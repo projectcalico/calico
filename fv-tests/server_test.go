@@ -33,9 +33,13 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	log "github.com/sirupsen/logrus"
 
+	. "github.com/onsi/ginkgo/extensions/table"
+
 	"github.com/projectcalico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
+	"github.com/projectcalico/libcalico-go/lib/ipip"
 	calinet "github.com/projectcalico/libcalico-go/lib/net"
+	"github.com/projectcalico/libcalico-go/lib/numorstring"
 	. "github.com/projectcalico/typha/fv-tests"
 	"github.com/projectcalico/typha/pkg/calc"
 	"github.com/projectcalico/typha/pkg/snapcache"
@@ -77,6 +81,73 @@ var (
 			Revision: "1238",
 		},
 		UpdateType: api.UpdateTypeKVUpdated,
+	}
+
+	// The updates below contain all the datatypes that the BGP syncer can emit.
+	ipPoolCIDR = calinet.MustParseCIDR("10.0.1.0/24")
+	ipPool1    = api.Update{
+		KVPair: model.KVPair{
+			Key: model.IPPoolKey{CIDR: ipPoolCIDR},
+			Value: &model.IPPool{
+				CIDR:          ipPoolCIDR,
+				IPIPInterface: "tunl0",
+				IPIPMode:      ipip.Always,
+				Masquerade:    true,
+				IPAM:          true,
+				Disabled:      true,
+			},
+			Revision: "1234",
+		},
+		UpdateType: api.UpdateTypeKVNew,
+	}
+	nodeBGPConfNode = api.Update{
+		KVPair: model.KVPair{
+			Key:      model.NodeBGPConfigKey{Nodename: "node1", Name: "foo"},
+			Value:    "nodeBGPConfNode",
+			Revision: "1235",
+		},
+		UpdateType: api.UpdateTypeKVNew,
+	}
+	nodeBGPConfGlobal = api.Update{
+		KVPair: model.KVPair{
+			Key:      model.GlobalBGPConfigKey{Name: "bar"},
+			Value:    "nodeBGPConfGlobal",
+			Revision: "1236",
+		},
+		UpdateType: api.UpdateTypeKVNew,
+	}
+	peerIP        = calinet.MustParseIP("10.1.2.3")
+	asNum, _      = numorstring.ASNumberFromString("62345")
+	bgpPeerGlobal = api.Update{
+		KVPair: model.KVPair{
+			Key: model.GlobalBGPPeerKey{PeerIP: peerIP},
+			Value: &model.BGPPeer{
+				PeerIP: peerIP,
+				ASNum:  asNum,
+			},
+			Revision: "1237",
+		},
+		UpdateType: api.UpdateTypeKVNew,
+	}
+	bgpPeerNode = api.Update{
+		KVPair: model.KVPair{
+			Key: model.NodeBGPPeerKey{PeerIP: peerIP, Nodename: "node1"},
+			Value: &model.BGPPeer{
+				PeerIP: peerIP,
+				ASNum:  asNum,
+			},
+			Revision: "1237",
+		},
+		UpdateType: api.UpdateTypeKVNew,
+	}
+	blockAffCIDR = calinet.MustParseCIDR("10.0.1.0/26")
+	blockAff1    = api.Update{
+		KVPair: model.KVPair{
+			Key:      model.BlockAffinityKey{CIDR: blockAffCIDR, Host: "node1"},
+			Value:    &model.BlockAffinity{State: model.StateConfirmed},
+			Revision: "1238",
+		},
+		UpdateType: api.UpdateTypeKVNew,
 	}
 )
 
@@ -311,6 +382,27 @@ var _ = Describe("With an in-process Server", func() {
 				},
 			)
 		})
+
+		DescribeTable("should pass through BGP KV pairs",
+			func(update api.Update, v1key string) {
+				decoupler.OnStatusUpdated(api.ResyncInProgress)
+				decoupler.OnUpdates([]api.Update{update})
+				decoupler.OnStatusUpdated(api.InSync)
+				Eventually(recorder.Status).Should(Equal(api.InSync))
+				expectClientState(
+					api.InSync,
+					map[string]api.Update{
+						v1key: update,
+					},
+				)
+			},
+			Entry("IP pool", ipPool1, "/calico/v1/ipam/v4/pool/10.0.1.0-24"),
+			Entry("Node conf", nodeBGPConfNode, "/calico/bgp/v1/host/node1/foo"),
+			Entry("Global conf", nodeBGPConfGlobal, "/calico/bgp/v1/global/bar"),
+			Entry("Node peer", bgpPeerNode, "/calico/bgp/v1/host/node1/peer_v4/10.1.2.3"),
+			Entry("Global peer", bgpPeerGlobal, "/calico/bgp/v1/global/peer_v4/10.1.2.3"),
+			Entry("Block affinity", blockAff1, "/calico/ipam/v2/host/node1/ipv4/block/10.0.1.0-26"),
+		)
 
 		It("should handle deletions", func() {
 			// Create two keys, then delete them.  One of the keys happens to have a
