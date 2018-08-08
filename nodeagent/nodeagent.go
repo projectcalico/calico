@@ -67,7 +67,7 @@ func Run() {
 	<-sigc
 
 	// Shut down the binder.
-	bstop <- nil
+	bstop <- true
 }
 
 func main() {
