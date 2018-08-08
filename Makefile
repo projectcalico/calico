@@ -80,7 +80,7 @@ endif
 DOCKER_GO_BUILD := mkdir -p .go-pkg-cache && \
                    docker run --rm -ti \
                      -v $(CURDIR):/go/src/$(PACKAGE_NAME):rw \
-                     -v $(CURDIR)/bin:/go/src/$(PACKAGE_NAME)/bin \
+                     -v $(CURDIR)/bin:/go/src/$(PACKAGE_NAME)/bin:rw \
                          -e LOCAL_USER_ID=$(LOCAL_USER_ID) \
                          -v $(CURDIR)/.go-pkg-cache:/go-cache/:rw \
                          -e GOCACHE=/go-cache \
