@@ -1,4 +1,4 @@
-// Copyright (c) 2016 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2018 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -86,14 +86,15 @@ func (options NodeBGPPeerListOptions) KeyFromDefaultPath(path string) Key {
 	log.Debugf("Get BGPPeer key from %s", path)
 	nodename := ""
 	peerIP := net.IP{}
-	ekeyb := []byte(path)
 
-	if r := matchHostBGPPeer.FindAllSubmatch(ekeyb, -1); len(r) == 1 {
-		nodename = string(r[0][1])
-		if err := peerIP.UnmarshalText(r[0][2]); err != nil {
-			log.WithError(err).WithField("PeerIP", r[0][2]).Error("Error unmarshalling GlobalBGPPeer IP address")
+	if r := matchHostBGPPeer.FindAllStringSubmatch(path, -1); len(r) == 1 {
+		nodename = r[0][1]
+		peerIPOrNil := net.ParseIP(r[0][2])
+		if peerIPOrNil == nil {
+			log.WithField("PeerIP", r[0][1]).Error("Error unmarshalling NodeBGPPeer IP address")
 			return nil
 		}
+		peerIP = *peerIPOrNil
 	} else {
 		log.Debugf("%s didn't match regex", path)
 		return nil
@@ -155,13 +156,14 @@ func (options GlobalBGPPeerListOptions) defaultPathRoot() string {
 func (options GlobalBGPPeerListOptions) KeyFromDefaultPath(path string) Key {
 	log.Debugf("Get BGPPeer key from %s", path)
 	peerIP := net.IP{}
-	ekeyb := []byte(path)
 
-	if r := matchGlobalBGPPeer.FindAllSubmatch(ekeyb, -1); len(r) == 1 {
-		if err := peerIP.UnmarshalText(r[0][1]); err != nil {
-			log.WithError(err).WithField("PeerIP", r[0][1]).Error("Error unmarshalling GlobalBGPPeer IP address")
+	if r := matchGlobalBGPPeer.FindAllStringSubmatch(path, -1); len(r) == 1 {
+		peerIPOrNil := net.ParseIP(r[0][1])
+		if peerIPOrNil == nil {
+			log.WithField("PeerIP", r[0][1]).Error("Error unmarshalling GlobalBGPPeer IP address")
 			return nil
 		}
+		peerIP = *peerIPOrNil
 	} else {
 		log.Debugf("%s didn't match regex", path)
 		return nil
