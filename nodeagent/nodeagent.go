@@ -60,7 +60,7 @@ func Run() {
 	signal.Notify(sigc, os.Interrupt, syscall.SIGTERM)
 
 	// Start the binder creating sockets
-	bstop := make(chan interface{})
+	bstop := make(chan bool)
 	go b.SearchAndBind(bstop)
 
 	// Wait for term signal.
