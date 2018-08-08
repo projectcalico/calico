@@ -48,12 +48,7 @@ escapefs = $(subst :,---,$(subst /,___,$(1)))
 unescapefs = $(subst ---,:,$(subst ___,/,$(1)))
 
 # Targets used when cross building.
-.PHONY: native register
-native:
-ifneq ($(BUILDARCH),$(ARCH))
-	@echo "Target $(MAKECMDGOALS)" is not supported when cross building! && false
-endif
-
+.PHONY: register
 # Enable binfmt adding support for miscellaneous binary formats.
 # This is only needed when running non-native binaries.
 register:
@@ -223,7 +218,7 @@ sub-image-%:
 	$(MAKE) image ARCH=$*
 
 $(CONTAINER_NAME): $(NODE_CONTAINER_CREATED)
-$(NODE_CONTAINER_CREATED): ./Dockerfile.$(ARCH) $(NODE_CONTAINER_FILES) $(NODE_CONTAINER_BINARIES)
+$(NODE_CONTAINER_CREATED): register ./Dockerfile.$(ARCH) $(NODE_CONTAINER_FILES) $(NODE_CONTAINER_BINARIES)
 	# Check versions of the binaries that we're going to use to build calico/node.
 	# Since the binaries are built for Linux, run them in a container to allow the
 	# make target to be run on different platforms (e.g. MacOS).
