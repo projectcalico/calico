@@ -12,7 +12,7 @@ test: fv st
 # The target architecture is select by setting the ARCH variable.
 # When ARCH is undefined it is set to the detected host architecture.
 # When ARCH differs from the host architecture a crossbuild will be performed.
-ARCHES=$(patsubst docker-image/Dockerfile.%,%,$(wildcard docker-image/Dockerfile.*))
+ARCHES=$(patsubst Dockerfile.%,%,$(wildcard Dockerfile.*))
 
 # BUILDARCH is the host architecture
 # ARCH is the target architecture
