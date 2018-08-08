@@ -1,3 +1,17 @@
+// Copyright (c) 2018 Tigera, Inc. All rights reserved.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package binder
 
 import (
@@ -24,7 +38,7 @@ type Binder interface {
 
 	// Search for pod mounts to bind sockets in.
 	// Send any value over the stop channel to gracefully cancel.
-	SearchAndBind(stop <-chan interface{})
+	SearchAndBind(stop <-chan bool)
 }
 
 type binder struct {
@@ -55,19 +69,23 @@ func (b *binder) SearchPath() string {
 	return b.searchPath
 }
 
-func (b *binder) SearchAndBind(stop <-chan interface{}) {
+func (b *binder) SearchAndBind(stop <-chan bool) {
 	w := NewWatcher(b.searchPath)
-	events := w.watch()
+	stopWatch := make(chan bool)
+	events := w.watch(stopWatch)
 	var event workloadEvent
+EventLoop:
 	for {
 		select {
 		case event = <-events:
 			b.handleEvent(event)
 		case <-stop:
-			break
+			break EventLoop
 		}
 	}
-	// Got stop signal! Close any open sockets
+	// Got stop signal! Stop directory watch.
+	stopWatch <- true
+	// Close any open sockets
 	for _, wl := range b.workloads.getAll() {
 		wl.listener.Close()
 	}
@@ -125,7 +143,7 @@ func readCredentials(path string, c *Credentials) error {
 	if err != nil {
 		return err
 	}
-	err = json.Unmarshal(data, &c.WorkloadCredentials)
+	err = json.Unmarshal(data, c)
 	if err != nil {
 		return err
 	}
