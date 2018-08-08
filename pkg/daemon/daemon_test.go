@@ -144,7 +144,7 @@ var _ = Describe("Daemon", func() {
 				Expect(d.SyncerToValidator).ToNot(BeNil())
 				Expect(d.ValidatorToCache).ToNot(BeNil())
 				Expect(d.Validator).ToNot(BeNil())
-				Expect(d.Cache).ToNot(BeNil())
+				Expect(d.FelixCache).ToNot(BeNil())
 				Expect(d.Server).ToNot(BeNil())
 			})
 

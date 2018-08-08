@@ -1,4 +1,4 @@
-// Copyright (c) 2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2018 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -43,8 +43,9 @@ import (
 )
 
 var (
-	ErrReadFailed          = errors.New("Failed to read from client")
-	ErrUnexpectedClientMsg = errors.New("Unexpected message from client")
+	ErrReadFailed               = errors.New("Failed to read from client")
+	ErrUnexpectedClientMsg      = errors.New("Unexpected message from client")
+	ErrUnsupportedClientFeature = errors.New("Unsupported client feature")
 )
 
 var (
@@ -113,7 +114,7 @@ const (
 
 type Server struct {
 	config     Config
-	cache      BreadcrumbProvider
+	caches     map[syncproto.SyncerType]BreadcrumbProvider
 	nextConnID uint64
 	maxConnsC  chan int
 	chosenPort int
@@ -226,12 +227,12 @@ func (c *Config) requiringTLS() bool {
 	return c.KeyFile+c.CertFile+c.CAFile+c.ClientCN+c.ClientURISAN != ""
 }
 
-func New(cache BreadcrumbProvider, config Config) *Server {
+func New(caches map[syncproto.SyncerType]BreadcrumbProvider, config Config) *Server {
 	config.ApplyDefaults()
 	log.WithField("config", config).Info("Creating server")
 	s := &Server{
 		config:       config,
-		cache:        cache,
+		caches:       caches,
 		maxConnsC:    make(chan int),
 		dropInterval: config.DropInterval,
 		maxConns:     config.MaxConns,
@@ -378,7 +379,7 @@ func (s *Server) serve(cxt context.Context) {
 		connection := &connection{
 			ID:        connID,
 			config:    &s.config,
-			cache:     s.cache,
+			caches:    s.caches,
 			cxt:       connCxt,
 			cancelCxt: cancel,
 			conn:      conn,
@@ -495,8 +496,9 @@ type connection struct {
 	// shutDownWG is used to wait for our background threads to finish.
 	shutDownWG sync.WaitGroup
 
-	cache BreadcrumbProvider
-	conn  net.Conn
+	caches map[syncproto.SyncerType]BreadcrumbProvider
+	cache  BreadcrumbProvider
+	conn   net.Conn
 
 	encoder *gob.Encoder
 	readC   chan interface{}
@@ -650,9 +652,25 @@ func (h *connection) doHandshake() error {
 	}
 	h.logCxt.WithField("msg", hello).Info("Received Hello message from client.")
 
+	syncerType := hello.SyncerType
+	if syncerType == "" {
+		// Old client, assume it's a down-level Felix.
+		h.logCxt.Info("Client didn't provide a SyncerType, assuming SyncerTypeFelix for back-compatibility.")
+		syncerType = syncproto.SyncerTypeFelix
+	}
+	desiredSyncerCache := h.caches[syncerType]
+	if desiredSyncerCache == nil {
+		h.logCxt.WithField("requestedType", syncerType).Info("Client requested unknown SyncerType.")
+		return ErrUnsupportedClientFeature
+	}
+	h.cache = desiredSyncerCache
+
 	// Respond to client's hello.
 	err = h.sendMsg(syncproto.MsgServerHello{
 		Version: buildinfo.GitVersion,
+		// Echo back the SyncerType so that up-level clients know that we understood their request.  Down-level
+		// clients will ignore.
+		SyncerType: syncerType,
 	})
 	if err != nil {
 		log.WithError(err).Warning("Failed to send hello to client")

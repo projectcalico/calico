@@ -49,6 +49,7 @@ import (
 	"github.com/projectcalico/typha/pkg/k8s"
 	"github.com/projectcalico/typha/pkg/logutils"
 	"github.com/projectcalico/typha/pkg/snapcache"
+	"github.com/projectcalico/typha/pkg/syncproto"
 	"github.com/projectcalico/typha/pkg/syncserver"
 )
 
@@ -78,7 +79,7 @@ type TyphaDaemon struct {
 	SyncerToValidator *calc.SyncerCallbacksDecoupler
 	Validator         *calc.ValidationFilter
 	ValidatorToCache  *calc.SyncerCallbacksDecoupler
-	Cache             *snapcache.Cache
+	FelixCache        *snapcache.Cache
 	Server            *syncserver.Server
 
 	// The functions below default to real library functions but they can be overridden for testing.
@@ -333,24 +334,30 @@ func (t *TyphaDaemon) CreateServer() {
 	// Health monitoring, for liveness and readiness endpoints.
 	t.healthAggregator = health.NewHealthAggregator()
 
-	// Get a Syncer from the datastore, which will feed the validator layer with updates.
-	t.SyncerToValidator = calc.NewSyncerCallbacksDecoupler()
-	t.Syncer = t.DatastoreClient.SyncerByIface(t.SyncerToValidator)
-	log.Debugf("Created Syncer: %#v", t.Syncer)
+	caches := map[syncproto.SyncerType]syncserver.BreadcrumbProvider{}
 
-	// Create the validator, which sits between the syncer and the cache.
-	t.ValidatorToCache = calc.NewSyncerCallbacksDecoupler()
-	t.Validator = calc.NewValidationFilter(t.ValidatorToCache)
+	{
+		// Get a Syncer from the datastore, which will feed the validator layer with updates.
+		t.SyncerToValidator = calc.NewSyncerCallbacksDecoupler()
+		t.Syncer = t.DatastoreClient.SyncerByIface(t.SyncerToValidator)
+		log.Debugf("Created Syncer: %#v", t.Syncer)
 
-	// Create our snapshot cache, which stores point-in-time copies of the datastore contents.
-	t.Cache = snapcache.New(snapcache.Config{
-		MaxBatchSize:     t.ConfigParams.SnapshotCacheMaxBatchSize,
-		HealthAggregator: t.healthAggregator,
-	})
+		// Create the validator, which sits between the syncer and the cache.
+		t.ValidatorToCache = calc.NewSyncerCallbacksDecoupler()
+		t.Validator = calc.NewValidationFilter(t.ValidatorToCache)
+
+		// Create our snapshot cache, which stores point-in-time copies of the datastore contents.
+		t.FelixCache = snapcache.New(snapcache.Config{
+			MaxBatchSize:     t.ConfigParams.SnapshotCacheMaxBatchSize,
+			HealthAggregator: t.healthAggregator,
+		})
+
+		caches[syncproto.SyncerTypeFelix] = t.FelixCache
+	}
 
 	// Create the server, which listens for connections from Felix.
 	t.Server = syncserver.New(
-		t.Cache,
+		caches,
 		syncserver.Config{
 			MaxMessageSize:          t.ConfigParams.ServerMaxMessageSize,
 			MinBatchingAgeThreshold: t.ConfigParams.ServerMinBatchingAgeThresholdSecs,
@@ -376,8 +383,8 @@ func (t *TyphaDaemon) Start(cxt context.Context) {
 	log.Info("Starting the datastore Syncer/cache layer")
 	t.Syncer.Start()
 	go t.SyncerToValidator.SendToContext(cxt, t.Validator)
-	go t.ValidatorToCache.SendToContext(cxt, t.Cache)
-	t.Cache.Start(cxt)
+	go t.ValidatorToCache.SendToContext(cxt, t.FelixCache)
+	t.FelixCache.Start(cxt)
 	t.Server.Start(cxt)
 	if t.ConfigParams.ConnectionRebalancingMode == "kubernetes" {
 		log.Info("Kubernetes connection rebalancing is enabled, starting k8s poll goroutine.")

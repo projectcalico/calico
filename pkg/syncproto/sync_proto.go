@@ -1,4 +1,4 @@
-// Copyright (c) 2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2018 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -192,13 +192,28 @@ type Envelope struct {
 	Message interface{}
 }
 
+type SyncerType string
+
+const (
+	SyncerTypeFelix SyncerType = "felix"
+	SyncerTypeBGP   SyncerType = "bgp"
+)
+
 type MsgClientHello struct {
 	Hostname string
 	Info     string
 	Version  string
+
+	// SyncerType the requested syncer type.  Added in v3.3; if client doesn't providea value, assumed to be
+	// SyncerTypeFelix.
+	SyncerType SyncerType
 }
 type MsgServerHello struct {
 	Version string
+
+	// SyncerType the active syncer type; if not specified, implies that the server is an older Typha instance that
+	// only supports SyncerTypeFelix.
+	SyncerType SyncerType
 }
 type MsgSyncStatus struct {
 	SyncStatus api.SyncStatus

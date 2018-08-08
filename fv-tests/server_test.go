@@ -1,4 +1,4 @@
-// Copyright (c) 2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2018 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -156,11 +156,13 @@ var _ = Describe("With an in-process Server", func() {
 		cacheCxt, cacheCancel = context.WithCancel(context.Background())
 		valFilter = calc.NewValidationFilter(cache)
 		go decoupler.SendToContext(cacheCxt, valFilter)
-		server = syncserver.New(cache, syncserver.Config{
-			PingInterval: 10 * time.Second,
-			Port:         syncserver.PortRandom,
-			DropInterval: 50 * time.Millisecond,
-		})
+		server = syncserver.New(
+			map[syncproto.SyncerType]syncserver.BreadcrumbProvider{syncproto.SyncerTypeFelix: cache},
+			syncserver.Config{
+				PingInterval: 10 * time.Second,
+				Port:         syncserver.PortRandom,
+				DropInterval: 50 * time.Millisecond,
+			})
 		cache.Start(cacheCxt)
 		serverCxt, serverCancel = context.WithCancel(context.Background())
 		server.Start(serverCxt)
@@ -499,12 +501,14 @@ var _ = Describe("With an in-process Server with short ping timeout", func() {
 			// Reduce the wake up interval from the default to give us faster tear down.
 			WakeUpInterval: 50 * time.Millisecond,
 		})
-		server = syncserver.New(cache, syncserver.Config{
-			PingInterval: 100 * time.Millisecond,
-			PongTimeout:  500 * time.Millisecond,
-			Port:         syncserver.PortRandom,
-			DropInterval: 50 * time.Millisecond,
-		})
+		server = syncserver.New(
+			map[syncproto.SyncerType]syncserver.BreadcrumbProvider{syncproto.SyncerTypeFelix: cache},
+			syncserver.Config{
+				PingInterval: 100 * time.Millisecond,
+				PongTimeout:  500 * time.Millisecond,
+				Port:         syncserver.PortRandom,
+				DropInterval: 50 * time.Millisecond,
+			})
 		cacheCxt, cacheCancel = context.WithCancel(context.Background())
 		cache.Start(cacheCxt)
 		serverCxt, serverCancel = context.WithCancel(context.Background())
@@ -693,12 +697,14 @@ var _ = Describe("With an in-process Server with long ping interval", func() {
 			// Reduce the wake up interval from the default to give us faster tear down.
 			WakeUpInterval: 50 * time.Millisecond,
 		})
-		server = syncserver.New(cache, syncserver.Config{
-			PingInterval: 10000 * time.Second,
-			PongTimeout:  50000 * time.Second,
-			Port:         syncserver.PortRandom,
-			DropInterval: 1 * time.Second,
-		})
+		server = syncserver.New(
+			map[syncproto.SyncerType]syncserver.BreadcrumbProvider{syncproto.SyncerTypeFelix: cache},
+			syncserver.Config{
+				PingInterval: 10000 * time.Second,
+				PongTimeout:  50000 * time.Second,
+				Port:         syncserver.PortRandom,
+				DropInterval: 1 * time.Second,
+			})
 		cacheCxt, cacheCancel = context.WithCancel(context.Background())
 		cache.Start(cacheCxt)
 		serverCxt, serverCancel = context.WithCancel(context.Background())
@@ -913,16 +919,18 @@ var _ = Describe("with server requiring TLS", func() {
 		cacheCxt, cacheCancel = context.WithCancel(context.Background())
 		valFilter = calc.NewValidationFilter(cache)
 		go decoupler.SendToContext(cacheCxt, valFilter)
-		server = syncserver.New(cache, syncserver.Config{
-			PingInterval: 10 * time.Second,
-			Port:         syncserver.PortRandom,
-			DropInterval: 50 * time.Millisecond,
-			KeyFile:      filepath.Join(certDir, serverCertName+".key"),
-			CertFile:     filepath.Join(certDir, serverCertName+".crt"),
-			CAFile:       filepath.Join(certDir, "ca.crt"),
-			ClientCN:     requiredClientCN,
-			ClientURISAN: requiredClientURISAN,
-		})
+		server = syncserver.New(
+			map[syncproto.SyncerType]syncserver.BreadcrumbProvider{syncproto.SyncerTypeFelix: cache},
+			syncserver.Config{
+				PingInterval: 10 * time.Second,
+				Port:         syncserver.PortRandom,
+				DropInterval: 50 * time.Millisecond,
+				KeyFile:      filepath.Join(certDir, serverCertName+".key"),
+				CertFile:     filepath.Join(certDir, serverCertName+".crt"),
+				CAFile:       filepath.Join(certDir, "ca.crt"),
+				ClientCN:     requiredClientCN,
+				ClientURISAN: requiredClientURISAN,
+			})
 		cache.Start(cacheCxt)
 		serverCxt, serverCancel = context.WithCancel(context.Background())
 		server.Start(serverCxt)
