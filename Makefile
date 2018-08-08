@@ -77,6 +77,16 @@ ifeq ($(ARCH),amd64)
 	docker rmi $(CONTAINER_NAME):latest || true
 	docker rmi $(CONTAINER_NAME):$(VERSION) || true
 endif
+DOCKER_GO_BUILD := mkdir -p .go-pkg-cache && \
+                   docker run --rm -ti \
+                     -v $(CURDIR):/go/src/$(PACKAGE_NAME):rw \
+                     -v $(CURDIR)/bin:/go/src/$(PACKAGE_NAME)/bin \
+                         -e LOCAL_USER_ID=$(LOCAL_USER_ID) \
+                         -v $(CURDIR)/.go-pkg-cache:/go-cache/:rw \
+                         -e GOCACHE=/go-cache \
+                         -w /go/src/$(PACKAGE_NAME) \
+                       $(GO_BUILD_CONTAINER)
+
 ###############################################################################
 # Building the binary
 ###############################################################################
@@ -98,15 +108,7 @@ bin/flexvol-ppc64le: ARCH=ppc64le
 bin/flexvol-s390x: ARCH=s390x
 bin/flexvol-%: vendor $(SRC_FILES)
 	mkdir -p bin
-	-mkdir -p .go-pkg-cache
-	docker run --rm -ti \
-	  -v $(CURDIR):/go/src/$(PACKAGE_NAME):ro \
-	  -v $(CURDIR)/bin:/go/src/$(PACKAGE_NAME)/bin \
-      -e LOCAL_USER_ID=$(LOCAL_USER_ID) \
-      -v $(CURDIR)/.go-pkg-cache:/go-cache/:rw \
-      -e GOCACHE=/go-cache \
-      -w /go/src/$(PACKAGE_NAME) \
-	    $(GO_BUILD_CONTAINER) go build -v -o bin/flexvol-$(ARCH) flexvol/flexvoldriver.go
+	$(DOCKER_GO_BUILD) go build -v -o bin/flexvol-$(ARCH) flexvol/flexvoldriver.go
 
 ###############################################################################
 # Building the image
