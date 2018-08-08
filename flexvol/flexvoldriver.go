@@ -33,7 +33,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	creds "github.com/colabsaumoh/proto-udsuspver/flexvol/creds"
+	creds "github.com/projectcalico/pod2daemon/flexvol/creds"
 )
 
 // Response is the output of Flex volume driver to the kubelet.

@@ -20,8 +20,8 @@ import (
 
 	"golang.org/x/net/context"
 
-	"github.com/colabsaumoh/proto-udsuspver/binder"
-	pb "github.com/colabsaumoh/proto-udsuspver/protos/udsver_v1"
+	"github.com/projectcalico/pod2daemon/binder"
+	pb "github.com/projectcalico/pod2daemon/protos/udsver_v1"
 )
 
 type WlServer struct{}

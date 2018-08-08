@@ -27,10 +27,10 @@ The workload API is going to be part of the nodeagent. The nodeagent shown here 
  import (
  	...
  
- 	nam "github.com/colabsaumoh/proto-udsuspver/nodeagentmgmt"
- 	wlh "github.com/colabsaumoh/proto-udsuspver/workloadhandler"
- 	mwi "github.com/colabsaumoh/proto-udsuspver/mgmtwlhintf"
- 	wlapi "github.com/colabsaumoh/proto-udsuspver/workloadapi"
+ 	nam "github.com/projectcalico/pod2daemon/nodeagentmgmt"
+ 	wlh "github.com/projectcalico/pod2daemon/workloadhandler"
+ 	mwi "github.com/projectcalico/pod2daemon/mgmtwlhintf"
+ 	wlapi "github.com/projectcalico/pod2daemon/workloadapi"
 )
 
 	// initialize the workload api.

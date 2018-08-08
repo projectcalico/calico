@@ -22,9 +22,9 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/colabsaumoh/proto-udsuspver/binder"
-	udsver "github.com/colabsaumoh/proto-udsuspver/protos/udsver_v1"
-	wlapi "github.com/colabsaumoh/proto-udsuspver/workloadapi"
+	"github.com/projectcalico/pod2daemon/binder"
+	udsver "github.com/projectcalico/pod2daemon/protos/udsver_v1"
+	wlapi "github.com/projectcalico/pod2daemon/workloadapi"
 )
 
 const (
