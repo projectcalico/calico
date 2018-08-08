@@ -213,6 +213,7 @@ var _ = Describe("Test the generic configuration update processor and the concre
 				Port:     65535,
 			},
 		}
+		res.Spec.ExternalNodesCIDRList = &[]string{"1.1.1.1", "2.2.2.2"}
 		expected := map[string]interface{}{
 			"RouteRefreshInterval":            "12.345",
 			"IptablesLockProbeIntervalMillis": "54.321",
@@ -223,6 +224,7 @@ var _ = Describe("Test the generic configuration update processor and the concre
 			"IptablesMarkMask":                "1313",
 			"FailsafeInboundHostPorts":        "none",
 			"FailsafeOutboundHostPorts":       "tcp:1234,udp:22,tcp:65535",
+			"ExternalNodesCIDRList":           "1.1.1.1,2.2.2.2",
 		}
 		kvps, err := cc.Process(&model.KVPair{
 			Key:   perNodeFelixKey,
