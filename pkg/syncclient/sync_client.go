@@ -103,8 +103,11 @@ func New(
 		options = &Options{}
 	}
 	return &SyncerClient{
-		ID:        id,
-		logCxt:    log.WithField("connID", id),
+		ID: id,
+		logCxt: log.WithFields(log.Fields{
+			"connID": id,
+			"type":   options.SyncerType,
+		}),
 		callbacks: cbs,
 		addr:      addr,
 
