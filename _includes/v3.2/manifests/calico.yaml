@@ -1,0 +1,52 @@
+{% comment %}
+calico.yaml acccepts the following include flags:
+
+| Name             | Accepted Values          |
+|------------------|--------------------------|
+| datastore        | kdd, etcd                |
+| typha            | true, false              |
+| network          | calico, flannel, <unset> |
+| calico_ipam      | true, false              |
+| ipip             | true, false              |
+| variant_name     | Calico, Canal            |
+| app_layer_policy | true, false              |
+
+{% endcomment -%}
+{% capture variant_name %}{% if include.network == "flannel" %}Canal{% else %}Calico{% endif %}{% endcapture -%}
+# {{variant_name}} Version {{site.data.versions[page.version].first.title}}
+# {{site.url}}/{{page.version}}/releases#{{site.data.versions[page.version].first.title}}
+# This manifest includes the following component versions:
+#   {{site.nodecontainer}}:{{site.data.versions[page.version].first.components["calico/node"].version}}
+#   calico/cni:{{site.data.versions[page.version].first.components["calico/cni"].version}}
+{%- if include.datastore == "etcd" %}
+#   calico/kube-controllers:{{site.data.versions[page.version].first.components["calico/kube-controllers"].version}}
+{%- endif %}
+{%- if include.network == "flannel" %}
+#   coreos/flannel:{{site.data.versions[page.version].first.components["flannel"].version}}
+{%- endif %}
+
+{% include {{page.version}}/manifests/calico-config.yaml datastore=include.datastore network=include.network calico_ipam=include.calico_ipam variant_name=variant_name typha=include.typha %}
+---
+
+{% if include.datastore == "etcd" %}
+{% include {{page.version}}/manifests/calico-etcd-secrets.yaml %}
+---
+{%- elsif include.datastore == "kdd" and include.typha == "true" %}
+{% include {{page.version}}/manifests/calico-typha.yaml %}
+---
+{%- endif %}
+
+{% include {{page.version}}/manifests/calico-node.yaml datastore=include.datastore network=include.network ipip=include.ipip variant_name=variant_name typha=include.typha app_layer_policy=include.app_layer_policy %}
+---
+{%- if include.datastore == "etcd" and include.network == "flannel" %}
+
+{% include {{page.version}}/manifests/configure-canal.yaml %}
+---
+{%- endif %}
+{%- if include.datastore == "etcd" %}
+
+{% include {{page.version}}/manifests/calico-kube-controllers.yaml variant_name=variant_name %}
+{%- elsif include.datastore == "kdd" %}
+
+{% include {{page.version}}/manifests/kdd-crds.yaml network=include.network %}
+{%- endif -%}
