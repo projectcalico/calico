@@ -240,6 +240,9 @@ func (c *configUpdateProcessor) processAddOrModified(kvp *model.KVPair) ([]*mode
 					default:
 						value = fmt.Sprintf("%v", vt.Seconds())
 					}
+				case []string:
+					// Make a list of strings comma delimited
+					value = strings.Join(vt, ",")
 				default:
 					value = fmt.Sprintf("%v", vt)
 				}
