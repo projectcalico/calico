@@ -27,7 +27,7 @@ imageNames:
   flannel: quay.io/coreos/flannel
   dikastes: quay.io/calico/dikastes
   pilot-webhook: quay.io/calico/pilot-webhook
-  flexvol: quay.io/saurabh/flexvol
+  flexvol: quay.io/calico/pod2daemon-flexvol
 
 exclude:
   - release-scripts

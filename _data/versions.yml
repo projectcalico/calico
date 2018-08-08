@@ -2171,5 +2171,5 @@ v3.2:
       version: v3.2.0
       url: https://github.com/projectcalico/app-policy/releases/tag/v3.2.0
     flexvol:
-      version: latest
+      version: v3.2.0
 
