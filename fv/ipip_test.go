@@ -235,32 +235,9 @@ var _ = infrastructure.DatastoreDescribe("IPIP topology before adding host IPs t
 			}
 		})
 
-		AfterEach(func() {
-			if CurrentGinkgoTestDescription().Failed {
-				// Don't clean up if failed.
-				return
-			}
-			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-			defer cancel()
-			c, err := client.FelixConfigurations().Get(ctx, "default", options.GetOptions{})
-			Expect(err).NotTo(HaveOccurred())
-			c.Spec.ExternalNodesCIDRList = nil
-			log.WithField("felixconfiguration", c).Info("Cleaning FelixConfiguration")
-			_, err = client.FelixConfigurations().Update(ctx, c, options.SetOptions{})
-			Expect(err).NotTo(HaveOccurred())
-			// Wait for the config to take
-			for _, f := range felixes {
-				Eventually(func() int {
-					return getNumIPSetMembers(f.Container, "cali40all-hosts-net")
-				}, "5s", "200ms").Should(Equal(1))
-			}
-		})
-
 		It("should have all-hosts-net ipset configured with the external hosts and workloads connect", func() {
-			cc.ResetExpectations()
 			f := felixes[0]
 			// Add the ip route via tunnel back on the Felix for which we nuked when we removed it's BGP spec.
-			//f.Exec("ip route add 10.65.1.0/24 via 172.17.0.16 dev tunl0 onlink")
 			f.Exec("ip", "route", "add", w[1].IP, "via", felixes[1].IP, "dev", "tunl0", "onlink")
 			cc.ExpectSome(w[0], w[1])
 			cc.CheckConnectivity()
