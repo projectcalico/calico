@@ -56,15 +56,20 @@ ifneq ($(BUILDARCH),$(ARCH))
 	docker run --rm --privileged multiarch/qemu-user-static:register || true
 endif
 
-
 # list of arches *not* to build when doing *-all
 #    until s390x works correctly
 EXCLUDEARCH ?= s390x
 VALIDARCHES = $(filter-out $(EXCLUDEARCH),$(ARCHES))
 
 ###############################################################################
-CONTAINER_BASENAME ?= node
-CONTAINER_NAME ?= calico/$(CONTAINER_BASENAME)
+BUILD_IMAGE?=calico/node
+PUSH_IMAGES?=$(BUILD_IMAGE) quay.io/calico/node
+RELEASE_IMAGES?=gcr.io/projectcalico-org/node eu.gcr.io/projectcalico-org/node asia.gcr.io/projectcalico.org/node us.gcr.io/projectcalico.org/node
+
+ifeq ($(RELEASE),true)
+# If this is a release, also tag and push additional images.
+PUSH_IMAGES+=$(RELEASE_IMAGES)
+endif
 
 GO_BUILD_VER?=v0.17
 CALICO_BUILD?=calico/go-build:$(GO_BUILD_VER)
@@ -95,12 +100,10 @@ K8S_VERSION?=v1.10.4
 HYPERKUBE_IMAGE?=gcr.io/google_containers/hyperkube-$(ARCH):$(K8S_VERSION)
 TEST_CONTAINER_FILES=$(shell find tests/ -type f ! -name '*.created')
 
-# Variables controlling the calico/node image
+# Variables controlling the image
 NODE_CONTAINER_CREATED=.calico_node.created-$(ARCH)
 NODE_CONTAINER_BIN_DIR=./dist/bin/
-# files in the container that we create locally
-NODE_BINARIES_FILES=calico-node-$(ARCH)
-NODE_CONTAINER_BINARIES = $(addprefix $(NODE_CONTAINER_BIN_DIR),$(NODE_BINARIES_FILES))
+NODE_CONTAINER_BINARY = $(NODE_CONTAINER_BIN_DIR)/calico-node-$(ARCH)
 
 # Variables used by the tests
 CRD_PATH=$(CURDIR)/vendor/github.com/projectcalico/libcalico-go/test/
@@ -109,7 +112,7 @@ ST_TO_RUN?=tests/st/
 # Can exclude the slower tests with "-a '!slow'"
 ST_OPTIONS?=
 
-# Variables for building the local binaries that go into calico/node
+# Variables for building the local binaries that go into the image
 MAKE_SURE_BIN_EXIST := $(shell mkdir -p dist .go-pkg-cache $(NODE_CONTAINER_BIN_DIR))
 NODE_CONTAINER_FILES=$(shell find ./filesystem -type f)
 SRCFILES=$(shell find ./pkg -name '*.go')
@@ -118,13 +121,6 @@ LDFLAGS=-ldflags "-X main.VERSION=$(CALICO_GIT_VER)"
 PACKAGE_NAME?=github.com/projectcalico/node
 LIBCALICOGO_PATH?=none
 
-# Variables for controlling image tagging and pushing.
-DOCKER_REPOS=calico quay.io/calico
-ifeq ($(RELEASE),true)
-# If this is a release, also tag and push GCR images. 
-DOCKER_REPOS+=gcr.io/projectcalico-org eu.gcr.io/projectcalico-org asia.gcr.io/projectcalico.org us.gcr.io/projectcalico.org
-endif
-
 ## Clean enough that a new release build will be clean
 clean:
 	find . -name '*.created' -exec rm -f {} +
@@ -132,17 +128,17 @@ clean:
 	rm -rf certs *.tar vendor $(NODE_CONTAINER_BIN_DIR)
 
 	# Delete images that we built in this repo
-	docker rmi $(CONTAINER_NAME):latest-$(ARCH) || true
+	docker rmi $(BUILD_IMAGE):latest-$(ARCH) || true
 	docker rmi $(TEST_CONTAINER_NAME) || true
 ifeq ($(ARCH),amd64)
-	docker rmi $(CONTAINER_NAME):latest || true
-	docker rmi $(CONTAINER_NAME):$(VERSION) || true
+	docker rmi $(BUILD_IMAGE):latest || true
+	docker rmi $(BUILD_IMAGE):$(VERSION) || true
 endif
 
 ###############################################################################
 # Building the binary
 ###############################################################################
-build:  $(NODE_CONTAINER_BINARIES)
+build:  $(NODE_CONTAINER_BINARY)
 # Use this to populate the vendor directory after checking out the repository.
 # To update upstream dependencies, delete the glide.lock file first.
 vendor: glide.lock
@@ -196,7 +192,7 @@ update-felix-confd-libcalico:
             if ! grep "\[WARN\]" $$OUTPUT; then true; else false; fi; \
           fi'
 
-$(NODE_CONTAINER_BINARIES): vendor
+$(NODE_CONTAINER_BINARY): vendor
 	docker run --rm \
 		-e GOARCH=$(ARCH) \
 		-e GOOS=linux \
@@ -210,24 +206,24 @@ $(NODE_CONTAINER_BINARIES): vendor
 ###############################################################################
 # Building the image
 ###############################################################################
-## Create the calico/node image for the current ARCH
-image: $(CONTAINER_NAME)
-## Create the calico/node images for all supported ARCHes
+## Create the image for the current ARCH
+image: $(BUILD_IMAGE)
+## Create the images for all supported ARCHes
 image-all: $(addprefix sub-image-,$(VALIDARCHES))
 sub-image-%:
 	$(MAKE) image ARCH=$*
 
-$(CONTAINER_NAME): $(NODE_CONTAINER_CREATED)
-$(NODE_CONTAINER_CREATED): register ./Dockerfile.$(ARCH) $(NODE_CONTAINER_FILES) $(NODE_CONTAINER_BINARIES)
-	# Check versions of the binaries that we're going to use to build calico/node.
+$(BUILD_IMAGE): $(NODE_CONTAINER_CREATED)
+$(NODE_CONTAINER_CREATED): register ./Dockerfile.$(ARCH) $(NODE_CONTAINER_FILES) $(NODE_CONTAINER_BINARY)
+	# Check versions of the binaries that we're going to use to build the image.
 	# Since the binaries are built for Linux, run them in a container to allow the
 	# make target to be run on different platforms (e.g. MacOS).
 	docker run --rm -v $(CURDIR)/dist/bin:/go/bin:rw $(CALICO_BUILD) /bin/sh -c "\
 	  echo; echo calico-node-$(ARCH) -v;         /go/bin/calico-node-$(ARCH) -v; \
 	"
-	docker build --pull -t $(CONTAINER_NAME):latest-$(ARCH) . --build-arg BIRD_IMAGE=$(BIRD_IMAGE) --build-arg QEMU_IMAGE=$(CALICO_BUILD) --build-arg ver=$(CALICO_GIT_VER) -f ./Dockerfile.$(ARCH)
+	docker build --pull -t $(BUILD_IMAGE):latest-$(ARCH) . --build-arg BIRD_IMAGE=$(BIRD_IMAGE) --build-arg QEMU_IMAGE=$(CALICO_BUILD) --build-arg ver=$(CALICO_GIT_VER) -f ./Dockerfile.$(ARCH)
 ifeq ($(ARCH),amd64)
-	docker tag $(CONTAINER_NAME):latest-$(ARCH) $(CONTAINER_NAME):latest
+	docker tag $(BUILD_IMAGE):latest-$(ARCH) $(BUILD_IMAGE):latest
 endif
 	touch $@
 
@@ -238,12 +234,12 @@ ifndef IMAGETAG
 endif
 
 ## push one arch
-push: imagetag $(addprefix sub-single-push-,$(call escapefs,$(DOCKER_REPOS)))
+push: imagetag $(addprefix sub-single-push-,$(call escapefs,$(PUSH_IMAGES)))
 
 sub-single-push-%:
-	docker push $(call unescapefs,$*/$(CONTAINER_BASENAME):$(IMAGETAG)-$(ARCH))
+	docker push $(call unescapefs,$*:$(IMAGETAG)-$(ARCH))
 ifeq ($(ARCH),amd64)
-	docker push $(call unescapefs,$*/$(CONTAINER_BASENAME):$(IMAGETAG))
+	docker push $(call unescapefs,$*:$(IMAGETAG))
 endif
 
 ## push all supported arches
@@ -252,12 +248,12 @@ sub-push-%:
 	$(MAKE) push ARCH=$* IMAGETAG=$(IMAGETAG)
 
 ## tag images of one arch
-tag-images: imagetag $(addprefix sub-single-tag-images-,$(call escapefs,$(DOCKER_REPOS)))
+tag-images: imagetag $(addprefix sub-single-tag-images-,$(call escapefs,$(PUSH_IMAGES)))
 
 sub-single-tag-images-%:
-	docker tag $(CONTAINER_NAME):latest-$(ARCH) $(call unescapefs,$*/$(CONTAINER_BASENAME):$(IMAGETAG)-$(ARCH))
+	docker tag $(BUILD_IMAGE):latest-$(ARCH) $(call unescapefs,$*:$(IMAGETAG)-$(ARCH))
 ifeq ($(ARCH),amd64)
-	docker tag $(CONTAINER_NAME):latest-$(ARCH) $(call unescapefs,$*/$(CONTAINER_BASENAME):$(IMAGETAG))
+	docker tag $(BUILD_IMAGE):latest-$(ARCH) $(call unescapefs,$*:$(IMAGETAG))
 endif
 
 ## tag images of all archs
@@ -399,10 +395,10 @@ calico-node.tar: $(NODE_CONTAINER_CREATED)
 	# Check versions of the Calico binaries that will be in calico-node.tar.
 	# Since the binaries are built for Linux, run them in a container to allow the
 	# make target to be run on different platforms (e.g. MacOS).
-	docker run --rm $(CONTAINER_NAME):latest-$(ARCH) /bin/sh -c "\
+	docker run --rm $(BUILD_IMAGE):latest-$(ARCH) /bin/sh -c "\
 	  echo bird --version;         /bin/bird --version; \
 	"
-	docker save --output $@ $(CONTAINER_NAME):latest-$(ARCH)
+	docker save --output $@ $(BUILD_IMAGE):latest-$(ARCH)
 
 .PHONY: st-checks
 st-checks:
@@ -437,7 +433,7 @@ st: dist/calicoctl busybox.tar routereflector.tar calico-node.tar workload.tar r
 	           -e HOST_CHECKOUT_DIR=$(CURDIR) \
 	           -e DEBUG_FAILURES=$(DEBUG_FAILURES) \
 	           -e MY_IP=$(LOCAL_IP_ENV) \
-	           -e NODE_CONTAINER_NAME=$(CONTAINER_NAME):latest-$(ARCH) \
+	           -e NODE_CONTAINER_NAME=$(BUILD_IMAGE):latest-$(ARCH) \
 	           -e RR_CONTAINER_NAME=$(RR_CONTAINER_NAME) \
 	           --rm -t \
 	           -v /var/run/docker.sock:/var/run/docker.sock \
@@ -505,8 +501,7 @@ endif
 ## Verifies the release artifacts produces by `make release-build` are correct.
 release-verify: release-prereqs
 	# Check the reported version is correct for each release artifact.
-	if ! docker run $(CONTAINER_NAME):$(VERSION) versions | grep '^calico\/node $(VERSION)'; then echo "Reported version:" `docker run $(CONTAINER_NAME):$(VERSION) versions` "\nExpected version: $(VERSION)"; false; else echo "\nVersion check passed\n"; fi
-	if ! docker run quay.io/$(CONTAINER_NAME):$(VERSION) versions | grep '^calico\/node $(VERSION)'; then echo "Reported version:" `docker run quay.io/$(CONTAINER_NAME):$(VERSION) versions` "\nExpected version: $(VERSION)"; false; else echo "\nVersion check passed\n"; fi
+	if ! docker run $(BUILD_IMAGE):$(VERSION) versions | grep 'node $(VERSION)'; then echo "Reported version:" `docker run $(BUILD_IMAGE):$(VERSION) versions` "\nExpected version: $(VERSION)"; false; else echo "\nVersion check passed\n"; fi
 
 ## Generates release notes based on commits in this version.
 release-notes: release-prereqs
@@ -535,22 +530,18 @@ release-publish: release-prereqs
 # WARNING: Only run this target if this release is the latest stable release. Do NOT
 # run this target for alpha / beta / release candidate builds, or patches to earlier Calico versions.
 ## Pushes `latest` release images. WARNING: Only run this for latest stable releases.
-release-publish-latest: release-prereqs
-	# Check latest versions match.
-	if ! docker run $(CONTAINER_NAME):latest-$(ARCH) versions | grep '^calico\/node $(VERSION)'; then echo "Reported version:" `docker run $(CONTAINER_NAME):latest-$(ARCH) versions` "\nExpected version: $(VERSION)"; false; else echo "\nVersion check passed\n"; fi
-	if ! docker run quay.io/$(CONTAINER_NAME):latest-$(ARCH) versions | grep '^calico\/node $(VERSION)'; then echo "Reported version:" `docker run quay.io/$(CONTAINER_NAME):latest-$(ARCH) versions` "\nExpected version: $(VERSION)"; false; else echo "\nVersion check passed\n"; fi
-
+release-publish-latest: release-verify
 	$(MAKE) push RELEASE=true IMAGETAG=latest ARCH=$(ARCH)
 
 .PHONY: node-test-at
-# Run calico/node docker-image acceptance tests
+# Run docker-image acceptance tests
 node-test-at: release-prereqs
 	docker run -v $(PWD)/tests/at/calico_node_goss.yaml:/tmp/goss.yaml \
-	calico/node:$(VERSION) /bin/sh -c 'apk --no-cache add wget ca-certificates && \
-	wget -q -O /tmp/goss \
-	https://github.com/aelsabbahy/goss/releases/download/v0.3.4/goss-linux-amd64 && \
-	chmod +rx /tmp/goss && \
-	/tmp/goss --gossfile /tmp/goss.yaml validate'
+	  $(BUILD_IMAGE):$(VERSION) /bin/sh -c ' \
+	   apk --no-cache add wget ca-certificates && \
+	   wget -q -O /tmp/goss https://github.com/aelsabbahy/goss/releases/download/v0.3.4/goss-linux-amd64 && \
+	   chmod +rx /tmp/goss && \
+	   /tmp/goss --gossfile /tmp/goss.yaml validate'
 
 # release-prereqs checks that the environment is configured properly to create a release.
 release-prereqs:
