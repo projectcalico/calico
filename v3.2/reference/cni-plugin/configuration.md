@@ -206,7 +206,19 @@ When using `type: k8s`, the Calico CNI plugin requires read-only Kubernetes API 
 
 ## IPAM
 
-When using the CNI `host-local` IPAM plugin, a special value `usePodCidr` is allowed for the subnet field.  This tells the plugin to determine the subnet to use from the Kubernetes API based on the Node.podCIDR field.
+When using the CNI `host-local` IPAM plugin, a special value `usePodCidr` is allowed for the subnet field (either at the top-level, or in a "range").  This tells the plugin to determine the subnet to use from the Kubernetes API based on the Node.podCIDR field.  Calico does not use the `gateway` field of a range so that field is not required and it will be ignored if present.
+
+> **Note**: `usePodCidr` can only be used as the value of the `subnet` field, it cannot be used in 
+> `rangeStart` or `rangeEnd` so those values are not useful if `subnet` is set to `usePodCidr`.
+{: .alert .alert-info}
+
+Calico supports the host-local IPAM plugin's `routes` field as follows:
+
+* If there is no `routes` field, Calico will install a default `0.0.0.0/0`, and/or `::/0` route into the pod (depending on whether the pod has an IPv4 and/or IPv6 address).
+
+* If there is a `routes` field then Calico will program *only* the routes in the routes field into the pod.  Since Calico implements a point-to-point link into the pod, the `gw` field is not required and it will be ignored if present.  All routes that Calico installs will have Calico's link-local IP as the next hop.
+
+Calico CNI plugin configuration:
 
 * `node_name`
     * The node name to use when looking up the `usePodCidr` value (defaults to current hostname)
@@ -222,7 +234,18 @@ When using the CNI `host-local` IPAM plugin, a special value `usePodCidr` is all
     },
     "ipam": {
         "type": "host-local",
-        "subnet": "usePodCidr"
+        "ranges": [
+            [
+                { "subnet": "usePodCidr" }
+            ],
+            [
+                { "subnet": "2001:db8::/96" }
+            ]
+        ],
+        "routes": [
+            { "dst": "0.0.0.0/0" },
+            { "dst": "2001:db8::/96" }
+        ]
     }
 }
 ```
