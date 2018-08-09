@@ -755,6 +755,24 @@ var _ = Describe("With an in-process Server with short ping timeout", func() {
 			expectGaugeValue("typha_connections_active", 0.0)
 		})
 
+		Describe("After sending Hello with bad syncer type", func() {
+			BeforeEach(func() {
+				err := w.Encode(syncproto.Envelope{
+					Message: syncproto.MsgClientHello{
+						Hostname:   "me",
+						Version:    "test",
+						Info:       "test info",
+						SyncerType: syncproto.SyncerType("garbage"),
+					},
+				})
+				Expect(err).NotTo(HaveOccurred())
+			})
+
+			It("should disconnect the client", func() {
+				expectDisconnection(100 * time.Millisecond)
+			})
+		})
+
 		Describe("After sending Hello", func() {
 			BeforeEach(func() {
 				err := w.Encode(syncproto.Envelope{
@@ -787,7 +805,7 @@ var _ = Describe("With an in-process Server with short ping timeout", func() {
 				log.WithError(err).Info("Sent garbage to server")
 				// We don't get dropped as quickly as above because the gob decoder doesn't raise an
 				// error for the above data (presumably, it's still waiting for more data to decode).
-				// We should still get dropped byt he ping timeout though...
+				// We should still get dropped by the ping timeout though...
 				expectDisconnection(time.Second)
 			})
 

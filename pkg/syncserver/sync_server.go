@@ -379,7 +379,7 @@ func (s *Server) serve(cxt context.Context) {
 		connection := &connection{
 			ID:        connID,
 			config:    &s.config,
-			caches:    s.caches,
+			allCaches: s.caches,
 			cxt:       connCxt,
 			cancelCxt: cancel,
 			conn:      conn,
@@ -496,9 +496,12 @@ type connection struct {
 	// shutDownWG is used to wait for our background threads to finish.
 	shutDownWG sync.WaitGroup
 
-	caches map[syncproto.SyncerType]BreadcrumbProvider
-	cache  BreadcrumbProvider
-	conn   net.Conn
+	// allCaches contains a mapping from syncer type (felix/BGP) to the right cache to use.  We don't know
+	// which cache to use until we do the handshake.  Once the handshake is complete, we store the correct
+	// cache in the "cache" field.
+	allCaches map[syncproto.SyncerType]BreadcrumbProvider
+	cache     BreadcrumbProvider
+	conn      net.Conn
 
 	encoder *gob.Encoder
 	readC   chan interface{}
@@ -658,7 +661,7 @@ func (h *connection) doHandshake() error {
 		h.logCxt.Info("Client didn't provide a SyncerType, assuming SyncerTypeFelix for back-compatibility.")
 		syncerType = syncproto.SyncerTypeFelix
 	}
-	desiredSyncerCache := h.caches[syncerType]
+	desiredSyncerCache := h.allCaches[syncerType]
 	if desiredSyncerCache == nil {
 		h.logCxt.WithField("requestedType", syncerType).Info("Client requested unknown SyncerType.")
 		return ErrUnsupportedClientFeature
