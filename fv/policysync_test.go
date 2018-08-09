@@ -33,9 +33,9 @@ import (
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 
-	"github.com/projectcalico/felix/binder"
 	"github.com/projectcalico/libcalico-go/lib/backend/k8s/conversion"
 	"github.com/projectcalico/libcalico-go/lib/options"
+	"github.com/projectcalico/pod2daemon/binder"
 
 	"github.com/projectcalico/felix/dataplane/mock"
 	"github.com/projectcalico/libcalico-go/lib/set"

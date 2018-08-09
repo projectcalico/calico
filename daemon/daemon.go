@@ -35,7 +35,6 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 
-	"github.com/projectcalico/felix/binder"
 	"github.com/projectcalico/felix/buildinfo"
 	"github.com/projectcalico/felix/calc"
 	"github.com/projectcalico/felix/config"
@@ -57,6 +56,7 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/health"
 	lclogutils "github.com/projectcalico/libcalico-go/lib/logutils"
 	"github.com/projectcalico/libcalico-go/lib/set"
+	"github.com/projectcalico/pod2daemon/binder"
 	"github.com/projectcalico/typha/pkg/syncclient"
 )
 
