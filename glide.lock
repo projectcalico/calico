@@ -1,5 +1,5 @@
-hash: e1fec2ab762f7727b4fbbc27165811c345ea2123857321fecf1434e5c16e57f1
-updated: 2018-08-03T06:19:16.531315983Z
+hash: dc6a14ca343a87843a23628bbc8c23a9dd694012fde1170952e9ae94248763d8
+updated: 2018-08-06T18:23:17.627142781Z
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -135,9 +135,20 @@ imports:
   subpackages:
   - pbutil
 - name: github.com/Microsoft/go-winio
-  version: 78439966b38d69bf38227fbf57ac8a6fee70f69a
+  version: a6d595ae73cf27a1b8fc32930668708f45ce1c85
 - name: github.com/Microsoft/hcsshim
-  version: 34a629f78a5d50f7de07727e41a948685c45e026
+  version: 4a468a6f7ae547974bc32911395c51fb1862b7df
+  subpackages:
+  - internal/guid
+  - internal/hcs
+  - internal/hcserror
+  - internal/hns
+  - internal/interop
+  - internal/longpath
+  - internal/mergemaps
+  - internal/safefile
+  - internal/schema1
+  - internal/wclayer
 - name: github.com/mipearson/rfw
   version: 6f0a6f3266ba1058df9ef0c94cda1cecd2e62852
 - name: github.com/modern-go/concurrent
@@ -271,11 +282,11 @@ imports:
   subpackages:
   - nl
 - name: github.com/vishvananda/netns
-  version: 13995c7128ccc8e51e9a6bd2b551020a27180abd
+  version: 8ba1072b58e0c2a240eb5f6120165c7776c3e7b8
 - name: github.com/whyrusleeping/go-logging
   version: 0457bb6b88fc1973573aaf6b5145d8d3ae972390
 - name: golang.org/x/crypto
-  version: 56440b844dfe139a8ac053f4ecac0b20b79058f4
+  version: 49796115aa4b964c318aad4f3084fdb41e9aa067
   subpackages:
   - ssh/terminal
 - name: golang.org/x/net
@@ -349,22 +360,31 @@ imports:
   version: 5b3c4e850e90a4cf6a20ebd46c8b32a0a3afcb9e
   subpackages:
   - balancer
+  - balancer/base
+  - balancer/roundrobin
   - codes
   - connectivity
   - credentials
-  - grpclb/grpc_lb_v1/messages
+  - encoding
+  - encoding/proto
   - grpclog
   - health/grpc_health_v1
   - internal
+  - internal/backoff
+  - internal/channelz
+  - internal/envconfig
+  - internal/grpcrand
+  - internal/transport
   - keepalive
   - metadata
   - naming
   - peer
   - resolver
+  - resolver/dns
+  - resolver/passthrough
   - stats
   - status
   - tap
-  - transport
 - name: gopkg.in/fsnotify/fsnotify.v1
   version: c2828203cd70a50dcccfb2761f8b1f8ceef9a8e9
 - name: gopkg.in/go-playground/validator.v8
