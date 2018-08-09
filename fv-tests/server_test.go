@@ -728,15 +728,22 @@ var _ = Describe("With an in-process Server with short ping timeout", func() {
 
 		expectDisconnection := func(after time.Duration) {
 			var envelope syncproto.Envelope
-			startTime := time.Now()
-			for {
-				err := r.Decode(&envelope)
-				if err != nil {
-					return // Success!
+			disconnected := make(chan struct{})
+
+			go func() {
+				defer close(disconnected)
+				for {
+					err := r.Decode(&envelope)
+					if err != nil {
+						return // Success!
+					}
 				}
-				if time.Since(startTime) > after {
-					Fail("Client should have been disconnected by now")
-				}
+			}()
+
+			select {
+			case <-time.After(after):
+				Fail("client wasn't disconnected within expected time")
+			case <-disconnected:
 			}
 			expectGaugeValue("typha_connections_active", 0.0)
 		}
