@@ -1,5 +1,5 @@
-hash: 254bbdcfd54c0ca77a14d6b3d6806f429852d16c7ba7a84fc23aafc1fbff80ea
-updated: 2018-08-09T08:52:14.683917179Z
+hash: 78c15ed8113db72dac1f65f9498479a24bec0bbff25b4ecf8ed7c2d6fc9b7c8b
+updated: 2018-08-09T10:01:17.850009947Z
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -104,7 +104,7 @@ imports:
 - name: github.com/imdario/mergo
   version: 6633656539c1639d9d78127b7d47c622b5d7b6dc
 - name: github.com/ipfs/go-log
-  version: fbf5fb0559e4040cdf0d36651984eaad45e347f4
+  version: 5dc2060baaf8db344f31dafd852340b93811d03f
   subpackages:
   - tracer
   - tracer/wire

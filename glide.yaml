@@ -13,10 +13,20 @@ import:
 - package: github.com/gogo/protobuf
   subpackages:
   - proto
+# prometheus/client_golang pulls in prometheus/client_model, which depends
+# on this version of golang/protobuf (but none of the prometheus repos provide
+# a dependency manifest). The genproto library (another indirect and unpinned
+# dependency) also depends on this version of protobuf.
+# This commit hash is v1.1.0 (but the hash is used because k8s also pulls in this version)
 - package: github.com/golang/protobuf
+  version: b4deda0973fb4c70b50d226b1af49f3da59f5265
   subpackages:
   - proto
 - package: github.com/jbenet/go-reuseport
+# go-reuseport pulls in go-log without a pin and master is now incompatible with the
+# version of gogo/protobuf that we are using.  Pin to most recent working master revision.
+- package: github.com/ipfs/go-log
+  version: 5dc2060baaf8db344f31dafd852340b93811d03f
 - package: github.com/kardianos/osext
 - package: github.com/kelseyhightower/envconfig
 - package: github.com/mipearson/rfw
