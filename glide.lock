@@ -1,5 +1,5 @@
-hash: 63d6eda5e97f5540e9b6ccaebcf12a95f4ea43a0248c64b0b163130fbe1d01a4
-updated: 2018-08-08T07:36:02.778151371Z
+hash: 605345c98f35978a02ec066be1b1003e3bb6cb7e661700633c07e6abce928e1a
+updated: 2018-08-09T07:36:21.001389896Z
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -106,7 +106,7 @@ imports:
 - name: github.com/kardianos/osext
   version: ae77be60afb1dcacde03767a8c37337fad28ac14
 - name: github.com/kelseyhightower/confd
-  version: 28af93721b7afdef3c4150be6c852beab8c37675
+  version: 027b9420934020f7708f2b20ddc83ae615b2a06e
   repo: https://github.com/projectcalico/confd.git
   subpackages:
   - pkg/backends
@@ -124,9 +124,20 @@ imports:
   subpackages:
   - pbutil
 - name: github.com/Microsoft/go-winio
-  version: 78439966b38d69bf38227fbf57ac8a6fee70f69a
+  version: a6d595ae73cf27a1b8fc32930668708f45ce1c85
 - name: github.com/Microsoft/hcsshim
-  version: 34a629f78a5d50f7de07727e41a948685c45e026
+  version: 4a468a6f7ae547974bc32911395c51fb1862b7df
+  subpackages:
+  - internal/guid
+  - internal/hcs
+  - internal/hcserror
+  - internal/hns
+  - internal/interop
+  - internal/longpath
+  - internal/mergemaps
+  - internal/safefile
+  - internal/schema1
+  - internal/wclayer
 - name: github.com/mipearson/rfw
   version: 6f0a6f3266ba1058df9ef0c94cda1cecd2e62852
 - name: github.com/modern-go/concurrent
@@ -173,7 +184,7 @@ imports:
 - name: github.com/peterbourgon/diskv
   version: 5f041e8faa004a95c88a202771f4cc3e991971e6
 - name: github.com/projectcalico/felix
-  version: 7f97e7a5831339e70e4d018e73790fc435b5c88c
+  version: 8418e022b3395447334078f8f4f28446fe8c2be0
   subpackages:
   - binder
   - buildinfo
@@ -215,7 +226,7 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: cfd40928e8b56a8f7260f99a586f7b1be16a2999
+  version: cac4ce6d0f2f1fdcaac2dcbe613374465cfd4953
   subpackages:
   - lib/apiconfig
   - lib/apis/v1
