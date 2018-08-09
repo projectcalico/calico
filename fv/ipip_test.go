@@ -182,7 +182,7 @@ var _ = infrastructure.DatastoreDescribe("IPIP topology before adding host IPs t
 			// updated as a signal that Felix has restarted.
 			for _, f := range felixes {
 				Eventually(func() int {
-					return getNumIPSetMembers(f.Container, "cali40all-hosts")
+					return getNumIPSetMembers(f.Container, "cali40all-hosts-net")
 				}, "5s", "200ms").Should(BeZero())
 			}
 		})
@@ -190,6 +190,56 @@ var _ = infrastructure.DatastoreDescribe("IPIP topology before adding host IPs t
 		It("should have no workload to workload connectivity", func() {
 			cc.ExpectNone(w[0], w[1])
 			cc.ExpectNone(w[1], w[0])
+			cc.CheckConnectivity()
+		})
+	})
+
+	Context("external nodes configured", func() {
+		BeforeEach(func() {
+			ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+			defer cancel()
+			l, err := client.Nodes().List(ctx, options.ListOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			// Now remove the BGP configuration from node 0
+			node := l.Items[0]
+			// save the old spec
+			prevBGPSpec := *node.Spec.BGP
+			node.Spec.BGP = nil
+			_, err = client.Nodes().Update(ctx, &node, options.SetOptions{})
+			Expect(err).NotTo(HaveOccurred())
+
+			// Removing the BGP config triggers a Felix restart. Wait for the ipset to be updated as a signal that Felix
+			// has restarted.
+			for _, f := range felixes {
+				Eventually(func() int {
+					return getNumIPSetMembers(f.Container, "cali40all-hosts-net")
+				}, "5s", "200ms").Should(Equal(1))
+			}
+
+			updateConfig := func(addr string) {
+				ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+				defer cancel()
+				c, err := client.FelixConfigurations().Get(ctx, "default", options.GetOptions{})
+				Expect(err).NotTo(HaveOccurred())
+				c.Spec.ExternalNodesCIDRList = &[]string{addr, "1.1.1.1"}
+				log.WithFields(log.Fields{"felixconfiguration": c, "adding Addr": addr}).Info("Updataing FelixConfiguration ")
+				_, err = client.FelixConfigurations().Update(ctx, c, options.SetOptions{})
+				Expect(err).NotTo(HaveOccurred())
+			}
+			updateConfig(prevBGPSpec.IPv4Address)
+			// Wait for the config to take
+			for _, f := range felixes {
+				Eventually(func() int {
+					return getNumIPSetMembers(f.Container, "cali40all-hosts-net")
+				}, "5s", "200ms").Should(Equal(3))
+			}
+		})
+
+		It("should have all-hosts-net ipset configured with the external hosts and workloads connect", func() {
+			f := felixes[0]
+			// Add the ip route via tunnel back on the Felix for which we nuked when we removed it's BGP spec.
+			f.Exec("ip", "route", "add", w[1].IP, "via", felixes[1].IP, "dev", "tunl0", "onlink")
+			cc.ExpectSome(w[0], w[1])
 			cc.CheckConnectivity()
 		})
 	})

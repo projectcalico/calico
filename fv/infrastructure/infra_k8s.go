@@ -365,6 +365,7 @@ func (kds *K8sDatastoreInfra) Stop() {
 	cleanupAllGlobalNetworkPolicies(kds.calicoClient)
 	cleanupAllNetworkPolicies(kds.calicoClient)
 	cleanupAllHostEndpoints(kds.calicoClient)
+	cleanupAllFelixConfigurations(kds.calicoClient)
 }
 
 func (kds *K8sDatastoreInfra) GetDockerArgs() []string {
@@ -702,6 +703,21 @@ func cleanupAllHostEndpoints(client client.Interface) {
 	log.WithField("count", len(heps.Items)).Info("HostEndpoints present")
 	for _, hep := range heps.Items {
 		_, err = client.HostEndpoints().Delete(ctx, hep.Name, options.DeleteOptions{})
+		if err != nil {
+			panic(err)
+		}
+	}
+}
+
+func cleanupAllFelixConfigurations(client client.Interface) {
+	ctx := context.Background()
+	fcs, err := client.FelixConfigurations().List(ctx, options.ListOptions{})
+	if err != nil {
+		panic(err)
+	}
+	log.WithField("count", len(fcs.Items)).Info("FelixConfigurations present")
+	for _, fc := range fcs.Items {
+		_, err = client.FelixConfigurations().Delete(ctx, fc.Name, options.DeleteOptions{})
 		if err != nil {
 			panic(err)
 		}

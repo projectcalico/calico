@@ -31,6 +31,7 @@ import (
 	"github.com/kardianos/osext"
 	log "github.com/sirupsen/logrus"
 
+	cnet "github.com/projectcalico/libcalico-go/lib/net"
 	"github.com/projectcalico/libcalico-go/lib/numorstring"
 )
 
@@ -395,4 +396,31 @@ func (p *OneofListParam) Parse(raw string) (result interface{}, err error) {
 		err = p.parseFailed(raw, "unknown option")
 	}
 	return
+}
+
+type CIDRListParam struct {
+	Metadata
+}
+
+func (c *CIDRListParam) Parse(raw string) (result interface{}, err error) {
+	log.WithField("CIDRs raw", raw).Info("CIDRList")
+	values := strings.Split(raw, ",")
+	resultSlice := []string{}
+	for _, in := range values {
+		val := strings.Trim(in, " ")
+		if len(val) == 0 {
+			continue
+		}
+		ip, net, e := cnet.ParseCIDROrIP(val)
+		if e != nil {
+			err = c.parseFailed(in, "invalid CIDR or IP "+val)
+			return
+		}
+		if ip.Version() != 4 {
+			err = c.parseFailed(in, "invalid CIDR or IP (not v4)")
+			return
+		}
+		resultSlice = append(resultSlice, net.String())
+	}
+	return resultSlice, nil
 }

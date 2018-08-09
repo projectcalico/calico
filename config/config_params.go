@@ -189,6 +189,8 @@ type Config struct {
 	ClusterType                    string        `config:"string;"`
 	CalicoVersion                  string        `config:"string;"`
 
+	ExternalNodesCIDRList []string `config:"cidr-list;;die-on-fail"`
+
 	DebugMemoryProfilePath          string        `config:"file;;"`
 	DebugCPUProfilePath             string        `config:"file;/tmp/felix-cpu-<timestamp>.pprof;"`
 	DebugDisableLogDropping         bool          `config:"bool;false"`
@@ -535,6 +537,8 @@ func loadParams() {
 		case "string":
 			param = &RegexpParam{Regexp: StringRegexp,
 				Msg: "invalid string"}
+		case "cidr-list":
+			param = &CIDRListParam{}
 		default:
 			log.Panicf("Unknown type of parameter: %v", kind)
 		}
