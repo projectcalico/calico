@@ -1,5 +1,5 @@
-hash: 78c15ed8113db72dac1f65f9498479a24bec0bbff25b4ecf8ed7c2d6fc9b7c8b
-updated: 2018-08-09T10:01:17.850009947Z
+hash: 99e45bce1604b129e07d0cb72db685e78bc681a10ec5c9a43f15443f38df35a9
+updated: 2018-08-10T06:19:12.083235509Z
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -246,7 +246,7 @@ imports:
   - lib/validator/v3
   - lib/watch
 - name: github.com/projectcalico/typha
-  version: f7fce4ccca315404088c331cad3d722d0f8759b4
+  version: 7daf106c3d2fd701c276c95c11180e1ac5c87eec
   subpackages:
   - pkg/syncclient
   - pkg/syncproto
@@ -360,31 +360,22 @@ imports:
   version: 5b3c4e850e90a4cf6a20ebd46c8b32a0a3afcb9e
   subpackages:
   - balancer
-  - balancer/base
-  - balancer/roundrobin
   - codes
   - connectivity
   - credentials
-  - encoding
-  - encoding/proto
+  - grpclb/grpc_lb_v1/messages
   - grpclog
   - health/grpc_health_v1
   - internal
-  - internal/backoff
-  - internal/channelz
-  - internal/envconfig
-  - internal/grpcrand
-  - internal/transport
   - keepalive
   - metadata
   - naming
   - peer
   - resolver
-  - resolver/dns
-  - resolver/passthrough
   - stats
   - status
   - tap
+  - transport
 - name: gopkg.in/fsnotify/fsnotify.v1
   version: c2828203cd70a50dcccfb2761f8b1f8ceef9a8e9
 - name: gopkg.in/go-playground/validator.v8
