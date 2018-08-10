@@ -76,23 +76,23 @@ traffic in the Istio service mesh, and the corresponding service account identit
 
 ### Determining Ingress IP & Port
 
-You will use the `istio-ingress` service to access the YAO Bank application.
+You will use the `istio-ingressgateway` service to access the YAO Bank application.
 
 1. If your Kubernetes cluster is running in an environment that supports external load balancers, the IP address of 
    ingress can be  obtained by the following command:
 
    ```bash
-   kubectl get ingress -o wide
+   kubectl get svc istio-ingressgateway -n istio-system
    ```
 
    whose output should be similar to
 
    ```bash
-   NAME      HOSTS     ADDRESS                 PORTS     AGE
-   gateway   *         130.211.10.121          80        1d
+   NAME                   TYPE           CLUSTER-IP       EXTERNAL-IP     PORT(S)                                      AGE
+   istio-ingressgateway   LoadBalancer   172.21.109.129   130.211.10.121  80:31380/TCP,443:31390/TCP,31400:31400/TCP   17h
    ```
 
-   The address of the ingress service would then be
+   The address of the ingressgateway service is the external IP of the `istio-ingressgateway`, followed by port 80:
    
    ```bash
    export GATEWAY_URL=130.211.10.121:80
@@ -103,7 +103,7 @@ node, along with the NodePort, to access the ingress. The IP & port can be obtai
 of the following command:
    
    ```bash
-   export GATEWAY_URL=$(kubectl get po -n istio-system -l istio=ingress -o 'jsonpath={.items[0].status.hostIP}'):$(kubectl get svc istio-ingress -n istio-system -o 'jsonpath={.spec.ports[0].nodePort}')
+   export GATEWAY_URL=$(kubectl get po -n istio-system -l istio=ingressgateway -o 'jsonpath={.items[0].status.hostIP}'):$(kubectl get svc istio-ingressgateway -n istio-system -o 'jsonpath={.spec.ports[0].nodePort}')
    ```
 
 Point your browser to `http://$GATEWAY_URL/` to confirm the YAO Bank application is functioning 

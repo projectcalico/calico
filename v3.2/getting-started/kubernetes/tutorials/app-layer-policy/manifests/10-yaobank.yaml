@@ -140,18 +140,36 @@ spec:
         ports:
         - containerPort: 80
 ---
-apiVersion: extensions/v1beta1
-kind: Ingress
+apiVersion: networking.istio.io/v1alpha3
+kind: Gateway
 metadata:
-  name: gateway
-  annotations:
-    kubernetes.io/ingress.class: "istio"
+  name: yaobank
 spec:
-  rules:
-  - http:
-      paths:
-      - path: /
-        backend:
-          serviceName: customer
-          servicePort: 80
+  selector:
+    istio: ingressgateway # use istio default controller
+  servers:
+  - port:
+      number: 80
+      name: http
+      protocol: HTTP
+    hosts:
+    - "*"
 ---
+apiVersion: networking.istio.io/v1alpha3
+kind: VirtualService
+metadata:
+  name: yaobank
+spec:
+  hosts:
+  - "*"
+  gateways:
+  - yaobank
+  http:
+  - match:
+    - uri:
+        prefix: /
+    route:
+    - destination:
+        host: customer
+        port:
+          number: 80
