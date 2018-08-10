@@ -1,4 +1,4 @@
 ---
 layout: null
 ---
-{% include {{page.version}}/manifests/calico-node.yaml datastore="kdd" network="flannel" app_layer_policy="true" %}
+{% include {{page.version}}/manifests/calico-node.yaml datastore="kdd" network="flannel" app_layer_policy="true" variant_name="Canal" %}
