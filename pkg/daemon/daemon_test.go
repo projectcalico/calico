@@ -149,6 +149,8 @@ var _ = Describe("Daemon", func() {
 					Expect(p.Cache).ToNot(BeNil())
 				}
 				Expect(d.Server).ToNot(BeNil())
+				Expect(datastore.bgpSyncerCalled).To(BeTrue())
+				Expect(datastore.felixSyncerCalled).To(BeTrue())
 			})
 
 			It("should start a working server", func() {

@@ -204,7 +204,7 @@ type MsgClientHello struct {
 	Info     string
 	Version  string
 
-	// SyncerType the requested syncer type.  Added in v3.3; if client doesn't providea value, assumed to be
+	// SyncerType the requested syncer type.  Added in v3.3; if client doesn't provide a value, assumed to be
 	// SyncerTypeFelix.
 	SyncerType SyncerType
 }
