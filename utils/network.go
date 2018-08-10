@@ -132,97 +132,94 @@ func DoNetworking(
 		// At this point, the virtual ethernet pair has been created, and both ends have the right names.
 		// Both ends of the veth are still in the container's network namespace.
 
+		// Figure out whether we have IPv4 and/or IPv6 addresses.
 		for _, addr := range result.IPs {
-
-			// Before returning, create the routes inside the namespace, first for IPv4 then IPv6.
 			if addr.Version == "4" {
-				// Add a connected route to a dummy next hop so that a default route can be set
-				gw := net.IPv4(169, 254, 1, 1)
-				gwNet := &net.IPNet{IP: gw, Mask: net.CIDRMask(32, 32)}
-				err := netlink.RouteAdd(
-					&netlink.Route{
-						LinkIndex: contVeth.Attrs().Index,
-						Scope:     netlink.SCOPE_LINK,
-						Dst:       gwNet,
-					},
-				)
-
-				if err != nil {
-					return fmt.Errorf("failed to add route inside the container: %v", err)
-				}
-
-				for _, r := range routes {
-					if r.IP.To4() == nil {
-						logger.WithField("route", r).Debug("Skipping non-IPv4 route")
-						continue
-					}
-					logger.WithField("route", r).Debug("Adding IPv4 route")
-					if err = ip.AddRoute(r, gw, contVeth); err != nil {
-						return fmt.Errorf("failed to add IPv4 route for %v via %v: %v", r, gw, err)
-					}
-				}
-
-				if err = netlink.AddrAdd(contVeth, &netlink.Addr{IPNet: &addr.Address}); err != nil {
-					return fmt.Errorf("failed to add IP addr to %q: %v", contVethName, err)
-				}
-				// Set hasIPv4 to true so sysctls for IPv4 can be programmed when the host side of
-				// the veth finishes moving to the host namespace.
 				hasIPv4 = true
+			} else if addr.Version == "6" {
+				hasIPv6 = true
+			}
+		}
+
+		// Do the per-IP version set-up.  Add gateway routes etc.
+		if hasIPv4 {
+			// Add a connected route to a dummy next hop so that a default route can be set
+			gw := net.IPv4(169, 254, 1, 1)
+			gwNet := &net.IPNet{IP: gw, Mask: net.CIDRMask(32, 32)}
+			err := netlink.RouteAdd(
+				&netlink.Route{
+					LinkIndex: contVeth.Attrs().Index,
+					Scope:     netlink.SCOPE_LINK,
+					Dst:       gwNet,
+				},
+			)
+
+			if err != nil {
+				return fmt.Errorf("failed to add route inside the container: %v", err)
 			}
 
-			// Handle IPv6 routes
-			if addr.Version == "6" {
-				// Make sure ipv6 is enabled in the container/pod network namespace.
-				// Without these sysctls enabled, interfaces will come up but they won't get a link local IPv6 address
-				// which is required to add the default IPv6 route.
-				if err = writeProcSys("/proc/sys/net/ipv6/conf/all/disable_ipv6", "0"); err != nil {
-					return fmt.Errorf("failed to set net.ipv6.conf.all.disable_ipv6=0: %s", err)
+			for _, r := range routes {
+				if r.IP.To4() == nil {
+					logger.WithField("route", r).Debug("Skipping non-IPv4 route")
+					continue
 				}
-
-				if err = writeProcSys("/proc/sys/net/ipv6/conf/default/disable_ipv6", "0"); err != nil {
-					return fmt.Errorf("failed to set net.ipv6.conf.default.disable_ipv6=0: %s", err)
+				logger.WithField("route", r).Debug("Adding IPv4 route")
+				if err = ip.AddRoute(r, gw, contVeth); err != nil {
+					return fmt.Errorf("failed to add IPv4 route for %v via %v: %v", r, gw, err)
 				}
+			}
+		}
 
-				if err = writeProcSys("/proc/sys/net/ipv6/conf/lo/disable_ipv6", "0"); err != nil {
-					return fmt.Errorf("failed to set net.ipv6.conf.lo.disable_ipv6=0: %s", err)
+		if hasIPv6 {
+			// Make sure ipv6 is enabled in the container/pod network namespace.
+			// Without these sysctls enabled, interfaces will come up but they won't get a link local IPv6 address
+			// which is required to add the default IPv6 route.
+			if err = writeProcSys("/proc/sys/net/ipv6/conf/all/disable_ipv6", "0"); err != nil {
+				return fmt.Errorf("failed to set net.ipv6.conf.all.disable_ipv6=0: %s", err)
+			}
+
+			if err = writeProcSys("/proc/sys/net/ipv6/conf/default/disable_ipv6", "0"); err != nil {
+				return fmt.Errorf("failed to set net.ipv6.conf.default.disable_ipv6=0: %s", err)
+			}
+
+			if err = writeProcSys("/proc/sys/net/ipv6/conf/lo/disable_ipv6", "0"); err != nil {
+				return fmt.Errorf("failed to set net.ipv6.conf.lo.disable_ipv6=0: %s", err)
+			}
+
+			// No need to add a dummy next hop route as the host veth device will already have an IPv6
+			// link local address that can be used as a next hop.
+			// Just fetch the address of the host end of the veth and use it as the next hop.
+			addresses, err := netlink.AddrList(hostVeth, netlink.FAMILY_V6)
+			if err != nil {
+				logger.Errorf("Error listing IPv6 addresses for the host side of the veth pair: %s", err)
+				return err
+			}
+
+			if len(addresses) < 1 {
+				// If the hostVeth doesn't have an IPv6 address then this host probably doesn't
+				// support IPv6. Since a IPv6 address has been allocated that can't be used,
+				// return an error.
+				return fmt.Errorf("failed to get IPv6 addresses for host side of the veth pair")
+			}
+
+			hostIPv6Addr := addresses[0].IP
+
+			for _, r := range routes {
+				if r.IP.To4() != nil {
+					logger.WithField("route", r).Debug("Skipping non-IPv6 route")
+					continue
 				}
-
-				// No need to add a dummy next hop route as the host veth device will already have an IPv6
-				// link local address that can be used as a next hop.
-				// Just fetch the address of the host end of the veth and use it as the next hop.
-				addresses, err := netlink.AddrList(hostVeth, netlink.FAMILY_V6)
-				if err != nil {
-					logger.Errorf("Error listing IPv6 addresses for the host side of the veth pair: %s", err)
-					return err
+				logger.WithField("route", r).Debug("Adding IPv6 route")
+				if err = ip.AddRoute(r, hostIPv6Addr, contVeth); err != nil {
+					return fmt.Errorf("failed to add IPv6 route for %v via %v: %v", r, hostIPv6Addr, err)
 				}
+			}
+		}
 
-				if len(addresses) < 1 {
-					// If the hostVeth doesn't have an IPv6 address then this host probably doesn't
-					// support IPv6. Since a IPv6 address has been allocated that can't be used,
-					// return an error.
-					return fmt.Errorf("failed to get IPv6 addresses for host side of the veth pair")
-				}
-
-				hostIPv6Addr := addresses[0].IP
-
-				for _, r := range routes {
-					if r.IP.To4() != nil {
-						logger.WithField("route", r).Debug("Skipping non-IPv6 route")
-						continue
-					}
-					logger.WithField("route", r).Debug("Adding IPv6 route")
-					if err = ip.AddRoute(r, hostIPv6Addr, contVeth); err != nil {
-						return fmt.Errorf("failed to add IPv6 route for %v via %v: %v", r, hostIPv6Addr, err)
-					}
-				}
-
-				if err = netlink.AddrAdd(contVeth, &netlink.Addr{IPNet: &addr.Address}); err != nil {
-					return fmt.Errorf("failed to add IPv6 addr to %q: %v", contVeth, err)
-				}
-
-				// Set hasIPv6 to true so sysctls for IPv6 can be programmed when the host side of
-				// the veth finishes moving to the host namespace.
-				hasIPv6 = true
+		// Now add the IPs to the container side of the veth.
+		for _, addr := range result.IPs {
+			if err = netlink.AddrAdd(contVeth, &netlink.Addr{IPNet: &addr.Address}); err != nil {
+				return fmt.Errorf("failed to add IP addr to %q: %v", contVeth, err)
 			}
 		}
 
