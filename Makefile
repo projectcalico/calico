@@ -117,7 +117,7 @@ MAKE_SURE_BIN_EXIST := $(shell mkdir -p dist .go-pkg-cache $(NODE_CONTAINER_BIN_
 NODE_CONTAINER_FILES=$(shell find ./filesystem -type f)
 SRCFILES=$(shell find ./pkg -name '*.go')
 LOCAL_USER_ID?=$(shell id -u $$USER)
-LDFLAGS=-ldflags "-X main.VERSION=$(CALICO_GIT_VER)"
+LDFLAGS=-ldflags "-X github.com/projectcalico/node/pkg/startup.VERSION=$(CALICO_GIT_VER)"
 PACKAGE_NAME?=github.com/projectcalico/node
 LIBCALICOGO_PATH?=none
 

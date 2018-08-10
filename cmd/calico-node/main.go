@@ -30,9 +30,6 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-// Populated by build - used for printing version.
-var VERSION string
-
 // Create a new flag set.
 var flagSet = flag.NewFlagSet("Calico", flag.ContinueOnError)
 
@@ -89,7 +86,7 @@ func main() {
 
 	// Decide which action to take based on the given flags.
 	if *version {
-		fmt.Println(VERSION)
+		fmt.Println(startup.VERSION)
 		os.Exit(0)
 	} else if *runFelix {
 		felix.Run("/etc/calico/felix.cfg")

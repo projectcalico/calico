@@ -1,5 +1,5 @@
 hash: adb389c256194a039451b8b611a18c1465cbdeb72658dafaf0cb29b4e7942ed7
-updated: 2018-08-09T14:03:58.238724763-07:00
+updated: 2018-08-10T14:21:46.644846591-07:00
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -106,7 +106,7 @@ imports:
 - name: github.com/kardianos/osext
   version: ae77be60afb1dcacde03767a8c37337fad28ac14
 - name: github.com/kelseyhightower/confd
-  version: 28af93721b7afdef3c4150be6c852beab8c37675
+  version: 027b9420934020f7708f2b20ddc83ae615b2a06e
   repo: https://github.com/projectcalico/confd.git
   subpackages:
   - pkg/backends
@@ -184,7 +184,7 @@ imports:
 - name: github.com/peterbourgon/diskv
   version: 5f041e8faa004a95c88a202771f4cc3e991971e6
 - name: github.com/projectcalico/felix
-  version: 2a2fedd7e2831db07d4f36d2ddc928df783e19bb
+  version: 30458090588d14445f4b16b5b80e6db80dbffc33
   subpackages:
   - binder
   - buildinfo
@@ -273,7 +273,7 @@ imports:
   - lib/validator/v3
   - lib/watch
 - name: github.com/projectcalico/typha
-  version: f7fce4ccca315404088c331cad3d722d0f8759b4
+  version: 7daf106c3d2fd701c276c95c11180e1ac5c87eec
   subpackages:
   - pkg/syncclient
   - pkg/syncproto
