@@ -851,6 +851,7 @@ var _ = Describe("CalicoCni", func() {
 			hostLocalIPAMConfigs := []struct {
 				description, config, unexpectedRoute string
 				expectedV4Routes, expectedV6Routes   []string
+				numIPv4IPs, numIPv6IPs               int
 			}{
 				{
 					description: "old-style inline subnet",
@@ -877,6 +878,8 @@ var _ = Describe("CalicoCni", func() {
 						regexp.QuoteMeta("169.254.1.1 dev eth0 scope link"),
 					},
 					unexpectedRoute: regexp.QuoteMeta("10."),
+					numIPv4IPs:      1,
+					numIPv6IPs:      0,
 				},
 				{
 					// This scenario tests IPv4+IPv6 without specifying any routes.
@@ -921,6 +924,8 @@ var _ = Describe("CalicoCni", func() {
 						"ff00::/8 dev eth0  metric 256",
 					},
 					unexpectedRoute: regexp.QuoteMeta("10."),
+					numIPv4IPs:      1,
+					numIPv6IPs:      1,
 				},
 				{
 					// In this scenario, we use a lot more of the host-local IPAM plugin.  Namely:
@@ -942,6 +947,11 @@ var _ = Describe("CalicoCni", func() {
 					          {
 					            "subnet": "usePodCidr"
 					          }
+					       ],
+					       [
+					           { 
+					               "subnet": "10.100.0.0/24" 
+					           }
 					       ],
 					       [
 					          {
@@ -973,6 +983,8 @@ var _ = Describe("CalicoCni", func() {
 						"ff00::/8 dev eth0  metric 256",
 					},
 					unexpectedRoute: "default",
+					numIPv4IPs:      2,
+					numIPv6IPs:      1,
 				},
 			}
 
@@ -1063,6 +1075,14 @@ var _ = Describe("CalicoCni", func() {
 							for _, r := range c.expectedV6Routes {
 								Expect(string(out)).To(MatchRegexp(r))
 							}
+
+							out, err = exec.Command("ip", "addr", "show").Output()
+							Expect(err).NotTo(HaveOccurred())
+							inet := regexp.MustCompile(` {4}inet .*scope global`)
+							Expect(inet.FindAll(out, -1)).To(HaveLen(c.numIPv4IPs))
+							inetv6 := regexp.MustCompile(` {4}inet6 .*scope global`)
+							Expect(inetv6.FindAll(out, -1)).To(HaveLen(c.numIPv6IPs))
+
 							return nil
 						})
 
