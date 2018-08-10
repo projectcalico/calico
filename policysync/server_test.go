@@ -18,9 +18,9 @@ import (
 	"errors"
 	"time"
 
-	"github.com/projectcalico/felix/binder"
 	"github.com/projectcalico/felix/policysync"
 	"github.com/projectcalico/felix/proto"
+	"github.com/projectcalico/pod2daemon/binder"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
