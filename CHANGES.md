@@ -1,5 +1,12 @@
 # Changelog
 
+## 3.2.0
+
+- Update requirements handling
+- Fix DHCP UT so that it works locally as well as in Zuul CI
+- Handle connectivity loss when reading etcd snapshot
+- Add endpoint labels for project ID and name, and for SG names
+
 ## 3.1.3
 
 - No changes

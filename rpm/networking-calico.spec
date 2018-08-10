@@ -3,7 +3,7 @@
 Name:           networking-calico
 Summary:        Project Calico networking for OpenStack/Neutron
 Epoch:          1
-Version:        3.1.3
+Version:        3.2.0
 Release:        1%{?dist}
 License:        Apache-2
 URL:            http://docs.openstack.org/developer/networking-calico/
@@ -161,6 +161,13 @@ rm -rf $RPM_BUILD_ROOT
 
 
 %changelog
+* Fri Aug 10 2018 Neil Jerram <neil@tigera.io> 1:3.2.0-1
+  - networking-calico version 3.2.0 release
+    - Update requirements handling
+    - Fix DHCP UT so that it works locally as well as in Zuul CI
+    - Handle connectivity loss when reading etcd snapshot
+    - Add endpoint labels for project ID and name, and for SG names
+
 * Wed May 30 2018 Neil Jerram <neil@tigera.io> 1:3.1.3-1
   - networking-calico version 3.1.3 release
     - No changes
