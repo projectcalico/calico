@@ -2135,7 +2135,7 @@ master:
      calico/dikastes:
       version: 147c10c
      flexvol:
-      version: latest
+      version: master
 
       
 v3.2:
