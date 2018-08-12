@@ -1,5 +1,6 @@
 ---
 title: Troubleshooting Calico for rkt
+sitemap: false 
 ---
 
 This article contains rkt specific troubleshooting advice for Calico and 

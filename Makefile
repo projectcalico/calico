@@ -88,9 +88,14 @@ endif
 	find $(VERSION) \( -name '*.md' -o -name '*.html' \) -exec sed -i 's#^\(redirect_from:.*\)\.md#\1#' '{}' \;
 
 update_canonical_urls:
-	# You must pass two version numbers into this command, e.g., make update_canonical_urls OLD=v3.0 NEW=v3.1
+	# You must pass two version numbers into this command, e.g., make update_canonical_urls OLD=v3.1 NEW=v3.2
 	# Looks through all directories and replaces previous latest release version numbers in canonical URLs with new
 	find . \( -name '*.md' -o -name '*.html' \) -exec sed -i '/canonical_url:/s/$(OLD)/$(NEW)/g' {} \;
+
+update_sitemap:
+	# You must pass the previous latest version number into this command, e.g., make update_sitemap PREVIOUS=v3.1
+	# Adds metadata to pages in previous release to exclude them from the sitemap.xml
+	find $(PREVIOUS) \( -name '*.md' -o -name '*.html' \) -exec sed -i 's#^title:.*#&\nsitemap: false #' '{}' \;
 
 ###############################################################################
 # Release targets

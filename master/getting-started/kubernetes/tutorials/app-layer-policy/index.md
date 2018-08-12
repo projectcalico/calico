@@ -1,5 +1,6 @@
 ---
 title: Application layer policy tutorial
+sitemap: false 
 canonical_url: 'https://docs.projectcalico.org/master/getting-started/kubernetes/tutorials/app-layer-policy/'
 ---
 

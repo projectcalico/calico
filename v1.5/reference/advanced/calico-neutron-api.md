@@ -1,5 +1,6 @@
 ---
 title: How Calico Interprets Neutron API Calls
+sitemap: false 
 canonical_url: 'https://docs.projectcalico.org/v1.6/reference/advanced/calico-neutron-api'
 ---
 

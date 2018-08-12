@@ -1,5 +1,6 @@
 ---
 title: Using Calico with a secure etcd cluster
+sitemap: false 
 canonical_url: 'https://docs.projectcalico.org/v1.6/reference/advanced/etcd-secure'
 ---
 

@@ -1,5 +1,6 @@
 ---
 title: Contribution Guidelines
+sitemap: false 
 canonical_url: 'https://docs.projectcalico.org/v2.5/reference/contribute'
 ---
 

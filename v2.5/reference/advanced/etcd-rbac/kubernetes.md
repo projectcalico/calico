@@ -1,5 +1,6 @@
 ---
 title: Using etcd RBAC to segment Kubernetes and Calico
+sitemap: false 
 canonical_url: 'https://docs.projectcalico.org/v3.1/reference/advanced/etcd-rbac/kubernetes'
 ---
 

@@ -1,5 +1,6 @@
 ---
 title: calicoctl checksystem
+sitemap: false 
 canonical_url: 'https://docs.projectcalico.org/v3.1/reference/calicoctl/commands/node/checksystem'
 ---
 This section describes the `calicoctl checksystem` commands.

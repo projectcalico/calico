@@ -1,5 +1,6 @@
 ---
 title: Overlapping IPv4 address ranges
+sitemap: false 
 ---
 This document describes how we can use 464XLAT to allow multiple tenants within the same data center to use the same IPv4 address ranges (including actually using the same IPv4 addresses). This is known as “overlapping” IPv4 addresses, and also as “address space isolation”, because it means that an IP address such as 10.10.0.2 (for example) for one tenant has nothing to do with the same IP address being used by a different tenant.
 

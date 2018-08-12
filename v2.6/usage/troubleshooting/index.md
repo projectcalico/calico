@@ -1,5 +1,6 @@
 ---
 title: Troubleshooting
+sitemap: false 
 canonical_url: 'https://docs.projectcalico.org/v3.1/usage/troubleshooting/'
 ---
 

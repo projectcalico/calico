@@ -1,5 +1,6 @@
 ---
 title: Configuring IP-in-IP
+sitemap: false 
 canonical_url: 'https://docs.projectcalico.org/v3.1/usage/configuration/ip-in-ip'
 ---
 

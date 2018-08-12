@@ -14,7 +14,7 @@ tutorial, we will do the following:
 
 This tutorial assumes that your client and each node in your cluster
 have `calicoctl`, etcd, and Docker 1.9 or greater installed in your `$PATH`.
-See our [Prerequisite tutorial]({{site.baseurl}}/{{page.version}}/getting-started/docker/installation/manual) 
+See our [Prerequisite tutorial]({{site.baseurl}}/{{page.version}}/getting-started/docker/installation/manual)
 for instructions on getting this properly set up.
 
 To make things simpler, let's store some commonly used values as environment

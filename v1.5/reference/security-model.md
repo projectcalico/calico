@@ -1,5 +1,6 @@
 ---
 title: Security Policy Model
+sitemap: false 
 canonical_url: 'https://docs.projectcalico.org/v1.6/reference/security-model'
 ---
 

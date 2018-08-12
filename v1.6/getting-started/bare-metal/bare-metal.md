@@ -1,5 +1,6 @@
 ---
 title: Using Calico to Secure Host Interfaces
+sitemap: false 
 canonical_url: 'https://docs.projectcalico.org/v3.1/getting-started/bare-metal/bare-metal'
 ---
 

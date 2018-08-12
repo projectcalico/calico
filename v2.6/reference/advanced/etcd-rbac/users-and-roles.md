@@ -1,5 +1,6 @@
 ---
 title: Creating Users and Roles in etcd
+sitemap: false 
 ---
 
 Providing role based access control within etcd requires the following:

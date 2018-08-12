@@ -1,5 +1,6 @@
 ---
 title: # Running the Calico tutorials on AWS
+sitemap: false 
 ---
 
 Calico is designed to provide high performance massively scalable virtual

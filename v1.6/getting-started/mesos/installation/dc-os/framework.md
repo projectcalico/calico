@@ -1,5 +1,6 @@
 ---
 title: Framework Install Walkthrough
+sitemap: false 
 ---
 
 Calico maintains a Framework for DC/OS for simple installation and use.

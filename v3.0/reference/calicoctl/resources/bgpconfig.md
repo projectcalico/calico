@@ -1,5 +1,6 @@
 ---
 title: BGP Configuration Resource (BGPConfiguration)
+sitemap: false 
 canonical_url: https://docs.projectcalico.org/v3.1/reference/calicoctl/resources/bgpconfig
 ---
 

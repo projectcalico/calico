@@ -1,5 +1,6 @@
 ---
 title: Running the Calico tutorials on DigitalOcean
+sitemap: false 
 ---
 
 

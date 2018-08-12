@@ -1,5 +1,6 @@
 ---
 title: Deploying Calico and Kubernetes on Container Linux by CoreOS using Vagrant and VirtualBox
+sitemap: false 
 canonical_url: 'https://docs.projectcalico.org/v3.1/getting-started/kubernetes/installation/vagrant/'
 ---
 

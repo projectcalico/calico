@@ -1,5 +1,6 @@
 ---
 title: Supported Platforms
+sitemap: false 
 ---
 
 Calico version {{ page.version }} has supported integration with the following platforms.

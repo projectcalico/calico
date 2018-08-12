@@ -1,5 +1,5 @@
 ---
-title: Requirements for Calico with Mesos
+title: Requirements for Calico with Mesos 
 canonical_url: 'https://docs.projectcalico.org/v2.6/getting-started/mesos/installation/dc-os/'
 ---
 
@@ -44,7 +44,7 @@ as Calico by setting the following flag when starting the docker daemon:
 --cluster-store=etcd://$ETCD_IP:$ETCD_PORT
 ```
 
-> **Note**: Set or replace `$ETCD_IP` and `$ETCD_PORT` with the appropriate 
+> **Note**: Set or replace `$ETCD_IP` and `$ETCD_PORT` with the appropriate
 > address of your etcd cluster.
 {: .alert .alert-info}
 
@@ -61,7 +61,7 @@ Cluster Store: etcd://10.0.0.1:2379
 By default, Mesos only enables the "Mesos" Containerizer. Ensure
 the Docker Containerizer is also enabled on each Agent.
 
-> **Note**: You may skip this step if you do not plan on using the Docker 
+> **Note**: You may skip this step if you do not plan on using the Docker
 > Containerizer.
 {: .alert .alert-info}
 
@@ -79,7 +79,7 @@ $ systemctl restart mesos-slave.service
 If you are planning to use Calico with the Unified containerizer,
 [enable the CNI Isolator on each agent](http://mesos.apache.org/documentation/latest/cni/#usage)
 
-> **Note**: You may skip this step if you do not plan on using the 
+> **Note**: You may skip this step if you do not plan on using the
 > Unified Containerizer.
 {: .alert .alert-info}
 

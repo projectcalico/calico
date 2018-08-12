@@ -1,5 +1,6 @@
 ---
 title: Manage `calico/node` using systemd
+sitemap: false 
 canonical_url: 'https://docs.projectcalico.org/v3.1/usage/configuration/as-service'
 ---
 

@@ -1,5 +1,6 @@
 ---
 title: Quickstart with Docker-Compose - Calico for Mesos CNI
+sitemap: false 
 ---
 This directory includes files for running a docker-compose demo of Calico for Mesos CNI.
 

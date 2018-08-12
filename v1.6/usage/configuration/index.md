@@ -1,5 +1,6 @@
 ---
 title: Configuring Calico
+sitemap: false 
 ---
 
 This page describes how to configure Calico. We first describe the

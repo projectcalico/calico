@@ -1,5 +1,6 @@
 ---
 title: Configuring encryption and authentication
+sitemap: false 
 canonical_url: 'https://docs.projectcalico.org/master/usage/encrypt-comms'
 ---
 

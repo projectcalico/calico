@@ -1,5 +1,6 @@
 ---
 title: Releases
+sitemap: false 
 ---
 
 The following table shows component versioning for Calico  **{{ page.version }}**.

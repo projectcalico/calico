@@ -1,5 +1,6 @@
 ---
 title: Using Calico with a secure etcd cluster
+sitemap: false 
 ---
 
 

@@ -1,5 +1,6 @@
 ---
 title: Stars demo with the Mesos Docker Containerizer
+sitemap: false 
 ---
 
 

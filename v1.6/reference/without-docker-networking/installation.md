@@ -1,5 +1,6 @@
 ---
 title: Calico without Docker networking (i.e. `--net=none`)
+sitemap: false 
 ---
 
 

@@ -1,5 +1,6 @@
 ---
 title: Installing Calico CNI for the Unified Containerizer
+sitemap: false 
 ---
 
 This guide details how to add Calico networking to a Mesos Agent with CNI enabled.

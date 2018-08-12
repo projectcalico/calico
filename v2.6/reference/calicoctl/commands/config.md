@@ -1,5 +1,6 @@
 ---
 title: calicoctl config
+sitemap: false 
 ---
 
 This sections describes the `calicoctl config` commands.

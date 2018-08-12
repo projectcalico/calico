@@ -190,6 +190,21 @@ release in the documentation. Perform these steps on a branch off of master.
    >       page was deleted, adjust the version number of the canonical URLs to the final copy of the page.
    >       If the page was renamed, update the canonical URLs to the new path.
 
+### Updating sitemap metadata
+
+   1. Pull the latest master and check out a _new_ branch.
+
+   1. Update the files in the previous latest release to include the `sitemap: false` metadata that excludes them from
+      the sitemap.xml.
+
+      ```
+      make update_sitemap PREVIOUS=vX.Y
+      ```
+
+      Example: `make update_sitemap PREVIOUS=v3.1`, where `3.1` was the previous latest release.
+
+   1. Submit a PR with the sitemap changes.
+
 ## <a name="patch"></a> Performing a "patch" release
 
 ### Creating the release

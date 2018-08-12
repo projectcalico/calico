@@ -1,5 +1,6 @@
 ---
 title: Installing Calico for the Docker Containerizer
+sitemap: false 
 ---
 
 This document provides the commands to download and run Calico

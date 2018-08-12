@@ -1,5 +1,6 @@
 ---
 title: Calico Kubernetes Hosted Install
+sitemap: false 
 ---
 
 Calico can be installed on a Kubernetes cluster with a single command.
