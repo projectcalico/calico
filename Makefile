@@ -519,10 +519,10 @@ ifneq ($(VERSION), $(GIT_VERSION))
 	$(error Attempt to build $(VERSION) from $(GIT_VERSION))
 endif
 
-	$(MAKE) image
-	$(MAKE) tag-images RELEASE=true IMAGETAG=$(VERSION)
+	$(MAKE) image-all
+	$(MAKE) tag-images-all RELEASE=true IMAGETAG=$(VERSION)
 	# Generate the `latest` images.
-	$(MAKE) tag-images RELEASE=true IMAGETAG=latest
+	$(MAKE) tag-images-all RELEASE=true IMAGETAG=latest
 
 ## Verifies the release artifacts produces by `make release-build` are correct.
 release-verify: release-prereqs
@@ -542,7 +542,7 @@ release-publish: release-prereqs
 	git push origin $(VERSION)
 
 	# Push images.
-	$(MAKE) push RELEASE=true IMAGETAG=$(VERSION) ARCH=$(ARCH)
+	$(MAKE) push-all RELEASE=true IMAGETAG=$(VERSION)
 
 	@echo "Finalize the GitHub release based on the pushed tag."
 	@echo ""
@@ -557,7 +557,7 @@ release-publish: release-prereqs
 # run this target for alpha / beta / release candidate builds, or patches to earlier Calico versions.
 ## Pushes `latest` release images. WARNING: Only run this for latest stable releases.
 release-publish-latest: release-verify
-	$(MAKE) push RELEASE=true IMAGETAG=latest ARCH=$(ARCH)
+	$(MAKE) push-all RELEASE=true IMAGETAG=latest
 
 .PHONY: node-test-at
 # Run docker-image acceptance tests
