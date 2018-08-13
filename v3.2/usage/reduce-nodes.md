@@ -1,5 +1,6 @@
 ---
 title: Scheduling to well-known nodes
+redirect_from: latest/usage/reduce-nodes
 canonical_url: 'https://docs.projectcalico.org/master/usage/reduce-nodes'
 ---
 

@@ -1,6 +1,5 @@
 ---
 title: Deploying Calico and Kubernetes on GCE
-redirect_from: latest/getting-started/kubernetes/installation/gce
 canonical_url: 'https://docs.projectcalico.org/v3.1/getting-started/kubernetes/installation/gce'
 ---
 

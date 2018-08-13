@@ -1,6 +1,5 @@
 ---
 title: Releases
-redirect_from: latest/releases/index
 ---
 
 The following table shows component versioning for Calico  **{{ page.version }}**.

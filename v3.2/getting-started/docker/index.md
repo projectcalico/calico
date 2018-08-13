@@ -1,5 +1,6 @@
 ---
 title: Calico with Docker
+redirect_from: latest/getting-started/docker/index
 canonical_url: 'https://docs.projectcalico.org/v2.6/getting-started/docker/'
 ---
 

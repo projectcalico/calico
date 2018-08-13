@@ -1,6 +1,5 @@
 ---
 title: Setting up etcd certificates for RBAC
-redirect_from: latest/reference/advanced/etcd-rbac/index
 canonical_url: 'https://docs.projectcalico.org/v3.1/reference/advanced/etcd-rbac/'
 ---
 

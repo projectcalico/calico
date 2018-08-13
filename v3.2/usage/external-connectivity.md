@@ -1,5 +1,6 @@
 ---
 title: External Connectivity
+redirect_from: latest/usage/external-connectivity
 canonical_url: 'https://docs.projectcalico.org/v3.1/usage/external-connectivity'
 ---
 

@@ -1,5 +1,6 @@
 ---
 title: Generating Certificates for etcd RBAC
+redirect_from: latest/reference/advanced/etcd-rbac/certificate-generation
 canonical_url: 'https://docs.projectcalico.org/v3.1/reference/advanced/etcd-rbac/certificate-generation'
 ---
 

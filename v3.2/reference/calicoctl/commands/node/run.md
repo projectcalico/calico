@@ -1,5 +1,6 @@
 ---
 title: calicoctl node run
+redirect_from: latest/reference/calicoctl/commands/node/run
 canonical_url: 'https://docs.projectcalico.org/v3.1/reference/calicoctl/commands/node/run'
 ---
 
