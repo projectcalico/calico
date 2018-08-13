@@ -2,7 +2,7 @@
 
 Name:           felix
 Summary:        Project Calico virtual networking for cloud data centers
-Version:        3.1.0
+Version:        3.2.0
 Release:        1%{?dist}
 License:        Apache-2
 URL:            http://projectcalico.org
@@ -151,6 +151,135 @@ rm -rf $RPM_BUILD_ROOT
 
 
 %changelog
+* Mon Aug 13 2018 Neil Jerram <neil@tigera.io> 3.2.0-1
+  - Felix v3.2.0 (from Git commit 3045809).
+    [Changes recorded in v3.2.0 tag]
+    - 8c1e6139d933fba9d4736a03cc44d3b755cff604 Sync IPSets over Policy Sync API
+    - 095a132934e671291f4d0e419e71d53c7242f0b4 Restructure for cross-compile
+    - 8030323812799c217394dc6f903c03143383f1f6 Addressing PR feedback
+    - 0e6c116de19b04df7d59445685710113bf5373f3 UT improvements for IPsets over Policy Sync API
+    - 0e1995e89f509e6c0df9ffb59ac9cfebdedd8371 UT temp dir & IPSetType panic tweaks
+    - c2c33aa4746f8e7bbb6ac647b0b4a655fb213086 NetworkSet CIDRs in canonical format
+    - 58578876fd78c02f92fa1f199d818fb66f051922 Add help on supported cross-compile architectures and how to use ARCH
+    - 9bcb67d04c3b09fa77005c6e3c1b34794d2c8743 Refactor PolicySync UT use of temp dirs
+    - 8a03988a80cafeee5a57f36c409a247c973945e2 Refactor to use net.IP.Mask()
+    - 0fefc80e6b61441eca38f6212ee5ae496a4d2a2a Add default tag in calico/felix target
+    - 88df426113971a249cf992ed6977f38fe0158a71 policysync UT
+    - 1f4942ff3d94d161636a57bca50d182e0697d335 EndpointInfo.iteratePolicies() only includes a policy once
+    - 9e23948da46c0c378accc8077d7124fb0a8b505a HavePayload matcher and IPSet type bug fix
+    - 209f2022c852afe7d3ef848ebbb1e2f655e57f7a Rearrange the etcd/felix support code
+    - 3e731cc4bf1a559485410e68bed32949d92cc3a6 Switch HostEndpoint tests to run with KDD
+    - 88c6c99ad1d2a08bb9a58a239ac829dd8053334e Update libcalico-go to f94d044d5357e7d8939fec43efc14124408cd2b9
+    - adf6950c5ed03aab28860154e7bf9723b752dd11 Do not skip PolicySyncPathPrefix
+    - c3ac8e2313c0956779c07453e3af3147941048a7 Pin to using v0.1 of calico/protoc container
+    - 406a4a526d24dd66b38374e1c34c9d7e41509769 Markup to kick GitHub
+    - f5378fb609aac12bc154e582fb8552af341e0d40 Fix package building following recent multiarch changes
+    - 94c3fef384e8cd56cbfa60dc9e6474e6e28ee31b Remove extra definitions of PROTOC_CONTAINER and PROTOC_VER.
+    - 897ba041e1ba48b8979a5ff6accb295aa1d86716 processor_test.go timeouts for large IPSet updates
+    - d03433ef5b6a8f2856c2f500368fc9c8fdec4e98 Ensure RPM directory exists
+    - 3a89b2642a66254c8fc42628aa7b3a6c08ea049d Update libcalico-go to 88291609bbefd0fe22982a7a78ec51d63583a651
+    - 7ba8c7466b9c2069bf9ee587181e38408bff8372 Fix healthaggregator compile issue
+    - ad4f12748ebc1cc0d5593bdf5b23ab001d5a9d70 FVs: Cleanup HostEndpoints for KDD
+    - 12b324fd563f531f236c2a72577fd99828d2694f Unexpected fix for HEP Policy fix
+    - 2bc53100466b0e4d18a7524b38eed44b4885b4e2 Add GINKGO_FOCUS var
+    - 87e42ff8fc04eeb2753cc90e59c53a759a1506c2 FV: fix interfaceName trimming in test-workload
+    - 262b2b10176c0d06f06f12d9d3dc531a0d670c7b Trying the Eventually with a metrics timeout
+    - 40fea2a71dcc242d8db7f86fb6f4a0560447b1ff Make slow test failures obvious
+    - 09057f7ad4458decd258af676d771f10e7da08cd Add stats for policy and profile counts.
+    - 7f81c582f16ad85065d833e8d753f4240e716059 Record 3.1.x packaging on master branch
+    - 24eb27a6cd98085b5bf104069fa0f755da781f0c Work around temporary IP set deletion failure
+    - 5428b5b219a66319aea8e1ac0031e4c45446a182 FV: Understand if there are silent failures
+    - a6ea0e305e9ee20790cad0b4ecad85bb8b1e0e5f FV: Trying to get info on HEP flake
+    - 8788d24e745180587f3c57379507150cb5ec9195 Add retry to workload start
+    - 26c2b6050e017bb602aca8a85c47a25dcb287988 Speculative work around for link not found errors in k8sfv.
+    - 1dba0560710c30e59c45c65adc97545d63ef8dc4 When using host endpoints, make sure we install an allow-to-datastore policy.
+    - 4a297dcca7631b56030eab6c8e92a8ef1c8ddb17 Stop healthchecks from listening on all interfaces.
+    - 8575aea07428f94e1b16721491c46858726af69b Don't mutate protos after sending them to Processor
+    - a2783289f85aeb5a9a968098e597f5465d8f37da Rev go-build to v0.13
+    - 66f966b745dbdb7ee05634b2c74cab1e294685f6 Run pre-commit hook inside container.
+    - d137aeb306255262aef719b37e56d377896c7347 Rev go-build to v0.14.
+    - a19da64c58d317751d7961170b2cb1fb5953113a Changes to allow libcalico-go upgrade for Felix.
+    - 90ec7d8a89ea99451630c38754eafc72358eeef2 Rev typha for matching libcalico-go.
+    - f1085dd7ac3bf056cefec9032a07d1b25a32983b Fix up selector comparison.
+    - 2cf7a677a32b93cf70c420e0d8479dc2bc6f3186 Fix timeout in pre-dnat test.
+    - 2a0747825973a075e83deee0f5bbb4cd7e2094e4 Add support for dumping a CPU profile on SIGUSR2.
+    - 555bfa4336ee6ed871ab2d90abe69aa0c1d09e58 Update libcalico-go to 2bcac53953f662bc5cb1879c93781a5b64f8579d
+    - 80bcd94fdae27cc6b73fa51258ef0668d23cbb4e Use logutils.FieldForceFlush to flush the logs without using Panic().
+    - bfc74a057d30de90e26c507e4ed47fa2376a9e0e Update libcalico-go to e3351395c934cee118999b9d29508e9280fa75ec
+    - a33fedc055612bca19d20eddb165696322b5b028 Squash no-op updates to policy.
+    - 16311602e731af5c52321ba3c76b9e6172b84a04 Work around etcd watcher tight loop.
+    - 02c3a5123d2c743c1669317aab4b7f8d36d2a8d4 Apply TLS to Felix-Typha connections
+    - 072882f6ad58480e7893371851d8810af09dc65f Add FV test with Typha and Felix-Typha TLS
+    - fac5d93aa8fd97268aea6e6ae29d7a9dcccb4485 Update Typha pins
+    - fad8c203851a13671793f77ad472d22fcfaf950d Code review markups
+    - 5aec6e7966764ebf2c4282952d1fc4b98b5f5393 For FV, Typha should serve health on all IPs
+    - a14726e2f7f3446b9960964274f36636d8f5162d Improve calico-diags redaction.
+    - b106eec21b180c68e4a13a051dad0ddb8ccd50b8 Improve diags around startup/restart.
+    - 268648a30ee7fdf785ef80a7bc09767e43d8da44 Have topology wait for any start-of-day Felix restarts.
+    - 764bcf3f7375ca2cd4cad033855b864227f0643c Update libcalico-go to 5646fa11213b9b5314cca7f5b3aa28ea9811c908
+    - c423efc7de4704147f249ec7f4c9582002d53cc3 HTTP Path rule convert over to protobuf.
+    - 0204614c49560bcaf3daa3f5ef6c614457276c9e Address review feedback.
+    - d02b60398a0ef9f8e4582ffe81387e81c2702e85 Fix protbuf name and numbering.
+    - 30c34a181b3af7b11ee50efda2d88ab19b0d9139 Fix up after updating model structs.
+    - f2df0384580d9e648c46c2846cd1f33b1b007068 Fix go-meta-linter errors
+    - 83cc178ca8e360a1e27f15d3ff5691b732e0f00b Check that capitalized 'Append' works for ChainInsertMode
+    - fbb059755e0ad1f15f45cf97fb8477aca1972c8b Avoid creating etcd client twice
+    - 4ce3d9d30b776d190bcbeff0cd04aed124ae8c6a Updated active rule calculator for ALP.
+    - d828d3b68fa1555e6cc3240ce62ebf369ec5e0f6 Added FV for ALP policy counter.
+    - 83be7c9d78e85303a33e40a2a536b79be3f947e5 Update libcalico-go to d3230e0d9ba41b54c082aeaf1c42f6ee98cb3331
+    - 7a68acbf80ba41fd7be2d4993ee4350c05a4cbf8 multi-arch push
+    - f9ed23dece9790441f21a8c45ab7744f27598c99 Update libcalico-go to d6aff54dc3527357f016c0cd5c5364f21a15e9b4
+    - 158165a0b87432034154d1cf3a2a4116373c8d3d Allow others to import and run Felix
+    - df502e4395f1ccb2ed911ab7dd2ee8ebd42de2f8 Check in protobufs
+    - 095d2b449dcc3f317393ba9422a7927f3f62a828 Update release targets to be consistent with other Makefiles
+    - 26ee376a92ddd31a340492f1904698cc8c2b5fd7 Clean up Makefile
+    - a2d3a89d31e5b952985b2a26aeed190a3ef080eb Add NatPortRange configuration option
+    - 9b1c05b425020523243a767c725905209f71e19e Strip v from version string when building debs/rpms
+    - d28a3369e6c11e1f56ff51d990488febc93b3862 Make new config param local
+    - ecf4beeddd3edfecb163aa091828dfa8786e7aad Handle initial Felix restart for IpInIpTunnelAddr config change
+    - 9316e6128dc1e02346af267f61d0489dac914364 use proper type for config param
+    - d88a3c41f1bef5f980d5c6a9bae3bafb6b8e7421 add UT for NATPortRange
+    - bc3e6b5e740ed478d492e9e564df8f3863af9b28 Revert vendor changes
+    - 09187f09c262fff27645c8a94c45cb296781a3ad Allow hep-forwarded traffic by default
+    - 097944e981678303d327f367bc9777b07dda6715 Configure model FV hosts to drop forwarded traffic by default
+    - ab895bd427d1f93f3e2e3ec09b415dc34e3255ae Fix calico-felix --version
+    - 5cb3d28ec88a089d5e1faf365ad479caefb7f4b4 Default-deny hep-forwarded traffic when there are applicable policies
+    - f73c0e54b0eb2fdf6cc91bd76c86f26b3b2bac81 Add FV test for applyOnForward behavior
+    - fdff3cc04415d7b1c57a16bd15f1db34209ccc99 Code review markups
+    - 13b69a30ab7ec9e31c5043719f3f0361ffbf8256 Remove super-spammy throttle log.
+    - 6e5653df6f6c4062138b2372d294eadca36ca25a Replicate all semaphore activities in ci and cd targets
+    - 98b523aa2040efeb37e774fb3d66b6971d345119 use helper method to create port range
+    - 8bca4e48562b226180b5d2d3881f1518444ec08c Avoid double NAT
+    - 5e30b895cb689a322b7345838b80f4c6edf09f68 Remove "local" annotation, capitalize NAT
+    - 96581d3fc70cb9349174949bed141125467f6a26 Bump libcalico/typha dependency
+    - ae9ed07f16062ba4eec699a3d661e47b5c0d0b86 bump k8s to 1.10.4 for FV.
+    - 4cb599a0281b7d332ba0879ec264a24c1c3531c0 Pass in PRIVATE_KEY to FV test scripts.
+    - 77181c3410e1efd18867f382e24b594b4eeb7cf7 Fix k8sfv
+    - e7af13fa09f1c01a0286994f53ec3e408f723018 Review Markup.
+    - 7d831257b8fa717e0a7bcf2867569e74af897bd8 Makefile: Bump etcd version
+    - 9a023491c6625b906d88a4ac7e1674ab35d07ff8 Update libcalico-go pin and clean up glide.yaml
+    - 09730f9f1d0281a0c68dfa2b37a5edd40d0b16c5 ci and cd push all arches; ability to exclude specific
+    - 6108b3c2f2310c2d71f67cf574fa5bd0facd47e8 Fix up yaml license
+    - e4a3ee04f50135739a02ed7f2773fdd7d3c9248b Remove unused CircleCI file
+    - cc62802059169ba7c7337ba958e3a76d126f88ec Build packages for Bionic
+    - 0f4b8299c977884efecfd6eaa9745a1fabdca729 Glide: Remove libcalico-go pin and restore other pins
+    - f9ded81231d56e3cd6a9ac75236e1d3998c399e0 Update go-bulid to v0.17
+    - 22a5a243f1dc4d8afa01b4a0bbf8da3fdcb767b1 Fix up static check
+    - cbcde3c4adf6cdbc24d077a44b50495ec25ba0c8 Update to latest Typha
+    - 543555666874f20435b14e9db3722ae98fa23eca Makefile: Add update-typha job
+    - 7f96dd0bf26300ea3927dd3dae782a6a3097cca2 Automated Typha pin update
+    - 1f1bda93527ade7b55733e1ea43a05e1e657344c gitignore: Add the semaphore cache directory
+    - 7f97e7a5831339e70e4d018e73790fc435b5c88c Automated Typha pin update
+    - 97625f3df770fb721807f16f6ac22e3cca9a246a Update hcsshim and use HNSSupportedFeatures to determine HNS ACL feature compatibility
+    - 4b2a9e53b6c33c3108b1a908492509879e427906 Updating glide
+    - 77f4eeefb8a91bc202a321e26602954e9aaf2cb5 Addressing PR feedback
+    - affb8520341d6b2018022860bf0239c5c671f55f Initial commit for external hosts cidr list.
+    - d31d74b142125506623b13c2683711486850301f Add ability to pre-create a FelixConfiguration in felix FVs.
+    - 439716393b84712596e9649dfc672d4b75ac36e0 Fix UT.  Update name of all-hosts IP set.
+    - ccf08f5e2d238f33e45845b236bf4fb0885ec6ff Resolve glide merge conflict.
+    - d84c3ecdfb120e99276e044b92c16dc1889b0ef7 Pin go-log, which floated to an incompatible version.
+    - 30458090588d14445f4b16b5b80e6db80dbffc33 Automated Typha pin update
+
 * Fri Apr 06 2018 Neil Jerram <neil@tigera.io> 3.1.0-1
   - Felix 3.1.0 (from Git commit dba3279).
     [Changes recorded in 3.1.0 tag]
