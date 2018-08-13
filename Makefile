@@ -432,9 +432,9 @@ release-build: release-prereqs clean
 ifneq ($(VERSION), $(GIT_VERSION))
 	$(error Attempt to build $(VERSION) from $(GIT_VERSION))
 endif
-	$(MAKE) image
-	$(MAKE) tag-images IMAGETAG=$(VERSION)
-	$(MAKE) tag-images IMAGETAG=latest
+	$(MAKE) image-all
+	$(MAKE) tag-images-all IMAGETAG=$(VERSION)
+	$(MAKE) tag-images-all IMAGETAG=latest
 
 ## Verifies the release artifacts produces by `make release-build` are correct.
 release-verify: release-prereqs
@@ -457,7 +457,7 @@ release-publish: release-prereqs
 	git push origin $(VERSION)
 
 	# Push images.
-	$(MAKE) push RELEASE=true IMAGETAG=$(VERSION) ARCH=$(ARCH)
+	$(MAKE) push-all RELEASE=true IMAGETAG=$(VERSION)
 
 	@echo "Finalize the GitHub release based on the pushed tag."
 	@echo "Attach the $(DIST)/calico-typha-amd64 binary."
@@ -477,7 +477,7 @@ release-publish-latest: release-prereqs
 	if ! docker run $(BUILD_IMAGE):latest-$(ARCH) calico-typha --version | grep '$(VERSION)'; then echo "Reported version:" `docker run $(BUILD_IMAGE):latest-$(ARCH) calico-typha --version` "\nExpected version: $(VERSION)"; false; else echo "\nVersion check passed\n"; fi
 	if ! docker run quay.io/$(BUILD_IMAGE):latest-$(ARCH) calico-typha --version | grep '$(VERSION)'; then echo "Reported version:" `docker run quay.io/$(BUILD_IMAGE):latest-$(ARCH) calico-typha --version` "\nExpected version: $(VERSION)"; false; else echo "\nVersion check passed\n"; fi
 
-	$(MAKE) push RELEASE=true IMAGETAG=latest ARCH=$(ARCH)
+	$(MAKE) push-all RELEASE=true IMAGETAG=latest
 
 # release-prereqs checks that the environment is configured properly to create a release.
 release-prereqs:
