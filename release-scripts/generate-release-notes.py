@@ -33,6 +33,8 @@ REPOS = [
         "confd",
         "bird",
         "calico-bgp-daemon",
+        "app-policy",
+        "pod2daemon",
 ]
 
 # Returns a dictionary where the keys are repositories, and the values are
