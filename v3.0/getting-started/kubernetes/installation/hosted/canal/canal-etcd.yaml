@@ -232,6 +232,9 @@ spec:
             # Disable Calico BGP.  Calico is simply enforcing policy.
             - name: CALICO_NETWORKING_BACKEND
               value: "none"
+            # Enable felix logging.
+            - name: FELIX_LOGSEVERITYSCREEN
+              value: "info"
             # Cluster type to identify the deployment type
             - name: CLUSTER_TYPE
               value: "k8s,canal"
