@@ -1,5 +1,5 @@
-hash: 605345c98f35978a02ec066be1b1003e3bb6cb7e661700633c07e6abce928e1a
-updated: 2018-08-09T07:36:21.001389896Z
+hash: bc8ff25089544d4201bfb8d13001dfca7b88dad635ed9a75503d8de8e47b80d0
+updated: 2018-08-13T07:38:24.16010341Z
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -184,9 +184,8 @@ imports:
 - name: github.com/peterbourgon/diskv
   version: 5f041e8faa004a95c88a202771f4cc3e991971e6
 - name: github.com/projectcalico/felix
-  version: 8418e022b3395447334078f8f4f28446fe8c2be0
+  version: 4f9d7ece4ca6ba0cfb7a73d908db873f061a0a3a
   subpackages:
-  - binder
   - buildinfo
   - calc
   - config
@@ -272,8 +271,12 @@ imports:
   - lib/validator/v1
   - lib/validator/v3
   - lib/watch
+- name: github.com/projectcalico/pod2daemon
+  version: df2b9c8d2744ebce544742f7f765b59c5e88db0d
+  subpackages:
+  - binder
 - name: github.com/projectcalico/typha
-  version: a14c9d3651189da5112dfebedfbbd2c5ba84ffea
+  version: 7daf106c3d2fd701c276c95c11180e1ac5c87eec
   subpackages:
   - pkg/syncclient
   - pkg/syncproto
