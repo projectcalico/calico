@@ -1,6 +1,6 @@
 ---
 title: IP Pool Resource (IPPool)
-canonical_url: https://docs.projectcalico.org/v3.1/reference/calicoctl/resources/ippool
+canonical_url: https://docs.projectcalico.org/v3.2/reference/calicoctl/resources/ippool
 ---
 
 An IP pool resource (`IPPool`) represents a collection of IP addresses from which Calico expects

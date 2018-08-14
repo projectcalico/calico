@@ -1,6 +1,6 @@
 ---
 title: calicoctl CLI user reference
-canonical_url: 'https://docs.projectcalico.org/v3.1/reference/calicoctl/'
+canonical_url: 'https://docs.projectcalico.org/v3.2/reference/calicoctl/'
 ---
 
 The command line tool, `calicoctl`, makes it easy to configure and start Calico

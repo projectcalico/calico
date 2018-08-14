@@ -1,6 +1,6 @@
 ---
 title: calico/ctl container
-canonical_url: 'https://docs.projectcalico.org/v3.1/usage/calicoctl/install'
+canonical_url: 'https://docs.projectcalico.org/v3.2/usage/calicoctl/install'
 ---
 
 With each release of calicoctl the docker container `calico/ctl` is released to

@@ -1,6 +1,6 @@
 ---
 title: Running Calico Node Container as a Service
-canonical_url: 'https://docs.projectcalico.org/v3.1/usage/configuration/as-service'
+canonical_url: 'https://docs.projectcalico.org/v3.2/usage/configuration/as-service'
 ---
 
 This guide explains how to run Calico as a system process or service,

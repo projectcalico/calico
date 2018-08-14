@@ -1,6 +1,6 @@
 ---
 title: Using calicoctl in Kubernetes
-canonical_url: 'https://docs.projectcalico.org/v3.1/getting-started/kubernetes/tutorials/using-calicoctl'
+canonical_url: 'https://docs.projectcalico.org/v3.2/getting-started/kubernetes/tutorials/using-calicoctl'
 ---
 
 There are two ways to run `calicoctl` in Kubernetes:

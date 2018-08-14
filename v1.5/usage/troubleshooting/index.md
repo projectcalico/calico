@@ -1,6 +1,6 @@
 ---
 title: Troubleshooting
-canonical_url: 'https://docs.projectcalico.org/v3.1/usage/troubleshooting/'
+canonical_url: 'https://docs.projectcalico.org/v3.2/usage/troubleshooting/'
 ---
 
 ## Running `sudo calicoctl ...` with Environment Variables

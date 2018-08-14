@@ -1,6 +1,6 @@
 ---
 title: Alternative Felix Install with PyInstaller Bundle
-canonical_url: 'https://docs.projectcalico.org/v3.1/getting-started/bare-metal/bare-metal-install'
+canonical_url: 'https://docs.projectcalico.org/v3.2/getting-started/bare-metal/bare-metal-install'
 ---
 
 These instructions will take you through a first-time install of

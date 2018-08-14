@@ -1,6 +1,6 @@
 ---
 title: Adding Calico to an Existing Kubernetes Cluster
-canonical_url: 'https://docs.projectcalico.org/v3.1/getting-started/kubernetes/installation/'
+canonical_url: 'https://docs.projectcalico.org/v3.2/getting-started/kubernetes/installation/'
 ---
 
 

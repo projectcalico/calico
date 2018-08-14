@@ -1,7 +1,7 @@
 ---
 title: Installing Calico on host endpoints
 redirect_from: latest/getting-started/bare-metal/installation/index
-canonical_url: 'https://docs.projectcalico.org/v3.1/getting-started/bare-metal/installation/'
+canonical_url: 'https://docs.projectcalico.org/v3.2/getting-started/bare-metal/installation/'
 ---
 
 You can use any of the following methods to install Felix on bare metal.

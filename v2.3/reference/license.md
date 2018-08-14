@@ -1,6 +1,6 @@
 ---
 title: Third Party Software Attributions
-canonical_url: 'https://docs.projectcalico.org/v3.1/reference/license'
+canonical_url: 'https://docs.projectcalico.org/v3.2/reference/license'
 ---
 
 

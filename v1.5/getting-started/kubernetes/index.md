@@ -1,6 +1,6 @@
 ---
 title: Kubernetes
-canonical_url: 'https://docs.projectcalico.org/v3.1/getting-started/kubernetes/'
+canonical_url: 'https://docs.projectcalico.org/v3.2/getting-started/kubernetes/'
 ---
 Calico can be used as a network plugin for Kubernetes to provide connectivity and network policy in a Kubernetes cluster.
 Calico allows you to enforce fine-grained network security policy natively in Kubernetes. The video below shows a quick demonstration of Calico policy in action.

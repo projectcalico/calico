@@ -1,7 +1,7 @@
 ---
 title: Installing Calico on Kubernetes
 redirect_from: latest/getting-started/kubernetes/installation/index
-canonical_url: https://docs.projectcalico.org/v3.1/getting-started/kubernetes/installation/
+canonical_url: https://docs.projectcalico.org/v3.2/getting-started/kubernetes/installation/
 ---
 
 We provide a number of manifests to get you up and running with {{site.prodname}} in
