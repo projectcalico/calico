@@ -1,7 +1,7 @@
 ---
 title: Worked Examples Using Calico-based OpenStack
 redirect_from: latest/getting-started/openstack/tutorials
-canonical_url: 'https://docs.projectcalico.org/v3.1/getting-started/openstack/tutorials'
+canonical_url: 'https://docs.projectcalico.org/v3.2/getting-started/openstack/tutorials'
 ---
 
 Here are a few worked examples for common {{site.prodname}} on OpenStack deployment

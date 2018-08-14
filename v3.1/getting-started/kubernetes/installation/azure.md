@@ -1,6 +1,6 @@
 ---
 title: Deploying Calico and Kubernetes on Azure
-canonical_url: 'https://docs.projectcalico.org/v3.1/getting-started/kubernetes/installation/azure'
+canonical_url: 'https://docs.projectcalico.org/v3.2/getting-started/kubernetes/installation/azure'
 ---
 
 There are a number of solutions for deploying {{site.prodname}} and Kubernetes on Azure.  We recommend taking

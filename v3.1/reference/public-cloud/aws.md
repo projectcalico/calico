@@ -1,6 +1,6 @@
 ---
 title: AWS
-canonical_url: https://docs.projectcalico.org/v3.1/reference/public-cloud/aws
+canonical_url: https://docs.projectcalico.org/v3.2/reference/public-cloud/aws
 ---
 
 {{site.prodname}} provides the following advantages when running in AWS:

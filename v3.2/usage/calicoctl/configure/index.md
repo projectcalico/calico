@@ -1,7 +1,7 @@
 ---
 title: Configuring calicoctl
 redirect_from: latest/usage/calicoctl/configure/index
-canonical_url: 'https://docs.projectcalico.org/v3.1/usage/calicoctl/configure/'
+canonical_url: 'https://docs.projectcalico.org/v3.2/usage/calicoctl/configure/'
 ---
 
 ### About configuring calicoctl

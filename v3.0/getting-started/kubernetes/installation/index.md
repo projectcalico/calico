@@ -1,6 +1,6 @@
 ---
 title: Installing Calico on Kubernetes
-canonical_url: https://docs.projectcalico.org/v3.1/getting-started/kubernetes/installation/
+canonical_url: https://docs.projectcalico.org/v3.2/getting-started/kubernetes/installation/
 ---
 
 Calico can be installed on a Kubernetes cluster in a number of configurations.  This document

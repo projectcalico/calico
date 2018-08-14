@@ -1,6 +1,6 @@
 ---
 title: calicoctl node status
-canonical_url: https://docs.projectcalico.org/v3.1/reference/calicoctl/commands/node/status
+canonical_url: https://docs.projectcalico.org/v3.2/reference/calicoctl/commands/node/status
 ---
 
 This sections describes the `calicoctl node status` command.

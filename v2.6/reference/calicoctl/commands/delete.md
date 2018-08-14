@@ -1,6 +1,6 @@
 ---
 title: calicoctl delete
-canonical_url: 'https://docs.projectcalico.org/v3.1/reference/calicoctl/commands/delete'
+canonical_url: 'https://docs.projectcalico.org/v3.2/reference/calicoctl/commands/delete'
 ---
 
 This sections describes the `calicoctl delete` command.

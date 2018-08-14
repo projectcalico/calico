@@ -1,6 +1,6 @@
 ---
 title: Configuring the Calico CNI plugins
-canonical_url: https://docs.projectcalico.org/v3.1/reference/cni-plugin/configuration
+canonical_url: https://docs.projectcalico.org/v3.2/reference/cni-plugin/configuration
 ---
 
 The Calico CNI plugin is configured through the standard CNI [configuration mechanism](https://github.com/containernetworking/cni/blob/master/SPEC.md#network-configuration)

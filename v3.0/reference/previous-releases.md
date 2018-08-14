@@ -1,6 +1,6 @@
 ---
 title: Previous releases
-canonical_url: https://docs.projectcalico.org/v3.1/reference/previous-releases
+canonical_url: https://docs.projectcalico.org/v3.2/reference/previous-releases
 ---
 
 

@@ -1,7 +1,7 @@
 ---
 title: Resource Definitions
 redirect_from: latest/reference/calicoctl/resources/index
-canonical_url: 'https://docs.projectcalico.org/v3.1/reference/calicoctl/resources/'
+canonical_url: 'https://docs.projectcalico.org/v3.2/reference/calicoctl/resources/'
 ---
 
 This section describes the set of valid resource types that can be managed

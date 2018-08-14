@@ -1,6 +1,6 @@
 ---
 title: External Connectivity
-canonical_url: 'https://docs.projectcalico.org/v3.1/usage/external-connectivity'
+canonical_url: 'https://docs.projectcalico.org/v3.2/usage/external-connectivity'
 ---
 
 {{site.prodname}} creates a routed network on which your containers look like normal IP
