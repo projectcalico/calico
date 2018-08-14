@@ -152,7 +152,7 @@ release in the documentation. Perform these steps on a branch off of master.
 
 ### Promoting to the latest release
 
-1. Add a new `<option>` entry to the `<span class="dropdown">` in `_layouts/docwithnav.html` file.
+1. Add TWO new `<option>` entries to the `<span class="dropdown">` in `_layouts/docwithnav.html` file.
 
 1. Modify the redirect in `/index.html` to point to your new release.
 
