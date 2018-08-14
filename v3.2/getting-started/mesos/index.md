@@ -1,5 +1,6 @@
 ---
 title: Integration Guide
+redirect_from: latest/getting-started/mesos/index
 canonical_url: 'https://docs.projectcalico.org/v2.6/getting-started/mesos/'
 ---
 

@@ -1,5 +1,6 @@
 ---
 title: Verifying your Calico on OpenStack deployment
+redirect_from: latest/getting-started/openstack/verification
 canonical_url: 'https://docs.projectcalico.org/v3.1/getting-started/openstack/verification'
 ---
 

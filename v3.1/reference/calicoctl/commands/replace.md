@@ -1,6 +1,5 @@
 ---
 title: calicoctl replace
-redirect_from: latest/reference/calicoctl/commands/replace
 canonical_url: 'https://docs.projectcalico.org/v3.1/reference/calicoctl/commands/replace'
 ---
 

@@ -1,6 +1,5 @@
 ---
 title: Deploying Calico and Kubernetes on Azure
-redirect_from: latest/getting-started/kubernetes/installation/azure
 canonical_url: 'https://docs.projectcalico.org/v3.1/getting-started/kubernetes/installation/azure'
 ---
 

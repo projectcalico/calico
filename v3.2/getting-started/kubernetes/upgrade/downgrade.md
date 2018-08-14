@@ -1,5 +1,6 @@
 ---
 title: Downgrading Calico
+redirect_from: latest/getting-started/kubernetes/upgrade/downgrade
 canonical_url: 'https://docs.projectcalico.org/v3.1/getting-started/kubernetes/upgrade/downgrade'
 ---
 

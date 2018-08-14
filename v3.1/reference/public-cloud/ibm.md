@@ -1,6 +1,5 @@
 ---
 title: Calico Configured Automatically in IBM Cloud
-redirect_from: latest/reference/public-cloud/ibm
 canonical_url: https://docs.projectcalico.org/v3.1/reference/public-cloud/ibm
 ---
 

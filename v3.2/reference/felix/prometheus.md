@@ -1,5 +1,6 @@
 ---
 title: Felix Prometheus Statistics
+redirect_from: latest/reference/felix/prometheus
 canonical_url: 'https://docs.projectcalico.org/v3.1/reference/felix/prometheus'
 ---
 

@@ -1,6 +1,5 @@
 ---
 title: Creating Users and Roles in etcd
-redirect_from: latest/reference/advanced/etcd-rbac/users-and-roles
 canonical_url: 'https://docs.projectcalico.org/v3.1/reference/advanced/etcd-rbac/users-and-roles'
 ---
 

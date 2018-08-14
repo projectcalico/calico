@@ -1,5 +1,6 @@
 ---
 title: Calico Repositories
+redirect_from: latest/reference/repo-structure
 canonical_url: 'https://docs.projectcalico.org/v3.1/reference/repo-structure'
 ---
 

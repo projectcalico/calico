@@ -1,6 +1,5 @@
 ---
 title: Deploying Calico on GCE
-redirect_from: latest/reference/public-cloud/gce
 canonical_url: https://docs.projectcalico.org/v3.1/reference/public-cloud/gce
 ---
 

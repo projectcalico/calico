@@ -1,5 +1,6 @@
 ---
 title: Upgrading Calico
+redirect_from: latest/getting-started/openstack/upgrade/index
 canonical_url: 'https://docs.projectcalico.org/v3.1/getting-started/openstack/upgrade/'
 ---
 ## Upgrade procedure
