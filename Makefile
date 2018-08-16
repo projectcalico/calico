@@ -39,11 +39,7 @@ _site build:
 
 ## Clean enough that a new release build will be clean
 clean:
-	# Clean jekyll
-	docker run --rm -ti -e JEKYLL_UID=`id -u` -v $$PWD:/srv/jekyll jekyll/jekyll:$(JEKYLL_VERSION) jekyll clean
-
-	# Remove any release directories
-	rm -rf _output
+	rm -rf _output _site .jekyll-metadata
 
 ###############################################################################
 # CI / test targets
