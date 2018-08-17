@@ -149,7 +149,7 @@ bin/dikastes-%: vendor proto $(SRC_FILES)
       -v $(CURDIR)/.go-pkg-cache:/go-cache/:rw \
       -e GOCACHE=/go-cache \
       -w /go/src/$(PACKAGE_NAME) \
-	    $(GO_BUILD_CONTAINER) go build -v -o bin/dikastes-$(ARCH)
+	    $(GO_BUILD_CONTAINER) go build -ldflags "-X main.VERSION=$(GIT_VERSION) -s -w" -v -o bin/dikastes-$(ARCH)
 
 # We use gogofast for protobuf compilation.  Regular gogo is incompatible with
 # gRPC, since gRPC uses golang/protobuf for marshalling/unmarshalling in that
@@ -342,8 +342,8 @@ endif
 ## Verifies the release artifacts produces by `make release-build` are correct.
 release-verify: release-prereqs
 	# Check the reported version is correct for each release artifact.
-	if ! docker run $(CONTAINER_NAME):$(VERSION)-$(ARCH) version | grep 'Version:\s*$(VERSION)$$'; then \
-	  echo "Reported version:" `docker run $(CONTAINER_NAME):$(VERSION)-$(ARCH) version` "\nExpected version: $(VERSION)"; \
+	if ! docker run $(CONTAINER_NAME):$(VERSION)-$(ARCH) /dikastes --version | grep 'Version:\s*$(VERSION)$$'; then \
+	  echo "Reported version:" `docker run $(CONTAINER_NAME):$(VERSION)-$(ARCH) /dikastes --version` "\nExpected version: $(VERSION)"; \
 	  false; \
 	else \
 	  echo "Version check passed\n"; \
