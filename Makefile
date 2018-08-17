@@ -1,6 +1,7 @@
 CALICO_DIR=$(shell git rev-parse --show-toplevel)
 VERSIONS_FILE?=$(CALICO_DIR)/_data/versions.yml
 JEKYLL_VERSION=pages
+HP_VERSION=v0.2
 DEV?=false
 CONFIG=--config _config.yml
 ifeq ($(DEV),true)
@@ -10,6 +11,9 @@ endif
 # Determine whether there's a local yaml installed or use dockerized version.
 # Note in order to install local (faster) yaml: "go get github.com/mikefarah/yaml"
 YAML_CMD:=$(shell which yaml || echo docker run --rm -i calico/yaml)
+
+# Local directories to ignore when running htmlproofer
+HP_IGNORE_LOCAL_DIRS="/v1.5/,/v1.6/,/v2.0/,/v2.1/,/v2.2/,/v2.3/,/v2.4/,/v2.5/,/v2.6/,/v3.0/"
 
 ##############################################################################
 # Version information used for cutting a release.
@@ -47,22 +51,22 @@ clean:
 
 ci: htmlproofer kubeval
 
-htmlproofer: clean _site
-	# Run htmlproofer, failing if we hit any errors.
-	./htmlproofer.sh
+htmlproofer: _site
+	docker run -ti -e JEKYLL_UID=`id -u` --rm -v $(PWD)/_site:/_site/ quay.io/calico/htmlproofer:$(HP_VERSION) /_site --assume-extension --check-html --empty-alt-ignore --file-ignore $(HP_IGNORE_LOCAL_DIRS) --internal_domains "docs.projectcalico.org" --disable_external --allow-hash-href
 
-kubeval:
+kubeval: _site
 	# Run kubeval to check master manifests are valid Kubernetes resources.
 	docker run -v $$PWD:/calico --entrypoint /bin/sh -ti garethr/kubeval:0.1.1 -c 'ok=true; for f in `find /calico/_site/master -name "*.yaml" |grep -v "\(config\|allow-istio-pilot\|30-policy\|istio-app-layer-policy\).yaml"`; do echo Running kubeval on $$f; /kubeval $$f || ok=false; done; $$ok'
-
-htmlproofer-all:
-	# Run htmlproofer across _all_ files. This is not part of CI.
-	echo "Running a soft check across all files"
-	docker run -ti -e JEKYLL_UID=`id -u` --rm -v $(pwd)/_site:/_site/ quay.io/calico/htmlproofer:${HP_VERSION} /_site --assume-extension --check-html --empty-alt-ignore --url-ignore "#"
 
 ###############################################################################
 # Docs automation
 ###############################################################################
+
+# URLs to ignore when checking external links.
+HP_IGNORE_URLS=/docs.openshift.org/
+
+check_external_links: _site
+	docker run -ti -e JEKYLL_UID=`id -u` --rm -v $(PWD)/_site:/_site/ quay.io/calico/htmlproofer:$(HP_VERSION) /_site --external_only --file-ignore $(HP_IGNORE_LOCAL_DIRS) --assume-extension --url-ignore $(HP_IGNORE_URLS) --internal_domains "docs.projectcalico.org"
 
 strip_redirects:
 	find \( -name '*.md' -o -name '*.html' \) -exec sed -i'' '/redirect_from:/d' '{}' \;
