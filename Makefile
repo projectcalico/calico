@@ -38,18 +38,19 @@ ifeq ($(ARCH),x86_64)
     override ARCH=amd64
 endif
 
-
 # list of arches *not* to build when doing *-all
 #    until s390x works correctly
 EXCLUDEARCH ?= s390x
 VALIDARCHES = $(filter-out $(EXCLUDEARCH),$(ARCHES))
-
 
 ###############################################################################
 GO_BUILD_VER?=v0.17
 GO_BUILD_CONTAINER?=calico/go-build:$(GO_BUILD_VER)
 PROTOC_VER?=v0.1
 PROTOC_CONTAINER?=calico/protoc:$(PROTOC_VER)-$(BUILDARCH)
+
+# Get version from git - used for releases.
+GIT_VERSION?=$(shell git describe --tags --dirty)
 
 # Figure out the users UID/GID.  These are needed to run docker containers
 # as the current user and ensure that files built inside containers are
