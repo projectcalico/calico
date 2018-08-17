@@ -95,7 +95,7 @@ LOCAL_USER_ID?=$(shell id -u $$USER)
 
 .PHONY: clean
 clean:
-	rm -rf $(BIN) vendor $(DEPLOY_CONTAINER_MARKER) .go-pkg-cache k8s-install/scripts/install_cni.test
+	rm -rf $(BIN) bin/github vendor $(DEPLOY_CONTAINER_MARKER) .go-pkg-cache k8s-install/scripts/install_cni.test
 
 ###############################################################################
 # Building the binary
@@ -387,6 +387,11 @@ endif
 	$(MAKE) tag-images-all IMAGETAG=$(VERSION)
 	$(MAKE) tag-images-all IMAGETAG=latest
 
+	# Copy artifacts for upload to GitHub.
+	mkdir -p bin/github
+	$(foreach var,$(VALIDARCHES), cp bin/$(var)/calico bin/github/calico-$(var);)
+	$(foreach var,$(VALIDARCHES), cp bin/$(var)/calico-ipam bin/github/calico-ipam-$(var);)
+
 ## Verifies the release artifacts produces by `make release-build` are correct.
 release-verify: release-prereqs
 	# Check the reported version is correct for each release artifact.
@@ -412,7 +417,7 @@ release-publish: release-prereqs
 	$(MAKE) push IMAGETAG=$(VERSION) ARCH=$(ARCH)
 
 	@echo "Finalize the GitHub release based on the pushed tag."
-	@echo "Attach the $(BIN)/calico and $(BIN)/calico-ipam binaries."
+	@echo "Attach all binaries in bin/github to the release."
 	@echo ""
 	@echo "  https://$(PACKAGE_NAME)/releases/tag/$(VERSION)"
 	@echo ""
