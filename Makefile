@@ -279,7 +279,7 @@ release-publish: release-prereqs
 
 	@echo "Finalize the GitHub release based on the pushed tag."
 	@echo ""
-	@echo "  https://$(PACKAGE_NAME)/releases/tag/$(VERSION)"
+	@echo "  https://github.com/projectcalico/confd/releases/tag/$(VERSION)"
 	@echo ""
 
 # release-prereqs checks that the environment is configured properly to create a release.
