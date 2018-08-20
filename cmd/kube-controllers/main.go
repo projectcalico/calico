@@ -147,7 +147,7 @@ func main() {
 	}
 
 	// If configured to do so, start an etcdv3 compaction.
-	startCompactor(ctx, config)
+	go startCompactor(ctx, config)
 
 	// Run the health checks on a separate goroutine.
 	if config.HealthEnabled {
@@ -211,13 +211,18 @@ func startCompactor(ctx context.Context, config *config.Config) {
 		return
 	}
 
-	// Kick off a periodic compaction of etcd.
-	etcdClient, err := newEtcdV3Client()
-	if err != nil {
-		log.WithError(err).Error("Failed to start etcd compaction routine")
-	} else {
+	// Kick off a periodic compaction of etcd, retry until success.
+	for {
+		etcdClient, err := newEtcdV3Client()
+		if err != nil {
+			log.WithError(err).Error("Failed to start etcd compaction routine, retry in 1m")
+			time.Sleep(1 * time.Minute)
+			continue
+		}
+
 		log.WithField("period", interval).Info("Starting periodic etcdv3 compaction")
 		etcd3.StartCompactor(ctx, etcdClient, interval)
+		break
 	}
 }
 
