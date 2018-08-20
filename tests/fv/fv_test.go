@@ -164,7 +164,7 @@ var _ = Describe("kube-controllers FV tests", func() {
 	})
 
 	Context("Node FV tests", func() {
-		It("should be removed in response to a k8s node delete [Release]", func() {
+		It("should be removed in response to a k8s node delete", func() {
 			kn := &v1.Node{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: kNodeName,
@@ -423,7 +423,7 @@ var _ = Describe("kube-controllers FV tests", func() {
 			}, time.Second*15, 500*time.Millisecond).ShouldNot(HaveOccurred())
 		})
 
-		It("should update existing profiles in etcd to match namespaces in k8s [Release]", func() {
+		It("should update existing profiles in etcd to match namespaces in k8s", func() {
 			profile, err := calicoClient.Profiles().Get(context.Background(), profName, options.GetOptions{})
 			By("getting the profile", func() {
 				Expect(err).ShouldNot(HaveOccurred())
@@ -565,7 +565,7 @@ var _ = Describe("kube-controllers FV tests", func() {
 			}, time.Second*15, 500*time.Millisecond).ShouldNot(HaveOccurred())
 		})
 
-		It("should re-program policies that have changed in etcd [Release]", func() {
+		It("should re-program policies that have changed in etcd", func() {
 			p, err := calicoClient.NetworkPolicies().Get(context.Background(), policyNamespace, genPolicyName, options.GetOptions{})
 			By("getting the policy", func() {
 				Expect(err).ShouldNot(HaveOccurred())
