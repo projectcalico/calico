@@ -364,10 +364,14 @@ ifneq ($(VERSION), $(GIT_VERSION))
 	$(error Attempt to build $(VERSION) from $(GIT_VERSION))
 endif
 
-	$(MAKE) image-all
+	$(MAKE) build-all image-all
 	$(MAKE) tag-images-all IMAGETAG=$(VERSION)
-	# Generate the `latest` images.
 	$(MAKE) tag-images-all IMAGETAG=latest
+
+	# Copy the amd64 variant to calicoctl - for now various downstream projects
+	# expect this naming convention. Until they can be swapped over, we still need to
+	# publish a binary called calicoctl.
+	$(MAKE) bin/calicoctl
 
 ## Verifies the release artifacts produces by `make release-build` are correct.
 release-verify: release-prereqs
