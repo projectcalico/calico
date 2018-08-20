@@ -58,14 +58,27 @@ GIT_VERSION?=$(shell git describe --tags --dirty)
 LOCAL_USER_ID:=$(shell id -u)
 MY_GID:=$(shell id -g)
 
-PACKAGE_NAME?=github.com/projectcalico/app-policy
 SRC_FILES=$(shell find -name '*.go' |grep -v vendor)
-CONTAINER_NAME?=calico/dikastes
 
-# Pre-configured docker run command that runs as this user with the repo
-# checked out to /code, uses the --rm flag to avoid leaving the container
-# around afterwards.
-DOCKER_RUN_RM:=docker run --rm --user $(MY_UID):$(MY_GID) -v ${CURDIR}:/code
+############################################################################
+CONTAINER_NAME?=calico/dikastes
+PACKAGE_NAME?=github.com/projectcalico/app-policy
+
+# Allow libcalico-go and the ssh auth sock to be mapped into the build container.
+ifdef LIBCALICOGO_PATH
+  EXTRA_DOCKER_ARGS += -v $(LIBCALICOGO_PATH):/go/src/github.com/projectcalico/libcalico-go:ro
+endif
+ifdef SSH_AUTH_SOCK
+  EXTRA_DOCKER_ARGS += -v $(SSH_AUTH_SOCK):/ssh-agent --env SSH_AUTH_SOCK=/ssh-agent
+endif
+
+ # Pre-configured docker run command that runs as this user with the repo
+ # checked out to /code, uses the --rm flag to avoid leaving the container
+ # around afterwards.
+DOCKER_RUN_RM:=docker run --rm \
+               $(EXTRA_DOCKER_ARGS) \
+               --user $(LOCAL_USER_ID):$(MY_GID) -v $(CURDIR):/code
+
 
 ENVOY_API=vendor/github.com/envoyproxy/data-plane-api
 EXT_AUTH=$(ENVOY_API)/envoy/service/auth/v2alpha/
