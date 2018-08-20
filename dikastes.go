@@ -46,11 +46,13 @@ Options:
   -l --listen <port>     Unix domain socket path [default: /var/run/dikastes/dikastes.sock]
   -d --dial <target>     Target to dial. [default: localhost:50051]
   --debug                Log at Debug level.`
-const version = "0.1"
+
+var VERSION string
+
 const NODE_NAME_ENV = "K8S_NODENAME"
 
 func main() {
-	arguments, err := docopt.Parse(usage, nil, true, version, false)
+	arguments, err := docopt.Parse(usage, nil, true, VERSION, false)
 	if err != nil {
 		println(usage)
 		return
