@@ -481,13 +481,6 @@ ut combined.coverprofile: vendor/.up-to-date $(SRC_FILES)
 	@echo Running Go UTs.
 	$(DOCKER_GO_BUILD) ./utils/run-coverage $(GINKGO_ARGS)
 
-.PHONY: upload-to-coveralls
-upload-to-coveralls: combined.coverprofile
-ifndef COVERALLS_REPO_TOKEN
-	$(error COVERALLS_REPO_TOKEN is undefined - run using make upload-to-coveralls COVERALLS_REPO_TOKEN=abcd)
-endif
-	$(DOCKER_GO_BUILD) goveralls -repotoken=$(COVERALLS_REPO_TOKEN) -coverprofile=combined.coverprofile
-
 ###############################################################################
 # FV Tests
 ###############################################################################
@@ -630,7 +623,7 @@ bin/test-connection: $(SRC_FILES) vendor/.up-to-date
 .PHONY: ci cd
 
 ## run CI cycle - build, test, etc.
-ci: image-all bin/calico-felix.exe ut upload-to-coveralls static-checks
+ci: image-all bin/calico-felix.exe ut static-checks
 ifeq (,$(filter fv, $(EXCEPT)))
 	@$(MAKE) fv
 endif
