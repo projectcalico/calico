@@ -335,12 +335,6 @@ ut combined.coverprofile: vendor/.up-to-date $(SRC_FILES)
 	@echo Running Go UTs.
 	$(DOCKER_GO_BUILD) ./utils/run-coverage
 
-.PHONY: upload-to-coveralls
-upload-to-coveralls: combined.coverprofile
-ifndef COVERALLS_REPO_TOKEN
-	$(error COVERALLS_REPO_TOKEN is undefined - run using make upload-to-coveralls COVERALLS_REPO_TOKEN=abcd)
-endif
-	$(DOCKER_GO_BUILD) goveralls -repotoken=$(COVERALLS_REPO_TOKEN) -coverprofile=combined.coverprofile
 ###############################################################################
 # CI/CD
 ###############################################################################
@@ -352,7 +346,7 @@ version: image
 	docker run --rm $(CONTAINER_NAME):latest-$(ARCH) calico-typha --version
 
 ## Builds the code and runs all tests.
-ci: image-all version static-checks ut upload-to-coveralls
+ci: image-all version static-checks ut
 ifeq (,$(filter k8sfv-test, $(EXCEPT)))
 	@$(MAKE) k8sfv-test
 endif
