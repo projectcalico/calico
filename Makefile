@@ -414,7 +414,8 @@ release-publish: release-prereqs
 	git push origin $(VERSION)
 
 	# Push images.
-	$(MAKE) push-all RELEASE=true IMAGETAG=$(VERSION) ARCH=$(ARCH)
+	$(MAKE) push-all RELEASE=true IMAGETAG=$(VERSION)
+
 
 	@echo "Finalize the GitHub release based on the pushed tag."
 	@echo "Attach all binaries in bin/github to the release."
@@ -434,7 +435,8 @@ release-publish-latest: release-prereqs
 	if ! docker run $(CONTAINER_NAME):latest-$(ARCH) calico -v | grep '^$(VERSION)$$'; then echo "Reported version:" `docker run $(CONTAINER_NAME):latest-$(ARCH) calico -v` "\nExpected version: $(VERSION)"; false; else echo "\nVersion check passed\n"; fi
 	if ! docker run quay.io/$(CONTAINER_NAME):latest-$(ARCH) calico -v | grep '^$(VERSION)$$'; then echo "Reported version:" `docker run quay.io/$(CONTAINER_NAME):latest-$(ARCH) calico -v` "\nExpected version: $(VERSION)"; false; else echo "\nVersion check passed\n"; fi
 
-	$(MAKE) push RELEASE=true IMAGETAG=latest ARCH=$(ARCH)
+	$(MAKE) push RELEASE=true IMAGETAG=latest
+
 
 # release-prereqs checks that the environment is configured properly to create a release.
 release-prereqs:
