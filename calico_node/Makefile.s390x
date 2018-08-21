@@ -1,0 +1,84 @@
+# Want to build the following binaries here in place of how they are obtained in the 
+# current Makefile: 
+# bird
+# felix (depends on protoc -> which needs a patch to be brought into the code before it's built)
+# calico-bgp-daemon (instead of using the calico-bgp-daemon make target -> in the docker container -> )
+# confd
+
+BIRD_URL:=git@github.com:projectcalico/bird.git 
+CONFD_URL := git@github.com:projectcalico/confd.git
+BGP_URL := git@github.com:projectcalico/calico-bgp-daemon.git
+FELIX_URL := git@github.com:projectcalico/felix.git
+# commit that includes a big endian fix needed for building on s390x
+PROTOC_URL := git@github.com:tigera/docker-protobuf.git
+PROTOC_VER := f319f977d93af36dc8c08c7a4a2f85d651789ad7
+Z_GO_BUILD_IMAGE ?=  
+# Using the upstream commit that includes s390x change NOTE later will want to align with the version that is used in the regular Calico releases
+BIRD_VER := a13538acc13b50e8530452b2d646da10c7da1d3e
+PROTOC_NAMESPACE ?= 
+
+.PHONY: update-felix
+$(NODE_CONTAINER_BIN_DIR)/calico-felix update-felix:
+	mkdir -p $(@D)
+	# pull or build the protoc container 
+	if ! docker pull $(PROTOC_NAMESPACE)/protoc:$(PROTOC_VER)$(ARCHTAG); then \
+	  git clone $(PROTOC_URL) ;\
+	  git -C docker-protobuf checkout $(PROTOC_VER) ;\
+	  docker build . -f docker-protobuf/Dockerfile -t calico/protoc$(ARCHTAG) ;\
+	  docker tag calico/protoc$(ARCHTAG)  $(PROTOC_NAMESPACE)/protoc:$(PROTOC_VER)$(ARCHTAG) ;\
+	  docker push $(PROTOC_NAMESPACE)/protoc:$(PROTOC_VER)$(ARCHTAG) ;\
+	else \
+	  docker tag $(PROTOC_NAMESPACE)/protoc:$(PROTOC_VER)$(ARCHTAG) calico/protoc$(ARCHTAG) ;\
+	fi 
+	git clone -b $(FELIX_VER) --single-branch $(FELIX_URL)
+	$(MAKE) GO_BUILD_CONTAINER=$(Z_GO_BUILD_IMAGE) -C felix  bin/calico-felix # this requires protoc 
+	cp felix/bin/calico-felix $@
+	chmod +x $(@D)/*
+	rm -rf felix
+
+# Get bird binaries
+$(NODE_CONTAINER_BIN_DIR)/bird:
+	# This make target actually builds the bird6 and birdcl binaries too
+	# Copy patched BIRD daemon with tunnel support. ?
+	mkdir -p  $(NODE_CONTAINER_BIN_DIR)
+	#git clone -b $(BIRD_VER) --single-branch $(BIRD_URL)
+	#git clone -b s390x --single-branch $(BIRD_URL)
+	git clone $(BIRD_URL)
+	cd bird && git checkout $(BIRD_REF) && ARCH=s390x ./build.sh
+	#
+	# copy the bird binaries into their respective directories
+	cp bird/dist/s390x/bird6 $(@D)/bird6
+	cp bird/dist/s390x/bird $(@D)/bird
+	cp bird/dist/s390x/birdcl $(@D)/birdcl
+	chmod +x $(@D)/*
+
+
+# Get the confd binary
+$(NODE_CONTAINER_BIN_DIR)/confd:
+	mkdir -p $(@D)
+	# Latest confd binaries are stored in automated builds of calico/confd.
+	# To get them, we create (but don't start) a container from that image.
+	git clone -b $(CONFD_VER) --single-branch $(CONFD_URL)
+	#$(MAKE) GO_BUILD_CONTAINER=$(Z_GO_BUILD_IMAGE) -C confd container
+	$(MAKE) GO_BUILD_CONTAINER=$(Z_GO_BUILD_IMAGE) -C confd bin/confd
+	#
+	# Then we copy the files out of the container.  Since docker preserves
+	# mtimes on its copy, check the file really did appear, then touch it
+	# to make sure that downstream targets get rebuilt.
+	cp confd/bin/confd $@
+	chmod +x $@
+	rm -rf confd
+
+# Get the calico-bgp-daemon binary
+$(NODE_CONTAINER_BIN_DIR)/calico-bgp-daemon:
+	mkdir -p $(NODE_CONTAINER_BIN_DIR)
+#	# clone calico bgp daemon 
+	git clone -b $(GOBGPD_VER) --single-branch $(BGP_URL) 
+	docker run  \
+	  -v $(CURDIR)/$$(basename $@):/go/src/github.com/projectcalico/$$(basename $@) \
+	  -e LOCAL_USER_ID=$(shell id -u $$USER) \
+	  -w /go/src/github.com/projectcalico/$$(basename $@) \
+	  $(Z_GO_BUILD_IMAGE) /bin/sh -c 'glide install -strip-vendor && make binary'
+	cp calico-bgp-daemon/dist/calico-bgp-daemon $@
+	chmod +x $(@D)/* 
+	rm -rf calico-bgp-daemon
