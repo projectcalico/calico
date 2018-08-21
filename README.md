@@ -1,6 +1,6 @@
 # Application Layer Policy
 
-This is a technical preview of Application Layer Policy for [Project Calico][calico], which enforces network and
+Application Layer Policy for [Project Calico][calico] enforces network and
 application layer authorization policies using [Istio].
 
 ![arch](https://github.com/projectcalico/app-policy/raw/master/docs/arch.png)
@@ -9,8 +9,8 @@ Istio mints and distributes cryptographic identities and uses them to establish 
 between pods.  Calico enforces authorization policy on this communication integrating cryptographic identities and 
 network layer attributes.
 
-A small shim filter is inserted into the proxy, which calls out to Calico components when service requests are
-processed.  We compute policy based on a global store which is distributed to the Calico components.
+The `envoy.ext_authz` filter inserted into the proxy, which calls out to Dikastes when service requests are
+processed.  We compute policy based on a global store which is distributed to Dikastes by its local Felix.
  
 ## Getting Started
  
@@ -381,14 +381,11 @@ service account we disallow the connection.
 
 ## Known Limitations
 
-This is an early access preview and it has not been fully integrated with all aspects of Calico.  In particular
 
- - Only GlobalNetworkPolicies are supported.  Calico NetworkPolicy objects cannot yet be used for Application Layer 
-   Policy
- - Only `Allow` rules are fully supported.  The demo supports whitelisting traffic with allow rules.  More advanced use
-   cases like mixing `Allow` and `Deny` rules are not yet supported.
- - The decision engine queries the Kube API Server on every request.  This is fine for small test applications, but
-   will not scale to large clusters.  Future versions will integrate with the API sync functionality in `calico-node`.
+ - Only `Allow` rules can be used with Application Layer Policy selectors. If you use `Deny` or `Pass` rules they
+   must be restricted to network layer selectors.
+ - Application Layer Policy selectors are only supported on ingress policy.  If you use egress policy, you must
+   restrict to network layer selectors.
 
 ## FAQ
 
