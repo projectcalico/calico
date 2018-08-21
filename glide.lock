@@ -1,5 +1,5 @@
-hash: 430b831498dd8b349de2627ac7a84a5a662bbf556a1ad08388c1ee2f29ec069c
-updated: 2018-08-16T07:36:22.965182882Z
+hash: b8a6a3adc939d3d6b954f4c0d2cbbdf5f97848f595858bb307876413c6f58594
+updated: 2018-08-21T07:40:45.753804062Z
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -106,7 +106,7 @@ imports:
 - name: github.com/kardianos/osext
   version: ae77be60afb1dcacde03767a8c37337fad28ac14
 - name: github.com/kelseyhightower/confd
-  version: 027b9420934020f7708f2b20ddc83ae615b2a06e
+  version: e123725a9ed9a621a5c8c2c4d8c445a882d4fa36
   repo: https://github.com/projectcalico/confd.git
   subpackages:
   - pkg/backends
@@ -184,7 +184,7 @@ imports:
 - name: github.com/peterbourgon/diskv
   version: 5f041e8faa004a95c88a202771f4cc3e991971e6
 - name: github.com/projectcalico/felix
-  version: a9c5d482557ab306f35de2da1f8d556d5ca065ed
+  version: 0b523865b87771a0eefe54210c873ef158ef00ed
   subpackages:
   - buildinfo
   - calc
@@ -276,7 +276,7 @@ imports:
   subpackages:
   - binder
 - name: github.com/projectcalico/typha
-  version: 7daf106c3d2fd701c276c95c11180e1ac5c87eec
+  version: 2fef2942b2e1edeee3dcec20c32d6cc9055f996c
   subpackages:
   - pkg/syncclient
   - pkg/syncproto
