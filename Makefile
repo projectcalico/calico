@@ -685,10 +685,10 @@ ifneq ($(VERSION), $(GIT_VERSION))
 	$(error Attempt to build $(VERSION) from $(GIT_VERSION))
 endif
 
-	$(MAKE) image
-	$(MAKE) tag-images IMAGETAG=$(VERSION)
+	$(MAKE) image-all
+	$(MAKE) tag-images-all IMAGETAG=$(VERSION)
 	# Generate the `latest` images.
-	$(MAKE) tag-images IMAGETAG=latest
+	$(MAKE) tag-images-all IMAGETAG=latest
 
 ## Verifies the release artifacts produces by `make release-build` are correct.
 release-verify: release-prereqs
@@ -718,7 +718,7 @@ release-publish: release-prereqs
 	git push origin $(VERSION)
 
 	# Push images.
-	$(MAKE) push IMAGETAG=$(VERSION) ARCH=$(ARCH)
+	$(MAKE) push-all IMAGETAG=$(VERSION)
 
 	@echo "Finalize the GitHub release based on the pushed tag."
 	@echo ""
@@ -746,7 +746,7 @@ release-publish-latest: release-prereqs
 	  fi \
 	done; \
 
-	$(MAKE) push IMAGETAG=latest ARCH=$(ARCH)
+	$(MAKE) push-all IMAGETAG=latest
 
 # release-prereqs checks that the environment is configured properly to create a release.
 release-prereqs:
