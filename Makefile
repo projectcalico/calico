@@ -184,8 +184,9 @@ DOCKER_GO_BUILD := mkdir -p .go-pkg-cache && \
                               --net=host \
                               $(EXTRA_DOCKER_ARGS) \
                               -e LOCAL_USER_ID=$(LOCAL_USER_ID) \
+                              -e GOCACHE=/gocache \
                               -v $(CURDIR):/go/src/$(PACKAGE_NAME):rw \
-                              -v $(CURDIR)/.go-pkg-cache:/go/pkg:rw \
+                              -v $(CURDIR)/.go-pkg-cache:/gocache:rw \
                               -w /go/src/$(PACKAGE_NAME) \
                               -e GOARCH=$(ARCH) \
                               $(CALICO_BUILD)
