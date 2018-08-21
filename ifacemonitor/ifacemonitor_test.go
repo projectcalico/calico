@@ -69,6 +69,7 @@ type mockDataplane struct {
 }
 
 func (nl *netlinkTest) addLink(name string) {
+	log.WithFields(log.Fields{"name": name}).Info("ADDLINK")
 	nl.linksMutex.Lock()
 	if nl.links == nil {
 		nl.links = map[string]linkModel{}
@@ -85,6 +86,7 @@ func (nl *netlinkTest) addLink(name string) {
 }
 
 func (nl *netlinkTest) renameLink(oldName, newName string) {
+	log.WithFields(log.Fields{"oldName": oldName, "newName": newName}).Info("RENAMELINK")
 	nl.linksMutex.Lock()
 	link := nl.links[oldName]
 	delete(nl.links, oldName)
@@ -94,6 +96,7 @@ func (nl *netlinkTest) renameLink(oldName, newName string) {
 }
 
 func (nl *netlinkTest) changeLinkState(name string, state string) {
+	log.WithFields(log.Fields{"name": name, "state": state}).Info("CHANGELINKSTATE")
 	nl.linksMutex.Lock()
 	link := nl.links[name]
 	link.state = state
@@ -103,6 +106,7 @@ func (nl *netlinkTest) changeLinkState(name string, state string) {
 }
 
 func (nl *netlinkTest) delLink(name string) {
+	log.WithFields(log.Fields{"name": name}).Info("DELLINK")
 	var oldIndex int
 	nl.linksMutex.Lock()
 	link, prs := nl.links[name]
@@ -155,6 +159,7 @@ func (nl *netlinkTest) signalLink(name string, oldIndex int) {
 }
 
 func (nl *netlinkTest) addAddr(name string, addr string) {
+	log.WithFields(log.Fields{"name": name, "addr": addr}).Info("ADDADDR")
 	nl.linksMutex.Lock()
 	link := nl.links[name]
 	link.addrs.Add(addr)
@@ -164,6 +169,7 @@ func (nl *netlinkTest) addAddr(name string, addr string) {
 }
 
 func (nl *netlinkTest) delAddr(name string, addr string) {
+	log.WithFields(log.Fields{"name": name, "addr": addr}).Info("DELADDR")
 	nl.linksMutex.Lock()
 	link := nl.links[name]
 	link.addrs.Discard(addr)
@@ -255,8 +261,7 @@ func (nl *netlinkTest) AddrList(link netlink.Link, family int) ([]netlink.Addr, 
 }
 
 func (dp *mockDataplane) linkStateCallback(ifaceName string, ifaceState ifacemonitor.State) {
-	log.Info("linkStateCallback: ifaceName=", ifaceName)
-	log.Info("linkStateCallback: ifaceState=", ifaceState)
+	log.WithFields(log.Fields{"name": ifaceName, "state": ifaceState}).Info("CALLBACK LINK")
 	dp.linkC <- linkUpdate{
 		name:  ifaceName,
 		state: ifaceState,
@@ -281,7 +286,7 @@ func (dp *mockDataplane) addrStateCallback(ifaceName string, addrs set.Set) {
 	log.WithFields(log.Fields{
 		"ifaceName": ifaceName,
 		"addrs":     addrs,
-	}).Info("Address state updated")
+	}).Info("CALLBACK ADDR")
 	dp.addrC <- addrState{ifaceName: ifaceName, addrs: addrs}
 	log.Info("mock dataplane reported address callback")
 }
