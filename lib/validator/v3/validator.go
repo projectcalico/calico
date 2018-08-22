@@ -1074,11 +1074,5 @@ func ruleUsesAppLayerPolicy(rule *api.Rule) (bool, reflect.Value, string) {
 	if rule.HTTP != nil {
 		return true, reflect.ValueOf(rule.HTTP), "HTTP"
 	}
-	if rule.Source.ServiceAccounts != nil {
-		return true, reflect.ValueOf(rule.Source.ServiceAccounts), "Source.ServiceAccounts"
-	}
-	if rule.Destination.ServiceAccounts != nil {
-		return true, reflect.ValueOf(rule.Destination.ServiceAccounts), "Destination.ServiceAccounts"
-	}
 	return false, reflect.Value{}, ""
 }
