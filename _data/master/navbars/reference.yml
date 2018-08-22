@@ -117,8 +117,6 @@ toc:
   section:
   - title: Introduction
     path: /reference/architecture/
-  - title: calico/node
-    path: /reference/architecture/components
   - title: Data Path
     path: /reference/architecture/data-path
 - title: Advanced
