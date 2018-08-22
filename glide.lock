@@ -1,5 +1,5 @@
-hash: afdb4e14a82e1bbd4f29a28100993bb7301dd3cd915616c23fd804d9a3580685
-updated: 2018-08-21T06:20:10.167833498Z
+hash: a910dc8bc390867aadab7ef1867fa40b80521ba7f4a89df4a678260fbe074a8a
+updated: 2018-08-22T06:19:31.206633002Z
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -250,13 +250,13 @@ imports:
   subpackages:
   - binder
 - name: github.com/projectcalico/typha
-  version: 2fef2942b2e1edeee3dcec20c32d6cc9055f996c
+  version: d03567ad2547e49c0411e6aa17ea107746b84e2f
   subpackages:
   - pkg/syncclient
   - pkg/syncproto
   - pkg/tlsutils
 - name: github.com/prometheus/client_golang
-  version: 5b23715facdef1452016bae512489c3cdf82458c
+  version: 29e6500a95d6ab373cae935d8615527ca38be74f
   subpackages:
   - prometheus
   - prometheus/promhttp
