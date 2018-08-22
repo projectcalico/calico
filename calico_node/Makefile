@@ -174,7 +174,6 @@ dist/calico-cni-plugin dist/calico-ipam-plugin:
 	-docker rm -f calico-cni
 
 test_image: calico_test.created ## Create the calico/test image
-
 calico_test.created: $(TEST_CONTAINER_FILES)
 	cd calico_test && docker build -f Dockerfile$(ARCHTAG).calico_test -t $(TEST_CONTAINER_NAME) .
 	touch calico_test.created
