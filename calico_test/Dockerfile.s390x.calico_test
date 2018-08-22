@@ -32,6 +32,14 @@
 # - eliminate most isolation, (--uts=host --pid=host --net=host --privileged)
 # - volume mount your ST source code
 # - run 'nosetests'
+
+# The Dockerfile.s390x.calico_test is copied from node/calico_test/Dockerfile.calico_test.
+# Modifications done includes:
+# 1) Base image has been changed from FROM docker:1.13.0 to FROM s390x/docker:18.03.0
+# 2) Maintainer is changed
+# 3) Updated ca-certificates
+# 4) Removed the "Install etcdctl" part and added steps to extract etcd from the copied tar file.
+
 FROM s390x/docker:18.03.0
 MAINTAINER LoZ Open Source Ecosystem (https://www.ibm.com/developerworks/community/groups/community/lozopensource)
 
