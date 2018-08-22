@@ -1,5 +1,5 @@
-hash: b8a6a3adc939d3d6b954f4c0d2cbbdf5f97848f595858bb307876413c6f58594
-updated: 2018-08-21T07:40:45.753804062Z
+hash: b51195425e56ac766a942891acfe7f46b139aee6bfd187cc35cc358d6fa13fe2
+updated: 2018-08-22T07:36:22.605569055Z
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -184,7 +184,7 @@ imports:
 - name: github.com/peterbourgon/diskv
   version: 5f041e8faa004a95c88a202771f4cc3e991971e6
 - name: github.com/projectcalico/felix
-  version: 0b523865b87771a0eefe54210c873ef158ef00ed
+  version: 03c34d31d9e3f30ce60849ff304c8e909f267bf2
   subpackages:
   - buildinfo
   - calc
@@ -276,7 +276,7 @@ imports:
   subpackages:
   - binder
 - name: github.com/projectcalico/typha
-  version: 2fef2942b2e1edeee3dcec20c32d6cc9055f996c
+  version: d03567ad2547e49c0411e6aa17ea107746b84e2f
   subpackages:
   - pkg/syncclient
   - pkg/syncproto
