@@ -1,4 +1,3 @@
-# Copyright IBM Corp. 2018
 FROM s390x/alpine:3.6
 MAINTAINER LoZ Open Source Ecosystem (https://www.ibm.com/developerworks/community/groups/community/lozopensource)
 
