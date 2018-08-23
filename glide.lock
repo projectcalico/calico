@@ -1,5 +1,5 @@
-hash: 7aa4c3b59b7fa6182a4a1aef90c5573ddbfca166a9f8a3e0b6d87399bde8459b
-updated: 2018-08-09T04:09:10.448344795Z
+hash: 1675d48a44812a815fc7be255499cc4275a429a7b31832c726b6c982eb8ab256
+updated: 2018-08-23T04:10:18.904471374Z
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -18,7 +18,7 @@ imports:
   subpackages:
   - quantile
 - name: github.com/BurntSushi/toml
-  version: a368813c5e648fee92e5f6c30e3944ff9d5e8895
+  version: 3012a1dbe2e4bd1391d42b32f0577cb7bbc7f005
 - name: github.com/coreos/etcd
   version: 33245c6b5b49130ca99280408fadfab01aac0e48
   subpackages:
@@ -112,7 +112,7 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: cac4ce6d0f2f1fdcaac2dcbe613374465cfd4953
+  version: 7c86cbcd7d360ebdff86969b2304b9355d73f62f
   subpackages:
   - lib/apiconfig
   - lib/apis/v1
@@ -147,7 +147,7 @@ imports:
   - lib/validator/v3
   - lib/watch
 - name: github.com/prometheus/client_golang
-  version: 5b23715facdef1452016bae512489c3cdf82458c
+  version: ebce7d0078c0109cbb4de5d50a2b799920b0f0d0
   subpackages:
   - prometheus
 - name: github.com/prometheus/client_model
@@ -171,7 +171,7 @@ imports:
 - name: github.com/spf13/pflag
   version: 583c0c0531f06d5278b7d917446061adc344b5cd
 - name: golang.org/x/crypto
-  version: de0752318171da717af4ce24d0a2e8626afaeb11
+  version: 614d502a4dac94afa3a6ce146bd1736da82514c6
   subpackages:
   - ssh/terminal
 - name: golang.org/x/net
@@ -196,7 +196,7 @@ imports:
   - jws
   - jwt
 - name: golang.org/x/sys
-  version: 904bdc257025c7b3f43c19360ad3ab85783fad78
+  version: 3b58ed4ad3395d483fc92d5d14123ce2c3581fec
   subpackages:
   - unix
   - windows
