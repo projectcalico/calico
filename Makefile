@@ -71,7 +71,7 @@ DEPLOY_CONTAINER_MARKER=cni_deploy_container-$(ARCH).created
 DOCKER_REPOS=calico quay.io/calico
 ifeq ($(RELEASE),true)
 # If this is a release, also tag and push GCR images. 
-DOCKER_REPOS+=gcr.io/projectcalico-org eu.gcr.io/projectcalico-org asia.gcr.io/projectcalico.org us.gcr.io/projectcalico.org
+DOCKER_REPOS+=gcr.io/projectcalico-org eu.gcr.io/projectcalico-org asia.gcr.io/projectcalico-org us.gcr.io/projectcalico-org
 endif
 
 # list of arches *not* to build when doing *-all
