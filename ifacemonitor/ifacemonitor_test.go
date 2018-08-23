@@ -69,6 +69,12 @@ type mockDataplane struct {
 }
 
 func (nl *netlinkTest) addLink(name string) {
+	nl.addLinkNoSignal(name)
+	nl.signalLink(name, 0)
+}
+
+func (nl *netlinkTest) addLinkNoSignal(name string) {
+	log.WithFields(log.Fields{"name": name}).Info("ADDLINK")
 	nl.linksMutex.Lock()
 	if nl.links == nil {
 		nl.links = map[string]linkModel{}
@@ -81,10 +87,10 @@ func (nl *netlinkTest) addLink(name string) {
 	}
 	nl.nextIndex++
 	nl.linksMutex.Unlock()
-	nl.signalLink(name, 0)
 }
 
 func (nl *netlinkTest) renameLink(oldName, newName string) {
+	log.WithFields(log.Fields{"oldName": oldName, "newName": newName}).Info("RENAMELINK")
 	nl.linksMutex.Lock()
 	link := nl.links[oldName]
 	delete(nl.links, oldName)
@@ -94,6 +100,7 @@ func (nl *netlinkTest) renameLink(oldName, newName string) {
 }
 
 func (nl *netlinkTest) changeLinkState(name string, state string) {
+	log.WithFields(log.Fields{"name": name, "state": state}).Info("CHANGELINKSTATE")
 	nl.linksMutex.Lock()
 	link := nl.links[name]
 	link.state = state
@@ -103,7 +110,12 @@ func (nl *netlinkTest) changeLinkState(name string, state string) {
 }
 
 func (nl *netlinkTest) delLink(name string) {
-	var oldIndex int
+	oldIndex := nl.delLinkNoSignal(name)
+	nl.signalLink(name, oldIndex)
+}
+
+func (nl *netlinkTest) delLinkNoSignal(name string) (oldIndex int) {
+	log.WithFields(log.Fields{"name": name}).Info("DELLINK")
 	nl.linksMutex.Lock()
 	link, prs := nl.links[name]
 	if prs {
@@ -113,7 +125,7 @@ func (nl *netlinkTest) delLink(name string) {
 	}
 	delete(nl.links, name)
 	nl.linksMutex.Unlock()
-	nl.signalLink(name, oldIndex)
+	return
 }
 
 func (nl *netlinkTest) signalLink(name string, oldIndex int) {
@@ -155,6 +167,7 @@ func (nl *netlinkTest) signalLink(name string, oldIndex int) {
 }
 
 func (nl *netlinkTest) addAddr(name string, addr string) {
+	log.WithFields(log.Fields{"name": name, "addr": addr}).Info("ADDADDR")
 	nl.linksMutex.Lock()
 	link := nl.links[name]
 	link.addrs.Add(addr)
@@ -164,10 +177,13 @@ func (nl *netlinkTest) addAddr(name string, addr string) {
 }
 
 func (nl *netlinkTest) delAddr(name string, addr string) {
+	log.WithFields(log.Fields{"name": name, "addr": addr}).Info("DELADDR")
 	nl.linksMutex.Lock()
 	link := nl.links[name]
-	link.addrs.Discard(addr)
-	nl.links[name] = link
+	if link.addrs != nil {
+		link.addrs.Discard(addr)
+		nl.links[name] = link
+	}
 	nl.linksMutex.Unlock()
 	nl.signalAddr(name, addr, false)
 }
@@ -255,8 +271,7 @@ func (nl *netlinkTest) AddrList(link netlink.Link, family int) ([]netlink.Addr, 
 }
 
 func (dp *mockDataplane) linkStateCallback(ifaceName string, ifaceState ifacemonitor.State) {
-	log.Info("linkStateCallback: ifaceName=", ifaceName)
-	log.Info("linkStateCallback: ifaceState=", ifaceState)
+	log.WithFields(log.Fields{"name": ifaceName, "state": ifaceState}).Info("CALLBACK LINK")
 	dp.linkC <- linkUpdate{
 		name:  ifaceName,
 		state: ifaceState,
@@ -281,7 +296,7 @@ func (dp *mockDataplane) addrStateCallback(ifaceName string, addrs set.Set) {
 	log.WithFields(log.Fields{
 		"ifaceName": ifaceName,
 		"addrs":     addrs,
-	}).Info("Address state updated")
+	}).Info("CALLBACK ADDR")
 	dp.addrC <- addrState{ifaceName: ifaceName, addrs: addrs}
 	log.Info("mock dataplane reported address callback")
 }
@@ -432,12 +447,11 @@ var _ = Describe("ifacemonitor", func() {
 		nl.changeLinkState("eth0", "up")
 		dp.expectLinkStateCb("eth0", ifacemonitor.StateUp)
 
-		// Trigger a resync, then immediately delete the link.  What happens is that the
-		// test code deletes its state for eth0 before the monitor's resync() calls
-		// LinkList, and so the monitor reports "Spotted interface removal on resync" and
-		// makes link and address callbacks accordingly.
+		// Test when a deleted link is detected in a resync.  The monitor should report
+		// "Spotted interface removal on resync" and make link and address callbacks
+		// accordingly.
+		nl.delLinkNoSignal("eth0")
 		resyncC <- time.Time{}
-		nl.delLink("eth0")
 		dp.expectLinkStateCb("eth0", ifacemonitor.StateDown)
 		dp.expectAddrStateCb("eth0", "", false)
 
@@ -481,5 +495,37 @@ var _ = Describe("ifacemonitor", func() {
 		// ready to read it.)
 		resyncC <- time.Time{}
 		resyncC <- time.Time{}
+	})
+
+	It("should handle link flap", func() {
+		// Add a link and an address.
+		nl.addLink("eth0")
+		resyncC <- time.Time{}
+		dp.expectAddrStateCb("eth0", "", true)
+		nl.addAddr("eth0", "10.0.240.10/24")
+		dp.expectAddrStateCb("eth0", "10.0.240.10", true)
+
+		// Set the link up, and expect a link callback.  Addresses are unchanged, so there
+		// is no address callback.
+		nl.changeLinkState("eth0", "up")
+		dp.expectLinkStateCb("eth0", ifacemonitor.StateUp)
+
+		// Delete the link, and have that picked up by resync.  For this scenario we have to
+		// assume that there is never any Netlink signal for the link deletion.
+		_ = nl.delLinkNoSignal("eth0")
+		resyncC <- time.Time{}
+		dp.expectLinkStateCb("eth0", ifacemonitor.StateDown)
+		dp.expectAddrStateCb("eth0", "", false)
+
+		// Add the link again, with the same ifIndex, but hold the signal through Netlink.
+		nl.nextIndex--
+		nl.addLinkNoSignal("eth0")
+		// Add the address, and let that go through Netlink.
+		nl.addAddr("eth0", "10.0.240.10/24")
+		// Now signal the link.
+		nl.signalLink("eth0", 0)
+
+		// Now we should see an address callback again.
+		dp.expectAddrStateCb("eth0", "10.0.240.10", true)
 	})
 })

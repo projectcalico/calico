@@ -52,7 +52,7 @@ type InterfaceMonitor struct {
 
 	netlinkStub  netlinkStub
 	resyncC      <-chan time.Time
-	upIfaces     set.Set
+	upIfaces     map[string]int // Map from interface name to index.
 	Callback     InterfaceStateCallback
 	AddrCallback AddrStateCallback
 	ifaceName    map[int]string
@@ -70,7 +70,7 @@ func NewWithStubs(config Config, netlinkStub netlinkStub, resyncC <-chan time.Ti
 		Config:      config,
 		netlinkStub: netlinkStub,
 		resyncC:     resyncC,
-		upIfaces:    set.New(),
+		upIfaces:    map[string]int{},
 		ifaceName:   map[int]string{},
 		ifaceAddrs:  map[int]set.Set{},
 	}
@@ -268,15 +268,15 @@ func (m *InterfaceMonitor) storeAndNotifyLinkInner(ifaceExists bool, ifaceName s
 	// etc.
 	rawFlags := attrs.RawFlags
 	ifaceIsUp := ifaceExists && rawFlags&syscall.IFF_RUNNING != 0
-	ifaceWasUp := m.upIfaces.Contains(ifaceName)
+	_, ifaceWasUp := m.upIfaces[ifaceName]
 	logCxt := log.WithField("ifaceName", ifaceName)
 	if ifaceIsUp && !ifaceWasUp {
 		logCxt.Debug("Interface now up")
-		m.upIfaces.Add(ifaceName)
+		m.upIfaces[ifaceName] = ifIndex
 		m.Callback(ifaceName, StateUp)
 	} else if ifaceWasUp && !ifaceIsUp {
 		logCxt.Debug("Interface now down")
-		m.upIfaces.Discard(ifaceName)
+		delete(m.upIfaces, ifaceName)
 		m.Callback(ifaceName, StateDown)
 	} else {
 		logCxt.WithField("ifaceIsUp", ifaceIsUp).Debug("Nothing to notify")
@@ -326,15 +326,17 @@ func (m *InterfaceMonitor) resync() error {
 		currentIfaces.Add(attrs.Name)
 		m.storeAndNotifyLink(true, link)
 	}
-	m.upIfaces.Iter(func(name interface{}) error {
+	for name, ifIndex := range m.upIfaces {
 		if currentIfaces.Contains(name) {
-			return nil
+			continue
 		}
 		log.WithField("ifaceName", name).Info("Spotted interface removal on resync.")
-		m.Callback(name.(string), StateDown)
-		m.AddrCallback(name.(string), nil)
-		return set.RemoveItem
-	})
+		m.Callback(name, StateDown)
+		m.AddrCallback(name, nil)
+		delete(m.upIfaces, name)
+		delete(m.ifaceAddrs, ifIndex)
+		delete(m.ifaceName, ifIndex)
+	}
 	log.Debug("Resync complete")
 	return nil
 }
