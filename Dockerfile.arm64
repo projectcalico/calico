@@ -22,10 +22,6 @@ MAINTAINER Tom Denham <tom@projectcalico.org>
 
 ARG ARCH=arm64
 
-# Populated by build with the git version.
-ARG ver="n/a"
-ENV NODE_VERSION=$ver
-
 # Enable non-native builds of this image on an amd64 hosts.
 # This must be the first RUN command in this file!
 # we only need this for the intermediate "base" image, so we can run all the apk and other commands
