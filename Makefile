@@ -95,7 +95,7 @@ LOCAL_USER_ID?=$(shell id -u $$USER)
 
 .PHONY: clean
 clean:
-	rm -rf $(BIN) vendor $(DEPLOY_CONTAINER_MARKER) .go-pkg-cache k8s-install/scripts/install_cni.test
+	rm -rf $(BIN) bin/github vendor $(DEPLOY_CONTAINER_MARKER) .go-pkg-cache k8s-install/scripts/install_cni.test
 
 ###############################################################################
 # Building the binary
@@ -383,9 +383,14 @@ release-build: release-prereqs clean
 ifneq ($(VERSION), $(GIT_VERSION))
 	$(error Attempt to build $(VERSION) from $(GIT_VERSION))
 endif
-	$(MAKE) image
-	$(MAKE) tag-images IMAGETAG=$(VERSION)
-	$(MAKE) tag-images IMAGETAG=latest
+	$(MAKE) image-all
+	$(MAKE) tag-images-all IMAGETAG=$(VERSION)
+	$(MAKE) tag-images-all IMAGETAG=latest
+
+	# Copy artifacts for upload to GitHub.
+	mkdir -p bin/github
+	$(foreach var,$(VALIDARCHES), cp bin/$(var)/calico bin/github/calico-$(var);)
+	$(foreach var,$(VALIDARCHES), cp bin/$(var)/calico-ipam bin/github/calico-ipam-$(var);)
 
 ## Verifies the release artifacts produces by `make release-build` are correct.
 release-verify: release-prereqs
@@ -409,10 +414,10 @@ release-publish: release-prereqs
 	git push origin $(VERSION)
 
 	# Push images.
-	$(MAKE) push IMAGETAG=$(VERSION) ARCH=$(ARCH)
+	$(MAKE) push-all RELEASE=true IMAGETAG=$(VERSION) ARCH=$(ARCH)
 
 	@echo "Finalize the GitHub release based on the pushed tag."
-	@echo "Attach the $(BIN)/calico and $(BIN)/calico-ipam binaries."
+	@echo "Attach all binaries in bin/github to the release."
 	@echo ""
 	@echo "  https://$(PACKAGE_NAME)/releases/tag/$(VERSION)"
 	@echo ""
@@ -429,7 +434,7 @@ release-publish-latest: release-prereqs
 	if ! docker run $(CONTAINER_NAME):latest-$(ARCH) calico -v | grep '^$(VERSION)$$'; then echo "Reported version:" `docker run $(CONTAINER_NAME):latest-$(ARCH) calico -v` "\nExpected version: $(VERSION)"; false; else echo "\nVersion check passed\n"; fi
 	if ! docker run quay.io/$(CONTAINER_NAME):latest-$(ARCH) calico -v | grep '^$(VERSION)$$'; then echo "Reported version:" `docker run quay.io/$(CONTAINER_NAME):latest-$(ARCH) calico -v` "\nExpected version: $(VERSION)"; false; else echo "\nVersion check passed\n"; fi
 
-	$(MAKE) push IMAGETAG=latest ARCH=$(ARCH)
+	$(MAKE) push RELEASE=true IMAGETAG=latest ARCH=$(ARCH)
 
 # release-prereqs checks that the environment is configured properly to create a release.
 release-prereqs:
