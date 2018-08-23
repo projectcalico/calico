@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2018 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -230,7 +230,7 @@ func (c *profileClient) Watch(ctx context.Context, list model.ListInterface, rev
 	log.WithFields(log.Fields{
 		"nsRev": nsRev,
 		"saRev": saRev,
-	}).Info("Watching two resources at individual revisions")
+	}).Debug("Watching two resources at individual revisions")
 
 	nsWatch, err := c.clientSet.CoreV1().Namespaces().Watch(metav1.ListOptions{ResourceVersion: nsRev})
 	if err != nil {
@@ -325,9 +325,9 @@ func (pw *profileWatcher) HasTerminated() bool {
 // Loop to process the events stream from the underlying k8s Watcher and convert them to
 // backend KVPs.
 func (pw *profileWatcher) processProfileEvents() {
-	log.Info("Watcher process started for profile.")
+	log.Debug("Watcher process started for profile.")
 	defer func() {
-		log.Info("Profile watcher process terminated")
+		log.Debug("Profile watcher process terminated")
 		pw.Stop()
 		close(pw.resultChan)
 		atomic.AddUint32(&pw.terminated, 1)
@@ -371,7 +371,7 @@ func (pw *profileWatcher) processProfileEvents() {
 			isNsEvent = false
 
 		case <-pw.context.Done(): //user cancel
-			log.Info("Process watcher done event in kdd client")
+			log.Debug("Process watcher done event in kdd client")
 			return
 		}
 
@@ -420,13 +420,13 @@ func (pw *profileWatcher) processProfileEvents() {
 			if e.Type == api.WatchError {
 				log.WithError(e.Error).Debug("Kubernetes event converted to backend watcher error event")
 				if _, ok := e.Error.(cerrors.ErrorWatchTerminated); ok {
-					log.Info("Watch terminated event")
+					log.Debug("Watch terminated event")
 					return
 				}
 			}
 
 		case <-pw.context.Done():
-			log.Info("Process watcher done event during watch event in kdd client")
+			log.Debug("Process watcher done event during watch event in kdd client")
 			return
 		}
 	}

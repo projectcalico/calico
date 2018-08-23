@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2018 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -126,7 +126,7 @@ func (crw *k8sWatcherConverter) processK8sEvents() {
 					}
 				}
 			case <-crw.context.Done():
-				crw.logCxt.Info("Process watcher done event during watch event in kdd client")
+				crw.logCxt.Debug("Process watcher done event during watch event in kdd client")
 				return
 			}
 		case <-crw.context.Done(): // user cancel

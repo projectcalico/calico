@@ -1,4 +1,4 @@
-// Copyright (c) 2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2018 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -302,7 +302,7 @@ func (c *networkPolicyClient) Watch(ctx context.Context, list model.ListInterfac
 	log.WithFields(log.Fields{
 		"crdNPRev": crdNPRev,
 		"k8sNPRev": k8sNPRev,
-	}).Info("Watching two resources at individual revisions")
+	}).Debug("Watching two resources at individual revisions")
 
 	k8sWatchClient := cache.NewListWatchFromClient(
 		c.clientSet.NetworkingV1().RESTClient(),
@@ -390,9 +390,9 @@ func (npw *networkPolicyWatcher) HasTerminated() bool {
 // Loop to process the events stream from the underlying k8s Watcher and convert them to
 // backend KVPs.
 func (npw *networkPolicyWatcher) processNPEvents() {
-	log.Info("Watcher process started")
+	log.Debug("Watcher process started")
 	defer func() {
-		log.Info("Watcher process terminated")
+		log.Debug("Watcher process terminated")
 		npw.Stop()
 		close(npw.resultChan)
 		atomic.AddUint32(&npw.terminated, 1)
@@ -436,7 +436,7 @@ func (npw *networkPolicyWatcher) processNPEvents() {
 			isCRDEvent = false
 
 		case <-npw.context.Done(): // user cancel
-			log.Info("Process watcher done event in KDD client")
+			log.Debug("Process watcher done event in KDD client")
 			return
 		}
 
@@ -482,13 +482,13 @@ func (npw *networkPolicyWatcher) processNPEvents() {
 			if e.Type == api.WatchError {
 				log.WithError(e.Error).Debug("Kubernetes event converted to backend watcher error event")
 				if _, ok := e.Error.(cerrors.ErrorWatchTerminated); ok {
-					log.Info("Watch terminated event")
+					log.Debug("Watch terminated event")
 					return
 				}
 			}
 
 		case <-npw.context.Done():
-			log.Info("Process watcher done event during watch event in kdd client")
+			log.Debug("Process watcher done event during watch event in kdd client")
 			return
 		}
 	}
