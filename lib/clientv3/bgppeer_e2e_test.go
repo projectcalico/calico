@@ -39,6 +39,7 @@ var _ = testutils.E2eDatastoreDescribe("BGPPeer tests", testutils.DatastoreAll, 
 	ctx := context.Background()
 	name1 := "bgppeer-1"
 	name2 := "bgppeer-2"
+	name3 := "bgppeer-3"
 	spec1 := apiv3.BGPPeerSpec{
 		Node:     "node1",
 		PeerIP:   "10.0.0.1",
@@ -48,6 +49,10 @@ var _ = testutils.E2eDatastoreDescribe("BGPPeer tests", testutils.DatastoreAll, 
 		Node:     "node2",
 		PeerIP:   "20.0.0.1",
 		ASNumber: numorstring.ASNumber(6511),
+	}
+	spec3 := apiv3.BGPPeerSpec{
+		NodeSelector: "has(routeReflectorClusterID)",
+		PeerSelector: "has(routeReflectorClusterID)",
 	}
 
 	DescribeTable("BGPPeer e2e CRUD tests",
@@ -125,12 +130,17 @@ var _ = testutils.E2eDatastoreDescribe("BGPPeer tests", testutils.DatastoreAll, 
 			testutils.ExpectResource(res2, apiv3.KindBGPPeer, testutils.ExpectNoNamespace, name2, spec2)
 			Expect(res.ResourceVersion).To(Equal(res2.ResourceVersion))
 
-			By("Listing all the BGPPeers, expecting a two results with name1/spec1 and name2/spec2")
+			By("Listing all the BGPPeers, expecting two results with name1/spec1 and name2/spec2")
 			outList, outError = c.BGPPeers().List(ctx, options.ListOptions{})
 			Expect(outError).NotTo(HaveOccurred())
 			Expect(outList.Items).To(HaveLen(2))
-			testutils.ExpectResource(&outList.Items[0], apiv3.KindBGPPeer, testutils.ExpectNoNamespace, name1, spec1)
-			testutils.ExpectResource(&outList.Items[1], apiv3.KindBGPPeer, testutils.ExpectNoNamespace, name2, spec2)
+			if name1 < name2 {
+				testutils.ExpectResource(&outList.Items[0], apiv3.KindBGPPeer, testutils.ExpectNoNamespace, name1, spec1)
+				testutils.ExpectResource(&outList.Items[1], apiv3.KindBGPPeer, testutils.ExpectNoNamespace, name2, spec2)
+			} else {
+				testutils.ExpectResource(&outList.Items[0], apiv3.KindBGPPeer, testutils.ExpectNoNamespace, name2, spec2)
+				testutils.ExpectResource(&outList.Items[1], apiv3.KindBGPPeer, testutils.ExpectNoNamespace, name1, spec1)
+			}
 
 			By("Updating BGPPeer name1 with spec2")
 			res1.Spec = spec2
@@ -199,8 +209,13 @@ var _ = testutils.E2eDatastoreDescribe("BGPPeer tests", testutils.DatastoreAll, 
 			outList, outError = c.BGPPeers().List(ctx, options.ListOptions{})
 			Expect(outError).NotTo(HaveOccurred())
 			Expect(outList.Items).To(HaveLen(2))
-			testutils.ExpectResource(&outList.Items[0], apiv3.KindBGPPeer, testutils.ExpectNoNamespace, name1, spec2)
-			testutils.ExpectResource(&outList.Items[1], apiv3.KindBGPPeer, testutils.ExpectNoNamespace, name2, spec2)
+			if name1 < name2 {
+				testutils.ExpectResource(&outList.Items[0], apiv3.KindBGPPeer, testutils.ExpectNoNamespace, name1, spec2)
+				testutils.ExpectResource(&outList.Items[1], apiv3.KindBGPPeer, testutils.ExpectNoNamespace, name2, spec2)
+			} else {
+				testutils.ExpectResource(&outList.Items[0], apiv3.KindBGPPeer, testutils.ExpectNoNamespace, name2, spec2)
+				testutils.ExpectResource(&outList.Items[1], apiv3.KindBGPPeer, testutils.ExpectNoNamespace, name1, spec2)
+			}
 
 			if config.Spec.DatastoreType != apiconfig.Kubernetes {
 				By("Deleting BGPPeer (name1) with the old resource version")
@@ -264,8 +279,9 @@ var _ = testutils.E2eDatastoreDescribe("BGPPeer tests", testutils.DatastoreAll, 
 			Expect(outError.Error()).To(ContainSubstring("resource does not exist: BGPPeer(" + name2 + ") with error:"))
 		},
 
-		// Test 1: Pass two fully populated BGPPeerSpecs and expect the series of operations to succeed.
-		Entry("Two fully populated BGPPeerSpecs", name1, name2, spec1, spec2),
+		Entry("BGPPeerSpecs 1,2", name1, name2, spec1, spec2),
+		Entry("BGPPeerSpecs 2,3", name2, name3, spec2, spec3),
+		Entry("BGPPeerSpecs 3,1", name3, name1, spec3, spec1),
 	)
 
 	Describe("BGPPeer watch functionality", func() {
