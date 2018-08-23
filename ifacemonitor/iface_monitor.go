@@ -52,7 +52,7 @@ type InterfaceMonitor struct {
 
 	netlinkStub  netlinkStub
 	resyncC      <-chan time.Time
-	upIfaces     map[string]int
+	upIfaces     map[string]int // Map from interface name to index.
 	Callback     InterfaceStateCallback
 	AddrCallback AddrStateCallback
 	ifaceName    map[int]string
