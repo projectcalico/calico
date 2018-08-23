@@ -447,12 +447,11 @@ var _ = Describe("ifacemonitor", func() {
 		nl.changeLinkState("eth0", "up")
 		dp.expectLinkStateCb("eth0", ifacemonitor.StateUp)
 
-		// Trigger a resync, then immediately delete the link.  What happens is that the
-		// test code deletes its state for eth0 before the monitor's resync() calls
-		// LinkList, and so the monitor reports "Spotted interface removal on resync" and
-		// makes link and address callbacks accordingly.
+		// Test when a deleted link is detected in a resync.  The monitor should report
+		// "Spotted interface removal on resync" and make link and address callbacks
+		// accordingly.
+		nl.delLinkNoSignal("eth0")
 		resyncC <- time.Time{}
-		nl.delLink("eth0")
 		dp.expectLinkStateCb("eth0", ifacemonitor.StateDown)
 		dp.expectAddrStateCb("eth0", "", false)
 
