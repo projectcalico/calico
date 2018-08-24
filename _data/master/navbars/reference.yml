@@ -136,8 +136,6 @@ toc:
         path: /reference/advanced/etcd-rbac/kubernetes-advanced
       - title: Etcd paths for Calico components
         path: /reference/advanced/etcd-rbac/calico-etcdv3-paths
-- title: Repo Structure
-  path: /reference/repo-structure
 - title: Get Involved
   path: /reference/involved
 - title: License
