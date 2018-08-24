@@ -130,14 +130,6 @@ be a release candidate.
    Once reviewed and CI is passing, merge the PR. This will cause the
    live docs site to be updated (after a few minutes).
 
-
-1. Edit the [Calico Docs Custom Search Engine](https://cse.google.com/).
-   1. Navigate to: search engine -> Search Features -> Refinements -> Add
-   1. Add a new refinement name: vX.Y
-   1. Navigate to: Setup -> Basics
-   1. Under "Sites to search", select "Add", for the url use `docs.projectcalico.org/vX.Y`
-   1. Choose vX.Y from the "Label" dropdown.
-
 1. Edit `_config_dev.yml` to exclude the previous release.
 
 If the release is not a release candidate but in fact a stable release, then you must also
@@ -189,6 +181,15 @@ release in the documentation. Perform these steps on a branch off of master.
    >       Modify the `canonical_url` metadata of the pages that error out so that they point to valid locations. If the
    >       page was deleted, adjust the version number of the canonical URLs to the final copy of the page.
    >       If the page was renamed, update the canonical URLs to the new path.
+
+### Update the custom search engine
+
+1. Go to the [Calico Docs Custom Search Engine](https://cse.google.com/).
+1. Navigate to: search engine -> Search Features -> Refinements -> Add
+1. Add a new refinement name: vX.Y
+1. Navigate to: Setup -> Basics
+1. Under "Sites to search", select "Add", for the url use `docs.projectcalico.org/vX.Y`
+1. Choose vX.Y from the "Label" dropdown.
 
 ## <a name="patch"></a> Performing a "patch" release
 
