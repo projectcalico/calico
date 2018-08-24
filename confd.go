@@ -28,6 +28,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err.Error())
 	}
+	log.Infof("Config: %#v", c)
 
 	// Run confd.
 	run.Run(c)

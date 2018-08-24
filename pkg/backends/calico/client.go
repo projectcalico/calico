@@ -15,39 +15,52 @@ package calico
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"strings"
 	"sync"
 
+	"github.com/kelseyhightower/confd/pkg/buildinfo"
+	"github.com/kelseyhightower/confd/pkg/config"
 	logutils "github.com/kelseyhightower/confd/pkg/log"
 	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/libcalico-go/lib/apiconfig"
+	apiv3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/libcalico-go/lib/backend/syncersv1/bgpsyncer"
+	"github.com/projectcalico/libcalico-go/lib/backend/syncersv1/updateprocessors"
+	"github.com/projectcalico/libcalico-go/lib/backend/watchersyncer"
 	"github.com/projectcalico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/libcalico-go/lib/errors"
+	"github.com/projectcalico/libcalico-go/lib/net"
+	"github.com/projectcalico/libcalico-go/lib/numorstring"
 	"github.com/projectcalico/libcalico-go/lib/options"
+	"github.com/projectcalico/libcalico-go/lib/selector"
+	"github.com/projectcalico/typha/pkg/syncclient"
+	"github.com/projectcalico/typha/pkg/syncproto"
 )
 
-const (
-	// Handle a few keys that we need to default if not specified.
-	globalASN      = "/calico/bgp/v1/global/as_num"
-	globalNodeMesh = "/calico/bgp/v1/global/node_mesh"
-	globalLogging  = "/calico/bgp/v1/global/loglevel"
-)
+const globalLogging = "/calico/bgp/v1/global/loglevel"
+
+// Handle a few keys that we need to default if not specified.
+var globalDefaults = map[string]string{
+	"/calico/bgp/v1/global/as_num":    "64512",
+	"/calico/bgp/v1/global/node_mesh": `{"enabled": true}`,
+	globalLogging:                     "info",
+}
 
 // backendClientAccessor is an interface to access the backend client from the main v2 client.
 type backendClientAccessor interface {
 	Backend() api.Client
 }
 
-func NewCalicoClient(configfile string, routeReflector bool) (*client, error) {
+func NewCalicoClient(confdConfig *config.Config) (*client, error) {
 	// Load the client config.  This loads from the environment if a filename
 	// has not been specified.
-	config, err := apiconfig.LoadClientConfig(configfile)
+	config, err := apiconfig.LoadClientConfig(confdConfig.CalicoConfig)
 	if err != nil {
 		log.Errorf("Failed to load Calico client configuration: %v", err)
 		return nil, err
@@ -87,10 +100,16 @@ func NewCalicoClient(configfile string, routeReflector bool) (*client, error) {
 	c := &client{
 		client:            bc,
 		cache:             make(map[string]string),
+		peeringCache:      make(map[string]string),
 		cacheRevision:     1,
 		revisionsByPrefix: make(map[string]uint64),
 		nodeMeshEnabled:   nodeMeshEnabled,
-		routeReflector:    routeReflector,
+		routeReflector:    confdConfig.RouteReflector,
+		nodeLabels:        make(map[string]map[string]string),
+		bgpPeers:          make(map[string]*apiv3.BGPPeer),
+	}
+	for k, v := range globalDefaults {
+		c.cache[k] = v
 	}
 
 	// Create a conditional that we use to wake up all of the watcher threads when there
@@ -108,8 +127,32 @@ func NewCalicoClient(configfile string, routeReflector bool) (*client, error) {
 	// confd process.
 	nodeName := os.Getenv("NODENAME")
 	c.nodeLogKey = fmt.Sprintf("/calico/bgp/v1/host/%s/loglevel", nodeName)
-	c.syncer = bgpsyncer.New(c.client, c, nodeName, nodeMeshEnabled || routeReflector)
-	c.syncer.Start()
+	c.nodeV1Processor = updateprocessors.NewBGPNodeUpdateProcessor()
+	if confdConfig.Typha != "" {
+		// Use a remote Syncer, via the Typha server.
+		log.WithField("addr", confdConfig.Typha).Info("Connecting to Typha.")
+		typhaConnection := syncclient.New(
+			confdConfig.Typha,
+			buildinfo.GitVersion,
+			nodeName,
+			fmt.Sprintf("Revision: %s; Build date: %s",
+				buildinfo.GitRevision, buildinfo.BuildDate),
+			c,
+			&syncclient.Options{SyncerType: syncproto.SyncerTypeBGP},
+		)
+		err := typhaConnection.Start(context.Background())
+		if err != nil {
+			log.WithError(err).Fatal("Failed to connect to Typha")
+		}
+		go func() {
+			typhaConnection.Finished.Wait()
+			log.Fatal("Connection to Typha failed")
+		}()
+	} else {
+		// Use the syncer locally.
+		c.syncer = bgpsyncer.New(c.client, c, nodeName)
+		c.syncer.Start()
+	}
 
 	return c, nil
 }
@@ -122,7 +165,10 @@ type client struct {
 	client api.Client
 
 	// The BGP syncer.
-	syncer api.Syncer
+	syncer          api.Syncer
+	nodeV1Processor watchersyncer.SyncerUpdateProcessor
+	nodeLabels      map[string]map[string]string
+	bgpPeers        map[string]*apiv3.BGPPeer
 
 	// Whether we have received the in-sync notification from the syncer.  We cannot
 	// start rendering until we are in-sync, so we block calls to GetValues until we
@@ -132,6 +178,7 @@ type client struct {
 
 	// Our internal cache of key/values, and our (internally defined) cache revision.
 	cache         map[string]string
+	peeringCache  map[string]string
 	cacheRevision uint64
 
 	// The current revision for each prefix.  A revision is updated when we have a sync
@@ -188,14 +235,241 @@ func (c *client) OnStatusUpdated(status api.SyncStatus) {
 	}
 }
 
+type BGPPeer struct {
+	PeerIP      net.IP               `json:"ip"`
+	ASNum       numorstring.ASNumber `json:"as_num,string"`
+	RRClusterID string               `json:"rr_cluster_id"`
+}
+
+func (c *client) updatePeersV1() {
+	// A map that will contain the v1 peerings that should exist, with the same key and
+	// value form as c.peeringCache.
+	peersV1 := make(map[string]string)
+
+	// Common subroutine for emitting both global and node-specific peerings.
+	emit := func(key model.Key, peer *BGPPeer) {
+		log.WithFields(log.Fields{"key": key, "peer": peer}).Debug("Maybe emit peering")
+
+		// Compute etcd v1 path for this peering key.
+		k, err := model.KeyToDefaultPath(key)
+		if err != nil {
+			log.Errorf("Ignoring update: unable to create path from Key %v: %v", key, err)
+			return
+		}
+
+		// If we already have an entry for that path, it wins.  When we're
+		// emitting reverse peerings to ensure symmetry, this is what ensures
+		// that an explicit forwards peering is not overwritten by an implicit
+		// reverse peering.
+		if _, ok := peersV1[k]; ok {
+			log.Debug("Peering already exists")
+			return
+		}
+
+		// If we would be emitting a node-specific peering to a peer IP, and we
+		// already have a global peering to that IP, skip emitting the node-specific
+		// one.
+		if nodeKey, ok := key.(model.NodeBGPPeerKey); ok {
+			globalKey := model.GlobalBGPPeerKey{PeerIP: nodeKey.PeerIP}
+			globalPath, _ := model.KeyToDefaultPath(globalKey)
+			if _, ok = peersV1[globalPath]; ok {
+				log.Debug("Global peering already exists")
+				return
+			}
+		}
+
+		// Serialize and store the value for this peering.
+		value, err := json.Marshal(peer)
+		if err != nil {
+			log.Errorf("Ignoring update: unable to serialize value %v: %v", peer, err)
+			return
+		}
+		peersV1[k] = string(value)
+	}
+
+	// Loop through v3 BGPPeers.
+	for _, v3res := range c.bgpPeers {
+		log.WithField("peer", v3res).Debug("First pass with v3 BGPPeer")
+
+		var localNodeNames []string
+		if v3res.Spec.NodeSelector != "" {
+			localNodeNames = c.nodesMatching(v3res.Spec.NodeSelector)
+		} else if v3res.Spec.Node != "" {
+			localNodeNames = []string{v3res.Spec.Node}
+		}
+		log.Debugf("Local nodes %#v", localNodeNames)
+
+		var peers []*BGPPeer
+		if v3res.Spec.PeerSelector != "" {
+			for _, peerNodeName := range c.nodesMatching(v3res.Spec.PeerSelector) {
+				peers = append(peers, c.nodeAsBGPPeer(peerNodeName))
+			}
+		} else {
+			ip := net.ParseIP(v3res.Spec.PeerIP)
+			if ip == nil {
+				log.Warning("PeerIP is not assigned or is malformed")
+				continue
+			}
+			peers = append(peers, &BGPPeer{
+				PeerIP: *ip,
+				ASNum:  v3res.Spec.ASNumber,
+			})
+		}
+		log.Debugf("Peers %#v", peers)
+
+		for _, peer := range peers {
+			log.Debugf("Peer: %#v", peer)
+			if localNodeNames == nil {
+				key := model.GlobalBGPPeerKey{PeerIP: peer.PeerIP}
+				emit(key, peer)
+			} else {
+				for _, localNodeName := range localNodeNames {
+					log.Debugf("Local node name: %#v", localNodeName)
+					key := model.NodeBGPPeerKey{Nodename: localNodeName, PeerIP: peer.PeerIP}
+					emit(key, peer)
+				}
+			}
+		}
+	}
+
+	// Loop through v3 BGPPeers again to add in any missing reverse peerings.
+	for _, v3res := range c.bgpPeers {
+		log.WithField("peer", v3res).Debug("Second pass with v3 BGPPeer")
+
+		var localNodeNames []string
+		if v3res.Spec.PeerSelector != "" {
+			localNodeNames = c.nodesMatching(v3res.Spec.PeerSelector)
+		} else {
+			localNodeNames = c.nodesWithIPAndAS(v3res.Spec.PeerIP, v3res.Spec.ASNumber)
+		}
+		log.Debugf("Local nodes %#v", localNodeNames)
+
+		// Skip peer computation if there are no local nodes.
+		if len(localNodeNames) == 0 {
+			continue
+		}
+
+		var peerNodeNames []string
+		if v3res.Spec.NodeSelector != "" {
+			peerNodeNames = c.nodesMatching(v3res.Spec.NodeSelector)
+		} else if v3res.Spec.Node != "" {
+			peerNodeNames = []string{v3res.Spec.Node}
+		} else {
+			peerNodeNames = c.nodesMatching("all()")
+		}
+		log.Debugf("Peers %#v", peerNodeNames)
+
+		for _, peerNodeName := range peerNodeNames {
+			peer := c.nodeAsBGPPeer(peerNodeName)
+			for _, localNodeName := range localNodeNames {
+				key := model.NodeBGPPeerKey{Nodename: localNodeName, PeerIP: peer.PeerIP}
+				emit(key, peer)
+			}
+		}
+	}
+
+	// Now reconcile against the cache.
+	for k, value := range c.peeringCache {
+		newValue, ok := peersV1[k]
+		if !ok {
+			// This cache entry should be deleted.
+			delete(c.peeringCache, k)
+			c.keyUpdated(k)
+		} else if newValue != value {
+			// This cache entry should be updated.
+			c.peeringCache[k] = newValue
+			c.keyUpdated(k)
+			delete(peersV1, k)
+		}
+	}
+	// peersV1 now only contains peerings to add to the cache.
+	for k, newValue := range peersV1 {
+		c.peeringCache[k] = newValue
+		c.keyUpdated(k)
+	}
+}
+
+func (c *client) nodesMatching(rawSelector string) []string {
+	nodeNames := []string{}
+	sel, err := selector.Parse(rawSelector)
+	if err != nil {
+		log.Errorf("Couldn't parse selector: %v", rawSelector)
+		return nodeNames
+	}
+	for nodeName, labels := range c.nodeLabels {
+		if sel.Evaluate(labels) {
+			nodeNames = append(nodeNames, nodeName)
+		}
+	}
+	return nodeNames
+}
+
+func (c *client) nodesWithIPAndAS(ip string, asNum numorstring.ASNumber) []string {
+	globalAS := c.globalAS()
+	var asStr string
+	if asNum == numorstring.ASNumber(0) {
+		asStr = globalAS
+	} else {
+		asStr = asNum.String()
+	}
+	nodeNames := []string{}
+	for nodeName, _ := range c.nodeLabels {
+		nodeIP, nodeAS, _ := c.nodeToIPAndAS(nodeName)
+		if nodeIP != ip {
+			continue
+		}
+		if nodeAS == "" {
+			nodeAS = globalAS
+		}
+		if nodeAS != asStr {
+			continue
+		}
+		nodeNames = append(nodeNames, nodeName)
+	}
+	return nodeNames
+}
+
+func (c *client) nodeToIPAndAS(nodeName string) (string, string, string) {
+	ipKey, _ := model.KeyToDefaultPath(model.NodeBGPConfigKey{Nodename: nodeName, Name: "ip_addr_v4"})
+	asKey, _ := model.KeyToDefaultPath(model.NodeBGPConfigKey{Nodename: nodeName, Name: "as_num"})
+	rrKey, _ := model.KeyToDefaultPath(model.NodeBGPConfigKey{Nodename: nodeName, Name: "rr_cluster_id"})
+	return c.cache[ipKey], c.cache[asKey], c.cache[rrKey]
+}
+
+func (c *client) globalAS() string {
+	asKey, _ := model.KeyToDefaultPath(model.GlobalBGPConfigKey{Name: "as_num"})
+	return c.cache[asKey]
+}
+
+func (c *client) nodeAsBGPPeer(nodeName string) *BGPPeer {
+	ipStr, asNum, rrClusterID := c.nodeToIPAndAS(nodeName)
+	peer := &BGPPeer{}
+	ip := net.ParseIP(ipStr)
+	if ip == nil {
+		return nil
+	}
+	peer.PeerIP = *ip
+	if asNum != "" {
+		log.Debugf("ASNum for %v is %#v", nodeName, asNum)
+		peer.ASNum, _ = numorstring.ASNumberFromString(asNum)
+	} else {
+		asNum = c.globalAS()
+		log.Debugf("Global ASNum for %v is %#v", nodeName, asNum)
+		peer.ASNum, _ = numorstring.ASNumberFromString(asNum)
+	}
+	peer.RRClusterID = rrClusterID
+	return peer
+}
+
 // OnUpdates is called from the BGP syncer to indicate that new updates are available from the
 // Calico datastore.
 // This client does the following:
-// -  stores the updates in it's local cache
+// -  stores the updates in its local cache
 // -  increments the revision number associated with each of the affected watch prefixes
 // -  wakes up the watchers so that they can check if any of the prefixes they are
 //    watching have been updated.
 func (c *client) OnUpdates(updates []api.Update) {
+
 	// Update our cache from the updates.
 	c.cacheLock.Lock()
 	defer c.cacheLock.Unlock()
@@ -207,55 +481,132 @@ func (c *client) OnUpdates(updates []api.Update) {
 		log.Debugf("Processing new updates, revision is now: %d", c.cacheRevision)
 	}
 
-	// Update our cache from each of the individual updates, and keep track of
-	// any of the prefixes that are impacted.
+	// Track whether these updates require BGP peerings to be recomputed.
+	needUpdatePeersV1 := false
+
 	for _, u := range updates {
-		// Update our cache of current entries.
-		k, err := model.KeyToDefaultPath(u.Key)
-		if err != nil {
-			log.Errorf("Ignoring update: unable to create path from Key %v: %v", u.Key, err)
+		log.Infof("Update: %#v", u)
+
+		// confd now receives Nodes and BGPPeers as v3 resources.
+		//
+		// For each Node, we save off the node's labels, then convert to v1 so that
+		// the same etcd key/value pairs appear as before (so that existing confd
+		// templates will continue to work).
+		//
+		// BGPPeers are saved off and then the whole set is processed to generate a
+		// corresponding set of v1 BGPPeers, bearing in mind (a) the possible use of
+		// v3 BGPPeer selector fields, and (b) that we fill in any reverse peerings
+		// that are needed for symmetry between Calico nodes.  Each v1 BGPPeer then
+		// generates etcd key/value pairs as expected by existing confd templates.
+		v3key, ok := u.Key.(model.ResourceKey)
+		if !ok {
+			// Not a v3 resource.
 			continue
 		}
 
-		switch u.UpdateType {
-		case api.UpdateTypeKVDeleted:
-			delete(c.cache, k)
-		case api.UpdateTypeKVNew, api.UpdateTypeKVUpdated:
-			value, err := model.SerializeValue(&u.KVPair)
+		if v3key.Kind == apiv3.KindNode {
+			// Convert to v1 key/value pairs.
+			log.Debugf("Node: %#v", u.Value)
+			if u.Value != nil {
+				log.Debugf("BGPSpec: %#v", u.Value.(*apiv3.Node).Spec.BGP)
+			}
+			kvps, err := c.nodeV1Processor.Process(&u.KVPair)
 			if err != nil {
-				log.Errorf("Ignoring update: unable to serialize value %v: %v", u.KVPair.Value, err)
+				log.Errorf("Problem converting Node resource: %v", err)
 				continue
 			}
-			c.cache[k] = string(value)
+			for _, kvp := range kvps {
+				log.Debugf("KVP: %#v", kvp)
+				if kvp.Value == nil {
+					c.updateCache(api.UpdateTypeKVDeleted, kvp)
+				} else {
+					c.updateCache(u.UpdateType, kvp)
+				}
+			}
+
+			// Update our cache of node labels.
+			v3res, ok := u.Value.(*apiv3.Node)
+			if !ok {
+				log.Warning("Bad value for Node resource")
+				continue
+			}
+			if v3res != nil {
+				c.nodeLabels[v3key.Name] = v3res.Labels
+			} else {
+				delete(c.nodeLabels, v3key.Name)
+			}
+
+			// Note need to recompute BGP v1 peerings.
+			needUpdatePeersV1 = true
 		}
 
-		log.Debugf("Cache entry updated from event type %d: %s=%s", u.UpdateType, k, c.cache[k])
-		if c.synced {
-			c.keyUpdated(k)
+		if v3key.Kind == apiv3.KindBGPPeer {
+			// Update our cache of v3 BGPPeer resources.
+			if u.Value == nil || u.UpdateType == api.UpdateTypeKVDeleted {
+				delete(c.bgpPeers, v3key.Name)
+			} else if v3res, ok := u.Value.(*apiv3.BGPPeer); ok {
+				c.bgpPeers[v3key.Name] = v3res
+			} else {
+				log.Warning("Bad value for BGPPeer resource")
+				continue
+			}
+
+			// Note need to recompute equivalent v1 peerings.
+			needUpdatePeersV1 = true
 		}
 	}
 
-	if c.synced {
-		// If we're not running for a route reflector, and the node-to-node mesh
-		// configuration has been toggled, we need to terminate so that confd can be
-		// restarted and monitor the correct set of nodes.  (If we running for a route
-		// reflector, we always monitor all nodes.)
-		if !c.routeReflector {
-			// The node is disabled if the setting is present and is set to false.  Although this
-			// is a json blob, it only contains a single field, so searching for "false" will
-			// suffice.
-			nodeMeshEnabled := !strings.Contains(c.cache[globalNodeMesh], "false")
-			if nodeMeshEnabled != c.nodeMeshEnabled {
-				log.Info("Node to node mesh setting has been modified - restarting confd")
-				os.Exit(1)
-			}
-		}
+	// If configuration relevant to BGP peerings has changed, recalculate the set of v1
+	// peerings that should exist, and update the cache accordingly.
+	if needUpdatePeersV1 {
+		log.Debug("Recompute BGP peerings")
+		c.updatePeersV1()
+	}
 
+	// Update our cache from each of the individual updates, and keep track of
+	// any of the prefixes that are impacted.
+	for _, u := range updates {
+		c.updateCache(u.UpdateType, &u.KVPair)
+	}
+
+	if c.synced {
 		// Wake up the watchers to let them know there may be some updates of interest.  We only
 		// need to do this once we're synced because until that point all of the Watcher threads
 		// will be blocked getting values.
 		log.Debug("Notify watchers of new event data")
 		c.watcherCond.Broadcast()
+	}
+}
+
+func (c *client) updateCache(updateType api.UpdateType, kvp *model.KVPair) {
+	// Update our cache of current entries.
+	k, err := model.KeyToDefaultPath(kvp.Key)
+	if err != nil {
+		log.Errorf("Ignoring update: unable to create path from Key %v: %v", kvp.Key, err)
+		return
+	}
+
+	switch updateType {
+	case api.UpdateTypeKVDeleted:
+		// The bird templates that confd is used to render assume that some global
+		// defaults are always configured.
+		if globalDefault, ok := globalDefaults[k]; ok {
+			c.cache[k] = globalDefault
+		} else {
+			delete(c.cache, k)
+		}
+	case api.UpdateTypeKVNew, api.UpdateTypeKVUpdated:
+		value, err := model.SerializeValue(kvp)
+		if err != nil {
+			log.Errorf("Ignoring update: unable to serialize value %v: %v", kvp.Value, err)
+			return
+		}
+		c.cache[k] = string(value)
+	}
+
+	log.Debugf("Cache entry updated from event type %d: %s=%s", updateType, k, c.cache[k])
+	if c.synced {
+		c.keyUpdated(k)
 	}
 }
 
@@ -266,8 +617,8 @@ func (c *client) ParseFailed(rawKey string, rawValue string) {
 }
 
 // GetValues is called from confd to obtain the cached data for the required set of prefixes.
-// We simply populate the values from our cache, only returning values which have the requested
-// set of prefixes.
+// We simply populate the values from our caches, only returning values which have the
+// requested set of prefixes.
 func (c *client) GetValues(keys []string) (map[string]string, error) {
 	// We should block GetValues until we have the sync'd notification - until that point we
 	// only have a partial snapshot and we should never write out partial config.
@@ -275,28 +626,17 @@ func (c *client) GetValues(keys []string) (map[string]string, error) {
 
 	log.Debugf("Requesting values for keys: %v", keys)
 
-	// For simplicity always populate the results with the common set of default values
-	// (event if we haven't been asked for them).
-	values := map[string]string{}
-
-	// The bird templates that confd is used to render assumes some global defaults are always
-	// configured.  Add in these defaults if the required keys includes them.  The configured
-	// values may override these.
-	if c.matchesPrefix(globalLogging, keys) {
-		values[globalLogging] = "info"
-	}
-	if c.matchesPrefix(globalASN, keys) {
-		values[globalASN] = "64512"
-	}
-	if c.matchesPrefix(globalNodeMesh, keys) {
-		values[globalNodeMesh] = `{"enabled": true}`
-	}
-
-	// Lock the data and then populate the results from our cache, selecting the data
+	// Lock the data and then populate the results from our caches, selecting the data
 	// whose path matches the set of prefix keys.
 	c.cacheLock.Lock()
 	defer c.cacheLock.Unlock()
+	values := map[string]string{}
 	for k, v := range c.cache {
+		if c.matchesPrefix(k, keys) {
+			values[k] = v
+		}
+	}
+	for k, v := range c.peeringCache {
 		if c.matchesPrefix(k, keys) {
 			values[k] = v
 		}
@@ -315,6 +655,7 @@ func (c *client) GetValues(keys []string) (map[string]string, error) {
 // thread after updating the cache.  If any of the watched revisions is greater than the waitIndex
 // then exit to render.
 func (c *client) WatchPrefix(prefix string, keys []string, lastRevision uint64, stopChan chan bool) error {
+	log.WithFields(log.Fields{"prefix": prefix, "keys": keys}).Debug("WatchPrefix entry")
 	c.cacheLock.Lock()
 	defer c.cacheLock.Unlock()
 
@@ -344,6 +685,7 @@ func (c *client) WatchPrefix(prefix string, keys []string, lastRevision uint64, 
 		// No changes for this watcher, so wait until there are more syncer events.
 		log.Debug("No updated keys for this template - waiting for event notification")
 		c.watcherCond.Wait()
+		log.WithFields(log.Fields{"prefix": prefix, "keys": keys}).Debug("WatchPrefix recheck")
 	}
 }
 

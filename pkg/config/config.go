@@ -10,7 +10,6 @@ import (
 	"strings"
 
 	"github.com/BurntSushi/toml"
-	"github.com/kelseyhightower/confd/pkg/backends"
 	logutils "github.com/kelseyhightower/confd/pkg/log"
 	"github.com/kelseyhightower/confd/pkg/resource/template"
 	log "github.com/sirupsen/logrus"
@@ -29,6 +28,7 @@ var (
 	syncOnly       bool
 	calicoconfig   string
 	routereflector bool
+	typha          string
 )
 
 // A Config structure is used to configure confd.
@@ -42,8 +42,8 @@ type Config struct {
 	RouteReflector bool   `toml:"routereflector"`
 	Onetime        bool   `toml:"onetime"`
 	KeepStageFile  bool   `toml:"keep-stage-file"`
+	Typha          string `toml:"typha"`
 	TemplateConfig template.Config
-	BackendsConfig backends.Config
 }
 
 func init() {
@@ -57,6 +57,7 @@ func init() {
 	flag.BoolVar(&syncOnly, "sync-only", false, "sync without check_cmd and reload_cmd")
 	flag.StringVar(&calicoconfig, "calicoconfig", "", "Calico apiconfig file path")
 	flag.BoolVar(&routereflector, "routereflector", false, "generate config for a route reflector")
+	flag.StringVar(&typha, "typha", "", "use Typha at the specified <address>:<port>")
 }
 
 // InitConfig initializes the confd configuration by first setting defaults,
@@ -155,5 +156,7 @@ func (c *ConfigVisitor) setConfigFromFlag(f *flag.Flag) {
 		c.config.Onetime = onetime
 	case "keep-stage-file":
 		c.config.Onetime = keepStageFile
+	case "typha":
+		c.config.Typha = typha
 	}
 }

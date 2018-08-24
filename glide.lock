@@ -1,5 +1,5 @@
-hash: 1c9b41517e3293dafe53d926e3c58f3075fd513ee6a3e31f2691bfc7416b7cc8
-updated: 2018-09-07T15:13:42.534152628Z
+hash: 1db3c803ed42a77220e80d597117ea0a1b7ad9003dffdb8e240359c562f14362
+updated: 2018-09-07T16:03:40.886488473Z
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -146,6 +146,12 @@ imports:
   - lib/set
   - lib/validator/v3
   - lib/watch
+- name: github.com/projectcalico/typha
+  version: 6915c7a2b8d3d57b182da8d2c9cf811a7096da7a
+  subpackages:
+  - pkg/syncclient
+  - pkg/syncproto
+  - pkg/tlsutils
 - name: github.com/prometheus/client_golang
   version: 7858729281ec582767b20e0d696b6041d995d5e0
   subpackages:

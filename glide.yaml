@@ -15,3 +15,5 @@ import:
   - lib/options
 - package: github.com/sirupsen/logrus
   version: v1.0.4
+- package: github.com/projectcalico/typha
+  version: 6915c7a2b8d3d57b182da8d2c9cf811a7096da7a
