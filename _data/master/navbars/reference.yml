@@ -117,8 +117,6 @@ toc:
   section:
   - title: Introduction
     path: /reference/architecture/
-  - title: calico/node
-    path: /reference/architecture/components
   - title: Data Path
     path: /reference/architecture/data-path
 - title: Advanced
@@ -138,8 +136,6 @@ toc:
         path: /reference/advanced/etcd-rbac/kubernetes-advanced
       - title: Etcd paths for Calico components
         path: /reference/advanced/etcd-rbac/calico-etcdv3-paths
-- title: Repo Structure
-  path: /reference/repo-structure
 - title: Get Involved
   path: /reference/involved
 - title: License
