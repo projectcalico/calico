@@ -87,7 +87,7 @@ GO_BUILD_VER?=v0.17
 CALICO_BUILD?=calico/go-build:$(GO_BUILD_VER)
 
 # location of docker credentials to push manifests
-DOCKER_CONFIG ?= $(HOME)/.docker/config
+DOCKER_CONFIG ?= $(HOME)/.docker/config.json
 
 # Version of this repository as reported by git.
 CALICO_GIT_VER := $(shell git describe --tags --dirty --always)
