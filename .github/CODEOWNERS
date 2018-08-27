@@ -1,0 +1,16 @@
+# Lines starting with '#' are comments.
+# Each line is a file pattern followed by one or more owners.
+
+# The docs team will be the default owners for everything in the repo.
+*       @docs
+
+# The core-maintainers need to review build and release changes
+# Order is important. The last matching pattern has the most precedence.
+# If a pull request only touches build files, only these owners will be requested to review.
+Makefile             @projectcalico/core-maintainers
+_data/versions.yaml  @projectcalico/core-maintainers
+CNAME                @projectcalico/core-maintainers
+manifests/           @projectcalico/core-maintainers
+
+# Just the Markdown in the root directory
+*.md                 @projectcalico/core-maintainers
