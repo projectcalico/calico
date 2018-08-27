@@ -40,13 +40,6 @@ exclude:
   - CONTRIBUTING_CODE.md
   - DOC_STYLE_GUIDE.md
   - hack
-  - calico_node
-
-# Markdown Processors
-# TODO - we're not entirely sure what these are for
-kramdown:
-  html_to_native: true
-  syntax_highlighter: rouge
 
 defaults:
   -
