@@ -264,6 +264,8 @@ push-non-manifests: imagetag $(addprefix sub-non-manifest-,$(call escapefs,$(PUS
 sub-non-manifest-%:
 ifeq ($(ARCH),amd64)
 	docker push $(call unescapefs,$*:$(IMAGETAG))
+else
+	$(NOECHO) $(NOOP)
 endif
 
 ## tag images of one arch for all supported registries
@@ -276,6 +278,8 @@ sub-single-tag-images-arch-%:
 sub-single-tag-images-non-manifest-%:
 ifeq ($(ARCH),amd64)
 	docker tag $(BUILD_IMAGE):latest-$(ARCH) $(call unescapefs,$*:$(IMAGETAG))
+else
+	$(NOECHO) $(NOOP)
 endif
 
 ## tag images of all archs
