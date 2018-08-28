@@ -13,6 +13,14 @@ trap 'echo "SIGINT received, simply exiting..."; exit 0' SIGINT
 trap 'echo "SIGTERM received, simply exiting..."; exit 0' SIGTERM
 trap 'echo "SIGHUP received, simply exiting..."; exit 0' SIGHUP
 
+# Helper function for raising errors
+# Usage:
+# some_command || exit_with_error "some_command_failed: maybe try..."
+exit_with_error(){
+  echo $1
+  exit 1
+}
+
 # The directory on the host where CNI networks are installed. Defaults to
 # /etc/cni/net.d, but can be overridden by setting CNI_NET_DIR.  This is used
 # for populating absolute paths in the CNI network config to assets
@@ -23,6 +31,7 @@ HOST_SECRETS_DIR=${HOST_CNI_NET_DIR}/calico-tls
 # Directory where we expect that TLS assets will be mounted into
 # the calico/cni container.
 SECRETS_MOUNT_DIR=${TLS_ASSETS_DIR:-/calico-secrets}
+
 
 # Clean up any existing binaries / config / assets.
 rm -f /host/opt/cni/bin/calico /host/opt/cni/bin/calico-ipam
@@ -81,12 +90,7 @@ do
       echo "$dir/$filename is already here and UPDATE_CNI_BINARIES isn't true, skipping"
       continue
     fi
-    cp $path $dir/
-    if [ "$?" != "0" ];
-    then
-      echo "Failed to copy $path to $dir. This may be caused by selinux configuration on the host, or something else."
-      exit 1
-    fi
+    cp $path $dir/ || exit_with_error "Failed to copy $path to $dir. This may be caused by selinux configuration on the host, or something else."
   done
 
   echo "Wrote Calico CNI binaries to $dir"
@@ -188,12 +192,8 @@ if [ "${CNI_CONF_NAME}" != "${CNI_OLD_CONF_NAME}" ]; then
     rm -f "/host/etc/cni/net.d/${CNI_OLD_CONF_NAME}"
 fi
 # Move the temporary CNI config into place.
-mv $TMP_CONF /host/etc/cni/net.d/${CNI_CONF_NAME}
-if [ "$?" != "0" ];
-then
-  echo "Failed to mv files. This may be caused by selinux configuration on the host, or something else."
-  exit 1
-fi
+mv $TMP_CONF /host/etc/cni/net.d/${CNI_CONF_NAME} || \
+  exit_with_error "Failed to mv files. This may be caused by selinux configuration on the host, or something else."
 
 echo "Created CNI config ${CNI_CONF_NAME}"
 
