@@ -20,6 +20,11 @@ inventory file:
   - `openshift_use_calico=true`
   - `openshift_use_openshift_sdn=false`
 
+If you are using OCP v3.6.0 or a version of openshift-ansible that does not
+include [the calico_ipv4pool_cidr commit](https://github.com/openshift/openshift-ansible/pull/5111),
+you must manually set `calico_ipv4pool_cidr` to the value of `osm_cluster_network_cidr`
+(which, by default, is `10.1.0.0/16` for OCP and `10.128.0.0/14` for origin.
+
 Also ensure that you have an explicitly defined host in the `[etcd]` group.
 
 **Sample Inventory File:**
@@ -34,6 +39,7 @@ etcd
 os_sdn_network_plugin_name=cni
 openshift_use_calico=true
 openshift_use_openshift_sdn=false
+calico_ipv4pool_cidr=10.128.0.0/14
 
 [masters]
 master1
