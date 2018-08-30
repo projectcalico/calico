@@ -92,7 +92,10 @@ be a release candidate.
        path: vX.Y
      values:
        version: vX.Y
+       sitemap: true
    ```
+
+1. Remove `sitemap: false` from the previous release in `_config.yml`.
 
 1. Follow the steps in [writing release notes](#release-notes) to generate candidate release notes.
 
