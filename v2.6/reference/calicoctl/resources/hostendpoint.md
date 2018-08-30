@@ -45,15 +45,15 @@ spec:
 
 | Field       | Description                 | Accepted Values   | Schema  |
 |-------------|-----------------------------|-------------------|---------|
-| name        | The name of this hostEndpoint. |      | string |
-| node        | The name of the node where this hostEndpoint resides. |      | string |
+| name        | The name of this hostEndpoint. Required. |      | string |
+| node        | The name of the node where this hostEndpoint resides. Required. |      | string |
 | labels      | A set of labels to apply to this endpoint. |      | map    |
 
 #### Spec
 
 | Field       | Description                 | Accepted Values   | Schema | Default    |
 |-------------|-----------------------------|-------------------|--------|------------|
-| interfaceName | The name of the interface on which to apply policy.      |                             | string          |
+| interfaceName | The name of the interface on which to apply policy. Required. |                             | string          |
 | expectedIPs   | The expected IP addresses associated with the interface. | Valid IPv4 or IPv6 address  | list |
 | profiles      | The list of profiles to apply to the endpoint.           |                             | list |
 
