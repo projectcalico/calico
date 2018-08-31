@@ -17,3 +17,13 @@
   for = "/*.yml"
   [headers.values]
     content-type = "text/yaml"
+
+[[headers]]
+  for = "/*.sh"
+  [headers.values]
+    content-type = "text/x-shellscript"
+
+[[headers]]
+  for = "/*.bash"
+  [headers.values]
+    content-type = "text/x-shellscript"
