@@ -38,16 +38,47 @@ ifeq ($(ARCH),x86_64)
     override ARCH=amd64
 endif
 
+# we want to be able to run the same recipe on multiple targets keyed on the image name
+# to do that, we would use the entire image name, e.g. calico/node:abcdefg, as the stem, or '%', in the target
+# however, make does **not** allow the usage of invalid filename characters - like / and : - in a stem, and thus errors out
+# to get around that, we "escape" those characters by converting all : to --- and all / to ___ , so that we can use them
+# in the target, we then unescape them back
+escapefs = $(subst :,---,$(subst /,___,$(1)))
+unescapefs = $(subst ---,:,$(subst ___,/,$(1)))
+
+# these macros create a list of valid architectures for pushing manifests
+space :=
+space +=
+comma := ,
+prefix_linux = $(addprefix linux/,$(strip $1))
+join_platforms = $(subst $(space),$(comma),$(call prefix_linux,$(strip $1)))
+
 
 # list of arches *not* to build when doing *-all
 #    until s390x works correctly
 EXCLUDEARCH ?= s390x
 VALIDARCHES = $(filter-out $(EXCLUDEARCH),$(ARCHES))
 
+BUILD_IMAGE?=calico/pod2daemon-flexvol
+PUSH_IMAGES?=$(BUILD_IMAGE) quay.io/calico/pod2daemon-flexvol
+RELEASE_IMAGES?=
+
+ifeq ($(RELEASE),true)
+# If this is a release, also tag and push GCR images. 
+PUSH_IMAGES+=$(RELEASE_IMAGES)
+endif
+
+# remove from the list to push to manifest any registries that do not support multi-arch
+EXCLUDE_MANIFEST_REGISTRIES ?= quay.io/
+PUSH_MANIFEST_IMAGES=$(PUSH_IMAGES:$(EXCLUDE_MANIFEST_REGISTRIES)%=)
+PUSH_NONMANIFEST_IMAGES=$(filter-out $(PUSH_MANIFEST_IMAGES),$(PUSH_IMAGES))
+
+# location of docker credentials to push manifests
+DOCKER_CONFIG ?= $(HOME)/.docker/config.json
 
 ###############################################################################
 GO_BUILD_VER?=v0.17
-GO_BUILD_CONTAINER?=calico/go-build:$(GO_BUILD_VER)
+CALICO_BUILD?=calico/go-build:$(GO_BUILD_VER)
 PROTOC_VER?=v0.1
 PROTOC_CONTAINER?=calico/protoc:$(PROTOC_VER)-$(BUILDARCH)
 
@@ -59,7 +90,6 @@ MY_GID:=$(shell id -g)
 
 PACKAGE_NAME?=github.com/projectcalico/pod2daemon
 SRC_FILES=$(shell find -name '*.go' |grep -v vendor)
-CONTAINER_NAME?=calico/pod2daemon-flexvol
 
 # Pre-configured docker run command that runs as this user with the repo
 # checked out to /code, uses the --rm flag to avoid leaving the container
@@ -71,11 +101,11 @@ DOCKER_RUN_RM:=docker run --rm --user $(MY_UID):$(MY_GID) -v ${CURDIR}:/code
 clean:
 	find . -name '*.created-$(ARCH)' -exec rm -f {} +
 
-	docker rmi $(CONTAINER_NAME):latest-$(ARCH) || true
-	docker rmi $(CONTAINER_NAME):$(VERSION)-$(ARCH) || true
+	docker rmi $(BUILD_IMAGE):latest-$(ARCH) || true
+	docker rmi $(BUILD_IMAGE):$(VERSION)-$(ARCH) || true
 ifeq ($(ARCH),amd64)
-	docker rmi $(CONTAINER_NAME):latest || true
-	docker rmi $(CONTAINER_NAME):$(VERSION) || true
+	docker rmi $(BUILD_IMAGE):latest || true
+	docker rmi $(BUILD_IMAGE):$(VERSION) || true
 endif
 DOCKER_GO_BUILD := mkdir -p .go-pkg-cache && \
                    docker run --rm -ti \
@@ -84,7 +114,7 @@ DOCKER_GO_BUILD := mkdir -p .go-pkg-cache && \
                          -v $(CURDIR)/.go-pkg-cache:/go-cache/:rw \
                          -e GOCACHE=/go-cache \
                          -w /go/src/$(PACKAGE_NAME) \
-                       $(GO_BUILD_CONTAINER)
+                       $(CALICO_BUILD)
 
 ###############################################################################
 # Building the binary
@@ -114,16 +144,16 @@ bin/flexvol-%: vendor $(SRC_FILES)
 ###############################################################################
 CONTAINER_CREATED=.pod2daemon-flexvol.created-$(ARCH)
 .PHONY: image calico/pod2daemon-flexvol
-image: $(CONTAINER_NAME)
+image: $(BUILD_IMAGE)
 image-all: $(addprefix sub-image-,$(VALIDARCHES))
 sub-image-%:
 	$(MAKE) image ARCH=$*
 
-$(CONTAINER_NAME): $(CONTAINER_CREATED)
+$(BUILD_IMAGE): $(CONTAINER_CREATED)
 $(CONTAINER_CREATED): Dockerfile.$(ARCH) bin/flexvol-$(ARCH)
-	docker build -t $(CONTAINER_NAME):latest-$(ARCH) --build-arg QEMU_IMAGE=$(CALICO_BUILD) -f Dockerfile.$(ARCH) .
+	docker build -t $(BUILD_IMAGE):latest-$(ARCH) --build-arg QEMU_IMAGE=$(CALICO_BUILD) -f Dockerfile.$(ARCH) .
 ifeq ($(ARCH),amd64)
-	docker tag $(CONTAINER_NAME):latest-$(ARCH) $(CONTAINER_NAME):latest
+	docker tag $(BUILD_IMAGE):latest-$(ARCH) $(BUILD_IMAGE):latest
 endif
 	touch $@
 
@@ -134,25 +164,42 @@ ifndef IMAGETAG
 endif
 
 ## push one arch
-push: imagetag
-	docker push $(CONTAINER_NAME):$(IMAGETAG)-$(ARCH)
-	docker push quay.io/$(CONTAINER_NAME):$(IMAGETAG)-$(ARCH)
-ifeq ($(ARCH),amd64)
-	docker push $(CONTAINER_NAME):$(IMAGETAG)
-	docker push quay.io/$(CONTAINER_NAME):$(IMAGETAG)
-endif
+push: imagetag $(addprefix sub-single-push-,$(call escapefs,$(PUSH_IMAGES)))
+sub-single-push-%:
+	docker push $(call unescapefs,$*:$(IMAGETAG)-$(ARCH))
 
 push-all: imagetag $(addprefix sub-push-,$(VALIDARCHES))
 sub-push-%:
 	$(MAKE) push ARCH=$* IMAGETAG=$(IMAGETAG)
 
-## tag images of one arch
-tag-images: imagetag
-	docker tag $(CONTAINER_NAME):latest-$(ARCH) $(CONTAINER_NAME):$(IMAGETAG)-$(ARCH)
-	docker tag $(CONTAINER_NAME):latest-$(ARCH) quay.io/$(CONTAINER_NAME):$(IMAGETAG)-$(ARCH)
+## push multi-arch manifest where supported
+push-manifests: imagetag  $(addprefix sub-manifest-,$(call escapefs,$(PUSH_MANIFEST_IMAGES)))
+sub-manifest-%:
+	# Docker login to hub.docker.com required before running this target as we are using $(DOCKER_CONFIG) holds the docker login credentials
+	# path to credentials based on manifest-tool's requirements here https://github.com/estesp/manifest-tool#sample-usage
+	docker run -t --entrypoint /bin/sh -v $(DOCKER_CONFIG):/root/.docker/config.json $(CALICO_BUILD) -c "/usr/bin/manifest-tool push from-args --platforms $(call join_platforms,$(VALIDARCHES)) --template $(call unescapefs,$*:$(IMAGETAG))-ARCH --target $(call unescapefs,$*:$(IMAGETAG))"
+
+## push default amd64 arch where multi-arch manifest is not supported
+push-non-manifests: imagetag $(addprefix sub-non-manifest-,$(call escapefs,$(PUSH_NONMANIFEST_IMAGES)))
+sub-non-manifest-%:
 ifeq ($(ARCH),amd64)
-	docker tag $(CONTAINER_NAME):latest-$(ARCH) $(CONTAINER_NAME):$(IMAGETAG)
-	docker tag $(CONTAINER_NAME):latest-$(ARCH) quay.io/$(CONTAINER_NAME):$(IMAGETAG)
+	docker push $(call unescapefs,$*:$(IMAGETAG))
+else
+	$(NOECHO) $(NOOP)
+endif
+
+## tag images of one arch
+tag-images: imagetag $(addprefix sub-single-tag-images-arch-,$(call escapefs,$(PUSH_IMAGES))) $(addprefix sub-single-tag-images-non-manifest-,$(call escapefs,$(PUSH_NONMANIFEST_IMAGES)))
+
+sub-single-tag-images-arch-%:
+	docker tag $(BUILD_IMAGE):latest-$(ARCH) $(call unescapefs,$*:$(IMAGETAG)-$(ARCH))
+
+# because some still do not support multi-arch manifest
+sub-single-tag-images-non-manifest-%:
+ifeq ($(ARCH),amd64)
+	docker tag $(BUILD_IMAGE):latest-$(ARCH) $(call unescapefs,$*:$(IMAGETAG))
+else
+	$(NOECHO) $(NOOP)
 endif
 
 ## tag images of all archs
@@ -170,7 +217,7 @@ static-checks: vendor
 		-e LOCAL_USER_ID=$(LOCAL_USER_ID) \
 		-v $(CURDIR):/go/src/$(PACKAGE_NAME) \
 		-w /go/src/$(PACKAGE_NAME) \
-		$(GO_BUILD_CONTAINER) gometalinter --deadline=300s --disable-all --enable=goimports --vendor ./...
+		$(CALICO_BUILD) gometalinter --deadline=300s --disable-all --enable=goimports --vendor ./...
 
 .PHONY: fix
 ## Fix static checks
@@ -186,7 +233,7 @@ ut: $(SRC_FILES)
 	docker run --rm -v $(CURDIR):/go/src/$(PACKAGE_NAME):rw \
     -e LOCAL_USER_ID=$(LOCAL_USER_ID) \
     -w /go/src/$(PACKAGE_NAME) \
-    $(GO_BUILD_CONTAINER) go test -v ./...
+    $(CALICO_BUILD) go test -v ./...
 
 ###############################################################################
 # CI
@@ -207,8 +254,8 @@ endif
 ifndef BRANCH_NAME
 	$(error BRANCH_NAME is undefined - run using make <target> BRANCH_NAME=var or set an environment variable)
 endif
-	$(MAKE) tag-images-all push-all IMAGETAG=${BRANCH_NAME} EXCLUDEARCH="$(EXCLUDEARCH)"
-	$(MAKE) tag-images-all push-all IMAGETAG=$(shell git describe --tags --dirty --always --long) EXCLUDEARCH="$(EXCLUDEARCH)"
+	$(MAKE) tag-images-all push-all push-manifests push-non-manifests IMAGETAG=${BRANCH_NAME} EXCLUDEARCH="$(EXCLUDEARCH)"
+	$(MAKE) tag-images-all push-all push-manifests push-non-manifests IMAGETAG=$(shell git describe --tags --dirty --always --long) EXCLUDEARCH="$(EXCLUDEARCH)"
 
 ###############################################################################
 # Release
@@ -246,8 +293,8 @@ release-build: release-prereqs clean
 ## Verifies the release artifacts produces by `make release-build` are correct.
 release-verify: release-prereqs
 	# TODO: Check the reported version is correct for each release artifact. Uncomment when binary supports version command.
-	# if ! docker run $(CONTAINER_NAME):$(VERSION)-$(ARCH) version | grep 'Version:\s*$(VERSION)$$'; then \
-	#  echo "Reported version:" `docker run --rm $(CONTAINER_NAME):$(VERSION)-$(ARCH) version` "\nExpected version: $(VERSION)"; \
+	# if ! docker run $(BUILD_IMAGE):$(VERSION)-$(ARCH) version | grep 'Version:\s*$(VERSION)$$'; then \
+	#  echo "Reported version:" `docker run --rm $(BUILD_IMAGE):$(VERSION)-$(ARCH) version` "\nExpected version: $(VERSION)"; \
 	#  false; \
 	# else \
 	#   echo "Version check passed\n"; \
