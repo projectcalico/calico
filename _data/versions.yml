@@ -17,8 +17,8 @@ v3.2:
       version: v3.2.1
       url: https://github.com/projectcalico/k8s-policy/releases/tag/v3.2.1
     networking-calico:
-      version: 3.2.0
-      url: http://git.openstack.org/cgit/openstack/networking-calico/commit/?h=3.2.0
+      version: 3.2.1
+      url: http://git.openstack.org/cgit/openstack/networking-calico/commit/?h=3.2.1
     typha:
       version: v3.2.1
       url: https://github.com/projectcalico/typha/releases/tag/v3.2.1
