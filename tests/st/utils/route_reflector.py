@@ -47,6 +47,9 @@ class RouteReflectorCluster(object):
                     'kind': 'Node',
                     'metadata': {
                         'name': rr.get_hostname(),
+                        'labels': {
+                            'routeReflectorClusterID': cluster_id,
+                        },
                     },
                     'spec': {
                         'bgp': {
@@ -59,6 +62,21 @@ class RouteReflectorCluster(object):
                 # Store the redundancy group.
                 redundancy_group.append(rr)
             self.redundancy_groups.append(redundancy_group)
+
+        # If there is more than one of them, configure full mesh
+        # peering between the route reflectors.
+        if self.num_redundancy_groups * self.num_in_redundancy_group > 1:
+            rr.add_resource({
+                'apiVersion': 'projectcalico.org/v3',
+                'kind': 'BGPPeer',
+                'metadata': {
+                    'name': 'rr-mesh',
+                },
+                'spec': {
+                    'nodeSelector': 'has(routeReflectorClusterID)',
+                    'peerSelector': 'has(routeReflectorClusterID)',
+                },
+            })
 
         return self
 

@@ -21,8 +21,6 @@ from tests.st.utils.route_reflector import RouteReflectorCluster
 from .peer import create_bgp_peer
 from tests.st.utils.utils import update_bgp_config
 
-# TODO: Re-enable
-@skip("Disabled until routereflector clustering support is implemented for v3 data model")
 class TestRouteReflectorCluster(TestBase):
 
     def _test_route_reflector_cluster(self, backend='bird'):
@@ -65,7 +63,7 @@ class TestRouteReflectorCluster(TestBase):
             # with a different set of redundant route reflectors.
             for host in [host1, host2, host3]:
                 for rr in rrc.get_redundancy_group():
-                    create_bgp_peer(host, "node", rr.ip, 64513, metadata={'name': host.name + rr.name})
+                    create_bgp_peer(host, "node", rr.ip, 64513, metadata={'name': host.name + rr.name.lower()})
 
             # Allow network to converge (which it now will).
             self.assert_true(workload_host1.check_can_ping(workload_host2.ip, retries=10))
