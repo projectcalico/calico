@@ -99,7 +99,7 @@ CALICOCTL_BUILD_DATE?=$(shell date -u +'%FT%T%z')
 CALICOCTL_GIT_REVISION?=$(shell git rev-parse --short HEAD)
 GIT_VERSION?=$(shell git describe --tags --dirty)
 
-GO_BUILD_CONTAINER?=calico/go-build:$(GO_BUILD_VER)
+CALICO_BUILD?=calico/go-build:$(GO_BUILD_VER)
 LOCAL_USER_ID?=$(shell id -u $$USER)
 
 PACKAGE_NAME?=github.com/projectcalico/calicoctl
@@ -146,7 +146,7 @@ vendor: glide.yaml
       -v $(CURDIR):/go/src/$(PACKAGE_NAME):rw $$EXTRA_DOCKER_BIND \
       -v $(HOME)/.glide:/home/user/.glide:rw \
       -e LOCAL_USER_ID=$(LOCAL_USER_ID) \
-      $(GO_BUILD_CONTAINER) /bin/sh -c ' \
+      $(CALICO_BUILD) /bin/sh -c ' \
 		  cd /go/src/$(PACKAGE_NAME) && \
           glide install -strip-vendor'
 
@@ -160,7 +160,7 @@ update-libcalico:
       -v $(CURDIR):/go/src/$(PACKAGE_NAME):rw $$EXTRA_DOCKER_BIND \
       -v $(HOME)/.glide:/home/user/.glide:rw \
       -e LOCAL_USER_ID=$(LOCAL_USER_ID) \
-      $(GO_BUILD_CONTAINER) /bin/sh -c ' \
+      $(CALICO_BUILD) /bin/sh -c ' \
         cd /go/src/$(PACKAGE_NAME); \
         echo "Updating libcalico to $(LIBCALICO_VERSION) from $(LIBCALICO_REPO)"; \
         export OLD_VER=$$(grep --after 50 libcalico-go glide.yaml |grep --max-count=1 --only-matching --perl-regexp "version:\s*\K[\.0-9a-z]+") ;\
@@ -197,7 +197,7 @@ bin/calicoctl-%: $(CALICOCTL_FILES) vendor
       -e LOCAL_USER_ID=$(LOCAL_USER_ID) \
       -v $(CURDIR)/.go-pkg-cache:/go-cache/:rw \
       -e GOCACHE=/go-cache \
-	    $(GO_BUILD_CONTAINER) sh -c '\
+	    $(CALICO_BUILD) sh -c '\
           cd /go/src/$(PACKAGE_NAME) && \
           go build -v -o bin/calicoctl-$(OS)-$(ARCH) $(LDFLAGS) "./calicoctl/calicoctl.go"'
 
@@ -288,7 +288,7 @@ static-checks: vendor
 	docker run --rm \
 		-e LOCAL_USER_ID=$(LOCAL_USER_ID) \
 		-v $(CURDIR):/go/src/$(PACKAGE_NAME) \
-		$(GO_BUILD_CONTAINER) sh -c '\
+		$(CALICO_BUILD) sh -c '\
 			cd /go/src/$(PACKAGE_NAME) && \
 			gometalinter --deadline=300s --disable-all --enable=goimports --vendor ./...'
 
@@ -310,7 +310,7 @@ install-git-hooks:
 ut: bin/calicoctl-linux-amd64
 	docker run --rm -v $(CURDIR):/go/src/$(PACKAGE_NAME):rw \
     -e LOCAL_USER_ID=$(LOCAL_USER_ID) \
-    $(GO_BUILD_CONTAINER) sh -c 'cd /go/src/$(PACKAGE_NAME) && ginkgo -cover -r --skipPackage vendor calicoctl/*'
+    $(CALICO_BUILD) sh -c 'cd /go/src/$(PACKAGE_NAME) && ginkgo -cover -r --skipPackage vendor calicoctl/*'
 
 ###############################################################################
 # STs
@@ -520,5 +520,5 @@ help: # Some kind of magic from https://gist.github.com/rcmachado/af3db315e31383
 	@echo "ARCH (target):          $(ARCH)"
 	@echo "OS (target):            $(OS)"
 	@echo "BUILDARCH (host):       $(BUILDARCH)"
-	@echo "GO_BUILD_CONTAINER:     $(GO_BUILD_CONTAINER)"
+	@echo "CALICO_BUILD:     $(CALICO_BUILD)"
 	@echo "-----------------------------------------"
