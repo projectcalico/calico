@@ -129,7 +129,7 @@ build: bin/flexvol-$(ARCH)
 
 ## Create the vendor directory
 vendor: Gopkg.toml
-	$(DOCKER_GO_BUILD) dep ensure
+	$(DOCKER_GO_BUILD) dep ensure -vendor-only
 
 bin/flexvol-amd64: ARCH=amd64
 bin/flexvol-arm64: ARCH=arm64
