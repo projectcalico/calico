@@ -1,9 +1,6 @@
 FROM arm64v8/alpine:3.8
 
-RUN mkdir -p /usr/local/bin
 ADD flexvol/docker/flexvol.sh /usr/local/bin/
 ADD bin/flexvol-arm64 /usr/local/bin/flexvol
-
-RUN chmod +x /usr/local/bin/flexvol.sh
 
 ENTRYPOINT ["/usr/local/bin/flexvol.sh"]
