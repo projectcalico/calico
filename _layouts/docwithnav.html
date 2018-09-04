@@ -60,9 +60,19 @@ The code is a little roundabout for a few reasons:
       ga('create', 'UA-52125893-4', 'auto');
       ga('send', 'pageview');
     </script>
+    <!-- Google Tag Manager -->
+    <script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
+    new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
+    j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
+    'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
+    })(window,document,'script','dataLayer','GTM-5FQ2QV4');</script>
+    <!-- End Google Tag Manager -->
     {% seo %}
   </head>
   <body>
+    <!-- Google Tag Manager (noscript) -->
+    <noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-5FQ2QV4" height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
+    <!-- End Google Tag Manager (noscript) -->
     <section>
       <nav id="toplevel-nav" class="navbar navbar-default navbar-static-top">
         <div class="container">
@@ -212,73 +222,16 @@ The code is a little roundabout for a few reasons:
               {{ content }}
 
               <!-- BOTTOM DOCUMENTATION PAGE NAVBAR -->
-              <div style="margin-top: 60px; margin-bottom: 40px; padding-top: 20px; border-top: 1px solid #999; text-align: left; color: #999;">Rate this Page: <div class="rw-ui-container" style="margin-top: -5px;"></div> <a href="https://www.projectcalico.org/contact?type=docs&file={{page.path}}" style="margin-left: 30px; color: #999; text-decoration: none;" target="_blank"><i class="fa fa-envelope" aria-hidden="true"></i> Provide Feedback</a> <a href="https://www.projectcalico.org/community#slack" style="margin-left: 30px; color: #999; text-decoration: none;" target="_blank"><i class="fa fa-slack" aria-hidden="true"></i> Get Help via Slack</a> <a href="https://www.projectcalico.org/training" style="margin-left: 30px; color: #999; text-decoration: none;" target="_blank"><i class="fa fa-graduation-cap" aria-hidden="true"></i> Training</a></div>
+              <div style="margin-top: 60px; margin-bottom: 40px; padding-top: 20px; border-top: 1px solid #999; text-align: left; color: #999;">
+                <a href="https://www.projectcalico.org/contact?type=docs&file={{page.path}}" style="margin-left: 30px; color: #999; text-decoration: none;" target="_blank"><i class="fa fa-envelope" aria-hidden="true"></i> Provide Feedback</a>
+                <a href="https://www.projectcalico.org/community#slack" style="margin-left: 30px; color: #999; text-decoration: none;" target="_blank"><i class="fa fa-slack" aria-hidden="true"></i> Get Help via Slack</a>
+                <a href="https://www.projectcalico.org/training" style="margin-left: 30px; color: #999; text-decoration: none;" target="_blank"><i class="fa fa-graduation-cap" aria-hidden="true"></i> Training</a>
+              </div>
               <!-- END BOTTOM DOCUMENTATION PAGE NAVBAR -->
             </div>
           </div>
         </div>
       </div>
     </section>
-    <!-- Start Visual Website Optimizer Asynchronous Code -->
-    <script type='text/javascript'>
-      var _vwo_code=(function(){
-      var account_id=287573,
-      settings_tolerance=2000,
-      library_tolerance=2500,
-      use_existing_jquery=false,
-      /* DO NOT EDIT BELOW THIS LINE */
-      f=false,d=document;return{use_existing_jquery:function(){return use_existing_jquery;},library_tolerance:function(){return library_tolerance;},finish:function(){if(!f){f=true;var a=d.getElementById('_vis_opt_path_hides');if(a)a.parentNode.removeChild(a);}},finished:function(){return f;},load:function(a){var b=d.createElement('script');b.src=a;b.type='text/javascript';b.innerText;b.onerror=function(){_vwo_code.finish();};d.getElementsByTagName('head')[0].appendChild(b);},init:function(){settings_timer=setTimeout('_vwo_code.finish()',settings_tolerance);var a=d.createElement('style'),b='body{opacity:0 !important;filter:alpha(opacity=0) !important;background:none !important;}',h=d.getElementsByTagName('head')[0];a.setAttribute('id','_vis_opt_path_hides');a.setAttribute('type','text/css');if(a.styleSheet)a.styleSheet.cssText=b;else a.appendChild(d.createTextNode(b));h.appendChild(a);this.load('//dev.visualwebsiteoptimizer.com/j.php?a='+account_id+'&u='+encodeURIComponent(d.URL)+'&r='+Math.random());return settings_timer;}};}());_vwo_settings_timer=_vwo_code.init();
-    </script>
-    <!-- End Visual Website Optimizer Asynchronous Code -->
-    <!-- DOCUMENTATION RATING ANALYTICS -->
-   <script type="text/javascript">(function(d, t, e, m){
-    // Async Rating-Widget initialization.
-    window.RW_Async_Init = function(){
-        RW.init({
-            huid: "368439",
-            uid: "33da22c0dff384767b5074aaf10ebc50",
-            source: "website",
-            options: {
-                "advanced": {
-					"font": {
-						"color": "#999999"
-					},
-                    "layout": {
-                        "align": {
-                            "hor": "left"
-                        }
-                    },
-                    "text": {
-                        "rateThis": "Rate this"
-                    }
-                },
-				"label": {
-					"background": "#FFFFFF"
-				},
-				"reVote": true,
-				"showInfo": false,
-				/*"showTooltip": false,*/
-				"hideRecommendations": false,
-				"showReport": false,
-				"showLoader": false,
-                "style": "oxygen",
-                "isDummy": false
-            }
-        });
-        RW.render();
-    };
-        // Append Rating-Widget JavaScript library.
-    var rw, s = d.getElementsByTagName(e)[0], id = "rw-js",
-        l = d.location, ck = "Y" + t.getFullYear() +
-        "M" + t.getMonth() + "D" + t.getDate(), p = l.protocol,
-        f = ((l.search.indexOf("DBG=") > -1) ? "" : ".min"),
-        a = ("https:" == p ? "secure." + m + "js/" : "js." + m);
-    if (d.getElementById(id)) return;
-    rw = d.createElement(e);
-    rw.id = id; rw.async = true; rw.type = "text/javascript";
-    rw.src = p + "//" + a + "external" + f + ".js?ck=" + ck;
-    s.parentNode.insertBefore(rw, s);
-    }(document, new Date(), "script", "rating-widget.com/"));</script>
-    <!-- END DOCUMENTATION RATING ANALYTICS -->
   </body>
 </html>
