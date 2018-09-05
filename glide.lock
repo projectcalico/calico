@@ -1,5 +1,5 @@
-hash: 26bbf082be3551402286d83d668c573062a58bd3082f0452fe0141d1667d1941
-updated: 2018-08-24T06:22:37.424683149Z
+hash: c613840a93c3d85307b3987dfb3a3b0255b09f752648835eeb705f5c557bec35
+updated: 2018-09-05T06:19:11.963033102Z
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -110,7 +110,7 @@ imports:
   - tracer/wire
   - writer
 - name: github.com/jbenet/go-reuseport
-  version: 562c3ba3003e80c9829992a6c1a760d51eb0792b
+  version: e46628cb7483cfb92096837ad8f85e9b66f17fc1
 - name: github.com/json-iterator/go
   version: f2b4162afba35581b6d4a50d3b8f34e33c144682
 - name: github.com/kardianos/osext
@@ -118,18 +118,18 @@ imports:
 - name: github.com/kelseyhightower/envconfig
   version: dd1402a4d99de9ac2f396cd6fcb957bc2c695ec1
 - name: github.com/libp2p/go-reuseport
-  version: 562c3ba3003e80c9829992a6c1a760d51eb0792b
+  version: e46628cb7483cfb92096837ad8f85e9b66f17fc1
   subpackages:
   - poll
   - singlepoll
 - name: github.com/libp2p/go-sockaddr
-  version: 3c898fbfff40e5933d76362819727708dae6da97
+  version: a7494d4eefeb607c8bc491cf8850a6e8dbd41cab
   subpackages:
   - net
 - name: github.com/mattn/go-colorable
   version: efa589957cd060542a26d2dd7832fd6a6c6c3ade
 - name: github.com/mattn/go-isatty
-  version: 6ca4dbf54d38eea1a992b3c722a76a5d1c4cb25c
+  version: 3fb116b820352b7f0c281308a4d6250c22d94e27
 - name: github.com/matttproud/golang_protobuf_extensions
   version: c12348ce28de40eed0136aa2b644d0ee0650e56c
   subpackages:
@@ -250,15 +250,16 @@ imports:
   subpackages:
   - binder
 - name: github.com/projectcalico/typha
-  version: 077ee066f3f306eda8b4906f7a11285cf01d382c
+  version: 0f566b5737eecf91f63cf61e9144a751fc31beb5
   subpackages:
   - pkg/syncclient
   - pkg/syncproto
   - pkg/tlsutils
 - name: github.com/prometheus/client_golang
-  version: ebce7d0078c0109cbb4de5d50a2b799920b0f0d0
+  version: 2dbc3a58c2b4d2c9aa7dbb87519be0c9a6767bfb
   subpackages:
   - prometheus
+  - prometheus/internal
   - prometheus/promhttp
   - prometheus/push
 - name: github.com/prometheus/client_model
@@ -290,7 +291,7 @@ imports:
 - name: github.com/whyrusleeping/go-logging
   version: 0457bb6b88fc1973573aaf6b5145d8d3ae972390
 - name: golang.org/x/crypto
-  version: 614d502a4dac94afa3a6ce146bd1736da82514c6
+  version: 0709b304e793a5edb4a2c0145f281ecdc20838a4
   subpackages:
   - ssh/terminal
 - name: golang.org/x/net
@@ -345,7 +346,7 @@ imports:
   subpackages:
   - rate
 - name: google.golang.org/appengine
-  version: 4216e58b9158e5f1c906f1aca75162a46a2ec88a
+  version: 03cac3b07182cfb08c0d0c0b6ee72a1ceb151c92
   subpackages:
   - internal
   - internal/app_identity
@@ -357,7 +358,7 @@ imports:
   - internal/urlfetch
   - urlfetch
 - name: google.golang.org/genproto
-  version: c66870c02cf823ceb633bcd05be3c7cda29976f4
+  version: 11092d34479b07829b72e10713b159248caf5dad
   subpackages:
   - googleapis/rpc/status
 - name: google.golang.org/grpc
