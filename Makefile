@@ -132,6 +132,9 @@ check-glide-warnings:
 	else \
 		echo "Skipping glide checks as there are local updates"; \
 	fi
+	# That can leave a present but empty vendor directory, which
+	# confuses the rest of the Makefile something rotten...
+	-rm -rf vendor
 
 ###############################################################################
 # Tests
