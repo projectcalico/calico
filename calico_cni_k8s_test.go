@@ -1045,16 +1045,22 @@ var _ = Describe("CalicoCni", func() {
 					Expect(err).ShouldNot(HaveOccurred())
 				})
 
-				It("a second ADD for the same container should be a no-op", func() {
-					// Try to create the same container (so CNI receives the ADD for the same endpoint again)
-					session, _, _, _, err := RunCNIPluginWithId(netconf, name, "", containerID, contNs)
+				It("a second ADD for the same container should work, assigning a new IP", func() {
+					// Try to create the same pod with a new contaienr ID (so CNI receives the ADD for the same endpoint again)
+					session, _, _, _, err := RunCNIPluginWithId(netconf, name, "", "new-container-id", contNs)
 					Expect(err).NotTo(HaveOccurred())
 					Eventually(session).Should(gexec.Exit(0))
 
 					resultSecondAdd, err := GetResultForCurrent(session, cniVersion)
 					Expect(err).NotTo(HaveOccurred())
-
 					log.Printf("Unmarshalled result from second ADD: %v\n", resultSecondAdd)
+
+					// The IP addresses shouldn't be the same, since we'll reassign one.
+					Expect(resultSecondAdd.IPs).ShouldNot(Equal(result.IPs))
+
+					// Otherwise, they should be the same.
+					resultSecondAdd.IPs = nil
+					result.IPs = nil
 					Expect(resultSecondAdd).Should(Equal(result))
 
 					// IPAM reservation should still be in place.
@@ -1075,9 +1081,10 @@ var _ = Describe("CalicoCni", func() {
 						Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Output: %s", output))
 					})
 
-					It("a second ADD should leave the datastore untouched", func() {
+					It("a second ADD should fail, but not clean up the original IPAM allocation", func() {
 						// Try to create the same container (so CNI receives the ADD for the same endpoint again)
-						session, _, _, _, err := RunCNIPluginWithId(netconf, name, "", containerID, contNs)
+						// Use the same pod information but a different container ID to simulate the ADD.
+						session, _, _, _, err := RunCNIPluginWithId(netconf, name, "", "new-container-id", contNs)
 						Expect(err).ShouldNot(HaveOccurred())
 						Eventually(session).Should(gexec.Exit(1))
 

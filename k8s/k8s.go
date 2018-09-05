@@ -66,216 +66,210 @@ func CmdAddK8s(args *skel.CmdArgs, conf utils.NetConf, nodename string, calicoCl
 		"Node":         nodename,
 	}).Info("Extracted identifiers for CmdAddK8s")
 
-	endpointAlreadyExisted := endpoint != nil
-	if endpointAlreadyExisted {
-		// This happens when Docker or the node restarts. K8s calls CNI with the same parameters as before.
-		// Do the networking (since the network namespace was destroyed and recreated).
-		// There's an existing endpoint - no need to create another. Find the IP address from the endpoint
-		// and use that in the response.
-		result, err = utils.CreateResultFromEndpoint(endpoint)
+	// Allocate the IP and update/create the endpoint. Do this even if the endpoint already exists and has an IP
+	// allocation. The kubelet will send a DEL call for any old containers and we'll clean up the old IPs then.
+	client, err := newK8sClient(conf, logger)
+	if err != nil {
+		return nil, err
+	}
+	logger.WithField("client", client).Debug("Created Kubernetes client")
+
+	if conf.IPAM.Type == "host-local" && strings.EqualFold(conf.IPAM.Subnet, "usePodCidr") {
+		// We've been told to use the "host-local" IPAM plugin with the Kubernetes podCidr for this node.
+		// Replace the actual value in the args.StdinData as that's what's passed to the IPAM plugin.
+		fmt.Fprintf(os.Stderr, "Calico CNI fetching podCidr from Kubernetes\n")
+		var stdinData map[string]interface{}
+		if err := json.Unmarshal(args.StdinData, &stdinData); err != nil {
+			return nil, err
+		}
+		podCidr, err := getPodCidr(client, conf, nodename)
 		if err != nil {
 			return nil, err
 		}
-		logger.WithField("result", result).Debug("Created result from existing endpoint")
-		// If any labels changed whilst the container was being restarted, they will be picked up by the policy
-		// controller so there's no need to update the labels here.
-	} else {
-		client, err := newK8sClient(conf, logger)
+		logger.WithField("podCidr", podCidr).Info("Fetched podCidr")
+		stdinData["ipam"].(map[string]interface{})["subnet"] = podCidr
+		fmt.Fprintf(os.Stderr, "Calico CNI passing podCidr to host-local IPAM: %s\n", podCidr)
+		args.StdinData, err = json.Marshal(stdinData)
 		if err != nil {
 			return nil, err
 		}
-		logger.WithField("client", client).Debug("Created Kubernetes client")
+		logger.WithField("stdin", string(args.StdinData)).Debug("Updated stdin data")
+	}
 
-		if conf.IPAM.Type == "host-local" && strings.EqualFold(conf.IPAM.Subnet, "usePodCidr") {
-			// We've been told to use the "host-local" IPAM plugin with the Kubernetes podCidr for this node.
-			// Replace the actual value in the args.StdinData as that's what's passed to the IPAM plugin.
-			fmt.Fprintf(os.Stderr, "Calico CNI fetching podCidr from Kubernetes\n")
-			var stdinData map[string]interface{}
-			if err := json.Unmarshal(args.StdinData, &stdinData); err != nil {
-				return nil, err
-			}
-			podCidr, err := getPodCidr(client, conf, nodename)
-			if err != nil {
-				return nil, err
-			}
-			logger.WithField("podCidr", podCidr).Info("Fetched podCidr")
-			stdinData["ipam"].(map[string]interface{})["subnet"] = podCidr
-			fmt.Fprintf(os.Stderr, "Calico CNI passing podCidr to host-local IPAM: %s\n", podCidr)
-			args.StdinData, err = json.Marshal(stdinData)
-			if err != nil {
-				return nil, err
-			}
-			logger.WithField("stdin", string(args.StdinData)).Debug("Updated stdin data")
+	labels := make(map[string]string)
+	annot := make(map[string]string)
+
+	// Only attempt to fetch the labels and annotations from Kubernetes
+	// if the policy type has been set to "k8s". This allows users to
+	// run the plugin under Kubernetes without needing it to access the
+	// Kubernetes API
+	if conf.Policy.PolicyType == "k8s" {
+		var err error
+
+		labels, annot, err = getK8sLabelsAnnotations(client, k8sArgs)
+		if err != nil {
+			return nil, err
 		}
+		logger.WithField("labels", labels).Debug("Fetched K8s labels")
+		logger.WithField("annotations", annot).Debug("Fetched K8s annotations")
 
-		labels := make(map[string]string)
-		annot := make(map[string]string)
+		// Check for calico IPAM specific annotations and set them if needed.
+		if conf.IPAM.Type == "calico-ipam" {
 
-		// Only attempt to fetch the labels and annotations from Kubernetes
-		// if the policy type has been set to "k8s". This allows users to
-		// run the plugin under Kubernetes without needing it to access the
-		// Kubernetes API
-		if conf.Policy.PolicyType == "k8s" {
-			var err error
+			v4pools := annot["cni.projectcalico.org/ipv4pools"]
+			v6pools := annot["cni.projectcalico.org/ipv6pools"]
 
-			labels, annot, err = getK8sLabelsAnnotations(client, k8sArgs)
-			if err != nil {
-				return nil, err
-			}
-			logger.WithField("labels", labels).Debug("Fetched K8s labels")
-			logger.WithField("annotations", annot).Debug("Fetched K8s annotations")
-
-			// Check for calico IPAM specific annotations and set them if needed.
-			if conf.IPAM.Type == "calico-ipam" {
-
-				v4pools := annot["cni.projectcalico.org/ipv4pools"]
-				v6pools := annot["cni.projectcalico.org/ipv6pools"]
-
-				if len(v4pools) != 0 || len(v6pools) != 0 {
-					var stdinData map[string]interface{}
-					if err := json.Unmarshal(args.StdinData, &stdinData); err != nil {
-						return nil, err
-					}
-					var v4PoolSlice, v6PoolSlice []string
-
-					if len(v4pools) > 0 {
-						if err := json.Unmarshal([]byte(v4pools), &v4PoolSlice); err != nil {
-							logger.WithField("IPv4Pool", v4pools).Error("Error parsing IPv4 IPPools")
-							return nil, err
-						}
-
-						if _, ok := stdinData["ipam"].(map[string]interface{}); !ok {
-							logger.Fatal("Error asserting stdinData type")
-							os.Exit(0)
-						}
-						stdinData["ipam"].(map[string]interface{})["ipv4_pools"] = v4PoolSlice
-						logger.WithField("ipv4_pools", v4pools).Debug("Setting IPv4 Pools")
-					}
-					if len(v6pools) > 0 {
-						if err := json.Unmarshal([]byte(v6pools), &v6PoolSlice); err != nil {
-							logger.WithField("IPv6Pool", v6pools).Error("Error parsing IPv6 IPPools")
-							return nil, err
-						}
-
-						if _, ok := stdinData["ipam"].(map[string]interface{}); !ok {
-							logger.Fatal("Error asserting stdinData type")
-							os.Exit(0)
-						}
-						stdinData["ipam"].(map[string]interface{})["ipv6_pools"] = v6PoolSlice
-						logger.WithField("ipv6_pools", v6pools).Debug("Setting IPv6 Pools")
-					}
-
-					newData, err := json.Marshal(stdinData)
-					if err != nil {
-						logger.WithField("stdinData", stdinData).Error("Error Marshaling data")
-						return nil, err
-					}
-					args.StdinData = newData
-					logger.WithField("stdin", string(args.StdinData)).Debug("Updated stdin data")
+			if len(v4pools) != 0 || len(v6pools) != 0 {
+				var stdinData map[string]interface{}
+				if err := json.Unmarshal(args.StdinData, &stdinData); err != nil {
+					return nil, err
 				}
+				var v4PoolSlice, v6PoolSlice []string
+
+				if len(v4pools) > 0 {
+					if err := json.Unmarshal([]byte(v4pools), &v4PoolSlice); err != nil {
+						logger.WithField("IPv4Pool", v4pools).Error("Error parsing IPv4 IPPools")
+						return nil, err
+					}
+
+					if _, ok := stdinData["ipam"].(map[string]interface{}); !ok {
+						logger.Fatal("Error asserting stdinData type")
+						os.Exit(0)
+					}
+					stdinData["ipam"].(map[string]interface{})["ipv4_pools"] = v4PoolSlice
+					logger.WithField("ipv4_pools", v4pools).Debug("Setting IPv4 Pools")
+				}
+				if len(v6pools) > 0 {
+					if err := json.Unmarshal([]byte(v6pools), &v6PoolSlice); err != nil {
+						logger.WithField("IPv6Pool", v6pools).Error("Error parsing IPv6 IPPools")
+						return nil, err
+					}
+
+					if _, ok := stdinData["ipam"].(map[string]interface{}); !ok {
+						logger.Fatal("Error asserting stdinData type")
+						os.Exit(0)
+					}
+					stdinData["ipam"].(map[string]interface{})["ipv6_pools"] = v6PoolSlice
+					logger.WithField("ipv6_pools", v6pools).Debug("Setting IPv6 Pools")
+				}
+
+				newData, err := json.Marshal(stdinData)
+				if err != nil {
+					logger.WithField("stdinData", stdinData).Error("Error Marshaling data")
+					return nil, err
+				}
+				args.StdinData = newData
+				logger.WithField("stdin", string(args.StdinData)).Debug("Updated stdin data")
 			}
 		}
+	}
 
-		ipAddrsNoIpam := annot["cni.projectcalico.org/ipAddrsNoIpam"]
-		ipAddrs := annot["cni.projectcalico.org/ipAddrs"]
+	ipAddrsNoIpam := annot["cni.projectcalico.org/ipAddrsNoIpam"]
+	ipAddrs := annot["cni.projectcalico.org/ipAddrs"]
 
-		// switch based on which annotations are passed or not passed.
-		switch {
-		case ipAddrs == "" && ipAddrsNoIpam == "":
-			// Call IPAM plugin if ipAddrsNoIpam or ipAddrs annotation is not present.
-			logger.Debugf("Calling IPAM plugin %s", conf.IPAM.Type)
-			ipamResult, err := ipam.ExecAdd(conf.IPAM.Type, args.StdinData)
-			if err != nil {
-				return nil, err
-			}
-			logger.Debugf("IPAM plugin returned: %+v", ipamResult)
-
-			// Convert IPAM result into current Result.
-			// IPAM result has a bunch of fields that are optional for an IPAM plugin
-			// but required for a CNI plugin, so this is to populate those fields.
-			// See CNI Spec doc for more details.
-			result, err = current.NewResultFromResult(ipamResult)
-			if err != nil {
-				utils.ReleaseIPAllocation(logger, conf.IPAM.Type, args.StdinData)
-				return nil, err
-			}
-
-			if len(result.IPs) == 0 {
-				utils.ReleaseIPAllocation(logger, conf.IPAM.Type, args.StdinData)
-				return nil, errors.New("IPAM plugin returned missing IP config")
-			}
-
-		case ipAddrs != "" && ipAddrsNoIpam != "":
-			// Can't have both ipAddrs and ipAddrsNoIpam annotations at the same time.
-			e := fmt.Errorf("Can't have both annotations: 'ipAddrs' and 'ipAddrsNoIpam' in use at the same time")
-			logger.Error(e)
-			return nil, e
-		case ipAddrsNoIpam != "":
-			// ipAddrsNoIpam annotation is set so bypass IPAM, and set the IPs manually.
-			overriddenResult, err := overrideIPAMResult(ipAddrsNoIpam, logger)
-			if err != nil {
-				return nil, err
-			}
-			logger.Debugf("Bypassing IPAM to set the result to: %+v", overriddenResult)
-
-			// Convert overridden IPAM result into current Result.
-			// This method fill in all the empty fields necessory for CNI output according to spec.
-			result, err = current.NewResultFromResult(overriddenResult)
-			if err != nil {
-				return nil, err
-			}
-
-			if len(result.IPs) == 0 {
-				return nil, errors.New("Failed to build result")
-			}
-
-		case ipAddrs != "":
-			// When ipAddrs annotation is set, we call out to the configured IPAM plugin
-			// requesting the specific IP addresses included in the annotation.
-			result, err = ipAddrsResult(ipAddrs, conf, args, logger)
-			if err != nil {
-				return nil, err
-			}
-			logger.Debugf("IPAM result set to: %+v", result)
+	// switch based on which annotations are passed or not passed.
+	switch {
+	case ipAddrs == "" && ipAddrsNoIpam == "":
+		// Call IPAM plugin if ipAddrsNoIpam or ipAddrs annotation is not present.
+		logger.Debugf("Calling IPAM plugin %s", conf.IPAM.Type)
+		ipamResult, err := ipam.ExecAdd(conf.IPAM.Type, args.StdinData)
+		if err != nil {
+			return nil, err
 		}
+		logger.Debugf("IPAM plugin returned: %+v", ipamResult)
 
-		// Create the endpoint object and configure it.
-		endpoint = api.NewWorkloadEndpoint()
-		endpoint.Metadata.Name = args.IfName
-		endpoint.Metadata.Node = nodename
-		endpoint.Metadata.Orchestrator = orchestrator
-		endpoint.Metadata.Workload = workload
-		endpoint.Metadata.Labels = labels
-
-		// Set the profileID according to whether Kubernetes policy is required.
-		// If it's not, then just use the network name (which is the normal behavior)
-		// otherwise use one based on the Kubernetes pod's Namespace.
-		if conf.Policy.PolicyType == "k8s" {
-			endpoint.Spec.Profiles = []string{fmt.Sprintf("k8s_ns.%s", k8sArgs.K8S_POD_NAMESPACE)}
-		} else {
-			endpoint.Spec.Profiles = []string{conf.Name}
-		}
-
-		// Populate the endpoint with the output from the IPAM plugin.
-		if err = utils.PopulateEndpointNets(endpoint, result); err != nil {
-			// Cleanup IP allocation and return the error.
+		// Convert IPAM result into current Result.
+		// IPAM result has a bunch of fields that are optional for an IPAM plugin
+		// but required for a CNI plugin, so this is to populate those fields.
+		// See CNI Spec doc for more details.
+		result, err = current.NewResultFromResult(ipamResult)
+		if err != nil {
 			utils.ReleaseIPAllocation(logger, conf.IPAM.Type, args.StdinData)
 			return nil, err
 		}
-		logger.WithField("endpoint", endpoint).Info("Populated endpoint")
+
+		if len(result.IPs) == 0 {
+			utils.ReleaseIPAllocation(logger, conf.IPAM.Type, args.StdinData)
+			return nil, errors.New("IPAM plugin returned missing IP config")
+		}
+
+	case ipAddrs != "" && ipAddrsNoIpam != "":
+		// Can't have both ipAddrs and ipAddrsNoIpam annotations at the same time.
+		e := fmt.Errorf("Can't have both annotations: 'ipAddrs' and 'ipAddrsNoIpam' in use at the same time")
+		logger.Error(e)
+		return nil, e
+	case ipAddrsNoIpam != "":
+		// ipAddrsNoIpam annotation is set so bypass IPAM, and set the IPs manually.
+		overriddenResult, err := overrideIPAMResult(ipAddrsNoIpam, logger)
+		if err != nil {
+			return nil, err
+		}
+		logger.Debugf("Bypassing IPAM to set the result to: %+v", overriddenResult)
+
+		// Convert overridden IPAM result into current Result.
+		// This method fill in all the empty fields necessory for CNI output according to spec.
+		result, err = current.NewResultFromResult(overriddenResult)
+		if err != nil {
+			return nil, err
+		}
+
+		if len(result.IPs) == 0 {
+			return nil, errors.New("Failed to build result")
+		}
+
+	case ipAddrs != "":
+		// If the endpoint already exists, we need to attempt to release the previous IP addresses here
+		// since the ADD call will fail when it tries to reallocate the same IPs. releaseIPAddrs assumes
+		// that Calico IPAM is in use, which is OK here since only Calico IPAM supports the ipAddrs
+		// annotation.
+		if endpoint != nil {
+			logger.Info("Endpoint already exists and ipAddrs is set. Release any old IPs")
+			if err := releaseIPAddrs(endpoint.Spec.IPNetworks, calicoClient, logger); err != nil {
+				return nil, fmt.Errorf("failed to release ipAddrs: %s", err)
+			}
+		}
+
+		// When ipAddrs annotation is set, we call out to the configured IPAM plugin
+		// requesting the specific IP addresses included in the annotation.
+		result, err = ipAddrsResult(ipAddrs, conf, args, logger)
+		if err != nil {
+			return nil, err
+		}
+		logger.Debugf("IPAM result set to: %+v", result)
 	}
+
+	// Create the endpoint object and configure it.
+	if endpoint == nil {
+		endpoint = api.NewWorkloadEndpoint()
+	}
+	endpoint.Metadata.Name = args.IfName
+	endpoint.Metadata.Node = nodename
+	endpoint.Metadata.Orchestrator = orchestrator
+	endpoint.Metadata.Workload = workload
+	endpoint.Metadata.Labels = labels
+	endpoint.Spec.IPNetworks = []cnet.IPNet{}
+
+	// Set the profileID according to whether Kubernetes policy is required.
+	// If it's not, then just use the network name (which is the normal behavior)
+	// otherwise use one based on the Kubernetes pod's Namespace.
+	if conf.Policy.PolicyType == "k8s" {
+		endpoint.Spec.Profiles = []string{fmt.Sprintf("k8s_ns.%s", k8sArgs.K8S_POD_NAMESPACE)}
+	} else {
+		endpoint.Spec.Profiles = []string{conf.Name}
+	}
+
+	// Populate the endpoint with the output from the IPAM plugin.
+	if err = utils.PopulateEndpointNets(endpoint, result); err != nil {
+		// Cleanup IP allocation and return the error.
+		utils.ReleaseIPAllocation(logger, conf.IPAM.Type, args.StdinData)
+		return nil, err
+	}
+	logger.WithField("endpoint", endpoint).Info("Populated endpoint")
 	fmt.Fprintf(os.Stderr, "Calico CNI using IPs: %s\n", endpoint.Spec.IPNetworks)
 
-	// maybeReleaseIPAM cleans up any IPAM allocations if we were creating a new endpoint;
-	// it is a no-op if this was a re-network of an existing endpoint.
-	maybeReleaseIPAM := func() {
-		logger.Debug("Checking if we need to clean up IPAM.")
-		logger := logger.WithField("IPs", endpoint.Spec.IPNetworks)
-		if endpointAlreadyExisted {
-			logger.Info("Not cleaning up IPAM allocation; this was a pre-existing endpoint.")
-			return
-		}
-		logger.Info("Releasing IPAM allocation after failure")
+	// releaseIPAM cleans up any IPAM allocations for this endpoint.
+	releaseIPAM := func() {
+		logger := logger.WithField("endpointIPs", endpoint.Spec.IPNetworks)
 		utils.ReleaseIPAllocation(logger, conf.IPAM.Type, args.StdinData)
 	}
 
@@ -284,14 +278,14 @@ func CmdAddK8s(args *skel.CmdArgs, conf utils.NetConf, nodename string, calicoCl
 	_, contVethMac, err := utils.DoNetworking(args, conf, result, logger, hostVethName)
 	if err != nil {
 		logger.WithError(err).Error("Error setting up networking")
-		maybeReleaseIPAM()
+		releaseIPAM()
 		return nil, err
 	}
 
 	mac, err := net.ParseMAC(contVethMac)
 	if err != nil {
 		logger.WithError(err).WithField("mac", mac).Error("Error parsing container MAC")
-		maybeReleaseIPAM()
+		releaseIPAM()
 		return nil, err
 	}
 	endpoint.Spec.MAC = &cnet.MAC{HardwareAddr: mac}
@@ -302,7 +296,7 @@ func CmdAddK8s(args *skel.CmdArgs, conf utils.NetConf, nodename string, calicoCl
 	// Write the endpoint object (either the newly created one, or the updated one)
 	if _, err := calicoClient.WorkloadEndpoints().Apply(endpoint); err != nil {
 		logger.WithError(err).Error("Error creating/updating endpoint in datastore.")
-		maybeReleaseIPAM()
+		releaseIPAM()
 		return nil, err
 	}
 	logger.Info("Wrote updated endpoint to datastore")
@@ -319,29 +313,27 @@ func CmdAddK8s(args *skel.CmdArgs, conf utils.NetConf, nodename string, calicoCl
 func CmdDelK8s(c *calicoclient.Client, ep api.WorkloadEndpointMetadata, args *skel.CmdArgs, conf utils.NetConf, logger *log.Entry) error {
 	wep, err := c.WorkloadEndpoints().Get(ep)
 	if err != nil {
-		if _, ok := err.(cerrors.ErrorResourceDoesNotExist); ok {
-			// We can talk to the datastore but WEP doesn't exist in there,
-			// but we still want to go ahead with the clean up. So, log a warning and continue with the clean up.
-			logger.WithField("WorkloadEndpoint", ep).Warning("WorkloadEndpoint does not exist in the datastore, moving forward with the clean up")
-		} else {
+		if _, ok := err.(cerrors.ErrorResourceDoesNotExist); !ok {
 			// Could not connect to datastore (connection refused, unauthorized, etc.)
 			// so we have no way of knowing/checking ActiveInstanceID. To protect the endpoint
 			// from false DEL, we return the error without deleting/cleaning up.
 			return err
 		}
 
-		// Check if ActiveInstanceID is populated (it will be an empty string "" if it was populated
-		// before this field was added to the API), and if it is there then compare it with ContainerID
-		// passed by the orchestrator to make sure they are the same, return without deleting if they aren't.
+		// We can talk to the datastore but WEP doesn't exist in there,
+		// but we still want to go ahead with the clean up. So, log a warning and continue with the clean up.
+		logger.WithField("WorkloadEndpoint", ep).Warning("WorkloadEndpoint does not exist in the datastore, moving forward with the clean up")
 	} else if wep.Metadata.ActiveInstanceID != "" && args.ContainerID != wep.Metadata.ActiveInstanceID {
+		// If the ContainerID is populated and doesn't match the CNI_CONATINERID provided for this execution, then
+		// we shouldn't delete the workload endpoint. We identify workload endpoints based on pod name and namespace, which means
+		// we can receive DEL commands for an old sandbox for a currently running pod. However, we key IPAM allocations based on the
+		// CNI_CONTAINERID, so we should still do that below for this case.
 		logger.WithField("WorkloadEndpoint", wep).Warning("CNI_ContainerID does not match WorkloadEndpoint ActiveInstanceID so ignoring the DELETE cmd.")
-		return nil
-
+	} else if err = c.WorkloadEndpoints().Delete(wep.Metadata); err != nil {
 		// Delete the WorkloadEndpoint object from the datastore.
 		// In case of k8s, where we are deleting the WEP we got from the Datastore,
 		// this Delete is a Compare-and-Delete, so if *any* field in the WEP changed from
 		// the time we get WEP until here then the Delete operation will fail.
-	} else if err = c.WorkloadEndpoints().Delete(wep.Metadata); err != nil {
 		switch err := err.(type) {
 		case cerrors.ErrorResourceDoesNotExist:
 			// Log and proceed with the clean up if WEP doesn't exist.
@@ -362,9 +354,11 @@ func CmdDelK8s(c *calicoclient.Client, ep api.WorkloadEndpointMetadata, args *sk
 	}
 
 	// Release the IP address by calling the configured IPAM plugin.
+	logger.Info("Releasing IP address(es)")
 	ipamErr := utils.CleanUpIPAM(conf, args, logger)
 
 	// Clean up namespace by removing the interfaces.
+	logger.Info("Cleaning up netns")
 	err = utils.CleanUpNamespace(args, logger)
 	if err != nil {
 		return err
@@ -377,7 +371,6 @@ func CmdDelK8s(c *calicoclient.Client, ep api.WorkloadEndpointMetadata, args *sk
 	}
 
 	logger.Info("Teardown processing complete.")
-
 	return nil
 }
 
@@ -673,4 +666,29 @@ func getPodCidr(client *kubernetes.Clientset, conf utils.NetConf, nodename strin
 	} else {
 		return node.Spec.PodCIDR, nil
 	}
+}
+
+// releaseIPAddrs calls directly into Calico IPAM to release the specified IP addresses.
+// NOTE: This function assumes Calico IPAM is in use, and calls into it directly rather than calling the IPAM plugin.
+func releaseIPAddrs(ipAddrs []cnet.IPNet, calico *calicoclient.Client, logger *log.Entry) error {
+	// For each IP, call out to Calico IPAM to release it.
+	for _, ip := range ipAddrs {
+		log := logger.WithField("IP", ip)
+		log.Info("Releasing explicitly requested address")
+		cip, _, err := cnet.ParseCIDR(ip.IP.String())
+		if err != nil {
+			return err
+		}
+		unallocated, err := calico.IPAM().ReleaseIPs([]cnet.IP{*cip})
+		if err != nil {
+			log.WithError(err).Error("Failed to release explicit IP")
+			return err
+		}
+		if len(unallocated) > 0 {
+			log.Warn("Asked to release address but it doesn't exist.")
+		} else {
+			log.Infof("Released explicit address: %s", ip)
+		}
+	}
+	return nil
 }
