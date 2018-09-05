@@ -58,6 +58,8 @@ func init() {
 	protoUDP := numorstring.ProtocolFromString("UDP")
 	protoNumeric := numorstring.ProtocolFromInt(123)
 
+	as61234, _ := numorstring.ASNumberFromString("61234")
+
 	// longLabelsValue is 63 and 64 chars long
 	maxAnnotationsLength := 256 * (1 << 10)
 	longValue := make([]byte, maxAnnotationsLength)
@@ -1131,6 +1133,22 @@ func init() {
 		Entry("should accept valid BGPPeerSpec", api.BGPPeerSpec{PeerIP: ipv4_1}, true),
 		Entry("should reject invalid BGPPeerSpec (IPv4)", api.BGPPeerSpec{PeerIP: bad_ipv4_1}, false),
 		Entry("should reject invalid BGPPeerSpec (IPv6)", api.BGPPeerSpec{PeerIP: bad_ipv6_1}, false),
+		Entry("should reject BGPPeerSpec with both Node and NodeSelector", api.BGPPeerSpec{
+			Node:         "my-node",
+			NodeSelector: "has(mylabel)",
+		}, false),
+		Entry("should reject BGPPeerSpec with both PeerIP and PeerSelector", api.BGPPeerSpec{
+			PeerIP:       ipv4_1,
+			PeerSelector: "has(mylabel)",
+		}, false),
+		Entry("should reject BGPPeerSpec with both ASNumber and PeerSelector", api.BGPPeerSpec{
+			ASNumber:     as61234,
+			PeerSelector: "has(mylabel)",
+		}, false),
+		Entry("should accept BGPPeerSpec with NodeSelector and PeerSelector", api.BGPPeerSpec{
+			NodeSelector: "has(mylabel)",
+			PeerSelector: "has(mylabel)",
+		}, true),
 
 		// (API) NodeSpec
 		Entry("should accept node with IPv4 BGP", api.NodeSpec{BGP: &api.NodeBGPSpec{IPv4Address: netv4_1}}, true),
