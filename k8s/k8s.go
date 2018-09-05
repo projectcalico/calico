@@ -313,29 +313,27 @@ func CmdAddK8s(args *skel.CmdArgs, conf utils.NetConf, nodename string, calicoCl
 func CmdDelK8s(c *calicoclient.Client, ep api.WorkloadEndpointMetadata, args *skel.CmdArgs, conf utils.NetConf, logger *log.Entry) error {
 	wep, err := c.WorkloadEndpoints().Get(ep)
 	if err != nil {
-		if _, ok := err.(cerrors.ErrorResourceDoesNotExist); ok {
-			// We can talk to the datastore but WEP doesn't exist in there,
-			// but we still want to go ahead with the clean up. So, log a warning and continue with the clean up.
-			logger.WithField("WorkloadEndpoint", ep).Warning("WorkloadEndpoint does not exist in the datastore, moving forward with the clean up")
-		} else {
+		if _, ok := err.(cerrors.ErrorResourceDoesNotExist); !ok {
 			// Could not connect to datastore (connection refused, unauthorized, etc.)
 			// so we have no way of knowing/checking ActiveInstanceID. To protect the endpoint
 			// from false DEL, we return the error without deleting/cleaning up.
 			return err
 		}
 
-		// Check if ActiveInstanceID is populated (it will be an empty string "" if it was populated
-		// before this field was added to the API), and if it is there then compare it with ContainerID
-		// passed by the orchestrator to make sure they are the same, return without deleting if they aren't.
+		// We can talk to the datastore but WEP doesn't exist in there,
+		// but we still want to go ahead with the clean up. So, log a warning and continue with the clean up.
+		logger.WithField("WorkloadEndpoint", ep).Warning("WorkloadEndpoint does not exist in the datastore, moving forward with the clean up")
 	} else if wep.Metadata.ActiveInstanceID != "" && args.ContainerID != wep.Metadata.ActiveInstanceID {
+		// If the ContainerID is populated and doesn't match the CNI_CONATINERID provided for this execution, then
+		// we shouldn't delete the workload endpoint. We identify workload endpoints based on pod name and namespace, which means
+		// we can receive DEL commands for an old sandbox for a currently running pod. However, we key IPAM allocations based on the
+		// CNI_CONTAINERID, so we should still do that below for this case.
 		logger.WithField("WorkloadEndpoint", wep).Warning("CNI_ContainerID does not match WorkloadEndpoint ActiveInstanceID so ignoring the DELETE cmd.")
-		return nil
-
+	} else if err = c.WorkloadEndpoints().Delete(wep.Metadata); err != nil {
 		// Delete the WorkloadEndpoint object from the datastore.
 		// In case of k8s, where we are deleting the WEP we got from the Datastore,
 		// this Delete is a Compare-and-Delete, so if *any* field in the WEP changed from
 		// the time we get WEP until here then the Delete operation will fail.
-	} else if err = c.WorkloadEndpoints().Delete(wep.Metadata); err != nil {
 		switch err := err.(type) {
 		case cerrors.ErrorResourceDoesNotExist:
 			// Log and proceed with the clean up if WEP doesn't exist.
@@ -356,9 +354,11 @@ func CmdDelK8s(c *calicoclient.Client, ep api.WorkloadEndpointMetadata, args *sk
 	}
 
 	// Release the IP address by calling the configured IPAM plugin.
+	logger.Info("Releasing IP address(es)")
 	ipamErr := utils.CleanUpIPAM(conf, args, logger)
 
 	// Clean up namespace by removing the interfaces.
+	logger.Info("Cleaning up netns")
 	err = utils.CleanUpNamespace(args, logger)
 	if err != nil {
 		return err
@@ -371,7 +371,6 @@ func CmdDelK8s(c *calicoclient.Client, ep api.WorkloadEndpointMetadata, args *sk
 	}
 
 	logger.Info("Teardown processing complete.")
-
 	return nil
 }
 
