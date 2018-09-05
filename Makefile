@@ -404,7 +404,7 @@ endif
 ## Verifies the release artifacts produces by `make release-build` are correct.
 release-verify: release-prereqs
 	# Check the reported version is correct for each release artifact.
-	if ! docker run $(BUILD_IMAGE):$(VERSION)-$(ARCH) /dikastes --version | grep 'Version:\s*$(VERSION)$$'; then \
+	if ! docker run $(BUILD_IMAGE):$(VERSION)-$(ARCH) /dikastes --version | grep '^$(VERSION)$$'; then \
 	  echo "Reported version:" `docker run $(BUILD_IMAGE):$(VERSION)-$(ARCH) /dikastes --version` "\nExpected version: $(VERSION)"; \
 	  false; \
 	else \
