@@ -5,7 +5,7 @@ canonical_url: 'https://docs.projectcalico.org/v3.2/usage/troubleshooting/loggin
 
 ## The calico-node container
 
-The components in the calico-node container all log to the directories under
+The components in the `{{site.nodecontainer}}` container all log to the directories under
 `/var/log/calico` inside the container.  By default this is mapped to the
 `/var/log/calico` directory on the host but can be changed by specifying a
 `--log-dir` parameter on the `calicoctl node run` command.
@@ -19,20 +19,24 @@ All logging is done using [svlogd](http://smarden.org/runit/svlogd.8.html).
 Each component can be configured by dropping a file named `config` into that
 component's logging directory.
 
-e.g. to configure bird to only log 4 files of 10KB each
+svlogd can be configured to forward logs to syslog, to prefix each line
+and to filter logs.
+See the [documentation](http://smarden.org/runit/svlogd.8.html) for further details.
 
+e.g. to configure bird to only log 4 files of 10KB each, create a file called `config` in the `/var/log/calico/bird` directory containing
 ```shell
 #/var/log/calico/bird/config
 s10000
 n4
 ```
 
-svlogd can also be configured to forward logs to syslog, to prefix each line
-and to filter logs. See the [documentation](http://smarden.org/runit/svlogd.8.html)
-for further details.
+e.g. to configure bird to drop logs with the suffix `Netlink: File exists`, create a file called `config` in the `/var/log/calico/bird` directory containing
+```shell
+-*Netlink: File exists
+```
 
-See the following sub-sections for details on configuring the log level for
-each calico-node component.
+See the following subsections for details on configuring the log level for
+each `{{site.nodecontainer}}` component.
 
 ### Bird/Bird6
 
@@ -45,7 +49,13 @@ log level across all Calico nodes, _or_ use the same command with the `--node`
 option to run the command for that specific node.  This command affects the
 logging level for both Bird/Bird6 and Felix.
 
-Valid log levels are:  none, debug, info, warning, error, critical.  For example:
+Valid log levels are:  debug, info, warning, error, critical, none.
+
+* The debug level enables "debug all" logging for bird.
+* The info level only enabled "debug {states}" logging. This is for protocol state changes (protocol going up, down, starting, stopping etc.)
+* The warning, error, critical and none levels all turn off bird debug logging completely.
+
+For example:
 
         calicoctl config set logLevel error
         calicoctl config set logLevel debug --node=Calico-Node-1
