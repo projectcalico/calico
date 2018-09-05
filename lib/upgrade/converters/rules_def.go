@@ -76,7 +76,7 @@ var V1InRule1 = apiv1.Rule{
 		Nets:     []*net.IPNet{&cidr3, &cidr4},
 		NotNet:   &cidr2,
 		NotNets:  []*net.IPNet{&cidr1, &cidr3},
-		Selector: "label1 == 'value1' || bake == 'cake'",
+		Selector: "has(calico/k8s_ns) || bake == 'cake'",
 	},
 	Destination: apiv1.EntityRule{
 		Tag:     "kingindanorth",
@@ -103,7 +103,7 @@ var V1ModelInRule1 = model.Rule{
 	DstNets:     []*net.IPNet{&cidr1Net, &cidr3Net},
 	NotDstNet:   &cidr1Net,
 	NotDstNets:  []*net.IPNet{&cidr3Net, &cidr4Net},
-	SrcSelector: "label1 == 'value1' || bake == 'cake'",
+	SrcSelector: "has(calico/k8s_ns) || bake == 'cake'",
 }
 
 var V3InRule1 = apiv3.Rule{
@@ -114,7 +114,7 @@ var V3InRule1 = apiv3.Rule{
 	Source: apiv3.EntityRule{
 		Nets:     []string{cidr3StrictMaskStr, cidr4StrictMaskStr, cidr1StrictMaskStr},
 		NotNets:  []string{cidr1StrictMaskStr, cidr3StrictMaskStr, cidr2StrictMaskStr},
-		Selector: "(label1 == 'value1' || bake == 'cake') && tag1 == ''",
+		Selector: "(has(projectcalico.org/namespace) || bake == 'cake') && tag1 == ''",
 	},
 	Destination: apiv3.EntityRule{
 		Nets:     []string{cidr1StrictMaskStr, cidr3StrictMaskStr, cidr2StrictMaskStr},
