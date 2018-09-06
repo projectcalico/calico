@@ -63,7 +63,7 @@ import:
   - lib/set
   - lib/validator/v1
 - package: github.com/projectcalico/typha
-  version: 0f566b5737eecf91f63cf61e9144a751fc31beb5
+  version: 41469cb3c6d121be290b87b904220d720b7df468
   subpackages:
   - pkg/syncclient
   - pkg/tlsutils
