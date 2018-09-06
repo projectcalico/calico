@@ -19,17 +19,21 @@ All logging is done using [svlogd](http://smarden.org/runit/svlogd.8.html).
 Each component can be configured by dropping a file named `config` into that
 component's logging directory.
 
-e.g. to configure bird to only log 4 files of 10KB each
+svlogd can be configured to forward logs to syslog, to prefix each line
+and to filter logs.
+See the [documentation](http://smarden.org/runit/svlogd.8.html) for further details.
 
+e.g. to configure bird to only log 4 files of 10KB each, create a file called `config` in the `/var/log/calico/bird` directory containing
 ```shell
 #/var/log/calico/bird/config
 s10000
 n4
 ```
 
-svlogd can also be configured to forward logs to syslog, to prefix each line
-and to filter logs. See the [documentation](http://smarden.org/runit/svlogd.8.html)
-for further details.
+e.g. to configure bird to drop logs with the suffix `Netlink: File exists`, create a file called `config` in the `/var/log/calico/bird` directory containing
+```shell
+-*Netlink: File exists
+```
 
 See the following subsections for details on configuring the log level for
 each `{{site.nodecontainer}}` component.
@@ -40,6 +44,10 @@ Bird and Bird6 are used for distributing IPv4 and IPv6 routes between {{site.pro
 enabled hosts.  The logs are output in the `bird` and `bird6` sub-directories
 of the `{{site.nodecontainer}}` logging directory.
 
+* The Debug level enables "debug all" logging for bird.
+* The Info level (default) only enabled "debug {states}" logging. This is for protocol state changes (protocol going up, down, starting, stopping etc.)
+* The Warning, Error and Fatal levels all turn off bird debug logging completely.
+
 See [BGP Configuration Resource](/{{page.version}}/reference/calicoctl/resources/bgpconfig) 
 for details on how to modify the logging level. For example:
 
@@ -47,9 +55,9 @@ for details on how to modify the logging level. For example:
 # Get the current bgpconfig settings
 $ calicoctl get bgpconfig -o yaml > bgp.yaml
 
-# Modify logSeverityScreen to none, debug, info, etc.
+# Modify logSeverityScreen to desired value
 #   Global change: set name to "default"
-#   Node-specific change: set name to the node name, e.g. "{{site.prodname}}-Node-1"
+#   Node-specific change: set name to the node name, e.g. "node-1"
 $ vim bgp.yaml
 
 # Replace the current bgpconfig settings
