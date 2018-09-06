@@ -37,6 +37,7 @@ const (
 	nodeBgpIpv4AddrAnnotation = "projectcalico.org/IPv4Address"
 	nodeBgpIpv6AddrAnnotation = "projectcalico.org/IPv6Address"
 	nodeBgpAsnAnnotation      = "projectcalico.org/ASNumber"
+	nodeBgpCIDAnnotation      = "projectcalico.org/RouteReflectorClusterID"
 )
 
 func NewNodeClient(c *kubernetes.Clientset) K8sResourceClient {
@@ -199,6 +200,7 @@ func K8sNodeToCalico(k8sNode *kapiv1.Node) (*model.KVPair, error) {
 	annotations := k8sNode.ObjectMeta.Annotations
 	bgpSpec.IPv4Address = annotations[nodeBgpIpv4AddrAnnotation]
 	bgpSpec.IPv6Address = annotations[nodeBgpIpv6AddrAnnotation]
+	bgpSpec.RouteReflectorClusterID = annotations[nodeBgpCIDAnnotation]
 	asnString, ok := annotations[nodeBgpAsnAnnotation]
 	if ok {
 		asn, err := numorstring.ASNumberFromString(asnString)
@@ -248,6 +250,7 @@ func mergeCalicoNodeIntoK8sNode(calicoNode *apiv3.Node, k8sNode *kapiv1.Node) (*
 		delete(k8sNode.Annotations, nodeBgpIpv4AddrAnnotation)
 		delete(k8sNode.Annotations, nodeBgpIpv6AddrAnnotation)
 		delete(k8sNode.Annotations, nodeBgpAsnAnnotation)
+		delete(k8sNode.Annotations, nodeBgpCIDAnnotation)
 		return k8sNode, nil
 	}
 
@@ -267,6 +270,12 @@ func mergeCalicoNodeIntoK8sNode(calicoNode *apiv3.Node, k8sNode *kapiv1.Node) (*
 		k8sNode.Annotations[nodeBgpAsnAnnotation] = calicoNode.Spec.BGP.ASNumber.String()
 	} else {
 		delete(k8sNode.Annotations, nodeBgpAsnAnnotation)
+	}
+
+	if calicoNode.Spec.BGP.RouteReflectorClusterID != "" {
+		k8sNode.Annotations[nodeBgpCIDAnnotation] = calicoNode.Spec.BGP.RouteReflectorClusterID
+	} else {
+		delete(k8sNode.Annotations, nodeBgpCIDAnnotation)
 	}
 
 	return k8sNode, nil

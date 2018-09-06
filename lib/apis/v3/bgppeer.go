@@ -48,6 +48,16 @@ type BGPPeerSpec struct {
 	PeerIP string `json:"peerIP" validate:"omitempty,ip"`
 	// The AS Number of the peer.
 	ASNumber numorstring.ASNumber `json:"asNumber"`
+	// Selector for the nodes that should have this peering.  When this is set, the Node
+	// field must be empty.
+	NodeSelector string `json:"nodeSelector,omitempty"`
+	// Selector for the remote nodes to peer with.  When this is set, the PeerIP and
+	// ASNumber fields must be empty.  For each peering between the local node and
+	// selected remote nodes, we configure an IPv4 peering if both ends have
+	// NodeBGPSpec.IPv4Address specified, and an IPv6 peering if both ends have
+	// NodeBGPSpec.IPv6Address specified.  The remote AS number comes from the remote
+	// node’s NodeBGPSpec.ASNumber, or the global default if that is not set.
+	PeerSelector string `json:"peerSelector,omitempty"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object

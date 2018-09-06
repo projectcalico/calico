@@ -29,7 +29,7 @@ var _ = Describe("Test the (BGP) Node update processor", func() {
 		Kind: apiv3.KindNode,
 		Name: "bgpnode1",
 	}
-	numBgpConfigs := 5
+	numBgpConfigs := 6
 	up := updateprocessors.NewBGPNodeUpdateProcessor()
 
 	BeforeEach(func() {
@@ -44,11 +44,12 @@ var _ = Describe("Test the (BGP) Node update processor", func() {
 		res := apiv3.NewNode()
 		res.Name = "bgpnode1"
 		expected := map[string]interface{}{
-			"ip_addr_v4": "",
-			"ip_addr_v6": "",
-			"network_v4": nil,
-			"network_v6": nil,
-			"as_num":     nil,
+			"ip_addr_v4":    "",
+			"ip_addr_v6":    "",
+			"network_v4":    nil,
+			"network_v6":    nil,
+			"as_num":        nil,
+			"rr_cluster_id": "",
 		}
 		kvps, err := up.Process(&model.KVPair{
 			Key:   v3NodeKey1,
@@ -86,11 +87,12 @@ var _ = Describe("Test the (BGP) Node update processor", func() {
 			IPv4Address: "1.2.3.4",
 		}
 		expected = map[string]interface{}{
-			"ip_addr_v4": "1.2.3.4",
-			"ip_addr_v6": "",
-			"network_v4": "1.2.3.4/32",
-			"network_v6": nil,
-			"as_num":     nil,
+			"ip_addr_v4":    "1.2.3.4",
+			"ip_addr_v6":    "",
+			"network_v4":    "1.2.3.4/32",
+			"network_v6":    nil,
+			"as_num":        nil,
+			"rr_cluster_id": "",
 		}
 		kvps, err = up.Process(&model.KVPair{
 			Key:   v3NodeKey1,
@@ -111,11 +113,12 @@ var _ = Describe("Test the (BGP) Node update processor", func() {
 			IPv6Address: "aa:bb:cc::",
 		}
 		expected = map[string]interface{}{
-			"ip_addr_v4": "",
-			"ip_addr_v6": "aa:bb:cc::",
-			"network_v4": nil,
-			"network_v6": "aa:bb:cc::/128",
-			"as_num":     nil,
+			"ip_addr_v4":    "",
+			"ip_addr_v6":    "aa:bb:cc::",
+			"network_v4":    nil,
+			"network_v6":    "aa:bb:cc::/128",
+			"as_num":        nil,
+			"rr_cluster_id": "",
 		}
 		kvps, err = up.Process(&model.KVPair{
 			Key:   v3NodeKey1,
@@ -139,11 +142,12 @@ var _ = Describe("Test the (BGP) Node update processor", func() {
 			ASNumber:    &asn,
 		}
 		expected = map[string]interface{}{
-			"ip_addr_v4": "1.2.3.4",
-			"ip_addr_v6": "aa:bb:cc::ffff",
-			"network_v4": "1.2.3.0/24",
-			"network_v6": "aa:bb:cc::ff00/120",
-			"as_num":     "12345",
+			"ip_addr_v4":    "1.2.3.4",
+			"ip_addr_v6":    "aa:bb:cc::ffff",
+			"network_v4":    "1.2.3.0/24",
+			"network_v6":    "aa:bb:cc::ff00/120",
+			"as_num":        "12345",
+			"rr_cluster_id": "",
 		}
 		kvps, err = up.Process(&model.KVPair{
 			Key:   v3NodeKey1,
@@ -195,11 +199,12 @@ var _ = Describe("Test the (BGP) Node update processor", func() {
 		})
 		// IPv4 address should be blank, network should be nil (deleted)
 		expected := map[string]interface{}{
-			"ip_addr_v4": "",
-			"ip_addr_v6": "aa:bb:cc::ffff",
-			"network_v4": nil,
-			"network_v6": "aa:bb:cc::ff00/120",
-			"as_num":     "12345",
+			"ip_addr_v4":    "",
+			"ip_addr_v6":    "aa:bb:cc::ffff",
+			"network_v4":    nil,
+			"network_v6":    "aa:bb:cc::ff00/120",
+			"as_num":        "12345",
+			"rr_cluster_id": "",
 		}
 		Expect(err).To(HaveOccurred())
 		checkExpectedConfigs(
@@ -222,13 +227,42 @@ var _ = Describe("Test the (BGP) Node update processor", func() {
 		})
 		// IPv6 address should be blank, network should be nil (deleted)
 		expected = map[string]interface{}{
-			"ip_addr_v4": "1.2.3.4",
-			"ip_addr_v6": "",
-			"network_v4": "1.2.3.0/24",
-			"network_v6": nil,
-			"as_num":     nil,
+			"ip_addr_v4":    "1.2.3.4",
+			"ip_addr_v6":    "",
+			"network_v4":    "1.2.3.0/24",
+			"network_v6":    nil,
+			"as_num":        nil,
+			"rr_cluster_id": "",
 		}
 		Expect(err).To(HaveOccurred())
+		checkExpectedConfigs(
+			kvps,
+			isNodeBgpConfig,
+			numBgpConfigs,
+			expected,
+		)
+	})
+
+	It("should handle route reflector cluster ID field", func() {
+		res := apiv3.NewNode()
+		res.Name = "bgpnode1"
+		res.Spec.BGP = &apiv3.NodeBGPSpec{
+			IPv4Address:             "172.17.0.2/24",
+			RouteReflectorClusterID: "255.0.0.1",
+		}
+		expected := map[string]interface{}{
+			"ip_addr_v4":    "172.17.0.2",
+			"ip_addr_v6":    "",
+			"network_v4":    "172.17.0.0/24",
+			"network_v6":    nil,
+			"as_num":        nil,
+			"rr_cluster_id": "255.0.0.1",
+		}
+		kvps, err := up.Process(&model.KVPair{
+			Key:   v3NodeKey1,
+			Value: res,
+		})
+		Expect(err).NotTo(HaveOccurred())
 		checkExpectedConfigs(
 			kvps,
 			isNodeBgpConfig,

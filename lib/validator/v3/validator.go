@@ -179,6 +179,7 @@ func init() {
 	registerStructValidator(validatorSecondary, validateWorkloadEndpointSpec, api.WorkloadEndpointSpec{})
 	registerStructValidator(validatorSecondary, validateHostEndpointSpec, api.HostEndpointSpec{})
 	registerStructValidator(validatorSecondary, validateRule, api.Rule{})
+	registerStructValidator(validatorSecondary, validateBGPPeerSpec, api.BGPPeerSpec{})
 
 	// Register structs that have two level of additional structs to validate.
 	registerStructValidator(validatorTertiary, validateNetworkPolicy, api.NetworkPolicy{})
@@ -825,6 +826,23 @@ func validateNodeSpec(v *validator.Validate, structLevel *validator.StructLevel)
 			structLevel.ReportError(reflect.ValueOf(ns.BGP), "BGP", "",
 				reason("Spec.BGP should not be empty"))
 		}
+	}
+}
+
+func validateBGPPeerSpec(v *validator.Validate, structLevel *validator.StructLevel) {
+	ps := structLevel.CurrentStruct.Interface().(api.BGPPeerSpec)
+
+	if ps.Node != "" && ps.NodeSelector != "" {
+		structLevel.ReportError(reflect.ValueOf(ps.Node), "Node", "",
+			reason("Node field must be empty when NodeSelector is specified"))
+	}
+	if ps.PeerIP != "" && ps.PeerSelector != "" {
+		structLevel.ReportError(reflect.ValueOf(ps.PeerIP), "PeerIP", "",
+			reason("PeerIP field must be empty when PeerSelector is specified"))
+	}
+	if uint32(ps.ASNumber) != 0 && ps.PeerSelector != "" {
+		structLevel.ReportError(reflect.ValueOf(ps.ASNumber), "ASNumber", "",
+			reason("ASNumber field must be empty when PeerSelector is specified"))
 	}
 }
 
