@@ -35,11 +35,11 @@ import (
 
 	. "github.com/onsi/ginkgo/extensions/table"
 
+	"github.com/projectcalico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/libcalico-go/lib/ipip"
 	calinet "github.com/projectcalico/libcalico-go/lib/net"
-	"github.com/projectcalico/libcalico-go/lib/numorstring"
 	. "github.com/projectcalico/typha/fv-tests"
 	"github.com/projectcalico/typha/pkg/calc"
 	"github.com/projectcalico/typha/pkg/snapcache"
@@ -116,27 +116,19 @@ var (
 		},
 		UpdateType: api.UpdateTypeKVNew,
 	}
-	peerIP        = calinet.MustParseIP("10.1.2.3")
-	asNum, _      = numorstring.ASNumberFromString("62345")
-	bgpPeerGlobal = api.Update{
+	v3Node = api.Update{
 		KVPair: model.KVPair{
-			Key: model.GlobalBGPPeerKey{PeerIP: peerIP},
-			Value: &model.BGPPeer{
-				PeerIP: peerIP,
-				ASNum:  asNum,
-			},
+			Key:      model.ResourceKey{Name: "node1", Kind: v3.KindNode},
+			Value:    &v3.Node{},
 			Revision: "1237",
 		},
 		UpdateType: api.UpdateTypeKVNew,
 	}
-	bgpPeerNode = api.Update{
+	v3BGPPeer = api.Update{
 		KVPair: model.KVPair{
-			Key: model.NodeBGPPeerKey{PeerIP: peerIP, Nodename: "node1"},
-			Value: &model.BGPPeer{
-				PeerIP: peerIP,
-				ASNum:  asNum,
-			},
-			Revision: "1237",
+			Key:      model.ResourceKey{Name: "peer1", Kind: v3.KindBGPPeer},
+			Value:    &v3.BGPPeer{},
+			Revision: "1238",
 		},
 		UpdateType: api.UpdateTypeKVNew,
 	}
@@ -145,7 +137,7 @@ var (
 		KVPair: model.KVPair{
 			Key:      model.BlockAffinityKey{CIDR: blockAffCIDR, Host: "node1"},
 			Value:    &model.BlockAffinity{State: model.StateConfirmed},
-			Revision: "1238",
+			Revision: "1239",
 		},
 		UpdateType: api.UpdateTypeKVNew,
 	}
@@ -429,8 +421,8 @@ var _ = Describe("With an in-process Server", func() {
 				Entry("IP pool", ipPool1, "/calico/v1/ipam/v4/pool/10.0.1.0-24"),
 				Entry("Node conf", nodeBGPConfNode, "/calico/bgp/v1/host/node1/foo"),
 				Entry("Global conf", nodeBGPConfGlobal, "/calico/bgp/v1/global/bar"),
-				Entry("Node peer", bgpPeerNode, "/calico/bgp/v1/host/node1/peer_v4/10.1.2.3"),
-				Entry("Global peer", bgpPeerGlobal, "/calico/bgp/v1/global/peer_v4/10.1.2.3"),
+				Entry("Node", v3Node, "/calico/resources/v3/projectcalico.org/nodes/node1"),
+				Entry("BGP peer", v3BGPPeer, "/calico/resources/v3/projectcalico.org/bgppeers/peer1"),
 				Entry("Block affinity", blockAff1, "/calico/ipam/v2/host/node1/ipv4/block/10.0.1.0-26"),
 			)
 
