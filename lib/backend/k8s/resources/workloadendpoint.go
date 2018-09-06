@@ -101,7 +101,7 @@ func (c *WorkloadEndpointClient) patchPodIP(ctx context.Context, kvp *model.KVPa
 		log.WithError(err).Error("Failed to calculate Pod patch.")
 		return nil, err
 	}
-	pod, err := c.clientSet.CoreV1().Pods(ns).Patch(wepID.Pod, types.StrategicMergePatchType, patch)
+	pod, err := c.clientSet.CoreV1().Pods(ns).Patch(wepID.Pod, types.StrategicMergePatchType, patch, "status")
 	if err != nil {
 		return nil, K8sErrorToCalico(err, kvp.Key)
 	}
