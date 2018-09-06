@@ -1,5 +1,5 @@
-hash: 7dc447161946efbf918a43281514f5bb7b4bc44d28ffd79fdf0b42084eb8e00a
-updated: 2018-08-24T04:09:47.592854968Z
+hash: 532465eba2b2a959b061ab489daeaa25792238578b4eb2aad65c3463f757f728
+updated: 2018-09-06T04:10:17.028259569Z
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -139,7 +139,7 @@ imports:
   - reporters/stenographer/support/go-isatty
   - types
 - name: github.com/onsi/gomega
-  version: 38ca19236de6fbe62537be60136602cf095daa35
+  version: ae19f1b56d53acc4d6a698412bfd1e92876163f6
   subpackages:
   - format
   - internal/assertion
@@ -165,7 +165,7 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: f251d846b93dc51ccf00a01269965d231eae5595
+  version: 687140c32995953e2b3156d5bc2a3f7f2585639e
   subpackages:
   - lib/apiconfig
   - lib/apis/v1
@@ -211,9 +211,10 @@ imports:
   - lib/validator/v3
   - lib/watch
 - name: github.com/prometheus/client_golang
-  version: ebce7d0078c0109cbb4de5d50a2b799920b0f0d0
+  version: 3525612fea19680dd3d49c768802ec082ca853b2
   subpackages:
   - prometheus
+  - prometheus/internal
   - prometheus/promhttp
 - name: github.com/prometheus/client_model
   version: 5c3871d89910bfb32f5fcab2aa4b9ec68e65a99f
@@ -240,12 +241,12 @@ imports:
   subpackages:
   - codec
 - name: github.com/Workiva/go-datastructures
-  version: f338bf48899950e415caffa02222a7273fbdeaf6
+  version: f07cbe3f82ca2fd6e5ab94afce65fe43319f675f
   subpackages:
   - list
   - trie/ctrie
 - name: golang.org/x/crypto
-  version: 614d502a4dac94afa3a6ce146bd1736da82514c6
+  version: 0709b304e793a5edb4a2c0145f281ecdc20838a4
   subpackages:
   - ssh/terminal
 - name: golang.org/x/net
@@ -301,7 +302,7 @@ imports:
   subpackages:
   - rate
 - name: google.golang.org/appengine
-  version: 4216e58b9158e5f1c906f1aca75162a46a2ec88a
+  version: 03cac3b07182cfb08c0d0c0b6ee72a1ceb151c92
   subpackages:
   - internal
   - internal/app_identity
