@@ -296,6 +296,24 @@ run-kube-proxy:
 
 ci: clean static-checks test-containerized-cni-versions docker-image
 
+cd:
+ifndef CONFIRM
+	$(error CONFIRM is undefined - run using make <target> CONFIRM=true)
+endif
+ifndef BRANCH_NAME
+	$(error BRANCH_NAME is undefined - run using make <target> BRANCH_NAME=var or set an environment variable)
+endif
+	# Tag and push images with git describe.
+	docker tag $(DEPLOY_CONTAINER_NAME) $(DEPLOY_CONTAINER_NAME):$(shell git describe --tags --dirty --always --long)
+	docker tag $(DEPLOY_CONTAINER_NAME) quay.io/$(DEPLOY_CONTAINER_NAME):$(shell git describe --tags --dirty --always --long)
+	docker push $(DEPLOY_CONTAINER_NAME):$(shell git describe --tags --dirty --always --long)
+	docker push quay.io/$(DEPLOY_CONTAINER_NAME):$(shell git describe --tags --dirty --always --long)
+	# Tag and push images with branch name.
+	docker tag $(DEPLOY_CONTAINER_NAME) $(DEPLOY_CONTAINER_NAME):$(BRANCH_NAME)
+	docker tag $(DEPLOY_CONTAINER_NAME) quay.io/$(DEPLOY_CONTAINER_NAME):$(BRANCH_NAME)
+	docker push $(DEPLOY_CONTAINER_NAME):$(BRANCH_NAME)
+	docker push quay.io/$(DEPLOY_CONTAINER_NAME):$(BRANCH_NAME)
+
 .PHONY: help
 help: # Some kind of magic from https://gist.github.com/rcmachado/af3db315e31383502660
 	$(info Available targets)
