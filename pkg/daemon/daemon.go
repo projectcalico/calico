@@ -493,7 +493,7 @@ func (s ClientV3Shim) FelixSyncerByIface(callbacks bapi.SyncerCallbacks) bapi.Sy
 }
 
 func (s ClientV3Shim) BGPSyncerByIface(callbacks bapi.SyncerCallbacks) bapi.Syncer {
-	return bgpsyncer.New(s.Backend(), callbacks, "", "")
+	return bgpsyncer.New(s.Backend(), callbacks, "")
 }
 
 // DatastoreClient is our interface to the datastore, used for mocking in the UTs.
