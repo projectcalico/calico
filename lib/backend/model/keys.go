@@ -23,6 +23,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/projectcalico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/libcalico-go/lib/net"
 	log "github.com/sirupsen/logrus"
 )
@@ -250,15 +251,15 @@ func KeyFromDefaultPath(path string) Key {
 	} else if matchReadyFlag.MatchString(path) {
 		log.Debugf("Path is a ready flag: %v", path)
 		return ReadyFlagKey{}
-	} else if k := (NodeBGPPeerListOptions{}).KeyFromDefaultPath(path); k != nil {
-		return k
-	} else if k := (GlobalBGPPeerListOptions{}).KeyFromDefaultPath(path); k != nil {
-		return k
 	} else if k := (NodeBGPConfigListOptions{}).KeyFromDefaultPath(path); k != nil {
 		return k
 	} else if k := (GlobalBGPConfigListOptions{}).KeyFromDefaultPath(path); k != nil {
 		return k
 	} else if k := (BlockAffinityListOptions{}).KeyFromDefaultPath(path); k != nil {
+		return k
+	} else if k := (ResourceListOptions{Kind: v3.KindNode}).KeyFromDefaultPath(path); k != nil {
+		return k
+	} else if k := (ResourceListOptions{Kind: v3.KindBGPPeer}).KeyFromDefaultPath(path); k != nil {
 		return k
 	} else {
 		log.Debugf("Path is unknown: %v", path)
