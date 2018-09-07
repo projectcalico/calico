@@ -139,13 +139,18 @@ var _ = Describe("Daemon", func() {
 
 			It("should create the server components", func() {
 				d.CreateServer()
-				Expect(d.SyncerToValidator).ToNot(BeNil())
-				Expect(d.Syncer).ToNot(BeNil())
-				Expect(d.SyncerToValidator).ToNot(BeNil())
-				Expect(d.ValidatorToCache).ToNot(BeNil())
-				Expect(d.Validator).ToNot(BeNil())
-				Expect(d.Cache).ToNot(BeNil())
+				Expect(d.SyncerPipelines).To(HaveLen(2))
+				for _, p := range d.SyncerPipelines {
+					Expect(p.SyncerToValidator).ToNot(BeNil())
+					Expect(p.Syncer).ToNot(BeNil())
+					Expect(p.SyncerToValidator).ToNot(BeNil())
+					Expect(p.ValidatorToCache).ToNot(BeNil())
+					Expect(p.Validator).ToNot(BeNil())
+					Expect(p.Cache).ToNot(BeNil())
+				}
 				Expect(d.Server).ToNot(BeNil())
+				Expect(datastore.bgpSyncerCalled).To(BeTrue())
+				Expect(datastore.felixSyncerCalled).To(BeTrue())
 			})
 
 			It("should start a working server", func() {
@@ -178,7 +183,7 @@ var _ = Describe("Daemon", func() {
 				Expect(err).NotTo(HaveOccurred())
 
 				// Send in an update at the top of the processing pipeline.
-				d.SyncerToValidator.OnStatusUpdated(bapi.InSync)
+				d.SyncerPipelines[0].SyncerToValidator.OnStatusUpdated(bapi.InSync)
 				// It should make it all the way through to our recorder.
 				Eventually(cbs.Status).Should(Equal(bapi.InSync))
 			})
@@ -306,16 +311,24 @@ var _ = Context("Healthcheck command", func() {
 })
 
 type mockDatastore struct {
-	mutex        sync.Mutex
-	syncerCalled bool
-	initCalled   int
-	failInit     bool
+	mutex             sync.Mutex
+	bgpSyncerCalled   bool
+	felixSyncerCalled bool
+	initCalled        int
+	failInit          bool
 }
 
-func (b *mockDatastore) SyncerByIface(callbacks bapi.SyncerCallbacks) bapi.Syncer {
+func (b *mockDatastore) FelixSyncerByIface(callbacks bapi.SyncerCallbacks) bapi.Syncer {
 	b.mutex.Lock()
 	defer b.mutex.Unlock()
-	b.syncerCalled = true
+	b.felixSyncerCalled = true
+	return &dummySyncer{}
+}
+
+func (b *mockDatastore) BGPSyncerByIface(callbacks bapi.SyncerCallbacks) bapi.Syncer {
+	b.mutex.Lock()
+	defer b.mutex.Unlock()
+	b.bgpSyncerCalled = true
 	return &dummySyncer{}
 }
 

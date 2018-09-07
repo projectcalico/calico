@@ -37,6 +37,7 @@ import (
 
 	"github.com/projectcalico/libcalico-go/lib/apiconfig"
 	bapi "github.com/projectcalico/libcalico-go/lib/backend/api"
+	"github.com/projectcalico/libcalico-go/lib/backend/syncersv1/bgpsyncer"
 	"github.com/projectcalico/libcalico-go/lib/backend/syncersv1/felixsyncer"
 	"github.com/projectcalico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/libcalico-go/lib/health"
@@ -49,6 +50,7 @@ import (
 	"github.com/projectcalico/typha/pkg/k8s"
 	"github.com/projectcalico/typha/pkg/logutils"
 	"github.com/projectcalico/typha/pkg/snapcache"
+	"github.com/projectcalico/typha/pkg/syncproto"
 	"github.com/projectcalico/typha/pkg/syncserver"
 )
 
@@ -74,12 +76,9 @@ type TyphaDaemon struct {
 	ConfigParams    *config.Config
 
 	// The components of the server, created in CreateServer() below.
-	Syncer            bapi.Syncer
-	SyncerToValidator *calc.SyncerCallbacksDecoupler
-	Validator         *calc.ValidationFilter
-	ValidatorToCache  *calc.SyncerCallbacksDecoupler
-	Cache             *snapcache.Cache
-	Server            *syncserver.Server
+	SyncerPipelines    []*syncerPipeline
+	CachesBySyncerType map[syncproto.SyncerType]syncserver.BreadcrumbProvider
+	Server             *syncserver.Server
 
 	// The functions below default to real library functions but they can be overridden for testing.
 	NewClientV3           func(config apiconfig.CalicoAPIConfig) (DatastoreClient, error)
@@ -97,6 +96,28 @@ type TyphaDaemon struct {
 	healthCheckPort int
 }
 
+type syncerPipeline struct {
+	Type              syncproto.SyncerType
+	Syncer            bapi.Syncer
+	SyncerToValidator *calc.SyncerCallbacksDecoupler
+	Validator         *calc.ValidationFilter
+	ValidatorToCache  *calc.SyncerCallbacksDecoupler
+	Cache             *snapcache.Cache
+}
+
+func (p syncerPipeline) Start(cxt context.Context) {
+	logCxt := log.WithField("syncerType", p.Type)
+	logCxt.Info("Starting syncer")
+	p.Syncer.Start()
+	logCxt.Info("Starting syncer-to-validator decoupler")
+	go p.SyncerToValidator.SendTo(p.Validator)
+	logCxt.Info("Starting validator-to-cache decoupler")
+	go p.ValidatorToCache.SendTo(p.Cache)
+	logCxt.Info("Starting cache")
+	p.Cache.Start(cxt)
+	logCxt.Info("Started syncer pipeline")
+}
+
 func New() *TyphaDaemon {
 	return &TyphaDaemon{
 		NewClientV3: func(config apiconfig.CalicoAPIConfig) (DatastoreClient, error) {
@@ -108,6 +129,7 @@ func New() *TyphaDaemon {
 		},
 		ConfigureEarlyLogging: logutils.ConfigureEarlyLogging,
 		ConfigureLogging:      logutils.ConfigureLogging,
+		CachesBySyncerType:    map[syncproto.SyncerType]syncserver.BreadcrumbProvider{},
 	}
 }
 
@@ -326,31 +348,49 @@ configRetry:
 	return nil
 }
 
-// CreateServer creates and configures (but does not start) the server components.
-func (t *TyphaDaemon) CreateServer() {
-	// Now create the Syncer; our caching layer and the TCP server.
-
-	// Health monitoring, for liveness and readiness endpoints.
-	t.healthAggregator = health.NewHealthAggregator()
-
+func (t *TyphaDaemon) addSyncerPipeline(
+	syncerType syncproto.SyncerType,
+	newSyncer func(callbacks bapi.SyncerCallbacks) bapi.Syncer,
+) {
 	// Get a Syncer from the datastore, which will feed the validator layer with updates.
-	t.SyncerToValidator = calc.NewSyncerCallbacksDecoupler()
-	t.Syncer = t.DatastoreClient.SyncerByIface(t.SyncerToValidator)
-	log.Debugf("Created Syncer: %#v", t.Syncer)
+	syncerToValidator := calc.NewSyncerCallbacksDecoupler()
+	syncer := newSyncer(syncerToValidator)
+	log.Debugf("Created Syncer: %#v", syncer)
 
 	// Create the validator, which sits between the syncer and the cache.
-	t.ValidatorToCache = calc.NewSyncerCallbacksDecoupler()
-	t.Validator = calc.NewValidationFilter(t.ValidatorToCache)
+	validatorToCache := calc.NewSyncerCallbacksDecoupler()
+	validator := calc.NewValidationFilter(validatorToCache)
 
 	// Create our snapshot cache, which stores point-in-time copies of the datastore contents.
-	t.Cache = snapcache.New(snapcache.Config{
+	cache := snapcache.New(snapcache.Config{
 		MaxBatchSize:     t.ConfigParams.SnapshotCacheMaxBatchSize,
 		HealthAggregator: t.healthAggregator,
 	})
 
+	pipeline := &syncerPipeline{
+		Type:              syncerType,
+		Syncer:            syncer,
+		SyncerToValidator: syncerToValidator,
+		Validator:         validator,
+		ValidatorToCache:  validatorToCache,
+		Cache:             cache,
+	}
+	t.SyncerPipelines = append(t.SyncerPipelines, pipeline)
+	t.CachesBySyncerType[syncerType] = cache
+}
+
+// CreateServer creates and configures (but does not start) the server components.
+func (t *TyphaDaemon) CreateServer() {
+	// Health monitoring, for liveness and readiness endpoints.
+	t.healthAggregator = health.NewHealthAggregator()
+
+	// Now create the Syncer and caching layer (one pipeline for each syncer we support).
+	t.addSyncerPipeline(syncproto.SyncerTypeFelix, t.DatastoreClient.FelixSyncerByIface)
+	t.addSyncerPipeline(syncproto.SyncerTypeBGP, t.DatastoreClient.BGPSyncerByIface)
+
 	// Create the server, which listens for connections from Felix.
 	t.Server = syncserver.New(
-		t.Cache,
+		t.CachesBySyncerType,
 		syncserver.Config{
 			MaxMessageSize:          t.ConfigParams.ServerMaxMessageSize,
 			MinBatchingAgeThreshold: t.ConfigParams.ServerMinBatchingAgeThresholdSecs,
@@ -374,10 +414,9 @@ func (t *TyphaDaemon) CreateServer() {
 func (t *TyphaDaemon) Start(cxt context.Context) {
 	// Now we've connected everything up, start the background processing threads.
 	log.Info("Starting the datastore Syncer/cache layer")
-	t.Syncer.Start()
-	go t.SyncerToValidator.SendToContext(cxt, t.Validator)
-	go t.ValidatorToCache.SendToContext(cxt, t.Cache)
-	t.Cache.Start(cxt)
+	for _, s := range t.SyncerPipelines {
+		s.Start(cxt)
+	}
 	t.Server.Start(cxt)
 	if t.ConfigParams.ConnectionRebalancingMode == "kubernetes" {
 		log.Info("Kubernetes connection rebalancing is enabled, starting k8s poll goroutine.")
@@ -449,14 +488,19 @@ type ClientV3Shim struct {
 	RealClientV3
 }
 
-func (s ClientV3Shim) SyncerByIface(callbacks bapi.SyncerCallbacks) bapi.Syncer {
+func (s ClientV3Shim) FelixSyncerByIface(callbacks bapi.SyncerCallbacks) bapi.Syncer {
 	return felixsyncer.New(s.Backend(), callbacks)
+}
+
+func (s ClientV3Shim) BGPSyncerByIface(callbacks bapi.SyncerCallbacks) bapi.Syncer {
+	return bgpsyncer.New(s.Backend(), callbacks, "")
 }
 
 // DatastoreClient is our interface to the datastore, used for mocking in the UTs.
 type DatastoreClient interface {
 	clientv3.Interface
-	SyncerByIface(callbacks bapi.SyncerCallbacks) bapi.Syncer
+	FelixSyncerByIface(callbacks bapi.SyncerCallbacks) bapi.Syncer
+	BGPSyncerByIface(callbacks bapi.SyncerCallbacks) bapi.Syncer
 }
 
 // RealClientV3 is the real API of the V3 client, including the semi-private API that we use to get the backend.

@@ -1,4 +1,4 @@
-// Copyright (c) 2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2018 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -47,6 +47,7 @@ type Options struct {
 	CAFile       string
 	ServerCN     string
 	ServerURISAN string
+	SyncerType   syncproto.SyncerType
 }
 
 func (o *Options) readTimeout() time.Duration {
@@ -98,9 +99,15 @@ func New(
 	}
 	id := nextID
 	nextID++
+	if options == nil {
+		options = &Options{}
+	}
 	return &SyncerClient{
-		ID:        id,
-		logCxt:    log.WithField("connID", id),
+		ID: id,
+		logCxt: log.WithFields(log.Fields{
+			"connID": id,
+			"type":   options.SyncerType,
+		}),
 		callbacks: cbs,
 		addr:      addr,
 
@@ -263,11 +270,16 @@ func (s *SyncerClient) loop(cxt context.Context, cancelFn context.CancelFunc) {
 	s.encoder = gob.NewEncoder(s.connection)
 	s.decoder = gob.NewDecoder(s.connection)
 
+	ourSyncerType := s.options.SyncerType
+	if ourSyncerType == "" {
+		ourSyncerType = syncproto.SyncerTypeFelix
+	}
 	err := s.sendMessageToServer(cxt, logCxt, "send hello to server",
 		syncproto.MsgClientHello{
-			Hostname: s.myHostname,
-			Version:  s.myVersion,
-			Info:     s.myInfo,
+			Hostname:   s.myHostname,
+			Version:    s.myVersion,
+			Info:       s.myInfo,
+			SyncerType: ourSyncerType,
 		},
 	)
 	if err != nil {
@@ -311,6 +323,20 @@ func (s *SyncerClient) loop(cxt context.Context, cancelFn context.CancelFunc) {
 			s.callbacks.OnUpdates(updates)
 		case syncproto.MsgServerHello:
 			logCxt.WithField("serverVersion", msg.Version).Info("Server hello message received")
+
+			// Check the SyncerType reported by the server.  If the server is too old to support SyncerType then
+			// the message will have an empty string in place of the SyncerType.  In that case we only proceed if
+			// the client wants the felix syncer.
+			serverSyncerType := msg.SyncerType
+			if serverSyncerType == "" {
+				logCxt.Info("Server responded without SyncerType, assuming an old Typha version that only " +
+					"supports SyncerTypeFelix.")
+				serverSyncerType = syncproto.SyncerTypeFelix
+			}
+			if ourSyncerType != serverSyncerType {
+				logCxt.Error("We require SyncerType %s but Typha server doesn't support it.", ourSyncerType)
+				return
+			}
 		}
 	}
 }

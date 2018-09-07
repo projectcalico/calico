@@ -1,4 +1,4 @@
-// Copyright (c) 2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2018 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -31,6 +31,7 @@ import (
 	"github.com/projectcalico/typha/pkg/config"
 	"github.com/projectcalico/typha/pkg/logutils"
 	"github.com/projectcalico/typha/pkg/syncclient"
+	"github.com/projectcalico/typha/pkg/syncproto"
 )
 
 const usage = `Test client for Typha, Calico's fan-out proxy.
@@ -41,6 +42,7 @@ Usage:
 Options:
   --version                    Print the version and exit.
   --server=<ADDR>              Set the server to connect to [default: localhost:5473].
+  --type=<TYPE>                Use a particular syncer type.
 `
 
 type syncerCallbacks struct {
@@ -87,7 +89,14 @@ func main() {
 
 	callbacks := &syncerCallbacks{}
 	addr := arguments["--server"].(string)
-	client := syncclient.New(addr, buildinfo.GitVersion, "test-host", "some info", callbacks, nil)
+	var syncerType syncproto.SyncerType
+	if t, ok := arguments["--type"].(string); ok {
+		syncerType = syncproto.SyncerType(t)
+	}
+	options := &syncclient.Options{
+		SyncerType: syncerType,
+	}
+	client := syncclient.New(addr, buildinfo.GitVersion, "test-host", "some info", callbacks, options)
 	err = client.Start(context.Background())
 	if err != nil {
 		log.WithError(err).Panic("Client failed")

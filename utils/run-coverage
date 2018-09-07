@@ -21,7 +21,7 @@ test_pkgs=$(go list -f '{{ if .TestGoFiles | or .XTestGoFiles }}{{ .ImportPath }
 test ! -z "$test_pkgs"
 echo "Packages with tests: $test_pkgs"
 
-ginkgo -cover -covermode=count -coverpkg=${go_dirs} -r -p
+ginkgo -cover -covermode=count -coverpkg=${go_dirs} ${GINKGO_ARGS} -r
 gocovmerge $(find . -name '*.coverprofile') > combined.coverprofile
 
 # Print the coverage.  We use sed to remove the verbose prefix and trim down
