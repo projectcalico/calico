@@ -6,7 +6,6 @@ calico-node.yaml acccepts the following include flags:
 | datastore        | kdd, etcd                |
 | typha            | true, false              |
 | network          | calico, flannel, <unset> |
-| ipip             | true, false              |
 | variant_name     | Calico, Canal            |
 | app_layer_policy | true, false              |
 
@@ -142,11 +141,6 @@ spec:
             # Enable IPIP
             - name: CALICO_IPV4POOL_IPIP
               value: "Always"
-  {%- if include.ipip == "true" %}
-            # Enable IP-in-IP within Felix.
-            - name: FELIX_IPINIPENABLED
-              value: "true"
-  {%- endif %}
             # Set MTU for tunnel device used if ipip is enabled
             - name: FELIX_IPINIPMTU
               valueFrom:
