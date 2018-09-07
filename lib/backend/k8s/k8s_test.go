@@ -1422,12 +1422,6 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 		})
 	})
 
-	It("should error on unsupported List() calls", func() {
-		objs, err := c.List(ctx, model.BlockAffinityListOptions{}, "")
-		Expect(err).To(HaveOccurred())
-		Expect(objs).To(BeNil())
-	})
-
 	It("should not error on unsupported List() calls", func() {
 		var nodename string
 		By("Listing all Nodes to find a suitable Node name", func() {
@@ -1438,6 +1432,11 @@ var _ = Describe("Test Syncer API for Kubernetes backend", func() {
 		})
 		By("Listing all BlockAffinity for a specific Node", func() {
 			objs, err := c.List(ctx, model.BlockAffinityListOptions{Host: nodename}, "")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(len(objs.KVPairs)).To(Equal(1))
+		})
+		By("Listing all BlockAffinity for all Nodes", func() {
+			objs, err := c.List(ctx, model.BlockAffinityListOptions{}, "")
 			Expect(err).NotTo(HaveOccurred())
 			Expect(len(objs.KVPairs)).To(Equal(1))
 		})
