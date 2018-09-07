@@ -222,6 +222,15 @@ func (st *SyncerTester) ExpectData(kvp model.KVPair) {
 	}
 }
 
+// ExpectPath verifies that a KVPair with a specified path is in the cache.
+func (st *SyncerTester) ExpectPath(path string) {
+	kv := func() interface{} {
+		return st.GetCacheKVPair(path)
+	}
+	Eventually(kv, 6*time.Second, time.Millisecond).ShouldNot(BeNil())
+	Consistently(kv).ShouldNot(BeNil())
+}
+
 // ExpectDataMatch verifies that the KV in the cache exists and matches the GomegaMatcher.
 func (st *SyncerTester) ExpectValueMatches(k model.Key, match gomegatypes.GomegaMatcher) {
 	key, err := model.KeyToDefaultPath(k)

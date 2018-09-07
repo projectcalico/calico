@@ -116,6 +116,42 @@ func (c *AffinityBlockClient) List(ctx context.Context, list model.ListInterface
 		return kvpl, nil
 	}
 
+	// When host is not specified...
+	if bl.IPVersion == 0 {
+		// Get the node settings, we use the nodes PodCIDR as the only node affinity block.
+		nodeList, err := c.clientSet.CoreV1().Nodes().List(metav1.ListOptions{ResourceVersion: revision})
+		if err != nil {
+			err = K8sErrorToCalico(err, list)
+			if _, ok := err.(cerrors.ErrorResourceDoesNotExist); !ok {
+				return nil, err
+			}
+			return kvpl, nil
+		}
+
+		kvpl.Revision = nodeList.ResourceVersion
+		for _, node := range nodeList.Items {
+			// Return no results if the pod CIDR is not assigned.
+			podcidr := node.Spec.PodCIDR
+			if len(podcidr) == 0 {
+				continue
+			}
+
+			_, cidr, err := cnet.ParseCIDR(podcidr)
+			if err != nil {
+				return nil, err
+			}
+			kvpl.KVPairs = append(kvpl.KVPairs, &model.KVPair{
+				Key: model.BlockAffinityKey{
+					CIDR: *cidr,
+					Host: node.Name,
+				},
+				Value:    &model.BlockAffinity{State: model.StateConfirmed},
+				Revision: node.ResourceVersion,
+			})
+		}
+		return kvpl, nil
+	}
+
 	// Currently querying the affinity block is only used by the BGP syncer *and* we always
 	// query for a specific Node, so for now fail List requests for all nodes.
 	log.Warn("Operation List (all nodes or all IP versions) is not supported on AffinityBlock type")
