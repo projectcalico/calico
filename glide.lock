@@ -1,5 +1,5 @@
-hash: 196a5e66ff95e7e84b451c1570a3eafe449579e91c8b4bf4d0f19b8e9a638a34
-updated: 2018-09-07T04:11:49.322591807Z
+hash: f8a4ad5ce27d05c774991fbf398f75d20b8129cd0bda7be6e01301485029105a
+updated: 2018-09-07T14:12:32.119941797Z
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -165,7 +165,7 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: e9246ed2f41c74cd5841c8ea22ddc16f2452ff49
+  version: c2b035b05a46738c580182ef6c9b8cb3423d9f9f
   subpackages:
   - lib/apiconfig
   - lib/apis/v1
@@ -211,7 +211,7 @@ imports:
   - lib/validator/v3
   - lib/watch
 - name: github.com/prometheus/client_golang
-  version: 3525612fea19680dd3d49c768802ec082ca853b2
+  version: 7858729281ec582767b20e0d696b6041d995d5e0
   subpackages:
   - prometheus
   - prometheus/internal
