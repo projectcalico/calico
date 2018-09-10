@@ -718,7 +718,8 @@ release-publish: release-prereqs
 	git push origin $(VERSION)
 
 	# Push images.
-	$(MAKE) push IMAGETAG=$(VERSION) ARCH=$(ARCH)
+	# Disabling for now since no-one is consuming the images.
+	# $(MAKE) push-all IMAGETAG=$(VERSION)
 
 	@echo "Finalize the GitHub release based on the pushed tag."
 	@echo ""
@@ -746,7 +747,8 @@ release-publish-latest: release-prereqs
 	  fi \
 	done; \
 
-	$(MAKE) push IMAGETAG=latest ARCH=$(ARCH)
+	# Disabling for now since no-one is consuming the images.
+	# $(MAKE) push-all IMAGETAG=latest
 
 # release-prereqs checks that the environment is configured properly to create a release.
 release-prereqs:
