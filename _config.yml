@@ -7,6 +7,7 @@ permalink:     /:title.html
 plugins:
   - jekyll-redirect-from
   - jekyll-seo-tag
+  - jekyll-sitemap
 
 url: https://docs.projectcalico.org
 
@@ -49,6 +50,7 @@ defaults:
     values:
       layout: docwithnav
       version: master
+      sitemap: false
   -
     scope:
       path: master
@@ -114,3 +116,4 @@ defaults:
       path: v3.2
     values:
       version: v3.2
+      sitemap: true
