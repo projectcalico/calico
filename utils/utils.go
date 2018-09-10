@@ -95,11 +95,7 @@ func CleanUpNamespace(args *skel.CmdArgs, logger *logrus.Entry) error {
 					return err
 				})
 
-				if err != nil {
-					ch <- err
-				} else {
-					ch <- nil
-				}
+				ch <- err
 			}()
 
 			select {
@@ -110,7 +106,7 @@ func CleanUpNamespace(args *skel.CmdArgs, logger *logrus.Entry) error {
 					fmt.Fprintf(os.Stderr, "Calico CNI deleted device in netns %s\n", args.Netns)
 				}
 			case <-time.After(5 * time.Second):
-				fmt.Fprintf(os.Stderr, "Calico CNI timed out deleting device in netns %s\n", args.Netns)
+				return fmt.Errorf("Calico CNI timed out deleting device in netns %s", args.Netns)
 			}
 		} else {
 			logger.Info("veth does not exist, no need to clean up.")
