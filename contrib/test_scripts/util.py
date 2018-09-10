@@ -9,10 +9,10 @@ import sys
 
 NETNS_ROOT = "/var/run/netns/"
 import os
-PLUGIN_LOCATION = os.path.dirname(os.path.realpath(__file__)) + "/../../dist/"
+PLUGIN_LOCATION = os.path.dirname(os.path.realpath(__file__)) + "/../../bin/amd64/"
 def create_container(extra_suffix=""):
     # Generate a random container_id
-    container_id = ''.join(random.choice(string.ascii_uppercase + string.digits) for _ in range(10))
+    container_id = ''.join(random.choice(string.ascii_lowercase + string.digits) for _ in range(10))
     netnspath = NETNS_ROOT + container_id
     check_call("ip netns add " + container_id, shell=True)
     check_call("ip netns exec %s ip link set lo up " % container_id, shell=True)
@@ -36,7 +36,7 @@ def create_container(extra_suffix=""):
         try:
             output = check_output(extra_suffix+plugin, stdin=f, env=os.environ, shell=True)
             print output
-            ip = json.loads(output)["ip4"]["ip"]
+            ip = json.loads(output)["ips"][0]["address"]
         except CalledProcessError as e:
             print "Plugin call failed"
             print e.output
