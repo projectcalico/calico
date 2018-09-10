@@ -725,7 +725,7 @@ class DockerHost(object):
         self.execute("iptables-save -c", raise_exception_on_failure=False)
         self.execute("ip6tables-save -c", raise_exception_on_failure=False)
         self.execute("ipset save", raise_exception_on_failure=False)
-        self.execute("ps", raise_exception_on_failure=False)
+        self.execute("ps waux", raise_exception_on_failure=False)
         self.execute("docker logs calico-node", raise_exception_on_failure=False)
         self.execute("docker exec calico-node ls -l /var/log/calico/felix", raise_exception_on_failure=False)
         self.execute("docker exec calico-node cat /var/log/calico/felix/*", raise_exception_on_failure=False)
@@ -733,6 +733,7 @@ class DockerHost(object):
         self.execute("docker exec calico-node cat /var/log/calico/confd/*", raise_exception_on_failure=False)
         self.execute("docker exec calico-node ls -l /var/log/calico/bird", raise_exception_on_failure=False)
         self.execute("docker exec calico-node cat /var/log/calico/bird/*", raise_exception_on_failure=False)
+        self.execute("docker exec calico-node cat /etc/calico/confd/config/bird.cfg", raise_exception_on_failure=False)
 
         self.execute("docker ps -a", raise_exception_on_failure=False)
         for wl in self.workloads:

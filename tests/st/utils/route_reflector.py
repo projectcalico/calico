@@ -42,46 +42,20 @@ class RouteReflectorCluster(object):
             redundancy_group = []
             for jj in range(self.num_in_redundancy_group):
                 rr = DockerHost('RR.%d.%d' % (ii, jj), start_calico=False)
-                ip_env = "-e IP=%s" % rr.ip
-                rr.execute("docker load --input /code/routereflector.tar")
+                rr.add_resource({
+                    'apiVersion': 'projectcalico.org/v3',
+                    'kind': 'Node',
+                    'metadata': {
+                        'name': rr.get_hostname(),
+                    },
+                    'spec': {
+                        'bgp': {
+                            'routeReflectorClusterID': cluster_id,
+                        },
+                    },
+                })
+                rr.start_calico_node()
 
-                # Check which type of etcd is being run, then invoke the
-                # suggested curl command to add the RR entry to etcd.
-                #
-                # See https://github.com/projectcalico/calico-bird/tree/feature-ipinip/build_routereflector
-                # for details.
-		rr_container_name = os.getenv("RR_CONTAINER_NAME", "calico/routereflector:latest")
-                if os.getenv("ETCD_SCHEME", None) == "https":
-                    # Etcd is running with SSL/TLS, pass the key values
-                    rr.execute("docker run --privileged --net=host -d "
-                               "--name rr %s "
-                               "-e ETCD_ENDPOINTS=https://%s:2379 "
-                               "-e ETCD_CA_CERT_FILE=%s "
-                               "-e ETCD_CERT_FILE=%s "
-                               "-e ETCD_KEY_FILE=%s "
-                               "-v %s/certs:%s/certs "
-                               "%s" %
-                               (ip_env, ETCD_HOSTNAME_SSL, ETCD_CA, ETCD_CERT,
-                                ETCD_KEY, CHECKOUT_DIR, CHECKOUT_DIR, rr_container_name))
-                    rr.execute(r'curl --cacert %s --cert %s --key %s '
-                               r'-L https://%s:2379/v2/keys/calico/bgp/v1/rr_v4/%s '
-                               r'-XPUT -d value="{'
-                                 r'\"ip\":\"%s\",'
-                                 r'\"cluster_id\":\"%s\"'
-                               r'}"' % (ETCD_CA, ETCD_CERT, ETCD_KEY,
-                                        ETCD_HOSTNAME_SSL, rr.ip, rr.ip,
-                                        cluster_id))
-
-                else:
-                    rr.execute("docker run --privileged --net=host -d "
-                           "--name rr %s "
-                           "-e ETCD_ENDPOINTS=http://%s:2379 "
-                           "%s" % (ip_env, get_ip(), rr_container_name))
-                    rr.execute(r'curl -L http://%s:2379/v2/keys/calico/bgp/v1/rr_v4/%s '
-                               r'-XPUT -d value="{'
-                                 r'\"ip\":\"%s\",'
-                                 r'\"cluster_id\":\"%s\"'
-                               r'}"' % (get_ip(), rr.ip, rr.ip, cluster_id))
                 # Store the redundancy group.
                 redundancy_group.append(rr)
             self.redundancy_groups.append(redundancy_group)
@@ -97,18 +71,18 @@ class RouteReflectorCluster(object):
         for rg in self.redundancy_groups:
             while rg:
                 try:
-                    self.pop_and_cleanup_route_reflector(rg)
+                    self.pop_and_cleanup_route_reflector(rg, log_extra_diags=bool(exc_type))
                 except KeyboardInterrupt:
                     raise
                 except Exception:
                     pass
 
-    def pop_and_cleanup_route_reflector(self, redundancy_group):
+    def pop_and_cleanup_route_reflector(self, redundancy_group, log_extra_diags=False):
         """
         Pop a route reflector off the stack and clean it up.
         """
         rr = redundancy_group.pop()
-        rr.cleanup()
+        rr.cleanup(log_extra_diags=log_extra_diags)
 
     def get_redundancy_group(self):
         """
