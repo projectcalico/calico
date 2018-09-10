@@ -64,7 +64,7 @@ OS?=$(shell uname -s | tr A-Z a-z)
 ###############################################################################
 GO_BUILD_VER?=v0.17
 
-K8S_VERSION?=v1.10.4
+K8S_VERSION?=v1.11.3
 HYPERKUBE_IMAGE?=gcr.io/google_containers/hyperkube-$(ARCH):$(K8S_VERSION)
 ETCD_VERSION?=v3.3.7
 ETCD_IMAGE?=quay.io/coreos/etcd:$(ETCD_VERSION)-$(BUILDARCH)
