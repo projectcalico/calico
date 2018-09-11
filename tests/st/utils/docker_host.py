@@ -482,7 +482,7 @@ class DockerHost(object):
         Also, perform log analysis to check for any errors, raising an exception
         if any were found.
 
-        If log_extra_is set to True we will log some extra diagnostics (this is
+        If log_extra_diags is set to True we will log some extra diagnostics (this is
         set to True if the DockerHost context manager exits with an exception).
         Extra logs will also be output if the log analyzer detects any errors.
         """

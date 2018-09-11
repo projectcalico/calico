@@ -464,7 +464,7 @@ st: dist/calicoctl busybox.tar routereflector.tar calico-node.tar workload.tar r
 	           --rm -t \
 	           -v /var/run/docker.sock:/var/run/docker.sock \
 	           $(TEST_CONTAINER_NAME) \
-	           sh -c 'nosetests $(ST_TO_RUN) -sv --nologcapture  --with-xunit --xunit-file="/code/nosetests.xml" --with-timer $(ST_OPTIONS)'
+	           sh -c 'nosetests $(ST_TO_RUN) -v --with-xunit --xunit-file="/code/nosetests.xml" --with-timer $(ST_OPTIONS)'
 	$(MAKE) stop-etcd
 
 ###############################################################################
