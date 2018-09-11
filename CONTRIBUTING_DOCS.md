@@ -64,26 +64,58 @@ The submission of a PR kicks off a continuous integration process which includes
 However, you can also run this after submitting your PR and experiencing an `htmlproofer` failure from the Semaphore job.
 
 
-## How to quickly apply changes in master to a previous release
+## How to apply changes in one directory to another
 
-Let's say there's a single commit that makes changes to the `master` directory which I want to apply to the `v1.5` directory. 
+We generally recommend making a change first in the `master` directory, getting
+it reviewed, addressing feedback, and then porting the change to the latest version
+directory. For larger contributions, porting the changes in the `master` directory
+to another directory may be tedious to perform manually. You can use the following
+procedure to make this process easier.
 
-1. Generate a diff. A sample command follows which stores the diff in a file called `my-patch.diff`.
+1. If your PR contains more than one commit, squash them.
 
-    ```
-    git diff f35c02fe73e6a64d187ee3f6e9298ca47ded91ab^1 f35c02fe73e6a64d187ee3f6e9298ca47ded91ab > my-patch.diff
-    ```
+1. Check out the master branch, pull the latest master, check your feature branch
+   back out and then rebase off the latest master as follows.
+   
+   ```bash
+   git rebase upstream/master
+   git push origin +feature-branch
+   ```
+   
+1. Issue the following command to obtain a file containing all the changes in your
+   commit.
+   
+   ```bash
+   git format-patch upstream/master
+   ```
+   
+1. Open the file in your favorite editor and manually replace instances of the 
+   `master` directory with the name of the version directory you want to apply
+   the same changes to. Because other instances of `master` may occur in the file
+   which you do _not_ want to change, we ask that you perform this step manually,
+   using your intelligence.
+   
+1. Issue the following command to apply the changes in the `master` directory
+   to the version directory.
+   
+   ```bash
+   git am --ignore-whitespace <file-name>
+   ```
+   
+   > **Note**: You may also need to employ the `[--exclude=<path-file>]` flag
+   > to exclude files that `git` is unable to apply the patch to for various reasons.
+   > You can then address these issues manually in a separate commit.
+   
+1. Push this commit up to your feature branch.
 
-1. Apply the diff to the target version directory.
+   ```bash
+   git push origin <branch>
+   ```
 
-    ```
-    git apply -p2 --directory=v1.5 my-patch.diff
-    ```
-    
-    - `-p2` strips off /master on the front of the paths.
-    - `--directory=v1.5` adds "v1.5" to the start of the paths.
-
-1. Inspect the results (`git status`, `git diff`, etc.) and commit.
+   > **Note**: It will have the same commit name as the previous commit.
+   
+1. Review the diff in the PR carefully. If you had to use the `exclude` flag,
+   resolve these issues manually and submit a new commit.
 
 ## Doc site organization
 
