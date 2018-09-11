@@ -6,8 +6,10 @@ import (
 	"io/ioutil"
 	"net"
 	"os"
+	"reflect"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/BurntSushi/toml"
 	logutils "github.com/kelseyhightower/confd/pkg/log"
@@ -20,16 +22,34 @@ var (
 	defaultConfigFile = "/etc/confd/confd.toml"
 	confdir           string
 	// config            Config // holds the global confd config.
-	interval       int
-	keepStageFile  bool
-	noop           bool
-	onetime        bool
-	prefix         string
-	syncOnly       bool
-	calicoconfig   string
-	routereflector bool
-	typha          string
+	interval      int
+	keepStageFile bool
+	noop          bool
+	onetime       bool
+	prefix        string
+	syncOnly      bool
+	calicoconfig  string
 )
+
+// Copied from <felix>/config/config_params.go.
+type TyphaConfig struct {
+	Addr           string
+	K8sServiceName string
+	K8sNamespace   string
+	ReadTimeout    time.Duration
+	WriteTimeout   time.Duration
+
+	// Client-side TLS config for confd's communication with Typha.  If any of these are
+	// specified, they _all_ must be - except that either CN or URISAN may be left unset.
+	// confd will then initiate a secure (TLS) connection to Typha.  Typha must present a
+	// certificate signed by a CA in CAFile, and with CN matching CN or URI SAN matching
+	// URISAN.
+	KeyFile  string
+	CertFile string
+	CAFile   string
+	CN       string
+	URISAN   string
+}
 
 // A Config structure is used to configure confd.
 type Config struct {
@@ -39,10 +59,9 @@ type Config struct {
 	Prefix         string `toml:"prefix"`
 	SyncOnly       bool   `toml:"sync-only"`
 	CalicoConfig   string `toml:"calicoconfig"`
-	RouteReflector bool   `toml:"routereflector"`
 	Onetime        bool   `toml:"onetime"`
 	KeepStageFile  bool   `toml:"keep-stage-file"`
-	Typha          string `toml:"typha"`
+	Typha          TyphaConfig
 	TemplateConfig template.Config
 }
 
@@ -56,8 +75,6 @@ func init() {
 	flag.StringVar(&prefix, "prefix", "", "key path prefix")
 	flag.BoolVar(&syncOnly, "sync-only", false, "sync without check_cmd and reload_cmd")
 	flag.StringVar(&calicoconfig, "calicoconfig", "", "Calico apiconfig file path")
-	flag.BoolVar(&routereflector, "routereflector", false, "generate config for a route reflector")
-	flag.StringVar(&typha, "typha", "", "use Typha at the specified <address>:<port>")
 }
 
 // InitConfig initializes the confd configuration by first setting defaults,
@@ -76,6 +93,12 @@ func InitConfig(ignoreFlags bool) (*Config, error) {
 		ConfDir:  "/etc/confd",
 		Interval: 600,
 		Prefix:   "",
+		Typha: TyphaConfig{
+			// Non-zero defaults copied from <felix>/config/config_params.go.
+			K8sNamespace: "kube-system",
+			ReadTimeout:  30 * time.Second,
+			WriteTimeout: 10 * time.Second,
+		},
 	}
 	// Update config from the TOML configuration file.
 	if configFile == "" {
@@ -104,6 +127,9 @@ func InitConfig(ignoreFlags bool) (*Config, error) {
 		// Default to info level logs.
 		logutils.SetLevel("info")
 	}
+
+	// Read Typha settings from the environment.
+	readTyphaConfig(&config.Typha)
 
 	return &config, nil
 }
@@ -150,13 +176,39 @@ func (c *ConfigVisitor) setConfigFromFlag(f *flag.Flag) {
 		c.config.SyncOnly = syncOnly
 	case "calicoconfig":
 		c.config.CalicoConfig = calicoconfig
-	case "routereflector":
-		c.config.RouteReflector = routereflector
 	case "onetime":
 		c.config.Onetime = onetime
 	case "keep-stage-file":
 		c.config.Onetime = keepStageFile
-	case "typha":
-		c.config.Typha = typha
+	}
+}
+
+func readTyphaConfig(typhaConfig *TyphaConfig) {
+	// When Typha is in use, there will already be variables prefixed with FELIX_, so it's
+	// convenient if confd honours those too.  However there may use cases for confd to
+	// have independent settings, so honour CONFD_ also.  Longer-term it would be nice to
+	// coalesce around CALICO_, so support that as well.
+	supportedPrefixes := []string{"CONFD_", "FELIX_", "CALICO_"}
+	kind := reflect.TypeOf(*typhaConfig)
+	for ii := 0; ii < kind.NumField(); ii++ {
+		field := kind.Field(ii)
+		nameUpper := strings.ToUpper(field.Name)
+		for _, prefix := range supportedPrefixes {
+			varName := prefix + "TYPHA" + nameUpper
+			if value := os.Getenv(varName); value != "" {
+				log.Infof("Found %v=%v", varName, value)
+				if field.Type.Name() == "Duration" {
+					seconds, err := strconv.ParseFloat(value, 64)
+					if err != nil {
+						log.Error("Invalid float")
+					}
+					duration := time.Duration(seconds * float64(time.Second))
+					reflect.ValueOf(typhaConfig).Elem().FieldByName(field.Name).Set(reflect.ValueOf(duration))
+				} else {
+					reflect.ValueOf(typhaConfig).Elem().FieldByName(field.Name).Set(reflect.ValueOf(value))
+				}
+				break
+			}
+		}
 	}
 }

@@ -56,13 +56,8 @@ ETCD_VER?=v3.3.7
 BIRD_VER=v0.3.1
 LOCAL_IP_ENV?=$(shell ip route get 8.8.8.8 | head -1 | awk '{print $$7}')
 
-CONFD_VERSION?=$(shell git describe --tags --dirty --always)
-GIT_COMMIT:=$(shell git rev-parse HEAD || echo '<unknown>')
 GIT_DESCRIPTION:=$(shell git describe --tags || echo '<unknown>')
-LDFLAGS=-ldflags "-X main.VERSION=$(CONFD_VERSION) \
-        -X $(PACKAGE_NAME)/pkg/buildinfo.GitVersion=$(GIT_DESCRIPTION) \
-        -X $(PACKAGE_NAME)/pkg/buildinfo.BuildDate=$(DATE) \
-        -X $(PACKAGE_NAME)/pkg/buildinfo.GitRevision=$(GIT_COMMIT)"
+LDFLAGS=-ldflags "-X $(PACKAGE_NAME)/pkg/buildinfo.GitVersion=$(GIT_DESCRIPTION)"
 
 # Ensure that the bin directory is always created
 MAKE_SURE_BIN_EXIST := $(shell mkdir -p bin)
@@ -186,7 +181,6 @@ test-kdd: bin/confd bin/kubectl bin/bird bin/bird6 bin/calico-node bin/calicoctl
 	-docker rm -f confd-typha
 	docker run -d --rm --net=host --name=confd-typha \
 		-v $(CURDIR)/tests/:/tests/ \
-		-e DATASTORE_TYPE=kubernetes \
 		-e TYPHA_DATASTORETYPE=kubernetes \
 		-e KUBECONFIG=/tests/confd_kubeconfig \
                  $(TYPHA_CONTAINER_NAME)
@@ -195,7 +189,8 @@ test-kdd: bin/confd bin/kubectl bin/bird bin/bird6 bin/calico-node bin/calicoctl
 		-v $(CURDIR)/bin:/calico/bin/ \
 		-e RELEASE_BRANCH=$(RELEASE_BRANCH) \
 		-e LOCAL_USER_ID=0 \
-		-e TYPHA=127.0.0.1:5473 \
+		-e FELIX_TYPHAADDR=127.0.0.1:5473 \
+		-e FELIX_TYPHAREADTIMEOUT=50 \
 		$(CALICO_BUILD) /tests/test_suite_kdd.sh
 	docker rm -f confd-typha
 

@@ -1,10 +1,5 @@
 #!/bin/bash
 
-CONFD_ARGS=-confdir=/etc/calico/confd
-if test -n "$TYPHA"; then
-    CONFD_ARGS="$CONFD_ARGS -typha=$TYPHA"
-fi
-
 # Execute the suite of tests.  It is assumed the following environment variables will
 # have been set up beforehand:
 # -  DATASTORE_TYPE + other calico datastore envs
@@ -48,7 +43,7 @@ execute_test_suite() {
 execute_tests_daemon() {
     # Run confd as a background process.
     echo "Running confd as background process"
-    BGP_LOGSEVERITYSCREEN="debug" confd $CONFD_ARGS >$LOGPATH/logd1 2>&1 &
+    BGP_LOGSEVERITYSCREEN="debug" confd -confdir=/etc/calico/confd >$LOGPATH/logd1 2>&1 &
     CONFD_PID=$!
     echo "Running with PID " $CONFD_PID
 
@@ -59,16 +54,8 @@ execute_tests_daemon() {
         run_individual_test 'mesh/ipip-off'
     done
 
-    # Turn the node-mesh off.  This will cause confd to terminate through one of its own
-    # template updates.  Check that it does.
+    # Turn the node-mesh off.
     turn_mesh_off
-    # check_pid_exits $CONFD_PID
-    #
-    # # Re-start a background confd.
-    # echo "Restarting confd"
-    # BGP_LOGSEVERITYSCREEN="debug" confd $CONFD_ARGS >$LOGPATH/logd2 2>&1 &
-    # CONFD_PID=$!
-    ps
 
     # Run the explicit peering tests.
     for i in $(seq 1 5); do
@@ -77,10 +64,10 @@ execute_tests_daemon() {
         run_individual_test 'explicit_peering/selectors'
     done
 
-    # Turn the node-mesh back on.  This will cause confd to terminate through one of its own
-    # template updates.  Check that it does.
+    # Turn the node-mesh back on.
     turn_mesh_on
-    # check_pid_exits $CONFD_PID
+
+    # Kill confd.
     kill -9 $CONFD_PID
 }
 
@@ -156,7 +143,7 @@ run_individual_test_oneshot() {
     calicoctl apply -f /tests/mock_data/calicoctl/${testdir}/input.yaml
 
     # Run confd in oneshot mode.
-    BGP_LOGSEVERITYSCREEN="debug" confd $CONFD_ARGS -onetime >$LOGPATH/logss 2>&1 || true
+    BGP_LOGSEVERITYSCREEN="debug" confd -confdir=/etc/calico/confd -onetime >$LOGPATH/logss 2>&1 || true
 
     # Check the confd templates are updated.
     test_confd_templates $testdir
@@ -187,22 +174,6 @@ build_tomls_for_node() {
 
     # Need to pause as running confd immediately after might result in files not being present.
     sync
-}
-
-# Check that the process with the specified pid exits.
-# $pid is process ID to monitor.
-check_pid_exits() {
-    # Compare the templates until they match (for a max of 10s).
-    pid=$1
-    echo "Checking confd exits (PID ${pid})"
-
-    for i in $(seq 1 10); do ps -o pid | grep -w $pid 1>/dev/null 2>&1 && sleep 1 || break; done
-
-    if ps -o pid | grep -w $pid 1>/dev/null 2>&1; then
-      echo "Failed: Expecting confd to have exited, but has not."
-      ps
-      exit 1
-    fi
 }
 
 # Tests that confd generates the required set of templates for the test.

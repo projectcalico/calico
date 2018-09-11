@@ -5,12 +5,11 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/kelseyhightower/confd/pkg/buildinfo"
 	"github.com/kelseyhightower/confd/pkg/config"
 	"github.com/kelseyhightower/confd/pkg/run"
 	log "github.com/sirupsen/logrus"
 )
-
-var VERSION string
 
 var (
 	printVersion bool
@@ -20,7 +19,7 @@ func main() {
 	flag.BoolVar(&printVersion, "version", false, "print version and exit")
 	flag.Parse()
 	if printVersion {
-		fmt.Printf("confd %s\n", VERSION)
+		fmt.Printf("confd %s\n", buildinfo.GitVersion)
 		os.Exit(0)
 	}
 

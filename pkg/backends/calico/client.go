@@ -16,10 +16,15 @@ package calico
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"strings"
 	"sync"
+
+	"k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
 
 	"github.com/kelseyhightower/confd/pkg/buildinfo"
 	"github.com/kelseyhightower/confd/pkg/config"
@@ -34,7 +39,7 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/backend/syncersv1/updateprocessors"
 	"github.com/projectcalico/libcalico-go/lib/backend/watchersyncer"
 	"github.com/projectcalico/libcalico-go/lib/clientv3"
-	"github.com/projectcalico/libcalico-go/lib/errors"
+	lerr "github.com/projectcalico/libcalico-go/lib/errors"
 	"github.com/projectcalico/libcalico-go/lib/net"
 	"github.com/projectcalico/libcalico-go/lib/numorstring"
 	"github.com/projectcalico/libcalico-go/lib/options"
@@ -80,7 +85,7 @@ func NewCalicoClient(confdConfig *config.Config) (*client, error) {
 		"default",
 		options.GetOptions{},
 	)
-	if _, ok := err.(errors.ErrorResourceDoesNotExist); err != nil && !ok {
+	if _, ok := err.(lerr.ErrorResourceDoesNotExist); err != nil && !ok {
 		// Failed to get the BGP configuration (and not because it doesn't exist).
 		// Exit.
 		log.Errorf("Failed to query current BGP settings: %v", err)
@@ -104,7 +109,6 @@ func NewCalicoClient(confdConfig *config.Config) (*client, error) {
 		cacheRevision:     1,
 		revisionsByPrefix: make(map[string]uint64),
 		nodeMeshEnabled:   nodeMeshEnabled,
-		routeReflector:    confdConfig.RouteReflector,
 		nodeLabels:        make(map[string]map[string]string),
 		bgpPeers:          make(map[string]*apiv3.BGPPeer),
 	}
@@ -128,17 +132,30 @@ func NewCalicoClient(confdConfig *config.Config) (*client, error) {
 	nodeName := os.Getenv("NODENAME")
 	c.nodeLogKey = fmt.Sprintf("/calico/bgp/v1/host/%s/loglevel", nodeName)
 	c.nodeV1Processor = updateprocessors.NewBGPNodeUpdateProcessor()
-	if confdConfig.Typha != "" {
+
+	typhaAddr, err := discoverTyphaAddr(&confdConfig.Typha)
+	if err != nil {
+		log.WithError(err).Fatal("Typha discovery enabled but discovery failed.")
+	}
+	if typhaAddr != "" {
 		// Use a remote Syncer, via the Typha server.
-		log.WithField("addr", confdConfig.Typha).Info("Connecting to Typha.")
+		log.WithField("addr", typhaAddr).Info("Connecting to Typha.")
 		typhaConnection := syncclient.New(
-			confdConfig.Typha,
+			typhaAddr,
 			buildinfo.GitVersion,
 			nodeName,
-			fmt.Sprintf("Revision: %s; Build date: %s",
-				buildinfo.GitRevision, buildinfo.BuildDate),
+			fmt.Sprintf("confd %s", buildinfo.GitVersion),
 			c,
-			&syncclient.Options{SyncerType: syncproto.SyncerTypeBGP},
+			&syncclient.Options{
+				SyncerType:   syncproto.SyncerTypeBGP,
+				ReadTimeout:  confdConfig.Typha.ReadTimeout,
+				WriteTimeout: confdConfig.Typha.WriteTimeout,
+				KeyFile:      confdConfig.Typha.KeyFile,
+				CertFile:     confdConfig.Typha.CertFile,
+				CAFile:       confdConfig.Typha.CAFile,
+				ServerCN:     confdConfig.Typha.CN,
+				ServerURISAN: confdConfig.Typha.URISAN,
+			},
 		)
 		err := typhaConnection.Start(context.Background())
 		if err != nil {
@@ -155,6 +172,54 @@ func NewCalicoClient(confdConfig *config.Config) (*client, error) {
 	}
 
 	return c, nil
+}
+
+var ErrServiceNotReady = errors.New("Kubernetes service missing IP or port.")
+
+func discoverTyphaAddr(typhaConfig *config.TyphaConfig) (string, error) {
+	if typhaConfig.Addr != "" {
+		// Explicit address; trumps other sources of config.
+		return typhaConfig.Addr, nil
+	}
+
+	if typhaConfig.K8sServiceName == "" {
+		// No explicit address, and no service name, not using Typha.
+		return "", nil
+	}
+
+	// If we get here, we need to look up the Typha service using the k8s API.
+	// TODO Typha: support Typha lookup without using rest.InClusterConfig().
+	k8sconf, err := rest.InClusterConfig()
+	if err != nil {
+		log.WithError(err).Error("Unable to create Kubernetes config.")
+		return "", err
+	}
+	clientset, err := kubernetes.NewForConfig(k8sconf)
+	if err != nil {
+		log.WithError(err).Error("Unable to create Kubernetes client set.")
+		return "", err
+	}
+	svcClient := clientset.CoreV1().Services(typhaConfig.K8sNamespace)
+	svc, err := svcClient.Get(typhaConfig.K8sServiceName, v1.GetOptions{})
+	if err != nil {
+		log.WithError(err).Error("Unable to get Typha service from Kubernetes.")
+		return "", err
+	}
+	host := svc.Spec.ClusterIP
+	log.WithField("clusterIP", host).Info("Found Typha ClusterIP.")
+	if host == "" {
+		log.WithError(err).Error("Typha service had no ClusterIP.")
+		return "", ErrServiceNotReady
+	}
+	for _, p := range svc.Spec.Ports {
+		if p.Name == "calico-typha" {
+			log.WithField("port", p).Info("Found Typha service port.")
+			typhaAddr := fmt.Sprintf("%s:%v", host, p.Port)
+			return typhaAddr, nil
+		}
+	}
+	log.Error("Didn't find Typha service port.")
+	return "", ErrServiceNotReady
 }
 
 // client implements the StoreClient interface for confd, and also implements the
@@ -194,9 +259,6 @@ type client struct {
 
 	// This node's log level key.
 	nodeLogKey string
-
-	// Whether we're running for a route reflector.
-	routeReflector bool
 }
 
 // SetPrefixes is called from confd to notify this client of the full set of prefixes that will
@@ -235,7 +297,7 @@ func (c *client) OnStatusUpdated(status api.SyncStatus) {
 	}
 }
 
-type BGPPeer struct {
+type bgpPeer struct {
 	PeerIP      net.IP               `json:"ip"`
 	ASNum       numorstring.ASNumber `json:"as_num,string"`
 	RRClusterID string               `json:"rr_cluster_id"`
@@ -247,7 +309,7 @@ func (c *client) updatePeersV1() {
 	peersV1 := make(map[string]string)
 
 	// Common subroutine for emitting both global and node-specific peerings.
-	emit := func(key model.Key, peer *BGPPeer) {
+	emit := func(key model.Key, peer *bgpPeer) {
 		log.WithFields(log.Fields{"key": key, "peer": peer}).Debug("Maybe emit peering")
 
 		// Compute etcd v1 path for this peering key.
@@ -299,10 +361,15 @@ func (c *client) updatePeersV1() {
 		}
 		log.Debugf("Local nodes %#v", localNodeNames)
 
-		var peers []*BGPPeer
+		var peers []*bgpPeer
 		if v3res.Spec.PeerSelector != "" {
 			for _, peerNodeName := range c.nodesMatching(v3res.Spec.PeerSelector) {
-				peers = append(peers, c.nodeAsBGPPeer(peerNodeName))
+				peer, err := c.nodeAsBGPPeer(peerNodeName)
+				if err != nil {
+					log.WithError(err).Errorf("Couldn't represent node %v as BGP peer", peerNodeName)
+					continue
+				}
+				peers = append(peers, peer)
 			}
 		} else {
 			ip := net.ParseIP(v3res.Spec.PeerIP)
@@ -310,7 +377,7 @@ func (c *client) updatePeersV1() {
 				log.Warning("PeerIP is not assigned or is malformed")
 				continue
 			}
-			peers = append(peers, &BGPPeer{
+			peers = append(peers, &bgpPeer{
 				PeerIP: *ip,
 				ASNum:  v3res.Spec.ASNumber,
 			})
@@ -336,6 +403,8 @@ func (c *client) updatePeersV1() {
 	for _, v3res := range c.bgpPeers {
 		log.WithField("peer", v3res).Debug("Second pass with v3 BGPPeer")
 
+		// This time, the "local" nodes are actually those matching the remote fields
+		// in BGPPeer, i.e. PeerIP, ASNumber and PeerSelector...
 		var localNodeNames []string
 		if v3res.Spec.PeerSelector != "" {
 			localNodeNames = c.nodesMatching(v3res.Spec.PeerSelector)
@@ -349,6 +418,8 @@ func (c *client) updatePeersV1() {
 			continue
 		}
 
+		// ...and the "peer" nodes are those matching the local fields in BGPPeer, i.e
+		// Node and NodeSelector.
 		var peerNodeNames []string
 		if v3res.Spec.NodeSelector != "" {
 			peerNodeNames = c.nodesMatching(v3res.Spec.NodeSelector)
@@ -360,7 +431,11 @@ func (c *client) updatePeersV1() {
 		log.Debugf("Peers %#v", peerNodeNames)
 
 		for _, peerNodeName := range peerNodeNames {
-			peer := c.nodeAsBGPPeer(peerNodeName)
+			peer, err := c.nodeAsBGPPeer(peerNodeName)
+			if err != nil {
+				log.WithError(err).Errorf("Couldn't represent node %v as BGP peer", peerNodeName)
+				continue
+			}
 			for _, localNodeName := range localNodeNames {
 				key := model.NodeBGPPeerKey{Nodename: localNodeName, PeerIP: peer.PeerIP}
 				emit(key, peer)
@@ -379,6 +454,10 @@ func (c *client) updatePeersV1() {
 			// This cache entry should be updated.
 			c.peeringCache[k] = newValue
 			c.keyUpdated(k)
+			delete(peersV1, k)
+		} else {
+			// Value in cache is already correct.  Delete from peersV1 so that we
+			// don't generate a spurious keyUpdated for this key.
 			delete(peersV1, k)
 		}
 	}
@@ -441,24 +520,25 @@ func (c *client) globalAS() string {
 	return c.cache[asKey]
 }
 
-func (c *client) nodeAsBGPPeer(nodeName string) *BGPPeer {
+func (c *client) nodeAsBGPPeer(nodeName string) (*bgpPeer, error) {
 	ipStr, asNum, rrClusterID := c.nodeToIPAndAS(nodeName)
-	peer := &BGPPeer{}
+	peer := &bgpPeer{}
 	ip := net.ParseIP(ipStr)
 	if ip == nil {
-		return nil
+		return nil, fmt.Errorf("Couldn't parse IP %v for node %v", ipStr, nodeName)
 	}
 	peer.PeerIP = *ip
+	var err error
 	if asNum != "" {
 		log.Debugf("ASNum for %v is %#v", nodeName, asNum)
-		peer.ASNum, _ = numorstring.ASNumberFromString(asNum)
+		peer.ASNum, err = numorstring.ASNumberFromString(asNum)
 	} else {
 		asNum = c.globalAS()
 		log.Debugf("Global ASNum for %v is %#v", nodeName, asNum)
-		peer.ASNum, _ = numorstring.ASNumberFromString(asNum)
+		peer.ASNum, err = numorstring.ASNumberFromString(asNum)
 	}
 	peer.RRClusterID = rrClusterID
-	return peer
+	return peer, err
 }
 
 // OnUpdates is called from the BGP syncer to indicate that new updates are available from the
