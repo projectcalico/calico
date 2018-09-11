@@ -146,8 +146,19 @@ class DockerHost(object):
 
             # Make sure docker is up
             docker_ps = partial(self.execute, "docker ps")
-            retry_until_success(docker_ps, ex_class=CalledProcessError,
-                                retries=10)
+            try:
+                # Retry the docker ps. If we fail, we'll gather some
+                # information and log it out.
+                retry_until_success(docker_ps, ex_class=CalledProcessError,
+                                    retries=10)
+            except CommandExecError:
+                # Hit a problem waiting for the docker host to have access
+                # to docker. Log out some information to help with diagnostics
+                # before re-raising the exception.
+                logger.error("Error waiting for docker to be ready in DockerHost")
+                log_and_run("docker ps -a")
+                log_and_run("docker logs %s" % self.name)
+                raise
 
             if simulate_gce_routing:
                 # Simulate addressing and routing setup as on a GCE instance:
