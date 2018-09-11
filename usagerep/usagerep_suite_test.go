@@ -31,6 +31,6 @@ func init() {
 
 func TestUsagerep(t *testing.T) {
 	RegisterFailHandler(Fail)
-	junitReporter := reporters.NewJUnitReporter("junit.xml")
+	junitReporter := reporters.NewJUnitReporter("../report/usagerep_suite.xml")
 	RunSpecsWithDefaultAndCustomReporters(t, "Usagerep Suite", []Reporter{junitReporter})
 }

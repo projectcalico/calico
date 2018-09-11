@@ -31,6 +31,6 @@ func init() {
 
 func TestJitter(t *testing.T) {
 	RegisterFailHandler(Fail)
-	junitReporter := reporters.NewJUnitReporter("junit.xml")
+	junitReporter := reporters.NewJUnitReporter("../report/throttle_suite.xml")
 	RunSpecsWithDefaultAndCustomReporters(t, "Throttle Suite", []Reporter{junitReporter})
 }

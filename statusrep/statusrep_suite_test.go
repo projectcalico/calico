@@ -31,6 +31,6 @@ func init() {
 
 func TestStatusrep(t *testing.T) {
 	RegisterFailHandler(Fail)
-	junitReporter := reporters.NewJUnitReporter("junit.xml")
+	junitReporter := reporters.NewJUnitReporter("../report/statusrep_suite.xml")
 	RunSpecsWithDefaultAndCustomReporters(t, "Statusrep Suite", []Reporter{junitReporter})
 }

@@ -18,10 +18,18 @@ import (
 	"testing"
 
 	. "github.com/onsi/ginkgo"
+	"github.com/onsi/ginkgo/reporters"
 	. "github.com/onsi/gomega"
+
+	"github.com/projectcalico/libcalico-go/lib/testutils"
 )
+
+func init() {
+	testutils.HookLogrusForGinkgo()
+}
 
 func TestPolicysync(t *testing.T) {
 	RegisterFailHandler(Fail)
-	RunSpecs(t, "Policysync Suite")
+	junitReporter := reporters.NewJUnitReporter("../report/policysync_suite.xml")
+	RunSpecsWithDefaultAndCustomReporters(t, "Policysync Suite", []Reporter{junitReporter})
 }

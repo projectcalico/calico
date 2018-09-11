@@ -31,6 +31,6 @@ func init() {
 
 func TestConfig(t *testing.T) {
 	RegisterFailHandler(Fail)
-	junitReporter := reporters.NewJUnitReporter("junit.xml")
+	junitReporter := reporters.NewJUnitReporter("../report/markbits_suite.xml")
 	RunSpecsWithDefaultAndCustomReporters(t, "MarkBits Suite", []Reporter{junitReporter})
 }
