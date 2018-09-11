@@ -174,10 +174,10 @@ func rulebackendToAPIv3(br model.Rule) apiv3.Rule {
 		notDstNetsStr = append(notDstNetsStr, net.String())
 	}
 
-	srcSelector := mergeTagsAndSelectors(br.SrcSelector, br.SrcTag)
-	dstSelector := mergeTagsAndSelectors(br.DstSelector, br.DstTag)
-	notSrcSelector := mergeTagsAndSelectors(br.NotSrcSelector, br.NotSrcTag)
-	notDstSelector := mergeTagsAndSelectors(br.NotDstSelector, br.NotDstTag)
+	srcSelector := mergeTagsAndSelectors(convertSelector(br.SrcSelector), br.SrcTag)
+	dstSelector := mergeTagsAndSelectors(convertSelector(br.DstSelector), br.DstTag)
+	notSrcSelector := mergeTagsAndSelectors(convertSelector(br.NotSrcSelector), br.NotSrcTag)
+	notDstSelector := mergeTagsAndSelectors(convertSelector(br.NotDstSelector), br.NotDstTag)
 
 	var v3Protocol *numorstring.Protocol
 	if br.Protocol != nil {
