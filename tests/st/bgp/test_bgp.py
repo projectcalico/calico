@@ -29,7 +29,7 @@ class TestReadiness(TestBase):
         """
         with DockerHost('host1',
                         additional_docker_options=CLUSTER_STORE_DOCKER_OPTIONS) as host1:
-            retry_until_success(host1.assert_is_ready, retries=10)
+            retry_until_success(host1.assert_is_ready, retries=30)
 
     def test_readiness_multihost(self):
         """
@@ -39,8 +39,8 @@ class TestReadiness(TestBase):
                         additional_docker_options=CLUSTER_STORE_DOCKER_OPTIONS) as host1, \
                 DockerHost('host2',
                            additional_docker_options=CLUSTER_STORE_DOCKER_OPTIONS) as host2:
-            retry_until_success(host1.assert_is_ready, retries=10)
-            retry_until_success(host2.assert_is_ready, retries=10)
+            retry_until_success(host1.assert_is_ready, retries=30)
+            retry_until_success(host2.assert_is_ready, retries=30)
 
     def test_not_ready_with_broken_felix(self):
         """
@@ -76,8 +76,8 @@ class TestReadiness(TestBase):
                         additional_docker_options=CLUSTER_STORE_DOCKER_OPTIONS) as host1, \
                 DockerHost('host2',
                            additional_docker_options=CLUSTER_STORE_DOCKER_OPTIONS) as host2:
-            retry_until_success(host1.assert_is_ready, retries=10)
-            retry_until_success(host2.assert_is_ready, retries=10)
+            retry_until_success(host1.assert_is_ready, retries=30)
+            retry_until_success(host2.assert_is_ready, retries=30)
 
             # Create a network and a couple of workloads on each host.
             network1 = host1.create_network("subnet1")
@@ -110,7 +110,7 @@ class TestReadiness(TestBase):
             host2.execute("iptables -t raw -D PREROUTING -p tcp -m multiport --dports 179 -j DROP")
 
             _log.debug('check connected and retry until "Established"')
-            retry_until_success(host1.assert_is_ready, retries=10)
-            retry_until_success(host2.assert_is_ready, retries=10)
+            retry_until_success(host1.assert_is_ready, retries=30)
+            retry_until_success(host2.assert_is_ready, retries=30)
             check_bird_status(host1, [("node-to-node mesh", host2.ip, "Established")])
             check_bird_status(host2, [("node-to-node mesh", host1.ip, "Established")])
