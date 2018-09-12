@@ -4,7 +4,6 @@ apiVersion: v1
 items:
 # V1 and V2 CRDS
 - apiVersion: apiextensions.k8s.io/v1beta1
-  description: Calico IP Pools
   kind: CustomResourceDefinition
   metadata:
     name: ippools.crd.projectcalico.org
@@ -17,7 +16,6 @@ items:
       plural: ippools
       singular: ippool
 - apiVersion: apiextensions.k8s.io/v1beta1
-  description: Calico BGP Peers
   kind: CustomResourceDefinition
   metadata:
     name: bgppeers.crd.projectcalico.org
@@ -31,7 +29,6 @@ items:
       singular: bgppeer
 # V2 only CRDs.
 - apiVersion: apiextensions.k8s.io/v1beta1
-  description: Calico Global Network Policies
   kind: CustomResourceDefinition
   metadata:
     name: globalnetworkpolicies.crd.projectcalico.org
@@ -44,7 +41,6 @@ items:
       plural: globalnetworkpolicies
       singular: globalnetworkpolicy
 - apiVersion: apiextensions.k8s.io/v1beta1
-  description: Calico Felix Configuration
   kind: CustomResourceDefinition
   metadata:
     name: felixconfigurations.crd.projectcalico.org
@@ -57,7 +53,6 @@ items:
       plural: felixconfigurations
       singular: felixconfiguration
 - apiVersion: apiextensions.k8s.io/v1beta1
-  description: Calico BGP Configuration
   kind: CustomResourceDefinition
   metadata:
     name: bgpconfigurations.crd.projectcalico.org
@@ -70,7 +65,6 @@ items:
       plural: bgpconfigurations
       singular: bgpconfiguration
 - apiVersion: apiextensions.k8s.io/v1beta1
-  description: Calico Cluster Information
   kind: CustomResourceDefinition
   metadata:
     name: clusterinformations.crd.projectcalico.org
