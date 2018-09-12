@@ -38,6 +38,23 @@ ifeq ($(ARCH),x86_64)
     override ARCH=amd64
 endif
 
+
+# we want to be able to run the same recipe on multiple targets keyed on the image name
+# to do that, we would use the entire image name, e.g. calico/node:abcdefg, as the stem, or '%', in the target
+# however, make does **not** allow the usage of invalid filename characters - like / and : - in a stem, and thus errors out
+# to get around that, we "escape" those characters by converting all : to --- and all / to ___ , so that we can use them
+# in the target, we then unescape them back
+escapefs = $(subst :,---,$(subst /,___,$(1)))
+unescapefs = $(subst ---,:,$(subst ___,/,$(1)))
+
+# these macros create a list of valid architectures for pushing manifests
+space :=
+space +=
+comma := ,
+prefix_linux = $(addprefix linux/,$(strip $1))
+join_platforms = $(subst $(space),$(comma),$(call prefix_linux,$(strip $1)))
+
+
 # list of arches *not* to build when doing *-all
 #    until s390x works correctly
 EXCLUDEARCH ?= s390x
@@ -45,7 +62,7 @@ VALIDARCHES = $(filter-out $(EXCLUDEARCH),$(ARCHES))
 
 ###############################################################################
 GO_BUILD_VER?=v0.17
-GO_BUILD_CONTAINER?=calico/go-build:$(GO_BUILD_VER)
+CALICO_BUILD?=calico/go-build:$(GO_BUILD_VER)
 PROTOC_VER?=v0.1
 PROTOC_CONTAINER?=calico/protoc:$(PROTOC_VER)-$(BUILDARCH)
 
@@ -61,8 +78,23 @@ MY_GID:=$(shell id -g)
 SRC_FILES=$(shell find -name '*.go' |grep -v vendor)
 
 ############################################################################
-CONTAINER_NAME?=calico/dikastes
+BUILD_IMAGE?=calico/dikastes
+PUSH_IMAGES?=$(BUILD_IMAGE) quay.io/calico/dikastes
+RELEASE_IMAGES?=gcr.io/projectcalico-org/dikastes eu.gcr.io/projectcalico-org/dikastes asia.gcr.io/projectcalico-org/dikastes us.gcr.io/projectcalico-org/dikastes
 PACKAGE_NAME?=github.com/projectcalico/app-policy
+
+# If this is a release, also tag and push additional images.
+ifeq ($(RELEASE),true)
+PUSH_IMAGES+=$(RELEASE_IMAGES)
+endif
+
+# remove from the list to push to manifest any registries that do not support multi-arch
+EXCLUDE_MANIFEST_REGISTRIES ?= quay.io/
+PUSH_MANIFEST_IMAGES=$(PUSH_IMAGES:$(EXCLUDE_MANIFEST_REGISTRIES)%=)
+PUSH_NONMANIFEST_IMAGES=$(filter-out $(PUSH_MANIFEST_IMAGES),$(PUSH_IMAGES))
+
+# location of docker credentials to push manifests
+DOCKER_CONFIG ?= $(HOME)/.docker/config.json
 
 # Allow libcalico-go and the ssh auth sock to be mapped into the build container.
 ifdef LIBCALICOGO_PATH
@@ -93,11 +125,11 @@ clean:
 
 	# Only one pb.go file exists outside the vendor dir
 	rm -rf bin vendor proto/felixbackend.pb.go
-	-docker rmi $(CONTAINER_NAME):latest-$(ARCH)
-	-docker rmi $(CONTAINER_NAME):$(VERSION)-$(ARCH)
+	-docker rmi $(BUILD_IMAGE):latest-$(ARCH)
+	-docker rmi $(BUILD_IMAGE):$(VERSION)-$(ARCH)
 ifeq ($(ARCH),amd64)
-	-docker rmi $(CONTAINER_NAME):latest
-	-docker rmi $(CONTAINER_NAME):$(VERSION)
+	-docker rmi $(BUILD_IMAGE):latest
+	-docker rmi $(BUILD_IMAGE):$(VERSION)
 endif
 ###############################################################################
 # Building the binary
@@ -121,7 +153,7 @@ vendor: glide.yaml
       -v $(HOME)/.glide:/home/user/.glide:rw \
       -e LOCAL_USER_ID=$(LOCAL_USER_ID) \
       -w /go/src/$(PACKAGE_NAME) \
-      $(GO_BUILD_CONTAINER) glide install -strip-vendor
+      $(CALICO_BUILD) glide install -strip-vendor
 
 # Default the libcalico repo and version but allow them to be overridden
 LIBCALICO_REPO?=github.com/projectcalico/libcalico-go
@@ -134,7 +166,7 @@ update-libcalico:
           -v $(HOME)/.glide:/home/user/.glide:rw \
           -e LOCAL_USER_ID=$(LOCAL_USER_ID) \
           -w /go/src/$(PACKAGE_NAME) \
-          $(GO_BUILD_CONTAINER) sh -c '\
+          $(CALICO_BUILD) sh -c '\
         echo "Updating libcalico to $(LIBCALICO_VERSION) from $(LIBCALICO_REPO)"; \
         export OLD_VER=$$(grep --after 50 libcalico-go glide.yaml |grep --max-count=1 --only-matching --perl-regexp "version:\s*\K[\.0-9a-z]+") ;\
         echo "Old version: $$OLD_VER";\
@@ -162,7 +194,7 @@ bin/dikastes-%: vendor proto $(SRC_FILES)
       -v $(CURDIR)/.go-pkg-cache:/go-cache/:rw \
       -e GOCACHE=/go-cache \
       -w /go/src/$(PACKAGE_NAME) \
-	    $(GO_BUILD_CONTAINER) go build -ldflags "-X main.VERSION=$(GIT_VERSION) -s -w" -v -o bin/dikastes-$(ARCH)
+	    $(CALICO_BUILD) go build -ldflags "-X main.VERSION=$(GIT_VERSION) -s -w" -v -o bin/dikastes-$(ARCH)
 
 # We use gogofast for protobuf compilation.  Regular gogo is incompatible with
 # gRPC, since gRPC uses golang/protobuf for marshalling/unmarshalling in that
@@ -217,17 +249,17 @@ proto/felixbackend.pb.go: proto/felixbackend.proto
 # Building the image
 ###############################################################################
 CONTAINER_CREATED=.dikastes.created-$(ARCH)
-.PHONY: image calico/dikastes
-image: $(CONTAINER_NAME)
+.PHONY: image $(BUILD_IMAGE)
+image: $(BUILD_IMAGE)
 image-all: $(addprefix sub-image-,$(VALIDARCHES))
 sub-image-%:
 	$(MAKE) image ARCH=$*
 
-$(CONTAINER_NAME): $(CONTAINER_CREATED)
+$(BUILD_IMAGE): $(CONTAINER_CREATED)
 $(CONTAINER_CREATED): Dockerfile.$(ARCH) bin/dikastes-$(ARCH)
-	docker build -t $(CONTAINER_NAME):latest-$(ARCH) --build-arg QEMU_IMAGE=$(CALICO_BUILD) -f Dockerfile.$(ARCH) .
+	docker build -t $(BUILD_IMAGE):latest-$(ARCH) --build-arg QEMU_IMAGE=$(CALICO_BUILD) -f Dockerfile.$(ARCH) .
 ifeq ($(ARCH),amd64)
-	docker tag $(CONTAINER_NAME):latest-$(ARCH) $(CONTAINER_NAME):latest
+	docker tag $(BUILD_IMAGE):latest-$(ARCH) $(BUILD_IMAGE):latest
 endif
 	touch $@
 
@@ -238,25 +270,42 @@ ifndef IMAGETAG
 endif
 
 ## push one arch
-push: imagetag
-	docker push $(CONTAINER_NAME):$(IMAGETAG)-$(ARCH)
-	docker push quay.io/$(CONTAINER_NAME):$(IMAGETAG)-$(ARCH)
-ifeq ($(ARCH),amd64)
-	docker push $(CONTAINER_NAME):$(IMAGETAG)
-	docker push quay.io/$(CONTAINER_NAME):$(IMAGETAG)
-endif
+push: imagetag $(addprefix sub-single-push-,$(call escapefs,$(PUSH_IMAGES)))
+sub-single-push-%:
+	docker push $(call unescapefs,$*:$(IMAGETAG)-$(ARCH))
 
 push-all: imagetag $(addprefix sub-push-,$(VALIDARCHES))
 sub-push-%:
 	$(MAKE) push ARCH=$* IMAGETAG=$(IMAGETAG)
 
-## tag images of one arch
-tag-images: imagetag
-	docker tag $(CONTAINER_NAME):latest-$(ARCH) $(CONTAINER_NAME):$(IMAGETAG)-$(ARCH)
-	docker tag $(CONTAINER_NAME):latest-$(ARCH) quay.io/$(CONTAINER_NAME):$(IMAGETAG)-$(ARCH)
+## push multi-arch manifest where supported
+push-manifests: imagetag  $(addprefix sub-manifest-,$(call escapefs,$(PUSH_MANIFEST_IMAGES)))
+sub-manifest-%:
+	# Docker login to hub.docker.com required before running this target as we are using $(DOCKER_CONFIG) holds the docker login credentials
+# path to credentials based on manifest-tool's requirements here https://github.com/estesp/manifest-tool#sample-usage
+	docker run -t --entrypoint /bin/sh -v $(DOCKER_CONFIG):/root/.docker/config.json $(CALICO_BUILD) -c "/usr/bin/manifest-tool push from-args --platforms $(call join_platforms,$(VALIDARCHES)) --template $(call unescapefs,$*:$(IMAGETAG))-ARCH --target $(call unescapefs,$*:$(IMAGETAG))"
+
+## push default amd64 arch where multi-arch manifest is not supported
+push-non-manifests: imagetag $(addprefix sub-non-manifest-,$(call escapefs,$(PUSH_NONMANIFEST_IMAGES)))
+sub-non-manifest-%:
 ifeq ($(ARCH),amd64)
-	docker tag $(CONTAINER_NAME):latest-$(ARCH) $(CONTAINER_NAME):$(IMAGETAG)
-	docker tag $(CONTAINER_NAME):latest-$(ARCH) quay.io/$(CONTAINER_NAME):$(IMAGETAG)
+	docker push $(call unescapefs,$*:$(IMAGETAG))
+else
+	$(NOECHO) $(NOOP)
+endif
+
+## tag images of one arch
+tag-images: imagetag $(addprefix sub-single-tag-images-arch-,$(call escapefs,$(PUSH_IMAGES))) $(addprefix sub-single-tag-images-non-manifest-,$(call escapefs,$(PUSH_NONMANIFEST_IMAGES)))
+
+sub-single-tag-images-arch-%:
+	docker tag $(BUILD_IMAGE):latest-$(ARCH) $(call unescapefs,$*:$(IMAGETAG)-$(ARCH))
+
+# because some still do not support multi-arch manifest
+sub-single-tag-images-non-manifest-%:
+ifeq ($(ARCH),amd64)
+	docker tag $(BUILD_IMAGE):latest-$(ARCH) $(call unescapefs,$*:$(IMAGETAG))
+else
+	$(NOECHO) $(NOOP)
 endif
 
 ## tag images of all archs
@@ -274,7 +323,7 @@ static-checks: vendor
 		-e LOCAL_USER_ID=$(LOCAL_USER_ID) \
 		-v $(CURDIR):/go/src/$(PACKAGE_NAME) \
 		-w /go/src/$(PACKAGE_NAME) \
-		$(GO_BUILD_CONTAINER) gometalinter --deadline=300s --disable-all --enable=goimports --vendor ./...
+		$(CALICO_BUILD) gometalinter --deadline=300s --disable-all --enable=goimports --vendor ./...
 
 .PHONY: fix
 ## Fix static checks
@@ -290,7 +339,7 @@ ut: proto
 	docker run --rm -v $(CURDIR):/go/src/$(PACKAGE_NAME):rw \
     -e LOCAL_USER_ID=$(LOCAL_USER_ID) \
     -w /go/src/$(PACKAGE_NAME) \
-    $(GO_BUILD_CONTAINER) go test -v ./...
+    $(CALICO_BUILD) go test -v ./...
 
 ###############################################################################
 # CI
@@ -311,8 +360,8 @@ endif
 ifndef BRANCH_NAME
 	$(error BRANCH_NAME is undefined - run using make <target> BRANCH_NAME=var or set an environment variable)
 endif
-	$(MAKE) tag-images-all push-all IMAGETAG=${BRANCH_NAME} EXCLUDEARCH="$(EXCLUDEARCH)"
-	$(MAKE) tag-images-all push-all IMAGETAG=$(shell git describe --tags --dirty --always --long) EXCLUDEARCH="$(EXCLUDEARCH)"
+	$(MAKE) tag-images-all push-all push-manifests push-non-manifests IMAGETAG=${BRANCH_NAME} EXCLUDEARCH="$(EXCLUDEARCH)"
+	$(MAKE) tag-images-all push-all push-manifests push-non-manifests IMAGETAG=$(shell git describe --tags --dirty --always --long) EXCLUDEARCH="$(EXCLUDEARCH)"
 
 ###############################################################################
 # Release
@@ -355,8 +404,8 @@ endif
 ## Verifies the release artifacts produces by `make release-build` are correct.
 release-verify: release-prereqs
 	# Check the reported version is correct for each release artifact.
-	if ! docker run $(CONTAINER_NAME):$(VERSION)-$(ARCH) /dikastes --version | grep '^$(VERSION)$$'; then \
-	  echo "Reported version:" `docker run $(CONTAINER_NAME):$(VERSION)-$(ARCH) /dikastes --version` "\nExpected version: $(VERSION)"; \
+	if ! docker run $(BUILD_IMAGE):$(VERSION)-$(ARCH) /dikastes --version | grep 'Version:\s*$(VERSION)$$'; then \
+	  echo "Reported version:" `docker run $(BUILD_IMAGE):$(VERSION)-$(ARCH) /dikastes --version` "\nExpected version: $(VERSION)"; \
 	  false; \
 	else \
 	  echo "Version check passed\n"; \
