@@ -9,3 +9,5 @@ junit.xml
 .generate_exes
 .generate_files
 checkouts
+/report/*.xml
+/release

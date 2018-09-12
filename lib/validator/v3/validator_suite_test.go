@@ -1,4 +1,4 @@
-// Copyright (c) 2016 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016,2018 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -20,11 +20,13 @@ import (
 
 	"testing"
 
+	"github.com/onsi/ginkgo/reporters"
 	"github.com/projectcalico/libcalico-go/lib/testutils"
 )
 
 func TestValidator(t *testing.T) {
 	testutils.HookLogrusForGinkgo()
 	RegisterFailHandler(Fail)
-	RunSpecs(t, "Validator Suite")
+	junitReporter := reporters.NewJUnitReporter("../../../report/v3_validator_suite.xml")
+	RunSpecsWithDefaultAndCustomReporters(t, "v3 Validator Suite", []Reporter{junitReporter})
 }

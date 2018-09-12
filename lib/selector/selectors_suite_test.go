@@ -1,4 +1,4 @@
-// Copyright (c) 2016 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016,2018 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -19,9 +19,12 @@ import (
 	. "github.com/onsi/gomega"
 
 	"testing"
+
+	"github.com/onsi/ginkgo/reporters"
 )
 
 func TestSelectors(t *testing.T) {
 	RegisterFailHandler(Fail)
-	RunSpecs(t, "Selectors Suite")
+	junitReporter := reporters.NewJUnitReporter("../../report/selectors_suite.xml")
+	RunSpecsWithDefaultAndCustomReporters(t, "Selectors Suite", []Reporter{junitReporter})
 }
