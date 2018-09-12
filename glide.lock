@@ -1,5 +1,5 @@
-hash: 369fda9165eae94dd1f7dc7cba9a79ade4425276e8632be3cbb87044a60cd8f5
-updated: 2018-09-07T06:19:03.760446866Z
+hash: 659bc5eff50019c5b94c84c4d466e40e197908ff37808777aaef1c7160ee7f64
+updated: 2018-09-12T11:06:20.81829391-07:00
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -45,7 +45,7 @@ imports:
 - name: github.com/ghodss/yaml
   version: 73d445a93680fa1a78ae23a5839bad48f32ba1ee
 - name: github.com/go-ini/ini
-  version: 5cf292cae48347c2490ac1a58fe36735fb78df7e
+  version: d58d458bec3cb5adec4b7ddb41131855eac0b33f
 - name: github.com/gogo/protobuf
   version: c0656edd0d9eab7c66d1eb0c568f9039345796f7
   subpackages:
@@ -177,7 +177,7 @@ imports:
   - reporters/stenographer/support/go-isatty
   - types
 - name: github.com/onsi/gomega
-  version: b6ea1ea48f981d0f615a154a45eabb9dd466556d
+  version: 7615b9433f86a8bdf29709bf288bc4fd0636a369
   subpackages:
   - format
   - internal/assertion
@@ -191,7 +191,7 @@ imports:
   - matchers/support/goraph/util
   - types
 - name: github.com/opentracing/opentracing-go
-  version: bd9c3193394760d98b2fa6ebb2291f0cd1d06a7d
+  version: 6aa6febac7b98f836100ecaea478c04f30b6dbd0
   subpackages:
   - ext
   - log
@@ -208,7 +208,7 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: e9246ed2f41c74cd5841c8ea22ddc16f2452ff49
+  version: 9137112a7d5a4b735a24dd1165d8fbc7dc3dfed1
   subpackages:
   - lib/apiconfig
   - lib/apis/v1
@@ -250,16 +250,15 @@ imports:
   subpackages:
   - binder
 - name: github.com/projectcalico/typha
-  version: 0a63ad19301c933bb50ac0a1b898d5ab250e7672
+  version: 3fbe9abb60bf3a4270011daa8ff3426d942d3f94
   subpackages:
   - pkg/syncclient
   - pkg/syncproto
   - pkg/tlsutils
 - name: github.com/prometheus/client_golang
-  version: 3525612fea19680dd3d49c768802ec082ca853b2
+  version: bcbbc08eb2ddff3af83bbf11e7ec13b4fd730b6e
   subpackages:
   - prometheus
-  - prometheus/internal
   - prometheus/promhttp
   - prometheus/push
 - name: github.com/prometheus/client_model
@@ -267,7 +266,7 @@ imports:
   subpackages:
   - go
 - name: github.com/prometheus/common
-  version: c7de2306084e37d54b8be01f3541a8464345e9a5
+  version: 7600349dcfe1abd18d72d3a1770870d9800a7801
   subpackages:
   - expfmt
   - internal/bitbucket.org/ww/goautoneg
@@ -291,7 +290,7 @@ imports:
 - name: github.com/whyrusleeping/go-logging
   version: 0457bb6b88fc1973573aaf6b5145d8d3ae972390
 - name: golang.org/x/crypto
-  version: 0709b304e793a5edb4a2c0145f281ecdc20838a4
+  version: c126467f60eb25f8f27e5a981f32a87e3965053f
   subpackages:
   - ssh/terminal
 - name: golang.org/x/net
@@ -346,7 +345,7 @@ imports:
   subpackages:
   - rate
 - name: google.golang.org/appengine
-  version: 03cac3b07182cfb08c0d0c0b6ee72a1ceb151c92
+  version: b1f26356af11148e710935ed1ac8a7f5702c7612
   subpackages:
   - internal
   - internal/app_identity
@@ -358,7 +357,7 @@ imports:
   - internal/urlfetch
   - urlfetch
 - name: google.golang.org/genproto
-  version: 11092d34479b07829b72e10713b159248caf5dad
+  version: 09f6ed296fc66555a25fe4ce95173148778dfa85
   subpackages:
   - googleapis/rpc/status
 - name: google.golang.org/grpc
