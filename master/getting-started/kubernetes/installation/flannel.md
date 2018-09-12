@@ -69,7 +69,7 @@ etcd, complete the following steps.
    > [view the manifest in your browser](hosted/canal/rbac-etcd.yaml){:target="_blank"}.
    {: .alert .alert-info}
 
-1. Download the {{site.prodname}} networking manifest for the Kubernetes API datastore.
+1. Download the {{site.prodname}} networking manifest.
 
    ```bash
    curl \
