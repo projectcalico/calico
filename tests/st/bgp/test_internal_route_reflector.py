@@ -97,7 +97,8 @@ class TestInternalRouteReflector(TestBase):
                                                        workload_host3],
                                         ip_pass_list=[workload_host1.ip,
                                                       workload_host2.ip,
-                                                      workload_host3.ip])
+                                                      workload_host3.ip],
+                                        retries=5)
 
     @attr('slow')
     def test_bird_internal_route_reflector(self):
