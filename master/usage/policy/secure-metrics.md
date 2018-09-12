@@ -17,19 +17,22 @@ to limit access to {{ site.prodname }}'s metrics endpoints.
 This guide provides two example workflows for creating network policies to limit access
 to {{site.prodname}}'s Prometheus metrics. Choosing an approach depends on your requirements.
 
-- [Using a blacklist approach](#using-a-blacklist-approach)
+- [Using a port blacklist approach](#using-a-port-blacklist-approach)
 
   This approach allows all traffic to your hosts by default, but lets you limit access to specific ports using
-  {{site.prodname}} policy. This approach allows you to restrict access to access to specific ports, while leaving other
+  {{site.prodname}} policy. This approach allows you to restrict access to specific ports, while leaving other
   host traffic unaffected.
 
-- [Using a whitelist approach](#using-a-whitelist-approach)
+- [Using a port whitelist approach](#using-a-port-whitelist-approach)
 
   This approach denies traffic to and from your hosts by default, and requires that all
   desired communication be explicitly allowed by a network policy. This approach is more secure because
   only explicitly-allowed traffic will get through, but it requires you to know all the ports that should be open on the host.
 
-## Using a blacklist approach
+In either case you must then identify, by an appropriate label, the endpoints or IPs that
+_are_ allowed to connect to each controlled port.
+
+## Using a port blacklist approach
 
 ### Overview
 
@@ -246,7 +249,7 @@ Then, use `calicoctl` to apply this policy.
 calicoctl apply -f typha-prometheus-policy.yaml
 ```
 
-## Using a whitelist approach
+## Using a port whitelist approach
 
 ### Overview
 
