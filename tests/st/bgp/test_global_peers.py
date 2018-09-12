@@ -55,8 +55,7 @@ class TestGlobalPeers(TestBase):
             update_bgp_config(host1, nodeMesh=False)
             self.assert_true(workload_host1.check_cant_ping(DEFAULT_IPV4_ADDR_2, retries=10))
 
-            # Configure global peers to explicitly set up a mesh.  This means
-            # each node will try to peer with itself which will fail.
+            # Configure global peers to explicitly set up a mesh.
             create_bgp_peer(host1, 'global', host2.ip, LARGE_AS_NUM)
             create_bgp_peer(host2, 'global', host1.ip, LARGE_AS_NUM)
 
@@ -71,10 +70,8 @@ class TestGlobalPeers(TestBase):
 
             # Check the BGP status on each host.  Connections from a node to
             # itself will be idle since this is invalid BGP configuration.
-            check_bird_status(host1, [("global", host1.ip, ["Idle", "Connect", "OpenSent", "OpenConfirm", "Active"]),
-                                       ("global", host2.ip, "Established")])
-            check_bird_status(host2, [("global", host1.ip, "Established"),
-                                       ("global", host2.ip, ["Idle", "Connect", "OpenSent", "OpenConfirm", "Active"])])
+            check_bird_status(host1, [("global", host2.ip, "Established")])
+            check_bird_status(host2, [("global", host1.ip, "Established")])
 
     @attr('slow')
     def test_bird_node_peers(self):
@@ -87,4 +84,3 @@ class TestGlobalPeers(TestBase):
         self._test_global_peers(backend='gobgp')
 
 TestGlobalPeers.batchnumber = 1  # Adds a batch number for parallel testing
-

@@ -99,10 +99,8 @@ BIRD_IMAGE ?= calico/bird:$(BIRD_VER)-$(ARCH)
 # Versions and locations of dependencies used in tests.
 CALICOCTL_VER?=master
 CNI_VER?=master
-RR_VER?=master
 TEST_CONTAINER_NAME_VER?=latest
 CTL_CONTAINER_NAME?=calico/ctl:$(CALICOCTL_VER)-$(ARCH)
-RR_CONTAINER_NAME ?= calico/routereflector:$(RR_VER)
 TEST_CONTAINER_NAME?=calico/test:$(TEST_CONTAINER_NAME_VER)-$(ARCH)
 ETCD_VERSION?=v3.3.7
 # If building on amd64 omit the arch in the container name.  Fixme!
@@ -193,7 +191,7 @@ update-felix-confd-libcalico:
           export OLD_CONFD_VER=$$(grep --after 50 confd glide.yaml |grep --max-count=1 --only-matching --perl-regexp "version:\s*\K[\.0-9a-z]+") ;\
           echo "Old libcalico version: $$OLD_LIBCALICO_VER";\
           echo "Old felix version: $$OLD_FELIX_VER";\
-          echo "Old confid version: $$OLD_CONFD_VER";\
+          echo "Old confd version: $$OLD_CONFD_VER";\
           if [ $(LIBCALICO_VERSION) != $$OLD_LIBCALICO_VER ] || [ $(FELIX_VERSION) != $$OLD_FELIX_VER ] || [ $(CONFD_VERSION) != $$OLD_CONFD_VER ]; then \
             sed -i "s/$$OLD_LIBCALICO_VER/$(LIBCALICO_VERSION)/" glide.yaml && \
             sed -i "s/$$OLD_FELIX_VER/$(FELIX_VERSION)/" glide.yaml && \
@@ -398,10 +396,6 @@ busybox.tar:
 	docker pull $(ARCH)/busybox:latest
 	docker save --output busybox.tar $(ARCH)/busybox:latest
 
-routereflector.tar:
-	-docker pull $(RR_CONTAINER_NAME)
-	docker save --output routereflector.tar $(RR_CONTAINER_NAME)
-
 workload.tar:
 	cd workload && docker build -t workload --build-arg QEMU_IMAGE=$(CALICO_BUILD) -f Dockerfile.$(ARCH) .
 	docker save --output workload.tar workload
@@ -412,7 +406,7 @@ stop-etcd:
 IPT_ALLOW_ETCD:=-A INPUT -i docker0 -p tcp --dport 2379 -m comment --comment "calico-st-allow-etcd" -j ACCEPT
 
 # Create the calico/test image
-test_image: calico_test.created 
+test_image: calico_test.created
 calico_test.created: $(TEST_CONTAINER_FILES)
 	cd calico_test && docker build --build-arg QEMU_IMAGE=$(CALICO_BUILD) -f Dockerfile.$(ARCH).calico_test -t $(TEST_CONTAINER_NAME) .
 	touch calico_test.created
@@ -436,8 +430,8 @@ st-checks:
 	iptables-save | grep -q 'calico-st-allow-etcd' || iptables $(IPT_ALLOW_ETCD)
 
 .PHONY: st
-## Run the system tests 
-st: dist/calicoctl busybox.tar routereflector.tar calico-node.tar workload.tar run-etcd calico_test.created dist/calico-cni-plugin dist/calico-ipam-plugin
+## Run the system tests
+st: dist/calicoctl busybox.tar calico-node.tar workload.tar run-etcd calico_test.created dist/calico-cni-plugin dist/calico-ipam-plugin
 	# Check versions of Calico binaries that ST execution will use.
 	docker run --rm -v $(CURDIR)/dist:/go/bin:rw $(CALICO_BUILD) /bin/sh -c "\
 	  echo; echo calicoctl --version;        /go/bin/calicoctl --version; \
@@ -460,7 +454,6 @@ st: dist/calicoctl busybox.tar routereflector.tar calico-node.tar workload.tar r
 	           -e DEBUG_FAILURES=$(DEBUG_FAILURES) \
 	           -e MY_IP=$(LOCAL_IP_ENV) \
 	           -e NODE_CONTAINER_NAME=$(BUILD_IMAGE):latest-$(ARCH) \
-	           -e RR_CONTAINER_NAME=$(RR_CONTAINER_NAME) \
 	           --rm -t \
 	           -v /var/run/docker.sock:/var/run/docker.sock \
 	           $(TEST_CONTAINER_NAME) \
@@ -576,7 +569,7 @@ ifndef VERSION
 endif
 
 ###############################################################################
-# Utilities 
+# Utilities
 ###############################################################################
 .PHONY: help
 ## Display this help text
@@ -601,7 +594,6 @@ $(info $(shell printf "%-21s = %-10s\n" "BIRD_VER" $(BIRD_VER)))
 
 $(info "Test dependency versions")
 $(info $(shell printf "%-21s = %-10s\n" "CNI_VER" $(CNI_VER)))
-$(info $(shell printf "%-21s = %-10s\n" "RR_VER" $(RR_VER)))
 
 $(info "Calico git version")
 $(info $(shell printf "%-21s = %-10s\n" "CALICO_GIT_VER" $(CALICO_GIT_VER)))

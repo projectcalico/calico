@@ -11,22 +11,27 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+import logging
+import yaml
+
 from nose.plugins.attrib import attr
 from unittest import skip
 
 from tests.st.test_base import TestBase
 from tests.st.utils.docker_host import DockerHost, CLUSTER_STORE_DOCKER_OPTIONS
 from tests.st.utils.route_reflector import RouteReflectorCluster
-
-from .peer import create_bgp_peer
 from tests.st.utils.utils import update_bgp_config
 
-class TestRouteReflectorCluster(TestBase):
+from .peer import create_bgp_peer
 
-    def _test_route_reflector_cluster(self, backend='bird'):
+logger = logging.getLogger(__name__)
+
+class TestInternalRouteReflector(TestBase):
+
+    @attr('slow')
+    def _test_internal_route_reflector(self, backend='bird', bgpconfig_as_num=64514, peer_as_num=64514):
         """
-        Run a multi-host test using a cluster of route reflectors and node
-        specific peerings.
+        Run a multi-host test using an internal route reflector.
         """
         with DockerHost('host1',
                         additional_docker_options=CLUSTER_STORE_DOCKER_OPTIONS,
@@ -36,39 +41,55 @@ class TestRouteReflectorCluster(TestBase):
                         start_calico=False) as host2, \
              DockerHost('host3',
                         additional_docker_options=CLUSTER_STORE_DOCKER_OPTIONS,
-                        start_calico=False) as host3, \
-             RouteReflectorCluster(2, 2) as rrc:
+                        start_calico=False) as host3:
 
-            # Start both hosts using specific backends.
+            # Start all hosts using specific backends.
             host1.start_calico_node("--backend=%s" % backend)
             host2.start_calico_node("--backend=%s" % backend)
             host3.start_calico_node("--backend=%s" % backend)
 
             # Set the default AS number - as this is used by the RR mesh, and
             # turn off the node-to-node mesh (do this from any host).
-            update_bgp_config(host1, asNum=64513, nodeMesh=False)
+            update_bgp_config(host1, nodeMesh=False, asNum=bgpconfig_as_num)
 
             # Create a workload on each host in the same network.
             network1 = host1.create_network("subnet1")
-            workload_host1 = host1.create_workload("workload1", network=network1)
-            workload_host2 = host2.create_workload("workload2", network=network1)
-            workload_host3 = host3.create_workload("workload3", network=network1)
+            workload_host1 = host1.create_workload("workload1",
+                                                   network=network1)
+            workload_host2 = host2.create_workload("workload2",
+                                                   network=network1)
+            workload_host3 = host3.create_workload("workload3",
+                                                   network=network1)
 
             # Allow network to converge (which it won't)
             self.assert_false(workload_host1.check_can_ping(workload_host2.ip, retries=5))
-            self.assert_true(workload_host1.check_cant_ping(workload_host3.ip))
-            self.assert_true(workload_host2.check_cant_ping(workload_host3.ip))
 
-            # Set distributed peerings between the hosts, each host peering
-            # with a different set of redundant route reflectors.
-            for host in [host1, host2, host3]:
-                for rr in rrc.get_redundancy_group():
-                    create_bgp_peer(host, "node", rr.ip, 64513, metadata={'name': host.name + rr.name.lower()})
+            # Make host2 act as a route reflector.
+            node2 = host2.calicoctl("get Node %s -o yaml" % host2.get_hostname())
+            node2cfg = yaml.safe_load(node2)
+            logger.info("host2 Node: %s", node2cfg)
+            node2cfg['spec']['bgp']['routeReflectorClusterID'] = '224.0.0.2'
+            node2cfg['metadata']['labels'] = {
+                'routeReflectorClusterID': node2cfg['spec']['bgp']['routeReflectorClusterID'],
+            }
+            host2.add_resource(node2cfg)
+
+            # Configure peerings - note, NOT a full mesh - from the
+            # other nodes to the route reflector.
+            host2.add_resource({
+                'apiVersion': 'projectcalico.org/v3',
+                'kind': 'BGPPeer',
+                'metadata': {
+                    'name': 'rr-peerings',
+                },
+                'spec': {
+                    'nodeSelector': '!has(routeReflectorClusterID)',
+                    'peerSelector': 'has(routeReflectorClusterID)',
+                },
+            })
 
             # Allow network to converge (which it now will).
             self.assert_true(workload_host1.check_can_ping(workload_host2.ip, retries=10))
-            self.assert_true(workload_host1.check_can_ping(workload_host3.ip, retries=10))
-            self.assert_true(workload_host2.check_can_ping(workload_host3.ip, retries=10))
 
             # And check connectivity in both directions.
             self.assert_ip_connectivity(workload_list=[workload_host1,
@@ -76,16 +97,21 @@ class TestRouteReflectorCluster(TestBase):
                                                        workload_host3],
                                         ip_pass_list=[workload_host1.ip,
                                                       workload_host2.ip,
-                                                      workload_host3.ip])
+                                                      workload_host3.ip],
+                                        retries=5)
 
     @attr('slow')
-    def test_bird_route_reflector_cluster(self):
-        self._test_route_reflector_cluster(backend='bird')
+    def test_bird_internal_route_reflector(self):
+        self._test_internal_route_reflector(backend='bird')
+
+    @attr('slow')
+    def test_bird_internal_route_reflector_default_as(self):
+        self._test_internal_route_reflector(backend='bird', bgpconfig_as_num=None, peer_as_num=64512)
 
     # TODO: Add back when gobgp is updated to work with libcalico-go v3 api
     @attr('slow')
     @skip("Disabled until gobgp is updated with libcalico-go v3")
-    def test_gobgp_route_reflector_cluster(self):
-        self._test_route_reflector_cluster(backend='gobgp')
+    def test_gobgp_internal_route_reflector(self):
+        self._test_internal_route_reflector(backend='gobgp')
 
-TestRouteReflectorCluster.batchnumber = 3  # Adds a batch number for parallel testing
+TestInternalRouteReflector.batchnumber = 1  # Adds a batch number for parallel testing
