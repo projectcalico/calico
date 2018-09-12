@@ -63,6 +63,7 @@ data:
                 "type": "flannel",
                 "delegate": {
                     "type": "calico",
+                    "include_default_routes": true,
                     "etcd_endpoints": "__ETCD_ENDPOINTS__",
                     "etcd_key_file": "__ETCD_KEY_FILE__",
                     "etcd_cert_file": "__ETCD_CERT_FILE__",

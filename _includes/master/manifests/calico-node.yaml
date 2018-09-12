@@ -497,7 +497,7 @@ roleRef:
   name: canal
 subjects:
 - kind: ServiceAccount
-  name: canal
+  name: canal-node
   namespace: kube-system
 
 ---
