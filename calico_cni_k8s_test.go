@@ -986,6 +986,66 @@ var _ = Describe("CalicoCni", func() {
 					numIPv4IPs:      2,
 					numIPv6IPs:      1,
 				},
+				{
+					// In this scenario, we use a lot more of the host-local IPAM plugin.  Namely:
+					// - we use multiple ranges, one of which is IPv6, the other uses the podCIDR
+					// - we add custom routes, but configure the plugin to also include our default routes.
+					description: "new-style with IPv4 and IPv6 ranges and routes and Calico default routes",
+					config: `
+					{
+					  "cniVersion": "%s",
+					  "name": "net6",
+					  "nodename_file_optional": true,
+					  "type": "calico",
+					  "etcd_endpoints": "http://%s:2379",
+					  "include_default_routes": true,
+					  "datastore_type": "%s",
+					  "ipam": {
+					    "type": "host-local",
+					    "ranges": [
+					       [
+					          {
+					            "subnet": "usePodCidr"
+					          }
+					       ],
+					       [
+					           { 
+					               "subnet": "10.100.0.0/24" 
+					           }
+					       ],
+					       [
+					          {
+					            "subnet": "dead:beef::/96"
+					          }
+					       ]
+					    ],
+					    "routes": [
+					      {"dst": "10.123.0.0/16", "gw": "10.123.0.1"},
+					      {"dst": "10.124.0.0/16"},
+					      {"dst": "dead:beef::/96"}
+					    ]
+					  },
+					  "kubernetes": {
+					   "k8s_api_root": "http://127.0.0.1:8080"
+					  },
+					  "policy": {"type": "k8s"},
+					  "log_level":"debug"
+					}`,
+					expectedV4Routes: []string{
+						regexp.QuoteMeta("default via 169.254.1.1 dev eth0"),
+						regexp.QuoteMeta("10.123.0.0/16 via 169.254.1.1 dev eth0"),
+						regexp.QuoteMeta("10.124.0.0/16 via 169.254.1.1 dev eth0"),
+						regexp.QuoteMeta("169.254.1.1 dev eth0 scope link"),
+					},
+					expectedV6Routes: []string{
+						"dead:beef::. dev eth0  metric 256",
+						"dead:beef::/96 via fe80::ecee:eeff:feee:eeee dev eth0  metric 1024",
+						"fe80::/64 dev eth0  metric 256",
+						"ff00::/8 dev eth0  metric 256",
+					},
+					numIPv4IPs: 2,
+					numIPv6IPs: 1,
+				},
 			}
 
 			for _, c := range hostLocalIPAMConfigs {
@@ -1068,7 +1128,10 @@ var _ = Describe("CalicoCni", func() {
 							for _, r := range c.expectedV4Routes {
 								Expect(string(out)).To(MatchRegexp(r))
 							}
-							Expect(string(out)).NotTo(ContainSubstring(c.unexpectedRoute))
+
+							if c.unexpectedRoute != "" {
+								Expect(string(out)).NotTo(ContainSubstring(c.unexpectedRoute))
+							}
 
 							out, err = exec.Command("ip", "-6", "route", "show").Output()
 							Expect(err).NotTo(HaveOccurred())
