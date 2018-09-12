@@ -1,5 +1,5 @@
-hash: f8a4ad5ce27d05c774991fbf398f75d20b8129cd0bda7be6e01301485029105a
-updated: 2018-09-07T14:12:32.119941797Z
+hash: 7807faec59dcedece9f80ba545d8765d28cfc4fad24a652ef7203657148b0157
+updated: 2018-09-12T04:12:45.029447729Z
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -47,7 +47,7 @@ imports:
 - name: github.com/ghodss/yaml
   version: 73d445a93680fa1a78ae23a5839bad48f32ba1ee
 - name: github.com/go-ini/ini
-  version: 5cf292cae48347c2490ac1a58fe36735fb78df7e
+  version: fa25069db393aecc09b71267d0489b357781c860
 - name: github.com/gogo/protobuf
   version: c0656edd0d9eab7c66d1eb0c568f9039345796f7
   subpackages:
@@ -139,7 +139,7 @@ imports:
   - reporters/stenographer/support/go-isatty
   - types
 - name: github.com/onsi/gomega
-  version: ae19f1b56d53acc4d6a698412bfd1e92876163f6
+  version: 7615b9433f86a8bdf29709bf288bc4fd0636a369
   subpackages:
   - format
   - internal/assertion
@@ -165,7 +165,7 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: c2b035b05a46738c580182ef6c9b8cb3423d9f9f
+  version: b79d47ddeb35021fbc823cf60997fa2969bf6b1c
   subpackages:
   - lib/apiconfig
   - lib/apis/v1
@@ -178,6 +178,7 @@ imports:
   - lib/backend/k8s/conversion
   - lib/backend/k8s/resources
   - lib/backend/model
+  - lib/backend/syncersv1/bgpsyncer
   - lib/backend/syncersv1/felixsyncer
   - lib/backend/syncersv1/updateprocessors
   - lib/backend/watchersyncer
@@ -246,7 +247,7 @@ imports:
   - list
   - trie/ctrie
 - name: golang.org/x/crypto
-  version: 0709b304e793a5edb4a2c0145f281ecdc20838a4
+  version: 0e37d006457bf46f9e6692014ba72ef82c33022c
   subpackages:
   - ssh/terminal
 - name: golang.org/x/net
