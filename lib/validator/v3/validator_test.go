@@ -573,6 +573,11 @@ func init() {
 				InterfaceName: "cali012371237",
 				ContainerID:   "Cath01234-G",
 			}, true),
+		Entry("should accept workload endpoint with a non-leading underscore in the ContainerID",
+			api.WorkloadEndpointSpec{
+				InterfaceName: "cali012371237",
+				ContainerID:   "Cath01234_G",
+			}, true),
 		Entry("should reject workload endpoint with no config", api.WorkloadEndpointSpec{}, false),
 		Entry("should reject workload endpoint with IPv4 networks that contain >1 address",
 			api.WorkloadEndpointSpec{
@@ -605,6 +610,11 @@ func init() {
 			api.WorkloadEndpointSpec{
 				InterfaceName: "cali0134",
 				ContainerID:   "-abcdefg",
+			}, false),
+		Entry("should reject workload endpoint containerID that starts with an underscore",
+			api.WorkloadEndpointSpec{
+				InterfaceName: "cali0134",
+				ContainerID:   "_abcdefg",
 			}, false),
 		Entry("should reject workload endpoint containerID that ends with a dash",
 			api.WorkloadEndpointSpec{
