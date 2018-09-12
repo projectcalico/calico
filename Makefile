@@ -111,7 +111,7 @@ ifneq ($(BUILDARCH),amd64)
         ETCD_IMAGE=$(ETCD_IMAGE)-$(ARCH)
 endif
 
-K8S_VERSION?=v1.10.4
+K8S_VERSION?=v1.11.3
 HYPERKUBE_IMAGE?=gcr.io/google_containers/hyperkube-$(ARCH):$(K8S_VERSION)
 TEST_CONTAINER_FILES=$(shell find tests/ -type f ! -name '*.created')
 
