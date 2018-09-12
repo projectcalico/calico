@@ -1,4 +1,4 @@
-// Copyright (c) 2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2018 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -20,11 +20,13 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
+	"github.com/onsi/ginkgo/reporters"
 	"github.com/projectcalico/libcalico-go/lib/testutils"
 )
 
 func TestClient(t *testing.T) {
 	testutils.HookLogrusForGinkgo()
 	RegisterFailHandler(Fail)
-	RunSpecs(t, "Felix syncer test suite")
+	junitReporter := reporters.NewJUnitReporter("../../../../report/felix_syncer_suite.xml")
+	RunSpecsWithDefaultAndCustomReporters(t, "Felix syncer test Suite", []Reporter{junitReporter})
 }

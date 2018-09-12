@@ -1,4 +1,4 @@
-// Copyright (c) 2016 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016,2018 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -19,9 +19,12 @@ import (
 	. "github.com/onsi/gomega"
 
 	"testing"
+
+	"github.com/onsi/ginkgo/reporters"
 )
 
 func TestModel(t *testing.T) {
 	RegisterFailHandler(Fail)
-	RunSpecs(t, "Calico upgrade KDD v1 resources Suite")
+	junitReporter := reporters.NewJUnitReporter("../../../../../../../report/resources_suite.xml")
+	RunSpecsWithDefaultAndCustomReporters(t, "Calico upgrade KDD v1 resources Suite", []Reporter{junitReporter})
 }

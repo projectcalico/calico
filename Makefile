@@ -153,7 +153,7 @@ ut: vendor run-etcd run-kubernetes-master
     -v $(CURDIR):/go/src/github.com/$(PACKAGE_NAME):rw \
     -v $(CURDIR)/.go-pkg-cache:/go-cache/:rw \
     -e GOCACHE=/go-cache \
-    $(CALICO_BUILD) sh -c 'cd /go/src/github.com/$(PACKAGE_NAME) && ginkgo -r --skipPackage vendor .'
+    $(CALICO_BUILD) sh -c 'cd /go/src/github.com/$(PACKAGE_NAME) && ginkgo -r --skipPackage vendor $(GINKGO_ARGS) .'
 
 ## Run etcd as a container (calico-etcd)
 run-etcd: stop-etcd
