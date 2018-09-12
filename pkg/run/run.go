@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"syscall"
 
-	"github.com/kelseyhightower/confd/pkg/backends"
+	"github.com/kelseyhightower/confd/pkg/backends/calico"
 	"github.com/kelseyhightower/confd/pkg/config"
 	"github.com/kelseyhightower/confd/pkg/resource/template"
 	log "github.com/sirupsen/logrus"
@@ -15,11 +15,7 @@ import (
 
 func Run(config *config.Config) {
 	log.Info("Starting calico-confd")
-	backendConfig := backends.Config{
-		Calicoconfig:   config.CalicoConfig,
-		RouteReflector: config.RouteReflector,
-	}
-	storeClient, err := backends.New(backendConfig)
+	storeClient, err := calico.NewCalicoClient(config)
 	if err != nil {
 		log.Fatal(err.Error())
 	}

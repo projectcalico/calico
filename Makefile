@@ -49,13 +49,15 @@ CALICO_BUILD = calico/go-build:$(GO_BUILD_VER)
 
 CALICOCTL_VER=master
 CALICOCTL_CONTAINER_NAME=calico/ctl:$(CALICOCTL_VER)-$(ARCH)
+TYPHA_VER=master
+TYPHA_CONTAINER_NAME=calico/typha:$(TYPHA_VER)-$(ARCH)
 K8S_VERSION?=v1.10.4
 ETCD_VER?=v3.3.7
 BIRD_VER=v0.3.1
 LOCAL_IP_ENV?=$(shell ip route get 8.8.8.8 | head -1 | awk '{print $$7}')
 
-CONFD_VERSION?=$(shell git describe --tags --dirty --always)
-LDFLAGS=-ldflags "-X main.VERSION=$(CONFD_VERSION)"
+GIT_DESCRIPTION:=$(shell git describe --tags || echo '<unknown>')
+LDFLAGS=-ldflags "-X $(PACKAGE_NAME)/pkg/buildinfo.GitVersion=$(GIT_DESCRIPTION)"
 
 # Ensure that the bin directory is always created
 MAKE_SURE_BIN_EXIST := $(shell mkdir -p bin)
@@ -120,6 +122,26 @@ update-libcalico:
           if ! grep "\[WARN\]" $$OUTPUT; then true; else false; fi; \
         fi'
 
+# Default the typha repo and version but allow them to be overridden
+TYPHA_REPO?=github.com/projectcalico/typha
+TYPHA_VERSION?=$(shell git ls-remote git@github.com:projectcalico/typha master 2>/dev/null | cut -f 1)
+
+## Update typha pin in glide.yaml
+update-typha:
+	$(DOCKER_GO_BUILD) sh -c '\
+        echo "Updating typha to $(TYPHA_VERSION) from $(TYPHA_REPO)"; \
+        export OLD_VER=$$(grep --after 50 typha glide.yaml |grep --max-count=1 --only-matching --perl-regexp "version:\s*\K[\.0-9a-z]+") ;\
+        echo "Old version: $$OLD_VER";\
+        if [ $(TYPHA_VERSION) != $$OLD_VER ]; then \
+            sed -i "s/$$OLD_VER/$(TYPHA_VERSION)/" glide.yaml && \
+            if [ $(TYPHA_REPO) != "github.com/projectcalico/typha" ]; then \
+              glide mirror set https://github.com/projectcalico/typha $(TYPHA_REPO) --vcs git; glide mirror list; \
+            fi;\
+          OUTPUT=`mktemp`;\
+          glide up --strip-vendor; glide up --strip-vendor 2>&1 | tee $$OUTPUT; \
+          if ! grep "\[WARN\]" $$OUTPUT; then true; else false; fi; \
+        fi'
+
 bin/confd-$(ARCH): $(SRC_FILES) vendor
 	$(DOCKER_GO_BUILD) \
 	    sh -c 'go build -v -i -o $@ $(LDFLAGS) "$(PACKAGE_NAME)" && \
@@ -156,12 +178,21 @@ fix:
 .PHONY: test-kdd
 ## Run template tests against KDD
 test-kdd: bin/confd bin/kubectl bin/bird bin/bird6 bin/calico-node bin/calicoctl run-k8s-apiserver
+	-docker rm -f confd-typha
+	docker run -d --rm --net=host --name=confd-typha \
+		-v $(CURDIR)/tests/:/tests/ \
+		-e TYPHA_DATASTORETYPE=kubernetes \
+		-e KUBECONFIG=/tests/confd_kubeconfig \
+                 $(TYPHA_CONTAINER_NAME)
 	docker run --rm --net=host \
 		-v $(CURDIR)/tests/:/tests/ \
 		-v $(CURDIR)/bin:/calico/bin/ \
 		-e RELEASE_BRANCH=$(RELEASE_BRANCH) \
 		-e LOCAL_USER_ID=0 \
+		-e FELIX_TYPHAADDR=127.0.0.1:5473 \
+		-e FELIX_TYPHAREADTIMEOUT=50 \
 		$(CALICO_BUILD) /tests/test_suite_kdd.sh
+	docker rm -f confd-typha
 
 .PHONY: test-etcd
 ## Run template tests against etcd
