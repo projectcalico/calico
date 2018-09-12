@@ -19,6 +19,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/ioutil"
 	"net"
 	"os"
 	"strings"
@@ -40,6 +41,10 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
 )
+
+// File in which to store Azure IPAM specific subnet information. The Azure CNI IPAM plugin
+// supports multiple CNI networks, so store the information in a file per-CNI network.
+var azureFilenameTemplate string = "/etc/cni/net.d/%s-azure-ipam.subnet"
 
 // CmdAddK8s performs the "ADD" operation on a kubernetes pod
 // Having kubernetes code in its own file avoids polluting the mainline code. It's expected that the kubernetes case will
@@ -253,6 +258,17 @@ func CmdAddK8s(ctx context.Context, args *skel.CmdArgs, conf types.NetConf, epID
 	ipAddrsNoIpam := annot["cni.projectcalico.org/ipAddrsNoIpam"]
 	ipAddrs := annot["cni.projectcalico.org/ipAddrs"]
 
+	if conf.IPAM.Type == "azure-vnet-ipam" {
+		// When using the Azure IPAM plugin, we need to pass it a subnet for all calls
+		// beyond the first one. This call updates updates the CNI configuration to meet
+		// the expectations of the Azure CNI IPAM plugin.
+		logger.Info("Configured to use Azure IPAM, check for subnet")
+		fn := fmt.Sprintf(azureFilenameTemplate, conf.Name)
+		if err := handleAzureIPAM(logger, args, fn); err != nil {
+			return nil, err
+		}
+	}
+
 	// Switch based on which annotations are passed or not passed.
 	switch {
 	case ipAddrs == "" && ipAddrsNoIpam == "":
@@ -277,6 +293,18 @@ func CmdAddK8s(ctx context.Context, args *skel.CmdArgs, conf types.NetConf, epID
 		if len(result.IPs) == 0 {
 			utils.ReleaseIPAllocation(logger, conf.IPAM.Type, args.StdinData)
 			return nil, errors.New("IPAM plugin returned missing IP config")
+		}
+
+		if conf.IPAM.Type == "azure-vnet-ipam" {
+			// Store off the subnet information - we need to pass this back on each subsequent call
+			// to the Azure IPAM plugin.
+			subnetPrefix := result.IPs[0].Address
+			subnetPrefix.IP = subnetPrefix.IP.Mask(subnetPrefix.Mask)
+			fn := fmt.Sprintf(azureFilenameTemplate, conf.Name)
+			if err := ioutil.WriteFile(fn, []byte(subnetPrefix.String()), 0644); err != nil {
+				return nil, err
+			}
+			logger.Infof("Stored azure subnet on disk: %s", subnetPrefix)
 		}
 
 	case ipAddrs != "" && ipAddrsNoIpam != "":
@@ -473,6 +501,17 @@ func CmdDelK8s(ctx context.Context, c calicoclient.Interface, epIDs utils.WEPIde
 			// deletion will be handled by Kubernetes. This error can be ignored.
 			logger.WithField("endpoint", wep).Info("Endpoint deletion will be handled by Kubernetes deletion of the Pod.")
 		default:
+			return err
+		}
+	}
+
+	if conf.IPAM.Type == "azure-vnet-ipam" {
+		// When using the Azure IPAM plugin, we need to pass it a subnet for all calls
+		// beyond the first one. This call updates updates the CNI configuration to meet
+		// the expectations of the Azure CNI IPAM plugin.
+		logger.Info("Configured to use Azure IPAM, check for subnet")
+		fn := fmt.Sprintf(azureFilenameTemplate, conf.Name)
+		if err := handleAzureIPAM(logger, args, fn); err != nil {
 			return err
 		}
 	}
@@ -827,4 +866,31 @@ func getPodCidr(client *kubernetes.Clientset, conf types.NetConf, nodename strin
 		return "", fmt.Errorf("no podCidr for node %s", nodename)
 	}
 	return node.Spec.PodCIDR, nil
+}
+
+// handleAzureIPAM mutates the given args to include the Azure IPAM subnet, if appropriate.
+func handleAzureIPAM(logger *logrus.Entry, args *skel.CmdArgs, filename string) error {
+	// Check to see if the subnet file exists. If it does, then load it and
+	// we'll pass it to the IPAM plugin.
+	azureSubnet, err := ioutil.ReadFile(filename)
+	if err != nil {
+		// File doesn't exist - no action required.
+		return nil
+	}
+	logger.Infof("Loaded azure subnet from file: %s", azureSubnet)
+
+	// We've found a subnet on disk. Populate the subnet field in the IPAM network configuration.
+	var stdinData map[string]interface{}
+	if err := json.Unmarshal(args.StdinData, &stdinData); err != nil {
+		return err
+	}
+	stdinData["ipam"].(map[string]interface{})["subnet"] = strings.TrimSpace(string(azureSubnet))
+
+	// Pack it back into the provided args.
+	args.StdinData, err = json.Marshal(stdinData)
+	if err != nil {
+		return err
+	}
+	logger.Infof("Updated CNI network configuration for Azure: %#v", stdinData)
+	return nil
 }
