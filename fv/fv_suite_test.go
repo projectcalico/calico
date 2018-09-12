@@ -35,7 +35,7 @@ func init() {
 
 func TestFv(t *testing.T) {
 	RegisterFailHandler(Fail)
-	junitReporter := reporters.NewJUnitReporter("junit.xml")
+	junitReporter := reporters.NewJUnitReporter("../report/fv_suite.xml")
 	RunSpecsWithDefaultAndCustomReporters(t, "FV Suite", []Reporter{junitReporter})
 }
 

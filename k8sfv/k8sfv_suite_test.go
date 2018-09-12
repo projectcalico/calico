@@ -43,6 +43,6 @@ func init() {
 
 func TestMain(t *testing.T) {
 	RegisterFailHandler(Fail)
-	junitReporter := reporters.NewJUnitReporter("junit.xml")
+	junitReporter := reporters.NewJUnitReporter("../report/k8sfv_suite.xml")
 	RunSpecsWithDefaultAndCustomReporters(t, "Felix/KDD FV tests", []Reporter{junitReporter})
 }

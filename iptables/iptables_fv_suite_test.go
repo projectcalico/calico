@@ -31,6 +31,6 @@ func init() {
 
 func TestIptablesFV(t *testing.T) {
 	RegisterFailHandler(Fail)
-	junitReporter := reporters.NewJUnitReporter("junit.xml")
+	junitReporter := reporters.NewJUnitReporter("../report/iptables_fv_suite.xml")
 	RunSpecsWithDefaultAndCustomReporters(t, "Iptables Suite", []Reporter{junitReporter})
 }
