@@ -308,6 +308,11 @@ func cmdAdd(args *skel.CmdArgs) error {
 		}
 
 		logger.WithField("endpoint", endpoint).Info("Wrote endpoint to datastore")
+
+		// Add the interface created above to the CNI result.
+		result.Interfaces = append(result.Interfaces, &current.Interface{
+			Name: endpoint.Spec.InterfaceName, Sandbox: endpoint.Spec.Endpoint},
+		)
 	}
 
 	// Handle profile creation - this is only done if there isn't a specific policy handler.

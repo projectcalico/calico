@@ -303,6 +303,11 @@ func CmdAddK8s(ctx context.Context, args *skel.CmdArgs, conf types.NetConf, epID
 	}
 	logger.Info("Wrote updated endpoint to datastore")
 
+	// Add the interface created above to the CNI result.
+	result.Interfaces = append(result.Interfaces, &current.Interface{
+		Name: endpoint.Spec.InterfaceName, Sandbox: endpoint.Spec.Endpoint},
+	)
+
 	return result, nil
 }
 
