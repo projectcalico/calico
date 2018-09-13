@@ -92,14 +92,9 @@ template bgp bgp_template {
 {{- else}}
 protocol bgp Global_{{$id}} from bgp_template {
   neighbor {{$data.ip}} as {{$data.as_num}};
-{{- if ne "" ($node_cluster_id)}}
-{{- if ne $data.rr_cluster_id ($node_cluster_id)}}
+{{- if and (ne "" ($node_cluster_id)) (ne $data.rr_cluster_id ($node_cluster_id))}}
   rr client;
   rr cluster id {{$node_cluster_id}};
-{{- else}}
-  next hop self;     # Disable next hop processing and always advertise our
-                     # local address as nexthop
-{{- end}}
 {{- else}}
   next hop self;     # Disable next hop processing and always advertise our
                      # local address as nexthop
@@ -121,14 +116,9 @@ protocol bgp Global_{{$id}} from bgp_template {
 {{- else}}
 protocol bgp Node_{{$id}} from bgp_template {
   neighbor {{$data.ip}} as {{$data.as_num}};
-{{- if ne "" ($node_cluster_id)}}
-{{- if ne $data.rr_cluster_id ($node_cluster_id)}}
+{{- if and (ne "" ($node_cluster_id)) (ne $data.rr_cluster_id ($node_cluster_id))}}
   rr client;
   rr cluster id {{$node_cluster_id}};
-{{- else}}
-  next hop self;     # Disable next hop processing and always advertise our
-                     # local address as nexthop
-{{- end}}
 {{- else}}
   next hop self;     # Disable next hop processing and always advertise our
                      # local address as nexthop
