@@ -89,6 +89,7 @@ type NetConf struct {
 	EtcdCertFile         string            `json:"etcd_cert_file"`
 	EtcdCaCertFile       string            `json:"etcd_ca_cert_file"`
 	ContainerSettings    ContainerSettings `json:"container_settings,omitempty"`
+	IncludeDefaultRoutes bool              `json:"include_default_routes,omitempty"`
 
 	// Options below here are deprecated.
 	EtcdAuthority string `json:"etcd_authority"`
