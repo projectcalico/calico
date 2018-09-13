@@ -75,9 +75,13 @@ Install Istio according to the [Istio project documentation](https://istio.io/do
 
 ```bash
 curl -L https://git.io/getLatestIstio | sh -
-cd istio-1.0.0
+cd $(ls -d istio-*)
 kubectl apply -f install/kubernetes/istio-demo-auth.yaml
 ```
+
+> **Note**: If an "unable to recognize" error occurs after applying `install/kubernetes/istio-demo-auth.yaml` it is likely a race
+> condition between creating an Istio CRD and then a resource of that type. Re-run the `kubectl apply`.
+{: .alert .alert-info}
 
 ## Updating the Istio sidecar injector
 
