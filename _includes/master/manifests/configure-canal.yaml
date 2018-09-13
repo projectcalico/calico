@@ -22,9 +22,10 @@ spec:
           image: quay.io/coreos/etcd:v3.1.5
           command:
           - "etcdctl"
-          - "--cert-file=/calico-secrets/etcd-cert"
-          - "--key-file=/calico-secrets/etcd-key"
-          - "--ca-file=/calico-secrets/etcd-ca"
+          # Uncomment the following lines if using TLS to etcd.
+          # - "--cert-file=/calico-secrets/etcd-cert"
+          # - "--key-file=/calico-secrets/etcd-key"
+          # - "--ca-file=/calico-secrets/etcd-ca"
           - "--no-sync"
           - "set"
           - "/coreos.com/network/config"
