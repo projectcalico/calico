@@ -18,6 +18,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"net/http"
 	"os"
 	"strings"
 	"time"
@@ -25,10 +26,13 @@ import (
 	"github.com/coreos/etcd/clientv3"
 	"github.com/coreos/etcd/pkg/transport"
 	"github.com/projectcalico/kube-controllers/pkg/config"
+	"github.com/projectcalico/kube-controllers/pkg/controllers/controller"
 	"github.com/projectcalico/kube-controllers/pkg/controllers/namespace"
 	"github.com/projectcalico/kube-controllers/pkg/controllers/networkpolicy"
 	"github.com/projectcalico/kube-controllers/pkg/controllers/node"
 	"github.com/projectcalico/kube-controllers/pkg/controllers/pod"
+	"github.com/projectcalico/kube-controllers/pkg/controllers/serviceaccount"
+	"github.com/projectcalico/kube-controllers/pkg/status"
 	"github.com/projectcalico/libcalico-go/lib/apiconfig"
 	client "github.com/projectcalico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/libcalico-go/lib/logutils"
@@ -95,30 +99,104 @@ func main() {
 		log.WithError(err).Fatal("Failed to initialize Calico datastore")
 	}
 
+	controllerCtrl := &controllerControl{
+		ctx:              ctx,
+		controllerStates: make(map[string]*controllerState),
+		config:           config,
+		stop:             stop,
+	}
+
+	// Create the status file. We will only update it if we have healthchecks enabled.
+	s := status.New(status.DefaultStatusFile)
+
 	for _, controllerType := range strings.Split(config.EnabledControllers, ",") {
 		switch controllerType {
 		case "workloadendpoint":
 			podController := pod.NewPodController(ctx, k8sClientset, calicoClient)
-			go podController.Run(config.WorkloadEndpointWorkers, config.ReconcilerPeriod, stop)
-		case "profile":
+			controllerCtrl.controllerStates["Pod"] = &controllerState{
+				controller:  podController,
+				threadiness: config.WorkloadEndpointWorkers,
+			}
+		case "profile", "namespace":
 			namespaceController := namespace.NewNamespaceController(ctx, k8sClientset, calicoClient)
-			go namespaceController.Run(config.ProfileWorkers, config.ReconcilerPeriod, stop)
+			controllerCtrl.controllerStates["Namespace"] = &controllerState{
+				controller:  namespaceController,
+				threadiness: config.ProfileWorkers,
+			}
 		case "policy":
 			policyController := networkpolicy.NewPolicyController(ctx, k8sClientset, calicoClient)
-			go policyController.Run(config.PolicyWorkers, config.ReconcilerPeriod, stop)
+			controllerCtrl.controllerStates["NetworkPolicy"] = &controllerState{
+				controller:  policyController,
+				threadiness: config.PolicyWorkers,
+			}
 		case "node":
 			nodeController := node.NewNodeController(ctx, k8sClientset, calicoClient)
-			go nodeController.Run(config.NodeWorkers, config.ReconcilerPeriod, stop)
+			controllerCtrl.controllerStates["Node"] = &controllerState{
+				controller:  nodeController,
+				threadiness: config.NodeWorkers,
+			}
+		case "serviceaccount":
+			serviceAccountController := serviceaccount.NewServiceAccountController(ctx, k8sClientset, calicoClient)
+			controllerCtrl.controllerStates["ServiceAccount"] = &controllerState{
+				controller:  serviceAccountController,
+				threadiness: config.ProfileWorkers,
+			}
 		default:
 			log.Fatalf("Invalid controller '%s' provided. Valid options are workloadendpoint, profile, policy", controllerType)
 		}
 	}
 
 	// If configured to do so, start an etcdv3 compaction.
-	startCompactor(ctx, config)
+	go startCompactor(ctx, config)
 
-	// Wait forever.
-	select {}
+	// Run the health checks on a separate goroutine.
+	if config.HealthEnabled {
+		go runHealthChecks(ctx, s, k8sClientset, calicoClient)
+	}
+
+	// Run the controllers. This runs indefinitely.
+	controllerCtrl.RunControllers()
+}
+
+// Run the controller health checks.
+func runHealthChecks(ctx context.Context, s *status.Status, k8sClientset *kubernetes.Clientset, calicoClient client.Interface) {
+	s.SetReady("CalicoDatastore", false, "initialized to false")
+	s.SetReady("KubeAPIServer", false, "initialized to false")
+
+	// Loop forever and perform healthchecks.
+	for {
+		// skip healthchecks if configured
+		// Datastore HealthCheck
+		healthCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+		err := calicoClient.EnsureInitialized(healthCtx, "", "k8s")
+		if err != nil {
+			log.WithError(err).Errorf("Failed to verify datastore")
+			s.SetReady(
+				"CalicoDatastore",
+				false,
+				fmt.Sprintf("Error verifying datastore: %v", err),
+			)
+		} else {
+			s.SetReady("CalicoDatastore", true, "")
+		}
+		cancel()
+
+		// Kube-apiserver HealthCheck
+		healthStatus := 0
+		k8sClientset.Discovery().RESTClient().Get().AbsPath("/healthz").Do().StatusCode(&healthStatus)
+		if healthStatus != http.StatusOK {
+			log.WithError(err).Errorf("Failed to reach apiserver")
+			s.SetReady(
+				"KubeAPIServer",
+				false,
+				fmt.Sprintf("Error reaching apiserver: %v with http status code: %d", err, healthStatus),
+			)
+		} else {
+			s.SetReady("KubeAPIServer", true, "")
+		}
+
+		time.Sleep(10 * time.Second)
+	}
 }
 
 // Starts an etcdv3 compaction goroutine with the given config.
@@ -133,13 +211,18 @@ func startCompactor(ctx context.Context, config *config.Config) {
 		return
 	}
 
-	// Kick off a periodic compaction of etcd.
-	etcdClient, err := newEtcdV3Client()
-	if err != nil {
-		log.WithError(err).Error("Failed to start etcd compaction routine")
-	} else {
+	// Kick off a periodic compaction of etcd, retry until success.
+	for {
+		etcdClient, err := newEtcdV3Client()
+		if err != nil {
+			log.WithError(err).Error("Failed to start etcd compaction routine, retry in 1m")
+			time.Sleep(1 * time.Minute)
+			continue
+		}
+
 		log.WithField("period", interval).Info("Starting periodic etcdv3 compaction")
 		etcd3.StartCompactor(ctx, etcdClient, interval)
+		break
 	}
 }
 
@@ -207,4 +290,27 @@ func newEtcdV3Client() (*clientv3.Client, error) {
 	}
 
 	return clientv3.New(cfg)
+}
+
+// Object for keeping track of controller states and statuses.
+type controllerControl struct {
+	ctx              context.Context
+	controllerStates map[string]*controllerState
+	config           *config.Config
+	stop             chan struct{}
+}
+
+// Runs all the controllers and blocks indefinitely.
+func (cc *controllerControl) RunControllers() {
+	for controllerType, cs := range cc.controllerStates {
+		log.WithField("ControllerType", controllerType).Info("Starting controller")
+		go cs.controller.Run(cs.threadiness, cc.config.ReconcilerPeriod, cc.stop)
+	}
+	select {}
+}
+
+// Object for keeping track of Controller information.
+type controllerState struct {
+	controller  controller.Controller
+	threadiness int
 }

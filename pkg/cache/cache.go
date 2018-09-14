@@ -69,6 +69,10 @@ type ResourceCacheArgs struct {
 	// ObjectType is the type of object which is to be stored in this cache.
 	ObjectType reflect.Type
 
+	// LogTypeDesc (optional) to log the type of object stored in the cache.
+	// If not provided it is derived from the ObjectType.
+	LogTypeDesc string
+
 	ReconcilerConfig ReconcilerConfig
 }
 
@@ -103,11 +107,16 @@ type calicoCache struct {
 func NewResourceCache(args ResourceCacheArgs) ResourceCache {
 	// Make sure logging is context aware.
 	return &calicoCache{
-		threadSafeCache:  cache.New(cache.NoExpiration, cache.DefaultExpiration),
-		workqueue:        workqueue.NewRateLimitingQueue(workqueue.DefaultControllerRateLimiter()),
-		ListFunc:         args.ListFunc,
-		ObjectType:       args.ObjectType,
-		log:              log.WithFields(log.Fields{"type": args.ObjectType}),
+		threadSafeCache: cache.New(cache.NoExpiration, cache.DefaultExpiration),
+		workqueue:       workqueue.NewRateLimitingQueue(workqueue.DefaultControllerRateLimiter()),
+		ListFunc:        args.ListFunc,
+		ObjectType:      args.ObjectType,
+		log: func() *log.Entry {
+			if args.LogTypeDesc == "" {
+				return log.WithFields(log.Fields{"type": args.ObjectType})
+			}
+			return log.WithFields(log.Fields{"type": args.LogTypeDesc})
+		}(),
 		mut:              &sync.Mutex{},
 		reconcilerConfig: args.ReconcilerConfig,
 	}
@@ -276,8 +285,8 @@ func (c *calicoCache) performDatastoreSync() error {
 			// Objects differ - queue an update to re-program if configured to do so.
 			if !c.reconcilerConfig.DisableUpdateOnChange {
 				c.log.WithField("key", key).Warn("Value for key has changed, queueing update to reprogram")
-				c.log.Debugf("Cached:  %+v", cachedObj)
-				c.log.Debugf("Updated: %+v", obj)
+				c.log.Debugf("Cached:  %#v", cachedObj)
+				c.log.Debugf("Updated: %#v", obj)
 				c.workqueue.Add(key)
 			}
 			continue
