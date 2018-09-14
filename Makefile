@@ -313,7 +313,7 @@ fv: vendor run-k8s-apiserver
 	-e ETCD_ENDPOINTS=http://$(LOCAL_IP_ENV):2379 \
 	--net=host \
 	-w /go/src/$(PACKAGE_NAME) \
-	$(CALICO_BUILD) ginkgo -cover -r -skipPackage vendor pkg/startup pkg/allocateipip
+	$(CALICO_BUILD) ginkgo -cover -r -skipPackage vendor pkg/startup pkg/allocateipip $(GINKGO_ARGS)
 
 # etcd is used by the STs
 .PHONY: run-etcd
@@ -457,7 +457,7 @@ st: dist/calicoctl busybox.tar calico-node.tar workload.tar run-etcd calico_test
 	           --rm -t \
 	           -v /var/run/docker.sock:/var/run/docker.sock \
 	           $(TEST_CONTAINER_NAME) \
-	           sh -c 'nosetests $(ST_TO_RUN) -v --with-xunit --xunit-file="/code/nosetests.xml" --with-timer $(ST_OPTIONS)'
+	           sh -c 'nosetests $(ST_TO_RUN) -v --with-xunit --xunit-file="/code/report/nosetests.xml" --with-timer $(ST_OPTIONS)'
 	$(MAKE) stop-etcd
 
 ###############################################################################
