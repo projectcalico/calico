@@ -466,8 +466,7 @@ class TestNamespace(TestBase):
             del data['metadata']['creationTimestamp']
 
         # Use calicoctl with the modified data.
-        host.writefile("new_data",
-                       yaml.dump(data, default_flow_style=False))
+        host.writejson("new_data", data)
         host.calicoctl("%s -f new_data" % action)
 
     @classmethod

@@ -292,18 +292,6 @@ class TestBase(TestCase):
             pformat(DeepDiff(thing1, thing2), indent=2)
 
     @staticmethod
-    def writeyaml(filename, data):
-        """
-        Converts a python dict to yaml and outputs to a file.
-        :param filename: filename to write
-        :param data: dictionary to write out as yaml
-        """
-        with open(filename, 'w') as f:
-            text = yaml.dump(data, default_flow_style=False)
-            logger.debug("Writing %s: \n%s" % (filename, text))
-            f.write(text)
-
-    @staticmethod
     def writejson(filename, data):
         """
         Converts a python dict to json and outputs to a file.

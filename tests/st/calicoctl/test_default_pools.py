@@ -110,8 +110,8 @@ class TestDefaultPools(TestBase):
         assert value in cidrs, "Didn't find %s in %s" % (value, cidrs)
 
         # Dump pools and attempt to load them with calicoctl (to confirm consistency)
-        self.host.calicoctl("get ippool -o yaml > testfile.yaml")
-        self.host.calicoctl("apply -f testfile.yaml")
+        self.host.calicoctl("get ippool -o json > testfile.json")
+        self.host.calicoctl("apply -f testfile.json")
 
         assert len(pools_dict) == exp_num_pools, \
             "Expected %s pools, found %s. %s" % (exp_num_pools, len(pools_dict), pools_dict)
