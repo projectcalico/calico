@@ -9,7 +9,7 @@ spec:
   selector: all()
   types:
     - Egress
-  order: 0.
+  order: 0
   egress:
     - action: Allow
       protocol: TCP
