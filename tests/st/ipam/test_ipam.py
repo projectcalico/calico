@@ -93,8 +93,8 @@ class MultiHostIpam(TestBase):
                     'metadata': {'name': 'ippool-name-1'},
                     'spec': {'cidr': str(ipv4_subnet.ipv4())},
                     }
-        self.hosts[0].writefile("newpool.yaml", yaml.dump(new_pool))
-        self.hosts[0].calicoctl("create -f newpool.yaml")
+        self.hosts[0].writejson("newpool.json", new_pool)
+        self.hosts[0].calicoctl("create -f newpool.json")
 
         for host in self.hosts:
             workload = host.create_workload("wlda-%s" % host.name,
@@ -114,7 +114,7 @@ class MultiHostIpam(TestBase):
 
         self.hosts[0].remove_workloads()
 
-        self.hosts[0].calicoctl("delete -f newpool.yaml")
+        self.hosts[0].calicoctl("delete -f newpool.json")
         self.hosts[0].calicoctl("get IPpool -o yaml")
 
         ipv4_subnet = netaddr.IPNetwork("10.0.1.0/24")
@@ -123,8 +123,8 @@ class MultiHostIpam(TestBase):
                     'metadata': {'name': 'ippool-name-2'},
                     'spec': {'cidr': str(ipv4_subnet.ipv4())},
                     }
-        self.hosts[0].writefile("pools.yaml", yaml.dump(new_pool))
-        self.hosts[0].calicoctl("create -f pools.yaml")
+        self.hosts[0].writejson("pools.json", new_pool)
+        self.hosts[0].calicoctl("create -f pools.json")
 
         for host in self.hosts:
             workload = host.create_workload("wlda2-%s" % host.name,
@@ -156,8 +156,8 @@ class MultiHostIpam(TestBase):
                     'metadata': {'name': 'ippool-name-3'},
                     'spec': {'cidr': str(ipv4_subnet.ipv4())},
                     }
-        self.hosts[0].writefile("newpool.yaml", yaml.dump(new_pool))
-        self.hosts[0].calicoctl("create -f newpool.yaml")
+        self.hosts[0].writejson("newpool.json", new_pool)
+        self.hosts[0].calicoctl("create -f newpool.json")
 
         for i in range(num_workloads):
             host = random.choice(self.hosts)
@@ -194,8 +194,8 @@ class MultiHostIpam(TestBase):
                     'metadata': {'name': 'ippool-name-4'},
                     'spec': {'cidr': str(ipv4_subnet.ipv4())},
                     }
-        self.hosts[0].writefile("newpool.yaml", yaml.dump(new_pool))
-        self.hosts[0].calicoctl("create -f newpool.yaml")
+        self.hosts[0].writejson("newpool.json", new_pool)
+        self.hosts[0].calicoctl("create -f newpool.json")
 
         host = self.hosts[0]
         i = 0

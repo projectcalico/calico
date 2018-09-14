@@ -385,8 +385,8 @@ class DockerHost(object):
                 pool['spec']['ipipMode'] = 'Always' if enabled else 'Never'
             if 'creationTimestamp' in pool['metadata']:
                 del pool['metadata']['creationTimestamp']
-        self.writefile("ippools.yaml", yaml.dump(pools_dict))
-        self.calicoctl("apply -f ippools.yaml")
+        self.writejson("ippools.json", pools_dict)
+        self.calicoctl("apply -f ippools.json")
 
     def attach_log_analyzer(self):
         self.log_analyzer = LogAnalyzer(self,
@@ -648,7 +648,7 @@ class DockerHost(object):
 
     def writefile(self, filename, data):
         """
-        Writes a file on a host (e.g. a yaml file for loading into calicoctl).
+        Writes a file on a host (e.g. a JSON file for loading into calicoctl).
         :param filename: string, the filename to create
         :param data: string, the data to put inthe file
         :return: Return code of execute operation.
@@ -715,8 +715,7 @@ class DockerHost(object):
             del data['metadata']['creationTimestamp']
 
         # Use calicoctl with the modified data.
-        self.writefile("new_data",
-                       yaml.dump(data, default_flow_style=False))
+        self.writejson("new_data", data)
         self.calicoctl("%s -f new_data" % action)
 
     def log_extra_diags(self):

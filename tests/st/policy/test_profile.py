@@ -193,8 +193,8 @@ class MultiHostMainline(TestBase):
                 'nets': n1_ips,
             }
         }
-        self.host1.writefile("netset.yaml", yaml.dump(netset, default_flow_style=False))
-        self.host1.calicoctl("create -f netset.yaml")
+        self.host1.writejson("netset.json", netset)
+        self.host1.calicoctl("create -f netset.json")
         netset = {
             'apiVersion': 'projectcalico.org/v3',
             'kind': 'GlobalNetworkSet',
@@ -206,8 +206,8 @@ class MultiHostMainline(TestBase):
                 'nets': n2_ips,
             }
         }
-        self.host1.writefile("netset.yaml", yaml.dump(netset, default_flow_style=False))
-        self.host1.calicoctl("create -f netset.yaml")
+        self.host1.writejson("netset.json", netset)
+        self.host1.calicoctl("create -f netset.json")
 
         # Check initial connectivity before we update the rules to reference the
         # network sets.
@@ -395,8 +395,7 @@ class MultiHostMainline(TestBase):
                 del p['metadata']['creationTimestamp']
 
         # Apply new profiles
-        host.writefile("new_profiles",
-                       yaml.dump(new_profiles, default_flow_style=False))
+        host.writejson("new_profiles", new_profiles)
         host.calicoctl("apply -f new_profiles")
 
     def _setup_workloads(self, host1, host2):
