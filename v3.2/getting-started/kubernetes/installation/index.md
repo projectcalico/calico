@@ -38,7 +38,7 @@ environments.
 | [Kismatic Enterprise Toolkit][ket]   | Fully-automated, production-grade Kubernetes operations on AWS and other clouds. |
 | [Kops][kops]                         | A popular Kubernetes project for launching production-ready clusters on AWS, as well as other public and private cloud environments. |
 | [Kubernetes kube-up][kube-up]        | Deploys {{site.prodname}} on GCE using the same underlying open-source infrastructure as Google's GKE platform. |
-| [Kubespray][kubespray]               | A Kubernetes project for deploying Kubernetes on GCE. |
+| [Kubespray][kubespray]               | A Kubernetes project for deploying Kubernetes with Ansible |
 | [StackPointCloud][stackpoint]        | Deploys a Kubernetes cluster with {{site.prodname}} to AWS in 3 steps using a web-based interface. |
 | [Typhoon][typhoon]                   | Deploys free and minimal Kubernetes clusters with Terraform. |
 
