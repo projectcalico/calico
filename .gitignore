@@ -16,3 +16,4 @@ k8s-install/scripts/tmp/
 install_cni.test
 *.swp
 *.coverprofile
+report/*.xml
