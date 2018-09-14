@@ -1,3 +1,5 @@
+//  Copyright (c) 2016,2018 Tigera, Inc. All rights reserved.
+
 package main_test
 
 import (
@@ -5,9 +7,12 @@ import (
 	. "github.com/onsi/gomega"
 
 	"testing"
+
+	"github.com/onsi/ginkgo/reporters"
 )
 
 func TestCalicoCni(t *testing.T) {
 	RegisterFailHandler(Fail)
-	RunSpecs(t, "CalicoCni Suite")
+	junitReporter := reporters.NewJUnitReporter("./report/cni_suite.xml")
+	RunSpecsWithDefaultAndCustomReporters(t, "CalicoCni Suite", []Reporter{junitReporter})
 }
