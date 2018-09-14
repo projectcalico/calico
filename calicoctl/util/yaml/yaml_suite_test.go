@@ -1,3 +1,5 @@
+// Copyright (c) 2016-2018 Tigera, Inc. All rights reserved.
+
 package yaml_test
 
 import (
@@ -5,9 +7,12 @@ import (
 	. "github.com/onsi/gomega"
 
 	"testing"
+
+	"github.com/onsi/ginkgo/reporters"
 )
 
 func TestYaml(t *testing.T) {
 	RegisterFailHandler(Fail)
-	RunSpecs(t, "Yaml Suite")
+	junitReporter := reporters.NewJUnitReporter("../../../report/yaml_suite.xml")
+	RunSpecsWithDefaultAndCustomReporters(t, "Yaml Suite", []Reporter{junitReporter})
 }

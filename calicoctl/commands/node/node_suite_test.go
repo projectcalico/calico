@@ -1,3 +1,5 @@
+// Copyright (c) 2016-2018 Tigera, Inc. All rights reserved.
+
 package node_test
 
 import (
@@ -6,6 +8,7 @@ import (
 
 	"testing"
 
+	"github.com/onsi/ginkgo/reporters"
 	"github.com/projectcalico/libcalico-go/lib/testutils"
 )
 
@@ -15,5 +18,6 @@ func init() {
 
 func TestCommands(t *testing.T) {
 	RegisterFailHandler(Fail)
-	RunSpecs(t, "Commands Suite")
+	junitReporter := reporters.NewJUnitReporter("../../../report/node_suite.xml")
+	RunSpecsWithDefaultAndCustomReporters(t, "Node Suite", []Reporter{junitReporter})
 }

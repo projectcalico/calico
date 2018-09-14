@@ -1,3 +1,5 @@
+// Copyright (c) 2016-2018 Tigera, Inc. All rights reserved.
+
 package resourcemgr_test
 
 import (
@@ -5,9 +7,12 @@ import (
 	. "github.com/onsi/gomega"
 
 	"testing"
+
+	"github.com/onsi/ginkgo/reporters"
 )
 
 func TestResourcemgr(t *testing.T) {
 	RegisterFailHandler(Fail)
-	RunSpecs(t, "Resourcemgr Suite")
+	junitReporter := reporters.NewJUnitReporter("../../report/resourcemgr_suite.xml")
+	RunSpecsWithDefaultAndCustomReporters(t, "Resourcemgr Suite", []Reporter{junitReporter})
 }
