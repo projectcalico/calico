@@ -16,7 +16,6 @@ package main
 
 import (
 	"context"
-	"flag"
 	"fmt"
 	"net/http"
 	"os"
@@ -25,6 +24,16 @@ import (
 
 	"github.com/coreos/etcd/clientv3"
 	"github.com/coreos/etcd/pkg/transport"
+	log "github.com/sirupsen/logrus"
+	flag "github.com/spf13/pflag"
+	"k8s.io/apiserver/pkg/storage/etcd3"
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/tools/clientcmd"
+
+	"github.com/projectcalico/libcalico-go/lib/apiconfig"
+	client "github.com/projectcalico/libcalico-go/lib/clientv3"
+	"github.com/projectcalico/libcalico-go/lib/logutils"
+
 	"github.com/projectcalico/kube-controllers/pkg/config"
 	"github.com/projectcalico/kube-controllers/pkg/controllers/controller"
 	"github.com/projectcalico/kube-controllers/pkg/controllers/namespace"
@@ -33,13 +42,6 @@ import (
 	"github.com/projectcalico/kube-controllers/pkg/controllers/pod"
 	"github.com/projectcalico/kube-controllers/pkg/controllers/serviceaccount"
 	"github.com/projectcalico/kube-controllers/pkg/status"
-	"github.com/projectcalico/libcalico-go/lib/apiconfig"
-	client "github.com/projectcalico/libcalico-go/lib/clientv3"
-	"github.com/projectcalico/libcalico-go/lib/logutils"
-	log "github.com/sirupsen/logrus"
-	"k8s.io/apiserver/pkg/storage/etcd3"
-	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/tools/clientcmd"
 )
 
 // VERSION is filled out during the build process (using git describe output)
@@ -55,7 +57,7 @@ func main() {
 	// If `-v` is passed, display the version and exit.
 	// Use a new flag set so as not to conflict with existing libraries which use "flag"
 	flagSet := flag.NewFlagSet("Calico", flag.ExitOnError)
-	version := flagSet.Bool("v", false, "Display version")
+	version := flagSet.BoolP("version", "v", false, "Display version")
 	err := flagSet.Parse(os.Args[1:])
 	if err != nil {
 		log.WithError(err).Fatal("Failed to parse flags")
