@@ -29,7 +29,7 @@ type Config struct {
 	CompactionPeriod string `default:"10m" split_words:"true"`
 
 	// Which controllers to run.
-	EnabledControllers string `default:"policy,namespace,workloadendpoint,serviceaccount" split_words:"true"`
+	EnabledControllers string `default:"node,policy,namespace,workloadendpoint,serviceaccount" split_words:"true"`
 
 	// Number of workers to run for each controller.
 	WorkloadEndpointWorkers int `default:"1" split_words:"true"`
