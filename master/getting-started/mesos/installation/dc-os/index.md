@@ -95,9 +95,17 @@ To perform networking on Unified Containerizer tasks, {{site.prodname}}'s CNI bi
 configuration file must be installed on every agent, and the slave process must
 be restarted to pick up the change. The Framework then performs the following steps:
 
-1. Download [`calico`]({{site.data.versions[page.version].first.components["calico/cni"].download_calico_url}}) to `/opt/mesosphere/active/cni/`
-2. Download [`calico-ipam`]({{site.data.versions[page.version].first.components["calico/cni"].download_calico_ipam_url}}) to `/opt/mesosphere/active/cni/`
-3. Create the following JSON file at `/opt/mesosphere/etc/dcos/network/cni/calico.cni`:
+1. Download the Calico CNI plugins to `/opt/mesosphere/active/cni`
+{% if page.version == "master" %}
+   You can download the [latest relase from GitHub](https://github.com/projectcalico/cni-plugin/releases).
+{% else %}
+   ```bash
+   curl -L -o /opt/mesosphere/active/cni/calico https://github.com/projectcalico/cni-plugin/releases/download/{{site.data.versions[page.version].first.components["calico/cni"].version}}/calico
+   curl -L -o /opt/mesosphere/active/cni/calico-ipam https://github.com/projectcalico/cni-plugin/releases/download/{{site.data.versions[page.version].first.components["calico/cni"].version}}/calico-ipam
+   ```
+{% endif %}
+
+2. Create the following JSON file at `/opt/mesosphere/etc/dcos/network/cni/calico.cni`:
 
    ```json
    {
@@ -109,12 +117,12 @@ be restarted to pick up the change. The Framework then performs the following st
        }
    }
    ```
-   
+
    > **Note**: If not running etcd in proxy mode, be sure to change `etcd_endpoints`
    to your correct etcd endpoint address.
    {: .alert .alert-info}
 
-4. Restart the slave process with `systemctl restart dcos-mesos-slave`
+3. Restart the slave process with `systemctl restart dcos-mesos-slave`
 
 ### Run {{site.nodecontainer}}
 

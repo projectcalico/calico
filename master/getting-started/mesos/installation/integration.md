@@ -14,7 +14,7 @@ you have etcd running.
 1. Download the calicoctl binary:
 
    ```
-   sudo wget -O /usr/local/bin/calicoctl {{site.data.versions[page.version].first.components.calicoctl.download_url}}
+   sudo wget -O /usr/local/bin/calicoctl {% include urls component=calicoctl %}
    sudo chmod +x /usr/local/bin/calicoctl
    ```
 
@@ -47,14 +47,18 @@ you have etcd running.
    [`$NETWORK_CNI_PLUGINS_DIR` you configured for Mesos](prerequisites).
    You may skip this step if you do not plan on using the Unified Containerizer.
 
+{% if page.version == "master" %}
+   You can download the binaries from the [latest relase from GitHub](https://github.com/projectcalico/cni-plugin/releases).
+{% else %}
    ```shell
    curl -L -o $NETWORK_CNI_PLUGINS_DIR/calico \
-       {{site.data.versions[page.version].first.components["calico/cni"].download_calico_url}}
+        https://github.com/projectcalico/cni-plugin/releases/download/{{site.data.versions[page.version].first.components["calico/cni"].version}}/calico
    curl -L -o $NETWORK_CNI_PLUGINS_DIR/calico-ipam \
-       {{site.data.versions[page.version].first.components["calico/cni"].download_calico_ipam_url}}
+        https://github.com/projectcalico/cni-plugin/releases/download/{{site.data.versions[page.version].first.components["calico/cni"].version}}/calico-ipam
    chmod +x $NETWORK_CNI_PLUGINS_DIR/calico
    chmod +x $NETWORK_CNI_PLUGINS_DIR/calico-ipam
    ```
+{% endif %}
 
 1. Create a {{site.prodname}} CNI configuration in the [`$NETWORK_CNI_CONF_DIR` you configured for Mesos](prerequisites), replacing `http://master.mesos:2379` with
    etcd's address:

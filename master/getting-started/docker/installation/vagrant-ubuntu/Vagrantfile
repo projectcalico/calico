@@ -4,8 +4,7 @@ layout: null
 # -*- mode: ruby -*-
 # vi: set ft=ruby :
 
-# The calicoctl download URL.
-calicoctl_url = "{{site.data.versions[page.version].first.components.calicoctl.download_url}}"
+calicoctl_url = "{% include urls component=calicoctl %}"
 
 # The version of the calico docker images to install.  This is used to pre-load
 # the calico/node image which slows down the install process, but speeds up the tutorial.
