@@ -41,7 +41,7 @@ spec:
       hostNetwork: true
       containers:
         - name: calico-etcd
-          image: quay.io/coreos/etcd:v3.1.10
+          image: quay.io/coreos/etcd:v3.3.9
           env:
             - name: CALICO_ETCD_IP
               valueFrom:
