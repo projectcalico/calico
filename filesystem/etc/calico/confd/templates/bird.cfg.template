@@ -73,8 +73,6 @@ template bgp bgp_template {
 {{if eq $onode_ip ($node_ip) }}# Skipping ourselves ({{$node_ip}})
 {{else if ne "" $onode_ip}}protocol bgp Mesh_{{$id}} from bgp_template {
   neighbor {{$onode_ip}} as {{if exists $onode_as_key}}{{getv $onode_as_key}}{{else}}{{getv "/global/as_num"}}{{end}};
-  next hop self;     # Disable next hop processing and always advertise our
-                     # local address as nexthop
 }{{end}}{{end}}{{end}}
 {{else}}
 # Node-to-node mesh disabled
@@ -92,17 +90,9 @@ template bgp bgp_template {
 {{- else}}
 protocol bgp Global_{{$id}} from bgp_template {
   neighbor {{$data.ip}} as {{$data.as_num}};
-{{- if ne "" ($node_cluster_id)}}
-{{- if ne $data.rr_cluster_id ($node_cluster_id)}}
+{{- if and (ne "" ($node_cluster_id)) (ne $data.rr_cluster_id ($node_cluster_id))}}
   rr client;
   rr cluster id {{$node_cluster_id}};
-{{- else}}
-  next hop self;     # Disable next hop processing and always advertise our
-                     # local address as nexthop
-{{- end}}
-{{- else}}
-  next hop self;     # Disable next hop processing and always advertise our
-                     # local address as nexthop
 {{- end}}
 }
 {{- end}}
@@ -121,17 +111,9 @@ protocol bgp Global_{{$id}} from bgp_template {
 {{- else}}
 protocol bgp Node_{{$id}} from bgp_template {
   neighbor {{$data.ip}} as {{$data.as_num}};
-{{- if ne "" ($node_cluster_id)}}
-{{- if ne $data.rr_cluster_id ($node_cluster_id)}}
+{{- if and (ne "" ($node_cluster_id)) (ne $data.rr_cluster_id ($node_cluster_id))}}
   rr client;
   rr cluster id {{$node_cluster_id}};
-{{- else}}
-  next hop self;     # Disable next hop processing and always advertise our
-                     # local address as nexthop
-{{- end}}
-{{- else}}
-  next hop self;     # Disable next hop processing and always advertise our
-                     # local address as nexthop
 {{- end}}
 }
 {{- end}}
