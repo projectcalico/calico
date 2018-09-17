@@ -41,7 +41,7 @@ spec:
       hostNetwork: true
       containers:
         - name: calico-etcd
-          image: quay.io/coreos/etcd:v3.1.10
+          image: quay.io/coreos/etcd:v3.3.9
           env:
             - name: CALICO_ETCD_IP
               valueFrom:
@@ -52,7 +52,7 @@ spec:
           args:
           - --name=calico
           - --data-dir=/var/etcd/calico-data
-          - --advertise-client-urls=http://$CALICO_ETCD_IP:6666
+          - --advertise-client-urls=http://$(CALICO_ETCD_IP):6666
           - --listen-client-urls=http://0.0.0.0:6666
           - --listen-peer-urls=http://0.0.0.0:6667
           - --auto-compaction-retention=1
