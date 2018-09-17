@@ -6,6 +6,7 @@ import (
 
 	"testing"
 
+	"github.com/onsi/ginkgo/reporters"
 	"github.com/projectcalico/libcalico-go/lib/testutils"
 )
 
@@ -15,5 +16,6 @@ func init() {
 
 func TestCommands(t *testing.T) {
 	RegisterFailHandler(Fail)
-	RunSpecs(t, "AllocateIPIPAddr Suite")
+	junitReporter := reporters.NewJUnitReporter("../../report/allocateipipaddr_suite.xml")
+	RunSpecsWithDefaultAndCustomReporters(t, "AllocateIPIPAddr Suite", []Reporter{junitReporter})
 }
