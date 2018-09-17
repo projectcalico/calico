@@ -1,5 +1,5 @@
-hash: 24235a364d9e955b792c97658c4647f0fe7751e284b47d451df60903b8d94512
-updated: 2018-09-12T10:42:28.365980441-07:00
+hash: 39b159080d35e9804b9330788ebbeffc648c021708f5bbd0a9fc27e230dff9d3
+updated: 2018-09-17T04:11:18.273996948Z
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -18,7 +18,7 @@ imports:
   subpackages:
   - quantile
 - name: github.com/BurntSushi/toml
-  version: a368813c5e648fee92e5f6c30e3944ff9d5e8895
+  version: 3012a1dbe2e4bd1391d42b32f0577cb7bbc7f005
 - name: github.com/coreos/etcd
   version: 33245c6b5b49130ca99280408fadfab01aac0e48
   subpackages:
@@ -112,7 +112,7 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: 9137112a7d5a4b735a24dd1165d8fbc7dc3dfed1
+  version: 2b98cf0202bc20708c94360528a08e9c499f1c11
   subpackages:
   - lib/apiconfig
   - lib/apis/v1
@@ -153,15 +153,16 @@ imports:
   - pkg/syncproto
   - pkg/tlsutils
 - name: github.com/prometheus/client_golang
-  version: bcbbc08eb2ddff3af83bbf11e7ec13b4fd730b6e
+  version: b7b390014bf2ea0679a8e477638afa1b706cbd70
   subpackages:
   - prometheus
+  - prometheus/internal
 - name: github.com/prometheus/client_model
   version: 5c3871d89910bfb32f5fcab2aa4b9ec68e65a99f
   subpackages:
   - go
 - name: github.com/prometheus/common
-  version: 7600349dcfe1abd18d72d3a1770870d9800a7801
+  version: c7de2306084e37d54b8be01f3541a8464345e9a5
   subpackages:
   - expfmt
   - internal/bitbucket.org/ww/goautoneg
@@ -177,7 +178,7 @@ imports:
 - name: github.com/spf13/pflag
   version: 583c0c0531f06d5278b7d917446061adc344b5cd
 - name: golang.org/x/crypto
-  version: c126467f60eb25f8f27e5a981f32a87e3965053f
+  version: 0e37d006457bf46f9e6692014ba72ef82c33022c
   subpackages:
   - ssh/terminal
 - name: golang.org/x/net
@@ -218,7 +219,7 @@ imports:
   subpackages:
   - rate
 - name: google.golang.org/appengine
-  version: b1f26356af11148e710935ed1ac8a7f5702c7612
+  version: 03cac3b07182cfb08c0d0c0b6ee72a1ceb151c92
   subpackages:
   - internal
   - internal/app_identity
