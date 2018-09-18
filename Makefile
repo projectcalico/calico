@@ -310,7 +310,7 @@ install-git-hooks:
 ut: bin/calicoctl-linux-amd64
 	docker run --rm -v $(CURDIR):/go/src/$(PACKAGE_NAME):rw \
     -e LOCAL_USER_ID=$(LOCAL_USER_ID) \
-    $(CALICO_BUILD) sh -c 'cd /go/src/$(PACKAGE_NAME) && ginkgo -cover -r --skipPackage vendor calicoctl/*'
+    $(CALICO_BUILD) sh -c 'cd /go/src/$(PACKAGE_NAME) && ginkgo -cover -r --skipPackage vendor calicoctl/* $(GINKGO_ARGS)'
 
 ###############################################################################
 # STs
@@ -334,7 +334,7 @@ st: bin/calicoctl-linux-amd64 run-etcd-host
 	           -v $(CURDIR):/code \
 	           -v /var/run/docker.sock:/var/run/docker.sock \
 	           $(TEST_CONTAINER_NAME) \
-	           sh -c 'nosetests $(ST_TO_RUN) -sv --nologcapture  --with-xunit --xunit-file="/code/nosetests.xml" --with-timer $(ST_OPTIONS)'
+	           sh -c 'nosetests $(ST_TO_RUN) -sv --nologcapture  --with-xunit --xunit-file="/code/report/nosetests.xml" --with-timer $(ST_OPTIONS)'
 
 	$(MAKE) stop-etcd
 
