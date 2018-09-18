@@ -280,7 +280,7 @@ TYPHA_VERSION?=$(shell git ls-remote git@github.com:projectcalico/typha master 2
 update-typha:
 	    $(DOCKER_GO_BUILD) sh -c '\
         echo "Updating typha to $(TYPHA_VERSION) from $(TYPHA_REPO)"; \
-        export OLD_VER=$$(grep --after 50 typha glide.yaml |grep --max-count=1 --only-matching --perl-regexp "version:\s*\K[\.0-9a-z]+") ;\
+        export OLD_VER=$$(grep --after 50 typha glide.yaml |grep --max-count=1 --only-matching --perl-regexp "version:\s*\K[^\s]+") ;\
         echo "Old version: $$OLD_VER";\
         if [ $(TYPHA_VERSION) != $$OLD_VER ]; then \
           sed -i "s/$$OLD_VER/$(TYPHA_VERSION)/" glide.yaml && \
