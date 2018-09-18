@@ -153,7 +153,7 @@ update-libcalico:
 		-w /go/src/$(PACKAGE_NAME) \
 		$(CALICO_BUILD) sh -c '\
         echo "Updating libcalico to $(LIBCALICO_VERSION) from $(LIBCALICO_REPO)"; \
-        export OLD_VER=$$(grep --after 50 libcalico-go glide.yaml |grep --max-count=1 --only-matching --perl-regexp "version:\s*\K[\.0-9a-z]+") ;\
+        export OLD_VER=$$(grep --after 50 libcalico-go glide.yaml |grep --max-count=1 --only-matching --perl-regexp "version:\s*\K[^\s]+") ;\
         echo "Old version: $$OLD_VER";\
         if [ $(LIBCALICO_VERSION) != $$OLD_VER ]; then \
             sed -i "s/$$OLD_VER/$(LIBCALICO_VERSION)/" glide.yaml && \
@@ -176,7 +176,7 @@ bin/kube-controllers-linux-$(ARCH): vendor $(SRCFILES)
 	  -e LOCAL_USER_ID=$(LOCAL_USER_ID) \
 	  -v $(CURDIR)/.go-pkg-cache:/go-cache/:rw \
       -e GOCACHE=/go-cache \
-	  $(CALICO_BUILD) go build -v -o bin/kube-controllers-$(OS)-$(ARCH) -ldflags "-X main.VERSION=$(GIT_VERSION)" ./cmd/kube-controllers/ 
+	  $(CALICO_BUILD) go build -v -o bin/kube-controllers-$(OS)-$(ARCH) -ldflags "-X main.VERSION=$(GIT_VERSION)" ./cmd/kube-controllers/
 
 bin/check-status-linux-$(ARCH): vendor $(SRCFILES)
 	mkdir -p bin
