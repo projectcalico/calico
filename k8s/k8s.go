@@ -369,6 +369,23 @@ func CmdAddK8s(ctx context.Context, args *skel.CmdArgs, conf types.NetConf, epID
 	endpoint.Spec.InterfaceName = hostVethName
 	endpoint.Spec.ContainerID = epIDs.ContainerID
 	logger.WithField("endpoint", endpoint).Info("Added Mac, interface name, and active container ID to endpoint")
+	// List of DNAT ipaddrs to map to this workload endpoint
+	floatingIPs := annot["cni.projectcalico.org/floatingIPs"]
+
+	if floatingIPs != "" {
+		ips, err := parseIPAddrs(floatingIPs, logger)
+		if err != nil {
+			return nil, err
+		}
+
+		for _, ip := range ips {
+			endpoint.Spec.IPNATs = append(endpoint.Spec.IPNATs, api.IPNAT{
+				InternalIP: result.IPs[0].Address.IP.String(),
+				ExternalIP: ip,
+			})
+		}
+		logger.WithField("endpoint", endpoint).Info("Added floatingIPs to endpoint")
+	}
 
 	// Write the endpoint object (either the newly created one, or the updated one)
 	if _, err := utils.CreateOrUpdate(ctx, calicoClient, endpoint); err != nil {
