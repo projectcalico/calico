@@ -1,5 +1,5 @@
-hash: 659bc5eff50019c5b94c84c4d466e40e197908ff37808777aaef1c7160ee7f64
-updated: 2018-09-12T11:06:20.81829391-07:00
+hash: a208c96084f08e9830111d57e73c6f813baed25d7e82b14f189bbcbff60897d1
+updated: 2018-09-19T09:53:24.402614955Z
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -45,7 +45,7 @@ imports:
 - name: github.com/ghodss/yaml
   version: 73d445a93680fa1a78ae23a5839bad48f32ba1ee
 - name: github.com/go-ini/ini
-  version: d58d458bec3cb5adec4b7ddb41131855eac0b33f
+  version: fa25069db393aecc09b71267d0489b357781c860
 - name: github.com/gogo/protobuf
   version: c0656edd0d9eab7c66d1eb0c568f9039345796f7
   subpackages:
@@ -208,7 +208,7 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: 9137112a7d5a4b735a24dd1165d8fbc7dc3dfed1
+  version: ed90b4008e2001e23d5f563b8fed7e39db0e1c2b
   subpackages:
   - lib/apiconfig
   - lib/apis/v1
@@ -250,15 +250,16 @@ imports:
   subpackages:
   - binder
 - name: github.com/projectcalico/typha
-  version: 3fbe9abb60bf3a4270011daa8ff3426d942d3f94
+  version: c09acf708fb11ce58b9da2bb69c0d36db96381ca
   subpackages:
   - pkg/syncclient
   - pkg/syncproto
   - pkg/tlsutils
 - name: github.com/prometheus/client_golang
-  version: bcbbc08eb2ddff3af83bbf11e7ec13b4fd730b6e
+  version: e637cec7d9c8990247098639ebc6d43dd34ddd49
   subpackages:
   - prometheus
+  - prometheus/internal
   - prometheus/promhttp
   - prometheus/push
 - name: github.com/prometheus/client_model
@@ -266,7 +267,7 @@ imports:
   subpackages:
   - go
 - name: github.com/prometheus/common
-  version: 7600349dcfe1abd18d72d3a1770870d9800a7801
+  version: c7de2306084e37d54b8be01f3541a8464345e9a5
   subpackages:
   - expfmt
   - internal/bitbucket.org/ww/goautoneg
@@ -290,7 +291,7 @@ imports:
 - name: github.com/whyrusleeping/go-logging
   version: 0457bb6b88fc1973573aaf6b5145d8d3ae972390
 - name: golang.org/x/crypto
-  version: c126467f60eb25f8f27e5a981f32a87e3965053f
+  version: 0e37d006457bf46f9e6692014ba72ef82c33022c
   subpackages:
   - ssh/terminal
 - name: golang.org/x/net
@@ -345,7 +346,7 @@ imports:
   subpackages:
   - rate
 - name: google.golang.org/appengine
-  version: b1f26356af11148e710935ed1ac8a7f5702c7612
+  version: ae0ab99deb4dc413a2b4bd6c8bdd0eb67f1e4d06
   subpackages:
   - internal
   - internal/app_identity
@@ -357,7 +358,7 @@ imports:
   - internal/urlfetch
   - urlfetch
 - name: google.golang.org/genproto
-  version: 09f6ed296fc66555a25fe4ce95173148778dfa85
+  version: c3f76f3b92d1ffa4c58a9ff842a58b8877655e0f
   subpackages:
   - googleapis/rpc/status
 - name: google.golang.org/grpc
