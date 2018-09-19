@@ -518,7 +518,7 @@ func servePrometheusMetrics(configParams *config.Config) {
 			}
 			if !configParams.PrometheusProcessMetricsEnabled {
 				log.Info("Discarding process metrics")
-				prometheus.Unregister(prometheus.NewProcessCollector(os.Getpid(), ""))
+				prometheus.Unregister(prometheus.NewProcessCollector(prometheus.ProcessCollectorOpts{}))
 			}
 		}
 		http.Handle("/metrics", promhttp.Handler())
