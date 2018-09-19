@@ -103,7 +103,10 @@ func psContains(proc []string, procList []*process.Process) bool {
 	for _, p := range procList {
 		cmds, err := p.CmdlineSlice()
 		if err != nil {
-			panic(err)
+			// Failed to get CLI arguments for this process.
+			// Maybe it doesn't exist any more - move on to the next one.
+			log.WithError(err).Debug("Error getting CLI arguments")
+			continue
 		}
 		var match bool
 		for i, p := range proc {
