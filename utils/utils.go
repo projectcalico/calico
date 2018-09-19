@@ -23,6 +23,7 @@ import (
 	"os"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/containernetworking/cni/pkg/skel"
 	cnitypes "github.com/containernetworking/cni/pkg/types"
@@ -111,13 +112,27 @@ func CleanUpNamespace(args *skel.CmdArgs, logger *logrus.Entry) error {
 
 		if devErr == nil {
 			fmt.Fprintf(os.Stderr, "Calico CNI deleting device in netns %s\n", args.Netns)
-			err := ns.WithNetNSPath(args.Netns, func(_ ns.NetNS) error {
-				_, err := ip.DelLinkByNameAddr(args.IfName, netlink.FAMILY_V4)
-				return err
-			})
+			// Deleting the veth has been seen to hang on some kernel version. Timeout the command if it takes too long.
+			ch := make(chan error, 1)
 
-			if err != nil {
-				return err
+			go func() {
+				err := ns.WithNetNSPath(args.Netns, func(_ ns.NetNS) error {
+					_, err := ip.DelLinkByNameAddr(args.IfName, netlink.FAMILY_V4)
+					return err
+				})
+
+				ch <- err
+			}()
+
+			select {
+			case err := <-ch:
+				if err != nil {
+					return err
+				} else {
+					fmt.Fprintf(os.Stderr, "Calico CNI deleted device in netns %s\n", args.Netns)
+				}
+			case <-time.After(5 * time.Second):
+				return fmt.Errorf("Calico CNI timed out deleting device in netns %s", args.Netns)
 			}
 		} else {
 			logger.WithField("ifName", args.IfName).Info("veth does not exist, no need to clean up.")
