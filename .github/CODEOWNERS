@@ -13,4 +13,4 @@ CNAME                @projectcalico/core-maintainers
 manifests/           @projectcalico/core-maintainers
 
 # Just the Markdown in the root directory
-*.md                 @projectcalico/core-maintainers
+/*.md                @projectcalico/core-maintainers
