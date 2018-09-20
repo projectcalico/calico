@@ -246,12 +246,9 @@ On each compute node, perform the following steps:
     calico-gen-bird6-conf.sh <compute_node_ipv4> <compute_node_ipv6> <route_reflector_ipv6> <bgp_as_number>
     ```
 
-    You also need to configure your route reflector to allow connections from
-    the compute node as a route reflector client.  If you are using BIRD as a
-    route reflector, follow the instructions
-    [here]({{site.baseurl}}/{{page.version}}/usage/routereflector/bird-rr-config). If
-    you are using another route reflector, refer to the appropriate
-    instructions to configure a client connection.
+    You will also need to [configure your route reflector to allow
+    connections from the compute node as a route reflector
+    client]({{site.baseurl}}/{{page.version}}/usage/routereflector).
 
     If you *are* configuring a full BGP mesh you need to handle the BGP
     configuration appropriately on each compute host. The scripts above can be
