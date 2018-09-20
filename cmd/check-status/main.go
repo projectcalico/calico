@@ -15,9 +15,10 @@
 package main
 
 import (
-	"flag"
 	"fmt"
 	"os"
+
+	flag "github.com/spf13/pflag"
 
 	"github.com/projectcalico/kube-controllers/pkg/status"
 )
@@ -31,9 +32,9 @@ func main() {
 	// If `-v` is passed, display the version and exit.
 	// Use a new flag set so as not to conflict with existing libraries which use "flag"
 	flagSet := flag.NewFlagSet("check-status", flag.ExitOnError)
-	version := flagSet.Bool("v", false, "Display version")
-	file := flagSet.String("f", status.DefaultStatusFile, "File to read with status information")
-	checkReady := flagSet.Bool("r", false, "Check readiness")
+	version := flagSet.BoolP("version", "v", false, "Display version")
+	file := flagSet.StringP("file", "f", status.DefaultStatusFile, "File to read with status information")
+	checkReady := flagSet.BoolP("ready", "r", false, "Check readiness")
 	err := flagSet.Parse(os.Args[1:])
 	if err != nil {
 		fmt.Println("Failed to parse flags")

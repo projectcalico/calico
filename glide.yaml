@@ -46,3 +46,4 @@ import:
   - tools/clientcmd
   - util/workqueue
 - package: github.com/onsi/ginkgo
+- package: github.com/spf13/pflag
