@@ -31,12 +31,8 @@ toc:
   path: /usage/configuration/bgp
 - title: Changing IP Pools
   path: /usage/changing-ip-pools
-- title: Route Reflector
-  section:
-  - title: Configuring BIRD
-    path: /usage/routereflector/bird-rr-config
-  - title: The calico/routereflector container
-    path: /usage/routereflector/calico-routereflector
+- title: Route Reflectors
+  path: /usage/routereflector
 - title: Enabling IPv6 Support
   path: /usage/ipv6
 - title: Enabling IPVS in Kubernetes
