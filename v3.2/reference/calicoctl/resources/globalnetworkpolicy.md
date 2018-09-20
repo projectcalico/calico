@@ -110,6 +110,10 @@ for how `doNotTrack` and `preDNAT` and `applyOnForward` can be useful for host e
 
 {% include {{page.version}}/ports.md %}
 
+#### ServiceAccountMatch
+
+{% include {{page.version}}/serviceaccountmatch.md %}
+
 ### Application layer policy
 
 Application layer policy is an optional feature of {{site.prodname}} and
@@ -120,10 +124,6 @@ in order to use the following match criteria.
 >  * Only ingress policy is supported. Egress policy must not contain any application layer policy match clauses.
 >  * Rules must have the action `Allow` if they contain application layer policy match clauses.
 {: .alert .alert-info}
-
-#### ServiceAccountMatch
-
-{% include {{page.version}}/serviceaccountmatch.md %}
 
 #### HTTPMatch
 
