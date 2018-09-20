@@ -349,65 +349,65 @@ much smaller number of BGP connections.
     resource]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/node) for each
     of those nodes, to:
 
-	-  set the node's `spec.bgp.routeReflectorClusterID` to a non-empty cluster ID such as
+    -  set the node's `spec.bgp.routeReflectorClusterID` to a non-empty cluster ID such as
        `224.0.0.1`
 
-	-  add a label indicating that the node is a route reflector.
+    -  add a label indicating that the node is a route reflector.
 
-	For example:
+    For example:
 
-	```
-	calicoctl get node <node_name> -o yaml > node.yml
+    ```
+    calicoctl get node <node_name> -o yaml > node.yml
 
-	# Edit node.yml so that it includes:
-	metadata:
-	  labels:
-	    i-am-a-route-reflector: true
-	spec:
-	  bgp:
-	    routeReflectorClusterID: 224.0.0.1
+    # Edit node.yml so that it includes:
+    metadata:
+      labels:
+        i-am-a-route-reflector: true
+    spec:
+      bgp:
+        routeReflectorClusterID: 224.0.0.1
 
     calicoctl apply -f node.yml
-	```
+    ```
 
-	> **Note**: For a simple deployment, all the route reflector nodes should have the same
-	> cluster ID.
-	{: .alert .alert-info}
+    > **Note**: For a simple deployment, all the route reflector nodes should have the same
+    > cluster ID.
+    {: .alert .alert-info}
 
 1.  Configure a [BGPPeer
     resource]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/bgppeer) to tell
     the other {{site.prodname}} nodes to peer with the route reflector nodes:
 
-	```
-	calicoctl apply -f - <<EOF
-	kind: BGPPeer
-	apiVersion: projectcalico.org/v3
-	metadata:
-	  name: peer-to-rrs
-	spec:
-	  nodeSelector: !has(i-am-a-route-reflector)
-	  peerSelector: has(i-am-a-route-reflector)
+    ```
+    calicoctl apply -f - <<EOF
+    kind: BGPPeer
+    apiVersion: projectcalico.org/v3
+    metadata:
+      name: peer-to-rrs
+    spec:
+      nodeSelector: !has(i-am-a-route-reflector)
+      peerSelector: has(i-am-a-route-reflector)
     EOF
-	```
+    ```
 
 1.  Configure a [BGPPeer
     resource]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/bgppeer) to tell
     the route reflector nodes to peer with each other:
 
-	```
-	calicoctl apply -f - <<EOF
-	kind: BGPPeer
-	apiVersion: projectcalico.org/v3
-	metadata:
-	  name: rr-mesh
-	spec:
-	  nodeSelector: has(i-am-a-route-reflector)
-	  peerSelector: has(i-am-a-route-reflector)
+    ```
+    calicoctl apply -f - <<EOF
+    kind: BGPPeer
+    apiVersion: projectcalico.org/v3
+    metadata:
+      name: rr-mesh
+    spec:
+      nodeSelector: has(i-am-a-route-reflector)
+      peerSelector: has(i-am-a-route-reflector)
     EOF
-	```
+    ```
 
-	> **Note**: This full mesh between the route reflectors allows this example to be complete
-	> on its own, in the sense of propagating all workload routes to all nodes.  Alternatively
-	> the route reflectors might not peer with each other directly, but via some upstream
-	> devices such as Top of Rack routers.
-	{: .alert .alert-info}
+    > **Note**: This full mesh between the route reflectors allows this example to be complete
+    > on its own, in the sense of propagating all workload routes to all nodes.  Alternatively
+    > the route reflectors might not peer with each other directly, but via some upstream
+    > devices such as Top of Rack routers.
+    {: .alert .alert-info}
