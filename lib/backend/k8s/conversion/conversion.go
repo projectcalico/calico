@@ -233,7 +233,7 @@ func (c Converter) PodToWorkloadEndpoint(pod *kapiv1.Pod) (*model.KVPair, error)
 
 	// Pull out floating IP annotation
 	var floatingIPs []apiv3.IPNAT
-	if annotation, ok := pod.Annotations["cni.projectcalico.org/floatingIPs"]; ok {
+	if annotation, ok := pod.Annotations["cni.projectcalico.org/floatingIPs"]; ok && len(ipNets) > 0 {
 
 		// Parse Annotation data
 		var ips []string
