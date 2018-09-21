@@ -23,7 +23,7 @@ ARG ARCH=amd64
 ENV NODE_VERSION=$ver
 
 # Install remaining runtime deps required for felix from the global repository
-RUN apk add --no-cache ip6tables ipset iputils iproute2 conntrack-tools runit
+RUN apk add --no-cache ip6tables ipset iputils iproute2 conntrack-tools runit ca-certificates
 
 # Copy our bird binaries in
 COPY --from=bird /bird* /bin/

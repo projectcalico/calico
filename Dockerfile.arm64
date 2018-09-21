@@ -33,7 +33,7 @@ ENV NODE_VERSION=$ver
 COPY --from=qemu /usr/bin/qemu-aarch64-static /usr/bin/
 
 # Install remaining runtime deps required for felix from the global repository
-RUN apk add --no-cache ip6tables ipset iputils iproute2 conntrack-tools runit
+RUN apk add --no-cache ip6tables ipset iputils iproute2 conntrack-tools runit ca-certificates
 
 # Copy our bird binaries in
 COPY --from=bird /bird* /bin/
