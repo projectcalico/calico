@@ -191,7 +191,20 @@ test-kdd: bin/confd bin/kubectl bin/bird bin/bird6 bin/calico-node bin/calicoctl
 		-e LOCAL_USER_ID=0 \
 		-e FELIX_TYPHAADDR=127.0.0.1:5473 \
 		-e FELIX_TYPHAREADTIMEOUT=50 \
-		$(CALICO_BUILD) /tests/test_suite_kdd.sh
+		$(CALICO_BUILD) /tests/test_suite_kdd.sh || \
+	{ \
+	    echo; \
+	    echo === confd single-shot log:; \
+	    cat tests/logs/kdd/logss || true; \
+	    echo; \
+	    echo === confd daemon log:; \
+	    cat tests/logs/kdd/logd1 || true; \
+	    echo; \
+	    echo === Typha log:; \
+	    docker logs confd-typha 2>&1; \
+	    echo; \
+            false; \
+        }
 	docker rm -f confd-typha
 
 .PHONY: test-etcd
