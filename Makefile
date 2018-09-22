@@ -170,7 +170,6 @@ vendor: glide.lock
 		-w /go/src/$(PACKAGE_NAME) \
 		$(CALICO_BUILD) glide install -strip-vendor
 
-
 ## Default the repos and versions but allow them to be overridden
 LIBCALICO_REPO?=github.com/projectcalico/libcalico-go
 LIBCALICO_VERSION?=$(shell git ls-remote git@github.com:projectcalico/libcalico-go master 2>/dev/null | cut -f 1)
@@ -515,7 +514,6 @@ release-build: release-prereqs clean
 ifneq ($(VERSION), $(GIT_VERSION))
 	$(error Attempt to build $(VERSION) from $(GIT_VERSION))
 endif
-
 	$(MAKE) image-all
 	$(MAKE) tag-images-all RELEASE=true IMAGETAG=$(VERSION)
 	# Generate the `latest` images.
@@ -539,7 +537,7 @@ release-publish: release-prereqs
 	git push origin $(VERSION)
 
 	# Push images.
-	$(MAKE) push-all RELEASE=true IMAGETAG=$(VERSION)
+	$(MAKE) push-all push-manifests push-non-manifests RELEASE=true IMAGETAG=$(VERSION)
 
 	@echo "Finalize the GitHub release based on the pushed tag."
 	@echo ""
@@ -554,7 +552,7 @@ release-publish: release-prereqs
 # run this target for alpha / beta / release candidate builds, or patches to earlier Calico versions.
 ## Pushes `latest` release images. WARNING: Only run this for latest stable releases.
 release-publish-latest: release-verify
-	$(MAKE) push-all RELEASE=true IMAGETAG=latest
+	$(MAKE) push-all push-manifests push-non-manifests RELEASE=true IMAGETAG=latest
 
 .PHONY: node-test-at
 # Run docker-image acceptance tests
@@ -591,7 +589,6 @@ help: # Some kind of magic from https://gist.github.com/rcmachado/af3db315e31383
 	{ helpMsg = $$0 }'                                                  \
 	width=20                                                            \
 	$(MAKEFILE_LIST)
-
 
 $(info "Build dependency versions")
 $(info $(shell printf "%-21s = %-10s\n" "BIRD_VER" $(BIRD_VER)))
