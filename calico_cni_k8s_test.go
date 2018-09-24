@@ -103,6 +103,15 @@ var _ = Describe("CalicoCni", func() {
 					panic(err)
 				}
 
+				// Create the Namespace before the tests
+				_, err = clientset.CoreV1().Namespaces().Create(&v1.Namespace{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:        "test",
+						Annotations: map[string]string{},
+					},
+				})
+				Expect(err).NotTo(HaveOccurred())
+
 				name := fmt.Sprintf("run%d", rand.Uint32())
 
 				// Create a K8s pod w/o any special params
@@ -399,6 +408,162 @@ var _ = Describe("CalicoCni", func() {
 					Eventually(session).Should(gexec.Exit(0))
 
 					_, err = testutils.DeleteContainer(netconf, contNs.Path(), name, testutils.K8S_TEST_NS)
+					Expect(err).ShouldNot(HaveOccurred())
+				})
+			})
+
+			Context("using calico-ipam with a Namespace annotation only", func() {
+				It("successfully assigns an IP address from the annotated ipPool in Namespace", func() {
+					netconfCalicoIPAM := fmt.Sprintf(`
+				{
+			      "cniVersion": "%s",
+				  "name": "netnsannot1",
+				  "type": "calico",
+				  "etcd_endpoints": "http://%s:2379",
+			          "nodename_file_optional": true,
+				  "datastore_type": "%s",
+			 	  "ipam": {
+			    	 "type": "calico-ipam"
+			         },
+					"kubernetes": {
+					  "k8s_api_root": "http://127.0.0.1:8080"
+					 },
+					"policy": {"type": "k8s"},
+					"log_level":"info"
+				}`, cniVersion, os.Getenv("ETCD_IP"), os.Getenv("DATASTORE_TYPE"))
+
+					// Create a new ipPool.
+					ipPool := "50.60.0.0/16"
+
+					testutils.MustCreateNewIPPool(calicoClient, ipPool, false, false, true)
+					_, ipPoolCIDR, err := net.ParseCIDR(ipPool)
+					Expect(err).NotTo(HaveOccurred())
+
+					config, err := clientcmd.DefaultClientConfig.ClientConfig()
+					Expect(err).NotTo(HaveOccurred())
+
+					clientset, err := kubernetes.NewForConfig(config)
+					Expect(err).NotTo(HaveOccurred())
+					// Create the Namespace before the tests
+					testNS := fmt.Sprintf("run%d", rand.Uint32())
+					_, err = clientset.CoreV1().Namespaces().Create(&v1.Namespace{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: testNS,
+							Annotations: map[string]string{
+								"cni.projectcalico.org/ipv4pools": "[\"50.60.0.0/16\"]",
+							},
+						},
+					})
+					Expect(err).NotTo(HaveOccurred())
+
+					// Now create a K8s pod passing in an IP pool.
+					name := fmt.Sprintf("run%d", rand.Uint32())
+					pod, err := clientset.CoreV1().Pods(testNS).Create(&v1.Pod{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:        name,
+							Annotations: map[string]string{},
+						},
+						Spec: v1.PodSpec{
+							Containers: []v1.Container{{
+								Name:  name,
+								Image: "ignore",
+							}},
+							NodeName: hostname,
+						},
+					})
+					Expect(err).NotTo(HaveOccurred())
+
+					log.Infof("Created POD object: %v", pod)
+
+					_, _, _, contAddresses, _, contNs, err := testutils.CreateContainer(netconfCalicoIPAM, name, testNS, "")
+					Expect(err).NotTo(HaveOccurred())
+
+					podIP := contAddresses[0].IP
+					log.Infof("All container IPs: %v", contAddresses)
+					log.Infof("Container got IP address: %s", podIP)
+					Expect(ipPoolCIDR.Contains(podIP)).To(BeTrue())
+
+					// Delete the container.
+					_, err = testutils.DeleteContainer(netconfCalicoIPAM, contNs.Path(), name, testNS)
+					Expect(err).ShouldNot(HaveOccurred())
+				})
+			})
+
+			Context("using calico-ipam with Namespace annotation and POD annotation", func() {
+				It("successfully assigns an IP address from the annotated ipPool in POD", func() {
+					netconfCalicoIPAM := fmt.Sprintf(`
+				{
+			      "cniVersion": "%s",
+				  "name": "netnsannot2",
+				  "type": "calico",
+				  "etcd_endpoints": "http://%s:2379",
+			          "nodename_file_optional": true,
+				  "datastore_type": "%s",
+			 	  "ipam": {
+			    	 "type": "calico-ipam"
+			         },
+					"kubernetes": {
+					  "k8s_api_root": "http://127.0.0.1:8080"
+					 },
+					"policy": {"type": "k8s"},
+					"log_level":"info"
+				}`, cniVersion, os.Getenv("ETCD_IP"), os.Getenv("DATASTORE_TYPE"))
+
+					// Create a new ipPool.
+					ipPool := "50.70.0.0/16"
+
+					testutils.MustCreateNewIPPool(calicoClient, ipPool, false, false, true)
+					_, ipPoolCIDR, err := net.ParseCIDR(ipPool)
+					Expect(err).NotTo(HaveOccurred())
+
+					config, err := clientcmd.DefaultClientConfig.ClientConfig()
+					Expect(err).NotTo(HaveOccurred())
+
+					clientset, err := kubernetes.NewForConfig(config)
+					Expect(err).NotTo(HaveOccurred())
+					// Create the Namespace before the tests
+					testNS := fmt.Sprintf("run%d", rand.Uint32())
+					_, err = clientset.CoreV1().Namespaces().Create(&v1.Namespace{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: testNS,
+							Annotations: map[string]string{
+								"cni.projectcalico.org/ipv4pools": "[\"50.55.0.0/16\"]",
+							},
+						},
+					})
+					Expect(err).NotTo(HaveOccurred())
+
+					// Now create a K8s pod passing in an IP pool.
+					name := fmt.Sprintf("run%d", rand.Uint32())
+					pod, err := clientset.CoreV1().Pods(testNS).Create(&v1.Pod{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: name,
+							Annotations: map[string]string{
+								"cni.projectcalico.org/ipv4pools": "[\"50.70.0.0/16\"]",
+							},
+						},
+						Spec: v1.PodSpec{
+							Containers: []v1.Container{{
+								Name:  name,
+								Image: "ignore",
+							}},
+							NodeName: hostname,
+						},
+					})
+					Expect(err).NotTo(HaveOccurred())
+
+					log.Infof("Created POD object: %v", pod)
+
+					_, _, _, contAddresses, _, contNs, err := testutils.CreateContainer(netconfCalicoIPAM, name, testNS, "")
+					Expect(err).NotTo(HaveOccurred())
+
+					podIP := contAddresses[0].IP
+					log.Infof("All container IPs: %v", contAddresses)
+					log.Infof("Container got IP address: %s", podIP)
+					Expect(ipPoolCIDR.Contains(podIP)).To(BeTrue())
+
+					// Delete the container.
+					_, err = testutils.DeleteContainer(netconfCalicoIPAM, contNs.Path(), name, testNS)
 					Expect(err).ShouldNot(HaveOccurred())
 				})
 			})
