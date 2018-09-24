@@ -12,7 +12,7 @@ import:
 - package: github.com/kardianos/osext
 - package: github.com/mipearson/rfw
 - package: github.com/projectcalico/libcalico-go
-  version: ed90b4008e2001e23d5f563b8fed7e39db0e1c2b
+  version: bb940fa9d94126edc25a81ee09c8e59f696dc90a
   subpackages:
   - lib/apiconfig
   - lib/backend/api
