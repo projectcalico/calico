@@ -105,7 +105,6 @@ DOCKER_CONFIG ?= $(HOME)/.docker/config.json
 EXCLUDEARCH ?= s390x
 VALIDARCHES = $(filter-out $(EXCLUDEARCH),$(ARCHES))
 
-
 ETCD_VER=v3.3.7
 ETCD_CONTAINER ?= quay.io/coreos/etcd:$(ETCD_VER)-$(BUILDARCH)
 # If building on amd64 omit the arch in the container name.
@@ -226,7 +225,6 @@ ifeq ($(ARCH),amd64)
 else
 	$(NOECHO) $(NOOP)
 endif
-
 
 ## tag images of one arch
 tag-images: imagetag $(addprefix sub-single-tag-images-arch-,$(call escapefs,$(PUSH_IMAGES))) $(addprefix sub-single-tag-images-non-manifest-,$(call escapefs,$(PUSH_NONMANIFEST_IMAGES)))
@@ -398,7 +396,6 @@ endif
 	$(MAKE) tag-images-all push-all push-manifests push-non-manifests  IMAGETAG=${BRANCH_NAME} EXCLUDEARCH="$(EXCLUDEARCH)"
 	$(MAKE) tag-images-all push-all push-manifests push-non-manifests  IMAGETAG=$(shell git describe --tags --dirty --always --long) EXCLUDEARCH="$(EXCLUDEARCH)"
 
-
 ###############################################################################
 # Release
 ###############################################################################
@@ -432,8 +429,8 @@ ifneq ($(VERSION), $(GIT_VERSION))
 	$(error Attempt to build $(VERSION) from $(GIT_VERSION))
 endif
 	$(MAKE) image-all
-	$(MAKE) tag-images-all IMAGETAG=$(VERSION)
-	$(MAKE) tag-images-all IMAGETAG=latest
+	$(MAKE) tag-images-all RELEASE=true IMAGETAG=$(VERSION)
+	$(MAKE) tag-images-all RELEASE=true IMAGETAG=latest
 
 	# Copy artifacts for upload to GitHub.
 	mkdir -p bin/github
@@ -462,7 +459,7 @@ release-publish: release-prereqs
 	git push origin $(VERSION)
 
 	# Push images.
-	$(MAKE) push-all RELEASE=true IMAGETAG=$(VERSION)
+	$(MAKE) push-all push-manifests push-non-manifests RELEASE=true IMAGETAG=$(VERSION)
 
 	@echo "Finalize the GitHub release based on the pushed tag."
 	@echo "Attach all binaries in bin/github to the release."
@@ -482,7 +479,7 @@ release-publish-latest: release-prereqs
 	if ! docker run $(BUILD_IMAGE):latest-$(ARCH) calico -v | grep '^$(VERSION)$$'; then echo "Reported version:" `docker run $(BUILD_IMAGE):latest-$(ARCH) calico -v` "\nExpected version: $(VERSION)"; false; else echo "\nVersion check passed\n"; fi
 	if ! docker run quay.io/$(BUILD_IMAGE):latest-$(ARCH) calico -v | grep '^$(VERSION)$$'; then echo "Reported version:" `docker run quay.io/$(BUILD_IMAGE):latest-$(ARCH) calico -v` "\nExpected version: $(VERSION)"; false; else echo "\nVersion check passed\n"; fi
 
-	$(MAKE) push RELEASE=true IMAGETAG=latest
+	$(MAKE) push-all push-manifests push-non-manifests RELEASE=true IMAGETAG=latest
 
 # release-prereqs checks that the environment is configured properly to create a release.
 release-prereqs:
