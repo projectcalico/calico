@@ -1,5 +1,5 @@
-hash: a208c96084f08e9830111d57e73c6f813baed25d7e82b14f189bbcbff60897d1
-updated: 2018-09-19T09:53:24.402614955Z
+hash: 96d319d8b71edb85c5fb49ff838ea93289a4f47d2c4b33cb18470cc99f0a8157
+updated: 2018-09-24T06:16:01.613338506Z
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -208,7 +208,7 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: ed90b4008e2001e23d5f563b8fed7e39db0e1c2b
+  version: bb940fa9d94126edc25a81ee09c8e59f696dc90a
   subpackages:
   - lib/apiconfig
   - lib/apis/v1
@@ -250,13 +250,13 @@ imports:
   subpackages:
   - binder
 - name: github.com/projectcalico/typha
-  version: c09acf708fb11ce58b9da2bb69c0d36db96381ca
+  version: 4b66bb620aba204ac6b5fd14159e267364691350
   subpackages:
   - pkg/syncclient
   - pkg/syncproto
   - pkg/tlsutils
 - name: github.com/prometheus/client_golang
-  version: e637cec7d9c8990247098639ebc6d43dd34ddd49
+  version: 73edb9af667d9467d99b2001722770062a0086c3
   subpackages:
   - prometheus
   - prometheus/internal
