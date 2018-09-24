@@ -1,4 +1,39 @@
 v3.2:
+- title: v3.2.2
+  components:
+    calico/node:
+      version: v3.2.2
+      url: https://github.com/projectcalico/node/releases/tag/v3.2.2
+    calicoctl:
+      version: v3.2.2
+      url: https://github.com/projectcalico/calicoctl/releases/tag/v3.2.2
+      download_url: https://github.com/projectcalico/calicoctl/releases/download/v3.2.2/calicoctl
+    calico/cni:
+      version: v3.2.2
+      url: https://github.com/projectcalico/cni-plugin/releases/tag/v3.2.2
+      download_calico_url: https://github.com/projectcalico/cni-plugin/releases/download/v3.2.2/calico
+      download_calico_ipam_url: https://github.com/projectcalico/cni-plugin/releases/download/v3.2.2/calico-ipam
+    calico/kube-controllers:
+      version: v3.2.2
+      url: https://github.com/projectcalico/k8s-policy/releases/tag/v3.2.2
+    networking-calico:
+      version: 3.2.0
+      url: http://git.openstack.org/cgit/openstack/networking-calico/commit/?h=3.2.0
+    typha:
+      version: v3.2.2
+      url: https://github.com/projectcalico/typha/releases/tag/v3.2.2
+    flannel:
+      version: v0.9.1
+    calico/routereflector:
+      version: v0.6.3
+      url: https://github.com/projectcalico/routereflector/releases/tag/v0.6.3
+    calico/dikastes:
+      version: v3.2.2
+      url: https://github.com/projectcalico/app-policy/releases/tag/v3.2.2
+    flexvol:
+      version: v3.2.2
+      url: https://github.com/projectcalico/pod2daemon/releases/tag/v3.2.2
+
 - title: v3.2.1
   components:
     calico/node:
