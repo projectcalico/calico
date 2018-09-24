@@ -7,7 +7,6 @@ all: build
 ## Run the tests for the current platform/architecture
 test: ut st
 
-
 ###############################################################################
 # Both native and cross architecture builds are supported.
 # The target architecture is select by setting the ARCH variable.
@@ -55,12 +54,10 @@ comma := ,
 prefix_linux = $(addprefix linux/,$(strip $1))
 join_platforms = $(subst $(space),$(comma),$(call prefix_linux,$(strip $1)))
 
-
 # list of arches *not* to build when doing *-all
 #    until s390x works correctly
 EXCLUDEARCH ?= s390x
 VALIDARCHES = $(filter-out $(EXCLUDEARCH),$(ARCHES))
-
 
 # Determine which OS.
 OS := $(shell uname -s | tr A-Z a-z)
@@ -85,8 +82,6 @@ PUSH_NONMANIFEST_IMAGES=$(filter-out $(PUSH_MANIFEST_IMAGES),$(PUSH_IMAGES))
 
 # location of docker credentials to push manifests
 DOCKER_CONFIG ?= $(HOME)/.docker/config.json
-
-
 
 CALICOCTL_VERSION?=$(shell git describe --tags --dirty --always)
 CALICOCTL_DIR=calicoctl
@@ -258,7 +253,6 @@ else
 	$(NOECHO) $(NOOP)
 endif
 
-
 ## tag images of one arch
 tag-images: imagetag $(addprefix sub-single-tag-images-arch-,$(call escapefs,$(PUSH_IMAGES))) $(addprefix sub-single-tag-images-non-manifest-,$(call escapefs,$(PUSH_NONMANIFEST_IMAGES)))
 
@@ -272,7 +266,6 @@ ifeq ($(ARCH),amd64)
 else
 	$(NOECHO) $(NOOP)
 endif
-
 
 ## tag images of all archs
 tag-images-all: imagetag $(addprefix sub-tag-images-,$(VALIDARCHES))
@@ -449,7 +442,7 @@ release-publish: release-prereqs
 	git push origin $(VERSION)
 
 	# Push images.
-	$(MAKE) push-all IMAGETAG=$(VERSION)
+	$(MAKE) push-all push-manifests push-non-manifests IMAGETAG=$(VERSION)
 
 	@echo "Finalize the GitHub release based on the pushed tag."
 	@echo ""
@@ -482,7 +475,7 @@ release-publish-latest: release-prereqs
 	  echo "Version check passed\n"; \
 	fi
 
-	$(MAKE) push-all IMAGETAG=latest
+	$(MAKE) push-all push-manifests push-non-manifests IMAGETAG=latest
 
 # release-prereqs checks that the environment is configured properly to create a release.
 release-prereqs:
