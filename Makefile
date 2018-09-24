@@ -112,7 +112,6 @@ ifneq ($(BUILDARCH),$(ARCH))
 	docker run --rm --privileged multiarch/qemu-user-static:register || true
 endif
 
-
 # list of arches *not* to build when doing *-all
 #    until s390x works correctly
 EXCLUDEARCH ?= s390x
@@ -496,7 +495,6 @@ fix go-fmt goimports:
       grep -v -e "^\\.$$" | \
       xargs goimports -w -local github.com/projectcalico/ *.go'
 
-
 .PHONY: check-typha-pins
 check-typha-pins: vendor/.up-to-date
 	@echo "Checking Typha's libcalico-go pin matches ours (so that any datamodel"
@@ -691,7 +689,6 @@ endif
 	$(MAKE) tag-images-all push-all push-manifests push-non-manifests IMAGETAG=$(BRANCH_NAME) EXCLUDEARCH="$(EXCLUDEARCH)"
 	$(MAKE) tag-images-all push-all push-manifests push-non-manifests IMAGETAG=$(shell git describe --tags --dirty --always --long) EXCLUDEARCH="$(EXCLUDEARCH)"
 
-
 ###############################################################################
 # Release
 ###############################################################################
@@ -743,9 +740,6 @@ release-verify: release-prereqs
 	    result=false; \
 	  fi \
 	done; \
-
-	# Run FV tests against the produced image. We only run the subset tagged as release tests.
-	$(MAKE) BUILD_IMAGE=$(BUILD_IMAGE):$(VERSION) GINKGO_FOCUS="Release" fv
 
 ## Generates release notes based on commits in this version.
 release-notes: release-prereqs
