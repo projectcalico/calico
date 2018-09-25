@@ -404,15 +404,6 @@ func (c ipamClient) autoAssign(ctx context.Context, num int, handleID *string, a
 	rem := num - len(ips)
 	if config.StrictAffinity != true && rem != 0 {
 		logCtx.Infof("Attempting to assign %d more addresses from non-affine blocks", rem)
-		// Figure out the pools to allocate from.
-		if len(pools) == 0 {
-			// Default to all configured pools.
-			pools, err = c.pools.GetEnabledPools(version.Number)
-			if err != nil {
-				logCtx.Errorf("Error reading configured pools: %v", err)
-				return ips, nil
-			}
-		}
 
 		// Iterate over pools and assign addresses until we either run out of pools,
 		// or the request has been satisfied.
@@ -444,6 +435,9 @@ func (c ipamClient) autoAssign(ctx context.Context, num int, handleID *string, a
 							continue
 						}
 						logCtx.WithError(err).Warningf("Failed to assign IPs from non-affine block in pool %s", p.String())
+						break
+					}
+					if len(newIPs) == 0 {
 						break
 					}
 					logCtx.Infof("Successfully assigned IPs from non-affine block %s", blockCIDR.String())

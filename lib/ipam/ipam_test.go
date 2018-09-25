@@ -275,6 +275,35 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreEtcdV3, 
 			Expect(outErr).NotTo(HaveOccurred())
 			Expect(block2.IPNet.Contains(v4[0].IP)).To(BeTrue())
 		})
+
+		It("should have strict IP pool affinity", func() {
+			// Assign the rest of the addresses in pool2.
+			// A /24 has 256 addresses. We've assigned 2 already, so assign 254 more.
+			args := AutoAssignArgs{
+				Num4:      254,
+				Num6:      0,
+				Hostname:  host,
+				IPv4Pools: []cnet.IPNet{pool2},
+			}
+
+			By("allocating the rest of the IPs in the pool", func() {
+				v4, _, outErr := ic.AutoAssign(context.Background(), args)
+				Expect(outErr).NotTo(HaveOccurred())
+				Expect(len(v4)).To(Equal(254))
+
+				// Expect all the IPs to be in pool2.
+				for _, a := range v4 {
+					Expect(pool2.IPNet.Contains(a.IP)).To(BeTrue(), fmt.Sprintf("%s not in pool %s", a.IP, pool2))
+				}
+			})
+
+			By("attempting to allocate an IP when there are no more left in the pool", func() {
+				args.Num4 = 1
+				v4, _, outErr := ic.AutoAssign(context.Background(), args)
+				Expect(outErr).NotTo(HaveOccurred())
+				Expect(len(v4)).To(Equal(0))
+			})
+		})
 	})
 
 	Describe("IPAM AutoAssign from different pools - multi", func() {
