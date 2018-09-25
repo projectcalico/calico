@@ -472,6 +472,72 @@ var _ = Describe("CalicoCni", func() {
 					_, err = testutils.DeleteContainer(netconfCalicoIPAM, contNs.Path(), name, testNS)
 					Expect(err).ShouldNot(HaveOccurred())
 				})
+
+				It("fails to assign from an IP pool that doesn't exist", func() {
+					netconfCalicoIPAM := types.NetConf{
+						CNIVersion:    cniVersion,
+						Name:          "netnsannot1",
+						Type:          "calico",
+						EtcdEndpoints: fmt.Sprintf("http://%s:2379", os.Getenv("ETCD_IP")),
+						DatastoreType: os.Getenv("DATASTORE_TYPE"),
+						IPAM: {
+							Type: "calico-ipam",
+						},
+						Kubernetes:           types.Kubernetes{K8sAPIRoot: "http://127.0.0.1:8080"},
+						Policy:               types.Policy{Type: "k8s"},
+						NodenameFileOptional: true,
+						LogLevel:             "info",
+					}
+
+					config, err := clientcmd.DefaultClientConfig.ClientConfig()
+					Expect(err).NotTo(HaveOccurred())
+
+					clientset, err := kubernetes.NewForConfig(config)
+					Expect(err).NotTo(HaveOccurred())
+
+					// Create the Namespace before the tests
+					testNS := fmt.Sprintf("run%d", rand.Uint32())
+					_, err = clientset.CoreV1().Namespaces().Create(&v1.Namespace{
+						ObjectMeta: metav1.ObjectMeta{
+							Name: testNS,
+							Annotations: map[string]string{
+								"cni.projectcalico.org/ipv4pools": "[\"100.0.0.0/16\"]",
+							},
+						},
+					})
+					Expect(err).NotTo(HaveOccurred())
+
+					// Now create a K8s pod.
+					name := fmt.Sprintf("run%d", rand.Uint32())
+					pod, err := clientset.CoreV1().Pods(testNS).Create(&v1.Pod{
+						ObjectMeta: metav1.ObjectMeta{
+							Name:        name,
+							Annotations: map[string]string{},
+						},
+						Spec: v1.PodSpec{
+							Containers: []v1.Container{{
+								Name:  name,
+								Image: "ignore",
+							}},
+							NodeName: hostname,
+						},
+					})
+					Expect(err).NotTo(HaveOccurred())
+					log.Infof("Created POD object: %v", pod)
+
+					_, _, _, _, _, contNs, err := testutils.CreateContainer(netconfCalicoIPAM, name, testNS, "")
+					Expect(err).NotTo(HaveOccurred())
+
+					// podIP := contAddresses[0].IP
+					// log.Infof("All container IPs: %v", contAddresses)
+					// log.Infof("Container got IP address: %s", podIP)
+					// Expect(ipPoolCIDR.Contains(podIP)).To(BeTrue())
+
+					// Delete the container.
+					_, err = testutils.DeleteContainer(netconfCalicoIPAM, contNs.Path(), name, testNS)
+					Expect(err).ShouldNot(HaveOccurred())
+				})
+
 			})
 
 			Context("using calico-ipam with Namespace annotation and POD annotation", func() {
