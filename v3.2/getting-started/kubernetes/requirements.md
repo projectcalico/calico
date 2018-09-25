@@ -54,6 +54,6 @@ for information on modifying the defaults.
 
 #### Mutating webhooks
 
-Application Layer Policy requires [Mutating Webhooks](https://kubernetes.io/docs/admin/admission-controllers/#mutatingadmissionwebhook-beta-in-19) to be enabled.
+Application Layer Policy requires the [MutatingAdmissionWebhook](https://kubernetes.io/docs/admin/admission-controllers/#mutatingadmissionwebhook) to be enabled.
 
 {% include {{page.version}}/reqs-kernel.md %}
