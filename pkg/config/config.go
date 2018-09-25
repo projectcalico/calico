@@ -195,7 +195,7 @@ func readTyphaConfig(typhaConfig *TyphaConfig) {
 		nameUpper := strings.ToUpper(field.Name)
 		for _, prefix := range supportedPrefixes {
 			varName := prefix + "TYPHA" + nameUpper
-			if value := os.Getenv(varName); value != "" {
+			if value := os.Getenv(varName); value != "" && value != "none" {
 				log.Infof("Found %v=%v", varName, value)
 				if field.Type.Name() == "Duration" {
 					seconds, err := strconv.ParseFloat(value, 64)
