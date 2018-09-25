@@ -18,8 +18,8 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/gbytes"
-	"github.com/onsi/gomega/gexec"
 	"github.com/projectcalico/cni-plugin/testutils"
+	"github.com/projectcalico/cni-plugin/types"
 	"github.com/projectcalico/cni-plugin/utils"
 	api "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	k8sconversion "github.com/projectcalico/libcalico-go/lib/backend/k8s/conversion"
@@ -129,15 +129,8 @@ var _ = Describe("CalicoCni", func() {
 				if err != nil {
 					panic(err)
 				}
-				containerID, session, contVeth, contAddresses, contRoutes, contNs, err := testutils.CreateContainer(netconf, name, testutils.K8S_TEST_NS, "")
-
+				containerID, result, contVeth, contAddresses, contRoutes, contNs, err := testutils.CreateContainer(netconf, name, testutils.K8S_TEST_NS, "")
 				Expect(err).ShouldNot(HaveOccurred())
-				Eventually(session).Should(gexec.Exit())
-
-				result, err := testutils.GetResultForCurrent(session, cniVersion)
-				if err != nil {
-					log.Fatalf("Error getting result from the session: %v\n", err)
-				}
 
 				mac := contVeth.Attrs().HardwareAddr
 
@@ -292,15 +285,8 @@ var _ = Describe("CalicoCni", func() {
 					if err != nil {
 						panic(err)
 					}
-					containerID, session, contVeth, _, _, contNs, err := testutils.CreateContainer(netconf, name, testutils.K8S_TEST_NS, "")
-
+					containerID, result, contVeth, _, _, contNs, err := testutils.CreateContainer(netconf, name, testutils.K8S_TEST_NS, "")
 					Expect(err).ShouldNot(HaveOccurred())
-					Eventually(session).Should(gexec.Exit())
-
-					result, err := testutils.GetResultForCurrent(session, cniVersion)
-					if err != nil {
-						log.Fatalf("Error getting result from the session: %v\n", err)
-					}
 
 					mac := contVeth.Attrs().HardwareAddr
 
@@ -403,9 +389,8 @@ var _ = Describe("CalicoCni", func() {
 					if err := testutils.CreateHostVeth("", name, testutils.K8S_TEST_NS, hostname); err != nil {
 						panic(err)
 					}
-					_, session, _, _, _, contNs, err := testutils.CreateContainer(netconf, name, testutils.K8S_TEST_NS, "")
+					_, _, _, _, _, contNs, err := testutils.CreateContainer(netconf, name, testutils.K8S_TEST_NS, "")
 					Expect(err).ShouldNot(HaveOccurred())
-					Eventually(session).Should(gexec.Exit(0))
 
 					_, err = testutils.DeleteContainer(netconf, contNs.Path(), name, testutils.K8S_TEST_NS)
 					Expect(err).ShouldNot(HaveOccurred())
@@ -444,6 +429,7 @@ var _ = Describe("CalicoCni", func() {
 
 					clientset, err := kubernetes.NewForConfig(config)
 					Expect(err).NotTo(HaveOccurred())
+
 					// Create the Namespace before the tests
 					testNS := fmt.Sprintf("run%d", rand.Uint32())
 					_, err = clientset.CoreV1().Namespaces().Create(&v1.Namespace{
@@ -456,7 +442,7 @@ var _ = Describe("CalicoCni", func() {
 					})
 					Expect(err).NotTo(HaveOccurred())
 
-					// Now create a K8s pod passing in an IP pool.
+					// Now create a K8s pod.
 					name := fmt.Sprintf("run%d", rand.Uint32())
 					pod, err := clientset.CoreV1().Pods(testNS).Create(&v1.Pod{
 						ObjectMeta: metav1.ObjectMeta{
@@ -472,7 +458,6 @@ var _ = Describe("CalicoCni", func() {
 						},
 					})
 					Expect(err).NotTo(HaveOccurred())
-
 					log.Infof("Created POD object: %v", pod)
 
 					_, _, _, contAddresses, _, contNs, err := testutils.CreateContainer(netconfCalicoIPAM, name, testNS, "")
@@ -1451,14 +1436,8 @@ var _ = Describe("CalicoCni", func() {
 					log.Infof("Created POD object: %v", pod)
 
 					// ADD the container with passing a CNI_ContainerID "X".
-					_, session, _, _, _, contNs, err := testutils.CreateContainerWithId(netconf, name, testutils.K8S_TEST_NS, "", cniContainerIDX)
+					_, result, _, _, _, contNs, err := testutils.CreateContainerWithId(netconf, name, testutils.K8S_TEST_NS, "", cniContainerIDX)
 					Expect(err).ShouldNot(HaveOccurred())
-					Eventually(session).Should(gexec.Exit())
-
-					result, err := testutils.GetResultForCurrent(session, cniVersion)
-					if err != nil {
-						log.Fatalf("Error getting result from the session: %v\n", err)
-					}
 
 					log.Printf("Unmarshaled result: %v\n", result)
 
@@ -1499,14 +1478,8 @@ var _ = Describe("CalicoCni", func() {
 					Expect(endpoints.Items).Should(HaveLen(0))
 
 					// ADD a new container with passing a CNI_ContainerID "Y".
-					_, session, _, _, _, contNs, err = testutils.CreateContainerWithId(netconf, name, testutils.K8S_TEST_NS, "", cniContainerIDY)
+					_, result, _, _, _, contNs, err = testutils.CreateContainerWithId(netconf, name, testutils.K8S_TEST_NS, "", cniContainerIDY)
 					Expect(err).ShouldNot(HaveOccurred())
-					Eventually(session).Should(gexec.Exit())
-
-					result, err = testutils.GetResultForCurrent(session, cniVersion)
-					if err != nil {
-						log.Fatalf("Error getting result from the session: %v\n", err)
-					}
 
 					log.Printf("Unmarshaled result: %v\n", result)
 
@@ -1620,14 +1593,8 @@ var _ = Describe("CalicoCni", func() {
 					log.Infof("Created POD object: %v", pod)
 
 					// ADD the container with passing a CNI_CONTAINERID of "X".
-					_, session, _, _, _, contNs, err := testutils.CreateContainerWithId(netconf, name, testutils.K8S_TEST_NS, "", cniContainerIDX)
+					_, result, _, _, _, contNs, err := testutils.CreateContainerWithId(netconf, name, testutils.K8S_TEST_NS, "", cniContainerIDX)
 					Expect(err).ShouldNot(HaveOccurred())
-					Eventually(session).Should(gexec.Exit())
-
-					result, err := testutils.GetResultForCurrent(session, cniVersion)
-					if err != nil {
-						log.Fatalf("Error getting result from the session: %v\n", err)
-					}
 					log.Printf("Unmarshaled result: %v\n", result)
 
 					// Assert that the endpoint is created in the backend datastore with ContainerID "X".
@@ -1657,14 +1624,8 @@ var _ = Describe("CalicoCni", func() {
 					Expect(endpoints.Items[0].Spec.ContainerID).Should(Equal(cniContainerIDX))
 
 					// ADD the container with passing a CNI_CONTAINERID of "Y"
-					_, session, _, _, _, contNs, err = testutils.CreateContainerWithId(netconf, name, testutils.K8S_TEST_NS, "", cniContainerIDY)
+					_, result, _, _, _, contNs, err = testutils.CreateContainerWithId(netconf, name, testutils.K8S_TEST_NS, "", cniContainerIDY)
 					Expect(err).ShouldNot(HaveOccurred())
-					Eventually(session).Should(gexec.Exit())
-
-					result, err = testutils.GetResultForCurrent(session, cniVersion)
-					if err != nil {
-						log.Fatalf("Error getting result from the session: %v\n", err)
-					}
 					log.Printf("Unmarshaled result: %v\n", result)
 
 					// Assert that the endpoint is created in the backend datastore with ContainerID "Y".
@@ -1796,15 +1757,8 @@ var _ = Describe("CalicoCni", func() {
 					Expect(err).NotTo(HaveOccurred())
 
 					log.Infof("Created POD object: %v", pod)
-					var session *gexec.Session
-					containerID, session, _, _, _, contNs, err = testutils.CreateContainer(netconf, name, testutils.K8S_TEST_NS, "")
+					containerID, result, _, _, _, contNs, err = testutils.CreateContainer(netconf, name, testutils.K8S_TEST_NS, "")
 					Expect(err).ShouldNot(HaveOccurred())
-					Eventually(session).Should(gexec.Exit(0))
-
-					result, err = testutils.GetResultForCurrent(session, cniVersion)
-					if err != nil {
-						log.Fatalf("Error getting result from the session: %v\n", err)
-					}
 
 					log.Printf("Unmarshalled result from first ADD: %v\n", result)
 
@@ -1845,11 +1799,7 @@ var _ = Describe("CalicoCni", func() {
 
 				It("a second ADD for the same container should work, assigning a new IP", func() {
 					// Try to create the same pod with a different container (so CNI receives the ADD for the same endpoint again)
-					session, _, _, _, err := testutils.RunCNIPluginWithId(netconf, name, testutils.K8S_TEST_NS, "", "new-container-id", "eth0", contNs)
-					Expect(err).NotTo(HaveOccurred())
-					Eventually(session).Should(gexec.Exit(0))
-
-					resultSecondAdd, err := testutils.GetResultForCurrent(session, cniVersion)
+					resultSecondAdd, _, _, _, err := testutils.RunCNIPluginWithId(netconf, name, testutils.K8S_TEST_NS, "", "new-container-id", "eth0", contNs)
 					Expect(err).NotTo(HaveOccurred())
 					log.Printf("Unmarshalled result from second ADD: %v\n", resultSecondAdd)
 
@@ -1888,9 +1838,8 @@ var _ = Describe("CalicoCni", func() {
 					It("a second ADD should fail, but not clean up the original IPAM allocation", func() {
 						// Try to create the same container (so CNI receives the ADD for the same endpoint again)
 						// Use a different container ID but the same Pod Name/Namespace
-						session, _, _, _, err := testutils.RunCNIPluginWithId(netconf, name, testutils.K8S_TEST_NS, "", "new-container-id", "eth0", contNs)
+						_, _, _, _, err := testutils.RunCNIPluginWithId(netconf, name, testutils.K8S_TEST_NS, "", "new-container-id", "eth0", contNs)
 						Expect(err).ShouldNot(HaveOccurred())
-						Eventually(session).Should(gexec.Exit(1))
 
 						// IPAM reservation should still be in place.
 						checkIPAMReservation()
@@ -2016,22 +1965,14 @@ var _ = Describe("CalicoCni", func() {
 					log.Infof("Created POD object: %v", pod)
 
 					// Create the container, which will call CNI and by default it will create the container with interface name 'eth0'.
-					containerID, session, _, _, _, contNs, err := testutils.CreateContainer(netconf, name, testutils.K8S_TEST_NS, "")
+					containerID, result, _, _, _, contNs, err := testutils.CreateContainer(netconf, name, testutils.K8S_TEST_NS, "")
 					Expect(err).ShouldNot(HaveOccurred())
 					// Make sure the pod gets cleaned up, whether we fail or not.
 					expectedIfaceName := "eth0"
 					defer func() {
-						_, err := testutils.DeleteContainerWithIdAndIfaceName(
-							netconf, contNs.Path(), name, testutils.K8S_TEST_NS, containerID, expectedIfaceName)
+						_, err := testutils.DeleteContainerWithIdAndIfaceName(netconf, contNs.Path(), name, testutils.K8S_TEST_NS, containerID, expectedIfaceName)
 						Expect(err).ShouldNot(HaveOccurred())
 					}()
-					Eventually(session).Should(gexec.Exit())
-
-					result, err := testutils.GetResultForCurrent(session, cniVersion)
-					if err != nil {
-						log.Fatalf("Error getting result from the session: %v\n", err)
-					}
-
 					log.Printf("First container, unmarshalled result: %v\n", result)
 
 					// The endpoint is created in etcd
@@ -2062,10 +2003,8 @@ var _ = Describe("CalicoCni", func() {
 
 					// Try to create the same container but with a different endpoint (container interface name 'eth1'),
 					// so CNI receives the ADD for the same containerID but different endpoint.
-					session, _, _, _, err = testutils.RunCNIPluginWithId(
-						netconf, name, testutils.K8S_TEST_NS, "", containerID, "eth1", contNs)
+					_, _, _, _, err = testutils.RunCNIPluginWithId(netconf, name, testutils.K8S_TEST_NS, "", containerID, "eth1", contNs)
 					Expect(err).ShouldNot(HaveOccurred())
-					Eventually(session).Should(gexec.Exit())
 
 					// If the above command succeeds, the CNI plugin will have renamed the container side of the
 					// veth to "eth1".  We need to clean it up under the correct name, or we'll leak it.
@@ -2130,16 +2069,8 @@ var _ = Describe("CalicoCni", func() {
 					Expect(err).NotTo(HaveOccurred())
 
 					// Create the container, which will call CNI and by default it will create the container with interface name 'eth0'.
-					session2, _, _, _, err := testutils.RunCNIPluginWithId(
-						netconf, name2, testutils.K8S_TEST_NS, "", containerID2, "eth0", contNs2)
+					result, _, _, _, err = testutils.RunCNIPluginWithId(netconf, name2, testutils.K8S_TEST_NS, "", containerID2, "eth0", contNs2)
 					Expect(err).ShouldNot(HaveOccurred())
-					Eventually(session2).Should(gexec.Exit())
-
-					result, err = testutils.GetResultForCurrent(session2, cniVersion)
-					if err != nil {
-						log.Fatalf("Error getting result from the session: %v\n", err)
-					}
-
 					log.Printf("Second container: unmarshalled result: %v\n", result)
 
 					// Make sure BOTH of the endpoints are there in etcd
@@ -2219,15 +2150,8 @@ var _ = Describe("CalicoCni", func() {
 					if err != nil {
 						panic(err)
 					}
-					containerID, session, contVeth, _, _, contNs, err := testutils.CreateContainer(netconf, name, testutils.K8S_TEST_NS, "")
-
+					containerID, result, contVeth, _, _, contNs, err := testutils.CreateContainer(netconf, name, testutils.K8S_TEST_NS, "")
 					Expect(err).ShouldNot(HaveOccurred())
-					Eventually(session).Should(gexec.Exit())
-
-					result, err := testutils.GetResultForCurrent(session, cniVersion)
-					if err != nil {
-						log.Fatalf("Error getting result from the session: %v\n", err)
-					}
 
 					mac := contVeth.Attrs().HardwareAddr
 
@@ -2332,15 +2256,9 @@ var _ = Describe("CalicoCni", func() {
 					if err != nil {
 						panic(err)
 					}
-					containerID, session, contVeth, _, _, contNs, err := testutils.CreateContainer(netconf, name, testutils.K8S_TEST_NS, "")
+					containerID, result, contVeth, _, _, contNs, err := testutils.CreateContainer(netconf, name, testutils.K8S_TEST_NS, "")
 
 					Expect(err).ShouldNot(HaveOccurred())
-					Eventually(session).Should(gexec.Exit())
-
-					result, err := testutils.GetResultForCurrent(session, cniVersion)
-					if err != nil {
-						log.Fatalf("Error getting result from the session: %v\n", err)
-					}
 
 					ids := names.WorkloadEndpointIdentifiers{
 						Node:         hostname,

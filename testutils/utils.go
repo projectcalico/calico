@@ -18,6 +18,7 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
 
+	"github.com/containernetworking/cni/pkg/invoke"
 	"github.com/containernetworking/cni/pkg/types"
 	"github.com/containernetworking/cni/pkg/types/020"
 	"github.com/containernetworking/cni/pkg/types/current"
@@ -103,7 +104,7 @@ func MustCreateNewIPPool(c client.Interface, cidr string, ipip, natOutgoing, ipa
 	}
 }
 
-// GetResultForCurrent takes the session output with cniVersion and returns the Result in current.Result format.
+// GetResultForCurrent takes the output with cniVersion and returns the Result in current.Result format.
 func GetResultForCurrent(session *gexec.Session, cniVersion string) (*current.Result, error) {
 
 	// Check if the version is older than 0.3.0.
@@ -112,7 +113,7 @@ func GetResultForCurrent(session *gexec.Session, cniVersion string) (*current.Re
 		r020 := types020.Result{}
 
 		if err := json.Unmarshal(session.Out.Contents(), &r020); err != nil {
-			log.Fatalf("Error unmarshaling session output to Result: %v\n", err)
+			log.Fatalf("Error unmarshaling output to Result: %v\n", err)
 		}
 
 		rCurrent, err := current.NewResultFromResult(&r020)
@@ -126,10 +127,37 @@ func GetResultForCurrent(session *gexec.Session, cniVersion string) (*current.Re
 	r := current.Result{}
 
 	if err := json.Unmarshal(session.Out.Contents(), &r); err != nil {
-		log.Fatalf("Error unmarshaling session output to Result: %v\n", err)
+		log.Fatalf("Error unmarshaling output to Result: %v\n", err)
 	}
 	return &r, nil
+}
 
+// GetResultForCurrent takes the output with cniVersion and returns the Result in current.Result format.
+func GetResultForCurrent2(result types.Result, cniVersion string) (*current.Result, error) {
+
+	// Check if the version is older than 0.3.0.
+	// Convert it to Current standard spec version if that is the case.
+	if version.Compare(cniVersion, "0.3.0", "<") {
+		r020 := types020.Result{}
+
+		if err := json.Unmarshal([]byte(result.String()), &r020); err != nil {
+			log.Fatalf("Error unmarshaling output to Result: %v\n", err)
+		}
+
+		rCurrent, err := current.NewResultFromResult(&r020)
+		if err != nil {
+			return nil, err
+		}
+
+		return rCurrent, nil
+	}
+
+	r := current.Result{}
+
+	if err := json.Unmarshal([]byte(result.String()), &r); err != nil {
+		log.Fatalf("Error unmarshaling output to Result: %v\n", err)
+	}
+	return &r, nil
 }
 
 // Delete all K8s pods from the "test" namespace
@@ -245,21 +273,20 @@ func CreateContainerNamespace() (containerNs ns.NetNS, containerId string, err e
 	return
 }
 
-func CreateContainer(netconf, podName, podNamespace string, ip string) (containerID string, session *gexec.Session, contVeth netlink.Link, contAddr []netlink.Addr, contRoutes []netlink.Route, targetNs ns.NetNS, err error) {
+func CreateContainer(netconf, podName, podNamespace, ip string) (containerID string, result *current.Result, contVeth netlink.Link, contAddr []netlink.Addr, contRoutes []netlink.Route, targetNs ns.NetNS, err error) {
 	targetNs, containerID, err = CreateContainerNamespace()
 	if err != nil {
 		return "", nil, nil, nil, nil, nil, err
 	}
 
-	session, contVeth, contAddr, contRoutes, err = RunCNIPluginWithId(netconf, podName, podNamespace, ip, containerID, "", targetNs)
-
+	result, contVeth, contAddr, contRoutes, err = RunCNIPluginWithId(netconf, podName, podNamespace, ip, containerID, "", targetNs)
 	return
 }
 
 // Create container with the giving containerId when containerId is not empty
 //
 // Deprecated: Please call CreateContainerNamespace and then RunCNIPluginWithID directly.
-func CreateContainerWithId(netconf, podName, podNamespace, ip, overrideContainerID string) (containerID string, session *gexec.Session, contVeth netlink.Link, contAddr []netlink.Addr, contRoutes []netlink.Route, targetNs ns.NetNS, err error) {
+func CreateContainerWithId(netconf, podName, podNamespace, ip, overrideContainerID string) (containerID string, result *current.Result, contVeth netlink.Link, contAddr []netlink.Addr, contRoutes []netlink.Route, targetNs ns.NetNS, err error) {
 	targetNs, containerID, err = CreateContainerNamespace()
 	if err != nil {
 		return "", nil, nil, nil, nil, nil, err
@@ -269,9 +296,17 @@ func CreateContainerWithId(netconf, podName, podNamespace, ip, overrideContainer
 		containerID = overrideContainerID
 	}
 
-	session, contVeth, contAddr, contRoutes, err = RunCNIPluginWithId(netconf, podName, podNamespace, ip, containerID, "", targetNs)
-
+	result, contVeth, contAddr, contRoutes, err = RunCNIPluginWithId(netconf, podName, podNamespace, ip, containerID, "", targetNs)
 	return
+}
+
+// Used for passing arguments to the CNI plugin.
+type cniArgs struct {
+	Env []string
+}
+
+func (c *cniArgs) AsEnv() []string {
+	return c.Env
 }
 
 // RunCNIPluginWithId calls CNI plugin with a containerID and targetNs passed to it.
@@ -285,7 +320,7 @@ func RunCNIPluginWithId(
 	ifName string,
 	targetNs ns.NetNS,
 ) (
-	session *gexec.Session,
+	result *current.Result,
 	contVeth netlink.Link,
 	contAddr []netlink.Addr,
 	contRoutes []netlink.Route,
@@ -315,34 +350,16 @@ func RunCNIPluginWithId(
 		fmt.Sprintf("CNI_NETNS=%s", targetNs.Path()),
 		k8sEnv,
 	}
+	args := &cniArgs{env}
 
 	log.Debugf("Calling CNI plugin with the following env vars: %v", env)
-
-	// Run the CNI plugin passing in the supplied netconf
-	// TODO - Get rid of this PLUGIN thing and use netconf instead
-	subProcess := exec.Command(fmt.Sprintf("%s/%s", os.Getenv("BIN"), os.Getenv("PLUGIN")), netconf)
-	subProcess.Env = env
-	stdin, err := subProcess.StdinPipe()
-	if err != nil {
-		panic("some error found")
-	}
-
-	_, err = io.WriteString(stdin, netconf)
+	var r types.Result
+	pluginPath := fmt.Sprintf("%s/%s", os.Getenv("BIN"), os.Getenv("PLUGIN"))
+	r, err = invoke.ExecPluginWithResult(pluginPath, []byte(netconf), args)
 	if err != nil {
 		panic(err)
 	}
-	_, err = io.WriteString(stdin, "\n")
-	if err != nil {
-		panic(err)
-	}
-
-	err = stdin.Close()
-	if err != nil {
-		panic(err)
-	}
-
-	session, err = gexec.Start(subProcess, ginkgo.GinkgoWriter, ginkgo.GinkgoWriter)
-	session.Wait(5)
+	result, err = GetResultForCurrent2(r, "")
 	if err != nil {
 		panic(err)
 	}
