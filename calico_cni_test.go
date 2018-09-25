@@ -14,7 +14,6 @@ import (
 	"github.com/containernetworking/plugins/pkg/ns"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	"github.com/onsi/gomega/gbytes"
 	"github.com/projectcalico/cni-plugin/testutils"
 	"github.com/projectcalico/cni-plugin/utils"
 	api "github.com/projectcalico/libcalico-go/lib/apis/v3"
@@ -44,7 +43,7 @@ var _ = Describe("CalicoCni", func() {
 			  "name": "net1",
 			  "type": "calico",
 			  "etcd_endpoints": "http://%s:2379",
-			  "log_level": "debug",
+			  "log_level": "info",
 			  "nodename_file_optional": true,
 			  "datastore_type": "%s",
 			  "ipam": {
@@ -256,7 +255,7 @@ var _ = Describe("CalicoCni", func() {
 			  "name": "net1",
 			  "type": "calico",
 			  "etcd_endpoints": "http://%s:2379",
-			  "log_level": "debug",
+			  "log_level": "info",
 			  "nodename_file_optional": true,
 			  "datastore_type": "%s",
 			  "container_settings": {
@@ -450,8 +449,8 @@ var _ = Describe("CalicoCni", func() {
 				containerNs, containerId, err := testutils.CreateContainerNamespace()
 				Expect(err).ToNot(HaveOccurred())
 
-				result, _, _, _, err := testutils.RunCNIPluginWithId(netconf, "", testutils.K8S_TEST_NS, "", containerId, "", containerNs)
-				Expect(result).Should(gbytes.Say("requested feature is not supported for this runtime: ip_addrs_no_ipam"))
+				_, _, _, _, err = testutils.RunCNIPluginWithId(netconf, "", testutils.K8S_TEST_NS, "", containerId, "", containerNs)
+				Expect(err).To(HaveOccurred())
 			})
 		})
 		Context("deprecate Hostname for nodename", func() {
@@ -547,7 +546,7 @@ var _ = Describe("CalicoCni", func() {
 		  "type": "calico",
 		  "etcd_endpoints": "http://%s:2379",
 		  "datastore_type": "%s",
-		  "log_level": "debug",
+		  "log_level": "info",
 	          "nodename_file_optional": true,
 		  "ipam": { "type": "calico-ipam" }
 		}`, cniVersion, os.Getenv("ETCD_IP"), os.Getenv("DATASTORE_TYPE"))
@@ -692,7 +691,7 @@ var _ = Describe("CalicoCni", func() {
 			    "subnet": "10.0.0.0/8"
 			  },
 			  "nodename_file_optional": true,
-			  "log_level":"debug"
+			  "log_level":"info"
 			}`, cniVersion, os.Getenv("ETCD_IP"), os.Getenv("DATASTORE_TYPE"))
 
 			It("route setup should be resilient to existing route", func() {

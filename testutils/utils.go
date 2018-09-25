@@ -132,34 +132,6 @@ func GetResultForCurrent(session *gexec.Session, cniVersion string) (*current.Re
 	return &r, nil
 }
 
-// GetResultForCurrent takes the output with cniVersion and returns the Result in current.Result format.
-func GetResultForCurrent2(result types.Result, cniVersion string) (*current.Result, error) {
-
-	// Check if the version is older than 0.3.0.
-	// Convert it to Current standard spec version if that is the case.
-	if version.Compare(cniVersion, "0.3.0", "<") {
-		r020 := types020.Result{}
-
-		if err := json.Unmarshal([]byte(result.String()), &r020); err != nil {
-			log.Fatalf("Error unmarshaling output to Result: %v\n", err)
-		}
-
-		rCurrent, err := current.NewResultFromResult(&r020)
-		if err != nil {
-			return nil, err
-		}
-
-		return rCurrent, nil
-	}
-
-	r := current.Result{}
-
-	if err := json.Unmarshal([]byte(result.String()), &r); err != nil {
-		log.Fatalf("Error unmarshaling output to Result: %v\n", err)
-	}
-	return &r, nil
-}
-
 // Delete all K8s pods from the "test" namespace
 func WipeK8sPods() {
 	config, err := clientcmd.DefaultClientConfig.ClientConfig()
@@ -352,16 +324,42 @@ func RunCNIPluginWithId(
 	}
 	args := &cniArgs{env}
 
+	// Invoke the CNI plugin, returning any errors to the calling code to handle.
 	log.Debugf("Calling CNI plugin with the following env vars: %v", env)
 	var r types.Result
 	pluginPath := fmt.Sprintf("%s/%s", os.Getenv("BIN"), os.Getenv("PLUGIN"))
 	r, err = invoke.ExecPluginWithResult(pluginPath, []byte(netconf), args)
 	if err != nil {
+		return
+	}
+
+	// Extract the target CNI version from the provided network config.
+	var nc types.NetConf
+	if err = json.Unmarshal([]byte(netconf), &nc); err != nil {
 		panic(err)
 	}
-	result, err = GetResultForCurrent2(r, "")
-	if err != nil {
-		panic(err)
+
+	// Parse the result as the target CNI version.
+	if version.Compare(nc.CNIVersion, "0.3.0", "<") {
+		// Special case for older CNI verisons.
+		var out []byte
+		out, err = json.Marshal(r)
+		log.Infof("CNI output: %s", out)
+		r020 := types020.Result{}
+		if err = json.Unmarshal(out, &r020); err != nil {
+			log.Fatalf("Error unmarshaling output to Result: %v\n", err)
+		}
+
+		result, err = current.NewResultFromResult(&r020)
+		if err != nil {
+			return
+		}
+
+	} else {
+		result, err = current.GetResult(r)
+		if err != nil {
+			return
+		}
 	}
 
 	err = targetNs.Do(func(_ ns.NetNS) error {

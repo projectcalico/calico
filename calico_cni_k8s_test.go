@@ -2,6 +2,7 @@ package main_test
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"math/rand"
 	"net"
@@ -17,7 +18,6 @@ import (
 	"github.com/containernetworking/plugins/pkg/ns"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	"github.com/onsi/gomega/gbytes"
 	"github.com/projectcalico/cni-plugin/testutils"
 	"github.com/projectcalico/cni-plugin/types"
 	"github.com/projectcalico/cni-plugin/utils"
@@ -48,13 +48,13 @@ func ensureNamespace(clientset *kubernetes.Clientset, name string) {
 	Expect(err).NotTo(HaveOccurred())
 }
 
-var _ = Describe("CalicoCni", func() {
+var _ = Describe("calico - k8sCalicoCni", func() {
 	// Create a random seed
 	rand.Seed(time.Now().UTC().UnixNano())
 	log.SetFormatter(&logutils.Formatter{})
 	log.AddHook(&logutils.ContextHook{})
 	log.SetOutput(GinkgoWriter)
-	log.SetLevel(log.DebugLevel)
+	log.SetLevel(log.InfoLevel)
 	hostname, _ := names.Hostname()
 	ctx := context.Background()
 	calicoClient, err := client.NewFromEnv()
@@ -474,20 +474,21 @@ var _ = Describe("CalicoCni", func() {
 				})
 
 				It("fails to assign from an IP pool that doesn't exist", func() {
-					netconfCalicoIPAM := types.NetConf{
-						CNIVersion:    cniVersion,
-						Name:          "netnsannot1",
-						Type:          "calico",
-						EtcdEndpoints: fmt.Sprintf("http://%s:2379", os.Getenv("ETCD_IP")),
-						DatastoreType: os.Getenv("DATASTORE_TYPE"),
-						IPAM: {
-							Type: "calico-ipam",
-						},
+					nc := types.NetConf{
+						CNIVersion:           cniVersion,
+						Name:                 "netnsannot1",
+						Type:                 "calico",
+						EtcdEndpoints:        fmt.Sprintf("http://%s:2379", os.Getenv("ETCD_IP")),
+						DatastoreType:        os.Getenv("DATASTORE_TYPE"),
 						Kubernetes:           types.Kubernetes{K8sAPIRoot: "http://127.0.0.1:8080"},
-						Policy:               types.Policy{Type: "k8s"},
+						Policy:               types.Policy{PolicyType: "k8s"},
 						NodenameFileOptional: true,
 						LogLevel:             "info",
 					}
+					nc.IPAM.Type = "calico-ipam"
+					ncb, err := json.Marshal(nc)
+					Expect(err).NotTo(HaveOccurred())
+					netconfCalicoIPAM := string(ncb)
 
 					config, err := clientcmd.DefaultClientConfig.ClientConfig()
 					Expect(err).NotTo(HaveOccurred())
@@ -525,13 +526,9 @@ var _ = Describe("CalicoCni", func() {
 					Expect(err).NotTo(HaveOccurred())
 					log.Infof("Created POD object: %v", pod)
 
+					// Expect an error when invoking the CNI plugin.
 					_, _, _, _, _, contNs, err := testutils.CreateContainer(netconfCalicoIPAM, name, testNS, "")
-					Expect(err).NotTo(HaveOccurred())
-
-					// podIP := contAddresses[0].IP
-					// log.Infof("All container IPs: %v", contAddresses)
-					// log.Infof("Container got IP address: %s", podIP)
-					// Expect(ipPoolCIDR.Contains(podIP)).To(BeTrue())
+					Expect(err).To(HaveOccurred())
 
 					// Delete the container.
 					_, err = testutils.DeleteContainer(netconfCalicoIPAM, contNs.Path(), name, testNS)
@@ -911,9 +908,8 @@ var _ = Describe("CalicoCni", func() {
 
 					log.Infof("Created POD object: %v", pod)
 
-					_, session, _, _, _, contNs, err := testutils.CreateContainer(netconfCalicoIPAM, name, testutils.K8S_TEST_NS, "")
-					Eventually(session).Should(gexec.Exit())
-					Expect(session.Out).Should(gbytes.Say("requested feature is not enabled: ip_addrs_no_ipam"))
+					_, _, _, _, _, contNs, err := testutils.CreateContainer(netconfCalicoIPAM, name, testutils.K8S_TEST_NS, "")
+					Expect(err).To(HaveOccurred())
 
 					_, err = testutils.DeleteContainer(netconfCalicoIPAM, contNs.Path(), name, testutils.K8S_TEST_NS)
 					Expect(err).ShouldNot(HaveOccurred())
@@ -937,7 +933,7 @@ var _ = Describe("CalicoCni", func() {
 					  "k8s_api_root": "http://127.0.0.1:8080"
 					 },
 					"policy": {"type": "k8s"},
-					"log_level":"debug"
+					"log_level":"info"
 				}`, cniVersion, os.Getenv("ETCD_IP"), os.Getenv("DATASTORE_TYPE"))
 
 					assignIP := net.IPv4(20, 0, 0, 111).To4()
@@ -1029,123 +1025,14 @@ var _ = Describe("CalicoCni", func() {
 				})
 			})
 
-			Context("using ipAddrs annotation to assign IP address to a pod, through Calico IPAM, without specifying cniVersion in CNI config", func() {
-				It("should successfully assigns the annotated IP address", func() {
-					netconfCalicoIPAM := fmt.Sprintf(`
-				{
-				  "name": "net5",
-				  "type": "calico",
-				  "etcd_endpoints": "http://%s:2379",
-				  "datastore_type": "%s",
-			          "nodename_file_optional": true,
-				  "ipam": {
-					   "type": "calico-ipam",
-					   "assign_ipv4": "true",
-					   "assign_ipv6": "true"
-				   },
-					"kubernetes": {
-					  "k8s_api_root": "http://127.0.0.1:8080"
-					 },
-					"policy": {"type": "k8s"},
-					"log_level":"info"
-				}`, os.Getenv("ETCD_IP"), os.Getenv("DATASTORE_TYPE"))
-
-					assignIP := net.IPv4(20, 0, 0, 111).To4()
-
-					// Create a new ipPool.
-					ipPool := "20.0.0.0/24"
-					testutils.MustCreateNewIPPool(calicoClient, ipPool, false, false, true)
-					_, _, err := net.ParseCIDR(ipPool)
-					Expect(err).NotTo(HaveOccurred())
-
-					config, err := clientcmd.DefaultClientConfig.ClientConfig()
-					Expect(err).NotTo(HaveOccurred())
-
-					clientset, err := kubernetes.NewForConfig(config)
-					Expect(err).NotTo(HaveOccurred())
-
-					// Now create a K8s pod passing in an IP address.
-					name := fmt.Sprintf("run%d", rand.Uint32())
-					pod, err := clientset.CoreV1().Pods(testutils.K8S_TEST_NS).Create(&v1.Pod{
-						ObjectMeta: metav1.ObjectMeta{
-							Name: name,
-							Annotations: map[string]string{
-								"cni.projectcalico.org/ipAddrs": "[\"20.0.0.111\"]",
-							},
-						},
-						Spec: v1.PodSpec{
-							Containers: []v1.Container{{
-								Name:  name,
-								Image: "ignore",
-							}},
-							NodeName: hostname,
-						},
-					})
-					Expect(err).NotTo(HaveOccurred())
-
-					log.Infof("Created POD object: %v", pod)
-
-					containerID, _, contVeth, contAddresses, _, contNs, err := testutils.CreateContainer(netconfCalicoIPAM, name, testutils.K8S_TEST_NS, "")
-					Expect(err).NotTo(HaveOccurred())
-					mac := contVeth.Attrs().HardwareAddr
-
-					podIP := contAddresses[0].IP
-					log.Infof("All container IPs: %v", contAddresses)
-					log.Infof("Container got IP address: %s", podIP)
-					Expect(podIP).Should(Equal(assignIP))
-
-					ids := names.WorkloadEndpointIdentifiers{
-						Node:         hostname,
-						Orchestrator: api.OrchestratorKubernetes,
-						Endpoint:     "eth0",
-						Pod:          name,
-						ContainerID:  containerID,
-					}
-
-					wrkload, err := ids.CalculateWorkloadEndpointName(false)
-					Expect(err).NotTo(HaveOccurred())
-
-					interfaceName := k8sconversion.VethNameForWorkload(testutils.K8S_TEST_NS, name)
-
-					// Make sure WorkloadEndpoint is created and has the requested IP in the datastore.
-					endpoints, err := calicoClient.WorkloadEndpoints().List(ctx, options.ListOptions{})
-					Expect(err).ShouldNot(HaveOccurred())
-					Expect(endpoints.Items).Should(HaveLen(1))
-
-					Expect(endpoints.Items[0].Name).Should(Equal(wrkload))
-					Expect(endpoints.Items[0].Namespace).Should(Equal(testutils.K8S_TEST_NS))
-					Expect(endpoints.Items[0].Labels).Should(Equal(map[string]string{
-						"projectcalico.org/namespace":      "test",
-						"projectcalico.org/orchestrator":   api.OrchestratorKubernetes,
-						"projectcalico.org/serviceaccount": "default",
-					}))
-
-					Expect(endpoints.Items[0].Spec).Should(Equal(api.WorkloadEndpointSpec{
-						Pod:           name,
-						InterfaceName: interfaceName,
-						IPNetworks:    []string{assignIP.String() + "/32"},
-						MAC:           mac.String(),
-						Profiles:      []string{"kns.test", "ksa.test.default"},
-						Node:          hostname,
-						Endpoint:      "eth0",
-						Workload:      "",
-						ContainerID:   containerID,
-						Orchestrator:  api.OrchestratorKubernetes,
-					}))
-
-					// Delete the container.
-					_, err = testutils.DeleteContainer(netconfCalicoIPAM, contNs.Path(), name, testutils.K8S_TEST_NS)
-					Expect(err).ShouldNot(HaveOccurred())
-				})
-			})
-
 			hostLocalIPAMConfigs := []struct {
-				description, config, unexpectedRoute string
-				expectedV4Routes, expectedV6Routes   []string
-				numIPv4IPs, numIPv6IPs               int
+				description, cniVersion, config, unexpectedRoute string
+				expectedV4Routes, expectedV6Routes               []string
+				numIPv4IPs, numIPv6IPs                           int
 			}{
 				{
 					description: "old-style inline subnet",
+					cniVersion:  cniVersion,
 					config: `
 					{
 					  "cniVersion": "%s",
@@ -1162,7 +1049,7 @@ var _ = Describe("CalicoCni", func() {
 					   "k8s_api_root": "http://127.0.0.1:8080"
 					  },
 					  "policy": {"type": "k8s"},
-					  "log_level":"debug"
+					  "log_level":"info"
 					}`,
 					expectedV4Routes: []string{
 						regexp.QuoteMeta("default via 169.254.1.1 dev eth0"),
@@ -1175,6 +1062,7 @@ var _ = Describe("CalicoCni", func() {
 				{
 					// This scenario tests IPv4+IPv6 without specifying any routes.
 					description: "new-style with IPv4 and IPv6 ranges, no routes",
+					cniVersion:  "0.3.0",
 					config: `
 					{
 					  "cniVersion": "%s",
@@ -1187,14 +1075,14 @@ var _ = Describe("CalicoCni", func() {
 					    "type": "host-local",
 					    "ranges": [
 					       [
-					          {
-					            "subnet": "usePodCidr"
-					          }
+					         {
+					           "subnet": "usePodCidr"
+					         }
 					       ],
 					       [
-					          {
-					            "subnet": "dead:beef::/96"
-					          }
+					         {
+					           "subnet": "dead:beef::/96"
+					         }
 					       ]
 					    ]
 					  },
@@ -1202,7 +1090,7 @@ var _ = Describe("CalicoCni", func() {
 					   "k8s_api_root": "http://127.0.0.1:8080"
 					  },
 					  "policy": {"type": "k8s"},
-					  "log_level":"debug"
+					  "log_level":"info"
 					}`,
 					expectedV4Routes: []string{
 						regexp.QuoteMeta("default via 169.254.1.1 dev eth0"),
@@ -1222,7 +1110,10 @@ var _ = Describe("CalicoCni", func() {
 					// In this scenario, we use a lot more of the host-local IPAM plugin.  Namely:
 					// - we use multiple ranges, one of which is IPv6, the other uses the podCIDR
 					// - we add custom routes, which override our default 0/0 and ::/0 routes.
+					// This configuration is only supported for CNI version >= 0.3.0 since we assign multiple
+					// addresses per family.
 					description: "new-style with IPv4 and IPv6 ranges and routes",
+					cniVersion:  "0.3.0",
 					config: `
 					{
 					  "cniVersion": "%s",
@@ -1235,19 +1126,19 @@ var _ = Describe("CalicoCni", func() {
 					    "type": "host-local",
 					    "ranges": [
 					       [
-					          {
-					            "subnet": "usePodCidr"
-					          }
+					         {
+					           "subnet": "usePodCidr"
+					         }
 					       ],
 					       [
-					           { 
-					               "subnet": "10.100.0.0/24" 
-					           }
+					         { 
+					             "subnet": "10.100.0.0/24" 
+					         }
 					       ],
 					       [
-					          {
-					            "subnet": "dead:beef::/96"
-					          }
+					         {
+					          "subnet": "dead:beef::/96"
+					         }
 					       ]
 					    ],
 					    "routes": [
@@ -1260,7 +1151,7 @@ var _ = Describe("CalicoCni", func() {
 					   "k8s_api_root": "http://127.0.0.1:8080"
 					  },
 					  "policy": {"type": "k8s"},
-					  "log_level":"debug"
+					  "log_level":"info"
 					}`,
 					expectedV4Routes: []string{
 						regexp.QuoteMeta("10.123.0.0/16 via 169.254.1.1 dev eth0"),
@@ -1282,6 +1173,7 @@ var _ = Describe("CalicoCni", func() {
 					// - we use multiple ranges, one of which is IPv6, the other uses the podCIDR
 					// - we add custom routes, but configure the plugin to also include our default routes.
 					description: "new-style with IPv4 and IPv6 ranges and routes and Calico default routes",
+					cniVersion:  "0.3.0",
 					config: `
 					{
 					  "cniVersion": "%s",
@@ -1295,9 +1187,9 @@ var _ = Describe("CalicoCni", func() {
 					    "type": "host-local",
 					    "ranges": [
 					       [
-					          {
-					            "subnet": "usePodCidr"
-					          }
+					           {
+					             "subnet": "usePodCidr"
+					           }
 					       ],
 					       [
 					           { 
@@ -1320,7 +1212,7 @@ var _ = Describe("CalicoCni", func() {
 					   "k8s_api_root": "http://127.0.0.1:8080"
 					  },
 					  "policy": {"type": "k8s"},
-					  "log_level":"debug"
+					  "log_level":"info"
 					}`,
 					expectedV4Routes: []string{
 						regexp.QuoteMeta("default via 169.254.1.1 dev eth0"),
@@ -1343,7 +1235,7 @@ var _ = Describe("CalicoCni", func() {
 				c := c // Make sure we get a fresh variable on each loop.
 				Context("Using host-local IPAM ("+c.description+"): request an IP then release it, and then request it again", func() {
 					It("should successfully assign IP both times and successfully release it in the middle", func() {
-						netconfHostLocalIPAM := fmt.Sprintf(c.config, cniVersion, os.Getenv("ETCD_IP"), os.Getenv("DATASTORE_TYPE"))
+						netconfHostLocalIPAM := fmt.Sprintf(c.config, c.cniVersion, os.Getenv("ETCD_IP"), os.Getenv("DATASTORE_TYPE"))
 
 						config, err := clientcmd.DefaultClientConfig.ClientConfig()
 						Expect(err).NotTo(HaveOccurred())
@@ -1771,7 +1663,7 @@ var _ = Describe("CalicoCni", func() {
 								  "k8s_api_root": "http://127.0.0.1:8080"
 								 },
 							"policy": {"type": "k8s"},
-							"log_level":"debug"
+							"log_level":"info"
 							}`,
 					cniVersion,
 					os.Getenv("ETCD_IP"),
@@ -1905,7 +1797,7 @@ var _ = Describe("CalicoCni", func() {
 						// Try to create the same container (so CNI receives the ADD for the same endpoint again)
 						// Use a different container ID but the same Pod Name/Namespace
 						_, _, _, _, err := testutils.RunCNIPluginWithId(netconf, name, testutils.K8S_TEST_NS, "", "new-container-id", "eth0", contNs)
-						Expect(err).ShouldNot(HaveOccurred())
+						Expect(err).Should(HaveOccurred())
 
 						// IPAM reservation should still be in place.
 						checkIPAMReservation()
@@ -1989,7 +1881,7 @@ var _ = Describe("CalicoCni", func() {
 				  "etcd_endpoints": "http://%s:2379",
 				  "datastore_type": "%s",
            			  "nodename_file_optional": true,
-				  "log_level": "debug",
+				  "log_level": "info",
 			 	  "ipam": {
 				    "type": "calico-ipam"
 				  },
