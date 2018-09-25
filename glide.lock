@@ -1,5 +1,5 @@
-hash: 96d319d8b71edb85c5fb49ff838ea93289a4f47d2c4b33cb18470cc99f0a8157
-updated: 2018-09-24T06:16:01.613338506Z
+hash: a8bd5d52d1333a610732369aa832ec76056aea4530dbe640a29b5935e7803547
+updated: 2018-09-25T06:16:33.226942029Z
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -110,7 +110,7 @@ imports:
   - tracer/wire
   - writer
 - name: github.com/jbenet/go-reuseport
-  version: e46628cb7483cfb92096837ad8f85e9b66f17fc1
+  version: dd0c37d7767bc38280bd9813145b65f8bd560629
 - name: github.com/json-iterator/go
   version: f2b4162afba35581b6d4a50d3b8f34e33c144682
 - name: github.com/kardianos/osext
@@ -118,7 +118,7 @@ imports:
 - name: github.com/kelseyhightower/envconfig
   version: dd1402a4d99de9ac2f396cd6fcb957bc2c695ec1
 - name: github.com/libp2p/go-reuseport
-  version: e46628cb7483cfb92096837ad8f85e9b66f17fc1
+  version: dd0c37d7767bc38280bd9813145b65f8bd560629
   subpackages:
   - poll
   - singlepoll
@@ -250,13 +250,13 @@ imports:
   subpackages:
   - binder
 - name: github.com/projectcalico/typha
-  version: 4b66bb620aba204ac6b5fd14159e267364691350
+  version: d7900ea95f0f8f99e2c95903685ce3449891b646
   subpackages:
   - pkg/syncclient
   - pkg/syncproto
   - pkg/tlsutils
 - name: github.com/prometheus/client_golang
-  version: 73edb9af667d9467d99b2001722770062a0086c3
+  version: f69c853d21c15596929fa9126ba211247e7dca95
   subpackages:
   - prometheus
   - prometheus/internal
@@ -358,7 +358,7 @@ imports:
   - internal/urlfetch
   - urlfetch
 - name: google.golang.org/genproto
-  version: c3f76f3b92d1ffa4c58a9ff842a58b8877655e0f
+  version: 221a8d4f74948678f06caaa13c9d41d22e069ae8
   subpackages:
   - googleapis/rpc/status
 - name: google.golang.org/grpc
