@@ -28,6 +28,7 @@ import contextlib
 from functools import wraps
 import inspect
 import os
+import re
 import uuid
 
 # OpenStack imports.
@@ -277,13 +278,61 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
             authcfg = cfg.CONF.keystone_authtoken
             LOG.debug("authcfg = %r", authcfg)
             for key in authcfg:
-                LOG.debug("authcfg[%s] = %s", key, authcfg[key])
-            auth = v3.Password(user_domain_name=authcfg.user_domain_name,
-                               username=authcfg.username,
-                               password=authcfg.password,
-                               project_domain_name=authcfg.project_domain_name,
-                               project_name=authcfg.project_name,
-                               auth_url=authcfg.auth_url + '/v3')
+                if 'password' in key:
+                    LOG.debug("authcfg[%s] = %s", key, '***')
+                else:
+                    LOG.debug("authcfg[%s] = %s", key, authcfg[key])
+
+            # Compatibility with older versions of openstack [mitaka and below]
+            try:
+                user_domain_name = authcfg.user_domain_name
+            except cfg.NoSuchOptError:
+                user_domain_name = 'default'
+                LOG.debug("authcfg[user_domain_name] fallback = %s",
+                          user_domain_name)
+
+            try:
+                username = authcfg.username
+            except cfg.NoSuchOptError:
+                username = authcfg.admin_user
+                LOG.debug("authcfg[username] fallback[admin_user] = %s",
+                          username)
+
+            try:
+                password = authcfg.password
+            except cfg.NoSuchOptError:
+                password = authcfg.admin_password
+                LOG.debug("authcfg[password] fallback[admin_password] = %s",
+                          '***')
+
+            try:
+                project_domain_name = authcfg.project_domain_name
+            except cfg.NoSuchOptError:
+                project_domain_name = 'default'
+                LOG.debug("authcfg[project_domain_name] fallback = %s",
+                          project_domain_name)
+
+            try:
+                project_name = authcfg.project_name
+            except cfg.NoSuchOptError:
+                project_name = authcfg.admin_tenant_name
+                LOG.debug("authcfg[project_name] fallback[admin_tenant_name]"
+                          " = %s", project_name)
+
+            try:
+                auth_url = authcfg.auth_url
+            except cfg.NoSuchOptError:
+                auth_url = authcfg.identity_uri
+                LOG.debug("authcfg[auth_url] fallback[identity_uri] = %s",
+                          auth_url)
+
+            auth = v3.Password(user_domain_name=user_domain_name,
+                               username=username,
+                               password=password,
+                               project_domain_name=project_domain_name,
+                               project_name=project_name,
+                               auth_url=re.sub(r'/v3/?$', '', auth_url) +
+                               '/v3')
             sess = session.Session(auth=auth)
             keystone_client = KeystoneClient(session=sess)
             LOG.debug("Keystone client = %r", keystone_client)

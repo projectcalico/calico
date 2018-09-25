@@ -319,6 +319,9 @@ class TestPluginEtcd(_TestEtcdBase):
         lib.m_compat.cfg.CONF.calico.etcd_compaction_period_mins = 0
         lib.m_compat.cfg.CONF.calico.project_name_cache_max = 0
 
+        # This value needs to be a string:
+        lib.m_compat.cfg.CONF.keystone_authtoken.auth_url = ""
+
     sg_default_key_v3 = (
         '/calico/resources/v3/projectcalico.org/networkpolicies/' +
         'openstack/ossg.default.SGID-default')
