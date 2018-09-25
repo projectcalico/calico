@@ -1,17 +1,24 @@
 package: github.com/projectcalico/node
 import:
+# Pin to the client_golang commit that changed NewProcessCollector(pid int, namespace string)
+# to NewProcessCollector(opts ProcessCollectorOpts), because otherwise we get coreos/etcd's
+# pin which is to an earlier point, and then all of our updated NewProcessCollector(...) calls
+# fail to compile.  Ideally we'd be happy with >= 773f5027234d0b08adf766be34f55df2f312abf7,
+# but I don't think glide allows that.
+- package: github.com/prometheus/client_golang
+  version: 773f5027234d0b08adf766be34f55df2f312abf7
 - package: github.com/kelseyhightower/confd
   repo: https://github.com/projectcalico/confd.git
-  version: 314bdf410382dff541599b1a3ea8fc41678512b6
+  version: 7c21b122e69a21d2ca6e2f26e4ca37b0ecd5dd17
   subpackages:
   - pkg/config
   - pkg/run
 - package: github.com/projectcalico/felix
-  version: 2894dba45c0338f19206ea836a72eda0fab008a7
+  version: bb9db03cf4f1a30b5c6073b62069aade0ba155b8
   subpackages:
   - daemon
 - package: github.com/projectcalico/libcalico-go
-  version: 2b98cf0202bc20708c94360528a08e9c499f1c11
+  version: bb940fa9d94126edc25a81ee09c8e59f696dc90a
   subpackages:
   - lib/apiconfig
   - lib/apis/v3
