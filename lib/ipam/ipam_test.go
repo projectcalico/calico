@@ -24,6 +24,7 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
+	"github.com/projectcalico/libcalico-go/lib/apis/v3"
 	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/libcalico-go/lib/apiconfig"
@@ -42,8 +43,8 @@ type ipPoolAccessor struct {
 	pools map[string]bool
 }
 
-func (i *ipPoolAccessor) GetEnabledPools(ipVersion int) ([]cnet.IPNet, error) {
-	sorted := []string{}
+func (i *ipPoolAccessor) GetEnabledPools(ipVersion int) ([]*v3.IPPool, error) {
+	sorted := make([]string, 0)
 	// Get a sorted list of enabled pool CIDR strings.
 	for p, e := range i.pools {
 		if e {
@@ -55,17 +56,23 @@ func (i *ipPoolAccessor) GetEnabledPools(ipVersion int) ([]cnet.IPNet, error) {
 	// Convert to IPNets and sort out the correct IP versions.  Sorting the results
 	// mimics more closely the behavior of etcd and allows the tests to be
 	// deterministic.
-	cidrs := []cnet.IPNet{}
+	pools := make([]*v3.IPPool, 0)
 	for _, p := range sorted {
 		c := cnet.MustParseCIDR(p)
 		if c.Version() == ipVersion {
-			cidrs = append(cidrs, c)
+			pool := &v3.IPPool{Spec: v3.IPPoolSpec{CIDR: p}}
+			if ipVersion == 4 {
+				pool.Spec.BlockSize = 26
+			} else {
+				pool.Spec.BlockSize = 122
+			}
+			pools = append(pools, pool)
 		}
 	}
 
-	log.Infof("GetEnabledPools returns: %s", cidrs)
+	log.Infof("GetEnabledPools returns: %s", pools)
 
-	return cidrs, nil
+	return pools, nil
 }
 
 var (
@@ -146,7 +153,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreEtcdV3, 
 
 				p, _ := ipPools.GetEnabledPools(4)
 				Expect(len(p)).To(Equal(1))
-				Expect(p[0].String()).To(Equal(pool2.String()))
+				Expect(p[0].Spec.CIDR).To(Equal(pool2.String()))
 				p, _ = ipPools.GetEnabledPools(6)
 				Expect(len(p)).To(BeZero())
 
