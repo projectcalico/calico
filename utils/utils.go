@@ -521,14 +521,38 @@ func ConfigureLogging(logLevel string) {
 	logrus.SetOutput(os.Stderr)
 }
 
-// Takes as array of IPv4 or IPv6 pools and parses them into an array of IPnet's
-func ParsePools(pools []string, isv4 bool) ([]cnet.IPNet, error) {
+// ResolvePools takes an array of CIDRs or IP Pool names and resolves it to a slice of pool CIDRs.
+func ResolvePools(ctx context.Context, c client.Interface, pools []string, isv4 bool) ([]cnet.IPNet, error) {
+	// First, query all IP pools. We need these so we can resolve names to CIDRs.
+	pl, err := c.IPPools().List(ctx, options.ListOptions{})
+	if err != nil {
+		return nil, err
+	}
+
+	// Iterate through the provided pools. If it parses as a CIDR, just use that.
+	// If it does not parse as a CIDR, then attempt to lookup an IP pool with a matching name.
 	result := []cnet.IPNet{}
 	for _, p := range pools {
 		_, cidr, err := net.ParseCIDR(p)
 		if err != nil {
-			return nil, fmt.Errorf("error parsing pool %q: %s", p, err)
+			// Didn't parse as a CIDR - check if it's the name
+			// of a configured IP pool.
+			for _, ipp := range pl.Items {
+				if ipp.Name == p {
+					// Found a match. Use the CIDR from the matching pool.
+					_, cidr, err = net.ParseCIDR(ipp.Spec.CIDR)
+					if err != nil {
+						return nil, fmt.Errorf("failed to parse IP pool cidr: %s", err)
+					}
+				}
+			}
+
+			if cidr == nil {
+				// Unable to resolve this pool to a CIDR - return an error.
+				return nil, fmt.Errorf("error parsing pool %q: %s", p, err)
+			}
 		}
+
 		ip := cidr.IP
 		if isv4 && ip.To4() == nil {
 			return nil, fmt.Errorf("%q isn't a IPv4 address", ip)
