@@ -1,5 +1,5 @@
-hash: a8bd5d52d1333a610732369aa832ec76056aea4530dbe640a29b5935e7803547
-updated: 2018-09-25T06:16:33.226942029Z
+hash: cd1896e430e210633eb7f70f219ad8f90fbd6d6ae5cb21b7a66d177d1829b29c
+updated: 2018-09-26T06:17:31.390451043Z
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -208,7 +208,7 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: bb940fa9d94126edc25a81ee09c8e59f696dc90a
+  version: 4a9fc7d60f567f3d6841272e3801e493a96819c0
   subpackages:
   - lib/apiconfig
   - lib/apis/v1
@@ -250,7 +250,7 @@ imports:
   subpackages:
   - binder
 - name: github.com/projectcalico/typha
-  version: d7900ea95f0f8f99e2c95903685ce3449891b646
+  version: 4970fdb03a0b08c3e7ee0667e7371c7ff12602c1
   subpackages:
   - pkg/syncclient
   - pkg/syncproto
@@ -358,7 +358,7 @@ imports:
   - internal/urlfetch
   - urlfetch
 - name: google.golang.org/genproto
-  version: 221a8d4f74948678f06caaa13c9d41d22e069ae8
+  version: 0e822944c569bf5c9afd034adaa56208bd2906ac
   subpackages:
   - googleapis/rpc/status
 - name: google.golang.org/grpc
