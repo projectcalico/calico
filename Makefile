@@ -308,7 +308,7 @@ ut: run-k8s-controller build $(BIN)/host-local
 ## to make sure we don't break backwards compatibility.
 .PHONY: test-cni-versions
 test-cni-versions:
-	for cniversion in "v0.2.0" "0.3.1" ; do \
+	for cniversion in "0.2.0" "0.3.1" ; do \
 		make ut CNI_SPEC_VERSION=$$cniversion; \
 	done
 

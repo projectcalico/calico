@@ -104,6 +104,20 @@ func MustCreateNewIPPool(c client.Interface, cidr string, ipip, natOutgoing, ipa
 	}
 }
 
+func MustDeleteIPPool(c client.Interface, cidr string) {
+	log.SetLevel(log.DebugLevel)
+	log.SetOutput(os.Stderr)
+
+	name := strings.Replace(cidr, ".", "-", -1)
+	name = strings.Replace(name, ":", "-", -1)
+	name = strings.Replace(name, "/", "-", -1)
+
+	_, err := c.IPPools().Delete(context.Background(), name, options.DeleteOptions{})
+	if err != nil {
+		panic(err)
+	}
+}
+
 // GetResultForCurrent takes the output with cniVersion and returns the Result in current.Result format.
 func GetResultForCurrent(session *gexec.Session, cniVersion string) (*current.Result, error) {
 
