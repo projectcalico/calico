@@ -9,7 +9,7 @@ import:
   version: 773f5027234d0b08adf766be34f55df2f312abf7
 - package: github.com/kelseyhightower/confd
   repo: https://github.com/projectcalico/confd.git
-  version: 447500ee7b805d9855b79dd86bbddbf7cc89df4b
+  version: 1850878900653af8f97feb076acea324f1db64e9
   subpackages:
   - pkg/config
   - pkg/run
