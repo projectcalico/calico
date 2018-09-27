@@ -824,41 +824,39 @@ var _ = Describe("Kubernetes CNI tests", func() {
 	})
 
 	Context("using floatingIPs annotation to assign a DNAT", func() {
-		It("successfully assigns a DNAT IP address from the annotated floatingIP", func() {
-			netconfCalicoIPAM := fmt.Sprintf(`
-					{
-					  "cniVersion": "%s",
-					  "name": "net11",
-					  "type": "calico",
-					  "etcd_endpoints": "http://%s:2379",
-			          	  "nodename_file_optional": true,
-					  "datastore_type": "%s",
-					  "ipam": {
-					    "type": "calico-ipam"
-					  },
-					  "kubernetes": {
-					    "k8s_api_root": "http://127.0.0.1:8080"
-					   },
-					  "policy": {"type": "k8s"},
-					  "log_level":"info"
-					}`, cniVersion, os.Getenv("ETCD_IP"), os.Getenv("DATASTORE_TYPE"))
+		var netconf types.NetConf
+		var name string
+		BeforeEach(func() {
+			netconf = types.NetConf{
+				CNIVersion:           cniVersion,
+				Name:                 "calico-network-name",
+				Type:                 "calico",
+				EtcdEndpoints:        fmt.Sprintf("http://%s:2379", os.Getenv("ETCD_IP")),
+				DatastoreType:        os.Getenv("DATASTORE_TYPE"),
+				Kubernetes:           types.Kubernetes{K8sAPIRoot: "http://127.0.0.1:8080"},
+				Policy:               types.Policy{PolicyType: "k8s"},
+				NodenameFileOptional: true,
+				LogLevel:             "info",
+				FeatureControl:       types.FeatureControl{FloatingIPs: true},
+			}
+			netconf.IPAM.Type = "calico-ipam"
 
-			// Create a new ipPool.
+			// Create an IP pool for the pod IP as well as a floating IP range.
 			for _, ipPool := range []string{"172.16.0.0/16", "1.1.1.0/24"} {
 				testutils.MustCreateNewIPPool(calicoClient, ipPool, false, false, true)
 				_, _, err := net.ParseCIDR(ipPool)
 				Expect(err).NotTo(HaveOccurred())
 			}
 
+			// Build kubernetes clients.
 			config, err := clientcmd.DefaultClientConfig.ClientConfig()
 			Expect(err).NotTo(HaveOccurred())
-
 			clientset, err := kubernetes.NewForConfig(config)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Now create a K8s pod passing in a floating IP.
 			ensureNamespace(clientset, testutils.K8S_TEST_NS)
-			name := fmt.Sprintf("run%d", rand.Uint32())
+			name = fmt.Sprintf("run%d", rand.Uint32())
 			pod, err := clientset.CoreV1().Pods(testutils.K8S_TEST_NS).Create(&v1.Pod{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: name,
@@ -875,13 +873,24 @@ var _ = Describe("Kubernetes CNI tests", func() {
 				},
 			})
 			Expect(err).NotTo(HaveOccurred())
-
 			log.Infof("Created POD object: %v", pod)
+		})
 
-			_, _, _, contAddresses, _, contNs, err := testutils.CreateContainer(netconfCalicoIPAM, name, testutils.K8S_TEST_NS, "")
+		AfterEach(func() {
+			// Delete IPPools.
+			for _, ipPool := range []string{"172.16.0.0/16", "1.1.1.0/24"} {
+				testutils.MustDeleteIPPool(calicoClient, ipPool)
+			}
+		})
+
+		It("successfully assigns a DNAT IP address from the annotated floatingIP", func() {
+			// Resolve the config struct.
+			confBytes, err := json.Marshal(netconf)
 			Expect(err).NotTo(HaveOccurred())
 
-			podIP := contAddresses[0].IP
+			// Invoke the CNI plugin
+			_, _, _, contAddresses, _, contNs, err := testutils.CreateContainer(string(confBytes), name, testutils.K8S_TEST_NS, "")
+			Expect(err).NotTo(HaveOccurred())
 
 			// Assert that the endpoint is created
 			endpoints, err := calicoClient.WorkloadEndpoints().List(ctx, options.ListOptions{})
@@ -889,11 +898,32 @@ var _ = Describe("Kubernetes CNI tests", func() {
 			Expect(endpoints.Items).Should(HaveLen(1))
 
 			// Assert that the endpoint contains the appropriate DNAT
+			podIP := contAddresses[0].IP
 			Expect(endpoints.Items[0].Spec.IPNATs).Should(HaveLen(1))
 			Expect(endpoints.Items[0].Spec.IPNATs).Should(Equal([]api.IPNAT{api.IPNAT{InternalIP: podIP.String(), ExternalIP: "1.1.1.1"}}))
 
 			// Delete the container.
-			_, err = testutils.DeleteContainer(netconfCalicoIPAM, contNs.Path(), name, testutils.K8S_TEST_NS)
+			_, err = testutils.DeleteContainer(string(confBytes), contNs.Path(), name, testutils.K8S_TEST_NS)
+			Expect(err).ShouldNot(HaveOccurred())
+		})
+
+		It("fails when the floating_ip feature is not enabled", func() {
+			// Resolve the config struct, disabling the feature.
+			netconf.FeatureControl.FloatingIPs = false
+			confBytes, err := json.Marshal(netconf)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Invoke the CNI plugin, expect it to fail.
+			_, _, _, _, _, contNs, err := testutils.CreateContainer(string(confBytes), name, testutils.K8S_TEST_NS, "")
+			Expect(err).To(HaveOccurred())
+
+			// Assert that the endpoint is not created
+			endpoints, err := calicoClient.WorkloadEndpoints().List(ctx, options.ListOptions{})
+			Expect(err).ShouldNot(HaveOccurred())
+			Expect(endpoints.Items).Should(HaveLen(0))
+
+			// Delete the container.
+			_, err = testutils.DeleteContainer(string(confBytes), contNs.Path(), name, testutils.K8S_TEST_NS)
 			Expect(err).ShouldNot(HaveOccurred())
 		})
 	})
