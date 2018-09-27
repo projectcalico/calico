@@ -41,6 +41,11 @@ execute_test_suite() {
 
 # Execute a set of tests using daemon mode.
 execute_tests_daemon() {
+    # For KDD, run Typha.
+    if [ "$DATASTORE_TYPE" = kubernetes ]; then
+	start_typha
+    fi
+
     # Run confd as a background process.
     echo "Running confd as background process"
     BGP_LOGSEVERITYSCREEN="debug" confd -confdir=/etc/calico/confd >$LOGPATH/logd1 2>&1 &
@@ -69,6 +74,11 @@ execute_tests_daemon() {
 
     # Kill confd.
     kill -9 $CONFD_PID
+
+    # For KDD, kill Typha.
+    if [ "$DATASTORE_TYPE" = kubernetes ]; then
+	kill_typha
+    fi
 }
 
 # Execute a set of tests using oneshot mode.
@@ -142,16 +152,55 @@ run_individual_test_oneshot() {
     echo "Populating calico with test data using calicoctl: " $testdir
     calicoctl apply -f /tests/mock_data/calicoctl/${testdir}/input.yaml
 
+    # For KDD, run Typha.
+    if [ "$DATASTORE_TYPE" = kubernetes ]; then
+	start_typha
+    fi
+
     # Run confd in oneshot mode.
     BGP_LOGSEVERITYSCREEN="debug" confd -confdir=/etc/calico/confd -onetime >$LOGPATH/logss 2>&1 || true
 
     # Check the confd templates are updated.
     test_confd_templates $testdir
 
+    # For KDD, kill Typha.
+    if [ "$DATASTORE_TYPE" = kubernetes ]; then
+	kill_typha
+    fi
+
     # Remove any resource that does not need to be persisted due to test environment
     # limitations.
     echo "Preparing Calico data for next test"
     calicoctl delete -f /tests/mock_data/calicoctl/${testdir}/delete.yaml
+}
+
+start_typha() {
+    echo "Starting Typha"
+    TYPHA_DATASTORETYPE=kubernetes \
+        KUBECONFIG=/tests/confd_kubeconfig \
+        TYPHA_LOGSEVERITYSCREEN=debug \
+	typha >$LOGPATH/typha 2>&1 &
+    TYPHA_PID=$!
+
+    # Set variables needed for confd to connect to Typha.
+    export FELIX_TYPHAADDR=127.0.0.1:5473
+    export FELIX_TYPHAREADTIMEOUT=50
+
+    # Allow a little time for Typha to start up and start listening.
+    #
+    # If Typha isn't ready when confd tries to connect to it, confd drops a FATAL
+    # log and exits.  You might think that confd should retry, but our general
+    # design (e.g. what Felix also does) here is to exit and be restarted by the
+    # surrounding service framework.
+    sleep 0.25
+
+    # Avoid getting bash's "Killed" message in the output when we kill Typha.
+    disown %?typha
+}
+
+kill_typha() {
+    echo "Killing Typha"
+    kill -9 $TYPHA_PID 2>/dev/null
 }
 
 # get_templates attempts to grab the latest templates from the calico repo
