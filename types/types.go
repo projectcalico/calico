@@ -33,6 +33,7 @@ type Policy struct {
 // FeatureControl is a struct which controls which features are enabled in Calico.
 type FeatureControl struct {
 	IPAddrsNoIpam bool `json:"ip_addrs_no_ipam"`
+	FloatingIPs   bool `json:"floating_ips"`
 }
 
 // Kubernetes a K8s specific struct to hold config

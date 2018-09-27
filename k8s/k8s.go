@@ -390,12 +390,19 @@ func CmdAddK8s(ctx context.Context, args *skel.CmdArgs, conf types.NetConf, epID
 	endpoint.Spec.InterfaceName = hostVethName
 	endpoint.Spec.ContainerID = epIDs.ContainerID
 	logger.WithField("endpoint", endpoint).Info("Added Mac, interface name, and active container ID to endpoint")
+
 	// List of DNAT ipaddrs to map to this workload endpoint
 	floatingIPs := annot["cni.projectcalico.org/floatingIPs"]
 
 	if floatingIPs != "" {
+		// If floating IPs are defined, but the feature is not enabled, return an error.
+		if !conf.FeatureControl.FloatingIPs {
+			releaseIPAM()
+			return nil, fmt.Errorf("requested feature is not enabled: floating_ips")
+		}
 		ips, err := parseIPAddrs(floatingIPs, logger)
 		if err != nil {
+			releaseIPAM()
 			return nil, err
 		}
 
