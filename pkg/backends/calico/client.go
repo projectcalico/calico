@@ -615,15 +615,18 @@ func (c *client) OnUpdates(updates []api.Update) {
 			}
 
 			// Update our cache of node labels.
-			v3res, ok := u.Value.(*apiv3.Node)
-			if !ok {
-				log.Warning("Bad value for Node resource")
-				continue
-			}
-			if v3res != nil {
-				c.nodeLabels[v3key.Name] = v3res.Labels
-			} else {
+			if u.Value == nil {
+				// This was a delete - remove node labels.
 				delete(c.nodeLabels, v3key.Name)
+			} else {
+				// This was a create or update - update node labels.
+				v3res, ok := u.Value.(*apiv3.Node)
+				if !ok {
+					log.Warning("Bad value for Node resource")
+					continue
+				}
+
+				c.nodeLabels[v3key.Name] = v3res.Labels
 			}
 
 			// Note need to recompute BGP v1 peerings.
