@@ -22,6 +22,11 @@ execute_test_suite() {
     download_templates_from_calico
     build_tomls_for_node
 
+    if [ "$DATASTORE_TYPE" = etcdv3 ]; then
+	test_extra_1
+	echo "Extra etcdv3 tests passed"
+    fi
+
     # Run the set of tests using confd in oneshot mode.
     echo "Execute oneshot-mode tests"
     execute_tests_oneshot
@@ -37,6 +42,108 @@ execute_test_suite() {
         execute_tests_daemon
     done
     echo "Daemon-mode tests passed"
+}
+
+test_extra_1() {
+    # Run confd as a background process.
+    echo "Running confd as background process"
+    NODENAME=node1 BGP_LOGSEVERITYSCREEN="debug" confd -confdir=/etc/calico/confd >$LOGPATH/logd1 2>&1 &
+    CONFD_PID=$!
+    echo "Running with PID " $CONFD_PID
+
+    # Turn the node-mesh off.
+    turn_mesh_off
+
+    # Create 4 nodes with a mesh of peerings.
+    calicoctl apply -f - <<EOF
+kind: Node
+apiVersion: projectcalico.org/v3
+metadata:
+  name: node1
+  labels:
+    node: yes
+spec:
+  bgp:
+    ipv4Address: 10.24.0.1/24
+---
+kind: Node
+apiVersion: projectcalico.org/v3
+metadata:
+  name: node2
+  labels:
+    node: yes
+spec:
+  bgp:
+    ipv4Address: 10.24.0.2/24
+---
+kind: Node
+apiVersion: projectcalico.org/v3
+metadata:
+  name: node3
+  labels:
+    node: yes
+spec:
+  bgp:
+    ipv4Address: 10.24.0.3/24
+---
+kind: Node
+apiVersion: projectcalico.org/v3
+metadata:
+  name: node4
+  labels:
+    node: yes
+spec:
+  bgp:
+    ipv4Address: 10.24.0.4/24
+---
+kind: BGPPeer
+apiVersion: projectcalico.org/v3
+metadata:
+  name: bgppeer-1
+spec:
+  nodeSelector: has(node)
+  peerSelector: has(node)
+EOF
+
+    # Expect 3 peerings.
+    expect_peerings 3
+
+    # Delete one of the nodes.
+    calicoctl delete node node3
+
+    # Expect just 2 peerings.
+    expect_peerings 2
+
+    # Kill confd.
+    kill -9 $CONFD_PID
+
+    # Turn the node-mesh back on.
+    turn_mesh_on
+
+    # Delete remaining resources.
+    calicoctl delete node node1
+    calicoctl delete node node2
+    calicoctl delete node node4
+    calicoctl delete bgppeer bgppeer-1
+}
+
+expect_peerings() {
+    expected_count=$1
+    attempts=0
+    while sleep 1; do
+	grep "protocol bgp" /etc/calico/confd/config/bird.cfg
+	count=`grep "protocol bgp" /etc/calico/confd/config/bird.cfg | wc -l`
+	if [ "$count" = "$expected_count" ]; then
+	    break
+	fi
+	let 'attempts += 1'
+	echo Failed attempts = $attempts
+	if [ "$attempts" -gt 5 ]; then
+	    echo Test failed
+	    cat /etc/calico/confd/config/bird.cfg
+	    return 2
+	fi
+    done
 }
 
 # Execute a set of tests using daemon mode.
