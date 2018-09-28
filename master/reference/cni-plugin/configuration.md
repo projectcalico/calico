@@ -208,7 +208,7 @@ When using `type: k8s`, the Calico CNI plugin requires read-only Kubernetes API 
 
 When using the CNI `host-local` IPAM plugin, a special value `usePodCidr` is allowed for the subnet field (either at the top-level, or in a "range").  This tells the plugin to determine the subnet to use from the Kubernetes API based on the Node.podCIDR field.  Calico does not use the `gateway` field of a range so that field is not required and it will be ignored if present.
 
-> **Note**: `usePodCidr` can only be used as the value of the `subnet` field, it cannot be used in 
+> **Note**: `usePodCidr` can only be used as the value of the `subnet` field, it cannot be used in
 > `rangeStart` or `rangeEnd` so those values are not useful if `subnet` is set to `usePodCidr`.
 {: .alert .alert-info}
 
@@ -335,3 +335,36 @@ There are two annotations to request a specific IP address:
 > - You can only specify one IPv4/IPv6 or one IPv4 and one IPv6 address with these annotations.
 > - When `ipAddrs` or `ipAddrsNoIpam` is used with `ipv4pools` or `ipv6pools`, `ipAddrs` / `ipAddrsNoIpam` take priority.
 {: .alert .alert-info}
+
+#### Requesting a floating IP
+
+You can request a floating IP address for a pod through [Kubernetes annotations](https://kubernetes.io/docs/user-guide/annotations/) with {{site.prodname}}.
+
+- `cni.projectcalico.org/floatingIPs`: A list of floating IPs which will be assigned to the pod's workload endpoint.
+
+  Example:
+
+   ```yaml
+   annotations:
+        "cni.projectcalico.org/floatingIPs": "[\"10.0.0.1\"]"
+   ```
+
+   The floatingIPs feature is disabled by default. It can be enabled in the feature_control section of the CNI network config:
+
+   ```json
+   {
+        "name": "any_name",
+        "cniVersion": "0.1.0",
+        "type": "calico",
+        "ipam": {
+            "type": "calico-ipam"
+        },
+       "feature_control": {
+           "floating_ips": true
+       }
+   }
+   ```
+
+   > **Warning**: This feature can allow pods to receive traffic which may not have been intended for that pod.
+   > Users should make sure the proper admission control is in place to prevent users from selecting arbitrary floating IP addresses.
+   {: .alert .alert-danger}
