@@ -33,7 +33,7 @@ func init() {
 		map[string]string{
 			"NAME":   "{{.ObjectMeta.Name}}",
 			"PEERIP": "{{.Spec.PeerIP}}",
-			"NODE":   "{{ if eq .Spec.Node `` }}(global){{ else }}{{.Spec.Node}}{{ end }}",
+			"NODE":   "{{ if eq .Spec.Node `` }}{{ if eq .Spec.NodeSelector `` }}(global){{ else }}{{.Spec.NodeSelector}}{{ end }}{{ else }}{{.Spec.Node}}{{ end }}",
 			"ASN":    "{{.Spec.ASNumber}}",
 		},
 		func(ctx context.Context, client client.Interface, resource ResourceObject) (ResourceObject, error) {
