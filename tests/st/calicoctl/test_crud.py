@@ -799,6 +799,27 @@ class TestCalicoctlCommands(TestBase):
         # Delete the resource
         rc = calicoctl("delete ippool %s" % name(ippool_name1_rev1_v4))
         rc.assert_no_error()
+
+    def test_bgppeer_node_selector(self):
+        rc = calicoctl("create", data={
+            'apiVersion': API_VERSION,
+            'kind': 'BGPPeer',
+            'metadata': {
+                'name': 'bp1'
+            },
+            'spec': {
+                'nodeSelector': "has(rr)",
+                'peerSelector': "has(rr)",
+            },
+        })
+        rc.assert_no_error()
+
+        rc = calicoctl("get bgpp")
+        rc.assert_no_error()
+        rc.assert_output_contains("bp1")
+        rc.assert_output_contains("has(rr)")
+        assert "global" not in rc.output
+
 #
 #
 # class TestCreateFromFile(TestBase):
