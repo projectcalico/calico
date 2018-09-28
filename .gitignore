@@ -16,3 +16,4 @@ testfile
 calico_test.created
 release-notes*
 report/*.xml
+.empty
