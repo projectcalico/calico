@@ -349,46 +349,55 @@ func (c *client) updatePeersV1() {
 		peersV1[k] = string(value)
 	}
 
-	// Loop through v3 BGPPeers.
-	for _, v3res := range c.bgpPeers {
-		log.WithField("peer", v3res).Debug("First pass with v3 BGPPeer")
-
-		var localNodeNames []string
-		if v3res.Spec.NodeSelector != "" {
-			localNodeNames = c.nodesMatching(v3res.Spec.NodeSelector)
-		} else if v3res.Spec.Node != "" {
-			localNodeNames = []string{v3res.Spec.Node}
-		}
-		log.Debugf("Local nodes %#v", localNodeNames)
-
-		var peers []*bgpPeer
-		if v3res.Spec.PeerSelector != "" {
-			for _, peerNodeName := range c.nodesMatching(v3res.Spec.PeerSelector) {
-				peers = append(peers, c.nodeAsBGPPeers(peerNodeName)...)
-			}
-		} else {
-			ip := net.ParseIP(v3res.Spec.PeerIP)
-			if ip == nil {
-				log.Warning("PeerIP is not assigned or is malformed")
+	// Loop through v3 BGPPeers twice, first to emit global peerings, then for
+	// node-specific ones.  The point here is to emit all of the possible global peerings
+	// _first_, so that we can then skip emitting any node-specific peerings that would
+	// duplicate those on particular nodes.
+	for _, globalPass := range []bool{true, false} {
+		for _, v3res := range c.bgpPeers {
+			log.WithField("peer", v3res).Debug("Process v3 BGPPeer")
+			if globalPass != ((v3res.Spec.NodeSelector == "") && (v3res.Spec.Node == "")) {
+				log.WithField("globalPass", globalPass).Debug("Skip BGPPeer on this pass")
 				continue
 			}
-			peers = append(peers, &bgpPeer{
-				PeerIP: *ip,
-				ASNum:  v3res.Spec.ASNumber,
-			})
-		}
-		log.Debugf("Peers %#v", peers)
 
-		for _, peer := range peers {
-			log.Debugf("Peer: %#v", peer)
-			if localNodeNames == nil {
-				key := model.GlobalBGPPeerKey{PeerIP: peer.PeerIP}
-				emit(key, peer)
+			var localNodeNames []string
+			if v3res.Spec.NodeSelector != "" {
+				localNodeNames = c.nodesMatching(v3res.Spec.NodeSelector)
+			} else if v3res.Spec.Node != "" {
+				localNodeNames = []string{v3res.Spec.Node}
+			}
+			log.Debugf("Local nodes %#v", localNodeNames)
+
+			var peers []*bgpPeer
+			if v3res.Spec.PeerSelector != "" {
+				for _, peerNodeName := range c.nodesMatching(v3res.Spec.PeerSelector) {
+					peers = append(peers, c.nodeAsBGPPeers(peerNodeName)...)
+				}
 			} else {
-				for _, localNodeName := range localNodeNames {
-					log.Debugf("Local node name: %#v", localNodeName)
-					key := model.NodeBGPPeerKey{Nodename: localNodeName, PeerIP: peer.PeerIP}
+				ip := net.ParseIP(v3res.Spec.PeerIP)
+				if ip == nil {
+					log.Warning("PeerIP is not assigned or is malformed")
+					continue
+				}
+				peers = append(peers, &bgpPeer{
+					PeerIP: *ip,
+					ASNum:  v3res.Spec.ASNumber,
+				})
+			}
+			log.Debugf("Peers %#v", peers)
+
+			for _, peer := range peers {
+				log.Debugf("Peer: %#v", peer)
+				if globalPass {
+					key := model.GlobalBGPPeerKey{PeerIP: peer.PeerIP}
 					emit(key, peer)
+				} else {
+					for _, localNodeName := range localNodeNames {
+						log.Debugf("Local node name: %#v", localNodeName)
+						key := model.NodeBGPPeerKey{Nodename: localNodeName, PeerIP: peer.PeerIP}
+						emit(key, peer)
+					}
 				}
 			}
 		}
