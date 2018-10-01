@@ -23,7 +23,8 @@ execute_test_suite() {
     build_tomls_for_node
 
     if [ "$DATASTORE_TYPE" = etcdv3 ]; then
-	test_extra_1
+	test_node_deletion
+	test_idle_peers
 	echo "Extra etcdv3 tests passed"
     fi
 
@@ -44,7 +45,7 @@ execute_test_suite() {
     echo "Daemon-mode tests passed"
 }
 
-test_extra_1() {
+test_node_deletion() {
     # Run confd as a background process.
     echo "Running confd as background process"
     NODENAME=node1 BGP_LOGSEVERITYSCREEN="debug" confd -confdir=/etc/calico/confd >$LOGPATH/logd1 2>&1 &
@@ -125,6 +126,89 @@ EOF
     calicoctl delete node node2
     calicoctl delete node node4
     calicoctl delete bgppeer bgppeer-1
+}
+
+# Test that when BGPPeers generate overlapping global and node-specific peerings, we reliably
+# only see the global peerings in the v1 data model.
+test_idle_peers() {
+    # Run confd as a background process.
+    echo "Running confd as background process"
+    NODENAME=node1 BGP_LOGSEVERITYSCREEN="debug" confd -confdir=/etc/calico/confd >$LOGPATH/logd1 2>&1 &
+    CONFD_PID=$!
+    echo "Running with PID " $CONFD_PID
+
+    # Turn the node-mesh off.
+    turn_mesh_off
+
+    # Create 2 nodes, a global peering between them, and a node-specific peering between them.
+    calicoctl apply -f - <<EOF
+kind: Node
+apiVersion: projectcalico.org/v3
+metadata:
+  name: node1
+  labels:
+    node: yes
+spec:
+  bgp:
+    ipv4Address: 10.24.0.1/24
+---
+kind: Node
+apiVersion: projectcalico.org/v3
+metadata:
+  name: node2
+  labels:
+    node: yes
+spec:
+  bgp:
+    ipv4Address: 10.24.0.2/24
+---
+kind: BGPPeer
+apiVersion: projectcalico.org/v3
+metadata:
+  name: node-specific
+spec:
+  node: node1
+  peerSelector: has(node)
+---
+kind: BGPPeer
+apiVersion: projectcalico.org/v3
+metadata:
+  name: global
+spec:
+  peerSelector: has(node)
+EOF
+
+    # Expect 1 peering.
+    expect_peerings 1
+
+    # 10 times, touch a Node resource to cause peerings to be recomputed, and check that we
+    # always see just one peering.
+    for n in `seq 1 10`; do
+	calicoctl apply -f - <<EOF
+kind: Node
+apiVersion: projectcalico.org/v3
+metadata:
+  name: node1
+  labels:
+    node: yes
+spec:
+  bgp:
+    ipv4Address: 10.24.0.1/24
+EOF
+	sleep 0.25
+	expect_peerings 1
+    done
+
+    # Kill confd.
+    kill -9 $CONFD_PID
+
+    # Turn the node-mesh back on.
+    turn_mesh_on
+
+    # Delete resources.  Note that deleting Node node1 also deletes the node-specific BGPPeer.
+    calicoctl delete node node1
+    calicoctl delete node node2
+    calicoctl delete bgppeer global
 }
 
 expect_peerings() {
