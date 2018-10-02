@@ -16,6 +16,7 @@ import (
 
 	"github.com/containernetworking/cni/pkg/types/current"
 	"github.com/containernetworking/plugins/pkg/ns"
+	cnitestutils "github.com/containernetworking/plugins/pkg/testutils"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"github.com/projectcalico/cni-plugin/testutils"
@@ -2111,7 +2112,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 			log.Infof("Created POD object: %v", pod2)
 
 			// Now since we can't use the same container namespace for the second container, we need to create a new one.
-			contNs2, err := ns.NewNS()
+			contNs2, err := cnitestutils.NewNS()
 			Expect(err).NotTo(HaveOccurred())
 			containerID2 := "random-cid"
 			defer func() {

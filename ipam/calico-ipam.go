@@ -61,7 +61,9 @@ func main() {
 		os.Exit(0)
 	}
 
-	skel.PluginMain(cmdAdd, cmdDel, cniSpecVersion.All)
+	skel.PluginMain(cmdAdd, nil, cmdDel,
+		cniSpecVersion.PluginSupports("0.1.0", "0.2.0", "0.3.0", "0.3.1"),
+		"Calico CNI IPAM "+VERSION)
 }
 
 type ipamArgs struct {

@@ -2,15 +2,18 @@ package: github.com/projectcalico/cni-plugin
 import:
 - package: github.com/sirupsen/logrus
   version: v1.0.4
+# Need a recent master version to pick up API changes.
 - package: github.com/containernetworking/cni
+  version: e67bb289cccfcad352b92c5234a1610b105846e0
   subpackages:
   - pkg/skel
   - pkg/types
   - pkg/types/020
   - pkg/types/current
   - pkg/version
+# Need a recent master version to pick up API changes.
 - package: github.com/containernetworking/plugins
-  version: v0.6.0
+  version: 646dbbace1b1000b2bcda2f9c66bda384555b57e
   subpackages:
   - pkg/ip
   - pkg/ipam
@@ -50,3 +53,7 @@ import:
 # It should also be safe to take the latest here (it's generally just adding more symbols)
 - package: golang.org/x/sys
   version: 1b2967e3c290b7c545b3db0deeda16e9be4f98a2
+# A number of packages depend on x/net.  The GRPC version used by the CNI support libraries
+# needs a more recent version than the default that gets selected.
+- package: golang.org/x/net
+  version: 4dfa2610cdf3b287375bbba5b8f2a14d3b01d8de
