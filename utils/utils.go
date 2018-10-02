@@ -544,6 +544,7 @@ func ResolvePools(ctx context.Context, c client.Interface, pools []string, isv4 
 					if err != nil {
 						return nil, fmt.Errorf("failed to parse IP pool cidr: %s", err)
 					}
+					logrus.Infof("Resolved pool name %s to cidr %s", ipp.Name, cidr)
 				}
 			}
 
