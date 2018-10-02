@@ -74,6 +74,7 @@ var _ = testutils.E2eDatastoreDescribe("IPPool KDD v1 to v3 migration tests", te
 		CIDR:        "2001::/120",
 		NATOutgoing: true,
 		IPIPMode:    apiv3.IPIPModeNever,
+		BlockSize:   122,
 	}
 	kvp2 := &model.KVPair{
 		Key: model.ResourceKey{
@@ -92,6 +93,7 @@ var _ = testutils.E2eDatastoreDescribe("IPPool KDD v1 to v3 migration tests", te
 				CIDR:        "2001::/120",
 				Disabled:    false,
 				NATOutgoing: true,
+				BlockSize:   122,
 				IPIP: &apiv1.IPIPConfiguration{
 					Enabled: false,
 				},

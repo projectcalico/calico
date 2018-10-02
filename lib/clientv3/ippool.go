@@ -91,7 +91,7 @@ func (r ipPools) Update(ctx context.Context, res *apiv3.IPPool, opts options.Set
 		return nil, err
 	}
 
-	// Get the existing settings, so that we can validate the CIDR has not changed.
+	// Get the existing settings, so that we can validate the CIDR and block size have not changed.
 	old, err := r.Get(ctx, res.Name, options.GetOptions{})
 	if err != nil {
 		return nil, err
@@ -189,8 +189,10 @@ func (r ipPools) Delete(ctx context.Context, name string, opts options.DeleteOpt
 func (r ipPools) Get(ctx context.Context, name string, opts options.GetOptions) (*apiv3.IPPool, error) {
 	out, err := r.client.resources.Get(ctx, opts, apiv3.KindIPPool, noNamespace, name)
 	if out != nil {
+		convertIpPoolFromStorage(out.(*apiv3.IPPool))
 		return out.(*apiv3.IPPool), err
 	}
+
 	return nil, err
 }
 
@@ -200,7 +202,38 @@ func (r ipPools) List(ctx context.Context, opts options.ListOptions) (*apiv3.IPP
 	if err := r.client.resources.List(ctx, opts, apiv3.KindIPPool, apiv3.KindIPPoolList, res); err != nil {
 		return nil, err
 	}
+
+	// Default values when reading from backend.
+	for _, pool := range res.Items {
+		convertIpPoolFromStorage(&pool)
+	}
+
 	return res, nil
+}
+
+// Default pool values when reading from storage
+func convertIpPoolFromStorage(pool *apiv3.IPPool) error {
+	// Default the blockSize if it wasn't previously set
+	if pool.Spec.BlockSize == 0 {
+		// Get the IP address of the CIDR to find the IP version
+		ipAddr, _, err := cnet.ParseCIDR(pool.Spec.CIDR)
+		if err != nil {
+			return cerrors.ErrorValidation{
+				ErroredFields: []cerrors.ErroredField{{
+					Name:   "IPPool.Spec.CIDR",
+					Reason: "IPPool CIDR must be a valid subnet",
+					Value:  pool.Spec.CIDR,
+				}},
+			}
+		}
+
+		if ipAddr.Version() == 4 {
+			pool.Spec.BlockSize = 26
+		} else {
+			pool.Spec.BlockSize = 122
+		}
+	}
+	return nil
 }
 
 // Watch returns a watch.Interface that watches the IPPools that match the
@@ -251,6 +284,57 @@ func (r ipPools) validateAndSetDefaults(ctx context.Context, new, old *apiv3.IPP
 		})
 	}
 
+	// Default the blockSize
+	if new.Spec.BlockSize == 0 {
+		if ipAddr.Version() == 4 {
+			new.Spec.BlockSize = 26
+		} else {
+			new.Spec.BlockSize = 122
+		}
+	}
+
+	// Check that the blockSize hasn't changed since updates are not supported.
+	if old != nil && old.Spec.BlockSize != new.Spec.BlockSize {
+		errFields = append(errFields, cerrors.ErroredField{
+			Name:   "IPPool.Spec.BlockSize",
+			Reason: "IPPool BlockSize cannot be modified",
+			Value:  new.Spec.BlockSize,
+		})
+	}
+
+	if ipAddr.Version() == 4 {
+		if new.Spec.BlockSize > 32 || new.Spec.BlockSize < 20 {
+			errFields = append(errFields, cerrors.ErroredField{
+				Name:   "IPPool.Spec.BlockSize",
+				Reason: "IPv4 block size must be between 20 and 32",
+				Value:  new.Spec.BlockSize,
+			})
+
+		}
+	} else {
+		if new.Spec.BlockSize > 128 || new.Spec.BlockSize < 116 {
+			errFields = append(errFields, cerrors.ErroredField{
+				Name:   "IPPool.Spec.BlockSize",
+				Reason: "IPv6 block size must be between 116 and 128",
+				Value:  new.Spec.BlockSize,
+			})
+		}
+	}
+
+	// The Calico IPAM places restrictions on the minimum IP pool size.  If
+	// the ippool is enabled, check that the pool is at least the minimum size.
+	if !new.Spec.Disabled {
+		ones, _ := cidr.Mask.Size()
+		log.Debugf("Pool CIDR: %s, mask: %d, blockSize: %d", cidr.String(), ones, new.Spec.BlockSize)
+		if ones > new.Spec.BlockSize {
+			errFields = append(errFields, cerrors.ErroredField{
+				Name:   "IPPool.Spec.CIDR",
+				Reason: "IP pool size is too small for use with Calico IPAM. It must be equal to or greater than the block size.",
+				Value:  new.Spec.CIDR,
+			})
+		}
+	}
+
 	// If there was no previous pool then this must be a Create.  Check that the CIDR
 	// does not overlap with any other pool CIDRs.
 	if old == nil {
@@ -292,28 +376,6 @@ func (r ipPools) validateAndSetDefaults(ctx context.Context, new, old *apiv3.IPP
 			Reason: "IPIP is not supported on an IPv6 IP pool",
 			Value:  new.Spec.IPIPMode,
 		})
-	}
-
-	// The Calico IPAM places restrictions on the minimum IP pool size.  If
-	// the ippool is enabled, check that the pool is at least the minimum size.
-	if !new.Spec.Disabled {
-		ones, bits := cidr.Mask.Size()
-		log.Debugf("Pool CIDR: %s, num bits: %d", cidr.String(), bits-ones)
-		if bits-ones < 6 {
-			if cidr.Version() == 4 {
-				errFields = append(errFields, cerrors.ErroredField{
-					Name:   "IPPool.Spec.CIDR",
-					Reason: "IPv4 pool size is too small (min /26) for use with Calico IPAM",
-					Value:  new.Spec.CIDR,
-				})
-			} else {
-				errFields = append(errFields, cerrors.ErroredField{
-					Name:   "IPPool.Spec.CIDR",
-					Reason: "IPv6 pool size is too small (min /122) for use with Calico IPAM",
-					Value:  new.Spec.CIDR,
-				})
-			}
-		}
 	}
 
 	// The Calico CIDR should be strictly masked

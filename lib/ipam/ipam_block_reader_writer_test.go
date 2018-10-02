@@ -184,7 +184,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 						defer GinkgoRecover()
 
 						testhost := fmt.Sprintf("host-%d", j)
-						ips, err := ic.autoAssign(ctx, 1, &testhost, nil, nil, ipv4, testhost)
+						ips, err := ic.autoAssign(ctx, 1, &testhost, nil, nil, 4, testhost)
 						if err != nil {
 							log.WithError(err).Errorf("Auto assign failed for host %s", testhost)
 							testErr = err
@@ -270,7 +270,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 						defer GinkgoRecover()
 
 						testhost := "single-host"
-						ips, err := ic.autoAssign(ctx, 1, nil, nil, nil, ipv4, testhost)
+						ips, err := ic.autoAssign(ctx, 1, nil, nil, nil, 4, testhost)
 						if err != nil {
 							log.WithError(err).Errorf("Auto assign failed for host %s", testhost)
 							testErr = err
@@ -659,7 +659,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 			}
 
 			By("attempting to claim the block on multiple hosts at the same time", func() {
-				ips, err := ic.autoAssign(ctx, 1, nil, nil, nil, ipv4, hostA)
+				ips, err := ic.autoAssign(ctx, 1, nil, nil, nil, 4, hostA)
 
 				// Shouldn't return an error.
 				Expect(err).NotTo(HaveOccurred())
@@ -689,7 +689,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 			})
 
 			By("attempting to claim another address", func() {
-				ips, err := ic.autoAssign(ctx, 1, nil, nil, nil, ipv4, hostA)
+				ips, err := ic.autoAssign(ctx, 1, nil, nil, nil, 4, hostA)
 
 				// Shouldn't return an error.
 				Expect(err).NotTo(HaveOccurred())

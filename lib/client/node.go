@@ -87,39 +87,9 @@ func (h *nodes) Delete(metadata api.NodeMetadata) error {
 	}
 	log.Debugf("Deleting node: %s", metadata.Name)
 
-	// List endpoints.
-	eps, err := h.c.WorkloadEndpoints().List(api.WorkloadEndpointMetadata{Node: metadata.Name})
-	if err != nil {
-		return err
-	}
-
-	// Collate all IPs across all endpoints, and then release those IPs.
-	ips := []net.IP{}
-	for _, ep := range eps.Items {
-		for _, nw := range ep.Spec.IPNetworks {
-			ips = append(ips, net.IP{nw.IP})
-		}
-	}
-
-	log.Debugf("Releasing the following IPs from workload endpoints: %v", ips)
-	_, err = h.c.IPAM().ReleaseIPs(context.Background(), ips)
-	if err != nil {
-		return err
-	}
-
-	// Remove the node from the IPAM data if it exists.
-	log.Debug("Removing IPAM host data")
-	err = h.c.IPAM().RemoveIPAMHost(context.Background(), metadata.Name)
-	if err != nil {
-		log.Debug("Error removing host data: %v", err)
-		if _, ok := err.(errors.ErrorResourceDoesNotExist); ok {
-			return err
-		}
-	}
-
 	// Remove BGP Node directory
 	log.Debug("Removing BGP Node data")
-	err = h.RemoveBGPNode(metadata)
+	err := h.RemoveBGPNode(metadata)
 	if err != nil {
 		log.Debug("Error removing BGP Node data: %v", err)
 		if _, ok := err.(errors.ErrorResourceDoesNotExist); ok {

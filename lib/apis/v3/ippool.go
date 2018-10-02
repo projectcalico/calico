@@ -50,6 +50,9 @@ type IPPoolSpec struct {
 	// When disabled is true, Calico IPAM will not assign addresses from this pool.
 	Disabled bool `json:"disabled,omitempty"`
 
+	// The block size to use for IP address assignments from this pool. Defaults to 26 for IPv4 and 112 for IPv6.
+	BlockSize int `json:"blockSize,omitempty"`
+
 	// Deprecated: this field is only used for APIv1 backwards compatibility.
 	// Setting this field is not allowed, this field is for internal use only.
 	IPIP *apiv1.IPIPConfiguration `json:"ipip,omitempty" validate:"omitempty,mustBeNil"`
