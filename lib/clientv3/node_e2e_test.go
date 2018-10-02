@@ -39,7 +39,49 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/watch"
 )
 
-var _ = testutils.E2eDatastoreDescribe("Node tests", testutils.DatastoreEtcdV3, func(config apiconfig.CalicoAPIConfig) {
+var _ = testutils.E2eDatastoreDescribe("Node tests (kdd)", testutils.DatastoreK8s, func(config apiconfig.CalicoAPIConfig) {
+	ctx := context.Background()
+
+	It("should delete labels on a node", func() {
+		c, err := clientv3.New(config)
+		Expect(err).NotTo(HaveOccurred())
+		be, err := backend.NewClient(config)
+		Expect(err).NotTo(HaveOccurred())
+		be.Clean()
+
+		// Get a node.
+		By("Querying a node")
+		name := "127.0.0.1"
+		node, err := c.Nodes().Get(ctx, name, options.GetOptions{})
+		Expect(err).NotTo(HaveOccurred())
+		Expect(len(node.Labels)).To(Equal(0))
+
+		// Add a label and check it gets written.
+		By("Adding a label to the node")
+		node.Labels = map[string]string{"test-label": "foo"}
+		_, err = c.Nodes().Update(ctx, node, options.SetOptions{})
+		Expect(err).NotTo(HaveOccurred())
+
+		By("Checking the label gets added")
+		node, err = c.Nodes().Get(ctx, name, options.GetOptions{})
+		Expect(err).NotTo(HaveOccurred())
+		Expect(len(node.Labels)).To(Equal(1))
+
+		// Delete the label from the node.
+		By("Deleting the label from the node")
+		node.Labels = map[string]string{}
+		_, err = c.Nodes().Update(ctx, node, options.SetOptions{})
+		Expect(err).NotTo(HaveOccurred())
+
+		// Get the node, check the labels are empty.
+		By("Checking the label is removed")
+		n, err := c.Nodes().Get(ctx, name, options.GetOptions{})
+		Expect(err).NotTo(HaveOccurred())
+		Expect(len(n.Labels)).To(Equal(0))
+	})
+})
+
+var _ = testutils.E2eDatastoreDescribe("Node tests (etcdv3)", testutils.DatastoreEtcdV3, func(config apiconfig.CalicoAPIConfig) {
 
 	ctx := context.Background()
 	name1 := "node-1"
@@ -221,6 +263,7 @@ var _ = testutils.E2eDatastoreDescribe("Node tests", testutils.DatastoreEtcdV3, 
 			bconfig, err := c.BGPConfigurations().Get(ctx, nodeConfigName, options.GetOptions{})
 			Expect(bconfig).Should(BeNil())
 		})
+
 	})
 
 	DescribeTable("Node e2e CRUD tests",
