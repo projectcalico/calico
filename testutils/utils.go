@@ -76,7 +76,7 @@ func WipeEtcd() {
 }
 
 // MustCreateNewIPPool creates a new Calico IPAM IP Pool.
-func MustCreateNewIPPool(c client.Interface, cidr string, ipip, natOutgoing, ipam bool) {
+func MustCreateNewIPPool(c client.Interface, cidr string, ipip, natOutgoing, ipam bool) string {
 	log.SetLevel(log.DebugLevel)
 
 	log.SetOutput(os.Stderr)
@@ -102,6 +102,7 @@ func MustCreateNewIPPool(c client.Interface, cidr string, ipip, natOutgoing, ipa
 	if err != nil {
 		panic(err)
 	}
+	return pool.Name
 }
 
 func MustDeleteIPPool(c client.Interface, cidr string) {
