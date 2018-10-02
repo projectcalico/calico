@@ -60,6 +60,9 @@ func SetK8sAnnotationsFromCalicoMetadata(k8sRes Resource, calicoRes Resource) {
 		} else {
 			a[labelsAnnotation] = string(lann)
 		}
+	} else {
+		// There are no Calico labels - nil out the k8s res.
+		delete(a, labelsAnnotation)
 	}
 	if annotations := calicoRes.GetObjectMeta().GetAnnotations(); len(annotations) > 0 {
 		if aann, err := json.Marshal(annotations); err != nil {
@@ -67,6 +70,9 @@ func SetK8sAnnotationsFromCalicoMetadata(k8sRes Resource, calicoRes Resource) {
 		} else {
 			a[annotationsAnnotation] = string(aann)
 		}
+	} else {
+		// There are no Calico annotations - nil out the k8s res.
+		delete(a, annotationsAnnotation)
 	}
 	k8sRes.GetObjectMeta().SetAnnotations(a)
 }
