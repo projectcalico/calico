@@ -319,7 +319,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 
 		// Add the interface created above to the CNI result.
 		result.Interfaces = append(result.Interfaces, &current.Interface{
-			Name: endpoint.Spec.InterfaceName, Sandbox: endpoint.Spec.Endpoint},
+			Name: endpoint.Spec.InterfaceName},
 		)
 	}
 
