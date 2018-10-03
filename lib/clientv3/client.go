@@ -142,19 +142,19 @@ type poolAccessor struct {
 	client *client
 }
 
-func (p poolAccessor) GetEnabledPools(ipVersion int) ([]*v3.IPPool, error) {
+func (p poolAccessor) GetEnabledPools(ipVersion int) ([]v3.IPPool, error) {
 	pools, err := p.client.IPPools().List(context.Background(), options.ListOptions{})
 	if err != nil {
 		return nil, err
 	}
 	log.Debugf("Got list of all IPPools: %v", pools)
-	var enabled []*v3.IPPool
+	var enabled []v3.IPPool
 	for _, pool := range pools.Items {
 		if pool.Spec.Disabled {
 			continue
 		} else if _, cidr, err := net.ParseCIDR(pool.Spec.CIDR); err == nil && cidr.Version() == ipVersion {
 			log.Debugf("Adding pool (%s) to the enabled IPPool list", cidr.String())
-			enabled = append(enabled, &pool)
+			enabled = append(enabled, pool)
 		} else if err != nil {
 			log.Warnf("Failed to parse the IPPool: %s. Ignoring that IPPool", pool.Spec.CIDR)
 		} else {

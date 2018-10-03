@@ -199,7 +199,7 @@ func (c ipamClient) getBlockFromAffinity(ctx context.Context, aff *model.KVPair)
 // determinePools compares a list of requested pools with the enabled pools
 // and returns the intersect. If any requested pool does not exist, or is not enabled, an error is returned.
 // If no pools are requested, all enabled pools are returned.
-func (c ipamClient) determinePools(requestedPoolNets []net.IPNet, version int) ([]*v3.IPPool, error) {
+func (c ipamClient) determinePools(requestedPoolNets []net.IPNet, version int) ([]v3.IPPool, error) {
 	enabledPools, err := c.pools.GetEnabledPools(version)
 	if err != nil {
 		log.WithError(err).Errorf("Error reading configured pools")
@@ -210,7 +210,7 @@ func (c ipamClient) determinePools(requestedPoolNets []net.IPNet, version int) (
 	if len(requestedPoolNets) > 0 {
 		log.Debugf("requested IPPools: %v", requestedPoolNets)
 		// Build a map so we can lookup existing pools.
-		pm := map[string]*v3.IPPool{}
+		pm := map[string]v3.IPPool{}
 		for _, p := range enabledPools {
 			pm[p.Spec.CIDR] = p
 		}

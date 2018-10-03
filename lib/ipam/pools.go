@@ -18,5 +18,5 @@ import "github.com/projectcalico/libcalico-go/lib/apis/v3"
 // Interface used to access the enabled IPPools.
 type PoolAccessorInterface interface {
 	// Returns a list of enabled pools sorted in alphanumeric name order.
-	GetEnabledPools(ipVersion int) ([]*v3.IPPool, error)
+	GetEnabledPools(ipVersion int) ([]v3.IPPool, error)
 }

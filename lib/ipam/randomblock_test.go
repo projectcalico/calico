@@ -37,7 +37,7 @@ var _ = Describe("Random Block Generator", func() {
 })
 
 func poolTest(cidr string, blockSize int) {
-	pools := []*v3.IPPool{{Spec: v3.IPPoolSpec{CIDR: cidr, BlockSize: blockSize}}}
+	pools := []v3.IPPool{{Spec: v3.IPPoolSpec{CIDR: cidr, BlockSize: blockSize}}}
 	host := "testHost"
 
 	_, pool, err := net.ParseCIDR(cidr)
