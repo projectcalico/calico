@@ -36,7 +36,7 @@ type blockReaderWriter struct {
 	pools  PoolAccessorInterface
 }
 
-func (rw blockReaderWriter) getAffineBlocks(ctx context.Context, host string, ver int, pools []*v3.IPPool) ([]cnet.IPNet, error) {
+func (rw blockReaderWriter) getAffineBlocks(ctx context.Context, host string, ver int, pools []v3.IPPool) ([]cnet.IPNet, error) {
 	// Lookup all blocks by providing an empty BlockListOptions
 	// to the List operation.
 	opts := model.BlockAffinityListOptions{Host: host, IPVersion: ver}
@@ -84,7 +84,7 @@ func (rw blockReaderWriter) getAffineBlocks(ctx context.Context, host string, ve
 // should already be sanitized and only enclude existing, enabled pools. Note that the block may become claimed
 // between receiving the cidr from this function and attempting to claim the corresponding block as this function
 // does not reserve the returned IPNet.
-func (rw blockReaderWriter) findUnclaimedBlock(ctx context.Context, host string, version int, pools []*v3.IPPool, config IPAMConfig) (*cnet.IPNet, error) {
+func (rw blockReaderWriter) findUnclaimedBlock(ctx context.Context, host string, version int, pools []v3.IPPool, config IPAMConfig) (*cnet.IPNet, error) {
 	// If there are no pools, we cannot assign addresses.
 	if len(pools) == 0 {
 		return nil, errors.New("no configured Calico pools")
@@ -340,7 +340,7 @@ func (rw blockReaderWriter) getPoolForIP(ip cnet.IP) *v3.IPPool {
 		// Compare any enabled pools.
 		_, pool, err := cnet.ParseCIDR(p.Spec.CIDR)
 		if err == nil && pool.Contains(ip.IP) {
-			return p
+			return &p
 		}
 	}
 	return nil
@@ -380,7 +380,7 @@ func blockGenerator(pool *v3.IPPool, cidr cnet.IPNet) func() *cnet.IPNet {
 // Returns a generator that, when called, returns a random
 // block from the given pool.  When there are no blocks left,
 // the it returns nil.
-func randomBlockGenerator(ipPool *v3.IPPool, hostName string) func() *cnet.IPNet {
+func randomBlockGenerator(ipPool v3.IPPool, hostName string) func() *cnet.IPNet {
 	_, pool, err := cnet.ParseCIDR(ipPool.Spec.CIDR)
 	if err != nil {
 		log.Errorf("Error parsing CIDR: %s %v", ipPool.Spec.CIDR, err)

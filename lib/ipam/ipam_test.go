@@ -43,7 +43,7 @@ type ipPoolAccessor struct {
 	pools map[string]bool
 }
 
-func (i *ipPoolAccessor) GetEnabledPools(ipVersion int) ([]*v3.IPPool, error) {
+func (i *ipPoolAccessor) GetEnabledPools(ipVersion int) ([]v3.IPPool, error) {
 	sorted := make([]string, 0)
 	// Get a sorted list of enabled pool CIDR strings.
 	for p, e := range i.pools {
@@ -56,11 +56,11 @@ func (i *ipPoolAccessor) GetEnabledPools(ipVersion int) ([]*v3.IPPool, error) {
 	// Convert to IPNets and sort out the correct IP versions.  Sorting the results
 	// mimics more closely the behavior of etcd and allows the tests to be
 	// deterministic.
-	pools := make([]*v3.IPPool, 0)
+	pools := make([]v3.IPPool, 0)
 	for _, p := range sorted {
 		c := cnet.MustParseCIDR(p)
 		if c.Version() == ipVersion {
-			pool := &v3.IPPool{Spec: v3.IPPoolSpec{CIDR: p}}
+			pool := v3.IPPool{Spec: v3.IPPoolSpec{CIDR: p}}
 			if ipVersion == 4 {
 				pool.Spec.BlockSize = 26
 			} else {
