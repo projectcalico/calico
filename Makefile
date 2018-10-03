@@ -38,6 +38,15 @@ ifeq ($(ARCH),x86_64)
         override ARCH=amd64
 endif
 
+# Build mounts for running in "local build" mode. Mount in libcalico, but null out
+# the vendor directory. This allows an easy build using local development code,
+# assuming that there is a local checkout of libcalico in the same directory as this repo.
+LOCAL_BUILD_MOUNTS ?=
+ifeq ($(LOCAL_BUILD),true)
+LOCAL_BUILD_MOUNTS = -v $(CURDIR)/../libcalico-go:/go/src/$(PACKAGE_NAME)/vendor/github.com/projectcalico/libcalico-go:ro \
+	-v $(CURDIR)/.empty:/go/src/$(PACKAGE_NAME)/vendor/github.com/projectcalico/libcalico-go/vendor:ro
+endif
+
 # we want to be able to run the same recipe on multiple targets keyed on the image name
 # to do that, we would use the entire image name, e.g. calico/node:abcdefg, as the stem, or '%', in the target
 # however, make does **not** allow the usage of invalid filename characters - like / and : - in a stem, and thus errors out
@@ -67,7 +76,11 @@ K8S_VERSION?=v1.11.3
 CNI_VERSION=v0.7.1
 
 # Get version from git.
-GIT_VERSION?=$(shell git describe --tags --dirty)
+GIT_VERSION:=$(shell git describe --tags --dirty --always)
+ifeq ($(LOCAL_BUILD),true)
+	GIT_VERSION = $(shell git describe --tags --dirty --always)-dev-build
+endif
+
 BUILD_IMAGE_ORG?=calico
 
 # By default set the CNI_SPEC_VERSION to 0.3.1 for tests.
@@ -181,6 +194,7 @@ $(BIN)/calico $(BIN)/calico-ipam: $(SRCFILES) vendor
 	-v $(CURDIR):/go/src/$(PACKAGE_NAME):ro \
 	-v $(CURDIR)/$(BIN):/go/src/$(PACKAGE_NAME)/$(BIN) \
 	-v $(CURDIR)/.go-pkg-cache:/go-cache/:rw \
+	$(LOCAL_BUILD_MOUNTS) \
 	-w /go/src/$(PACKAGE_NAME) \
 	-e GOCACHE=/go-cache \
 		$(CALICO_BUILD) sh -c '\
@@ -299,6 +313,7 @@ ut: run-k8s-controller build $(BIN)/host-local
 	-e DATASTORE_TYPE=$(DATASTORE_TYPE) \
 	-e ETCD_ENDPOINTS=http://$(LOCAL_IP_ENV):2379 \
 	-v $(CURDIR):/go/src/$(PACKAGE_NAME):rw \
+	$(LOCAL_BUILD_MOUNTS) \
 	$(CALICO_BUILD) sh -c '\
 			cd  /go/src/$(PACKAGE_NAME) && \
 			ginkgo -cover -r -skipPackage vendor -skipPackage k8s-install $(GINKGO_ARGS)'
@@ -485,6 +500,9 @@ release-publish-latest: release-prereqs
 release-prereqs:
 ifndef VERSION
 	$(error VERSION is undefined - run using make release VERSION=vX.Y.Z)
+endif
+ifdef LOCAL_BUILD
+	$(error LOCAL_BUILD must not be set for a release)
 endif
 
 ###############################################################################
