@@ -39,6 +39,19 @@ ifeq ($(ARCH),x86_64)
     override ARCH=amd64
 endif
 
+# Build mounts for running in "local build" mode. Mount in libcalico, confd, and felix but null out
+# their respective vendor directories. This allows an easy build of calico/node using local development code,
+# assuming that there is a local checkout of felix, confd, and libcalico in the same directory as the node repo.
+LOCAL_BUILD_MOUNTS ?=
+ifeq ($(LOCAL_BUILD),true)
+LOCAL_BUILD_MOUNTS = -v $(CURDIR)/../libcalico-go:/go/src/$(PACKAGE_NAME)/vendor/github.com/projectcalico/libcalico-go:ro \
+	-v $(CURDIR)/.empty:/go/src/$(PACKAGE_NAME)/vendor/github.com/projectcalico/libcalico-go/vendor:ro \
+	-v $(CURDIR)/../confd:/go/src/$(PACKAGE_NAME)/vendor/github.com/projectcalico/confd:ro \
+	-v $(CURDIR)/.empty:/go/src/$(PACKAGE_NAME)/vendor/github.com/projectcalico/confd/vendor:ro \
+	-v $(CURDIR)/../felix:/go/src/$(PACKAGE_NAME)/vendor/github.com/projectcalico/felix:ro \
+	-v $(CURDIR)/.empty:/go/src/$(PACKAGE_NAME)/vendor/github.com/projectcalico/felix/vendor:ro
+endif
+
 # we want to be able to run the same recipe on multiple targets keyed on the image name
 # to do that, we would use the entire image name, e.g. calico/node:abcdefg, as the stem, or '%', in the target
 # however, make does **not** allow the usage of invalid filename characters - like / and : - in a stem, and thus errors out
@@ -91,6 +104,9 @@ DOCKER_CONFIG ?= $(HOME)/.docker/config.json
 
 # Version of this repository as reported by git.
 CALICO_GIT_VER := $(shell git describe --tags --dirty --always)
+ifeq ($(LOCAL_BUILD),true)
+	CALICO_GIT_VER = $(shell git describe --tags --dirty --always)-dev-build
+endif
 
 # Versions and location of dependencies used in the build.
 BIRD_VER?=v0.3.2-13-g17d14e60
@@ -212,6 +228,7 @@ $(NODE_CONTAINER_BINARY): vendor
 		-v $(CURDIR)/.go-pkg-cache:/go-cache/:rw \
 		-e GOCACHE=/go-cache \
 		-v $(CURDIR):/go/src/$(PACKAGE_NAME) \
+		$(LOCAL_BUILD_MOUNTS) \
 		-w /go/src/$(PACKAGE_NAME) \
 		$(CALICO_BUILD) go build -v -o $@ $(LDFLAGS) ./cmd/calico-node/main.go
 
@@ -312,6 +329,7 @@ fix:
 fv: vendor run-k8s-apiserver
 	docker run --rm \
 	-v $(CURDIR):/go/src/$(PACKAGE_NAME):rw \
+	$(LOCAL_BUILD_MOUNTS) \
 	-e LOCAL_USER_ID=$(LOCAL_USER_ID) \
 	-e ETCD_ENDPOINTS=http://$(LOCAL_IP_ENV):2379 \
 	--net=host \
@@ -568,6 +586,9 @@ node-test-at: release-prereqs
 release-prereqs:
 ifndef VERSION
 	$(error VERSION is undefined - run using make release VERSION=vX.Y.Z)
+endif
+ifdef LOCAL_BUILD
+	$(error LOCAL_BUILD must not be set for a release)
 endif
 
 ###############################################################################
