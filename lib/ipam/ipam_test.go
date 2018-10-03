@@ -24,30 +24,35 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
-	"github.com/projectcalico/libcalico-go/lib/apis/v3"
-	log "github.com/sirupsen/logrus"
-
 	"github.com/projectcalico/libcalico-go/lib/apiconfig"
+	"github.com/projectcalico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/libcalico-go/lib/backend"
 	bapi "github.com/projectcalico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	cerrors "github.com/projectcalico/libcalico-go/lib/errors"
 	cnet "github.com/projectcalico/libcalico-go/lib/net"
 	"github.com/projectcalico/libcalico-go/lib/testutils"
+	log "github.com/sirupsen/logrus"
 )
 
 // Implement an IP pools accessor for the IPAM client.  This is a "mock" version
 // of the accessor that we populate directly, rather than requiring the pool
 // data to be persisted in etcd.
 type ipPoolAccessor struct {
-	pools map[string]bool
+	pools map[string]pool
+}
+
+type pool struct {
+	cidr      string
+	blockSize int
+	enabled   bool
 }
 
 func (i *ipPoolAccessor) GetEnabledPools(ipVersion int) ([]v3.IPPool, error) {
 	sorted := make([]string, 0)
 	// Get a sorted list of enabled pool CIDR strings.
 	for p, e := range i.pools {
-		if e {
+		if e.enabled {
 			sorted = append(sorted, p)
 		}
 	}
@@ -61,10 +66,15 @@ func (i *ipPoolAccessor) GetEnabledPools(ipVersion int) ([]v3.IPPool, error) {
 		c := cnet.MustParseCIDR(p)
 		if c.Version() == ipVersion {
 			pool := v3.IPPool{Spec: v3.IPPoolSpec{CIDR: p}}
-			if ipVersion == 4 {
-				pool.Spec.BlockSize = 26
+			if i.pools[p].blockSize == 0 {
+				if ipVersion == 4 {
+					pool.Spec.BlockSize = 26
+				} else {
+					pool.Spec.BlockSize = 122
+				}
+
 			} else {
-				pool.Spec.BlockSize = 122
+				pool.Spec.BlockSize = i.pools[p].blockSize
 			}
 			pools = append(pools, pool)
 		}
@@ -76,7 +86,7 @@ func (i *ipPoolAccessor) GetEnabledPools(ipVersion int) ([]v3.IPPool, error) {
 }
 
 var (
-	ipPools = &ipPoolAccessor{pools: map[string]bool{}}
+	ipPools = &ipPoolAccessor{pools: map[string]pool{}}
 )
 
 type testArgsClaimAff struct {
@@ -90,13 +100,91 @@ type testArgsClaimAff struct {
 
 var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreEtcdV3, func(config apiconfig.CalicoAPIConfig) {
 	// Create a new backend client and an IPAM Client using the IP Pools Accessor.
-	// Tests that need to ensure a clean datastore should invokke Clean() on the datastore at the start of the
+	// Tests that need to ensure a clean datastore should invoke Clean() on the datastore at the start of the
 	// tests.
 	bc, err := backend.NewClient(config)
 	if err != nil {
 		panic(err)
 	}
 	ic := NewIPAMClient(bc, ipPools)
+
+	Context("Measuring allocation performance", func() {
+		bc.Clean()
+		deleteAllPools()
+
+		var pool20, pool32, pool26 []cnet.IPNet
+		// Create many pools
+		for i := 0; i < 100; i++ {
+			cidr := fmt.Sprintf("10.%d.0.0/16", i)
+			ipPools.pools[cidr] = pool{enabled: true, blockSize: 26}
+			pool26 = append(pool26, cnet.MustParseCIDR(cidr))
+		}
+
+		for i := 0; i < 100; i++ {
+			cidr := fmt.Sprintf("11.%d.0.0/16", i)
+			ipPools.pools[cidr] = pool{enabled: true, blockSize: 32}
+			pool32 = append(pool32, cnet.MustParseCIDR(cidr))
+		}
+
+		for i := 0; i < 50; i++ {
+			cidr := fmt.Sprintf("12.%d.0.0/16", i)
+			ipPools.pools[cidr] = pool{enabled: true, blockSize: 20}
+			pool20 = append(pool20, cnet.MustParseCIDR(cidr))
+		}
+
+		Measure("It should be able to allocate a lot of addresses quickly", func(b Benchmarker) {
+			runtime := b.Time("runtime", func() {
+				v4, _, outErr := ic.AutoAssign(context.Background(), AutoAssignArgs{Num4: 64, IPv4Pools: pool20})
+				Expect(outErr).NotTo(HaveOccurred())
+				Expect(len(v4)).To(Equal(64))
+			})
+
+			Expect(runtime.Seconds()).Should(BeNumerically("<", 1))
+		}, 20)
+
+		Measure("It should be able to allocate a single address quickly - blocksize 26", func(b Benchmarker) {
+			runtime := b.Time("runtime", func() {
+				v4, _, outErr := ic.AutoAssign(context.Background(), AutoAssignArgs{Num4: 1, IPv4Pools: pool26})
+				Expect(outErr).NotTo(HaveOccurred())
+				Expect(len(v4)).To(Equal(1))
+			})
+
+			Expect(runtime.Seconds()).Should(BeNumerically("<", 0.1))
+		}, 100)
+
+		Measure("It should be able to allocate a single address quickly - blocksize 20", func(b Benchmarker) {
+			runtime := b.Time("runtime", func() {
+				v4, _, outErr := ic.AutoAssign(context.Background(), AutoAssignArgs{Num4: 1, IPv4Pools: pool20})
+				Expect(outErr).NotTo(HaveOccurred())
+				Expect(len(v4)).To(Equal(1))
+			})
+
+			Expect(runtime.Seconds()).Should(BeNumerically("<", 0.1))
+		}, 100)
+
+		Measure("It should be able to allocate a single address quickly - blocksize 32", func(b Benchmarker) {
+			runtime := b.Time("runtime", func() {
+				v4, _, outErr := ic.AutoAssign(context.Background(), AutoAssignArgs{Num4: 1, IPv4Pools: pool32})
+				Expect(outErr).NotTo(HaveOccurred())
+				Expect(len(v4)).To(Equal(1))
+			})
+
+			Expect(runtime.Seconds()).Should(BeNumerically("<", 0.1))
+		}, 100)
+
+		Measure("It should be able to allocate and release addresses quickly", func(b Benchmarker) {
+			runtime := b.Time("runtime", func() {
+				v4, _, outErr := ic.AutoAssign(context.Background(), AutoAssignArgs{Num4: 1})
+				Expect(outErr).NotTo(HaveOccurred())
+				Expect(len(v4)).To(Equal(1))
+				v4, outErr = ic.ReleaseIPs(context.Background(), v4)
+				Expect(outErr).NotTo(HaveOccurred())
+				Expect(len(v4)).To(Equal(0))
+			})
+
+			Expect(runtime.Seconds()).Should(BeNumerically("<", 1))
+		}, 20)
+	})
 
 	// We're assigning one IP which should be from the only ipPool created at the time, second one
 	// should be from the same /26 block since they're both from the same host, then delete
@@ -357,7 +445,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreEtcdV3, 
 				IPv4Pools: []cnet.IPNet{pool1, pool2},
 			}
 			v4, _, outErr := ic.AutoAssign(context.Background(), args)
-			log.Println("IPAM returned: %v", v4)
+			log.Printf("IPAM returned: %v\n", v4)
 
 			Expect(outErr).NotTo(HaveOccurred())
 			Expect(len(v4)).To(Equal(1))
@@ -372,7 +460,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreEtcdV3, 
 				IPv4Pools: []cnet.IPNet{pool1, pool2},
 			}
 			v4, _, outErr := ic.AutoAssign(context.Background(), args)
-			log.Println("v4: %d IPs", len(v4))
+			log.Printf("v4: %d IPs\n", len(v4))
 
 			Expect(outErr).NotTo(HaveOccurred())
 			Expect(len(v4)).To(Equal(300))
@@ -386,7 +474,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreEtcdV3, 
 				IPv4Pools: []cnet.IPNet{pool1, pool2},
 			}
 			v4, _, outErr := ic.AutoAssign(context.Background(), args)
-			log.Println("v4: %d IPs", len(v4))
+			log.Printf("v4: %d IPs\n", len(v4))
 
 			// Expect 211 entries since we have a total of 512, we requested 1 + 300 already.
 			Expect(outErr).NotTo(HaveOccurred())
@@ -401,7 +489,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreEtcdV3, 
 				IPv4Pools: []cnet.IPNet{pool1, pool5_doesnot_exist},
 			}
 			v4, _, err := ic.AutoAssign(context.Background(), args)
-			log.Println("v4: %d IPs", len(v4))
+			log.Printf("v4: %d IPs\n", len(v4))
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).Should(Equal("the given pool (40.0.0.0/24) does not exist, or is not enabled"))
 			Expect(len(v4)).To(Equal(0))
@@ -409,13 +497,13 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreEtcdV3, 
 	})
 
 	DescribeTable("AutoAssign: requested IPs vs returned IPs",
-		func(host string, cleanEnv bool, pool []string, usePool string, inv4, inv6, expv4, expv6 int, expError error) {
+		func(host string, cleanEnv bool, pools []pool, usePool string, inv4, inv6, expv4, expv6 int, expError error) {
 			if cleanEnv {
 				bc.Clean()
 				deleteAllPools()
 			}
-			for _, v := range pool {
-				applyPool(v, true)
+			for _, v := range pools {
+				ipPools.pools[v.cidr] = pool{cidr: v.cidr, enabled: v.enabled, blockSize: v.blockSize}
 			}
 
 			fromPool := cnet.MustParseNetwork(usePool)
@@ -436,27 +524,36 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreEtcdV3, 
 			Expect(outv6).To(HaveLen(expv6))
 		},
 
-		// Test 1: AutoAssign 1 IPv4, 1 IPv6 - expect one of each to be returned.
-		Entry("1 v4 1 v6", "testHost", true, []string{"192.168.1.0/24", "fd80:24e2:f998:72d6::/120"}, "192.168.1.0/24", 1, 1, 1, 1, nil),
+		// Test 1a: AutoAssign 1 IPv4, 1 IPv6 with tiny block - expect one of each to be returned.
+		Entry("1 v4 1 v6 - tiny block", "testHost", true, []pool{{"192.168.1.0/24", 32, true}, {"fd80:24e2:f998:72d6::/120", 128, true}}, "192.168.1.0/24", 1, 1, 1, 1, nil),
 
-		// Test 2: AutoAssign 256 IPv4, 256 IPv6 - expect 256 IPv4 + IPv6 addresses.
-		Entry("256 v4 256 v6", "testHost", true, []string{"192.168.1.0/24", "fd80:24e2:f998:72d6::/120"}, "192.168.1.0/24", 256, 256, 256, 256, nil),
+		// Test 1b: AutoAssign 1 IPv4, 1 IPv6 with massive block - expect one of each to be returned.
+		Entry("1 v4 1 v6 - big block", "testHost", true, []pool{{"192.168.0.0/16", 20, true}, {"fd80:24e2:f998:72d6::/110", 116, true}}, "192.168.0.0/16", 1, 1, 1, 1, nil),
+
+		// Test 1c: AutoAssign 1 IPv4, 1 IPv6 with default block - expect one of each to be returned.
+		Entry("1 v4 1 v6 - default block", "testHost", true, []pool{{"192.168.1.0/24", 26, true}, {"fd80:24e2:f998:72d6::/120", 122, true}}, "192.168.1.0/24", 1, 1, 1, 1, nil),
+
+		// Test 2a: AutoAssign 256 IPv4, 256 IPv6 with default blocksize- expect 256 IPv4 + IPv6 addresses.
+		Entry("256 v4 256 v6", "testHost", true, []pool{{"192.168.1.0/24", 26, true}, {"fd80:24e2:f998:72d6::/120", 122, true}}, "192.168.1.0/24", 256, 256, 256, 256, nil),
+
+		// Test 2b: AutoAssign 256 IPv4, 256 IPv6 with small blocksize- expect 256 IPv4 + IPv6 addresses.
+		Entry("256 v4 256 v6 - small blocks", "testHost", true, []pool{{"192.168.1.0/24", 30, true}, {"fd80:24e2:f998:72d6::/120", 126, true}}, "192.168.1.0/24", 256, 256, 256, 256, nil),
 
 		// Test 3: AutoAssign 257 IPv4, 0 IPv6 - expect 256 IPv4 addresses, no IPv6, and no error.
-		Entry("257 v4 0 v6", "testHost", true, []string{"192.168.1.0/24", "fd80:24e2:f998:72d6::/120"}, "192.168.1.0/24", 257, 0, 256, 0, nil),
+		Entry("257 v4 0 v6", "testHost", true, []pool{{"192.168.1.0/24", 26, true}, {"fd80:24e2:f998:72d6::/120", 122, true}}, "192.168.1.0/24", 257, 0, 256, 0, nil),
 
 		// Test 4: AutoAssign 0 IPv4, 257 IPv6 - expect 256 IPv6 addresses, no IPv6, and no error.
-		Entry("0 v4 257 v6", "testHost", true, []string{"192.168.1.0/24", "fd80:24e2:f998:72d6::/120"}, "192.168.1.0/24", 0, 257, 0, 256, nil),
+		Entry("0 v4 257 v6", "testHost", true, []pool{{"192.168.1.0/24", 26, true}, {"fd80:24e2:f998:72d6::/120", 122, true}}, "192.168.1.0/24", 0, 257, 0, 256, nil),
 
 		// Test 5: (use pool of size /25 so only two blocks are contained):
 		// - Assign 1 address on host A (Expect 1 address).
-		Entry("1 v4 0 v6 host-A", "host-A", true, []string{"10.0.0.0/25", "fd80:24e2:f998:72d6::/121"}, "10.0.0.0/25", 1, 0, 1, 0, nil),
+		Entry("1 v4 0 v6 host-A", "host-A", true, []pool{{"10.0.0.0/25", 26, true}, {"fd80:24e2:f998:72d6::/121", 122, true}}, "10.0.0.0/25", 1, 0, 1, 0, nil),
 
 		// - Assign 1 address on host B (Expect 1 address, different block).
-		Entry("1 v4 0 v6 host-B", "host-B", false, []string{"10.0.0.0/25", "fd80:24e2:f998:72d6::/121"}, "10.0.0.0/25", 1, 0, 1, 0, nil),
+		Entry("1 v4 0 v6 host-B", "host-B", false, []pool{{"10.0.0.0/25", 26, true}, {"fd80:24e2:f998:72d6::/121", 122, true}}, "10.0.0.0/25", 1, 0, 1, 0, nil),
 
 		// - Assign 64 more addresses on host A (Expect 63 addresses from host A's block, 1 address from host B's block).
-		Entry("64 v4 0 v6 host-A", "host-A", false, []string{"10.0.0.0/25", "fd80:24e2:f998:72d6::/121"}, "10.0.0.0/25", 64, 0, 64, 0, nil),
+		Entry("64 v4 0 v6 host-A", "host-A", false, []pool{{"10.0.0.0/25", 26, true}, {"fd80:24e2:f998:72d6::/121", 122, true}}, "10.0.0.0/25", 64, 0, 64, 0, nil),
 	)
 
 	DescribeTable("AssignIP: requested IP vs returned error",
@@ -501,7 +598,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreEtcdV3, 
 
 	DescribeTable("ReleaseIPs: requested IPs to be released vs actual unallocated IPs",
 		func(inIP net.IP, cleanEnv bool, pool []string, assignIP net.IP, autoAssignNumIPv4 int, expUnallocatedIPs []cnet.IP, expError error) {
-			inIPs := []cnet.IP{cnet.IP{inIP}}
+			inIPs := []cnet.IP{{inIP}}
 
 			// If we cleaned the datastore then recreate the pools.
 			if cleanEnv {
@@ -554,10 +651,10 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreEtcdV3, 
 
 		// Test cases (ReleaseIPs):
 		// Test 1: release an IP that's not configured in any pools - expect a slice with the same IP as unallocatedIPs and no error.
-		Entry("Release an IP that's not configured in any pools", net.ParseIP("1.1.1.1"), true, []string{"192.168.1.0/24", "fd80:24e2:f998:72d6::/120"}, net.IP{}, 0, []cnet.IP{cnet.IP{net.ParseIP("1.1.1.1")}}, nil),
+		Entry("Release an IP that's not configured in any pools", net.ParseIP("1.1.1.1"), true, []string{"192.168.1.0/24", "fd80:24e2:f998:72d6::/120"}, net.IP{}, 0, []cnet.IP{{net.ParseIP("1.1.1.1")}}, nil),
 
 		// Test 2: release an IP that's not allocated in the pool - expect a slice with one (unallocatedIPs) and no error.
-		Entry("Release an IP that's not allocated in the pool", net.ParseIP("192.168.1.0"), true, []string{"192.168.1.0/24", "fd80:24e2:f998:72d6::/120"}, net.IP{}, 0, []cnet.IP{cnet.IP{net.ParseIP("192.168.1.0")}}, nil),
+		Entry("Release an IP that's not allocated in the pool", net.ParseIP("192.168.1.0"), true, []string{"192.168.1.0/24", "fd80:24e2:f998:72d6::/120"}, net.IP{}, 0, []cnet.IP{{net.ParseIP("192.168.1.0")}}, nil),
 
 		// Test 3: Assign 1 IPv4 with AssignIP from a configured pool and then release it.
 		// - Assign should not return an error.
@@ -573,7 +670,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreEtcdV3, 
 		// - Assign should not return no error.
 		// - ReleaseIPs should return a slice with one (unallocatedIPs) and no error.
 		Entry("Assign 1 IPv4 address with AssignIP then try to release 2 IPs (assign one and release it)", net.IP{}, true, []string{"192.168.1.0/24", "fd80:24e2:f998:72d6::/120"}, net.ParseIP("192.168.1.0"), 0, []cnet.IP{}, nil),
-		Entry("Assign 1 IPv4 address with AssignIP then try to release 2 IPs (release a second one)", net.ParseIP("192.168.1.1"), false, []string{"192.168.1.0/24", "fd80:24e2:f998:72d6::/120"}, net.IP{}, 0, []cnet.IP{cnet.IP{net.ParseIP("192.168.1.1")}}, nil),
+		Entry("Assign 1 IPv4 address with AssignIP then try to release 2 IPs (release a second one)", net.ParseIP("192.168.1.1"), false, []string{"192.168.1.0/24", "fd80:24e2:f998:72d6::/120"}, net.IP{}, 0, []cnet.IP{{net.ParseIP("192.168.1.1")}}, nil),
 	)
 
 	DescribeTable("ClaimAffinity: claim IPNet vs actual number of blocks claimed",
@@ -611,7 +708,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreEtcdV3, 
 		// Test 1: claim affinity for an unclaimed IPNet of size 64 - expect 1 claimed blocks, 0 failed and expect no error.
 		Entry("Claim affinity for an unclaimed IPNet of size 64", testArgsClaimAff{"192.168.1.0/26", "host-A", true, []string{"192.168.1.0/24", "fd80:24e2:f998:72d6::/120"}, net.IP{}, 1, 0, nil}),
 
-		// Test 2: claim affinity for an unclaimed IPNet of size smaller than 64 - expect 0 claimed blocks, 0 failed and expect an error error.
+		// Test 2: claim affinity for an unclaimed IPNet of size smaller than 64 - expect 0 claimed blocks, 0 failed and expect an error.
 		Entry("Claim affinity for an unclaimed IPNet of size smaller than 64", testArgsClaimAff{"192.168.1.0/27", "host-A", true, []string{"192.168.1.0/24", "fd80:24e2:f998:72d6::/120"}, net.IP{}, 0, 0, errors.New("The requested CIDR (192.168.1.0/27) is smaller than the minimum.")}),
 
 		// Test 3: claim affinity for a IPNet that has an IP already assigned to another host.
@@ -655,7 +752,7 @@ func getAffineBlocks(backend bapi.Client, host string) []cnet.IPNet {
 	}
 
 	// Iterate through and extract the block CIDRs.
-	blocks := []cnet.IPNet{}
+	var blocks []cnet.IPNet
 	for _, o := range datastoreObjs.KVPairs {
 		k := o.Key.(model.BlockAffinityKey)
 		blocks = append(blocks, k.CIDR)
@@ -665,10 +762,9 @@ func getAffineBlocks(backend bapi.Client, host string) []cnet.IPNet {
 
 func deleteAllPools() {
 	log.Infof("Deleting all pools")
-	ipPools.pools = map[string]bool{}
+	ipPools.pools = map[string]pool{}
 }
 
 func applyPool(cidr string, enabled bool) {
-	log.Infof("Adding pool: %s, enabled: %v", cidr, enabled)
-	ipPools.pools[cidr] = enabled
+	ipPools.pools[cidr] = pool{enabled: enabled}
 }

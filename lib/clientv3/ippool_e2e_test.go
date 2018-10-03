@@ -705,6 +705,98 @@ var _ = testutils.E2eDatastoreDescribe("IPPool tests", testutils.DatastoreAll, f
 			Expect(err.Error()).To(ContainSubstring("IPPool(ippool4) CIDR overlaps with IPPool(ippool1) CIDR 1.2.3.0/24"))
 		})
 	})
+
+	Describe("Verify pool blocksize validation", func() {
+		var err error
+		var c clientv3.Interface
+
+		BeforeEach(func() {
+			c, err = clientv3.New(config)
+			Expect(err).NotTo(HaveOccurred())
+
+			be, err := backend.NewClient(config)
+			Expect(err).NotTo(HaveOccurred())
+			be.Clean()
+		})
+
+		It("should prevent the blocksize being changed on an update", func() {
+			By("Creating a pool")
+			pool, err := c.IPPools().Create(ctx, &apiv3.IPPool{
+				ObjectMeta: metav1.ObjectMeta{Name: "ippool1"},
+				Spec: apiv3.IPPoolSpec{
+					CIDR:      "1.2.3.0/24",
+					BlockSize: 25,
+				},
+			}, options.SetOptions{})
+			Expect(err).NotTo(HaveOccurred())
+
+			By("Attempting to change the blockSize")
+			pool.Spec.BlockSize = 26
+			_, err = c.IPPools().Update(ctx, pool, options.SetOptions{})
+			Expect(err).To(HaveOccurred())
+			Expect(err).To(BeAssignableToTypeOf(errors.ErrorValidation{}))
+			Expect(err.Error()).To(ContainSubstring("IPPool BlockSize cannot be modified"))
+		})
+
+		It("should prevent pools from being created with bad block sizes", func() {
+			_, err := c.IPPools().Create(ctx, &apiv3.IPPool{
+				ObjectMeta: metav1.ObjectMeta{Name: "ippool1"},
+				Spec: apiv3.IPPoolSpec{
+					CIDR:      "1.2.3.0/24",
+					BlockSize: 19,
+				},
+			}, options.SetOptions{})
+			Expect(err).To(HaveOccurred())
+			Expect(err).To(BeAssignableToTypeOf(errors.ErrorValidation{}))
+			Expect(err.Error()).To(ContainSubstring("block size must be between"))
+
+			_, err = c.IPPools().Create(ctx, &apiv3.IPPool{
+				ObjectMeta: metav1.ObjectMeta{Name: "ippool1"},
+				Spec: apiv3.IPPoolSpec{
+					CIDR:      "1.2.3.0/24",
+					BlockSize: 33,
+				},
+			}, options.SetOptions{})
+			Expect(err).To(HaveOccurred())
+			Expect(err).To(BeAssignableToTypeOf(errors.ErrorValidation{}))
+			Expect(err.Error()).To(ContainSubstring("block size must be between"))
+		})
+
+		It("should prevent the creation of a pool with an identical or overlapping CIDR using block sizes", func() {
+			By("Creating a pool")
+			_, err := c.IPPools().Create(ctx, &apiv3.IPPool{
+				ObjectMeta: metav1.ObjectMeta{Name: "ippool1"},
+				Spec: apiv3.IPPoolSpec{
+					CIDR:      "1.2.3.0/24",
+					BlockSize: 25,
+				},
+			}, options.SetOptions{})
+			Expect(err).NotTo(HaveOccurred())
+
+			By("Attempting to create a pool with the same CIDR")
+			_, err = c.IPPools().Create(ctx, &apiv3.IPPool{
+				ObjectMeta: metav1.ObjectMeta{Name: "ippool2"},
+				Spec: apiv3.IPPoolSpec{
+					CIDR:      "1.2.3.0/24",
+					BlockSize: 25,
+				},
+			}, options.SetOptions{})
+			Expect(err).To(HaveOccurred())
+			Expect(err).To(BeAssignableToTypeOf(errors.ErrorValidation{}))
+			Expect(err.Error()).To(ContainSubstring("IPPool(ippool2) CIDR overlaps with IPPool(ippool1) CIDR 1.2.3.0/24"))
+
+			By("Attempting to create a pool half overlappping CIDR and a different block size")
+			_, err = c.IPPools().Create(ctx, &apiv3.IPPool{
+				ObjectMeta: metav1.ObjectMeta{Name: "ippool3"},
+				Spec: apiv3.IPPoolSpec{
+					CIDR: "1.2.3.8/31",
+				},
+			}, options.SetOptions{})
+			Expect(err).To(HaveOccurred())
+			Expect(err).To(BeAssignableToTypeOf(errors.ErrorValidation{}))
+			Expect(err.Error()).To(ContainSubstring("IPPool(ippool3) CIDR overlaps with IPPool(ippool1) CIDR 1.2.3.0/24"))
+		})
+	})
 })
 
 var _ = testutils.E2eDatastoreDescribe("IPPool tests", testutils.DatastoreEtcdV3, func(config apiconfig.CalicoAPIConfig) {
