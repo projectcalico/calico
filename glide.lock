@@ -1,5 +1,5 @@
-hash: 1b27c90d8b7f5ca8b8da11c7eedadf7a34c3ec4347699d246412475d8a3755d0
-updated: 2018-09-26T04:10:15.584648276Z
+hash: a07e931406b45f179c26c45253b2716a545becae2690e7fad0b5533d203cca83
+updated: 2018-10-03T04:10:18.845335253Z
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -47,7 +47,7 @@ imports:
 - name: github.com/ghodss/yaml
   version: 73d445a93680fa1a78ae23a5839bad48f32ba1ee
 - name: github.com/go-ini/ini
-  version: fa25069db393aecc09b71267d0489b357781c860
+  version: 7b294651033cd7d9e7f0d9ffa1b75ed1e198e737
 - name: github.com/gogo/protobuf
   version: c0656edd0d9eab7c66d1eb0c568f9039345796f7
   subpackages:
@@ -165,7 +165,7 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: 4a9fc7d60f567f3d6841272e3801e493a96819c0
+  version: 3f53d6e81f2d6997b0f86c1e95cf2546bc19f167
   subpackages:
   - lib/apiconfig
   - lib/apis/v1
@@ -212,7 +212,7 @@ imports:
   - lib/validator/v3
   - lib/watch
 - name: github.com/prometheus/client_golang
-  version: f69c853d21c15596929fa9126ba211247e7dca95
+  version: 0a8115f42e037a6e327f9a269a26ff6603fb8472
   subpackages:
   - prometheus
   - prometheus/internal
@@ -247,7 +247,7 @@ imports:
   - list
   - trie/ctrie
 - name: golang.org/x/crypto
-  version: 0e37d006457bf46f9e6692014ba72ef82c33022c
+  version: e3636079e1a4c1f337f212cc5cd2aca108f6c900
   subpackages:
   - ssh/terminal
 - name: golang.org/x/net
