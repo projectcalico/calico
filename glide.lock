@@ -1,5 +1,5 @@
-hash: cd1896e430e210633eb7f70f219ad8f90fbd6d6ae5cb21b7a66d177d1829b29c
-updated: 2018-09-26T06:17:31.390451043Z
+hash: dfa70afe6e74cbb0962a3b52fcc254574ada924b343a6628a4054696bb899afd
+updated: 2018-10-03T06:17:52.060112148Z
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -45,7 +45,7 @@ imports:
 - name: github.com/ghodss/yaml
   version: 73d445a93680fa1a78ae23a5839bad48f32ba1ee
 - name: github.com/go-ini/ini
-  version: fa25069db393aecc09b71267d0489b357781c860
+  version: 7b294651033cd7d9e7f0d9ffa1b75ed1e198e737
 - name: github.com/gogo/protobuf
   version: c0656edd0d9eab7c66d1eb0c568f9039345796f7
   subpackages:
@@ -208,7 +208,7 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: 4a9fc7d60f567f3d6841272e3801e493a96819c0
+  version: 3f53d6e81f2d6997b0f86c1e95cf2546bc19f167
   subpackages:
   - lib/apiconfig
   - lib/apis/v1
@@ -250,13 +250,13 @@ imports:
   subpackages:
   - binder
 - name: github.com/projectcalico/typha
-  version: 4970fdb03a0b08c3e7ee0667e7371c7ff12602c1
+  version: 2ef19b3e2afc6b6839c9cb67242c5b3d9ade5364
   subpackages:
   - pkg/syncclient
   - pkg/syncproto
   - pkg/tlsutils
 - name: github.com/prometheus/client_golang
-  version: f69c853d21c15596929fa9126ba211247e7dca95
+  version: 0a8115f42e037a6e327f9a269a26ff6603fb8472
   subpackages:
   - prometheus
   - prometheus/internal
@@ -291,7 +291,7 @@ imports:
 - name: github.com/whyrusleeping/go-logging
   version: 0457bb6b88fc1973573aaf6b5145d8d3ae972390
 - name: golang.org/x/crypto
-  version: 0e37d006457bf46f9e6692014ba72ef82c33022c
+  version: e3636079e1a4c1f337f212cc5cd2aca108f6c900
   subpackages:
   - ssh/terminal
 - name: golang.org/x/net
@@ -358,7 +358,7 @@ imports:
   - internal/urlfetch
   - urlfetch
 - name: google.golang.org/genproto
-  version: 0e822944c569bf5c9afd034adaa56208bd2906ac
+  version: c7e5094acea1ca1b899e2259d80a6b0f882f81f8
   subpackages:
   - googleapis/rpc/status
 - name: google.golang.org/grpc
