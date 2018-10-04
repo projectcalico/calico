@@ -156,7 +156,7 @@ is easy to remedy that by launching an image, making appropriate changes
 to its configuration files, taking a snapshot, and then using that
 snapshot thereafter instead of the original image.
 
-For example, starting from the Ubuntu 14.04 cloud image, the following
+For example, starting from an Ubuntu cloud image, the following
 changes will suffice to meet the requirements just listed.
 
 -   In `/etc/network/interfaces.d/eth0.cfg`, add:
@@ -172,6 +172,15 @@ changes will suffice to meet the requirements just listed.
     contents:
 
         net.ipv6.conf.eth0.router_solicitation_delay = 10
+
+For CentOS, these additions to a cloud-init script have been reported to be effective:
+
+	runcmd:
+	- sed -i -e '$a'"IPV6INIT=yes" /etc/sysconfig/network-scripts/ifcfg-eth0
+	- sed -i -e '$a'"DHCPV6C=yes" /etc/sysconfig/network-scripts/ifcfg-eth0
+	- sed -i '/PATH/i\new_ip6_prefixlen=128' /sbin/dhclient-script
+	- systemctl restart network
+
 
 ### Enabling IPv6 support in {{site.prodname}}
 
