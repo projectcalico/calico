@@ -39,6 +39,15 @@ ifeq ($(ARCH),x86_64)
         override ARCH=amd64
 endif
 
+# Build mounts for running in "local build" mode. Mount in libcalico, but null out
+# the vendor directory. This allows an easy build using local development code,
+# assuming that there is a local checkout of libcalico in the same directory as this repo.
+LOCAL_BUILD_MOUNTS ?=
+ifeq ($(LOCAL_BUILD),true)
+LOCAL_BUILD_MOUNTS = -v $(CURDIR)/../libcalico-go:/go/src/$(PACKAGE_NAME)/vendor/github.com/projectcalico/libcalico-go:ro \
+	-v $(CURDIR)/.empty:/go/src/$(PACKAGE_NAME)/vendor/github.com/projectcalico/libcalico-go/vendor:ro
+endif
+
 # we want to be able to run the same recipe on multiple targets keyed on the image name
 # to do that, we would use the entire image name, e.g. calico/node:abcdefg, as the stem, or '%', in the target
 # however, make does **not** allow the usage of invalid filename characters - like / and : - in a stem, and thus errors out
@@ -83,7 +92,6 @@ PUSH_NONMANIFEST_IMAGES=$(filter-out $(PUSH_MANIFEST_IMAGES),$(PUSH_IMAGES))
 # location of docker credentials to push manifests
 DOCKER_CONFIG ?= $(HOME)/.docker/config.json
 
-CALICOCTL_VERSION?=$(shell git describe --tags --dirty --always)
 CALICOCTL_DIR=calicoctl
 CALICOCTL_FILES=$(shell find $(CALICOCTL_DIR) -name '*.go')
 CTL_CONTAINER_CREATED=$(CALICOCTL_DIR)/.calico_ctl.created-$(ARCH)
@@ -92,14 +100,17 @@ TEST_CONTAINER_NAME ?= calico/test
 
 CALICOCTL_BUILD_DATE?=$(shell date -u +'%FT%T%z')
 CALICOCTL_GIT_REVISION?=$(shell git rev-parse --short HEAD)
-GIT_VERSION?=$(shell git describe --tags --dirty)
+GIT_VERSION?=$(shell git describe --tags --dirty --always)
+ifeq ($(LOCAL_BUILD),true)
+	GIT_VERSION = $(shell git describe --tags --dirty --always)-dev-build
+endif
 
 CALICO_BUILD?=calico/go-build:$(GO_BUILD_VER)
 LOCAL_USER_ID?=$(shell id -u $$USER)
 
 PACKAGE_NAME?=github.com/projectcalico/calicoctl
 
-LDFLAGS=-ldflags "-X $(PACKAGE_NAME)/calicoctl/commands.VERSION=$(CALICOCTL_VERSION) \
+LDFLAGS=-ldflags "-X $(PACKAGE_NAME)/calicoctl/commands.VERSION=$(GIT_VERSION) \
 	-X $(PACKAGE_NAME)/calicoctl/commands.BUILD_DATE=$(CALICOCTL_BUILD_DATE) \
 	-X $(PACKAGE_NAME)/calicoctl/commands.GIT_REVISION=$(CALICOCTL_GIT_REVISION) -s -w"
 
@@ -185,16 +196,16 @@ bin/calicoctl-%: $(CALICOCTL_FILES) vendor
 	docker run --rm -ti \
 	  -e OS=$(OS) -e ARCH=$(ARCH) \
 	  -e GOOS=$(OS) -e GOARCH=$(ARCH) \
-	  -e CALICOCTL_VERSION=$(CALICOCTL_VERSION) \
 	  -e CALICOCTL_BUILD_DATE=$(CALICOCTL_BUILD_DATE) -e CALICOCTL_GIT_REVISION=$(CALICOCTL_GIT_REVISION) \
 	  -v $(CURDIR):/go/src/$(PACKAGE_NAME):ro \
 	  -v $(CURDIR)/bin:/go/src/$(PACKAGE_NAME)/bin \
-      -e LOCAL_USER_ID=$(LOCAL_USER_ID) \
-      -v $(CURDIR)/.go-pkg-cache:/go-cache/:rw \
-      -e GOCACHE=/go-cache \
-	    $(CALICO_BUILD) sh -c '\
-          cd /go/src/$(PACKAGE_NAME) && \
-          go build -v -o bin/calicoctl-$(OS)-$(ARCH) $(LDFLAGS) "./calicoctl/calicoctl.go"'
+	  -e LOCAL_USER_ID=$(LOCAL_USER_ID) \
+	  -v $(CURDIR)/.go-pkg-cache:/go-cache/:rw \
+	  $(LOCAL_BUILD_MOUNTS) \
+	  -e GOCACHE=/go-cache \
+	  -w /go/src/$(PACKAGE_NAME) \
+	  $(CALICO_BUILD) \
+	  go build -v -o bin/calicoctl-$(OS)-$(ARCH) $(LDFLAGS) "./calicoctl/calicoctl.go"
 
 # Overrides for the binaries that need different output names
 bin/calicoctl: bin/calicoctl-linux-amd64
@@ -302,8 +313,9 @@ install-git-hooks:
 ## Run the tests in a container. Useful for CI, Mac dev.
 ut: bin/calicoctl-linux-amd64
 	docker run --rm -v $(CURDIR):/go/src/$(PACKAGE_NAME):rw \
-    -e LOCAL_USER_ID=$(LOCAL_USER_ID) \
-    $(CALICO_BUILD) sh -c 'cd /go/src/$(PACKAGE_NAME) && ginkgo -cover -r --skipPackage vendor calicoctl/* $(GINKGO_ARGS)'
+		-e LOCAL_USER_ID=$(LOCAL_USER_ID) \
+		$(LOCAL_BUILD_MOUNTS) \
+		$(CALICO_BUILD) sh -c 'cd /go/src/$(PACKAGE_NAME) && ginkgo -cover -r --skipPackage vendor calicoctl/* $(GINKGO_ARGS)'
 
 ###############################################################################
 # STs
@@ -481,6 +493,9 @@ release-publish-latest: release-prereqs
 release-prereqs:
 ifndef VERSION
 	$(error VERSION is undefined - run using make release VERSION=vX.Y.Z)
+endif
+ifdef LOCAL_BUILD
+	$(error LOCAL_BUILD must not be set for a release)
 endif
 
 ###############################################################################
