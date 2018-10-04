@@ -61,6 +61,12 @@ type HostEndpointSpec struct {
 	Profiles []string `json:"profiles,omitempty" validate:"omitempty,dive,name"`
 	// Ports contains the endpoint's named ports, which may be referenced in security policy rules.
 	Ports []EndpointPort `json:"ports,omitempty" validate:"dive"`
+	// Indicates, when true, that this HostEndpoint governs all traffic to, from or through the
+	// default network namespace of the host named by the "Node" field; as opposed to traffic
+	// through a particular interface.  When "AllInterfaces" is true, "InterfaceName" must be
+	// empty.  Note that this includes traffic to or from other network namespaces on the same
+	// host, such as from local non-host-networked workloads.
+	AllInterfaces bool `json:"allInterfaces,omitempty"`
 }
 
 type EndpointPort struct {
