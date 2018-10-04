@@ -128,7 +128,8 @@ func GetResultForCurrent(session *gexec.Session, cniVersion string) (*current.Re
 		r020 := types020.Result{}
 
 		if err := json.Unmarshal(session.Out.Contents(), &r020); err != nil {
-			log.Fatalf("Error unmarshaling output to Result: %v\n", err)
+			log.Errorf("Error unmarshaling output to Result: %v\n", err)
+			return nil, err
 		}
 
 		rCurrent, err := current.NewResultFromResult(&r020)
@@ -142,7 +143,8 @@ func GetResultForCurrent(session *gexec.Session, cniVersion string) (*current.Re
 	r := current.Result{}
 
 	if err := json.Unmarshal(session.Out.Contents(), &r); err != nil {
-		log.Fatalf("Error unmarshaling output to Result: %v\n", err)
+		log.Errorf("Error unmarshaling output to Result: %v\n", err)
+		return nil, err
 	}
 	return &r, nil
 }
@@ -228,7 +230,8 @@ func RunIPAMPlugin(netconf, command, args, cniVersion string) (*current.Result, 
 		if command == "ADD" {
 			result, err = GetResultForCurrent(session, cniVersion)
 			if err != nil {
-				log.Fatalf("Error getting result from the session: %v \n %v\n", session, err)
+				log.Errorf("Error getting result from the session: %v \n %v\n", session, err)
+				panic(err)
 			}
 		}
 	} else {
@@ -362,7 +365,8 @@ func RunCNIPluginWithId(
 		log.Infof("CNI output: %s", out)
 		r020 := types020.Result{}
 		if err = json.Unmarshal(out, &r020); err != nil {
-			log.Fatalf("Error unmarshaling output to Result: %v\n", err)
+			log.Errorf("Error unmarshaling output to Result: %v\n", err)
+			return
 		}
 
 		result, err = current.NewResultFromResult(&r020)
