@@ -340,6 +340,10 @@ There are two annotations to request a specific IP address:
 
 You can request a floating IP address for a pod through [Kubernetes annotations](https://kubernetes.io/docs/user-guide/annotations/) with {{site.prodname}}.
 
+> **Note**:
+> The specified address must belong to an IP Pool for advertisement to work properly.
+{: .alert .alert-info}
+
 - `cni.projectcalico.org/floatingIPs`: A list of floating IPs which will be assigned to the pod's workload endpoint.
 
   Example:
