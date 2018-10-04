@@ -203,9 +203,9 @@ bin/calicoctl-%: $(CALICOCTL_FILES) vendor
 	  -v $(CURDIR)/.go-pkg-cache:/go-cache/:rw \
 	  $(LOCAL_BUILD_MOUNTS) \
 	  -e GOCACHE=/go-cache \
-	  $(CALICO_BUILD) sh -c '\
-	  cd /go/src/$(PACKAGE_NAME) && \
-	  go build -v -o bin/calicoctl-$(OS)-$(ARCH) $(LDFLAGS) "./calicoctl/calicoctl.go"'
+	  -w /go/src/$(PACKAGE_NAME) \
+	  $(CALICO_BUILD) \
+	  go build -v -o bin/calicoctl-$(OS)-$(ARCH) $(LDFLAGS) "./calicoctl/calicoctl.go"
 
 # Overrides for the binaries that need different output names
 bin/calicoctl: bin/calicoctl-linux-amd64
