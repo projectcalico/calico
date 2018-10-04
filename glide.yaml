@@ -9,16 +9,16 @@ import:
   version: 773f5027234d0b08adf766be34f55df2f312abf7
 - package: github.com/kelseyhightower/confd
   repo: https://github.com/projectcalico/confd.git
-  version: f0b3c906340fb432d1f1df2bb1703e509aad5025
+  version: 8c4712c917b088c5fa49c1a837d65cebbcd81eed
   subpackages:
   - pkg/config
   - pkg/run
 - package: github.com/projectcalico/felix
-  version: aa252e1e7c59174a83f2fcffe937c1119ef0d021
+  version: 2ce3051f453aca2bce445bbfa90f50d6c45ea732
   subpackages:
   - daemon
 - package: github.com/projectcalico/libcalico-go
-  version: 4a9fc7d60f567f3d6841272e3801e493a96819c0
+  version: 2acf84885d63b4335dc346e22a6562f48685b3a2
   subpackages:
   - lib/apiconfig
   - lib/apis/v3
