@@ -79,6 +79,13 @@ func (_ IPPool) BackendV1ToAPIV3(kvp *model.KVPair) (Resource, error) {
 		Disabled:    pool.Disabled,
 	}
 
+	// Set the blocksize based on IP address family.
+	if pool.CIDR.IP.To4() != nil {
+		ipp.Spec.BlockSize = 26
+	} else {
+		ipp.Spec.BlockSize = 122
+	}
+
 	return ipp, nil
 }
 
