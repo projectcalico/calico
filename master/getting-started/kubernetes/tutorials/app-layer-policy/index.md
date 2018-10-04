@@ -267,7 +267,7 @@ pod by executing a remote shell inside it.
 
 Repeat our attempt to access the database.
 
-    curl http://database:2379/v2/keys?recursive=true
+    curl -I http://database:2379/v2/keys?recursive=true
 
 We have left out the JSON formatting because we do not expect to get a valid JSON response. This
 time we should get a `403 Forbidden` response.  Only the account summary microservice has database
@@ -280,7 +280,7 @@ Finally, let's return to the attack pod that simulated stealing secret keys.
 Let's repeat our attack with stolen keys. We'll further increase the account balance to highlight
 whether it succeeds.
 
-    curl -k https://database:2379/v2/keys/account/519940/balance -d value="99999.99" -XPUT --key /etc/certs/key.pem --cert /etc/certs/cert-chain.pem
+    curl -k --connect-timeout 3 https://database:2379/v2/keys/account/519940/balance -d value="99999.99" -XPUT --key /etc/certs/key.pem --cert /etc/certs/cert-chain.pem
     
 You should get no response, and refreshing your browser should not show an increased balance.
 
