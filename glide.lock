@@ -1,5 +1,5 @@
-hash: 7b119628cc3629ec75ecc3afe9d515f4d78e5c9dc004e8d8dec3e2da43185684
-updated: 2018-09-26T04:11:30.263088794Z
+hash: ecaab09f119e0c3a386ad1acc341d1740bb12a73301a9b1f418f121988f084d7
+updated: 2018-10-04T00:01:17.484215297Z
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -106,13 +106,13 @@ imports:
 - name: github.com/json-iterator/go
   version: f2b4162afba35581b6d4a50d3b8f34e33c144682
 - name: github.com/kelseyhightower/envconfig
-  version: dd1402a4d99de9ac2f396cd6fcb957bc2c695ec1
+  version: f611eb38b3875cc3bd991ca91c51d06446afa14c
 - name: github.com/matttproud/golang_protobuf_extensions
   version: c12348ce28de40eed0136aa2b644d0ee0650e56c
   subpackages:
   - pbutil
 - name: github.com/mcuadros/go-version
-  version: 6d5863ca60fa6fe914b5fd43ed8533d7567c5b0b
+  version: 88e56e02bea1c203c99222c365fa52a69996ccac
 - name: github.com/modern-go/concurrent
   version: bacd9c7ef1dd9b15be4a9909b8ac7a4e313eec94
 - name: github.com/modern-go/reflect2
@@ -164,7 +164,7 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: 4a9fc7d60f567f3d6841272e3801e493a96819c0
+  version: e7afc81e727d3e00dd8f8495dd8488b57506040d
   subpackages:
   - lib/apiconfig
   - lib/apis/v1
@@ -196,15 +196,15 @@ imports:
   - lib/validator/v3
   - lib/watch
 - name: github.com/prometheus/client_golang
-  version: bcbbc08eb2ddff3af83bbf11e7ec13b4fd730b6e
+  version: 967789050ba94deca04a5e84cce8ad472ce313c1
   subpackages:
   - prometheus
 - name: github.com/prometheus/client_model
-  version: 5c3871d89910bfb32f5fcab2aa4b9ec68e65a99f
+  version: 6f3806018612930941127f2a7c6c453ba2c527d2
   subpackages:
   - go
 - name: github.com/prometheus/common
-  version: 7600349dcfe1abd18d72d3a1770870d9800a7801
+  version: e3fb1a1acd7605367a2b378bc2e2f893c05174b7
   subpackages:
   - expfmt
   - internal/bitbucket.org/ww/goautoneg
@@ -226,7 +226,7 @@ imports:
 - name: github.com/vishvananda/netns
   version: 54f0e4339ce73702a0607f49922aaa1e749b418d
 - name: golang.org/x/crypto
-  version: a2144134853fc9a27a7b1e3eb4f19f1a76df13c9
+  version: a49355c7e3f8fe157a85be2f77e6e269a0f89602
   subpackages:
   - ssh/terminal
 - name: golang.org/x/net
