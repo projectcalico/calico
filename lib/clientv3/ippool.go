@@ -20,14 +20,14 @@ import (
 	"net"
 	"time"
 
-	log "github.com/sirupsen/logrus"
-
 	apiv3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
+	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	cerrors "github.com/projectcalico/libcalico-go/lib/errors"
 	cnet "github.com/projectcalico/libcalico-go/lib/net"
 	"github.com/projectcalico/libcalico-go/lib/options"
 	validator "github.com/projectcalico/libcalico-go/lib/validator/v3"
 	"github.com/projectcalico/libcalico-go/lib/watch"
+	log "github.com/sirupsen/logrus"
 )
 
 // IPPoolInterface has methods to work with IPPool resources.
@@ -63,9 +63,47 @@ func (r ipPools) Create(ctx context.Context, res *apiv3.IPPool, opts options.Set
 		return nil, err
 	}
 
+	// Check that there are no existing blocks in the pool range that have a different block size.
+	poolBlockSize := res.Spec.BlockSize
+	poolIP, poolCIDR, err := net.ParseCIDR(res.Spec.CIDR)
+	if err != nil {
+		return nil, cerrors.ErrorParsingDatastoreEntry{
+			RawKey:   "CIDR",
+			RawValue: string(res.Spec.CIDR),
+			Err:      err,
+		}
+	}
+
+	ipVersion := 4
+	if poolIP.To4() == nil {
+		ipVersion = 6
+	}
+
+	blocks, err := r.client.backend.List(ctx, model.BlockListOptions{IPVersion: ipVersion}, "")
+	if _, ok := err.(cerrors.ErrorOperationNotSupported); !ok && err != nil {
+		// There was an error and it wasn't OperationNotSupported - return it.
+		return nil, err
+	} else if err == nil {
+		// Skip the block check if the error is OperationUnsupported - IPAM is not supported on KDD.
+		for _, b := range blocks.KVPairs {
+			k := b.Key.(model.BlockKey)
+			ones, _ := k.CIDR.Mask.Size()
+			// Check if this block has a different size to the pool, and that it overlaps with the pool.
+			if ones != poolBlockSize && k.CIDR.IsNetOverlap(*poolCIDR) {
+				return nil, cerrors.ErrorValidation{
+					ErroredFields: []cerrors.ErroredField{{
+						Name:   "IPPool.Spec.BlockSize",
+						Reason: "IPPool blocksSize conflicts with existing allocations that use a different blockSize",
+						Value:  res.Spec.BlockSize,
+					}},
+				}
+			}
+		}
+	}
+
 	// Enable IPIP globally if required.  Do this before the Create so if it fails the user
 	// can retry the same command.
-	err := r.maybeEnableIPIP(ctx, res)
+	err = r.maybeEnableIPIP(ctx, res)
 	if err != nil {
 		return nil, err
 	}
