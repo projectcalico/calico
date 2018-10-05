@@ -51,8 +51,9 @@ Our manifests default to `192.168.0.0/16` for the pod IP range except [Canal/fla
 which defaults to `10.244.0.0/16`. Refer to [Configuring the pod IP range](./installation/config-options#configuring-the-pod-ip-range)
 for information on modifying the defaults.
 
-#### Mutating webhooks
+## Application layer policy requirements
 
-Application Layer Policy requires the [MutatingAdmissionWebhook](https://kubernetes.io/docs/admin/admission-controllers/#mutatingadmissionwebhook) to be enabled.
+- [MutatingAdmissionWebhook](https://kubernetes.io/docs/admin/admission-controllers/#mutatingadmissionwebhook) enabled
+- [Istio v1.0](https://istio.io/about/notes/1.0/)
 
 {% include {{page.version}}/reqs-kernel.md %}
