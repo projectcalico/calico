@@ -98,7 +98,6 @@ DEPLOY_CONTAINER_MARKER=cni_deploy_container-$(ARCH).created
 
 PUSH_IMAGES?=$(BUILD_IMAGE) quay.io/calico/cni
 RELEASE_IMAGES?=gcr.io/projectcalico-org/cni eu.gcr.io/projectcalico-org/cni asia.gcr.io/projectcalico-org/cni us.gcr.io/projectcalico-org/cni
-PACKAGE_NAME?=github.com/projectcalico/cni-plugin
 
 # If this is a release, also tag and push additional images.
 ifeq ($(RELEASE),true)
