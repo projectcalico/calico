@@ -47,6 +47,7 @@ The code is a little roundabout for a few reasons:
     <link href="https://fonts.googleapis.com/css?family=Lato" rel="stylesheet">
     <link rel="stylesheet" href='https://fonts.googleapis.com/css?family=Roboto+Mono' type='text/css'>
     <link rel="stylesheet" href="{{site.baseurl}}/css/style.css"/>
+    <link rel="stylesheet" href="{{site.baseurl}}/css/search.css"/>
     <link rel="stylesheet" href="{{site.baseurl}}/css/plugins/offcanvas.css"/>
     <link href="https://www.projectcalico.org/wp-content/themes/dante/css/font-awesome.min.css" rel="stylesheet">
     <script src="{{site.baseurl}}/js/jquery-2.2.0.min.js"></script>
@@ -194,18 +195,8 @@ The code is a little roundabout for a few reasons:
           </p>
           <div class="col-xs-6 col-sm-4 col-md-3 sidebar-offcanvas">
             <div class="row">
-              <script>
-                (function() {
-                  var cx = '015028447179048192876:xjzskk7awwe';
-                  var gcse = document.createElement('script');
-                  gcse.type = 'text/javascript';
-                  gcse.async = true;
-                  gcse.src = 'https://cse.google.com/cse.js?cx=' + cx;
-                  var s = document.getElementsByTagName('script')[0];
-                  s.parentNode.insertBefore(gcse, s);
-                })();
-              </script>
-              <gcse:search></gcse:search>
+              <input type=text id="search-input">
+              <div class="search-results"></div>
             </div>
             <div id="sidebar">
             	{% include sidebar.html sidebar=this_pages_navbar.toc prefix="nav" %}
@@ -234,5 +225,13 @@ The code is a little roundabout for a few reasons:
         </div>
       </div>
     </section>
+
+    <script src="{{site.baseurl}}/js/searchConfig.js"></script>
+
+    <script>
+      $(document).ready(function() {
+        window.initializeSearch('{{page.version}}', '#search-input', '.search-results');
+      });
+    </script>
   </body>
 </html>
