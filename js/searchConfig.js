@@ -22,15 +22,8 @@
         }
 
         $(document).ready(function () {
-            // Initialize search here. Note the algoliaOptions setting.
-            // docsearch({
-            //     apiKey: '99def7ba73ea2430f7f42383148fe57a',
-            //     indexName: 'projectcalico',
-            //     inputSelector: targetElementSelector,
-            //     debug: false,
-            //     algoliaOptions: { 'facetFilters': ['version:' + currentDocVersion] }
-            // });
-            initializeInstantSearch(searchInputSelector, searchResultsSelector, searchPaginationSelector);
+            initializeInstantSearch(currentDocVersion, searchInputSelector, searchResultsSelector,
+                searchPaginationSelector);
             initializePopover(searchContentSelector, searchInputSelector);
             hidePopoversOnClickOutside();
         });
@@ -69,13 +62,20 @@
             </div>\
         ';
 
-    function initializeInstantSearch(inputSelector, resultsSelector, paginationSelector) {
-        // TODO:
+    function initializeInstantSearch(currentDocVersion, inputSelector, resultsSelector, paginationSelector) {
+        // TODO: appId, apiKey
         var search = instantsearch({
             appId: 'BH4D9OD16A',
             apiKey: 'e574b72c1301f8a28e49ec9644096c79',
             indexName: 'apereo',
-            routing: true
+            routing: false,
+            // https://community.algolia.com/instantsearch.js/v2/instantsearch.html#struct-InstantSearchOptions-searchClient
+            searchParameters: {
+                hitsPerPage: 5,
+                // facetsRefinements: {
+                //     version: currentDocVersion
+                // }
+            }
         });
         search.addWidget(instantsearch.widgets.searchBox({
             container: inputSelector,
