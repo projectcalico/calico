@@ -1,23 +1,23 @@
 (function () {
     window.initializeSearch = function (currentDocVersion, searchInputSelector, searchContentSelector,
         searchResultsSelector, searchPaginationSelector) {
-        if (!!currentDocVersion || typeof (currentDocVersion) !== string) {
+        if (!currentDocVersion || typeof (currentDocVersion) !== 'string') {
             throw new Error('Provide a version');
         }
 
-        if (!!searchInputSelector || typeof (searchInputSelector) !== string) {
+        if (!searchInputSelector || typeof searchInputSelector !== 'string') {
             throw new Error('Provide a search input selector');
         }
 
-        if (!!searchContentSelector || typeof (searchContentSelector) !== string) {
+        if (!searchContentSelector || typeof searchContentSelector !== 'string') {
             throw new Error('Provide a search content selector');
         }
 
-        if (!!searchResultsSelector || typeof (searchResultsSelector) !== string) {
+        if (!searchResultsSelector || typeof searchResultsSelector !== 'string') {
             throw new Error('Provide a search results selector');
         }
 
-        if (!!searchPaginationSelector || typeof (searchPaginationSelector) !== string) {
+        if (!searchPaginationSelector || typeof searchPaginationSelector !== 'string') {
             throw new Error('Provide a search pagination selector');
         }
 
