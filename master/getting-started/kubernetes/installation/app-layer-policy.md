@@ -67,8 +67,7 @@ kubectl apply -f \
 
 ## Installing Istio
 
-Application layer policy requires you to use Istio in your cluster to function
-correctly. We support Istio version 1.0.0 or newer.
+Application layer policy [requires Istio](../requirements#application-layer-policy-requirements).
 
 Install Istio according to the [Istio project documentation](https://istio.io/docs/setup/kubernetes/), making sure to enable mutual TLS authentication. For example:
 
@@ -117,7 +116,7 @@ kubectl apply -f \
 
 > **Note**: You can also
 > [view the manifest in your browser](manifests/app-layer-policy/istio-app-layer-policy.yaml){:target="_blank"}.
-{: .alert .alert-info} 
+{: .alert .alert-info}
 
 ## Adding namespace labels
 
