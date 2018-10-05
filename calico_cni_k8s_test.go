@@ -397,6 +397,319 @@ var _ = Describe("Kubernetes CNI tests", func() {
 			})
 		})
 
+		hostLocalIPAMConfigs := []struct {
+			description, cniVersion, config, unexpectedRoute string
+			expectedV4Routes, expectedV6Routes               []string
+			numIPv4IPs, numIPv6IPs                           int
+		}{
+			{
+				description: "old-style inline subnet",
+				cniVersion:  cniVersion,
+				config: `
+					{
+					  "cniVersion": "%s",
+					  "name": "net6",
+					  "nodename_file_optional": true,
+					  "type": "calico",
+					  "etcd_endpoints": "http://%s:2379",
+					  "datastore_type": "%s",
+					  "ipam": {
+					    "type": "host-local",
+					    "subnet": "usePodCidr"
+					  },
+					  "kubernetes": {
+					   "k8s_api_root": "http://127.0.0.1:8080"
+					  },
+					  "policy": {"type": "k8s"},
+					  "log_level":"info"
+					}`,
+				expectedV4Routes: []string{
+					regexp.QuoteMeta("default via 169.254.1.1 dev eth0"),
+					regexp.QuoteMeta("169.254.1.1 dev eth0 scope link"),
+				},
+				unexpectedRoute: regexp.QuoteMeta("10."),
+				numIPv4IPs:      1,
+				numIPv6IPs:      0,
+			},
+			{
+				// This scenario tests IPv4+IPv6 without specifying any routes.
+				description: "new-style with IPv4 and IPv6 ranges, no routes",
+				cniVersion:  "0.3.0",
+				config: `
+					{
+					  "cniVersion": "%s",
+					  "name": "net6",
+					  "nodename_file_optional": true,
+					  "type": "calico",
+					  "etcd_endpoints": "http://%s:2379",
+					  "datastore_type": "%s",
+					  "ipam": {
+					    "type": "host-local",
+					    "ranges": [
+					       [
+					         {
+					           "subnet": "usePodCidr"
+					         }
+					       ],
+					       [
+					         {
+					           "subnet": "dead:beef::/96"
+					         }
+					       ]
+					    ]
+					  },
+					  "kubernetes": {
+					   "k8s_api_root": "http://127.0.0.1:8080"
+					  },
+					  "policy": {"type": "k8s"},
+					  "log_level":"info"
+					}`,
+				expectedV4Routes: []string{
+					regexp.QuoteMeta("default via 169.254.1.1 dev eth0"),
+					regexp.QuoteMeta("169.254.1.1 dev eth0 scope link"),
+				},
+				expectedV6Routes: []string{
+					"dead:beef::[0-9a-f]* dev eth0  metric 256",
+					"fe80::/64 dev eth0  metric 256",
+					"default via fe80::ecee:eeff:feee:eeee dev eth0  metric 1024",
+					"ff00::/8 dev eth0  metric 256",
+				},
+				unexpectedRoute: regexp.QuoteMeta("10."),
+				numIPv4IPs:      1,
+				numIPv6IPs:      1,
+			},
+			{
+				// In this scenario, we use a lot more of the host-local IPAM plugin.  Namely:
+				// - we use multiple ranges, one of which is IPv6, the other uses the podCIDR
+				// - we add custom routes, which override our default 0/0 and ::/0 routes.
+				// This configuration is only supported for CNI version >= 0.3.0 since we assign multiple
+				// addresses per family.
+				description: "new-style with IPv4 and IPv6 ranges and routes",
+				cniVersion:  "0.3.0",
+				config: `
+					{
+					  "cniVersion": "%s",
+					  "name": "net6",
+					  "nodename_file_optional": true,
+					  "type": "calico",
+					  "etcd_endpoints": "http://%s:2379",
+					  "datastore_type": "%s",
+					  "ipam": {
+					    "type": "host-local",
+					    "ranges": [
+					       [
+					         {
+					           "subnet": "usePodCidr"
+					         }
+					       ],
+					       [
+					         { 
+					             "subnet": "10.100.0.0/24" 
+					         }
+					       ],
+					       [
+					         {
+					          "subnet": "dead:beef::/96"
+					         }
+					       ]
+					    ],
+					    "routes": [
+					      {"dst": "10.123.0.0/16", "gw": "10.123.0.1"},
+					      {"dst": "10.124.0.0/16"},
+					      {"dst": "dead:beef::/96"}
+					    ]
+					  },
+					  "kubernetes": {
+					   "k8s_api_root": "http://127.0.0.1:8080"
+					  },
+					  "policy": {"type": "k8s"},
+					  "log_level":"info"
+					}`,
+				expectedV4Routes: []string{
+					regexp.QuoteMeta("10.123.0.0/16 via 169.254.1.1 dev eth0"),
+					regexp.QuoteMeta("10.124.0.0/16 via 169.254.1.1 dev eth0"),
+					regexp.QuoteMeta("169.254.1.1 dev eth0 scope link"),
+				},
+				expectedV6Routes: []string{
+					"dead:beef::. dev eth0  metric 256",
+					"dead:beef::/96 via fe80::ecee:eeff:feee:eeee dev eth0  metric 1024",
+					"fe80::/64 dev eth0  metric 256",
+					"ff00::/8 dev eth0  metric 256",
+				},
+				unexpectedRoute: "default",
+				numIPv4IPs:      2,
+				numIPv6IPs:      1,
+			},
+			{
+				// In this scenario, we use a lot more of the host-local IPAM plugin.  Namely:
+				// - we use multiple ranges, one of which is IPv6, the other uses the podCIDR
+				// - we add custom routes, but configure the plugin to also include our default routes.
+				description: "new-style with IPv4 and IPv6 ranges and routes and Calico default routes",
+				cniVersion:  "0.3.0",
+				config: `
+					{
+					  "cniVersion": "%s",
+					  "name": "net6",
+					  "nodename_file_optional": true,
+					  "type": "calico",
+					  "etcd_endpoints": "http://%s:2379",
+					  "include_default_routes": true,
+					  "datastore_type": "%s",
+					  "ipam": {
+					    "type": "host-local",
+					    "ranges": [
+					       [
+					           {
+					             "subnet": "usePodCidr"
+					           }
+					       ],
+					       [
+					           { 
+					               "subnet": "10.100.0.0/24" 
+					           }
+					       ],
+					       [
+					          {
+					            "subnet": "dead:beef::/96"
+					          }
+					       ]
+					    ],
+					    "routes": [
+					      {"dst": "10.123.0.0/16", "gw": "10.123.0.1"},
+					      {"dst": "10.124.0.0/16"},
+					      {"dst": "dead:beef::/96"}
+					    ]
+					  },
+					  "kubernetes": {
+					   "k8s_api_root": "http://127.0.0.1:8080"
+					  },
+					  "policy": {"type": "k8s"},
+					  "log_level":"info"
+					}`,
+				expectedV4Routes: []string{
+					regexp.QuoteMeta("default via 169.254.1.1 dev eth0"),
+					regexp.QuoteMeta("10.123.0.0/16 via 169.254.1.1 dev eth0"),
+					regexp.QuoteMeta("10.124.0.0/16 via 169.254.1.1 dev eth0"),
+					regexp.QuoteMeta("169.254.1.1 dev eth0 scope link"),
+				},
+				expectedV6Routes: []string{
+					"dead:beef::. dev eth0  metric 256",
+					"dead:beef::/96 via fe80::ecee:eeff:feee:eeee dev eth0  metric 1024",
+					"fe80::/64 dev eth0  metric 256",
+					"ff00::/8 dev eth0  metric 256",
+				},
+				numIPv4IPs: 2,
+				numIPv6IPs: 1,
+			},
+		}
+
+		for _, c := range hostLocalIPAMConfigs {
+			c := c // Make sure we get a fresh variable on each loop.
+			Context("Using host-local IPAM ("+c.description+"): request an IP then release it, and then request it again", func() {
+				It("should successfully assign IP both times and successfully release it in the middle", func() {
+					netconfHostLocalIPAM := fmt.Sprintf(c.config, c.cniVersion, os.Getenv("ETCD_IP"), os.Getenv("DATASTORE_TYPE"))
+
+					config, err := clientcmd.DefaultClientConfig.ClientConfig()
+					Expect(err).NotTo(HaveOccurred())
+
+					clientset, err := kubernetes.NewForConfig(config)
+					Expect(err).NotTo(HaveOccurred())
+
+					ensureNamespace(clientset, testutils.K8S_TEST_NS)
+
+					// Create a K8s Node object with PodCIDR and name equal to hostname.
+					_, err = clientset.CoreV1().Nodes().Create(&v1.Node{
+						ObjectMeta: metav1.ObjectMeta{Name: hostname},
+						Spec: v1.NodeSpec{
+							PodCIDR: "10.0.0.0/24",
+						},
+					})
+					Expect(err).NotTo(HaveOccurred())
+					defer clientset.CoreV1().Nodes().Delete(hostname, &metav1.DeleteOptions{})
+
+					By("Creating a pod with a specific IP address")
+					name := fmt.Sprintf("run%d", rand.Uint32())
+					_, err = clientset.CoreV1().Pods(testutils.K8S_TEST_NS).Create(&v1.Pod{
+						ObjectMeta: metav1.ObjectMeta{Name: name},
+						Spec: v1.PodSpec{
+							Containers: []v1.Container{{
+								Name:  name,
+								Image: "ignore",
+							}},
+							NodeName: hostname,
+						},
+					})
+					Expect(err).NotTo(HaveOccurred())
+
+					requestedIP := "10.0.0.42"
+					expectedIP := net.IPv4(10, 0, 0, 42).To4()
+
+					_, _, _, contAddresses, _, contNs, err := testutils.CreateContainer(netconfHostLocalIPAM, name, testutils.K8S_TEST_NS, requestedIP)
+					Expect(err).NotTo(HaveOccurred())
+
+					podIP := contAddresses[0].IP
+					log.Infof("All container IPs: %v", contAddresses)
+					Expect(podIP).Should(Equal(expectedIP))
+
+					By("Deleting the pod we created earlier")
+					_, err = testutils.DeleteContainer(netconfHostLocalIPAM, contNs.Path(), name, testutils.K8S_TEST_NS)
+					Expect(err).ShouldNot(HaveOccurred())
+
+					By("Creating a second pod with the same IP address as the first pod")
+					name2 := fmt.Sprintf("run2%d", rand.Uint32())
+					_, err = clientset.CoreV1().Pods(testutils.K8S_TEST_NS).Create(&v1.Pod{
+						ObjectMeta: metav1.ObjectMeta{Name: name2},
+						Spec: v1.PodSpec{
+							Containers: []v1.Container{{
+								Name:  fmt.Sprintf("container-%s", name2),
+								Image: "ignore",
+							}},
+							NodeName: hostname,
+						},
+					})
+					Expect(err).NotTo(HaveOccurred())
+
+					_, _, _, contAddresses, _, contNs, err = testutils.CreateContainer(netconfHostLocalIPAM, name2, testutils.K8S_TEST_NS, requestedIP)
+					Expect(err).NotTo(HaveOccurred())
+
+					pod2IP := contAddresses[0].IP
+					log.Infof("All container IPs: %v", contAddresses)
+					Expect(pod2IP).Should(Equal(expectedIP))
+
+					contNs.Do(func(_ ns.NetNS) error {
+						defer GinkgoRecover()
+						out, err := exec.Command("ip", "route", "show").Output()
+						Expect(err).NotTo(HaveOccurred())
+						for _, r := range c.expectedV4Routes {
+							Expect(string(out)).To(MatchRegexp(r))
+						}
+
+						if c.unexpectedRoute != "" {
+							Expect(string(out)).NotTo(ContainSubstring(c.unexpectedRoute))
+						}
+
+						out, err = exec.Command("ip", "-6", "route", "show").Output()
+						Expect(err).NotTo(HaveOccurred())
+						for _, r := range c.expectedV6Routes {
+							Expect(string(out)).To(MatchRegexp(r))
+						}
+
+						out, err = exec.Command("ip", "addr", "show").Output()
+						Expect(err).NotTo(HaveOccurred())
+						inet := regexp.MustCompile(` {4}inet .*scope global`)
+						Expect(inet.FindAll(out, -1)).To(HaveLen(c.numIPv4IPs))
+						inetv6 := regexp.MustCompile(` {4}inet6 .*scope global`)
+						Expect(inetv6.FindAll(out, -1)).To(HaveLen(c.numIPv6IPs))
+
+						return nil
+					})
+
+					_, err = testutils.DeleteContainer(netconfHostLocalIPAM, contNs.Path(), name2, testutils.K8S_TEST_NS)
+					Expect(err).ShouldNot(HaveOccurred())
+				})
+			})
+		}
+
 	})
 
 	Context("using calico-ipam with a Namespace annotation only", func() {
@@ -405,6 +718,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 		var pool1CIDR, pool2CIDR *net.IPNet
 		var pool1 = "50.60.0.0/24"
 		var pool2 = "50.60.1.0/24"
+		var clientset *kubernetes.Clientset
 		BeforeEach(func() {
 			// Build the network config for this set of tests.
 			nc = types.NetConf{
@@ -432,6 +746,11 @@ var _ = Describe("Kubernetes CNI tests", func() {
 			_, pool2CIDR, err = net.ParseCIDR(pool2)
 			Expect(err).NotTo(HaveOccurred())
 
+			// Set up clients.
+			config, err := clientcmd.DefaultClientConfig.ClientConfig()
+			Expect(err).NotTo(HaveOccurred())
+			clientset, err = kubernetes.NewForConfig(config)
+			Expect(err).NotTo(HaveOccurred())
 		})
 
 		AfterEach(func() {
@@ -441,13 +760,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 		})
 
 		It("successfully assigns an IP address from an IP Pool specified on a Namespace", func() {
-			config, err := clientcmd.DefaultClientConfig.ClientConfig()
-			Expect(err).NotTo(HaveOccurred())
-
-			clientset, err := kubernetes.NewForConfig(config)
-			Expect(err).NotTo(HaveOccurred())
-
-			// Create the Namespace before the tests
+			// Create the Namespace.
 			testNS := fmt.Sprintf("run%d", rand.Uint32())
 			_, err = clientset.CoreV1().Namespaces().Create(&v1.Namespace{
 				ObjectMeta: metav1.ObjectMeta{
@@ -491,13 +804,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 		})
 
 		It("should fail to assign from an IP pool that doesn't exist", func() {
-			config, err := clientcmd.DefaultClientConfig.ClientConfig()
-			Expect(err).NotTo(HaveOccurred())
-
-			clientset, err := kubernetes.NewForConfig(config)
-			Expect(err).NotTo(HaveOccurred())
-
-			// Create the Namespace before the tests
+			// Create the Namespace.
 			testNS := fmt.Sprintf("run%d", rand.Uint32())
 			_, err = clientset.CoreV1().Namespaces().Create(&v1.Namespace{
 				ObjectMeta: metav1.ObjectMeta{
@@ -537,13 +844,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 		})
 
 		It("should fail to assign an IP when the provided IP Pool is full", func() {
-			config, err := clientcmd.DefaultClientConfig.ClientConfig()
-			Expect(err).NotTo(HaveOccurred())
-
-			clientset, err := kubernetes.NewForConfig(config)
-			Expect(err).NotTo(HaveOccurred())
-
-			// Create the Namespace before the tests
+			// Create the Namespace.
 			testNS := fmt.Sprintf("run%d", rand.Uint32())
 			_, err = clientset.CoreV1().Namespaces().Create(&v1.Namespace{
 				ObjectMeta: metav1.ObjectMeta{
@@ -600,13 +901,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 		})
 
 		It("should assign an IP from the second pool when the first IP Pool is full", func() {
-			config, err := clientcmd.DefaultClientConfig.ClientConfig()
-			Expect(err).NotTo(HaveOccurred())
-
-			clientset, err := kubernetes.NewForConfig(config)
-			Expect(err).NotTo(HaveOccurred())
-
-			// Create the Namespace before the tests
+			// Create the Namespace.
 			testNS := fmt.Sprintf("run%d", rand.Uint32())
 			_, err = clientset.CoreV1().Namespaces().Create(&v1.Namespace{
 				ObjectMeta: metav1.ObjectMeta{
@@ -673,6 +968,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 		var netconf string
 		var ipPoolCIDR *net.IPNet
 		var pool1 = "50.70.0.0/16"
+		var clientset *kubernetes.Clientset
 		BeforeEach(func() {
 			// Build the network config for this set of tests.
 			nc = types.NetConf{
@@ -695,6 +991,12 @@ var _ = Describe("Kubernetes CNI tests", func() {
 			testutils.MustCreateNewIPPool(calicoClient, pool1, false, false, true)
 			_, ipPoolCIDR, err = net.ParseCIDR(pool1)
 			Expect(err).NotTo(HaveOccurred())
+
+			// Create clients.
+			config, err := clientcmd.DefaultClientConfig.ClientConfig()
+			Expect(err).NotTo(HaveOccurred())
+			clientset, err = kubernetes.NewForConfig(config)
+			Expect(err).NotTo(HaveOccurred())
 		})
 
 		AfterEach(func() {
@@ -703,12 +1005,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 		})
 
 		It("should prefer pod annotations to namespace annotations if both are present", func() {
-			config, err := clientcmd.DefaultClientConfig.ClientConfig()
-			Expect(err).NotTo(HaveOccurred())
-			clientset, err := kubernetes.NewForConfig(config)
-			Expect(err).NotTo(HaveOccurred())
-
-			// Create the Namespace before the tests
+			// Create the Namespace.
 			testNS := fmt.Sprintf("run%d", rand.Uint32())
 			_, err = clientset.CoreV1().Namespaces().Create(&v1.Namespace{
 				ObjectMeta: metav1.ObjectMeta{
@@ -981,33 +1278,38 @@ var _ = Describe("Kubernetes CNI tests", func() {
 	})
 
 	Context("using ipAddrsNoIpam annotation to assign IP address to a pod, bypassing IPAM", func() {
-		It("should successfully assigns the annotated IP address", func() {
-			netconfCalicoIPAM := fmt.Sprintf(`
-				{
-			      "cniVersion": "%s",
-				  "name": "net3",
-				  "type": "calico",
-				  "feature_control": {
-					"ip_addrs_no_ipam": true
-				  },
-				  "etcd_endpoints": "http://%s:2379",
-				  "datastore_type": "%s",
-			          "nodename_file_optional": true,
-			 	  "ipam": {},
-					"kubernetes": {
-					  "k8s_api_root": "http://127.0.0.1:8080"
-					 },
-					"policy": {"type": "k8s"},
-					"log_level":"info"
-				}`, cniVersion, os.Getenv("ETCD_IP"), os.Getenv("DATASTORE_TYPE"))
+		var clientset *kubernetes.Clientset
+		var netconf string
+		var nc types.NetConf
 
-			assignIP := net.IPv4(10, 0, 0, 1).To4()
-
+		BeforeEach(func() {
+			// Set up clients.
 			config, err := clientcmd.DefaultClientConfig.ClientConfig()
 			Expect(err).NotTo(HaveOccurred())
-
-			clientset, err := kubernetes.NewForConfig(config)
+			clientset, err = kubernetes.NewForConfig(config)
 			Expect(err).NotTo(HaveOccurred())
+
+			// Create a network config.
+			nc = types.NetConf{
+				CNIVersion:           cniVersion,
+				Name:                 "calico-uts",
+				Type:                 "calico",
+				EtcdEndpoints:        fmt.Sprintf("http://%s:2379", os.Getenv("ETCD_IP")),
+				DatastoreType:        os.Getenv("DATASTORE_TYPE"),
+				Kubernetes:           types.Kubernetes{K8sAPIRoot: "http://127.0.0.1:8080"},
+				Policy:               types.Policy{PolicyType: "k8s"},
+				NodenameFileOptional: true,
+				LogLevel:             "info",
+				FeatureControl:       types.FeatureControl{IPAddrsNoIpam: true},
+			}
+			nc.IPAM.Type = "calico-ipam"
+			ncb, err := json.Marshal(nc)
+			Expect(err).NotTo(HaveOccurred())
+			netconf = string(ncb)
+		})
+
+		It("should successfully assigns the annotated IP address", func() {
+			assignIP := net.IPv4(10, 0, 0, 1).To4()
 
 			// Now create a K8s pod passing in an IP address.
 			name := fmt.Sprintf("run%d", rand.Uint32())
@@ -1030,7 +1332,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 
 			log.Infof("Created POD object: %v", pod)
 
-			containerID, _, contVeth, contAddresses, _, contNs, err := testutils.CreateContainer(netconfCalicoIPAM, name, testutils.K8S_TEST_NS, "")
+			containerID, _, contVeth, contAddresses, _, contNs, err := testutils.CreateContainer(netconf, name, testutils.K8S_TEST_NS, "")
 			Expect(err).NotTo(HaveOccurred())
 			mac := contVeth.Attrs().HardwareAddr
 
@@ -1079,28 +1381,16 @@ var _ = Describe("Kubernetes CNI tests", func() {
 			}))
 
 			// Delete the container.
-			_, err = testutils.DeleteContainer(netconfCalicoIPAM, contNs.Path(), name, testutils.K8S_TEST_NS)
+			_, err = testutils.DeleteContainer(netconf, contNs.Path(), name, testutils.K8S_TEST_NS)
 			Expect(err).ShouldNot(HaveOccurred())
 		})
-	})
 
-	Context("using ipAddrsNoIpam annotation to assign IP address to a pod, bypassing IPAM", func() {
 		It("should fail if ipAddrsNoIpam is not enabled", func() {
-			netconfCalicoIPAM := fmt.Sprintf(`
-				{
-			      "cniVersion": "%s",
-				  "name": "net3",
-				  "type": "calico",
-				  "etcd_endpoints": "http://%s:2379",
-				  "datastore_type": "%s",
-			          "nodename_file_optional": true,
-			 	  "ipam": {},
-					"kubernetes": {
-					  "k8s_api_root": "http://127.0.0.1:8080"
-					 },
-					"policy": {"type": "k8s"},
-					"log_level":"info"
-				}`, cniVersion, os.Getenv("ETCD_IP"), os.Getenv("DATASTORE_TYPE"))
+			// Disable the feature
+			nc.FeatureControl.IPAddrsNoIpam = false
+			ncb, err := json.Marshal(nc)
+			Expect(err).NotTo(HaveOccurred())
+			netconf = string(ncb)
 
 			config, err := clientcmd.DefaultClientConfig.ClientConfig()
 			Expect(err).NotTo(HaveOccurred())
@@ -1129,14 +1419,61 @@ var _ = Describe("Kubernetes CNI tests", func() {
 
 			log.Infof("Created POD object: %v", pod)
 
-			_, _, _, _, _, contNs, err := testutils.CreateContainer(netconfCalicoIPAM, name, testutils.K8S_TEST_NS, "")
+			_, _, _, _, _, contNs, err := testutils.CreateContainer(netconf, name, testutils.K8S_TEST_NS, "")
 			Expect(err).To(HaveOccurred())
 
-			_, err = testutils.DeleteContainer(netconfCalicoIPAM, contNs.Path(), name, testutils.K8S_TEST_NS)
+			_, err = testutils.DeleteContainer(netconf, contNs.Path(), name, testutils.K8S_TEST_NS)
 			Expect(err).ShouldNot(HaveOccurred())
 		})
 
-		It("should successfully assigns the annotated IP address", func() {
+		It("should return an error if multiple addresses are requested using ipAddrsNoIpam", func() {
+			// Now create a K8s pod passing in more than one IPv4 address.
+			name := fmt.Sprintf("run%d", rand.Uint32())
+			pod, err := clientset.CoreV1().Pods(testutils.K8S_TEST_NS).Create(&v1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: name,
+					Annotations: map[string]string{
+						"cni.projectcalico.org/ipAddrsNoIpam": "[\"10.0.0.1\", \"10.0.0.2\"]",
+					},
+				},
+				Spec: v1.PodSpec{
+					Containers: []v1.Container{{
+						Name:  name,
+						Image: "ignore",
+					}},
+					NodeName: hostname,
+				},
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			log.Infof("Created POD object: %v", pod)
+
+			_, _, _, _, _, contNs, err := testutils.CreateContainer(netconf, name, testutils.K8S_TEST_NS, "")
+			Expect(err).To(HaveOccurred())
+
+			// Make sure the WorkloadEndpoint is not created in the datastore.
+			endpoints, err := calicoClient.WorkloadEndpoints().List(ctx, options.ListOptions{})
+			Expect(err).ShouldNot(HaveOccurred())
+			Expect(endpoints.Items).Should(HaveLen(0))
+
+			// Delete the container.
+			_, err = testutils.DeleteContainer(netconf, contNs.Path(), name, testutils.K8S_TEST_NS)
+			Expect(err).ShouldNot(HaveOccurred())
+		})
+	})
+
+	Context("using ipAddrs annotation to assign IP address to a pod from IPAM", func() {
+		var clientset *kubernetes.Clientset
+
+		BeforeEach(func() {
+			// Set up clients.
+			config, err := clientcmd.DefaultClientConfig.ClientConfig()
+			Expect(err).NotTo(HaveOccurred())
+			clientset, err = kubernetes.NewForConfig(config)
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		It("should successfully assign the annotated IP address", func() {
 			netconfCalicoIPAM := fmt.Sprintf(`
 				{
 				  "cniVersion": "%s",
@@ -1163,12 +1500,6 @@ var _ = Describe("Kubernetes CNI tests", func() {
 			ipPool := "20.0.0.0/24"
 			testutils.MustCreateNewIPPool(calicoClient, ipPool, false, false, true)
 			_, _, err := net.ParseCIDR(ipPool)
-			Expect(err).NotTo(HaveOccurred())
-
-			config, err := clientcmd.DefaultClientConfig.ClientConfig()
-			Expect(err).NotTo(HaveOccurred())
-
-			clientset, err := kubernetes.NewForConfig(config)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Now create a K8s pod passing in an IP address.
@@ -1246,357 +1577,47 @@ var _ = Describe("Kubernetes CNI tests", func() {
 		})
 	})
 
-	hostLocalIPAMConfigs := []struct {
-		description, cniVersion, config, unexpectedRoute string
-		expectedV4Routes, expectedV6Routes               []string
-		numIPv4IPs, numIPv6IPs                           int
-	}{
-		{
-			description: "old-style inline subnet",
-			cniVersion:  cniVersion,
-			config: `
-					{
-					  "cniVersion": "%s",
-					  "name": "net6",
-					  "nodename_file_optional": true,
-					  "type": "calico",
-					  "etcd_endpoints": "http://%s:2379",
-					  "datastore_type": "%s",
-					  "ipam": {
-					    "type": "host-local",
-					    "subnet": "usePodCidr"
-					  },
-					  "kubernetes": {
-					   "k8s_api_root": "http://127.0.0.1:8080"
-					  },
-					  "policy": {"type": "k8s"},
-					  "log_level":"info"
-					}`,
-			expectedV4Routes: []string{
-				regexp.QuoteMeta("default via 169.254.1.1 dev eth0"),
-				regexp.QuoteMeta("169.254.1.1 dev eth0 scope link"),
-			},
-			unexpectedRoute: regexp.QuoteMeta("10."),
-			numIPv4IPs:      1,
-			numIPv6IPs:      0,
-		},
-		{
-			// This scenario tests IPv4+IPv6 without specifying any routes.
-			description: "new-style with IPv4 and IPv6 ranges, no routes",
-			cniVersion:  "0.3.0",
-			config: `
-					{
-					  "cniVersion": "%s",
-					  "name": "net6",
-					  "nodename_file_optional": true,
-					  "type": "calico",
-					  "etcd_endpoints": "http://%s:2379",
-					  "datastore_type": "%s",
-					  "ipam": {
-					    "type": "host-local",
-					    "ranges": [
-					       [
-					         {
-					           "subnet": "usePodCidr"
-					         }
-					       ],
-					       [
-					         {
-					           "subnet": "dead:beef::/96"
-					         }
-					       ]
-					    ]
-					  },
-					  "kubernetes": {
-					   "k8s_api_root": "http://127.0.0.1:8080"
-					  },
-					  "policy": {"type": "k8s"},
-					  "log_level":"info"
-					}`,
-			expectedV4Routes: []string{
-				regexp.QuoteMeta("default via 169.254.1.1 dev eth0"),
-				regexp.QuoteMeta("169.254.1.1 dev eth0 scope link"),
-			},
-			expectedV6Routes: []string{
-				"dead:beef::[0-9a-f]* dev eth0  metric 256",
-				"fe80::/64 dev eth0  metric 256",
-				"default via fe80::ecee:eeff:feee:eeee dev eth0  metric 1024",
-				"ff00::/8 dev eth0  metric 256",
-			},
-			unexpectedRoute: regexp.QuoteMeta("10."),
-			numIPv4IPs:      1,
-			numIPv6IPs:      1,
-		},
-		{
-			// In this scenario, we use a lot more of the host-local IPAM plugin.  Namely:
-			// - we use multiple ranges, one of which is IPv6, the other uses the podCIDR
-			// - we add custom routes, which override our default 0/0 and ::/0 routes.
-			// This configuration is only supported for CNI version >= 0.3.0 since we assign multiple
-			// addresses per family.
-			description: "new-style with IPv4 and IPv6 ranges and routes",
-			cniVersion:  "0.3.0",
-			config: `
-					{
-					  "cniVersion": "%s",
-					  "name": "net6",
-					  "nodename_file_optional": true,
-					  "type": "calico",
-					  "etcd_endpoints": "http://%s:2379",
-					  "datastore_type": "%s",
-					  "ipam": {
-					    "type": "host-local",
-					    "ranges": [
-					       [
-					         {
-					           "subnet": "usePodCidr"
-					         }
-					       ],
-					       [
-					         { 
-					             "subnet": "10.100.0.0/24" 
-					         }
-					       ],
-					       [
-					         {
-					          "subnet": "dead:beef::/96"
-					         }
-					       ]
-					    ],
-					    "routes": [
-					      {"dst": "10.123.0.0/16", "gw": "10.123.0.1"},
-					      {"dst": "10.124.0.0/16"},
-					      {"dst": "dead:beef::/96"}
-					    ]
-					  },
-					  "kubernetes": {
-					   "k8s_api_root": "http://127.0.0.1:8080"
-					  },
-					  "policy": {"type": "k8s"},
-					  "log_level":"info"
-					}`,
-			expectedV4Routes: []string{
-				regexp.QuoteMeta("10.123.0.0/16 via 169.254.1.1 dev eth0"),
-				regexp.QuoteMeta("10.124.0.0/16 via 169.254.1.1 dev eth0"),
-				regexp.QuoteMeta("169.254.1.1 dev eth0 scope link"),
-			},
-			expectedV6Routes: []string{
-				"dead:beef::. dev eth0  metric 256",
-				"dead:beef::/96 via fe80::ecee:eeff:feee:eeee dev eth0  metric 1024",
-				"fe80::/64 dev eth0  metric 256",
-				"ff00::/8 dev eth0  metric 256",
-			},
-			unexpectedRoute: "default",
-			numIPv4IPs:      2,
-			numIPv6IPs:      1,
-		},
-		{
-			// In this scenario, we use a lot more of the host-local IPAM plugin.  Namely:
-			// - we use multiple ranges, one of which is IPv6, the other uses the podCIDR
-			// - we add custom routes, but configure the plugin to also include our default routes.
-			description: "new-style with IPv4 and IPv6 ranges and routes and Calico default routes",
-			cniVersion:  "0.3.0",
-			config: `
-					{
-					  "cniVersion": "%s",
-					  "name": "net6",
-					  "nodename_file_optional": true,
-					  "type": "calico",
-					  "etcd_endpoints": "http://%s:2379",
-					  "include_default_routes": true,
-					  "datastore_type": "%s",
-					  "ipam": {
-					    "type": "host-local",
-					    "ranges": [
-					       [
-					           {
-					             "subnet": "usePodCidr"
-					           }
-					       ],
-					       [
-					           { 
-					               "subnet": "10.100.0.0/24" 
-					           }
-					       ],
-					       [
-					          {
-					            "subnet": "dead:beef::/96"
-					          }
-					       ]
-					    ],
-					    "routes": [
-					      {"dst": "10.123.0.0/16", "gw": "10.123.0.1"},
-					      {"dst": "10.124.0.0/16"},
-					      {"dst": "dead:beef::/96"}
-					    ]
-					  },
-					  "kubernetes": {
-					   "k8s_api_root": "http://127.0.0.1:8080"
-					  },
-					  "policy": {"type": "k8s"},
-					  "log_level":"info"
-					}`,
-			expectedV4Routes: []string{
-				regexp.QuoteMeta("default via 169.254.1.1 dev eth0"),
-				regexp.QuoteMeta("10.123.0.0/16 via 169.254.1.1 dev eth0"),
-				regexp.QuoteMeta("10.124.0.0/16 via 169.254.1.1 dev eth0"),
-				regexp.QuoteMeta("169.254.1.1 dev eth0 scope link"),
-			},
-			expectedV6Routes: []string{
-				"dead:beef::. dev eth0  metric 256",
-				"dead:beef::/96 via fe80::ecee:eeff:feee:eeee dev eth0  metric 1024",
-				"fe80::/64 dev eth0  metric 256",
-				"ff00::/8 dev eth0  metric 256",
-			},
-			numIPv4IPs: 2,
-			numIPv6IPs: 1,
-		},
-	}
+	// This context contains test cases meant to simulate specific scenarios seen when running the plugin
+	// in a Kubernetes cluster.
+	Context("Kubernetes-specific race condition tests", func() {
+		var clientset *kubernetes.Clientset
+		var cniContainerIDX string = "container-id-00x"
+		var cniContainerIDY string = "container-id-00y"
+		var ipPool string = "10.0.0.0/24"
+		var name string
+		var nc types.NetConf
+		var netconf string
 
-	for _, c := range hostLocalIPAMConfigs {
-		c := c // Make sure we get a fresh variable on each loop.
-		Context("Using host-local IPAM ("+c.description+"): request an IP then release it, and then request it again", func() {
-			It("should successfully assign IP both times and successfully release it in the middle", func() {
-				netconfHostLocalIPAM := fmt.Sprintf(c.config, c.cniVersion, os.Getenv("ETCD_IP"), os.Getenv("DATASTORE_TYPE"))
-
-				config, err := clientcmd.DefaultClientConfig.ClientConfig()
-				Expect(err).NotTo(HaveOccurred())
-
-				clientset, err := kubernetes.NewForConfig(config)
-				Expect(err).NotTo(HaveOccurred())
-
-				ensureNamespace(clientset, testutils.K8S_TEST_NS)
-
-				// Create a K8s Node object with PodCIDR and name equal to hostname.
-				_, err = clientset.CoreV1().Nodes().Create(&v1.Node{
-					ObjectMeta: metav1.ObjectMeta{Name: hostname},
-					Spec: v1.NodeSpec{
-						PodCIDR: "10.0.0.0/24",
-					},
-				})
-				Expect(err).NotTo(HaveOccurred())
-				defer clientset.CoreV1().Nodes().Delete(hostname, &metav1.DeleteOptions{})
-
-				By("Creating a pod with a specific IP address")
-				name := fmt.Sprintf("run%d", rand.Uint32())
-				_, err = clientset.CoreV1().Pods(testutils.K8S_TEST_NS).Create(&v1.Pod{
-					ObjectMeta: metav1.ObjectMeta{Name: name},
-					Spec: v1.PodSpec{
-						Containers: []v1.Container{{
-							Name:  name,
-							Image: "ignore",
-						}},
-						NodeName: hostname,
-					},
-				})
-				Expect(err).NotTo(HaveOccurred())
-
-				requestedIP := "10.0.0.42"
-				expectedIP := net.IPv4(10, 0, 0, 42).To4()
-
-				_, _, _, contAddresses, _, contNs, err := testutils.CreateContainer(netconfHostLocalIPAM, name, testutils.K8S_TEST_NS, requestedIP)
-				Expect(err).NotTo(HaveOccurred())
-
-				podIP := contAddresses[0].IP
-				log.Infof("All container IPs: %v", contAddresses)
-				Expect(podIP).Should(Equal(expectedIP))
-
-				By("Deleting the pod we created earlier")
-				_, err = testutils.DeleteContainer(netconfHostLocalIPAM, contNs.Path(), name, testutils.K8S_TEST_NS)
-				Expect(err).ShouldNot(HaveOccurred())
-
-				By("Creating a second pod with the same IP address as the first pod")
-				name2 := fmt.Sprintf("run2%d", rand.Uint32())
-				_, err = clientset.CoreV1().Pods(testutils.K8S_TEST_NS).Create(&v1.Pod{
-					ObjectMeta: metav1.ObjectMeta{Name: name2},
-					Spec: v1.PodSpec{
-						Containers: []v1.Container{{
-							Name:  fmt.Sprintf("container-%s", name2),
-							Image: "ignore",
-						}},
-						NodeName: hostname,
-					},
-				})
-				Expect(err).NotTo(HaveOccurred())
-
-				_, _, _, contAddresses, _, contNs, err = testutils.CreateContainer(netconfHostLocalIPAM, name2, testutils.K8S_TEST_NS, requestedIP)
-				Expect(err).NotTo(HaveOccurred())
-
-				pod2IP := contAddresses[0].IP
-				log.Infof("All container IPs: %v", contAddresses)
-				Expect(pod2IP).Should(Equal(expectedIP))
-
-				contNs.Do(func(_ ns.NetNS) error {
-					defer GinkgoRecover()
-					out, err := exec.Command("ip", "route", "show").Output()
-					Expect(err).NotTo(HaveOccurred())
-					for _, r := range c.expectedV4Routes {
-						Expect(string(out)).To(MatchRegexp(r))
-					}
-
-					if c.unexpectedRoute != "" {
-						Expect(string(out)).NotTo(ContainSubstring(c.unexpectedRoute))
-					}
-
-					out, err = exec.Command("ip", "-6", "route", "show").Output()
-					Expect(err).NotTo(HaveOccurred())
-					for _, r := range c.expectedV6Routes {
-						Expect(string(out)).To(MatchRegexp(r))
-					}
-
-					out, err = exec.Command("ip", "addr", "show").Output()
-					Expect(err).NotTo(HaveOccurred())
-					inet := regexp.MustCompile(` {4}inet .*scope global`)
-					Expect(inet.FindAll(out, -1)).To(HaveLen(c.numIPv4IPs))
-					inetv6 := regexp.MustCompile(` {4}inet6 .*scope global`)
-					Expect(inetv6.FindAll(out, -1)).To(HaveLen(c.numIPv6IPs))
-
-					return nil
-				})
-
-				_, err = testutils.DeleteContainer(netconfHostLocalIPAM, contNs.Path(), name2, testutils.K8S_TEST_NS)
-				Expect(err).ShouldNot(HaveOccurred())
-			})
-		})
-	}
-
-	// This specific test case is for an issue where k8s would send extra DELs being "aggressive". See: https://github.com/kubernetes/kubernetes/issues/44100
-	Context("ADD a container with a ContainerID and DEL it with the same ContainerID then ADD a new container with a different ContainerID, and send a DEL for the old ContainerID", func() {
-		It("Use different CNI_ContainerIDs to ADD and DEL the container", func() {
-			netconf := fmt.Sprintf(`
-				{
-			      "cniVersion": "%s",
-				  "name": "net7",
-				  "type": "calico",
-				  "etcd_endpoints": "http://%s:2379",
-				  "datastore_type": "%s",
-           			  "nodename_file_optional": true,
-			 	  "ipam": {
-			    	 "type": "calico-ipam"
-			         },
-					"kubernetes": {
-					  "k8s_api_root": "http://127.0.0.1:8080"
-					 },
-					"policy": {"type": "k8s"},
-					"log_level":"info"
-				}`, cniVersion, os.Getenv("ETCD_IP"), os.Getenv("DATASTORE_TYPE"))
-
-			// Create a new ipPool.
-			ipPool := "10.0.0.0/24"
-			testutils.MustCreateNewIPPool(calicoClient, ipPool, false, false, true)
-
+		BeforeEach(func() {
+			// Set up clients.
 			config, err := clientcmd.DefaultClientConfig.ClientConfig()
 			Expect(err).NotTo(HaveOccurred())
-
-			clientset, err := kubernetes.NewForConfig(config)
+			clientset, err = kubernetes.NewForConfig(config)
 			Expect(err).NotTo(HaveOccurred())
 
+			// Create a network config.
+			nc = types.NetConf{
+				CNIVersion:           cniVersion,
+				Name:                 "calico-uts",
+				Type:                 "calico",
+				EtcdEndpoints:        fmt.Sprintf("http://%s:2379", os.Getenv("ETCD_IP")),
+				DatastoreType:        os.Getenv("DATASTORE_TYPE"),
+				Kubernetes:           types.Kubernetes{K8sAPIRoot: "http://127.0.0.1:8080"},
+				Policy:               types.Policy{PolicyType: "k8s"},
+				NodenameFileOptional: true,
+				LogLevel:             "info",
+			}
+			nc.IPAM.Type = "calico-ipam"
+			ncb, err := json.Marshal(nc)
+			Expect(err).NotTo(HaveOccurred())
+			netconf = string(ncb)
+
+			// Create a new ipPool.
+			testutils.MustCreateNewIPPool(calicoClient, ipPool, false, false, true)
+
 			// Now create a K8s pod.
-			name := fmt.Sprintf("run%d", rand.Uint32())
-
-			cniContainerIDX := "container-id-00x"
-			cniContainerIDY := "container-id-00y"
-
-			pod, err := clientset.CoreV1().Pods(testutils.K8S_TEST_NS).Create(
+			name = fmt.Sprintf("pod-%d", rand.Uint32())
+			_, err = clientset.CoreV1().Pods(testutils.K8S_TEST_NS).Create(
 				&v1.Pod{
 					ObjectMeta: metav1.ObjectMeta{
 						Name: name,
@@ -1609,22 +1630,30 @@ var _ = Describe("Kubernetes CNI tests", func() {
 						NodeName: hostname,
 					},
 				})
-
 			Expect(err).NotTo(HaveOccurred())
+		})
 
-			log.Infof("Created POD object: %v", pod)
+		AfterEach(func() {
+			// Delete IP pools.
+			testutils.MustDeleteIPPool(calicoClient, ipPool)
+		})
 
-			// ADD the container with passing a CNI_ContainerID "X".
+		// This specific test case is for an issue where k8s would send extra DELs being "aggressive". See: https://github.com/kubernetes/kubernetes/issues/44100
+		// Specifically, what this test simulates is:
+		// - CNI ADD for containerIDX
+		// - CNI DEL for containerIDX
+		// - CNI ADD for containerIDY
+		// - CNI DEL for containerIDX (Spurious delete for old container ID)
+		It("Use different container IDs to ADD and DEL the container", func() {
+			// ADD the container with passing a container ID "X".
 			_, result, _, _, _, contNs, err := testutils.CreateContainerWithId(netconf, name, testutils.K8S_TEST_NS, "", cniContainerIDX)
 			Expect(err).ShouldNot(HaveOccurred())
-
 			log.Printf("Unmarshaled result: %v\n", result)
 
 			// Assert that the endpoint is created in the backend datastore with ContainerID "X".
 			endpoints, err := calicoClient.WorkloadEndpoints().List(ctx, options.ListOptions{})
 			Expect(err).ShouldNot(HaveOccurred())
 			Expect(endpoints.Items).Should(HaveLen(1))
-
 			idsX := names.WorkloadEndpointIdentifiers{
 				Node:         hostname,
 				Orchestrator: api.OrchestratorKubernetes,
@@ -1632,10 +1661,8 @@ var _ = Describe("Kubernetes CNI tests", func() {
 				Pod:          name,
 				ContainerID:  cniContainerIDX,
 			}
-
 			wrkloadX, err := idsX.CalculateWorkloadEndpointName(false)
 			Expect(err).NotTo(HaveOccurred())
-
 			Expect(endpoints.Items[0].Name).Should(Equal(wrkloadX))
 			Expect(endpoints.Items[0].Namespace).Should(Equal(testutils.K8S_TEST_NS))
 			Expect(endpoints.Items[0].Labels).Should(Equal(map[string]string{
@@ -1643,10 +1670,9 @@ var _ = Describe("Kubernetes CNI tests", func() {
 				"projectcalico.org/orchestrator":   api.OrchestratorKubernetes,
 				"projectcalico.org/serviceaccount": "default",
 			}))
-
 			Expect(endpoints.Items[0].Spec.ContainerID).Should(Equal(cniContainerIDX))
 
-			// Delete the container with the CNI_ContainerID "X".
+			// Delete the container with container ID "X".
 			exitCode, err := testutils.DeleteContainerWithId(netconf, contNs.Path(), name, testutils.K8S_TEST_NS, cniContainerIDX)
 			Expect(err).ShouldNot(HaveOccurred())
 			Expect(exitCode).Should(Equal(0))
@@ -1656,17 +1682,15 @@ var _ = Describe("Kubernetes CNI tests", func() {
 			Expect(err).ShouldNot(HaveOccurred())
 			Expect(endpoints.Items).Should(HaveLen(0))
 
-			// ADD a new container with passing a CNI_ContainerID "Y".
+			// ADD a new container with passing a container ID "Y".
 			_, result, _, _, _, contNs, err = testutils.CreateContainerWithId(netconf, name, testutils.K8S_TEST_NS, "", cniContainerIDY)
 			Expect(err).ShouldNot(HaveOccurred())
-
 			log.Printf("Unmarshaled result: %v\n", result)
 
 			// Assert that the endpoint is created in the backend datastore with ContainerID "Y".
 			endpoints, err = calicoClient.WorkloadEndpoints().List(ctx, options.ListOptions{})
 			Expect(err).ShouldNot(HaveOccurred())
 			Expect(endpoints.Items).Should(HaveLen(1))
-
 			idsY := names.WorkloadEndpointIdentifiers{
 				Node:         hostname,
 				Orchestrator: api.OrchestratorKubernetes,
@@ -1674,10 +1698,8 @@ var _ = Describe("Kubernetes CNI tests", func() {
 				Pod:          name,
 				ContainerID:  cniContainerIDY,
 			}
-
 			wrkloadY, err := idsY.CalculateWorkloadEndpointName(false)
 			Expect(err).NotTo(HaveOccurred())
-
 			Expect(endpoints.Items[0].Name).Should(Equal(wrkloadY))
 			Expect(endpoints.Items[0].Namespace).Should(Equal(testutils.K8S_TEST_NS))
 			Expect(endpoints.Items[0].Labels).Should(Equal(map[string]string{
@@ -1685,19 +1707,17 @@ var _ = Describe("Kubernetes CNI tests", func() {
 				"projectcalico.org/orchestrator":   api.OrchestratorKubernetes,
 				"projectcalico.org/serviceaccount": "default",
 			}))
-
 			Expect(endpoints.Items[0].Spec.ContainerID).Should(Equal(cniContainerIDY))
 
-			// Delete the container with the CNI_ContainerID "X" again.
+			// Delete the container with container ID "X" again.
 			exitCode, err = testutils.DeleteContainerWithId(netconf, contNs.Path(), name, testutils.K8S_TEST_NS, cniContainerIDX)
 			Expect(err).ShouldNot(HaveOccurred())
 			Expect(exitCode).Should(Equal(0))
 
-			// Assert that the endpoint with ContainerID "Y" is still in the datastore.
+			// Assert that the endpoint with container ID "Y" is still in the datastore.
 			endpoints, err = calicoClient.WorkloadEndpoints().List(ctx, options.ListOptions{})
 			Expect(err).ShouldNot(HaveOccurred())
 			Expect(endpoints.Items).Should(HaveLen(1))
-
 			Expect(endpoints.Items[0].Name).Should(Equal(wrkloadY))
 			Expect(endpoints.Items[0].Namespace).Should(Equal(testutils.K8S_TEST_NS))
 			Expect(endpoints.Items[0].Labels).Should(Equal(map[string]string{
@@ -1705,72 +1725,20 @@ var _ = Describe("Kubernetes CNI tests", func() {
 				"projectcalico.org/orchestrator":   api.OrchestratorKubernetes,
 				"projectcalico.org/serviceaccount": "default",
 			}))
-
 			Expect(endpoints.Items[0].Spec.ContainerID).Should(Equal(cniContainerIDY))
 
-			// Finally, delete the container with the CNI_ContainerID "Y".
+			// Finally, delete the container with container ID "Y".
 			exitCode, err = testutils.DeleteContainerWithId(netconf, contNs.Path(), name, testutils.K8S_TEST_NS, cniContainerIDY)
 			Expect(err).ShouldNot(HaveOccurred())
 			Expect(exitCode).Should(Equal(0))
-
 		})
-	})
 
-	// This specific test case is for an issue where k8s would send two ADDs with different container IDs for the same Pod.
-	Context("Multiple ADD calls with different container IDs followed by DEL calls for stale container IDs", func() {
-		It("Use different CNI_ContainerIDs to ADD and DEL the container", func() {
-			netconf := fmt.Sprintf(`
-				{
-			      "cniVersion": "%s",
-				  "name": "net7",
-				  "type": "calico",
-				  "etcd_endpoints": "http://%s:2379",
-				  "datastore_type": "%s",
-           			  "nodename_file_optional": true,
-			 	  "ipam": {
-			    	 "type": "calico-ipam"
-			         },
-					"kubernetes": {
-					  "k8s_api_root": "http://127.0.0.1:8080"
-					 },
-					"policy": {"type": "k8s"},
-					"log_level":"info"
-				}`, cniVersion, os.Getenv("ETCD_IP"), os.Getenv("DATASTORE_TYPE"))
-
-			// Create a new ipPool.
-			ipPool := "10.0.0.0/24"
-			testutils.MustCreateNewIPPool(calicoClient, ipPool, false, false, true)
-
-			config, err := clientcmd.DefaultClientConfig.ClientConfig()
-			Expect(err).NotTo(HaveOccurred())
-
-			clientset, err := kubernetes.NewForConfig(config)
-			Expect(err).NotTo(HaveOccurred())
-
-			// Now create a K8s pod.
-			name := fmt.Sprintf("run%d", rand.Uint32())
-
-			cniContainerIDX := "container-id-00x"
-			cniContainerIDY := "container-id-00y"
-
-			pod, err := clientset.CoreV1().Pods(testutils.K8S_TEST_NS).Create(
-				&v1.Pod{
-					ObjectMeta: metav1.ObjectMeta{
-						Name: name,
-					},
-					Spec: v1.PodSpec{
-						Containers: []v1.Container{{
-							Name:  name,
-							Image: "ignore",
-						}},
-						NodeName: hostname,
-					},
-				})
-
-			Expect(err).NotTo(HaveOccurred())
-
-			log.Infof("Created POD object: %v", pod)
-
+		// Specifically, this test simulartes the following:
+		// - CNI ADD using containerIDX
+		// - CNI ADD using containerIDY
+		// - CNI DEL using containerIDX (should be a no-op)
+		// - CNI DEL using containerIDY (should actually delete the container)
+		It("should handle deletes for stale container IDs", func() {
 			// ADD the container with passing a CNI_CONTAINERID of "X".
 			_, result, _, _, _, contNs, err := testutils.CreateContainerWithId(netconf, name, testutils.K8S_TEST_NS, "", cniContainerIDX)
 			Expect(err).ShouldNot(HaveOccurred())
@@ -1780,7 +1748,6 @@ var _ = Describe("Kubernetes CNI tests", func() {
 			endpoints, err := calicoClient.WorkloadEndpoints().List(ctx, options.ListOptions{})
 			Expect(err).ShouldNot(HaveOccurred())
 			Expect(endpoints.Items).Should(HaveLen(1))
-
 			idsX := names.WorkloadEndpointIdentifiers{
 				Node:         hostname,
 				Orchestrator: api.OrchestratorKubernetes,
@@ -1788,10 +1755,8 @@ var _ = Describe("Kubernetes CNI tests", func() {
 				Pod:          name,
 				ContainerID:  cniContainerIDX,
 			}
-
 			wrkloadX, err := idsX.CalculateWorkloadEndpointName(false)
 			Expect(err).NotTo(HaveOccurred())
-
 			Expect(endpoints.Items[0].Name).Should(Equal(wrkloadX))
 			Expect(endpoints.Items[0].Namespace).Should(Equal(testutils.K8S_TEST_NS))
 			Expect(endpoints.Items[0].Labels).Should(Equal(map[string]string{
@@ -1799,7 +1764,6 @@ var _ = Describe("Kubernetes CNI tests", func() {
 				"projectcalico.org/orchestrator":   api.OrchestratorKubernetes,
 				"projectcalico.org/serviceaccount": "default",
 			}))
-
 			Expect(endpoints.Items[0].Spec.ContainerID).Should(Equal(cniContainerIDX))
 
 			// ADD the container with passing a CNI_CONTAINERID of "Y"
@@ -1811,7 +1775,6 @@ var _ = Describe("Kubernetes CNI tests", func() {
 			endpoints, err = calicoClient.WorkloadEndpoints().List(ctx, options.ListOptions{})
 			Expect(err).ShouldNot(HaveOccurred())
 			Expect(endpoints.Items).Should(HaveLen(1))
-
 			idsY := names.WorkloadEndpointIdentifiers{
 				Node:         hostname,
 				Orchestrator: api.OrchestratorKubernetes,
@@ -1819,10 +1782,8 @@ var _ = Describe("Kubernetes CNI tests", func() {
 				Pod:          name,
 				ContainerID:  cniContainerIDY,
 			}
-
 			wrkloadY, err := idsY.CalculateWorkloadEndpointName(false)
 			Expect(err).NotTo(HaveOccurred())
-
 			Expect(endpoints.Items[0].Name).Should(Equal(wrkloadY))
 			Expect(endpoints.Items[0].Namespace).Should(Equal(testutils.K8S_TEST_NS))
 			Expect(endpoints.Items[0].Labels).Should(Equal(map[string]string{
@@ -1830,7 +1791,6 @@ var _ = Describe("Kubernetes CNI tests", func() {
 				"projectcalico.org/orchestrator":   api.OrchestratorKubernetes,
 				"projectcalico.org/serviceaccount": "default",
 			}))
-
 			Expect(endpoints.Items[0].Spec.ContainerID).Should(Equal(cniContainerIDY))
 
 			// Delete the container with the CNI_CONTAINERID "X".
@@ -1842,7 +1802,6 @@ var _ = Describe("Kubernetes CNI tests", func() {
 			endpoints, err = calicoClient.WorkloadEndpoints().List(ctx, options.ListOptions{})
 			Expect(err).ShouldNot(HaveOccurred())
 			Expect(endpoints.Items).Should(HaveLen(1))
-
 			Expect(endpoints.Items[0].Name).Should(Equal(wrkloadY))
 			Expect(endpoints.Items[0].Namespace).Should(Equal(testutils.K8S_TEST_NS))
 			Expect(endpoints.Items[0].Labels).Should(Equal(map[string]string{
@@ -1850,7 +1809,6 @@ var _ = Describe("Kubernetes CNI tests", func() {
 				"projectcalico.org/orchestrator":   api.OrchestratorKubernetes,
 				"projectcalico.org/serviceaccount": "default",
 			}))
-
 			Expect(endpoints.Items[0].Spec.ContainerID).Should(Equal(cniContainerIDY))
 
 			// Delete the container with the CNI_CONTAINERID "Y".
@@ -1862,35 +1820,12 @@ var _ = Describe("Kubernetes CNI tests", func() {
 			endpoints, err = calicoClient.WorkloadEndpoints().List(ctx, options.ListOptions{})
 			Expect(err).ShouldNot(HaveOccurred())
 			Expect(endpoints.Items).Should(HaveLen(0))
-
 		})
 	})
 
-	Context("after creating a pod", func() {
-
-		netconf := fmt.Sprintf(
-			`
-							{
-							"cniVersion": "%s",
-							"name": "net8",
-							"type": "calico",
-							"etcd_endpoints": "http://%s:2379",
-							"datastore_type": "%s",
-           			                        "nodename_file_optional": true,
-							"ipam": {
-									"type": "calico-ipam"
-									},
-							"kubernetes": {
-								  "k8s_api_root": "http://127.0.0.1:8080"
-								 },
-							"policy": {"type": "k8s"},
-							"log_level":"info"
-							}`,
-			cniVersion,
-			os.Getenv("ETCD_IP"),
-			os.Getenv("DATASTORE_TYPE"),
-		)
-
+	Context("after a pod has already been networked once", func() {
+		var nc types.NetConf
+		var netconf string
 		var workloadName, containerID, name string
 		var endpointSpec api.WorkloadEndpointSpec
 		var contNs ns.NetNS
@@ -1898,7 +1833,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 
 		checkIPAMReservation := func() {
 			// IPAM reservation should still be in place.
-			handleID, _ := utils.GetHandleID("net8", containerID, workloadName)
+			handleID, _ := utils.GetHandleID("calico-uts", containerID, workloadName)
 			ipamIPs, err := calicoClient.IPAM().IPsByHandle(context.Background(), handleID)
 			ExpectWithOffset(1, err).NotTo(HaveOccurred(), "error getting IPs")
 			ExpectWithOffset(1, ipamIPs).To(HaveLen(1),
@@ -1910,15 +1845,29 @@ var _ = Describe("Kubernetes CNI tests", func() {
 			// Create a new ipPool.
 			testutils.MustCreateNewIPPool(calicoClient, "10.0.0.0/24", false, false, true)
 
-			config, err := clientcmd.DefaultClientConfig.ClientConfig()
+			// Create a network config.
+			nc = types.NetConf{
+				CNIVersion:           cniVersion,
+				Name:                 "calico-uts",
+				Type:                 "calico",
+				EtcdEndpoints:        fmt.Sprintf("http://%s:2379", os.Getenv("ETCD_IP")),
+				DatastoreType:        os.Getenv("DATASTORE_TYPE"),
+				Kubernetes:           types.Kubernetes{K8sAPIRoot: "http://127.0.0.1:8080"},
+				Policy:               types.Policy{PolicyType: "k8s"},
+				NodenameFileOptional: true,
+				LogLevel:             "info",
+			}
+			nc.IPAM.Type = "calico-ipam"
+			ncb, err := json.Marshal(nc)
 			Expect(err).NotTo(HaveOccurred())
-
-			clientset, err := kubernetes.NewForConfig(config)
-			Expect(err).NotTo(HaveOccurred())
+			netconf = string(ncb)
 
 			// Now create a K8s pod.
+			config, err := clientcmd.DefaultClientConfig.ClientConfig()
+			Expect(err).NotTo(HaveOccurred())
+			clientset, err := kubernetes.NewForConfig(config)
+			Expect(err).NotTo(HaveOccurred())
 			name = fmt.Sprintf("run%d", rand.Uint32())
-
 			pod, err := clientset.CoreV1().Pods(testutils.K8S_TEST_NS).Create(
 				&v1.Pod{
 					ObjectMeta: metav1.ObjectMeta{
@@ -1932,20 +1881,18 @@ var _ = Describe("Kubernetes CNI tests", func() {
 						NodeName: hostname,
 					},
 				})
-
 			Expect(err).NotTo(HaveOccurred())
-
 			log.Infof("Created POD object: %v", pod)
+
+			// Run the CNI plugin.
 			containerID, result, _, _, _, contNs, err = testutils.CreateContainer(netconf, name, testutils.K8S_TEST_NS, "")
 			Expect(err).ShouldNot(HaveOccurred())
-
 			log.Printf("Unmarshalled result from first ADD: %v\n", result)
 
 			// The endpoint is created in etcd
 			endpoints, err := calicoClient.WorkloadEndpoints().List(ctx, options.ListOptions{})
 			Expect(err).ShouldNot(HaveOccurred())
 			Expect(endpoints.Items).Should(HaveLen(1))
-
 			ids := names.WorkloadEndpointIdentifiers{
 				Node:         hostname,
 				Orchestrator: api.OrchestratorKubernetes,
@@ -1953,10 +1900,8 @@ var _ = Describe("Kubernetes CNI tests", func() {
 				Pod:          name,
 				ContainerID:  containerID,
 			}
-
 			workloadName, err = ids.CalculateWorkloadEndpointName(false)
 			Expect(err).NotTo(HaveOccurred())
-
 			Expect(endpoints.Items[0].Name).Should(Equal(workloadName))
 			Expect(endpoints.Items[0].Namespace).Should(Equal(testutils.K8S_TEST_NS))
 			Expect(endpoints.Items[0].Labels).Should(Equal(map[string]string{
@@ -1964,10 +1909,8 @@ var _ = Describe("Kubernetes CNI tests", func() {
 				"projectcalico.org/orchestrator":   api.OrchestratorKubernetes,
 				"projectcalico.org/serviceaccount": "default",
 			}))
-
 			endpointSpec = endpoints.Items[0].Spec
 			Expect(endpointSpec.ContainerID).Should(Equal(containerID))
-
 			checkIPAMReservation()
 		})
 
@@ -2028,68 +1971,6 @@ var _ = Describe("Kubernetes CNI tests", func() {
 				// So the tear-down succeeds, put the veth back.
 				renameVeth(tweakedVethName, realVethName)
 			})
-		})
-	})
-
-	Context("ask for more than 1 IPv4 addrs using ipAddrsNoIpam annotation to assign IP address to a pod, bypassing IPAM", func() {
-		It("should return an error", func() {
-			netconfCalicoIPAM := fmt.Sprintf(`
-				{
-			      "cniVersion": "%s",
-				  "name": "net9",
-				  "type": "calico",
-				  "feature_control": {
-					  "ip_addrs_no_ipam": true
-				  },
-				  "etcd_endpoints": "http://%s:2379",
-				  "datastore_type": "%s",
-           			  "nodename_file_optional": true,
-			 	  "ipam": {},
-					"kubernetes": {
-					  "k8s_api_root": "http://127.0.0.1:8080"
-					 },
-					"policy": {"type": "k8s"},
-					"log_level":"info"
-				}`, cniVersion, os.Getenv("ETCD_IP"), os.Getenv("DATASTORE_TYPE"))
-
-			config, err := clientcmd.DefaultClientConfig.ClientConfig()
-			Expect(err).NotTo(HaveOccurred())
-
-			clientset, err := kubernetes.NewForConfig(config)
-			Expect(err).NotTo(HaveOccurred())
-
-			// Now create a K8s pod passing in more than one IPv4 address.
-			name := fmt.Sprintf("run%d", rand.Uint32())
-			pod, err := clientset.CoreV1().Pods(testutils.K8S_TEST_NS).Create(&v1.Pod{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: name,
-					Annotations: map[string]string{
-						"cni.projectcalico.org/ipAddrsNoIpam": "[\"10.0.0.1\", \"10.0.0.2\"]",
-					},
-				},
-				Spec: v1.PodSpec{
-					Containers: []v1.Container{{
-						Name:  name,
-						Image: "ignore",
-					}},
-					NodeName: hostname,
-				},
-			})
-			Expect(err).NotTo(HaveOccurred())
-
-			log.Infof("Created POD object: %v", pod)
-
-			_, _, _, _, _, contNs, err := testutils.CreateContainer(netconfCalicoIPAM, name, testutils.K8S_TEST_NS, "")
-			Expect(err).To(HaveOccurred())
-
-			// Make sure the WorkloadEndpoint is not created in the datastore.
-			endpoints, err := calicoClient.WorkloadEndpoints().List(ctx, options.ListOptions{})
-			Expect(err).ShouldNot(HaveOccurred())
-			Expect(endpoints.Items).Should(HaveLen(0))
-
-			// Delete the container.
-			_, err = testutils.DeleteContainer(netconfCalicoIPAM, contNs.Path(), name, testutils.K8S_TEST_NS)
-			Expect(err).ShouldNot(HaveOccurred())
 		})
 	})
 
