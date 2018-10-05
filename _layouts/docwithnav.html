@@ -49,9 +49,11 @@ The code is a little roundabout for a few reasons:
     <link rel="stylesheet" href="{{site.baseurl}}/css/style.css"/>
     <link rel="stylesheet" href="{{site.baseurl}}/css/search.css"/>
     <link rel="stylesheet" href="{{site.baseurl}}/css/plugins/offcanvas.css"/>
+    <link rel="stylesheet" href="{{site.baseurl}}/css/instantsearch/instantsearch.min.css"/>
     <link href="https://www.projectcalico.org/wp-content/themes/dante/css/font-awesome.min.css" rel="stylesheet">
     <script src="{{site.baseurl}}/js/jquery-2.2.0.min.js"></script>
     <script src="{{site.baseurl}}/js/bootstrap/bootstrap.min.js"></script>
+    <script src="{{site.baseurl}}/js/instantsearch/instantsearch.min.js"></script>
     <script src="{{site.baseurl}}/js/script.js"></script>
     <script>
       (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
@@ -195,12 +197,15 @@ The code is a little roundabout for a few reasons:
           </p>
           <div class="col-xs-6 col-sm-4 col-md-3 sidebar-offcanvas">
             <div class="row">
-              <input type=text id="search-input">
-              <div class="search-results"></div>
+              <div class="search-input-container"></div>
+              <div class="search-container">
+                <div class="search-container__results"></div>
+                <div class="search-container__pagination"></div>
+              </div>
             </div>
             <div id="sidebar">
             	{% include sidebar.html sidebar=this_pages_navbar.toc prefix="nav" %}
-			</div>
+            </div>
           </div>
           <div class="col-xs-12 col-sm-8 col-md-9">
             <div id="content-main">
@@ -230,7 +235,7 @@ The code is a little roundabout for a few reasons:
 
     <script>
       $(document).ready(function() {
-        window.initializeSearch('{{page.version}}', '#search-input', '.search-results');
+        window.initializeSearch('{{page.version}}', '.search-input-container', '.search-container', '.search-container__results', '.search-container__pagination');
       });
     </script>
   </body>

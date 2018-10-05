@@ -1,0 +1,27 @@
+.search-container {
+    display: none;
+}
+
+.ais-content {
+    color: #63676d;
+}
+
+.ais-lvl0 {
+    color: black;
+    font-size: 1.1em
+}
+
+.ais-result {
+    margin-bottom: 15px;
+    border-left: solid 1px #ddd;
+    padding-left: 10px;
+}
+
+input:focus {
+    outline: none;
+}
+
+.popover {
+    max-width: unset;
+    width: 500px;
+}
