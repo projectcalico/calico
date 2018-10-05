@@ -35,7 +35,16 @@ ifeq ($(ARCH),aarch64)
         override ARCH=arm64
 endif
 ifeq ($(ARCH),x86_64)
-    override ARCH=amd64
+        override ARCH=amd64
+endif
+
+# Build mounts for running in "local build" mode. Mount in libcalico, but null out
+# the vendor directory. This allows an easy build using local development code,
+# assuming that there is a local checkout of libcalico in the same directory as this repo.
+LOCAL_BUILD_MOUNTS ?=
+ifeq ($(LOCAL_BUILD),true)
+LOCAL_BUILD_MOUNTS = -v $(CURDIR)/../libcalico-go:/go/src/$(PACKAGE_NAME)/vendor/github.com/projectcalico/libcalico-go:ro \
+	-v $(CURDIR)/.empty:/go/src/$(PACKAGE_NAME)/vendor/github.com/projectcalico/libcalico-go/vendor:ro
 endif
 
 # we want to be able to run the same recipe on multiple targets keyed on the image name
@@ -96,16 +105,11 @@ LIBCALICOGO_PATH?=none
 LOCAL_USER_ID?=$(shell id -u $$USER)
 
 # Get version from git.
-GIT_VERSION?=$(shell git describe --tags --dirty)
+GIT_VERSION?=$(shell git describe --tags --dirty --always)
+ifeq ($(LOCAL_BUILD),true)
+	GIT_VERSION = $(shell git describe --tags --dirty --always)-dev-build
+endif
 
-DOCKER_GO_BUILD := mkdir -p .go-pkg-cache && \
-                   docker run --rm \
-                              --net=host \
-                              -e LOCAL_USER_ID=$(LOCAL_USER_ID) \
-                              -v $${PWD}:/go/src/$(PACKAGE_NAME):rw \
-                              -v $${PWD}/.go-pkg-cache:/go/pkg:rw \
-                              -w /go/src/$(PACKAGE_NAME) \
-                              $(CALICO_BUILD)
 SRCFILES=cmd/kube-controllers/main.go $(shell find pkg -name '*.go')
 
 ## Removes all build artifacts.
@@ -174,7 +178,8 @@ bin/kube-controllers-linux-$(ARCH): vendor $(SRCFILES)
 	  -w /go/src/$(PACKAGE_NAME) \
 	  -e LOCAL_USER_ID=$(LOCAL_USER_ID) \
 	  -v $(CURDIR)/.go-pkg-cache:/go-cache/:rw \
-      -e GOCACHE=/go-cache \
+	  $(LOCAL_BUILD_MOUNTS) \
+	  -e GOCACHE=/go-cache \
 	  $(CALICO_BUILD) go build -v -o bin/kube-controllers-$(OS)-$(ARCH) -ldflags "-X main.VERSION=$(GIT_VERSION)" ./cmd/kube-controllers/
 
 bin/check-status-linux-$(ARCH): vendor $(SRCFILES)
@@ -187,7 +192,8 @@ bin/check-status-linux-$(ARCH): vendor $(SRCFILES)
 	  -w /go/src/$(PACKAGE_NAME) \
 	  -e LOCAL_USER_ID=$(LOCAL_USER_ID) \
 	  -v $(CURDIR)/.go-pkg-cache:/go-cache/:rw \
-      -e GOCACHE=/go-cache \
+	  $(LOCAL_BUILD_MOUNTS) \
+	  -e GOCACHE=/go-cache \
 	  $(CALICO_BUILD) go build -v -o bin/check-status-$(OS)-$(ARCH) -ldflags "-X main.VERSION=$(GIT_VERSION)" ./cmd/check-status/
 
 ###############################################################################
@@ -284,6 +290,7 @@ install-git-hooks:
 # Make sure that a copyright statement exists on all go files.
 check-copyright:
 	./check-copyrights.sh
+
 ###############################################################################
 # Tests
 ###############################################################################
@@ -294,6 +301,7 @@ ut: vendor
 		-e LOCAL_USER_ID=$(LOCAL_USER_ID) \
 		-v $(CURDIR)/.go-pkg-cache:/go/pkg/:rw \
 		-v $(CURDIR):/go/src/$(PACKAGE_NAME):rw \
+		$(LOCAL_BUILD_MOUNTS) \
 		-w /go/src/$(PACKAGE_NAME) \
 		$(CALICO_BUILD) sh -c 'WHAT=$(WHAT) SKIP=$(SKIP) ./run-uts'
 
@@ -307,7 +315,15 @@ fv: tests/fv/fv.test image
 tests/fv/fv.test: $(shell find ./tests -type f -name '*.go' -print)
 	# We pre-build the test binary so that we can run it outside a container and allow it
 	# to interact with docker.
-	$(DOCKER_GO_BUILD) go test ./tests/fv -c --tags fvtests -o tests/fv/fv.test
+	mkdir -p .go-pkg-cache && \
+		docker run --rm \
+		--net=host \
+		-e LOCAL_USER_ID=$(LOCAL_USER_ID) \
+		-v $${PWD}:/go/src/$(PACKAGE_NAME):rw \
+		-v $${PWD}/.go-pkg-cache:/go/pkg:rw \
+		$(LOCAL_BUILD_MOUNTS) \
+		-w /go/src/$(PACKAGE_NAME) \
+		$(CALICO_BUILD) go test ./tests/fv -c --tags fvtests -o tests/fv/fv.test
 
 ###############################################################################
 # CI
@@ -411,6 +427,9 @@ release-publish-latest: release-prereqs
 release-prereqs:
 ifndef VERSION
 	$(error VERSION is undefined - run using make release VERSION=vX.Y.Z)
+endif
+ifdef LOCAL_BUILD
+	$(error LOCAL_BUILD must not be set for a release)
 endif
 
 ###############################################################################
