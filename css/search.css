@@ -2,6 +2,11 @@
     display: none;
 }
 
+.search-container__results .algolia-docsearch-suggestion--highlight {
+    color: #c7254e;
+    background-color: #f9f2f4;
+}
+
 .ais-content {
     color: #63676d;
 }
