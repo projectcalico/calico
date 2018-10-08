@@ -20,6 +20,7 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
+	"github.com/projectcalico/libcalico-go/lib/ipam"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"context"
@@ -702,6 +703,92 @@ var _ = testutils.E2eDatastoreDescribe("IPPool tests", testutils.DatastoreAll, f
 			Expect(err).To(HaveOccurred())
 			Expect(err).To(BeAssignableToTypeOf(errors.ErrorValidation{}))
 			Expect(err.Error()).To(ContainSubstring("IPPool(ippool4) CIDR overlaps with IPPool(ippool1) CIDR 1.2.3.0/24"))
+		})
+	})
+})
+
+var _ = testutils.E2eDatastoreDescribe("IPPool tests", testutils.DatastoreEtcdV3, func(config apiconfig.CalicoAPIConfig) {
+
+	ctx := context.Background()
+
+	Describe("Verify pool creation with changing blocksizes", func() {
+		var c clientv3.Interface
+		var err error
+
+		BeforeEach(func() {
+			c, err = clientv3.New(config)
+			Expect(err).NotTo(HaveOccurred())
+
+			be, err := backend.NewClient(config)
+			Expect(err).NotTo(HaveOccurred())
+			be.Clean()
+		})
+
+		It("should prevent the creation of a pool that covers existing blocks with a different blockSize", func() {
+			By("Creating a pool with the default blockSize")
+			_, err := c.IPPools().Create(ctx, &apiv3.IPPool{
+				ObjectMeta: metav1.ObjectMeta{Name: "ippool1"},
+				Spec: apiv3.IPPoolSpec{
+					CIDR: "1.2.3.0/26",
+				},
+			}, options.SetOptions{})
+			Expect(err).NotTo(HaveOccurred())
+
+			// Allocate an IP so that a block is allocated
+			assigned, _, err := c.IPAM().AutoAssign(ctx, ipam.AutoAssignArgs{Num4: 1})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(assigned).To(HaveLen(1))
+
+			// Delete the pool
+			_, err = c.IPPools().Delete(ctx, "ippool1", options.DeleteOptions{})
+			Expect(err).NotTo(HaveOccurred())
+
+			By("creating a pool with a different blockSize")
+			_, err = c.IPPools().Create(ctx, &apiv3.IPPool{
+				ObjectMeta: metav1.ObjectMeta{Name: "ippool1"},
+				Spec: apiv3.IPPoolSpec{
+					CIDR:      "1.2.3.0/26",
+					BlockSize: 28,
+				},
+			}, options.SetOptions{})
+			Expect(err).To(HaveOccurred())
+
+			By("creating a pool with the same blockSize")
+			_, err = c.IPPools().Create(ctx, &apiv3.IPPool{
+				ObjectMeta: metav1.ObjectMeta{Name: "ippool1"},
+				Spec: apiv3.IPPoolSpec{
+					CIDR:      "1.2.3.0/26",
+					BlockSize: 26,
+				},
+			}, options.SetOptions{})
+			Expect(err).NotTo(HaveOccurred())
+
+			// Delete the pool
+			_, err = c.IPPools().Delete(ctx, "ippool1", options.DeleteOptions{})
+			Expect(err).NotTo(HaveOccurred())
+
+			By("creating a pool with a different blockSize that overlaps")
+			_, err = c.IPPools().Create(ctx, &apiv3.IPPool{
+				ObjectMeta: metav1.ObjectMeta{Name: "ippool1"},
+				Spec: apiv3.IPPoolSpec{
+					CIDR:      "1.2.2.0/23",
+					BlockSize: 28,
+				},
+			}, options.SetOptions{})
+			Expect(err).To(HaveOccurred())
+
+			By("deleting the block and creating a pool with a different blockSize")
+			unreleased, err := c.IPAM().ReleaseIPs(ctx, assigned)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(unreleased).To(HaveLen(0))
+			_, err = c.IPPools().Create(ctx, &apiv3.IPPool{
+				ObjectMeta: metav1.ObjectMeta{Name: "ippool1"},
+				Spec: apiv3.IPPoolSpec{
+					CIDR:      "1.2.3.0/26",
+					BlockSize: 28,
+				},
+			}, options.SetOptions{})
+			Expect(err).NotTo(HaveOccurred())
 		})
 	})
 })
