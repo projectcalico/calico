@@ -6,7 +6,7 @@ canonical_url: 'https://docs.projectcalico.org/v3.2/usage/calicoctl/install'
 ## About installing calicoctl
 
 `calicoctl` allows you to create, read, update, and delete {{site.prodname}} objects
-from the command line. 
+from the command line.
 
 You can run `calicoctl` on any host with network access to the
 {{site.prodname}} datastore as either a binary or a container.
@@ -29,7 +29,3 @@ corresponds to your desired deployment.
 [Configure `calicoctl` to connect to your datastore](/{{page.version}}/usage/calicoctl/configure/).
 
 {% include {{page.version}}/ctl-container-install.md %}
-
-**Next step**:
-
-[Configure `calicoctl` to connect to your datastore](/{{page.version}}/usage/calicoctl/configure/).
