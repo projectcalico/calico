@@ -1,22 +1,22 @@
 ---
-title: Configuring the Calico Kubernetes controllers
-canonical_url: 'https://docs.projectcalico.org/v3.2/reference/kube-controllers/configuration'
+title: Configuring the Tigera Secure EE Kubernetes controllers
 ---
 
 The {{site.prodname}} Kubernetes controllers are primarily configured through environment variables. When running
 the controllers as a Kubernetes pod, this is accomplished through the pod manifest `env`
 section.
 
-## The calico/kube-controllers container
+## The {{site.imageNames["kubeControllers"]}} container
 
-The `calico/kube-controllers` container includes the following controllers:
+The `{{site.imageNames["kubeControllers"]}}` container includes the following controllers:
 
 1. policy controller: watches network policies and programs {{site.prodname}} policies.
-1. profile controller: watches namespaces and programs {{site.prodname}} profiles.
+1. namespace controller: watches namespaces and programs {{site.prodname}} profiles.
+1. serviceaccount controller: watches service accounts and programs {{site.prodname}} profiles.
 1. workloadendpoint controller: watches for changes to pod labels and updates {{site.prodname}} workload endpoints.
 1. node controller: watches for the removal of Kubernetes nodes and removes corresponding data from {{site.prodname}}.
 
-By default, the following controllers are enabled: profile, policy, workloadendpoint
+The {{site.prodname}} Kubernetes manifests run these controllers within a single pod in the `calico-kube-controllers` deployment.
 
 ### Configuring etcd access
 
@@ -37,8 +37,6 @@ must ensure that the files exist within the pod. This is usually done in one of 
 
 ### Configuring Kubernetes API access
 
-The controllers must have read access to the Kubernetes API in order to monitor `NetworkPolicy`, `Pod`, and `Namespace` events.
-
 When running the controllers as a self-hosted Kubernetes Pod, Kubernetes API access is [configured automatically][in-cluster-config] and
 no additional configuration is required. However, the controllers can also be configured to use an explicit [kubeconfig][kubeconfig] file override to
 configure API access if needed.
@@ -49,9 +47,11 @@ The following environment variables can be used to configure the {{site.prodname
 
 | Environment   | Description | Schema |
 | ------------- | ----------- | ------ |
-| `ENABLED_CONTROLLERS` | Which controllers to run | policy, profile, workloadendpoint, node |
+| `ENABLED_CONTROLLERS` | Which controllers to run | namespace, node, policy, serviceaccount, workloadendpoint |
 | `LOG_LEVEL`     | Minimum log level to be displayed. | debug, info, warning, error |
 | `KUBECONFIG`    | Path to a kubeconfig file for Kubernetes API access | path |
+
+If `ENABLED_CONTROLLERS` is not explicitly specified, the following controllers are run by default: policy, namespace, workloadendpoint, serviceaccount
 
 [in-cluster-config]: https://kubernetes.io/docs/tasks/access-application-cluster/access-cluster/#accessing-the-api-from-a-pod
 [kubeconfig]: https://kubernetes.io/docs/concepts/configuration/organize-cluster-access-kubeconfig/
@@ -60,9 +60,12 @@ The following environment variables can be used to configure the {{site.prodname
 
 ### Node controller
 
-The node controller automatically cleans up configuration for nodes that no longer exist.
+The node controller automatically cleans up configuration for nodes that no longer exist. The controller must have read 
+access to the Kubernetes API to monitor `Node` events.
 
-The node controller is not enabled by default. However, the {{site.prodname}} Kubernetes manifests do enable this controller.
+The node controller is not enabled by default if `ENABLED_CONTROLLERS` is not explicitly specified.
+However, the {{site.prodname}} Kubernetes manifests explicitly specify the `ENABLED_CONTROLLERS` and enable this controller
+within the calico-kube-controllers deployment.
 
 To enable the node controller, perform the following two steps.
 
@@ -75,22 +78,41 @@ To enable the node controller, perform the following two steps.
       fieldPath: spec.nodeName
 ```
 
+This controller is only valid when using etcd as the {{site.prodname}} datastore.
+
 ### Policy controller
 
-The policy controller syncs Kubernetes network policies to the {{site.prodname}} data store.
+The policy controller syncs Kubernetes network policies to the {{site.prodname}} datastore. The controller must have read 
+access to the Kubernetes API to monitor `NetworkPolicy` events.
 
-The policy controller is enabled by default.
+The policy controller is enabled by default if `ENABLED_CONTROLLERS` is not explicitly specified.
 
+This controller is only valid when using etcd as the {{site.prodname}} datastore.
 
 ### Workload endpoint controller
 
-The workload endpoint controller automatically syncs Kubernetes pod label changes to the {{site.prodname}} data store by updating
-the corresponding workload endpoints appropriately.
+The workload endpoint controller automatically syncs Kubernetes pod label changes to the {{site.prodname}} datastore by updating
+the corresponding workload endpoints appropriately. The controller must have read 
+access to the Kubernetes API to monitor `Pod` events.
 
-The workload endpoint controller is enabled by default.
+The workload endpoint controller is enabled by default if `ENABLED_CONTROLLERS` is not explicitly specified.
 
-### Profile controller
+This controller is only valid when using etcd as the {{site.prodname}} datastore.
 
-The profile controller syncs Kubernetes namespace label changes to the {{site.prodname}} data store.
+### Namespace controller
 
-The profile controller is enabled by default.
+The namespace controller syncs Kubernetes namespace label changes to the {{site.prodname}} datastore. The controller must have read 
+access to the Kubernetes API to monitor `Namespace` events.
+
+The namespace controller is enabled by default if `ENABLED_CONTROLLERS` is not explicitly specified.
+
+This controller is only valid when using etcd as the {{site.prodname}} datastore.
+
+### Service account controller
+
+The service account controller syncs Kubernetes service account changes to the {{site.prodname}} datastore.
+The controller must have read access to the Kubernetes API to monitor `ServiceAccount` events.
+
+The service account controller is enabled by default if `ENABLED_CONTROLLERS` is not explicitly specified.
+
+This controller is only valid when using etcd as the {{site.prodname}} datastore.
