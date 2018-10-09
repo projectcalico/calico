@@ -52,6 +52,13 @@
                     </a>\
                 </h5>\
                 {{/hierarchy.lvl2}}\
+                {{#hierarchy.lvl3}}\
+                <h6 class="search-result__subsubsubcategory ais-lvl3">\
+                    <a href="{{url}}">\
+                        {{{_highlightResult.hierarchy.lvl3.value}}}\
+                    </a>\
+                </h6>\
+                {{/hierarchy.lvl3}}\
                 {{#content}}\
                 <div class="search-result__content ais-content">\
                     <a href="{{url}}" >\
