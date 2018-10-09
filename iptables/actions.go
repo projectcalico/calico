@@ -121,7 +121,7 @@ type SNATAction struct {
 func (g SNATAction) ToFragment(features *Features) string {
 	fullyRand := ""
 	if features.SNATFullyRandom {
-		fullyRand = " --fully-random"
+		fullyRand = " --random-fully"
 	}
 	return fmt.Sprintf("--jump SNAT --to-source %s%s", g.ToAddr, fullyRand)
 }
@@ -138,7 +138,7 @@ type MasqAction struct {
 func (g MasqAction) ToFragment(features *Features) string {
 	fullyRand := ""
 	if features.MASQFullyRandom {
-		fullyRand = " --fully-random"
+		fullyRand = " --random-fully"
 	}
 	if g.ToPorts != "" {
 		return fmt.Sprintf("--jump MASQUERADE --to-ports %s"+fullyRand, g.ToPorts)

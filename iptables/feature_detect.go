@@ -53,7 +53,7 @@ func mustParseVersion(v string) *version.Version {
 	return ver
 }
 
-// VersionToFeatures convers an iptables version line as returned by iptables --version into a set of feature flags.
+// VersionToFeatures converts an iptables version line as returned by iptables --version into a set of feature flags.
 func VersionToFeatures(s string) (*Features, error) {
 	re := regexp.MustCompile(`v(\d+\.\d+\.\d+)`)
 	matches := re.FindStringSubmatch(s)
@@ -74,6 +74,7 @@ func VersionToFeatures(s string) (*Features, error) {
 	return &features, nil
 }
 
+// KernelVersionToFeatures parses a /proc/version-formatted string and returns the features supported by the kernel.
 func KernelVersionToFeatures(s string) (*Features, error) {
 	re := regexp.MustCompile(`Linux version (\d+\.\d+\.\d+)`)
 	matches := re.FindStringSubmatch(s)

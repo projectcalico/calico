@@ -443,7 +443,7 @@ type versionCmd struct {
 }
 
 func (d *versionCmd) String() string {
-	return "saveCmd"
+	return "versionCmd"
 }
 
 func (d *versionCmd) SetStdin(r io.Reader) {

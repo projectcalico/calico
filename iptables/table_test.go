@@ -763,7 +763,7 @@ func describeDirtyDataplaneTests(appendMode bool) {
 		It("with no errors, it should get to correct final state", func() {
 			table.Apply()
 			checkFinalState()
-			Expect(dataplane.Cmds).To(HaveLen(3)) // a save and a restore
+			Expect(dataplane.Cmds).To(HaveLen(3)) // a version, save and a restore
 		})
 		It("with no errors, it shouldn't sleep", func() {
 			table.Apply()
@@ -774,7 +774,7 @@ func describeDirtyDataplaneTests(appendMode bool) {
 				checkFinalState()
 			})
 			It("it should retry once", func() {
-				Expect(dataplane.Cmds).To(HaveLen(4)) // 2 saves and a restore
+				Expect(dataplane.Cmds).To(HaveLen(4)) // a version, 2 saves and a restore
 			})
 			It("it should sleep", func() {
 				Expect(dataplane.CumulativeSleep).To(Equal(100 * time.Millisecond))
