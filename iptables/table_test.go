@@ -46,6 +46,7 @@ var _ = Describe("Table with an empty dataplane", func() {
 			TableOptions{
 				HistoricChainPrefixes: rules.AllHistoricChainNamePrefixes,
 				NewCmdOverride:        dataplane.newCmd,
+				ReadFileOverride:      dataplane.readFile,
 				SleepOverride:         dataplane.sleep,
 				NowOverride:           dataplane.now,
 			},
@@ -72,6 +73,15 @@ var _ = Describe("Table with an empty dataplane", func() {
 		table.Apply()
 		Expect(table.Features).To(Equal(&Features{
 			SNATFullyRandom: true,
+		}))
+	})
+
+	It("should detect no SNAT fully random for kernel version 3.13", func() {
+		dataplane.Version = "iptables v1.6.1\n"
+		dataplane.KernelVersion = "Linux version 3.13.0-generic-1234"
+		table.Apply()
+		Expect(table.Features).To(Equal(&Features{
+			SNATFullyRandom: false,
 		}))
 	})
 

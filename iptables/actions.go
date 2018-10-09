@@ -16,10 +16,6 @@ package iptables
 
 import "fmt"
 
-type Features struct {
-	SNATFullyRandom bool
-}
-
 type Action interface {
 	ToFragment(features *Features) string
 }

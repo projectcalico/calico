@@ -19,13 +19,13 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"os/exec"
 	"reflect"
 	"regexp"
 	"strings"
 	"time"
 
-	"github.com/hashicorp/go-version"
 	"github.com/prometheus/client_golang/prometheus"
 	log "github.com/sirupsen/logrus"
 
@@ -242,6 +242,8 @@ type Table struct {
 
 	// Factory for making commands, used by UTs to shim exec.Command().
 	newCmd cmdFactory
+	// Shim for reading ioutil.ReadFile
+	readFile func(name string) ([]byte, error)
 	// Shims for time.XXX functions:
 	timeSleep func(d time.Duration)
 	timeNow   func() time.Time
@@ -256,6 +258,8 @@ type TableOptions struct {
 
 	// NewCmdOverride for tests, if non-nil, factory to use instead of the real exec.Command()
 	NewCmdOverride cmdFactory
+	// ReadFileOverride for tests, if non-nil, alternative to ioutil.ReadFile().
+	ReadFileOverride func(name string) ([]byte, error)
 	// SleepOverride for tests, if non-nil, replacement for time.Sleep()
 	SleepOverride func(d time.Duration)
 	// NowOverride for tests, if non-nil, replacement for time.Now()
@@ -319,6 +323,10 @@ func NewTable(
 	if options.NewCmdOverride != nil {
 		newCmd = options.NewCmdOverride
 	}
+	readFile := ioutil.ReadFile
+	if options.ReadFileOverride != nil {
+		readFile = options.ReadFileOverride
+	}
 	sleep := time.Sleep
 	if options.SleepOverride != nil {
 		sleep = options.SleepOverride
@@ -359,6 +367,7 @@ func NewTable(
 		writeLock: iptablesWriteLock,
 
 		newCmd:    newCmd,
+		readFile:  readFile,
 		timeSleep: sleep,
 		timeNow:   now,
 
@@ -445,37 +454,32 @@ func (t *Table) refreshFeatures() error {
 	}
 
 	s := string(out)
-	features, err := IPTablesVersionToFeatures(s)
+	features, err := VersionToFeatures(s)
 	if err != nil {
 		return err
 	}
 
-	if t.Features == nil || *t.Features != *features {
-		log.WithField("features", features).Info("Detected iptables features")
-		t.Features = features
+	kernVersion, err := t.readFile("/proc/version")
+	if err != nil {
+		return err
+	}
+	log.WithField("version", string(kernVersion)).Debug("Loaded kernel version")
+	kernFeatures, err := KernelVersionToFeatures(string(kernVersion))
+	if err != nil {
+		return err
+	}
+
+	merged := MergeFeatures(features, kernFeatures)
+
+	if t.Features == nil || *t.Features != *merged {
+		log.WithFields(log.Fields{
+			"iptables": features,
+			"kernel":   kernFeatures,
+			"merged":   merged,
+		}).Info("Detected iptables features")
+		t.Features = merged
 	}
 	return nil
-}
-
-func IPTablesVersionToFeatures(s string) (*Features, error) {
-	re := regexp.MustCompile(`v(\d+\.\d+\.\d+)`)
-	matches := re.FindStringSubmatch(s)
-	if len(matches) == 0 {
-		return nil, fmt.Errorf("iptables returnedbad version: %s", s)
-	}
-	iptablesVersion, err := version.NewVersion(matches[1])
-	if err != nil {
-		return nil, err
-	}
-	var features Features
-	v161, err := version.NewVersion("1.6.1")
-	if err != nil {
-		return nil, err
-	}
-	if iptablesVersion.Compare(v161) >= 0 {
-		features.SNATFullyRandom = true
-	}
-	return &features, nil
 }
 
 func (t *Table) loadDataplaneState() {

@@ -41,6 +41,8 @@ func newMockDataplane(table string, chains map[string][]string) *mockDataplane {
 		ChainMods:     set.New(),
 		DeletedChains: set.New(),
 		Version:       "iptables v1.6.0\n",
+		KernelVersion: "Linux version 4.15.0-34-generic (buildd@lgw01-amd64-037) (gcc version 5.4.0 20160609 " +
+			"(Ubuntu 5.4.0-6ubuntu1~16.04.10)) #37~16.04.1-Ubuntu SMP Tue Aug 28 10:44:06 UTC 2018",
 	}
 }
 
@@ -71,6 +73,7 @@ type mockDataplane struct {
 	Time                   time.Time
 	FailNextVersion        bool
 	Version                string
+	KernelVersion          string
 }
 
 func (d *mockDataplane) ResetCmds() {
@@ -118,6 +121,13 @@ func (d *mockDataplane) newCmd(name string, arg ...string) CmdIface {
 	d.Cmds = append(d.Cmds, cmd)
 
 	return cmd
+}
+
+func (d *mockDataplane) readFile(name string) ([]byte, error) {
+	if name == "/proc/version" {
+		return []byte(d.KernelVersion), nil
+	}
+	return nil, errors.New("not implemented")
 }
 
 func (d *mockDataplane) sleep(duration time.Duration) {
