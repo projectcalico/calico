@@ -40,7 +40,7 @@ func newMockDataplane(table string, chains map[string][]string) *mockDataplane {
 		FlushedChains: set.New(),
 		ChainMods:     set.New(),
 		DeletedChains: set.New(),
-		Version:       "iptables v1.6.0\n",
+		Version:       "iptables v1.5.9\n",
 		KernelVersion: "Linux version 4.15.0-34-generic (buildd@lgw01-amd64-037) (gcc version 5.4.0 20160609 " +
 			"(Ubuntu 5.4.0-6ubuntu1~16.04.10)) #37~16.04.1-Ubuntu SMP Tue Aug 28 10:44:06 UTC 2018",
 	}

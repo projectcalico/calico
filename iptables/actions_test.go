@@ -35,6 +35,7 @@ var _ = DescribeTable("Actions",
 	Entry("SNATAction", Features{}, SNATAction{ToAddr: "10.0.0.1"}, "--jump SNAT --to-source 10.0.0.1"),
 	Entry("SNATAction fully random", Features{SNATFullyRandom: true}, SNATAction{ToAddr: "10.0.0.1"}, "--jump SNAT --to-source 10.0.0.1 --fully-random"),
 	Entry("MasqAction", Features{}, MasqAction{}, "--jump MASQUERADE"),
+	Entry("MasqAction", Features{MASQFullyRandom: true}, MasqAction{}, "--jump MASQUERADE --fully-random"),
 	Entry("ClearMarkAction", Features{}, ClearMarkAction{Mark: 0x1000}, "--jump MARK --set-mark 0/0x1000"),
 	Entry("SetMarkAction", Features{}, SetMarkAction{Mark: 0x1000}, "--jump MARK --set-mark 0x1000/0x1000"),
 	Entry("SetMaskedMarkAction", Features{}, SetMaskedMarkAction{

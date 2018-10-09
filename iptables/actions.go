@@ -136,10 +136,14 @@ type MasqAction struct {
 }
 
 func (g MasqAction) ToFragment(features *Features) string {
-	if g.ToPorts != "" {
-		return fmt.Sprintf("--jump MASQUERADE --to-ports %s", g.ToPorts)
+	fullyRand := ""
+	if features.MASQFullyRandom {
+		fullyRand = " --fully-random"
 	}
-	return "--jump MASQUERADE"
+	if g.ToPorts != "" {
+		return fmt.Sprintf("--jump MASQUERADE --to-ports %s"+fullyRand, g.ToPorts)
+	}
+	return "--jump MASQUERADE" + fullyRand
 }
 
 func (g MasqAction) String() string {
