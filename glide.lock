@@ -1,5 +1,5 @@
-hash: acb92933fd27e80fd599ffad2cdd023fc9d55657757382bd06547c14ec25ddd6
-updated: 2018-10-08T07:45:29.916371552Z
+hash: ed651749a075dfe845439b49b0eae6ad68f4bbcbb4da22635d5244391ffa4b85
+updated: 2018-10-09T07:47:30.148942371Z
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -106,7 +106,7 @@ imports:
 - name: github.com/kardianos/osext
   version: ae77be60afb1dcacde03767a8c37337fad28ac14
 - name: github.com/kelseyhightower/confd
-  version: 8c4712c917b088c5fa49c1a837d65cebbcd81eed
+  version: d2c7b04550cedb25af0935330cb5ef43cbf98119
   repo: https://github.com/projectcalico/confd.git
   subpackages:
   - pkg/backends
@@ -185,7 +185,7 @@ imports:
 - name: github.com/peterbourgon/diskv
   version: 5f041e8faa004a95c88a202771f4cc3e991971e6
 - name: github.com/projectcalico/felix
-  version: cb1f6618563c3818be1685d46648ec49e626106a
+  version: 58352e76ea89b8b9395974094f6d6c93868cf24e
   subpackages:
   - buildinfo
   - calc
@@ -226,7 +226,7 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: 2acf84885d63b4335dc346e22a6562f48685b3a2
+  version: 97a21ea5de9ca912ebf2c7083de5ea7afe49f397
   subpackages:
   - lib/apiconfig
   - lib/apis/v1
