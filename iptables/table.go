@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2018 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -25,6 +25,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/hashicorp/go-version"
 	"github.com/prometheus/client_golang/prometheus"
 	log "github.com/sirupsen/logrus"
 
@@ -182,6 +183,9 @@ func init() {
 type Table struct {
 	Name      string
 	IPVersion uint8
+
+	// Detected features of the iptables tools. Populated on the first resync.
+	Features *Features
 
 	// chainToInsertedRules maps from chain name to a list of rules to be inserted at the start
 	// of that chain.  Rules are written with rule hash comments.  The Table cleans up inserted
@@ -433,10 +437,55 @@ func (t *Table) RemoveChainByName(name string) {
 	t.InvalidateDataplaneCache("chain removal")
 }
 
+func (t *Table) refreshFeatures() error {
+	cmd := t.newCmd("iptables", "--version")
+	out, err := cmd.Output()
+	if err != nil {
+		return err
+	}
+
+	s := string(out)
+	features, err := IPTablesVersionToFeatures(s)
+	if err != nil {
+		return err
+	}
+
+	if t.Features == nil || *t.Features != *features {
+		log.WithField("features", features).Info("Detected iptables features")
+		t.Features = features
+	}
+	return nil
+}
+
+func IPTablesVersionToFeatures(s string) (*Features, error) {
+	re := regexp.MustCompile(`v(\d+\.\d+\.\d+)`)
+	matches := re.FindStringSubmatch(s)
+	if len(matches) == 0 {
+		return nil, fmt.Errorf("iptables returnedbad version: %s", s)
+	}
+	iptablesVersion, err := version.NewVersion(matches[1])
+	if err != nil {
+		return nil, err
+	}
+	var features Features
+	v161, err := version.NewVersion("1.6.1")
+	if err != nil {
+		return nil, err
+	}
+	if iptablesVersion.Compare(v161) >= 0 {
+		features.SNATFullyRandom = true
+	}
+	return &features, nil
+}
+
 func (t *Table) loadDataplaneState() {
 	// Load the hashes from the dataplane.
 	t.logCxt.Info("Loading current iptables state and checking it is correct.")
 	t.lastReadTime = t.timeNow()
+	err := t.refreshFeatures()
+	if err != nil {
+		log.WithError(err).Panic("Failed to parse iptables version information")
+	}
 	dataplaneHashes := t.getHashesFromDataplane()
 
 	// Check that the rules we think we've programmed are still there and mark any inconsistent
@@ -543,7 +592,7 @@ func (t *Table) expectedHashesForInsertChain(
 ) (allHashes, ourHashes []string) {
 	insertedRules := t.chainToInsertedRules[chainName]
 	allHashes = make([]string, len(insertedRules)+numNonCalicoRules)
-	ourHashes = calculateRuleInsertHashes(chainName, insertedRules)
+	ourHashes = calculateRuleInsertHashes(chainName, insertedRules, t.Features)
 	offset := 0
 	if t.insertMode == "append" {
 		log.Debug("In append mode, returning our hashes at end.")
@@ -845,7 +894,7 @@ func (t *Table) applyUpdates() error {
 			// Chain update or creation.  Scan the chain against its previous hashes
 			// and replace/append/delete as appropriate.
 			previousHashes := t.chainToDataplaneHashes[chainName]
-			currentHashes := chain.RuleHashes()
+			currentHashes := chain.RuleHashes(t.Features)
 			newHashes[chainName] = currentHashes
 			for i := 0; i < len(previousHashes) || i < len(currentHashes); i++ {
 				var line string
@@ -856,7 +905,7 @@ func (t *Table) applyUpdates() error {
 					// Hash doesn't match, replace the rule.
 					ruleNum := i + 1 // 1-indexed.
 					prefixFrag := t.commentFrag(currentHashes[i])
-					line = chain.Rules[i].RenderReplace(chainName, ruleNum, prefixFrag)
+					line = chain.Rules[i].RenderReplace(chainName, ruleNum, prefixFrag, t.Features)
 				} else if i < len(previousHashes) {
 					// previousHashes was longer, remove the old rules from the end.
 					ruleNum := len(currentHashes) + 1 // 1-indexed
@@ -864,7 +913,7 @@ func (t *Table) applyUpdates() error {
 				} else {
 					// currentHashes was longer.  Append.
 					prefixFrag := t.commentFrag(currentHashes[i])
-					line = chain.Rules[i].RenderAppend(chainName, prefixFrag)
+					line = chain.Rules[i].RenderAppend(chainName, prefixFrag, t.Features)
 				}
 				inputBuf.WriteString(line)
 				inputBuf.WriteString("\n")
@@ -912,7 +961,7 @@ func (t *Table) applyUpdates() error {
 			// state of the chain.
 			for i := len(rules) - 1; i >= 0; i-- {
 				prefixFrag := t.commentFrag(newRuleHashes[i])
-				line := rules[i].RenderInsert(chainName, prefixFrag)
+				line := rules[i].RenderInsert(chainName, prefixFrag, t.Features)
 				inputBuf.WriteString(line)
 				inputBuf.WriteString("\n")
 				t.countNumLinesExecuted.Inc()
@@ -921,7 +970,7 @@ func (t *Table) applyUpdates() error {
 			t.logCxt.Debug("Rendering append rules.")
 			for i := 0; i < len(rules); i++ {
 				prefixFrag := t.commentFrag(newRuleHashes[i])
-				line := rules[i].RenderAppend(chainName, prefixFrag)
+				line := rules[i].RenderAppend(chainName, prefixFrag, t.Features)
 				inputBuf.WriteString(line)
 				inputBuf.WriteString("\n")
 				t.countNumLinesExecuted.Inc()
@@ -1010,12 +1059,12 @@ func deleteRule(chainName string, ruleNum int) string {
 	return fmt.Sprintf("-D %s %d", chainName, ruleNum)
 }
 
-func calculateRuleInsertHashes(chainName string, rules []Rule) []string {
+func calculateRuleInsertHashes(chainName string, rules []Rule, features *Features) []string {
 	chain := Chain{
 		Name:  chainName,
 		Rules: rules,
 	}
-	return (&chain).RuleHashes()
+	return (&chain).RuleHashes(features)
 }
 
 func numEmptyStrings(strs []string) int {

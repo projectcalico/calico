@@ -1,4 +1,4 @@
-// Copyright (c) 2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2018 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -57,10 +57,22 @@ var _ = Describe("Table with an empty dataplane", func() {
 		table.Apply()
 		// Should only load, since there's nothing to so.
 		Expect(dataplane.CmdNames).To(Equal([]string{
+			"iptables",
 			"iptables-save",
 		}))
 		Expect(iptLock.Held).To(BeFalse())
 		Expect(iptLock.WasTaken).To(BeFalse())
+		Expect(table.Features).To(Equal(&Features{
+			SNATFullyRandom: false,
+		}))
+	})
+
+	It("should detect SNAT fully random for version 1.6.1", func() {
+		dataplane.Version = "iptables v1.6.1\n"
+		table.Apply()
+		Expect(table.Features).To(Equal(&Features{
+			SNATFullyRandom: true,
+		}))
 	})
 
 	It("should have a refresh scheduled at start-of-day", func() {
@@ -77,6 +89,7 @@ var _ = Describe("Table with an empty dataplane", func() {
 		Expect(dataplane.CmdNames).To(BeEmpty())
 		table.Apply()
 		Expect(dataplane.CmdNames).To(Equal([]string{
+			"iptables",
 			"iptables-save",
 			"iptables-restore",
 		}))
@@ -139,7 +152,7 @@ var _ = Describe("Table with an empty dataplane", func() {
 				"OUTPUT":  {},
 			}))
 			// Should do a save but then figure out that there's nothing to do
-			Expect(dataplane.CmdNames).To(ConsistOf("iptables-save"))
+			Expect(dataplane.CmdNames).To(ConsistOf("iptables", "iptables-save"))
 		})
 
 		Describe("after inserting a rule then updating the insertions", func() {
@@ -304,7 +317,7 @@ var _ = Describe("Table with an empty dataplane", func() {
 				dataplane.ResetCmds()
 				table.Apply()
 				// Should do a save but then figure out that there's nothing to do
-				Expect(dataplane.CmdNames).To(ConsistOf("iptables-save"))
+				Expect(dataplane.CmdNames).To(ConsistOf("iptables", "iptables-save"))
 			})
 		})
 		Describe("then extending the chain", func() {
@@ -454,7 +467,7 @@ func describePostUpdateCheckTests(enableRefresh bool) {
 		}
 	}
 	assertRecheck := func() {
-		Expect(dataplane.CmdNames).To(ConsistOf("iptables-save"))
+		Expect(dataplane.CmdNames).To(ConsistOf("iptables", "iptables-save"))
 	}
 	assertDelayMillis := func(delay int64) func() {
 		return func() {
@@ -731,7 +744,7 @@ func describeDirtyDataplaneTests(appendMode bool) {
 		It("with no errors, it should get to correct final state", func() {
 			table.Apply()
 			checkFinalState()
-			Expect(len(dataplane.Cmds)).To(Equal(2)) // a save and a restore
+			Expect(dataplane.Cmds).To(HaveLen(3)) // a save and a restore
 		})
 		It("with no errors, it shouldn't sleep", func() {
 			table.Apply()
@@ -742,7 +755,7 @@ func describeDirtyDataplaneTests(appendMode bool) {
 				checkFinalState()
 			})
 			It("it should retry once", func() {
-				Expect(len(dataplane.Cmds)).To(Equal(3)) // 2 saves and a restore
+				Expect(dataplane.Cmds).To(HaveLen(4)) // 2 saves and a restore
 			})
 			It("it should sleep", func() {
 				Expect(dataplane.CumulativeSleep).To(Equal(100 * time.Millisecond))
@@ -819,7 +832,7 @@ func describeDirtyDataplaneTests(appendMode bool) {
 				Expect(func() {
 					table.Apply()
 				}).To(Panic())
-				Expect(len(dataplane.Cmds)).To(Equal(4))
+				Expect(dataplane.Cmds).To(HaveLen(5))
 			}, 1)
 		})
 
