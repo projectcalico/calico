@@ -66,8 +66,8 @@
         // TODO: appId, apiKey
         var search = instantsearch({
             appId: 'BH4D9OD16A',
-            apiKey: 'e574b72c1301f8a28e49ec9644096c79',
-            indexName: 'apereo',
+            apiKey: '99def7ba73ea2430f7f42383148fe57a',
+            indexName: 'projectcalico',
             routing: false,
             // https://community.algolia.com/instantsearch.js/v2/instantsearch.html#struct-InstantSearchOptions-searchClient
             searchParameters: {
