@@ -39,6 +39,15 @@ ifeq ($(ARCH),x86_64)
     override ARCH=amd64
 endif
 
+# Build mounts for running in "local build" mode. Mount in libcalico, but null out
+# the vendor directory. This allows an easy build using local development code,
+# assuming that there is a local checkout of libcalico in the same directory as this repo.
+LOCAL_BUILD_MOUNTS ?=
+ifeq ($(LOCAL_BUILD),true)
+LOCAL_BUILD_MOUNTS = -v $(CURDIR)/../libcalico-go:/go/src/$(PACKAGE_NAME)/vendor/github.com/projectcalico/libcalico-go:ro \
+	-v $(CURDIR)/.empty:/go/src/$(PACKAGE_NAME)/vendor/github.com/projectcalico/libcalico-go/vendor:ro
+endif
+
 # we want to be able to run the same recipe on multiple targets keyed on the image name
 # to do that, we would use the entire image name, e.g. calico/node:abcdefg, as the stem, or '%', in the target
 # however, make does **not** allow the usage of invalid filename characters - like / and : - in a stem, and thus errors out
@@ -54,7 +63,6 @@ comma := ,
 prefix_linux = $(addprefix linux/,$(strip $1))
 join_platforms = $(subst $(space),$(comma),$(call prefix_linux,$(strip $1)))
 
-
 # Targets used when cross building.
 .PHONY: register
 # Enable binfmt adding support for miscellaneous binary formats.
@@ -68,7 +76,6 @@ endif
 #    until s390x works correctly
 EXCLUDEARCH ?= s390x
 VALIDARCHES = $(filter-out $(EXCLUDEARCH),$(ARCHES))
-
 
 ###############################################################################
 BUILD_IMAGE=calico/typha
@@ -89,8 +96,6 @@ PUSH_NONMANIFEST_IMAGES=$(filter-out $(PUSH_MANIFEST_IMAGES),$(PUSH_IMAGES))
 
 # location of docker credentials to push manifests
 DOCKER_CONFIG ?= $(HOME)/.docker/config.json
-
-
 
 GO_BUILD_VER?=v0.17
 # For building, we use the go-build image for the *host* architecture, even if the target is different
@@ -140,7 +145,7 @@ endif
 ifdef SSH_AUTH_SOCK
   EXTRA_DOCKER_ARGS += -v $(SSH_AUTH_SOCK):/ssh-agent --env SSH_AUTH_SOCK=/ssh-agent
 endif
-DOCKER_GO_BUILD := mkdir -p .go-pkg-cache && \
+DOCKER_RUN := mkdir -p .go-pkg-cache && \
                    docker run --rm \
                               --net=host \
                               $(EXTRA_DOCKER_ARGS) \
@@ -148,8 +153,7 @@ DOCKER_GO_BUILD := mkdir -p .go-pkg-cache && \
                               -v $(CURDIR):/go/src/$(PACKAGE_NAME):rw \
                               -v $(CURDIR)/.go-pkg-cache:/go/pkg:rw \
                               -w /go/src/$(PACKAGE_NAME) \
-                              -e GOARCH=$(ARCH) \
-                              $(CALICO_BUILD)
+                              -e GOARCH=$(ARCH)
 
 .PHONY: clean
 clean:
@@ -182,14 +186,14 @@ sub-build-%:
 .PHONY: update-vendor
 update-vendor:
 	mkdir -p $$HOME/.glide
-	$(DOCKER_GO_BUILD) glide up --strip-vendor
+	$(DOCKER_RUN) $(CALICO_BUILD) glide up --strip-vendor
 	touch vendor/.up-to-date
 
 # vendor is a shortcut for force rebuilding the go vendor directory.
 .PHONY: vendor
 vendor vendor/.up-to-date: glide.lock
 	mkdir -p $$HOME/.glide
-	$(DOCKER_GO_BUILD) glide install --strip-vendor
+	$(DOCKER_RUN) $(CALICO_BUILD) glide install --strip-vendor
 	touch vendor/.up-to-date
 
 # Default the libcalico repo and version but allow them to be overridden
@@ -198,7 +202,7 @@ LIBCALICO_VERSION?=$(shell git ls-remote git@github.com:projectcalico/libcalico-
 
 ## Update libcalico pin in glide.yaml
 update-libcalico:
-	$(DOCKER_GO_BUILD) sh -c '\
+	$(DOCKER_RUN) $(CALICO_BUILD) sh -c '\
         echo "Updating libcalico to $(LIBCALICO_VERSION) from $(LIBCALICO_REPO)"; \
         export OLD_VER=$$(grep --after 50 libcalico-go glide.yaml |grep --max-count=1 --only-matching --perl-regexp "version:\s*\K[^\s]+") ;\
         echo "Old version: $$OLD_VER";\
@@ -218,7 +222,7 @@ bin/calico-typha: bin/calico-typha-$(ARCH)
 bin/calico-typha-$(ARCH): $(SRC_FILES) vendor/.up-to-date
 	@echo Building typha...
 	mkdir -p bin
-	$(DOCKER_GO_BUILD) \
+	$(DOCKER_RUN) $(LOCAL_BUILD_MOUNTS) $(CALICO_BUILD) \
 	    sh -c 'go build -v -i -o $@ -v $(LDFLAGS) "$(PACKAGE_NAME)/cmd/calico-typha" && \
 		( ldd $@ 2>&1 | grep -q -e "Not a valid dynamic program" \
 		-e "not a dynamic executable" || \
@@ -227,7 +231,7 @@ bin/calico-typha-$(ARCH): $(SRC_FILES) vendor/.up-to-date
 bin/typha-client-$(ARCH): $(SRC_FILES) vendor/.up-to-date
 	@echo Building typha client...
 	mkdir -p bin
-	$(DOCKER_GO_BUILD) \
+	$(DOCKER_RUN) $(LOCAL_BUILD_MOUNTS) $(CALICO_BUILD) \
 	    sh -c 'go build -v -i -o $@ -v $(LDFLAGS) "$(PACKAGE_NAME)/cmd/typha-client" && \
 		( ldd $@ 2>&1 | grep -q -e "Not a valid dynamic program" \
 		-e "not a dynamic executable" || \
@@ -288,8 +292,6 @@ else
 	$(NOECHO) $(NOOP)
 endif
 
-
-
 ## tag images of one arch
 tag-images: imagetag $(addprefix sub-single-tag-images-arch-,$(call escapefs,$(PUSH_IMAGES))) $(addprefix sub-single-tag-images-non-manifest-,$(call escapefs,$(PUSH_NONMANIFEST_IMAGES)))
 sub-single-tag-images-arch-%:
@@ -316,33 +318,33 @@ static-checks:
 	$(MAKE) go-meta-linter check-licenses
 
 bin/check-licenses: $(SRC_FILES)
-	$(DOCKER_GO_BUILD) go build -v -i -o $@ "$(PACKAGE_NAME)/check-licenses"
+	$(DOCKER_RUN) $(LOCAL_BUILD_MOUNTS) $(CALICO_BUILD) go build -v -i -o $@ "$(PACKAGE_NAME)/check-licenses"
 
 .PHONY: check-licenses
 check-licenses: check-licenses/dependency-licenses.txt bin/check-licenses
 	@echo Checking dependency licenses
-	$(DOCKER_GO_BUILD) bin/check-licenses
+	$(DOCKER_RUN) $(CALICO_BUILD) bin/check-licenses
 
 check-licenses/dependency-licenses.txt: vendor/.up-to-date
-	$(DOCKER_GO_BUILD) sh -c 'licenses ./cmd/calico-typha > check-licenses/dependency-licenses.tmp && \
+	$(DOCKER_RUN) $(CALICO_BUILD) sh -c 'licenses ./cmd/calico-typha > check-licenses/dependency-licenses.tmp && \
 	                          mv check-licenses/dependency-licenses.tmp check-licenses/dependency-licenses.txt'
 
 .PHONY: go-meta-linter
 go-meta-linter: vendor/.up-to-date $(GENERATED_GO_FILES)
 	# Run staticcheck stand-alone since gometalinter runs concurrent copies, which
 	# uses a lot of RAM.
-	$(DOCKER_GO_BUILD) sh -c 'glide nv | xargs -n 3 staticcheck'
-	$(DOCKER_GO_BUILD) gometalinter --enable-gc \
-	                                --deadline=300s \
-	                                --disable-all \
-	                                --enable=goimports \
-	                                --enable=errcheck \
-	                                --vendor ./...
+	$(DOCKER_RUN) $(CALICO_BUILD) sh -c 'glide nv | xargs -n 3 staticcheck'
+	$(DOCKER_RUN) $(CALICO_BUILD) gometalinter --enable-gc \
+		--deadline=300s \
+		--disable-all \
+		--enable=goimports \
+		--enable=errcheck \
+		--vendor ./...
 
 # Run go fmt on all our go files.
 .PHONY: go-fmt goimports fix
 go-fmt goimports fix:
-	$(DOCKER_GO_BUILD) sh -c 'glide nv -x | \
+	$(DOCKER_RUN) $(CALICO_BUILD) sh -c 'glide nv -x | \
 	                          grep -v -e "^\\.$$" | \
 	                          xargs goimports -w -local github.com/projectcalico/'
 
@@ -357,7 +359,7 @@ install-git-hooks:
 .PHONY: ut
 ut combined.coverprofile: vendor/.up-to-date $(SRC_FILES)
 	@echo Running Go UTs.
-	$(DOCKER_GO_BUILD) ./utils/run-coverage
+	$(DOCKER_RUN) $(LOCAL_BUILD_MOUNTS) $(CALICO_BUILD) ./utils/run-coverage
 
 ###############################################################################
 # CI/CD
@@ -375,7 +377,6 @@ ifeq (,$(filter k8sfv-test, $(EXCEPT)))
 	@$(MAKE) k8sfv-test
 endif
 
-
 ## Deploys images to registry
 cd:
 ifndef CONFIRM
@@ -391,7 +392,6 @@ k8sfv-test: image
 	cd .. && git clone https://github.com/projectcalico/felix.git && cd felix; \
 	[ ! -e ../typha/semaphore-felix-branch ] || git checkout $(cat ../typha/semaphore-felix-branch); \
 	JUST_A_MINUTE=true USE_TYPHA=true FV_TYPHAIMAGE=$(BUILD_IMAGE):latest TYPHA_VERSION=latest $(MAKE) k8sfv-test
-
 
 ###############################################################################
 # Release
@@ -479,9 +479,11 @@ ifndef VERSION
 	$(error VERSION is undefined - run using make release VERSION=vX.Y.Z)
 endif
 ifeq ($(GIT_COMMIT),<unknown>)
-	$(error git commit ID couldn't be determined, releases must be done from a git working copy)
+	$(error git commit ID could not be determined, releases must be done from a git working copy)
 endif
-
+ifdef LOCAL_BUILD
+	$(error LOCAL_BUILD must not be set for a release)
+endif
 
 ###############################################################################
 # Developer helper scripts (not used by build or test)
@@ -489,12 +491,12 @@ endif
 .PHONY: ut-no-cover
 ut-no-cover: vendor/.up-to-date $(SRC_FILES)
 	@echo Running Go UTs without coverage.
-	$(DOCKER_GO_BUILD) ginkgo -r $(GINKGO_OPTIONS)
+	$(DOCKER_RUN) $(LOCAL_BUILD_MOUNTS) $(CALICO_BUILD) ginkgo -r $(GINKGO_OPTIONS)
 
 .PHONY: ut-watch
 ut-watch: vendor/.up-to-date $(SRC_FILES)
 	@echo Watching go UTs for changes...
-	$(DOCKER_GO_BUILD) ginkgo watch -r $(GINKGO_OPTIONS)
+	$(DOCKER_RUN) $(LOCAL_BUILD_MOUNTS) $(CALICO_BUILD) ginkgo watch -r $(GINKGO_OPTIONS)
 
 # Launch a browser with Go coverage stats for the whole project.
 .PHONY: cover-browser
@@ -508,19 +510,19 @@ cover-report: combined.coverprofile
 	@echo
 	@echo ======== All coverage =========
 	@echo
-	@$(DOCKER_GO_BUILD) sh -c 'go tool cover -func combined.coverprofile | \
+	@$(DOCKER_RUN) $(CALICO_BUILD) sh -c 'go tool cover -func combined.coverprofile | \
 	                           sed 's=$(PACKAGE_NAME)/==' | \
 	                           column -t'
 	@echo
 	@echo ======== Missing coverage only =========
 	@echo
-	@$(DOCKER_GO_BUILD) sh -c "go tool cover -func combined.coverprofile | \
+	@$(DOCKER_RUN) $(CALICO_BUILD) sh -c "go tool cover -func combined.coverprofile | \
 	                           sed 's=$(PACKAGE_NAME)/==' | \
 	                           column -t | \
 	                           grep -v '100\.0%'"
 
 bin/calico-typha.transfer-url: bin/calico-typha-$(ARCH)
-	$(DOCKER_GO_BUILD) sh -c 'curl --upload-file bin/calico-typha-$(ARCH) https://transfer.sh/calico-typha > $@'
+	$(DOCKER_RUN) $(CALICO_BUILD) sh -c 'curl --upload-file bin/calico-typha-$(ARCH) https://transfer.sh/calico-typha > $@'
 
 # Install or update the tools used by the build
 .PHONY: update-tools
