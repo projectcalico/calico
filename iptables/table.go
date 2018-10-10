@@ -24,12 +24,11 @@ import (
 	"reflect"
 	"regexp"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
 	log "github.com/sirupsen/logrus"
-
-	"sync"
 
 	"github.com/projectcalico/libcalico-go/lib/set"
 )
@@ -232,7 +231,7 @@ type Table struct {
 	postWriteInterval        time.Duration
 	refreshInterval          time.Duration
 
-	writeLock sync.Locker
+	calicoXtablesLock sync.Locker
 
 	logCxt *log.Entry
 
@@ -245,8 +244,10 @@ type Table struct {
 	// Shim for reading ioutil.ReadFile
 	readFile func(name string) ([]byte, error)
 	// Shims for time.XXX functions:
-	timeSleep func(d time.Duration)
-	timeNow   func() time.Time
+	timeSleep         func(d time.Duration)
+	timeNow           func() time.Time
+	lockTimeout       time.Duration
+	lockProbeInterval time.Duration
 }
 
 type TableOptions struct {
@@ -264,6 +265,9 @@ type TableOptions struct {
 	SleepOverride func(d time.Duration)
 	// NowOverride for tests, if non-nil, replacement for time.Now()
 	NowOverride func() time.Time
+
+	LockTimeout       time.Duration
+	LockProbeInterval time.Duration
 }
 
 func NewTable(
@@ -364,7 +368,10 @@ func NewTable(
 
 		refreshInterval: options.RefreshInterval,
 
-		writeLock: iptablesWriteLock,
+		calicoXtablesLock: iptablesWriteLock,
+
+		lockTimeout:       options.LockTimeout,
+		lockProbeInterval: options.LockProbeInterval,
 
 		newCmd:    newCmd,
 		readFile:  readFile,
@@ -1014,14 +1021,43 @@ func (t *Table) applyUpdates() error {
 		t.logCxt.WithField("iptablesInput", input).Debug("Writing to iptables")
 
 		var outputBuf, errBuf bytes.Buffer
-		cmd := t.newCmd(t.iptablesRestoreCmd, "--noflush", "--verbose")
+		args := []string{"--noflush", "--verbose"}
+		if t.Features.RestoreSupportsLock {
+			// Versions of iptables-restore that support the xtables lock _always_ take the xtables lock.  Make sure
+			// that we configure it to retry and configure for a short retry interval (the default is to wait 1s
+			// between lock probes).
+			lockTimeout := t.lockTimeout.Seconds()
+			if lockTimeout <= 0 {
+				// Before iptables-restore added lock support, we were able to disable the lock completely, which
+				// was indicated by a value <=0 (and was our default).  Newer versions of iptables-restore require the
+				// lock so we override the default and set it to 10s.
+				lockTimeout = 10
+			}
+			lockProbeMicros := t.lockProbeInterval.Nanoseconds() / 1000
+			timeoutStr := fmt.Sprintf("%.0f", lockTimeout)
+			intervalStr := fmt.Sprintf("%d", lockProbeMicros)
+			args = append(args,
+				"--wait", timeoutStr, // seconds
+				"--wait-interval", intervalStr, // microseconds
+			)
+			log.WithFields(log.Fields{
+				"timeoutSecs":         timeoutStr,
+				"probeIntervalMicros": intervalStr,
+			}).Debug("Using native iptables-restore xtables lock.")
+		}
+		cmd := t.newCmd(t.iptablesRestoreCmd, args...)
 		cmd.SetStdin(&inputBuf)
 		cmd.SetStdout(&outputBuf)
 		cmd.SetStderr(&errBuf)
 		countNumRestoreCalls.Inc()
-		t.writeLock.Lock()
+		if !t.Features.RestoreSupportsLock {
+			// Use our xtables lock implementation (if enabled) if iptables-restore doesn't support it.
+			t.calicoXtablesLock.Lock()
+		}
 		err := cmd.Run()
-		t.writeLock.Unlock()
+		if !t.Features.RestoreSupportsLock {
+			t.calicoXtablesLock.Unlock()
+		}
 		if err != nil {
 			t.logCxt.WithFields(log.Fields{
 				"output":      outputBuf.String(),

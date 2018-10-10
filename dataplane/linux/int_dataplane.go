@@ -240,6 +240,8 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		InsertMode:            config.IptablesInsertMode,
 		RefreshInterval:       config.IptablesRefreshInterval,
 		PostWriteInterval:     config.IptablesPostWriteCheckInterval,
+		LockTimeout:           config.IptablesLockTimeout,
+		LockProbeInterval:     config.IptablesLockProbeInterval,
 	}
 
 	// However, the NAT tables need an extra cleanup regex.
@@ -248,14 +250,17 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 
 	var iptablesLock sync.Locker
 	if config.IptablesLockTimeout <= 0 {
-		log.Info("iptables lock disabled.")
+		log.Debug("Calico implementation of iptables lock disabled (by configuration).")
 		iptablesLock = dummyLock{}
 	} else {
 		// Create the shared iptables lock.  This allows us to block other processes from
 		// manipulating iptables while we make our updates.  We use a shared lock because we
 		// actually do multiple updates in parallel (but to different tables), which is safe.
-		log.WithField("timeout", config.IptablesLockTimeout).Info(
-			"iptables lock enabled")
+		//
+		// Note: this is only used for iptables < v1.6.2; v1.6.2 added mandatory lock support
+		// to iptables-restore, which we'll detect later on.
+		log.WithField("timeout", config.IptablesLockTimeout).Debug(
+			"Calico implementation of iptables lock will be enabled (if iptables is pre-v1.6.2)")
 		iptablesLock = iptables.NewSharedLock(
 			config.IptablesLockFilePath,
 			config.IptablesLockTimeout,

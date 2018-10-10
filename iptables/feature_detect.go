@@ -24,8 +24,13 @@ import (
 )
 
 type Features struct {
+	// SNATFullyRandom is true if --fully-random is supported by the SNAT action.
 	SNATFullyRandom bool
+	// MASQFullyRandom is true if --fully-random is supported by the MASQUERADE action.
 	MASQFullyRandom bool
+	// RestoreSupportsLock is true if the iptables-restore command supports taking the xtables lock and the
+	// associated -w and -W arguments.
+	RestoreSupportsLock bool
 }
 
 func MergeFeatures(a, b *Features) *Features {
@@ -70,6 +75,7 @@ func VersionToFeatures(s string) (*Features, error) {
 	}
 	if iptablesVersion.Compare(v1Dot6Dot2) >= 0 {
 		features.MASQFullyRandom = true
+		features.RestoreSupportsLock = true
 	}
 	return &features, nil
 }
@@ -86,6 +92,7 @@ func KernelVersionToFeatures(s string) (*Features, error) {
 		return nil, err
 	}
 	var features Features
+	features.RestoreSupportsLock = true // Not kernel dependent.
 	if iptablesVersion.Compare(v3Dot14Dot0) >= 0 {
 		features.SNATFullyRandom = true
 		features.MASQFullyRandom = true

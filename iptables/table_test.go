@@ -76,12 +76,13 @@ var _ = Describe("Table with an empty dataplane", func() {
 		}))
 	})
 
-	It("should detect MASQ fully random for version 1.6.2", func() {
+	It("should detect MASQ fully random, RestoreSupportsLock for version 1.6.2", func() {
 		dataplane.Version = "iptables v1.6.2\n"
 		table.Apply()
 		Expect(table.Features).To(Equal(&Features{
-			SNATFullyRandom: true,
-			MASQFullyRandom: true,
+			SNATFullyRandom:     true,
+			MASQFullyRandom:     true,
+			RestoreSupportsLock: true,
 		}))
 	})
 
