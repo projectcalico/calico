@@ -113,6 +113,15 @@ var _ = infrastructure.DatastoreDescribe("IPIP topology before adding host IPs t
 		infra.Stop()
 	})
 
+	It("should use the --random-fully flag in the MASQUERADE rules", func() {
+		for _, felix := range felixes {
+			Eventually(func() string {
+				out, _ := felix.ExecOutput("iptables-save", "-c")
+				return out
+			}, "10s", "100ms").Should(ContainSubstring("--random-fully"))
+		}
+	})
+
 	It("should have workload to workload connectivity", func() {
 		cc.ExpectSome(w[0], w[1])
 		cc.ExpectSome(w[1], w[0])
