@@ -70,7 +70,6 @@
         ';
 
     function initializeInstantSearch(currentDocVersion, inputSelector, resultsSelector, paginationSelector) {
-        // TODO: appId, apiKey
         var search = instantsearch({
             appId: 'BH4D9OD16A',
             apiKey: '99def7ba73ea2430f7f42383148fe57a',
@@ -79,9 +78,9 @@
             // https://community.algolia.com/instantsearch.js/v2/instantsearch.html#struct-InstantSearchOptions-searchClient
             searchParameters: {
                 hitsPerPage: 5,
-                // facetsRefinements: {
-                //     version: currentDocVersion
-                // }
+                facetsRefinements: {
+                    version: currentDocVersion
+                }
             }
         });
         search.addWidget(instantsearch.widgets.searchBox({
