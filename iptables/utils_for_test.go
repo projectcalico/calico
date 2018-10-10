@@ -1,4 +1,4 @@
-// Copyright (c) 2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2018 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -40,6 +40,9 @@ func newMockDataplane(table string, chains map[string][]string) *mockDataplane {
 		FlushedChains: set.New(),
 		ChainMods:     set.New(),
 		DeletedChains: set.New(),
+		Version:       "iptables v1.5.9\n",
+		KernelVersion: "Linux version 4.15.0-34-generic (buildd@lgw01-amd64-037) (gcc version 5.4.0 20160609 " +
+			"(Ubuntu 5.4.0-6ubuntu1~16.04.10)) #37~16.04.1-Ubuntu SMP Tue Aug 28 10:44:06 UTC 2018",
 	}
 }
 
@@ -68,6 +71,9 @@ type mockDataplane struct {
 	PipeBuffers            []*closableBuffer
 	CumulativeSleep        time.Duration
 	Time                   time.Time
+	FailNextVersion        bool
+	Version                string
+	KernelVersion          string
 }
 
 func (d *mockDataplane) ResetCmds() {
@@ -103,6 +109,11 @@ func (d *mockDataplane) newCmd(name string, arg ...string) CmdIface {
 		cmd = &saveCmd{
 			Dataplane: d,
 		}
+	case "iptables":
+		Expect(arg).To(Equal([]string{"--version"}))
+		cmd = &versionCmd{
+			Dataplane: d,
+		}
 	default:
 		Fail(fmt.Sprintf("Unexpected command %v", name))
 	}
@@ -110,6 +121,13 @@ func (d *mockDataplane) newCmd(name string, arg ...string) CmdIface {
 	d.Cmds = append(d.Cmds, cmd)
 
 	return cmd
+}
+
+func (d *mockDataplane) readFile(name string) ([]byte, error) {
+	if name == "/proc/version" {
+		return []byte(d.KernelVersion), nil
+	}
+	return nil, errors.New("not implemented")
 }
 
 func (d *mockDataplane) sleep(duration time.Duration) {
@@ -416,6 +434,65 @@ func (d *saveCmd) StdoutPipe() (io.ReadCloser, error) {
 	return cb, nil
 }
 
+func (d *saveCmd) Run() error {
+	return errors.New("Not implemented")
+}
+
+type versionCmd struct {
+	Dataplane *mockDataplane
+}
+
+func (d *versionCmd) String() string {
+	return "versionCmd"
+}
+
+func (d *versionCmd) SetStdin(r io.Reader) {
+	Fail("Not implemented")
+}
+
+func (d *versionCmd) SetStdout(w io.Writer) {
+	Fail("Not implemented")
+}
+
+func (d *versionCmd) SetStderr(w io.Writer) {
+	Fail("Not implemented")
+}
+
+func (d *versionCmd) Start() error {
+	if d.Dataplane.FailNextStart {
+		d.Dataplane.FailNextStart = false
+		return errors.New("dummy start failure")
+	}
+	return nil
+}
+
+func (d *versionCmd) Wait() error {
+	Fail("Not implemented")
+	return nil
+}
+
+func (d *versionCmd) Kill() error {
+	Fail("Not implemented")
+	return nil
+}
+
+func (d *versionCmd) Output() ([]byte, error) {
+	if d.Dataplane.FailNextVersion {
+		d.Dataplane.FailNextVersion = false
+		return nil, errors.New("Simulated failure")
+	}
+
+	return []byte(d.Dataplane.Version), nil
+}
+
+func (d *versionCmd) StdoutPipe() (io.ReadCloser, error) {
+	return nil, errors.New("Not implemented")
+}
+
+func (d *versionCmd) Run() error {
+	return errors.New("Not implemented")
+}
+
 type closableBuffer struct {
 	b                 *bytes.Buffer
 	Closed            bool
@@ -435,8 +512,4 @@ func (b *closableBuffer) Close() error {
 	}
 	b.Closed = true
 	return b.CloseErr
-}
-
-func (d *saveCmd) Run() error {
-	return errors.New("Not implemented")
 }

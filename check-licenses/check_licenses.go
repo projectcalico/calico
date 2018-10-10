@@ -101,6 +101,8 @@ var (
 		// under a *GPL license (if we wanted to do that).
 		{pkgName: "github.com/projectcalico/felix/vendor/github.com/hashicorp/golang-lru/simplelru",
 			license: "Mozilla Public License 2.0"},
+		{pkgName: "github.com/projectcalico/felix/vendor/github.com/hashicorp/go-version",
+			license: "Mozilla Public License 2.0"},
 		// Not detected properly - But it's apache license - https://github.com/go-yaml/yaml/blob/v2.2.1/LICENSE
 		{pkgName: "github.com/projectcalico/felix/vendor/gopkg.in/yaml.v2",
 			license: "? (The Unlicense, 35%)"},

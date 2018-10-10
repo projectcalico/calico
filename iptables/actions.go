@@ -1,4 +1,4 @@
-// Copyright (c) 2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2018 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,7 +17,7 @@ package iptables
 import "fmt"
 
 type Action interface {
-	ToFragment() string
+	ToFragment(features *Features) string
 }
 
 type GotoAction struct {
@@ -25,7 +25,7 @@ type GotoAction struct {
 	TypeGoto struct{}
 }
 
-func (g GotoAction) ToFragment() string {
+func (g GotoAction) ToFragment(features *Features) string {
 	return "--goto " + g.Target
 }
 
@@ -38,7 +38,7 @@ type JumpAction struct {
 	TypeJump struct{}
 }
 
-func (g JumpAction) ToFragment() string {
+func (g JumpAction) ToFragment(features *Features) string {
 	return "--jump " + g.Target
 }
 
@@ -50,7 +50,7 @@ type ReturnAction struct {
 	TypeReturn struct{}
 }
 
-func (r ReturnAction) ToFragment() string {
+func (r ReturnAction) ToFragment(features *Features) string {
 	return "--jump RETURN"
 }
 
@@ -62,7 +62,7 @@ type DropAction struct {
 	TypeDrop struct{}
 }
 
-func (g DropAction) ToFragment() string {
+func (g DropAction) ToFragment(features *Features) string {
 	return "--jump DROP"
 }
 
@@ -75,7 +75,7 @@ type LogAction struct {
 	TypeLog struct{}
 }
 
-func (g LogAction) ToFragment() string {
+func (g LogAction) ToFragment(features *Features) string {
 	return fmt.Sprintf(`--jump LOG --log-prefix "%s: " --log-level 5`, g.Prefix)
 }
 
@@ -87,7 +87,7 @@ type AcceptAction struct {
 	TypeAccept struct{}
 }
 
-func (g AcceptAction) ToFragment() string {
+func (g AcceptAction) ToFragment(features *Features) string {
 	return "--jump ACCEPT"
 }
 
@@ -101,7 +101,7 @@ type DNATAction struct {
 	TypeDNAT struct{}
 }
 
-func (g DNATAction) ToFragment() string {
+func (g DNATAction) ToFragment(features *Features) string {
 	if g.DestPort == 0 {
 		return fmt.Sprintf("--jump DNAT --to-destination %s", g.DestAddr)
 	} else {
@@ -118,8 +118,12 @@ type SNATAction struct {
 	TypeSNAT struct{}
 }
 
-func (g SNATAction) ToFragment() string {
-	return fmt.Sprintf("--jump SNAT --to-source %s", g.ToAddr)
+func (g SNATAction) ToFragment(features *Features) string {
+	fullyRand := ""
+	if features.SNATFullyRandom {
+		fullyRand = " --random-fully"
+	}
+	return fmt.Sprintf("--jump SNAT --to-source %s%s", g.ToAddr, fullyRand)
 }
 
 func (g SNATAction) String() string {
@@ -131,11 +135,15 @@ type MasqAction struct {
 	TypeMasq struct{}
 }
 
-func (g MasqAction) ToFragment() string {
-	if g.ToPorts != "" {
-		return fmt.Sprintf("--jump MASQUERADE --to-ports %s", g.ToPorts)
+func (g MasqAction) ToFragment(features *Features) string {
+	fullyRand := ""
+	if features.MASQFullyRandom {
+		fullyRand = " --random-fully"
 	}
-	return "--jump MASQUERADE"
+	if g.ToPorts != "" {
+		return fmt.Sprintf("--jump MASQUERADE --to-ports %s"+fullyRand, g.ToPorts)
+	}
+	return "--jump MASQUERADE" + fullyRand
 }
 
 func (g MasqAction) String() string {
@@ -147,7 +155,7 @@ type ClearMarkAction struct {
 	TypeClearMark struct{}
 }
 
-func (c ClearMarkAction) ToFragment() string {
+func (c ClearMarkAction) ToFragment(features *Features) string {
 	return fmt.Sprintf("--jump MARK --set-mark 0/%#x", c.Mark)
 }
 
@@ -160,7 +168,7 @@ type SetMarkAction struct {
 	TypeSetMark struct{}
 }
 
-func (c SetMarkAction) ToFragment() string {
+func (c SetMarkAction) ToFragment(features *Features) string {
 	return fmt.Sprintf("--jump MARK --set-mark %#x/%#x", c.Mark, c.Mark)
 }
 
@@ -174,7 +182,7 @@ type SetMaskedMarkAction struct {
 	TypeSetMaskedMark struct{}
 }
 
-func (c SetMaskedMarkAction) ToFragment() string {
+func (c SetMaskedMarkAction) ToFragment(features *Features) string {
 	return fmt.Sprintf("--jump MARK --set-mark %#x/%#x", c.Mark, c.Mask)
 }
 
@@ -186,7 +194,7 @@ type NoTrackAction struct {
 	TypeNoTrack struct{}
 }
 
-func (g NoTrackAction) ToFragment() string {
+func (g NoTrackAction) ToFragment(features *Features) string {
 	return "--jump NOTRACK"
 }
 
