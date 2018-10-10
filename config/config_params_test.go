@@ -27,9 +27,10 @@ import (
 	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
 
+	log "github.com/sirupsen/logrus"
+
 	"github.com/projectcalico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/libcalico-go/lib/numorstring"
-	log "github.com/sirupsen/logrus"
 )
 
 var _ = Describe("FelixConfig vs ConfigParams parity", func() {

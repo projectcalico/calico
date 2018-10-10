@@ -68,6 +68,7 @@ type mockDataplane struct {
 	FailAllSaves           bool
 	FailNextPipeClose      bool
 	FailNextStart          bool
+	FailNextReadFile       bool
 	PipeBuffers            []*closableBuffer
 	CumulativeSleep        time.Duration
 	Time                   time.Time
@@ -124,6 +125,10 @@ func (d *mockDataplane) newCmd(name string, arg ...string) CmdIface {
 }
 
 func (d *mockDataplane) readFile(name string) ([]byte, error) {
+	if d.FailNextReadFile {
+		d.FailNextReadFile = false
+		return nil, errors.New("dummy error")
+	}
 	if name == "/proc/version" {
 		return []byte(d.KernelVersion), nil
 	}

@@ -31,6 +31,7 @@ var _ = Describe("Table with an empty dataplane", func() {
 	var dataplane *mockDataplane
 	var table *Table
 	var iptLock *mockMutex
+	var featureDetector *FeatureDetector
 	BeforeEach(func() {
 		dataplane = newMockDataplane("filter", map[string][]string{
 			"FORWARD": {},
@@ -38,15 +39,18 @@ var _ = Describe("Table with an empty dataplane", func() {
 			"OUTPUT":  {},
 		})
 		iptLock = &mockMutex{}
+		featureDetector = NewFeatureDetector()
+		featureDetector.NewCmd = dataplane.newCmd
+		featureDetector.ReadFile = dataplane.readFile
 		table = NewTable(
 			"filter",
 			4,
 			rules.RuleHashPrefix,
 			iptLock,
+			featureDetector,
 			TableOptions{
 				HistoricChainPrefixes: rules.AllHistoricChainNamePrefixes,
 				NewCmdOverride:        dataplane.newCmd,
-				ReadFileOverride:      dataplane.readFile,
 				SleepOverride:         dataplane.sleep,
 				NowOverride:           dataplane.now,
 			},
@@ -63,36 +67,6 @@ var _ = Describe("Table with an empty dataplane", func() {
 		}))
 		Expect(iptLock.Held).To(BeFalse())
 		Expect(iptLock.WasTaken).To(BeFalse())
-		Expect(table.Features).To(Equal(&Features{
-			SNATFullyRandom: false,
-		}))
-	})
-
-	It("should detect SNAT fully random for version 1.6.0", func() {
-		dataplane.Version = "iptables v1.6.0\n"
-		table.Apply()
-		Expect(table.Features).To(Equal(&Features{
-			SNATFullyRandom: true,
-		}))
-	})
-
-	It("should detect MASQ fully random, RestoreSupportsLock for version 1.6.2", func() {
-		dataplane.Version = "iptables v1.6.2\n"
-		table.Apply()
-		Expect(table.Features).To(Equal(&Features{
-			SNATFullyRandom:     true,
-			MASQFullyRandom:     true,
-			RestoreSupportsLock: true,
-		}))
-	})
-
-	It("should detect no SNAT fully random for kernel version 3.13", func() {
-		dataplane.Version = "iptables v1.6.1\n"
-		dataplane.KernelVersion = "Linux version 3.13.0-generic-1234"
-		table.Apply()
-		Expect(table.Features).To(Equal(&Features{
-			SNATFullyRandom: false,
-		}))
 	})
 
 	It("should have a refresh scheduled at start-of-day", func() {
@@ -130,6 +104,7 @@ var _ = Describe("Table with an empty dataplane", func() {
 				4,
 				rules.RuleHashPrefix,
 				&mockMutex{},
+				featureDetector,
 				TableOptions{
 					HistoricChainPrefixes: rules.AllHistoricChainNamePrefixes,
 					NewCmdOverride:        dataplane.newCmd,
@@ -466,11 +441,15 @@ func describePostUpdateCheckTests(enableRefresh bool) {
 		if enableRefresh {
 			options.RefreshInterval = 30 * time.Second
 		}
+		featureDetector := NewFeatureDetector()
+		featureDetector.NewCmd = dataplane.newCmd
+		featureDetector.ReadFile = dataplane.readFile
 		table = NewTable(
 			"filter",
 			4,
 			rules.RuleHashPrefix,
 			&mockMutex{},
+			featureDetector,
 			options,
 		)
 		table.SetRuleInsertions("FORWARD", []Rule{
@@ -655,11 +634,15 @@ func describeDirtyDataplaneTests(appendMode bool) {
 		if appendMode {
 			insertMode = "append"
 		}
+		featureDetector := NewFeatureDetector()
+		featureDetector.NewCmd = dataplane.newCmd
+		featureDetector.ReadFile = dataplane.readFile
 		table = NewTable(
 			"filter",
 			4,
 			rules.RuleHashPrefix,
 			&mockMutex{},
+			featureDetector,
 			TableOptions{
 				HistoricChainPrefixes:    rules.AllHistoricChainNamePrefixes,
 				ExtraCleanupRegexPattern: "sneaky-rule",
@@ -1027,11 +1010,15 @@ var _ = Describe("Table with inserts and a non-Calico chain", func() {
 			"non-calico": {"-m comment \"foo\""},
 		})
 		iptLock = &mockMutex{}
+		featureDetector := NewFeatureDetector()
+		featureDetector.NewCmd = dataplane.newCmd
+		featureDetector.ReadFile = dataplane.readFile
 		table = NewTable(
 			"filter",
 			6,
 			rules.RuleHashPrefix,
 			iptLock,
+			featureDetector,
 			TableOptions{
 				HistoricChainPrefixes: rules.AllHistoricChainNamePrefixes,
 				NewCmdOverride:        dataplane.newCmd,

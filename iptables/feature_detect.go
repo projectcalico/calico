@@ -15,12 +15,31 @@
 package iptables
 
 import (
-	"fmt"
-	"reflect"
+	"io/ioutil"
 	"regexp"
+	"sync"
 
 	"github.com/hashicorp/go-version"
-	"github.com/sirupsen/logrus"
+	log "github.com/sirupsen/logrus"
+)
+
+var (
+	vXDotYDotZRegexp    = regexp.MustCompile(`v(\d+\.\d+\.\d+)`)
+	kernelVersionRegexp = regexp.MustCompile(`Linux version (\d+\.\d+\.\d+)`)
+
+	// iptables versions:
+	// v1Dot4Dot7 is the oldest version we've ever supported.
+	v1Dot4Dot7 = mustParseVersion("1.4.7")
+	// v1Dot6Dot0 added --random-fully to SNAT.
+	v1Dot6Dot0 = mustParseVersion("1.6.0")
+	// v1Dot6Dot2 added --random-fully to MASQUERADE
+	v1Dot6Dot2 = mustParseVersion("1.6.2")
+
+	// Linux kernel versions:
+	// v3Dot10Dot0 is the oldest version we support at time of writing.
+	v3Dot10Dot0 = mustParseVersion("3.10.0")
+	// v3Dot14Dot0 added the random-fully feature on the iptables interface.
+	v3Dot14Dot0 = mustParseVersion("3.14.0")
 )
 
 type Features struct {
@@ -33,69 +52,109 @@ type Features struct {
 	RestoreSupportsLock bool
 }
 
-func MergeFeatures(a, b *Features) *Features {
-	var merged Features
-	featuresT := reflect.TypeOf(merged)
-	for i := 0; i < featuresT.NumField(); i++ {
-		if reflect.ValueOf(*a).Field(i).Bool() && reflect.ValueOf(*b).Field(i).Bool() {
-			reflect.ValueOf(&merged).Elem().Field(i).SetBool(true)
-		}
-	}
-	return &merged
+type FeatureDetector struct {
+	lock         sync.Mutex
+	featureCache *Features
+
+	// Shim for reading ioutil.ReadFile
+	ReadFile func(name string) ([]byte, error)
+	// Factory for making commands, used by UTs to shim exec.Command().
+	NewCmd cmdFactory
 }
 
-var (
-	v1Dot6Dot0  = mustParseVersion("1.6.0")
-	v1Dot6Dot2  = mustParseVersion("1.6.2")
-	v3Dot14Dot0 = mustParseVersion("3.14.0")
-)
+func NewFeatureDetector() *FeatureDetector {
+	return &FeatureDetector{
+		ReadFile: ioutil.ReadFile,
+		NewCmd:   newRealCmd,
+	}
+}
+
+func (d *FeatureDetector) GetFeatures() *Features {
+	d.lock.Lock()
+	defer d.lock.Unlock()
+
+	if d.featureCache == nil {
+		d.refreshFeaturesLockHeld()
+	}
+
+	return d.featureCache
+}
+
+func (d *FeatureDetector) RefreshFeatures() {
+	d.lock.Lock()
+	defer d.lock.Unlock()
+
+	d.refreshFeaturesLockHeld()
+}
+
+func (d *FeatureDetector) refreshFeaturesLockHeld() {
+	// Get the versions.  If we fail to detect a version for some reason, we use a safe default.
+	log.Debug("Refreshing detected iptables features")
+	iptV := d.getIptablesVersion()
+	kerV := d.getKernelVersion()
+
+	// Calculate the features.
+	features := Features{
+		SNATFullyRandom:     iptV.Compare(v1Dot6Dot0) >= 0 && kerV.Compare(v3Dot14Dot0) >= 0,
+		MASQFullyRandom:     iptV.Compare(v1Dot6Dot2) >= 0 && kerV.Compare(v3Dot14Dot0) >= 0,
+		RestoreSupportsLock: iptV.Compare(v1Dot6Dot2) >= 0,
+	}
+
+	if d.featureCache == nil || *d.featureCache != features {
+		log.WithField("features", features).Info("Updating detected iptables features")
+		d.featureCache = &features
+	}
+}
+
+func (d *FeatureDetector) getIptablesVersion() *version.Version {
+	cmd := d.NewCmd("iptables", "--version")
+	out, err := cmd.Output()
+	if err != nil {
+		log.WithError(err).Warn("Failed to get iptables version, assuming old version with no optional features")
+		return v1Dot4Dot7
+	}
+	s := string(out)
+	matches := vXDotYDotZRegexp.FindStringSubmatch(s)
+	if len(matches) == 0 {
+		log.WithField("rawVersion", s).Warn(
+			"Failed to parse iptables version, assuming old version with no optional features")
+		return v1Dot4Dot7
+	}
+	parsedVersion, err := version.NewVersion(matches[1])
+	if err != nil {
+		log.WithField("rawVersion", s).WithError(err).Warn(
+			"Failed to parse iptables version, assuming old version with no optional features")
+		return v1Dot4Dot7
+	}
+	return parsedVersion
+}
+
+func (d *FeatureDetector) getKernelVersion() *version.Version {
+	kernVersion, err := d.ReadFile("/proc/version")
+	if err != nil {
+		log.WithError(err).Warn("Failed to get kernel version, assuming old version with no optional features")
+		return v3Dot10Dot0
+	}
+	s := string(kernVersion)
+	matches := kernelVersionRegexp.FindStringSubmatch(s)
+	if len(matches) == 0 {
+		log.WithField("rawVersion", s).Warn(
+			"Failed to parse kernel version, assuming old version with no optional features")
+		return v3Dot10Dot0
+	}
+	parsedVersion, err := version.NewVersion(matches[1])
+	if err != nil {
+		log.WithField("rawVersion", s).WithError(err).Warn(
+			"Failed to parse kernel version, assuming old version with no optional features")
+		return v3Dot10Dot0
+	}
+	return parsedVersion
+}
 
 func mustParseVersion(v string) *version.Version {
 	ver, err := version.NewVersion(v)
 	if err != nil {
-		logrus.WithError(err).Panic("Failed to parse version.")
+		log.WithError(err).Panic("Failed to parse version.")
 	}
 	return ver
-}
-
-// VersionToFeatures converts an iptables version line as returned by iptables --version into a set of feature flags.
-func VersionToFeatures(s string) (*Features, error) {
-	re := regexp.MustCompile(`v(\d+\.\d+\.\d+)`)
-	matches := re.FindStringSubmatch(s)
-	if len(matches) == 0 {
-		return nil, fmt.Errorf("iptables returned bad version: %s", s)
-	}
-	iptablesVersion, err := version.NewVersion(matches[1])
-	if err != nil {
-		return nil, err
-	}
-	var features Features
-	if iptablesVersion.Compare(v1Dot6Dot0) >= 0 {
-		features.SNATFullyRandom = true
-	}
-	if iptablesVersion.Compare(v1Dot6Dot2) >= 0 {
-		features.MASQFullyRandom = true
-		features.RestoreSupportsLock = true
-	}
-	return &features, nil
-}
-
-// KernelVersionToFeatures parses a /proc/version-formatted string and returns the features supported by the kernel.
-func KernelVersionToFeatures(s string) (*Features, error) {
-	re := regexp.MustCompile(`Linux version (\d+\.\d+\.\d+)`)
-	matches := re.FindStringSubmatch(s)
-	if len(matches) == 0 {
-		return nil, fmt.Errorf("kernel returned bad version: %s", s)
-	}
-	iptablesVersion, err := version.NewVersion(matches[1])
-	if err != nil {
-		return nil, err
-	}
-	var features Features
-	features.RestoreSupportsLock = true // Not kernel dependent.
-	if iptablesVersion.Compare(v3Dot14Dot0) >= 0 {
-		features.SNATFullyRandom = true
-		features.MASQFullyRandom = true
-	}
-	return &features, nil
 }
