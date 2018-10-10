@@ -79,8 +79,9 @@
             searchParameters: {
                 hitsPerPage: 5,
                 facetsRefinements: {
-                    version: currentDocVersion
-                }
+                    version: [currentDocVersion]
+                },
+                facets: ['version']
             }
         });
         search.addWidget(instantsearch.widgets.searchBox({
