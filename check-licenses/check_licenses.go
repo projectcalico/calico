@@ -1,4 +1,4 @@
-// Copyright (c) 2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2018 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -100,6 +100,8 @@ var (
 		// Mozilla Public License.  Note, would prohibit us from ever releasing our code
 		// under a *GPL license (if we wanted to do that).
 		{pkgName: "github.com/projectcalico/felix/vendor/github.com/hashicorp/golang-lru/simplelru",
+			license: "Mozilla Public License 2.0"},
+		{pkgName: "github.com/projectcalico/felix/vendor/github.com/hashicorp/go-version",
 			license: "Mozilla Public License 2.0"},
 		// Not detected properly - But it's apache license - https://github.com/go-yaml/yaml/blob/v2.2.1/LICENSE
 		{pkgName: "github.com/projectcalico/felix/vendor/gopkg.in/yaml.v2",

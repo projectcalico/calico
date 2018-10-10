@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2018 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -36,25 +36,25 @@ type Rule struct {
 	Comment string
 }
 
-func (r Rule) RenderAppend(chainName, prefixFragment string) string {
+func (r Rule) RenderAppend(chainName, prefixFragment string, features *Features) string {
 	fragments := make([]string, 0, 6)
 	fragments = append(fragments, "-A", chainName)
-	return r.renderInner(fragments, prefixFragment)
+	return r.renderInner(fragments, prefixFragment, features)
 }
 
-func (r Rule) RenderInsert(chainName, prefixFragment string) string {
+func (r Rule) RenderInsert(chainName, prefixFragment string, features *Features) string {
 	fragments := make([]string, 0, 6)
 	fragments = append(fragments, "-I", chainName)
-	return r.renderInner(fragments, prefixFragment)
+	return r.renderInner(fragments, prefixFragment, features)
 }
 
-func (r Rule) RenderReplace(chainName string, ruleNum int, prefixFragment string) string {
+func (r Rule) RenderReplace(chainName string, ruleNum int, prefixFragment string, features *Features) string {
 	fragments := make([]string, 0, 7)
 	fragments = append(fragments, "-R", chainName, fmt.Sprintf("%d", ruleNum))
-	return r.renderInner(fragments, prefixFragment)
+	return r.renderInner(fragments, prefixFragment, features)
 }
 
-func (r Rule) renderInner(fragments []string, prefixFragment string) string {
+func (r Rule) renderInner(fragments []string, prefixFragment string, features *Features) string {
 	if prefixFragment != "" {
 		fragments = append(fragments, prefixFragment)
 	}
@@ -66,7 +66,7 @@ func (r Rule) renderInner(fragments []string, prefixFragment string) string {
 	if matchFragment != "" {
 		fragments = append(fragments, matchFragment)
 	}
-	actionFragment := r.Action.ToFragment()
+	actionFragment := r.Action.ToFragment(features)
 	if actionFragment != "" {
 		fragments = append(fragments, actionFragment)
 	}
@@ -78,7 +78,7 @@ type Chain struct {
 	Rules []Rule
 }
 
-func (c *Chain) RuleHashes() []string {
+func (c *Chain) RuleHashes(features *Features) []string {
 	hashes := make([]string, len(c.Rules))
 	// First hash the chain name so that identical rules in different chains will get different
 	// hashes.
@@ -90,7 +90,7 @@ func (c *Chain) RuleHashes() []string {
 		// the rules before it affect its hash.
 		s.Reset()
 		s.Write(hash)
-		ruleForHashing := rule.RenderAppend(c.Name, "HASH")
+		ruleForHashing := rule.RenderAppend(c.Name, "HASH", features)
 		s.Write([]byte(ruleForHashing))
 		hash = s.Sum(hash[0:0])
 		// Encode the hash using a compact character set.  We use the URL-safe base64
