@@ -132,15 +132,15 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreEtcdV3, 
 			pool20 = append(pool20, cnet.MustParseCIDR(cidr))
 		}
 
-		Measure("It should be able to allocate a lot of addresses quickly", func(b Benchmarker) {
+		Measure("It should be able to allocate a single address quickly - blocksize 32", func(b Benchmarker) {
 			runtime := b.Time("runtime", func() {
-				v4, _, outErr := ic.AutoAssign(context.Background(), AutoAssignArgs{Num4: 64, IPv4Pools: pool20})
+				v4, _, outErr := ic.AutoAssign(context.Background(), AutoAssignArgs{Num4: 1, IPv4Pools: pool32})
 				Expect(outErr).NotTo(HaveOccurred())
-				Expect(len(v4)).To(Equal(64))
+				Expect(len(v4)).To(Equal(1))
 			})
 
 			Expect(runtime.Seconds()).Should(BeNumerically("<", 1))
-		}, 20)
+		}, 100)
 
 		Measure("It should be able to allocate a single address quickly - blocksize 26", func(b Benchmarker) {
 			runtime := b.Time("runtime", func() {
@@ -149,7 +149,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreEtcdV3, 
 				Expect(len(v4)).To(Equal(1))
 			})
 
-			Expect(runtime.Seconds()).Should(BeNumerically("<", 0.1))
+			Expect(runtime.Seconds()).Should(BeNumerically("<", 1))
 		}, 100)
 
 		Measure("It should be able to allocate a single address quickly - blocksize 20", func(b Benchmarker) {
@@ -159,18 +159,18 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreEtcdV3, 
 				Expect(len(v4)).To(Equal(1))
 			})
 
-			Expect(runtime.Seconds()).Should(BeNumerically("<", 0.1))
+			Expect(runtime.Seconds()).Should(BeNumerically("<", 1))
 		}, 100)
 
-		Measure("It should be able to allocate a single address quickly - blocksize 32", func(b Benchmarker) {
+		Measure("It should be able to allocate a lot of addresses quickly", func(b Benchmarker) {
 			runtime := b.Time("runtime", func() {
-				v4, _, outErr := ic.AutoAssign(context.Background(), AutoAssignArgs{Num4: 1, IPv4Pools: pool32})
+				v4, _, outErr := ic.AutoAssign(context.Background(), AutoAssignArgs{Num4: 64, IPv4Pools: pool20})
 				Expect(outErr).NotTo(HaveOccurred())
-				Expect(len(v4)).To(Equal(1))
+				Expect(len(v4)).To(Equal(64))
 			})
 
-			Expect(runtime.Seconds()).Should(BeNumerically("<", 0.1))
-		}, 100)
+			Expect(runtime.Seconds()).Should(BeNumerically("<", 1))
+		}, 20)
 
 		Measure("It should be able to allocate and release addresses quickly", func(b Benchmarker) {
 			runtime := b.Time("runtime", func() {
