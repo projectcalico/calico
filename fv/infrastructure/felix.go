@@ -88,7 +88,10 @@ func RunFelix(infra DatastoreInfra, options TopologyOptions) *Felix {
 	// that packet, not just allow it to pass through cali-FORWARD and assume it will
 	// be accepted by the rest of the chain.  Establishing that setting in this FV
 	// allows us to test that.
-	c.Exec("iptables", "-P", "FORWARD", "DROP")
+	c.Exec("iptables",
+		"-w", "10", // Retry this for 10 seconds, e.g. if something else is holding the lock
+		"-W", "100000", // How often to probe the lock in microsecs.
+		"-P", "FORWARD", "DROP")
 
 	return &Felix{
 		Container: c,

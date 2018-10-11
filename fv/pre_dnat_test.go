@@ -107,6 +107,8 @@ var _ = infrastructure.DatastoreDescribe("pre-dnat with initialized Felix, 2 wor
 		BeforeEach(func() {
 			felix.Exec(
 				"iptables", "-t", "nat",
+				"-w", "10", // Retry this for 10 seconds, e.g. if something else is holding the lock
+				"-W", "100000", // How often to probe the lock in microsecs.
 				"-A", "PREROUTING",
 				"-p", "tcp",
 				"-d", "10.65.0.10", "--dport", "32010",
@@ -114,6 +116,8 @@ var _ = infrastructure.DatastoreDescribe("pre-dnat with initialized Felix, 2 wor
 			)
 			felix.Exec(
 				"iptables", "-t", "nat",
+				"-w", "10", // Retry this for 10 seconds, e.g. if something else is holding the lock
+				"-W", "100000", // How often to probe the lock in microsecs.
 				"-A", "PREROUTING",
 				"-p", "tcp",
 				"-d", "10.65.0.11", "--dport", "32011",
