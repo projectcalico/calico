@@ -50,7 +50,7 @@ defaults:
     values:
       layout: docwithnav
       version: master
-      sitemap: false
+      sitemap: true
   -
     scope:
       path: master
@@ -115,5 +115,5 @@ defaults:
     scope:
       path: v3.2
     values:
-      version: v3.2
-      sitemap: true
+      version: v3.2 
+      
