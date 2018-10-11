@@ -1,5 +1,5 @@
-hash: c504975ae876fe54aff404bf08ff364de6eca57c2eec0a2f4a389cf45710e264
-updated: 2018-10-11T07:47:27.676859647Z
+hash: 5f9fcc6cd5774b809cbe3f815ba21b6f853e93497782b88282cf07446f0665ad
+updated: 2018-10-11T12:18:27.37360544Z
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -47,7 +47,7 @@ imports:
 - name: github.com/ghodss/yaml
   version: 73d445a93680fa1a78ae23a5839bad48f32ba1ee
 - name: github.com/go-ini/ini
-  version: d58d458bec3cb5adec4b7ddb41131855eac0b33f
+  version: 5cf292cae48347c2490ac1a58fe36735fb78df7e
 - name: github.com/gogo/protobuf
   version: c0656edd0d9eab7c66d1eb0c568f9039345796f7
   subpackages:
@@ -119,7 +119,7 @@ imports:
   - pkg/resource/template
   - pkg/run
 - name: github.com/kelseyhightower/envconfig
-  version: f611eb38b3875cc3bd991ca91c51d06446afa14c
+  version: dd1402a4d99de9ac2f396cd6fcb957bc2c695ec1
 - name: github.com/kelseyhightower/memkv
   version: 892bfd468afa0fa476556e7bd7734a087cda08b3
 - name: github.com/matttproud/golang_protobuf_extensions
@@ -187,7 +187,7 @@ imports:
 - name: github.com/peterbourgon/diskv
   version: 5f041e8faa004a95c88a202771f4cc3e991971e6
 - name: github.com/projectcalico/felix
-  version: f8d10909c83a6b690a8077c101b3baf6dc6cf7bc
+  version: e5f02aa2b6f98ebc5a332f8e6624e42c252df15a
   subpackages:
   - buildinfo
   - calc
@@ -319,9 +319,9 @@ imports:
   subpackages:
   - nl
 - name: github.com/vishvananda/netns
-  version: 54f0e4339ce73702a0607f49922aaa1e749b418d
+  version: 13995c7128ccc8e51e9a6bd2b551020a27180abd
 - name: golang.org/x/crypto
-  version: a49355c7e3f8fe157a85be2f77e6e269a0f89602
+  version: 49796115aa4b964c318aad4f3084fdb41e9aa067
   subpackages:
   - ssh/terminal
 - name: golang.org/x/net
@@ -377,7 +377,7 @@ imports:
   subpackages:
   - rate
 - name: google.golang.org/appengine
-  version: b1f26356af11148e710935ed1ac8a7f5702c7612
+  version: 4216e58b9158e5f1c906f1aca75162a46a2ec88a
   subpackages:
   - internal
   - internal/app_identity
