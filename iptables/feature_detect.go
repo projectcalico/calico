@@ -101,7 +101,11 @@ func (d *FeatureDetector) refreshFeaturesLockHeld() {
 	}
 
 	if d.featureCache == nil || *d.featureCache != features {
-		log.WithField("features", features).Info("Updating detected iptables features")
+		log.WithFields(log.Fields{
+			"features":        features,
+			"kernelVersion":   kerV,
+			"iptablesVersion": iptV,
+		}).Info("Updating detected iptables features")
 		d.featureCache = &features
 	}
 }
@@ -114,6 +118,7 @@ func (d *FeatureDetector) getIptablesVersion() *version.Version {
 		return v1Dot4Dot7
 	}
 	s := string(out)
+	log.WithField("rawVersion", s).Debug("Ran iptables --version")
 	matches := vXDotYDotZRegexp.FindStringSubmatch(s)
 	if len(matches) == 0 {
 		log.WithField("rawVersion", s).Warn(
@@ -126,6 +131,7 @@ func (d *FeatureDetector) getIptablesVersion() *version.Version {
 			"Failed to parse iptables version, assuming old version with no optional features")
 		return v1Dot4Dot7
 	}
+	log.WithField("version", parsedVersion).Debug("Parsed iptables version")
 	return parsedVersion
 }
 
@@ -136,6 +142,7 @@ func (d *FeatureDetector) getKernelVersion() *version.Version {
 		return v3Dot10Dot0
 	}
 	s := string(kernVersion)
+	log.WithField("rawVersion", s).Debug("Raw kernel version")
 	matches := kernelVersionRegexp.FindStringSubmatch(s)
 	if len(matches) == 0 {
 		log.WithField("rawVersion", s).Warn(
@@ -148,6 +155,7 @@ func (d *FeatureDetector) getKernelVersion() *version.Version {
 			"Failed to parse kernel version, assuming old version with no optional features")
 		return v3Dot10Dot0
 	}
+	log.WithField("version", parsedVersion).Debug("Parsed kernel version")
 	return parsedVersion
 }
 
