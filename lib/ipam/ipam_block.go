@@ -37,6 +37,10 @@ type allocationBlock struct {
 func newBlock(cidr cnet.IPNet) allocationBlock {
 	ones, size := cidr.Mask.Size()
 	numAddresses := 2 << uint(size-ones-1)
+	if numAddresses == 0 {
+		// Shifting doesn't handle 2^0 properly. Override the value.
+		numAddresses = 1
+	}
 	b := model.AllocationBlock{}
 	b.Allocations = make([]*int, numAddresses)
 	b.Unallocated = make([]int, numAddresses)
@@ -61,7 +65,7 @@ func (b *allocationBlock) autoAssign(
 		s := fmt.Sprintf("Block affinity (%s) does not match provided (%s)", *b.Affinity, host)
 		return nil, errors.New(s)
 	} else if b.Affinity == nil {
-		log.Warn("Attempting to assign IPs from block with no affinity: %v", b)
+		log.Warnf("Attempting to assign IPs from block with no affinity: %v", b)
 		if checkAffinity {
 			// If we're checking strict affinity, we can't assign from a block with no affinity.
 			return nil, fmt.Errorf("Attempt to assign from block %v with no affinity", b.CIDR)
@@ -92,7 +96,7 @@ func (b *allocationBlock) assign(address cnet.IP, handleID *string, attrs map[st
 		// Affinity check is enabled but the host does not match - error.
 		return errors.New("Block host affinity does not match")
 	} else if b.Affinity == nil {
-		log.Warn("Attempting to assign IP from block with no affinity: %v", b)
+		log.Warnf("Attempting to assign IP from block with no affinity: %v", b)
 		if b.StrictAffinity {
 			// If we're checking strict affinity, we can't assign from a block with no affinity.
 			return fmt.Errorf("Attempt to assign from block %v with no affinity", b.CIDR)
@@ -215,7 +219,7 @@ func (b *allocationBlock) deleteAttributes(delIndexes, ordinals []int) {
 		if !intInSlice(x, delIndexes) {
 			// Attribute at x is not being deleted.  Build a mapping
 			// of old attribute index (x) to new attribute index (y).
-			log.Debugf("%d in %s", x, delIndexes)
+			log.Debugf("%d in %v", x, delIndexes)
 			newIndex := y
 			newIndexes[x] = &newIndex
 			y += 1

@@ -42,12 +42,12 @@ func (h allocationHandle) decrementBlock(blockCidr cnet.IPNet, num int) (*int, e
 	blockId := blockCidr.String()
 	if current, ok := h.Block[blockId]; !ok {
 		// This entry doesn't exist.
-		errStr := fmt.Sprintf("Tried to decrement block %s by %s but it isn't linked to handle %s", blockId, num, h.HandleID)
+		errStr := fmt.Sprintf("Tried to decrement block %s by %v but it isn't linked to handle %s", blockId, num, h.HandleID)
 		return nil, errors.New(errStr)
 	} else {
 		newNum := current - num
 		if newNum < 0 {
-			errStr := fmt.Sprintf("Tried to decrement block %s by %s but it only has %s addresses on handle %s", blockId, num, current, h.HandleID)
+			errStr := fmt.Sprintf("Tried to decrement block %s by %v but it only has %v addresses on handle %s", blockId, num, current, h.HandleID)
 			return nil, errors.New(errStr)
 		}
 
