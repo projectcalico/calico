@@ -19,17 +19,15 @@ import (
 	"bytes"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os/exec"
 	"reflect"
 	"regexp"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
 	log "github.com/sirupsen/logrus"
-
-	"sync"
 
 	"github.com/projectcalico/libcalico-go/lib/set"
 )
@@ -184,8 +182,8 @@ type Table struct {
 	Name      string
 	IPVersion uint8
 
-	// Detected features of the iptables tools. Populated on the first resync.
-	Features *Features
+	// featureDetector detects the features of the dataplane.
+	featureDetector *FeatureDetector
 
 	// chainToInsertedRules maps from chain name to a list of rules to be inserted at the start
 	// of that chain.  Rules are written with rule hash comments.  The Table cleans up inserted
@@ -232,7 +230,14 @@ type Table struct {
 	postWriteInterval        time.Duration
 	refreshInterval          time.Duration
 
-	writeLock sync.Locker
+	// calicoXtablesLock, if enabled, our implementation of the xtables lock.
+	calicoXtablesLock sync.Locker
+
+	// lockTimeout is the timeout used for iptables-restore's native xtables lock implementation.
+	lockTimeout time.Duration
+	// lockTimeout is the lock probe interval used for iptables-restore's native xtables lock
+	// implementation.
+	lockProbeInterval time.Duration
 
 	logCxt *log.Entry
 
@@ -242,8 +247,6 @@ type Table struct {
 
 	// Factory for making commands, used by UTs to shim exec.Command().
 	newCmd cmdFactory
-	// Shim for reading ioutil.ReadFile
-	readFile func(name string) ([]byte, error)
 	// Shims for time.XXX functions:
 	timeSleep func(d time.Duration)
 	timeNow   func() time.Time
@@ -256,10 +259,13 @@ type TableOptions struct {
 	RefreshInterval          time.Duration
 	PostWriteInterval        time.Duration
 
+	// LockTimeout is the timeout to use for iptables-restore's native xtables lock.
+	LockTimeout time.Duration
+	// LockProbeInterval is the probe interval to use for iptables-restore's native xtables lock.
+	LockProbeInterval time.Duration
+
 	// NewCmdOverride for tests, if non-nil, factory to use instead of the real exec.Command()
 	NewCmdOverride cmdFactory
-	// ReadFileOverride for tests, if non-nil, alternative to ioutil.ReadFile().
-	ReadFileOverride func(name string) ([]byte, error)
 	// SleepOverride for tests, if non-nil, replacement for time.Sleep()
 	SleepOverride func(d time.Duration)
 	// NowOverride for tests, if non-nil, replacement for time.Now()
@@ -271,6 +277,7 @@ func NewTable(
 	ipVersion uint8,
 	hashPrefix string,
 	iptablesWriteLock sync.Locker,
+	detector *FeatureDetector,
 	options TableOptions,
 ) *Table {
 	// Calculate the regex used to match the hash comment.  The comment looks like this:
@@ -323,10 +330,6 @@ func NewTable(
 	if options.NewCmdOverride != nil {
 		newCmd = options.NewCmdOverride
 	}
-	readFile := ioutil.ReadFile
-	if options.ReadFileOverride != nil {
-		readFile = options.ReadFileOverride
-	}
 	sleep := time.Sleep
 	if options.SleepOverride != nil {
 		sleep = options.SleepOverride
@@ -339,6 +342,7 @@ func NewTable(
 	table := &Table{
 		Name:                   name,
 		IPVersion:              ipVersion,
+		featureDetector:        detector,
 		chainToInsertedRules:   inserts,
 		dirtyInserts:           dirtyInserts,
 		chainNameToChain:       map[string]*Chain{},
@@ -364,10 +368,12 @@ func NewTable(
 
 		refreshInterval: options.RefreshInterval,
 
-		writeLock: iptablesWriteLock,
+		calicoXtablesLock: iptablesWriteLock,
+
+		lockTimeout:       options.LockTimeout,
+		lockProbeInterval: options.LockProbeInterval,
 
 		newCmd:    newCmd,
-		readFile:  readFile,
 		timeSleep: sleep,
 		timeNow:   now,
 
@@ -446,50 +452,13 @@ func (t *Table) RemoveChainByName(name string) {
 	t.InvalidateDataplaneCache("chain removal")
 }
 
-func (t *Table) refreshFeatures() error {
-	cmd := t.newCmd("iptables", "--version")
-	out, err := cmd.Output()
-	if err != nil {
-		return err
-	}
-
-	s := string(out)
-	features, err := VersionToFeatures(s)
-	if err != nil {
-		return err
-	}
-
-	kernVersion, err := t.readFile("/proc/version")
-	if err != nil {
-		return err
-	}
-	log.WithField("version", string(kernVersion)).Debug("Loaded kernel version")
-	kernFeatures, err := KernelVersionToFeatures(string(kernVersion))
-	if err != nil {
-		return err
-	}
-
-	merged := MergeFeatures(features, kernFeatures)
-
-	if t.Features == nil || *t.Features != *merged {
-		log.WithFields(log.Fields{
-			"iptables": features,
-			"kernel":   kernFeatures,
-			"merged":   merged,
-		}).Info("Detected iptables features")
-		t.Features = merged
-	}
-	return nil
-}
-
 func (t *Table) loadDataplaneState() {
+	// Refresh the cache of feature data.
+	t.featureDetector.RefreshFeatures()
+
 	// Load the hashes from the dataplane.
 	t.logCxt.Info("Loading current iptables state and checking it is correct.")
 	t.lastReadTime = t.timeNow()
-	err := t.refreshFeatures()
-	if err != nil {
-		log.WithError(err).Panic("Failed to parse iptables version information")
-	}
 	dataplaneHashes := t.getHashesFromDataplane()
 
 	// Check that the rules we think we've programmed are still there and mark any inconsistent
@@ -596,7 +565,8 @@ func (t *Table) expectedHashesForInsertChain(
 ) (allHashes, ourHashes []string) {
 	insertedRules := t.chainToInsertedRules[chainName]
 	allHashes = make([]string, len(insertedRules)+numNonCalicoRules)
-	ourHashes = calculateRuleInsertHashes(chainName, insertedRules, t.Features)
+	features := t.featureDetector.GetFeatures()
+	ourHashes = calculateRuleInsertHashes(chainName, insertedRules, features)
 	offset := 0
 	if t.insertMode == "append" {
 		log.Debug("In append mode, returning our hashes at end.")
@@ -867,6 +837,9 @@ func (t *Table) Apply() (rescheduleAfter time.Duration) {
 
 func (t *Table) applyUpdates() error {
 	var inputBuf bytes.Buffer
+	// If needed, detect the dataplane features.
+	features := t.featureDetector.GetFeatures()
+
 	// iptables-restore input starts with a line indicating the table name.
 	tableNameLine := fmt.Sprintf("*%s\n", t.Name)
 	inputBuf.WriteString(tableNameLine)
@@ -898,7 +871,7 @@ func (t *Table) applyUpdates() error {
 			// Chain update or creation.  Scan the chain against its previous hashes
 			// and replace/append/delete as appropriate.
 			previousHashes := t.chainToDataplaneHashes[chainName]
-			currentHashes := chain.RuleHashes(t.Features)
+			currentHashes := chain.RuleHashes(features)
 			newHashes[chainName] = currentHashes
 			for i := 0; i < len(previousHashes) || i < len(currentHashes); i++ {
 				var line string
@@ -909,7 +882,7 @@ func (t *Table) applyUpdates() error {
 					// Hash doesn't match, replace the rule.
 					ruleNum := i + 1 // 1-indexed.
 					prefixFrag := t.commentFrag(currentHashes[i])
-					line = chain.Rules[i].RenderReplace(chainName, ruleNum, prefixFrag, t.Features)
+					line = chain.Rules[i].RenderReplace(chainName, ruleNum, prefixFrag, features)
 				} else if i < len(previousHashes) {
 					// previousHashes was longer, remove the old rules from the end.
 					ruleNum := len(currentHashes) + 1 // 1-indexed
@@ -917,7 +890,7 @@ func (t *Table) applyUpdates() error {
 				} else {
 					// currentHashes was longer.  Append.
 					prefixFrag := t.commentFrag(currentHashes[i])
-					line = chain.Rules[i].RenderAppend(chainName, prefixFrag, t.Features)
+					line = chain.Rules[i].RenderAppend(chainName, prefixFrag, features)
 				}
 				inputBuf.WriteString(line)
 				inputBuf.WriteString("\n")
@@ -965,7 +938,7 @@ func (t *Table) applyUpdates() error {
 			// state of the chain.
 			for i := len(rules) - 1; i >= 0; i-- {
 				prefixFrag := t.commentFrag(newRuleHashes[i])
-				line := rules[i].RenderInsert(chainName, prefixFrag, t.Features)
+				line := rules[i].RenderInsert(chainName, prefixFrag, features)
 				inputBuf.WriteString(line)
 				inputBuf.WriteString("\n")
 				t.countNumLinesExecuted.Inc()
@@ -974,7 +947,7 @@ func (t *Table) applyUpdates() error {
 			t.logCxt.Debug("Rendering append rules.")
 			for i := 0; i < len(rules); i++ {
 				prefixFrag := t.commentFrag(newRuleHashes[i])
-				line := rules[i].RenderAppend(chainName, prefixFrag, t.Features)
+				line := rules[i].RenderAppend(chainName, prefixFrag, features)
 				inputBuf.WriteString(line)
 				inputBuf.WriteString("\n")
 				t.countNumLinesExecuted.Inc()
@@ -1014,14 +987,40 @@ func (t *Table) applyUpdates() error {
 		t.logCxt.WithField("iptablesInput", input).Debug("Writing to iptables")
 
 		var outputBuf, errBuf bytes.Buffer
-		cmd := t.newCmd(t.iptablesRestoreCmd, "--noflush", "--verbose")
+		args := []string{"--noflush", "--verbose"}
+		if features.RestoreSupportsLock {
+			// Versions of iptables-restore that support the xtables lock also make it impossible to disable.  Make
+			// sure that we configure it to retry and configure for a short retry interval (the default is to try to
+			// acquire the lock only once).
+			lockTimeout := t.lockTimeout.Seconds()
+			if lockTimeout <= 0 {
+				// Before iptables-restore added lock support, we were able to disable the lock completely, which
+				// was indicated by a value <=0 (and was our default).  Newer versions of iptables-restore require the
+				// lock so we override the default and set it to 10s.
+				lockTimeout = 10
+			}
+			lockProbeMicros := t.lockProbeInterval.Nanoseconds() / 1000
+			timeoutStr := fmt.Sprintf("%.0f", lockTimeout)
+			intervalStr := fmt.Sprintf("%d", lockProbeMicros)
+			args = append(args,
+				"--wait", timeoutStr, // seconds
+				"--wait-interval", intervalStr, // microseconds
+			)
+			log.WithFields(log.Fields{
+				"timeoutSecs":         timeoutStr,
+				"probeIntervalMicros": intervalStr,
+			}).Debug("Using native iptables-restore xtables lock.")
+		}
+		cmd := t.newCmd(t.iptablesRestoreCmd, args...)
 		cmd.SetStdin(&inputBuf)
 		cmd.SetStdout(&outputBuf)
 		cmd.SetStderr(&errBuf)
 		countNumRestoreCalls.Inc()
-		t.writeLock.Lock()
+		// Note: calicoXtablesLock will be a dummy lock if our xtables lock is disabled (i.e. if iptables-restore
+		// supports the xtables lock itself, or if our implementation is disabled by config.
+		t.calicoXtablesLock.Lock()
 		err := cmd.Run()
-		t.writeLock.Unlock()
+		t.calicoXtablesLock.Unlock()
 		if err != nil {
 			t.logCxt.WithFields(log.Fields{
 				"output":      outputBuf.String(),
