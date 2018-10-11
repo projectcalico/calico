@@ -32,7 +32,7 @@ var (
 	v1Dot4Dot7 = mustParseVersion("1.4.7")
 	// v1Dot6Dot0 added --random-fully to SNAT.
 	v1Dot6Dot0 = mustParseVersion("1.6.0")
-	// v1Dot6Dot2 added --random-fully to MASQUERADE
+	// v1Dot6Dot2 added --random-fully to MASQUERADE and the xtables lock to iptables-restore.
 	v1Dot6Dot2 = mustParseVersion("1.6.2")
 
 	// Linux kernel versions:
@@ -43,9 +43,9 @@ var (
 )
 
 type Features struct {
-	// SNATFullyRandom is true if --fully-random is supported by the SNAT action.
+	// SNATFullyRandom is true if --random-fully is supported by the SNAT action.
 	SNATFullyRandom bool
-	// MASQFullyRandom is true if --fully-random is supported by the MASQUERADE action.
+	// MASQFullyRandom is true if --random-fully is supported by the MASQUERADE action.
 	MASQFullyRandom bool
 	// RestoreSupportsLock is true if the iptables-restore command supports taking the xtables lock and the
 	// associated -w and -W arguments.

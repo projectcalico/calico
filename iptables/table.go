@@ -989,8 +989,9 @@ func (t *Table) applyUpdates() error {
 		var outputBuf, errBuf bytes.Buffer
 		args := []string{"--noflush", "--verbose"}
 		if features.RestoreSupportsLock {
-			// Versions of iptables-restore that support the xtables lock also make it mandatory.  Make sure
-			// that we configure it to retry and configure for a short retry interval (the default is not to retry).
+			// Versions of iptables-restore that support the xtables lock also make it impossible to disable.  Make
+			// sure that we configure it to retry and configure for a short retry interval (the default is to try to
+			// acquire the lock only once).
 			lockTimeout := t.lockTimeout.Seconds()
 			if lockTimeout <= 0 {
 				// Before iptables-restore added lock support, we were able to disable the lock completely, which
@@ -1015,7 +1016,9 @@ func (t *Table) applyUpdates() error {
 		cmd.SetStdout(&outputBuf)
 		cmd.SetStderr(&errBuf)
 		countNumRestoreCalls.Inc()
-		t.calicoXtablesLock.Lock() // Will be a dummy lock if our xtables lock is disabled.
+		// Note: calicoXtablesLock will be a dummy lock if our xtables lock is disabled (i.e. if iptables-restore
+		// supports the xtables lock itself, or if our implementation is disabled by config.
+		t.calicoXtablesLock.Lock()
 		err := cmd.Run()
 		t.calicoXtablesLock.Unlock()
 		if err != nil {
