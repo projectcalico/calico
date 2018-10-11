@@ -16,6 +16,7 @@ package iptables
 
 import (
 	"bytes"
+	"errors"
 
 	"sync"
 
@@ -68,11 +69,19 @@ var _ = Describe("Hash extraction tests", func() {
 	var table *Table
 
 	BeforeEach(func() {
+		fd := NewFeatureDetector()
+		fd.ReadFile = func(name string) ([]byte, error) {
+			return nil, errors.New("not implemented")
+		}
+		fd.NewCmd = func(name string, arg ...string) CmdIface {
+			return newRealCmd("echo", "iptables v1.4.7")
+		}
 		table = NewTable(
 			"filter",
 			4,
 			"cali:",
 			&sync.Mutex{},
+			fd,
 			TableOptions{
 				HistoricChainPrefixes:    []string{"felix-", "cali"},
 				ExtraCleanupRegexPattern: "an-old-rule",
