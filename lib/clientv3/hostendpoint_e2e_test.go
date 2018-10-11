@@ -39,6 +39,7 @@ var _ = testutils.E2eDatastoreDescribe("HostEndpoint tests", testutils.Datastore
 	ctx := context.Background()
 	name1 := "hep-1"
 	name2 := "hep-2"
+	name3 := "hep-3"
 	spec1 := apiv3.HostEndpointSpec{
 		Node:          "node1",
 		InterfaceName: "eth0",
@@ -65,6 +66,10 @@ var _ = testutils.E2eDatastoreDescribe("HostEndpoint tests", testutils.Datastore
 				Protocol: numorstring.ProtocolFromString("UDP"),
 			},
 		},
+	}
+	spec3 := apiv3.HostEndpointSpec{
+		Node:          "node2",
+		InterfaceName: "*",
 	}
 
 	DescribeTable("HostEndpoint e2e CRUD tests",
@@ -146,9 +151,13 @@ var _ = testutils.E2eDatastoreDescribe("HostEndpoint tests", testutils.Datastore
 			outList, outError = c.HostEndpoints().List(ctx, options.ListOptions{})
 			Expect(outError).NotTo(HaveOccurred())
 			Expect(outList.Items).To(HaveLen(2))
-			testutils.ExpectResource(&outList.Items[0], apiv3.KindHostEndpoint, testutils.ExpectNoNamespace, name1, spec1)
-			testutils.ExpectResource(&outList.Items[1], apiv3.KindHostEndpoint, testutils.ExpectNoNamespace, name2, spec2)
-
+			if name1 < name2 {
+				testutils.ExpectResource(&outList.Items[0], apiv3.KindHostEndpoint, testutils.ExpectNoNamespace, name1, spec1)
+				testutils.ExpectResource(&outList.Items[1], apiv3.KindHostEndpoint, testutils.ExpectNoNamespace, name2, spec2)
+			} else {
+				testutils.ExpectResource(&outList.Items[0], apiv3.KindHostEndpoint, testutils.ExpectNoNamespace, name2, spec2)
+				testutils.ExpectResource(&outList.Items[1], apiv3.KindHostEndpoint, testutils.ExpectNoNamespace, name1, spec1)
+			}
 			By("Updating HostEndpoint name1 with spec2")
 			res1.Spec = spec2
 			res1, outError = c.HostEndpoints().Update(ctx, res1, options.SetOptions{})
@@ -212,9 +221,13 @@ var _ = testutils.E2eDatastoreDescribe("HostEndpoint tests", testutils.Datastore
 			outList, outError = c.HostEndpoints().List(ctx, options.ListOptions{})
 			Expect(outError).NotTo(HaveOccurred())
 			Expect(outList.Items).To(HaveLen(2))
-			testutils.ExpectResource(&outList.Items[0], apiv3.KindHostEndpoint, testutils.ExpectNoNamespace, name1, spec2)
-			testutils.ExpectResource(&outList.Items[1], apiv3.KindHostEndpoint, testutils.ExpectNoNamespace, name2, spec2)
-
+			if name1 < name2 {
+				testutils.ExpectResource(&outList.Items[0], apiv3.KindHostEndpoint, testutils.ExpectNoNamespace, name1, spec2)
+				testutils.ExpectResource(&outList.Items[1], apiv3.KindHostEndpoint, testutils.ExpectNoNamespace, name2, spec2)
+			} else {
+				testutils.ExpectResource(&outList.Items[0], apiv3.KindHostEndpoint, testutils.ExpectNoNamespace, name2, spec2)
+				testutils.ExpectResource(&outList.Items[1], apiv3.KindHostEndpoint, testutils.ExpectNoNamespace, name1, spec2)
+			}
 			By("Deleting HostEndpoint (name1) with the old resource version")
 			_, outError = c.HostEndpoints().Delete(ctx, name1, options.DeleteOptions{ResourceVersion: rv1_1})
 			Expect(outError).To(HaveOccurred())
@@ -268,6 +281,8 @@ var _ = testutils.E2eDatastoreDescribe("HostEndpoint tests", testutils.Datastore
 
 		// Test 1: Pass two fully populated HostEndpointSpecs and expect the series of operations to succeed.
 		Entry("Two fully populated HostEndpointSpecs", name1, name2, spec1, spec2),
+		Entry("Two fully populated HostEndpointSpecs", name2, name3, spec2, spec3),
+		Entry("Two fully populated HostEndpointSpecs", name3, name1, spec3, spec1),
 	)
 
 	Describe("HostEndpoint watch functionality", func() {

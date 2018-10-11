@@ -249,6 +249,13 @@ func init() {
 			},
 			true,
 		),
+		Entry("should accept HostEndpointSpec with interfaceName *",
+			api.HostEndpointSpec{
+				InterfaceName: "*",
+				Node:          "node01",
+			},
+			true,
+		),
 
 		Entry("should accept GlobalNetworkSetSpec with CIDRs and IPs",
 			api.GlobalNetworkSetSpec{
