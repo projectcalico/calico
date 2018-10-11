@@ -1,4 +1,4 @@
-# How to release Calico
+
 
 > **NOTE:** These instructions apply only to Calico versions v3.2.0 or greater.
 > For older releases, refer to the instructions in the corresponding `release-vX.Y` branch.
