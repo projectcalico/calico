@@ -159,12 +159,16 @@ var _ = Context("etcd connection interruption", func() {
 					// Use the raw table to drop the TCP connections (to etcd) that felix is using,
 					// in both directions, based on source and destination port.
 					felix.Exec("iptables",
+						"-w", "10", // Retry this for 10 seconds, e.g. if something else is holding the lock
+						"-W", "100000", // How often to probe the lock in microsecs.
 						"-t", "raw", "-I", "PREROUTING",
 						"-p", "tcp",
 						"-s", etcd.IP,
 						"-m", "multiport", "--destination-ports", matches[1],
 						"-j", "DROP")
 					felix.Exec("iptables",
+						"-w", "10", // Retry this for 10 seconds, e.g. if something else is holding the lock
+						"-W", "100000", // How often to probe the lock in microsecs.
 						"-t", "raw", "-I", "OUTPUT",
 						"-p", "tcp",
 						"-d", etcd.IP,
