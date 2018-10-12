@@ -1,5 +1,5 @@
-hash: 0b759b83e48cfcd62018d1734fa75d98b9cb66e44580cb5df29eceb90007f9af
-updated: 2018-10-09T04:09:36.902514706Z
+hash: fa2ecd815607af76896ebf122b8bda26448dcaee138b67d01614c502c1827483
+updated: 2018-10-12T04:10:24.805407537Z
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -165,7 +165,7 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: 97a21ea5de9ca912ebf2c7083de5ea7afe49f397
+  version: c8711541c5a4cd6fe867fcdcd00fdf914df88f17
   subpackages:
   - lib/apiconfig
   - lib/apis/v1
@@ -212,7 +212,7 @@ imports:
   - lib/validator/v3
   - lib/watch
 - name: github.com/prometheus/client_golang
-  version: 0a8115f42e037a6e327f9a269a26ff6603fb8472
+  version: 7866eead363ec334628dbc56e32df590a05f4696
   subpackages:
   - prometheus
   - prometheus/internal
@@ -247,7 +247,7 @@ imports:
   - list
   - trie/ctrie
 - name: golang.org/x/crypto
-  version: e3636079e1a4c1f337f212cc5cd2aca108f6c900
+  version: 7c1a557ab941a71c619514f229f0b27ccb0c27cf
   subpackages:
   - ssh/terminal
 - name: golang.org/x/net
