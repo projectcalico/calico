@@ -242,8 +242,8 @@ func (r ipPools) List(ctx context.Context, opts options.ListOptions) (*apiv3.IPP
 	}
 
 	// Default values when reading from backend.
-	for _, pool := range res.Items {
-		convertIpPoolFromStorage(&pool)
+	for i := range res.Items {
+		convertIpPoolFromStorage(&res.Items[i])
 	}
 
 	return res, nil
