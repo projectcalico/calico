@@ -55,6 +55,9 @@ template bgp bgp_template {
   source address {{$node_ip}};  # The local address we use for the TCP connection
   add paths on;
   graceful restart;  # See comment in kernel section about graceful restart.
+  connect delay time 2;
+  connect retry time 5;
+  error wait time 5,30;
 }
 
 # ------------- Node-to-node mesh -------------
