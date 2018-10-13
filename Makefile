@@ -35,7 +35,16 @@ ifeq ($(ARCH),aarch64)
         override ARCH=arm64
 endif
 ifeq ($(ARCH),x86_64)
-    override ARCH=amd64
+        override ARCH=amd64
+endif
+
+# Build mounts for running in "local build" mode. Mount in libcalico, but null out
+# the vendor directory. This allows an easy build using local development code,
+# assuming that there is a local checkout of libcalico in the same directory as this repo.
+LOCAL_BUILD_MOUNTS ?=
+ifeq ($(LOCAL_BUILD),true)
+LOCAL_BUILD_MOUNTS = -v $(CURDIR)/../libcalico-go:/go/src/$(PACKAGE_NAME)/vendor/github.com/projectcalico/libcalico-go:ro \
+	-v $(CURDIR)/.empty:/go/src/$(PACKAGE_NAME)/vendor/github.com/projectcalico/libcalico-go/vendor:ro
 endif
 
 # we want to be able to run the same recipe on multiple targets keyed on the image name
@@ -65,7 +74,10 @@ PROTOC_VER?=v0.1
 PROTOC_CONTAINER?=calico/protoc:$(PROTOC_VER)-$(BUILDARCH)
 
 # Get version from git - used for releases.
-GIT_VERSION?=$(shell git describe --tags --dirty)
+GIT_VERSION?=$(shell git describe --tags --dirty --always)
+ifeq ($(LOCAL_BUILD),true)
+	GIT_VERSION = $(shell git describe --tags --dirty --always)-dev-build
+endif
 
 # Figure out the users UID/GID.  These are needed to run docker containers
 # as the current user and ensure that files built inside containers are
@@ -187,11 +199,12 @@ bin/dikastes-%: vendor proto $(SRC_FILES)
 	docker run --rm -ti \
 	  -v $(CURDIR):/go/src/$(PACKAGE_NAME):ro \
 	  -v $(CURDIR)/bin:/go/src/$(PACKAGE_NAME)/bin \
-      -e LOCAL_USER_ID=$(LOCAL_USER_ID) \
-      -v $(CURDIR)/.go-pkg-cache:/go-cache/:rw \
-      -e GOCACHE=/go-cache \
-      -w /go/src/$(PACKAGE_NAME) \
-	    $(CALICO_BUILD) go build -ldflags "-X main.VERSION=$(GIT_VERSION) -s -w" -v -o bin/dikastes-$(ARCH)
+	  -v $(CURDIR)/.go-pkg-cache:/go-cache/:rw \
+	  $(LOCAL_BUILD_MOUNTS) \
+	  -e LOCAL_USER_ID=$(LOCAL_USER_ID) \
+	  -e GOCACHE=/go-cache \
+	  -w /go/src/$(PACKAGE_NAME) \
+	  $(CALICO_BUILD) go build -ldflags "-X main.VERSION=$(GIT_VERSION) -s -w" -v -o bin/dikastes-$(ARCH)
 
 # We use gogofast for protobuf compilation.  Regular gogo is incompatible with
 # gRPC, since gRPC uses golang/protobuf for marshalling/unmarshalling in that
@@ -334,9 +347,10 @@ fix:
 ## Run the tests in a container. Useful for CI, Mac dev
 ut: proto
 	docker run --rm -v $(CURDIR):/go/src/$(PACKAGE_NAME):rw \
-    -e LOCAL_USER_ID=$(LOCAL_USER_ID) \
-    -w /go/src/$(PACKAGE_NAME) \
-    $(CALICO_BUILD) go test -v ./...
+		$(LOCAL_BUILD_MOUNTS) \
+		-e LOCAL_USER_ID=$(LOCAL_USER_ID) \
+		-w /go/src/$(PACKAGE_NAME) \
+		$(CALICO_BUILD) go test -v ./...
 
 ###############################################################################
 # CI
@@ -441,6 +455,9 @@ release-publish-latest: release-prereqs
 release-prereqs:
 ifndef VERSION
 	$(error VERSION is undefined - run using make release VERSION=vX.Y.Z)
+endif
+ifdef LOCAL_BUILD
+	$(error LOCAL_BUILD must not be set for a release)
 endif
 
 ###############################################################################
