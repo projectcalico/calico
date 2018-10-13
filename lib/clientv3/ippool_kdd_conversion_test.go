@@ -44,6 +44,7 @@ var _ = testutils.E2eDatastoreDescribe("IPPool KDD v1 to v3 migration tests", te
 		CIDR:        "1.2.3.0/24",
 		NATOutgoing: true,
 		IPIPMode:    apiv3.IPIPModeCrossSubnet,
+		BlockSize:   26,
 	}
 	kvp1 := &model.KVPair{
 		Key: model.ResourceKey{
@@ -66,6 +67,7 @@ var _ = testutils.E2eDatastoreDescribe("IPPool KDD v1 to v3 migration tests", te
 					Enabled: true,
 					Mode:    ipip.CrossSubnet,
 				},
+				BlockSize: 26,
 			},
 		},
 	}
@@ -105,6 +107,7 @@ var _ = testutils.E2eDatastoreDescribe("IPPool KDD v1 to v3 migration tests", te
 		CIDR:        "1.1.1.0/24",
 		NATOutgoing: false,
 		IPIPMode:    apiv3.IPIPModeAlways,
+		BlockSize:   26,
 	}
 	kvp3 := &model.KVPair{
 		Key: model.ResourceKey{
@@ -125,6 +128,7 @@ var _ = testutils.E2eDatastoreDescribe("IPPool KDD v1 to v3 migration tests", te
 				IPIP: &apiv1.IPIPConfiguration{
 					Enabled: true,
 				},
+				BlockSize: 26,
 			},
 		},
 	}
@@ -133,6 +137,7 @@ var _ = testutils.E2eDatastoreDescribe("IPPool KDD v1 to v3 migration tests", te
 		CIDR:        "1.2.3.0/24",
 		NATOutgoing: true,
 		IPIPMode:    apiv3.IPIPModeAlways,
+		BlockSize:   26,
 	}
 	kvp5 := &model.KVPair{
 		Key: model.ResourceKey{
@@ -156,6 +161,7 @@ var _ = testutils.E2eDatastoreDescribe("IPPool KDD v1 to v3 migration tests", te
 				},
 				NATOutgoing:   true,
 				NATOutgoingV1: false,
+				BlockSize:     26,
 			},
 		},
 	}
@@ -164,6 +170,7 @@ var _ = testutils.E2eDatastoreDescribe("IPPool KDD v1 to v3 migration tests", te
 		CIDR:        "1.2.3.0/24",
 		NATOutgoing: true,
 		IPIPMode:    apiv3.IPIPModeCrossSubnet,
+		BlockSize:   26,
 	}
 	kvp6 := &model.KVPair{
 		Key: model.ResourceKey{
@@ -185,6 +192,7 @@ var _ = testutils.E2eDatastoreDescribe("IPPool KDD v1 to v3 migration tests", te
 				IPIP:          nil,
 				NATOutgoing:   false,
 				NATOutgoingV1: true,
+				BlockSize:     26,
 			},
 		},
 	}
