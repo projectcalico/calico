@@ -52,8 +52,18 @@ func (s *Status) SetReady(key string, ready bool, reason string) {
 	defer s.readyMutex.Unlock()
 
 	if prev, ok := s.Readiness[key]; !ok || prev.Ready != ready || prev.Reason != reason {
+		fields := logrus.Fields{
+			"prev.Ready":  prev.Ready,
+			"ready":       ready,
+			"prev.Reason": prev.Reason,
+			"reason":      reason,
+		}
+		logrus.WithFields(fields).Debug("Updating readiness status")
 		s.Readiness[key] = ConditionStatus{Ready: ready, Reason: reason}
-		_ = s.writeStatus()
+		if err := s.writeStatus(); err != nil {
+			logrus.WithError(err).Warnf("Failed to write status")
+		}
+
 	}
 }
 
