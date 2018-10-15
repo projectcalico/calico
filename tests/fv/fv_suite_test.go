@@ -1,4 +1,4 @@
-// Copyright (c) 2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2018 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -21,6 +21,8 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"testing"
+
+	"github.com/onsi/ginkgo/reporters"
 )
 
 func init() {
@@ -30,5 +32,6 @@ func init() {
 
 func TestFv(t *testing.T) {
 	RegisterFailHandler(Fail)
-	RunSpecs(t, "Fv Suite")
+	junitReporter := reporters.NewJUnitReporter("../../report/fv_suite.xml")
+	RunSpecsWithDefaultAndCustomReporters(t, "Fv Suite", []Reporter{junitReporter})
 }

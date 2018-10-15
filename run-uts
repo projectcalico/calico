@@ -26,7 +26,8 @@ test ! -z "$go_dirs"
 # Run tests in random order find tests recursively (-r).
 echo WHAT: $WHAT
 echo SKIP: $SKIP
-ginkgo -cover -coverpkg=${go_dirs} -r --skipPackage $SKIP $WHAT
+echo GINKGO_ARGS: $GINKGO_ARGS
+ginkgo -cover -coverpkg=${go_dirs} -r --skipPackage $SKIP $WHAT $GINKGO_ARGS
 gocovmerge $(find . -name '*.coverprofile') > combined.coverprofile
 
 echo
