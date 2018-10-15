@@ -162,7 +162,7 @@ type RuleRenderer interface {
 	) []*iptables.Chain
 
 	HostDispatchChains(map[string]proto.HostEndpointID, bool) []*iptables.Chain
-	FromHostDispatchChains(map[string]proto.HostEndpointID) []*iptables.Chain
+	FromHostDispatchChains(map[string]proto.HostEndpointID, string) []*iptables.Chain
 	HostEndpointToFilterChains(
 		ifaceName string,
 		epMarkMapper EndpointMarkMapper,

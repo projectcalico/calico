@@ -204,9 +204,6 @@ func (r *DefaultRuleRenderer) StaticFilterOutputForwardEndpointMarkChain() *Chai
 func (r *DefaultRuleRenderer) filterInputChain(ipVersion uint8) *Chain {
 	var inputRules []Rule
 
-	// Accept immediately if we've already accepted this packet in the raw or mangle table.
-	inputRules = append(inputRules, r.acceptAlreadyAccepted()...)
-
 	if ipVersion == 4 && r.IPIPEnabled {
 		// IPIP is enabled, filter incoming IPIP packets to ensure they come from a
 		// recognised host and are going to a local address on the host.  We use the protocol
@@ -253,6 +250,11 @@ func (r *DefaultRuleRenderer) filterInputChain(ipVersion uint8) *Chain {
 			Action: GotoAction{Target: ChainWorkloadToHost},
 		})
 	}
+
+	// Now we only have ingress host endpoint processing to do.  The ingress host endpoint may
+	// have already accepted this packet in the raw or mangle table.  In that case, accept the
+	// packet immediately here too.
+	inputRules = append(inputRules, r.acceptAlreadyAccepted()...)
 
 	// Apply host endpoint policy.
 	inputRules = append(inputRules,

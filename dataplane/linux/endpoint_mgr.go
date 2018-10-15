@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2018 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -365,6 +365,13 @@ func (m *endpointManager) calculateHostEndpointStatus(id proto.HostEndpointID) (
 			resolved = true
 			operUp = true
 			for _, ifaceName := range ifaceNames {
+				if ifaceName == allInterfaces {
+					// For * host endpoints we don't let particular interfaces
+					// impact their reported status, because it's unclear what
+					// the semantics would be, and we'd potentially have to look
+					// at every interface on the host.
+					continue
+				}
 				ifaceUp := m.activeUpIfaces.Contains(ifaceName)
 				logCxt.WithFields(log.Fields{
 					"ifaceName": ifaceName,
@@ -571,6 +578,10 @@ func (m *endpointManager) resolveHostEndpoints() {
 	HostEpLoop:
 		for id, hostEp := range m.rawHostEndpoints {
 			logCxt := ifaceCxt.WithField("id", id)
+			if forAllInterfaces(hostEp) {
+				logCxt.Debug("Skip all-interfaces host endpoint")
+				continue
+			}
 			logCxt.WithField("bestHostEpId", bestHostEpId).Debug("See if HostEp matches interface")
 			if (bestHostEpId.EndpointId != "") && (bestHostEpId.EndpointId < id.EndpointId) {
 				// We already have a HostEndpointId that is better than
@@ -626,10 +637,7 @@ func (m *endpointManager) resolveHostEndpoints() {
 				logCxt.Debug("Endpoint has pre-DNAT policies.")
 				newPreDNATIfaceNameToHostEpID[ifaceName] = bestHostEpId
 			}
-			// Note, in contrast to the check above, we unconditionally record the
-			// match in newHostEpIDToIfaceNames so that we always render the endpoint
-			// into the filter table.  This ensures that we get the correct "default
-			// drop" behaviour and that failsafe rules are applied correctly.
+			// Record that this host endpoint is in use, for status reporting.
 			newHostEpIDToIfaceNames[bestHostEpId] = append(
 				newHostEpIDToIfaceNames[bestHostEpId], ifaceName)
 		}
@@ -651,6 +659,39 @@ func (m *endpointManager) resolveHostEndpoints() {
 				m.epIDsToUpdateStatus.Add(newID)
 			}
 		}
+	}
+
+	// Similar loop to find the best all-interfaces host endpoint.
+	bestHostEpId := proto.HostEndpointID{}
+	var bestHostEp proto.HostEndpoint
+	for id, hostEp := range m.rawHostEndpoints {
+		logCxt := log.WithField("id", id)
+		if !forAllInterfaces(hostEp) {
+			logCxt.Debug("Skip interface-specific host endpoint")
+			continue
+		}
+		if (bestHostEpId.EndpointId != "") && (bestHostEpId.EndpointId < id.EndpointId) {
+			// We already have a HostEndpointId that is better than
+			// this one, so no point looking any further.
+			logCxt.Debug("No better than existing match")
+			continue
+		}
+		logCxt.Debug("New best all-interfaces host endpoint")
+		bestHostEpId = id
+		bestHostEp = *hostEp
+	}
+
+	// We currently only implement pre-DNAT policy for the all-interfaces host endpoint.
+	if bestHostEpId.EndpointId != "" {
+		logCxt := log.WithField("bestHostEpId", bestHostEpId)
+		logCxt.Debug("Got all interfaces HostEp")
+		if len(bestHostEp.PreDnatTiers) > 0 {
+			logCxt.Debug("Endpoint has pre-DNAT policies.")
+			newPreDNATIfaceNameToHostEpID[allInterfaces] = bestHostEpId
+		}
+		// Record that this host endpoint is in use, for status reporting.
+		newHostEpIDToIfaceNames[bestHostEpId] = append(
+			newHostEpIDToIfaceNames[bestHostEpId], allInterfaces)
 	}
 
 	// Set up programming for the host endpoints that are now to be used.
@@ -765,7 +806,15 @@ func (m *endpointManager) resolveHostEndpoints() {
 
 	// Rewrite the mangle dispatch chains if they've changed.
 	log.WithField("resolvedHostEpIds", newPreDNATIfaceNameToHostEpID).Debug("Rewrite mangle dispatch chains?")
-	newMangleDispatchChains := m.ruleRenderer.FromHostDispatchChains(newPreDNATIfaceNameToHostEpID)
+	defaultChainName := ""
+	if _, ok := newPreDNATIfaceNameToHostEpID[allInterfaces]; ok {
+		// All-interfaces host endpoint is active.  Arrange for it to be the default,
+		// instead of trying to dispatch to it directly based on the non-existent interface
+		// name *.
+		defaultChainName = rules.EndpointChainName(rules.HostFromEndpointPfx, allInterfaces)
+		delete(newPreDNATIfaceNameToHostEpID, allInterfaces)
+	}
+	newMangleDispatchChains := m.ruleRenderer.FromHostDispatchChains(newPreDNATIfaceNameToHostEpID, defaultChainName)
 	m.updateDispatchChains(m.activeHostMangleDispatchChains, newMangleDispatchChains, m.mangleTable)
 
 	// Rewrite the raw dispatch chains if they've changed.
@@ -887,4 +936,12 @@ func writeProcSys(path, value string) error {
 		err = err1
 	}
 	return err
+}
+
+// The interface name that we use to mean "all interfaces".
+var allInterfaces = "*"
+
+// True if the given host endpoint is for all interfaces, as opposed to for a specific interface.
+func forAllInterfaces(hep *proto.HostEndpoint) bool {
+	return hep.Name == allInterfaces
 }

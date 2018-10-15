@@ -511,7 +511,7 @@ var _ = Describe("Dispatch chains", func() {
 				func(names []string, expectedChains []*iptables.Chain) {
 					input := convertToInput(names, expectedChains)
 					// Note: order of chains and rules should be deterministic.
-					Expect(renderer.FromHostDispatchChains(input)).To(Equal(expectedChains))
+					Expect(renderer.FromHostDispatchChains(input, "")).To(Equal(expectedChains))
 				},
 				Entry("nil map", nil, []*iptables.Chain{
 					{

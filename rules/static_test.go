@@ -196,11 +196,6 @@ var _ = Describe("Static", func() {
 							Expect(findChain(rr.StaticFilterTableChains(ipVersion), "cali-INPUT")).To(Equal(&Chain{
 								Name: "cali-INPUT",
 								Rules: []Rule{
-									// Untracked packets already matched in raw table.
-									{Match: Match().MarkSingleBitSet(0x10),
-										Action: AcceptAction{},
-									},
-
 									// Forward check chain.
 									{Action: ClearMarkAction{Mark: conf.IptablesMarkEndpoint}},
 									{Action: JumpAction{Target: ChainForwardCheck}},
@@ -212,6 +207,11 @@ var _ = Describe("Static", func() {
 									// don't return here.
 									{Match: Match().InInterface("cali+"),
 										Action: GotoAction{Target: "cali-wl-to-host"}},
+
+									// Untracked packets already matched in raw table.
+									{Match: Match().MarkSingleBitSet(0x10),
+										Action: AcceptAction{},
+									},
 
 									// Non-workload traffic, send to host chains.
 									{Action: ClearMarkAction{Mark: 0xf0}},
@@ -227,15 +227,15 @@ var _ = Describe("Static", func() {
 							Expect(findChain(rr.StaticFilterTableChains(ipVersion), "cali-INPUT")).To(Equal(&Chain{
 								Name: "cali-INPUT",
 								Rules: []Rule{
-									// Untracked packets already matched in raw table.
-									{Match: Match().MarkSingleBitSet(0x10),
-										Action: AcceptAction{},
-									},
-
 									// Per-prefix workload jump rules.  Note use of goto so that we
 									// don't return here.
 									{Match: Match().InInterface("cali+"),
 										Action: GotoAction{Target: "cali-wl-to-host"}},
+
+									// Untracked packets already matched in raw table.
+									{Match: Match().MarkSingleBitSet(0x10),
+										Action: AcceptAction{},
+									},
 
 									// Non-workload traffic, send to host chains.
 									{Action: ClearMarkAction{Mark: 0xf0}},
@@ -469,10 +469,6 @@ var _ = Describe("Static", func() {
 			expInputChainIPIPV4IPVS := &Chain{
 				Name: "cali-INPUT",
 				Rules: []Rule{
-					// Untracked packets already matched in raw table.
-					{Match: Match().MarkSingleBitSet(0x10),
-						Action: AcceptAction{}},
-
 					// IPIP rules
 					{Match: Match().
 						ProtocolNum(4).
@@ -497,6 +493,10 @@ var _ = Describe("Static", func() {
 					{Match: Match().InInterface("cali+"),
 						Action: GotoAction{Target: "cali-wl-to-host"}},
 
+					// Untracked packets already matched in raw table.
+					{Match: Match().MarkSingleBitSet(0x10),
+						Action: AcceptAction{}},
+
 					// Not from a workload, apply host policy.
 					{Action: ClearMarkAction{Mark: 0xf0}},
 					{Action: JumpAction{Target: "cali-from-host-endpoint"}},
@@ -511,10 +511,6 @@ var _ = Describe("Static", func() {
 			expInputChainIPIPV4NoIPVS := &Chain{
 				Name: "cali-INPUT",
 				Rules: []Rule{
-					// Untracked packets already matched in raw table.
-					{Match: Match().MarkSingleBitSet(0x10),
-						Action: AcceptAction{}},
-
 					// IPIP rules
 					{Match: Match().
 						ProtocolNum(4).
@@ -531,6 +527,10 @@ var _ = Describe("Static", func() {
 					// don't return here.
 					{Match: Match().InInterface("cali+"),
 						Action: GotoAction{Target: "cali-wl-to-host"}},
+
+					// Untracked packets already matched in raw table.
+					{Match: Match().MarkSingleBitSet(0x10),
+						Action: AcceptAction{}},
 
 					// Not from a workload, apply host policy.
 					{Action: ClearMarkAction{Mark: 0xf0}},
@@ -547,10 +547,6 @@ var _ = Describe("Static", func() {
 			expInputChainIPIPV6IPVS := &Chain{
 				Name: "cali-INPUT",
 				Rules: []Rule{
-					// Untracked packets already matched in raw table.
-					{Match: Match().MarkSingleBitSet(0x10),
-						Action: AcceptAction{}},
-
 					// Forward check chain.
 					{Action: ClearMarkAction{Mark: epMark}},
 					{Action: JumpAction{Target: ChainForwardCheck}},
@@ -562,6 +558,10 @@ var _ = Describe("Static", func() {
 					// don't return here.
 					{Match: Match().InInterface("cali+"),
 						Action: GotoAction{Target: "cali-wl-to-host"}},
+
+					// Untracked packets already matched in raw table.
+					{Match: Match().MarkSingleBitSet(0x10),
+						Action: AcceptAction{}},
 
 					// Not from a workload, apply host policy.
 					{Action: ClearMarkAction{Mark: 0xf0}},
@@ -576,14 +576,14 @@ var _ = Describe("Static", func() {
 			expInputChainIPIPV6NoIPVS := &Chain{
 				Name: "cali-INPUT",
 				Rules: []Rule{
-					// Untracked packets already matched in raw table.
-					{Match: Match().MarkSingleBitSet(0x10),
-						Action: AcceptAction{}},
-
 					// Per-prefix workload jump rules.  Note use of goto so that we
 					// don't return here.
 					{Match: Match().InInterface("cali+"),
 						Action: GotoAction{Target: "cali-wl-to-host"}},
+
+					// Untracked packets already matched in raw table.
+					{Match: Match().MarkSingleBitSet(0x10),
+						Action: AcceptAction{}},
 
 					// Not from a workload, apply host policy.
 					{Action: ClearMarkAction{Mark: 0xf0}},
@@ -1085,14 +1085,14 @@ var _ = Describe("Static", func() {
 				Expect(findChain(rr.StaticFilterTableChains(ipVersion), "cali-INPUT")).To(Equal(&Chain{
 					Name: "cali-INPUT",
 					Rules: []Rule{
-						// Untracked packets already matched in raw table.
-						{Match: Match().MarkSingleBitSet(0x10),
-							Action: ReturnAction{}},
-
 						// Per-prefix workload jump rules.  Note use of goto so that we
 						// don't return here.
 						{Match: Match().InInterface("cali+"),
 							Action: GotoAction{Target: "cali-wl-to-host"}},
+
+						// Untracked packets already matched in raw table.
+						{Match: Match().MarkSingleBitSet(0x10),
+							Action: ReturnAction{}},
 
 						// Non-workload traffic, send to host chains.
 						{Action: ClearMarkAction{Mark: 0xf0}},
