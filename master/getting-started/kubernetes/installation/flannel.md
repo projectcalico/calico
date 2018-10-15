@@ -29,17 +29,6 @@ section that matches your type.
    > to kubeadm to set the Kubernetes controller flags.
    {: .alert .alert-success}
 
-1. If your cluster has RBAC enabled, issue the following command to
-   configure the roles and bindings that {{site.prodname}} requires.
-
-   ```
-   kubectl apply -f \
-   {{site.url}}/{{page.version}}/getting-started/kubernetes/installation/hosted/canal/rbac.yaml
-   ```
-   > **Note**: You can also
-   > [view the manifest in your browser](hosted/canal/rbac.yaml){:target="_blank"}.
-   {: .alert .alert-info}
-
 1. Issue the following command to install {{site.prodname}}.
 
    ```bash
@@ -57,17 +46,6 @@ section that matches your type.
 
 We strongly recommend using the Kubernetes API datastore, but if you prefer to use
 etcd, complete the following steps.
-
-1. If your cluster has RBAC enabled, issue the following command to
-   configure the roles and bindings that {{site.prodname}} requires.
-
-   ```
-   kubectl apply -f \
-   {{site.url}}/{{page.version}}/getting-started/kubernetes/installation/hosted/canal/rbac-etcd.yaml
-   ```
-   > **Note**: You can also
-   > [view the manifest in your browser](hosted/canal/rbac-etcd.yaml){:target="_blank"}.
-   {: .alert .alert-info}
 
 1. Download the {{site.prodname}} networking manifest.
 

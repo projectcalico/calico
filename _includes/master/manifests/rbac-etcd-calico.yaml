@@ -1,11 +1,3 @@
----
-layout: null
----
-# {{site.prodname}} Version {{site.data.versions[page.version].first.title}}
-# {{site.url}}/{{page.version}}/releases#{{site.data.versions[page.version].first.title}}
-
----
-
 kind: ClusterRole
 apiVersion: rbac.authorization.k8s.io/v1beta1
 metadata:
