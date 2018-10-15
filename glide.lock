@@ -1,5 +1,5 @@
-hash: f8ec472a6c94bcb292f25f29f1dd87d7d39d345d956ec6bfd75f7f90275814cc
-updated: 2018-10-12T06:20:05.968645934Z
+hash: 2d7f497def777cb55b4cf755d1a70fdb33a48ab337a778be30aa4bd60e1276ba
+updated: 2018-10-15T06:17:08.374796281Z
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -45,7 +45,7 @@ imports:
 - name: github.com/ghodss/yaml
   version: 73d445a93680fa1a78ae23a5839bad48f32ba1ee
 - name: github.com/go-ini/ini
-  version: 7b294651033cd7d9e7f0d9ffa1b75ed1e198e737
+  version: 9c8236e659b76e87bf02044d06fde8683008ff3e
 - name: github.com/gogo/protobuf
   version: c0656edd0d9eab7c66d1eb0c568f9039345796f7
   subpackages:
@@ -193,7 +193,7 @@ imports:
   - matchers/support/goraph/util
   - types
 - name: github.com/opentracing/opentracing-go
-  version: 6aa6febac7b98f836100ecaea478c04f30b6dbd0
+  version: be550b025b433cdfa2f11efb962afa2ea3c4d967
   subpackages:
   - ext
   - log
@@ -210,7 +210,7 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: c8711541c5a4cd6fe867fcdcd00fdf914df88f17
+  version: 6d861106dbc2f8a8f62fc63dd8f6e6715f049412
   subpackages:
   - lib/apiconfig
   - lib/apis/v1
@@ -252,7 +252,7 @@ imports:
   subpackages:
   - binder
 - name: github.com/projectcalico/typha
-  version: 4fcc5ce9fe4406b93feb8b4e1cf63c9c07ef64b8
+  version: 98a407e25813dc93b55097f656c796994a6eda4d
   subpackages:
   - pkg/syncclient
   - pkg/syncproto
@@ -293,7 +293,7 @@ imports:
 - name: github.com/whyrusleeping/go-logging
   version: 0457bb6b88fc1973573aaf6b5145d8d3ae972390
 - name: golang.org/x/crypto
-  version: 7c1a557ab941a71c619514f229f0b27ccb0c27cf
+  version: 0c41d7ab0a0ee717d4590a44bcb987dfd9e183eb
   subpackages:
   - ssh/terminal
 - name: golang.org/x/net
