@@ -3,13 +3,26 @@ title: Host Endpoint Resource (HostEndpoint)
 canonical_url: 'https://docs.projectcalico.org/v3.2/reference/calicoctl/resources/hostendpoint'
 ---
 
-A host endpoint resource (`HostEndpoint`) represents an interface attached to a host that is running {{site.prodname}}.
+Host endpoint resources (`HostEndpoint`) come in two flavors.
+
+-  A host endpoint with `interfaceName: *` protects the host as a whole, including from any
+   workloads that are running on it.  More precisely, it enforces {{site.prodname}} policy on
+   all traffic that is entering or leaving the host's default network namespace in any way.
+
+-  Otherwise a host endpoint represents a specific external interface of a host - with that
+   interface being identified by `interfaceName` or `expectedIPs` - and enforces
+   {{site.prodname}} policy on traffic that enters or leaves the host through that interface.
 
 Each host endpoint may include a set of labels and list of profiles that {{site.prodname}}
 will use to apply
-[policy]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/networkpolicy)
+[policy]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/globalnetworkpolicy)
 to the interface.  If no profiles or labels are applied, {{site.prodname}} will not apply
 any policy.
+
+> **Note**: Currently, for host endpoints with `interfaceName: *`, only [pre-DNAT
+> policy]({{site.baseurl}}/{{page.version}}/getting-started/bare-metal/policy/pre-dnat) is
+> implemented.
+{: .alert .alert-info}
 
 For `calicoctl` [commands]({{site.baseurl}}/{{page.version}}/reference/calicoctl/commands/) that specify a resource type on the CLI, the following
 aliases are supported (all case insensitive): `hostendpoint`, `hostendpoints`, `hep`, `heps`.
@@ -60,10 +73,10 @@ spec:
 | Field         | Description                                              | Accepted Values             | Schema                                 | Default |
 |---------------|----------------------------------------------------------|-----------------------------|----------------------------------------|---------|
 | node          | The name of the node where this HostEndpoint resides.    |                             | string                                 |
-| interfaceName | The name of the interface on which to apply policy.      |                             | string                                 |
+| interfaceName | Either `*` or the name of the specific interface on which to apply policy. |           | string                                 |
 | expectedIPs   | The expected IP addresses associated with the interface. | Valid IPv4 or IPv6 address  | list                                   |
 | profiles      | The list of profiles to apply to the endpoint.           |                             | list                                   |
-| ports         | List on named ports that this workload exposes.          |                             | List of [EndpointPorts](#endpointport) |
+| ports         | List of named ports that this workload exposes.          |                             | List of [EndpointPorts](#endpointport) |
 
 #### EndpointPort
 
