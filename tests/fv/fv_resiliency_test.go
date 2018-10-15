@@ -68,9 +68,9 @@ var _ = Describe("[Resilience] PolicyController", func() {
 		k8sClient, err = testutils.GetK8sClient(kfconfigfile.Name())
 		Expect(err).NotTo(HaveOccurred())
 
-		// Wait for the apiserver to be available.
+		// Wait for the apiserver to be available and for the default namespace to exist.
 		Eventually(func() error {
-			_, err := k8sClient.CoreV1().Namespaces().List(metav1.ListOptions{})
+			_, err := k8sClient.CoreV1().Namespaces().Get("default", metav1.GetOptions{})
 			return err
 		}, 15*time.Second, 500*time.Millisecond).Should(BeNil())
 

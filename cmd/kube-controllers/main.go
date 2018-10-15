@@ -153,6 +153,7 @@ func main() {
 
 	// Run the health checks on a separate goroutine.
 	if config.HealthEnabled {
+		log.Info("Starting status report routine")
 		go runHealthChecks(ctx, s, k8sClientset, calicoClient)
 	}
 

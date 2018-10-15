@@ -21,6 +21,7 @@ import (
 	"net"
 	"os"
 	"os/exec"
+	"strings"
 	"time"
 
 	"github.com/satori/go.uuid"
@@ -113,23 +114,25 @@ var _ = Describe("kube-controllers FV tests", func() {
 
 	Context("Healthcheck FV tests", func() {
 		It("should pass health check", func() {
-			// wait for a health check cycle to pass
+			By("Waiting for an initial readiness report")
 			Eventually(func() []byte {
 				cmd := exec.Command("docker", "exec", policyController.Name, "/usr/bin/check-status", "-r")
 				stdoutStderr, _ := cmd.CombinedOutput()
 
 				return stdoutStderr
 			}, 20*time.Second, 500*time.Millisecond).ShouldNot(ContainSubstring("initialized to false"))
-			Eventually(func() []byte {
+
+			By("Waiting for the controller to be ready")
+			Eventually(func() string {
 				cmd := exec.Command("docker", "exec", policyController.Name, "/usr/bin/check-status", "-r")
 				stdoutStderr, _ := cmd.CombinedOutput()
 
-				return stdoutStderr
-			}, 20*time.Second, 500*time.Millisecond).ShouldNot(ContainSubstring("Error"))
+				return strings.TrimSpace(string(stdoutStderr))
+			}, 20*time.Second, 500*time.Millisecond).Should(Equal("Ready"))
 		})
 
 		It("should fail health check if apiserver is not running", func() {
-			// wait for a health check cycle to pass
+			By("Waiting for an initial readiness report")
 			Eventually(func() []byte {
 				cmd := exec.Command("docker", "exec", policyController.Name, "/usr/bin/check-status", "-r")
 				stdoutStderr, _ := cmd.CombinedOutput()
@@ -137,7 +140,10 @@ var _ = Describe("kube-controllers FV tests", func() {
 				return stdoutStderr
 			}, 20*time.Second, 500*time.Millisecond).ShouldNot(ContainSubstring("initialized to false"))
 
+			By("Stopping the apiserver")
 			apiserver.Stop()
+
+			By("Waiting for the readiness to change")
 			Eventually(func() []byte {
 				cmd := exec.Command("docker", "exec", policyController.Name, "/usr/bin/check-status", "-r")
 				stdoutStderr, _ := cmd.CombinedOutput()
@@ -147,7 +153,7 @@ var _ = Describe("kube-controllers FV tests", func() {
 		})
 
 		It("should fail health check if etcd not running", func() {
-			// wait for a health check cycle to pass
+			By("Waiting for an initial readiness report")
 			Eventually(func() []byte {
 				cmd := exec.Command("docker", "exec", policyController.Name, "/usr/bin/check-status", "-r")
 				stdoutStderr, _ := cmd.CombinedOutput()
@@ -155,7 +161,10 @@ var _ = Describe("kube-controllers FV tests", func() {
 				return stdoutStderr
 			}, 20*time.Second, 500*time.Millisecond).ShouldNot(ContainSubstring("initialized to false"))
 
+			By("Stopping etcd")
 			etcd.Stop()
+
+			By("Waiting for the readiness to change")
 			Eventually(func() []byte {
 				cmd := exec.Command("docker", "exec", policyController.Name, "/usr/bin/check-status", "-r")
 				stdoutStderr, _ := cmd.CombinedOutput()
