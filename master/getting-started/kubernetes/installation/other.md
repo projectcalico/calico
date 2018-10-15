@@ -13,17 +13,6 @@ complete the following steps.
    {{site.prodname}} [system requirements](../requirements). If you don't,
    follow the steps in [Using kubeadm to create a cluster](http://kubernetes.io/docs/getting-started-guides/kubeadm/).
 
-1. If your cluster has RBAC enabled, issue the following command to
-   configure the roles and bindings that {{site.prodname}} requires.
-
-   ```
-   kubectl apply -f \
-   {{site.url}}/{{page.version}}/getting-started/kubernetes/installation/hosted/rbac-kdd.yaml
-   ```
-   > **Note**: You can also
-   > [view the manifest in your browser](hosted/rbac-kdd.yaml){:target="_blank"}.
-   {: .alert .alert-info}
-
 1. Ensure that the Kubernetes controller manager has the following flags
    set: <br>
    `--cluster-cidr=192.168.0.0/16` and `--allocate-node-cidrs=true`.

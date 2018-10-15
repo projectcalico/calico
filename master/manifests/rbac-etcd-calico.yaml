@@ -1,0 +1,4 @@
+---
+layout: null
+---
+{% include {{page.version}}/manifests/rbac-etcd-calico.yaml %}
