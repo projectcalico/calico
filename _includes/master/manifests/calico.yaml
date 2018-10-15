@@ -31,17 +31,27 @@ calico.yaml acccepts the following include flags:
 {% include {{page.version}}/manifests/calico-etcd-secrets.yaml %}
 ---
 {%- elsif include.datastore == "kdd" and include.typha == "true" %}
+{% include {{page.version}}/manifests/rbac-kdd-calico.yaml %}
+---
 {% include {{page.version}}/manifests/calico-typha.yaml %}
 ---
 {%- endif %}
-
+{% if include.datastore == "etcd" and include.network == "calico" %}
+{% include {{page.version}}/manifests/rbac-etcd-calico.yaml %}
+---
+{%- endif %}
 {% include {{page.version}}/manifests/calico-node.yaml datastore=include.datastore network=include.network variant_name=variant_name typha=include.typha app_layer_policy=include.app_layer_policy %}
 ---
 {%- if include.datastore == "etcd" and include.network == "flannel" %}
-
+{% include {{page.version}}/manifests/rbac-etcd-flannel.yaml %}
+---
 {% include {{page.version}}/manifests/configure-canal.yaml %}
 ---
 {%- endif %}
+{%- if include.datastore == "kdd" and include.network == "flannel" %}
+{% include {{page.version}}/manifests/rbac-kdd-flannel.yaml %}
+---
+{%- endif -%}
 {%- if include.datastore == "etcd" %}
 
 {% include {{page.version}}/manifests/calico-kube-controllers.yaml variant_name=variant_name %}

@@ -30,17 +30,6 @@ datastore type and number of nodes.
 
 ### Installing with the etcd datastore
 
-1. If your cluster has RBAC enabled, issue the following command to
-   configure the roles and bindings that {{site.prodname}} requires.
-
-   ```
-   kubectl apply -f \
-   {{site.url}}/{{page.version}}/getting-started/kubernetes/installation/rbac.yaml
-   ```
-   > **Note**: You can also
-   > [view the manifest in your browser](rbac.yaml){:target="_blank"}.
-   {: .alert .alert-info}
-
 1. Download the {{site.prodname}} networking manifest for etcd.
 
    ```bash
@@ -74,17 +63,6 @@ datastore type and number of nodes.
    > to kubeadm to set both Kubernetes controller flags.
    {: .alert .alert-success}
 
-1. If your cluster has RBAC enabled, issue the following command to
-   configure the roles and bindings that {{site.prodname}} requires.
-
-   ```
-   kubectl apply -f \
-   {{site.url}}/{{page.version}}/getting-started/kubernetes/installation/hosted/rbac-kdd.yaml
-   ```
-   > **Note**: You can also
-   > [view the manifest in your browser](hosted/rbac-kdd.yaml){:target="_blank"}.
-   {: .alert .alert-info}
-
 1. Issue the following command to install {{site.prodname}}.
 
    ```bash
@@ -106,17 +84,6 @@ datastore type and number of nodes.
    > **Tip**: On kubeadm, you can pass `--pod-network-cidr=192.168.0.0/16`
    > to kubeadm to set both Kubernetes controller flags.
    {: .alert .alert-success}
-
-1. If your cluster has RBAC enabled, issue the following command to
-   configure the roles and bindings that {{site.prodname}} requires.
-
-   ```
-   kubectl apply -f \
-   {{site.url}}/{{page.version}}/getting-started/kubernetes/installation/hosted/rbac-kdd.yaml
-   ```
-   > **Note**: You can also
-   > [view the manifest in your browser](hosted/rbac-kdd.yaml){:target="_blank"}.
-   {: .alert .alert-info}
 
 1. Download the {{site.prodname}} networking manifest for the Kubernetes API datastore.
 
