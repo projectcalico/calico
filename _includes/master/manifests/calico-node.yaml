@@ -228,6 +228,9 @@ spec:
             - mountPath: /lib/modules
               name: lib-modules
               readOnly: true
+            - mountPath: /run/xtables.lock
+              name: xtables-lock
+              readOnly: false
             - mountPath: /var/run/calico
               name: var-run-calico
               readOnly: false
@@ -337,8 +340,9 @@ spec:
                   name: canal-config
                   key: masquerade
           volumeMounts:
-          - name: run
-            mountPath: /run
+          - mountPath: /run/xtables.lock
+            name: xtables-lock
+            readOnly: false
           - name: flannel-cfg
             mountPath: /etc/kube-flannel/
   {%- elsif include.datastore == "etcd" %}
@@ -426,11 +430,12 @@ spec:
         - name: var-lib-calico
           hostPath:
             path: /var/lib/calico
+        - name: xtables-lock
+          hostPath:
+            path: /run/xtables.lock
+            type: FileOrCreate
 {%- if include.network == "flannel" and include.datastore == "kdd" %}
         # Used by flannel.
-        - name: run
-          hostPath:
-            path: /run
         - name: flannel-cfg
           configMap:
             name: canal-config
