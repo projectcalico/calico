@@ -308,10 +308,9 @@ ut: vendor
 
 .PHONY: fv
 ## Build and run the FV tests.
-GINKGO_FOCUS?=.*
 fv: tests/fv/fv.test image
 	@echo Running Go FVs.
-	cd tests/fv && ETCD_IMAGE=$(ETCD_IMAGE) HYPERKUBE_IMAGE=$(HYPERKUBE_IMAGE) CONTAINER_NAME=$(BUILD_IMAGE):latest-$(ARCH) PRIVATE_KEY=`pwd`/private.key ./fv.test $(GINKGO_ARGS) -ginkgo.slowSpecThreshold 30 -ginkgo.focus $(GINKGO_FOCUS)
+	cd tests/fv && ETCD_IMAGE=$(ETCD_IMAGE) HYPERKUBE_IMAGE=$(HYPERKUBE_IMAGE) CONTAINER_NAME=$(BUILD_IMAGE):latest-$(ARCH) PRIVATE_KEY=`pwd`/private.key ./fv.test $(GINKGO_ARGS) -ginkgo.slowSpecThreshold 30
 
 tests/fv/fv.test: $(shell find ./tests -type f -name '*.go' -print)
 	# We pre-build the test binary so that we can run it outside a container and allow it
