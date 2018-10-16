@@ -122,4 +122,3 @@ defaults:
       path: v3.3
     values:
       version: v3.3
-      sitemap: false 
