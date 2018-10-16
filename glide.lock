@@ -1,5 +1,5 @@
-hash: c56100ec302a394555e6c75cbd3b1975ea2790ecca1368c26cdfc426256c317b
-updated: 2018-10-12T04:09:53.760024047Z
+hash: f61e947a7bf0136b7bacb9d166e80b4a6ef157db60931f0498d744af631e334e
+updated: 2018-10-15T17:48:20.084082885-07:00
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -14,7 +14,7 @@ imports:
   - autorest/azure
   - autorest/date
 - name: github.com/beorn7/perks
-  version: 3a771d992973f24aa725d07868b467d1ddfceafb
+  version: 3ac7bf7a47d159a033b107610db8a1b6575507a4
   subpackages:
   - quantile
 - name: github.com/containernetworking/cni
@@ -106,13 +106,13 @@ imports:
 - name: github.com/json-iterator/go
   version: f2b4162afba35581b6d4a50d3b8f34e33c144682
 - name: github.com/kelseyhightower/envconfig
-  version: f611eb38b3875cc3bd991ca91c51d06446afa14c
+  version: dd1402a4d99de9ac2f396cd6fcb957bc2c695ec1
 - name: github.com/matttproud/golang_protobuf_extensions
-  version: c12348ce28de40eed0136aa2b644d0ee0650e56c
+  version: fc2b8d3a73c4867e51861bbdd5ae3c1f0869dd6a
   subpackages:
   - pbutil
 - name: github.com/mcuadros/go-version
-  version: 88e56e02bea1c203c99222c365fa52a69996ccac
+  version: 6d5863ca60fa6fe914b5fd43ed8533d7567c5b0b
 - name: github.com/modern-go/concurrent
   version: bacd9c7ef1dd9b15be4a9909b8ac7a4e313eec94
 - name: github.com/modern-go/reflect2
@@ -164,7 +164,7 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: c8711541c5a4cd6fe867fcdcd00fdf914df88f17
+  version: f575ac221a59d73d445c6e106f170a375d77eb9f
   subpackages:
   - lib/apiconfig
   - lib/apis/v1
@@ -196,7 +196,7 @@ imports:
   - lib/validator/v3
   - lib/watch
 - name: github.com/prometheus/client_golang
-  version: 967789050ba94deca04a5e84cce8ad472ce313c1
+  version: 5cec1d0429b02e4323e042eb04dafdb079ddf568
   subpackages:
   - prometheus
 - name: github.com/prometheus/client_model
@@ -226,7 +226,7 @@ imports:
 - name: github.com/vishvananda/netns
   version: 54f0e4339ce73702a0607f49922aaa1e749b418d
 - name: golang.org/x/crypto
-  version: a49355c7e3f8fe157a85be2f77e6e269a0f89602
+  version: 49796115aa4b964c318aad4f3084fdb41e9aa067
   subpackages:
   - ssh/terminal
 - name: golang.org/x/net
