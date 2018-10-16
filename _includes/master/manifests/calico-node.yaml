@@ -56,16 +56,56 @@ spec:
       # Minimize downtime during a rolling upgrade or deletion; tell Kubernetes to do a "force
       # deletion": https://kubernetes.io/docs/concepts/workloads/pods/pod/#termination-of-pods.
       terminationGracePeriodSeconds: 0
-{%- if include.app_layer_policy == "true" %}
-      # Adds a Flex Volume Driver that creates a per-pod Unix Domain Socket to allow Dikastes
-      # to communicate with Felix over the Policy Sync API.
+{%- if include.datastore == "kdd" or include.app_layer_policy == "true" %}
       initContainers:
-      - name: flexvol-driver
-        image: {{site.imageNames["flexvol"]}}:{{site.data.versions[page.version].first.components["flexvol"].version}}
-        imagePullPolicy: Always
-        volumeMounts:
-        - name: flexvol-driver-host
-          mountPath: /host/driver
+{%- endif %}
+{%- if include.datastore == "kdd" %}
+        # This init container installs the Calico CNI binaries
+        # and CNI network config file on each node.
+        - name: install-cni
+          image: {{site.imageNames["cni"]}}:{{site.data.versions[page.version].first.components["calico/cni"].version}}
+          command: ["/install-cni.sh"]
+          env:
+            # Name of the CNI config file to create.
+            - name: CNI_CONF_NAME
+              value: "10-{{include.variant_name | downcase}}.conflist"
+            # The CNI network config to install on each node.
+            - name: CNI_NETWORK_CONFIG
+              valueFrom:
+                configMapKeyRef:
+                  name: {{include.variant_name | downcase}}-config
+                  key: cni_network_config
+            # Set the hostname based on the k8s node name.
+            - name: KUBERNETES_NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+{%-  if include.network == "calico" %}
+            # CNI MTU Config variable
+            - name: CNI_MTU
+              valueFrom:
+                configMapKeyRef:
+                  name: {{include.variant_name | downcase}}-config
+                  key: veth_mtu
+{%- endif %}
+            # Prevents the container from sleeping forever.
+            - name: SLEEP
+              value: "false"
+          volumeMounts:
+            - mountPath: /host/opt/cni/bin
+              name: cni-bin-dir
+            - mountPath: /host/etc/cni/net.d
+              name: cni-net-dir
+{%- endif %}
+{%- if include.app_layer_policy == "true" %}
+        # Adds a Flex Volume Driver that creates a per-pod Unix Domain Socket to allow Dikastes
+        # to communicate with Felix over the Policy Sync API.
+        - name: flexvol-driver
+          image: {{site.imageNames["flexvol"]}}:{{site.data.versions[page.version].first.components["flexvol"].version}}
+          imagePullPolicy: Always
+          volumeMounts:
+          - name: flexvol-driver-host
+            mountPath: /host/driver
 {%- endif %}
       containers:
         # Runs {{site.nodecontainer}} container on each Kubernetes node.  This
@@ -245,6 +285,7 @@ spec:
             - name: policysync
               mountPath: /var/run/nodeagent
 {%- endif %}
+{%- if include.datastore == "etcd" %}
         # This container installs the {{site.prodname}} CNI binaries
         # and CNI network config file on each node.
         - name: install-cni
@@ -254,7 +295,6 @@ spec:
             # Name of the CNI config file to create.
             - name: CNI_CONF_NAME
               value: "10-{{include.variant_name | downcase}}.conflist"
-{%- if include.datastore == "etcd" %}
             # The location of the {{site.prodname}} etcd cluster.
             - name: ETCD_ENDPOINTS
               valueFrom:
@@ -281,33 +321,25 @@ spec:
                   name: canal-config
                   key: etcd_cert
   {%- endif %}
-{%- elsif include.datastore == "kdd" %}
-            # Set the hostname based on the k8s node name.
-            - name: KUBERNETES_NODE_NAME
-              valueFrom:
-                fieldRef:
-                  fieldPath: spec.nodeName
-{%- endif %}
             # The CNI network config to install on each node.
             - name: CNI_NETWORK_CONFIG
               valueFrom:
                 configMapKeyRef:
                   name: {{include.variant_name | downcase}}-config
                   key: cni_network_config
-{%-  if include.network == "calico" %}
+  {%-  if include.network == "calico" %}
             # CNI MTU Config variable
             - name: CNI_MTU
               valueFrom:
                 configMapKeyRef:
                   name: {{include.variant_name | downcase}}-config
                   key: veth_mtu
-{%- endif %}
+  {%- endif %}
           volumeMounts:
             - mountPath: /host/opt/cni/bin
               name: cni-bin-dir
             - mountPath: /host/etc/cni/net.d
               name: cni-net-dir
-{%- if include.datastore == "etcd" %}
             - mountPath: /calico-secrets
               name: etcd-certs
 {%- endif %}
