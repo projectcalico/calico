@@ -115,4 +115,9 @@ defaults:
     scope:
       path: v3.2
     values:
-      version: v3.2 
+      version: v3.2
+  -    
+    scope:
+      path: v3.3
+    values:
+      version: v3.3
