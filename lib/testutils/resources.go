@@ -14,6 +14,7 @@
 package testutils
 
 import (
+	"reflect"
 	"sort"
 	"sync"
 	"time"
@@ -33,20 +34,50 @@ import (
 	"k8s.io/apimachinery/pkg/conversion"
 )
 
-// ExpectResource is a test validation function that checks the specified resource
-// matches the key attributes: kind, namespace, name and the supplied Spec.  This
-// should be called within a Ginkgo test.
 const ExpectNoNamespace = ""
 
-func ExpectResource(res runtime.Object, kind, namespace, name string, spec interface{}, optionalDescription ...interface{}) {
+type resourceMatcher struct {
+	kind, namespace, name string
+	spec                  interface{}
+}
+
+func Resource(kind, namespace, name string, spec interface{}, optionalDescription ...interface{}) *resourceMatcher {
+	return &resourceMatcher{kind, namespace, name, spec}
+}
+
+// Another name for the same matcher (which reads better when checking a single item).
+var MatchResource = Resource
+
+func (m *resourceMatcher) Match(actual interface{}) (success bool, err error) {
+	// 'actual' here may be a resource struct like v3.HostEndpoint, or a pointer to a resource
+	// struct.  If it's a pointer we can immediately convert it to runtime.Object.
+	res, ok := actual.(runtime.Object)
+	if !ok {
+		// It must be a resource struct.  For conversion to runtime.Object we need a pointer
+		// to a resource struct, which we can get as follows.
+		ptr := reflect.New(reflect.TypeOf(actual))
+		ptr.Elem().Set(reflect.ValueOf(actual))
+		res = ptr.Interface().(runtime.Object)
+	}
 	ma := res.(v1.ObjectMetaAccessor)
-	ExpectWithOffset(1, ma.GetObjectMeta().GetNamespace()).To(Equal(namespace), optionalDescription...)
-	ExpectWithOffset(1, ma.GetObjectMeta().GetName()).To(Equal(name), optionalDescription...)
-	ExpectWithOffset(1, ma.GetObjectMeta().GetResourceVersion()).ToNot(BeEmpty(), optionalDescription...)
-	ExpectWithOffset(1, res.GetObjectKind().GroupVersionKind().Kind).To(Equal(kind), optionalDescription...)
-	ExpectWithOffset(1, res.GetObjectKind().GroupVersionKind().Group).To(Equal(apiv3.Group), optionalDescription...)
-	ExpectWithOffset(1, res.GetObjectKind().GroupVersionKind().Version).To(Equal(apiv3.VersionCurrent), optionalDescription...)
-	ExpectWithOffset(1, getSpec(res)).To(Equal(spec), optionalDescription...)
+	success = (ma.GetObjectMeta().GetNamespace() == m.namespace) &&
+		(ma.GetObjectMeta().GetName() == m.name) &&
+		(ma.GetObjectMeta().GetResourceVersion() != "") &&
+		(res.GetObjectKind().GroupVersionKind().Kind == m.kind) &&
+		(res.GetObjectKind().GroupVersionKind().Group == apiv3.Group) &&
+		(res.GetObjectKind().GroupVersionKind().Version == apiv3.VersionCurrent) &&
+		reflect.DeepEqual(getSpec(res), m.spec)
+	return
+}
+
+func (m *resourceMatcher) FailureMessage(actual interface{}) (message string) {
+	message = fmt.Sprintf("Expected\n\t%#v\nto match\n\t%#v", actual, m)
+	return
+}
+
+func (m *resourceMatcher) NegatedFailureMessage(actual interface{}) (message string) {
+	message = fmt.Sprintf("Expected\n\t%#v\nnot to match\n\t%#v", actual, m)
+	return
 }
 
 // TestResourceWatch is a test helper used to validate a set of events are received
@@ -228,14 +259,13 @@ func (t *testResourceWatcher) expectEvents(kind string, anyOrder bool, expectedE
 		Expect(actualEvent.Type).To(Equal(expectedEvent.Type), traceString)
 		if expectedEvent.Object != nil {
 			Expect(actualEvent.Object).NotTo(BeNil(), traceString)
-			ExpectResource(
-				actualEvent.Object,
+			Expect(actualEvent.Object).To(MatchResource(
 				kind,
 				expectedEvent.Object.(v1.ObjectMetaAccessor).GetObjectMeta().GetNamespace(),
 				expectedEvent.Object.(v1.ObjectMetaAccessor).GetObjectMeta().GetName(),
 				getSpec(expectedEvent.Object),
 				traceString,
-			)
+			))
 		} else {
 			Expect(actualEvent.Object).To(BeNil(), traceString)
 		}
@@ -244,14 +274,13 @@ func (t *testResourceWatcher) expectEvents(kind string, anyOrder bool, expectedE
 		// check for that if the datastore is KDD.
 		if expectedEvent.Previous != nil && (expectedEvent.Type == watch.Deleted || t.datastoreType != apiconfig.Kubernetes) {
 			Expect(actualEvent.Previous).NotTo(BeNil(), traceString)
-			ExpectResource(
-				actualEvent.Previous,
+			Expect(actualEvent.Previous).To(MatchResource(
 				kind,
 				expectedEvent.Previous.(v1.ObjectMetaAccessor).GetObjectMeta().GetNamespace(),
 				expectedEvent.Previous.(v1.ObjectMetaAccessor).GetObjectMeta().GetName(),
 				getSpec(expectedEvent.Previous),
 				traceString,
-			)
+			))
 		} else {
 			Expect(actualEvent.Previous).To(BeNil(), traceString)
 		}

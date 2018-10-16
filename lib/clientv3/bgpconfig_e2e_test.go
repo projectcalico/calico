@@ -92,7 +92,7 @@ var _ = testutils.E2eDatastoreDescribe("BGPConfiguration tests", testutils.Datas
 				Spec:       specInfo,
 			}, options.SetOptions{})
 			Expect(outError).NotTo(HaveOccurred())
-			testutils.ExpectResource(res1, apiv3.KindBGPConfiguration, testutils.ExpectNoNamespace, name1, specInfo)
+			Expect(res1).To(MatchResource(apiv3.KindBGPConfiguration, testutils.ExpectNoNamespace, name1, specInfo))
 
 			// Track the version of the original data for name1.
 			rv1_1 := res1.ResourceVersion
@@ -108,7 +108,7 @@ var _ = testutils.E2eDatastoreDescribe("BGPConfiguration tests", testutils.Datas
 			By("Getting BGPConfiguration (name1) and comparing the output against specInfo")
 			res, outError := c.BGPConfigurations().Get(ctx, name1, options.GetOptions{})
 			Expect(outError).NotTo(HaveOccurred())
-			testutils.ExpectResource(res, apiv3.KindBGPConfiguration, testutils.ExpectNoNamespace, name1, specInfo)
+			Expect(res).To(MatchResource(apiv3.KindBGPConfiguration, testutils.ExpectNoNamespace, name1, specInfo))
 			Expect(res.ResourceVersion).To(Equal(res1.ResourceVersion))
 
 			By("Getting BGPConfiguration (name2) before it is created")
@@ -119,8 +119,9 @@ var _ = testutils.E2eDatastoreDescribe("BGPConfiguration tests", testutils.Datas
 			By("Listing all the BGPConfigurations, expecting a single result with name1/specInfo")
 			outList, outError := c.BGPConfigurations().List(ctx, options.ListOptions{})
 			Expect(outError).NotTo(HaveOccurred())
-			Expect(outList.Items).To(HaveLen(1))
-			testutils.ExpectResource(&outList.Items[0], apiv3.KindBGPConfiguration, testutils.ExpectNoNamespace, name1, specInfo)
+			Expect(outList.Items).To(ConsistOf(
+				testutils.Resource(apiv3.KindBGPConfiguration, testutils.ExpectNoNamespace, name1, specInfo),
+			))
 
 			By("Creating a new BGPConfiguration with name2/specDebug")
 			res2, outError := c.BGPConfigurations().Create(ctx, &apiv3.BGPConfiguration{
@@ -128,26 +129,27 @@ var _ = testutils.E2eDatastoreDescribe("BGPConfiguration tests", testutils.Datas
 				Spec:       specDebug,
 			}, options.SetOptions{})
 			Expect(outError).NotTo(HaveOccurred())
-			testutils.ExpectResource(res2, apiv3.KindBGPConfiguration, testutils.ExpectNoNamespace, name2, specDebug)
+			Expect(res2).To(MatchResource(apiv3.KindBGPConfiguration, testutils.ExpectNoNamespace, name2, specDebug))
 
 			By("Getting BGPConfiguration (name2) and comparing the output against specDebug")
 			res, outError = c.BGPConfigurations().Get(ctx, name2, options.GetOptions{})
 			Expect(outError).NotTo(HaveOccurred())
-			testutils.ExpectResource(res2, apiv3.KindBGPConfiguration, testutils.ExpectNoNamespace, name2, specDebug)
+			Expect(res2).To(MatchResource(apiv3.KindBGPConfiguration, testutils.ExpectNoNamespace, name2, specDebug))
 			Expect(res.ResourceVersion).To(Equal(res2.ResourceVersion))
 
 			By("Listing all the BGPConfigurations, expecting a two results with name1/specInfo and name2/specDebug")
 			outList, outError = c.BGPConfigurations().List(ctx, options.ListOptions{})
 			Expect(outError).NotTo(HaveOccurred())
-			Expect(outList.Items).To(HaveLen(2))
-			testutils.ExpectResource(&outList.Items[0], apiv3.KindBGPConfiguration, testutils.ExpectNoNamespace, name1, specInfo)
-			testutils.ExpectResource(&outList.Items[1], apiv3.KindBGPConfiguration, testutils.ExpectNoNamespace, name2, specDebug)
+			Expect(outList.Items).To(ConsistOf(
+				testutils.Resource(apiv3.KindBGPConfiguration, testutils.ExpectNoNamespace, name1, specInfo),
+				testutils.Resource(apiv3.KindBGPConfiguration, testutils.ExpectNoNamespace, name2, specDebug),
+			))
 
 			By("Updating BGPConfiguration name1 with specDebug")
 			res1.Spec = specDebug
 			res1, outError = c.BGPConfigurations().Update(ctx, res1, options.SetOptions{})
 			Expect(outError).NotTo(HaveOccurred())
-			testutils.ExpectResource(res1, apiv3.KindBGPConfiguration, testutils.ExpectNoNamespace, name1, specDebug)
+			Expect(res1).To(MatchResource(apiv3.KindBGPConfiguration, testutils.ExpectNoNamespace, name1, specDebug))
 
 			By("Attempting to update the BGPConfiguration without a Creation Timestamp")
 			res, outError = c.BGPConfigurations().Update(ctx, &apiv3.BGPConfiguration{
@@ -188,30 +190,32 @@ var _ = testutils.E2eDatastoreDescribe("BGPConfiguration tests", testutils.Datas
 				By("Getting BGPConfiguration (name1) with the original resource version and comparing the output against specInfo")
 				res, outError = c.BGPConfigurations().Get(ctx, name1, options.GetOptions{ResourceVersion: rv1_1})
 				Expect(outError).NotTo(HaveOccurred())
-				testutils.ExpectResource(res, apiv3.KindBGPConfiguration, testutils.ExpectNoNamespace, name1, specInfo)
+				Expect(res).To(MatchResource(apiv3.KindBGPConfiguration, testutils.ExpectNoNamespace, name1, specInfo))
 				Expect(res.ResourceVersion).To(Equal(rv1_1))
 			}
 
 			By("Getting BGPConfiguration (name1) with the updated resource version and comparing the output against specDebug")
 			res, outError = c.BGPConfigurations().Get(ctx, name1, options.GetOptions{ResourceVersion: rv1_2})
 			Expect(outError).NotTo(HaveOccurred())
-			testutils.ExpectResource(res, apiv3.KindBGPConfiguration, testutils.ExpectNoNamespace, name1, specDebug)
+			Expect(res).To(MatchResource(apiv3.KindBGPConfiguration, testutils.ExpectNoNamespace, name1, specDebug))
 			Expect(res.ResourceVersion).To(Equal(rv1_2))
 
 			if config.Spec.DatastoreType != apiconfig.Kubernetes {
 				By("Listing BGPConfigurations with the original resource version and checking for a single result with name1/specInfo")
 				outList, outError = c.BGPConfigurations().List(ctx, options.ListOptions{ResourceVersion: rv1_1})
 				Expect(outError).NotTo(HaveOccurred())
-				Expect(outList.Items).To(HaveLen(1))
-				testutils.ExpectResource(&outList.Items[0], apiv3.KindBGPConfiguration, testutils.ExpectNoNamespace, name1, specInfo)
+				Expect(outList.Items).To(ConsistOf(
+					testutils.Resource(apiv3.KindBGPConfiguration, testutils.ExpectNoNamespace, name1, specInfo),
+				))
 			}
 
 			By("Listing BGPConfigurations with the latest resource version and checking for two results with name1/specDebug and name2/specDebug")
 			outList, outError = c.BGPConfigurations().List(ctx, options.ListOptions{})
 			Expect(outError).NotTo(HaveOccurred())
-			Expect(outList.Items).To(HaveLen(2))
-			testutils.ExpectResource(&outList.Items[0], apiv3.KindBGPConfiguration, testutils.ExpectNoNamespace, name1, specDebug)
-			testutils.ExpectResource(&outList.Items[1], apiv3.KindBGPConfiguration, testutils.ExpectNoNamespace, name2, specDebug)
+			Expect(outList.Items).To(ConsistOf(
+				testutils.Resource(apiv3.KindBGPConfiguration, testutils.ExpectNoNamespace, name1, specDebug),
+				testutils.Resource(apiv3.KindBGPConfiguration, testutils.ExpectNoNamespace, name2, specDebug),
+			))
 
 			if config.Spec.DatastoreType != apiconfig.Kubernetes {
 				By("Deleting BGPConfiguration (name1) with the old resource version")
@@ -223,7 +227,7 @@ var _ = testutils.E2eDatastoreDescribe("BGPConfiguration tests", testutils.Datas
 			By("Deleting BGPConfiguration (name1) with the new resource version")
 			dres, outError := c.BGPConfigurations().Delete(ctx, name1, options.DeleteOptions{ResourceVersion: rv1_2})
 			Expect(outError).NotTo(HaveOccurred())
-			testutils.ExpectResource(dres, apiv3.KindBGPConfiguration, testutils.ExpectNoNamespace, name1, specDebug)
+			Expect(dres).To(MatchResource(apiv3.KindBGPConfiguration, testutils.ExpectNoNamespace, name1, specDebug))
 
 			if config.Spec.DatastoreType != apiconfig.Kubernetes {
 				By("Updating BGPConfiguration name2 with a 2s TTL and waiting for the entry to be deleted")
@@ -257,7 +261,7 @@ var _ = testutils.E2eDatastoreDescribe("BGPConfiguration tests", testutils.Datas
 				By("Attempting to deleting BGPConfiguration (name2)")
 				dres, outError = c.BGPConfigurations().Delete(ctx, name2, options.DeleteOptions{})
 				Expect(outError).NotTo(HaveOccurred())
-				testutils.ExpectResource(dres, apiv3.KindBGPConfiguration, testutils.ExpectNoNamespace, name2, specDebug)
+				Expect(dres).To(MatchResource(apiv3.KindBGPConfiguration, testutils.ExpectNoNamespace, name2, specDebug))
 			}
 
 			By("Attempting to deleting BGPConfiguration (name2) again")
@@ -281,13 +285,13 @@ var _ = testutils.E2eDatastoreDescribe("BGPConfiguration tests", testutils.Datas
 				Spec:       specDefault1,
 			}, options.SetOptions{})
 			Expect(outError).NotTo(HaveOccurred())
-			testutils.ExpectResource(resDefault, apiv3.KindBGPConfiguration, testutils.ExpectNoNamespace, nameDefault, specDefault1)
+			Expect(resDefault).To(MatchResource(apiv3.KindBGPConfiguration, testutils.ExpectNoNamespace, nameDefault, specDefault1))
 
 			By("Updating the default BGPConfiguration with node to node mesh disabled and a different default AS number")
 			resDefault.Spec = specDefault2
 			resDefault, outError = c.BGPConfigurations().Update(ctx, resDefault, options.SetOptions{})
 			Expect(outError).NotTo(HaveOccurred())
-			testutils.ExpectResource(resDefault, apiv3.KindBGPConfiguration, testutils.ExpectNoNamespace, nameDefault, specDefault2)
+			Expect(resDefault).To(MatchResource(apiv3.KindBGPConfiguration, testutils.ExpectNoNamespace, nameDefault, specDefault2))
 
 			By("Attempting to create a non-default BGPConfiguration with node to node mesh enabled and a default AS number")
 			_, outError = c.BGPConfigurations().Create(ctx, &apiv3.BGPConfiguration{
