@@ -1,4 +1,4 @@
 ---
 layout: null
 ---
-{% include {{page.version}}/manifests/rbac-kdd-flannel.yaml %}
+{% include {{page.version}}/manifests/rbac.yaml datastore=kdd network=flannel %}

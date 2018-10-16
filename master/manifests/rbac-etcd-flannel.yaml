@@ -1,4 +1,4 @@
 ---
 layout: null
 ---
-{% include {{page.version}}/manifests/rbac-etcd-flannel.yaml %}
+{% include {{page.version}}/manifests/rbac.yaml datastore=etcd network=flannel %}

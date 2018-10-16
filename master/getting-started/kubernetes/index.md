@@ -88,16 +88,16 @@ the host. Instead, continue directly to the
    You should see the following output.
 
    ```
-   clusterrole.rbac.authorization.k8s.io "calico-kube-controllers" created
-   clusterrolebinding.rbac.authorization.k8s.io "calico-kube-controllers" created
-   clusterrole.rbac.authorization.k8s.io "calico-node" created
-   clusterrolebinding.rbac.authorization.k8s.io "calico-node" created
    configmap "calico-config" created
    secret "calico-etcd-secrets" created
    daemonset.extensions "calico-node" created
    serviceaccount "calico-node" created
    deployment.extensions "calico-kube-controllers" created
    serviceaccount "calico-kube-controllers" created
+   clusterrole.rbac.authorization.k8s.io "calico-kube-controllers" created
+   clusterrolebinding.rbac.authorization.k8s.io "calico-kube-controllers" created
+   clusterrole.rbac.authorization.k8s.io "calico-node" created
+   clusterrolebinding.rbac.authorization.k8s.io "calico-node" created
    ```
 
 1. Confirm that all of the pods are running with the following command.
