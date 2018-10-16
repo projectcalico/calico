@@ -46,6 +46,7 @@ spec:
         # add-on, ensuring it gets priority scheduling and that its resources are reserved
         # if it ever gets evicted.
         scheduler.alpha.kubernetes.io/critical-pod: ''
+        cluster-autoscaler.kubernetes.io/safe-to-evict: 'true'
     spec:
       nodeSelector:
         beta.kubernetes.io/os: linux
