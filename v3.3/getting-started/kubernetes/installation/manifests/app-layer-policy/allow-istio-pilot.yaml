@@ -1,0 +1,19 @@
+# This NetworkPolicy allows pods egress access the to 
+# Istio Pilot service in the istio-system namespace.
+
+apiVersion: projectcalico.org/v3
+kind: NetworkPolicy
+metadata:
+  name: allow-istio-pilot
+spec:
+  selector: all()
+  types:
+    - Egress
+  order: 0
+  egress:
+    - action: Allow
+      protocol: TCP
+      destination:
+        selector: projectcalico.org/namespace == 'istio-system' && istio == 'pilot'
+        ports:
+          - 15011

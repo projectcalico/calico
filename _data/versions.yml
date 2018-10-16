@@ -1571,6 +1571,38 @@ v2.1:
       version: 1.4.2
       url: http://git.openstack.org/cgit/openstack/networking-calico/commit/?h=1.4.2
 
+# v3.3 is still pre-GA. This section simply exists for development purposes,
+# and will be deleted when v3.3.0 is promoted to GA.
+v3.3:
+- title: v3.3.0-pre
+  components:
+    calico/node:
+      version: release-v3.3
+      url: ""
+    calicoctl:
+      version: release-v3.3
+      url: "https://www.projectcalico.org/builds/calicoctl"
+    calico/cni:
+      version: release-v3.3
+      url: ""
+    calico/kube-controllers:
+      version: release-v3.3
+      url: ""
+    networking-calico:
+      version: release-v3.3
+      url: ""
+    typha:
+      version: release-v3.3
+      url: ""
+    flannel:
+      version: release-v3.3
+      url: ""
+    calico/dikastes:
+      version: release-v3.3
+      url: ""
+    flexvol:
+      version: release-v3.3
+      url: ""
 
 # The master release stream is used to generate the master version of the docs.  
 master:
@@ -1589,17 +1621,11 @@ master:
      calico/cni:
       version: master
       url: ""
-     libnetwork-plugin:
-      version: master
-      url: ""
      calico/kube-controllers:
       version: master
       url: ""
      networking-calico:
       version: master
-      url: ""
-     calico/routereflector:
-      version: v0.5.0
       url: ""
      flannel:
       version: v0.9.1
