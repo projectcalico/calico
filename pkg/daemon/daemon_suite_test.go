@@ -1,4 +1,4 @@
-// Copyright (c) 2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2018 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,6 +16,7 @@ package daemon_test
 
 import (
 	. "github.com/onsi/ginkgo"
+	"github.com/onsi/ginkgo/reporters"
 	. "github.com/onsi/gomega"
 
 	"testing"
@@ -29,5 +30,6 @@ func init() {
 
 func TestDaemon(t *testing.T) {
 	RegisterFailHandler(Fail)
-	RunSpecs(t, "Daemon Suite")
+	junitReporter := reporters.NewJUnitReporter("../../report/daemon_suite.xml")
+	RunSpecsWithDefaultAndCustomReporters(t, "Daemon Suite", []Reporter{junitReporter})
 }

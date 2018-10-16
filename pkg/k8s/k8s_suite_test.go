@@ -1,4 +1,4 @@
-// Copyright (c) 2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2018 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -20,6 +20,8 @@ import (
 
 	"testing"
 
+	"github.com/onsi/ginkgo/reporters"
+
 	"github.com/projectcalico/libcalico-go/lib/testutils"
 )
 
@@ -29,5 +31,6 @@ func init() {
 
 func TestK8s(t *testing.T) {
 	RegisterFailHandler(Fail)
-	RunSpecs(t, "K8s Suite")
+	junitReporter := reporters.NewJUnitReporter("../../report/k8s_suite.xml")
+	RunSpecsWithDefaultAndCustomReporters(t, "K8s Suite", []Reporter{junitReporter})
 }
