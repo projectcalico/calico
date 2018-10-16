@@ -117,3 +117,8 @@ defaults:
     values:
       version: v3.2
       sitemap: true
+  -
+    scope:
+      path: v3.3
+    values:
+      version: v3.3
