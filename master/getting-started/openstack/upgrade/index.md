@@ -25,7 +25,7 @@ to your OpenStack deployment.
 
 ## Upgrade from an earlier {{site.prodname}} v3 release
 
-The data store is compatible, so you only need to **[upgrade your {{site.prodname}}
+The datastore is compatible, so you only need to **[upgrade your {{site.prodname}}
 packages](/{{page.version}}/getting-started/openstack/upgrade/upgrade)**, first on each
 compute node, then on the controllers.
 
@@ -35,8 +35,8 @@ You must first [upgrade](/v2.6/getting-started/openstack/upgrade) to {{site.prod
 [v2.6.5](https://github.com/projectcalico/calico/releases), as a separate step, before you can
 upgrade to {{site.prodname}} {{site.data.versions[page.version].first.title}}.
 
-Then please take the following steps, which include converting all {{site.prodname}} data
-store data from the etcdv2 API and format to etcdv3.
+Then please take the following steps, which include converting all {{site.prodname}}
+datastore data from the etcdv2 API and format to etcdv3.
 
 1. Set up an etcdv3 cluster, if you don't already have etcdv3 capability, either by [upgrading the etcd software of your existing etcdv2 cluster](https://coreos.com/etcd/docs/latest/upgrades/upgrade_3_0.html), or by [installing an etcdv3 cluster on new servers](https://coreos.com/etcd/docs/latest/op-guide/clustering.html).
 
@@ -45,7 +45,7 @@ store data from the etcdv2 API and format to etcdv3.
    > move the data from the etcdv2 API to the etcdv3 API.  This requires an etcd v3.x server.
    {: .alert .alert-success}
 
-1. If you have added {{site.prodname}} objects in addition to those that are derived automatically (by our Neutron driver) from OpenStack networks/security groups (e.g. Host Endpoints, Host Protection policies, etc) you will need to follow these additional steps to migrate that data:
+1. If you have added {{site.prodname}} objects in addition to those that are derived automatically (by our Neutron driver) from OpenStack networks/security groups (e.g., Host Endpoints, Host Protection policies, etc) you will need to follow these additional steps to migrate that data:
 
     1. Install `etcdctl`, if you don't already have it.
 
@@ -59,5 +59,5 @@ store data from the etcdv2 API and format to etcdv3.
 
 1. **[Delete old data](/{{page.version}}/getting-started/openstack/upgrade/delete#deleting-calico-data-from-etcdv2-after-a-successful-migration-and-upgrade)** from etcd.
 
-1. Finally, if you have any calico resource manifests stored offline (e.g. files checked into code management systems), you should update them to the new API using the conversion tool:
-  **[Convert any offline {{site.prodname}} data from V1 to V3](/{{page.version}}/getting-started/openstack/upgrade/convert)**
+1. Finally, if you have any {{site.prodname}} resource manifests stored offline (e.g., files checked into code management systems), you should update them to the new API using the conversion tool:
+  **[Convert any offline {{site.prodname}} data from v1 to v3](/{{page.version}}/getting-started/openstack/upgrade/convert)**
