@@ -97,6 +97,8 @@ be a release candidate.
 
 1. Remove `sitemap: false` from the previous release in `_config.yml`.
 
+1. If appropriate, update the list of tested Kubernetes versions in `vX.Y/getting-started/kubernetes/requirements.md`.
+
 1. Follow the steps in [writing release notes](#release-notes) to generate candidate release notes.
 
    Then, add the newly created release note file to git.
