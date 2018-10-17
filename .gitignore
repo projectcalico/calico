@@ -16,3 +16,4 @@ dist/kube-controllers
 .go-pkg-cache
 st-kubeconfig.yaml
 *.coverprofile
+/report/*.xml
