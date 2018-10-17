@@ -113,12 +113,13 @@ var _ = infrastructure.DatastoreDescribe("IPIP topology before adding host IPs t
 		infra.Stop()
 	})
 
-	It("should use the --random-fully flag in the MASQUERADE rules", func() {
+	It("should succeed in adding MASQUERADE rules (i.e. implies that it detects that "+
+		"--random-fully is not available in Alpine 3.7)", func() {
 		for _, felix := range felixes {
 			Eventually(func() string {
 				out, _ := felix.ExecOutput("iptables-save", "-c")
 				return out
-			}, "10s", "100ms").Should(ContainSubstring("--random-fully"))
+			}, "10s", "100ms").Should(ContainSubstring("MASQUERADE"))
 		}
 	})
 
