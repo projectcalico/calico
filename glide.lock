@@ -1,5 +1,5 @@
-hash: cba0ee8f62c07d05fb47373b19e3504c58f27cbcd8e939b672adc4a3c75c8c9a
-updated: 2018-10-17T08:36:57.711546126Z
+hash: 908101f631c3a18cdc47d9736ae9c0a0f867dc96177af210966886e108522be7
+updated: 2018-10-17T10:25:42.511523121Z
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -254,10 +254,9 @@ imports:
   - pkg/syncproto
   - pkg/tlsutils
 - name: github.com/prometheus/client_golang
-  version: 1cafe34db7fdec6022e17e00e1c1ea501022f3e4
+  version: 5b23715facdef1452016bae512489c3cdf82458c
   subpackages:
   - prometheus
-  - prometheus/internal
   - prometheus/promhttp
   - prometheus/push
 - name: github.com/prometheus/client_model
@@ -265,7 +264,7 @@ imports:
   subpackages:
   - go
 - name: github.com/prometheus/common
-  version: bcb74de08d37a417cb6789eec1d6c810040f0470
+  version: c7de2306084e37d54b8be01f3541a8464345e9a5
   subpackages:
   - expfmt
   - internal/bitbucket.org/ww/goautoneg
