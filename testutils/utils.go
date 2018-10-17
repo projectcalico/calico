@@ -23,6 +23,7 @@ import (
 	"github.com/containernetworking/cni/pkg/types/020"
 	"github.com/containernetworking/cni/pkg/types/current"
 	"github.com/containernetworking/plugins/pkg/ns"
+	"github.com/containernetworking/plugins/pkg/testutils"
 	"github.com/mcuadros/go-version"
 	"github.com/onsi/ginkgo"
 	"github.com/onsi/gomega/gexec"
@@ -244,7 +245,7 @@ func RunIPAMPlugin(netconf, command, args, cniVersion string) (*current.Result, 
 }
 
 func CreateContainerNamespace() (containerNs ns.NetNS, containerId string, err error) {
-	containerNs, err = ns.NewNS()
+	containerNs, err = testutils.NewNS()
 	if err != nil {
 		return nil, "", err
 	}
@@ -346,7 +347,7 @@ func RunCNIPluginWithId(
 	log.Debugf("Calling CNI plugin with the following env vars: %v", env)
 	var r types.Result
 	pluginPath := fmt.Sprintf("%s/%s", os.Getenv("BIN"), os.Getenv("PLUGIN"))
-	r, err = invoke.ExecPluginWithResult(pluginPath, []byte(netconf), args)
+	r, err = invoke.ExecPluginWithResult(pluginPath, []byte(netconf), args, nil)
 	if err != nil {
 		return
 	}

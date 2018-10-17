@@ -19,6 +19,7 @@ import (
 	"net"
 	"os"
 	"syscall"
+	"time"
 
 	"github.com/containernetworking/cni/pkg/skel"
 	"github.com/containernetworking/cni/pkg/types/current"
@@ -415,4 +416,48 @@ func writeProcSys(path, value string) error {
 		err = err1
 	}
 	return err
+}
+
+// CleanUpNamespace deletes the devices in the network namespace.
+func CleanUpNamespace(args *skel.CmdArgs, logger *logrus.Entry) error {
+	// Only try to delete the device if a namespace was passed in.
+	if args.Netns != "" {
+		logger.WithFields(logrus.Fields{
+			"netns": args.Netns,
+			"iface": args.IfName,
+		}).Debug("Checking namespace & device exist.")
+		devErr := ns.WithNetNSPath(args.Netns, func(_ ns.NetNS) error {
+			_, err := netlink.LinkByName(args.IfName)
+			return err
+		})
+
+		if devErr == nil {
+			fmt.Fprintf(os.Stderr, "Calico CNI deleting device in netns %s\n", args.Netns)
+			// Deleting the veth has been seen to hang on some kernel version. Timeout the command if it takes too long.
+			ch := make(chan error, 1)
+
+			go func() {
+				err := ns.WithNetNSPath(args.Netns, func(_ ns.NetNS) error {
+					return ip.DelLinkByName(args.IfName)
+				})
+
+				ch <- err
+			}()
+
+			select {
+			case err := <-ch:
+				if err != nil {
+					return err
+				} else {
+					fmt.Fprintf(os.Stderr, "Calico CNI deleted device in netns %s\n", args.Netns)
+				}
+			case <-time.After(5 * time.Second):
+				return fmt.Errorf("Calico CNI timed out deleting device in netns %s", args.Netns)
+			}
+		} else {
+			logger.WithField("ifName", args.IfName).Info("veth does not exist, no need to clean up.")
+		}
+	}
+
+	return nil
 }

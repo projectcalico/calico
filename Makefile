@@ -192,7 +192,7 @@ $(BIN)/calico $(BIN)/calico-ipam: $(SRCFILES) vendor
 	-e GOARCH=$(ARCH) \
 	-e LOCAL_USER_ID=$(LOCAL_USER_ID) \
 	-v $(CURDIR):/go/src/$(PACKAGE_NAME):ro \
-	-v $(CURDIR)/$(BIN):/go/src/$(PACKAGE_NAME)/$(BIN) \
+	-v $(CURDIR)/$(BIN):/go/src/$(PACKAGE_NAME)/$(BIN):rw \
 	-v $(CURDIR)/.go-pkg-cache:/go-cache/:rw \
 	$(LOCAL_BUILD_MOUNTS) \
 	-w /go/src/$(PACKAGE_NAME) \
