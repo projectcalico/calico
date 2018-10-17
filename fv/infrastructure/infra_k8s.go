@@ -25,6 +25,7 @@ import (
 	"sync"
 	"time"
 
+	. "github.com/onsi/gomega"
 	log "github.com/sirupsen/logrus"
 	"k8s.io/api/core/v1"
 	apierrs "k8s.io/apimachinery/pkg/api/errors"
@@ -505,8 +506,8 @@ func (kds *K8sDatastoreInfra) AddAllowToDatastore(selector string) error {
 	return err
 }
 
-func (kds *K8sDatastoreInfra) AddDefaultAllow() error {
-	return nil
+func (kds *K8sDatastoreInfra) AddDefaultAllow() {
+	return
 }
 
 func (kds *K8sDatastoreInfra) AddDefaultDeny() error {
