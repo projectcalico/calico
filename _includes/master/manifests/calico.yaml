@@ -26,7 +26,6 @@ calico.yaml acccepts the following include flags:
 
 {% include {{page.version}}/manifests/calico-config.yaml datastore=include.datastore network=include.network calico_ipam=include.calico_ipam variant_name=variant_name typha=include.typha %}
 ---
-
 {% if include.datastore == "etcd" %}
 {% include {{page.version}}/manifests/calico-etcd-secrets.yaml %}
 ---
@@ -34,18 +33,16 @@ calico.yaml acccepts the following include flags:
 {% include {{page.version}}/manifests/calico-typha.yaml %}
 ---
 {%- endif %}
-
 {% include {{page.version}}/manifests/calico-node.yaml datastore=include.datastore network=include.network variant_name=variant_name typha=include.typha app_layer_policy=include.app_layer_policy %}
 ---
 {%- if include.datastore == "etcd" and include.network == "flannel" %}
-
 {% include {{page.version}}/manifests/configure-canal.yaml %}
 ---
 {%- endif %}
 {%- if include.datastore == "etcd" %}
-
 {% include {{page.version}}/manifests/calico-kube-controllers.yaml variant_name=variant_name %}
 {%- elsif include.datastore == "kdd" %}
-
 {% include {{page.version}}/manifests/kdd-crds.yaml network=include.network %}
 {%- endif -%}
+---
+{% include {{page.version}}/manifests/rbac.yaml datastore=include.datastore network=include.network calico_ipam=include.calico_ipam variant_name=variant_name typha=include.typha %}

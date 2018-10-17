@@ -204,11 +204,29 @@ tokens or certificates to present which identify it as the configured API user.
 Detailed instructions for configuring Kubernetes RBAC are outside the scope of this document.  For more information,
 please see the [upstream Kubernetes documentation](https://kubernetes.io/docs/admin/authorization/rbac/) on the topic.
 
-The following YAML file defines the necessary API permissions required by {{site.prodname}}
-when using the etcd datastore.
+The permissions required by the {{site.prodname}} components vary by datastore type and networking provider.
+Apply the manifest appropriate to your cluster configuration.
 
-```
-kubectl apply -f {{site.url}}/{{page.version}}/getting-started/kubernetes/installation/rbac.yaml
-```
+- **Kubernetes API datastore with {{site.prodname}} networking**:
 
-[Click here to view the above yaml directly.](rbac.yaml)
+   ```
+   kubectl apply -f {{site.url}}/{{page.version}}/manifests/rbac-kdd-calico.yaml
+   ```
+
+- **Kubernetes API datastore with flannel networking**:
+
+   ```
+   kubectl apply -f {{site.url}}/{{page.version}}/manifests/rbac-kdd-flannel.yaml
+   ```
+
+- **etcd datastore with {{site.prodname}} networking**:
+
+   ```
+   kubectl apply -f {{site.url}}/{{page.version}}/manifests/rbac-etcd-calico.yaml
+   ```
+
+- **etcd datastore with flannel networking**:
+
+   ```
+   kubectl apply -f {{site.url}}/{{page.version}}/manifests/rbac-etcd-flannel.yaml
+   ```

@@ -1,5 +1,5 @@
 ---
-title: Upgrading Calico 
+title: Upgrading Calico
 canonical_url: 'https://docs.projectcalico.org/v3.2/getting-started/kubernetes/upgrade/upgrade'
 ---
 
@@ -18,17 +18,6 @@ and your datastore type.
 
 
 ## Upgrading an installation that uses the Kubernetes API datastore
-   
-1. If your configuration uses RBAC, use the following command to create the roles 
-   and role bindings for {{site.prodname}}'s components:
-
-   ```
-   kubectl apply -f \
-   {{site.url}}/{{page.version}}/getting-started/kubernetes/installation/hosted/rbac-kdd.yaml
-   ```
-   > **Note**: You can also 
-   > [view the manifest in your browser]({{site.url}}/{{page.version}}/getting-started/kubernetes/installation/hosted/rbac-kdd.yaml){:target="_blank"}.
-   {: .alert .alert-info}
 
 1. Download the {{page.version}} manifest that corresponds to your original installation method.
 
@@ -52,24 +41,24 @@ and your datastore type.
    {{site.url}}/{{page.version}}/getting-started/kubernetes/installation/hosted/kubernetes-datastore/policy-only/1.7/calico.yaml \
    -O
    ```
-   
-   > **Note**: If you manually modified the manifest, you must manually apply the 
+
+   > **Note**: If you manually modified the manifest, you must manually apply the
    > same changes to the downloaded manifest.
    {: .alert .alert-info}
 
-1. Use the following command to initiate a rolling update, after replacing 
+1. Use the following command to initiate a rolling update, after replacing
    `<manifest-file-name>` with the file name of your {{page.version}} manifest.
 
    ```
    kubectl apply -f <manifest-file-name>
    ```
-   
+
 1. Watch the status of the upgrade as follows.
 
    ```
    watch kubectl get pods -n kube-system
    ```
-   
+
    Verify that the status of all {{site.prodname}} pods indicate `Running`.
 
    ```
@@ -86,10 +75,10 @@ and your datastore type.
    ```bash
    calicoctl version
    ```
-   
+
    It should return a `Cluster Version` of `{{page.version}}.x`.
-   
-   > **Note**: If upgrading from {{site.prodname}} 2.6.x and an error occurs during 
+
+   > **Note**: If upgrading from {{site.prodname}} 2.6.x and an error occurs during
    > the upgrade, refer to [Downgrading Calico](/{{page.version}}/getting-started/kubernetes/upgrade/downgrade).
    {: .alert .alert-info}
 
@@ -97,17 +86,6 @@ and your datastore type.
 
 
 ## Upgrading an installation that uses an etcd datastore
-
-1. If your configuration uses RBAC, use the following command to create the roles 
-   and role bindings for {{site.prodname}}'s components:
-
-   ```
-   kubectl apply -f \
-   {{site.url}}/{{page.version}}/getting-started/kubernetes/installation/rbac.yaml
-   ```
-   > **Note**: You can also 
-   > [view the manifest in your browser]({{site.url}}/{{page.version}}/getting-started/kubernetes/installation/rbac.yaml){:target="_blank"}.
-   {: .alert .alert-info}
 
 1. Download the {{page.version}} manifest that corresponds to your original installation method.
 
@@ -124,25 +102,25 @@ and your datastore type.
    {{site.url}}/{{page.version}}/getting-started/kubernetes/installation/hosted/canal/canal-etcd.yaml \
    -O
    ```
-   
+
    > **Note**: You must must manually apply the changes you made to the manifest
    > during installation to the downloaded {{page.version}} manifest. At a minimum,
    > you must set the `etcd_endpoints` value.
    {: .alert .alert-info}
 
-1. Use the following command to initiate a rolling update, after replacing 
+1. Use the following command to initiate a rolling update, after replacing
    `<manifest-file-name>` with the file name of your {{page.version}} manifest.
 
    ```
    kubectl apply -f <manifest-file-name>
    ```
-   
+
 1. Watch the status of the upgrade as follows.
 
    ```
    watch kubectl get pods -n kube-system
    ```
-   
+
    Verify that the status of all {{site.prodname}} pods indicate `Running`.
 
    ```
@@ -155,8 +133,8 @@ and your datastore type.
    > **Tip**: The {{site.noderunning}} pods will report `1/2` in the `READY` column, as shown.
    {: .alert .alert-success}
 
-   > **Note**: If upgrading from {{site.prodname}} 2.6.x and an error occurs during 
-   > the upgrade, refer to an error occurs during the upgrade, refer to 
+   > **Note**: If upgrading from {{site.prodname}} 2.6.x and an error occurs during
+   > the upgrade, refer to an error occurs during the upgrade, refer to
    > [Downgrading {{site.prodname}}](/{{page.version}}/getting-started/kubernetes/upgrade/downgrade).
    {: .alert .alert-info}
 
@@ -168,16 +146,16 @@ and your datastore type.
    ```bash
    calicoctl version
    ```
-   
-   It should return a `Cluster Version` of `{{page.version}}.x`.
-   
-1. If you are upgrading from {{site.prodname}} 3.x, skip to the next step. Otherwise, 
-   for those upgrading from {{site.prodname}} 2.6.x, wait for some time to really 
-   ensure that the upgrade succeeded and no problems ensued. Then complete the 
-   upgrade by running `calico-upgrade complete`. After this, you can once again schedule 
-   pods and make changes to configuration and policy. 
 
-   > **Important**: If you experience errors after running `calico-upgrade complete`, 
+   It should return a `Cluster Version` of `{{page.version}}.x`.
+
+1. If you are upgrading from {{site.prodname}} 3.x, skip to the next step. Otherwise,
+   for those upgrading from {{site.prodname}} 2.6.x, wait for some time to really
+   ensure that the upgrade succeeded and no problems ensued. Then complete the
+   upgrade by running `calico-upgrade complete`. After this, you can once again schedule
+   pods and make changes to configuration and policy.
+
+   > **Important**: If you experience errors after running `calico-upgrade complete`,
    > such as an inability to schedule pods, [downgrade {{site.prodname}} as soon as possible](/{{page.version}}/getting-started/kubernetes/upgrade/downgrade).
    {: .alert .alert-danger}
 
