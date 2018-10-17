@@ -209,6 +209,7 @@ func setupK8sDatastoreInfra() (*K8sDatastoreInfra, error) {
 	}
 	log.Info("Added role binding.")
 
+	start = time.Now()
 	for {
 		_, err := kds.K8sClient.CoreV1().Namespaces().List(metav1.ListOptions{})
 		if err == nil {
