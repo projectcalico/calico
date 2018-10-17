@@ -15,9 +15,9 @@ complete the following steps.
 
 1. Ensure that the Kubernetes controller manager has the following flags
    set: <br>
-   `--cluster-cidr=192.168.0.0/16` and `--allocate-node-cidrs=true`.
+   `--cluster-cidr=<your-pod-cidr>` and `--allocate-node-cidrs=true`.
 
-   > **Tip**: On kubeadm, you can pass `--pod-network-cidr=192.168.0.0/16`
+   > **Tip**: On kubeadm, you can pass `--pod-network-cidr=<your-pod-cidr>`
    > to kubeadm to set both Kubernetes controller flags.
    {: .alert .alert-success}
 
@@ -28,6 +28,8 @@ complete the following steps.
    {{site.url}}/{{page.version}}/getting-started/kubernetes/installation/hosted/kubernetes-datastore/policy-only/1.7/calico.yaml \
    -O
    ```
+
+{% include {{page.version}}/pod-cidr-sed.md yaml="calico" %}
 
 1. If your cluster contains more than 50 nodes:
 

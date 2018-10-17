@@ -38,6 +38,8 @@ datastore type and number of nodes.
    -O
    ```
 
+{% include {{page.version}}/pod-cidr-sed.md yaml="calico" %}
+
 1. In the `ConfigMap` named `calico-config`, set the value of
    `etcd_endpoints` to the IP address and port of your etcd server.
 
@@ -57,31 +59,9 @@ datastore type and number of nodes.
 
 1. Ensure that the Kubernetes controller manager has the following flags
    set: <br>
-   `--cluster-cidr=192.168.0.0/16` and `--allocate-node-cidrs=true`.
+   `--cluster-cidr=<your-pod-cidr>` and `--allocate-node-cidrs=true`.
 
-   > **Tip**: On kubeadm, you can pass `--pod-network-cidr=192.168.0.0/16`
-   > to kubeadm to set both Kubernetes controller flags.
-   {: .alert .alert-success}
-
-1. Issue the following command to install {{site.prodname}}.
-
-   ```bash
-   kubectl apply -f \
-   {{site.url}}/{{page.version}}/getting-started/kubernetes/installation/hosted/kubernetes-datastore/calico-networking/1.7/calico.yaml
-   ```
-
-   > **Note**: You can also [view the manifest in your browser](hosted/kubernetes-datastore/calico-networking/1.7/calico.yaml){:target="_blank"}.
-   {: .alert .alert-info}
-
-1. If you wish to enforce application layer policies and secure workload-to-workload
-   communications with mutual TLS authentication, continue to [Enabling application layer policy](app-layer-policy) (optional).
-
-### Installing with the Kubernetes API datastore—more than 50 nodes
-
-1. Ensure that the Kubernetes controller manager has the following flags set:<br>
-   `--cluster-cidr=192.168.0.0/16` and `--allocate-node-cidrs=true`.
-
-   > **Tip**: On kubeadm, you can pass `--pod-network-cidr=192.168.0.0/16`
+   > **Tip**: On kubeadm, you can pass `--pod-network-cidr=<your-pod-cidr>`
    > to kubeadm to set both Kubernetes controller flags.
    {: .alert .alert-success}
 
@@ -92,6 +72,37 @@ datastore type and number of nodes.
    {{site.url}}/{{page.version}}/getting-started/kubernetes/installation/hosted/kubernetes-datastore/calico-networking/1.7/calico.yaml \
    -O
    ```
+
+{% include {{page.version}}/pod-cidr-sed.md yaml="calico" %}
+
+1. Apply the manifest using the following command.
+
+   ```bash
+   kubectl apply -f calico.yaml
+   ```
+
+1. If you wish to enforce application layer policies and secure workload-to-workload
+   communications with mutual TLS authentication, continue to [Enabling application layer policy](app-layer-policy) (optional).
+
+### Installing with the Kubernetes API datastore—more than 50 nodes
+
+1. Ensure that the Kubernetes controller manager has the following flags
+   set: <br>
+   `--cluster-cidr=<your-pod-cidr>` and `--allocate-node-cidrs=true`.
+
+   > **Tip**: On kubeadm, you can pass `--pod-network-cidr=<your-pod-cidr>`
+   > to kubeadm to set both Kubernetes controller flags.
+   {: .alert .alert-success}
+
+1. Download the {{site.prodname}} networking manifest for the Kubernetes API datastore.
+
+   ```bash
+   curl \
+   {{site.url}}/{{page.version}}/getting-started/kubernetes/installation/hosted/kubernetes-datastore/calico-networking/1.7/calico.yaml \
+   -O
+   ```
+
+{% include {{page.version}}/pod-cidr-sed.md yaml="calico" %}
 
 1. In the `ConfigMap` named `calico-config`, locate the `typha_service_name`,
    delete the `none` value, and replace it with `calico-typha`.
