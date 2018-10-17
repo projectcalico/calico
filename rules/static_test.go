@@ -388,6 +388,37 @@ var _ = Describe("Static", func() {
 				}))
 			})
 
+			It("IPv4: Should return expected mangle PREROUTING chain", func() {
+				Expect(findChain(rr.StaticMangleTableChains(4), "cali-PREROUTING")).To(Equal(&Chain{
+					Name: "cali-PREROUTING",
+					Rules: []Rule{
+						{Match: Match().ConntrackState("RELATED,ESTABLISHED"),
+							Action: AcceptAction{}},
+						{Match: Match().MarkSingleBitSet(0x10),
+							Action: AcceptAction{}},
+						{Action: JumpAction{Target: ChainDispatchFromHostEndpoint}},
+						{Match: Match().MarkSingleBitSet(0x10),
+							Action:  AcceptAction{},
+							Comment: "Host endpoint policy accepted packet."},
+					},
+				}))
+			})
+			It("IPv6: Should return expected mangle PREROUTING chain", func() {
+				Expect(findChain(rr.StaticMangleTableChains(6), "cali-PREROUTING")).To(Equal(&Chain{
+					Name: "cali-PREROUTING",
+					Rules: []Rule{
+						{Match: Match().ConntrackState("RELATED,ESTABLISHED"),
+							Action: AcceptAction{}},
+						{Match: Match().MarkSingleBitSet(0x10),
+							Action: AcceptAction{}},
+						{Action: JumpAction{Target: ChainDispatchFromHostEndpoint}},
+						{Match: Match().MarkSingleBitSet(0x10),
+							Action:  AcceptAction{},
+							Comment: "Host endpoint policy accepted packet."},
+					},
+				}))
+			})
+
 			It("IPv4: should include the expected workload-to-host chain in the filter chains", func() {
 				Expect(findChain(rr.StaticFilterTableChains(4), "cali-wl-to-host")).To(Equal(&Chain{
 					Name: "cali-wl-to-host",

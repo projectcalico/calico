@@ -726,15 +726,6 @@ func (r *DefaultRuleRenderer) StaticManglePreroutingChain(ipVersion uint8) *Chai
 		},
 	)
 
-	// If packet is from a workload interface, ACCEPT or RETURN immediately according to
-	// IptablesMangleAllowAction (because pre-DNAT policy is only for host endpoints).
-	for _, ifacePrefix := range r.WorkloadIfacePrefixes {
-		rules = append(rules, Rule{
-			Match:  Match().InInterface(ifacePrefix + "+"),
-			Action: r.mangleAllowAction,
-		})
-	}
-
 	// Now (=> not from a workload) dispatch to host endpoint chain for the incoming interface.
 	rules = append(rules,
 		Rule{
