@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2018 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,6 +16,7 @@ package iptables
 
 import (
 	"bytes"
+	"errors"
 
 	"sync"
 
@@ -68,11 +69,19 @@ var _ = Describe("Hash extraction tests", func() {
 	var table *Table
 
 	BeforeEach(func() {
+		fd := NewFeatureDetector()
+		fd.ReadFile = func(name string) ([]byte, error) {
+			return nil, errors.New("not implemented")
+		}
+		fd.NewCmd = func(name string, arg ...string) CmdIface {
+			return newRealCmd("echo", "iptables v1.4.7")
+		}
 		table = NewTable(
 			"filter",
 			4,
 			"cali:",
 			&sync.Mutex{},
+			fd,
 			TableOptions{
 				HistoricChainPrefixes:    []string{"felix-", "cali"},
 				ExtraCleanupRegexPattern: "an-old-rule",
@@ -163,5 +172,5 @@ func calculateHashes(chainName string, rules []Rule) []string {
 		Name:  chainName,
 		Rules: rules,
 	}
-	return chain.RuleHashes()
+	return chain.RuleHashes(&Features{})
 }

@@ -493,7 +493,7 @@ go-meta-linter: vendor/.up-to-date $(GENERATED_GO_FILES)
 fix go-fmt goimports:
 	$(DOCKER_GO_BUILD) sh -c 'glide nv -x | \
       grep -v -e "^\\.$$" | \
-      xargs goimports -w -local github.com/projectcalico/ *.go'
+      xargs goimports -w -local github.com/projectcalico/'
 
 .PHONY: check-typha-pins
 check-typha-pins: vendor/.up-to-date

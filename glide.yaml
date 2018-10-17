@@ -67,11 +67,16 @@ import:
   subpackages:
   - pkg/syncclient
   - pkg/tlsutils
+# Pinned on release branch (to previously chosen commit) because it floated to a version with breaking API changes.
 - package: github.com/prometheus/client_golang
+  version: 5b23715facdef1452016bae512489c3cdf82458c
   subpackages:
   - prometheus
   - prometheus/promhttp
   - prometheus/push
+# Pinned on release branch (to previously chosen commit) because it floated to a version with breaking API changes.
+- package: github.com/prometheus/common
+  version: c7de2306084e37d54b8be01f3541a8464345e9a5
 - package: github.com/prometheus/procfs
   version: a6e9df898b1336106c743392c48ee0b71f5c4efa
   subpackages:
@@ -118,3 +123,5 @@ import:
 - package: github.com/davecgh/go-spew
   subpackages:
   - spew
+- package: github.com/hashicorp/go-version
+  version: ^1.0.0

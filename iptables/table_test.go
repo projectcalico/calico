@@ -1,4 +1,4 @@
-// Copyright (c) 2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2018 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -31,6 +31,7 @@ var _ = Describe("Table with an empty dataplane", func() {
 	var dataplane *mockDataplane
 	var table *Table
 	var iptLock *mockMutex
+	var featureDetector *FeatureDetector
 	BeforeEach(func() {
 		dataplane = newMockDataplane("filter", map[string][]string{
 			"FORWARD": {},
@@ -38,11 +39,15 @@ var _ = Describe("Table with an empty dataplane", func() {
 			"OUTPUT":  {},
 		})
 		iptLock = &mockMutex{}
+		featureDetector = NewFeatureDetector()
+		featureDetector.NewCmd = dataplane.newCmd
+		featureDetector.ReadFile = dataplane.readFile
 		table = NewTable(
 			"filter",
 			4,
 			rules.RuleHashPrefix,
 			iptLock,
+			featureDetector,
 			TableOptions{
 				HistoricChainPrefixes: rules.AllHistoricChainNamePrefixes,
 				NewCmdOverride:        dataplane.newCmd,
@@ -57,6 +62,7 @@ var _ = Describe("Table with an empty dataplane", func() {
 		table.Apply()
 		// Should only load, since there's nothing to so.
 		Expect(dataplane.CmdNames).To(Equal([]string{
+			"iptables",
 			"iptables-save",
 		}))
 		Expect(iptLock.Held).To(BeFalse())
@@ -77,6 +83,7 @@ var _ = Describe("Table with an empty dataplane", func() {
 		Expect(dataplane.CmdNames).To(BeEmpty())
 		table.Apply()
 		Expect(dataplane.CmdNames).To(Equal([]string{
+			"iptables",
 			"iptables-save",
 			"iptables-restore",
 		}))
@@ -97,6 +104,7 @@ var _ = Describe("Table with an empty dataplane", func() {
 				4,
 				rules.RuleHashPrefix,
 				&mockMutex{},
+				featureDetector,
 				TableOptions{
 					HistoricChainPrefixes: rules.AllHistoricChainNamePrefixes,
 					NewCmdOverride:        dataplane.newCmd,
@@ -139,7 +147,7 @@ var _ = Describe("Table with an empty dataplane", func() {
 				"OUTPUT":  {},
 			}))
 			// Should do a save but then figure out that there's nothing to do
-			Expect(dataplane.CmdNames).To(ConsistOf("iptables-save"))
+			Expect(dataplane.CmdNames).To(ConsistOf("iptables", "iptables-save"))
 		})
 
 		Describe("after inserting a rule then updating the insertions", func() {
@@ -304,7 +312,7 @@ var _ = Describe("Table with an empty dataplane", func() {
 				dataplane.ResetCmds()
 				table.Apply()
 				// Should do a save but then figure out that there's nothing to do
-				Expect(dataplane.CmdNames).To(ConsistOf("iptables-save"))
+				Expect(dataplane.CmdNames).To(ConsistOf("iptables", "iptables-save"))
 			})
 		})
 		Describe("then extending the chain", func() {
@@ -433,11 +441,15 @@ func describePostUpdateCheckTests(enableRefresh bool) {
 		if enableRefresh {
 			options.RefreshInterval = 30 * time.Second
 		}
+		featureDetector := NewFeatureDetector()
+		featureDetector.NewCmd = dataplane.newCmd
+		featureDetector.ReadFile = dataplane.readFile
 		table = NewTable(
 			"filter",
 			4,
 			rules.RuleHashPrefix,
 			&mockMutex{},
+			featureDetector,
 			options,
 		)
 		table.SetRuleInsertions("FORWARD", []Rule{
@@ -454,7 +466,7 @@ func describePostUpdateCheckTests(enableRefresh bool) {
 		}
 	}
 	assertRecheck := func() {
-		Expect(dataplane.CmdNames).To(ConsistOf("iptables-save"))
+		Expect(dataplane.CmdNames).To(ConsistOf("iptables", "iptables-save"))
 	}
 	assertDelayMillis := func(delay int64) func() {
 		return func() {
@@ -622,11 +634,15 @@ func describeDirtyDataplaneTests(appendMode bool) {
 		if appendMode {
 			insertMode = "append"
 		}
+		featureDetector := NewFeatureDetector()
+		featureDetector.NewCmd = dataplane.newCmd
+		featureDetector.ReadFile = dataplane.readFile
 		table = NewTable(
 			"filter",
 			4,
 			rules.RuleHashPrefix,
 			&mockMutex{},
+			featureDetector,
 			TableOptions{
 				HistoricChainPrefixes:    rules.AllHistoricChainNamePrefixes,
 				ExtraCleanupRegexPattern: "sneaky-rule",
@@ -731,7 +747,7 @@ func describeDirtyDataplaneTests(appendMode bool) {
 		It("with no errors, it should get to correct final state", func() {
 			table.Apply()
 			checkFinalState()
-			Expect(len(dataplane.Cmds)).To(Equal(2)) // a save and a restore
+			Expect(dataplane.Cmds).To(HaveLen(3)) // a version, save and a restore
 		})
 		It("with no errors, it shouldn't sleep", func() {
 			table.Apply()
@@ -742,7 +758,7 @@ func describeDirtyDataplaneTests(appendMode bool) {
 				checkFinalState()
 			})
 			It("it should retry once", func() {
-				Expect(len(dataplane.Cmds)).To(Equal(3)) // 2 saves and a restore
+				Expect(dataplane.Cmds).To(HaveLen(4)) // a version, 2 saves and a restore
 			})
 			It("it should sleep", func() {
 				Expect(dataplane.CumulativeSleep).To(Equal(100 * time.Millisecond))
@@ -819,7 +835,7 @@ func describeDirtyDataplaneTests(appendMode bool) {
 				Expect(func() {
 					table.Apply()
 				}).To(Panic())
-				Expect(len(dataplane.Cmds)).To(Equal(4))
+				Expect(dataplane.Cmds).To(HaveLen(5))
 			}, 1)
 		})
 
@@ -994,11 +1010,15 @@ var _ = Describe("Table with inserts and a non-Calico chain", func() {
 			"non-calico": {"-m comment \"foo\""},
 		})
 		iptLock = &mockMutex{}
+		featureDetector := NewFeatureDetector()
+		featureDetector.NewCmd = dataplane.newCmd
+		featureDetector.ReadFile = dataplane.readFile
 		table = NewTable(
 			"filter",
 			6,
 			rules.RuleHashPrefix,
 			iptLock,
+			featureDetector,
 			TableOptions{
 				HistoricChainPrefixes: rules.AllHistoricChainNamePrefixes,
 				NewCmdOverride:        dataplane.newCmd,
