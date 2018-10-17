@@ -47,8 +47,7 @@ var _ = infrastructure.DatastoreDescribe("apply on forward tests; with 2 nodes",
 
 	BeforeEach(func() {
 		var err error
-		infra, err = getInfra()
-		Expect(err).NotTo(HaveOccurred())
+		infra = getInfra()
 
 		options := infrastructure.DefaultTopologyOptions()
 		options.IPIPEnabled = false

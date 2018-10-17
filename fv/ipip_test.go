@@ -51,8 +51,7 @@ var _ = infrastructure.DatastoreDescribe("IPIP topology before adding host IPs t
 
 	BeforeEach(func() {
 		var err error
-		infra, err = getInfra()
-		Expect(err).NotTo(HaveOccurred())
+		infra = getInfra()
 		felixes, client = infrastructure.StartNNodeTopology(2, infrastructure.DefaultTopologyOptions(), infra)
 
 		// Install a default profile that allows all ingress and egress, in the absence of any Policy.

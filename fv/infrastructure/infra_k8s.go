@@ -91,8 +91,10 @@ func TearDownK8sInfra(kds *K8sDatastoreInfra) {
 	}
 }
 
-func createK8sDatastoreInfra() (DatastoreInfra, error) {
-	return GetK8sDatastoreInfra()
+func createK8sDatastoreInfra() DatastoreInfra {
+	infra, err := GetK8sDatastoreInfra()
+	Expect(err).NotTo(HaveOccurred())
+	return infra
 }
 
 func GetK8sDatastoreInfra() (*K8sDatastoreInfra, error) {

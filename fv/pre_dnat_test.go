@@ -55,8 +55,7 @@ var _ = infrastructure.DatastoreDescribe("pre-dnat with initialized Felix, 2 wor
 
 	BeforeEach(func() {
 		var err error
-		infra, err = getInfra()
-		Expect(err).NotTo(HaveOccurred())
+		infra = getInfra()
 
 		options := infrastructure.DefaultTopologyOptions()
 		// For variety, run this test with IPv6 disabled.

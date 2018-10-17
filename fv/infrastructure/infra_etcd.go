@@ -34,8 +34,10 @@ type EtcdDatastoreInfra struct {
 	BadEndpoint string
 }
 
-func createEtcdDatastoreInfra() (DatastoreInfra, error) {
-	return GetEtcdDatastoreInfra()
+func createEtcdDatastoreInfra() DatastoreInfra {
+	infra, err := GetEtcdDatastoreInfra()
+	Expect(err).NotTo(HaveOccurred())
+	return infra
 }
 
 func GetEtcdDatastoreInfra() (*EtcdDatastoreInfra, error) {
