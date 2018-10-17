@@ -49,8 +49,7 @@ var _ = infrastructure.DatastoreDescribe("do-not-track policy tests; with 2 node
 
 	BeforeEach(func() {
 		var err error
-		infra, err = getInfra()
-		Expect(err).NotTo(HaveOccurred())
+		infra = getInfra()
 
 		dumpedDiags = false
 		options := infrastructure.DefaultTopologyOptions()

@@ -71,9 +71,7 @@ var _ = infrastructure.DatastoreDescribe("with initialized Felix", []apiconfig.D
 	)
 
 	BeforeEach(func() {
-		var err error
-		infra, err = getInfra()
-		Expect(err).NotTo(HaveOccurred())
+		infra = getInfra()
 
 		felix, client = infrastructure.StartSingleNodeTopology(infrastructure.DefaultTopologyOptions(), infra)
 
