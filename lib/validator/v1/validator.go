@@ -161,7 +161,7 @@ func validateAction(v *validator.Validate, topStruct reflect.Value, currentStruc
 func validateInterface(v *validator.Validate, topStruct reflect.Value, currentStructOrField reflect.Value, field reflect.Value, fieldType reflect.Type, fieldKind reflect.Kind, param string) bool {
 	s := field.String()
 	log.Debugf("Validate interface: %s", s)
-	return interfaceRegex.MatchString(s)
+	return s == "*" || interfaceRegex.MatchString(s)
 }
 
 func validateBackendAction(v *validator.Validate, topStruct reflect.Value, currentStructOrField reflect.Value, field reflect.Value, fieldType reflect.Type, fieldKind reflect.Kind, param string) bool {
