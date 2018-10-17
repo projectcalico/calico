@@ -36,6 +36,7 @@ func TestActionFromString(t *testing.T) {
 	Expect(actionFromString("Pass")).To(Equal(PASS))
 	Expect(actionFromString("log")).To(Equal(LOG))
 	Expect(actionFromString("Log")).To(Equal(LOG))
+	Expect(actionFromString("next-tier")).To(Equal(PASS))
 	Expect(func() { actionFromString("no_match") }).To(Panic())
 }
 
@@ -314,7 +315,7 @@ func TestCheckStorePass(t *testing.T) {
 	store.PolicyByID[proto.PolicyID{Tier: "tier1", Name: "policy1"}] = &proto.Policy{
 		InboundRules: []*proto.Rule{
 			{
-				Action:    "pass",
+				Action:    "next-tier",
 				HttpMatch: &proto.HTTPMatch{Methods: []string{"GET"}},
 			},
 		},

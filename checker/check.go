@@ -166,11 +166,14 @@ func checkRules(rules []*proto.Rule, req *requestCache, policyNamespace string) 
 
 // actionFromString converts a string action name, like "allow" into an Action.
 func actionFromString(s string) Action {
+	// Felix currently passes us the v1 resource types where the "pass" action is called "next-tier".
+	// Here we support both the v1 and v3 action names.
 	m := map[string]Action{
-		"allow": ALLOW,
-		"deny":  DENY,
-		"pass":  PASS,
-		"log":   LOG,
+		"allow":     ALLOW,
+		"deny":      DENY,
+		"pass":      PASS,
+		"next-tier": PASS,
+		"log":       LOG,
 	}
 	a, found := m[strings.ToLower(s)]
 	if !found {
