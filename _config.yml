@@ -19,11 +19,11 @@ noderunning: calico-node
 
 # Image names in case the host changes
 imageNames:
-  node: quay.io/calico/node
-  calicoctl: quay.io/calico/ctl
-  typha: quay.io/calico/typha
-  cni: quay.io/calico/cni
-  kubeControllers: quay.io/calico/kube-controllers
+  node: calico/node
+  calicoctl: calico/ctl
+  typha: calico/typha
+  cni: calico/cni
+  kubeControllers: calico/kube-controllers
   calico-upgrade: quay.io/calico/upgrade
   flannel: quay.io/coreos/flannel
   dikastes: quay.io/calico/dikastes
