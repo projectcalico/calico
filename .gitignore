@@ -49,3 +49,4 @@ htmlcov/
 /k8sfv/prometheus/data
 /k8sfv/prometheus/prometheus.yml
 /k8sfv/output/
+/report/*.xml
