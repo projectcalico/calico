@@ -938,10 +938,11 @@ func writeProcSys(path, value string) error {
 	return err
 }
 
-// The interface name that we use to mean "all interfaces".
-var allInterfaces = "*"
+// The interface name that we use to mean "all interfaces".  This is intentionally longer than
+// IFNAMSIZ (16) characters, so that it can't possibly match a real interface name.
+var allInterfaces = "any-interface-at-all"
 
 // True if the given host endpoint is for all interfaces, as opposed to for a specific interface.
 func forAllInterfaces(hep *proto.HostEndpoint) bool {
-	return hep.Name == allInterfaces
+	return hep.Name == "*"
 }
