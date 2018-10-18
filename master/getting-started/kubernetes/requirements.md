@@ -47,10 +47,6 @@ IP ranges in your network, including:
 - The Kubernetes service cluster IP range
 - The range from which host IPs are allocated
 
-Our manifests default to `192.168.0.0/16` for the pod IP range except [Canal/flannel](./installation/flannel),
-which defaults to `10.244.0.0/16`. Refer to [Configuring the pod IP range](./installation/config-options#configuring-the-pod-ip-range)
-for information on modifying the defaults.
-
 ## Application layer policy requirements
 
 - [MutatingAdmissionWebhook](https://kubernetes.io/docs/admin/admission-controllers/#mutatingadmissionwebhook) enabled
