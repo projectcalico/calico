@@ -1,5 +1,5 @@
-hash: 2d7f497def777cb55b4cf755d1a70fdb33a48ab337a778be30aa4bd60e1276ba
-updated: 2018-10-15T06:17:08.374796281Z
+hash: 5547cd0ab9d5e2e6de7174bc78c4f4c74c2bd228e29bc1e383a9b4ee89f4b951
+updated: 2018-10-18T06:18:11.045742656Z
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -252,13 +252,13 @@ imports:
   subpackages:
   - binder
 - name: github.com/projectcalico/typha
-  version: 98a407e25813dc93b55097f656c796994a6eda4d
+  version: 9ce66928a1d7e33cc3509da700c7b355715848a7
   subpackages:
   - pkg/syncclient
   - pkg/syncproto
   - pkg/tlsutils
 - name: github.com/prometheus/client_golang
-  version: 7866eead363ec334628dbc56e32df590a05f4696
+  version: 1cafe34db7fdec6022e17e00e1c1ea501022f3e4
   subpackages:
   - prometheus
   - prometheus/internal
@@ -269,7 +269,7 @@ imports:
   subpackages:
   - go
 - name: github.com/prometheus/common
-  version: c7de2306084e37d54b8be01f3541a8464345e9a5
+  version: bcb74de08d37a417cb6789eec1d6c810040f0470
   subpackages:
   - expfmt
   - internal/bitbucket.org/ww/goautoneg
@@ -360,7 +360,7 @@ imports:
   - internal/urlfetch
   - urlfetch
 - name: google.golang.org/genproto
-  version: af9cb2a35e7f169ec875002c1829c9b315cddc04
+  version: 94acd270e44e65579b9ee3cdab25034d33fed608
   subpackages:
   - googleapis/rpc/status
 - name: google.golang.org/grpc
