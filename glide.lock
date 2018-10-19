@@ -1,5 +1,5 @@
-hash: c835366a13896f7e076226af9b1d14f1e9468f7630c55f0eceabc75b854875ff
-updated: 2018-10-17T15:49:17.128802455+01:00
+hash: 952a87cca6bf58ceff909e1592f1295b85b288ba6bb394c086f681860663d2ff
+updated: 2018-10-19T10:17:36.239840441Z
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -32,6 +32,7 @@ imports:
   - pkg/ip
   - pkg/ipam
   - pkg/ns
+  - pkg/testutils
   - pkg/utils/hwaddr
   - pkg/utils/sysctl
 - name: github.com/coreos/etcd
@@ -165,7 +166,7 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: 6d861106dbc2f8a8f62fc63dd8f6e6715f049412
+  version: 6106092cbcbfd8fa6dc2742a4101d7f6d42b01e6
   subpackages:
   - lib/apiconfig
   - lib/apis/v1
@@ -197,10 +198,9 @@ imports:
   - lib/validator/v3
   - lib/watch
 - name: github.com/prometheus/client_golang
-  version: 773f5027234d0b08adf766be34f55df2f312abf7
+  version: 5b23715facdef1452016bae512489c3cdf82458c
   subpackages:
   - prometheus
-  - prometheus/internal
 - name: github.com/prometheus/client_model
   version: 6f3806018612930941127f2a7c6c453ba2c527d2
   subpackages:
