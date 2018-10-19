@@ -42,8 +42,20 @@ type HostEndpoint struct {
 type HostEndpointSpec struct {
 	// The node name identifying the Calico node instance.
 	Node string `json:"node,omitempty" validate:"omitempty,name"`
-	// The name of the linux interface to apply policy to; for example “eth0”.
-	// If "InterfaceName" is not present then at least one expected IP must be specified.
+	// Either "*", or the name of a specific Linux interface to apply policy to; or empty.  "*"
+	// indicates that this HostEndpoint governs all traffic to, from or through the default
+	// network namespace of the host named by the "Node" field; entering and leaving that
+	// namespace via any interface, including those from/to non-host-networked local workloads.
+	//
+	// If InterfaceName is not "*", this HostEndpoint only governs traffic that enters or leaves
+	// the host through the specific interface named by InterfaceName, or - when InterfaceName
+	// is empty - through the specific interface that has one of the IPs in ExpectedIPs.
+	// Therefore, when InterfaceName is empty, at least one expected IP must be specified.  Only
+	// external interfaces (such as “eth0”) are supported here; it isn't possible for a
+	// HostEndpoint to protect traffic through a specific local workload interface.
+	//
+	// Note: Only some kinds of policy are implemented for "*" HostEndpoints; initially just
+	// pre-DNAT policy.  Please check Calico documentation for the latest position.
 	InterfaceName string `json:"interfaceName,omitempty" validate:"omitempty,interface"`
 	// The expected IP addresses (IPv4 and IPv6) of the endpoint.
 	// If "InterfaceName" is not present, Calico will look for an interface matching any

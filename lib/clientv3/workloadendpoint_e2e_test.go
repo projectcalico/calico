@@ -131,7 +131,7 @@ var _ = testutils.E2eDatastoreDescribe("WorkloadEndpoint tests", testutils.Datas
 			res1, outError := c.WorkloadEndpoints().Create(ctx, wepToCreate, options.SetOptions{})
 			Expect(outError).NotTo(HaveOccurred())
 			Expect(wepToCreate).To(Equal(wepToCreateCopy), "Create() unexpectedly modified input")
-			testutils.ExpectResource(res1, apiv3.KindWorkloadEndpoint, namespace1, name1, spec1_1)
+			Expect(res1).To(MatchResource(apiv3.KindWorkloadEndpoint, namespace1, name1, spec1_1))
 			Expect(res1.Labels[apiv3.LabelOrchestrator]).To(Equal(res1.Spec.Orchestrator))
 			Expect(res1.Labels[apiv3.LabelNamespace]).To(Equal(res1.Namespace))
 
@@ -149,7 +149,7 @@ var _ = testutils.E2eDatastoreDescribe("WorkloadEndpoint tests", testutils.Datas
 			By("Getting WorkloadEndpoint (name1) and comparing the output against spec1_1")
 			res, outError := c.WorkloadEndpoints().Get(ctx, namespace1, name1, options.GetOptions{})
 			Expect(outError).NotTo(HaveOccurred())
-			testutils.ExpectResource(res, apiv3.KindWorkloadEndpoint, namespace1, name1, spec1_1)
+			Expect(res).To(MatchResource(apiv3.KindWorkloadEndpoint, namespace1, name1, spec1_1))
 			Expect(res.ResourceVersion).To(Equal(res1.ResourceVersion))
 			Expect(res.Labels[apiv3.LabelOrchestrator]).To(Equal(res.Spec.Orchestrator))
 			Expect(res.Labels[apiv3.LabelNamespace]).To(Equal(res.Namespace))
@@ -162,8 +162,9 @@ var _ = testutils.E2eDatastoreDescribe("WorkloadEndpoint tests", testutils.Datas
 			By("Listing all the WorkloadEndpoints in namespace1, expecting a single result with name1/spec1_1")
 			outList, outError := c.WorkloadEndpoints().List(ctx, options.ListOptions{Namespace: namespace1})
 			Expect(outError).NotTo(HaveOccurred())
-			Expect(outList.Items).To(HaveLen(1))
-			testutils.ExpectResource(&outList.Items[0], apiv3.KindWorkloadEndpoint, namespace1, name1, spec1_1)
+			Expect(outList.Items).To(ConsistOf(
+				testutils.Resource(apiv3.KindWorkloadEndpoint, namespace1, name1, spec1_1),
+			))
 			Expect(outList.Items[0].Labels[apiv3.LabelOrchestrator]).To(Equal(outList.Items[0].Spec.Orchestrator))
 			Expect(outList.Items[0].Labels[apiv3.LabelNamespace]).To(Equal(outList.Items[0].Namespace))
 
@@ -173,26 +174,28 @@ var _ = testutils.E2eDatastoreDescribe("WorkloadEndpoint tests", testutils.Datas
 				Spec:       spec2_1,
 			}, options.SetOptions{})
 			Expect(outError).NotTo(HaveOccurred())
-			testutils.ExpectResource(res2, apiv3.KindWorkloadEndpoint, namespace2, name2, spec2_1)
+			Expect(res2).To(MatchResource(apiv3.KindWorkloadEndpoint, namespace2, name2, spec2_1))
 
 			By("Getting WorkloadEndpoint (name2) and comparing the output against spec1_2")
 			res, outError = c.WorkloadEndpoints().Get(ctx, namespace2, name2, options.GetOptions{})
 			Expect(outError).NotTo(HaveOccurred())
-			testutils.ExpectResource(res, apiv3.KindWorkloadEndpoint, namespace2, name2, spec2_1)
+			Expect(res).To(MatchResource(apiv3.KindWorkloadEndpoint, namespace2, name2, spec2_1))
 			Expect(res.ResourceVersion).To(Equal(res2.ResourceVersion))
 
 			By("Listing all the WorkloadEndpoints using an empty namespace (all-namespaces), expecting a two results with name1/spec1_1 and name2/spec1_2")
 			outList, outError = c.WorkloadEndpoints().List(ctx, options.ListOptions{})
 			Expect(outError).NotTo(HaveOccurred())
-			Expect(outList.Items).To(HaveLen(2))
-			testutils.ExpectResource(&outList.Items[0], apiv3.KindWorkloadEndpoint, namespace1, name1, spec1_1)
-			testutils.ExpectResource(&outList.Items[1], apiv3.KindWorkloadEndpoint, namespace2, name2, spec2_1)
+			Expect(outList.Items).To(ConsistOf(
+				testutils.Resource(apiv3.KindWorkloadEndpoint, namespace1, name1, spec1_1),
+				testutils.Resource(apiv3.KindWorkloadEndpoint, namespace2, name2, spec2_1),
+			))
 
 			By("Listing all the WorkloadEndpoints in namespace2, expecting a one results with name2/spec2_1")
 			outList, outError = c.WorkloadEndpoints().List(ctx, options.ListOptions{Namespace: namespace2})
 			Expect(outError).NotTo(HaveOccurred())
-			Expect(outList.Items).To(HaveLen(1))
-			testutils.ExpectResource(&outList.Items[0], apiv3.KindWorkloadEndpoint, namespace2, name2, spec2_1)
+			Expect(outList.Items).To(ConsistOf(
+				testutils.Resource(apiv3.KindWorkloadEndpoint, namespace2, name2, spec2_1),
+			))
 
 			By("Updating WorkloadEndpoint name1 with spec1_2")
 			res1.Spec = spec1_2
@@ -201,7 +204,7 @@ var _ = testutils.E2eDatastoreDescribe("WorkloadEndpoint tests", testutils.Datas
 			Expect(outError).NotTo(HaveOccurred())
 			Expect(res1).To(Equal(res1Copy), "Update() unexpectedly modified input")
 			res1 = res1Out
-			testutils.ExpectResource(res1, apiv3.KindWorkloadEndpoint, namespace1, name1, spec1_2)
+			Expect(res1).To(MatchResource(apiv3.KindWorkloadEndpoint, namespace1, name1, spec1_2))
 			Expect(res1.Labels[apiv3.LabelOrchestrator]).To(Equal(res1.Spec.Orchestrator))
 			Expect(res1.Labels[apiv3.LabelNamespace]).To(Equal(res1.Namespace))
 
@@ -243,27 +246,29 @@ var _ = testutils.E2eDatastoreDescribe("WorkloadEndpoint tests", testutils.Datas
 			By("Getting WorkloadEndpoint (name1) with the original resource version and comparing the output against spec1_1")
 			res, outError = c.WorkloadEndpoints().Get(ctx, namespace1, name1, options.GetOptions{ResourceVersion: rv1_1})
 			Expect(outError).NotTo(HaveOccurred())
-			testutils.ExpectResource(res, apiv3.KindWorkloadEndpoint, namespace1, name1, spec1_1)
+			Expect(res).To(MatchResource(apiv3.KindWorkloadEndpoint, namespace1, name1, spec1_1))
 			Expect(res.ResourceVersion).To(Equal(rv1_1))
 
 			By("Getting WorkloadEndpoint (name1) with the updated resource version and comparing the output against spec1_2")
 			res, outError = c.WorkloadEndpoints().Get(ctx, namespace1, name1, options.GetOptions{ResourceVersion: rv1_2})
 			Expect(outError).NotTo(HaveOccurred())
-			testutils.ExpectResource(res, apiv3.KindWorkloadEndpoint, namespace1, name1, spec1_2)
+			Expect(res).To(MatchResource(apiv3.KindWorkloadEndpoint, namespace1, name1, spec1_2))
 			Expect(res.ResourceVersion).To(Equal(rv1_2))
 
 			By("Listing WorkloadEndpoints with the original resource version and checking for a single result with name1/spec1_1")
 			outList, outError = c.WorkloadEndpoints().List(ctx, options.ListOptions{Namespace: namespace1, ResourceVersion: rv1_1})
 			Expect(outError).NotTo(HaveOccurred())
-			Expect(outList.Items).To(HaveLen(1))
-			testutils.ExpectResource(&outList.Items[0], apiv3.KindWorkloadEndpoint, namespace1, name1, spec1_1)
+			Expect(outList.Items).To(ConsistOf(
+				testutils.Resource(apiv3.KindWorkloadEndpoint, namespace1, name1, spec1_1),
+			))
 
 			By("Listing WorkloadEndpoints (all namespaces) with the latest resource version and checking for two results with name1/spec1_2 and name2/spec1_2")
 			outList, outError = c.WorkloadEndpoints().List(ctx, options.ListOptions{})
 			Expect(outError).NotTo(HaveOccurred())
-			Expect(outList.Items).To(HaveLen(2))
-			testutils.ExpectResource(&outList.Items[0], apiv3.KindWorkloadEndpoint, namespace1, name1, spec1_2)
-			testutils.ExpectResource(&outList.Items[1], apiv3.KindWorkloadEndpoint, namespace2, name2, spec2_1)
+			Expect(outList.Items).To(ConsistOf(
+				testutils.Resource(apiv3.KindWorkloadEndpoint, namespace1, name1, spec1_2),
+				testutils.Resource(apiv3.KindWorkloadEndpoint, namespace2, name2, spec2_1),
+			))
 
 			By("Deleting WorkloadEndpoint (name1) with the old resource version")
 			_, outError = c.WorkloadEndpoints().Delete(ctx, namespace1, name1, options.DeleteOptions{ResourceVersion: rv1_1})
@@ -273,7 +278,7 @@ var _ = testutils.E2eDatastoreDescribe("WorkloadEndpoint tests", testutils.Datas
 			By("Deleting WorkloadEndpoint (name1) with the new resource version")
 			dres, outError := c.WorkloadEndpoints().Delete(ctx, namespace1, name1, options.DeleteOptions{ResourceVersion: rv1_2})
 			Expect(outError).NotTo(HaveOccurred())
-			testutils.ExpectResource(dres, apiv3.KindWorkloadEndpoint, namespace1, name1, spec1_2)
+			Expect(dres).To(MatchResource(apiv3.KindWorkloadEndpoint, namespace1, name1, spec1_2))
 			Expect(dres.Labels[apiv3.LabelOrchestrator]).To(Equal(dres.Spec.Orchestrator))
 			Expect(dres.Labels[apiv3.LabelNamespace]).To(Equal(dres.Namespace))
 
@@ -538,35 +543,40 @@ var _ = testutils.E2eDatastoreDescribe("WorkloadEndpoint tests", testutils.Datas
 			By("Doing an exact get on one of the workload endpoints")
 			outList, err := c.WorkloadEndpoints().List(ctx, options.ListOptions{Namespace: "namespace1", Name: "node--1-k8s-pod-eth0"})
 			Expect(err).NotTo(HaveOccurred())
-			Expect(outList.Items).To(HaveLen(1))
-			testutils.ExpectResource(&outList.Items[0], apiv3.KindWorkloadEndpoint, "namespace1", "node--1-k8s-pod-eth0", outRes1.Spec)
+			Expect(outList.Items).To(ConsistOf(
+				testutils.Resource(apiv3.KindWorkloadEndpoint, "namespace1", "node--1-k8s-pod-eth0", outRes1.Spec),
+			))
 
 			By("Doing a short prefix get to retrieve both workload endpoints in namespace1")
 			outList, err = c.WorkloadEndpoints().List(ctx, options.ListOptions{Namespace: "namespace1", Name: "node--1-k8s-pod-", Prefix: true})
 			Expect(err).NotTo(HaveOccurred())
-			Expect(outList.Items).To(HaveLen(2))
-			testutils.ExpectResource(&outList.Items[0], apiv3.KindWorkloadEndpoint, "namespace1", "node--1-k8s-pod--1-eth0", outRes2.Spec)
-			testutils.ExpectResource(&outList.Items[1], apiv3.KindWorkloadEndpoint, "namespace1", "node--1-k8s-pod-eth0", outRes1.Spec)
+			Expect(outList.Items).To(ConsistOf(
+				testutils.Resource(apiv3.KindWorkloadEndpoint, "namespace1", "node--1-k8s-pod--1-eth0", outRes2.Spec),
+				testutils.Resource(apiv3.KindWorkloadEndpoint, "namespace1", "node--1-k8s-pod-eth0", outRes1.Spec),
+			))
 
 			By("Doing a longer prefix get to retrieve one workload endpoints in namespace1")
 			outList, err = c.WorkloadEndpoints().List(ctx, options.ListOptions{Namespace: "namespace1", Name: "node--1-k8s-pod--1", Prefix: true})
 			Expect(err).NotTo(HaveOccurred())
-			Expect(outList.Items).To(HaveLen(1))
-			testutils.ExpectResource(&outList.Items[0], apiv3.KindWorkloadEndpoint, "namespace1", "node--1-k8s-pod--1-eth0", outRes2.Spec)
+			Expect(outList.Items).To(ConsistOf(
+				testutils.Resource(apiv3.KindWorkloadEndpoint, "namespace1", "node--1-k8s-pod--1-eth0", outRes2.Spec),
+			))
 
 			By("Doing a short prefix get with wildcarded namespace to retrieve all workload endpoints")
 			outList, err = c.WorkloadEndpoints().List(ctx, options.ListOptions{Name: "node--1-k8s-pod-", Prefix: true})
 			Expect(err).NotTo(HaveOccurred())
-			Expect(outList.Items).To(HaveLen(3))
-			testutils.ExpectResource(&outList.Items[0], apiv3.KindWorkloadEndpoint, "namespace1", "node--1-k8s-pod--1-eth0", outRes2.Spec)
-			testutils.ExpectResource(&outList.Items[1], apiv3.KindWorkloadEndpoint, "namespace1", "node--1-k8s-pod-eth0", outRes1.Spec)
-			testutils.ExpectResource(&outList.Items[2], apiv3.KindWorkloadEndpoint, "namespace2", "node--1-k8s-pod--2-eth0", outRes3.Spec)
+			Expect(outList.Items).To(ConsistOf(
+				testutils.Resource(apiv3.KindWorkloadEndpoint, "namespace1", "node--1-k8s-pod--1-eth0", outRes2.Spec),
+				testutils.Resource(apiv3.KindWorkloadEndpoint, "namespace1", "node--1-k8s-pod-eth0", outRes1.Spec),
+				testutils.Resource(apiv3.KindWorkloadEndpoint, "namespace2", "node--1-k8s-pod--2-eth0", outRes3.Spec),
+			))
 
 			By("Doing a long prefix get with wildcarded names to retrieve the workload endpoint in namespace2")
 			outList, err = c.WorkloadEndpoints().List(ctx, options.ListOptions{Name: "node--1-k8s-pod--2", Prefix: true})
 			Expect(err).NotTo(HaveOccurred())
-			Expect(outList.Items).To(HaveLen(1))
-			testutils.ExpectResource(&outList.Items[0], apiv3.KindWorkloadEndpoint, "namespace2", "node--1-k8s-pod--2-eth0", outRes3.Spec)
+			Expect(outList.Items).To(ConsistOf(
+				testutils.Resource(apiv3.KindWorkloadEndpoint, "namespace2", "node--1-k8s-pod--2-eth0", outRes3.Spec),
+			))
 
 			By("Deleting all endpoints")
 			_, err = c.WorkloadEndpoints().Delete(ctx, outRes1.Namespace, outRes1.Name, options.DeleteOptions{})

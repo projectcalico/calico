@@ -297,7 +297,7 @@ var _ = testutils.E2eDatastoreDescribe("Node tests (etcdv3)", testutils.Datastor
 				Spec:       spec1,
 			}, options.SetOptions{})
 			Expect(outError).NotTo(HaveOccurred())
-			testutils.ExpectResource(res1, apiv3.KindNode, testutils.ExpectNoNamespace, name1, spec1)
+			Expect(res1).To(MatchResource(apiv3.KindNode, testutils.ExpectNoNamespace, name1, spec1))
 
 			// Track the version of the original data for name1.
 			rv1_1 := res1.ResourceVersion
@@ -313,7 +313,7 @@ var _ = testutils.E2eDatastoreDescribe("Node tests (etcdv3)", testutils.Datastor
 			By("Getting Node (name1) and comparing the output against spec1")
 			res, outError := c.Nodes().Get(ctx, name1, options.GetOptions{})
 			Expect(outError).NotTo(HaveOccurred())
-			testutils.ExpectResource(res, apiv3.KindNode, testutils.ExpectNoNamespace, name1, spec1)
+			Expect(res).To(MatchResource(apiv3.KindNode, testutils.ExpectNoNamespace, name1, spec1))
 			Expect(res.ResourceVersion).To(Equal(res1.ResourceVersion))
 
 			By("Getting Node (name2) before it is created")
@@ -324,8 +324,9 @@ var _ = testutils.E2eDatastoreDescribe("Node tests (etcdv3)", testutils.Datastor
 			By("Listing all the Nodes, expecting a single result with name1/spec1")
 			outList, outError := c.Nodes().List(ctx, options.ListOptions{})
 			Expect(outError).NotTo(HaveOccurred())
-			Expect(outList.Items).To(HaveLen(1))
-			testutils.ExpectResource(&outList.Items[0], apiv3.KindNode, testutils.ExpectNoNamespace, name1, spec1)
+			Expect(outList.Items).To(ConsistOf(
+				testutils.Resource(apiv3.KindNode, testutils.ExpectNoNamespace, name1, spec1),
+			))
 
 			By("Creating a new Node with name2/spec2")
 			res2, outError := c.Nodes().Create(ctx, &apiv3.Node{
@@ -333,26 +334,27 @@ var _ = testutils.E2eDatastoreDescribe("Node tests (etcdv3)", testutils.Datastor
 				Spec:       spec2,
 			}, options.SetOptions{})
 			Expect(outError).NotTo(HaveOccurred())
-			testutils.ExpectResource(res2, apiv3.KindNode, testutils.ExpectNoNamespace, name2, spec2)
+			Expect(res2).To(MatchResource(apiv3.KindNode, testutils.ExpectNoNamespace, name2, spec2))
 
 			By("Getting Node (name2) and comparing the output against spec2")
 			res, outError = c.Nodes().Get(ctx, name2, options.GetOptions{})
 			Expect(outError).NotTo(HaveOccurred())
-			testutils.ExpectResource(res2, apiv3.KindNode, testutils.ExpectNoNamespace, name2, spec2)
+			Expect(res2).To(MatchResource(apiv3.KindNode, testutils.ExpectNoNamespace, name2, spec2))
 			Expect(res.ResourceVersion).To(Equal(res2.ResourceVersion))
 
 			By("Listing all the Nodes, expecting a two results with name1/spec1 and name2/spec2")
 			outList, outError = c.Nodes().List(ctx, options.ListOptions{})
 			Expect(outError).NotTo(HaveOccurred())
-			Expect(outList.Items).To(HaveLen(2))
-			testutils.ExpectResource(&outList.Items[0], apiv3.KindNode, testutils.ExpectNoNamespace, name1, spec1)
-			testutils.ExpectResource(&outList.Items[1], apiv3.KindNode, testutils.ExpectNoNamespace, name2, spec2)
+			Expect(outList.Items).To(ConsistOf(
+				testutils.Resource(apiv3.KindNode, testutils.ExpectNoNamespace, name1, spec1),
+				testutils.Resource(apiv3.KindNode, testutils.ExpectNoNamespace, name2, spec2),
+			))
 
 			By("Updating Node name1 with spec2")
 			res1.Spec = spec2
 			res1, outError = c.Nodes().Update(ctx, res1, options.SetOptions{})
 			Expect(outError).NotTo(HaveOccurred())
-			testutils.ExpectResource(res1, apiv3.KindNode, testutils.ExpectNoNamespace, name1, spec2)
+			Expect(res1).To(MatchResource(apiv3.KindNode, testutils.ExpectNoNamespace, name1, spec2))
 
 			By("Attempting to update the Node without a Creation Timestamp")
 			res, outError = c.Nodes().Update(ctx, &apiv3.Node{
@@ -392,27 +394,29 @@ var _ = testutils.E2eDatastoreDescribe("Node tests (etcdv3)", testutils.Datastor
 			By("Getting Node (name1) with the original resource version and comparing the output against spec1")
 			res, outError = c.Nodes().Get(ctx, name1, options.GetOptions{ResourceVersion: rv1_1})
 			Expect(outError).NotTo(HaveOccurred())
-			testutils.ExpectResource(res, apiv3.KindNode, testutils.ExpectNoNamespace, name1, spec1)
+			Expect(res).To(MatchResource(apiv3.KindNode, testutils.ExpectNoNamespace, name1, spec1))
 			Expect(res.ResourceVersion).To(Equal(rv1_1))
 
 			By("Getting Node (name1) with the updated resource version and comparing the output against spec2")
 			res, outError = c.Nodes().Get(ctx, name1, options.GetOptions{ResourceVersion: rv1_2})
 			Expect(outError).NotTo(HaveOccurred())
-			testutils.ExpectResource(res, apiv3.KindNode, testutils.ExpectNoNamespace, name1, spec2)
+			Expect(res).To(MatchResource(apiv3.KindNode, testutils.ExpectNoNamespace, name1, spec2))
 			Expect(res.ResourceVersion).To(Equal(rv1_2))
 
 			By("Listing Nodes with the original resource version and checking for a single result with name1/spec1")
 			outList, outError = c.Nodes().List(ctx, options.ListOptions{ResourceVersion: rv1_1})
 			Expect(outError).NotTo(HaveOccurred())
-			Expect(outList.Items).To(HaveLen(1))
-			testutils.ExpectResource(&outList.Items[0], apiv3.KindNode, testutils.ExpectNoNamespace, name1, spec1)
+			Expect(outList.Items).To(ConsistOf(
+				testutils.Resource(apiv3.KindNode, testutils.ExpectNoNamespace, name1, spec1),
+			))
 
 			By("Listing Nodes with the latest resource version and checking for two results with name1/spec2 and name2/spec2")
 			outList, outError = c.Nodes().List(ctx, options.ListOptions{})
 			Expect(outError).NotTo(HaveOccurred())
-			Expect(outList.Items).To(HaveLen(2))
-			testutils.ExpectResource(&outList.Items[0], apiv3.KindNode, testutils.ExpectNoNamespace, name1, spec2)
-			testutils.ExpectResource(&outList.Items[1], apiv3.KindNode, testutils.ExpectNoNamespace, name2, spec2)
+			Expect(outList.Items).To(ConsistOf(
+				testutils.Resource(apiv3.KindNode, testutils.ExpectNoNamespace, name1, spec2),
+				testutils.Resource(apiv3.KindNode, testutils.ExpectNoNamespace, name2, spec2),
+			))
 
 			By("Deleting Node (name1) with the old resource version")
 			_, outError = c.Nodes().Delete(ctx, name1, options.DeleteOptions{ResourceVersion: rv1_1})
@@ -422,7 +426,7 @@ var _ = testutils.E2eDatastoreDescribe("Node tests (etcdv3)", testutils.Datastor
 			By("Deleting Node (name1) with the new resource version")
 			dres, outError := c.Nodes().Delete(ctx, name1, options.DeleteOptions{ResourceVersion: rv1_2})
 			Expect(outError).NotTo(HaveOccurred())
-			testutils.ExpectResource(dres, apiv3.KindNode, testutils.ExpectNoNamespace, name1, spec2)
+			Expect(dres).To(MatchResource(apiv3.KindNode, testutils.ExpectNoNamespace, name1, spec2))
 
 			By("Updating Node name2 with a 2s TTL and waiting for the entry to be deleted")
 			_, outError = c.Nodes().Update(ctx, res2, options.SetOptions{TTL: 2 * time.Second})
