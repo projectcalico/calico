@@ -171,7 +171,7 @@ the following steps.
    to a file.
 
     ```
-    calicoctl get bgpconfig default -o yaml > bgp.yaml
+    calicoctl get bgpconfig default --export -o yaml > bgp.yaml
     ```
 
 1. Open the bgpconfig settings file in your favorite editor, modify
@@ -357,7 +357,7 @@ much smaller number of BGP connections.
     For example:
 
     ```
-    calicoctl get node <node_name> -o yaml > node.yml
+    calicoctl get node <node_name> --export -o yaml > node.yml
 
     # Edit node.yml so that it includes:
     metadata:
