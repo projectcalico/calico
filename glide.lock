@@ -1,5 +1,5 @@
-hash: d4cca2e68ed27ccd88627afd3aad9674bfb27bd7fbd1dae9b3f9c89c8e0ecf20
-updated: 2018-10-09T04:16:37.040929448Z
+hash: baab74e3c9318514574de2778a767eb448493843238197041ebbae42399a9ffa
+updated: 2018-10-19T10:03:39.461618436-07:00
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -21,21 +21,13 @@ imports:
   version: 33245c6b5b49130ca99280408fadfab01aac0e48
   subpackages:
   - auth/authpb
-  - client
   - clientv3
   - etcdserver/api/v3rpc/rpctypes
   - etcdserver/etcdserverpb
   - mvcc/mvccpb
-  - pkg/pathutil
-  - pkg/srv
   - pkg/tlsutil
   - pkg/transport
   - pkg/types
-  - version
-- name: github.com/coreos/go-semver
-  version: 8ab6407b697782a06568d4b7f1db25550ec2e4c6
-  subpackages:
-  - semver
 - name: github.com/davecgh/go-spew
   version: 782f4967f2dc4564575ca782fe2d04090b5faca8
   subpackages:
@@ -45,7 +37,7 @@ imports:
 - name: github.com/ghodss/yaml
   version: 0ca9ea5df5451ffdf184b4428c902747c2c11cd7
 - name: github.com/go-ini/ini
-  version: d58d458bec3cb5adec4b7ddb41131855eac0b33f
+  version: 9c8236e659b76e87bf02044d06fde8683008ff3e
 - name: github.com/gogo/protobuf
   version: 342cbe0a04158f6dcb03ca0079991a51a4248c02
   subpackages:
@@ -87,6 +79,8 @@ imports:
   version: 787624de3eb7bd915c329cba748687a3b22666a6
   subpackages:
   - diskcache
+- name: github.com/hashicorp/go-version
+  version: b5a281d3160aa11950a6182bd9a9dc2cb1e02d50
 - name: github.com/hashicorp/golang-lru
   version: a0d98a5f288019575c6d1f4bb1573fef2d1fcdc4
   subpackages:
@@ -99,21 +93,21 @@ imports:
   - watch
   - winfile
 - name: github.com/imdario/mergo
-  version: 6633656539c1639d9d78127b7d47c622b5d7b6dc
+  version: 9316a62528ac99aaecb4e47eadd6dc8aa6533d58
 - name: github.com/json-iterator/go
   version: f2b4162afba35581b6d4a50d3b8f34e33c144682
 - name: github.com/kardianos/osext
   version: ae77be60afb1dcacde03767a8c37337fad28ac14
 - name: github.com/kelseyhightower/envconfig
-  version: dd1402a4d99de9ac2f396cd6fcb957bc2c695ec1
+  version: f611eb38b3875cc3bd991ca91c51d06446afa14c
 - name: github.com/matttproud/golang_protobuf_extensions
-  version: fc2b8d3a73c4867e51861bbdd5ae3c1f0869dd6a
+  version: c12348ce28de40eed0136aa2b644d0ee0650e56c
   subpackages:
   - pbutil
 - name: github.com/modern-go/concurrent
   version: bacd9c7ef1dd9b15be4a9909b8ac7a4e313eec94
 - name: github.com/modern-go/reflect2
-  version: 05fbef0ca5da472bbf96c9322b84a53edc03c9fd
+  version: 94122c33edd36123c84d5368cfb2b69df93a0ec8
 - name: github.com/onsi/ginkgo
   version: 3774a09d95489ccaa16032e0770d08ea77ba6184
   subpackages:
@@ -149,13 +143,13 @@ imports:
   - matchers/support/goraph/util
   - types
 - name: github.com/patrickmn/go-cache
-  version: 9f6ff22cfff829561052f5886ec80a2ac148b4eb
+  version: 5633e0862627c011927fa39556acae8b1f1df58a
 - name: github.com/pborman/uuid
   version: ca53cad383cad2479bbba7f7a1a05797ec1386e4
 - name: github.com/peterbourgon/diskv
   version: 5f041e8faa004a95c88a202771f4cc3e991971e6
 - name: github.com/projectcalico/felix
-  version: 0ff3c42a9911847456bb0ea13c09f775a7dbf506
+  version: 14a8b313427e073da49d00a066d1b01207a8dc26
   subpackages:
   - calc
   - config
@@ -181,7 +175,7 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: 97a21ea5de9ca912ebf2c7083de5ea7afe49f397
+  version: f575ac221a59d73d445c6e106f170a375d77eb9f
   subpackages:
   - lib/apiconfig
   - lib/apis/v1
@@ -240,10 +234,6 @@ imports:
   version: f006c2ac4710855cf0f916dd6b77acf6b048dc6e
 - name: github.com/spf13/pflag
   version: e57e3eeb33f795204c1ca35f56c44f83227c6e66
-- name: github.com/ugorji/go
-  version: bdcc60b419d136a85cdf2e7cbcac34b3f1cd6e57
-  subpackages:
-  - codec
 - name: golang.org/x/crypto
   version: 9419663f5a44be8b34ca85f08abc5fe1be11f8a3
   subpackages:
@@ -302,7 +292,7 @@ imports:
   subpackages:
   - rate
 - name: google.golang.org/appengine
-  version: b1f26356af11148e710935ed1ac8a7f5702c7612
+  version: 4216e58b9158e5f1c906f1aca75162a46a2ec88a
   subpackages:
   - internal
   - internal/app_identity
@@ -341,7 +331,7 @@ imports:
 - name: gopkg.in/fsnotify/fsnotify.v1
   version: c2828203cd70a50dcccfb2761f8b1f8ceef9a8e9
 - name: gopkg.in/go-playground/validator.v8
-  version: 5f1438d3fca68893a817e4a66806cea46a9e4ebf
+  version: 5f57d2222ad794d0dffb07e664ea05e2ee07d60c
 - name: gopkg.in/inf.v0
   version: 3887ee99ecf07df5b447e9b00d9c0b2adaa9f3e4
 - name: gopkg.in/tomb.v1
@@ -424,12 +414,10 @@ imports:
   - pkg/watch
   - third_party/forked/golang/reflect
 - name: k8s.io/apiserver
-  version: 55fc0ea59fbeb78bebf981320bea0f7bbe3a161c
+  version: 7f6c545c2e4ff0af96d8aac792ca499ea87a92e1
   subpackages:
   - pkg/storage
   - pkg/storage/etcd
-  - pkg/storage/etcd/metrics
-  - pkg/storage/etcd/util
   - pkg/storage/etcd3
   - pkg/storage/value
   - pkg/util/trace
