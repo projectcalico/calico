@@ -290,6 +290,33 @@ var _ = infrastructure.DatastoreDescribe("pre-dnat with initialized Felix, 2 wor
 						cc.ExpectSome(externalClient, w[0], 32010)
 						cc.CheckConnectivity()
 					})
+
+					Context("with workload egress policy to deny 32010 flow", func() {
+
+						BeforeEach(func() {
+							policy := api.NewNetworkPolicy()
+							policy.Name = "deny-to-32010"
+							policy.Namespace = "default"
+							order := float64(10)
+							policy.Spec.Order = &order
+							policy.Spec.Egress = []api.Rule{{
+								Action:      api.Deny,
+								Destination: api.EntityRule{Selector: "name=='" + w[0].Name + "'"}},
+							}
+							policy.Spec.Selector = "name=='" + w[1].Name + "'"
+							_, err := client.NetworkPolicies().Create(utils.Ctx, policy, utils.NoOptions)
+							Expect(err).NotTo(HaveOccurred())
+						})
+
+						It("only external client can connect to 32010; no one to 32011", func() {
+							cc := &workload.ConnectivityChecker{}
+							cc.ExpectNone(w[0], w[1], 32011)
+							cc.ExpectNone(w[1], w[0], 32010)
+							cc.ExpectNone(externalClient, w[1], 32011)
+							cc.ExpectSome(externalClient, w[0], 32010)
+							cc.CheckConnectivity()
+						})
+					})
 				})
 			})
 		})
