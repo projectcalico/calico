@@ -108,7 +108,7 @@ following command to set the global config value.
 
 ```
 # Get the current Felix settings
-$ calicoctl get felixconfig -o yaml > felix.yaml
+$ calicoctl get felixconfig --export -o yaml > felix.yaml
 
 # Modify ipipMTU to the intended integer value
 $ vim felix.yaml
