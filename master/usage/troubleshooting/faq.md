@@ -87,7 +87,7 @@ documents *mandates* the use of VLANs.
 1. Retrieve current IP Pool config
 
    ```shell
-   $ calicoctl get ipPool -o yaml > pool.yaml
+   $ calicoctl get ipPool --export -o yaml > pool.yaml
    ```
 
 2. Modify IP Pool config
