@@ -3,19 +3,21 @@ title: Host Endpoint Resource (HostEndpoint)
 canonical_url: 'https://docs.projectcalico.org/v3.2/reference/calicoctl/resources/hostendpoint'
 ---
 
-Host endpoint resources (`HostEndpoint`) come in two flavors.
+A host endpoint resource (`HostEndpoint`) represents one or more real or virtual interfaces
+attached to a host that is running {{site.prodname}}.  It enforces {{site.prodname}} policy on
+the traffic that is entering or leaving the host's default network namespace through those
+interfaces.
 
--  A host endpoint with `interfaceName: *` protects the host as a whole, including from any
-   workloads that are running on it.  More precisely, it enforces {{site.prodname}} policy on
-   all traffic that is entering or leaving the host's default network namespace in any way.
+-  A host endpoint with `interfaceName: *` represents _all_ of a host's real or virtual
+   interfaces.
 
--  Otherwise a host endpoint represents a specific external interface of a host - with that
-   interface being identified by `interfaceName` or `expectedIPs` - and enforces
-   {{site.prodname}} policy on traffic that enters or leaves the host through that interface.
+-  A host endpoint for one specific real interface is configured by `interfaceName:
+   <name-of-that-interface>`, for example `interfaceName: eth0`, or by leaving `interfaceName`
+   empty and including one of the interface's IPs in `expectedIPs`.
 
 Each host endpoint may include a set of labels and list of profiles that {{site.prodname}}
 will use to apply
-[policy]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/globalnetworkpolicy)
+[policy]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/networkpolicy)
 to the interface.  If no profiles or labels are applied, {{site.prodname}} will not apply
 any policy.
 
