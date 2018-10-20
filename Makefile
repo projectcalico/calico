@@ -220,7 +220,7 @@ update-felix-confd-libcalico:
             if ! grep "\[WARN\]" $$OUTPUT; then true; else false; fi; \
           fi'
 
-$(NODE_CONTAINER_BINARY): vendor
+$(NODE_CONTAINER_BINARY): vendor $(SRCFILES)
 	docker run --rm \
 		-e GOARCH=$(ARCH) \
 		-e GOOS=linux \
