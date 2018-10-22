@@ -34,6 +34,15 @@ func (r *DefaultRuleRenderer) WorkloadDispatchChains(
 		names = append(names, endpoint.Name)
 	}
 
+	// If there is no policy at all for a workload endpoint, we don't allow any traffic through
+	// it.
+	endRules := []Rule{
+		Rule{
+			Match:   Match(),
+			Action:  DropAction{},
+			Comment: "Unknown interface",
+		},
+	}
 	result := []*Chain{}
 	result = append(result,
 		// Assemble a from-workload and to-workload dispatch chain.
@@ -43,8 +52,8 @@ func (r *DefaultRuleRenderer) WorkloadDispatchChains(
 			WorkloadToEndpointPfx,
 			ChainFromWorkloadDispatch,
 			ChainToWorkloadDispatch,
-			true,
-			true,
+			endRules,
+			endRules,
 		)...,
 	)
 
@@ -91,17 +100,19 @@ func (r *DefaultRuleRenderer) HostDispatchChains(
 	endpoints map[string]proto.HostEndpointID,
 	applyOnForward bool,
 ) []*Chain {
-	return r.hostDispatchChains(endpoints, false, applyOnForward)
+	return r.hostDispatchChains(endpoints, "", false, applyOnForward)
 }
 
 func (r *DefaultRuleRenderer) FromHostDispatchChains(
 	endpoints map[string]proto.HostEndpointID,
+	defaultChainName string,
 ) []*Chain {
-	return r.hostDispatchChains(endpoints, true, false)
+	return r.hostDispatchChains(endpoints, defaultChainName, true, false)
 }
 
 func (r *DefaultRuleRenderer) hostDispatchChains(
 	endpoints map[string]proto.HostEndpointID,
+	defaultFromChainName string,
 	fromOnly bool,
 	applyOnForward bool,
 ) []*Chain {
@@ -112,6 +123,19 @@ func (r *DefaultRuleRenderer) hostDispatchChains(
 		names = append(names, ifaceName)
 	}
 
+	var fromEndRules, toEndRules []Rule
+	if defaultFromChainName != "" {
+		// Arrange to goto the specified default chain for any packets that don't match an
+		// interface in the `endpoints` map.  (Currently we only use this for pre-DNAT
+		// policy, so it's only needed for 'from' chain programming; but we will extend
+		// later to other kinds of policy, and then it will be wanted equally in 'to' chain
+		// programming.)
+		fromEndRules = []Rule{
+			Rule{
+				Action: GotoAction{Target: defaultFromChainName},
+			},
+		}
+	}
 	if fromOnly {
 		return r.interfaceNameDispatchChains(
 			names,
@@ -119,8 +143,8 @@ func (r *DefaultRuleRenderer) hostDispatchChains(
 			"",
 			ChainDispatchFromHostEndpoint,
 			"",
-			false,
-			false,
+			fromEndRules,
+			toEndRules,
 		)
 	}
 
@@ -131,8 +155,8 @@ func (r *DefaultRuleRenderer) hostDispatchChains(
 			HostToEndpointPfx,
 			ChainDispatchFromHostEndpoint,
 			ChainDispatchToHostEndpoint,
-			false,
-			false,
+			fromEndRules,
+			toEndRules,
 		)
 	}
 
@@ -143,8 +167,8 @@ func (r *DefaultRuleRenderer) hostDispatchChains(
 			HostToEndpointPfx,
 			ChainDispatchFromHostEndpoint,
 			ChainDispatchToHostEndpoint,
-			false,
-			false,
+			fromEndRules,
+			toEndRules,
 		),
 		r.interfaceNameDispatchChains(
 			names,
@@ -152,8 +176,8 @@ func (r *DefaultRuleRenderer) hostDispatchChains(
 			HostToEndpointForwardPfx,
 			ChainDispatchFromHostEndPointForward,
 			ChainDispatchToHostEndpointForward,
-			false,
-			false,
+			fromEndRules,
+			toEndRules,
 		)...,
 	)
 }
@@ -164,8 +188,8 @@ func (r *DefaultRuleRenderer) interfaceNameDispatchChains(
 	toEndpointPfx,
 	dispatchFromEndpointChainName,
 	dispatchToEndpointChainName string,
-	dropAtEndOfFromChain bool,
-	dropAtEndOfToChain bool,
+	fromEndRules []Rule,
+	toEndRules []Rule,
 ) []*Chain {
 
 	log.WithField("ifaceNames", names).Debug("Rendering endpoint dispatch chains")
@@ -188,7 +212,7 @@ func (r *DefaultRuleRenderer) interfaceNameDispatchChains(
 				Target: EndpointChainName(pfx, name),
 			}
 		},
-		dropAtEndOfFromChain,
+		fromEndRules,
 	)
 
 	chains := append(fromChildChains, fromRootChain)
@@ -207,7 +231,7 @@ func (r *DefaultRuleRenderer) interfaceNameDispatchChains(
 					Target: EndpointChainName(pfx, name),
 				}
 			},
-			dropAtEndOfToChain,
+			toEndRules,
 		)
 		chains = append(chains, toChildChains...)
 		chains = append(chains, toRootChain)
@@ -255,7 +279,7 @@ func (r *DefaultRuleRenderer) endpointMarkDispatchChains(
 						Target: EndpointChainName(pfx, name),
 					}
 				},
-				false,
+				nil,
 			)
 
 			chains = append(chains, childChains...)
@@ -345,7 +369,7 @@ func (r *DefaultRuleRenderer) buildSingleDispatchChains(
 	endpointPfx string,
 	getMatchForEndpoint func(name string) MatchCriteria,
 	getActionForEndpoint func(pfx, name string) Action,
-	dropAtEndOfChain bool,
+	endRules []Rule,
 ) ([]*Chain, *Chain, []Rule) {
 
 	childChains := make([]*Chain, 0)
@@ -384,25 +408,20 @@ func (r *DefaultRuleRenderer) buildSingleDispatchChains(
 			// ...and child chains.
 			childEndpointRules := make([]Rule, 0)
 			for _, name := range ifaceNames {
-				logCxt.WithField("ifaceName", name).Debug("Adding rule to child chains")
+				logCxt.WithField("ifaceName", name).Debug("Adding rule to child chain")
 
 				childEndpointRules = append(childEndpointRules, Rule{
 					Match:  getMatchForEndpoint(name),
 					Action: getActionForEndpoint(endpointPfx, name),
 				})
 			}
-			if dropAtEndOfChain {
-				// Since we use a goto in the root chain (as described above), we
-				// need to duplicate the drop rules at the end of the child chain
-				// since packets that reach the end of the child chain would
-				// return up past the root chain, appearing to be accepted.
-				logCxt.Debug("Adding drop rules at end of child from chains.")
-				childEndpointRules = append(childEndpointRules, Rule{
-					Match:   Match(),
-					Action:  DropAction{},
-					Comment: "Unknown interface",
-				})
-			}
+
+			// Since we use a goto in the root chain (as described above), we need to
+			// duplicate the end rules at the end of the child chain so that
+			// non-matching packets in a child chain are treated the same as
+			// non-matching packets in the root chain.
+			logCxt.Debug("Adding end rules at end of child chain")
+			childEndpointRules = append(childEndpointRules, endRules...)
 
 			childEndpointChain := &Chain{
 				Name:  childChainName,
@@ -424,14 +443,8 @@ func (r *DefaultRuleRenderer) buildSingleDispatchChains(
 		}
 	}
 
-	if dropAtEndOfChain {
-		log.Debug("Adding drop rules at end of root from chains.")
-		rootRules = append(rootRules, Rule{
-			Match:   Match(),
-			Action:  DropAction{},
-			Comment: "Unknown interface",
-		})
-	}
+	log.Debug("Adding end rules at end of root chain")
+	rootRules = append(rootRules, endRules...)
 
 	rootChain := &Chain{
 		Name:  chainName,

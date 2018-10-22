@@ -131,10 +131,10 @@ var _ = infrastructure.DatastoreDescribe("pre-dnat with initialized Felix, 2 wor
 			cc.CheckConnectivityWithTimeout(30 * time.Second)
 		})
 
-		Context("with pre-DNAT policy to prevent access from outside", func() {
+		Context("with pre-DNAT policy denying all ingress", func() {
 
 			BeforeEach(func() {
-				// Make sure our new host endpoints don't cut felix off from the datastore.
+				// Make sure our host endpoints won't cut felix off from the datastore.
 				err := infra.AddAllowToDatastore("has(host-endpoint)")
 				Expect(err).NotTo(HaveOccurred())
 
@@ -148,78 +148,17 @@ var _ = infrastructure.DatastoreDescribe("pre-dnat with initialized Felix, 2 wor
 				policy.Spec.Selector = "has(host-endpoint)"
 				_, err = client.GlobalNetworkPolicies().Create(utils.Ctx, policy, utils.NoOptions)
 				Expect(err).NotTo(HaveOccurred())
-
-				hostEp := api.NewHostEndpoint()
-				hostEp.Name = "felix-eth0"
-				hostEp.Spec.Node = felix.Hostname
-				hostEp.Labels = map[string]string{"host-endpoint": "true"}
-				hostEp.Spec.InterfaceName = "eth0"
-				_, err = client.HostEndpoints().Create(utils.Ctx, hostEp, utils.NoOptions)
-				Expect(err).NotTo(HaveOccurred())
 			})
 
-			It("external client cannot connect", func() {
-				cc := &workload.ConnectivityChecker{}
-				cc.ExpectSome(w[0], w[1], 32011)
-				cc.ExpectSome(w[1], w[0], 32010)
-				cc.ExpectNone(externalClient, w[1], 32011)
-				cc.ExpectNone(externalClient, w[0], 32010)
-				cc.CheckConnectivityWithTimeout(30 * time.Second)
-			})
-
-			Context("with pre-DNAT policy to open pinhole to 32010", func() {
+			Context("with host endpoint applying policy to eth0", func() {
 
 				BeforeEach(func() {
-					policy := api.NewGlobalNetworkPolicy()
-					policy.Name = "allow-ingress-32010"
-					order := float64(10)
-					policy.Spec.Order = &order
-					policy.Spec.PreDNAT = true
-					policy.Spec.ApplyOnForward = true
-					protocol := numorstring.ProtocolFromString("tcp")
-					ports := numorstring.SinglePort(32010)
-					policy.Spec.Ingress = []api.Rule{{
-						Action:   api.Allow,
-						Protocol: &protocol,
-						Destination: api.EntityRule{Ports: []numorstring.Port{
-							ports,
-						}},
-					}}
-					policy.Spec.Selector = "has(host-endpoint)"
-					_, err := client.GlobalNetworkPolicies().Create(utils.Ctx, policy, utils.NoOptions)
-					Expect(err).NotTo(HaveOccurred())
-				})
-
-				It("external client can connect to 32010 but not 32011", func() {
-					cc := &workload.ConnectivityChecker{}
-					cc.ExpectSome(w[0], w[1], 32011)
-					cc.ExpectSome(w[1], w[0], 32010)
-					cc.ExpectNone(externalClient, w[1], 32011)
-					cc.ExpectSome(externalClient, w[0], 32010)
-					cc.CheckConnectivity()
-				})
-			})
-
-			Context("with pre-DNAT policy to open pinhole to 8055", func() {
-
-				BeforeEach(func() {
-					policy := api.NewGlobalNetworkPolicy()
-					policy.Name = "allow-ingress-8055"
-					order := float64(10)
-					policy.Spec.Order = &order
-					policy.Spec.PreDNAT = true
-					policy.Spec.ApplyOnForward = true
-					protocol := numorstring.ProtocolFromString("tcp")
-					ports := numorstring.SinglePort(8055)
-					policy.Spec.Ingress = []api.Rule{{
-						Action:   api.Allow,
-						Protocol: &protocol,
-						Destination: api.EntityRule{Ports: []numorstring.Port{
-							ports,
-						}},
-					}}
-					policy.Spec.Selector = "has(host-endpoint)"
-					_, err := client.GlobalNetworkPolicies().Create(utils.Ctx, policy, utils.NoOptions)
+					hostEp := api.NewHostEndpoint()
+					hostEp.Name = "felix-eth0"
+					hostEp.Spec.Node = felix.Hostname
+					hostEp.Labels = map[string]string{"host-endpoint": "true"}
+					hostEp.Spec.InterfaceName = "eth0"
+					_, err := client.HostEndpoints().Create(utils.Ctx, hostEp, utils.NoOptions)
 					Expect(err).NotTo(HaveOccurred())
 				})
 
@@ -229,7 +168,155 @@ var _ = infrastructure.DatastoreDescribe("pre-dnat with initialized Felix, 2 wor
 					cc.ExpectSome(w[1], w[0], 32010)
 					cc.ExpectNone(externalClient, w[1], 32011)
 					cc.ExpectNone(externalClient, w[0], 32010)
-					cc.CheckConnectivity()
+					cc.CheckConnectivityWithTimeout(30 * time.Second)
+				})
+
+				Context("with pre-DNAT policy to open pinhole to 32010", func() {
+
+					BeforeEach(func() {
+						policy := api.NewGlobalNetworkPolicy()
+						policy.Name = "allow-ingress-32010"
+						order := float64(10)
+						policy.Spec.Order = &order
+						policy.Spec.PreDNAT = true
+						policy.Spec.ApplyOnForward = true
+						protocol := numorstring.ProtocolFromString("tcp")
+						ports := numorstring.SinglePort(32010)
+						policy.Spec.Ingress = []api.Rule{{
+							Action:   api.Allow,
+							Protocol: &protocol,
+							Destination: api.EntityRule{Ports: []numorstring.Port{
+								ports,
+							}},
+						}}
+						policy.Spec.Selector = "has(host-endpoint)"
+						_, err := client.GlobalNetworkPolicies().Create(utils.Ctx, policy, utils.NoOptions)
+						Expect(err).NotTo(HaveOccurred())
+					})
+
+					It("external client can connect to 32010 but not 32011", func() {
+						cc := &workload.ConnectivityChecker{}
+						cc.ExpectSome(w[0], w[1], 32011)
+						cc.ExpectSome(w[1], w[0], 32010)
+						cc.ExpectNone(externalClient, w[1], 32011)
+						cc.ExpectSome(externalClient, w[0], 32010)
+						cc.CheckConnectivity()
+					})
+				})
+
+				Context("with pre-DNAT policy to open pinhole to 8055", func() {
+
+					BeforeEach(func() {
+						policy := api.NewGlobalNetworkPolicy()
+						policy.Name = "allow-ingress-8055"
+						order := float64(10)
+						policy.Spec.Order = &order
+						policy.Spec.PreDNAT = true
+						policy.Spec.ApplyOnForward = true
+						protocol := numorstring.ProtocolFromString("tcp")
+						ports := numorstring.SinglePort(8055)
+						policy.Spec.Ingress = []api.Rule{{
+							Action:   api.Allow,
+							Protocol: &protocol,
+							Destination: api.EntityRule{Ports: []numorstring.Port{
+								ports,
+							}},
+						}}
+						policy.Spec.Selector = "has(host-endpoint)"
+						_, err := client.GlobalNetworkPolicies().Create(utils.Ctx, policy, utils.NoOptions)
+						Expect(err).NotTo(HaveOccurred())
+					})
+
+					It("external client cannot connect", func() {
+						cc := &workload.ConnectivityChecker{}
+						cc.ExpectSome(w[0], w[1], 32011)
+						cc.ExpectSome(w[1], w[0], 32010)
+						cc.ExpectNone(externalClient, w[1], 32011)
+						cc.ExpectNone(externalClient, w[0], 32010)
+						cc.CheckConnectivity()
+					})
+				})
+			})
+
+			Context("with all-interfaces host endpoint", func() {
+
+				BeforeEach(func() {
+					hostEp := api.NewHostEndpoint()
+					hostEp.Name = "felix-all"
+					hostEp.Spec.Node = felix.Hostname
+					hostEp.Labels = map[string]string{"host-endpoint": "true"}
+					hostEp.Spec.InterfaceName = "*"
+					_, err := client.HostEndpoints().Create(utils.Ctx, hostEp, utils.NoOptions)
+					Expect(err).NotTo(HaveOccurred())
+				})
+
+				It("no one can connect via NodePorts", func() {
+					cc := &workload.ConnectivityChecker{}
+					cc.ExpectNone(w[0], w[1], 32011)
+					cc.ExpectNone(w[1], w[0], 32010)
+					cc.ExpectNone(externalClient, w[1], 32011)
+					cc.ExpectNone(externalClient, w[0], 32010)
+					cc.CheckConnectivityWithTimeout(30 * time.Second)
+				})
+
+				Context("with pre-DNAT policy to open pinhole via 32010", func() {
+
+					BeforeEach(func() {
+						policy := api.NewGlobalNetworkPolicy()
+						policy.Name = "allow-via-32010"
+						order := float64(10)
+						policy.Spec.Order = &order
+						policy.Spec.PreDNAT = true
+						policy.Spec.ApplyOnForward = true
+						protocol := numorstring.ProtocolFromString("tcp")
+						ports := numorstring.SinglePort(32010)
+						policy.Spec.Ingress = []api.Rule{{
+							Action:   api.Allow,
+							Protocol: &protocol,
+							Destination: api.EntityRule{Ports: []numorstring.Port{
+								ports,
+							}},
+						}}
+						policy.Spec.Selector = "has(host-endpoint)"
+						_, err := client.GlobalNetworkPolicies().Create(utils.Ctx, policy, utils.NoOptions)
+						Expect(err).NotTo(HaveOccurred())
+					})
+
+					It("clients can connect to 32010 but not 32011", func() {
+						cc := &workload.ConnectivityChecker{}
+						cc.ExpectNone(w[0], w[1], 32011)
+						cc.ExpectSome(w[1], w[0], 32010)
+						cc.ExpectNone(externalClient, w[1], 32011)
+						cc.ExpectSome(externalClient, w[0], 32010)
+						cc.CheckConnectivity()
+					})
+
+					Context("with workload egress policy to deny 32010 flow", func() {
+
+						BeforeEach(func() {
+							policy := api.NewNetworkPolicy()
+							policy.Name = "deny-to-32010"
+							policy.Namespace = "default"
+							order := float64(10)
+							policy.Spec.Order = &order
+							policy.Spec.Egress = []api.Rule{{
+								Action:      api.Deny,
+								Destination: api.EntityRule{Selector: "name=='" + w[0].Name + "'"}},
+							}
+							policy.Spec.Selector = "name=='" + w[1].Name + "'"
+							_, err := client.NetworkPolicies().Create(utils.Ctx, policy, utils.NoOptions)
+							Expect(err).NotTo(HaveOccurred())
+						})
+
+						It("only external client can connect to 32010; no one to 32011", func() {
+							cc := &workload.ConnectivityChecker{}
+							cc.ExpectNone(w[0], w[1], 32011)
+							cc.ExpectNone(w[1], w[0], 32010)
+							cc.ExpectNone(externalClient, w[1], 32011)
+							cc.ExpectSome(externalClient, w[0], 32010)
+							cc.CheckConnectivity()
+						})
+					})
 				})
 			})
 		})
