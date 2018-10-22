@@ -13,7 +13,7 @@ g = Github(os.environ.get('GITHUB_TOKEN'))
 assert os.environ.get('VERSION')
 VERSION=os.environ.get('VERSION')
 MILESTONE="Calico %s" % VERSION
-RELEASE_STREAM = string.join(string.split(VERSION, ".")[:2], ".")
+RELEASE_STREAM = ".".join(VERSION.split(".")[:2])
 
 # The file where we'll store the release notes.
 FILENAME="_includes/%s/release-notes/%s-release-notes.md" % (RELEASE_STREAM, VERSION)
@@ -63,7 +63,7 @@ def issues_by_repo():
                     break
                 issues = repo.get_issues(milestone=m, labels=[label], state="closed")
                 for i in issues:
-                    all_issues.setdefault(repo, []).append(i)
+                    all_issues.setdefault(repo.name, []).append(i)
     return all_issues
 
 # Takes an issue and returns the appropriate release notes from that
@@ -88,11 +88,11 @@ if __name__ == "__main__":
         f.write(u"#### <Placeholder>\n\n")
         f.write(u"#### Bug fixes\n\n")
         f.write(u"#### Other changes\n\n")
-        for repo, issues in all_issues.iteritems():
-            print("Writing notes for %s" % repo.name)
+        for repo, issues in all_issues.items():
+            print("Writing notes for %s" % repo)
             for i in issues:
                 for note in extract_release_notes(i):
-                    f.write(" - %s [%s #%d](%s) (@%s)\n" % (note, repo.name, i.number, i.html_url, i.user.login))
+                    f.write(" - %s [%s #%d](%s) (@%s)\n" % (note, repo, i.number, i.html_url, i.user.login))
 
     print("")
     print("Release notes written to " + FILENAME)
