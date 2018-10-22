@@ -1,5 +1,6 @@
 ---
 title: Getting Involved
+redirect_from: latest/reference/involved
 canonical_url: 'https://docs.projectcalico.org/v3.2/reference/involved'
 ---
 

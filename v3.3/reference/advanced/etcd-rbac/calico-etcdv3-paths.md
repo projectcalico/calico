@@ -1,5 +1,6 @@
 ---
 title: Calico key and path prefixes in etcd v3
+redirect_from: latest/reference/advanced/etcd-rbac/calico-etcdv3-paths
 canonical_url: 'https://docs.projectcalico.org/v3.2/reference/advanced/etcd-rbac/calico-etcdv3-paths'
 ---
 

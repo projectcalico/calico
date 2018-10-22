@@ -138,7 +138,6 @@ Examples:
 
 - To create a top level splash page for a URL path, simply name the file `index.md`.
 
-- If you are adding a new page to the current release directory, add the following metadata just under the `title` of the page: `redirect_from: latest/<path-to-new-file>`. This ensures that readers who use `latest` in their paths instead of the version number of the current release get redirected to your new page. If you do not add this, you may experience `htmlproofer` errors.
 
 - [Add the new page to the side navigation bar](#linking-content).
 

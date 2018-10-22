@@ -1,3 +1,33 @@
+v3.3:
+- title: v3.3.0
+  components:
+    calico/node:
+      version: v3.3.0
+      url: https://github.com/projectcalico/node/releases/tag/v3.3.0
+    calicoctl:
+      version: v3.3.0
+      url: https://github.com/projectcalico/calicoctl/releases/tag/v3.3.0
+    calico/cni:
+      version: v3.3.0
+      url: https://github.com/projectcalico/cni-plugin/releases/tag/v3.3.0
+    calico/kube-controllers:
+      version: v3.3.0
+      url: https://github.com/projectcalico/k8s-policy/releases/tag/v3.3.0
+    networking-calico:
+      version: 3.2.0
+      url: http://git.openstack.org/cgit/openstack/networking-calico/commit/?h=3.2.0
+    typha:
+      version: v3.3.0
+      url: https://github.com/projectcalico/typha/releases/tag/v3.3.0
+    flannel:
+      version: v0.9.1
+    calico/dikastes:
+      version: v3.3.0
+      url: https://github.com/projectcalico/app-policy/releases/tag/v3.3.0
+    flexvol:
+      version: v3.3.0
+      url: https://github.com/projectcalico/pod2daemon/releases/tag/v3.3.0
+
 v3.2:
 - title: v3.2.3
   components:
@@ -1570,39 +1600,6 @@ v2.1:
     networking-calico:
       version: 1.4.2
       url: http://git.openstack.org/cgit/openstack/networking-calico/commit/?h=1.4.2
-
-# v3.3 is still pre-GA. This section simply exists for development purposes,
-# and will be deleted when v3.3.0 is promoted to GA.
-v3.3:
-- title: v3.3.0-pre
-  components:
-    calico/node:
-      version: release-v3.3
-      url: ""
-    calicoctl:
-      version: release-v3.3
-      url: "https://www.projectcalico.org/builds/calicoctl"
-    calico/cni:
-      version: release-v3.3
-      url: ""
-    calico/kube-controllers:
-      version: release-v3.3
-      url: ""
-    networking-calico:
-      version: release-v3.3
-      url: ""
-    typha:
-      version: release-v3.3
-      url: ""
-    flannel:
-      version: release-v3.3
-      url: ""
-    calico/dikastes:
-      version: release-v3.3
-      url: ""
-    flexvol:
-      version: release-v3.3
-      url: ""
 
 # The master release stream is used to generate the master version of the docs.  
 master:

@@ -1,5 +1,6 @@
 ---
 title: Overview of Calico for DC/OS
+redirect_from: latest/getting-started/mesos/installation/dc-os/index
 canonical_url: 'https://docs.projectcalico.org/v2.6/getting-started/mesos/installation/dc-os/'
 ---
 
