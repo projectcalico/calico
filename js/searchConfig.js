@@ -29,8 +29,10 @@
         });
     };
 
-    var searchResultTemplate = '\
+    var searchResultsTemplate = '\
+            {{#hits}}\
             <div class="search-result ais-result">\
+                {{#shouldDisplayTopCategory}}\
                 {{#hierarchy.lvl0}}\
                 <h3 class="search-result__category ais-lvl0">\
                     <a href="{{url}}" >\
@@ -38,35 +40,43 @@
                     </a>\
                 </h3>\
                 {{/hierarchy.lvl0}}\
-                {{#hierarchy.lvl1}}\
-                <h4 class="search-result__subcategory ais-lvl1">\
-                    <a href="{{url}}">\
-                        {{{_highlightResult.hierarchy.lvl1.value}}}\
-                    </a>\
-                </h4>\
-                {{/hierarchy.lvl1}}\
-                {{#hierarchy.lvl2}}\
-                <h5 class="search-result__subsubcategory ais-lvl2">\
-                    <a href="{{url}}">\
-                        {{{_highlightResult.hierarchy.lvl2.value}}}\
-                    </a>\
-                </h5>\
-                {{/hierarchy.lvl2}}\
-                {{#hierarchy.lvl3}}\
-                <h6 class="search-result__subsubsubcategory ais-lvl3">\
-                    <a href="{{url}}">\
-                        {{{_highlightResult.hierarchy.lvl3.value}}}\
-                    </a>\
-                </h6>\
-                {{/hierarchy.lvl3}}\
-                {{#content}}\
-                <div class="search-result__content ais-content">\
-                    <a href="{{url}}" >\
-                        {{{_snippetResult.content.value}}}\
-                    </a>\
+                {{/shouldDisplayTopCategory}}\
+                <div class="search-result__columns">\
+                    <div class="search-result__left-column">\
+                    {{#hierarchy.lvl1}}\
+                    <h4 class="search-result__subcategory ais-lvl1">\
+                        <a href="{{url}}">\
+                            {{{_highlightResult.hierarchy.lvl1.value}}}\
+                        </a>\
+                    </h4>\
+                    {{/hierarchy.lvl1}}\
+                    </div>\
+                    <div class="search-result__right-column">\
+                    {{#hierarchy.lvl2}}\
+                    <h5 class="search-result__subsubcategory ais-lvl2">\
+                        <a href="{{url}}">\
+                            {{{_highlightResult.hierarchy.lvl2.value}}}\
+                        </a>\
+                    </h5>\
+                    {{/hierarchy.lvl2}}\
+                    {{#hierarchy.lvl3}}\
+                    <h6 class="search-result__subsubsubcategory ais-lvl3">\
+                        <a href="{{url}}">\
+                            {{{_highlightResult.hierarchy.lvl3.value}}}\
+                     </a>\
+                    </h6>\
+                    {{/hierarchy.lvl3}}\
+                    {{#content}}\
+                    <div class="search-result__content ais-content">\
+                        <a href="{{url}}" >\
+                            {{{_snippetResult.content.value}}}\
+                        </a>\
+                    </div>\
+                    {{/content}}\
+                    </div>\
                 </div>\
-                {{/content}}\
             </div>\
+            {{/hits}}\
         ';
 
     function initializeInstantSearch(currentDocVersion, inputSelector, resultsSelector, paginationSelector) {
@@ -94,7 +104,34 @@
             container: resultsSelector,
             templates: {
                 empty: 'No results',
-                item: searchResultTemplate
+                allItems: searchResultsTemplate
+            },
+            transformData: {
+                allItems: searchResults => {
+                    searchResults.hits.sort(function (a, b) {
+                        var hitATopCategory = a.hierarchy.lvl0;
+                        var hitBTopCategory = b.hierarchy.lvl0;
+
+                        return hitATopCategory < hitBTopCategory
+                            ? -1
+                            : hitATopCategory > hitBTopCategory;
+                    });
+
+                    var visitedTopCategories = {};
+
+                    searchResults.hits.forEach(function (hit) {
+                        var hitTopCategory = hit.hierarchy.lvl0;
+
+                        if (hitTopCategory && visitedTopCategories[hitTopCategory]) {
+                            hit.shouldDisplayTopCategory = false;
+                        } else {
+                            hit.shouldDisplayTopCategory = true;
+                            visitedTopCategories[hitTopCategory] = true;
+                        }
+                    });
+
+                    return searchResults;
+                }
             },
             hitsPerPage: 6
         }));

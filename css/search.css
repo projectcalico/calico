@@ -7,15 +7,6 @@
     background-color: #f9f2f4;
 }
 
-.ais-content {
-    color: #63676d;
-}
-
-.ais-lvl0 {
-    color: black;
-    font-size: 1.1em
-}
-
 .ais-result {
     margin-bottom: 15px;
     border-left: solid 1px #ddd;
@@ -29,4 +20,49 @@ input:focus {
 .popover {
     max-width: unset;
     width: 400px;
+}
+
+.search-result__category > * {
+    color: black;
+    font-size: 20px;
+
+    border-bottom: 1px grey solid;
+}
+
+.search-result__subcategory > * 
+{
+    color: gray;
+    font-size: 18px;
+}
+
+.search-result__subsubcategory > *,
+.search-result__subsubsubcategory > *
+{
+    color: gray;
+    font-size: 16px;
+}
+
+.search-result__content > *
+{
+    color: gray;
+    font-size: 14px;
+}
+
+.search-result__columns {
+    display: flex;
+    justify-content: center
+}
+
+.search-result__left-column {
+    flex-basis: 1;
+    flex-grow: 0;
+}
+
+.search-result__right-column {
+    flex-basis: 1;
+    flex-grow: 1;
+
+    margin-left: 5px;
+    padding-left: 5px;
+    border-left: 1px grey solid;
 }
