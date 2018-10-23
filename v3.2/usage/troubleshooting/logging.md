@@ -1,6 +1,5 @@
 ---
 title: Logging
-redirect_from: latest/usage/troubleshooting/logging
 canonical_url: 'https://docs.projectcalico.org/v3.2/usage/troubleshooting/logging'
 ---
 

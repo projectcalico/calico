@@ -1,5 +1,6 @@
 ---
 title: Customizing the Calico Universe Framework
+redirect_from: latest/getting-started/mesos/installation/dc-os/custom
 canonical_url: 'https://docs.projectcalico.org/v2.6/getting-started/mesos/installation/dc-os/custom'
 ---
 

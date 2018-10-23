@@ -1,5 +1,6 @@
 ---
 title: Launching Tasks
+redirect_from: latest/getting-started/mesos/tutorials/launching-tasks
 canonical_url: 'https://docs.projectcalico.org/v2.6/getting-started/mesos/tutorials/launching-tasks'
 ---
 

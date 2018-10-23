@@ -1,5 +1,6 @@
 ---
 title: Connecting to Tasks
+redirect_from: latest/getting-started/mesos/tutorials/connecting-tasks
 canonical_url: 'https://docs.projectcalico.org/v2.6/getting-started/mesos/tutorials/connecting-tasks'
 ---
 
