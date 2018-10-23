@@ -73,6 +73,7 @@ the host. Instead, continue directly to the
    daemonset "calico-etcd" created
    service "calico-etcd" created
    ```
+   {: .no-select-button}
 
 1. Install {{site.prodname}} with the following command.
 
@@ -99,6 +100,7 @@ the host. Instead, continue directly to the
    clusterrole.rbac.authorization.k8s.io "calico-node" created
    clusterrolebinding.rbac.authorization.k8s.io "calico-node" created
    ```
+   {: .no-select-button}
 
 1. Confirm that all of the pods are running with the following command.
 
@@ -120,6 +122,7 @@ the host. Instead, continue directly to the
    kube-system  kube-proxy-8fzp2                           1/1    Running  0         5m
    kube-system  kube-scheduler-jbaker-virtualbox           1/1    Running  0         5m
    ```
+   {: .no-select-button}
 
 1. Press CTRL+C to exit `watch`.
 
@@ -135,6 +138,7 @@ the host. Instead, continue directly to the
    ```
    node "<your-hostname>" untainted
    ```
+   {: .no-select-button}
 
 1. Confirm that you now have a node in your cluster with the
    following command.
@@ -149,6 +153,7 @@ the host. Instead, continue directly to the
    NAME             STATUS  ROLES   AGE  VERSION  EXTERNAL-IP  OS-IMAGE            KERNEL-VERSION     CONTAINER-RUNTIME
    <your-hostname>  Ready   master  1h   v1.8.x   <none>       Ubuntu 16.04.3 LTS  4.10.0-28-generic  docker://1.12.6
    ```
+   {: .no-select-button}
 
 Congratulations! You now have a single-host Kubernetes cluster
 equipped with {{site.prodname}}.

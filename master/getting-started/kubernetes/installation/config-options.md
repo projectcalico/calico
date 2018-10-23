@@ -98,6 +98,7 @@ To use these manifests with a TLS-enabled etcd cluster you must do the following
    etcd_cert: "/calico-secrets/etcd-cert"
    etcd_key: "/calico-secrets/etcd-key"
    ```
+   {: .no-select-button}
 
 1. Ensure that you have three files, one containing the `etcd_ca` value, another containing
    the `etcd_key` value, and a third containing the `etcd_cert` value.
@@ -128,6 +129,7 @@ To use these manifests with a TLS-enabled etcd cluster you must do the following
      etcd-cert: LS0tLS1...ElGSUNBVEUtLS0tLQ==
      etcd-ca: LS0tLS1CRUdJTiBD...JRklDQVRFLS0tLS0=
    ```
+   {: .no-select-button}
 
 1. Apply the manifest.
 

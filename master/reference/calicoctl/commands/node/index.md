@@ -8,7 +8,7 @@ This section describes the `calicoctl node` commands.
 Read the [calicoctl Overview]({{site.baseurl}}/{{page.version}}/reference/calicoctl/)
 for a full list of calicoctl commands.
 
-Note that if you run `calicoctl` in a container, `calicoctl node ...` commands will 
+Note that if you run `calicoctl` in a container, `calicoctl node ...` commands will
 not work (they need access to parts of the host filesystem).
 
 ## Displaying the help text for 'calicoctl node' commands
@@ -30,9 +30,10 @@ Options:
 Description:
   Node specific commands for calicoctl.  These commands must be run directly on
   the compute host running the Calico node instance.
-  
+
   See 'calicoctl node <command> --help' to read about a specific subcommand.
 ```
+{: .no-select-button}
 
 ## Node specific commands
 

@@ -27,6 +27,7 @@ Description:
 
   See 'calicoctl ipam <command> --help' to read about a specific subcommand.
 ```
+{: .no-select-button}
 
 ## IPAM specific commands
 

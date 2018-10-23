@@ -66,6 +66,7 @@ and your datastore type.
    {{site.noderunning}}-vm8kh     2/2   Running   0    3m
    {{site.noderunning}}-w92wk     2/2   Running   0    3m
    ```
+   {: .no-select-button}
 
 1. Remove any existing `calicoctl` instances, [install the new `calicoctl`](../../../usage/calicoctl/install)
    and [configure it to connect to your datastore](../../../usage/calicoctl/configure/).
@@ -129,6 +130,7 @@ and your datastore type.
    {{site.noderunning}}-vm8kh                          1/2       Running   0          3m
    {{site.noderunning}}-w92wk                          1/2       Running   0          3m
    ```
+   {: .no-select-button}
 
    > **Tip**: The {{site.noderunning}} pods will report `1/2` in the `READY` column, as shown.
    {: .alert .alert-success}

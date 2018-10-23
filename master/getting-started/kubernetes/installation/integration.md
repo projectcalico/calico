@@ -128,7 +128,7 @@ The {{site.prodname}} CNI plugins require a standard CNI config file.  The `poli
 running the `calico/kube-controllers` container .
 
 ```bash
-mkdir -p /etc/cni/net.d
+mkdir -p /etc/cni/net.d 
 cat >/etc/cni/net.d/10-calico.conf <<EOF
 {
     "name": "calico-k8s-network",
@@ -181,16 +181,22 @@ To install the controllers:
 - Install it using `kubectl`.
 
 ```shell
-$ kubectl create -f calico-kube-controllers.yaml
+kubectl create -f calico-kube-controllers.yaml
 ```
 
-After a few moments, you should see the controllers enter `Running` state:
+After a few moments, issue the following command.
 
 ```shell
-$ kubectl get pods --namespace=kube-system
+kubectl get pods --namespace=kube-system
+```
+
+You should see the controllers enter the `Running` state.
+
+```bash
 NAME                                     READY     STATUS    RESTARTS   AGE
 calico-kube-controllers                  1/1       Running   0          1m
 ```
+{: .no-select-button}
 
 For more information on how to configure the controllers,
 see the [configuration guide]({{site.baseur}}/{{page.version}}/reference/kube-controllers/configuration).

@@ -42,7 +42,7 @@ Refer to the section that corresponds to your orchestrator for details.
 Kubernetes components must be configured to operate with IPv6.
 To enable IPv6, set the following flags.
 
-##### kube-apiserver 
+##### kube-apiserver
 
 | Flag | Value/Content |
 | ---- | ------------- |
@@ -117,7 +117,7 @@ calico-node pod.
 ### Modifying your DNS for IPv6
 
 It will probably be necessary to modify your DNS pod for IPv6. If you are using
-[kube-dns](/{{page.version}}/getting-started/kubernetes/installation/manifests/kubedns.yaml), 
+[kube-dns](/{{page.version}}/getting-started/kubernetes/installation/manifests/kubedns.yaml),
 then the following changes will ensure IPv6 operation.
 
 - Update the image versions to at least `1.14.8`.
@@ -130,11 +130,13 @@ then the following changes will ensure IPv6 operation.
   --probe=kubedns,127.0.0.1:10053,kubernetes.default.svc.cluster.local,5,A
   --probe=dnsmasq,127.0.0.1:53,kubernetes.default.svc.cluster.local,5,A
   ```
+  {: .no-select-button}
   to
   ```
   --probe=kubedns,127.0.0.1:10053,kubernetes.default.svc.cluster.local,5,SRV
   --probe=dnsmasq,127.0.0.1:53,kubernetes.default.svc.cluster.local,5,SRV
   ```
+  {: .no-select-button}
 
 ## Enabling IPv6 with OpenStack
 

@@ -32,11 +32,12 @@ Description:
   using it, so only use this command to clean up addresses from endpoints that
   were not cleanly removed from Calico.
 ```
+{: .no-select-button}
 
 ### Examples
 
 ```
-$ calicoctl ipam release --ip=192.168.1.2
+calicoctl ipam release --ip=192.168.1.2
 ```
 
 ### General options
@@ -46,6 +47,7 @@ $ calicoctl ipam release --ip=192.168.1.2
                           configuration in YAML or JSON format.
                           [default: /etc/calico/calicoctl.cfg]
 ```
+{: .no-select-button}
 
 ## See also
 

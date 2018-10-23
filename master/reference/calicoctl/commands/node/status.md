@@ -24,11 +24,16 @@ Description:
   Check the status of the Calico node instance.  This incudes the status and
   uptime of the node instance, and BGP peering states.
 ```
+{: .no-select-button}
 
 ### Examples
 
+Check the status of a {{site.prodname}} instance.
 ```
-$ sudo calicoctl node status
+sudo calicoctl node status
+```
+Some sample results follow,.
+```
 Calico process is running.
 
 IPv4 BGP status
@@ -41,3 +46,4 @@ IPv4 BGP status
 IPv6 BGP status
 No IPv6 peers found.
 ```
+{: .no-select-button}

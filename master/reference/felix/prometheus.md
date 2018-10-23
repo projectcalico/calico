@@ -52,10 +52,15 @@ existing metrics.
 | `felix_route_table_per_iface_sync_seconds` | Time taken to sync each interface |
 
 Prometheus metrics are self-documenting, with metrics turned on, `curl` can be used to list the
-metrics along with their help text and type information:
+metrics along with their help text and type information.
 
 ```
-$ curl -s http://localhost:9091/metrics | head
+curl -s http://localhost:9091/metrics | head
+```
+
+Example response:
+
+```
 # HELP felix_active_local_endpoints Number of active endpoints on this host.
 # TYPE felix_active_local_endpoints gauge
 felix_active_local_endpoints 91
@@ -68,6 +73,7 @@ felix_active_local_selectors 82
 # HELP felix_active_local_tags Number of active tags on this host.
 ...
 ```
+{: .no-select-button}
 
 #### CPU / Memory metrics
 

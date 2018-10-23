@@ -9,6 +9,7 @@ http:
     - exact: "/projects/calico"
     - prefix: "/users"
 ```
+{: .no-select-button}
 
 | Field | Description | Schema |
 |-------|-------------|--------|
@@ -19,5 +20,5 @@ http:
 
 | Syntax  | Example             | Description |
 |---------|---------------------|-------------|
-| exact   | `exact: "/foo/bar"` | Matches the exact path as written, not including the query string or fragments. | 
+| exact   | `exact: "/foo/bar"` | Matches the exact path as written, not including the query string or fragments. |
 | prefix  | `prefix: "/keys"`   | Matches any path that begins with the given prefix. |
