@@ -60,9 +60,8 @@ input:focus {
 
 .search-result__right-column {
     flex-basis: 1;
-    flex-grow: 1;
+    flex-grow: 0;
 
     margin-left: 5px;
     padding-left: 5px;
-    border-left: 1px grey solid;
 }
