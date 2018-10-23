@@ -175,6 +175,11 @@ fix:
 ###############################################################################
 # Unit Tests
 ###############################################################################
+
+# Set to true when calling test-xxx to update the rendered templates instead of
+# checking them.
+UPDATE_EXPECTED_DATA?=false
+
 .PHONY: test-kdd
 ## Run template tests against KDD
 test-kdd: bin/confd bin/kubectl bin/bird bin/bird6 bin/calico-node bin/calicoctl bin/typha run-k8s-apiserver
@@ -185,6 +190,7 @@ test-kdd: bin/confd bin/kubectl bin/bird bin/bird6 bin/calico-node bin/calicoctl
 		-e LOCAL_USER_ID=0 \
 		-e FELIX_TYPHAADDR=127.0.0.1:5473 \
 		-e FELIX_TYPHAREADTIMEOUT=50 \
+		-e UPDATE_EXPECTED_DATA=$(UPDATE_EXPECTED_DATA) \
 		$(CALICO_BUILD) /tests/test_suite_kdd.sh || \
 	{ \
 	    echo; \
@@ -208,6 +214,7 @@ test-etcd: bin/confd bin/etcdctl bin/bird bin/bird6 bin/calico-node bin/calicoct
 		-v $(CURDIR)/bin:/calico/bin/ \
 		-e RELEASE_BRANCH=$(RELEASE_BRANCH) \
 		-e LOCAL_USER_ID=0 \
+		-e UPDATE_EXPECTED_DATA=$(UPDATE_EXPECTED_DATA) \
 		$(CALICO_BUILD) /tests/test_suite_etcd.sh
 
 ## Etcd is used by the kubernetes
