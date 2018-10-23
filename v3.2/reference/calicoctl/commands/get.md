@@ -1,6 +1,6 @@
 ---
 title: calicoctl get
-canonical_url: 'https://docs.projectcalico.org/v3.2/reference/calicoctl/commands/get'
+canonical_url: 'https://docs.projectcalico.org/v3.3/reference/calicoctl/commands/get'
 ---
 
 This sections describes the `calicoctl get` command.

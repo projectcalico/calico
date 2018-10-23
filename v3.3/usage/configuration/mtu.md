@@ -1,7 +1,7 @@
 ---
 title: Configuring MTU
 redirect_from: latest/usage/configuration/mtu
-canonical_url: 'https://docs.projectcalico.org/v3.2/usage/configuration/mtu'
+canonical_url: 'https://docs.projectcalico.org/v3.3/usage/configuration/mtu'
 ---
 
 Depending on the environment {{site.prodname}} is being deployed into it may be

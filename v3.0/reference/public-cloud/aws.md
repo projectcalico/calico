@@ -1,6 +1,6 @@
 ---
 title: AWS
-canonical_url: https://docs.projectcalico.org/v3.2/reference/public-cloud/aws
+canonical_url: https://docs.projectcalico.org/v3.3/reference/public-cloud/aws
 ---
 
 Calico provides the following advantages when running in AWS:

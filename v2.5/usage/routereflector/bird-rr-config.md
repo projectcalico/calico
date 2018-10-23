@@ -1,6 +1,6 @@
 ---
 title: 'Configuring BIRD as a BGP Route Reflector'
-canonical_url: 'https://docs.projectcalico.org/v3.2/usage/routereflector/bird-rr-config'
+canonical_url: 'https://docs.projectcalico.org/v3.3/usage/routereflector/bird-rr-config'
 ---
 
 For many Calico deployments, the use of a Route Reflector is not required. 

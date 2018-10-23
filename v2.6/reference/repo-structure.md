@@ -1,6 +1,6 @@
 ---
 title: Calico Repositories
-canonical_url: 'https://docs.projectcalico.org/v3.2/reference/repo-structure'
+canonical_url: 'https://docs.projectcalico.org/v3.3/reference/repo-structure'
 ---
 
 The following information details which artifacts are built from which

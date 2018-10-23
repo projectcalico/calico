@@ -1,6 +1,6 @@
 ---
 title: Configuring calicoctl - etcdv2 datastore
-canonical_url: 'https://docs.projectcalico.org/v3.2/usage/calicoctl/configure/etcd'
+canonical_url: 'https://docs.projectcalico.org/v3.3/usage/calicoctl/configure/etcd'
 ---
 
 

@@ -1,6 +1,6 @@
 ---
 title: Calicoctl Configuration Overview 
-canonical_url: 'https://docs.projectcalico.org/v3.2/usage/calicoctl/configure/'
+canonical_url: 'https://docs.projectcalico.org/v3.3/usage/calicoctl/configure/'
 ---
 
 The `calicoctl` command line tool needs to be configured with details of
