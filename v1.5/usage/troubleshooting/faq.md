@@ -1,6 +1,6 @@
 ---
 title: Frequently Asked Questions
-canonical_url: 'https://docs.projectcalico.org/v3.2/usage/troubleshooting/faq'
+canonical_url: 'https://docs.projectcalico.org/v3.3/usage/troubleshooting/faq'
 ---
 
 This page contains answers to several frequently asked technical

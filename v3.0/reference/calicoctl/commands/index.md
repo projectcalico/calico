@@ -1,6 +1,6 @@
 ---
 title: Command Reference
-canonical_url: https://docs.projectcalico.org/v3.2/reference/calicoctl/commands/
+canonical_url: https://docs.projectcalico.org/v3.3/reference/calicoctl/commands/
 ---
 
 The command line tool, `calicoctl`, makes it easy to manage Calico network

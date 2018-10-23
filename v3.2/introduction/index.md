@@ -1,6 +1,6 @@
 ---
 title: About Calico
-canonical_url: 'https://docs.projectcalico.org/v3.2/introduction/'
+canonical_url: 'https://docs.projectcalico.org/v3.3/introduction/'
 ---
 
 {{site.prodname}} provides secure network connectivity for

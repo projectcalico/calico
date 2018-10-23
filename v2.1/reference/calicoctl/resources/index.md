@@ -1,6 +1,6 @@
 ---
 title: Resource Definitions
-canonical_url: 'https://docs.projectcalico.org/v3.2/reference/calicoctl/resources/'
+canonical_url: 'https://docs.projectcalico.org/v3.3/reference/calicoctl/resources/'
 ---
 
 This section describes the set of valid resource types that can be managed
