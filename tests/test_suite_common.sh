@@ -1,5 +1,9 @@
 #!/bin/bash
 
+trap 'echo "\nCaught signal, exiting...\n"; exit 1' SIGINT SIGTERM
+
+: ${UPDATE_EXPECTED_DATA:=false}
+
 # Execute the suite of tests.  It is assumed the following environment variables will
 # have been set up beforehand:
 # -  DATASTORE_TYPE + other calico datastore envs
@@ -421,8 +425,8 @@ build_tomls_for_node() {
 test_confd_templates() {
     # Compare the templates until they match (for a max of 10s).
     testdir=$1
-    for i in $(seq 1 10); do echo "comparing templates attempt $i" && compare_templates $testdir 0 && break || sleep 1; done
-    compare_templates $testdir 1
+    for i in $(seq 1 10); do echo "comparing templates attempt $i" && compare_templates $testdir 0 false && break || sleep 1; done
+    compare_templates $testdir 1 ${UPDATE_EXPECTED_DATA}
 }
 
 # Compares the generated templates against the known good templates
@@ -432,18 +436,28 @@ compare_templates() {
     # Check the generated templates against known compiled templates.
     testdir=$1
     output=$2
+    record=$3
     rc=0
     for f in `ls /tests/compiled_templates/${DATASTORE_TYPE}/${testdir}`; do
-        if ! diff --ignore-blank-lines -q /tests/compiled_templates/${DATASTORE_TYPE}/${testdir}/${f} /etc/calico/confd/config/${f} 1>/dev/null 2>&1; then
-            rc=1
+        expected=/tests/compiled_templates/${DATASTORE_TYPE}/${testdir}/${f}
+        actual=/etc/calico/confd/config/${f}
+        if ! diff --ignore-blank-lines -q ${expected} ${actual} 1>/dev/null 2>&1; then
+            if ! $record; then
+                rc=1;
+            fi
             if [ $output -ne 0 ]; then
                 echo "Failed: $f templates do not match, showing diff of expected vs received"
                 set +e
-                diff /tests/compiled_templates/${DATASTORE_TYPE}/${testdir}/${f} /etc/calico/confd/config/${f}
-                echo "Copying confd rendered output to ${LOGPATH}/rendered/${f}"
-                cp /etc/calico/confd/config/${f} ${LOGPATH}/rendered/${f}
-                set -e
-                rc=2
+                diff ${expected} ${actual}
+                if $record; then
+                    echo "Updating expected result..."
+                    cp ${actual} ${expected}
+                else
+                    echo "Copying confd rendered output to ${LOGPATH}/rendered/${f}"
+                    cp ${actual} ${LOGPATH}/rendered/${f}
+                    set -e
+                    rc=2
+                fi
             fi
         fi
     done
