@@ -56,6 +56,9 @@ template bgp bgp_template {
   source address {{$node_ip6}};  # The local address we use for the TCP connection
   add paths on;
   graceful restart;  # See comment in kernel section about graceful restart.
+  connect delay time 2;
+  connect retry time 5;
+  error wait time 5,30;
 }
 
 # ------------- Node-to-node mesh -------------
@@ -75,6 +78,15 @@ template bgp bgp_template {
 {{else if eq "" $onode_ip}}# No IPv6 address configured for this node
 {{else}}protocol bgp Mesh_{{$id}} from bgp_template {
   neighbor {{$onode_ip}} as {{if exists $onode_as_key}}{{getv $onode_as_key}}{{else}}{{getv "/global/as_num"}}{{end}};
+  {{- /*
+       Make the peering unidirectional. This avoids a race where
+       - peer A opens a connection and begins a graceful restart
+       - before the restart completes, peer B opens its connection
+       - peer A sees the new connection and aborts the graceful restart, causing a route flap.
+  */ -}}
+  {{if gt $onode_ip $node_ip}}
+  passive on; # Mesh is unidirectional, peer will connect to us.
+  {{- end}}
 }{{end}}{{end}}{{end}}
 {{else}}
 # Node-to-node mesh disabled
