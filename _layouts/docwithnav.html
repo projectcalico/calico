@@ -234,6 +234,7 @@ The code is a little roundabout for a few reasons:
     <script src="{{site.baseurl}}/js/searchConfig.js"></script>
 
     <script type="text/template" id="search-results-template">
+      {% raw %}
       <div class="search-results">
         {{#hits}}
 
@@ -276,6 +277,7 @@ The code is a little roundabout for a few reasons:
         </div>
         {{/hits}}
       </div>
+      {% endraw %}
     </script>
 
     <script>
