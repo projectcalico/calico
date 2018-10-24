@@ -106,13 +106,13 @@ or
 make cover-browser
 ```
 
-## How can a subset of the go unit tests?
+## How can I run a subset of the go unit tests?
 
 If you want to be able to run unit tests for specific packages for more iterative
 development, you'll need to install
 
 - GNU make
-- go >=1.7
+- go >=1.10
 
 then run `make update-tools` to install ginkgo, which is the test tool used to
 run Felix's unit tests.
