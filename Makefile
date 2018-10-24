@@ -76,7 +76,7 @@ PUSH_NONMANIFEST_IMAGES=$(filter-out $(PUSH_MANIFEST_IMAGES),$(PUSH_IMAGES))
 DOCKER_CONFIG ?= $(HOME)/.docker/config.json
 
 ###############################################################################
-GO_BUILD_VER?=v0.17
+GO_BUILD_VER?=v0.19
 CALICO_BUILD?=calico/go-build:$(GO_BUILD_VER)
 PROTOC_VER?=v0.1
 PROTOC_CONTAINER?=calico/protoc:$(PROTOC_VER)-$(BUILDARCH)
@@ -99,6 +99,7 @@ DOCKER_RUN_RM:=docker run --rm --user $(MY_UID):$(MY_GID) -v ${CURDIR}:/code
 ## Clean enough that a new release build will be clean
 clean:
 	find . -name '*.created-$(ARCH)' -exec rm -f {} +
+	rm -rf report/￼
 
 	docker rmi $(BUILD_IMAGE):latest-$(ARCH) || true
 	docker rmi $(BUILD_IMAGE):$(VERSION)-$(ARCH) || true
@@ -229,10 +230,11 @@ fix:
 .PHONY: ut
 ## Run the tests in a container. Useful for CI, Mac dev
 ut: $(SRC_FILES)
+	mkdir -p report
 	docker run --rm -v $(CURDIR):/go/src/$(PACKAGE_NAME):rw \
     -e LOCAL_USER_ID=$(LOCAL_USER_ID) \
     -w /go/src/$(PACKAGE_NAME) \
-    $(CALICO_BUILD) go test -v ./...
+    $(CALICO_BUILD) /bin/bash -c "go test -v ./... | go-junit-report > ./report/tests.xml"
 
 ###############################################################################
 # CI
