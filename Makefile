@@ -68,7 +68,7 @@ EXCLUDEARCH ?= s390x
 VALIDARCHES = $(filter-out $(EXCLUDEARCH),$(ARCHES))
 
 ###############################################################################
-GO_BUILD_VER?=v0.17
+GO_BUILD_VER?=v0.19
 CALICO_BUILD?=calico/go-build:$(GO_BUILD_VER)
 PROTOC_VER?=v0.1
 PROTOC_CONTAINER?=calico/protoc:$(PROTOC_VER)-$(BUILDARCH)
@@ -131,7 +131,7 @@ HTTP_STATUS=$(ENVOY_API)/envoy/type/http_status
 ## Clean enough that a new release build will be clean
 clean:
 	find . -name '*.created-$(ARCH)' -exec rm -f {} +
-
+	rm -rf report/
 	# Only one pb.go file exists outside the vendor dir
 	rm -rf bin vendor proto/felixbackend.pb.go
 	-docker rmi $(BUILD_IMAGE):latest-$(ARCH)
@@ -346,11 +346,12 @@ fix:
 .PHONY: ut
 ## Run the tests in a container. Useful for CI, Mac dev
 ut: proto
+	mkdir -p report
 	docker run --rm -v $(CURDIR):/go/src/$(PACKAGE_NAME):rw \
 		$(LOCAL_BUILD_MOUNTS) \
 		-e LOCAL_USER_ID=$(LOCAL_USER_ID) \
 		-w /go/src/$(PACKAGE_NAME) \
-		$(CALICO_BUILD) go test -v ./...
+		$(CALICO_BUILD) /bin/bash -c "go test -v ./... | go-junit-report > ./report/tests.xml"
 
 ###############################################################################
 # CI
