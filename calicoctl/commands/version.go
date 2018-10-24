@@ -26,7 +26,7 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/options"
 )
 
-var VERSION, BUILD_DATE, GIT_REVISION string
+var VERSION, GIT_REVISION string
 var VERSION_SUMMARY string
 
 func init() {
@@ -56,7 +56,6 @@ Description:
 	}
 
 	fmt.Println("Client Version:   ", VERSION)
-	fmt.Println("Build date:       ", BUILD_DATE)
 	fmt.Println("Git commit:       ", GIT_REVISION)
 
 	// Load the client config and connect.
