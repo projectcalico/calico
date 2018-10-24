@@ -25,3 +25,6 @@ vendor
 
 # Local build bin
 /bin
+
+# Test reports
+report/
