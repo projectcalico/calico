@@ -36,7 +36,7 @@
             indexName: 'projectcalico',
             routing: false,
             searchParameters: {
-                hitsPerPage: 5,
+                hitsPerPage: 10,
                 facetsRefinements: {
                     version: [currentDocVersion]
                 },
@@ -81,8 +81,7 @@
 
                     return searchResults;
                 }
-            },
-            hitsPerPage: 12
+            }
         }));
         search.addWidget(instantsearch.widgets.pagination({
             container: paginationSelector,
