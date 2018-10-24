@@ -29,63 +29,12 @@
         });
     };
 
-    var searchResultsTemplate = '\
-            {{#hits}}\
-            <div class="search-result ais-result">\
-                {{#shouldDisplayTopCategory}}\
-                {{#hierarchy.lvl0}}\
-                <h3 class="search-result__category ais-lvl0">\
-                    <a href="{{url}}" >\
-                        {{{_highlightResult.hierarchy.lvl0.value}}}\
-                    </a>\
-                </h3>\
-                {{/hierarchy.lvl0}}\
-                {{/shouldDisplayTopCategory}}\
-                <div class="search-result__columns">\
-                    <div class="search-result__left-column">\
-                    {{#hierarchy.lvl1}}\
-                    <h4 class="search-result__subcategory ais-lvl1">\
-                        <a href="{{url}}">\
-                            {{{_highlightResult.hierarchy.lvl1.value}}}\
-                        </a>\
-                    </h4>\
-                    {{/hierarchy.lvl1}}\
-                    </div>\
-                    <div class="search-result__right-column">\
-                    {{#hierarchy.lvl2}}\
-                    <h5 class="search-result__subsubcategory ais-lvl2">\
-                        <a href="{{url}}">\
-                            {{{_highlightResult.hierarchy.lvl2.value}}}\
-                        </a>\
-                    </h5>\
-                    {{/hierarchy.lvl2}}\
-                    {{#hierarchy.lvl3}}\
-                    <h6 class="search-result__subsubsubcategory ais-lvl3">\
-                        <a href="{{url}}">\
-                            {{{_highlightResult.hierarchy.lvl3.value}}}\
-                     </a>\
-                    </h6>\
-                    {{/hierarchy.lvl3}}\
-                    {{#content}}\
-                    <div class="search-result__content ais-content">\
-                        <a href="{{url}}" >\
-                            {{{_snippetResult.content.value}}}\
-                        </a>\
-                    </div>\
-                    {{/content}}\
-                    </div>\
-                </div>\
-            </div>\
-            {{/hits}}\
-        ';
-
     function initializeInstantSearch(currentDocVersion, inputSelector, resultsSelector, paginationSelector) {
         var search = instantsearch({
             appId: 'BH4D9OD16A',
             apiKey: '99def7ba73ea2430f7f42383148fe57a',
             indexName: 'projectcalico',
             routing: false,
-            // https://community.algolia.com/instantsearch.js/v2/instantsearch.html#struct-InstantSearchOptions-searchClient
             searchParameters: {
                 hitsPerPage: 5,
                 facetsRefinements: {
@@ -104,7 +53,7 @@
             container: resultsSelector,
             templates: {
                 empty: 'No results',
-                allItems: searchResultsTemplate
+                allItems: $('#search-results-template').html()
             },
             transformData: {
                 allItems: searchResults => {
@@ -133,7 +82,7 @@
                     return searchResults;
                 }
             },
-            hitsPerPage: 6
+            hitsPerPage: 12
         }));
         search.addWidget(instantsearch.widgets.pagination({
             container: paginationSelector,

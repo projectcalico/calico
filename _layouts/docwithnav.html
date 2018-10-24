@@ -233,6 +233,51 @@ The code is a little roundabout for a few reasons:
 
     <script src="{{site.baseurl}}/js/searchConfig.js"></script>
 
+    <script type="text/html" id="search-results-template">
+      <div class="search-results">
+        {{#hits}}
+
+        {{#shouldDisplayTopCategory}}
+        {{#hierarchy.lvl0}}
+          <a href="{{url}}" class="search-results__group-header">
+            {{{_highlightResult.hierarchy.lvl0.value}}}
+          </a>
+        {{/hierarchy.lvl0}}
+        {{/shouldDisplayTopCategory}}
+
+        <div class="search-results__search-result search-result columns-layout">
+          <div class="columns-layout__left-column">
+            {{#hierarchy.lvl1}}
+              <a href="{{url}}" class="search-result__subcategory">
+                {{{_highlightResult.hierarchy.lvl1.value}}}
+              </a>
+            {{/hierarchy.lvl1}}
+          </div>
+
+          <div class="columns-layout__right-column">
+            {{#hierarchy.lvl2}}
+              <a href="{{url}}" class="search-result__subsubcategory">
+                {{{_highlightResult.hierarchy.lvl2.value}}}
+              </a>
+            {{/hierarchy.lvl2}}
+
+            {{#hierarchy.lvl3}}
+              <a href="{{url}}" class="search-result__subsubsubcategory">
+                {{{_highlightResult.hierarchy.lvl3.value}}}
+              </a>
+            {{/hierarchy.lvl3}}
+
+            {{#content}}
+              <a href="{{url}}" class="search-result__content">
+                {{{_snippetResult.content.value}}}
+              </a>
+            {{/content}}
+          </div>
+        </div>
+        {{/hits}}
+      </div>
+    </script>
+
     <script>
       $(document).ready(function() {
         window.initializeSearch('{{page.version}}', '.search-input-container', '.search-container', '.search-container__results', '.search-container__pagination');
