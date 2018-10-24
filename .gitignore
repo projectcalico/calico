@@ -4,3 +4,4 @@ proto/*.pb.go
 .go-pkg-cache/
 bin
 *.created-*
+report/
