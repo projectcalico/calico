@@ -1,5 +1,5 @@
-hash: 2ce862754f762643e0f1c9db4cd501714656720cafabb7896a49245711adb5cd
-updated: 2018-10-23T07:44:42.2884369Z
+hash: 4dbf079b77f6d345fa60fdd55252dbd679e88b9b89ae9b732667beb1651c45d5
+updated: 2018-10-24T07:49:03.967278995Z
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -108,7 +108,7 @@ imports:
 - name: github.com/kardianos/osext
   version: ae77be60afb1dcacde03767a8c37337fad28ac14
 - name: github.com/kelseyhightower/confd
-  version: 3b01549eda308a589cab97089fefe1549c5540e0
+  version: 62c052d758e5b6a2ca6a81cd6c56c080e81849aa
   repo: https://github.com/projectcalico/confd.git
   subpackages:
   - pkg/backends
