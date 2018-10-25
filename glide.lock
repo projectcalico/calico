@@ -1,5 +1,5 @@
-hash: 97f09c724f73aa9789b0b465028af16c5912de6a1d421ee2b47fc1311469d6f0
-updated: 2018-10-20T06:14:28.044539074Z
+hash: 0d8c71332f721e4681796ae7d7a4ae49c1a082bbc59987193d0aae9e40542d47
+updated: 2018-10-25T06:14:33.46223374Z
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -252,13 +252,13 @@ imports:
   subpackages:
   - binder
 - name: github.com/projectcalico/typha
-  version: fc175797a5b381445713827f25b7fa15ab44f806
+  version: 951f216a902c3da885048e34224888af3a2022c2
   subpackages:
   - pkg/syncclient
   - pkg/syncproto
   - pkg/tlsutils
 - name: github.com/prometheus/client_golang
-  version: 1cafe34db7fdec6022e17e00e1c1ea501022f3e4
+  version: 16f375c74db6ccf880e1cd9c6c6087a6d58e5d12
   subpackages:
   - prometheus
   - prometheus/internal
@@ -269,7 +269,7 @@ imports:
   subpackages:
   - go
 - name: github.com/prometheus/common
-  version: 16b4535ad14a9ef20a9d9fd8055143c5faa15224
+  version: 7e9e6cabbd393fc208072eedef99188d0ce788b6
   subpackages:
   - expfmt
   - internal/bitbucket.org/ww/goautoneg
@@ -293,7 +293,7 @@ imports:
 - name: github.com/whyrusleeping/go-logging
   version: 0457bb6b88fc1973573aaf6b5145d8d3ae972390
 - name: golang.org/x/crypto
-  version: 0c41d7ab0a0ee717d4590a44bcb987dfd9e183eb
+  version: 74cb1d3d52f4c01cbfb44c1b50d204462f3124c7
   subpackages:
   - ssh/terminal
 - name: golang.org/x/net
