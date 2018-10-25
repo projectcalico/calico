@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2018 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -36,11 +36,7 @@ type allocationBlock struct {
 
 func newBlock(cidr cnet.IPNet) allocationBlock {
 	ones, size := cidr.Mask.Size()
-	numAddresses := 2 << uint(size-ones-1)
-	if numAddresses == 0 {
-		// Shifting doesn't handle 2^0 properly. Override the value.
-		numAddresses = 1
-	}
+	numAddresses := 1 << uint(size-ones)
 	b := model.AllocationBlock{}
 	b.Allocations = make([]*int, numAddresses)
 	b.Unallocated = make([]int, numAddresses)
@@ -348,7 +344,7 @@ func (b *allocationBlock) findOrAddAttribute(handleID *string, attrs map[string]
 // Get number of addresses covered by the block
 func (b allocationBlock) numAddresses() int {
 	ones, size := b.CIDR.Mask.Size()
-	numAddresses := 2 << uint(size-ones-1)
+	numAddresses := 1 << uint(size-ones)
 	return numAddresses
 }
 
