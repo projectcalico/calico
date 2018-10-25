@@ -19,7 +19,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"net"
 	"os"
 	"strings"
@@ -28,6 +27,7 @@ import (
 	cnitypes "github.com/containernetworking/cni/pkg/types"
 	"github.com/containernetworking/cni/pkg/types/current"
 	"github.com/containernetworking/plugins/pkg/ipam"
+	"github.com/projectcalico/cni-plugin/azure"
 	"github.com/projectcalico/cni-plugin/types"
 	"github.com/projectcalico/cni-plugin/utils"
 	api "github.com/projectcalico/libcalico-go/lib/apis/v3"
@@ -41,10 +41,6 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
 )
-
-// File in which to store Azure IPAM specific subnet information. The Azure CNI IPAM plugin
-// supports multiple CNI networks, so store the information in a file per-CNI network.
-var azureFilenameTemplate string = "/etc/cni/net.d/%s-azure-ipam.subnet"
 
 // CmdAddK8s performs the "ADD" operation on a kubernetes pod
 // Having kubernetes code in its own file avoids polluting the mainline code. It's expected that the kubernetes case will
@@ -258,13 +254,18 @@ func CmdAddK8s(ctx context.Context, args *skel.CmdArgs, conf types.NetConf, epID
 	ipAddrsNoIpam := annot["cni.projectcalico.org/ipAddrsNoIpam"]
 	ipAddrs := annot["cni.projectcalico.org/ipAddrs"]
 
+	// Azure network, if we need it.
+	var an *azure.AzureNetwork
 	if conf.IPAM.Type == "azure-vnet-ipam" {
 		// When using the Azure IPAM plugin, we need to pass it a subnet for all calls
 		// beyond the first one. This call updates updates the CNI configuration to meet
 		// the expectations of the Azure CNI IPAM plugin.
 		logger.Info("Configured to use Azure IPAM, check for subnet")
-		fn := fmt.Sprintf(azureFilenameTemplate, conf.Name)
-		if err := handleAzureIPAM(logger, args, fn); err != nil {
+		an = &azure.AzureNetwork{Name: conf.Name}
+		if err := an.Load(); err != nil {
+			return nil, err
+		}
+		if err := azure.MutateConfigAdd(args, *an); err != nil {
 			return nil, err
 		}
 	}
@@ -295,13 +296,15 @@ func CmdAddK8s(ctx context.Context, args *skel.CmdArgs, conf types.NetConf, epID
 			return nil, errors.New("IPAM plugin returned missing IP config")
 		}
 
-		if conf.IPAM.Type == "azure-vnet-ipam" {
+		if an != nil {
 			// Store off the subnet information - we need to pass this back on each subsequent call
 			// to the Azure IPAM plugin.
 			subnetPrefix := result.IPs[0].Address
 			subnetPrefix.IP = subnetPrefix.IP.Mask(subnetPrefix.Mask)
-			fn := fmt.Sprintf(azureFilenameTemplate, conf.Name)
-			if err := ioutil.WriteFile(fn, []byte(subnetPrefix.String()), 0644); err != nil {
+			an.Subnets = []string{subnetPrefix.String()}
+			if err := an.Write(); err != nil {
+				// TODO: Update releaseIPAllocation for Azure...
+				utils.ReleaseIPAllocation(logger, conf.IPAM.Type, args.StdinData)
 				return nil, err
 			}
 			logger.Infof("Stored azure subnet on disk: %s", subnetPrefix)
@@ -451,6 +454,21 @@ func CmdAddK8s(ctx context.Context, args *skel.CmdArgs, conf types.NetConf, epID
 	}
 	logger.Info("Wrote updated endpoint to datastore")
 
+	// If we're using the Azure plugin, then write azure endpoint information here.
+	if an != nil {
+		ae := azure.AzureEndpoint{
+			Network:     conf.Name,
+			ContainerID: args.ContainerID,
+			Interface:   args.IfName,
+			Addresses:   endpoint.Spec.IPNetworks,
+		}
+		if err := ae.Write(); err != nil {
+			// TODO: Update to support Azure IPAM.
+			releaseIPAM()
+			return nil, err
+		}
+	}
+
 	// Add the interface created above to the CNI result.
 	result.Interfaces = append(result.Interfaces, &current.Interface{
 		Name: endpoint.Spec.InterfaceName},
@@ -505,13 +523,19 @@ func CmdDelK8s(ctx context.Context, c calicoclient.Interface, epIDs utils.WEPIde
 		}
 	}
 
+	var ae *azure.AzureEndpoint
 	if conf.IPAM.Type == "azure-vnet-ipam" {
 		// When using the Azure IPAM plugin, we need to pass it a subnet for all calls
 		// beyond the first one. This call updates updates the CNI configuration to meet
 		// the expectations of the Azure CNI IPAM plugin.
 		logger.Info("Configured to use Azure IPAM, check for subnet")
-		fn := fmt.Sprintf(azureFilenameTemplate, conf.Name)
-		if err := handleAzureIPAM(logger, args, fn); err != nil {
+		ae = &azure.AzureEndpoint{Network: conf.Name, ContainerID: args.ContainerID, Interface: args.IfName}
+		if err := ae.Load(); err != nil {
+			// Return an error here if we fail to load the config. In Azure CNI compatiblity mode, we need this to
+			// succeed any way in order to release the IPAM allocations below.
+			return err
+		}
+		if err := azure.MutateConfigDel(args, ae); err != nil {
 			return err
 		}
 	}
@@ -519,6 +543,13 @@ func CmdDelK8s(ctx context.Context, c calicoclient.Interface, epIDs utils.WEPIde
 	// Release the IP address for this container by calling the configured IPAM plugin.
 	logger.Info("Releasing IP address(es)")
 	ipamErr := utils.CleanUpIPAM(conf, args, logger)
+
+	if ae != nil {
+		// Clean up the Azure endpoint data now that we've claened up the IPAM allocation.
+		if err := ae.Delete(); err != nil {
+			logger.WithError(err).Errorf("Error deleting Azure endpoint")
+		}
+	}
 
 	// Clean up namespace by removing the interfaces.
 	logger.Info("Cleaning up netns")
@@ -866,31 +897,4 @@ func getPodCidr(client *kubernetes.Clientset, conf types.NetConf, nodename strin
 		return "", fmt.Errorf("no podCidr for node %s", nodename)
 	}
 	return node.Spec.PodCIDR, nil
-}
-
-// handleAzureIPAM mutates the given args to include the Azure IPAM subnet, if appropriate.
-func handleAzureIPAM(logger *logrus.Entry, args *skel.CmdArgs, filename string) error {
-	// Check to see if the subnet file exists. If it does, then load it and
-	// we'll pass it to the IPAM plugin.
-	azureSubnet, err := ioutil.ReadFile(filename)
-	if err != nil {
-		// File doesn't exist - no action required.
-		return nil
-	}
-	logger.Infof("Loaded azure subnet from file: %s", azureSubnet)
-
-	// We've found a subnet on disk. Populate the subnet field in the IPAM network configuration.
-	var stdinData map[string]interface{}
-	if err := json.Unmarshal(args.StdinData, &stdinData); err != nil {
-		return err
-	}
-	stdinData["ipam"].(map[string]interface{})["subnet"] = strings.TrimSpace(string(azureSubnet))
-
-	// Pack it back into the provided args.
-	args.StdinData, err = json.Marshal(stdinData)
-	if err != nil {
-		return err
-	}
-	logger.Infof("Updated CNI network configuration for Azure: %#v", stdinData)
-	return nil
 }
