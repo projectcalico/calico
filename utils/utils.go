@@ -28,7 +28,7 @@ import (
 	cnitypes "github.com/containernetworking/cni/pkg/types"
 	"github.com/containernetworking/cni/pkg/types/current"
 	"github.com/containernetworking/plugins/pkg/ipam"
-	"github.com/projectcalico/cni-plugin/azure"
+	"github.com/projectcalico/cni-plugin/internal/pkg/azure"
 	"github.com/projectcalico/cni-plugin/types"
 	"github.com/projectcalico/libcalico-go/lib/apiconfig"
 	api "github.com/projectcalico/libcalico-go/lib/apis/v3"
