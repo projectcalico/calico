@@ -181,7 +181,6 @@ update-libcalico:
             fi;\
           OUTPUT=`mktemp`;\
           glide up --strip-vendor; glide up --strip-vendor 2>&1 | grep -v "golang.org/x/sys" | tee $$OUTPUT; \
-          if ! grep "\[WARN\]" $$OUTPUT; then true; else false; fi; \
         fi'
 
 ## Build the Calico network plugin and ipam plugins
