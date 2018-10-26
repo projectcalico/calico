@@ -495,7 +495,7 @@ spec:
             secretName: calico-etcd-secrets
             defaultMode: 0400
 {%- endif %}
-{%- if include.app_layer_policy %}
+{%- if include.app_layer_policy == "true" %}
         # Used to create per-pod Unix Domain Sockets
         - name: policysync
           hostPath:
