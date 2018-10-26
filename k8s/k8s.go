@@ -27,7 +27,6 @@ import (
 	cnitypes "github.com/containernetworking/cni/pkg/types"
 	"github.com/containernetworking/cni/pkg/types/current"
 	"github.com/containernetworking/plugins/pkg/ipam"
-	"github.com/projectcalico/cni-plugin/azure"
 	"github.com/projectcalico/cni-plugin/types"
 	"github.com/projectcalico/cni-plugin/utils"
 	api "github.com/projectcalico/libcalico-go/lib/apis/v3"
@@ -254,60 +253,13 @@ func CmdAddK8s(ctx context.Context, args *skel.CmdArgs, conf types.NetConf, epID
 	ipAddrsNoIpam := annot["cni.projectcalico.org/ipAddrsNoIpam"]
 	ipAddrs := annot["cni.projectcalico.org/ipAddrs"]
 
-	// Azure network, if we need it.
-	var an *azure.AzureNetwork
-	if conf.IPAM.Type == "azure-vnet-ipam" {
-		// When using the Azure IPAM plugin, we need to pass it a subnet for all calls
-		// beyond the first one. This call updates updates the CNI configuration to meet
-		// the expectations of the Azure CNI IPAM plugin.
-		logger.Info("Configured to use Azure IPAM, check for subnet")
-		an = &azure.AzureNetwork{Name: conf.Name}
-		if err := an.Load(); err != nil {
-			return nil, err
-		}
-		if err := azure.MutateConfigAdd(args, *an); err != nil {
-			return nil, err
-		}
-	}
-
 	// Switch based on which annotations are passed or not passed.
 	switch {
 	case ipAddrs == "" && ipAddrsNoIpam == "":
-		// Call IPAM plugin if ipAddrsNoIpam or ipAddrs annotation is not present.
-		logger.Debugf("Calling IPAM plugin %s", conf.IPAM.Type)
-		ipamResult, err := ipam.ExecAdd(conf.IPAM.Type, args.StdinData)
+		// Call the IPAM plugin.
+		result, err = utils.AddIPAM(conf, args, logger)
 		if err != nil {
 			return nil, err
-		}
-		logger.Debugf("IPAM plugin returned: %+v", ipamResult)
-
-		// Convert IPAM result into current Result.
-		// IPAM result has a bunch of fields that are optional for an IPAM plugin
-		// but required for a CNI plugin, so this is to populate those fields.
-		// See CNI Spec doc for more details.
-		result, err = current.NewResultFromResult(ipamResult)
-		if err != nil {
-			utils.ReleaseIPAllocation(logger, conf.IPAM.Type, args.StdinData)
-			return nil, err
-		}
-
-		if len(result.IPs) == 0 {
-			utils.ReleaseIPAllocation(logger, conf.IPAM.Type, args.StdinData)
-			return nil, errors.New("IPAM plugin returned missing IP config")
-		}
-
-		if an != nil {
-			// Store off the subnet information - we need to pass this back on each subsequent call
-			// to the Azure IPAM plugin.
-			subnetPrefix := result.IPs[0].Address
-			subnetPrefix.IP = subnetPrefix.IP.Mask(subnetPrefix.Mask)
-			an.Subnets = []string{subnetPrefix.String()}
-			if err := an.Write(); err != nil {
-				// TODO: Update releaseIPAllocation for Azure...
-				utils.ReleaseIPAllocation(logger, conf.IPAM.Type, args.StdinData)
-				return nil, err
-			}
-			logger.Infof("Stored azure subnet on disk: %s", subnetPrefix)
 		}
 
 	case ipAddrs != "" && ipAddrsNoIpam != "":
@@ -317,6 +269,12 @@ func CmdAddK8s(ctx context.Context, args *skel.CmdArgs, conf types.NetConf, epID
 		return nil, e
 
 	case ipAddrsNoIpam != "":
+		// Validate that we're allowed to use this feature.
+		if conf.IPAM.Type != "calico-ipam" {
+			e := fmt.Errorf("ipAddrsNoIpam is not compatible with configured IPAM: %s", conf.IPAM.Type)
+			logger.Error(e)
+			return nil, e
+		}
 		if !conf.FeatureControl.IPAddrsNoIpam {
 			e := fmt.Errorf("requested feature is not enabled: ip_addrs_no_ipam")
 			logger.Error(e)
@@ -342,6 +300,13 @@ func CmdAddK8s(ctx context.Context, args *skel.CmdArgs, conf types.NetConf, epID
 		}
 
 	case ipAddrs != "":
+		// Validate that we're allowed to use this feature.
+		if conf.IPAM.Type != "calico-ipam" {
+			e := fmt.Errorf("ipAddrs is not compatible with configured IPAM: %s", conf.IPAM.Type)
+			logger.Error(e)
+			return nil, e
+		}
+
 		// If the endpoint already exists, we need to attempt to release the previous IP addresses here
 		// since the ADD call will fail when it tries to reallocate the same IPs. releaseIPAddrs assumes
 		// that Calico IPAM is in use, which is OK here since only Calico IPAM supports the ipAddrs
@@ -390,7 +355,7 @@ func CmdAddK8s(ctx context.Context, args *skel.CmdArgs, conf types.NetConf, epID
 	// Populate the endpoint with the output from the IPAM plugin.
 	if err = utils.PopulateEndpointNets(endpoint, result); err != nil {
 		// Cleanup IP allocation and return the error.
-		utils.ReleaseIPAllocation(logger, conf.IPAM.Type, args.StdinData)
+		utils.ReleaseIPAllocation(logger, conf, args)
 		return nil, err
 	}
 	logger.WithField("endpoint", endpoint).Info("Populated endpoint")
@@ -399,7 +364,7 @@ func CmdAddK8s(ctx context.Context, args *skel.CmdArgs, conf types.NetConf, epID
 	// releaseIPAM cleans up any IPAM allocations on failure.
 	releaseIPAM := func() {
 		logger.WithField("endpointIPs", endpoint.Spec.IPNetworks).Info("Releasing IPAM allocation(s) after failure")
-		utils.ReleaseIPAllocation(logger, conf.IPAM.Type, args.StdinData)
+		utils.ReleaseIPAllocation(logger, conf, args)
 	}
 
 	// Whether the endpoint existed or not, the veth needs (re)creating.
@@ -453,21 +418,6 @@ func CmdAddK8s(ctx context.Context, args *skel.CmdArgs, conf types.NetConf, epID
 		return nil, err
 	}
 	logger.Info("Wrote updated endpoint to datastore")
-
-	// If we're using the Azure plugin, then write azure endpoint information here.
-	if an != nil {
-		ae := azure.AzureEndpoint{
-			Network:     conf.Name,
-			ContainerID: args.ContainerID,
-			Interface:   args.IfName,
-			Addresses:   endpoint.Spec.IPNetworks,
-		}
-		if err := ae.Write(); err != nil {
-			// TODO: Update to support Azure IPAM.
-			releaseIPAM()
-			return nil, err
-		}
-	}
 
 	// Add the interface created above to the CNI result.
 	result.Interfaces = append(result.Interfaces, &current.Interface{
@@ -523,33 +473,9 @@ func CmdDelK8s(ctx context.Context, c calicoclient.Interface, epIDs utils.WEPIde
 		}
 	}
 
-	var ae *azure.AzureEndpoint
-	if conf.IPAM.Type == "azure-vnet-ipam" {
-		// When using the Azure IPAM plugin, we need to pass it a subnet for all calls
-		// beyond the first one. This call updates updates the CNI configuration to meet
-		// the expectations of the Azure CNI IPAM plugin.
-		logger.Info("Configured to use Azure IPAM, check for subnet")
-		ae = &azure.AzureEndpoint{Network: conf.Name, ContainerID: args.ContainerID, Interface: args.IfName}
-		if err := ae.Load(); err != nil {
-			// Return an error here if we fail to load the config. In Azure CNI compatiblity mode, we need this to
-			// succeed any way in order to release the IPAM allocations below.
-			return err
-		}
-		if err := azure.MutateConfigDel(args, ae); err != nil {
-			return err
-		}
-	}
-
 	// Release the IP address for this container by calling the configured IPAM plugin.
 	logger.Info("Releasing IP address(es)")
 	ipamErr := utils.CleanUpIPAM(conf, args, logger)
-
-	if ae != nil {
-		// Clean up the Azure endpoint data now that we've claened up the IPAM allocation.
-		if err := ae.Delete(); err != nil {
-			logger.WithError(err).Errorf("Error deleting Azure endpoint")
-		}
-	}
 
 	// Clean up namespace by removing the interfaces.
 	logger.Info("Cleaning up netns")
@@ -675,7 +601,7 @@ func callIPAMWithIP(ip net.IP, conf types.NetConf, args *skel.CmdArgs, logger *l
 	// so the subsequent calls don't get polluted by the old IP value.
 	if err := os.Setenv("CNI_ARGS", originalArgs); err != nil {
 		// Need to clean up IP allocation if this step doesn't succeed.
-		utils.ReleaseIPAllocation(logger, conf.IPAM.Type, args.StdinData)
+		utils.ReleaseIPAllocation(logger, conf, args)
 		logger.Errorf("Error setting CNI_ARGS environment variable: %v", err)
 		return nil, err
 	}

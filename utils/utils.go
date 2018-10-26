@@ -28,6 +28,7 @@ import (
 	cnitypes "github.com/containernetworking/cni/pkg/types"
 	"github.com/containernetworking/cni/pkg/types/current"
 	"github.com/containernetworking/plugins/pkg/ipam"
+	"github.com/projectcalico/cni-plugin/azure"
 	"github.com/projectcalico/cni-plugin/types"
 	"github.com/projectcalico/libcalico-go/lib/apiconfig"
 	api "github.com/projectcalico/libcalico-go/lib/apis/v3"
@@ -93,15 +94,82 @@ func CreateOrUpdate(ctx context.Context, client client.Interface, wep *api.Workl
 	return client.WorkloadEndpoints().Create(ctx, wep, options.SetOptions{})
 }
 
+// AddIPAM calls through to the configured IPAM plugin.
+// It also contains IPAM plugin specific logic based on the configured plugin.
+func AddIPAM(conf types.NetConf, args *skel.CmdArgs, logger *logrus.Entry) (*current.Result, error) {
+	// Check if we're configured to use the Azure IPAM plugin.
+	var an *azure.AzureNetwork
+	if conf.IPAM.Type == "azure-vnet-ipam" {
+		// Load the azure network configuration, if any exists. Then, use
+		// that configuration to mutate the config we'll pass to the IPAM plugin.
+		logger.Info("Configured to use Azure IPAM, check for subnet")
+		an = &azure.AzureNetwork{Name: conf.Name}
+		if err := an.Load(); err != nil {
+			return nil, err
+		}
+		if err := azure.MutateConfigAdd(args, *an); err != nil {
+			return nil, err
+		}
+	}
+
+	// Actually call the IPAM plugin.
+	logger.Debugf("Calling IPAM plugin %s", conf.IPAM.Type)
+	ipamResult, err := ipam.ExecAdd(conf.IPAM.Type, args.StdinData)
+	if err != nil {
+		return nil, err
+	}
+	logger.Debugf("IPAM plugin returned: %+v", ipamResult)
+
+	// Convert the IPAM result into the current version.
+	result, err := current.NewResultFromResult(ipamResult)
+	if err != nil {
+		return nil, err
+	}
+	if len(result.IPs) == 0 {
+		return nil, errors.New("IPAM plugin returned missing IP config")
+	}
+
+	// If we're using the Azure plugin, then write azure network and endpoint information here.
+	// We'll need this information on delete so we can clean up any allocated IPs.
+	if an != nil {
+		// Store the Azure network data so that we can access it on subsequent calls.
+		subnetPrefix := result.IPs[0].Address
+		subnetPrefix.IP = subnetPrefix.IP.Mask(subnetPrefix.Mask)
+		an.Subnets = []string{subnetPrefix.String()}
+		if err := an.Write(); err != nil {
+			return nil, err
+		}
+		logger.Infof("Stored azure subnet on disk: %s", subnetPrefix)
+
+		// Store the Azure endpoint data for use on delete.
+		var ips []string
+		for _, ip := range result.IPs {
+			ips = append(ips, ip.Address.IP.String())
+		}
+		ae := azure.AzureEndpoint{
+			Network:     conf.Name,
+			ContainerID: args.ContainerID,
+			Interface:   args.IfName,
+			Addresses:   ips,
+		}
+		if err := ae.Write(); err != nil {
+			return nil, err
+		}
+	}
+	return result, nil
+}
+
 // CleanUpIPAM calls IPAM plugin to release the IP address.
-// It also contains IPAM plugin specific changes needed before calling the plugin.
+// It also contains IPAM plugin specific logic based on the configured plugin,
+// and is the logical counterpart to AddIPAM.
 func CleanUpIPAM(conf types.NetConf, args *skel.CmdArgs, logger *logrus.Entry) error {
 	fmt.Fprint(os.Stderr, "Calico CNI releasing IP address\n")
 	logger.WithFields(logrus.Fields{"paths": os.Getenv("CNI_PATH"),
 		"type": conf.IPAM.Type}).Debug("Looking for IPAM plugin in paths")
 
-	// We need to replace "usePodCidr" with a valid, but dummy podCidr string with "host-local" IPAM.
+	var ae *azure.AzureEndpoint
 	if conf.IPAM.Type == "host-local" {
+		// We need to replace "usePodCidr" with a valid, but dummy podCidr string with "host-local" IPAM.
 		// host-local IPAM releases the IP by ContainerID, so podCidr isn't really used to release the IP.
 		// It just needs a valid CIDR, but it doesn't have to be the CIDR associated with the host.
 		const dummyPodCidr = "0.0.0.0/0"
@@ -125,12 +193,34 @@ func CleanUpIPAM(conf types.NetConf, args *skel.CmdArgs, logger *logrus.Entry) e
 			return err
 		}
 		logger.WithField("stdin", string(args.StdinData)).Debug("Updated stdin data for Delete Cmd")
+	} else if conf.IPAM.Type == "azure-vnet-ipam" {
+		// The azure-vnet-ipam plugin expects two values to be passed in the CNI config in order to
+		// successfully clean up: ipAddress and subnet. Populate these based on data stored to disk.
+		logger.Info("Configured to use Azure IPAM, load network and endpoint")
+		an := &azure.AzureNetwork{Name: conf.Name}
+		if err := an.Load(); err != nil {
+			return err
+		}
+		ae = &azure.AzureEndpoint{Network: conf.Name, ContainerID: args.ContainerID, Interface: args.IfName}
+		if err := ae.Load(); err != nil {
+			return err
+		}
+		if err := azure.MutateConfigDel(args, *an, *ae); err != nil {
+			return err
+		}
 	}
 
+	// Call the CNI plugin.
 	err := ipam.ExecDel(conf.IPAM.Type, args.StdinData)
-
 	if err != nil {
 		logger.Error(err)
+	} else if ae != nil {
+		// Clean up any Azure endpoint data now that we've claened up the IPAM allocation.
+		// However, don't do this if the IPAM release failed - otherwise we'll lose information we need
+		// in order to release the address.
+		if err := ae.Delete(); err != nil {
+			logger.WithError(err).Errorf("Error deleting Azure endpoint")
+		}
 	}
 
 	return err
@@ -444,14 +534,14 @@ func CreateClient(conf types.NetConf) (client.Interface, error) {
 }
 
 // ReleaseIPAllocation is called to cleanup IPAM allocations if something goes wrong during
-// CNI ADD execution.
-func ReleaseIPAllocation(logger *logrus.Entry, ipamType string, stdinData []byte) {
+// CNI ADD execution. It forces the CNI_COMMAND to be DEL.
+func ReleaseIPAllocation(logger *logrus.Entry, conf types.NetConf, args *skel.CmdArgs) {
 	logger.Info("Cleaning up IP allocations for failed ADD")
 	if err := os.Setenv("CNI_COMMAND", "DEL"); err != nil {
 		// Failed to set CNI_COMMAND to DEL.
 		logger.Warning("Failed to set CNI_COMMAND=DEL")
 	} else {
-		if err := ipam.ExecDel(ipamType, stdinData); err != nil {
+		if err := CleanUpIPAM(conf, args, logger); err != nil {
 			// Failed to cleanup the IP allocation.
 			logger.Warning("Failed to clean up IP allocations for failed ADD")
 		}

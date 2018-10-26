@@ -11,8 +11,8 @@ import (
 
 var networksDir string = "/var/run/calico/azure/networks/"
 
-// AzureNetwork is a representation of an Azure network. It is used to
-// share state with the Azure vnet IPAM plugin.
+// AzureNetwork facilitates the manipulation of state associated with an Azure
+// network. It can be stored and used across executions of the plugin.
 type AzureNetwork struct {
 	Name    string
 	Subnets []string
@@ -33,7 +33,7 @@ func (an *AzureNetwork) Write() error {
 	if err := ioutil.WriteFile(an.filename(), bytes, 0600); err != nil {
 		return err
 	}
-	logrus.Infof("Wrote Azure network to disk: %#v", an)
+	logrus.Infof("Stored AzureNetwork: %#v", an)
 	return nil
 }
 
@@ -42,7 +42,7 @@ func (an *AzureNetwork) Load() error {
 	if err != nil {
 		return nil
 	}
-	logrus.Infof("Loaded azure network from file: %s", bytes)
+	logrus.Infof("Loaded AzureNetwork: %s", bytes)
 	return json.Unmarshal(bytes, an)
 }
 
