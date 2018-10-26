@@ -1,0 +1,8 @@
+[template]
+src = "bird6_ipam.cfg.template"
+dest = "/etc/calico/confd/config/bird6_ipam.cfg"
+prefix = "/calico/v1/ipam/v6"
+keys = [
+    "/pool",
+]
+reload_cmd = "pkill -HUP bird6 || true"

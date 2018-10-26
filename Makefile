@@ -42,9 +42,6 @@ endif
 ###############################################################################
 GO_BUILD_VER?=v0.17
 
-# Select which release branch to test.
-RELEASE_BRANCH?=master
-
 CALICO_BUILD = calico/go-build:$(GO_BUILD_VER)
 
 CALICOCTL_VER=master
@@ -183,10 +180,11 @@ UPDATE_EXPECTED_DATA?=false
 .PHONY: test-kdd
 ## Run template tests against KDD
 test-kdd: bin/confd bin/kubectl bin/bird bin/bird6 bin/calico-node bin/calicoctl bin/typha run-k8s-apiserver
+	-git clean -fx etc/calico/confd
 	docker run --rm --net=host \
 		-v $(CURDIR)/tests/:/tests/ \
 		-v $(CURDIR)/bin:/calico/bin/ \
-		-e RELEASE_BRANCH=$(RELEASE_BRANCH) \
+		-v $(CURDIR)/etc/calico:/etc/calico/ \
 		-e LOCAL_USER_ID=0 \
 		-e FELIX_TYPHAADDR=127.0.0.1:5473 \
 		-e FELIX_TYPHAREADTIMEOUT=50 \
@@ -205,17 +203,20 @@ test-kdd: bin/confd bin/kubectl bin/bird bin/bird6 bin/calico-node bin/calicoctl
 	    echo; \
             false; \
         }
+	-git clean -fx etc/calico/confd
 
 .PHONY: test-etcd
 ## Run template tests against etcd
 test-etcd: bin/confd bin/etcdctl bin/bird bin/bird6 bin/calico-node bin/calicoctl run-etcd
+	-git clean -fx etc/calico/confd
 	docker run --rm --net=host \
 		-v $(CURDIR)/tests/:/tests/ \
 		-v $(CURDIR)/bin:/calico/bin/ \
-		-e RELEASE_BRANCH=$(RELEASE_BRANCH) \
+		-v $(CURDIR)/etc/calico:/etc/calico/ \
 		-e LOCAL_USER_ID=0 \
 		-e UPDATE_EXPECTED_DATA=$(UPDATE_EXPECTED_DATA) \
 		$(CALICO_BUILD) /tests/test_suite_etcd.sh
+	-git clean -fx etc/calico/confd
 
 ## Etcd is used by the kubernetes
 # NOTE: https://quay.io/repository/coreos/etcd is available *only* for the following archs with the following tags:
