@@ -244,27 +244,7 @@ stop-etcd:
 ###############################################################################
 .PHONY: ci
 ## Run what CI runs
-ci: clean check-glide-warnings static-checks test build-libcalico-users
-
-# The list of repos that use libcalico (that support being tests in this way)
-LIBCALICO_REPOS=cni-plugin calicoctl typha kube-controllers
-
-# Checkout the repos into the "checkouts" directory
-DIRS := $(addprefix checkouts/,$(LIBCALICO_REPOS))
-$(DIRS):
-	@mkdir -p $(@D)
-	git clone -b master --single-branch git@github.com:projectcalico/$(@F).git $@
-
-## Build all projects that depend on libcalico-go using this version of libcalico-go
-build-libcalico-users: $(addsuffix -libcalico-build, $(DIRS))
-$(addsuffix -libcalico-build, $(DIRS)): %-libcalico-build: %
-	@export NEW_VER=$$(git rev-parse HEAD) ;\
-	cd $<; \
-	export OLD_VER=$$(grep --after 50 libcalico-go glide.yaml |grep --max-count=1 --only-matching --perl-regexp "version:\s*\K[\.0-9a-z]+") ;\
-	echo "Old: $$OLD_VER\nNew: $$NEW_VER";\
-	if [ $$NEW_VER != $$OLD_VER ]; then \
-		make clean; make update-libcalico build LIBCALICO_REPO=file:///libcalico-go LIBCALICO_VERSION=$$NEW_VER EXTRA_DOCKER_BIND="-v $(CURDIR):/libcalico-go";\
-	fi
+ci: clean check-glide-warnings static-checks test
 
 .PHONY: help
 ## Display this help text
