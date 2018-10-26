@@ -1,3 +1,9 @@
+felix (3.3.0~__STREAM__) __STREAM__; urgency=low
+
+  * Felix v3.3.0 (from Git commit 002ca0d).
+
+ -- Neil Jerram <neil@tigera.io>  Fri, 26 Oct 2018 18:00:11 +0100
+
 felix (3.2.0~__STREAM__) __STREAM__; urgency=low
 
   * Felix v3.2.0 (from Git commit 3045809).
