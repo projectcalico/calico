@@ -448,7 +448,7 @@ func cmdDel(args *skel.CmdArgs) error {
 	}
 
 	// Release the IP address by calling the configured IPAM plugin.
-	ipamErr := utils.CleanUpIPAM(conf, args, logger)
+	ipamErr := utils.DeleteIPAM(conf, args, logger)
 
 	// Delete the WorkloadEndpoint object from the datastore.
 	if _, err = calicoClient.WorkloadEndpoints().Delete(ctx, epIDs.Namespace, epIDs.WEPName, options.DeleteOptions{}); err != nil {

@@ -159,10 +159,10 @@ func AddIPAM(conf types.NetConf, args *skel.CmdArgs, logger *logrus.Entry) (*cur
 	return result, nil
 }
 
-// CleanUpIPAM calls IPAM plugin to release the IP address.
+// DeleteIPAM calls IPAM plugin to release the IP address.
 // It also contains IPAM plugin specific logic based on the configured plugin,
 // and is the logical counterpart to AddIPAM.
-func CleanUpIPAM(conf types.NetConf, args *skel.CmdArgs, logger *logrus.Entry) error {
+func DeleteIPAM(conf types.NetConf, args *skel.CmdArgs, logger *logrus.Entry) error {
 	fmt.Fprint(os.Stderr, "Calico CNI releasing IP address\n")
 	logger.WithFields(logrus.Fields{"paths": os.Getenv("CNI_PATH"),
 		"type": conf.IPAM.Type}).Debug("Looking for IPAM plugin in paths")
@@ -541,7 +541,7 @@ func ReleaseIPAllocation(logger *logrus.Entry, conf types.NetConf, args *skel.Cm
 		// Failed to set CNI_COMMAND to DEL.
 		logger.Warning("Failed to set CNI_COMMAND=DEL")
 	} else {
-		if err := CleanUpIPAM(conf, args, logger); err != nil {
+		if err := DeleteIPAM(conf, args, logger); err != nil {
 			// Failed to cleanup the IP allocation.
 			logger.Warning("Failed to clean up IP allocations for failed ADD")
 		}
