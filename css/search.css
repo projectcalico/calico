@@ -13,7 +13,8 @@
 
 .columns-layout {
     display: flex;
-    justify-content: center
+    justify-content: center;
+    align-items: baseline;
 }
 
 .columns-layout__left-column {
