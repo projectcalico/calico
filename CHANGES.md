@@ -1,5 +1,9 @@
 # Changelog
 
+## 3.3.0
+
+- Make client auth setup compatible with mitaka and earlier
+
 ## 3.2.0
 
 - Update requirements handling
