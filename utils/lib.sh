@@ -41,7 +41,7 @@ function git_commit_id {
 }
 
 function strip_v {
-	echo $1 | cut -d "v" -f 2
+	echo $1 | sed 's/^v//'
 }
 
 # Convert PEP 440 version to Debian.
@@ -51,7 +51,7 @@ function git_version_to_deb {
 
 # Convert PEP 440 version to RPM.
 function git_version_to_rpm {
-    echo $1 | sed 's/\([0-9]\)-\?\(a\|b\|rc\|pre\)/\1_\2/'
+    echo $1 | sed 's/\([0-9]\)-\?\(a\|b\|rc\|pre\|0.dev\)/\1_\2/'
 }
 
 # Check that version is valid.
@@ -118,23 +118,4 @@ function test_validate_version {
     expect_valid v2.0.0-beta.2
     expect_valid v2.0.0-beta.3
     expect_valid v2.0.0-beta-rc1
-}
-
-# Return the series of tags from HEAD back to (but excluding) the
-# specified tag, with the most recent tag first.
-function git_tags_back_to {
-
-    backstop_tag=$1
-    cursor=HEAD
-    num_tags=0
-    while [ $num_tags -lt 10 ]; do
-	previous_tag=`git describe --tags --abbrev=0 $cursor`
-	if [ $previous_tag = $backstop_tag ]; then
-	    # We've found the last packaged release, so stop.
-	    break
-	fi
-	echo ${previous_tag}
-	let 'num_tags += 1'
-	cursor="${previous_tag}^"
-    done
 }
