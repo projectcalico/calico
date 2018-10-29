@@ -52,6 +52,7 @@ spec:
     filterType: NETWORK
     filterName: "envoy.ext_authz"
     filterConfig:
+      stat_prefix: "dikastes"
       grpc_service:
         envoy_grpc:
           cluster_name: "outbound|1||dikastes.calico.cluster.local"
