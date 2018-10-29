@@ -2,7 +2,7 @@
 
 Name:           felix
 Summary:        Project Calico virtual networking for cloud data centers
-Version:        3.2.0
+Version:        3.3.0
 Release:        1%{?dist}
 License:        Apache-2
 URL:            http://projectcalico.org
@@ -151,6 +151,9 @@ rm -rf $RPM_BUILD_ROOT
 
 
 %changelog
+* Fri Oct 26 2018 Neil Jerram <neil@tigera.io> 3.3.0-1
+  - Felix v3.3.0 (from Git commit 002ca0d).
+
 * Mon Aug 13 2018 Neil Jerram <neil@tigera.io> 3.2.0-1
   - Felix v3.2.0 (from Git commit 3045809).
     [Changes recorded in v3.2.0 tag]
