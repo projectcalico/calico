@@ -41,7 +41,7 @@ function git_commit_id {
 }
 
 function strip_v {
-	echo $1 | cut -d "v" -f 2
+	echo $1 | sed 's/^v//'
 }
 
 # Convert PEP 440 version to Debian.
