@@ -41,45 +41,46 @@ for package_type in "$@"; do
 	    debver=`git_version_to_deb ${version}`
 	    debver=`strip_v ${debver}`
 
-	    if grep felix debian/changelog | head -n 1 | grep -F "${debver}~__STREAM__"; then
-		# debian/changelog already has the version stanza.
-		:
-	    else
-		# Current time in Debian changelog format; e.g. Wed, 02 Mar
-		# 2016 14:08:51 +0000.
-		timestamp=`date "+%a, %d %b %Y %H:%M:%S %z"`
-		mv debian/changelog debian/changelog.prev
-		{
-		    cat <<EOF
+	    # Current time in Debian changelog format; e.g. Wed, 02
+	    # Mar 2016 14:08:51 +0000.
+	    timestamp=`date "+%a, %d %b %Y %H:%M:%S %z"`
+	    {
+		cat <<EOF
 felix (${debver}~__STREAM__) __STREAM__; urgency=low
 
 EOF
-		    if ${release}; then
-			cat <<EOF
+		if ${release}; then
+		    cat <<EOF
   * Felix ${version} (from Git commit ${sha}).
 EOF
-		    else
-			cat <<EOF
+		else
+		    cat <<EOF
   * Development snapshot (from Git commit ${sha}).
 EOF
-		    fi
+		fi
 
-		    cat <<EOF
+		cat <<EOF
 
  -- Neil Jerram <neil@tigera.io>  ${timestamp}
 
 EOF
-		    cat debian/changelog.prev
-
-		} > debian/changelog
-
-		rm debian/changelog.prev
-	    fi
+	    } > debian/changelog
 
 	    for series in trusty xenial bionic; do
 		${DOCKER_RUN_RM} -e DEB_VERSION=${debver}~${series} \
 				 calico-build/${series} debian/build-debs
 	    done
+
+	    # Tidy up by deleting the changelog file again.
+	    rm debian/changelog
+
+	    cat <<EOF
+
+    +---------------------------------------------------------------------------+
+    | Debs have been built at dist/bionic, dist/xenial and dist/trusty.         |
+    +---------------------------------------------------------------------------+
+
+EOF
 	    ;;
 
 	rpm )
@@ -101,36 +102,42 @@ EOF
 	    sed -i "s/^Version:.*$/Version:        ${rpmver#*:}/" ${rpm_spec}
 	    sed -i "s/^Release:.*$/Release:        ${rpmrel}%{?dist}/" ${rpm_spec}
 
-	    if grep -F " ${rpmver}-${rpmrel}" ${rpm_spec}; then
-		# debian/changelog already has the version stanza.
-		:
-	    else
-		# Add a stanza to the %changelog section.
-		timestamp=`date "+%a %b %d %Y"`
-		{
-		    cat <<EOF
+	    # Add a stanza to the %changelog section.
+	    timestamp=`date "+%a %b %d %Y"`
+	    {
+		cat <<EOF
 * ${timestamp} Neil Jerram <neil@tigera.io> ${rpmver}-${rpmrel}
 EOF
-		    if ${release}; then
-			cat <<EOF
+		if ${release}; then
+		    cat <<EOF
   - Felix ${version} (from Git commit ${sha}).
 EOF
-		    else
-			cat <<EOF
+		else
+		    cat <<EOF
   - Development snapshot (from Git commit ${sha}).
 EOF
-		    fi
-		    echo
+		fi
+		echo
 
-		} | sed -i '/^%changelog/ r /dev/stdin' ${rpm_spec}
-	    fi
+	    } | sed -i '/^%changelog/ r /dev/stdin' ${rpm_spec}
 
-		  for elversion in 7 6; do
-			# Skip the rpm build if we are missing the matching build image.
-			imageid=$(docker images -q calico-build/centos${elversion}:latest)
-			[ -n "$imageid"  ] && ${DOCKER_RUN_RM} -e EL_VERSION=el${elversion} \
-				$imageid rpm/build-rpms
-		  done
+	    for elversion in 7 6; do
+		# Skip the rpm build if we are missing the matching build image.
+		imageid=$(docker images -q calico-build/centos${elversion}:latest)
+		[ -n "$imageid"  ] && ${DOCKER_RUN_RM} -e EL_VERSION=el${elversion} \
+		    $imageid rpm/build-rpms
+	    done
+
+	    # Tidy up by reverting the changes made to the RPM spec file.
+	    git checkout HEAD -- rpm/felix.spec
+
+	    cat <<EOF
+
+    +---------------------------------------------------------------------------+
+    | RPMs have been built at dist/rpms.                                        |
+    +---------------------------------------------------------------------------+
+
+EOF
 	    ;;
 
 	* )
@@ -140,30 +147,3 @@ EOF
     esac
 
 done
-
-cat <<EOF
-
-    +---------------------------------------------------------------------------+
-    | Packaging files (debian/changelog and/or rpm/felix.spec) have been        |
-    | updated, and new packages built under dist/.  Debian and RPM change logs  |
-    | have been generated from existing Git tag content - which should have     |
-    | been previously reviewed - and so should not need further review now.     |
-    | However, if there are issues to correct in the change logs:               |
-    |                                                                           |
-    | - Fix those issues _before_ releasing (or pre-releasing) the newly built  |
-    |   packages (e.g. to a PPA), because it won't work to try to 'overwrite'   |
-    |   previously released packages by re-releasing with the same package      |
-    |   version number.                                                         |
-    |                                                                           |
-    | - Make the changes needed, then run                                       |
-    |       FORCE_VERSION=<desired version> make deb rpm                        |
-    |   You should observe that your changes are not overwritten, and that new  |
-    |   packages are built with those changes included.                         |
-    |                                                                           |
-    | Then, if you decide to release the new packages publically, please also   |
-    | commit and merge the packaging file changes, so that we have a record of  |
-    | how and when the released packages were built.  Otherwise you can discard |
-    | those changes.                                                            |
-    +---------------------------------------------------------------------------+
-
-EOF

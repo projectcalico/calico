@@ -51,7 +51,7 @@ function git_version_to_deb {
 
 # Convert PEP 440 version to RPM.
 function git_version_to_rpm {
-    echo $1 | sed 's/\([0-9]\)-\?\(a\|b\|rc\|pre\)/\1_\2/'
+    echo $1 | sed 's/\([0-9]\)-\?\(a\|b\|rc\|pre\|0.dev\)/\1_\2/'
 }
 
 # Check that version is valid.

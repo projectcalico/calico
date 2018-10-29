@@ -76,33 +76,12 @@ You should have no local changes and tests should be passing.
 
 ## Releasing debs and rpms
 
-### Build the packages
-
 After completing the above `make release` process, you should produce and publish
 the deb/rpm artifacts.
 
-To build Debian and RPM packages for a release:
+### Build the packages
 
-- Build the packages
-
-  ```
-  make deb rpm
-  ```
-
-  You should see debian/changelog and rpm/felix.spec being updated with the new version
-  number and release notes, and packages built under `dist/`.
-
-- Create a PR to get those changes, in particular the release notes, reviewed.
-  If you need to make changes, do so, and run
-
-  ```
-  FORCE_VERSION=<new version> make deb rpm
-  ```
-
-  to rebuild packages with those changes in.  (Where `<new version>` is exactly
-  the same as when you ran `make release VERSION=<new version>` above.)
-
-- Once the changes are approved and any testing looks good, merge the PR.
+Run `make deb rpm` to build Debian and RPM packages for a release.
 
 ### Publish the packages
 
