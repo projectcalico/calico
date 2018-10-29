@@ -51,3 +51,5 @@ htmlcov/
 /k8sfv/output/
 
 .semaphore-cache/
+/rpm/felix.spec
+/debian/changelog

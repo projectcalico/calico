@@ -71,9 +71,6 @@ EOF
 				 calico-build/${series} debian/build-debs
 	    done
 
-	    # Tidy up by deleting the changelog file again.
-	    rm debian/changelog
-
 	    cat <<EOF
 
     +---------------------------------------------------------------------------+
@@ -87,6 +84,7 @@ EOF
 	    debver=`git_version_to_rpm ${version}`
 	    debver=`strip_v ${debver}`
 	    rpm_spec=rpm/felix.spec
+	    cp -f ${rpm_spec}.in ${rpm_spec}
 
 	    # Generate RPM version and release.
 	    IFS=_ read ver qual <<< ${debver}
@@ -127,9 +125,6 @@ EOF
 		[ -n "$imageid"  ] && ${DOCKER_RUN_RM} -e EL_VERSION=el${elversion} \
 		    $imageid rpm/build-rpms
 	    done
-
-	    # Tidy up by reverting the changes made to the RPM spec file.
-	    git checkout HEAD -- rpm/felix.spec
 
 	    cat <<EOF
 
