@@ -11,7 +11,7 @@ Source0:        networking-calico-%{version}.tar.gz
 Source45:	calico-dhcp-agent.service
 BuildArch:	noarch
 Group:          Applications/Engineering
-Requires:       python-pbr
+Requires:       python-pbr, python2-etcd3gw
 
 
 %description
