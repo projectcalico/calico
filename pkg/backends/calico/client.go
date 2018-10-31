@@ -106,6 +106,7 @@ func NewCalicoClient(confdConfig *config.Config) (*client, error) {
 		client:            bc,
 		cache:             make(map[string]string),
 		peeringCache:      make(map[string]string),
+		routeCache:        make(map[string]string),
 		cacheRevision:     1,
 		revisionsByPrefix: make(map[string]uint64),
 		nodeMeshEnabled:   nodeMeshEnabled,
@@ -169,6 +170,16 @@ func NewCalicoClient(confdConfig *config.Config) (*client, error) {
 		// Use the syncer locally.
 		c.syncer = bgpsyncer.New(c.client, c, nodeName)
 		c.syncer.Start()
+	}
+
+	// Create and start route generator.
+	rg, err := NewRouteGenerator(c)
+	if err != nil {
+		log.WithError(err).Fatal("Failed to create route generator")
+	}
+	err = rg.Start()
+	if err != nil {
+		log.WithError(err).Fatal("Failed to start route generator")
 	}
 
 	return c, nil
@@ -244,6 +255,7 @@ type client struct {
 	// Our internal cache of key/values, and our (internally defined) cache revision.
 	cache         map[string]string
 	peeringCache  map[string]string
+	routeCache    map[string]string
 	cacheRevision uint64
 
 	// The current revision for each prefix.  A revision is updated when we have a sync
@@ -743,6 +755,11 @@ func (c *client) GetValues(keys []string) (map[string]string, error) {
 			values[k] = v
 		}
 	}
+	for k, v := range c.routeCache {
+		if c.matchesPrefix(k, keys) {
+			values[k] = v
+		}
+	}
 
 	log.Debugf("Returning %d results", len(values))
 
@@ -837,5 +854,41 @@ func (c *client) updateLogLevel() {
 		logutils.SetLevel(globalLogLevel)
 	} else {
 		logutils.SetLevel("info")
+	}
+}
+
+var routeKeyPrefix = "/route/"
+
+func (c *client) updateRoutes(cidrs []string) {
+
+	// Convert the slice of CIDRs to a map with corresponding
+	// cache keys.
+	routeMap := map[string]string{}
+	for _, cidr := range cidrs {
+		routeMap[routeKeyPrefix+cidr] = cidr
+	}
+
+	// Lock the cache.
+	c.cacheLock.Lock()
+	defer c.cacheLock.Unlock()
+
+	// Reconcile the new route map against the cache.
+	for k, _ := range c.routeCache {
+		_, ok := routeMap[k]
+		if !ok {
+			// This cache entry should be deleted.
+			delete(c.routeCache, k)
+			c.keyUpdated(k)
+		} else {
+			// Wanted and already present in cache.  Delete from routeMap so that we
+			// don't generate a spurious keyUpdated for this key, just below.
+			delete(routeMap, k)
+		}
+	}
+
+	// routeMap now only contains routes to add to the cache.
+	for k, newValue := range routeMap {
+		c.routeCache[k] = newValue
+		c.keyUpdated(k)
 	}
 }
