@@ -57,3 +57,4 @@ import:
 # needs a more recent version than the default that gets selected.
 - package: golang.org/x/net
   version: 4dfa2610cdf3b287375bbba5b8f2a14d3b01d8de
+- package: github.com/natefinch/atomic

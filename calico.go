@@ -246,12 +246,12 @@ func cmdAdd(args *skel.CmdArgs) error {
 			// See CNI Spec doc for more details.
 			result, err = current.NewResultFromResult(ipamResult)
 			if err != nil {
-				utils.ReleaseIPAllocation(logger, conf.IPAM.Type, args.StdinData)
+				utils.ReleaseIPAllocation(logger, conf, args)
 				return err
 			}
 
 			if len(result.IPs) == 0 {
-				utils.ReleaseIPAllocation(logger, conf.IPAM.Type, args.StdinData)
+				utils.ReleaseIPAllocation(logger, conf, args)
 				return errors.New("IPAM plugin returned missing IP config")
 			}
 
@@ -280,7 +280,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 			logger.WithField("endpoint", endpoint).Debug("Populated endpoint (without nets)")
 			if err = utils.PopulateEndpointNets(endpoint, result); err != nil {
 				// Cleanup IP allocation and return the error.
-				utils.ReleaseIPAllocation(logger, conf.IPAM.Type, args.StdinData)
+				utils.ReleaseIPAllocation(logger, conf, args)
 				return err
 			}
 			logger.WithField("endpoint", endpoint).Info("Populated endpoint (with nets)")
@@ -292,7 +292,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 				args, conf, result, logger, "", utils.DefaultRoutes)
 			if err != nil {
 				// Cleanup IP allocation and return the error.
-				utils.ReleaseIPAllocation(logger, conf.IPAM.Type, args.StdinData)
+				utils.ReleaseIPAllocation(logger, conf, args)
 				return err
 			}
 
@@ -310,7 +310,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 			if !endpointAlreadyExisted {
 				// Only clean up the IP allocation if this was a new endpoint.  Otherwise,
 				// we'd release the IP that is already attached to the existing endpoint.
-				utils.ReleaseIPAllocation(logger, conf.IPAM.Type, args.StdinData)
+				utils.ReleaseIPAllocation(logger, conf, args)
 			}
 			return err
 		}
@@ -336,7 +336,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 				exists = false
 			} else {
 				// Cleanup IP allocation and return the error.
-				utils.ReleaseIPAllocation(logger, conf.IPAM.Type, args.StdinData)
+				utils.ReleaseIPAllocation(logger, conf, args)
 				return err
 			}
 		}
@@ -368,7 +368,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 
 			if _, err := calicoClient.Profiles().Create(ctx, profile, options.SetOptions{}); err != nil {
 				// Cleanup IP allocation and return the error.
-				utils.ReleaseIPAllocation(logger, conf.IPAM.Type, args.StdinData)
+				utils.ReleaseIPAllocation(logger, conf, args)
 				return err
 			}
 		}
@@ -448,7 +448,7 @@ func cmdDel(args *skel.CmdArgs) error {
 	}
 
 	// Release the IP address by calling the configured IPAM plugin.
-	ipamErr := utils.CleanUpIPAM(conf, args, logger)
+	ipamErr := utils.DeleteIPAM(conf, args, logger)
 
 	// Delete the WorkloadEndpoint object from the datastore.
 	if _, err = calicoClient.WorkloadEndpoints().Delete(ctx, epIDs.Namespace, epIDs.WEPName, options.DeleteOptions{}); err != nil {
