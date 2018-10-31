@@ -2,3 +2,4 @@
 *
 !filesystem
 !dist/bin
+!vendor/github.com/kelseyhightower/confd/etc/calico/confd

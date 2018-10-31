@@ -28,6 +28,9 @@ COPY --from=bird /bird* /bin/
 # Copy in the filesystem - this contains felix, calico-bgp-daemon etc...
 COPY filesystem/ /
 
+# Add in confd config and templates
+COPY vendor/github.com/kelseyhightower/confd/etc/calico/ /etc/calico/
+
 # Copy in the calico-node binary
 COPY dist/bin/calico-node-${ARCH} /bin/calico-node
 

@@ -1,8 +1,0 @@
-[template]
-src = "tunl-ip.template"
-dest = "/tmp/tunl-ip"
-prefix = "/calico/v1/ipam/v4"
-keys = [
-    "/pool",
-]
-reload_cmd = "calico-node -allocate-ipip-addr"

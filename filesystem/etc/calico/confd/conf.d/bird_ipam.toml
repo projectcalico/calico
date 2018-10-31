@@ -1,8 +1,0 @@
-[template]
-src = "bird_ipam.cfg.template"
-dest = "/etc/calico/confd/config/bird_ipam.cfg"
-prefix = "/calico/v1/ipam/v4"
-keys = [
-    "/pool",
-]
-reload_cmd = "pkill -HUP bird || true"
