@@ -112,7 +112,8 @@ steps below.
 If you wish to only use IPv6 (by disabling IPv4) or your hosts only have
 IPv6 addresses, you must disable autodetection of IPv4 by setting `IP`
 to `none`.  With that set you must also pass a `CALICO_ROUTER_ID` to each
-calico-node pod.
+calico-node pod. Also you must add an env `FELIX_HEALTHHOST` to `localhost6`
+because the calico-node's health check use IPv4 by default.
 
 ### Modifying your DNS for IPv6
 
