@@ -1,5 +1,5 @@
-hash: 65cb1102d1ea34e3a6f2d4fe6ed39ed37bd406040a7e294bdc8ea16222688717
-updated: 2018-10-30T07:40:01.637034019Z
+hash: 871bba7df468f9a205106decf8d620b6ff4b9e79d3585389075c6439720c4cca
+updated: 2018-10-31T17:38:05.452973382Z
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -108,8 +108,8 @@ imports:
 - name: github.com/kardianos/osext
   version: ae77be60afb1dcacde03767a8c37337fad28ac14
 - name: github.com/kelseyhightower/confd
-  version: 5557ca50a0512c9e4f1e2e83d7b2683ebf7c1aba
-  repo: https://github.com/neiljerram/confd.git
+  version: f3ff0ab3e97c4b507bb396e9ecc66009304c5933
+  repo: https://github.com/projectcalico/confd.git
   subpackages:
   - pkg/backends
   - pkg/backends/calico
@@ -119,7 +119,7 @@ imports:
   - pkg/resource/template
   - pkg/run
 - name: github.com/kelseyhightower/envconfig
-  version: dd1402a4d99de9ac2f396cd6fcb957bc2c695ec1
+  version: f611eb38b3875cc3bd991ca91c51d06446afa14c
 - name: github.com/kelseyhightower/memkv
   version: 892bfd468afa0fa476556e7bd7734a087cda08b3
 - name: github.com/matttproud/golang_protobuf_extensions
@@ -321,7 +321,7 @@ imports:
 - name: github.com/vishvananda/netns
   version: 13995c7128ccc8e51e9a6bd2b551020a27180abd
 - name: golang.org/x/crypto
-  version: 49796115aa4b964c318aad4f3084fdb41e9aa067
+  version: a49355c7e3f8fe157a85be2f77e6e269a0f89602
   subpackages:
   - ssh/terminal
 - name: golang.org/x/net
@@ -377,7 +377,7 @@ imports:
   subpackages:
   - rate
 - name: google.golang.org/appengine
-  version: 4216e58b9158e5f1c906f1aca75162a46a2ec88a
+  version: b1f26356af11148e710935ed1ac8a7f5702c7612
   subpackages:
   - internal
   - internal/app_identity
