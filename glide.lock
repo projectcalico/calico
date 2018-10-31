@@ -1,5 +1,5 @@
-hash: 952a87cca6bf58ceff909e1592f1295b85b288ba6bb394c086f681860663d2ff
-updated: 2018-10-19T10:17:36.239840441Z
+hash: 8314bbd377aa8bda1fc85a2b49bf1e93b8dd62bd52ecf48bbb357a4cdd737fd7
+updated: 2018-10-31T10:31:38.552658525-07:00
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -119,6 +119,8 @@ imports:
   version: bacd9c7ef1dd9b15be4a9909b8ac7a4e313eec94
 - name: github.com/modern-go/reflect2
   version: 05fbef0ca5da472bbf96c9322b84a53edc03c9fd
+- name: github.com/natefinch/atomic
+  version: a62ce929ffcc871a51e98c6eba7b20321e3ed62d
 - name: github.com/onsi/ginkgo
   version: 7f8ab55aaf3b86885aa55b762e803744d1674700
   subpackages:

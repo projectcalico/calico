@@ -1,11 +1,13 @@
 package azure
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"os"
 
+	"github.com/natefinch/atomic"
 	"github.com/sirupsen/logrus"
 )
 
@@ -26,11 +28,12 @@ func (an *AzureNetwork) Write() error {
 	}
 
 	// Write the network struct to disk.
-	bytes, err := json.Marshal(an)
+	b, err := json.Marshal(an)
 	if err != nil {
 		return err
 	}
-	if err := ioutil.WriteFile(an.filename(), bytes, 0600); err != nil {
+	r := bytes.NewReader(b)
+	if err := atomic.WriteFile(an.filename(), r); err != nil {
 		return err
 	}
 	logrus.Infof("Stored AzureNetwork: %#v", an)

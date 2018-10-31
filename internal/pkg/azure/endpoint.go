@@ -1,11 +1,13 @@
 package azure
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"os"
 
+	"github.com/natefinch/atomic"
 	"github.com/sirupsen/logrus"
 )
 
@@ -21,11 +23,12 @@ type AzureEndpoint struct {
 }
 
 func (ae *AzureEndpoint) Write() error {
-	bytes, err := json.Marshal(ae)
+	b, err := json.Marshal(ae)
 	if err != nil {
 		return err
 	}
-	if err := ioutil.WriteFile(ae.filename(), bytes, 0600); err != nil {
+	r := bytes.NewReader(b)
+	if err := atomic.WriteFile(ae.filename(), r); err != nil {
 		return err
 	}
 	logrus.Infof("Stored AzureEndpoint: %#v", ae)
