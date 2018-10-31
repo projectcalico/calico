@@ -22,8 +22,7 @@ execute_test_suite() {
     rm $LOGPATH/log* || true
     rm $LOGPATH/rendered/*.cfg || true
 
-    # Download the templates from calico and build the tomls based on $NODENAME
-    download_templates_from_calico
+    # Build the tomls based on $NODENAME.
     build_tomls_for_node
 
     if [ "$DATASTORE_TYPE" = etcdv3 ]; then
@@ -396,16 +395,6 @@ start_typha() {
 kill_typha() {
     echo "Killing Typha"
     kill -9 $TYPHA_PID 2>/dev/null
-}
-
-# get_templates attempts to grab the latest templates from the calico repo
-download_templates_from_calico() {
-    repo_dir="/node-repo"
-    if [ ! -d ${repo_dir} ]; then
-        echo "Getting latest confd templates from calico repo, branch=${RELEASE_BRANCH}"
-        git clone https://github.com/projectcalico/node.git ${repo_dir} -b ${RELEASE_BRANCH}
-        ln -s ${repo_dir}/filesystem/etc/calico/ /etc/calico
-    fi
 }
 
 build_tomls_for_node() {
