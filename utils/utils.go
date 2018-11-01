@@ -286,7 +286,6 @@ func CreateClient(conf NetConf) (*client.Client, error) {
 			return nil, err
 		}
 	}
-	log.Infof("Configured environment: %+v", os.Environ())
 
 	// Load the client config from the current environment.
 	clientConfig, err := client.LoadClientConfig("")
