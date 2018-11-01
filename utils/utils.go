@@ -476,7 +476,6 @@ func CreateClient(conf types.NetConf) (client.Interface, error) {
 			return nil, err
 		}
 	}
-	logrus.Infof("Configured environment: %+v", os.Environ())
 
 	// Load the client config from the current environment.
 	clientConfig, err := apiconfig.LoadClientConfig("")
