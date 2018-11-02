@@ -1,5 +1,5 @@
-hash: 994bb429c708c57bc1c38288dc7a713b1e7a7f4029f41956c55ce420ac35d6f8
-updated: 2018-10-19T13:34:51.503955126Z
+hash: c442b9a7c88ee27b31eb1d047e29c5abc1686fa8c63682f3bd957b6e0445b9b2
+updated: 2018-11-02T14:14:14.929029-07:00
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -47,7 +47,7 @@ imports:
 - name: github.com/ghodss/yaml
   version: 73d445a93680fa1a78ae23a5839bad48f32ba1ee
 - name: github.com/go-ini/ini
-  version: 9c8236e659b76e87bf02044d06fde8683008ff3e
+  version: 5cf292cae48347c2490ac1a58fe36735fb78df7e
 - name: github.com/gogo/protobuf
   version: c0656edd0d9eab7c66d1eb0c568f9039345796f7
   subpackages:
@@ -106,7 +106,7 @@ imports:
 - name: github.com/kardianos/osext
   version: ae77be60afb1dcacde03767a8c37337fad28ac14
 - name: github.com/kelseyhightower/envconfig
-  version: dd1402a4d99de9ac2f396cd6fcb957bc2c695ec1
+  version: f611eb38b3875cc3bd991ca91c51d06446afa14c
 - name: github.com/matttproud/golang_protobuf_extensions
   version: c12348ce28de40eed0136aa2b644d0ee0650e56c
   subpackages:
@@ -139,7 +139,7 @@ imports:
   - reporters/stenographer/support/go-isatty
   - types
 - name: github.com/onsi/gomega
-  version: 7615b9433f86a8bdf29709bf288bc4fd0636a369
+  version: 2152b45fa28a361beba9aab0885972323a444e28
   subpackages:
   - format
   - internal/assertion
@@ -165,7 +165,7 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: 6106092cbcbfd8fa6dc2742a4101d7f6d42b01e6
+  version: f571cb71cd7fa1b773beee7413157b361452e247
   subpackages:
   - lib/apiconfig
   - lib/apis/v1
@@ -218,11 +218,11 @@ imports:
   - prometheus/internal
   - prometheus/promhttp
 - name: github.com/prometheus/client_model
-  version: 5c3871d89910bfb32f5fcab2aa4b9ec68e65a99f
+  version: 6f3806018612930941127f2a7c6c453ba2c527d2
   subpackages:
   - go
 - name: github.com/prometheus/common
-  version: 16b4535ad14a9ef20a9d9fd8055143c5faa15224
+  version: e3fb1a1acd7605367a2b378bc2e2f893c05174b7
   subpackages:
   - expfmt
   - internal/bitbucket.org/ww/goautoneg
@@ -242,7 +242,7 @@ imports:
   subpackages:
   - codec
 - name: github.com/Workiva/go-datastructures
-  version: f07cbe3f82ca2fd6e5ab94afce65fe43319f675f
+  version: f338bf48899950e415caffa02222a7273fbdeaf6
   subpackages:
   - list
   - trie/ctrie
@@ -257,7 +257,6 @@ imports:
   - context/ctxhttp
   - html
   - html/atom
-  - html/charset
   - http2
   - http2/hpack
   - idna
@@ -280,20 +279,6 @@ imports:
 - name: golang.org/x/text
   version: b19bf474d317b857955b12035d2c5acb57ce8b01
   subpackages:
-  - encoding
-  - encoding/charmap
-  - encoding/htmlindex
-  - encoding/internal
-  - encoding/internal/identifier
-  - encoding/japanese
-  - encoding/korean
-  - encoding/simplifiedchinese
-  - encoding/traditionalchinese
-  - encoding/unicode
-  - internal/tag
-  - internal/utf8internal
-  - language
-  - runes
   - secure/bidirule
   - transform
   - unicode/bidi
@@ -303,7 +288,7 @@ imports:
   subpackages:
   - rate
 - name: google.golang.org/appengine
-  version: ae0ab99deb4dc413a2b4bd6c8bdd0eb67f1e4d06
+  version: b1f26356af11148e710935ed1ac8a7f5702c7612
   subpackages:
   - internal
   - internal/app_identity
