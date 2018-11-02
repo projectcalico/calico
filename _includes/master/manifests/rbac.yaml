@@ -69,6 +69,11 @@ rules:
       - namespaces
     verbs:
       - get
+  - apiGroups: [""]
+    resources:
+      - nodes/status
+    verbs:
+      - patch
 {%- if include.datastore == "kdd" %}
   # Watch for changes to Kubernetes NetworkPolicies.
   - apiGroups: ["networking.k8s.io"]
