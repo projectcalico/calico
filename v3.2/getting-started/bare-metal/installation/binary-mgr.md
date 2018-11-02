@@ -3,14 +3,6 @@ title: Binary install with package manager
 canonical_url: 'https://docs.projectcalico.org/v3.3/getting-started/bare-metal/installation/binary-mgr'
 ---
 
-
-## Prerequisites
-
-- [Install calicoctl as a binary](/{{page.version}}/usage/calicoctl/install#installing-calicoctl-as-a-binary-on-a-single-host).
-
-- [Configure calicoctl to connect to etcd](/{{page.version}}/usage/calicoctl/configure/).
-
-
 ## Installing Felix
 
 {% include ppa_repo_name %}
