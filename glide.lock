@@ -1,5 +1,5 @@
 hash: adb389c256194a039451b8b611a18c1465cbdeb72658dafaf0cb29b4e7942ed7
-updated: 2018-10-17T10:12:27.995122662-07:00
+updated: 2018-11-06T09:39:01.257883-08:00
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -108,7 +108,7 @@ imports:
 - name: github.com/kardianos/osext
   version: ae77be60afb1dcacde03767a8c37337fad28ac14
 - name: github.com/kelseyhightower/confd
-  version: ff20aa165a50aa94233cea867a1761184d0b42a5
+  version: 669d6ce6116a830c40f2a67b36d05ab5ecf27ed0
   repo: https://github.com/projectcalico/confd.git
   subpackages:
   - pkg/backends
@@ -118,7 +118,7 @@ imports:
   - pkg/resource/template
   - pkg/run
 - name: github.com/kelseyhightower/envconfig
-  version: dd1402a4d99de9ac2f396cd6fcb957bc2c695ec1
+  version: f611eb38b3875cc3bd991ca91c51d06446afa14c
 - name: github.com/kelseyhightower/memkv
   version: 892bfd468afa0fa476556e7bd7734a087cda08b3
 - name: github.com/matttproud/golang_protobuf_extensions
@@ -186,7 +186,7 @@ imports:
 - name: github.com/peterbourgon/diskv
   version: 5f041e8faa004a95c88a202771f4cc3e991971e6
 - name: github.com/projectcalico/felix
-  version: 14e478f23494d43e87c39766bfb76e019d3f13ae
+  version: 56823bb05874bfdd0b84e8aabe79a949d61caaad
   subpackages:
   - binder
   - buildinfo
@@ -228,7 +228,7 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: ec4b1f9cf37b63ba4e98cd1b3bd7d94f2ad5ddc6
+  version: 9d3859e1544309049df51602b484031ee201e31a
   subpackages:
   - lib/apiconfig
   - lib/apis/v1
@@ -275,7 +275,7 @@ imports:
   - lib/validator/v3
   - lib/watch
 - name: github.com/projectcalico/typha
-  version: 7daf106c3d2fd701c276c95c11180e1ac5c87eec
+  version: 68239307c245f957495ea35d314ecca7e10c51ea
   subpackages:
   - pkg/syncclient
   - pkg/syncproto
@@ -315,9 +315,9 @@ imports:
   subpackages:
   - nl
 - name: github.com/vishvananda/netns
-  version: 13995c7128ccc8e51e9a6bd2b551020a27180abd
+  version: 8ba1072b58e0c2a240eb5f6120165c7776c3e7b8
 - name: golang.org/x/crypto
-  version: 0c41d7ab0a0ee717d4590a44bcb987dfd9e183eb
+  version: 1351f936d976c60a0a48d728281922cf63eafb8d
   subpackages:
   - ssh/terminal
 - name: golang.org/x/net
@@ -373,7 +373,7 @@ imports:
   subpackages:
   - rate
 - name: google.golang.org/appengine
-  version: ae0ab99deb4dc413a2b4bd6c8bdd0eb67f1e4d06
+  version: 4f7eeb5305a4ba1966344836ba4af9996b7b4e05
   subpackages:
   - internal
   - internal/app_identity
@@ -391,11 +391,8 @@ imports:
 - name: google.golang.org/grpc
   version: 5b3c4e850e90a4cf6a20ebd46c8b32a0a3afcb9e
   subpackages:
-  - balancer
   - codes
-  - connectivity
   - credentials
-  - grpclb/grpc_lb_v1/messages
   - grpclog
   - health/grpc_health_v1
   - internal
@@ -403,7 +400,6 @@ imports:
   - metadata
   - naming
   - peer
-  - resolver
   - stats
   - status
   - tap
@@ -411,7 +407,7 @@ imports:
 - name: gopkg.in/fsnotify/fsnotify.v1
   version: c2828203cd70a50dcccfb2761f8b1f8ceef9a8e9
 - name: gopkg.in/go-playground/validator.v8
-  version: 5f1438d3fca68893a817e4a66806cea46a9e4ebf
+  version: 5f57d2222ad794d0dffb07e664ea05e2ee07d60c
 - name: gopkg.in/inf.v0
   version: 3887ee99ecf07df5b447e9b00d9c0b2adaa9f3e4
 - name: gopkg.in/tomb.v1
