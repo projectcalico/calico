@@ -1,5 +1,5 @@
-hash: fa2ecd815607af76896ebf122b8bda26448dcaee138b67d01614c502c1827483
-updated: 2018-10-12T04:10:24.805407537Z
+hash: 4877b16e4feda85ba1c82f45b876eefc7587c0d9ae3f699fa1012f8edf23c3f8
+updated: 2018-11-04T14:13:08.399215-08:00
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -33,7 +33,7 @@ imports:
   - pkg/types
   - version
 - name: github.com/coreos/go-semver
-  version: e214231b295a8ea9479f11b70b35d5acf3556d9b
+  version: 8ab6407b697782a06568d4b7f1db25550ec2e4c6
   subpackages:
   - semver
 - name: github.com/davecgh/go-spew
@@ -47,7 +47,7 @@ imports:
 - name: github.com/ghodss/yaml
   version: 73d445a93680fa1a78ae23a5839bad48f32ba1ee
 - name: github.com/go-ini/ini
-  version: 7b294651033cd7d9e7f0d9ffa1b75ed1e198e737
+  version: 9c8236e659b76e87bf02044d06fde8683008ff3e
 - name: github.com/gogo/protobuf
   version: c0656edd0d9eab7c66d1eb0c568f9039345796f7
   subpackages:
@@ -139,7 +139,7 @@ imports:
   - reporters/stenographer/support/go-isatty
   - types
 - name: github.com/onsi/gomega
-  version: 7615b9433f86a8bdf29709bf288bc4fd0636a369
+  version: 2152b45fa28a361beba9aab0885972323a444e28
   subpackages:
   - format
   - internal/assertion
@@ -165,7 +165,7 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: c8711541c5a4cd6fe867fcdcd00fdf914df88f17
+  version: 489a4d4fcdf275caca1edf59e95054b6e8601555
   subpackages:
   - lib/apiconfig
   - lib/apis/v1
@@ -212,7 +212,7 @@ imports:
   - lib/validator/v3
   - lib/watch
 - name: github.com/prometheus/client_golang
-  version: 7866eead363ec334628dbc56e32df590a05f4696
+  version: abad2d1bd44235a26707c172eab6bca5bf2dbad3
   subpackages:
   - prometheus
   - prometheus/internal
@@ -222,7 +222,7 @@ imports:
   subpackages:
   - go
 - name: github.com/prometheus/common
-  version: c7de2306084e37d54b8be01f3541a8464345e9a5
+  version: 7e9e6cabbd393fc208072eedef99188d0ce788b6
   subpackages:
   - expfmt
   - internal/bitbucket.org/ww/goautoneg
@@ -247,7 +247,7 @@ imports:
   - list
   - trie/ctrie
 - name: golang.org/x/crypto
-  version: 7c1a557ab941a71c619514f229f0b27ccb0c27cf
+  version: 49796115aa4b964c318aad4f3084fdb41e9aa067
   subpackages:
   - ssh/terminal
 - name: golang.org/x/net
@@ -257,7 +257,6 @@ imports:
   - context/ctxhttp
   - html
   - html/atom
-  - html/charset
   - http2
   - http2/hpack
   - idna
@@ -280,20 +279,6 @@ imports:
 - name: golang.org/x/text
   version: b19bf474d317b857955b12035d2c5acb57ce8b01
   subpackages:
-  - encoding
-  - encoding/charmap
-  - encoding/htmlindex
-  - encoding/internal
-  - encoding/internal/identifier
-  - encoding/japanese
-  - encoding/korean
-  - encoding/simplifiedchinese
-  - encoding/traditionalchinese
-  - encoding/unicode
-  - internal/tag
-  - internal/utf8internal
-  - language
-  - runes
   - secure/bidirule
   - transform
   - unicode/bidi
@@ -303,7 +288,7 @@ imports:
   subpackages:
   - rate
 - name: google.golang.org/appengine
-  version: ae0ab99deb4dc413a2b4bd6c8bdd0eb67f1e4d06
+  version: 4a4468ece617fc8205e99368fa2200e9d1fad421
   subpackages:
   - internal
   - internal/app_identity
