@@ -150,6 +150,7 @@ DOCKER_RUN := mkdir -p .go-pkg-cache && \
                               --net=host \
                               $(EXTRA_DOCKER_ARGS) \
                               -e LOCAL_USER_ID=$(LOCAL_USER_ID) \
+                              -v $(HOME)/.glide:/home/user/.glide:rw \
                               -v $(CURDIR):/go/src/$(PACKAGE_NAME):rw \
                               -v $(CURDIR)/.go-pkg-cache:/go/pkg:rw \
                               -w /go/src/$(PACKAGE_NAME) \
@@ -212,9 +213,7 @@ update-libcalico:
             if [ $(LIBCALICO_REPO) != "github.com/projectcalico/libcalico-go" ]; then \
               glide mirror set https://github.com/projectcalico/libcalico-go $(LIBCALICO_REPO) --vcs git; glide mirror list; \
             fi;\
-          OUTPUT=`mktemp`;\
-          glide up --strip-vendor; glide up --strip-vendor 2>&1 | tee $$OUTPUT; \
-          if ! grep "\[WARN\]" $$OUTPUT; then true; else false; fi; \
+          glide up --strip-vendor || glide up --strip-vendor; \
         fi'
 
 bin/calico-typha: bin/calico-typha-$(ARCH)
