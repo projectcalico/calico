@@ -160,7 +160,7 @@ imports:
 - name: github.com/mitchellh/mapstructure
   version: d2dd0262208475919e1a362f675cfc0e7c10e905
 - name: github.com/projectcalico/libcalico-go
-  version: edf3017e0fdba18ffd96694c9215623e06404f59
+  version: 3655574dc6162df9974bbdebab072b5ee104b554
   subpackages:
   - lib/api
   - lib/api/unversioned
