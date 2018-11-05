@@ -218,9 +218,7 @@ update-felix-confd-libcalico:
             sed -i "s/$$OLD_LIBCALICO_VER/$(LIBCALICO_VERSION)/" glide.yaml && \
             sed -i "s/$$OLD_FELIX_VER/$(FELIX_VERSION)/" glide.yaml && \
             sed -i "s/$$OLD_CONFD_VER/$(CONFD_VERSION)/" glide.yaml && \
-            OUTPUT=`mktemp`;\
-            glide up --strip-vendor; glide up --strip-vendor 2>&1 | tee $$OUTPUT; \
-            if ! grep "\[WARN\]" $$OUTPUT; then true; else false; fi; \
+            glide up --strip-vendor || glide up --strip-vendor; \
           fi'
 
 $(NODE_CONTAINER_BINARY): vendor $(SRCFILES)
