@@ -228,6 +228,7 @@ DOCKER_RUN := mkdir -p .go-pkg-cache && \
                               $(EXTRA_DOCKER_ARGS) \
                               -e LOCAL_USER_ID=$(LOCAL_USER_ID) \
                               -e GOCACHE=/gocache \
+                              -v $(HOME)/.glide:/home/user/.glide:rw \
                               -v $(CURDIR):/go/src/$(PACKAGE_NAME):rw \
                               -v $(CURDIR)/.go-pkg-cache:/gocache:rw \
                               -w /go/src/$(PACKAGE_NAME) \
@@ -296,9 +297,7 @@ update-typha:
         echo "Old version: $$OLD_VER";\
         if [ $(TYPHA_VERSION) != $$OLD_VER ]; then \
           sed -i "s/$$OLD_VER/$(TYPHA_VERSION)/" glide.yaml && \
-          OUTPUT=`mktemp`;\
-          glide up --strip-vendor; glide up --strip-vendor 2>&1 | tee $$OUTPUT; \
-          if ! grep -v "github.com/onsi/gomega" $$OUTPUT | grep -v "golang.org/x/sys" | grep -v "github.com/onsi/ginkgo" | grep "\[WARN\]"; then true; else false; fi; \
+          glide up --strip-vendor || glide up --strip-vendor; \
         fi'
 
 bin/calico-felix: bin/calico-felix-$(ARCH)
