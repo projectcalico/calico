@@ -63,7 +63,7 @@ import:
   - lib/set
   - lib/validator/v1
 - package: github.com/projectcalico/typha
-  version: 4fcc5ce9fe4406b93feb8b4e1cf63c9c07ef64b8
+  version: 405c8304513463ea3bc85cec0000aae1053ada62
   subpackages:
   - pkg/syncclient
   - pkg/tlsutils
@@ -97,6 +97,7 @@ import:
   subpackages:
   - unix
 - package: google.golang.org/grpc
+  version: 5b3c4e850e90a4cf6a20ebd46c8b32a0a3afcb9e
   subpackages:
   - credentials
   - peer
