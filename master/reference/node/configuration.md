@@ -145,14 +145,16 @@ The `can-reach` method uses your local routing to determine which IP address
 will be used to reach the supplied destination.  Both IP addresses and domain
 names may be used.
 
-e.g.
+Example using IP addresses:
 
 ```
-# Using IP addresses
 IP_AUTODETECTION_METHOD=can-reach=8.8.8.8
 IP6_AUTODETECTION_METHOD=can-reach=2001:4860:4860::8888
+```
 
-# Using domain names
+Example using domain names:
+
+```
 IP_AUTODETECTION_METHOD=can-reach=www.google.com
 IP6_AUTODETECTION_METHOD=can-reach=www.google.com
 ```
@@ -164,10 +166,9 @@ syntax) to enumerate matching interfaces and to return the first IP address on
 the first matching interface.  The order that both the interfaces
 and the IP addresses are listed is system dependent.
 
-e.g.
+Example with valid IP address on interface eth0, eth1, eth2 etc.:
 
 ```
-# Valid IP address on interface eth0, eth1, eth2 etc.
 IP_AUTODETECTION_METHOD=interface=eth.*
 IP6_AUTODETECTION_METHOD=interface=eth.*
 ```
@@ -176,19 +177,18 @@ IP6_AUTODETECTION_METHOD=interface=eth.*
 
 The `calico/node` container supports an exec readiness endpoint.
 
-Here is the help text:
+To access this endpoint, use the following command.
 
 ```
-$ docker exec calico-node /bin/readiness -h
-Usage of dist/readiness:
-  -bird
-    	Specify to enable BIRD readiness checks
-  -bird6
-    	Specify to enable BIRD6 readiness checks
-  -felix
-    	Specify to enable felix readiness checks
+docker exec calico-node /bin/calico-node [flag]
 ```
 
-The BIRD readiness endpoint ensures that the BGP mesh is healthy by verifiying that all BGP peers are established and
+Substitute `[flag]` with one or more of the following.
+
+- `-bird-ready`
+- `-bird6-ready`
+- `-felix-ready`
+
+The BIRD readiness endpoint ensures that the BGP mesh is healthy by verifying that all BGP peers are established and
 no graceful restart is in progress. If the BIRD readiness check is failing due to unreachable peers that are no longer
 in the cluster, see [decomissioning a node]({{site.baseurl}}/{{page.version}}/usage/decommissioning-a-node).

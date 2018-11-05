@@ -8,11 +8,11 @@ systemd, inside either of the following container types:
 - [Docker](#running-caliconode-in-a-docker-container)
 - [rkt](#running-caliconode-in-a-rkt-container)
 
-## Running `{{site.nodecontainer}}` in a Docker container
+## Running {{site.nodecontainer}} in a Docker container
 
 This section describes how to run `{{site.nodecontainer}}` as a Docker container.
 
-> **Note**: We include examples for systemd, but the commands can be 
+> **Note**: We include examples for systemd, but the commands can be
 > applied to other init daemons such as upstart.
 {: .alert .alert-info}
 
@@ -126,7 +126,7 @@ The script will also stop the `{{site.nodecontainer}}` container when the servic
 {: .alert .alert-info}
 
 
-## Running `{{site.nodecontainer}}` in a rkt container
+## Running {{site.nodecontainer}} in a rkt container
 
 Each {{site.prodname}}-rkt enabled node requires the `{{site.nodecontainer}}` container to be running.
 
@@ -152,10 +152,16 @@ sudo rkt run --stage1-path=/usr/share/rkt/stage1-fly.aci \
 > environment may contain a comma separated list of endpoints of your etcd cluster.
 {: .alert .alert-info}
 
-You can check that it's running using `sudo rkt list`.
+Check that it's running.
 
 ```shell
-$ sudo rkt list
+sudo rkt list
+```
+
+An example response follows.
+
+```bash
 UUID      APP	IMAGE NAME                  STATE   CREATED         STARTED         NETWORKS
 b52bba11  node  {{site.imageNames["node"]}}:{{site.data.versions[page.version].first.title}}  running 10 seconds ago  10 seconds ago
 ```
+{: .no-select-button}

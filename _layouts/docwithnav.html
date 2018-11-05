@@ -52,6 +52,10 @@ The code is a little roundabout for a few reasons:
     <script src="{{site.baseurl}}/js/jquery-2.2.0.min.js"></script>
     <script src="{{site.baseurl}}/js/bootstrap/bootstrap.min.js"></script>
     <script src="{{site.baseurl}}/js/script.js"></script>
+{% if page.version != "v1.5" and page.version != "v1.6" and page.version != "v2.0" and page.version != "v2.1" and page.version != "v2.2" and page.version != "v2.3" and page.version != "v2.4" and page.version != "v2.5" and page.version != "v2.6" and page.version != "v3.0" and page.version != "v3.1" and page.version != "v3.2" and page.version != "v3.3" %}
+    <script src="{{site.baseurl}}/js/clipboard.min.js"></script>
+    <script src="{{site.baseurl}}/js/code-select.js"></script>
+{% endif %}
     <script>
       (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
       (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),

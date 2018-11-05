@@ -5,12 +5,12 @@ canonical_url: 'https://docs.projectcalico.org/v3.3/reference/calicoctl/commands
 
 This sections describes the `calicoctl apply` command.
 
-Read the [calicoctl command line interface user reference]({{site.baseurl}}/{{page.version}}/reference/calicoctl/) 
+Read the [calicoctl command line interface user reference]({{site.baseurl}}/{{page.version}}/reference/calicoctl/)
 for a full list of calicoctl commands.
 
-> **Note**: The available actions for a specific resource type may be 
-> limited based on the datastore used for {{site.prodname}} (etcdv3 / Kubernetes API). 
-> Please refer to the 
+> **Note**: The available actions for a specific resource type may be
+> limited based on the datastore used for {{site.prodname}} (etcdv3 / Kubernetes API).
+> Please refer to the
 > [Resources section]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/)
 > for details about each resource type.
 {: .alert .alert-info}
@@ -18,7 +18,7 @@ for a full list of calicoctl commands.
 
 ## Displaying the help text for 'calicoctl apply' command
 
-Run `calicoctl apply --help` to display the following help menu for the 
+Run `calicoctl apply --help` to display the following help menu for the
 command.
 
 ```
@@ -77,19 +77,35 @@ Description:
   must be provided, it is not sufficient to supply only the fields that are
   being updated.
 ```
+{: .no-select-button}
 
 ### Examples
 
-```
-# Apply a set of resources (of mixed type) using the data in resources.yaml.
-# Results indicate that 8 resources were successfully applied
-$ calicoctl apply -f ./resources.yaml
-Successfully applied 8 resource(s)
+1. Apply a set of resources (of mixed type) using the data in resources.yaml.
 
-# Apply two policy resources based on the JSON passed into stdin.
-$ cat policy.json | calicoctl apply -f -
-Successfully applied 2 'policy' resource(s)
-```
+   ```bash
+   calicoctl apply -f ./resources.yaml
+   ```
+
+   Results indicate that 8 resources were successfully applied
+
+   ```bash
+   Successfully applied 8 resource(s)
+   ```
+   {: .no-select-button}
+
+1. Apply two policy resources based on the JSON passed into stdin.
+
+   ```bash
+   cat policy.json | calicoctl apply -f -
+   ```
+
+   Results indicate success.
+
+   ```bash
+   Successfully applied 2 'policy' resource(s)
+   ```
+   {: .no-select-button}
 
 ### Options
 
@@ -100,6 +116,7 @@ Successfully applied 2 'policy' resource(s)
                           Only applicable to NetworkPolicy and WorkloadEndpoint.
                           Uses the default namespace if not specified.
 ```
+{: .no-select-button}
 
 ### General options
 
@@ -108,6 +125,7 @@ Successfully applied 2 'policy' resource(s)
                           configuration in YAML or JSON format.
                           [default: /etc/calico/calicoctl.cfg]
 ```
+{: .no-select-button}
 
 ## See also
 

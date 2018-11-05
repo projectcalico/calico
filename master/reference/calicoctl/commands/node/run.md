@@ -123,6 +123,7 @@ Description:
   This command is used to start a calico/node container instance which provides
   Calico networking and network policy on your compute host.
 ```
+{: .no-select-button}
 
 ### Kubernetes as the datastore
 
@@ -135,9 +136,15 @@ have no effect.  These include:
 
 ### Examples
 
+Start the {{site.nodecontainer}} with a pre-configured IPv4 address for BGP.
+
+```bash
+sudo calicoctl node run
 ```
-# Start the {{site.nodecontainer}} with a pre-configured IPv4 address for BGP.
-$ sudo calicoctl node run
+
+An example response follows.
+
+```bash
 Running command to load modules: modprobe -a xt_set ip6_tables
 Enabling IPv4 forwarding
 Enabling IPv6 forwarding
@@ -155,6 +162,7 @@ Calico node name:  calico
 CALICO_LIBNETWORK_ENABLED is true - start libnetwork service
 Calico node started successfully
 ```
+{: .no-select-button}
 
 #### IP Autodetection method examples
 
@@ -182,7 +190,7 @@ To set the autodetection method for IPv6, use the `--ip6-autodetection-method` o
 
 > **Note**: If you are starting the `{{site.nodecontainer}}` container directly (and not using the
 > `calicoctl run` helper command), the options are passed in environment
-> variables. These are described in 
+> variables. These are described in
 > [Configuring `{{site.nodecontainer}}`]({{site.baseurl}}/{{page.version}}/reference/node/configuration).
 {: .alert .alert-info}
 
@@ -198,10 +206,9 @@ This is the default detection method. However, since this method only makes a
 very simplified guess, it is recommended to either configure the node with a
 specific IP address, or to use one of the other detection methods.
 
-e.g.
+An example with first-found auto detection method explicitly specified follows
 
-```
-# First-found auto detection method explicitly specified
+```bash
 sudo calicoctl node run --ip autodetect --ip-autodetection-method first-found
 ```
 
@@ -211,13 +218,14 @@ The `can-reach` method uses your local routing to determine which IP address
 will be used to reach the supplied destination.  Both IP addresses and domain
 names may be used.
 
-e.g.
+An example with IP detection using a can-reach IP address:
 
-```
-# IP detection using a can-reach IP address
+```bash
 sudo calicoctl node run --ip autodetect --ip-autodetection-method can-reach=8.8.8.8
+```
+An example with IP detection using a can-reach domain name:
 
-# IP detection using a can-reach domain name
+```bash
 sudo calicoctl node run --ip autodetect --ip-autodetection-method can-reach=www.google.com
 ```
 
@@ -229,16 +237,21 @@ the first interface that matches any of the interface regexes provided.  The
 order that both the interfaces and the IP addresses are listed is system
 dependent.
 
-e.g.
+Example with IP detection on interface eth0:
 
-```
-# IP detection on interface eth0
+```bash
 sudo calicoctl node run --ip autodetect --ip-autodetection-method interface=eth0
+```
 
-# IP detection on interfaces eth0, eth1, eth2 etc.
+Example with IP detection on interfaces eth0, eth1, eth2 etc.:
+
+```bash
 sudo calicoctl node run --ip autodetect --ip-autodetection-method interface=eth.*
+```
 
-# IP detection on interfaces eth0, eth1, eth2 etc. and wlp2s0
+An example with IP detection on interfaces eth0, eth1, eth2 etc. and wlp2s0:
+
+```bash
 sudo calicoctl node run --ip-autodetect --ip-autodetection-method interface=eth.*,wlp2s0
 ```
 
@@ -342,6 +355,7 @@ terminating `,` character does not need to be specified for those cases.
                          networking, and when enabled traffic must be
                          explicitly allowed by configuring Calico policies.
 ```
+{: .no-select-button}
 
 ### General options
 
@@ -350,6 +364,7 @@ terminating `,` character does not need to be specified for those cases.
                          configuration in YAML or JSON format.
                          [default: /etc/calico/calicoctl.cfg]
 ```
+{: .no-select-button}
 
 ## See also
 

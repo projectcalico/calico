@@ -43,6 +43,19 @@ pre code {
   white-space: pre;
 }
 
+// copy btn style
+.btn-copy-code {
+  color: #FF7E00;
+  padding-right: 0px;
+  float: right;
+  border: 0;
+  font-size: 16px;
+  margin-top: -3px;
+  &:hover {
+    cursor: pointer;
+  }
+}
+
 #toplevel-nav {
   -webkit-box-shadow: 0px 0px 8px 1px #666;
   -moz-box-shadow: 0px 0px 8px 1px #666;
@@ -91,15 +104,15 @@ input.gsc-input, .gsc-input-box, .gsc-input-box-hover, .gsc-input-box-focus, .gs
 }
 
 @media screen and (min-width: 999px) {
-    
+
     #tigera-navbar ul.nav {
         li {
             height: 44px;
-            
+
             ul {
                 margin: 24px 0 0 0;
                 padding: 0;
-                
+
                 li {
                     min-height: 24px !important;
                     display: block;
@@ -108,26 +121,26 @@ input.gsc-input, .gsc-input-box, .gsc-input-box-hover, .gsc-input-box-focus, .gs
                     width: 200px;
                     margin: 0;
                     border-top: 1px dashed #999;
-                    
+
                     a {
                         color: #fff;
                         font-size: 14px;
                     }
-                    
+
                     a:hover {
                         color: $navbar-default-link-hover-color !important;
                         text-decoration: none;
                     }
                 }
-                
+
                 li:first-child {
                     border-top: none;
                 }
             }
         }
-        
+
         li:hover ul {
             display: block;
-        }   
+        }
     }
 }

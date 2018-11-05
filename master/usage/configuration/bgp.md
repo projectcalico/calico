@@ -232,6 +232,7 @@ It should return something like the following.
 NAME                  PEERIP         NODE      ASN
 bgppeer-global-3040   192.20.30.40   (global)  64567
 ```
+{: .no-select-button}
 
 To remove the global BGP peer that you just created run the following command.
 
@@ -284,6 +285,7 @@ You should see your new BGP peer resource listed in the response.
 NAME                 PEERIP      NODE    ASN
 bgppeer-node-aabbff  aa:bb::ff   node1   64514
 ```
+{: .no-select-button}
 
 To remove the BGP peer run the following command.
 
@@ -333,6 +335,7 @@ IPv6 BGP status
 | aa:bb::ff    | node-to-node mesh | up    | 16:17:26 | Established |
 +--------------+-------------------+-------+----------+-------------+
 ```
+{: .no-select-button}
 
 ### Configuring in-cluster route reflectors
 
@@ -358,15 +361,22 @@ much smaller number of BGP connections.
 
     ```
     calicoctl get node <node_name> --export -o yaml > node.yml
+    ```
 
-    # Edit node.yml so that it includes:
+    Edit node.yml so that it includes:
+
+    ```
     metadata:
       labels:
         i-am-a-route-reflector: true
     spec:
       bgp:
         routeReflectorClusterID: 224.0.0.1
+    ```
 
+    Then apply the updated YAML.
+
+    ```
     calicoctl apply -f node.yml
     ```
 

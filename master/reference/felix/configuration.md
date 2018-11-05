@@ -160,17 +160,25 @@ convenient.
 Felix also reads configuration parameters from the datastore.  It supports
 a global setting and a per-host override.
 
-```
-# Get the current felixconfig settings
-$ calicoctl get felixconfig --export -o yaml > felix.yaml
+1. Get the current felixconfig settings.
 
-# Modify logFilePath to your intended path, e.g. "/tmp/felix.log"
-#   Global change: set name to "default"
-#   Node-specific change: set name to the node name, e.g. "{{site.prodname}}-Node-1"
-$ vim felix.yaml
+   ```bash
+   calicoctl get felixconfig -o yaml > felix.yaml
+   ```
 
-# Replace the current felixconfig settings
-$ calicoctl replace -f felix.yaml
-```
+1. Modify logFilePath to your intended path, e.g. "/tmp/felix.log"
+
+   ```bash
+   vim felix.yaml
+   ```
+   > **Tip**: For a global change set name to "default".
+   > For a node-specific change: set name to the node name, e.g. "{{site.prodname}}-Node-1"
+   {: .alert .alert-success}
+
+1. Replace the current felixconfig settings
+
+   ```bash
+   calicoctl replace -f felix.yaml
+   ```
 
 For more information, see [Felix Configuration Resource](../calicoctl/resources/felixconfig).

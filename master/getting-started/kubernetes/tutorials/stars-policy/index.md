@@ -56,15 +56,16 @@ Now that we've enabled isolation, the UI can no longer access the pods, and so t
 
 ### 3) Allow the UI to access the Services using NetworkPolicy objects
 
+Apply the following YAMLs to allow access from the management UI.
+
 ```shell
-# Allow access from the management UI.
-kubectl create -f {{site.url}}/{{page.version}}/getting-started/kubernetes/tutorials/stars-policy/policies/allow-ui.yaml
+kubectl create -f {{site.url}}/{{page.version}}/getting-started/kubernetes/tutorials/stars-policy/policies/allow-ui.yaml 
 kubectl create -f {{site.url}}/{{page.version}}/getting-started/kubernetes/tutorials/stars-policy/policies/allow-ui-client.yaml
 ```
 
 After a few seconds, refresh the UI - it should now show the Services, but they should not be able to access each other any more.
 
-### 4) Create the "backend-policy.yaml" file to allow traffic from the frontend to the backend.
+### 4) Create the backend-policy.yaml file to allow traffic from the frontend to the backend.
 
 ```shell
 kubectl create -f {{site.url}}/{{page.version}}/getting-started/kubernetes/tutorials/stars-policy/policies/backend-policy.yaml
@@ -76,7 +77,7 @@ Refresh the UI.  You should see the following:
 - The backend cannot access the frontend at all.
 - The client cannot access the frontend, nor can it access the backend.
 
-### 5) Expose the frontend service to the `client` namespace.
+### 5) Expose the frontend service to the client namespace.
 
 ```shell
 kubectl create -f {{site.url}}/{{page.version}}/getting-started/kubernetes/tutorials/stars-policy/policies/frontend-policy.yaml
@@ -85,7 +86,7 @@ kubectl create -f {{site.url}}/{{page.version}}/getting-started/kubernetes/tutor
 The client can now access the frontend, but not the backend.  Neither the frontend nor the backend
 can initiate connections to the client.  The frontend can still access the backend.
 
-To use Calico to enforce egress policy on Kubernetes pods, see [the advanced policy demo]({{site.baseurl}}/{{page.version}}/getting-started/kubernetes/tutorials/advanced-policy).
+To use {{site.prodname}} to enforce egress policy on Kubernetes pods, see [the advanced policy demo]({{site.baseurl}}/{{page.version}}/getting-started/kubernetes/tutorials/advanced-policy).
 
 ### 6) (Optional) Clean up the demo environment.
 

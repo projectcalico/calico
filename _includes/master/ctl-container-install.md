@@ -43,11 +43,16 @@ You can then run commands using kubectl as shown below.
 
 ```
 kubectl exec -ti -n kube-system calicoctl -- /calicoctl get profiles -o wide
+```
 
+An example response follows.
+
+```bash
 NAME                 TAGS
 kns.default          kns.default
 kns.kube-system      kns.kube-system
 ```
+{: .no-select-button}
 
 We recommend setting an alias as follows.
 

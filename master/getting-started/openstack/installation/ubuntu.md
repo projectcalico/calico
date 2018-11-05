@@ -200,6 +200,7 @@ On each compute node, perform the following steps:
     # a lock path must be set.
     lock_path = $state_path/lock
     ```
+    {: .no-select-button}
 
     Add a `[calico]` section with the following content, where `<ip>` is the IP
     address of the etcd server.

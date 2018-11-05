@@ -91,12 +91,15 @@ calicoctl node run --ip=autodetect --ip-autodetection-method=can-reach=8.8.8.8
 
 The IP addresses may also be set by updating the node resource.
 
-You can use `calicoctl` to query the current configuration and then apply updates.
-For example:
+Use `calicoctl` to query the current node configuration. An example follows.
 
 ```
-# Start by querying the current node configuration
-$ calicoctl get node node2 -o yaml
+calicoctl get node node2 -o yaml
+```
+
+It should return the configuration of the specified node.
+
+```yaml
 - apiVersion: projectcalico.org/v3
   kind: Node
   metadata:
@@ -105,10 +108,14 @@ $ calicoctl get node node2 -o yaml
     bgp:
       ipv4Address: 10.0.2.10/32
       ipv6Address: fd80:24e2:f998:72d6::/128
+```
+{: .no-select-button}
 
-# Now reconfigure the node with updated ipv4Address to include the correct
-# subnet.
-$ calicoctl apply -f - << EOF
+Next, reconfigure the node with an ipv4Address updated to include the correct
+subnet.
+
+```
+calicoctl apply -f - << EOF
 - apiVersion: projectcalico.org/v3
   kind: Node
   metadata:
@@ -125,4 +132,3 @@ EOF
 >`{{site.nodecontainer}}` container—otherwise those values will overwrite the values
 > configured through the resource.
 {: .alert .alert-info}
-

@@ -5,12 +5,12 @@ canonical_url: 'https://docs.projectcalico.org/v3.3/reference/calicoctl/commands
 
 This section describes the `calicoctl version` command.
 
-Read the [calicoctl Overview]({{site.baseurl}}/{{page.version}}/reference/calicoctl/) 
+Read the [calicoctl Overview]({{site.baseurl}}/{{page.version}}/reference/calicoctl/)
 for a full list of calicoctl commands.
 
 ## Displaying the help text for 'calicoctl version' commands
 
-Run `calicoctl version --help` to display the following help menu for the 
+Run `calicoctl version --help` to display the following help menu for the
 commands.
 
 ```
@@ -26,6 +26,7 @@ Options:
 Description:
   Display the version of calicoctl.
 ```
+{: .no-select-button}
 
 ### Example
 
@@ -33,11 +34,11 @@ Use `calicoctl version` to obtain the following data.
 
 {% include {{page.version}}/calicoctl-version.md %}
 
-\* To obtain these values, you must configure `calicoctl` 
+\* To obtain these values, you must configure `calicoctl`
    [to connect to your datastore](/{{page.version}}/usage/calicoctl/configure/).
 
 
 ## See also
 
--  [calicoctl configuration]({{site.baseurl}}/{{page.version}}/reference/calicoctl/setup) 
+-  [calicoctl configuration]({{site.baseurl}}/{{page.version}}/reference/calicoctl/setup)
    for details on configuring `calicoctl` to access the {{site.prodname}} datastore.

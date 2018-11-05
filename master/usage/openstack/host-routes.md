@@ -41,7 +41,7 @@ routed there.
 > according to its routing table, to wherever it needs to go. This also means
 > that the gateway IP address really is functioning as each instance's default
 > gateway, in the generally understood sense.
-> 
+>
 {: .alert .alert-info}
 
 
@@ -61,15 +61,21 @@ For example, suppose an instance has eth0 attached to a subnet with gateway
 10.65.0.1, eth1 attached to a subnet with gateway 11.8.0.1, and a default route
 via eth0.  Then a host route like
 
-    11.11.0.0/16,11.8.0.1
+```bash
+11.11.0.0/16,11.8.0.1
+```
+{: .no-select-button}
 
 can be configured for the subnet, to say that data to 11.11.0.0/16 should go
 out through eth1.  The instance's routing table will then be:
 
-    default via 10.65.0.1 dev eth0
-    10.65.0.0/24 dev eth0
-    11.8.0.0/24 dev eth1
-    11.11.0.0/16 via 11.8.0.1 dev eth1
+```bash
+default via 10.65.0.1 dev eth0
+10.65.0.0/24 dev eth0
+11.8.0.0/24 dev eth1
+11.11.0.0/16 via 11.8.0.1 dev eth1
+```
+{: .no-select-button}
 
 When an instance only has a single network attachment, and so a single NIC,
 host routes cannot make any difference to how data is routed, so it is

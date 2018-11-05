@@ -28,24 +28,43 @@ Description:
   special attributes defined for the IP or whether the IP has been reserved by
   a user of the Calico IP Address Manager.
 ```
+{: .no-select-button}
 
 ### Examples
 
-```
-# IP is not assigned to an endpoint
-$ calicoctl ipam show --ip=192.168.1.2
-IP 192.168.1.2 is not currently assigned
+1. Print the information associated with an IP address.
 
-# Basic Docker container has the assigned IP
-$ calicoctl ipam show --ip=192.168.1.1
-No attributes defined for 192.168.1.1
-```
+   ```bash
+   calicoctl ipam show --ip=192.168.1.2
+   ```
+
+   The following results indicate that the IP is not assigned to an endpoint.
+
+   ```bash
+   Results
+   IP 192.168.1.2 is not currently assigned
+   ```
+   {: .no-select-button}
+
+1. Print the information associated with a different IP address.
+
+   ```bash
+   calicoctl ipam show --ip=192.168.1.1
+   ```
+
+   Results show that a basic Docker container has the assigned IP.
+
+   ```bash
+   No attributes defined for 192.168.1.1
+   ```
+   {: .no-select-button}
 
 ### Options
 
 ```
-   --ip=<IP>          IP address to show.
+--ip=<IP>          IP address to show.
 ```
+{: .no-select-button}
 
 ### General options
 
@@ -54,6 +73,7 @@ No attributes defined for 192.168.1.1
                            configuration in YAML or JSON format.
                            [default: /etc/calico/calicoctl.cfg]
 ```
+{: .no-select-button}
 
 ## See also
 
