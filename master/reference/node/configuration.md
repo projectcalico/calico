@@ -22,6 +22,7 @@ The `{{site.nodecontainer}}` container is primarily configured through environme
 | CALICO_ROUTER_ID | Sets the `router id` to use for BGP if no IPv4 address is set on the node. [Default: ``] | string |
 | DATASTORE_TYPE | Type of datastore. [Default: `etcdv3`] | kubernetes, etcdv3 |
 | WAIT_FOR_DATASTORE | Wait for connection to datastore before starting. If a successful connection is not made, node will shutdown. [Default: `false`] | boolean |
+| CALICO_K8S_NODE_REF | The name of the corresponding node object in the Kubernetes API. When set, used for correlating this node with events from the Kubernetes API. | string |
 | CALICO_LIBNETWORK_CREATE_PROFILES | Enables creating a {{site.prodname}} profile resource for each Docker network.  When disabled, no profiles will be processed even if manually created. [Default: `true`] | boolean |
 | CALICO_LIBNETWORK_LABEL_ENDPOINTS | Enables copying a subset of the Docker container labels for use as Calico labels on workloadendpoints. [Default: `false`] | boolean |
 | CALICO_LIBNETWORK_ENABLED | Enables running the docker-libnetwork plugin directly in the `{{site.nodecontainer}}` container. [Default: `true`] | boolean |
