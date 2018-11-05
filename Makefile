@@ -164,9 +164,7 @@ update-libcalico:
             if [ $(LIBCALICO_REPO) != "github.com/projectcalico/libcalico-go" ]; then \
               glide mirror set https://github.com/projectcalico/libcalico-go $(LIBCALICO_REPO) --vcs git; glide mirror list; \
             fi;\
-          OUTPUT=`mktemp`;\
-          glide up --strip-vendor; glide up --strip-vendor 2>&1 | tee $$OUTPUT; \
-          if ! grep "\[WARN\]" $$OUTPUT; then true; else false; fi; \
+          glide up --strip-vendor || glide up --strip-vendor; \
         fi'
 
 bin/kube-controllers-linux-$(ARCH): vendor $(SRCFILES)
