@@ -22,8 +22,8 @@ execute_test_suite() {
     rm $LOGPATH/rendered/*.cfg || true
 
     if [ "$DATASTORE_TYPE" = etcdv3 ]; then
-	test_node_deletion
-	test_idle_peers
+	run_extra_test test_node_deletion
+	run_extra_test test_idle_peers
 	echo "Extra etcdv3 tests passed"
     fi
 
@@ -42,6 +42,15 @@ execute_test_suite() {
         execute_tests_daemon
     done
     echo "Daemon-mode tests passed"
+}
+
+run_extra_test() {
+    test_fn=$1
+    echo
+    echo "Run test: $1"
+    echo "==============================="
+    eval $1
+    echo "==============================="
 }
 
 test_node_deletion() {
