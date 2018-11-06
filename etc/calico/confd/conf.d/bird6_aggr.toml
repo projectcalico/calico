@@ -1,8 +1,7 @@
 [template]
-src = "bird_aggr.cfg.template"
+src = "bird6_aggr.cfg.template"
 dest = "/etc/calico/confd/config/bird6_aggr.cfg"
-prefix = "/calico/ipam/v2/host/NODENAME/ipv6/block"
 keys = [
-    "/",
+    "/calico/ipam/v2/host/NODENAME/ipv6/block",
 ]
 reload_cmd = "pkill -HUP bird || true"
