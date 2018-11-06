@@ -20,6 +20,7 @@ endif
 
 all: clean test
 
+CONTAINER_NAME?=calico/confd
 GO_BUILD_CONTAINER?=calico/go-build$(ARCHTAG):$(GO_BUILD_VER)
 
 K8S_VERSION=v1.7.4
@@ -69,7 +70,7 @@ vendor vendor/.up-to-date: glide.lock
 	touch vendor/.up-to-date
 
 container: bin/confd
-	docker build -t calico/confd .
+	docker build -t $(CONTAINER_NAME) .
 
 bin/confd: $(GO_FILES) vendor/.up-to-date
 	@echo Building confd...
@@ -78,6 +79,45 @@ bin/confd: $(GO_FILES) vendor/.up-to-date
 		( ldd bin/confd 2>&1 | grep -q -e "Not a valid dynamic program" \
 			-e "not a dynamic executable" || \
 	             ( echo "Error: bin/confd was not statically linked"; false ) )'
+
+## ensure we have a real IMAGETAG
+imagetag:
+ifndef IMAGETAG
+	$(error IMAGETAG is undefined - run using make <target> IMAGETAG=X.Y.Z)
+endif
+
+## push images
+push: imagetag
+	docker push $(CONTAINER_NAME):$(IMAGETAG)
+	docker push quay.io/$(CONTAINER_NAME):$(IMAGETAG)
+
+## tag images
+tag-images: imagetag
+	docker tag $(CONTAINER_NAME):latest $(CONTAINER_NAME):$(IMAGETAG)
+	docker tag $(CONTAINER_NAME):latest quay.io/$(CONTAINER_NAME):$(IMAGETAG)
+
+
+###############################################################################
+# CI
+###############################################################################
+.PHONY: ci
+## Run all tests
+ci: clean container test
+
+###############################################################################
+# CD
+###############################################################################
+.PHONY: cd
+## Deploys images to registry
+cd:
+ifndef CONFIRM
+	$(error CONFIRM is undefined - run using make <target> CONFIRM=true)
+endif
+ifndef BRANCH_NAME
+	$(error BRANCH_NAME is undefined - run using make <target> BRANCH_NAME=var or set an environment variable)
+endif
+	$(MAKE) tag-images push IMAGETAG=${BRANCH_NAME}
+	$(MAKE) tag-images push IMAGETAG=$(shell git describe --tags --dirty --always --long)
 
 .PHONY: test
 ## Run all tests
