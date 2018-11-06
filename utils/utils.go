@@ -205,6 +205,11 @@ func DeleteIPAM(conf types.NetConf, args *skel.CmdArgs, logger *logrus.Entry) er
 		if err := ae.Load(); err != nil {
 			return err
 		}
+		if len(ae.Addresses) == 0 {
+			// If we couldn't find this endpoint, then simply return successfully.
+			logger.WithField("AzureEndpoint", ae).Infof("No endpoint addresses, skip IPAM release")
+			return nil
+		}
 		if err := azure.MutateConfigDel(args, *an, *ae); err != nil {
 			return err
 		}
