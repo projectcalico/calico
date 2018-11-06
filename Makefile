@@ -164,6 +164,8 @@ clean:
 	docker rmi $(BUILD_IMAGE):latest-$(ARCH) || true
 	docker rmi $(TEST_CONTAINER_NAME) || true
 
+	rm tests/k8st/dind-cluster.sh
+
 ###############################################################################
 # Building the binary
 ###############################################################################
@@ -451,6 +453,42 @@ st-checks:
 	# running on the host.
 	iptables-save | grep -q 'calico-st-allow-etcd' || iptables $(IPT_ALLOW_ETCD)
 
+## Get the kubeadm-dind-cluster script
+tests/k8st/dind-cluster.sh:
+	wget -O tests/k8st/dind-cluster.sh https://raw.githubusercontent.com/lwr20/kubeadm-dind-cluster/master/fixed/dind-cluster-v1.10.sh
+	chmod +x tests/k8st/dind-cluster.sh
+
+.PHONY: k8s-test
+## Run the k8s tests
+k8s-test: $(NODE_CONTAINER_CREATED) calico_test.created tests/k8st/dind-cluster.sh k8s-stop k8s-start
+	docker run \
+	    -v $(CURDIR):/code \
+	    -v /var/run/docker.sock:/var/run/docker.sock \
+	    -v /home/$(USER)/.kube/config:/root/.kube/config \
+	    -v /home/$(USER)/.kubeadm-dind-cluster:/root/.kubeadm-dind-cluster \
+	    --privileged \
+	    --net host \
+        $(TEST_CONTAINER_NAME) \
+	    sh -c 'cp /root/.kubeadm-dind-cluster/kubectl /bin/kubectl && ls -ltr /bin/kubectl && which kubectl && cd /code/tests/k8st && nosetests -v --with-xunit --xunit-file="/code/report/k8s-tests.xml" --with-timer'
+	$(MAKE) k8s-stop
+
+.PHONY: k8s-start
+## Start k8s cluster
+k8s-start: tests/k8st/dind-cluster.sh
+	CNI_PLUGIN=calico tests/k8st/dind-cluster.sh up
+	docker cp calico-node.tar kube-master:/calico-node.tar
+	docker cp calico-node.tar kube-node-1:/calico-node.tar
+	docker cp calico-node.tar kube-node-2:/calico-node.tar
+	docker exec kube-master docker load -i /calico-node.tar
+	docker exec kube-node-1 docker load -i /calico-node.tar
+	docker exec kube-node-2 docker load -i /calico-node.tar
+
+.PHONY: k8s-stop
+## Stop k8s cluster
+k8s-stop: tests/k8st/dind-cluster.sh
+	tests/k8st/dind-cluster.sh down
+	tests/k8st/dind-cluster.sh clean
+
 .PHONY: st
 ## Run the system tests
 st: dist/calicoctl busybox.tar calico-node.tar workload.tar run-etcd calico_test.created dist/calico-cni-plugin dist/calico-ipam-plugin
@@ -487,7 +525,7 @@ st: dist/calicoctl busybox.tar calico-node.tar workload.tar run-etcd calico_test
 ###############################################################################
 .PHONY: ci
 ## Run what CI runs
-ci: static-checks fv image-all st
+ci: static-checks fv image-all st k8s-test
 
 ## Deploys images to registry
 cd:
