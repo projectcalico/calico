@@ -22,7 +22,6 @@ from tests.k8st.test_base import TestBase
 from tests.k8st.utils.utils import retry_until_success
 
 _log = logging.getLogger(__name__)
-_log.setLevel(logging.INFO)
 
 
 class TestAllRunning(TestBase):
@@ -47,6 +46,9 @@ class TestSimplePolicy(TestBase):
     def test_simple_policy(self):
         # Check we can talk to service.
         retry_until_success(self.can_connect, retries=10, wait_time=1, function_args=["access"])
+        _log.info("Client 'access' connected to open service")
+        retry_until_success(self.can_connect, retries=10, wait_time=1, function_args=["no-access"])
+        _log.info("Client 'no-access' connected to open service")
 
         # Create default-deny policy
         policy = client.V1NetworkPolicy(
@@ -68,6 +70,9 @@ class TestSimplePolicy(TestBase):
 
         # Check we cannot talk to service
         retry_until_success(self.cannot_connect, retries=10, wait_time=1, function_args=["access"])
+        _log.info("Client 'access' failed to connect to isolated service")
+        retry_until_success(self.cannot_connect, retries=10, wait_time=1, function_args=["no-access"])
+        _log.info("Client 'no-access' failed to connect to isolated service")
 
         # Create allow policy
         policy = client.V1NetworkPolicy(
@@ -100,17 +105,23 @@ class TestSimplePolicy(TestBase):
 
         # Check we can talk to service as 'access'
         retry_until_success(self.can_connect, retries=10, wait_time=1, function_args=["access"])
+        _log.info("Client 'access' connected to protected service")
 
-        # Check we cannot talk to service as 'cant-access'
+        # Check we cannot talk to service as 'no-access'
         retry_until_success(self.cannot_connect, retries=10, wait_time=1, function_args=["access"])
+        _log.info("Client 'no-access' failed to connect to protected service")
 
     def can_connect(self, name):
         if not self.check_connected(name):
+            _log.warning("'%s' failed to connect, when connection was expected", name)
             raise self.ConnectionError
+        _log.info("'%s' connected, as expected", name)
 
     def cannot_connect(self, name):
         if self.check_connected(name):
+            _log.warning("'%s' unexpectedly connected", name)
             raise self.ConnectionError
+        _log.info("'%s' failed to connect, as expected", name)
 
     @staticmethod
     def check_connected(name):

@@ -24,7 +24,7 @@ from kubernetes import client, config
 
 from utils.utils import retry_until_success
 
-logging.basicConfig(level=logging.INFO, format="%(message)s")
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 logger = logging.getLogger(__name__)
 
 
@@ -111,29 +111,29 @@ class TestBase(TestCase):
     def create_service(self, image, name, ns, port, replicas=2):
         cluster = self.k8s_client()
         cluster.create_namespace(client.V1Namespace(metadata=client.V1ObjectMeta(name=ns)))
-        container = client.V1Container(
-            name=name,
-            image=image,
-            ports=[client.V1ContainerPort(container_port=port)])
-        # Create and configure a spec section
-        template = client.V1PodTemplateSpec(
-            metadata=client.V1ObjectMeta(labels={"app": name}),
-            spec=client.V1PodSpec(containers=[container]))
-        # Create the specification of deployment
-        spec = client.ExtensionsV1beta1DeploymentSpec(
-            replicas=replicas,
-            template=template)
-        # Instantiate the deployment object
-        nginx_deployment = client.ExtensionsV1beta1Deployment(
+
+        # Run a deployment with <replicas> copies of <image>, with the
+        # pods labelled with "app": <name>.
+        deployment = client.ExtensionsV1beta1Deployment(
             api_version="extensions/v1beta1",
             kind="Deployment",
             metadata=client.V1ObjectMeta(name=name),
-            spec=spec)
+            spec=client.ExtensionsV1beta1DeploymentSpec(
+                replicas=replicas,
+                template=client.V1PodTemplateSpec(
+                    metadata=client.V1ObjectMeta(labels={"app": name}),
+                    spec=client.V1PodSpec(containers=[
+                        client.V1Container(name=name,
+                                           image=image,
+                                           ports=[client.V1ContainerPort(container_port=port)]),
+                    ]))))
         api_response = client.ExtensionsV1beta1Api().create_namespaced_deployment(
-            body=nginx_deployment,
+            body=deployment,
             namespace=ns)
         logger.debug("Deployment created. status='%s'" % str(api_response.status))
 
+        # Create a service called <name> whose endpoints are the pods
+        # with "app": <name>; i.e. those just created above.
         service = client.V1Service(
             metadata=client.V1ObjectMeta(
                 name=name,
