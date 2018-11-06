@@ -47,7 +47,7 @@ func setClientPrefixes(config Config, trs []*TemplateResource) error {
 	// unique prefixes that are being watched.
 	pmap := map[string]bool{}
 	for _, tr := range trs {
-		for _, pk := range tr.PrefixedKeys {
+		for _, pk := range tr.ExpandedKeys {
 			pmap[pk] = true
 		}
 	}
@@ -101,7 +101,7 @@ func (p *watchProcessor) monitorPrefix(t *TemplateResource) {
 	for {
 		// Watch from the last revision that we updated the templates with.  This will exit it the
 		// data in the datastore for the requested prefixes has had updates since that revision.
-		err := t.storeClient.WatchPrefix(t.Prefix, t.PrefixedKeys, revision, p.stopChan)
+		err := t.storeClient.WatchPrefix(t.Prefix, t.ExpandedKeys, revision, p.stopChan)
 		if err != nil {
 			p.errChan <- err
 			// Prevent backend errors from consuming all resources.

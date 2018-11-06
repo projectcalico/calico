@@ -31,6 +31,7 @@ import (
 	logutils "github.com/kelseyhightower/confd/pkg/log"
 	log "github.com/sirupsen/logrus"
 
+	"github.com/kelseyhightower/confd/pkg/resource/template"
 	"github.com/projectcalico/libcalico-go/lib/apiconfig"
 	apiv3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/libcalico-go/lib/backend/api"
@@ -130,8 +131,7 @@ func NewCalicoClient(confdConfig *config.Config) (*client, error) {
 	// monitor all nodes.  If this setting changes (which we will monitor in the OnUpdates
 	// callback) then we terminate confd - the calico/node init process will restart the
 	// confd process.
-	nodeName := os.Getenv("NODENAME")
-	c.nodeLogKey = fmt.Sprintf("/calico/bgp/v1/host/%s/loglevel", nodeName)
+	c.nodeLogKey = fmt.Sprintf("/calico/bgp/v1/host/%s/loglevel", template.NodeName)
 	c.nodeV1Processor = updateprocessors.NewBGPNodeUpdateProcessor()
 
 	typhaAddr, err := discoverTyphaAddr(&confdConfig.Typha)
@@ -144,7 +144,7 @@ func NewCalicoClient(confdConfig *config.Config) (*client, error) {
 		typhaConnection := syncclient.New(
 			typhaAddr,
 			buildinfo.GitVersion,
-			nodeName,
+			template.NodeName,
 			fmt.Sprintf("confd %s", buildinfo.GitVersion),
 			c,
 			&syncclient.Options{
@@ -168,7 +168,7 @@ func NewCalicoClient(confdConfig *config.Config) (*client, error) {
 		}()
 	} else {
 		// Use the syncer locally.
-		c.syncer = bgpsyncer.New(c.client, c, nodeName)
+		c.syncer = bgpsyncer.New(c.client, c, template.NodeName)
 		c.syncer.Start()
 	}
 
