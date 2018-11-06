@@ -63,9 +63,26 @@ vendor: glide.yaml
       glide install -strip-vendor'
 
 # build calico_ctl image
+image: $(CTL_CONTAINER_CREATED)
 $(CTL_CONTAINER_CREATED): calicoctl/Dockerfile.calicoctl dist/calicoctl
 	docker build -t $(CTL_CONTAINER_NAME) -f calicoctl/Dockerfile.calicoctl .
 	touch $@
+
+## ensure we have a real IMAGETAG
+imagetag:
+ifndef IMAGETAG
+	$(error IMAGETAG is undefined - run using make <target> IMAGETAG=X.Y.Z)
+endif
+
+## push images
+push: imagetag
+	docker push $(CTL_CONTAINER_NAME):$(IMAGETAG)
+	docker push quay.io/$(CTL_CONTAINER_NAME):$(IMAGETAG)
+
+## tag images
+tag-images: imagetag
+	docker tag $(CTL_CONTAINER_NAME):latest $(CTL_CONTAINER_NAME):$(IMAGETAG)
+	docker tag $(CTL_CONTAINER_NAME):latest quay.io/$(CTL_CONTAINER_NAME):$(IMAGETAG)
 
 ## Build calicoctl
 binary: $(CALICOCTL_FILES) vendor
@@ -153,6 +170,28 @@ static-checks: vendor
 		$(CALICO_BUILD) sh -c '\
 			cd /go/src/$(PACKAGE_NAME) && \
 			gometalinter --deadline=300s --disable-all --enable=goimports --vendor ./...'
+
+###############################################################################
+# CI
+###############################################################################
+.PHONY: ci
+## Builds the code and runs all tests.
+ci: clean static-checks image test-containerized st
+
+###############################################################################
+# CD
+###############################################################################
+.PHONY: cd
+## Deploys images to registry
+cd:
+ifndef CONFIRM
+	$(error CONFIRM is undefined - run using make <target> CONFIRM=true)
+endif
+ifndef BRANCH_NAME
+	$(error BRANCH_NAME is undefined - run using make <target> BRANCH_NAME=var or set an environment variable)
+endif
+	$(MAKE) tag-images push IMAGETAG=${BRANCH_NAME}
+	$(MAKE) tag-images push IMAGETAG=$(shell git describe --tags --dirty --always --long)
 
 
 SOURCE_DIR?=$(dir $(lastword $(MAKEFILE_LIST)))
