@@ -24,6 +24,7 @@ execute_test_suite() {
     if [ "$DATASTORE_TYPE" = etcdv3 ]; then
 	run_extra_test test_node_deletion
 	run_extra_test test_idle_peers
+	run_extra_test test_static_routes
 	echo "Extra etcdv3 tests passed"
     fi
 
@@ -51,6 +52,13 @@ run_extra_test() {
     echo "==============================="
     eval $1
     echo "==============================="
+}
+
+test_static_routes() {
+    export CALICO_STATIC_ROUTES=10.65.1.0/24,10.66.1.0/24
+    run_individual_test_oneshot 'mesh/static-routes'
+    export -n CALICO_STATIC_ROUTES
+    unset CALICO_STATIC_ROUTES
 }
 
 test_node_deletion() {
