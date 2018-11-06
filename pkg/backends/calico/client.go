@@ -857,7 +857,7 @@ func (c *client) updateLogLevel() {
 	}
 }
 
-var routeKeyPrefix = "/route/"
+var routeKeyPrefix = "/calico/staticroutes/"
 
 func (c *client) updateRoutes(cidrs []string) {
 
@@ -865,7 +865,7 @@ func (c *client) updateRoutes(cidrs []string) {
 	// cache keys.
 	routeMap := map[string]string{}
 	for _, cidr := range cidrs {
-		routeMap[routeKeyPrefix+cidr] = cidr
+		routeMap[routeKeyPrefix+strings.Replace(cidr, "/", "-", 1)] = cidr
 	}
 
 	// Lock the cache.

@@ -30,8 +30,8 @@ func NewRouteGenerator(c *client) (rg *routeGenerator, err error) {
 func (rg *routeGenerator) Start() (err error) {
 	// MVP implementation: read CIDRs to advertise,
 	// comma-separated, from an environment variable
-	// CALICO_ROUTES.
-	routeString := os.Getenv("CALICO_ROUTES")
+	// CALICO_STATIC_ROUTES.
+	routeString := os.Getenv("CALICO_STATIC_ROUTES")
 	cidrs := []string{}
 	for _, route := range strings.Split(routeString, ",") {
 		cidr := strings.TrimSpace(route)
