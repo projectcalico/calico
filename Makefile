@@ -166,7 +166,7 @@ clean:
 	       vendor \
 	       .go-pkg-cache \
 	       check-licenses/dependency-licenses.txt \
-	       report/*.xml
+	       report/*.xml \
 	       release-notes-*
 	find . -name "*.coverprofile" -type f -delete
 	find . -name "coverage.xml" -type f -delete
