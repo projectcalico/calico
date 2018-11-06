@@ -1,5 +1,5 @@
-hash: f22b585200f04e2f6c99bc52a817b707563a0502b86e83a3ecf9657cf441544f
-updated: 2018-11-02T14:17:43.999864-07:00
+hash: 3eb90be693f6c3faf53ec4eb43691b03c1ad3fcc4ff77efa0cfd87466acf0b53
+updated: 2018-11-06T04:09:28.577636824Z
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -168,7 +168,7 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: f571cb71cd7fa1b773beee7413157b361452e247
+  version: 95e3ce14aeaa65c74c638e6db6dfb4844094d482
   subpackages:
   - lib/apiconfig
   - lib/apis/v1
@@ -197,6 +197,7 @@ imports:
   - lib/selector/parser
   - lib/selector/tokenizer
   - lib/set
+  - lib/testutils
   - lib/validator/v3
   - lib/watch
 - name: github.com/prometheus/client_golang
