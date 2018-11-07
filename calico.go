@@ -73,7 +73,6 @@ func cmdAdd(args *skel.CmdArgs) error {
 	}
 
 	logrus.WithField("EndpointIDs", wepIDs).Info("Extracted identifiers")
-	logrus.WithField("NetConfg", conf).Info("Loaded CNI NetConf")
 
 	calicoClient, err := utils.CreateClient(conf)
 	if err != nil {
