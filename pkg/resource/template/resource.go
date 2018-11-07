@@ -93,7 +93,7 @@ func NewTemplateResource(path string, config Config) (*TemplateResource, error) 
 	}
 
 	// Replace "NODENAME" in the prefix by the actual node name.
-	tr.Prefix = strings.Replace(tr.Prefix, "NODENAME", NodeName, 1)
+	tr.Prefix = strings.Replace(tr.Prefix, "//NODENAME", "/"+NodeName, 1)
 
 	if tr.Src == "" {
 		return nil, ErrEmptySrc

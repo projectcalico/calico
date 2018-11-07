@@ -2,7 +2,7 @@
 src = "bird_aggr.cfg.template"
 dest = "/etc/calico/confd/config/bird_aggr.cfg"
 keys = [
-    "/calico/ipam/v2/host/NODENAME/ipv4/block",
+    "/calico/ipam/v2/host//NODENAME/ipv4/block",
     "/calico/staticroutes",
 ]
 reload_cmd = "pkill -HUP bird || true"

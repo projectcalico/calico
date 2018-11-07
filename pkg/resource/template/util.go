@@ -24,7 +24,7 @@ func expandKeys(prefix string, keys []string) []string {
 	s := make([]string, len(keys))
 	for i, k := range keys {
 		// Prepend the prefix and replace "NODENAME" in the key by the actual node name.
-		s[i] = path.Join(prefix, strings.Replace(k, "NODENAME", NodeName, 1))
+		s[i] = path.Join(prefix, strings.Replace(k, "//NODENAME", "/"+NodeName, 1))
 	}
 	return s
 }
