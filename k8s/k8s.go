@@ -627,8 +627,6 @@ func newK8sClient(conf utils.NetConf, logger *log.Entry) (*kubernetes.Clientset,
 		return nil, err
 	}
 
-	logger.Debugf("Kubernetes config %v", config)
-
 	// Create the clientset
 	return kubernetes.NewForConfig(config)
 }
