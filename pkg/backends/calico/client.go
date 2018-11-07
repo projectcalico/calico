@@ -874,8 +874,7 @@ func (c *client) updateRoutes(cidrs []string) {
 
 	// Reconcile the new route map against the cache.
 	for k, _ := range c.routeCache {
-		_, ok := routeMap[k]
-		if !ok {
+		if _, ok := routeMap[k]; !ok {
 			// This cache entry should be deleted.
 			delete(c.routeCache, k)
 			c.keyUpdated(k)
