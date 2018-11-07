@@ -75,6 +75,7 @@ DOCKER_GO_BUILD := mkdir -p .go-pkg-cache && \
                               $(EXTRA_DOCKER_ARGS) \
                               -e LOCAL_USER_ID=$(LOCAL_USER_ID) \
                               -e GOARCH=$(ARCH) \
+                              -v $(HOME)/.glide:/home/user/.glide:rw \
                               -v ${CURDIR}:/go/src/$(PACKAGE_NAME):rw \
                               -v ${CURDIR}/.go-pkg-cache:/go/pkg:rw \
                               -w /go/src/$(PACKAGE_NAME) \
@@ -114,9 +115,7 @@ update-libcalico:
             if [ $(LIBCALICO_REPO) != "github.com/projectcalico/libcalico-go" ]; then \
               glide mirror set https://github.com/projectcalico/libcalico-go $(LIBCALICO_REPO) --vcs git; glide mirror list; \
             fi;\
-          OUTPUT=`mktemp`;\
-          glide up --strip-vendor; glide up --strip-vendor 2>&1 | tee $$OUTPUT; \
-          if ! grep "\[WARN\]" $$OUTPUT; then true; else false; fi; \
+          glide up --strip-vendor || glide up --strip-vendor; \
         fi'
 
 # Default the typha repo and version but allow them to be overridden
@@ -134,9 +133,7 @@ update-typha:
             if [ $(TYPHA_REPO) != "github.com/projectcalico/typha" ]; then \
               glide mirror set https://github.com/projectcalico/typha $(TYPHA_REPO) --vcs git; glide mirror list; \
             fi;\
-          OUTPUT=`mktemp`;\
-          glide up --strip-vendor; glide up --strip-vendor 2>&1 | tee $$OUTPUT; \
-          if ! grep "\[WARN\]" $$OUTPUT; then true; else false; fi; \
+          glide up --strip-vendor || glide up --strip-vendor; \
         fi'
 
 bin/confd-$(ARCH): $(SRC_FILES) vendor
