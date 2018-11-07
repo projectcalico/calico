@@ -69,6 +69,8 @@ vendor vendor/.up-to-date: glide.lock
 	$(DOCKER_GO_BUILD) glide install --strip-vendor
 	touch vendor/.up-to-date
 
+.PHONY: image
+image: container
 container: bin/confd
 	docker build -t $(CONTAINER_NAME) .
 
