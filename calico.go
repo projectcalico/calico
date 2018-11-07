@@ -85,7 +85,6 @@ func cmdAdd(args *skel.CmdArgs) error {
 		"ContainerID":  args.ContainerID,
 	}).Info("Extracted identifiers")
 
-	logger.WithFields(log.Fields{"NetConfg": conf}).Info("Loaded CNI NetConf")
 	calicoClient, err := CreateClient(conf)
 	if err != nil {
 		return err
