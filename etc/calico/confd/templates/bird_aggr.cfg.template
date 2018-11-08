@@ -9,10 +9,13 @@ protocol static {
 {{$cidr := join $parts "/"}}
    route {{$cidr}} blackhole;
 {{end}}
+{{- if ls $static_key}}
+   # Static routes.
 {{- range ls $static_key}}
 {{- $parts := split . "-"}}
 {{- $cidr := join $parts "/"}}
    route {{$cidr}} blackhole;
+{{- end}}
 {{- end}}
 }
 {{else}}# No static routes configured.{{end}}
