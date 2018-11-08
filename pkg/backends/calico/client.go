@@ -31,6 +31,7 @@ import (
 	logutils "github.com/kelseyhightower/confd/pkg/log"
 	log "github.com/sirupsen/logrus"
 
+	"github.com/kelseyhightower/confd/pkg/resource/template"
 	"github.com/projectcalico/libcalico-go/lib/apiconfig"
 	apiv3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/libcalico-go/lib/backend/api"
@@ -106,6 +107,7 @@ func NewCalicoClient(confdConfig *config.Config) (*client, error) {
 		client:            bc,
 		cache:             make(map[string]string),
 		peeringCache:      make(map[string]string),
+		routeCache:        make(map[string]string),
 		cacheRevision:     1,
 		revisionsByPrefix: make(map[string]uint64),
 		nodeMeshEnabled:   nodeMeshEnabled,
@@ -129,8 +131,7 @@ func NewCalicoClient(confdConfig *config.Config) (*client, error) {
 	// monitor all nodes.  If this setting changes (which we will monitor in the OnUpdates
 	// callback) then we terminate confd - the calico/node init process will restart the
 	// confd process.
-	nodeName := os.Getenv("NODENAME")
-	c.nodeLogKey = fmt.Sprintf("/calico/bgp/v1/host/%s/loglevel", nodeName)
+	c.nodeLogKey = fmt.Sprintf("/calico/bgp/v1/host/%s/loglevel", template.NodeName)
 	c.nodeV1Processor = updateprocessors.NewBGPNodeUpdateProcessor()
 
 	typhaAddr, err := discoverTyphaAddr(&confdConfig.Typha)
@@ -143,7 +144,7 @@ func NewCalicoClient(confdConfig *config.Config) (*client, error) {
 		typhaConnection := syncclient.New(
 			typhaAddr,
 			buildinfo.GitVersion,
-			nodeName,
+			template.NodeName,
 			fmt.Sprintf("confd %s", buildinfo.GitVersion),
 			c,
 			&syncclient.Options{
@@ -167,8 +168,18 @@ func NewCalicoClient(confdConfig *config.Config) (*client, error) {
 		}()
 	} else {
 		// Use the syncer locally.
-		c.syncer = bgpsyncer.New(c.client, c, nodeName)
+		c.syncer = bgpsyncer.New(c.client, c, template.NodeName)
 		c.syncer.Start()
+	}
+
+	// Create and start route generator.
+	rg, err := NewRouteGenerator(c)
+	if err != nil {
+		log.WithError(err).Fatal("Failed to create route generator")
+	}
+	err = rg.Start()
+	if err != nil {
+		log.WithError(err).Fatal("Failed to start route generator")
 	}
 
 	return c, nil
@@ -244,6 +255,7 @@ type client struct {
 	// Our internal cache of key/values, and our (internally defined) cache revision.
 	cache         map[string]string
 	peeringCache  map[string]string
+	routeCache    map[string]string
 	cacheRevision uint64
 
 	// The current revision for each prefix.  A revision is updated when we have a sync
@@ -743,6 +755,11 @@ func (c *client) GetValues(keys []string) (map[string]string, error) {
 			values[k] = v
 		}
 	}
+	for k, v := range c.routeCache {
+		if c.matchesPrefix(k, keys) {
+			values[k] = v
+		}
+	}
 
 	log.Debugf("Returning %d results", len(values))
 
@@ -837,5 +854,40 @@ func (c *client) updateLogLevel() {
 		logutils.SetLevel(globalLogLevel)
 	} else {
 		logutils.SetLevel("info")
+	}
+}
+
+var routeKeyPrefix = "/calico/staticroutes/"
+
+func (c *client) updateRoutes(cidrs []string) {
+
+	// Convert the slice of CIDRs to a map with corresponding
+	// cache keys.
+	routeMap := map[string]string{}
+	for _, cidr := range cidrs {
+		routeMap[routeKeyPrefix+strings.Replace(cidr, "/", "-", 1)] = cidr
+	}
+
+	// Lock the cache.
+	c.cacheLock.Lock()
+	defer c.cacheLock.Unlock()
+
+	// Reconcile the new route map against the cache.
+	for k, _ := range c.routeCache {
+		if _, ok := routeMap[k]; !ok {
+			// This cache entry should be deleted.
+			delete(c.routeCache, k)
+			c.keyUpdated(k)
+		} else {
+			// Wanted and already present in cache.  Delete from routeMap so that we
+			// don't generate a spurious keyUpdated for this key, just below.
+			delete(routeMap, k)
+		}
+	}
+
+	// routeMap now only contains routes to add to the cache.
+	for k, newValue := range routeMap {
+		c.routeCache[k] = newValue
+		c.keyUpdated(k)
 	}
 }

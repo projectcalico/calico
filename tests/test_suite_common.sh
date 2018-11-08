@@ -10,8 +10,7 @@ trap 'echo "\nCaught signal, exiting...\n"; exit 1' SIGINT SIGTERM
 # -  LOGPATH
 execute_test_suite() {
     # This is needed for two reasons:
-    # -  for the sed commands used in build_tomls_for_node to convert the downloaded TOML
-    #    files and insert the node name.
+    # -  to substitute for "NODENAME" in some of the cond TOML files
     # -  for the confd Calico client to select which node to listen to for key events.
     export NODENAME="kube-master"
 
@@ -22,12 +21,10 @@ execute_test_suite() {
     rm $LOGPATH/log* || true
     rm $LOGPATH/rendered/*.cfg || true
 
-    # Build the tomls based on $NODENAME.
-    build_tomls_for_node
-
     if [ "$DATASTORE_TYPE" = etcdv3 ]; then
-	test_node_deletion
-	test_idle_peers
+	run_extra_test test_node_deletion
+	run_extra_test test_idle_peers
+	run_extra_test test_static_routes
 	echo "Extra etcdv3 tests passed"
     fi
 
@@ -46,6 +43,22 @@ execute_test_suite() {
         execute_tests_daemon
     done
     echo "Daemon-mode tests passed"
+}
+
+run_extra_test() {
+    test_fn=$1
+    echo
+    echo "Run test: $1"
+    echo "==============================="
+    eval $1
+    echo "==============================="
+}
+
+test_static_routes() {
+    export CALICO_STATIC_ROUTES=10.65.1.0/24,10.66.1.0/24
+    run_individual_test_oneshot 'mesh/static-routes'
+    export -n CALICO_STATIC_ROUTES
+    unset CALICO_STATIC_ROUTES
 }
 
 test_node_deletion() {
@@ -395,18 +408,6 @@ start_typha() {
 kill_typha() {
     echo "Killing Typha"
     kill -9 $TYPHA_PID 2>/dev/null
-}
-
-build_tomls_for_node() {
-    echo "Building initial toml files"
-    # This is pulled from the calico_node rc.local script, it generates these three
-    # toml files populated with the $NODENAME var set in calling script.
-    sed "s/NODENAME/$NODENAME/" /etc/calico/confd/templates/bird6_aggr.toml.template > /etc/calico/confd/conf.d/bird6_aggr.toml
-    sed "s/NODENAME/$NODENAME/" /etc/calico/confd/templates/bird_aggr.toml.template > /etc/calico/confd/conf.d/bird_aggr.toml
-    sed "s/NODENAME/$NODENAME/" /etc/calico/confd/templates/bird_ipam.toml.template > /etc/calico/confd/conf.d/bird_ipam.toml
-
-    # Need to pause as running confd immediately after might result in files not being present.
-    sync
 }
 
 # Tests that confd generates the required set of templates for the test.

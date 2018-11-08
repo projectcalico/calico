@@ -5,9 +5,12 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"strings"
 
 	log "github.com/sirupsen/logrus"
 )
+
+var NodeName = os.Getenv("NODENAME")
 
 // fileInfo describes a configuration file and is returned by fileStat.
 type fileInfo struct {
@@ -17,10 +20,11 @@ type fileInfo struct {
 	Md5  string
 }
 
-func appendPrefix(prefix string, keys []string) []string {
+func expandKeys(prefix string, keys []string) []string {
 	s := make([]string, len(keys))
 	for i, k := range keys {
-		s[i] = path.Join(prefix, k)
+		// Prepend the prefix and replace "NODENAME" in the key by the actual node name.
+		s[i] = path.Join(prefix, strings.Replace(k, "//NODENAME", "/"+NodeName, 1))
 	}
 	return s
 }
