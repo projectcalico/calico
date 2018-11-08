@@ -53,7 +53,6 @@ type KubeClient struct {
 
 func NewKubeClient(kc *capi.KubeConfig) (*KubeClient, error) {
 	// Use the kubernetes client code to load the kubeconfig file and combine it with the overrides.
-	log.Debugf("Building client for config: %+v", kc)
 	configOverrides := &clientcmd.ConfigOverrides{}
 	var overridesMap = []struct {
 		variable *string
@@ -82,7 +81,6 @@ func NewKubeClient(kc *capi.KubeConfig) (*KubeClient, error) {
 	if kc.K8sInsecureSkipTLSVerify {
 		configOverrides.ClusterInfo.InsecureSkipTLSVerify = true
 	}
-	log.Debugf("Config overrides: %+v", configOverrides)
 
 	// A kubeconfig file was provided.  Use it to load a config, passing through
 	// any overrides.
