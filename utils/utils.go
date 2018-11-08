@@ -192,7 +192,7 @@ func DeleteIPAM(conf types.NetConf, args *skel.CmdArgs, logger *logrus.Entry) er
 		if err != nil {
 			return err
 		}
-		logger.WithField("stdin", string(args.StdinData)).Debug("Updated stdin data for Delete Cmd")
+		logger.Debug("Updated stdin data for Delete Cmd")
 	} else if conf.IPAM.Type == "azure-vnet-ipam" {
 		// The azure-vnet-ipam plugin expects two values to be passed in the CNI config in order to
 		// successfully clean up: ipAddress and subnet. Populate these based on data stored to disk.
