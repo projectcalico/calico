@@ -1,5 +1,5 @@
-hash: 126c7a4b8dbba03548fc4bf7b79c5648c258e8f91e857eaed7fbb77e7bfbe6d9
-updated: 2018-11-04T12:17:40.551487-08:00
+hash: e48e4a7ebf247050374f67247351bc662a88b0ab215c29ec74387e7cb563a458
+updated: 2018-11-07T20:14:43.38221-08:00
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -117,13 +117,13 @@ imports:
 - name: github.com/imdario/mergo
   version: 6633656539c1639d9d78127b7d47c622b5d7b6dc
 - name: github.com/influxdata/influxdb
-  version: 5bcb952b6f32718a760edfa2af53f53542ad9d60
+  version: 2e7d8d753fd70e7378c537dfe82b64fd2786b1cb
   subpackages:
   - client/v2
   - models
   - pkg/escape
 - name: github.com/influxdata/platform
-  version: 6549f24b16f8229c175e96b9f9233baa19b4bc97
+  version: cc1070fc1c2f8011895a041f28b6b8aee028ea71
   subpackages:
   - models
   - pkg/escape
@@ -212,7 +212,7 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: 9d3859e1544309049df51602b484031ee201e31a
+  version: 00179b9410d8f5191e2bc9e3df04d40ff90efa6d
   subpackages:
   - lib/apiconfig
   - lib/apis/v1
@@ -251,7 +251,7 @@ imports:
   subpackages:
   - prometheus
 - name: github.com/prometheus/client_model
-  version: 5c3871d89910bfb32f5fcab2aa4b9ec68e65a99f
+  version: 6f3806018612930941127f2a7c6c453ba2c527d2
   subpackages:
   - go
 - name: github.com/prometheus/common
@@ -267,7 +267,7 @@ imports:
 - name: github.com/satori/go.uuid
   version: f58768cc1a7a7e77a3bd49e98cdd21419399b6a3
 - name: github.com/shirou/gopsutil
-  version: 3ec50d2876a36047b2ca39f955ba88fb7a455e92
+  version: 48177ef5f8809fc72b716c414435f2d4cff8e24d
   subpackages:
   - cpu
   - host
@@ -290,7 +290,7 @@ imports:
 - name: github.com/spf13/pflag
   version: 583c0c0531f06d5278b7d917446061adc344b5cd
 - name: github.com/spf13/viper
-  version: 62edee319679b6ceaec16de03b966102d2dea709
+  version: ae103d7e593e371c69e832d5eb3347e2b80cbbc9
 - name: github.com/StackExchange/wmi
   version: b12b22c5341f0c26d88c4d66176330500e84db68
 - name: github.com/termie/go-shutil
