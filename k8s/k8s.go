@@ -93,7 +93,7 @@ func CmdAddK8s(args *skel.CmdArgs, conf utils.NetConf, nodename string, calicoCl
 		if err != nil {
 			return nil, err
 		}
-		logger.WithField("stdin", string(args.StdinData)).Debug("Updated stdin data")
+		logger.Debug("Updated stdin data")
 	}
 
 	labels := make(map[string]string)
@@ -159,7 +159,7 @@ func CmdAddK8s(args *skel.CmdArgs, conf utils.NetConf, nodename string, calicoCl
 					return nil, err
 				}
 				args.StdinData = newData
-				logger.WithField("stdin", string(args.StdinData)).Debug("Updated stdin data")
+				logger.Debug("Updated stdin data")
 			}
 		}
 	}
