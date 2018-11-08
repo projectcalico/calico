@@ -1,5 +1,5 @@
-hash: 5c76e2a885fffd6f9b2a2b683f49336e05d4048bdc2dedaa3a549e6e5aa721e5
-updated: 2018-11-04T14:17:49.837913-08:00
+hash: 44b3180bd5458586dd69ce02b052ef6b915ea575dfea057d1fa4e2e69b8c88af
+updated: 2018-11-07T20:37:11.001867-08:00
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -149,7 +149,7 @@ imports:
 - name: github.com/peterbourgon/diskv
   version: 5f041e8faa004a95c88a202771f4cc3e991971e6
 - name: github.com/projectcalico/felix
-  version: 14a8b313427e073da49d00a066d1b01207a8dc26
+  version: d3fad4d86e7a5b42099b41f8409ba86351e8ad16
   subpackages:
   - calc
   - config
@@ -175,7 +175,7 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: 489a4d4fcdf275caca1edf59e95054b6e8601555
+  version: 31e5bf43bc5712dd7851bbfbc435edc3bd1ac90e
   subpackages:
   - lib/apiconfig
   - lib/apis/v1
@@ -414,7 +414,7 @@ imports:
   - pkg/watch
   - third_party/forked/golang/reflect
 - name: k8s.io/apiserver
-  version: b4fba3b8a3fcc386bbd69d871d707e88295b3144
+  version: f1dab8c342623e75f0484f20b150183d9e73f406
   subpackages:
   - pkg/storage
   - pkg/storage/etcd
