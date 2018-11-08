@@ -99,7 +99,7 @@ func CleanUpIPAM(conf NetConf, args *skel.CmdArgs, logger *log.Entry) error {
 		if err != nil {
 			return err
 		}
-		logger.WithField("stdin", string(args.StdinData)).Debug("Updated stdin data for Delete Cmd")
+		logger.Debug("Updated stdin data for Delete Cmd")
 	}
 
 	err := ipam.ExecDel(conf.IPAM.Type, args.StdinData)
