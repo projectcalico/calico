@@ -1,5 +1,5 @@
-hash: 3eb90be693f6c3faf53ec4eb43691b03c1ad3fcc4ff77efa0cfd87466acf0b53
-updated: 2018-11-06T04:09:28.577636824Z
+hash: 5d6d3d3e260a135e82b98e25e52f9f0fd6e7a591a09a2df21b41b63bbe5dd272
+updated: 2018-11-07T19:44:47.922641-08:00
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -108,7 +108,7 @@ imports:
 - name: github.com/json-iterator/go
   version: f2b4162afba35581b6d4a50d3b8f34e33c144682
 - name: github.com/kelseyhightower/envconfig
-  version: f611eb38b3875cc3bd991ca91c51d06446afa14c
+  version: dd1402a4d99de9ac2f396cd6fcb957bc2c695ec1
 - name: github.com/matttproud/golang_protobuf_extensions
   version: c12348ce28de40eed0136aa2b644d0ee0650e56c
   subpackages:
@@ -168,7 +168,7 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: 95e3ce14aeaa65c74c638e6db6dfb4844094d482
+  version: 8153e730454a49e9f7de54dab96d34f35775264f
   subpackages:
   - lib/apiconfig
   - lib/apis/v1
@@ -272,7 +272,7 @@ imports:
   subpackages:
   - rate
 - name: google.golang.org/appengine
-  version: b1f26356af11148e710935ed1ac8a7f5702c7612
+  version: 4a4468ece617fc8205e99368fa2200e9d1fad421
   subpackages:
   - internal
   - internal/app_identity
