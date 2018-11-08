@@ -1,5 +1,5 @@
 hash: adb389c256194a039451b8b611a18c1465cbdeb72658dafaf0cb29b4e7942ed7
-updated: 2018-11-06T09:39:01.257883-08:00
+updated: 2018-11-07T21:33:43.820125-08:00
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -14,7 +14,7 @@ imports:
   - autorest/azure
   - autorest/date
 - name: github.com/beorn7/perks
-  version: 3a771d992973f24aa725d07868b467d1ddfceafb
+  version: 3ac7bf7a47d159a033b107610db8a1b6575507a4
   subpackages:
   - quantile
 - name: github.com/BurntSushi/toml
@@ -35,7 +35,7 @@ imports:
   - pkg/types
   - version
 - name: github.com/coreos/go-semver
-  version: e214231b295a8ea9479f11b70b35d5acf3556d9b
+  version: 8ab6407b697782a06568d4b7f1db25550ec2e4c6
   subpackages:
   - semver
 - name: github.com/davecgh/go-spew
@@ -118,7 +118,7 @@ imports:
   - pkg/resource/template
   - pkg/run
 - name: github.com/kelseyhightower/envconfig
-  version: f611eb38b3875cc3bd991ca91c51d06446afa14c
+  version: dd1402a4d99de9ac2f396cd6fcb957bc2c695ec1
 - name: github.com/kelseyhightower/memkv
   version: 892bfd468afa0fa476556e7bd7734a087cda08b3
 - name: github.com/matttproud/golang_protobuf_extensions
@@ -228,7 +228,7 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: 9d3859e1544309049df51602b484031ee201e31a
+  version: 00179b9410d8f5191e2bc9e3df04d40ff90efa6d
   subpackages:
   - lib/apiconfig
   - lib/apis/v1
@@ -287,7 +287,7 @@ imports:
   - prometheus/promhttp
   - prometheus/push
 - name: github.com/prometheus/client_model
-  version: 5c3871d89910bfb32f5fcab2aa4b9ec68e65a99f
+  version: 6f3806018612930941127f2a7c6c453ba2c527d2
   subpackages:
   - go
 - name: github.com/prometheus/common
@@ -315,9 +315,9 @@ imports:
   subpackages:
   - nl
 - name: github.com/vishvananda/netns
-  version: 8ba1072b58e0c2a240eb5f6120165c7776c3e7b8
+  version: 54f0e4339ce73702a0607f49922aaa1e749b418d
 - name: golang.org/x/crypto
-  version: 1351f936d976c60a0a48d728281922cf63eafb8d
+  version: 9419663f5a44be8b34ca85f08abc5fe1be11f8a3
   subpackages:
   - ssh/terminal
 - name: golang.org/x/net
@@ -373,7 +373,7 @@ imports:
   subpackages:
   - rate
 - name: google.golang.org/appengine
-  version: 4f7eeb5305a4ba1966344836ba4af9996b7b4e05
+  version: 4a4468ece617fc8205e99368fa2200e9d1fad421
   subpackages:
   - internal
   - internal/app_identity
@@ -391,8 +391,11 @@ imports:
 - name: google.golang.org/grpc
   version: 5b3c4e850e90a4cf6a20ebd46c8b32a0a3afcb9e
   subpackages:
+  - balancer
   - codes
+  - connectivity
   - credentials
+  - grpclb/grpc_lb_v1/messages
   - grpclog
   - health/grpc_health_v1
   - internal
@@ -400,6 +403,7 @@ imports:
   - metadata
   - naming
   - peer
+  - resolver
   - stats
   - status
   - tap
@@ -407,7 +411,7 @@ imports:
 - name: gopkg.in/fsnotify/fsnotify.v1
   version: c2828203cd70a50dcccfb2761f8b1f8ceef9a8e9
 - name: gopkg.in/go-playground/validator.v8
-  version: 5f57d2222ad794d0dffb07e664ea05e2ee07d60c
+  version: 5f1438d3fca68893a817e4a66806cea46a9e4ebf
 - name: gopkg.in/inf.v0
   version: 3887ee99ecf07df5b447e9b00d9c0b2adaa9f3e4
 - name: gopkg.in/tomb.v1
