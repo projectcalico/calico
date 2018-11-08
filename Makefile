@@ -160,7 +160,7 @@ vendor: glide.yaml
 
 # Default the libcalico repo and version but allow them to be overridden
 LIBCALICO_REPO?=github.com/projectcalico/libcalico-go
-LIBCALICO_VERSION?=$(shell git ls-remote git@github.com:projectcalico/libcalico-go master 2>/dev/null | cut -f 1)
+LIBCALICO_VERSION?=$(shell git ls-remote git@github.com:projectcalico/libcalico-go release-v3.3 2>/dev/null | cut -f 1)
 
 ## Update libcalico pin in glide.yaml
 update-libcalico:
