@@ -286,8 +286,9 @@ vendor vendor/.up-to-date: glide.lock
 	fi
 
 # Default the typha repo and version but allow them to be overridden
+TYPHA_BRANCH?=$(shell git rev-parse --abbrev-ref HEAD)
 TYPHA_REPO?=github.com/projectcalico/typha
-TYPHA_VERSION?=$(shell git ls-remote git@github.com:projectcalico/typha master 2>/dev/null | cut -f 1)
+TYPHA_VERSION?=$(shell git ls-remote git@github.com:projectcalico/typha $(TYPHA_BRANCH) 2>/dev/null | cut -f 1)
 
 ## Update typha pin in glide.yaml
 update-typha:
