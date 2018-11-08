@@ -1,5 +1,5 @@
-hash: 6a1f7878ef438ad96912425003962be2ae6a552b6bb7e6c65b9b7a64eb0f96da
-updated: 2018-11-04T22:52:31.8248347Z
+hash: de7d0810e144ad17e59ca2630c9f7a9d87744ec37e815ed5d916c5cd662b86f4
+updated: 2018-11-07T21:10:35.295274-08:00
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -14,7 +14,7 @@ imports:
   - autorest/azure
   - autorest/date
 - name: github.com/beorn7/perks
-  version: 3a771d992973f24aa725d07868b467d1ddfceafb
+  version: 3ac7bf7a47d159a033b107610db8a1b6575507a4
   subpackages:
   - quantile
 - name: github.com/containernetworking/cni
@@ -210,7 +210,7 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: 9d3859e1544309049df51602b484031ee201e31a
+  version: 00179b9410d8f5191e2bc9e3df04d40ff90efa6d
   subpackages:
   - lib/apiconfig
   - lib/apis/v1
@@ -248,7 +248,7 @@ imports:
   - lib/validator/v3
   - lib/watch
 - name: github.com/projectcalico/typha
-  version: 68239307c245f957495ea35d314ecca7e10c51ea
+  version: cc5c21d7ddf3067bab60dd538bca0c99b745684c
   subpackages:
   - pkg/syncclient
   - pkg/syncproto
@@ -260,7 +260,7 @@ imports:
   - prometheus/promhttp
   - prometheus/push
 - name: github.com/prometheus/client_model
-  version: 5c3871d89910bfb32f5fcab2aa4b9ec68e65a99f
+  version: 6f3806018612930941127f2a7c6c453ba2c527d2
   subpackages:
   - go
 - name: github.com/prometheus/common
@@ -284,11 +284,11 @@ imports:
   subpackages:
   - nl
 - name: github.com/vishvananda/netns
-  version: 13995c7128ccc8e51e9a6bd2b551020a27180abd
+  version: 54f0e4339ce73702a0607f49922aaa1e749b418d
 - name: github.com/whyrusleeping/go-logging
   version: 0457bb6b88fc1973573aaf6b5145d8d3ae972390
 - name: golang.org/x/crypto
-  version: 4d3f4d9ffa16a13f451c3b2999e9c49e9750bf06
+  version: 9419663f5a44be8b34ca85f08abc5fe1be11f8a3
   subpackages:
   - ssh/terminal
 - name: golang.org/x/net
@@ -355,40 +355,25 @@ imports:
   - internal/urlfetch
   - urlfetch
 - name: google.golang.org/genproto
-  version: c830210a61dfaa790e1920f8d0470fc27bc2efbe
+  version: 09f6ed296fc66555a25fe4ce95173148778dfa85
   subpackages:
   - googleapis/rpc/status
 - name: google.golang.org/grpc
   version: 5b3c4e850e90a4cf6a20ebd46c8b32a0a3afcb9e
   subpackages:
-  - balancer
-  - balancer/base
-  - balancer/roundrobin
-  - binarylog/grpc_binarylog_v1
   - codes
-  - connectivity
   - credentials
-  - encoding
-  - encoding/proto
   - grpclog
   - health/grpc_health_v1
   - internal
-  - internal/backoff
-  - internal/binarylog
-  - internal/channelz
-  - internal/envconfig
-  - internal/grpcrand
-  - internal/transport
   - keepalive
   - metadata
   - naming
   - peer
-  - resolver
-  - resolver/dns
-  - resolver/passthrough
   - stats
   - status
   - tap
+  - transport
 - name: gopkg.in/fsnotify/fsnotify.v1
   version: c2828203cd70a50dcccfb2761f8b1f8ceef9a8e9
 - name: gopkg.in/go-playground/validator.v8
