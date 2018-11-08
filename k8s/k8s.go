@@ -87,7 +87,7 @@ func CmdAddK8s(ctx context.Context, args *skel.CmdArgs, conf types.NetConf, epID
 		if err != nil {
 			return nil, err
 		}
-		logger.WithField("stdin", string(args.StdinData)).Debug("Updated stdin data")
+		logger.Debug("Updated stdin data")
 	}
 
 	labels := make(map[string]string)
@@ -155,7 +155,7 @@ func CmdAddK8s(ctx context.Context, args *skel.CmdArgs, conf types.NetConf, epID
 					return nil, err
 				}
 				args.StdinData = newData
-				logger.WithField("stdin", string(args.StdinData)).Debug("Updated stdin data")
+				logger.Debug("Updated stdin data")
 			}
 		}
 	}
@@ -650,8 +650,6 @@ func newK8sClient(conf types.NetConf, logger *logrus.Entry) (*kubernetes.Clients
 	if err != nil {
 		return nil, err
 	}
-
-	logger.Debugf("Kubernetes config %v", config)
 
 	// Create the clientset
 	return kubernetes.NewForConfig(config)
