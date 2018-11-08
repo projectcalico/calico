@@ -48,20 +48,6 @@ case "$CALICO_NETWORKING_BACKEND" in
 	cp -a /etc/service/available/confd /etc/service/enabled/
 	;;
 	* )
-	# Run BIRD / Confd.
-	#
-	# Run Confd in onetime mode, to ensure that we have a working config in place to allow bird(s) and
-	# felix to start.  Don't fail startup if this confd execution fails.
-	#
-	# First generate the BIRD aggregation TOML file from the template by
-	# switching out the nodename.
-	sed "s/NODENAME/$NODENAME/" /etc/calico/confd/templates/bird6_aggr.toml.template > /etc/calico/confd/conf.d/bird6_aggr.toml
-	sed "s/NODENAME/$NODENAME/" /etc/calico/confd/templates/bird_aggr.toml.template > /etc/calico/confd/conf.d/bird_aggr.toml
-	sed "s/NODENAME/$NODENAME/" /etc/calico/confd/templates/bird_ipam.toml.template > /etc/calico/confd/conf.d/bird_ipam.toml
-
-	# Run confd once - this ensures we have sensible config generated at the point we start
-	# bird.
-	calico-node -confd -confd-onetime -confd-keep-stage-file >/felix-startup-1.log 2>&1 || true
 
 	# Enable the confd and bird services
 	cp -a /etc/service/available/bird  /etc/service/enabled/

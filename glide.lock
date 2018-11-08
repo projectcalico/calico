@@ -1,5 +1,5 @@
-hash: 6646e50f60777448ad277b2b3b263bf684c1d928043a4fcb95ad4dc7048b6303
-updated: 2018-11-08T07:37:13.287659315Z
+hash: 5b5acd0d05c72c534a34705d567767a574e1a5ac54111873496fc7c0bdd1b55e
+updated: 2018-11-08T14:26:01.537613239Z
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -14,7 +14,7 @@ imports:
   - autorest/azure
   - autorest/date
 - name: github.com/beorn7/perks
-  version: 3a771d992973f24aa725d07868b467d1ddfceafb
+  version: 3ac7bf7a47d159a033b107610db8a1b6575507a4
   subpackages:
   - quantile
 - name: github.com/BurntSushi/toml
@@ -108,7 +108,7 @@ imports:
 - name: github.com/kardianos/osext
   version: ae77be60afb1dcacde03767a8c37337fad28ac14
 - name: github.com/kelseyhightower/confd
-  version: a4afe20834a67845c3eedba0216d145938c35381
+  version: f5ff4ac1481fb3520e71a5d11abbfcf09c1cde6d
   repo: https://github.com/projectcalico/confd.git
   subpackages:
   - pkg/backends
@@ -187,7 +187,7 @@ imports:
 - name: github.com/peterbourgon/diskv
   version: 5f041e8faa004a95c88a202771f4cc3e991971e6
 - name: github.com/projectcalico/felix
-  version: 878db156746c0b22327010d7149a29122ba175dc
+  version: 52129812cac6ce2c8bd13fd678e53e34816442d4
   subpackages:
   - buildinfo
   - calc
@@ -319,9 +319,9 @@ imports:
   subpackages:
   - nl
 - name: github.com/vishvananda/netns
-  version: 13995c7128ccc8e51e9a6bd2b551020a27180abd
+  version: 54f0e4339ce73702a0607f49922aaa1e749b418d
 - name: golang.org/x/crypto
-  version: a49355c7e3f8fe157a85be2f77e6e269a0f89602
+  version: 49796115aa4b964c318aad4f3084fdb41e9aa067
   subpackages:
   - ssh/terminal
 - name: golang.org/x/net
