@@ -110,7 +110,7 @@ func CmdAddK8s(ctx context.Context, args *skel.CmdArgs, conf types.NetConf, epID
 		if err != nil {
 			return nil, err
 		}
-		logger.WithField("stdin", string(args.StdinData)).Debug("Updated stdin data")
+		logger.Debug("Updated stdin data")
 
 		// Extract any custom routes from the IPAM configuration.
 		ipamData := stdinData["ipam"].(map[string]interface{})
@@ -224,7 +224,7 @@ func CmdAddK8s(ctx context.Context, args *skel.CmdArgs, conf types.NetConf, epID
 					return nil, err
 				}
 				args.StdinData = newData
-				logger.WithField("stdin", string(args.StdinData)).Debug("Updated stdin data")
+				logger.Debug("Updated stdin data")
 			}
 		}
 	}
