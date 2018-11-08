@@ -5,6 +5,7 @@ MAINTAINER Shaun Crampton <shaun@tigera.io>
 RUN apk add --update tini
 
 FROM scratch
+COPY --from=base /tmp /tmp
 COPY --from=base /sbin/tini /sbin/tini
 COPY --from=base /lib/ld-musl-x86_64.so.1 /lib/ld-musl-x86_64.so.1
 COPY --from=base /lib/libc.musl-x86_64.so.1 /lib/libc.musl-x86_64.so.1
