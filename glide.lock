@@ -1,5 +1,5 @@
-hash: 5db3ad064ff8d0cffe866a78ceceb162c60df1d3f0f566e6fbc61639c2789547
-updated: 2018-11-06T04:07:41.665030769Z
+hash: 2c8183fbc2e0b5929039b8461f24d0f5cef50bdc53073b849c9ee0d3efc6e1d8
+updated: 2018-11-07T19:46:35.639352-08:00
 imports:
 - name: github.com/docopt/docopt-go
   version: 784ddc588536785e7299f7272f39101f7faccc3f
@@ -13,7 +13,7 @@ imports:
   subpackages:
   - google/rpc
 - name: github.com/gogo/protobuf
-  version: 636bf0302bc95575d69441b25a2603156ffdddf1
+  version: c0656edd0d9eab7c66d1eb0c568f9039345796f7
   subpackages:
   - proto
   - sortkeys
@@ -41,7 +41,7 @@ imports:
   - matchers/support/goraph/util
   - types
 - name: github.com/projectcalico/libcalico-go
-  version: 95e3ce14aeaa65c74c638e6db6dfb4844094d482
+  version: 8153e730454a49e9f7de54dab96d34f35775264f
   subpackages:
   - lib/apis/v3
   - lib/client
