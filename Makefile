@@ -199,8 +199,9 @@ vendor vendor/.up-to-date: glide.lock
 	touch vendor/.up-to-date
 
 # Default the libcalico repo and version but allow them to be overridden
+LIBCALICO_BRANCH?=$(shell git rev-parse --abbrev-ref HEAD)
 LIBCALICO_REPO?=github.com/projectcalico/libcalico-go
-LIBCALICO_VERSION?=$(shell git ls-remote git@github.com:projectcalico/libcalico-go master 2>/dev/null | cut -f 1)
+LIBCALICO_VERSION?=$(shell git ls-remote git@github.com:projectcalico/libcalico-go $(LIBCALICO_BRANCH) 2>/dev/null | cut -f 1)
 
 ## Update libcalico pin in glide.yaml
 update-libcalico:
