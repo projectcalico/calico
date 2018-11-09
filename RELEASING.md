@@ -14,6 +14,13 @@ Releases of this repository still serve several important purposes. Namely, they
 
 ## Prerequisites
 
+To release Calico, you need the following permissions:
+
+- Write access to the core repositories in the projectcalico/ GitHub organization.
+- Push access to the Calico DockerHub repositories.
+- Push access to the Calico quay.io repositories.
+- Push access to the gcr.io/projectcalico-org repositories.
+
 Before attempting to create a Calico release you must do the following.
 
 1. Choose a Calico version number, e.g. `v3.2.0`.
