@@ -287,6 +287,32 @@ v3.1:
       url: https://github.com/projectcalico/routereflector/releases/tag/v0.6.1
 
 v3.0:
+- title: v3.0.9
+  components:
+    typha:
+      version: v0.6.7
+      url: https://github.com/projectcalico/typha/releases/tag/v0.6.7
+    calicoctl:
+      version: v2.0.7
+      url: https://github.com/projectcalico/calicoctl/releases/tag/v2.0.7
+      download_url: https://github.com/projectcalico/calicoctl/releases/download/v2.0.7/calicoctl
+    calico/node:
+      version: v3.0.9
+      url: https://github.com/projectcalico/calico/releases/tag/v3.0.9
+    calico/cni:
+      version: v2.0.7
+      url: https://github.com/projectcalico/cni-plugin/releases/tag/v2.0.7
+      download_calico_url: https://github.com/projectcalico/cni-plugin/releases/download/v2.0.7/calico
+      download_calico_ipam_url: https://github.com/projectcalico/cni-plugin/releases/download/v2.0.7/calico-ipam
+    calico/kube-controllers:
+      version: v2.0.6
+      url: https://github.com/projectcalico/k8s-policy/releases/tag/v2.0.6
+    calico/routereflector:
+      version: v0.5.1
+      url: https://github.com/projectcalico/routereflector/releases/tag/v0.5.1
+    flannel:
+      version: v0.9.1
+
 - title: v3.0.8
   components:
     typha:
