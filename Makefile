@@ -328,6 +328,7 @@ ifneq ($(VERSION), $(GIT_VERSION))
 endif
 
 	$(MAKE) image
+	$(MAKE) build-all
 	$(MAKE) tag-images IMAGETAG=$(VERSION)
 	# Generate the `latest` images.
 	$(MAKE) tag-images IMAGETAG=latest
