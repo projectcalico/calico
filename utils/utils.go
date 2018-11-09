@@ -47,9 +47,10 @@ func Min(a, b int) int {
 }
 
 // DetermineNodename gets the node name, in order of priority:
-// 1. Hostname field in NetConf (DEPRECATED).
-// 2. Nodename field in NetConf.
-// 3. OS Hostname.
+// 1. Nodename field in NetConf
+// 2. Nodename from the file /var/lib/calico/nodename
+// 3. Hostname field in NetConf (DEPRECATED).
+// 4. OS Hostname.
 func DetermineNodename(conf types.NetConf) string {
 	nodename, _ := names.Hostname()
 	if conf.Hostname != "" {
