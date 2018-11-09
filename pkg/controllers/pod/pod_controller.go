@@ -111,7 +111,7 @@ func NewPodController(k8sClientset *kubernetes.Clientset, calicoClient *client.C
 
 			wepInterface, err := podConverter.Convert(obj)
 			if err != nil {
-				log.WithError(err).Errorf("Error while converting %#v to wep.", obj)
+				log.WithError(err).Errorf("Error while converting %v to wep.", key)
 				return
 			}
 
@@ -128,8 +128,6 @@ func NewPodController(k8sClientset *kubernetes.Clientset, calicoClient *client.C
 				return
 			}
 			log.Debugf("Got UPDATE event for pod: %s", key)
-			log.Debugf("Old object: \n%#v\n", oldObj)
-			log.Debugf("New object: \n%#v\n", newObj)
 
 			// Ignore updates for not ready / irrelevant pods.
 			if !isReadyCalicoPod(newObj.(*v1.Pod)) {
@@ -139,7 +137,7 @@ func NewPodController(k8sClientset *kubernetes.Clientset, calicoClient *client.C
 
 			wepInterface, err := podConverter.Convert(newObj)
 			if err != nil {
-				log.WithError(err).Errorf("Error while converting %#v to wep.", newObj)
+				log.WithError(err).Errorf("Error while converting %v to wep.", key)
 				return
 			}
 
@@ -164,7 +162,7 @@ func NewPodController(k8sClientset *kubernetes.Clientset, calicoClient *client.C
 
 			wepInterface, err := podConverter.Convert(obj)
 			if err != nil {
-				log.WithError(err).Errorf("Error while converting %#v to wep.", obj)
+				log.WithError(err).Errorf("Error while converting %v to wep.", key)
 				return
 			}
 

@@ -15,7 +15,7 @@
 package converter
 
 import (
-	"fmt"
+	"errors"
 
 	"github.com/projectcalico/libcalico-go/lib/api"
 	"github.com/projectcalico/libcalico-go/lib/backend/k8s"
@@ -66,11 +66,11 @@ func (p *podConverter) Convert(k8sObj interface{}) (interface{}, error) {
 	if !ok {
 		tombstone, ok := k8sObj.(cache.DeletedFinalStateUnknown)
 		if !ok {
-			return nil, fmt.Errorf("couldn't get object from tombstone %+v", k8sObj)
+			return nil, errors.New("couldn't get object from tombstone")
 		}
 		pod, ok = tombstone.Obj.(*k8sApiV1.Pod)
 		if !ok {
-			return nil, fmt.Errorf("tombstone contained object that is not a Pod %+v", k8sObj)
+			return nil, errors.New("tombstone contained object that is not a Pod")
 		}
 	}
 	kvp, err := c.PodToWorkloadEndpoint(pod)
