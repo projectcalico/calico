@@ -15,7 +15,7 @@
 package converter
 
 import (
-	"fmt"
+	"errors"
 
 	log "github.com/sirupsen/logrus"
 
@@ -68,11 +68,11 @@ func (p *podConverter) Convert(k8sObj interface{}) (interface{}, error) {
 	if !ok {
 		tombstone, ok := k8sObj.(cache.DeletedFinalStateUnknown)
 		if !ok {
-			return nil, fmt.Errorf("couldn't get object from tombstone %+v", k8sObj)
+			return nil, errors.New("couldn't get object from tombstone")
 		}
 		pod, ok = tombstone.Obj.(*v1.Pod)
 		if !ok {
-			return nil, fmt.Errorf("tombstone contained object that is not a Pod %+v", k8sObj)
+			return nil, errors.New("tombstone contained object that is not a Pod")
 		}
 	}
 
