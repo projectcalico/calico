@@ -37,9 +37,13 @@ Before attempting to create a Calico release you must do the following.
    - [calico/kube-controllers](https://github.com/projectcalico/kube-controllers/releases)
    - [calico/felix](https://github.com/projectcalico/felix/releases)
    - [calico/typha](https://github.com/projectcalico/typha/releases)
-   - [networking-calico](https://github.com/openstack/networking-calico)
    - [calico/dikastes](https://github.com/projectcalico/app-policy/releases)
    - [calico/pod2daemon-flexvol](https://github.com/projectcalico/pod2daemon/releases)
+
+   The following components _must_ use the same minor revision number as the Calico version number above, but
+   do not always need to be released for every patch. They must be cut as part of a minor release of Calico.
+
+   - [networking-calico](https://github.com/openstack/networking-calico)
 
    The following components do not share a version with the Calico release, but are included in the documentation.
 
