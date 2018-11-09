@@ -332,8 +332,8 @@ ifneq ($(VERSION), $(GIT_VERSION))
 	$(error Attempt to build $(VERSION) from $(GIT_VERSION))
 endif
 	$(MAKE) image
-	$(MAKE) tag-images IMAGETAG=$(VERSION)
-	$(MAKE) tag-images IMAGETAG=latest
+	$(MAKE) tag-images RELEASE=true IMAGETAG=$(VERSION)
+	$(MAKE) tag-images RELEASE=true IMAGETAG=latest
 
 ## Verifies the release artifacts produces by `make release-build` are correct.
 release-verify: release-prereqs
@@ -357,13 +357,7 @@ release-publish: release-prereqs
 	git push origin $(VERSION)
 
 	# Push images.
-	$(MAKE) push IMAGETAG=$(VERSION) ARCH=$(ARCH)
-
-	# Push GCR images.
-	docker push gcr.io/projectcalico-org/cni:$(ARCHTAG):$(VERSION)
-	docker push eu.gcr.io/projectcalico-org/cni:$(ARCHTAG):$(VERSION)
-	docker push asia.gcr.io/projectcalico-org/cni:$(ARCHTAG):$(VERSION)
-	docker push us.gcr.io/projectcalico-org/cni:$(ARCHTAG):$(VERSION)
+	$(MAKE) push RELEASE=true IMAGETAG=$(VERSION) ARCH=$(ARCH)
 
 	@echo "Finalize the GitHub release based on the pushed tag."
 	@echo "Attach the $(BIN)/calico and $(BIN)/calico-ipam binaries."
