@@ -19,8 +19,6 @@ import (
 
 	"fmt"
 
-	log "github.com/sirupsen/logrus"
-
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
@@ -284,7 +282,6 @@ var _ = Describe("Visitor", func() {
 			s.AcceptVisitor(visitor)
 
 			By("generating the correct output selector", func() {
-				log.Infof("[test] out: %s", s.String())
 				Expect(s.String()).To(Equal(outSelector))
 			})
 		},

@@ -40,7 +40,7 @@ const (
 // that will be tested.
 func E2eDatastoreDescribe(description string, datastores DatastoreType, body func(config apiconfig.CalicoAPIConfig)) bool {
 	if datastores&DatastoreEtcdV3 != 0 {
-		Describe(fmt.Sprintf("%s (etcdv3 backend)", description),
+		Describe(fmt.Sprintf("%s [Datastore] (etcdv3 backend)", description),
 			func() {
 				body(apiconfig.CalicoAPIConfig{
 					Spec: apiconfig.CalicoAPIConfigSpec{
@@ -54,7 +54,7 @@ func E2eDatastoreDescribe(description string, datastores DatastoreType, body fun
 	}
 
 	if datastores&DatastoreK8s != 0 {
-		Describe(fmt.Sprintf("%s (kubernetes backend)", description),
+		Describe(fmt.Sprintf("%s [Datastore] (kubernetes backend)", description),
 			func() {
 				body(apiconfig.CalicoAPIConfig{
 					Spec: apiconfig.CalicoAPIConfigSpec{

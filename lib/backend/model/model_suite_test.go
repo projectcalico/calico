@@ -17,6 +17,7 @@ package model_test
 import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	"github.com/projectcalico/libcalico-go/lib/testutils"
 
 	"testing"
 
@@ -24,6 +25,7 @@ import (
 )
 
 func TestModel(t *testing.T) {
+	testutils.HookLogrusForGinkgo()
 	RegisterFailHandler(Fail)
 	junitReporter := reporters.NewJUnitReporter("../../../report/model_suite.xml")
 	RunSpecsWithDefaultAndCustomReporters(t, "Model Suite", []Reporter{junitReporter})
