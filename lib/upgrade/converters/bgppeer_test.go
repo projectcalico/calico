@@ -15,28 +15,42 @@
 package converters
 
 import (
-	"testing"
-
+	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"k8s.io/apimachinery/pkg/apis/meta/v1"
 
+	. "github.com/onsi/ginkgo/extensions/table"
 	apiv1 "github.com/projectcalico/libcalico-go/lib/apis/v1"
-	"github.com/projectcalico/libcalico-go/lib/apis/v1/unversioned"
 	apiv3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/libcalico-go/lib/net"
 	"github.com/projectcalico/libcalico-go/lib/scope"
 )
 
-var bgpPeerTable = []struct {
-	description string
-	v1API       unversioned.Resource
-	v1KVP       *model.KVPair
-	v3API       apiv3.BGPPeer
-}{
-	{
-		description: "global scoped BGPPeer",
-		v1API: &apiv1.BGPPeer{
+var _ = DescribeTable("v1->v3 bgp peer conversion tests table (success)",
+	func(v1API *apiv1.BGPPeer, v1KVP *model.KVPair, v3API apiv3.BGPPeer) {
+		p := BGPPeer{}
+
+		// Test and assert v1 API to v1 backend logic.
+		v1KVPResult, err := p.APIV1ToBackendV1(v1API)
+		Expect(err).NotTo(HaveOccurred())
+		md := v1API.Metadata
+		if md.Scope == "global" {
+			Expect(v1KVPResult.Key.(model.GlobalBGPPeerKey).PeerIP).To(Equal(v1KVP.Key.(model.GlobalBGPPeerKey).PeerIP))
+		} else {
+			Expect(v1KVPResult.Key.(model.NodeBGPPeerKey).PeerIP).To(Equal(v1KVP.Key.(model.NodeBGPPeerKey).PeerIP))
+		}
+		Expect(v1KVPResult.Value.(*model.BGPPeer)).To(Equal(v1KVP.Value))
+
+		// Test and assert v1 backend to v3 API logic.
+		v3APIResult, err := p.BackendV1ToAPIV3(v1KVP)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(v3APIResult.(*apiv3.BGPPeer).Name).To(Equal(v3API.Name))
+		Expect(v3APIResult.(*apiv3.BGPPeer).Spec).To(Equal(v3API.Spec))
+	},
+
+	Entry("global scoped BGPPeer",
+		&apiv1.BGPPeer{
 			Metadata: apiv1.BGPPeerMetadata{
 				Scope:  scope.Global,
 				PeerIP: *net.ParseIP("10.0.0.1"),
@@ -45,7 +59,7 @@ var bgpPeerTable = []struct {
 				ASNumber: 255,
 			},
 		},
-		v1KVP: &model.KVPair{
+		&model.KVPair{
 			Key: model.GlobalBGPPeerKey{
 				PeerIP: *net.ParseIP("10.0.0.1"),
 			},
@@ -54,7 +68,7 @@ var bgpPeerTable = []struct {
 				ASNum:  255,
 			},
 		},
-		v3API: apiv3.BGPPeer{
+		apiv3.BGPPeer{
 			ObjectMeta: v1.ObjectMeta{
 				Name: "10-0-0-1",
 			},
@@ -63,10 +77,9 @@ var bgpPeerTable = []struct {
 				ASNumber: 255,
 			},
 		},
-	},
-	{
-		description: "global scoped ipv6 BGPPeer",
-		v1API: &apiv1.BGPPeer{
+	),
+	Entry("global scoped ipv6 BGPPeer",
+		&apiv1.BGPPeer{
 			Metadata: apiv1.BGPPeerMetadata{
 				Scope:  scope.Global,
 				PeerIP: *net.ParseIP("Aa:bb::"),
@@ -75,7 +88,7 @@ var bgpPeerTable = []struct {
 				ASNumber: 255,
 			},
 		},
-		v1KVP: &model.KVPair{
+		&model.KVPair{
 			Key: model.GlobalBGPPeerKey{
 				PeerIP: *net.ParseIP("Aa:bb::"),
 			},
@@ -84,7 +97,7 @@ var bgpPeerTable = []struct {
 				ASNum:  255,
 			},
 		},
-		v3API: apiv3.BGPPeer{
+		apiv3.BGPPeer{
 			ObjectMeta: v1.ObjectMeta{
 				Name: "00aa-00bb-0000-0000-0000-0000-0000-0000",
 			},
@@ -93,10 +106,9 @@ var bgpPeerTable = []struct {
 				ASNumber: 255,
 			},
 		},
-	},
-	{
-		description: "node scoped BGPPeer",
-		v1API: &apiv1.BGPPeer{
+	),
+	Entry("node scoped BGPPeer",
+		&apiv1.BGPPeer{
 			Metadata: apiv1.BGPPeerMetadata{
 				Scope:  scope.Node,
 				Node:   "namedNode",
@@ -106,7 +118,7 @@ var bgpPeerTable = []struct {
 				ASNumber: 255,
 			},
 		},
-		v1KVP: &model.KVPair{
+		&model.KVPair{
 			Key: model.NodeBGPPeerKey{
 				Nodename: "namedNode",
 				PeerIP:   *net.ParseIP("10.0.0.1"),
@@ -116,7 +128,7 @@ var bgpPeerTable = []struct {
 				ASNum:  255,
 			},
 		},
-		v3API: apiv3.BGPPeer{
+		apiv3.BGPPeer{
 			ObjectMeta: v1.ObjectMeta{
 				Name: "namednode.10-0-0-1",
 			},
@@ -126,10 +138,9 @@ var bgpPeerTable = []struct {
 				ASNumber: 255,
 			},
 		},
-	},
-	{
-		description: "node scoped BGPPeer with ipv6",
-		v1API: &apiv1.BGPPeer{
+	),
+	Entry("node scoped BGPPeer with ipv6",
+		&apiv1.BGPPeer{
 			Metadata: apiv1.BGPPeerMetadata{
 				Scope:  scope.Node,
 				Node:   "namedNode",
@@ -139,7 +150,7 @@ var bgpPeerTable = []struct {
 				ASNumber: 255,
 			},
 		},
-		v1KVP: &model.KVPair{
+		&model.KVPair{
 			Key: model.NodeBGPPeerKey{
 				Nodename: "namedNode",
 				PeerIP:   *net.ParseIP("Aa:bb::"),
@@ -149,7 +160,7 @@ var bgpPeerTable = []struct {
 				ASNum:  255,
 			},
 		},
-		v3API: apiv3.BGPPeer{
+		apiv3.BGPPeer{
 			ObjectMeta: v1.ObjectMeta{
 				Name: "namednode.00aa-00bb-0000-0000-0000-0000-0000-0000",
 			},
@@ -159,43 +170,21 @@ var bgpPeerTable = []struct {
 				ASNumber: 255,
 			},
 		},
+	),
+)
+
+var _ = DescribeTable("v1->v3 bgp peer conversion tests table (fail)",
+	func(v1API *apiv1.BGPPeer) {
+		// Failure cases.
+		p := BGPPeer{}
+
+		// Test and assert v1 API to v1 backend logic.
+		_, err := p.APIV1ToBackendV1(v1API)
+		Expect(err).To(HaveOccurred())
 	},
-}
 
-func TestCanConvertV1ToV3BGPPeer(t *testing.T) {
-	for _, entry := range bgpPeerTable {
-		t.Run(entry.description, func(t *testing.T) {
-			RegisterTestingT(t)
-
-			p := BGPPeer{}
-
-			// Test and assert v1 API to v1 backend logic.
-			v1KVPResult, err := p.APIV1ToBackendV1(entry.v1API)
-			Expect(err).NotTo(HaveOccurred(), entry.description)
-			md := entry.v1API.(*apiv1.BGPPeer).Metadata
-			if md.Scope == "global" {
-				Expect(v1KVPResult.Key.(model.GlobalBGPPeerKey).PeerIP).To(Equal(entry.v1KVP.Key.(model.GlobalBGPPeerKey).PeerIP))
-			} else {
-				Expect(v1KVPResult.Key.(model.NodeBGPPeerKey).PeerIP).To(Equal(entry.v1KVP.Key.(model.NodeBGPPeerKey).PeerIP))
-			}
-			Expect(v1KVPResult.Value.(*model.BGPPeer)).To(Equal(entry.v1KVP.Value))
-
-			// Test and assert v1 backend to v3 API logic.
-			v3APIResult, err := p.BackendV1ToAPIV3(entry.v1KVP)
-			Expect(err).NotTo(HaveOccurred(), entry.description)
-			Expect(v3APIResult.(*apiv3.BGPPeer).Name).To(Equal(entry.v3API.Name), entry.description)
-			Expect(v3APIResult.(*apiv3.BGPPeer).Spec).To(Equal(entry.v3API.Spec), entry.description)
-		})
-	}
-}
-
-var bgpPeerFailTable = []struct {
-	description string
-	v1API       unversioned.Resource
-}{
-	{
-		description: "missing PeerIP",
-		v1API: &apiv1.BGPPeer{
+	Entry("missing PeerIP",
+		&apiv1.BGPPeer{
 			Metadata: apiv1.BGPPeerMetadata{
 				Scope: scope.Global,
 			},
@@ -203,10 +192,9 @@ var bgpPeerFailTable = []struct {
 				ASNumber: 255,
 			},
 		},
-	},
-	{
-		description: "scope set global with node specified",
-		v1API: &apiv1.BGPPeer{
+	),
+	Entry("scope set global with node specified",
+		&apiv1.BGPPeer{
 			Metadata: apiv1.BGPPeerMetadata{
 				Scope:  scope.Global,
 				Node:   "namedNode",
@@ -216,10 +204,9 @@ var bgpPeerFailTable = []struct {
 				ASNumber: 255,
 			},
 		},
-	},
-	{
-		description: "scope set node with NO node specified",
-		v1API: &apiv1.BGPPeer{
+	),
+	Entry("scope set node with NO node specified",
+		&apiv1.BGPPeer{
 			Metadata: apiv1.BGPPeerMetadata{
 				Scope:  scope.Node,
 				PeerIP: *net.ParseIP("10.0.0.1"),
@@ -228,48 +215,31 @@ var bgpPeerFailTable = []struct {
 				ASNumber: 255,
 			},
 		},
-	},
-}
+	),
+)
 
-func TestFailConvertV1ToV3BGPPeer(t *testing.T) {
-	for _, entry := range bgpPeerFailTable {
-		t.Run(entry.description, func(t *testing.T) {
-			RegisterTestingT(t)
+var _ = Describe("v1->v3 BGP Peer conversion tests", func() {
+	It("APIV1ToBackendV1 with the wrong resource produces an error", func() {
+		resource := &apiv1.IPPool{
+			Metadata: apiv1.IPPoolMetadata{},
+			Spec:     apiv1.IPPoolSpec{},
+		}
 
-			p := BGPPeer{}
+		p := BGPPeer{}
+		_, err := p.APIV1ToBackendV1(resource)
 
-			// Test and assert v1 API to v1 backend logic.
-			_, err := p.APIV1ToBackendV1(entry.v1API)
-			Expect(err).To(HaveOccurred(), entry.description)
-		})
-	}
-}
+		Expect(err).To(HaveOccurred())
+	})
 
-func TestBGPConvertWithInvalidResource(t *testing.T) {
-	t.Run("APIV1ToBackendV1 with the wrong resource produces an error",
-		func(t *testing.T) {
-			RegisterTestingT(t)
-			resource := &apiv1.IPPool{
-				Metadata: apiv1.IPPoolMetadata{},
-				Spec:     apiv1.IPPoolSpec{},
-			}
+	It("BackendV1ToAPIV3 with wrong resource produces an error", func() {
+		resource := &model.KVPair{
+			Key:   model.IPPoolKey{},
+			Value: &model.IPPool{},
+		}
 
-			p := BGPPeer{}
-			_, err := p.APIV1ToBackendV1(resource)
+		p := BGPPeer{}
+		_, err := p.BackendV1ToAPIV3(resource)
 
-			Expect(err).To(HaveOccurred())
-		})
-	t.Run("BackendV1ToAPIV3 with wrong resource produces an error",
-		func(t *testing.T) {
-			RegisterTestingT(t)
-			resource := &model.KVPair{
-				Key:   model.IPPoolKey{},
-				Value: &model.IPPool{},
-			}
-
-			p := BGPPeer{}
-			_, err := p.BackendV1ToAPIV3(resource)
-
-			Expect(err).To(HaveOccurred())
-		})
-}
+		Expect(err).To(HaveOccurred())
+	})
+})

@@ -16,26 +16,37 @@ package converters
 
 import (
 	"fmt"
-	"testing"
 
+	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+
 	"k8s.io/apimachinery/pkg/apis/meta/v1"
 
+	. "github.com/onsi/ginkgo/extensions/table"
 	apiv1 "github.com/projectcalico/libcalico-go/lib/apis/v1"
-	"github.com/projectcalico/libcalico-go/lib/apis/v1/unversioned"
 	apiv3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 )
 
-var profileTable = []struct {
-	description string
-	v1API       unversioned.Resource
-	v1KVP       *model.KVPair
-	v3API       apiv3.Profile
-}{
-	{
-		description: "fully populated Profile",
-		v1API: &apiv1.Profile{
+var _ = DescribeTable("v1->v3 profile conversion tests table",
+	func(v1API *apiv1.Profile, v1KVP *model.KVPair, v3API apiv3.Profile) {
+		p := Profile{}
+
+		// Test and assert v1 API to v1 backend logic.
+		v1KVPResult, err := p.APIV1ToBackendV1(v1API)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(v1KVPResult.Key.(model.ProfileKey).Name).To(Equal(v1KVP.Key.(model.ProfileKey).Name))
+		Expect(v1KVPResult.Value.(*model.Profile)).To(Equal(v1KVP.Value))
+
+		// Test and assert v1 backend to v3 API logic.
+		v3APIResult, err := p.BackendV1ToAPIV3(v1KVP)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(v3APIResult.(*apiv3.Profile).Name).To(Equal(v3API.Name))
+		Expect(v3APIResult.(*apiv3.Profile).Spec).To(Equal(v3API.Spec))
+	},
+
+	Entry("fully populated Profile",
+		&apiv1.Profile{
 			Metadata: apiv1.ProfileMetadata{
 				Name:   "nameyMcProfileName",
 				Tags:   []string{"meep", "mop"},
@@ -46,7 +57,7 @@ var profileTable = []struct {
 				EgressRules:  []apiv1.Rule{V1EgressRule1, V1EgressRule2},
 			},
 		},
-		v1KVP: &model.KVPair{
+		&model.KVPair{
 			Key: model.ProfileKey{
 				Name: "nameyMcProfileName",
 			},
@@ -59,7 +70,7 @@ var profileTable = []struct {
 				Labels: map[string]string{"pncs.thingy": "val"},
 			},
 		},
-		v3API: apiv3.Profile{
+		apiv3.Profile{
 			ObjectMeta: v1.ObjectMeta{
 				Name: "nameymcprofilename-9740ed19",
 			},
@@ -69,10 +80,10 @@ var profileTable = []struct {
 				LabelsToApply: map[string]string{"pncs.thingy": "val", "meep": "", "mop": ""},
 			},
 		},
-	},
-	{
-		description: "Profile name conversion",
-		v1API: &apiv1.Profile{
+	),
+
+	Entry("Profile name conversion",
+		&apiv1.Profile{
 			Metadata: apiv1.ProfileMetadata{
 				Name: "k8s_ns.FlUx-.-CaPaCiToR$$",
 				Tags: []string{"lalala"},
@@ -82,7 +93,7 @@ var profileTable = []struct {
 				EgressRules:  []apiv1.Rule{},
 			},
 		},
-		v1KVP: &model.KVPair{
+		&model.KVPair{
 			Key: model.ProfileKey{
 				Name: "k8s_ns.FlUx-.-CaPaCiToR$$",
 			},
@@ -95,7 +106,7 @@ var profileTable = []struct {
 				Labels: map[string]string{},
 			},
 		},
-		v3API: apiv3.Profile{
+		apiv3.Profile{
 			ObjectMeta: v1.ObjectMeta{
 				Name: "kns.flux.capacitor-a9ad9f16",
 			},
@@ -105,36 +116,11 @@ var profileTable = []struct {
 				LabelsToApply: map[string]string{"lalala": ""},
 			},
 		},
-	},
-}
+	),
+)
 
-func TestCanConvertV1ToV3Profile(t *testing.T) {
-
-	for _, entry := range profileTable {
-		t.Run(entry.description, func(t *testing.T) {
-			RegisterTestingT(t)
-
-			p := Profile{}
-
-			// Test and assert v1 API to v1 backend logic.
-			v1KVPResult, err := p.APIV1ToBackendV1(entry.v1API)
-			Expect(err).NotTo(HaveOccurred(), entry.description)
-			Expect(v1KVPResult.Key.(model.ProfileKey).Name).To(Equal(entry.v1KVP.Key.(model.ProfileKey).Name))
-			Expect(v1KVPResult.Value.(*model.Profile)).To(Equal(entry.v1KVP.Value))
-
-			// Test and assert v1 backend to v3 API logic.
-			v3APIResult, err := p.BackendV1ToAPIV3(entry.v1KVP)
-			Expect(err).NotTo(HaveOccurred(), entry.description)
-			Expect(v3APIResult.(*apiv3.Profile).Name).To(Equal(entry.v3API.Name), entry.description)
-			Expect(v3APIResult.(*apiv3.Profile).Spec).To(Equal(entry.v3API.Spec), entry.description)
-		})
-	}
-}
-
-func TestExitOnTagLabelCollision(t *testing.T) {
-	t.Run("Profile conversion should exit with an error when a Tag has the same value as a Label key", func(t *testing.T) {
-		RegisterTestingT(t)
-
+var _ = Describe("v1->v3 profile conversion tests", func() {
+	It("Profile conversion should exit with an error when a Tag has the same value as a Label key", func() {
 		p := Profile{}
 
 		v1KVP := &model.KVPair{
@@ -154,14 +140,11 @@ func TestExitOnTagLabelCollision(t *testing.T) {
 		// Assert that converting v1 backend to v3 API returns an error.
 		_, err := p.BackendV1ToAPIV3(v1KVP)
 		Expect(err).To(HaveOccurred())
-		Expect(err.Error()).To(Equal(fmt.Sprintf("Tag: '%s' and Label '%s == %s' have the same value for Profile: %s. Change the Label key before proceeding", "covfefe", "covfefe", "hot", "makemake")))
+		e := fmt.Sprintf("Tag: '%s' and Label '%s == %s' have the same value for Profile: %s. Change the Label key before proceeding", "covfefe", "covfefe", "hot", "makemake")
+		Expect(err.Error()).To(Equal(e))
 	})
-}
 
-func TestNoLabelsOnBackend(t *testing.T) {
-	t.Run("Profile conversion should succeed when there are no labels but there are tags", func(t *testing.T) {
-		RegisterTestingT(t)
-
+	It("Profile conversion should succeed when there are no labels but there are tags", func() {
 		p := Profile{}
 
 		v1KVP := &model.KVPair{
@@ -182,11 +165,8 @@ func TestNoLabelsOnBackend(t *testing.T) {
 		_, err := p.BackendV1ToAPIV3(v1KVP)
 		Expect(err).NotTo(HaveOccurred())
 	})
-}
-func TestNoLabelsOrTagsOnBackend(t *testing.T) {
-	t.Run("Profile conversion should succeed when there are no tags or labels", func(t *testing.T) {
-		RegisterTestingT(t)
 
+	It("Profile conversion should succeed when there are no tags or labels", func() {
 		p := Profile{}
 
 		v1KVP := &model.KVPair{
@@ -207,4 +187,4 @@ func TestNoLabelsOrTagsOnBackend(t *testing.T) {
 		_, err := p.BackendV1ToAPIV3(v1KVP)
 		Expect(err).NotTo(HaveOccurred())
 	})
-}
+})

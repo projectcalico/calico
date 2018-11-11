@@ -15,27 +15,21 @@
 package converters
 
 import (
-	"testing"
-
+	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
 )
 
-var table = []struct {
-	v1 string
-	v3 string
-}{
-	{"foo == 'bar'", "foo == 'bar'"},
-	{"calico/k8s_ns == 'default'", "projectcalico.org/namespace == 'default'"},
-	{"calico/k8s_ns in {'default'}", "projectcalico.org/namespace in {'default'}"},
-	{"has(calico/k8s_ns)", "has(projectcalico.org/namespace)"},
-	{"has(calico/k8s_ns) || foo == 'bar'", "has(projectcalico.org/namespace) || foo == 'bar'"},
+var selectorTable = []TableEntry{
+	Entry("foo == 'bar'", "foo == 'bar'", "foo == 'bar'"),
+	Entry("calico/k8s_ns == 'default'", "calico/k8s_ns == 'default'", "projectcalico.org/namespace == 'default'"),
+	Entry("calico/k8s_ns in {'default'}", "calico/k8s_ns in {'default'}", "projectcalico.org/namespace in {'default'}"),
+	Entry("has(calico/k8s_ns)", "has(calico/k8s_ns)", "has(projectcalico.org/namespace)"),
+	Entry("has(calico/k8s_ns) || foo == 'bar'", "has(calico/k8s_ns) || foo == 'bar'", "has(projectcalico.org/namespace) || foo == 'bar'"),
 }
 
-func TestCanConvertSelectors(t *testing.T) {
-	for _, entry := range table {
-		t.Run(entry.v1, func(t *testing.T) {
-			RegisterTestingT(t)
-			Expect(convertSelector(entry.v1)).To(Equal(entry.v3), entry.v1)
-		})
-	}
-}
+var _ = DescribeTable("v1->v3 selector conversion tests",
+	func(v1, v3 string) {
+		Expect(convertSelector(v1)).To(Equal(v3), v1)
+	},
+	selectorTable...,
+)

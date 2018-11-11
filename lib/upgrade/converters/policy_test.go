@@ -15,9 +15,9 @@
 package converters
 
 import (
-	"testing"
-
+	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
+
 	"k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	apiv1 "github.com/projectcalico/libcalico-go/lib/apis/v1"
@@ -28,15 +28,9 @@ import (
 
 var order1 = 1000.00
 var order2 = 999.99
-var policyTable = []struct {
-	description string
-	v1API       unversioned.Resource
-	v1KVP       *model.KVPair
-	v3API       apiv3.GlobalNetworkPolicy
-}{
-	{
-		description: "fully populated Policy",
-		v1API: &apiv1.Policy{
+var policyTable = []TableEntry{
+	Entry("fully populated Policy",
+		&apiv1.Policy{
 			Metadata: apiv1.PolicyMetadata{
 				Name: "nameyMcPolicyName",
 			},
@@ -50,7 +44,7 @@ var policyTable = []struct {
 				Types:        []apiv1.PolicyType{apiv1.PolicyTypeIngress},
 			},
 		},
-		v1KVP: &model.KVPair{
+		&model.KVPair{
 			Key: model.PolicyKey{
 				Name: "nameyMcPolicyName",
 			},
@@ -65,7 +59,7 @@ var policyTable = []struct {
 				Types:          []string{"ingress"},
 			},
 		},
-		v3API: apiv3.GlobalNetworkPolicy{
+		apiv3.GlobalNetworkPolicy{
 			ObjectMeta: v1.ObjectMeta{
 				Name: "nameymcpolicyname-32df456f",
 			},
@@ -80,10 +74,9 @@ var policyTable = []struct {
 				Types:          []apiv3.PolicyType{apiv3.PolicyTypeIngress},
 			},
 		},
-	},
-	{
-		description: "policy name conversion",
-		v1API: &apiv1.Policy{
+	),
+	Entry("policy name conversion",
+		&apiv1.Policy{
 			Metadata: apiv1.PolicyMetadata{
 				Name: "MaKe.-.MaKe",
 			},
@@ -97,7 +90,7 @@ var policyTable = []struct {
 				Types:        []apiv1.PolicyType{apiv1.PolicyTypeIngress},
 			},
 		},
-		v1KVP: &model.KVPair{
+		&model.KVPair{
 			Key: model.PolicyKey{
 				Name: "MaKe.-.MaKe",
 			},
@@ -112,7 +105,7 @@ var policyTable = []struct {
 				Types:          []string{"ingress"},
 			},
 		},
-		v3API: apiv3.GlobalNetworkPolicy{
+		apiv3.GlobalNetworkPolicy{
 			ObjectMeta: v1.ObjectMeta{
 				Name: "make-make-1b6971c8",
 			},
@@ -127,11 +120,9 @@ var policyTable = []struct {
 				Types:          []apiv3.PolicyType{apiv3.PolicyTypeIngress},
 			},
 		},
-	},
-	{
-		description: "policy with PreDNAT set to true " +
-			"should convert ApplyOnForward to true in v3 API",
-		v1API: &apiv1.Policy{
+	),
+	Entry("policy with PreDNAT set to true should convert ApplyOnForward to true in v3 API",
+		&apiv1.Policy{
 			Metadata: apiv1.PolicyMetadata{
 				Name: "RAWR",
 			},
@@ -142,7 +133,7 @@ var policyTable = []struct {
 				Types:        []apiv1.PolicyType{apiv1.PolicyTypeIngress},
 			},
 		},
-		v1KVP: &model.KVPair{
+		&model.KVPair{
 			Key: model.PolicyKey{
 				Name: "RAWR",
 			},
@@ -156,7 +147,7 @@ var policyTable = []struct {
 				Types:          []string{"ingress"},
 			},
 		},
-		v3API: apiv3.GlobalNetworkPolicy{
+		apiv3.GlobalNetworkPolicy{
 			ObjectMeta: v1.ObjectMeta{
 				Name: "rawr-03d81e1d",
 			},
@@ -170,11 +161,10 @@ var policyTable = []struct {
 				Types:          []apiv3.PolicyType{apiv3.PolicyTypeIngress},
 			},
 		},
-	},
-	{
-		description: "policy with DoNotTrack set to true " +
-			"should convert ApplyOnForward to true in v3 API",
-		v1API: &apiv1.Policy{
+	),
+	Entry("policy with DoNotTrack set to true "+
+		"should convert ApplyOnForward to true in v3 API",
+		&apiv1.Policy{
 			Metadata: apiv1.PolicyMetadata{
 				Name: "RAWR",
 			},
@@ -185,7 +175,7 @@ var policyTable = []struct {
 				Types:        []apiv1.PolicyType{apiv1.PolicyTypeIngress},
 			},
 		},
-		v1KVP: &model.KVPair{
+		&model.KVPair{
 			Key: model.PolicyKey{
 				Name: "RAWR",
 			},
@@ -199,7 +189,7 @@ var policyTable = []struct {
 				Types:          []string{"ingress"},
 			},
 		},
-		v3API: apiv3.GlobalNetworkPolicy{
+		apiv3.GlobalNetworkPolicy{
 			ObjectMeta: v1.ObjectMeta{
 				Name: "rawr-03d81e1d",
 			},
@@ -213,11 +203,9 @@ var policyTable = []struct {
 				Types:          []apiv3.PolicyType{apiv3.PolicyTypeIngress},
 			},
 		},
-	},
-	{
-		description: "policy with PreDNAT and DoNotTrack both " +
-			"set to false should NOT convert ApplyOnForward to true in v3 API",
-		v1API: &apiv1.Policy{
+	),
+	Entry("policy with PreDNAT and DoNotTrack both set to false should NOT convert ApplyOnForward to true in v3 API",
+		&apiv1.Policy{
 			Metadata: apiv1.PolicyMetadata{
 				Name: "meow",
 			},
@@ -229,7 +217,7 @@ var policyTable = []struct {
 				Types:        []apiv1.PolicyType{apiv1.PolicyTypeIngress},
 			},
 		},
-		v1KVP: &model.KVPair{
+		&model.KVPair{
 			Key: model.PolicyKey{
 				Name: "meow",
 			},
@@ -243,7 +231,7 @@ var policyTable = []struct {
 				Types:          []string{"ingress"},
 			},
 		},
-		v3API: apiv3.GlobalNetworkPolicy{
+		apiv3.GlobalNetworkPolicy{
 			ObjectMeta: v1.ObjectMeta{
 				Name: "meow",
 			},
@@ -257,10 +245,9 @@ var policyTable = []struct {
 				Types:          []apiv3.PolicyType{apiv3.PolicyTypeIngress},
 			},
 		},
-	},
-	{
-		description: "policy with non-strictly masked CIDR should get converted to strictly masked CIDR in v3 API",
-		v1API: &apiv1.Policy{
+	),
+	Entry("policy with non-strictly masked CIDR should get converted to strictly masked CIDR in v3 API",
+		&apiv1.Policy{
 			Metadata: apiv1.PolicyMetadata{
 				Name: "MaKe.-.MaKe",
 			},
@@ -275,7 +262,7 @@ var policyTable = []struct {
 				Types:        []apiv1.PolicyType{apiv1.PolicyTypeIngress, apiv1.PolicyTypeEgress},
 			},
 		},
-		v1KVP: &model.KVPair{
+		&model.KVPair{
 			Key: model.PolicyKey{
 				Name: "MaKe.-.MaKe",
 			},
@@ -291,7 +278,7 @@ var policyTable = []struct {
 				Types:          []string{"ingress", "egress"},
 			},
 		},
-		v3API: apiv3.GlobalNetworkPolicy{
+		apiv3.GlobalNetworkPolicy{
 			ObjectMeta: v1.ObjectMeta{
 				Name: "make-make-1b6971c8",
 			},
@@ -307,10 +294,9 @@ var policyTable = []struct {
 				Types:          []apiv3.PolicyType{apiv3.PolicyTypeIngress, apiv3.PolicyTypeEgress},
 			},
 		},
-	},
-	{
-		description: "policy test3",
-		v1API: &apiv1.Policy{
+	),
+	Entry("policy test3",
+		&apiv1.Policy{
 			Metadata: apiv1.PolicyMetadata{
 				Name: "policy1",
 			},
@@ -328,7 +314,7 @@ var policyTable = []struct {
 				Selector: "type=='database'",
 			},
 		},
-		v1KVP: &model.KVPair{
+		&model.KVPair{
 			Key: model.PolicyKey{
 				Name: "policy1",
 			},
@@ -344,7 +330,7 @@ var policyTable = []struct {
 				Types:         []string{"ingress"},
 			},
 		},
-		v3API: apiv3.GlobalNetworkPolicy{
+		apiv3.GlobalNetworkPolicy{
 			ObjectMeta: v1.ObjectMeta{
 				Name: "policy1",
 			},
@@ -362,40 +348,32 @@ var policyTable = []struct {
 				Types:    []apiv3.PolicyType{apiv3.PolicyTypeIngress},
 			},
 		},
+	),
+}
+
+var _ = DescribeTable("v1->v3 policy conversion tests",
+	func(v1API unversioned.Resource, v1KVP *model.KVPair, v3API apiv3.GlobalNetworkPolicy) {
+		p := Policy{}
+
+		// Test and assert v1 API to v1 backend logic.
+		v1KVPResult, err := p.APIV1ToBackendV1(v1API)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(v1KVPResult.Key.(model.PolicyKey).Name).To(Equal(v1KVP.Key.(model.PolicyKey).Name))
+		Expect(v1KVPResult.Value.(*model.Policy)).To(Equal(v1KVP.Value))
+
+		// Test and assert v1 backend to v3 API logic.
+		v3APIResult, err := p.BackendV1ToAPIV3(v1KVP)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(v3APIResult.(*apiv3.GlobalNetworkPolicy).Name).To(Equal(v3API.Name))
+		Expect(v3APIResult.(*apiv3.GlobalNetworkPolicy).Spec).To(Equal(v3API.Spec))
 	},
-}
 
-func TestCanConvertV1ToV3Policy(t *testing.T) {
+	policyTable...,
+)
 
-	for _, entry := range policyTable {
-		t.Run(entry.description, func(t *testing.T) {
-			RegisterTestingT(t)
-
-			p := Policy{}
-
-			// Test and assert v1 API to v1 backend logic.
-			v1KVPResult, err := p.APIV1ToBackendV1(entry.v1API)
-			Expect(err).NotTo(HaveOccurred(), entry.description)
-			Expect(v1KVPResult.Key.(model.PolicyKey).Name).To(Equal(entry.v1KVP.Key.(model.PolicyKey).Name))
-			Expect(v1KVPResult.Value.(*model.Policy)).To(Equal(entry.v1KVP.Value))
-
-			// Test and assert v1 backend to v3 API logic.
-			v3APIResult, err := p.BackendV1ToAPIV3(entry.v1KVP)
-			Expect(err).NotTo(HaveOccurred(), entry.description)
-			Expect(v3APIResult.(*apiv3.GlobalNetworkPolicy).Name).To(Equal(entry.v3API.Name), entry.description)
-			Expect(v3APIResult.(*apiv3.GlobalNetworkPolicy).Spec).To(Equal(entry.v3API.Spec), entry.description)
-		})
-	}
-}
-
-var policyTableBackend = []struct {
-	description string
-	v1KVP       *model.KVPair
-	v3API       apiv3.GlobalNetworkPolicy
-}{
-	{
-		description: "converting model with no Types with preDNAT to v3 API only has Ingress for Types",
-		v1KVP: &model.KVPair{
+var policyTableBackend = []TableEntry{
+	Entry("converting model with no Types with preDNAT to v3 API only has Ingress for Types",
+		&model.KVPair{
 			Key: model.PolicyKey{
 				Name: "somekey",
 			},
@@ -411,7 +389,7 @@ var policyTableBackend = []struct {
 				Types:          []string{},
 			},
 		},
-		v3API: apiv3.GlobalNetworkPolicy{
+		apiv3.GlobalNetworkPolicy{
 			ObjectMeta: v1.ObjectMeta{
 				Name: "somekey",
 			},
@@ -427,22 +405,19 @@ var policyTableBackend = []struct {
 				Types:          []apiv3.PolicyType{apiv3.PolicyTypeIngress},
 			},
 		},
+	),
+}
+
+var _ = DescribeTable("v1->v3 policy conversion tests (backend)",
+	func(v1KVP *model.KVPair, v3API apiv3.GlobalNetworkPolicy) {
+		p := Policy{}
+
+		// Test and assert v1 backend to v3 API logic.
+		v3APIResult, err := p.BackendV1ToAPIV3(v1KVP)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(v3APIResult.(*apiv3.GlobalNetworkPolicy).Name).To(Equal(v3API.Name))
+		Expect(v3APIResult.(*apiv3.GlobalNetworkPolicy).Spec).To(Equal(v3API.Spec))
 	},
-}
 
-func TestCanConvertKVModelToV3Policy(t *testing.T) {
-
-	for _, entry := range policyTableBackend {
-		t.Run(entry.description, func(t *testing.T) {
-			RegisterTestingT(t)
-
-			p := Policy{}
-
-			// Test and assert v1 backend to v3 API logic.
-			v3APIResult, err := p.BackendV1ToAPIV3(entry.v1KVP)
-			Expect(err).NotTo(HaveOccurred(), entry.description)
-			Expect(v3APIResult.(*apiv3.GlobalNetworkPolicy).Name).To(Equal(entry.v3API.Name), entry.description)
-			Expect(v3APIResult.(*apiv3.GlobalNetworkPolicy).Spec).To(Equal(entry.v3API.Spec), entry.description)
-		})
-	}
-}
+	policyTableBackend...,
+)

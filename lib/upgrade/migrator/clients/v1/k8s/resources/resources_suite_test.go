@@ -17,6 +17,7 @@ package resources_test
 import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	"github.com/projectcalico/libcalico-go/lib/testutils"
 
 	"testing"
 
@@ -24,7 +25,8 @@ import (
 )
 
 func TestModel(t *testing.T) {
+	testutils.HookLogrusForGinkgo()
 	RegisterFailHandler(Fail)
 	junitReporter := reporters.NewJUnitReporter("../../../../../../../report/resources_suite.xml")
-	RunSpecsWithDefaultAndCustomReporters(t, "Calico upgrade KDD v1 resources Suite", []Reporter{junitReporter})
+	RunSpecsWithDefaultAndCustomReporters(t, "calico-upgrade KDD v1 resources Suite", []Reporter{junitReporter})
 }

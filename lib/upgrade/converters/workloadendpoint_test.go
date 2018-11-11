@@ -15,10 +15,10 @@
 package converters_test
 
 import (
-	"testing"
-
 	cnet "net"
 
+	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
 
 	apiv1 "github.com/projectcalico/libcalico-go/lib/apis/v1"
@@ -31,15 +31,9 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-var wepTable = []struct {
-	description string
-	v1API       unversioned.Resource
-	v1KVP       *model.KVPair
-	v3API       apiv3.WorkloadEndpoint
-}{
-	{
-		description: "fully populated WEP",
-		v1API: &apiv1.WorkloadEndpoint{
+var wepTable = []TableEntry{
+	Entry("fully populated WEP",
+		&apiv1.WorkloadEndpoint{
 			Metadata: apiv1.WorkloadEndpointMetadata{
 				Name:             "eth0",
 				Workload:         "default.frontend-5gs43",
@@ -59,7 +53,7 @@ var wepTable = []struct {
 				Ports:         makeEndpointPortsV1(),
 			},
 		},
-		v1KVP: &model.KVPair{
+		&model.KVPair{
 			Key: model.WorkloadEndpointKey{
 				Hostname:       "TestNode",
 				OrchestratorID: "k8s",
@@ -82,7 +76,7 @@ var wepTable = []struct {
 				Ports:            makeEndpointPortsKvp(),
 			},
 		},
-		v3API: apiv3.WorkloadEndpoint{
+		apiv3.WorkloadEndpoint{
 			ObjectMeta: v1.ObjectMeta{
 				Name:   "testnode-k8s-frontend--5gs43-eth0",
 				Labels: makeLabelsV3(),
@@ -103,10 +97,9 @@ var wepTable = []struct {
 				Ports:         makeEndpointPortsV3(),
 			},
 		},
-	},
-	{
-		description: "IPv4 only WEP",
-		v1API: &apiv1.WorkloadEndpoint{
+	),
+	Entry("IPv4 only WEP",
+		&apiv1.WorkloadEndpoint{
 			Metadata: apiv1.WorkloadEndpointMetadata{
 				Name:             "eth0",
 				Workload:         "default.frontend-5gs43",
@@ -130,7 +123,7 @@ var wepTable = []struct {
 				Ports:         makeEndpointPortsV1(),
 			},
 		},
-		v1KVP: &model.KVPair{
+		&model.KVPair{
 			Key: model.WorkloadEndpointKey{
 				Hostname:       "TestNode",
 				OrchestratorID: "k8s",
@@ -152,7 +145,7 @@ var wepTable = []struct {
 				Ports:            makeEndpointPortsKvp(),
 			},
 		},
-		v3API: apiv3.WorkloadEndpoint{
+		apiv3.WorkloadEndpoint{
 			ObjectMeta: v1.ObjectMeta{
 				Name:   "testnode-k8s-frontend--5gs43-eth0",
 				Labels: makeLabelsV3(),
@@ -175,10 +168,9 @@ var wepTable = []struct {
 				Ports:         makeEndpointPortsV3(),
 			},
 		},
-	},
-	{
-		description: "IPv6 only WEP",
-		v1API: &apiv1.WorkloadEndpoint{
+	),
+	Entry("IPv6 only WEP",
+		&apiv1.WorkloadEndpoint{
 			Metadata: apiv1.WorkloadEndpointMetadata{
 				Name:             "eth0",
 				Workload:         "default.frontend-5gs43",
@@ -202,7 +194,7 @@ var wepTable = []struct {
 				Ports:         makeEndpointPortsV1(),
 			},
 		},
-		v1KVP: &model.KVPair{
+		&model.KVPair{
 			Key: model.WorkloadEndpointKey{
 				Hostname:       "TestNode",
 				OrchestratorID: "k8s",
@@ -224,7 +216,7 @@ var wepTable = []struct {
 				Ports:            makeEndpointPortsKvp(),
 			},
 		},
-		v3API: apiv3.WorkloadEndpoint{
+		apiv3.WorkloadEndpoint{
 			ObjectMeta: v1.ObjectMeta{
 				Name:   "testnode-k8s-frontend--5gs43-eth0",
 				Labels: makeLabelsV3(),
@@ -247,10 +239,9 @@ var wepTable = []struct {
 				Ports:         makeEndpointPortsV3(),
 			},
 		},
-	},
-	{
-		description: "WEP missing labels",
-		v1API: &apiv1.WorkloadEndpoint{
+	),
+	Entry("WEP missing labels",
+		&apiv1.WorkloadEndpoint{
 			Metadata: apiv1.WorkloadEndpointMetadata{
 				Name:             "eth0",
 				Workload:         "default.frontend-5gs43",
@@ -270,7 +261,7 @@ var wepTable = []struct {
 				Ports:         makeEndpointPortsV1(),
 			},
 		},
-		v1KVP: &model.KVPair{
+		&model.KVPair{
 			Key: model.WorkloadEndpointKey{
 				Hostname:       "TestNode",
 				OrchestratorID: "k8s",
@@ -293,7 +284,7 @@ var wepTable = []struct {
 				Ports:            makeEndpointPortsKvp(),
 			},
 		},
-		v3API: apiv3.WorkloadEndpoint{
+		apiv3.WorkloadEndpoint{
 			ObjectMeta: v1.ObjectMeta{
 				Name:   "testnode-k8s-frontend--5gs43-eth0",
 				Labels: map[string]string{},
@@ -314,41 +305,37 @@ var wepTable = []struct {
 				Ports:         makeEndpointPortsV3(),
 			},
 		},
+	),
+}
+
+var _ = DescribeTable("v1->v3 workload endpoint conversion tests",
+	func(v1API unversioned.Resource, v1KVP *model.KVPair, v3API apiv3.WorkloadEndpoint) {
+		w := converters.WorkloadEndpoint{}
+
+		// Test and assert v1 API to v1 backend logic.
+		v1KVPResult, err := w.APIV1ToBackendV1(v1API)
+		Expect(err).NotTo(HaveOccurred())
+
+		// Metadata to Key.
+		Expect(v1KVPResult.Key.(model.WorkloadEndpointKey).Hostname).To(Equal(v1KVP.Key.(model.WorkloadEndpointKey).Hostname))
+		Expect(v1KVPResult.Key.(model.WorkloadEndpointKey).OrchestratorID).To(Equal(v1KVP.Key.(model.WorkloadEndpointKey).OrchestratorID))
+		Expect(v1KVPResult.Key.(model.WorkloadEndpointKey).WorkloadID).To(Equal(v1KVP.Key.(model.WorkloadEndpointKey).WorkloadID))
+		Expect(v1KVPResult.Key.(model.WorkloadEndpointKey).EndpointID).To(Equal(v1KVP.Key.(model.WorkloadEndpointKey).EndpointID))
+		// Spec to Value.
+		Expect(*v1KVPResult.Value.(*model.WorkloadEndpoint)).To(Equal(*v1KVP.Value.(*model.WorkloadEndpoint)))
+
+		// Test and assert v1 backend to v3 API logic.
+		v3APIResult, err := w.BackendV1ToAPIV3(v1KVP)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(v3APIResult.(*apiv3.WorkloadEndpoint).ObjectMeta.Name).To(Equal(v3API.ObjectMeta.Name))
+		Expect(v3APIResult.(*apiv3.WorkloadEndpoint).ObjectMeta.Labels).To(Equal(v3API.ObjectMeta.Labels))
+		Expect(v3APIResult.(*apiv3.WorkloadEndpoint).Spec).To(Equal(v3API.Spec))
 	},
-}
+	wepTable...,
+)
 
-func TestCanConvertV1ToV3WorkloadEndpoint(t *testing.T) {
-	for _, entry := range wepTable {
-		t.Run(entry.description, func(t *testing.T) {
-			RegisterTestingT(t)
-
-			w := converters.WorkloadEndpoint{}
-
-			// Test and assert v1 API to v1 backend logic.
-			v1KVPResult, err := w.APIV1ToBackendV1(entry.v1API)
-			Expect(err).NotTo(HaveOccurred(), entry.description)
-			// Metadata to Key.
-			Expect(v1KVPResult.Key.(model.WorkloadEndpointKey).Hostname).To(Equal(entry.v1KVP.Key.(model.WorkloadEndpointKey).Hostname))
-			Expect(v1KVPResult.Key.(model.WorkloadEndpointKey).OrchestratorID).To(Equal(entry.v1KVP.Key.(model.WorkloadEndpointKey).OrchestratorID))
-			Expect(v1KVPResult.Key.(model.WorkloadEndpointKey).WorkloadID).To(Equal(entry.v1KVP.Key.(model.WorkloadEndpointKey).WorkloadID))
-			Expect(v1KVPResult.Key.(model.WorkloadEndpointKey).EndpointID).To(Equal(entry.v1KVP.Key.(model.WorkloadEndpointKey).EndpointID))
-			// Spec to Value.
-			Expect(*v1KVPResult.Value.(*model.WorkloadEndpoint)).To(Equal(*entry.v1KVP.Value.(*model.WorkloadEndpoint)))
-
-			// Test and assert v1 backend to v3 API logic.
-			v3APIResult, err := w.BackendV1ToAPIV3(entry.v1KVP)
-			Expect(err).NotTo(HaveOccurred(), entry.description)
-			Expect(v3APIResult.(*apiv3.WorkloadEndpoint).ObjectMeta.Name).To(Equal(entry.v3API.ObjectMeta.Name))
-			Expect(v3APIResult.(*apiv3.WorkloadEndpoint).ObjectMeta.Labels).To(Equal(entry.v3API.ObjectMeta.Labels))
-			Expect(v3APIResult.(*apiv3.WorkloadEndpoint).Spec).To(Equal(entry.v3API.Spec))
-		})
-	}
-}
-
-func TestBadK8sWorkloadID(t *testing.T) {
-	t.Run("Test invalid k8s workloadID (no dot in name) fails to convert", func(t *testing.T) {
-		RegisterTestingT(t)
-
+var _ = Describe("v1->v3 workload endpoint conversion tests", func() {
+	It("Test invalid k8s workloadID (no dot in name) fails to convert", func() {
 		w := converters.WorkloadEndpoint{}
 		wepBackendV1 := &model.KVPair{
 			Key: model.WorkloadEndpointKey{
@@ -377,7 +364,7 @@ func TestBadK8sWorkloadID(t *testing.T) {
 		Expect(err.Error()).To(Equal("malformed k8s workload ID 'default/frontend-5gs43': workload was not added " +
 			"through the Calico CNI plugin and cannot be converted"))
 	})
-}
+})
 
 func makeLabelsV1() map[string]string {
 	return map[string]string{
