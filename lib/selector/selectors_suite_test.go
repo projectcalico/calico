@@ -18,9 +18,10 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
+	"testing"
+
 	"github.com/onsi/ginkgo/reporters"
 	"github.com/projectcalico/libcalico-go/lib/testutils"
-	"testing"
 )
 
 func TestSelectors(t *testing.T) {

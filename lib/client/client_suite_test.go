@@ -12,21 +12,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package backend_test
+package client
 
 import (
+	"testing"
+
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-
-	"testing"
 
 	"github.com/onsi/ginkgo/reporters"
 	"github.com/projectcalico/libcalico-go/lib/testutils"
 )
 
-func TestBackend(t *testing.T) {
+func TestClient(t *testing.T) {
 	testutils.HookLogrusForGinkgo()
 	RegisterFailHandler(Fail)
-	junitReporter := reporters.NewJUnitReporter("../../report/backend_suite.xml")
-	RunSpecsWithDefaultAndCustomReporters(t, "Backend Suite", []Reporter{junitReporter})
+	junitReporter := reporters.NewJUnitReporter("../../report/client_suite.xml")
+	RunSpecsWithDefaultAndCustomReporters(t, "Client Suite", []Reporter{junitReporter})
 }

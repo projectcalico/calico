@@ -102,16 +102,16 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreEtcdV3, 
 	// Create a new backend client and an IPAM Client using the IP Pools Accessor.
 	// Tests that need to ensure a clean datastore should invoke Clean() on the datastore at the start of the
 	// tests.
-	bc, err := backend.NewClient(config)
-	if err != nil {
-		panic(err)
-	}
-	ic := NewIPAMClient(bc, ipPools)
+	var bc bapi.Client
+	var ic Interface
+	BeforeEach(func() {
+		var err error
+		bc, err = backend.NewClient(config)
+		Expect(err).NotTo(HaveOccurred())
+		ic = NewIPAMClient(bc, ipPools)
+	})
 
 	Context("Measuring allocation performance", func() {
-		bc.Clean()
-		deleteAllPools()
-
 		var pool20, pool32, pool26 []cnet.IPNet
 		// Create many pools
 		for i := 0; i < 100; i++ {
