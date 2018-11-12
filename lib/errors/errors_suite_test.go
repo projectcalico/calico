@@ -21,9 +21,11 @@ import (
 	"testing"
 
 	"github.com/onsi/ginkgo/reporters"
+	"github.com/projectcalico/libcalico-go/lib/testutils"
 )
 
-func TestModel(t *testing.T) {
+func TestErrors(t *testing.T) {
+	testutils.HookLogrusForGinkgo()
 	RegisterFailHandler(Fail)
 	junitReporter := reporters.NewJUnitReporter("../../report/errors_suite.xml")
 	RunSpecsWithDefaultAndCustomReporters(t, "Errors Suite", []Reporter{junitReporter})

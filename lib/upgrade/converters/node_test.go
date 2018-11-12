@@ -15,8 +15,8 @@
 package converters
 
 import (
-	"testing"
-
+	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
 
 	apiv1 "github.com/projectcalico/libcalico-go/lib/apis/v1"
@@ -38,15 +38,9 @@ var ipv6IPNet = cnet.MustParseCIDR(ipv6String)
 var ipv6IPNetMask = ipv6IPNet.Network()
 var ipv6IP = cnet.MustParseIP("fed::5")
 
-var nodeTable = []struct {
-	description string
-	v1API       unversioned.Resource
-	v1KVP       *model.KVPair
-	v3API       apiv3.Node
-}{
-	{
-		description: "Valid basic v1 node has data moved to right place",
-		v1API: &apiv1.Node{
+var nodeTable = []TableEntry{
+	Entry("Valid basic v1 node has data moved to right place",
+		&apiv1.Node{
 			Metadata: apiv1.NodeMetadata{
 				Name: "my-node",
 			},
@@ -58,7 +52,7 @@ var nodeTable = []struct {
 				},
 			},
 		},
-		v1KVP: &model.KVPair{
+		&model.KVPair{
 			Key: model.NodeKey{
 				Hostname: "my-node",
 			},
@@ -70,7 +64,7 @@ var nodeTable = []struct {
 				BGPIPv6Net:  ipv6IPNetMask,
 			},
 		},
-		v3API: apiv3.Node{
+		apiv3.Node{
 			ObjectMeta: v1.ObjectMeta{
 				Name: "my-node",
 			},
@@ -82,10 +76,9 @@ var nodeTable = []struct {
 				},
 			},
 		},
-	},
-	{
-		description: "Check name conversion",
-		v1API: &apiv1.Node{
+	),
+	Entry("Check name conversion",
+		&apiv1.Node{
 			Metadata: apiv1.NodeMetadata{
 				Name: "myNode.here",
 			},
@@ -97,7 +90,7 @@ var nodeTable = []struct {
 				},
 			},
 		},
-		v1KVP: &model.KVPair{
+		&model.KVPair{
 			Key: model.NodeKey{
 				Hostname: "myNode.here",
 			},
@@ -109,7 +102,7 @@ var nodeTable = []struct {
 				BGPIPv6Net:  ipv6IPNetMask,
 			},
 		},
-		v3API: apiv3.Node{
+		apiv3.Node{
 			ObjectMeta: v1.ObjectMeta{
 				Name: "mynode.here",
 			},
@@ -121,10 +114,9 @@ var nodeTable = []struct {
 				},
 			},
 		},
-	},
-	{
-		description: "Conversion with only IPv6",
-		v1API: &apiv1.Node{
+	),
+	Entry("Conversion with only IPv6",
+		&apiv1.Node{
 			Metadata: apiv1.NodeMetadata{
 				Name: "my-node",
 			},
@@ -134,7 +126,7 @@ var nodeTable = []struct {
 				},
 			},
 		},
-		v1KVP: &model.KVPair{
+		&model.KVPair{
 			Key: model.NodeKey{
 				Hostname: "my-node",
 			},
@@ -143,7 +135,7 @@ var nodeTable = []struct {
 				BGPIPv6Net:  ipv6IPNetMask,
 			},
 		},
-		v3API: apiv3.Node{
+		apiv3.Node{
 			ObjectMeta: v1.ObjectMeta{
 				Name: "my-node",
 			},
@@ -153,10 +145,9 @@ var nodeTable = []struct {
 				},
 			},
 		},
-	},
-	{
-		description: "Conversion with only IPv4",
-		v1API: &apiv1.Node{
+	),
+	Entry("Conversion with only IPv4",
+		&apiv1.Node{
 			Metadata: apiv1.NodeMetadata{
 				Name: "my-node",
 			},
@@ -166,7 +157,7 @@ var nodeTable = []struct {
 				},
 			},
 		},
-		v1KVP: &model.KVPair{
+		&model.KVPair{
 			Key: model.NodeKey{
 				Hostname: "my-node",
 			},
@@ -175,7 +166,7 @@ var nodeTable = []struct {
 				BGPIPv4Net:  ipv4IPNetMask,
 			},
 		},
-		v3API: apiv3.Node{
+		apiv3.Node{
 			ObjectMeta: v1.ObjectMeta{
 				Name: "my-node",
 			},
@@ -185,10 +176,9 @@ var nodeTable = []struct {
 				},
 			},
 		},
-	},
-	{
-		description: "Conversion with OrchRefs",
-		v1API: &apiv1.Node{
+	),
+	Entry("Conversion with OrchRefs",
+		&apiv1.Node{
 			Metadata: apiv1.NodeMetadata{
 				Name: "my-node",
 			},
@@ -202,7 +192,7 @@ var nodeTable = []struct {
 				},
 			},
 		},
-		v1KVP: &model.KVPair{
+		&model.KVPair{
 			Key: model.NodeKey{
 				Hostname: "my-node",
 			},
@@ -215,7 +205,7 @@ var nodeTable = []struct {
 				},
 			},
 		},
-		v3API: apiv3.Node{
+		apiv3.Node{
 			ObjectMeta: v1.ObjectMeta{
 				Name: "my-node",
 			},
@@ -229,38 +219,32 @@ var nodeTable = []struct {
 				},
 			},
 		},
+	),
+}
+
+var _ = DescribeTable("v1->v3 Node conversion tests",
+	func(v1API *apiv1.Node, v1KVP *model.KVPair, v3API apiv3.Node) {
+		p := Node{}
+		// Check v1API->v1KVP.
+		convertedKvp, err := p.APIV1ToBackendV1(v1API)
+		Expect(err).NotTo(HaveOccurred())
+
+		Expect(convertedKvp.Key.(model.NodeKey)).To(Equal(v1KVP.Key.(model.NodeKey)))
+		Expect(convertedKvp.Value.(*model.Node)).To(Equal(v1KVP.Value))
+
+		// Check v1KVP->v3API.
+		convertedv3, err := p.BackendV1ToAPIV3(v1KVP)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(convertedv3.(*apiv3.Node).ObjectMeta).To(Equal(v3API.ObjectMeta))
+		Expect(convertedv3.(*apiv3.Node).Spec).To(Equal(v3API.Spec))
 	},
-}
 
-func TestCanConvertV1ToV3Node(t *testing.T) {
-	for _, tdata := range nodeTable {
-		t.Run(tdata.description, func(t *testing.T) {
-			RegisterTestingT(t)
+	nodeTable...,
+)
 
-			p := Node{}
-			// Check v1API->v1KVP.
-			convertedKvp, err := p.APIV1ToBackendV1(tdata.v1API)
-			Expect(err).NotTo(HaveOccurred(), tdata.description)
-
-			Expect(convertedKvp.Key.(model.NodeKey)).To(Equal(tdata.v1KVP.Key.(model.NodeKey)))
-			Expect(convertedKvp.Value.(*model.Node)).To(Equal(tdata.v1KVP.Value))
-
-			// Check v1KVP->v3API.
-			convertedv3, err := p.BackendV1ToAPIV3(tdata.v1KVP)
-			Expect(err).NotTo(HaveOccurred(), tdata.description)
-			Expect(convertedv3.(*apiv3.Node).ObjectMeta).To(Equal(tdata.v3API.ObjectMeta), tdata.description)
-			Expect(convertedv3.(*apiv3.Node).Spec).To(Equal(tdata.v3API.Spec), tdata.description)
-		})
-	}
-}
-
-var nodeV1FailTable = []struct {
-	description string
-	v1API       unversioned.Resource
-}{
-	{
-		description: "No IPv4 or IPv6 Address",
-		v1API: &apiv1.Node{
+var nodeV1FailTable = []TableEntry{
+	Entry("No IPv4 or IPv6 Address",
+		&apiv1.Node{
 			Metadata: apiv1.NodeMetadata{
 				Name: "my-node",
 			},
@@ -270,33 +254,28 @@ var nodeV1FailTable = []struct {
 				},
 			},
 		},
-	},
-	{
-		description: "Incorrect Resource",
-		v1API: apiv1.IPPool{
+	),
+	Entry("Incorrect Resource",
+		apiv1.IPPool{
 			Metadata: apiv1.IPPoolMetadata{},
 			Spec:     apiv1.IPPoolSpec{},
 		},
+	),
+}
+
+var _ = DescribeTable("v1->v3 Node conversion tests (failure)",
+	func(v1API unversioned.Resource) {
+		p := Node{}
+		// Check v1API->v1KVP.
+		_, err := p.APIV1ToBackendV1(v1API)
+		Expect(err).To(HaveOccurred())
 	},
-}
 
-func TestFailToConvertV1ToKVNode(t *testing.T) {
-	for _, tdata := range nodeV1FailTable {
-		t.Run(tdata.description, func(t *testing.T) {
-			RegisterTestingT(t)
+	nodeV1FailTable...,
+)
 
-			p := Node{}
-			// Check v1API->v1KVP.
-			_, err := p.APIV1ToBackendV1(tdata.v1API)
-			Expect(err).To(HaveOccurred(), tdata.description)
-		})
-	}
-}
-
-func TestFailToConvertInvalidKVToAPIV3Node(t *testing.T) {
-	t.Run("BackendV1ToAPIV3 with wrong Key produces an error", func(t *testing.T) {
-		RegisterTestingT(t)
-
+var _ = Describe("v1->v3 Node conversion tests (failure)", func() {
+	It("BackendV1ToAPIV3 with wrong Key produces an error", func() {
 		resource := &model.KVPair{
 			Key: model.IPPoolKey{},
 			Value: &model.Node{
@@ -308,9 +287,8 @@ func TestFailToConvertInvalidKVToAPIV3Node(t *testing.T) {
 		_, err := p.BackendV1ToAPIV3(resource)
 		Expect(err).To(HaveOccurred())
 	})
-	t.Run("BackendV1ToAPIV3 with wrong Value produces an error", func(t *testing.T) {
-		RegisterTestingT(t)
 
+	It("BackendV1ToAPIV3 with wrong Value produces an error", func() {
 		resource := &model.KVPair{
 			Key: model.NodeKey{
 				Hostname: "my-node",
@@ -321,16 +299,11 @@ func TestFailToConvertInvalidKVToAPIV3Node(t *testing.T) {
 		_, err := p.BackendV1ToAPIV3(resource)
 		Expect(err).To(HaveOccurred())
 	})
-}
+})
 
-var nodeKVtoV3Table = []struct {
-	description string
-	v1KVP       *model.KVPair
-	v3API       apiv3.Node
-}{
-	{
-		description: "Conversion without the Net fields",
-		v1KVP: &model.KVPair{
+var nodeKVtoV3Table = []TableEntry{
+	Entry("Conversion without the Net fields",
+		&model.KVPair{
 			Key: model.NodeKey{
 				Hostname: "my-node",
 			},
@@ -340,7 +313,7 @@ var nodeKVtoV3Table = []struct {
 				BGPIPv6Addr: &ipv6IP,
 			},
 		},
-		v3API: apiv3.Node{
+		apiv3.Node{
 			ObjectMeta: v1.ObjectMeta{
 				Name: "my-node",
 			},
@@ -353,10 +326,9 @@ var nodeKVtoV3Table = []struct {
 				},
 			},
 		},
-	},
-	{
-		description: "Conversion without any Address fields",
-		v1KVP: &model.KVPair{
+	),
+	Entry("Conversion without any Address fields",
+		&model.KVPair{
 			Key: model.NodeKey{
 				Hostname: "my-node",
 			},
@@ -364,26 +336,24 @@ var nodeKVtoV3Table = []struct {
 				BGPASNumber: &asn,
 			},
 		},
-		v3API: apiv3.Node{
+		apiv3.Node{
 			ObjectMeta: v1.ObjectMeta{
 				Name: "my-node",
 			},
 			Spec: apiv3.NodeSpec{},
 		},
+	),
+}
+
+var _ = DescribeTable("KVP v1->v3 Node conversion tests",
+	func(v1KVP *model.KVPair, v3API apiv3.Node) {
+		p := Node{}
+		// Check v1KVP->v3API.
+		convertedv3, err := p.BackendV1ToAPIV3(v1KVP)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(convertedv3.(*apiv3.Node).ObjectMeta).To(Equal(v3API.ObjectMeta))
+		Expect(convertedv3.(*apiv3.Node).Spec).To(Equal(v3API.Spec))
 	},
-}
 
-func TestCanConvertKVToV3Node(t *testing.T) {
-	for _, tdata := range nodeKVtoV3Table {
-		t.Run(tdata.description, func(t *testing.T) {
-			RegisterTestingT(t)
-
-			p := Node{}
-			// Check v1KVP->v3API.
-			convertedv3, err := p.BackendV1ToAPIV3(tdata.v1KVP)
-			Expect(err).NotTo(HaveOccurred(), tdata.description)
-			Expect(convertedv3.(*apiv3.Node).ObjectMeta).To(Equal(tdata.v3API.ObjectMeta), tdata.description)
-			Expect(convertedv3.(*apiv3.Node).Spec).To(Equal(tdata.v3API.Spec), tdata.description)
-		})
-	}
-}
+	nodeKVtoV3Table...,
+)

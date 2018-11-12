@@ -17,6 +17,7 @@ package conversion_test
 import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	"github.com/projectcalico/libcalico-go/lib/testutils"
 
 	"testing"
 
@@ -24,6 +25,7 @@ import (
 )
 
 func TestConversion(t *testing.T) {
+	testutils.HookLogrusForGinkgo()
 	RegisterFailHandler(Fail)
 	junitReporter := reporters.NewJUnitReporter("../../../../report/conversion_suite.xml")
 	RunSpecsWithDefaultAndCustomReporters(t, "Conversion Suite", []Reporter{junitReporter})

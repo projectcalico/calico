@@ -5,7 +5,7 @@ default: build
 all: build
 
 ## Run the tests
-test: ut
+test: ut fv
 
 # Define some constants
 #######################
@@ -145,15 +145,27 @@ ut-cover: vendor
 	./run-uts
 
 .PHONY:ut
-## Run the tests in a container. Useful for CI, Mac dev.
-ut: vendor run-etcd run-kubernetes-master
+## Run the fast set of unit tests in a container.
+ut: vendor
 	-mkdir -p .go-pkg-cache
 	docker run --rm -t --privileged --net=host \
-    -e LOCAL_USER_ID=$(LOCAL_USER_ID) \
-    -v $(CURDIR):/go/src/github.com/$(PACKAGE_NAME):rw \
-    -v $(CURDIR)/.go-pkg-cache:/go-cache/:rw \
-    -e GOCACHE=/go-cache \
-    $(CALICO_BUILD) sh -c 'cd /go/src/github.com/$(PACKAGE_NAME) && ginkgo -r --skipPackage vendor $(GINKGO_ARGS) .'
+		-e LOCAL_USER_ID=$(LOCAL_USER_ID) \
+		-v $(CURDIR):/go/src/github.com/$(PACKAGE_NAME):rw \
+		-v $(CURDIR)/.go-pkg-cache:/go-cache/:rw \
+		-e GOCACHE=/go-cache \
+		$(CALICO_BUILD) sh -c 'cd /go/src/github.com/$(PACKAGE_NAME) && ginkgo -r --skipPackage vendor -skip "\[Datastore\]" $(GINKGO_ARGS) .'
+
+
+.PHONY:fv
+## Run functional tests against a real datastore in a container.
+fv: vendor run-etcd run-kubernetes-master
+	-mkdir -p .go-pkg-cache
+	docker run --rm -t --privileged --net=host \
+		-e LOCAL_USER_ID=$(LOCAL_USER_ID) \
+		-v $(CURDIR):/go/src/github.com/$(PACKAGE_NAME):rw \
+		-v $(CURDIR)/.go-pkg-cache:/go-cache/:rw \
+		-e GOCACHE=/go-cache \
+		$(CALICO_BUILD) sh -c 'cd /go/src/github.com/$(PACKAGE_NAME) && ginkgo -r --skipPackage vendor -focus "\[Datastore\]" $(GINKGO_ARGS) .'
 
 ## Run etcd as a container (calico-etcd)
 run-etcd: stop-etcd

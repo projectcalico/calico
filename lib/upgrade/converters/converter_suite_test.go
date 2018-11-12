@@ -12,21 +12,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package converter_test
+package converters
 
 import (
-	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/gomega"
-	"github.com/projectcalico/libcalico-go/lib/testutils"
-
 	"testing"
 
+	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/gomega"
+
 	"github.com/onsi/ginkgo/reporters"
+	"github.com/projectcalico/libcalico-go/lib/testutils"
 )
 
-func TestConverter(t *testing.T) {
+func TestClient(t *testing.T) {
 	testutils.HookLogrusForGinkgo()
 	RegisterFailHandler(Fail)
-	junitReporter := reporters.NewJUnitReporter("../../report/converter_suite.xml")
-	RunSpecsWithDefaultAndCustomReporters(t, "Converter Suite", []Reporter{junitReporter})
+	junitReporter := reporters.NewJUnitReporter("../../../report/converter_suite.xml")
+	RunSpecsWithDefaultAndCustomReporters(t, "calico-upgrade converter pkg suite", []Reporter{junitReporter})
 }

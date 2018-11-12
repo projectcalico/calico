@@ -15,28 +15,20 @@
 package converters
 
 import (
-	"testing"
-
+	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
-	"k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	apiv1 "github.com/projectcalico/libcalico-go/lib/apis/v1"
-	"github.com/projectcalico/libcalico-go/lib/apis/v1/unversioned"
 	apiv3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/libcalico-go/lib/ipip"
 	cnet "github.com/projectcalico/libcalico-go/lib/net"
+	"k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-var poolTable = []struct {
-	description string
-	v1API       unversioned.Resource
-	v1KVP       *model.KVPair
-	v3API       apiv3.IPPool
-}{
-	{
-		description: "fully populated IPv4 IPPool",
-		v1API: &apiv1.IPPool{
+var poolTable = []TableEntry{
+	Entry("fully populated IPv4 IPPool",
+		&apiv1.IPPool{
 			Metadata: apiv1.IPPoolMetadata{
 				CIDR: cnet.MustParseCIDR("10.0.0.1/24"),
 			},
@@ -49,7 +41,7 @@ var poolTable = []struct {
 				Disabled:    false,
 			},
 		},
-		v1KVP: &model.KVPair{
+		&model.KVPair{
 			Key: model.IPPoolKey{
 				CIDR: cnet.MustParseCIDR("10.0.0.1/24"),
 			},
@@ -62,7 +54,7 @@ var poolTable = []struct {
 				IPAM:          true,
 			},
 		},
-		v3API: apiv3.IPPool{
+		apiv3.IPPool{
 			ObjectMeta: v1.ObjectMeta{
 				Name: "10-0-0-1-24",
 			},
@@ -74,10 +66,9 @@ var poolTable = []struct {
 				BlockSize:   26,
 			},
 		},
-	},
-	{
-		description: "fully populated IPv6 IPPool",
-		v1API: &apiv1.IPPool{
+	),
+	Entry("fully populated IPv6 IPPool",
+		&apiv1.IPPool{
 			Metadata: apiv1.IPPoolMetadata{
 				CIDR: cnet.MustParseCIDR("2001::/120"),
 			},
@@ -90,7 +81,7 @@ var poolTable = []struct {
 				Disabled:    true,
 			},
 		},
-		v1KVP: &model.KVPair{
+		&model.KVPair{
 			Key: model.IPPoolKey{
 				CIDR: cnet.MustParseCIDR("2001::/120"),
 			},
@@ -103,7 +94,7 @@ var poolTable = []struct {
 				IPAM:          false,
 			},
 		},
-		v3API: apiv3.IPPool{
+		apiv3.IPPool{
 			ObjectMeta: v1.ObjectMeta{
 				Name: "2001---120",
 			},
@@ -115,10 +106,9 @@ var poolTable = []struct {
 				BlockSize:   122,
 			},
 		},
-	},
-	{
-		description: "IPv4 IPPool with IPIPMode blank, should be converted to IPIPMode Always",
-		v1API: &apiv1.IPPool{
+	),
+	Entry("IPv4 IPPool with IPIPMode blank, should be converted to IPIPMode Always",
+		&apiv1.IPPool{
 			Metadata: apiv1.IPPoolMetadata{
 				CIDR: cnet.MustParseCIDR("5.5.5.5/25"),
 			},
@@ -131,7 +121,7 @@ var poolTable = []struct {
 				Disabled:    true,
 			},
 		},
-		v1KVP: &model.KVPair{
+		&model.KVPair{
 			Key: model.IPPoolKey{
 				CIDR: cnet.MustParseCIDR("5.5.5.5/25"),
 			},
@@ -144,7 +134,7 @@ var poolTable = []struct {
 				IPAM:          false,
 			},
 		},
-		v3API: apiv3.IPPool{
+		apiv3.IPPool{
 			ObjectMeta: v1.ObjectMeta{
 				Name: "5-5-5-5-25",
 			},
@@ -156,10 +146,9 @@ var poolTable = []struct {
 				BlockSize:   26,
 			},
 		},
-	},
-	{
-		description: "IPv4 IPPool with IPIPMode unspecified, should be converted to IPIPMode Always",
-		v1API: &apiv1.IPPool{
+	),
+	Entry("IPv4 IPPool with IPIPMode unspecified, should be converted to IPIPMode Always",
+		&apiv1.IPPool{
 			Metadata: apiv1.IPPoolMetadata{
 				CIDR: cnet.MustParseCIDR("6.6.6.6/26"),
 			},
@@ -171,7 +160,7 @@ var poolTable = []struct {
 				Disabled:    true,
 			},
 		},
-		v1KVP: &model.KVPair{
+		&model.KVPair{
 			Key: model.IPPoolKey{
 				CIDR: cnet.MustParseCIDR("6.6.6.6/26"),
 			},
@@ -182,7 +171,7 @@ var poolTable = []struct {
 				IPAM:       false,
 			},
 		},
-		v3API: apiv3.IPPool{
+		apiv3.IPPool{
 			ObjectMeta: v1.ObjectMeta{
 				Name: "6-6-6-6-26",
 			},
@@ -194,10 +183,9 @@ var poolTable = []struct {
 				BlockSize:   26,
 			},
 		},
-	},
-	{
-		description: "partially populated IPv4 IPPool with IPIPMode set to cross-subnet",
-		v1API: &apiv1.IPPool{
+	),
+	Entry("partially populated IPv4 IPPool with IPIPMode set to cross-subnet",
+		&apiv1.IPPool{
 			Metadata: apiv1.IPPoolMetadata{
 				CIDR: cnet.MustParseCIDR("1.1.1.1/11"),
 			},
@@ -210,7 +198,7 @@ var poolTable = []struct {
 				Disabled:    true,
 			},
 		},
-		v1KVP: &model.KVPair{
+		&model.KVPair{
 			Key: model.IPPoolKey{
 				CIDR: cnet.MustParseCIDR("1.1.1.1/11"),
 			},
@@ -223,7 +211,7 @@ var poolTable = []struct {
 				IPAM:          false,
 			},
 		},
-		v3API: apiv3.IPPool{
+		apiv3.IPPool{
 			ObjectMeta: v1.ObjectMeta{
 				Name: "1-1-1-1-11",
 			},
@@ -235,28 +223,25 @@ var poolTable = []struct {
 				BlockSize:   26,
 			},
 		},
+	),
+}
+
+var _ = DescribeTable("v1->v3 IPPool conversion tests",
+	func(v1API *apiv1.IPPool, v1KVP *model.KVPair, v3API apiv3.IPPool) {
+		p := IPPool{}
+
+		// Test and assert v1 API to v1 backend logic.
+		v1KVPResult, err := p.APIV1ToBackendV1(v1API)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(v1KVPResult.Key.(model.IPPoolKey).CIDR).To(Equal(v1KVP.Key.(model.IPPoolKey).CIDR))
+		Expect(v1KVPResult.Value.(*model.IPPool)).To(Equal(v1KVP.Value))
+
+		// Test and assert v1 backend to v3 API logic.
+		v3APIResult, err := p.BackendV1ToAPIV3(v1KVP)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(v3APIResult.(*apiv3.IPPool).Name).To(Equal(v3API.Name))
+		Expect(v3APIResult.(*apiv3.IPPool).Spec).To(Equal(v3API.Spec))
 	},
-}
 
-func TestCanConvertV1ToV3IPPool(t *testing.T) {
-
-	for _, entry := range poolTable {
-		t.Run(entry.description, func(t *testing.T) {
-			RegisterTestingT(t)
-
-			p := IPPool{}
-
-			// Test and assert v1 API to v1 backend logic.
-			v1KVPResult, err := p.APIV1ToBackendV1(entry.v1API)
-			Expect(err).NotTo(HaveOccurred(), entry.description)
-			Expect(v1KVPResult.Key.(model.IPPoolKey).CIDR).To(Equal(entry.v1KVP.Key.(model.IPPoolKey).CIDR))
-			Expect(v1KVPResult.Value.(*model.IPPool)).To(Equal(entry.v1KVP.Value))
-
-			// Test and assert v1 backend to v3 API logic.
-			v3APIResult, err := p.BackendV1ToAPIV3(entry.v1KVP)
-			Expect(err).NotTo(HaveOccurred(), entry.description)
-			Expect(v3APIResult.(*apiv3.IPPool).Name).To(Equal(entry.v3API.Name), entry.description)
-			Expect(v3APIResult.(*apiv3.IPPool).Spec).To(Equal(entry.v3API.Spec), entry.description)
-		})
-	}
-}
+	poolTable...,
+)

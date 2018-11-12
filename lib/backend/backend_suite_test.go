@@ -1,5 +1,5 @@
 // Copyright (c) 2017-2018 Tigera, Inc. All rights reserved.
-//
+
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -21,10 +21,12 @@ import (
 	"testing"
 
 	"github.com/onsi/ginkgo/reporters"
+	"github.com/projectcalico/libcalico-go/lib/testutils"
 )
 
-func TestEtcd(t *testing.T) {
+func TestBackend(t *testing.T) {
+	testutils.HookLogrusForGinkgo()
 	RegisterFailHandler(Fail)
-	junitReporter := reporters.NewJUnitReporter("../../report/datastore_backend_suite.xml")
-	RunSpecsWithDefaultAndCustomReporters(t, "Datastore backend Suite", []Reporter{junitReporter})
+	junitReporter := reporters.NewJUnitReporter("../../report/backend_suite.xml")
+	RunSpecsWithDefaultAndCustomReporters(t, "Backend Suite", []Reporter{junitReporter})
 }

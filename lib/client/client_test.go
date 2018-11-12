@@ -91,19 +91,19 @@ kind: notCalicoApiConfig
 
 	// Environments to test ETCD parameters
 	env1 := map[string]string{
-		"ETCD_ENDPOINTS":    "https://1.2.3.4:1234,https://10.20.30.40:1234",
-		"ETCD_USERNAME":     "bar",
-		"ETCD_PASSWORD":     "baz",
-		"ETCD_KEY_FILE":     "foo",
-		"ETCD_CERT_FILE":    "foobar",
-		"ETCD_CA_CERT_FILE": "foobarbaz",
+		"APIV1_ETCD_ENDPOINTS":    "https://1.2.3.4:1234,https://10.20.30.40:1234",
+		"APIV1_ETCD_USERNAME":     "bar",
+		"APIV1_ETCD_PASSWORD":     "baz",
+		"APIV1_ETCD_KEY_FILE":     "foo",
+		"APIV1_ETCD_CERT_FILE":    "foobar",
+		"APIV1_ETCD_CA_CERT_FILE": "foobarbaz",
 	}
 	cfg1env := api.NewCalicoAPIConfig()
 	cfg1env.Spec = api.CalicoAPIConfigSpec{
 		DatastoreType: api.EtcdV2,
 		EtcdConfig: api.EtcdConfig{
-			EtcdScheme:     "http",
-			EtcdAuthority:  "127.0.0.1:2379",
+			EtcdScheme:     "",
+			EtcdAuthority:  "",
 			EtcdEndpoints:  "https://1.2.3.4:1234,https://10.20.30.40:1234",
 			EtcdUsername:   "bar",
 			EtcdPassword:   "baz",
@@ -115,20 +115,20 @@ kind: notCalicoApiConfig
 
 	// Environments to test k8s parameters
 	env2 := map[string]string{
-		"DATASTORE_TYPE":   string(api.Kubernetes),
-		"KUBECONFIG":       "filename",
-		"K8S_API_ENDPOINT": "bar1",
-		"K8S_CERT_FILE":    "baz1",
-		"K8S_KEY_FILE":     "foo1",
-		"K8S_CA_FILE":      "foobar1",
-		"K8S_API_TOKEN":    "foobarbaz1",
+		"APIV1_DATASTORE_TYPE":   string(api.Kubernetes),
+		"APIV1_KUBECONFIG":       "filename",
+		"APIV1_K8S_API_ENDPOINT": "bar1",
+		"APIV1_K8S_CERT_FILE":    "baz1",
+		"APIV1_K8S_KEY_FILE":     "foo1",
+		"APIV1_K8S_CA_FILE":      "foobar1",
+		"APIV1_K8S_API_TOKEN":    "foobarbaz1",
 	}
 	cfg2env := api.NewCalicoAPIConfig()
 	cfg2env.Spec = api.CalicoAPIConfigSpec{
 		DatastoreType: api.Kubernetes,
 		EtcdConfig: api.EtcdConfig{
-			EtcdScheme:    "http",
-			EtcdAuthority: "127.0.0.1:2379",
+			EtcdScheme:    "",
+			EtcdAuthority: "",
 		},
 		KubeConfig: api.KubeConfig{
 			Kubeconfig:     "filename",
@@ -142,15 +142,15 @@ kind: notCalicoApiConfig
 
 	// Environments should work with CALICO_ prefix too.
 	env3 := map[string]string{
-		"CALICO_ETCD_AUTHORITY": "123.123.123.123:2344",
-		"CALICO_ETCD_USERNAME":  "userbar",
-		"CALICO_ETCD_PASSWORD":  "passbaz",
+		"CALICO_APIV1_ETCD_AUTHORITY": "123.123.123.123:2344",
+		"CALICO_APIV1_ETCD_USERNAME":  "userbar",
+		"CALICO_APIV1_ETCD_PASSWORD":  "passbaz",
 	}
 	cfg3env := api.NewCalicoAPIConfig()
 	cfg3env.Spec = api.CalicoAPIConfigSpec{
 		DatastoreType: api.EtcdV2,
 		EtcdConfig: api.EtcdConfig{
-			EtcdScheme:    "http",
+			EtcdScheme:    "",
 			EtcdAuthority: "123.123.123.123:2344",
 			EtcdUsername:  "userbar",
 			EtcdPassword:  "passbaz",
@@ -159,16 +159,16 @@ kind: notCalicoApiConfig
 
 	// Environments to test k8s parameters (preferential naming)
 	env4 := map[string]string{
-		"DATASTORE_TYPE":    string(api.Kubernetes),
-		"KUBECONFIG":        "filename",
-		"CALICO_KUBECONFIG": "filename-preferred",
+		"APIV1_DATASTORE_TYPE":    string(api.Kubernetes),
+		"APIV1_KUBECONFIG":        "filename",
+		"CALICO_APIV1_KUBECONFIG": "filename-preferred",
 	}
 	cfg4env := api.NewCalicoAPIConfig()
 	cfg4env.Spec = api.CalicoAPIConfigSpec{
 		DatastoreType: api.Kubernetes,
 		EtcdConfig: api.EtcdConfig{
-			EtcdScheme:    "http",
-			EtcdAuthority: "127.0.0.1:2379",
+			EtcdScheme:    "",
+			EtcdAuthority: "",
 		},
 		KubeConfig: api.KubeConfig{
 			Kubeconfig: "filename-preferred",
