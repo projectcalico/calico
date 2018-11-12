@@ -60,6 +60,7 @@ func (c *nodeClient) Create(ctx context.Context, kvp *model.KVPair) (*model.KVPa
 }
 
 func (c *nodeClient) Update(ctx context.Context, kvp *model.KVPair) (*model.KVPair, error) {
+	log.Debug("Received Update request on Node type")
 	// Get a current copy of the node to fill in fields we don't track.
 	oldNode, err := c.clientSet.CoreV1().Nodes().Get(kvp.Key.(model.ResourceKey).Name, metav1.GetOptions{})
 	if err != nil {
@@ -71,7 +72,7 @@ func (c *nodeClient) Update(ctx context.Context, kvp *model.KVPair) (*model.KVPa
 		return nil, err
 	}
 
-	newNode, err := c.clientSet.CoreV1().Nodes().Update(node)
+	newNode, err := c.clientSet.CoreV1().Nodes().UpdateStatus(node)
 	if err != nil {
 		log.WithError(err).Info("Error updating Node resource")
 		return nil, K8sErrorToCalico(err, kvp.Key)
