@@ -51,22 +51,23 @@ func Min(a, b int) int {
 // 2. Nodename from the file /var/lib/calico/nodename
 // 3. Hostname field in NetConf (DEPRECATED).
 // 4. OS Hostname.
-func DetermineNodename(conf types.NetConf) string {
-	nodename, _ := names.Hostname()
-	if conf.Hostname != "" {
-		nodename = conf.Hostname
-		logrus.Warn("Configuration option 'hostname' is deprecated, use 'nodename' instead.")
-	}
-	if nff := nodenameFromFile(); nff != "" {
-		logrus.Debugf("Read node name from file: %s", nff)
-		nodename = nff
-	}
+func DetermineNodename(conf types.NetConf) (nodename string) {
 	if conf.Nodename != "" {
 		logrus.Debugf("Read node name from CNI conf: %s", conf.Nodename)
 		nodename = conf.Nodename
+	} else if nff := nodenameFromFile(); nff != "" {
+		logrus.Debugf("Read node name from file: %s", nff)
+		nodename = nff
+	} else if conf.Hostname != "" {
+		nodename = conf.Hostname
+		logrus.Warn("Configuration option 'hostname' is deprecated, use 'nodename' instead")
+	} else {
+		nodename, _ = names.Hostname()
+		logrus.Debugf("Read node name from OS Hostname")
 	}
+
 	logrus.Debugf("Using node name %s", nodename)
-	return nodename
+	return
 }
 
 // nodenameFromFile reads the /var/lib/calico/nodename file if it exists and
