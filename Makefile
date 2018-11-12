@@ -65,8 +65,8 @@ join_platforms = $(subst $(space),$(comma),$(call prefix_linux,$(strip $1)))
 ###############################################################################
 GO_BUILD_VER ?= v0.17
 
-SRCFILES=calico.go $(wildcard utils/*.go) $(wildcard k8s/*.go) $(wildcard azure/*.go) ipam/calico-ipam.go
-TEST_SRCFILES=$(wildcard test_utils/*.go) $(wildcard calico_cni_*.go)
+SRCFILES=$(shell find pkg cmd internal -name '*.go')
+TEST_SRCFILES=$(shell find tests -name '*.go')
 LOCAL_IP_ENV?=$(shell ip route get 8.8.8.8 | head -1 | awk '{print $$7}')
 
 # fail if unable to download
@@ -149,14 +149,14 @@ vendor: glide.yaml
 
 	# To build without Docker just run "glide install -strip-vendor"
 	if [ "$(LIBCALICOGO_PATH)" != "none" ]; then \
-          EXTRA_DOCKER_BIND="-v $(LIBCALICOGO_PATH):/go/src/github.com/projectcalico/libcalico-go:ro"; \
+	  EXTRA_DOCKER_BIND="-v $(LIBCALICOGO_PATH):/go/src/github.com/projectcalico/libcalico-go:ro"; \
 	fi; \
-    docker run --rm -i \
-      -v $(CURDIR):/go/src/$(PACKAGE_NAME):rw $$EXTRA_DOCKER_BIND \
-      -v $(HOME)/.glide:/home/user/.glide:rw \
-      -e LOCAL_USER_ID=$(LOCAL_USER_ID) \
-      -w /go/src/$(PACKAGE_NAME) \
-      $(CALICO_BUILD) glide install -strip-vendor
+	docker run --rm -i \
+	  -v $(CURDIR):/go/src/$(PACKAGE_NAME):rw $$EXTRA_DOCKER_BIND \
+	  -v $(HOME)/.glide:/home/user/.glide:rw \
+	  -e LOCAL_USER_ID=$(LOCAL_USER_ID) \
+	  -w /go/src/$(PACKAGE_NAME) \
+	  $(CALICO_BUILD) glide install -strip-vendor
 
 # Default the libcalico repo and version but allow them to be overridden
 LIBCALICO_BRANCH?=$(shell git rev-parse --abbrev-ref HEAD)
@@ -166,21 +166,21 @@ LIBCALICO_VERSION?=$(shell git ls-remote git@github.com:projectcalico/libcalico-
 ## Update libcalico pin in glide.yaml
 update-libcalico:
 	docker run --rm -i \
-      -v $(CURDIR):/go/src/$(PACKAGE_NAME):rw $$EXTRA_DOCKER_BIND \
-      -v $(HOME)/.glide:/home/user/.glide:rw \
-      -e LOCAL_USER_ID=$(LOCAL_USER_ID) \
-      -w /go/src/$(PACKAGE_NAME) \
-      $(CALICO_BUILD) /bin/sh -c ' \
-        echo "Updating libcalico to $(LIBCALICO_VERSION) from $(LIBCALICO_REPO)"; \
-        export OLD_VER=$$(grep --after 50 libcalico-go glide.yaml |grep --max-count=1 --only-matching --perl-regexp "version:\s*\K[^\s]+") ;\
-        echo "Old version: $$OLD_VER";\
-        if [ $(LIBCALICO_VERSION) != $$OLD_VER ]; then \
-            sed -i "s/$$OLD_VER/$(LIBCALICO_VERSION)/" glide.yaml && \
-            if [ $(LIBCALICO_REPO) != "github.com/projectcalico/libcalico-go" ]; then \
-              glide mirror set https://github.com/projectcalico/libcalico-go $(LIBCALICO_REPO) --vcs git; glide mirror list; \
-            fi;\
-          glide up --strip-vendor || glide up --strip-vendor; \
-        fi'
+	  -v $(CURDIR):/go/src/$(PACKAGE_NAME):rw $$EXTRA_DOCKER_BIND \
+	  -v $(HOME)/.glide:/home/user/.glide:rw \
+	  -e LOCAL_USER_ID=$(LOCAL_USER_ID) \
+	  -w /go/src/$(PACKAGE_NAME) \
+	  $(CALICO_BUILD) /bin/sh -c ' \
+	    echo "Updating libcalico to $(LIBCALICO_VERSION) from $(LIBCALICO_REPO)"; \
+	    export OLD_VER=$$(grep --after 50 libcalico-go glide.yaml |grep --max-count=1 --only-matching --perl-regexp "version:\s*\K[^\s]+") ;\
+	    echo "Old version: $$OLD_VER";\
+	    if [ $(LIBCALICO_VERSION) != $$OLD_VER ]; then \
+	        sed -i "s/$$OLD_VER/$(LIBCALICO_VERSION)/" glide.yaml && \
+	        if [ $(LIBCALICO_REPO) != "github.com/projectcalico/libcalico-go" ]; then \
+	          glide mirror set https://github.com/projectcalico/libcalico-go $(LIBCALICO_REPO) --vcs git; glide mirror list; \
+	        fi;\
+	      glide up --strip-vendor || glide up --strip-vendor; \
+	    fi'
 
 ## Build the Calico network plugin and ipam plugins
 $(BIN)/calico $(BIN)/calico-ipam: $(SRCFILES) vendor
@@ -195,9 +195,9 @@ $(BIN)/calico $(BIN)/calico-ipam: $(SRCFILES) vendor
 	$(LOCAL_BUILD_MOUNTS) \
 	-w /go/src/$(PACKAGE_NAME) \
 	-e GOCACHE=/go-cache \
-		$(CALICO_BUILD) sh -c '\
-			go build -v -o $(BIN)/calico -ldflags "-X main.VERSION=$(GIT_VERSION) -s -w" calico.go ; \
-            go build -v -o $(BIN)/calico-ipam -ldflags "-X main.VERSION=$(GIT_VERSION) -s -w" ipam/calico-ipam.go'
+	    $(CALICO_BUILD) sh -c '\
+	        go build -v -o $(BIN)/calico -ldflags "-X main.VERSION=$(GIT_VERSION) -s -w" ./cmd/calico && \
+	        go build -v -o $(BIN)/calico-ipam -ldflags "-X main.VERSION=$(GIT_VERSION) -s -w" ./cmd/calico-ipam'
 
 ###############################################################################
 # Building the image
@@ -306,7 +306,7 @@ ut: run-k8s-controller build $(BIN)/host-local
 	-e LOCAL_USER_ID=0 \
 	-e ARCH=$(ARCH) \
 	-e PLUGIN=calico \
-	-e BIN=$(BIN) \
+	-e BIN=/go/src/$(PACKAGE_NAME)/$(BIN) \
 	-e CNI_SPEC_VERSION=$(CNI_SPEC_VERSION) \
 	-e DATASTORE_TYPE=$(DATASTORE_TYPE) \
 	-e ETCD_ENDPOINTS=http://$(LOCAL_IP_ENV):2379 \
@@ -329,10 +329,10 @@ test-cni-versions:
 run-k8s-apiserver: stop-k8s-apiserver run-etcd
 	docker run --detach --net=host \
 	  --name calico-k8s-apiserver \
-	  -v `pwd`/testutils/private.key:/private.key \
+	  -v `pwd`/internal/pkg/testutils/private.key:/private.key \
 	  gcr.io/google_containers/hyperkube-$(ARCH):$(K8S_VERSION) \
 	  /hyperkube apiserver \
-            --etcd-servers=http://$(LOCAL_IP_ENV):2379 \
+	    --etcd-servers=http://$(LOCAL_IP_ENV):2379 \
 	    --service-cluster-ip-range=10.101.0.0/16 \
 	    --service-account-key-file=/private.key
 
@@ -340,10 +340,10 @@ run-k8s-apiserver: stop-k8s-apiserver run-etcd
 run-k8s-controller: stop-k8s-controller run-k8s-apiserver
 	docker run --detach --net=host \
 	  --name calico-k8s-controller \
-	  -v `pwd`/testutils/private.key:/private.key \
+	  -v `pwd`/internal/pkg/testutils/private.key:/private.key \
 	  gcr.io/google_containers/hyperkube-$(ARCH):$(K8S_VERSION) \
 	  /hyperkube controller-manager \
-            --master=127.0.0.1:8080 \
+	    --master=127.0.0.1:8080 \
 	    --min-resync-period=3m \
 	    --allocate-node-cidrs=true \
 	    --cluster-cidr=192.168.0.0/16 \
@@ -361,11 +361,11 @@ stop-k8s-controller:
 ## Etcd is used by the tests
 run-etcd: stop-etcd
 	docker run --detach \
-	-p 2379:2379 \
-	--name calico-etcd $(ETCD_CONTAINER) \
-	etcd \
-	--advertise-client-urls "http://$(LOCAL_IP_ENV):2379,http://127.0.0.1:2379,http://$(LOCAL_IP_ENV):4001,http://127.0.0.1:4001" \
-	--listen-client-urls "http://0.0.0.0:2379,http://0.0.0.0:4001"
+	  -p 2379:2379 \
+	  --name calico-etcd $(ETCD_CONTAINER) \
+	  etcd \
+	  --advertise-client-urls "http://$(LOCAL_IP_ENV):2379,http://127.0.0.1:2379,http://$(LOCAL_IP_ENV):4001,http://127.0.0.1:4001" \
+	  --listen-client-urls "http://0.0.0.0:2379,http://0.0.0.0:4001"
 
 ## Stops calico-etcd containers
 stop-etcd:

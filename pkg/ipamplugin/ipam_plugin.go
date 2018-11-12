@@ -11,7 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-package main
+package ipamplugin
 
 import (
 	"context"
@@ -25,8 +25,8 @@ import (
 	cnitypes "github.com/containernetworking/cni/pkg/types"
 	"github.com/containernetworking/cni/pkg/types/current"
 	cniSpecVersion "github.com/containernetworking/cni/pkg/version"
-	"github.com/projectcalico/cni-plugin/types"
-	"github.com/projectcalico/cni-plugin/utils"
+	"github.com/projectcalico/cni-plugin/internal/pkg/utils"
+	"github.com/projectcalico/cni-plugin/pkg/types"
 	"github.com/projectcalico/libcalico-go/lib/errors"
 	"github.com/projectcalico/libcalico-go/lib/ipam"
 	"github.com/projectcalico/libcalico-go/lib/logutils"
@@ -34,10 +34,7 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-// VERSION is filled out during the build process (using git describe output)
-var VERSION string
-
-func main() {
+func Main(version string) {
 	// Set up logging formatting.
 	logrus.SetFormatter(&logutils.Formatter{})
 
@@ -48,7 +45,7 @@ func main() {
 	// Use a new flag set so as not to conflict with existing libraries which use "flag"
 	flagSet := flag.NewFlagSet("calico-ipam", flag.ExitOnError)
 
-	version := flagSet.Bool("v", false, "Display version")
+	versionFlag := flagSet.Bool("v", false, "Display version")
 	err := flagSet.Parse(os.Args[1:])
 
 	if err != nil {
@@ -56,14 +53,14 @@ func main() {
 		os.Exit(1)
 	}
 
-	if *version {
-		fmt.Println(VERSION)
+	if *versionFlag {
+		fmt.Println(version)
 		os.Exit(0)
 	}
 
 	skel.PluginMain(cmdAdd, nil, cmdDel,
 		cniSpecVersion.PluginSupports("0.1.0", "0.2.0", "0.3.0", "0.3.1"),
-		"Calico CNI IPAM "+VERSION)
+		"Calico CNI IPAM "+version)
 }
 
 type ipamArgs struct {
