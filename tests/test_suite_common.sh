@@ -274,6 +274,7 @@ execute_tests_daemon() {
         run_individual_test 'explicit_peering/global'
         run_individual_test 'explicit_peering/specific_node'
         run_individual_test 'explicit_peering/selectors'
+        run_individual_test 'explicit_peering/route_reflector'
     done
 
     # Turn the node-mesh back on.
@@ -301,6 +302,7 @@ execute_tests_oneshot() {
         run_individual_test_oneshot 'explicit_peering/global'
         run_individual_test_oneshot 'explicit_peering/specific_node'
         run_individual_test_oneshot 'explicit_peering/selectors'
+        run_individual_test_oneshot 'explicit_peering/route_reflector'
     done
 }
 

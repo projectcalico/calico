@@ -58,9 +58,11 @@ protocol direct {
 {{else}}{{$node_as_key := printf "/host/%s/as_num" (getenv "NODENAME")}}
 # Template for all BGP clients
 template bgp bgp_template {
+{{- $as_key := or (and (exists $node_as_key) $node_as_key) "/global/as_num"}}
+{{- $node_as_num := getv $as_key}}
 {{- template "LOGGING"}}
   description "Connection to BGP peer";
-  local as {{if exists $node_as_key}}{{getv $node_as_key}}{{else}}{{getv "/global/as_num"}}{{end}};
+  local as {{$node_as_num}};
   multihop;
   gateway recursive; # This should be the default, but just in case.
   import all;        # Import all routes, since we don't know what the upstream
@@ -116,7 +118,7 @@ template bgp bgp_template {
 {{- else}}
 protocol bgp Global_{{$id}} from bgp_template {
   neighbor {{$data.ip}} as {{$data.as_num}};
-{{- if and (ne "" ($node_cluster_id)) (ne $data.rr_cluster_id ($node_cluster_id))}}
+{{- if and (eq $data.as_num $node_as_num) (ne "" ($node_cluster_id)) (ne $data.rr_cluster_id ($node_cluster_id))}}
   rr client;
   rr cluster id {{$node_cluster_id}};
 {{- end}}
@@ -137,7 +139,7 @@ protocol bgp Global_{{$id}} from bgp_template {
 {{- else}}
 protocol bgp Node_{{$id}} from bgp_template {
   neighbor {{$data.ip}} as {{$data.as_num}};
-{{- if and (ne "" ($node_cluster_id)) (ne $data.rr_cluster_id ($node_cluster_id))}}
+{{- if and (eq $data.as_num $node_as_num) (ne "" ($node_cluster_id)) (ne $data.rr_cluster_id ($node_cluster_id))}}
   rr client;
   rr cluster id {{$node_cluster_id}};
 {{- end}}
