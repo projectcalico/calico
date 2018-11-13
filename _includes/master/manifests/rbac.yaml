@@ -73,8 +73,11 @@ rules:
     resources:
       - nodes/status
     verbs:
+      # Needed for clearing NodeNetworkUnavailable flag.
       - patch
 {%- if include.datastore == "kdd" %}
+      # Calico stores some configuration information in node annotations.
+      - update
   # Watch for changes to Kubernetes NetworkPolicies.
   - apiGroups: ["networking.k8s.io"]
     resources:
@@ -131,7 +134,6 @@ rules:
     verbs:
       - get
       - list
-      - update
       - watch
   # Used to discover Typhas.
   - apiGroups: [""]
