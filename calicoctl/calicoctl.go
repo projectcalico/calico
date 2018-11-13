@@ -53,7 +53,7 @@ Description:
 
   See 'calicoctl <command> --help' to read about a specific subcommand.
 `
-	arguments, _ := docopt.Parse(doc, nil, true, "", true, false)
+	arguments, _ := docopt.Parse(doc, nil, true, commands.VERSION_SUMMARY, true, false)
 
 	if logLevel := arguments["--log-level"]; logLevel != nil {
 		parsedLogLevel, err := log.ParseLevel(logLevel.(string))
