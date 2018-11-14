@@ -80,6 +80,26 @@ To deploy a cluster suitable for production, refer to [Installation](/{{page.ver
    ```
    {: .no-select-button}
 
+1. Install the RBAC roles required for {{site.prodname}}
+
+   ```
+   kubectl apply -f \
+   {{site.url}}/{{page.version}}/getting-started/kubernetes/installation/rbac.yaml
+   ```
+
+   > **Note**: You can also
+   > [view the YAML in a new tab]({{site.url}}/{{page.version}}/getting-started/kubernetes/installation/rbac.yaml){:target="_blank"}.
+   {: .alert .alert-info}
+
+   You should see the following output.
+
+   ```
+   clusterrole.rbac.authorization.k8s.io/calico-kube-controllers created
+   clusterrolebinding.rbac.authorization.k8s.io/calico-kube-controllers created
+   clusterrole.rbac.authorization.k8s.io/calico-node created
+   clusterrolebinding.rbac.authorization.k8s.io/calico-node created
+   ```
+
 1. Install {{site.prodname}} with the following command.
 
    ```
