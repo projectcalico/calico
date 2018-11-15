@@ -28,7 +28,6 @@ you can set up an etcdv3 cluster dedicated to {{site.prodname}}.{% endif %}
 {% if include.orch == "OpenStack" %}If you don't already have an etcdv3 cluster
 to connect to, we provide instructions in the [installation documentation](./installation/).{% endif %}{% if include.orch == "host protection" %}The key/value store must be etcdv3.{% endif %}
 
-
 ## Network requirements
 
 Ensure that your hosts and firewalls allow the necessary traffic based on your configuration.
@@ -55,4 +54,19 @@ Ensure that your hosts and firewalls allow the necessary traffic based on your c
 {%- if include.orch == "OpenStack" %}
 
 \* _If your compute hosts connect directly and don't use IP-in-IP, you don't need to allow IP-in-IP traffic._
+{% endif -%}
+
+## Privileges
+
+Ensure that {{site.prodname}} has the `CAP_SYS_ADMIN` privilege.
+
+The simplest way to provide the necessary privilege is to run {{site.prodname}} as root or in a privileged container.
+
+{%- if include.orch == "Kubernetes" %}
+When installed as a Kubernetes daemon set, {{site.prodname}} meets this requirement by running as a
+privileged container. This requires that the kubelet be allowed to run privileged
+containers. There are two ways this can be achieved.
+
+- Specify `--allow-privileged` on the kubelet (deprecated).
+- Use a [pod security policy](https://kubernetes.io/docs/concepts/policy/pod-security-policy/).
 {% endif -%}
