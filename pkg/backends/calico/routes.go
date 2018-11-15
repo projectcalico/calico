@@ -49,9 +49,9 @@ type routeGenerator struct {
 }
 
 // NewRouteGenerator initializes a kube-api client and the informers
-func NewRouteGenerator(c *client) (rg *routeGenerator, err error) {
+func NewRouteGenerator(c *client) *routeGenerator {
 	// initialize empty route generator
-	rg = &routeGenerator{
+	rg := &routeGenerator{
 		client:      c,
 		nodeName:    template.NodeName,
 		svcRouteMap: make(map[string][]string),
@@ -62,14 +62,17 @@ func NewRouteGenerator(c *client) (rg *routeGenerator, err error) {
 	cfgFile := os.Getenv("KUBECONFIG")
 	cfg, err := clientcmd.BuildConfigFromFlags("", cfgFile)
 	if err != nil {
+		log.WithError(err).Info("KUBECONFIG environment variable not found, attempting in-cluster")
 		// attempt 2: in cluster config
 		if cfg, err = rest.InClusterConfig(); err != nil {
-			return nil, err
+			log.WithError(err).Warn("in-cluster config not found, no service ip routes will be advertised")
+			return nil
 		}
 	}
 	client, err := kubernetes.NewForConfig(cfg)
 	if err != nil {
-		return nil, err
+		log.WithError(err).Warn("failed to initialize kubeclient, no service ip routes will be advertised")
+		return nil
 	}
 
 	// set up services informer
@@ -82,12 +85,12 @@ func NewRouteGenerator(c *client) (rg *routeGenerator, err error) {
 	epHandler := cache.ResourceEventHandlerFuncs{AddFunc: rg.onEPAdd, UpdateFunc: rg.onEPUpdate, DeleteFunc: rg.onEPDelete}
 	rg.epIndexer, rg.epInformer = cache.NewIndexerInformer(epWatcher, &v1.Endpoints{}, 0, epHandler, cache.Indexers{})
 
-	return
+	return rg
 }
 
 // Start reads CALICO_STATIC_ROUTES for k8s-cluster-ips
 // and CIDRs to advertise, comma-separated
-func (rg *routeGenerator) Start() (err error) {
+func (rg *routeGenerator) Start() {
 	var (
 		isDynamic   bool
 		ch          = make(chan struct{})

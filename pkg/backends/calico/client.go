@@ -173,15 +173,9 @@ func NewCalicoClient(confdConfig *config.Config) (*client, error) {
 	}
 
 	// Create and start route generator.
-	rg, err := NewRouteGenerator(c)
-	if err != nil {
-		log.WithError(err).Fatal("Failed to create route generator")
+	if rg := NewRouteGenerator(c); rg != nil {
+		rg.Start()
 	}
-	err = rg.Start()
-	if err != nil {
-		log.WithError(err).Fatal("Failed to start route generator")
-	}
-
 	return c, nil
 }
 
