@@ -49,9 +49,9 @@ type routeGenerator struct {
 }
 
 // NewRouteGenerator initializes a kube-api client and the informers
-func NewRouteGenerator(c *client) *routeGenerator {
+func NewRouteGenerator(c *client) (rg *routeGenerator, err error) {
 	// initialize empty route generator
-	rg := &routeGenerator{
+	rg = &routeGenerator{
 		client:      c,
 		nodeName:    template.NodeName,
 		svcRouteMap: make(map[string][]string),
@@ -65,14 +65,12 @@ func NewRouteGenerator(c *client) *routeGenerator {
 		log.WithError(err).Info("KUBECONFIG environment variable not found, attempting in-cluster")
 		// attempt 2: in cluster config
 		if cfg, err = rest.InClusterConfig(); err != nil {
-			log.WithError(err).Warn("in-cluster config not found, no service ip routes will be advertised")
-			return nil
+			return
 		}
 	}
 	client, err := kubernetes.NewForConfig(cfg)
 	if err != nil {
-		log.WithError(err).Warn("failed to initialize kubeclient, no service ip routes will be advertised")
-		return nil
+		return
 	}
 
 	// set up services informer
@@ -85,17 +83,16 @@ func NewRouteGenerator(c *client) *routeGenerator {
 	epHandler := cache.ResourceEventHandlerFuncs{AddFunc: rg.onEPAdd, UpdateFunc: rg.onEPUpdate, DeleteFunc: rg.onEPDelete}
 	rg.epIndexer, rg.epInformer = cache.NewIndexerInformer(epWatcher, &v1.Endpoints{}, 0, epHandler, cache.Indexers{})
 
-	return rg
+	return
 }
 
 // Start reads CALICO_STATIC_ROUTES for k8s-cluster-ips
 // and CIDRs to advertise, comma-separated
-func (rg *routeGenerator) Start() {
+func (rg *routeGenerator) Start(routeString string) {
 	var (
-		isDynamic   bool
-		ch          = make(chan struct{})
-		cidrs       = []string{}
-		routeString = os.Getenv(envStaticRoutes)
+		isDynamic bool
+		ch        = make(chan struct{})
+		cidrs     = []string{}
 	)
 
 	// parse routeString
