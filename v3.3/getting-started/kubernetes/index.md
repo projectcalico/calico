@@ -120,10 +120,6 @@ To deploy a cluster suitable for production, refer to [Installation](/{{page.ver
    serviceaccount/calico-node created
    deployment.extensions/calico-kube-controllers created
    serviceaccount/calico-kube-controllers created
-   clusterrole.rbac.authorization.k8s.io/calico-kube-controllers created
-   clusterrolebinding.rbac.authorization.k8s.io/calico-kube-controllers created
-   clusterrole.rbac.authorization.k8s.io/calico-node created
-   clusterrolebinding.rbac.authorization.k8s.io/calico-node created
    ```
    {: .no-select-button}
 
