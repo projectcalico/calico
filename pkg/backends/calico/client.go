@@ -173,7 +173,7 @@ func NewCalicoClient(confdConfig *config.Config) (*client, error) {
 	}
 
 	// Create and start route generator.
-	routes := os.Getenv(envStaticRoutes)
+	routes := os.Getenv(envAdvertiseClusterIPs)
 	if len(routes) > 0 {
 		if rg, err := NewRouteGenerator(c); err != nil {
 			log.WithError(err).Fatal("Failed to start route generator")
@@ -181,7 +181,7 @@ func NewCalicoClient(confdConfig *config.Config) (*client, error) {
 			rg.Start(routes)
 		}
 	} else {
-		log.Info("CALICO_STATIC_ROUTES not specified, no service ips will be advertised")
+		log.Info(envAdvertiseClusterIPs + " not specified, no cluster ips will be advertised")
 	}
 	return c, nil
 }

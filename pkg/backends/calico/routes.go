@@ -31,9 +31,8 @@ import (
 )
 
 const (
-	envStaticRoutes = "CALICO_STATIC_ROUTES"
-	staticRoutesKey = "calico/static-routes"
-	clusterIPStr    = "k8s-cluster-ips"
+	envAdvertiseClusterIPs = "CALICO_ADVERTISE_CLUSTER_IPS"
+	staticRoutesKey        = "calico/static-routes"
 )
 
 // routeGenerator defines the data fields
@@ -98,20 +97,12 @@ func (rg *routeGenerator) Start(routeString string) {
 	// parse routeString
 	for _, route := range strings.Split(routeString, ",") {
 		cidr := strings.TrimSpace(route)
-		if len(cidr) == 0 {
-			// skip empty string
+		// consider anything else as cidr
+		if _, _, err := net.ParseCIDR(cidr); err != nil {
+			log.WithField("cidr", cidr).WithError(err).Warn("Start: failed to parse cidr, passing")
 			continue
-		} else if cidr == clusterIPStr {
-			// handle k8s-cluster-ips
-			isDynamic = true
-		} else {
-			// consider anything else as cidr
-			if _, _, err := net.ParseCIDR(cidr); err != nil {
-				log.WithField("cidr", cidr).WithError(err).Warn("Start: failed to parse cidr, passing")
-				continue
-			}
-			cidrs = append(cidrs, cidr)
 		}
+		cidrs = append(cidrs, cidr)
 	}
 
 	// affix cidrs to the route map
@@ -141,7 +132,7 @@ func (rg *routeGenerator) getServiceForEndpoints(ep *v1.Endpoints) (*v1.Service,
 		log.WithField("key", key).WithError(err).Warn("getServiceForEndpoints: error on retrieving service for key, passing")
 		return nil, key
 	} else if !exists {
-		log.WithField("key", key).Warn("getServiceForEndpoints: service for key not found, passing")
+		log.WithField("key", key).Debug("getServiceForEndpoints: service for key not found, passing")
 		return nil, key
 	}
 	return svcIface.(*v1.Service), key
@@ -161,7 +152,7 @@ func (rg *routeGenerator) getEndpointsForService(svc *v1.Service) (*v1.Endpoints
 		log.WithField("key", key).WithError(err).Warn("getEndpointsForService: error on retrieving endpoint for key, passing")
 		return nil, key
 	} else if !exists {
-		log.WithField("key", key).Warn("getEndpointsForService: service for endpoint not found, passing")
+		log.WithField("key", key).Debug("getEndpointsForService: service for endpoint not found, passing")
 		return nil, key
 	}
 	return epIface.(*v1.Endpoints), key
@@ -206,6 +197,16 @@ func (rg *routeGenerator) setRouteForSvc(svc *v1.Service, ep *v1.Endpoints) {
 // advertiseThisService returns true if this service should be advertised on this node,
 // false otherwise.
 func (rg *routeGenerator) advertiseThisService(svc *v1.Service, ep *v1.Endpoints) bool {
+	// do nothing if the svc is not a relevant type
+	if (svc.Spec.Type != v1.ServiceTypeClusterIP) && (svc.Spec.Type != v1.ServiceTypeNodePort) && (svc.Spec.Type != v1.ServiceTypeLoadBalancer) {
+		return false
+	}
+
+	// also do nothing if the clusterIP is empty or None
+	if len(svc.Spec.ClusterIP) > 0 && svc.Spec.ClusterIP != "None" {
+		return false
+	}
+
 	// always set if externalTrafficPolicy != local
 	if svc.Spec.ExternalTrafficPolicy != v1.ServiceExternalTrafficPolicyTypeLocal {
 		return true

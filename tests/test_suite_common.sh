@@ -55,10 +55,10 @@ run_extra_test() {
 }
 
 test_static_routes() {
-    export CALICO_STATIC_ROUTES=10.65.1.0/24,10.66.1.0/24
+    export CALICO_ADVERTISE_CLUSTER_IPS=10.65.1.0/24
     run_individual_test_oneshot 'mesh/static-routes'
-    export -n CALICO_STATIC_ROUTES
-    unset CALICO_STATIC_ROUTES
+    export -n CALICO_ADVERTISE_CLUSTER_IPS
+    unset CALICO_ADVERTISE_CLUSTER_IPS
 }
 
 test_node_deletion() {
