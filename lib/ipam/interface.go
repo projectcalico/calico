@@ -1,4 +1,4 @@
-// Copyright (c) 2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2018 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -32,6 +32,8 @@ type Interface interface {
 	// AutoAssign automatically assigns one or more IP addresses as specified by the
 	// provided AutoAssignArgs.  AutoAssign returns the list of the assigned IPv4 addresses,
 	// and the list of the assigned IPv6 addresses.
+	//
+	// In case of error, returns the IPs allocated so far along with the error.
 	AutoAssign(ctx context.Context, args AutoAssignArgs) ([]cnet.IP, []cnet.IP, error)
 
 	// ReleaseIPs releases any of the given IP addresses that are currently assigned,

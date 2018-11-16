@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2018 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -64,6 +64,10 @@ type AutoAssignArgs struct {
 	// If specified, the previously configured IPv6 pools from which
 	// to assign IPv6 addresses.  If not specified, this defaults to all IPv6 pools.
 	IPv6Pools []cnet.IPNet
+
+	// If non-zero, limit on the number of affine blocks this host is allowed to claim
+	// (per IP version).
+	MaxBlocksPerHost int
 }
 
 // IPAMConfig contains global configuration options for Calico IPAM.
