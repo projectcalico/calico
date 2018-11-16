@@ -210,7 +210,7 @@ You should _not_ need to modify the `canonical_url` metadata unless you are addi
 
 ## Code samples
 
-Our site adds a copy button to each code block by default. To ensure that readers can copy and paste the code successfully, follow the [Code samples](https://github.com/projectcalico/calico/blob/contr-update/DOC_STYLE_GUIDE.md#code-samples) recommendations in the DOC_STYLE_GUIDE.
+Our site adds a copy button to each code block by default. To ensure that readers can copy and paste the code successfully, follow the [Code samples](https://github.com/projectcalico/calico/blob/master/DOC_STYLE_GUIDE.md#code-samples) recommendations in the DOC_STYLE_GUIDE.
 
 To modify the default behavior for code samples that should not be copied, such as responses, append `{: .no-select-button}`. An example follows.
 
