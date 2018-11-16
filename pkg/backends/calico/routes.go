@@ -62,14 +62,15 @@ func NewRouteGenerator(c *client) (rg *routeGenerator, err error) {
 	cfgFile := os.Getenv("KUBECONFIG")
 	cfg, err := clientcmd.BuildConfigFromFlags("", cfgFile)
 	if err != nil {
+		log.WithError(err).Info("KUBECONFIG environment variable not found, attempting in-cluster")
 		// attempt 2: in cluster config
 		if cfg, err = rest.InClusterConfig(); err != nil {
-			return nil, err
+			return
 		}
 	}
 	client, err := kubernetes.NewForConfig(cfg)
 	if err != nil {
-		return nil, err
+		return
 	}
 
 	// set up services informer
@@ -87,12 +88,11 @@ func NewRouteGenerator(c *client) (rg *routeGenerator, err error) {
 
 // Start reads CALICO_STATIC_ROUTES for k8s-cluster-ips
 // and CIDRs to advertise, comma-separated
-func (rg *routeGenerator) Start() (err error) {
+func (rg *routeGenerator) Start(routeString string) {
 	var (
-		isDynamic   bool
-		ch          = make(chan struct{})
-		cidrs       = []string{}
-		routeString = os.Getenv(envStaticRoutes)
+		isDynamic bool
+		ch        = make(chan struct{})
+		cidrs     = []string{}
 	)
 
 	// parse routeString
