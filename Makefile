@@ -190,7 +190,7 @@ bin/calicoctl-linux-%: OS=linux
 bin/calicoctl-%: $(CALICOCTL_FILES) vendor
 	mkdir -p bin
 	-mkdir -p .go-pkg-cache
-	docker run --rm -ti \
+	docker run --rm \
 	  -e OS=$(OS) -e ARCH=$(ARCH) \
 	  -e GOOS=$(OS) -e GOARCH=$(ARCH) \
 	  -e CALICOCTL_GIT_REVISION=$(CALICOCTL_GIT_REVISION) \
