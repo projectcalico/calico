@@ -124,7 +124,7 @@ func (c *etcdV3Client) Create(ctx context.Context, d *model.KVPair) (*model.KVPa
 	if !txnResp.Succeeded {
 		// The resource must already exist.  Extract the current newValue and
 		// return that if possible.
-		logCxt.Info("Create transaction failed due to resource already existing")
+		logCxt.Debug("Create transaction failed due to resource already existing")
 		var existing *model.KVPair
 		getResp := (*clientv3.GetResponse)(txnResp.Responses[0].GetResponseRange())
 		if len(getResp.Kvs) != 0 {
@@ -187,11 +187,11 @@ func (c *etcdV3Client) Update(ctx context.Context, d *model.KVPair) (*model.KVPa
 	if !txnResp.Succeeded {
 		getResp := (*clientv3.GetResponse)(txnResp.Responses[0].GetResponseRange())
 		if len(getResp.Kvs) == 0 {
-			logCxt.Info("Update transaction failed due to resource not existing")
+			logCxt.Debug("Update transaction failed due to resource not existing")
 			return nil, cerrors.ErrorResourceDoesNotExist{Identifier: d.Key}
 		}
 
-		logCxt.Info("Update transaction failed due to resource update conflict")
+		logCxt.Debug("Update transaction failed due to resource update conflict")
 		existing, _ := etcdToKVPair(d.Key, getResp.Kvs[0])
 		return existing, cerrors.ErrorResourceUpdateConflict{Identifier: d.Key}
 	}
@@ -273,11 +273,11 @@ func (c *etcdV3Client) Delete(ctx context.Context, k model.Key, revision string)
 	// Transaction did not succeed - which means the ModifiedIndex check failed.  We can respond
 	// with the latest settings.
 	if !txnResp.Succeeded {
-		logCxt.Info("Delete transaction failed due to resource update conflict")
+		logCxt.Debug("Delete transaction failed due to resource update conflict")
 
 		getResp := txnResp.Responses[0].GetResponseRange()
 		if len(getResp.Kvs) == 0 {
-			logCxt.Info("Delete transaction failed due resource not existing")
+			logCxt.Debug("Delete transaction failed due resource not existing")
 			return nil, cerrors.ErrorResourceDoesNotExist{Identifier: k}
 		}
 		latestValue, err := etcdToKVPair(k, getResp.Kvs[0])
@@ -290,7 +290,7 @@ func (c *etcdV3Client) Delete(ctx context.Context, k model.Key, revision string)
 	// The delete response should have succeeded since the Get response did.
 	delResp := txnResp.Responses[0].GetResponseDeleteRange()
 	if delResp.Deleted == 0 {
-		logCxt.Info("Delete transaction failed due resource not existing")
+		logCxt.Debug("Delete transaction failed due resource not existing")
 		return nil, cerrors.ErrorResourceDoesNotExist{Identifier: k}
 	}
 
@@ -324,7 +324,7 @@ func (c *etcdV3Client) Get(ctx context.Context, k model.Key, revision string) (*
 	logCxt.Debug("Calling Get on etcdv3 client")
 	resp, err := c.etcdClient.Get(ctx, key, ops...)
 	if err != nil {
-		logCxt.WithError(err).Info("Error returned from etcdv3 client")
+		logCxt.WithError(err).Debug("Error returned from etcdv3 client")
 		return nil, cerrors.ErrorDatastoreError{Err: err}
 	}
 	if len(resp.Kvs) == 0 {
@@ -381,7 +381,7 @@ func (c *etcdV3Client) List(ctx context.Context, l model.ListInterface, revision
 	logCxt.Debug("Calling Get on etcdv3 client")
 	resp, err := c.etcdClient.Get(ctx, key, ops...)
 	if err != nil {
-		logCxt.WithError(err).Info("Error returned from etcdv3 client")
+		logCxt.WithError(err).Debug("Error returned from etcdv3 client")
 		return nil, cerrors.ErrorDatastoreError{Err: err}
 	}
 	logCxt.WithField("numResults", len(resp.Kvs)).Debug("Processing response from etcdv3")
@@ -427,7 +427,7 @@ func (c *etcdV3Client) IsClean() (bool, error) {
 	log.Debug("Calling Get on etcdv3 client")
 	resp, err := c.etcdClient.Get(context.Background(), "/calico/", clientv3.WithPrefix())
 	if err != nil {
-		log.WithError(err).Info("Error returned from etcdv3 client")
+		log.WithError(err).Debug("Error returned from etcdv3 client")
 		return false, cerrors.ErrorDatastoreError{Err: err}
 	}
 
@@ -481,7 +481,7 @@ func getKeyValueStrings(d *model.KVPair) (string, string, error) {
 func parseRevision(revs string) (int64, error) {
 	rev, err := strconv.ParseInt(revs, 10, 64)
 	if err != nil {
-		log.WithField("Revision", revs).Info("Unable to parse Revision")
+		log.WithField("Revision", revs).Debug("Unable to parse Revision")
 		return 0, cerrors.ErrorValidation{
 			ErroredFields: []cerrors.ErroredField{
 				{
