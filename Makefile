@@ -135,6 +135,18 @@ release-publish: release-prereqs
 release-notes: release-prereqs
 	VERSION=$(CALICO_VER) GITHUB_TOKEN=$(GITHUB_TOKEN) python2 ./release-scripts/generate-release-notes.py
 
+update-authors:
+ifndef GITHUB_TOKEN
+	$(error GITHUB_TOKEN must be set)
+endif
+	@echo "# Calico authors" > AUTHORS.md
+	@echo "" >> AUTHORS.md
+	@echo "This file is auto-generated based on contribution records reported" >> AUTHORS.md
+	@echo "by GitHub for the core repositories within the projectcalico/ organization. It is ordered alphabetically." >> AUTHORS.md
+	@echo "" >> AUTHORS.md
+	@docker run -ti --rm -v $(PWD):/code -e GITHUB_TOKEN=$(GITHUB_TOKEN) python:3 \
+		bash -c 'pip install pygithub && /usr/local/bin/python /code/release-scripts/get-contributors.py >> /code/AUTHORS.md'
+
 # release-prereqs checks that the environment is configured properly to create a release.
 release-prereqs:
 ifndef RELEASE_STREAM
