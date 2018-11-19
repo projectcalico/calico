@@ -14,6 +14,7 @@
 package calico
 
 import (
+	"fmt"
 	"net"
 	"os"
 	"strings"
@@ -32,7 +33,6 @@ import (
 
 const (
 	envAdvertiseClusterIPs = "CALICO_ADVERTISE_CLUSTER_IPS"
-	staticRoutesKey        = "calico/static-routes"
 )
 
 // routeGenerator defines the data fields
@@ -45,15 +45,23 @@ type routeGenerator struct {
 	svcInformer, epInformer cache.Controller
 	svcIndexer, epIndexer   cache.Indexer
 	svcRouteMap             map[string][]string // maps service name to ip
+	clusterCIDR             string
 }
 
 // NewRouteGenerator initializes a kube-api client and the informers
-func NewRouteGenerator(c *client) (rg *routeGenerator, err error) {
+func NewRouteGenerator(c *client, clusterCIDR string) (rg *routeGenerator, err error) {
+	// Parse clusterCIDr to make sure it is valid.
+	cidr := strings.TrimSpace(clusterCIDR)
+	if _, _, err := net.ParseCIDR(cidr); err != nil {
+		return nil, fmt.Errorf("failed to parse cluster CIDR %s: %s", clusterCIDR, err)
+	}
+
 	// initialize empty route generator
 	rg = &routeGenerator{
 		client:      c,
 		nodeName:    template.NodeName,
 		svcRouteMap: make(map[string][]string),
+		clusterCIDR: clusterCIDR,
 	}
 
 	// set up k8s client
@@ -85,35 +93,11 @@ func NewRouteGenerator(c *client) (rg *routeGenerator, err error) {
 	return
 }
 
-// Start reads CALICO_STATIC_ROUTES for k8s-cluster-ips
-// and CIDRs to advertise, comma-separated
-func (rg *routeGenerator) Start(routeString string) {
-	var (
-		isDynamic bool
-		ch        = make(chan struct{})
-		cidrs     = []string{}
-	)
-
-	// parse routeString
-	for _, route := range strings.Split(routeString, ",") {
-		cidr := strings.TrimSpace(route)
-		// consider anything else as cidr
-		if _, _, err := net.ParseCIDR(cidr); err != nil {
-			log.WithField("cidr", cidr).WithError(err).Warn("Start: failed to parse cidr, passing")
-			continue
-		}
-		cidrs = append(cidrs, cidr)
-	}
-
-	// affix cidrs to the route map
-	rg.svcRouteMap[staticRoutesKey] = cidrs
-	rg.updateRoutes()
-
-	// start the listeners
-	if isDynamic {
-		go rg.svcInformer.Run(ch)
-		go rg.epInformer.Run(ch)
-	}
+// Start starts the RouteGenerator so that it will monitor Kubernetes services.
+func (rg *routeGenerator) Start() {
+	ch := make(chan struct{})
+	go rg.svcInformer.Run(ch)
+	go rg.epInformer.Run(ch)
 
 	return
 }
@@ -190,7 +174,6 @@ func (rg *routeGenerator) setRouteForSvc(svc *v1.Service, ep *v1.Endpoints) {
 		delete(rg.svcRouteMap, key)
 	}
 	rg.Unlock()
-
 	rg.updateRoutes()
 }
 
@@ -203,16 +186,16 @@ func (rg *routeGenerator) advertiseThisService(svc *v1.Service, ep *v1.Endpoints
 	}
 
 	// also do nothing if the clusterIP is empty or None
-	if len(svc.Spec.ClusterIP) > 0 && svc.Spec.ClusterIP != "None" {
+	if svc.Spec.ClusterIP == "" || svc.Spec.ClusterIP == "None" {
 		return false
 	}
 
-	// always set if externalTrafficPolicy != local
+	// we only need to advertise local services, since we advertise the entire cluster IP range.
 	if svc.Spec.ExternalTrafficPolicy != v1.ServiceExternalTrafficPolicyTypeLocal {
-		return true
+		return false
 	}
 
-	// add svc clusterIP if node contains at least one endpoint for svc
+	// advertise clusterIP if node contains at least one endpoint for svc
 	for _, subset := range ep.Subsets {
 		// not interested in subset.NotReadyAddresses
 		for _, address := range subset.Addresses {
@@ -302,13 +285,15 @@ func (rg *routeGenerator) onEPDelete(obj interface{}) {
 // updateRoutes compiles all the svcIPs that have endpoints
 // running on this node and calls the client's updateRoutes
 func (rg *routeGenerator) updateRoutes() {
-	log.WithField("svcRouteMap", rg.svcRouteMap).Debug("updateRoutes")
-	cidrs := []string{}
+	log.WithField("svcRouteMap", rg.svcRouteMap).Debug("updateRoutes calculating routes to advertise")
+
+	// Always advertise the cluster CIDR.
+	cidrs := []string{rg.clusterCIDR}
+
+	// Add in any service IPs we need to advertise.
 	for _, ips := range rg.svcRouteMap {
-		for _, ip := range ips {
-			cidrs = append(cidrs, ip)
-		}
+		cidrs = append(cidrs, ips...)
 	}
 	rg.client.updateRoutes(cidrs)
-	log.WithField("cidrs", cidrs).Debug("updateRoutes")
+	log.WithField("cidrs", cidrs).Debug("updateRoutes determined routes to advertise")
 }
