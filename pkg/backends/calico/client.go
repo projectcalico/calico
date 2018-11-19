@@ -182,6 +182,7 @@ func NewCalicoClient(confdConfig *config.Config) (*client, error) {
 		}
 	} else {
 		log.Info(envAdvertiseClusterIPs + " not specified, no cluster ips will be advertised")
+		c.OnInSync(SourceRouteGenerator)
 	}
 	return c, nil
 }
@@ -234,6 +235,11 @@ func discoverTyphaAddr(typhaConfig *config.TyphaConfig) (string, error) {
 	return "", ErrServiceNotReady
 }
 
+var (
+	SourceSyncer         string = "SourceSyncer"
+	SourceRouteGenerator string = "SourceRouteGenerator"
+)
+
 // client implements the StoreClient interface for confd, and also implements the
 // Calico api.SyncerCallbacks and api.SyncerParseFailCallbacks interfaces for the
 // BGP Syncer.
@@ -247,9 +253,11 @@ type client struct {
 	nodeLabels      map[string]map[string]string
 	bgpPeers        map[string]*apiv3.BGPPeer
 
-	// Whether we have received the in-sync notification from the syncer.  We cannot
-	// start rendering until we are in-sync, so we block calls to GetValues until we
-	// have synced.
+	// Readiness signals for individual data sources.
+	syncerReady, rgReady bool
+
+	// Indicates whether all data sources have synced. We cannot start rendering until
+	// all sources have synced, so we block calls to GetValues until this is true.
 	synced      bool
 	waitForSync sync.WaitGroup
 
@@ -298,6 +306,27 @@ func (c *client) OnStatusUpdated(status api.SyncStatus) {
 	// We should only get a single in-sync status update.  When we do, unblock the GetValues
 	// calls.
 	if status == api.InSync {
+		c.OnInSync(SourceSyncer)
+	}
+}
+
+// OnInSync handles multiplexing in-sync messages from multiple data sources
+// into a single representation of readiness.
+func (c *client) OnInSync(source string) {
+	switch source {
+	case SourceSyncer:
+		log.Info("Calico Syncer has indicated it is in sync")
+		c.syncerReady = true
+	case SourceRouteGenerator:
+		log.Info("RouteGenerator has indicated it is in sync")
+		c.rgReady = true
+	default:
+		log.Errorf("InSync message from unknown source: %s", source)
+		return
+	}
+
+	if c.syncerReady && c.rgReady {
+		// All data sources are ready.
 		c.cacheLock.Lock()
 		defer c.cacheLock.Unlock()
 		c.synced = true

@@ -19,6 +19,7 @@ import (
 	"os"
 	"strings"
 	"sync"
+	"time"
 
 	log "github.com/sirupsen/logrus"
 	"k8s.io/api/core/v1"
@@ -98,6 +99,14 @@ func (rg *routeGenerator) Start() {
 	ch := make(chan struct{})
 	go rg.svcInformer.Run(ch)
 	go rg.epInformer.Run(ch)
+
+	// Wait for informers to sync, then notify the main client.
+	go func() {
+		for !rg.svcInformer.HasSynced() || !rg.epInformer.HasSynced() {
+			time.Sleep(100 * time.Millisecond)
+		}
+		rg.client.OnInSync(SourceRouteGenerator)
+	}()
 
 	return
 }
