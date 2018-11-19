@@ -114,6 +114,9 @@ func (rg *routeGenerator) Start() {
 		for !rg.svcInformer.HasSynced() || !rg.epInformer.HasSynced() {
 			time.Sleep(100 * time.Millisecond)
 		}
+
+		// Notify the main client we're in sync now.
+		rg.updateRoutes()
 		rg.client.OnInSync(SourceRouteGenerator)
 	}()
 
@@ -198,31 +201,43 @@ func (rg *routeGenerator) setRouteForSvc(svc *v1.Service, ep *v1.Endpoints) {
 // advertiseThisService returns true if this service should be advertised on this node,
 // false otherwise.
 func (rg *routeGenerator) advertiseThisService(svc *v1.Service, ep *v1.Endpoints) bool {
+	logc := log.WithField("svc", fmt.Sprintf("%s/%s", svc.Namespace, svc.Name))
+
 	// do nothing if the svc is not a relevant type
 	if (svc.Spec.Type != v1.ServiceTypeClusterIP) && (svc.Spec.Type != v1.ServiceTypeNodePort) && (svc.Spec.Type != v1.ServiceTypeLoadBalancer) {
+		logc.Debugf("Skipping service with cluster type %s", svc.Spec.Type)
 		return false
 	}
 
 	// also do nothing if the clusterIP is empty or None
 	if svc.Spec.ClusterIP == "" || svc.Spec.ClusterIP == "None" {
+		logc.Debugf("Skipping service with no cluster IP %s", svc.Spec.Type)
 		return false
 	}
 
 	// we only need to advertise local services, since we advertise the entire cluster IP range.
 	if svc.Spec.ExternalTrafficPolicy != v1.ServiceExternalTrafficPolicyTypeLocal {
+		logc.Debugf("Skipping service with non-local external traffic policy '%s'", svc.Spec.ExternalTrafficPolicy)
 		return false
 	}
 
 	// advertise clusterIP if node contains at least one endpoint for svc
+	logc.Debugf("Checking subsets: %v", ep.Subsets)
 	for _, subset := range ep.Subsets {
 		// not interested in subset.NotReadyAddresses
 		for _, address := range subset.Addresses {
+			if address.NodeName != nil {
+				logc.Debugf("Endpoint on node: %s", *address.NodeName)
+				logc.Debugf("Our node: %s", rg.nodeName)
+			}
 			if address.NodeName == nil || *address.NodeName != rg.nodeName {
 				continue
 			}
+			logc.Debugf("Advertising local service")
 			return true
 		}
 	}
+	logc.Debugf("Skipping service with no local endpoints")
 	return false
 }
 
