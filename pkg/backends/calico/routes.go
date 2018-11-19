@@ -57,10 +57,19 @@ func NewRouteGenerator(c *client, clusterCIDR string) (rg *routeGenerator, err e
 		return nil, fmt.Errorf("failed to parse cluster CIDR %s: %s", clusterCIDR, err)
 	}
 
+	// Determine the node name we'll use to check for local endpoints.
+	// This value should match the name of the node in the Kubernetes API.
+	// Prefer CALICO_K8S_NODE_REF, and fall back to the Calico node name.
+	nodename := template.NodeName
+	if n := os.Getenv("CALICO_K8S_NODE_REF"); n != "" {
+		nodename = n
+	}
+	log.Debugf("Route generator configured to use node name %s", nodename)
+
 	// initialize empty route generator
 	rg = &routeGenerator{
 		client:      c,
-		nodeName:    template.NodeName,
+		nodeName:    nodename,
 		svcRouteMap: make(map[string][]string),
 		clusterCIDR: clusterCIDR,
 	}
