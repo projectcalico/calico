@@ -45,7 +45,7 @@ The `{{site.nodecontainer}}` container is primarily configured through environme
 | K8S_KEY_FILE | Location of a client key for accessing the Kubernetes API.                   | string |
 | K8S_CA_FILE | Location of a CA for accessing the Kubernetes API.                            | string |
 | K8S_TOKEN | Token to be used for accessing the Kubernetes API.                              | string |
-| ADVERTISE_CLUSTER_IPS | Enable [advertising Kubernetes service IPs over BGP]({{site.baseurl}}/{{page.version}}/usage/service-advertisement), within the specified CIDR. [Default: disabled] | IPv4 CIDR |
+| ADVERTISE_CLUSTER_IPS | Enable [advertising Kubernetes service cluster IPs over BGP]({{site.baseurl}}/{{page.version}}/usage/service-advertisement), within the specified CIDR. [Default: disabled] | IPv4 CIDR |
 
 In addition to the above, `{{site.nodecontainer}}` also supports [the standard Felix configuration environment variables](../felix/configuration).
 

@@ -151,10 +151,10 @@ service accounts with the necessary permissions.
 
 ### Configuring service advertisement
 
-{{site.prodname}} supports [advertising Kubernetes service IPs over
+{{site.prodname}} supports [advertising Kubernetes services over
 BGP]({{site.baseurl}}/{{page.version}}/usage/service-advertisement),
-so that those IPs are routable from outside the cluster.  To enable
-this, add an `ADVERTISE_CLUSTER_IPS` variable setting to the
+so that service cluster IPs are routable from outside the cluster.  To
+enable this, add an `ADVERTISE_CLUSTER_IPS` variable setting to the
 environment for {{site.nodecontainer}} in the `calico.yaml` manifest,
 with value equal to the cluster IP range for your Kubernetes cluster;
 for example:
