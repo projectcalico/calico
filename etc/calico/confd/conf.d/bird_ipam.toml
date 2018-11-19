@@ -6,5 +6,6 @@ keys = [
     "/v1/ipam/v4/pool",
     "/bgp/v1/host//NODENAME",
     "/staticroutes",
+    "/rejectcidrs",
 ]
 reload_cmd = "pkill -HUP bird || true"

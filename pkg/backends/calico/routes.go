@@ -51,7 +51,7 @@ type routeGenerator struct {
 
 // NewRouteGenerator initializes a kube-api client and the informers
 func NewRouteGenerator(c *client, clusterCIDR string) (rg *routeGenerator, err error) {
-	// Parse clusterCIDr to make sure it is valid.
+	// Parse clusterCIDR to make sure it is valid.
 	cidr := strings.TrimSpace(clusterCIDR)
 	if _, _, err := net.ParseCIDR(cidr); err != nil {
 		return nil, fmt.Errorf("failed to parse cluster CIDR %s: %s", clusterCIDR, err)
@@ -109,6 +109,12 @@ func (rg *routeGenerator) Start() {
 	go rg.svcInformer.Run(ch)
 	go rg.epInformer.Run(ch)
 
+	// Don't program routes within the cluster CIDR.
+	rg.client.AddRejectCIDRs([]string{rg.clusterCIDR})
+
+	// But, do advertise it.
+	rg.client.AddStaticRoutes([]string{rg.clusterCIDR})
+
 	// Wait for informers to sync, then notify the main client.
 	go func() {
 		for !rg.svcInformer.HasSynced() || !rg.epInformer.HasSynced() {
@@ -116,7 +122,6 @@ func (rg *routeGenerator) Start() {
 		}
 
 		// Notify the main client we're in sync now.
-		rg.updateRoutes()
 		rg.client.OnInSync(SourceRouteGenerator)
 	}()
 
@@ -191,11 +196,12 @@ func (rg *routeGenerator) setRouteForSvc(svc *v1.Service, ep *v1.Endpoints) {
 	rg.Lock()
 	if rg.advertiseThisService(svc, ep) {
 		rg.svcRouteMap[key] = []string{svc.Spec.ClusterIP + "/32"}
-	} else if _, exists := rg.svcRouteMap[key]; exists {
+		rg.client.AddStaticRoutes([]string{svc.Spec.ClusterIP + "/32"})
+	} else if routes, exists := rg.svcRouteMap[key]; exists {
+		rg.client.DeleteStaticRoutes(routes)
 		delete(rg.svcRouteMap, key)
 	}
 	rg.Unlock()
-	rg.updateRoutes()
 }
 
 // advertiseThisService returns true if this service should be advertised on this node,
@@ -222,14 +228,9 @@ func (rg *routeGenerator) advertiseThisService(svc *v1.Service, ep *v1.Endpoints
 	}
 
 	// advertise clusterIP if node contains at least one endpoint for svc
-	logc.Debugf("Checking subsets: %v", ep.Subsets)
 	for _, subset := range ep.Subsets {
 		// not interested in subset.NotReadyAddresses
 		for _, address := range subset.Addresses {
-			if address.NodeName != nil {
-				logc.Debugf("Endpoint on node: %s", *address.NodeName)
-				logc.Debugf("Our node: %s", rg.nodeName)
-			}
 			if address.NodeName == nil || *address.NodeName != rg.nodeName {
 				continue
 			}
@@ -255,14 +256,11 @@ func (rg *routeGenerator) unsetRouteForSvc(obj interface{}) {
 	rg.Lock()
 	defer rg.Unlock()
 
-	// pass if already deleted
-	if _, exists := rg.svcRouteMap[key]; !exists {
-		return
+	// Remove any routes that might exist.
+	if routes, exists := rg.svcRouteMap[key]; exists {
+		rg.client.DeleteStaticRoutes(routes)
+		delete(rg.svcRouteMap, key)
 	}
-
-	// delete
-	delete(rg.svcRouteMap, key)
-	rg.updateRoutes()
 }
 
 // onSvcAdd is called when a k8s service is created
@@ -313,20 +311,4 @@ func (rg *routeGenerator) onEPUpdate(_, obj interface{}) {
 // onEPDelete is called when a k8s endpoint is deleted
 func (rg *routeGenerator) onEPDelete(obj interface{}) {
 	rg.unsetRouteForSvc(obj)
-}
-
-// updateRoutes compiles all the svcIPs that have endpoints
-// running on this node and calls the client's updateRoutes
-func (rg *routeGenerator) updateRoutes() {
-	log.WithField("svcRouteMap", rg.svcRouteMap).Debug("updateRoutes calculating routes to advertise")
-
-	// Always advertise the cluster CIDR.
-	cidrs := []string{rg.clusterCIDR}
-
-	// Add in any service IPs we need to advertise.
-	for _, ips := range rg.svcRouteMap {
-		cidrs = append(cidrs, ips...)
-	}
-	rg.client.updateRoutes(cidrs)
-	log.WithField("cidrs", cidrs).Debug("updateRoutes determined routes to advertise")
 }
