@@ -149,6 +149,26 @@ To use these manifests with a TLS-enabled etcd cluster you must do the following
 Depending on your cluster's authorization mode, you'll want to back these
 service accounts with the necessary permissions.
 
+### Configuring service advertisement
+
+{{site.prodname}} supports [advertising Kubernetes service IPs over
+BGP]({{site.baseurl}}/{{page.version}}/usage/service-advertisement),
+so that those IPs are routable from outside the cluster.  To enable
+this, add an `ADVERTISE_CLUSTER_IPS` variable setting to the
+environment for {{site.nodecontainer}} in the `calico.yaml` manifest,
+with value equal to the cluster IP range for your Kubernetes cluster;
+for example:
+
+```yaml
+          env:
+            [...]
+            - name: ADVERTISE_CLUSTER_IPS
+              value: "10.96.0.0/12"
+```
+
+For more information, see [Configuring
+{{site.nodecontainer}}]({{site.baseurl}}/{{page.version}}/reference/node/configuration).
+
 ### Other configuration options
 
 The following table outlines the remaining supported `ConfigMap` options.
