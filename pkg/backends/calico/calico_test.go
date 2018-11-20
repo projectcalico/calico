@@ -9,7 +9,7 @@ import (
 	"k8s.io/client-go/tools/cache"
 )
 
-func addEndpointNode(ep *v1.Endpoints, nodename string) {
+func addEndpointSubset(ep *v1.Endpoints, nodename string) {
 	ep.Subsets = append(ep.Subsets, v1.EndpointSubset{
 		Addresses: []v1.EndpointAddress{
 			v1.EndpointAddress{
@@ -70,7 +70,7 @@ var _ = Describe("RouteGenerator", func() {
 
 	Describe("(un)setRouteForSvc", func() {
 		BeforeEach(func() {
-			addEndpointNode(ep, rg.nodeName)
+			addEndpointSubset(ep, rg.nodeName)
 		})
 		Context("svc = svc, ep = nil", func() {
 			It("should work", func() {
@@ -97,16 +97,16 @@ var _ = Describe("RouteGenerator", func() {
 			svc2 := *svc
 			ep2 := *ep
 			ep2.ObjectMeta.Name = svc2.ObjectMeta.Name
-			addEndpointNode(&ep2, "barfoo")
+			addEndpointSubset(&ep2, "barfoo")
 			rg.epIndexer.Add(ep)
 
-			addEndpointNode(ep, rg.nodeName)
+			addEndpointSubset(ep, rg.nodeName)
 			rg.epIndexer.Add(ep)
 
 		})
 		Context("onSvcAdd", func() {
 			It("should work", func() {
-				addEndpointNode(ep, rg.nodeName)
+				addEndpointSubset(ep, rg.nodeName)
 				rg.epIndexer.Add(ep)
 				rg.onSvcAdd(svc)
 				Expect(rg.svcRouteMap["foo/bar"]).To(Equal("127.0.0.1/32"))
