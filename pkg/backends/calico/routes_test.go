@@ -16,40 +16,35 @@ func addEndpointSubset(ep *v1.Endpoints, nodename string) {
 				NodeName: &nodename}}})
 }
 
+func buildSimpleService() (rg *routeGenerator, svc *v1.Service, ep *v1.Endpoints) {
+	rg = &routeGenerator{
+		nodeName:    "foobar",
+		svcIndexer:  cache.NewIndexer(cache.MetaNamespaceKeyFunc, nil),
+		epIndexer:   cache.NewIndexer(cache.MetaNamespaceKeyFunc, nil),
+		svcRouteMap: make(map[string]string),
+		client: &client{
+			cache: make(map[string]string),
+		},
+	}
+	meta := metav1.ObjectMeta{Namespace: "foo", Name: "bar"}
+	svc = &v1.Service{
+		ObjectMeta: meta,
+		Spec: v1.ServiceSpec{
+			Type:                  v1.ServiceTypeClusterIP,
+			ClusterIP:             "127.0.0.1",
+			ExternalTrafficPolicy: v1.ServiceExternalTrafficPolicyTypeLocal,
+		}}
+	ep = &v1.Endpoints{
+		ObjectMeta: meta,
+	}
+	return
+}
+
 var _ = Describe("RouteGenerator", func() {
-	var (
-		rg   *routeGenerator
-		meta metav1.ObjectMeta
-		svc  *v1.Service
-		ep   *v1.Endpoints
-	)
-
-	BeforeEach(func() {
-		rg = &routeGenerator{
-			nodeName:    "foobar",
-			svcIndexer:  cache.NewIndexer(cache.MetaNamespaceKeyFunc, nil),
-			epIndexer:   cache.NewIndexer(cache.MetaNamespaceKeyFunc, nil),
-			svcRouteMap: make(map[string]string),
-			client: &client{
-				cache: make(map[string]string),
-			},
-		}
-		meta = metav1.ObjectMeta{Namespace: "foo", Name: "bar"}
-		svc = &v1.Service{
-			ObjectMeta: meta,
-			Spec: v1.ServiceSpec{
-				Type:                  v1.ServiceTypeClusterIP,
-				ClusterIP:             "127.0.0.1",
-				ExternalTrafficPolicy: v1.ServiceExternalTrafficPolicyTypeLocal,
-			}}
-		ep = &v1.Endpoints{
-			ObjectMeta: meta,
-		}
-	})
-
 	Describe("getServiceForEndpoints", func() {
 		It("should get corresponding service for endpoints", func() {
 			// getServiceForEndpoints
+			rg, svc, ep := buildSimpleService()
 			rg.svcIndexer.Add(svc)
 			fetchedSvc, key := rg.getServiceForEndpoints(ep)
 			Expect(fetchedSvc.ObjectMeta).To(Equal(svc.ObjectMeta))
@@ -59,6 +54,7 @@ var _ = Describe("RouteGenerator", func() {
 	Describe("getEndpointsForService", func() {
 		It("should get corresponding endpoints for service", func() {
 			// getEndpointsForService
+			rg, svc, ep := buildSimpleService()
 			rg.epIndexer.Add(ep)
 			fetchedEp, key := rg.getEndpointsForService(svc)
 			Expect(fetchedEp.ObjectMeta).To(Equal(ep.ObjectMeta))
@@ -67,6 +63,7 @@ var _ = Describe("RouteGenerator", func() {
 	})
 
 	Describe("(un)setRouteForSvc", func() {
+		rg, svc, ep := buildSimpleService()
 		BeforeEach(func() {
 			addEndpointSubset(ep, rg.nodeName)
 		})
@@ -91,6 +88,7 @@ var _ = Describe("RouteGenerator", func() {
 	})
 
 	Describe("resourceInformerHandlers", func() {
+		rg, svc, ep := buildSimpleService()
 		BeforeEach(func() {
 			svc2 := *svc
 			ep2 := *ep
