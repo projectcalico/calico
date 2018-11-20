@@ -55,10 +55,10 @@ run_extra_test() {
 }
 
 test_static_routes() {
-    export CALICO_STATIC_ROUTES=10.65.1.0/24,10.66.1.0/24
+    export CALICO_ADVERTISE_CLUSTER_IPS=10.101.0.0/16
     run_individual_test_oneshot 'mesh/static-routes'
-    export -n CALICO_STATIC_ROUTES
-    unset CALICO_STATIC_ROUTES
+    export -n CALICO_ADVERTISE_CLUSTER_IPS
+    unset CALICO_ADVERTISE_CLUSTER_IPS
 }
 
 test_node_deletion() {
@@ -361,6 +361,11 @@ run_individual_test_oneshot() {
     echo "Populating calico with test data using calicoctl: " $testdir
     calicoctl apply -f /tests/mock_data/calicoctl/${testdir}/input.yaml
 
+    # Populate Kubernetes API with data if it exists for this test.
+    if [[ -f /tests/mock_data/calicoctl/${testdir}/kubectl-input.yaml ]]; then
+	    KUBECONFIG=/tests/confd_kubeconfig kubectl apply -f /tests/mock_data/calicoctl/${testdir}/kubectl-input.yaml
+    fi
+
     # For KDD, run Typha.
     if [ "$DATASTORE_TYPE" = kubernetes ]; then
 	start_typha
@@ -380,6 +385,9 @@ run_individual_test_oneshot() {
     # Remove any resource that does not need to be persisted due to test environment
     # limitations.
     echo "Preparing Calico data for next test"
+    if [[ -f /tests/mock_data/calicoctl/${testdir}/kubectl-delete.yaml ]]; then
+	    KUBECONFIG=/tests/confd_kubeconfig kubectl delete -f /tests/mock_data/calicoctl/${testdir}/kubectl-delete.yaml
+    fi
     calicoctl delete -f /tests/mock_data/calicoctl/${testdir}/delete.yaml
 }
 

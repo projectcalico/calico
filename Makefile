@@ -205,7 +205,7 @@ test-kdd: bin/confd bin/kubectl bin/bird bin/bird6 bin/calico-node bin/calicoctl
 
 .PHONY: test-etcd
 ## Run template tests against etcd
-test-etcd: bin/confd bin/etcdctl bin/bird bin/bird6 bin/calico-node bin/calicoctl run-etcd
+test-etcd: bin/confd bin/etcdctl bin/bird bin/bird6 bin/calico-node bin/kubectl bin/calicoctl run-etcd run-k8s-apiserver
 	-git clean -fx etc/calico/confd
 	docker run --rm --net=host \
 		-v $(CURDIR)/tests/:/tests/ \
@@ -245,6 +245,8 @@ run-k8s-apiserver: stop-k8s-apiserver run-etcd
 	gcr.io/google_containers/hyperkube-$(ARCH):$(K8S_VERSION) \
 		  /hyperkube apiserver --etcd-servers=http://$(LOCAL_IP_ENV):2379 \
 		  --service-cluster-ip-range=10.101.0.0/16
+	# Wait until the apiserver is accepting requests.
+	while ! docker exec calico-k8s-apiserver kubectl get nodes; do echo "Waiting for apiserver to come up..."; sleep 2; done
 
 ## Stop Kubernetes apiserver
 stop-k8s-apiserver:

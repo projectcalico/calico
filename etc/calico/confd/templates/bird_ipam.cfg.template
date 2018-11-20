@@ -21,13 +21,14 @@ filter calico_export_to_bgp_peers {
 
 {{$network_key := printf "/bgp/v1/host/%s/network_v4" (getenv "NODENAME")}}{{if exists $network_key}}{{$network := getv $network_key}}
 filter calico_kernel_programming {
-{{- if ls $static_key}}
+{{- $reject_key := "/rejectcidrs"}}
+{{- if ls $reject_key}}
 
   # Don't program static routes into kernel.
-  {{- range ls $static_key}}
+  {{- range ls $reject_key}}
     {{- $parts := split . "-"}}
     {{- $cidr := join $parts "/"}}
-  if ( net = {{$cidr}} ) then { reject; }
+  if ( net ~ {{$cidr}} ) then { reject; }
   {{- end}}
 
 {{- end}}
