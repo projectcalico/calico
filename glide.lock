@@ -1,5 +1,5 @@
-hash: 411d735108dba7ff22b34f91bc29aaa8f46d02274c2822d678d7c4ba50cc080a
-updated: 2018-11-20T07:38:00.607956312Z
+hash: e79313875e2f408045b532d1fa0aee8755a490a5e5a20b5d16de1ca128baf87a
+updated: 2018-11-20T23:36:49.072668498Z
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -14,11 +14,11 @@ imports:
   - autorest/azure
   - autorest/date
 - name: github.com/beorn7/perks
-  version: 3ac7bf7a47d159a033b107610db8a1b6575507a4
+  version: 3a771d992973f24aa725d07868b467d1ddfceafb
   subpackages:
   - quantile
 - name: github.com/BurntSushi/toml
-  version: a368813c5e648fee92e5f6c30e3944ff9d5e8895
+  version: 3012a1dbe2e4bd1391d42b32f0577cb7bbc7f005
 - name: github.com/coreos/etcd
   version: 33245c6b5b49130ca99280408fadfab01aac0e48
   subpackages:
@@ -35,7 +35,7 @@ imports:
   - pkg/types
   - version
 - name: github.com/coreos/go-semver
-  version: e214231b295a8ea9479f11b70b35d5acf3556d9b
+  version: 8ab6407b697782a06568d4b7f1db25550ec2e4c6
   subpackages:
   - semver
 - name: github.com/davecgh/go-spew
@@ -47,7 +47,7 @@ imports:
 - name: github.com/ghodss/yaml
   version: 73d445a93680fa1a78ae23a5839bad48f32ba1ee
 - name: github.com/go-ini/ini
-  version: 5cf292cae48347c2490ac1a58fe36735fb78df7e
+  version: 9c8236e659b76e87bf02044d06fde8683008ff3e
 - name: github.com/gogo/protobuf
   version: c0656edd0d9eab7c66d1eb0c568f9039345796f7
   subpackages:
@@ -108,7 +108,7 @@ imports:
 - name: github.com/kardianos/osext
   version: ae77be60afb1dcacde03767a8c37337fad28ac14
 - name: github.com/kelseyhightower/confd
-  version: 6dfafc0a5f80df65d5c93dba3950396cae522b7e
+  version: 7111007732161e82886344267da99a1e9678cd48
   repo: https://github.com/projectcalico/confd.git
   subpackages:
   - pkg/backends
@@ -119,7 +119,7 @@ imports:
   - pkg/resource/template
   - pkg/run
 - name: github.com/kelseyhightower/envconfig
-  version: f611eb38b3875cc3bd991ca91c51d06446afa14c
+  version: dd1402a4d99de9ac2f396cd6fcb957bc2c695ec1
 - name: github.com/kelseyhightower/memkv
   version: 892bfd468afa0fa476556e7bd7734a087cda08b3
 - name: github.com/matttproud/golang_protobuf_extensions
@@ -228,7 +228,7 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: 96968f320e974776918cd79bf5762187fb9ffc80
+  version: bf5bcf4eba31c4577a744ded8add69bedc8f724a
   subpackages:
   - lib/apiconfig
   - lib/apis/v1
@@ -319,7 +319,7 @@ imports:
   subpackages:
   - nl
 - name: github.com/vishvananda/netns
-  version: 54f0e4339ce73702a0607f49922aaa1e749b418d
+  version: 13995c7128ccc8e51e9a6bd2b551020a27180abd
 - name: golang.org/x/crypto
   version: 49796115aa4b964c318aad4f3084fdb41e9aa067
   subpackages:
@@ -377,7 +377,7 @@ imports:
   subpackages:
   - rate
 - name: google.golang.org/appengine
-  version: b1f26356af11148e710935ed1ac8a7f5702c7612
+  version: 4a4468ece617fc8205e99368fa2200e9d1fad421
   subpackages:
   - internal
   - internal/app_identity
