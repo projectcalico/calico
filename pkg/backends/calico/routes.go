@@ -45,7 +45,7 @@ type routeGenerator struct {
 	nodeName                string
 	svcInformer, epInformer cache.Controller
 	svcIndexer, epIndexer   cache.Indexer
-	svcRouteMap             map[string][]string // maps service name to ip
+	svcRouteMap             map[string]string
 	clusterCIDR             string
 }
 
@@ -70,7 +70,7 @@ func NewRouteGenerator(c *client, clusterCIDR string) (rg *routeGenerator, err e
 	rg = &routeGenerator{
 		client:      c,
 		nodeName:    nodename,
-		svcRouteMap: make(map[string][]string),
+		svcRouteMap: make(map[string]string),
 		clusterCIDR: clusterCIDR,
 	}
 
@@ -190,16 +190,27 @@ func (rg *routeGenerator) setRouteForSvc(svc *v1.Service, ep *v1.Endpoints) {
 			return
 		}
 	}
+	logc := log.WithField("svc", fmt.Sprintf("%s/%s", svc.Namespace, svc.Name))
 
 	// see if any endpoints are on this node and advertise if so
 	// else remove the route if it also already exists
 	rg.Lock()
 	if rg.advertiseThisService(svc, ep) {
-		rg.svcRouteMap[key] = []string{svc.Spec.ClusterIP + "/32"}
-		rg.client.AddStaticRoutes([]string{svc.Spec.ClusterIP + "/32"})
-	} else if routes, exists := rg.svcRouteMap[key]; exists {
-		rg.client.DeleteStaticRoutes(routes)
-		delete(rg.svcRouteMap, key)
+		route := svc.Spec.ClusterIP + "/32"
+		if cur, exists := rg.svcRouteMap[key]; !exists {
+			// This is a new route - send it through.
+			rg.advertiseRoute(key, route)
+		} else if route != cur {
+			// The route has changed somehow. Send a delete for the old one
+			// and add the new one. We don't expect to hit this, since cluster IPs
+			// are immutable. But, handle it for good measure.
+			logc.Warn("ClusterIP for service changed, adjusting")
+			rg.withdrawRoute(key, cur)
+			rg.advertiseRoute(key, route)
+		}
+	} else if cur, exists := rg.svcRouteMap[key]; exists {
+		// We were advertising this route, but should no longer do so.
+		rg.withdrawRoute(key, cur)
 	}
 	rg.Unlock()
 }
@@ -231,11 +242,10 @@ func (rg *routeGenerator) advertiseThisService(svc *v1.Service, ep *v1.Endpoints
 	for _, subset := range ep.Subsets {
 		// not interested in subset.NotReadyAddresses
 		for _, address := range subset.Addresses {
-			if address.NodeName == nil || *address.NodeName != rg.nodeName {
-				continue
+			if address.NodeName != nil && *address.NodeName == rg.nodeName {
+				logc.Debugf("Advertising local service")
+				return true
 			}
-			logc.Debugf("Advertising local service")
-			return true
 		}
 	}
 	logc.Debugf("Skipping service with no local endpoints")
@@ -256,11 +266,22 @@ func (rg *routeGenerator) unsetRouteForSvc(obj interface{}) {
 	rg.Lock()
 	defer rg.Unlock()
 
-	// Remove any routes that might exist.
-	if routes, exists := rg.svcRouteMap[key]; exists {
-		rg.client.DeleteStaticRoutes(routes)
-		delete(rg.svcRouteMap, key)
+	// Remove the route if it exists.
+	if route, exists := rg.svcRouteMap[key]; exists {
+		rg.withdrawRoute(key, route)
 	}
+}
+
+// advertiseRoute advertises a route and caches it.
+func (rg *routeGenerator) advertiseRoute(key, route string) {
+	rg.svcRouteMap[key] = route
+	rg.client.AddStaticRoutes([]string{route})
+}
+
+// withdrawRoute withdraws a route and removes it from the cache.
+func (rg *routeGenerator) withdrawRoute(key, route string) {
+	rg.client.DeleteStaticRoutes([]string{route})
+	delete(rg.svcRouteMap, key)
 }
 
 // onSvcAdd is called when a k8s service is created
