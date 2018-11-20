@@ -23,6 +23,53 @@ from tests.st.utils.utils import update_bgp_config
 
 class TestRouteReflectorCluster(TestBase):
 
+    def test_route_reflector_cluster_resilience(self):
+        """
+        Runs a cluster of route reflectors, brings one node down, and ensures that traffic still flows
+        """
+        with DockerHost('host1',
+                        additional_docker_options=CLUSTER_STORE_DOCKER_OPTIONS,
+                        start_calico=False) as host1, \
+             DockerHost('host2',
+                        additional_docker_options=CLUSTER_STORE_DOCKER_OPTIONS,
+                        start_calico=False) as host2, \
+             RouteReflectorCluster(2, 1) as rrc:
+
+            # Start both hosts using specific backends.
+            host1.start_calico_node("--backend=bird")
+            host2.start_calico_node("--backend=bird")
+            update_bgp_config(host1, asNum=64513, nodeMesh=False)
+
+            # Create a workload on each host in the same network.
+            network1 = host1.create_network("subnet1")
+            workload_host1 = host1.create_workload("workload1", network=network1)
+            workload_host2 = host2.create_workload("workload2", network=network1)
+
+            # Assert no network connectivity
+            self.assert_false(workload_host1.check_can_ping(workload_host2.ip, retries=5))
+
+            # Peer the hosts with the route reflectors
+            for host in [host1, host2]:
+                for rr in rrc.get_redundancy_group():
+                    create_bgp_peer(host, "node", rr.ip, 64513, metadata={'name': host.name + rr.name.lower()})
+
+            # Assert network connectivity
+            self.assert_true(workload_host1.check_can_ping(workload_host2.ip, retries=10))
+            self.assert_ip_connectivity(workload_list=[workload_host1,
+                                                       workload_host2],
+                                        ip_pass_list=[workload_host1.ip,
+                                                      workload_host2.ip])
+            # Bring down a node
+            rrc.redundancy_groups[0][0].cleanup()
+
+            # Assert that network is still connected
+            self.assert_true(workload_host1.check_can_ping(workload_host2.ip, retries=10))
+            self.assert_ip_connectivity(workload_list=[workload_host1,
+                                                       workload_host2],
+                                        ip_pass_list=[workload_host1.ip,
+                                                      workload_host2.ip])
+
+
     def _test_route_reflector_cluster(self, backend='bird'):
         """
         Run a multi-host test using a cluster of route reflectors and node
