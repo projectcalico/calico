@@ -47,24 +47,22 @@ var _ = Describe("RouteGenerator", func() {
 		}
 	})
 
-	Describe("Get one for the other", func() {
-		Context("getServiceForEndpoints", func() {
-			It("should work", func() {
-				// getServiceForEndpoints
-				rg.svcIndexer.Add(svc)
-				fetchedSvc, key := rg.getServiceForEndpoints(ep)
-				Expect(fetchedSvc.ObjectMeta).To(Equal(svc.ObjectMeta))
-				Expect(key).To(Equal("foo/bar"))
-			})
+	Describe("getServiceForEndpoints", func() {
+		It("should get corresponding service for endpoints", func() {
+			// getServiceForEndpoints
+			rg.svcIndexer.Add(svc)
+			fetchedSvc, key := rg.getServiceForEndpoints(ep)
+			Expect(fetchedSvc.ObjectMeta).To(Equal(svc.ObjectMeta))
+			Expect(key).To(Equal("foo/bar"))
 		})
-		Context("getEndpointsForService", func() {
-			It("should work", func() {
-				// getEndpointsForService
-				rg.epIndexer.Add(ep)
-				fetchedEp, key := rg.getEndpointsForService(svc)
-				Expect(fetchedEp.ObjectMeta).To(Equal(ep.ObjectMeta))
-				Expect(key).To(Equal("foo/bar"))
-			})
+	})
+	Describe("getEndpointsForService", func() {
+		It("should get corresponding endpoints for service", func() {
+			// getEndpointsForService
+			rg.epIndexer.Add(ep)
+			fetchedEp, key := rg.getEndpointsForService(svc)
+			Expect(fetchedEp.ObjectMeta).To(Equal(ep.ObjectMeta))
+			Expect(key).To(Equal("foo/bar"))
 		})
 	})
 
@@ -73,7 +71,7 @@ var _ = Describe("RouteGenerator", func() {
 			addEndpointSubset(ep, rg.nodeName)
 		})
 		Context("svc = svc, ep = nil", func() {
-			It("should work", func() {
+			It("should set an unset routes for a service", func() {
 				rg.epIndexer.Add(ep)
 				rg.setRouteForSvc(svc, nil)
 				Expect(rg.svcRouteMap["foo/bar"]).To(Equal("127.0.0.1/32"))
@@ -82,7 +80,7 @@ var _ = Describe("RouteGenerator", func() {
 			})
 		})
 		Context("svc = nil, ep = ep", func() {
-			It("should work", func() {
+			It("should set an unset routes for a service", func() {
 				rg.svcIndexer.Add(svc)
 				rg.setRouteForSvc(nil, ep)
 				Expect(rg.svcRouteMap["foo/bar"]).To(Equal("127.0.0.1/32"))
@@ -105,7 +103,7 @@ var _ = Describe("RouteGenerator", func() {
 
 		})
 		Context("onSvcAdd", func() {
-			It("should work", func() {
+			It("should add the service's clusterIP into the svcRouteMap", func() {
 				addEndpointSubset(ep, rg.nodeName)
 				rg.epIndexer.Add(ep)
 				rg.onSvcAdd(svc)
@@ -114,33 +112,23 @@ var _ = Describe("RouteGenerator", func() {
 		})
 
 		Context("onSvcUpdate", func() {
-			It("should work", func() {
-				// TODO
-			})
+			// TODO
 		})
 
 		Context("onSvcDelete", func() {
-			It("should work", func() {
-				// TODO
-			})
+			// TODO
 		})
 
 		Context("onEpAdd", func() {
-			It("should work", func() {
-				// TODO
-			})
+			// TODO
 		})
 
 		Context("onEpUpdate", func() {
-			It("should work", func() {
-				// TODO
-			})
+			// TODO
 		})
 
 		Context("onEpDelete", func() {
-			It("should work", func() {
-				// TODO
-			})
+			// TODO
 		})
 	})
 })
