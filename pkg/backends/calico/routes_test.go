@@ -93,17 +93,19 @@ var _ = Describe("RouteGenerator", func() {
 	})
 
 	Describe("resourceInformerHandlers", func() {
-		svc, ep := buildSimpleService()
+		var (
+			svc, svc2 *v1.Service
+			ep, ep2   *v1.Endpoints
+		)
 		BeforeEach(func() {
-			svc2 := *svc
-			ep2 := *ep
-			ep2.ObjectMeta.Name = svc2.ObjectMeta.Name
-			addEndpointSubset(&ep2, "barfoo")
-			rg.epIndexer.Add(ep2)
+			svc, ep = buildSimpleService()
+			svc2, ep2 = buildSimpleService()
 
 			addEndpointSubset(ep, rg.nodeName)
 			rg.epIndexer.Add(ep)
 
+			addEndpointSubset(&ep2, "barfoo")
+			rg.epIndexer.Add(ep2)
 		})
 		Context("onSvcAdd", func() {
 			It("should add the service's clusterIP into the svcRouteMap", func() {
