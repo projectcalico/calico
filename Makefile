@@ -144,6 +144,9 @@ check-glide-warnings:
 ut-cover: vendor
 	./run-uts
 
+WHAT?=.
+GINKGO_FOCUS?=.*
+
 .PHONY:ut
 ## Run the fast set of unit tests in a container.
 ut: vendor
@@ -153,7 +156,7 @@ ut: vendor
 		-v $(CURDIR):/go/src/github.com/$(PACKAGE_NAME):rw \
 		-v $(CURDIR)/.go-pkg-cache:/go-cache/:rw \
 		-e GOCACHE=/go-cache \
-		$(CALICO_BUILD) sh -c 'cd /go/src/github.com/$(PACKAGE_NAME) && ginkgo -r --skipPackage vendor -skip "\[Datastore\]" $(GINKGO_ARGS) .'
+		$(CALICO_BUILD) sh -c 'cd /go/src/github.com/$(PACKAGE_NAME) && ginkgo -r --skipPackage vendor -skip "\[Datastore\]" -focus="$(GINKGO_FOCUS)" $(GINKGO_ARGS) $(WHAT)'
 
 
 .PHONY:fv
@@ -165,7 +168,7 @@ fv: vendor run-etcd run-kubernetes-master
 		-v $(CURDIR):/go/src/github.com/$(PACKAGE_NAME):rw \
 		-v $(CURDIR)/.go-pkg-cache:/go-cache/:rw \
 		-e GOCACHE=/go-cache \
-		$(CALICO_BUILD) sh -c 'cd /go/src/github.com/$(PACKAGE_NAME) && ginkgo -r --skipPackage vendor -focus "\[Datastore\]" $(GINKGO_ARGS) .'
+		$(CALICO_BUILD) sh -c 'cd /go/src/github.com/$(PACKAGE_NAME) && ginkgo -r --skipPackage vendor -focus "$(GINKGO_FOCUS).*\[Datastore\]|\[Datastore\].*$(GINKGO_FOCUS)" $(GINKGO_ARGS) $(WHAT)'
 
 ## Run etcd as a container (calico-etcd)
 run-etcd: stop-etcd
