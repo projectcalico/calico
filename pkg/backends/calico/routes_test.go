@@ -66,12 +66,13 @@ var _ = Describe("RouteGenerator", func() {
 	})
 
 	Describe("(un)setRouteForSvc", func() {
-		svc, ep := buildSimpleService()
 		BeforeEach(func() {
-			addEndpointSubset(ep, rg.nodeName)
 		})
 		Context("svc = svc, ep = nil", func() {
 			It("should set an unset routes for a service", func() {
+				svc, ep := buildSimpleService()
+				addEndpointSubset(ep, rg.nodeName)
+
 				rg.epIndexer.Add(ep)
 				rg.setRouteForSvc(svc, nil)
 				Expect(rg.svcRouteMap["foo/bar"]).To(Equal("127.0.0.1/32"))
@@ -81,6 +82,9 @@ var _ = Describe("RouteGenerator", func() {
 		})
 		Context("svc = nil, ep = ep", func() {
 			It("should set an unset routes for a service", func() {
+				svc, ep := buildSimpleService()
+				addEndpointSubset(ep, rg.nodeName)
+
 				rg.svcIndexer.Add(svc)
 				rg.setRouteForSvc(nil, ep)
 				Expect(rg.svcRouteMap["foo/bar"]).To(Equal("127.0.0.1/32"))
