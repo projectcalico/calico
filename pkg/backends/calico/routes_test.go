@@ -66,8 +66,6 @@ var _ = Describe("RouteGenerator", func() {
 	})
 
 	Describe("(un)setRouteForSvc", func() {
-		BeforeEach(func() {
-		})
 		Context("svc = svc, ep = nil", func() {
 			It("should set an unset routes for a service", func() {
 				svc, ep := buildSimpleService()
@@ -113,6 +111,7 @@ var _ = Describe("RouteGenerator", func() {
 				rg.epIndexer.Add(ep)
 				rg.onSvcAdd(svc)
 				Expect(rg.svcRouteMap["foo/bar"]).To(Equal("127.0.0.1/32"))
+				Expect(rg.client.cache["/calico/staticroutes/127.0.0.1-32"]).To(Equal("127.0.0.1/32"))
 			})
 		})
 
