@@ -46,13 +46,6 @@ clean:
 	rm -rf $(BINDIR)
 	rm -rf checkouts
 
-.PHONY: clean-gen-files
-## Convenience target for devs to remove generated files and related utilities
-clean-gen-files:
-	rm -f $(BINDIR)/deepcopy-gen
-	rm -f ./lib/apis/v3/zz_generated.deepcopy.go
-	rm -f ./lib/upgrade/migrator/clients/v1/k8s/custom/zz_generated.deepcopy.go
-
 ###############################################################################
 # Building the binary
 ###############################################################################
@@ -63,17 +56,20 @@ vendor: glide.lock
 	mkdir -p $(HOME)/.glide
 	$(DOCKER_GO_BUILD) glide install --strip-vendor
 
-.PHONY: gen-files
-## Build generated-go utilities (e.g. deepcopy_gen) and generated files
-gen-files: $(BINDIR)/deepcopy-gen \
-           ./lib/apis/v3/zz_generated.deepcopy.go \
+GENERATED_FILES:=./lib/apis/v3/zz_generated.deepcopy.go \
            ./lib/upgrade/migrator/clients/v1/k8s/custom/zz_generated.deepcopy.go
+
+.PHONY: gen-files
+## Force rebuild generated go utilities (e.g. deepcopy-gen) and generated files
+gen-files:
+	rm -rf $(GENERATED_FILES)
+	$(MAKE) $(GENERATED_FILES)
 
 $(BINDIR)/deepcopy-gen: vendor
 	$(DOCKER_GO_BUILD) \
 		sh -c 'go build -o $@ $(LIBCALICO-GO_PKG)/vendor/k8s.io/code-generator/cmd/deepcopy-gen'
 
-./lib/upgrade/migrator/clients/v1/k8s/custom/zz_generated.deepcopy.go: ${UPGRADE_SRCS}
+./lib/upgrade/migrator/clients/v1/k8s/custom/zz_generated.deepcopy.go: $(UPGRADE_SRCS) $(BINDIR)/deepcopy-gen
 	$(DOCKER_GO_BUILD) \
 		sh -c '$(BINDIR)/deepcopy-gen \
 			--v 1 --logtostderr \
@@ -82,7 +78,7 @@ $(BINDIR)/deepcopy-gen: vendor
 			--bounding-dirs "github.com/projectcalico/libcalico-go" \
 			--output-file-base zz_generated.deepcopy'
 
-./lib/apis/v3/zz_generated.deepcopy.go: ${APIS_SRCS}
+./lib/apis/v3/zz_generated.deepcopy.go: $(APIS_SRCS) $(BINDIR)/deepcopy-gen
 	$(DOCKER_GO_BUILD) \
 		sh -c '$(BINDIR)/deepcopy-gen \
 			--v 1 --logtostderr \
@@ -98,8 +94,8 @@ $(BINDIR)/deepcopy-gen: vendor
 static-checks: check-format check-gen-files
 
 .PHONY: check-gen-files
-check-gen-files: gen-files
-	git diff --exit-code || (echo "The generated targets changed, please 'make gen-files' and commit the results"; exit 1)
+check-gen-files: $(GENERATED_FILES)
+	git diff --exit-code -- $(GENERATED_FILES) || (echo "The generated targets changed, please 'make gen-files' and commit the results"; exit 1)
 
 .PHONY: check-format
 # Depends on the vendor directory because goimports needs to be able to resolve the imports.
