@@ -5,7 +5,7 @@ default: build
 all: build
 
 ## Run the tests for the current platform/architecture
-test: test-kdd test-etcd
+test: test-kdd test-etcd ut
 
 ###############################################################################
 # Both native and cross architecture builds are supported.
@@ -215,6 +215,17 @@ test-etcd: bin/confd bin/etcdctl bin/bird bin/bird6 bin/calico-node bin/kubectl 
 		-e UPDATE_EXPECTED_DATA=$(UPDATE_EXPECTED_DATA) \
 		$(CALICO_BUILD) /tests/test_suite_etcd.sh
 	-git clean -fx etc/calico/confd
+
+.PHONY: ut
+## Run the fast set of unit tests in a container.
+ut: vendor
+	-mkdir -p .go-pkg-cache
+	docker run --rm -t --privileged --net=host \
+		-e LOCAL_USER_ID=$(LOCAL_USER_ID) \
+		-v $(CURDIR):/go/src/$(PACKAGE_NAME):rw \
+		-v $(CURDIR)/.go-pkg-cache:/go-cache/:rw \
+		-e GOCACHE=/go-cache \
+		$(CALICO_BUILD) sh -c 'cd /go/src/$(PACKAGE_NAME) && ginkgo -r --skipPackage vendor -skip "\[Datastore\]" $(GINKGO_ARGS) .'
 
 ## Etcd is used by the kubernetes
 # NOTE: https://quay.io/repository/coreos/etcd is available *only* for the following archs with the following tags:
