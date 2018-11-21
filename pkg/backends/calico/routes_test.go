@@ -101,7 +101,7 @@ var _ = Describe("RouteGenerator", func() {
 			ep2 := *ep
 			ep2.ObjectMeta.Name = svc2.ObjectMeta.Name
 			addEndpointSubset(&ep2, "barfoo")
-			rg.epIndexer.Add(ep)
+			rg.epIndexer.Add(ep2)
 
 			addEndpointSubset(ep, rg.nodeName)
 			rg.epIndexer.Add(ep)
