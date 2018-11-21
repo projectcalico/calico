@@ -156,7 +156,9 @@ endif
 		echo "Expected CALICO_VER $(CALICO_VER) to equal NODE_VER $(NODE_VER)"; \
 		exit 1; fi
 
-RELEASE_DIR?=_output/release-$(CALICO_VER)
+OUTPUT_DIR?=_output
+RELEASE_DIR_NAME?=release-$(CALICO_VER)
+RELEASE_DIR?=$(OUTPUT_DIR)/$(RELEASE_DIR_NAME)
 RELEASE_DIR_K8S_MANIFESTS?=$(RELEASE_DIR)/k8s-manifests
 RELEASE_DIR_IMAGES?=$(RELEASE_DIR)/images
 RELEASE_DIR_BIN?=$(RELEASE_DIR)/bin
@@ -166,7 +168,7 @@ MANIFEST_SRC ?= ./_site/$(RELEASE_STREAM)/getting-started/kubernetes/installatio
 release-archive: release-prereqs $(RELEASE_DIR).tgz
 
 $(RELEASE_DIR).tgz: $(RELEASE_DIR) $(RELEASE_DIR_K8S_MANIFESTS) $(RELEASE_DIR_IMAGES) $(RELEASE_DIR_BIN) $(RELEASE_DIR)/README
-	tar -czvf $(RELEASE_DIR).tgz $(RELEASE_DIR)/*
+	tar -czvf $(RELEASE_DIR).tgz -C $(OUTPUT_DIR) $(RELEASE_DIR_NAME)
 
 $(RELEASE_DIR_IMAGES): $(RELEASE_DIR_IMAGES)/calico-node.tar $(RELEASE_DIR_IMAGES)/calico-typha.tar $(RELEASE_DIR_IMAGES)/calico-cni.tar $(RELEASE_DIR_IMAGES)/calico-kube-controllers.tar
 $(RELEASE_DIR_BIN): $(RELEASE_DIR_BIN)/calicoctl $(RELEASE_DIR_BIN)/calicoctl-windows-amd64.exe $(RELEASE_DIR_BIN)/calicoctl-darwin-amd64
