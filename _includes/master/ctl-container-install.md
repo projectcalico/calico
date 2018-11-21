@@ -4,7 +4,7 @@ To install `calicoctl` as a container on a single host, log into the
 target host and issue the following command.
 
 ```
-docker pull {{site.imageNames["calicoctl"]}}:{{site.data.versions[page.version].first.title}}
+docker pull {{site.data.imageNames[page.version].imageNames["calicoctl"]}}:{{site.data.versions[page.version].first.title}}
 ```
 
 **Next step**:

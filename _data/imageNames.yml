@@ -1,0 +1,64 @@
+v3.3:
+  imageNames:
+    node: quay.io/calico/node
+    calicoctl: quay.io/calico/ctl
+    typha: quay.io/calico/typha
+    cni: quay.io/calico/cni
+    kubeControllers: quay.io/calico/kube-controllers
+    calico-upgrade: quay.io/calico/upgrade
+    flannel: quay.io/coreos/flannel
+    dikastes: quay.io/calico/dikastes
+    pilot-webhook: quay.io/calico/pilot-webhook
+    flexvol: quay.io/calico/pod2daemon-flexvol
+
+v3.2:
+  imageNames:
+    node: quay.io/calico/node
+    calicoctl: quay.io/calico/ctl
+    typha: quay.io/calico/typha
+    cni: quay.io/calico/cni
+    kubeControllers: quay.io/calico/kube-controllers
+    calico-upgrade: quay.io/calico/upgrade
+    flannel: quay.io/coreos/flannel
+    dikastes: quay.io/calico/dikastes
+    pilot-webhook: quay.io/calico/pilot-webhook
+    flexvol: quay.io/calico/pod2daemon-flexvol
+
+v3.1:
+  imageNames:
+    node: quay.io/calico/node
+    calicoctl: quay.io/calico/ctl
+    typha: quay.io/calico/typha
+    cni: quay.io/calico/cni
+    kubeControllers: quay.io/calico/kube-controllers
+    calico-upgrade: quay.io/calico/upgrade
+    flannel: quay.io/coreos/flannel
+    dikastes: quay.io/calico/dikastes
+    pilot-webhook: quay.io/calico/pilot-webhook
+    flexvol: quay.io/calico/pod2daemon-flexvol
+
+v3.0:
+  imageNames:
+    node: quay.io/calico/node
+    calicoctl: quay.io/calico/ctl
+    typha: quay.io/calico/typha
+    cni: quay.io/calico/cni
+    kubeControllers: quay.io/calico/kube-controllers
+    calico-upgrade: quay.io/calico/upgrade
+    flannel: quay.io/coreos/flannel
+    dikastes: quay.io/calico/dikastes
+    pilot-webhook: quay.io/calico/pilot-webhook
+    flexvol: quay.io/calico/pod2daemon-flexvol
+
+master:
+  imageNames:
+    node: quay.io/calico/node
+    calicoctl: quay.io/calico/ctl
+    typha: quay.io/calico/typha
+    cni: quay.io/calico/cni
+    kubeControllers: quay.io/calico/kube-controllers
+    calico-upgrade: quay.io/calico/upgrade
+    flannel: quay.io/coreos/flannel
+    dikastes: quay.io/calico/dikastes
+    pilot-webhook: quay.io/calico/pilot-webhook
+    flexvol: quay.io/calico/pod2daemon-flexvol

@@ -62,7 +62,7 @@ wget {{site.data.versions[page.version].first.components.calicoctl.download_url}
 sudo chmod +x calicoctl
 
 # Run the calico/node container
-sudo ETCD_ENDPOINTS=http://<ETCD_IP>:<ETCD_PORT> ./calicoctl node run --node-image={{site.imageNames["node"]}}:{{site.data.versions[page.version].first.title}}
+sudo ETCD_ENDPOINTS=http://<ETCD_IP>:<ETCD_PORT> ./calicoctl node run --node-image={{site.data.imageNames[page.version].imageNames["node"]}}:{{site.data.versions[page.version].first.title}}
 ```
 
 See the [`calicoctl node run` documentation]({{site.baseurl}}/{{page.version}}/reference/calicoctl/commands/node/)
@@ -96,7 +96,7 @@ ExecStart=/usr/bin/docker run --net=host --privileged --name=calico-node \
   -v /run/docker/plugins:/run/docker/plugins \
   -v /var/run/docker.sock:/var/run/docker.sock \
   -v /var/log/calico:/var/log/calico \
-  {{site.imageNames["node"]}}:{{site.data.versions[page.version].first.title}}
+  {{site.data.imageNames[page.version].imageNames["node"]}}:{{site.data.versions[page.version].first.title}}
 ExecStop=/usr/bin/docker rm -f calico-node
 Restart=always
 RestartSec=10

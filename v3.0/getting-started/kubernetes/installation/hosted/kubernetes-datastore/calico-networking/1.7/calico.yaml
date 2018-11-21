@@ -110,7 +110,7 @@ spec:
       hostNetwork: true
       serviceAccountName: calico-node
       containers:
-      - image: {{site.imageNames["typha"]}}:{{site.data.versions[page.version].first.components["typha"].version}}
+      - image: {{site.data.imageNames[page.version].imageNames["typha"]}}:{{site.data.versions[page.version].first.components["typha"].version}}
         name: calico-typha
         ports:
         - containerPort: 5473
@@ -200,7 +200,7 @@ spec:
         # container programs network policy and routes on each
         # host.
         - name: calico-node
-          image: {{site.imageNames["node"]}}:{{site.data.versions[page.version].first.title}}
+          image: {{site.data.imageNames[page.version].imageNames["node"]}}:{{site.data.versions[page.version].first.title}}
           env:
             # Use Kubernetes API as the backing datastore.
             - name: DATASTORE_TYPE
@@ -280,7 +280,7 @@ spec:
         # This container installs the Calico CNI binaries
         # and CNI network config file on each node.
         - name: install-cni
-          image: {{site.imageNames["cni"]}}:{{site.data.versions[page.version].first.components["calico/cni"].version}}
+          image: {{site.data.imageNames[page.version].imageNames["cni"]}}:{{site.data.versions[page.version].first.components["calico/cni"].version}}
           command: ["/install-cni.sh"]
           env:
             # Name of the CNI config file to create.
