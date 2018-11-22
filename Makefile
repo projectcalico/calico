@@ -5,7 +5,7 @@ default: build
 all: build
 
 ## Run the tests for the current platform/architecture
-test: test-kdd test-etcd ut
+test: ut test-kdd test-etcd
 
 ###############################################################################
 # Both native and cross architecture builds are supported.
