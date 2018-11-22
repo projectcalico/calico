@@ -21,22 +21,36 @@ _log = logging.getLogger(__name__)
 
 
 def start_external_node_with_bgp(name, config):
-    # # Setup external node: use privileged mode for setting routes
-    subprocess.check_call("docker run -d "
-                          "--privileged "
-                          "--name %s "
-                          "--network kubeadm-dind-net "
-                          "mirantis/kubeadm-dind-cluster:v1.10" % name,
-                          shell=True)
+    # Check how much disk space we have.
+    run("df -h")
+
+    # Setup external node: use privileged mode for setting routes
+    run("docker run -d "
+        "--privileged "
+        "--name %s "
+        "--network kubeadm-dind-net "
+        "mirantis/kubeadm-dind-cluster:v1.10" % name)
+
+    # Check how much space there is inside the container.  We may need
+    # to retry this, as it may take a while for the image to download
+    # and the container to start running.
+    while True:
+        try:
+            run("docker exec %s df -h" % name)
+            break
+        except subprocess.CalledProcessError:
+            _log.exception("Container not ready yet")
+            time.sleep(20)
+
     # Install bird on extra node
-    subprocess.check_call("docker exec %s apt update" % name, shell=True)
-    subprocess.check_call("docker exec %s apt install -y bird" % name, shell=True)
-    subprocess.check_call("docker exec %s mkdir /run/bird" % name, shell=True)
+    run("docker exec %s apt update" % name)
+    run("docker exec %s apt install -y bird" % name)
+    run("docker exec %s mkdir /run/bird" % name)
     with open('bird.conf', 'w') as birdconfig:
         birdconfig.write(config)
-    subprocess.check_call("docker cp bird.conf %s:/etc/bird/bird.conf" % name, shell=True)
-    subprocess.check_call("rm bird.conf", shell=True)
-    subprocess.check_call("docker exec %s service bird restart" % name, shell=True)
+    run("docker cp bird.conf %s:/etc/bird/bird.conf" % name)
+    run("rm bird.conf")
+    run("docker exec %s service bird restart" % name)
 
 
 def retry_until_success(fun,
@@ -101,3 +115,15 @@ def function_name(f):
         return f.__name__
     except Exception:
         return "<unknown function>"
+
+
+def run(command):
+    _log.info("Run: %s", command)
+    try:
+        out = subprocess.check_output(command,
+                                      shell=True,
+                                      stderr=subprocess.STDOUT)
+        _log.info("Output:\n%s", out)
+    except subprocess.CalledProcessError as e:
+        _log.exception("Failure output:\n%s", e.output)
+        raise

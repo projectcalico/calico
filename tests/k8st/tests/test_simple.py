@@ -19,7 +19,7 @@ from time import sleep
 from kubernetes import client
 
 from tests.k8st.test_base import TestBase
-from tests.k8st.utils.utils import retry_until_success
+from tests.k8st.utils.utils import retry_until_success, run
 
 _log = logging.getLogger(__name__)
 
@@ -39,8 +39,28 @@ class TestSimplePolicy(TestBase):
     def setUp(self):
         self.create_service("nginx:1.7.9", "nginx", "policy-demo", 80)
 
+        # Create two client pods that live for the duration of the
+        # test.  We will use 'kubectl exec' to try wgets from these at
+        # particular times.
+        #
+        # We do it this way - instead of one-shot pods that are
+        # created, try wget, and then exit - because it takes a
+        # relatively long time (7 seconds?) in this test setup for
+        # Calico routing and policy to be set up correctly for a newly
+        # created pod.  In particular it's possible that connection
+        # from a just-created pod will fail because that pod's IP has
+        # not yet propagated to the IP set for the ingress policy on
+        # the server pod - which can confuse test code that is
+        # expecting connection failure for some other reason.
+        run("kubectl run --generator=run-pod/v1 access -n policy-demo" +
+            " --image busybox --command /bin/sleep -- 3600")
+        run("kubectl run --generator=run-pod/v1 no-access -n policy-demo" +
+            " --image busybox --command /bin/sleep -- 3600")
+
     def tearDown(self):
         # Delete deployment
+        run("kubectl delete --grace-period 0 pod access -n policy-demo")
+        run("kubectl delete --grace-period 0 pod no-access -n policy-demo")
         self.delete_and_confirm("policy-demo", "ns")
 
     def test_simple_policy(self):
@@ -108,7 +128,7 @@ class TestSimplePolicy(TestBase):
         _log.info("Client 'access' connected to protected service")
 
         # Check we cannot talk to service as 'no-access'
-        retry_until_success(self.cannot_connect, retries=10, wait_time=1, function_args=["access"])
+        retry_until_success(self.cannot_connect, retries=10, wait_time=1, function_args=["no-access"])
         _log.info("Client 'no-access' failed to connect to protected service")
 
     def can_connect(self, name):
@@ -126,17 +146,10 @@ class TestSimplePolicy(TestBase):
     @staticmethod
     def check_connected(name):
         try:
-            subprocess.check_call("kubectl run "
-                                  "--namespace=policy-demo "
-                                  "%s "
-                                  "--restart Never "
-                                  "--rm -i "
-                                  "--image busybox "
-                                  "--command /bin/wget "
-                                  "-- -q --timeout=1 nginx" % name,
-                                  shell=True)
+            run(("kubectl exec %s -n policy-demo" +
+                 " -- /bin/wget -O /dev/null -q --timeout=1 nginx") % name)
         except subprocess.CalledProcessError:
-            _log.debug("Failed to contact service")
+            _log.exception("Failed to wget from nginx service")
             return False
         _log.debug("Contacted service")
         return True

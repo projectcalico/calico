@@ -22,9 +22,8 @@ from unittest import TestCase
 from deepdiff import DeepDiff
 from kubernetes import client, config
 
-from utils.utils import retry_until_success
+from utils.utils import retry_until_success, run
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 logger = logging.getLogger(__name__)
 
 
@@ -102,8 +101,10 @@ class TestBase(TestCase):
         pods = self.cluster.list_namespaced_pod(ns)
 
         for pod in pods.items:
+            logger.info("%s\t%s\t%s", pod.metadata.name, pod.metadata.namespace, pod.status.phase)
+            if pod.status.phase != 'Running':
+                run("kubectl describe po %s -n %s" % (pod.metadata.name, pod.metadata.namespace))
             assert pod.status.phase == 'Running'
-            print "%s\t%s\t%s" % (pod.metadata.name, pod.metadata.namespace, pod.status.phase)
 
     def create_namespace(self, ns_name):
         self.cluster.create_namespace(client.V1Namespace(metadata=client.V1ObjectMeta(name=ns_name)))
@@ -165,13 +166,13 @@ class TestBase(TestCase):
 
     def delete_and_confirm(self, name, resource_type):
         try:
-            subprocess.check_call("kubectl delete %s %s" % (resource_type, name), shell=True)
+            run("kubectl delete %s %s" % (resource_type, name))
         except subprocess.CalledProcessError:
             pass
 
         def is_it_gone_yet(res_name, res_type):
             try:
-                subprocess.check_call("kubectl get %s %s" % (res_type, res_name), shell=True)
+                run("kubectl get %s %s" % (res_type, res_name))
                 raise self.StillThere
             except subprocess.CalledProcessError:
                 # Success

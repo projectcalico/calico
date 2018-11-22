@@ -19,7 +19,7 @@ from time import sleep
 from kubernetes import client, config
 
 from tests.k8st.test_base import TestBase
-from tests.k8st.utils.utils import start_external_node_with_bgp, retry_until_success
+from tests.k8st.utils.utils import start_external_node_with_bgp, retry_until_success, run
 
 _log = logging.getLogger(__name__)
 
@@ -103,10 +103,10 @@ class TestBGPAdvert(TestBase):
 
         start_external_node_with_bgp("kube-node-extra", bird_conf)
 
-        # # Create nginx deployment and service
+        # Create nginx deployment and service
         self.create_service("nginx:1.7.9", "nginx", "bgp-test", 80)
 
-        # set CALICO_STATIC_ROUTES=10.96.0.0/12
+        # set CALICO_ADVERTISE_CLUSTER_IPS=10.96.0.0/12
         config.load_kube_config(os.environ.get('KUBECONFIG'))
         api = client.AppsV1Api(client.ApiClient())
         node_ds = api.read_namespaced_daemon_set("calico-node", "kube-system", exact=True, export=True)
@@ -114,16 +114,27 @@ class TestBGPAdvert(TestBase):
             if container.name == "calico-node":
                 route_env_present = False
                 for env in container.env:
-                    if env.name == "CALICO_STATIC_ROUTES":
+                    if env.name == "CALICO_ADVERTISE_CLUSTER_IPS":
                         route_env_present = True
                 if not route_env_present:
-                    container.env.append({"name": "CALICO_STATIC_ROUTES", "value": "10.96.0.0/12", "value_from": None})
+                    container.env.append({"name": "CALICO_ADVERTISE_CLUSTER_IPS", "value": "10.96.0.0/12", "value_from": None})
         api.replace_namespaced_daemon_set("calico-node", "kube-system", node_ds)
-        sleep(3)
+
+        # Wait until the DaemonSet reports that all nodes have been updated.
+        while True:
+            sleep(10)
+            node_ds = api.read_namespaced_daemon_set_status("calico-node", "kube-system")
+            _log.info("%d/%d nodes updated",
+                      node_ds.status.updated_number_scheduled,
+                      node_ds.status.desired_number_scheduled)
+            if node_ds.status.updated_number_scheduled == node_ds.status.desired_number_scheduled:
+                break
+
+        # Now wait until all nodes report running.
         retry_until_success(self.check_pod_status, retries=20, wait_time=3, function_args=["kube-system"])
 
-        # # Establish BGPPeer from cluster nodes to node-extra using calicoctl
-        subprocess.check_call("""kubectl exec -i -n kube-system calicoctl -- /calicoctl apply -f - << EOF
+        # Establish BGPPeer from cluster nodes to node-extra using calicoctl
+        run("""kubectl exec -i -n kube-system calicoctl -- /calicoctl apply -f - << EOF
 apiVersion: projectcalico.org/v3
 kind: BGPPeer
 metadata:
@@ -132,11 +143,11 @@ spec:
   peerIP: 10.192.0.5
   asNumber: 64512
 EOF
-""", shell=True)
+""")
 
     def tearDown(self):
         try:
-            subprocess.check_call("docker rm -f kube-node-extra", shell=True)
+            run("docker rm -f kube-node-extra")
         except subprocess.CalledProcessError:
             pass
         self.delete_and_confirm("bgp-test", "ns")
@@ -149,11 +160,12 @@ EOF
         # # Test access to nginx svc from kube-node-extra
 
         def test():
-            subprocess.check_call("docker exec kube-node-extra ip r", shell=True)
+            run("docker exec kube-node-extra ip r")
             # Assert that a route to the service IP range is present
-            subprocess.check_call("docker exec kube-node-extra ip r | grep 10.96.0.0/12", shell=True)
+            run("docker exec kube-node-extra ip r | grep 10.96.0.0/12")
             # Assert that the nginx service can be curled from the external node
-            subprocess.check_call("docker exec kube-node-extra "
-                                  "curl --connect-timeout 2 -m 3  "
-                                  "$(kubectl get svc nginx -n bgp-test -o json | jq -r .spec.clusterIP)", shell=True)
+            run("docker exec kube-node-extra "
+                "curl --connect-timeout 2 -m 3  "
+                "$(kubectl get svc nginx -n bgp-test -o json | jq -r .spec.clusterIP)")
+
         retry_until_success(test, retries=6, wait_time=10)
