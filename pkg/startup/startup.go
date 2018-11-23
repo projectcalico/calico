@@ -458,7 +458,7 @@ func parseIPEnvironment(envName, envValue string, version int) string {
 	ip := &cnet.IPNet{}
 	err := ip.UnmarshalJSON([]byte("\"" + envValue + "\""))
 	if err != nil || ip.Version() != version {
-		log.Warn("Environment does not contain a valid IPv%d address: %s=%s", version, envName, envValue)
+		log.Warnf("Environment does not contain a valid IPv%d address: %s=%s", version, envName, envValue)
 		terminate()
 	}
 	log.Infof("Using IPv%d address from environment: %s=%s", ip.Version(), envName, envValue)
@@ -772,7 +772,7 @@ func createIPPool(ctx context.Context, client client.Interface, cidr *cnet.IPNet
 	// beat us to it, so handle the fact that the pool already exists.
 	if _, err := client.IPPools().Create(ctx, pool, options.SetOptions{}); err != nil {
 		if _, ok := err.(cerrors.ErrorResourceAlreadyExists); !ok {
-			log.WithError(err).Errorf("Failed to create default IPv%d IP pool: %s", version)
+			log.WithError(err).Errorf("Failed to create default IPv%d IP pool: %s", version, cidr.String())
 			terminate()
 		}
 	} else {
