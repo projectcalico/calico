@@ -80,7 +80,7 @@ func (i *ipPoolAccessor) GetEnabledPools(ipVersion int) ([]v3.IPPool, error) {
 		}
 	}
 
-	log.Infof("GetEnabledPools returns: %s", pools)
+	log.Infof("GetEnabledPools returns: %v", pools)
 
 	return pools, nil
 }

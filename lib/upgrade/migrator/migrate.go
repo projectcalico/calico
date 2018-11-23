@@ -703,7 +703,7 @@ func (m *migrationHelper) ShouldMigrate() (bool, error) {
 		// The ClusterInformation exists but the CalicoVersion field is empty. This may happen if a
 		// non-calico/node or typha component initializes the datastore prior to the node writing in
 		// the current version, or the node or typha completing the data migration.
-		log.Debugf("ClusterInformation contained empty CalicoVersion - treating as is ClusterInformation is not present", ci.Spec.CalicoVersion)
+		log.Debug("ClusterInformation contained empty CalicoVersion - treating as if ClusterInformation is not present")
 	} else if err == nil {
 		// The ClusterInformation exists and the CalicoVersion field is not empty, check if migration is
 		// required.
