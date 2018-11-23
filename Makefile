@@ -63,7 +63,7 @@ prefix_linux = $(addprefix linux/,$(strip $1))
 join_platforms = $(subst $(space),$(comma),$(call prefix_linux,$(strip $1)))
 
 ###############################################################################
-GO_BUILD_VER ?= v0.17
+GO_BUILD_VER ?= v0.20
 
 SRCFILES=$(shell find pkg cmd internal -name '*.go')
 TEST_SRCFILES=$(shell find tests -name '*.go')
