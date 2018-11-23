@@ -76,7 +76,7 @@ PUSH_NONMANIFEST_IMAGES=$(filter-out $(PUSH_MANIFEST_IMAGES),$(PUSH_IMAGES))
 DOCKER_CONFIG ?= $(HOME)/.docker/config.json
 
 ###############################################################################
-GO_BUILD_VER?=v0.19
+GO_BUILD_VER?=v0.20
 CALICO_BUILD?=calico/go-build:$(GO_BUILD_VER)
 PROTOC_VER?=v0.1
 PROTOC_CONTAINER?=calico/protoc:$(PROTOC_VER)-$(BUILDARCH)
