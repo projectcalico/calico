@@ -146,7 +146,7 @@ func (c *NodeController) syncDelete() error {
 	time.Sleep(c.rl.When(RateLimitCalicoList))
 	cNodes, err := c.calicoClient.Nodes().List(c.ctx, options.ListOptions{})
 	if err != nil {
-		log.WithError(err).Errorf("Error listing Calico nodes", err)
+		log.WithError(err).Error("Error listing Calico nodes")
 		return err
 	}
 	c.rl.Forget(RateLimitCalicoList)
@@ -154,7 +154,7 @@ func (c *NodeController) syncDelete() error {
 	time.Sleep(c.rl.When(RateLimitK8s))
 	kNodes, err := c.k8sClientset.CoreV1().Nodes().List(meta_v1.ListOptions{})
 	if err != nil {
-		log.WithError(err).Errorf("Error listing K8s nodes", err)
+		log.WithError(err).Error("Error listing K8s nodes")
 		return err
 	}
 	c.rl.Forget(RateLimitK8s)
@@ -171,7 +171,7 @@ func (c *NodeController) syncDelete() error {
 			_, err := c.calicoClient.Nodes().Delete(c.ctx, node.Name, options.DeleteOptions{})
 			if _, doesNotExist := err.(errors.ErrorResourceDoesNotExist); err != nil && !doesNotExist {
 				// We hit an error other than "does not exist".
-				log.WithError(err).Errorf("Error deleting Calico node: %v", node.Name, err)
+				log.WithError(err).Errorf("Error deleting Calico node: %v", node.Name)
 				return err
 			}
 			c.rl.Forget(RateLimitCalicoDelete)

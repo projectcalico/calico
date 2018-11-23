@@ -753,7 +753,7 @@ var _ = Describe("kube-controllers FV tests", func() {
 			wep.Name = wepName
 			wep.Namespace = podNamespace
 			wep.Labels = map[string]string{
-				"foo": "label1",
+				"foo":                            "label1",
 				"projectcalico.org/namespace":    podNamespace,
 				"projectcalico.org/orchestrator": api.OrchestratorKubernetes,
 			}

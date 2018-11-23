@@ -94,8 +94,8 @@ var _ = Describe("PodConverter", func() {
 
 		// Assert labels are correct.
 		var labels = map[string]string{
-			"foo":   "bar",
-			"roger": "rabbit",
+			"foo":                            "bar",
+			"roger":                          "rabbit",
 			"projectcalico.org/orchestrator": "k8s",
 			"projectcalico.org/namespace":    "default",
 		}

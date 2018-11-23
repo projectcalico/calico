@@ -281,6 +281,7 @@ fix goimports:
 	goimports -l -w ./pkg
 	goimports -l -w ./cmd/kube-controllers/main.go
 	goimports -l -w ./cmd/check-status/main.go
+	goimports -l -w ./tests
 
 .PHONY: install-git-hooks
 ## Install Git hooks
