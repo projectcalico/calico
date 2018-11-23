@@ -70,7 +70,7 @@ VALIDARCHES = $(filter-out $(EXCLUDEARCH),$(ARCHES))
 # Determine which OS.
 OS?=$(shell uname -s | tr A-Z a-z)
 ###############################################################################
-GO_BUILD_VER?=v0.17
+GO_BUILD_VER?=v0.20
 
 K8S_VERSION?=v1.11.3
 HYPERKUBE_IMAGE?=gcr.io/google_containers/hyperkube-$(ARCH):$(K8S_VERSION)
