@@ -1793,3 +1793,35 @@ master:
       version: 147c10c
      flexvol:
       version: master
+
+v3.4:
+- title: v3.4.0-pre
+  components:
+    calico/node:
+      version: release-v3.4
+      url:
+    calicoctl:
+      version: release-v3.4
+      url: "https://www.projectcalico.org/builds/calicoctl"
+    calico/cni:
+      version: release-v3.4
+      url:
+    calico/kube-controllers:
+      version: release-v3.4
+      url:
+    networking-calico:
+      version: release-v3.4
+      url:
+    typha:
+      version: release-v3.4
+      url: 
+    flannel:
+      version: release-v3.4
+      url:
+    calico/dikastes:
+      version: release-v3.4
+      url:
+    flexvol:
+      version: release-v3.4
+      url:
+
