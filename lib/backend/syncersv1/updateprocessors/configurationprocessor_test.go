@@ -363,7 +363,7 @@ var _ = Describe("Test the generic configuration update processor and the concre
 		res.Annotations = map[string]string{
 			"config.projectcalico.org/NewConfigType":        "newFieldValue",
 			"config.projectcalico.org/AnotherNewConfigType": "newFieldValue2",
-			"thisisnotvalid":                                "not included",
+			"thisisnotvalid": "not included",
 		}
 		asNum := numorstring.ASNumber(12345)
 		res.Spec.ASNumber = &asNum
