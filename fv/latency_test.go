@@ -52,10 +52,9 @@ func (c latencyConfig) workloadIP(workloadIdx int) string {
 var _ = Context("Latency tests with initialized Felix and etcd datastore", func() {
 
 	var (
-		etcd     *containers.Container
-		felix    *infrastructure.Felix
-		felixPID int
-		client   client.Interface
+		etcd   *containers.Container
+		felix  *infrastructure.Felix
+		client client.Interface
 
 		resultsFile *os.File
 	)
@@ -65,7 +64,7 @@ var _ = Context("Latency tests with initialized Felix and etcd datastore", func(
 		topologyOptions.EnableIPv6 = true
 
 		felix, etcd, client = infrastructure.StartSingleNodeEtcdTopology(topologyOptions)
-		felixPID = felix.GetFelixPID()
+		_ = felix.GetFelixPID()
 
 		// Install the hping tool, which we use for latency measurments.
 		felix.Exec("sh", "-c", "echo http://dl-cdn.alpinelinux.org/alpine/edge/testing >> /etc/apk/repositories")
