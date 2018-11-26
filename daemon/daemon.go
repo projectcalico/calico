@@ -640,7 +640,7 @@ func exitWithCustomRC(rc int, message string) {
 	// Since log writing is done a background thread, we set the force-flush flag on this log to ensure that
 	// all the in-flight logs get written before we exit.
 	log.WithFields(log.Fields{
-		"rc": rc,
+		"rc":                       rc,
 		lclogutils.FieldForceFlush: true,
 	}).Info(message)
 	os.Exit(rc)
@@ -799,9 +799,9 @@ func newConnector(configParams *config.Config,
 		datastore:                  datastore,
 		ToDataplane:                make(chan interface{}),
 		StatusUpdatesFromDataplane: make(chan interface{}),
-		InSync:            make(chan bool, 1),
-		failureReportChan: failureReportChan,
-		dataplane:         dataplane,
+		InSync:                     make(chan bool, 1),
+		failureReportChan:          failureReportChan,
+		dataplane:                  dataplane,
 	}
 	return felixConn
 }

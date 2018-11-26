@@ -641,7 +641,7 @@ func (t *Table) attemptToGetHashesFromDataplane() (hashes map[string][]string, e
 		killErr := cmd.Kill()
 		if killErr != nil {
 			// If we don't know what state the process is in, we can't Wait() on it.
-			log.WithError(killErr).Panic(
+			log.WithError(killErr).Panicf(
 				"Failed to kill %s process after failure.", t.iptablesSaveCmd)
 		}
 	}

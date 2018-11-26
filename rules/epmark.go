@@ -58,9 +58,9 @@ func NewEndpointMarkMapperWithShim(markMask, nonCaliMark uint32, hash32 HashCalc
 	markBitsManager := markbits.NewMarkBitsManager(markMask, "endpoint-iptable-mark")
 
 	epmm := &DefaultEPMarkManager{
-		markBitsManager: markBitsManager,
-		maxPosition:     markBitsManager.CurrentFreeNumberOfMark(), // This includes zero
-		hash32:          hash32,
+		markBitsManager:          markBitsManager,
+		maxPosition:              markBitsManager.CurrentFreeNumberOfMark(), // This includes zero
+		hash32:                   hash32,
 		activeEndpointToPosition: map[string]int{},
 		activeEndpointToMark:     map[string]uint32{},
 		activePositionToEndpoint: map[int]string{},
