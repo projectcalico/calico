@@ -377,7 +377,7 @@ func makeLabelsV1() map[string]string {
 func makeLabelsV3() map[string]string {
 	return map[string]string{
 		"projectcalico.org/namespace": "default",
-		"test": "someValue",
+		"test":                        "someValue",
 	}
 }
 

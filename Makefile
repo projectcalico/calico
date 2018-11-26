@@ -11,7 +11,7 @@ test: ut fv
 #######################
 K8S_VERSION      ?= v1.11.3
 ETCD_VERSION     ?= v3.3.7
-GO_BUILD_VER     ?= v0.17
+GO_BUILD_VER     ?= v0.20
 CALICO_BUILD     ?= calico/go-build:$(GO_BUILD_VER)
 PACKAGE_NAME     ?= projectcalico/libcalico-go
 LOCAL_USER_ID    ?= $(shell id -u $$USER)
