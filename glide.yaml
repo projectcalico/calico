@@ -14,11 +14,11 @@ import:
   - pkg/config
   - pkg/run
 - package: github.com/projectcalico/felix
-  version: 7bb1e403d363f41e81e2034dca59c72034f9024e
+  version: 1cde71e22f098e8f76a599d4b6b25b721ca46562
   subpackages:
   - daemon
 - package: github.com/projectcalico/libcalico-go
-  version: 498510af2a6fd75f73d1d65470bb1bdc66448cdf
+  version: 6a1014e0034702349d09ac5c6d75c0a59e802c99
   subpackages:
   - lib/apiconfig
   - lib/apis/v3
