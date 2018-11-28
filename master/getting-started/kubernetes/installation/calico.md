@@ -17,43 +17,11 @@ The procedure differs according to the type of datastore you want {{site.prodnam
 to use and the number of nodes. Refer to the section that matches your desired
 datastore type and number of nodes.
 
+- [Kubernetes API datastore—50 nodes or less](#installing-with-the-kubernetes-api-datastore50-nodes-or-less)
+
+- [Kubernetes API datastore—more than 50 nodes](#installing-with-the-kubernetes-api-datastoremore-than-50-nodes)
+
 - [etcd datastore](#installing-with-the-etcd-datastore)
-
-- [Kubernetes API datastore—50 nodes or less](#installing-with-the-kubernetes-api-datastore50-nodes-or-less) (beta)
-
-- [Kubernetes API datastore—more than 50 nodes](#installing-with-the-kubernetes-api-datastoremore-than-50-nodes) (beta)
-
-> **Note**: {{site.prodname}} networking with the Kubernetes API datastore
-> is beta because it does not yet support {{site.prodname}} IPAM. It uses
-> `host-local` IPAM with Kubernetes pod CIDR assignments instead.
-{: .alert .alert-info}
-
-### Installing with the etcd datastore
-
-1. Download the {{site.prodname}} networking manifest for etcd.
-
-   ```bash
-   curl \
-   {{site.url}}/{{page.version}}/getting-started/kubernetes/installation/hosted/calico.yaml \
-   -O
-   ```
-
-{% include {{page.version}}/pod-cidr-sed.md yaml="calico" %}
-
-1. In the `ConfigMap` named `calico-config`, set the value of
-   `etcd_endpoints` to the IP address and port of your etcd server.
-
-   > **Tip**: You can specify more than one using commas as delimiters.
-   {: .alert .alert-success}
-
-1. Apply the manifest using the following command.
-
-   ```bash
-   kubectl apply -f calico.yaml
-   ```
-
-1. If you wish to enforce application layer policies and secure workload-to-workload
-   communications with mutual TLS authentication, continue to [Enabling application layer policy](app-layer-policy) (optional).
 
 ### Installing with the Kubernetes API datastore—50 nodes or less
 
@@ -98,14 +66,11 @@ datastore type and number of nodes.
 
    ```bash
    curl \
-   {{site.url}}/{{page.version}}/getting-started/kubernetes/installation/hosted/kubernetes-datastore/calico-networking/1.7/calico.yaml \
+   {{site.url}}/{{page.version}}/getting-started/kubernetes/installation/hosted/kubernetes-datastore/calico-networking/typha/calico.yaml \
    -O
    ```
 
 {% include {{page.version}}/pod-cidr-sed.md yaml="calico" %}
-
-1. In the `ConfigMap` named `calico-config`, locate the `typha_service_name`,
-   delete the `none` value, and replace it with `calico-typha`.
 
 1. Modify the replica count in the`Deployment` named `calico-typha`
    to the desired number of replicas.
@@ -132,6 +97,33 @@ datastore type and number of nodes.
    {: .alert .alert-danger}
 
 1. Apply the manifest.
+
+   ```bash
+   kubectl apply -f calico.yaml
+   ```
+
+1. If you wish to enforce application layer policies and secure workload-to-workload
+   communications with mutual TLS authentication, continue to [Enabling application layer policy](app-layer-policy) (optional).
+
+### Installing with the etcd datastore
+
+1. Download the {{site.prodname}} networking manifest for etcd.
+
+   ```bash
+   curl \
+   {{site.url}}/{{page.version}}/getting-started/kubernetes/installation/hosted/calico.yaml \
+   -O
+   ```
+
+   {% include {{page.version}}/pod-cidr-sed.md yaml="calico" %}
+
+1. In the `ConfigMap` named `calico-config`, set the value of
+   `etcd_endpoints` to the IP address and port of your etcd server.
+
+   > **Tip**: You can specify more than one using commas as delimiters.
+   {: .alert .alert-success}
+
+1. Apply the manifest using the following command.
 
    ```bash
    kubectl apply -f calico.yaml

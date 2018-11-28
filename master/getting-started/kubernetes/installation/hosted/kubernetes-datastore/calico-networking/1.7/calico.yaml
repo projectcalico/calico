@@ -1,4 +1,4 @@
 ---
 layout: null
 ---
-{% include {{page.version}}/manifests/calico.yaml datastore="kdd" network="calico" typha="true" %}
+{% include {{page.version}}/manifests/calico.yaml datastore="kdd" network="calico" %}
