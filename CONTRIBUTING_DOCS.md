@@ -2,7 +2,7 @@
 
 ## Overview
 
-We welcome contributions to the Calico documentation. 
+We welcome contributions to the Calico documentation.
 
 Instead of filing a GitHub issue, consider making a PR instead. You are likely to see a much more rapid resolution.
 
@@ -16,7 +16,7 @@ The doc contribution process works as follows.
 1. [Check for broken links](#checking-for-broken-links).
 1. Submit a pull request (PR) against the master branch of the [Project Calico repo](https://github.com/projectcalico/calico).
 1. If you haven't already signed our contributer agreement, GitHub will prompt you to do so (required).
-1. Request a review from one or more Calico maintainers. 
+1. Request a review from one or more Calico maintainers.
 1. After getting the approval of at least one Calico maintainer, we ask that you [backport the changes in the `master` folder to the folders of the last two releases](#how-to-quickly-apply-changes-in-master-to-a-previous-release), if appropriate.
 1. Squash your commits.
 1. One of the doc repo maintainers will give the PR a final look and then merge it.
@@ -31,7 +31,7 @@ We also encourage you to review [Doc site organization](#doc-site-organization),
 
 ## Building the doc site locally
 
-We use GitHub Pages and Jekyll to serve and build our site. While there are [several ways to build the site locally](https://help.github.com/articles/setting-up-your-github-pages-site-locally-with-jekyll/), we recommend using our Docker image and the Makefile in the root of the repo. These will allow you to build the site with a single command. 
+We use GitHub Pages and Jekyll to serve and build our site. While there are [several ways to build the site locally](https://help.github.com/articles/setting-up-your-github-pages-site-locally-with-jekyll/), we recommend using our Docker image and the Makefile in the root of the repo. These will allow you to build the site with a single command.
 
 > **Prerequisite**: [Docker](https://docs.docker.com/engine/installation/).
 
@@ -59,14 +59,14 @@ To check for broken links, navigate into the root of the repo and issue the foll
 make htmlproofer
 ```
 
-The submission of a PR kicks off a continuous integration process which includes a `make htmlproofer` command. Any errors from `htmlproofer` will cause your PR to fail the continuous integration test, so it's best to run this locally before submitting your PR. 
+The submission of a PR kicks off a continuous integration process which includes a `make htmlproofer` command. Any errors from `htmlproofer` will cause your PR to fail the continuous integration test, so it's best to run this locally before submitting your PR.
 
 However, you can also run this after submitting your PR and experiencing an `htmlproofer` failure from the Semaphore job.
 
 
 ## How to quickly apply changes in master to a previous release
 
-Let's say there's a single commit that makes changes to the `master` directory which I want to apply to the `v1.5` directory. 
+Let's say there's a single commit that makes changes to the `master` directory which I want to apply to the `v1.5` directory.
 
 1. Generate a diff. A sample command follows which stores the diff in a file called `my-patch.diff`.
 
@@ -79,7 +79,7 @@ Let's say there's a single commit that makes changes to the `master` directory w
     ```
     git apply -p2 --directory=v1.5 my-patch.diff
     ```
-    
+
     - `-p2` strips off /master on the front of the paths.
     - `--directory=v1.5` adds "v1.5" to the start of the paths.
 
@@ -108,7 +108,7 @@ Each orchestrator has a landing page that is targeted at people who are coming t
 
 ### Usage
 
-This section contains task-based information. All top-level titles in this section should start with a gerund. Each topic should include why you want to perform the task, a goal, and a set of steps you can follow to achieve it. 
+This section contains task-based information. All top-level titles in this section should start with a gerund. Each topic should include why you want to perform the task, a goal, and a set of steps you can follow to achieve it.
 
 Examples:
 
@@ -152,10 +152,10 @@ If you need to delete or rename a directory or file:
 
 - Update any `canonical_url` paths that reference the deleted or renamed page. The `canonical_url` metadata of all previous instances of the page may reference the deleted or renamed page. You must correct these pages to reference the final instance of the page. When you submit your PR, `htmlproofer` will flag these errors.
 
-    - _Deletion example_: If you delete a page from the `master` and `v3.0` directories, you must update the `canonical_url` path of the page in the `v2.6` directory to point to itself. You would also need to update the `canonical_url` paths of any previous instances of the page to point to the copy in the `v2.6` directory. This final copy becomes the new canonical copy. 
-    
+    - _Deletion example_: If you delete a page from the `master` and `v3.0` directories, you must update the `canonical_url` path of the page in the `v2.6` directory to point to itself. You would also need to update the `canonical_url` paths of any previous instances of the page to point to the copy in the `v2.6` directory. This final copy becomes the new canonical copy.
+
     - _Renaming example_: If you rename a page from the `master` and `v3.0` directories, you must update the `canonical_url` path of the page in the `v2.6` directory to point to the new path. Also correct any copies in previous directories.
-    
+
     - For more discussion of canonical URLs, refer to the [Canonical URLs](#canonical-urls) section.
 
 ### Side navigation bar
@@ -204,10 +204,20 @@ An anchor link for each heading is automatically created. It consists of the tit
 
 Because the documentation site includes content for past versions as well as the latest version, it contains many duplicate pages. When Google indexes the site, it needs to know which copy we prefer. We use [jekyll-seo-tag](https://github.com/jekyll/jekyll-seo-tag) to add [canonical URLs](https://support.google.com/webmasters/answer/139066?hl=en) to each page. This helps us to ensure that the latest copy of the page comes up first when people search for information via Google.
 
-Each page should include a `canonical_url` tag that contains the absolute path to the latest copy of the page, even if the latest copy is the page itself. 
+Each page should include a `canonical_url` tag that contains the absolute path to the latest copy of the page, even if the latest copy is the page itself.
 
 You should _not_ need to modify the `canonical_url` metadata unless you are adding, deleting, or renaming a page.
 
+## Code samples
+
+Our site adds a copy button to each code block by default. To ensure that readers can copy and paste the code successfully, follow the [Code samples](https://github.com/projectcalico/calico/blob/master/DOC_STYLE_GUIDE.md#code-samples) recommendations in the DOC_STYLE_GUIDE.
+
+To modify the default behavior for code samples that should not be copied, such as responses, append `{: .no-select-button}`. An example follows.
+
+```
+Successfully created 8 resource(s)
+{: .no-select-button}
+```
 
 ## Releases
 

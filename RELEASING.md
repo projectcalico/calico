@@ -37,9 +37,13 @@ Before attempting to create a Calico release you must do the following.
    - [calico/kube-controllers](https://github.com/projectcalico/kube-controllers/releases)
    - [calico/felix](https://github.com/projectcalico/felix/releases)
    - [calico/typha](https://github.com/projectcalico/typha/releases)
-   - [networking-calico](https://github.com/openstack/networking-calico)
    - [calico/dikastes](https://github.com/projectcalico/app-policy/releases)
    - [calico/pod2daemon-flexvol](https://github.com/projectcalico/pod2daemon/releases)
+
+   The following components _must_ use the same minor revision number as the Calico version number above, but
+   do not always need to be released for every patch. They must be cut as part of a minor release of Calico.
+
+   - [networking-calico](https://github.com/openstack/networking-calico)
 
    The following components do not share a version with the Calico release, but are included in the documentation.
 
@@ -99,12 +103,15 @@ be a release candidate.
        path: vX.Y
      values:
        version: vX.Y
-       sitemap: true
    ```
 
-1. Remove `sitemap: false` from the previous release in `_config.yml`.
-
 1. If appropriate, update the list of tested Kubernetes versions in `vX.Y/getting-started/kubernetes/requirements.md`.
+
+1. Update the AUTHORS.md file. This will require `GITHUB_TOKEN` be set in your environment.
+
+   ```
+   make update-authors
+   ```
 
 1. Follow the steps in [writing release notes](#release-notes) to generate candidate release notes.
 
@@ -158,11 +165,16 @@ release in the documentation. Perform these steps on a branch off of master.
 
 1. Modify the redirect in `/index.html` to point to your new release.
 
-1. Move the section for the release in `_data/versions.yml` to the top of the file so that it will be the 'Latest Release'.
+1. Move the section for the release in `_data/versions.yml` to the top of the file so that it will be
+   the 'Latest Release', and remove any release candidates from the section.
 
 1. Run `make add_redirects_for_latest VERSION=vX.Y` to update the redirects.
 
-1. Commit your changes and open a pull request, make sure it passes CI and get it reviewed.
+1. Commit your current changes.
+
+1. Update `sitemap-latest.xml` in the root of the repository. This is still a manual process. Use `_site/sitemap.xml` as a guide.
+
+1. Commit the sitemap changes as a new commit and open a pull request, make sure it passes CI and get it reviewed.
 
    Once reviewed and CI has passed, merge the PR. This will cause the live docs site to be updated (after a few minutes).
 
