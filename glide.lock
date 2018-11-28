@@ -1,5 +1,5 @@
-hash: e7d024d788a3d1aff39729877ef8e3890d8d9b8c95941fea063a18f1cc900862
-updated: 2018-11-28T14:14:51.321864844Z
+hash: 1debad31cbe7745662ca0fa2b07c7dd0c9494385beba082b98120d3c72837f1a
+updated: 2018-11-28T14:53:25.206055487Z
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -93,7 +93,7 @@ imports:
 - name: github.com/imdario/mergo
   version: 6633656539c1639d9d78127b7d47c622b5d7b6dc
 - name: github.com/json-iterator/go
-  version: 2ddf6d758266fcb080a4f9e054b9f292c85e6798
+  version: f2b4162afba35581b6d4a50d3b8f34e33c144682
 - name: github.com/kelseyhightower/envconfig
   version: dd1402a4d99de9ac2f396cd6fcb957bc2c695ec1
 - name: github.com/kelseyhightower/memkv
@@ -195,10 +195,9 @@ imports:
   - pkg/syncproto
   - pkg/tlsutils
 - name: github.com/prometheus/client_golang
-  version: 773f5027234d0b08adf766be34f55df2f312abf7
+  version: 5cec1d0429b02e4323e042eb04dafdb079ddf568
   subpackages:
   - prometheus
-  - prometheus/internal
 - name: github.com/prometheus/client_model
   version: 6f3806018612930941127f2a7c6c453ba2c527d2
   subpackages:
