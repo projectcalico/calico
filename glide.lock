@@ -1,5 +1,5 @@
-hash: 2a7948a17de1191b6a8ce9d51caffb3de675dc22a01b664ba8150915b094e2ef
-updated: 2018-11-20T15:16:34.509854-08:00
+hash: e7d024d788a3d1aff39729877ef8e3890d8d9b8c95941fea063a18f1cc900862
+updated: 2018-11-28T14:14:51.321864844Z
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -93,7 +93,7 @@ imports:
 - name: github.com/imdario/mergo
   version: 6633656539c1639d9d78127b7d47c622b5d7b6dc
 - name: github.com/json-iterator/go
-  version: f2b4162afba35581b6d4a50d3b8f34e33c144682
+  version: 2ddf6d758266fcb080a4f9e054b9f292c85e6798
 - name: github.com/kelseyhightower/envconfig
   version: dd1402a4d99de9ac2f396cd6fcb957bc2c695ec1
 - name: github.com/kelseyhightower/memkv
@@ -153,7 +153,7 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: a95e159639bd200988629ff47c28169ac6d98837
+  version: 6a1014e0034702349d09ac5c6d75c0a59e802c99
   subpackages:
   - lib/apiconfig
   - lib/apis/v1

@@ -160,7 +160,7 @@ static-checks: vendor
 		-v $(CURDIR):/go/src/$(PACKAGE_NAME) \
 		-w /go/src/$(PACKAGE_NAME) \
 		$(CALICO_BUILD) \
-		gometalinter --deadline=300s --disable-all --enable=vet --enable=errcheck  --enable=goimports --vendor ./...
+		gometalinter --deadline=300s --disable-all --enable=vet --enable=errcheck  --enable=goimports --vendor --exclude=vendor ./...
 
 .PHONY: fix
 ## Fix static checks
