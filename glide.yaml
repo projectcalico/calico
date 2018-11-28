@@ -84,3 +84,8 @@ import:
   - rest
   - tools/cache
   - tools/clientcmd
+# The 1.11.0 versions of k8s.io/apimachinery and k8s.io/api pin json-iter to 
+# different versions and one of them has a compilation bug.  Pin to the fixed 
+# version.
+- package: github.com/json-iterator/go
+  version: f2b4162afba35581b6d4a50d3b8f34e33c144682
