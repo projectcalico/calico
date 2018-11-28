@@ -77,7 +77,7 @@ kubectl create -f policies/backend-policy.yaml
 
 Refresh the UI.  You should see the following:
 
-- The frontend can now access the backend (on TCP port 80 only).
+- The frontend can now access the backend (on TCP port 6379 only).
 - The backend cannot access the frontend at all.
 - The client cannot access the frontend, nor can it access the backend.
 
