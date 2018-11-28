@@ -147,6 +147,15 @@ rules:
       - get
       - list
       - watch
+  # These permissions are only requried for upgrade from v2.6, and can
+  # be removed after upgrade or on fresh installations.
+  - apiGroups: ["crd.projectcalico.org"]
+    resources:
+      - bgpconfigurations
+      - bgppeers
+    verbs:
+      - create
+      - update
 {%- endif %}
 ---
 apiVersion: rbac.authorization.k8s.io/v1beta1
