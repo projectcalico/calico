@@ -115,7 +115,7 @@ datastore type and number of nodes.
    -O
    ```
 
-   {% include {{page.version}}/pod-cidr-sed.md yaml="calico" %}
+{% include {{page.version}}/pod-cidr-sed.md yaml="calico" %}
 
 1. In the `ConfigMap` named `calico-config`, set the value of
    `etcd_endpoints` to the IP address and port of your etcd server.
