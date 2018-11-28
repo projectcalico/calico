@@ -64,8 +64,7 @@ ETCD_ENDPOINTS to point at the correct etcd cluster endpoints.
 > it will reconfigure any value currently set through the node resource.
 >
 > The `CALICO_NETWORKING_BACKEND` defaults to use BIRD as the routing daemon.
-> This may also be set to `gobgp` (to use GoBGP as the routing daemon, but note
-> that this does not support IP-in-IP), or `none` (if routing is handled by an
+> This may also be set to `none` (if routing is handled by an
 > alternative mechanism).
 {: .alert .alert-info}
 

@@ -3,9 +3,9 @@ title: Calico Architecture
 canonical_url: https://docs.projectcalico.org/v3.3/reference/architecture/
 ---
 
-This document discusses the various pieces of the Calico's architecture, 
+This document discusses the various pieces of the Calico's architecture,
 with a focus on what specific role each component plays in
-the Calico network. 
+the Calico network.
 
 <!-- TODO(smc) data-model: Link to new data model docs. -->
 
@@ -115,7 +115,7 @@ a consistent data store, which ensures Calico can always build an
 accurate network.
 
 Depending on the orchestrator plugin, etcd may either be the master data
-store or a lightweight mirror of a separate data store. 
+store or a lightweight mirror of a separate data store.
 
 The etcd component is distributed across the entire deployment. It is
 divided into two groups of machines: the core cluster, and the proxies.
@@ -164,10 +164,6 @@ into the network.
 
 Calico deploys a BGP client on every node that also hosts a [Felix](#felix). The role of the BGP client is to read routing state that [Felix](#felix) programs into the kernel and
 distribute it around the data center.
-
-In Calico, this BGP component is most commonly
-[BIRD](http://bird.network.cz/), though any BGP client, such as [GoBGP](https://github.com/osrg/gobgp) that can draw
-routes from the kernel and distribute them is suitable in this role.
 
 The BGP client is responsible for performing the following task:
 
