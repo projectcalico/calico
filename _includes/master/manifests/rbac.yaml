@@ -71,6 +71,18 @@ rules:
       - get
   - apiGroups: [""]
     resources:
+      - endpoints
+      - services
+    verbs:
+      # Used to discover service IPs for advertisement.
+      - watch
+      - list
+{%- if include.datastore == "kdd" %}
+      # Used to discover Typhas.
+      - get
+{%- endif %}
+  - apiGroups: [""]
+    resources:
       - nodes/status
     verbs:
       # Needed for clearing NodeNetworkUnavailable flag.
@@ -135,13 +147,6 @@ rules:
       - get
       - list
       - watch
-  # Used to discover Typhas.
-  - apiGroups: [""]
-    resources:
-      - endpoints
-      - services
-    verbs:
-      - get
 {%- endif %}
 ---
 apiVersion: rbac.authorization.k8s.io/v1beta1
