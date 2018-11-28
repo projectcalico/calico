@@ -11,8 +11,8 @@ interfaces.
 -  A host endpoint with `interfaceName: *` represents _all_ of a host's real or virtual
    interfaces.
 
--  A host endpoint for one specific real interface is configured by `interfaceName:
-   <name-of-that-interface>`, for example `interfaceName: eth0`, or by leaving `interfaceName`
+-  A host endpoint for one specific real interface is configured by `interfaceName: <name-of-that-interface>`,
+   for example `interfaceName: eth0`, or by leaving `interfaceName`
    empty and including one of the interface's IPs in `expectedIPs`.
 
 Each host endpoint may include a set of labels and list of profiles that {{site.prodname}}
