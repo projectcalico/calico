@@ -359,7 +359,7 @@ func CmdAddK8s(ctx context.Context, args *skel.CmdArgs, conf types.NetConf, epID
 		return nil, err
 	}
 	logger.WithField("endpoint", endpoint).Info("Populated endpoint")
-	fmt.Fprintf(os.Stderr, "Calico CNI using IPs: %s\n", endpoint.Spec.IPNetworks)
+	logger.Infof("Calico CNI using IPs: %s", endpoint.Spec.IPNetworks)
 
 	// releaseIPAM cleans up any IPAM allocations on failure.
 	releaseIPAM := func() {

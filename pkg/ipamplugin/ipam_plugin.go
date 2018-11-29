@@ -112,7 +112,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 	ctx := context.Background()
 	r := &current.Result{}
 	if ipamArgs.IP != nil {
-		fmt.Fprintf(os.Stderr, "Calico CNI IPAM request IP: %v\n", ipamArgs.IP)
+		logger.Infof("Calico CNI IPAM request IP: %v", ipamArgs.IP)
 
 		// The hostname will be defaulted to the actual hostname if conf.Nodename is empty
 		assignArgs := ipam.AssignIPArgs{
@@ -161,7 +161,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 			num6 = 1
 		}
 
-		fmt.Fprintf(os.Stderr, "Calico CNI IPAM request count IPv4=%d IPv6=%d\n", num4, num6)
+		logger.Infof("Calico CNI IPAM request count IPv4=%d IPv6=%d", num4, num6)
 
 		v4pools, err := utils.ResolvePools(ctx, calicoClient, conf.IPAM.IPv4Pools, true)
 		if err != nil {
@@ -173,7 +173,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 			return err
 		}
 
-		fmt.Fprintf(os.Stderr, "Calico CNI IPAM handle=%s\n", handleID)
+		logger.Infof("Calico CNI IPAM handle=%s", handleID)
 		assignArgs := ipam.AutoAssignArgs{
 			Num4:      num4,
 			Num6:      num6,
@@ -184,7 +184,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 		}
 		logger.WithField("assignArgs", assignArgs).Info("Auto assigning IP")
 		assignedV4, assignedV6, err := calicoClient.IPAM().AutoAssign(ctx, assignArgs)
-		fmt.Fprintf(os.Stderr, "Calico CNI IPAM assigned addresses IPv4=%v IPv6=%v\n", assignedV4, assignedV6)
+		logger.Infof("Calico CNI IPAM assigned addresses IPv4=%v IPv6=%v", assignedV4, assignedV6)
 		if err != nil {
 			return err
 		}

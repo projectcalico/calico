@@ -284,7 +284,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 			}
 			logger.WithField("endpoint", endpoint).Info("Populated endpoint (with nets)")
 
-			fmt.Fprintf(os.Stderr, "Calico CNI using IPs: %s\n", endpoint.Spec.IPNetworks)
+			logger.Infof("Calico CNI using IPs: %s", endpoint.Spec.IPNetworks)
 
 			// 3) Set up the veth
 			hostVethName, contVethMac, err := utils.DoNetworking(
@@ -344,7 +344,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 			// The profile doesn't exist so needs to be created. The rules vary depending on whether k8s is being used.
 			// Under k8s (without full policy support) the rule is permissive and allows all traffic.
 			// Otherwise, incoming traffic is only allowed from profiles with the same tag.
-			fmt.Fprintf(os.Stderr, "Calico CNI creating profile: %s\n", conf.Name)
+			logger.Infof("Calico CNI creating profile: %s", conf.Name)
 			var inboundRules []api.Rule
 			if wepIDs.Orchestrator == api.OrchestratorKubernetes {
 				inboundRules = []api.Rule{{Action: api.Allow}}

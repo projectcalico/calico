@@ -432,7 +432,7 @@ func CleanUpNamespace(args *skel.CmdArgs, logger *logrus.Entry) error {
 		})
 
 		if devErr == nil {
-			fmt.Fprintf(os.Stderr, "Calico CNI deleting device in netns %s\n", args.Netns)
+			logger.Infof("Calico CNI deleting device in netns %s", args.Netns)
 			// Deleting the veth has been seen to hang on some kernel version. Timeout the command if it takes too long.
 			ch := make(chan error, 1)
 
@@ -449,7 +449,7 @@ func CleanUpNamespace(args *skel.CmdArgs, logger *logrus.Entry) error {
 				if err != nil {
 					return err
 				} else {
-					fmt.Fprintf(os.Stderr, "Calico CNI deleted device in netns %s\n", args.Netns)
+					logger.Infof("Calico CNI deleted device in netns %s", args.Netns)
 				}
 			case <-time.After(5 * time.Second):
 				return fmt.Errorf("Calico CNI timed out deleting device in netns %s", args.Netns)

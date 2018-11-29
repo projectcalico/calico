@@ -165,7 +165,7 @@ func AddIPAM(conf types.NetConf, args *skel.CmdArgs, logger *logrus.Entry) (*cur
 // It also contains IPAM plugin specific logic based on the configured plugin,
 // and is the logical counterpart to AddIPAM.
 func DeleteIPAM(conf types.NetConf, args *skel.CmdArgs, logger *logrus.Entry) error {
-	fmt.Fprint(os.Stderr, "Calico CNI releasing IP address\n")
+	logger.Info("Calico CNI releasing IP address")
 	logger.WithFields(logrus.Fields{"paths": os.Getenv("CNI_PATH"),
 		"type": conf.IPAM.Type}).Debug("Looking for IPAM plugin in paths")
 
@@ -300,7 +300,7 @@ func replaceHostLocalIPAMPodCIDR(logger *logrus.Entry, rawIpamData interface{}, 
 	}
 	subnet, _ := ipamData["subnet"].(string)
 	if strings.EqualFold(subnet, "usePodCidr") {
-		fmt.Fprint(os.Stderr, "Calico CNI fetching podCidr from Kubernetes\n")
+		logger.Info("Calico CNI fetching podCidr from Kubernetes")
 		podCidr, err := getPodCidr()
 		if err != nil {
 			logger.Info("Failed to getPodCidr")
@@ -308,7 +308,7 @@ func replaceHostLocalIPAMPodCIDR(logger *logrus.Entry, rawIpamData interface{}, 
 		}
 		logger.WithField("podCidr", podCidr).Info("Fetched podCidr")
 		ipamData["subnet"] = podCidr
-		fmt.Fprintf(os.Stderr, "Calico CNI passing podCidr to host-local IPAM: %s\n", podCidr)
+		logger.Infof("Calico CNI passing podCidr to host-local IPAM: %s", podCidr)
 	}
 	return nil
 }
