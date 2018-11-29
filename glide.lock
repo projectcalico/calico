@@ -1,5 +1,5 @@
-hash: 3623927b6b3a2f291525e6bdabd348f2f5143803c97151ddd492d5cf6d950af8
-updated: 2018-11-23T07:39:00.324690163Z
+hash: 55882f32039dfd5b18b8c4bd204197482c776f72c00a80b3f13cc99912d721b9
+updated: 2018-11-29T22:26:26.447101523Z
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -35,7 +35,7 @@ imports:
   - pkg/types
   - version
 - name: github.com/coreos/go-semver
-  version: 8ab6407b697782a06568d4b7f1db25550ec2e4c6
+  version: e214231b295a8ea9479f11b70b35d5acf3556d9b
   subpackages:
   - semver
 - name: github.com/davecgh/go-spew
@@ -108,7 +108,7 @@ imports:
 - name: github.com/kardianos/osext
   version: ae77be60afb1dcacde03767a8c37337fad28ac14
 - name: github.com/kelseyhightower/confd
-  version: 76ce5a15c8712b68801571b3e3ec016027854844
+  version: 62ff3843c5f55ea478f03345723c15fe29819bb7
   repo: https://github.com/projectcalico/confd.git
   subpackages:
   - pkg/backends
@@ -319,9 +319,9 @@ imports:
   subpackages:
   - nl
 - name: github.com/vishvananda/netns
-  version: 13995c7128ccc8e51e9a6bd2b551020a27180abd
+  version: 54f0e4339ce73702a0607f49922aaa1e749b418d
 - name: golang.org/x/crypto
-  version: 49796115aa4b964c318aad4f3084fdb41e9aa067
+  version: 94eea52f7b742c7cbe0b03b22f0c4c8631ece122
   subpackages:
   - ssh/terminal
 - name: golang.org/x/net
