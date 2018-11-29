@@ -138,6 +138,7 @@ NODE_CONTAINER_BINARY = $(NODE_CONTAINER_BIN_DIR)/calico-node-$(ARCH)
 CRD_PATH=$(CURDIR)/vendor/github.com/projectcalico/libcalico-go/test/
 LOCAL_IP_ENV?=$(shell ip route get 8.8.8.8 | head -1 | awk '{print $$7}')
 ST_TO_RUN?=tests/st/
+K8ST_TO_RUN?=tests/
 # Can exclude the slower tests with "-a '!slow'"
 ST_OPTIONS?=
 
@@ -163,6 +164,8 @@ clean:
 	# Delete images that we built in this repo
 	docker rmi $(BUILD_IMAGE):latest-$(ARCH) || true
 	docker rmi $(TEST_CONTAINER_NAME) || true
+
+	rm tests/k8st/$(DIND_SCR)
 
 ###############################################################################
 # Building the binary
@@ -450,6 +453,51 @@ st-checks:
 	# Insert an iptables rule to allow access from our test containers to etcd
 	# running on the host.
 	iptables-save | grep -q 'calico-st-allow-etcd' || iptables $(IPT_ALLOW_ETCD)
+
+## Get the kubeadm-dind-cluster script
+K8ST_VERSION?=v1.12
+DIND_SCR?=dind-cluster-$(K8ST_VERSION).sh
+tests/k8st/dind-cluster-$(K8ST_VERSION).sh:
+	wget -O tests/k8st/$(DIND_SCR) https://raw.githubusercontent.com/neiljerram/kubeadm-dind-cluster/calico-customization-tidy/fixed/$(DIND_SCR)
+	chmod +x tests/k8st/$(DIND_SCR)
+
+.PHONY: k8s-test
+## Run the k8s tests
+k8s-test:
+	$(MAKE) k8s-stop
+	$(MAKE) k8s-start
+	$(MAKE) k8s-run-test
+	#$(MAKE) k8s-stop
+
+.PHONY: k8s-start
+## Start k8s cluster
+k8s-start: $(NODE_CONTAINER_CREATED) tests/k8st/$(DIND_SCR)
+	CNI_PLUGIN=calico \
+	CALICO_VERSION=master \
+	CALICO_NODE_IMAGE=$(BUILD_IMAGE):latest-$(ARCH) \
+	POD_NETWORK_CIDR=192.168.0.0/16 \
+	SKIP_SNAPSHOT=y \
+	tests/k8st/$(DIND_SCR) up
+
+.PHONY: k8s-stop
+## Stop k8s cluster
+k8s-stop: tests/k8st/$(DIND_SCR)
+	tests/k8st/$(DIND_SCR) down
+	tests/k8st/$(DIND_SCR) clean
+
+.PHONY: k8s-run-test
+## Run k8st in an existing k8s cluster
+k8s-run-test: calico_test.created
+	docker run \
+	    -v $(CURDIR):/code \
+	    -v /var/run/docker.sock:/var/run/docker.sock \
+	    -v /home/$(USER)/.kube/config:/root/.kube/config \
+	    -v /home/$(USER)/.kubeadm-dind-cluster:/root/.kubeadm-dind-cluster \
+	    --privileged \
+	    --net host \
+        $(TEST_CONTAINER_NAME) \
+	    sh -c 'cp /root/.kubeadm-dind-cluster/kubectl /bin/kubectl && ls -ltr /bin/kubectl && which kubectl && cd /code/tests/k8st && \
+	           nosetests $(K8ST_TO_RUN) -v --with-xunit --xunit-file="/code/report/k8s-tests.xml" --with-timer'
 
 .PHONY: st
 ## Run the system tests

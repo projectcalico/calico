@@ -38,7 +38,7 @@ MAINTAINER Tom Denham <tom@projectcalico.org>
 # Running STs in this container requires that it has all dependencies installed
 # for executing the tests. Install these dependencies:
 RUN apk add --update python python-dev py2-pip py-setuptools openssl-dev libffi-dev tshark \
-        netcat-openbsd iptables ip6tables iproute2 iputils ipset curl && \
+        netcat-openbsd iptables ip6tables iproute2 iputils ipset curl gcc jq musl-dev && \
         echo 'hosts: files mdns4_minimal [NOTFOUND=return] dns mdns4' >> /etc/nsswitch.conf && \
         rm -rf /var/cache/apk/*
 
