@@ -186,7 +186,23 @@ func runHealthChecks(ctx context.Context, s *status.Status, k8sClientset *kubern
 
 		// Kube-apiserver HealthCheck
 		healthStatus := 0
+		k8sCheckDone := make(chan interface{}, 1)
+		go func(k8sCheckDone <-chan interface{}) {
+			time.Sleep(2 * time.Second)
+			select {
+			case <-k8sCheckDone:
+				// The check has completed.
+			default:
+				// Check is still running, so report not ready.
+				s.SetReady(
+					"KubeAPIServer",
+					false,
+					fmt.Sprintf("Taking a long time to check apiserver"),
+				)
+			}
+		}(k8sCheckDone)
 		k8sClientset.Discovery().RESTClient().Get().AbsPath("/healthz").Do().StatusCode(&healthStatus)
+		k8sCheckDone <- nil
 		if healthStatus != http.StatusOK {
 			log.WithError(err).Errorf("Failed to reach apiserver")
 			s.SetReady(
