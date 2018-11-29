@@ -21,7 +21,7 @@ Usage:
                      [--ip6-autodetection-method=<IP6_AUTODETECTION_METHOD>]
                      [--log-dir=<LOG_DIR>]
                      [--node-image=<DOCKER_IMAGE_NAME>]
-                     [--backend=(bird|gobgp|none)]
+                     [--backend=(bird|none)]
                      [--config=<CONFIG>]
                      [--no-default-ippools]
                      [--dryrun]
@@ -88,11 +88,9 @@ Options:
      --node-image=<DOCKER_IMAGE_NAME>
                            Docker image to use for Calico's per-node container.
                            [default: {{site.data.imageNames[page.version].imageNames["node"]}}:latest]
-     --backend=(bird|gobgp|none)
+     --backend=(bird|none)
                            Specify which networking backend to use.  When set
                            to "none", Calico node runs in policy only mode.
-                           The option to run with gobgp is currently
-                           experimental.
                            [default: bird]
      --dryrun              Output the appropriate command, without starting the
                            container.
@@ -182,7 +180,7 @@ To set the autodetection method for IPv6, use the `--ip6-autodetection-method` o
 
 > **Note**: If you are starting the `{{site.nodecontainer}}` container directly (and not using the
 > `calicoctl run` helper command), the options are passed in environment
-> variables. These are described in 
+> variables. These are described in
 > [Configuring `{{site.nodecontainer}}`]({{site.baseurl}}/{{page.version}}/reference/node/configuration).
 {: .alert .alert-info}
 
@@ -314,11 +312,9 @@ terminating `,` character does not need to be specified for those cases.
    --node-image=<DOCKER_IMAGE_NAME>
                          Docker image to use for Calico's per-node container.
                          [default: {{site.data.imageNames[page.version].imageNames["node"]}}:latest]
-   --backend=(bird|gobgp|none)
+   --backend=(bird|none)
                          Specify which networking backend to use.  When set
                          to "none", Calico node runs in policy only mode.
-                         The option to run with gobgp is currently
-                         experimental.
                          [default: bird]
    --dryrun              Output the appropriate command, without starting the
                          container.

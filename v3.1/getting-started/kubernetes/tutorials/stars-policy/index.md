@@ -72,7 +72,7 @@ kubectl create -f {{site.url}}/{{page.version}}/getting-started/kubernetes/tutor
 
 Refresh the UI.  You should see the following:
 
-- The frontend can now access the backend (on TCP port 80 only).
+- The frontend can now access the backend (on TCP port 6379 only).
 - The backend cannot access the frontend at all.
 - The client cannot access the frontend, nor can it access the backend.
 

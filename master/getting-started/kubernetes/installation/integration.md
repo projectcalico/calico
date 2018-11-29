@@ -3,7 +3,6 @@ title: Integration Guide
 canonical_url: 'https://docs.projectcalico.org/v3.3/getting-started/kubernetes/installation/integration'
 ---
 
-
 This document explains the components necessary to install {{site.prodname}} on
 Kubernetes for integrating with custom configuration management.
 
@@ -116,10 +115,14 @@ Download the binaries and make sure they're executable.
 
 {% if page.version == "master" %}
 You can download the [latest relase from GitHub](https://github.com/projectcalico/cni-plugin/releases).
+
+Download the correct binaries for your architecture, and place them at `/opt/cni/bin/calico` and `/opt/cni/bin/calico-ipam`.
 {% else %}
 ```bash
-wget -N -P /opt/cni/bin https://github.com/projectcalico/cni-plugin/releases/download/{{site.data.versions[page.version].first.components["calico/cni"].version}}/calico
-wget -N -P /opt/cni/bin https://github.com/projectcalico/cni-plugin/releases/download/{{site.data.versions[page.version].first.components["calico/cni"].version}}/calico-ipam
+wget -N https://github.com/projectcalico/cni-plugin/releases/download/{{site.data.versions[page.version].first.components["calico/cni"].version}}/calico-amd64
+wget -N https://github.com/projectcalico/cni-plugin/releases/download/{{site.data.versions[page.version].first.components["calico/cni"].version}}/calico-ipam-amd64
+mv ./calico-amd64 /opt/cni/bin/calico
+mv ./calico-ipam-amd64 /opt/cni/bin/calico-ipam
 chmod +x /opt/cni/bin/calico /opt/cni/bin/calico-ipam
 ```
 {% endif %}
@@ -128,7 +131,7 @@ The {{site.prodname}} CNI plugins require a standard CNI config file.  The `poli
 running the `calico/kube-controllers` container .
 
 ```bash
-mkdir -p /etc/cni/net.d 
+mkdir -p /etc/cni/net.d
 cat >/etc/cni/net.d/10-calico.conf <<EOF
 {
     "name": "calico-k8s-network",
@@ -161,8 +164,8 @@ In addition to the CNI plugin specified by the CNI config file, Kubernetes requi
 Download the file `loopback` and copy it to the CNI binary directory.
 
 ```bash
-wget https://github.com/containernetworking/cni/releases/download/v0.6.0/cni-v0.6.0.tgz
-tar -zxvf cni-v0.6.0.tgz
+wget https://github.com/containernetworking/plugins/releases/download/v0.7.1/cni-plugins-amd64-v0.7.1.tgz
+tar -zxvf cni-plugins-amd64-v0.7.1.tgz
 sudo cp loopback /opt/cni/bin/
 ```
 

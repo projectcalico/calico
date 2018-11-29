@@ -4,9 +4,9 @@ redirect_from: latest/reference/architecture/index
 canonical_url: 'https://docs.projectcalico.org/v3.3/reference/architecture/'
 ---
 
-This document discusses the various pieces of {{site.prodname}}'s architecture, 
+This document discusses the various pieces of {{site.prodname}}'s architecture,
 with a focus on what specific role each component plays in
-the {{site.prodname}} network. 
+the {{site.prodname}} network.
 
 <!-- TODO(smc) data-model: Link to new data model docs. -->
 
@@ -92,12 +92,12 @@ The orchestrator plugin is responsible for the following tasks:
 
 The orchestrator will inevitably have its own set of APIs for managing
 networks. The orchestrator plugin's primary job is to translate those
-APIs into {{site.prodname}}'s data-model and then store it in 
+APIs into {{site.prodname}}'s data-model and then store it in
 {{site.prodname}}'s datastore.
 
 Some of this translation will be very simple, other bits may be more
 complex in order to render a single complex operation (e.g. live
-migration) into the series of simpler operations the rest of the 
+migration) into the series of simpler operations the rest of the
 {{site.prodname}} network expects.
 
 #### Feedback
@@ -170,10 +170,6 @@ into the network.
 
 {{site.prodname}} deploys a BGP client on every node that also hosts a [Felix](#felix). The role of the BGP client is to read routing state that [Felix](#felix) programs into the kernel and
 distribute it around the data center.
-
-In Calico, this BGP component is most commonly
-[BIRD](http://bird.network.cz/), though any BGP client, such as [GoBGP](https://github.com/osrg/gobgp) that can draw
-routes from the kernel and distribute them is suitable in this role.
 
 The BGP client is responsible for performing the following task:
 

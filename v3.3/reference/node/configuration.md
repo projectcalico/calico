@@ -27,10 +27,10 @@ The `{{site.nodecontainer}}` container is primarily configured through environme
 | CALICO_LIBNETWORK_LABEL_ENDPOINTS | Enables copying a subset of the Docker container labels for use as Calico labels on workloadendpoints. [Default: `false`] | boolean |
 | CALICO_LIBNETWORK_ENABLED | Enables running the docker-libnetwork plugin directly in the `{{site.nodecontainer}}` container. [Default: `true`] | boolean |
 | CALICO_LIBNETWORK_IFPREFIX | Interface prefix to use for the network interface within the Docker containers that have been networked by the {{site.prodname}} driver. [Default: `cali`] | string |
-| CALICO_NETWORKING_BACKEND | Describes which BGP networking backend to use [Default: `bird`] | gobgp, bird, none |
+| CALICO_NETWORKING_BACKEND | Describes which BGP networking backend to use [Default: `bird`] | bird, none |
 | CALICO_IPV4POOL_CIDR | The IPv4 Pool to create if none exists at start up. It is invalid to define this variable and NO_DEFAULT_POOLS. [Default: `192.168.0.0/16`] | IPv4 CIDR |
 | CALICO_IPV6POOL_CIDR | The IPv6 Pool to create if none exists at start up. It is invalid to define this variable and NO_DEFAULT_POOLS. [Default: `<a randomly chosen /48 ULA>`] | IPv6 CIDR |
-| CALICO_IPV4POOL_IPIP | IPIP Mode to use for the IPv4 POOL created at start up. [Default: `Off`] | Off, Always, CrossSubnet |
+| CALICO_IPV4POOL_IPIP | IPIP Mode to use for the IPv4 POOL created at start up. [Default: `Always`] | Always, CrossSubnet, Never ("Off" is also accepted as a synonym for "Never") |
 | CALICO_IPV4POOL_NAT_OUTGOING | Controls NAT Outgoing for the IPv4 Pool created at start up. [Default: `true`] | boolean |
 | CALICO_IPV6POOL_NAT_OUTGOING | Controls NAT Outgoing for the IPv6 Pool created at start up. [Default: `false`] | boolean |
 | CALICO_STARTUP_LOGLEVEL      | The log severity above which startup `{{site.nodecontainer}}` logs are sent to the stdout. [Default: `ERROR`] | DEBUG, INFO, WARNING, ERROR, CRITICAL, or NONE (case-insensitive) |
