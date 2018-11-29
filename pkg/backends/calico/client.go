@@ -711,6 +711,11 @@ func (c *client) OnUpdates(updates []api.Update) {
 		c.updateCache(u.UpdateType, &u.KVPair)
 	}
 
+	// Notify watcher thread that we've received new updates.
+	c.onNewUpdates()
+}
+
+func (c *client) onNewUpdates() {
 	if c.synced {
 		// Wake up the watchers to let them know there may be some updates of interest.  We only
 		// need to do this once we're synced because until that point all of the Watcher threads
@@ -894,6 +899,7 @@ func (c *client) AddRejectCIDRs(cidrs []string) {
 		c.cache[k] = cidr
 		c.keyUpdated(k)
 	}
+	c.onNewUpdates()
 }
 
 // DeleteRejectCIDRs removes the config to reject routes within the given CIDRs.
@@ -906,6 +912,7 @@ func (c *client) DeleteRejectCIDRs(cidrs []string) {
 		delete(c.cache, k)
 		c.keyUpdated(k)
 	}
+	c.onNewUpdates()
 }
 
 // AddStaticRoutes adds the given CIDRs as static routes to be advertised from this node.
@@ -918,6 +925,7 @@ func (c *client) AddStaticRoutes(cidrs []string) {
 		c.cache[k] = cidr
 		c.keyUpdated(k)
 	}
+	c.onNewUpdates()
 }
 
 // DeleteStaticRoutes withdraws the given CIDRs from the set of static routes advertised
@@ -931,4 +939,5 @@ func (c *client) DeleteStaticRoutes(cidrs []string) {
 		delete(c.cache, k)
 		c.keyUpdated(k)
 	}
+	c.onNewUpdates()
 }
