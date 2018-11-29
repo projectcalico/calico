@@ -613,12 +613,8 @@ func (c *client) OnUpdates(updates []api.Update) {
 	c.cacheLock.Lock()
 	defer c.cacheLock.Unlock()
 
-	// If we are in-sync then this is an incremental update, so increment our internal
-	// cache revision.
-	if c.synced {
-		c.cacheRevision++
-		log.Debugf("Processing new updates, revision is now: %d", c.cacheRevision)
-	}
+	// Indicate that our cache has been updated.
+	c.incrementCacheRevision()
 
 	// Track whether these updates require BGP peerings to be recomputed.
 	needUpdatePeersV1 := false
@@ -713,6 +709,15 @@ func (c *client) OnUpdates(updates []api.Update) {
 
 	// Notify watcher thread that we've received new updates.
 	c.onNewUpdates()
+}
+
+func (c *client) incrementCacheRevision() {
+	// If we are in-sync then this is an incremental update, so increment our internal
+	// cache revision.
+	if c.synced {
+		c.cacheRevision++
+		log.Debugf("Processing new updates, revision is now: %d", c.cacheRevision)
+	}
 }
 
 func (c *client) onNewUpdates() {
@@ -894,6 +899,7 @@ func (c *client) AddRejectCIDRs(cidrs []string) {
 	c.cacheLock.Lock()
 	defer c.cacheLock.Unlock()
 
+	c.incrementCacheRevision()
 	for _, cidr := range cidrs {
 		k := rejectKeyPrefix + strings.Replace(cidr, "/", "-", 1)
 		c.cache[k] = cidr
@@ -907,6 +913,7 @@ func (c *client) DeleteRejectCIDRs(cidrs []string) {
 	c.cacheLock.Lock()
 	defer c.cacheLock.Unlock()
 
+	c.incrementCacheRevision()
 	for _, cidr := range cidrs {
 		k := rejectKeyPrefix + strings.Replace(cidr, "/", "-", 1)
 		delete(c.cache, k)
@@ -920,6 +927,7 @@ func (c *client) AddStaticRoutes(cidrs []string) {
 	c.cacheLock.Lock()
 	defer c.cacheLock.Unlock()
 
+	c.incrementCacheRevision()
 	for _, cidr := range cidrs {
 		k := routeKeyPrefix + strings.Replace(cidr, "/", "-", 1)
 		c.cache[k] = cidr
@@ -934,6 +942,7 @@ func (c *client) DeleteStaticRoutes(cidrs []string) {
 	c.cacheLock.Lock()
 	defer c.cacheLock.Unlock()
 
+	c.incrementCacheRevision()
 	for _, cidr := range cidrs {
 		k := routeKeyPrefix + strings.Replace(cidr, "/", "-", 1)
 		delete(c.cache, k)
