@@ -359,7 +359,7 @@ release-publish: release-prereqs
 	# Push binaries to GitHub release.
 	# Requires ghr: https://github.com/tcnksm/ghr
 	# Requires GITHUB_TOKEN environment variable set.
-	ghr -r calicoctl \
+	ghr -u projectcalico -r calicoctl \
 		-b "Release notes can be found at https://docs.projectcalico.org" \
 		-n $(VERSION) \
 		$(VERSION) ./bin/
