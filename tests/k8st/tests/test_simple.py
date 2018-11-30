@@ -37,6 +37,8 @@ class TestAllRunning(TestBase):
 
 class TestSimplePolicy(TestBase):
     def setUp(self):
+        TestBase.setUp(self)
+        self.create_namespace("policy-demo")
         self.create_service("nginx:1.7.9", "nginx", "policy-demo", 80)
 
         # Create two client pods that live for the duration of the

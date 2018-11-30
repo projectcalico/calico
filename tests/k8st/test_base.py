@@ -109,10 +109,7 @@ class TestBase(TestCase):
     def create_namespace(self, ns_name):
         self.cluster.create_namespace(client.V1Namespace(metadata=client.V1ObjectMeta(name=ns_name)))
 
-    def create_service(self, image, name, ns, port, replicas=2):
-        cluster = self.k8s_client()
-        cluster.create_namespace(client.V1Namespace(metadata=client.V1ObjectMeta(name=ns)))
-
+    def create_service(self, image, name, ns, port, replicas=1, svc_type="NodePort", traffic_policy="Local", cluster_ip=None):
         # Run a deployment with <replicas> copies of <image>, with the
         # pods labelled with "app": <name>.
         deployment = client.ExtensionsV1beta1Deployment(
@@ -143,9 +140,13 @@ class TestBase(TestCase):
             spec={
                 "ports": [{"port": port}],
                 "selector": {"app": name},
+                "type": svc_type,
+                "externalTrafficPolicy": traffic_policy,
             }
         )
-        api_response = cluster.create_namespaced_service(
+        if cluster_ip:
+          service.spec["clusterIP"] = cluster_ip
+        api_response = self.cluster.create_namespaced_service(
             body=service,
             namespace=ns,
         )
@@ -164,15 +165,18 @@ class TestBase(TestCase):
                     time.sleep(3)
                     retry_until_success(cls.check_pod_status, retries=20, wait_time=3, function_args=["kube-system"])
 
-    def delete_and_confirm(self, name, resource_type):
+    def wait_until_exists(self, name, resource_type, ns="default"):
+        retry_until_success(run, function_args=["kubectl get %s %s -n%s" % (resource_type, name, ns)])
+
+    def delete_and_confirm(self, name, resource_type, ns="default"):
         try:
-            run("kubectl delete %s %s" % (resource_type, name))
+            run("kubectl delete %s %s -n%s" % (resource_type, name, ns))
         except subprocess.CalledProcessError:
             pass
 
         def is_it_gone_yet(res_name, res_type):
             try:
-                run("kubectl get %s %s" % (res_type, res_name))
+                run("kubectl get %s %s -n%s" % (res_type, res_name, ns), logerr=False)
                 raise self.StillThere
             except subprocess.CalledProcessError:
                 # Success
@@ -182,3 +186,32 @@ class TestBase(TestCase):
 
     class StillThere(Exception):
         pass
+
+    def get_routes(self):
+        return run("docker exec kube-node-extra ip r")
+
+    def update_ds_env(self, ds, ns, k, v):
+        config.load_kube_config(os.environ.get('KUBECONFIG'))
+        api = client.AppsV1Api(client.ApiClient())
+        node_ds = api.read_namespaced_daemon_set(ds, ns, exact=True, export=True)
+        for container in node_ds.spec.template.spec.containers:
+            if container.name == ds:
+                env_present = False
+                for env in container.env:
+                    if env.name == k:
+                        env_present = True
+                if not env_present:
+                    container.env.append({"name": k, "value": v, "value_from": None})
+        api.replace_namespaced_daemon_set(ds, ns, node_ds)
+
+        # Wait until the DaemonSet reports that all nodes have been updated.
+        while True:
+            time.sleep(10)
+            node_ds = api.read_namespaced_daemon_set_status("calico-node", "kube-system")
+            logger.info("%d/%d nodes updated",
+                      node_ds.status.updated_number_scheduled,
+                      node_ds.status.desired_number_scheduled)
+            if node_ds.status.updated_number_scheduled == node_ds.status.desired_number_scheduled:
+                break
+
+

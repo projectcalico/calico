@@ -117,7 +117,7 @@ def function_name(f):
         return "<unknown function>"
 
 
-def run(command):
+def run(command, logerr=True):
     _log.info("Run: %s", command)
     try:
         out = subprocess.check_output(command,
@@ -125,5 +125,7 @@ def run(command):
                                       stderr=subprocess.STDOUT)
         _log.info("Output:\n%s", out)
     except subprocess.CalledProcessError as e:
-        _log.exception("Failure output:\n%s", e.output)
+        if logerr:
+          _log.exception("Failure output:\n%s", e.output)
         raise
+    return out
