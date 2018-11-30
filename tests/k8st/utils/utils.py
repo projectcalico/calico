@@ -129,3 +129,7 @@ def run(command, logerr=True):
           _log.exception("Failure output:\n%s", e.output)
         raise
     return out
+
+def curl(hostname, container="kube-node-extra"):
+    cmd = "docker exec %s curl --connect-timeout 2 -m 3 %s" % (container, hostname)
+    return run(cmd)
