@@ -39,7 +39,7 @@ class TestSimplePolicy(TestBase):
     def setUp(self):
         TestBase.setUp(self)
         self.create_namespace("policy-demo")
-        self.create_service("nginx:1.7.9", "nginx", "policy-demo", 80)
+        self.deploy("nginx:1.7.9", "nginx", "policy-demo", 80)
 
         # Create two client pods that live for the duration of the
         # test.  We will use 'kubectl exec' to try wgets from these at
