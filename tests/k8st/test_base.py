@@ -214,4 +214,5 @@ class TestBase(TestCase):
             if node_ds.status.updated_number_scheduled == node_ds.status.desired_number_scheduled:
                 break
 
-
+    def scale_deployment(self, deployment, ns, replicas):
+        return run("kubectl scale deployment %s -n %s --replicas %s" % (deployment, ns, replicas)).strip()
