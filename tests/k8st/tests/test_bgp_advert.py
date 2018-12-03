@@ -249,10 +249,14 @@ EOF
         # Assert they are all advertised to the other node. This should happen
         # quickly enough that by the time we have queried all services from
         # the k8s API, they should be programmed on the remote node.
+        routes = self.get_routes()
         for cip in cluster_ips:
-            self.assertIn(cip, self.get_routes())
+            self.assertIn(cip, routes)
 
         # Scale to 0 replicas, assert all routes are removed.
         self.scale_deployment(local_svc, self.ns, 0)
-        for cip in cluster_ips:
-            self.assertNotIn(cip, self.get_routes())
+        def check_routes_gone():
+            routes = self.get_routes()
+            for cip in cluster_ips:
+                self.assertNotIn(cip, routes)
+        retry_until_success(check_routes_gone, retries=10, wait_time=5)
