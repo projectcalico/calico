@@ -4,3 +4,4 @@ tmp/
 vendor
 .go-pkg-cache
 tests/logs/
+/report/calico_backend_suite.xml
