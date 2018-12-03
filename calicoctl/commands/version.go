@@ -30,8 +30,7 @@ var VERSION, GIT_REVISION string
 var VERSION_SUMMARY string
 
 func init() {
-	VERSION_SUMMARY = "calicoctl " + VERSION + ", build " + GIT_REVISION + `
-Run 'calicoctl version' to see cluster version information as well.`
+	VERSION_SUMMARY = `Run 'calicoctl version' to see version information.`
 }
 
 func Version(args []string) {
