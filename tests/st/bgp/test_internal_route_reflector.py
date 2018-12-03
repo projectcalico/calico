@@ -89,7 +89,7 @@ class TestInternalRouteReflector(TestBase):
             })
 
             # Allow network to converge (which it now will).
-            self.assert_true(workload_host1.check_can_ping(workload_host2.ip, retries=10))
+            self.assert_true(workload_host1.check_can_ping(workload_host2.ip, retries=20))
 
             # And check connectivity in both directions.
             self.assert_ip_connectivity(workload_list=[workload_host1,

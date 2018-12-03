@@ -62,7 +62,7 @@ class TestSingleRouteReflector(TestBase):
             create_bgp_peer(host1, "global", rg[0].ip, peer_as_num)
 
             # Allow network to converge (which it now will).
-            self.assert_true(workload_host1.check_can_ping(workload_host2.ip, retries=10))
+            self.assert_true(workload_host1.check_can_ping(workload_host2.ip, retries=20))
 
             # And check connectivity in both directions.
             self.assert_ip_connectivity(workload_list=[workload_host1,
