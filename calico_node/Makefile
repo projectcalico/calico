@@ -1,7 +1,7 @@
 ###############################################################################
 # vX.Y format: update during major release process
 RELEASE_STREAM ?= v2.6
-CI_RELEASE_STREAM ?= master
+CI_RELEASE_STREAM ?= v2.6
 
 ###############################################################################
 GO_BUILD_VER?=v0.8
