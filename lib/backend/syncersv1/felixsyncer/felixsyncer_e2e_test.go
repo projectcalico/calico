@@ -126,13 +126,19 @@ var _ = testutils.E2eDatastoreDescribe("Felix syncer tests", testutils.Datastore
 			if config.Spec.DatastoreType == apiconfig.Kubernetes {
 				// For Kubernetes, update the existing node config to have some BGP configuration.
 				By("Configuring a node with an IP address")
-				node, err = c.Nodes().Get(ctx, "127.0.0.1", options.GetOptions{})
-				Expect(err).NotTo(HaveOccurred())
-				node.Spec.BGP = &apiv3.NodeBGPSpec{
-					IPv4Address: "1.2.3.4/24",
-					IPv6Address: "aa:bb::cc/120",
+				for i := 0; i < 5; i++ {
+					// This can fail due to an update conflict, so we allow a few retries.
+					node, err = c.Nodes().Get(ctx, "127.0.0.1", options.GetOptions{})
+					Expect(err).NotTo(HaveOccurred())
+					node.Spec.BGP = &apiv3.NodeBGPSpec{
+						IPv4Address: "1.2.3.4/24",
+						IPv6Address: "aa:bb::cc/120",
+					}
+					node, err = c.Nodes().Update(ctx, node, options.SetOptions{})
+					if err == nil {
+						break
+					}
 				}
-				node, err = c.Nodes().Update(ctx, node, options.SetOptions{})
 				Expect(err).NotTo(HaveOccurred())
 			} else {
 				// For non-Kubernetes, add a new node with valid BGP configuration.
