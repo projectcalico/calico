@@ -16,6 +16,7 @@ package node
 
 import (
 	"context"
+	"reflect"
 	"time"
 
 	log "github.com/sirupsen/logrus"
@@ -27,6 +28,7 @@ import (
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
 
+	"github.com/projectcalico/kube-controllers/pkg/config"
 	"github.com/projectcalico/kube-controllers/pkg/controllers/controller"
 	api "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	client "github.com/projectcalico/libcalico-go/lib/clientv3"
@@ -38,6 +40,11 @@ const (
 	RateLimitCalicoList   = "calico-list"
 	RateLimitK8s          = "k8s"
 	RateLimitCalicoDelete = "calico-delete"
+)
+
+var (
+	maxAttempts    = 5
+	retrySleepTime = 3 * time.Second
 )
 
 // NodeController implements the Controller interface.  It is responsible for monitoring
@@ -52,31 +59,93 @@ type NodeController struct {
 }
 
 // NewNodeController Constructor for NodeController
-func NewNodeController(ctx context.Context, k8sClientset *kubernetes.Clientset, calicoClient client.Interface) controller.Controller {
+func NewNodeController(ctx context.Context, k8sClientset *kubernetes.Clientset, calicoClient client.Interface, cfg *config.Config) controller.Controller {
+	nc := &NodeController{
+		ctx:          ctx,
+		calicoClient: calicoClient,
+		k8sClientset: k8sClientset,
+		rl:           workqueue.DefaultControllerRateLimiter(),
+	}
 	// channel used to kick the controller into scheduling a sync. It has length
 	// 1 so that we coalesce multiple kicks while a sync is happening down to
 	// just one additional sync.
-	schedule := make(chan interface{}, 1)
+	nc.schedule = make(chan interface{}, 1)
 
 	// Create a Node watcher.
 	listWatcher := cache.NewListWatchFromClient(k8sClientset.CoreV1().RESTClient(), "nodes", "", fields.Everything())
 
-	// Informer handles managing the watch and signals us when nodes are deleted.
-	_, informer := cache.NewIndexerInformer(listWatcher, &v1.Node{}, 0, cache.ResourceEventHandlerFuncs{
+	// Setup event handlers
+	handlers := cache.ResourceEventHandlerFuncs{
 		DeleteFunc: func(obj interface{}) {
 			// Just kick controller to wake up and perform a sync. No need to bother what node it was
 			// as we sync everything.
-			kick(schedule)
-		},
-	}, cache.Indexers{})
+			kick(nc.schedule)
+		}}
 
-	return &NodeController{
-		ctx:          ctx,
-		informer:     informer,
-		calicoClient: calicoClient,
-		k8sClientset: k8sClientset,
-		rl:           workqueue.DefaultControllerRateLimiter(),
-		schedule:     schedule,
+	// Only setup node labels syncer if env var is set
+	if cfg.SyncNodeLabels {
+		handlers.AddFunc = func(obj interface{}) {
+			nc.applyNodeLabels(obj.(*v1.Node))
+		}
+		handlers.UpdateFunc = func(_, obj interface{}) {
+			nc.applyNodeLabels(obj.(*v1.Node))
+		}
+	}
+
+	// Informer handles managing the watch and signals us when nodes are deleted.
+	//   also syncs up labels between k8s/calico node objects
+	_, nc.informer = cache.NewIndexerInformer(listWatcher, &v1.Node{}, 0, handlers, cache.Indexers{})
+
+	return nc
+}
+
+// applyNodeLabels applies the labels found in v1.Node and to calico's Node.
+func (nc *NodeController) applyNodeLabels(node *v1.Node) {
+	var calNode *api.Node
+	var err error
+	var nAttempts int
+
+	// Try to get calico's Node object multiple times.
+	for nAttempts = 1; nAttempts < maxAttempts; nAttempts++ {
+		calNode, err = nc.calicoClient.Nodes().Get(context.Background(), node.Name, options.GetOptions{})
+		if err != nil {
+			log.WithField("attempts", nAttempts).WithError(err).Error("failed to get node: " + node.Name)
+			nAttempts++
+			time.Sleep(retrySleepTime)
+			continue
+		}
+		break
+	}
+	if err != nil && nAttempts == maxAttempts {
+		log.WithError(err).Error("failed to get node too many times")
+		return
+	}
+
+	// Labels may be nil.
+	if calNode.ObjectMeta.Labels == nil {
+		calNode.ObjectMeta.Labels = make(map[string]string)
+	}
+
+	// Only override labels if they are not already synced.
+	if reflect.DeepEqual(node.ObjectMeta.Labels, calNode.ObjectMeta.Labels) {
+		calNode.ObjectMeta.Labels = node.ObjectMeta.Labels
+
+		// Try to update node multiple times.
+		for nAttempts = 1; nAttempts < maxAttempts; nAttempts++ {
+			if _, err := nc.calicoClient.Nodes().Update(context.Background(), calNode, options.SetOptions{}); err != nil {
+				log.WithField("attempts", nAttempts).WithError(err).Error("failed to update node: " + node.Name)
+				nAttempts++
+				time.Sleep(retrySleepTime)
+				continue
+			}
+			break
+		}
+		if err != nil && nAttempts == maxAttempts {
+			log.WithError(err).Error("failed to update node too many times")
+			return
+		}
+
+		log.WithField("node", node.ObjectMeta.Name).Info("successfully synced Node labels")
 	}
 }
 

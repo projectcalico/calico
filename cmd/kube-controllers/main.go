@@ -132,7 +132,7 @@ func main() {
 				threadiness: config.PolicyWorkers,
 			}
 		case "node":
-			nodeController := node.NewNodeController(ctx, k8sClientset, calicoClient)
+			nodeController := node.NewNodeController(ctx, k8sClientset, calicoClient, config)
 			controllerCtrl.controllerStates["Node"] = &controllerState{
 				controller:  nodeController,
 				threadiness: config.NodeWorkers,
