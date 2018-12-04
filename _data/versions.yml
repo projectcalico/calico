@@ -39,7 +39,7 @@ v2.6:
       version: 1.4.3
       url: http://git.openstack.org/cgit/openstack/networking-calico/commit/?h=1.4.3
     calico/routereflector:
-      version: v0.4.3
+      version: v0.4.2
       url: ""
 
 - title: v2.6.11
