@@ -306,7 +306,7 @@ class LogAnalyzer(object):
         for log in self._parse_latest_logs():
             logs.append(log)
             if self._is_error_log(log, err_words, ignore_list):
-                logger.info("Error found in node logs: %s", log)
+                _log.info("Error found in node logs: %s", log)
                 errors.append(logs)
                 logs = deque(maxlen=NUM_CONTEXT_LOGS)
 
