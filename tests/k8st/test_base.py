@@ -35,15 +35,13 @@ class TestBase(TestCase):
     """
     Base class for test-wide methods.
     """
-    @classmethod
-    def setUpClass(cls):
-        cls.check_calico_version()
 
     def setUp(self):
         """
         Clean up before every test.
         """
         self.cluster = self.k8s_client()
+        self.check_calico_version()
 
         # Log a newline to ensure that the first log appears on its own line.
         logger.info("")
@@ -109,7 +107,11 @@ class TestBase(TestCase):
     def create_namespace(self, ns_name):
         self.cluster.create_namespace(client.V1Namespace(metadata=client.V1ObjectMeta(name=ns_name)))
 
-    def create_service(self, image, name, ns, port, replicas=1, svc_type="NodePort", traffic_policy="Local", cluster_ip=None):
+    def deploy(self, image, name, ns, port, replicas=1, svc_type="NodePort", traffic_policy="Local", cluster_ip=None):
+        """
+        Creates a deployment and corresponding service with the given
+        parameters.
+        """
         # Run a deployment with <replicas> copies of <image>, with the
         # pods labelled with "app": <name>.
         deployment = client.ExtensionsV1beta1Deployment(
@@ -132,6 +134,9 @@ class TestBase(TestCase):
 
         # Create a service called <name> whose endpoints are the pods
         # with "app": <name>; i.e. those just created above.
+        self.create_service(name, name, ns, port, svc_type, traffic_policy)
+
+    def create_service(self, name, app, ns, port, svc_type="NodePort", traffic_policy="Local", cluster_ip=None):
         service = client.V1Service(
             metadata=client.V1ObjectMeta(
                 name=name,
@@ -139,7 +144,7 @@ class TestBase(TestCase):
             ),
             spec={
                 "ports": [{"port": port}],
-                "selector": {"app": name},
+                "selector": {"app": app},
                 "type": svc_type,
                 "externalTrafficPolicy": traffic_policy,
             }
@@ -150,10 +155,9 @@ class TestBase(TestCase):
             body=service,
             namespace=ns,
         )
-        logger.debug("Service created. status='%s'" % str(api_response.status))
+        logger.debug("Additional Service created. status='%s'" % str(api_response.status))
 
-    @classmethod
-    def check_calico_version(cls):
+    def check_calico_version(self):
         config.load_kube_config(os.environ.get('KUBECONFIG'))
         api = client.AppsV1Api(client.ApiClient())
         node_ds = api.read_namespaced_daemon_set("calico-node", "kube-system", exact=True, export=True)
@@ -163,7 +167,7 @@ class TestBase(TestCase):
                     container.image = "calico/node:latest-amd64"
                     api.replace_namespaced_daemon_set("calico-node", "kube-system", node_ds)
                     time.sleep(3)
-                    retry_until_success(cls.check_pod_status, retries=20, wait_time=3, function_args=["kube-system"])
+                    retry_until_success(self.check_pod_status, retries=20, wait_time=3, function_args=["kube-system"])
 
     def wait_until_exists(self, name, resource_type, ns="default"):
         retry_until_success(run, function_args=["kubectl get %s %s -n%s" % (resource_type, name, ns)])

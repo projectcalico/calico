@@ -108,6 +108,9 @@ class TestBGPAdvert(TestBase):
         # set CALICO_ADVERTISE_CLUSTER_IPS=10.96.0.0/12
         self.update_ds_env("calico-node", "kube-system", "CALICO_ADVERTISE_CLUSTER_IPS", "10.96.0.0/12")
 
+        # Enable debug logging
+        self.update_ds_env("calico-node", "kube-system", "BGP_LOGSEVERITYSCREEN", "debug")
+
         # Establish BGPPeer from cluster nodes to node-extra using calicoctl
         run("""kubectl exec -i -n kube-system calicoctl -- /calicoctl apply -f - << EOF
 apiVersion: projectcalico.org/v3
@@ -121,11 +124,11 @@ EOF
 """)
 
     def tearDown(self):
+        self.delete_and_confirm(self.ns, "ns")
         try:
             run("docker rm -f kube-node-extra")
         except subprocess.CalledProcessError:
             pass
-        self.delete_and_confirm(self.ns, "ns")
 
     def get_svc_cluster_ip(self, svc, ns):
         return run("kubectl get svc %s -n %s -o json | jq -r .spec.clusterIP" % (svc, ns)).strip()
@@ -152,8 +155,8 @@ EOF
         # Create both a Local and a Cluster type NodePort service with a single replica.
         local_svc = "nginx-local"
         cluster_svc = "nginx-cluster"
-        self.create_service("nginx:1.7.9", local_svc, self.ns, 80)
-        self.create_service("nginx:1.7.9", cluster_svc, self.ns, 80, traffic_policy="Cluster")
+        self.deploy("nginx:1.7.9", local_svc, self.ns, 80)
+        self.deploy("nginx:1.7.9", cluster_svc, self.ns, 80, traffic_policy="Cluster")
         self.wait_until_exists(local_svc, "svc", self.ns)
         self.wait_until_exists(cluster_svc, "svc", self.ns)
 
@@ -162,8 +165,8 @@ EOF
         cluster_svc_ip = self.get_svc_cluster_ip(cluster_svc, self.ns)
 
         # Assert that both nginx service can be curled from the external node.
-        retry_until_success(curl,function_args=[local_svc_ip])
-        retry_until_success(curl,function_args=[cluster_svc_ip])
+        retry_until_success(curl, function_args=[local_svc_ip])
+        retry_until_success(curl, function_args=[cluster_svc_ip])
 
         # Assert that local clusterIP is an advertised route and cluster clusterIP is not.
         retry_until_success(lambda: self.assertIn(local_svc_ip, self.get_routes()))
@@ -194,7 +197,7 @@ EOF
           retry_until_success(curl, function_args=[local_svc_ip])
 
         # Connectivity to nginx-cluster will rarely succeed because it is load-balanced across all nodes.
-        # When the traffic hits a node that doesn't host one of the service's pod, it will be re-routed 
+        # When the traffic hits a node that doesn't host one of the service's pod, it will be re-routed
         #  to another node and SNAT will cause the policy to drop the traffic.
         # Try to curl 10 times.
         try:
@@ -217,3 +220,43 @@ EOF
         # Assert that clusterIP is no longer and advertised route
         retry_until_success(lambda: self.assertNotIn(local_svc_ip, self.get_routes()))
 
+    def test_many_services(self):
+        """
+        Creates a lot of services quickly
+        """
+        # Assert that a route to the service IP range is present.
+        retry_until_success(lambda: self.assertIn("10.96.0.0/12", self.get_routes()))
+
+        # Create a local service and deployment.
+        local_svc = "nginx-local"
+        self.deploy("nginx:1.7.9", local_svc, self.ns, 80)
+
+        # Get clusterIPs.
+        cluster_ips = []
+        cluster_ips.append(self.get_svc_cluster_ip(local_svc, self.ns))
+
+        # Create many more services which select this deployment.
+        num_svc = 300
+        for i in range(num_svc):
+            name = "nginx-svc-%s" % i
+            self.create_service(name, local_svc, self.ns, 80)
+
+        # Get all of their IPs.
+        for i in range(num_svc):
+            name = "nginx-svc-%s" % i
+            cluster_ips.append(self.get_svc_cluster_ip(name, self.ns))
+
+        # Assert they are all advertised to the other node. This should happen
+        # quickly enough that by the time we have queried all services from
+        # the k8s API, they should be programmed on the remote node.
+        routes = self.get_routes()
+        for cip in cluster_ips:
+            self.assertIn(cip, routes)
+
+        # Scale to 0 replicas, assert all routes are removed.
+        self.scale_deployment(local_svc, self.ns, 0)
+        def check_routes_gone():
+            routes = self.get_routes()
+            for cip in cluster_ips:
+                self.assertNotIn(cip, routes)
+        retry_until_success(check_routes_gone, retries=10, wait_time=5)
