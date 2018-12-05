@@ -769,7 +769,15 @@ release-publish: release-prereqs
 	# Disabling for now since no-one is consuming the images.
 	# $(MAKE) push-all IMAGETAG=$(VERSION)
 
-	@echo "Finalize the GitHub release based on the pushed tag."
+	# Push binaries to GitHub release.
+	# Requires ghr: https://github.com/tcnksm/ghr
+	# Requires GITHUB_TOKEN environment variable set.
+	ghr -u projectcalico -r felix \
+		-b "Release notes can be found at https://docs.projectcalico.org" \
+		-n $(VERSION) \
+		$(VERSION) ./bin/
+
+	@echo "Confirm that the release was published at the following URL."
 	@echo ""
 	@echo "  https://$(PACKAGE_NAME)/releases/tag/$(VERSION)"
 	@echo ""
@@ -805,6 +813,12 @@ ifndef VERSION
 endif
 ifdef LOCAL_BUILD
 	$(error LOCAL_BUILD must not be set for a release)
+endif
+ifndef GITHUB_TOKEN
+	$(error GITHUB_TOKEN must be set for a release)
+endif
+ifeq (, $(shell which ghr))
+	$(error Unable to find `ghr` in PATH, run this: go get -u github.com/tcnksm/ghr)
 endif
 
 ###############################################################################
