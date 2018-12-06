@@ -19,6 +19,23 @@ import time
 
 _log = logging.getLogger(__name__)
 
+# Helps with printing diags after a test.
+class DiagsCollector(object):
+    def __enter__(self):
+        pass
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        # Print out diagnostics for the test. These will go to screen
+        # on test failure.
+        _log.info("===================================================")
+        _log.info("============= COLLECTING DIAGS FOR TEST ===========")
+        _log.info("===================================================")
+        run("kubectl get deployments,pods,svc,endpoints --all-namespaces -o wide")
+        run("kubectl logs -n kube-system -l k8s-app=calico-node")
+        _log.info("===================================================")
+        _log.info("============= COLLECTED DIAGS FOR TEST ============")
+        _log.info("===================================================")
+
 
 def start_external_node_with_bgp(name, config):
     # Check how much disk space we have.
