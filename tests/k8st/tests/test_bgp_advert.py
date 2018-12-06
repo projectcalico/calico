@@ -164,6 +164,10 @@ EOF
         local_svc_ip = self.get_svc_cluster_ip(local_svc, self.ns)
         cluster_svc_ip = self.get_svc_cluster_ip(cluster_svc, self.ns)
 
+        # Wait for the deployments to roll out.
+        self.wait_for_deployment(local_svc, self.ns)
+        self.wait_for_deployment(cluster_svc, self.ns)
+
         # Assert that both nginx service can be curled from the external node.
         retry_until_success(curl, function_args=[local_svc_ip])
         retry_until_success(curl, function_args=[cluster_svc_ip])
@@ -209,6 +213,7 @@ EOF
 
         # Scale the local_svc to 4 replicas
         self.scale_deployment(local_svc, self.ns, 4)
+        self.wait_for_deployment(local_svc, self.ns)
         self.assert_ecmp_routes(local_svc_ip)
         for i in range(attempts):
           retry_until_success(curl, function_args=[local_svc_ip])
@@ -230,6 +235,7 @@ EOF
         # Create a local service and deployment.
         local_svc = "nginx-local"
         self.deploy("nginx:1.7.9", local_svc, self.ns, 80)
+        self.wait_for_deployment(local_svc, self.ns)
 
         # Get clusterIPs.
         cluster_ips = []
@@ -255,6 +261,7 @@ EOF
 
         # Scale to 0 replicas, assert all routes are removed.
         self.scale_deployment(local_svc, self.ns, 0)
+        self.wait_for_deployment(local_svc, self.ns)
         def check_routes_gone():
             routes = self.get_routes()
             for cip in cluster_ips:

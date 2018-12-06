@@ -136,6 +136,14 @@ class TestBase(TestCase):
         # with "app": <name>; i.e. those just created above.
         self.create_service(name, name, ns, port, svc_type, traffic_policy)
 
+    def wait_for_deployment(self, name, ns):
+        """
+        Waits for the given deployment to have the desired number of replicas.
+        """
+        logger.info("Checking status for deployment %s/%s" % (ns, name))
+        run("kubectl -n %s rollout status deployment/%s" % (ns, name))
+        run("kubectl get pods -n %s -o wide" % ns)
+
     def create_service(self, name, app, ns, port, svc_type="NodePort", traffic_policy="Local", cluster_ip=None):
         service = client.V1Service(
             metadata=client.V1ObjectMeta(
