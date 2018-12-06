@@ -17,7 +17,7 @@ from unittest import skip
 from tests.st.test_base import TestBase
 from tests.st.utils.docker_host import DockerHost, CLUSTER_STORE_DOCKER_OPTIONS
 from tests.st.utils.route_reflector import RouteReflectorCluster
-from tests.st.utils.utils import update_bgp_config
+from tests.st.utils.utils import update_bgp_config, check_bird_status, retry_until_success
 
 from .peer import create_bgp_peer
 
@@ -62,6 +62,10 @@ class TestSingleRouteReflector(TestBase):
             create_bgp_peer(host1, "global", rg[0].ip, peer_as_num)
 
             # Allow network to converge (which it now will).
+            retry_until_success(host1.assert_is_ready, retries=30, felix=False)
+            retry_until_success(host2.assert_is_ready, retries=30, felix=False)
+            check_bird_status(host1, [("global", rg[0].ip, "Established")])
+            check_bird_status(host2, [("global", rg[0].ip, "Established")])
             self.assert_true(workload_host1.check_can_ping(workload_host2.ip, retries=20))
 
             # And check connectivity in both directions.
