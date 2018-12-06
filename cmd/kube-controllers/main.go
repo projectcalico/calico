@@ -197,7 +197,7 @@ func runHealthChecks(ctx context.Context, s *status.Status, k8sClientset *kubern
 				s.SetReady(
 					"KubeAPIServer",
 					false,
-					fmt.Sprintf("Taking a long time to check apiserver"),
+					fmt.Sprintf("Error reaching apiserver: taking a long time to check apiserver"),
 				)
 			}
 		}(k8sCheckDone)
