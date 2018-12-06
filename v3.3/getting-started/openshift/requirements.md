@@ -10,8 +10,8 @@ canonical_url: 'https://docs.projectcalico.org/v3.3/getting-started/openshift/re
 
 {{site.prodname}} {{page.version}} supports:
 
-- OpenShift Origin 3.6 and 3.7
-- OpenShift Container Platform 3.6 and 3.7
+- OpenShift Origin/OKD 3.9, 3.10 and 3.11
+- OpenShift Container Platform 3.9, 3.10 and 3.11
 
 Refer to the OpenShift documentation for additional requirements.
 
