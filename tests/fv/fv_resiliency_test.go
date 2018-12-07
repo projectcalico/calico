@@ -70,7 +70,7 @@ var _ = Describe("[Resilience] PolicyController", func() {
 
 		// Wait for the apiserver to be available.
 		Eventually(func() error {
-			_, err := k8sClient.CoreV1().Namespaces().List(metav1.ListOptions{})
+			_, err := k8sClient.CoreV1().Namespaces().Get("default", metav1.GetOptions{})
 			return err
 		}, 30*time.Second, 1*time.Second).Should(BeNil())
 
