@@ -72,7 +72,7 @@ var _ = Describe("[Resilience] PolicyController", func() {
 		Eventually(func() error {
 			_, err := k8sClient.CoreV1().Namespaces().List(metav1.ListOptions{})
 			return err
-		}, 15*time.Second, 500*time.Millisecond).Should(BeNil())
+		}, 30*time.Second, 1*time.Second).Should(BeNil())
 
 		// Create a Kubernetes NetworkPolicy.
 		policyName = "jelly"
