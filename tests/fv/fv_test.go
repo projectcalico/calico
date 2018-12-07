@@ -82,7 +82,7 @@ var _ = Describe("kube-controllers FV tests", func() {
 		Eventually(func() error {
 			_, err := k8sClient.CoreV1().Namespaces().List(metav1.ListOptions{})
 			return err
-		}, 15*time.Second, 500*time.Millisecond).Should(BeNil())
+		}, 30*time.Second, 1*time.Second).Should(BeNil())
 
 		// Run controller manager.  Empirically it can take around 10s until the
 		// controller manager is ready to create default service accounts, even
