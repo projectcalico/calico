@@ -30,7 +30,7 @@ spec:
           command:
             - "/bin/sh"
             - "-c"
-            - "chmod +x /etc/config/calico/remove-policy/remove-calico-policy.sh; /etc/config/calico/remove-policy/remove-calico-policy.sh"
+            - "cp /etc/config/calico/remove-policy/remove-calico-policy.sh .; chmod +x ./remove-calico-policy.sh; ./remove-calico-policy.sh"
           env:
             - name: CLUSTER_CIDR
               value: ""
