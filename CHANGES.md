@@ -1,5 +1,9 @@
 # Changelog
 
+## 3.4.0
+
+- Rev version number to match current Calico release.
+
 ## 3.3.0
 
 - Make client auth setup compatible with mitaka and earlier

@@ -3,7 +3,7 @@
 Name:           networking-calico
 Summary:        Project Calico networking for OpenStack/Neutron
 Epoch:          1
-Version:        3.3.0
+Version:        3.4.0
 Release:        1%{?dist}
 License:        Apache-2
 URL:            http://docs.openstack.org/developer/networking-calico/
@@ -161,6 +161,10 @@ rm -rf $RPM_BUILD_ROOT
 
 
 %changelog
+* Mon Dec 10 2018 Neil Jerram <neil@tigera.io> 1:3.4.0-1
+  - networking-calico version 3.4.0 release
+    - Rev version number to match current Calico release.
+
 * Fri Oct 26 2018 Neil Jerram <neil@tigera.io> 1:3.3.0-1
   - networking-calico version 3.3.0 release
     - Make client auth setup compatible with mitaka and earlier

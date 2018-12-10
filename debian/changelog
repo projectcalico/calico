@@ -1,3 +1,17 @@
+networking-calico (1:3.4.0~xenial) xenial; urgency=low
+
+  * networking-calico release (from Git commit 79c7e00).
+    - Rev version number to match current Calico release.
+
+ -- Neil Jerram <neil@tigera.io>  Mon, 10 Dec 2018 14:56:00 +0000
+
+networking-calico (1:3.4.0~trusty) trusty; urgency=low
+
+  * networking-calico release (from Git commit 79c7e00).
+    - Rev version number to match current Calico release.
+
+ -- Neil Jerram <neil@tigera.io>  Mon, 10 Dec 2018 14:56:00 +0000
+
 networking-calico (1:3.3.0~xenial) xenial; urgency=low
 
   * networking-calico release (from Git commit 3465fd7).
