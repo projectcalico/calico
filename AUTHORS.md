@@ -67,6 +67,7 @@ by GitHub for the core repositories within the projectcalico/ organization. It i
 | Jose Bigio                               | @jose-bigio |
 | Josh Conant                              | @insequent |
 | Justin Nauman                            | @jrnt30 |
+| Justin Ohms                              | @JustinOhms |
 | Karthik Krishnan Ramasubramanian         | @doublek |
 | Ketan Kulkarni                           | @ketkulka |
 | Lance Robson                             | @lwr20 |
@@ -114,7 +115,7 @@ by GitHub for the core repositories within the projectcalico/ organization. It i
 | Seth                                     | @sethmccombs |
 | Shatru                                   | @shatrugna |
 | Shaun Crampton                           | @fasaxc |
-| SONG JIANG                               | @song-jiang |
+| Song Jiang                               | @song-jiang |
 | Spike Curtis                             | @spikecurtis |
 | Stephen Schlie                           | @heschlie |
 | Suraj Narwade                            | @surajnarwade |

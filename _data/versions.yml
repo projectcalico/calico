@@ -1,3 +1,33 @@
+v3.4:
+- title: v3.4.0
+  components:
+    calico/node:
+      version: v3.4.0
+      url: https://github.com/projectcalico/node/releases/tag/v3.4.0
+    calicoctl:
+      version: v3.4.0
+      url: https://github.com/projectcalico/calicoctl/releases/tag/v3.4.0
+    calico/cni:
+      version: v3.4.0
+      url: https://github.com/projectcalico/cni-plugin/releases/tag/v3.4.0
+    calico/kube-controllers:
+      version: v3.4.0
+      url: https://github.com/projectcalico/k8s-policy/releases/tag/v3.4.0
+    networking-calico:
+      version: v3.4.0
+      url: http://git.openstack.org/cgit/openstack/networking-calico/commit/?h=3.4.0
+    typha:
+      version: v3.4.0
+      url: https://github.com/projectcalico/typha/releases/tag/v3.4.0
+    flannel:
+      version: v0.9.1
+    calico/dikastes:
+      version: v3.4.0
+      url: https://github.com/projectcalico/app-policy/releases/tag/v3.4.0
+    flexvol:
+      version: v3.4.0
+      url: https://github.com/projectcalico/pod2daemon/releases/tag/v3.4.0
+
 v3.3:
 - title: v3.3.2
   components:
@@ -1823,34 +1853,4 @@ master:
      flexvol:
       version: master
 
-v3.4:
-- title: v3.4.0-pre
-  components:
-    calico/node:
-      version: release-v3.4
-      url:
-    calicoctl:
-      version: release-v3.4
-      url: "https://www.projectcalico.org/builds/calicoctl"
-    calico/cni:
-      version: release-v3.4
-      url:
-    calico/kube-controllers:
-      version: release-v3.4
-      url:
-    networking-calico:
-      version: release-v3.4
-      url:
-    typha:
-      version: release-v3.4
-      url: 
-    flannel:
-      version: release-v3.4
-      url:
-    calico/dikastes:
-      version: release-v3.4
-      url:
-    flexvol:
-      version: release-v3.4
-      url:
 
