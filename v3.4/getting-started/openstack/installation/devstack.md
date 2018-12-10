@@ -1,5 +1,6 @@
 ---
 title: DevStack plugin for Calico
+redirect_from: latest/getting-started/openstack/installation/devstack
 canonical_url: 'https://docs.projectcalico.org/v3.3/getting-started/openstack/installation/devstack'
 ---
 

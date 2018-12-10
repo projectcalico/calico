@@ -1,6 +1,5 @@
 ---
 title: Controlling ingress and egress traffic with network policy
-redirect_from: latest/getting-started/kubernetes/tutorials/advanced-policy
 canonical_url: 'https://docs.projectcalico.org/v3.3/getting-started/kubernetes/tutorials/advanced-policy'
 ---
 

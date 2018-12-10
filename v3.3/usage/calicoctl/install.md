@@ -1,6 +1,5 @@
 ---
 title: Installing calicoctl
-redirect_from: latest/usage/calicoctl/install
 canonical_url: 'https://docs.projectcalico.org/v3.3/usage/calicoctl/install'
 ---
 

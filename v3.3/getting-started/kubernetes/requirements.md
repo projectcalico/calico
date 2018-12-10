@@ -1,6 +1,5 @@
 ---
 title: System requirements
-redirect_from: latest/getting-started/kubernetes/requirements
 canonical_url: 'https://docs.projectcalico.org/v3.3/getting-started/kubernetes/requirements'
 ---
 
