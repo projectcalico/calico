@@ -27,6 +27,7 @@ import (
 	cerrors "github.com/projectcalico/libcalico-go/lib/errors"
 	"github.com/projectcalico/libcalico-go/lib/names"
 	"github.com/projectcalico/libcalico-go/lib/net"
+	"github.com/projectcalico/libcalico-go/lib/selector"
 )
 
 const (
@@ -202,45 +203,76 @@ func (c ipamClient) getBlockFromAffinity(ctx context.Context, aff *model.KVPair)
 	return b, nil
 }
 
-// determinePools compares a list of requested pools with the enabled pools
-// and returns the intersect. If any requested pool does not exist, or is not enabled, an error is returned.
+// determinePools compares a list of requested pools with the enabled pools and returns the intersect.
+// If any requested pool does not exist, or is not enabled, an error is returned.
 // If no pools are requested, all enabled pools are returned.
-func (c ipamClient) determinePools(requestedPoolNets []net.IPNet, version int) ([]v3.IPPool, error) {
+// Also applies selector logic on node labels to determine if the pool is a match.
+func (c ipamClient) determinePools(requestedPoolNets []net.IPNet, version int, node *v3.Node) ([]v3.IPPool, error) {
+	// Nil check input node object.
+	if node == nil {
+		log.Error("node is nil, refusing to determinePools...")
+		return nil, errors.New("node is nil")
+	}
+
+	// Get enabled pools.
 	enabledPools, err := c.pools.GetEnabledPools(version)
 	if err != nil {
 		log.WithError(err).Errorf("Error reading configured pools")
 		return nil, err
 	}
 	log.Debugf("enabled Pools: %v", enabledPools)
+	log.Debugf("requested IPPools: %v", requestedPoolNets)
 
+	// Build a map so we can lookup existing pools.
+	pm := map[string]v3.IPPool{}
+	for _, p := range enabledPools {
+		pm[p.Spec.CIDR] = p
+	}
+
+	// Empty the enabledpools and repopulate only the requested ones.
 	if len(requestedPoolNets) > 0 {
-		log.Debugf("requested IPPools: %v", requestedPoolNets)
-		// Build a map so we can lookup existing pools.
-		pm := map[string]v3.IPPool{}
-		for _, p := range enabledPools {
-			pm[p.Spec.CIDR] = p
-		}
-
-		// Empty the enabledpools and repopulate only the requested ones.
 		enabledPools = nil
+	}
 
-		// Make sure each requested pool exists
-		for _, rp := range requestedPoolNets {
-			if pool, ok := pm[rp.String()]; !ok {
-				// The requested pool doesn't exist.
-				return nil, fmt.Errorf("the given pool (%s) does not exist, or is not enabled", rp.IPNet.String())
-			} else {
-				enabledPools = append(enabledPools, pool)
-			}
+	// Make sure each requested pool exists
+	for _, rp := range requestedPoolNets {
+		if pool, ok := pm[rp.String()]; !ok {
+			// The requested pool doesn't exist.
+			return nil, fmt.Errorf("the given pool (%s) does not exist, or is not enabled", rp.IPNet.String())
+		} else {
+			enabledPools = append(enabledPools, pool)
 		}
 	}
 
-	return enabledPools, nil
+	// Filter enabledPools using node selector (if specified).
+	filteredEnabledPools := []v3.IPPool{}
+	for _, pool := range enabledPools {
+		if len(pool.Spec.NodeSelector) > 0 {
+			if sel, err := selector.Parse(pool.Spec.NodeSelector); err != nil {
+				// Invalid selector syntax.
+				log.WithError(err).WithField("selector", pool.Spec.NodeSelector).Error("failed to parse selector")
+				return nil, err
+			} else if !sel.Evaluate(node.Labels) {
+				// Do not consider pool enabled if the nodeSelector doesn't match the node's labels.
+				continue
+			}
+		}
+		filteredEnabledPools = append(filteredEnabledPools, pool)
+	}
+
+	return filteredEnabledPools, nil
 }
 
 func (c ipamClient) autoAssign(ctx context.Context, num int, handleID *string, attrs map[string]string, requestedPools []net.IPNet, version int, host string, maxNumBlocks int) ([]net.IP, error) {
+	// Retrieve node for given hostname to use for ip pool node selection
+	node, err := c.client.Get(ctx, model.ResourceKey{Kind: v3.KindNode, Name: host}, "")
+	if err != nil {
+		log.WithError(err).WithField("node", host).Error("failed to get node for host")
+		return nil, err
+	}
+
 	// Start by sanitizing the requestedPools.
-	pools, err := c.determinePools(requestedPools, version)
+	pools, err := c.determinePools(requestedPools, version, node.Value.(*v3.Node))
 	if err != nil {
 		return nil, err
 	}
