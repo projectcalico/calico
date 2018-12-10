@@ -1,5 +1,6 @@
 ---
 title: How Calico Interprets Neutron API Calls
+redirect_from: latest/getting-started/openstack/neutron-api
 canonical_url: 'https://docs.projectcalico.org/v3.3/getting-started/openstack/neutron-api'
 ---
 

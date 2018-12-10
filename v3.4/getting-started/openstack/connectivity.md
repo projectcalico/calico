@@ -1,5 +1,6 @@
 ---
 title: Connectivity in OpenStack
+redirect_from: latest/getting-started/openstack/connectivity
 canonical_url: 'https://docs.projectcalico.org/v3.3/getting-started/openstack/connectivity'
 ---
 

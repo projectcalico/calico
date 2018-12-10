@@ -1,6 +1,5 @@
 ---
 title: Configuring Typha
-redirect_from: latest/reference/typha/configuration
 canonical_url: 'https://docs.projectcalico.org/v3.3/reference/typha/configuration'
 ---
 

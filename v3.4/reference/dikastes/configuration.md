@@ -1,5 +1,6 @@
 ---
 title: Configuring Dikastes
+redirect_from: latest/reference/dikastes/configuration
 canonical_url: 'https://docs.projectcalico.org/master/reference/dikastes/configuration'
 ---
 
