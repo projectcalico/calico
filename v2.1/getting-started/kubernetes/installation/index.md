@@ -36,7 +36,6 @@ to integrate Calico into your own installation or deployment scripts.
 A number of popular Kubernetes installers use Calico to provide networking and/or network policy.
 Here are a few, listed alphabetically.
 
-- [Apprenda Kismatic Enterprise Toolkit](https://github.com/apprenda/kismatic)
 - [Container Linux by CoreOS](https://coreos.com/kubernetes/docs/latest/)
 - [GCE](http://kubernetes.io/docs/getting-started-guides/network-policy/calico/)
 - [Gravitational Telekube](http://gravitational.com/blog/gravitational-tigera-partnership/)
