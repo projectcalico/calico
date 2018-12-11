@@ -165,6 +165,7 @@ calicoctl apply -f - <<EOF
       - action: Allow
         protocol: TCP
         destination:
+          selector: has(host-endpoint)
           ports: [31852]
     selector: has(host-endpoint)
 EOF
