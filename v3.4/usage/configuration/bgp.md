@@ -1,7 +1,7 @@
 ---
 title: Configuring BGP Peers
 redirect_from: latest/usage/configuration/bgp
-canonical_url: 'https://docs.projectcalico.org/v3.3/usage/configuration/bgp'
+canonical_url: 'https://docs.projectcalico.org/v3.4/usage/configuration/bgp'
 ---
 
 This document describes the commands available in `calicoctl` for managing BGP.  It covers

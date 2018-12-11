@@ -1,6 +1,6 @@
 ---
 title: Advanced etcd segmentation for Calico
-canonical_url: 'https://docs.projectcalico.org/v3.3/reference/advanced/etcd-rbac/kubernetes-advanced'
+canonical_url: 'https://docs.projectcalico.org/v3.4/reference/advanced/etcd-rbac/kubernetes-advanced'
 ---
 
 This document describes advanced segmentation of the etcd roles to limit

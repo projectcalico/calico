@@ -1,7 +1,7 @@
 ---
 title: AWS
 redirect_from: latest/reference/public-cloud/aws
-canonical_url: https://docs.projectcalico.org/v3.3/reference/public-cloud/aws
+canonical_url: https://docs.projectcalico.org/v3.4/reference/public-cloud/aws
 ---
 
 {{site.prodname}} provides the following advantages when running in AWS:

@@ -1,6 +1,6 @@
 ---
 title: Configuring calicoctl to connect to the Kubernetes API datastore
-canonical_url: 'https://docs.projectcalico.org/v3.3/usage/calicoctl/configure/kdd'
+canonical_url: 'https://docs.projectcalico.org/v3.4/usage/calicoctl/configure/kdd'
 ---
 
 

@@ -1,6 +1,6 @@
 ---
 title: calicoctl profile
-canonical_url: 'https://docs.projectcalico.org/v3.3/reference/calicoctl/resources/profile'
+canonical_url: 'https://docs.projectcalico.org/v3.4/reference/calicoctl/resources/profile'
 ---
 
 > NOTE: The `calicoctl profile` commands should NOT be used when running
