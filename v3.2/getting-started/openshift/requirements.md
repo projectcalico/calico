@@ -1,6 +1,6 @@
 ---
 title: System requirements
-canonical_url: 'https://docs.projectcalico.org/v3.3/getting-started/openshift/requirements'
+canonical_url: 'https://docs.projectcalico.org/v3.4/getting-started/openshift/requirements'
 ---
 
 {% include {{page.version}}/reqs-sys.md orch="OpenShift" %}

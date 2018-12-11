@@ -1,6 +1,6 @@
 ---
 title: Canal/flannel Hosted Install
-canonical_url: https://docs.projectcalico.org/v3.3/getting-started/kubernetes/installation/flannel
+canonical_url: https://docs.projectcalico.org/v3.4/getting-started/kubernetes/installation/flannel
 ---
 
 ## About Canal

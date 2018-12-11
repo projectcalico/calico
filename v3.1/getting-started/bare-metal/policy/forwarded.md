@@ -1,6 +1,6 @@
 ---
 title: Apply on forwarded traffic
-canonical_url: 'https://docs.projectcalico.org/v3.3/getting-started/bare-metal/policy/forwarded'
+canonical_url: 'https://docs.projectcalico.org/v3.4/getting-started/bare-metal/policy/forwarded'
 ---
 
 If `applyOnForward` is `false`, the host endpoint policy applies to traffic to/from

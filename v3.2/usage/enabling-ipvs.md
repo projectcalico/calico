@@ -1,6 +1,6 @@
 ---
 title: Enabling IPVS in Kubernetes
-canonical_url: 'https://docs.projectcalico.org/v3.3/usage/enabling-ipvs'
+canonical_url: 'https://docs.projectcalico.org/v3.4/usage/enabling-ipvs'
 ---
 
 {{site.prodname}} has support for `kube-proxy`'s `ipvs` proxy mode.
