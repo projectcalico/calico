@@ -14,12 +14,16 @@
 #    under the License.
 
 import copy
+import netaddr
+import os
 import re
 import sys
 import time
 
 from neutron.agent.linux import dhcp
 from oslo_log import log as logging
+
+from networking_calico.compat import constants
 
 LOG = logging.getLogger(__name__)
 
@@ -33,8 +37,129 @@ class DnsmasqRouted(dhcp.Dnsmasq):
                                             version, plugin)
         self.device_manager = CalicoDeviceManager(self.conf, plugin)
 
+    # Frozen copy of Dnsmasq::_build_cmdline_callback from
+    # neutron/agent/linux/dhcp.py in Neutron 13.0.2.
+    def neutron_13_0_2_build_cmdline_callback(self, pid_file):
+        # We ignore local resolv.conf if dns servers are specified
+        # or if local resolution is explicitly disabled.
+        _no_resolv = (
+            '--no-resolv' if self.conf.dnsmasq_dns_servers or
+            not self.conf.dnsmasq_local_resolv else '')
+        cmd = [
+            'dnsmasq',
+            '--no-hosts',
+            _no_resolv,
+            '--except-interface=lo',
+            '--pid-file=%s' % pid_file,
+            '--dhcp-hostsfile=%s' % self.get_conf_file_name('host'),
+            '--addn-hosts=%s' % self.get_conf_file_name('addn_hosts'),
+            '--dhcp-optsfile=%s' % self.get_conf_file_name('opts'),
+            '--dhcp-leasefile=%s' % self.get_conf_file_name('leases'),
+            '--dhcp-match=set:ipxe,175',
+        ]
+        if self.device_manager.driver.bridged:
+            cmd += [
+                '--bind-interfaces',
+                '--interface=%s' % self.interface_name,
+            ]
+        else:
+            cmd += [
+                '--bind-dynamic',
+                '--interface=%s' % self.interface_name,
+                '--interface=tap*',
+                '--bridge-interface=%s,tap*' % self.interface_name,
+            ]
+
+        possible_leases = 0
+        for i, subnet in enumerate(self._get_all_subnets(self.network)):
+            mode = None
+            # if a subnet is specified to have dhcp disabled
+            if not subnet.enable_dhcp:
+                continue
+            if subnet.ip_version == 4:
+                mode = 'static'
+            else:
+                # Note(scollins) If the IPv6 attributes are not set, set it as
+                # static to preserve previous behavior
+                addr_mode = getattr(subnet, 'ipv6_address_mode', None)
+                ra_mode = getattr(subnet, 'ipv6_ra_mode', None)
+                if (addr_mode in [constants.DHCPV6_STATEFUL,
+                                  constants.DHCPV6_STATELESS] or
+                        not addr_mode and not ra_mode):
+                    mode = 'static'
+
+            cidr = netaddr.IPNetwork(subnet.cidr)
+
+            if self.conf.dhcp_lease_duration == -1:
+                lease = 'infinite'
+            else:
+                lease = '%ss' % self.conf.dhcp_lease_duration
+
+            # mode is optional and is not set - skip it
+            if mode:
+                if subnet.ip_version == 4:
+                    cmd.append('--dhcp-range=%s%s,%s,%s,%s,%s' %
+                               ('set:', self._TAG_PREFIX % i,
+                                cidr.network, mode, cidr.netmask, lease))
+                else:
+                    if cidr.prefixlen < 64:
+                        LOG.debug('Ignoring subnet %(subnet)s, CIDR has '
+                                  'prefix length < 64: %(cidr)s',
+                                  {'subnet': subnet.id, 'cidr': cidr})
+                        continue
+                    cmd.append('--dhcp-range=%s%s,%s,%s,%d,%s' %
+                               ('set:', self._TAG_PREFIX % i,
+                                cidr.network, mode,
+                                cidr.prefixlen, lease))
+                possible_leases += cidr.size
+
+        mtu = getattr(self.network, 'mtu', 0)
+        # Do not advertise unknown mtu
+        if mtu > 0:
+            cmd.append('--dhcp-option-force=option:mtu,%d' % mtu)
+
+        # Cap the limit because creating lots of subnets can inflate
+        # this possible lease cap.
+        cmd.append('--dhcp-lease-max=%d' %
+                   min(possible_leases, self.conf.dnsmasq_lease_max))
+
+        if self.conf.dhcp_renewal_time > 0:
+            cmd.append('--dhcp-option-force=option:T1,%ds' %
+                       self.conf.dhcp_renewal_time)
+
+        if self.conf.dhcp_rebinding_time > 0:
+            cmd.append('--dhcp-option-force=option:T2,%ds' %
+                       self.conf.dhcp_rebinding_time)
+
+        cmd.append('--conf-file=%s' % self.conf.dnsmasq_config_file)
+        for server in self.conf.dnsmasq_dns_servers:
+            cmd.append('--server=%s' % server)
+
+        if self.dns_domain:
+            cmd.append('--domain=%s' % self.dns_domain)
+
+        if self.conf.dhcp_broadcast_reply:
+            cmd.append('--dhcp-broadcast')
+
+        if self.conf.dnsmasq_base_log_dir:
+            log_dir = os.path.join(
+                self.conf.dnsmasq_base_log_dir,
+                self.network.id)
+            try:
+                if not os.path.exists(log_dir):
+                    os.makedirs(log_dir)
+            except OSError:
+                LOG.error('Error while create dnsmasq log dir: %s', log_dir)
+            else:
+                log_filename = os.path.join(log_dir, 'dhcp_dns_log')
+                cmd.append('--log-queries')
+                cmd.append('--log-dhcp')
+                cmd.append('--log-facility=%s' % log_filename)
+
+        return cmd
+
     def _build_cmdline_callback(self, pid_file):
-        cmd = super(DnsmasqRouted, self)._build_cmdline_callback(pid_file)
+        cmd = self.neutron_13_0_2_build_cmdline_callback(pid_file)
 
         # Replace 'static' by 'static,off-link' in all IPv6
         # --dhcp-range options.
