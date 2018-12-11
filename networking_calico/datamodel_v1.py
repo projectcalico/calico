@@ -15,55 +15,31 @@
 """
 Shared etcd data-model definitions for version 1 of the data model.
 
-This file is versioned.  The idea is that only back-compatible changes
-should be made to this file and non-back-compatible changes should be
-made in a new copy of the file with revved version suffix.  That allows
-us to maintain multiple copies of the data model in parallel during
-migrations.
+The wider Calico data model is now v3.  The legacy v1 definitions here
+are private to networking-calico (i.e. the Neutron driver and the
+Calico DHCP agent) and Felix's status-reporting code.  However, when
+changing these, we still need to consider upgrading an existing
+Calico/OpenStack deployment.
 """
 import re
 
-# All Calico data is stored under this path.
-ROOT_DIR = "/calico"
-
-# Current versions
-FELIX_VERSION = "/v1"
-OPENSTACK_VERSION = "/v1"
-DHCP_VERSION = "/v1"
-
-# OpenStack data is stored under this path.
-OPENSTACK_DIR = ROOT_DIR + "/openstack"
-OPENSTACK_VERSION_DIR = OPENSTACK_DIR + OPENSTACK_VERSION
-
-# Status data and reporting
-FELIX_STATUS_DIR = ROOT_DIR + "/felix" + FELIX_VERSION + "/host"
-
-# Data that flows from orchestrator to felix is stored under a versioned
-# sub-tree.
-VERSION_DIR = ROOT_DIR + FELIX_VERSION
-# Global ready flag.  Stores 'true' or 'false'.
-READY_KEY = VERSION_DIR + "/Ready"
-# Global config (directory).
-CONFIG_DIR = VERSION_DIR + '/config'
-HOST_DIR = VERSION_DIR + '/host'
-POLICY_DIR = VERSION_DIR + '/policy'
-PROFILE_DIR = POLICY_DIR + "/profile"
+# Subtree used by Felix to report its own status (as an OpenStack
+# 'agent') and the status of each endpoint (or OpenStack 'port') that
+# it is responsible for.
+#
+# Agent status is at /calico/felix/v1/host/<hostname>/status.
+#
+# Port status is at /calico/felix/v1/host/<hostname>/
+#                    workload/openstack/<workload>/endpoint/<endpoint>.
+FELIX_STATUS_DIR = "/calico/felix/v1/host"
 
 # Key used for leader election by Neutron mechanism drivers.
-NEUTRON_ELECTION_KEY = OPENSTACK_VERSION_DIR + '/neutron_election'
+NEUTRON_ELECTION_KEY = "/calico/openstack/v1/neutron_election"
 
-# Regex to match profile rules, capturing the profile ID in capture group
-# "profile_id".
-RULES_KEY_RE = re.compile(
-    r'^' + PROFILE_DIR + r'/(?P<profile_id>[^/]+)/rules')
-# Regex to match profile tags, capturing the profile ID in capture group
-# "profile_id".
-TAGS_KEY_RE = re.compile(
-    r'^' + PROFILE_DIR + r'/(?P<profile_id>[^/]+)/tags')
-# Regex to match endpoints, captures "hostname" and "endpoint_id".  Works for
-# endpoint configuration and endpoint status paths.
+# Regex to match endpoints, captures "hostname" and "endpoint_id".
+# Works for endpoint status paths.
 ENDPOINT_KEY_RE = re.compile(
-    r'^(?:' + HOST_DIR + r'|' + FELIX_STATUS_DIR + r')'
+    r'^(?:' + FELIX_STATUS_DIR + r')'
     r'/(?P<hostname>[^/]+)/'
     r'workload/'
     r'(?P<orchestrator>[^/]+)/'
@@ -74,34 +50,9 @@ ENDPOINT_STATUS_UP = "up"
 ENDPOINT_STATUS_DOWN = "down"
 ENDPOINT_STATUS_ERROR = "error"
 
-# Information intended for use by the DHCP agent.
-DHCP_DIR = ROOT_DIR + "/dhcp" + DHCP_VERSION
-SUBNET_DIR = DHCP_DIR + "/subnet"
-
-
-def dir_for_host(hostname):
-    return HOST_DIR + "/%s" % hostname
-
-
-def key_for_endpoint(host, orchestrator, workload_id, endpoint_id):
-    return (HOST_DIR + "/%s/workload/%s/%s/endpoint/%s" %
-            (host, orchestrator, workload_id, endpoint_id))
-
-
-def key_for_profile(profile_id):
-    return PROFILE_DIR + "/" + profile_id
-
-
-def key_for_profile_rules(profile_id):
-    return PROFILE_DIR + "/%s/rules" % profile_id
-
-
-def key_for_profile_tags(profile_id):
-    return PROFILE_DIR + "/%s/tags" % profile_id
-
-
-def key_for_config(config_name):
-    return CONFIG_DIR + "/%s" % config_name
+# Subtree used by the Neutron driver to pass subnet information to the
+# DHCP agent.
+SUBNET_DIR = "/calico/dhcp/v1/subnet"
 
 
 def key_for_subnet(subnet_id):
@@ -122,21 +73,6 @@ def get_endpoint_id_from_key(key):
         return None
 
 
-def hostname_from_status_key(key):
-    """Get hostname from a status key (or None if this is not a status key).
-
-    :param: key for felix status
-            expected key format: FELIX_STATUS_DIR/<hostname>/
-                                                      <some path or not>/status
-    """
-    if not key.startswith(FELIX_STATUS_DIR) or not key.endswith("/status"):
-        return None
-    in_host_dir = key[len(FELIX_STATUS_DIR + '/'):]
-    path = in_host_dir.split('/', 1)
-    hostname = path[0]
-    return hostname
-
-
 class EndpointId(object):
     __slots__ = ["host", "endpoint"]
 
@@ -146,10 +82,6 @@ class EndpointId(object):
         # on a host.  The others get repeated over time.
         self.host = intern(host.encode("utf8"))
         self.endpoint = intern(endpoint.encode("utf8"))
-
-    @property
-    def path_for_status(self):
-        raise NotImplementedError()  # pragma: no cover
 
     def __str__(self):
         return self.__class__.__name__ + ("<%s>" % self.endpoint)
@@ -172,12 +104,6 @@ class WloadEndpointId(EndpointId):
         super(WloadEndpointId, self).__init__(host, endpoint)
         self.orchestrator = intern(orchestrator.encode("utf8"))
         self.workload = intern(workload.encode("utf8"))
-
-    @property
-    def path_for_status(self):
-        return "/".join([FELIX_STATUS_DIR, self.host,
-                         "workload", self.orchestrator, self.workload,
-                         "endpoint", self.endpoint])
 
     def __repr__(self):
         return self.__class__.__name__ + ("(%r,%r,%r,%r)" % (self.host,

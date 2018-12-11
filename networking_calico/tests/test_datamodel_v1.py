@@ -22,55 +22,11 @@ Test data model key calculations etc.
 import logging
 import unittest
 
-from networking_calico.datamodel_v1 import dir_for_host
-from networking_calico.datamodel_v1 import key_for_config
-from networking_calico.datamodel_v1 import key_for_endpoint
-from networking_calico.datamodel_v1 import key_for_profile
-from networking_calico.datamodel_v1 import key_for_profile_rules
-from networking_calico.datamodel_v1 import key_for_profile_tags
-from networking_calico.datamodel_v1 import RULES_KEY_RE
 from networking_calico.datamodel_v1 import WloadEndpointId
 
 
 # Logger
 log = logging.getLogger(__name__)
-
-
-class TestDatamodel(unittest.TestCase):
-    def test_rules_regex(self):
-        m = RULES_KEY_RE.match("/calico/v1/policy/profile/prof1/rules")
-        self.assertEqual(m.group("profile_id"), "prof1")
-        m = RULES_KEY_RE.match("/calico/v1/policy/profile/prof1/rules/")
-        self.assertEqual(m.group("profile_id"), "prof1")
-
-        m = RULES_KEY_RE.match("/calico/v1/policy/profile/prof1/rule")
-        self.assertFalse(m)
-        m = RULES_KEY_RE.match("/calico/v1/host/")
-        self.assertFalse(m)
-
-    def test_dir_for_host(self):
-        self.assertEqual(dir_for_host("foo"), "/calico/v1/host/foo")
-
-    def test_key_for_endpoint(self):
-        self.assertEqual(
-            key_for_endpoint("foo", "openstack", "wl1", "ep2"),
-            "/calico/v1/host/foo/workload/openstack/wl1/endpoint/ep2")
-
-    def test_key_for_profile(self):
-        self.assertEqual(key_for_profile("prof1"),
-                         "/calico/v1/policy/profile/prof1")
-
-    def test_key_for_profile_rules(self):
-        self.assertEqual(key_for_profile_rules("prof1"),
-                         "/calico/v1/policy/profile/prof1/rules")
-
-    def test_key_for_profile_tags(self):
-        self.assertEqual(key_for_profile_tags("prof1"),
-                         "/calico/v1/policy/profile/prof1/tags")
-
-    def test_key_for_config(self):
-        self.assertEqual(key_for_config("ConfigValue"),
-                         "/calico/v1/config/ConfigValue")
 
 
 class TestWorkloadEndpointId(unittest.TestCase):
