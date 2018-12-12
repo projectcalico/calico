@@ -17,8 +17,6 @@ as well as other public and private cloud environments.
 
 **[CoreOS Kubernetes][coreos]** documentation to learn how to install, run and use Kubernetes on CoreOS Container Linux on AWS.
 
-**[Kismatic Enterprise Toolkit][ket]** Fully-automated, production-grade Kubernetes operations on AWS and other clouds.
-
 **[StackPointCloud][stackpoint]** lets you deploy a Kubernetes cluster with {{site.prodname}} to AWS in 3 steps using a web-based interface.
 
 **[Typhoon][typhoon]** deploys free and minimal Kubernetes clusters with Terraform, for AWS and other platforms.
@@ -26,7 +24,6 @@ as well as other public and private cloud environments.
 
 [heptio]: https://s3.amazonaws.com/quickstart-reference/heptio/latest/doc/heptio-kubernetes-on-the-aws-cloud.pdf
 [kops]: https://github.com/kubernetes/kops/blob/master/docs/networking.md#calico-example-for-cni-and-network-policy
-[ket]: https://apprenda.com/kismatic/
 [stackpoint]: https://stackpoint.io/#/
 [coreos]: https://coreos.com/kubernetes/docs/latest/
 [typhoon]: https://typhoon.psdn.io/

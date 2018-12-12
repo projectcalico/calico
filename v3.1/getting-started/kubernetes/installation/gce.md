@@ -10,8 +10,6 @@ Make sure you've read the [GCE configuration guide](../../../reference/public-cl
 
 #### Popular guides and tools
 
-**[Kismatic Enterprise Toolkit][ket]** Fully-automated, production-grade Kubernetes operations on GCE and other clouds.
-
 **[Kubernetes kube-up][kube-up]** deploys {{site.prodname}} on GCE using the same underlying open-source infrastructure as Google's GKE platform.
 
 **[Kubespray][kubespray]** is a Kubernetes incubator project for deploying Kubernetes on GCE.
@@ -20,7 +18,6 @@ Make sure you've read the [GCE configuration guide](../../../reference/public-cl
 
 **[Typhoon][typhoon]** deploys free and minimal Kubernetes clusters with Terraform, for GCE and other platforms.
 
-[ket]: https://apprenda.com/kismatic/
 [kube-up]: http://kubernetes.io/docs/getting-started-guides/network-policy/calico/
 [kubespray]: https://github.com/kubernetes-incubator/kubespray
 [stackpoint]: https://stackpoint.io/#/
