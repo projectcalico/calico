@@ -175,11 +175,16 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreEtcdV3, 
 		Measure("It should be able to allocate and release addresses quickly", func(b Benchmarker) {
 			runtime := b.Time("runtime", func() {
 				v4, _, outErr := ic.AutoAssign(context.Background(), AutoAssignArgs{Num4: 1})
+				v4IP := make([]cnet.IP, 0, 0)
+				for _, ipNets := range v4 {
+					IP, _, _ := cnet.ParseCIDR(ipNets.String())
+					v4IP = append(v4IP, *IP)
+				}
 				Expect(outErr).NotTo(HaveOccurred())
-				Expect(len(v4)).To(Equal(1))
-				v4, outErr = ic.ReleaseIPs(context.Background(), v4)
+				Expect(len(v4IP)).To(Equal(1))
+				v4IP, outErr = ic.ReleaseIPs(context.Background(), v4IP)
 				Expect(outErr).NotTo(HaveOccurred())
-				Expect(len(v4)).To(Equal(0))
+				Expect(len(v4IP)).To(Equal(0))
 			})
 
 			Expect(runtime.Seconds()).Should(BeNumerically("<", 1))
@@ -635,7 +640,10 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreEtcdV3, 
 					Num4: autoAssignNumIPv4,
 				})
 				Expect(err).ToNot(HaveOccurred())
-				inIPs = assignedIPv4
+				for _, ipnet := range assignedIPv4 {
+					inIPs = append(inIPs, cnet.MustParseIP(ipnet.IP.String()))
+				}
+				inIPs = inIPs[1:]
 			}
 
 			unallocatedIPs, outErr := ic.ReleaseIPs(context.Background(), inIPs)

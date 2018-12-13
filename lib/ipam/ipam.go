@@ -66,7 +66,7 @@ type ipamClient struct {
 // and the list of the assigned IPv6 addresses.
 //
 // In case of error, returns the IPs allocated so far along with the error.
-func (c ipamClient) AutoAssign(ctx context.Context, args AutoAssignArgs) ([]net.IP, []net.IP, error) {
+func (c ipamClient) AutoAssign(ctx context.Context, args AutoAssignArgs) ([]net.IPNet, []net.IPNet, error) {
 	// Determine the hostname to use - prefer the provided hostname if
 	// non-nil, otherwise use the hostname reported by os.
 	hostname, err := decideHostname(args.Hostname)
@@ -75,7 +75,7 @@ func (c ipamClient) AutoAssign(ctx context.Context, args AutoAssignArgs) ([]net.
 	}
 	log.Infof("Auto-assign %d ipv4, %d ipv6 addrs for host '%s'", args.Num4, args.Num6, hostname)
 
-	var v4list, v6list []net.IP
+	var v4list, v6list []net.IPNet
 
 	if args.Num4 != 0 {
 		// Assign IPv4 addresses.
@@ -238,7 +238,7 @@ func (c ipamClient) determinePools(requestedPoolNets []net.IPNet, version int) (
 	return enabledPools, nil
 }
 
-func (c ipamClient) autoAssign(ctx context.Context, num int, handleID *string, attrs map[string]string, requestedPools []net.IPNet, version int, host string, maxNumBlocks int) ([]net.IP, error) {
+func (c ipamClient) autoAssign(ctx context.Context, num int, handleID *string, attrs map[string]string, requestedPools []net.IPNet, version int, host string, maxNumBlocks int) ([]net.IPNet, error) {
 	// Start by sanitizing the requestedPools.
 	pools, err := c.determinePools(requestedPools, version)
 	if err != nil {
@@ -263,8 +263,8 @@ func (c ipamClient) autoAssign(ctx context.Context, num int, handleID *string, a
 		return nil, err
 	}
 	logCtx.Debugf("Found %d affine IPv%d blocks for host: %v", len(affBlocks), version, affBlocks)
-	ips := []net.IP{}
-	newIPs := []net.IP{}
+	ips := []net.IPNet{}
+	newIPs := []net.IPNet{}
 
 	// Record how many blocks we own so we can check against the limit later.
 	numBlocksOwned := len(affBlocks)
@@ -684,7 +684,7 @@ func (c ipamClient) releaseIPsFromBlock(ctx context.Context, ips []net.IP, block
 	return nil, errors.New("Max retries hit - excessive concurrent IPAM requests")
 }
 
-func (c ipamClient) assignFromExistingBlock(ctx context.Context, block *model.KVPair, num int, handleID *string, attrs map[string]string, host string, affCheck bool) ([]net.IP, error) {
+func (c ipamClient) assignFromExistingBlock(ctx context.Context, block *model.KVPair, num int, handleID *string, attrs map[string]string, host string, affCheck bool) ([]net.IPNet, error) {
 	blockCIDR := block.Key.(model.BlockKey).CIDR
 	logCtx := log.WithFields(log.Fields{"host": host, "block": blockCIDR})
 	if handleID != nil {
@@ -702,7 +702,7 @@ func (c ipamClient) assignFromExistingBlock(ctx context.Context, block *model.KV
 	}
 	if len(ips) == 0 {
 		logCtx.Infof("Block is full")
-		return []net.IP{}, nil
+		return []net.IPNet{}, nil
 	}
 
 	// Increment handle count.
