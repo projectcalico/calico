@@ -149,7 +149,7 @@ be a release candidate.
    Once reviewed and CI is passing, merge the PR. This will cause the
    live docs site to be updated (after a few minutes).
 
-1. Edit `_config_dev.yml` to exclude the previous release.
+1. Review `_config_dev.yml` and edit it to exclude any previous releases that we now don't want to continue testing.
 
 If the release is not a release candidate but in fact a stable release, then you must also
 follow the steps in the next section for promoting a release candidate to a final release.
