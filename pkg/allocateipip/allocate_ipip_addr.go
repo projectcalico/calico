@@ -179,7 +179,7 @@ func assignHostTunnelAddr(ctx context.Context, c client.Interface, nodename stri
 		if node.Spec.BGP == nil {
 			node.Spec.BGP = &api.NodeBGPSpec{}
 		}
-		node.Spec.BGP.IPv4IPIPTunnelAddr = ipv4Addrs[0].String()
+		node.Spec.BGP.IPv4IPIPTunnelAddr = ipv4Addrs[0].IP.String()
 
 		_, updateError = c.Nodes().Update(ctx, node, options.SetOptions{})
 		if _, ok := updateError.(cerrors.ErrorResourceUpdateConflict); ok {
@@ -196,13 +196,13 @@ func assignHostTunnelAddr(ctx context.Context, c client.Interface, nodename stri
 	// and release the IP if there was an error.
 	if updateError != nil {
 		// We hit an error, so release the IP address before exiting.
-		_, err := c.IPAM().ReleaseIPs(ctx, []net.IP{ipv4Addrs[0]})
+		_, err := c.IPAM().ReleaseIPs(ctx, []net.IP{{IP: ipv4Addrs[0].IP}})
 		if err != nil {
-			log.WithError(err).WithField("IP", ipv4Addrs[0].String()).Errorf("Error releasing IP address on faiure")
+			log.WithError(err).WithField("IP", ipv4Addrs[0].IP.String()).Errorf("Error releasing IP address on failure")
 		}
 
 		// Log the error and exit with exit code 1.
-		log.WithError(err).WithField("IP", ipv4Addrs[0].String()).Fatal("Unable to set IPIP tunnel address")
+		log.WithError(err).WithField("IP", ipv4Addrs[0].IP.String()).Fatal("Unable to set IPIP tunnel address")
 	}
 
 	log.WithField("IP", ipv4Addrs[0].String()).Info("Set IPIP tunnel address")
