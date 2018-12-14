@@ -102,4 +102,4 @@ spec:
 | Datastore type           | Create/Delete | Update | Get/List | Notes
 |--------------------------|---------------|--------|----------|------
 | etcdv3                   | Yes           | Yes    | Yes      |
-| Kubernetes API datastore | No            | No     | Yes      | `NetworkPolicy` is determined from Kubernetes `NetworkPolicy` resources.
+| Kubernetes API datastore | Yes           | Yes    | Yes      | `NetworkPolicy` is determined from Kubernetes `NetworkPolicy` resources.
