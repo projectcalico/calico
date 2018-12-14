@@ -49,8 +49,8 @@ The full list of parameters which can be set is as follows.
 | `ReportingIntervalSecs`           | `FELIX_REPORTINGINTERVALSECS`           | Interval at which Felix reports its status into the datastore or `0` to disable. Must be non-zero in OpenStack deployments. [Default: `30`] | int |
 | `ReportingTTLSecs`                | `FELIX_REPORTINGTTLSECS`                | Time-to-live setting for process-wide status reports. [Default: `90`] | int |
 | `UsageReportingEnabled`           | `FELIX_USAGEREPORTINGENABLED`           | Reports anonymous {{site.prodname}} version number and cluster size to projectcalico.org. Logs warnings returned by the usage server. For example, if a significant security vulnerability has been discovered in the version of {{site.prodname}} being used. [Default: `true`] | boolean |
-| `UsageReportingInitialDelaySecs`  | `FELIX_USAGEREPORTINGINITIALDELAYSECS`  | Minimum delay before first usage report, in seconds. [Default: `300`] | int |
-| `UsageReportingIntervalSecs`      | `FELIX_USAGEREPORTINGINTERVALSECS`      | Interval at which to make usage reports, in seconds. [Default: `86400`] | int |
+| `UsageReportingInitialDelay`  | `FELIX_USAGEREPORTINGINITIALDELAY`  | Minimum delay before first usage report, in seconds. [Default: `300`] | string |
+| `UsageReportingInterval`      | `FELIX_USAGEREPORTINGINTERVAL`      | Interval at which to make usage reports, in seconds. [Default: `86400`] | string |
 
 
 #### etcd datastore configuration
