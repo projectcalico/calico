@@ -75,14 +75,14 @@ spec:
  | No                    | Yes                  | `Egress`            |
  | Yes                   | Yes                  | `Ingress, Egress`   |
 
-\*\* The `doNotTrack` and `preDNAT` and `applyOnForward` fields are meaningful 
+\*\* The `doNotTrack` and `preDNAT` and `applyOnForward` fields are meaningful
 only when applying policy to a [host endpoint]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/hostendpoint).
 
 Only one of `doNotTrack` and `preDNAT` may be set to `true` (in a given policy). If they are both `false`, or when applying the policy to a
 [workload endpoint]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/workloadendpoint),
 the policy is enforced after connection tracking and any DNAT.
 
-`applyOnForward` must be set to `true` if either `doNotTrack` or `preDNAT` is 
+`applyOnForward` must be set to `true` if either `doNotTrack` or `preDNAT` is
 `true` because for a given policy, any untracked rules or rules before DNAT will
  in practice apply to forwarded traffic.
 
@@ -133,4 +133,4 @@ in order to use the following match criteria.
 | Datastore type           | Create/Delete | Update | Get/List | Notes
 |--------------------------|---------------|--------|----------|------
 | etcdv3                   | Yes           | Yes    | Yes      |
-| Kubernetes API datastore | No            | No     | Yes      |
+| Kubernetes API datastore | Yes           | Yes    | Yes      |
