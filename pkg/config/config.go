@@ -44,7 +44,7 @@ type Config struct {
 	HealthEnabled bool `default:"true"`
 
 	// Enable syncing of node labels
-	SyncNodeLabels bool `default:"false" split_words:"true"`
+	SyncNodeLabels bool `default:"true" split_words:"true"`
 }
 
 // Parse parses envconfig and stores in Config struct

@@ -17,7 +17,6 @@ package node
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"time"
 
 	log "github.com/sirupsen/logrus"
@@ -42,6 +41,7 @@ const (
 	RateLimitCalicoList   = "calico-list"
 	RateLimitK8s          = "k8s"
 	RateLimitCalicoDelete = "calico-delete"
+	nodeLabelAnnotation   = "projectcalico.org/kube-labels"
 )
 
 var (
@@ -77,10 +77,6 @@ func NewNodeController(ctx context.Context, k8sClientset *kubernetes.Clientset, 
 	// just one additional sync.
 	nc.schedule = make(chan interface{}, 1)
 
-	// Start the syncer.
-	nc.initSyncer()
-	nc.syncer.Start()
-
 	// Create a Node watcher.
 	listWatcher := cache.NewListWatchFromClient(k8sClientset.CoreV1().RESTClient(), "nodes", "", fields.Everything())
 
@@ -92,12 +88,18 @@ func NewNodeController(ctx context.Context, k8sClientset *kubernetes.Clientset, 
 			kick(nc.schedule)
 		}}
 
-	// TODO: Only setup node labels syncer if env var is set
-	handlers.AddFunc = func(obj interface{}) {
-		nc.syncNodeLabels(obj.(*v1.Node))
-	}
-	handlers.UpdateFunc = func(_, obj interface{}) {
-		nc.syncNodeLabels(obj.(*v1.Node))
+	if cfg.SyncNodeLabels {
+		// Start the syncer.
+		nc.initSyncer()
+		nc.syncer.Start()
+
+		// Add handlers for node add/update events from k8s.
+		handlers.AddFunc = func(obj interface{}) {
+			nc.syncNodeLabels(obj.(*v1.Node))
+		}
+		handlers.UpdateFunc = func(_, obj interface{}) {
+			nc.syncNodeLabels(obj.(*v1.Node))
+		}
 	}
 
 	// Informer handles managing the watch and signals us when nodes are deleted.
@@ -108,7 +110,10 @@ func NewNodeController(ctx context.Context, k8sClientset *kubernetes.Clientset, 
 }
 
 // syncNodeLabels syncs the labels found in v1.Node to the Calico node object.
-func (nc *NodeController) syncNodeLabels(node *v1.Node) error {
+// It uses an annotation on the Calico node object to keep track of which labels have
+// beend synced from Kubernetes, so that it doesn't overwrite user provided labels (e.g.,
+// via calicoctl or another Calico controller).
+func (nc *NodeController) syncNodeLabels(node *v1.Node) {
 	// On failure, we retry a certain number of times.
 	for n := 1; n < maxAttempts; n++ {
 		// Get the Calico node representation.
@@ -116,7 +121,7 @@ func (nc *NodeController) syncNodeLabels(node *v1.Node) error {
 		if !ok {
 			// We havent learned this Calico node yet.
 			log.Debugf("Skipping update for node with no Calico equivalent")
-			return nil
+			return
 		}
 		calNode, err := nc.calicoClient.Nodes().Get(context.Background(), name, options.GetOptions{})
 		if err != nil {
@@ -135,13 +140,16 @@ func (nc *NodeController) syncNodeLabels(node *v1.Node) error {
 		needsUpdate := false
 
 		// Check if it has the annotation for k8s labels.
-		a, ok := calNode.Annotations["projectcalico.org/kube-labels"]
+		a, ok := calNode.Annotations[nodeLabelAnnotation]
 
 		// If there are labels present, then parse them. Otherwise this is
 		// a first-time sync, in which case there are no old labels.
 		var oldLabels map[string]string = map[string]string{}
 		if ok {
-			json.Unmarshal([]byte(a), &oldLabels)
+			if err = json.Unmarshal([]byte(a), &oldLabels); err != nil {
+				log.WithError(err).Error("Failed to unmarshal node labels")
+				return
+			}
 		}
 		log.Debugf("Determined previously synced labels: %s", oldLabels)
 
@@ -171,9 +179,9 @@ func (nc *NodeController) syncNodeLabels(node *v1.Node) error {
 		bytes, err := json.Marshal(node.Labels)
 		if err != nil {
 			log.WithError(err).Errorf("Error marshalling node labels")
-			panic(err) // TODO
+			return
 		}
-		calNode.Annotations["projectcalico.org/kube-labels"] = string(bytes)
+		calNode.Annotations[nodeLabelAnnotation] = string(bytes)
 
 		// Update the node in the datastore.
 		if needsUpdate {
@@ -184,9 +192,9 @@ func (nc *NodeController) syncNodeLabels(node *v1.Node) error {
 			}
 			log.WithField("node", node.ObjectMeta.Name).Info("Successfully synced node labels")
 		}
-		return nil
+		return
 	}
-	return fmt.Errorf("Too many retries when updating node")
+	log.Errorf("Too many retries when updating node")
 }
 
 // getK8sNodeName is a helper method that searches a calicoNode for its kubernetes nodeRef.
