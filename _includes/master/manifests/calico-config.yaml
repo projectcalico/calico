@@ -27,10 +27,12 @@ data:
   etcd_cert: "" # "/calico-secrets/etcd-cert"
   etcd_key: ""  # "/calico-secrets/etcd-key"
 
-{%- elsif include.datastore == "kdd" and include.typha == "true" %}
-  # To enable Typha, set this to "calico-typha" *and* set a non-zero value for Typha replicas
-  # below.  We recommend using Typha if you have more than 50 nodes. Above 100 nodes it is
-  # essential.
+{%- endif %}
+{%- if include.typha == "true" %}
+  # You must set a non-zero value for Typha replicas below.
+  typha_service_name: "calico-typha"
+{%- else %}
+  # Typha is disabled.
   typha_service_name: "none"
 
 {%- endif %}

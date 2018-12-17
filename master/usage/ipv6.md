@@ -1,6 +1,6 @@
 ---
 title: Enabling IPv6 Support
-canonical_url: 'https://docs.projectcalico.org/v3.2/usage/ipv6'
+canonical_url: 'https://docs.projectcalico.org/v3.4/usage/ipv6'
 ---
 
 ### About enabling IPv6
@@ -42,7 +42,7 @@ Refer to the section that corresponds to your orchestrator for details.
 Kubernetes components must be configured to operate with IPv6.
 To enable IPv6, set the following flags.
 
-##### kube-apiserver 
+##### kube-apiserver
 
 | Flag | Value/Content |
 | ---- | ------------- |
@@ -117,7 +117,7 @@ calico-node pod.
 ### Modifying your DNS for IPv6
 
 It will probably be necessary to modify your DNS pod for IPv6. If you are using
-[kube-dns](/{{page.version}}/getting-started/kubernetes/installation/manifests/kubedns.yaml), 
+[kube-dns](/{{page.version}}/getting-started/kubernetes/installation/manifests/kubedns.yaml),
 then the following changes will ensure IPv6 operation.
 
 - Update the image versions to at least `1.14.8`.
@@ -130,11 +130,13 @@ then the following changes will ensure IPv6 operation.
   --probe=kubedns,127.0.0.1:10053,kubernetes.default.svc.cluster.local,5,A
   --probe=dnsmasq,127.0.0.1:53,kubernetes.default.svc.cluster.local,5,A
   ```
+  {: .no-select-button}
   to
   ```
   --probe=kubedns,127.0.0.1:10053,kubernetes.default.svc.cluster.local,5,SRV
   --probe=dnsmasq,127.0.0.1:53,kubernetes.default.svc.cluster.local,5,SRV
   ```
+  {: .no-select-button}
 
 ## Enabling IPv6 with OpenStack
 
@@ -156,7 +158,7 @@ is easy to remedy that by launching an image, making appropriate changes
 to its configuration files, taking a snapshot, and then using that
 snapshot thereafter instead of the original image.
 
-For example, starting from the Ubuntu 14.04 cloud image, the following
+For example, starting from an Ubuntu cloud image, the following
 changes will suffice to meet the requirements just listed.
 
 -   In `/etc/network/interfaces.d/eth0.cfg`, add:
@@ -172,6 +174,15 @@ changes will suffice to meet the requirements just listed.
     contents:
 
         net.ipv6.conf.eth0.router_solicitation_delay = 10
+
+For CentOS, these additions to a cloud-init script have been reported to be effective:
+
+	runcmd:
+	- sed -i -e '$a'"IPV6INIT=yes" /etc/sysconfig/network-scripts/ifcfg-eth0
+	- sed -i -e '$a'"DHCPV6C=yes" /etc/sysconfig/network-scripts/ifcfg-eth0
+	- sed -i '/PATH/i\new_ip6_prefixlen=128' /sbin/dhclient-script
+	- systemctl restart network
+
 
 ### Enabling IPv6 support in {{site.prodname}}
 

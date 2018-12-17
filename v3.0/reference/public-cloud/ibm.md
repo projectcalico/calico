@@ -1,6 +1,6 @@
 ---
 title: Calico Configured Automatically in IBM Cloud
-canonical_url: https://docs.projectcalico.org/v3.2/reference/public-cloud/ibm
+canonical_url: https://docs.projectcalico.org/v3.4/reference/public-cloud/ibm
 ---
 
 {{site.prodname}} is installed and configured automatically in your [IBM Cloud Kubernetes Service][IBMKUBE].  Default policies are created to protect your Kubernetes cluster, with the option to create your own policies to protect specific services.

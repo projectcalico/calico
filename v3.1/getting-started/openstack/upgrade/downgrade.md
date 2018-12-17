@@ -1,6 +1,6 @@
 ---
 title: Downgrading Calico
-canonical_url: 'https://docs.projectcalico.org/v3.2/getting-started/openstack/upgrade/downgrade'
+canonical_url: 'https://docs.projectcalico.org/v3.4/getting-started/openstack/upgrade/downgrade'
 ---
 
 ## About downgrading {{site.prodname}}

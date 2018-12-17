@@ -1,17 +1,17 @@
 ---
 title: DevStack plugin for Calico
-canonical_url: 'https://docs.projectcalico.org/v3.2/getting-started/openstack/installation/devstack'
+canonical_url: 'https://docs.projectcalico.org/v3.4/getting-started/openstack/installation/devstack'
 ---
 
 The networking-calico project provides a DevStack plugin.  The following
 instructions explain how to set up a single or multiple node DevStack/{{site.prodname}}
 system, and then how to see {{site.prodname}} connectivity in action.
 
-> **Note**: networking-calico includes a 
-> [shell script](https://git.openstack.org/cgit/openstack/networking-calico/tree/devstack/bootstrap.sh) 
-> that implements the following setup instructions. You are welcome to use it, 
-> but we recommend that you read the following description first anyway, and 
-> briefly review the script's code, so that you will understand what the 
+> **Note**: networking-calico includes a
+> [shell script](https://git.openstack.org/cgit/openstack/networking-calico/tree/devstack/bootstrap.sh)
+> that implements the following setup instructions. You are welcome to use it,
+> but we recommend that you read the following description first anyway, and
+> briefly review the script's code, so that you will understand what the
 > script does.
 {: .alert .alert-info}
 
@@ -28,7 +28,7 @@ and compute functions running on the same node:
 
        enable_plugin networking-calico https://git.openstack.org/openstack/networking-calico
 
-3. Run ``stack.sh``
+3. Run `stack.sh`.
 
 4. Create a shared, routed network with an IPv4 subnet:
 
@@ -38,7 +38,7 @@ and compute functions running on the same node:
 
 5. Ensure that IPv4 and IPv6 forwarding are enabled:
 
-       sysctl -w net.ipv4.ip_forward=1
+       sysctl -w net.ipv4.ip_forward=1 
        sysctl -w net.ipv6.conf.all.forwarding=1
 
 

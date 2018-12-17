@@ -1,6 +1,6 @@
 ---
 title: Creating host endpoint objects
-canonical_url: 'https://docs.projectcalico.org/v3.2/getting-started/bare-metal/policy/objects'
+canonical_url: 'https://docs.projectcalico.org/v3.4/getting-started/bare-metal/policy/objects'
 ---
 
 
@@ -97,14 +97,24 @@ and (if used) the interface name in the configuration. If there was
 something wrong with the endpoint data, Felix will log a validation
 error at `WARNING` level and it will ignore the endpoint:
 
-    $ grep "Validation failed" /var/log/calico/felix.log
-    2016-05-31 12:16:21,651 [WARNING][8657/3] calico.felix.fetcd 1017:
-        Validation failed for host endpoint HostEndpointId<eth0>, treating as
-        missing: 'name' or 'expected_ipvX_addrs' must be present.;
-        '{ "labels": {"foo": "bar"}, "profile_ids": ["prof1"]}'
+A `grep` through the Felix logs for the string "Validation failed" should allow
+you to locate the error.
+
+```bash
+grep "Validation failed" /var/log/calico/felix.log
+```
+
+An example error follows.
+
+```bash
+2016-05-31 12:16:21,651 [WARNING][8657/3] calico.felix.fetcd 1017:
+    Validation failed for host endpoint HostEndpointId<eth0>, treating as
+    missing: 'name' or 'expected_ipvX_addrs' must be present.;
+    '{ "labels": {"foo": "bar"}, "profile_ids": ["prof1"]}'
+```
+{: .no-select-button}
 
 The error can be quite long but it should log the precise cause of the
-rejection; in this case "'name' or 'expected\_ipvX\_addrs' must be
-present" tells us that either the interface's name or its expected IP
+rejection; in this case `'name' or 'expected\_ipvX\_addrs' must be
+present` tells us that either the interface's name or its expected IP
 address must be specified.
-

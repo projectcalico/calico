@@ -1,6 +1,6 @@
 ---
 title: Kubeadm Hosted Install
-canonical_url: 'https://docs.projectcalico.org/v3.2/getting-started/kubernetes/installation/hosted/kubeadm/'
+canonical_url: 'https://docs.projectcalico.org/v3.4/getting-started/kubernetes/installation/hosted/kubeadm/'
 ---
 
 This document outlines how to install Calico, as well as a as single node

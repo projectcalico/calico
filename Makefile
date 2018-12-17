@@ -135,6 +135,18 @@ release-publish: release-prereqs
 release-notes: release-prereqs
 	VERSION=$(CALICO_VER) GITHUB_TOKEN=$(GITHUB_TOKEN) python2 ./release-scripts/generate-release-notes.py
 
+update-authors:
+ifndef GITHUB_TOKEN
+	$(error GITHUB_TOKEN must be set)
+endif
+	@echo "# Calico authors" > AUTHORS.md
+	@echo "" >> AUTHORS.md
+	@echo "This file is auto-generated based on contribution records reported" >> AUTHORS.md
+	@echo "by GitHub for the core repositories within the projectcalico/ organization. It is ordered alphabetically." >> AUTHORS.md
+	@echo "" >> AUTHORS.md
+	@docker run -ti --rm -v $(PWD):/code -e GITHUB_TOKEN=$(GITHUB_TOKEN) python:3 \
+		bash -c 'pip install pygithub && /usr/local/bin/python /code/release-scripts/get-contributors.py >> /code/AUTHORS.md'
+
 # release-prereqs checks that the environment is configured properly to create a release.
 release-prereqs:
 ifndef RELEASE_STREAM
@@ -144,7 +156,9 @@ endif
 		echo "Expected CALICO_VER $(CALICO_VER) to equal NODE_VER $(NODE_VER)"; \
 		exit 1; fi
 
-RELEASE_DIR?=_output/release-$(CALICO_VER)
+OUTPUT_DIR?=_output
+RELEASE_DIR_NAME?=release-$(CALICO_VER)
+RELEASE_DIR?=$(OUTPUT_DIR)/$(RELEASE_DIR_NAME)
 RELEASE_DIR_K8S_MANIFESTS?=$(RELEASE_DIR)/k8s-manifests
 RELEASE_DIR_IMAGES?=$(RELEASE_DIR)/images
 RELEASE_DIR_BIN?=$(RELEASE_DIR)/bin
@@ -154,7 +168,7 @@ MANIFEST_SRC ?= ./_site/$(RELEASE_STREAM)/getting-started/kubernetes/installatio
 release-archive: release-prereqs $(RELEASE_DIR).tgz
 
 $(RELEASE_DIR).tgz: $(RELEASE_DIR) $(RELEASE_DIR_K8S_MANIFESTS) $(RELEASE_DIR_IMAGES) $(RELEASE_DIR_BIN) $(RELEASE_DIR)/README
-	tar -czvf $(RELEASE_DIR).tgz $(RELEASE_DIR)/*
+	tar -czvf $(RELEASE_DIR).tgz -C $(OUTPUT_DIR) $(RELEASE_DIR_NAME)
 
 $(RELEASE_DIR_IMAGES): $(RELEASE_DIR_IMAGES)/calico-node.tar $(RELEASE_DIR_IMAGES)/calico-typha.tar $(RELEASE_DIR_IMAGES)/calico-cni.tar $(RELEASE_DIR_IMAGES)/calico-kube-controllers.tar
 $(RELEASE_DIR_BIN): $(RELEASE_DIR_BIN)/calicoctl $(RELEASE_DIR_BIN)/calicoctl-windows-amd64.exe $(RELEASE_DIR_BIN)/calicoctl-darwin-amd64

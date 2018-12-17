@@ -1,6 +1,6 @@
 ---
 title: Quickstart for Calico on Kubernetes
-canonical_url: 'https://docs.projectcalico.org/v3.2/getting-started/kubernetes/'
+canonical_url: 'https://docs.projectcalico.org/v3.4/getting-started/kubernetes/'
 ---
 
 
@@ -19,17 +19,21 @@ To deploy a cluster suitable for production, refer to [Installation](/{{page.ver
 - 2CPU
 - 2GB RAM
 - 10GB free disk space
-- RedHat Enterprise Linux 7.x+, CentOS 7.x+, Ubuntu 16.04+, or Debian 8.x+
+- RedHat Enterprise Linux 7.x+, CentOS 7.x+, Ubuntu 16.04+, or Debian 9.x+
 
 
 ### Before you begin
 
-[Follow the Kubernetes instructions to install kubeadm](https://kubernetes.io/docs/setup/independent/install-kubeadm/){:target="_blank"}.
+- Ensure that {{site.prodname}} can manage `cali` and `tunl` interfaces on the host.
+  If NetworkManager is present on the host, refer to
+  [Configure NetworkManager](../../usage/troubleshooting/#configure-networkmanager).
 
-> **Note**: After installing kubeadm, do not power down or restart
-the host. Instead, continue directly to the
-[next section to create your cluster](#create-a-single-host-kubernetes-cluster).
-{: .alert .alert-info}
+- [Follow the Kubernetes instructions to install kubeadm](https://kubernetes.io/docs/setup/independent/install-kubeadm/){:target="_blank"}.
+
+   > **Note**: After installing kubeadm, do not power down or restart
+   the host. Instead, continue directly to the
+   [next section to create your cluster](#create-a-single-host-kubernetes-cluster).
+   {: .alert .alert-info}
 
 
 ### Create a single-host Kubernetes cluster
@@ -43,7 +47,7 @@ the host. Instead, continue directly to the
    sudo kubeadm init --pod-network-cidr=192.168.0.0/16
    ```
 
-   > **Note**: If 192.16.0.0/16 is already in use within your network you must select a different pod network
+   > **Note**: If 192.168.0.0/16 is already in use within your network you must select a different pod network
    > CIDR, replacing 192.168.0.0/16 in the above command as well as in any manifests applied below.
    {: .alert .alert-info}
 
@@ -70,29 +74,10 @@ the host. Instead, continue directly to the
    You should see the following output.
 
    ```
-   daemonset "calico-etcd" created
-   service "calico-etcd" created
+   daemonset.extensions/calico-etcd created
+   service/calico-etcd created
    ```
-
-1. Install the RBAC roles required for {{site.prodname}}
-
-   ```
-   kubectl apply -f \
-   {{site.url}}/{{page.version}}/getting-started/kubernetes/installation/rbac.yaml
-   ```
-
-   > **Note**: You can also
-   > [view the YAML in a new tab]({{site.url}}/{{page.version}}/getting-started/kubernetes/installation/rbac.yaml){:target="_blank"}.
-   {: .alert .alert-info}
-
-   You should see the following output.
-
-   ```
-   clusterrole.rbac.authorization.k8s.io "calico-kube-controllers" created
-   clusterrolebinding.rbac.authorization.k8s.io "calico-kube-controllers" created
-   clusterrole.rbac.authorization.k8s.io "calico-node" created
-   clusterrolebinding.rbac.authorization.k8s.io "calico-node" created
-   ```
+   {: .no-select-button}
 
 1. Install {{site.prodname}} with the following command.
 
@@ -108,13 +93,18 @@ the host. Instead, continue directly to the
    You should see the following output.
 
    ```
-   configmap "calico-config" created
-   secret "calico-etcd-secrets" created
-   daemonset.extensions "calico-node" created
-   serviceaccount "calico-node" created
-   deployment.extensions "calico-kube-controllers" created
-   serviceaccount "calico-kube-controllers" created
+   configmap/calico-config created
+   secret/calico-etcd-secrets created
+   daemonset.extensions/calico-node created
+   serviceaccount/calico-node created
+   deployment.extensions/calico-kube-controllers created
+   serviceaccount/calico-kube-controllers created
+   clusterrole.rbac.authorization.k8s.io/calico-kube-controllers created
+   clusterrolebinding.rbac.authorization.k8s.io/calico-kube-controllers created
+   clusterrole.rbac.authorization.k8s.io/calico-node created
+   clusterrolebinding.rbac.authorization.k8s.io/calico-node created
    ```
+   {: .no-select-button}
 
 1. Confirm that all of the pods are running with the following command.
 
@@ -126,16 +116,18 @@ the host. Instead, continue directly to the
 
    ```
    NAMESPACE    NAME                                       READY  STATUS   RESTARTS  AGE
-   kube-system  calico-etcd-x2482                          1/1    Running  0         2m
-   kube-system  calico-kube-controllers-6ff88bf6d4-tgtzb   1/1    Running  0         2m
-   kube-system  {{site.noderunning}}-24h85                          2/2    Running  0         2m
-   kube-system  etcd-jbaker-virtualbox                     1/1    Running  0         6m
-   kube-system  kube-apiserver-jbaker-virtualbox           1/1    Running  0         6m
-   kube-system  kube-controller-manager-jbaker-virtualbox  1/1    Running  0         6m
-   kube-system  kube-dns-545bc4bfd4-67qqp                  3/3    Running  0         5m
-   kube-system  kube-proxy-8fzp2                           1/1    Running  0         5m
-   kube-system  kube-scheduler-jbaker-virtualbox           1/1    Running  0         5m
+   kube-system  calico-etcd-x2482                          1/1    Running  0         2m45s
+   kube-system  calico-kube-controllers-6ff88bf6d4-tgtzb   1/1    Running  0         2m45s
+   kube-system  {{site.noderunning}}-24h85                          2/2    Running  0         2m43s
+   kube-system  coredns-846jhw23g9-9af73                   1/1    Running  0         4m5s
+   kube-system  coredns-846jhw23g9-hmswk                   1/1    Running  0         4m5s
+   kube-system  etcd-jbaker-1                              1/1    Running  0         6m22s
+   kube-system  kube-apiserver-jbaker-1                    1/1    Running  0         6m12s
+   kube-system  kube-controller-manager-jbaker-1           1/1    Running  0         6m16s
+   kube-system  kube-proxy-8fzp2                           1/1    Running  0         5m16s
+   kube-system  kube-scheduler-jbaker-1                    1/1    Running  0         5m41s
    ```
+   {: .no-select-button}
 
 1. Press CTRL+C to exit `watch`.
 
@@ -149,8 +141,9 @@ the host. Instead, continue directly to the
    It should return the following.
 
    ```
-   node "<your-hostname>" untainted
+   node/<your-hostname> untainted
    ```
+   {: .no-select-button}
 
 1. Confirm that you now have a node in your cluster with the
    following command.
@@ -162,9 +155,10 @@ the host. Instead, continue directly to the
    It should return something like the following.
 
    ```
-   NAME             STATUS  ROLES   AGE  VERSION  EXTERNAL-IP  OS-IMAGE            KERNEL-VERSION     CONTAINER-RUNTIME
-   <your-hostname>  Ready   master  1h   v1.8.x   <none>       Ubuntu 16.04.3 LTS  4.10.0-28-generic  docker://1.12.6
+   NAME              STATUS   ROLES    AGE   VERSION   INTERNAL-IP   EXTERNAL-IP   OS-IMAGE             KERNEL-VERSION    CONTAINER-RUNTIME
+   <your-hostname>   Ready    master   52m   v1.12.2   10.128.0.28   <none>        Ubuntu 18.04.1 LTS   4.15.0-1023-gcp   docker://18.6.1
    ```
+   {: .no-select-button}
 
 Congratulations! You now have a single-host Kubernetes cluster
 equipped with {{site.prodname}}.

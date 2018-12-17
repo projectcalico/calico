@@ -1,6 +1,6 @@
 ---
 title: calicoctl version
-canonical_url: 'https://docs.projectcalico.org/v3.2/reference/calicoctl/commands/version'
+canonical_url: 'https://docs.projectcalico.org/v3.4/reference/calicoctl/commands/version'
 ---
 
 # User reference for 'calicoctl version' commands

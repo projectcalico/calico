@@ -1,6 +1,6 @@
 ---
 title: Calico System Requirements
-canonical_url: https://docs.projectcalico.org/v3.2/reference/requirements
+canonical_url: https://docs.projectcalico.org/v3.4/reference/requirements
 ---
 
 Depending on the Calico functionality you are using, there are some requirements your system needs to meet in order for Calico to work properly.

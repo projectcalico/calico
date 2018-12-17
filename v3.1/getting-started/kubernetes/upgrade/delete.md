@@ -1,6 +1,6 @@
 ---
 title: Deleting old data
-canonical_url: 'https://docs.projectcalico.org/v3.2/getting-started/kubernetes/upgrade/delete'
+canonical_url: 'https://docs.projectcalico.org/v3.4/getting-started/kubernetes/upgrade/delete'
 ---
 
 ## About deleting old Calico data

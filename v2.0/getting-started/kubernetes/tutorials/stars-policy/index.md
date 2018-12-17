@@ -1,6 +1,6 @@
 ---
 title: Stars Policy Demo
-canonical_url: 'https://docs.projectcalico.org/v3.2/getting-started/kubernetes/tutorials/stars-policy/'
+canonical_url: 'https://docs.projectcalico.org/v3.4/getting-started/kubernetes/tutorials/stars-policy/'
 ---
 The included demo sets up a frontend and backend service, as well as a client service, all
 running on Kubernetes.  It then configures network policy on each service.
@@ -76,7 +76,7 @@ kubectl create -f policies/backend-policy.yaml
 
 Refresh the UI.  You should see the following:
 
-- The frontend can now access the backend (on TCP port 80 only).
+- The frontend can now access the backend (on TCP port 6379 only).
 - The backend cannot access the frontend at all.
 - The client cannot access the frontend, nor can it access the backend.
 

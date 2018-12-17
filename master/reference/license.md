@@ -1,6 +1,6 @@
 ---
 title: Third Party Software Attributions
-canonical_url: 'https://docs.projectcalico.org/v3.2/reference/license'
+canonical_url: 'https://docs.projectcalico.org/v3.4/reference/license'
 ---
 
 
@@ -16,6 +16,7 @@ reproduced below for clarity.
 
 ## OpenStack
 
+```bash
     Copyright (c) 2012 OpenStack Foundation.
     All Rights Reserved.
 
@@ -30,9 +31,12 @@ reproduced below for clarity.
     WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
     License for the specific language governing permissions and limitations
     under the License.
+```
+{: .no-select-button}
 
 ## Dnsmasq
 
+```
     dnsmasq is Copyright (c) 2000-2014 Simon Kelley
     This program is free software; you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -46,9 +50,12 @@ reproduced below for clarity.
 
     You should have received a copy of the GNU General Public License
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
+```
+{: .no-select-button}
 
 ## BIRD
 
+```
     BIRD Internet Routing Daemon
 
         (c) 1998--2008  Martin Mares <mj@ucw.cz>
@@ -69,3 +76,5 @@ reproduced below for clarity.
     You should have received a copy of the GNU General Public License
     along with this program; if not, write to the Free Software
     Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+```
+{: .no-select-button}

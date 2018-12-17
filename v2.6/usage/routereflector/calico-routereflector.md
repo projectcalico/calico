@@ -1,6 +1,6 @@
 ---
 title: 'Calico BIRD Route Reflector container'
-canonical_url: 'https://docs.projectcalico.org/v3.2/usage/routereflector/calico-routereflector'
+canonical_url: 'https://docs.projectcalico.org/v3.4/usage/routereflector/calico-routereflector'
 ---
 
 For many Calico deployments, the use of a Route Reflector is not required.

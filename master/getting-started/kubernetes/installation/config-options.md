@@ -1,6 +1,6 @@
 ---
 title: Customizing the manifests
-canonical_url: 'https://docs.projectcalico.org/v3.2/getting-started/kubernetes/installation/config-options'
+canonical_url: 'https://docs.projectcalico.org/v3.4/getting-started/kubernetes/installation/config-options'
 ---
 
 ## About customizing manifests
@@ -98,6 +98,7 @@ To use these manifests with a TLS-enabled etcd cluster you must do the following
    etcd_cert: "/calico-secrets/etcd-cert"
    etcd_key: "/calico-secrets/etcd-key"
    ```
+   {: .no-select-button}
 
 1. Ensure that you have three files, one containing the `etcd_ca` value, another containing
    the `etcd_key` value, and a third containing the `etcd_cert` value.
@@ -128,6 +129,7 @@ To use these manifests with a TLS-enabled etcd cluster you must do the following
      etcd-cert: LS0tLS1...ElGSUNBVEUtLS0tLQ==
      etcd-ca: LS0tLS1CRUdJTiBD...JRklDQVRFLS0tLS0=
    ```
+   {: .no-select-button}
 
 1. Apply the manifest.
 
@@ -146,6 +148,26 @@ To use these manifests with a TLS-enabled etcd cluster you must do the following
 {{site.prodname}}'s manifests assign its components one of two service accounts.
 Depending on your cluster's authorization mode, you'll want to back these
 service accounts with the necessary permissions.
+
+### Configuring service advertisement
+
+{{site.prodname}} supports [advertising Kubernetes services over
+BGP]({{site.baseurl}}/{{page.version}}/usage/service-advertisement),
+so that service cluster IPs are routable from outside the cluster.  To
+enable this, add a `CALICO_ADVERTISE_CLUSTER_IPS` variable setting to
+the environment for {{site.nodecontainer}} in the `calico.yaml`
+manifest, with value equal to the cluster IP range for your Kubernetes
+cluster; for example:
+
+```yaml
+          env:
+            [...]
+            - name: CALICO_ADVERTISE_CLUSTER_IPS
+              value: "10.96.0.0/12"
+```
+
+For more information, see [Configuring
+{{site.nodecontainer}}]({{site.baseurl}}/{{page.version}}/reference/node/configuration).
 
 ### Other configuration options
 

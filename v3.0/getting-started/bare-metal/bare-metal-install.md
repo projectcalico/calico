@@ -1,6 +1,6 @@
 ---
 title: Installing Felix as a static binary
-canonical_url: https://docs.projectcalico.org/v3.2/getting-started/bare-metal/installation/
+canonical_url: https://docs.projectcalico.org/v3.4/getting-started/bare-metal/installation/
 ---
 
 These instructions will take you through a first-time install of

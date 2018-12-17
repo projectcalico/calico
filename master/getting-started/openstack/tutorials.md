@@ -1,6 +1,6 @@
 ---
 title: Worked Examples Using Calico-based OpenStack
-canonical_url: 'https://docs.projectcalico.org/v3.2/getting-started/openstack/tutorials'
+canonical_url: 'https://docs.projectcalico.org/v3.4/getting-started/openstack/tutorials'
 ---
 
 Here are a few worked examples for common {{site.prodname}} on OpenStack deployment
@@ -31,10 +31,15 @@ laptop, they need the machine to be reachable from outside the data
 center. In vanilla Neutron, this would mean provisioning it with a
 floating IP, but in {{site.prodname}} they instead want to make sure the VM is
 attached to the `external` network. To add themselves to this network,
-the user needs to find out the UUID for it:
+the user needs to find out the UUID for it.
 
+```bash
+neutron net-list
 ```
-$ neutron net-list
+
+This should return something like the following.
+
+```bash
 +--------------------------------------+----------+----------------------------------------------------------+
 | id                                   | name     | subnets                                                  |
 +--------------------------------------+----------+----------------------------------------------------------+
@@ -44,17 +49,18 @@ $ neutron net-list
 |                                      |          | bf94ccb1-c57c-4c9a-a873-c20cbfa4ecaf 2001:db8:a41:3::/64 |
 +--------------------------------------+----------+----------------------------------------------------------+
 ```
+{: .no-select-button}
 
-As the user can see, the `external` network has the UUID
-`8d5dec25-a6aa-4e18-8706-a51637a428c2`. Thus, they create the machine
-with the following nova boot command:
+In the example above, the `external` network has the UUID
+`8d5dec25-a6aa-4e18-8706-a51637a428c2`. Thus, the machine can be created
+with the following `nova boot` command.
 
 ```
-$ nova boot --flavor m1.medium                                  \
-            --image debian-wheezy-amd64                         \
-            --security-groups default                           \
-            --nic "netid=8d5dec25-a6aa-4e18-8706-a51637a428c2"  \
-            development-server
+nova boot --flavor m1.medium                                  \
+          --image debian-wheezy-amd64                         \
+          --security-groups default                           \
+          --nic "netid=8d5dec25-a6aa-4e18-8706-a51637a428c2"  \
+          development-server
 ```
 
 This places the VM with a single NIC in the `external` network. The VM
@@ -74,45 +80,60 @@ below:
 | security_groups                      | default                                                   |
 +--------------------------------------+-----------------------------------------------------------+
 ```
+{: .no-select-button}
 
-While the machine boots, this tenant decides to configure their security
-group. It needs four extra rules: one for SSH and three for VNC. This
+While the machine boots, the security group can be configured. It needs
+four extra rules: one for SSH and three for VNC. In this example,
 developer's personal machine has the IPv4 address 191.64.52.12, and
 that's the only machine they'd like to be able to access their machine.
-For that reason, they add the four security group rules:
+For that reason, they add the four security group rules as follows.
 
+To add the SSH ingress rule:
+
+```bash
+neutron security-group-rule-create --protocol tcp                      \
+                                   --port-range-min 22                 \
+                                   --port-range-max 22                 \
+                                   --direction ingress                 \
+                                   --remote-ip-prefix 191.64.52.12/32  \
+                                   --ethertype IPv4                    \
+                                   default
 ```
-$ neutron security-group-rule-create --protocol tcp                      \
-                                     --port-range-min 22                 \
-                                     --port-range-max 22                 \
-                                     --direction ingress                 \
-                                     --remote-ip-prefix 191.64.52.12/32  \
-                                     --ethertype IPv4                    \
-                                     default
 
-$ neutron security-group-rule-create --protocol tcp                      \
-                                     --port-range-min 5800               \
-                                     --port-range-max 5801               \
-                                     --direction ingress                 \
-                                     --remote-ip-prefix 191.64.52.12/32  \
-                                     --ethertype IPv4                    \
-                                     default
+To add the first VNC rule:
 
-$ neutron security-group-rule-create --protocol tcp                      \
-                                     --port-range-min 5900               \
-                                     --port-range-max 5901               \
-                                     --direction ingress                 \
-                                     --remote-ip-prefix 191.64.52.12/32  \
-                                     --ethertype IPv4                    \
-                                     default
+```bash
+neutron security-group-rule-create --protocol tcp                      \
+                                   --port-range-min 5800               \
+                                   --port-range-max 5801               \
+                                   --direction ingress                 \
+                                   --remote-ip-prefix 191.64.52.12/32  \
+                                   --ethertype IPv4                    \
+                                   default
+```
 
-$ neutron security-group-rule-create --protocol tcp                      \
-                                     --port-range-min 6000               \
-                                     --port-range-max 6001               \
-                                     --direction ingress                 \
-                                     --remote-ip-prefix 191.64.52.12/32  \
-                                     --ethertype IPv4                    \
-                                     default
+To add the second VNC rule:
+
+```bash
+neutron security-group-rule-create --protocol tcp                      \
+                                   --port-range-min 5900               \
+                                   --port-range-max 5901               \
+                                   --direction ingress                 \
+                                   --remote-ip-prefix 191.64.52.12/32  \
+                                   --ethertype IPv4                    \
+                                   default
+```
+
+To add the third VNC rule:
+
+```bash
+neutron security-group-rule-create --protocol tcp                      \
+                                   --port-range-min 6000               \
+                                   --port-range-max 6001               \
+                                   --direction ingress                 \
+                                   --remote-ip-prefix 191.64.52.12/32  \
+                                   --ethertype IPv4                    \
+                                   default
 ```
 
 At this stage, the developer's machine is up and running. It can be

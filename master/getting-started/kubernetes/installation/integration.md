@@ -1,8 +1,7 @@
 ---
 title: Integration Guide
-canonical_url: 'https://docs.projectcalico.org/v3.2/getting-started/kubernetes/installation/integration'
+canonical_url: 'https://docs.projectcalico.org/v3.4/getting-started/kubernetes/installation/integration'
 ---
-
 
 This document explains the components necessary to install {{site.prodname}} on
 Kubernetes for integrating with custom configuration management.
@@ -116,10 +115,14 @@ Download the binaries and make sure they're executable.
 
 {% if page.version == "master" %}
 You can download the [latest relase from GitHub](https://github.com/projectcalico/cni-plugin/releases).
+
+Download the correct binaries for your architecture, and place them at `/opt/cni/bin/calico` and `/opt/cni/bin/calico-ipam`.
 {% else %}
 ```bash
-wget -N -P /opt/cni/bin https://github.com/projectcalico/cni-plugin/releases/download/{{site.data.versions[page.version].first.components["calico/cni"].version}}/calico
-wget -N -P /opt/cni/bin https://github.com/projectcalico/cni-plugin/releases/download/{{site.data.versions[page.version].first.components["calico/cni"].version}}/calico-ipam
+wget -N https://github.com/projectcalico/cni-plugin/releases/download/{{site.data.versions[page.version].first.components["calico/cni"].version}}/calico-amd64
+wget -N https://github.com/projectcalico/cni-plugin/releases/download/{{site.data.versions[page.version].first.components["calico/cni"].version}}/calico-ipam-amd64
+mv ./calico-amd64 /opt/cni/bin/calico
+mv ./calico-ipam-amd64 /opt/cni/bin/calico-ipam
 chmod +x /opt/cni/bin/calico /opt/cni/bin/calico-ipam
 ```
 {% endif %}
@@ -161,8 +164,8 @@ In addition to the CNI plugin specified by the CNI config file, Kubernetes requi
 Download the file `loopback` and copy it to the CNI binary directory.
 
 ```bash
-wget https://github.com/containernetworking/cni/releases/download/v0.6.0/cni-v0.6.0.tgz
-tar -zxvf cni-v0.6.0.tgz
+wget https://github.com/containernetworking/plugins/releases/download/v0.7.1/cni-plugins-amd64-v0.7.1.tgz
+tar -zxvf cni-plugins-amd64-v0.7.1.tgz
 sudo cp loopback /opt/cni/bin/
 ```
 
@@ -181,16 +184,22 @@ To install the controllers:
 - Install it using `kubectl`.
 
 ```shell
-$ kubectl create -f calico-kube-controllers.yaml
+kubectl create -f calico-kube-controllers.yaml
 ```
 
-After a few moments, you should see the controllers enter `Running` state:
+After a few moments, issue the following command.
 
 ```shell
-$ kubectl get pods --namespace=kube-system
+kubectl get pods --namespace=kube-system
+```
+
+You should see the controllers enter the `Running` state.
+
+```bash
 NAME                                     READY     STATUS    RESTARTS   AGE
 calico-kube-controllers                  1/1       Running   0          1m
 ```
+{: .no-select-button}
 
 For more information on how to configure the controllers,
 see the [configuration guide]({{site.baseur}}/{{page.version}}/reference/kube-controllers/configuration).
@@ -204,11 +213,29 @@ tokens or certificates to present which identify it as the configured API user.
 Detailed instructions for configuring Kubernetes RBAC are outside the scope of this document.  For more information,
 please see the [upstream Kubernetes documentation](https://kubernetes.io/docs/admin/authorization/rbac/) on the topic.
 
-The following YAML file defines the necessary API permissions required by {{site.prodname}}
-when using the etcd datastore.
+The permissions required by the {{site.prodname}} components vary by datastore type and networking provider.
+Apply the manifest appropriate to your cluster configuration.
 
-```
-kubectl apply -f {{site.url}}/{{page.version}}/getting-started/kubernetes/installation/rbac.yaml
-```
+- **Kubernetes API datastore with {{site.prodname}} networking**:
 
-[Click here to view the above yaml directly.](rbac.yaml)
+   ```
+   kubectl apply -f {{site.url}}/{{page.version}}/manifests/rbac-kdd-calico.yaml
+   ```
+
+- **Kubernetes API datastore with flannel networking**:
+
+   ```
+   kubectl apply -f {{site.url}}/{{page.version}}/manifests/rbac-kdd-flannel.yaml
+   ```
+
+- **etcd datastore with {{site.prodname}} networking**:
+
+   ```
+   kubectl apply -f {{site.url}}/{{page.version}}/manifests/rbac-etcd-calico.yaml
+   ```
+
+- **etcd datastore with flannel networking**:
+
+   ```
+   kubectl apply -f {{site.url}}/{{page.version}}/manifests/rbac-etcd-flannel.yaml
+   ```

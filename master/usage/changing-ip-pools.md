@@ -66,6 +66,7 @@ installed {{ site.prodname }} without setting the default IP pool to match. Runn
 NAME                  CIDR             NAT    IPIPMODE   DISABLED
 default-ipv4-ippool   192.168.0.0/16   true   Always     false
 ```
+{: .no-select-button}
 
 Based on the output of `calicoctl get wep --all-namespaces`, we see `kube-dns` has already been allocated an address
 from the wrong range:
@@ -74,6 +75,7 @@ from the wrong range:
 NAMESPACE     WORKLOAD                   NODE      NETWORKS            INTERFACE
 kube-system   kube-dns-6f4fd4bdf-8q7zp   vagrant   192.168.52.130/32   cali800a63073ed
 ```
+{: .no-select-button}
 
 Let's get started.
 
@@ -99,6 +101,7 @@ Let's get started.
    default-ipv4-ippool   192.168.0.0/16   true   Always     false
    new-pool              10.0.0.0/16      true   Always     false
    ```
+   {: .no-select-button}
 
 2. Disable the old IP pool.
 
@@ -157,8 +160,9 @@ Let's get started.
    default-ipv4-ippool   192.168.0.0/16   true   Always     true
    new-pool              10.0.0.0/16      true   Always     false
    ```
+   {: .no-select-button}
 
-3. Recreate all existing workloads using IPs from the disabled pool. 
+3. Recreate all existing workloads using IPs from the disabled pool.
    In this example, kube-dns is the only workload networked by {{ site.prodname }}:
 
    ```
@@ -171,6 +175,7 @@ Let's get started.
    NAMESPACE     WORKLOAD                   NODE      NETWORKS            INTERFACE
    kube-system   kube-dns-6f4fd4bdf-8q7zp   vagrant   10.0.24.8/32   cali800a63073ed
    ```
+   {: .no-select-button}
 
 4. Delete the old IP pool:
 

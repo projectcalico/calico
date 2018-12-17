@@ -1,16 +1,16 @@
 ---
 title: calicoctl delete
-canonical_url: 'https://docs.projectcalico.org/v3.2/reference/calicoctl/commands/delete'
+canonical_url: 'https://docs.projectcalico.org/v3.4/reference/calicoctl/commands/delete'
 ---
 
 This sections describes the `calicoctl delete` command.
 
-Read the [calicoctl command line interface user reference]({{site.baseurl}}/{{page.version}}/reference/calicoctl/) 
+Read the [calicoctl command line interface user reference]({{site.baseurl}}/{{page.version}}/reference/calicoctl/)
 for a full list of calicoctl commands.
 
-> **Note**: The available actions for a specific resource type may be 
-> limited based on the datastore used for {{site.prodname}} (etcdv3 / Kubernetes API). 
-> Please refer to the 
+> **Note**: The available actions for a specific resource type may be
+> limited based on the datastore used for {{site.prodname}} (etcdv3 / Kubernetes API).
+> Please refer to the
 > [Resources section]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/)
 > for details about each resource type.
 {: .alert .alert-info}
@@ -18,7 +18,7 @@ for a full list of calicoctl commands.
 
 ## Displaying the help text for 'calicoctl delete' command
 
-Run `calicoctl delete --help` to display the following help menu for the 
+Run `calicoctl delete --help` to display the following help menu for the
 command.
 
 ```
@@ -86,19 +86,35 @@ Description:
   failure deleting a specific resource it is possible to work out which
   resource failed based on the number of resources successfully deleted.
 ```
+{: .no-select-button}
 
 ### Examples
 
-```
-# Delete a set of resources (of mixed type) using the data in resources.yaml.
-# Results indicate that 8 resources were successfully deleted.
-$ calicoctl delete -f ./resources.yaml
-Successfully deleted 8 resource(s)
+1. Delete a set of resources (of mixed type) using the data in resources.yaml.
 
-# Delete a policy resource by name.  The policy is called "policy1".
-$ bin/calicoctl delete policy policy1
-Successfully deleted 1 'policy' resource(s)
-```
+   ```bash
+   calicoctl delete -f ./resources.yaml
+   ```
+
+   Results indicate that 8 resources were successfully deleted.
+
+   ```bash
+   Successfully deleted 8 resource(s)
+   ```
+   {: .no-select-button}
+
+1. Delete a policy resource by name.  The policy is called "policy1".
+
+   ```bash
+   bin/calicoctl delete policy policy1
+   ```
+
+   Results indicate success.
+
+   ```bash
+   Successfully deleted 1 'policy' resource(s)
+   ```
+   {: .no-select-button}
 
 ### Options
 
@@ -111,6 +127,7 @@ Successfully deleted 1 'policy' resource(s)
                           Only applicable to NetworkPolicy and WorkloadEndpoint.
                           Uses the default namespace if not specified.
 ```
+{: .no-select-button}
 
 ### General options
 
@@ -119,6 +136,7 @@ Successfully deleted 1 'policy' resource(s)
                           configuration in YAML or JSON format.
                           [default: /etc/calico/calicoctl.cfg]
 ```
+{: .no-select-button}
 
 ## See also
 

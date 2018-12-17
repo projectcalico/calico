@@ -1,6 +1,6 @@
 ---
 title: Installing Calico for policy (advanced)
-canonical_url: 'https://docs.projectcalico.org/v3.2/getting-started/kubernetes/installation/other'
+canonical_url: 'https://docs.projectcalico.org/v3.4/getting-started/kubernetes/installation/other'
 ---
 
 You can also use {{site.prodname}} just for policy enforcement and achieve networking 

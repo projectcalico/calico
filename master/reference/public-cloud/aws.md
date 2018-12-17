@@ -1,6 +1,6 @@
 ---
 title: AWS
-canonical_url: https://docs.projectcalico.org/v3.2/reference/public-cloud/aws
+canonical_url: https://docs.projectcalico.org/v3.4/reference/public-cloud/aws
 ---
 
 {{site.prodname}} provides the following advantages when running in AWS:
@@ -44,7 +44,7 @@ The following `calicoctl` command will create or modify an IPv4 pool with
 CIDR 192.168.0.0/16 using IPIP mode `CrossSubnet`. Adjust the pool CIDR for your deployment.
 
 ```
-$ calicoctl apply -f - << EOF
+calicoctl apply -f - << EOF
 apiVersion: projectcalico.org/v3
 kind: IPPool
 metadata:
@@ -69,7 +69,7 @@ CIDR 192.168.0.0/16 using IPIP mode `CrossSubnet` and enables outgoing NAT.
 Adjust the pool CIDR for your deployment.
 
 ```
-$ calicoctl apply -f - << EOF
+calicoctl apply -f - << EOF
 apiVersion: projectcalico.org/v3
 kind: IPPool
 metadata:

@@ -1,7 +1,6 @@
 ---
 title: Enabling IPVS in Kubernetes
-redirect_from: latest/usage/enabling-ipvs
-canonical_url: 'https://docs.projectcalico.org/v3.2/usage/enabling-ipvs'
+canonical_url: 'https://docs.projectcalico.org/v3.4/usage/enabling-ipvs'
 ---
 
 {{site.prodname}} has support for `kube-proxy`'s `ipvs` proxy mode.
@@ -19,8 +18,8 @@ However, it comes with some limitations.  In IPVS mode:
   {{site.prodname}} will treat traffic to those ports as host traffic instead
   of pod traffic.
 - {{site.prodname}} does not support Kubernetes services that make use of a
-  locally-assigned ExternalIP.  {{site.prodname}} does support ExternalIPs that
-  are implemented via an external load balancer.
+  locally-assigned `ExternalIP` for Kubernetes v1.10. This is due to a kube-proxy issue
+  and has been fixed in Kubernetes v1.11.
 
  {{site.prodname}} will detect if you change `kube-proxy`'s proxy mode after 
  {{site.prodname}} has been deployed. Any Kubernetes `ipvs`-specific configuration 

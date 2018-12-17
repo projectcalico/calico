@@ -1,6 +1,6 @@
 ---
 title: Calico Kubernetes Hosted Install
-canonical_url: https://docs.projectcalico.org/v3.2/getting-started/kubernetes/installation/
+canonical_url: https://docs.projectcalico.org/v3.4/getting-started/kubernetes/installation/
 ---
 
 Calico can be installed on a Kubernetes cluster with a single command.

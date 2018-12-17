@@ -1,7 +1,6 @@
 ---
 title: Installing Calico on Kubernetes
-redirect_from: latest/getting-started/kubernetes/installation/index
-canonical_url: https://docs.projectcalico.org/v3.2/getting-started/kubernetes/installation/
+canonical_url: https://docs.projectcalico.org/v3.4/getting-started/kubernetes/installation/
 ---
 
 We provide a number of manifests to get you up and running with {{site.prodname}} in
@@ -35,7 +34,6 @@ environments.
 | [Google Container Engine][gke]       | A managed Kubernetes environment by Google using {{site.prodname}} for network policy. |
 | [Heptio AWS Quickstart][heptio]      | Uses kubeadm and CloudFormation to build Kubernetes clusters on AWS using {{site.prodname}} for networking and network policy enforcement. |
 | [IBM Cloud Kubernetes Service][ibmk] | A managed Kubernetes environment by IBM using {{site.prodname}} for networking and network policy enforcement. |
-| [Kismatic Enterprise Toolkit][ket]   | Fully-automated, production-grade Kubernetes operations on AWS and other clouds. |
 | [Kops][kops]                         | A popular Kubernetes project for launching production-ready clusters on AWS, as well as other public and private cloud environments. |
 | [Kubernetes kube-up][kube-up]        | Deploys {{site.prodname}} on GCE using the same underlying open-source infrastructure as Google's GKE platform. |
 | [Kubespray][kubespray]               | A Kubernetes project for deploying Kubernetes with Ansible |
@@ -46,7 +44,6 @@ environments.
 [gke]: https://cloud.google.com/kubernetes-engine/docs/how-to/network-policy
 [heptio]: https://s3.amazonaws.com/quickstart-reference/heptio/latest/doc/heptio-kubernetes-on-the-aws-cloud.pdf
 [ibmk]: https://www.ibm.com/cloud/container-service/
-[ket]: https://apprenda.com/kismatic/
 [kops]: https://github.com/kubernetes/kops/blob/master/docs/networking.md#calico-example-for-cni-and-network-policy
 [kubespray]: https://github.com/kubernetes-incubator/kubespray
 [kube-up]: http://kubernetes.io/docs/getting-started-guides/network-policy/calico/

@@ -1,6 +1,6 @@
 ---
 title: Calico Architecture
-canonical_url: 'https://docs.projectcalico.org/v3.2/reference/architecture/'
+canonical_url: 'https://docs.projectcalico.org/v3.4/reference/architecture/'
 ---
 
 This document discusses the various pieces of the Calico etcd-based

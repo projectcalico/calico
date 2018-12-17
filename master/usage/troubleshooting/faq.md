@@ -1,6 +1,6 @@
 ---
 title: Frequently Asked Questions
-canonical_url: 'https://docs.projectcalico.org/v3.2/usage/troubleshooting/faq'
+canonical_url: 'https://docs.projectcalico.org/v3.4/usage/troubleshooting/faq'
 ---
 
 * TOC
@@ -87,7 +87,7 @@ documents *mandates* the use of VLANs.
 1. Retrieve current IP Pool config
 
    ```shell
-   $ calicoctl get ipPool -o yaml > pool.yaml
+   calicoctl get ipPool --export -o yaml > pool.yaml
    ```
 
 2. Modify IP Pool config
@@ -110,7 +110,7 @@ documents *mandates* the use of VLANs.
 3. Load the modified file.
 
    ```shell
-   $ calicoctl replace -f pool.yaml
+   calicoctl replace -f pool.yaml
    ```
 
 ## "How does {{site.prodname}} maintain saved state?"
@@ -304,20 +304,31 @@ In cases where this is not possible then you can configure incoming NAT
 you can configure incoming NAT with port mapping on the host on which the container
 is running on.
 
-```
-# First create a new chain called "expose-ports" to hold the NAT rules
-# and jump to that chain from the OUTPUT and PREROUTING chains.
-# The OUTPUT chain is hit by traffic originating on the host itself;
-# The PREROUTING chain is hit by traffic coming from elsewhere.
-iptables -t nat -N expose-ports
-iptables -t nat -A OUTPUT -j expose-ports
-iptables -t nat -A PREROUTING -j expose-ports
+1. Create a new chain called "expose-ports" to hold the NAT rules.
 
-# Then, for each port you want to expose, add a rule to the
-# expose-ports chain, replacing <PUBLIC_IP> with the host IP that you
-# want to use to expose the port and <PUBLIC_PORT> with the host port.
-iptables -t nat -A expose-ports -p tcp --destination <PUBLIC_IP> --dport <PUBLIC_PORT> -j DNAT  --to <CALICO_IP>:<SERVICE_PORT>
-```
+   ```bash
+   iptables -t nat -N expose-ports
+   ```
+
+1. Jump to that chain from the OUTPUT and PREROUTING chains.
+
+   ```bash
+   iptables -t nat -A OUTPUT -j expose-ports
+   iptables -t nat -A PREROUTING -j expose-ports
+   ```
+
+   > **Tip**: The OUTPUT chain is hit by traffic originating on the host itself;
+   > The PREROUTING chain is hit by traffic coming from elsewhere.
+   {: .alert .alert-success}
+
+1. For each port you want to expose, add a rule to the
+   expose-ports chain, replacing ``<PUBLIC_IP>`` with the host IP that you
+   want to use to expose the port and ``<PUBLIC_PORT>`` with the host port.
+
+   ```bash
+   iptables -t nat -A expose-ports -p tcp --destination <PUBLIC_IP> \
+   --dport <PUBLIC_PORT> -j DNAT  --to <CALICO_IP>:<SERVICE_PORT>
+   ```
 
 For example, you have a container to which you've assigned the CALICO_IP
 of 192.168.7.4, and you have NGINX running on port 8080 inside the container.
@@ -331,6 +342,7 @@ iptables -t nat -A PREROUTING -j expose-ports
 
 iptables -t nat -A expose-ports -p tcp --destination 192.0.2.1 --dport 80 -j DNAT --to 192.168.7.4:8080
 ```
+{: .alert .alert-success}
 
 The commands will need to be run each time the host is restarted.
 

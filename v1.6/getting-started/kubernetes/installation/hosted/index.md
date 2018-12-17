@@ -1,6 +1,6 @@
 ---
 title: Calico Kubernetes Hosted Install
-canonical_url: 'https://docs.projectcalico.org/v3.2/getting-started/kubernetes/installation/hosted/hosted'
+canonical_url: 'https://docs.projectcalico.org/v3.4/getting-started/kubernetes/installation/hosted/hosted'
 ---
 
 This document describes deploying Calico on Kubernetes using Kubernetes manifests.  Note that the Kubernetes hosted installation method is experimental and subject to change, and requires Kubernetes v1.4.0+.

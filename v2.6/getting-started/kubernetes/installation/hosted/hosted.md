@@ -1,6 +1,6 @@
 ---
 title: Standard Hosted Install
-canonical_url: https://docs.projectcalico.org/v3.2/getting-started/kubernetes/installation/
+canonical_url: https://docs.projectcalico.org/v3.4/getting-started/kubernetes/installation/
 ---
 
 The following steps install Calico as a Kubernetes add-on using your own etcd cluster.

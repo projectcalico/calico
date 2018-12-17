@@ -1,6 +1,6 @@
 ---
 title: Installing Calico for policy and flannel for networking
-canonical_url: 'https://docs.projectcalico.org/v3.2/getting-started/kubernetes/installation/flannel'
+canonical_url: 'https://docs.projectcalico.org/v3.4/getting-started/kubernetes/installation/flannel'
 ---
 
 ## Before you begin
@@ -22,33 +22,29 @@ section that matches your type.
 
 ### Installing with the Kubernetes API datastore (recommended)
 
-1. Ensure that the Kubernetes controller manager has the following flags set:<br>
-   `--cluster-cidr=10.244.0.0/16` and `--allocate-node-cidrs=true`.
+1. Ensure that the Kubernetes controller manager has the following flags
+   set: <br>
+   `--cluster-cidr=<your-pod-cidr>` and `--allocate-node-cidrs=true`.
 
-   > **Tip**: If you're using kubeadm, you can pass `--pod-network-cidr=10.244.0.0/16`
-   > to kubeadm to set the Kubernetes controller flags.
+   > **Tip**: On kubeadm, you can pass `--pod-network-cidr=<your-pod-cidr>`
+   > to kubeadm to set both Kubernetes controller flags.
    {: .alert .alert-success}
 
-1. If your cluster has RBAC enabled, issue the following command to
-   configure the roles and bindings that {{site.prodname}} requires.
+1. Download the flannel networking manifest for the Kubernetes API datastore.
 
+   ```bash
+   curl \
+   {{site.url}}/{{page.version}}/getting-started/kubernetes/installation/hosted/canal/canal.yaml \
+   -O
    ```
-   kubectl apply -f \
-   {{site.url}}/{{page.version}}/getting-started/kubernetes/installation/hosted/canal/rbac.yaml
-   ```
-   > **Note**: You can also
-   > [view the manifest in your browser](hosted/canal/rbac.yaml){:target="_blank"}.
-   {: .alert .alert-info}
+
+{% include {{page.version}}/pod-cidr-sed.md yaml="canal" %}
 
 1. Issue the following command to install {{site.prodname}}.
 
    ```bash
-   kubectl apply -f \
-   {{site.url}}/{{page.version}}/getting-started/kubernetes/installation/hosted/canal/canal.yaml
+   kubectl apply -f canal.yaml
    ```
-
-   > **Note**: You can also [view the manifest in your browser](hosted/canal/canal.yaml){:target="_blank"}.
-   {: .alert .alert-info}
 
 1. If you wish to enforce application layer policies and secure workload-to-workload
    communications with mutual TLS authentication, continue to [Enabling application layer policy](app-layer-policy) (optional).
@@ -58,17 +54,6 @@ section that matches your type.
 We strongly recommend using the Kubernetes API datastore, but if you prefer to use
 etcd, complete the following steps.
 
-1. If your cluster has RBAC enabled, issue the following command to
-   configure the roles and bindings that {{site.prodname}} requires.
-
-   ```
-   kubectl apply -f \
-   {{site.url}}/{{page.version}}/getting-started/kubernetes/installation/hosted/canal/rbac-etcd.yaml
-   ```
-   > **Note**: You can also
-   > [view the manifest in your browser](hosted/canal/rbac-etcd.yaml){:target="_blank"}.
-   {: .alert .alert-info}
-
 1. Download the {{site.prodname}} networking manifest.
 
    ```bash
@@ -76,6 +61,8 @@ etcd, complete the following steps.
    {{site.url}}/{{page.version}}/getting-started/kubernetes/installation/hosted/canal/canal-etcd.yaml \
    -O
    ```
+
+{% include {{page.version}}/pod-cidr-sed.md yaml="canal-etcd" %}
 
 1. In the `ConfigMap` named `calico-config`, set the value of
    `etcd_endpoints` to the IP address and port of your etcd server.

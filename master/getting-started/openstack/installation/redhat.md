@@ -1,6 +1,6 @@
 ---
 title: Red Hat Enterprise Linux packaged install
-canonical_url: 'https://docs.projectcalico.org/v3.2/getting-started/openstack/installation/redhat'
+canonical_url: 'https://docs.projectcalico.org/v3.4/getting-started/openstack/installation/redhat'
 ---
 
 These instructions will take you through a first-time install of
@@ -51,23 +51,6 @@ These steps are detailed in this section.
     EOF
     ```
 
-1.  Install the `etcd3gw` Python package, if it is not already installed on
-    your system.  `etcd3gw` is needed by {{site.prodname}}'s OpenStack driver
-    and DHCP agent, but is not yet RPM-packaged, so you should install it with
-    `pip`.  First check in case it has already been pulled in by your OpenStack
-    installation.
-
-    ```
-    find /usr/lib/python2.7/ -name etcd3gw
-    ```
-
-    If you see no output there, install `etcd3gw` with pip.
-
-    ```
-    yum install -y python-pip
-    pip install etcd3gw
-    ```
-
 ## etcd install
 
 {{site.prodname}} operation requires an etcd v3 key/value store—this may be
@@ -98,14 +81,20 @@ setup.  Here we present a sample recipe for a single node cluster.
     ETCD_INITIAL_CLUSTER_TOKEN=<uuid>
     ```
 
-    You can obtain a `<uuid>` by running the `uuidgen` tool:
+    You can obtain a `<uuid>` by running the `uuidgen` tool.
 
+    ```bash
+    uuidgen
     ```
-    # uuidgen
+
+    It should return a `<uuid>` value such as the following.
+
+    ```bash
     11f92f19-cb5a-476f-879f-5efc34033b8b
     ```
+    {: .no-select-button}
 
-    If it is not installed, run `yum install -y util-linux` to
+    If the `uuidgen` tool is not installed, run `yum install -y util-linux` to
     install it.
 
 1.  Launch etcd and set it to restart after a reboot:
@@ -221,6 +210,7 @@ On each compute node, perform the following steps:
     # a lock path must be set.
     lock_path = $state_path/lock
     ```
+    {: .no-select-button}
 
     Add a `[calico]` section with the following content, where `<ip>` is the IP
     address of the etcd server.
@@ -247,8 +237,9 @@ On each compute node, perform the following steps:
     ```
     service neutron-l3-agent stop
     chkconfig neutron-l3-agent off
-    ... repeat for bridging agent and any others ...
     ```
+
+    Repeat for bridging agent and any others.
 
 1.  If this node is not a controller, install and start the Nova
     Metadata API. This step is not required on combined compute and
@@ -315,7 +306,7 @@ On each compute node, perform the following steps:
     ```
     service bird restart
     service bird6 restart
-    chkconfig bird on
+    chkconfig bird on 
     chkconfig bird6 on
     ```
 

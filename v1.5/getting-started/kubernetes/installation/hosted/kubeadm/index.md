@@ -1,6 +1,6 @@
 ---
 title: Install for Kubeadm
-canonical_url: 'https://docs.projectcalico.org/v3.2/getting-started/kubernetes/installation/hosted/kubeadm/'
+canonical_url: 'https://docs.projectcalico.org/v3.4/getting-started/kubernetes/installation/hosted/kubeadm/'
 ---
 
 This document describes a single manifest for installing Calico on kubeadm managed 

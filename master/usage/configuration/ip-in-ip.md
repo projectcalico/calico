@@ -1,6 +1,6 @@
 ---
 title: Configuring IP-in-IP
-canonical_url: 'https://docs.projectcalico.org/v3.2/usage/configuration/ip-in-ip'
+canonical_url: 'https://docs.projectcalico.org/v3.4/usage/configuration/ip-in-ip'
 ---
 
 If your network fabric performs source/destination address checks
@@ -29,7 +29,7 @@ The following `calicoctl` command will create or modify an IPv4 pool with
 CIDR 192.168.0.0/16 to use IP-in-IP with mode `Always`:
 
 ```
-$ calicoctl apply -f - << EOF
+calicoctl apply -f - << EOF
 apiVersion: projectcalico.org/v3
 kind: IPPool
 metadata:
@@ -61,7 +61,7 @@ CIDR 192.168.0.0/16 to use IP-in-IP with mode `CrossSubnet`:
 
 
 ```
-$ calicoctl apply -f - << EOF
+calicoctl apply -f - << EOF
 apiVersion: projectcalico.org/v3
 kind: IPPool
 metadata:
@@ -100,14 +100,18 @@ IPIP mode is enabled.
 
 You can verify which of your nodes is correctly configured using calicoctl.
 
-Run `calicoctl get nodes --output=wide` to check the configuration.  e.g.
+```
+calicoctl get nodes --output=wide
+```
+
+An example response follows.
 
 ```
-$ calicoctl get nodes --output=wide
 NAME    ASN       IPV4           IPV6
 node1   (64512)   10.0.2.15/24
 node2   (64512)   10.0.2.10/32
 ```
+{: .no-select-button}
 
 In this example, node1 has the correct subnet information whereas node2 needs
 to be fixed.

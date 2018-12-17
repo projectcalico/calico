@@ -1,6 +1,6 @@
 ---
 title: Deploying Calico and Kubernetes on Container Linux by CoreOS using Vagrant and VirtualBox
-canonical_url: 'https://docs.projectcalico.org/v3.2/getting-started/kubernetes/installation/vagrant/'
+canonical_url: 'https://docs.projectcalico.org/v3.4/getting-started/kubernetes/installation/vagrant/'
 ---
 
 These instructions allow you to set up a Kubernetes cluster with Calico networking using Vagrant and the [Calico CNI plugin][calico-cni]. This guide does not setup TLS between Kubernetes components.

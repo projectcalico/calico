@@ -1,6 +1,6 @@
 ---
 title: Logging
-canonical_url: 'https://docs.projectcalico.org/v3.2/usage/troubleshooting/logging'
+canonical_url: 'https://docs.projectcalico.org/v3.4/usage/troubleshooting/logging'
 ---
 
 ## The {{site.nodecontainer}} container
@@ -48,21 +48,31 @@ of the `{{site.nodecontainer}}` logging directory.
 * The Info level (default) only enabled "debug {states}" logging. This is for protocol state changes (protocol going up, down, starting, stopping etc.)
 * The Warning, Error and Fatal levels all turn off bird debug logging completely.
 
-See [BGP Configuration Resource](/{{page.version}}/reference/calicoctl/resources/bgpconfig) 
+See [BGP Configuration Resource](/{{page.version}}/reference/calicoctl/resources/bgpconfig)
 for details on how to modify the logging level. For example:
 
-```
-# Get the current bgpconfig settings
-$ calicoctl get bgpconfig -o yaml > bgp.yaml
 
-# Modify logSeverityScreen to desired value
-#   Global change: set name to "default"
-#   Node-specific change: set name to the node name, e.g. "node-1"
-$ vim bgp.yaml
+1. Get the current bgpconfig settings.
 
-# Replace the current bgpconfig settings
-$ calicoctl replace -f bgp.yaml
-```
+   ```bash
+   calicoctl get bgpconfig -o yaml > bgp.yaml
+   ```
+
+1. Modify logSeverityScreen to desired value.
+
+   ```bash
+   vim bgp.yaml
+   ```
+
+   > **Tip**: For a global change set the name to "default".
+   > For a node-specific change set the name to the node name, e.g., "node-1".
+   {: .alert .alert-success}
+
+1. Replace the current bgpconfig settings.
+
+   ```bash
+   calicoctl replace -f bgp.yaml
+   ```
 
 ### Felix
 
@@ -71,18 +81,27 @@ endpoints.  Felix is responsible for the programming of iptables rules on the
 host.  The logs are output in the `felix` sub-directory of the `{{site.nodecontainer}}`
 logging directory.
 
-```
-# Get the current felixconfig settings
-$ calicoctl get felixconfig -o yaml > felix.yaml
+1. Get the current felixconfig settings.
 
-# Modify logSeverityScreen to none, debug, info, etc.
-#   Global change: set name to "default"
-#   Node-specific change: set name to the node name, e.g. "{{site.prodname}}-Node-1"
-$ vim felix.yaml
+   ```bash
+   calicoctl get felixconfig -o yaml > felix.yaml
+   ```
 
-# Replace the current felixconfig settings
-$ calicoctl replace -f felix.yaml
-```
+1. Modify logSeverityScreen to desired value.
+
+   ```bash
+   vim felix.yaml
+   ```
+
+   > **Tip**: For a global change set the name to "default".
+   > For a node-specific change set the name to the node name, e.g., "{{site.prodname}}-Node-1".
+   {: .alert .alert-success}
+
+1. Replace the current felixconfig settings.
+
+   ```bash
+   calicoctl replace -f felix.yaml
+   ```
 
 ### confd
 

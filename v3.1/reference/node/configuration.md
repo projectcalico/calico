@@ -1,6 +1,6 @@
 ---
 title: Configuring calico/node
-canonical_url: 'https://docs.projectcalico.org/v3.2/reference/node/configuration'
+canonical_url: 'https://docs.projectcalico.org/v3.4/reference/node/configuration'
 ---
 
 The `{{site.nodecontainer}}` container is primarily configured through environment variables.
@@ -20,7 +20,7 @@ The `{{site.nodecontainer}}` container is primarily configured through environme
 | AS | The AS number for this node. When specified, the value is saved in the node resource configuration for this host, overriding any previously configured value. When omitted, if an AS number has been previously configured in the node resource, that AS number is used for the peering.  When omitted, if an AS number has not yet been configured in the node resource, the node will use the global value (see [example modifying Global BGP settings](/{{page.version}}/usage/configuration/bgp#example) for details.) | int |
 | DATASTORE_TYPE | Type of datastore. [Default: `etcdv3`] | kubernetes, etcdv3 |
 | WAIT_FOR_DATASTORE | Wait for connection to datastore before starting. If a successful connection is not made, node will shutdown. [Default: `false`] | boolean |
-| CALICO_NETWORKING_BACKEND | Describes which BGP networking backend to use [Default: `bird`] | gobgp, bird, none |
+| CALICO_NETWORKING_BACKEND | Describes which BGP networking backend to use [Default: `bird`] | bird, none |
 | CALICO_IPV4POOL_CIDR | The IPv4 Pool to create if none exists at start up. It is invalid to define this variable and NO_DEFAULT_POOLS. [Default: `192.168.0.0/16`] | IPv4 CIDR |
 | CALICO_IPV6POOL_CIDR | The IPv6 Pool to create if none exists at start up. It is invalid to define this variable and NO_DEFAULT_POOLS. [Default: `<a randomly chosen /48 ULA>`] | IPv6 CIDR |
 | CALICO_IPV4POOL_IPIP | IPIP Mode to use for the IPv4 POOL created at start up. [Default: `Off`] | Off, Always, CrossSubnet |

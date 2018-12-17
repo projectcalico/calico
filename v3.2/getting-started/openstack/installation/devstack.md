@@ -1,7 +1,6 @@
 ---
 title: DevStack plugin for Calico
-redirect_from: latest/getting-started/openstack/installation/devstack
-canonical_url: 'https://docs.projectcalico.org/v3.2/getting-started/openstack/installation/devstack'
+canonical_url: 'https://docs.projectcalico.org/v3.4/getting-started/openstack/installation/devstack'
 ---
 
 The networking-calico project provides a DevStack plugin.  The following

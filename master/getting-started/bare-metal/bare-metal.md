@@ -1,6 +1,6 @@
 ---
 title: Using Calico to Secure Host Interfaces
-canonical_url: 'https://docs.projectcalico.org/v3.2/getting-started/bare-metal/bare-metal'
+canonical_url: 'https://docs.projectcalico.org/v3.4/getting-started/bare-metal/bare-metal'
 ---
 
 This guide describes how to use {{site.prodname}} to secure the network interfaces
@@ -8,10 +8,10 @@ of the host itself (as opposed to those of any container/VM workloads
 that are present on the host). We call such interfaces "host endpoints",
 to distinguish them from "workload endpoints" (such as containers or VMs).
 
-{{site.prodname}} supports the same rich security policy model for host endpoints (host 
-endpoint policy) that it supports for workload endpoints. Host endpoints can 
-have labels, and their labels are in the same "namespace" as those of workload 
-endpoints. This allows security rules for either type of endpoint to refer to 
+{{site.prodname}} supports the same rich security policy model for host endpoints (host
+endpoint policy) that it supports for workload endpoints. Host endpoints can
+have labels, and their labels are in the same "namespace" as those of workload
+endpoints. This allows security rules for either type of endpoint to refer to
 the other type (or a mix of the two) using labels and selectors.
 
 {{site.prodname}} does not support setting IPs or policing MAC addresses for host
@@ -34,21 +34,20 @@ to/from other interfaces is left alone.
 
 You can use host endpoint policy to secure a NAT gateway or router. {{site.prodname}}
 supports selector-based policy when running on a gateway or router, allowing for
-rich, dynamic security policy based on the labels attached to your host endpoints. 
+rich, dynamic security policy based on the labels attached to your host endpoints.
 
 You can apply host endpoint policies to three types of traffic:
 - Traffic that is terminated locally.
 - Traffic that is forwarded between host endpoints.
-- Traffic that is forwarded between a host endpoint and a workload endpoint on the 
+- Traffic that is forwarded between a host endpoint and a workload endpoint on the
 same host.
 
 Set the `applyOnForward` flag to `true` to apply a policy to forwarded traffic.
 See [GlobalNetworkPolicy spec]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/globalnetworkpolicy#spec).
 
-> **Note**: Both traffic forwarded between host endpoints and traffic forwarded 
+> **Note**: Both traffic forwarded between host endpoints and traffic forwarded
 > between a host endpoint and a workload endpoint on the same host is regarded as
-> `forwarded traffic`. 
+> `forwarded traffic`.
 >
-> ![]({{site.baseurl}}/images/bare-metal-packet-flows-AOF.png)
+> ![]({{site.baseurl}}/images/bare-metal-packet-flows.svg)
 {: .alert .alert-info}
-

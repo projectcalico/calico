@@ -1,6 +1,6 @@
 ---
 title: Installing Calico for policy (advanced)
-canonical_url: 'https://docs.projectcalico.org/v3.2/getting-started/kubernetes/installation/other'
+canonical_url: 'https://docs.projectcalico.org/v3.4/getting-started/kubernetes/installation/other'
 ---
 
 You can also use {{site.prodname}} just for policy enforcement and achieve networking
@@ -13,22 +13,11 @@ complete the following steps.
    {{site.prodname}} [system requirements](../requirements). If you don't,
    follow the steps in [Using kubeadm to create a cluster](http://kubernetes.io/docs/getting-started-guides/kubeadm/).
 
-1. If your cluster has RBAC enabled, issue the following command to
-   configure the roles and bindings that {{site.prodname}} requires.
-
-   ```
-   kubectl apply -f \
-   {{site.url}}/{{page.version}}/getting-started/kubernetes/installation/hosted/rbac-kdd.yaml
-   ```
-   > **Note**: You can also
-   > [view the manifest in your browser](hosted/rbac-kdd.yaml){:target="_blank"}.
-   {: .alert .alert-info}
-
 1. Ensure that the Kubernetes controller manager has the following flags
    set: <br>
-   `--cluster-cidr=192.168.0.0/16` and `--allocate-node-cidrs=true`.
+   `--cluster-cidr=<your-pod-cidr>` and `--allocate-node-cidrs=true`.
 
-   > **Tip**: On kubeadm, you can pass `--pod-network-cidr=192.168.0.0/16`
+   > **Tip**: On kubeadm, you can pass `--pod-network-cidr=<your-pod-cidr>`
    > to kubeadm to set both Kubernetes controller flags.
    {: .alert .alert-success}
 
@@ -39,6 +28,8 @@ complete the following steps.
    {{site.url}}/{{page.version}}/getting-started/kubernetes/installation/hosted/kubernetes-datastore/policy-only/1.7/calico.yaml \
    -O
    ```
+
+{% include {{page.version}}/pod-cidr-sed.md yaml="calico" %}
 
 1. If your cluster contains more than 50 nodes:
 
@@ -58,6 +49,7 @@ complete the following steps.
        ...
        replicas: <number of replicas>
      ```
+     {: .no-select-button}
 
      We recommend at least one replica for every 200 nodes and no more than
      20 replicas. In production, we recommend a minimum of three replicas to reduce

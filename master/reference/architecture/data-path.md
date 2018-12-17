@@ -1,6 +1,6 @@
 ---
 title: 'The Calico Data Path: IP Routing and iptables'
-canonical_url: 'https://docs.projectcalico.org/v3.2/reference/architecture/data-path'
+canonical_url: 'https://docs.projectcalico.org/v3.4/reference/architecture/data-path'
 ---
 
 
@@ -20,11 +20,15 @@ workload’s host to the workload itself.
 
 Suppose that IPv4 addresses for the workloads are allocated from a
 datacenter-private subnet of 10.65/16, and that the hosts have IP
-addresses from 172.18.203/24. If you look at the routing table on a host
-you will see something like this:
+addresses from 172.18.203/24. If you look at the routing table on a host:
 
+```bash
+route -n
 ```
-ubuntu@calico-ci02:~$ route -n
+
+You will see something like this:
+
+```bash
 Kernel IP routing table
 Destination     Gateway         Genmask         Flags Metric Ref    Use Iface
 0.0.0.0         172.18.203.1    0.0.0.0         UG    0      0        0 eth0
@@ -35,6 +39,7 @@ Destination     Gateway         Genmask         Flags Metric Ref    Use Iface
 10.65.0.24      0.0.0.0         255.255.255.255 UH    0      0        0 tapa429fb36-04
 172.18.203.0    0.0.0.0         255.255.255.0   U     0      0        0 eth0
 ```
+{: .no-select-button}
 
 There is one workload on this host with IP address 10.65.0.24, and
 accessible from the host via a TAP (or veth, etc.) interface named

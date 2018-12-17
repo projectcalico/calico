@@ -1,6 +1,6 @@
 ---
 title: Ubuntu packaged install instructions
-canonical_url: 'https://docs.projectcalico.org/v3.2/getting-started/openstack/installation/ubuntu'
+canonical_url: 'https://docs.projectcalico.org/v3.4/getting-started/openstack/installation/ubuntu'
 ---
 
 These instructions will take you through a first-time install of
@@ -200,6 +200,7 @@ On each compute node, perform the following steps:
     # a lock path must be set.
     lock_path = $state_path/lock
     ```
+    {: .no-select-button}
 
     Add a `[calico]` section with the following content, where `<ip>` is the IP
     address of the etcd server.

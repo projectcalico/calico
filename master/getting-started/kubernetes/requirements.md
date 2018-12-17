@@ -1,6 +1,6 @@
 ---
 title: System requirements
-canonical_url: 'https://docs.projectcalico.org/v3.2/getting-started/kubernetes/requirements'
+canonical_url: 'https://docs.projectcalico.org/v3.4/getting-started/kubernetes/requirements'
 ---
 
 {% include {{page.version}}/reqs-sys.md orch="Kubernetes" %}
@@ -11,9 +11,9 @@ canonical_url: 'https://docs.projectcalico.org/v3.2/getting-started/kubernetes/r
 
 We test {{site.prodname}} {{page.version}} against the following Kubernetes versions.
 
-- 1.9
 - 1.10
 - 1.11
+- 1.12
 
 Other versions are likely to work, but we do not actively test {{site.prodname}}
 {{page.version}} against them.
@@ -47,12 +47,9 @@ IP ranges in your network, including:
 - The Kubernetes service cluster IP range
 - The range from which host IPs are allocated
 
-Our manifests default to `192.168.0.0/16` for the pod IP range except [Canal/flannel](./installation/flannel),
-which defaults to `10.244.0.0/16`. Refer to [Configuring the pod IP range](./installation/config-options#configuring-the-pod-ip-range)
-for information on modifying the defaults.
+## Application layer policy requirements
 
-#### Mutating webhooks
-
-Application Layer Policy requires the [MutatingAdmissionWebhook](https://kubernetes.io/docs/admin/admission-controllers/#mutatingadmissionwebhook) to be enabled.
+- [MutatingAdmissionWebhook](https://kubernetes.io/docs/admin/admission-controllers/#mutatingadmissionwebhook) enabled
+- [Istio v1.0](https://istio.io/about/notes/1.0/)
 
 {% include {{page.version}}/reqs-kernel.md %}

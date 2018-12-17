@@ -1,6 +1,6 @@
 ---
 title: Network Policy Resource (NetworkPolicy)
-canonical_url: 'https://docs.projectcalico.org/v3.2/reference/calicoctl/resources/networkpolicy'
+canonical_url: 'https://docs.projectcalico.org/v3.4/reference/calicoctl/resources/networkpolicy'
 ---
 
 A network policy resource (`NetworkPolicy`) represents an ordered set of rules which are applied
@@ -102,4 +102,4 @@ spec:
 | Datastore type           | Create/Delete | Update | Get/List | Notes
 |--------------------------|---------------|--------|----------|------
 | etcdv3                   | Yes           | Yes    | Yes      |
-| Kubernetes API datastore | No            | No     | Yes      | `NetworkPolicy` is determined from Kubernetes `NetworkPolicy` resources.
+| Kubernetes API datastore | Yes           | Yes    | Yes      | `NetworkPolicy` is determined from Kubernetes `NetworkPolicy` resources.

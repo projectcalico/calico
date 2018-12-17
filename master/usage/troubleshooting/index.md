@@ -1,6 +1,6 @@
 ---
 title: Troubleshooting
-canonical_url: 'https://docs.projectcalico.org/v3.2/usage/troubleshooting/'
+canonical_url: 'https://docs.projectcalico.org/v3.4/usage/troubleshooting/'
 ---
 
 * TOC
@@ -78,6 +78,7 @@ IPv4 BGP status
 IPv6 BGP status
 No IPv6 peers found.
 ```
+{: .no-select-button}
 
 If you do not see this, please check the following.
 
@@ -109,13 +110,13 @@ variables will not be transferred to the `sudo` environment.  You can run `sudo`
 the `-E` flag to include your environment variables:
 
 ```shell
-    sudo -E calicoctl node run
+sudo -E calicoctl node run
 ```
 
 or you can set environment variables for `sudo` commands like this:
 
 ```shell
-    sudo ETCD_ENDPOINTS=http://172.25.0.1:2379 calicoctl node run
+sudo ETCD_ENDPOINTS=http://172.25.0.1:2379 calicoctl node run
 ```
 
 Also be aware that connection information can be specified as a config
@@ -130,4 +131,6 @@ If you hit problems, please [raise an issue in GitHub](https://github.com/projec
 Diagnostics can be collected using the calicoctl command line tool. This should be run with superuser privileges,
 for example:
 
-        sudo calicoctl node diags
+```bash
+sudo calicoctl node diags
+```

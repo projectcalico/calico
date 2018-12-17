@@ -1,6 +1,6 @@
 ---
 title: calicoctl ipam
-canonical_url: 'https://docs.projectcalico.org/v3.2/reference/calicoctl/commands/ipam/'
+canonical_url: 'https://docs.projectcalico.org/v3.4/reference/calicoctl/commands/ipam/'
 ---
 
 This section describes the `calicoctl ipam` commands.
@@ -27,6 +27,7 @@ Description:
 
   See 'calicoctl ipam <command> --help' to read about a specific subcommand.
 ```
+{: .no-select-button}
 
 ## IPAM specific commands
 

@@ -1,6 +1,6 @@
 ---
 title: Configuring a Calico Role for etcdv2 RBAC
-canonical_url: 'https://docs.projectcalico.org/v3.2/reference/advanced/etcd-rbac/'
+canonical_url: 'https://docs.projectcalico.org/v3.4/reference/advanced/etcd-rbac/'
 ---
 
 Calico writes all of its data in a `/calico/` directory of etcd.

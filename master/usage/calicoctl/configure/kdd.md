@@ -1,6 +1,6 @@
 ---
 title: Configuring calicoctl to connect to the Kubernetes API datastore
-canonical_url: 'https://docs.projectcalico.org/v3.2/usage/calicoctl/configure/kdd'
+canonical_url: 'https://docs.projectcalico.org/v3.4/usage/calicoctl/configure/kdd'
 ---
 
 
@@ -46,17 +46,17 @@ spec:
 #### Example using environment variables
 
 ```shell
-$ export DATASTORE_TYPE=kubernetes
-$ export KUBECONFIG=~/.kube/config
-$ calicoctl get workloadendpoints
+export DATASTORE_TYPE=kubernetes
+export KUBECONFIG=~/.kube/config
+calicoctl get workloadendpoints
 ```
 
 And using `CALICO_` prefixed names:
 
 ```shell
-$ export CALICO_DATASTORE_TYPE=kubernetes
-$ export CALICO_KUBECONFIG=~/.kube/config
-$ calicoctl get workloadendpoints
+export CALICO_DATASTORE_TYPE=kubernetes
+export CALICO_KUBECONFIG=~/.kube/config 
+calicoctl get workloadendpoints
 ```
 
 

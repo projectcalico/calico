@@ -55,6 +55,10 @@ The code is a little roundabout for a few reasons:
     <script src="{{site.baseurl}}/js/bootstrap/bootstrap.min.js"></script>
     <script src="{{site.baseurl}}/js/instantsearch/instantsearch.min.js"></script>
     <script src="{{site.baseurl}}/js/script.js"></script>
+{% if page.version != "v1.5" and page.version != "v1.6" and page.version != "v2.0" and page.version != "v2.1" and page.version != "v2.2" and page.version != "v2.3" and page.version != "v2.4" and page.version != "v2.5" and page.version != "v2.6" and page.version != "v3.0" and page.version != "v3.1" and page.version != "v3.2" and page.version != "v3.3" %}
+    <script src="{{site.baseurl}}/js/clipboard.min.js"></script>
+    <script src="{{site.baseurl}}/js/code-select.js"></script>
+{% endif %}
     <script>
       (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
       (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
@@ -137,7 +141,9 @@ The code is a little roundabout for a few reasons:
              <li class="dropdown">
                <a href="#" class="dropdown-toggle" data-toggle="dropdown" role="button" aria-haspopup="true" aria-expanded="false">Version ({% if page.version == 'master' %}nightly{% else %}{{page.version}}{% endif %})<span class="caret"></span></a>
                <ul class="dropdown-menu">
-                 <li><a href="{{site.baseurl}}/v3.2/introduction">v3.2 (latest)</a></li>
+                 <li><a href="{{site.baseurl}}/v3.4/introduction">v3.4 (latest)</a></li>
+                 <li><a href="{{site.baseurl}}/v3.3/introduction">v3.3</a></li>
+                 <li><a href="{{site.baseurl}}/v3.2/introduction">v3.2</a></li>
                  <li><a href="{{site.baseurl}}/v3.1/introduction">v3.1</a></li>
                  <li><a href="{{site.baseurl}}/v3.0/introduction">v3.0</a></li>
                  <li><a href="{{site.baseurl}}/v2.6/introduction">v2.6</a></li>
@@ -167,7 +173,9 @@ The code is a little roundabout for a few reasons:
               <li class="dropdown">
                 <a href="#" class="dropdown-toggle" data-toggle="dropdown" role="button" aria-haspopup="true" aria-expanded="false">Version ({% if page.version == 'master' %}nightly{% else %}{{page.version}}{% endif %})<span class="caret"></span></a>
                 <ul class="dropdown-menu">
-                   <li><a href="{{site.baseurl}}/v3.2/introduction">v3.2 (latest)</a></li>
+                   <li><a href="{{site.baseurl}}/v3.4/introduction">v3.4 (latest)</a></li>
+                   <li><a href="{{site.baseurl}}/v3.3/introduction">v3.3</a></li>
+                   <li><a href="{{site.baseurl}}/v3.2/introduction">v3.2</a></li>
                    <li><a href="{{site.baseurl}}/v3.1/introduction">v3.1</a></li>
                    <li><a href="{{site.baseurl}}/v3.0/introduction">v3.0</a></li>
                    <li><a href="{{site.baseurl}}/v2.6/introduction">v2.6</a></li>

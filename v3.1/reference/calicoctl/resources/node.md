@@ -1,6 +1,6 @@
 ---
 title: Node Resource (Node)
-canonical_url: 'https://docs.projectcalico.org/v3.2/reference/calicoctl/resources/node'
+canonical_url: 'https://docs.projectcalico.org/v3.4/reference/calicoctl/resources/node'
 ---
 
 A node resource (`Node`) represents a node running {{site.prodname}}.  When adding a host

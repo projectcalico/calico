@@ -1,6 +1,6 @@
 ---
 title: Tutorial
-canonical_url: 'https://docs.projectcalico.org/v3.2/getting-started/bare-metal/policy/tutorial'
+canonical_url: 'https://docs.projectcalico.org/v3.4/getting-started/bare-metal/policy/tutorial'
 ---
 
 Imagine that the administrator of a Kubernetes cluster wants to secure it as much as
@@ -79,7 +79,7 @@ are in use in your own cluster.
 >
 > The explicit `drop-other-ingress` policy is needed because there is no
 > automatic default-drop semantic for pre-DNAT policy. There _is_ a
-> default-drop semantic for normal host endpoint policy but—as noted above—normal 
+> default-drop semantic for normal host endpoint policy but—as noted above—normal
 > host endpoint policy is not always enforced.
 {: .alert .alert-info}
 
@@ -164,6 +164,7 @@ calicoctl apply -f - <<EOF
       - action: Allow
         protocol: TCP
         destination:
+          selector: has(host-endpoint)
           ports: [31852]
     selector: has(host-endpoint)
 EOF
@@ -172,9 +173,8 @@ EOF
 If you wanted to make that NodePort accessible only through particular nodes, you could achieve that by giving those nodes a particular `host-endpoint` label:
 
 ```
-      host-endpoint: <special-value>
+host-endpoint: <special-value>
 ```
 
 and then using `host-endpoint=='<special-value>'` as the selector of the
 `allow-nodeport` policy, instead of `has(host-endpoint)`.
-
