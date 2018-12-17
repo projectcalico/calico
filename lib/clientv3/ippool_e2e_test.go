@@ -42,9 +42,10 @@ var _ = testutils.E2eDatastoreDescribe("IPPool tests", testutils.DatastoreAll, f
 	name1 := "ippool-1"
 	name2 := "ippool-2"
 	spec1 := apiv3.IPPoolSpec{
-		CIDR:      "1.2.3.0/24",
-		IPIPMode:  apiv3.IPIPModeAlways,
-		BlockSize: 26,
+		CIDR:         "1.2.3.0/24",
+		IPIPMode:     apiv3.IPIPModeAlways,
+		BlockSize:    26,
+		NodeSelector: "all()",
 	}
 	spec1_2 := apiv3.IPPoolSpec{
 		CIDR:         "1.2.3.0/24",
@@ -54,15 +55,17 @@ var _ = testutils.E2eDatastoreDescribe("IPPool tests", testutils.DatastoreAll, f
 		NodeSelector: `foo == "bar"`,
 	}
 	spec2 := apiv3.IPPoolSpec{
-		CIDR:        "2001::/120",
-		NATOutgoing: true,
-		IPIPMode:    apiv3.IPIPModeNever,
-		BlockSize:   122,
+		CIDR:         "2001::/120",
+		NATOutgoing:  true,
+		IPIPMode:     apiv3.IPIPModeNever,
+		BlockSize:    122,
+		NodeSelector: "all()",
 	}
 	spec2_1 := apiv3.IPPoolSpec{
-		CIDR:      "2001::/120",
-		IPIPMode:  apiv3.IPIPModeNever,
-		BlockSize: 122,
+		CIDR:         "2001::/120",
+		IPIPMode:     apiv3.IPIPModeNever,
+		BlockSize:    122,
+		NodeSelector: "all()",
 	}
 
 	It("should error when creating an IPPool with no name", func() {

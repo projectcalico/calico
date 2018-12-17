@@ -456,6 +456,75 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreEtcdV3, 
 				Expect(pool1.IPNet.Contains(a.IP)).To(BeTrue(), fmt.Sprintf("%s not in pool %s", a.IP, pool1))
 			}
 		})
+
+		// This test validates the behavior of changing node selectors on IP pools. Specifically, it
+		// ensures that when a node used to be selected by an IP pool but is no longer selected, we
+		// properly release block affinities so that the block can be reassigned to a node that is
+		// actually selected by the IP pool.
+		It("should handle changing node selectors and release appropriately", func() {
+			host := "host"
+			pool1 := cnet.MustParseNetwork("10.0.0.0/24")
+
+			bc.Clean()
+			deleteAllPools()
+
+			applyNode(bc, host, map[string]string{"foo": "bar"})
+			applyPool(pool1.String(), true, `foo == "bar"`)
+
+			// Assign three addresses to the node.
+			v4, _, err := ic.AutoAssign(context.Background(), AutoAssignArgs{
+				Num4:     3,
+				Num6:     0,
+				Hostname: host,
+			})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(len(v4)).To(Equal(3))
+
+			// Should have one affine block to this host.
+			blocks := getAffineBlocks(bc, host)
+			Expect(len(blocks)).To(Equal(1))
+
+			// Expect all the IPs to be from pool1.
+			for _, a := range v4 {
+				Expect(pool1.IPNet.Contains(a.IP)).To(BeTrue(), fmt.Sprintf("%s not in pool %s", a.IP, pool1))
+			}
+
+			// Release one of the IPs.
+			unallocated, err := ic.ReleaseIPs(context.Background(), v4[0:1])
+			Expect(len(unallocated)).To(Equal(0))
+			Expect(err).NotTo(HaveOccurred())
+
+			// Should still have one affine block to this host.
+			blocks = getAffineBlocks(bc, host)
+			Expect(len(blocks)).To(Equal(1))
+
+			// Change the selector for the IP pool so that it no longer matches node1.
+			applyPool(pool1.String(), true, `foo != "bar"`)
+
+			// Release another one of the IPs.
+			unallocated, err = ic.ReleaseIPs(context.Background(), v4[1:2])
+			Expect(len(unallocated)).To(Equal(0))
+			Expect(err).NotTo(HaveOccurred())
+
+			// The block should no longer have an affinity to this host.
+			Expect(len(getAffineBlocks(bc, host))).To(Equal(0))
+
+			// But it should still exist.
+			opts := model.BlockListOptions{IPVersion: 4}
+			out, err := bc.List(context.Background(), opts, "")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(len(out.KVPairs)).To(Equal(1))
+
+			// Release the last IP.
+			unallocated, err = ic.ReleaseIPs(context.Background(), v4[2:3])
+			Expect(len(unallocated)).To(Equal(0))
+			Expect(err).NotTo(HaveOccurred())
+
+			// The block now has no affinity, and no IPs, so it should be deleted.
+			out, err = bc.List(context.Background(), opts, "")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(len(out.KVPairs)).To(Equal(0))
+		})
 	})
 
 	Describe("IPAM AutoAssign from different pools - multi", func() {
@@ -806,63 +875,71 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreEtcdV3, 
 		// - Claim affinity to the same block again but for "host-B" this time - expect 0 claimed blocks, 4 failed and expect no error.
 		Entry("Claim affinity to the same block again but for Host-B this time", testArgsClaimAff{"10.0.0.0/24", "host-B", false, []string{"10.0.0.0/24", "fd80:24e2:f998:72d6::/120"}, net.IP{}, 0, 4, nil}),
 	)
-
-	DescribeTable("determinePools: filter enabled pools using given requested pools and input Calico Node",
-		func(pool1Enabled, pool2Enabled bool, pool1Selector, pool2Selector string, requestPool1, requestPool2 bool, expectation []string, expectErr bool) {
-			// Seed data
-			ipPools.pools = map[string]pool{
-				"10.0.0.0/24": pool{enabled: pool1Enabled, nodeSelector: pool1Selector},
-				"20.0.0.0/24": pool{enabled: pool2Enabled, nodeSelector: pool2Selector},
-			}
-			node := &v3.Node{ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{"foo": "bar"}}}
-
-			// Prep input data
-			reqPools := []cnet.IPNet{}
-			if requestPool1 {
-				cidr := cnet.MustParseCIDR("10.0.0.0/24")
-				reqPools = append(reqPools, cidr)
-			}
-			if requestPool2 {
-				cidr := cnet.MustParseCIDR("20.0.0.0/24")
-				reqPools = append(reqPools, cidr)
-			}
-
-			// Call determinePools
-			pools, err := ic.(*ipamClient).determinePools(reqPools, 4, node)
-
-			// Assert expectations
-			if expectErr {
-				Expect(err).To(HaveOccurred())
-			} else {
-				Expect(err).NotTo(HaveOccurred())
-			}
-			Expect(len(expectation)).To(Equal(len(pools)))
-			for _, pool := range pools {
-				Expect(expectation).Should(ContainElement(pool.Spec.CIDR))
-			}
-		},
-		Entry("Both pools enabled, none with node selector, no requested pools", true, true, "", "", false, false, []string{"10.0.0.0/24", "20.0.0.0/24"}, false),
-		Entry("Both pools enabled, none with node selector, pool1 requested", true, true, "", "", true, false, []string{"10.0.0.0/24"}, false),
-
-		Entry("Both pools enabled, pool1 matching selector, no requested pools", true, true, `foo == "bar"`, "", false, false, []string{"10.0.0.0/24", "20.0.0.0/24"}, false),
-		Entry("Both pools enabled, pool1 matching node selector, pool1 requested", true, true, `foo == "bar"`, "", true, false, []string{"10.0.0.0/24"}, false),
-
-		Entry("Both pools enabled, pool1 mismatching node selector, no requested pools", true, true, `foo != "bar"`, "", false, false, []string{"20.0.0.0/24"}, false),
-		Entry("Both pools enabled, pool1 mismatching node selector, pool1 requested", true, true, `foo != "bar"`, "", true, false, []string{}, false),
-
-		Entry("Both pools enabled, pool1 matching node selector, pool2 requested", true, true, `foo == "bar"`, "", false, true, []string{"20.0.0.0/24"}, false),
-
-		Entry("pool1 disabled, none with node selector, no requested pools", false, true, "", "", false, false, []string{"20.0.0.0/24"}, false),
-		Entry("pool1 disabled, none with node selector, pool1 requested", false, true, "", "", true, false, []string{}, true),
-		Entry("pool1 disabled, none with node selector, pool2 requested", false, true, "", "", false, true, []string{"20.0.0.0/24"}, false),
-
-		Entry("pool1 disabled, pool2 matching node selector, no requested pools", false, true, "", `foo == "bar"`, false, false, []string{"20.0.0.0/24"}, false),
-		Entry("pool1 disabled, pool2 matching node selector, pool2 requested", false, true, "", `foo == "bar"`, false, true, []string{"20.0.0.0/24"}, false),
-		Entry("pool1 disabled, pool2 mismatching node selector, no requested pools", false, true, "", `foo == "bar"`, false, false, []string{"20.0.0.0/24"}, false),
-		Entry("pool1 disabled, pool2 mismatching node selector, pool2 requested", false, true, "", `foo == "bar"`, false, false, []string{"20.0.0.0/24"}, false),
-	)
-
 })
+
+// Tests for determining IP pools to use.
+var _ = DescribeTable("determinePools tests",
+	func(pool1Enabled, pool2Enabled bool, pool1Selector, pool2Selector string, requestPool1, requestPool2 bool, expectation []string, expectErr bool) {
+		// Seed data
+		ipPools.pools = map[string]pool{
+			"10.0.0.0/24": pool{enabled: pool1Enabled, nodeSelector: pool1Selector},
+			"20.0.0.0/24": pool{enabled: pool2Enabled, nodeSelector: pool2Selector},
+		}
+		// Create a new IPAM client, giving a nil datastore client since determining pools
+		// doesn't require datastore access (we mock out the IP pool accessor).
+		ic := NewIPAMClient(nil, ipPools)
+
+		// Create a node object for the test.
+		node := v3.Node{ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{"foo": "bar"}}}
+
+		// Prep input data
+		reqPools := []cnet.IPNet{}
+		if requestPool1 {
+			cidr := cnet.MustParseCIDR("10.0.0.0/24")
+			reqPools = append(reqPools, cidr)
+		}
+		if requestPool2 {
+			cidr := cnet.MustParseCIDR("20.0.0.0/24")
+			reqPools = append(reqPools, cidr)
+		}
+
+		// Call determinePools
+		pools, err := ic.(*ipamClient).determinePools(reqPools, 4, node)
+
+		// Assert on any returned error.
+		if expectErr {
+			Expect(err).To(HaveOccurred())
+		} else {
+			Expect(err).NotTo(HaveOccurred())
+		}
+
+		// Check that the expected pools match the returned.
+		actual := []string{}
+		for _, pool := range pools {
+			actual = append(actual, pool.Spec.CIDR)
+		}
+		Expect(actual).To(Equal(expectation))
+	},
+	Entry("Both pools enabled, none with node selector, no requested pools", true, true, "", "", false, false, []string{"10.0.0.0/24", "20.0.0.0/24"}, false),
+	Entry("Both pools enabled, none with node selector, pool1 requested", true, true, "", "", true, false, []string{"10.0.0.0/24"}, false),
+
+	Entry("Both pools enabled, pool1 matching selector, no requested pools", true, true, `foo == "bar"`, `foo != "bar"`, false, false, []string{"10.0.0.0/24"}, false),
+	Entry("Both pools enabled, pool1 matching node selector, pool1 requested", true, true, `foo == "bar"`, `foo != "bar"`, true, false, []string{"10.0.0.0/24"}, false),
+
+	Entry("Both pools enabled, pool1 mismatching node selector, no requested pools", true, true, `foo != "bar"`, "all()", false, false, []string{"20.0.0.0/24"}, false),
+	Entry("Both pools enabled, pool1 mismatching node selector, pool1 requested", true, true, `foo != "bar"`, "", true, false, []string{"10.0.0.0/24"}, false),
+
+	Entry("Both pools enabled, pool1 matching node selector, pool2 requested", true, true, `foo == "bar"`, "", false, true, []string{"20.0.0.0/24"}, false),
+
+	Entry("pool1 disabled, none with node selector, no requested pools", false, true, "", "", false, false, []string{"20.0.0.0/24"}, false),
+	Entry("pool1 disabled, none with node selector, pool1 requested", false, true, "", "", true, false, []string{}, true),
+	Entry("pool1 disabled, none with node selector, pool2 requested", false, true, "", "", false, true, []string{"20.0.0.0/24"}, false),
+
+	Entry("pool1 disabled, pool2 matching node selector, no requested pools", false, true, "", `foo == "bar"`, false, false, []string{"20.0.0.0/24"}, false),
+	Entry("pool1 disabled, pool2 matching node selector, pool2 requested", false, true, "", `foo == "bar"`, false, true, []string{"20.0.0.0/24"}, false),
+	Entry("pool1 disabled, pool2 mismatching node selector, no requested pools", false, true, "", `foo != "bar"`, false, false, []string{}, false),
+	Entry("pool1 disabled, pool2 mismatching node selector, pool2 requested", false, true, "", `foo != "bar"`, false, true, []string{"20.0.0.0/24"}, false),
+)
 
 // assignIPutil is a utility function to help with assigning a single IP address to a hostname passed in.
 func assignIPutil(ic Interface, assignIP net.IP, host string) {
