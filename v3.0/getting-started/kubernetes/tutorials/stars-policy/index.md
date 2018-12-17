@@ -1,6 +1,6 @@
 ---
 title: Stars Policy Demo
-canonical_url: https://docs.projectcalico.org/v3.3/getting-started/kubernetes/tutorials/stars-policy/
+canonical_url: https://docs.projectcalico.org/v3.4/getting-started/kubernetes/tutorials/stars-policy/
 ---
 The included demo sets up a frontend and backend service, as well as a client service, all
 running on Kubernetes.  It then configures network policy on each service.

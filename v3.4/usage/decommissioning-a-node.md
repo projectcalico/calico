@@ -1,7 +1,7 @@
 ---
 title: Decommissioning a Node
 redirect_from: latest/usage/decommissioning-a-node
-canonical_url: 'https://docs.projectcalico.org/v3.3/usage/decommissioning-a-node'
+canonical_url: 'https://docs.projectcalico.org/v3.4/usage/decommissioning-a-node'
 ---
 
 ### About decommissioning nodes

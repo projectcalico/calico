@@ -1,6 +1,6 @@
 ---
 title: 'Configuring BIRD as a BGP Route Reflector'
-canonical_url: 'https://docs.projectcalico.org/v3.3/usage/routereflector/bird-rr-config'
+canonical_url: 'https://docs.projectcalico.org/v3.4/usage/routereflector/bird-rr-config'
 ---
 
 These instructions will take you through installing BIRD as a BGP route

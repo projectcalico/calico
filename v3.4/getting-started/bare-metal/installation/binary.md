@@ -1,7 +1,7 @@
 ---
 title: Binary install without package manager
 redirect_from: latest/getting-started/bare-metal/installation/binary
-canonical_url: 'https://docs.projectcalico.org/v3.3/getting-started/bare-metal/installation/binary'
+canonical_url: 'https://docs.projectcalico.org/v3.4/getting-started/bare-metal/installation/binary'
 ---
 
 ## Download and install the binary
