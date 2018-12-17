@@ -16,7 +16,8 @@ package node
 
 import (
 	"context"
-	"reflect"
+	"encoding/json"
+	"fmt"
 	"time"
 
 	log "github.com/sirupsen/logrus"
@@ -44,7 +45,7 @@ const (
 
 var (
 	maxAttempts    = 5
-	retrySleepTime = 3 * time.Second
+	retrySleepTime = 100 * time.Millisecond
 )
 
 // NodeController implements the Controller interface.  It is responsible for monitoring
@@ -82,14 +83,12 @@ func NewNodeController(ctx context.Context, k8sClientset *kubernetes.Clientset, 
 			kick(nc.schedule)
 		}}
 
-	// Only setup node labels syncer if env var is set
-	if cfg.SyncNodeLabels {
-		handlers.AddFunc = func(obj interface{}) {
-			nc.applyNodeLabels(obj.(*v1.Node))
-		}
-		handlers.UpdateFunc = func(_, obj interface{}) {
-			nc.applyNodeLabels(obj.(*v1.Node))
-		}
+	// TODO: Only setup node labels syncer if env var is set
+	handlers.AddFunc = func(obj interface{}) {
+		nc.syncNodeLabels(obj.(*v1.Node))
+	}
+	handlers.UpdateFunc = func(_, obj interface{}) {
+		nc.syncNodeLabels(obj.(*v1.Node))
 	}
 
 	// Informer handles managing the watch and signals us when nodes are deleted.
@@ -99,54 +98,73 @@ func NewNodeController(ctx context.Context, k8sClientset *kubernetes.Clientset, 
 	return nc
 }
 
-// applyNodeLabels applies the labels found in v1.Node and to calico's Node.
-func (nc *NodeController) applyNodeLabels(node *v1.Node) {
-	var calNode *api.Node
-	var err error
-	var nAttempts int
-
-	// Try to get calico's Node object multiple times.
-	for nAttempts = 1; nAttempts < maxAttempts; nAttempts++ {
-		calNode, err = nc.calicoClient.Nodes().Get(context.Background(), node.Name, options.GetOptions{})
+// syncNodeLabels syncs the labels found in v1.Node to the Calico node object.
+func (nc *NodeController) syncNodeLabels(node *v1.Node) error {
+	// On failure, we retry a certain number of times.
+	for n := 1; n < maxAttempts; n++ {
+		// Get the Calico node representation.
+		calNode, err := nc.calicoClient.Nodes().Get(context.Background(), node.Name, options.GetOptions{})
 		if err != nil {
-			log.WithField("attempts", nAttempts).WithError(err).Error("failed to get node: " + node.Name)
-			nAttempts++
+			log.WithError(err).Warnf("Failed to get node, retrying")
 			time.Sleep(retrySleepTime)
 			continue
 		}
-		break
-	}
-	if err != nil && nAttempts == maxAttempts {
-		log.WithError(err).Error("failed to get node too many times")
-		return
-	}
+		if calNode.Labels == nil {
+			calNode.Labels = map[string]string{}
+		}
+		if calNode.Annotations == nil {
+			calNode.Annotations = map[string]string{}
+		}
 
-	// Labels may be nil.
-	if calNode.ObjectMeta.Labels == nil {
-		calNode.ObjectMeta.Labels = make(map[string]string)
-	}
+		// Check if it has the annotation for k8s labels.
+		a, ok := calNode.Annotations["projectcalico.org/kube-labels"]
 
-	// Only override labels if they are not already synced.
-	if reflect.DeepEqual(node.ObjectMeta.Labels, calNode.ObjectMeta.Labels) {
-		calNode.ObjectMeta.Labels = node.ObjectMeta.Labels
+		// If there are labels present, then parse them. Otherwise this is
+		// a first-time sync, in which case there are no old labels.
+		var oldLabels map[string]string = map[string]string{}
+		if ok {
+			json.Unmarshal([]byte(a), &oldLabels)
+		}
+		log.Debugf("Determined previously synced labels: %s", oldLabels)
 
-		// Try to update node multiple times.
-		for nAttempts = 1; nAttempts < maxAttempts; nAttempts++ {
-			if _, err := nc.calicoClient.Nodes().Update(context.Background(), calNode, options.SetOptions{}); err != nil {
-				log.WithField("attempts", nAttempts).WithError(err).Error("failed to update node: " + node.Name)
-				nAttempts++
-				time.Sleep(retrySleepTime)
-				continue
+		// We've synced labels before. Determine diffs to apply.
+		// For each k/v in node.Labels, if it isn't present or the value
+		// differs, add it to the node.
+		for k, v := range node.Labels {
+			if v2, ok := calNode.Labels[k]; !ok || v != v2 {
+				log.Debugf("Adding node label %s=%s", k, v)
+				calNode.Labels[k] = v
 			}
-			break
-		}
-		if err != nil && nAttempts == maxAttempts {
-			log.WithError(err).Error("failed to update node too many times")
-			return
 		}
 
-		log.WithField("node", node.ObjectMeta.Name).Info("successfully synced Node labels")
+		// For each k/v that used to be in the k8s node labels, but is no longer,
+		// remove it from the Calico node.
+		for k, v := range oldLabels {
+			if _, ok := node.Labels[k]; !ok {
+				// The old label is no longer present. Remove it.
+				log.Debugf("Deleting node label %s=%s", k, v)
+				delete(calNode.Labels, k)
+			}
+		}
+
+		// Set the annotation to the correct values.
+		bytes, err := json.Marshal(node.Labels)
+		if err != nil {
+			log.WithError(err).Errorf("Error marshalling node labels")
+			panic(err) // TODO
+		}
+		calNode.Annotations["projectcalico.org/kube-labels"] = string(bytes)
+
+		// Update the node in the datastore.
+		if _, err := nc.calicoClient.Nodes().Update(context.Background(), calNode, options.SetOptions{}); err != nil {
+			log.WithError(err).Warnf("Failed to update node, retrying")
+			time.Sleep(retrySleepTime)
+			continue
+		}
+		log.WithField("node", node.ObjectMeta.Name).Info("Successfully synced node labels")
+		return nil
 	}
+	return fmt.Errorf("Too many retries when updating node")
 }
 
 // getK8sNodeName is a helper method that searches a calicoNode for its kubernetes nodeRef.
