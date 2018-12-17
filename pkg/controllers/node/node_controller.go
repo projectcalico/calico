@@ -32,6 +32,7 @@ import (
 	"github.com/projectcalico/kube-controllers/pkg/config"
 	"github.com/projectcalico/kube-controllers/pkg/controllers/controller"
 	api "github.com/projectcalico/libcalico-go/lib/apis/v3"
+	bapi "github.com/projectcalico/libcalico-go/lib/backend/api"
 	client "github.com/projectcalico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/libcalico-go/lib/errors"
 	"github.com/projectcalico/libcalico-go/lib/options"
@@ -53,10 +54,13 @@ var (
 type NodeController struct {
 	ctx          context.Context
 	informer     cache.Controller
+	indexer      cache.Indexer
 	calicoClient client.Interface
 	k8sClientset *kubernetes.Clientset
 	rl           workqueue.RateLimiter
 	schedule     chan interface{}
+	nodemapper   map[string]string
+	syncer       bapi.Syncer
 }
 
 // NewNodeController Constructor for NodeController
@@ -66,11 +70,16 @@ func NewNodeController(ctx context.Context, k8sClientset *kubernetes.Clientset, 
 		calicoClient: calicoClient,
 		k8sClientset: k8sClientset,
 		rl:           workqueue.DefaultControllerRateLimiter(),
+		nodemapper:   map[string]string{},
 	}
 	// channel used to kick the controller into scheduling a sync. It has length
 	// 1 so that we coalesce multiple kicks while a sync is happening down to
 	// just one additional sync.
 	nc.schedule = make(chan interface{}, 1)
+
+	// Start the syncer.
+	nc.initSyncer()
+	nc.syncer.Start()
 
 	// Create a Node watcher.
 	listWatcher := cache.NewListWatchFromClient(k8sClientset.CoreV1().RESTClient(), "nodes", "", fields.Everything())
@@ -92,8 +101,8 @@ func NewNodeController(ctx context.Context, k8sClientset *kubernetes.Clientset, 
 	}
 
 	// Informer handles managing the watch and signals us when nodes are deleted.
-	//   also syncs up labels between k8s/calico node objects
-	_, nc.informer = cache.NewIndexerInformer(listWatcher, &v1.Node{}, 0, handlers, cache.Indexers{})
+	// also syncs up labels between k8s/calico node objects
+	nc.indexer, nc.informer = cache.NewIndexerInformer(listWatcher, &v1.Node{}, 0, handlers, cache.Indexers{})
 
 	return nc
 }
@@ -103,7 +112,13 @@ func (nc *NodeController) syncNodeLabels(node *v1.Node) error {
 	// On failure, we retry a certain number of times.
 	for n := 1; n < maxAttempts; n++ {
 		// Get the Calico node representation.
-		calNode, err := nc.calicoClient.Nodes().Get(context.Background(), node.Name, options.GetOptions{})
+		name, ok := nc.nodemapper[node.Name]
+		if !ok {
+			// We havent learned this Calico node yet.
+			log.Debugf("Skipping update for node with no Calico equivalent")
+			return nil
+		}
+		calNode, err := nc.calicoClient.Nodes().Get(context.Background(), name, options.GetOptions{})
 		if err != nil {
 			log.WithError(err).Warnf("Failed to get node, retrying")
 			time.Sleep(retrySleepTime)
@@ -115,6 +130,9 @@ func (nc *NodeController) syncNodeLabels(node *v1.Node) error {
 		if calNode.Annotations == nil {
 			calNode.Annotations = map[string]string{}
 		}
+
+		// Track if we need to perform an update.
+		needsUpdate := false
 
 		// Check if it has the annotation for k8s labels.
 		a, ok := calNode.Annotations["projectcalico.org/kube-labels"]
@@ -134,6 +152,7 @@ func (nc *NodeController) syncNodeLabels(node *v1.Node) error {
 			if v2, ok := calNode.Labels[k]; !ok || v != v2 {
 				log.Debugf("Adding node label %s=%s", k, v)
 				calNode.Labels[k] = v
+				needsUpdate = true
 			}
 		}
 
@@ -144,6 +163,7 @@ func (nc *NodeController) syncNodeLabels(node *v1.Node) error {
 				// The old label is no longer present. Remove it.
 				log.Debugf("Deleting node label %s=%s", k, v)
 				delete(calNode.Labels, k)
+				needsUpdate = true
 			}
 		}
 
@@ -156,12 +176,14 @@ func (nc *NodeController) syncNodeLabels(node *v1.Node) error {
 		calNode.Annotations["projectcalico.org/kube-labels"] = string(bytes)
 
 		// Update the node in the datastore.
-		if _, err := nc.calicoClient.Nodes().Update(context.Background(), calNode, options.SetOptions{}); err != nil {
-			log.WithError(err).Warnf("Failed to update node, retrying")
-			time.Sleep(retrySleepTime)
-			continue
+		if needsUpdate {
+			if _, err := nc.calicoClient.Nodes().Update(context.Background(), calNode, options.SetOptions{}); err != nil {
+				log.WithError(err).Warnf("Failed to update node, retrying")
+				time.Sleep(retrySleepTime)
+				continue
+			}
+			log.WithField("node", node.ObjectMeta.Name).Info("Successfully synced node labels")
 		}
-		log.WithField("node", node.ObjectMeta.Name).Info("Successfully synced node labels")
 		return nil
 	}
 	return fmt.Errorf("Too many retries when updating node")
