@@ -36,6 +36,7 @@ func main() {
               name.
     get       Get a resource identified by file, stdin or resource type and
               name.
+    label     Add or update labels of resources.
     convert   Convert config files between different API versions.
     ipam      IP address management.
     node      Calico node management.
@@ -82,6 +83,8 @@ Description:
 			commands.Delete(args)
 		case "get":
 			commands.Get(args)
+		case "label":
+			commands.Label(args)
 		case "convert":
 			commands.Convert(args)
 		case "version":

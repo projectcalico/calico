@@ -820,6 +820,43 @@ class TestCalicoctlCommands(TestBase):
         rc.assert_output_contains("has(rr)")
         assert "global" not in rc.output
 
+    def test_label_command(self):
+        """
+        Test calicoctl label command.
+        """
+        rc = calicoctl("create",data=workloadendpoint_name1_rev1)
+        rev1_labels = workloadendpoint_name1_rev1['metadata']['labels']
+        rc.assert_no_error()
+
+        rc = calicoctl("label workloadendpoint node1-k8s-abcd-eth0 app=web --namespace=namespace1")
+        rc.assert_no_error()
+
+        rc = calicoctl("get workloadendpoint node1-k8s-abcd-eth0 --namespace=namespace1 -o yaml")
+        rc.assert_no_error()
+        rev2 = rc.decoded
+        self.assertEqual("web",rev2['metadata']['labels']['app'])
+
+        rc = calicoctl("label workloadendpoint node1-k8s-abcd-eth0 app=order --namespace=namespace1")
+        rc.assert_error(text="key app is already present")
+
+        rc = calicoctl("label workloadendpoint node1-k8s-abcd-eth0 app=order --namespace=namespace1 --overwrite")
+        rc.assert_no_error()
+
+        rc = calicoctl("get workloadendpoint node1-k8s-abcd-eth0 --namespace=namespace1 -o yaml")
+        rc.assert_no_error()
+        rev3 = rc.decoded
+        self.assertEqual("order",rev3['metadata']['labels']['app'])
+
+        rc = calicoctl("label workloadendpoint node1-k8s-abcd-eth0 app --namespace=namespace1 --remove")
+        rc.assert_no_error()
+
+        rc = calicoctl("get workloadendpoint node1-k8s-abcd-eth0 --namespace=namespace1 -o yaml")
+        rc.assert_no_error()
+        rev4 = rc.decoded
+        self.assertEqual(rev1_labels,rev4['metadata']['labels'])
+
+
+
 #
 #
 # class TestCreateFromFile(TestBase):
