@@ -17,20 +17,23 @@ Releases of this repository still serve several important purposes. Namely, they
 To release Calico, you need **the following permissions**:
 
 - Write access to the core repositories in the projectcalico/ GitHub organization.
-- Push access to the Calico DockerHub repositories.
+- Push access to the Calico DockerHub repositories. Assuming you've been granted access by an admin:
 
-    # Assuming you've been granted access by an admin.
+    ```
     docker login
+    ```
 
-- Push access to the Calico quay.io repositories.
+- Push access to the Calico quay.io repositories. Assuming you've been granted access by an admin:
 
-    # Assuming you've been granted access by an admin.
+    ```
     docker login quay.io
+    ```
 
-- Push access to the gcr.io/projectcalico-org repositories. **Note:** Some of the repos do not yet support credential helpers, you must use one of the token-based logins.  For example:
+- Push access to the gcr.io/projectcalico-org repositories. **Note:** Some of the repos do not yet support credential helpers, you must use one of the token-based logins.  For example, assuming you've been granted access, this will configure a short-lived auth token:
 
-    # Assuming you've been granted access, this will configure a short-lived auth token:
+    ```
     gcloud auth print-access-token | docker login -u oauth2accesstoken --password-stdin https://gcr.io 
+    ```
 
 You'll also need **several GB of disk space** (~7GB for v3.4.0, for example).
 
@@ -41,11 +44,14 @@ Some of the release scripts also require **tools to be installed** in your dev e
   env var (for example by adding it to your `.profile`.
 - Install the "GitHub release" tool, `ghr`:
 
-      go get -u github.com/tcnksm/ghr
+    ```
+    go get -u github.com/tcnksm/ghr
+    ```
 
 Finally, the release process **assumes that your repos are checked out with name `origin`** for the git remote
-for the main Calico repo.  (Tigera note: this will be the case if you use the release scripts in the `process` repo
-since it checks out a fresh copy of the code to do the build.)
+for the main Calico repo.
+
+## Releasing the subcomponents
 
 Before attempting to create a Calico release you must do the following.
 
