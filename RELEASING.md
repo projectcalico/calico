@@ -14,12 +14,44 @@ Releases of this repository still serve several important purposes. Namely, they
 
 ## Prerequisites
 
-To release Calico, you need the following permissions:
+To release Calico, you need **the following permissions**:
 
 - Write access to the core repositories in the projectcalico/ GitHub organization.
-- Push access to the Calico DockerHub repositories.
-- Push access to the Calico quay.io repositories.
-- Push access to the gcr.io/projectcalico-org repositories.
+- Push access to the Calico DockerHub repositories. Assuming you've been granted access by an admin:
+
+    ```
+    docker login
+    ```
+
+- Push access to the Calico quay.io repositories. Assuming you've been granted access by an admin:
+
+    ```
+    docker login quay.io
+    ```
+
+- Push access to the gcr.io/projectcalico-org repositories. **Note:** Some of the repos do not yet support credential helpers, you must use one of the token-based logins.  For example, assuming you've been granted access, this will configure a short-lived auth token:
+
+    ```
+    gcloud auth print-access-token | docker login -u oauth2accesstoken --password-stdin https://gcr.io 
+    ```
+
+You'll also need **several GB of disk space** (~7GB for v3.4.0, for example).
+
+Some of the release scripts also require **tools to be installed** in your dev environment:
+
+- [Install and configure](https://github.com/github/hub#installation) the GitHub `hub` tool.
+- Create a [personal access token](https://github.com/settings/tokens) for Github and export it as the `GITHUB_TOKEN` 
+  env var (for example by adding it to your `.profile`.
+- Install the "GitHub release" tool, `ghr`:
+
+    ```
+    go get -u github.com/tcnksm/ghr
+    ```
+
+Finally, the release process **assumes that your repos are checked out with name `origin`** for the git remote
+for the main Calico repo.
+
+## Releasing the subcomponents
 
 Before attempting to create a Calico release you must do the following.
 
@@ -161,7 +193,7 @@ release in the documentation. Perform these steps on a branch off of master.
 
 ### Promoting to the latest release
 
-1. Add TWO new `<option>` entries to the `<span class="dropdown">` in `_layouts/docwithnav.html` file.
+1. Add TWO new `<li>` entries to the `<span class="dropdown">` in `_layouts/docwithnav.html` file.
 
 1. Modify the redirect in `/index.html` to point to your new release.
 
