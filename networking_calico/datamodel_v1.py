@@ -21,30 +21,9 @@ Calico DHCP agent) and Felix's status-reporting code.  However, when
 changing these, we still need to consider upgrading an existing
 Calico/OpenStack deployment.
 """
-import re
-
-# Subtree used by Felix to report its own status (as an OpenStack
-# 'agent') and the status of each endpoint (or OpenStack 'port') that
-# it is responsible for.
-#
-# Agent status is at /calico/felix/v1/host/<hostname>/status.
-#
-# Port status is at /calico/felix/v1/host/<hostname>/
-#                    workload/openstack/<workload>/endpoint/<endpoint>.
-FELIX_STATUS_DIR = "/calico/felix/v1/host"
 
 # Key used for leader election by Neutron mechanism drivers.
 NEUTRON_ELECTION_KEY = "/calico/openstack/v1/neutron_election"
-
-# Regex to match endpoints, captures "hostname" and "endpoint_id".
-# Works for endpoint status paths.
-ENDPOINT_KEY_RE = re.compile(
-    r'^(?:' + FELIX_STATUS_DIR + r')'
-    r'/(?P<hostname>[^/]+)/'
-    r'workload/'
-    r'(?P<orchestrator>[^/]+)/'
-    r'(?P<workload_id>[^/]+)/'
-    r'endpoint/(?P<endpoint_id>[^/]+)')
 
 ENDPOINT_STATUS_UP = "up"
 ENDPOINT_STATUS_DOWN = "down"
@@ -57,20 +36,6 @@ SUBNET_DIR = "/calico/dhcp/v1/subnet"
 
 def key_for_subnet(subnet_id):
     return SUBNET_DIR + "/%s" % subnet_id
-
-
-def get_endpoint_id_from_key(key):
-    m = ENDPOINT_KEY_RE.match(key)
-    if m:
-        # Got an endpoint.
-        host = m.group("hostname")
-        orch = m.group("orchestrator")
-        workload_id = m.group("workload_id")
-        endpoint_id = m.group("endpoint_id")
-        combined_id = WloadEndpointId(host, orch, workload_id, endpoint_id)
-        return combined_id
-    else:
-        return None
 
 
 class EndpointId(object):

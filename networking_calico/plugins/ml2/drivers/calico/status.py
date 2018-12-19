@@ -21,8 +21,9 @@
 import collections
 import json
 
+from networking_calico.common import config as calico_config
 from networking_calico.compat import log
-from networking_calico import datamodel_v1
+from networking_calico import datamodel_v2
 from networking_calico import etcdutils
 
 
@@ -44,7 +45,7 @@ class StatusWatcher(etcdutils.EtcdWatcher):
     """A class that watches our status-reporting subtree.
 
     Status events use the Calico v1 data model, under
-    datamodel_v1.FELIX_STATUS_DIR, but are written and read over etcdv3.
+    datamodel_v2.felix_status_dir, but are written and read over etcdv3.
 
     This class parses events within that subtree and passes corresponding
     updates to the mechanism driver.
@@ -60,8 +61,9 @@ class StatusWatcher(etcdutils.EtcdWatcher):
     """
 
     def __init__(self, calico_driver):
-        super(StatusWatcher, self).__init__(datamodel_v1.FELIX_STATUS_DIR,
-                                            "/round-trip-check")
+        self.region_string = calico_config.get_region_string()
+        status_path = datamodel_v2.felix_status_dir(self.region_string)
+        super(StatusWatcher, self).__init__(status_path, "/round-trip-check")
         self.calico_driver = calico_driver
 
         self.processing_snapshot = False
@@ -77,13 +79,11 @@ class StatusWatcher(etcdutils.EtcdWatcher):
         self._felix_live_rev = {}
 
         # Register for felix uptime updates.
-        self.register_path(datamodel_v1.FELIX_STATUS_DIR +
-                           "/<hostname>/status",
+        self.register_path(status_path + "/<hostname>/status",
                            on_set=self._on_status_set,
                            on_del=self._on_status_del)
         # Register for per-port status updates.
-        self.register_path(datamodel_v1.FELIX_STATUS_DIR +
-                           "/<hostname>/workload/openstack/"
+        self.register_path(status_path + "/<hostname>/workload/openstack/"
                            "<workload>/endpoint/<endpoint>",
                            on_set=self._on_ep_set,
                            on_del=self._on_ep_delete)
@@ -153,7 +153,8 @@ class StatusWatcher(etcdutils.EtcdWatcher):
         Reports the status to the driver and caches the existence of the
         endpoint.
         """
-        ep_id = datamodel_v1.get_endpoint_id_from_key(response.key)
+        ep_id = datamodel_v2.get_endpoint_id_from_key(self.region_string,
+                                                      response.key)
         if not ep_id:
             LOG.error("Failed to extract endpoint ID from: %s.  Ignoring "
                       "update!", response.key)
@@ -186,7 +187,8 @@ class StatusWatcher(etcdutils.EtcdWatcher):
         the deletion to the driver.
         """
         LOG.debug("Port %s/%s/%s deleted", hostname, workload, endpoint)
-        endpoint_id = datamodel_v1.get_endpoint_id_from_key(response.key)
+        endpoint_id = datamodel_v2.get_endpoint_id_from_key(self.region_string,
+                                                            response.key)
         self._endpoints_by_host[hostname].discard(endpoint_id)
         if not self._endpoints_by_host[hostname]:
             del self._endpoints_by_host[hostname]
