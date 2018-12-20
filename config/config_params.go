@@ -139,6 +139,8 @@ type Config struct {
 	MetadataAddr string `config:"hostname;127.0.0.1;die-on-fail"`
 	MetadataPort int    `config:"int(0,65535);8775;die-on-fail"`
 
+	OpenstackRegion string `config:"string;;local"`
+
 	InterfacePrefix  string `config:"iface-list;cali;non-zero,die-on-fail"`
 	InterfaceExclude string `config:"iface-list;kube-ipvs0"`
 

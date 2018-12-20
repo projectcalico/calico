@@ -29,6 +29,7 @@ import (
 
 type EndpointStatusReporter struct {
 	hostname           string
+	region             string
 	endpointUpdates    <-chan interface{}
 	inSync             <-chan bool
 	stop               chan bool
@@ -45,6 +46,7 @@ type EndpointStatusReporter struct {
 }
 
 func NewEndpointStatusReporter(hostname string,
+	region string,
 	endpointUpdates <-chan interface{},
 	inSync <-chan bool,
 	datastore datastore,
@@ -56,6 +58,7 @@ func NewEndpointStatusReporter(hostname string,
 
 	return newEndpointStatusReporterWithTickerChans(
 		hostname,
+		region,
 		endpointUpdates,
 		inSync,
 		datastore,
@@ -71,6 +74,7 @@ func NewEndpointStatusReporter(hostname string,
 // newEndpointStatusReporterWithTickerChans is an internal constructor allowing
 // the tickers to be mocked for UT.
 func newEndpointStatusReporterWithTickerChans(hostname string,
+	region string,
 	endpointUpdates <-chan interface{},
 	inSync <-chan bool,
 	datastore datastore,
@@ -82,6 +86,7 @@ func newEndpointStatusReporterWithTickerChans(hostname string,
 	resyncInterval time.Duration) *EndpointStatusReporter {
 	return &EndpointStatusReporter{
 		hostname:           hostname,
+		region:             region,
 		endpointUpdates:    endpointUpdates,
 		datastore:          datastore,
 		inSync:             inSync,
@@ -155,6 +160,7 @@ loop:
 					OrchestratorID: msg.Id.OrchestratorId,
 					WorkloadID:     msg.Id.WorkloadId,
 					EndpointID:     msg.Id.EndpointId,
+					Region:         esr.region,
 				}
 				status = msg.Status.Status
 			case *proto.WorkloadEndpointStatusRemove:
@@ -163,17 +169,20 @@ loop:
 					OrchestratorID: msg.Id.OrchestratorId,
 					WorkloadID:     msg.Id.WorkloadId,
 					EndpointID:     msg.Id.EndpointId,
+					Region:         esr.region,
 				}
 			case *proto.HostEndpointStatusUpdate:
 				statID = model.HostEndpointStatusKey{
 					Hostname:   esr.hostname,
 					EndpointID: msg.Id.EndpointId,
+					Region:     esr.region,
 				}
 				status = msg.Status.Status
 			case *proto.HostEndpointStatusRemove:
 				statID = model.HostEndpointStatusKey{
 					Hostname:   esr.hostname,
 					EndpointID: msg.Id.EndpointId,
+					Region:     esr.region,
 				}
 			default:
 				log.Panicf("Unexpected message: %#v", msg)
@@ -252,6 +261,7 @@ func (esr *EndpointStatusReporter) attemptResync(ctx context.Context) {
 
 	wlListOpts := model.WorkloadEndpointStatusListOptions{
 		Hostname: esr.hostname,
+		Region:   esr.region,
 	}
 	kvl, err := esr.datastore.List(ctx, wlListOpts, "")
 	if err == nil {
@@ -279,6 +289,7 @@ func (esr *EndpointStatusReporter) attemptResync(ctx context.Context) {
 
 	hostListOpts := model.HostEndpointStatusListOptions{
 		Hostname: esr.hostname,
+		Region:   esr.region,
 	}
 	kvl, err = esr.datastore.List(ctx, hostListOpts, "")
 	if err == nil {

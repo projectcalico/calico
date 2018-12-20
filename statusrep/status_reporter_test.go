@@ -135,6 +135,7 @@ var _ = Describe("Status", func() {
 
 		esr = newEndpointStatusReporterWithTickerChans(
 			hostname,
+			"",
 			epUpdates,
 			inSyncChan,
 			datastore,
@@ -426,6 +427,7 @@ var _ = Describe("Non-mocked EndpointStatusReporter", func() {
 		datastore = newMockDatastore()
 		esr = NewEndpointStatusReporter(
 			hostname,
+			"",
 			epUpdates,
 			inSyncChan,
 			datastore,

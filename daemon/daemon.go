@@ -459,6 +459,7 @@ configRetry:
 			"Endpoint status reporting enabled, starting status reporter")
 		dpConnector.statusReporter = statusrep.NewEndpointStatusReporter(
 			configParams.FelixHostname,
+			configParams.OpenstackRegion,
 			dpConnector.StatusUpdatesFromDataplane,
 			dpConnector.InSync,
 			dpConnector.datastore,
@@ -853,7 +854,7 @@ func (fc *DataplaneConnector) handleProcessStatusUpdate(ctx context.Context, msg
 		FirstUpdate:   !fc.firstStatusReportSent,
 	}
 	kv := model.KVPair{
-		Key:   model.ActiveStatusReportKey{Hostname: fc.config.FelixHostname},
+		Key:   model.ActiveStatusReportKey{Hostname: fc.config.FelixHostname, Region: fc.config.OpenstackRegion},
 		Value: &statusReport,
 		TTL:   fc.config.ReportingTTLSecs,
 	}
@@ -866,7 +867,7 @@ func (fc *DataplaneConnector) handleProcessStatusUpdate(ctx context.Context, msg
 		fc.firstStatusReportSent = true
 	}
 	kv = model.KVPair{
-		Key:   model.LastStatusReportKey{Hostname: fc.config.FelixHostname},
+		Key:   model.LastStatusReportKey{Hostname: fc.config.FelixHostname, Region: fc.config.OpenstackRegion},
 		Value: &statusReport,
 	}
 	applyCtx, cancel = context.WithTimeout(ctx, 2*time.Second)
