@@ -873,6 +873,12 @@ func (m *endpointManager) configureInterface(name string) error {
 		if err != nil {
 			return err
 		}
+		// Normally, the kernel has a delay before responding to proxy ARP but we know
+		// that's not needed in a Calico network so we disable it.
+		err = m.writeProcSys(fmt.Sprintf("/proc/sys/net/ipv4/neigh/%s/proxy_delay", name), "0")
+		if err != nil {
+			return err
+		}
 		// Enable proxy ARP, this makes the host respond to all ARP requests with its own
 		// MAC.  This has a couple of advantages:
 		//
@@ -890,12 +896,6 @@ func (m *endpointManager) configureInterface(name string) error {
 		//   host side of the veth, which is one fewer thing to maintain and one fewer
 		//   thing we may clash over.
 		err = m.writeProcSys(fmt.Sprintf("/proc/sys/net/ipv4/conf/%s/proxy_arp", name), "1")
-		if err != nil {
-			return err
-		}
-		// Normally, the kernel has a delay before responding to proxy ARP but we know
-		// that's not needed in a Calico network so we disable it.
-		err = m.writeProcSys(fmt.Sprintf("/proc/sys/net/ipv4/neigh/%s/proxy_delay", name), "0")
 		if err != nil {
 			return err
 		}
