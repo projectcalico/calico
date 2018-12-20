@@ -321,6 +321,12 @@ func configureSysctls(hostVethName string, hasIPv4, hasIPv6 bool) error {
 	var err error
 
 	if hasIPv4 {
+		// Normally, the kernel has a delay before responding to proxy ARP but we know
+		// that's not needed in a Calico network so we disable it.
+		if err = writeProcSys(fmt.Sprintf("/proc/sys/net/ipv4/neigh/%s/proxy_delay", hostVethName), "0"); err != nil {
+			return fmt.Errorf("failed to set net.ipv4.neigh.%s.proxy_delay=0: %s", hostVethName, err)
+		}
+
 		// Enable proxy ARP, this makes the host respond to all ARP requests with its own
 		// MAC. We install explicit routes into the containers network
 		// namespace and we use a link-local address for the gateway.  Turing on proxy ARP
@@ -329,12 +335,6 @@ func configureSysctls(hostVethName string, hasIPv4, hasIPv6 bool) error {
 		// thing we may clash over.
 		if err = writeProcSys(fmt.Sprintf("/proc/sys/net/ipv4/conf/%s/proxy_arp", hostVethName), "1"); err != nil {
 			return fmt.Errorf("failed to set net.ipv4.conf.%s.proxy_arp=1: %s", hostVethName, err)
-		}
-
-		// Normally, the kernel has a delay before responding to proxy ARP but we know
-		// that's not needed in a Calico network so we disable it.
-		if err = writeProcSys(fmt.Sprintf("/proc/sys/net/ipv4/neigh/%s/proxy_delay", hostVethName), "0"); err != nil {
-			return fmt.Errorf("failed to set net.ipv4.neigh.%s.proxy_delay=0: %s", hostVethName, err)
 		}
 
 		// Enable IP forwarding of packets coming _from_ this interface.  For packets to
