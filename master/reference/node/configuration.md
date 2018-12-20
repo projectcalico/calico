@@ -6,7 +6,7 @@ canonical_url: 'https://docs.projectcalico.org/v3.5/reference/node/configuration
 The `{{site.nodecontainer}}` container is primarily configured through environment variables.
 
 
-## Environment Variables
+## Environment variables
 
 | Environment   | Description | Schema |
 | ------------- | ----------- | ------ |
@@ -17,7 +17,7 @@ The `{{site.nodecontainer}}` container is primarily configured through environme
 | IP_AUTODETECTION_METHOD | The method to use to autodetect the IPv4 address for this host. This is only used when the IPv4 address is being autodetected. See [IP Autodetection methods](#ip-autodetection-methods) for details of the valid methods. [Default: `first-found`] | string |
 | IP6_AUTODETECTION_METHOD | The method to use to autodetect the IPv6 address for this host. This is only used when the IPv6 address is being autodetected. See [IP Autodetection methods](#ip-autodetection-methods) for details of the valid methods. [Default: `first-found`] | string |
 | DISABLE_NODE_IP_CHECK | Skips checks for duplicate Node IPs. This can reduce the load on the cluster when a large number of Nodes are restarting. [Default: `false`] | boolean |
-| AS | The AS number for this node. When specified, the value is saved in the node resource configuration for this host, overriding any previously configured value. When omitted, if an AS number has been previously configured in the node resource, that AS number is used for the peering.  When omitted, if an AS number has not yet been configured in the node resource, the node will use the global value (see [example modifying Global BGP settings](/{{page.version}}/usage/configuration/bgp#example) for details.) | int |
+| AS | The AS number for this node. When specified, the value is saved in the node resource configuration for this host, overriding any previously configured value. When omitted, if an AS number has been previously configured in the node resource, that AS number is used for the peering.  When omitted, if an AS number has not yet been configured in the node resource, the node will use the global value (see [example modifying Global BGP settings](/{{page.version}}/networking/bgp#example) for details.) | int |
 | CALICO_DISABLE_FILE_LOGGING | Disables logging to file. [Default: "false"] | string |
 | CALICO_ROUTER_ID | Sets the `router id` to use for BGP if no IPv4 address is set on the node. [Default: ``] | string |
 | DATASTORE_TYPE | Type of datastore. [Default: `etcdv3`] | kubernetes, etcdv3 |
@@ -45,7 +45,7 @@ The `{{site.nodecontainer}}` container is primarily configured through environme
 | K8S_KEY_FILE | Location of a client key for accessing the Kubernetes API.                   | string |
 | K8S_CA_FILE | Location of a CA for accessing the Kubernetes API.                            | string |
 | K8S_TOKEN | Token to be used for accessing the Kubernetes API.                              | string |
-| CALICO_ADVERTISE_CLUSTER_IPS | Enable [advertising Kubernetes service cluster IPs over BGP]({{site.baseurl}}/{{page.version}}/usage/service-advertisement), within the specified CIDR. [Default: disabled] | IPv4 CIDR |
+| CALICO_ADVERTISE_CLUSTER_IPS | Enable [advertising Kubernetes service cluster IPs over BGP]({{site.baseurl}}/{{page.version}}/networking/service-advertisement), within the specified CIDR. [Default: disabled] | IPv4 CIDR |
 
 In addition to the above, `{{site.nodecontainer}}` also supports [the standard Felix configuration environment variables](../felix/configuration).
 
@@ -105,7 +105,7 @@ variables, they are:
   resource.
 - `none`: Autodetection will not be performed (this is useful to disable IPv4).
 
-### IP Autodetection methods
+### IP autodetection methods
 
 When {{site.prodname}} is used for routing, each node must be configured with an IPv4
 address and/or an IPv6 address that will be used to route between
@@ -193,4 +193,4 @@ Substitute `[flag]` with one or more of the following.
 
 The BIRD readiness endpoint ensures that the BGP mesh is healthy by verifying that all BGP peers are established and
 no graceful restart is in progress. If the BIRD readiness check is failing due to unreachable peers that are no longer
-in the cluster, see [decomissioning a node]({{site.baseurl}}/{{page.version}}/usage/decommissioning-a-node).
+in the cluster, see [decomissioning a node]({{site.baseurl}}/{{page.version}}/maintenance/decommissioning-a-node).

@@ -35,17 +35,17 @@ Verify that the application pods have been created and are ready.
     kubectl get pods
 
 When the demo application has come up, you will see three pods.
-    
+
     NAME                        READY     STATUS    RESTARTS   AGE
     customer-2809159614-qqfnx   3/3       Running   0          21h
     database-1601951801-m4w70   3/3       Running   0          21h
     summary-2817688950-g1b3n    3/3       Running   0          21h
-    
+
 View the Kubernetes ServiceAccounts created by the manifest.
 
-    kubectl get serviceaccount 
+    kubectl get serviceaccount
 
-You should see a Kubernetes ServiceAccount for each microservice in the application (in addition to the `default` account). 
+You should see a Kubernetes ServiceAccount for each microservice in the application (in addition to the `default` account).
 
     NAME       SECRETS   AGE
     customer   1         21h
@@ -55,7 +55,7 @@ You should see a Kubernetes ServiceAccount for each microservice in the applicat
 
 Examine the Kubernetes Secrets.
 
-    kubectl get secret 
+    kubectl get secret
 
 You should see output similar to the following.
 
@@ -69,8 +69,8 @@ You should see output similar to the following.
     istio.summary          istio.io/key-and-cert                 3         21h
     summary-token-8kpt1    kubernetes.io/service-account-token   3         21h
 
-Notice that Istio CA will have created a secret of type `istio.io/key-and-cert` for each 
-service account.  These keys and X.509 certificates are used to cryptographically authenticate 
+Notice that Istio CA will have created a secret of type `istio.io/key-and-cert` for each
+service account.  These keys and X.509 certificates are used to cryptographically authenticate
 traffic in the Istio service mesh, and the corresponding service account identities are used by
 {{site.prodname}} in authorization policy.
 
@@ -78,7 +78,7 @@ traffic in the Istio service mesh, and the corresponding service account identit
 
 You will use the `istio-ingressgateway` service to access the YAO Bank application.
 
-1. If your Kubernetes cluster is running in an environment that supports external load balancers, the IP address of 
+1. If your Kubernetes cluster is running in an environment that supports external load balancers, the IP address of
    ingress can be  obtained by the following command:
 
    ```bash
@@ -93,20 +93,20 @@ You will use the `istio-ingressgateway` service to access the YAO Bank applicati
    ```
 
    The address of the ingressgateway service is the external IP of the `istio-ingressgateway`, followed by port 80:
-   
+
    ```bash
    export GATEWAY_URL=130.211.10.121:80
    ```
 
 1. If your cluster does not support external load balancers, you can use the public IP of the worker
-node, along with the NodePort, to access the ingress. The IP & port can be obtained from the output 
+node, along with the NodePort, to access the ingress. The IP & port can be obtained from the output
 of the following command:
-   
+
    ```bash
    export GATEWAY_URL=$(kubectl get po -n istio-system -l istio=ingressgateway -o 'jsonpath={.items[0].status.hostIP}'):$(kubectl get svc istio-ingressgateway -n istio-system -o 'jsonpath={.spec.ports[0].nodePort}')
    ```
 
-Point your browser to `http://$GATEWAY_URL/` to confirm the YAO Bank application is functioning 
+Point your browser to `http://$GATEWAY_URL/` to confirm the YAO Bank application is functioning
 correctly.  It may take several minutes for all the services to come up and respond, during which
 time you may see 404 or 500 errors.
 
@@ -120,20 +120,20 @@ But, let's consider some deficiencies in this security architecture:
 
  * All incoming connections from workloads in the Istio mesh are equally trusted
  * Possession of a key & certificate pair is the *only* access credential considered.
- 
+
 To understand why these might be a problem, let's take them one at a time.
 
 #### Trusting workloads
 
-Trusting connections from any workload in the Istio mesh is a poor security architecture because, 
-like Kubernetes, Istio is designed to host multiple applications.  Some of those applications may 
+Trusting connections from any workload in the Istio mesh is a poor security architecture because,
+like Kubernetes, Istio is designed to host multiple applications.  Some of those applications may
 not be as trusted as others.  They may be operated by different users or teams with wildly different
 security requirements.  We don't want our secure financial application microservices accessible from
 some hacky prototype another developer is cooking up.
 
-Even within our own application, the best practice is to limit access as much as possible.  Only 
+Even within our own application, the best practice is to limit access as much as possible.  Only
 pods that need access to a service should get it.  Consider the YAO Bank application.  The customer
-web service does not need, and should not have direct access to the backend database.  The customer 
+web service does not need, and should not have direct access to the backend database.  The customer
 web service needs to directly interact with clients outside the cluster, some of whom may be
 malicious.  Unfortunately, vulnerabilities in web applications are all too common.  For example, an
 [unpatched vulnerability in Apache Struts][struts cve] is what allowed attackers their initial
@@ -153,7 +153,7 @@ Notice that from here, we get direct access to the backend database.  For exampl
 
 #### Single factor authorization
 
-The possession of a key and certificate pair is a very strong assertion that a connection is 
+The possession of a key and certificate pair is a very strong assertion that a connection is
 authentic because it is based on cryptographic proofs that are believed to be nearly impossible to
 forge.  When we authenticate connections this way we can say with extremely high confidence that the
 party on the other end is in possession of the corresponding key. However, this is only a proxy for
@@ -168,7 +168,7 @@ stored as Kubernetes secrets, we won't exploit a vulnerability in a service, but
 the secret in a pod that will simulate an attacker.
 
 If you still have your shell open in the customer pod, exit out or open a new terminal tab (we will
-return to the customer pod later). 
+return to the customer pod later).
 
 ```bash
 kubectl apply -f \
@@ -180,8 +180,8 @@ It creates a pod and mounts `istio.summary` secret.  This will allow us to masqu
 the `summary` service, even though this pod is not run as that service account.  Let's try this out.  First, `exec` into the pod.
 
     kubectl exec -ti attack-<fill in pod ID> bash
-    
-Now, we will attack the database.  Instead of listing the contents like we did before, let's try 
+
+Now, we will attack the database.  Instead of listing the contents like we did before, let's try
 something more malicious, like changing the account balance with a `PUT` command.
 
     curl -k https://database:2379/v2/keys/accounts/519940/balance -d value="10000.00" -XPUT --key /etc/certs/key.pem --cert /etc/certs/cert-chain.pem
@@ -281,7 +281,7 @@ Let's repeat our attack with stolen keys. We'll further increase the account bal
 whether it succeeds.
 
     curl -k --connect-timeout 3 https://database:2379/v2/keys/account/519940/balance -d value="99999.99" -XPUT --key /etc/certs/key.pem --cert /etc/certs/cert-chain.pem
-    
+
 You should get no response, and refreshing your browser should not show an increased balance.
 
 You might wonder how {{site.prodname}} was able to detect and prevent this attack—the attacker was
@@ -290,7 +290,7 @@ authorization checks.  Although our attack pod had the keys to fool the X.509 ce
 {{site.prodname}} also monitors the Kubernetes API Server for which IP addresses are associated with which
 service accounts.  Since our attack pod has an IP not associated with the account summary service
 account we disallow the connection.
- 
+
  [yao bank]: https://github.com/spikecurtis/yaobank
  [etcd]: https://github.com/coreos/etcd
  [struts cve]: https://nvd.nist.gov/vuln/detail/CVE-2017-5638

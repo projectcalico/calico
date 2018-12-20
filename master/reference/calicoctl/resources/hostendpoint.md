@@ -1,5 +1,5 @@
 ---
-title: Host Endpoint Resource (HostEndpoint)
+title: Host endpoint
 canonical_url: 'https://docs.projectcalico.org/v3.5/reference/calicoctl/resources/hostendpoint'
 ---
 
@@ -22,7 +22,7 @@ to the interface.  If no profiles or labels are applied, {{site.prodname}} will 
 any policy.
 
 > **Note**: Currently, for host endpoints with `interfaceName: *`, only [pre-DNAT
-> policy]({{site.baseurl}}/{{page.version}}/getting-started/bare-metal/policy/pre-dnat) is
+> policy]({{site.baseurl}}/{{page.version}}/security/host-endpoints/pre-dnat) is
 > implemented.
 {: .alert .alert-info}
 
@@ -61,7 +61,7 @@ spec:
     protocol: UDP
 ```
 
-### HostEndpoint Definition
+### Host endpoint definition
 
 #### Metadata
 

@@ -3,7 +3,7 @@ title: Configuring the Calico CNI plugins
 canonical_url: 'https://docs.projectcalico.org/v3.5/reference/cni-plugin/configuration'
 ---
 
-The Calico CNI plugin is configured through the standard CNI
+The {{site.prodname}} CNI plugin is configured through the standard CNI
 [configuration mechanism](https://github.com/containernetworking/cni/blob/master/SPEC.md#network-configuration)
 
 A minimal configuration file that uses {{site.prodname}} for networking
@@ -43,7 +43,7 @@ The following option allows configuration of the {{site.prodname}} datastore typ
 
 * `datastore_type` (default: etcdv3)
 
-The Calico CNI plugin supports the following datastore types:
+The {{site.prodname}} CNI plugin supports the following datastore types:
 
 * etcdv3 (default)
 * kubernetes
@@ -148,7 +148,7 @@ The following options allow configuration of settings within the container names
 
 ## Kubernetes specific
 
-When using the Calico CNI plugin with Kubernetes, the plugin must be able to access the Kubernetes API server in order to find the labels assigned to the Kubernetes pods. The recommended way to configure access is through a `kubeconfig` file specified in the `kubernetes` section of the network config. e.g.
+When using the {{site.prodname}} CNI plugin with Kubernetes, the plugin must be able to access the Kubernetes API server in order to find the labels assigned to the Kubernetes pods. The recommended way to configure access is through a `kubeconfig` file specified in the `kubernetes` section of the network config. e.g.
 
 ```json
 {
@@ -180,7 +180,7 @@ As a convenience, the API location location can also be configured directly, e.g
 }
 ```
 
-### Enabling Kubernetes Policy
+### Enabling Kubernetes policy
 
 If you wish to use the Kubernetes `NetworkPolicy` resource then you must set a policy type in the network config.
 There is a single supported policy type, `k8s`. When set,
@@ -203,25 +203,25 @@ you must also run calico/kube-controllers with the policy, profile, and workload
 }
 ```
 
-When using `type: k8s`, the Calico CNI plugin requires read-only Kubernetes API access to the `Pods` resource in all namespaces.
+When using `type: k8s`, the {{site.prodname}} CNI plugin requires read-only Kubernetes API access to the `Pods` resource in all namespaces.
 
 ## IPAM
 
 ### Using CNI configuration
 
-When using the CNI `host-local` IPAM plugin, a special value `usePodCidr` is allowed for the subnet field (either at the top-level, or in a "range").  This tells the plugin to determine the subnet to use from the Kubernetes API based on the Node.podCIDR field.  Calico does not use the `gateway` field of a range so that field is not required and it will be ignored if present.
+When using the CNI `host-local` IPAM plugin, a special value `usePodCidr` is allowed for the subnet field (either at the top-level, or in a "range").  This tells the plugin to determine the subnet to use from the Kubernetes API based on the Node.podCIDR field. {{site.prodname}} does not use the `gateway` field of a range so that field is not required and it will be ignored if present.
 
 > **Note**: `usePodCidr` can only be used as the value of the `subnet` field, it cannot be used in
 > `rangeStart` or `rangeEnd` so those values are not useful if `subnet` is set to `usePodCidr`.
 {: .alert .alert-info}
 
-Calico supports the host-local IPAM plugin's `routes` field as follows:
+{{site.prodname}} supports the host-local IPAM plugin's `routes` field as follows:
 
-* If there is no `routes` field, Calico will install a default `0.0.0.0/0`, and/or `::/0` route into the pod (depending on whether the pod has an IPv4 and/or IPv6 address).
+* If there is no `routes` field, {{site.prodname}} will install a default `0.0.0.0/0`, and/or `::/0` route into the pod (depending on whether the pod has an IPv4 and/or IPv6 address).
 
-* If there is a `routes` field then Calico will program *only* the routes in the routes field into the pod.  Since Calico implements a point-to-point link into the pod, the `gw` field is not required and it will be ignored if present.  All routes that Calico installs will have Calico's link-local IP as the next hop.
+* If there is a `routes` field then {{site.prodname}} will program *only* the routes in the routes field into the pod.  Since {{site.prodname}} implements a point-to-point link into the pod, the `gw` field is not required and it will be ignored if present.  All routes that {{site.prodname}} installs will have {{site.prodname}}'s link-local IP as the next hop.
 
-Calico CNI plugin configuration:
+{{site.prodname}} CNI plugin configuration:
 
 * `node_name`
     * The node name to use when looking up the `usePodCidr` value (defaults to current hostname)
@@ -261,7 +261,7 @@ When making use of the `usePodCidr` option, the {{site.prodname}} CNI plugin req
 
 In addition to specifying IP pools in the CNI config as discussed above, {{site.prodname}} IPAM supports specifying IP pools per-namespace or per-pod using the following [Kubernetes annotations](https://kubernetes.io/docs/user-guide/annotations/).
 
-- `cni.projectcalico.org/ipv4pools`: A list of configured IPv4 Pools from which to choose an address for the Pod.
+- `cni.projectcalico.org/ipv4pools`: A list of configured IPv4 Pools from which to choose an address for the pod.
 
    Example:
 
@@ -270,7 +270,7 @@ In addition to specifying IP pools in the CNI config as discussed above, {{site.
       "cni.projectcalico.org/ipv4pools": "[\"default-ipv4-ippool\"]"
    ```
 
-- `cni.projectcalico.org/ipv6pools`: A list of configured IPv6 Pools from which to choose an address for the Pod.
+- `cni.projectcalico.org/ipv6pools`: A list of configured IPv6 Pools from which to choose an address for the pod.
 
    Example:
 
@@ -294,7 +294,7 @@ If provided, these IP pools will override any IP pools specified in the CNI conf
 {: .alert .alert-info}
 
 
-#### Requesting a Specific IP address
+#### Requesting a specific IP address
 
 You can also request a specific IP address through [Kubernetes annotations](https://kubernetes.io/docs/user-guide/annotations/) with {{site.prodname}} IPAM.
 There are two annotations to request a specific IP address:
@@ -415,7 +415,7 @@ Example:
    ```
 
 Check out the usage guide on [assigning IP addresses based on
-topology]({{site.baseurl}}/{{page.version}}/usage/assigning-ip-addresses-topology)
+topology]({{site.baseurl}}/{{page.version}}/networking/assigning-ip-addresses-topology)
 for a full example.
 
 ### Order of precedence
@@ -432,4 +432,3 @@ take on the following precedence, 1 being the highest:
 > a newly configured IP pool, they must be recreated. We recommmend doing this
 > before going into production or during a maintenance window.
 {: .alert .alert-info}
-

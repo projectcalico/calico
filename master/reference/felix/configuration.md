@@ -36,7 +36,7 @@ The full list of parameters which can be set is as follows.
 | `FelixHostname`                   | `FELIX_FELIXHOSTNAME`                   | The hostname Felix reports to the plugin. Should be used if the hostname Felix autodetects is incorrect or does not match what the plugin will expect. [Default: `socket.gethostname()`] | string |
 | `HealthEnabled`                   | `FELIX_HEALTHENABLED`                   | When enabled, exposes felix health information via an http endpoint. | boolean |
 | `HealthHost`                      | `FELIX_HEALTHHOST`                      | The address on which Felix will respond to health requests. [Default: `localhost`] | string |
-| `IpInIpMtu`                       | `FELIX_IPINIPMTU`                       | The MTU to set on the tunnel device. See [Configuring MTU]({{site.baseurl}}/{{page.version}}/usage/configuration/mtu) [Default: `1440`] | int |
+| `IpInIpMtu`                       | `FELIX_IPINIPMTU`                       | The MTU to set on the tunnel device. See [Configuring MTU]({{site.baseurl}}/{{page.version}}/networking/mtu) [Default: `1440`] | int |
 | `LogFilePath`                     | `FELIX_LOGFILEPATH`                     | The full path to the Felix log. Set to `none` to disable file logging. [Default: `/var/log/calico/felix.log`] | string |
 | `LogSeverityFile`                 | `FELIX_LOGSEVERITYFILE`                 | The log severity above which logs are sent to the log file. [Default: `Info`] | `Debug`, `Info`, `Warning`, `Error`, `Fatal` |
 | `LogSeverityScreen`               | `FELIX_LOGSEVERITYSCREEN`               | The log severity above which logs are sent to the stdout. [Default: `Info`] | `Debug`, `Info`, `Warning`, `Error`, `Fatal` |
@@ -110,7 +110,7 @@ The Kubernetes API datastore driver reads its configuration from Kubernetes-prov
 | ------------------------|------------------------ | ------------ | ------ |
 | `MetadataAddr`          | `FELIX_METADATAADDR`    | The IP address or domain name of the server that can answer VM queries for cloud-init metadata. In OpenStack, this corresponds to the machine running nova-api (or in Ubuntu, nova-api-metadata). A value of `none`  (case insensitive) means that Felix should not set up any NAT rule for the metadata path. [Default: `127.0.0.1`]  | `<IPv4-address>`, `<hostname>`, `none` |
 | `MetadataPort`          | `FELIX_METADATAPORT`    | The port of the metadata server. This, combined with global.MetadataAddr (if not 'None'), is used to set up a NAT rule, from 169.254.169.254:80 to MetadataAddr:MetadataPort. In most cases this should not need to be changed [Default: `8775`].  | int |
-| `OpenstackRegion`       | `FELIX_OPENSTACKREGION` | In a [multi-region deployment]({{site.baseurl}}/{{page.version}}/usage/openstack/multiple-regions), the name of the region that this Felix is in. [Default: none].  | string\* |
+| `OpenstackRegion`       | `FELIX_OPENSTACKREGION` | In a [multi-region deployment]({{site.baseurl}}/{{page.version}}/networking/openstack/multiple-regions), the name of the region that this Felix is in. [Default: none].  | string\* |
 
 \* If non-empty, the value specified for `OpenstackRegion` must be a
 string of lower case alphanumeric characters or '-', starting and
@@ -133,7 +133,7 @@ ending with an alphanumeric character.
 | `TyphaURISAN`           | `FELIX_TYPHAURISAN`    | If set, a URI SAN that Typha's certificate must have. We recommend populating this with a [SPIFFE](https://github.com/spiffe/spiffe/blob/master/standards/SPIFFE-ID.md#2-spiffe-identity) string that identifies Typha. All Typha instances should use the same SPIFFE ID. If you have enabled TLS on the communications from Felix to Typha, you must set a value here or in `TyphaCN`. You can set values in both, as well, such as to facilitate a migration from using one to the other. If either matches, the communication succeeds. [Default: none] | string |
 
 For more information on how to use and set these variables, refer to
-[Connections from Felix to Typha (Kubernetes)](../../usage/encrypt-comms#connections-from-felix-to-typha-kubernetes).
+[Connections from Felix to Typha (Kubernetes)](../../security/comms/crypto-auth#connections-from-felix-to-typha-kubernetes).
 
 ### Environment variables
 

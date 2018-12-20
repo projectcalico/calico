@@ -1,5 +1,5 @@
 ---
-title: Calico Configured Automatically in IBM Cloud
+title: IBM Cloud
 canonical_url: https://docs.projectcalico.org/v3.5/reference/public-cloud/ibm
 ---
 
@@ -9,9 +9,9 @@ canonical_url: https://docs.projectcalico.org/v3.5/reference/public-cloud/ibm
 
 [IP-in-IP encapsulation][IPIP] is automatically configured to only encapsulate packets traveling across subnets, and uses NAT for outgoing connections from your containers.
 
-## Enabling Workload-to-WAN Traffic
+## Enabling workload-to-WAN traffic
 
 This is also handled automatically in the [IBM Cloud Kubernetes Service][IBMKUBE].  No additional configuration of Calico is necessary.
 
-[IPIP]: {{site.baseurl}}/{{page.version}}/usage/configuration/ip-in-ip
+[IPIP]: {{site.baseurl}}/{{page.version}}/networking/ip-in-ip
 [IBMKUBE]: https://www.ibm.com/cloud/container-service/

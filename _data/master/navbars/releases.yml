@@ -1,7 +1,0 @@
-bigheader: Releases
-abstract: Versioning information for Calico Components
-path: /releases
-order: 4
-toc:
-- title: Releases
-  path: /releases/

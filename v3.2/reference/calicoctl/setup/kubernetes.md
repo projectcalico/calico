@@ -1,5 +1,5 @@
 ---
-redirect_to: /master/usage/calicoctl/configure/kdd
+redirect_to: /v3.2/usage/calicoctl/configure/kdd
 ---
 
 <!--- Page was deleted, now it just performs a redirect

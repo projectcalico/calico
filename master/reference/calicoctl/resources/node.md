@@ -1,10 +1,10 @@
 ---
-title: Node Resource (Node)
+title: Node
 canonical_url: 'https://docs.projectcalico.org/v3.5/reference/calicoctl/resources/node'
 ---
 
 A node resource (`Node`) represents a node running {{site.prodname}}.  When adding a host
-to a {{site.prodname}} cluster, a Node resource needs to be created which contains the
+to a {{site.prodname}} cluster, a node resource needs to be created which contains the
 configuration for the `{{site.nodecontainer}}` instance running on the host.
 
 When starting a `{{site.nodecontainer}}` instance, the name supplied to the instance should
@@ -58,7 +58,7 @@ spec:
 
 | Field       | Description                 | Accepted Values   | Schema | Default    |
 |-------------|-----------------------------|-------------------|--------|------------|
-| asNumber    | The AS Number of your `{{site.nodecontainer}}`. | Optional. If omitted the global value is used (see [example modifying Global BGP settings](/{{page.version}}/usage/configuration/bgp#example) for details about modifying the `asNumber` setting). | integer |
+| asNumber    | The AS Number of your `{{site.nodecontainer}}`. | Optional. If omitted the global value is used (see [example modifying Global BGP settings](/{{page.version}}/networking/bgp#example) for details about modifying the `asNumber` setting). | integer |
 | ipv4Address | The IPv4 address and subnet exported as the next-hop for the {{site.prodname}} endpoints on the host | The IPv4 address must be specified if BGP is enabled. | string |
 | ipv6Address | The IPv6 address and subnet exported as the next-hop for the {{site.prodname}} endpoints on the host | Optional | string |
 | ipv4IPIPTunnelAddr | IPv4 address of the IP-in-IP tunnel | Optional IPv4 address | string |

@@ -1,5 +1,5 @@
 ---
-redirect_to: /master/usage/calicoctl/configure/etcd
+redirect_to: /v3.4/usage/calicoctl/configure/etcd
 ---
 
 <!--- Page was deleted, now it just performs a redirect

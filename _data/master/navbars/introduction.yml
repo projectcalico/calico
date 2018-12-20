@@ -1,5 +1,4 @@
 bigheader: "Introduction"
-abstract: "Background information on Calico"
 path: /introduction
 order: 0
 toc:
@@ -7,4 +6,3 @@ toc:
   path: /introduction/
 - title: Sample deployments
   path: /introduction/deployments
-

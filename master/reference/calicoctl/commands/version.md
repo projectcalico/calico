@@ -35,10 +35,9 @@ Use `calicoctl version` to obtain the following data.
 {% include {{page.version}}/calicoctl-version.md %}
 
 \* To obtain these values, you must configure `calicoctl`
-   [to connect to your datastore](/{{page.version}}/usage/calicoctl/configure/).
+   [to connect to your datastore](/{{page.version}}/getting-started/calicoctl/configure/).
 
 
 ## See also
 
--  [calicoctl configuration]({{site.baseurl}}/{{page.version}}/reference/calicoctl/setup)
-   for details on configuring `calicoctl` to access the {{site.prodname}} datastore.
+-  [Installing calicoctl]({{site.baseurl}}/{{page.version}}/getting-started/calicoctl/install).

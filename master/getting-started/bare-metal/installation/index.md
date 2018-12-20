@@ -5,12 +5,12 @@ canonical_url: 'https://docs.projectcalico.org/v3.5/getting-started/bare-metal/i
 
 You will need to install calicoctl and configure it to connect to your etcd datastore.
 
--  [Install calicoctl as a binary](/{{page.version}}/usage/calicoctl/install#installing-calicoctl-as-a-binary-on-a-single-host).
+-  [Install calicoctl as a binary](../../calicoctl/install#installing-calicoctl-as-a-binary-on-a-single-host).
 
--  [Configure calicoctl to connect to etcd](/{{page.version}}/usage/calicoctl/configure/).
+-  [Configure calicoctl to connect to etcd](../../calicoctl/configure/etcd).
 
 Then you can use any of the following methods to install and run Felix, on each bare metal
-host where you want Calico host protection.
+host where you want {{site.prodname}} host protection.
 
 - [Binary from package manager](binary-mgr): On Red Hat Enterprise Linux (RHEL), Ubuntu,
   and CentOS hosts, use the package manager to install and run Felix as a binary.

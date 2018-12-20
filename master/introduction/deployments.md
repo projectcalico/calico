@@ -30,7 +30,7 @@ Josh Bowen, KubeCon 2016 (28:46)
 
 #### Yahoo! JAPAN
 
-[How We Architected and Run Kubernetes on OpenStack at Scale at Yahoo! JAPAN](http://blog.kubernetes.io/2016/10/kubernetes-and-openstack-at-yahoo-japan.html) <img src="{{site.baseurl}}/images/kubernetes.svg" alt="Kubernetes" width="2.5%" style="display: inline"> <img src="{{site.baseurl}}/images/openstack.svg" alt="OpenStack" width="2.25%" style="display: inline"> <img src="{{site.baseurl}}/images/blog.svg" alt="blog" width="1.5%" style="display: inline"><br>
+[How We Architected and Run Kubernetes on OpenStack at Scale at Yahoo! JAPAN](https://kubernetes.io/blog/2016/10/kubernetes-and-openstack-at-yahoo-japan/) <img src="{{site.baseurl}}/images/kubernetes.svg" alt="Kubernetes" width="2.5%" style="display: inline"> <img src="{{site.baseurl}}/images/openstack.svg" alt="OpenStack" width="2.25%" style="display: inline"> <img src="{{site.baseurl}}/images/blog.svg" alt="blog" width="1.5%" style="display: inline"><br>
 Norifumi Matsuya, Hirotaka Ichikawa, Masaharu Miyamoto and Yuta Kinoshita 2016
 
 #### GitHub

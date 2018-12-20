@@ -10,7 +10,7 @@ This quickstart gets you a single-host Kubernetes cluster with {{site.prodname}}
 in approximately 15 minutes. You can use this cluster for testing and
 development.
 
-To deploy a cluster suitable for production, refer to [Installation](/{{page.version}}/getting-started/kubernetes/installation/).
+To deploy a cluster suitable for production, refer to [Installation](installation).
 
 
 ### Requirements
@@ -26,7 +26,7 @@ To deploy a cluster suitable for production, refer to [Installation](/{{page.ver
 
 - Ensure that {{site.prodname}} can manage `cali` and `tunl` interfaces on the host.
   If NetworkManager is present on the host, refer to
-  [Configure NetworkManager](../../usage/troubleshooting/#configure-networkmanager).
+  [Configure NetworkManager](../../maintenance/troubleshooting#configure-networkmanager).
 
 - [Follow the Kubernetes instructions to install kubeadm](https://kubernetes.io/docs/setup/independent/install-kubeadm/){:target="_blank"}.
 
@@ -166,10 +166,10 @@ equipped with {{site.prodname}}.
 
 ### Next steps
 
-**[Secure a simple application using the Kubernetes `NetworkPolicy` API](tutorials/simple-policy)**
+**[Secure a simple application using the Kubernetes `NetworkPolicy` API](../../security/simple-policy)**
 
-**[Control ingress and egress traffic using the Kubernetes `NetworkPolicy` API](tutorials/advanced-policy)**
+**[Control ingress and egress traffic using the Kubernetes `NetworkPolicy` API](../../security/advanced-policy)**
 
-**[Create a user interface that shows blocked and allowed connections in real time](tutorials/stars-policy/)**
+**[Create a user interface that shows blocked and allowed connections in real time](../../security/stars-policy/)**
 
-**[Install and configure calicoctl](/{{page.version}}/usage/calicoctl/install)**
+**[Install and configure calicoctl](../calicoctl/install)**

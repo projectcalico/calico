@@ -99,7 +99,30 @@ The code is a little roundabout for a few reasons:
           </div>
           <div id="tigera-navbar" class="navbar-collapse collapse">
             <ul class="nav navbar-nav navbar-right">
+
+              <li class="active"><a href="{{site.baseurl}}/v3.5/introduction"><strong>{% if page.version == 'master' %}nightly{% else %}{{page.version}}{% endif %}<span class="caret"></span></strong></a>
+                <ul>
+                    <li><a href="{{site.baseurl}}/v3.5/introduction">v3.5 (latest)</a></li>
+                    <li><a href="{{site.baseurl}}/v3.4/introduction">v3.4</a></li>
+                    <li><a href="{{site.baseurl}}/v3.3/introduction">v3.3</a></li>
+                    <li><a href="{{site.baseurl}}/v3.2/introduction">v3.2</a></li>
+                    <li><a href="{{site.baseurl}}/v3.1/introduction">v3.1</a></li>
+                    <li><a href="{{site.baseurl}}/v3.0/introduction">v3.0</a></li>
+                    <li><a href="{{site.baseurl}}/v2.6/introduction">v2.6</a></li>
+                    <li><a href="{{site.baseurl}}/v2.5/introduction">v2.5</a></li>
+                    <li><a href="{{site.baseurl}}/v2.4/introduction">v2.4</a></li>
+                    <li><a href="{{site.baseurl}}/v2.3/introduction">v2.3</a></li>
+                    <li><a href="{{site.baseurl}}/v2.2/introduction">v2.2</a></li>
+                    <li><a href="{{site.baseurl}}/v2.1/introduction">v2.1</a></li>
+                    <li><a href="{{site.baseurl}}/v2.0/introduction">v2.0</a></li>
+                    <li><a href="{{site.baseurl}}/v1.6/introduction">v1.6</a></li>
+                    <li><a href="{{site.baseurl}}/v1.5/introduction">v1.5</a></li>
+                    <li><a href="{{site.baseurl}}/master/introduction">nightly</a></li>
+                </ul>
+              </li>
+
               <li><a href="https://projectcalico.org">Home</a></li>
+
               <li class="active"><a href="https://projectcalico.org/resources"><span>Resources</span></a>
                 <ul>
                     <li><a href="{{site.baseurl}}/latest/getting-started/"><i class="fa fa-tachometer" aria-hidden="true"></i> &nbsp; Getting Started</a></li>
@@ -107,7 +130,7 @@ The code is a little roundabout for a few reasons:
                     <!--<li><a href="https://www.projectcalico.org/tutorials"><i class="fa fa-file-code-o" aria-hidden="true"></i> &nbsp; Tutorials &amp; Examples</a></li>
                     <li><a href=""><i class="fa fa-paper-plane-o" aria-hidden="true"></i> &nbsp; Online Workshops</a></li>-->
                     <li><a href="https://www.projectcalico.org/videos"><i class="fa fa-video-camera" aria-hidden="true"></i> &nbsp; Videos &amp; Webinars</a></li>
-                    <li><a href="https://www.projectcalico.org/training"><i class="fa fa-graduation-cap" aria-hidden="true"></i> &nbsp; Training</a></li>
+                    <li><a href="https://www.projectcalico.org/training"><i class="fa fa-mortar-board" aria-hidden="true"></i> &nbsp; Training</a></li>
                     <li><a href="{{site.baseurl}}/latest/releases/"><i class="fa fa-clock-o" aria-hidden="true"></i> &nbsp; Releases</a></li>
                     <li><a href="https://www.projectcalico.org/blog"><i class="fa fa-bookmark" aria-hidden="true"></i> &nbsp; Blog</a></li>
                 </ul>
@@ -137,30 +160,6 @@ The code is a little roundabout for a few reasons:
                 {% endfor %}
               </ul>
             </form>
-            <ul class="visible-xs nav navbar-nav navbar-right">
-             <li class="dropdown">
-               <a href="#" class="dropdown-toggle" data-toggle="dropdown" role="button" aria-haspopup="true" aria-expanded="false">Version ({% if page.version == 'master' %}nightly{% else %}{{page.version}}{% endif %})<span class="caret"></span></a>
-               <ul class="dropdown-menu">
-                 <li><a href="{{site.baseurl}}/v3.5/introduction">v3.5 (latest)</a></li>
-                 <li><a href="{{site.baseurl}}/v3.4/introduction">v3.4</a></li>
-                 <li><a href="{{site.baseurl}}/v3.3/introduction">v3.3</a></li>
-                 <li><a href="{{site.baseurl}}/v3.2/introduction">v3.2</a></li>
-                 <li><a href="{{site.baseurl}}/v3.1/introduction">v3.1</a></li>
-                 <li><a href="{{site.baseurl}}/v3.0/introduction">v3.0</a></li>
-                 <li><a href="{{site.baseurl}}/v2.6/introduction">v2.6</a></li>
-                 <li><a href="{{site.baseurl}}/v2.5/introduction">v2.5</a></li>
-                 <li><a href="{{site.baseurl}}/v2.4/introduction">v2.4</a></li>
-                 <li><a href="{{site.baseurl}}/v2.3/introduction">v2.3</a></li>
-                 <li><a href="{{site.baseurl}}/v2.2/introduction">v2.2</a></li>
-                 <li><a href="{{site.baseurl}}/v2.1/introduction">v2.1</a></li>
-                 <li><a href="{{site.baseurl}}/v2.0/introduction">v2.0</a></li>
-                 <li><a href="{{site.baseurl}}/v1.6/introduction">v1.6</a></li>
-                 <li><a href="{{site.baseurl}}/v1.5/introduction">v1.5</a></li>
-                 <li><a href="{{site.baseurl}}/master/introduction">nightly</a></li>
-                 <li role="separator" class="divider"></li>
-               </ul>
-             </li>
-           </ul>
           </div>
         </div>
         <div id="navbar" class="navbar-inverse navbar-collapse collapse">
@@ -171,28 +170,6 @@ The code is a little roundabout for a few reasons:
                   <a href="{{site.baseurl}}/{{page.version}}{{navbar.path}}"><span>{{ navbar.bigheader }}</span></a>
                 </li>
               {% endfor %}
-              <li class="dropdown">
-                <a href="#" class="dropdown-toggle" data-toggle="dropdown" role="button" aria-haspopup="true" aria-expanded="false">Version ({% if page.version == 'master' %}nightly{% else %}{{page.version}}{% endif %})<span class="caret"></span></a>
-                <ul class="dropdown-menu">
-                   <li><a href="{{site.baseurl}}/v3.5/introduction">v3.5 (latest)</a></li>
-                   <li><a href="{{site.baseurl}}/v3.4/introduction">v3.4</a></li>
-                   <li><a href="{{site.baseurl}}/v3.3/introduction">v3.3</a></li>
-                   <li><a href="{{site.baseurl}}/v3.2/introduction">v3.2</a></li>
-                   <li><a href="{{site.baseurl}}/v3.1/introduction">v3.1</a></li>
-                   <li><a href="{{site.baseurl}}/v3.0/introduction">v3.0</a></li>
-                   <li><a href="{{site.baseurl}}/v2.6/introduction">v2.6</a></li>
-                   <li><a href="{{site.baseurl}}/v2.5/introduction">v2.5</a></li>
-                   <li><a href="{{site.baseurl}}/v2.4/introduction">v2.4</a></li>
-                   <li><a href="{{site.baseurl}}/v2.3/introduction">v2.3</a></li>
-                   <li><a href="{{site.baseurl}}/v2.2/introduction">v2.2</a></li>
-                   <li><a href="{{site.baseurl}}/v2.1/introduction">v2.1</a></li>
-                   <li><a href="{{site.baseurl}}/v2.0/introduction">v2.0</a></li>
-                   <li><a href="{{site.baseurl}}/v1.6/introduction">v1.6</a></li>
-                   <li><a href="{{site.baseurl}}/v1.5/introduction">v1.5</a></li>
-                  <li role="separator" class="divider"></li>
-                  <li><a href="{{site.baseurl}}/master/introduction">nightly</a></li>
-                </ul>
-              </li>
             </ul>
           </div>
           <div class="row">

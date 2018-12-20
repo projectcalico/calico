@@ -1,5 +1,5 @@
 ---
-title: Profile Resource (Profile)
+title: Profile
 canonical_url: 'https://docs.projectcalico.org/v3.5/reference/calicoctl/resources/profile'
 ---
 

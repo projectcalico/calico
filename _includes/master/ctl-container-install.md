@@ -9,7 +9,7 @@ docker pull {{site.imageNames["calicoctl"]}}:{{site.data.versions[page.version].
 
 **Next step**:
 
-[Configure `calicoctl` to connect to your datastore](/{{page.version}}/usage/calicoctl/configure/).
+[Configure `calicoctl` to connect to your datastore](configure).
 
 
 ## Installing calicoctl as a Kubernetes pod
