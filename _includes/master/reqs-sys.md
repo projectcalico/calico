@@ -20,13 +20,26 @@
 ## Key/value store
 
 {{site.prodname}} {{page.version}} requires a key/value store accessible by all
-{{site.prodname}} components. {% if include.orch == "Kubernetes" %} On Kubernetes,
-you can configure {{site.prodname}} to access an etcdv3 cluster directly or to
-use the Kubernetes API datastore.{% endif %}{% if include.orch == "OpenShift" %} On
-OpenShift, {{site.prodname}} can share an etcdv3 cluster with OpenShift, or
-you can set up an etcdv3 cluster dedicated to {{site.prodname}}.{% endif %}
+{{site.prodname}} components. {% if include.orch == "Kubernetes" %} You can choose either
+of the following options.
+
+- Use the Kubernetes API datastore.
+
+- Configure {{site.prodname}} to access an etcdv3 cluster directly (required if you plan to protect
+  [bare metal hosts](../bare-metal/bare-metal)). If you don't already have an etcdv3 cluster set up,
+  refer to the [coreos](https://coreos.com/etcd/docs/latest/) documentation for instructions. Before
+  beginning our [production install](./installation/), you must have your etcdv3 cluster set up.
+  Otherwise, refer to our [Quickstart](.). The Quickstart sets up an etcd instance for you, but it won't
+  be suitable for production.
+{% endif %}{% if include.orch == "OpenShift" %}
+For testing and development purposes, you can configure {{site.prodname}} to share an etcdv3
+cluster with OpenShift. Production clusters require an etcdv3 cluster dedicated to {{site.prodname}}. Refer to the [coreos](https://coreos.com/etcd/docs/latest/)
+documentation for setup instructions.{% endif %}
 {% if include.orch == "OpenStack" %}If you don't already have an etcdv3 cluster
-to connect to, we provide instructions in the [installation documentation](./installation/).{% endif %}{% if include.orch == "host protection" %}The key/value store must be etcdv3.{% endif %}
+to connect to, we provide instructions in the [installation documentation](./installation/).{% endif %}
+{% if include.orch == "host protection" %}Bare metal hosts cannot connect to a datastore through the Kubernetes API.
+If you have a Kubernetes cluster and want to protect bare metal hosts, you must configure your Kubernetes cluster
+to connect directly to an etcdv3 cluster.{% endif %}
 
 ## Network requirements
 

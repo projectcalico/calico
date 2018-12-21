@@ -54,6 +54,10 @@ section that matches your type.
 We strongly recommend using the Kubernetes API datastore, but if you prefer to use
 etcd, complete the following steps.
 
+> **Note**: As discussed in the [system requirements](../requirements#keyvalue-store), ensure that you have an etcdv3 cluster
+> set up before beginning this procedure.
+{: .alert .alert-info}
+
 1. Download the {{site.prodname}} networking manifest.
 
    ```bash

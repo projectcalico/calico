@@ -107,6 +107,10 @@ datastore type and number of nodes.
 
 ### Installing with the etcd datastore
 
+> **Note**: As discussed in the [system requirements](../requirements#keyvalue-store), ensure that you have an etcdv3 cluster
+> set up before beginning this procedure.
+{: .alert .alert-info}
+
 1. Download the {{site.prodname}} networking manifest for etcd.
 
    ```bash
