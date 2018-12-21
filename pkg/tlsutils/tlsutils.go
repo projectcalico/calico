@@ -142,7 +142,7 @@ func MakeCACert(name string) (*x509.Certificate, *rsa.PrivateKey) {
 		// https://golang.org/pkg/crypto/x509/#VerifyOptions
 		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth, x509.ExtKeyUsageClientAuth},
 		BasicConstraintsValid: true,
-		IsCA: true,
+		IsCA:                  true,
 	}
 
 	derBytes, err := x509.CreateCertificate(rand.Reader, &template, &template, &key.PublicKey, key)
