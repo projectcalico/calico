@@ -1,5 +1,5 @@
-hash: c05580eaf884360c8072cea4745abfebfaa48f2978bb6a008b80d84e93321f94
-updated: 2018-12-05T06:17:43.050936491Z
+hash: cb83e84a703cf0f8b45bff80be21395bc2da14e8d3b71ea41473f93fc0bbe20e
+updated: 2018-12-22T06:13:17.360526299Z
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -252,7 +252,7 @@ imports:
   subpackages:
   - binder
 - name: github.com/projectcalico/typha
-  version: fb4f2c822336e049f75452e21394e2d69f692ef8
+  version: 0bd59769525663f6e22866d9ba987d1c7ad1ecb5
   subpackages:
   - pkg/syncclient
   - pkg/syncproto
