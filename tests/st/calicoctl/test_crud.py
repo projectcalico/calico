@@ -855,6 +855,25 @@ class TestCalicoctlCommands(TestBase):
         rev4 = rc.decoded
         self.assertEqual(rev1_labels,rev4['metadata']['labels'])
 
+        # test adding label for resources with no labels.
+        rc = calicoctl("create",data=node_name1_rev1)
+        rc.assert_no_error()
+
+        rc = calicoctl("label nodes node1 cluster=frontend")
+        rc.assert_no_error()
+
+        rc = calicoctl("get nodes node1 -o yaml")
+        rc.assert_no_error()
+        node1_rev2 = rc.decoded
+        self.assertEqual("frontend",node1_rev2['metadata']['labels']['cluster'])
+
+        # test removing labels on resources with no labels
+        rc = calicoctl("apply",data=node_name1_rev1)
+        rc.assert_no_error()
+        rc = calicoctl("label nodes node1 cluster --remove")
+        rc.assert_error("can not remove label")
+
+
 
 
 #
