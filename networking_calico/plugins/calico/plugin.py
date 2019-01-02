@@ -24,6 +24,14 @@ LOG = log.getLogger(__name__)
 
 
 class CalicoPlugin(Ml2Plugin, l3_db.L3_NAT_db_mixin):
+
+    # These attributes specify whether the plugin supports or not
+    # bulk/pagination/sorting operations. Name mangling is used in
+    # order to ensure it is qualified by class
+    __native_bulk_support = True
+    __native_pagination_support = True
+    __native_sorting_support = True
+
     def __init__(self):
         # Add the ability to handle floating IPs.
         self._supported_extension_aliases.extend(["router"])
