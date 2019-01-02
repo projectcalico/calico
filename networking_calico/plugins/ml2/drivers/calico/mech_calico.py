@@ -1042,6 +1042,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
             if rewrite_cluster_info:
                 LOG.info("New ClusterInformation: %s", cluster_info)
                 if datamodel_v3.put("ClusterInformation",
+                                    datamodel_v3.NOT_NAMESPACED,
                                     "default",
                                     cluster_info,
                                     mod_revision=ci_mod_revision):
@@ -1087,6 +1088,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
             if rewrite_felix_config:
                 LOG.info("New FelixConfiguration: %s", felix_config)
                 if datamodel_v3.put("FelixConfiguration",
+                                    datamodel_v3.NOT_NAMESPACED,
                                     "default",
                                     felix_config,
                                     mod_revision=fc_mod_revision):

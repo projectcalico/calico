@@ -226,6 +226,13 @@ def delete(key, existing_value=None, mod_revision=None):
     return deleted
 
 
+def delete_prefix(prefix):
+    """Best effort deletion of all keys beginning with PREFIX."""
+    LOG.debug("etcdv3 delete_prefix prefix=%s", prefix)
+    client = _get_client()
+    return client.delete_prefix(prefix)
+
+
 def get_prefix(prefix, revision=None):
     """Read all etcdv3 data whose key begins with a given prefix.
 

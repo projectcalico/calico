@@ -66,6 +66,7 @@ class _TestEtcdBase(lib.Lib, unittest.TestCase):
         self.clientv3.delete.side_effect = self.etcd3_delete
         self.clientv3.get.side_effect = self.etcd3_get
         self.clientv3.get_prefix.side_effect = self.etcd3_get_prefix
+        self.clientv3.delete_prefix.side_effect = self.etcd3_delete_prefix
         self.clientv3.status.return_value = {
             'header': {'revision': '10', 'cluster_id': '1234abcd'},
         }
@@ -223,6 +224,14 @@ class _TestEtcdBase(lib.Lib, unittest.TestCase):
         except lib.EtcdKeyNotFound:
             return False
 
+    def etcd3_delete_prefix(self, prefix):
+        _log.info("etcd3 delete prefix: %s", prefix)
+        for key, value in self.etcd_data.items():
+            if key.startswith(prefix):
+                del self.etcd_data[key]
+                _log.info("etcd3 deleted %s", key)
+                self.recent_deletes.add(key)
+
     def etcd3_transaction(self, txn):
         if 'request_put' in txn['success'][0]:
             put_request = txn['success'][0]['request_put']
@@ -294,15 +303,21 @@ class _TestEtcdBase(lib.Lib, unittest.TestCase):
         return read_result
 
 
-class TestPluginEtcd(_TestEtcdBase):
-    # Tests for the Calico mechanism driver.  This covers the mainline function
-    # and the periodic resync thread.
+class TestPluginEtcdBase(_TestEtcdBase):
+
+    def setUp_region(self):
+        self.region = None
+        self.region_string = "no-region"
+        self.namespace = "openstack"
 
     def setUp(self):
         """Setup before each test case."""
+        self.setUp_region()
+        _log.info("Region %r string %r", self.region, self.region_string)
+
         # Do common plugin test setup.
         lib.m_compat.cfg.CONF.core_plugin = 'ml2'
-        super(TestPluginEtcd, self).setUp()
+        super(TestPluginEtcdBase, self).setUp()
 
         # Mock out the status updating thread.  These tests were originally
         # written before that was added and they do not support the interleaved
@@ -321,77 +336,62 @@ class TestPluginEtcd(_TestEtcdBase):
         lib.m_compat.cfg.CONF.calico.num_port_status_threads = 4
         lib.m_compat.cfg.CONF.calico.etcd_compaction_period_mins = 0
         lib.m_compat.cfg.CONF.calico.project_name_cache_max = 0
-        lib.m_compat.cfg.CONF.calico.openstack_region = None
+        lib.m_compat.cfg.CONF.calico.openstack_region = self.region
         calico_config._reset_globals()
         datamodel_v2._reset_globals()
 
         # This value needs to be a string:
         lib.m_compat.cfg.CONF.keystone_authtoken.auth_url = ""
 
-    sg_default_key_v3 = (
-        '/calico/resources/v3/projectcalico.org/networkpolicies/' +
-        'openstack/ossg.default.SGID-default')
-    sg_default_value_v3 = {
-        'apiVersion': 'projectcalico.org/v3',
-        'kind': 'NetworkPolicy',
-        'metadata': {
-            'namespace': 'openstack',
-            'name': 'ossg.default.SGID-default'
-        },
-        'spec': {
-            'egress': [
-                {'action': 'Allow',
-                 'ipVersion': 4},
-                {'action': 'Allow',
-                 'ipVersion': 6}],
-            'ingress': [
-                {'action': 'Allow',
-                 'ipVersion': 4,
-                 'source': {
-                     'selector':
-                     'has(sg.projectcalico.org/openstack-SGID-default)'}},
-                {'action': 'Allow',
-                 'ipVersion': 6,
-                 'source': {
-                     'selector':
-                     'has(sg.projectcalico.org/openstack-SGID-default)'}}
-            ],
-            'selector': 'has(sg.projectcalico.org/openstack-SGID-default)'}}
-
-    initial_etcd3_writes = {
-        '/calico/resources/v3/projectcalico.org/clusterinformations/default': {
+        self.sg_default_key_v3 = (
+            '/calico/resources/v3/projectcalico.org/networkpolicies/' +
+            self.namespace + '/ossg.default.SGID-default')
+        self.sg_default_value_v3 = {
             'apiVersion': 'projectcalico.org/v3',
-            'kind': 'ClusterInformation',
-            'metadata': {'name': 'default'},
-            'spec': {'clusterGUID': 'uuid-start-no-ports',
-                     'clusterType': 'openstack',
-                     'datastoreReady': True}},
-        '/calico/resources/v3/projectcalico.org/felixconfigurations/default': {
-            'apiVersion': 'projectcalico.org/v3',
-            'kind': 'FelixConfiguration',
-            'metadata': {'name': 'default'},
-            'spec': {'endpointReportingEnabled': True,
-                     'interfacePrefix': 'tap'}},
-        sg_default_key_v3: sg_default_value_v3
-    }
+            'kind': 'NetworkPolicy',
+            'metadata': {
+                'namespace': self.namespace,
+                'name': 'ossg.default.SGID-default'
+            },
+            'spec': {
+                'egress': [
+                    {'action': 'Allow',
+                     'ipVersion': 4},
+                    {'action': 'Allow',
+                     'ipVersion': 6}],
+                'ingress': [
+                    {'action': 'Allow',
+                     'ipVersion': 4,
+                     'source': {
+                         'selector':
+                         'has(sg.projectcalico.org/openstack-SGID-default)'}},
+                    {'action': 'Allow',
+                     'ipVersion': 6,
+                     'source': {
+                         'selector':
+                         'has(sg.projectcalico.org/openstack-SGID-default)'}}
+                ],
+                'selector':
+                'has(sg.projectcalico.org/openstack-SGID-default)'}}
 
-    def test_start_no_ports(self):
-        """Startup with no ports or existing etcd data."""
-        # Allow the etcd transport's resync thread to run. The last thing it
-        # does is write the Felix config, so let it run three reads.
-
-        with lib.FixedUUID('uuid-start-no-ports'):
-            self.give_way()
-            self.simulated_time_advance(31)
-
-        self.assertEtcdWrites(self.initial_etcd3_writes)
-
-    def test_etcd_reset(self):
-        for n in range(1, 20):
-            _log.info("Reset etcd data after %s reads/writes/deletes", n)
-            self.reset_etcd_after = n
-            self.test_start_two_ports()
-            self.etcd_data = {}
+        self.initial_etcd3_writes = {
+            '/calico/resources/v3/projectcalico.org/' +
+            'clusterinformations/default': {
+                'apiVersion': 'projectcalico.org/v3',
+                'kind': 'ClusterInformation',
+                'metadata': {'name': 'default'},
+                'spec': {'clusterGUID': 'uuid-start-no-ports',
+                         'clusterType': 'openstack',
+                         'datastoreReady': True}},
+            '/calico/resources/v3/projectcalico.org/' +
+            'felixconfigurations/default': {
+                'apiVersion': 'projectcalico.org/v3',
+                'kind': 'FelixConfiguration',
+                'metadata': {'name': 'default'},
+                'spec': {'endpointReportingEnabled': True,
+                         'interfacePrefix': 'tap'}},
+            self.sg_default_key_v3: self.sg_default_value_v3
+        }
 
     def make_context(self):
         context = mock.MagicMock()
@@ -410,11 +410,11 @@ class TestPluginEtcd(_TestEtcdBase):
 
         ep_deadbeef_key_v3 = (
             '/calico/resources/v3/projectcalico.org/workloadendpoints/' +
-            'openstack/felix--host--1-openstack-' +
+            self.namespace + '/felix--host--1-openstack-' +
             'instance--1-DEADBEEF--1234--5678')
         ep_facebeef_key_v3 = (
             '/calico/resources/v3/projectcalico.org/workloadendpoints/' +
-            'openstack/felix--host--1-openstack-' +
+            self.namespace + '/felix--host--1-openstack-' +
             'instance--2-FACEBEEF--1234--5678')
         ep_deadbeef_value_v3 = {
             'apiVersion': 'projectcalico.org/v3',
@@ -426,13 +426,13 @@ class TestPluginEtcd(_TestEtcdBase):
                 },
                 'name': ('felix--host--1-openstack-instance' +
                          '--1-DEADBEEF--1234--5678'),
-                'namespace': 'openstack',
+                'namespace': self.namespace,
                 'labels': {
                     'sg.projectcalico.org/openstack-SGID-default':
                     'My_default_SG',
                     'sg-name.projectcalico.org/openstack-My_default_SG':
                     'SGID-default',
-                    'projectcalico.org/namespace': 'openstack',
+                    'projectcalico.org/namespace': self.namespace,
                     'projectcalico.org/openstack-project-id': 'jane3',
                     'projectcalico.org/openstack-project-name': 'pname_jane3',
                     'projectcalico.org/orchestrator': 'openstack'
@@ -458,13 +458,13 @@ class TestPluginEtcd(_TestEtcdBase):
                 },
                 'name': ('felix--host--1-openstack-instance' +
                          '--2-FACEBEEF--1234--5678'),
-                'namespace': 'openstack',
+                'namespace': self.namespace,
                 'labels': {
                     'sg.projectcalico.org/openstack-SGID-default':
                     'My_default_SG',
                     'sg-name.projectcalico.org/openstack-My_default_SG':
                     'SGID-default',
-                    'projectcalico.org/namespace': 'openstack',
+                    'projectcalico.org/namespace': self.namespace,
                     'projectcalico.org/openstack-project-id': 'jane3',
                     'projectcalico.org/openstack-project-name': 'pname_jane3',
                     'projectcalico.org/orchestrator': 'openstack'
@@ -570,7 +570,7 @@ class TestPluginEtcd(_TestEtcdBase):
 
         ep_hello_key_v3 = (
             '/calico/resources/v3/projectcalico.org/workloadendpoints/' +
-            'openstack/felix--host--2-openstack-' +
+            self.namespace + '/felix--host--2-openstack-' +
             'instance--3-HELLO--1234--5678')
         ep_hello_value_v3 = {
             'apiVersion': 'projectcalico.org/v3',
@@ -582,13 +582,13 @@ class TestPluginEtcd(_TestEtcdBase):
                 },
                 'name': ('felix--host--2-openstack-instance' +
                          '--3-HELLO--1234--5678'),
-                'namespace': 'openstack',
+                'namespace': self.namespace,
                 'labels': {
                     'sg.projectcalico.org/openstack-SGID-default':
                     'My_default_SG',
                     'sg-name.projectcalico.org/openstack-My_default_SG':
                     'SGID-default',
-                    'projectcalico.org/namespace': 'openstack',
+                    'projectcalico.org/namespace': self.namespace,
                     'projectcalico.org/openstack-project-id': 'jane3',
                     'projectcalico.org/openstack-project-name': 'pname_jane3',
                     'projectcalico.org/orchestrator': 'openstack'
@@ -711,12 +711,12 @@ class TestPluginEtcd(_TestEtcdBase):
 
         sg_1_key_v3 = (
             '/calico/resources/v3/projectcalico.org/networkpolicies/' +
-            'openstack/ossg.default.SG-1')
+            self.namespace + '/ossg.default.SG-1')
         sg_1_value_v3 = {
             'apiVersion': 'projectcalico.org/v3',
             'kind': 'NetworkPolicy',
             'metadata': {
-                'namespace': 'openstack',
+                'namespace': self.namespace,
                 'name': 'ossg.default.SG-1'
             },
             'spec': {
@@ -888,6 +888,29 @@ class TestPluginEtcd(_TestEtcdBase):
             'port_range_min': 5060,
             'port_range_max': 5060
         }
+
+
+class TestPluginEtcd(TestPluginEtcdBase):
+    # Tests for the Calico mechanism driver.  This covers the mainline function
+    # and the periodic resync thread.
+
+    def test_start_no_ports(self):
+        """Startup with no ports or existing etcd data."""
+        # Allow the etcd transport's resync thread to run. The last thing it
+        # does is write the Felix config, so let it run three reads.
+
+        with lib.FixedUUID('uuid-start-no-ports'):
+            self.give_way()
+            self.simulated_time_advance(31)
+
+        self.assertEtcdWrites(self.initial_etcd3_writes)
+
+    def test_etcd_reset(self):
+        for n in range(1, 20):
+            _log.info("Reset etcd data after %s reads/writes/deletes", n)
+            self.reset_etcd_after = n
+            self.test_start_two_ports()
+            self.etcd_data = {}
 
     def test_noop_entry_points(self):
         """test_noop_entry_points
@@ -1178,13 +1201,14 @@ class TestPluginEtcd(_TestEtcdBase):
         self.assertEtcdDeletes(set())
 
     def test_policy_coexistence(self):
-        """Coexistence with other policy data in the 'openstack' namespace.
+        """Coexistence with other data in the 'openstack' namespace.
 
         Check that we _do_ clean up old policy data that has our prefix, but
         _don't_ touch policies without our prefix.
         """
 
-        # Start up with two existing policies in the 'openstack' namespace.
+        # Start up with two existing policies in the 'openstack'
+        # namespace.
         self.etcd_data = {
             '/calico/resources/v3/projectcalico.org/networkpolicies/' +
             'openstack/customer-policy-1': json.dumps({
@@ -1231,35 +1255,101 @@ class TestPluginEtcd(_TestEtcdBase):
     def test_old_openstack_data(self):
         """Startup with existing but old OpenStack profile data."""
 
-        # Check that we clean it up.
+        # Check that we clean up policy data that we created, but not policy
+        # data that the user created.
+        our_policy_string = json.dumps({
+            'apiVersion': 'projectcalico.org/v3',
+            'kind': 'NetworkPolicy',
+            'metadata': {
+                'namespace': 'openstack',
+                'name': 'ossg.default.OLD'
+            },
+            'spec': {
+                'egress': [
+                    {'action': 'Allow',
+                     'ipVersion': 4},
+                    {'action': 'Allow',
+                     'ipVersion': 6}],
+                'ingress': [
+                    {'action': 'Allow',
+                     'ipVersion': 4,
+                     'source': {
+                         'selector':
+                         'has(sg.projectcalico.org/openstack-OLD)'}},
+                    {'action': 'Allow',
+                     'ipVersion': 6,
+                     'source': {
+                         'selector':
+                         'has(sg.projectcalico.org/openstack-OLD)'}}],
+                'selector': 'has(sg.projectcalico.org/openstack-OLD)'}}
+        )
+        user_policy_string = our_policy_string.replace("ossg", "user")
         self.etcd_data = {
             '/calico/resources/v3/projectcalico.org/networkpolicies/' +
-            'openstack/ossg.default.OLD': json.dumps({
-                'apiVersion': 'projectcalico.org/v3',
-                'kind': 'NetworkPolicy',
-                'metadata': {
-                    'namespace': 'openstack',
-                    'name': 'ossg.default.OLD'
-                },
-                'spec': {
-                    'egress': [
-                        {'action': 'Allow',
-                         'ipVersion': 4},
-                        {'action': 'Allow',
-                         'ipVersion': 6}],
-                    'ingress': [
-                        {'action': 'Allow',
-                         'ipVersion': 4,
-                         'source': {
-                             'selector':
-                             'has(sg.projectcalico.org/openstack-OLD)'}},
-                        {'action': 'Allow',
-                         'ipVersion': 6,
-                         'source': {
-                             'selector':
-                             'has(sg.projectcalico.org/openstack-OLD)'}}],
-                    'selector': 'has(sg.projectcalico.org/openstack-OLD)'}}
-            )}
+            'openstack/ossg.default.OLD': our_policy_string,
+            '/calico/resources/v3/projectcalico.org/networkpolicies/' +
+            'openstack/user.default.OLD': user_policy_string,
+        }
+        with lib.FixedUUID('uuid-old-data'):
+            self.give_way()
+            self.simulated_time_advance(31)
+
+        expected_writes = copy.deepcopy(self.initial_etcd3_writes)
+        expected_writes[
+            '/calico/resources/v3/projectcalico.org/clusterinformations/' +
+            'default']['spec']['clusterGUID'] = 'uuid-old-data'
+        self.assertEtcdWrites(expected_writes)
+        self.assertEtcdDeletes(set([
+            '/calico/resources/v3/projectcalico.org/networkpolicies/' +
+            'openstack/ossg.default.OLD',
+        ]))
+
+
+class TestPluginEtcdRegion(TestPluginEtcdBase):
+
+    def setUp_region(self):
+        self.region = "europe"
+        self.region_string = "region-europe"
+        self.namespace = "openstack-region-europe"
+
+    def test_legacy_openstack_data(self):
+        """Startup with existing data in legacy "openstack" namespace."""
+
+        # Check that we clean up policy data that we created, but not policy
+        # data that the user created.
+        our_policy_string = json.dumps({
+            'apiVersion': 'projectcalico.org/v3',
+            'kind': 'NetworkPolicy',
+            'metadata': {
+                'namespace': 'openstack',
+                'name': 'ossg.default.OLD'
+            },
+            'spec': {
+                'egress': [
+                    {'action': 'Allow',
+                     'ipVersion': 4},
+                    {'action': 'Allow',
+                     'ipVersion': 6}],
+                'ingress': [
+                    {'action': 'Allow',
+                     'ipVersion': 4,
+                     'source': {
+                         'selector':
+                         'has(sg.projectcalico.org/openstack-OLD)'}},
+                    {'action': 'Allow',
+                     'ipVersion': 6,
+                     'source': {
+                         'selector':
+                         'has(sg.projectcalico.org/openstack-OLD)'}}],
+                'selector': 'has(sg.projectcalico.org/openstack-OLD)'}}
+        )
+        user_policy_string = our_policy_string.replace("ossg", "user")
+        self.etcd_data = {
+            '/calico/resources/v3/projectcalico.org/networkpolicies/' +
+            'openstack/ossg.default.OLD': our_policy_string,
+            '/calico/resources/v3/projectcalico.org/networkpolicies/' +
+            'openstack/user.default.OLD': user_policy_string,
+        }
         with lib.FixedUUID('uuid-old-data'):
             self.give_way()
             self.simulated_time_advance(31)

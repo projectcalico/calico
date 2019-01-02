@@ -49,7 +49,7 @@ class ResourceSyncer(object):
       stored in etcd, and conversely can be constructed from a resource's etcd
       key.  (So the name could be the complete etcd key; but it doesn't have to
       be, and for the v3 resources here it is just the metadata name field -
-      which works because we only use a single namespace, 'openstack'.)
+      which works because we only use a single namespace.)
 
     - The data needs to be in some form that is comparable, between the data
       that exists in etcd for a given resource name, and the data for that same
@@ -177,7 +177,15 @@ class ResourceSyncer(object):
                                 " deleted by another writer",
                                 self.resource_kind, name)
 
+        # Delete any legacy etcd data for this kind of resource.  (For example,
+        # how this resource was represented in a previous release.)
+        self.delete_legacy_etcd_data()
+
         LOG.info("Resync for %s; done.", self.resource_kind)
+
+    def delete_legacy_etcd_data(self):
+        # By default this is a no-op, but subclasses may override.
+        pass
 
     def etcd_write_data_matches_existing(self, write_data, existing):
         """Test whether data that we would write is the same as existing.
