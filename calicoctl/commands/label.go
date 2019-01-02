@@ -19,7 +19,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/docopt/docopt-go"
+	docopt "github.com/docopt/docopt-go"
 	"github.com/projectcalico/calicoctl/calicoctl/commands/constants"
 	"github.com/projectcalico/calicoctl/calicoctl/resourcemgr"
 
@@ -139,6 +139,9 @@ Description:
 	overwrite := parsedArgs["--overwrite"].(bool)
 	overwritten := false
 	client := results.client
+	if labels == nil {
+		labels = make(map[string]string)
+	}
 
 	if remove {
 		// remove label.
