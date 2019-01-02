@@ -199,11 +199,32 @@ func (t *testResourceWatcher) expectEvents(kind string, anyOrder bool, expectedE
 	// events, so protect against that scenario - we'll check later once we've
 	// constructed useful diagnostics.
 	var actualEvents []watch.Event
-	if len(t.events) >= len(expectedEvents) {
-		actualEvents = t.events[:len(expectedEvents)]
+	log.Infof("Received %s events, expected %d", len(t.events), len(expectedEvents))
+	if len(t.events) != len(expectedEvents) {
+		// Log out the events we received before failing the test.
+		log.Errorf("Number of received events does not match expected.")
+		for _, e := range t.events {
+			var o runtime.Object
+			if e.Type == watch.Deleted {
+				o = e.Previous
+			} else {
+				o = e.Object
+			}
+			log.Infof(
+				"Received event: EventType:%s; Kind:%s; Name:%s; Namespace:%s",
+				e.Type,
+				o.GetObjectKind().GroupVersionKind(),
+				o.(v1.ObjectMetaAccessor).GetObjectMeta().GetName(),
+				o.(v1.ObjectMetaAccessor).GetObjectMeta().GetNamespace(),
+			)
+		}
+
+		// Fail the test.
+		Expect(len(t.events)).To(Equal(len(expectedEvents)))
 	} else {
 		actualEvents = t.events
 	}
+
 	if anyOrder {
 		log.Info("Ordering events")
 		expectedEvents = t.sortEvents(expectedEvents)
