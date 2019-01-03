@@ -144,12 +144,11 @@ func (nc *NodeController) syncNodeLabels(node *v1.Node) {
 		needsUpdate := false
 
 		// Check if it has the annotation for k8s labels.
-		a, ok := calNode.Annotations[nodeLabelAnnotation]
 
 		// If there are labels present, then parse them. Otherwise this is
 		// a first-time sync, in which case there are no old labels.
-		var oldLabels map[string]string = map[string]string{}
-		if ok {
+		oldLabels := map[string]string{}
+		if a, ok := calNode.Annotations[nodeLabelAnnotation]; ok {
 			if err = json.Unmarshal([]byte(a), &oldLabels); err != nil {
 				log.WithError(err).Error("Failed to unmarshal node labels")
 				return
