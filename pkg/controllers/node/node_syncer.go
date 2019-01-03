@@ -50,7 +50,9 @@ func (c *NodeController) OnUpdates(updates []bapi.Update) {
 			if kn := getK8sNodeName(*n); kn != "" {
 				// Create a mapping from Kubernetes node -> Calico node.
 				logrus.Debugf("Mapping Calico -> k8s node. %s -> %s", n.Name, kn)
+				c.nodemapLock.Lock()
 				c.nodemapper[kn] = n.Name
+				c.nodemapLock.Unlock()
 
 				// It has a node reference - get that Kubernetes node, and if
 				// it exists perform a sync.
@@ -69,7 +71,9 @@ func (c *NodeController) OnUpdates(updates []bapi.Update) {
 			if kn := getK8sNodeName(*n); kn != "" {
 				// Remove it from the node map.
 				logrus.Debugf("Unmapping Calico -> k8s node. %s -> %s", n.Name, kn)
+				c.nodemapLock.Lock()
 				delete(c.nodemapper, kn)
+				c.nodemapLock.Unlock()
 			}
 		default:
 			logrus.Errorf("Unhandled update type")

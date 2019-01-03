@@ -17,6 +17,7 @@ package node
 import (
 	"context"
 	"encoding/json"
+	"sync"
 	"time"
 
 	log "github.com/sirupsen/logrus"
@@ -60,6 +61,7 @@ type NodeController struct {
 	rl           workqueue.RateLimiter
 	schedule     chan interface{}
 	nodemapper   map[string]string
+	nodemapLock  sync.Mutex
 	syncer       bapi.Syncer
 }
 
@@ -117,7 +119,9 @@ func (nc *NodeController) syncNodeLabels(node *v1.Node) {
 	// On failure, we retry a certain number of times.
 	for n := 1; n < maxAttempts; n++ {
 		// Get the Calico node representation.
+		nc.nodemapLock.Lock()
 		name, ok := nc.nodemapper[node.Name]
+		nc.nodemapLock.Unlock()
 		if !ok {
 			// We havent learned this Calico node yet.
 			log.Debugf("Skipping update for node with no Calico equivalent")
@@ -140,12 +144,11 @@ func (nc *NodeController) syncNodeLabels(node *v1.Node) {
 		needsUpdate := false
 
 		// Check if it has the annotation for k8s labels.
-		a, ok := calNode.Annotations[nodeLabelAnnotation]
 
 		// If there are labels present, then parse them. Otherwise this is
 		// a first-time sync, in which case there are no old labels.
-		var oldLabels map[string]string = map[string]string{}
-		if ok {
+		oldLabels := map[string]string{}
+		if a, ok := calNode.Annotations[nodeLabelAnnotation]; ok {
 			if err = json.Unmarshal([]byte(a), &oldLabels); err != nil {
 				log.WithError(err).Error("Failed to unmarshal node labels")
 				return
