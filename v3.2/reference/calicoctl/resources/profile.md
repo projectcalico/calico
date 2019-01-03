@@ -24,8 +24,6 @@ apiVersion: projectcalico.org/v3
 kind: Profile
 metadata:
   name: profile1
-  labels:
-    profile: profile1
 spec:
   ingress:
   - action: Deny
@@ -37,6 +35,8 @@ spec:
       selector: profile == 'profile1'
   egress:
   - action: Allow
+  labelsToApply:
+    profile: profile1
 ```
 
 ### Definition
