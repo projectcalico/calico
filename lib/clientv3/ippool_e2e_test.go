@@ -42,26 +42,30 @@ var _ = testutils.E2eDatastoreDescribe("IPPool tests", testutils.DatastoreAll, f
 	name1 := "ippool-1"
 	name2 := "ippool-2"
 	spec1 := apiv3.IPPoolSpec{
-		CIDR:      "1.2.3.0/24",
-		IPIPMode:  apiv3.IPIPModeAlways,
-		BlockSize: 26,
+		CIDR:         "1.2.3.0/24",
+		IPIPMode:     apiv3.IPIPModeAlways,
+		BlockSize:    26,
+		NodeSelector: "all()",
 	}
 	spec1_2 := apiv3.IPPoolSpec{
-		CIDR:        "1.2.3.0/24",
-		NATOutgoing: true,
-		IPIPMode:    apiv3.IPIPModeNever,
-		BlockSize:   26,
+		CIDR:         "1.2.3.0/24",
+		NATOutgoing:  true,
+		IPIPMode:     apiv3.IPIPModeNever,
+		BlockSize:    26,
+		NodeSelector: `foo == "bar"`,
 	}
 	spec2 := apiv3.IPPoolSpec{
-		CIDR:        "2001::/120",
-		NATOutgoing: true,
-		IPIPMode:    apiv3.IPIPModeNever,
-		BlockSize:   122,
+		CIDR:         "2001::/120",
+		NATOutgoing:  true,
+		IPIPMode:     apiv3.IPIPModeNever,
+		BlockSize:    122,
+		NodeSelector: "all()",
 	}
 	spec2_1 := apiv3.IPPoolSpec{
-		CIDR:      "2001::/120",
-		IPIPMode:  apiv3.IPIPModeNever,
-		BlockSize: 122,
+		CIDR:         "2001::/120",
+		IPIPMode:     apiv3.IPIPModeNever,
+		BlockSize:    122,
+		NodeSelector: "all()",
 	}
 
 	It("should error when creating an IPPool with no name", func() {
@@ -831,8 +835,13 @@ var _ = testutils.E2eDatastoreDescribe("IPPool tests (etcd only)", testutils.Dat
 			}, options.SetOptions{})
 			Expect(err).NotTo(HaveOccurred())
 
+			// Create test node
+			host := "host-test"
+			_, err = c.Nodes().Create(ctx, &apiv3.Node{ObjectMeta: metav1.ObjectMeta{Name: host}}, options.SetOptions{})
+			Expect(err).NotTo(HaveOccurred())
+
 			// Allocate an IP so that a block is allocated
-			assigned, _, err := c.IPAM().AutoAssign(ctx, ipam.AutoAssignArgs{Num4: 1})
+			assigned, _, err := c.IPAM().AutoAssign(ctx, ipam.AutoAssignArgs{Num4: 1, Hostname: host})
 			Expect(err).NotTo(HaveOccurred())
 			Expect(assigned).To(HaveLen(1))
 
@@ -898,8 +907,12 @@ var _ = testutils.E2eDatastoreDescribe("IPPool tests (etcd only)", testutils.Dat
 			}, options.SetOptions{})
 			Expect(err).NotTo(HaveOccurred())
 
+			host := "host-test"
+			_, err = c.Nodes().Create(ctx, &apiv3.Node{ObjectMeta: metav1.ObjectMeta{Name: host}}, options.SetOptions{})
+			Expect(err).NotTo(HaveOccurred())
+
 			// Allocate an IP so that a block is allocated
-			assigned, _, err := c.IPAM().AutoAssign(ctx, ipam.AutoAssignArgs{Num4: 1})
+			assigned, _, err := c.IPAM().AutoAssign(ctx, ipam.AutoAssignArgs{Num4: 1, Hostname: host})
 			Expect(err).NotTo(HaveOccurred())
 			Expect(assigned).To(HaveLen(1))
 
@@ -915,7 +928,7 @@ var _ = testutils.E2eDatastoreDescribe("IPPool tests (etcd only)", testutils.Dat
 
 			// Allocate an IP so that a block is allocated
 			pool2 := []cnet.IPNet{cnet.MustParseCIDR(p2.Spec.CIDR)}
-			assigned, _, err = c.IPAM().AutoAssign(ctx, ipam.AutoAssignArgs{IPv4Pools: pool2, Num4: 1})
+			assigned, _, err = c.IPAM().AutoAssign(ctx, ipam.AutoAssignArgs{IPv4Pools: pool2, Num4: 1, Hostname: host})
 			Expect(err).NotTo(HaveOccurred())
 			Expect(assigned).To(HaveLen(1))
 

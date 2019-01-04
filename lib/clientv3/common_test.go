@@ -39,9 +39,10 @@ var _ = testutils.E2eDatastoreDescribe("Common resource tests", testutils.Datast
 			ctx := context.Background()
 			name1 := "ippool-1"
 			spec1 := apiv3.IPPoolSpec{
-				CIDR:      "1.2.3.0/24",
-				IPIPMode:  apiv3.IPIPModeAlways,
-				BlockSize: 26,
+				CIDR:         "1.2.3.0/24",
+				IPIPMode:     apiv3.IPIPModeAlways,
+				BlockSize:    26,
+				NodeSelector: "all()",
 			}
 			c, err := clientv3.New(config)
 			Expect(err).NotTo(HaveOccurred())

@@ -152,6 +152,8 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 
 			hostA = "hostA"
 			hostB = "hostB"
+			applyNode(bc, hostA, nil)
+			applyNode(bc, hostB, nil)
 
 			pools = &ipPoolAccessor{pools: map[string]pool{"10.0.0.0/26": {enabled: true}}}
 
@@ -184,6 +186,9 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 						defer GinkgoRecover()
 
 						testhost := fmt.Sprintf("host-%d", j)
+						applyNode(bc, testhost, nil)
+						defer deleteNode(bc, testhost)
+
 						ips, err := ic.autoAssign(ctx, 1, &testhost, nil, nil, 4, testhost, 0)
 						if err != nil {
 							log.WithError(err).Errorf("Auto assign failed for host %s", testhost)
@@ -264,12 +269,13 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 				wg := sync.WaitGroup{}
 				var testErr error
 
+				testhost := "single-host"
+				applyNode(bc, testhost, nil)
 				for i := 0; i < 4; i++ {
 					wg.Add(1)
 					go func() {
 						defer GinkgoRecover()
 
-						testhost := "single-host"
 						ips, err := ic.autoAssign(ctx, 1, nil, nil, nil, 4, testhost, 0)
 						if err != nil {
 							log.WithError(err).Errorf("Auto assign failed for host %s", testhost)

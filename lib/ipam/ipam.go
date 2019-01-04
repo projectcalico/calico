@@ -27,6 +27,8 @@ import (
 	cerrors "github.com/projectcalico/libcalico-go/lib/errors"
 	"github.com/projectcalico/libcalico-go/lib/names"
 	"github.com/projectcalico/libcalico-go/lib/net"
+	cnet "github.com/projectcalico/libcalico-go/lib/net"
+	"github.com/projectcalico/libcalico-go/lib/selector"
 )
 
 const (
@@ -202,45 +204,86 @@ func (c ipamClient) getBlockFromAffinity(ctx context.Context, aff *model.KVPair)
 	return b, nil
 }
 
-// determinePools compares a list of requested pools with the enabled pools
-// and returns the intersect. If any requested pool does not exist, or is not enabled, an error is returned.
+// determinePools compares a list of requested pools with the enabled pools and returns the intersect.
+// If any requested pool does not exist, or is not enabled, an error is returned.
 // If no pools are requested, all enabled pools are returned.
-func (c ipamClient) determinePools(requestedPoolNets []net.IPNet, version int) ([]v3.IPPool, error) {
+// Also applies selector logic on node labels to determine if the pool is a match.
+func (c ipamClient) determinePools(requestedPoolNets []net.IPNet, version int, node v3.Node) ([]v3.IPPool, error) {
+	// Get all the enabled IP pools from the datastore.
 	enabledPools, err := c.pools.GetEnabledPools(version)
 	if err != nil {
-		log.WithError(err).Errorf("Error reading configured pools")
+		log.WithError(err).Errorf("Error getting IP pools")
 		return nil, err
 	}
-	log.Debugf("enabled Pools: %v", enabledPools)
+	log.Debugf("enabled pools: %v", enabledPools)
+	log.Debugf("requested pools: %v", requestedPoolNets)
 
-	if len(requestedPoolNets) > 0 {
-		log.Debugf("requested IPPools: %v", requestedPoolNets)
-		// Build a map so we can lookup existing pools.
-		pm := map[string]v3.IPPool{}
-		for _, p := range enabledPools {
-			pm[p.Spec.CIDR] = p
-		}
+	// Build a map so we can lookup existing pools by their CIDR.
+	pm := map[string]v3.IPPool{}
+	for _, p := range enabledPools {
+		pm[p.Spec.CIDR] = p
+	}
 
-		// Empty the enabledpools and repopulate only the requested ones.
-		enabledPools = nil
-
-		// Make sure each requested pool exists
-		for _, rp := range requestedPoolNets {
-			if pool, ok := pm[rp.String()]; !ok {
-				// The requested pool doesn't exist.
-				return nil, fmt.Errorf("the given pool (%s) does not exist, or is not enabled", rp.IPNet.String())
-			} else {
-				enabledPools = append(enabledPools, pool)
-			}
+	// Build a list of requested IP pool objects based on the provided CIDRs, validating
+	// that each one actually exists and is enabled for IPAM.
+	requestedPools := []v3.IPPool{}
+	for _, rp := range requestedPoolNets {
+		if pool, ok := pm[rp.String()]; !ok {
+			// The requested pool doesn't exist.
+			return nil, fmt.Errorf("the given pool (%s) does not exist, or is not enabled", rp.IPNet.String())
+		} else {
+			log.Debugf("Requested IP pool is ok to use: %s", pool.Name)
+			requestedPools = append(requestedPools, pool)
 		}
 	}
 
-	return enabledPools, nil
+	// If requested IP pools are provided, use those unconditionally. We will ignore
+	// IP pool selectors in this case. We need this for backwards compatibility, since IP pool
+	// node selectors have not always existed.
+	if len(requestedPools) > 0 {
+		log.Debugf("Using the requested IP pools")
+		return requestedPools, nil
+	}
+
+	// At this point, we've determined the set of enabled IP pools which are valid for use.
+	// We only want to use IP pools which actually match this node, so do a filter based on
+	// selector.
+	matchingPools := []v3.IPPool{}
+	for _, pool := range enabledPools {
+		if len(pool.Spec.NodeSelector) > 0 {
+			if sel, err := selector.Parse(pool.Spec.NodeSelector); err != nil {
+				// Invalid selector syntax.
+				log.WithError(err).WithField("selector", pool.Spec.NodeSelector).Error("failed to parse selector")
+				return nil, err
+			} else if !sel.Evaluate(node.Labels) {
+				// Do not consider pool enabled if the nodeSelector doesn't match the node's labels.
+				log.Debugf("IP pool does not match this node: %s", pool.Name)
+				continue
+			}
+		}
+		log.Debugf("IP pool matches this node: %s", pool.Name)
+		matchingPools = append(matchingPools, pool)
+	}
+
+	return matchingPools, nil
 }
 
 func (c ipamClient) autoAssign(ctx context.Context, num int, handleID *string, attrs map[string]string, requestedPools []net.IPNet, version int, host string, maxNumBlocks int) ([]net.IP, error) {
-	// Start by sanitizing the requestedPools.
-	pools, err := c.determinePools(requestedPools, version)
+	// Retrieve node for given hostname to use for ip pool node selection
+	node, err := c.client.Get(ctx, model.ResourceKey{Kind: v3.KindNode, Name: host}, "")
+	if err != nil {
+		log.WithError(err).WithField("node", host).Error("failed to get node for host")
+		return nil, err
+	}
+
+	// Make sure the returned value is OK.
+	v3n, ok := node.Value.(*v3.Node)
+	if !ok {
+		return nil, fmt.Errorf("Datastore returned malformed node object")
+	}
+
+	// Determine the correct set of IP pools to use for this request.
+	pools, err := c.determinePools(requestedPools, version, *v3n)
 	if err != nil {
 		return nil, err
 	}
@@ -636,6 +679,63 @@ func (c ipamClient) releaseIPsFromBlock(ctx context.Context, ips []net.IP, block
 
 		// Block exists - get the allocationBlock from the KVPair.
 		b := allocationBlock{obj.Value.(*model.AllocationBlock)}
+
+		// Retrieve node for this allocation. We do this so we can clean up affinity for blocks
+		// which should no longer be affine to this host.
+		host := getHostAffinity(b.AllocationBlock)
+		logCtx.Debugf("block affinity: %s", host)
+		if host != "" {
+			// Get the corresponding node object.
+			logCtx.Debugf("Looking up node for host affinity %s", host)
+			node, err := c.client.Get(ctx, model.ResourceKey{Kind: v3.KindNode, Name: host}, "")
+			if err != nil {
+				if _, ok := err.(cerrors.ErrorResourceDoesNotExist); !ok {
+					logCtx.WithError(err).WithField("node", host).Error("failed to get node for host")
+					return nil, err
+				}
+				// We still want to be able to release IPs if the node doesn't exist.
+				logCtx.Info("Node doesn't exist, releasing IPs anyway")
+			} else {
+				// Make sure the returned value is a valid node.
+				v3n, ok := node.Value.(*v3.Node)
+				if !ok {
+					return nil, fmt.Errorf("Datastore returned malformed node object")
+				}
+
+				// If the IP pool which owns this block no longer selects this node,
+				// we should release the block's affinity to this node so it can be
+				// used elsewhere.
+				pool := c.blockReaderWriter.getPoolForIP(cnet.IP{blockCIDR.IP})
+				if pool == nil {
+					// No IP pool owns this block.
+				} else if sel, err := selector.Parse(pool.Spec.NodeSelector); err != nil {
+					// Invalid selector syntax.
+					logCtx.WithError(err).WithField("selector", pool.Spec.NodeSelector).Error("failed to parse selector")
+					return nil, err
+				} else if !sel.Evaluate(v3n.Labels) {
+					// Pool does not match this node's label, release this block's affinity.
+					if err := c.ReleaseAffinity(ctx, blockCIDR, host); err != nil {
+						return nil, err
+					}
+
+					// Since this updates the block, we need to requery it so the code below
+					// can release the IP addresses without an update conflict.
+					obj, err = c.client.Get(ctx, model.BlockKey{CIDR: blockCIDR}, "")
+					if err != nil {
+						if _, ok := err.(cerrors.ErrorResourceDoesNotExist); ok {
+							// The block does not exist - all addresses must be unassigned.
+							return ips, nil
+						} else {
+							// Unexpected error reading block.
+							return nil, err
+						}
+					}
+
+					// Block exists - get the allocationBlock from the KVPair.
+					b = allocationBlock{obj.Value.(*model.AllocationBlock)}
+				}
+			}
+		}
 
 		// Release the IPs.
 		unallocated, handles, err2 := b.release(ips)

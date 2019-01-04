@@ -271,6 +271,11 @@ func convertIpPoolFromStorage(pool *apiv3.IPPool) error {
 			pool.Spec.BlockSize = 122
 		}
 	}
+
+	// Default the nodeSelector if it wasn't previously set.
+	if pool.Spec.NodeSelector == "" {
+		pool.Spec.NodeSelector = "all()"
+	}
 	return nil
 }
 
@@ -310,6 +315,11 @@ func (r ipPools) validateAndSetDefaults(ctx context.Context, new, old *apiv3.IPP
 
 	// Normalize the CIDR before persisting.
 	new.Spec.CIDR = cidr.String()
+
+	// If a nodeSelector is not specified, then this IP pool selects all nodes.
+	if new.Spec.NodeSelector == "" {
+		new.Spec.NodeSelector = "all()"
+	}
 
 	// If there was a previous pool then this must be an Update, validate that the
 	// CIDR has not changed.  Since we are using normalized CIDRs we can just do a

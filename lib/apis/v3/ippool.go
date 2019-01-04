@@ -53,6 +53,9 @@ type IPPoolSpec struct {
 	// The block size to use for IP address assignments from this pool. Defaults to 26 for IPv4 and 112 for IPv6.
 	BlockSize int `json:"blockSize,omitempty"`
 
+	// Allows IPPool to allocate for a specific node by label selector.
+	NodeSelector string `json:"nodeSelector,omitempty" validate:"omitempty,selector"`
+
 	// Deprecated: this field is only used for APIv1 backwards compatibility.
 	// Setting this field is not allowed, this field is for internal use only.
 	IPIP *apiv1.IPIPConfiguration `json:"ipip,omitempty" validate:"omitempty,mustBeNil"`
