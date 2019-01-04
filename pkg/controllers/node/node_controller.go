@@ -16,6 +16,8 @@ package node
 
 import (
 	"context"
+	"encoding/json"
+	"sync"
 	"time"
 
 	log "github.com/sirupsen/logrus"
@@ -27,8 +29,10 @@ import (
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
 
+	"github.com/projectcalico/kube-controllers/pkg/config"
 	"github.com/projectcalico/kube-controllers/pkg/controllers/controller"
 	api "github.com/projectcalico/libcalico-go/lib/apis/v3"
+	bapi "github.com/projectcalico/libcalico-go/lib/backend/api"
 	client "github.com/projectcalico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/libcalico-go/lib/errors"
 	"github.com/projectcalico/libcalico-go/lib/options"
@@ -38,6 +42,12 @@ const (
 	RateLimitCalicoList   = "calico-list"
 	RateLimitK8s          = "k8s"
 	RateLimitCalicoDelete = "calico-delete"
+	nodeLabelAnnotation   = "projectcalico.org/kube-labels"
+)
+
+var (
+	maxAttempts    = 5
+	retrySleepTime = 100 * time.Millisecond
 )
 
 // NodeController implements the Controller interface.  It is responsible for monitoring
@@ -45,39 +55,151 @@ const (
 type NodeController struct {
 	ctx          context.Context
 	informer     cache.Controller
+	indexer      cache.Indexer
 	calicoClient client.Interface
 	k8sClientset *kubernetes.Clientset
 	rl           workqueue.RateLimiter
 	schedule     chan interface{}
+	nodemapper   map[string]string
+	nodemapLock  sync.Mutex
+	syncer       bapi.Syncer
 }
 
 // NewNodeController Constructor for NodeController
-func NewNodeController(ctx context.Context, k8sClientset *kubernetes.Clientset, calicoClient client.Interface) controller.Controller {
+func NewNodeController(ctx context.Context, k8sClientset *kubernetes.Clientset, calicoClient client.Interface, cfg *config.Config) controller.Controller {
+	nc := &NodeController{
+		ctx:          ctx,
+		calicoClient: calicoClient,
+		k8sClientset: k8sClientset,
+		rl:           workqueue.DefaultControllerRateLimiter(),
+		nodemapper:   map[string]string{},
+	}
 	// channel used to kick the controller into scheduling a sync. It has length
 	// 1 so that we coalesce multiple kicks while a sync is happening down to
 	// just one additional sync.
-	schedule := make(chan interface{}, 1)
+	nc.schedule = make(chan interface{}, 1)
 
 	// Create a Node watcher.
 	listWatcher := cache.NewListWatchFromClient(k8sClientset.CoreV1().RESTClient(), "nodes", "", fields.Everything())
 
-	// Informer handles managing the watch and signals us when nodes are deleted.
-	_, informer := cache.NewIndexerInformer(listWatcher, &v1.Node{}, 0, cache.ResourceEventHandlerFuncs{
+	// Setup event handlers
+	handlers := cache.ResourceEventHandlerFuncs{
 		DeleteFunc: func(obj interface{}) {
 			// Just kick controller to wake up and perform a sync. No need to bother what node it was
 			// as we sync everything.
-			kick(schedule)
-		},
-	}, cache.Indexers{})
+			kick(nc.schedule)
+		}}
 
-	return &NodeController{
-		ctx:          ctx,
-		informer:     informer,
-		calicoClient: calicoClient,
-		k8sClientset: k8sClientset,
-		rl:           workqueue.DefaultControllerRateLimiter(),
-		schedule:     schedule,
+	if cfg.SyncNodeLabels {
+		// Add handlers for node add/update events from k8s.
+		handlers.AddFunc = func(obj interface{}) {
+			nc.syncNodeLabels(obj.(*v1.Node))
+		}
+		handlers.UpdateFunc = func(_, obj interface{}) {
+			nc.syncNodeLabels(obj.(*v1.Node))
+		}
 	}
+
+	// Informer handles managing the watch and signals us when nodes are deleted.
+	// also syncs up labels between k8s/calico node objects
+	nc.indexer, nc.informer = cache.NewIndexerInformer(listWatcher, &v1.Node{}, 0, handlers, cache.Indexers{})
+
+	if cfg.SyncNodeLabels {
+		// Start the syncer.
+		nc.initSyncer()
+		nc.syncer.Start()
+	}
+
+	return nc
+}
+
+// syncNodeLabels syncs the labels found in v1.Node to the Calico node object.
+// It uses an annotation on the Calico node object to keep track of which labels have
+// beend synced from Kubernetes, so that it doesn't overwrite user provided labels (e.g.,
+// via calicoctl or another Calico controller).
+func (nc *NodeController) syncNodeLabels(node *v1.Node) {
+	// On failure, we retry a certain number of times.
+	for n := 1; n < maxAttempts; n++ {
+		// Get the Calico node representation.
+		nc.nodemapLock.Lock()
+		name, ok := nc.nodemapper[node.Name]
+		nc.nodemapLock.Unlock()
+		if !ok {
+			// We havent learned this Calico node yet.
+			log.Debugf("Skipping update for node with no Calico equivalent")
+			return
+		}
+		calNode, err := nc.calicoClient.Nodes().Get(context.Background(), name, options.GetOptions{})
+		if err != nil {
+			log.WithError(err).Warnf("Failed to get node, retrying")
+			time.Sleep(retrySleepTime)
+			continue
+		}
+		if calNode.Labels == nil {
+			calNode.Labels = map[string]string{}
+		}
+		if calNode.Annotations == nil {
+			calNode.Annotations = map[string]string{}
+		}
+
+		// Track if we need to perform an update.
+		needsUpdate := false
+
+		// Check if it has the annotation for k8s labels.
+
+		// If there are labels present, then parse them. Otherwise this is
+		// a first-time sync, in which case there are no old labels.
+		oldLabels := map[string]string{}
+		if a, ok := calNode.Annotations[nodeLabelAnnotation]; ok {
+			if err = json.Unmarshal([]byte(a), &oldLabels); err != nil {
+				log.WithError(err).Error("Failed to unmarshal node labels")
+				return
+			}
+		}
+		log.Debugf("Determined previously synced labels: %s", oldLabels)
+
+		// We've synced labels before. Determine diffs to apply.
+		// For each k/v in node.Labels, if it isn't present or the value
+		// differs, add it to the node.
+		for k, v := range node.Labels {
+			if v2, ok := calNode.Labels[k]; !ok || v != v2 {
+				log.Debugf("Adding node label %s=%s", k, v)
+				calNode.Labels[k] = v
+				needsUpdate = true
+			}
+		}
+
+		// For each k/v that used to be in the k8s node labels, but is no longer,
+		// remove it from the Calico node.
+		for k, v := range oldLabels {
+			if _, ok := node.Labels[k]; !ok {
+				// The old label is no longer present. Remove it.
+				log.Debugf("Deleting node label %s=%s", k, v)
+				delete(calNode.Labels, k)
+				needsUpdate = true
+			}
+		}
+
+		// Set the annotation to the correct values.
+		bytes, err := json.Marshal(node.Labels)
+		if err != nil {
+			log.WithError(err).Errorf("Error marshalling node labels")
+			return
+		}
+		calNode.Annotations[nodeLabelAnnotation] = string(bytes)
+
+		// Update the node in the datastore.
+		if needsUpdate {
+			if _, err := nc.calicoClient.Nodes().Update(context.Background(), calNode, options.SetOptions{}); err != nil {
+				log.WithError(err).Warnf("Failed to update node, retrying")
+				time.Sleep(retrySleepTime)
+				continue
+			}
+			log.WithField("node", node.ObjectMeta.Name).Info("Successfully synced node labels")
+		}
+		return
+	}
+	log.Errorf("Too many retries when updating node")
 }
 
 // getK8sNodeName is a helper method that searches a calicoNode for its kubernetes nodeRef.
