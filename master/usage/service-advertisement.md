@@ -12,7 +12,7 @@ to send traffic to a Kubernetes service cluster IP, and that traffic will be rou
 available endpoints for that service.
 
 You may want to enable this feature if you would like Kubernetes services to be accessible outside of the
-cluster without the need for a dedicated load balancer.
+cluster without the need for a dedicated load balancer. Please note this feature is currently limited to services having a `Type` of `ClusterIP`.
 
 ## Prerequisites
 
