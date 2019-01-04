@@ -62,7 +62,7 @@ func (c *NodeController) OnUpdates(updates []bapi.Update) {
 					continue
 				} else if err != nil {
 					logrus.WithError(err).Warnf("Couldn't get node from indexer")
-					return
+					continue
 				}
 				c.syncNodeLabels(obj.(*v1.Node))
 			}
