@@ -91,10 +91,6 @@ func NewNodeController(ctx context.Context, k8sClientset *kubernetes.Clientset, 
 		}}
 
 	if cfg.SyncNodeLabels {
-		// Start the syncer.
-		nc.initSyncer()
-		nc.syncer.Start()
-
 		// Add handlers for node add/update events from k8s.
 		handlers.AddFunc = func(obj interface{}) {
 			nc.syncNodeLabels(obj.(*v1.Node))
@@ -107,6 +103,12 @@ func NewNodeController(ctx context.Context, k8sClientset *kubernetes.Clientset, 
 	// Informer handles managing the watch and signals us when nodes are deleted.
 	// also syncs up labels between k8s/calico node objects
 	nc.indexer, nc.informer = cache.NewIndexerInformer(listWatcher, &v1.Node{}, 0, handlers, cache.Indexers{})
+
+	if cfg.SyncNodeLabels {
+		// Start the syncer.
+		nc.initSyncer()
+		nc.syncer.Start()
+	}
 
 	return nc
 }
