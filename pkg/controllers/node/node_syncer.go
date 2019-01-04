@@ -59,10 +59,10 @@ func (c *NodeController) OnUpdates(updates []bapi.Update) {
 				obj, ok, err := c.indexer.GetByKey(kn)
 				if !ok {
 					logrus.Debugf("No corresponding kubernetes node")
-					return
+					continue
 				} else if err != nil {
 					logrus.WithError(err).Warnf("Couldn't get node from indexer")
-					return
+					continue
 				}
 				c.syncNodeLabels(obj.(*v1.Node))
 			}
