@@ -32,7 +32,7 @@ To release Calico, you need **the following permissions**:
 - Push access to the gcr.io/projectcalico-org repositories. **Note:** Some of the repos do not yet support credential helpers, you must use one of the token-based logins.  For example, assuming you've been granted access, this will configure a short-lived auth token:
 
     ```
-    gcloud auth print-access-token | docker login -u oauth2accesstoken --password-stdin https://gcr.io 
+    gcloud auth print-access-token | docker login -u oauth2accesstoken --password-stdin https://gcr.io
     ```
 
 You'll also need **several GB of disk space** (~7GB for v3.4.0, for example).
@@ -40,7 +40,7 @@ You'll also need **several GB of disk space** (~7GB for v3.4.0, for example).
 Some of the release scripts also require **tools to be installed** in your dev environment:
 
 - [Install and configure](https://github.com/github/hub#installation) the GitHub `hub` tool.
-- Create a [personal access token](https://github.com/settings/tokens) for Github and export it as the `GITHUB_TOKEN` 
+- Create a [personal access token](https://github.com/settings/tokens) for Github and export it as the `GITHUB_TOKEN`
   env var (for example by adding it to your `.profile`.
 - Install the "GitHub release" tool, `ghr`:
 
@@ -137,7 +137,11 @@ be a release candidate.
        version: vX.Y
    ```
 
-1. If appropriate, update the list of tested Kubernetes versions in `vX.Y/getting-started/kubernetes/requirements.md`.
+1. If appropriate, update the list of tested versions for different platforms in the appropriate documents.
+   - Kubernetes `vX.Y/getting-started/kubernetes/requirements.md`
+   - OpenShift `vX.Y/getting-started/openshift/requirements.md`
+   - OpenStack `vX.Y/getting-started/openstack/requirements.md`
+   - Host protection `vX.Y/getting-started/bare-metal/requirements.md`
 
 1. Update the AUTHORS.md file. This will require `GITHUB_TOKEN` be set in your environment.
 

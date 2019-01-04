@@ -3,13 +3,13 @@ title: Installing Calico on OpenShift
 canonical_url: 'https://docs.projectcalico.org/v2.6/getting-started/openshift/installation'
 ---
 
-Installation of {{site.prodname}} in OpenShift is integrated in openshift-ansible v3.6.
+Installation of {{site.prodname}} in OpenShift is integrated in openshift-ansible.
 The information below explains the variables which must be set during
-during the standard [Advanced Installation](https://docs.openshift.org/latest/install_config/install/advanced_install.html#configuring-cluster-variables).
+the standard [Advanced Installation](https://docs.openshift.org/latest/install_config/install/advanced_install.html#configuring-cluster-variables).
 
 ## Before you begin
 
-Ensure that your cluster meets the {{site.prodname}} [system requirements](requirements). 
+Ensure that your cluster meets the {{site.prodname}} [system requirements](requirements).
 
 ## Installation
 
@@ -45,7 +45,7 @@ node1
 etcd1
 ```
 
-You are now ready to execute the ansible provision which will install {{site.prodname}}. Note that by default, 
+You are now ready to execute the ansible provision which will install {{site.prodname}}. Note that by default,
 {{site.prodname}} will connect to the same etcd that OpenShift uses, and in order to do so, will distribute etcd's
 certs to each node. If you would prefer Calico not connect to the same etcd as OpenShift, you may modify the install
 such that Calico connects to an etcd you have already set up by following the [dedicated etcd install guide](dedicated-etcd).
