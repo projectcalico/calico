@@ -1,5 +1,5 @@
-hash: c052e9ce258ce4b632e4e137491699715b23c0fd04691bd1dc7c9c47bc047366
-updated: 2019-01-03T04:30:55.035163193Z
+hash: a250a7f9717aec213d83766a72f7faf2c7bfe02c8dee3263619e4f60882afb1b
+updated: 2019-01-05T04:21:51.829183217Z
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -175,7 +175,7 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: 4600040fed729a899891872f48869af3e2f05b0e
+  version: 7a87b4e49d6c6ecb21351dba8d726d2133414ce7
   subpackages:
   - lib/apiconfig
   - lib/apis/v1
@@ -188,6 +188,7 @@ imports:
   - lib/backend/k8s/conversion
   - lib/backend/k8s/resources
   - lib/backend/model
+  - lib/backend/watchersyncer
   - lib/clientv3
   - lib/errors
   - lib/hash
