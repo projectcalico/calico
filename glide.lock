@@ -1,5 +1,5 @@
-hash: 4bf80770dd47f1bd09af2c2def7fc8dbe5ad8c16a972a9a2ff0eab622e21654f
-updated: 2019-01-03T04:07:56.175287574Z
+hash: 0574fc964816ea9c7e995b313c948885f93acd4de5a36762801818888471e033
+updated: 2019-01-05T04:04:57.810787295Z
 imports:
 - name: github.com/docopt/docopt-go
   version: 784ddc588536785e7299f7272f39101f7faccc3f
@@ -41,7 +41,7 @@ imports:
   - matchers/support/goraph/util
   - types
 - name: github.com/projectcalico/libcalico-go
-  version: 4600040fed729a899891872f48869af3e2f05b0e
+  version: 7a87b4e49d6c6ecb21351dba8d726d2133414ce7
   subpackages:
   - lib/apis/v3
   - lib/client
@@ -50,7 +50,7 @@ imports:
   - lib/selector/parser
   - lib/selector/tokenizer
 - name: github.com/sirupsen/logrus
-  version: bcd833dfe83d3cebad139e4a29ed79cb2318bf95
+  version: e1e72e9de974bd926e5c56f83753fba2df402ce5
 - name: golang.org/x/crypto
   version: 9419663f5a44be8b34ca85f08abc5fe1be11f8a3
   subpackages:
