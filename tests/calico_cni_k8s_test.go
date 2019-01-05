@@ -22,6 +22,7 @@ import (
 	"github.com/projectcalico/cni-plugin/internal/pkg/testutils"
 	"github.com/projectcalico/cni-plugin/internal/pkg/utils"
 	"github.com/projectcalico/cni-plugin/pkg/types"
+	"github.com/projectcalico/libcalico-go/lib/apis/v3"
 	api "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	k8sconversion "github.com/projectcalico/libcalico-go/lib/backend/k8s/conversion"
 	client "github.com/projectcalico/libcalico-go/lib/clientv3"
@@ -68,6 +69,22 @@ var _ = Describe("Kubernetes CNI tests", func() {
 	BeforeEach(func() {
 		testutils.WipeK8sPods()
 		testutils.WipeEtcd()
+
+		// Create the node for these tests. The IPAM code requires a corresponding Calico node to exist.
+		var err error
+		n := v3.NewNode()
+		n.Name, err = names.Hostname()
+		Expect(err).NotTo(HaveOccurred())
+		_, err = calicoClient.Nodes().Create(context.Background(), n, options.SetOptions{})
+		Expect(err).NotTo(HaveOccurred())
+	})
+
+	AfterEach(func() {
+		// Delete the node.
+		name, err := names.Hostname()
+		Expect(err).NotTo(HaveOccurred())
+		_, err = calicoClient.Nodes().Delete(context.Background(), name, options.DeleteOptions{})
+		Expect(err).NotTo(HaveOccurred())
 	})
 
 	utils.ConfigureLogging("info")

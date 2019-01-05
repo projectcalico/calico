@@ -9,8 +9,10 @@ import (
 	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
 	"github.com/projectcalico/cni-plugin/internal/pkg/testutils"
+	"github.com/projectcalico/libcalico-go/lib/apis/v3"
 	client "github.com/projectcalico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/libcalico-go/lib/ipam"
+	"github.com/projectcalico/libcalico-go/lib/names"
 	cnet "github.com/projectcalico/libcalico-go/lib/net"
 	"github.com/projectcalico/libcalico-go/lib/options"
 )
@@ -26,6 +28,22 @@ var _ = Describe("Calico IPAM Tests", func() {
 		testutils.WipeEtcd()
 		testutils.MustCreateNewIPPool(calicoClient, defaultIPv4Pool, false, false, true)
 		testutils.MustCreateNewIPPool(calicoClient, "fd80:24e2:f998:72d6::/64", false, false, true)
+
+		// Create the node for these tests. The IPAM code requires a corresponding Calico node to exist.
+		var err error
+		n := v3.NewNode()
+		n.Name, err = names.Hostname()
+		Expect(err).NotTo(HaveOccurred())
+		_, err = calicoClient.Nodes().Create(context.Background(), n, options.SetOptions{})
+		Expect(err).NotTo(HaveOccurred())
+	})
+
+	AfterEach(func() {
+		// Delete the node.
+		name, err := names.Hostname()
+		Expect(err).NotTo(HaveOccurred())
+		_, err = calicoClient.Nodes().Delete(context.Background(), name, options.DeleteOptions{})
+		Expect(err).NotTo(HaveOccurred())
 	})
 
 	Describe("Run IPAM plugin", func() {
@@ -127,6 +145,7 @@ var _ = Describe("Calico IPAM Tests", func() {
                     }
                 }`, cniVersion, os.Getenv("ETCD_IP"), os.Getenv("DATASTORE_TYPE"), plugin)
 				result, _, _ := testutils.RunIPAMPlugin(netconf, "ADD", "", cniVersion)
+				Expect(len(result.IPs)).To(Equal(1))
 				Expect(result.IPs[0].Address.IP.String()).Should(HavePrefix("192.168."))
 			})
 		})
@@ -184,6 +203,15 @@ var _ = Describe("Calico IPAM Tests", func() {
 				// Get an allocation then check that it is not from the disabled pool
 				result, _, _ = testutils.RunIPAMPlugin(netconf, "ADD", "", cniVersion)
 				Expect(result.IPs[0].Address.IP.String()).Should(HavePrefix("192.169.1"))
+
+				// Re-enable the the pool. We can't delete the node if the IP pool is disabled.
+				// This is arguably a bug in the node deletion code...
+				pool, err = calicoClient.IPPools().Get(context.Background(), "192-168-0-0-16", options.GetOptions{})
+				Expect(err).ToNot(HaveOccurred())
+				pool.Spec.Disabled = false
+				_, err = calicoClient.IPPools().Update(context.Background(), pool, options.SetOptions{})
+				Expect(err).ToNot(HaveOccurred())
+
 			})
 		})
 
