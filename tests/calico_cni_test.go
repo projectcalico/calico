@@ -31,6 +31,21 @@ var _ = Describe("CalicoCni", func() {
 
 	BeforeEach(func() {
 		testutils.WipeEtcd()
+		// Create the node for these tests. The IPAM code requires a corresponding Calico node to exist.
+		var err error
+		n := api.NewNode()
+		n.Name, err = names.Hostname()
+		Expect(err).NotTo(HaveOccurred())
+		_, err = calicoClient.Nodes().Create(context.Background(), n, options.SetOptions{})
+		Expect(err).NotTo(HaveOccurred())
+	})
+
+	AfterEach(func() {
+		// Delete the node.
+		name, err := names.Hostname()
+		Expect(err).NotTo(HaveOccurred())
+		_, err = calicoClient.Nodes().Delete(context.Background(), name, options.DeleteOptions{})
+		Expect(err).NotTo(HaveOccurred())
 	})
 
 	cniVersion := os.Getenv("CNI_SPEC_VERSION")
