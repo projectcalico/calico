@@ -126,6 +126,10 @@ func (options WorkloadEndpointStatusListOptions) KeyFromDefaultPath(ekey string)
 		log.WithError(err).Debugf("Bad region in path %s", ekey)
 		return nil
 	}
+	if options.Region != "" && region != options.Region {
+		log.Debugf("Didn't match region %s != %s", options.Region, region)
+		return nil
+	}
 	hostname := r[0][2]
 	orchID := unescapeName(r[0][3])
 	workloadID := unescapeName(r[0][4])

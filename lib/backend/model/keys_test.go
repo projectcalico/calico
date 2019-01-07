@@ -17,11 +17,35 @@ package model_test
 import (
 	. "github.com/projectcalico/libcalico-go/lib/backend/model"
 
+	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
 
 	"github.com/projectcalico/libcalico-go/lib/net"
 )
+
+var _ = Describe("keys with region component", func() {
+
+	It("should not parse workload endpoint status with wrong region", func() {
+		Expect((WorkloadEndpointStatusListOptions{Region: "Asia"}).KeyFromDefaultPath("/calico/felix/v2/region-Europe/host/h1/workload/o1/w1/endpoint/e1")).To(BeNil())
+	})
+
+	It("should not parse active Felix status with wrong region", func() {
+		Expect((ActiveStatusReportListOptions{Region: "Asia"}).KeyFromDefaultPath("/calico/felix/v2/region-Europe/host/h1/status")).To(BeNil())
+	})
+
+	It("should not parse last reported Felix status with wrong region", func() {
+		Expect((LastStatusReportListOptions{Region: "Asia"}).KeyFromDefaultPath("/calico/felix/v2/region-Europe/host/h1/last_reported_status")).To(BeNil())
+	})
+
+	It("should generate correct path for a Felix status key with no region", func() {
+		Expect(KeyToDefaultPath(ActiveStatusReportKey{Hostname: "h1"})).To(Equal("/calico/felix/v2/no-region/host/h1/status"))
+	})
+
+	It("should generate correct path for a workload status key with no region", func() {
+		Expect(KeyToDefaultPath(WorkloadEndpointStatusKey{Hostname: "h1", EndpointID: "e1", WorkloadID: "w1", OrchestratorID: "o1"})).To(Equal("/calico/felix/v2/no-region/host/h1/workload/o1/w1/endpoint/e1"))
+	})
+})
 
 var _ = DescribeTable(
 	"key parsing",
@@ -120,6 +144,24 @@ var _ = DescribeTable(
 		"ready flag",
 		"/calico/v1/Ready",
 		ReadyFlagKey{},
+		false,
+	),
+	Entry(
+		"workload endpoint status",
+		"/calico/felix/v2/region-Europe/host/h1/workload/o1/w1/endpoint/e1",
+		WorkloadEndpointStatusKey{Hostname: "h1", EndpointID: "e1", Region: "Europe", WorkloadID: "w1", OrchestratorID: "o1"},
+		false,
+	),
+	Entry(
+		"Felix active status",
+		"/calico/felix/v2/region-Europe/host/h1/status",
+		ActiveStatusReportKey{Hostname: "h1", Region: "Europe"},
+		false,
+	),
+	Entry(
+		"Felix last reported status",
+		"/calico/felix/v2/region-Europe/host/h1/last_reported_status",
+		LastStatusReportKey{Hostname: "h1", Region: "Europe"},
 		false,
 	),
 )

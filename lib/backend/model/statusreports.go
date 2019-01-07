@@ -84,6 +84,10 @@ func (options ActiveStatusReportListOptions) KeyFromDefaultPath(ekey string) Key
 		log.WithError(err).Debugf("Bad region in path %s", ekey)
 		return nil
 	}
+	if options.Region != "" && region != options.Region {
+		log.Debugf("Didn't match region %s != %s", options.Region, region)
+		return nil
+	}
 	name := r[0][2]
 	if options.Hostname != "" && name != options.Hostname {
 		log.Debugf("Didn't match name %s != %s", options.Hostname, name)
@@ -145,6 +149,10 @@ func (options LastStatusReportListOptions) KeyFromDefaultPath(ekey string) Key {
 	region, err := regionStringToRegion(r[0][1])
 	if err != nil {
 		log.WithError(err).Debugf("Bad region in path %s", ekey)
+		return nil
+	}
+	if options.Region != "" && region != options.Region {
+		log.Debugf("Didn't match region %s != %s", options.Region, region)
 		return nil
 	}
 	name := r[0][2]
