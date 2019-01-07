@@ -112,11 +112,14 @@ class TestElection(unittest.TestCase):
         client.add_read_exception(etcdv3.KeyNotFound())
         client.add_write_exception(None)
         client.add_write_exception(None)
+        client.add_write_exception(None)
         elector = election.Elector("test_basic",
                                    "/bloop",
+                                   old_key="/legacy",
                                    interval=5,
                                    ttl=15)
         self._wait_and_stop(client, elector)
+        client.assert_key_written("/legacy")
 
     def test_fail_to_maintain(self):
         # Become the master after one round

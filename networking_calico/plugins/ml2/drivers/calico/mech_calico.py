@@ -59,6 +59,7 @@ from sqlalchemy import exc as sa_exc
 import neutron.plugins.ml2.rpc as rpc
 
 # Calico imports.
+from networking_calico.common import config as calico_config
 from networking_calico.compat import cfg
 from networking_calico.compat import constants
 from networking_calico.compat import db_exc
@@ -66,6 +67,7 @@ from networking_calico.compat import lockutils
 from networking_calico.compat import log
 from networking_calico.compat import plugin_dir
 from networking_calico import datamodel_v1
+from networking_calico import datamodel_v2
 from networking_calico import datamodel_v3
 from networking_calico import etcdv3
 from networking_calico.logutils import logging_exceptions
@@ -363,12 +365,12 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
             )
 
             # Elector, for performing leader election.
-            self.elector = Elector(
-                server_id=cfg.CONF.calico.elector_name,
-                election_key=datamodel_v1.NEUTRON_ELECTION_KEY,
-                interval=MASTER_REFRESH_INTERVAL,
-                ttl=MASTER_TIMEOUT,
-            )
+            self.elector = Elector(cfg.CONF.calico.elector_name,
+                                   datamodel_v2.neutron_election_key(
+                                       calico_config.get_region_string()),
+                                   old_key=datamodel_v1.NEUTRON_ELECTION_KEY,
+                                   interval=MASTER_REFRESH_INTERVAL,
+                                   ttl=MASTER_TIMEOUT)
 
             self._my_pid = current_pid
 

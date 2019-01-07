@@ -58,19 +58,30 @@ class RestartElection(Exception):
 
 
 class Elector(object):
-    def __init__(self, server_id, election_key, interval=30, ttl=60):
+    def __init__(self, server_id, election_key,
+                 old_key=None, interval=30, ttl=60):
         """Class that manages elections.
 
         :param server_id: Server ID. Must be unique to this server, and should
                           take a value that is meaningful in logs (e.g.
                           hostname)
-        :param election_key: The etcd key used in the election - e.g.
+        :param election_key: The etcd key used for the election - e.g.
+                             "/calico/v2/no-region/election"
+        :param old_key: A legacy key that does not determine the election, but
+                        that we write whenever we write the election_key - e.g.
                              "/calico/v1/election"
+                        This makes sense when old_key used to be election_key,
+                        and there are other copies of this code running that
+                        still need to be upgraded to use the new election key.
+                        Our writing of the old key will prevent those not-yet-
+                        upgraded copies from thinking that they should win the
+                        election.
         :param interval: Interval (seconds) between checks on etcd. Must be > 0
         :param ttl: Time to live (seconds) for etcd values. Must be > interval.
         """
         self._server_id = server_id
         self._key = election_key
+        self._old_key = old_key
         self._interval = int(interval)
         self._ttl = int(ttl)
         self._stopped = False
@@ -256,6 +267,9 @@ class Elector(object):
         LOG.info("Successfully become master - key %s, value %s",
                  self._key, self.id_string)
 
+        # If there's a legacy election key, try to write that now too.
+        self._write_old_key(ttl_lease)
+
         try:
             while not self._stopped:
                 try:
@@ -279,11 +293,25 @@ class Elector(object):
                     # master.
                     self._log_exception("refresh master role", e)
                     raise RestartElection()
+
+                # If there's a legacy election key, try to write that now too.
+                self._write_old_key(ttl_lease)
+
                 eventlet.sleep(self._interval)
         finally:
             LOG.info("Exiting master refresh loop, no longer the master")
             self._master = False
         raise RestartElection()
+
+    def _write_old_key(self, lease):
+        # If there's a legacy election key, try to write that now too.
+        # Don't worry if there's a problem, as we only do this to
+        # assist during an upgrade.
+        try:
+            if self._old_key:
+                etcdv3.put(self._old_key, self.id_string, lease=lease)
+        except Exception as e:
+            self._log_exception("write old key", e)
 
     def _log_exception(self, failed_to, exc):
         """Log out an exception we got from a call to etcd.
