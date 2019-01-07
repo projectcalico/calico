@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2018 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2019 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -61,6 +61,10 @@ var wlEPUp = model.WorkloadEndpointStatus{
 	Status: "up",
 }
 
+var wlEPUpRegion = model.WorkloadEndpointStatus{
+	Status: "up",
+}
+
 var wlEPDown = model.WorkloadEndpointStatus{
 	Status: "down",
 }
@@ -95,6 +99,13 @@ var updatedWlEPKey = model.WorkloadEndpointStatusKey{
 	WorkloadID:     "updatedWL",
 	EndpointID:     "updatedEP",
 }
+var updatedWlEPKeyRegion = model.WorkloadEndpointStatusKey{
+	Hostname:       hostname,
+	OrchestratorID: "orch",
+	WorkloadID:     "updatedWL",
+	EndpointID:     "updatedEP",
+	Region:         "Europe",
+}
 
 var protoHostID = proto.HostEndpointID{
 	EndpointId: "updatedEP",
@@ -122,9 +133,15 @@ var _ = Describe("Status", func() {
 	var datastore *mockDatastore
 	var resyncTicker, rateLimitTicker *mockStoppable
 	var resyncTickerChan, rateLimitTickerChan chan time.Time
+	var region string
 
 	BeforeEach(func() {
-		log.Info("BeforeEach called, creating EndpointStatusReporter")
+		// No region configured, by default.
+		region = ""
+	})
+
+	JustBeforeEach(func() {
+		log.Info("JustBeforeEach called, creating EndpointStatusReporter")
 		epUpdates = make(chan interface{})
 		inSyncChan = make(chan bool)
 		datastore = newMockDatastore()
@@ -135,7 +152,7 @@ var _ = Describe("Status", func() {
 
 		esr = newEndpointStatusReporterWithTickerChans(
 			hostname,
-			"",
+			region,
 			epUpdates,
 			inSyncChan,
 			datastore,
@@ -157,7 +174,7 @@ var _ = Describe("Status", func() {
 
 	Describe("with empty datastore", func() {
 		Describe("after sending in-sync message", func() {
-			BeforeEach(func() {
+			JustBeforeEach(func() {
 				inSyncChan <- true
 			})
 			It("Should start a resync", func() {
@@ -214,7 +231,7 @@ var _ = Describe("Status", func() {
 			})
 
 			Describe("with an error on the first 2 Apply() calls", func() {
-				BeforeEach(func() {
+				JustBeforeEach(func() {
 					datastore.ApplyErrs = []error{
 						errors.New("datastore FAIL"),
 						errors.New("datastore FAIL"),
@@ -233,17 +250,31 @@ var _ = Describe("Status", func() {
 					}))
 				})
 			})
+
+			Describe("with a non-empty region configured", func() {
+				BeforeEach(func() {
+					region = "Europe"
+				})
+				It("should report status with that region", func() {
+					epUpdates <- &wlEPUpdateUp
+					rateLimitTickerChan <- time.Now() // Copies queued to active
+					rateLimitTickerChan <- time.Now() // Tries first write
+					Eventually(datastore.snapshot).Should(Equal(map[model.Key]interface{}{
+						updatedWlEPKeyRegion: wlEPUp,
+					}))
+				})
+			})
 		})
 	})
 	Describe("with defunct local and remote endpoints in datastore", func() {
-		BeforeEach(func() {
+		JustBeforeEach(func() {
 			datastore.kvs[localWlEPKey] = &wlEPUp
 			datastore.kvs[localHostEPKey] = &hostEPDown
 			datastore.kvs[remoteWlEPKey] = &wlEPUp
 			datastore.kvs[remoteHostEPKey] = &hostEPDown
 		})
 		Describe("after sending in-sync", func() {
-			BeforeEach(func() {
+			JustBeforeEach(func() {
 				inSyncChan <- true
 			})
 			It("should only clean up local endpoints", func() {
@@ -295,7 +326,7 @@ var _ = Describe("Status", func() {
 			}, 1)
 
 			Describe("with an error on the first 2 List() calls", func() {
-				BeforeEach(func() {
+				JustBeforeEach(func() {
 					datastore.ListErrs = []error{
 						errors.New("datastore FAIL"),
 						errors.New("datastore FAIL"),
@@ -318,7 +349,7 @@ var _ = Describe("Status", func() {
 			})
 
 			Describe("with an error on the first 2 Delete() calls", func() {
-				BeforeEach(func() {
+				JustBeforeEach(func() {
 					datastore.DeleteErrs = []error{
 						errors.New("datastore FAIL"),
 						errors.New("datastore FAIL"),
@@ -379,14 +410,14 @@ var _ = Describe("Status", func() {
 	})
 
 	Describe("with malformed local and remote endpoints in datastore", func() {
-		BeforeEach(func() {
+		JustBeforeEach(func() {
 			datastore.kvs[localWlEPKey] = nil
 			datastore.kvs[localHostEPKey] = nil
 			datastore.kvs[remoteWlEPKey] = nil
 			datastore.kvs[remoteHostEPKey] = nil
 		})
 		Describe("after sending in-sync", func() {
-			BeforeEach(func() {
+			JustBeforeEach(func() {
 				inSyncChan <- true
 			})
 			It("should only clean up local endpoints", func() {
