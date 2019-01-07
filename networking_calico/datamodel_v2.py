@@ -87,3 +87,7 @@ def _reset_globals():
 # Region-aware subnet path.
 def subnet_dir(region_string=NO_REGION):
     return "/calico/dhcp/v2/%s/subnet" % region_string
+
+
+def key_for_subnet(subnet_id, region_string):
+    return subnet_dir(region_string) + "/%s" % subnet_id
