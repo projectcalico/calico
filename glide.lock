@@ -1,5 +1,5 @@
-hash: f7f264ee3e8fa96a977617b1a49e23d3f332cac8b06b88ed22e16da2667f42c3
-updated: 2019-01-07T07:40:21.499863259Z
+hash: b819690228f5dca8c8bd2ad48d391de23be69009a277960dccfc25be9819e25a
+updated: 2019-01-08T07:42:04.425505425Z
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -89,7 +89,7 @@ imports:
   subpackages:
   - diskcache
 - name: github.com/hashicorp/go-version
-  version: b5a281d3160aa11950a6182bd9a9dc2cb1e02d50
+  version: d40cf49b3a77bba84a7afdbd7f1dc295d114efb1
 - name: github.com/hashicorp/golang-lru
   version: a0d98a5f288019575c6d1f4bb1573fef2d1fcdc4
   subpackages:
@@ -187,7 +187,7 @@ imports:
 - name: github.com/peterbourgon/diskv
   version: 5f041e8faa004a95c88a202771f4cc3e991971e6
 - name: github.com/projectcalico/felix
-  version: 9dd64a27b1532064ec9ca99850f550f7a32075da
+  version: 950aa45d4d3ced41541751c3b5bfec08a4ba0d3a
   subpackages:
   - buildinfo
   - calc
