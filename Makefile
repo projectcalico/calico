@@ -308,6 +308,14 @@ bin/typha:
 	  touch $@
 	-docker rm -f confd-typha
 
+foss-checks: vendor
+	@echo Running $@...
+	@docker run --rm -v $(CURDIR):/go/src/$(PACKAGE_NAME):rw \
+	  -e LOCAL_USER_ID=$(LOCAL_USER_ID) \
+	  -e FOSSA_API_KEY=$(FOSSA_API_KEY) \
+	  -w /go/src/$(PACKAGE_NAME) \
+	  $(CALICO_BUILD) /usr/local/bin/fossa
+
 ###############################################################################
 # CI
 ###############################################################################
