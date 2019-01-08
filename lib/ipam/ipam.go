@@ -250,16 +250,15 @@ func (c ipamClient) determinePools(requestedPoolNets []net.IPNet, version int, n
 	// selector.
 	matchingPools := []v3.IPPool{}
 	for _, pool := range enabledPools {
-		if len(pool.Spec.NodeSelector) > 0 {
-			if sel, err := selector.Parse(pool.Spec.NodeSelector); err != nil {
-				// Invalid selector syntax.
-				log.WithError(err).WithField("selector", pool.Spec.NodeSelector).Error("failed to parse selector")
-				return nil, err
-			} else if !sel.Evaluate(node.Labels) {
-				// Do not consider pool enabled if the nodeSelector doesn't match the node's labels.
-				log.Debugf("IP pool does not match this node: %s", pool.Name)
-				continue
-			}
+		matches, err := pool.DoesMatchNode(node)
+		if err != nil {
+			log.WithError(err).WithField("pool", pool).Error("failed to determine if node matches pool")
+			return nil, err
+		}
+		if !matches {
+			// Do not consider pool enabled if the nodeSelector doesn't match the node's labels.
+			log.Debugf("IP pool does not match this node: %s", pool.Name)
+			continue
 		}
 		log.Debugf("IP pool matches this node: %s", pool.Name)
 		matchingPools = append(matchingPools, pool)

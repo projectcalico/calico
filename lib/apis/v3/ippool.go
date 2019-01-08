@@ -18,6 +18,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	apiv1 "github.com/projectcalico/libcalico-go/lib/apis/v1"
+	"github.com/projectcalico/libcalico-go/lib/selector"
 )
 
 const (
@@ -63,6 +64,22 @@ type IPPoolSpec struct {
 	// Deprecated: this field is only used for APIv1 backwards compatibility.
 	// Setting this field is not allowed, this field is for internal use only.
 	NATOutgoingV1 bool `json:"nat-outgoing,omitempty" validate:"omitempty,mustBeFalse"`
+}
+
+// DoesMatchNode determines whether or not the IPPool's nodeSelector
+// matches the labels on the given node.
+func (pool IPPool) DoesMatchNode(n Node) (bool, error) {
+	// No node selector means that the pool matches the node.
+	if len(pool.Spec.NodeSelector) == 0 {
+		return true, nil
+	}
+	// Check for valid selector syntax.
+	sel, err := selector.Parse(pool.Spec.NodeSelector)
+	if err != nil {
+		return false, err
+	}
+	// Return whether or not the selector matches.
+	return sel.Evaluate(n.Labels), nil
 }
 
 type IPIPMode string
