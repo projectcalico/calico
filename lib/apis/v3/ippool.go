@@ -66,9 +66,9 @@ type IPPoolSpec struct {
 	NATOutgoingV1 bool `json:"nat-outgoing,omitempty" validate:"omitempty,mustBeFalse"`
 }
 
-// DoesMatchNode determines whether or not the IPPool's nodeSelector
+// SelectsNode determines whether or not the IPPool's nodeSelector
 // matches the labels on the given node.
-func (pool IPPool) DoesMatchNode(n Node) (bool, error) {
+func (pool IPPool) SelectsNode(n Node) (bool, error) {
 	// No node selector means that the pool matches the node.
 	if len(pool.Spec.NodeSelector) == 0 {
 		return true, nil

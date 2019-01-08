@@ -250,7 +250,7 @@ func (c ipamClient) determinePools(requestedPoolNets []net.IPNet, version int, n
 	// selector.
 	matchingPools := []v3.IPPool{}
 	for _, pool := range enabledPools {
-		matches, err := pool.DoesMatchNode(node)
+		matches, err := pool.SelectsNode(node)
 		if err != nil {
 			log.WithError(err).WithField("pool", pool).Error("failed to determine if node matches pool")
 			return nil, err

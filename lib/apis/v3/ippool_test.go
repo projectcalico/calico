@@ -34,21 +34,21 @@ var _ = Describe("IPPoolSpec nodeSelector", func() {
 	It("should return true, nil for empty nodeSelector", func() {
 		pool.Spec = IPPoolSpec{NodeSelector: ""}
 
-		matches, err := pool.DoesMatchNode(node)
+		matches, err := pool.SelectsNode(node)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(matches).To(Equal(true))
 	})
 	It("should return false, err for invalid selector syntax", func() {
 		pool.Spec = IPPoolSpec{NodeSelector: "this is invalid selector syntax"}
 
-		matches, err := pool.DoesMatchNode(node)
+		matches, err := pool.SelectsNode(node)
 		Expect(err).To(HaveOccurred())
 		Expect(matches).To(Equal(false))
 	})
 	It("should return false, nil for mismatching labels", func() {
 		pool.Spec = IPPoolSpec{NodeSelector: `foo == "bar"`}
 
-		matches, err := pool.DoesMatchNode(node)
+		matches, err := pool.SelectsNode(node)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(matches).To(Equal(false))
 	})
@@ -56,7 +56,7 @@ var _ = Describe("IPPoolSpec nodeSelector", func() {
 		node.Labels = map[string]string{"foo": "bar"}
 		pool.Spec = IPPoolSpec{NodeSelector: `foo == "bar"`}
 
-		matches, err := pool.DoesMatchNode(node)
+		matches, err := pool.SelectsNode(node)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(matches).To(Equal(true))
 	})
