@@ -71,6 +71,7 @@ The following options are deprecated.
 
 * Logging is always to `stderr`
 * Logging level can be controlled by setting `"log_level"` in the netconf. Allowed levels are
+  * `ERROR` - Only error logs are emitted.
   * `WARNING` - the default.
   * `INFO` - Enables some additional logging from the CNI plugin.
   * `DEBUG` - Enables lots of debug logging from both the CNI plugin and the underlying libcalico library.
@@ -285,8 +286,8 @@ If provided, these IP pools will override any IP pools specified in the CNI conf
 {: .alert .alert-info}
 
 > **Note**: The {{site.prodname}} CNI plugin supports specifying an annotation per namespace.
-> If both the namespace and the pod have this annotation, the pod information will be used. 
-> Otherwise, if only the namespace has the annotation the annotation of the namespace will 
+> If both the namespace and the pod have this annotation, the pod information will be used.
+> Otherwise, if only the namespace has the annotation the annotation of the namespace will
 > be used for each pod in it.
 {: .alert .alert-info}
 
