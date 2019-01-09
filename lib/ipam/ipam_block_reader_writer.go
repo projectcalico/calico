@@ -17,6 +17,7 @@ package ipam
 import (
 	"context"
 	"errors"
+	"fmt"
 	"hash/fnv"
 	"math/big"
 	"math/rand"
@@ -87,7 +88,7 @@ func (rw blockReaderWriter) getAffineBlocks(ctx context.Context, host string, ve
 func (rw blockReaderWriter) findUnclaimedBlock(ctx context.Context, host string, version int, pools []v3.IPPool, config IPAMConfig) (*cnet.IPNet, error) {
 	// If there are no pools, we cannot assign addresses.
 	if len(pools) == 0 {
-		return nil, errors.New("no configured Calico pools")
+		return nil, fmt.Errorf("no configured Calico pools for node %s", host)
 	}
 
 	// Iterate through pools to find a new block.
