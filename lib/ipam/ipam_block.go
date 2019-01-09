@@ -20,6 +20,7 @@ import (
 	"math/big"
 	"net"
 	"reflect"
+	"strings"
 
 	"github.com/projectcalico/libcalico-go/lib/apis/v3"
 	log "github.com/sirupsen/logrus"
@@ -130,6 +131,13 @@ func (b *allocationBlock) assign(address cnet.IP, handleID *string, attrs map[st
 // hostAffinityMatches checks if the provided host matches the provided affinity.
 func hostAffinityMatches(host string, block *model.AllocationBlock) bool {
 	return *block.Affinity == "host:"+host
+}
+
+func getHostAffinity(block *model.AllocationBlock) string {
+	if block.Affinity != nil && strings.HasPrefix(*block.Affinity, "host:") {
+		return strings.TrimPrefix(*block.Affinity, "host:")
+	}
+	return ""
 }
 
 func (b allocationBlock) numFreeAddresses() int {

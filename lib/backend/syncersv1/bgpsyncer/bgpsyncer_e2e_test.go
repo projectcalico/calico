@@ -246,9 +246,15 @@ var _ = testutils.E2eDatastoreDescribe("BGP syncer tests", testutils.DatastoreAl
 				By("Allocating an IP address on a different host and checking for no updates")
 				// The syncer only monitors affine blocks for one host, so IP allocations for a different
 				// host should not result in updates.
+				hostname := "not-this-host"
+				node, err = c.Nodes().Create(ctx, &apiv3.Node{ObjectMeta: metav1.ObjectMeta{Name: hostname}}, options.SetOptions{})
+				Expect(err).NotTo(HaveOccurred())
+				expectedCacheSize += 1
+				syncTester.ExpectCacheSize(expectedCacheSize)
+
 				ipV4Nets2, _, err := c.IPAM().AutoAssign(ctx, ipam.AutoAssignArgs{
 					Num4:     1,
-					Hostname: "not-this-host",
+					Hostname: hostname,
 				})
 
 				var ips2 []net.IP

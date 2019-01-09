@@ -461,6 +461,22 @@ func init() {
 				Spec: api.IPPoolSpec{CIDR: netv4_3},
 			}, false,
 		),
+		Entry("should allow a valid nodeSelector",
+			api.IPPool{
+				ObjectMeta: v1.ObjectMeta{
+					Name: "pool.name",
+				},
+				Spec: api.IPPoolSpec{CIDR: netv4_3, NodeSelector: `foo == "bar"`},
+			}, true,
+		),
+		Entry("should disallow a invalid nodeSelector",
+			api.IPPool{
+				ObjectMeta: v1.ObjectMeta{
+					Name: "pool.name",
+				},
+				Spec: api.IPPoolSpec{CIDR: netv4_3, NodeSelector: "this is not valid selector syntax"},
+			}, false,
+		),
 
 		// (API) Interface.
 		Entry("should accept a valid interface", api.WorkloadEndpointSpec{InterfaceName: "Valid_Iface.0-9"}, true),

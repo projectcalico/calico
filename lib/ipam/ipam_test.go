@@ -24,6 +24,9 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
+	log "github.com/sirupsen/logrus"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
 	"github.com/projectcalico/libcalico-go/lib/apiconfig"
 	"github.com/projectcalico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/libcalico-go/lib/backend"
@@ -32,7 +35,6 @@ import (
 	cerrors "github.com/projectcalico/libcalico-go/lib/errors"
 	cnet "github.com/projectcalico/libcalico-go/lib/net"
 	"github.com/projectcalico/libcalico-go/lib/testutils"
-	log "github.com/sirupsen/logrus"
 )
 
 // Implement an IP pools accessor for the IPAM client.  This is a "mock" version
@@ -43,9 +45,10 @@ type ipPoolAccessor struct {
 }
 
 type pool struct {
-	cidr      string
-	blockSize int
-	enabled   bool
+	cidr         string
+	blockSize    int
+	enabled      bool
+	nodeSelector string
 }
 
 func (i *ipPoolAccessor) GetEnabledPools(ipVersion int) ([]v3.IPPool, error) {
@@ -65,7 +68,7 @@ func (i *ipPoolAccessor) GetEnabledPools(ipVersion int) ([]v3.IPPool, error) {
 	for _, p := range sorted {
 		c := cnet.MustParseCIDR(p)
 		if c.Version() == ipVersion {
-			pool := v3.IPPool{Spec: v3.IPPoolSpec{CIDR: p}}
+			pool := v3.IPPool{Spec: v3.IPPoolSpec{CIDR: p, NodeSelector: i.pools[p].nodeSelector}}
 			if i.pools[p].blockSize == 0 {
 				if ipVersion == 4 {
 					pool.Spec.BlockSize = 26
@@ -112,6 +115,8 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreEtcdV3, 
 	})
 
 	Context("Measuring allocation performance", func() {
+		hostname := "host-perf"
+
 		var pool20, pool32, pool26 []cnet.IPNet
 		// Create many pools
 		for i := 0; i < 100; i++ {
@@ -132,9 +137,17 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreEtcdV3, 
 			pool20 = append(pool20, cnet.MustParseCIDR(cidr))
 		}
 
+		BeforeEach(func() {
+			applyNode(bc, hostname, map[string]string{"foo": "bar"})
+		})
+
+		AfterEach(func() {
+			deleteNode(bc, hostname)
+		})
+
 		Measure("It should be able to allocate a single address quickly - blocksize 32", func(b Benchmarker) {
 			runtime := b.Time("runtime", func() {
-				v4, _, outErr := ic.AutoAssign(context.Background(), AutoAssignArgs{Num4: 1, IPv4Pools: pool32})
+				v4, _, outErr := ic.AutoAssign(context.Background(), AutoAssignArgs{Num4: 1, IPv4Pools: pool32, Hostname: hostname})
 				Expect(outErr).NotTo(HaveOccurred())
 				Expect(len(v4)).To(Equal(1))
 			})
@@ -144,7 +157,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreEtcdV3, 
 
 		Measure("It should be able to allocate a single address quickly - blocksize 26", func(b Benchmarker) {
 			runtime := b.Time("runtime", func() {
-				v4, _, outErr := ic.AutoAssign(context.Background(), AutoAssignArgs{Num4: 1, IPv4Pools: pool26})
+				v4, _, outErr := ic.AutoAssign(context.Background(), AutoAssignArgs{Num4: 1, IPv4Pools: pool26, Hostname: hostname})
 				Expect(outErr).NotTo(HaveOccurred())
 				Expect(len(v4)).To(Equal(1))
 			})
@@ -154,7 +167,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreEtcdV3, 
 
 		Measure("It should be able to allocate a single address quickly - blocksize 20", func(b Benchmarker) {
 			runtime := b.Time("runtime", func() {
-				v4, _, outErr := ic.AutoAssign(context.Background(), AutoAssignArgs{Num4: 1, IPv4Pools: pool20})
+				v4, _, outErr := ic.AutoAssign(context.Background(), AutoAssignArgs{Num4: 1, IPv4Pools: pool20, Hostname: hostname})
 				Expect(outErr).NotTo(HaveOccurred())
 				Expect(len(v4)).To(Equal(1))
 			})
@@ -164,7 +177,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreEtcdV3, 
 
 		Measure("It should be able to allocate a lot of addresses quickly", func(b Benchmarker) {
 			runtime := b.Time("runtime", func() {
-				v4, _, outErr := ic.AutoAssign(context.Background(), AutoAssignArgs{Num4: 64, IPv4Pools: pool20})
+				v4, _, outErr := ic.AutoAssign(context.Background(), AutoAssignArgs{Num4: 64, IPv4Pools: pool20, Hostname: hostname})
 				Expect(outErr).NotTo(HaveOccurred())
 				Expect(len(v4)).To(Equal(64))
 			})
@@ -174,7 +187,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreEtcdV3, 
 
 		Measure("It should be able to allocate and release addresses quickly", func(b Benchmarker) {
 			runtime := b.Time("runtime", func() {
-				v4, _, outErr := ic.AutoAssign(context.Background(), AutoAssignArgs{Num4: 1})
+				v4, _, outErr := ic.AutoAssign(context.Background(), AutoAssignArgs{Num4: 1, Hostname: hostname})
 				v4IP := make([]cnet.IP, 0, 0)
 				for _, ipNets := range v4 {
 					IP, _, _ := cnet.ParseCIDR(ipNets.String())
@@ -208,7 +221,10 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreEtcdV3, 
 			It("should auto-assign from the only available pool", func() {
 				bc.Clean()
 				deleteAllPools()
-				applyPool("10.0.0.0/24", true)
+
+				applyNode(bc, hostA, nil)
+				applyNode(bc, hostB, nil)
+				applyPool("10.0.0.0/24", true, "")
 
 				args := AutoAssignArgs{
 					Num4:     1,
@@ -242,7 +258,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreEtcdV3, 
 
 			It("should assign from a new pool for a new host (old pool is removed)", func() {
 				deleteAllPools()
-				applyPool("20.0.0.0/24", true)
+				applyPool("20.0.0.0/24", true, "")
 
 				p, _ := ipPools.GetEnabledPools(4)
 				Expect(len(p)).To(Equal(1))
@@ -281,11 +297,21 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreEtcdV3, 
 			Num6:     0,
 			Hostname: "test-host",
 		}
+
+		BeforeEach(func() {
+			applyNode(bc, args.Hostname, nil)
+		})
+
+		AfterEach(func() {
+			deleteNode(bc, args.Hostname)
+		})
+
 		// Call once in order to assign an IP address and create a block.
 		It("should have assigned an IP address with no error", func() {
 			deleteAllPools()
-			applyPool("10.0.0.0/24", true)
-			applyPool("20.0.0.0/24", true)
+
+			applyPool("10.0.0.0/24", true, "")
+			applyPool("20.0.0.0/24", true, "")
 
 			v4, _, outErr := ic.AutoAssign(context.Background(), args)
 			Expect(outErr).NotTo(HaveOccurred())
@@ -309,8 +335,10 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreEtcdV3, 
 		It("should get an IP from pool1 when explicitly requesting from that pool", func() {
 			bc.Clean()
 			deleteAllPools()
-			applyPool("10.0.0.0/24", true)
-			applyPool("20.0.0.0/24", true)
+
+			applyNode(bc, host, nil)
+			applyPool("10.0.0.0/24", true, "")
+			applyPool("20.0.0.0/24", true, "")
 
 			args := AutoAssignArgs{
 				Num4:      1,
@@ -406,6 +434,106 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreEtcdV3, 
 		})
 	})
 
+	Describe("IPAM AutoAssign using ip pool node selectors", func() {
+		It("should only assign ips from the ip pool whose node selector matches the host's node labels", func() {
+			host := "host"
+			pool1 := cnet.MustParseNetwork("10.0.0.0/24")
+			pool2 := cnet.MustParseNetwork("20.0.0.0/24")
+
+			bc.Clean()
+			deleteAllPools()
+
+			applyNode(bc, host, map[string]string{"foo": "bar"})
+			applyPool(pool1.String(), true, `foo == "bar"`)
+			applyPool(pool2.String(), true, `foo != "bar"`)
+
+			// Attempt to assign 300 ips but only the 256 ips from pool1 should be used.
+			v4, _, outErr := ic.AutoAssign(context.Background(), AutoAssignArgs{
+				Num4:     300,
+				Num6:     0,
+				Hostname: host,
+			})
+			Expect(outErr).NotTo(HaveOccurred())
+			Expect(len(v4)).To(Equal(256))
+
+			// Expect all the IPs to be from pool1.
+			for _, a := range v4 {
+				Expect(pool1.IPNet.Contains(a.IP)).To(BeTrue(), fmt.Sprintf("%s not in pool %s", a.IP, pool1))
+			}
+		})
+
+		// This test validates the behavior of changing node selectors on IP pools. Specifically, it
+		// ensures that when a node used to be selected by an IP pool but is no longer selected, we
+		// properly release block affinities so that the block can be reassigned to a node that is
+		// actually selected by the IP pool.
+		It("should handle changing node selectors and release appropriately", func() {
+			host := "host"
+			pool1 := cnet.MustParseNetwork("10.0.0.0/24")
+
+			bc.Clean()
+			deleteAllPools()
+
+			applyNode(bc, host, map[string]string{"foo": "bar"})
+			applyPool(pool1.String(), true, `foo == "bar"`)
+
+			// Assign three addresses to the node.
+			v4nets, _, err := ic.AutoAssign(context.Background(), AutoAssignArgs{
+				Num4:     3,
+				Num6:     0,
+				Hostname: host,
+			})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(len(v4nets)).To(Equal(3))
+
+			// Should have one affine block to this host.
+			blocks := getAffineBlocks(bc, host)
+			Expect(len(blocks)).To(Equal(1))
+
+			// Expect all the IPs to be from pool1.
+			var v4IPs []cnet.IP
+			for _, a := range v4nets {
+				Expect(pool1.IPNet.Contains(a.IP)).To(BeTrue(), fmt.Sprintf("%s not in pool %s", a.IP, pool1))
+				v4IPs = append(v4IPs, cnet.IP{a.IP})
+			}
+
+			// Release one of the IPs.
+			unallocated, err := ic.ReleaseIPs(context.Background(), v4IPs[0:1])
+			Expect(len(unallocated)).To(Equal(0))
+			Expect(err).NotTo(HaveOccurred())
+
+			// Should still have one affine block to this host.
+			blocks = getAffineBlocks(bc, host)
+			Expect(len(blocks)).To(Equal(1))
+
+			// Change the selector for the IP pool so that it no longer matches node1.
+			applyPool(pool1.String(), true, `foo != "bar"`)
+
+			// Release another one of the IPs.
+			unallocated, err = ic.ReleaseIPs(context.Background(), v4IPs[1:2])
+			Expect(len(unallocated)).To(Equal(0))
+			Expect(err).NotTo(HaveOccurred())
+
+			// The block should no longer have an affinity to this host.
+			Expect(len(getAffineBlocks(bc, host))).To(Equal(0))
+
+			// But it should still exist.
+			opts := model.BlockListOptions{IPVersion: 4}
+			out, err := bc.List(context.Background(), opts, "")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(len(out.KVPairs)).To(Equal(1))
+
+			// Release the last IP.
+			unallocated, err = ic.ReleaseIPs(context.Background(), v4IPs[2:3])
+			Expect(len(unallocated)).To(Equal(0))
+			Expect(err).NotTo(HaveOccurred())
+
+			// The block now has no affinity, and no IPs, so it should be deleted.
+			out, err = bc.List(context.Background(), opts, "")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(len(out.KVPairs)).To(Equal(0))
+		})
+	})
+
 	Describe("IPAM AutoAssign from different pools - multi", func() {
 		host := "host-A"
 		pool1 := cnet.MustParseNetwork("10.0.0.0/24")
@@ -423,10 +551,12 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreEtcdV3, 
 			}
 			bc.Clean()
 			deleteAllPools()
-			applyPool(pool1.String(), true)
-			applyPool(pool2.String(), true)
-			applyPool(pool3.String(), false)
-			applyPool(pool4_v6.String(), true)
+
+			applyNode(bc, host, nil)
+			applyPool(pool1.String(), true, "")
+			applyPool(pool2.String(), true, "")
+			applyPool(pool3.String(), false, "")
+			applyPool(pool4_v6.String(), true, "")
 			_, _, outErr := ic.AutoAssign(context.Background(), args)
 			Expect(outErr).To(HaveOccurred())
 		})
@@ -503,10 +633,14 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreEtcdV3, 
 
 	DescribeTable("AutoAssign: requested IPs vs returned IPs",
 		func(host string, cleanEnv bool, pools []pool, usePool string, inv4, inv6, expv4, expv6 int, blockLimit int, expError error) {
+
 			if cleanEnv {
 				bc.Clean()
 				deleteAllPools()
 			}
+			applyNode(bc, host, nil)
+			defer deleteNode(bc, host)
+
 			for _, v := range pools {
 				ipPools.pools[v.cidr] = pool{cidr: v.cidr, enabled: v.enabled, blockSize: v.blockSize}
 			}
@@ -531,40 +665,40 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreEtcdV3, 
 		},
 
 		// Test 1a: AutoAssign 1 IPv4, 1 IPv6 with tiny block - expect one of each to be returned.
-		Entry("1 v4 1 v6 - tiny block", "testHost", true, []pool{{"192.168.1.0/24", 32, true}, {"fd80:24e2:f998:72d6::/120", 128, true}}, "192.168.1.0/24", 1, 1, 1, 1, 0, nil),
+		Entry("1 v4 1 v6 - tiny block", "testHost", true, []pool{{"192.168.1.0/24", 32, true, ""}, {"fd80:24e2:f998:72d6::/120", 128, true, ""}}, "192.168.1.0/24", 1, 1, 1, 1, 0, nil),
 
 		// Test 1b: AutoAssign 1 IPv4, 1 IPv6 with massive block - expect one of each to be returned.
-		Entry("1 v4 1 v6 - big block", "testHost", true, []pool{{"192.168.0.0/16", 20, true}, {"fd80:24e2:f998:72d6::/110", 116, true}}, "192.168.0.0/16", 1, 1, 1, 1, 0, nil),
+		Entry("1 v4 1 v6 - big block", "testHost", true, []pool{{"192.168.0.0/16", 20, true, ""}, {"fd80:24e2:f998:72d6::/110", 116, true, ""}}, "192.168.0.0/16", 1, 1, 1, 1, 0, nil),
 
 		// Test 1c: AutoAssign 1 IPv4, 1 IPv6 with default block - expect one of each to be returned.
-		Entry("1 v4 1 v6 - default block", "testHost", true, []pool{{"192.168.1.0/24", 26, true}, {"fd80:24e2:f998:72d6::/120", 122, true}}, "192.168.1.0/24", 1, 1, 1, 1, 0, nil),
+		Entry("1 v4 1 v6 - default block", "testHost", true, []pool{{"192.168.1.0/24", 26, true, ""}, {"fd80:24e2:f998:72d6::/120", 122, true, ""}}, "192.168.1.0/24", 1, 1, 1, 1, 0, nil),
 
 		// Test 2a: AutoAssign 256 IPv4, 256 IPv6 with default blocksize- expect 256 IPv4 + IPv6 addresses.
-		Entry("256 v4 256 v6", "testHost", true, []pool{{"192.168.1.0/24", 26, true}, {"fd80:24e2:f998:72d6::/120", 122, true}}, "192.168.1.0/24", 256, 256, 256, 256, 0, nil),
+		Entry("256 v4 256 v6", "testHost", true, []pool{{"192.168.1.0/24", 26, true, ""}, {"fd80:24e2:f998:72d6::/120", 122, true, ""}}, "192.168.1.0/24", 256, 256, 256, 256, 0, nil),
 
 		// Test 2b: AutoAssign 256 IPv4, 256 IPv6 with small blocksize- expect 256 IPv4 + IPv6 addresses.
-		Entry("256 v4 256 v6 - small blocks", "testHost", true, []pool{{"192.168.1.0/24", 30, true}, {"fd80:24e2:f998:72d6::/120", 126, true}}, "192.168.1.0/24", 256, 256, 256, 256, 0, nil),
+		Entry("256 v4 256 v6 - small blocks", "testHost", true, []pool{{"192.168.1.0/24", 30, true, ""}, {"fd80:24e2:f998:72d6::/120", 126, true, ""}}, "192.168.1.0/24", 256, 256, 256, 256, 0, nil),
 
 		// Test 2a: AutoAssign 256 IPv4, 256 IPv6 with num blocks limit expect 64 IPv4 + IPv6 addresses.
-		Entry("256 v4 0 v6 block limit", "testHost", true, []pool{{"192.168.1.0/24", 26, true}, {"fd80:24e2:f998:72d6::/120", 122, true}}, "192.168.1.0/24", 256, 0, 64, 0, 1, ErrBlockLimit),
-		Entry("256 v4 0 v6 block limit 2", "testHost", true, []pool{{"192.168.1.0/24", 26, true}, {"fd80:24e2:f998:72d6::/120", 122, true}}, "192.168.1.0/24", 256, 0, 128, 0, 2, ErrBlockLimit),
-		Entry("0 v4 256 v6 block limit", "testHost", true, []pool{{"192.168.1.0/24", 26, true}, {"fd80:24e2:f998:72d6::/120", 122, true}}, "192.168.1.0/24", 0, 256, 0, 64, 1, ErrBlockLimit),
+		Entry("256 v4 0 v6 block limit", "testHost", true, []pool{{"192.168.1.0/24", 26, true, ""}, {"fd80:24e2:f998:72d6::/120", 122, true, ""}}, "192.168.1.0/24", 256, 0, 64, 0, 1, ErrBlockLimit),
+		Entry("256 v4 0 v6 block limit 2", "testHost", true, []pool{{"192.168.1.0/24", 26, true, ""}, {"fd80:24e2:f998:72d6::/120", 122, true, ""}}, "192.168.1.0/24", 256, 0, 128, 0, 2, ErrBlockLimit),
+		Entry("0 v4 256 v6 block limit", "testHost", true, []pool{{"192.168.1.0/24", 26, true, ""}, {"fd80:24e2:f998:72d6::/120", 122, true, ""}}, "192.168.1.0/24", 0, 256, 0, 64, 1, ErrBlockLimit),
 
 		// Test 3: AutoAssign 257 IPv4, 0 IPv6 - expect 256 IPv4 addresses, no IPv6, and no error.
-		Entry("257 v4 0 v6", "testHost", true, []pool{{"192.168.1.0/24", 26, true}, {"fd80:24e2:f998:72d6::/120", 122, true}}, "192.168.1.0/24", 257, 0, 256, 0, 0, nil),
+		Entry("257 v4 0 v6", "testHost", true, []pool{{"192.168.1.0/24", 26, true, ""}, {"fd80:24e2:f998:72d6::/120", 122, true, ""}}, "192.168.1.0/24", 257, 0, 256, 0, 0, nil),
 
 		// Test 4: AutoAssign 0 IPv4, 257 IPv6 - expect 256 IPv6 addresses, no IPv6, and no error.
-		Entry("0 v4 257 v6", "testHost", true, []pool{{"192.168.1.0/24", 26, true}, {"fd80:24e2:f998:72d6::/120", 122, true}}, "192.168.1.0/24", 0, 257, 0, 256, 0, nil),
+		Entry("0 v4 257 v6", "testHost", true, []pool{{"192.168.1.0/24", 26, true, ""}, {"fd80:24e2:f998:72d6::/120", 122, true, ""}}, "192.168.1.0/24", 0, 257, 0, 256, 0, nil),
 
 		// Test 5: (use pool of size /25 so only two blocks are contained):
 		// - Assign 1 address on host A (Expect 1 address).
-		Entry("1 v4 0 v6 host-A", "host-A", true, []pool{{"10.0.0.0/25", 26, true}, {"fd80:24e2:f998:72d6::/121", 122, true}}, "10.0.0.0/25", 1, 0, 1, 0, 0, nil),
+		Entry("1 v4 0 v6 host-A", "host-A", true, []pool{{"10.0.0.0/25", 26, true, ""}, {"fd80:24e2:f998:72d6::/121", 122, true, ""}}, "10.0.0.0/25", 1, 0, 1, 0, 0, nil),
 
 		// - Assign 1 address on host B (Expect 1 address, different block).
-		Entry("1 v4 0 v6 host-B", "host-B", false, []pool{{"10.0.0.0/25", 26, true}, {"fd80:24e2:f998:72d6::/121", 122, true}}, "10.0.0.0/25", 1, 0, 1, 0, 0, nil),
+		Entry("1 v4 0 v6 host-B", "host-B", false, []pool{{"10.0.0.0/25", 26, true, ""}, {"fd80:24e2:f998:72d6::/121", 122, true, ""}}, "10.0.0.0/25", 1, 0, 1, 0, 0, nil),
 
 		// - Assign 64 more addresses on host A (Expect 63 addresses from host A's block, 1 address from host B's block).
-		Entry("64 v4 0 v6 host-A", "host-A", false, []pool{{"10.0.0.0/25", 26, true}, {"fd80:24e2:f998:72d6::/121", 122, true}}, "10.0.0.0/25", 64, 0, 64, 0, 0, nil),
+		Entry("64 v4 0 v6 host-A", "host-A", false, []pool{{"10.0.0.0/25", 26, true, ""}, {"fd80:24e2:f998:72d6::/121", 122, true, ""}}, "10.0.0.0/25", 64, 0, 64, 0, 0, nil),
 	)
 
 	DescribeTable("AssignIP: requested IP vs returned error",
@@ -577,8 +711,12 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreEtcdV3, 
 				bc.Clean()
 				deleteAllPools()
 			}
+
+			applyNode(bc, host, nil)
+			defer deleteNode(bc, host)
+
 			for _, v := range pool {
-				applyPool(v, true)
+				applyPool(v, true, "")
 			}
 
 			outError := ic.AssignIP(context.Background(), args)
@@ -610,14 +748,19 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreEtcdV3, 
 	DescribeTable("ReleaseIPs: requested IPs to be released vs actual unallocated IPs",
 		func(inIP net.IP, cleanEnv bool, pool []string, assignIP net.IP, autoAssignNumIPv4 int, expUnallocatedIPs []cnet.IP, expError error) {
 			inIPs := []cnet.IP{{inIP}}
+			hostname := "host-release"
 
 			// If we cleaned the datastore then recreate the pools.
 			if cleanEnv {
 				bc.Clean()
 				deleteAllPools()
 			}
+
+			applyNode(bc, hostname, nil)
+			defer deleteNode(bc, hostname)
+
 			for _, v := range pool {
-				applyPool(v, true)
+				applyPool(v, true, "")
 			}
 
 			if len(assignIP) != 0 {
@@ -637,7 +780,8 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreEtcdV3, 
 
 			if autoAssignNumIPv4 != 0 {
 				assignedIPv4, _, err := ic.AutoAssign(context.Background(), AutoAssignArgs{
-					Num4: autoAssignNumIPv4,
+					Num4:     autoAssignNumIPv4,
+					Hostname: hostname,
 				})
 				Expect(err).ToNot(HaveOccurred())
 				for _, ipnet := range assignedIPv4 {
@@ -695,8 +839,12 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreEtcdV3, 
 				bc.Clean()
 				deleteAllPools()
 			}
+
+			applyNode(bc, args.host, nil)
+			defer deleteNode(bc, args.host)
+
 			for _, v := range args.pool {
-				applyPool(v, true)
+				applyPool(v, true, "")
 			}
 
 			assignIPutil(ic, args.assignIP, "Host-A")
@@ -739,6 +887,70 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreEtcdV3, 
 	)
 })
 
+// Tests for determining IP pools to use.
+var _ = DescribeTable("determinePools tests",
+	func(pool1Enabled, pool2Enabled bool, pool1Selector, pool2Selector string, requestPool1, requestPool2 bool, expectation []string, expectErr bool) {
+		// Seed data
+		ipPools.pools = map[string]pool{
+			"10.0.0.0/24": pool{enabled: pool1Enabled, nodeSelector: pool1Selector},
+			"20.0.0.0/24": pool{enabled: pool2Enabled, nodeSelector: pool2Selector},
+		}
+		// Create a new IPAM client, giving a nil datastore client since determining pools
+		// doesn't require datastore access (we mock out the IP pool accessor).
+		ic := NewIPAMClient(nil, ipPools)
+
+		// Create a node object for the test.
+		node := v3.Node{ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{"foo": "bar"}}}
+
+		// Prep input data
+		reqPools := []cnet.IPNet{}
+		if requestPool1 {
+			cidr := cnet.MustParseCIDR("10.0.0.0/24")
+			reqPools = append(reqPools, cidr)
+		}
+		if requestPool2 {
+			cidr := cnet.MustParseCIDR("20.0.0.0/24")
+			reqPools = append(reqPools, cidr)
+		}
+
+		// Call determinePools
+		pools, err := ic.(*ipamClient).determinePools(reqPools, 4, node)
+
+		// Assert on any returned error.
+		if expectErr {
+			Expect(err).To(HaveOccurred())
+		} else {
+			Expect(err).NotTo(HaveOccurred())
+		}
+
+		// Check that the expected pools match the returned.
+		actual := []string{}
+		for _, pool := range pools {
+			actual = append(actual, pool.Spec.CIDR)
+		}
+		Expect(actual).To(Equal(expectation))
+	},
+	Entry("Both pools enabled, none with node selector, no requested pools", true, true, "", "", false, false, []string{"10.0.0.0/24", "20.0.0.0/24"}, false),
+	Entry("Both pools enabled, none with node selector, pool1 requested", true, true, "", "", true, false, []string{"10.0.0.0/24"}, false),
+
+	Entry("Both pools enabled, pool1 matching selector, no requested pools", true, true, `foo == "bar"`, `foo != "bar"`, false, false, []string{"10.0.0.0/24"}, false),
+	Entry("Both pools enabled, pool1 matching node selector, pool1 requested", true, true, `foo == "bar"`, `foo != "bar"`, true, false, []string{"10.0.0.0/24"}, false),
+
+	Entry("Both pools enabled, pool1 mismatching node selector, no requested pools", true, true, `foo != "bar"`, "all()", false, false, []string{"20.0.0.0/24"}, false),
+	Entry("Both pools enabled, pool1 mismatching node selector, pool1 requested", true, true, `foo != "bar"`, "", true, false, []string{"10.0.0.0/24"}, false),
+
+	Entry("Both pools enabled, pool1 matching node selector, pool2 requested", true, true, `foo == "bar"`, "", false, true, []string{"20.0.0.0/24"}, false),
+
+	Entry("pool1 disabled, none with node selector, no requested pools", false, true, "", "", false, false, []string{"20.0.0.0/24"}, false),
+	Entry("pool1 disabled, none with node selector, pool1 requested", false, true, "", "", true, false, []string{}, true),
+	Entry("pool1 disabled, none with node selector, pool2 requested", false, true, "", "", false, true, []string{"20.0.0.0/24"}, false),
+
+	Entry("pool1 disabled, pool2 matching node selector, no requested pools", false, true, "", `foo == "bar"`, false, false, []string{"20.0.0.0/24"}, false),
+	Entry("pool1 disabled, pool2 matching node selector, pool2 requested", false, true, "", `foo == "bar"`, false, true, []string{"20.0.0.0/24"}, false),
+	Entry("pool1 disabled, pool2 mismatching node selector, no requested pools", false, true, "", `foo != "bar"`, false, false, []string{}, false),
+	Entry("pool1 disabled, pool2 mismatching node selector, pool2 requested", false, true, "", `foo != "bar"`, false, true, []string{"20.0.0.0/24"}, false),
+)
+
 // assignIPutil is a utility function to help with assigning a single IP address to a hostname passed in.
 func assignIPutil(ic Interface, assignIP net.IP, host string) {
 	if len(assignIP) != 0 {
@@ -779,6 +991,22 @@ func deleteAllPools() {
 	ipPools.pools = map[string]pool{}
 }
 
-func applyPool(cidr string, enabled bool) {
-	ipPools.pools[cidr] = pool{enabled: enabled}
+func applyPool(cidr string, enabled bool, nodeSelector string) {
+	ipPools.pools[cidr] = pool{enabled: enabled, nodeSelector: nodeSelector}
+}
+
+func applyNode(c bapi.Client, host string, labels map[string]string) {
+	c.Apply(context.Background(), &model.KVPair{
+		Key: model.ResourceKey{Name: host, Kind: v3.KindNode},
+		Value: v3.Node{
+			ObjectMeta: metav1.ObjectMeta{Labels: labels},
+			Spec: v3.NodeSpec{OrchRefs: []v3.OrchRef{
+				v3.OrchRef{Orchestrator: "k8s", NodeName: host},
+			}},
+		},
+	})
+}
+
+func deleteNode(c bapi.Client, host string) {
+	c.Delete(context.Background(), &model.ResourceKey{Name: host, Kind: v3.KindNode}, "")
 }
