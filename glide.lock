@@ -1,5 +1,5 @@
-hash: d330462bfec9103a264ba46772f2d0495e06313366405d96d5b5e242a1b302c1
-updated: 2019-01-08T14:35:12.918896-08:00
+hash: e874c024d70f616db8311cd1fd65474f0612875170683d88bedf3cf0fe6da9bc
+updated: 2019-01-09T07:42:56.264155264Z
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -108,7 +108,7 @@ imports:
 - name: github.com/kardianos/osext
   version: ae77be60afb1dcacde03767a8c37337fad28ac14
 - name: github.com/kelseyhightower/confd
-  version: 143e10b4611f8f2c081b4adade9461cd0973c9ca
+  version: 1f1055ee87d7a713373d1d9121e7024b58831f08
   repo: https://github.com/projectcalico/confd.git
   subpackages:
   - pkg/backends
@@ -187,7 +187,7 @@ imports:
 - name: github.com/peterbourgon/diskv
   version: 5f041e8faa004a95c88a202771f4cc3e991971e6
 - name: github.com/projectcalico/felix
-  version: 950aa45d4d3ced41541751c3b5bfec08a4ba0d3a
+  version: a49ec3dad8a2c6ea144ff6a0ed01084315fa7250
   subpackages:
   - buildinfo
   - calc
