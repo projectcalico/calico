@@ -217,10 +217,15 @@ var _ = testutils.E2eDatastoreDescribe("BGP syncer tests", testutils.DatastoreAl
 			var blockAffinityKeyV1 model.BlockAffinityKey
 			if config.Spec.DatastoreType != apiconfig.Kubernetes {
 				By("Allocating an IP address and checking that we get an allocation block")
-				ips1, _, err := c.IPAM().AutoAssign(ctx, ipam.AutoAssignArgs{
+				ipV4Nets1, _, err := c.IPAM().AutoAssign(ctx, ipam.AutoAssignArgs{
 					Num4:     1,
 					Hostname: "127.0.0.1",
 				})
+
+				var ips1 []net.IP
+				for _, ipnet := range ipV4Nets1 {
+					ips1 = append(ips1, net.IP{ipnet.IP})
+				}
 				Expect(err).NotTo(HaveOccurred())
 
 				// Allocating an IP will create an affinity block that we should be notified of.  Not sure
@@ -247,10 +252,16 @@ var _ = testutils.E2eDatastoreDescribe("BGP syncer tests", testutils.DatastoreAl
 				expectedCacheSize += 1
 				syncTester.ExpectCacheSize(expectedCacheSize)
 
-				ips2, _, err := c.IPAM().AutoAssign(ctx, ipam.AutoAssignArgs{
+				ipV4Nets2, _, err := c.IPAM().AutoAssign(ctx, ipam.AutoAssignArgs{
 					Num4:     1,
 					Hostname: hostname,
 				})
+
+				var ips2 []net.IP
+				for _, ipnet := range ipV4Nets2 {
+					ips2 = append(ips2, net.IP{ipnet.IP})
+				}
+
 				Expect(err).NotTo(HaveOccurred())
 				syncTester.ExpectCacheSize(expectedCacheSize)
 

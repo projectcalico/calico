@@ -188,11 +188,16 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreEtcdV3, 
 		Measure("It should be able to allocate and release addresses quickly", func(b Benchmarker) {
 			runtime := b.Time("runtime", func() {
 				v4, _, outErr := ic.AutoAssign(context.Background(), AutoAssignArgs{Num4: 1, Hostname: hostname})
+				v4IP := make([]cnet.IP, 0, 0)
+				for _, ipNets := range v4 {
+					IP, _, _ := cnet.ParseCIDR(ipNets.String())
+					v4IP = append(v4IP, *IP)
+				}
 				Expect(outErr).NotTo(HaveOccurred())
-				Expect(len(v4)).To(Equal(1))
-				v4, outErr = ic.ReleaseIPs(context.Background(), v4)
+				Expect(len(v4IP)).To(Equal(1))
+				v4IP, outErr = ic.ReleaseIPs(context.Background(), v4IP)
 				Expect(outErr).NotTo(HaveOccurred())
-				Expect(len(v4)).To(Equal(0))
+				Expect(len(v4IP)).To(Equal(0))
 			})
 
 			Expect(runtime.Seconds()).Should(BeNumerically("<", 1))
@@ -472,25 +477,27 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreEtcdV3, 
 			applyPool(pool1.String(), true, `foo == "bar"`)
 
 			// Assign three addresses to the node.
-			v4, _, err := ic.AutoAssign(context.Background(), AutoAssignArgs{
+			v4nets, _, err := ic.AutoAssign(context.Background(), AutoAssignArgs{
 				Num4:     3,
 				Num6:     0,
 				Hostname: host,
 			})
 			Expect(err).NotTo(HaveOccurred())
-			Expect(len(v4)).To(Equal(3))
+			Expect(len(v4nets)).To(Equal(3))
 
 			// Should have one affine block to this host.
 			blocks := getAffineBlocks(bc, host)
 			Expect(len(blocks)).To(Equal(1))
 
 			// Expect all the IPs to be from pool1.
-			for _, a := range v4 {
+			var v4IPs []cnet.IP
+			for _, a := range v4nets {
 				Expect(pool1.IPNet.Contains(a.IP)).To(BeTrue(), fmt.Sprintf("%s not in pool %s", a.IP, pool1))
+				v4IPs = append(v4IPs, cnet.IP{a.IP})
 			}
 
 			// Release one of the IPs.
-			unallocated, err := ic.ReleaseIPs(context.Background(), v4[0:1])
+			unallocated, err := ic.ReleaseIPs(context.Background(), v4IPs[0:1])
 			Expect(len(unallocated)).To(Equal(0))
 			Expect(err).NotTo(HaveOccurred())
 
@@ -502,7 +509,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreEtcdV3, 
 			applyPool(pool1.String(), true, `foo != "bar"`)
 
 			// Release another one of the IPs.
-			unallocated, err = ic.ReleaseIPs(context.Background(), v4[1:2])
+			unallocated, err = ic.ReleaseIPs(context.Background(), v4IPs[1:2])
 			Expect(len(unallocated)).To(Equal(0))
 			Expect(err).NotTo(HaveOccurred())
 
@@ -516,7 +523,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreEtcdV3, 
 			Expect(len(out.KVPairs)).To(Equal(1))
 
 			// Release the last IP.
-			unallocated, err = ic.ReleaseIPs(context.Background(), v4[2:3])
+			unallocated, err = ic.ReleaseIPs(context.Background(), v4IPs[2:3])
 			Expect(len(unallocated)).To(Equal(0))
 			Expect(err).NotTo(HaveOccurred())
 
@@ -777,7 +784,10 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreEtcdV3, 
 					Hostname: hostname,
 				})
 				Expect(err).ToNot(HaveOccurred())
-				inIPs = assignedIPv4
+				for _, ipnet := range assignedIPv4 {
+					inIPs = append(inIPs, cnet.MustParseIP(ipnet.IP.String()))
+				}
+				inIPs = inIPs[1:]
 			}
 
 			unallocatedIPs, outErr := ic.ReleaseIPs(context.Background(), inIPs)

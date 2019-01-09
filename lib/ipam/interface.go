@@ -31,10 +31,10 @@ type Interface interface {
 
 	// AutoAssign automatically assigns one or more IP addresses as specified by the
 	// provided AutoAssignArgs.  AutoAssign returns the list of the assigned IPv4 addresses,
-	// and the list of the assigned IPv6 addresses.
+	// and the list of the assigned IPv6 addresses in IPNet format.
 	//
 	// In case of error, returns the IPs allocated so far along with the error.
-	AutoAssign(ctx context.Context, args AutoAssignArgs) ([]cnet.IP, []cnet.IP, error)
+	AutoAssign(ctx context.Context, args AutoAssignArgs) ([]cnet.IPNet, []cnet.IPNet, error)
 
 	// ReleaseIPs releases any of the given IP addresses that are currently assigned,
 	// so that they are available to be used in another assignment.
