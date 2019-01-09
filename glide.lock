@@ -1,5 +1,5 @@
-hash: a250a7f9717aec213d83766a72f7faf2c7bfe02c8dee3263619e4f60882afb1b
-updated: 2019-01-05T04:21:51.829183217Z
+hash: 9a36a80bdf72677b870e1d7f9d254ce4297b0002d5eaf9abbd60583e28c39b5f
+updated: 2019-01-09T04:16:42.845427509Z
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -80,7 +80,7 @@ imports:
   subpackages:
   - diskcache
 - name: github.com/hashicorp/go-version
-  version: b5a281d3160aa11950a6182bd9a9dc2cb1e02d50
+  version: d40cf49b3a77bba84a7afdbd7f1dc295d114efb1
 - name: github.com/hashicorp/golang-lru
   version: a0d98a5f288019575c6d1f4bb1573fef2d1fcdc4
   subpackages:
@@ -175,7 +175,7 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: 7a87b4e49d6c6ecb21351dba8d726d2133414ce7
+  version: d93dd29e85face5237500468e68b7333e0af5a46
   subpackages:
   - lib/apiconfig
   - lib/apis/v1
