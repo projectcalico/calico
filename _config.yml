@@ -19,16 +19,16 @@ noderunning: calico-node
 
 # Image names in case the host changes
 imageNames:
-  node: quay.io/calico/node
-  calicoctl: quay.io/calico/ctl
-  typha: quay.io/calico/typha
-  cni: quay.io/calico/cni
-  kubeControllers: quay.io/calico/kube-controllers
-  calico-upgrade: quay.io/calico/upgrade
-  flannel: quay.io/coreos/flannel
-  dikastes: quay.io/calico/dikastes
-  pilot-webhook: quay.io/calico/pilot-webhook
-  flexvol: quay.io/calico/pod2daemon-flexvol
+  node: calico/node
+  calicoctl: calico/ctl
+  typha: calico/typha
+  cni: calico/cni
+  kubeControllers: calico/kube-controllers
+  calico-upgrade: calico/upgrade
+  flannel: coreos/flannel
+  dikastes: calico/dikastes
+  pilot-webhook: calico/pilot-webhook
+  flexvol: calico/pod2daemon-flexvol
 
 # List of files to exclude. These files won't get included in the deployed site.
 exclude:
@@ -51,11 +51,13 @@ defaults:
       layout: docwithnav
       version: master
       sitemap: true
+      registry:
   -
     scope:
       path: master
     values:
       version: master
+      registry:
   -
     scope:
       path: v1.5
@@ -106,28 +108,34 @@ defaults:
       path: v3.0
     values:
       version: v3.0
+      registry: quay.io/
   -
     scope:
       path: v3.1
     values:
       version: v3.1
+      registry: quay.io/
   -
     scope:
       path: v3.2
     values:
       version: v3.2
+      registry: quay.io/
   -
     scope:
       path: v3.3
     values:
       version: v3.3
+      registry:
   -
     scope:
       path: v3.4
     values:
       version: v3.4
+      registry:
   -
     scope:
       path: v3.5
     values:
       version: v3.5
+      registry:

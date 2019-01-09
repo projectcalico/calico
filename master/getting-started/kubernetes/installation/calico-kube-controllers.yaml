@@ -34,7 +34,7 @@ spec:
       containers:
         - name: calico-kube-controllers
           # Make sure to pin this to your desired version.
-          image: {{site.imageNames["kubeControllers"]}}:{{site.data.versions[page.version].first.components["calico/kube-controllers"].version}}
+          image: {{page.registry}}{{site.imageNames["kubeControllers"]}}:{{site.data.versions[page.version].first.components["calico/kube-controllers"].version}}
           env:
             # Configure the location of your etcd cluster.
             - name: ETCD_ENDPOINTS

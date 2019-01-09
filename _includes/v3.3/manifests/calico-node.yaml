@@ -61,7 +61,7 @@ spec:
       # to communicate with Felix over the Policy Sync API.
       initContainers:
       - name: flexvol-driver
-        image: {{site.imageNames["flexvol"]}}:{{site.data.versions[page.version].first.components["flexvol"].version}}
+        image: {{page.registry}}{{site.imageNames["flexvol"]}}:{{site.data.versions[page.version].first.components["flexvol"].version}}
         imagePullPolicy: Always
         volumeMounts:
         - name: flexvol-driver-host
@@ -72,7 +72,7 @@ spec:
         # container programs network policy and routes on each
         # host.
         - name: calico-node
-          image: {{site.imageNames["node"]}}:{{site.data.versions[page.version].first.components["calico/node"].version}}
+          image: {{page.registry}}{{site.imageNames["node"]}}:{{site.data.versions[page.version].first.components["calico/node"].version}}
           env:
 {%- if include.datastore == "etcd" %}
             # The location of the {{site.prodname}} etcd cluster.
@@ -248,7 +248,7 @@ spec:
         # This container installs the {{site.prodname}} CNI binaries
         # and CNI network config file on each node.
         - name: install-cni
-          image: {{site.imageNames["cni"]}}:{{site.data.versions[page.version].first.components["calico/cni"].version}}
+          image: {{page.registry}}{{site.imageNames["cni"]}}:{{site.data.versions[page.version].first.components["calico/cni"].version}}
           command: ["/install-cni.sh"]
           env:
             # Name of the CNI config file to create.
