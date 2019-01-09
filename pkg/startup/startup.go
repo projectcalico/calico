@@ -16,6 +16,7 @@ package startup
 import (
 	"context"
 	cryptorand "crypto/rand"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io/ioutil"
@@ -25,9 +26,6 @@ import (
 	"regexp"
 	"strings"
 	"time"
-
-	log "github.com/sirupsen/logrus"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/projectcalico/libcalico-go/lib/apiconfig"
 	api "github.com/projectcalico/libcalico-go/lib/apis/v3"
@@ -40,6 +38,11 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/options"
 	"github.com/projectcalico/libcalico-go/lib/upgrade/migrator"
 	"github.com/projectcalico/libcalico-go/lib/upgrade/migrator/clients"
+	log "github.com/sirupsen/logrus"
+	kapiv1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
 
 	"github.com/projectcalico/node/pkg/calicoclient"
 	"github.com/projectcalico/node/pkg/startup/autodetection"
@@ -140,6 +143,15 @@ func Run() {
 
 		// Configure the node AS number.
 		configureASNumber(node)
+
+		// If running under kubernetes with secrets to call k8s API
+		if config, err := rest.InClusterConfig(); err == nil {
+			log.Info("Setting NetworkUnavailable to False")
+			err = setNodeNetworkUnavailableFalse(config, nodeName)
+			if err != nil {
+				log.WithError(err).Errorf("Unable to set NetworkUnavailable to False")
+			}
+		}
 	}
 
 	configureNodeRef(node)
@@ -997,6 +1009,32 @@ func ensureKDDMigrated(cfg *apiconfig.CalicoAPIConfig, cv3 client.Interface) err
 	}
 
 	return nil
+}
+
+// Set Kubernetes NodeNetworkUnavailable to false when starting
+// https://kubernetes.io/docs/concepts/architecture/nodes/#condition
+func setNodeNetworkUnavailableFalse(config *rest.Config, nodeName string) error {
+	// creates the k8s clientset
+	clientset, err := kubernetes.NewForConfig(config)
+	if err != nil {
+		return err
+	}
+
+	condition := kapiv1.NodeCondition{
+		Type:               kapiv1.NodeNetworkUnavailable,
+		Status:             kapiv1.ConditionFalse,
+		Reason:             "CalicoIsUp",
+		Message:            "Calico is running on this node",
+		LastTransitionTime: metav1.Now(),
+		LastHeartbeatTime:  metav1.Now(),
+	}
+	raw, err := json.Marshal(&[]kapiv1.NodeCondition{condition})
+	if err != nil {
+		return err
+	}
+	patch := []byte(fmt.Sprintf(`{"status":{"conditions":%s}}`, raw))
+	_, err = clientset.CoreV1().Nodes().PatchStatus(nodeName, patch)
+	return err
 }
 
 // terminate prints a terminate message and exists with status 1.
