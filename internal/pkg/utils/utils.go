@@ -560,6 +560,8 @@ func ConfigureLogging(logLevel string) {
 		logrus.SetLevel(logrus.DebugLevel)
 	} else if strings.EqualFold(logLevel, "info") {
 		logrus.SetLevel(logrus.InfoLevel)
+	} else if strings.EqualFold(logLevel, "error") {
+		logrus.SetLevel(logrus.ErrorLevel)
 	} else {
 		// Default level
 		logrus.SetLevel(logrus.WarnLevel)
