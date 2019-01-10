@@ -525,6 +525,59 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreEtcdV3, 
 			Expect(err).NotTo(HaveOccurred())
 			Expect(len(out.KVPairs)).To(Equal(0))
 		})
+
+		It("should handle changing node selectors between two nodes", func() {
+			node1 := "host1"
+			node2 := "host2"
+			pool1 := cnet.MustParseNetwork("10.0.0.0/30")
+
+			bc.Clean()
+			deleteAllPools()
+
+			applyNode(bc, node1, map[string]string{"foo": "bar"})
+			applyNode(bc, node2, nil)
+			applyPoolWithBlockSize(pool1.String(), true, `foo == "bar"`, 30)
+
+			// Assign 3 addresses to node1.
+			v4, _, err := ic.AutoAssign(context.Background(), AutoAssignArgs{
+				Num4:     3,
+				Num6:     0,
+				Hostname: node1,
+			})
+			Expect(err).ToNot(HaveOccurred())
+			Expect(len(v4)).To(Equal(3))
+
+			// Should have one affine block to node1.
+			blocks := getAffineBlocks(bc, node1)
+			Expect(len(blocks)).To(Equal(1))
+
+			// Switch labels so that ip pool selects node2.
+			applyNode(bc, node1, nil)
+			applyNode(bc, node2, map[string]string{"foo": "bar"})
+
+			// Assign 1 address to node1, expect an error.
+			v4, _, err = ic.AutoAssign(context.Background(), AutoAssignArgs{
+				Num4:     1,
+				Num6:     0,
+				Hostname: node1,
+			})
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(Equal("no configured Calico pools for node host1"))
+			Expect(len(v4)).To(Equal(0))
+
+			// Assign 1 address to node2.
+			v4, _, err = ic.AutoAssign(context.Background(), AutoAssignArgs{
+				Num4:     1,
+				Num6:     0,
+				Hostname: node2,
+			})
+			Expect(err).ToNot(HaveOccurred())
+			Expect(len(v4)).To(Equal(1))
+
+			// The address assigned to node2 should come from the block affine to node1.
+			node2IP := v4[0].IP
+			Expect(pool1.IPNet.Contains(node2IP)).To(BeTrue(), fmt.Sprintf("%s not in pool %s", node2IP, pool1))
+		})
 	})
 
 	Describe("IPAM AutoAssign from different pools - multi", func() {
@@ -983,6 +1036,10 @@ func deleteAllPools() {
 
 func applyPool(cidr string, enabled bool, nodeSelector string) {
 	ipPools.pools[cidr] = pool{enabled: enabled, nodeSelector: nodeSelector}
+}
+
+func applyPoolWithBlockSize(cidr string, enabled bool, nodeSelector string, blockSize int) {
+	ipPools.pools[cidr] = pool{enabled: enabled, nodeSelector: nodeSelector, blockSize: blockSize}
 }
 
 func applyNode(c bapi.Client, host string, labels map[string]string) {
