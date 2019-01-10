@@ -47,10 +47,13 @@ The code is a little roundabout for a few reasons:
     <link href="https://fonts.googleapis.com/css?family=Lato" rel="stylesheet">
     <link rel="stylesheet" href='https://fonts.googleapis.com/css?family=Roboto+Mono' type='text/css'>
     <link rel="stylesheet" href="{{site.baseurl}}/css/style.css"/>
+    <link rel="stylesheet" href="{{site.baseurl}}/css/search.css"/>
     <link rel="stylesheet" href="{{site.baseurl}}/css/plugins/offcanvas.css"/>
+    <link rel="stylesheet" href="{{site.baseurl}}/css/instantsearch/instantsearch.min.css"/>
     <link href="https://www.projectcalico.org/wp-content/themes/dante/css/font-awesome.min.css" rel="stylesheet">
     <script src="{{site.baseurl}}/js/jquery-2.2.0.min.js"></script>
     <script src="{{site.baseurl}}/js/bootstrap/bootstrap.min.js"></script>
+    <script src="{{site.baseurl}}/js/instantsearch/instantsearch.min.js"></script>
     <script src="{{site.baseurl}}/js/script.js"></script>
 {% if page.version != "v1.5" and page.version != "v1.6" and page.version != "v2.0" and page.version != "v2.1" and page.version != "v2.2" and page.version != "v2.3" and page.version != "v2.4" and page.version != "v2.5" and page.version != "v2.6" and page.version != "v3.0" and page.version != "v3.1" and page.version != "v3.2" and page.version != "v3.3" %}
     <script src="{{site.baseurl}}/js/clipboard.min.js"></script>
@@ -202,22 +205,15 @@ The code is a little roundabout for a few reasons:
           </p>
           <div class="col-xs-6 col-sm-4 col-md-3 sidebar-offcanvas">
             <div class="row">
-              <script>
-                (function() {
-                  var cx = '015028447179048192876:xjzskk7awwe';
-                  var gcse = document.createElement('script');
-                  gcse.type = 'text/javascript';
-                  gcse.async = true;
-                  gcse.src = 'https://cse.google.com/cse.js?cx=' + cx;
-                  var s = document.getElementsByTagName('script')[0];
-                  s.parentNode.insertBefore(gcse, s);
-                })();
-              </script>
-              <gcse:search></gcse:search>
+              <div class="search-input-container" data-toggle="popover" data-placement="bottom"></div>
+              <div class="search-container">
+                <div class="search-container__results"></div>
+                <div class="search-container__pagination"></div>
+              </div>
             </div>
             <div id="sidebar">
             	{% include sidebar.html sidebar=this_pages_navbar.toc prefix="nav" %}
-			</div>
+            </div>
           </div>
           <div class="col-xs-12 col-sm-8 col-md-9">
             <div id="content-main">
@@ -242,5 +238,60 @@ The code is a little roundabout for a few reasons:
         </div>
       </div>
     </section>
+
+    <script src="{{site.baseurl}}/js/searchConfig.js"></script>
+
+    <script type="text/template" id="search-results-template">
+      {% raw %}
+      <div class="search-results">
+        {{#hits}}
+
+        {{#shouldDisplayTopCategory}}
+        {{#hierarchy.lvl0}}
+          <a href="{{url}}" class="search-results__group-header">
+            {{{_highlightResult.hierarchy.lvl0.value}}}
+          </a>
+        {{/hierarchy.lvl0}}
+        {{/shouldDisplayTopCategory}}
+
+        <div class="search-results__search-result search-result columns-layout">
+          <div class="columns-layout__left-column">
+            {{#hierarchy.lvl1}}
+              <a href="{{url}}" class="search-result__subcategory">
+                {{{_highlightResult.hierarchy.lvl1.value}}}
+              </a>
+            {{/hierarchy.lvl1}}
+          </div>
+
+          <div class="columns-layout__right-column">
+            {{#hierarchy.lvl2}}
+              <a href="{{url}}" class="search-result__subsubcategory">
+                {{{_highlightResult.hierarchy.lvl2.value}}}
+              </a>
+            {{/hierarchy.lvl2}}
+
+            {{#hierarchy.lvl3}}
+              <a href="{{url}}" class="search-result__subsubsubcategory">
+                {{{_highlightResult.hierarchy.lvl3.value}}}
+              </a>
+            {{/hierarchy.lvl3}}
+
+            {{#content}}
+              <a href="{{url}}" class="search-result__content">
+                {{{_snippetResult.content.value}}}
+              </a>
+            {{/content}}
+          </div>
+        </div>
+        {{/hits}}
+      </div>
+      {% endraw %}
+    </script>
+
+    <script>
+      $(document).ready(function() {
+        window.initializeSearch('{{page.version}}', '.search-input-container', '.search-container', '.search-container__results', '.search-container__pagination');
+      });
+    </script>
   </body>
 </html>

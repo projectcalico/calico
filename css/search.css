@@ -1,0 +1,66 @@
+.search-container {
+    display: none;
+}
+
+.search-input-container input:focus {
+    outline: none;
+}
+
+.popover {
+    max-width: unset;
+    width: 600px;
+}
+
+.columns-layout {
+    display: flex;
+    justify-content: center;
+    align-items: baseline;
+}
+
+.columns-layout__left-column {
+    flex-basis: 40%;
+    flex-grow: 0;
+}
+
+.columns-layout__right-column {
+    flex-basis: 60%;
+    flex-grow: 0;
+
+    margin-left: 5px;
+}
+
+.search-results__search-result {
+    padding: 0 5px 5px 5px;
+    margin: 0;
+    border-left: 1px #ddd solid;
+}
+
+.search-results__group-header {
+    font-size: 14px;
+    font-weight: bold;
+
+    color: black;
+}
+
+.search-result__subcategory
+{
+    font-size: 12px;
+
+    color: black;
+}
+
+.search-result__subsubcategory,
+.search-result__subsubsubcategory,
+.search-result__content
+{
+    display: block;
+
+    font-size: 12px;
+
+    color: gray;
+}
+
+.search-results .algolia-docsearch-suggestion--highlight {
+    color: #f69432;
+    background-color: #f9f2f4;
+}
