@@ -1853,4 +1853,26 @@ master:
      flexvol:
       version: master
 
-
+# v3.5 is still pre-release. Add a section here so that the nightly builds work.
+# Remove this once we promote to a real release.
+v3.5:
+- title: v3.5.0
+  components:
+    calico/node:
+      version: release-v3.5
+    calicoctl:
+      version: release-v3.5
+    calico/cni:
+      version: release-v3.5
+    calico/kube-controllers:
+      version: release-v3.5
+    networking-calico:
+      version: release-v3.5
+    typha:
+      version: release-v3.5
+    flannel:
+      version: v0.9.1
+    calico/dikastes:
+      version: release-v3.5
+    flexvol:
+      version: release-v3.5
