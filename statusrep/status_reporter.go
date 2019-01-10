@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2018 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2019 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -175,14 +175,12 @@ loop:
 				statID = model.HostEndpointStatusKey{
 					Hostname:   esr.hostname,
 					EndpointID: msg.Id.EndpointId,
-					Region:     esr.region,
 				}
 				status = msg.Status.Status
 			case *proto.HostEndpointStatusRemove:
 				statID = model.HostEndpointStatusKey{
 					Hostname:   esr.hostname,
 					EndpointID: msg.Id.EndpointId,
-					Region:     esr.region,
 				}
 			default:
 				log.Panicf("Unexpected message: %#v", msg)
@@ -289,7 +287,6 @@ func (esr *EndpointStatusReporter) attemptResync(ctx context.Context) {
 
 	hostListOpts := model.HostEndpointStatusListOptions{
 		Hostname: esr.hostname,
-		Region:   esr.region,
 	}
 	kvl, err = esr.datastore.List(ctx, hostListOpts, "")
 	if err == nil {
