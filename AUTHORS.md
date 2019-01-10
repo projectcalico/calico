@@ -20,6 +20,7 @@ by GitHub for the core repositories within the projectcalico/ organization. It i
 | Artem Panchenko                          | @artem-panchenko |
 | Avi Deitcher                             | @deitch |
 | Benjamin                                 | @ben-st |
+| Bingshen Wang                            | @BSWANG |
 | Bo Liu                                   | @liubog2008 |
 | Brad Beam                                | @bradbeam |
 | Brad Behle                               | @bradbehle |
@@ -56,6 +57,7 @@ by GitHub for the core repositories within the projectcalico/ organization. It i
 | Giancarlo Rubio                          | @gianrubio |
 | Guang Ya Liu                             | @gyliu513 |
 | Gunjan Patel                             | @gunjan5 |
+| Guy Templeton                            | @gjtempleton |
 | He Yi                                    | @heyi-arm |
 | huikang                                  | @huikang |
 | IWAMOTO Toshihiro                        | @toshiiw |
@@ -143,7 +145,9 @@ by GitHub for the core repositories within the projectcalico/ organization. It i
 | ---                                      | @emanic |
 | ---                                      | @fen4o |
 | ---                                      | @frnkdny |
+| ---                                      | @kirandivekar |
 | ---                                      | @marvin-tigera |
+| ---                                      | @meeee |
 | ---                                      | @mikev |
 | ---                                      | @mofelee |
 | ---                                      | @OwenTuz |

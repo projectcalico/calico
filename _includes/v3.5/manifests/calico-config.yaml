@@ -1,0 +1,149 @@
+{% comment %}
+calico-config.yaml acccepts the following include flags:
+
+| Name         | Accepted Values          |
+|--------------|--------------------------|
+| datastore    | kdd, etcd                |
+| typha        | true, false              |
+| network      | calico, flannel, <unset> |
+| calico_ipam  | true, false              |
+| variant_name | Calico, Canal            |
+
+{% endcomment -%}
+# This ConfigMap is used to configure a self-hosted {{include.variant_name}} installation.
+kind: ConfigMap
+apiVersion: v1
+metadata:
+  name: {{include.variant_name | downcase}}-config
+  namespace: kube-system
+data:
+{%- if include.datastore == "etcd" %}
+  # Configure this with the location of your etcd cluster.
+  etcd_endpoints: "http://10.96.232.136:6666"
+
+  # If you're using TLS enabled etcd uncomment the following.
+  # You must also populate the Secret below with these files.
+  etcd_ca: ""   # "/calico-secrets/etcd-ca"
+  etcd_cert: "" # "/calico-secrets/etcd-cert"
+  etcd_key: ""  # "/calico-secrets/etcd-key"
+
+{%- endif %}
+{%- if include.typha == "true" %}
+  # You must set a non-zero value for Typha replicas below.
+  typha_service_name: "calico-typha"
+{%- else %}
+  # Typha is disabled.
+  typha_service_name: "none"
+
+{%- endif %}
+{%- if include.network == "calico" %}
+  # Configure the {{site.prodname}} backend to use.
+  calico_backend: "bird"
+
+  # Configure the MTU to use
+  veth_mtu: "1440"
+{%- elsif include.network == "flannel" %}
+  # The interface used by canal for host <-> host communication.
+  # If left blank, then the interface is chosen using the node's
+  # default route.
+  canal_iface: ""
+
+  # Whether or not to masquerade traffic to destinations not within
+  # the pod network.
+  masquerade: "true"
+{%- endif %}
+
+  # The CNI network configuration to install on each node.  The special
+  # values in this config will be automatically populated.
+{%- if include.datastore == "etcd"  and include.network == "flannel" %}
+  cni_network_config: |-
+    {
+        "name": "canal",
+        "cniVersion": "0.3.0",
+        "plugins": [
+            {
+                "type": "flannel",
+                "delegate": {
+                    "type": "calico",
+                    "include_default_routes": true,
+                    "etcd_endpoints": "__ETCD_ENDPOINTS__",
+                    "etcd_key_file": "__ETCD_KEY_FILE__",
+                    "etcd_cert_file": "__ETCD_CERT_FILE__",
+                    "etcd_ca_cert_file": "__ETCD_CA_CERT_FILE__",
+                    "log_level": "info",
+                    "policy": {
+                        "type": "k8s",
+                        "k8s_api_root": "https://__KUBERNETES_SERVICE_HOST__:__KUBERNETES_SERVICE_PORT__",
+                        "k8s_auth_token": "__SERVICEACCOUNT_TOKEN__"
+                    },
+                    "kubernetes": {
+                        "kubeconfig": "/etc/cni/net.d/__KUBECONFIG_FILENAME__"
+                    }
+                }
+            },
+            {
+                "type": "portmap",
+                "capabilities": {"portMappings": true},
+                "snat": true
+            }
+        ]
+    }
+{%- else %}
+  cni_network_config: |-
+    {
+      "name": "k8s-pod-network",
+      "cniVersion": "0.3.0",
+      "plugins": [
+        {
+          "type": "calico",
+          "log_level": "info",
+  {%- if include.datastore == "etcd" %}
+          "etcd_endpoints": "__ETCD_ENDPOINTS__",
+          "etcd_key_file": "__ETCD_KEY_FILE__",
+          "etcd_cert_file": "__ETCD_CERT_FILE__",
+          "etcd_ca_cert_file": "__ETCD_CA_CERT_FILE__",
+  {%- elsif include.datastore == "kdd" %}
+          "datastore_type": "kubernetes",
+          "nodename": "__KUBERNETES_NODE_NAME__",
+  {%- endif %}
+  {%- if include.network == "calico" %}
+          "mtu": __CNI_MTU__,
+  {%- elsif include.network == null %}
+          "mtu": 1500,
+  {%- endif %}
+  {%- if include.calico_ipam == "true" %}
+          "ipam": {
+              "type": "calico-ipam"
+          },
+  {%- else %}
+          "ipam": {
+            "type": "host-local",
+            "subnet": "usePodCidr"
+          },
+  {%- endif %}
+          "policy": {
+              "type": "k8s"
+          },
+          "kubernetes": {
+              "kubeconfig": "__KUBECONFIG_FILEPATH__"
+          }
+        },
+        {
+          "type": "portmap",
+          "snat": true,
+          "capabilities": {"portMappings": true}
+        }
+      ]
+    }
+{%- endif %}
+{%- if include.network == "flannel" and include.datastore == "kdd" %}
+
+  # Flannel network configuration. Mounted into the flannel container.
+  net-conf.json: |
+    {
+      "Network": "10.244.0.0/16",
+      "Backend": {
+        "Type": "vxlan"
+      }
+    }
+{%- endif %}
