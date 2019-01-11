@@ -265,7 +265,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 				}
 			})
 
-			By("assigning from host twice the number of available blocks all at once", func() {
+			By("assigning from the same host several times at once", func() {
 				wg := sync.WaitGroup{}
 				var testErr error
 
@@ -282,7 +282,6 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 							testErr = err
 						}
 						if len(ips) != 1 {
-							// All hosts should get an IP, although some will be from non-affine blocks.
 							log.WithError(err).Errorf("No IPs assigned for host %s", testhost)
 							testErr = fmt.Errorf("No IPs assigned to %s", testhost)
 						}
@@ -301,6 +300,10 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 				Expect(err).NotTo(HaveOccurred())
 
 				// Should only have a single affinity, for the test host.
+				// Note: There is a known race condition where this may not always be true, resulting
+				// in test flakes on this line. The race occurs when multiple calls on the same host attempt to pick a new block
+				// CIDR and one of them succeeds in claiming the block before the other finishes selecting a CIDR. As a
+				// result, two affine blocks are successfully claimed for the host.
 				Expect(len(affs.KVPairs)).To(Equal(1))
 
 				// For each affinity, expect the corresponding block to have the same affinity.
