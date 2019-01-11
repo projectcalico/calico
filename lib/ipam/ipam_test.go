@@ -466,7 +466,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreEtcdV3, 
 		// ensures that when a node used to be selected by an IP pool but is no longer selected, we
 		// properly release block affinities so that the block can be reassigned to a node that is
 		// actually selected by the IP pool.
-		It("should handle changing node selectors and release appropriately", func() {
+		It("should handle changing node selectors and release affinity appropriately (ReleaseIPs)", func() {
 			host := "host"
 			pool1 := cnet.MustParseNetwork("10.0.0.0/24")
 
@@ -533,7 +533,10 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreEtcdV3, 
 			Expect(len(out.KVPairs)).To(Equal(0))
 		})
 
-		It("should handle changing node selectors between two nodes", func() {
+		// Tests behavior when there are no more blocks available. For nodes which are selected by an
+		// IP pool, addresses should be borrowed from other blocks within the pool. For nodes which are
+		// not selected by that IP pool, an error should be returned and addresses should no be borrowed.
+		It("should handle changing node selectors between two nodes with no available blocks", func() {
 			node1 := "host1"
 			node2 := "host2"
 			pool1 := cnet.MustParseNetwork("10.0.0.0/30")
@@ -545,7 +548,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreEtcdV3, 
 			applyNode(bc, node2, nil)
 			applyPoolWithBlockSize(pool1.String(), true, `foo == "bar"`, 30)
 
-			// Assign 3 addresses to node1.
+			// Assign 3 of the 4 total addresses to node1.
 			v4, _, err := ic.AutoAssign(context.Background(), AutoAssignArgs{
 				Num4:     3,
 				Num6:     0,
@@ -580,6 +583,10 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreEtcdV3, 
 			})
 			Expect(err).ToNot(HaveOccurred())
 			Expect(len(v4)).To(Equal(1))
+
+			// The block should still be affine to node 1.
+			blocks = getAffineBlocks(bc, node1)
+			Expect(len(blocks)).To(Equal(1))
 
 			// The address assigned to node2 should come from the block affine to node1.
 			node2IP := v4[0].IP
