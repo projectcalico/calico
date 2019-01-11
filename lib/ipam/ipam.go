@@ -28,7 +28,6 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/names"
 	"github.com/projectcalico/libcalico-go/lib/net"
 	cnet "github.com/projectcalico/libcalico-go/lib/net"
-	"github.com/projectcalico/libcalico-go/lib/selector"
 )
 
 const (
@@ -289,7 +288,7 @@ func (c ipamClient) autoAssign(ctx context.Context, num int, handleID *string, a
 
 	// If there are no pools, we cannot assign addresses.
 	if len(pools) == 0 {
-		return nil, errors.New("no configured Calico pools")
+		return nil, fmt.Errorf("no configured Calico pools for node %v", host)
 	}
 
 	// First, we try to assign addresses from one of the existing host-affine blocks.  We
@@ -665,6 +664,8 @@ func (c ipamClient) releaseIPsFromBlock(ctx context.Context, ips []net.IP, block
 	logCtx := log.WithField("cidr", blockCIDR)
 	for i := 0; i < ipamEtcdRetries; i++ {
 		logCtx.Info("Getting block so we can release IPs")
+
+		// Get allocation block for cidr.
 		obj, err := c.client.Get(ctx, model.BlockKey{CIDR: blockCIDR}, "")
 		if err != nil {
 			if _, ok := err.(cerrors.ErrorResourceDoesNotExist); ok {
@@ -676,67 +677,32 @@ func (c ipamClient) releaseIPsFromBlock(ctx context.Context, ips []net.IP, block
 			}
 		}
 
-		// Block exists - get the allocationBlock from the KVPair.
-		b := allocationBlock{obj.Value.(*model.AllocationBlock)}
+		// Determine whether or not the block's pool still matches the node.
+		released, err := c.ensureConsistentAffinity(ctx, obj.Value.(*model.AllocationBlock))
+		if err != nil {
+			if updateErr, ok := err.(cerrors.ErrorResourceUpdateConflict); ok {
+				logCtx.WithError(updateErr).Debug("Failed to ensure consistent affinity")
+				continue
+			}
+			logCtx.WithError(err).Error("Error ensuring consistent affinity")
+			return nil, err
+		}
 
-		// Retrieve node for this allocation. We do this so we can clean up affinity for blocks
-		// which should no longer be affine to this host.
-		host := getHostAffinity(b.AllocationBlock)
-		logCtx.Debugf("block affinity: %s", host)
-		if host != "" {
-			// Get the corresponding node object.
-			logCtx.Debugf("Looking up node for host affinity %s", host)
-			node, err := c.client.Get(ctx, model.ResourceKey{Kind: v3.KindNode, Name: host}, "")
+		// Releasing the affinity modifies the block, requery so the code below
+		// can release the IP addresses without an update conflict.
+		if released {
+			obj, err = c.client.Get(ctx, model.BlockKey{CIDR: blockCIDR}, "")
 			if err != nil {
-				if _, ok := err.(cerrors.ErrorResourceDoesNotExist); !ok {
-					logCtx.WithError(err).WithField("node", host).Error("failed to get node for host")
-					return nil, err
+				if _, ok := err.(cerrors.ErrorResourceDoesNotExist); ok {
+					// The block does not exist - all addresses must be unassigned.
+					return ips, nil
 				}
-				// We still want to be able to release IPs if the node doesn't exist.
-				logCtx.Info("Node doesn't exist, releasing IPs anyway")
-			} else {
-				// Make sure the returned value is a valid node.
-				v3n, ok := node.Value.(*v3.Node)
-				if !ok {
-					return nil, fmt.Errorf("Datastore returned malformed node object")
-				}
-
-				// If the IP pool which owns this block no longer selects this node,
-				// we should release the block's affinity to this node so it can be
-				// used elsewhere.
-				pool := c.blockReaderWriter.getPoolForIP(cnet.IP{blockCIDR.IP})
-				if pool == nil {
-					// No IP pool owns this block.
-				} else if sel, err := selector.Parse(pool.Spec.NodeSelector); err != nil {
-					// Invalid selector syntax.
-					logCtx.WithError(err).WithField("selector", pool.Spec.NodeSelector).Error("failed to parse selector")
-					return nil, err
-				} else if !sel.Evaluate(v3n.Labels) {
-					// Pool does not match this node's label, release this block's affinity.
-					if err := c.ReleaseAffinity(ctx, blockCIDR, host); err != nil {
-						return nil, err
-					}
-
-					// Since this updates the block, we need to requery it so the code below
-					// can release the IP addresses without an update conflict.
-					obj, err = c.client.Get(ctx, model.BlockKey{CIDR: blockCIDR}, "")
-					if err != nil {
-						if _, ok := err.(cerrors.ErrorResourceDoesNotExist); ok {
-							// The block does not exist - all addresses must be unassigned.
-							return ips, nil
-						} else {
-							// Unexpected error reading block.
-							return nil, err
-						}
-					}
-
-					// Block exists - get the allocationBlock from the KVPair.
-					b = allocationBlock{obj.Value.(*model.AllocationBlock)}
-				}
+				return nil, err
 			}
 		}
 
 		// Release the IPs.
+		b := allocationBlock{obj.Value.(*model.AllocationBlock)}
 		unallocated, handles, err2 := b.release(ips)
 		if err2 != nil {
 			return nil, err2
@@ -1162,6 +1128,31 @@ func (c ipamClient) releaseByHandle(ctx context.Context, handleID string, blockC
 				return err
 			}
 		}
+
+		// Determine whether or not the block's pool still matches the node.
+		released, err := c.ensureConsistentAffinity(ctx, obj.Value.(*model.AllocationBlock))
+		if err != nil {
+			if updateErr, ok := err.(cerrors.ErrorResourceUpdateConflict); ok {
+				logCtx.WithError(updateErr).Debug("Failed to ensure consistent affinity")
+				continue
+			}
+			logCtx.WithError(err).Error("Error ensuring consistent affinity")
+			return err
+		}
+
+		// Since this updates the block, we need to requery it so the code below
+		// can release the IP addresses without an update conflict.
+		if released {
+			obj, err = c.client.Get(ctx, model.BlockKey{CIDR: blockCIDR}, "")
+			if err != nil {
+				if _, ok := err.(cerrors.ErrorResourceDoesNotExist); ok {
+					// The block does not exist - all addresses must be unassigned.
+					return nil
+				}
+				return err
+			}
+		}
+
 		block := allocationBlock{obj.Value.(*model.AllocationBlock)}
 		num := block.releaseByHandle(handleID)
 		if num == 0 {
@@ -1381,6 +1372,72 @@ func (c ipamClient) convertBackendToIPAMConfig(cfg *model.IPAMConfig) *IPAMConfi
 		StrictAffinity:     cfg.StrictAffinity,
 		AutoAllocateBlocks: cfg.AutoAllocateBlocks,
 	}
+}
+
+// ensureConsistentAffinity retrieves the pool and node for the given block and determines
+// if the pool still selects node. If it no longer matches, it will release the block
+// affinity for that node.
+// Returns a bool indicating if the block affinity was released.
+func (c ipamClient) ensureConsistentAffinity(ctx context.Context, b *model.AllocationBlock) (bool, error) {
+
+	// Retrieve node for this allocation. We do this so we can clean up affinity for blocks
+	// which should no longer be affine to this host.
+	host := getHostAffinity(b)
+	logCtx := log.WithFields(log.Fields{"cidr": b.CIDR, "host": host})
+
+	// If no hostname is found on the block affinity,
+	// there is no need to do an ip pool node selection check.
+	if host == "" {
+		logCtx.Debug("Block already has no affinity")
+		return false, nil
+	}
+
+	// If the IP pool which owns this block no longer selects this node,
+	// we should release the block's affinity to this node so it can be
+	// used elsewhere.
+	logCtx.Debugf("Looking up node labels for host affinity")
+	node, err := c.client.Get(ctx, model.ResourceKey{Kind: v3.KindNode, Name: host}, "")
+	if err != nil {
+		if _, ok := err.(cerrors.ErrorResourceDoesNotExist); !ok {
+			logCtx.WithError(err).WithField("node", host).Error("Failed to get node for host")
+			return false, err
+		}
+		logCtx.Info("Node doesn't exist, no need to release affinity")
+		return false, nil
+	}
+
+	// Make sure the returned value is a valid node.
+	v3n, ok := node.Value.(*v3.Node)
+	if !ok {
+		return false, fmt.Errorf("Datastore returned malformed node object")
+	}
+
+	// Fetch the pool for the given CIDR and check if it selects the node.
+	pool := c.blockReaderWriter.getPoolForIP(cnet.IP{b.CIDR.IPNet.IP})
+	if pool == nil {
+		logCtx.Debug("No pools own this block")
+		return false, nil
+	} else if sel, err := pool.SelectsNode(*v3n); err != nil {
+		logCtx.WithField("selector", pool.Spec.NodeSelector).WithError(err).Error("Failed to determine node selection")
+		return false, err
+	} else if sel {
+		logCtx.Debug("Pool selects node, no change")
+		return false, nil
+	}
+	logCtx.WithField("selector", pool.Spec.NodeSelector).Debug("Pool no longer selects node, releasing block affinity")
+
+	// Pool does not match this node's label, release this block's affinity.
+	if err = c.blockReaderWriter.releaseBlockAffinity(ctx, host, b.CIDR); err != nil {
+		if _, ok := err.(errBlockClaimConflict); ok {
+			// Not claimed by this host - ignore.
+		} else if _, ok := err.(cerrors.ErrorResourceDoesNotExist); ok {
+			// Block does not exist - ignore.
+		} else {
+			return false, err
+		}
+	}
+
+	return true, err
 }
 
 func decideHostname(host string) (string, error) {
