@@ -3,12 +3,12 @@ title: Profile
 canonical_url: 'https://docs.projectcalico.org/v3.5/reference/calicoctl/resources/profile'
 ---
 
-A profile resource (`Profile`) represents a set of rules which are applied
-to the individual endpoints to which this profile has been assigned.
+Profiles provide a way to group multiple endpoints so that they inherit a shared set of labels. For historic reasons, Profiles can also include
+policy rules, but that feature is deprecated in favor of the much more
+flexible [NetworkPolicy]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/networkpolicy) and
+[GlobalNetworkPolicy]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/globalnetworkpolicy) resources.
 
 Each {{site.prodname}} endpoint or host endpoint can be assigned to zero or more profiles.
-
-Also see the [NetworkPolicy]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/networkpolicy) and [GlobalNetworkPolicy]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/globalnetworkpolicy) which provide an alternate way to select what policy is applied to an endpoint.
 
 For `calicoctl` [commands]({{site.baseurl}}/{{page.version}}/reference/calicoctl/commands/) that specify a resource type on the CLI, the following
 aliases are supported (all case insensitive): `profile`, `profiles`, `pro`, `pros`.
@@ -16,14 +16,14 @@ aliases are supported (all case insensitive): `profile`, `profiles`, `pro`, `pro
 ### Sample YAML
 
 The following sample profile allows all traffic from endpoints that
-have the profile label set to `profile1` (i.e. endpoints that reference this profile),
+have the label `stage: development` (i.e. endpoints that reference this profile),
 except that *all* traffic from 10.0.20.0/24 is denied.
 
 ```yaml
 apiVersion: projectcalico.org/v3
 kind: Profile
 metadata:
-  name: profile1
+  name: dev-apps
 spec:
   ingress:
   - action: Deny
@@ -32,11 +32,11 @@ spec:
       - 10.0.20.0/24
   - action: Allow
     source:
-      selector: profile == 'profile1'
+      selector: stage == 'development'
   egress:
   - action: Allow
   labelsToApply:
-    profile: profile1
+    stage: development
 ```
 
 ### Definition
@@ -53,8 +53,8 @@ spec:
 
 | Field       | Description                 | Accepted Values   | Schema | Default    |
 |-------------|-----------------------------|-------------------|--------|------------|
-| ingress  | The ingress rules belonging to this profile. | | List of [Rule](#rule) |
-| egress   | The egress rules belonging to this profile. | | List of [Rule](#rule)  |
+| ingress (deprecated) | The ingress rules belonging to this profile. | | List of [Rule](#rule) |
+| egress  (deprecated) | The egress rules belonging to this profile. | | List of [Rule](#rule)  |
 | labelsToApply | An optional set of labels to apply to each endpoint in this profile (in addition to the endpoint's own labels) |  | map |
 
 #### Rule
