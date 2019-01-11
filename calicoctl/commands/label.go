@@ -179,11 +179,11 @@ Description:
 	}
 
 	if remove {
-		fmt.Printf("label %s is removed from %s %s\n", key, kind, name)
+		fmt.Printf("Successfully removed label %s from %s %s\n", key, kind, name)
 	} else if overwritten {
-		fmt.Printf("label %s of %s %s is overwitten\n", key, kind, name)
+		fmt.Printf("Successfully updated label %s on %s %s\n", key, kind, name)
 	} else {
-		fmt.Printf("label %s of %s %s is set\n", key, kind, name)
+		fmt.Printf("Successfully set label %s on %s %s\n", key, kind, name)
 	}
 	return
 }
