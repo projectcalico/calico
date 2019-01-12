@@ -3,7 +3,7 @@ import:
 - package: github.com/BurntSushi/toml
 - package: github.com/kelseyhightower/memkv
 - package: github.com/projectcalico/libcalico-go
-  version: d5423d9e846b139ba059b255a887ee654544b3d6
+  version: 32c8c69e55863c4c03cb61af60ad070e075b0c04
   subpackages:
   - lib/apiconfig
   - lib/backend/api
