@@ -533,6 +533,92 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreEtcdV3, 
 			Expect(len(out.KVPairs)).To(Equal(0))
 		})
 
+		// Same test as above but using the ReleaseByHandle IPAM method
+		It("should handle changing node selectors and release affinity appropriately (ReleaseByHandle)", func() {
+			host := "host"
+			pool1 := cnet.MustParseNetwork("10.0.0.0/24")
+
+			bc.Clean()
+			deleteAllPools()
+
+			applyNode(bc, host, map[string]string{"foo": "bar"})
+			applyPool(pool1.String(), true, `foo == "bar"`)
+
+			handleID1 := "handle1"
+			handleID2 := "handle2"
+			handleID3 := "handle3"
+
+			// Assign three addresses to the node.
+			v4net1, _, err := ic.AutoAssign(context.Background(), AutoAssignArgs{
+				Num4:     1,
+				Num6:     0,
+				Hostname: host,
+				HandleID: &handleID1,
+			})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(len(v4net1)).To(Equal(1))
+
+			v4net2, _, err := ic.AutoAssign(context.Background(), AutoAssignArgs{
+				Num4:     1,
+				Num6:     0,
+				Hostname: host,
+				HandleID: &handleID2,
+			})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(len(v4net2)).To(Equal(1))
+
+			v4net3, _, err := ic.AutoAssign(context.Background(), AutoAssignArgs{
+				Num4:     1,
+				Num6:     0,
+				Hostname: host,
+				HandleID: &handleID3,
+			})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(len(v4net3)).To(Equal(1))
+
+			// Should have one affine block to this host.
+			blocks := getAffineBlocks(bc, host)
+			Expect(len(blocks)).To(Equal(1))
+
+			// Expect all the IPs to be from pool1.
+			Expect(pool1.IPNet.Contains(v4net1[0].IP)).To(BeTrue(), fmt.Sprintf("%s not in pool %s", v4net1[0].IP, pool1))
+			Expect(pool1.IPNet.Contains(v4net2[0].IP)).To(BeTrue(), fmt.Sprintf("%s not in pool %s", v4net2[0].IP, pool1))
+			Expect(pool1.IPNet.Contains(v4net3[0].IP)).To(BeTrue(), fmt.Sprintf("%s not in pool %s", v4net3[0].IP, pool1))
+
+			// Release one of the IPs.
+			err = ic.ReleaseByHandle(context.Background(), handleID1)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Should still have one affine block to this host.
+			blocks = getAffineBlocks(bc, host)
+			Expect(len(blocks)).To(Equal(1))
+
+			// Change the selector for the IP pool so that it no longer matches node1.
+			applyPool(pool1.String(), true, `foo != "bar"`)
+
+			// Release another one of the IPs.
+			err = ic.ReleaseByHandle(context.Background(), handleID2)
+			Expect(err).NotTo(HaveOccurred())
+
+			// The block should no longer have an affinity to this host.
+			Expect(len(getAffineBlocks(bc, host))).To(Equal(0))
+
+			// But it should still exist.
+			opts := model.BlockListOptions{IPVersion: 4}
+			out, err := bc.List(context.Background(), opts, "")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(len(out.KVPairs)).To(Equal(1))
+
+			// Release the last IP.
+			err = ic.ReleaseByHandle(context.Background(), handleID3)
+			Expect(err).NotTo(HaveOccurred())
+
+			// The block now has no affinity, and no IPs, so it should be deleted.
+			out, err = bc.List(context.Background(), opts, "")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(len(out.KVPairs)).To(Equal(0))
+		})
+
 		// Tests behavior when there are no more blocks available. For nodes which are selected by an
 		// IP pool, addresses should be borrowed from other blocks within the pool. For nodes which are
 		// not selected by that IP pool, an error should be returned and addresses should no be borrowed.
