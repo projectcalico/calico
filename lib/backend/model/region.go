@@ -14,30 +14,15 @@
 
 package model
 
-import (
-	"fmt"
-	"strings"
-)
-
 const (
 	NoRegion     string = "no-region"
 	RegionPrefix string = "region-"
 )
 
-func regionString(region string) string {
+func RegionString(region string) string {
 	if region != "" {
 		return RegionPrefix + region
 	} else {
 		return NoRegion
 	}
-}
-
-func regionStringToRegion(regionString string) (string, error) {
-	if regionString == NoRegion {
-		return "", nil
-	}
-	if strings.HasPrefix(regionString, RegionPrefix) {
-		return strings.TrimPrefix(regionString, RegionPrefix), nil
-	}
-	return "", fmt.Errorf("'%v' is not a valid region string", regionString)
 }
