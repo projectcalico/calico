@@ -160,7 +160,7 @@ loop:
 					OrchestratorID: msg.Id.OrchestratorId,
 					WorkloadID:     msg.Id.WorkloadId,
 					EndpointID:     msg.Id.EndpointId,
-					Region:         esr.region,
+					RegionString:   model.RegionString(esr.region),
 				}
 				status = msg.Status.Status
 			case *proto.WorkloadEndpointStatusRemove:
@@ -169,7 +169,7 @@ loop:
 					OrchestratorID: msg.Id.OrchestratorId,
 					WorkloadID:     msg.Id.WorkloadId,
 					EndpointID:     msg.Id.EndpointId,
-					Region:         esr.region,
+					RegionString:   model.RegionString(esr.region),
 				}
 			case *proto.HostEndpointStatusUpdate:
 				statID = model.HostEndpointStatusKey{
@@ -258,8 +258,8 @@ func (esr *EndpointStatusReporter) attemptResync(ctx context.Context) {
 	var kvs []*model.KVPair
 
 	wlListOpts := model.WorkloadEndpointStatusListOptions{
-		Hostname: esr.hostname,
-		Region:   esr.region,
+		Hostname:     esr.hostname,
+		RegionString: model.RegionString(esr.region),
 	}
 	kvl, err := esr.datastore.List(ctx, wlListOpts, "")
 	if err == nil {

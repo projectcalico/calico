@@ -38,6 +38,7 @@ var localWlEPKey = model.WorkloadEndpointStatusKey{
 	OrchestratorID: "orch",
 	WorkloadID:     "wlid",
 	EndpointID:     "epid",
+	RegionString:   "no-region",
 }
 
 var localHostEPKey = model.HostEndpointStatusKey{
@@ -50,6 +51,7 @@ var remoteWlEPKey = model.WorkloadEndpointStatusKey{
 	OrchestratorID: "orch",
 	WorkloadID:     "wlid",
 	EndpointID:     "epid",
+	RegionString:   "no-region",
 }
 
 var remoteHostEPKey = model.HostEndpointStatusKey{
@@ -98,13 +100,14 @@ var updatedWlEPKey = model.WorkloadEndpointStatusKey{
 	OrchestratorID: "orch",
 	WorkloadID:     "updatedWL",
 	EndpointID:     "updatedEP",
+	RegionString:   "no-region",
 }
 var updatedWlEPKeyRegion = model.WorkloadEndpointStatusKey{
 	Hostname:       hostname,
 	OrchestratorID: "orch",
 	WorkloadID:     "updatedWL",
 	EndpointID:     "updatedEP",
-	Region:         "Europe",
+	RegionString:   "region-Europe",
 }
 
 var protoHostID = proto.HostEndpointID{
