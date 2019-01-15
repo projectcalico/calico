@@ -58,6 +58,11 @@ rules:
       - namespaces
     verbs:
       - get
+  - apiGroups: [""]
+    resources:
+      - nodes/status
+    verbs:
+      - patch
 
 ---
 
