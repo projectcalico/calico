@@ -513,10 +513,10 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreEtcdV3, 
 			Expect(len(unallocated)).To(Equal(0))
 			Expect(err).NotTo(HaveOccurred())
 
-			// The block should no longer have an affinity to this host.
-			Expect(len(getAffineBlocks(bc, host))).To(Equal(0))
+			// The block still have an affinity to this host.
+			Expect(len(getAffineBlocks(bc, host))).To(Equal(1))
 
-			// But it should still exist.
+			// And it should still exist.
 			opts := model.BlockListOptions{IPVersion: 4}
 			out, err := bc.List(context.Background(), opts, "")
 			Expect(err).NotTo(HaveOccurred())
@@ -600,10 +600,10 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreEtcdV3, 
 			err = ic.ReleaseByHandle(context.Background(), handleID2)
 			Expect(err).NotTo(HaveOccurred())
 
-			// The block should no longer have an affinity to this host.
-			Expect(len(getAffineBlocks(bc, host))).To(Equal(0))
+			// The block still have an affinity to this host.
+			Expect(len(getAffineBlocks(bc, host))).To(Equal(1))
 
-			// But it should still exist.
+			// And it should still exist.
 			opts := model.BlockListOptions{IPVersion: 4}
 			out, err := bc.List(context.Background(), opts, "")
 			Expect(err).NotTo(HaveOccurred())
@@ -677,6 +677,158 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreEtcdV3, 
 			// The address assigned to node2 should come from the block affine to node1.
 			node2IP := v4[0].IP
 			Expect(pool1.IPNet.Contains(node2IP)).To(BeTrue(), fmt.Sprintf("%s not in pool %s", node2IP, pool1))
+		})
+
+		// Allocates IPs from a pool that has a matching node selector,
+		// deallocates them all, deselects the pool from the node,
+		// tests that the block affinity should be released.
+		It("should release affinity and block when pool is empty and node selector is deselected", func() {
+			host := "host"
+			pool1 := cnet.MustParseNetwork("10.0.0.0/24")
+
+			bc.Clean()
+			deleteAllPools()
+
+			applyNode(bc, host, map[string]string{"foo": "bar"})
+			applyPool(pool1.String(), true, `foo == "bar"`)
+
+			// Assign three addresses to the node.
+			v4nets, _, err := ic.AutoAssign(context.Background(), AutoAssignArgs{
+				Num4:     3,
+				Num6:     0,
+				Hostname: host,
+			})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(len(v4nets)).To(Equal(3))
+
+			// Should have one affine block to this host.
+			blocks := getAffineBlocks(bc, host)
+			Expect(len(blocks)).To(Equal(1))
+
+			// Expect all the IPs to be from pool1.
+			var v4IPs []cnet.IP
+			for _, a := range v4nets {
+				Expect(pool1.IPNet.Contains(a.IP)).To(BeTrue(), fmt.Sprintf("%s not in pool %s", a.IP, pool1))
+				v4IPs = append(v4IPs, cnet.IP{a.IP})
+			}
+
+			// Release all IPs.
+			unallocated, err := ic.ReleaseIPs(context.Background(), v4IPs)
+			Expect(len(unallocated)).To(Equal(0))
+			Expect(err).NotTo(HaveOccurred())
+
+			// Change the selector for the IP pool so that it no longer matches node1.
+			applyPool(pool1.String(), true, `foo != "bar"`)
+
+			// The block should still have an affinity to this host.
+			Expect(len(getAffineBlocks(bc, host))).To(Equal(1))
+
+			// The allocation block should still exist.
+			opts := model.BlockListOptions{IPVersion: 4}
+			out, err := bc.List(context.Background(), opts, "")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(len(out.KVPairs)).To(Equal(1))
+
+			// Create a second pool and assign a new address to the node.
+			pool2 := cnet.MustParseNetwork("20.0.0.0/24")
+			applyPool(pool2.String(), true, "all()")
+
+			// Assign three addresses to the node.
+			v4nets, _, err = ic.AutoAssign(context.Background(), AutoAssignArgs{
+				Num4:     3,
+				Num6:     0,
+				Hostname: host,
+			})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(len(v4nets)).To(Equal(3))
+
+			// Expect all the IPs to be from pool2.
+			v4IPs = []cnet.IP{}
+			for _, a := range v4nets {
+				Expect(pool2.IPNet.Contains(a.IP)).To(BeTrue(), fmt.Sprintf("%s not in pool %s", a.IP, pool2))
+				v4IPs = append(v4IPs, cnet.IP{a.IP})
+			}
+
+			// The block should only have one affinity to this host.
+			blocks = getAffineBlocks(bc, host)
+			Expect(len(blocks)).To(Equal(1))
+			Expect(pool2.IPNet.Contains(blocks[0].IP)).To(BeTrue())
+
+			// The block should only have one affinity.
+			out, err = bc.List(context.Background(), opts, "")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(len(out.KVPairs)).To(Equal(1))
+
+		})
+
+		// Create one ip pool, call AutoAssign, call ReleaseIPs,
+		// create another ip pool, call AutoAssign explicitly passing the second pool,
+		// ensure that the block affinity from the first ip pool is not released.
+		It("should not release blocks when the ips within are released but still selects the node while a different pool is explicitly requested", func() {
+			host := "host"
+			pool1 := cnet.MustParseNetwork("10.0.0.0/24")
+
+			bc.Clean()
+			deleteAllPools()
+
+			applyNode(bc, host, map[string]string{"foo": "bar"})
+			applyPool(pool1.String(), true, `foo == "bar"`)
+
+			// Assign three addresses to the node.
+			v4nets, _, err := ic.AutoAssign(context.Background(), AutoAssignArgs{
+				Num4:     3,
+				Num6:     0,
+				Hostname: host,
+			})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(len(v4nets)).To(Equal(3))
+
+			// Should have one affine block to this host.
+			blocks := getAffineBlocks(bc, host)
+			Expect(len(blocks)).To(Equal(1))
+
+			// Expect all the IPs to be from pool1.
+			var v4IPs []cnet.IP
+			for _, a := range v4nets {
+				Expect(pool1.IPNet.Contains(a.IP)).To(BeTrue(), fmt.Sprintf("%s not in pool %s", a.IP, pool1))
+				v4IPs = append(v4IPs, cnet.IP{a.IP})
+			}
+
+			// Release all IPs.
+			unallocated, err := ic.ReleaseIPs(context.Background(), v4IPs)
+			Expect(len(unallocated)).To(Equal(0))
+			Expect(err).NotTo(HaveOccurred())
+
+			// The block should still have an affinity to this host.
+			Expect(len(getAffineBlocks(bc, host))).To(Equal(1))
+
+			// The allocation block should still exist.
+			opts := model.BlockListOptions{IPVersion: 4}
+			out, err := bc.List(context.Background(), opts, "")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(len(out.KVPairs)).To(Equal(1))
+
+			// Create a second pool and assign a new address to the node.
+			pool2 := cnet.MustParseNetwork("20.0.0.0/24")
+			applyPool(pool2.String(), true, "all()")
+
+			// Assign three addresses to the node.
+			v4nets, _, err = ic.AutoAssign(context.Background(), AutoAssignArgs{
+				Num4:      3,
+				Num6:      0,
+				Hostname:  host,
+				IPv4Pools: []cnet.IPNet{pool2},
+			})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(len(v4nets)).To(Equal(3))
+
+			// The block should still have an affinity to this host.
+			Expect(len(getAffineBlocks(bc, host))).To(Equal(2))
+
+			// The allocation block should still exist.
+			out, err = bc.List(context.Background(), opts, "")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(len(out.KVPairs)).To(Equal(2))
 		})
 	})
 
@@ -1060,7 +1212,7 @@ var _ = DescribeTable("determinePools tests",
 		}
 
 		// Call determinePools
-		pools, err := ic.(*ipamClient).determinePools(reqPools, 4, node)
+		pools, _, err := ic.(*ipamClient).determinePools(reqPools, 4, node)
 
 		// Assert on any returned error.
 		if expectErr {

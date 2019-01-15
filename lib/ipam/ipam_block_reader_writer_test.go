@@ -552,7 +552,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 			})
 
 			By("attempting to release the block", func() {
-				err := rw.releaseBlockAffinity(ctx, hostA, *net)
+				err := rw.releaseBlockAffinity(ctx, hostA, *net, false)
 				Expect(err).NotTo(BeNil())
 
 				// Should hit a resource update conflict.
@@ -788,7 +788,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 			})
 
 			By("releasing the affinity", func() {
-				err := rw.releaseBlockAffinity(ctx, host, *net)
+				err := rw.releaseBlockAffinity(ctx, host, *net, false)
 				Expect(err).NotTo(HaveOccurred())
 			})
 
@@ -805,7 +805,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 			})
 
 			By("releasing the affinity again", func() {
-				err := rw.releaseBlockAffinity(ctx, host, *net)
+				err := rw.releaseBlockAffinity(ctx, host, *net, false)
 				Expect(err).To(HaveOccurred())
 				_, ok := err.(cerrors.ErrorResourceDoesNotExist)
 				Expect(ok).To(BeTrue())
