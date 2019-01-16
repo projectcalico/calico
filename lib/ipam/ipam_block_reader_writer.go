@@ -37,7 +37,10 @@ type blockReaderWriter struct {
 	pools  PoolAccessorInterface
 }
 
-func (rw blockReaderWriter) getAffineBlocks(ctx context.Context, host string, ver int, pools []v3.IPPool) ([]cnet.IPNet, error) {
+func (rw blockReaderWriter) getAffineBlocks(ctx context.Context, host string, ver int, pools []v3.IPPool) (blocksInPool, blocksNotInPool []cnet.IPNet, err error) {
+	blocksInPool = []cnet.IPNet{}
+	blocksNotInPool = []cnet.IPNet{}
+
 	// Lookup all blocks by providing an empty BlockListOptions
 	// to the List operation.
 	opts := model.BlockAffinityListOptions{Host: host, IPVersion: ver}
@@ -46,39 +49,44 @@ func (rw blockReaderWriter) getAffineBlocks(ctx context.Context, host string, ve
 		if _, ok := err.(cerrors.ErrorResourceDoesNotExist); ok {
 			// The block path does not exist yet.  This is OK - it means
 			// there are no affine blocks.
-			return []cnet.IPNet{}, nil
+			return
 
 		} else {
 			log.Errorf("Error getting affine blocks: %v", err)
-			return nil, err
+			return
 		}
 	}
 
 	// Iterate through and extract the block CIDRs.
-	ids := []cnet.IPNet{}
 	for _, o := range datastoreObjs.KVPairs {
 		k := o.Key.(model.BlockAffinityKey)
 
 		// Add the block if no IP pools were specified, or if IP pools were specified
 		// and the block falls within the given IP pools.
 		if len(pools) == 0 {
-			ids = append(ids, k.CIDR)
+			blocksInPool = append(blocksInPool, k.CIDR)
 		} else {
+			found := false
 			for _, pool := range pools {
-				_, poolNet, err := cnet.ParseCIDR(pool.Spec.CIDR)
+				var poolNet *cnet.IPNet
+				_, poolNet, err = cnet.ParseCIDR(pool.Spec.CIDR)
 				if err != nil {
 					log.Errorf("Error parsing CIDR: %s from pool: %s %v", pool.Spec.CIDR, pool.Name, err)
-					return nil, err
+					return
 				}
 
 				if poolNet.Contains(k.CIDR.IPNet.IP) {
-					ids = append(ids, k.CIDR)
+					blocksInPool = append(blocksInPool, k.CIDR)
+					found = true
 					break
 				}
 			}
+			if !found {
+				blocksNotInPool = append(blocksNotInPool, k.CIDR)
+			}
 		}
 	}
-	return ids, nil
+	return
 }
 
 // findUnclaimedBlock finds a block cidr which does not yet exist within the given list of pools. The provided pools
@@ -247,7 +255,7 @@ func (rw blockReaderWriter) confirmAffinity(ctx context.Context, aff *model.KVPa
 
 // releaseBlockAffinity releases the host's affinity to the given block, and returns an affinityClaimedError if
 // the host does not claim an affinity for the block.
-func (rw blockReaderWriter) releaseBlockAffinity(ctx context.Context, host string, blockCIDR cnet.IPNet) error {
+func (rw blockReaderWriter) releaseBlockAffinity(ctx context.Context, host string, blockCIDR cnet.IPNet, requireEmpty bool) error {
 	// Make sure hostname is not empty.
 	if host == "" {
 		log.Errorf("Hostname can't be empty")
@@ -282,6 +290,12 @@ func (rw blockReaderWriter) releaseBlockAffinity(ctx context.Context, host strin
 			logCtx.Warn("Failed to delete stale affinity")
 		}
 		return errBlockClaimConflict{Block: b}
+	}
+
+	// Don't release block affinity if we require it to be empty and it's not empty.
+	if requireEmpty && !b.empty() {
+		logCtx.Debug("Block must be empty but is not empty, refusing to remove affinity.")
+		return nil
 	}
 
 	// Mark the affinity as pending deletion.
@@ -335,8 +349,10 @@ func (rw blockReaderWriter) releaseBlockAffinity(ctx context.Context, host strin
 
 // getPoolForIP returns the pool if the given IP is within a configured
 // Calico pool, and nil otherwise.
-func (rw blockReaderWriter) getPoolForIP(ip cnet.IP) *v3.IPPool {
-	enabledPools, _ := rw.pools.GetEnabledPools(ip.Version())
+func (rw blockReaderWriter) getPoolForIP(ip cnet.IP, enabledPools []v3.IPPool) *v3.IPPool {
+	if enabledPools == nil {
+		enabledPools, _ = rw.pools.GetEnabledPools(ip.Version())
+	}
 	for _, p := range enabledPools {
 		// Compare any enabled pools.
 		_, pool, err := cnet.ParseCIDR(p.Spec.CIDR)
