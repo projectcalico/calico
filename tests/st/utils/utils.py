@@ -144,13 +144,23 @@ class CalicoctlOutput:
         if text:
             self.assert_output_contains(text)
 
+    def assert_output_equals(self, text):
+        """
+        Assert the calicoctl command output is exactly the supplied text.
+        Args:
+            text:   Expected text in the command output.
+        """
+        if not text:
+            return
+        assert text == self.output, "Expected output to exactly match; \n" + \
+                                    "command=" + self.command + "\noutput=\n" + self.output + \
+                                    "\nexpected=\n" + text
+
     def assert_output_contains(self, text):
         """
         Assert the calicoctl command output contains the supplied text.
         Args:
-            data:   The data to compare
-            format: The expected output format of the data.
-            text:   (optional) Expected text in the command output.
+            text:   Expected text in the command output.
         """
         if not text:
             return
