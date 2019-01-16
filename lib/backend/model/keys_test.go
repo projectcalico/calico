@@ -79,6 +79,30 @@ var _ = Describe("keys with region component", func() {
 		_, err := KeyToDefaultPath(WorkloadEndpointStatusKey{Hostname: "h1", EndpointID: "e1", WorkloadID: "w1", OrchestratorID: "o1"})
 		Expect(err).To(HaveOccurred())
 	})
+
+	It("should give correct path root for ActiveStatusReportListOptions with unspecified region string", func() {
+		Expect(ListOptionsToDefaultPathRoot(ActiveStatusReportListOptions{Hostname: "h1"})).To(Equal("/calico/felix/v2/"))
+	})
+
+	It("should give correct path root for LastStatusReportListOptions with unspecified region string", func() {
+		Expect(ListOptionsToDefaultPathRoot(LastStatusReportListOptions{Hostname: "h1"})).To(Equal("/calico/felix/v2/"))
+	})
+
+	It("should give correct path root for WorkloadEndpointStatusListOptions with unspecified region string", func() {
+		Expect(ListOptionsToDefaultPathRoot(WorkloadEndpointStatusListOptions{Hostname: "h1"})).To(Equal("/calico/felix/v2/"))
+	})
+
+	It("should give correct path root for ActiveStatusReportListOptions with valid region string", func() {
+		Expect(ListOptionsToDefaultPathRoot(ActiveStatusReportListOptions{Hostname: "h1", RegionString: "region-us"})).To(Equal("/calico/felix/v2/region-us/host/h1/status"))
+	})
+
+	It("should give correct path root for LastStatusReportListOptions with valid region string", func() {
+		Expect(ListOptionsToDefaultPathRoot(LastStatusReportListOptions{Hostname: "h1", RegionString: "region-us"})).To(Equal("/calico/felix/v2/region-us/host/h1/last_reported_status"))
+	})
+
+	It("should give correct path root for WorkloadEndpointStatusListOptions with valid region string", func() {
+		Expect(ListOptionsToDefaultPathRoot(WorkloadEndpointStatusListOptions{Hostname: "h1", RegionString: "region-us"})).To(Equal("/calico/felix/v2/region-us/host/h1/workload"))
+	})
 })
 
 var _ = DescribeTable(

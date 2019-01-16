@@ -97,7 +97,11 @@ type WorkloadEndpointStatusListOptions struct {
 }
 
 func (options WorkloadEndpointStatusListOptions) defaultPathRoot() string {
-	k := "/calico/felix/v2/" + options.RegionString + "/host"
+	k := "/calico/felix/v2/"
+	if options.RegionString == "" {
+		return k
+	}
+	k = k + options.RegionString + "/host"
 	if options.Hostname == "" {
 		return k
 	}

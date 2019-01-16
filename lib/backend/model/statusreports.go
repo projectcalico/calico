@@ -67,7 +67,11 @@ type ActiveStatusReportListOptions struct {
 }
 
 func (options ActiveStatusReportListOptions) defaultPathRoot() string {
-	k := "/calico/felix/v2/" + options.RegionString + "/host"
+	k := "/calico/felix/v2/"
+	if options.RegionString == "" {
+		return k
+	}
+	k = k + options.RegionString + "/host"
 	if options.Hostname == "" {
 		return k
 	}
@@ -133,7 +137,11 @@ type LastStatusReportListOptions struct {
 }
 
 func (options LastStatusReportListOptions) defaultPathRoot() string {
-	k := "/calico/felix/v2/" + options.RegionString + "/host"
+	k := "/calico/felix/v2/"
+	if options.RegionString == "" {
+		return k
+	}
+	k = k + options.RegionString + "/host"
 	if options.Hostname == "" {
 		return k
 	}
