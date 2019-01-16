@@ -14,6 +14,8 @@
 
 package model
 
+import "fmt"
+
 const (
 	NoRegion     string = "no-region"
 	RegionPrefix string = "region-"
@@ -25,4 +27,8 @@ func RegionString(region string) string {
 	} else {
 		return NoRegion
 	}
+}
+
+func ErrorSlashInRegionString(regionString string) error {
+	return fmt.Errorf("RegionString %v is invalid because it includes a slash", regionString)
 }

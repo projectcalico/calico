@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"reflect"
 	"regexp"
+	"strings"
 
 	"github.com/projectcalico/libcalico-go/lib/errors"
 	log "github.com/sirupsen/logrus"
@@ -44,6 +45,9 @@ func (key ActiveStatusReportKey) defaultDeletePath() (string, error) {
 	}
 	if key.RegionString == "" {
 		return "", errors.ErrorInsufficientIdentifiers{Name: "regionString"}
+	}
+	if strings.Contains(key.RegionString, "/") {
+		return "", ErrorSlashInRegionString(key.RegionString)
 	}
 	e := fmt.Sprintf("/calico/felix/v2/%s/host/%s/status", key.RegionString, key.Hostname)
 	return e, nil
@@ -114,6 +118,9 @@ func (key LastStatusReportKey) defaultDeletePath() (string, error) {
 	}
 	if key.RegionString == "" {
 		return "", errors.ErrorInsufficientIdentifiers{Name: "regionString"}
+	}
+	if strings.Contains(key.RegionString, "/") {
+		return "", ErrorSlashInRegionString(key.RegionString)
 	}
 	e := fmt.Sprintf("/calico/felix/v2/%s/host/%s/last_reported_status", key.RegionString, key.Hostname)
 	return e, nil

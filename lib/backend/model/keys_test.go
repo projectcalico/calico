@@ -103,6 +103,16 @@ var _ = Describe("keys with region component", func() {
 	It("should give correct path root for WorkloadEndpointStatusListOptions with valid region string", func() {
 		Expect(ListOptionsToDefaultPathRoot(WorkloadEndpointStatusListOptions{Hostname: "h1", RegionString: "region-us"})).To(Equal("/calico/felix/v2/region-us/host/h1/workload"))
 	})
+
+	It("should return error for a Felix status key with invalid region string", func() {
+		_, err := KeyToDefaultPath(ActiveStatusReportKey{Hostname: "h1", RegionString: "region-us/east"})
+		Expect(err).To(HaveOccurred())
+	})
+
+	It("should return error for a workload status key with invalid region string", func() {
+		_, err := KeyToDefaultPath(WorkloadEndpointStatusKey{Hostname: "h1", EndpointID: "e1", WorkloadID: "w1", OrchestratorID: "o1", RegionString: "region-us/east"})
+		Expect(err).To(HaveOccurred())
+	})
 })
 
 var _ = DescribeTable(

@@ -16,6 +16,7 @@ package model
 
 import (
 	"fmt"
+	"strings"
 
 	"regexp"
 
@@ -53,6 +54,9 @@ func (key WorkloadEndpointStatusKey) defaultPath() (string, error) {
 	if key.RegionString == "" {
 		return "", errors.ErrorInsufficientIdentifiers{Name: "regionString"}
 	}
+	if strings.Contains(key.RegionString, "/") {
+		return "", ErrorSlashInRegionString(key.RegionString)
+	}
 	return fmt.Sprintf("/calico/felix/v2/%s/host/%s/workload/%s/%s/endpoint/%s",
 		key.RegionString,
 		key.Hostname, escapeName(key.OrchestratorID), escapeName(key.WorkloadID), escapeName(key.EndpointID)), nil
@@ -71,6 +75,12 @@ func (key WorkloadEndpointStatusKey) defaultDeleteParentPaths() ([]string, error
 	}
 	if key.WorkloadID == "" {
 		return nil, errors.ErrorInsufficientIdentifiers{Name: "workload"}
+	}
+	if key.RegionString == "" {
+		return nil, errors.ErrorInsufficientIdentifiers{Name: "regionString"}
+	}
+	if strings.Contains(key.RegionString, "/") {
+		return nil, ErrorSlashInRegionString(key.RegionString)
 	}
 	workload := fmt.Sprintf("/calico/felix/v2/%s/host/%s/workload/%s/%s",
 		key.RegionString,
