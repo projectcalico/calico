@@ -204,6 +204,13 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreEtcdV3, 
 		}, 20)
 	})
 
+	Describe("RemoveIPAMHost tests", func() {
+		It("should succeed if the host already doesn't exist", func() {
+			err := ic.RemoveIPAMHost(context.Background(), "randomhost")
+			Expect(err).NotTo(HaveOccurred())
+		})
+	})
+
 	// We're assigning one IP which should be from the only ipPool created at the time, second one
 	// should be from the same /26 block since they're both from the same host, then delete
 	// the ipPool and create a new ipPool, and AutoAssign 1 more IP for the same host - expect the

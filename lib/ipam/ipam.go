@@ -1017,8 +1017,14 @@ func (c ipamClient) RemoveIPAMHost(ctx context.Context, host string) error {
 		k := model.IPAMHostKey{Host: hostname}
 		kvp, err := c.client.Get(ctx, k, "")
 		if err != nil {
-			logCtx.WithError(err).Errorf("Failed to get IPAM host")
-			return err
+			if _, ok := err.(cerrors.ErrorResourceDoesNotExist); !ok {
+				logCtx.WithError(err).Errorf("Failed to get IPAM host")
+				return err
+			}
+
+			// Resource does not exist, no need to remove it.
+			logCtx.Info("IPAM host data does not exist")
+			return nil
 		}
 
 		// Remove the host tree from the datastore.
