@@ -45,6 +45,16 @@ ippool_name1_rev1_v4 = {
     }
 }
 
+ippool_name1_rev1_table = (
+    "NAME           CIDR          SELECTOR       \n"
+    "ippool-name1   10.0.1.0/24   foo == 'bar'"
+)
+
+ippool_name1_rev1_wide_table = (
+    "NAME           CIDR          NAT     IPIPMODE   DISABLED   SELECTOR       \n"
+    "ippool-name1   10.0.1.0/24   false   Always     false      foo == 'bar'"
+)
+
 ippool_name1_rev2_v4 = {
     'apiVersion': API_VERSION,
     'kind': 'IPPool',

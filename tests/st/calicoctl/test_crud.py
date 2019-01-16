@@ -58,6 +58,12 @@ class TestCalicoctlCommands(TestBase):
         rc = calicoctl("get ippool -o yaml")
         rc.assert_list("IPPool", [ippool_name1_rev1_v4, ippool_name2_rev1_v6])
 
+        # Check correct rendering of the table format.
+        rc = calicoctl("get ippool %s" % name(ippool_name1_rev1_v4))
+        rc.assert_output_equals(ippool_name1_rev1_table)
+        rc = calicoctl("get ippool %s -o wide" % name(ippool_name1_rev1_v4))
+        rc.assert_output_equals(ippool_name1_rev1_wide_table)
+
         # Remove both the ipv4 pool and ipv6 pool by CLI options and by file.
         rc = calicoctl("delete ippool %s" % name(ippool_name1_rev1_v4))
         rc.assert_no_error()
