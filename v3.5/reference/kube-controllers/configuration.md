@@ -45,13 +45,12 @@ configure API access if needed.
 
 The following environment variables can be used to configure the {{site.prodname}} Kubernetes controllers.
 
-| Environment   | Description | Schema |
-| ------------- | ----------- | ------ |
-| `ENABLED_CONTROLLERS` | Which controllers to run | namespace, node, policy, serviceaccount, workloadendpoint |
-| `LOG_LEVEL`     | Minimum log level to be displayed. | debug, info, warning, error |
-| `KUBECONFIG`    | Path to a kubeconfig file for Kubernetes API access | path |
-
-If `ENABLED_CONTROLLERS` is not explicitly specified, the following controllers are run by default: policy, namespace, workloadendpoint, serviceaccount
+| Environment   | Description | Schema | Default |
+| ------------- | ----------- | ------ | -------
+| `ENABLED_CONTROLLERS` | Which controllers to run | namespace, node, policy, serviceaccount, workloadendpoint | policy,namespace,serviceaccount,workloadendpoint,node
+| `LOG_LEVEL`     | Minimum log level to be displayed. | debug, info, warning, error | info
+| `KUBECONFIG`    | Path to a kubeconfig file for Kubernetes API access | path | 
+| `SYNC_NODE_LABELS`    | When enabled, Kubernetes node labels will be copied to Calico node objects. | boolean | true
 
 [in-cluster-config]: https://kubernetes.io/docs/tasks/access-application-cluster/access-cluster/#accessing-the-api-from-a-pod
 [kubeconfig]: https://kubernetes.io/docs/concepts/configuration/organize-cluster-access-kubeconfig/
@@ -79,6 +78,12 @@ To enable the node controller, perform the following two steps.
 ```
 
 This controller is only valid when using etcd as the {{site.prodname}} datastore.
+
+Set `SYNC_NODE_LABELS` to true (enabled by default) to ensure that labels on
+Kubernetes node resources remain in-sync with labels on the corresponding {{site.prodname}}
+node resource. If both node resources specify a label with different values,
+the Kubernetes node resource takes precedence. Labels on the {{site.prodname}}
+resource that don't exist in the Kubernetes node will remain as is.
 
 ### Policy controller
 
