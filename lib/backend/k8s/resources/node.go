@@ -35,12 +35,11 @@ import (
 )
 
 const (
-	nodeBgpIpv4AddrAnnotation   = "projectcalico.org/IPv4Address"
-	nodeBgpIpv6AddrAnnotation   = "projectcalico.org/IPv6Address"
-	nodeBgpAsnAnnotation        = "projectcalico.org/ASNumber"
-	nodeBgpCIDAnnotation        = "projectcalico.org/RouteReflectorClusterID"
-	nodeK8sLabelAnnotation      = "projectcalico.org/kube-labels"
-	nodeShadowedLabelAnnotation = "projectcalico.org/shadowed-labels"
+	nodeBgpIpv4AddrAnnotation = "projectcalico.org/IPv4Address"
+	nodeBgpIpv6AddrAnnotation = "projectcalico.org/IPv6Address"
+	nodeBgpAsnAnnotation      = "projectcalico.org/ASNumber"
+	nodeBgpCIDAnnotation      = "projectcalico.org/RouteReflectorClusterID"
+	nodeK8sLabelAnnotation    = "projectcalico.org/kube-labels"
 )
 
 func NewNodeClient(c *kubernetes.Clientset) K8sResourceClient {
@@ -303,21 +302,16 @@ func mergeCalicoNodeIntoK8sNode(calicoNode *apiv3.Node, k8sNode *kapiv1.Node) (*
 // mergeCalicoAndK8sLabels merges the Kubernetes labels (from k8sNode.Labels) with those that are already present in
 // calicoNode (which were loaded from our annotation).  Kubernetes labels take precedence.  To make the operation
 // reversible (so that we can support write back of a Calico node that was read from Kubernetes), we also store the
-// complete set of Kubernetes labels in an annotation along with any Calico labels that were shadowed by Kubernetes
-// labels.
+// complete set of Kubernetes labels in an annotation.
+//
+// Note: if a Kubernetes label shadows a Calico label, the Calico label will be lost when the resource is written
+// back to the datastore.  This is consistent with kube-controllers' behavior.
 func mergeCalicoAndK8sLabels(calicoNode *apiv3.Node, k8sNode *kapiv1.Node) error {
 	// Now, copy the Kubernetes Node labels over.  Note: this may overwrite Calico labels of the same name, but that's
 	// consistent with the kube-controllers behavior.
-	var shadowedLabels map[string]string
 	for k, v := range k8sNode.Labels {
 		if calicoNode.Labels == nil {
 			calicoNode.Labels = map[string]string{}
-		}
-		if calValue, ok := calicoNode.Labels[k]; ok {
-			if shadowedLabels == nil {
-				shadowedLabels = map[string]string{}
-			}
-			shadowedLabels[k] = calValue
 		}
 		calicoNode.Labels[k] = v
 	}
@@ -333,73 +327,51 @@ func mergeCalicoAndK8sLabels(calicoNode *apiv3.Node, k8sNode *kapiv1.Node) error
 		return err
 	}
 	calicoNode.Annotations[nodeK8sLabelAnnotation] = string(bytes)
-
-	// To be able to round trip Calico labels, we stash any labels that we've shadowed in an annotation.
-	if shadowedLabels != nil {
-		bytes, err := json.Marshal(shadowedLabels)
-		if err != nil {
-			log.WithError(err).Errorf("Error marshalling node labels")
-			return err
-		}
-		calicoNode.Annotations[nodeShadowedLabelAnnotation] = string(bytes)
-	}
 	return nil
 }
 
-// restoreCalicoLabels tries to undo the transformation done by mergeCalicoLabels.  It returns a copy of the node with
-// Kubernetes labels removed from the Labels field and restores any shadowed Calico labels.  It also filters the
-// bookkeeping annotations out of the copy.
+// restoreCalicoLabels tries to undo the transformation done by mergeCalicoLabels.  If no changes are needed, it
+// returns the input value; otherwise, it returns a copy.
 func restoreCalicoLabels(calicoNode *apiv3.Node) (*apiv3.Node, error) {
-	calicoNode = calicoNode.DeepCopy()
-
-	if rawLabels := calicoNode.Annotations[nodeK8sLabelAnnotation]; rawLabels != "" {
-		// We stashed the k8s labels in an annotation, extract them so we can compare with the combined labels.
-		k8sLabels := map[string]string{}
-		if err := json.Unmarshal([]byte(rawLabels), &k8sLabels); err != nil {
-			log.WithError(err).Error("Failed to unmarshal k8s node labels from " +
-				nodeK8sLabelAnnotation + " annotation")
-			return nil, err
-		}
-		// We stashed any Calico labels that got shadowed (when we calculated the inherited labels) in an annotation,
-		// extract them.
-		shadowedLabels := map[string]string{}
-		rawShadowedLabels := calicoNode.Annotations[nodeShadowedLabelAnnotation]
-		if rawShadowedLabels != "" {
-			if err := json.Unmarshal([]byte(rawShadowedLabels), &shadowedLabels); err != nil {
-				log.WithError(err).Error("Failed to unmarshal Calico labels from " +
-					nodeShadowedLabelAnnotation + " annotation")
-				return nil, err
-			}
-		}
-
-		// Now remove any labels that match the k8s ones.
-		if log.GetLevel() >= log.DebugLevel {
-			log.WithFields(log.Fields{"k8s": k8sLabels, "shadowed": shadowedLabels}).Debug("Loaded label annotations")
-		}
-		for k, k8sVal := range k8sLabels {
-			if calVal, ok := calicoNode.Labels[k]; ok && calVal == k8sVal {
-				// Value is still set and it matches the value from k8s.
-				if shadowedVal, ok := shadowedLabels[k]; ok {
-					// The k8s value shadowed an old Calico label, restore the Calico value.
-					if log.GetLevel() >= log.DebugLevel {
-						log.WithField("key", k).Debug("Restoring shadowed label")
-					}
-					calicoNode.Labels[k] = shadowedVal
-					continue
-				}
-				// The k8s value was inherited and there was no old Calico value, drop the label so that we don't copy
-				// it to the Calico annotation.
-				if log.GetLevel() >= log.DebugLevel {
-					log.WithField("key", k).Debug("Removing k8s label")
-				}
-				delete(calicoNode.Labels, k)
-			}
-		}
+	rawLabels := calicoNode.Annotations[nodeK8sLabelAnnotation]
+	if rawLabels == "" {
+		return calicoNode, nil
 	}
 
-	// Filter out our bookkeeping annotations, which are only used for round-tripping labels correctly.
+	// We're about to update the labels and annotations on the node, take a copy.
+	calicoNode = calicoNode.DeepCopy()
+
+	// We stashed the k8s labels in an annotation, extract them so we can compare with the combined labels.
+	k8sLabels := map[string]string{}
+	if err := json.Unmarshal([]byte(rawLabels), &k8sLabels); err != nil {
+		log.WithError(err).Error("Failed to unmarshal k8s node labels from " +
+			nodeK8sLabelAnnotation + " annotation")
+		return nil, err
+	}
+
+	// Now remove any labels that match the k8s ones.
+	if log.GetLevel() >= log.DebugLevel {
+		log.WithField("k8s", k8sLabels).Debug("Loaded label annotations")
+	}
+	for k, k8sVal := range k8sLabels {
+		if calVal, ok := calicoNode.Labels[k]; ok && calVal != k8sVal {
+			log.WithFields(log.Fields{
+				"label":    k,
+				"newValue": calVal,
+				"k8sValue": k8sVal,
+			}).Warn("Update to label that is shadowed by a Kubernetes label will be ignored.")
+		}
+
+		// The k8s value was inherited and there was no old Calico value, drop the label so that we don't copy
+		// it to the Calico annotation.
+		if log.GetLevel() >= log.DebugLevel {
+			log.WithField("key", k).Debug("Removing inherited k8s label")
+		}
+		delete(calicoNode.Labels, k)
+	}
+
+	// Filter out our bookkeeping annotation, which is only used for round-tripping labels correctly.
 	delete(calicoNode.Annotations, nodeK8sLabelAnnotation)
-	delete(calicoNode.Annotations, nodeShadowedLabelAnnotation)
 	if len(calicoNode.Annotations) == 0 {
 		calicoNode.Annotations = nil
 	}

@@ -318,7 +318,7 @@ var _ = Describe("Test Node conversion", func() {
 		Expect(newCalicoNode.Value).To(Equal(calicoNodeWithMergedLabels))
 	})
 
-	It("Should round trip shadowed labels correctly", func() {
+	It("Should shadow labels correctly", func() {
 		kl := map[string]string{
 			"net.beta.kubernetes.io/role": "master",
 			"shadowed":                    "k8s-value",
@@ -359,28 +359,28 @@ var _ = Describe("Test Node conversion", func() {
 		calicoNodeWithMergedLabels := calicoNode.DeepCopy()
 		calicoNodeWithMergedLabels.Annotations = map[string]string{}
 		calicoNodeWithMergedLabels.Annotations[nodeK8sLabelAnnotation] = "{\"net.beta.kubernetes.io/role\":\"master\",\"shadowed\":\"k8s-value\"}"
-		calicoNodeWithMergedLabels.Annotations[nodeShadowedLabelAnnotation] = "{\"shadowed\":\"calico-value\"}"
 		// And, the k8s labels get merged in...
 		calicoNodeWithMergedLabels.Labels["net.beta.kubernetes.io/role"] = "master"
 		calicoNodeWithMergedLabels.Labels["shadowed"] = "k8s-value"
 		Expect(newCalicoNode.Value).To(Equal(calicoNodeWithMergedLabels))
 
-		// restoreCalicoLabels should undo the merge, removing the annotations and restoring the shadowed labels.
+		// restoreCalicoLabels should undo the merge, but the shadowed label will be lost.
+		calicoNodeNoShadow := calicoNode.DeepCopy()
+		delete(calicoNodeNoShadow.Labels, "shadowed")
 		calicoNodeRestored, err := restoreCalicoLabels(calicoNodeWithMergedLabels)
-		Expect(calicoNodeRestored).To(Equal(calicoNode))
+		Expect(calicoNodeRestored).To(Equal(calicoNodeNoShadow))
+
+		// For coverage, make a change to the shadowed label, this will log a warning.
+		calicoNodeWithMergedLabels.Labels["shadowed"] = "some change"
+		calicoNodeRestored, err = restoreCalicoLabels(calicoNodeWithMergedLabels)
+		Expect(calicoNodeRestored).To(Equal(calicoNodeNoShadow))
 	})
 
 	It("restoreCalicoLabels should error if annotations are malformed", func() {
 		calicoNode := apiv3.NewNode()
 		calicoNode.Annotations = map[string]string{}
-		calicoNode.Annotations[nodeK8sLabelAnnotation] = "{}"
-		calicoNode.Annotations[nodeShadowedLabelAnnotation] = "Garbage"
-		_, err := restoreCalicoLabels(calicoNode)
-		Expect(err).To(HaveOccurred())
-
 		calicoNode.Annotations[nodeK8sLabelAnnotation] = "Garbage"
-		calicoNode.Annotations[nodeShadowedLabelAnnotation] = "{}"
-		_, err = restoreCalicoLabels(calicoNode)
+		_, err := restoreCalicoLabels(calicoNode)
 		Expect(err).To(HaveOccurred())
 
 		k8sNode := &k8sapi.Node{
