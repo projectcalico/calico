@@ -144,8 +144,12 @@ def split_endpoint_name(name):
 class CalicoEtcdWatcher(etcdutils.EtcdWatcher):
 
     def __init__(self, agent, hostname):
-        workload_endpoint_prefix = datamodel_v3._build_key("WorkloadEndpoint",
-                                                           "")
+        self.region_string = calico_config.get_region_string()
+        workload_endpoint_prefix = datamodel_v3._build_key(
+            "WorkloadEndpoint",
+            datamodel_v3.get_namespace(self.region_string),
+            "",
+        )
         this_host_prefix = (workload_endpoint_prefix +
                             hostname.replace('-', '--') +
                             "-openstack-")
@@ -171,7 +175,7 @@ class CalicoEtcdWatcher(etcdutils.EtcdWatcher):
         self.v1_subnet_watcher = SubnetWatcher(self, datamodel_v1.SUBNET_DIR)
         self.subnet_watcher = SubnetWatcher(
             self,
-            datamodel_v2.subnet_dir(calico_config.get_region_string()))
+            datamodel_v2.subnet_dir(self.region_string))
 
         # Cache of the ports that we've asked Dnsmasq to handle, for each
         # network ID.

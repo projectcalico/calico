@@ -20,6 +20,7 @@ except ImportError:
     # Ocata and earlier.
     from neutron.db.l3_db import FloatingIP
 
+from networking_calico.common import config as calico_config
 from networking_calico.compat import cfg
 from networking_calico.compat import log
 from networking_calico.compat import n_exc
@@ -72,6 +73,12 @@ class WorkloadEndpointSyncer(ResourceSyncer):
         self.policy_syncer = policy_syncer
         self.keystone = keystone_client
         self.proj_name_cache = {}
+        self.region_string = calico_config.get_region_string()
+        self.namespace = datamodel_v3.get_namespace(self.region_string)
+
+    def delete_legacy_etcd_data(self):
+        if self.namespace != datamodel_v3.NO_REGION_NAMESPACE:
+            datamodel_v3.delete_legacy(self.resource_kind, '')
 
     # The following methods differ from those for other resources because for
     # endpoints we need to read, compare and write labels and annotations as
@@ -79,6 +86,7 @@ class WorkloadEndpointSyncer(ResourceSyncer):
 
     def get_all_from_etcd(self):
         return datamodel_v3.get_all(self.resource_kind,
+                                    self.namespace,
                                     with_labels_and_annotations=True)
 
     def etcd_write_data_matches_existing(self, write_data, existing):
@@ -91,6 +99,7 @@ class WorkloadEndpointSyncer(ResourceSyncer):
     def create_in_etcd(self, name, write_data):
         spec, labels, annotations = write_data
         return datamodel_v3.put(self.resource_kind,
+                                self.namespace,
                                 name,
                                 spec,
                                 labels=labels,
@@ -100,6 +109,7 @@ class WorkloadEndpointSyncer(ResourceSyncer):
     def update_in_etcd(self, name, write_data, mod_revision=None):
         spec, labels, annotations = write_data
         return datamodel_v3.put(self.resource_kind,
+                                self.namespace,
                                 name,
                                 spec,
                                 labels=labels,
@@ -107,7 +117,9 @@ class WorkloadEndpointSyncer(ResourceSyncer):
                                 mod_revision=mod_revision)
 
     def delete_from_etcd(self, name, mod_revision):
-        return datamodel_v3.delete(self.resource_kind, name,
+        return datamodel_v3.delete(self.resource_kind,
+                                   self.namespace,
+                                   name,
                                    mod_revision=mod_revision)
 
     def get_all_from_neutron(self, context):
@@ -125,7 +137,7 @@ class WorkloadEndpointSyncer(ResourceSyncer):
                 raise ResourceGone()
         port = self.add_extra_port_information(context, port)
         return (endpoint_spec(port),
-                endpoint_labels(port),
+                endpoint_labels(port, self.namespace),
                 endpoint_annotations(port))
 
     def write_endpoint(self, port, context):
@@ -145,13 +157,16 @@ class WorkloadEndpointSyncer(ResourceSyncer):
         # regain the transaction. Let's not do that for now, and performance
         # test to see if it's a problem later.
         datamodel_v3.put("WorkloadEndpoint",
+                         self.namespace,
                          endpoint_name(port),
                          endpoint_spec(port),
-                         labels=endpoint_labels(port),
+                         labels=endpoint_labels(port, self.namespace),
                          annotations=endpoint_annotations(port))
 
     def delete_endpoint(self, port):
-        datamodel_v3.delete("WorkloadEndpoint", endpoint_name(port))
+        datamodel_v3.delete("WorkloadEndpoint",
+                            self.namespace,
+                            endpoint_name(port))
 
     def add_port_interface_name(self, port):
         port['interface_name'] = 'tap' + port['id'][:11]
@@ -323,14 +338,14 @@ def endpoint_name(port):
     )
 
 
-def endpoint_labels(port):
+def endpoint_labels(port, namespace):
     labels = {}
     for sg_id in port['security_groups']:
         sg_name = port.get(PORT_KEY_SG_NAMES, {}).get(sg_id, '')
         labels[SG_LABEL_PREFIX + sg_id] = sg_name
         if sg_name:
             labels[SG_NAME_LABEL_PREFIX + sg_name] = sg_id
-    labels['projectcalico.org/namespace'] = 'openstack'
+    labels['projectcalico.org/namespace'] = namespace
     labels['projectcalico.org/orchestrator'] = 'openstack'
 
     proj_id = port.get('project_id', port.get('tenant_id'))

@@ -18,9 +18,9 @@ import re
 import uuid
 
 from networking_calico.compat import log
+from networking_calico import datamodel_v2
 from networking_calico import etcdv3
 from networking_calico.timestamp import timestamp_now
-
 
 # Particular JSON key strings.
 CLUSTER_GUID = 'clusterGUID'
@@ -29,17 +29,21 @@ DATASTORE_READY = 'datastoreReady'
 ENDPOINT_REPORTING_ENABLED = 'endpointReportingEnabled'
 INTERFACE_PREFIX = 'interfacePrefix'
 
-
 # Annotation keys.
 ANN_KEY_PREFIX = 'openstack.projectcalico.org/'
 ANN_KEY_FQDN = ANN_KEY_PREFIX + 'fqdn'
 ANN_KEY_NETWORK_ID = ANN_KEY_PREFIX + 'network-id'
 
+# Namespace constants.
+NO_REGION_NAMESPACE = 'openstack'
+REGION_NAMESPACE_PREFIX = 'openstack-'
+NOT_NAMESPACED = None
+
 
 LOG = log.getLogger(__name__)
 
 
-def put(resource_kind, name, spec, annotations={}, labels=None,
+def put(resource_kind, namespace, name, spec, annotations={}, labels=None,
         mod_revision=None):
     """Write a Calico v3 resource to etcdv3.
 
@@ -47,6 +51,8 @@ def put(resource_kind, name, spec, annotations={}, labels=None,
 
     - name (string): The resource's name.  This is used to form its etcd key,
       and also goes in its .Metadata.Name field.
+
+    - namespace (string): The namespace to put the resource in.
 
     - spec (dict): Resource spec, as a dict with keys as specified by the
       'json:' comments in the relevant golang struct definition (for example,
@@ -63,11 +69,11 @@ def put(resource_kind, name, spec, annotations={}, labels=None,
 
     Returns True if the write happened successfully; False if not.
     """
-    key = _build_key(resource_kind, name)
+    key = _build_key(resource_kind, namespace, name)
     value = None
     try:
         # Get the existing resource so we can persist its metadata.
-        value, _ = _get_with_metadata(resource_kind, name)
+        value, _ = _get_with_metadata(resource_kind, namespace, name)
     except etcdv3.KeyNotFound:
         pass
     except ValueError:
@@ -83,7 +89,8 @@ def put(resource_kind, name, spec, annotations={}, labels=None,
         }
     # Ensure namespace set, for a namespaced resource.
     if _is_namespaced(resource_kind):
-        value['metadata']['namespace'] = 'openstack'
+        assert namespace is not None
+        value['metadata']['namespace'] = namespace
     # Ensure that there is a creation timestamp.
     if 'creationTimestamp' not in value['metadata']:
         value['metadata']['creationTimestamp'] = timestamp_now()
@@ -107,9 +114,9 @@ def put(resource_kind, name, spec, annotations={}, labels=None,
 
 
 def get(resource_kind, name):
-    """Read spec of a Calico v3 resource from etcdv3.
+    """Read spec of a non-namespaced Calico v3 resource from etcdv3.
 
-    - resource_kind (string): E.g. WorkloadEndpoint, Profile, etc.
+    - resource_kind (string): E.g. ClusterInformation.
 
     - name (string): The resource's name, which is used to form its etcd key.
 
@@ -118,21 +125,31 @@ def get(resource_kind, name):
     - spec is the resource spec as a dict with keys as specified by the 'json:'
       comments in the relevant golang struct definition (for example,
       https://github.com/projectcalico/libcalico-go/blob/master/
-      lib/apis/v3/workloadendpoint.go#L38).
+      lib/apis/v3/clusterinfo.go#L39).
 
     - mod_revision is the etcdv3 revision at which the resource was last
       modified.
 
     Raises etcdv3.KeyNotFound if there is no resource with that kind and name.
     """
-    value, mod_revision = _get_with_metadata(resource_kind, name)
+    value, mod_revision = _get_with_metadata(resource_kind,
+                                             NOT_NAMESPACED,
+                                             name)
     return value['spec'], mod_revision
 
 
-def get_all(resource_kind, with_labels_and_annotations=False, revision=None):
+def delete_legacy(resource_kind, name_prefix=''):
+    key = _build_key(resource_kind, NO_REGION_NAMESPACE, name_prefix)
+    etcdv3.delete_prefix(key)
+
+
+def get_all(resource_kind, namespace,
+            with_labels_and_annotations=False, revision=None):
     """Read all Calico v3 resources of a certain kind from etcdv3.
 
     - resource_kind (string): E.g. WorkloadEndpoint, Profile, etc.
+
+    - namespace (string): The namespace to get resources for.
 
     - with_labels_and_annotations: If True, indicates to return the labels and
       annotations for each resource as well as the spec.
@@ -158,7 +175,7 @@ def get_all(resource_kind, with_labels_and_annotations=False, revision=None):
     - mod_revision is the revision at which that resource was last modified (an
       integer represented as a string).
     """
-    prefix = _build_key(resource_kind, '')
+    prefix = _build_key(resource_kind, namespace, '')
     results = etcdv3.get_prefix(prefix, revision=revision)
     tuples = []
     for result in results:
@@ -190,16 +207,18 @@ def get_all(resource_kind, with_labels_and_annotations=False, revision=None):
     return tuples
 
 
-def delete(resource_kind, name, mod_revision=None):
+def delete(resource_kind, namespace, name, mod_revision=None):
     """Delete a Calico v3 resource from etcdv3.
 
     - resource_kind (string): E.g. WorkloadEndpoint, Profile, etc.
+
+    - namespace (string): The namespace to delete the resource in.
 
     - name (string): The resource's name, which is used to form its etcd key.
 
     Returns True if the deletion was successful; False if not.
     """
-    key = _build_key(resource_kind, name)
+    key = _build_key(resource_kind, namespace, name)
     return etcdv3.delete(key, mod_revision=mod_revision)
 
 
@@ -244,19 +263,30 @@ def _plural(resource_kind):
     return resource_kind + "s"
 
 
-def _build_key(resource_kind, name):
-    if _is_namespaced(resource_kind):
-        # Use 'openstack' as the namespace.
-        template = "/calico/resources/v3/projectcalico.org/%s/openstack/%s"
+def get_namespace(region_string):
+    if region_string is not None and region_string != datamodel_v2.NO_REGION:
+        return REGION_NAMESPACE_PREFIX + region_string
     else:
-        template = "/calico/resources/v3/projectcalico.org/%s/%s"
-    return template % (_plural(resource_kind).lower(), name)
+        return NO_REGION_NAMESPACE
 
 
-def _get_with_metadata(resource_kind, name):
+def _build_key(resource_kind, namespace, name):
+    kind_plural = _plural(resource_kind).lower()
+    if _is_namespaced(resource_kind):
+        assert namespace is not None
+        return "/calico/resources/v3/projectcalico.org/%s/%s/%s" % (
+            kind_plural, namespace, name
+        )
+    else:
+        return "/calico/resources/v3/projectcalico.org/%s/%s" % (
+            kind_plural, name
+        )
+
+
+def _get_with_metadata(resource_kind, namespace, name):
     # Note: 'with_metadata' here means including the Calico data model
     # metadata, as well as the etcdv3 mod_revision.
-    key = _build_key(resource_kind, name)
+    key = _build_key(resource_kind, namespace, name)
     value_as_string, mod_revision = etcdv3.get(key)
     value = json.loads(value_as_string)
     return value, mod_revision

@@ -13,6 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from networking_calico.common import config as calico_config
 from networking_calico.compat import log
 from networking_calico import datamodel_v3
 from networking_calico.plugins.ml2.drivers.calico.syncer import ResourceSyncer
@@ -41,24 +42,39 @@ class PolicySyncer(ResourceSyncer):
         super(PolicySyncer, self).__init__(db,
                                            txn_from_context,
                                            "NetworkPolicy")
+        self.region_string = calico_config.get_region_string()
+        self.namespace = datamodel_v3.get_namespace(self.region_string)
+
+    def delete_legacy_etcd_data(self):
+        if self.namespace != datamodel_v3.NO_REGION_NAMESPACE:
+            datamodel_v3.delete_legacy(self.resource_kind, SG_NAME_PREFIX)
 
     def get_all_from_etcd(self):
         results = []
-        for r in datamodel_v3.get_all(self.resource_kind):
+        for r in datamodel_v3.get_all(self.resource_kind, self.namespace):
             name, _, _ = r
             if name.startswith(SG_NAME_PREFIX):
                 results.append(r)
         return results
 
     def create_in_etcd(self, name, spec):
-        return datamodel_v3.put(self.resource_kind, name, spec, mod_revision=0)
+        return datamodel_v3.put(self.resource_kind,
+                                self.namespace,
+                                name,
+                                spec,
+                                mod_revision=0)
 
     def update_in_etcd(self, name, spec, mod_revision=None):
-        return datamodel_v3.put(self.resource_kind, name, spec,
+        return datamodel_v3.put(self.resource_kind,
+                                self.namespace,
+                                name,
+                                spec,
                                 mod_revision=mod_revision)
 
     def delete_from_etcd(self, name, mod_revision):
-        return datamodel_v3.delete(self.resource_kind, name,
+        return datamodel_v3.delete(self.resource_kind,
+                                   self.namespace,
+                                   name,
                                    mod_revision=mod_revision)
 
     def get_all_from_neutron(self, context):
