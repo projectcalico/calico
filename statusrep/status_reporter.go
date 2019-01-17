@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2018 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2019 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -29,6 +29,7 @@ import (
 
 type EndpointStatusReporter struct {
 	hostname           string
+	region             string
 	endpointUpdates    <-chan interface{}
 	inSync             <-chan bool
 	stop               chan bool
@@ -45,6 +46,7 @@ type EndpointStatusReporter struct {
 }
 
 func NewEndpointStatusReporter(hostname string,
+	region string,
 	endpointUpdates <-chan interface{},
 	inSync <-chan bool,
 	datastore datastore,
@@ -56,6 +58,7 @@ func NewEndpointStatusReporter(hostname string,
 
 	return newEndpointStatusReporterWithTickerChans(
 		hostname,
+		region,
 		endpointUpdates,
 		inSync,
 		datastore,
@@ -71,6 +74,7 @@ func NewEndpointStatusReporter(hostname string,
 // newEndpointStatusReporterWithTickerChans is an internal constructor allowing
 // the tickers to be mocked for UT.
 func newEndpointStatusReporterWithTickerChans(hostname string,
+	region string,
 	endpointUpdates <-chan interface{},
 	inSync <-chan bool,
 	datastore datastore,
@@ -82,6 +86,7 @@ func newEndpointStatusReporterWithTickerChans(hostname string,
 	resyncInterval time.Duration) *EndpointStatusReporter {
 	return &EndpointStatusReporter{
 		hostname:           hostname,
+		region:             region,
 		endpointUpdates:    endpointUpdates,
 		datastore:          datastore,
 		inSync:             inSync,
@@ -155,6 +160,7 @@ loop:
 					OrchestratorID: msg.Id.OrchestratorId,
 					WorkloadID:     msg.Id.WorkloadId,
 					EndpointID:     msg.Id.EndpointId,
+					RegionString:   model.RegionString(esr.region),
 				}
 				status = msg.Status.Status
 			case *proto.WorkloadEndpointStatusRemove:
@@ -163,6 +169,7 @@ loop:
 					OrchestratorID: msg.Id.OrchestratorId,
 					WorkloadID:     msg.Id.WorkloadId,
 					EndpointID:     msg.Id.EndpointId,
+					RegionString:   model.RegionString(esr.region),
 				}
 			case *proto.HostEndpointStatusUpdate:
 				statID = model.HostEndpointStatusKey{
@@ -251,7 +258,8 @@ func (esr *EndpointStatusReporter) attemptResync(ctx context.Context) {
 	var kvs []*model.KVPair
 
 	wlListOpts := model.WorkloadEndpointStatusListOptions{
-		Hostname: esr.hostname,
+		Hostname:     esr.hostname,
+		RegionString: model.RegionString(esr.region),
 	}
 	kvl, err := esr.datastore.List(ctx, wlListOpts, "")
 	if err == nil {
