@@ -1,5 +1,5 @@
 ---
-title: Configuring the Tigera Secure EE Kubernetes controllers
+title: Configuring the Calico Kubernetes controllers
 ---
 
 The {{site.prodname}} Kubernetes controllers are primarily configured through environment variables. When running
@@ -60,7 +60,7 @@ If `ENABLED_CONTROLLERS` is not explicitly specified, the following controllers 
 
 ### Node controller
 
-The node controller automatically cleans up configuration for nodes that no longer exist. The controller must have read 
+The node controller automatically cleans up configuration for nodes that no longer exist. The controller must have read
 access to the Kubernetes API to monitor `Node` events.
 
 The node controller is not enabled by default if `ENABLED_CONTROLLERS` is not explicitly specified.
@@ -82,7 +82,7 @@ This controller is only valid when using etcd as the {{site.prodname}} datastore
 
 ### Policy controller
 
-The policy controller syncs Kubernetes network policies to the {{site.prodname}} datastore. The controller must have read 
+The policy controller syncs Kubernetes network policies to the {{site.prodname}} datastore. The controller must have read
 access to the Kubernetes API to monitor `NetworkPolicy` events.
 
 The policy controller is enabled by default if `ENABLED_CONTROLLERS` is not explicitly specified.
@@ -92,7 +92,7 @@ This controller is only valid when using etcd as the {{site.prodname}} datastore
 ### Workload endpoint controller
 
 The workload endpoint controller automatically syncs Kubernetes pod label changes to the {{site.prodname}} datastore by updating
-the corresponding workload endpoints appropriately. The controller must have read 
+the corresponding workload endpoints appropriately. The controller must have read
 access to the Kubernetes API to monitor `Pod` events.
 
 The workload endpoint controller is enabled by default if `ENABLED_CONTROLLERS` is not explicitly specified.
@@ -101,7 +101,7 @@ This controller is only valid when using etcd as the {{site.prodname}} datastore
 
 ### Namespace controller
 
-The namespace controller syncs Kubernetes namespace label changes to the {{site.prodname}} datastore. The controller must have read 
+The namespace controller syncs Kubernetes namespace label changes to the {{site.prodname}} datastore. The controller must have read
 access to the Kubernetes API to monitor `Namespace` events.
 
 The namespace controller is enabled by default if `ENABLED_CONTROLLERS` is not explicitly specified.
