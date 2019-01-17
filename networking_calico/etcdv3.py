@@ -324,7 +324,7 @@ def watch_subtree(prefix, start_revision):
     entrypoint should be updated or removed when those status notifications
     have been reimplemented within the Calico v3 data model.
     """
-    LOG.info("Watch subtree %s from revision %r", prefix, start_revision)
+    LOG.debug("Watch subtree %s from revision %r", prefix, start_revision)
     client = _get_client()
     event_stream, cancel = client.watch_prefix(prefix,
                                                start_revision=start_revision)

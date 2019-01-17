@@ -82,3 +82,8 @@ def get_endpoint_id_from_key(region_string, key):
 def _reset_globals():
     global _cached_endpoint_key_re
     _cached_endpoint_key_re = None
+
+
+# Region-aware subnet path.
+def subnet_dir(region_string=NO_REGION):
+    return "/calico/dhcp/v2/%s/subnet" % region_string

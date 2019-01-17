@@ -138,8 +138,8 @@ class EtcdWatcher(object):
             try:
                 cluster_id, last_revision = etcdv3.get_status()
                 last_revision = int(last_revision)
-                LOG.info("Current cluster_id %s, revision %d",
-                         cluster_id, last_revision)
+                LOG.debug("Current cluster_id %s, revision %d",
+                          cluster_id, last_revision)
                 if cluster_id != current_cluster_id:
                     # No particular handling here; but keep track of the
                     # current cluster ID and log if it changes.  (In the
@@ -161,13 +161,13 @@ class EtcdWatcher(object):
             # Allow subclass to do pre-snapshot processing, and to return any
             # data that it will need for reconciliation after the snapshot.
             my_name = self.__class__.__name__
-            LOG.info("%s Calling pre-snapshot hook", my_name)
+            LOG.debug("%s Calling pre-snapshot hook", my_name)
             snapshot_data = self._pre_snapshot_hook()
 
             try:
                 # Get all existing values and process them through the
                 # dispatcher.
-                LOG.info("%s Loading snapshot", my_name)
+                LOG.debug("%s Loading snapshot", my_name)
                 for result in etcdv3.get_prefix(self.prefix,
                                                 revision=last_revision):
                     key, value, mod_revision = result
@@ -187,14 +187,14 @@ class EtcdWatcher(object):
                 continue
 
             # Allow subclass to do post-snapshot reconciliation.
-            LOG.info("%s Done loading snapshot, calling post snapshot hook",
-                     my_name)
+            LOG.debug("%s Done loading snapshot, calling post snapshot hook",
+                      my_name)
             self._post_snapshot_hook(snapshot_data)
 
             # Now watch for any changes, starting after the revision above.
             try:
                 # Start a watch from just after the last known revision.
-                LOG.info("%s Starting to watch for updates", my_name)
+                LOG.debug("%s Starting to watch for updates", my_name)
                 event_stream, cancel = etcdv3.watch_subtree(
                     self.prefix,
                     str(last_revision + 1))
@@ -361,8 +361,8 @@ class EtcdWatcher(object):
                 # Update last known revision.
                 if mod_revision > last_revision:
                     last_revision = mod_revision
-                    LOG.info("Last known revision is now %d",
-                             last_revision)
+                    LOG.debug("Last known revision is now %d",
+                              last_revision)
 
     def stop(self):
         LOG.info("Stop watching status tree")

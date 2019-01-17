@@ -42,6 +42,7 @@ from networking_calico.compat import cfg
 from networking_calico.compat import constants
 from networking_calico.compat import DHCPV6_STATEFUL
 from networking_calico import datamodel_v1
+from networking_calico import datamodel_v2
 from networking_calico import datamodel_v3
 from networking_calico import etcdutils
 
@@ -162,15 +163,22 @@ class CalicoEtcdWatcher(etcdutils.EtcdWatcher):
         # Networks for which Dnsmasq needs updating.
         self.dirty_networks = set()
 
-        # Also watch the etcd subnet tree.  When something in that subtree
-        # changes, the subnet watcher will tell _this_ watcher to resync.
-        self.subnet_watcher = SubnetWatcher(self)
+        # Also watch the etcd subnet trees: both the new region-aware
+        # one, and the old pre-region one, so as to support a VM
+        # renewing its DHCP lease while an upgrade is still in
+        # progress.  When something in that subtree changes, the
+        # subnet watcher will tell _this_ watcher to resync.
+        self.v1_subnet_watcher = SubnetWatcher(self, datamodel_v1.SUBNET_DIR)
+        self.subnet_watcher = SubnetWatcher(
+            self,
+            datamodel_v2.subnet_dir(calico_config.get_region_string()))
 
         # Cache of the ports that we've asked Dnsmasq to handle, for each
         # network ID.
         self._last_dnsmasq_ports = {}
 
     def start(self):
+        eventlet.spawn(self.v1_subnet_watcher.start)
         eventlet.spawn(self.subnet_watcher.start)
         super(CalicoEtcdWatcher, self).start()
 
@@ -262,12 +270,14 @@ class CalicoEtcdWatcher(etcdutils.EtcdWatcher):
         network_id = annotations.get(datamodel_v3.ANN_KEY_NETWORK_ID)
         for addrm in endpoint['ipNetworks']:
             ip_addr = addrm.split('/')[0]
-            try:
-                subnet_id = self.subnet_watcher.get_subnet_id_for_addr(
-                    ip_addr,
-                    network_id
-                )
-            except SubnetIDNotFound:
+            subnet_id = self.subnet_watcher.get_subnet_id_for_addr(
+                ip_addr,
+                network_id
+            ) or self.v1_subnet_watcher.get_subnet_id_for_addr(
+                ip_addr,
+                network_id
+            )
+            if subnet_id is None:
                 LOG.warning("Missing subnet data for one of port's IPs")
                 return
             fixed_ips.append({'subnet_id': subnet_id,
@@ -324,13 +334,13 @@ class CalicoEtcdWatcher(etcdutils.EtcdWatcher):
         # hold for adding into the cache.
         new_subnets = {}
         for subnet_id in needed_subnet_ids:
-            try:
-                # Get data for this subnet from SubnetWatcher.
-                new_subnets[subnet_id] = \
-                    self.subnet_watcher.get_subnet(subnet_id)
-            except SubnetIDNotFound:
+            # Get data for this subnet from the SubnetWatchers.
+            subnet = (self.subnet_watcher.get_subnet(subnet_id) or
+                      self.v1_subnet_watcher.get_subnet(subnet_id))
+            if subnet is None:
                 LOG.warning("No data for subnet %s", subnet_id)
-                raise
+                raise SubnetIDNotFound()
+            new_subnets[subnet_id] = subnet
 
         if not net:
             # We don't already have a NetModel, so look for a cached NetModel
@@ -479,14 +489,12 @@ class SubnetIDNotFound(Exception):
 
 class SubnetWatcher(etcdutils.EtcdWatcher):
 
-    def __init__(self, endpoint_watcher):
-        super(SubnetWatcher, self).__init__(datamodel_v1.SUBNET_DIR)
+    def __init__(self, endpoint_watcher, path):
+        super(SubnetWatcher, self).__init__(path)
         self.endpoint_watcher = endpoint_watcher
-        self.register_path(
-            datamodel_v1.SUBNET_DIR + "/<subnet_id>",
-            on_set=self.on_subnet_set,
-            on_del=self.on_subnet_del,
-        )
+        self.register_path(path + "/<subnet_id>",
+                           on_set=self.on_subnet_set,
+                           on_del=self.on_subnet_del)
         self.subnets_by_id = {}
 
     def start(self):
@@ -503,7 +511,7 @@ class SubnetWatcher(etcdutils.EtcdWatcher):
 
     def on_subnet_set(self, response, subnet_id):
         """Handler for subnet creations and updates."""
-        LOG.info("Subnet %s created or updated", subnet_id)
+        LOG.debug("Subnet %s created or updated", subnet_id)
         subnet_data = etcdutils.safe_decode_json(response.value, 'subnet')
 
         if subnet_data is None:
@@ -535,14 +543,14 @@ class SubnetWatcher(etcdutils.EtcdWatcher):
                 continue
             if ip_addr in netaddr.IPNetwork(subnet_data['cidr']):
                 return subnet_id
-        raise SubnetIDNotFound()
+        return None
 
     def get_subnet(self, subnet_id):
         """Get data for the specified subnet."""
         LOG.debug("Get subnet %s", subnet_id)
 
         if subnet_id not in self.subnets_by_id:
-            raise SubnetIDNotFound()
+            return None
 
         data = self.subnets_by_id[subnet_id]
         LOG.debug("Subnet data: %s", data)

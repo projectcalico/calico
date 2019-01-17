@@ -31,6 +31,7 @@ from networking_calico.common import config as calico_config
 from networking_calico.compat import cfg
 from networking_calico.compat import DHCPV6_STATEFUL
 from networking_calico import datamodel_v1
+from networking_calico import datamodel_v2
 from networking_calico.etcdutils import EtcdWatcher
 
 LOG = logging.getLogger(__name__)
@@ -315,8 +316,10 @@ class TestDhcpAgent(base.BaseTestCase):
                          "workloadendpoints/openstack/" +
                          self.hostname.replace('-', '--') +
                          "-openstack-")
-        self.assertEqual(agent.etcd.subnet_watcher.prefix,
+        self.assertEqual(agent.etcd.v1_subnet_watcher.prefix,
                          datamodel_v1.SUBNET_DIR)
+        self.assertEqual(agent.etcd.subnet_watcher.prefix,
+                         datamodel_v2.subnet_dir())
 
     def test_host_config(self):
         cfg.CONF.host = "my-special-hostname"
@@ -326,8 +329,27 @@ class TestDhcpAgent(base.BaseTestCase):
                          "workloadendpoints/openstack/" +
                          "my--special--hostname" +
                          "-openstack-")
-        self.assertEqual(agent.etcd.subnet_watcher.prefix,
+        self.assertEqual(agent.etcd.v1_subnet_watcher.prefix,
                          datamodel_v1.SUBNET_DIR)
+        self.assertEqual(agent.etcd.subnet_watcher.prefix,
+                         datamodel_v2.subnet_dir())
+
+    def test_region_config(self):
+        cfg.CONF.set_override('openstack_region',
+                              'asia-central',
+                              group='calico')
+        calico_config._reset_globals()
+        agent = CalicoDhcpAgent()
+        self.assertEqual(agent.etcd.prefix,
+                         "/calico/resources/v3/projectcalico.org/" +
+                         "workloadendpoints/openstack/" +
+                         self.hostname.replace('-', '--') +
+                         "-openstack-")
+        self.assertEqual(agent.etcd.v1_subnet_watcher.prefix,
+                         datamodel_v1.SUBNET_DIR)
+        self.assertEqual(agent.etcd.subnet_watcher.prefix,
+                         datamodel_v2.subnet_dir("region-asia-central"))
+        calico_config._reset_globals()
 
 
 commonutils = 'neutron.agent.linux.dhcp.commonutils'
