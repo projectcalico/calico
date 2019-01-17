@@ -16,8 +16,10 @@
 import json
 import netaddr
 
+from networking_calico.common import config as calico_config
 from networking_calico.compat import log
 from networking_calico import datamodel_v1
+from networking_calico import datamodel_v2
 from networking_calico import etcdv3
 from networking_calico.plugins.ml2.drivers.calico.syncer import ResourceGone
 from networking_calico.plugins.ml2.drivers.calico.syncer import ResourceSyncer
@@ -33,12 +35,17 @@ class SubnetSyncer(ResourceSyncer):
     """
     def __init__(self, db, txn_from_context):
         super(SubnetSyncer, self).__init__(db, txn_from_context, "Subnet")
+        self.region_string = calico_config.get_region_string()
+
+    def delete_legacy_etcd_data(self):
+        etcdv3.delete_prefix(datamodel_v1.SUBNET_DIR)
 
     def get_all_from_etcd(self):
-        return etcdv3.get_prefix(datamodel_v1.SUBNET_DIR)
+        return etcdv3.get_prefix(datamodel_v2.subnet_dir(self.region_string))
 
     def get_all_from_neutron(self, context):
-        return dict((datamodel_v1.key_for_subnet(subnet['id']), subnet)
+        return dict((datamodel_v2.key_for_subnet(subnet['id'],
+                                                 self.region_string), subnet)
                     for subnet in self.db.get_subnets(context)
                     if subnet['enable_dhcp'])
 
@@ -67,15 +74,16 @@ class SubnetSyncer(ResourceSyncer):
         write_data = self.neutron_to_etcd_write_data(subnet,
                                                      context,
                                                      reread=False)
-        return self.update_in_etcd(datamodel_v1.key_for_subnet(subnet['id']),
-                                   write_data)
+        return self.update_in_etcd(
+            datamodel_v2.key_for_subnet(subnet['id'], self.region_string),
+            write_data)
 
     @etcdv3.logging_exceptions
     def subnet_deleted(self, subnet_id):
         """Delete data from etcd for a subnet that is no longer wanted."""
         LOG.info("Deleting subnet %s", subnet_id)
         # Delete the etcd key for this subnet.
-        key = datamodel_v1.key_for_subnet(subnet_id)
+        key = datamodel_v2.key_for_subnet(subnet_id, self.region_string)
         if not self.delete_from_etcd(key):
             # Already gone, treat as success.
             LOG.debug("Key %s, which we were deleting, disappeared", key)

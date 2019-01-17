@@ -34,10 +34,6 @@ ENDPOINT_STATUS_ERROR = "error"
 SUBNET_DIR = "/calico/dhcp/v1/subnet"
 
 
-def key_for_subnet(subnet_id):
-    return SUBNET_DIR + "/%s" % subnet_id
-
-
 class EndpointId(object):
     __slots__ = ["host", "endpoint"]
 
