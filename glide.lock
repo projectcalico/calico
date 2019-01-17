@@ -1,5 +1,5 @@
-hash: 39f66e3aba3c7a4c645a92e0c87bd6c9873197ae4316d5b7d65de22c4d623ae4
-updated: 2019-01-17T04:11:31.334048353Z
+hash: 0c7ae7c9ed590267cd234c9787c1ff2e3b5abca893502c78377fb20e69c4fa5a
+updated: 2019-01-17T10:22:57.089456503Z
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -33,7 +33,7 @@ imports:
   - pkg/types
   - version
 - name: github.com/coreos/go-semver
-  version: 8ab6407b697782a06568d4b7f1db25550ec2e4c6
+  version: e214231b295a8ea9479f11b70b35d5acf3556d9b
   subpackages:
   - semver
 - name: github.com/davecgh/go-spew
@@ -118,7 +118,7 @@ imports:
 - name: github.com/modern-go/reflect2
   version: 05fbef0ca5da472bbf96c9322b84a53edc03c9fd
 - name: github.com/onsi/ginkgo
-  version: 0d4f08024c0112cfde4b94bc45e25777eedb4561
+  version: 3774a09d95489ccaa16032e0770d08ea77ba6184
   subpackages:
   - config
   - extensions/table
@@ -139,7 +139,7 @@ imports:
   - reporters/stenographer/support/go-isatty
   - types
 - name: github.com/onsi/gomega
-  version: 9078de543588a442b7e49ae2e887db64812d77ce
+  version: 7615b9433f86a8bdf29709bf288bc4fd0636a369
   subpackages:
   - format
   - internal/assertion
@@ -165,7 +165,7 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: 3930d9445d830b1e83fad3153925dd4a8cbcb9e2
+  version: 8f41ab3dc3a4bd5b1e027cdc60f4deca44108456
   subpackages:
   - lib/apiconfig
   - lib/apis/v1
