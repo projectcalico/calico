@@ -65,6 +65,8 @@ toc:
     path: /usage/openstack/service-ips
   - title: Host routes
     path: /usage/openstack/host-routes
+  - title: Multiple regions
+    path: /usage/openstack/multiple-regions
   - title: Kuryr
     path: /usage/openstack/kuryr
 - title: Troubleshooting
