@@ -30,7 +30,9 @@ import mock
 
 import networking_calico.plugins.ml2.drivers.calico.test.lib as lib
 
+from networking_calico.common import config as calico_config
 from networking_calico import datamodel_v1
+from networking_calico import datamodel_v2
 from networking_calico import etcdv3
 from networking_calico.monotonic import monotonic_time
 from networking_calico.plugins.ml2.drivers.calico import mech_calico
@@ -238,11 +240,12 @@ class _TestEtcdBase(lib.Lib, unittest.TestCase):
 
         # Slow down reading from etcd status subtree to allow threads to run
         # more often
-        if wait and key == datamodel_v1.FELIX_STATUS_DIR:
+        if wait and key == datamodel_v2.felix_status_dir():
             eventlet.sleep(30)
             self.driver.db.create_or_update_agent = mock.Mock()
 
-        self.etcd_data[datamodel_v1.FELIX_STATUS_DIR + "/vm1/status"] = \
+        self.etcd_data[datamodel_v2.felix_status_dir() +
+                       "/vm1/status"] = \
             json.dumps({
                 "time": "2015-08-14T10:37:54"
             })
@@ -318,6 +321,9 @@ class TestPluginEtcd(_TestEtcdBase):
         lib.m_compat.cfg.CONF.calico.num_port_status_threads = 4
         lib.m_compat.cfg.CONF.calico.etcd_compaction_period_mins = 0
         lib.m_compat.cfg.CONF.calico.project_name_cache_max = 0
+        lib.m_compat.cfg.CONF.calico.openstack_region = None
+        calico_config._reset_globals()
+        datamodel_v2._reset_globals()
 
         # This value needs to be a string:
         lib.m_compat.cfg.CONF.keystone_authtoken.auth_url = ""
@@ -1495,17 +1501,47 @@ class TestDriverStatusReporting(lib.Lib, unittest.TestCase):
         self.assertEqual([mock.call(("host", "port"))], m_queue.put.mock_calls)
 
 
-class TestStatusWatcher(_TestEtcdBase):
+class TestStatusWatcherBase(_TestEtcdBase):
+
+    def setUp_region(self):
+        self.region = None
+        self.region_string = "no-region"
+
     def setUp(self):
+        self.setUp_region()
+        _log.info("Region %r string %r", self.region, self.region_string)
+
         # Mock out config.
         lib.m_compat.cfg.CONF.calico.etcd_host = "localhost"
         lib.m_compat.cfg.CONF.calico.etcd_port = 4001
         lib.m_compat.cfg.CONF.calico.etcd_key_file = None
         lib.m_compat.cfg.CONF.calico.etcd_cert_file = None
         lib.m_compat.cfg.CONF.calico.etcd_ca_cert_file = None
-        super(TestStatusWatcher, self).setUp()
+        lib.m_compat.cfg.CONF.calico.openstack_region = self.region
+        calico_config._reset_globals()
+        datamodel_v2._reset_globals()
+
+        super(TestStatusWatcherBase, self).setUp()
         self.driver = mock.Mock(spec=mech_calico.CalicoMechanismDriver)
         self.watcher = status.StatusWatcher(self.driver)
+
+    def _add_test_endpoint(self):
+        # Add a workload to be deleted
+        m_port_status_node = mock.Mock()
+        m_port_status_node.key = (
+            ("/calico/felix/v2/%s/host/hostname/workload/" +
+             "openstack/wlid/endpoint/ep1") % self.region_string
+        )
+        m_port_status_node.value = '{"status": "up"}'
+        self.watcher._on_ep_set(m_port_status_node, "hostname", "wlid", "ep1")
+        ep_id = datamodel_v1.WloadEndpointId("hostname", "openstack",
+                                             "wlid", "ep1")
+        self.assertEqual({"hostname": set([ep_id])},
+                         self.watcher._endpoints_by_host)
+        return m_port_status_node
+
+
+class TestStatusWatcher(TestStatusWatcherBase):
 
     def test_tls(self):
         lib.m_compat.cfg.CONF.calico.etcd_cert_file = "cert-file"
@@ -1516,13 +1552,15 @@ class TestStatusWatcher(_TestEtcdBase):
     def test_snapshot(self):
         # Populate initial status tree data, for initial snapshot testing.
 
-        felix_status_key = '/calico/felix/v1/host/hostname/status'
+        felix_status_key = '/calico/felix/v2/no-region/host/hostname/status'
         felix_last_reported_status_key = \
-            '/calico/felix/v1/host/hostname/last_reported_status'
-        ep_on_that_host_key = ('/calico/felix/v1/host/hostname/workload/' +
-                               'openstack/wlid/endpoint/ep1')
-        ep_on_unknown_host_key = ('/calico/felix/v1/host/unknown/workload/' +
-                                  'openstack/wlid/endpoint/ep2')
+            '/calico/felix/v2/no-region/host/hostname/last_reported_status'
+        ep_on_that_host_key = (
+            '/calico/felix/v2/no-region/host/hostname/workload/' +
+            'openstack/wlid/endpoint/ep1')
+        ep_on_unknown_host_key = (
+            '/calico/felix/v2/no-region/host/unknown/workload/' +
+            'openstack/wlid/endpoint/ep2')
 
         self.etcd_data = {
             # An agent status key to ignore.
@@ -1605,8 +1643,8 @@ class TestStatusWatcher(_TestEtcdBase):
         # back to high after the snapshot.
         watch_events = [{
             "kv": {
-                "key": "/calico/felix/v1/host/hostname/workload/openstack/"
-                       "wlid/endpoint/ep1",
+                "key": "/calico/felix/v2/no-region/host/hostname/workload/"
+                       "openstack/wlid/endpoint/ep1",
                 "value": '{"status": "up"}',
             },
             "type": "SET",
@@ -1637,7 +1675,7 @@ class TestStatusWatcher(_TestEtcdBase):
 
     def test_endpoint_status_add_bad_json(self):
         m_port_status_node = mock.Mock()
-        m_port_status_node.key = "/calico/felix/v1/host/hostname/workload/" \
+        m_port_status_node.key = "/calico/felix/v2/no-region/host/hostname/workload/" \
                                  "openstack/wlid/endpoint/ep1"
         m_port_status_node.value = '{"status": "up"'
         self.watcher._on_ep_set(m_port_status_node, "hostname", "wlid", "ep1")
@@ -1651,7 +1689,7 @@ class TestStatusWatcher(_TestEtcdBase):
 
     def test_endpoint_status_add_bad_id(self):
         m_port_status_node = mock.Mock()
-        m_port_status_node.key = "/calico/felix/v1/host/hostname/workload/" \
+        m_port_status_node.key = "/calico/felix/v2/no-region/host/hostname/workload/" \
                                  "openstack/wlid/endpoint"
         self.watcher._on_ep_set(m_port_status_node, "hostname", "wlid", "ep1")
         self.assertEqual(
@@ -1659,23 +1697,10 @@ class TestStatusWatcher(_TestEtcdBase):
             self.driver.on_port_status_changed.mock_calls)
         self.assertEqual({}, self.watcher._endpoints_by_host)
 
-    def _add_test_endpoint(self):
-        # Add a workload to be deleted
-        m_port_status_node = mock.Mock()
-        m_port_status_node.key = "/calico/felix/v1/host/hostname/workload/" \
-                                 "openstack/wlid/endpoint/ep1"
-        m_port_status_node.value = '{"status": "up"}'
-        self.watcher._on_ep_set(m_port_status_node, "hostname", "wlid", "ep1")
-        ep_id = datamodel_v1.WloadEndpointId("hostname", "openstack",
-                                             "wlid", "ep1")
-        self.assertEqual({"hostname": set([ep_id])},
-                         self.watcher._endpoints_by_host)
-        return m_port_status_node
-
     def test_status_bad_json(self):
         for value in ["{", 10, "foo"]:
             m_response = mock.Mock()
-            m_response.key = "/calico/felix/v1/host/hostname/status"
+            m_response.key = "/calico/felix/v2/no-region/host/hostname/status"
             m_response.value = value
             self.watcher._on_status_set(m_response, "foo")
         self.assertFalse(self.driver.on_felix_alive.called)
@@ -1683,14 +1708,14 @@ class TestStatusWatcher(_TestEtcdBase):
     def test_felix_status_expiry(self):
         # Put an endpoint in the cache to find later...
         m_response = mock.Mock()
-        m_response.key = "/calico/felix/v1/host/hostname/workload/" \
+        m_response.key = "/calico/felix/v2/no-region/host/hostname/workload/" \
                          "openstack/wlid/endpoint/epid"
         m_response.value = '{"status": "up"}'
         self.watcher._on_ep_set(m_response, "hostname", "wlid", "epid")
 
         # Then note that felix is down.
         m_response = mock.Mock()
-        m_response.key = "/calico/felix/v1/host/hostname/status"
+        m_response.key = "/calico/felix/v2/no-region/host/hostname/status"
         self.watcher._on_status_del(m_response, "hostname")
 
         # Check that nothing happens to the port.  (Previously, we used to mark
@@ -1702,6 +1727,85 @@ class TestStatusWatcher(_TestEtcdBase):
                           priority="high"),
             ],
             self.driver.on_port_status_changed.mock_calls)
+
+
+class TestMultiRegionStatusWatcher(TestStatusWatcherBase):
+
+    def setUp_region(self):
+        self.region = "europe"
+        self.region_string = "region-europe"
+
+    def test_endpoint_status_add_delete(self):
+        m_port_status_node = self._add_test_endpoint()
+        m_port_status_node.action = "delete"
+        self.watcher._on_ep_delete(m_port_status_node,
+                                   "hostname", "wlid", "ep1")
+
+        self.assertEqual(
+            [
+                mock.call("hostname", "ep1", {"status": "up"},
+                          priority="high"),
+                mock.call("hostname", "ep1", None, priority="high"),
+            ],
+            self.driver.on_port_status_changed.mock_calls)
+        self.assertEqual({}, self.watcher._endpoints_by_host)
+
+    def test_handle_port_this_region(self):
+        # Simulate status update for a workload in this region.
+        m_port_status_node = mock.Mock()
+        m_port_status_node.key = (
+            "/calico/felix/v2/" + self.region_string +
+            "/host/hostname/workload/openstack/wlid/endpoint/ep1"
+        )
+        m_port_status_node.value = '{"status": "up"}'
+        m_port_status_node.action = "set"
+        self.watcher.dispatcher.handle_event(m_port_status_node)
+        self.assertEqual(
+            [
+                mock.call("hostname", "ep1", {"status": "up"},
+                          priority="high"),
+            ],
+            self.driver.on_port_status_changed.mock_calls)
+
+    def test_ignore_port_other_region(self):
+        # Simulate status update for a workload in another region.
+        m_port_status_node = mock.Mock()
+        m_port_status_node.key = (
+            "/calico/felix/v2/region-other/host/hostname/workload/" +
+            "openstack/wlid/endpoint/ep1"
+        )
+        m_port_status_node.value = '{"status": "up"}'
+        m_port_status_node.action = "set"
+        self.watcher.dispatcher.handle_event(m_port_status_node)
+        self.assertEqual(
+            [],
+            self.driver.on_port_status_changed.mock_calls)
+
+    def test_handle_felix_this_region(self):
+        self.driver.on_felix_alive.reset_mock()
+        m_response = mock.Mock()
+        m_response.action = "set"
+        m_response.key = ("/calico/felix/v2/" +
+                          self.region_string +
+                          "/host/hostname/status")
+        m_response.value = json.dumps({
+            "uptime": 10,
+            "first_update": True,
+        })
+        self.watcher.dispatcher.handle_event(m_response)
+        self.assertTrue(self.driver.on_felix_alive.called)
+
+    def test_ignore_felix_other_region(self):
+        self.driver.on_felix_alive.reset_mock()
+        m_response = mock.Mock()
+        m_response.action = "set"
+        m_response.key = "/calico/felix/v2/region-other/host/hostname/status"
+        m_response.value = json.dumps({
+            "uptime": 10,
+            "first_update": True,
+        })
+        self.watcher.dispatcher.handle_event(m_response)
+        self.assertFalse(self.driver.on_felix_alive.called)
 
 
 def _neutron_rule_from_dict(overrides):
