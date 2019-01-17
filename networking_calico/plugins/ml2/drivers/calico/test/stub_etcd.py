@@ -46,6 +46,7 @@ class Client(object):
         self.no_more_results = Event()
         self.failure = None
         self.next_lease_id = 100000
+        self.keys_written = set()
 
     def get(self, key, metadata=False):
         assert metadata, "Always expect get() call with metadata=True"
@@ -117,7 +118,11 @@ class Client(object):
             log.debug("Raise write exception %s", result.exception)
             raise result.exception
         log.debug("Return write result")
+        self.keys_written.add(path)
         return result
+
+    def assert_key_written(self, key):
+        assert(key in self.keys_written)
 
     def add_read_exception(self, exception):
         assert(isinstance(exception, Exception))
