@@ -101,7 +101,7 @@ var _ = testutils.E2eDatastoreDescribe("Backend API tests", testutils.DatastoreE
 				FirstUpdate:   true,
 			}
 			kv := model.KVPair{
-				Key:   model.ActiveStatusReportKey{Hostname: "host1"},
+				Key:   model.ActiveStatusReportKey{Hostname: "host1", RegionString: "no-region"},
 				Value: &statusReport,
 				TTL:   1 * time.Second,
 			}

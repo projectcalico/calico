@@ -17,11 +17,103 @@ package model_test
 import (
 	. "github.com/projectcalico/libcalico-go/lib/backend/model"
 
+	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
 
 	"github.com/projectcalico/libcalico-go/lib/net"
 )
+
+var _ = Describe("keys with region component", func() {
+
+	It("should not parse workload endpoint status with wrong region", func() {
+		Expect((WorkloadEndpointStatusListOptions{RegionString: "region-Asia"}).KeyFromDefaultPath("/calico/felix/v2/region-Europe/host/h1/workload/o1/w1/endpoint/e1")).To(BeNil())
+	})
+
+	It("should not parse active Felix status with wrong region", func() {
+		Expect((ActiveStatusReportListOptions{RegionString: "region-Asia"}).KeyFromDefaultPath("/calico/felix/v2/region-Europe/host/h1/status")).To(BeNil())
+	})
+
+	It("should not parse last reported Felix status with wrong region", func() {
+		Expect((LastStatusReportListOptions{RegionString: "region-Asia"}).KeyFromDefaultPath("/calico/felix/v2/region-Europe/host/h1/last_reported_status")).To(BeNil())
+	})
+
+	It("should parse workload endpoint status with any region", func() {
+		Expect((WorkloadEndpointStatusListOptions{}).KeyFromDefaultPath("/calico/felix/v2/region-Europe/host/h1/workload/o1/w1/endpoint/e1")).To(Equal(WorkloadEndpointStatusKey{
+			Hostname:       "h1",
+			EndpointID:     "e1",
+			WorkloadID:     "w1",
+			OrchestratorID: "o1",
+			RegionString:   RegionString("Europe"),
+		}))
+	})
+
+	It("should parse active Felix status with any region", func() {
+		Expect((ActiveStatusReportListOptions{}).KeyFromDefaultPath("/calico/felix/v2/region-Europe/host/h1/status")).To(Equal(ActiveStatusReportKey{
+			Hostname:     "h1",
+			RegionString: RegionString("Europe"),
+		}))
+	})
+
+	It("should parse last reported Felix status with any region", func() {
+		Expect((LastStatusReportListOptions{}).KeyFromDefaultPath("/calico/felix/v2/region-Europe/host/h1/last_reported_status")).To(Equal(LastStatusReportKey{
+			Hostname:     "h1",
+			RegionString: RegionString("Europe"),
+		}))
+	})
+
+	It("should generate correct path for a Felix status key with the no-region region string", func() {
+		Expect(KeyToDefaultPath(ActiveStatusReportKey{Hostname: "h1", RegionString: RegionString("")})).To(Equal("/calico/felix/v2/no-region/host/h1/status"))
+	})
+
+	It("should generate correct path for a workload status key with the no-region region string", func() {
+		Expect(KeyToDefaultPath(WorkloadEndpointStatusKey{Hostname: "h1", EndpointID: "e1", WorkloadID: "w1", OrchestratorID: "o1", RegionString: RegionString("")})).To(Equal("/calico/felix/v2/no-region/host/h1/workload/o1/w1/endpoint/e1"))
+	})
+
+	It("should return error for a Felix status key with no region string", func() {
+		_, err := KeyToDefaultPath(ActiveStatusReportKey{Hostname: "h1"})
+		Expect(err).To(HaveOccurred())
+	})
+
+	It("should return error for a workload status key with no region string", func() {
+		_, err := KeyToDefaultPath(WorkloadEndpointStatusKey{Hostname: "h1", EndpointID: "e1", WorkloadID: "w1", OrchestratorID: "o1"})
+		Expect(err).To(HaveOccurred())
+	})
+
+	It("should give correct path root for ActiveStatusReportListOptions with unspecified region string", func() {
+		Expect(ListOptionsToDefaultPathRoot(ActiveStatusReportListOptions{Hostname: "h1"})).To(Equal("/calico/felix/v2/"))
+	})
+
+	It("should give correct path root for LastStatusReportListOptions with unspecified region string", func() {
+		Expect(ListOptionsToDefaultPathRoot(LastStatusReportListOptions{Hostname: "h1"})).To(Equal("/calico/felix/v2/"))
+	})
+
+	It("should give correct path root for WorkloadEndpointStatusListOptions with unspecified region string", func() {
+		Expect(ListOptionsToDefaultPathRoot(WorkloadEndpointStatusListOptions{Hostname: "h1"})).To(Equal("/calico/felix/v2/"))
+	})
+
+	It("should give correct path root for ActiveStatusReportListOptions with valid region string", func() {
+		Expect(ListOptionsToDefaultPathRoot(ActiveStatusReportListOptions{Hostname: "h1", RegionString: "region-us"})).To(Equal("/calico/felix/v2/region-us/host/h1/status"))
+	})
+
+	It("should give correct path root for LastStatusReportListOptions with valid region string", func() {
+		Expect(ListOptionsToDefaultPathRoot(LastStatusReportListOptions{Hostname: "h1", RegionString: "region-us"})).To(Equal("/calico/felix/v2/region-us/host/h1/last_reported_status"))
+	})
+
+	It("should give correct path root for WorkloadEndpointStatusListOptions with valid region string", func() {
+		Expect(ListOptionsToDefaultPathRoot(WorkloadEndpointStatusListOptions{Hostname: "h1", RegionString: "region-us"})).To(Equal("/calico/felix/v2/region-us/host/h1/workload"))
+	})
+
+	It("should return error for a Felix status key with invalid region string", func() {
+		_, err := KeyToDefaultPath(ActiveStatusReportKey{Hostname: "h1", RegionString: "region-us/east"})
+		Expect(err).To(HaveOccurred())
+	})
+
+	It("should return error for a workload status key with invalid region string", func() {
+		_, err := KeyToDefaultPath(WorkloadEndpointStatusKey{Hostname: "h1", EndpointID: "e1", WorkloadID: "w1", OrchestratorID: "o1", RegionString: "region-us/east"})
+		Expect(err).To(HaveOccurred())
+	})
+})
 
 var _ = DescribeTable(
 	"key parsing",
@@ -120,6 +212,24 @@ var _ = DescribeTable(
 		"ready flag",
 		"/calico/v1/Ready",
 		ReadyFlagKey{},
+		false,
+	),
+	Entry(
+		"workload endpoint status",
+		"/calico/felix/v2/region-Europe/host/h1/workload/o1/w1/endpoint/e1",
+		WorkloadEndpointStatusKey{Hostname: "h1", EndpointID: "e1", RegionString: "region-Europe", WorkloadID: "w1", OrchestratorID: "o1"},
+		false,
+	),
+	Entry(
+		"Felix active status",
+		"/calico/felix/v2/region-Europe/host/h1/status",
+		ActiveStatusReportKey{Hostname: "h1", RegionString: "region-Europe"},
+		false,
+	),
+	Entry(
+		"Felix last reported status",
+		"/calico/felix/v2/region-Europe/host/h1/last_reported_status",
+		LastStatusReportKey{Hostname: "h1", RegionString: "region-Europe"},
 		false,
 	),
 )

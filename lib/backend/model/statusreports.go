@@ -1,4 +1,4 @@
-// Copyright (c) 2016 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2018 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -18,19 +18,21 @@ import (
 	"fmt"
 	"reflect"
 	"regexp"
+	"strings"
 
 	"github.com/projectcalico/libcalico-go/lib/errors"
 	log "github.com/sirupsen/logrus"
 )
 
 var (
-	matchActiveStatusReport = regexp.MustCompile("^/?calico/felix/v1/host/([^/]+)/status$")
-	matchLastStatusReport   = regexp.MustCompile("^/?calico/felix/v1/host/([^/]+)/last_reported_status")
+	matchActiveStatusReport = regexp.MustCompile("^/?calico/felix/v2/([^/]+)/host/([^/]+)/status$")
+	matchLastStatusReport   = regexp.MustCompile("^/?calico/felix/v2/([^/]+)/host/([^/]+)/last_reported_status")
 	typeStatusReport        = reflect.TypeOf(StatusReport{})
 )
 
 type ActiveStatusReportKey struct {
-	Hostname string `json:"-" validate:"required,hostname"`
+	Hostname     string `json:"-" validate:"required,hostname"`
+	RegionString string
 }
 
 func (key ActiveStatusReportKey) defaultPath() (string, error) {
@@ -41,7 +43,13 @@ func (key ActiveStatusReportKey) defaultDeletePath() (string, error) {
 	if key.Hostname == "" {
 		return "", errors.ErrorInsufficientIdentifiers{Name: "hostname"}
 	}
-	e := fmt.Sprintf("/calico/felix/v1/host/%s/status", key.Hostname)
+	if key.RegionString == "" {
+		return "", errors.ErrorInsufficientIdentifiers{Name: "regionString"}
+	}
+	if strings.Contains(key.RegionString, "/") {
+		return "", ErrorSlashInRegionString(key.RegionString)
+	}
+	e := fmt.Sprintf("/calico/felix/v2/%s/host/%s/status", key.RegionString, key.Hostname)
 	return e, nil
 }
 
@@ -58,11 +66,16 @@ func (key ActiveStatusReportKey) String() string {
 }
 
 type ActiveStatusReportListOptions struct {
-	Hostname string
+	Hostname     string
+	RegionString string
 }
 
 func (options ActiveStatusReportListOptions) defaultPathRoot() string {
-	k := "/calico/felix/v1/host"
+	k := "/calico/felix/v2/"
+	if options.RegionString == "" {
+		return k
+	}
+	k = k + options.RegionString + "/host"
 	if options.Hostname == "" {
 		return k
 	}
@@ -77,16 +90,22 @@ func (options ActiveStatusReportListOptions) KeyFromDefaultPath(ekey string) Key
 		log.Debugf("Didn't match regex")
 		return nil
 	}
-	name := r[0][1]
+	regionString := r[0][1]
+	name := r[0][2]
+	if options.RegionString != "" && regionString != options.RegionString {
+		log.Debugf("Didn't match region %s != %s", options.RegionString, regionString)
+		return nil
+	}
 	if options.Hostname != "" && name != options.Hostname {
 		log.Debugf("Didn't match name %s != %s", options.Hostname, name)
 		return nil
 	}
-	return ActiveStatusReportKey{Hostname: name}
+	return ActiveStatusReportKey{Hostname: name, RegionString: regionString}
 }
 
 type LastStatusReportKey struct {
-	Hostname string `json:"-" validate:"required,hostname"`
+	Hostname     string `json:"-" validate:"required,hostname"`
+	RegionString string
 }
 
 func (key LastStatusReportKey) defaultPath() (string, error) {
@@ -97,7 +116,13 @@ func (key LastStatusReportKey) defaultDeletePath() (string, error) {
 	if key.Hostname == "" {
 		return "", errors.ErrorInsufficientIdentifiers{Name: "hostname"}
 	}
-	e := fmt.Sprintf("/calico/felix/v1/host/%s/last_reported_status", key.Hostname)
+	if key.RegionString == "" {
+		return "", errors.ErrorInsufficientIdentifiers{Name: "regionString"}
+	}
+	if strings.Contains(key.RegionString, "/") {
+		return "", ErrorSlashInRegionString(key.RegionString)
+	}
+	e := fmt.Sprintf("/calico/felix/v2/%s/host/%s/last_reported_status", key.RegionString, key.Hostname)
 	return e, nil
 }
 
@@ -114,11 +139,16 @@ func (key LastStatusReportKey) String() string {
 }
 
 type LastStatusReportListOptions struct {
-	Hostname string
+	Hostname     string
+	RegionString string
 }
 
 func (options LastStatusReportListOptions) defaultPathRoot() string {
-	k := "/calico/felix/v1/host"
+	k := "/calico/felix/v2/"
+	if options.RegionString == "" {
+		return k
+	}
+	k = k + options.RegionString + "/host"
 	if options.Hostname == "" {
 		return k
 	}
@@ -133,12 +163,17 @@ func (options LastStatusReportListOptions) KeyFromDefaultPath(ekey string) Key {
 		log.Debugf("Didn't match regex")
 		return nil
 	}
-	name := r[0][1]
+	regionString := r[0][1]
+	name := r[0][2]
+	if options.RegionString != "" && regionString != options.RegionString {
+		log.Debugf("Didn't match region %s != %s", options.RegionString, regionString)
+		return nil
+	}
 	if options.Hostname != "" && name != options.Hostname {
 		log.Debugf("Didn't match name %s != %s", options.Hostname, name)
 		return nil
 	}
-	return LastStatusReportKey{Hostname: name}
+	return LastStatusReportKey{Hostname: name, RegionString: regionString}
 }
 
 type StatusReport struct {

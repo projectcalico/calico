@@ -1,4 +1,4 @@
-// Copyright (c) 2016 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2018 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,6 +16,7 @@ package model
 
 import (
 	"fmt"
+	"strings"
 
 	"regexp"
 
@@ -26,7 +27,7 @@ import (
 )
 
 var (
-	matchWorkloadEndpointStatus = regexp.MustCompile("^/?calico/felix/v1/host/([^/]+)/workload/([^/]+)/([^/]+)/endpoint/([^/]+)$")
+	matchWorkloadEndpointStatus = regexp.MustCompile("^/?calico/felix/v2/([^/]+)/host/([^/]+)/workload/([^/]+)/([^/]+)/endpoint/([^/]+)$")
 )
 
 type WorkloadEndpointStatusKey struct {
@@ -34,6 +35,7 @@ type WorkloadEndpointStatusKey struct {
 	OrchestratorID string `json:"-"`
 	WorkloadID     string `json:"-"`
 	EndpointID     string `json:"-"`
+	RegionString   string
 }
 
 func (key WorkloadEndpointStatusKey) defaultPath() (string, error) {
@@ -49,7 +51,14 @@ func (key WorkloadEndpointStatusKey) defaultPath() (string, error) {
 	if key.EndpointID == "" {
 		return "", errors.ErrorInsufficientIdentifiers{Name: "endpoint"}
 	}
-	return fmt.Sprintf("/calico/felix/v1/host/%s/workload/%s/%s/endpoint/%s",
+	if key.RegionString == "" {
+		return "", errors.ErrorInsufficientIdentifiers{Name: "regionString"}
+	}
+	if strings.Contains(key.RegionString, "/") {
+		return "", ErrorSlashInRegionString(key.RegionString)
+	}
+	return fmt.Sprintf("/calico/felix/v2/%s/host/%s/workload/%s/%s/endpoint/%s",
+		key.RegionString,
 		key.Hostname, escapeName(key.OrchestratorID), escapeName(key.WorkloadID), escapeName(key.EndpointID)), nil
 }
 
@@ -67,7 +76,14 @@ func (key WorkloadEndpointStatusKey) defaultDeleteParentPaths() ([]string, error
 	if key.WorkloadID == "" {
 		return nil, errors.ErrorInsufficientIdentifiers{Name: "workload"}
 	}
-	workload := fmt.Sprintf("/calico/felix/v1/host/%s/workload/%s/%s",
+	if key.RegionString == "" {
+		return nil, errors.ErrorInsufficientIdentifiers{Name: "regionString"}
+	}
+	if strings.Contains(key.RegionString, "/") {
+		return nil, ErrorSlashInRegionString(key.RegionString)
+	}
+	workload := fmt.Sprintf("/calico/felix/v2/%s/host/%s/workload/%s/%s",
+		key.RegionString,
 		key.Hostname, escapeName(key.OrchestratorID), escapeName(key.WorkloadID))
 	endpoints := workload + "/endpoint"
 	return []string{endpoints, workload}, nil
@@ -87,10 +103,15 @@ type WorkloadEndpointStatusListOptions struct {
 	OrchestratorID string
 	WorkloadID     string
 	EndpointID     string
+	RegionString   string
 }
 
 func (options WorkloadEndpointStatusListOptions) defaultPathRoot() string {
-	k := "/calico/felix/v1/host"
+	k := "/calico/felix/v2/"
+	if options.RegionString == "" {
+		return k
+	}
+	k = k + options.RegionString + "/host"
 	if options.Hostname == "" {
 		return k
 	}
@@ -117,10 +138,15 @@ func (options WorkloadEndpointStatusListOptions) KeyFromDefaultPath(ekey string)
 		log.Debugf("Didn't match regex")
 		return nil
 	}
-	hostname := r[0][1]
-	orchID := unescapeName(r[0][2])
-	workloadID := unescapeName(r[0][3])
-	endpointID := unescapeName(r[0][4])
+	regionString := r[0][1]
+	hostname := r[0][2]
+	orchID := unescapeName(r[0][3])
+	workloadID := unescapeName(r[0][4])
+	endpointID := unescapeName(r[0][5])
+	if options.RegionString != "" && regionString != options.RegionString {
+		log.Debugf("Didn't match region %s != %s", options.RegionString, regionString)
+		return nil
+	}
 	if options.Hostname != "" && hostname != options.Hostname {
 		log.Debugf("Didn't match hostname %s != %s", options.Hostname, hostname)
 		return nil
@@ -142,6 +168,7 @@ func (options WorkloadEndpointStatusListOptions) KeyFromDefaultPath(ekey string)
 		OrchestratorID: orchID,
 		WorkloadID:     workloadID,
 		EndpointID:     endpointID,
+		RegionString:   regionString,
 	}
 }
 

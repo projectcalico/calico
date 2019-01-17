@@ -261,6 +261,14 @@ func KeyFromDefaultPath(path string) Key {
 		return k
 	} else if k := (ResourceListOptions{Kind: v3.KindBGPPeer}).KeyFromDefaultPath(path); k != nil {
 		return k
+	} else if k := (HostEndpointStatusListOptions{}).KeyFromDefaultPath(path); k != nil {
+		return k
+	} else if k := (WorkloadEndpointStatusListOptions{}).KeyFromDefaultPath(path); k != nil {
+		return k
+	} else if k := (ActiveStatusReportListOptions{}).KeyFromDefaultPath(path); k != nil {
+		return k
+	} else if k := (LastStatusReportListOptions{}).KeyFromDefaultPath(path); k != nil {
+		return k
 	} else {
 		log.Debugf("Path is unknown: %v", path)
 	}
