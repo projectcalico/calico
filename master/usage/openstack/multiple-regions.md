@@ -63,29 +63,33 @@ except for these points:
 
     where `<region>` is the name of the region that that node belongs to.
 
+> **Warning**: If the Felix and Neutron values here do not match, OpenStack
+> will not be able to launch any VMs in that region, because the Neutron server
+> for the region will think that there are no working compute nodes.
+{: .alert .alert-danger}
+
 ## Configuring cross-region policy
 
 Suppose that:
 
-- you have two regions, "RegionOne" and "RegionTwo"
+- you have two regions
 
-- you have a set of VMs in RegionOne belonging to security group
+- you have a set of VMs in one region belonging to security group
   a7734e61-b545-452d-a3cd-0189cbd9747a
 
-- you have a set of VMs in RegionTwo belonging to security group
+- you have a set of VMs in another region belonging to security group
   85cc3048-abc3-43cc-89b3-377341426ac5
 
-- you want to allow the VMs in RegionTwo to connect to port 80 of the VMs in
-  RegionOne.
+- you want to allow the second set of VMs to connect to port 80 of the first
+  set.
 
 You could do that by configuring this {{site.prodname}} policy:
 
 ```yaml
 apiVersion: projectcalico.org/v3
-kind: NetworkPolicy
+kind: GlobalNetworkPolicy
 metadata:
   name: allow-tcp-80
-  namespace: openstack-region-RegionOne
 spec:
   selector: "has(sg.projectcalico.org/openstack-a7734e61-b545-452d-a3cd-0189cbd9747a)"
   types:
@@ -94,7 +98,6 @@ spec:
   - action: Allow
     protocol: TCP
     source:
-      namespaceSelector: "all()"
       selector: "has(sg.projectcalico.org/openstack-85cc3048-abc3-43cc-89b3-377341426ac5)"
     destination:
       ports:
@@ -102,14 +105,20 @@ spec:
 ```
 
 In words, this says that connections to port 80 of the VMs with the label for
-the a7734e61... security group are allowed from VMs - in any namespace - with
-the label for the 85cc3048... security group.  We know that the 85cc3048... VMs
-_are_ in a different namespace from the a7734e61... VMs, so the
-`namespaceSelector: "all()"` here - which allows the connecting VMs to come
-from any region or namespace - is critical for this policy to work as intended.
+the a7734e61... security group are allowed from VMs (in any region) with
+the label for the 85cc3048... security group.
 
-You can use any of the
+In the `selector` fields, you can use any of the
 [labels]({{site.baseurl}}/{{page.version}}/usage/openstack/labels) that
-{{site.prodname}} adds to OpenStack VM endpoints, to identify a set of allowed
-(or denied) clients.  You can also use `nets` or `notNets` instead of
-`selector`, to identify clients by IP address.
+{{site.prodname}} adds to OpenStack VM endpoints, to identify the set of VMs
+that the policy should apply to, and the set of allowed (or denied) clients.
+Here are some more examples of selectors to get you started:
+
+-  To select all VMs in a region named "one": `projectcalico.org/namespace ==
+   'openstack-region-one'`.
+
+-  To select all VMs that are in a security group named "production", in *any*
+   region: `has(sg-name.projectcalico.org/openstack-production)`.
+
+You can also use `nets` or `notNets` instead of the `selector` field under
+`source` or `destination`, to identify clients by IP address.
