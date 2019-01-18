@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2018 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2019 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -397,9 +397,12 @@ var _ = Describe("DatastoreConfig tests", func() {
 var _ = DescribeTable("Config validation",
 	func(settings map[string]string, ok bool) {
 		cfg := New()
-		cfg.UpdateFrom(settings, ConfigFile)
-		err := cfg.Validate()
-		log.WithError(err).Info("Validation result")
+		_, err := cfg.UpdateFrom(settings, ConfigFile)
+		log.WithError(err).Info("UpdateFrom result")
+		if err == nil {
+			err = cfg.Validate()
+			log.WithError(err).Info("Validation result")
+		}
 		if !ok {
 			Expect(err).To(HaveOccurred())
 		} else {
@@ -435,4 +438,16 @@ var _ = DescribeTable("Config validation",
 		"TyphaCN":       "typha-peer",
 		"TyphaURISAN":   "spiffe://k8s.example.com/typha-peer",
 	}, true),
+	Entry("valid OpenstackRegion", map[string]string{
+		"OpenstackRegion": "region1",
+	}, true),
+	Entry("OpenstackRegion with uppercase", map[string]string{
+		"OpenstackRegion": "RegionOne",
+	}, false),
+	Entry("OpenstackRegion with slash", map[string]string{
+		"OpenstackRegion": "us/east",
+	}, false),
+	Entry("OpenstackRegion with underscore", map[string]string{
+		"OpenstackRegion": "my_region",
+	}, false),
 )
