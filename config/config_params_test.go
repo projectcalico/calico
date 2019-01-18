@@ -450,4 +450,7 @@ var _ = DescribeTable("Config validation",
 	Entry("OpenstackRegion with underscore", map[string]string{
 		"OpenstackRegion": "my_region",
 	}, false),
+	Entry("OpenstackRegion too long", map[string]string{
+		"OpenstackRegion": "my-region-has-a-very-long-and-extremely-interesting-name",
+	}, false),
 )

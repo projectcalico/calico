@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2018 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2019 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -25,6 +25,8 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+
+	"k8s.io/apimachinery/pkg/util/validation"
 
 	"time"
 
@@ -423,4 +425,29 @@ func (c *CIDRListParam) Parse(raw string) (result interface{}, err error) {
 		resultSlice = append(resultSlice, net.String())
 	}
 	return resultSlice, nil
+}
+
+type RegionParam struct {
+	Metadata
+}
+
+const regionNamespacePrefix = "openstack-region-"
+const maxRegionLength int = validation.DNS1123LabelMaxLength - len(regionNamespacePrefix)
+
+func (r *RegionParam) Parse(raw string) (result interface{}, err error) {
+	log.WithField("raw", raw).Info("Region")
+	if len(raw) > maxRegionLength {
+		err = fmt.Errorf("The value of OpenstackRegion must be %v chars or fewer", maxRegionLength)
+		return
+	}
+	errs := validation.IsDNS1123Label(raw)
+	if len(errs) != 0 {
+		msg := "The value of OpenstackRegion must be a valid DNS label"
+		for _, err := range errs {
+			msg = msg + "; " + err
+		}
+		err = errors.New(msg)
+		return
+	}
+	return raw, nil
 }
