@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2018 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2019 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -139,7 +139,7 @@ type Config struct {
 	MetadataAddr string `config:"hostname;127.0.0.1;die-on-fail"`
 	MetadataPort int    `config:"int(0,65535);8775;die-on-fail"`
 
-	OpenstackRegion string `config:"string;;local"`
+	OpenstackRegion string `config:"region;;local,die-on-fail"`
 
 	InterfacePrefix  string `config:"iface-list;cali;non-zero,die-on-fail"`
 	InterfaceExclude string `config:"iface-list;kube-ipvs0"`
@@ -528,6 +528,8 @@ func loadParams() {
 		case "hostname":
 			param = &RegexpParam{Regexp: HostnameRegexp,
 				Msg: "invalid hostname"}
+		case "region":
+			param = &RegionParam{}
 		case "oneof":
 			options := strings.Split(kindParams, ",")
 			lowerCaseToCanon := make(map[string]string)
