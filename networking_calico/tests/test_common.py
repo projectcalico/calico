@@ -79,3 +79,18 @@ class TestCommon(unittest.TestCase):
         self.assertTrue(common.validate_cidr("2001::a/64", None))
 
         self.assertFalse(common.validate_cidr(None, None))
+
+    def test_validate_region(self):
+        # Valid openstack_region.
+        config._validate_region("region1")
+        # openstack_region with uppercase.
+        self.assertRaises(AssertionError, config._validate_region, "RegionOne")
+        # openstack_region with slash.
+        self.assertRaises(AssertionError, config._validate_region, "us/east")
+        # openstack_region with underscore.
+        self.assertRaises(AssertionError, config._validate_region, "my_region")
+        # openstack_region too long.
+        self.assertRaises(
+            AssertionError,
+            config._validate_region,
+            "my-region-has-a-very-long-and-extremely-interesting-name")

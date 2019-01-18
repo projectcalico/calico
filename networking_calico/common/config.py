@@ -10,8 +10,11 @@
 #    License for the specific language governing permissions and limitations
 #    under the License.
 
+import re
+
 from networking_calico.compat import cfg
 from networking_calico import datamodel_v2
+from networking_calico import datamodel_v3
 
 
 SHARED_OPTS = [
@@ -46,6 +49,20 @@ def register_options(conf, additional_options=None):
 
 
 _cached_region_string = None
+MAX_DNS_LABEL_LEN = 63
+MAX_REGION_LEN = MAX_DNS_LABEL_LEN - len(datamodel_v3.REGION_NAMESPACE_PREFIX +
+                                         datamodel_v2.REGION_PREFIX)
+DNS_LABEL_REGEXP = "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$"
+
+
+def _validate_region(region):
+    assert len(region) <= MAX_REGION_LEN, \
+        ("The value of openstack_region must be must be %d chars or fewer" %
+         MAX_REGION_LEN)
+    assert re.compile(DNS_LABEL_REGEXP).match(region), \
+        ("The value of openstack_region must be must be a valid DNS label;"
+         " comprising lower case alphanumeric characters or '-',"
+         " and starting and ending with an alphanumeric character")
 
 
 def get_region_string():
@@ -77,6 +94,7 @@ def get_region_string():
     if _cached_region_string is None:
         # Use [calico] openstack_region if configured.
         if cfg.CONF.calico.openstack_region:
+            _validate_region(cfg.CONF.calico.openstack_region)
             _cached_region_string = "%s%s" % (datamodel_v2.REGION_PREFIX,
                                               cfg.CONF.calico.openstack_region)
         else:
