@@ -1,6 +1,5 @@
 ---
 title: Multiple Regions
-canonical_url: 'https://docs.projectcalico.org/v3.5/usage/openstack/multiple-regions'
 ---
 
 If you use a [multiple region
