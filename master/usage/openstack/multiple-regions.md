@@ -63,6 +63,11 @@ except for these points:
 
     where `<region>` is the name of the region that that node belongs to.
 
+> **Note**: the value specified for `OpenstackRegion` and `openstack_region`
+> must be a string of lower case alphanumeric characters or '-', starting and
+> ending with an alphanumeric character.
+{: .alert .alert-info}
+
 > **Warning**: If the Felix and Neutron values here do not match, OpenStack
 > will not be able to launch any VMs in that region, because the Neutron server
 > for the region will think that there are no working compute nodes.

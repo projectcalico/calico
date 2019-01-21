@@ -67,6 +67,19 @@ that server is using a non-standard port.  If the etcd server is TLS-secured, al
 | etcd_cert_file    |               | The path to the TLS client certificate file to use with etcd |
 | etcd_ca_cert_file |               | The path to the TLS CA certificate file to use with etcd     |
 
+In a [multi-region deployment]({{site.baseurl}}/{{page.version}}/usage/openstack/multiple-regions),
+`[calico] openstack_region` configures the name of the region that the local compute or controller
+node belongs to.
+
+| Setting            | Default Value | Meaning                                                                      |
+|--------------------|---------------|------------------------------------------------------------------------------|
+| `openstack_region` | none          | The name of the region that the local compute of controller node belongs to. |
+
+When specified, the value of `openstack_region` must be a string of lower case alphanumeric
+characters or '-', starting and ending with an alphanumeric character, and must match the value of
+[`OpenstackRegion`]({{site.baseurl}}/{{page.version}}/reference/felix/configuration#openstack-specific-configuration)
+configured for the Felixes in the same region.
+
 ### ML2 (.../ml2_conf.ini)
 
 In `/etc/neutron/plugins/ml2/ml2_conf.ini` you need the following
