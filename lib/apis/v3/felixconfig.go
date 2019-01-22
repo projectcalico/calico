@@ -92,6 +92,12 @@ type FelixConfigurationSpec struct {
 	// In most cases this should not need to be changed [Default: 8775].
 	MetadataPort *int `json:"metadataPort,omitempty"`
 
+	// OpenstackRegion is the name of the region that a particular Felix belongs to. In a multi-region
+	// Calico/OpenStack deployment, this must be configured somehow for each Felix (here in the datamodel,
+	// or in felix.cfg or the environment on each compute node), and must match the [calico]
+	// openstack_region value configured in neutron.conf on each node. [Default: Empty]
+	OpenstackRegion string `json:"openstackRegion,omitempty"`
+
 	// InterfacePrefix is the interface name prefix that identifies workload endpoints and so distinguishes
 	// them from host endpoint interfaces. Note: in environments other than bare metal, the orchestrators
 	// configure this appropriately. For example our Kubernetes and Docker integrations set the ‘cali’ value,

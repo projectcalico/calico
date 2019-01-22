@@ -559,6 +559,20 @@ func validateFelixConfigSpec(v *validator.Validate, structLevel *validator.Struc
 			}
 		}
 	}
+
+	// Validate that the OpenStack region is suitable for use in a namespace name.
+	const regionNamespacePrefix = "openstack-region-"
+	const maxRegionLength int = k8svalidation.DNS1123LabelMaxLength - len(regionNamespacePrefix)
+	if len(c.OpenstackRegion) > maxRegionLength {
+		structLevel.ReportError(reflect.ValueOf(c.OpenstackRegion),
+			"OpenstackRegion", "", reason("is too long"))
+	} else if len(c.OpenstackRegion) > 0 {
+		problems := k8svalidation.IsDNS1123Label(c.OpenstackRegion)
+		if len(problems) > 0 {
+			structLevel.ReportError(reflect.ValueOf(c.OpenstackRegion),
+				"OpenstackRegion", "", reason("must be a valid DNS label"))
+		}
+	}
 }
 
 func validateWorkloadEndpointSpec(v *validator.Validate, structLevel *validator.StructLevel) {
