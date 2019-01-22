@@ -1,5 +1,5 @@
-hash: 9a36a80bdf72677b870e1d7f9d254ce4297b0002d5eaf9abbd60583e28c39b5f
-updated: 2019-01-09T04:16:42.845427509Z
+hash: a9b1f6acb0a2643bcdd2d1e5ec9f428f928246313b26e98ff876cc00ef25feb7
+updated: 2019-01-22T12:16:29.027401-08:00
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -37,7 +37,7 @@ imports:
 - name: github.com/ghodss/yaml
   version: 0ca9ea5df5451ffdf184b4428c902747c2c11cd7
 - name: github.com/go-ini/ini
-  version: 9c8236e659b76e87bf02044d06fde8683008ff3e
+  version: 6ed8d5f64cd79a498d1f3fab5880cc376ce41bbe
 - name: github.com/gogo/protobuf
   version: 342cbe0a04158f6dcb03ca0079991a51a4248c02
   subpackages:
@@ -149,7 +149,7 @@ imports:
 - name: github.com/peterbourgon/diskv
   version: 5f041e8faa004a95c88a202771f4cc3e991971e6
 - name: github.com/projectcalico/felix
-  version: 1b3147cca714c561b55d7438f83de5c3887846d8
+  version: a49ec3dad8a2c6ea144ff6a0ed01084315fa7250
   subpackages:
   - calc
   - config
@@ -175,7 +175,7 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: d93dd29e85face5237500468e68b7333e0af5a46
+  version: 7d8292ea4aff9a63600c03a98aa22422732b2267
   subpackages:
   - lib/apiconfig
   - lib/apis/v1
@@ -234,7 +234,7 @@ imports:
 - name: github.com/sirupsen/logrus
   version: f006c2ac4710855cf0f916dd6b77acf6b048dc6e
 - name: github.com/spf13/pflag
-  version: e57e3eeb33f795204c1ca35f56c44f83227c6e66
+  version: 583c0c0531f06d5278b7d917446061adc344b5cd
 - name: golang.org/x/crypto
   version: 9419663f5a44be8b34ca85f08abc5fe1be11f8a3
   subpackages:
@@ -415,7 +415,7 @@ imports:
   - pkg/watch
   - third_party/forked/golang/reflect
 - name: k8s.io/apiserver
-  version: f1dab8c342623e75f0484f20b150183d9e73f406
+  version: b6aa1175dafa586b8042c7bfdcd1585f9ecfaa08
   subpackages:
   - pkg/storage
   - pkg/storage/etcd
@@ -489,4 +489,6 @@ imports:
   - util/jsonpath
   - util/retry
   - util/workqueue
+- name: k8s.io/klog
+  version: 8139d8cb77af419532b33dfa7dd09fbc5f1d344f
 testImports: []
