@@ -4,8 +4,8 @@ canonical_url: 'https://docs.projectcalico.org/master/usage/openstack/labels'
 ---
 
 When {{site.prodname}} represents an OpenStack VM as a {{site.prodname}} WorkloadEndpoint,
-it puts labels on the WorkloadEndpoint to identify the project and security groups that
-the VM belongs to.
+it puts labels on the WorkloadEndpoint to identify the project, security groups and
+namespace that the VM belongs to.
 
 For the VM's OpenStack project (previously known as 'tenant'), those labels are:
 
@@ -22,6 +22,18 @@ For each security group that the VM belongs to, those labels are:
 | `sg.projectcalico.org/openstack-<security group ID>`        | `<security group name>` |
 | `sg-name.projectcalico.org/openstack-<security group name>` | `<security group ID>`   |
 |-------------------------------------------------------------|-------------------------|
+
+For the VM's {{site.prodname}} namespace, the label is:
+
+| Label Name                      | Value                |
+|---------------------------------|----------------------|
+| `projectcalico.org/namespace`   | `<namespace name>`   |
+|---------------------------------|----------------------|
+
+When `[calico] openstack_region` has been configured in `/etc/neutron/neutron.conf` (as
+recommended for [multiple region deployments](multiple-regions)) the namespace will be
+"openstack-region-" followed by the configured region name.  Otherwise it is simply
+"openstack".
 
 > **Note**: Calico only allows certain characters in label names and values
 > (alphanumerics, '-', '\_', '.' and '/'), so if a project or security group name normally
