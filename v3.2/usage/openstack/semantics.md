@@ -1,6 +1,6 @@
 ---
 title: Detailed Semantics
-canonical_url: 'https://docs.projectcalico.org/v2.6/usage/openstack/semantics'
+canonical_url: 'https://docs.projectcalico.org/v3.4/usage/openstack/semantics'
 ---
 
 A {{site.prodname}} network is a Neutron network (either provider or tenant) whose
@@ -47,8 +47,8 @@ False`, so at the moment - unfortunately - it *still* has to be understood that
 > and anycast IP. Anycast IP also requires support for allowed-address-pairs,
 > or some other way of assigning the same IP address to more than one instance;
 > work for allowed-address-pairs support is in progress at
-> [https://review.openstack.org/#/c/344008/](https://review.openstack.org/#/c/344008/). 
-> Multicast IP support is on our roadmap but not yet implemented. Broadcast IP 
+> [https://review.openstack.org/#/c/344008/](https://review.openstack.org/#/c/344008/).
+> Multicast IP support is on our roadmap but not yet implemented. Broadcast IP
 > is not possible because it depends on L2 adjacency.
 {: .alert .alert-info}
 

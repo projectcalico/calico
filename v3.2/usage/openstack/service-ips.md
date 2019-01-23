@@ -1,9 +1,9 @@
 ---
 title: Service IPs
-canonical_url: 'https://docs.projectcalico.org/v2.6/usage/openstack/service-ips'
+canonical_url: 'https://docs.projectcalico.org/v3.4/usage/openstack/service-ips'
 ---
 
-{{site.prodname}} supports two approaches for assigning a service IP to a 
+{{site.prodname}} supports two approaches for assigning a service IP to a
 {{site.prodname}}-networked VM:
 
 - using a floating IP

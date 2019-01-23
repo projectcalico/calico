@@ -1,6 +1,6 @@
 ---
 title: Kuryr
-canonical_url: 'https://docs.projectcalico.org/v2.6/usage/openstack/kuryr'
+canonical_url: 'https://docs.projectcalico.org/v3.4/usage/openstack/kuryr'
 ---
 
 networking-calico works with Kuryr; this means using Neutron, with the {{site.prodname}}

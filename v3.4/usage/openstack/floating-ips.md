@@ -1,7 +1,7 @@
 ---
 title: Floating IPs
 redirect_from: latest/usage/openstack/floating-ips
-canonical_url: 'https://docs.projectcalico.org/v2.6/usage/openstack/floating-ips'
+canonical_url: 'https://docs.projectcalico.org/v3.4/usage/openstack/floating-ips'
 ---
 
 networking-calico includes beta support for floating IPs.  Currently this
@@ -67,7 +67,7 @@ For example:
 1. Create a floating IP and associate it with the target VM.
 
    ```bash
-   neutron floatingip-create public 
+   neutron floatingip-create public
    neutron floatingip-associate <floatingip-id> <target-VM-port-id>
    ```
 
