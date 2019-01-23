@@ -72,6 +72,19 @@ except for these points:
 > for the region will think that there are no working compute nodes.
 {: .alert .alert-danger}
 
+### Configuring Openstack
+You should now create networks in your Openstack regions as normal. e.g.
+```
+ neutron net-create --shared calico
+ neutron subnet-create --gateway 10.65.0.1 --enable-dhcp --ip-version 4 --name calico-v4 calico 10.65.0.0/24
+```
+
+> **Note** that Calico networking provides a flat L3 network,
+> so *subnets across all regions must not overlap*.
+> For example, having 10.1.0.0/16 in one region and 10.2.0.0/16 in another
+> would be fine, but 10.1.0.0/16 and 10.1.200.0/24 would not.
+{: .alert .alert-info}
+
 ## Configuring cross-region policy
 
 Suppose that:
