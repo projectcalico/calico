@@ -80,7 +80,9 @@ You should now create networks in your Openstack regions as normal. e.g.
 ```
 
 > **Note** that Calico networking provides a flat L3 network,
-> so *subnets must be disjoint across all regions*.
+> so *subnets across all regions must not overlap*.
+> For example, having 10.1.0.0/16 in one region and 10.2.0.0/16 in another
+> would be fine, but 10.1.0.0/16 and 10.1.200.0/24 would not.
 {: .alert .alert-info}
 
 ## Configuring cross-region policy
