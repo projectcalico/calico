@@ -61,7 +61,7 @@ case "$CALICO_NETWORKING_BACKEND" in
 
 	# Run confd once - this ensures we have sensible config generated at the point we start
 	# bird.
-	calico-node -confd -confd-onetime -confd-keep-stage-file >/felix-startup-1.log 2>&1 || true
+	calico-node -confd -confd-run-once -confd-keep-stage-file >/felix-startup-1.log 2>&1 || true
 
 	# Enable the confd and bird services
 	cp -a /etc/service/available/bird  /etc/service/enabled/
