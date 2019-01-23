@@ -1,5 +1,5 @@
-hash: 521a0d1082bd8ff676218d5c77e9985481ca90912156e427ddf625d97593bb04
-updated: 2019-01-21T07:38:05.996293416Z
+hash: a7e0905ada9c0d3ac22bce29b42acf02949076d0d8ec67065cb53ee7a8e1b51c
+updated: 2019-01-23T07:38:05.769452317Z
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -187,7 +187,7 @@ imports:
 - name: github.com/peterbourgon/diskv
   version: 5f041e8faa004a95c88a202771f4cc3e991971e6
 - name: github.com/projectcalico/felix
-  version: 10d1a77774b9c8af137ab47d8bb1a8122c25ae27
+  version: 743b921643e4da1236f903bee775ac6912c9c8bd
   subpackages:
   - buildinfo
   - calc
@@ -228,7 +228,7 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: 5371ca7dceb1779d50ca090dc1231bd9d762c106
+  version: 77ba774ca125b3bca31616bc3ca4d2e93ebb04d0
   subpackages:
   - lib/apiconfig
   - lib/apis/v1
