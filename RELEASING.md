@@ -229,6 +229,15 @@ release in the documentation. Perform these steps on a branch off of master.
 
    Example: `make update_canonical_urls OLD=v3.0 NEW=v3.1`, where `3.0` was the previous latest and `3.1` is the new latest release.
 
+   Then run the following command to switch any canonical URLs pointing to the `master` directory to
+   the latest release. This can occur when people create new pages before the release directory gets cut.
+
+   ```
+   make update_canonical_urls OLD=master NEW=vX.Y
+   ```
+
+   Example: `make update_canonical_urls OLD=master NEW=v3.1`, where `3.1` is the new latest release.
+
 1. Submit a PR with the canonical link changes, make sure it passes CI, and get it reviewed.
 
    ```

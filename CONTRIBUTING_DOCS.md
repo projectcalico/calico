@@ -141,7 +141,7 @@ Examples:
 
 - [Add the new page to the side navigation bar](#linking-content).
 
-- Within the copies of the page in the `master` and previous release directories, add a `canonical_url` line below the `title` line in the metadata of the page. This should contain the absolute path to the page in the current latest directory. Example: `canonical_url: 'https://docs.projectcalico.org/v3.0/getting-started/kubernetes/'`. For more discussion of canonical URLs, refer to the [Canonical URLs](#canonical-urls) section.
+- Within all copies of the page (in the `master` as well as relevant release directories), add a `canonical_url` line below the `title` line in the metadata of the page. This should contain the absolute path to the page in the current latest directory. If you are creating a new page that does not exist in any directory except `master` (for example, because the release directory has not yet been cut), use the `master` path in the `canonical_url`. Example: `canonical_url: 'https://docs.projectcalico.org/v3.0/getting-started/kubernetes/'`. If the For more discussion of canonical URLs, refer to the [Canonical URLs](#canonical-urls) section.
 
 
 ### Deleting or renaming pages
