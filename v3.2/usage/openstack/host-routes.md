@@ -1,6 +1,6 @@
 ---
 title: Host routes
-canonical_url: 'https://docs.projectcalico.org/v2.6/usage/openstack/host-routes'
+canonical_url: 'https://docs.projectcalico.org/v3.4/usage/openstack/host-routes'
 ---
 
 Neutron allows "host routes" to be configured on a subnet, with each host route
@@ -41,7 +41,7 @@ routed there.
 > according to its routing table, to wherever it needs to go. This also means
 > that the gateway IP address really is functioning as each instance's default
 > gateway, in the generally understood sense.
-> 
+>
 {: .alert .alert-info}
 
 
