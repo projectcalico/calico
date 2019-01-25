@@ -51,6 +51,8 @@ toc:
   path: /usage/configuration/conntrack
 - title: Advertising Kubernetes services
   path: /usage/service-advertisement
+- title: Assigning IP addresses based on topology
+  path: /usage/assigning-ip-addresses-topology
 - title: Calico for OpenStack
   section:
   - title: Endpoint Labels
