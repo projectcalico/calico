@@ -1,5 +1,6 @@
 ---
 title: Securing Calico's Prometheus endpoints
+redirect_from: latest/usage/policy/secure-metrics
 ---
 
 ## About securing access to {{site.prodname}}'s metrics endpoints

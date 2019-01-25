@@ -1,6 +1,5 @@
 ---
 title: Enabling IPVS in Kubernetes
-redirect_from: latest/usage/enabling-ipvs
 canonical_url: 'https://docs.projectcalico.org/v3.4/usage/enabling-ipvs'
 ---
 

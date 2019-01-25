@@ -1,6 +1,5 @@
 ---
 title: Installing Calico for policy and flannel for networking
-redirect_from: latest/getting-started/kubernetes/installation/flannel
 canonical_url: 'https://docs.projectcalico.org/v3.4/getting-started/kubernetes/installation/flannel'
 ---
 

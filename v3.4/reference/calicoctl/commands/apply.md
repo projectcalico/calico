@@ -1,6 +1,5 @@
 ---
 title: calicoctl apply
-redirect_from: latest/reference/calicoctl/commands/apply
 canonical_url: 'https://docs.projectcalico.org/v3.4/reference/calicoctl/commands/apply'
 ---
 

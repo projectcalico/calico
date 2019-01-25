@@ -1,6 +1,5 @@
 ---
 title: Calico Integrations
-redirect_from: latest/getting-started/index
 canonical_url: 'https://docs.projectcalico.org/v3.4/getting-started/'
 ---
 

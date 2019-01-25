@@ -1,5 +1,6 @@
 ---
 title: Configuring Systems for use with Calico
+redirect_from: latest/usage/openstack/configuration
 canonical_url: 'https://docs.projectcalico.org/v3.4/usage/openstack/configuration'
 ---
 

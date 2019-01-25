@@ -1,6 +1,5 @@
 ---
 title: System requirements
-redirect_from: latest/getting-started/openstack/requirements
 canonical_url: 'https://docs.projectcalico.org/v3.4/getting-started/openstack/requirements'
 ---
 
