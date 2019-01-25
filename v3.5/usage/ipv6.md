@@ -1,7 +1,7 @@
 ---
 title: Enabling IPv6 Support
 redirect_from: latest/usage/ipv6
-canonical_url: 'https://docs.projectcalico.org/v3.4/usage/ipv6'
+canonical_url: 'https://docs.projectcalico.org/v3.5/usage/ipv6'
 ---
 
 ### About enabling IPv6

@@ -1,6 +1,6 @@
 ---
 title: BGP Configuration
-canonical_url: 'https://docs.projectcalico.org/v3.4/usage/configuration/bgp'
+canonical_url: 'https://docs.projectcalico.org/v3.5/usage/configuration/bgp'
 ---
 
 This document describes the commands available in calicoctl for managing BGP.

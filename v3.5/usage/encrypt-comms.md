@@ -1,7 +1,7 @@
 ---
 title: Configuring encryption and authentication
 redirect_from: latest/usage/encrypt-comms
-canonical_url: 'https://docs.projectcalico.org/master/usage/encrypt-comms'
+canonical_url: 'https://docs.projectcalico.org/v3.5/usage/encrypt-comms'
 ---
 
 ## Connections from {{site.prodname}} components to etcd

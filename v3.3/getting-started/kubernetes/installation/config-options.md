@@ -1,6 +1,6 @@
 ---
 title: Customizing the manifests
-canonical_url: 'https://docs.projectcalico.org/v3.4/getting-started/kubernetes/installation/config-options'
+canonical_url: 'https://docs.projectcalico.org/v3.5/getting-started/kubernetes/installation/config-options'
 ---
 
 ## About customizing manifests

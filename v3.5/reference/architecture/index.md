@@ -1,7 +1,7 @@
 ---
 title: Calico Architecture
 redirect_from: latest/reference/architecture/index
-canonical_url: 'https://docs.projectcalico.org/v3.4/reference/architecture/'
+canonical_url: 'https://docs.projectcalico.org/v3.5/reference/architecture/'
 ---
 
 This document discusses the various pieces of {{site.prodname}}'s architecture,

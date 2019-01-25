@@ -1,7 +1,7 @@
 ---
 title: Calico Integrations
 redirect_from: latest/getting-started/index
-canonical_url: 'https://docs.projectcalico.org/v3.4/getting-started/'
+canonical_url: 'https://docs.projectcalico.org/v3.5/getting-started/'
 ---
 
 To get started using {{site.prodname}}, we recommend running through one or more of the

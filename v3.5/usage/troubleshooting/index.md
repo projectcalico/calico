@@ -1,7 +1,7 @@
 ---
 title: Troubleshooting
 redirect_from: latest/usage/troubleshooting/index
-canonical_url: 'https://docs.projectcalico.org/v3.4/usage/troubleshooting/'
+canonical_url: 'https://docs.projectcalico.org/v3.5/usage/troubleshooting/'
 ---
 
 * TOC
