@@ -18,6 +18,7 @@ by GitHub for the core repositories within the projectcalico/ organization. It i
 | Anthony Arnaud                           | @aarnaud |
 | Anton Antonov                            | @syndbg |
 | Artem Panchenko                          | @artem-panchenko |
+| Artyom Rymarchik                         | @mechanicalbot |
 | Avi Deitcher                             | @deitch |
 | Benjamin                                 | @ben-st |
 | Bingshen Wang                            | @BSWANG |
@@ -56,14 +57,14 @@ by GitHub for the core repositories within the projectcalico/ organization. It i
 | Gerard Hickey                            | @hickey |
 | Giancarlo Rubio                          | @gianrubio |
 | Guang Ya Liu                             | @gyliu513 |
-| Gunjan Patel                             | @gunjan5 |
+| Gunjan "Grass-fed Rabbit" Patel          | @gunjan5 |
 | Guy Templeton                            | @gjtempleton |
 | He Yi                                    | @heyi-arm |
 | huikang                                  | @huikang |
 | IWAMOTO Toshihiro                        | @toshiiw |
-| J. Grizzard                              | @elfchief |
 | Jan Ivar Beddari                         | @beddari |
 | Jeff Schroeder                           | @SEJeff |
+| JG                                       | @elfchief |
 | jie zhang                                | @jiulongzaitian |
 | Joel Bastos                              | @kintoandar |
 | Jose Bigio                               | @jose-bigio |
@@ -147,9 +148,11 @@ by GitHub for the core repositories within the projectcalico/ organization. It i
 | ---                                      | @frnkdny |
 | ---                                      | @kirandivekar |
 | ---                                      | @marvin-tigera |
+| ---                                      | @maxkudosh |
 | ---                                      | @meeee |
 | ---                                      | @mikev |
 | ---                                      | @mofelee |
 | ---                                      | @OwenTuz |
+| ---                                      | @rymarchikbot |
 | ---                                      | @saumohos |
 | ---                                      | @svInfra17 |

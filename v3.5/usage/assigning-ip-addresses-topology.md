@@ -1,5 +1,6 @@
 ---
 title: Assigning IP addresses based on topology
+redirect_from: latest/usage/assigning-ip-addresses-topology
 ---
 
 ## About IP address assignment

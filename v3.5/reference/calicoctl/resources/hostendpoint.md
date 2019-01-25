@@ -1,5 +1,6 @@
 ---
 title: Host Endpoint Resource (HostEndpoint)
+redirect_from: latest/reference/calicoctl/resources/hostendpoint
 canonical_url: 'https://docs.projectcalico.org/v3.4/reference/calicoctl/resources/hostendpoint'
 ---
 

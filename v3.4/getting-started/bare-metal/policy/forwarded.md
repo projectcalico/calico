@@ -1,6 +1,5 @@
 ---
 title: Apply on forwarded traffic
-redirect_from: latest/getting-started/bare-metal/policy/forwarded
 canonical_url: 'https://docs.projectcalico.org/v3.4/getting-started/bare-metal/policy/forwarded'
 ---
 

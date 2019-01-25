@@ -1,6 +1,5 @@
 ---
 title: Service IPs
-redirect_from: latest/usage/openstack/service-ips
 canonical_url: 'https://docs.projectcalico.org/v3.4/usage/openstack/service-ips'
 ---
 

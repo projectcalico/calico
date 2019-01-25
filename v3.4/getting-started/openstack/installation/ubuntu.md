@@ -1,6 +1,5 @@
 ---
 title: Ubuntu packaged install instructions
-redirect_from: latest/getting-started/openstack/installation/ubuntu
 canonical_url: 'https://docs.projectcalico.org/v3.4/getting-started/openstack/installation/ubuntu'
 ---
 
