@@ -26,6 +26,7 @@ Usage:
               name.
     get       Get a resource identified by file, stdin or resource type and
               name.
+    label     Add or update labels of resources.
     convert   Convert config files between different API versions.
     ipam      IP address management.
     node      Calico node management.
@@ -55,6 +56,7 @@ organized by top level command.
 -  [calicoctl apply]({{site.baseurl}}/{{page.version}}/reference/calicoctl/commands/apply)
 -  [calicoctl delete]({{site.baseurl}}/{{page.version}}/reference/calicoctl/commands/delete)
 -  [calicoctl get]({{site.baseurl}}/{{page.version}}/reference/calicoctl/commands/get)
+-  [calicoctl label]({{site.baseurl}}/{{page.version}}/reference/calicoctl/commands/label)
 -  [calicoctl ipam]({{site.baseurl}}/{{page.version}}/reference/calicoctl/commands/ipam)
 -  [calicoctl node]({{site.baseurl}}/{{page.version}}/reference/calicoctl/commands/node)
 -  [calicoctl convert]({{site.baseurl}}/{{page.version}}/reference/calicoctl/commands/convert)

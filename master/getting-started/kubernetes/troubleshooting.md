@@ -43,7 +43,7 @@ key `log_level`.  See [the configuration guide]({{site.baseurl}}/{{page.version}
 When using {{site.prodname}} IPAM, IP addresses are assigned from [IP Pools]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/ippool).
 
 By default, all enabled IP Pool are used. However, you can specify which IP Pools to use for IP address management in the [CNI network config]({{site.baseurl}}/{{page.version}}/reference/cni-plugin/configuration#ipam),
-or on a per-Pod basis using [Kubernetes annotations]({{site.baseurl}}/{{page.version}}/reference/cni-plugin/configuration#ipam-manipulation-with-kubernetes-annotations).
+or on a per-Pod basis using [Kubernetes annotations]({{site.baseurl}}/{{page.version}}/reference/cni-plugin/configuration#using-kubernetes-annotations).
 
 #### How do I assign a specific IP address to a pod?
 

@@ -207,6 +207,8 @@ When using `type: k8s`, the Calico CNI plugin requires read-only Kubernetes API 
 
 ## IPAM
 
+### Using CNI configuration
+
 When using the CNI `host-local` IPAM plugin, a special value `usePodCidr` is allowed for the subnet field (either at the top-level, or in a "range").  This tells the plugin to determine the subnet to use from the Kubernetes API based on the Node.podCIDR field.  Calico does not use the `gateway` field of a range so that field is not required and it will be ignored if present.
 
 > **Note**: `usePodCidr` can only be used as the value of the `subnet` field, it cannot be used in
@@ -253,7 +255,7 @@ Calico CNI plugin configuration:
 
 When making use of the `usePodCidr` option, the {{site.prodname}} CNI plugin requires read-only Kubernetes API access to the `Nodes` resource.
 
-### IPAM Manipulation with Kubernetes Annotations
+### Using Kubernetes annotations
 
 #### Specifying IP pools on a per-namespace or per-pod basis
 
@@ -378,3 +380,56 @@ You can request a floating IP address for a pod through [Kubernetes annotations]
    > **Warning**: This feature can allow pods to receive traffic which may not have been intended for that pod.
    > Users should make sure the proper admission control is in place to prevent users from selecting arbitrary floating IP addresses.
    {: .alert .alert-danger}
+
+### Using IP pools node selectors
+
+Nodes will only assign workload addresses from IP pools which select them. By
+default, IP pools select all nodes, but this can be configured using the
+`nodeSelector` field. Check out the [IP pool resource
+document]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/ippool)
+for more details.
+
+Example:
+
+1. Create (or update) an IP pool that only allocates IPs for nodes where it
+   contains a label `rack=0`.
+
+   ```
+   calicoctl create -f -<<EOF
+   apiVersion: projectcalico.org/v3
+   kind: IPPool
+   metadata:
+      name: rack-0-ippool
+   spec:
+      cidr: 192.168.0.0/24
+      ipipMode: Always
+      natOutgoing: true
+      nodeSelector: rack == "0"
+   EOF
+   ```
+
+2. Label a node with `rack=0`.
+
+   ```
+   kubectl label nodes kube-node-0 rack=0
+   ```
+
+Check out the usage guide on [assigning IP addresses based on
+topology]({{site.baseurl}}/{{page.version}}/usage/assigning-ip-addresses-topology)
+for a full example.
+
+### Order of precedence
+
+If more than one of these methods are used for IP address assignment, they will
+take on the following precedence, 1 being the highest:
+
+1. Kubernetes annotations
+2. CNI configuration
+3. IP pool node selectors
+
+> **Note**: {{site.prodname}} IPAM will not reassign IP addresses to workloads
+> that are already running. To update running workloads with IP addresses from
+> a newly configured IP pool, they must be recreated. We recommmend doing this
+> before going into production or during a maintenance window.
+{: .alert .alert-info}
+

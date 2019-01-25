@@ -26,6 +26,8 @@ toc:
       path: /reference/calicoctl/commands/delete
     - title: convert
       path: /reference/calicoctl/commands/convert
+    - title: label
+      path: /reference/calicoctl/commands/label
     - title: ipam
       section:
       - title: Overview

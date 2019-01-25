@@ -21,6 +21,7 @@ spec:
   ipipMode: CrossSubnet
   natOutgoing: true
   disabled: false
+  nodeSelector: all()
 ```
 
 ### IP Pool Definition
@@ -40,10 +41,12 @@ spec:
 | ipipMode | The IPIP mode defining when IPIP will be used. | Always, CrossSubnet, Never | string| `Never` |
 | natOutgoing | When enabled, packets sent from {{site.prodname}} networked containers in this pool to destinations outside of this pool will be masqueraded. | true, false | boolean | `false` |
 | disabled | When set to true, {{site.prodname}} IPAM will not assign addresses from this pool. | true, false | boolean | `false` |
+| nodeSelector | Selects the nodes that {{site.prodname}} IPAM should assign addresses from this pool to. | | [selector](#node-selector) | all() |
 
-> **Important**: Do not use a custom `blockSize` until **all** Calico components have been updated to a version that 
-> supports it (at least v3.3.0).  Older versions of components do not understand the field so they may corrupt the 
-> IP pool by creating blocks of incorrect size.
+> **Important**: Do not use a custom `blockSize` until **all** Calico components
+> have been updated to a version that supports it. Older versions of components
+> do not understand the field so they may corrupt the IP pool by creating blocks
+> of incorrect size.
 {: .alert .alert-danger}
 
 #### IPIP
@@ -69,6 +72,18 @@ The default block sizes of `26` for IPv4 and `122` for IPv6 provide blocks of 64
 Increasing the block size from the default (e.g., using `24` for IPv4 to give 256 addresses per block) means fewer blocks per host, and potentially fewer routes. But try to ensure that there are at least as many blocks in the pool as there are hosts.
 
 Reducing the block size from the default (e.g., using `28` for IPv4 to give 16 addresses per block) means more blocks per host and therefore potentially more routes. This can be beneficial if it allows the blocks to be more fairly distributed amongst the hosts.
+
+#### Node Selector
+
+{% include {{page.version}}/selectors.md %}
+
+For details on configuring IP pool node selectors, please read the
+[Assigning IP addresses based on topology guide.]({{site.baseurl}}/{{page.version}}/usage/assigning-ip-addresses-topology).
+
+> **Note**: The pool's `disabled` field takes higher precedence than
+> `nodeSelector`. This means that {{site.prodname}} IPAM will not allocate any
+> IPs from a disabled pool even if it selects the node that it is on.
+{: .alert .alert-warning}
 
 ### Supported operations
 
