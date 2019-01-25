@@ -1,6 +1,6 @@
 ---
 title: Sample deployments
-canonical_url: 'https://docs.projectcalico.org/v3.4/introduction/deployments'
+canonical_url: 'https://docs.projectcalico.org/v3.5/introduction/deployments'
 ---
 
 #### Google Kubernetes Engine (GKE)

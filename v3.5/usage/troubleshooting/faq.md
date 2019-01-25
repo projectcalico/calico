@@ -1,7 +1,7 @@
 ---
 title: Frequently Asked Questions
 redirect_from: latest/usage/troubleshooting/faq
-canonical_url: 'https://docs.projectcalico.org/v3.4/usage/troubleshooting/faq'
+canonical_url: 'https://docs.projectcalico.org/v3.5/usage/troubleshooting/faq'
 ---
 
 * TOC

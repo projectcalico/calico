@@ -1,6 +1,6 @@
 ---
 title: Reference
-canonical_url: https://docs.projectcalico.org/v3.4/reference/
+canonical_url: https://docs.projectcalico.org/v3.5/reference/
 noversion: yes
 ---
 

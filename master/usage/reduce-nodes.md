@@ -1,6 +1,6 @@
 ---
 title: Scheduling to well-known nodes
-canonical_url: 'https://docs.projectcalico.org/master/usage/reduce-nodes'
+canonical_url: 'https://docs.projectcalico.org/v3.5/usage/reduce-nodes'
 ---
 
 If you are on Kubernetes, use the Kubernetes API datastore, and have a cluster of more

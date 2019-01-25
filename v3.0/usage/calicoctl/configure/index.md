@@ -1,6 +1,6 @@
 ---
 title: Configuring calicoctl
-canonical_url: https://docs.projectcalico.org/v3.4/usage/calicoctl/configure/
+canonical_url: https://docs.projectcalico.org/v3.5/usage/calicoctl/configure/
 ---
 
 ### About configuring calicoctl
