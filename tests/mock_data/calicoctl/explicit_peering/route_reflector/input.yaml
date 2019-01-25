@@ -3,10 +3,13 @@ apiVersion: projectcalico.org/v3
 metadata:
   name: default
 spec:
+  asNumber: 64532
   nodeToNodeMeshEnabled: false
 
 ---
 
+# This BGPPeer peers the RR node (kube-master) with an explicit
+# external peer.
 kind: BGPPeer
 apiVersion: projectcalico.org/v3
 metadata:
@@ -18,6 +21,8 @@ spec:
 
 ---
 
+# This BGPPeer peers the RR node (kube-master) with an explicit
+# external v6 peer.
 kind: BGPPeer
 apiVersion: projectcalico.org/v3
 metadata:
@@ -26,6 +31,18 @@ spec:
   peerIP: ac13::57
   asNumber: 64533
   nodeSelector: has(routeReflector)
+
+---
+
+# This BGPPeer peers the RR node (kube-master) with the other
+# non-RR nodes in the cluster (kube-node-1, kube-node-2).
+kind: BGPPeer
+apiVersion: projectcalico.org/v3
+metadata:
+  name: bgppeer-other-nodes
+spec:
+  nodeSelector: has(routeReflector)
+  peerSelector: '!has(routeReflector)'
 
 ---
 
@@ -71,4 +88,3 @@ metadata:
 spec:
   bgp:
     ipv4Address: 10.192.0.4/16
-

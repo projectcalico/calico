@@ -24,3 +24,10 @@ kind: BGPPeer
 apiVersion: projectcalico.org/v3
 metadata:
   name: bgppeer-v6
+
+---
+
+kind: BGPPeer
+apiVersion: projectcalico.org/v3
+metadata:
+  name: bgppeer-other-nodes
