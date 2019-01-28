@@ -24,7 +24,7 @@ bare metal host endpoints.
 Proven in production at scale, {{site.prodname}} {{page.version}} features
 integrations with Kubernetes, OpenShift, and OpenStack.
 
-> **Note**: For integrations with the  Mesos, DC/OS, and Docker
+> **Note**: For integrations with the  Mesos, DC/OS, and Docker (libnetwork)
 > orchestrators, use [Calico v2.6](/v2.6/introduction/).
 {: .alert .alert-info}
 
