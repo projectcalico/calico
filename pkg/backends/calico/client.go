@@ -635,10 +635,25 @@ func (c *client) OnUpdates(updates []api.Update) {
 		// generates etcd key/value pairs as expected by existing confd templates.
 		v3key, ok := u.Key.(model.ResourceKey)
 		if !ok {
-			// Not a v3 resource.
+			// Not a v3 resource. We care about when the BGP configuration changes - recalculate
+			// peers when we receive AS number updates.
+			if cfgKey, ok := u.Key.(model.GlobalBGPConfigKey); ok {
+				if cfgKey.Name == "as_num" {
+					log.Debugf("Global AS number update, recalculate peers")
+					needUpdatePeersV1 = true
+				}
+			}
+
+			if cfgKey, ok := u.Key.(model.NodeBGPConfigKey); ok {
+				if cfgKey.Name == "as_num" {
+					log.WithField("node", cfgKey.Nodename).Debugf("Node AS number update, recalculate peers")
+					needUpdatePeersV1 = true
+				}
+			}
 			continue
 		}
 
+		// It's a v3 resource - we care about some of these.
 		if v3key.Kind == apiv3.KindNode {
 			// Convert to v1 key/value pairs.
 			log.Debugf("Node: %#v", u.Value)
@@ -694,17 +709,17 @@ func (c *client) OnUpdates(updates []api.Update) {
 		}
 	}
 
+	// Update our cache from each of the individual updates, and keep track of
+	// any of the prefixes that are impacted.
+	for _, u := range updates {
+		c.updateCache(u.UpdateType, &u.KVPair)
+	}
+
 	// If configuration relevant to BGP peerings has changed, recalculate the set of v1
 	// peerings that should exist, and update the cache accordingly.
 	if needUpdatePeersV1 {
 		log.Debug("Recompute BGP peerings")
 		c.updatePeersV1()
-	}
-
-	// Update our cache from each of the individual updates, and keep track of
-	// any of the prefixes that are impacted.
-	for _, u := range updates {
-		c.updateCache(u.UpdateType, &u.KVPair)
 	}
 
 	// Notify watcher thread that we've received new updates.
