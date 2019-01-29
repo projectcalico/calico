@@ -1,4 +1,8 @@
 ---
 layout: null
 ---
-{% include {{page.version}}/manifests/calico.yaml datastore="kdd" typha="true" %}
+{% helm %}
+datastore: kdd
+typha:
+  enabled: true
+{% endhelm %}

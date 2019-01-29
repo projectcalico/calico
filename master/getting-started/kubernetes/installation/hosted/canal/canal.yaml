@@ -1,4 +1,7 @@
 ---
 layout: null
 ---
-{% include {{page.version}}/manifests/calico.yaml datastore="kdd" network="flannel" %}
+{% helm %}
+datastore: kdd
+network: flannel
+{% endhelm %}
