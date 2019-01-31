@@ -1,68 +1,69 @@
 ---
 title: About Calico
-redirect_from: latest/introduction/index
 canonical_url: 'https://docs.projectcalico.org/v3.5/introduction/'
 ---
+## What is {{site.prodname}}?
 
-{{site.prodname}} provides secure network connectivity for
-containers and virtual machine workloads.
+{{site.prodname}} is an open source networking and network security solution for containers, virtual machines, and native host-based workloads.  {{site.prodname}}
+supports a broad range of platforms including Kubernetes, OpenShift, Docker EE, OpenStack, and bare metal services.
 
-{{site.prodname}} creates and manages a flat layer 3 network,
-assigning each workload a fully routable IP address.
-Workloads can communicate without IP encapsulation
-or network address translation for bare metal
-performance, easier troubleshooting, and better
-interoperability. In environments that require an
-overlay, {{site.prodname}} uses IP-in-IP tunneling or can work
-with other overlay networking such as flannel.
+{{site.prodname}} combines flexible networking capabilities with run-anywhere security enforcement to provide a solution with native Linux kernel performance
+and true cloud-native scalability. {{site.prodname}} provides developers and cluster operators with a consistent experience and set of capabilities whether
+running in public cloud or on-prem, on a single node or across a multi-thousand node cluster.
 
-{{site.prodname}} also provides dynamic enforcement of network
-security rules. Using {{site.prodname}}'s simple policy language,
-you can achieve fine-grained control over communications
-between containers, virtual machine workloads, and
-bare metal host endpoints.
+## Why use {{site.prodname}}?
 
-Proven in production at scale, {{site.prodname}} {{page.version}} features
-integrations with Kubernetes, OpenShift, and OpenStack.
+### Best practices for network security
 
-> **Note**: For integrations with the  Mesos, DC/OS, and Docker (libnetwork)
-> orchestrators, use [Calico v2.6](/v2.6/introduction/).
-{: .alert .alert-info}
+{{site.prodname}}’s rich network policy model makes it easy to lock down communication so the only traffic that flows is the traffic you want to flow.
+You can think of {{site.prodname}}’s security enforcement as wrapping each of your workloads with its own personal firewall that is dynamically
+re-configured in real time as you deploy new services or scale your application up or down.
 
-# Get started
+{{site.prodname}}’s policy engine can enforce the same policy model at the host networking layer and (if using Istio & Envoy) at the service mesh
+layer, protecting your infrastructure from compromised workloads and protecting your workloads from compromised infrastructure.
 
-<div class="row">
-  <div class="col-xs-6 col-md-3">
-    <a href="/{{page.version}}/getting-started/kubernetes/" class="thumbnail">
-      <img src="{{site.baseurl}}/images/kubernetes-button.svg" alt="Kubernetes" width="40%">
-    </a>
-  </div>
-  <div class="col-xs-6 col-md-3">
-    <a href="/{{page.version}}/getting-started/openshift/installation" class="thumbnail">
-      <img src="{{site.baseurl}}/images/openshift-button.svg" alt="OpenShift" width="35%">
-    </a>
-  </div>
-  <div class="col-xs-6 col-md-3">
-    <a href="/{{page.version}}/getting-started/openstack/" class="thumbnail">
-      <img src="{{site.baseurl}}/images/openstack-button.svg" alt="OpenStack" width="40%">
-    </a>
-  </div>
-</div>
+### Performance
 
+{{site.prodname}} uses the Linux kernel’s built-in highly optimized forwarding and access control capabilities to deliver native Linux networking dataplane
+performance, typically without requiring any of the encap/decap overheads associated with first generation SDN networks. {{site.prodname}}’s control plane
+and policy engine has been fine tuned over many years of production use to minimize overall CPU usage and occupancy.
 
-# How it works
+### Scalability
 
-![{{site.prodname}} overview diagram]({{site.baseurl}}/images/calico-arch-gen-v3.2.svg){: width="65%" }
+{{site.prodname}}’s core design principles leverage best practice cloud-native design patterns combined with proven standards based network protocols
+trusted worldwide by the largest internet carriers. The result is a solution with exceptional scalability that has been running at scale in
+production for years. {{site.prodname}}’s development test cycle includes regularly testing multi-thousand node clusters.  Whether you are running a 10
+node cluster, 100 node cluster, or more, you reap the benefits of the improved performance and scalability
+characteristics demanded by the largest Kubernetes clusters.
 
-<br>
-{{site.prodname}} leverages the routing and iptables firewall capabilities native to the Linux kernel. All traffic to and from individual containers, virtual machines, and hosts traverses these in-kernel rules before being routed to its destination.
+### Interoperability
 
-- **`calicoctl`**: allows you to achieve advanced policies and networking from a simple, command-line interface.
+{{site.prodname}} enables Kubernetes workloads and non-Kubernetes or legacy workloads to communicate seamlessly and securely.  Kubernetes pods are first
+class citizens on your network and able to communicate with any other workload on your network.  In addition {{site.prodname}} can seamlessly extend to
+secure your existing host based workloads (whether in public cloud or on-prem on VMs or bare metal servers) alongside Kubernetes.  All workloads
+are subject to the same network policy model so the only traffic that is allowed to flow is the traffic you expect to flow.
 
-- **orchestrator plugins**: provide close integration and synchronization with a variety of popular orchestrators.
+### Looks familiar
 
-- **key/value store**: holds {{site.prodname}}'s policy and network configuration state.
+{{site.prodname}} uses the Linux primitives that existing system administrators are already familiar with. Type in your favorite Linux networking command
+and you’ll get the results you expect.  In the vast majority of deployments the packet leaving your application is the packet that goes on the wire,
+with no encapsulation, tunnels, or overlays.  All the existings tools that system and network administrators use to gain visibility
+and analyze networking issues work as they do today.
 
-- **``{{site.nodecontainer}}``**: runs on each host, reads relevant policy and network configuration information from the key/value store, and implements it in the Linux kernel.
+### Real world production hardened
 
-- **Dikastes/Envoy**: optional Kubernetes sidecars that secure workload-to-workload communications with mutual TLS authentication and enforce application layer policy.
+{{site.prodname}} is trusted and running in production at large enterprises including SaaS providers, financial services companies, and manufacturers.  The largest
+public cloud providers have selected {{site.prodname}} to provide network security for their hosted Kubernetes services (Amazon EKS, Azure AKS, Google GKE, and IBM IKS) running
+across tens of thousands of clusters.
+
+### Full Kubernetes network policy support
+
+{{site.prodname}}’s network policy engine formed the original reference implementation of Kubernetes network policy during the development of the API. {{site.prodname}} is
+distinguished in that it implements the full set of features defined by the API giving users all the capabilities and flexibility envisaged when the API was defined.
+And for users that require even more power, {{site.prodname}} supports an extended set of network policy capabilities that work seamlessly alongside the Kubernetes API
+giving users even more flexibility in how they define their network policies.
+
+### A contributor community backed by the Tigera team
+
+The {{site.prodname}} open source project has been supported by 150+ contributors across a broad range of companies.  In addition {{site.prodname}} is backed by Tigera, founded by
+the original {{site.prodname}} engineering team, and committed to maintaining {{site.prodname}} as the leading standard for Kubernetes network security.
