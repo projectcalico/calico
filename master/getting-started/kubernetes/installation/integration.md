@@ -1,5 +1,5 @@
 ---
-title: Integration Guide
+title: Integration guide
 canonical_url: 'https://docs.projectcalico.org/v3.5/getting-started/kubernetes/installation/integration'
 ---
 

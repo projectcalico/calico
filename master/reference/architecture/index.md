@@ -1,5 +1,5 @@
 ---
-title: Calico Architecture
+title: Calico architecture
 canonical_url: 'https://docs.projectcalico.org/v3.5/reference/architecture/'
 ---
 
@@ -38,7 +38,7 @@ endpoints on that host.
 Depending on the specific orchestrator environment, Felix is responsible
 for the following tasks:
 
-#### Interface Management
+#### Interface management
 
 Felix programs some information about interfaces into the kernel in
 order to get the kernel to correctly handle the traffic emitted by that
@@ -50,20 +50,20 @@ It also monitors for interfaces to appear and disappear so that it can
 ensure that the programming for those interfaces is applied at the
 appropriate time.
 
-#### Route Programming
+#### Route programming
 
 Felix is responsible for programming routes to the endpoints on its host
 into the Linux kernel FIB (Forwarding Information Base) . This ensures that packets destined for those
 endpoints that arrive on at the host are forwarded accordingly.
 
-#### ACL Programming
+#### ACL programming
 
 Felix is also responsible for programming ACLs into the Linux kernel.
 These ACLs are used to ensure that only valid traffic can be sent
 between endpoints, and ensure that endpoints are not capable of
 circumventing {{site.prodname}}'s security measures.
 
-#### State Reporting
+#### State reporting
 
 Felix is responsible for providing data about the health of the network.
 In particular, it reports errors and problems with configuring its host.
@@ -71,7 +71,7 @@ This data is written into etcd, to make it visible to other components
 and operators of the network.
 
 
-## Orchestrator Plugin
+## Orchestrator plugin
 
 Unlike Felix there is no single 'orchestrator plugin': instead, there
 are separate plugins for each major cloud orchestration platform (e.g.
@@ -87,7 +87,7 @@ calls. This provides seamless integration with Neutron.
 
 The orchestrator plugin is responsible for the following tasks:
 
-#### API Translation
+#### API translation
 
 The orchestrator will inevitably have its own set of APIs for managing
 networks. The orchestrator plugin's primary job is to translate those
@@ -142,7 +142,7 @@ machine.
 
 etcd is responsible for performing the following tasks:
 
-#### Data Storage
+#### Data storage
 
 etcd stores the data for the {{site.prodname}} network in a distributed,
 consistent, fault-tolerant manner (for cluster sizes of at least three
@@ -165,14 +165,14 @@ into the network.
 
 
 
-## BGP Client (BIRD)
+## BGP client (BIRD)
 
 {{site.prodname}} deploys a BGP client on every node that also hosts a [Felix](#felix). The role of the BGP client is to read routing state that [Felix](#felix) programs into the kernel and
 distribute it around the data center.
 
 The BGP client is responsible for performing the following task:
 
-#### Route Distribution
+#### Route distribution
 
 When [Felix](#felix) inserts routes into the Linux kernel FIB,
 the BGP client will pick them up and distribute them to the other nodes
@@ -180,7 +180,7 @@ in the deployment. This ensures that traffic is efficiently routed
 around the deployment.
 
 
-## BGP Route Reflector (BIRD)
+## BGP route reflector (BIRD)
 
 For larger deployments, simple BGP can become a limiting factor because
 it requires every BGP client to be connected to every other BGP client
@@ -203,7 +203,7 @@ than as a standard BGP client.
 
 The BGP route reflector is responsible for the following task:
 
-#### Centralized Route Distribution
+#### Centralized route distribution
 
 When the [Calico BGP client](#bgp-client-bird) advertises routes
 from its FIB to the route reflector, the route reflector advertises

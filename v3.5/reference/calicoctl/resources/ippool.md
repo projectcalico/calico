@@ -54,7 +54,7 @@ spec:
 Routing of packets using IP-in-IP will be used when the destination IP address
 is in an IP Pool that has IPIP enabled.  In addition, if the `ipipMode` is set to `CrossSubnet`,
 {{site.prodname}} will only route using IP-in-IP if the IP address of the destination node is in a different
-subnet. The subnet of each node is configured on the node resource (which may be automatically 
+subnet. The subnet of each node is configured on the node resource (which may be automatically
 determined when running the `{{site.nodecontainer}}` service).
 
 For details on configuring IP-in-IP on your deployment, please read the
@@ -84,7 +84,7 @@ For details on configuring IP pool node selectors, please read the
 > **Note**: The pool's `disabled` field takes higher precedence than
 > `nodeSelector`. This means that {{site.prodname}} IPAM will not allocate any
 > IPs from a disabled pool even if it selects the node that it is on.
-{: .alert .alert-warning}
+{: .alert .alert-info}
 
 ### Supported operations
 

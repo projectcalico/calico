@@ -1,5 +1,5 @@
 ---
-title: Global Network Policy Resource (GlobalNetworkPolicy)
+title: Global network policy
 canonical_url: 'https://docs.projectcalico.org/v3.5/reference/calicoctl/resources/globalnetworkpolicy'
 ---
 

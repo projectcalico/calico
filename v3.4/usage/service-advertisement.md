@@ -41,7 +41,7 @@ kubectl patch ds -n kube-system calico-node --patch \
 
 ## Behavior
 
-Calico implements [external traffic policy][external-traffic-policy] for Kubernetes services
+{{site.prodname}} implements [external traffic policy][external-traffic-policy] for Kubernetes services
 using normal BGP route processing and ECMP routing.
 
 -  traffic to the cluster IP for a service with `externalTrafficPolicy: Local` will be load-balanced across the
@@ -50,7 +50,7 @@ using normal BGP route processing and ECMP routing.
 -  traffic to the cluster IP for a service with `externalTrafficPolicy: Cluster` will be load-balanced across all
    the nodes in the cluster.
 
-In order to implement this behavior, Calico does the following.
+In order to implement this behavior, {{site.prodname}} does the following.
 
 -  the service cluster IP CIDR (for example, 10.96.0.0/12) is advertised from
    every node in the cluster

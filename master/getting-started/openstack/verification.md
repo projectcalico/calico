@@ -1,5 +1,5 @@
 ---
-title: Verifying your Calico on OpenStack deployment
+title: Verifying your deployment
 canonical_url: 'https://docs.projectcalico.org/v3.5/getting-started/openstack/verification'
 ---
 
@@ -163,7 +163,7 @@ resolved by restarting `cinder`.
 
 ```
 service cinder-volume restart
-service cinder-scheduler restart 
+service cinder-scheduler restart
 service cinder-api restart
 ```
 

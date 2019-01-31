@@ -1,5 +1,5 @@
 ---
-redirect_to: /master/usage/calicoctl/install
+redirect_to: /v3.3/usage/calicoctl/install
 ---
 
 <!--- Page was deleted, now it just performs a redirect

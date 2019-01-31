@@ -1,5 +1,5 @@
 ---
-title: Getting Involved
+title: Getting involved
 canonical_url: 'https://docs.projectcalico.org/v3.5/reference/involved'
 ---
 
@@ -14,7 +14,7 @@ project, please take a look at the following.
 Our [public slack](https://slack.projectcalico.org) is the quickest way to get
 in touch for help debugging any issues with Calico.
 
-## Read the Source, Luke!
+## Read the source, Luke!
 
 All of Calico's code is on [GitHub](https://github.com/projectcalico).  The following
 list contains the most commonly encountered repositories:

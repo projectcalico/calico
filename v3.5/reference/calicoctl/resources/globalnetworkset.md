@@ -1,9 +1,10 @@
 ---
 title: Global Network Set Resource (GlobalNetworkSet)
 redirect_from: latest/reference/calicoctl/resources/globalnetworkset
+canonical_url: https://docs.projectcalico.org/v3.5/reference/calicoctl/resources/globalnetworkset
 ---
 
-A global network set resource (GlobalNetworkSet) represents an arbitrary set of IP subnetworks/CIDRs, 
+A global network set resource (GlobalNetworkSet) represents an arbitrary set of IP subnetworks/CIDRs,
 allowing it to be matched by {{site.prodname}} policy.  Network sets are useful for applying policy to traffic
 coming from (or going to) external, non-{{site.prodname}}, networks.
 
@@ -12,10 +13,10 @@ IPs that should match a source/destination selector within a
 [global network policy]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/globalnetworkpolicy) rule, it includes
 the CIDRs from any network sets that match the selector.
 
-> **Important**: Since {{site.prodname}} matches packets based on their source/destination IP addresses, 
+> **Important**: Since {{site.prodname}} matches packets based on their source/destination IP addresses,
 > {{site.prodname}} rules may not behave as expected if there is NAT between the {{site.prodname}}-enabled node and the
 > networks listed in a network set.  For example, in Kubernetes, incoming traffic via a service IP is
-> typically SNATed by the kube-proxy before reaching the destination host so {{site.prodname}}'s workload 
+> typically SNATed by the kube-proxy before reaching the destination host so {{site.prodname}}'s workload
 > policy will see the kube-proxy's host's IP as the source instead of the real source.
 {: .alert .alert-danger}
 

@@ -1,17 +1,9 @@
 ---
-title: Calico Integrations
+title: Getting started
 canonical_url: 'https://docs.projectcalico.org/v3.5/getting-started/'
 ---
 
-To get started using {{site.prodname}}, we recommend running through one or more of the
-available tutorials linked below.
+This section provides instructions for installing {{site.prodname}} with popular orchestrators, on bare metal hosts,
+and using an init system.
 
-These tutorials will help you understand the different environment options when
-using {{site.prodname}}.  In most cases we provide worked examples using manual setup on
-your own servers, a quick set-up in a virtualized environment using Vagrant and
-a number of cloud services.
-
-- [{{site.prodname}} with Kubernetes](kubernetes)
-- [{{site.prodname}} with OpenShift](openshift/installation)
-- [{{site.prodname}} with OpenStack](openstack)
-- [Host protection](bare-metal/bare-metal)
+It also goes over how to set up `calicoctl`, {{site.prodname}}'s command line interface (CLI) tool.

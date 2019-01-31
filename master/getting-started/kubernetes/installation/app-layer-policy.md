@@ -1,5 +1,5 @@
 ---
-title: Enabling application layer policy
+title: Enabling application layer policy (optional)
 canonical_url: 'https://docs.projectcalico.org/v3.5/getting-started/kubernetes/installation/app-layer-policy'
 ---
 

@@ -1,15 +1,14 @@
-bigheader: "Getting Started"
-abstract: "All you need to know to get started with Calico"
+bigheader: "Getting started"
 path: /getting-started
 order: 1
 toc:
-- title: Getting Started with Calico
+- title: Getting started
   path: /getting-started/
 - title: Kubernetes
   section:
   - title: Quickstart
     path: /getting-started/kubernetes/
-  - title: Requirements
+  - title: System requirements
     path: /getting-started/kubernetes/requirements
   - title: Installation
     section:
@@ -23,44 +22,14 @@ toc:
       path: /getting-started/kubernetes/installation/other
     - title: Enabling application layer policy (optional)
       path: /getting-started/kubernetes/installation/app-layer-policy
-    - title: Customizing the manifests (advanced)
+    - title: Customizing the manifests
       path: /getting-started/kubernetes/installation/config-options
     - title: Integration guide (advanced)
       path: /getting-started/kubernetes/installation/integration
-  - title: Tutorials
-    section:
-    - title: Simple Policy Demo
-      path: /getting-started/kubernetes/tutorials/simple-policy
-    - title: Stars Policy Demo
-      path: /getting-started/kubernetes/tutorials/stars-policy/
-    - title: Advanced network policy
-      path: /getting-started/kubernetes/tutorials/advanced-policy
-    - title: Application layer policy
-      path: /getting-started/kubernetes/tutorials/app-layer-policy/
-  - title: Troubleshooting / FAQ
-    path: /getting-started/kubernetes/troubleshooting
-  - title: Upgrade
-    section:
-    - title: Overview
-      path: /getting-started/kubernetes/upgrade/
-    - title: Install and configure calico-upgrade
-      path: /getting-started/kubernetes/upgrade/setup
-    - title: Test the migration
-      path: /getting-started/kubernetes/upgrade/test
-    - title: Migrate your data
-      path: /getting-started/kubernetes/upgrade/migrate
-    - title: Upgrade Calico
-      path: /getting-started/kubernetes/upgrade/upgrade
-    - title: Converting your calicoctl manifests
-      path: /getting-started/kubernetes/upgrade/convert
-    - title: Deleting old data
-      path: /getting-started/kubernetes/upgrade/delete
-    - title: Downgrading Calico
-      path: /getting-started/kubernetes/upgrade/downgrade
 
 - title: OpenShift
   section:
-  - title: Requirements
+  - title: System requirements
     path: /getting-started/openshift/requirements
   - title: Installation
     path: /getting-started/openshift/installation
@@ -71,7 +40,7 @@ toc:
   section:
   - title: Overview
     path: /getting-started/openstack/
-  - title: Requirements
+  - title: System requirements
     path: /getting-started/openstack/requirements
   - title: Installation
     section:
@@ -83,38 +52,12 @@ toc:
       path: /getting-started/openstack/installation/redhat
     - title: DevStack
       path: /getting-started/openstack/installation/devstack
-  - title: Tutorials
-    path: /getting-started/openstack/tutorials
-  - title: Troubleshooting
-    path: /getting-started/openstack/verification
-  - title: IP Addressing and Connectivity
-    path: /getting-started/openstack/connectivity
-  - title: Use of the Neutron API
-    path: /getting-started/openstack/neutron-api
-  - title: Upgrade
-    section:
-    - title: Overview
-      path: /getting-started/openstack/upgrade/
-    - title: Install and configure calico-upgrade
-      path: /getting-started/openstack/upgrade/setup
-    - title: Test the migration
-      path: /getting-started/openstack/upgrade/test
-    - title: Migrate your data
-      path: /getting-started/openstack/upgrade/migrate
-    - title: Upgrade Calico
-      path: /getting-started/openstack/upgrade/upgrade
-    - title: Deleting old data
-      path: /getting-started/openstack/upgrade/delete
-    - title: Converting your calicoctl manifests
-      path: /getting-started/openstack/upgrade/convert
-    - title: Downgrading Calico
-      path: /getting-started/openstack/upgrade/downgrade
+    - title: Verifying your deployment
+      path: /getting-started/openstack/verification
 
-- title: Host Protection
+- title: Bare metal hosts
   section:
-  - title: Overview
-    path: /getting-started/bare-metal/bare-metal
-  - title: Requirements
+  - title: System requirements
     path: /getting-started/bare-metal/requirements
   - title: Installation
     section:
@@ -126,25 +69,19 @@ toc:
       path: /getting-started/bare-metal/installation/binary
     - title: Container install
       path: /getting-started/bare-metal/installation/container
-  - title: Setting policy
+
+- title: Running calico/node with an init system
+  path: /getting-started/as-service
+
+- title: calicoctl
+  section:
+  - title: Installing calicoctl
+    path: /getting-started/calicoctl/install
+  - title: Configuring calicoctl
     section:
-    - title: Basic connectivity
-      path: /getting-started/bare-metal/policy/
-    - title: Creating policy objects
-      path: /getting-started/bare-metal/policy/objects
-    - title: Selector-based policies
-      path: /getting-started/bare-metal/policy/selector
-    - title: Failsafe rules
-      path: /getting-started/bare-metal/policy/failsafe
-    - title: Untracked policy
-      path: /getting-started/bare-metal/policy/donottrack
-    - title: Pre-DNAT policy
-      path: /getting-started/bare-metal/policy/pre-dnat
-    - title: Apply on forwarded traffic
-      path: /getting-started/bare-metal/policy/forwarded
-    - title: Summary
-      path: /getting-started/bare-metal/policy/summary
-    - title: Tutorial
-      path: /getting-started/bare-metal/policy/tutorial
-    - title: conntrack
-      path: /getting-started/bare-metal/policy/conntrack
+    - title: Overview
+      path: /getting-started/calicoctl/configure/
+    - title: Configuring calicoctl to connect to an etcd datastore
+      path: /getting-started/calicoctl/configure/etcd
+    - title: Configuring calicoctl to connect to the Kubernetes API datastore
+      path: /getting-started/calicoctl/configure/kdd

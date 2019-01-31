@@ -1,14 +1,14 @@
 ---
-title: Felix Prometheus Statistics
+title: Prometheus statistics
 canonical_url: 'https://docs.projectcalico.org/v3.5/reference/felix/prometheus'
 ---
 
 Felix can be configured to report a number of metrics through Prometheus.  See the
 [configuration reference](configuration) for how to enable metrics reporting.
 
-## Metric Reference
+## Metric reference
 
-#### Felix Specific
+#### Felix specific
 
 Felix exports a number of Prometheus metrics.  The current set is as follows.  Since some metrics
 are tied to particular implementation choices inside Felix we can't make any hard guarantees that
@@ -75,7 +75,7 @@ felix_active_local_selectors 82
 ```
 {: .no-select-button}
 
-#### CPU / Memory metrics
+#### CPU / memory metrics
 
 Felix also exports the default set of metrics that Prometheus makes available.  Currently, those
 include:

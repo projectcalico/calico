@@ -1,12 +1,11 @@
 ---
-title: Ubuntu packaged install instructions
+title: Ubuntu
 canonical_url: 'https://docs.projectcalico.org/v3.5/getting-started/openstack/installation/ubuntu'
 ---
 
 These instructions will take you through a first-time install of
 {{site.prodname}}.  If you are upgrading an existing system, please see
-[{{site.prodname}} on OpenStack
-upgrade]({{site.baseurl}}/{{page.version}}/getting-started/openstack/upgrade)
+[Upgrading {{site.prodname}} on OpenStack](../../../maintenance/openstack-upgrade)
 instead.
 
 There are three sections to the install: installing etcd, adding
@@ -249,7 +248,7 @@ On each compute node, perform the following steps:
 
     You will also need to [configure your route reflector to allow
     connections from the compute node as a route reflector
-    client]({{site.baseurl}}/{{page.version}}/usage/routereflector).
+    client](../../../networking/routereflector).
 
     If you *are* configuring a full BGP mesh you need to handle the BGP
     configuration appropriately on each compute host. The scripts above can be

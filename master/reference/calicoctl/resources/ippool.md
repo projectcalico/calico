@@ -1,5 +1,5 @@
 ---
-title: IP Pool Resource (IPPool)
+title: IP pool
 canonical_url: 'https://docs.projectcalico.org/v3.5/reference/calicoctl/resources/ippool'
 ---
 
@@ -24,7 +24,7 @@ spec:
   nodeSelector: all()
 ```
 
-### IP Pool Definition
+### IP pool definition
 
 #### Metadata
 
@@ -43,21 +43,20 @@ spec:
 | disabled | When set to true, {{site.prodname}} IPAM will not assign addresses from this pool. | true, false | boolean | `false` |
 | nodeSelector | Selects the nodes that {{site.prodname}} IPAM should assign addresses from this pool to. | | [selector](#node-selector) | all() |
 
-> **Important**: Do not use a custom `blockSize` until **all** Calico components
-> have been updated to a version that supports it. Older versions of components
-> do not understand the field so they may corrupt the IP pool by creating blocks
-> of incorrect size.
+> **Important**: Do not use a custom `blockSize` until **all** {{site.prodname}} components have been updated to a version that
+> supports it (at least v3.3.0).  Older versions of components do not understand the field so they may corrupt the
+> IP pool by creating blocks of incorrect size.
 {: .alert .alert-danger}
 
 #### IPIP
 Routing of packets using IP-in-IP will be used when the destination IP address
 is in an IP Pool that has IPIP enabled.  In addition, if the `ipipMode` is set to `CrossSubnet`,
 {{site.prodname}} will only route using IP-in-IP if the IP address of the destination node is in a different
-subnet. The subnet of each node is configured on the node resource (which may be automatically 
+subnet. The subnet of each node is configured on the node resource (which may be automatically
 determined when running the `{{site.nodecontainer}}` service).
 
-For details on configuring IP-in-IP on your deployment, please read the
-[Configuring IP-in-IP guide]({{site.baseurl}}/{{page.version}}/usage/configuration/ip-in-ip).
+For details on configuring IP-in-IP on your deployment, please refer to
+[Configuring IP-in-IP]({{site.baseurl}}/{{page.version}}/networking/ip-in-ip).
 
 
 > **Note**: Setting `natOutgoing` is recommended on any IP Pool with `ipip` enabled.
@@ -66,7 +65,7 @@ Hosts running {{site.prodname}} is asymmetric and may cause traffic to be filter
 [RPF](https://en.wikipedia.org/wiki/Reverse_path_forwarding) checks failing.
 {: .alert .alert-info}
 
-#### Block Sizes
+#### Block sizes
 The default block sizes of `26` for IPv4 and `122` for IPv6 provide blocks of 64 addresses. This allows addresses to be allocated in groups to workloads running on the same host. By grouping addresses, fewer routes need to be exchanged between hosts and to other BGP peers. If a host allocates all of the addresses in a block then it will be allocated an additional block. If there are no more blocks available then the host can take addresses from blocks allocated to other hosts. Specific routes are added for the borrowed addresses which has an impact on route table size.
 
 Increasing the block size from the default (e.g., using `24` for IPv4 to give 256 addresses per block) means fewer blocks per host, and potentially fewer routes. But try to ensure that there are at least as many blocks in the pool as there are hosts.
@@ -78,12 +77,12 @@ Reducing the block size from the default (e.g., using `28` for IPv4 to give 16 a
 {% include {{page.version}}/selectors.md %}
 
 For details on configuring IP pool node selectors, please read the
-[Assigning IP addresses based on topology guide.]({{site.baseurl}}/{{page.version}}/usage/assigning-ip-addresses-topology).
+[Assigning IP addresses based on topology guide.]({{site.baseurl}}/{{page.version}}/networking/assigning-ip-addresses-topology).
 
 > **Note**: The pool's `disabled` field takes higher precedence than
 > `nodeSelector`. This means that {{site.prodname}} IPAM will not allocate any
 > IPs from a disabled pool even if it selects the node that it is on.
-{: .alert .alert-warning}
+{: .alert .alert-info}
 
 ### Supported operations
 

@@ -1,5 +1,5 @@
 ---
-title: Command Reference
+title: Command reference
 canonical_url: 'https://docs.projectcalico.org/v3.5/reference/calicoctl/commands/'
 ---
 

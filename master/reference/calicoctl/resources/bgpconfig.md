@@ -1,5 +1,5 @@
 ---
-title: BGP Configuration Resource (BGPConfiguration)
+title: BGP configuration
 canonical_url: 'https://docs.projectcalico.org/v3.5/reference/calicoctl/resources/bgpconfig'
 ---
 
@@ -22,7 +22,7 @@ spec:
   asNumber: 63400
 ```
 
-### BGP Configuration Definition
+### BGP configuration definition
 
 #### Metadata
 
