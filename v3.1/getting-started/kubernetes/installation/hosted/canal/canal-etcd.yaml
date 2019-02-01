@@ -131,7 +131,7 @@ spec:
         # Runs the flannel daemon to enable vxlan networking between
         # container hosts.
         - name: flannel
-          image: {{site.imageNames["flannel"]}}:{{site.data.versions[page.version].first.components["flannel"].version}}
+          image: {{page.registry}}{{site.imageNames["flannel"]}}:{{site.data.versions[page.version].first.components["flannel"].version}}
           env:
             # The location of the etcd cluster.
             - name: FLANNELD_ETCD_ENDPOINTS
@@ -203,7 +203,7 @@ spec:
         # container programs network policy and local routes on each
         # host.
         - name: calico-node
-          image: {{site.imageNames["node"]}}:{{site.data.versions[page.version].first.title}}
+          image: {{page.registry}}{{site.imageNames["node"]}}:{{site.data.versions[page.version].first.title}}
           env:
             # The location of the etcd cluster.
             - name: ETCD_ENDPOINTS
@@ -277,7 +277,7 @@ spec:
         # This container installs the Calico CNI binaries
         # and CNI network config file on each node.
         - name: install-calico-cni
-          image: {{site.imageNames["cni"]}}:{{site.data.versions[page.version].first.components["calico/cni"].version}}
+          image: {{page.registry}}{{site.imageNames["cni"]}}:{{site.data.versions[page.version].first.components["calico/cni"].version}}
           imagePullPolicy: Always
           command: ["/install-cni.sh"]
           env:
@@ -442,7 +442,7 @@ spec:
           operator: Exists
       containers:
         - name: calico-kube-controllers
-          image: {{site.imageNames["kubeControllers"]}}:{{site.data.versions[page.version].first.components["calico/kube-controllers"].version}}
+          image: {{page.registry}}{{site.imageNames["kubeControllers"]}}:{{site.data.versions[page.version].first.components["calico/kube-controllers"].version}}
           env:
             # The location of the Calico etcd cluster.
             - name: ETCD_ENDPOINTS

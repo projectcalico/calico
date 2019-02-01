@@ -58,7 +58,7 @@ spec:
       # as a host-networked pod.
       serviceAccountName: calico-node
       containers:
-      - image: quay.io/calico/typha:{{site.data.versions[page.version].first.components["typha"].version}}
+      - image: {{page.registry}}{{site.imageNames["typha"]}}:{{site.data.versions[page.version].first.components["typha"].version}}
         name: calico-typha
         ports:
         - containerPort: 5473
