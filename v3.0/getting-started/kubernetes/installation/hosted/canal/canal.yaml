@@ -111,7 +111,7 @@ spec:
         # container programs network policy and routes on each
         # host.
         - name: calico-node
-          image: {{page.registry}}{{site.imageNames["node"]}}:{{site.data.versions[page.version].first.title}}
+          image: {{site.data.versions[page.version].first.registry}}{{site.imageNames["node"]}}:{{site.data.versions[page.version].first.title}}
           env:
             # Use Kubernetes API as the backing datastore.
             - name: DATASTORE_TYPE
@@ -176,7 +176,7 @@ spec:
         # This container installs the Calico CNI binaries
         # and CNI network config file on each node.
         - name: install-cni
-          image: {{page.registry}}{{site.imageNames["cni"]}}:{{site.data.versions[page.version].first.components["calico/cni"].version}}
+          image: {{site.data.versions[page.version].first.registry}}{{site.imageNames["cni"]}}:{{site.data.versions[page.version].first.components["calico/cni"].version}}
           command: ["/install-cni.sh"]
           env:
             - name: CNI_CONF_NAME
@@ -199,7 +199,7 @@ spec:
         # This container runs flannel using the kube-subnet-mgr backend
         # for allocating subnets.
         - name: kube-flannel
-          image: {{page.registry}}{{site.imageNames["flannel"]}}:{{site.data.versions[page.version].first.components["flannel"].version}}
+          image: {{site.data.versions[page.version].first.registry}}{{site.imageNames["flannel"]}}:{{site.data.versions[page.version].first.components["flannel"].version}}
           command: [ "/opt/bin/flanneld", "--ip-masq", "--kube-subnet-mgr" ]
           securityContext:
             privileged: true

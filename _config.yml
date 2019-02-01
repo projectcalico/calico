@@ -51,13 +51,11 @@ defaults:
       layout: docwithnav
       version: master
       sitemap: true
-      registry:
   -
     scope:
       path: master
     values:
       version: master
-      registry:
   -
     scope:
       path: v1.5
@@ -108,34 +106,28 @@ defaults:
       path: v3.0
     values:
       version: v3.0
-      registry: quay.io/
   -
     scope:
       path: v3.1
     values:
       version: v3.1
-      registry: quay.io/
   -
     scope:
       path: v3.2
     values:
       version: v3.2
-      registry: quay.io/
   -
     scope:
       path: v3.3
     values:
       version: v3.3
-      registry:
   -
     scope:
       path: v3.4
     values:
       version: v3.4
-      registry:
   -
     scope:
       path: v3.5
     values:
       version: v3.5
-      registry:

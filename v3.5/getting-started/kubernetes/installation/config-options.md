@@ -230,7 +230,7 @@ Add a new container to the template.
 
 ```
       - name: dikastes
-        image: {{page.registry}}{{site.imageNames["dikastes"]}}:{{site.data.versions[page.version].first.components["calico/dikastes"].version}}
+        image: {{site.data.versions[page.version].first.registry}}{{site.imageNames["dikastes"]}}:{{site.data.versions[page.version].first.components["calico/dikastes"].version}}
         args: ["/dikastes", "server", "-l", "/var/run/dikastes/dikastes.sock", "-d", "/var/run/felix/nodeagent/socket", "--debug"]
         volumeMounts:
         - mountPath: /var/run/dikastes
