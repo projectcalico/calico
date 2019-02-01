@@ -1,13 +1,14 @@
-{% comment %}
+{{- if eq .Values.datastore "kdd" -}}
+{{- /*
 kdd-crds.yaml acccepts the following include flags:
 
 | Name             | Accepted Values          |
 |------------------|--------------------------|
 | network          | calico, flannel, <unset> |
 
-{% endcomment -%}
+*/ -}}
 # Create all the CustomResourceDefinitions needed for
-# {{site.prodname}} {% if include.network %}policy and networking{% else %}policy-only{% endif %} mode.
+# {{.Values.prodname}} {{ if .Values.network }}policy and networking{{ else }}policy-only{{ end }} mode.
 
 apiVersion: apiextensions.k8s.io/v1beta1
 kind: CustomResourceDefinition
@@ -22,7 +23,7 @@ spec:
     plural: felixconfigurations
     singular: felixconfiguration
 ---
-{%- if include.network == "calico" %}
+{{- if eq .Values.network "calico" }}
 
 apiVersion: apiextensions.k8s.io/v1beta1
 kind: CustomResourceDefinition
@@ -38,7 +39,7 @@ spec:
     singular: bgppeer
 
 ---
-{%- endif %}
+{{- end }}
 
 apiVersion: apiextensions.k8s.io/v1beta1
 kind: CustomResourceDefinition
@@ -142,3 +143,4 @@ spec:
     kind: NetworkPolicy
     plural: networkpolicies
     singular: networkpolicy
+{{- end -}}

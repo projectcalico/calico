@@ -1,12 +1,13 @@
-{% comment %}
+{{- if eq .Values.datastore "etcd" -}}
+{{- /*
 calico-kube-controllers.yaml acccepts the following include flags:
 
 | Name             | Accepted Values |
 |------------------|-----------------|
 | variant_name     | Calico, Canal   |
 
-{% endcomment -%}
-# This manifest deploys the {{site.prodname}} Kubernetes controllers.
+*/ -}}
+# This manifest deploys the {{.Values.prodname}} Kubernetes controllers.
 # See https://github.com/projectcalico/kube-controllers
 apiVersion: extensions/v1beta1
 kind: Deployment
@@ -43,31 +44,31 @@ spec:
       serviceAccountName: calico-kube-controllers
       containers:
         - name: calico-kube-controllers
-          image: {{page.registry}}{{site.imageNames["kubeControllers"]}}:{{site.data.versions[page.version].first.components["calico/kube-controllers"].version}}
+          image: {{.Values.imageRegistry}}{{.Values.imageNames.kubeControllers}}:{{ tuple "calico/kube-controllers" . | include "tag" }}
           env:
-            # The location of the {{site.prodname}} etcd cluster.
+            # The location of the {{.Values.prodname}} etcd cluster.
             - name: ETCD_ENDPOINTS
               valueFrom:
                 configMapKeyRef:
-                  name: {{include.variant_name | downcase}}-config
+                  name: {{include "variant_name" . | lower}}-config
                   key: etcd_endpoints
             # Location of the CA certificate for etcd.
             - name: ETCD_CA_CERT_FILE
               valueFrom:
                 configMapKeyRef:
-                  name: {{include.variant_name | downcase}}-config
+                  name: {{include "variant_name" . | lower}}-config
                   key: etcd_ca
             # Location of the client key for etcd.
             - name: ETCD_KEY_FILE
               valueFrom:
                 configMapKeyRef:
-                  name: {{include.variant_name | downcase}}-config
+                  name: {{include "variant_name" . | lower}}-config
                   key: etcd_key
             # Location of the client certificate for etcd.
             - name: ETCD_CERT_FILE
               valueFrom:
                 configMapKeyRef:
-                  name: {{include.variant_name | downcase}}-config
+                  name: {{include "variant_name" . | lower}}-config
                   key: etcd_cert
             # Choose which controllers to run.
             - name: ENABLED_CONTROLLERS
@@ -96,3 +97,4 @@ kind: ServiceAccount
 metadata:
   name: calico-kube-controllers
   namespace: kube-system
+{{- end -}}
