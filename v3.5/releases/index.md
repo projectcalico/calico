@@ -21,7 +21,10 @@ Use the version selector at the top-right of this page to view a different relea
 {% endif %}
 
 | Component              | Version |
-|------------------------|---------|{% for component_name in release.components %}
-| {{ component_name[0] }}   | [{{ component_name[1].version }}]({{ component_name[1].url }}) |{% endfor %}
+|------------------------|---------|
+{% for component in release.components %}
+{%- capture component_name %}{{ component[0] }}{% endcapture -%}
+| {{ component_name }}   | [{{ component[1].version }}]({% include component_url component=component_name release=release %}) |
+{% endfor %}
 
 {% endfor %}
