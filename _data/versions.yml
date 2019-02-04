@@ -10,7 +10,7 @@ v3.5:
     calico/kube-controllers:
       version: v3.5.0
     networking-calico:
-      version: v3.4.0
+      version: 3.4.0
     typha:
       version: v3.5.0
     flannel:
