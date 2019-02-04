@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2018 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2019 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -27,7 +27,6 @@ import (
 	cerrors "github.com/projectcalico/libcalico-go/lib/errors"
 	"github.com/projectcalico/libcalico-go/lib/names"
 	"github.com/projectcalico/libcalico-go/lib/net"
-	cnet "github.com/projectcalico/libcalico-go/lib/net"
 )
 
 const (
@@ -310,7 +309,7 @@ func (c ipamClient) autoAssign(ctx context.Context, num int, handleID *string, a
 	// Release any emptied blocks still affine to this host but no longer part of an IP Pool which selects this node.
 	for _, block := range affBlocksToRelease {
 		// Determine the pool for each block.
-		pool := c.blockReaderWriter.getPoolForIP(cnet.IP{block.IP}, allPools)
+		pool := c.blockReaderWriter.getPoolForIP(net.IP{block.IP}, allPools)
 		if pool == nil {
 			logCtx.WithFields(log.Fields{"pool": pool, "block": block}).Warn("No pool found for block, skipping")
 			continue
@@ -1427,7 +1426,7 @@ func (c ipamClient) ensureConsistentAffinity(ctx context.Context, b *model.Alloc
 	}
 
 	// Fetch the pool for the given CIDR and check if it selects the node.
-	pool := c.blockReaderWriter.getPoolForIP(cnet.IP{b.CIDR.IPNet.IP}, nil)
+	pool := c.blockReaderWriter.getPoolForIP(net.IP{b.CIDR.IPNet.IP}, nil)
 	if pool == nil {
 		logCtx.Debug("No pools own this block")
 		return nil

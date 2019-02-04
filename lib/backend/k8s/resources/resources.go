@@ -1,4 +1,4 @@
-// Copyright (c) 2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2019 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -145,7 +145,6 @@ func ConvertCalicoResourceToK8sResource(resIn Resource) (Resource, error) {
 	meta.ResourceVersion = rom.GetResourceVersion()
 	meta.Labels = rom.GetLabels()
 	meta.UID = rom.GetUID()
-	meta.Finalizers = rom.GetFinalizers()
 
 	resOut := resIn.DeepCopyObject().(Resource)
 	romOut := resOut.GetObjectMeta()
@@ -189,7 +188,6 @@ func ConvertK8sResourceToCalicoResource(res Resource) error {
 	meta.Labels = rom.GetLabels()
 	meta.Annotations = annotations
 	meta.UID = rom.GetUID()
-	meta.Finalizers = rom.GetFinalizers()
 
 	// Overwrite the K8s metadata with the Calico metadata.
 	meta.DeepCopyInto(rom.(*metav1.ObjectMeta))

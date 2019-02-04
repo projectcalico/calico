@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2019 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -55,7 +55,11 @@ func NewIPAMHandleClient(c *kubernetes.Clientset, r *rest.RESTClient) K8sResourc
 	return &ipamHandleClient{rc: rc}
 }
 
-// Implements the api.Client interface for IPAMHandles.
+// affinityHandleClient implements the api.Client interface for IPAMHandle objects. It
+// handles the translation between v1 objects understood by the IPAM codebase in lib/ipam,
+// and the CRDs which are used to actually store the data in the Kubernetes API.
+// It uses a customK8sResourceClient under the covers to perform CRUD operations on
+// kubernetes CRDs.
 type ipamHandleClient struct {
 	rc customK8sResourceClient
 }
@@ -75,12 +79,12 @@ func (c ipamHandleClient) toV1(kvpv3 *model.KVPair) *model.KVPair {
 	}
 }
 
-func (c ipamHandleClient) v3Fields(k model.Key) string {
+func (c ipamHandleClient) parseKey(k model.Key) string {
 	return strings.ToLower(k.(model.IPAMHandleKey).HandleID)
 }
 
 func (c ipamHandleClient) toV3(kvpv1 *model.KVPair) *model.KVPair {
-	name := c.v3Fields(kvpv1.Key)
+	name := c.parseKey(kvpv1.Key)
 	handle := kvpv1.Key.(model.IPAMHandleKey).HandleID
 	block := kvpv1.Value.(*model.IPAMHandle).Block
 	return &model.KVPair{
@@ -125,7 +129,7 @@ func (c *ipamHandleClient) Update(ctx context.Context, kvp *model.KVPair) (*mode
 }
 
 func (c *ipamHandleClient) Delete(ctx context.Context, key model.Key, revision string, uid *types.UID) (*model.KVPair, error) {
-	name := c.v3Fields(key)
+	name := c.parseKey(key)
 	k := model.ResourceKey{
 		Name: name,
 		Kind: apiv3.KindIPAMHandle,
@@ -138,7 +142,7 @@ func (c *ipamHandleClient) Delete(ctx context.Context, key model.Key, revision s
 }
 
 func (c *ipamHandleClient) Get(ctx context.Context, key model.Key, revision string) (*model.KVPair, error) {
-	name := c.v3Fields(key)
+	name := c.parseKey(key)
 	k := model.ResourceKey{
 		Name: name,
 		Kind: apiv3.KindIPAMHandle,

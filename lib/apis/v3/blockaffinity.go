@@ -1,4 +1,4 @@
-// Copyright (c) 2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2019 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -26,31 +26,32 @@ const (
 // +genclient
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
-// BGPPeer contains information about a BGPPeer resource that is a peer of a Calico
-// compute node.
+// BlockAffinity maintains a block affinity's state
 type BlockAffinity struct {
 	metav1.TypeMeta `json:",inline"`
 	// Standard object's metadata.
 	metav1.ObjectMeta `json:"metadata,omitempty"`
-	// Specification of the BGPPeer.
+	// Specification of the BlockAffinity.
 	Spec BlockAffinitySpec `json:"spec,omitempty"`
 }
 
-// BGPPeerSpec contains the specification for a BGPPeer resource.
+// BlockAffinitySpec contains the specification for a BlockAffinity resource.
 type BlockAffinitySpec struct {
 	State string `json:"state"`
+	Node  string `json:"node"`
+	CIDR  string `json:"cidr"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
-// BGPPeerList contains a list of BGPPeer resources.
+// BlockAffinityList contains a list of BlockAffinity resources.
 type BlockAffinityList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata"`
 	Items           []BlockAffinity `json:"items"`
 }
 
-// NewBGPPeer creates a new (zeroed) BGPPeer struct with the TypeMetadata initialised to the current
+// NewBlockAffinity creates a new (zeroed) BlockAffinity struct with the TypeMetadata initialised to the current
 // version.
 func NewBlockAffinity() *BlockAffinity {
 	return &BlockAffinity{
@@ -61,7 +62,7 @@ func NewBlockAffinity() *BlockAffinity {
 	}
 }
 
-// NewBGPPeerList creates a new (zeroed) BGPPeerList struct with the TypeMetadata initialised to the current
+// NewBlockAffinityList creates a new (zeroed) BlockAffinityList struct with the TypeMetadata initialised to the current
 // version.
 func NewBlockAffinityList() *BlockAffinityList {
 	return &BlockAffinityList{

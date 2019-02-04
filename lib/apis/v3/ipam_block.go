@@ -1,4 +1,4 @@
-// Copyright (c) 2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2019 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -26,17 +26,16 @@ const (
 // +genclient
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
-// BGPPeer contains information about a BGPPeer resource that is a peer of a Calico
-// compute node.
+// IPAMBlock contains information about a block for IP address assignment.
 type IPAMBlock struct {
 	metav1.TypeMeta `json:",inline"`
 	// Standard object's metadata.
 	metav1.ObjectMeta `json:"metadata,omitempty"`
-	// Specification of the BGPPeer.
+	// Specification of the IPAMBlock.
 	Spec IPAMBlockSpec `json:"spec,omitempty"`
 }
 
-// BGPPeerSpec contains the specification for a BGPPeer resource.
+// IPAMBlockSpec contains the specification for a IPAMBlock resource.
 type IPAMBlockSpec struct {
 	CIDR           string                `json:"cidr"`
 	Affinity       *string               `json:"affinity"`
@@ -45,11 +44,6 @@ type IPAMBlockSpec struct {
 	Unallocated    []int                 `json:"unallocated"`
 	Attributes     []AllocationAttribute `json:"attributes"`
 	Deleting       bool                  `json:"deleting"`
-
-	// HostAffinity is deprecated in favor of Affinity.
-	// This is only to keep compatiblity with existing deployments.
-	// The data format should be `Affinity: host:hostname` (not `hostAffinity: hostname`).
-	HostAffinity *string `json:"hostAffinity,omitempty"`
 }
 
 type AllocationAttribute struct {
@@ -59,14 +53,14 @@ type AllocationAttribute struct {
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
-// BGPPeerList contains a list of BGPPeer resources.
+// IPAMBlockList contains a list of IPAMBlock resources.
 type IPAMBlockList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata"`
 	Items           []IPAMBlock `json:"items"`
 }
 
-// NewBGPPeer creates a new (zeroed) BGPPeer struct with the TypeMetadata initialised to the current
+// NewIPAMBlock creates a new (zeroed) IPAMBlock struct with the TypeMetadata initialised to the current
 // version.
 func NewIPAMBlock() *IPAMBlock {
 	return &IPAMBlock{
@@ -77,7 +71,7 @@ func NewIPAMBlock() *IPAMBlock {
 	}
 }
 
-// NewBGPPeerList creates a new (zeroed) BGPPeerList struct with the TypeMetadata initialised to the current
+// NewIPAMBlockList creates a new (zeroed) IPAMBlockList struct with the TypeMetadata initialised to the current
 // version.
 func NewIPAMBlockList() *IPAMBlockList {
 	return &IPAMBlockList{

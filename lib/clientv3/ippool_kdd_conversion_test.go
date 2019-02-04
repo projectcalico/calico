@@ -335,7 +335,7 @@ var _ = testutils.E2eDatastoreDescribe("IPPool KDD v1 to v3 migration tests", te
 			outRes4, err := c.IPPools().Update(
 				ctx,
 				&apiv3.IPPool{
-					ObjectMeta: metav1.ObjectMeta{Name: name2, ResourceVersion: outRes2.ResourceVersion, CreationTimestamp: metav1.Now(), UID: "test-fail-ippool"},
+					ObjectMeta: metav1.ObjectMeta{Name: name2, ResourceVersion: outRes2.ResourceVersion, CreationTimestamp: metav1.Now(), UID: outKVP2.Value.(*apiv3.IPPool).ObjectMeta.UID},
 					Spec:       spec2_v3,
 				},
 				options.SetOptions{},

@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2019 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -27,21 +27,25 @@ import (
 )
 
 const (
-	IPAMConfigResourceName = "BlockAffinities"
-	IPAMConfigCRDName      = "blockaffinities.crd.projectcalico.org"
+	IPAMConfigResourceName = "IPAMConfig"
+	IPAMConfigCRDName      = "ipamconfigs.crd.projectcalico.org"
 )
 
 func NewIPAMConfigClient(c *kubernetes.Clientset, r *rest.RESTClient) K8sResourceClient {
 	return &ipamConfigClient{}
 }
 
-// Implements the api.Client interface for AffinityBlocks.
+// ipamConfigClient implements the api.Client interface for IPAMConfig objects. It
+// handles the translation between v1 objects understood by the IPAM codebase in lib/ipam,
+// and the CRDs which are used to actually store the data in the Kubernetes API.
+// It uses a customK8sResourceClient under the covers to perform CRUD operations on
+// kubernetes CRDs.
 type ipamConfigClient struct {
 	rc customK8sResourceClient
 }
 
 func (c *ipamConfigClient) Create(ctx context.Context, kvp *model.KVPair) (*model.KVPair, error) {
-	log.Warn("Operation Create is not supported on AffinityBlock type")
+	log.Warn("Operation Create is not supported on IPAMConfig type")
 	return nil, cerrors.ErrorOperationNotSupported{
 		Identifier: kvp.Key,
 		Operation:  "Create",
@@ -49,7 +53,7 @@ func (c *ipamConfigClient) Create(ctx context.Context, kvp *model.KVPair) (*mode
 }
 
 func (c *ipamConfigClient) Update(ctx context.Context, kvp *model.KVPair) (*model.KVPair, error) {
-	log.Warn("Operation Update is not supported on AffinityBlock type")
+	log.Warn("Operation Update is not supported on IPAMConfig type")
 	return nil, cerrors.ErrorOperationNotSupported{
 		Identifier: kvp.Key,
 		Operation:  "Create",
@@ -57,7 +61,7 @@ func (c *ipamConfigClient) Update(ctx context.Context, kvp *model.KVPair) (*mode
 }
 
 func (c *ipamConfigClient) Delete(ctx context.Context, key model.Key, revision string, uid *types.UID) (*model.KVPair, error) {
-	log.Warn("Operation Delete is not supported on AffinityBlock type")
+	log.Warn("Operation Delete is not supported on IPAMConfig type")
 	return nil, cerrors.ErrorOperationNotSupported{
 		Identifier: key,
 		Operation:  "Delete",
@@ -75,7 +79,7 @@ func (c *ipamConfigClient) Get(ctx context.Context, key model.Key, revision stri
 }
 
 func (c *ipamConfigClient) List(ctx context.Context, list model.ListInterface, revision string) (*model.KVPairList, error) {
-	log.Warn("Operation List is not supported on AffinityBlock type")
+	log.Warn("Operation List is not supported on IPAMConfig type")
 	return nil, cerrors.ErrorOperationNotSupported{
 		Identifier: list,
 		Operation:  "List",
@@ -83,7 +87,7 @@ func (c *ipamConfigClient) List(ctx context.Context, list model.ListInterface, r
 }
 
 func (c *ipamConfigClient) Watch(ctx context.Context, list model.ListInterface, revision string) (api.WatchInterface, error) {
-	log.Warn("Operation Watch is not supported on AffinityBlock type")
+	log.Warn("Operation Watch is not supported on IPAMConfig type")
 	return nil, cerrors.ErrorOperationNotSupported{
 		Identifier: list,
 		Operation:  "Watch",

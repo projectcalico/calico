@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2018 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2019 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -110,9 +110,11 @@ func NewKubeClient(ca *apiconfig.CalicoAPIConfigSpec) (api.Client, error) {
 		return nil, resources.K8sErrorToCalico(err, nil)
 	}
 
-	// Create the clientset
+	// Create the clientset. We increase the QPS so that the IPAM code performs
+	// efficiently. The IPAM code can create bursts of requests to the API, so
+	// in order to keep pod creation times sensible we allow a higher request rate.
 	config.QPS = float32(500)
-	config.Burst = 500
+	config.Burst = 1000
 	cs, err := kubernetes.NewForConfig(config)
 	if err != nil {
 		return nil, resources.K8sErrorToCalico(err, nil)
@@ -210,7 +212,7 @@ func NewKubeClient(ca *apiconfig.CalicoAPIConfigSpec) (api.Client, error) {
 		reflect.TypeOf(model.BlockAffinityKey{}),
 		reflect.TypeOf(model.BlockAffinityListOptions{}),
 		apiv3.KindBlockAffinity,
-		resources.NewAffinityBlockClient(cs, crdClientV1),
+		resources.NewBlockAffinityClient(cs, crdClientV1),
 	)
 	kubeClient.registerResourceClient(
 		reflect.TypeOf(model.BlockKey{}),
@@ -301,7 +303,7 @@ func (c *KubeClient) Clean() error {
 	for _, k := range kinds {
 		lo := model.ResourceListOptions{Kind: k}
 		if rs, err := c.List(ctx, lo, ""); err != nil {
-			log.WithField("Kind", k).Warning("Failed to list resources")
+			log.WithError(err).WithField("Kind", k).Warning("Failed to list resources")
 		} else {
 			for _, r := range rs.KVPairs {
 				if _, err = c.Delete(ctx, r.Key, r.Revision); err != nil {
@@ -311,36 +313,19 @@ func (c *KubeClient) Clean() error {
 		}
 	}
 
-	// And clean up IPAM data.
-	lo := model.BlockListOptions{}
-	if rs, err := c.List(ctx, lo, ""); err != nil {
-		log.WithField("Kind", lo).Warning("Failed to list resources")
-	} else {
-		for _, r := range rs.KVPairs {
-			if _, err = c.Delete(ctx, r.Key, r.Revision); err != nil {
-				log.WithField("Key", r.Key).Warning("Failed to delete entry from KDD")
-			}
-		}
-	}
-
-	balo := model.BlockAffinityListOptions{}
-	if rs, err := c.List(ctx, balo, ""); err != nil {
-		log.WithField("Kind", balo).Warning("Failed to list resources")
-	} else {
-		for _, r := range rs.KVPairs {
-			if _, err = c.Delete(ctx, r.Key, r.Revision); err != nil {
-				log.WithField("Key", r.Key).Warning("Failed to delete entry from KDD")
-			}
-		}
-	}
-
-	halo := model.BlockAffinityListOptions{}
-	if rs, err := c.List(ctx, halo, ""); err != nil {
-		log.WithField("Kind", halo).Warning("Failed to list resources")
-	} else {
-		for _, r := range rs.KVPairs {
-			if _, err = c.Delete(ctx, r.Key, r.Revision); err != nil {
-				log.WithField("Key", r.Key).Warning("Failed to delete entry from KDD")
+	// Cleanup IPAM resources that have slightly different backend semantics.
+	for _, li := range []model.ListInterface{
+		model.BlockListOptions{},
+		model.BlockAffinityListOptions{},
+		model.BlockAffinityListOptions{},
+	} {
+		if rs, err := c.List(ctx, li, ""); err != nil {
+			log.WithError(err).WithField("Kind", li).Warning("Failed to list resources")
+		} else {
+			for _, r := range rs.KVPairs {
+				if _, err = c.Delete(ctx, r.Key, r.Revision); err != nil {
+					log.WithError(err).WithField("Key", r.Key).Warning("Failed to delete entry from KDD")
+				}
 			}
 		}
 	}
