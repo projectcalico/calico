@@ -1860,22 +1860,16 @@ master:
   components:
      typha:
       version: master
-      url: ""
      calicoctl:
       version: master
-      url: "https://www.projectcalico.org/builds/calicoctl"
      calico/node:
       version: master
-      url: ""
      calico/cni:
       version: master
-      url: ""
      calico/kube-controllers:
       version: master
-      url: ""
      networking-calico:
       version: master
-      url: ""
      flannel:
       version: v0.9.1
      calico/dikastes:
