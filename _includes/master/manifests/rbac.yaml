@@ -1,4 +1,4 @@
-{% comment %}
+{{- /*
 rbac.yaml acccepts the following include flags:
 
 | Name         | Accepted Values          |
@@ -8,9 +8,9 @@ rbac.yaml acccepts the following include flags:
 | network      | calico, flannel, <unset> |
 | calico_ipam  | true, false              |
 | variant_name | Calico, Canal            |
-{% endcomment -%}
+*/ -}}
 
-{%- if include.datastore == "etcd" %}
+{{- if eq .Values.datastore "etcd" }}
 # Include a clusterrole for the kube-controllers component,
 # and bind it to the calico-kube-controllers serviceaccount.
 kind: ClusterRole
@@ -53,7 +53,7 @@ subjects:
   name: calico-kube-controllers
   namespace: kube-system
 ---
-{%- endif %}
+{{- end }}
 # Include a clusterrole for the calico-node DaemonSet,
 # and bind it to the calico-node serviceaccount.
 kind: ClusterRole
@@ -77,17 +77,17 @@ rules:
       # Used to discover service IPs for advertisement.
       - watch
       - list
-{%- if include.datastore == "kdd" %}
+{{- if eq .Values.datastore "kdd" }}
       # Used to discover Typhas.
       - get
-{%- endif %}
+{{- end }}
   - apiGroups: [""]
     resources:
       - nodes/status
     verbs:
       # Needed for clearing NodeNetworkUnavailable flag.
       - patch
-{%- if include.datastore == "kdd" %}
+{{- if eq .Values.datastore "kdd" }}
       # Calico stores some configuration information in node annotations.
       - update
   # Watch for changes to Kubernetes NetworkPolicies.
@@ -156,7 +156,7 @@ rules:
     verbs:
       - create
       - update
-{%- endif %}
+{{- end }}
 ---
 apiVersion: rbac.authorization.k8s.io/v1beta1
 kind: ClusterRoleBinding
@@ -171,7 +171,7 @@ subjects:
   name: calico-node
   namespace: kube-system
 ---
-{%- if include.network == "flannel" %}
+{{- if eq .Values.network "flannel" }}
 # Flannel ClusterRole
 # Pulled from https://github.com/coreos/flannel/blob/master/Documentation/kube-flannel-rbac.yml
 kind: ClusterRole
@@ -213,7 +213,7 @@ subjects:
   name: canal
   namespace: kube-system
 ---
-# Bind the {{site.prodname}} ClusterRole to the canal ServiceAccount.
+# Bind the {{.Values.prodname}} ClusterRole to the canal ServiceAccount.
 apiVersion: rbac.authorization.k8s.io/v1beta1
 kind: ClusterRoleBinding
 metadata:
@@ -226,4 +226,4 @@ subjects:
 - kind: ServiceAccount
   name: canal
   namespace: kube-system
-{%- endif %}
+{{- end }}

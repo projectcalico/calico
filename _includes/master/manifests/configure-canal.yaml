@@ -1,3 +1,4 @@
+{{- if and (eq .Values.datastore "etcd") (eq .Values.network "flannel") -}}
 # This manifest deploys a Job which performs one time
 # configuration of Canal.
 apiVersion: batch/v1
@@ -52,3 +53,4 @@ spec:
         - name: etcd-certs
           secret:
             secretName: calico-etcd-secrets
+{{- end -}}

@@ -1,3 +1,4 @@
+{{- if and (eq .Values.datastore "kdd") .Values.typha.enabled -}}
 # This manifest creates a Service, which will be backed by Calico's Typha daemon.
 # Typha sits in between Felix and the API server, reducing Calico's load on the API server.
 
@@ -59,7 +60,7 @@ spec:
       # as a host-networked pod.
       serviceAccountName: calico-node
       containers:
-      - image: {{page.registry}}{{site.imageNames["typha"]}}:{{site.data.versions[page.version].first.components["typha"].version}}
+      - image: quay.io/calico/typha:{{ tuple "typha" . | include "tag" }}
         name: calico-typha
         ports:
         - containerPort: 5473
@@ -120,3 +121,4 @@ spec:
   selector:
     matchLabels:
       k8s-app: calico-typha
+{{- end -}}

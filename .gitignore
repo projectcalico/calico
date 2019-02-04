@@ -10,3 +10,4 @@ _site
 .releasedata
 Gemfile.lock
 _output/
+bin
