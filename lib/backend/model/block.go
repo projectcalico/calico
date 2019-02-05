@@ -86,6 +86,7 @@ func (options BlockListOptions) KeyFromDefaultPath(path string) Key {
 }
 
 type AllocationBlock struct {
+	AtomicDelete
 	CIDR           net.IPNet             `json:"cidr"`
 	Affinity       *string               `json:"affinity"`
 	StrictAffinity bool                  `json:"strictAffinity"`
@@ -98,6 +99,14 @@ type AllocationBlock struct {
 	// This is only to keep compatiblity with existing deployments.
 	// The data format should be `Affinity: host:hostname` (not `hostAffinity: hostname`).
 	HostAffinity *string `json:"hostAffinity,omitempty"`
+}
+
+func (b *AllocationBlock) SetDelete() {
+	b.Deleting = true
+}
+
+func (b *AllocationBlock) GetDelete() bool {
+	return b.Deleting
 }
 
 type AllocationAttribute struct {

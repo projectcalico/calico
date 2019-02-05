@@ -47,7 +47,16 @@ type BlockAffinityKey struct {
 }
 
 type BlockAffinity struct {
+	AtomicDelete
 	State BlockAffinityState `json:"state"`
+}
+
+func (b *BlockAffinity) SetDelete() {
+	b.State = StateDeleted
+}
+
+func (b *BlockAffinity) GetDelete() bool {
+	return b.State == StateDeleted
 }
 
 func (key BlockAffinityKey) defaultPath() (string, error) {
