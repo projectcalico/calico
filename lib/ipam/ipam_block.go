@@ -158,9 +158,17 @@ func (b *allocationBlock) release(addresses []cnet.IP) ([]cnet.IP, map[string]in
 	delRefCounts := map[int]int{}
 	attrsToDelete := []int{}
 
+	// De-duplicate addresses to ensure reference counting is correcet
+	uniqueAddresses := make(map[string]struct{})
+	for _, ip := range addresses {
+		uniqueAddresses[ip.IP.String()] = struct{}{}
+	}
+
 	// Determine the ordinals that need to be released and the
 	// attributes that need to be cleaned up.
-	for _, ip := range addresses {
+	for ipStr, _ := range uniqueAddresses {
+		ip := cnet.MustParseIP(ipStr)
+
 		// Convert to an ordinal.
 		ordinal, err := ipToOrdinal(ip, *b)
 		if err != nil {
