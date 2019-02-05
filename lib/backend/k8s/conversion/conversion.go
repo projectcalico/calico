@@ -693,8 +693,14 @@ func (c Converter) ServiceAccountToProfile(sa *kapiv1.ServiceAccount) (*model.KV
 		CreationTimestamp: sa.CreationTimestamp,
 		UID:               sa.UID,
 	}
-	profile.Spec = apiv3.ProfileSpec{
-		LabelsToApply: labels,
+
+	// Only set labels to apply when there are actually labels. This makes the
+	// result of this function consistent with the struct as loaded directly
+	// from etcd, which uses nil for the empty map.
+	if len(labels) != 0 {
+		profile.Spec.LabelsToApply = labels
+	} else {
+		profile.Spec.LabelsToApply = nil
 	}
 
 	// Embed the profile in a KVPair.
