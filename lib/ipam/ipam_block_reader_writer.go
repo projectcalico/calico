@@ -344,21 +344,21 @@ func (rw blockReaderWriter) releaseBlockAffinity(ctx context.Context, host strin
 	return nil
 }
 
-// atomicQuery retrives a resource for the given key and also checks for deletion to guard against
+// queryObject retrives a resource for the given key and also checks for deletion to guard against
 // a potential race condition.
-func (rw blockReaderWriter) atomicQuery(ctx context.Context, k model.Key, revision string) (*model.KVPair, error) {
+func (rw blockReaderWriter) queryObject(ctx context.Context, k model.Key, revision string) (*model.KVPair, error) {
 	kvp, err := rw.client.Get(ctx, k, revision)
 	if err != nil {
 		return nil, err
 	}
 
-	if !kvp.Value.(model.AtomicDelete).GetDelete() {
+	if !kvp.Value.(model.DeletionMarker).IsDeleted() {
 		// We're all good - return the resource
 		return kvp, nil
 	}
 
 	// If the resource is marked as deleted, we need to delete it.
-	if err := rw.atomicDelete(ctx, kvp); err != nil {
+	if err := rw.deleteObject(ctx, kvp); err != nil {
 		return nil, err
 	}
 
@@ -366,19 +366,19 @@ func (rw blockReaderWriter) atomicQuery(ctx context.Context, k model.Key, revisi
 	return nil, cerrors.ErrorResourceDoesNotExist{fmt.Errorf("Resource was deleted"), k}
 }
 
-// atomicUpdate ensures that the given resource is not marked for deletion and performs the update.
-func (rw blockReaderWriter) atomicUpdate(ctx context.Context, kvp *model.KVPair) (*model.KVPair, error) {
-	if kvp.Value.(model.AtomicDelete).GetDelete() {
+// updateObject ensures that the given resource is not marked for deletion and performs the update.
+func (rw blockReaderWriter) updateObject(ctx context.Context, kvp *model.KVPair) (*model.KVPair, error) {
+	if kvp.Value.(model.DeletionMarker).IsDeleted() {
 		return nil, cerrors.ErrorResourceUpdateConflict{Err: fmt.Errorf("Resource being deleted"), Identifier: kvp.Key}
 	}
 	return rw.client.Update(ctx, kvp)
 }
 
-// atomicDelete marks the given resource for deletion as a signal to concurrent routines
+// deleteObject marks the given resource for deletion as a signal to concurrent routines
 // that may be trying to compete for it.
-func (rw blockReaderWriter) atomicDelete(ctx context.Context, kvp *model.KVPair) error {
+func (rw blockReaderWriter) deleteObject(ctx context.Context, kvp *model.KVPair) error {
 	// Mark the resource for deletion
-	kvp.Value.(model.AtomicDelete).SetDelete()
+	kvp.Value.(model.DeletionMarker).MarkDeleted()
 	kvp, err := rw.client.Update(ctx, kvp)
 	if err != nil {
 		return err
@@ -389,49 +389,49 @@ func (rw blockReaderWriter) atomicDelete(ctx context.Context, kvp *model.KVPair)
 	return err
 }
 
-// queryAffinity ...
+// queryAffinity gets an affinity for the given host + CIDR key.
 func (rw blockReaderWriter) queryAffinity(ctx context.Context, host string, cidr cnet.IPNet, revision string) (*model.KVPair, error) {
-	return rw.atomicQuery(ctx, model.BlockAffinityKey{Host: host, CIDR: cidr}, revision)
+	return rw.queryObject(ctx, model.BlockAffinityKey{Host: host, CIDR: cidr}, revision)
 }
 
-// updateAffinity ...
+// updateAffinity updates the given affinity.
 func (rw blockReaderWriter) updateAffinity(ctx context.Context, aff *model.KVPair) (*model.KVPair, error) {
-	return rw.atomicUpdate(ctx, aff)
+	return rw.updateObject(ctx, aff)
 }
 
-// deleteAffinity ...
+// deleteAffinity deletes the given affinity.
 func (rw blockReaderWriter) deleteAffinity(ctx context.Context, aff *model.KVPair) error {
-	return rw.atomicDelete(ctx, aff)
+	return rw.deleteObject(ctx, aff)
 }
 
-// queryBlock ...
+// queryBlock gets a block for the given block CIDR key.
 func (rw blockReaderWriter) queryBlock(ctx context.Context, blockCIDR cnet.IPNet, revision string) (*model.KVPair, error) {
-	return rw.atomicQuery(ctx, model.BlockKey{CIDR: blockCIDR}, revision)
+	return rw.queryObject(ctx, model.BlockKey{CIDR: blockCIDR}, revision)
 }
 
-// updateBlock ...
+// updateBlock updates the given block.
 func (rw blockReaderWriter) updateBlock(ctx context.Context, b *model.KVPair) (*model.KVPair, error) {
-	return rw.atomicUpdate(ctx, b)
+	return rw.updateObject(ctx, b)
 }
 
-// deleteBlock ...
+// deleteBlock deletes the given block.
 func (rw blockReaderWriter) deleteBlock(ctx context.Context, b *model.KVPair) error {
-	return rw.atomicDelete(ctx, b)
+	return rw.deleteObject(ctx, b)
 }
 
-// queryHandle ...
+// queryHandle gets a handle for the given handleID key.
 func (rw blockReaderWriter) queryHandle(ctx context.Context, handleID, revision string) (*model.KVPair, error) {
-	return rw.atomicQuery(ctx, model.IPAMHandleKey{HandleID: handleID}, revision)
+	return rw.queryObject(ctx, model.IPAMHandleKey{HandleID: handleID}, revision)
 }
 
-// updateHandle ...
+// updateHandle updates the given handle.
 func (rw blockReaderWriter) updateHandle(ctx context.Context, kvp *model.KVPair) (*model.KVPair, error) {
-	return rw.atomicUpdate(ctx, kvp)
+	return rw.updateObject(ctx, kvp)
 }
 
-// deleteHandle ...
+// deleteHandle deletes the given handle.
 func (rw blockReaderWriter) deleteHandle(ctx context.Context, kvp *model.KVPair) error {
-	return rw.atomicDelete(ctx, kvp)
+	return rw.deleteObject(ctx, kvp)
 }
 
 // getPoolForIP returns the pool if the given IP is within a configured

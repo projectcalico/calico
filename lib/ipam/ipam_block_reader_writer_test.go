@@ -647,7 +647,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 			calls := 0
 			fc.getFuncs[fmt.Sprintf("%s", blockKVP.Key)] = func(ctx context.Context, k model.Key, r string) (*model.KVPair, error) {
 				return func(ctx context.Context, k model.Key, r string) (*model.KVPair, error) {
-					calls = calls + 1
+					calls++
 
 					if calls == 1 {
 						// First time the block doesn't exist yet.
@@ -744,6 +744,92 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 
 				// Should be a single block affinity, assigned to the other host.
 				Expect(len(objs.KVPairs)).To(Equal(0))
+			})
+		})
+
+		It("should not delete an IPAM block when affinity released when empty but another process allocates an IP at the same time", func() {
+			// Tests the scenario where:
+			// - hostA proc1 queries for the block
+			// - hostA proc2 queries for the block
+			// - hostA proc2 releases affinity (marks PendingDeletion)
+			// - hostA proc1 allocates IP from block
+			// - hostA proc1 updates block
+			// - hostA proc2 attempts to delete block (tries to mark but fails)
+			b := newBlock(*net)
+			aff := "host:" + hostA
+			b.AllocationBlock.Affinity = &aff
+			blockKVP := model.KVPair{
+				Key:   model.BlockKey{CIDR: *net},
+				Value: b.AllocationBlock,
+			}
+
+			affinityKVP := model.KVPair{
+				Key: model.BlockAffinityKey{Host: hostA, CIDR: *net},
+				Value: &model.BlockAffinity{
+					State: model.StateConfirmed,
+				},
+			}
+
+			By("setting up the client for the test", func() {
+				fc = newFakeClient()
+
+				// Sneak in a side-effect such that when hostA-proc1 tries to release the affinity of an empty block,
+				// another IP will get allocated from it.
+				call := 0
+				fc.updateFuncs[fmt.Sprintf("%s", affinityKVP.Key)] = func(ctx context.Context, object *model.KVPair) (*model.KVPair, error) {
+					updated, err := bc.Update(ctx, object)
+					if err != nil {
+						return nil, err
+					}
+
+					call++
+					if call == 1 {
+						// proc1 allocates an IP from block
+						kvpb, err := bc.Get(ctx, blockKVP.Key, "")
+						if err != nil {
+							return nil, err
+						}
+						b1 := allocationBlock{kvpb.Value.(*model.AllocationBlock)}
+						b1.autoAssign(1, nil, hostA, nil, false)
+						if _, err := bc.Update(ctx, kvpb); err != nil {
+							return nil, err
+						}
+					}
+
+					return updated, nil
+				}
+
+				// For any other objects, just create/update/delete them as normal.
+				fc.createFuncs["default"] = func(ctx context.Context, object *model.KVPair) (*model.KVPair, error) { return bc.Create(ctx, object) }
+				fc.updateFuncs["default"] = func(ctx context.Context, object *model.KVPair) (*model.KVPair, error) { return bc.Update(ctx, object) }
+				fc.deleteFuncs["default"] = func(ctx context.Context, k model.Key, r string) (*model.KVPair, error) { return bc.Delete(ctx, k, r) }
+				fc.getFuncs["default"] = func(ctx context.Context, k model.Key, r string) (*model.KVPair, error) { return bc.Get(ctx, k, r) }
+
+				rw = blockReaderWriter{client: fc, pools: pools}
+				ic = &ipamClient{
+					client:            bc,
+					pools:             pools,
+					blockReaderWriter: rw,
+				}
+			})
+
+			By("allocating an IP and creating a block", func() {
+				_, err := bc.Create(ctx, &blockKVP)
+				Expect(err).To(BeNil())
+
+				_, err = bc.Create(ctx, &affinityKVP)
+				Expect(err).To(BeNil())
+			})
+
+			By("calling ReleaseAffinity", func() {
+				err := ic.ReleaseAffinity(ctx, *net, hostA)
+				Expect(err).NotTo(HaveOccurred())
+			})
+
+			By("verfiying that the block was not deleted", func() {
+				b, err := bc.Get(ctx, blockKVP.Key, "")
+				Expect(err).To(BeNil())
+				Expect(b).NotTo(BeNil())
 			})
 		})
 	})
@@ -908,5 +994,4 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests (kdd 
 		_, err = bc.Delete(ctx, kvpb.Key, kvpb.Revision)
 		Expect(err).NotTo(HaveOccurred())
 	})
-
 })

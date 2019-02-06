@@ -232,7 +232,6 @@ func (c ipamClient) determinePools(requestedPoolNets []net.IPNet, version int, n
 			err = fmt.Errorf("the given pool (%s) does not exist, or is not enabled", rp.IPNet.String())
 			return
 		} else {
-			log.Debugf("Requested IP pool is ok to use: %s", pool.Name)
 			requestedPools = append(requestedPools, pool)
 		}
 	}
