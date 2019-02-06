@@ -22,6 +22,8 @@ import (
 	"strings"
 	"time"
 
+	"crypto/tls"
+
 	"github.com/coreos/etcd/clientv3"
 	"github.com/coreos/etcd/pkg/transport"
 	log "github.com/sirupsen/logrus"
@@ -55,13 +57,40 @@ func NewEtcdV3Client(config *apiconfig.EtcdConfig) (api.Client, error) {
 	}
 
 	// Create the etcd client
-	tlsInfo := &transport.TLSInfo{
-		CAFile:   config.EtcdCACertFile,
-		CertFile: config.EtcdCertFile,
-		KeyFile:  config.EtcdKeyFile,
+	// If Etcd Certificate and Key are provided inline through command line agrument,
+	// then the inline values take precedence over the once in the config file.
+	// All the three parametes, Certificate, key and CA certificate are to be provided inline for processing.
+	var tls *tls.Config
+	var err error
+	if (config.EtcdCert != "" && config.EtcdKey == "" && config.EtcdKeyFile != "") ||
+		(config.EtcdKey != "" && config.EtcdCert == "" && config.EtcdCertFile != "") ||
+		(config.EtcdCertFile != "" && config.EtcdKeyFile == "" && config.EtcdKey != "") ||
+		(config.EtcdKeyFile != "" && config.EtcdCertFile == "" && config.EtcdCert != "") {
+		return nil, fmt.Errorf("Cannot process mix of inline certificate-key and certificate files")
 	}
 
-	tls, err := tlsInfo.ClientConfig()
+	if config.EtcdCert != "" && config.EtcdKey != "" {
+		if config.EtcdCACert == "" && config.EtcdCACertFile != "" {
+			return nil, fmt.Errorf("Cannot process CA certificate file with  inline certificate-key ")
+		}
+		tlsInfo := &TlsInlineCertKey{
+			CACert: config.EtcdCACert,
+			Cert:   config.EtcdCert,
+			Key:    config.EtcdKey,
+		}
+		tls, err = tlsInfo.ClientConfigInlineCertKey()
+	} else {
+		if config.EtcdCACert != "" && config.EtcdCACertFile == "" {
+			return nil, fmt.Errorf("Cannot process inline CA certificate with certificate-key files")
+		}
+		tlsInfo := &transport.TLSInfo{
+			CAFile:   config.EtcdCACertFile,
+			CertFile: config.EtcdCertFile,
+			KeyFile:  config.EtcdKeyFile,
+		}
+		tls, err = tlsInfo.ClientConfig()
+	}
+
 	if err != nil {
 		return nil, fmt.Errorf("could not initialize etcdv3 client: %+v", err)
 	}
