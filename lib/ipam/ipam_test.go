@@ -211,6 +211,59 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreEtcdV3, 
 		})
 	})
 
+	Describe("IPAM ReleaseIPs with duplicates in the request should be safe", func() {
+		host := "host-A"
+		pool1 := cnet.MustParseNetwork("10.0.0.0/26")
+		// Single out an IP to attempt a double-release and double-assign with
+		sentinelIP := net.ParseIP("10.0.0.1")
+
+		It("Should setup a pool with no free addresses", func() {
+			bc.Clean()
+			deleteAllPools()
+
+			applyNode(bc, host, nil)
+			applyPool("10.0.0.0/26", true, "")
+
+			args := AutoAssignArgs{
+				Num4:      64,
+				Hostname:  host,
+				IPv4Pools: []cnet.IPNet{pool1},
+			}
+			ips, _, bulkAssignErr := ic.AutoAssign(context.Background(), args)
+
+			Expect(bulkAssignErr).NotTo(HaveOccurred())
+			Expect(len(ips)).To(Equal(64))
+		})
+
+		It("Should release with sentinel IP duplicated in the request args", func() {
+			// Releasing the same IP multiple times in a single request
+			// should be handled gracefully by the IPAM Block allocator
+			_, releaseErr := ic.ReleaseIPs(context.Background(), []cnet.IP{
+				cnet.IP{sentinelIP},
+				cnet.IP{sentinelIP},
+			})
+			Expect(releaseErr).NotTo(HaveOccurred())
+		})
+
+		It("Should be able to re-assign the sentinel IP", func() {
+			assignIPutil(ic, sentinelIP, host)
+			attrs, attrErr := ic.GetAssignmentAttributes(context.Background(), cnet.IP{sentinelIP})
+			Expect(attrErr).NotTo(HaveOccurred())
+			Expect(attrs).To(BeEmpty())
+		})
+
+		It("Should fail to assign any more addresses", func() {
+			args := AutoAssignArgs{
+				Num4:      1,
+				Hostname:  host,
+				IPv4Pools: []cnet.IPNet{pool1},
+			}
+			ips, _, err := ic.AutoAssign(context.Background(), args)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(len(ips)).To(Equal(0), "An IP has been assigned twice!")
+		})
+	})
+
 	// We're assigning one IP which should be from the only ipPool created at the time, second one
 	// should be from the same /26 block since they're both from the same host, then delete
 	// the ipPool and create a new ipPool, and AutoAssign 1 more IP for the same host - expect the
@@ -1133,7 +1186,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreEtcdV3, 
 		// - Assign should not return no error.
 		// - ReleaseIPs should return a slice with one (unallocatedIPs) and no error.
 		Entry("Assign 1 IPv4 address with AssignIP then try to release 2 IPs (assign one and release it)", net.IP{}, true, []string{"192.168.1.0/24", "fd80:24e2:f998:72d6::/120"}, net.ParseIP("192.168.1.0"), 0, []cnet.IP{}, nil),
-		Entry("Assign 1 IPv4 address with AssignIP then try to release 2 IPs (release a second one)", net.ParseIP("192.168.1.1"), false, []string{"192.168.1.0/24", "fd80:24e2:f998:72d6::/120"}, net.IP{}, 0, []cnet.IP{{net.ParseIP("192.168.1.1")}}, nil),
+		Entry("Assign 1 IPv4 address with AssignIP then try to release 2 IPs (release a second one)", net.ParseIP("192.168.1.1"), false, []string{"192.168.1.0/24", "fd80:24e2:f998:72d6::/120"}, net.IP{}, 0, []cnet.IP{cnet.MustParseIP("192.168.1.1")}, nil),
 	)
 
 	DescribeTable("ClaimAffinity: claim IPNet vs actual number of blocks claimed",
