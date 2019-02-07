@@ -8,7 +8,7 @@ filter calico_export_to_bgp_peers {
   {{- range ls $static_key}}
     {{- $parts := split . "-"}}
     {{- $cidr := join $parts "/"}}
-  if ( net = {{$cidr}} ) then { accept; }
+  if ( net ~ {{$cidr}} ) then { accept; }
   {{- end}}
 {{- end}}
 {{range ls "/v1/ipam/v4/pool"}}{{$data := json (getv (printf "/v1/ipam/v4/pool/%s" .))}}
