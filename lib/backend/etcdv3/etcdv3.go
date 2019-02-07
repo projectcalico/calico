@@ -58,21 +58,19 @@ func NewEtcdV3Client(config *apiconfig.EtcdConfig) (api.Client, error) {
 
 	// Create the etcd client
 	// If Etcd Certificate and Key are provided inline through command line agrument,
-	// then the inline values take precedence over the once in the config file.
+	// then the inline values take precedence over the ones in the config file.
 	// All the three parametes, Certificate, key and CA certificate are to be provided inline for processing.
 	var tls *tls.Config
 	var err error
-	if (config.EtcdCert != "" && config.EtcdKey == "" && config.EtcdKeyFile != "") ||
-		(config.EtcdKey != "" && config.EtcdCert == "" && config.EtcdCertFile != "") ||
-		(config.EtcdCertFile != "" && config.EtcdKeyFile == "" && config.EtcdKey != "") ||
-		(config.EtcdKeyFile != "" && config.EtcdCertFile == "" && config.EtcdCert != "") {
-		return nil, fmt.Errorf("Cannot process mix of inline certificate-key and certificate files")
+
+	haveInline := config.EtcdCert != "" || config.EtcdKey != "" || config.EtcdCACert != ""
+	haveFiles := config.EtcdCertFile != "" || config.EtcdKeyFile != "" || config.EtcdCACertFile != ""
+
+	if haveInline && haveFiles {
+		return nil, fmt.Errorf("Cannot mix of inline certificate-key and certificate files")
 	}
 
-	if config.EtcdCert != "" && config.EtcdKey != "" {
-		if config.EtcdCACert == "" && config.EtcdCACertFile != "" {
-			return nil, fmt.Errorf("Cannot process CA certificate file with  inline certificate-key ")
-		}
+	if haveInline {
 		tlsInfo := &TlsInlineCertKey{
 			CACert: config.EtcdCACert,
 			Cert:   config.EtcdCert,
@@ -80,9 +78,6 @@ func NewEtcdV3Client(config *apiconfig.EtcdConfig) (api.Client, error) {
 		}
 		tls, err = tlsInfo.ClientConfigInlineCertKey()
 	} else {
-		if config.EtcdCACert != "" && config.EtcdCACertFile == "" {
-			return nil, fmt.Errorf("Cannot process inline CA certificate with certificate-key files")
-		}
 		tlsInfo := &transport.TLSInfo{
 			CAFile:   config.EtcdCACertFile,
 			CertFile: config.EtcdCertFile,

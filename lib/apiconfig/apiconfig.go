@@ -57,7 +57,7 @@ type EtcdConfig struct {
 	EtcdCACertFile string `json:"etcdCACertFile" envconfig:"ETCD_CA_CERT_FILE"`
 
 	// These config file parameters are to support inline certificates, keys and CA / Trusted certificate.
-	// There are no corresponding enviroment variables to avoid accidental exposure.
+	// There are no corresponding environment variables to avoid accidental exposure.
 	EtcdKey    string `json:"etcdKey" ignored:"true"`
 	EtcdCert   string `json:"etcdCert" ignored:"true"`
 	EtcdCACert string `json:"etcdCACert" ignored:"true"`
