@@ -25,21 +25,21 @@ var _ = Describe("RulesAPIToBackend", func() {
 			EtcdCertFile:   "/dev/null",
 			EtcdKeyFile:    "/dev/null",
 
-                        EtcdCACert: "",
-                        EtcdCert:   "",
-                        EtcdKey:    "",
+			EtcdCACert: "",
+			EtcdCert:   "",
+			EtcdKey:    "",
 
-			EtcdEndpoints:  "http://fake:2379",
+			EtcdEndpoints: "http://fake:2379",
 		})
 
 		Expect(err).To(HaveOccurred())
 	})
 
 	It("should raise an error for providing only inline Key and not Certificate", func() {
-                _, err := etcdv3.NewEtcdV3Client(&apiconfig.EtcdConfig{
-                        EtcdCACert: "",
-                        EtcdCert:   "",
-                        EtcdKey:    `-----BEGIN RSA PRIVATE KEY-----
+		_, err := etcdv3.NewEtcdV3Client(&apiconfig.EtcdConfig{
+			EtcdCACert: "",
+			EtcdCert:   "",
+			EtcdKey: `-----BEGIN RSA PRIVATE KEY-----
 MIIBOwIBAAJBAJv8ZpB5hEK7qxP9K3v43hUS5fGT4waKe7ix4Z4mu5UBv+cw7WSF
 At0Vaag0sAbsPzU8Hhsrj/qPABvfB8asUwcCAwEAAQJAG0r3ezH35WFG1tGGaUOr
 QA61cyaII53ZdgCR1IU8bx7AUevmkFtBf+aqMWusWVOWJvGu2r5VpHVAIl8nF6DS
@@ -49,16 +49,16 @@ BO/g900SAcJbcQIgRtEljIShOB8pDjrsQPxmI1BLhnjD1EhRSubwhDw5AFUCIQCN
 A24pDtdOHydwtSB5+zFqFLfmVZplQM/g5kb4so70Yw==
 -----END RSA PRIVATE KEY-----`,
 
-                        EtcdEndpoints:  "http://fake:2379",
-                })
+			EtcdEndpoints: "http://fake:2379",
+		})
 
-                Expect(err).To(HaveOccurred())
-        })
+		Expect(err).To(HaveOccurred())
+	})
 
 	It("should raise an error for providing only inline Certificate and not Key", func() {
-                _, err := etcdv3.NewEtcdV3Client(&apiconfig.EtcdConfig{
-                        EtcdCACert: "",
-                        EtcdCert:   `-----BEGIN CERTIFICATE-----
+		_, err := etcdv3.NewEtcdV3Client(&apiconfig.EtcdConfig{
+			EtcdCACert: "",
+			EtcdCert: `-----BEGIN CERTIFICATE-----
 MIICEjCCAXsCAg36MA0GCSqGSIb3DQEBBQUAMIGbMQswCQYDVQQGEwJKUDEOMAwG
 A1UECBMFVG9reW8xEDAOBgNVBAcTB0NodW8ta3UxETAPBgNVBAoTCEZyYW5rNERE
 MRgwFgYDVQQLEw9XZWJDZXJ0IFN1cHBvcnQxGDAWBgNVBAMTD0ZyYW5rNEREIFdl
@@ -72,21 +72,21 @@ AQABMA0GCSqGSIb3DQEBBQUAA4GBABS2TLuBeTPmcaTaUW/LCB2NYOy8GMdzR1mx
 2VguKv4SWjRFoRkIfIlHX0qVviMhSlNy2ioFLy7JcPZb+v3ftDGywUqcBiVDoea0
 Hn+GmxZA
 -----END CERTIFICATE-----`,
-                        EtcdKey:    "",
+			EtcdKey: "",
 
-                        EtcdEndpoints:  "http://fake:2379",
-                })
+			EtcdEndpoints: "http://fake:2379",
+		})
 
-                Expect(err).To(HaveOccurred())
-        })
+		Expect(err).To(HaveOccurred())
+	})
 
 	It("should raise an error for providing a mix of inline Certificate-Key and Certificate-Key Files as parameters", func() {
-                _, err := etcdv3.NewEtcdV3Client(&apiconfig.EtcdConfig{
+		_, err := etcdv3.NewEtcdV3Client(&apiconfig.EtcdConfig{
 
 			EtcdCACertFile: "/fake/path",
 
-                        EtcdCACert: "",
-                        EtcdCert:   `-----BEGIN CERTIFICATE-----
+			EtcdCACert: "",
+			EtcdCert: `-----BEGIN CERTIFICATE-----
 MIICEjCCAXsCAg36MA0GCSqGSIb3DQEBBQUAMIGbMQswCQYDVQQGEwJKUDEOMAwG
 A1UECBMFVG9reW8xEDAOBgNVBAcTB0NodW8ta3UxETAPBgNVBAoTCEZyYW5rNERE
 MRgwFgYDVQQLEw9XZWJDZXJ0IFN1cHBvcnQxGDAWBgNVBAMTD0ZyYW5rNEREIFdl
@@ -100,7 +100,7 @@ AQABMA0GCSqGSIb3DQEBBQUAA4GBABS2TLuBeTPmcaTaUW/LCB2NYOy8GMdzR1mx
 2VguKv4SWjRFoRkIfIlHX0qVviMhSlNy2ioFLy7JcPZb+v3ftDGywUqcBiVDoea0
 Hn+GmxZA
 -----END CERTIFICATE-----`,
-                        EtcdKey:    `-----BEGIN RSA PRIVATE KEY-----
+			EtcdKey: `-----BEGIN RSA PRIVATE KEY-----
 MIIBOwIBAAJBAJv8ZpB5hEK7qxP9K3v43hUS5fGT4waKe7ix4Z4mu5UBv+cw7WSF
 At0Vaag0sAbsPzU8Hhsrj/qPABvfB8asUwcCAwEAAQJAG0r3ezH35WFG1tGGaUOr
 QA61cyaII53ZdgCR1IU8bx7AUevmkFtBf+aqMWusWVOWJvGu2r5VpHVAIl8nF6DS
@@ -110,18 +110,18 @@ BO/g900SAcJbcQIgRtEljIShOB8pDjrsQPxmI1BLhnjD1EhRSubwhDw5AFUCIQCN
 A24pDtdOHydwtSB5+zFqFLfmVZplQM/g5kb4so70Yw==
 -----END RSA PRIVATE KEY-----`,
 
-                        EtcdEndpoints:  "http://fake:2379",
-                })
+			EtcdEndpoints: "http://fake:2379",
+		})
 
-                Expect(err).To(HaveOccurred())
-        })
+		Expect(err).To(HaveOccurred())
+	})
 
 	It("should raise an error for not able to decode inline CA certificate", func() {
-                _, err := etcdv3.NewEtcdV3Client(&apiconfig.EtcdConfig{
+		_, err := etcdv3.NewEtcdV3Client(&apiconfig.EtcdConfig{
 
 			EtcdCACertFile: "",
 
-                        EtcdCACert: `-----BEGIN CERTIFICATE-----
+			EtcdCACert: `-----BEGIN CERTIFICATE-----
 MIICEjCCAXsCAg36MA0GCSqGSIb3DQEBBQUAMIGbMQswCQYDVQQGEwJKUDEOMAwG
 A1UECBMFVG9reW8xEDAOBgNVBAcTB0NodW8ta3UxETAPBgNVBAoTCEZyYW5rNERE
 MRgwFgYDVQQLEw9XZWJDZXJ0IFN1cHBvcnQxGDAWBgNVBAMTD0ZyYW5rNEREIFdl
@@ -135,7 +135,7 @@ AQABMA0GCSqGSIb3DQEBBQUAA4GBABS2TLuBeTPmcaTaUW/LCB2NYOy8GMdzR1mx
 2VguKv4SWjRFoRkIfIlHX0qVviMhSlNy2ioFLy7JcPZb+v3ftDGywUqcBiVDoea0
 Hn+GmxZA
 -----END CERTIFICATE-----`,
-                        EtcdCert:   `-----BEGIN CERTIFICATE-----
+			EtcdCert: `-----BEGIN CERTIFICATE-----
 MIICEjCCAXsCAg36MA0GCSqGSIb3DQEBBQUAMIGbMQswCQYDVQQGEwJKUDEOMAwG
 A1UECBMFVG9reW8xEDAOBgNVBAcTB0NodW8ta3UxETAPBgNVBAoTCEZyYW5rNERE
 MRgwFgYDVQQLEw9XZWJDZXJ0IFN1cHBvcnQxGDAWBgNVBAMTD0ZyYW5rNEREIFdl
@@ -149,7 +149,7 @@ AQABMA0GCSqGSIb3DQEBBQUAA4GBABS2TLuBeTPmcaTaUW/LCB2NYOy8GMdzR1mx
 2VguKv4SWjRFoRkIfIlHX0qVviMhSlNy2ioFLy7JcPZb+v3ftDGywUqcBiVDoea0
 Hn+GmxZA
 -----END CERTIFICATE-----`,
-                        EtcdKey:    `-----BEGIN RSA PRIVATE KEY-----
+			EtcdKey: `-----BEGIN RSA PRIVATE KEY-----
 MIIBOwIBAAJBAJv8ZpB5hEK7qxP9K3v43hUS5fGT4waKe7ix4Z4mu5UBv+cw7WSF
 At0Vaag0sAbsPzU8Hhsrj/qPABvfB8asUwcCAwEAAQJAG0r3ezH35WFG1tGGaUOr
 QA61cyaII53ZdgCR1IU8bx7AUevmkFtBf+aqMWusWVOWJvGu2r5VpHVAIl8nF6DS
@@ -159,19 +159,19 @@ BO/g900SAcJbcQIgRtEljIShOB8pDjrsQPxmI1BLhnjD1EhRSubwhDw5AFUCIQCN
 A24pDtdOHydwtSB5+zFqFLfmVZplQM/g5kb4so70Yw==
 -----END RSA PRIVATE KEY-----`,
 
-                        EtcdEndpoints:  "http://fake:2379",
-                })
+			EtcdEndpoints: "http://fake:2379",
+		})
 
-                Expect(err).To(HaveOccurred())
-        })
-        It("should raise an error for providing a mix of all inline Certificate-Key and Certificate-Key Files as parameters", func() {
-                _, err := etcdv3.NewEtcdV3Client(&apiconfig.EtcdConfig{
+		Expect(err).To(HaveOccurred())
+	})
+	It("should raise an error for providing a mix of all inline Certificate-Key and Certificate-Key Files as parameters", func() {
+		_, err := etcdv3.NewEtcdV3Client(&apiconfig.EtcdConfig{
 
-                        EtcdCACertFile: "/fake/path",
-                        EtcdCertFile:   "/fake/path",
-                        EtcdKeyFile:    "/fake/path",
+			EtcdCACertFile: "/fake/path",
+			EtcdCertFile:   "/fake/path",
+			EtcdKeyFile:    "/fake/path",
 
-                        EtcdCACert: `-----BEGIN CERTIFICATE-----
+			EtcdCACert: `-----BEGIN CERTIFICATE-----
 MIICKzCCAZSgAwIBAgIBAzANBgkqhkiG9w0BAQQFADA3MQswCQYDVQQGEwJVUzER
 MA8GA1UEChMITmV0c2NhcGUxFTATBgNVBAsTDFN1cHJpeWEncyBDQTAeFw05NzEw
 MTgwMTM2MjVaFw05OTEwMTgwMTM2MjVaMEgxCzAJBgNVBAYTAlVTMREwDwYDVQQK
@@ -185,7 +185,7 @@ I6/z07Z635DfzX4XbAFpjlRl/AYwQzTSYx8GfcNAqCqCwaSDKvsuj/vwbf91o3j3
 UkdGYpcd2cYRCgKi4MwqdWyLtpuHAH18hHZ5uvi00mJYw8W2wUOsY0RC/a/IDy84
 hW3WWehBUqVK5SY4/zJ4oTjx7dwNMdGwbWfpRqjd1A==
 -----END CERTIFICATE-----`,
-                        EtcdCert:   `-----BEGIN CERTIFICATE-----
+			EtcdCert: `-----BEGIN CERTIFICATE-----
 MIICEjCCAXsCAg36MA0GCSqGSIb3DQEBBQUAMIGbMQswCQYDVQQGEwJKUDEOMAwG
 A1UECBMFVG9reW8xEDAOBgNVBAcTB0NodW8ta3UxETAPBgNVBAoTCEZyYW5rNERE
 MRgwFgYDVQQLEw9XZWJDZXJ0IFN1cHBvcnQxGDAWBgNVBAMTD0ZyYW5rNEREIFdl
@@ -199,7 +199,7 @@ AQABMA0GCSqGSIb3DQEBBQUAA4GBABS2TLuBeTPmcaTaUW/LCB2NYOy8GMdzR1mx
 2VguKv4SWjRFoRkIfIlHX0qVviMhSlNy2ioFLy7JcPZb+v3ftDGywUqcBiVDoea0
 Hn+GmxZA
 -----END CERTIFICATE-----`,
-                        EtcdKey:    `-----BEGIN RSA PRIVATE KEY-----
+			EtcdKey: `-----BEGIN RSA PRIVATE KEY-----
 MIIBOwIBAAJBAJv8ZpB5hEK7qxP9K3v43hUS5fGT4waKe7ix4Z4mu5UBv+cw7WSF
 At0Vaag0sAbsPzU8Hhsrj/qPABvfB8asUwcCAwEAAQJAG0r3ezH35WFG1tGGaUOr
 QA61cyaII53ZdgCR1IU8bx7AUevmkFtBf+aqMWusWVOWJvGu2r5VpHVAIl8nF6DS
@@ -209,10 +209,10 @@ BO/g900SAcJbcQIgRtEljIShOB8pDjrsQPxmI1BLhnjD1EhRSubwhDw5AFUCIQCN
 A24pDtdOHydwtSB5+zFqFLfmVZplQM/g5kb4so70Yw==
 -----END RSA PRIVATE KEY-----`,
 
-                        EtcdEndpoints:  "http://fake:2379",
-                })
+			EtcdEndpoints: "http://fake:2379",
+		})
 
-                Expect(err).To(HaveOccurred())
-        })
+		Expect(err).To(HaveOccurred())
+	})
 
 })
