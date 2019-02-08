@@ -64,7 +64,7 @@ func (info TlsInlineCertKey) ClientConfigInlineCertKey() (*tls.Config, error) {
 // baseCertConfig() populates tls struct with certificate data
 func (info TlsInlineCertKey) baseCertConfig() (*tls.Config, error) {
 	if info.Key == "" || info.Cert == "" {
-		return nil, fmt.Errorf("Key and Cert must both be present[key: %v, cert: %v]", info.Key, info.Cert)
+		return nil, fmt.Errorf("Certificate and Key must both be present inline.")
 	}
 
 	_, err := newCert([]byte(info.Cert), []byte(info.Key))
