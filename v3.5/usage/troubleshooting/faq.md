@@ -425,19 +425,20 @@ network interface - on every compute host with at least one VM in the relevant N
 network; and that is one of the ingredients needed, in Linux, for a VM to be able to ping
 that IP.
 
-The reason why it still isn't possible for a VM to ping that IP, is that Calico by default
-configures iptables rules to block almost all communication to its own host - because in
-general, of course, a workload should not be able to access and possibly compromise its
-host. There are a few pinholes here, e.g. for DHCP, but those do not include ping (ICMP
-Echo). If you start running a command like `watch 'sudo iptables-save -c | grep DROP'` on
-a compute host, and then try pinging the default gateway IP from a VM on that host, you
-will see the DROP count increasing as each ping packet is sent and blocked.
+The reason why it still *isn't* possible for a VM to ping that IP, is that Calico by
+default configures iptables rules to block almost all communication *to* its own host -
+because in general, of course, a workload should not be able to access and possibly
+compromise its host. There are a few pinholes here, e.g. for DHCP, but those do not
+include ping (ICMP Echo). If you start running a command like `watch 'sudo iptables-save
+-c | grep DROP'` on a compute host, and then try pinging the default gateway IP from a VM
+on that host, you will see the DROP count increasing as each ping packet is sent and
+blocked.
 
 This behaviour is controlled by a config parameter named DefaultEndpointToHostAction,
 whose default is DROP. For the sake of demonstration, you can change this by adding
 `DefaultEndpointToHostAction = RETURN` to `/etc/calico/felix.cfg`, then use `sudo
 systemctl restart calico-felix` to restart Felix, and then you will observe that a VM on
-that host can ping its default gateway. However we do not recommend routinely operating
+that host *can* ping its default gateway. However we do not recommend routinely operating
 with `DefaultEndpointToHostAction = RETURN`, because that potentially allows a malicious
 VM to compromise its host.
 
