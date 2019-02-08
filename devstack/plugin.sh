@@ -72,7 +72,6 @@ EOF
 		    # enabled services should exist at this point.
 		    echo Calico plugin: post-config
 
-
 		    # Update qemu configuration (shouldn't be anything
 		    # in there so safe to blow away)
 		    sudo sh -c "cat > /etc/libvirt/qemu.conf" << EOF
@@ -117,6 +116,10 @@ EOF
 		    if test -n "$CALICO_ETCD_COMPACTION_MIN_REVISIONS"; then
 			iniset $NEUTRON_CONF calico etcd_compaction_min_revisions $CALICO_ETCD_COMPACTION_MIN_REVISIONS
 		    fi
+
+		    # Give Neutron the admin role so that it can look up
+		    # project name and parent_id fields in the Keystone DB.
+		    openstack role add admin --user neutron --project service --user-domain Default --project-domain Default
 		    ;;
 
 		extra)

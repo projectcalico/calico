@@ -52,6 +52,7 @@ LOG = log.getLogger(__name__)
 PROJECT_ID_LABEL_NAME = 'projectcalico.org/openstack-project-id'
 PROJECT_NAME_LABEL_NAME = 'projectcalico.org/openstack-project-name'
 PROJECT_NAME_MAX_LENGTH = datamodel_v3.SANITIZE_LABEL_MAX_LENGTH
+PROJECT_PARENT_ID_LABEL_NAME = 'projectcalico.org/openstack-project-parent-id'
 
 # Note: Calico requires a label value to be an empty string, or to consist of
 # alphanumeric characters, '-', '_' or '.', starting and ending with an
@@ -60,7 +61,7 @@ PROJECT_NAME_MAX_LENGTH = datamodel_v3.SANITIZE_LABEL_MAX_LENGTH
 
 # Calico-specific keys in the port dict for storing information that
 # we want to include in WorkloadEndpoints.
-PORT_KEY_PROJ_NAME = 'calico-project-name'
+PORT_KEY_PROJ_DATA = 'calico-project-data'
 PORT_KEY_SG_NAMES = 'calico-sg-names'
 
 
@@ -72,7 +73,7 @@ class WorkloadEndpointSyncer(ResourceSyncer):
                                                      "WorkloadEndpoint")
         self.policy_syncer = policy_syncer
         self.keystone = keystone_client
-        self.proj_name_cache = {}
+        self.proj_data_cache = {}
         self.region_string = calico_config.get_region_string()
         self.namespace = datamodel_v3.get_namespace(self.region_string)
 
@@ -230,7 +231,7 @@ class WorkloadEndpointSyncer(ResourceSyncer):
         )
         self.add_port_gateways(port, context)
         self.add_port_interface_name(port)
-        self.add_port_project_name(port, context)
+        self.add_port_project_data(port, context)
         self.add_port_sg_names(port, context)
 
         return port
@@ -272,56 +273,43 @@ class WorkloadEndpointSyncer(ResourceSyncer):
             )
             port[PORT_KEY_SG_NAMES][sg['id']] = sg_name
 
-    def add_port_project_name(self, port, context):
-        """add_port_project_name
+    def add_port_project_data(self, port, context):
+        """add_port_project_data
 
-        Determine the OpenStack project name for a given port's
-        project/tenant ID, and add it as port['calico_project_name'].
+        Determine the OpenStack project name and parent ID for a given
+        port's project/tenant ID, and add it as
+        port['calico-project-data'].
         """
         proj_id = port.get('project_id', port.get('tenant_id'))
         if proj_id is None:
             LOG.warning("Port with no project ID: %r", port)
             return
 
-        # If we've already cached the corresponding project name, we're done.
-        proj_name = self.proj_name_cache.get(proj_id)
-        if proj_name is not None:
-            LOG.debug("Project name %r was cached", proj_name)
-            port[PORT_KEY_PROJ_NAME] = proj_name
+        # If we've already cached the corresponding project data, we're done.
+        proj_data = self.proj_data_cache.get(proj_id)
+        if proj_data is not None:
+            LOG.debug("Project data %r was cached", proj_data)
+            port[PORT_KEY_PROJ_DATA] = proj_data
             return
 
         # Flush the cache if it has reached its maximum allowed size.
-        if len(self.proj_name_cache) >= cfg.CONF.calico.project_name_cache_max:
-            self.proj_name_cache = {}
+        if len(self.proj_data_cache) >= cfg.CONF.calico.project_name_cache_max:
+            self.proj_data_cache = {}
 
-        # Get the project name from the request context if its available and
-        # matches the port's project ID.
-        cdict = context.to_dict()
-        LOG.info("Request context %s", cdict)
-        req_proj_id = cdict.get('project_id', cdict.get('tenant_id'))
-        req_proj_name = cdict.get('project_name', cdict.get('tenant_name'))
-        if req_proj_id == proj_id and req_proj_name is not None:
-            LOG.info("Got project name %r from request", req_proj_name)
-            port[PORT_KEY_PROJ_NAME] = \
-                datamodel_v3.sanitize_label_name_value(req_proj_name,
-                                                       PROJECT_NAME_MAX_LENGTH)
-            self.proj_name_cache[proj_id] = port[PORT_KEY_PROJ_NAME]
-            return
-
-        # Last resort, look up the port's project ID in the Keystone DB.
+        # Not cached, so look up the port's project in the Keystone DB.
         try:
-            wanted_proj_name = None
+            wanted_data = None
             for proj in self.keystone.projects.list():
-                if proj.id not in self.proj_name_cache:
+                if proj.id not in self.proj_data_cache:
                     LOG.info("Got project name %r from Keystone", proj.name)
                     proj_name = datamodel_v3.sanitize_label_name_value(
                         proj.name, PROJECT_NAME_MAX_LENGTH
                     )
-                    self.proj_name_cache[proj.id] = proj_name
+                    self.proj_data_cache[proj.id] = (proj_name, proj.parent_id)
                     if proj.id == proj_id:
-                        wanted_proj_name = proj_name
-            if wanted_proj_name is not None:
-                port[PORT_KEY_PROJ_NAME] = wanted_proj_name
+                        wanted_data = self.proj_data_cache[proj.id]
+            if wanted_data is not None:
+                port[PORT_KEY_PROJ_DATA] = wanted_data
             return
         except Exception:
             # Probably don't have right credentials for that lookup.
@@ -351,8 +339,10 @@ def endpoint_labels(port, namespace):
     proj_id = port.get('project_id', port.get('tenant_id'))
     if proj_id is not None:
         labels[PROJECT_ID_LABEL_NAME] = proj_id
-    if PORT_KEY_PROJ_NAME in port:
-        labels[PROJECT_NAME_LABEL_NAME] = port[PORT_KEY_PROJ_NAME]
+    if PORT_KEY_PROJ_DATA in port:
+        name, parent_id = port[PORT_KEY_PROJ_DATA]
+        labels[PROJECT_NAME_LABEL_NAME] = name
+        labels[PROJECT_PARENT_ID_LABEL_NAME] = parent_id
 
     return labels
 

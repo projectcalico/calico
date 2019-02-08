@@ -193,6 +193,7 @@ def mock_projects_list():
     mock_project = mock.Mock()
     mock_project.id = "jane3"
     mock_project.name = "pname+%s" % mock_project.id
+    mock_project.parent_id = "gibson"
     return [mock_project]
 keystone_client = mock.Mock()
 keystone_client.projects.list.side_effect = mock_projects_list

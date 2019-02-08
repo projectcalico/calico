@@ -435,6 +435,7 @@ class TestPluginEtcdBase(_TestEtcdBase):
                     'projectcalico.org/namespace': self.namespace,
                     'projectcalico.org/openstack-project-id': 'jane3',
                     'projectcalico.org/openstack-project-name': 'pname_jane3',
+                    'projectcalico.org/openstack-project-parent-id': 'gibson',
                     'projectcalico.org/orchestrator': 'openstack'
                 }
             },
@@ -467,6 +468,7 @@ class TestPluginEtcdBase(_TestEtcdBase):
                     'projectcalico.org/namespace': self.namespace,
                     'projectcalico.org/openstack-project-id': 'jane3',
                     'projectcalico.org/openstack-project-name': 'pname_jane3',
+                    'projectcalico.org/openstack-project-parent-id': 'gibson',
                     'projectcalico.org/orchestrator': 'openstack'
                 }
             },
@@ -591,6 +593,7 @@ class TestPluginEtcdBase(_TestEtcdBase):
                     'projectcalico.org/namespace': self.namespace,
                     'projectcalico.org/openstack-project-id': 'jane3',
                     'projectcalico.org/openstack-project-name': 'pname_jane3',
+                    'projectcalico.org/openstack-project-parent-id': 'gibson',
                     'projectcalico.org/orchestrator': 'openstack'
                 }
             },
