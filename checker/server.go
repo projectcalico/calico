@@ -37,7 +37,14 @@ func NewServer(ctx context.Context, stores <-chan *policystore.PolicyStore) *aut
 
 // Check applies the currently loaded policy to a network request and renders a policy decision.
 func (as *authServer) Check(ctx context.Context, req *authz.CheckRequest) (*authz.CheckResponse, error) {
-	log.Debugf("Check(%v, %v)", ctx, req)
+	log.WithFields(log.Fields{
+		"context":         ctx,
+		"Req.Method":      req.GetAttributes().GetRequest().GetHttp().GetMethod(),
+		"Req.Path":        req.GetAttributes().GetRequest().GetHttp().GetPath(),
+		"Req.Protocol":    req.GetAttributes().GetRequest().GetHttp().GetProtocol(),
+		"Req.Source":      req.GetAttributes().GetSource(),
+		"Req.Destination": req.GetAttributes().GetDestination(),
+	}).Debug("Check start")
 	resp := authz.CheckResponse{Status: &rpc.Status{Code: INTERNAL}}
 	var st rpc.Status
 
@@ -53,9 +60,13 @@ func (as *authServer) Check(ctx context.Context, req *authz.CheckRequest) (*auth
 	store.Read(func(ps *policystore.PolicyStore) { st = checkStore(ps, req) })
 	resp.Status = &st
 	log.WithFields(log.Fields{
-		"Request":  req,
-		"Response": resp,
-	}).Info("Check complete")
+		"Req.Method":      req.GetAttributes().GetRequest().GetHttp().GetMethod(),
+		"Req.Path":        req.GetAttributes().GetRequest().GetHttp().GetPath(),
+		"Req.Protocol":    req.GetAttributes().GetRequest().GetHttp().GetProtocol(),
+		"Req.Source":      req.GetAttributes().GetSource(),
+		"Req.Destination": req.GetAttributes().GetDestination(),
+		"Response":        resp,
+	}).Debug("Check complete")
 	return &resp, nil
 }
 
