@@ -439,3 +439,52 @@ confusing behavior where traffic can be blocked and then suddenly start working!
 
 To resolve the issue, add a rule to your security groups that allows inbound and outbound IP-in-IP traffic (IP protocol
 number 4) between your hosts.
+
+## In Calico for OpenStack, why can't a VM ping its default gateway?
+
+With other networking implementations, OpenStack VMs in the same Neutron network appear to
+be directly connected to each other at layer 2 (Ethernet). When a VM sends to another VM
+in the same network, there is no routing at all, from the VM point of view. (Of course
+there may be routing in the underlay network, because compute hosts may be on different
+subnets.)
+
+When a VM sends to something outside its own network, it goes - by simulated layer 2 - to
+the default gateway first, and then is routed to wherever it is addressed to.
+
+With Calico, this is all different. Any packet sent by a VM is layer-2-terminated and
+IP-routed by the VM's compute host, whether the VM is sending to another VM in the same
+network, or to anywhere else. So Calico doesn't need the "default gateway" concept, and it
+doesn't really make any sense with Calico. If a VM thinks that "my default gateway is the
+first hop at which the packets I send can be IP-routed", and in any way relies on that,
+that will be wrong, with Calico networking.
+
+Now, with all that said, for detailed technical reasons to do with the DHCP server
+(dnsmasq), Calico does actually configure the default gateway IP - i.e. bind it to a Linux
+network interface - on every compute host with at least one VM in the relevant Neutron
+network; and that is one of the ingredients needed, in Linux, for a VM to be able to ping
+that IP.
+
+The reason why it still isn't possible for a VM to ping that IP, is that Calico by default
+configures iptables rules to block almost all communication to its own host - because in
+general, of course, a workload should not be able to access and possibly compromise its
+host. There are a few pinholes here, e.g. for DHCP, but those do not include ping (ICMP
+Echo). If you start running a command like `watch 'sudo iptables-save -c | grep DROP'` on
+a compute host, and then try pinging the default gateway IP from a VM on that host, you
+will see the DROP count increasing as each ping packet is sent and blocked.
+
+This behaviour is controlled by a config parameter named DefaultEndpointToHostAction,
+whose default is DROP. For the sake of demonstration, you can change this by adding
+`DefaultEndpointToHostAction = RETURN` to `/etc/calico/felix.cfg`, then use `sudo
+systemctl restart calico-felix` to restart Felix, and then you will observe that a VM on
+that host can ping its default gateway. However we do not recommend routinely operating
+with `DefaultEndpointToHostAction = RETURN`, because that potentially allows a malicious
+VM to compromise its host.
+
+In summary, then, there are two points behind why a VM cannot normally ping its default
+gateway, with Calico.
+
+#. The default gateway concept just doesn't really fit, and isn't needed, given how Calico
+   routes everything at the compute node - which is a fundamental aspect of Calico
+   networking for OpenStack.
+
+#. Calico's iptables rules generally do not allow a VM to contact its host.
