@@ -241,7 +241,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 			bc.Clean()
 			deleteAllPools()
 
-			applyNode(bc, host, nil)
+			applyNode(bc, kc, host, nil)
 			applyPool("10.0.0.0/26", true, "")
 
 			args := AutoAssignArgs{

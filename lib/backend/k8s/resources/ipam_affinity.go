@@ -29,9 +29,11 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/net"
 	log "github.com/sirupsen/logrus"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/cache"
 )
 
 const (
@@ -245,11 +247,21 @@ func (c *affinityBlockClient) List(ctx context.Context, list model.ListInterface
 }
 
 func (c *affinityBlockClient) Watch(ctx context.Context, list model.ListInterface, revision string) (api.WatchInterface, error) {
-	log.Warn("Operation Watch is not supported on BlockAffinity type")
-	return nil, cerrors.ErrorOperationNotSupported{
-		Identifier: list,
-		Operation:  "Watch",
+	resl := model.ResourceListOptions{Kind: apiv3.KindBlockAffinity}
+	k8sWatchClient := cache.NewListWatchFromClient(c.rc.restClient, c.rc.resource, "", fields.Everything())
+	k8sWatch, err := k8sWatchClient.WatchFunc(metav1.ListOptions{ResourceVersion: revision})
+	if err != nil {
+		return nil, K8sErrorToCalico(err, list)
 	}
+	toKVPair := func(r Resource) (*model.KVPair, error) {
+		conv, err := c.rc.convertResourceToKVPair(r)
+		if err != nil {
+			return nil, err
+		}
+		return c.toV1(conv)
+	}
+
+	return newK8sWatcherConverter(ctx, resl.Kind+" (custom)", toKVPair, k8sWatch), nil
 }
 
 func (c *affinityBlockClient) EnsureInitialized() error {

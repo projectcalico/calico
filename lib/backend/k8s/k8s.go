@@ -384,6 +384,12 @@ func buildCRDClientV1(cfg rest.Config) (*rest.RESTClient, error) {
 				&apiv3.NetworkPolicyList{},
 				&apiv3.HostEndpoint{},
 				&apiv3.HostEndpointList{},
+				&apiv3.BlockAffinity{},
+				&apiv3.BlockAffinityList{},
+				&apiv3.IPAMBlock{},
+				&apiv3.IPAMBlockList{},
+				&apiv3.IPAMHandle{},
+				&apiv3.IPAMHandleList{},
 			)
 			return nil
 		})
