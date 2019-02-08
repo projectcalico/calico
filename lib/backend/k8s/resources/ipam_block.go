@@ -98,7 +98,6 @@ func (c ipamBlockClient) toV1(kvpv3 *model.KVPair) (*model.KVPair, error) {
 	return &model.KVPair{
 		Key: model.BlockKey{
 			CIDR: *cidr,
-			UID:  &ab.UID,
 		},
 		Value: &model.AllocationBlock{
 			CIDR:           *cidr,
@@ -110,6 +109,7 @@ func (c ipamBlockClient) toV1(kvpv3 *model.KVPair) (*model.KVPair, error) {
 			Deleting:       ab.Spec.Deleting,
 		},
 		Revision: kvpv3.Revision,
+		UID:      &ab.UID,
 	}, nil
 }
 
@@ -200,13 +200,13 @@ func (c *ipamBlockClient) Update(ctx context.Context, kvp *model.KVPair) (*model
 	return v1nkvp, nil
 }
 
-func (c *ipamBlockClient) Delete(ctx context.Context, key model.Key, revision string, uid *types.UID) (*model.KVPair, error) {
-	name, _ := c.parseKey(key)
+func (c *ipamBlockClient) DeleteKVP(ctx context.Context, kvp *model.KVPair) (*model.KVPair, error) {
+	name, _ := c.parseKey(kvp.Key)
 	k := model.ResourceKey{
 		Name: name,
 		Kind: apiv3.KindIPAMBlock,
 	}
-	kvp, err := c.rc.Delete(ctx, k, revision, key.(model.BlockKey).UID)
+	kvp, err := c.rc.Delete(ctx, k, kvp.Revision, kvp.UID)
 	if err != nil {
 		return nil, err
 	}
@@ -215,6 +215,14 @@ func (c *ipamBlockClient) Delete(ctx context.Context, key model.Key, revision st
 		return nil, err
 	}
 	return v1nkvp, nil
+}
+
+func (c *ipamBlockClient) Delete(ctx context.Context, key model.Key, revision string, uid *types.UID) (*model.KVPair, error) {
+	log.Warn("Operation Delete is not supported on IPAMBlock type - use DeleteKVP")
+	return nil, cerrors.ErrorOperationNotSupported{
+		Identifier: key,
+		Operation:  "Delete",
+	}
 }
 
 func (c *ipamBlockClient) Get(ctx context.Context, key model.Key, revision string) (*model.KVPair, error) {

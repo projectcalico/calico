@@ -967,6 +967,10 @@ func (c *fakeClient) Apply(ctx context.Context, object *model.KVPair) (*model.KV
 	panic("should not be called")
 	return nil, nil
 }
+func (c *fakeClient) DeleteKVP(ctx context.Context, kvp *model.KVPair) (*model.KVPair, error) {
+	panic("should not be called")
+	return nil, nil
+}
 func (c *fakeClient) Delete(ctx context.Context, key model.Key, revision string) (*model.KVPair, error) {
 	panic("should not be called")
 	return nil, nil

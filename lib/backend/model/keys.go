@@ -26,6 +26,7 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/libcalico-go/lib/net"
 	log "github.com/sirupsen/logrus"
+	"k8s.io/apimachinery/pkg/types"
 )
 
 // RawString is used a value type to indicate that the value is a bare non-JSON string
@@ -92,6 +93,7 @@ type KVPair struct {
 	Key      Key
 	Value    interface{}
 	Revision string
+	UID      *types.UID
 	TTL      time.Duration // For writes, if non-zero, key has a TTL.
 }
 

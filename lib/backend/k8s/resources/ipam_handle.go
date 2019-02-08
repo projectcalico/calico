@@ -128,17 +128,25 @@ func (c *ipamHandleClient) Update(ctx context.Context, kvp *model.KVPair) (*mode
 	return c.toV1(kvp), nil
 }
 
-func (c *ipamHandleClient) Delete(ctx context.Context, key model.Key, revision string, uid *types.UID) (*model.KVPair, error) {
-	name := c.parseKey(key)
+func (c *ipamHandleClient) DeleteKVP(ctx context.Context, kvp *model.KVPair) (*model.KVPair, error) {
+	name := c.parseKey(kvp.Key)
 	k := model.ResourceKey{
 		Name: name,
 		Kind: apiv3.KindIPAMHandle,
 	}
-	kvp, err := c.rc.Delete(ctx, k, revision, uid)
+	kvp, err := c.rc.Delete(ctx, k, kvp.Revision, kvp.UID)
 	if err != nil {
 		return nil, err
 	}
 	return c.toV1(kvp), nil
+}
+
+func (c *ipamHandleClient) Delete(ctx context.Context, key model.Key, revision string, uid *types.UID) (*model.KVPair, error) {
+	log.Warn("Operation Delete is not supported on IPAMHandle type")
+	return nil, cerrors.ErrorOperationNotSupported{
+		Identifier: key,
+		Operation:  "Delete",
+	}
 }
 
 func (c *ipamHandleClient) Get(ctx context.Context, key model.Key, revision string) (*model.KVPair, error) {

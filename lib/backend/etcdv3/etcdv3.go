@@ -237,6 +237,10 @@ func (c *etcdV3Client) Apply(ctx context.Context, d *model.KVPair) (*model.KVPai
 	return d, nil
 }
 
+func (c *etcdV3Client) DeleteKVP(ctx context.Context, kvp *model.KVPair) (*model.KVPair, error) {
+	return c.Delete(ctx, kvp.Key, kvp.Revision)
+}
+
 // Delete an entry in the datastore.  This errors if the entry does not exists.
 func (c *etcdV3Client) Delete(ctx context.Context, k model.Key, revision string) (*model.KVPair, error) {
 	logCxt := log.WithFields(log.Fields{"model-etcdKey": k, "rev": revision})

@@ -149,6 +149,10 @@ func (c *customK8sResourceClient) Update(ctx context.Context, kvp *model.KVPair)
 	return kvp, nil
 }
 
+func (c *customK8sResourceClient) DeleteKVP(ctx context.Context, kvp *model.KVPair) (*model.KVPair, error) {
+	return c.Delete(ctx, kvp.Key, kvp.Revision, kvp.UID)
+}
+
 // Delete deletes an existing Custom K8s Resource instance in the k8s API using the supplied KVPair.
 func (c *customK8sResourceClient) Delete(ctx context.Context, k model.Key, revision string, uid *types.UID) (*model.KVPair, error) {
 	logContext := log.WithFields(log.Fields{

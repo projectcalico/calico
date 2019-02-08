@@ -323,7 +323,7 @@ func (c *KubeClient) Clean() error {
 			log.WithError(err).WithField("Kind", li).Warning("Failed to list resources")
 		} else {
 			for _, r := range rs.KVPairs {
-				if _, err = c.Delete(ctx, r.Key, r.Revision); err != nil {
+				if _, err = c.DeleteKVP(ctx, r); err != nil {
 					log.WithError(err).WithField("Key", r.Key).Warning("Failed to delete entry from KDD")
 				}
 			}
@@ -453,6 +453,20 @@ func (c *KubeClient) Apply(ctx context.Context, kvp *model.KVPair) (*model.KVPai
 		}
 	}
 	return updated, nil
+}
+
+// Delete an entry in the datastore. This is a no-op when using the k8s backend.
+func (c *KubeClient) DeleteKVP(ctx context.Context, kvp *model.KVPair) (*model.KVPair, error) {
+	log.Debugf("Performing 'DeleteKVP' for %+v", kvp.Key)
+	client := c.getResourceClientFromKey(kvp.Key)
+	if client == nil {
+		log.Debug("Attempt to 'DeleteKVP' using kubernetes backend is not supported.")
+		return nil, cerrors.ErrorOperationNotSupported{
+			Identifier: kvp.Key,
+			Operation:  "Delete",
+		}
+	}
+	return client.DeleteKVP(ctx, kvp)
 }
 
 // Delete an entry in the datastore. This is a no-op when using the k8s backend.

@@ -43,10 +43,15 @@ type K8sResourceClient interface {
 	// current.
 	Update(ctx context.Context, object *model.KVPair) (*model.KVPair, error)
 
-	// Delete removes the object specified by the KVPair.  If the KVPair
+	// Delete removes the object specified by the Key.  If the call
 	// contains revision information, the delete only succeeds if the
 	// revision is still current.
 	Delete(ctx context.Context, key model.Key, revision string, uid *types.UID) (*model.KVPair, error)
+
+	// DeleteKVP removes the object specified by the KVPair.  If the KVPair
+	// contains revision information, the delete only succeeds if the
+	// revision is still current.
+	DeleteKVP(ctx context.Context, object *model.KVPair) (*model.KVPair, error)
 
 	// Get returns the object identified by the given key as a KVPair with
 	// revision information.

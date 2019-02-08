@@ -129,6 +129,12 @@ func (c *networkPolicyClient) Apply(ctx context.Context, kvp *model.KVPair) (*mo
 		Operation:  "Apply",
 	}
 }
+func (c *networkPolicyClient) DeleteKVP(ctx context.Context, kvp *model.KVPair) (*model.KVPair, error) {
+	return nil, cerrors.ErrorOperationNotSupported{
+		Identifier: kvp.Key,
+		Operation:  "DeleteKVP",
+	}
+}
 
 func (c *networkPolicyClient) Delete(ctx context.Context, key model.Key, revision string, uid *types.UID) (*model.KVPair, error) {
 	log.Debug("Received Delete request on NetworkPolicy type")

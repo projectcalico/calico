@@ -60,6 +60,14 @@ func (c *ipamConfigClient) Update(ctx context.Context, kvp *model.KVPair) (*mode
 	}
 }
 
+func (c *ipamConfigClient) DeleteKVP(ctx context.Context, kvp *model.KVPair) (*model.KVPair, error) {
+	log.Warn("Operation DeleteKVP is not supported on IPAMConfig type")
+	return nil, cerrors.ErrorOperationNotSupported{
+		Identifier: kvp,
+		Operation:  "DeleteKVP",
+	}
+}
+
 func (c *ipamConfigClient) Delete(ctx context.Context, key model.Key, revision string, uid *types.UID) (*model.KVPair, error) {
 	log.Warn("Operation Delete is not supported on IPAMConfig type")
 	return nil, cerrors.ErrorOperationNotSupported{

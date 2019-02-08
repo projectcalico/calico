@@ -62,6 +62,14 @@ func (c *profileClient) Update(ctx context.Context, kvp *model.KVPair) (*model.K
 	}
 }
 
+func (c *profileClient) DeleteKVP(ctx context.Context, kvp *model.KVPair) (*model.KVPair, error) {
+	log.Warn("Operation DeleteKVP is not supported on Profile type")
+	return nil, cerrors.ErrorOperationNotSupported{
+		Identifier: kvp.Key,
+		Operation:  "DeleteKVP",
+	}
+}
+
 func (c *profileClient) Delete(ctx context.Context, key model.Key, revision string, uid *types.UID) (*model.KVPair, error) {
 	log.Warn("Operation Delete is not supported on Profile type")
 	return nil, cerrors.ErrorOperationNotSupported{

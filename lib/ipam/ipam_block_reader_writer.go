@@ -283,8 +283,7 @@ func (rw blockReaderWriter) releaseBlockAffinity(ctx context.Context, host strin
 	if b.Affinity != nil && !hostAffinityMatches(host, b.AllocationBlock) {
 		// This means the affinity is stale - we can delete it.
 		logCtx.Errorf("Mismatched affinity: %s != %s - try to delete stale affinity", *b.Affinity, "host:"+host)
-		_, err := rw.client.Delete(ctx, aff.Key, "")
-		if err != nil {
+		if err := rw.deleteAffinity(ctx, aff); err != nil {
 			logCtx.Warn("Failed to delete stale affinity")
 		}
 		return errBlockClaimConflict{Block: b}
@@ -385,7 +384,7 @@ func (rw blockReaderWriter) deleteObject(ctx context.Context, kvp *model.KVPair)
 	}
 
 	// We've removed / updated the resource, so perform a compare-and-delete on it.
-	_, err = rw.client.Delete(ctx, kvp.Key, kvp.Revision)
+	_, err = rw.client.DeleteKVP(ctx, kvp)
 	return err
 }
 

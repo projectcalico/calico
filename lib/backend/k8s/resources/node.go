@@ -90,6 +90,14 @@ func (c *nodeClient) Update(ctx context.Context, kvp *model.KVPair) (*model.KVPa
 	return newCalicoNode, nil
 }
 
+func (c *nodeClient) DeleteKVP(ctx context.Context, kvp *model.KVPair) (*model.KVPair, error) {
+	log.Warn("Operation DeleteKVP is not supported on Node type")
+	return nil, cerrors.ErrorOperationNotSupported{
+		Identifier: kvp.Key,
+		Operation:  "DeleteKVP",
+	}
+}
+
 func (c *nodeClient) Delete(ctx context.Context, key model.Key, revision string, uid *types.UID) (*model.KVPair, error) {
 	log.Warn("Operation Delete is not supported on Node type")
 	return nil, cerrors.ErrorOperationNotSupported{

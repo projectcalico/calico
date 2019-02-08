@@ -82,12 +82,12 @@ func (c affinityBlockClient) toV1(kvpv3 *model.KVPair) (*model.KVPair, error) {
 		Key: model.BlockAffinityKey{
 			CIDR: *cidr,
 			Host: kvpv3.Value.(*apiv3.BlockAffinity).Spec.Node,
-			UID:  &kvpv3.Value.(*apiv3.BlockAffinity).UID,
 		},
 		Value: &model.BlockAffinity{
 			State: state,
 		},
 		Revision: kvpv3.Revision,
+		UID:      &kvpv3.Value.(*apiv3.BlockAffinity).UID,
 	}, nil
 }
 
@@ -174,13 +174,13 @@ func (c *affinityBlockClient) Update(ctx context.Context, kvp *model.KVPair) (*m
 	return v1kvp, nil
 }
 
-func (c *affinityBlockClient) Delete(ctx context.Context, key model.Key, revision string, uid *types.UID) (*model.KVPair, error) {
-	name, _, _ := c.parseKey(key)
+func (c *affinityBlockClient) DeleteKVP(ctx context.Context, kvp *model.KVPair) (*model.KVPair, error) {
+	name, _, _ := c.parseKey(kvp.Key)
 	k := model.ResourceKey{
 		Name: name,
 		Kind: apiv3.KindBlockAffinity,
 	}
-	kvp, err := c.rc.Delete(ctx, k, revision, key.(model.BlockAffinityKey).UID)
+	kvp, err := c.rc.Delete(ctx, k, kvp.Revision, kvp.UID)
 	if err != nil {
 		return nil, err
 	}
@@ -189,6 +189,14 @@ func (c *affinityBlockClient) Delete(ctx context.Context, key model.Key, revisio
 		return nil, err
 	}
 	return v1kvp, nil
+}
+
+func (c *affinityBlockClient) Delete(ctx context.Context, key model.Key, revision string, uid *types.UID) (*model.KVPair, error) {
+	log.Warn("Operation Delete is not supported on BlockAffinity type - use DeleteKVP")
+	return nil, cerrors.ErrorOperationNotSupported{
+		Identifier: key,
+		Operation:  "Delete",
+	}
 }
 
 func (c *affinityBlockClient) Get(ctx context.Context, key model.Key, revision string) (*model.KVPair, error) {

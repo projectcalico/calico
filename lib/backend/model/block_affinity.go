@@ -23,7 +23,6 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/errors"
 	"github.com/projectcalico/libcalico-go/lib/net"
 	log "github.com/sirupsen/logrus"
-	"k8s.io/apimachinery/pkg/types"
 )
 
 var (
@@ -41,9 +40,8 @@ const (
 )
 
 type BlockAffinityKey struct {
-	CIDR net.IPNet  `json:"-" validate:"required,name"`
-	Host string     `json:"-"`
-	UID  *types.UID `json:"-"`
+	CIDR net.IPNet `json:"-" validate:"required,name"`
+	Host string    `json:"-"`
 }
 
 type BlockAffinity struct {
