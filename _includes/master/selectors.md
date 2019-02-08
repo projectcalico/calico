@@ -13,5 +13,7 @@ primitive expressions can be combined using the logical operator `&&`.
 | k in { 'v1', 'v2' } | Matches any resource with label 'k' and value in the given set
 | k not in { 'v1', 'v2' } | Matches any resource without label 'k' or any with label 'k' and value _not_ in the given set
 | k contains 's'      | Matches any resource with label 'k' and value containing the substring 's'
+| k starts with 's'   | Matches any resource with label 'k' and value starting with the substring 's'
+| k ends with 's'     | Matches any resource with label 'k' and value ending with the substring 's'
 
 
