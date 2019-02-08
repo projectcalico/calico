@@ -1,0 +1,8 @@
+# Block all user-agents
+User-agent: *
+Disallow: /master/
+Disallow: /images/
+Disallow: /js/
+Disallow: /fonts/
+Disallow: /css/
+Disallow: /assets/
