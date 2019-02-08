@@ -51,11 +51,13 @@ func (i *InvalidDataFromDataPlane) Error() string {
 // match checks if the Rule matches the request.  It returns true if the Rule matches, false otherwise.
 func match(rule *proto.Rule, req *requestCache, policyNamespace string) bool {
 	log.WithFields(log.Fields{
-		"rule":         rule,
-		"Req.Method":   req.Request.GetAttributes().GetRequest().GetHttp().GetMethod(),
-		"Req.Path":     req.Request.GetAttributes().GetRequest().GetHttp().GetPath(),
-		"Req.Protocol": req.Request.GetAttributes().GetRequest().GetHttp().GetProtocol(),
-	}).Info("Checking rule on request")
+		"rule":            rule,
+		"Req.Method":      req.Request.GetAttributes().GetRequest().GetHttp().GetMethod(),
+		"Req.Path":        req.Request.GetAttributes().GetRequest().GetHttp().GetPath(),
+		"Req.Protocol":    req.Request.GetAttributes().GetRequest().GetHttp().GetProtocol(),
+		"Req.Source":      req.Request.GetAttributes().GetSource(),
+		"Req.Destination": req.Request.GetAttributes().GetDestination(),
+	}).Debug("Checking rule on request")
 	attr := req.Request.GetAttributes()
 	return matchSource(rule, req, policyNamespace) &&
 		matchDestination(rule, req, policyNamespace) &&
