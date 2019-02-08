@@ -13,11 +13,12 @@ security groups, and that cannot be overridden by user-level security group conf
 
 For the VM's OpenStack project (previously known as 'tenant'), those labels are:
 
-| Label Name                                 | Value                     |
-|--------------------------------------------|---------------------------|
-| `projectcalico.org/openstack-project-id`   | `<the VM's project ID>`   |
-| `projectcalico.org/openstack-project-name` | `<the VM's project name>` |
-|--------------------------------------------|---------------------------|
+| Label Name                                      | Value                          |
+|-------------------------------------------------|--------------------------------|
+| `projectcalico.org/openstack-project-id`        | `<the VM's project ID>`        |
+| `projectcalico.org/openstack-project-name`      | `<the VM's project name>`      |
+| `projectcalico.org/openstack-project-parent-id` | `<the VM's parent project ID>` |
+|-------------------------------------------------|--------------------------------|
 
 For each security group that the VM belongs to, those labels are:
 
