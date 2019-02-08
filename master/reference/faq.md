@@ -491,8 +491,8 @@ VM to compromise its host.
 In summary, then, there are two points behind why a VM cannot normally ping its default
 gateway, with Calico.
 
-#. The default gateway concept just doesn't really fit, and isn't needed, given how Calico
-   routes everything at the compute node - which is a fundamental aspect of Calico
-   networking for OpenStack.
+1.  The default gateway concept just doesn't really fit, and isn't needed, given how
+    Calico routes everything at the compute node - which is a fundamental aspect of Calico
+    networking for OpenStack.
 
-#. Calico's iptables rules generally do not allow a VM to contact its host.
+1.  Calico's iptables rules generally do not allow a VM to contact its host.
