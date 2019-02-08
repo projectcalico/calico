@@ -456,9 +456,6 @@ With typical OpenStack networking drivers other than Calico,
    simulated layer 2 - to the default gateway first, and then is
    routed to wherever it is addressed to.
 
-When a VM sends to something outside its own network, it goes - by simulated layer 2 - to
-the default gateway first, and then is routed to wherever it is addressed to.
-
 With Calico, this is all different. Any packet sent by a VM is layer-2-terminated and
 IP-routed by the VM's compute host, whether the VM is sending to another VM in the same
 network, or to anywhere else. So Calico doesn't need the "default gateway" concept, and it
