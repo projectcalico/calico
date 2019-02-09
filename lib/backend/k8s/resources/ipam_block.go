@@ -69,24 +69,13 @@ type ipamBlockClient struct {
 }
 
 func (c ipamBlockClient) toV1(kvpv3 *model.KVPair) (*model.KVPair, error) {
-	cidrStr := kvpv3.Value.(*apiv3.IPAMBlock).Annotations["projectcalico.org/cidr"]
+	cidrStr := kvpv3.Value.(*apiv3.IPAMBlock).Spec.CIDR
 	_, cidr, err := net.ParseCIDR(cidrStr)
 	if err != nil {
 		return nil, err
 	}
 
 	ab := kvpv3.Value.(*apiv3.IPAMBlock)
-
-	// The CRD needs ints, not *int, so convert here.
-	allocations := []*int{}
-	for _, a := range ab.Spec.Allocations {
-		if a == -1 {
-			allocations = append(allocations, nil)
-		} else {
-			a2 := a
-			allocations = append(allocations, &a2)
-		}
-	}
 
 	// Convert attributes.
 	attrs := []model.AllocationAttribute{}
@@ -105,7 +94,7 @@ func (c ipamBlockClient) toV1(kvpv3 *model.KVPair) (*model.KVPair, error) {
 			CIDR:           *cidr,
 			Affinity:       ab.Spec.Affinity,
 			StrictAffinity: ab.Spec.StrictAffinity,
-			Allocations:    allocations,
+			Allocations:    ab.Spec.Allocations,
 			Unallocated:    ab.Spec.Unallocated,
 			Attributes:     attrs,
 			Deleting:       ab.Spec.Deleting,
@@ -125,16 +114,6 @@ func (c ipamBlockClient) toV3(kvpv1 *model.KVPair) *model.KVPair {
 	name, cidr := c.parseKey(kvpv1.Key)
 
 	ab := kvpv1.Value.(*model.AllocationBlock)
-
-	// The CRD needs ints, not *int, so convert here.
-	allocations := []int{}
-	for _, a := range ab.Allocations {
-		if a != nil {
-			allocations = append(allocations, *a)
-		} else if a == nil {
-			allocations = append(allocations, -1)
-		}
-	}
 
 	// Convert attributes.
 	attrs := []apiv3.AllocationAttribute{}
@@ -158,13 +137,10 @@ func (c ipamBlockClient) toV3(kvpv1 *model.KVPair) *model.KVPair {
 			ObjectMeta: metav1.ObjectMeta{
 				Name:            name,
 				ResourceVersion: kvpv1.Revision,
-				Annotations: map[string]string{
-					"projectcalico.org/cidr": cidr,
-				},
 			},
 			Spec: apiv3.IPAMBlockSpec{
 				CIDR:           cidr,
-				Allocations:    allocations,
+				Allocations:    ab.Allocations,
 				Unallocated:    ab.Unallocated,
 				Affinity:       ab.Affinity,
 				StrictAffinity: ab.StrictAffinity,

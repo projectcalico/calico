@@ -113,8 +113,8 @@ func NewKubeClient(ca *apiconfig.CalicoAPIConfigSpec) (api.Client, error) {
 	// Create the clientset. We increase the QPS so that the IPAM code performs
 	// efficiently. The IPAM code can create bursts of requests to the API, so
 	// in order to keep pod creation times sensible we allow a higher request rate.
-	config.QPS = float32(500)
-	config.Burst = 1000
+	config.QPS = float32(50)
+	config.Burst = 100
 	cs, err := kubernetes.NewForConfig(config)
 	if err != nil {
 		return nil, resources.K8sErrorToCalico(err, nil)
@@ -281,7 +281,6 @@ func (c *KubeClient) getResourceClientFromList(list model.ListInterface) resourc
 // known custom resource is defined: GlobalFelixConfig. It accomplishes this
 // by trying to set the ClusterType (an instance of GlobalFelixConfig).
 func (c *KubeClient) EnsureInitialized() error {
-	log.Info("EnsuringInitialized - noop")
 	return nil
 }
 
@@ -461,7 +460,7 @@ func (c *KubeClient) Apply(ctx context.Context, kvp *model.KVPair) (*model.KVPai
 	return updated, nil
 }
 
-// Delete an entry in the datastore. This is a no-op when using the k8s backend.
+// Delete an entry in the datastore.
 func (c *KubeClient) DeleteKVP(ctx context.Context, kvp *model.KVPair) (*model.KVPair, error) {
 	log.Debugf("Performing 'DeleteKVP' for %+v", kvp.Key)
 	client := c.getResourceClientFromKey(kvp.Key)
@@ -475,7 +474,7 @@ func (c *KubeClient) DeleteKVP(ctx context.Context, kvp *model.KVPair) (*model.K
 	return client.DeleteKVP(ctx, kvp)
 }
 
-// Delete an entry in the datastore. This is a no-op when using the k8s backend.
+// Delete an entry in the datastore by key.
 func (c *KubeClient) Delete(ctx context.Context, k model.Key, revision string) (*model.KVPair, error) {
 	log.Debugf("Performing 'Delete' for %+v", k)
 	client := c.getResourceClientFromKey(k)

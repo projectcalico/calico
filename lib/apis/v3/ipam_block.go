@@ -40,7 +40,7 @@ type IPAMBlockSpec struct {
 	CIDR           string                `json:"cidr"`
 	Affinity       *string               `json:"affinity"`
 	StrictAffinity bool                  `json:"strictAffinity"`
-	Allocations    []int                 `json:"allocations"`
+	Allocations    []*int                `json:"allocations"`
 	Unallocated    []int                 `json:"unallocated"`
 	Attributes     []AllocationAttribute `json:"attributes"`
 	Deleting       bool                  `json:"deleting"`

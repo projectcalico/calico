@@ -1122,8 +1122,14 @@ func (in *IPAMBlockSpec) DeepCopyInto(out *IPAMBlockSpec) {
 	}
 	if in.Allocations != nil {
 		in, out := &in.Allocations, &out.Allocations
-		*out = make([]int, len(*in))
-		copy(*out, *in)
+		*out = make([]*int, len(*in))
+		for i := range *in {
+			if (*in)[i] != nil {
+				in, out := &(*in)[i], &(*out)[i]
+				*out = new(int)
+				**out = **in
+			}
+		}
 	}
 	if in.Unallocated != nil {
 		in, out := &in.Unallocated, &out.Unallocated

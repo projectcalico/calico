@@ -91,11 +91,7 @@ func (c *nodeClient) Update(ctx context.Context, kvp *model.KVPair) (*model.KVPa
 }
 
 func (c *nodeClient) DeleteKVP(ctx context.Context, kvp *model.KVPair) (*model.KVPair, error) {
-	log.Warn("Operation DeleteKVP is not supported on Node type")
-	return nil, cerrors.ErrorOperationNotSupported{
-		Identifier: kvp.Key,
-		Operation:  "DeleteKVP",
-	}
+	return c.Delete(ctx, kvp.Key, kvp.Revision, kvp.UID)
 }
 
 func (c *nodeClient) Delete(ctx context.Context, key model.Key, revision string, uid *types.UID) (*model.KVPair, error) {

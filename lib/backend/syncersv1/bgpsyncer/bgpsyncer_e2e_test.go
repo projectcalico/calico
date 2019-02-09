@@ -68,22 +68,15 @@ var _ = testutils.E2eDatastoreDescribe("BGP syncer tests", testutils.DatastoreAl
 			syncTester.ExpectCacheSize(expectedCacheSize)
 			syncTester.ExpectStatusUpdate(api.ResyncInProgress)
 			if config.Spec.DatastoreType == apiconfig.Kubernetes {
-				expectedCacheSize += 1 // TODO: undo when kdd host-local ipam support is addressed
+				expectedCacheSize += 1
 			}
 			syncTester.ExpectCacheSize(expectedCacheSize)
 			syncTester.ExpectStatusUpdate(api.InSync)
 			syncTester.ExpectCacheSize(expectedCacheSize)
 
-			// For Kubernetes test the two entries already in the cache - one
-			// affinity block and one node.
+			// For Kubernetes test one entry already in the cache for the node.
 			if config.Spec.DatastoreType == apiconfig.Kubernetes {
 				syncTester.ExpectPath("/calico/resources/v3/projectcalico.org/nodes/127.0.0.1")
-				/*
-					syncTester.ExpectData(model.KVPair{
-						Key:   model.BlockAffinityKey{Host: "127.0.0.1", CIDR: net.MustParseCIDR("10.10.10.0/24")},
-						Value: &model.BlockAffinity{State: model.StateConfirmed},
-					})
-				*/
 			}
 
 			By("Disabling node to node mesh and adding a default ASNumber")

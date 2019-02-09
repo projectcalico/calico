@@ -129,9 +129,15 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 	Context("Measuring allocation performance", func() {
 		var pa *ipPoolAccessor
 		var hostname string
+		var err error
 		var pool20, pool32, pool26 []cnet.IPNet
 
 		BeforeEach(func() {
+			// Build a new backend client. We use a different client for each test
+			// so that the k8s QPS /burst limits don't carry across tests.
+			bc, err = backend.NewClient(config)
+			Expect(err).NotTo(HaveOccurred())
+
 			// Build a new pool accessor for these tests.
 			pa = &ipPoolAccessor{pools: map[string]pool{}}
 			ic = NewIPAMClient(bc, pa)
@@ -172,7 +178,9 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 				Expect(len(v4)).To(Equal(1))
 			})
 
-			Expect(runtime.Seconds()).Should(BeNumerically("<", 1))
+			// With /32 block sizes, we can sometimes take a bit longer since there are many more blocks in the system,
+			// requiring many more datastore interactions to find a block. It should still be well within 2 seconds.
+			Expect(runtime.Seconds()).Should(BeNumerically("<", 2))
 		}, 100)
 
 		Measure("It should be able to allocate a single address quickly - blocksize 26", func(b Benchmarker) {
@@ -302,8 +310,10 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 				bc.Clean()
 				deleteAllPools()
 
-				applyNode(bc, kc, hostA, nil)
-				applyNode(bc, kc, hostB, nil)
+				err := applyNode(bc, kc, hostA, nil)
+				Expect(err).NotTo(HaveOccurred())
+				err = applyNode(bc, kc, hostB, nil)
+				Expect(err).NotTo(HaveOccurred())
 				applyPool("10.0.0.0/24", true, "")
 
 				args := AutoAssignArgs{
@@ -523,7 +533,8 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 			bc.Clean()
 			deleteAllPools()
 
-			applyNode(bc, kc, host, nil)
+			err := applyNode(bc, kc, host, nil)
+			Expect(err).NotTo(HaveOccurred())
 			applyPool("10.0.0.0/24", true, "")
 			applyPool("20.0.0.0/24", true, "")
 
@@ -1139,11 +1150,11 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 				MaxBlocksPerHost: blockLimit,
 			}
 
-			outv4, outv6, outErr := ic.AutoAssign(context.Background(), args)
+			outv4, outv6, err := ic.AutoAssign(context.Background(), args)
 			if expError != nil {
-				Expect(outErr).To(HaveOccurred())
+				Expect(err).To(HaveOccurred())
 			} else {
-				Expect(outErr).ToNot(HaveOccurred())
+				Expect(err).ToNot(HaveOccurred())
 			}
 			Expect(outv4).To(HaveLen(expv4))
 			Expect(outv6).To(HaveLen(expv6))
