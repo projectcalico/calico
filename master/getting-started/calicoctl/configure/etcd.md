@@ -14,6 +14,24 @@ canonical_url: 'https://docs.projectcalico.org/v3.5/usage/calicoctl/configure/et
 | `etcdKeyFile`             | `ETCD_KEY_FILE`      | Path to the file containing the private key matching the `calicoctl` client certificate. Enables `calicoctl` to participate in mutual TLS authentication and identify itself to the etcd server. Example: `/etc/calicoctl/key.pem` (optional) | string
 | `etcdCertFile`            | `ETCD_CERT_FILE`     | Path to the file containing the client certificate issued to `calicoctl`. Enables `calicoctl` to participate in mutual TLS authentication and identify itself to the etcd server. Example: `/etc/calicoctl/cert.pem` (optional) | string
 | `etcdCACertFile`          | `ETCD_CA_CERT_FILE`  | Path to the file containing the root certificate of the certificate authority (CA) that issued the etcd server certificate. Configures `calicoctl` to trust the CA that signed the root certificate. The file may contain multiple root certificates, causing `calicoctl` to trust each of the CAs included. Example: `/etc/calicoctl/ca.pem` (optional) | string
+| `etcdKey`                 |                      | The private key matching the `calicoctl` client certificate. Enables `calicoctl` to participate in mutual TLS authentication and identify itself to the etcd server. Example: `-----BEGIN RSA PRIVATE KEY-----
+k0dWj16h9P6TvfcNl2iwT4VIwx0uy2faWBED1DrCJcuQCy5nPrts2ZIaAWPi1t3t
+VbDKQvs+KXBEeqh0qYcYkejUXqIF0uKUFLjiQmZssjpL5RHqqWuYKbO87n+Jod1L
+TjGRHdbP0zF2U0LdjM17rc2hpJ3qrmgJ7pOLzbXMcOr+NP1ojRCArXhQ4iLs7D8T
+eHw9QH4luJYtnmk7x03izLMQdLWcKnUbqh/xOVPyazgJHXwRxwNXpMsBVGY=
+-----END RSA PRIVATE KEY-----` (optional) | string
+| `etcdCert`                |                      | The client certificate issued to `calicoctl`. Enables `calicoctl` to participate in mutual TLS authentication and identify itself to the etcd server. Example: `-----BEGIN CERTIFICATE-----
+gI6iLXgMsp2EOlD56I6FA1jrCtNb01XQvX3eyFuA6g5T1jWGYBDtvQb0WRVkdUy9
+L/uK+sHQwtloCSuakcQAsWV9bajCQtHX8XGu25Yz56kpJ/OJjcishxT6pc/sthum
+A5PX739JsNUi/p5aG+H/6eNx+ukJP7QaM646YCfS5i8S9DJUvim+/BSlKi2ZiOCd
+0MYH4Xb7lmAOTNmTvSYpKo9J2fZ9erw0MYSBTyjh6F7PRbHBiivgUnJfGQ==
+-----END CERTIFICATE-----` (optional) | string
+| `etcdCACert`              |                      | The root certificate of the certificate authority (CA) that issued the etcd server certificate. Configures `calicoctl` to trust the CA that signed the root certificate. The config file may contain multiple root certificates, causing `calicoctl` to trust each of the CAs included. Example: `-----BEGIN CERTIFICATE-----
+MIICKzCCAZSgAwIBAgIBAzANBgkqhkiG9w0BAQQFADA3MQswCQYDVQQGEwJVUzER
+MA8GA1UEChMITmV0c2NhcGUxFTATBgNVBAsTDFN1cHJpeWEncyBDQTAeFw05NzEw
+MTgwMTM2MjVaFw05OTEwMTgwMTM2MjVaMEgxCzAJBgNVBAYTAlVTMREwDwYDVQQK
+EwhOZXRzY2FwZTENMAsGA1UECxMEUHViczEXMBUGA==
+-----END CERTIFICATE-----` (optional) | string
 
 > **Note**:
 > - If you are running with TLS enabled, ensure your endpoint addresses use HTTPS.
@@ -23,6 +41,8 @@ canonical_url: 'https://docs.projectcalico.org/v3.5/usage/calicoctl/configure/et
 >   `CALICO_DATASTORE_TYPE` and `CALICO_ETCD_ENDPOINTS` etc. may also be used.
 >   This is useful if the non-prefixed names clash with existing environment
 >   variables defined on your system
+> - The Configuration file options `etcdCACert`, `etcdCert` and `etcdKey` does not have
+>   corresponding environment variables.
 > - Previous versions of `calicoctl` supported `ETCD_SCHEME` and `ETC_AUTHORITY` environment
 >   variables as a mechanism for specifying the etcd endpoints. These variables are
 >   no longer supported. Use `ETCD_ENDPOINTS` instead.
@@ -45,6 +65,33 @@ spec:
   etcdKeyFile: /etc/calico/key.pem
   etcdCertFile: /etc/calico/cert.pem
   etcdCACertFile: /etc/calico/ca.pem
+```
+#### Example configuration file with inline CA certificate, client certificate and key
+
+```yaml
+apiVersion: projectcalico.org/v3
+kind: CalicoAPIConfig
+metadata:
+spec:
+  etcdEndpoints: https://etcd1:2379,https://etcd2:2379,https://etcd3:2379
+  etcdKey: `-----BEGIN RSA PRIVATE KEY-----
+k0dWj16h9P6TvfcNl2iwT4VIwx0uy2faWBED1DrCJcuQCy5nPrts2ZIaAWPi1t3t
+VbDKQvs+KXBEeqh0qYcYkejUXqIF0uKUFLjiQmZssjpL5RHqqWuYKbO87n+Jod1L
+TjGRHdbP0zF2U0LdjM17rc2hpJ3qrmgJ7pOLzbXMcOr+NP1ojRCArXhQ4iLs7D8T
+eHw9QH4luJYtnmk7x03izLMQdLWcKnUbqh/xOVPyazgJHXwRxwNXpMsBVGY=
+-----END RSA PRIVATE KEY-----`
+  etcdCert: `-----BEGIN CERTIFICATE-----
+gI6iLXgMsp2EOlD56I6FA1jrCtNb01XQvX3eyFuA6g5T1jWGYBDtvQb0WRVkdUy9
+L/uK+sHQwtloCSuakcQAsWV9bajCQtHX8XGu25Yz56kpJ/OJjcishxT6pc/sthum
+A5PX739JsNUi/p5aG+H/6eNx+ukJP7QaM646YCfS5i8S9DJUvim+/BSlKi2ZiOCd
+0MYH4Xb7lmAOTNmTvSYpKo9J2fZ9erw0MYSBTyjh6F7PRbHBiivgUnJfGQ==
+-----END CERTIFICATE-----`
+  etcdCACert: `-----BEGIN CERTIFICATE-----
+MIICKzCCAZSgAwIBAgIBAzANBgkqhkiG9w0BAQQFADA3MQswCQYDVQQGEwJVUzER
+MA8GA1UEChMITmV0c2NhcGUxFTATBgNVBAsTDFN1cHJpeWEncyBDQTAeFw05NzEw
+MTgwMTM2MjVaFw05OTEwMTgwMTM2MjVaMEgxCzAJBgNVBAYTAlVTMREwDwYDVQQK
+EwhOZXRzY2FwZTENMAsGA1UECxMEUHViczEXMBUGA==
+-----END CERTIFICATE-----`
 ```
 
 #### Example using environment variables
