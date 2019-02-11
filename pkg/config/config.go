@@ -45,6 +45,9 @@ type Config struct {
 
 	// Enable syncing of node labels
 	SyncNodeLabels bool `default:"true" split_words:"true"`
+
+	// etcdv3 or kubernetes
+	DatastoreType string `default:"etcdv3" split_words:"true"`
 }
 
 // Parse parses envconfig and stores in Config struct

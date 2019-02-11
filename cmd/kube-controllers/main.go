@@ -36,6 +36,7 @@ import (
 
 	"github.com/projectcalico/kube-controllers/pkg/config"
 	"github.com/projectcalico/kube-controllers/pkg/controllers/controller"
+	kddipam "github.com/projectcalico/kube-controllers/pkg/controllers/kdd-ipam"
 	"github.com/projectcalico/kube-controllers/pkg/controllers/namespace"
 	"github.com/projectcalico/kube-controllers/pkg/controllers/networkpolicy"
 	"github.com/projectcalico/kube-controllers/pkg/controllers/node"
@@ -143,13 +144,21 @@ func main() {
 				controller:  serviceAccountController,
 				threadiness: config.ProfileWorkers,
 			}
+		case "ipam":
+			ipamController := kddipam.NewController(ctx, k8sClientset, calicoClient, config)
+			controllerCtrl.controllerStates["IPAM"] = &controllerState{
+				controller:  ipamController,
+				threadiness: 1,
+			}
 		default:
-			log.Fatalf("Invalid controller '%s' provided. Valid options are workloadendpoint, profile, policy", controllerType)
+			log.Fatalf("Invalid controller '%s' provided.", controllerType)
 		}
 	}
 
-	// If configured to do so, start an etcdv3 compaction.
-	go startCompactor(ctx, config)
+	if config.DatastoreType == "etcdv3" {
+		// If configured to do so, start an etcdv3 compaction.
+		go startCompactor(ctx, config)
+	}
 
 	// Run the health checks on a separate goroutine.
 	if config.HealthEnabled {
