@@ -109,6 +109,13 @@ func cmdAdd(args *skel.CmdArgs) error {
 		return err
 	}
 
+	// We attach important attributes to the allocation.
+	attrs := map[string]string{ipam.AttributeNode: nodename}
+	if epIDs.Pod != "" {
+		attrs[ipam.AttributePod] = epIDs.Pod
+		attrs[ipam.AttributeNamespace] = epIDs.Namespace
+	}
+
 	ctx := context.Background()
 	r := &current.Result{}
 	if ipamArgs.IP != nil {
@@ -119,6 +126,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 			IP:       cnet.IP{IP: ipamArgs.IP},
 			HandleID: &handleID,
 			Hostname: nodename,
+			Attrs:    attrs,
 		}
 
 		logger.WithField("assignArgs", assignArgs).Info("Assigning provided IP")
@@ -181,6 +189,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 			Hostname:  nodename,
 			IPv4Pools: v4pools,
 			IPv6Pools: v6pools,
+			Attrs:     attrs,
 		}
 		logger.WithField("assignArgs", assignArgs).Info("Auto assigning IP")
 		assignedV4, assignedV6, err := calicoClient.IPAM().AutoAssign(ctx, assignArgs)
