@@ -90,7 +90,7 @@ type AllocationBlock struct {
 	Allocations    []*int                `json:"allocations"`
 	Unallocated    []int                 `json:"unallocated"`
 	Attributes     []AllocationAttribute `json:"attributes"`
-	Deleting       bool                  `json:"deleting"`
+	Deleted        bool                  `json:"deleted"`
 
 	// HostAffinity is deprecated in favor of Affinity.
 	// This is only to keep compatiblity with existing deployments.
@@ -99,11 +99,11 @@ type AllocationBlock struct {
 }
 
 func (b *AllocationBlock) MarkDeleted() {
-	b.Deleting = true
+	b.Deleted = true
 }
 
 func (b *AllocationBlock) IsDeleted() bool {
-	return b.Deleting
+	return b.Deleted
 }
 
 type AllocationAttribute struct {

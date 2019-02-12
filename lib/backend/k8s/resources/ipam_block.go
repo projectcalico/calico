@@ -97,7 +97,7 @@ func (c ipamBlockClient) toV1(kvpv3 *model.KVPair) (*model.KVPair, error) {
 			Allocations:    ab.Spec.Allocations,
 			Unallocated:    ab.Spec.Unallocated,
 			Attributes:     attrs,
-			Deleting:       ab.Spec.Deleting,
+			Deleted:        ab.Spec.Deleted,
 		},
 		Revision: kvpv3.Revision,
 		UID:      &ab.UID,
@@ -145,7 +145,7 @@ func (c ipamBlockClient) toV3(kvpv1 *model.KVPair) *model.KVPair {
 				Affinity:       ab.Affinity,
 				StrictAffinity: ab.StrictAffinity,
 				Attributes:     attrs,
-				Deleting:       ab.Deleting,
+				Deleted:        ab.Deleted,
 			},
 		},
 		Revision: kvpv1.Revision,
@@ -158,11 +158,11 @@ func (c *ipamBlockClient) Create(ctx context.Context, kvp *model.KVPair) (*model
 	if err != nil {
 		return nil, err
 	}
-	v1nkvp, err := c.toV1(b)
+	v1kvp, err := c.toV1(b)
 	if err != nil {
 		return nil, err
 	}
-	return v1nkvp, nil
+	return v1kvp, nil
 }
 
 func (c *ipamBlockClient) Update(ctx context.Context, kvp *model.KVPair) (*model.KVPair, error) {
@@ -171,31 +171,34 @@ func (c *ipamBlockClient) Update(ctx context.Context, kvp *model.KVPair) (*model
 	if err != nil {
 		return nil, err
 	}
-	v1nkvp, err := c.toV1(b)
+	v1kvp, err := c.toV1(b)
 	if err != nil {
 		return nil, err
 	}
-	return v1nkvp, nil
+	return v1kvp, nil
 }
 
 func (c *ipamBlockClient) DeleteKVP(ctx context.Context, kvp *model.KVPair) (*model.KVPair, error) {
+	// We need to mark as deleted first, since the Kubernetes API doesn't support
+	// compare-and-delete. This update operation allows us to eliminate races with other clients.
 	name, _ := c.parseKey(kvp.Key)
-	k := model.ResourceKey{
-		Name: name,
-		Kind: apiv3.KindIPAMBlock,
-	}
-	kvp, err := c.rc.Delete(ctx, k, kvp.Revision, kvp.UID)
+	kvp.Value.(*model.AllocationBlock).Deleted = true
+	v1kvp, err := c.Update(ctx, kvp)
 	if err != nil {
 		return nil, err
 	}
-	v1nkvp, err := c.toV1(kvp)
+
+	// Now actually delete the object.
+	k := model.ResourceKey{Name: name, Kind: apiv3.KindIPAMBlock}
+	kvp, err = c.rc.Delete(ctx, k, v1kvp.Revision, kvp.UID)
 	if err != nil {
 		return nil, err
 	}
-	return v1nkvp, nil
+	return c.toV1(kvp)
 }
 
 func (c *ipamBlockClient) Delete(ctx context.Context, key model.Key, revision string, uid *types.UID) (*model.KVPair, error) {
+	// Delete should not be used for blocks, since we need the object UID for correctness.
 	log.Warn("Operation Delete is not supported on IPAMBlock type - use DeleteKVP")
 	return nil, cerrors.ErrorOperationNotSupported{
 		Identifier: key,
@@ -204,20 +207,30 @@ func (c *ipamBlockClient) Delete(ctx context.Context, key model.Key, revision st
 }
 
 func (c *ipamBlockClient) Get(ctx context.Context, key model.Key, revision string) (*model.KVPair, error) {
+	// Get the object.
 	name, _ := c.parseKey(key)
-	k := model.ResourceKey{
-		Name: name,
-		Kind: apiv3.KindIPAMBlock,
-	}
+	k := model.ResourceKey{Name: name, Kind: apiv3.KindIPAMBlock}
 	kvp, err := c.rc.Get(ctx, k, revision)
 	if err != nil {
 		return nil, err
 	}
-	v1nkvp, err := c.toV1(kvp)
+
+	// Convert it back to V1 format.
+	v1kvp, err := c.toV1(kvp)
 	if err != nil {
 		return nil, err
 	}
-	return v1nkvp, nil
+
+	// If this object has been marked as deleted, then we need to clean it up and
+	// return not found.
+	if v1kvp.Value.(*model.AllocationBlock).Deleted {
+		if _, err := c.DeleteKVP(ctx, v1kvp); err != nil {
+			return nil, err
+		}
+		return nil, cerrors.ErrorResourceDoesNotExist{fmt.Errorf("Resource was deleted"), key}
+	}
+
+	return v1kvp, nil
 }
 
 func (c *ipamBlockClient) List(ctx context.Context, list model.ListInterface, revision string) (*model.KVPairList, error) {

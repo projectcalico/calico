@@ -16,6 +16,7 @@ package resources
 
 import (
 	"context"
+	"fmt"
 	"reflect"
 	"strings"
 
@@ -129,12 +130,18 @@ func (c *ipamHandleClient) Update(ctx context.Context, kvp *model.KVPair) (*mode
 }
 
 func (c *ipamHandleClient) DeleteKVP(ctx context.Context, kvp *model.KVPair) (*model.KVPair, error) {
+	// We need to mark as deleted first, since the Kubernetes API doesn't support
+	// compare-and-delete. This update operation allows us to eliminate races with other clients.
 	name := c.parseKey(kvp.Key)
-	k := model.ResourceKey{
-		Name: name,
-		Kind: apiv3.KindIPAMHandle,
+	kvp.Value.(*model.IPAMHandle).Deleted = true
+	v1kvp, err := c.Update(ctx, kvp)
+	if err != nil {
+		return nil, err
 	}
-	kvp, err := c.rc.Delete(ctx, k, kvp.Revision, kvp.UID)
+
+	// Now actually delete the object.
+	k := model.ResourceKey{Name: name, Kind: apiv3.KindIPAMHandle}
+	kvp, err = c.rc.Delete(ctx, k, v1kvp.Revision, kvp.UID)
 	if err != nil {
 		return nil, err
 	}
@@ -142,6 +149,7 @@ func (c *ipamHandleClient) DeleteKVP(ctx context.Context, kvp *model.KVPair) (*m
 }
 
 func (c *ipamHandleClient) Delete(ctx context.Context, key model.Key, revision string, uid *types.UID) (*model.KVPair, error) {
+	// Delete should not be used for handles, since we need the object UID for correctness.
 	log.Warn("Operation Delete is not supported on IPAMHandle type")
 	return nil, cerrors.ErrorOperationNotSupported{
 		Identifier: key,
@@ -151,15 +159,25 @@ func (c *ipamHandleClient) Delete(ctx context.Context, key model.Key, revision s
 
 func (c *ipamHandleClient) Get(ctx context.Context, key model.Key, revision string) (*model.KVPair, error) {
 	name := c.parseKey(key)
-	k := model.ResourceKey{
-		Name: name,
-		Kind: apiv3.KindIPAMHandle,
-	}
+	k := model.ResourceKey{Name: name, Kind: apiv3.KindIPAMHandle}
 	kvp, err := c.rc.Get(ctx, k, revision)
 	if err != nil {
 		return nil, err
 	}
-	return c.toV1(kvp), nil
+
+	// Convert it to v1.
+	v1kvp := c.toV1(kvp)
+
+	// If this object has been marked as deleted, then we need to clean it up and
+	// return not found.
+	if v1kvp.Value.(*model.IPAMHandle).Deleted {
+		if _, err := c.DeleteKVP(ctx, v1kvp); err != nil {
+			return nil, err
+		}
+		return nil, cerrors.ErrorResourceDoesNotExist{fmt.Errorf("Resource was deleted"), key}
+	}
+
+	return v1kvp, nil
 }
 
 func (c *ipamHandleClient) List(ctx context.Context, list model.ListInterface, revision string) (*model.KVPairList, error) {

@@ -36,7 +36,6 @@ const (
 	StateConfirmed       BlockAffinityState = "confirmed"
 	StatePending         BlockAffinityState = "pending"
 	StatePendingDeletion BlockAffinityState = "pendingDeletion"
-	StateDeleted         BlockAffinityState = "deleted"
 )
 
 type BlockAffinityKey struct {
@@ -45,15 +44,8 @@ type BlockAffinityKey struct {
 }
 
 type BlockAffinity struct {
-	State BlockAffinityState `json:"state"`
-}
-
-func (b *BlockAffinity) MarkDeleted() {
-	b.State = StateDeleted
-}
-
-func (b *BlockAffinity) IsDeleted() bool {
-	return b.State == StateDeleted
+	State   BlockAffinityState `json:"state"`
+	Deleted bool               `json:"deleted"`
 }
 
 func (key BlockAffinityKey) defaultPath() (string, error) {
@@ -84,6 +76,7 @@ func (key BlockAffinityKey) String() string {
 type BlockAffinityListOptions struct {
 	Host      string
 	IPVersion int
+	NotFull   bool
 }
 
 func (options BlockAffinityListOptions) defaultPathRoot() string {

@@ -58,21 +58,21 @@ func NewBlockAffinityClient(c *kubernetes.Clientset, r *rest.RESTClient) K8sReso
 		resourceKind: apiv3.KindBlockAffinity,
 	}
 
-	return &affinityBlockClient{rc: rc}
+	return &blockAffinityClient{rc: rc}
 }
 
-// affinityBlockClient implements the api.Client interface for BlockAffinity objects. It
+// blockAffinityClient implements the api.Client interface for BlockAffinity objects. It
 // handles the translation between v1 objects understood by the IPAM codebase in lib/ipam,
 // and the CRDs which are used to actually store the data in the Kubernetes API.
 // It uses a customK8sResourceClient under the covers to perform CRUD operations on
 // kubernetes CRDs.
-type affinityBlockClient struct {
+type blockAffinityClient struct {
 	rc customK8sResourceClient
 }
 
 // toV1 converts the given v3 CRD KVPair into a v1 model representation
 // which can be passed to the IPAM code.
-func (c affinityBlockClient) toV1(kvpv3 *model.KVPair) (*model.KVPair, error) {
+func (c blockAffinityClient) toV1(kvpv3 *model.KVPair) (*model.KVPair, error) {
 	// Parse the CIDR into a struct.
 	_, cidr, err := net.ParseCIDR(kvpv3.Value.(*apiv3.BlockAffinity).Spec.CIDR)
 	if err != nil {
@@ -95,7 +95,7 @@ func (c affinityBlockClient) toV1(kvpv3 *model.KVPair) (*model.KVPair, error) {
 
 // parseKey parses the given model.Key, returning a suitable name, CIDR
 // and host for use in the Kubernetes API.
-func (c affinityBlockClient) parseKey(k model.Key) (name, cidr, host string) {
+func (c blockAffinityClient) parseKey(k model.Key) (name, cidr, host string) {
 	host = k.(model.BlockAffinityKey).Host
 	cidr = fmt.Sprintf("%s", k.(model.BlockAffinityKey).CIDR)
 	cidrname := names.CIDRToName(k.(model.BlockAffinityKey).CIDR)
@@ -112,18 +112,16 @@ func (c affinityBlockClient) parseKey(k model.Key) (name, cidr, host string) {
 		name = fmt.Sprintf("%s-%s", host[:252-len(cidrname)-13], cidrname)
 
 		// Add a hash to help with uniqueness.
-		// Kubernetes requires all names to end with an alphabetic character, so
-		// append a 'c' to the end to ensure we always meet this requirement.
 		h := sha256.New()
 		h.Write([]byte(fmt.Sprintf("%s+%s", host, cidrname)))
-		name = fmt.Sprintf("%s-%sc", name, hex.EncodeToString(h.Sum(nil))[:10])
+		name = fmt.Sprintf("%s-%s", name, hex.EncodeToString(h.Sum(nil))[:11])
 	}
 	return
 }
 
 // toV3 takes the given v1 KVPair and converts it into a v3 representation, suitable
 // for writing as a CRD to the Kubernetes API.
-func (c affinityBlockClient) toV3(kvpv1 *model.KVPair) *model.KVPair {
+func (c blockAffinityClient) toV3(kvpv1 *model.KVPair) *model.KVPair {
 	name, cidr, host := c.parseKey(kvpv1.Key)
 	state := kvpv1.Value.(*model.BlockAffinity).State
 	return &model.KVPair{
@@ -150,7 +148,7 @@ func (c affinityBlockClient) toV3(kvpv1 *model.KVPair) *model.KVPair {
 	}
 }
 
-func (c *affinityBlockClient) Create(ctx context.Context, kvp *model.KVPair) (*model.KVPair, error) {
+func (c *blockAffinityClient) Create(ctx context.Context, kvp *model.KVPair) (*model.KVPair, error) {
 	nkvp := c.toV3(kvp)
 	kvp, err := c.rc.Create(ctx, nkvp)
 	if err != nil {
@@ -163,7 +161,7 @@ func (c *affinityBlockClient) Create(ctx context.Context, kvp *model.KVPair) (*m
 	return v1kvp, nil
 }
 
-func (c *affinityBlockClient) Update(ctx context.Context, kvp *model.KVPair) (*model.KVPair, error) {
+func (c *blockAffinityClient) Update(ctx context.Context, kvp *model.KVPair) (*model.KVPair, error) {
 	nkvp := c.toV3(kvp)
 	kvp, err := c.rc.Update(ctx, nkvp)
 	if err != nil {
@@ -176,24 +174,27 @@ func (c *affinityBlockClient) Update(ctx context.Context, kvp *model.KVPair) (*m
 	return v1kvp, nil
 }
 
-func (c *affinityBlockClient) DeleteKVP(ctx context.Context, kvp *model.KVPair) (*model.KVPair, error) {
+func (c *blockAffinityClient) DeleteKVP(ctx context.Context, kvp *model.KVPair) (*model.KVPair, error) {
+	// We need to mark as deleted first, since the Kubernetes API doesn't support
+	// compare-and-delete. This update operation allows us to eliminate races with other clients.
 	name, _, _ := c.parseKey(kvp.Key)
-	k := model.ResourceKey{
-		Name: name,
-		Kind: apiv3.KindBlockAffinity,
-	}
-	kvp, err := c.rc.Delete(ctx, k, kvp.Revision, kvp.UID)
+	kvp.Value.(*model.BlockAffinity).Deleted = true
+	v1kvp, err := c.Update(ctx, kvp)
 	if err != nil {
 		return nil, err
 	}
-	v1kvp, err := c.toV1(kvp)
+
+	// Now actually delete the object.
+	k := model.ResourceKey{Name: name, Kind: apiv3.KindBlockAffinity}
+	kvp, err = c.rc.Delete(ctx, k, v1kvp.Revision, kvp.UID)
 	if err != nil {
 		return nil, err
 	}
-	return v1kvp, nil
+	return c.toV1(kvp)
 }
 
-func (c *affinityBlockClient) Delete(ctx context.Context, key model.Key, revision string, uid *types.UID) (*model.KVPair, error) {
+func (c *blockAffinityClient) Delete(ctx context.Context, key model.Key, revision string, uid *types.UID) (*model.KVPair, error) {
+	// Delete should not be used for affinities, since we need the object UID for correctness.
 	log.Warn("Operation Delete is not supported on BlockAffinity type - use DeleteKVP")
 	return nil, cerrors.ErrorOperationNotSupported{
 		Identifier: key,
@@ -201,24 +202,34 @@ func (c *affinityBlockClient) Delete(ctx context.Context, key model.Key, revisio
 	}
 }
 
-func (c *affinityBlockClient) Get(ctx context.Context, key model.Key, revision string) (*model.KVPair, error) {
+func (c *blockAffinityClient) Get(ctx context.Context, key model.Key, revision string) (*model.KVPair, error) {
+	// Get the object.
 	name, _, _ := c.parseKey(key)
-	k := model.ResourceKey{
-		Name: name,
-		Kind: apiv3.KindBlockAffinity,
-	}
+	k := model.ResourceKey{Name: name, Kind: apiv3.KindBlockAffinity}
 	kvp, err := c.rc.Get(ctx, k, revision)
 	if err != nil {
 		return nil, err
 	}
+
+	// Convert it to v1.
 	v1kvp, err := c.toV1(kvp)
 	if err != nil {
 		return nil, err
 	}
+
+	// If this object has been marked as deleted, then we need to clean it up and
+	// return not found.
+	if v1kvp.Value.(*model.BlockAffinity).Deleted {
+		if _, err := c.DeleteKVP(ctx, v1kvp); err != nil {
+			return nil, err
+		}
+		return nil, cerrors.ErrorResourceDoesNotExist{fmt.Errorf("Resource was deleted"), key}
+	}
+
 	return v1kvp, nil
 }
 
-func (c *affinityBlockClient) List(ctx context.Context, list model.ListInterface, revision string) (*model.KVPairList, error) {
+func (c *blockAffinityClient) List(ctx context.Context, list model.ListInterface, revision string) (*model.KVPairList, error) {
 	l := model.ResourceListOptions{Kind: apiv3.KindBlockAffinity}
 	v3list, err := c.rc.List(ctx, l, revision)
 	if err != nil {
@@ -246,7 +257,7 @@ func (c *affinityBlockClient) List(ctx context.Context, list model.ListInterface
 	return kvpl, nil
 }
 
-func (c *affinityBlockClient) Watch(ctx context.Context, list model.ListInterface, revision string) (api.WatchInterface, error) {
+func (c *blockAffinityClient) Watch(ctx context.Context, list model.ListInterface, revision string) (api.WatchInterface, error) {
 	resl := model.ResourceListOptions{Kind: apiv3.KindBlockAffinity}
 	k8sWatchClient := cache.NewListWatchFromClient(c.rc.restClient, c.rc.resource, "", fields.Everything())
 	k8sWatch, err := k8sWatchClient.WatchFunc(metav1.ListOptions{ResourceVersion: revision})
@@ -264,6 +275,6 @@ func (c *affinityBlockClient) Watch(ctx context.Context, list model.ListInterfac
 	return newK8sWatcherConverter(ctx, resl.Kind+" (custom)", toKVPair, k8sWatch), nil
 }
 
-func (c *affinityBlockClient) EnsureInitialized() error {
+func (c *blockAffinityClient) EnsureInitialized() error {
 	return nil
 }

@@ -37,9 +37,10 @@ type BlockAffinity struct {
 
 // BlockAffinitySpec contains the specification for a BlockAffinity resource.
 type BlockAffinitySpec struct {
-	State string `json:"state"`
-	Node  string `json:"node"`
-	CIDR  string `json:"cidr"`
+	State   string `json:"state"`
+	Node    string `json:"node"`
+	CIDR    string `json:"cidr"`
+	Deleted string `json:"deleted"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object

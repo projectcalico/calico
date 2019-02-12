@@ -22,6 +22,7 @@ import (
 	"math/big"
 	"math/rand"
 	"net"
+	"time"
 
 	"github.com/projectcalico/libcalico-go/lib/apis/v3"
 	log "github.com/sirupsen/logrus"
@@ -343,94 +344,52 @@ func (rw blockReaderWriter) releaseBlockAffinity(ctx context.Context, host strin
 	return nil
 }
 
-// queryObject retrives a resource for the given key and also checks for deletion to guard against
-// a potential race condition.
-func (rw blockReaderWriter) queryObject(ctx context.Context, k model.Key, revision string) (*model.KVPair, error) {
-	kvp, err := rw.client.Get(ctx, k, revision)
-	if err != nil {
-		return nil, err
-	}
-
-	if !kvp.Value.(model.DeletionMarker).IsDeleted() {
-		// We're all good - return the resource
-		return kvp, nil
-	}
-
-	// If the resource is marked as deleted, we need to delete it.
-	if err := rw.deleteObject(ctx, kvp); err != nil {
-		return nil, err
-	}
-
-	// Return does not exist
-	return nil, cerrors.ErrorResourceDoesNotExist{fmt.Errorf("Resource was deleted"), k}
-}
-
-// updateObject ensures that the given resource is not marked for deletion and performs the update.
-func (rw blockReaderWriter) updateObject(ctx context.Context, kvp *model.KVPair) (*model.KVPair, error) {
-	if kvp.Value.(model.DeletionMarker).IsDeleted() {
-		return nil, cerrors.ErrorResourceUpdateConflict{Err: fmt.Errorf("Resource being deleted"), Identifier: kvp.Key}
-	}
-	return rw.client.Update(ctx, kvp)
-}
-
-// deleteObject marks the given resource for deletion as a signal to concurrent routines
-// that may be trying to compete for it.
-func (rw blockReaderWriter) deleteObject(ctx context.Context, kvp *model.KVPair) error {
-	// Mark the resource for deletion
-	kvp.Value.(model.DeletionMarker).MarkDeleted()
-	kvp, err := rw.client.Update(ctx, kvp)
-	if err != nil {
-		return err
-	}
-
-	// We've removed / updated the resource, so perform a compare-and-delete on it.
-	_, err = rw.client.DeleteKVP(ctx, kvp)
-	return err
-}
-
 // queryAffinity gets an affinity for the given host + CIDR key.
 func (rw blockReaderWriter) queryAffinity(ctx context.Context, host string, cidr cnet.IPNet, revision string) (*model.KVPair, error) {
-	return rw.queryObject(ctx, model.BlockAffinityKey{Host: host, CIDR: cidr}, revision)
+	return rw.client.Get(ctx, model.BlockAffinityKey{Host: host, CIDR: cidr}, revision)
 }
 
 // updateAffinity updates the given affinity.
 func (rw blockReaderWriter) updateAffinity(ctx context.Context, aff *model.KVPair) (*model.KVPair, error) {
-	return rw.updateObject(ctx, aff)
+	return rw.client.Update(ctx, aff)
 }
 
 // deleteAffinity deletes the given affinity.
 func (rw blockReaderWriter) deleteAffinity(ctx context.Context, aff *model.KVPair) error {
-	return rw.deleteObject(ctx, aff)
+	_, err := rw.client.DeleteKVP(ctx, aff)
+	return err
 }
 
 // queryBlock gets a block for the given block CIDR key.
 func (rw blockReaderWriter) queryBlock(ctx context.Context, blockCIDR cnet.IPNet, revision string) (*model.KVPair, error) {
-	return rw.queryObject(ctx, model.BlockKey{CIDR: blockCIDR}, revision)
+	return rw.client.Get(ctx, model.BlockKey{CIDR: blockCIDR}, revision)
 }
 
 // updateBlock updates the given block.
 func (rw blockReaderWriter) updateBlock(ctx context.Context, b *model.KVPair) (*model.KVPair, error) {
-	return rw.updateObject(ctx, b)
+	return rw.client.Update(ctx, b)
 }
 
 // deleteBlock deletes the given block.
 func (rw blockReaderWriter) deleteBlock(ctx context.Context, b *model.KVPair) error {
-	return rw.deleteObject(ctx, b)
+	_, err := rw.client.DeleteKVP(ctx, b)
+	return err
 }
 
 // queryHandle gets a handle for the given handleID key.
 func (rw blockReaderWriter) queryHandle(ctx context.Context, handleID, revision string) (*model.KVPair, error) {
-	return rw.queryObject(ctx, model.IPAMHandleKey{HandleID: handleID}, revision)
+	return rw.client.Get(ctx, model.IPAMHandleKey{HandleID: handleID}, revision)
 }
 
 // updateHandle updates the given handle.
 func (rw blockReaderWriter) updateHandle(ctx context.Context, kvp *model.KVPair) (*model.KVPair, error) {
-	return rw.updateObject(ctx, kvp)
+	return rw.client.Update(ctx, kvp)
 }
 
 // deleteHandle deletes the given handle.
 func (rw blockReaderWriter) deleteHandle(ctx context.Context, kvp *model.KVPair) error {
-	return rw.deleteObject(ctx, kvp)
+	_, err := rw.client.DeleteKVP(ctx, kvp)
+	return err
 }
 
 // getPoolForIP returns the pool if the given IP is within a configured
@@ -480,6 +439,22 @@ func blockGenerator(pool *v3.IPPool, cidr cnet.IPNet) func() *cnet.IPNet {
 	}
 }
 
+func determineSeed(mask net.IPMask, hostname string) int64 {
+	if ones, bits := mask.Size(); ones == bits {
+		// For small blocks, we don't care about the same host picking the same
+		// block, so just use a seed based on timestamp. This optimization reduces
+		// the number of reads required to find an unclaimed block on a host.
+		return time.Now().UTC().UnixNano()
+	}
+
+	// Create a random number generator seed based on the hostname.
+	// This is to avoid assigning multiple blocks when multiple
+	// workloads request IPs around the same time.
+	hostHash := fnv.New32()
+	hostHash.Write([]byte(hostname))
+	return int64(hostHash.Sum32())
+}
+
 // Returns a generator that, when called, returns a random
 // block from the given pool.  When there are no blocks left,
 // the it returns nil.
@@ -510,13 +485,9 @@ func randomBlockGenerator(ipPool v3.IPPool, hostName string) func() *cnet.IPNet 
 	numBlocks := new(big.Int)
 	numBlocks.Div(numIP, blockSize)
 
-	// Create a random number generator seed based on the hostname.
-	// This is to avoid assigning multiple blocks when multiple
-	// workloads request IPs around the same time.
-	hostHash := fnv.New32()
-	hostHash.Write([]byte(hostName))
-	source := rand.NewSource(int64(hostHash.Sum32()))
-	randm := rand.New(source)
+	// Build a random number generator.
+	seed := determineSeed(blockMask, hostName)
+	randm := rand.New(rand.NewSource(seed))
 
 	// initialIndex keeps track of the random starting point
 	initialIndex := new(big.Int)

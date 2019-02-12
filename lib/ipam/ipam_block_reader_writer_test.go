@@ -744,7 +744,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 				objs, err := rw.client.List(ctx, opts, "")
 				Expect(err).NotTo(HaveOccurred())
 				Expect(len(objs.KVPairs)).To(Equal(1))
-				Expect(objs.KVPairs[0].Value.(*model.BlockAffinity).State).To(Equal(model.StateDeleted))
+				Expect(objs.KVPairs[0].Value.(*model.BlockAffinity).State).To(Equal(model.StatePending))
 			})
 
 			By("attempting to claim another address", func() {
@@ -1017,4 +1017,29 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests (kdd 
 		_, err = bc.DeleteKVP(ctx, kvpb)
 		Expect(err).NotTo(HaveOccurred())
 	})
+
+	It("should respect Kubernetes UID for handles", func() {
+		// Create a handle
+		initKVP := &model.KVPair{
+			Key:   model.IPAMHandleKey{HandleID: "someid"},
+			Value: &model.IPAMHandle{},
+		}
+		kvpa, err := bc.Create(ctx, initKVP)
+		Expect(err).NotTo(HaveOccurred())
+
+		// Delete the handle, and re-create it.
+		_, err = bc.DeleteKVP(ctx, kvpa)
+		Expect(err).NotTo(HaveOccurred())
+		kvpb, err := bc.Create(ctx, initKVP)
+		Expect(err).NotTo(HaveOccurred())
+
+		// Try to delete it using the original UID - it should fail.
+		_, err = bc.DeleteKVP(ctx, kvpa)
+		Expect(err).To(HaveOccurred())
+
+		// Try to delete it using the new UID - it should succeed.
+		_, err = bc.DeleteKVP(ctx, kvpb)
+		Expect(err).NotTo(HaveOccurred())
+	})
+
 })

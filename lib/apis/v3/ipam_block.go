@@ -43,7 +43,7 @@ type IPAMBlockSpec struct {
 	Allocations    []*int                `json:"allocations"`
 	Unallocated    []int                 `json:"unallocated"`
 	Attributes     []AllocationAttribute `json:"attributes"`
-	Deleting       bool                  `json:"deleting"`
+	Deleted        bool                  `json:"deleted`
 }
 
 type AllocationAttribute struct {
