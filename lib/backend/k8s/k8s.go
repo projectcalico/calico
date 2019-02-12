@@ -228,7 +228,7 @@ func NewKubeClient(ca *apiconfig.CalicoAPIConfigSpec) (api.Client, error) {
 	kubeClient.registerResourceClient(
 		reflect.TypeOf(model.IPAMConfigKey{}),
 		nil,
-		"",
+		apiv3.KindIPAMConfig,
 		resources.NewIPAMConfigClient(cs, crdClientV1),
 	)
 
@@ -340,6 +340,11 @@ func (c *KubeClient) Clean() error {
 			}
 		}
 	}
+
+	// Delete global IPAM config
+	if _, err := c.Delete(ctx, model.IPAMConfigKey{}, ""); err != nil {
+		log.WithError(err).WithField("key", model.IPAMConfigGlobalName).Warning("Failed to delete global IPAM Config from KDD")
+	}
 	return nil
 }
 
@@ -388,6 +393,8 @@ func buildCRDClientV1(cfg rest.Config) (*rest.RESTClient, error) {
 				&apiv3.IPAMBlockList{},
 				&apiv3.IPAMHandle{},
 				&apiv3.IPAMHandleList{},
+				&apiv3.IPAMConfig{},
+				&apiv3.IPAMConfigList{},
 			)
 			return nil
 		})

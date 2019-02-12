@@ -14,14 +14,19 @@
 
 package model
 
-import "reflect"
+import (
+	"reflect"
+)
+
+const (
+	IPAMConfigGlobalName = "default"
+)
 
 var (
 	typeIPAMConfig = reflect.TypeOf(IPAMConfig{})
 )
 
-type IPAMConfigKey struct {
-}
+type IPAMConfigKey struct{}
 
 func (key IPAMConfigKey) defaultPath() (string, error) {
 	return "/calico/ipam/v2/config", nil
