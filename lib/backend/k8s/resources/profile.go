@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2018 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2019 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -24,6 +24,7 @@ import (
 	log "github.com/sirupsen/logrus"
 	kapiv1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
 
 	"github.com/projectcalico/libcalico-go/lib/backend/api"
@@ -61,7 +62,11 @@ func (c *profileClient) Update(ctx context.Context, kvp *model.KVPair) (*model.K
 	}
 }
 
-func (c *profileClient) Delete(ctx context.Context, key model.Key, revision string) (*model.KVPair, error) {
+func (c *profileClient) DeleteKVP(ctx context.Context, kvp *model.KVPair) (*model.KVPair, error) {
+	return c.Delete(ctx, kvp.Key, kvp.Revision, kvp.UID)
+}
+
+func (c *profileClient) Delete(ctx context.Context, key model.Key, revision string, uid *types.UID) (*model.KVPair, error) {
 	log.Warn("Operation Delete is not supported on Profile type")
 	return nil, cerrors.ErrorOperationNotSupported{
 		Identifier: key,

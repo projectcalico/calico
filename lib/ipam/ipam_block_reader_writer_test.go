@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2018 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2019 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -21,12 +21,14 @@ import (
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	"k8s.io/client-go/kubernetes"
 
 	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/libcalico-go/lib/apiconfig"
 	"github.com/projectcalico/libcalico-go/lib/backend"
 	"github.com/projectcalico/libcalico-go/lib/backend/api"
+	"github.com/projectcalico/libcalico-go/lib/backend/k8s"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	cerrors "github.com/projectcalico/libcalico-go/lib/errors"
 	cnet "github.com/projectcalico/libcalico-go/lib/net"
@@ -35,21 +37,23 @@ import (
 
 func newFakeClient() *fakeClient {
 	return &fakeClient{
-		createFuncs: map[string]func(ctx context.Context, object *model.KVPair) (*model.KVPair, error){},
-		updateFuncs: map[string]func(ctx context.Context, object *model.KVPair) (*model.KVPair, error){},
-		getFuncs:    map[string]func(ctx context.Context, key model.Key, revision string) (*model.KVPair, error){},
-		deleteFuncs: map[string]func(ctx context.Context, key model.Key, revision string) (*model.KVPair, error){},
-		listFuncs:   map[string]func(ctx context.Context, list model.ListInterface, revision string) (*model.KVPairList, error){},
+		createFuncs:    map[string]func(ctx context.Context, object *model.KVPair) (*model.KVPair, error){},
+		updateFuncs:    map[string]func(ctx context.Context, object *model.KVPair) (*model.KVPair, error){},
+		getFuncs:       map[string]func(ctx context.Context, key model.Key, revision string) (*model.KVPair, error){},
+		deleteKVPFuncs: map[string]func(ctx context.Context, object *model.KVPair) (*model.KVPair, error){},
+		deleteFuncs:    map[string]func(ctx context.Context, key model.Key, revision string) (*model.KVPair, error){},
+		listFuncs:      map[string]func(ctx context.Context, list model.ListInterface, revision string) (*model.KVPairList, error){},
 	}
 }
 
 // fakeClient implements the backend api.Client interface.
 type fakeClient struct {
-	createFuncs map[string]func(ctx context.Context, object *model.KVPair) (*model.KVPair, error)
-	updateFuncs map[string]func(ctx context.Context, object *model.KVPair) (*model.KVPair, error)
-	getFuncs    map[string]func(ctx context.Context, key model.Key, revision string) (*model.KVPair, error)
-	deleteFuncs map[string]func(ctx context.Context, key model.Key, revision string) (*model.KVPair, error)
-	listFuncs   map[string]func(ctx context.Context, list model.ListInterface, revision string) (*model.KVPairList, error)
+	createFuncs    map[string]func(ctx context.Context, object *model.KVPair) (*model.KVPair, error)
+	updateFuncs    map[string]func(ctx context.Context, object *model.KVPair) (*model.KVPair, error)
+	getFuncs       map[string]func(ctx context.Context, key model.Key, revision string) (*model.KVPair, error)
+	deleteFuncs    map[string]func(ctx context.Context, key model.Key, revision string) (*model.KVPair, error)
+	deleteKVPFuncs map[string]func(ctx context.Context, kvp *model.KVPair) (*model.KVPair, error)
+	listFuncs      map[string]func(ctx context.Context, list model.ListInterface, revision string) (*model.KVPairList, error)
 }
 
 // We don't implement any of the CRUD related methods, just the Watch method to return
@@ -70,7 +74,7 @@ func (c *fakeClient) Update(ctx context.Context, object *model.KVPair) (*model.K
 	} else if f, ok := c.updateFuncs["default"]; ok {
 		return f(ctx, object)
 	}
-	panic(fmt.Sprintf("Create called on unexpected object: %+v", object))
+	panic(fmt.Sprintf("Update called on unexpected object: %+v", object))
 	return nil, nil
 
 }
@@ -78,6 +82,18 @@ func (c *fakeClient) Apply(ctx context.Context, object *model.KVPair) (*model.KV
 	panic("should not be called")
 	return nil, nil
 }
+
+func (c *fakeClient) DeleteKVP(ctx context.Context, kvp *model.KVPair) (*model.KVPair, error) {
+	if f, ok := c.deleteKVPFuncs[fmt.Sprintf("%s", kvp.Key)]; ok {
+		return f(ctx, kvp)
+	} else if f, ok := c.deleteKVPFuncs["default"]; ok {
+		return f(ctx, kvp)
+	}
+
+	panic(fmt.Sprintf("DeleteKVP called on unexpected object: %+v", kvp.Key))
+	return nil, nil
+}
+
 func (c *fakeClient) Delete(ctx context.Context, key model.Key, revision string) (*model.KVPair, error) {
 	if f, ok := c.deleteFuncs[fmt.Sprintf("%s", key)]; ok {
 		return f(ctx, key, revision)
@@ -88,6 +104,7 @@ func (c *fakeClient) Delete(ctx context.Context, key model.Key, revision string)
 	panic(fmt.Sprintf("Delete called on unexpected object: %+v", key))
 	return nil, nil
 }
+
 func (c *fakeClient) Get(ctx context.Context, key model.Key, revision string) (*model.KVPair, error) {
 	if f, ok := c.getFuncs[fmt.Sprintf("%s", key)]; ok {
 		return f(ctx, key, revision)
@@ -97,14 +114,17 @@ func (c *fakeClient) Get(ctx context.Context, key model.Key, revision string) (*
 	panic(fmt.Sprintf("Get called on unexpected object: %+v", key))
 	return nil, nil
 }
+
 func (c *fakeClient) Syncer(callbacks api.SyncerCallbacks) api.Syncer {
 	panic("should not be called")
 	return nil
 }
+
 func (c *fakeClient) EnsureInitialized() error {
 	panic("should not be called")
 	return nil
 }
+
 func (c *fakeClient) Clean() error {
 	panic("should not be called")
 	return nil
@@ -125,7 +145,7 @@ func (c *fakeClient) Watch(ctx context.Context, list model.ListInterface, revisi
 	return nil, nil
 }
 
-var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", testutils.DatastoreEtcdV3, func(config apiconfig.CalicoAPIConfig) {
+var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", testutils.DatastoreAll, func(config apiconfig.CalicoAPIConfig) {
 
 	log.SetLevel(log.DebugLevel)
 
@@ -140,6 +160,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 			pools        *ipPoolAccessor
 			rw           blockReaderWriter
 			ic           *ipamClient
+			kc           *kubernetes.Clientset
 		)
 
 		BeforeEach(func() {
@@ -150,10 +171,15 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 			Expect(err).NotTo(HaveOccurred())
 			bc.Clean()
 
-			hostA = "hostA"
-			hostB = "hostB"
-			applyNode(bc, hostA, nil)
-			applyNode(bc, hostB, nil)
+			// If running in KDD mode, extract the k8s clientset.
+			if config.Spec.DatastoreType == "kubernetes" {
+				kc = bc.(*k8s.KubeClient).ClientSet
+			}
+
+			hostA = "host-a"
+			hostB = "host-b"
+			applyNode(bc, kc, hostA, nil)
+			applyNode(bc, kc, hostB, nil)
 
 			pools = &ipPoolAccessor{pools: map[string]pool{"10.0.0.0/26": {enabled: true}}}
 
@@ -186,8 +212,8 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 						defer GinkgoRecover()
 
 						testhost := fmt.Sprintf("host-%d", j)
-						applyNode(bc, testhost, nil)
-						defer deleteNode(bc, testhost)
+						applyNode(bc, kc, testhost, nil)
+						defer deleteNode(bc, kc, testhost)
 
 						ips, err := ic.autoAssign(ctx, 1, &testhost, nil, nil, 4, testhost, 0)
 						if err != nil {
@@ -221,6 +247,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 					log.Infof("Validaing affinity: %+v", a)
 					b, err := bc.Get(ctx, model.BlockKey{CIDR: a.Key.(model.BlockAffinityKey).CIDR}, "")
 					Expect(err).NotTo(HaveOccurred())
+					Expect(b).NotTo(BeNil())
 
 					// Each affinity should match the block it points to.
 					Expect(*b.Value.(*model.AllocationBlock).Affinity).To(Equal(fmt.Sprintf("host:%s", a.Key.(model.BlockAffinityKey).Host)))
@@ -270,7 +297,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 				var testErr error
 
 				testhost := "single-host"
-				applyNode(bc, testhost, nil)
+				applyNode(bc, kc, testhost, nil)
 				for i := 0; i < 4; i++ {
 					wg.Add(1)
 					go func() {
@@ -438,9 +465,13 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 				// it actually simulates the other process marking the affinity as pending delete
 				// and deletes the block.
 				fc.createFuncs[fmt.Sprintf("%s", blockKVP.Key)] = func(ctx context.Context, object *model.KVPair) (*model.KVPair, error) {
-					// Mark the affinity pending deletion.
-					affinityKVP.Value.(*model.BlockAffinity).State = model.StatePendingDeletion
-					_, err := bc.Apply(ctx, &affinityKVP)
+					// Mark the affinity pending deletion. Query the affinity and update it.
+					a, err := bc.Get(ctx, affinityKVP.Key, "")
+					if err != nil {
+						panic(err)
+					}
+					a.Value.(*model.BlockAffinity).State = model.StatePendingDeletion
+					_, err = bc.Update(ctx, a)
 					if err != nil {
 						panic(err)
 					}
@@ -502,7 +533,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 				b := newBlock(*net)
 				blockKVP = model.KVPair{
 					Key:   model.BlockKey{CIDR: *net},
-					Value: &b,
+					Value: b.AllocationBlock,
 				}
 				affinityKVP = model.KVPair{
 					Key:   model.BlockAffinityKey{Host: hostA, CIDR: *net},
@@ -514,25 +545,39 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 				// Sneak in a side-effect such that when hostA-proc1 tries to delete the block,
 				// it actually simulates the other process marking the affinity as pending
 				// and creating the block.
-				fc.deleteFuncs[fmt.Sprintf("%s", blockKVP.Key)] = func(ctx context.Context, key model.Key, revision string) (*model.KVPair, error) {
-					// Mark the affinity pending.
-					affinityKVP.Value.(*model.BlockAffinity).State = model.StatePending
-					_, err := bc.Apply(ctx, &affinityKVP)
+				fc.deleteKVPFuncs[fmt.Sprintf("%s", blockKVP.Key)] = func(ctx context.Context, kvp *model.KVPair) (*model.KVPair, error) {
+					// Delete the block, but then immediately create it again below to simulate another process claiming
+					// the block.
+					kvp, err := bc.DeleteKVP(ctx, kvp)
+
+					// Mark the affinity pending. Query the affinity and update it.
+					a, err := bc.Get(ctx, affinityKVP.Key, "")
 					if err != nil {
 						panic(err)
 					}
 
-					// Delete the block, but then immediately create it again to simulate another process claiming
-					// the block.
-					kvp, err := bc.Delete(ctx, key, revision)
-					bc.Create(ctx, kvp)
+					a.Value.(*model.BlockAffinity).State = model.StatePending
+					_, err = bc.Update(ctx, a)
+					if err != nil {
+						panic(err)
+					}
+
+					// We don't want to return an error on create, just panic.
+					// We'll return the delete from error if there as one.
+					kvp.Revision = ""
+					_, nerr := bc.Create(ctx, kvp)
+					if nerr != nil {
+						panic(nerr)
+					}
 					return kvp, err
 				}
 
 				// For any other objects, just create/update/delete them as normal.
 				fc.createFuncs["default"] = func(ctx context.Context, object *model.KVPair) (*model.KVPair, error) { return bc.Create(ctx, object) }
 				fc.updateFuncs["default"] = func(ctx context.Context, object *model.KVPair) (*model.KVPair, error) { return bc.Update(ctx, object) }
-				fc.deleteFuncs["default"] = func(ctx context.Context, k model.Key, r string) (*model.KVPair, error) { return bc.Delete(ctx, k, r) }
+				fc.deleteKVPFuncs["default"] = func(ctx context.Context, object *model.KVPair) (*model.KVPair, error) {
+					return bc.DeleteKVP(ctx, object)
+				}
 				fc.getFuncs["default"] = func(ctx context.Context, k model.Key, r string) (*model.KVPair, error) { return bc.Get(ctx, k, r) }
 
 				rw = blockReaderWriter{client: fc, pools: pools}
@@ -572,11 +617,11 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 			// Creation function for a block affinity - actually create it.
 			affKVP := &model.KVPair{
 				Key:   model.BlockAffinityKey{Host: hostA, CIDR: *net},
-				Value: model.BlockAffinity{},
+				Value: &model.BlockAffinity{},
 			}
 			affKVP2 := &model.KVPair{
 				Key:   model.BlockAffinityKey{Host: hostB, CIDR: *net},
-				Value: model.BlockAffinity{State: model.StateConfirmed},
+				Value: &model.BlockAffinity{State: model.StateConfirmed},
 			}
 
 			fc.createFuncs[fmt.Sprintf("%s", affKVP.Key)] = func(ctx context.Context, object *model.KVPair) (*model.KVPair, error) {
@@ -596,7 +641,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 			b.Affinity = &affStrA
 			b.StrictAffinity = false
 			blockKVP := &model.KVPair{
-				Key:   model.BlockKey{*net},
+				Key:   model.BlockKey{CIDR: *net},
 				Value: b.AllocationBlock,
 			}
 
@@ -604,11 +649,11 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 			b2.Affinity = &affStrB
 			b2.StrictAffinity = false
 			blockKVP2 := &model.KVPair{
-				Key:   model.BlockKey{*net},
+				Key:   model.BlockKey{CIDR: *net},
 				Value: b2.AllocationBlock,
 			}
 			fc.createFuncs[fmt.Sprintf("%s", blockKVP.Key)] = func(ctx context.Context, object *model.KVPair) (*model.KVPair, error) {
-				// Create the "stolen" affinity from the other racing host.
+				// Create the "stolen" block from the other racing host.
 				_, err := bc.Create(ctx, blockKVP2)
 				if err != nil {
 					return nil, err
@@ -623,7 +668,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 			calls := 0
 			fc.getFuncs[fmt.Sprintf("%s", blockKVP.Key)] = func(ctx context.Context, k model.Key, r string) (*model.KVPair, error) {
 				return func(ctx context.Context, k model.Key, r string) (*model.KVPair, error) {
-					calls = calls + 1
+					calls++
 
 					if calls == 1 {
 						// First time the block doesn't exist yet.
@@ -640,8 +685,8 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 			// Delete function for the affinity - this should fail, triggering the scenario under test where two hosts now think they
 			// have affinity to the block.
 			deleteCalls := 0
-			fc.deleteFuncs[fmt.Sprintf("%s", affKVP.Key)] = func(ctx context.Context, k model.Key, r string) (*model.KVPair, error) {
-				return func(ctx context.Context, k model.Key, r string) (*model.KVPair, error) {
+			fc.deleteKVPFuncs[fmt.Sprintf("%s", affKVP.Key)] = func(ctx context.Context, kvp *model.KVPair) (*model.KVPair, error) {
+				return func(ctx context.Context, kvp *model.KVPair) (*model.KVPair, error) {
 					deleteCalls = deleteCalls + 1
 
 					if deleteCalls == 1 {
@@ -650,13 +695,18 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 					}
 
 					// Subsequent calls succeed.
-					return bc.Delete(ctx, k, r)
-				}(ctx, k, r)
+					return bc.DeleteKVP(ctx, kvp)
+				}(ctx, kvp)
 			}
 
 			// List function should behave normally.
 			fc.listFuncs["default"] = func(ctx context.Context, list model.ListInterface, revision string) (*model.KVPairList, error) {
 				return bc.List(ctx, list, revision)
+			}
+
+			// Update function should behave normally.
+			fc.updateFuncs["default"] = func(ctx context.Context, kvp *model.KVPair) (*model.KVPair, error) {
+				return bc.Update(ctx, kvp)
 			}
 
 			// Create the block reader / writer which will simulate the failure scenario.
@@ -688,7 +738,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 				Expect(objs.KVPairs[0].Value.(*model.BlockAffinity).State).To(Equal(model.StateConfirmed))
 			})
 
-			By("checking that the test host has a pending affinity", func() {
+			By("checking that the requested host does not have a confirmed affinity", func() {
 				// The block should have the affinity field set properly.
 				opts := model.BlockAffinityListOptions{Host: hostA}
 				objs, err := rw.client.List(ctx, opts, "")
@@ -715,6 +765,94 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 
 				// Should be a single block affinity, assigned to the other host.
 				Expect(len(objs.KVPairs)).To(Equal(0))
+			})
+		})
+
+		It("should not delete an IPAM block when affinity released when empty but another process allocates an IP at the same time", func() {
+			// Tests the scenario where:
+			// - hostA proc1 queries for the block
+			// - hostA proc2 queries for the block
+			// - hostA proc2 releases affinity (marks PendingDeletion)
+			// - hostA proc1 allocates IP from block
+			// - hostA proc1 updates block
+			// - hostA proc2 attempts to delete block (tries to mark but fails)
+			b := newBlock(*net)
+			aff := "host:" + hostA
+			b.AllocationBlock.Affinity = &aff
+			blockKVP := model.KVPair{
+				Key:   model.BlockKey{CIDR: *net},
+				Value: b.AllocationBlock,
+			}
+
+			affinityKVP := model.KVPair{
+				Key: model.BlockAffinityKey{Host: hostA, CIDR: *net},
+				Value: &model.BlockAffinity{
+					State: model.StateConfirmed,
+				},
+			}
+
+			By("setting up the client for the test", func() {
+				fc = newFakeClient()
+
+				// Sneak in a side-effect such that when hostA-proc1 tries to release the affinity of an empty block,
+				// another IP will get allocated from it.
+				call := 0
+				fc.updateFuncs[fmt.Sprintf("%s", affinityKVP.Key)] = func(ctx context.Context, object *model.KVPair) (*model.KVPair, error) {
+					updated, err := bc.Update(ctx, object)
+					if err != nil {
+						return nil, err
+					}
+
+					call++
+					if call == 1 {
+						// proc1 allocates an IP from block
+						kvpb, err := bc.Get(ctx, blockKVP.Key, "")
+						if err != nil {
+							return nil, err
+						}
+						b1 := allocationBlock{kvpb.Value.(*model.AllocationBlock)}
+						b1.autoAssign(1, nil, hostA, nil, false)
+						if _, err := bc.Update(ctx, kvpb); err != nil {
+							return nil, err
+						}
+					}
+
+					return updated, nil
+				}
+
+				// For any other objects, just create/update/delete them as normal.
+				fc.createFuncs["default"] = func(ctx context.Context, object *model.KVPair) (*model.KVPair, error) { return bc.Create(ctx, object) }
+				fc.updateFuncs["default"] = func(ctx context.Context, object *model.KVPair) (*model.KVPair, error) { return bc.Update(ctx, object) }
+				fc.deleteKVPFuncs["default"] = func(ctx context.Context, object *model.KVPair) (*model.KVPair, error) {
+					return bc.DeleteKVP(ctx, object)
+				}
+				fc.getFuncs["default"] = func(ctx context.Context, k model.Key, r string) (*model.KVPair, error) { return bc.Get(ctx, k, r) }
+
+				rw = blockReaderWriter{client: fc, pools: pools}
+				ic = &ipamClient{
+					client:            bc,
+					pools:             pools,
+					blockReaderWriter: rw,
+				}
+			})
+
+			By("allocating an IP and creating a block", func() {
+				_, err := bc.Create(ctx, &blockKVP)
+				Expect(err).To(BeNil())
+
+				_, err = bc.Create(ctx, &affinityKVP)
+				Expect(err).To(BeNil())
+			})
+
+			By("calling ReleaseAffinity", func() {
+				err := ic.ReleaseAffinity(ctx, *net, hostA)
+				Expect(err).NotTo(HaveOccurred())
+			})
+
+			By("verfiying that the block was not deleted", func() {
+				b, err := bc.Get(ctx, blockKVP.Key, "")
+				Expect(err).To(BeNil())
+				Expect(b).NotTo(BeNil())
 			})
 		})
 	})
@@ -812,4 +950,96 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 			})
 		})
 	})
+})
+
+var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests (kdd only)", testutils.DatastoreK8s, func(config apiconfig.CalicoAPIConfig) {
+
+	var (
+		bc  api.Client
+		net *cnet.IPNet
+		ctx context.Context
+	)
+
+	BeforeEach(func() {
+		var err error
+		bc, err = backend.NewClient(config)
+		Expect(err).NotTo(HaveOccurred())
+		bc.Clean()
+		ctx = context.Background()
+		_, net, err = cnet.ParseCIDR("10.0.0.0/26")
+		Expect(err).NotTo(HaveOccurred())
+	})
+
+	It("should respect Kubernetes UID for affinities", func() {
+		// Create a block affinity
+		initKVP := &model.KVPair{
+			Key:   model.BlockAffinityKey{Host: "somehost", CIDR: *net},
+			Value: &model.BlockAffinity{},
+		}
+		kvpa, err := bc.Create(ctx, initKVP)
+		Expect(err).NotTo(HaveOccurred())
+
+		// Delete the block affinity, and re-create it.
+		_, err = bc.DeleteKVP(ctx, kvpa)
+		Expect(err).NotTo(HaveOccurred())
+		kvpb, err := bc.Create(ctx, initKVP)
+		Expect(err).NotTo(HaveOccurred())
+
+		// Try to delete it using the original UID - it should fail.
+		_, err = bc.DeleteKVP(ctx, kvpa)
+		Expect(err).To(HaveOccurred())
+
+		// Try to delete it using the new UID - it should succeed.
+		_, err = bc.DeleteKVP(ctx, kvpb)
+		Expect(err).NotTo(HaveOccurred())
+	})
+
+	It("should respect Kubernetes UID for blocks", func() {
+		// Create a block
+		initKVP := &model.KVPair{
+			Key:   model.BlockKey{CIDR: *net},
+			Value: &model.AllocationBlock{},
+		}
+		kvpa, err := bc.Create(ctx, initKVP)
+		Expect(err).NotTo(HaveOccurred())
+
+		// Delete the block, and re-create it.
+		_, err = bc.DeleteKVP(ctx, kvpa)
+		Expect(err).NotTo(HaveOccurred())
+		kvpb, err := bc.Create(ctx, initKVP)
+		Expect(err).NotTo(HaveOccurred())
+
+		// Try to delete it using the original UID - it should fail.
+		_, err = bc.DeleteKVP(ctx, kvpa)
+		Expect(err).To(HaveOccurred())
+
+		// Try to delete it using the new UID - it should succeed.
+		_, err = bc.DeleteKVP(ctx, kvpb)
+		Expect(err).NotTo(HaveOccurred())
+	})
+
+	It("should respect Kubernetes UID for handles", func() {
+		// Create a handle
+		initKVP := &model.KVPair{
+			Key:   model.IPAMHandleKey{HandleID: "someid"},
+			Value: &model.IPAMHandle{},
+		}
+		kvpa, err := bc.Create(ctx, initKVP)
+		Expect(err).NotTo(HaveOccurred())
+
+		// Delete the handle, and re-create it.
+		_, err = bc.DeleteKVP(ctx, kvpa)
+		Expect(err).NotTo(HaveOccurred())
+		kvpb, err := bc.Create(ctx, initKVP)
+		Expect(err).NotTo(HaveOccurred())
+
+		// Try to delete it using the original UID - it should fail.
+		_, err = bc.DeleteKVP(ctx, kvpa)
+		Expect(err).To(HaveOccurred())
+
+		// Try to delete it using the new UID - it should succeed.
+		_, err = bc.DeleteKVP(ctx, kvpb)
+		Expect(err).NotTo(HaveOccurred())
+	})
+
 })

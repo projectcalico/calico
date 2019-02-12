@@ -1,4 +1,4 @@
-// Copyright (c) 2016 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2019 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -90,11 +90,20 @@ type AllocationBlock struct {
 	Allocations    []*int                `json:"allocations"`
 	Unallocated    []int                 `json:"unallocated"`
 	Attributes     []AllocationAttribute `json:"attributes"`
+	Deleted        bool                  `json:"deleted"`
 
 	// HostAffinity is deprecated in favor of Affinity.
 	// This is only to keep compatiblity with existing deployments.
 	// The data format should be `Affinity: host:hostname` (not `hostAffinity: hostname`).
 	HostAffinity *string `json:"hostAffinity,omitempty"`
+}
+
+func (b *AllocationBlock) MarkDeleted() {
+	b.Deleted = true
+}
+
+func (b *AllocationBlock) IsDeleted() bool {
+	return b.Deleted
 }
 
 type AllocationAttribute struct {

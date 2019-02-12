@@ -1,4 +1,4 @@
-// Copyright (c) 2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2019 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -24,6 +24,7 @@ import (
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/cache"
@@ -148,8 +149,12 @@ func (c *customK8sResourceClient) Update(ctx context.Context, kvp *model.KVPair)
 	return kvp, nil
 }
 
+func (c *customK8sResourceClient) DeleteKVP(ctx context.Context, kvp *model.KVPair) (*model.KVPair, error) {
+	return c.Delete(ctx, kvp.Key, kvp.Revision, kvp.UID)
+}
+
 // Delete deletes an existing Custom K8s Resource instance in the k8s API using the supplied KVPair.
-func (c *customK8sResourceClient) Delete(ctx context.Context, k model.Key, revision string) (*model.KVPair, error) {
+func (c *customK8sResourceClient) Delete(ctx context.Context, k model.Key, revision string, uid *types.UID) (*model.KVPair, error) {
 	logContext := log.WithFields(log.Fields{
 		"Key":      k,
 		"Resource": c.resource,
@@ -170,6 +175,11 @@ func (c *customK8sResourceClient) Delete(ctx context.Context, k model.Key, revis
 
 	namespace := k.(model.ResourceKey).Namespace
 
+	opts := &metav1.DeleteOptions{}
+	if uid != nil {
+		opts.Preconditions = &metav1.Preconditions{UID: uid}
+	}
+
 	// Delete the resource using the name.
 	logContext = logContext.WithField("Name", name)
 	logContext.Debug("Send delete request by name")
@@ -178,10 +188,11 @@ func (c *customK8sResourceClient) Delete(ctx context.Context, k model.Key, revis
 		NamespaceIfScoped(namespace, c.namespaced).
 		Resource(c.resource).
 		Name(name).
+		Body(opts).
 		Do().
 		Error()
 	if err != nil {
-		logContext.WithError(err).Info("Error deleting resource")
+		logContext.WithError(err).Debug("Error deleting resource")
 		return nil, K8sErrorToCalico(err, k)
 	}
 	return existing, nil

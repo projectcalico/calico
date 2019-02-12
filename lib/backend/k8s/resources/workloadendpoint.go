@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2019 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -66,7 +66,11 @@ func (c *WorkloadEndpointClient) Update(ctx context.Context, kvp *model.KVPair) 
 	return c.patchPodIP(ctx, kvp)
 }
 
-func (c *WorkloadEndpointClient) Delete(ctx context.Context, key model.Key, revision string) (*model.KVPair, error) {
+func (c *WorkloadEndpointClient) DeleteKVP(ctx context.Context, kvp *model.KVPair) (*model.KVPair, error) {
+	return c.Delete(ctx, kvp.Key, kvp.Revision, kvp.UID)
+}
+
+func (c *WorkloadEndpointClient) Delete(ctx context.Context, key model.Key, revision string, uid *types.UID) (*model.KVPair, error) {
 	log.Warn("Operation Delete is not supported on WorkloadEndpoint type")
 	return nil, cerrors.ErrorOperationNotSupported{
 		Identifier: key,

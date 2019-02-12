@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2018 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2019 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -24,6 +24,7 @@ import (
 	kapiv1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
 
 	apiv3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
@@ -89,7 +90,11 @@ func (c *nodeClient) Update(ctx context.Context, kvp *model.KVPair) (*model.KVPa
 	return newCalicoNode, nil
 }
 
-func (c *nodeClient) Delete(ctx context.Context, key model.Key, revision string) (*model.KVPair, error) {
+func (c *nodeClient) DeleteKVP(ctx context.Context, kvp *model.KVPair) (*model.KVPair, error) {
+	return c.Delete(ctx, kvp.Key, kvp.Revision, kvp.UID)
+}
+
+func (c *nodeClient) Delete(ctx context.Context, key model.Key, revision string, uid *types.UID) (*model.KVPair, error) {
 	log.Warn("Operation Delete is not supported on Node type")
 	return nil, cerrors.ErrorOperationNotSupported{
 		Identifier: key,

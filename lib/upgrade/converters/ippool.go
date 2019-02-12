@@ -18,14 +18,12 @@ import (
 	"fmt"
 	"strings"
 
-	log "github.com/sirupsen/logrus"
-
 	apiv1 "github.com/projectcalico/libcalico-go/lib/apis/v1"
 	"github.com/projectcalico/libcalico-go/lib/apis/v1/unversioned"
 	apiv3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/libcalico-go/lib/ipip"
-	cnet "github.com/projectcalico/libcalico-go/lib/net"
+	"github.com/projectcalico/libcalico-go/lib/names"
 )
 
 // IPPool implements the Converter interface.
@@ -71,7 +69,7 @@ func (_ IPPool) BackendV1ToAPIV3(kvp *model.KVPair) (Resource, error) {
 	}
 
 	ipp := apiv3.NewIPPool()
-	ipp.Name = cidrToName(pool.CIDR)
+	ipp.Name = names.CIDRToName(pool.CIDR)
 	ipp.Spec = apiv3.IPPoolSpec{
 		CIDR:         pool.CIDR.String(),
 		IPIPMode:     convertIPIPMode(pool.IPIPMode, pool.IPIPInterface),
@@ -99,17 +97,4 @@ func convertIPIPMode(mode ipip.Mode, ipipInterface string) apiv3.IPIPMode {
 		return apiv3.IPIPModeCrossSubnet
 	}
 	return apiv3.IPIPModeAlways
-}
-
-func cidrToName(cidr cnet.IPNet) string {
-	name := strings.Replace(cidr.String(), ".", "-", 3)
-	name = strings.Replace(name, ":", "-", 7)
-	name = strings.Replace(name, "/", "-", 1)
-
-	log.WithFields(log.Fields{
-		"Name":  name,
-		"IPNet": cidr.String(),
-	}).Debug("Converted IPNet to resource name")
-
-	return name
 }

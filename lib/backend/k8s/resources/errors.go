@@ -15,6 +15,8 @@
 package resources
 
 import (
+	"strings"
+
 	"github.com/projectcalico/libcalico-go/lib/errors"
 
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
@@ -45,6 +47,13 @@ func K8sErrorToCalico(ke error, id interface{}) error {
 		}
 	}
 	if kerrors.IsConflict(ke) {
+		// Treat precondition errors as not found.
+		if strings.Contains(ke.Error(), "UID in precondition") {
+			return errors.ErrorResourceDoesNotExist{
+				Err:        ke,
+				Identifier: id,
+			}
+		}
 		return errors.ErrorResourceUpdateConflict{
 			Err:        ke,
 			Identifier: id,

@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2018 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2019 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -33,6 +33,7 @@ import (
 	networkingv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
@@ -128,8 +129,11 @@ func (c *networkPolicyClient) Apply(ctx context.Context, kvp *model.KVPair) (*mo
 		Operation:  "Apply",
 	}
 }
+func (c *networkPolicyClient) DeleteKVP(ctx context.Context, kvp *model.KVPair) (*model.KVPair, error) {
+	return c.Delete(ctx, kvp.Key, kvp.Revision, kvp.UID)
+}
 
-func (c *networkPolicyClient) Delete(ctx context.Context, key model.Key, revision string) (*model.KVPair, error) {
+func (c *networkPolicyClient) Delete(ctx context.Context, key model.Key, revision string, uid *types.UID) (*model.KVPair, error) {
 	log.Debug("Received Delete request on NetworkPolicy type")
 	k := key.(model.ResourceKey)
 	if strings.HasPrefix(k.Name, conversion.K8sNetworkPolicyNamePrefix) {
@@ -146,7 +150,7 @@ func (c *networkPolicyClient) Delete(ctx context.Context, key model.Key, revisio
 	if err != nil {
 		return nil, err
 	}
-	kvp, err := c.crdClient.Delete(ctx, key, crdRev)
+	kvp, err := c.crdClient.Delete(ctx, key, crdRev, uid)
 
 	if kvp != nil {
 		// Convert the revision back to the combined CRD/k8s revision - the k8s rev will be empty.

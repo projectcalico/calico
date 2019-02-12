@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2018 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2019 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -110,7 +110,10 @@ func NewKubeClient(ca *apiconfig.CalicoAPIConfigSpec) (api.Client, error) {
 		return nil, resources.K8sErrorToCalico(err, nil)
 	}
 
-	// Create the clientset
+	// Create the clientset. We increase the burst so that the IPAM code performs
+	// efficiently. The IPAM code can create bursts of requests to the API, so
+	// in order to keep pod creation times sensible we allow a higher request rate.
+	config.Burst = 1000
 	cs, err := kubernetes.NewForConfig(config)
 	if err != nil {
 		return nil, resources.K8sErrorToCalico(err, nil)
@@ -207,8 +210,26 @@ func NewKubeClient(ca *apiconfig.CalicoAPIConfigSpec) (api.Client, error) {
 	kubeClient.registerResourceClient(
 		reflect.TypeOf(model.BlockAffinityKey{}),
 		reflect.TypeOf(model.BlockAffinityListOptions{}),
+		apiv3.KindBlockAffinity,
+		resources.NewBlockAffinityClient(cs, crdClientV1),
+	)
+	kubeClient.registerResourceClient(
+		reflect.TypeOf(model.BlockKey{}),
+		reflect.TypeOf(model.BlockListOptions{}),
+		apiv3.KindIPAMBlock,
+		resources.NewIPAMBlockClient(cs, crdClientV1),
+	)
+	kubeClient.registerResourceClient(
+		reflect.TypeOf(model.IPAMHandleKey{}),
+		reflect.TypeOf(model.IPAMHandleListOptions{}),
+		apiv3.KindIPAMHandle,
+		resources.NewIPAMHandleClient(cs, crdClientV1),
+	)
+	kubeClient.registerResourceClient(
+		reflect.TypeOf(model.IPAMConfigKey{}),
+		nil,
 		"",
-		resources.NewAffinityBlockClient(cs),
+		resources.NewIPAMConfigClient(cs, crdClientV1),
 	)
 
 	return kubeClient, nil
@@ -259,7 +280,6 @@ func (c *KubeClient) getResourceClientFromList(list model.ListInterface) resourc
 // known custom resource is defined: GlobalFelixConfig. It accomplishes this
 // by trying to set the ClusterType (an instance of GlobalFelixConfig).
 func (c *KubeClient) EnsureInitialized() error {
-	log.Info("EnsuringInitialized - noop")
 	return nil
 }
 
@@ -281,11 +301,28 @@ func (c *KubeClient) Clean() error {
 	for _, k := range kinds {
 		lo := model.ResourceListOptions{Kind: k}
 		if rs, err := c.List(ctx, lo, ""); err != nil {
-			log.WithField("Kind", k).Warning("Failed to list resources")
+			log.WithError(err).WithField("Kind", k).Warning("Failed to list resources")
 		} else {
 			for _, r := range rs.KVPairs {
 				if _, err = c.Delete(ctx, r.Key, r.Revision); err != nil {
 					log.WithField("Key", r.Key).Warning("Failed to delete entry from KDD")
+				}
+			}
+		}
+	}
+
+	// Cleanup IPAM resources that have slightly different backend semantics.
+	for _, li := range []model.ListInterface{
+		model.BlockListOptions{},
+		model.BlockAffinityListOptions{},
+		model.BlockAffinityListOptions{},
+	} {
+		if rs, err := c.List(ctx, li, ""); err != nil {
+			log.WithError(err).WithField("Kind", li).Warning("Failed to list resources")
+		} else {
+			for _, r := range rs.KVPairs {
+				if _, err = c.DeleteKVP(ctx, r); err != nil {
+					log.WithError(err).WithField("Key", r.Key).Warning("Failed to delete entry from KDD")
 				}
 			}
 		}
@@ -345,6 +382,12 @@ func buildCRDClientV1(cfg rest.Config) (*rest.RESTClient, error) {
 				&apiv3.NetworkPolicyList{},
 				&apiv3.HostEndpoint{},
 				&apiv3.HostEndpointList{},
+				&apiv3.BlockAffinity{},
+				&apiv3.BlockAffinityList{},
+				&apiv3.IPAMBlock{},
+				&apiv3.IPAMBlockList{},
+				&apiv3.IPAMHandle{},
+				&apiv3.IPAMHandleList{},
 			)
 			return nil
 		})
@@ -416,7 +459,21 @@ func (c *KubeClient) Apply(ctx context.Context, kvp *model.KVPair) (*model.KVPai
 	return updated, nil
 }
 
-// Delete an entry in the datastore. This is a no-op when using the k8s backend.
+// Delete an entry in the datastore.
+func (c *KubeClient) DeleteKVP(ctx context.Context, kvp *model.KVPair) (*model.KVPair, error) {
+	log.Debugf("Performing 'DeleteKVP' for %+v", kvp.Key)
+	client := c.getResourceClientFromKey(kvp.Key)
+	if client == nil {
+		log.Debug("Attempt to 'DeleteKVP' using kubernetes backend is not supported.")
+		return nil, cerrors.ErrorOperationNotSupported{
+			Identifier: kvp.Key,
+			Operation:  "Delete",
+		}
+	}
+	return client.DeleteKVP(ctx, kvp)
+}
+
+// Delete an entry in the datastore by key.
 func (c *KubeClient) Delete(ctx context.Context, k model.Key, revision string) (*model.KVPair, error) {
 	log.Debugf("Performing 'Delete' for %+v", k)
 	client := c.getResourceClientFromKey(k)
@@ -427,7 +484,7 @@ func (c *KubeClient) Delete(ctx context.Context, k model.Key, revision string) (
 			Operation:  "Delete",
 		}
 	}
-	return client.Delete(ctx, k, revision)
+	return client.Delete(ctx, k, revision, nil)
 }
 
 // Get an entry from the datastore.  This errors if the entry does not exist.

@@ -1,4 +1,4 @@
-// Copyright (c) 2016 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2019 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -44,7 +44,8 @@ type BlockAffinityKey struct {
 }
 
 type BlockAffinity struct {
-	State BlockAffinityState `json:"state"`
+	State   BlockAffinityState `json:"state"`
+	Deleted bool               `json:"deleted"`
 }
 
 func (key BlockAffinityKey) defaultPath() (string, error) {
@@ -75,6 +76,7 @@ func (key BlockAffinityKey) String() string {
 type BlockAffinityListOptions struct {
 	Host      string
 	IPVersion int
+	NotFull   bool
 }
 
 func (options BlockAffinityListOptions) defaultPathRoot() string {

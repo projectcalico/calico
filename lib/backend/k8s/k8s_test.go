@@ -23,6 +23,7 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"github.com/projectcalico/libcalico-go/lib/backend/syncersv1/felixsyncer"
+	"github.com/projectcalico/libcalico-go/lib/net"
 	"github.com/projectcalico/libcalico-go/lib/testutils"
 
 	log "github.com/sirupsen/logrus"
@@ -628,7 +629,7 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 		})
 
 		By("Deleted the Global Network Policy created by Apply", func() {
-			_, err := gnpClient.Delete(ctx, kvp2a.Key, "")
+			_, err := gnpClient.Delete(ctx, kvp2a.Key, "", nil)
 			Expect(err).NotTo(HaveOccurred())
 		})
 
@@ -664,7 +665,7 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 		})
 
 		By("Deleting an existing Global Network Policy", func() {
-			_, err := gnpClient.Delete(ctx, kvp1a.Key, "")
+			_, err := gnpClient.Delete(ctx, kvp1a.Key, "", nil)
 			Expect(err).NotTo(HaveOccurred())
 		})
 
@@ -1423,7 +1424,7 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 		})
 	})
 
-	It("should not error on unsupported List() calls", func() {
+	It("should support listing block affinities", func() {
 		var nodename string
 		By("Listing all Nodes to find a suitable Node name", func() {
 			nodes, err := c.List(ctx, model.ResourceListOptions{Kind: apiv3.KindNode}, "")
@@ -1431,13 +1432,37 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 			kvp := *nodes.KVPairs[0]
 			nodename = kvp.Key.(model.ResourceKey).Name
 		})
-		By("Listing all BlockAffinity for a specific Node", func() {
-			objs, err := c.List(ctx, model.BlockAffinityListOptions{Host: nodename}, "")
+		By("Creating an affinity for that node", func() {
+			cidr := net.MustParseCIDR("10.0.0.0/26")
+			kvp := model.KVPair{
+				Key: model.BlockAffinityKey{
+					CIDR: cidr,
+					Host: nodename,
+				},
+				Value: &model.BlockAffinity{},
+			}
+			_, err := c.Create(ctx, &kvp)
 			Expect(err).NotTo(HaveOccurred())
-			Expect(len(objs.KVPairs)).To(Equal(1))
+		})
+		By("Creating an affinity for a different node", func() {
+			cidr := net.MustParseCIDR("10.0.1.0/26")
+			kvp := model.KVPair{
+				Key: model.BlockAffinityKey{
+					CIDR: cidr,
+					Host: "othernode",
+				},
+				Value: &model.BlockAffinity{},
+			}
+			_, err := c.Create(ctx, &kvp)
+			Expect(err).NotTo(HaveOccurred())
 		})
 		By("Listing all BlockAffinity for all Nodes", func() {
 			objs, err := c.List(ctx, model.BlockAffinityListOptions{}, "")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(len(objs.KVPairs)).To(Equal(2))
+		})
+		By("Listing all BlockAffinity for a specific Node", func() {
+			objs, err := c.List(ctx, model.BlockAffinityListOptions{Host: nodename}, "")
 			Expect(err).NotTo(HaveOccurred())
 			Expect(len(objs.KVPairs)).To(Equal(1))
 		})
@@ -1472,8 +1497,14 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 			// Set the ResourceVersion (since it is auto populated by the Kubernetes datastore) to make it easier to compare objects.
 			Expect(fc.Value.(*apiv3.FelixConfiguration).GetObjectMeta().GetResourceVersion()).To(Equal(""))
 			fc.Value.(*apiv3.FelixConfiguration).GetObjectMeta().SetResourceVersion(updFC.Value.(*apiv3.FelixConfiguration).GetObjectMeta().GetResourceVersion())
+
+			// UID is auto-generated, make sure we don't fail the assertion based on it.
+			fc.Value.(*apiv3.FelixConfiguration).ObjectMeta.UID = updFC.Value.(*apiv3.FelixConfiguration).ObjectMeta.UID
+
+			// Assert the created object matches what we created.
 			Expect(updFC.Value.(*apiv3.FelixConfiguration)).To(Equal(fc.Value.(*apiv3.FelixConfiguration)))
 			Expect(updFC.Revision).NotTo(BeNil())
+
 			// Unset the ResourceVersion for the original resource since we modified it just for the sake of comparing in the tests.
 			fc.Value.(*apiv3.FelixConfiguration).GetObjectMeta().SetResourceVersion("")
 		})
@@ -1839,4 +1870,70 @@ var _ = testutils.E2eDatastoreDescribe("Test Watch support", testutils.Datastore
 			Expect(receivedEvent).To(BeTrue(), "Did not receive watch event")
 		})
 	})
+
+	It("should support watching BlockAffinities", func() {
+		By("watching all affinities", func() {
+			watch, err := c.Watch(ctx, model.BlockAffinityListOptions{}, "")
+			Expect(err).NotTo(HaveOccurred())
+
+			// Create a block affinity.
+			_, err = c.Create(ctx, &model.KVPair{
+				Key: model.BlockAffinityKey{
+					CIDR: net.MustParseCIDR("10.0.0.0/26"),
+					Host: "test-hostname",
+				},
+				Value: &model.BlockAffinity{State: model.StatePending},
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			// We should get at least one event from the watch.
+			var receivedEvent bool
+			for i := 0; i < 10; i++ {
+				select {
+				case e := <-watch.ResultChan():
+					// Got an event. Check it's OK.
+					Expect(e.Error).NotTo(HaveOccurred())
+					Expect(e.Type).To(Equal(api.WatchAdded))
+					receivedEvent = true
+					break
+				default:
+					time.Sleep(50 * time.Millisecond)
+				}
+			}
+			Expect(receivedEvent).To(BeTrue(), "Did not receive watch event")
+		})
+	})
+
+	It("should support watching IPAM blocks", func() {
+		By("watching all blocks", func() {
+			watch, err := c.Watch(ctx, model.BlockListOptions{}, "")
+			Expect(err).NotTo(HaveOccurred())
+
+			// Create a block.
+			_, err = c.Create(ctx, &model.KVPair{
+				Key: model.BlockKey{
+					CIDR: net.MustParseCIDR("10.0.0.0/26"),
+				},
+				Value: &model.AllocationBlock{},
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			// We should get at least one event from the watch.
+			var receivedEvent bool
+			for i := 0; i < 10; i++ {
+				select {
+				case e := <-watch.ResultChan():
+					// Got an event. Check it's OK.
+					Expect(e.Error).NotTo(HaveOccurred())
+					Expect(e.Type).To(Equal(api.WatchAdded))
+					receivedEvent = true
+					break
+				default:
+					time.Sleep(50 * time.Millisecond)
+				}
+			}
+			Expect(receivedEvent).To(BeTrue(), "Did not receive watch event")
+		})
+	})
+
 })
