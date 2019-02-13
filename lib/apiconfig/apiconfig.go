@@ -55,6 +55,12 @@ type EtcdConfig struct {
 	EtcdKeyFile    string `json:"etcdKeyFile" envconfig:"ETCD_KEY_FILE"`
 	EtcdCertFile   string `json:"etcdCertFile" envconfig:"ETCD_CERT_FILE"`
 	EtcdCACertFile string `json:"etcdCACertFile" envconfig:"ETCD_CA_CERT_FILE"`
+
+	// These config file parameters are to support inline certificates, keys and CA / Trusted certificate.
+	// There are no corresponding environment variables to avoid accidental exposure.
+	EtcdKey    string `json:"etcdKey" ignored:"true"`
+	EtcdCert   string `json:"etcdCert" ignored:"true"`
+	EtcdCACert string `json:"etcdCACert" ignored:"true"`
 }
 
 type KubeConfig struct {

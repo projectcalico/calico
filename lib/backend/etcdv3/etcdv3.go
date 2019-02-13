@@ -22,6 +22,8 @@ import (
 	"strings"
 	"time"
 
+	"crypto/tls"
+
 	"github.com/coreos/etcd/clientv3"
 	"github.com/coreos/etcd/pkg/transport"
 	log "github.com/sirupsen/logrus"
@@ -55,13 +57,35 @@ func NewEtcdV3Client(config *apiconfig.EtcdConfig) (api.Client, error) {
 	}
 
 	// Create the etcd client
-	tlsInfo := &transport.TLSInfo{
-		CAFile:   config.EtcdCACertFile,
-		CertFile: config.EtcdCertFile,
-		KeyFile:  config.EtcdKeyFile,
+	// If Etcd Certificate and Key are provided inline through command line agrument,
+	// then the inline values take precedence over the ones in the config file.
+	// All the three parametes, Certificate, key and CA certificate are to be provided inline for processing.
+	var tls *tls.Config
+	var err error
+
+	haveInline := config.EtcdCert != "" || config.EtcdKey != "" || config.EtcdCACert != ""
+	haveFiles := config.EtcdCertFile != "" || config.EtcdKeyFile != "" || config.EtcdCACertFile != ""
+
+	if haveInline && haveFiles {
+		return nil, fmt.Errorf("Cannot mix inline certificate-key and certificate / key files")
 	}
 
-	tls, err := tlsInfo.ClientConfig()
+	if haveInline {
+		tlsInfo := &TlsInlineCertKey{
+			CACert: config.EtcdCACert,
+			Cert:   config.EtcdCert,
+			Key:    config.EtcdKey,
+		}
+		tls, err = tlsInfo.ClientConfigInlineCertKey()
+	} else {
+		tlsInfo := &transport.TLSInfo{
+			CAFile:   config.EtcdCACertFile,
+			CertFile: config.EtcdCertFile,
+			KeyFile:  config.EtcdKeyFile,
+		}
+		tls, err = tlsInfo.ClientConfig()
+	}
+
 	if err != nil {
 		return nil, fmt.Errorf("could not initialize etcdv3 client: %+v", err)
 	}
