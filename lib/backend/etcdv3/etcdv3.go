@@ -67,7 +67,7 @@ func NewEtcdV3Client(config *apiconfig.EtcdConfig) (api.Client, error) {
 	haveFiles := config.EtcdCertFile != "" || config.EtcdKeyFile != "" || config.EtcdCACertFile != ""
 
 	if haveInline && haveFiles {
-		return nil, fmt.Errorf("Cannot mix of inline certificate-key and certificate files")
+		return nil, fmt.Errorf("Cannot mix inline certificate-key and certificate / key files")
 	}
 
 	if haveInline {
