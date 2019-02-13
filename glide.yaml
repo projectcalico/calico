@@ -3,7 +3,7 @@ import:
 - package: github.com/docopt/docopt-go
   version: ^0.6.2
 - package: github.com/projectcalico/libcalico-go
-  version: 13c0e7d9fbf4de88aefdeb92df0e503b6123098e
+  version: 9ccf86fcbbe260dd6ba0c31afaa9686e3025868e
   subpackages:
   - lib/apis/v3
   - lib/client
