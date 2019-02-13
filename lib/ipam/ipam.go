@@ -310,7 +310,7 @@ func (c ipamClient) autoAssign(ctx context.Context, num int, handleID *string, a
 		// Determine the pool for each block.
 		pool := c.blockReaderWriter.getPoolForIP(net.IP{block.IP}, allPools)
 		if pool == nil {
-			logCtx.WithFields(log.Fields{"pool": pool, "block": block}).Warn("No pool found for block, skipping")
+			logCtx.WithFields(log.Fields{"block": block}).Warn("No pool found for block, skipping")
 			continue
 		}
 
@@ -321,7 +321,7 @@ func (c ipamClient) autoAssign(ctx context.Context, num int, handleID *string, a
 			continue
 		}
 		if blockSelectsNode {
-			logCtx.Debug("Block's pool still selects node, refusing to remove affinity")
+			logCtx.WithFields(log.Fields{"pool": pool, "block": block}).Debug("Block's pool still selects node, refusing to remove affinity")
 			continue
 		}
 

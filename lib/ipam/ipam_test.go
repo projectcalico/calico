@@ -133,16 +133,13 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 		var pool20, pool32, pool26 []cnet.IPNet
 
 		BeforeEach(func() {
-			// Build a new backend client. We use a different client for each test
-			// so that the k8s QPS /burst limits don't carry across tests.
+			// Remove all data in the datastore.
 			bc, err = backend.NewClient(config)
 			Expect(err).NotTo(HaveOccurred())
+			bc.Clean()
 
 			// Build a new pool accessor for these tests.
 			pa = &ipPoolAccessor{pools: map[string]pool{}}
-			ic = NewIPAMClient(bc, pa)
-
-			hostname = "host-perf"
 
 			// Create many pools
 			for i := 0; i < 100; i++ {
@@ -164,6 +161,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 			}
 
 			// Create the node object.
+			hostname = "host-perf"
 			applyNode(bc, kc, hostname, map[string]string{"foo": "bar"})
 		})
 
@@ -173,18 +171,28 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 
 		Measure("It should be able to allocate a single address quickly - blocksize 32", func(b Benchmarker) {
 			runtime := b.Time("runtime", func() {
+				// Build a new backend client. We use a different client for each iteration of the test
+				// so that the k8s QPS /burst limits don't carry across tests. This is more realistic.
+				bc, err = backend.NewClient(config)
+				Expect(err).NotTo(HaveOccurred())
+				ic = NewIPAMClient(bc, pa)
+
 				v4, _, outErr := ic.AutoAssign(context.Background(), AutoAssignArgs{Num4: 1, IPv4Pools: pool32, Hostname: hostname})
 				Expect(outErr).NotTo(HaveOccurred())
 				Expect(len(v4)).To(Equal(1))
 			})
 
-			// With /32 block sizes, we can sometimes take a bit longer since there are many more blocks in the system,
-			// requiring many more datastore interactions to find a block. It should still be well within 2 seconds.
-			Expect(runtime.Seconds()).Should(BeNumerically("<", 2))
+			Expect(runtime.Seconds()).Should(BeNumerically("<", 1))
 		}, 100)
 
 		Measure("It should be able to allocate a single address quickly - blocksize 26", func(b Benchmarker) {
 			runtime := b.Time("runtime", func() {
+				// Build a new backend client. We use a different client for each iteration of the test
+				// so that the k8s QPS /burst limits don't carry across tests. This is more realistic.
+				bc, err = backend.NewClient(config)
+				Expect(err).NotTo(HaveOccurred())
+				ic = NewIPAMClient(bc, pa)
+
 				v4, _, outErr := ic.AutoAssign(context.Background(), AutoAssignArgs{Num4: 1, IPv4Pools: pool26, Hostname: hostname})
 				Expect(outErr).NotTo(HaveOccurred())
 				Expect(len(v4)).To(Equal(1))
@@ -195,6 +203,12 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 
 		Measure("It should be able to allocate a single address quickly - blocksize 20", func(b Benchmarker) {
 			runtime := b.Time("runtime", func() {
+				// Build a new backend client. We use a different client for each iteration of the test
+				// so that the k8s QPS /burst limits don't carry across tests. This is more realistic.
+				bc, err = backend.NewClient(config)
+				Expect(err).NotTo(HaveOccurred())
+				ic = NewIPAMClient(bc, pa)
+
 				v4, _, outErr := ic.AutoAssign(context.Background(), AutoAssignArgs{Num4: 1, IPv4Pools: pool20, Hostname: hostname})
 				Expect(outErr).NotTo(HaveOccurred())
 				Expect(len(v4)).To(Equal(1))
@@ -205,6 +219,12 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 
 		Measure("It should be able to allocate a lot of addresses quickly", func(b Benchmarker) {
 			runtime := b.Time("runtime", func() {
+				// Build a new backend client. We use a different client for each iteration of the test
+				// so that the k8s QPS /burst limits don't carry across tests. This is more realistic.
+				bc, err = backend.NewClient(config)
+				Expect(err).NotTo(HaveOccurred())
+				ic = NewIPAMClient(bc, pa)
+
 				v4, _, outErr := ic.AutoAssign(context.Background(), AutoAssignArgs{Num4: 64, IPv4Pools: pool20, Hostname: hostname})
 				Expect(outErr).NotTo(HaveOccurred())
 				Expect(len(v4)).To(Equal(64))
@@ -215,6 +235,12 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 
 		Measure("It should be able to allocate and release addresses quickly", func(b Benchmarker) {
 			runtime := b.Time("runtime", func() {
+				// Build a new backend client. We use a different client for each iteration of the test
+				// so that the k8s QPS /burst limits don't carry across tests. This is more realistic.
+				bc, err = backend.NewClient(config)
+				Expect(err).NotTo(HaveOccurred())
+				ic = NewIPAMClient(bc, pa)
+
 				v4, _, outErr := ic.AutoAssign(context.Background(), AutoAssignArgs{Num4: 1, Hostname: hostname})
 				v4IP := make([]cnet.IP, 0, 0)
 				for _, ipNets := range v4 {
