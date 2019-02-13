@@ -757,7 +757,9 @@ func (c ipamClient) releaseIPsFromBlock(ctx context.Context, ips []net.IP, block
 		// Success - decrement handles.
 		logCtx.Debugf("Decrementing handles: %v", handles)
 		for handleID, amount := range handles {
-			c.decrementHandle(ctx, handleID, blockCIDR, amount)
+			if err := c.decrementHandle(ctx, handleID, blockCIDR, amount); err != nil {
+				logCtx.WithError(err).Warn("Failed to decrement handle")
+			}
 		}
 
 		// Determine whether or not the block's pool still matches the node.
@@ -804,7 +806,10 @@ func (c ipamClient) assignFromExistingBlock(ctx context.Context, block *model.KV
 	if err != nil {
 		logCtx.WithError(err).Infof("Failed to update block")
 		if handleID != nil {
-			c.decrementHandle(ctx, *handleID, blockCIDR, num)
+			logCtx.Debug("Decrementing handle since we failed to allocate IP(s)")
+			if err := c.decrementHandle(ctx, *handleID, blockCIDR, num); err != nil {
+				logCtx.WithError(err).Warnf("Failed to decrement handle")
+			}
 		}
 		return nil, err
 	}
@@ -1206,7 +1211,9 @@ func (c ipamClient) releaseByHandle(ctx context.Context, handleID string, blockC
 			}
 			logCtx.Info("Successfully released IPs from block")
 		}
-		c.decrementHandle(ctx, handleID, blockCIDR, num)
+		if err = c.decrementHandle(ctx, handleID, blockCIDR, num); err != nil {
+			logCtx.WithError(err).Warn("Failed to decrement handle")
+		}
 
 		// Determine whether or not the block's pool still matches the node.
 		if err = c.ensureConsistentAffinity(ctx, block.AllocationBlock); err != nil {
@@ -1274,29 +1281,41 @@ func (c ipamClient) decrementHandle(ctx context.Context, handleID string, blockC
 	for i := 0; i < ipamEtcdRetries; i++ {
 		obj, err := c.blockReaderWriter.queryHandle(ctx, handleID, "")
 		if err != nil {
-			return fmt.Errorf("Can't decrement block with handle '%+v' because it doesn't exist", handleID)
+			return err
 		}
 		handle := allocationHandle{obj.Value.(*model.IPAMHandle)}
 
 		_, err = handle.decrementBlock(blockCIDR, num)
 		if err != nil {
-			return fmt.Errorf("Can't decrement block with handle '%+v': too few allocated", handleID)
+			return err
 		}
 
 		// Update / Delete as appropriate.  Since we have been manipulating the
 		// data in the KVPair, just pass this straight back to the client.
 		if handle.empty() {
 			log.Debugf("Deleting handle: %s", handleID)
-			err = c.blockReaderWriter.deleteHandle(ctx, obj)
+			if err = c.blockReaderWriter.deleteHandle(ctx, obj); err != nil {
+				if err != nil {
+					if _, ok := err.(cerrors.ErrorResourceUpdateConflict); ok {
+						// Update conflict - retry.
+						continue
+					} else if _, ok := err.(cerrors.ErrorResourceDoesNotExist); !ok {
+						return err
+					}
+					// Already deleted.
+				}
+			}
 		} else {
 			log.Debugf("Updating handle: %s", handleID)
-			_, err = c.blockReaderWriter.updateHandle(ctx, obj)
+			if _, err = c.blockReaderWriter.updateHandle(ctx, obj); err != nil {
+				if _, ok := err.(cerrors.ErrorResourceUpdateConflict); ok {
+					// Update conflict - retry.
+					continue
+				}
+				return err
+			}
 		}
 
-		// Check error.
-		if err != nil {
-			continue
-		}
 		log.Debugf("Decremented handle '%s' by %d", handleID, num)
 		return nil
 	}
