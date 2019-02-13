@@ -36,7 +36,6 @@ import (
 
 	"github.com/projectcalico/kube-controllers/pkg/config"
 	"github.com/projectcalico/kube-controllers/pkg/controllers/controller"
-	kddipam "github.com/projectcalico/kube-controllers/pkg/controllers/kdd-ipam"
 	"github.com/projectcalico/kube-controllers/pkg/controllers/namespace"
 	"github.com/projectcalico/kube-controllers/pkg/controllers/networkpolicy"
 	"github.com/projectcalico/kube-controllers/pkg/controllers/node"
@@ -143,12 +142,6 @@ func main() {
 			controllerCtrl.controllerStates["ServiceAccount"] = &controllerState{
 				controller:  serviceAccountController,
 				threadiness: config.ProfileWorkers,
-			}
-		case "ipam":
-			ipamController := kddipam.NewController(ctx, k8sClientset, calicoClient, config)
-			controllerCtrl.controllerStates["IPAM"] = &controllerState{
-				controller:  ipamController,
-				threadiness: 1,
 			}
 		default:
 			log.Fatalf("Invalid controller '%s' provided.", controllerType)
