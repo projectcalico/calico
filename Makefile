@@ -38,7 +38,9 @@ UPGRADE_SRCS := $(filter-out ./lib/upgrade/migrator/clients/v1/k8s/custom/zz_gen
 # Create a list of files upon which the generated file depends, skip the generated file itself
 APIS_SRCS := $(filter-out ./lib/apis/v3/zz_generated.deepcopy.go, $(wildcard ./lib/apis/v3/*.go))
 
+# The path, inside libcalico-go, to the cert files required for etcdv3 fv test
 TEST_CERT_PATH := test/etcd-ut-certs/
+
 .PHONY: clean
 ## Removes all .coverprofile files, the vendor dir, and .go-pkg-cache
 clean:
@@ -146,7 +148,7 @@ GINKGO_FOCUS?=.*
 
 .PHONY:ut
 ## Run the fast set of unit tests in a container.
-ut: vendor run-etcd-tls
+ut: vendor
 	-mkdir -p .go-pkg-cache
 	docker run --rm -t --privileged --net=host \
 		-e LOCAL_USER_ID=$(LOCAL_USER_ID) \
@@ -154,26 +156,10 @@ ut: vendor run-etcd-tls
 		-v $(CURDIR)/.go-pkg-cache:/go-cache/:rw \
 		-e GOCACHE=/go-cache \
 		$(CALICO_BUILD) sh -c 'cd /go/src/github.com/$(PACKAGE_NAME) && ginkgo -r --skipPackage vendor -skip "\[Datastore\]" -focus="$(GINKGO_FOCUS)" $(GINKGO_ARGS) $(WHAT)'
-	$(MAKE) stop-etcd
-
-## Run etcd, with tls enabled, as a container (calico-etcd)
-run-etcd-tls: stop-etcd
-	docker run --detach \
-		-v `pwd`/$(TEST_CERT_PATH):/root/etcd-certificates/ \
-		--net=host \
-		--entrypoint=/usr/local/bin/etcd \
-		--name calico-etcd quay.io/coreos/etcd:$(ETCD_VERSION)  \
-		--advertise-client-urls https://127.0.0.1:2379 \
-		--listen-client-urls https://0.0.0.0:2379 \
-		--trusted-ca-file=/root/etcd-certificates/ca.crt \
-		--cert-file=/root/etcd-certificates/server.crt \
-		--key-file=/root/etcd-certificates/server.key \
-		--client-cert-auth=true \
-		--data-dir=/var/lib/etcd
 
 .PHONY:fv
 ## Run functional tests against a real datastore in a container.
-fv: vendor run-etcd run-kubernetes-master
+fv: vendor run-etcd run-etcd-tls run-kubernetes-master
 	-mkdir -p .go-pkg-cache
 	docker run --rm -t --privileged --net=host \
 		-e LOCAL_USER_ID=$(LOCAL_USER_ID) \
@@ -181,6 +167,30 @@ fv: vendor run-etcd run-kubernetes-master
 		-v $(CURDIR)/.go-pkg-cache:/go-cache/:rw \
 		-e GOCACHE=/go-cache \
 		$(CALICO_BUILD) sh -c 'cd /go/src/github.com/$(PACKAGE_NAME) && ginkgo -r --skipPackage vendor -focus "$(GINKGO_FOCUS).*\[Datastore\]|\[Datastore\].*$(GINKGO_FOCUS)" $(GINKGO_ARGS) $(WHAT)'
+
+	$(MAKE) stop-etcd-tls
+
+## Run etcd, with tls enabled, as a container (calico-etcd-tls)
+run-etcd-tls: stop-etcd-tls
+	docker run --detach \
+		-v `pwd`/$(TEST_CERT_PATH):/root/etcd-certificates/ \
+		--net=host \
+		--entrypoint=/usr/local/bin/etcd \
+		--name calico-etcd-tls quay.io/coreos/etcd:$(ETCD_VERSION)  \
+		--listen-peer-urls https://127.0.0.1:5008 \
+		--peer-cert-file=/root/etcd-certificates/server.crt \
+		--peer-key-file=/root/etcd-certificates/server.key \
+		--advertise-client-urls https://127.0.0.1:5007 \
+		--listen-client-urls https://0.0.0.0:5007 \
+		--trusted-ca-file=/root/etcd-certificates/ca.crt \
+		--cert-file=/root/etcd-certificates/server.crt \
+		--key-file=/root/etcd-certificates/server.key \
+		--client-cert-auth=true \
+		--data-dir=/var/lib/etcd
+
+## Stop etcd with name calico-etcd-tls
+stop-etcd-tls:
+	-docker rm -f calico-etcd-tls
 
 ## Run etcd as a container (calico-etcd)
 run-etcd: stop-etcd
