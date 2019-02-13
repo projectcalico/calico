@@ -90,7 +90,7 @@ func (c *customK8sResourceClient) Create(ctx context.Context, kvp *model.KVPair)
 	// Update the return data with the metadata populated by the (Kubernetes) datastore.
 	kvp, err = c.convertResourceToKVPair(resOut)
 	if err != nil {
-		logContext.WithError(err).Info("Error converting created K8s resource to Calico resource")
+		logContext.WithError(err).Debug("Error converting created K8s resource to Calico resource")
 		return nil, K8sErrorToCalico(err, kvp.Key)
 	}
 	// Update the revision information from the response.
@@ -115,7 +115,7 @@ func (c *customK8sResourceClient) Update(ctx context.Context, kvp *model.KVPair)
 	// Convert the KVPair to a K8s resource.
 	resIn, err := c.convertKVPairToResource(kvp)
 	if err != nil {
-		logContext.WithError(err).Info("Error updating resource")
+		logContext.WithError(err).Debug("Error updating resource")
 		return nil, err
 	}
 
@@ -140,7 +140,7 @@ func (c *customK8sResourceClient) Update(ctx context.Context, kvp *model.KVPair)
 	// Update the return data with the metadata populated by the (Kubernetes) datastore.
 	kvp, err = c.convertResourceToKVPair(resOut)
 	if err != nil {
-		logContext.WithError(err).Info("Error converting created K8s resource to Calico resource")
+		logContext.WithError(err).Debug("Error converting created K8s resource to Calico resource")
 		return nil, K8sErrorToCalico(err, kvp.Key)
 	}
 	// Success. Update the revision information from the response.
@@ -164,7 +164,7 @@ func (c *customK8sResourceClient) Delete(ctx context.Context, k model.Key, revis
 	// Convert the Key to a resource name.
 	name, err := c.keyToName(k)
 	if err != nil {
-		logContext.WithError(err).Info("Error deleting resource")
+		logContext.WithError(err).Debug("Error deleting resource")
 		return nil, err
 	}
 
@@ -208,7 +208,7 @@ func (c *customK8sResourceClient) Get(ctx context.Context, key model.Key, revisi
 	logContext.Debug("Get custom Kubernetes resource")
 	name, err := c.keyToName(key)
 	if err != nil {
-		logContext.WithError(err).Info("Error getting resource")
+		logContext.WithError(err).Debug("Error getting resource")
 		return nil, err
 	}
 	namespace := key.(model.ResourceKey).Namespace
@@ -225,7 +225,7 @@ func (c *customK8sResourceClient) Get(ctx context.Context, key model.Key, revisi
 		Name(name).
 		Do().Into(resOut)
 	if err != nil {
-		logContext.WithError(err).Info("Error getting resource")
+		logContext.WithError(err).Debug("Error getting resource")
 		return nil, K8sErrorToCalico(err, key)
 	}
 
@@ -256,7 +256,7 @@ func (c *customK8sResourceClient) List(ctx context.Context, list model.ListInter
 			// error that it doesn't exist - we'll return an empty
 			// list.
 			if _, ok := err.(cerrors.ErrorResourceDoesNotExist); !ok {
-				log.WithField("Resource", c.resource).WithError(err).Info("Error listing resource")
+				log.WithField("Resource", c.resource).WithError(err).Debug("Error listing resource")
 				return nil, err
 			}
 			return &model.KVPairList{
@@ -290,7 +290,7 @@ func (c *customK8sResourceClient) List(ctx context.Context, list model.ListInter
 		// means there are no matching Custom K8s Resources, and we should return
 		// an empty list.
 		if !kerrors.IsNotFound(err) {
-			log.WithError(err).Info("Error listing resources")
+			log.WithError(err).Debug("Error listing resources")
 			return nil, K8sErrorToCalico(err, list)
 		}
 		return &model.KVPairList{
