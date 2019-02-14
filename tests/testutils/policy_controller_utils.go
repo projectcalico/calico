@@ -22,14 +22,20 @@ import (
 	"os"
 
 	"github.com/projectcalico/felix/fv/containers"
+	"github.com/projectcalico/libcalico-go/lib/apiconfig"
 )
 
-func RunPolicyController(etcdIP, kconfigfile string) *containers.Container {
-	return containers.Run("calico-policy-controller",
+func RunPolicyController(datastoreType apiconfig.DatastoreType, etcdIP, kconfigfile, ctrls string) *containers.Container {
+	if ctrls == "" {
+		// Default to all controllers.
+		ctrls = "workloadendpoint,namespace,policy,node,serviceaccount"
+	}
+	return containers.Run("calico-kube-controllers",
 		containers.RunOpts{AutoRemove: true},
 		"--privileged",
 		"-e", fmt.Sprintf("ETCD_ENDPOINTS=http://%s:2379", etcdIP),
-		"-e", "ENABLED_CONTROLLERS=workloadendpoint,namespace,policy,node,serviceaccount",
+		"-e", fmt.Sprintf("DATASTORE_TYPE=%s", datastoreType),
+		"-e", fmt.Sprintf("ENABLED_CONTROLLERS=%s", ctrls),
 		"-e", "LOG_LEVEL=debug",
 		"-e", fmt.Sprintf("KUBECONFIG=%s", kconfigfile),
 		"-e", "RECONCILER_PERIOD=10s",

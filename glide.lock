@@ -1,5 +1,5 @@
-hash: 93bf41b244a92b50b94d6044e3d9fc52f2d4822dfb7553700474ce14e16f8834
-updated: 2019-02-13T13:15:22.218401776-08:00
+hash: 7519d548c3701cc5fed15778a91cc397e9bc253e2b3489ccf7fafd070f201356
+updated: 2019-02-20T13:13:15.381549269-08:00
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -37,7 +37,7 @@ imports:
 - name: github.com/ghodss/yaml
   version: 0ca9ea5df5451ffdf184b4428c902747c2c11cd7
 - name: github.com/go-ini/ini
-  version: 9c8236e659b76e87bf02044d06fde8683008ff3e
+  version: ece0e89bb05aec0d6768f7bc1e77f11f03da0d11
 - name: github.com/gogo/protobuf
   version: 342cbe0a04158f6dcb03ca0079991a51a4248c02
   subpackages:
@@ -59,7 +59,7 @@ imports:
 - name: github.com/google/btree
   version: 925471ac9e2131377a91e1595defec898166fe49
 - name: github.com/google/gofuzz
-  version: 44d81051d367757e1c7c6a5a86423ece9afcf63c
+  version: 24818f796faf91cd76ec7bddd72458fbced7a6c1
 - name: github.com/googleapis/gnostic
   version: 0c5108395e2debce0d731cf0287ddf7242066aba
   subpackages:
@@ -149,7 +149,7 @@ imports:
 - name: github.com/peterbourgon/diskv
   version: 5f041e8faa004a95c88a202771f4cc3e991971e6
 - name: github.com/projectcalico/felix
-  version: 1b3147cca714c561b55d7438f83de5c3887846d8
+  version: ad7168eb0193942045b0bc932e88dd0d3f267c5b
   subpackages:
   - calc
   - config
@@ -293,7 +293,7 @@ imports:
   subpackages:
   - rate
 - name: google.golang.org/appengine
-  version: 4a4468ece617fc8205e99368fa2200e9d1fad421
+  version: 54a98f90d1c46b7731eb8fb305d2a321c30ef610
   subpackages:
   - internal
   - internal/app_identity
@@ -415,13 +415,12 @@ imports:
   - pkg/watch
   - third_party/forked/golang/reflect
 - name: k8s.io/apiserver
-  version: f1dab8c342623e75f0484f20b150183d9e73f406
+  version: 054bf9967aa859e39038908f7fa5735f91ee011d
   subpackages:
   - pkg/storage
   - pkg/storage/etcd
   - pkg/storage/etcd3
   - pkg/storage/value
-  - pkg/util/trace
 - name: k8s.io/client-go
   version: 7d04d0e2a0a1a4d4a1cd6baa432a2301492e4e65
   subpackages:
@@ -489,4 +488,13 @@ imports:
   - util/jsonpath
   - util/retry
   - util/workqueue
+- name: k8s.io/klog
+  version: 8139d8cb77af419532b33dfa7dd09fbc5f1d344f
+- name: k8s.io/utils
+  version: ed37f7428a91fc2a81070808937195dcd46d320e
+  subpackages:
+  - buffer
+  - integer
+  - pointer
+  - trace
 testImports: []

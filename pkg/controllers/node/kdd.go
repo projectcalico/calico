@@ -1,3 +1,17 @@
+// Copyright (c) 2019 Tigera, Inc. All rights reserved.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package node
 
 import (
@@ -10,13 +24,8 @@ import (
 	cerrors "github.com/projectcalico/libcalico-go/lib/errors"
 	log "github.com/sirupsen/logrus"
 	"k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/apis/meta/v1"
+	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
-
-type allocation struct {
-	handle     string
-	attributes map[string]string
-}
 
 // syncDeleteKDD cleans up any IPAM resources which should no longer exist based on nodes in the cluster.
 // It returns an error if it is determined that there are resources which should be cleaned up, but is unable to do so.
@@ -38,7 +47,7 @@ func (c *NodeController) syncDeleteKDD() error {
 
 	// Build a list of all the nodes in the cluster based on IPAM allocations across all
 	// blocks, plus affinities.
-	nodes := map[string][]allocation{}
+	nodes := map[string][]model.AllocationAttribute{}
 	for _, kvp := range blocks.KVPairs {
 		b := kvp.Value.(*model.AllocationBlock)
 
@@ -47,7 +56,7 @@ func (c *NodeController) syncDeleteKDD() error {
 		if b.Affinity != nil {
 			n := strings.TrimLeft(*b.Affinity, "host:")
 			if _, ok := nodes[n]; !ok {
-				nodes[n] = []allocation{}
+				nodes[n] = []model.AllocationAttribute{}
 			}
 		}
 
@@ -62,7 +71,7 @@ func (c *NodeController) syncDeleteKDD() error {
 			// Track nodes based on IP allocations.
 			if val, ok := attr.AttrSecondary["node"]; ok {
 				if _, ok := nodes[val]; !ok {
-					nodes[val] = []allocation{}
+					nodes[val] = []model.AllocationAttribute{}
 				}
 
 				// If there is no handle, then skip this IP. We need the handle
@@ -74,14 +83,11 @@ func (c *NodeController) syncDeleteKDD() error {
 
 				// Add this allocation to the node, so we can release it later if
 				// we need to.
-				nodes[val] = append(nodes[val], allocation{
-					handle:     *attr.AttrPrimary,
-					attributes: attr.AttrSecondary,
-				})
+				nodes[val] = append(nodes[val], attr)
 			}
 		}
 	}
-	log.Debugf("Nodes in IPAM: %s", nodes)
+	log.Debugf("Nodes in IPAM: %v", nodes)
 
 	// For each node present in IPAM, if it doesn't exist in the Kubernetes API then we
 	// should consider it a candidate for cleanup.
@@ -99,8 +105,8 @@ func (c *NodeController) syncDeleteKDD() error {
 		// extra sure that the node is gone before we clean it up.
 		canDelete := true
 		for _, a := range allocations {
-			ns := a.attributes["namespace"]
-			pod := a.attributes["pod"]
+			ns := a.AttrSecondary["namespace"]
+			pod := a.AttrSecondary["pod"]
 
 			// TODO: Need to handle IPIP addresses somehow. They are allocated in calico-ipam, but
 			// currently don't have this metadata attached.
@@ -138,31 +144,23 @@ func (c *NodeController) syncDeleteKDD() error {
 	return nil
 }
 
-func (c *NodeController) cleanupNode(node string, allocations []allocation) error {
-	// Release the affinities for this node.
-	logc := log.WithField("node", node)
-	if err := c.calicoClient.IPAM().ReleaseHostAffinities(c.ctx, node); err != nil {
-		logc.WithError(err).Errorf("Failed to release node affinity")
-		return err
-	}
-	logc.Debug("Released all affinities for node")
-
+func (c *NodeController) cleanupNode(node string, allocations []model.AllocationAttribute) error {
 	// At this point, we've verified that the node isn't in Kubernetes and that all the allocations
-	// are tied to pods which don't exist any more. We've released the affinity, so clean up
-	// any allocations which may still be laying around.
+	// are tied to pods which don't exist any more. Clean up any allocations which may still be laying around.
+	logc := log.WithField("node", node)
 	retry := false
 	for _, a := range allocations {
-		if err := c.calicoClient.IPAM().ReleaseByHandle(c.ctx, a.handle); err != nil {
+		if err := c.calicoClient.IPAM().ReleaseByHandle(c.ctx, *a.AttrPrimary); err != nil {
 			if _, ok := err.(cerrors.ErrorResourceDoesNotExist); ok {
 				// If it doesn't exist, we're OK, since we don't want it to!
 				// Try to release any other allocations, but we'll still return an error
 				// to retry the whole thing from the top. On the retry,
 				// we should no longer see any allocations.
-				logc.WithField("handle", a.handle).Debug("IP already released")
+				logc.WithField("handle", *a.AttrPrimary).Debug("IP already released")
 				retry = true
 				continue
 			}
-			logc.WithError(err).WithField("handle", a.handle).Warning("Failed to release IP")
+			logc.WithError(err).WithField("handle", *a.AttrPrimary).Warning("Failed to release IP")
 			retry = true
 			break
 		}
@@ -172,6 +170,13 @@ func (c *NodeController) cleanupNode(node string, allocations []allocation) erro
 		logc.Info("Couldn't release all IPs for stale node, schedule retry")
 		return fmt.Errorf("Couldn't release all IPs")
 	}
+
+	// Release the affinities for this node, requiring that the blocks are empty.
+	if err := c.calicoClient.IPAM().ReleaseHostAffinities(c.ctx, node, true); err != nil {
+		logc.WithError(err).Errorf("Failed to release block affinities for node")
+		return err
+	}
+	logc.Debug("Released all affinities for node")
 
 	return nil
 }
