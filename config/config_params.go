@@ -205,6 +205,8 @@ type Config struct {
 	sourceToRawConfig map[Source]map[string]string
 	rawValues         map[string]string
 	Err               error
+
+	IptablesNATOutgoingInterfaceFilter	bool	`config:"bool;false"`
 }
 
 type ProtoPort struct {
