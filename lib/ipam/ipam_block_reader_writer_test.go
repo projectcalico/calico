@@ -423,7 +423,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 						defer GinkgoRecover()
 
 						testhost := "same-host"
-						err := ic.ReleaseAffinity(ctx, *net, testhost)
+						err := ic.ReleaseAffinity(ctx, *net, testhost, false)
 						if err != nil {
 							log.WithError(err).Errorf("Failed to release affinity for host %s", testhost)
 							testErr = err
@@ -845,7 +845,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 			})
 
 			By("calling ReleaseAffinity", func() {
-				err := ic.ReleaseAffinity(ctx, *net, hostA)
+				err := ic.ReleaseAffinity(ctx, *net, hostA, false)
 				Expect(err).NotTo(HaveOccurred())
 			})
 

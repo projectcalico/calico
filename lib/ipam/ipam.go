@@ -330,6 +330,8 @@ func (c ipamClient) autoAssign(ctx context.Context, num int, handleID *string, a
 			if err = c.blockReaderWriter.releaseBlockAffinity(ctx, host, block, true); err != nil {
 				if _, ok := err.(errBlockClaimConflict); ok {
 					// Not claimed by this host - ignore.
+				} else if _, ok := err.(errBlockNotEmpty); ok {
+					// Block isn't empty - ignore.
 				} else if _, ok := err.(cerrors.ErrorResourceDoesNotExist); ok {
 					// Block does not exist - ignore.
 				} else {
@@ -895,7 +897,7 @@ func (c ipamClient) ClaimAffinity(ctx context.Context, cidr net.IPNet, host stri
 // on the given host.  If a block does not have affinity for the given host,
 // its affinity will not be released and no error will be returned.
 // If an empty string is passed as the host, then the hostname is automatically detected.
-func (c ipamClient) ReleaseAffinity(ctx context.Context, cidr net.IPNet, host string) error {
+func (c ipamClient) ReleaseAffinity(ctx context.Context, cidr net.IPNet, host string, mustBeEmpty bool) error {
 	// Verify the requested CIDR falls within a configured pool.
 	pool := c.blockReaderWriter.getPoolForIP(net.IP{IP: cidr.IP}, nil)
 	if pool == nil {
@@ -920,7 +922,7 @@ func (c ipamClient) ReleaseAffinity(ctx context.Context, cidr net.IPNet, host st
 	for blockCIDR := blocks(); blockCIDR != nil; blockCIDR = blocks() {
 		logCtx := log.WithField("cidr", blockCIDR)
 		for i := 0; i < datastoreRetries; i++ {
-			err := c.blockReaderWriter.releaseBlockAffinity(ctx, hostname, *blockCIDR, false)
+			err := c.blockReaderWriter.releaseBlockAffinity(ctx, hostname, *blockCIDR, mustBeEmpty)
 			if err != nil {
 				if _, ok := err.(errBlockClaimConflict); ok {
 					// Not claimed by this host - ignore.
@@ -943,7 +945,7 @@ func (c ipamClient) ReleaseAffinity(ctx context.Context, cidr net.IPNet, host st
 // ReleaseHostAffinities releases affinity for all blocks that are affine
 // to the given host.  If an empty string is passed as the host,
 // then the hostname is automatically detected.
-func (c ipamClient) ReleaseHostAffinities(ctx context.Context, host string) error {
+func (c ipamClient) ReleaseHostAffinities(ctx context.Context, host string, mustBeEmpty bool) error {
 	hostname, err := decideHostname(host)
 	if err != nil {
 		return err
@@ -957,7 +959,7 @@ func (c ipamClient) ReleaseHostAffinities(ctx context.Context, host string) erro
 		}
 
 		for _, blockCIDR := range blockCIDRs {
-			err := c.ReleaseAffinity(ctx, blockCIDR, hostname)
+			err := c.ReleaseAffinity(ctx, blockCIDR, hostname, mustBeEmpty)
 			if err != nil {
 				if _, ok := err.(errBlockClaimConflict); ok {
 					// Claimed by a different host.
@@ -1032,7 +1034,7 @@ func (c ipamClient) RemoveIPAMHost(ctx context.Context, host string) error {
 	for i := 0; i < datastoreRetries; i++ {
 		// Release affinities for this host.
 		logCtx.Info("Releasing IPAM affinities for host")
-		if err := c.ReleaseHostAffinities(ctx, hostname); err != nil {
+		if err := c.ReleaseHostAffinities(ctx, hostname, false); err != nil {
 			logCtx.WithError(err).Errorf("Failed to release IPAM affinities for host")
 			return err
 		}
@@ -1119,7 +1121,7 @@ func (c ipamClient) IPsByHandle(ctx context.Context, handleID string) ([]net.IP,
 		_, blockCIDR, _ := net.ParseCIDR(k)
 		obj, err := c.blockReaderWriter.queryBlock(ctx, *blockCIDR, "")
 		if err != nil {
-			log.Warningf("Couldn't read block %s referenced by handle %s", blockCIDR, handleID)
+			log.WithError(err).Warningf("Couldn't read block %s referenced by handle %s", blockCIDR, handleID)
 			continue
 		}
 
@@ -1461,6 +1463,8 @@ func (c ipamClient) ensureConsistentAffinity(ctx context.Context, b *model.Alloc
 	if err = c.blockReaderWriter.releaseBlockAffinity(ctx, host, b.CIDR, true); err != nil {
 		if _, ok := err.(errBlockClaimConflict); ok {
 			// Not claimed by this host - ignore.
+		} else if _, ok := err.(errBlockNotEmpty); ok {
+			// Block isn't empty - ignore.
 		} else if _, ok := err.(cerrors.ErrorResourceDoesNotExist); ok {
 			// Block does not exist - ignore.
 		} else {

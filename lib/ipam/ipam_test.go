@@ -265,6 +265,62 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 		})
 	})
 
+	Describe("Affinity FV tests", func() {
+		var err error
+		var hostname string
+		BeforeEach(func() {
+			// Remove all data in the datastore.
+			bc, err = backend.NewClient(config)
+			Expect(err).NotTo(HaveOccurred())
+			bc.Clean()
+
+			// Create an IP pool
+			applyPool("10.0.0.0/24", true, "all()")
+
+			// Create the node object.
+			hostname = "host-affinity-fvs"
+			applyNode(bc, kc, hostname, nil)
+		})
+
+		It("should only release empty blocks", func() {
+			// Allocate an IP address in a block.
+			handle := "test-handle"
+			v4, _, err := ic.AutoAssign(context.Background(), AutoAssignArgs{Num4: 1, Hostname: hostname, HandleID: &handle})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(len(v4)).To(Equal(1))
+
+			// Get the block that was allocated. It should have an affinity matching the host.
+			blocks, err := bc.List(context.Background(), model.BlockListOptions{}, "")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(len(blocks.KVPairs)).To(Equal(1))
+			Expect(*blocks.KVPairs[0].Value.(*model.AllocationBlock).Affinity).To(Equal(fmt.Sprintf("host:%s", hostname)))
+
+			// Try to release the block's affinity, requiring it to be empty. It should fail.
+			err = ic.ReleaseAffinity(context.Background(), blocks.KVPairs[0].Value.(*model.AllocationBlock).CIDR, hostname, true)
+			Expect(err).To(HaveOccurred())
+
+			// The block should still have an affinity to the host.
+			blocks, err = bc.List(context.Background(), model.BlockListOptions{}, "")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(len(blocks.KVPairs)).To(Equal(1))
+			Expect(*blocks.KVPairs[0].Value.(*model.AllocationBlock).Affinity).To(Equal(fmt.Sprintf("host:%s", hostname)))
+
+			// Release the IP.
+			err = ic.ReleaseByHandle(context.Background(), handle)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Try to release the block's affinity, requiring it to be empty. This time, the block is empty
+			// and it should succeed.
+			err = ic.ReleaseAffinity(context.Background(), blocks.KVPairs[0].Value.(*model.AllocationBlock).CIDR, hostname, true)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Releasing the block affinity should have deleted it.
+			blocks, err = bc.List(context.Background(), model.BlockListOptions{}, "")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(len(blocks.KVPairs)).To(Equal(0))
+		})
+	})
+
 	Describe("IPAM ReleaseIPs with duplicates in the request should be safe", func() {
 		host := "host-a"
 		pool1 := cnet.MustParseNetwork("10.0.0.0/26")
