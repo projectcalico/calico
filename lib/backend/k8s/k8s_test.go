@@ -1936,4 +1936,35 @@ var _ = testutils.E2eDatastoreDescribe("Test Watch support", testutils.Datastore
 		})
 	})
 
+	It("should handle a CRUD of IPAM Config", func() {
+		ipamKVP := &model.KVPair{
+			Key: model.IPAMConfigKey{},
+			Value: &model.IPAMConfig{
+				StrictAffinity:     false,
+				AutoAllocateBlocks: true,
+			},
+		}
+		By("Creating an IPAM Config", func() {
+			kvpRes, err := c.Create(ctx, ipamKVP)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(kvpRes.Value).To(Equal(ipamKVP.Value))
+		})
+		By("Reading and updating an IPAM Config", func() {
+			kvpRes, err := c.Get(ctx, ipamKVP.Key, "")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(kvpRes.Value).To(Equal(ipamKVP.Value))
+
+			kvpRes.Value.(*model.IPAMConfig).StrictAffinity = true
+			kvpRes.Value.(*model.IPAMConfig).AutoAllocateBlocks = false
+			kvpRes2, err := c.Update(ctx, kvpRes)
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(kvpRes2.Value).NotTo(Equal(ipamKVP.Value))
+			Expect(kvpRes2.Value).To(Equal(kvpRes.Value))
+		})
+		By("Deleting an IPAM Config", func() {
+			_, err := c.Delete(ctx, ipamKVP.Key, "")
+			Expect(err).NotTo(HaveOccurred())
+		})
+	})
 })

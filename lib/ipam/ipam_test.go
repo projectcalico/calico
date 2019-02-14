@@ -1407,6 +1407,31 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 		// - Claim affinity to the same block again but for "host-b" this time - expect 0 claimed blocks, 4 failed and expect no error.
 		Entry("Claim affinity to the same block again but for host-b this time", testArgsClaimAff{"10.0.0.0/24", "host-b", false, []string{"10.0.0.0/24", "fd80:24e2:f998:72d6::/120"}, net.IP{}, 0, 4, nil}),
 	)
+
+	Describe("ensure that GetIPAMConfig and SetIPAMConfig work as expected", func() {
+		ctx := context.Background()
+
+		BeforeEach(func() {
+			bc.Clean()
+		})
+
+		It("should get the default IPAMConfig if one doesn't exist", func() {
+			cfg, err := ic.GetIPAMConfig(ctx)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(cfg.AutoAllocateBlocks).To(Equal(true))
+			Expect(cfg.StrictAffinity).To(Equal(false))
+		})
+
+		It("should set an IPAMConfig resource that is different from the default", func() {
+			cfg := IPAMConfig{AutoAllocateBlocks: false, StrictAffinity: true}
+			err := ic.SetIPAMConfig(ctx, cfg)
+			Expect(err).NotTo(HaveOccurred())
+
+			cfg2, err := ic.GetIPAMConfig(ctx)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(*cfg2).To(Equal(cfg))
+		})
+	})
 })
 
 // Tests for determining IP pools to use.
