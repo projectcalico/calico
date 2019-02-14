@@ -66,10 +66,10 @@ type EtcdConfig struct {
 type KubeConfig struct {
 	Kubeconfig               string `json:"kubeconfig" envconfig:"KUBECONFIG" default:""`
 	K8sAPIEndpoint           string `json:"k8sAPIEndpoint" envconfig:"K8S_API_ENDPOINT" default:""`
-	K8sKeyFile               string `json:"k8sKeyFile" default:""`
-	K8sCertFile              string `json:"k8sCertFile" default:""`
-	K8sCAFile                string `json:"k8sCAFile" default:""`
-	K8sAPIToken              string `json:"k8sAPIToken" default:""`
+	K8sKeyFile               string `json:"k8sKeyFile" ignore:"true"`
+	K8sCertFile              string `json:"k8sCertFile" ignore:"true"`
+	K8sCAFile                string `json:"k8sCAFile" ignore:"true"`
+	K8sAPIToken              string `json:"k8sAPIToken" ignore:"true"`
 	K8sInsecureSkipTLSVerify bool   `json:"k8sInsecureSkipTLSVerify" envconfig:"K8S_INSECURE_SKIP_TLS_VERIFY" default:""`
 	K8sDisableNodePoll       bool   `json:"k8sDisableNodePoll" envconfig:"K8S_DISABLE_NODE_POLL" default:""`
 }
