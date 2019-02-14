@@ -1,5 +1,5 @@
-hash: 159275731d0765ea751f71592cd328e15b4a83dadd338b58e98511d60d8f2c62
-updated: 2019-02-13T13:34:57.683350741-08:00
+hash: 058cc0fc03b63d6f5af563aaf3af75bb515540c89110fea8dec0369559357566
+updated: 2019-02-14T07:38:49.506148069Z
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -187,7 +187,7 @@ imports:
 - name: github.com/peterbourgon/diskv
   version: 5f041e8faa004a95c88a202771f4cc3e991971e6
 - name: github.com/projectcalico/felix
-  version: d34febb1f1089b94f39618d850eb30ce7ea77694
+  version: 5211c86a4152ef11411abb7b5eb675a79ece6eb8
   subpackages:
   - buildinfo
   - calc
