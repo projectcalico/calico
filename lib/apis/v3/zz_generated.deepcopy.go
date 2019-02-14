@@ -699,6 +699,11 @@ func (in *FelixConfigurationSpec) DeepCopyInto(out *FelixConfigurationSpec) {
 		*out = new(v1.Duration)
 		**out = **in
 	}
+	if in.IptablesNATOutgoingInterfaceFilter != nil {
+		in, out := &in.IptablesNATOutgoingInterfaceFilter, &out.IptablesNATOutgoingInterfaceFilter
+		*out = new(bool)
+		**out = **in
+	}
 	return
 }
 
