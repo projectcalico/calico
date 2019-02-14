@@ -1722,7 +1722,7 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 			getNode, err := c.Get(ctx, kvp.Key.(model.ResourceKey), "")
 			Expect(err).NotTo(HaveOccurred())
 			Expect(*getNode.Value.(*apiv3.Node).Spec.BGP.ASNumber).To(Equal(newAsn))
-			Expect(getNode.Value.(*apiv3.Node).Spec.BGP.IPv4IPIPTunnelAddr).To(Equal("10.10.10.1"))
+			Expect(getNode.Value.(*apiv3.Node).Spec.BGP.IPv4IPIPTunnelAddr).To(Equal(""))
 
 			// We do not support creating Nodes, we should see an error
 			// if the Node does not exist.
@@ -1749,7 +1749,8 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 					},
 					Spec: apiv3.NodeSpec{
 						BGP: &apiv3.NodeBGPSpec{
-							IPv4Address: ip,
+							IPv4Address:        ip,
+							IPv4IPIPTunnelAddr: "10.0.0.1",
 						},
 					},
 				},
@@ -1758,11 +1759,13 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 
 			Expect(err).NotTo(HaveOccurred())
 			Expect(node.Value.(*apiv3.Node).Spec.BGP.ASNumber).To(BeNil())
+			Expect(node.Value.(*apiv3.Node).Spec.BGP.IPv4IPIPTunnelAddr).To(Equal("10.0.0.1"))
 
 			// Also check that Get() returns the changes
 			getNode, err := c.Get(ctx, kvp.Key.(model.ResourceKey), "")
 			Expect(err).NotTo(HaveOccurred())
 			Expect(getNode.Value.(*apiv3.Node).Spec.BGP.ASNumber).To(BeNil())
+			Expect(getNode.Value.(*apiv3.Node).Spec.BGP.IPv4IPIPTunnelAddr).To(Equal("10.0.0.1"))
 		})
 
 		By("Syncing HostIPs over the Syncer", func() {
