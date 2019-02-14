@@ -32,7 +32,7 @@ import (
 const (
 	// Number of retries when we have an error writing data
 	// to etcd.
-	ipamEtcdRetries   = 100
+	datastoreRetries  = 100
 	ipamKeyErrRetries = 3
 )
 
@@ -326,7 +326,7 @@ func (c ipamClient) autoAssign(ctx context.Context, num int, handleID *string, a
 		}
 
 		// Release the block affinity, requiring it to be empty.
-		for i := 0; i < ipamEtcdRetries; i++ {
+		for i := 0; i < datastoreRetries; i++ {
 			if err = c.blockReaderWriter.releaseBlockAffinity(ctx, host, block, true); err != nil {
 				if _, ok := err.(errBlockClaimConflict); ok {
 					// Not claimed by this host - ignore.
@@ -359,7 +359,7 @@ func (c ipamClient) autoAssign(ctx context.Context, num int, handleID *string, a
 
 		// Try to assign from this block - if we hit a CAS error, we'll try this block again.
 		// For any other error, we'll break out and try the next affine block.
-		for i := 0; i < ipamEtcdRetries; i++ {
+		for i := 0; i < datastoreRetries; i++ {
 			// Get the affinity.
 			logCtx.Infof("Trying affinity for %s", cidr)
 			aff, err := c.blockReaderWriter.queryAffinity(ctx, host, cidr, "")
@@ -407,7 +407,7 @@ func (c ipamClient) autoAssign(ctx context.Context, num int, handleID *string, a
 	logCtx.Debugf("Allocate new blocks? Config: %+v", config)
 	if config.AutoAllocateBlocks == true {
 		rem := num - len(ips)
-		retries := ipamEtcdRetries
+		retries := datastoreRetries
 		for rem > 0 && retries > 0 {
 			if maxNumBlocks > 0 && numBlocksOwned >= maxNumBlocks {
 				log.Warnf("Unable to allocate a new IPAM block; host already has %v blocks but "+
@@ -434,7 +434,7 @@ func (c ipamClient) autoAssign(ctx context.Context, num int, handleID *string, a
 			logCtx := log.WithFields(log.Fields{"host": host, "subnet": subnet})
 			logCtx.Info("Found unclaimed block")
 
-			for i := 0; i < ipamEtcdRetries; i++ {
+			for i := 0; i < datastoreRetries; i++ {
 				// We found an unclaimed block - claim affinity for it.
 				pa, err := c.blockReaderWriter.getPendingAffinity(ctx, host, *subnet)
 				if err != nil {
@@ -519,7 +519,7 @@ func (c ipamClient) autoAssign(ctx context.Context, num int, handleID *string, a
 					break
 				}
 
-				for i := 0; i < ipamEtcdRetries; i++ {
+				for i := 0; i < datastoreRetries; i++ {
 					b, err := c.blockReaderWriter.queryBlock(ctx, *blockCIDR, "")
 					if err != nil {
 						logCtx.WithError(err).Warn("Failed to get non-affine block")
@@ -572,7 +572,7 @@ func (c ipamClient) AssignIP(ctx context.Context, args AssignIPArgs) error {
 
 	blockCIDR := getBlockCIDRForAddress(args.IP, pool)
 	log.Debugf("IP %s is in block '%s'", args.IP.String(), blockCIDR.String())
-	for i := 0; i < ipamEtcdRetries; i++ {
+	for i := 0; i < datastoreRetries; i++ {
 		obj, err := c.blockReaderWriter.queryBlock(ctx, blockCIDR, "")
 		if err != nil {
 			if _, ok := err.(cerrors.ErrorResourceDoesNotExist); !ok {
@@ -701,7 +701,7 @@ func (c ipamClient) ReleaseIPs(ctx context.Context, ips []net.IP) ([]net.IP, err
 
 func (c ipamClient) releaseIPsFromBlock(ctx context.Context, ips []net.IP, blockCIDR net.IPNet) ([]net.IP, error) {
 	logCtx := log.WithField("cidr", blockCIDR)
-	for i := 0; i < ipamEtcdRetries; i++ {
+	for i := 0; i < datastoreRetries; i++ {
 		logCtx.Info("Getting block so we can release IPs")
 
 		// Get allocation block for cidr.
@@ -857,7 +857,7 @@ func (c ipamClient) ClaimAffinity(ctx context.Context, cidr net.IPNet, host stri
 	// Claim all blocks within the given cidr.
 	blocks := blockGenerator(pool, cidr)
 	for blockCIDR := blocks(); blockCIDR != nil; blockCIDR = blocks() {
-		for i := 0; i < ipamEtcdRetries; i++ {
+		for i := 0; i < datastoreRetries; i++ {
 			// First, claim a pending affinity.
 			pa, err := c.blockReaderWriter.getPendingAffinity(ctx, hostname, *blockCIDR)
 			if err != nil {
@@ -919,7 +919,7 @@ func (c ipamClient) ReleaseAffinity(ctx context.Context, cidr net.IPNet, host st
 	blocks := blockGenerator(pool, cidr)
 	for blockCIDR := blocks(); blockCIDR != nil; blockCIDR = blocks() {
 		logCtx := log.WithField("cidr", blockCIDR)
-		for i := 0; i < ipamEtcdRetries; i++ {
+		for i := 0; i < datastoreRetries; i++ {
 			err := c.blockReaderWriter.releaseBlockAffinity(ctx, hostname, *blockCIDR, false)
 			if err != nil {
 				if _, ok := err.(errBlockClaimConflict); ok {
@@ -989,7 +989,7 @@ func (c ipamClient) ReleasePoolAffinities(ctx context.Context, pool net.IPNet) e
 		for blockString, host := range pairs {
 			_, blockCIDR, _ := net.ParseCIDR(blockString)
 			logCtx := log.WithField("cidr", blockCIDR)
-			for i := 0; i < ipamEtcdRetries; i++ {
+			for i := 0; i < datastoreRetries; i++ {
 				err = c.blockReaderWriter.releaseBlockAffinity(ctx, host, *blockCIDR, false)
 				if err != nil {
 					if _, ok := err.(errBlockClaimConflict); ok {
@@ -1029,7 +1029,7 @@ func (c ipamClient) RemoveIPAMHost(ctx context.Context, host string) error {
 	logCtx := log.WithField("host", hostname)
 	logCtx.Info("Removing IPAM data for host")
 
-	for i := 0; i < ipamEtcdRetries; i++ {
+	for i := 0; i < datastoreRetries; i++ {
 		// Release affinities for this host.
 		logCtx.Info("Releasing IPAM affinities for host")
 		if err := c.ReleaseHostAffinities(ctx, hostname); err != nil {
@@ -1151,8 +1151,8 @@ func (c ipamClient) ReleaseByHandle(ctx context.Context, handleID string) error 
 
 func (c ipamClient) releaseByHandle(ctx context.Context, handleID string, blockCIDR net.IPNet) error {
 	logCtx := log.WithFields(log.Fields{"handle": handleID, "cidr": blockCIDR})
-	for i := 0; i < ipamEtcdRetries; i++ {
-		logCtx.Info("Querying block so we can release IPs by handle")
+	for i := 0; i < datastoreRetries; i++ {
+		logCtx.Debug("Querying block so we can release IPs by handle")
 		obj, err := c.blockReaderWriter.queryBlock(ctx, blockCIDR, "")
 		if err != nil {
 			if _, ok := err.(cerrors.ErrorResourceDoesNotExist); ok {
@@ -1171,10 +1171,10 @@ func (c ipamClient) releaseByHandle(ctx context.Context, handleID string, blockC
 		if num == 0 {
 			// Block has no addresses with this handle, so
 			// all addresses are already unallocated.
-			logCtx.Info("Block has no addresses with the given handle")
+			logCtx.Debug("Block has no addresses with the given handle")
 			return nil
 		}
-		logCtx.Infof("Block has %d IPs with the given handle", num)
+		logCtx.Debugf("Block has %d IPs with the given handle", num)
 
 		if block.empty() && block.Affinity == nil {
 			logCtx.Info("Deleting block because it is now empty and has no affinity")
@@ -1196,7 +1196,7 @@ func (c ipamClient) releaseByHandle(ctx context.Context, handleID string, blockC
 			// Compare and swap the AllocationBlock using the original
 			// KVPair read from before.  No need to update the Value since we
 			// have been directly manipulating the value referenced by the KVPair.
-			logCtx.Info("Updating block to release IPs")
+			logCtx.Debug("Updating block to release IPs")
 			_, err = c.blockReaderWriter.updateBlock(ctx, obj)
 			if err != nil {
 				if _, ok := err.(cerrors.ErrorResourceUpdateConflict); ok {
@@ -1209,7 +1209,7 @@ func (c ipamClient) releaseByHandle(ctx context.Context, handleID string, blockC
 					return err
 				}
 			}
-			logCtx.Info("Successfully released IPs from block")
+			logCtx.Debug("Successfully released IPs from block")
 		}
 		if err = c.decrementHandle(ctx, handleID, blockCIDR, num); err != nil {
 			logCtx.WithError(err).Warn("Failed to decrement handle")
@@ -1227,7 +1227,7 @@ func (c ipamClient) releaseByHandle(ctx context.Context, handleID string, blockC
 func (c ipamClient) incrementHandle(ctx context.Context, handleID string, blockCIDR net.IPNet, num int) error {
 	var obj *model.KVPair
 	var err error
-	for i := 0; i < ipamEtcdRetries; i++ {
+	for i := 0; i < datastoreRetries; i++ {
 		obj, err = c.blockReaderWriter.queryHandle(ctx, handleID, "")
 		if err != nil {
 			if _, ok := err.(cerrors.ErrorResourceDoesNotExist); ok {
@@ -1278,7 +1278,7 @@ func (c ipamClient) incrementHandle(ctx context.Context, handleID string, blockC
 }
 
 func (c ipamClient) decrementHandle(ctx context.Context, handleID string, blockCIDR net.IPNet, num int) error {
-	for i := 0; i < ipamEtcdRetries; i++ {
+	for i := 0; i < datastoreRetries; i++ {
 		obj, err := c.blockReaderWriter.queryHandle(ctx, handleID, "")
 		if err != nil {
 			return err
