@@ -8,4 +8,5 @@
 | ports | Positive match on the specified ports | | list of [ports](#ports) | |
 | notPorts | Negative match on the specified ports | | list of [ports](#ports) | |
 | serviceAccounts | Match endpoints running under service accounts. If a `namespaceSelector` is also defined, the set of service accounts this applies to is limited to the service accounts in the selected namespaces. Application layer policy must be enabled to use this field. | | [ServiceAccountMatch](#serviceaccountmatch) | |
+| domains | Match destination domain names. | | [DomainMatch](#domainmatch) | |
 

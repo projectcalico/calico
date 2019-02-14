@@ -62,6 +62,8 @@ toc:
         path: /reference/calicoctl/resources/felixconfig
       - title: Global network set
         path: /reference/calicoctl/resources/globalnetworkset
+      - title: Global domain set
+        path: /reference/calicoctl/resources/globaldomainset
       - title: Host endpoint
         path: /reference/calicoctl/resources/hostendpoint
       - title: IP pool

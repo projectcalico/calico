@@ -81,6 +81,10 @@ spec:
 
 {% include {{page.version}}/serviceaccountmatch.md %}
 
+#### DomainMatch
+
+{% include {{page.version}}/domainmatch.md %}
+
 ### Application layer policy
 
 Application layer policy is an optional feature of {{site.prodname}} and

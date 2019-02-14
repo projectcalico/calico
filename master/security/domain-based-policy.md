@@ -37,7 +37,7 @@ There are two ways for a rule to specify allowed domain names:
 1.  By listing those domain names directly in `domains.names`.
 
 2.  By creating a
-    [GlobalDomainSet]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/globalnetworkpolicy)
+    [GlobalDomainSet]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/globaldomainset)
     resource - which groups together a set of domain names that you
     want to label in the same way - and using `domains.selector` to
     select GlobalDomainSets by their labels.  The effect then is to
