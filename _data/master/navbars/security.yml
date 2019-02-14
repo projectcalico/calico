@@ -44,3 +44,5 @@ toc:
     path: /security/comms/reduce-nodes
   - title: Securing Calico's Prometheus endpoints
     path: /security/comms/secure-metrics
+- title: Admin policy using domain names
+  path: /security/domain-based-policy
