@@ -181,6 +181,7 @@ test-kdd: bin/confd bin/kubectl bin/bird bin/bird6 bin/calico-node bin/calicoctl
 	-git clean -fx etc/calico/confd
 	docker run --rm --net=host \
 		-v $(CURDIR)/tests/:/tests/ \
+		-v $(CURDIR)/vendor:/vendor/ \
 		-v $(CURDIR)/bin:/calico/bin/ \
 		-v $(CURDIR)/etc/calico:/etc/calico/ \
 		-e LOCAL_USER_ID=0 \
