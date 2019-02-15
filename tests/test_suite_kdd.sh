@@ -25,15 +25,19 @@ export LOGPATH=/tests/logs/kdd
 export DATASTORE_TYPE=kubernetes
 export KUBECONFIG=/tests/confd_kubeconfig
 
+# CRDs are pulled in from libcalico.
+CRDS_FILE=/vendor/github.com/projectcalico/libcalico-go/test/crds.yaml
+
 # Prepopulate k8s with data that cannot be populated through calicoctl.
 # All tests use the same set of nodes - for k8s these cannot be created through
 # calioctl, so we need to create them through kubectl.
 echo "Waiting for k8s API server to come on line"
-for i in $(seq 1 30); do kubectl apply -f /tests/mock_data/kdd/crds.yaml 1>/dev/null 2>&1 && break || sleep 1; done
+for i in $(seq 1 30); do kubectl apply -f $CRDS_FILE 1>/dev/null 2>&1 && break || sleep 1; done
 
 echo "Populating k8s with test data that cannot be handled by calicoctl"
-kubectl apply -f /tests/mock_data/kdd/crds.yaml
+kubectl apply -f $CRDS_FILE
 kubectl apply -f /tests/mock_data/kdd/nodes.yaml
+kubectl apply -f /tests/mock_data/kdd/ipam.yaml
 
 # Use calicoctl to apply some data - this will require the CRDs to be online.  Repeat
 # until successful.
