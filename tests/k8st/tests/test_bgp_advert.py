@@ -16,9 +16,11 @@ import os
 import subprocess
 import unittest
 from time import sleep
+from netaddr import IPAddress
 
 from kubernetes import client, config
 
+from tests.st.utils.docker_host import DockerHost
 from tests.k8st.test_base import TestBase
 from tests.k8st.utils.utils import start_external_node_with_bgp, \
         retry_until_success, run, curl, DiagsCollector
@@ -96,6 +98,56 @@ protocol bgp Mesh_10_192_0_4 from bgp_template {
 }
 """
 
+bird_conf2 = """
+router id 20.192.0.5;
+# Configure synchronization between routing tables and kernel.
+protocol kernel {
+  learn;             # Learn all alien routes from the kernel
+  persist;           # Don't remove routes on bird shutdown
+  scan time 2;       # Scan kernel routing table every 2 seconds
+  import all;
+  export all;
+  graceful restart;  # Turn on graceful restart to reduce potential flaps in
+                     # routes when reloading BIRD configuration.  With a full
+                     # automatic mesh, there is no way to prevent BGP from
+                     # flapping since multiple nodes update their BGP
+                     # configuration at the same time, GR is not guaranteed to
+                     # work correctly in this scenario.
+  merge paths on;
+}
+# Watch interface up/down events.
+protocol device {
+  debug { states };
+  scan time 2;    # Scan interfaces every 2 seconds
+}
+protocol direct {
+  debug { states };
+  interface -"cali*", "*"; # Exclude cali* but include everything else.
+}
+# Template for all BGP clients
+template bgp bgp_template {
+  debug { states };
+  description "Connection to BGP peer";
+  local as 64514;
+  multihop;
+  gateway recursive; # This should be the default, but just in case.
+  import all;        # Import all routes, since we don't know what the upstream
+                     # topology is and therefore have to trust the ToR/RR.
+  export all;
+  source address 20.192.0.5;  # The local address we use for the TCP connection
+  add paths on;
+  graceful restart;  # See comment in kernel section about graceful restart.
+  connect delay time 2;
+  connect retry time 5;
+  error wait time 5,30;
+}
+# ------------- Node-to-node mesh -------------
+# For peer /host/kube-master/ip_addr_v4
+protocol bgp Mesh_20_192_0_2 from bgp_template {
+  neighbor 20.192.0.2 as 64514;
+  passive on; # Mesh is unidirectional, peer will connect to us.
+}
+"""
 
 class TestBGPAdvert(TestBase):
 
@@ -273,3 +325,68 @@ EOF
                 for cip in cluster_ips:
                     self.assertNotIn(cip, routes)
             retry_until_success(check_routes_gone, retries=10, wait_time=5)
+
+    def test_rr_filtering_svc_adv(self):
+        """
+        Test route with svc ip is not filtered on RR
+        """
+        with DiagsCollector():
+            # Create a network policy on node-A accepts traffic from the external node.
+            run("""docker exec -i kube-master kubectl apply -f - << EOF
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-tcp-80-ex
+  namespace: bgp-test
+spec:
+  podSelector: {node-A}
+  policyTypes:
+  - Ingress
+  ingress:
+  - from:
+    - ipBlock: { cidr: 20.192.0.5/32 }
+    ports:
+    - protocol: TCP
+      port: 80
+EOF
+""")
+           # Create RR host on node-B
+            cluster_id = str(IPAddress(0xFF000001))
+            rr = DockerHost('RR', start_calico=False)
+            rr.add_resource({
+                'apiVersion': 'projectcalico.org/v3',
+                'kind': 'Node',
+                'metadata': {
+                    'name': rr.get_hostname(),
+                    'labels': {
+                        'routeReflectorClusterID': cluster_id,
+                        },
+                    },
+                'spec': {
+                    'bgp': {
+                        'routeReflectorClusterID': cluster_id,
+                        },
+                    },
+                })
+            rr.start_calico_node()
+
+           # Disable node-to-node mesh
+            bgpconfig_as_num = 64514
+            peer_as_num = 64514
+            update_bgp_config(Node-A, nodeMesh=False, asNum=bgpconfig_as_num)
+            create_bgp_peer(Node-A, "global", rr.ip, peer_as_num)
+
+           # Allow peering from external node(node-C) to RR(node-B)
+            start_external_node_with_bgp("kube-node-extra", bird_conf2)
+
+           # Establish BGPPeer from cluster nodes to node-extra using calicoctl
+            run("""kubectl exec -i -n kube-system calicoctl -- /calicoctl apply -f - << EOF
+apiVersion: projectcalico.org/v3
+kind: BGPPeer
+metadata:
+  name: node-extra.peer
+spec:
+  peerIP: 20.192.0.5
+  asNumber: 64514
+EOF
+""")
