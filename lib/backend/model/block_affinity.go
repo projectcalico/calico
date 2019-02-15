@@ -76,7 +76,6 @@ func (key BlockAffinityKey) String() string {
 type BlockAffinityListOptions struct {
 	Host      string
 	IPVersion int
-	NotFull   bool
 }
 
 func (options BlockAffinityListOptions) defaultPathRoot() string {
