@@ -442,26 +442,24 @@ number 4) between your hosts.
 
 ## In Calico for OpenStack, why can't a VM ping its default gateway?
 
-With typical OpenStack networking drivers other than Calico,
+The concept of default gateway makes sense with OpenStack networking drivers that simulate
+direct layer 2 (Ethernet) connectivity between VMs in the same Neutron network.  With that
+kind of simulation,
 
--  OpenStack VMs in the same Neutron network appear to be directly
-   connected to each other at layer 2 (Ethernet).
+-  When a VM sends to another VM in the same network, there is no routing at all, from the
+   VM point of view. (Of course there may be routing in the underlay network, because
+   compute hosts may be on different subnets.)
 
--  When a VM sends to another VM in the same network, there is no
-   routing at all, from the VM point of view. (Of course there may be
-   routing in the underlay network, because compute hosts may be on
-   different subnets.)
+-  When a VM sends to something outside its own network, it goes - by simulated layer 2 -
+   to the default gateway first, and then is routed to wherever it is addressed to.
 
--  When a VM sends to something outside its own network, it goes - by
-   simulated layer 2 - to the default gateway first, and then is
-   routed to wherever it is addressed to.
-
-With Calico, this is all different. Any packet sent by a VM is layer-2-terminated and
-IP-routed by the VM's compute host, whether the VM is sending to another VM in the same
-network, or to anywhere else. So Calico doesn't need the "default gateway" concept, and it
-doesn't really make any sense with Calico. If a VM thinks that "my default gateway is the
-first hop at which the packets I send can be IP-routed", and in any way relies on that,
-that will be wrong, with Calico networking.
+However OpenStack also allows drivers, including Calico, that use routing between the VMs
+of a Neutron network.  With Calico specifically, any packet sent by a VM is
+layer-2-terminated and IP-routed by the VM's compute host, whether the VM is sending to
+another VM in the same network, or to anywhere else. So Calico doesn't need the "default
+gateway" concept, and it doesn't really make any sense with Calico. If a VM thinks that
+"my default gateway is the first hop at which the packets I send can be IP-routed", and in
+any way relies on that, that will be wrong, with Calico networking.
 
 Now, with all that said, for detailed technical reasons to do with the DHCP server
 (dnsmasq), Calico does actually configure the default gateway IP - i.e. bind it to a Linux
