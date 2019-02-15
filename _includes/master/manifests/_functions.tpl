@@ -35,12 +35,8 @@ return: |
 {{- $component := index . 0 -}}
 {{- $ctx := index . 1 -}}
 
-{{- /* The remaining lines parse versions.yml to get the tag for the "component" for the given "page.version". */ -}}
-{{- /* First, grab the latest revision release from versions.yml for the given "page.version"  */ -}}
-{{- $release := index $ctx.Values $ctx.Values.page.version | first -}}
-
 {{- /* get the specified component  */ -}}
-{{- $component := index $release.components $component -}}
+{{- $component := index $ctx.Values $component -}}
 
 {{- /* get the 'version' of that component */ -}}
 {{- $component.version -}}
