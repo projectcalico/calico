@@ -18,11 +18,13 @@ import (
 	"fmt"
 	"sort"
 
+	"github.com/sirupsen/logrus"
+
 	"github.com/projectcalico/felix/iptables"
 )
 
-func makeRule(protocol string, action string, ipVersion uint8, rule []iptables.Rule) {
-	var r *DefaultRuleRenderer
+func makeRule(r *DefaultRuleRenderer, protocol string, action string, ipVersion uint8, rule []iptables.Rule) []iptables.Rule {
+	logrus.Debugf("\nprotocol  = %v action = %v\n", protocol, action)
 	ipConf := r.ipSetConfig(ipVersion)
 	allIPsSetName := ipConf.NameForMainIPSet(IPSetIDNATOutgoingAllPools)
 	masqIPsSetName := ipConf.NameForMainIPSet(IPSetIDNATOutgoingMasqPools)
@@ -44,9 +46,11 @@ func makeRule(protocol string, action string, ipVersion uint8, rule []iptables.R
 			OutInterface(r.Config.IptablesNATOutgoingInterfaceFilter)
 	}
 
+	logrus.Debugf("\nmatch = %v\n", match)
+
 	if action == "masq" {
 		toPorts := ""
-		if r.Config.NATPortRange.MaxPort > 0 {
+		if r.Config.NATPortRange.MaxPort > 0 && protocol != "" {
 			toPorts = fmt.Sprintf("%d-%d", r.Config.NATPortRange.MinPort, r.Config.NATPortRange.MaxPort)
 		}
 		rule = []iptables.Rule{
@@ -55,6 +59,7 @@ func makeRule(protocol string, action string, ipVersion uint8, rule []iptables.R
 				Match:  match,
 			},
 		}
+		logrus.Debugf("\nrule for action masq = %v\n", rule)
 	} else if action == "return" {
 		rule = []iptables.Rule{
 			{
@@ -62,6 +67,7 @@ func makeRule(protocol string, action string, ipVersion uint8, rule []iptables.R
 				Match:  match,
 			},
 		}
+		logrus.Debugf("\nrule for action return = %v\n", rule)
 	} else if action == "drop" {
 		rule = []iptables.Rule{
 			{
@@ -69,22 +75,35 @@ func makeRule(protocol string, action string, ipVersion uint8, rule []iptables.R
 				Match:  match,
 			},
 		}
+		logrus.Debugf("\nrule for action drop = %v\n", rule)
+	} else {
+		rule = []iptables.Rule{
+			{
+				Action: iptables.MasqAction{},
+				Match:  match,
+			},
+		}
+		logrus.Debugf("\nrule for no action = %v\n", rule)
 	}
+	logrus.Debugf("\nrules in makeRule = %v\n", rule)
+	return rule
 }
 
 func (r *DefaultRuleRenderer) NATOutgoingChain(natOutgoingActive bool, ipVersion uint8) *iptables.Chain {
+	logrus.Debugf("\ninside NATOutgoingChain func\n natOutgoingActive = %v, ipVersion = %v\n", natOutgoingActive, ipVersion)
 	var rules []iptables.Rule
 	if natOutgoingActive {
 		if r.Config.NATPortRange.MaxPort > 0 {
-			makeRule("masq", "tcp", ipVersion, rules)
-			makeRule("return", "tcp", ipVersion, rules)
-			makeRule("masq", "udp", ipVersion, rules)
-			makeRule("return", "udp", ipVersion, rules)
-			makeRule("masq", "", ipVersion, rules)
+			rules = makeRule(r, "tcp", "masq", ipVersion, rules)
+			rules = append(rules, makeRule(r, "tcp", "return", ipVersion, rules)...)
+			rules = append(rules, makeRule(r, "udp", "masq", ipVersion, rules)...)
+			rules = append(rules, makeRule(r, "udp", "return", ipVersion, rules)...)
+			rules = append(rules, makeRule(r, "", "masq", ipVersion, rules)...)
 		} else {
-			makeRule("masq", "", ipVersion, rules)
+			rules = append(rules, makeRule(r, "", "masq", ipVersion, rules)...)
 		}
 	}
+	logrus.Debugf("\nrules in NATOutgoingChain = %v\n", rules)
 	return &iptables.Chain{
 		Name:  ChainNATOutgoing,
 		Rules: rules,
