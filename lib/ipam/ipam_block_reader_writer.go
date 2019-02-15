@@ -394,18 +394,25 @@ func (rw blockReaderWriter) deleteHandle(ctx context.Context, kvp *model.KVPair)
 
 // getPoolForIP returns the pool if the given IP is within a configured
 // Calico pool, and nil otherwise.
-func (rw blockReaderWriter) getPoolForIP(ip cnet.IP, enabledPools []v3.IPPool) *v3.IPPool {
+func (rw blockReaderWriter) getPoolForIP(ip cnet.IP, enabledPools []v3.IPPool) (*v3.IPPool, error) {
 	if enabledPools == nil {
-		enabledPools, _ = rw.pools.GetEnabledPools(ip.Version())
+		var err error
+		enabledPools, err = rw.pools.GetEnabledPools(ip.Version())
+		if err != nil {
+			return nil, err
+		}
 	}
 	for _, p := range enabledPools {
 		// Compare any enabled pools.
 		_, pool, err := cnet.ParseCIDR(p.Spec.CIDR)
-		if err == nil && pool.Contains(ip.IP) {
-			return &p
+		if err != nil {
+			fields := log.Fields{"pool": p.Name, "cidr": p.Spec.CIDR}
+			log.WithError(err).WithFields(fields).Warn("Pool has invalid CIDR")
+		} else if pool.Contains(ip.IP) {
+			return &p, nil
 		}
 	}
-	return nil
+	return nil, nil
 }
 
 // Generator to get list of block CIDRs which
