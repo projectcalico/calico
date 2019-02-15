@@ -54,6 +54,16 @@ func (e errBlockClaimConflict) Error() string {
 	return fmt.Sprintf("%v already claimed", e.Block.CIDR)
 }
 
+// errBlockNotEmpty indicates that a given block has already
+// been claimed by another host.
+type errBlockNotEmpty struct {
+	Block allocationBlock
+}
+
+func (e errBlockNotEmpty) Error() string {
+	return fmt.Sprintf("block '%v' is not empty", e.Block.CIDR)
+}
+
 // errStaleAffinity indicates to the calling code that the given affinity
 // is not confirmed, and that the corresponding block belongs to another host.
 type errStaleAffinity string

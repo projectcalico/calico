@@ -292,8 +292,8 @@ func (rw blockReaderWriter) releaseBlockAffinity(ctx context.Context, host strin
 
 	// Don't release block affinity if we require it to be empty and it's not empty.
 	if requireEmpty && !b.empty() {
-		logCtx.Debug("Block must be empty but is not empty, refusing to remove affinity.")
-		return nil
+		logCtx.Info("Block must be empty but is not empty, refusing to remove affinity.")
+		return errBlockNotEmpty{Block: b}
 	}
 
 	// Mark the affinity as pending deletion.

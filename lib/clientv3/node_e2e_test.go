@@ -238,7 +238,7 @@ var _ = testutils.E2eDatastoreDescribe("Node tests (etcdv3)", testutils.Datastor
 			Expect(ips).Should(BeNil())
 
 			// Check that the host affinity pool was released.
-			err = c.IPAM().ReleaseAffinity(ctx, affBlock, name1)
+			err = c.IPAM().ReleaseAffinity(ctx, affBlock, name1, false)
 			Expect(err).NotTo(HaveOccurred())
 
 			list, err := be.List(
