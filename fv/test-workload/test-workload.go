@@ -24,7 +24,7 @@ import (
 	"time"
 
 	"github.com/containernetworking/cni/pkg/ns"
-	"github.com/docopt/docopt-go"
+	docopt "github.com/docopt/docopt-go"
 	log "github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
 

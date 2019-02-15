@@ -17,7 +17,7 @@ package main
 import (
 	"time"
 
-	"github.com/docopt/docopt-go"
+	docopt "github.com/docopt/docopt-go"
 	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/felix/iptables"

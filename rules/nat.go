@@ -21,59 +21,68 @@ import (
 	"github.com/projectcalico/felix/iptables"
 )
 
+func makeRule(protocol string, action string, ipVersion uint8, rule []iptables.Rule) {
+	var r *DefaultRuleRenderer
+	ipConf := r.ipSetConfig(ipVersion)
+	allIPsSetName := ipConf.NameForMainIPSet(IPSetIDNATOutgoingAllPools)
+	masqIPsSetName := ipConf.NameForMainIPSet(IPSetIDNATOutgoingMasqPools)
+	match := iptables.Match()
+
+	if protocol != "" {
+		match = iptables.Match().
+			SourceIPSet(masqIPsSetName).
+			NotDestIPSet(allIPsSetName).
+			Protocol(protocol)
+	} else {
+		match = iptables.Match().
+			SourceIPSet(masqIPsSetName).
+			NotDestIPSet(allIPsSetName)
+	}
+
+	if r.Config.IptablesNATOutgoingInterfaceFilter != "" {
+		match = iptables.Match().
+			OutInterface(r.Config.IptablesNATOutgoingInterfaceFilter)
+	}
+
+	if action == "masq" {
+		toPorts := ""
+		if r.Config.NATPortRange.MaxPort > 0 {
+			toPorts = fmt.Sprintf("%d-%d", r.Config.NATPortRange.MinPort, r.Config.NATPortRange.MaxPort)
+		}
+		rule = []iptables.Rule{
+			{
+				Action: iptables.MasqAction{ToPorts: toPorts},
+				Match:  match,
+			},
+		}
+	} else if action == "return" {
+		rule = []iptables.Rule{
+			{
+				Action: iptables.ReturnAction{},
+				Match:  match,
+			},
+		}
+	} else if action == "drop" {
+		rule = []iptables.Rule{
+			{
+				Action: iptables.DropAction{},
+				Match:  match,
+			},
+		}
+	}
+}
+
 func (r *DefaultRuleRenderer) NATOutgoingChain(natOutgoingActive bool, ipVersion uint8) *iptables.Chain {
 	var rules []iptables.Rule
 	if natOutgoingActive {
-		ipConf := r.ipSetConfig(ipVersion)
-		allIPsSetName := ipConf.NameForMainIPSet(IPSetIDNATOutgoingAllPools)
-		masqIPsSetName := ipConf.NameForMainIPSet(IPSetIDNATOutgoingMasqPools)
 		if r.Config.NATPortRange.MaxPort > 0 {
-			toPorts := fmt.Sprintf("%d-%d", r.Config.NATPortRange.MinPort, r.Config.NATPortRange.MaxPort)
-			rules = []iptables.Rule{
-				{
-					Action: iptables.MasqAction{ToPorts: toPorts},
-					Match: iptables.Match().
-						SourceIPSet(masqIPsSetName).
-						NotDestIPSet(allIPsSetName).
-						Protocol("tcp"),
-				},
-				{
-					Action: iptables.ReturnAction{},
-					Match: iptables.Match().
-						SourceIPSet(masqIPsSetName).
-						NotDestIPSet(allIPsSetName).
-						Protocol("tcp"),
-				},
-				{
-					Action: iptables.MasqAction{ToPorts: toPorts},
-					Match: iptables.Match().
-						SourceIPSet(masqIPsSetName).
-						NotDestIPSet(allIPsSetName).
-						Protocol("udp"),
-				},
-				{
-					Action: iptables.ReturnAction{},
-					Match: iptables.Match().
-						SourceIPSet(masqIPsSetName).
-						NotDestIPSet(allIPsSetName).
-						Protocol("udp"),
-				},
-				{
-					Action: iptables.MasqAction{},
-					Match: iptables.Match().
-						SourceIPSet(masqIPsSetName).
-						NotDestIPSet(allIPsSetName),
-				},
-			}
+			makeRule("masq", "tcp", ipVersion, rules)
+			makeRule("return", "tcp", ipVersion, rules)
+			makeRule("masq", "udp", ipVersion, rules)
+			makeRule("return", "udp", ipVersion, rules)
+			makeRule("masq", "", ipVersion, rules)
 		} else {
-			rules = []iptables.Rule{
-				{
-					Action: iptables.MasqAction{},
-					Match: iptables.Match().
-						SourceIPSet(masqIPsSetName).
-						NotDestIPSet(allIPsSetName),
-				},
-			}
+			makeRule("masq", "", ipVersion, rules)
 		}
 	}
 	return &iptables.Chain{

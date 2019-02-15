@@ -247,7 +247,8 @@ type Config struct {
 
 	DisableConntrackInvalid bool
 
-	NATPortRange numorstring.Port
+	NATPortRange                       numorstring.Port
+	IptablesNATOutgoingInterfaceFilter string
 }
 
 func (c *Config) validate() {
