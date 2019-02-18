@@ -45,5 +45,5 @@ class TestNodeStatus(TestBase):
                 self.assertEquals(e.output,
                                   "Calico process is not running.\n")
             else:
-                raise AssertionError("'calicoctl status' did not exit with "
-                                     "code 1 when node was not running")
+                raise AssertionError("'calicoctl node status' did not exit"
+                                     " with code 1 when node was not running")
