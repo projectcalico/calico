@@ -18,13 +18,10 @@ import (
 	"fmt"
 	"sort"
 
-	log "github.com/sirupsen/logrus"
-
 	"github.com/projectcalico/felix/iptables"
 )
 
-func makeRule(r *DefaultRuleRenderer, protocol string, action iptables.Action, ipVersion uint8, rule iptables.Rule) iptables.Rule {
-	log.Debugf("\nprotocol  = %v action = %v\n", protocol, action)
+func (r *DefaultRuleRenderer) MakeNatOutgoingRule(protocol string, action iptables.Action, ipVersion uint8) iptables.Rule {
 	ipConf := r.ipSetConfig(ipVersion)
 	allIPsSetName := ipConf.NameForMainIPSet(IPSetIDNATOutgoingAllPools)
 	masqIPsSetName := ipConf.NameForMainIPSet(IPSetIDNATOutgoingMasqPools)
@@ -42,37 +39,31 @@ func makeRule(r *DefaultRuleRenderer, protocol string, action iptables.Action, i
 		match = match.OutInterface(r.Config.IptablesNATOutgoingInterfaceFilter)
 	}
 
-	log.Debugf("\nmatch = %v\n", match)
-
-	rule = iptables.Rule{
+	rule := iptables.Rule{
 		Action: action,
 		Match:  match,
 	}
-	log.Debugf("\nrules in makeRule = %v\n", rule)
 	return rule
 }
 
 func (r *DefaultRuleRenderer) NATOutgoingChain(natOutgoingActive bool, ipVersion uint8) *iptables.Chain {
-	log.Debugf("\ninside NATOutgoingChain func\n natOutgoingActive = %v, ipVersion = %v\n", natOutgoingActive, ipVersion)
 	var rules []iptables.Rule
-	var rule iptables.Rule
 	if natOutgoingActive {
 		if r.Config.NATPortRange.MaxPort > 0 {
 			toPorts := fmt.Sprintf("%d-%d", r.Config.NATPortRange.MinPort, r.Config.NATPortRange.MaxPort)
 			rules = []iptables.Rule{
-				makeRule(r, "tcp", iptables.MasqAction{ToPorts: toPorts}, ipVersion, rule),
-				makeRule(r, "tcp", iptables.ReturnAction{}, ipVersion, rule),
-				makeRule(r, "udp", iptables.MasqAction{ToPorts: toPorts}, ipVersion, rule),
-				makeRule(r, "udp", iptables.ReturnAction{}, ipVersion, rule),
-				makeRule(r, "", iptables.MasqAction{}, ipVersion, rule),
+				r.MakeNatOutgoingRule("tcp", iptables.MasqAction{ToPorts: toPorts}, ipVersion),
+				r.MakeNatOutgoingRule("tcp", iptables.ReturnAction{}, ipVersion),
+				r.MakeNatOutgoingRule("udp", iptables.MasqAction{ToPorts: toPorts}, ipVersion),
+				r.MakeNatOutgoingRule("udp", iptables.ReturnAction{}, ipVersion),
+				r.MakeNatOutgoingRule("", iptables.MasqAction{}, ipVersion),
 			}
 		} else {
 			rules = []iptables.Rule{
-				makeRule(r, "", iptables.MasqAction{}, ipVersion, rule),
+				r.MakeNatOutgoingRule("", iptables.MasqAction{}, ipVersion),
 			}
 		}
 	}
-	log.Debugf("\nrules in NATOutgoingChain = %v\n", rules)
 	return &iptables.Chain{
 		Name:  ChainNATOutgoing,
 		Rules: rules,
