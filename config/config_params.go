@@ -33,10 +33,11 @@ import (
 )
 
 var (
-	IfaceListRegexp = regexp.MustCompile(`^[a-zA-Z0-9_-]{1,15}(,[a-zA-Z0-9_-]{1,15})*$`)
-	AuthorityRegexp = regexp.MustCompile(`^[^:/]+:\d+$`)
-	HostnameRegexp  = regexp.MustCompile(`^[a-zA-Z0-9_.-]+$`)
-	StringRegexp    = regexp.MustCompile(`^.*$`)
+	IfaceListRegexp  = regexp.MustCompile(`^[a-zA-Z0-9_-]{1,15}(,[a-zA-Z0-9_-]{1,15})*$`)
+	AuthorityRegexp  = regexp.MustCompile(`^[^:/]+:\d+$`)
+	HostnameRegexp   = regexp.MustCompile(`^[a-zA-Z0-9_.-]+$`)
+	StringRegexp     = regexp.MustCompile(`^.*$`)
+	IfaceParamRegexp = regexp.MustCompile(`^[a-zA-Z0-9:._+-]{1,15}$`)
 )
 
 const (
@@ -206,7 +207,7 @@ type Config struct {
 	rawValues         map[string]string
 	Err               error
 
-	IptablesNATOutgoingInterfaceFilter string `config:"string;"`
+	IptablesNATOutgoingInterfaceFilter string `config:"iface-param;"`
 }
 
 type ProtoPort struct {
@@ -509,6 +510,9 @@ func loadParams() {
 		case "iface-list":
 			param = &RegexpParam{Regexp: IfaceListRegexp,
 				Msg: "invalid Linux interface name"}
+		case "iface-param":
+			param = &RegexpParam{Regexp: IfaceParamRegexp,
+				Msg: "invalid Linux interface parameter"}
 		case "file":
 			param = &FileParam{
 				MustExist:  strings.Contains(kindParams, "must-exist"),

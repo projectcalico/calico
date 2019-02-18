@@ -18,92 +18,61 @@ import (
 	"fmt"
 	"sort"
 
-	"github.com/sirupsen/logrus"
+	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/felix/iptables"
 )
 
-func makeRule(r *DefaultRuleRenderer, protocol string, action string, ipVersion uint8, rule []iptables.Rule) []iptables.Rule {
-	logrus.Debugf("\nprotocol  = %v action = %v\n", protocol, action)
+func makeRule(r *DefaultRuleRenderer, protocol string, action iptables.Action, ipVersion uint8, rule iptables.Rule) iptables.Rule {
+	log.Debugf("\nprotocol  = %v action = %v\n", protocol, action)
 	ipConf := r.ipSetConfig(ipVersion)
 	allIPsSetName := ipConf.NameForMainIPSet(IPSetIDNATOutgoingAllPools)
 	masqIPsSetName := ipConf.NameForMainIPSet(IPSetIDNATOutgoingMasqPools)
 	match := iptables.Match()
 
+	match = iptables.Match().
+		SourceIPSet(masqIPsSetName).
+		NotDestIPSet(allIPsSetName)
+
 	if protocol != "" {
-		match = iptables.Match().
-			SourceIPSet(masqIPsSetName).
-			NotDestIPSet(allIPsSetName).
-			Protocol(protocol)
-	} else {
-		match = iptables.Match().
-			SourceIPSet(masqIPsSetName).
-			NotDestIPSet(allIPsSetName)
+		match = match.Protocol(protocol)
 	}
 
 	if r.Config.IptablesNATOutgoingInterfaceFilter != "" {
-		match = iptables.Match().
-			OutInterface(r.Config.IptablesNATOutgoingInterfaceFilter)
+		match = match.OutInterface(r.Config.IptablesNATOutgoingInterfaceFilter)
 	}
 
-	logrus.Debugf("\nmatch = %v\n", match)
+	log.Debugf("\nmatch = %v\n", match)
 
-	if action == "masq" {
-		toPorts := ""
-		if r.Config.NATPortRange.MaxPort > 0 && protocol != "" {
-			toPorts = fmt.Sprintf("%d-%d", r.Config.NATPortRange.MinPort, r.Config.NATPortRange.MaxPort)
-		}
-		rule = []iptables.Rule{
-			{
-				Action: iptables.MasqAction{ToPorts: toPorts},
-				Match:  match,
-			},
-		}
-		logrus.Debugf("\nrule for action masq = %v\n", rule)
-	} else if action == "return" {
-		rule = []iptables.Rule{
-			{
-				Action: iptables.ReturnAction{},
-				Match:  match,
-			},
-		}
-		logrus.Debugf("\nrule for action return = %v\n", rule)
-	} else if action == "drop" {
-		rule = []iptables.Rule{
-			{
-				Action: iptables.DropAction{},
-				Match:  match,
-			},
-		}
-		logrus.Debugf("\nrule for action drop = %v\n", rule)
-	} else {
-		rule = []iptables.Rule{
-			{
-				Action: iptables.MasqAction{},
-				Match:  match,
-			},
-		}
-		logrus.Debugf("\nrule for no action = %v\n", rule)
+	rule = iptables.Rule{
+		Action: action,
+		Match:  match,
 	}
-	logrus.Debugf("\nrules in makeRule = %v\n", rule)
+	log.Debugf("\nrules in makeRule = %v\n", rule)
 	return rule
 }
 
 func (r *DefaultRuleRenderer) NATOutgoingChain(natOutgoingActive bool, ipVersion uint8) *iptables.Chain {
-	logrus.Debugf("\ninside NATOutgoingChain func\n natOutgoingActive = %v, ipVersion = %v\n", natOutgoingActive, ipVersion)
+	log.Debugf("\ninside NATOutgoingChain func\n natOutgoingActive = %v, ipVersion = %v\n", natOutgoingActive, ipVersion)
 	var rules []iptables.Rule
+	var rule iptables.Rule
 	if natOutgoingActive {
 		if r.Config.NATPortRange.MaxPort > 0 {
-			rules = makeRule(r, "tcp", "masq", ipVersion, rules)
-			rules = append(rules, makeRule(r, "tcp", "return", ipVersion, rules)...)
-			rules = append(rules, makeRule(r, "udp", "masq", ipVersion, rules)...)
-			rules = append(rules, makeRule(r, "udp", "return", ipVersion, rules)...)
-			rules = append(rules, makeRule(r, "", "masq", ipVersion, rules)...)
+			toPorts := fmt.Sprintf("%d-%d", r.Config.NATPortRange.MinPort, r.Config.NATPortRange.MaxPort)
+			rules = []iptables.Rule{
+				makeRule(r, "tcp", iptables.MasqAction{ToPorts: toPorts}, ipVersion, rule),
+				makeRule(r, "tcp", iptables.ReturnAction{}, ipVersion, rule),
+				makeRule(r, "udp", iptables.MasqAction{ToPorts: toPorts}, ipVersion, rule),
+				makeRule(r, "udp", iptables.ReturnAction{}, ipVersion, rule),
+				makeRule(r, "", iptables.MasqAction{}, ipVersion, rule),
+			}
 		} else {
-			rules = append(rules, makeRule(r, "", "masq", ipVersion, rules)...)
+			rules = []iptables.Rule{
+				makeRule(r, "", iptables.MasqAction{}, ipVersion, rule),
+			}
 		}
 	}
-	logrus.Debugf("\nrules in NATOutgoingChain = %v\n", rules)
+	log.Debugf("\nrules in NATOutgoingChain = %v\n", rules)
 	return &iptables.Chain{
 		Name:  ChainNATOutgoing,
 		Rules: rules,
