@@ -215,7 +215,7 @@ type FelixConfigurationSpec struct {
 	DebugSimulateCalcGraphHangAfter *metav1.Duration `json:"debugSimulateCalcGraphHangAfter,omitempty" configv1timescale:"seconds"`
 	DebugSimulateDataplaneHangAfter *metav1.Duration `json:"debugSimulateDataplaneHangAfter,omitempty" configv1timescale:"seconds"`
 
-	IptablesNATOutgoingInterfaceFilter *bool `json:"iptablesNATOutgoingInterfaceFilter,omitempty"`
+	IptablesNATOutgoingInterfaceFilter string `json:"iptablesNATOutgoingInterfaceFilter,omitempty" validate:"omitempty,natParam"`
 }
 
 // ProtoPort is combination of protocol and port, both must be specified.

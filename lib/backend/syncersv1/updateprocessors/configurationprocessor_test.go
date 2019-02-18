@@ -215,7 +215,7 @@ var _ = Describe("Test the generic configuration update processor and the concre
 			},
 		}
 		res.Spec.ExternalNodesCIDRList = &[]string{"1.1.1.1", "2.2.2.2"}
-		res.Spec.IptablesNATOutgoingInterfaceFilter = &bool1
+		res.Spec.IptablesNATOutgoingInterfaceFilter = "cali-123"
 		expected := map[string]interface{}{
 			"RouteRefreshInterval":               "12.345",
 			"IptablesLockProbeIntervalMillis":    "54.321",
@@ -227,7 +227,7 @@ var _ = Describe("Test the generic configuration update processor and the concre
 			"FailsafeInboundHostPorts":           "none",
 			"FailsafeOutboundHostPorts":          "tcp:1234,udp:22,tcp:65535",
 			"ExternalNodesCIDRList":              "1.1.1.1,2.2.2.2",
-			"IptablesNATOutgoingInterfaceFilter": "false",
+			"IptablesNATOutgoingInterfaceFilter": "cali-123",
 		}
 		kvps, err := cc.Process(&model.KVPair{
 			Key:   perNodeFelixKey,

@@ -524,6 +524,8 @@ func init() {
 		Entry("should accept a valid LogSeverityScreen value 'Warning'", api.FelixConfigurationSpec{LogSeverityScreen: "Warning"}, true),
 		Entry("should accept a valid LogSeverityFile value 'Debug'", api.FelixConfigurationSpec{LogSeverityFile: "Debug"}, true),
 		Entry("should accept a valid LogSeveritySys value 'Info'", api.FelixConfigurationSpec{LogSeveritySys: "Info"}, true),
+		Entry("should accept a valid IptablesNATOutgoingInterfaceFilter value 'cali-123'", api.FelixConfigurationSpec{IptablesNATOutgoingInterfaceFilter: "cali-123"}, true),
+		Entry("should reject an invalid IptablesNATOutgoingInterfaceFilter value 'cali@123'", api.FelixConfigurationSpec{IptablesNATOutgoingInterfaceFilter: "cali@123"}, false),
 
 		// (API) Protocol
 		Entry("should accept protocol TCP", protocolFromString("TCP"), true),
