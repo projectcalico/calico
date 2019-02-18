@@ -854,15 +854,7 @@ class TestFelixOnGateway(TestBase):
         retry_until_success(self.assert_host_can_curl_ext)
 
     def delete_all(self, resource):
-        # Grab all objects of a resource type
-        objects = yaml.load(self.hosts[0].calicoctl("get %s -o yaml" % resource))
-        # and delete them (if there are any)
-        if len(objects) > 0:
-            _log.info("objects: %s", objects)
-            if 'items' in objects and len(objects['items']) == 0:
-                pass
-            else:
-                self.hosts[0]._delete_data(objects)
+        self.hosts[0].delete_all_resource(resource)
 
     @classmethod
     def get_container_ip(cls, container_name):

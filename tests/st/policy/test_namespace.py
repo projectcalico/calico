@@ -436,15 +436,7 @@ class TestNamespace(TestBase):
 
     @classmethod
     def delete_all(cls, resource):
-        # Grab all objects of a resource type
-        objects = yaml.load(cls.hosts[0].calicoctl("get %s -o yaml" % resource))
-        # and delete them (if there are any)
-        if len(objects) > 0:
-            _log.info("objects: %s", objects)
-            if 'items' in objects and len(objects['items']) == 0:
-                pass
-            else:
-                cls.hosts[0]._delete_data(objects)
+        cls.hosts[0].delete_all_resource(resource)
 
     @classmethod
     def get_container_ip(cls, container_name):
