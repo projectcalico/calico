@@ -40,17 +40,29 @@ recommended for [multiple region deployments](multiple-regions)) the namespace w
 "openstack-region-" followed by the configured region name.  Otherwise it is simply
 "openstack".
 
-> **Note**: Calico only allows certain characters in label names and values
+> **Note**: To allow {{site.prodname}} to provide the project name and parent ID labels,
+> you must give Neutron the 'admin' role within your cluster:
+> ```
+> openstack role add --project service --user neutron admin
+> ```
+> or some equivalent privilege that allows the Neutron server to do admin-level queries of
+> the Keystone database.  This is because {{site.prodname}}'s driver runs as part of the
+> Neutron server, and needs to query the Keystone database for the information for those
+> labels.  If Neutron isn't sufficiently privileged, {{site.prodname}} will fall back to
+> not generating those labels.
+{: .alert .alert-info}
+
+> **Note**: {{site.prodname}} only allows certain characters in label names and values
 > (alphanumerics, '-', '\_', '.' and '/'), so if a project or security group name normally
 > has other characters, those will be replaced here by '\_'.  Also there is a length
 > limit, so particularly long names may be truncated.
 {: .alert .alert-info}
 
-> **Note**: Calico does not support changing project name or security group name for a
-> given ID associated with a VM after the VM has been created.  It is recommended that
-> operators avoid any possible confusion here by not changing project name for a
-> particular project ID or security group name for particular security group ID,
-> post-creation.
+> **Note**: {{site.prodname}} does not support changing project name or security group
+> name for a given ID associated with a VM after the VM has been created.  It is
+> recommended that operators avoid any possible confusion here by not changing project
+> name for a particular project ID or security group name for particular security group
+> ID, post-creation.
 {: .alert .alert-info}
 
 ## Configuring operator policy
