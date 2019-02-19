@@ -148,7 +148,7 @@ func init() {
 	registerFieldValidator("portName", validatePortName)
 	registerFieldValidator("mustBeNil", validateMustBeNil)
 	registerFieldValidator("mustBeFalse", validateMustBeFalse)
-	registerFieldValidator("ifaceFilter", validateNATParam)
+	registerFieldValidator("ifaceFilter", validateIfaceFilter)
 
 	// Register network validators (i.e. validating a correctly masked CIDR).  Also
 	// accepts an IP address without a mask (assumes a full mask).
@@ -232,9 +232,9 @@ func validateInterface(v *validator.Validate, topStruct reflect.Value, currentSt
 	return s == "*" || interfaceRegex.MatchString(s)
 }
 
-func validateNATParam(v *validator.Validate, topStruct reflect.Value, currentStructOrField reflect.Value, field reflect.Value, fieldType reflect.Type, fieldKind reflect.Kind, param string) bool {
+func validateIfaceFilter(v *validator.Validate, topStruct reflect.Value, currentStructOrField reflect.Value, field reflect.Value, fieldType reflect.Type, fieldKind reflect.Kind, param string) bool {
 	s := field.String()
-	log.Debugf("Validate NAT Parameter: %s", s)
+	log.Debugf("Validate Interface Filter : %s", s)
 	return ifaceFilterRegex.MatchString(s)
 }
 
