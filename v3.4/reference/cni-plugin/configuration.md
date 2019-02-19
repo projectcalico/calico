@@ -377,3 +377,21 @@ You can request a floating IP address for a pod through [Kubernetes annotations]
    > **Warning**: This feature can allow pods to receive traffic which may not have been intended for that pod.
    > Users should make sure the proper admission control is in place to prevent users from selecting arbitrary floating IP addresses.
    {: .alert .alert-danger}
+
+### CNI network configuration lists
+
+The CNI 0.3.0 [spec](https://github.com/containernetworking/cni/blob/spec-v0.3.0/SPEC.md#network-configuration-lists) supports "chaining" multiple cni plugins together and {{site.prodname}} supports this as well. {{site.prodname}} enables the portmap plugin by default which is required to implement Kubernetes host port functionality. This can be disabled by removing the portmap section from the CNI network configuration in the {{site.prodname}} manifests.
+
+ ```json
+        {
+          "type": "portmap",
+          "snat": true,
+          "capabilities": {"portMappings": true}
+        }
+```
+{: .no-select-button}
+
+> **Note**: A CNI issue exists with the portmap plugin where draining nodes
+> may take a long time with a cluster of 100+ nodes and 4000+ services.
+> See https://github.com/containernetworking/cni/issues/605
+{: .alert .alert-info}
