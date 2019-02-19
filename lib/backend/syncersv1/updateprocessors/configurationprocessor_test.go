@@ -70,16 +70,17 @@ var _ = Describe("Test the generic configuration update processor and the concre
 		Kind: apiv3.KindBGPConfiguration,
 		Name: "node.bgpnode1",
 	}
-	numFelixConfigs := 55
+	numFelixConfigs := 56
 	numClusterConfigs := 4
 	numNodeClusterConfigs := 3
 	numBgpConfigs := 3
 	felixMappedNames := map[string]interface{}{
-		"RouteRefreshInterval":    nil,
-		"IptablesRefreshInterval": nil,
-		"IpsetsRefreshInterval":   nil,
-		"IpInIpEnabled":           nil,
-		"IpInIpMtu":               nil,
+		"RouteRefreshInterval":               nil,
+		"IptablesRefreshInterval":            nil,
+		"IpsetsRefreshInterval":              nil,
+		"IpInIpEnabled":                      nil,
+		"IpInIpMtu":                          nil,
+		"IptablesNATOutgoingInterfaceFilter": nil,
 	}
 
 	It("should handle conversion of node-specific delete with no additional configs", func() {
@@ -214,17 +215,19 @@ var _ = Describe("Test the generic configuration update processor and the concre
 			},
 		}
 		res.Spec.ExternalNodesCIDRList = &[]string{"1.1.1.1", "2.2.2.2"}
+		res.Spec.IptablesNATOutgoingInterfaceFilter = "cali-123"
 		expected := map[string]interface{}{
-			"RouteRefreshInterval":            "12.345",
-			"IptablesLockProbeIntervalMillis": "54.321",
-			"EndpointReportingDelaySecs":      "0",
-			"IpsetsRefreshInterval":           "0.1",
-			"InterfacePrefix":                 "califoobar",
-			"IpInIpEnabled":                   "false",
-			"IptablesMarkMask":                "1313",
-			"FailsafeInboundHostPorts":        "none",
-			"FailsafeOutboundHostPorts":       "tcp:1234,udp:22,tcp:65535",
-			"ExternalNodesCIDRList":           "1.1.1.1,2.2.2.2",
+			"RouteRefreshInterval":               "12.345",
+			"IptablesLockProbeIntervalMillis":    "54.321",
+			"EndpointReportingDelaySecs":         "0",
+			"IpsetsRefreshInterval":              "0.1",
+			"InterfacePrefix":                    "califoobar",
+			"IpInIpEnabled":                      "false",
+			"IptablesMarkMask":                   "1313",
+			"FailsafeInboundHostPorts":           "none",
+			"FailsafeOutboundHostPorts":          "tcp:1234,udp:22,tcp:65535",
+			"ExternalNodesCIDRList":              "1.1.1.1,2.2.2.2",
+			"IptablesNATOutgoingInterfaceFilter": "cali-123",
 		}
 		kvps, err := cc.Process(&model.KVPair{
 			Key:   perNodeFelixKey,

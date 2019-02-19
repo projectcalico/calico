@@ -64,6 +64,7 @@ var (
 	globalNetworkPolicyNameRegex = regexp.MustCompile("^(" + nameLabelFmt + ")$")
 
 	interfaceRegex        = regexp.MustCompile("^[a-zA-Z0-9_.-]{1,15}$")
+	ifaceFilterRegex      = regexp.MustCompile("^[a-zA-Z0-9:._+-]{1,15}$")
 	actionRegex           = regexp.MustCompile("^(Allow|Deny|Log|Pass)$")
 	protocolRegex         = regexp.MustCompile("^(TCP|UDP|ICMP|ICMPv6|SCTP|UDPLite)$")
 	ipipModeRegex         = regexp.MustCompile("^(Always|CrossSubnet|Never)$")
@@ -147,6 +148,7 @@ func init() {
 	registerFieldValidator("portName", validatePortName)
 	registerFieldValidator("mustBeNil", validateMustBeNil)
 	registerFieldValidator("mustBeFalse", validateMustBeFalse)
+	registerFieldValidator("ifaceFilter", validateIfaceFilter)
 
 	// Register network validators (i.e. validating a correctly masked CIDR).  Also
 	// accepts an IP address without a mask (assumes a full mask).
@@ -228,6 +230,12 @@ func validateInterface(v *validator.Validate, topStruct reflect.Value, currentSt
 	s := field.String()
 	log.Debugf("Validate interface: %s", s)
 	return s == "*" || interfaceRegex.MatchString(s)
+}
+
+func validateIfaceFilter(v *validator.Validate, topStruct reflect.Value, currentStructOrField reflect.Value, field reflect.Value, fieldType reflect.Type, fieldKind reflect.Kind, param string) bool {
+	s := field.String()
+	log.Debugf("Validate Interface Filter : %s", s)
+	return ifaceFilterRegex.MatchString(s)
 }
 
 func validateDatastoreType(v *validator.Validate, topStruct reflect.Value, currentStructOrField reflect.Value, field reflect.Value, fieldType reflect.Type, fieldKind reflect.Kind, param string) bool {
