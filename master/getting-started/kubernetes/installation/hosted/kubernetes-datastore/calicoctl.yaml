@@ -70,6 +70,9 @@ rules:
       - ippools
       - networkpolicies
       - hostendpoints
+      - ipamblocks
+      - blockaffinities
+      - ipamhandles
     verbs:
       - create
       - get
