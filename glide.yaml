@@ -39,6 +39,7 @@ import:
   subpackages:
   - types
 - package: github.com/projectcalico/libcalico-go
+  version: 72554c43e943469fc7393b558ae76df9bac5b67e
   subpackages:
   - lib/apiconfig
   - lib/apis/v3
