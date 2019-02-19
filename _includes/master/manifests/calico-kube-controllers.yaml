@@ -139,7 +139,7 @@ spec:
             # Choose which controllers to run.
             - name: ENABLED_CONTROLLERS
               value: node
-            - name: ENABLED_CONTROLLERS
+            - name: DATASTORE_TYPE
               value: kubernetes
           readinessProbe:
             exec:
