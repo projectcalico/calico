@@ -137,6 +137,12 @@ rules:
 {{- if eq .Values.datastore "kdd" }}
       # Calico stores some configuration information in node annotations.
       - update
+  # The Calico IPAM migration needs to get daemonsets
+  - apiGroups: ["apps"]
+    resources:
+      - daemonsets
+    verbs:
+      - get
   # Watch for changes to Kubernetes NetworkPolicies.
   - apiGroups: ["networking.k8s.io"]
     resources:
