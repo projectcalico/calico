@@ -13,6 +13,12 @@ require "yaml"
 # {% endhelm %}
 module Jekyll
   class RenderHelmTagBlock < Liquid::Block
+    def initialize(tag_name, extra_args, liquid_options)
+      super
+      if not extra_args.empty?
+        @extra_args = extra_args
+      end
+    end
     def render(context)
       text = super
 
@@ -72,13 +78,19 @@ module Jekyll
       tv.close
 
       # execute helm.
-      out = `helm template _includes/#{version}/charts/calico \
+      cmd = """helm template _includes/#{version}/charts/calico \
         --set imageRegistry=#{imageRegistry} \
         --set prodname=#{configYml["prodname"]} \
         --set nodecontainer=#{configYml["nodecontainer"]} \
         -f #{tv.path} \
-        -f #{t.path}`
-      
+        -f #{t.path}"""
+
+      if @extra_args
+        cmd += " " + @extra_args
+      end
+
+      out = `#{cmd}`
+
       t.unlink
       tv.unlink
       return out

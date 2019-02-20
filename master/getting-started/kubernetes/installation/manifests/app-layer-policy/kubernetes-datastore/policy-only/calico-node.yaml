@@ -1,7 +1,7 @@
 ---
 layout: null
 ---
-{% helm %}
+{% helm --execute=templates/calico-node.yaml %}
 datastore: kdd
 typha:
   enabled: true
