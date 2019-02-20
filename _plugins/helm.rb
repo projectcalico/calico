@@ -29,18 +29,47 @@ module Jekyll
       versionFile = YAML::load_file('_data/versions.yml')
       components = versionFile[version][0]["components"]
 
-      # Write the yaml values to a temp file for reading.
+      # In order to preserve backwards compatibility with the existing template system,
+      # we process config.yml for imageNames and _versions.yml for tags,
+      # then write them in a more standard helm format.
+      configYml = YAML::load_file('_config.yml')
+      imageNames = configYml["imageNames"]
+      versionsYml = <<~EOF
+        node:
+          image: #{imageNames["node"]}
+          tag: #{components["calico/node"]["version"]}
+        calicoctl:
+          image: #{imageNames["calicoctl"]}
+          tag: #{components["calicoctl"]["version"]}
+        typha:
+          image: #{imageNames["typha"]}
+          tag: #{components["calico/node"]["version"]}
+        cni:
+          image: #{imageNames["cni"]}
+          tag: #{components["calico/cni"]["version"]}
+        kubeControllers:
+          image: #{imageNames["kubeControllers"]}
+          tag: #{components["calico/kube-controllers"]["version"]}
+        flannel:
+          image: #{imageNames["flannel"]}
+          tag: #{components["flannel"]["version"]}
+        dikastes:
+          image: #{imageNames["dikastes"]}
+          tag: #{components["calico/dikastes"]["version"]}
+        flexvol:
+          image: #{imageNames["dikastes"]}
+          tag: #{components["calico/dikastes"]["version"]}
+        EOF
+
       tv = Tempfile.new("temp_versions.yml")
-      tv.write(components.to_yaml)
+      tv.write(versionsYml)
       tv.close
 
-      # Here we execute helm. In order to preserve backwards compatibility with the existing template system,
-      # we pass the entire versions.yml and config.yml. Our chart templates use the passed in "version" to parse
-      # out the correct image tags accordingly.
+      # execute helm.
       out = `helm template _includes/#{version}/charts/calico \
-        --set page.version=#{version} \
         --set imageRegistry=#{imageRegistry} \
-        -f _config.yml \
+        --set prodname=#{configYml["prodname"]} \
+        --set nodecontainer=#{configYml["nodecontainer"]} \
         -f #{tv.path} \
         -f #{t.path}`
       

@@ -59,7 +59,7 @@ spec:
         # This container installs the {{.Values.prodname}} CNI binaries
         # and CNI network config file on each node.
         - name: install-cni
-          image: {{.Values.imageRegistry}}{{.Values.imageNames.cni}}:{{ tuple "calico/cni" . | include "tag" }}
+          image: {{.Values.imageRegistry}}{{.Values.cni.image}}:{{ .Values.cni.tag }}
           command: ["/install-cni.sh"]
           env:
             # Name of the CNI config file to create.
@@ -129,7 +129,7 @@ spec:
         # Adds a Flex Volume Driver that creates a per-pod Unix Domain Socket to allow Dikastes
         # to communicate with Felix over the Policy Sync API.
         - name: flexvol-driver
-          image: {{.Values.imageRegistry}}{{.Values.imageNames.flexvol}}:{{tuple "flexvol" . | include "tag"}}
+          image: {{.Values.imageRegistry}}{{.Values.flexvol.image}}:{{.Values.flexvol.tag}}
           imagePullPolicy: Always
           volumeMounts:
           - name: flexvol-driver-host
@@ -140,7 +140,7 @@ spec:
         # container programs network policy and routes on each
         # host.
         - name: calico-node
-          image: {{.Values.imageRegistry}}{{.Values.imageNames.node}}:{{ tuple "calico/node" . | include "tag" }}
+          image: {{.Values.imageRegistry}}{{.Values.node.image}}:{{.Values.node.tag}}
           env:
 {{- if eq .Values.datastore "etcd" }}
             # The location of the {{.Values.prodname}} etcd cluster.
