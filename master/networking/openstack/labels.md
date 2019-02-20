@@ -1,11 +1,15 @@
 ---
-title: Endpoint labels
+title: Endpoint labels and operator policy
 canonical_url: 'https://docs.projectcalico.org/v3.5/usage/openstack/labels'
 ---
 
 When {{site.prodname}} represents an OpenStack VM as a {{site.prodname}} WorkloadEndpoint,
 it puts labels on the WorkloadEndpoint to identify the project, security groups and
-namespace that the VM belongs to.
+namespace that the VM belongs to.  The deployment operator can use these labels to
+configure {{site.prodname}} policy that is additional to the policy defined by OpenStack
+security groups, and that cannot be overridden by user-level security group config.
+
+## VM endpoint labels
 
 For the VM's OpenStack project (previously known as 'tenant'), those labels are:
 
@@ -39,9 +43,71 @@ recommended for [multiple region deployments](multiple-regions)) the namespace w
 > (alphanumerics, '-', '\_', '.' and '/'), so if a project or security group name normally
 > has other characters, those will be replaced here by '\_'.  Also there is a length
 > limit, so particularly long names may be truncated.
+{: .alert .alert-info}
 
 > **Note**: Calico does not support changing project name or security group name for a
 > given ID associated with a VM after the VM has been created.  It is recommended that
 > operators avoid any possible confusion here by not changing project name for a
 > particular project ID or security group name for particular security group ID,
 > post-creation.
+{: .alert .alert-info}
+
+## Configuring operator policy
+
+Configuring operator policy requires the `calicoctl` executable, so you should
+[install]({{site.baseurl}}/{{page.version}}/getting-started/calicoctl/install) and
+[configure
+calicoctl]({{site.baseurl}}/{{page.version}}/getting-started/calicoctl/configure) if you
+haven't done so already.
+
+-  Calico for OpenStack deployments use an etcd datastore, so you should follow the
+   instructions for an etcd datastore.
+
+-  The settings you need for etcd endpoints, and TLS credentials if your deployment uses
+   those, should match what you have in your
+   [`neutron.conf`]({{site.baseurl}}/{{page.version}}/networking/openstack/configuration)
+   and [Felix]({{site.baseurl}}/{{page.version}}/reference/felix/configuration)
+   configurations.
+
+## Example
+
+Now you can configure {{site.prodname}} operator policy that will apply before the policy
+that is derived from OpenStack security groups.  For example, to prevent any possible
+communication between the "superman" and "lexluthor" projects, you could configure the
+following.
+
+```yaml
+calicoctl apply -f - <<EOF
+apiVersion: projectcalico.org/v3
+kind: GlobalNetworkPolicy
+metadata:
+  name: deny-lexluthor-to-superman
+spec:
+  order: 10
+  selector: "projectcalico.org/openstack-project-name == 'superman'"
+  types:
+  - Ingress
+  ingress:
+  - action: Deny
+    source:
+      selector: "projectcalico.org/openstack-project-name == 'lexluthor'"
+---
+apiVersion: projectcalico.org/v3
+kind: GlobalNetworkPolicy
+metadata:
+  name: deny-superman-to-lexluthor
+spec:
+  order: 10
+  selector: "projectcalico.org/openstack-project-name == 'lexluthor'"
+  types:
+  - Ingress
+  ingress:
+  - action: Deny
+    source:
+      selector: "projectcalico.org/openstack-project-name == 'superman'"
+EOF
+```
+
+> **Note**: {{site.prodname}} will enforce any policy with a specified `order` field (as
+> here) before any policy derived from OpenStack security groups.
+{: .alert .alert-info}
