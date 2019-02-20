@@ -27,6 +27,12 @@ module Jekyll
 
       # Load the versions.yml file so it can be rewritten in a standard helm format.
       versionFile = YAML::load_file('_data/versions.yml')
+      if not versionFile.key?(version)
+        puts "skipping because #{version} not present in _versions.yml"
+        t.unlink
+        return
+      end
+
       components = versionFile[version][0]["components"]
 
       # Write the yaml values to a temp file for reading.
