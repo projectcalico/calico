@@ -25,9 +25,8 @@ func (r *DefaultRuleRenderer) MakeNatOutgoingRule(protocol string, action iptabl
 	ipConf := r.ipSetConfig(ipVersion)
 	allIPsSetName := ipConf.NameForMainIPSet(IPSetIDNATOutgoingAllPools)
 	masqIPsSetName := ipConf.NameForMainIPSet(IPSetIDNATOutgoingMasqPools)
-	match := iptables.Match()
 
-	match = iptables.Match().
+	match := iptables.Match().
 		SourceIPSet(masqIPsSetName).
 		NotDestIPSet(allIPsSetName)
 
