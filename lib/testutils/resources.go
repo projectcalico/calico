@@ -256,13 +256,17 @@ func (t *testResourceWatcher) expectEvents(kind string, anyOrder bool, expectedE
 			} else {
 				actualObject = actualEvent.Object
 			}
-			log.Infof(
-				"Actual:   EventType:%s; Kind:%s; Name:%s; Namespace:%s",
-				actualEvent.Type,
-				actualObject.GetObjectKind().GroupVersionKind(),
-				actualObject.(v1.ObjectMetaAccessor).GetObjectMeta().GetName(),
-				actualObject.(v1.ObjectMetaAccessor).GetObjectMeta().GetNamespace(),
-			)
+			if actualObject != nil {
+				log.Infof(
+					"Actual:   EventType:%s; Kind:%s; Name:%s; Namespace:%s",
+					actualEvent.Type,
+					actualObject.GetObjectKind().GroupVersionKind(),
+					actualObject.(v1.ObjectMetaAccessor).GetObjectMeta().GetName(),
+					actualObject.(v1.ObjectMetaAccessor).GetObjectMeta().GetNamespace(),
+				)
+			} else {
+				log.Warnf("Actual:    EventType:%s, Object: <nil>; Error: %s", actualEvent.Type, actualEvent.Error)
+			}
 		} else {
 			log.Error("Actual:   Event missing")
 		}
