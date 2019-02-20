@@ -328,6 +328,9 @@ var _ = DescribeTable("Config parsing",
 			{30500, 30600, ""},
 		},
 	),
+
+	Entry("IptablesNATOutgoingInterfaceFilter", "IptablesNATOutgoingInterfaceFilter", "cali-123", "cali-123"),
+	Entry("IptablesNATOutgoingInterfaceFilter", "IptablesNATOutgoingInterfaceFilter", "cali@123", "", false),
 )
 
 var _ = DescribeTable("OpenStack heuristic tests",
