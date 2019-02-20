@@ -102,9 +102,13 @@ Suppose that:
 - you want to allow the second set of VMs to connect to port 80 of the first
   set.
 
-You could do that by configuring this {{site.prodname}} policy:
+You need to have [calicoctl installed and configured for your
+cluster](labels#configuring-operator-policy).  Once that is in place,
+you could achieve the desired connectivity by using calicoctl to
+configure this {{site.prodname}} policy:
 
 ```yaml
+calicoctl apply -f - <<EOF
 apiVersion: projectcalico.org/v3
 kind: GlobalNetworkPolicy
 metadata:
@@ -121,6 +125,7 @@ spec:
     destination:
       ports:
       - 80
+EOF
 ```
 
 In words, this says that connections to port 80 of the VMs with the label for

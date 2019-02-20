@@ -32,7 +32,7 @@ toc:
     path:  /networking/openstack/dev-machine-setup
   - title: IP addressing and connectivity
     path: /networking/openstack/connectivity
-  - title: Endpoint labels
+  - title: Endpoint labels and operator policy
     path: /networking/openstack/labels
   - title: Configuring systems for use with Calico
     path: /networking/openstack/configuration
