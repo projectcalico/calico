@@ -39,6 +39,7 @@ import:
   subpackages:
   - types
 - package: github.com/projectcalico/libcalico-go
+  version: cd09a1798e7368df0f1d981916ee806294bd907c
   subpackages:
   - lib/apiconfig
   - lib/apis/v3
@@ -63,7 +64,7 @@ import:
   - lib/set
   - lib/validator/v1
 - package: github.com/projectcalico/typha
-  version: 3afde192457f43a6352f2f47eba8a2b5ea6f4ede
+  version: f3678dd7d289a5a728864a18d67dc2f2a8a140e7
   subpackages:
   - pkg/syncclient
   - pkg/tlsutils

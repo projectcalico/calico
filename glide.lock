@@ -1,5 +1,5 @@
-hash: a866621e5f4c45805c5ff7b24c88e289a06a8b2cfb21cf42ca8c0fcb4d166d1a
-updated: 2018-11-22T06:21:05.658717674Z
+hash: ebc66b863f7a91373b8583a0da8e6ad3c8e34be8017e2a3b626bfb58822b7909
+updated: 2019-02-21T09:53:34.769872955Z
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -91,7 +91,7 @@ imports:
 - name: github.com/gxed/GoEndian
   version: 0f5c6873267e5abf306ffcdfcfa4bf77517ef4a7
 - name: github.com/hashicorp/go-version
-  version: b5a281d3160aa11950a6182bd9a9dc2cb1e02d50
+  version: d40cf49b3a77bba84a7afdbd7f1dc295d114efb1
 - name: github.com/hashicorp/golang-lru
   version: a0d98a5f288019575c6d1f4bb1573fef2d1fcdc4
   subpackages:
@@ -210,7 +210,7 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: 44d4f72e33fd2796b3fffdc5b204641c9618b62f
+  version: cd09a1798e7368df0f1d981916ee806294bd907c
   subpackages:
   - lib/apiconfig
   - lib/apis/v1
@@ -252,7 +252,7 @@ imports:
   subpackages:
   - binder
 - name: github.com/projectcalico/typha
-  version: 3afde192457f43a6352f2f47eba8a2b5ea6f4ede
+  version: f3678dd7d289a5a728864a18d67dc2f2a8a140e7
   subpackages:
   - pkg/syncclient
   - pkg/syncproto
