@@ -82,11 +82,39 @@ var selectorTests = []selectorTest{
 			{"a": `'`},
 		}},
 
-	// Tests copied from Python version.
 	{`a == 'a'`, []map[string]string{{"a": "a"}}, []map[string]string{}},
 	{`a == "a"`, []map[string]string{{"a": "a"}}, []map[string]string{}},
 	{`a != "b"`, []map[string]string{{"a": "a"}}, []map[string]string{}},
 	{`a != "a"`, []map[string]string{{}}, []map[string]string{}},
+	{`a contains "a"`, []map[string]string{
+		{"a": "a"},
+		{"a": "bab"},
+		{"a": "aaa", "b": "c"},
+	}, []map[string]string{
+		{},
+		{"a": "b"},
+		{"b": "aaa"},
+	}},
+	{`a starts with "a"`, []map[string]string{
+		{"a": "a"},
+		{"a": "abb"},
+		{"a": "aaa", "b": "c"},
+	}, []map[string]string{
+		{},
+		{"a": "b"},
+		{"a": "baa"},
+		{"b": "aaa"},
+	}},
+	{`a ends with "a"`, []map[string]string{
+		{"a": "a"},
+		{"a": "bba"},
+		{"a": "aaa", "b": "c"},
+	}, []map[string]string{
+		{},
+		{"a": "b"},
+		{"a": "aab"},
+		{"b": "aaa"},
+	}},
 	{`a in {"a"}`, []map[string]string{{"a": "a"}}, []map[string]string{}},
 	{`!a in {"a"}`, []map[string]string{{"a": "b"}}, []map[string]string{}},
 	{`a in {"a", "b"}`, []map[string]string{{"a": "a"}}, []map[string]string{}},
@@ -137,29 +165,32 @@ var selectorTests = []selectorTest{
 }
 
 var badSelectors = []string{
-	"b == b",         // label == label
-	"'b1' == b",      // literal on lhs
-	"b",              // bare label
-	"a b",            // Garbage
-	"!",              // Garbage
-	`foo == "bar" &`, // Garbage
-	`foo == "bar" |`, // Garbage
-	`foo != ||`,      // Garbage
-	`foo in {"", ||`, // Garbage
-	`foo in ""`,      // Expect set literal
-	`"FOO`,           // Unterminated string
-	`"FOO'`,          // Unterminated string
-	`"FOO`,           // Unterminated string
-	`'FOO`,           // Unterminated string
-	`(`,              // Unterminated paren
-	`(a == "foo"`,    // Unterminated paren
-	`)`,              // Unterminated paren
-	`()`,             // Unterminated paren
-	`%`,              // Unexpected char
-	`a == "b" && %`,  // Unexpected char
-	`a == "b" || %`,  // Unexpected char
-	`a `,             // should be followed by operator
-	`has(foo) &&`,    // should be followed by operator
+	"b == b",          // label == label
+	"b contains b",    // label contains label
+	"b starts with b", // label starts with label
+	"b ends with b",   // label starts with label
+	"'b1' == b",       // literal on lhs
+	"b",               // bare label
+	"a b",             // Garbage
+	"!",               // Garbage
+	`foo == "bar" &`,  // Garbage
+	`foo == "bar" |`,  // Garbage
+	`foo != ||`,       // Garbage
+	`foo in {"", ||`,  // Garbage
+	`foo in ""`,       // Expect set literal
+	`"FOO`,            // Unterminated string
+	`"FOO'`,           // Unterminated string
+	`"FOO`,            // Unterminated string
+	`'FOO`,            // Unterminated string
+	`(`,               // Unterminated paren
+	`(a == "foo"`,     // Unterminated paren
+	`)`,               // Unterminated paren
+	`()`,              // Unterminated paren
+	`%`,               // Unexpected char
+	`a == "b" && %`,   // Unexpected char
+	`a == "b" || %`,   // Unexpected char
+	`a `,              // should be followed by operator
+	`has(foo) &&`,     // should be followed by operator
 }
 
 var canonicalisationTests = []struct {
@@ -174,6 +205,10 @@ var canonicalisationTests = []struct {
 	{`! (a == "b"&&! c != "d")`, `!(a == "b" && !c != "d")`, "s:lh3haoY1ikTRkd4UZu0nWSaIBknYLPJLX16d-w"},
 	{`a == "'"`, `a == "'"`, ""},
 	{`a == '"'`, `a == '"'`, ""},
+	{`a contains '"'`, `a contains '"'`, ""},
+	{`a contains "'"`, `a contains "'"`, ""},
+	{`a startswith '"'`, `a starts with '"'`, ""},
+	{`a endswith "'"`, `a ends with "'"`, ""},
 	{`a!='"'`, `a != '"'`, ""},
 	// Set items get sorted/de-duped.
 	{`a in {"d"}`, `a in {"d"}`, ""},
@@ -288,6 +323,9 @@ var _ = Describe("Visitor", func() {
 
 		Entry("should visit a LabelEqValueNode", "k == 'v'", "visited/k == \"v\"", testVisitor),
 		Entry("should visit a LabelNeValueNode", "k != 'v'", "visited/k != \"v\"", testVisitor),
+		Entry("should visit a LabelContainsValueNode", "k contains 'v'", "visited/k contains \"v\"", testVisitor),
+		Entry("should visit a LabelStartWithValueNode", "k starts with 'v'", "visited/k starts with \"v\"", testVisitor),
+		Entry("should visit a LabelEndsWithValueNode", "k ends with 'v'", "visited/k ends with \"v\"", testVisitor),
 		Entry("should visit an AndNode", "k == 'v' && x == 'y'", "(visited/k == \"v\" && visited/x == \"y\")", testVisitor),
 		Entry("should visit an OrNode", "k == 'v' || has(x)", "(visited/k == \"v\" || has(visited/x))", testVisitor),
 		Entry("should visit a NotNode", "!(k == 'v')", "!visited/k == \"v\"", testVisitor),

@@ -1,4 +1,4 @@
-// Copyright (c) 2016 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016, 2019 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,6 +16,7 @@ package tokenizer
 
 import (
 	"errors"
+	"fmt"
 	"regexp"
 	"strings"
 
@@ -25,7 +26,8 @@ import (
 type tokenKind uint8
 
 const (
-	TokLabel tokenKind = iota + 1
+	TokNone tokenKind = iota
+	TokLabel
 	TokStringLiteral
 	TokLBrace
 	TokRBrace
@@ -35,6 +37,9 @@ const (
 	TokIn
 	TokNot
 	TokNotIn
+	TokContains
+	TokStartsWith
+	TokEndsWith
 	TokAll
 	TokHas
 	TokLParen
@@ -65,6 +70,9 @@ const (
 
 var (
 	identifierRegex = regexp.MustCompile("^" + LabelKeyMatcher)
+	containsRegex   = regexp.MustCompile(`^contains`)
+	startsWithRegex = regexp.MustCompile(`^starts\s*with`)
+	endsWithRegex   = regexp.MustCompile(`^ends\s*with`)
 	hasRegex        = regexp.MustCompile("^" + hasExpr)
 	allRegex        = regexp.MustCompile("^" + allExpr)
 	notInRegex      = regexp.MustCompile("^" + notInExpr)
@@ -82,6 +90,10 @@ func Tokenize(input string) (tokens []Token, err error) {
 		if len(input) == 0 {
 			tokens = append(tokens, Token{TokEOF, nil})
 			return
+		}
+		var lastTokKind = TokNone
+		if len(tokens) > 0 {
+			lastTokKind = tokens[len(tokens)-1].Kind
 		}
 		switch input[0] {
 		case '(':
@@ -147,9 +159,35 @@ func Tokenize(input string) (tokens []Token, err error) {
 				return nil, errors.New("expected ||")
 			}
 		default:
-			// Handle less-simple cases with regex matches.  We've
-			// already stripped any whitespace.
-			if idxs := hasRegex.FindStringSubmatchIndex(input); idxs != nil {
+			// Handle less-simple cases with regex matches.  We've already stripped any whitespace.
+			if lastTokKind == TokLabel {
+				// If we just saw a label, look for a contains/starts with/ends with operator instead of another label.
+				if idxs := containsRegex.FindStringIndex(input); idxs != nil {
+					// Found "all"
+					tokens = append(tokens, Token{TokContains, nil})
+					input = input[idxs[1]:]
+				} else if idxs := startsWithRegex.FindStringIndex(input); idxs != nil {
+					// Found "all"
+					tokens = append(tokens, Token{TokStartsWith, nil})
+					input = input[idxs[1]:]
+				} else if idxs := endsWithRegex.FindStringIndex(input); idxs != nil {
+					// Found "all"
+					tokens = append(tokens, Token{TokEndsWith, nil})
+					input = input[idxs[1]:]
+				} else if idxs := notInRegex.FindStringIndex(input); idxs != nil {
+					// Found "not in"
+					tokens = append(tokens, Token{TokNotIn, nil})
+					input = input[idxs[1]:]
+				} else if idxs := inRegex.FindStringIndex(input); idxs != nil {
+					// Found "in"
+					tokens = append(tokens, Token{TokIn, nil})
+					input = input[idxs[1]:]
+				} else {
+					err = fmt.Errorf("unexpected characters after label '%v', was expecting an operator",
+						tokens[len(tokens)-1].Value)
+					return
+				}
+			} else if idxs := hasRegex.FindStringSubmatchIndex(input); idxs != nil {
 				// Found "has(label)"
 				wholeMatchEnd := idxs[1]
 				labelNameMatchStart := idxs[2]
@@ -157,14 +195,6 @@ func Tokenize(input string) (tokens []Token, err error) {
 				labelName := input[labelNameMatchStart:labelNameMatchEnd]
 				tokens = append(tokens, Token{TokHas, labelName})
 				input = input[wholeMatchEnd:]
-			} else if idxs := notInRegex.FindStringIndex(input); idxs != nil {
-				// Found "not in"
-				tokens = append(tokens, Token{TokNotIn, nil})
-				input = input[idxs[1]:]
-			} else if idxs := inRegex.FindStringIndex(input); idxs != nil {
-				// Found "in"
-				tokens = append(tokens, Token{TokIn, nil})
-				input = input[idxs[1]:]
 			} else if idxs := allRegex.FindStringIndex(input); idxs != nil {
 				// Found "all"
 				tokens = append(tokens, Token{TokAll, nil})

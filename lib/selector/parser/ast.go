@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2019 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -75,6 +75,12 @@ func (v PrefixVisitor) Visit(n interface{}) {
 		np.LabelName = fmt.Sprintf("%s%s", v.Prefix, np.LabelName)
 	case *LabelNeValueNode:
 		np.LabelName = fmt.Sprintf("%s%s", v.Prefix, np.LabelName)
+	case *LabelContainsValueNode:
+		np.LabelName = fmt.Sprintf("%s%s", v.Prefix, np.LabelName)
+	case *LabelStartsWithValueNode:
+		np.LabelName = fmt.Sprintf("%s%s", v.Prefix, np.LabelName)
+	case *LabelEndsWithValueNode:
+		np.LabelName = fmt.Sprintf("%s%s", v.Prefix, np.LabelName)
 	case *HasNode:
 		np.LabelName = fmt.Sprintf("%s%s", v.Prefix, np.LabelName)
 	case *LabelInSetNode:
@@ -147,13 +153,70 @@ func (node *LabelEqValueNode) AcceptVisitor(v Visitor) {
 }
 
 func (node *LabelEqValueNode) collectFragments(fragments []string) []string {
-	var quote string
-	if strings.Contains(node.Value, `"`) {
-		quote = `'`
-	} else {
-		quote = `"`
+	return appendLabelOpAndQuotedString(fragments, node.LabelName, " == ", node.Value)
+}
+
+type LabelContainsValueNode struct {
+	LabelName string
+	Value     string
+}
+
+func (node *LabelContainsValueNode) Evaluate(labels Labels) bool {
+	val, ok := labels.Get(node.LabelName)
+	if ok {
+		return strings.Contains(val, node.Value)
 	}
-	return append(fragments, node.LabelName, " == ", quote, node.Value, quote)
+	return false
+}
+
+func (node *LabelContainsValueNode) AcceptVisitor(v Visitor) {
+	v.Visit(node)
+}
+
+func (node *LabelContainsValueNode) collectFragments(fragments []string) []string {
+	return appendLabelOpAndQuotedString(fragments, node.LabelName, " contains ", node.Value)
+}
+
+type LabelStartsWithValueNode struct {
+	LabelName string
+	Value     string
+}
+
+func (node *LabelStartsWithValueNode) Evaluate(labels Labels) bool {
+	val, ok := labels.Get(node.LabelName)
+	if ok {
+		return strings.HasPrefix(val, node.Value)
+	}
+	return false
+}
+
+func (node *LabelStartsWithValueNode) AcceptVisitor(v Visitor) {
+	v.Visit(node)
+}
+
+func (node *LabelStartsWithValueNode) collectFragments(fragments []string) []string {
+	return appendLabelOpAndQuotedString(fragments, node.LabelName, " starts with ", node.Value)
+}
+
+type LabelEndsWithValueNode struct {
+	LabelName string
+	Value     string
+}
+
+func (node *LabelEndsWithValueNode) Evaluate(labels Labels) bool {
+	val, ok := labels.Get(node.LabelName)
+	if ok {
+		return strings.HasSuffix(val, node.Value)
+	}
+	return false
+}
+
+func (node *LabelEndsWithValueNode) AcceptVisitor(v Visitor) {
+	v.Visit(node)
+}
+
+func (node *LabelEndsWithValueNode) collectFragments(fragments []string) []string {
+	return appendLabelOpAndQuotedString(fragments, node.LabelName, " ends with ", node.Value)
 }
 
 type LabelInSetNode struct {
@@ -239,13 +302,7 @@ func (node *LabelNeValueNode) AcceptVisitor(v Visitor) {
 }
 
 func (node *LabelNeValueNode) collectFragments(fragments []string) []string {
-	var quote string
-	if strings.Contains(node.Value, `"`) {
-		quote = `'`
-	} else {
-		quote = `"`
-	}
-	return append(fragments, node.LabelName, " != ", quote, node.Value, quote)
+	return appendLabelOpAndQuotedString(fragments, node.LabelName, " != ", node.Value)
 }
 
 type HasNode struct {
@@ -361,4 +418,14 @@ func (node *AllNode) AcceptVisitor(v Visitor) {
 
 func (node *AllNode) collectFragments(fragments []string) []string {
 	return append(fragments, "all()")
+}
+
+func appendLabelOpAndQuotedString(fragments []string, label, op, s string) []string {
+	var quote string
+	if strings.Contains(s, `"`) {
+		quote = `'`
+	} else {
+		quote = `"`
+	}
+	return append(fragments, label, op, quote, s, quote)
 }
