@@ -1,3 +1,5 @@
+// Copyright (c) 2015-2019 Tigera, Inc. All rights reserved.
+
 package main_test
 
 import (
@@ -30,7 +32,10 @@ var _ = Describe("CalicoCni", func() {
 	calicoClient, _ := client.NewFromEnv()
 
 	BeforeEach(func() {
-		testutils.WipeEtcd()
+		if os.Getenv("DATASTORE_TYPE") == "kubernetes" {
+			Skip("Don't run non-kubernetes test with Kubernetes Datastore")
+		}
+		testutils.WipeDatastore()
 		// Create the node for these tests. The IPAM code requires a corresponding Calico node to exist.
 		var err error
 		n := api.NewNode()
@@ -41,6 +46,11 @@ var _ = Describe("CalicoCni", func() {
 	})
 
 	AfterEach(func() {
+		if os.Getenv("DATASTORE_TYPE") == "kubernetes" {
+			// no cleanup needed.
+			return
+		}
+
 		// Delete the node.
 		name, err := names.Hostname()
 		Expect(err).NotTo(HaveOccurred())

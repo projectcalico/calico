@@ -1,3 +1,16 @@
+// Copyright (c) 2015-2019 Tigera, Inc. All rights reserved.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 package testutils
 
 import (
@@ -13,14 +26,9 @@ import (
 	"strings"
 	"syscall"
 
-	kerrors "k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/tools/clientcmd"
-
 	"github.com/containernetworking/cni/pkg/invoke"
 	"github.com/containernetworking/cni/pkg/types"
-	"github.com/containernetworking/cni/pkg/types/020"
+	types020 "github.com/containernetworking/cni/pkg/types/020"
 	"github.com/containernetworking/cni/pkg/types/current"
 	"github.com/containernetworking/plugins/pkg/ns"
 	"github.com/containernetworking/plugins/pkg/testutils"
@@ -34,6 +42,11 @@ import (
 	client "github.com/projectcalico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/libcalico-go/lib/names"
 	"github.com/projectcalico/libcalico-go/lib/options"
+	corev1 "k8s.io/api/core/v1"
+	kerrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/kubernetes"
+
 	log "github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
 )
@@ -49,15 +62,24 @@ func min(a, b int) int {
 }
 
 // Delete everything under /calico from etcd.
-func WipeEtcd() {
-	be, err := backend.NewClient(apiconfig.CalicoAPIConfig{
+func WipeDatastore() {
+	spec := apiconfig.CalicoAPIConfig{
 		Spec: apiconfig.CalicoAPIConfigSpec{
-			DatastoreType: apiconfig.EtcdV3,
 			EtcdConfig: apiconfig.EtcdConfig{
-				EtcdEndpoints: "http://127.0.0.1:2379",
+				EtcdEndpoints: os.Getenv("ETCD_ENDPOINTS"),
+			},
+			KubeConfig: apiconfig.KubeConfig{
+				K8sAPIEndpoint: os.Getenv("K8S_API_ENDPOINT"),
 			},
 		},
-	})
+	}
+	if os.Getenv("DATASTORE_TYPE") == "etcdv3" {
+		spec.Spec.DatastoreType = apiconfig.EtcdV3
+	} else {
+		spec.Spec.DatastoreType = apiconfig.Kubernetes
+	}
+
+	be, err := backend.NewClient(spec)
 	if err != nil {
 		panic(err)
 	}
@@ -150,37 +172,9 @@ func GetResultForCurrent(session *gexec.Session, cniVersion string) (*current.Re
 	return &r, nil
 }
 
-// Delete all K8s pods from the "test" namespace
-func WipeK8sPods() {
-	config, err := clientcmd.DefaultClientConfig.ClientConfig()
-	if err != nil {
-		panic(err)
-	}
-	clientset, err := kubernetes.NewForConfig(config)
-
-	if err != nil {
-		panic(err)
-	}
-	pods, err := clientset.CoreV1().Pods(K8S_TEST_NS).List(metav1.ListOptions{})
-	if err != nil {
-		panic(err)
-	}
-
-	for _, pod := range pods.Items {
-		err = clientset.CoreV1().Pods(K8S_TEST_NS).Delete(pod.Name, &metav1.DeleteOptions{})
-
-		if err != nil {
-			if kerrors.IsNotFound(err) {
-				continue
-			}
-			panic(err)
-		}
-	}
-}
-
 // RunIPAMPlugin sets ENV vars required then calls the IPAM plugin
 // specified in the config and returns the result and exitCode.
-func RunIPAMPlugin(netconf, command, args, cniVersion string) (*current.Result, types.Error, int) {
+func RunIPAMPlugin(netconf, command, args, cid, cniVersion string) (*current.Result, types.Error, int) {
 	conf := types.NetConf{}
 	if err := json.Unmarshal([]byte(netconf), &conf); err != nil {
 		panic(fmt.Errorf("failed to load netconf: %v", err))
@@ -189,7 +183,7 @@ func RunIPAMPlugin(netconf, command, args, cniVersion string) (*current.Result, 
 	// Run the CNI plugin passing in the supplied netconf
 	cmd := &exec.Cmd{
 		Env: []string{
-			"CNI_CONTAINERID=a",
+			fmt.Sprintf("CNI_CONTAINERID=%s", cid),
 			"CNI_NETNS=b",
 			"CNI_IFNAME=c",
 			"CNI_PATH=d",
@@ -225,7 +219,7 @@ func RunIPAMPlugin(netconf, command, args, cniVersion string) (*current.Result, 
 	exitCode := session.ExitCode()
 
 	result := &current.Result{}
-	error := types.Error{}
+	e := types.Error{}
 	stdout := session.Out.Contents()
 	if exitCode == 0 {
 		if command == "ADD" {
@@ -236,12 +230,12 @@ func RunIPAMPlugin(netconf, command, args, cniVersion string) (*current.Result, 
 			}
 		}
 	} else {
-		if err := json.Unmarshal(stdout, &error); err != nil {
+		if err := json.Unmarshal(stdout, &e); err != nil {
 			panic(fmt.Errorf("failed to load error: %s %v", stdout, err))
 		}
 	}
 
-	return result, error, exitCode
+	return result, e, exitCode
 }
 
 func CreateContainerNamespace() (containerNs ns.NetNS, containerId string, err error) {
@@ -557,4 +551,51 @@ func CheckSysctlValue(sysctlPath, value string) error {
 	}
 
 	return nil
+}
+
+func AddNode(c client.Interface, kc *kubernetes.Clientset, host string) error {
+	var err error
+	err = nil
+	if os.Getenv("DATASTORE_TYPE") == "kubernetes" {
+		// create the node in Kubernetes.
+		n := corev1.Node{
+			TypeMeta: metav1.TypeMeta{
+				Kind:       "Node",
+				APIVersion: "v1",
+			},
+		}
+		n.Name = host
+
+		// Create/Update the node
+		newNode, err := kc.CoreV1().Nodes().Create(&n)
+		if err != nil {
+			if kerrors.IsAlreadyExists(err) {
+				return nil
+			}
+		}
+		log.WithField("node", newNode).WithError(err).Info("node applied")
+	} else {
+		// Otherwise, create it in Calico.
+		n := api.NewNode()
+		n.Name = host
+		_, err = c.Nodes().Create(context.Background(), n, options.SetOptions{})
+	}
+	return err
+}
+
+func DeleteNode(c client.Interface, kc *kubernetes.Clientset, host string) error {
+	var err error
+	err = nil
+	if os.Getenv("DATASTORE_TYPE") == "kubernetes" {
+		// delete the node in Kubernetes.
+		err := kc.CoreV1().Nodes().Delete(host, &metav1.DeleteOptions{})
+		log.WithError(err).Info("node deleted")
+	} else {
+		// Otherwise, delete it in Calico.
+		n := api.NewNode()
+		n.Name = host
+		_, err = c.Nodes().Delete(context.Background(), host, options.DeleteOptions{})
+		log.WithError(err).Info("node deleted")
+	}
+	return err
 }
