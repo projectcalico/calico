@@ -1,5 +1,5 @@
-hash: 7519d548c3701cc5fed15778a91cc397e9bc253e2b3489ccf7fafd070f201356
-updated: 2019-02-20T04:18:49.366454861Z
+hash: 4398fe2b5d3e148b7d2bed409f844e8802cfca7c68a1e1399ff2c6caf4d0a434
+updated: 2019-02-21T11:50:18.330550819-08:00
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -175,7 +175,7 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: 72554c43e943469fc7393b558ae76df9bac5b67e
+  version: 0c0bf8ddea8af7d05f3594366d358e731040e39b
   subpackages:
   - lib/apiconfig
   - lib/apis/v1
@@ -234,7 +234,7 @@ imports:
 - name: github.com/sirupsen/logrus
   version: f006c2ac4710855cf0f916dd6b77acf6b048dc6e
 - name: github.com/spf13/pflag
-  version: e57e3eeb33f795204c1ca35f56c44f83227c6e66
+  version: 583c0c0531f06d5278b7d917446061adc344b5cd
 - name: golang.org/x/crypto
   version: 9419663f5a44be8b34ca85f08abc5fe1be11f8a3
   subpackages:

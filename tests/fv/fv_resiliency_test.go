@@ -30,6 +30,7 @@ import (
 
 	"github.com/projectcalico/felix/fv/containers"
 	"github.com/projectcalico/kube-controllers/tests/testutils"
+	"github.com/projectcalico/libcalico-go/lib/apiconfig"
 	api "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	client "github.com/projectcalico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/libcalico-go/lib/options"
@@ -52,20 +53,20 @@ var _ = Describe("[Resilience] PolicyController", func() {
 	BeforeEach(func() {
 		// Run etcd.
 		calicoEtcd = testutils.RunEtcd()
-		calicoClient = testutils.GetCalicoClient(calicoEtcd.IP)
+		calicoClient = testutils.GetCalicoClient(apiconfig.EtcdV3, calicoEtcd.IP, "")
 
 		// Run apiserver.
 		k8sEtcd = testutils.RunEtcd()
 		apiserver = testutils.RunK8sApiserver(k8sEtcd.IP)
 
 		// Write out a kubeconfig file
-		kfconfigfile, err := ioutil.TempFile("", "ginkgo-policycontroller")
+		kconfigfile, err := ioutil.TempFile("", "ginkgo-policycontroller")
 		Expect(err).NotTo(HaveOccurred())
-		defer os.Remove(kfconfigfile.Name())
+		defer os.Remove(kconfigfile.Name())
 		data := fmt.Sprintf(testutils.KubeconfigTemplate, apiserver.IP)
-		kfconfigfile.Write([]byte(data))
+		kconfigfile.Write([]byte(data))
 
-		k8sClient, err = testutils.GetK8sClient(kfconfigfile.Name())
+		k8sClient, err = testutils.GetK8sClient(kconfigfile.Name())
 		Expect(err).NotTo(HaveOccurred())
 
 		// Wait for the apiserver to be available and for the default namespace to exist.
@@ -100,7 +101,7 @@ var _ = Describe("[Resilience] PolicyController", func() {
 			Do().Error()
 		Expect(err).NotTo(HaveOccurred())
 
-		policyController = testutils.RunPolicyController(calicoEtcd.IP, kfconfigfile.Name())
+		policyController = testutils.RunPolicyController(apiconfig.EtcdV3, calicoEtcd.IP, kconfigfile.Name(), "")
 
 		// Wait for it to appear in Calico's etcd.
 		Eventually(func() *api.NetworkPolicy {

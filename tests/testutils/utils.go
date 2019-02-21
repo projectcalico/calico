@@ -55,6 +55,7 @@ func RunK8sApiserver(etcdIp string) *containers.Container {
 	return containers.Run("st-apiserver",
 		containers.RunOpts{AutoRemove: true},
 		"-v", os.Getenv("PRIVATE_KEY")+":/private.key",
+		"-v", os.Getenv("CRDS_FILE")+":/crds.yaml",
 		fmt.Sprintf("%s", os.Getenv("HYPERKUBE_IMAGE")),
 		"/hyperkube", "apiserver",
 		"--service-cluster-ip-range=10.101.0.0/16",
@@ -91,10 +92,11 @@ func RunEtcd() *containers.Container {
 		"--listen-client-urls", "http://0.0.0.0:2379")
 }
 
-func GetCalicoClient(etcdIP string) client.Interface {
+func GetCalicoClient(dsType apiconfig.DatastoreType, etcdIP, kcfg string) client.Interface {
 	cfg := apiconfig.NewCalicoAPIConfig()
-	cfg.Spec.DatastoreType = apiconfig.EtcdV3
+	cfg.Spec.DatastoreType = dsType
 	cfg.Spec.EtcdEndpoints = fmt.Sprintf("http://%s:2379", etcdIP)
+	cfg.Spec.Kubeconfig = kcfg
 	client, err := client.New(*cfg)
 
 	Expect(err).NotTo(HaveOccurred())

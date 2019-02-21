@@ -144,12 +144,14 @@ func main() {
 				threadiness: config.ProfileWorkers,
 			}
 		default:
-			log.Fatalf("Invalid controller '%s' provided. Valid options are workloadendpoint, profile, policy", controllerType)
+			log.Fatalf("Invalid controller '%s' provided.", controllerType)
 		}
 	}
 
-	// If configured to do so, start an etcdv3 compaction.
-	go startCompactor(ctx, config)
+	if config.DatastoreType == "etcdv3" {
+		// If configured to do so, start an etcdv3 compaction.
+		go startCompactor(ctx, config)
+	}
 
 	// Run the health checks on a separate goroutine.
 	if config.HealthEnabled {
