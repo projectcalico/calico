@@ -2,6 +2,7 @@ package allocateipip
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"time"
 
@@ -155,11 +156,16 @@ func removeHostTunnelAddr(ctx context.Context, c client.Interface, nodename stri
 // with some space. Stores the result in the host's config as its tunnel
 // address.
 func assignHostTunnelAddr(ctx context.Context, c client.Interface, nodename string, ipipCidrs []net.IPNet) {
+	attrs := map[string]string{
+		ipam.AttributeNode: nodename,
+		ipam.AttributeType: ipam.AttributeTypeIPIP,
+	}
+	handle := fmt.Sprintf("ipip-tunnel-addr-%s", nodename)
 	args := ipam.AutoAssignArgs{
 		Num4:      1,
 		Num6:      0,
-		HandleID:  nil,
-		Attrs:     nil,
+		HandleID:  &handle,
+		Attrs:     attrs,
 		Hostname:  nodename,
 		IPv4Pools: ipipCidrs,
 	}
