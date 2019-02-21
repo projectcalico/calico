@@ -19,7 +19,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/projectcalico/libcalico-go/lib/apis/v3"
+	v3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	log "github.com/sirupsen/logrus"
 
 	bapi "github.com/projectcalico/libcalico-go/lib/backend/api"
@@ -34,6 +34,13 @@ const (
 	// to etcd.
 	datastoreRetries  = 100
 	ipamKeyErrRetries = 3
+
+	// Common attributes which may be set on allocations by clients.
+	AttributePod       = "pod"
+	AttributeNamespace = "namespace"
+	AttributeNode      = "node"
+	AttributeType      = "type"
+	AttributeTypeIPIP  = "ipipTunnelAddress"
 )
 
 var (
