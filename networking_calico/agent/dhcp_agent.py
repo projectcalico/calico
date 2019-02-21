@@ -272,8 +272,12 @@ class CalicoEtcdWatcher(etcdutils.EtcdWatcher):
         dns_assignments = []
         fqdn = annotations.get(datamodel_v3.ANN_KEY_FQDN)
         network_id = annotations.get(datamodel_v3.ANN_KEY_NETWORK_ID)
+        allowedIps = map(lambda e: e.split('/')[0],
+                         endpoint.get('allowedIps', []))
         for addrm in endpoint['ipNetworks']:
             ip_addr = addrm.split('/')[0]
+            if ip_addr in allowedIps:
+                continue
             subnet_id = self.subnet_watcher.get_subnet_id_for_addr(
                 ip_addr,
                 network_id
@@ -283,13 +287,18 @@ class CalicoEtcdWatcher(etcdutils.EtcdWatcher):
             )
             if subnet_id is None:
                 LOG.warning("Missing subnet data for one of port's IPs")
-                return
+                continue
+
             fixed_ips.append({'subnet_id': subnet_id,
                               'ip_address': ip_addr})
+
             if fqdn:
                 dns_assignments.append({'hostname': fqdn.split('.')[0],
                                         'ip_address': ip_addr,
                                         'fqdn': fqdn})
+        if not fixed_ips:
+            return
+
         port = {'id': endpoint_id,
                 'device_owner': 'calico',
                 'device_id': endpoint['interfaceName'],
