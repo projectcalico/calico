@@ -16,12 +16,15 @@ package node
 
 import (
 	"fmt"
+	"math/big"
+	"net"
 	"strings"
 	"time"
 
 	bapi "github.com/projectcalico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	cerrors "github.com/projectcalico/libcalico-go/lib/errors"
+	"github.com/projectcalico/libcalico-go/lib/ipam"
 	log "github.com/sirupsen/logrus"
 	"k8s.io/apimachinery/pkg/api/errors"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -60,6 +63,9 @@ func (c *NodeController) syncDeleteKDD() error {
 			}
 		}
 
+		// To reduce log spam.
+		firstSkip := true
+
 		// Go through each IPAM allocation, check its attributes for the node it is assigned to.
 		for _, idx := range b.Allocations {
 			if idx == nil {
@@ -69,7 +75,7 @@ func (c *NodeController) syncDeleteKDD() error {
 			attr := b.Attributes[*idx]
 
 			// Track nodes based on IP allocations.
-			if val, ok := attr.AttrSecondary["node"]; ok {
+			if val, ok := attr.AttrSecondary[ipam.AttributeNode]; ok {
 				if _, ok := nodes[val]; !ok {
 					nodes[val] = []model.AllocationAttribute{}
 				}
@@ -77,7 +83,13 @@ func (c *NodeController) syncDeleteKDD() error {
 				// If there is no handle, then skip this IP. We need the handle
 				// in order to release the IP below.
 				if attr.AttrPrimary == nil {
-					log.Warnf("Skipping IP with no handle")
+					ip := ordinalToIP(b, *idx)
+					logc := log.WithFields(log.Fields{"ip": ip, "block": b.CIDR.String()})
+					if firstSkip {
+						logc.Warnf("Skipping IP with no handle")
+					} else {
+						logc.Debugf("Skipping IP with no handle")
+					}
 					continue
 				}
 
@@ -88,6 +100,9 @@ func (c *NodeController) syncDeleteKDD() error {
 		}
 	}
 	log.Debugf("Nodes in IPAM: %v", nodes)
+
+	// For storing any errors encountered below.
+	var storedErr error
 
 	// For each node present in IPAM, if it doesn't exist in the Kubernetes API then we
 	// should consider it a candidate for cleanup.
@@ -105,19 +120,22 @@ func (c *NodeController) syncDeleteKDD() error {
 		// extra sure that the node is gone before we clean it up.
 		canDelete := true
 		for _, a := range allocations {
-			ns := a.AttrSecondary["namespace"]
-			pod := a.AttrSecondary["pod"]
+			ns := a.AttrSecondary[ipam.AttributeNamespace]
+			pod := a.AttrSecondary[ipam.AttributePod]
+			ipip := a.AttrSecondary[ipam.AttributeType] == ipam.AttributeTypeIPIP
 
-			// TODO: Need to handle IPIP addresses somehow. They are allocated in calico-ipam, but
-			// currently don't have this metadata attached.
-			if ns == "" || pod == "" {
-				log.Warnf("IP allocation does not have a namespace/pod associated")
+			// Skip any allocations which are not either a Kubernetes pod, or a node's
+			// IPIP address. In practice, we don't expect these, but they might exist.
+			// When they do, they will need to be released outside of this controller in order for
+			// the block to be cleaned up.
+			if (ns == "" || pod == "") && !ipip {
+				log.Info("IP allocation is from an unknown source. Will be unable to cleanup block until it is removed.")
 				continue
 			}
 
 			// Check to see if the pod still exists. If it does, then we shouldn't clean up
 			// this node, since it might come back online.
-			if c.podExists(pod, ns) {
+			if pod != "" && c.podExists(pod, ns, node) {
 				logc.WithFields(log.Fields{"pod": pod, "ns": ns}).Debugf("Pod still exists")
 				canDelete = false
 				break
@@ -134,12 +152,17 @@ func (c *NodeController) syncDeleteKDD() error {
 		time.Sleep(c.rl.When(RateLimitCalicoDelete))
 		logc.Info("Cleaning up IPAM resources for deleted node")
 		if err := c.cleanupNode(node, allocations); err != nil {
-			// TODO: We might want to clean up other nodes before returning.
-			return err
+			// Store the error, but continue. Storing the error ensures we'll retry.
+			log.WithError(err).Warnf("Error cleaning up node '%s'", node)
+			storedErr = err
+			continue
 		}
 		c.rl.Forget(RateLimitCalicoDelete)
 	}
 
+	if storedErr != nil {
+		return storedErr
+	}
 	log.Info("Node and IPAM data is in sync")
 	return nil
 }
@@ -192,13 +215,32 @@ func (c *NodeController) nodeExists(node string) bool {
 	return true
 }
 
-func (c *NodeController) podExists(name, ns string) bool {
-	_, err := c.k8sClientset.CoreV1().Pods(ns).Get(name, v1.GetOptions{})
+func (c *NodeController) podExists(name, ns, node string) bool {
+	n, err := c.k8sClientset.CoreV1().Pods(ns).Get(name, v1.GetOptions{})
 	if err != nil {
 		if errors.IsNotFound(err) {
 			return false
 		}
 		log.WithError(err).Warn("Failed to query pod, assume it exists")
 	}
+	if n.Spec.NodeName != node {
+		// If the pod has been rescheduled to a new node, we can treat the old allocation as
+		// gone and clean it up.
+		fields := log.Fields{"old": node, "new": n.Spec.NodeName, "pod": name, "ns": ns}
+		log.WithFields(fields).Info("Pod rescheduled on new node. Will clean up old allocation")
+		return false
+	}
 	return true
+}
+
+func ordinalToIP(b *model.AllocationBlock, ord int) net.IP {
+	ip := b.CIDR.IP
+	var intVal *big.Int
+	if ip.To4() != nil {
+		intVal = big.NewInt(0).SetBytes(ip.To4())
+	} else {
+		intVal = big.NewInt(0).SetBytes(ip.To16())
+	}
+	sum := big.NewInt(0).Add(intVal, big.NewInt(int64(ord)))
+	return net.IP(sum.Bytes())
 }

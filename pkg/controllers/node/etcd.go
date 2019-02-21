@@ -70,7 +70,7 @@ func (c *NodeController) syncDeleteEtcd() error {
 
 // syncNodeLabels syncs the labels found in v1.Node to the Calico node object.
 // It uses an annotation on the Calico node object to keep track of which labels have
-// beend synced from Kubernetes, so that it doesn't overwrite user provided labels (e.g.,
+// been synced from Kubernetes, so that it doesn't overwrite user provided labels (e.g.,
 // via calicoctl or another Calico controller).
 func (nc *NodeController) syncNodeLabels(node *v1.Node) {
 	// On failure, we retry a certain number of times.

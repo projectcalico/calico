@@ -94,10 +94,7 @@ var _ = Describe("kube-controllers FV tests (KDD mode)", func() {
 		// In KDD mode, we only support the node controller right now.
 		policyController = testutils.RunPolicyController(apiconfig.Kubernetes, "", kconfigfile.Name(), "node")
 
-		// Run controller manager.  Empirically it can take around 10s until the
-		// controller manager is ready to create default service accounts, even
-		// when the hyperkube image has already been downloaded to run the API
-		// server.  We use Eventually to allow for possible delay when doing
+		// Run controller manager.
 		controllerManager = testutils.RunK8sControllerManager(apiserver.IP)
 	})
 
@@ -222,6 +219,14 @@ var _ = Describe("kube-controllers FV tests (KDD mode)", func() {
 			})
 			Expect(err).NotTo(HaveOccurred())
 
+			// Allocate an IPIP address to NodeA as well.
+			handleAIPIP := "handleAIPIP"
+			attrs = map[string]string{"node": nodeA, "type": "ipipTunnelAddress"}
+			err = calicoClient.IPAM().AssignIP(context.Background(), ipam.AssignIPArgs{
+				IP: net.MustParseIP("192.168.0.2"), HandleID: &handleAIPIP, Attrs: attrs, Hostname: nodeA,
+			})
+			Expect(err).NotTo(HaveOccurred())
+
 			// Allocate a pod IP address and thus a block and affinity to NodeB.
 			handleB := "handleB"
 			attrs = map[string]string{"node": nodeB, "pod": "pod-b", "namespace": "default"}
@@ -270,9 +275,19 @@ var _ = Describe("kube-controllers FV tests (KDD mode)", func() {
 			err = k8sClient.CoreV1().Nodes().Delete(nodeB, nil)
 			Expect(err).NotTo(HaveOccurred())
 			Eventually(func() error {
+				if err := assertIPsWithHandle(calicoClient.IPAM(), handleA, 1); err != nil {
+					return err
+				}
+				if err := assertIPsWithHandle(calicoClient.IPAM(), handleAIPIP, 1); err != nil {
+					return err
+				}
 				if err := assertIPsWithHandle(calicoClient.IPAM(), handleB, 0); err != nil {
 					return err
 				}
+				if err := assertIPsWithHandle(calicoClient.IPAM(), handleC, 1); err != nil {
+					return err
+				}
+
 				if err := assertNumBlocks(bc, 3); err != nil {
 					return err
 				}
@@ -301,6 +316,9 @@ var _ = Describe("kube-controllers FV tests (KDD mode)", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Eventually(func() error {
 				if err := assertIPsWithHandle(calicoClient.IPAM(), handleA, 0); err != nil {
+					return err
+				}
+				if err := assertIPsWithHandle(calicoClient.IPAM(), handleAIPIP, 0); err != nil {
 					return err
 				}
 				if err := assertNumBlocks(bc, 0); err != nil {
