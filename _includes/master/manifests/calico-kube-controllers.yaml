@@ -1,12 +1,4 @@
 {{- if eq .Values.datastore "etcd" -}}
-{{- /*
-calico-kube-controllers.yaml acccepts the following include flags:
-
-| Name             | Accepted Values |
-|------------------|-----------------|
-| variant_name     | Calico, Canal   |
-
-*/ -}}
 # This manifest deploys the {{.Values.prodname}} Kubernetes controllers.
 # See https://github.com/projectcalico/kube-controllers
 apiVersion: extensions/v1beta1

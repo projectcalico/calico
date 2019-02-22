@@ -137,12 +137,6 @@ rules:
 {{- if eq .Values.datastore "kdd" }}
       # Calico stores some configuration information in node annotations.
       - update
-  # The Calico IPAM migration needs to get daemonsets
-  - apiGroups: ["apps"]
-    resources:
-      - daemonsets
-    verbs:
-      - get
   # Watch for changes to Kubernetes NetworkPolicies.
   - apiGroups: ["networking.k8s.io"]
     resources:
@@ -200,6 +194,16 @@ rules:
       - get
       - list
       - watch
+  # These permissions are only requried for upgrade from v2.6, and can
+  # be removed after upgrade or on fresh installations.
+  - apiGroups: ["crd.projectcalico.org"]
+    resources:
+      - bgpconfigurations
+      - bgppeers
+    verbs:
+      - create
+      - update
+{{- if eq .Values.network "calico" }}
   # These permissions are required for Calico CNI to perform IPAM allocations.
   - apiGroups: ["crd.projectcalico.org"]
     resources:
@@ -223,15 +227,14 @@ rules:
       - blockaffinities
     verbs:
       - watch
-  # These permissions are only requried for upgrade from v2.6, and can
-  # be removed after upgrade or on fresh installations.
-  - apiGroups: ["crd.projectcalico.org"]
+  # The Calico IPAM migration needs to get daemonsets. These permissions can be
+  # removed if not upgrading from an installation using host-local IPAM.
+  - apiGroups: ["apps"]
     resources:
-      - bgpconfigurations
-      - bgppeers
+      - daemonsets
     verbs:
-      - create
-      - update
+      - get
+{{- end }}
 {{- end }}
 ---
 apiVersion: rbac.authorization.k8s.io/v1beta1
