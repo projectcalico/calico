@@ -50,7 +50,7 @@ done using the `calicoctl` utility.
 
 ```
 # Download and install calicoctl
-wget {% include urls component=calicoctl %}
+wget {% include urls component="calicoctl" %}
 sudo chmod +x calicoctl
 
 # Run the {{site.nodecontainer}} container
