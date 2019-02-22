@@ -65,6 +65,10 @@ spec:
             # Choose which controllers to run.
             - name: ENABLED_CONTROLLERS
               value: policy,namespace,serviceaccount,workloadendpoint,node
+          resources:
+            requests:
+              cpu: 50m
+              memory: 512Mi
           volumeMounts:
             # Mount in the etcd TLS secrets.
             - mountPath: /calico-secrets
@@ -133,6 +137,10 @@ spec:
               value: node
             - name: DATASTORE_TYPE
               value: kubernetes
+          resources:
+            requests:
+              cpu: 50m
+              memory: 512Mi
           readinessProbe:
             exec:
               command:
