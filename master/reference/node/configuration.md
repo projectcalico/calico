@@ -194,3 +194,35 @@ Substitute `[flag]` with one or more of the following.
 The BIRD readiness endpoint ensures that the BGP mesh is healthy by verifying that all BGP peers are established and
 no graceful restart is in progress. If the BIRD readiness check is failing due to unreachable peers that are no longer
 in the cluster, see [decomissioning a node]({{site.baseurl}}/{{page.version}}/maintenance/decommissioning-a-node).
+
+### Kubernetes resource requests / limits
+
+Kubernetes allows specification of resource (memory, CPU) [requests and limits][resource-requests-limits] for each container in the pod. Resource requests are
+used when scheduling pods to ensure each node in the cluster is not overburdened. Resource limits are used to prevent each container from consuming more
+resources than specified.
+
+The {{site.noderunning}} DaemonSet is not configured with requests and limits by default, but can be. Which values you should use variest dramatically based on
+many factors, including but not limited to cluster size, available resources per-node, number of pods in the cluster, number of network policies in use, and churn rate
+of the cluster. While we cannot recommend a known good set of values for every cluster, the following approach should be close.
+
+#### Resource requests
+
+Resource requests are used for scheduling, and so it typically makes sense to set these to prevent worker nodes from being over-burdened.
+
+The following formula approximates the appropriate value for CPU requests:
+
+	cpu_requests = 80m + (num_nodes * 20m)
+
+> **Note**: In general, we recommend allocating no more than `500m` CPU requests for clusters under 2000 nodes.
+{: .alert .alert-info}
+
+The following formula approximates the appropriate value for memory requests:
+
+	mem_requests = TODO
+
+#### Resource limits
+
+Resource limits in Kubernetes are used to prevent pods from exceeding the given quota. As a result, it is important to be cautious when setting resource limits
+for Calico. Selecting a CPU limit that is too low will impact Calico's performance. Selecting a memory limit that is too low may cause Calico to be terminated.
+
+[resource-requests-limits]: https://kubernetes.io/docs/concepts/configuration/manage-compute-resources-container/#resource-requests-and-limits-of-pod-and-container
