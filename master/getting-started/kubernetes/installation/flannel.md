@@ -33,9 +33,7 @@ section that matches your type.
 1. Download the flannel networking manifest for the Kubernetes API datastore.
 
    ```bash
-   curl \
-   {{site.url}}/{{page.version}}/getting-started/kubernetes/installation/hosted/canal/canal.yaml \
-   -O
+   curl {{site.url}}/{{page.version}}/manifests/canal.yaml -O
    ```
 
 {% include {{page.version}}/pod-cidr-sed.md yaml="canal" %}
@@ -57,9 +55,7 @@ etcd, complete the following steps.
 1. Download the {{site.prodname}} networking manifest.
 
    ```bash
-   curl \
-   {{site.url}}/{{page.version}}/getting-started/kubernetes/installation/hosted/canal/canal-etcd.yaml \
-   -O
+   curl {{site.url}}/{{page.version}}/manifests/canal-etcd.yaml -O
    ```
 
 {% include {{page.version}}/pod-cidr-sed.md yaml="canal-etcd" %}

@@ -53,7 +53,7 @@ to your integrator's documentation for help setting these flags.
 ## Updating a hosted {{site.prodname}} manifest
 
 To deploy {{site.prodname}} with the CA and {{site.prodname}}-specific certificate/key pair,
-use [this manifest template]({{site.baseurl}}/{{page.version}}/getting-started/kubernetes/installation/hosted/calico.yaml)
+use [this manifest template]({{site.baseurl}}/{{page.version}}/manifests/calico-etcd.yaml)
 with the modifications described below. The same information could be added to
 or updated in other manifests but the linked one is the most straight forward
 example.

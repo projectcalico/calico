@@ -219,23 +219,23 @@ Apply the manifest appropriate to your cluster configuration.
 - **Kubernetes API datastore with {{site.prodname}} networking**:
 
    ```
-   kubectl apply -f {{site.url}}/{{page.version}}/manifests/rbac-kdd-calico.yaml
+   kubectl apply -f {{site.url}}/{{page.version}}/manifests/rbac/rbac-kdd-calico.yaml
    ```
 
 - **Kubernetes API datastore with flannel networking**:
 
    ```
-   kubectl apply -f {{site.url}}/{{page.version}}/manifests/rbac-kdd-flannel.yaml
+   kubectl apply -f {{site.url}}/{{page.version}}/manifests/rbac/rbac-kdd-flannel.yaml
    ```
 
 - **etcd datastore with {{site.prodname}} networking**:
 
    ```
-   kubectl apply -f {{site.url}}/{{page.version}}/manifests/rbac-etcd-calico.yaml
+   kubectl apply -f {{site.url}}/{{page.version}}/manifests/rbac/rbac-etcd-calico.yaml
    ```
 
 - **etcd datastore with flannel networking**:
 
    ```
-   kubectl apply -f {{site.url}}/{{page.version}}/manifests/rbac-etcd-flannel.yaml
+   kubectl apply -f {{site.url}}/{{page.version}}/manifests/rbac/rbac-etcd-flannel.yaml
    ```

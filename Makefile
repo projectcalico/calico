@@ -206,7 +206,7 @@ RELEASE_DIR?=$(OUTPUT_DIR)/$(RELEASE_DIR_NAME)
 RELEASE_DIR_K8S_MANIFESTS?=$(RELEASE_DIR)/k8s-manifests
 RELEASE_DIR_IMAGES?=$(RELEASE_DIR)/images
 RELEASE_DIR_BIN?=$(RELEASE_DIR)/bin
-MANIFEST_SRC ?= ./_site/$(RELEASE_STREAM)/getting-started/kubernetes/installation
+MANIFEST_SRC ?= ./_site/$(RELEASE_STREAM)/manifests
 
 ## Create an archive that contains a complete "Calico" release
 release-archive: release-prereqs $(RELEASE_DIR).tgz
@@ -244,13 +244,10 @@ $(RELEASE_DIR_K8S_MANIFESTS):
 
 	# Find all the hosted manifests and copy them into the release dir. Use xargs to mkdir the destination directory structure before copying them.
 	# -printf "%P\n" prints the file name and directory structure with the search dir stripped off
-	find $(MANIFEST_SRC)/hosted -name  '*.yaml' -printf "%P\n" | \
+	find $(MANIFEST_SRC) -name  '*.yaml' -printf "%P\n" | \
 	  xargs -I FILE sh -c \
-	    'mkdir -p $(RELEASE_DIR_K8S_MANIFESTS)/hosted/`dirname FILE`;\
-	    cp $(MANIFEST_SRC)/hosted/FILE $(RELEASE_DIR_K8S_MANIFESTS)/hosted/`dirname FILE`;'
-
-	# Copy the non-hosted manifets too
-	cp $(MANIFEST_SRC)/*.yaml $(RELEASE_DIR_K8S_MANIFESTS)
+	    'mkdir -p $(RELEASE_DIR_K8S_MANIFESTS)/`dirname FILE`;\
+	    cp $(MANIFEST_SRC)/FILE $(RELEASE_DIR_K8S_MANIFESTS)/`dirname FILE`;'
 
 $(RELEASE_DIR_IMAGES)/calico-node.tar:
 	mkdir -p $(RELEASE_DIR_IMAGES)

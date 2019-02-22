@@ -63,12 +63,11 @@ To deploy a cluster suitable for production, refer to [Installation](installatio
 1. Install {{site.prodname}} with the following command.
 
    ```
-   kubectl apply -f \
-   {{site.url}}/{{page.version}}/getting-started/kubernetes/installation/hosted/kubernetes-datastore/calico-networking/1.7/calico.yaml
+   kubectl apply -f {{site.url}}/{{page.version}}/manifests/calico.yaml
    ```
 
    > **Note**: You can also
-   > [view the YAML in a new tab]({{site.url}}/{{page.version}}/getting-started/kubernetes/installation/hosted/kubernetes-datastore/calico-networking/1.7/calico.yaml){:target="_blank"}.
+   > [view the YAML in a new tab]({{site.url}}/{{page.version}}/manifests/calico.yaml){:target="_blank"}.
    {: .alert .alert-info}
 
    You should see the following output.
@@ -86,6 +85,7 @@ To deploy a cluster suitable for production, refer to [Installation](installatio
    customresourcedefinition.apiextensions.k8s.io "clusterinformations.crd.projectcalico.org" created
    customresourcedefinition.apiextensions.k8s.io "globalnetworkpolicies.crd.projectcalico.org" created
    customresourcedefinition.apiextensions.k8s.io "globalnetworksets.crd.projectcalico.org" created
+   customresourcedefinition.apiextensions.k8s.io "networksets.crd.projectcalico.org" created
    customresourcedefinition.apiextensions.k8s.io "networkpolicies.crd.projectcalico.org" created
    clusterrole.rbac.authorization.k8s.io "calico-kube-controllers" created
    clusterrolebinding.rbac.authorization.k8s.io "calico-kube-controllers" created

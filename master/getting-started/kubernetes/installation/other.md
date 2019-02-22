@@ -24,9 +24,7 @@ complete the following steps.
 1. Download the {{site.prodname}} policy-only manifest for the Kubernetes API datastore.
 
    ```bash
-   curl \
-   {{site.url}}/{{page.version}}/getting-started/kubernetes/installation/hosted/kubernetes-datastore/policy-only/1.7/calico.yaml \
-   -O
+   curl {{site.url}}/{{page.version}}/manifests/calico-policy-only.yaml -O
    ```
 
 {% include {{page.version}}/pod-cidr-sed.md yaml="calico" %}
@@ -53,9 +51,9 @@ complete the following steps.
 
      We recommend at least one replica for every 200 nodes and no more than
      20 replicas. In production, we recommend a minimum of three replicas to reduce
-     the impact of rolling upgrades and failures.  The number of replicas should 
+     the impact of rolling upgrades and failures.  The number of replicas should
      always be less than the number of nodes, otherwise rolling upgrades will stall.
-     In addition, Typha only helps with scale if there are fewer Typha instances than 
+     In addition, Typha only helps with scale if there are fewer Typha instances than
      there are nodes.
 
      > **Tip**: If you set `typha_service_name` without increasing the replica

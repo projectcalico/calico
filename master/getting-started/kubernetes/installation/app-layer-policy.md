@@ -23,45 +23,41 @@ the manifest, your `{{site.nodecontainer}}` containers will restart.
 - **{{site.prodname}} for policy and networking with the etcd datastore**:
 
   ```bash
-kubectl apply -f \
-{{site.url}}/{{page.version}}/getting-started/kubernetes/installation/manifests/app-layer-policy/etcd/calico-networking/calico-node.yaml
-	```
+  kubectl apply -f {{site.url}}/{{page.version}}/manifests/alp/node-etcd.yaml
+  ```
 
 	> **Note**: You can also
-	> [view the manifest in your browser](manifests/app-layer-policy/etcd/calico-networking/calico-node.yaml){:target="_blank"}.
+	> [view the manifest in your browser]({{site.url}}/{{page.version}}/manifests/alp/node-etcd.yaml){:target="_blank"}.
 	{: .alert .alert-info}
 
 - **{{site.prodname}} for policy and networking with the Kubernetes API datastore**:
 
   ```bash
-kubectl apply -f \
-{{site.url}}/{{page.version}}/getting-started/kubernetes/installation/manifests/app-layer-policy/kubernetes-datastore/calico-networking/calico-node.yaml
-	```
+  kubectl apply -f {{site.url}}/{{page.version}}/manifests/alp/node-typha.yaml
+  ```
 
 	> **Note**: You can also
-	> [view the manifest in your browser]({{site.url}}/{{page.version}}/getting-started/kubernetes/installation/manifests/app-layer-policy/kubernetes-datastore/calico-networking/calico-node.yaml){:target="_blank"}.
+	> [view the manifest in your browser]({{site.url}}/{{page.version}}/manifests/alp/node-typha.yaml){:target="_blank"}.
 	{: .alert .alert-info}
 
 - **{{site.prodname}} for policy and flannel for networking with the Kubernetes API datastore**:
 
   ```bash
-kubectl apply -f \
-{{site.url}}/{{page.version}}/getting-started/kubernetes/installation/manifests/app-layer-policy/kubernetes-datastore/flannel/calico-node.yaml
-	```
+  kubectl apply -f {{site.url}}/{{page.version}}/manifests/alp/node-canal.yaml
+  ```
 
 	> **Note**: You can also
-	> [view the manifest in your browser](manifests/app-layer-policy/kubernetes-datastore/flannel/calico-node.yaml){:target="_blank"}.
+	> [view the manifest in your browser]({{site.url}}/{{page.version}}/manifests/alp/node-canal.yaml){:target="_blank"}.
 	{: .alert .alert-info}
 
 - **{{site.prodname}} for policy only**:
 
   ```bash
-kubectl apply -f \
-{{site.url}}/{{page.version}}/getting-started/kubernetes/installation/manifests/app-layer-policy/kubernetes-datastore/policy-only/calico-node.yaml
-	```
+  kubectl apply -f {{site.url}}/{{page.version}}/manifests/alp/node-policy-only.yaml
+  ```
 
 	> **Note**: You can also
-	> [view the manifest in your browser](manifests/app-layer-policy/kubernetes-datastore/policy-only/calico-node.yaml){:target="_blank"}.
+	> [view the manifest in your browser]({{site.url}}/{{page.version}}/manifests/alp/node-policy-only.yaml){:target="_blank"}.
 	{: .alert .alert-info}
 
 
@@ -94,12 +90,11 @@ with Istio. This step modifies the injector configuration to add Dikastes, a
 1. Apply the following ConfigMap to enable injection of Dikastes alongside Envoy.
 
    ```bash
-   kubectl apply -f \
-   {{site.url}}/{{page.version}}/getting-started/kubernetes/installation/manifests/app-layer-policy/istio-inject-configmap.yaml
+   kubectl apply -f {{site.url}}/{{page.version}}/manifests/alp/istio-inject-configmap.yaml
    ```
 
 	 > **Note**: You can also
-   > [view the manifest in your browser]({{site.url}}/{{page.version}}/getting-started/kubernetes/installation/manifests/app-layer-policy/istio-inject-configmap.yaml){:target="_blank"}.
+   > [view the manifest in your browser]({{site.url}}/{{page.version}}/manifests/alp/istio-inject-configmap.yaml){:target="_blank"}.
    {: .alert .alert-info}
 
 If you would like to install a different version of Istio or inspect the changes
@@ -111,12 +106,11 @@ we have made to the standard sidecar injector `ConfigMap`, see
 Apply the following manifest to configure Istio to query {{site.prodname}} for application layer policy authorization decisions
 
 ```bash
-kubectl apply -f \
-{{site.url}}/{{page.version}}/getting-started/kubernetes/installation/manifests/app-layer-policy/istio-app-layer-policy.yaml
+kubectl apply -f {{site.url}}/{{page.version}}/manifests/alp/istio-app-layer-policy.yaml
 ```
 
 > **Note**: You can also
-> [view the manifest in your browser](manifests/app-layer-policy/istio-app-layer-policy.yaml){:target="_blank"}.
+> [view the manifest in your browser]({{site.url}}/{{page.version}}/manifests/alp/istio-app-layer-policy.yaml){:target="_blank"}.
 {: .alert .alert-info}
 
 ## Adding namespace labels
