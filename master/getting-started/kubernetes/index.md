@@ -60,49 +60,41 @@ To deploy a cluster suitable for production, refer to [Installation](installatio
    sudo chown $(id -u):$(id -g) $HOME/.kube/config
    ```
 
-1. Install an etcd instance with the following command.
-
-   ```
-   kubectl apply -f \
-   {{site.url}}/{{page.version}}/getting-started/kubernetes/installation/hosted/etcd.yaml
-   ```
-
-   > **Note**: You can also
-   > [view the YAML in a new tab]({{site.url}}/{{page.version}}/getting-started/kubernetes/installation/hosted/etcd.yaml){:target="_blank"}.
-   {: .alert .alert-info}
-
-   You should see the following output.
-
-   ```
-   daemonset.extensions/calico-etcd created
-   service/calico-etcd created
-   ```
-   {: .no-select-button}
-
 1. Install {{site.prodname}} with the following command.
 
    ```
    kubectl apply -f \
-   {{site.url}}/{{page.version}}/getting-started/kubernetes/installation/hosted/calico.yaml
+   {{site.url}}/{{page.version}}/getting-started/kubernetes/installation/hosted/kubernetes-datastore/calico-networking/1.7/calico.yaml
    ```
 
    > **Note**: You can also
-   > [view the YAML in a new tab]({{site.url}}/{{page.version}}/getting-started/kubernetes/installation/hosted/calico.yaml){:target="_blank"}.
+   > [view the YAML in a new tab]({{site.url}}/{{page.version}}/getting-started/kubernetes/installation/hosted/kubernetes-datastore/calico-networking/1.7/calico.yaml){:target="_blank"}.
    {: .alert .alert-info}
 
    You should see the following output.
 
    ```
-   configmap/calico-config created
-   secret/calico-etcd-secrets created
-   daemonset.extensions/calico-node created
-   serviceaccount/calico-node created
-   deployment.extensions/calico-kube-controllers created
-   serviceaccount/calico-kube-controllers created
-   clusterrole.rbac.authorization.k8s.io/calico-kube-controllers created
-   clusterrolebinding.rbac.authorization.k8s.io/calico-kube-controllers created
-   clusterrole.rbac.authorization.k8s.io/calico-node created
-   clusterrolebinding.rbac.authorization.k8s.io/calico-node created
+   configmap "calico-config" created
+   customresourcedefinition.apiextensions.k8s.io "felixconfigurations.crd.projectcalico.org" created
+   customresourcedefinition.apiextensions.k8s.io "ipamblocks.crd.projectcalico.org" created
+   customresourcedefinition.apiextensions.k8s.io "blockaffinities.crd.projectcalico.org" created
+   customresourcedefinition.apiextensions.k8s.io "ipamhandles.crd.projectcalico.org" created
+   customresourcedefinition.apiextensions.k8s.io "bgppeers.crd.projectcalico.org" created
+   customresourcedefinition.apiextensions.k8s.io "bgpconfigurations.crd.projectcalico.org" created
+   customresourcedefinition.apiextensions.k8s.io "ippools.crd.projectcalico.org" created
+   customresourcedefinition.apiextensions.k8s.io "hostendpoints.crd.projectcalico.org" created
+   customresourcedefinition.apiextensions.k8s.io "clusterinformations.crd.projectcalico.org" created
+   customresourcedefinition.apiextensions.k8s.io "globalnetworkpolicies.crd.projectcalico.org" created
+   customresourcedefinition.apiextensions.k8s.io "globalnetworksets.crd.projectcalico.org" created
+   customresourcedefinition.apiextensions.k8s.io "networkpolicies.crd.projectcalico.org" created
+   clusterrole.rbac.authorization.k8s.io "calico-kube-controllers" created
+   clusterrolebinding.rbac.authorization.k8s.io "calico-kube-controllers" created
+   clusterrole.rbac.authorization.k8s.io "calico-node" created
+   clusterrolebinding.rbac.authorization.k8s.io "calico-node" created
+   daemonset.extensions "calico-node" created
+   serviceaccount "calico-node" created
+   deployment.extensions "calico-kube-controllers" created
+   serviceaccount "calico-kube-controllers" created
    ```
    {: .no-select-button}
 
@@ -116,7 +108,6 @@ To deploy a cluster suitable for production, refer to [Installation](installatio
 
    ```
    NAMESPACE    NAME                                       READY  STATUS   RESTARTS  AGE
-   kube-system  calico-etcd-x2482                          1/1    Running  0         2m45s
    kube-system  calico-kube-controllers-6ff88bf6d4-tgtzb   1/1    Running  0         2m45s
    kube-system  {{site.noderunning}}-24h85                          2/2    Running  0         2m43s
    kube-system  coredns-846jhw23g9-9af73                   1/1    Running  0         4m5s
