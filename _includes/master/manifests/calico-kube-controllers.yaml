@@ -126,7 +126,7 @@ spec:
       serviceAccountName: calico-kube-controllers
       containers:
         - name: calico-kube-controllers
-          image: {{.Values.imageRegistry}}{{.Values.imageNames.kubeControllers}}:{{ tuple "calico/kube-controllers" . | include "tag" }}
+          image: {{.Values.imageRegistry}}{{.Values.kubeControllers.image}}:{{ .Values.kubeControllers.tag }}
           env:
             # Choose which controllers to run.
             - name: ENABLED_CONTROLLERS
