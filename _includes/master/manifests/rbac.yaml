@@ -1,15 +1,3 @@
-{{- /*
-rbac.yaml acccepts the following include flags:
-
-| Name         | Accepted Values          |
-|--------------|--------------------------|
-| datastore    | kdd, etcd                |
-| typha        | true, false              |
-| network      | calico, flannel, <unset> |
-| calico_ipam  | true, false              |
-| variant_name | Calico, Canal            |
-*/ -}}
-
 {{- if eq .Values.datastore "etcd" }}
 # Include a clusterrole for the kube-controllers component,
 # and bind it to the calico-kube-controllers serviceaccount.
@@ -21,8 +9,7 @@ rules:
   # Pods are monitored for changing labels.
   # The node controller monitors Kubernetes nodes.
   # Namespace and serviceaccount labels are used for policy.
-  - apiGroups:
-      - ""
+  - apiGroups: [""]
     resources:
       - pods
       - nodes
@@ -32,13 +19,73 @@ rules:
       - watch
       - list
   # Watch for changes to Kubernetes NetworkPolicies.
-  - apiGroups:
-      - networking.k8s.io
+  - apiGroups: ["networking.k8s.io"]
     resources:
       - networkpolicies
     verbs:
       - watch
       - list
+---
+kind: ClusterRoleBinding
+apiVersion: rbac.authorization.k8s.io/v1beta1
+metadata:
+  name: calico-kube-controllers
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: calico-kube-controllers
+subjects:
+- kind: ServiceAccount
+  name: calico-kube-controllers
+  namespace: kube-system
+---
+{{- else if eq .Values.network "calico" }}
+# Include a clusterrole for the kube-controllers component,
+# and bind it to the calico-kube-controllers serviceaccount.
+kind: ClusterRole
+apiVersion: rbac.authorization.k8s.io/v1beta1
+metadata:
+  name: calico-kube-controllers
+rules:
+  # Nodes are watched to monitor for deletions.
+  - apiGroups: [""]
+    resources:
+      - nodes
+    verbs:
+      - watch
+      - list
+      - get
+  # Pods are queried to check for existence.
+  - apiGroups: [""]
+    resources:
+      - pods
+    verbs:
+      - get
+  # IPAM resources are manipulated when nodes are deleted.
+  - apiGroups: ["crd.projectcalico.org"]
+    resources:
+      - ippools
+    verbs:
+      - list
+  - apiGroups: ["crd.projectcalico.org"]
+    resources:
+      - blockaffinities
+      - ipamblocks
+      - ipamhandles
+    verbs:
+      - get
+      - list
+      - create
+      - update
+      - delete
+  # Needs access to update clusterinformations.
+  - apiGroups: ["crd.projectcalico.org"]
+    resources:
+      - clusterinformations
+    verbs:
+      - get
+      - create
+      - update
 ---
 kind: ClusterRoleBinding
 apiVersion: rbac.authorization.k8s.io/v1beta1
@@ -156,6 +203,38 @@ rules:
     verbs:
       - create
       - update
+{{- if eq .Values.network "calico" }}
+  # These permissions are required for Calico CNI to perform IPAM allocations.
+  - apiGroups: ["crd.projectcalico.org"]
+    resources:
+      - blockaffinities
+      - ipamblocks
+      - ipamhandles
+    verbs:
+      - get
+      - list
+      - create
+      - update
+      - delete
+  - apiGroups: ["crd.projectcalico.org"]
+    resources:
+      - ipamconfigs
+    verbs:
+      - get
+  # Block affinities must also be watchable by confd for route aggregation.
+  - apiGroups: ["crd.projectcalico.org"]
+    resources:
+      - blockaffinities
+    verbs:
+      - watch
+  # The Calico IPAM migration needs to get daemonsets. These permissions can be
+  # removed if not upgrading from an installation using host-local IPAM.
+  - apiGroups: ["apps"]
+    resources:
+      - daemonsets
+    verbs:
+      - get
+{{- end }}
 {{- end }}
 ---
 apiVersion: rbac.authorization.k8s.io/v1beta1
@@ -179,21 +258,18 @@ apiVersion: rbac.authorization.k8s.io/v1beta1
 metadata:
   name: flannel
 rules:
-  - apiGroups:
-      - ""
+  - apiGroups: [""]
     resources:
       - pods
     verbs:
       - get
-  - apiGroups:
-      - ""
+  - apiGroups: [""]
     resources:
       - nodes
     verbs:
       - list
       - watch
-  - apiGroups:
-      - ""
+  - apiGroups: [""]
     resources:
       - nodes/status
     verbs:
