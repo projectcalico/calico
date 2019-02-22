@@ -383,10 +383,10 @@ class TestNamespace(TestBase):
                 ],
             }
         }
-        cls._apply_resources(profile_data, cls.host1)
+        cls.host1._apply_resources(profile_data)
 
     def add_policy(self, policy_data):
-        self._apply_resources(policy_data, self.host1)
+        self.host1._apply_resources(policy_data)
 
     def check_namespace_access(self, target, nsa_can, nsb_can, default_can):
         assert_func = {
@@ -436,38 +436,7 @@ class TestNamespace(TestBase):
 
     @classmethod
     def delete_all(cls, resource):
-        # Grab all objects of a resource type
-        objects = yaml.load(cls.hosts[0].calicoctl("get %s -o yaml" % resource))
-        # and delete them (if there are any)
-        if len(objects) > 0:
-            _log.info("objects: %s", objects)
-            if 'items' in objects and len(objects['items']) == 0:
-                pass
-            else:
-                cls._delete_data(objects, cls.hosts[0])
-
-    @classmethod
-    def _delete_data(cls, data, host):
-        _log.debug("Deleting data with calicoctl: %s", data)
-        cls._exec_calicoctl("delete", data, host)
-
-    @classmethod
-    def _apply_resources(cls, resources, host):
-        cls._exec_calicoctl("apply", resources, host)
-
-    @staticmethod
-    def _exec_calicoctl(action, data, host):
-        # Delete creationTimestamp fields from the data that we're going to
-        # write.
-        for obj in data.get('items', []):
-            if 'creationTimestamp' in obj['metadata']:
-                del obj['metadata']['creationTimestamp']
-        if 'metadata' in data and 'creationTimestamp' in data['metadata']:
-            del data['metadata']['creationTimestamp']
-
-        # Use calicoctl with the modified data.
-        host.writejson("new_data", data)
-        host.calicoctl("%s -f new_data" % action)
+        cls.hosts[0].delete_all_resource(resource)
 
     @classmethod
     def get_container_ip(cls, container_name):
