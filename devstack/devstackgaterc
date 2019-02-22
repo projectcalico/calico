@@ -59,8 +59,8 @@ r="$r|(?:tempest\.scenario\.test_security_groups_basic_ops\.TestSecurityGroupsBa
 # End list of exclusions.
 r="$r)"
 
-# Run the remaining Tempest scenario tests.
-r="$r(tempest\.scenario).*$"
+# Run the remaining Tempest scenario tests, and the allowed address pair test.
+r="$r((tempest\.scenario)|(tempest\.api\.network\.test_allowed_address_pair)).*$"
 
 if [ -z $DEVSTACK_GATE_GRENADE ]; then
     # Do not run the tempest test cases on grenade jobs. By not setting this,
