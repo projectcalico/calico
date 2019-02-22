@@ -31,16 +31,16 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	cerrors "github.com/projectcalico/libcalico-go/lib/errors"
-	"github.com/projectcalico/libcalico-go/lib/net"
 	"github.com/projectcalico/libcalico-go/lib/numorstring"
 )
 
 const (
-	nodeBgpIpv4AddrAnnotation = "projectcalico.org/IPv4Address"
-	nodeBgpIpv6AddrAnnotation = "projectcalico.org/IPv6Address"
-	nodeBgpAsnAnnotation      = "projectcalico.org/ASNumber"
-	nodeBgpCIDAnnotation      = "projectcalico.org/RouteReflectorClusterID"
-	nodeK8sLabelAnnotation    = "projectcalico.org/kube-labels"
+	nodeBgpIpv4AddrAnnotation           = "projectcalico.org/IPv4Address"
+	nodeBgpIpv4IPIPTunnelAddrAnnotation = "projectcalico.org/IPv4IPIPTunnelAddr"
+	nodeBgpIpv6AddrAnnotation           = "projectcalico.org/IPv6Address"
+	nodeBgpAsnAnnotation                = "projectcalico.org/ASNumber"
+	nodeBgpCIDAnnotation                = "projectcalico.org/RouteReflectorClusterID"
+	nodeK8sLabelAnnotation              = "projectcalico.org/kube-labels"
 )
 
 func NewNodeClient(c *kubernetes.Clientset) K8sResourceClient {
@@ -225,22 +225,8 @@ func K8sNodeToCalico(k8sNode *kapiv1.Node) (*model.KVPair, error) {
 			bgpSpec.ASNumber = &asn
 		}
 	}
-
-	if k8sNode.Spec.PodCIDR != "" {
-		_, cidr, err := net.ParseCIDR(k8sNode.Spec.PodCIDR)
-		if err != nil {
-			log.WithError(err).Errorf("PodCIDR %s did not parse successfully", k8sNode.Spec.PodCIDR)
-			return nil, errors.New("Invalid PodCIDR")
-		} else if cidr.Version() == 4 {
-			// For back compatibility with v2.6.x, always generate a tunnel address if we have the pod
-			// CIDR.
-			bgpSpec.IPv4IPIPTunnelAddr = getTunnelIp(k8sNode)
-		}
-		calicoNode.Spec.BGP = bgpSpec
-	} else if bgpSpec.IPv4Address != "" || bgpSpec.IPv6Address != "" || bgpSpec.ASNumber != nil {
-		log.Warnf("Node %s does not have podCIDR to use to calculate the IPIP Tunnel Address", k8sNode.Name)
-		calicoNode.Spec.BGP = bgpSpec
-	}
+	bgpSpec.IPv4IPIPTunnelAddr = annotations[nodeBgpIpv4IPIPTunnelAddrAnnotation]
+	calicoNode.Spec.BGP = bgpSpec
 
 	// Create the resource key from the node name.
 	return &model.KVPair{
@@ -271,6 +257,7 @@ func mergeCalicoNodeIntoK8sNode(calicoNode *apiv3.Node, k8sNode *kapiv1.Node) (*
 	if calicoNode.Spec.BGP == nil {
 		// If it is a empty NodeBGPSpec, remove all annotations.
 		delete(k8sNode.Annotations, nodeBgpIpv4AddrAnnotation)
+		delete(k8sNode.Annotations, nodeBgpIpv4IPIPTunnelAddrAnnotation)
 		delete(k8sNode.Annotations, nodeBgpIpv6AddrAnnotation)
 		delete(k8sNode.Annotations, nodeBgpAsnAnnotation)
 		delete(k8sNode.Annotations, nodeBgpCIDAnnotation)
@@ -281,6 +268,12 @@ func mergeCalicoNodeIntoK8sNode(calicoNode *apiv3.Node, k8sNode *kapiv1.Node) (*
 		k8sNode.Annotations[nodeBgpIpv4AddrAnnotation] = calicoNode.Spec.BGP.IPv4Address
 	} else {
 		delete(k8sNode.Annotations, nodeBgpIpv4AddrAnnotation)
+	}
+
+	if calicoNode.Spec.BGP.IPv4IPIPTunnelAddr != "" {
+		k8sNode.Annotations[nodeBgpIpv4IPIPTunnelAddrAnnotation] = calicoNode.Spec.BGP.IPv4IPIPTunnelAddr
+	} else {
+		delete(k8sNode.Annotations, nodeBgpIpv4IPIPTunnelAddrAnnotation)
 	}
 
 	if calicoNode.Spec.BGP.IPv6Address != "" {
@@ -382,25 +375,4 @@ func restoreCalicoLabels(calicoNode *apiv3.Node) (*apiv3.Node, error) {
 	}
 
 	return calicoNode, nil
-}
-
-// Calculate the IPIP Tunnel IP address to use for a given Node.  We use the first IP in the
-// node CIDR for our tunnel address.  If an IPv4 address cannot be picked from the given
-// CIDR then an empty string will be returned.
-func getTunnelIp(n *kapiv1.Node) string {
-	ip, _, err := net.ParseCIDR(n.Spec.PodCIDR)
-	if err != nil {
-		log.Warnf("Invalid podCIDR for HostConfig: %s, %s", n.Name, n.Spec.PodCIDR)
-		return ""
-	}
-	// We need to get the IP for the podCIDR and increment it to the
-	// first IP in the CIDR.
-	tunIp := ip.To4()
-	if tunIp == nil {
-		log.WithField("podCIDR", n.Spec.PodCIDR).Infof("Cannot pick an IPv4 tunnel address from the given CIDR")
-		return ""
-	}
-	tunIp[3]++
-
-	return tunIp.String()
 }

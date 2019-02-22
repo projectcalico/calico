@@ -73,7 +73,7 @@ var _ = Describe("Test Node conversion", func() {
 		ip := net.ParseIP("172.17.17.10")
 
 		Expect(bgpIpv4Address).To(Equal(ip.String()))
-		Expect(ipInIpAddr).To(Equal("10.0.0.2"))
+		Expect(ipInIpAddr).To(Equal(""))
 		Expect(asn.String()).To(Equal("2546"))
 	})
 
@@ -123,7 +123,7 @@ var _ = Describe("Test Node conversion", func() {
 		ip := net.ParseIP("172.17.17.10")
 
 		Expect(bgpIpv4Address).To(Equal(ip.String()))
-		Expect(ipInIpAddr).To(Equal("10.0.0.2"))
+		Expect(ipInIpAddr).To(Equal(""))
 		Expect(asn.String()).To(Equal("2546"))
 		Expect(rrClusterID).To(Equal("248.0.4.5"))
 	})
@@ -174,43 +174,6 @@ var _ = Describe("Test Node conversion", func() {
 		Expect(ipInIpAddr).To(Equal(""))
 	})
 
-	It("should fail to parse a k8s Node to a Calico Node with bad PodCIDR", func() {
-		l := map[string]string{"net.beta.kubernetes.io/role": "master"}
-		node := k8sapi.Node{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:            "TestNode",
-				Labels:          l,
-				ResourceVersion: "1234",
-				Annotations: map[string]string{
-					nodeBgpIpv4AddrAnnotation: "172.17.17.10",
-					nodeBgpAsnAnnotation:      "2546",
-				},
-			},
-			Status: k8sapi.NodeStatus{
-				Addresses: []k8sapi.NodeAddress{
-					k8sapi.NodeAddress{
-						Type:    k8sapi.NodeInternalIP,
-						Address: "172.17.17.10",
-					},
-					k8sapi.NodeAddress{
-						Type:    k8sapi.NodeExternalIP,
-						Address: "192.168.1.100",
-					},
-					k8sapi.NodeAddress{
-						Type:    k8sapi.NodeHostName,
-						Address: "172-17-17-10",
-					},
-				},
-			},
-			Spec: k8sapi.NodeSpec{
-				PodCIDR: "10.0.a.1/24",
-			},
-		}
-
-		_, err := K8sNodeToCalico(&node)
-		Expect(err).To(HaveOccurred())
-	})
-
 	It("should parse a k8s Node to a Calico Node with podCIDR but no BGP config", func() {
 		l := map[string]string{"net.beta.kubernetes.io/role": "master"}
 		node := k8sapi.Node{
@@ -230,7 +193,7 @@ var _ = Describe("Test Node conversion", func() {
 
 		// Ensure we got the correct values.
 		ipInIpAddr := n.Value.(*apiv3.Node).Spec.BGP.IPv4IPIPTunnelAddr
-		Expect(ipInIpAddr).To(Equal("10.0.0.1"))
+		Expect(ipInIpAddr).To(Equal(""))
 	})
 
 	It("Should parse and remove BGP info when given Calico Node with empty BGP spec", func() {
@@ -308,7 +271,7 @@ var _ = Describe("Test Node conversion", func() {
 		By("Converting the k8s node back into a calico node")
 		// Set the PodCIDR so we can also test the IPIP tunnel field
 		newK8sNode.Spec.PodCIDR = "172.100.0.0/24"
-		calicoNode.Spec.BGP.IPv4IPIPTunnelAddr = "172.100.0.1"
+		calicoNode.Spec.BGP.IPv4IPIPTunnelAddr = ""
 		newCalicoNode, err := K8sNodeToCalico(newK8sNode)
 		Expect(err).NotTo(HaveOccurred())
 
@@ -343,6 +306,7 @@ var _ = Describe("Test Node conversion", func() {
 		calicoNode.Name = "TestNode"
 		calicoNode.ResourceVersion = "1234"
 		calicoNode.Labels = cl
+		calicoNode.Spec.BGP = &apiv3.NodeBGPSpec{}
 
 		newK8sNode, err := mergeCalicoNodeIntoK8sNode(calicoNode, k8sNode)
 		Expect(err).NotTo(HaveOccurred())
@@ -393,5 +357,54 @@ var _ = Describe("Test Node conversion", func() {
 		}
 		_, err = mergeCalicoNodeIntoK8sNode(calicoNode, k8sNode)
 		Expect(err).To(HaveOccurred())
+	})
+
+	It("should parse a k8s Node to a Calico Node with an IPv4IPIPTunnelAddr", func() {
+		l := map[string]string{"net.beta.kubernetes.io/role": "master"}
+		node := k8sapi.Node{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:            "TestNode",
+				Labels:          l,
+				ResourceVersion: "1234",
+				Annotations: map[string]string{
+					nodeBgpIpv4AddrAnnotation:           "172.17.17.10",
+					nodeBgpIpv4IPIPTunnelAddrAnnotation: "10.0.0.24",
+					nodeBgpAsnAnnotation:                "2546",
+				},
+			},
+			Status: k8sapi.NodeStatus{
+				Addresses: []k8sapi.NodeAddress{
+					k8sapi.NodeAddress{
+						Type:    k8sapi.NodeInternalIP,
+						Address: "172.17.17.10",
+					},
+					k8sapi.NodeAddress{
+						Type:    k8sapi.NodeExternalIP,
+						Address: "192.168.1.100",
+					},
+					k8sapi.NodeAddress{
+						Type:    k8sapi.NodeHostName,
+						Address: "172-17-17-10",
+					},
+				},
+			},
+			Spec: k8sapi.NodeSpec{
+				PodCIDR: "10.0.0.1/24",
+			},
+		}
+
+		n, err := K8sNodeToCalico(&node)
+		Expect(err).NotTo(HaveOccurred())
+
+		// Ensure we got the correct values.
+		bgpIpv4Address := n.Value.(*apiv3.Node).Spec.BGP.IPv4Address
+		ipInIpAddr := n.Value.(*apiv3.Node).Spec.BGP.IPv4IPIPTunnelAddr
+		asn := n.Value.(*apiv3.Node).Spec.BGP.ASNumber
+
+		ip := net.ParseIP("172.17.17.10")
+
+		Expect(bgpIpv4Address).To(Equal(ip.String()))
+		Expect(ipInIpAddr).To(Equal("10.0.0.24"))
+		Expect(asn.String()).To(Equal("2546"))
 	})
 })

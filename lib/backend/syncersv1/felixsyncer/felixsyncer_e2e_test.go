@@ -66,7 +66,7 @@ var _ = testutils.E2eDatastoreDescribe("Felix syncer tests", testutils.Datastore
 			// Kubernetes will have a profile for each of the namespaces that is configured.
 			// We expect:  default, kube-system, kube-public, namespace-1, namespace-2
 			if config.Spec.DatastoreType == apiconfig.Kubernetes {
-				expectedCacheSize += 6
+				expectedCacheSize += 5
 				syncTester.ExpectData(model.KVPair{
 					Key: model.ProfileRulesKey{ProfileKey: model.ProfileKey{Name: "kns.default"}},
 					Value: &model.ProfileRules{
@@ -102,10 +102,6 @@ var _ = testutils.E2eDatastoreDescribe("Felix syncer tests", testutils.Datastore
 						OutboundRules: []model.Rule{{Action: "allow"}},
 					},
 				})
-				syncTester.ExpectData(model.KVPair{
-					Key:   model.HostConfigKey{Hostname: "127.0.0.1", Name: "IpInIpTunnelAddr"},
-					Value: "10.10.10.1",
-				})
 				expectedCacheSize += func(syncTester *testutils.SyncerTester, namespaces []string) int {
 					for _, n := range namespaces {
 						syncTester.ExpectData(model.KVPair{
@@ -131,8 +127,9 @@ var _ = testutils.E2eDatastoreDescribe("Felix syncer tests", testutils.Datastore
 					node, err = c.Nodes().Get(ctx, "127.0.0.1", options.GetOptions{})
 					Expect(err).NotTo(HaveOccurred())
 					node.Spec.BGP = &apiv3.NodeBGPSpec{
-						IPv4Address: "1.2.3.4/24",
-						IPv6Address: "aa:bb::cc/120",
+						IPv4Address:        "1.2.3.4/24",
+						IPv6Address:        "aa:bb::cc/120",
+						IPv4IPIPTunnelAddr: "10.10.10.1",
 					}
 					node, err = c.Nodes().Update(ctx, node, options.SetOptions{})
 					if err == nil {
@@ -140,6 +137,12 @@ var _ = testutils.E2eDatastoreDescribe("Felix syncer tests", testutils.Datastore
 					}
 				}
 				Expect(err).NotTo(HaveOccurred())
+
+				syncTester.ExpectData(model.KVPair{
+					Key:   model.HostConfigKey{Hostname: "127.0.0.1", Name: "IpInIpTunnelAddr"},
+					Value: "10.10.10.1",
+				})
+				expectedCacheSize += 1
 			} else {
 				// For non-Kubernetes, add a new node with valid BGP configuration.
 				By("Creating a node with an IP address")

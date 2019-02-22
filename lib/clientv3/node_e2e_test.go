@@ -59,6 +59,7 @@ var _ = testutils.E2eDatastoreDescribe("Node tests (kdd)", testutils.DatastoreK8
 		// Add a label and check it gets written.
 		By("Adding a label to the node")
 		node.Labels = map[string]string{"test-label": "foo"}
+		node.Spec.BGP = &apiv3.NodeBGPSpec{IPv4Address: "10.0.0.1"}
 		_, err = c.Nodes().Update(ctx, node, options.SetOptions{})
 		Expect(err).NotTo(HaveOccurred())
 
