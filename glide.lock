@@ -1,5 +1,5 @@
-hash: ed4fdb2d7144b3b800ba67b3fb2de1938fb77cbd92281fcaa0d969b90decf89a
-updated: 2018-11-08T08:55:18.968545-08:00
+hash: 56de558da395ed78bdebc7608182e7fcb6825a3167d6b980c622cc41b38f56b0
+updated: 2019-02-22T06:38:35.788185707Z
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -89,7 +89,7 @@ imports:
   subpackages:
   - diskcache
 - name: github.com/hashicorp/go-version
-  version: b5a281d3160aa11950a6182bd9a9dc2cb1e02d50
+  version: d40cf49b3a77bba84a7afdbd7f1dc295d114efb1
 - name: github.com/hashicorp/golang-lru
   version: a0d98a5f288019575c6d1f4bb1573fef2d1fcdc4
   subpackages:
@@ -104,7 +104,7 @@ imports:
 - name: github.com/imdario/mergo
   version: 6633656539c1639d9d78127b7d47c622b5d7b6dc
 - name: github.com/json-iterator/go
-  version: f2b4162afba35581b6d4a50d3b8f34e33c144682
+  version: 2ddf6d758266fcb080a4f9e054b9f292c85e6798
 - name: github.com/kardianos/osext
   version: ae77be60afb1dcacde03767a8c37337fad28ac14
 - name: github.com/kelseyhightower/confd
@@ -148,7 +148,7 @@ imports:
 - name: github.com/modern-go/reflect2
   version: 05fbef0ca5da472bbf96c9322b84a53edc03c9fd
 - name: github.com/onsi/ginkgo
-  version: 3774a09d95489ccaa16032e0770d08ea77ba6184
+  version: 2e1be8f7d90e9d3e3e58b0ce470f2f14d075406f
   subpackages:
   - config
   - extensions/table
@@ -169,7 +169,7 @@ imports:
   - reporters/stenographer/support/go-isatty
   - types
 - name: github.com/onsi/gomega
-  version: 7615b9433f86a8bdf29709bf288bc4fd0636a369
+  version: 65fb64232476ad9046e57c26cd0bff3d3a8dc6cd
   subpackages:
   - format
   - internal/assertion
@@ -187,7 +187,7 @@ imports:
 - name: github.com/peterbourgon/diskv
   version: 5f041e8faa004a95c88a202771f4cc3e991971e6
 - name: github.com/projectcalico/felix
-  version: 7ac6889385d1c5549619bf1e10d780737c9d5207
+  version: f1340fb81e9bd072165e795e0788b7b8024360aa
   subpackages:
   - buildinfo
   - calc
@@ -228,7 +228,7 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: 31e5bf43bc5712dd7851bbfbc435edc3bd1ac90e
+  version: 4985b8b7be099abf31009c1d8300b7aa8d5d880d
   subpackages:
   - lib/apiconfig
   - lib/apis/v1
@@ -279,7 +279,7 @@ imports:
   subpackages:
   - binder
 - name: github.com/projectcalico/typha
-  version: 6915c7a2b8d3d57b182da8d2c9cf811a7096da7a
+  version: 26d7cd1dd99408883cb5eea8902216caebe08f3a
   subpackages:
   - pkg/syncclient
   - pkg/syncproto
