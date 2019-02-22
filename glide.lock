@@ -186,7 +186,7 @@ imports:
 - name: github.com/peterbourgon/diskv
   version: 5f041e8faa004a95c88a202771f4cc3e991971e6
 - name: github.com/projectcalico/felix
-  version: 56823bb05874bfdd0b84e8aabe79a949d61caaad
+  version: 609b455aa574b17805aba64cd81864fba07aa0a1
   subpackages:
   - binder
   - buildinfo
@@ -228,7 +228,7 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: 00179b9410d8f5191e2bc9e3df04d40ff90efa6d
+  version: fd80b2664f4d3bb84784d7faf53cc990dbc0e457
   subpackages:
   - lib/apiconfig
   - lib/apis/v1
@@ -275,7 +275,7 @@ imports:
   - lib/validator/v3
   - lib/watch
 - name: github.com/projectcalico/typha
-  version: 68239307c245f957495ea35d314ecca7e10c51ea
+  version: 59fe14ea764fcaf5eaafeff91c0e9546b74653de
   subpackages:
   - pkg/syncclient
   - pkg/syncproto
