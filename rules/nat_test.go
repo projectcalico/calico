@@ -59,84 +59,12 @@ var _ = Describe("NAT", func() {
 
 		//copy struct
 		localConfig := rrConfigNormal
-		localConfig.NATPortRange, _ = numorstring.PortFromRange(99, 100)
-		renderer = NewRenderer(localConfig)
-
-		Expect(renderer.NATOutgoingChain(true, 4)).To(Equal(&Chain{
-			Name: "cali-nat-outgoing",
-			Rules: []Rule{
-				{
-					Action: MasqAction{ToPorts: "99-100"},
-					Match: Match().
-						SourceIPSet("cali40masq-ipam-pools").
-						NotDestIPSet("cali40all-ipam-pools").Protocol("tcp"),
-				},
-				{
-					Action: ReturnAction{},
-					Match: Match().
-						SourceIPSet("cali40masq-ipam-pools").
-						NotDestIPSet("cali40all-ipam-pools").Protocol("tcp"),
-				},
-				{
-					Action: MasqAction{ToPorts: "99-100"},
-					Match: Match().
-						SourceIPSet("cali40masq-ipam-pools").
-						NotDestIPSet("cali40all-ipam-pools").Protocol("udp"),
-				},
-				{
-					Action: ReturnAction{},
-					Match: Match().
-						SourceIPSet("cali40masq-ipam-pools").
-						NotDestIPSet("cali40all-ipam-pools").Protocol("udp"),
-				},
-				{
-					Action: MasqAction{},
-					Match: Match().
-						SourceIPSet("cali40masq-ipam-pools").
-						NotDestIPSet("cali40all-ipam-pools"),
-				},
-			},
-		}))
-	})
-	It("should render rules when active with explicit port range", func() {
-
-		//copy struct
-		localConfig := rrConfigNormal
-		localConfig.NATPortRange, _ = numorstring.PortFromRange(99, 100)
 		localConfig.IptablesNATOutgoingInterfaceFilter = "cali-123"
 		renderer = NewRenderer(localConfig)
 
 		Expect(renderer.NATOutgoingChain(true, 4)).To(Equal(&Chain{
 			Name: "cali-nat-outgoing",
 			Rules: []Rule{
-				{
-					Action: MasqAction{ToPorts: "99-100"},
-					Match: Match().
-						SourceIPSet("cali40masq-ipam-pools").
-						NotDestIPSet("cali40all-ipam-pools").Protocol("tcp").
-						OutInterface("cali-123"),
-				},
-				{
-					Action: ReturnAction{},
-					Match: Match().
-						SourceIPSet("cali40masq-ipam-pools").
-						NotDestIPSet("cali40all-ipam-pools").Protocol("tcp").
-						OutInterface("cali-123"),
-				},
-				{
-					Action: MasqAction{ToPorts: "99-100"},
-					Match: Match().
-						SourceIPSet("cali40masq-ipam-pools").
-						NotDestIPSet("cali40all-ipam-pools").Protocol("udp").
-						OutInterface("cali-123"),
-				},
-				{
-					Action: ReturnAction{},
-					Match: Match().
-						SourceIPSet("cali40masq-ipam-pools").
-						NotDestIPSet("cali40all-ipam-pools").Protocol("udp").
-						OutInterface("cali-123"),
-				},
 				{
 					Action: MasqAction{},
 					Match: Match().
