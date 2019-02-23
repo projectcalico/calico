@@ -25,9 +25,9 @@ import (
 
 	"github.com/containernetworking/plugins/plugins/ipam/host-local/backend/disk"
 	log "github.com/sirupsen/logrus"
-	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+	"github.com/projectcalico/cni-plugin/internal/pkg/utils"
 	bapi "github.com/projectcalico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/libcalico-go/lib/backend/k8s"
 	client "github.com/projectcalico/libcalico-go/lib/clientv3"
@@ -36,8 +36,7 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/net"
 	cnet "github.com/projectcalico/libcalico-go/lib/net"
 	"github.com/projectcalico/libcalico-go/lib/options"
-
-	"github.com/projectcalico/cni-plugin/internal/pkg/utils"
+	corev1 "k8s.io/api/core/v1"
 )
 
 const (
@@ -104,8 +103,8 @@ func Migrate(ctxt context.Context, c client.Interface, nodename string) error {
 				IP:       *ipipTunnelAddr,
 				Hostname: nodename,
 				Attrs: map[string]string{
-					"node":           nodename,
-					"ipipTunnelAddr": "true",
+					ipam.AttributeNode: nodename,
+					ipam.AttributeType: ipam.AttributeTypeIPIP,
 				},
 			}); err != nil {
 				if _, ok := err.(errors.ErrorResourceAlreadyExists); !ok {
@@ -133,11 +132,12 @@ func Migrate(ctxt context.Context, c client.Interface, nodename string) error {
 
 	// Check if the directory is empty.
 	if _, err = ipamDir.Readdirnames(1); err != nil {
-		if err == io.EOF {
+		if os.IsNotExist(err) || err == io.EOF {
 			log.Info("host-local IPAM data dir empty; no migration necessary...")
 			log.Info("removing host-local IPAM data directory...")
 			if err = os.Remove(ipAllocPath); err != nil {
 				log.WithError(err).Error("failed to remove host-local IPAM data dir directory")
+				return err
 			}
 			log.Info("successfully removed host-local IPAM data directory!")
 			return nil
@@ -178,14 +178,37 @@ func Migrate(ctxt context.Context, c client.Interface, nodename string) error {
 	// Also disable cni by deleting the binaries.
 	log.Info("removing cni binaries...")
 	for _, binary := range binariesToDisable {
-		if err = os.Remove(binary); err != nil {
+		if err = os.Remove(binary); err != nil && !os.IsNotExist(err) {
 			return fmt.Errorf("failed to remove binary %s: %s", binary, err)
 		}
 		log.WithField("binary", binary).Info("successfully removed cni binary!")
 	}
 	time.Sleep(5 * time.Second)
 
-	// Establishing a mapping of IP addresses to Pods on this node.
+	// Acquire a lock on the host-local cni backend. This serves as extra precaution
+	// against racing with any remaining host-local processes which might be allocating
+	// IP addresses.
+	log.Info("acquiring lock on host-local IPAM")
+	hostLocal, err := disk.New(ipAllocPath, "")
+	if err != nil {
+		return fmt.Errorf("failed to initialize host-local IPAM: %s", err)
+	}
+	if err = hostLocal.Lock(); err != nil {
+		return fmt.Errorf("failed to acquire lock on host-local IPAM: %s", err)
+	}
+	log.Info("successfully acquired lock on host-local IPAM!")
+	defer func() {
+		// Release the lock on host local backend
+		log.Info("releasing lock on host-local backend...")
+		if err = hostLocal.Unlock(); err != nil {
+			log.WithError(err).Error("failed to release lock on host local backend")
+		} else {
+			log.Info("successfully released lock on host-local backend!")
+		}
+	}()
+
+	// Establishing a mapping of IP addresses to Pods on this node. We need this
+	// to populate Calico IPAM's allocation attributes below.
 	log.Info("mapping pod ips to pods...")
 	podList, err := k8sClient.CoreV1().Pods("").List(metav1.ListOptions{
 		FieldSelector: fmt.Sprintf("spec.nodeName=%s", nodename),
@@ -200,25 +223,6 @@ func Migrate(ctxt context.Context, c client.Interface, nodename string) error {
 		podIPMap[pod.Status.PodIP] = pod
 	}
 	log.Info("successfully mapped pod ips to pods!")
-
-	// Acquire a lock on the host-local cni backend
-	log.Info("acquiring lock on host-local backend...")
-	hostLocal, err := disk.New(ipAllocPath, "")
-	if err != nil {
-		return fmt.Errorf("failed to initialize host local backend: %s", err)
-	}
-	if err = hostLocal.Lock(); err != nil {
-		return fmt.Errorf("failed to acquire lock on host local backend: %s", err)
-	}
-	log.Info("successfully acquired lock on host-local backend!")
-	defer func() {
-		// Release the lock on host local backend
-		log.Info("releasing lock on host-local backend...")
-		if err = hostLocal.Unlock(); err != nil {
-			log.WithError(err).Error("failed to release lock on host local backend")
-		}
-		log.Info("successfully released lock on host-local backend!")
-	}()
 
 	// Read in all the files in the host-local directory.
 	log.Info("reading files from host-local IPAM data dir...")
@@ -236,7 +240,7 @@ func Migrate(ctxt context.Context, c client.Interface, nodename string) error {
 		// Delete and skip the last reserved IP.
 		if strings.Contains(f.Name(), "last") {
 			logCtxt.Info("skipping and removing last reserved ip file...")
-			if err = os.Remove(fname); err != nil {
+			if err = os.Remove(fname); err != nil && !os.IsNotExist(err) {
 				return fmt.Errorf("failed to remove file %s: %s", fname, err)
 			}
 			logCtxt.Info("successfully removed last reserved ip file!")
@@ -262,39 +266,18 @@ func Migrate(ctxt context.Context, c client.Interface, nodename string) error {
 		}
 		containerID := string(b)
 
-		// See if the IP hasn't already been assigned for the handleID.
-		handleID := utils.GetHandleID("k8s-pod-network", containerID, "")
-		ips, err := c.IPAM().IPsByHandle(ctxt, handleID)
-		if err == nil {
-		} else if _, ok := err.(errors.ErrorResourceDoesNotExist); !ok {
-			// Return error if it is NOT does not exist, otherwise continue.
-			return fmt.Errorf("failed to fetch ips for handleID %s: %s", handleID, err)
-		}
-		logCtxt.WithField("handleID", handleID).Info("file contains handle ID")
-
-		alreadyExists := false
-		for _, ip := range ips {
-			if _, ok := podIPMap[ip.String()]; ok {
-				alreadyExists = true
-				break
-			}
-		}
-		if alreadyExists {
-			logCtxt.Info("pod IP already assigned, skipping...")
-			continue
-		}
-
 		// Get the pod resource associated with the IP.
 		pod, ok := podIPMap[f.Name()]
 		if !ok {
-			logCtxt.WithField("ip", f.Name()).Info("pod not found for IP, deleting and continuing...")
-			if err = os.Remove(fname); err != nil {
+			logCtxt.WithField("ip", f.Name()).Info("pod not found for IP, deleting and continuing")
+			if err = os.Remove(fname); err != nil && !os.IsNotExist(err) {
 				return fmt.Errorf("failed to remove file %s: %s", fname, err)
 			}
 			continue
 		}
 
-		// Store allocation to datastore
+		// Store allocation to Calico datastore.
+		handleID := utils.GetHandleID("k8s-pod-network", containerID, "")
 		logCtxt.Info("assinging pod IP to Calico IPAM...")
 		if err = c.IPAM().AssignIP(ctxt, ipam.AssignIPArgs{
 			IP:       *ip,
@@ -306,21 +289,33 @@ func Migrate(ctxt context.Context, c client.Interface, nodename string) error {
 				ipam.AttributeNamespace: pod.Namespace,
 			},
 		}); err != nil {
-			return fmt.Errorf("failed to assign IP to calico backend: %s", err)
+			if _, ok := err.(errors.ErrorResourceAlreadyExists); !ok {
+				return fmt.Errorf("failed to assign IP to calico backend: %s", err)
+			}
+			// Pod IP already assigned - likely failed to remove the file on the last attempt.
+			// continue, but log a warning.
+			logCtxt.Warn("pod IP already assigned, skipping")
 		}
-		logCtxt.Info("successfully assinged pod IP to Calico IPAM...")
+		logCtxt.Info("pod IP assigned in Calico IPAM")
 
-		// Delete the file
-		logCtxt.Info("removing file...")
-		if err = os.Remove(fname); err != nil {
+		// Delete the file from the host-local directory.
+		logCtxt.Info("removing host-local allocation file")
+		if err = os.Remove(fname); err != nil && !os.IsNotExist(err) {
 			return fmt.Errorf("failed to remove file %s: %s", fname, err)
 		}
 		logCtxt.Info("successfully removed file!")
 	}
 
-	// Delete the host-local IPAM data directory
-	log.Info("removing host-local IPAM data directory...")
-	if err = os.Remove(ipAllocPath); err != nil {
+	// Release the lock.
+	if err = hostLocal.Unlock(); err != nil {
+		log.WithError(err).Error("failed to release lock on host local backend")
+	} else {
+		log.Info("successfully released lock on host-local backend!")
+	}
+
+	// Delete the host-local IPAM data directory.
+	log.Info("removing host-local IPAM data directory")
+	if err = os.RemoveAll(ipAllocPath); err != nil && !os.IsNotExist(err) {
 		log.WithError(err).Error("failed to remove host-local IPAM data dir directory")
 	}
 	log.Info("successfully removed host-local IPAM data directory!")
