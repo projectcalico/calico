@@ -248,7 +248,7 @@ imports:
   - lib/validator/v3
   - lib/watch
 - name: github.com/projectcalico/typha
-  version: e013bcbd49a7ef379f37e1ece542bc3bd9d2046e
+  version: 6cfe1d43f83e03b7464c98e5fb0220a6756eac65
   subpackages:
   - pkg/syncclient
   - pkg/syncproto
