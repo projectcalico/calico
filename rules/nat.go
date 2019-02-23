@@ -47,19 +47,8 @@ func (r *DefaultRuleRenderer) MakeNatOutgoingRule(protocol string, action iptabl
 func (r *DefaultRuleRenderer) NATOutgoingChain(natOutgoingActive bool, ipVersion uint8) *iptables.Chain {
 	var rules []iptables.Rule
 	if natOutgoingActive {
-		if r.Config.NATPortRange.MaxPort > 0 {
-			toPorts := fmt.Sprintf("%d-%d", r.Config.NATPortRange.MinPort, r.Config.NATPortRange.MaxPort)
-			rules = []iptables.Rule{
-				r.MakeNatOutgoingRule("tcp", iptables.MasqAction{ToPorts: toPorts}, ipVersion),
-				r.MakeNatOutgoingRule("tcp", iptables.ReturnAction{}, ipVersion),
-				r.MakeNatOutgoingRule("udp", iptables.MasqAction{ToPorts: toPorts}, ipVersion),
-				r.MakeNatOutgoingRule("udp", iptables.ReturnAction{}, ipVersion),
-				r.MakeNatOutgoingRule("", iptables.MasqAction{}, ipVersion),
-			}
-		} else {
-			rules = []iptables.Rule{
-				r.MakeNatOutgoingRule("", iptables.MasqAction{}, ipVersion),
-			}
+		rules = []iptables.Rule{
+			r.MakeNatOutgoingRule("", iptables.MasqAction{}, ipVersion),
 		}
 	}
 	return &iptables.Chain{
