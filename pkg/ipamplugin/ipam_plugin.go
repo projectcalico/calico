@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"time"
 
 	"github.com/containernetworking/cni/pkg/skel"
 	cnitypes "github.com/containernetworking/cni/pkg/types"
@@ -27,6 +28,9 @@ import (
 	cniSpecVersion "github.com/containernetworking/cni/pkg/version"
 	"github.com/projectcalico/cni-plugin/internal/pkg/utils"
 	"github.com/projectcalico/cni-plugin/pkg/types"
+	"github.com/projectcalico/cni-plugin/pkg/upgrade"
+	"github.com/projectcalico/libcalico-go/lib/apiconfig"
+	client "github.com/projectcalico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/libcalico-go/lib/errors"
 	"github.com/projectcalico/libcalico-go/lib/ipam"
 	"github.com/projectcalico/libcalico-go/lib/logutils"
@@ -46,6 +50,7 @@ func Main(version string) {
 	flagSet := flag.NewFlagSet("calico-ipam", flag.ExitOnError)
 
 	versionFlag := flagSet.Bool("v", false, "Display version")
+	upgradeFlag := flagSet.Bool("upgrade", false, "Upgrade from host-local")
 	err := flagSet.Parse(os.Args[1:])
 
 	if err != nil {
@@ -55,6 +60,42 @@ func Main(version string) {
 
 	if *versionFlag {
 		fmt.Println(version)
+		os.Exit(0)
+	}
+
+	// Migration logic
+	if *upgradeFlag {
+		logrus.Info("migrating from host-local to calico-ipam...")
+		ctxt := context.Background()
+
+		// nodename associates IPs to this node.
+		nodename := os.Getenv("KUBERNETES_NODE_NAME")
+		if nodename == "" {
+			logrus.Fatal("KUBERNETES_NODE_NAME not specified, refusing to migrate...")
+		}
+		logCtxt := logrus.WithField("node", nodename)
+
+		// calicoClient makes IPAM calls.
+		cfg, err := apiconfig.LoadClientConfig("")
+		if err != nil {
+			logCtxt.Fatal("failed to load api client config")
+		}
+		cfg.Spec.DatastoreType = apiconfig.Kubernetes
+		calicoClient, err := client.New(*cfg)
+		if err != nil {
+			logCtxt.Fatal("failed to initialize api client")
+		}
+
+		// Perform the migration.
+		for {
+			err := upgrade.Migrate(ctxt, calicoClient, nodename)
+			if err == nil {
+				break
+			}
+			logCtxt.WithError(err).Error("failed to migrate ipam, retrying...")
+			time.Sleep(time.Second)
+		}
+		logCtxt.Info("migration from host-local to calico-ipam complete")
 		os.Exit(0)
 	}
 
@@ -93,10 +134,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 		return fmt.Errorf("error constructing WorkloadEndpoint name: %s", err)
 	}
 
-	handleID, err := utils.GetHandleID(conf.Name, args.ContainerID, epIDs.WEPName)
-	if err != nil {
-		return err
-	}
+	handleID := utils.GetHandleID(conf.Name, args.ContainerID, epIDs.WEPName)
 
 	logger := logrus.WithFields(logrus.Fields{
 		"Workload":    epIDs.WEPName,
@@ -252,10 +290,7 @@ func cmdDel(args *skel.CmdArgs) error {
 		return fmt.Errorf("error constructing WorkloadEndpoint name: %s", err)
 	}
 
-	handleID, err := utils.GetHandleID(conf.Name, args.ContainerID, epIDs.WEPName)
-	if err != nil {
-		return err
-	}
+	handleID := utils.GetHandleID(conf.Name, args.ContainerID, epIDs.WEPName)
 
 	logger := logrus.WithFields(logrus.Fields{
 		"Workload":    epIDs.WEPName,

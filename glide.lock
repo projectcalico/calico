@@ -6,6 +6,8 @@ imports:
   subpackages:
   - compute/metadata
   - internal
+- name: github.com/alexflint/go-filemutex
+  version: 72bdc8eae2aef913234599b837f5dda445ca9bd9
 - name: github.com/Azure/go-autorest
   version: 1ff28809256a84bb6966640ff3d0371af82ccba4
   subpackages:
@@ -35,6 +37,8 @@ imports:
   - pkg/testutils
   - pkg/utils/hwaddr
   - pkg/utils/sysctl
+  - plugins/ipam/host-local/backend
+  - plugins/ipam/host-local/backend/disk
 - name: github.com/coreos/etcd
   version: 33245c6b5b49130ca99280408fadfab01aac0e48
   subpackages:
