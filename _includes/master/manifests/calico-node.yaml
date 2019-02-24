@@ -62,7 +62,7 @@ spec:
         # upgraded to use calico-ipam.
         - name: upgrade-ipam
           image: {{.Values.imageRegistry}}{{.Values.cni.image}}:{{ .Values.cni.tag }}
-          command: ["/opt/cni/bin/calico-ipam -upgrade"]
+          command: ["/opt/cni/bin/calico-ipam", "-upgrade"]
           env:
             - name: KUBERNETES_NODE_NAME
               valueFrom:
