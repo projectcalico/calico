@@ -56,6 +56,29 @@ spec:
       # deletion": https://kubernetes.io/docs/concepts/workloads/pods/pod/#termination-of-pods.
       terminationGracePeriodSeconds: 0
       initContainers:
+{{- if eq .Values.datastore "kdd" }}
+        # This container performs upgrade from host-local IPAM to calico-ipam.
+        # It can be deleted if this is a fresh installation, or if you have already
+        # upgraded to use calico-ipam.
+        - name: upgrade-ipam
+          image: {{.Values.imageRegistry}}{{.Values.cni.image}}:{{ .Values.cni.tag }}
+          command: ["/opt/cni/bin/calico-ipam -upgrade"]
+          env:
+            - name: KUBERNETES_NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+            - name: CALICO_NETWORKING_BACKEND
+              valueFrom:
+                configMapKeyRef:
+                  name: calico-config
+                  key: calico_backend
+          volumeMounts:
+            - mountPath: /var/lib/cni/networks
+              name: host-local-net-dir
+            - mountPath: /host/opt/cni/bin
+              name: cni-bin-dir
+{{- end }}
         # This container installs the {{.Values.prodname}} CNI binaries
         # and CNI network config file on each node.
         - name: install-cni
@@ -464,6 +487,13 @@ spec:
           secret:
             secretName: calico-etcd-secrets
             defaultMode: 0400
+{{- else if eq .Values.datastore "kdd" }}
+        # Mount in the directory for host-local IPAM allocations. This is
+        # used when upgrading from host-local to calico-ipam, and can be removed
+        # if not using the upgrade-ipam init container.
+        - name: host-local-net-dir
+          hostPath:
+            path: /var/lib/cni/networks
 {{- end }}
 {{- if .Values.app_layer_policy }}
         # Used to create per-pod Unix Domain Sockets
