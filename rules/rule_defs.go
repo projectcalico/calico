@@ -246,7 +246,7 @@ type Config struct {
 	FailsafeInboundHostPorts  []config.ProtoPort
 	FailsafeOutboundHostPorts []config.ProtoPort
 
-	DisableConntrackInvalid bool
+	DisableConntrackInvalid            bool
 	IptablesNATOutgoingInterfaceFilter string
 }
 
