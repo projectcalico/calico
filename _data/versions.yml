@@ -2074,6 +2074,6 @@ master:
      flannel:
       version: v0.9.1
      calico/dikastes:
-      version: 147c10c
+      version: master 
      flexvol:
       version: master
