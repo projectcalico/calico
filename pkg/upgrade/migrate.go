@@ -99,9 +99,11 @@ func Migrate(ctxt context.Context, c client.Interface, nodename string) error {
 
 			// Assign the address via Calico IPAM.
 			ipipTunnelAddr := cnet.ParseIP(node.Spec.BGP.IPv4IPIPTunnelAddr)
+			handle := fmt.Sprintf("ipip-tunnel-addr-%s", nodename)
 			if err = c.IPAM().AssignIP(ctxt, ipam.AssignIPArgs{
 				IP:       *ipipTunnelAddr,
 				Hostname: nodename,
+				HandleID: &handle,
 				Attrs: map[string]string{
 					ipam.AttributeNode: nodename,
 					ipam.AttributeType: ipam.AttributeTypeIPIP,
