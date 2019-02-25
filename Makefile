@@ -151,7 +151,15 @@ release-publish: release-prereqs
 	# Push the git tag.
 	git push origin $(CALICO_VER)
 
-	@echo "Finalize the GitHub release based on the pushed tag and attach release-$(CALICO_VER).tgz"
+	# Push binaries to GitHub release.
+	# Requires ghr: https://github.com/tcnksm/ghr
+	# Requires GITHUB_TOKEN environment variable set.
+	ghr -u projectcalico -r calico \
+		-b 'Release notes can be found at https://docs.projectcalico.org/$(RELEASE_STREAM)/releases/' \
+		-n $(CALICO_VER) \
+		$(CALICO_VER) $(RELEASE_DIR).tgz
+
+	@echo "Verify the GitHub release based on the pushed tag."
 	@echo ""
 	@echo "  https://github.com/projectcalico/calico/releases/tag/$(CALICO_VER)"
 	@echo ""
@@ -180,6 +188,9 @@ endif
 	@if [ $(CALICO_VER) != $(NODE_VER) ]; then \
 		echo "Expected CALICO_VER $(CALICO_VER) to equal NODE_VER $(NODE_VER)"; \
 		exit 1; fi
+ifeq (, $(shell which ghr))
+	$(error Unable to find `ghr` in PATH, run this: go get -u github.com/tcnksm/ghr)
+endif
 
 OUTPUT_DIR?=_output
 RELEASE_DIR_NAME?=release-$(CALICO_VER)

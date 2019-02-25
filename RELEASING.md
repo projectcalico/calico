@@ -177,8 +177,7 @@ be a release candidate.
    ```
 
    Follow the steps on screen, which will instruct you to upload
-   the `release-<VERSION>.tgz` artifact to the GitHub release using the GitHub UI, and
-   populate the GitHub release with the release notes from earlier.
+   the `release-<VERSION>.tgz` artifact to the GitHub release.
 
 1. Push your branch and open a pull request. Get it reviewed and wait for it to pass CI.
 
@@ -285,8 +284,7 @@ release in the documentation. Perform these steps on a branch off of master.
    ```
 
    Follow the steps on screen, which will instruct you to upload
-   the `release-<VERSION>.tgz` artifact to the GitHub release using the GitHub UI, and
-   populate the GitHub release with the release notes from earlier.
+   the `release-<VERSION>.tgz` artifact to the GitHub release.
 
 1. Push your branch and open a pull request. Get it reviewed and wait for it to pass CI.
 
