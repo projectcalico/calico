@@ -41,6 +41,9 @@ The `{{site.nodecontainer}}` container is primarily configured through environme
 | ETCD_CA_CERT_FILE | Path to the file containing the root certificate of the certificate authority (CA) that issued the etcd server certificate. Configures `{{site.nodecontainer}}` to trust the CA that signed the root certificate. The file may contain multiple root certificates, causing `{{site.nodecontainer}}` to trust each of the CAs included. Example: `/etc/node/ca.pem` | string |
 | KUBECONFIG | When using the Kubernetes datastore, the location of a kubeconfig file to use. | string |
 | K8S_API_ENDPOINT | Location of the Kubernetes API.  Not required if using kubeconfig.       | string |
+| K8S_CERT_FILE | Location of a client certificate for accessing the Kubernetes API.          | string |
+| K8S_KEY_FILE | Location of a client key for accessing the Kubernetes API.                   | string |
+| K8S_CA_FILE | Location of a CA for accessing the Kubernetes API.                            | string |
 | CALICO_ADVERTISE_CLUSTER_IPS | Enable [advertising Kubernetes service cluster IPs over BGP]({{site.baseurl}}/{{page.version}}/networking/service-advertisement), within the specified CIDR. [Default: disabled] | IPv4 CIDR |
 
 In addition to the above, `{{site.nodecontainer}}` also supports [the standard Felix configuration environment variables](../felix/configuration).
