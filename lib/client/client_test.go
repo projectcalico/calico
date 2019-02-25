@@ -121,7 +121,7 @@ kind: notCalicoApiConfig
 		"APIV1_K8S_CERT_FILE":    "baz1",
 		"APIV1_K8S_KEY_FILE":     "foo1",
 		"APIV1_K8S_CA_FILE":      "foobar1",
-		"APIV1_K8S_API_TOKEN":    "foobarbaz1",
+		"APIV1_K8S_API_TOKEN":    "foobarbaz1", // Ignored due to security reasons
 	}
 	cfg2env := api.NewCalicoAPIConfig()
 	cfg2env.Spec = api.CalicoAPIConfigSpec{
@@ -136,7 +136,7 @@ kind: notCalicoApiConfig
 			K8sCertFile:    "baz1",
 			K8sKeyFile:     "foo1",
 			K8sCAFile:      "foobar1",
-			K8sAPIToken:    "foobarbaz1",
+			K8sAPIToken:    "",
 		},
 	}
 

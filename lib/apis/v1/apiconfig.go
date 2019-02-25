@@ -63,7 +63,7 @@ type KubeConfig struct {
 	K8sKeyFile               string `json:"k8sKeyFile" envconfig:"APIV1_K8S_KEY_FILE" default:""`
 	K8sCertFile              string `json:"k8sCertFile" envconfig:"APIV1_K8S_CERT_FILE" default:""`
 	K8sCAFile                string `json:"k8sCAFile" envconfig:"APIV1_K8S_CA_FILE" default:""`
-	K8sAPIToken              string `json:"k8sAPIToken" envconfig:"APIV1_K8S_API_TOKEN" default:""`
+	K8sAPIToken              string `json:"k8sAPIToken" ignore:"true"`
 	K8sInsecureSkipTLSVerify bool   `json:"k8sInsecureSkipTLSVerify" envconfig:"APIV1_K8S_INSECURE_SKIP_TLS_VERIFY" default:""`
 	K8sDisableNodePoll       bool   `json:"k8sDisableNodePoll" envconfig:"APIV1_K8S_DISABLE_NODE_POLL" default:""`
 }
