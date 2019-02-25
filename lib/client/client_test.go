@@ -118,6 +118,9 @@ kind: notCalicoApiConfig
 		"APIV1_DATASTORE_TYPE":   string(api.Kubernetes),
 		"APIV1_KUBECONFIG":       "filename",
 		"APIV1_K8S_API_ENDPOINT": "bar1",
+		"APIV1_K8S_CERT_FILE":    "baz1",
+		"APIV1_K8S_KEY_FILE":     "foo1",
+		"APIV1_K8S_CA_FILE":      "foobar1",
 	}
 	cfg2env := api.NewCalicoAPIConfig()
 	cfg2env.Spec = api.CalicoAPIConfigSpec{
@@ -129,9 +132,9 @@ kind: notCalicoApiConfig
 		KubeConfig: api.KubeConfig{
 			Kubeconfig:     "filename",
 			K8sAPIEndpoint: "bar1",
-			K8sCertFile:    "",
-			K8sKeyFile:     "",
-			K8sCAFile:      "",
+			K8sCertFile:    "baz1",
+			K8sKeyFile:     "foo1",
+			K8sCAFile:      "foobar1",
 			K8sAPIToken:    "",
 		},
 	}
