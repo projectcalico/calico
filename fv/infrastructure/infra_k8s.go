@@ -412,6 +412,9 @@ func (kds *K8sDatastoreInfra) AddNode(felix *Felix, idx int, needBGP bool) {
 		},
 		Spec: v1.NodeSpec{PodCIDR: fmt.Sprintf("10.65.%d.0/24", idx)},
 	}
+	if felix.ExpectedIPIPTunnelAddr != "" {
+		node_in.Annotations["projectcalico.org/IPv4IPIPTunnelAddr"] = felix.ExpectedIPIPTunnelAddr
+	}
 	log.WithField("node_in", node_in).Debug("Node defined")
 	node_out, err := kds.K8sClient.CoreV1().Nodes().Create(node_in)
 	log.WithField("node_out", node_out).Debug("Created node")

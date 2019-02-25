@@ -179,7 +179,8 @@ func StartNNodeTopology(n int, opts TopologyOptions, infra DatastoreInfra) (feli
 		if w != nil {
 			// Wait for any Felix restart...
 			log.Info("Wait for Felix to restart")
-			Eventually(w, "10s").Should(BeClosed())
+			Eventually(w, "10s").Should(BeClosed(),
+				"Timed out waiting for Felix to restart with IpInIpTunnelAddress")
 		}
 		felixes = append(felixes, felix)
 	}
