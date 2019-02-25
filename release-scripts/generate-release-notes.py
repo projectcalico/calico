@@ -5,6 +5,7 @@ import os
 import re
 import io
 import string
+import datetime
 
 # First create a Github instance. Create a token through Github website - provide "repo" auth.
 g = Github(os.environ.get('GITHUB_TOKEN'))
@@ -82,10 +83,14 @@ if __name__ == "__main__":
     # Get the list of issues.
     all_issues = issues_by_repo()
 
+    # Get date in the right format.
+    date = datetime.date.today().strftime("%d %b %Y")
+
     # Write release notes out to a file.
     with io.open(FILENAME, "w", encoding='utf-8') as f:
-        f.write(u"<INSERT RELEASE DATE>\n\n")
-        f.write(u"#### <Placeholder>\n\n")
+        f.write(u"%s\n\n" % date)
+        f.write(u"#### Headline feature 1\n\n")
+        f.write(u"#### Headline feature 2\n\n")
         f.write(u"#### Bug fixes\n\n")
         f.write(u"#### Other changes\n\n")
         for repo, issues in all_issues.items():
