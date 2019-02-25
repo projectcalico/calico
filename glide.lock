@@ -1,5 +1,5 @@
-hash: 1390bfb1687b63edec6409066d26ef87fc43c567c232b0672b6660d1b5de3006
-updated: 2019-02-19T17:28:28.414595684Z
+hash: 2852d0ef37bbbc3c57716c9da4e7fda8a1066611f9a91c3b44a8aa7f0dc80c94
+updated: 2019-02-25T12:01:14.193154244Z
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -118,7 +118,7 @@ imports:
 - name: github.com/kardianos/osext
   version: ae77be60afb1dcacde03767a8c37337fad28ac14
 - name: github.com/kelseyhightower/envconfig
-  version: dd1402a4d99de9ac2f396cd6fcb957bc2c695ec1
+  version: f611eb38b3875cc3bd991ca91c51d06446afa14c
 - name: github.com/libp2p/go-reuseport
   version: 8cfd5f2973c8e2476813120b9a516d9a82eb7c7a
   subpackages:
@@ -210,7 +210,7 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: 72554c43e943469fc7393b558ae76df9bac5b67e
+  version: 725f193eca997939e4f67d04fc5586f25803a980
   subpackages:
   - lib/apiconfig
   - lib/apis/v1
@@ -252,13 +252,13 @@ imports:
   subpackages:
   - binder
 - name: github.com/projectcalico/typha
-  version: e013bcbd49a7ef379f37e1ece542bc3bd9d2046e
+  version: 9dbb48caf5a9bb37f6076b2353f4533a71d3c13c
   subpackages:
   - pkg/syncclient
   - pkg/syncproto
   - pkg/tlsutils
 - name: github.com/prometheus/client_golang
-  version: 1cafe34db7fdec6022e17e00e1c1ea501022f3e4
+  version: 773f5027234d0b08adf766be34f55df2f312abf7
   subpackages:
   - prometheus
   - prometheus/internal
@@ -386,7 +386,7 @@ imports:
 - name: gopkg.in/fsnotify/fsnotify.v1
   version: c2828203cd70a50dcccfb2761f8b1f8ceef9a8e9
 - name: gopkg.in/go-playground/validator.v8
-  version: 5f1438d3fca68893a817e4a66806cea46a9e4ebf
+  version: 5f57d2222ad794d0dffb07e664ea05e2ee07d60c
 - name: gopkg.in/inf.v0
   version: 3887ee99ecf07df5b447e9b00d9c0b2adaa9f3e4
 - name: gopkg.in/tomb.v1
