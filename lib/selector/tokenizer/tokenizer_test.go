@@ -1,4 +1,4 @@
-// Copyright (c) 2016 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016, 2019 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -46,6 +46,81 @@ var tokenTests = []struct {
 		{tokenizer.TokStringLiteral, "value"},
 		{tokenizer.TokEOF, nil},
 	}},
+	{`label contains "value"`, []tokenizer.Token{
+		{tokenizer.TokLabel, "label"},
+		{tokenizer.TokContains, nil},
+		{tokenizer.TokStringLiteral, "value"},
+		{tokenizer.TokEOF, nil},
+	}},
+	{`contains contains "contains"`, []tokenizer.Token{
+		{tokenizer.TokLabel, "contains"},
+		{tokenizer.TokContains, nil},
+		{tokenizer.TokStringLiteral, "contains"},
+		{tokenizer.TokEOF, nil},
+	}},
+	{`contains contains 'contains'`, []tokenizer.Token{
+		{tokenizer.TokLabel, "contains"},
+		{tokenizer.TokContains, nil},
+		{tokenizer.TokStringLiteral, "contains"},
+		{tokenizer.TokEOF, nil},
+	}},
+	{`label contains"value"`, []tokenizer.Token{
+		{tokenizer.TokLabel, "label"},
+		{tokenizer.TokContains, nil},
+		{tokenizer.TokStringLiteral, "value"},
+		{tokenizer.TokEOF, nil},
+	}},
+	{`label startswith "value"`, []tokenizer.Token{
+		{tokenizer.TokLabel, "label"},
+		{tokenizer.TokStartsWith, nil},
+		{tokenizer.TokStringLiteral, "value"},
+		{tokenizer.TokEOF, nil},
+	}},
+	{`label endswith "value"`, []tokenizer.Token{
+		{tokenizer.TokLabel, "label"},
+		{tokenizer.TokEndsWith, nil},
+		{tokenizer.TokStringLiteral, "value"},
+		{tokenizer.TokEOF, nil},
+	}},
+	{`label starts with "value"`, []tokenizer.Token{
+		{tokenizer.TokLabel, "label"},
+		{tokenizer.TokStartsWith, nil},
+		{tokenizer.TokStringLiteral, "value"},
+		{tokenizer.TokEOF, nil},
+	}},
+	{`startswith starts with "value"`, []tokenizer.Token{
+		{tokenizer.TokLabel, "startswith"},
+		{tokenizer.TokStartsWith, nil},
+		{tokenizer.TokStringLiteral, "value"},
+		{tokenizer.TokEOF, nil},
+	}},
+	{`label ends with "value"`, []tokenizer.Token{
+		{tokenizer.TokLabel, "label"},
+		{tokenizer.TokEndsWith, nil},
+		{tokenizer.TokStringLiteral, "value"},
+		{tokenizer.TokEOF, nil},
+	}},
+	{`endswith ends with "value"`, []tokenizer.Token{
+		{tokenizer.TokLabel, "endswith"},
+		{tokenizer.TokEndsWith, nil},
+		{tokenizer.TokStringLiteral, "value"},
+		{tokenizer.TokEOF, nil},
+	}},
+	{`label starts  with "value"`, []tokenizer.Token{
+		{tokenizer.TokLabel, "label"},
+		{tokenizer.TokStartsWith, nil},
+		{tokenizer.TokStringLiteral, "value"},
+		{tokenizer.TokEOF, nil},
+	}},
+	{`label ends  with "value"`, []tokenizer.Token{
+		{tokenizer.TokLabel, "label"},
+		{tokenizer.TokEndsWith, nil},
+		{tokenizer.TokStringLiteral, "value"},
+		{tokenizer.TokEOF, nil},
+	}},
+	{`label starts foo "value"`, nil},
+	{`label ends foo "value"`, nil},
+	{`label squiggles "value"`, nil},
 	{`a not in "bar" && !has(foo) || b in c`, []tokenizer.Token{
 		{tokenizer.TokLabel, "a"},
 		{tokenizer.TokNotIn, nil},
@@ -138,8 +213,15 @@ var _ = Describe("Token", func() {
 
 	for _, test := range tokenTests {
 		test := test // Take copy for closure
-		It(fmt.Sprintf("should tokenize %#v as %v", test.input, test.expected), func() {
-			Expect(tokenizer.Tokenize(test.input)).To(Equal(test.expected))
-		})
+		if test.expected == nil {
+			It(fmt.Sprintf("should return error for input %#v", test.input), func() {
+				_, err := tokenizer.Tokenize(test.input)
+				Expect(err).To(HaveOccurred())
+			})
+		} else {
+			It(fmt.Sprintf("should tokenize %#v as %v", test.input, test.expected), func() {
+				Expect(tokenizer.Tokenize(test.input)).To(Equal(test.expected))
+			})
+		}
 	}
 })

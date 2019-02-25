@@ -1,4 +1,4 @@
-// Copyright (c) 2016 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016, 2019 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -163,6 +163,27 @@ func parseOperation(tokens []tokenizer.Token) (sel node, remTokens []tokenizer.T
 		case tokenizer.TokNe:
 			if tokens[2].Kind == tokenizer.TokStringLiteral {
 				sel = &LabelNeValueNode{tokens[0].Value.(string), tokens[2].Value.(string)}
+				remTokens = tokens[3:]
+			} else {
+				err = errors.New("Expected string")
+			}
+		case tokenizer.TokContains:
+			if tokens[2].Kind == tokenizer.TokStringLiteral {
+				sel = &LabelContainsValueNode{tokens[0].Value.(string), tokens[2].Value.(string)}
+				remTokens = tokens[3:]
+			} else {
+				err = errors.New("Expected string")
+			}
+		case tokenizer.TokStartsWith:
+			if tokens[2].Kind == tokenizer.TokStringLiteral {
+				sel = &LabelStartsWithValueNode{tokens[0].Value.(string), tokens[2].Value.(string)}
+				remTokens = tokens[3:]
+			} else {
+				err = errors.New("Expected string")
+			}
+		case tokenizer.TokEndsWith:
+			if tokens[2].Kind == tokenizer.TokStringLiteral {
+				sel = &LabelEndsWithValueNode{tokens[0].Value.(string), tokens[2].Value.(string)}
 				remTokens = tokens[3:]
 			} else {
 				err = errors.New("Expected string")
