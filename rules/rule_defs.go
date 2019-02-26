@@ -186,6 +186,7 @@ type RuleRenderer interface {
 	ProfileToIptablesChains(profileID *proto.ProfileID, policy *proto.Profile, ipVersion uint8) []*iptables.Chain
 	ProtoRuleToIptablesRules(pRule *proto.Rule, ipVersion uint8) []iptables.Rule
 
+	MakeNatOutgoingRule(protocol string, action iptables.Action, ipVersion uint8) iptables.Rule
 	NATOutgoingChain(active bool, ipVersion uint8) *iptables.Chain
 
 	DNATsToIptablesChains(dnats map[string]string) []*iptables.Chain
@@ -245,7 +246,8 @@ type Config struct {
 	FailsafeInboundHostPorts  []config.ProtoPort
 	FailsafeOutboundHostPorts []config.ProtoPort
 
-	DisableConntrackInvalid bool
+	DisableConntrackInvalid            bool
+	IptablesNATOutgoingInterfaceFilter string
 }
 
 func (c *Config) validate() {
