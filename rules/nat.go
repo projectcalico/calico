@@ -20,19 +20,35 @@ import (
 	"github.com/projectcalico/felix/iptables"
 )
 
+func (r *DefaultRuleRenderer) MakeNatOutgoingRule(protocol string, action iptables.Action, ipVersion uint8) iptables.Rule {
+	ipConf := r.ipSetConfig(ipVersion)
+	allIPsSetName := ipConf.NameForMainIPSet(IPSetIDNATOutgoingAllPools)
+	masqIPsSetName := ipConf.NameForMainIPSet(IPSetIDNATOutgoingMasqPools)
+
+	match := iptables.Match().
+		SourceIPSet(masqIPsSetName).
+		NotDestIPSet(allIPsSetName)
+
+	if protocol != "" {
+		match = match.Protocol(protocol)
+	}
+
+	if r.Config.IptablesNATOutgoingInterfaceFilter != "" {
+		match = match.OutInterface(r.Config.IptablesNATOutgoingInterfaceFilter)
+	}
+
+	rule := iptables.Rule{
+		Action: action,
+		Match:  match,
+	}
+	return rule
+}
+
 func (r *DefaultRuleRenderer) NATOutgoingChain(natOutgoingActive bool, ipVersion uint8) *iptables.Chain {
 	var rules []iptables.Rule
 	if natOutgoingActive {
-		ipConf := r.ipSetConfig(ipVersion)
-		allIPsSetName := ipConf.NameForMainIPSet(IPSetIDNATOutgoingAllPools)
-		masqIPsSetName := ipConf.NameForMainIPSet(IPSetIDNATOutgoingMasqPools)
 		rules = []iptables.Rule{
-			{
-				Action: iptables.MasqAction{},
-				Match: iptables.Match().
-					SourceIPSet(masqIPsSetName).
-					NotDestIPSet(allIPsSetName),
-			},
+			r.MakeNatOutgoingRule("", iptables.MasqAction{}, ipVersion),
 		}
 	}
 	return &iptables.Chain{

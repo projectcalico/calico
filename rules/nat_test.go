@@ -54,6 +54,26 @@ var _ = Describe("NAT", func() {
 			},
 		}))
 	})
+	It("should render rules when active with out interface", func() {
+
+		//copy struct
+		localConfig := rrConfigNormal
+		localConfig.IptablesNATOutgoingInterfaceFilter = "cali-123"
+		renderer = NewRenderer(localConfig)
+
+		Expect(renderer.NATOutgoingChain(true, 4)).To(Equal(&Chain{
+			Name: "cali-nat-outgoing",
+			Rules: []Rule{
+				{
+					Action: MasqAction{},
+					Match: Match().
+						SourceIPSet("cali4-masq-ipam-pools").
+						NotDestIPSet("cali4-all-ipam-pools").
+						OutInterface("cali-123"),
+				},
+			},
+		}))
+	})
 	It("should render nothing when inactive", func() {
 		Expect(renderer.NATOutgoingChain(false, 4)).To(Equal(&Chain{
 			Name:  "cali-nat-outgoing",
