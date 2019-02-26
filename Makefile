@@ -89,7 +89,7 @@ LOCAL_USER_ID?=$(shell id -u $$USER)
 
 .PHONY: clean
 clean:
-	rm -rf $(BIN) vendor $(DEPLOY_CONTAINER_MARKER) .go-pkg-cache k8s-install/scripts/install_cni.test
+	rm -rf $(BIN) vendor $(DEPLOY_CONTAINER_MARKER) .go-pkg-cache k8s-install/scripts/install_cni.test ./bin/github
 
 ###############################################################################
 # Building the binary
@@ -359,30 +359,32 @@ release-publish: release-prereqs
 	# Push images.
 	$(MAKE) push RELEASE=true IMAGETAG=$(VERSION) ARCH=$(ARCH)
 
+	# Push binaries to GitHub release.
+	# Requires ghr: https://github.com/tcnksm/ghr
+	# Requires GITHUB_TOKEN environment variable set.
+	mkdir ./bin/github
+	cp $(DIST)/calico ./bin/github
+	cp $(DIST)/calico-ipam ./bin/github
+	ghr -u projectcalico -r cni-plugin \
+		-b "Release notes can be found at https://docs.projectcalico.org" \
+		-n $(VERSION) \
+		$(VERSION) ./bin/github/
+
 	@echo "Finalize the GitHub release based on the pushed tag."
-	@echo "Attach the $(BIN)/calico and $(BIN)/calico-ipam binaries."
 	@echo ""
 	@echo "  https://$(PACKAGE_NAME)/releases/tag/$(VERSION)"
 	@echo ""
-	@echo "If this is the latest stable release, then run the following to push 'latest' images."
-	@echo ""
-	@echo "  make VERSION=$(VERSION) release-publish-latest"
-	@echo ""
-
-# WARNING: Only run this target if this release is the latest stable release. Do NOT
-# run this target for alpha / beta / release candidate builds, or patches to earlier Calico versions.
-## Pushes `latest` release images. WARNING: Only run this for latest stable releases.
-release-publish-latest: release-prereqs
-	# Check latest versions match.
-	if ! docker run $(CONTAINER_NAME):latest-$(ARCH) calico -v | grep '^$(VERSION)$$'; then echo "Reported version:" `docker run $(CONTAINER_NAME):latest-$(ARCH) calico -v` "\nExpected version: $(VERSION)"; false; else echo "\nVersion check passed\n"; fi
-	if ! docker run quay.io/$(CONTAINER_NAME):latest-$(ARCH) calico -v | grep '^$(VERSION)$$'; then echo "Reported version:" `docker run quay.io/$(CONTAINER_NAME):latest-$(ARCH) calico -v` "\nExpected version: $(VERSION)"; false; else echo "\nVersion check passed\n"; fi
-
-	$(MAKE) push IMAGETAG=latest ARCH=$(ARCH)
 
 # release-prereqs checks that the environment is configured properly to create a release.
 release-prereqs:
 ifndef VERSION
 	$(error VERSION is undefined - run using make release VERSION=vX.Y.Z)
+endif
+ifndef GITHUB_TOKEN
+	$(error GITHUB_TOKEN must be set for a release)
+endif
+ifeq (, $(shell which ghr))
+	$(error Unable to find `ghr` in PATH, run this: go get -u github.com/tcnksm/ghr)
 endif
 
 ###############################################################################
