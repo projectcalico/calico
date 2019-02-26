@@ -31,7 +31,7 @@ import:
 - package: golang.org/x/net
   subpackages:
   - context
-- package: gopkg.in/go-playground/validator.v8
+- package: gopkg.in/go-playground/validator.v9
 - package: gopkg.in/tchap/go-patricia.v2
   subpackages:
   - patricia

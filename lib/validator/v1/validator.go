@@ -20,19 +20,18 @@ import (
 	"regexp"
 	"strings"
 
-	validator "gopkg.in/go-playground/validator.v8"
+	log "github.com/sirupsen/logrus"
+	"gopkg.in/go-playground/validator.v9"
+	k8svalidation "k8s.io/apimachinery/pkg/util/validation"
 
 	api "github.com/projectcalico/libcalico-go/lib/apis/v1"
+	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/libcalico-go/lib/errors"
 	calinet "github.com/projectcalico/libcalico-go/lib/net"
 	"github.com/projectcalico/libcalico-go/lib/numorstring"
 	"github.com/projectcalico/libcalico-go/lib/scope"
 	"github.com/projectcalico/libcalico-go/lib/selector"
 	"github.com/projectcalico/libcalico-go/lib/selector/tokenizer"
-	log "github.com/sirupsen/logrus"
-	k8svalidation "k8s.io/apimachinery/pkg/util/validation"
-
-	"github.com/projectcalico/libcalico-go/lib/backend/model"
 )
 
 var validate *validator.Validate
@@ -78,9 +77,9 @@ func Validate(current interface{}) error {
 	for _, f := range err.(validator.ValidationErrors) {
 		verr.ErroredFields = append(verr.ErroredFields,
 			errors.ErroredField{
-				Name:   f.Name,
-				Value:  f.Value,
-				Reason: extractReason(f.Tag),
+				Name:   f.StructField(),
+				Value:  f.Value(),
+				Reason: extractReason(f.Tag()),
 			})
 	}
 	return verr
@@ -88,8 +87,7 @@ func Validate(current interface{}) error {
 
 func init() {
 	// Initialise static data.
-	config := &validator.Config{TagName: "validate", FieldNameTag: "json"}
-	validate = validator.New(config)
+	validate = validator.New()
 
 	// Register field validators.
 	registerFieldValidator("action", validateAction)
@@ -152,56 +150,56 @@ func registerStructValidator(fn validator.StructLevelFunc, t ...interface{}) {
 	validate.RegisterStructValidation(fn, t...)
 }
 
-func validateAction(v *validator.Validate, topStruct reflect.Value, currentStructOrField reflect.Value, field reflect.Value, fieldType reflect.Type, fieldKind reflect.Kind, param string) bool {
-	s := field.String()
+func validateAction(fl validator.FieldLevel) bool {
+	s := fl.Field().String()
 	log.Debugf("Validate action: %s", s)
 	return actionRegex.MatchString(s)
 }
 
-func validateInterface(v *validator.Validate, topStruct reflect.Value, currentStructOrField reflect.Value, field reflect.Value, fieldType reflect.Type, fieldKind reflect.Kind, param string) bool {
-	s := field.String()
+func validateInterface(fl validator.FieldLevel) bool {
+	s := fl.Field().String()
 	log.Debugf("Validate interface: %s", s)
 	return s == "*" || interfaceRegex.MatchString(s)
 }
 
-func validateBackendAction(v *validator.Validate, topStruct reflect.Value, currentStructOrField reflect.Value, field reflect.Value, fieldType reflect.Type, fieldKind reflect.Kind, param string) bool {
-	s := field.String()
+func validateBackendAction(fl validator.FieldLevel) bool {
+	s := fl.Field().String()
 	log.Debugf("Validate action: %s", s)
 	return backendActionRegex.MatchString(s)
 }
 
-func validateName(v *validator.Validate, topStruct reflect.Value, currentStructOrField reflect.Value, field reflect.Value, fieldType reflect.Type, fieldKind reflect.Kind, param string) bool {
-	s := field.String()
+func validateName(fl validator.FieldLevel) bool {
+	s := fl.Field().String()
 	log.Debugf("Validate name: %s", s)
 	return nameRegex.MatchString(s)
 }
 
-func validateNamespacedName(v *validator.Validate, topStruct reflect.Value, currentStructOrField reflect.Value, field reflect.Value, fieldType reflect.Type, fieldKind reflect.Kind, param string) bool {
-	s := field.String()
+func validateNamespacedName(fl validator.FieldLevel) bool {
+	s := fl.Field().String()
 	log.Debugf("Validate namespacedName: %s", s)
 	return namespacedNameRegex.MatchString(s)
 }
 
-func validateIPVersion(v *validator.Validate, topStruct reflect.Value, currentStructOrField reflect.Value, field reflect.Value, fieldType reflect.Type, fieldKind reflect.Kind, param string) bool {
-	ver := field.Int()
+func validateIPVersion(fl validator.FieldLevel) bool {
+	ver := fl.Field().Int()
 	log.Debugf("Validate ip version: %d", ver)
 	return ver == 4 || ver == 6
 }
 
-func validateIPIPMode(v *validator.Validate, topStruct reflect.Value, currentStructOrField reflect.Value, field reflect.Value, fieldType reflect.Type, fieldKind reflect.Kind, param string) bool {
-	s := field.String()
+func validateIPIPMode(fl validator.FieldLevel) bool {
+	s := fl.Field().String()
 	log.Debugf("Validate name: %s", s)
 	return ipipModeRegex.MatchString(s)
 }
 
-func validatePortName(v *validator.Validate, topStruct reflect.Value, currentStructOrField reflect.Value, field reflect.Value, fieldType reflect.Type, fieldKind reflect.Kind, param string) bool {
-	s := field.String()
+func validatePortName(fl validator.FieldLevel) bool {
+	s := fl.Field().String()
 	log.Debugf("Validate port name: %s", s)
 	return len(s) != 0 && len(k8svalidation.IsValidPortName(s)) == 0
 }
 
-func validateSelector(v *validator.Validate, topStruct reflect.Value, currentStructOrField reflect.Value, field reflect.Value, fieldType reflect.Type, fieldKind reflect.Kind, param string) bool {
-	s := field.String()
+func validateSelector(fl validator.FieldLevel) bool {
+	s := fl.Field().String()
 	log.Debugf("Validate selector: %s", s)
 
 	// We use the selector parser to validate a selector string.
@@ -213,14 +211,14 @@ func validateSelector(v *validator.Validate, topStruct reflect.Value, currentStr
 	return true
 }
 
-func validateTag(v *validator.Validate, topStruct reflect.Value, currentStructOrField reflect.Value, field reflect.Value, fieldType reflect.Type, fieldKind reflect.Kind, param string) bool {
-	s := field.String()
+func validateTag(fl validator.FieldLevel) bool {
+	s := fl.Field().String()
 	log.Debugf("Validate tag: %s", s)
 	return nameRegex.MatchString(s)
 }
 
-func validateLabels(v *validator.Validate, topStruct reflect.Value, currentStructOrField reflect.Value, field reflect.Value, fieldType reflect.Type, fieldKind reflect.Kind, param string) bool {
-	l := field.Interface().(map[string]string)
+func validateLabels(fl validator.FieldLevel) bool {
+	l := fl.Field().Interface().(map[string]string)
 	log.Debugf("Validate labels: %s", l)
 	for k, v := range l {
 		if !labelRegex.MatchString(k) || !labelValueRegex.MatchString(v) {
@@ -230,14 +228,14 @@ func validateLabels(v *validator.Validate, topStruct reflect.Value, currentStruc
 	return true
 }
 
-func validateScopeGlobalOrNode(v *validator.Validate, topStruct reflect.Value, currentStructOrField reflect.Value, field reflect.Value, fieldType reflect.Type, fieldKind reflect.Kind, param string) bool {
-	f := field.Interface().(scope.Scope)
+func validateScopeGlobalOrNode(fl validator.FieldLevel) bool {
+	f := fl.Field().Interface().(scope.Scope)
 	log.Debugf("Validate scope: %v", f)
 	return f == scope.Global || f == scope.Node
 }
 
-func validatePolicyType(v *validator.Validate, topStruct reflect.Value, currentStructOrField reflect.Value, field reflect.Value, fieldType reflect.Type, fieldKind reflect.Kind, param string) bool {
-	s := field.String()
+func validatePolicyType(fl validator.FieldLevel) bool {
+	s := fl.Field().String()
 	log.Debugf("Validate policy type: %s", s)
 	if s == string(api.PolicyTypeIngress) {
 		return true
@@ -248,8 +246,8 @@ func validatePolicyType(v *validator.Validate, topStruct reflect.Value, currentS
 	return false
 }
 
-func validateProtocol(v *validator.Validate, structLevel *validator.StructLevel) {
-	p := structLevel.CurrentStruct.Interface().(numorstring.Protocol)
+func validateProtocol(structLevel validator.StructLevel) {
+	p := structLevel.Current().Interface().(numorstring.Protocol)
 	log.Debugf("Validate protocol: %v %s %d", p.Type, p.StrVal, p.NumVal)
 
 	// The protocol field may be an integer 1-255 (i.e. not 0), or one of the valid protocol
@@ -257,67 +255,67 @@ func validateProtocol(v *validator.Validate, structLevel *validator.StructLevel)
 	if num, err := p.NumValue(); err == nil {
 		if num == 0 {
 			structLevel.ReportError(reflect.ValueOf(p.NumVal),
-				"Protocol", "", reason("protocol number invalid"))
+				"Protocol", "", reason("protocol number invalid"), "")
 		}
 	} else if !protocolRegex.MatchString(p.String()) {
 		structLevel.ReportError(reflect.ValueOf(p.String()),
-			"Protocol", "", reason("protocol name invalid"))
+			"Protocol", "", reason("protocol name invalid"), "")
 	}
 }
 
-func validatePort(v *validator.Validate, structLevel *validator.StructLevel) {
-	p := structLevel.CurrentStruct.Interface().(numorstring.Port)
+func validatePort(structLevel validator.StructLevel) {
+	p := structLevel.Current().Interface().(numorstring.Port)
 
 	// Check that the port range is in the correct order.  The YAML parsing also checks this,
 	// but this protects against misuse of the programmatic API.
 	log.Debugf("Validate port: %v", p)
 	if p.MinPort > p.MaxPort {
 		structLevel.ReportError(reflect.ValueOf(p.MaxPort),
-			"Port", "", reason("port range invalid"))
+			"Port", "", reason("port range invalid"), "")
 	}
 
 	if p.PortName != "" {
 		if p.MinPort != 0 || p.MaxPort != 0 {
 			structLevel.ReportError(reflect.ValueOf(p.PortName),
-				"Port", "", reason("named port invalid, if name is specified, min and max should be 0"))
+				"Port", "", reason("named port invalid, if name is specified, min and max should be 0"), "")
 		}
 	} else if p.MinPort < 1 || p.MaxPort < 1 {
 		structLevel.ReportError(reflect.ValueOf(p.MaxPort),
-			"Port", "", reason("port range invalid, port number must be between 0 and 65536"))
+			"Port", "", reason("port range invalid, port number must be between 0 and 65536"), "")
 	}
 }
 
-func validateIPNAT(v *validator.Validate, structLevel *validator.StructLevel) {
-	i := structLevel.CurrentStruct.Interface().(api.IPNAT)
+func validateIPNAT(structLevel validator.StructLevel) {
+	i := structLevel.Current().Interface().(api.IPNAT)
 	log.Debugf("Internal IP: %s; External IP: %s", i.InternalIP, i.ExternalIP)
 
 	// An IPNAT must have both the internal and external IP versions the same.
 	if i.InternalIP.Version() != i.ExternalIP.Version() {
 		structLevel.ReportError(reflect.ValueOf(i.ExternalIP),
-			"ExternalIP", "", reason("mismatched IP versions"))
+			"ExternalIP", "", reason("mismatched IP versions"), "")
 	}
 }
 
-func validateWorkloadEndpointSpec(v *validator.Validate, structLevel *validator.StructLevel) {
-	w := structLevel.CurrentStruct.Interface().(api.WorkloadEndpointSpec)
+func validateWorkloadEndpointSpec(structLevel validator.StructLevel) {
+	w := structLevel.Current().Interface().(api.WorkloadEndpointSpec)
 
 	// The configured networks only support /32 (for IPv4) and /128 (for IPv6) at present.
 	for _, netw := range w.IPNetworks {
 		ones, bits := netw.Mask.Size()
 		if bits != ones {
 			structLevel.ReportError(reflect.ValueOf(w.IPNetworks),
-				"IPNetworks", "", reason("IP network contains multiple addresses"))
+				"IPNetworks", "", reason("IP network contains multiple addresses"), "")
 		}
 	}
 
 	if w.IPv4Gateway != nil && w.IPv4Gateway.Version() != 4 {
 		structLevel.ReportError(reflect.ValueOf(w.IPv4Gateway),
-			"IPv4Gateway", "", reason("invalid IPv4 gateway address specified"))
+			"IPv4Gateway", "", reason("invalid IPv4 gateway address specified"), "")
 	}
 
 	if w.IPv6Gateway != nil && w.IPv6Gateway.Version() != 6 {
 		structLevel.ReportError(reflect.ValueOf(w.IPv6Gateway),
-			"IPv6Gateway", "", reason("invalid IPv6 gateway address specified"))
+			"IPv6Gateway", "", reason("invalid IPv6 gateway address specified"), "")
 	}
 
 	// If NATs have been specified, then they should each be within the configured networks of
@@ -341,23 +339,23 @@ func validateWorkloadEndpointSpec(v *validator.Validate, structLevel *validator.
 
 		if !valid {
 			structLevel.ReportError(reflect.ValueOf(w.IPNATs),
-				"IPNATs", "", reason("NAT is not in the endpoint networks"))
+				"IPNATs", "", reason("NAT is not in the endpoint networks"), "")
 		}
 	}
 }
 
-func validateHostEndpointSpec(v *validator.Validate, structLevel *validator.StructLevel) {
-	h := structLevel.CurrentStruct.Interface().(api.HostEndpointSpec)
+func validateHostEndpointSpec(structLevel validator.StructLevel) {
+	h := structLevel.Current().Interface().(api.HostEndpointSpec)
 
 	// A host endpoint must have an interface name and/or some expected IPs specified.
 	if h.InterfaceName == "" && len(h.ExpectedIPs) == 0 {
 		structLevel.ReportError(reflect.ValueOf(h.InterfaceName),
-			"InterfaceName", "", reason("no interface or expected IPs have been specified"))
+			"InterfaceName", "", reason("no interface or expected IPs have been specified"), "")
 	}
 }
 
-func validateIPPool(v *validator.Validate, structLevel *validator.StructLevel) {
-	pool := structLevel.CurrentStruct.Interface().(api.IPPool)
+func validateIPPool(structLevel validator.StructLevel) {
+	pool := structLevel.Current().Interface().(api.IPPool)
 
 	// Validation of the data occurs before checking whether Metadata
 	// fields are complete, so need to check whether CIDR is assigned before
@@ -367,7 +365,7 @@ func validateIPPool(v *validator.Validate, structLevel *validator.StructLevel) {
 		// IPIP cannot be enabled for IPv6.
 		if pool.Metadata.CIDR.Version() == 6 && pool.Spec.IPIP != nil && pool.Spec.IPIP.Enabled {
 			structLevel.ReportError(reflect.ValueOf(pool.Spec.IPIP.Enabled),
-				"IPIP.Enabled", "", reason("IPIP is not supported on an IPv6 IP pool"))
+				"IPIP.Enabled", "", reason("IPIP is not supported on an IPv6 IP pool"), "")
 		}
 
 		// The Calico IPAM places restrictions on the minimum IP pool size.  If
@@ -378,10 +376,10 @@ func validateIPPool(v *validator.Validate, structLevel *validator.StructLevel) {
 			if bits-ones < 6 {
 				if pool.Metadata.CIDR.Version() == 4 {
 					structLevel.ReportError(reflect.ValueOf(pool.Metadata.CIDR),
-						"CIDR", "", reason(poolSmallIPv4))
+						"CIDR", "", reason(poolSmallIPv4), "")
 				} else {
 					structLevel.ReportError(reflect.ValueOf(pool.Metadata.CIDR),
-						"CIDR", "", reason(poolSmallIPv6))
+						"CIDR", "", reason(poolSmallIPv6), "")
 				}
 			}
 		}
@@ -391,54 +389,54 @@ func validateIPPool(v *validator.Validate, structLevel *validator.StructLevel) {
 		log.Debugf("Pool CIDR: %s, Masked IP: %d", pool.Metadata.CIDR, ipNet.IP)
 		if ipNet.IP.String() != ip.String() {
 			structLevel.ReportError(reflect.ValueOf(pool.Metadata.CIDR),
-				"CIDR", "", reason(poolUnstictCIDR))
+				"CIDR", "", reason(poolUnstictCIDR), "")
 		}
 
 		// IP Pool CIDR cannot overlap with IPv4 or IPv6 link local address range.
 		if pool.Metadata.CIDR.Version() == 4 && pool.Metadata.CIDR.IsNetOverlap(ipv4LinkLocalNet) {
 			structLevel.ReportError(reflect.ValueOf(pool.Metadata.CIDR),
-				"CIDR", "", reason(overlapsV4LinkLocal))
+				"CIDR", "", reason(overlapsV4LinkLocal), "")
 		}
 
 		if pool.Metadata.CIDR.Version() == 6 && pool.Metadata.CIDR.IsNetOverlap(ipv6LinkLocalNet) {
 			structLevel.ReportError(reflect.ValueOf(pool.Metadata.CIDR),
-				"CIDR", "", reason(overlapsV6LinkLocal))
+				"CIDR", "", reason(overlapsV6LinkLocal), "")
 		}
 	}
 }
 
-func validateICMPFields(v *validator.Validate, structLevel *validator.StructLevel) {
-	icmp := structLevel.CurrentStruct.Interface().(api.ICMPFields)
+func validateICMPFields(structLevel validator.StructLevel) {
+	icmp := structLevel.Current().Interface().(api.ICMPFields)
 
 	// Due to Kernel limitations, ICMP code must always be specified with a type.
 	if icmp.Code != nil && icmp.Type == nil {
 		structLevel.ReportError(reflect.ValueOf(icmp.Code),
-			"Code", "", reason("ICMP code specified without an ICMP type"))
+			"Code", "", reason("ICMP code specified without an ICMP type"), "")
 	}
 }
 
-func validateRule(v *validator.Validate, structLevel *validator.StructLevel) {
-	rule := structLevel.CurrentStruct.Interface().(api.Rule)
+func validateRule(structLevel validator.StructLevel) {
+	rule := structLevel.Current().Interface().(api.Rule)
 
 	// If the protocol is neither tcp (6) nor udp (17) check that the port values have not
 	// been specified.
 	if rule.Protocol == nil || !rule.Protocol.SupportsPorts() {
 		if len(rule.Source.Ports) > 0 {
 			structLevel.ReportError(reflect.ValueOf(rule.Source.Ports),
-				"Source.Ports", "", reason(protocolPortsMsg))
+				"Source.Ports", "", reason(protocolPortsMsg), "")
 		}
 		if len(rule.Source.NotPorts) > 0 {
 			structLevel.ReportError(reflect.ValueOf(rule.Source.NotPorts),
-				"Source.NotPorts", "", reason(protocolPortsMsg))
+				"Source.NotPorts", "", reason(protocolPortsMsg), "")
 		}
 
 		if len(rule.Destination.Ports) > 0 {
 			structLevel.ReportError(reflect.ValueOf(rule.Destination.Ports),
-				"Destination.Ports", "", reason(protocolPortsMsg))
+				"Destination.Ports", "", reason(protocolPortsMsg), "")
 		}
 		if len(rule.Destination.NotPorts) > 0 {
 			structLevel.ReportError(reflect.ValueOf(rule.Destination.NotPorts),
-				"Destination.NotPorts", "", reason(protocolPortsMsg))
+				"Destination.NotPorts", "", reason(protocolPortsMsg), "")
 		}
 	}
 
@@ -455,7 +453,8 @@ func validateRule(v *validator.Validate, structLevel *validator.StructLevel) {
 		structLevel.ReportError(reflect.ValueOf(rule.Source.Nets),
 			"Source/Destination.Net/Nets",
 			"Source/Destination.Net/Nets",
-			reason("only one of Net and Nets fields allowed"))
+			reason("only one of Net and Nets fields allowed"),
+			"")
 	}
 
 	var seenV4, seenV6 bool
@@ -468,12 +467,12 @@ func validateRule(v *validator.Validate, structLevel *validator.StructLevel) {
 		}
 		if rule.IPVersion != nil && ((v4 && *rule.IPVersion != 4) || (v6 && *rule.IPVersion != 6)) {
 			structLevel.ReportError(reflect.ValueOf(rule.Source.Net), fieldName,
-				"", reason("rule IP version doesn't match CIDR version"))
+				"", reason("rule IP version doesn't match CIDR version"), "")
 		}
 		if v4 && seenV6 || v6 && seenV4 || v4 && v6 {
 			// This field makes the rule inconsistent.
 			structLevel.ReportError(reflect.ValueOf(nets), fieldName,
-				"", reason("rule contains both IPv4 and IPv6 CIDRs"))
+				"", reason("rule contains both IPv4 and IPv6 CIDRs"), "")
 		}
 		seenV4 = seenV4 || v4
 		seenV6 = seenV6 || v6
@@ -485,64 +484,64 @@ func validateRule(v *validator.Validate, structLevel *validator.StructLevel) {
 	scanNets(rule.Destination.GetNotNets(), "Destination.NotNet(s)")
 }
 
-func validateBackendRule(v *validator.Validate, structLevel *validator.StructLevel) {
-	rule := structLevel.CurrentStruct.Interface().(model.Rule)
+func validateBackendRule(structLevel validator.StructLevel) {
+	rule := structLevel.Current().Interface().(model.Rule)
 
 	// If the protocol is neither tcp (6) nor udp (17) check that the port values have not
 	// been specified.
 	if rule.Protocol == nil || !rule.Protocol.SupportsPorts() {
 		if len(rule.SrcPorts) > 0 {
 			structLevel.ReportError(reflect.ValueOf(rule.SrcPorts),
-				"SrcPorts", "", reason(protocolPortsMsg))
+				"SrcPorts", "", reason(protocolPortsMsg), "")
 		}
 		if len(rule.NotSrcPorts) > 0 {
 			structLevel.ReportError(reflect.ValueOf(rule.NotSrcPorts),
-				"NotSrcPorts", "", reason(protocolPortsMsg))
+				"NotSrcPorts", "", reason(protocolPortsMsg), "")
 		}
 
 		if len(rule.DstPorts) > 0 {
 			structLevel.ReportError(reflect.ValueOf(rule.DstPorts),
-				"DstPorts", "", reason(protocolPortsMsg))
+				"DstPorts", "", reason(protocolPortsMsg), "")
 		}
 		if len(rule.NotDstPorts) > 0 {
 			structLevel.ReportError(reflect.ValueOf(rule.NotDstPorts),
-				"NotDstPorts", "", reason(protocolPortsMsg))
+				"NotDstPorts", "", reason(protocolPortsMsg), "")
 		}
 	}
 }
 
-func validateNodeSpec(v *validator.Validate, structLevel *validator.StructLevel) {
-	ns := structLevel.CurrentStruct.Interface().(api.NodeSpec)
+func validateNodeSpec(structLevel validator.StructLevel) {
+	ns := structLevel.Current().Interface().(api.NodeSpec)
 
 	if ns.BGP != nil {
 		if ns.BGP.IPv4Address == nil && ns.BGP.IPv6Address == nil {
 			structLevel.ReportError(reflect.ValueOf(ns.BGP.IPv4Address),
-				"BGP.IPv4Address", "", reason("no BGP IP address and subnet specified"))
+				"BGP.IPv4Address", "", reason("no BGP IP address and subnet specified"), "")
 		}
 
 		if ns.BGP.IPv4Address != nil && ns.BGP.IPv4Address.Version() != 4 {
 			structLevel.ReportError(reflect.ValueOf(ns.BGP.IPv4Address),
-				"BGP.IPv4Address", "", reason("invalid IPv4 address and subnet specified"))
+				"BGP.IPv4Address", "", reason("invalid IPv4 address and subnet specified"), "")
 		}
 
 		if ns.BGP.IPv6Address != nil && ns.BGP.IPv6Address.Version() != 6 {
 			structLevel.ReportError(reflect.ValueOf(ns.BGP.IPv6Address),
-				"BGP.IPv6Address", "", reason("invalid IPv6 address and subnet specified"))
+				"BGP.IPv6Address", "", reason("invalid IPv6 address and subnet specified"), "")
 		}
 	}
 }
 
-func validateBGPPeerMeta(v *validator.Validate, structLevel *validator.StructLevel) {
-	m := structLevel.CurrentStruct.Interface().(api.BGPPeerMetadata)
+func validateBGPPeerMeta(structLevel validator.StructLevel) {
+	m := structLevel.Current().Interface().(api.BGPPeerMetadata)
 
 	if m.Scope == scope.Global && m.Node != "" {
 		structLevel.ReportError(reflect.ValueOf(m.Node),
-			"Metadata.Node", "", reason("no BGP Peer node name should be specified when scope is global"))
+			"Metadata.Node", "", reason("no BGP Peer node name should be specified when scope is global"), "")
 	}
 }
 
-func validateBackendEndpointPort(v *validator.Validate, structLevel *validator.StructLevel) {
-	port := structLevel.CurrentStruct.Interface().(model.EndpointPort)
+func validateBackendEndpointPort(structLevel validator.StructLevel) {
+	port := structLevel.Current().Interface().(model.EndpointPort)
 
 	if port.Protocol.String() != "tcp" && port.Protocol.String() != "udp" {
 		structLevel.ReportError(
@@ -550,12 +549,13 @@ func validateBackendEndpointPort(v *validator.Validate, structLevel *validator.S
 			"EndpointPort.Protocol",
 			"",
 			reason("EndpointPort protocol must be 'tcp' or 'udp'."),
+			"",
 		)
 	}
 }
 
-func validateEndpointPort(v *validator.Validate, structLevel *validator.StructLevel) {
-	port := structLevel.CurrentStruct.Interface().(api.EndpointPort)
+func validateEndpointPort(structLevel validator.StructLevel) {
+	port := structLevel.Current().Interface().(api.EndpointPort)
 
 	if port.Protocol.String() != "tcp" && port.Protocol.String() != "udp" {
 		structLevel.ReportError(
@@ -563,28 +563,29 @@ func validateEndpointPort(v *validator.Validate, structLevel *validator.StructLe
 			"EndpointPort.Protocol",
 			"",
 			reason("EndpointPort protocol must be 'tcp' or 'udp'."),
+			"",
 		)
 	}
 }
 
-func validatePolicySpec(v *validator.Validate, structLevel *validator.StructLevel) {
-	m := structLevel.CurrentStruct.Interface().(api.PolicySpec)
+func validatePolicySpec(structLevel validator.StructLevel) {
+	m := structLevel.Current().Interface().(api.PolicySpec)
 
 	if m.DoNotTrack && m.PreDNAT {
 		structLevel.ReportError(reflect.ValueOf(m.PreDNAT),
-			"PolicySpec.PreDNAT", "", reason("PreDNAT and DoNotTrack cannot both be true, for a given PolicySpec"))
+			"PolicySpec.PreDNAT", "", reason("PreDNAT and DoNotTrack cannot both be true, for a given PolicySpec"), "")
 	}
 
 	if m.PreDNAT && len(m.EgressRules) > 0 {
 		structLevel.ReportError(reflect.ValueOf(m.EgressRules),
-			"PolicySpec.EgressRules", "", reason("PreDNAT PolicySpec cannot have any EgressRules"))
+			"PolicySpec.EgressRules", "", reason("PreDNAT PolicySpec cannot have any EgressRules"), "")
 	}
 
 	if m.PreDNAT && len(m.Types) > 0 {
 		for _, t := range m.Types {
 			if t == api.PolicyTypeEgress {
 				structLevel.ReportError(reflect.ValueOf(m.Types),
-					"PolicySpec.Types", "", reason("PreDNAT PolicySpec cannot have 'egress' Type"))
+					"PolicySpec.Types", "", reason("PreDNAT PolicySpec cannot have 'egress' Type"), "")
 			}
 		}
 	}
@@ -594,7 +595,7 @@ func validatePolicySpec(v *validator.Validate, structLevel *validator.StructLeve
 	for _, t := range m.Types {
 		if _, exists := mp[t]; exists {
 			structLevel.ReportError(reflect.ValueOf(m.Types),
-				"PolicySpec.Types", "", reason("'"+string(t)+"' type specified more than once"))
+				"PolicySpec.Types", "", reason("'"+string(t)+"' type specified more than once"), "")
 		} else {
 			mp[t] = true
 		}
