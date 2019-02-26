@@ -308,6 +308,9 @@ var _ = DescribeTable("Config parsing",
 			{Protocol: "tcp", Port: 6667},
 		},
 	),
+
+	Entry("IptablesNATOutgoingInterfaceFilter", "IptablesNATOutgoingInterfaceFilter", "cali-123", "cali-123"),
+	Entry("IptablesNATOutgoingInterfaceFilter", "IptablesNATOutgoingInterfaceFilter", "cali@123", "", false),
 )
 
 var _ = DescribeTable("OpenStack heuristic tests",
