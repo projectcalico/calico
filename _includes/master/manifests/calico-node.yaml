@@ -56,7 +56,7 @@ spec:
       # deletion": https://kubernetes.io/docs/concepts/workloads/pods/pod/#termination-of-pods.
       terminationGracePeriodSeconds: 0
       initContainers:
-{{- if eq .Values.datastore "kdd" }}
+{{- if and (eq .Values.network "calico") (eq .Values.datastore "kdd") }}
         # This container performs upgrade from host-local IPAM to calico-ipam.
         # It can be deleted if this is a fresh installation, or if you have already
         # upgraded to use calico-ipam.
@@ -487,7 +487,7 @@ spec:
           secret:
             secretName: calico-etcd-secrets
             defaultMode: 0400
-{{- else if eq .Values.datastore "kdd" }}
+{{- else if and (eq .Values.network "calico") (eq .Values.datastore "kdd") }}
         # Mount in the directory for host-local IPAM allocations. This is
         # used when upgrading from host-local to calico-ipam, and can be removed
         # if not using the upgrade-ipam init container.
