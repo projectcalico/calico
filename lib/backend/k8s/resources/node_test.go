@@ -190,10 +190,7 @@ var _ = Describe("Test Node conversion", func() {
 
 		n, err := K8sNodeToCalico(&node)
 		Expect(err).NotTo(HaveOccurred())
-
-		// Ensure we got the correct values.
-		ipInIpAddr := n.Value.(*apiv3.Node).Spec.BGP.IPv4IPIPTunnelAddr
-		Expect(ipInIpAddr).To(Equal(""))
+		Expect(n.Value.(*apiv3.Node).Spec.BGP).To(BeNil())
 	})
 
 	It("Should parse and remove BGP info when given Calico Node with empty BGP spec", func() {
@@ -306,7 +303,6 @@ var _ = Describe("Test Node conversion", func() {
 		calicoNode.Name = "TestNode"
 		calicoNode.ResourceVersion = "1234"
 		calicoNode.Labels = cl
-		calicoNode.Spec.BGP = &apiv3.NodeBGPSpec{}
 
 		newK8sNode, err := mergeCalicoNodeIntoK8sNode(calicoNode, k8sNode)
 		Expect(err).NotTo(HaveOccurred())

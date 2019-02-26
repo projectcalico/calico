@@ -19,6 +19,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"reflect"
 
 	log "github.com/sirupsen/logrus"
 	kapiv1 "k8s.io/api/core/v1"
@@ -226,7 +227,11 @@ func K8sNodeToCalico(k8sNode *kapiv1.Node) (*model.KVPair, error) {
 		}
 	}
 	bgpSpec.IPv4IPIPTunnelAddr = annotations[nodeBgpIpv4IPIPTunnelAddrAnnotation]
-	calicoNode.Spec.BGP = bgpSpec
+
+	// Only set the BGP spec if it is not empty.
+	if !reflect.DeepEqual(*bgpSpec, apiv3.NodeBGPSpec{}) {
+		calicoNode.Spec.BGP = bgpSpec
+	}
 
 	// Create the resource key from the node name.
 	return &model.KVPair{
