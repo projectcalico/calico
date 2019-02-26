@@ -1,9 +1,3 @@
-felix (3.1.4.post2+20190223114023+0000+41~ac839~__STREAM__) __STREAM__; urgency=low
-
-  * Development snapshot (from Git commit 41ac839).
-
- -- Neil Jerram <neil@tigera.io>  Sat, 23 Feb 2019 11:40:23 +0000
-
 felix (3.1.3~__STREAM__) __STREAM__; urgency=low
 
   * Felix 3.1.3 (from Git commit 4d7bb9a).
