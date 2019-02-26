@@ -62,23 +62,96 @@ docker-image: $(DEPLOY_CONTAINER_MARKER)
 
 .PHONY: clean
 clean:
-	rm -rf $(DIST) vendor $(DEPLOY_CONTAINER_MARKER) .go-pkg-cache k8s-install/scripts/install_cni.test
+	rm -rf $(DIST) vendor $(DEPLOY_CONTAINER_MARKER) .go-pkg-cache k8s-install/scripts/install_cni.test ./bin/github
 
-release: clean
+###############################################################################
+# Release
+###############################################################################
+PREVIOUS_RELEASE=$(shell git describe --tags --abbrev=0)
+
+## Tags and builds a release from start to finish.
+release: release-prereqs
+	$(MAKE) VERSION=$(VERSION) release-tag
+	$(MAKE) VERSION=$(VERSION) release-build
+	$(MAKE) VERSION=$(VERSION) release-verify
+
+	@echo ""
+	@echo "Release build complete. Next, push the produced images."
+	@echo ""
+	@echo "  make VERSION=$(VERSION) release-publish"
+	@echo ""
+
+## Produces a git tag for the release.
+release-tag: release-prereqs release-notes
+	git tag $(VERSION) -F release-notes-$(VERSION)
+	@echo ""
+	@echo "Now you can build the release:"
+	@echo ""
+	@echo "  make VERSION=$(VERSION) release-build"
+	@echo ""
+
+## Produces a clean build of release artifacts at the specified version.
+release-build: release-prereqs clean
+# Check that the correct code is checked out.
+ifneq ($(VERSION), $(GIT_VERSION))
+	$(error Attempt to build $(VERSION) from $(GIT_VERSION))
+endif
+	$(MAKE) build-containerized $(DEPLOY_CONTAINER_MARKER)
+	docker tag $(DEPLOY_CONTAINER_NAME) $(DEPLOY_CONTAINER_NAME):$(VERSION)
+	docker tag $(DEPLOY_CONTAINER_NAME) quay.io/$(DEPLOY_CONTAINER_NAME):$(VERSION)
+
+## Verifies the release artifacts produces by `make release-build` are correct.
+release-verify: release-prereqs
+	# Check the reported version is correct for each release artifact.
+	docker run --rm $(DEPLOY_CONTAINER_NAME):$(VERSION) calico -v | grep -x $(VERSION) || ( echo "Reported version:" `docker run --rm $(DEPLOY_CONTAINER_NAME) calico -v` "\nExpected version: $(VERSION)" && exit 1 )
+	docker run --rm quay.io/$(DEPLOY_CONTAINER_NAME):$(VERSION) calico-ipam -v | grep -x $(VERSION) || ( echo "Reported version:" `docker run --rm $(DEPLOY_CONTAINER_NAME) calico-ipam -v | grep -x $(VERSION)` "\nExpected version: $(VERSION)" && exit 1 )
+
+## Generates release notes based on commits in this version.
+release-notes: release-prereqs
+	mkdir -p dist
+	echo "# Changelog" > release-notes-$(VERSION)
+	sh -c "git cherry -v $(PREVIOUS_RELEASE) | cut '-d ' -f 2- | sed 's/^/- /' >> release-notes-$(VERSION)"
+
+## Pushes a github release and release artifacts produced by `make release-build`.
+release-publish: release-prereqs
+	# Push the git tag.
+	git push origin $(VERSION)
+
+	docker push calico/cni$(ARCHTAG):$(VERSION)
+	docker push quay.io/calico/cni$(ARCHTAG):$(VERSION)
+
+	# Push binaries to GitHub release.
+	# Requires ghr: https://github.com/tcnksm/ghr
+	# Requires GITHUB_TOKEN environment variable set.
+	mkdir ./bin/github
+	cp $(DIST)/calico ./bin/github
+	cp $(DIST)/calico-ipam ./bin/github
+	ghr -u projectcalico -r cni-plugin \
+		-b "Release notes can be found at https://docs.projectcalico.org" \
+		-n $(VERSION) \
+		$(VERSION) ./bin/github/
+
+	@echo "Finalize the GitHub release based on the pushed tag."
+	@echo ""
+	@echo "  https://$(PACKAGE_NAME)/releases/tag/$(VERSION)"
+	@echo ""
+
+# release-prereqs checks that the environment is configured properly to create a release.
+release-prereqs:
 ifndef VERSION
 	$(error VERSION is undefined - run using make release VERSION=vX.Y.Z)
 endif
-	git tag $(VERSION)
-	$(MAKE) build-containerized $(DEPLOY_CONTAINER_MARKER)
+ifndef GITHUB_TOKEN
+	$(error GITHUB_TOKEN must be set for a release)
+endif
+ifeq (, $(shell which ghr))
+	$(error Unable to find `ghr` in PATH, run this: go get -u github.com/tcnksm/ghr)
+endif
+
+release: clean
 	# Check that the version output appears on a line of its own (the -x option to grep).
 # Tests that the "git tag" makes it into the binary. Main point is to catch "-dirty" builds
 	@echo "Checking if the tag made it into the binary"
-	docker run --rm $(DEPLOY_CONTAINER_NAME) calico -v | grep -x $(VERSION) || ( echo "Reported version:" `docker run --rm $(DEPLOY_CONTAINER_NAME) calico -v` "\nExpected version: $(VERSION)" && exit 1 )
-	docker run --rm $(DEPLOY_CONTAINER_NAME) calico-ipam -v | grep -x $(VERSION) || ( echo "Reported version:" `docker run --rm $(DEPLOY_CONTAINER_NAME) calico-ipam -v | grep -x $(VERSION)` "\nExpected version: $(VERSION)" && exit 1 )
-	docker tag $(DEPLOY_CONTAINER_NAME) $(DEPLOY_CONTAINER_NAME):$(VERSION)
-	docker tag $(DEPLOY_CONTAINER_NAME) quay.io/$(DEPLOY_CONTAINER_NAME):$(VERSION)
-	docker tag $(DEPLOY_CONTAINER_NAME) quay.io/$(DEPLOY_CONTAINER_NAME):latest
-
 	@echo ""
 	@echo "Push the git tag."
 	@echo ""
@@ -88,13 +161,6 @@ endif
 	@echo ""
 	@echo "Push the versioned release images."
 	@echo ""
-	@echo "  docker push calico/cni$(ARCHTAG):$(VERSION)"
-	@echo "  docker push quay.io/calico/cni$(ARCHTAG):$(VERSION)"
-	@echo ""
-	@echo "If this is a stable release, push the latest images as well."
-	@echo ""
-	@echo "  docker push calico/cni$(ARCHTAG):latest"
-	@echo "  docker push quay.io/calico/cni$(ARCHTAG):latest"
 
 # To update upstream dependencies, delete the glide.lock file first.
 ## Use this to populate the vendor directory after checking out the repository.
