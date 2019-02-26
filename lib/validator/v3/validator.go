@@ -827,7 +827,6 @@ func validateNodeSpec(structLevel validator.StructLevel) {
 	}
 }
 
-
 func validateBGPPeerSpec(structLevel validator.StructLevel) {
 	ps := structLevel.Current().Interface().(api.BGPPeerSpec)
 
