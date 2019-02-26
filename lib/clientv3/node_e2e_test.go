@@ -56,6 +56,9 @@ var _ = testutils.E2eDatastoreDescribe("Node tests (kdd)", testutils.DatastoreK8
 		Expect(err).NotTo(HaveOccurred())
 		Expect(len(node.Labels)).To(Equal(0))
 
+		// Without any BGP config written, the BGP spec should be nil.
+		Expect(node.Spec.BGP).To(BeNil())
+
 		// Add a label and check it gets written.
 		By("Adding a label to the node")
 		node.Labels = map[string]string{"test-label": "foo"}
@@ -79,6 +82,37 @@ var _ = testutils.E2eDatastoreDescribe("Node tests (kdd)", testutils.DatastoreK8
 		n, err := c.Nodes().Get(ctx, name, options.GetOptions{})
 		Expect(err).NotTo(HaveOccurred())
 		Expect(len(n.Labels)).To(Equal(0))
+	})
+
+	It("should update BGP spec on a node", func() {
+		c, err := clientv3.New(config)
+		Expect(err).NotTo(HaveOccurred())
+		be, err := backend.NewClient(config)
+		Expect(err).NotTo(HaveOccurred())
+		be.Clean()
+
+		// Get a node.
+		By("Querying a node with no BGP spec")
+		name := "127.0.0.1"
+		node, err := c.Nodes().Get(ctx, name, options.GetOptions{})
+		Expect(err).NotTo(HaveOccurred())
+
+		// Without any BGP config written, the BGP spec should be nil.
+		Expect(node.Spec.BGP).To(BeNil())
+
+		// Update the BGP spec.
+		By("Updating the BGP spec")
+		node.Spec.BGP = &apiv3.NodeBGPSpec{}
+		node.Spec.BGP.IPv4IPIPTunnelAddr = "192.168.1.1"
+		_, err = c.Nodes().Update(ctx, node, options.SetOptions{})
+		Expect(err).NotTo(HaveOccurred())
+
+		By("Querying the node again")
+		node, err = c.Nodes().Get(ctx, name, options.GetOptions{})
+		Expect(err).NotTo(HaveOccurred())
+
+		// It should now not be nil.
+		Expect(node.Spec.BGP).NotTo(BeNil())
 	})
 })
 
