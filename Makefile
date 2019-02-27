@@ -362,7 +362,7 @@ release-publish: release-prereqs
 	# Push binaries to GitHub release.
 	# Requires ghr: https://github.com/tcnksm/ghr
 	# Requires GITHUB_TOKEN environment variable set.
-	mkdir ./bin/github
+	mkdir -p ./bin/github
 	cp $(DIST)/calico ./bin/github
 	cp $(DIST)/calico-ipam ./bin/github
 	ghr -u projectcalico -r cni-plugin \
