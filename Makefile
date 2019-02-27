@@ -328,6 +328,7 @@ endif
 
 	$(MAKE) image
 	$(MAKE) build-all
+	mv ./bin/calicoctl-linux-amd64 ./bin/calicoctl
 	$(MAKE) tag-images IMAGETAG=$(VERSION)
 	# Generate the `latest` images.
 	$(MAKE) tag-images IMAGETAG=latest
