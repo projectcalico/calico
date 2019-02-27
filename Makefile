@@ -68,6 +68,7 @@ clean:
 # Release
 ###############################################################################
 PREVIOUS_RELEASE=$(shell git describe --tags --abbrev=0)
+GIT_VERSION:=$(shell git describe --tags --dirty --always)
 
 ## Tags and builds a release from start to finish.
 release: release-prereqs
