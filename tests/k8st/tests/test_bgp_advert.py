@@ -156,6 +156,7 @@ EOF
             json.dump(config, fp, indent=2)
 
     def test_rr(self):
+        # Create ExternalTrafficPolicy Local service with one endpoint on node-1
         run("""kubectl apply -f - << EOF
 apiVersion: apps/v1
 kind: Deployment
@@ -208,6 +209,8 @@ EOF
         run("kubectl exec -i -n kube-system calicoctl -- /calicoctl get nodes -o yaml")
         run("kubectl exec -i -n kube-system calicoctl -- /calicoctl get bgppeers -o yaml")
         run("kubectl exec -i -n kube-system calicoctl -- /calicoctl get bgpconfigs -o yaml")
+
+        # Update the node-2 to behave as a route-reflector
         run("kubectl exec -i -n kube-system calicoctl -- /calicoctl get node kube-node-2 -o json > /home/rosh.json")
         run("sed -i '11 a \ \ \ \ \ \ \"i-am-a-route-reflector\": \"true\",' /home/rosh.json")
         run("sed -i '21 a \ \ \ \ \ \ \"routeReflectorClusterID\": \"224.0.0.1\",' /home/rosh.json")
@@ -217,6 +220,8 @@ EOF
         run("kubectl exec -i -n kube-system calicoctl -- /calicoctl get node kube-node-2 -o json > /home/rosh-edited.json")
         run("cat /home/rosh-edited.json")
 
+        # Disable node-to-node mesh and configure bgp peering
+        # between node-1 and RR and also between external node and RR
         run("""kubectl exec -i -n kube-system calicoctl -- /calicoctl apply -f - << EOF
 apiVersion: projectcalico.org/v3
 items:
@@ -252,6 +257,7 @@ kind: BGPPeerList
 EOF
 """)
         run("kubectl exec -i -n kube-system calicoctl -- /calicoctl get bgppeers -o wide")
+        run("docker exec kube-node-extra ip route")
         assert False
 
     def test_mainline(self):
