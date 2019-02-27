@@ -1,5 +1,5 @@
-hash: f5010a7d644c18387c3ef844e5e8b626d1ae7176ec60b437d3d2a09b14ec5a31
-updated: 2019-02-26T04:07:23.783850429Z
+hash: a69d0998039c55a5b063a684ff9d584fb9a7b01c7bcec1a39d3254f946164d4b
+updated: 2019-02-27T04:07:50.36105343Z
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -48,6 +48,12 @@ imports:
   version: 73d445a93680fa1a78ae23a5839bad48f32ba1ee
 - name: github.com/go-ini/ini
   version: 9c8236e659b76e87bf02044d06fde8683008ff3e
+- name: github.com/go-playground/locales
+  version: f63010822830b6fe52288ee52d5a1151088ce039
+  subpackages:
+  - currency
+- name: github.com/go-playground/universal-translator
+  version: 71201497bace774495daed26a3874fd339e0b538
 - name: github.com/gogo/protobuf
   version: c0656edd0d9eab7c66d1eb0c568f9039345796f7
   subpackages:
@@ -107,6 +113,8 @@ imports:
   version: ae77be60afb1dcacde03767a8c37337fad28ac14
 - name: github.com/kelseyhightower/envconfig
   version: f611eb38b3875cc3bd991ca91c51d06446afa14c
+- name: github.com/leodido/go-urn
+  version: a67a23e1c1af3c66528573bb86a87246477277c1
 - name: github.com/matttproud/golang_protobuf_extensions
   version: c12348ce28de40eed0136aa2b644d0ee0650e56c
   subpackages:
@@ -165,7 +173,7 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: 33eebffa778c15244f4ce9549d7629c11190447d
+  version: d94130ce287bda707db64dc03f1a92038bbe639f
   subpackages:
   - lib/apiconfig
   - lib/apis/v1
@@ -341,8 +349,8 @@ imports:
   - transport
 - name: gopkg.in/fsnotify/fsnotify.v1
   version: c2828203cd70a50dcccfb2761f8b1f8ceef9a8e9
-- name: gopkg.in/go-playground/validator.v8
-  version: 5f57d2222ad794d0dffb07e664ea05e2ee07d60c
+- name: gopkg.in/go-playground/validator.v9
+  version: b199fa0642d29caca62b6a99d65cc981ba5edc3b
 - name: gopkg.in/inf.v0
   version: 3887ee99ecf07df5b447e9b00d9c0b2adaa9f3e4
 - name: gopkg.in/tomb.v1
