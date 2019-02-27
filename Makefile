@@ -499,8 +499,8 @@ k8s-run-test: calico_test.created
 	docker run \
 	    -v $(CURDIR):/code \
 	    -v /var/run/docker.sock:/var/run/docker.sock \
-	    -v /$(USER)/.kube/config:/root/.kube/config \
-	    -v /$(USER)/.kubeadm-dind-cluster:/root/.kubeadm-dind-cluster \
+	    -v /home/$(USER)/.kube/config:/root/.kube/config \
+	    -v /home/$(USER)/.kubeadm-dind-cluster:/root/.kubeadm-dind-cluster \
 	    --privileged \
 	    --net host \
         $(TEST_CONTAINER_NAME) \
