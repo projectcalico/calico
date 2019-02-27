@@ -148,20 +148,6 @@ ifeq (, $(shell which ghr))
 	$(error Unable to find `ghr` in PATH, run this: go get -u github.com/tcnksm/ghr)
 endif
 
-release: clean
-	# Check that the version output appears on a line of its own (the -x option to grep).
-# Tests that the "git tag" makes it into the binary. Main point is to catch "-dirty" builds
-	@echo "Checking if the tag made it into the binary"
-	@echo ""
-	@echo "Push the git tag."
-	@echo ""
-	@echo "  git push origin $(VERSION)"
-	@echo ""
-	@echo "Then create a release on Github and attach the $(DIST)/calico and $(DIST)/calico-ipam binaries"
-	@echo ""
-	@echo "Push the versioned release images."
-	@echo ""
-
 # To update upstream dependencies, delete the glide.lock file first.
 ## Use this to populate the vendor directory after checking out the repository.
 vendor: glide.yaml
