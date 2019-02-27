@@ -330,6 +330,7 @@ endif
 	$(MAKE) tag-images IMAGETAG=$(VERSION)
 	# Generate the `latest` images.
 	$(MAKE) tag-images IMAGETAG=latest
+	mv ./bin/calicoctl-linux-amd64 ./bin/calicoctl
 
 ## Verifies the release artifacts produces by `make release-build` are correct.
 release-verify: release-prereqs
