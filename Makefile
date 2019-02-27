@@ -89,6 +89,7 @@ DOCKER_GO_BUILD := mkdir -p .go-pkg-cache && \
 clean:
 	rm -rf bin/*
 	rm -rf tests/logs
+	rm -rf vendor/
 	-docker rmi -f $(CONTAINER_NAME):latest-$(ARCH)
 	-docker rmi -f $(CONTAINER_NAME):$(VERSION)-$(ARCH)
 	-docker rmi -f quay.io/$(CONTAINER_NAME):latest-$(ARCH)
