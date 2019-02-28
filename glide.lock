@@ -1,5 +1,5 @@
-hash: 4ad4be6c2b6eca480e999bfb073c1030f4d0a0c5de9f7200d63dfe3b05118d11
-updated: 2019-02-27T04:12:02.487302297Z
+hash: 2208e3f212e1c83ef63fd6d3e43f4f3090b34212d91719243b77656a306cf3a8
+updated: 2019-02-28T04:12:25.396276027Z
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -39,6 +39,12 @@ imports:
   version: 01aeca54ebda6e0fbfafd0a524d234159c05ec20
 - name: github.com/ghodss/yaml
   version: 73d445a93680fa1a78ae23a5839bad48f32ba1ee
+- name: github.com/go-playground/locales
+  version: f63010822830b6fe52288ee52d5a1151088ce039
+  subpackages:
+  - currency
+- name: github.com/go-playground/universal-translator
+  version: 71201497bace774495daed26a3874fd339e0b538
 - name: github.com/gogo/protobuf
   version: c0656edd0d9eab7c66d1eb0c568f9039345796f7
   subpackages:
@@ -98,6 +104,8 @@ imports:
   version: dd1402a4d99de9ac2f396cd6fcb957bc2c695ec1
 - name: github.com/kelseyhightower/memkv
   version: 892bfd468afa0fa476556e7bd7734a087cda08b3
+- name: github.com/leodido/go-urn
+  version: a67a23e1c1af3c66528573bb86a87246477277c1
 - name: github.com/matttproud/golang_protobuf_extensions
   version: c12348ce28de40eed0136aa2b644d0ee0650e56c
   subpackages:
@@ -153,7 +161,7 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: 33eebffa778c15244f4ce9549d7629c11190447d
+  version: d94130ce287bda707db64dc03f1a92038bbe639f
   subpackages:
   - lib/apiconfig
   - lib/apis/v1
@@ -189,7 +197,7 @@ imports:
   - lib/validator/v3
   - lib/watch
 - name: github.com/projectcalico/typha
-  version: 86d82ced150fd1440a725345a09dda11c0c035be
+  version: 1022a525f42cdf5cfba6346c864a36cb55d98660
   subpackages:
   - pkg/syncclient
   - pkg/syncproto
@@ -313,8 +321,8 @@ imports:
   - transport
 - name: gopkg.in/fsnotify/fsnotify.v1
   version: c2828203cd70a50dcccfb2761f8b1f8ceef9a8e9
-- name: gopkg.in/go-playground/validator.v8
-  version: 5f1438d3fca68893a817e4a66806cea46a9e4ebf
+- name: gopkg.in/go-playground/validator.v9
+  version: b199fa0642d29caca62b6a99d65cc981ba5edc3b
 - name: gopkg.in/inf.v0
   version: 3887ee99ecf07df5b447e9b00d9c0b2adaa9f3e4
 - name: gopkg.in/tomb.v1
