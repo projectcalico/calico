@@ -52,7 +52,7 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/backend/syncersv1/felixsyncer"
 	"github.com/projectcalico/libcalico-go/lib/backend/syncersv1/updateprocessors"
 	"github.com/projectcalico/libcalico-go/lib/backend/watchersyncer"
-	errors2 "github.com/projectcalico/libcalico-go/lib/errors"
+	cerrors "github.com/projectcalico/libcalico-go/lib/errors"
 	"github.com/projectcalico/libcalico-go/lib/health"
 	lclogutils "github.com/projectcalico/libcalico-go/lib/logutils"
 	"github.com/projectcalico/libcalico-go/lib/set"
@@ -729,7 +729,7 @@ func getAndMergeConfig(
 	}, "")
 	if err != nil {
 		switch err.(type) {
-		case errors2.ErrorResourceDoesNotExist:
+		case cerrors.ErrorResourceDoesNotExist:
 			logCxt.Info("No config of this type")
 			return nil
 		default:
@@ -862,7 +862,12 @@ func (fc *DataplaneConnector) handleProcessStatusUpdate(ctx context.Context, msg
 	_, err := fc.datastore.Apply(applyCtx, &kv)
 	cancel()
 	if err != nil {
-		log.Warningf("Failed to write status to datastore: %v", err)
+		if _, ok := err.(cerrors.ErrorOperationNotSupported); ok {
+			log.Debug("Datastore doesn't support status reports.")
+			return // and it won't support the last status key either.
+		} else {
+			log.Warningf("Failed to write status to datastore: %v", err)
+		}
 	} else {
 		fc.firstStatusReportSent = true
 	}
