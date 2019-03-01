@@ -25,14 +25,6 @@ datastore type and number of nodes.
 
 ### Installing with the Kubernetes API datastore—50 nodes or less
 
-1. Ensure that the Kubernetes controller manager has the following flags
-   set: <br>
-   `--cluster-cidr=<your-pod-cidr>` and `--allocate-node-cidrs=true`.
-
-   > **Tip**: On kubeadm, you can pass `--pod-network-cidr=<your-pod-cidr>`
-   > to kubeadm to set both Kubernetes controller flags.
-   {: .alert .alert-success}
-
 1. Download the {{site.prodname}} networking manifest for the Kubernetes API datastore.
 
    ```bash
@@ -53,14 +45,6 @@ datastore type and number of nodes.
    communications with mutual TLS authentication, continue to [Enabling application layer policy](app-layer-policy) (optional).
 
 ### Installing with the Kubernetes API datastore—more than 50 nodes
-
-1. Ensure that the Kubernetes controller manager has the following flags
-   set: <br>
-   `--cluster-cidr=<your-pod-cidr>` and `--allocate-node-cidrs=true`.
-
-   > **Tip**: On kubeadm, you can pass `--pod-network-cidr=<your-pod-cidr>`
-   > to kubeadm to set both Kubernetes controller flags.
-   {: .alert .alert-success}
 
 1. Download the {{site.prodname}} networking manifest for the Kubernetes API datastore.
 

@@ -55,7 +55,6 @@ To enable IPv6, set the following flags.
 | Flag | Value/Content |
 | ---- | ------------- |
 | `--master` | Should be set with the IPv6 address where the kube-apiserver can be accessed. |
-| `--node-cidr-mask-size` | If the `--allocate-node-cidrs` flag is set then it is necessary to set this flag, they are necessary when using host-local IPAM. If using calico-ipam is is easier to remove both flags as they are not needed. |
 | `--cluster-cidr` | Should be set to match the {{site.prodname}} IPv6 IPPool. |
 
 ##### kube-scheduler
