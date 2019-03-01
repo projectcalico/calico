@@ -1,5 +1,5 @@
-hash: 44d319b73bdb3aca1668a563bd6bdfe83708a0bebadc5508dc1c90364107e797
-updated: 2019-02-26T04:08:44.980786838Z
+hash: 70db1db21fb622bb3c95589d649a3d78eb73fa3174750b5035a095ef06004261
+updated: 2019-02-28T14:48:28.812147745-08:00
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -51,6 +51,12 @@ imports:
   version: 39dc8486bd0952279431257138bc428275b86797
   subpackages:
   - oleutil
+- name: github.com/go-playground/locales
+  version: f63010822830b6fe52288ee52d5a1151088ce039
+  subpackages:
+  - currency
+- name: github.com/go-playground/universal-translator
+  version: 71201497bace774495daed26a3874fd339e0b538
 - name: github.com/gogo/protobuf
   version: c0656edd0d9eab7c66d1eb0c568f9039345796f7
   subpackages:
@@ -131,6 +137,8 @@ imports:
   version: f2b4162afba35581b6d4a50d3b8f34e33c144682
 - name: github.com/kelseyhightower/envconfig
   version: dd1402a4d99de9ac2f396cd6fcb957bc2c695ec1
+- name: github.com/leodido/go-urn
+  version: a67a23e1c1af3c66528573bb86a87246477277c1
 - name: github.com/magiconair/properties
   version: 7c38529aac7222391b7a2661365177a97e21b998
 - name: github.com/mattn/go-runewidth
@@ -212,7 +220,7 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: 33eebffa778c15244f4ce9549d7629c11190447d
+  version: d94130ce287bda707db64dc03f1a92038bbe639f
   subpackages:
   - lib/apiconfig
   - lib/apis/v1
@@ -396,8 +404,8 @@ imports:
   - transport
 - name: gopkg.in/fsnotify/fsnotify.v1
   version: c2828203cd70a50dcccfb2761f8b1f8ceef9a8e9
-- name: gopkg.in/go-playground/validator.v8
-  version: 5f1438d3fca68893a817e4a66806cea46a9e4ebf
+- name: gopkg.in/go-playground/validator.v9
+  version: b199fa0642d29caca62b6a99d65cc981ba5edc3b
 - name: gopkg.in/inf.v0
   version: 3887ee99ecf07df5b447e9b00d9c0b2adaa9f3e4
 - name: gopkg.in/tomb.v1

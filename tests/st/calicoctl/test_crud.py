@@ -1652,7 +1652,7 @@ class InvalidData(TestBase):
                                 'node': 'node1',
                                 'peerIP': '192.168.0.256',
                                 }
-                   }, "error with field peerIP = '192.168.0.256'"),
+                   }, "error with field PeerIP = '192.168.0.256'"),
                    ("bgpPeer-apiversion", {
                        'apiVersion': 'v7',
                        'kind': 'BGPPeer',
@@ -1670,7 +1670,7 @@ class InvalidData(TestBase):
                                 'node': 'node2',
                                 'peerIP': 'fd5f::6::ee',
                                 }
-                   }, "error with field peerIP = 'fd5f::6::ee'"),
+                   }, "error with field PeerIP = 'fd5f::6::ee'"),
                    ("bgpPeer-invalidnodename", {
                        'apiVersion': API_VERSION,
                        'kind': 'BGPPeer',
@@ -1679,7 +1679,7 @@ class InvalidData(TestBase):
                                 'node': 'node 2',
                                 'peerIP': 'fd5f::6:ee',
                                 }
-                   }, "error with field node = 'node 2'"),
+                   }, "error with field Node = 'node 2'"),
                    # See issue https://github.com/projectcalico/libcalico-go/issues/248
                    ("bgpPeer-unrecognisedfield", {
                        'apiVersion': API_VERSION,
@@ -1722,7 +1722,7 @@ class InvalidData(TestBase):
                                              'prof2'],
                                 'node': 'host1',
                                 }
-                   }, "error with field interfaceName = 'wibblywobblyeth0'"),
+                   }, "error with field InterfaceName = 'wibblywobblyeth0'"),
                    # https://github.com/projectcalico/libcalico-go/pull/236/files
                    ("policy-invalidHighPortinList", {
                        'apiVersion': API_VERSION,
@@ -1830,7 +1830,7 @@ class InvalidData(TestBase):
                                              'source': {}}],
                                 'order': 100000,
                                 'selector': ""}
-                   }, "error with field action = 'jumpupanddown'"),
+                   }, "error with field Action = 'jumpupanddown'"),
                    ("policy-NetworkPolicyNameRejected", {
                        'apiVersion': API_VERSION,
                        'kind': 'NetworkPolicy',
@@ -1855,7 +1855,7 @@ class InvalidData(TestBase):
                        'spec': {
                            'ipipMode': 'Always',
                            'cidr': "10.0.1.0/33"}  # impossible mask
-                   }, "error with field cidr = '10.0.1.0/33'"),
+                   }, "CIDR = '10.0.1.0/33'"),
                    ("pool-invalidNet2", {
                        'apiVersion': API_VERSION,
                        'kind': 'IPPool',
@@ -1863,7 +1863,7 @@ class InvalidData(TestBase):
                        'spec': {
                            'ipipMode': 'Always',
                            'cidr': "10.0.256.0/24"}  # invalid octet
-                   }, "error with field cidr = '10.0.256.0/24'"),
+                   }, "CIDR = '10.0.256.0/24'"),
                    ("pool-invalidNet3", {
                        'apiVersion': API_VERSION,
                        'kind': 'IPPool',
@@ -1880,7 +1880,7 @@ class InvalidData(TestBase):
                        'spec': {
                            'ipipMode': 'Never',
                            'cidr': "fd5f::2::1/32"}  # too many ::
-                   }, "error with field cidr = 'fd5f::2::1/32'"),
+                   }, "CIDR = 'fd5f::2::1/32'"),
                    #  https://github.com/projectcalico/libcalico-go/issues/224
                    # ("pool-invalidNet5a", {'apiVersion': API_VERSION,
                    #                       'kind': 'IPPool',
@@ -1917,7 +1917,7 @@ class InvalidData(TestBase):
                            'ipipMode': 'Never',
                            'cidr': "fd5f::1/123",
                        }  # invalid mask
-                   }, "error with field cidr = 'fd5f::1/123'"),
+                   }, "CIDR = 'fd5f::1/123'"),
                    ("pool-invalidIpIp1", {
                        'apiVersion': API_VERSION,
                        'kind': 'IPPool',
@@ -1943,7 +1943,7 @@ class InvalidData(TestBase):
                            'Egress': [{'action': 'Allow',
                                        'destination': {},
                                        'source': {}}],
-                           'Ingress': [{'ipVersion': 6,
+                           'Ingress': [{'ipVersion': 4,
                                         'ICMP': {'type': 256,  # max value 255
                                                  'code': 255},
                                         'action': 'Deny',
@@ -1951,7 +1951,7 @@ class InvalidData(TestBase):
                                         'destination': {},
                                         'source': {}}],
                        }
-                   }, "error with field type = '256'"),
+                   }, "error with field Type = '256'"),
                    ("profile-ICMPcode", {
                        'apiVersion': API_VERSION,
                        'kind': 'Profile',
@@ -1962,7 +1962,7 @@ class InvalidData(TestBase):
                            'Egress': [{'action': 'Allow',
                                        'destination': {},
                                        'source': {}}],
-                           'Ingress': [{'ipVersion': 6,
+                           'Ingress': [{'ipVersion': 4,
                                         'ICMP': {'type': 19,
                                                  'code': 256},  # max value 255
                                         'action': 'Deny',
@@ -1970,7 +1970,7 @@ class InvalidData(TestBase):
                                         'destination': {},
                                         'source': {}}],
                        }
-                   }, "error with field code = '256'"),
+                   }, "error with field Code = '256'"),
                    ("compound-config", [{
                        'apiVersion': API_VERSION,
                        'kind': 'BGPPeer',
@@ -1993,7 +1993,7 @@ class InvalidData(TestBase):
                            'Egress': [{'action': 'Allow',
                                        'destination': {},
                                        'source': {}}],
-                           'Ingress': [{'ipVersion': 6,
+                           'Ingress': [{'ipVersion': 4,
                                         'ICMP': {'type': 256,  # 1-byte field
                                                  'code': 255},
                                         'action': 'Deny',
@@ -2001,7 +2001,7 @@ class InvalidData(TestBase):
                                         'destination': {},
                                         'source': {}}],
                            },
-                   }], "error with field type = '256'"),
+                   }], "error with field Type = '256'"),
                ]
 
     @parameterized.expand(testdata)
