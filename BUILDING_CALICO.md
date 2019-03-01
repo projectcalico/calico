@@ -212,7 +212,6 @@ To build the bird and bird6 binaries, clone the bird repo and checkout the corre
 ```
 cd $BASEDIR
 git clone --depth 1 --single-branch --branch $VERSION_BIRD git@github.com:projectcalico/bird.git
-git clone git@github.com:projectcalico/bird.git
 cd bird
 ```
 
