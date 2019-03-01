@@ -63,8 +63,8 @@ module Jekyll
           image: #{imageNames["dikastes"]}
           tag: #{components["calico/dikastes"]["version"]}
         flexvol:
-          image: #{imageNames["dikastes"]}
-          tag: #{components["calico/dikastes"]["version"]}
+          image: #{imageNames["flexvol"]}
+          tag: #{components["flexvol"]["version"]}
         EOF
 
       tv = Tempfile.new("temp_versions.yml")
