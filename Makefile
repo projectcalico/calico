@@ -1,8 +1,8 @@
 # Shortcut targets
-default: build
+default: test
 
 ## Build binary
-all: build
+all: test
 
 ## Run the tests
 test: ut fv
