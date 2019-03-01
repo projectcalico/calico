@@ -49,7 +49,7 @@ module Jekyll
           tag: #{components["calicoctl"]["version"]}
         typha:
           image: #{imageNames["typha"]}
-          tag: #{components["calico/node"]["version"]}
+          tag: #{components["typha"]["version"]}
         cni:
           image: #{imageNames["cni"]}
           tag: #{components["calico/cni"]["version"]}
