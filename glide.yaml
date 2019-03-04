@@ -15,7 +15,7 @@ import:
   - json
 - package: github.com/projectcalico/go-yaml-wrapper
 - package: github.com/projectcalico/libcalico-go
-  version: bed3c60f60d5a00d793ac8f6c08f16251877799f
+  version: d8124fdd8e8335f9ead755b5dd01ee10e7c1672d
   subpackages:
   - lib/apiconfig
   - lib/apis/v1
@@ -43,6 +43,9 @@ import:
   - pkg/apis/meta/v1/unstructured
   - pkg/runtime
   - pkg/runtime/schema
+# Later versions don't seem to work with glide.
+- package: github.com/influxdata/influxdb 
+  version: dd481f35df2c3b50c42087e2f8e3890e0f889711
 testImport:
 - package: github.com/onsi/ginkgo
   subpackages:
