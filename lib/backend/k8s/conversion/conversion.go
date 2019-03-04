@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2019 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -47,7 +47,7 @@ const (
 	SelectorPod
 )
 
-//TODO: make this private and expose a public conversion interface instead
+// TODO: make this private and expose a public conversion interface instead
 type Converter struct{}
 
 // VethNameForWorkload returns a deterministic veth name
@@ -130,6 +130,11 @@ func (c Converter) IsValidCalicoWorkloadEndpoint(pod *kapiv1.Pod) bool {
 	} else if !c.IsScheduled(pod) {
 		log.WithField("pod", pod.Name).Debug("Pod is not scheduled.")
 		return false
+	} else if c.IsFinished(pod) {
+		// Exclude finished pods.  When a pod finishes, the kubelet releases its IP so
+		// the IP in the pod status no-longer belongs to this endpoint.
+		log.WithField("pod", pod.Name).Debug("Pod has finished.")
+		return false
 	}
 	return true
 }
@@ -144,6 +149,20 @@ func (c Converter) IsReadyCalicoPod(pod *kapiv1.Pod) bool {
 		return false
 	}
 	return true
+}
+
+const (
+	// Completed is documented but doesn't seem to be in the API, it should be safe to include.
+	// Maybe it's in an older version of the API?
+	podCompleted kapiv1.PodPhase = "Completed"
+)
+
+func (c Converter) IsFinished(pod *kapiv1.Pod) bool {
+	switch pod.Status.Phase {
+	case kapiv1.PodFailed, kapiv1.PodSucceeded, podCompleted:
+		return true
+	}
+	return false
 }
 
 func (c Converter) IsScheduled(pod *kapiv1.Pod) bool {
