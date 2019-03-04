@@ -465,9 +465,6 @@ st-checks:
 ## Get the kubeadm-dind-cluster script
 K8ST_VERSION?=v1.12
 DIND_SCR?=dind-cluster-$(K8ST_VERSION).sh
-tests/k8st/dind-cluster-$(K8ST_VERSION).sh:
-	wget -O tests/k8st/$(DIND_SCR) https://raw.githubusercontent.com/neiljerram/kubeadm-dind-cluster/calico-customization-tidy/fixed/$(DIND_SCR)
-	chmod +x tests/k8st/$(DIND_SCR)
 
 .PHONY: k8s-test
 ## Run the k8s tests
@@ -481,7 +478,7 @@ k8s-test:
 ## Start k8s cluster
 k8s-start: $(NODE_CONTAINER_CREATED) tests/k8st/$(DIND_SCR)
 	CNI_PLUGIN=calico \
-	CALICO_VERSION=v3.3 \
+	CALICO_VERSION=master \
 	CALICO_NODE_IMAGE=$(BUILD_IMAGE):latest-$(ARCH) \
 	POD_NETWORK_CIDR=192.168.0.0/16 \
 	SKIP_SNAPSHOT=y \
