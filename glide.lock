@@ -1,5 +1,5 @@
 hash: 2208e3f212e1c83ef63fd6d3e43f4f3090b34212d91719243b77656a306cf3a8
-updated: 2019-02-28T04:12:25.396276027Z
+updated: 2019-03-04T13:33:19.788471031Z
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -14,7 +14,7 @@ imports:
   - autorest/azure
   - autorest/date
 - name: github.com/beorn7/perks
-  version: 3ac7bf7a47d159a033b107610db8a1b6575507a4
+  version: 3a771d992973f24aa725d07868b467d1ddfceafb
   subpackages:
   - quantile
 - name: github.com/BurntSushi/toml
