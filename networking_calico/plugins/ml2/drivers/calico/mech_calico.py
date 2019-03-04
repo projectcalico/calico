@@ -289,7 +289,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
             try:
                 user_domain_name = authcfg.user_domain_name
             except cfg.NoSuchOptError:
-                user_domain_name = 'default'
+                user_domain_name = 'Default'
                 LOG.debug("authcfg[user_domain_name] fallback = %s",
                           user_domain_name)
 
@@ -310,7 +310,7 @@ class CalicoMechanismDriver(mech_agent.SimpleAgentMechanismDriverBase):
             try:
                 project_domain_name = authcfg.project_domain_name
             except cfg.NoSuchOptError:
-                project_domain_name = 'default'
+                project_domain_name = 'Default'
                 LOG.debug("authcfg[project_domain_name] fallback = %s",
                           project_domain_name)
 
