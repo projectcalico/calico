@@ -8,12 +8,11 @@ These instructions will take you through a first-time install of
 [Upgrading {{site.prodname}} on OpenStack](../../../maintenance/openstack-upgrade)
 instead.
 
-There are three sections to the install: installing etcd, adding
-{{site.prodname}} to OpenStack control nodes, and adding {{site.prodname}} to
-OpenStack compute nodes.  Follow the [Common steps](#common-steps) on each node
-before moving on to the specific instructions in the control and compute
-sections. If you want to create a combined control and compute node, work
-through all three sections.
+There are two sections to the install: adding {{site.prodname}} to OpenStack
+control nodes, and adding {{site.prodname}} to OpenStack compute nodes.  Follow
+the [Common steps](#common-steps) on each node before moving on to the specific
+instructions in the control and compute sections. If you want to create a
+combined control and compute node, work through all three sections.
 
 ## Before you begin
 
@@ -72,28 +71,9 @@ These steps are detailed in this section.
     pip install etcd3gw
     ```
 
-## etcd install
-
-{{site.prodname}} operation requires an etcd v3 key/value store—this may be
-installed on a single machine or as a cluster.  For production you will likely
-want multiple nodes for greater performance and reliability; please refer to
-[the upstream etcd docs](https://coreos.com/etcd/) for detailed advice and
-setup.
-
-etcd v3 is not packaged for Ubuntu Trusty or Xenial, so to install an etcd
-server we suggest one of the following:
-
-- Download the etcd binary from the [official etcd release
-  page](https://github.com/coreos/etcd/releases/), and run it as shown by the
-  instructions there.
-
-- [Running etcd as a container under
-  Docker](https://coreos.com/etcd/docs/latest/op-guide/container.html#docker).
-
 ## Control node install
 
-On each control node ensure etcd or an etcd proxy is installed, and then
-perform the following steps.
+On each control node, perform the following steps.
 
 1.  Delete all configured OpenStack state, in particular any instances,
     routers, subnets and networks (in that order) created by the install
