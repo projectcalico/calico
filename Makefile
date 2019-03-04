@@ -481,7 +481,7 @@ k8s-test:
 ## Start k8s cluster
 k8s-start: $(NODE_CONTAINER_CREATED) tests/k8st/$(DIND_SCR)
 	CNI_PLUGIN=calico \
-	CALICO_VERSION=master \
+	CALICO_VERSION=v3.3 \
 	CALICO_NODE_IMAGE=$(BUILD_IMAGE):latest-$(ARCH) \
 	POD_NETWORK_CIDR=192.168.0.0/16 \
 	SKIP_SNAPSHOT=y \
