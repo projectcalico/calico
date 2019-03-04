@@ -8,12 +8,11 @@ These instructions will take you through a first-time install of
 [Upgrading {{site.prodname}} on OpenStack](../../../maintenance/openstack-upgrade)
 instead.
 
-There are three sections to the install: installing etcd, adding
-{{site.prodname}} to OpenStack control nodes, and adding {{site.prodname}} to
-OpenStack compute nodes.  Follow the [Common steps](#common-steps) on each node
-before moving on to the specific instructions in the control and compute
-sections. If you want to create a combined control and compute node, work
-through all three sections.
+There are two sections to the install: adding {{site.prodname}} to OpenStack
+control nodes, and adding {{site.prodname}} to OpenStack compute nodes.  Follow
+the [Common steps](#common-steps) on each node before moving on to the specific
+instructions in the control and compute sections. If you want to create a
+combined control and compute node, work through all three sections.
 
 ## Before you begin
 
@@ -48,59 +47,6 @@ These steps are detailed in this section.
     gpgkey=https://binaries.projectcalico.org/rpm/{{ ppa_repo_name }}/key
     priority=97
     EOF
-    ```
-
-## etcd install
-
-{{site.prodname}} operation requires an etcd v3 key/value store—this may be
-installed on a single machine or as a cluster.  For production you will likely
-want multiple nodes for greater performance and reliability; please refer to
-[the upstream etcd docs](https://coreos.com/etcd/) for detailed advice and
-setup.  Here we present a sample recipe for a single node cluster.
-
-1.  Install etcd, and ensure that it is initially not running:
-
-    ```
-    yum install -y etcd
-    systemctl stop etcd
-    ```
-
-1.  Place the following in `/etc/etcd/etcd.conf`, replacing `<hostname>`,
-    `<public_ip>` and `<uuid>` with their appropriate values for the machine.
-
-    ```
-    ETCD_DATA_DIR=/var/lib/etcd
-    ETCD_NAME=<hostname>
-    ETCD_ADVERTISE_CLIENT_URLS="http://<public_ip>:2379,http://<public_ip>:4001"
-    ETCD_LISTEN_CLIENT_URLS="http://0.0.0.0:2379,http://0.0.0.0:4001"
-    ETCD_LISTEN_PEER_URLS="http://0.0.0.0:2380"
-    ETCD_INITIAL_ADVERTISE_PEER_URLS="http://<public_ip>:2380"
-    ETCD_INITIAL_CLUSTER="<hostname>=http://<public_ip>:2380"
-    ETCD_INITIAL_CLUSTER_STATE=new
-    ETCD_INITIAL_CLUSTER_TOKEN=<uuid>
-    ```
-
-    You can obtain a `<uuid>` by running the `uuidgen` tool.
-
-    ```bash
-    uuidgen
-    ```
-
-    It should return a `<uuid>` value such as the following.
-
-    ```bash
-    11f92f19-cb5a-476f-879f-5efc34033b8b
-    ```
-    {: .no-select-button}
-
-    If the `uuidgen` tool is not installed, run `yum install -y util-linux` to
-    install it.
-
-1.  Launch etcd and set it to restart after a reboot:
-
-    ```
-    systemctl start etcd
-    systemctl enable etcd
     ```
 
 ## Control node install
