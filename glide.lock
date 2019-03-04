@@ -1,5 +1,5 @@
-hash: 866b6b0fe51be5f4721455e1c285d7b79cceec22b4398c09fee37822e8605aa1
-updated: 2019-02-27T06:13:06.197249048Z
+hash: 72df0dfd34352b471b60e21d9a8e24ca1e940f58708ea96b56414734e6c2cb61
+updated: 2019-03-04T06:13:02.922270614Z
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -218,7 +218,7 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: d94130ce287bda707db64dc03f1a92038bbe639f
+  version: bed3c60f60d5a00d793ac8f6c08f16251877799f
   subpackages:
   - lib/apiconfig
   - lib/apis/v1
@@ -260,7 +260,7 @@ imports:
   subpackages:
   - binder
 - name: github.com/projectcalico/typha
-  version: 1022a525f42cdf5cfba6346c864a36cb55d98660
+  version: b48f7406d2643a42d199d0d3452a62170b0a7fe3
   subpackages:
   - pkg/syncclient
   - pkg/syncproto
@@ -393,8 +393,6 @@ imports:
   - transport
 - name: gopkg.in/fsnotify/fsnotify.v1
   version: c2828203cd70a50dcccfb2761f8b1f8ceef9a8e9
-- name: gopkg.in/go-playground/validator.v8
-  version: 5f57d2222ad794d0dffb07e664ea05e2ee07d60c
 - name: gopkg.in/go-playground/validator.v9
   version: b199fa0642d29caca62b6a99d65cc981ba5edc3b
 - name: gopkg.in/inf.v0
