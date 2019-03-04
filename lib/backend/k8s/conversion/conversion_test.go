@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2019 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -381,7 +381,40 @@ var _ = Describe("Test Pod conversion", func() {
 		Expect(wep.Value.(*apiv3.WorkloadEndpoint).Spec.IPNetworks).To(ConsistOf("192.168.0.2/32"))
 	})
 
-	It("should not parse a Pod without an IP to a WorkloadEndpoint", func() {
+	DescribeTable("IsValidCalicoWorkloadEndpoint reject/accept phase tests",
+		func(podPhase kapiv1.PodPhase, expectedResult bool) {
+			pod := kapiv1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "podA",
+					Namespace: "default",
+					Annotations: map[string]string{
+						"cni.projectcalico.org/podIP": "192.168.0.1",
+					},
+					ResourceVersion: "1234",
+				},
+				Spec: kapiv1.PodSpec{
+					NodeName:   "nodeA",
+					Containers: []kapiv1.Container{},
+				},
+				Status: kapiv1.PodStatus{
+					PodIP: "192.168.0.1",
+					Phase: podPhase,
+				},
+			}
+			Expect(c.IsValidCalicoWorkloadEndpoint(&pod)).To(Equal(expectedResult))
+		},
+		Entry("Pending", kapiv1.PodPending, true),
+		Entry("Running", kapiv1.PodRunning, true),
+		// PodUnknown usually means that the Kubelet is out-of-touch with the API server.  It _might_ be
+		// finished but I think we have to assume that it's still alive to avoid escalating the Kubelet failure
+		// to a network outage for that pod.
+		Entry("Unknown", kapiv1.PodUnknown, true),
+		Entry("Pending", kapiv1.PodSucceeded, false),
+		Entry("Failed", kapiv1.PodFailed, false),
+		Entry("Completed", kapiv1.PodPhase("Completed"), false),
+	)
+
+	It("Pod without an IP should be valid but not ready", func() {
 		pod := kapiv1.Pod{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "podB",
@@ -400,8 +433,11 @@ var _ = Describe("Test Pod conversion", func() {
 			Status: kapiv1.PodStatus{},
 		}
 
+		Expect(c.IsValidCalicoWorkloadEndpoint(&pod)).To(BeTrue())
 		_, err := c.PodToWorkloadEndpoint(&pod)
 		Expect(err).NotTo(HaveOccurred())
+
+		Expect(c.IsReadyCalicoPod(&pod)).To(BeFalse())
 	})
 
 	It("should parse a Pod with no labels", func() {
