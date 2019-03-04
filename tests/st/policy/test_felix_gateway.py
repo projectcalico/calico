@@ -715,7 +715,7 @@ class TestFelixOnGateway(TestBase):
         })
 
     def add_policy(self, policy_data):
-        self._apply_resources(policy_data, self.gateway)
+        self.gateway._apply_resources(policy_data)
 
     def add_gateway_internal_iface(self):
         host_endpoint_data = {
@@ -730,7 +730,7 @@ class TestFelixOnGateway(TestBase):
                 'interfaceName': 'eth0'
             }
         }
-        self._apply_resources(host_endpoint_data, self.gateway)
+        self.gateway._apply_resources(host_endpoint_data)
 
     def add_gateway_external_iface(self):
         host_endpoint_data = {
@@ -745,7 +745,7 @@ class TestFelixOnGateway(TestBase):
                 'interfaceName': 'eth1'
             }
         }
-        self._apply_resources(host_endpoint_data, self.gateway)
+        self.gateway._apply_resources(host_endpoint_data)
 
     def add_host_iface(self):
         host_endpoint_data = {
@@ -761,7 +761,7 @@ class TestFelixOnGateway(TestBase):
                 'expectedIPs': [str(self.host.ip)],
             }
         }
-        self._apply_resources(host_endpoint_data, self.gateway)
+        self.gateway._apply_resources(host_endpoint_data)
 
     def assert_host_can_curl_local(self):
         try:
@@ -854,37 +854,7 @@ class TestFelixOnGateway(TestBase):
         retry_until_success(self.assert_host_can_curl_ext)
 
     def delete_all(self, resource):
-        # Grab all objects of a resource type
-        objects = yaml.load(self.hosts[0].calicoctl("get %s -o yaml" % resource))
-        # and delete them (if there are any)
-        if len(objects) > 0:
-            _log.info("objects: %s", objects)
-            if 'items' in objects and len(objects['items']) == 0:
-                pass
-            else:
-                self._delete_data(objects, self.hosts[0])
-
-    def _delete_data(self, data, host):
-        _log.debug("Deleting data with calicoctl: %s", data)
-        self._exec_calicoctl("delete", data, host)
-
-    @classmethod
-    def _apply_resources(cls, resources, host):
-        cls._exec_calicoctl("apply", resources, host)
-
-    @staticmethod
-    def _exec_calicoctl(action, data, host):
-        # Delete creationTimestamp fields from the data that we're going to
-        # write.
-        for obj in data.get('items', []):
-            if 'creationTimestamp' in obj['metadata']:
-                del obj['metadata']['creationTimestamp']
-        if 'metadata' in data and 'creationTimestamp' in data['metadata']:
-            del data['metadata']['creationTimestamp']
-
-        # Use calicoctl with the modified data.
-        host.writejson("new_data", data)
-        host.calicoctl("%s -f new_data" % action)
+        self.hosts[0].delete_all_resource(resource)
 
     @classmethod
     def get_container_ip(cls, container_name):

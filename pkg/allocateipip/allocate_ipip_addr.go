@@ -2,12 +2,12 @@ package allocateipip
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"time"
 
 	"github.com/projectcalico/node/pkg/calicoclient"
 
-	"github.com/projectcalico/libcalico-go/lib/apiconfig"
 	api "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	client "github.com/projectcalico/libcalico-go/lib/clientv3"
 	cerrors "github.com/projectcalico/libcalico-go/lib/errors"
@@ -36,13 +36,7 @@ func Run() {
 	log.AddHook(&logutils.ContextHook{})
 
 	// Load the client config from environment.
-	cfg, c := calicoclient.CreateClient()
-
-	// This is a no-op for KDD.
-	if cfg.Spec.DatastoreType == apiconfig.Kubernetes {
-		log.Info("Kubernetes datastore driver handles IPIP allocation - no op")
-		return
-	}
+	_, c := calicoclient.CreateClient()
 
 	// The allocate_ipip_addr binary is only ever invoked _after_ the
 	// startup binary has been invoked and the modified environments have
@@ -162,11 +156,16 @@ func removeHostTunnelAddr(ctx context.Context, c client.Interface, nodename stri
 // with some space. Stores the result in the host's config as its tunnel
 // address.
 func assignHostTunnelAddr(ctx context.Context, c client.Interface, nodename string, ipipCidrs []net.IPNet) {
+	attrs := map[string]string{
+		ipam.AttributeNode: nodename,
+		ipam.AttributeType: ipam.AttributeTypeIPIP,
+	}
+	handle := fmt.Sprintf("ipip-tunnel-addr-%s", nodename)
 	args := ipam.AutoAssignArgs{
 		Num4:      1,
 		Num6:      0,
-		HandleID:  nil,
-		Attrs:     nil,
+		HandleID:  &handle,
+		Attrs:     attrs,
 		Hostname:  nodename,
 		IPv4Pools: ipipCidrs,
 	}
