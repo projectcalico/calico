@@ -1,4 +1,3 @@
-#!/usr/bin/python
 # Copyright (c) 2018 Tigera, Inc. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -100,6 +99,8 @@ protocol bgp Mesh_10_192_0_4 from bgp_template {
 }
 """
 
+# BIRD config for an external node to peer with
+# the in-cluster route reflector on kube-node-2.
 bird_conf_rr = """
 router id 10.192.0.5;
 
@@ -200,12 +201,14 @@ EOF
         self.update_ds_env("calico-node", "kube-system", "BGP_LOGSEVERITYSCREEN", "debug")
 
         # Establish BGPPeer from cluster nodes to node-extra using calicoctl
+        # External peer has IP 10.192.0.5
         run("""kubectl exec -i -n kube-system calicoctl -- /calicoctl apply -f - << EOF
 apiVersion: projectcalico.org/v3
 kind: BGPPeer
 metadata:
   name: node-extra.peer
 spec:
+  node: kube-node-2
   peerIP: 10.192.0.5
   asNumber: 64512
 EOF
@@ -262,7 +265,6 @@ spec:
         beta.kubernetes.io/os: linux
         kubernetes.io/hostname: kube-node-1
 ---
-
 apiVersion: v1
 kind: Service
 metadata:
@@ -288,51 +290,41 @@ EOF
         run("kubectl exec -i -n kube-system calicoctl -- /calicoctl get bgpconfigs -o yaml")
 
         # Update the node-2 to behave as a route-reflector
-        run("kubectl exec -i -n kube-system calicoctl -- /calicoctl get node kube-node-2 -o json > /home/node.json")
-        run("sed -i '11 a \ \ \ \ \ \ \"i-am-a-route-reflector\": \"true\",' /home/node.json")
-        run("sed -i '21 a \ \ \ \ \ \ \"routeReflectorClusterID\": \"224.0.0.1\",' /home/node.json")
-        run("kubectl cp /home/node.json kube-system/calicoctl:/home/node.json")
-        run("kubectl exec -i -n kube-system calicoctl -- cat /home/node.json")
-        run("kubectl exec -i -n kube-system calicoctl -- /calicoctl apply -f /home/node.json")
-        run("kubectl exec -i -n kube-system calicoctl -- /calicoctl get node kube-node-2 -o yaml")
+        json_str = run("kubectl exec -i -n kube-system calicoctl -- /calicoctl get node kube-node-2 -o json")
+        node_dict = json.loads(json_str)
+        node_dict['metadata']['labels']['i-am-a-route-reflector'] = 'true'
+        node_dict['spec']['bgp']['routeReflectorClusterID'] = '224.0.0.1'
+        run("""kubectl exec -i -n kube-system calicoctl -- /calicoctl apply -f - << EOF
+%s
+EOF
+""" % json.dumps(node_dict))
 
         # Disable node-to-node mesh and configure bgp peering
         # between node-1 and RR and also between external node and RR
         run("""kubectl exec -i -n kube-system calicoctl -- /calicoctl apply -f - << EOF
 apiVersion: projectcalico.org/v3
-items:
-- apiVersion: projectcalico.org/v3
-  kind: BGPConfiguration
-  metadata: {name: default}
-  spec:
-    nodeToNodeMeshEnabled: false
-    asNumber: 64512
-kind: BGPConfigurationList
-metadata:
-  resourceVersion: 139
+kind: BGPConfiguration
+metadata: {name: default}
+spec:
+  nodeToNodeMeshEnabled: false
+  asNumber: 64512
 EOF
 """)
         run("""kubectl exec -i -n kube-system calicoctl -- /calicoctl apply -f - << EOF
 apiVersion: projectcalico.org/v3
-items:
-- apiVersion: projectcalico.org/v3
-  kind: BGPPeer
-  metadata: {name: kube-node-1}
-  spec:
-    node: kube-node-1
-    peerIP: 10.192.0.4
-    asNumber: 64512
-kind: BGPPeerList
+kind: BGPPeer
+metadata: {name: kube-node-1}
+spec:
+  node: kube-node-1
+  peerIP: 10.192.0.4
+  asNumber: 64512
 EOF
 """)
-        run("kubectl get endpoints nginx-rr -n bgp-test -o yaml > /home/endpoint.yaml")
-        svcRoute = ""
-        with open("/home/endpoint.yaml", 'r') as stream:
-            content = yaml.load(stream)
-            for k,v in content.items():
-                if "clusterIP" in v:
-                    svcRoute = k
-        self.assertIn(svcRoute, self.get_routes())
+        svc_json = run("kubectl get svc nginx-rr -n bgp-test -o json")
+        svc_dict = json.loads(svc_json)
+        svcRoute = svc_dict['spec']['clusterIP']
+        print "svcRoute = %s" % svcRoute
+        retry_until_success(lambda: self.assertIn(svcRoute, self.get_routes()))
 
     def test_mainline(self):
         """
