@@ -46,7 +46,7 @@ var bird6Ready = flagSet.Bool("bird6-ready", false, "Run BIRD6 readiness checks"
 var felixReady = flagSet.Bool("felix-ready", false, "Run felix readiness checks")
 
 // thresholdTime is introduced for bird readiness check. Default value is 30 sec.
-var thresholdTime = flagSet.Duration("thresholdTime", 30*time.Second, "Threshold time for bird readiness")
+var thresholdTime = flagSet.Duration("threshold-time", 30*time.Second, "Threshold time for bird readiness")
 
 // confd flags
 var runConfd = flagSet.Bool("confd", false, "Run confd")

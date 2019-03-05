@@ -60,6 +60,12 @@ func Run(bird, bird6, felix bool, thresholdTime time.Duration) {
 // socket to gather all BGP peer connection status, and overall graceful
 // restart status.
 func checkBIRDReady(ipv string, thresholdTime time.Duration) error {
+	// Stat nodename file to get the modified time of the file.
+	nodenameFileStat, err := os.Stat("/var/lib/calico/nodename")
+	if err != nil {
+		return fmt.Errorf("Failed to stat() nodename file: %v", err)
+	}
+
 	// Check for unestablished peers
 	peers, err := bird.GetPeers(ipv)
 	log.Debugf("peers: %v", peers)
@@ -67,27 +73,24 @@ func checkBIRDReady(ipv string, thresholdTime time.Duration) error {
 		return err
 	}
 
-	// numEstablishedPeer keeps count of number of peers with bgp state established
-	numEstablishedPeer := 0
 	s := []string{}
+
+	// numEstablishedPeer keeps count of number of peers with bgp state established.
+	numEstablishedPeer := 0
 
 	for _, peer := range peers {
 		if peer.BGPState == "Established" {
 			numEstablishedPeer += 1
-		} else if peer.BGPState != "Established" {
+		} else {
 			s = append(s, peer.PeerIP)
 		}
 	}
-
-	fmt.Printf("Number of nodes with BGP peering established = %v", numEstablishedPeer)
-
-	nodenameFileStat, err := os.Stat("/var/lib/calico/nodename")
-	if err != nil {
-		return fmt.Errorf("Error in nodename file: %v", err)
-	}
+	log.Infof("Number of node(s) with BGP peering established = %v", numEstablishedPeer)
 
 	if time.Since(nodenameFileStat.ModTime()) < thresholdTime {
 		if len(s) > 0 {
+			// When we first start up, only report ready if all our peerings are established.
+			// This prevents rolling update from proceeding until BGP is back up.
 			return fmt.Errorf("BGP not established with %+v", strings.Join(s, ","))
 		}
 		// Check for GR
@@ -98,7 +101,9 @@ func checkBIRDReady(ipv string, thresholdTime time.Duration) error {
 			return errors.New("graceful restart in progress")
 		}
 	} else if numEstablishedPeer > 0 {
-		log.Debugf("There exist(s) %v calico node which has BGP peering established.", numEstablishedPeer)
+		// After a while, only require a single peering to be up.  This prevents the whole mesh
+		// from reporting not-ready if some nodes go down.
+		log.Debugf("There exist(s) %v calico node(s) with BGP peering established.", numEstablishedPeer)
 	} else {
 		return fmt.Errorf("BGP not established with %+v", strings.Join(s, ","))
 	}
