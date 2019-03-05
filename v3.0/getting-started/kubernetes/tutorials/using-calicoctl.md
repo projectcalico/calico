@@ -4,11 +4,11 @@ canonical_url: https://docs.projectcalico.org/v3.1/getting-started/kubernetes/tu
 ---
 
 `calicoctl` allows you to create, read, update, and delete {{site.prodname}} objects
-from the command line. [Installing `calicoctl` as a binary](/{{page.version}}/usage/calicoctl/install#installing-calicoctl-as-a-binary) 
-will provide you with maximum functionality, including access to the 
-`node` commands. 
+from the command line. [Installing `calicoctl` as a binary](/{{page.version}}/usage/calicoctl/install#installing-calicoctl-as-a-binary)
+will provide you with maximum functionality, including access to the
+`node` commands.
 
-However, you can also [install `calicoctl` as a pod](/{{page.version}}/usage/calicoctl/install#installing-calicoctl-as-a-container) and run `calicoctl` 
+However, you can also [install `calicoctl` as a pod](/{{page.version}}/usage/calicoctl/install#installing-calicoctl-as-a-container) and run `calicoctl`
 commands using `kubectl`:
 
 ```
@@ -18,5 +18,5 @@ kns.default          kns.default
 kns.kube-system      kns.kube-system
 ```
 
-See the [calicoctl reference guide]({{site.baseurl}}/{{page.version}}/reference/calicoctl) 
+See the [calicoctl reference guide]({{site.baseurl}}/{{page.version}}/reference/calicoctl)
 for more information.

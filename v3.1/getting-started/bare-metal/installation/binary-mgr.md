@@ -50,7 +50,7 @@ is in state "wait-for-ready". The default location for the log file is
 You should configure a `node` resource for each
 host running Felix.  In this case, the database is initialized after
 creating the first `node` resource.  For a deployment that does not include
-the {{site.prodname}}/BGP integration, the specification of a node resource just 
+the {{site.prodname}}/BGP integration, the specification of a node resource just
 requires the name of the node; for most deployments this will be the same as the
 hostname.
 
@@ -63,7 +63,7 @@ calicoctl create -f - <<EOF
 EOF
 ```
 
-The Felix logs should transition from periodic notifications 
-that Felix is in the state `wait-for-ready` to a stream of initialization 
+The Felix logs should transition from periodic notifications
+that Felix is in the state `wait-for-ready` to a stream of initialization
 messages.
 

@@ -53,7 +53,7 @@ spec:
         - containerPort: 2379
         command: ["etcd"]
         args:
-          - "-advertise-client-urls" 
+          - "-advertise-client-urls"
           - "http://database:2379"
           - "-listen-client-urls"
           - "http://0.0.0.0:2379"

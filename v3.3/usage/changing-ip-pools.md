@@ -158,7 +158,7 @@ Let's get started.
    new-pool              10.0.0.0/16      true   Always     false
    ```
 
-3. Recreate all existing workloads using IPs from the disabled pool. 
+3. Recreate all existing workloads using IPs from the disabled pool.
    In this example, kube-dns is the only workload networked by {{ site.prodname }}:
 
    ```

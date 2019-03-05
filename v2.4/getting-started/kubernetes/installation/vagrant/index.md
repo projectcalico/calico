@@ -78,7 +78,7 @@ And finally check that Docker is running on both hosts by running
 
 Prequisite: [`kubectl` installed](https://kubernetes.io/docs/tasks/tools/install-kubectl/)
 
-Let's configure `kubectl` so you can access the cluster from your local machine. 
+Let's configure `kubectl` so you can access the cluster from your local machine.
 
 ```shell
 kubectl config set-cluster vagrant-cluster --server=http://172.18.18.101:8080

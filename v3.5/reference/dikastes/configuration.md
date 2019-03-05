@@ -11,7 +11,7 @@ are listed in the following table.
 |-------------------|--------------|--------------|--------|
 | `--listen <path>` | `-l`         | Unix domain socket path for Dikastes to create its listen socket. This socket accepts connections from Envoy to query whether a request should be authorized. | string |
 | `--dial <path>`   | `-d`         | Unix domain socket path where Dikastes should connect to the Policy Sync API (provided by Felix) to obtain the policy for the pod it is enforcing on. | string |
-| `--debug`         |              | Flag to set Dikastes to log extra information for debugging purposes | n/a | 
+| `--debug`         |              | Flag to set Dikastes to log extra information for debugging purposes | n/a |
 
 For example:
 

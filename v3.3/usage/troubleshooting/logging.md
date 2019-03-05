@@ -48,7 +48,7 @@ of the `{{site.nodecontainer}}` logging directory.
 * The Info level (default) only enabled "debug {states}" logging. This is for protocol state changes (protocol going up, down, starting, stopping etc.)
 * The Warning, Error and Fatal levels all turn off bird debug logging completely.
 
-See [BGP Configuration Resource](/{{page.version}}/reference/calicoctl/resources/bgpconfig) 
+See [BGP Configuration Resource](/{{page.version}}/reference/calicoctl/resources/bgpconfig)
 for details on how to modify the logging level. For example:
 
 ```

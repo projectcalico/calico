@@ -6,7 +6,7 @@ canonical_url: 'https://docs.projectcalico.org/v3.5/reference/calicoctl/'
 The command line tool, `calicoctl`, makes it easy to manage Calico network
 and security policy.
 
-It can be downloaded from the [releases page of the 
+It can be downloaded from the [releases page of the
 calicoctl repository](https://github.com/projectcalico/calicoctl/releases/tag/v1.1.0).
 
 Alternatively, you can run it as a docker container if you want to - the image
@@ -23,7 +23,7 @@ The calicoctl command line interface provides a number of resource management
 commands to allow you to create, modify, delete and view the different Calico
 resources.
 
-The full list of commands is described in the 
+The full list of commands is described in the
 [Command Reference]({{site.baseurl}}/{{page.version}}/reference/calicoctl/commands/)
 section.
 

@@ -306,7 +306,7 @@ On each compute node, perform the following steps:
     ```
     service bird restart
     service bird6 restart
-    chkconfig bird on 
+    chkconfig bird on
     chkconfig bird6 on
     ```
 

@@ -16,7 +16,7 @@ of calicoctl.
 
 ## Top level help
 
-Run `calicoctl --help` to display the following help menu for the top level 
+Run `calicoctl --help` to display the following help menu for the top level
 calicoctl commands.
 
 ```

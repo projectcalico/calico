@@ -163,7 +163,7 @@ resolved by restarting `cinder`.
 
 ```
 service cinder-volume restart
-service cinder-scheduler restart 
+service cinder-scheduler restart
 service cinder-api restart
 ```
 

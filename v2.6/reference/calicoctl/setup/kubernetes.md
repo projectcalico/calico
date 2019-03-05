@@ -5,9 +5,9 @@ canonical_url: 'https://docs.projectcalico.org/v3.5/usage/calicoctl/configure/kd
 
 This document covers the configuration options for calicoctl when using the Kubernetes API as a datastore.
 
-> **Note**: If running Calico on Kubernetes with the etcdv2 
+> **Note**: If running Calico on Kubernetes with the etcdv2
 > datastore, see the [etcdv2 configuration document](etcdv2) instead.
-> For more information on running with the Kubernetes datastore, see 
+> For more information on running with the Kubernetes datastore, see
 > [the installation guide](/{{page.version}}/getting-started/kubernetes/installation/hosted/kubernetes-datastore/).
 >
 {: .alert .alert-info}

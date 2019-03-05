@@ -208,7 +208,7 @@ When using `type: k8s`, the Calico CNI plugin requires read-only Kubernetes API 
 
 When using the CNI `host-local` IPAM plugin, a special value `usePodCidr` is allowed for the subnet field (either at the top-level, or in a "range").  This tells the plugin to determine the subnet to use from the Kubernetes API based on the Node.podCIDR field.  Calico does not use the `gateway` field of a range so that field is not required and it will be ignored if present.
 
-> **Note**: `usePodCidr` can only be used as the value of the `subnet` field, it cannot be used in 
+> **Note**: `usePodCidr` can only be used as the value of the `subnet` field, it cannot be used in
 > `rangeStart` or `rangeEnd` so those values are not useful if `subnet` is set to `usePodCidr`.
 {: .alert .alert-info}
 

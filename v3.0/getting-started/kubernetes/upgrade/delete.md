@@ -7,15 +7,15 @@ canonical_url: https://docs.projectcalico.org/v3.5/getting-started/kubernetes/up
 
 You may need or wish to manually delete Calico data from your etcd datastore under the
 following conditions.
-  
+
 - [**etcd**: You succeeded in migrating your data and upgrading to Calico v3.0. After
   running Calico for some time and experiencing no errors, you want to delete
   the old Calico data from the etcdv2 datastore.](#deleting-calico-data-from-etcdv2-after-a-successful-migration-and-upgrade)
-  
+
 - [**etcd**: A data migration attempt failed partway through, leaving the etcdv3 datastore
   with some, but not all of your etcvd2 data.](#deleting-calico-data-from-etcdv3-after-a-partial-migration)
 
-- [**Kubernetes API datastore**: You are using the Kubernetes API datastore and upgraded 
+- [**Kubernetes API datastore**: You are using the Kubernetes API datastore and upgraded
   to Calico v3.0 but then downgraded to v2.6.5. You want to clean the Calico v3.0 data out of
   the Kubernetes API datastore. If you plan to attempt another upgrade to
   Calico v3.0, this is required](#deleting-calico-data-from-the-kubernetes-api-datastore-after-a-downgrade)
@@ -25,40 +25,40 @@ following conditions.
 ### Prerequisite
 
 This procedure requires etcdctl v3. The etcdctl tool is installed along with etcd. To install just etcdctl, [download the etcd release binary](https://github.com/coreos/etcd/releases), untar it, and extract the etcdctl binary.
-  
+
 ### Deleting Calico data from etcdv2
 
-> **Note**: You must pass the same options you 
-> [configured `calico-upgrade` with](/{{page.version}}/getting-started/kubernetes/upgrade/setup#configuring-calico-upgrade-to-connect-to-the-etcdv2-datastore) 
+> **Note**: You must pass the same options you
+> [configured `calico-upgrade` with](/{{page.version}}/getting-started/kubernetes/upgrade/setup#configuring-calico-upgrade-to-connect-to-the-etcdv2-datastore)
 > to etcdctl to achieve a connection. We include just the `--endpoint` flag in the
 > following commands. Depending on your etcd configuration, you may need to include
-> additional parameters in these commands. Refer to the 
-> [etcdctl documentation for etcdv2 datastores](https://github.com/coreos/etcd/blob/master/etcdctl/READMEv2.md) 
+> additional parameters in these commands. Refer to the
+> [etcdctl documentation for etcdv2 datastores](https://github.com/coreos/etcd/blob/master/etcdctl/READMEv2.md)
 > for more information about the flags and environment variables.
 {: .alert .alert-info}
 
 1. Issue the following command to retrieve a list of all of the Calico keys.
-   
+
    ```
    etcdctl --endpoint=<etcdv2-hostname:port> ls /calico --recursive
    ```
-   
+
 1. Issue the following command to delete the {{site.prodname}} keys.
-   
+
    ```
-   etcdctl --endpoint=<etcdv2-hostname:port> rm /calico/ --recursive 
+   etcdctl --endpoint=<etcdv2-hostname:port> rm /calico/ --recursive
    ```
-   
+
 1. Issue the following command to confirm that the {{site.prodname}} keys were deleted.
-   
+
    ```
    etcdctl --endpoint=<etcdv2-hostname:port> ls /calico --recursive
    ```
-   
+
    It should return `Error: 100: Key not found (/calico) [1186]`.
-   
+
 1. Congratulations! You've cleaned {{site.prodname}}'s etcdv2 datastore of {{site.prodname}}
-   data. 
+   data.
 
 
 ## Deleting Calico data from etcdv3 after a partial migration
@@ -66,45 +66,45 @@ This procedure requires etcdctl v3. The etcdctl tool is installed along with etc
 ### Prerequisites
 
 This procedure requires etcdctl v3. The etcdctl tool is installed along with etcd. To install just etcdctl, [download the etcd release binary](https://github.com/coreos/etcd/releases), untar it, and extract the etcdctl binary.
-  
+
 
 ### Deleting Calico data from etcdv3
 
-> **Note**: You must pass the same options you 
-> [configured `calico-upgrade` with](/{{page.version}}/getting-started/kubernetes/upgrade/setup#configuring-calico-upgrade-to-connect-to-the-etcdv3-cluster) 
+> **Note**: You must pass the same options you
+> [configured `calico-upgrade` with](/{{page.version}}/getting-started/kubernetes/upgrade/setup#configuring-calico-upgrade-to-connect-to-the-etcdv3-cluster)
 > to etcdctl to achieve a connection. We include just the `--endpoints` flag in the
 > following commands. Depending on your etcd configuration, you may need to include
-> additional parameters in these commands or set environment variables. Refer to the 
-> [etcdctl documentation for etcdv3 datastores](https://github.com/coreos/etcd/blob/master/etcdctl/README.md) 
+> additional parameters in these commands or set environment variables. Refer to the
+> [etcdctl documentation for etcdv3 datastores](https://github.com/coreos/etcd/blob/master/etcdctl/README.md)
 > for more information about the flags and environment variables.
 {: .alert .alert-info}
 
-   
+
 1. Issue the following command to retrieve a list of all of the Calico keys.
-   
+
    ```
    ETCDCTL_API=3 etcdctl --endpoints=<etcdv3-hostname:port> get /calico/ --prefix --keys-only
    ```
-   
+
 1. Issue the following command to delete the {{site.prodname}} keys.
-   
+
    ```
-   ETCDCTL_API=3 etcdctl --endpoints=<etcdv3-hostname:port> del /calico/ --prefix 
+   ETCDCTL_API=3 etcdctl --endpoints=<etcdv3-hostname:port> del /calico/ --prefix
    ```
-   
+
    It returns the number of keys it deleted.
-   
+
 1. Issue the following command to confirm that the {{site.prodname}} keys were deleted.
-   
+
    ```
    ETCDCTL_API=3 etcdctl --endpoints=<etcdv3-hostname:port> get /calico/ --prefix --keys-only
    ```
-   
+
    It should return nothing.
-   
+
 1. Congratulations! You've cleaned {{site.prodname}}'s etcdv3 datastore of {{site.prodname}}
-   data. 
-   
+   data.
+
 ### Next steps
 
 Return to [Migrate your data](/{{page.version}}/getting-started/kubernetes/upgrade/migrate)

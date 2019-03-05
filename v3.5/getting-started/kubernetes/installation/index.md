@@ -15,7 +15,7 @@ for instructions.
 - [Installing {{site.prodname}} for policy (advanced)](other)
 
 After installing {{site.prodname}}, you can [enable application layer policy](app-layer-policy).
-Enabling application layer policy also secures workload-to-workload communications with mutual 
+Enabling application layer policy also secures workload-to-workload communications with mutual
 TLS authentication.
 
 Should you wish to modify the manifests before applying them, refer to

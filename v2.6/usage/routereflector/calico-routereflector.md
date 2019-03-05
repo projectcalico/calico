@@ -76,8 +76,8 @@ Where:
 -  `<ETCD_IP:PORT>` is the colon separated IPv4 address and port of an etcd
    node in the etcd cluster.  A comma-separated list of endpoints may be
    specified.
-   
-> **Note**: If you require TLS/SSL-enabled etcd, see the 
+
+> **Note**: If you require TLS/SSL-enabled etcd, see the
 > [section below](#route-reflector-with-tlsssl-etcd)
 > for details on how to start the route reflector.
 {: .alert .alert-info}

@@ -37,7 +37,7 @@ mesh topology).
 
 For large-scale deployments, or for deployments where you require a more specific
 BGP topology (e.g., peering with ToR switches) the full node-to-node mesh should be
-disabled and explicit BGP peers configured for your {{site.prodname}} nodes.  A BGP peer may 
+disabled and explicit BGP peers configured for your {{site.prodname}} nodes.  A BGP peer may
 be configured in your {{site.prodname}} network as a global BGP peer or a per-node BGP peer.
 
 **Global BGP peers**
@@ -84,7 +84,7 @@ not necessary.
 
 If you are explicitly configuring the BGP topology for your {{site.prodname}} network,
 you may wish to disable the full node-to-node mesh. See
-[Example](#example) 
+[Example](#example)
 for instructions to change the `nodeToNodeMeshEnabled` global BGP setting.
 
 If you are building your network from scratch and do not need the full
@@ -103,14 +103,14 @@ the following steps.
 
 1. Issue the following command to determine if you have a `default` BGP configuration
    resource.
-   
+
     ```
     calicoctl get bgpconfig default
     ```
 
-1. If the resource _does_ exist, skip to step 3. Otherwise, use the following 
-   command to create the resource. Before issuing the command, adjust the 
-   `nodeToNodeMeshEnabled` and `asNumber` lines and values as desired. 
+1. If the resource _does_ exist, skip to step 3. Otherwise, use the following
+   command to create the resource. Before issuing the command, adjust the
+   `nodeToNodeMeshEnabled` and `asNumber` lines and values as desired.
    Refer to [BGP Configuration Resource]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/bgpconfig) for details about these settings.
 
     ```
@@ -125,20 +125,20 @@ the following steps.
       asNumber: 63400
     EOF
     ```
-    
+
     You're done!
 
-1. If the resource _does_ exist, use the following command to retrieve it and save it 
+1. If the resource _does_ exist, use the following command to retrieve it and save it
    to a file.
-    
+
     ```
     calicoctl get bgpconfig default -o yaml > bgp.yaml
     ```
 
-1. Open the bgpconfig settings file in your favorite editor, modify 
-   the `nodeToNodeMeshEnabled` or `asNumber` as desired, and save the file. 
+1. Open the bgpconfig settings file in your favorite editor, modify
+   the `nodeToNodeMeshEnabled` or `asNumber` as desired, and save the file.
    Refer to [BGP Configuration Resource]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/bgpconfig) for details about these settings.
-   
+
     ```
     vim bgp.yaml
     ```
@@ -184,7 +184,7 @@ EOF
 To view the current list of BGP peers run the following command.
 
 ```
-calicoctl get bgpPeer 
+calicoctl get bgpPeer
 ```
 
 It should return something like the following.
@@ -198,8 +198,8 @@ To remove the global BGP peer that you just created run the following command.
 
 ```
 calicoctl delete bgppeer bgppeer-global-3040
-``` 
-    
+```
+
 
 ### Configuring a node-specific BGP peer
 
@@ -250,7 +250,7 @@ To remove the BGP peer run the following command.
 
 ```
 calicoctl delete bgppeer bgppeer-node-aabbff
-``` 
+```
 
 
 ### Checking the status of the BGP peers

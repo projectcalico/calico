@@ -92,10 +92,10 @@ documents *mandates* the use of VLANs.
 
 2. Modify IP Pool config
 
-   Modify the pool's spec to enable IP-IP and nat-outgoing. (See 
+   Modify the pool's spec to enable IP-IP and nat-outgoing. (See
    [IP Pools]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/ippool)
    for other settings that can be edited.)
-   
+
    ```shell
    - apiVersion: v1
      kind: ipPool
@@ -312,15 +312,15 @@ iptables -t nat -N expose-ports
 iptables -t nat -A OUTPUT -j expose-ports
 iptables -t nat -A PREROUTING -j expose-ports
 
-# Then, for each port you want to expose, add a rule to the 
+# Then, for each port you want to expose, add a rule to the
 # expose-ports chain, replacing <PUBLIC_IP> with the host IP that you
 # want to use to expose the port and <PUBLIC_PORT> with the host port.
 iptables -t nat -A expose-ports -p tcp --destination <PUBLIC_IP> --dport <PUBLIC_PORT> -j DNAT  --to <CALICO_IP>:<SERVICE_PORT>
 ```
 
-For example, you have a container to which you've assigned the CALICO_IP 
-of 192.168.7.4, and you have NGINX running on port 8080 inside the container. 
-If you want to expose this service on port 80 and your host has IP 192.0.2.1, 
+For example, you have a container to which you've assigned the CALICO_IP
+of 192.168.7.4, and you have NGINX running on port 8080 inside the container.
+If you want to expose this service on port 80 and your host has IP 192.0.2.1,
 then you could run the following commands:
 
 ```

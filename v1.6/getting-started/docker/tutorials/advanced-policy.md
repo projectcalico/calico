@@ -6,13 +6,13 @@ canonical_url: 'https://docs.projectcalico.org/v2.0/getting-started/docker/tutor
 
 ## Background
 
-With Calico, a Docker network represents a logical set of rules that define the 
+With Calico, a Docker network represents a logical set of rules that define the
 allowed traffic in and out of containers assigned to that network.  The rules
 are encapsulated in a Calico "profile".
 
-When creating a Docker network using the Calico network driver, the Calico 
-driver creates a profile object for that network.  The default policy applied 
-by Calico when a new network is created allows communication between all 
+When creating a Docker network using the Calico network driver, the Calico
+driver creates a profile object for that network.  The default policy applied
+by Calico when a new network is created allows communication between all
 containers connected to that network, and no communication from other networks.
 
 Using the standard `calicoctl profile` commands it is possible to manage the
@@ -21,14 +21,14 @@ feature-rich policy associated with a network.
 > Note that if you want to access the feature rich Calico policy, you must use
 > both the Calico Network _and_ Calico IPAM drivers together.  Using the Calico
 > IPAM driver ensures _all_ traffic from the container is routed via the host
-> vRouter and is subject to Calico policy. Using the default IPAM driver 
+> vRouter and is subject to Calico policy. Using the default IPAM driver
 > instructs the Calico network driver to route non-network traffic (i.e.
 > destinations outside the network CIDR) via the Docker gateway bridge, and in
 > this case may not be subjected to the policy configured on the host vRouter.
 
-> The profile that is created by the Calico network driver is given the same 
+> The profile that is created by the Calico network driver is given the same
 > name as the Docker-generated network ID.  This can be cumbersome to work
-> with, so the `calicoctl` tool that is used to manage the network policy 
+> with, so the `calicoctl` tool that is used to manage the network policy
 > handles the mapping between network names and IDs.  For the most part,
 > the detail about network IDs can be ignored, but it is mentioned here as a
 > side note for advanced users and developers,
@@ -39,18 +39,18 @@ Whilst the Docker API supports the ability to attach a container to multiple
 networks, it is not possible to use this feature of Docker when using Calico
 as the networking and IPAM provider.
 
-However, by defining multiple networks and modifying the Calico policy 
-associated with those networks it is possible to achieve the same isolation 
+However, by defining multiple networks and modifying the Calico policy
+associated with those networks it is possible to achieve the same isolation
 that you would have if using multiple networks, with the additional bonus of a
 much richer policy set.
 
-For example, suppose with a standard Docker network approach you have two 
+For example, suppose with a standard Docker network approach you have two
 networks A and B, and you have set of containers on network A, some on network
 B, and some on both networks A and B.  When using Calico as a Docker network
 plugin, you would configure networks A and B and then configure a third network
 (lets call it AB) to represent the "A and B" group where the policy would be
 modified to allow ingress traffic from both A and B.  Rather than attaching a
-container to network A and network B, with this model you would attach the 
+container to network A and network B, with this model you would attach the
 container to network AB.
 
 ## Managing Calico policy for a network
@@ -69,7 +69,7 @@ containers.  We can create a network called `databases` with the the following
 command:
 
 ```
-docker network create --driver calico --ipam-driver calico databases 
+docker network create --driver calico --ipam-driver calico databases
 ```
 
 #### View the policy associated with the network
@@ -102,9 +102,9 @@ as source and destination CIDR, port and tag.
 
 The `calicoctl profile <profile> rule add` and `calicoctl profile <profile> rule remove`
 commands can be used to add and remove rules in the profile.
-  
+
 As an example, suppose the databases network represents a group of MySQL
-databases which should allow TCP traffic to port 3306 from "application" 
+databases which should allow TCP traffic to port 3306 from "application"
 containers.
 
 To achieve that, create a second network called "applications" which the
@@ -136,6 +136,6 @@ display the valid profile commands.
 
 ## Further reading
 
-For more details about advanced policy options read the 
+For more details about advanced policy options read the
 [Advanced Network Policy tutorial]({{site.baseurl}}/{{page.version}}/usage/configuration/advanced-network-policy).
 

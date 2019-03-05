@@ -9,8 +9,8 @@ components and the order in which that upgrade should be performed. Most
 releases do not concurrently upgrade all of these components: if a
 release does not upgrade a given component, you may skip those steps.
 
-> **Important**: While the upgrade procedure is very safe, you will 
-> be unable to issue API requests to your OpenStack system during the 
+> **Important**: While the upgrade procedure is very safe, you will
+> be unable to issue API requests to your OpenStack system during the
 > procedure. Please plan your upgrade window accordingly, and see the
 > [Service Impact](#service-impact) section for more details.
 {: .alert .alert-danger}
@@ -203,7 +203,7 @@ host you can upgrade only the Calico packages, as follows:
 
     apt-get update
     apt-get install calico-control calico-common python-etcd networking-calico
-    
+
 > **Important**: Running `apt-get upgrade` is not sufficient to upgrade Calico
 > due to new dependent packages added in version 1.3. If you want to
 > upgrade Calico as part of a system-wide update, you must use

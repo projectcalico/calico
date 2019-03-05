@@ -143,12 +143,12 @@ sudo cp loopback /opt/cin/bin/
 ```
 
 ### 4. Deploy the Calico network policy controller
-The `calico/kube-policy-controller` implements the Kubernetes NetworkPolicy API by watching the Kubernetes API for Pod, Namespace, and 
+The `calico/kube-policy-controller` implements the Kubernetes NetworkPolicy API by watching the Kubernetes API for Pod, Namespace, and
 NetworkPolicy events and configuring Calico in response.  It runs as a single pod managed by a ReplicaSet.
 
 To install the policy controller:
 
-- Download the [policy controller manifest](policy-controller.yaml). 
+- Download the [policy controller manifest](policy-controller.yaml).
 - Modify `<ETCD_ENDPOINTS>` to point to your etcd cluster.
 - Install it using `kubectl`.
 
@@ -175,7 +175,7 @@ with CNI networking enabled. There are a number of ways to do this and we won't 
 
 Download the Calico self-hosted manifest, [`calico.yaml`](hosted/calico.yaml).
 
-Edit the provided ConfigMap at the top of the file in order to configure Calico 
+Edit the provided ConfigMap at the top of the file in order to configure Calico
 for your deployment.  Then install the manifests using Kubernetes.
 
 ```

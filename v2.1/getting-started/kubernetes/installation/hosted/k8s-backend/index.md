@@ -2,7 +2,7 @@
 title: Etcdless Hosted Install
 ---
 
-This document describes installing Calico on Kubernetes in a mode that does not require access to an etcd cluster.  
+This document describes installing Calico on Kubernetes in a mode that does not require access to an etcd cluster.
 This mode uses the Kubernetes API as the datastore.  Note that this feature
 currently comes with a number of limitations, namely:
 

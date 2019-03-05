@@ -182,7 +182,7 @@ To set the autodetection method for IPv6, use the `--ip6-autodetection-method` o
 
 > **Note**: If you are starting the calico/node container directly (and not using the
 > `calicoctl run` helper command), the options are passed in environment
-> variables. These are described in the 
+> variables. These are described in the
 > [calico/node configuration guide]({{site.baseurl}}/{{page.version}}/reference/node/configuration).
 {: .alert .alert-info}
 

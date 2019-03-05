@@ -12,10 +12,10 @@ This document will demonstrate how to manipulate policy for Calico using
 To demonstrate this, we will use Marathon to launch an nginx webserver using the Universal Containerizer.
 Then, we will launch basic curl task which will repeatedly curl the webserver.
 
-> **Note**: This example assumes you are running in a DC/OS environment 
-> since it uses the DC/OS DNS to access the web server. It is easy enough 
+> **Note**: This example assumes you are running in a DC/OS environment
+> since it uses the DC/OS DNS to access the web server. It is easy enough
 > to adjust this demo for non-DC/OS environments by replacing the
-> `webserver.marathon.containerip.dcos.thisdcos.directory` DNS name with 
+> `webserver.marathon.containerip.dcos.thisdcos.directory` DNS name with
 > the IP address of the web server container.
 {: .alert .alert-info}
 
@@ -96,7 +96,7 @@ calicoctl apply -f - <<EOF
 EOF
 ```
 
-> **Note**: You'll need `calicoctl` configured to access your central etcd datastore. 
+> **Note**: You'll need `calicoctl` configured to access your central etcd datastore.
 > See [help]({{site.baseurl}}/{{page.version}}/reference/calicoctl/setup/etcdv2).
 {: .alert .alert-info}
 

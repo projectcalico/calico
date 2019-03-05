@@ -3,7 +3,7 @@ title: 'Calico BIRD Route Reflector container'
 canonical_url: 'https://docs.projectcalico.org/v3.5/usage/routereflector/calico-routereflector'
 ---
 
-For many Calico deployments, the use of a Route Reflector is not required. 
+For many Calico deployments, the use of a Route Reflector is not required.
 However, for large scale deployments a full mesh of BGP peerings between each
 of your Calico nodes may become untenable.  In this case, route reflectors
 allow you to remove the full mesh and scale up the size of the cluster.
@@ -21,22 +21,22 @@ calico/node container image.
 
 For an OpenStack deployment, read [Configuring BIRD as a BGP Route Reflector](bird-rr-config).
 
-> NOTE: The API and behavior of the calico/routereflector is likely to change in 
+> NOTE: The API and behavior of the calico/routereflector is likely to change in
 > future releases.
 
 #### Known limitations
 
--  The calico/routereflector instance will automatically peer with the Calico 
+-  The calico/routereflector instance will automatically peer with the Calico
    nodes, but it currently has no mechanism to configure peerings with non-Calico
    BGP speakers (e.g. edge routers)
--  There is no `calicoctl` integration or similar.  
+-  There is no `calicoctl` integration or similar.
 -  If you are using Kubernetes API as the Calico datastore, the Route Reflector container
    currently only supports running as a single-instance.
 -  For etcdv2, the Route Reflector container may be used to form a cluster of route reflectors that
    automatically create a full mesh between each Route Reflector.
-   -  Note that there is no `calicoctl` integration and to form a cluster it is necessary to 
+   -  Note that there is no `calicoctl` integration and to form a cluster it is necessary to
       configure data directly into the `etcd` datastore for each Route Reflector instance.
-   -  It is not possible to form multiple separate meshed groups 
+   -  It is not possible to form multiple separate meshed groups
       of Route Reflectors using this image.
 
 ## Starting and configuring your route reflectors
@@ -57,7 +57,7 @@ installed.
 Run the following command to start the Route Reflector container image.
 
 ```
-docker run --privileged --net=host -d                              \ 
+docker run --privileged --net=host -d                              \
            -e IP=<IPv4_RR>                                         \
            [-e IP6=<IPv6_RR>]                                      \
            -e ETCD_ENDPOINTS=<http://ETCD_IP:PORT>                 \
@@ -67,22 +67,22 @@ docker run --privileged --net=host -d                              \
 Where:
 
 -  `[]` indicates an optional parameter
--  `<IPv4_RR>` is the IPv4 address of the RR host (the BIRD instance binds to 
+-  `<IPv4_RR>` is the IPv4 address of the RR host (the BIRD instance binds to
    the hosts IPv4 address)
 -  `<IPv6_RR>` is the *optional* IPv6 address of the RR host (the BIRD6 instance
    binds to the hosts IPv6 address)
 -  `<ETCD_IP:PORT>` is the colon separated IPv4 address and port of an etcd
-   node in the etcd cluster.  A comma-separated list of endpoints may be 
+   node in the etcd cluster.  A comma-separated list of endpoints may be
    specified.
-   
+
 > Note: If you require TLS/SSL enabled etcd, see the [section below](#route-reflector-with-tlsssl-etcd)
 > for details on how to start the route reflector.
 
 #### Configuring a cluster of Route Reflectors
 
-If you want to use more than one route reflector, the Route Reflector container supports 
+If you want to use more than one route reflector, the Route Reflector container supports
 running as a single cluster of route reflectors.  The Calico BIRD Route Reflector
-takes care of creating a full mesh between all of the route reflectors in the 
+takes care of creating a full mesh between all of the route reflectors in the
 cluster.
 
 To operate a cluster of these route reflectorsm it is necessary to explicitly
@@ -92,7 +92,7 @@ to add an entry into etcd.
 The configuration for the Route Reflector is stored for IPv4 at:
 
 	/calico/bgp/v1/rr_v4/<RR IPv4 address>
-	
+
 and IPv6 at:
 
 	/calico/bgp/v1/rr_v6/<RR IPv6 address>
@@ -127,7 +127,7 @@ the following command would be used to configure the Route Reflector.
 curl -L http://192.0.2.10:2379/v2/keys/calico/bgp/v1/rr_v4/192.0.2.50 -XPUT -d value="{\"ip\":\"192.0.2.50\",\"cluster_id\":\"1.0.0.1\"}"
 ```
 
-See [below](#example-topology--multiple-cluster-ids) for details 
+See [below](#example-topology--multiple-cluster-ids) for details
 about large networks and the use and format of the cluster ID.
 
 Repeat the above instructions for every Route Reflector in the cluster.
@@ -170,7 +170,7 @@ curl --cacert <path_to_ca_cert> --cert <path_to_cert> --key <path_to_key> -L htt
 
 ### Using the Kubernetes API as the Calico datastore
 
-If you are using Kuberenetes as the datastore for Calico, the Calico Route 
+If you are using Kuberenetes as the datastore for Calico, the Calico Route
 Reflector container only supports running as a single route reflector.  It is not
 possible with this image to set up a cluster of route reflectors.
 
@@ -211,7 +211,7 @@ before configuring any nodes.  This only needs to be done once.
 -  Disable the full node-to-node BGP mesh
 -  Configure the default node AS number for your network (this is used by
    the Route Reflector image when setting up the Route Reflector full mesh).
-   
+
 If you have a small cluster of Route Reflectors and you intend to have every
 Calico Docker node peer with every Route Reflector, set this up one time as
 global configuration.
@@ -229,14 +229,14 @@ From any Calico Docker node, run the following:
 From any Calico Docker node, run the following:
 
     calicoctl get nodes --output=wide
-    
+
 This returns table of all configured Calico node instances and includes the AS
 number for each node.
 
 ### Peering with every Route Reflector (optional)
 
 If you have a small cluster of Route Reflectors (e.g. a single RR or a pair of
-RRs for redundancy) and you intend to have every Calico Docker node peer with 
+RRs for redundancy) and you intend to have every Calico Docker node peer with
 each of the Route Reflectors, you can set up the peerings as a one-time set of
 global configuration.
 
@@ -254,11 +254,11 @@ metadata:
 spec:
   asNumber: <AS_NUM>
 EOF
-``` 
+```
 
 Where:
 -  `<IP_RR>` is the IPv4 or IPv6 address of the Route Reflector.
--  `<AS_NUM>` is the AS number to use for the network (set or determined 
+-  `<AS_NUM>` is the AS number to use for the network (set or determined
    above).
 
 ## Setting up node-specific peering
@@ -272,11 +272,11 @@ example, you may have:
 
 -  a cluster of 100 route reflectors connected in a full mesh
 -  a network of 100,000 Calico Docker nodes
--  each Calico Docker node is connected to two or three different Route 
+-  each Calico Docker node is connected to two or three different Route
    Reflectors.
-   
+
 ### Configuring a node-specific Route Reflector peering
-  
+
 To configure a Route Reflector as a peer of a specific node, run the following
 *from the node*:
 
@@ -291,17 +291,17 @@ metadata:
 spec:
   asNumber: <AS_NUM>
 EOF
-``` 
+```
 
 Where:
 -  `<IP_RR>` is the IPv4 or IPv6 address of the Route Reflector.
--  `<AS_NUM>` is the AS number to use for the network (set or determined 
+-  `<AS_NUM>` is the AS number to use for the network (set or determined
    above).
 -  `<NODENAME>` is the name of the node.
 
 Run this separately for each Route Reflector that you want to peer with the
 node.
-   
+
 ## Additional information
 
 ### Example topology / multiple cluster IDs
@@ -312,7 +312,7 @@ of a cluster ID to ensure there are no routing loops when distributing routes.
 The Route Reflector image provided assumes that it has a fixed cluster ID for
 each Route Reflector rather than being configurable on a per peer basis.
 
-For example, the topology outlined in the diagram below is based on the Top of 
+For example, the topology outlined in the diagram below is based on the Top of
 Rack model:
 
 -  Each rack is assigned its own cluster ID (a unique number in IPv4 address
@@ -320,5 +320,5 @@ Rack model:
 -  Each node (server in the rack) peers with a redundant set of route
    reflectors specific to that rack.
 -  All of the ToR route reflectors form a full mesh with each other.
-   
+
 ![Example scale topology](mesh-topology.png)

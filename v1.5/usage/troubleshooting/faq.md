@@ -4,7 +4,7 @@ canonical_url: 'https://docs.projectcalico.org/v3.5/usage/troubleshooting/faq'
 ---
 
 This page contains answers to several frequently asked technical
-questions about Calico on Openstack. It is updated on a regular basis: 
+questions about Calico on Openstack. It is updated on a regular basis:
 please check back for more information.
 
 ## "Why use Calico?"
@@ -16,12 +16,12 @@ we think Calico is more scalable, simpler and more flexible. We think
 you should look into it if you have more than a handful of nodes on a
 single site.
 
-For a more detailed discussion of this topic, see our blog post at 
+For a more detailed discussion of this topic, see our blog post at
 [Why Calico?](https://www.projectcalico.org/why-calico/).
 
 ## "Does Calico work with IPv6?"
 
-Yes! 
+Yes!
 
 ## "Is Calico compliant with PCI/DSS requirements?"
 
@@ -90,9 +90,9 @@ workloads to each other, and the broader world.
 
 However, the underlying physical fabric obviously needs to be set up
 too. Here, Calico has discussed how both a layer 2 (see
-[here]({{site.baseurl}}/{{page.version}}/reference/private-cloud/l2-interconnect-fabric)) 
-or a layer 3 (see 
-[here]({{site.baseurl}}/{{page.version}}/reference/private-cloud/l3-interconnect-fabric)) 
+[here]({{site.baseurl}}/{{page.version}}/reference/private-cloud/l2-interconnect-fabric))
+or a layer 3 (see
+[here]({{site.baseurl}}/{{page.version}}/reference/private-cloud/l3-interconnect-fabric))
 fabric
 could be integrated with Calico. This is one of the great strengths of
 the Calico model: it allows the infrastructure to be decoupled from what
@@ -114,8 +114,8 @@ stateless variant of RFC 6877 (464-XLAT). For more detail, see
 
 ## "How do I control policy/connectivity without virtual/physical firewalls?"
 
-Calico provides an extremely rich security policy model, detailed 
-[here]({{site.baseurl}}/{{page.version}}/reference/security-model). 
+Calico provides an extremely rich security policy model, detailed
+[here]({{site.baseurl}}/{{page.version}}/reference/security-model).
 This model applies the policy at the first and last hop
 of the routed traffic within the Calico network (the source and
 destination compute hosts).
@@ -146,6 +146,6 @@ again, and again the reachability doesn’t have to change.
 
 ## "How does Calico interact with the Neutron API?"
 
-[This document]({{site.baseurl}}/{{page.version}}/reference/advanced/calico-neutron-api) 
+[This document]({{site.baseurl}}/{{page.version}}/reference/advanced/calico-neutron-api)
 document goes into extensive detail about how
 various Neutron API calls translate into Calico actions.

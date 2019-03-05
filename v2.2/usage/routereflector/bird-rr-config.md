@@ -3,17 +3,17 @@ title: 'Configuring BIRD as a BGP Route Reflector'
 canonical_url: 'https://docs.projectcalico.org/v3.5/usage/routereflector/bird-rr-config'
 ---
 
-For many Calico deployments, the use of a Route Reflector is not required. 
+For many Calico deployments, the use of a Route Reflector is not required.
 However, for large scale deployments a full mesh of BGP peerings between each
 of your Calico nodes may become untenable.  In this case, route reflectors
 allow you to remove the full mesh and scale up the size of the cluster.
 
 These instructions will take you through installing BIRD as a BGP route
 reflector, and updating your other BIRD instances to speak to your new
-route reflector.  The instructions that are are valid for both Ubuntu 14.04 and 
-RHEL 7.  
+route reflector.  The instructions that are are valid for both Ubuntu 14.04 and
+RHEL 7.
 
-For a container-based deployment, using the calico/node container, check 
+For a container-based deployment, using the calico/node container, check
 out the [Calico BIRD Route Reflector container](calico-routereflector).
 
 ## Prerequisites
@@ -144,7 +144,7 @@ Optionally, if you configured IPv6 in step 3, also restart BIRD6:
     systemctl restart bird6
     systemctl enable bird6
 
-### Step 5: Reconfigure compute nodes 
+### Step 5: Reconfigure compute nodes
 
 #### Openstack deployments
 
@@ -161,7 +161,7 @@ instances as detailed in step 4.
 
 #### Container-based deployments
 
-For container-based deployments using the `calico/node` container, use 
+For container-based deployments using the `calico/node` container, use
 `calicoctl` to disable the full mesh between each node and configure the
 route reflector as a global peer.
 

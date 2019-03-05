@@ -1,5 +1,5 @@
 ---
-title: Standard Hosted Install 
+title: Standard Hosted Install
 canonical_url: 'https://docs.projectcalico.org/v3.5/getting-started/kubernetes/installation/hosted/hosted'
 ---
 
@@ -16,7 +16,7 @@ kubectl apply -f calico.yaml
 
 > **NOTE**
 >
-> Make sure you configure the provided ConfigMap with the location of your etcd cluster before running the above command. 
+> Make sure you configure the provided ConfigMap with the location of your etcd cluster before running the above command.
 
 ## Configuration Options
 

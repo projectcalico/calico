@@ -117,7 +117,7 @@ kubectl apply -f \
 
 > **Note**: You can also
 > [view the manifest in your browser](manifests/app-layer-policy/istio-app-layer-policy.yaml){:target="_blank"}.
-{: .alert .alert-info} 
+{: .alert .alert-info}
 
 ## Adding namespace labels
 

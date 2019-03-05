@@ -8,7 +8,7 @@ Use the version selector at the top-right of this page to view a different relea
 
 ## v1.6.1
 
-This release includes the following bugfixes: 
+This release includes the following bugfixes:
 
 - Felix ([v1.4.6](https://github.com/projectcalico/felix/releases/tag/1.4.6)):
   - Fix that packets weren't properly policed when there were multiple interface prefixes.

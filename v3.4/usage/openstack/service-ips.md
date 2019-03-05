@@ -164,7 +164,7 @@ We begin by creating a test VM that will be the target of the service IP.
    ```
    {: .no-select-button}
 
-   In this example, the VM has been given a fixed IP of 10.28.0.13.  
+   In this example, the VM has been given a fixed IP of 10.28.0.13.
 
 1. Let's look at the corresponding Neutron port.
 
@@ -191,7 +191,7 @@ We begin by creating a test VM that will be the target of the service IP.
 
 
 Now we want to set up a service IP - let's say `10.28.0.23` - that
-initially points to that VM, `testvm1`.  
+initially points to that VM, `testvm1`.
 
 1. One way to do that is to add the service IP as a second 'fixed IP' on the Neutron port.
 
@@ -530,7 +530,7 @@ cycle the active VM).
 
    It should return:
 
-   ```bash  
+   ```bash
    testvm2
    ```
    {: .no-select-button}
@@ -543,7 +543,7 @@ cycle the active VM).
 
    They should look something like the following.
 
-   ```bash    
+   ```bash
    1: lo: <LOOPBACK,UP,LOWER_UP> mtu 16436 qdisc noqueue
        link/loopback 00:00:00:00:00:00 brd 00:00:00:00:00:00
        inet 127.0.0.1/8 scope host lo

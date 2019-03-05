@@ -10,7 +10,7 @@ canonical_url: 'https://docs.projectcalico.org/v3.5/getting-started/bare-metal/p
 Normal host endpoint policies apply to traffic that arrives on
 and/or is sent to a host interface, but the rules for applying untracked and
 pre-DNAT policies differ in some cases. Here we present and summarize all of
-those rules together, for all possible flows and all types of host endpoints 
+those rules together, for all possible flows and all types of host endpoints
 policy.
 
 For packets that arrive on a host interface and are destined for a local
@@ -18,12 +18,12 @@ workload, i.e., a locally-hosted pod, container or VM:
 
 - Pre-DNAT policies apply.
 
-- Normal policies do apply if `applyOnForward` is `true`. 
+- Normal policies do apply if `applyOnForward` is `true`.
   Normal policies do not apply if `applyOnForward` is `false`.
 
 - Untracked policies technically do apply, but never have any net positive
   effect for such flows.
-  
+
   > **Note**: To be precise, untracked policy for the incoming host interface may
   > apply in the forwards direction, and if so it will have the effect of forwarding
   > the packet to the workload without any connection tracking. But then, in
@@ -88,8 +88,8 @@ For packets that are sent from a local workload out of a host interface:
 
 - No untracked or pre-DNAT host endpoint policies apply.
 
-- Normal policies apply if `applyOnForward` is `true`: specifically, the egress 
+- Normal policies apply if `applyOnForward` is `true`: specifically, the egress
   rules of the normal policies that apply to the outgoing interface. (The reverse
-  direction is allowed by conntrack state.) Normal policies do not apply if 
+  direction is allowed by conntrack state.) Normal policies do not apply if
   `applyOnForward` is `false`.
 

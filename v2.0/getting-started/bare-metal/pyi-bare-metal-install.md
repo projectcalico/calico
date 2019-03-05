@@ -44,9 +44,9 @@ The bundle has the following pre-requisites:
     check the version, run `ipset --version`.
 -   The conntrack, iptables and ipsets kernel modules must be available
     (or compiled-in).
--   An [etcd](https://github.com/coreos/etcd/releases/) cluster that 
-    supports the etcdv2 protocol.  We recommend running the latest 
-    stable release of etcd v3.x. To check the version, run 
+-   An [etcd](https://github.com/coreos/etcd/releases/) cluster that
+    supports the etcdv2 protocol.  We recommend running the latest
+    stable release of etcd v3.x. To check the version, run
     `etcd --version`
 
 > **NOTE**
@@ -130,7 +130,7 @@ etcd.
 
 Felix tries to detect whether IPv6 is available on your platform but
 the detection can fail on older (or more unusual) systems.  If Felix
-exits soon after startup with `ipset` or `iptables` errors try 
+exits soon after startup with `ipset` or `iptables` errors try
 setting the `Ipv6Support` setting to `false`.
 
 ## Start Felix

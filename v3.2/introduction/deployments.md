@@ -6,27 +6,27 @@ canonical_url: 'https://docs.projectcalico.org/v3.5/introduction/deployments'
 #### Google Kubernetes Engine (GKE)
 
 [Securing cluster networking with network policies](https://www.youtube.com/watch?v=3gGpMmYeEO8&t=0m0s) <img src="{{site.baseurl}}/images/kubernetes.svg" alt="Kubernetes" width="2.5%" style="display: inline"> <img src="{{site.baseurl}}/images/camera.svg" alt="video" width="2%" style="display: inline"><br>
-Ahmet Balkan, KubeCon 2017 (30:54) 
+Ahmet Balkan, KubeCon 2017 (30:54)
 
 #### Squarespace
 
 [Kubernetes in the Datacenter: Squarespace’s Journey Towards Self-Service Infrastructure](https://www.youtube.com/watch?v=oHrcWU9Tyz4&t=0m0s) <img src="{{site.baseurl}}/images/kubernetes.svg" alt="Kubernetes" width="2.5%" style="display: inline"> <img src="{{site.baseurl}}/images/camera.svg" alt="video" width="2%" style="display: inline"><br>
-Kevin Lynch, KubeCon 2017(36:29)  
+Kevin Lynch, KubeCon 2017(36:29)
 
 #### Giant Swarm
 
 [How We Run Kubernetes in Kubernetes, aka Kubeception](https://www.youtube.com/watch?v=Nq5uIIT5mOw&t=0m0s) <img src="{{site.baseurl}}/images/kubernetes.svg" alt="Kubernetes" width="2.5%" style="display: inline"> <img src="{{site.baseurl}}/images/camera.svg" alt="video" width="2%" style="display: inline"><br>
-Timo Derstappen, KubeCon 2017 (24:57) 
+Timo Derstappen, KubeCon 2017 (24:57)
 
 #### PagSeguro
 
 [Apache Mesos and Security: The Joy of Mesos with Calico](https://www.youtube.com/watch?v=woaKCAG4li4&t=0m0s) <img src="{{site.baseurl}}/images/mesos.svg" alt="Mesos" width="2%" style="display: inline"> <img src="{{site.baseurl}}/images/camera.svg" alt="video" width="2%" style="display: inline"><br>
-Diego Oliveira & Acácio Alves dos Santos, MesosCon 2017 (37:17)  
+Diego Oliveira & Acácio Alves dos Santos, MesosCon 2017 (37:17)
 
 #### Apigee
 
 [Managing a Multi-Tenanted Kubernetes Cluster in Production](https://www.youtube.com/watch?v=lA1B2b5kU2g&t=0m0s) <img src="{{site.baseurl}}/images/kubernetes.svg" alt="Kubernetes" width="2.5%" style="display: inline"> <img src="{{site.baseurl}}/images/camera.svg" alt="video" width="2%" style="display: inline"><br>
-Josh Bowen, KubeCon 2016 (28:46) 
+Josh Bowen, KubeCon 2016 (28:46)
 
 #### Yahoo! JAPAN
 

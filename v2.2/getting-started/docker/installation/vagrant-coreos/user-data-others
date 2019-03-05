@@ -33,10 +33,10 @@ coreos:
       Documentation=http://docs.docker.com
       After=containerd.service docker.socket network.target download-reqs.service
       Requires=containerd.service docker.socket download-reqs.service
-      
+
       [Service]
       Type=notify
-      
+
       # the default is not to use systemd for cgroups because the delegate issues still
       # exists and systemd currently does not support the cgroup feature set required
       # for containers run by docker
@@ -53,7 +53,7 @@ coreos:
       TimeoutStartSec=0
       # set delegate yes so that systemd does not reset the cgroups of docker containers
       Delegate=yes
-      
+
       [Install]
       WantedBy=multi-user.target
 write_files:

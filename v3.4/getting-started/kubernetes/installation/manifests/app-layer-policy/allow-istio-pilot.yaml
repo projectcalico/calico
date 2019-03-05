@@ -1,4 +1,4 @@
-# This NetworkPolicy allows pods egress access the to 
+# This NetworkPolicy allows pods egress access the to
 # Istio Pilot service in the istio-system namespace.
 
 apiVersion: projectcalico.org/v3

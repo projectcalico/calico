@@ -1,5 +1,5 @@
 # This manifest installs the calico/node container, as well
-# as the Calico CNI plugins and network config on 
+# as the Calico CNI plugins and network config on
 # each master and worker node in a Kubernetes cluster.
 kind: DaemonSet
 apiVersion: extensions/v1beta1
@@ -25,7 +25,7 @@ spec:
     spec:
       hostNetwork: true
       containers:
-        # Runs calico/node container on each Kubernetes node.  This 
+        # Runs calico/node container on each Kubernetes node.  This
         # container programs network policy and routes on each
         # host.
         - name: calico-node

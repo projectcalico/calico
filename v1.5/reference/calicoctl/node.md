@@ -220,7 +220,7 @@ Node stopped and all configuration removed
 ```
 
 ### calicoctl node remove
-This command is used to remove data associated with a `calico/node` instance.  
+This command is used to remove data associated with a `calico/node` instance.
 
 To remove the node cleanly, you must first remove all workloads from Calico and
 manually clean up any workloads that were uncleanly stopped with the

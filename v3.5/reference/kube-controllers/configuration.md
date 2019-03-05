@@ -50,7 +50,7 @@ The following environment variables can be used to configure the {{site.prodname
 | ------------- | ----------- | ------ | -------
 | `ENABLED_CONTROLLERS` | Which controllers to run | namespace, node, policy, serviceaccount, workloadendpoint | policy,namespace,serviceaccount,workloadendpoint,node
 | `LOG_LEVEL`     | Minimum log level to be displayed. | debug, info, warning, error | info
-| `KUBECONFIG`    | Path to a kubeconfig file for Kubernetes API access | path | 
+| `KUBECONFIG`    | Path to a kubeconfig file for Kubernetes API access | path |
 | `SYNC_NODE_LABELS`    | When enabled, Kubernetes node labels will be copied to Calico node objects. | boolean | true
 
 [in-cluster-config]: https://kubernetes.io/docs/tasks/access-application-cluster/access-cluster/#accessing-the-api-from-a-pod

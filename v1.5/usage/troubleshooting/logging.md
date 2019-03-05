@@ -15,7 +15,7 @@ automatically rotated, and by default 10 files of 1MB each are kept. The
 current log file is called `current` and rotated files have @ followed by a
 timestamp detailing when the files was rotated in [tai64n](http://cr.yp.to/libtai/tai64.html#tai64n) format.
 
-All logging is done using [svlogd](http://smarden.org/runit/svlogd.8.html). 
+All logging is done using [svlogd](http://smarden.org/runit/svlogd.8.html).
 Each component can be configured by dropping a file named `config` into that
 component's logging directory.
 
@@ -31,7 +31,7 @@ svlogd can also be configured to forward logs to syslog, to prefix each line
 and to filter logs. See the [documentation](http://smarden.org/runit/svlogd.8.html)
 for further details.
 
-See the following sub-sections for details on configuring the log level for 
+See the following sub-sections for details on configuring the log level for
 each calico-node component.
 
 ### Bird/Bird6

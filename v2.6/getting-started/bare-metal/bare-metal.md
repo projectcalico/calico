@@ -231,7 +231,7 @@ EOF
 Once you have such a policy in place, you may want to disable the
 [failsafe rules](#failsafe-rules).
 
-> **Note**: Packets that reach the end of the list of rules fall-through to the 
+> **Note**: Packets that reach the end of the list of rules fall-through to the
 > next policy (sorted by the `order` field).
 >
 > The selector in the policy, `all()`, will match *all* endpoints,
@@ -401,7 +401,7 @@ can be disabled by setting each configuration value to "none".
 > to etcd.
 >
 > Before disabling the failsafe rules, we recommend creating a policy to
-> replace it with more-specific rules for your environment: see 
+> replace it with more-specific rules for your environment: see
 > [above](#creating-basic-connectivity-and-calico-policy).
 {: .alert .alert-danger}
 
@@ -499,7 +499,7 @@ workload - i.e. a locally-hosted pod, container or VM:
 
 - Untracked policies technically do apply, but never have any net positive
   effect for such flows.
-  
+
   > **Note**: To be precise, untracked policy for the incoming host interface may apply
   > in the forwards direction, and if so it will have the effect of forwarding
   > the packet to the workload without any connection tracking. But then, in
@@ -638,7 +638,7 @@ are in use in your own cluster.
 >
 > The explicit `drop-other-ingress` policy is needed because there is no
 > automatic default-drop semantic for pre-DNAT policy. There _is_ a
-> default-drop semantic for normal host endpoint policy but—as noted above—normal 
+> default-drop semantic for normal host endpoint policy but—as noted above—normal
 > host endpoint policy is not always enforced.
 {: .alert .alert-info}
 

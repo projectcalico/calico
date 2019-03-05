@@ -7,10 +7,10 @@ An Node resource (node) represents a node running Calico.  When adding a host
 to a Calico cluster, a Node resource needs to be created which contains the
 configuration for the Calico Node instance running on the host.
 
-When starting a Calico node instance, the name supplied to the instance should 
-match the name configured in the Node resource.  
+When starting a Calico node instance, the name supplied to the instance should
+match the name configured in the Node resource.
 
-By default, starting a `calico/node` instance will automatically create a node resource 
+By default, starting a `calico/node` instance will automatically create a node resource
 using the `hostname` of the compute host.
 
 For `calicoctl` commands that specify a resource type on the CLI, the following
@@ -44,7 +44,7 @@ spec:
 |-------------|-----------------------------|-------------------|--------|------------|
 | bgp      | BGP configuration for this node.  Omit if using Calico for policy only. | | [BGP](#bgp) |
 
-#### BGP 
+#### BGP
 
 | Field       | Description                 | Accepted Values   | Schema | Default    |
 |-------------|-----------------------------|-------------------|--------|------------|

@@ -38,7 +38,7 @@ and compute functions running on the same node:
 
 5. Ensure that IPv4 and IPv6 forwarding are enabled:
 
-       sysctl -w net.ipv4.ip_forward=1 
+       sysctl -w net.ipv4.ip_forward=1
        sysctl -w net.ipv6.conf.all.forwarding=1
 
 

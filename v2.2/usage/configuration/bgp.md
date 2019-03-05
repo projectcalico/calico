@@ -37,7 +37,7 @@ mesh topology).
 
 For large-scale deployments, or for deployments where you require a more specific
 BGP topology (e.g. peering with ToR switches) the full node-to-node mesh should be
-disabled and explicit BGP peers configured for your Calico nodes.  A BGP peer may 
+disabled and explicit BGP peers configured for your Calico nodes.  A BGP peer may
 be configured in your Calico network as a Global BGP Peer or a Per-Node BGP Peer.
 
 **Global BGP Peers**

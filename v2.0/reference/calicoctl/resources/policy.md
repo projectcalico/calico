@@ -3,11 +3,11 @@ title: Policy Resource (policy)
 canonical_url: 'https://docs.projectcalico.org/v3.5/reference/calicoctl/resources/globalnetworkpolicy'
 ---
 
-A Policy resource (policy) represents an ordered set of rules which are applied 
-to a collection of endpoints which match a [label selector](#selector).  
+A Policy resource (policy) represents an ordered set of rules which are applied
+to a collection of endpoints which match a [label selector](#selector).
 
 Policy resources can be used to define network connectivity rules between groups of Calico endpoints and host endpoints, and
-take precedence over [Profile resources]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/profile) if any are defined. 
+take precedence over [Profile resources]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/profile) if any are defined.
 
 For `calicoctl` commands that specify a resource type on the CLI, the following
 aliases are supported (all case insensitive): `policy`, `policies`, `pol`, `pols`.
@@ -25,7 +25,7 @@ metadata:
 spec:
   selector: role == 'database'
   ingress:
-  - action: allow 
+  - action: allow
     protocol: tcp
     source:
       selector: role == 'frontend'
@@ -45,7 +45,7 @@ spec:
 | name | The name of the policy. |         | string |
 
 
-#### Spec 
+#### Spec
 
 | Field    | Description                 | Accepted Values   | Schema | Default    |
 |----------|-----------------------------|-------------------|--------|------------|
@@ -88,7 +88,7 @@ applied action is deny.
 | notNet | Negative match on CIDR. | Valid IPv4 or IPv6 CIDR | cidr | |
 | selector    | Positive match on selected endpoints. | Valid selector | [selector](#selector) | |
 | notSelector | Negative match on selected endpoints. | Valid selector | [selector](#selector) | |
-| ports | Positive match on the specified ports | | list of [ports](#ports) | | 
+| ports | Positive match on the specified ports | | list of [ports](#ports) | |
 | notPorts | Negative match on the specified ports | | list of [ports](#ports) | |
 
 #### Selector

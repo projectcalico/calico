@@ -4,21 +4,21 @@ canonical_url: 'https://docs.projectcalico.org/v3.5/getting-started/bare-metal/p
 ---
 
 If `applyOnForward` is `false`, the host endpoint policy applies to traffic to/from
- local processes only. 
+ local processes only.
 
 If `applyOnForward` is `true`, the host endpoint policy also applies to forwarded traffic:
 - Traffic that comes in via a host endpoint and is forwarded to a local workload (container/pod/VM).
 - Traffic from a local workload that is forwarded out via a host endpoint.
 - Traffic that comes in via a host endpoint and is forwarded out via another host endpoint.
 
-By default, `applyOnForward` is `false`. 
+By default, `applyOnForward` is `false`.
 
 Untracked policies and pre-DNAT policies must have `applyOnForward` set to `true`
 because they apply to all forwarded traffic.
 
 Forwarded traffic is allowed by default if no policies apply to the endpoint and direction. In
 other words, if a host endpoint is configured, but there are no policies with `applyOnForward`
-set to `true` that apply to that host endpoint and traffic direction, forwarded traffic is 
+set to `true` that apply to that host endpoint and traffic direction, forwarded traffic is
 allowed in that direction. For example if a forwarded flow is incoming via a host endpoint, but there are
 no Ingress policies with `applyOnForward: true` that apply to that host endpoint, the flow is
 allowed.  If there are `applyOnForward: true` policies that select the host endpoint and direction,
@@ -54,7 +54,7 @@ calicoctl apply -f - <<EOF
   metadata:
     name: empty-default-deny
   spec:
-    types: 
+    types:
       - Ingress
       - Egress
     selector: has(host-endpoint)
@@ -63,7 +63,7 @@ EOF
 ```
 > **Note**: This policy has no `order` field specified which causes it to default
 > to the highest value. Because higher order values have the lowest order of precedence,
-> {{site.prodname}} will apply this policy after all other policies. Refer to the 
+> {{site.prodname}} will apply this policy after all other policies. Refer to the
 > [policy spec]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/networkpolicy#spec) for
 > more discussion.
 {: .alert .alert-info}

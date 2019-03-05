@@ -5,23 +5,23 @@ canonical_url: https://docs.projectcalico.org/v3.5/usage/calicoctl/install
 
 ## About installing calicoctl
 
-`calicoctl` allows you to create, read, update, and delete {{site.prodname}} objects 
-from the command line. You can run it on any host with network access to the 
-{{site.prodname}} datastore in either of the following formats. 
+`calicoctl` allows you to create, read, update, and delete {{site.prodname}} objects
+from the command line. You can run it on any host with network access to the
+{{site.prodname}} datastore in either of the following formats.
 
 - [Binary](#installing-calicoctl-as-a-binary): provides full functionality, including
 `node` commands for instances of `{{site.nodecontainer}}` on the same host.
 
-- [Container](#installing-calicoctl-as-a-container): provides less functionality than 
+- [Container](#installing-calicoctl-as-a-container): provides less functionality than
 the binary format, such as no use of the `node` commands.
 
 
 ## Installing calicoctl as a binary
 
 1. Log into the host, open a terminal prompt, and navigate to the location where
-you want to install the binary. 
+you want to install the binary.
 
-   > **Tip**: Consider navigating to a location that's in your `PATH`. For example, 
+   > **Tip**: Consider navigating to a location that's in your `PATH`. For example,
    > `/usr/local/bin/`.
    {: .alert .alert-success}
 
@@ -37,7 +37,7 @@ you want to install the binary.
    > to one that is or add its location to your `PATH`. This will allow you to invoke it
    > without having to prepend its location.
    {: .alert .alert-info}
-   
+
 **Next step**:
 
 [Configure `calicoctl` to connect to your datastore](/{{page.version}}/usage/calicoctl/configure/).

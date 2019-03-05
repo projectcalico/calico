@@ -3,10 +3,10 @@ title: Configuring the Calico CNI plugins
 canonical_url: 'https://docs.projectcalico.org/v3.5/reference/cni-plugin/configuration'
 ---
 
-The Calico CNI plugin is configured through the standard CNI 
+The Calico CNI plugin is configured through the standard CNI
 [configuration mechanism](https://github.com/containernetworking/cni/blob/master/SPEC.md#network-configuration)
 
-A minimal configuration file that uses {{site.prodname}} for networking 
+A minimal configuration file that uses {{site.prodname}} for networking
 and IPAM looks like this
 
 ```json

@@ -5,7 +5,7 @@ canonical_url: 'https://docs.projectcalico.org/v3.5/reference/calicoctl/commands
 
 This sections describes the `calicoctl get` command.
 
-Read the [calicoctl command line interface user reference]({{site.baseurl}}/{{page.version}}/reference/calicoctl/) 
+Read the [calicoctl command line interface user reference]({{site.baseurl}}/{{page.version}}/reference/calicoctl/)
 for a full list of calicoctl commands.
 
 > The available actions for a specific resource type may be limited based on the datastore
@@ -14,7 +14,7 @@ for a full list of calicoctl commands.
 
 ## Displaying the help text for 'calicoctl get' command
 
-Run `calicoctl get --help` to display the following help menu for the 
+Run `calicoctl get --help` to display the following help menu for the
 command.
 
 ```
@@ -141,9 +141,9 @@ columns, and `custom-columns` for selecting which columns to display.
 Example
 ```
 $ calicoctl get hostEndpoint
-HOSTNAME   NAME        
-host1      endpoint1   
-myhost     eth0        
+HOSTNAME   NAME
+host1      endpoint1
+myhost     eth0
 ```
 
 #### `wide`
@@ -155,9 +155,9 @@ The headings displayed for each resource type is fixed.  See `custom-columns` fo
 Example
 ```
 $ calicoctl get hostEndpoint --output=wide
-HOSTNAME   NAME        INTERFACE   IPS                PROFILES      
-host1      endpoint1               1.2.3.4,0:bb::aa   prof1,prof2   
-myhost     eth0                                       profile1      
+HOSTNAME   NAME        INTERFACE   IPS                PROFILES
+host1      endpoint1               1.2.3.4,0:bb::aa   prof1,prof2
+myhost     eth0                                       profile1
 ```
 
 #### `custom-columns`
@@ -169,9 +169,9 @@ resource type is documented in the [Resources]({{site.baseurl}}/{{page.version}}
 Example
 ```
 $ calicoctl get hostEndpoint --output=custom-columns=NAME,IPS
-NAME        IPS                
-endpoint1   1.2.3.4,0:bb::aa   
-eth0                           
+NAME        IPS
+endpoint1   1.2.3.4,0:bb::aa
+eth0
 ```
 
 #### `yaml / json`
@@ -212,7 +212,7 @@ $ calicoctl get hostEndpoint --output=yaml
 
 The `go-template` and `go-template-file` options display the output using a golang template specified as a string
 on the CLI, or defined in a separate file.
-When writing a template, be aware that the data passed to the template is a golang slice of resource-lists.  The 
+When writing a template, be aware that the data passed to the template is a golang slice of resource-lists.  The
 resource-lists are defined in the [libcalico API]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/) and there is a resource-list defined for
 each resource type.  A resource-list contains an Items field which is itself a slice of resources.  Thus, to output
 the "Name" field from the supplied data, it is necessary to enumerate over the slice of resource-lists and the items

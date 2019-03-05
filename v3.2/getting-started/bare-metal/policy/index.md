@@ -13,14 +13,14 @@ connectivity to a host:
 
 -   They are overly broad in allowing inbound SSH on any interface and
     allowing traffic out to etcd's ports on any interface.
-    
+
 -   Depending on your network, they may not cover all the ports that are
     required; for example, your network may rely on allowing ICMP,
     or DHCP.
 
 Therefore, we recommend creating a failsafe {{site.prodname}} security policy that
 is tailored to your environment. The example command below shows one
-example of how you might do that; the command uses `calicoctl` to create a single 
+example of how you might do that; the command uses `calicoctl` to create a single
 policy resource, which:
 
   - Applies to all known endpoints.
@@ -71,7 +71,7 @@ EOF
 Once you have such a policy in place, you may want to disable the
 [failsafe rules](failsafe).
 
-> **Note**: Packets that reach the end of the list of rules fall-through to the 
+> **Note**: Packets that reach the end of the list of rules fall-through to the
 > next policy (sorted by the `order` field).
 >
 > The selector in the policy, `all()`, will match *all* endpoints,

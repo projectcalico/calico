@@ -9,7 +9,7 @@ this feature, Docker requires that you specify the `--subnet` parameter when run
 `docker network create`.
 
 Calico requires that the passed `--subnet` value be the same CIDR as an existing
-Calico IP pool.  
+Calico IP pool.
 
 ## Example
 

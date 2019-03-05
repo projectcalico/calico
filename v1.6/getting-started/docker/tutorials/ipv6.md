@@ -12,7 +12,7 @@ The worked example below focuses on a non-cloud environment.
 
 ## 1. Pre-requisites
 
-The instructions below assume you have the following hosts with IPv4 addresses configured.  
+The instructions below assume you have the following hosts with IPv4 addresses configured.
 Adjust the instructions accordingly.
 
 | hostname  | IP address   |

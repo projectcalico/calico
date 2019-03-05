@@ -2,7 +2,7 @@
 kind: ConfigMap
 apiVersion: v1
 metadata:
-  name: calico-config 
+  name: calico-config
   namespace: kube-system
 data:
   # Configure this with the location of your etcd cluster.
@@ -53,7 +53,7 @@ metadata:
 data:
   # Populate the following files with etcd TLS configuration if desired, but leave blank if
   # not using TLS for etcd.
-  # This self-hosted install expects three files with the following names.  The values 
+  # This self-hosted install expects three files with the following names.  The values
   # should be base64 encoded strings of the entire contents of each file.
   # etcd-key: null
   # etcd-cert: null
@@ -62,7 +62,7 @@ data:
 ---
 
 # This manifest installs the calico/node container, as well
-# as the Calico CNI plugins and network config on 
+# as the Calico CNI plugins and network config on
 # each master and worker node in a Kubernetes cluster.
 kind: DaemonSet
 apiVersion: extensions/v1beta1
@@ -87,7 +87,7 @@ spec:
     spec:
       hostNetwork: true
       containers:
-        # Runs calico/node container on each Kubernetes node.  This 
+        # Runs calico/node container on each Kubernetes node.  This
         # container programs network policy and routes on each
         # host.
         - name: calico-node
@@ -99,8 +99,8 @@ spec:
                 configMapKeyRef:
                   name: calico-config
                   key: etcd_endpoints
-            # Choose the backend to use. 
-            - name: CALICO_NETWORKING_BACKEND 
+            # Choose the backend to use.
+            - name: CALICO_NETWORKING_BACKEND
               valueFrom:
                 configMapKeyRef:
                   name: calico-config
@@ -191,7 +191,7 @@ spec:
 # This manifest deploys the Calico policy controller on Kubernetes.
 # See https://github.com/projectcalico/k8s-policy
 apiVersion: extensions/v1beta1
-kind: ReplicaSet 
+kind: ReplicaSet
 metadata:
   name: calico-policy-controller
   namespace: kube-system
@@ -247,7 +247,7 @@ spec:
             # service for API access.
             - name: K8S_API
               value: "https://kubernetes.default:443"
-            # Since we're running in the host namespace and might not have KubeDNS 
+            # Since we're running in the host namespace and might not have KubeDNS
             # access, configure the container's /etc/hosts to resolve
             # kubernetes.default to the correct service clusterIP.
             - name: CONFIGURE_ETC_HOSTS

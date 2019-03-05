@@ -32,7 +32,7 @@ Usage:
       icmp [(type <ICMPTYPE> [(code <ICMPCODE>)])]
            [(from [(tag <SRCTAG>)] [(cidr <SRCCIDR>)])]
            [(to   [(tag <DSTTAG>)] [(cidr <DSTCIDR>)])] |
-      [(from [(tag <SRCTAG>)] [(cidr <SRCCIDR>)])]  
+      [(from [(tag <SRCTAG>)] [(cidr <SRCCIDR>)])]
       [(to   [(tag <DSTTAG>)] [(cidr <DSTCIDR>)])]
     )]
   calicoctl profile <PROFILE> rule remove (inbound|outbound) (--at=<POSITION>|

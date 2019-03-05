@@ -26,7 +26,7 @@ in AWS.
 | BGP           | Custom TCP Rule | TCP      | 179        |
 | IPIP*         | Custom Protocol | 4        | all        |
 
-\* The IPIP exception is required only when using Calico with IPIP encapsulation. Keep reading 
+\* The IPIP exception is required only when using Calico with IPIP encapsulation. Keep reading
 for information on when IPIP is required in AWS.
 
 #### Routing Traffic Within a Single VPC Subnet
@@ -53,8 +53,8 @@ performance, you can configure Calico to perform IPIP encapsulation only across 
 To enable the "cross-subnet" IPIP feature, configure your Calico IP pool resources
 to enable IPIP and set the mode to "cross-subnet".
 
-> **Note**: This feature was introduced in Calico v2.1, if your deployment was created with 
-> an older version of Calico, or if you if you are unsure whether your deployment 
+> **Note**: This feature was introduced in Calico v2.1, if your deployment was created with
+> an older version of Calico, or if you if you are unsure whether your deployment
 > is configured correctly, follow the [Configuring IP-in-IP guide]({{site.baseurl}}/{{page.version}}/usage/configuration/ip-in-ip)
 > which discusses this in more detail.
 >

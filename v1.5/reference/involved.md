@@ -16,16 +16,16 @@ in touch for help debugging any issues with Calico.
 
 ## Read the Source, Luke!
 
-All of Calico's code is on [GitHub](https://github.com/projectcalico).  The following 
+All of Calico's code is on [GitHub](https://github.com/projectcalico).  The following
 list contains the most commonly encountered repositories:
 
 Repository         | Description
 -------------------|----------------------------
 [felix](https://github.com/projectcalico/felix) | The felix policy enforcement agent.
-[calico-containers](https://github.com/projectcalico/calico-containers) | Home of the calico/node and calicoctl components. 
+[calico-containers](https://github.com/projectcalico/calico-containers) | Home of the calico/node and calicoctl components.
 [calico-cni](https://github.com/projectcalico/calico-cni) | The Calico CNI plugin.
 [libnetwork-plugin](https://github.com/projectcalico/libnetwork-plugin) | The Calico libnetwork plugin for Docker.
-[k8s-policy](https://github.com/projectcalico/k8s-policy) | Kubernetes policy controller. 
+[k8s-policy](https://github.com/projectcalico/k8s-policy) | Kubernetes policy controller.
 [libcalico](https://github.com/projectcalico/libcalico) | Python Calico library.
 [libcalico-go](https://github.com/projectcalico/libcalico-go) | Golang Calico library.
 

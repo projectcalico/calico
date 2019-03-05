@@ -36,7 +36,7 @@ can be disabled by setting each configuration value to "none".
 > to etcd.
 >
 > Before disabling the failsafe rules, we recommend creating a policy to
-> replace it with more-specific rules for your environment: see 
+> replace it with more-specific rules for your environment: see
 > [Creating policy for basic connectivity](../policy/).
 {: .alert .alert-danger}
 

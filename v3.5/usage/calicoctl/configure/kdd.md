@@ -56,7 +56,7 @@ And using `CALICO_` prefixed names:
 
 ```shell
 export CALICO_DATASTORE_TYPE=kubernetes
-export CALICO_KUBECONFIG=~/.kube/config 
+export CALICO_KUBECONFIG=~/.kube/config
 calicoctl get workloadendpoints
 ```
 

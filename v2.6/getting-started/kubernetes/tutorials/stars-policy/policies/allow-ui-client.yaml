@@ -1,8 +1,8 @@
 kind: NetworkPolicy
-apiVersion: extensions/v1beta1 
+apiVersion: extensions/v1beta1
 metadata:
-  namespace: client 
-  name: allow-ui 
+  namespace: client
+  name: allow-ui
 spec:
   podSelector:
     matchLabels: {}
@@ -10,4 +10,4 @@ spec:
     - from:
         - namespaceSelector:
             matchLabels:
-              role: management-ui 
+              role: management-ui

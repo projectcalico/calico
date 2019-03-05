@@ -3,31 +3,31 @@ title: Customizing the manifests
 canonical_url: 'https://docs.projectcalico.org/v3.5/getting-started/kubernetes/installation/config-options'
 ---
 
-Each manifest contains all the necessary resources for installing {{site.prodname}} 
+Each manifest contains all the necessary resources for installing {{site.prodname}}
 on each node in your Kubernetes cluster.
 
 It installs the following Kubernetes resources:
 
-- The `calico-config` ConfigMap, which contains parameters for configuring 
+- The `calico-config` ConfigMap, which contains parameters for configuring
   the install.
 - Installs the `{{site.nodecontainer}}` container on each host using a DaemonSet.
-- Installs the {{site.prodname}} CNI binaries and network config on each host using 
+- Installs the {{site.prodname}} CNI binaries and network config on each host using
   a DaemonSet.
 - Runs `calico/kube-controllers` as a deployment.
-- The `calico-etcd-secrets` secret, which optionally allows for providing etcd 
+- The `calico-etcd-secrets` secret, which optionally allows for providing etcd
   TLS assets.
 
 ## Configuration options
 
-The `ConfigMap` in `calico.yaml` provides a way to configure a {{site.prodname}} 
+The `ConfigMap` in `calico.yaml` provides a way to configure a {{site.prodname}}
 self-hosted installation. It exposes the following configuration parameters.
 
 ### Configuring the pod IP range
 
 {{site.prodname}} IPAM assigns IP addresses from [IP pools]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/ippool).
 
-To change the default IP range used for pods, modify the `CALICO_IPV4POOL_CIDR` 
-section of the `calico.yaml` manifest.  For more information, see 
+To change the default IP range used for pods, modify the `CALICO_IPV4POOL_CIDR`
+section of the `calico.yaml` manifest.  For more information, see
 [Configuring {{site.nodecontainer}}]({{site.baseurl}}/{{page.version}}/reference/node/configuration).
 
 ### Configuring IP-in-IP
@@ -37,16 +37,16 @@ want to disable IP-in-IP encapsulation, such as under the following circumstance
 
 - Their cluster is [running in a properly configured AWS VPC]({{site.baseurl}}/{{page.version}}/reference/public-cloud/aws).
 - All their Kubernetes nodes are connected to the same L2 network.
-- They intend to use BGP peering to make their underlying infrastructure aware of 
+- They intend to use BGP peering to make their underlying infrastructure aware of
   pod IP addresses.
 
-To disable IP-in-IP encapsulation, modify the `CALICO_IPV4POOL_IPIP` section of the 
+To disable IP-in-IP encapsulation, modify the `CALICO_IPV4POOL_IPIP` section of the
 manifest.  For more information, see [Configuring {{site.nodecontainer}}]({{site.baseurl}}/{{page.version}}/reference/node/configuration).
 
 ### etcd configuration
 
-By default, these manifests do not configure secure access to etcd and assume an 
-etcd proxy is running on each host. The following configuration options let you 
+By default, these manifests do not configure secure access to etcd and assume an
+etcd proxy is running on each host. The following configuration options let you
 specify custom etcd cluster endpoints as well as TLS.
 
 The following table outlines the supported `ConfigMap` options for etcd:
@@ -64,7 +64,7 @@ To use these manifests with a TLS-enabled etcd cluster you must do the following
   - `etcd-ca`
   - `etcd-key`
   - `etcd-cert`
-- Populate the following options in the `ConfigMap` which will trigger the various 
+- Populate the following options in the `ConfigMap` which will trigger the various
   services to expect the provided TLS assets:
   - `etcd_ca: /calico-secrets/etcd-ca`
   - `etcd_key: /calico-secrets/etcd-key`

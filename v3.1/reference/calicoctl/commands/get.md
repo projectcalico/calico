@@ -5,12 +5,12 @@ canonical_url: 'https://docs.projectcalico.org/v3.5/reference/calicoctl/commands
 
 This sections describes the `calicoctl get` command.
 
-Read the [calicoctl command line interface user reference]({{site.baseurl}}/{{page.version}}/reference/calicoctl/) 
+Read the [calicoctl command line interface user reference]({{site.baseurl}}/{{page.version}}/reference/calicoctl/)
 for a full list of calicoctl commands.
 
-> **Note**: The available actions for a specific resource type may be 
-> limited based on the datastore used for {{site.prodname}} (etcdv3 / Kubernetes API). 
-> Please refer to the 
+> **Note**: The available actions for a specific resource type may be
+> limited based on the datastore used for {{site.prodname}} (etcdv3 / Kubernetes API).
+> Please refer to the
 > [Resources section]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/)
 > for details about each resource type.
 {: .alert .alert-info}
@@ -18,7 +18,7 @@ for a full list of calicoctl commands.
 
 ## Displaying the help text for 'calicoctl get' command
 
-Run `calicoctl get --help` to display the following help menu for the 
+Run `calicoctl get --help` to display the following help menu for the
 command.
 
 ```
@@ -47,7 +47,7 @@ Options:
   -n --namespace=<NS>          Namespace of the resource.
                                Only applicable to NetworkPolicy and WorkloadEndpoint.
                                Uses the default namespace if not specified.
-  -a --all-namespaces          If present, list the requested object(s) across 
+  -a --all-namespaces          If present, list the requested object(s) across
                                all namespaces.
   --export                     If present, returns the requested object(s) stripped of
                                cluster-specific information. This flag will be ignored
@@ -118,7 +118,7 @@ Description:
 -n --namespace=<NS>          Namespace of the resource.
                              Only applicable to NetworkPolicy and WorkloadEndpoint.
                              Uses the default namespace if not specified.
--a --all-namespaces          If present, list the requested object(s) across 
+-a --all-namespaces          If present, list the requested object(s) across
                              all namespaces.
 --export                     If present, returns the requested object(s) stripped of
                              cluster-specific information. This flag will be ignored
@@ -146,7 +146,7 @@ columns, and `custom-columns` for selecting which columns to display.
 Example
 ```
 $ calicoctl get hostEndpoint
-NAME          NODE       
+NAME          NODE
 endpoint1     host1
 myhost-eth0   myhost
 ```
@@ -176,7 +176,7 @@ Example
 $ calicoctl get hostEndpoint --output=custom-columns=NAME,IPS
 NAME        IPS
 endpoint1   1.2.3.4,0:bb::aa
-myhost-eth0                           
+myhost-eth0
 ```
 
 #### `yaml / json`
@@ -217,7 +217,7 @@ $ calicoctl get hostEndpoint --output=yaml
 
 The `go-template` and `go-template-file` options display the output using a golang template specified as a string
 on the CLI, or defined in a separate file.
-When writing a template, be aware that the data passed to the template is a golang slice of resource-lists.  The 
+When writing a template, be aware that the data passed to the template is a golang slice of resource-lists.  The
 resource-lists are defined in the [libcalico API]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/) and there is a resource-list defined for
 each resource type.  A resource-list contains an Items field which is itself a slice of resources.  Thus, to output
 the "Name" field from the supplied data, it is necessary to enumerate over the slice of resource-lists and the items

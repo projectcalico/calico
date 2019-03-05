@@ -35,7 +35,7 @@ guide for more information.
 
 ## etcd.EtcdException: No more machines in the cluster
 
-If you see this exception, it means `calicoctl` can't communicate with your etcd 
+If you see this exception, it means `calicoctl` can't communicate with your etcd
 cluster.  Ensure etcd is up and listening on `localhost:2379`
 
 ## No ping between containers on different hosts

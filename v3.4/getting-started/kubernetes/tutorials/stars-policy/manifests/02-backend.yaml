@@ -1,29 +1,29 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: backend 
+  name: backend
   namespace: stars
 spec:
   ports:
   - port: 6379
-    targetPort: 6379 
+    targetPort: 6379
   selector:
-    role: backend 
+    role: backend
 ---
 apiVersion: v1
 kind: ReplicationController
 metadata:
-  name: backend 
+  name: backend
   namespace: stars
 spec:
   replicas: 1
   template:
     metadata:
       labels:
-        role: backend 
+        role: backend
     spec:
       containers:
-      - name: backend 
+      - name: backend
         image: calico/star-probe:v0.1.0
         imagePullPolicy: Always
         command:
@@ -31,4 +31,4 @@ spec:
         - --http-port=6379
         - --urls=http://frontend.stars:80/status,http://backend.stars:6379/status,http://client.client:9000/status
         ports:
-        - containerPort: 6379 
+        - containerPort: 6379

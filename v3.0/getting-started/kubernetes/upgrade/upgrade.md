@@ -1,5 +1,5 @@
 ---
-title: Upgrading Calico 
+title: Upgrading Calico
 canonical_url: https://docs.projectcalico.org/v3.5/getting-started/kubernetes/upgrade/upgrade
 ---
 
@@ -20,33 +20,33 @@ and your datastore type.
 
 
 ## Upgrading a self-hosted installation that uses the Kubernetes API datastore
-   
-1. If your configuration uses RBAC, use the following command to create the roles 
+
+1. If your configuration uses RBAC, use the following command to create the roles
    and role bindings for {{site.prodname}}'s components:
 
    ```
    kubectl apply -f {{site.url}}/{{page.version}}/getting-started/kubernetes/installation/hosted/rbac-kdd.yaml
    ```
-   > **Note**: You can also 
+   > **Note**: You can also
    > [view the YAML in your browser]({{site.url}}/{{page.version}}/getting-started/kubernetes/installation/hosted/rbac-kdd.yaml){:target="_blank"}.
    {: .alert .alert-info}
 
-1. [Refer to the Kubernetes datastore hosted installation documentation and 
+1. [Refer to the Kubernetes datastore hosted installation documentation and
    obtain the manifest needed for your configuration.](https://docs.projectcalico.org/v3.0/getting-started/kubernetes/installation/hosted/kubernetes-datastore/)
 
-1. Use the following command to initiate a rolling update, after replacing 
+1. Use the following command to initiate a rolling update, after replacing
    `<v3-manifest>` with the name of the manifest file obtained in the previous step.
 
    ```
    kubectl apply -f <v3-manifest>
    ```
-   
+
 1. Watch the status of the upgrade as follows.
 
    ```
    watch kubectl get pods -n kube-system
    ```
-   
+
    Verify that the status of all {{site.prodname}} pods indicate `Running`.
 
    ```
@@ -60,13 +60,13 @@ and your datastore type.
    ```
    kubectl exec -n kube-system calico-node-hvvg8 versions
    ```
-   
+
    It should return `v3.0.x`.
-   
-   > **Note**: If an error occurs during the upgrade, refer to 
+
+   > **Note**: If an error occurs during the upgrade, refer to
    > [Downgrading Calico](/{{page.version}}/getting-started/kubernetes/upgrade/downgrade).
    {: .alert .alert-info}
-   
+
 1. Remove any existing `calicoctl` instances and install the new `calicoctl`.
 
 1. Congratulations! You have upgraded to {{site.prodname}} {{page.version}}.
@@ -77,19 +77,19 @@ and your datastore type.
 1. [Refer to the v3.0 documentation and obtain the manifest that matches your installation
    method.](https://docs.projectcalico.org/v3.0/getting-started/kubernetes/installation/hosted/)
 
-1. Use the following command to initiate a rolling update, after replacing 
+1. Use the following command to initiate a rolling update, after replacing
    `<v3-manifest>` with the name of the manifest file obtained in the previous step.
 
    ```
    kubectl apply -f <v3-manifest>
    ```
-   
+
 1. Watch the status of the upgrade as follows.
 
    ```
    watch kubectl get pods -n kube-system
    ```
-   
+
    Verify that the status of all {{site.prodname}} pods indicate `Running`.
 
    ```
@@ -102,27 +102,27 @@ and your datastore type.
    > **Tip**: The {{site.noderunning}} pods will report `1/2` in the `READY` column, as shown.
    {: .alert .alert-success}
 
-   > **Note**: If an error occurs during the upgrade, refer to 
+   > **Note**: If an error occurs during the upgrade, refer to
    > [Downgrading Calico](/{{page.version}}/getting-started/kubernetes/upgrade/downgrade).
    {: .alert .alert-info}
-   
+
 1. Use the following command to confirm that {{site.noderunning}} has upgraded to v3.0.x.
 
    ```
    kubectl exec -n kube-system calico-node-hvvg8 versions
    ```
-   
-   It should return `v3.0.x`.
-   
-1. We recommend waiting for some time and really ensuring that the upgrade succeeded 
-   and no problems ensued before completing the upgrade by running 
-   `calico-upgrade complete`. After this, you can once again schedule pods and 
-   make changes to configuration and policy. 
 
-   > **Important**: If you experience errors after running `calico-upgrade complete`, 
+   It should return `v3.0.x`.
+
+1. We recommend waiting for some time and really ensuring that the upgrade succeeded
+   and no problems ensued before completing the upgrade by running
+   `calico-upgrade complete`. After this, you can once again schedule pods and
+   make changes to configuration and policy.
+
+   > **Important**: If you experience errors after running `calico-upgrade complete`,
    > such as an inability to schedule pods, [downgrade Calico as soon as possible](/{{page.version}}/getting-started/kubernetes/upgrade/downgrade).
    {: .alert .alert-danger}
-   
+
 1. Remove any existing `calicoctl` instances and install the new `calicoctl`.
 
 1. Congratulations! You have upgraded to {{site.prodname}} {{page.version}}.

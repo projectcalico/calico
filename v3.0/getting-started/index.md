@@ -15,7 +15,7 @@ a number of cloud services.
 - [Calico with OpenShift](openshift/installation)
 - [Host protection](bare-metal/bare-metal)
 
-> **Note**: For integrations with the OpenStack, Mesos, DC/OS, and Docker 
-> orchestrators, use [Calico v2.6](/v2.6/introduction/). We plan to resume 
+> **Note**: For integrations with the OpenStack, Mesos, DC/OS, and Docker
+> orchestrators, use [Calico v2.6](/v2.6/introduction/). We plan to resume
 > support for these orchestrators in a future v3.x release.
 {: .alert .alert-info}

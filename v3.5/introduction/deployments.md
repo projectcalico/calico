@@ -12,7 +12,7 @@ Ahmet Balkan, KubeCon 2017 (30:54)
 #### Squarespace
 
 [Kubernetes in the Datacenter: Squarespace’s Journey Towards Self-Service Infrastructure](https://www.youtube.com/watch?v=oHrcWU9Tyz4&t=0m0s) <img src="{{site.baseurl}}/images/kubernetes.svg" alt="Kubernetes" width="2.5%" style="display: inline"> <img src="{{site.baseurl}}/images/camera.svg" alt="video" width="2%" style="display: inline"><br>
-Kevin Lynch, KubeCon 2017(36:29)  
+Kevin Lynch, KubeCon 2017(36:29)
 
 #### Giant Swarm
 
@@ -22,7 +22,7 @@ Timo Derstappen, KubeCon 2017 (24:57)
 #### PagSeguro
 
 [Apache Mesos and Security: The Joy of Mesos with Calico](https://www.youtube.com/watch?v=woaKCAG4li4&t=0m0s) <img src="{{site.baseurl}}/images/mesos.svg" alt="Mesos" width="2%" style="display: inline"> <img src="{{site.baseurl}}/images/camera.svg" alt="video" width="2%" style="display: inline"><br>
-Diego Oliveira & Acácio Alves dos Santos, MesosCon 2017 (37:17)  
+Diego Oliveira & Acácio Alves dos Santos, MesosCon 2017 (37:17)
 
 #### Apigee
 

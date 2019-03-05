@@ -4,12 +4,12 @@ canonical_url: https://docs.projectcalico.org/v3.5/getting-started/kubernetes/up
 ---
 
  Use `calicoctl convert` to convert your Calico resource manifests from v1 API to v3 API.
- 
+
    > **Note**: Make sure to use the latest version of `calicoctl`
-   
+
  `calicoctl convert` command allows you to convert multiple resources from v1 API to v3 at the same time.
  You can convert your v1 yaml or json manifests v3 yaml or json manifests.
- 
+
  **Example**
  ```
  calicoctl convert -f path/to/v1-multi-resource.yaml -o yaml
@@ -32,7 +32,7 @@ canonical_url: https://docs.projectcalico.org/v3.5/getting-started/kubernetes/up
      node: node5
      peerIP: 5.5.5.5
  ```
- 
+
  Original v1 resource file:
  ```
  cat v1-multi-resource.yaml
@@ -53,5 +53,5 @@ canonical_url: https://docs.projectcalico.org/v3.5/getting-started/kubernetes/up
    spec:
      asNumber: 6555
  ```
- 
+
  See [calicoctl convert]({{site.baseurl}}/{{page.version}}/reference/calicoctl/commands/convert) for detailed usage of the `convert` command.

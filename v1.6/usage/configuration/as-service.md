@@ -10,8 +10,8 @@ daemons such as upstart as well.
 
 ## Running the Calico Node Container as a Service
 This section describes how to run the Calico node as a Docker container
-in Systemd.  Included here is an EnvironmentFile that defines the Environment 
-variables for Calico and a sample systemd service file that uses the 
+in Systemd.  Included here is an EnvironmentFile that defines the Environment
+variables for Calico and a sample systemd service file that uses the
 environment file and starts the Calico node image as a service.
 
 `calico.env` - the EnvironmentFile:

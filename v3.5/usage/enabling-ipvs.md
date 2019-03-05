@@ -22,7 +22,7 @@ However, it comes with some limitations.  In IPVS mode:
   locally-assigned `ExternalIP` for Kubernetes v1.10. This is due to a kube-proxy issue
   and has been fixed in Kubernetes v1.11.
 
- {{site.prodname}} will detect if you change `kube-proxy`'s proxy mode after 
- {{site.prodname}} has been deployed. Any Kubernetes `ipvs`-specific configuration 
- needs to be [configured](../reference/felix/configuration#ipvs-portranges) 
+ {{site.prodname}} will detect if you change `kube-proxy`'s proxy mode after
+ {{site.prodname}} has been deployed. Any Kubernetes `ipvs`-specific configuration
+ needs to be [configured](../reference/felix/configuration#ipvs-portranges)
  before changing the `kube-proxy` proxy mode to `ipvs`.

@@ -28,9 +28,9 @@ impact on Calico.
 > to a version >= v2.3.0, or when upgrading Calico using the etcd datastore from a version < v2.4.0
 > to a version >= v2.4.0, you should follow the steps for [upgrading to v1 NetworkPolicy semantics](#upgrading-to-v1-networkpolicy-semantics)
 
-> **Important**: If you are using the Kubernetes datastore and upgrading from 
-> Calico v2.4.x or earlier to Calico v2.5.x or later, you must 
-> [migrate your Calico configuration data](https://github.com/projectcalico/calico/blob/master/upgrade/v2.5/README.md) 
+> **Important**: If you are using the Kubernetes datastore and upgrading from
+> Calico v2.4.x or earlier to Calico v2.5.x or later, you must
+> [migrate your Calico configuration data](https://github.com/projectcalico/calico/blob/master/upgrade/v2.5/README.md)
 > before upgrading. Otherwise, your cluster may lose connectivity after the upgrade.
 {: .alert .alert-danger}
 

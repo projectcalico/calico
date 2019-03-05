@@ -6,7 +6,7 @@ metadata:
 spec:
   podSelector:
     matchLabels:
-      role: frontend 
+      role: frontend
   ingress:
     - from:
         - namespaceSelector:

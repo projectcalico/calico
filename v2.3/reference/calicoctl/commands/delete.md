@@ -5,12 +5,12 @@ canonical_url: 'https://docs.projectcalico.org/v3.5/reference/calicoctl/commands
 
 This sections describes the `calicoctl delete` command.
 
-Read the [calicoctl command line interface user reference]({{site.baseurl}}/{{page.version}}/reference/calicoctl/) 
+Read the [calicoctl command line interface user reference]({{site.baseurl}}/{{page.version}}/reference/calicoctl/)
 for a full list of calicoctl commands.
 
 ## Displaying the help text for 'calicoctl delete' command
 
-Run `calicoctl delete --help` to display the following help menu for the 
+Run `calicoctl delete --help` to display the following help menu for the
 command.
 
 ```

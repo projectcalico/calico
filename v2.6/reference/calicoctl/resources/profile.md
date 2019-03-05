@@ -3,12 +3,12 @@ title: Profile Resource (profile)
 canonical_url: 'https://docs.projectcalico.org/v3.5/reference/calicoctl/resources/profile'
 ---
 
-A Profile resource (profile) represents a set of rules which are applied 
+A Profile resource (profile) represents a set of rules which are applied
 to the individual endpoints to which this profile has been assigned.
 
 Each Calico endpoint or host endpoint can be assigned to zero or more profiles.
 
-Also see the [Policy resource]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/policy) 
+Also see the [Policy resource]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/policy)
 which provides an alternate way to select what policy is applied to an endpoint.
 
 For `calicoctl` commands that specify a resource type on the CLI, the following
@@ -26,7 +26,7 @@ kind: profile
 metadata:
   name: profile1
   labels:
-    profile: profile1 
+    profile: profile1
 spec:
   ingress:
   - action: deny
@@ -37,10 +37,10 @@ spec:
     source:
       selector: profile == 'profile1'
   egress:
-  - action: allow 
+  - action: allow
 ```
 
-### Definition 
+### Definition
 
 #### Metadata
 

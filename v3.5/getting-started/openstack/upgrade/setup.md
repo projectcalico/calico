@@ -39,7 +39,7 @@ following:
 {% include {{page.version}}/config-calico-upgrade-etcd.md %}
 
 
-  
+
 ## Next steps
 
 After configuring `calico-upgrade` to communicate with the existing etcdv2 instance

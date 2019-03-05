@@ -3,8 +3,8 @@ title: Troubleshooting Calico for rkt
 canonical_url: 'https://docs.projectcalico.org/v2.6/getting-started/rkt/troubleshooting'
 ---
 
-This article contains rkt specific troubleshooting advice for Calico and 
-frequently asked questions. 
+This article contains rkt specific troubleshooting advice for Calico and
+frequently asked questions.
 See also the [main Calico troubleshooting](../../usage/troubleshooting) pages.
 
 ## Frequently Asked Questions

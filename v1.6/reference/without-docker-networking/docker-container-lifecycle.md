@@ -119,7 +119,7 @@ The calicoctl utility:
 
 Felix spots new endpoint information:
 -  Felix programs ACLs into the host's Linux kernel iptables that drop all
-   traffic to the container.  
+   traffic to the container.
 -  Felix adds routing table entries to route to the local container via
    the host-side veth for the container.
 
@@ -151,7 +151,7 @@ programs no additional iptable rules.
 The calicoctl tool can be used to manipulate the rules of a profile to provide
 fine grained policy.  In this example, we are using the default configuration
 which specifies that any containers that references the profile has full
-connectivity to containers also referencing the profile.  
+connectivity to containers also referencing the profile.
 
 ![calicoctl profile add]({{site.baseurl}}/images/lifecycle/profile_add.png)
 

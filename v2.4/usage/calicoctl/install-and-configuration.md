@@ -69,7 +69,7 @@ issue then try again.
 ### Next steps
 
 Now you are ready to read and configure most aspects of Calico.  You can
-find the full list of commands in the 
+find the full list of commands in the
 [Command Reference]({{site.baseurl}}/{{page.version}}/reference/calicoctl/commands/).
 
 The full list of resources that can be managed, including a description of each,

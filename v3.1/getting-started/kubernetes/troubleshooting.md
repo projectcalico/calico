@@ -38,19 +38,19 @@ depend on how your kubelet is configured.  For deployments using `systemd`, you 
 The log level can be configured via the CNI network configuration file, by changing the value of the
 key `log_level`.  See [the configuration guide]({{site.baseurl}}/{{page.version}}/reference/cni-plugin/configuration) for more information.
 
-#### How do I configure the Pod IP range? 
+#### How do I configure the Pod IP range?
 
 When using {{site.prodname}} IPAM, IP addresses are assigned from [IP Pools]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/ippool).
 
 By default, all enabled IP Pool are used. However, you can specify which IP Pools to use for IP address management in the [CNI network config]({{site.baseurl}}/{{page.version}}/reference/cni-plugin/configuration#ipam),
 or on a per-Pod basis using [Kubernetes annotations]({{site.baseurl}}/{{page.version}}/reference/cni-plugin/configuration#ipam-manipulation-with-kubernetes-annotations).
 
-#### How do I assign a specific IP address to a pod? 
+#### How do I assign a specific IP address to a pod?
 
 For most use-cases it's not necessary to assign specific IP addresses to a Kubernetes Pod, and it's recommended to use Kubernetes Services instead.
-However, if you do need to assign a particular address to a Pod, {{site.prodname}} provides two ways of doing this: 
+However, if you do need to assign a particular address to a Pod, {{site.prodname}} provides two ways of doing this:
 
 - You can request an IP that is available in {{site.prodname}} IPAM using the `cni.projectcalico.org/ipAddrs` annotation.
-- You can request an IP using the `cni.projectcalico.org/ipAddrsNoIpam` annotation. Note that this annotation bypasses the configured IPAM plugin, and thus in most cases it is recommended to use the above annotation. 
+- You can request an IP using the `cni.projectcalico.org/ipAddrsNoIpam` annotation. Note that this annotation bypasses the configured IPAM plugin, and thus in most cases it is recommended to use the above annotation.
 
 See the [Requesting a Specific IP address]({{site.baseurl}}/{{page.version}}/reference/cni-plugin/configuration#requesting-a-specific-ip-address) section in the CNI plugin reference documentation for more details.

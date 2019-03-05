@@ -3,7 +3,7 @@ title: Advanced Network Policy
 ---
 
 Calico endpoints are assigned their network policy by configuring them with a
-policy profile.  
+policy profile.
 
 In the [Calico without Docker networking tutorial]({{site.baseurl}}/{{page.version}}/getting-started/docker/tutorials/basic)
 we created profiles and assigned endpoints (a container interface) to them.
@@ -12,7 +12,7 @@ the profiles are created under-the-covers as part of the Docker network
 creation (available natively in Docker 1.9 and above).
 
 By default, a Calico profile is created with rules and tags (identifiers) such
-that endpoints with the same profile can all communicate with one another.  
+that endpoints with the same profile can all communicate with one another.
 In this tutorial, we look at how to customize policy profiles for more advanced
 policy.
 
@@ -22,7 +22,7 @@ node cluster.
 
 ## Overview
 
-A policy profile comprises two elements: *tags* and *rules*.  
+A policy profile comprises two elements: *tags* and *rules*.
 
 *Tags* identify different groups or sets of Calico endpoints.  A tag might
 represent a role or network permission, for example, you might define a tag
@@ -52,7 +52,7 @@ Outbound rules:
 
 Notice that profiles define policy for inbound packets and outbound packets
 separately.  This profile allows inbound traffic from other endpoints with the
-tag `WEB`, and (implicitly) denies inbound traffic from all other addresses.  
+tag `WEB`, and (implicitly) denies inbound traffic from all other addresses.
 It allows all outbound traffic regardless of destination.
 
 Let's modify this profile to make it more appropriate for a public webserver.
@@ -98,7 +98,7 @@ APP for these services.
 $ ./calicoctl profile add APP
 ```
 
-For this example, let's say the APP containers present a service on port 7890.  
+For this example, let's say the APP containers present a service on port 7890.
 We'll define a new tag, `APP_7890` to give containers access to this service
 port.  Using a tag allows us to grant and revoke access to different other
 profiles.  In this example, the WEB containers need access, but we might also

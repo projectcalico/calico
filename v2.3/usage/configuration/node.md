@@ -3,8 +3,8 @@ title: Configuring a Node IP Address and Subnet
 canonical_url: 'https://docs.projectcalico.org/v3.5/usage/configuration/node'
 ---
 
-By default, Calico automatically detects each Node's IP address and subnet.  In most cases, 
-this auto-detection is enough and you will not need to change the value picked by Calico.  
+By default, Calico automatically detects each Node's IP address and subnet.  In most cases,
+this auto-detection is enough and you will not need to change the value picked by Calico.
 However, there are some scenarios where the default autodetection may not choose the right
 address.  For example:
 
@@ -22,13 +22,13 @@ When `calico/node` is started, it determines the IP and subnet configuration usi
 following sequence:
 
 -  If an IP and subnet are explicitly specified using the `IP` (or `IP6`) environment variable (passed through
-   to the container), the container will use this value *and* update the node 
-   resource with that value: therefore a query of the node resource will always tell you what 
+   to the container), the container will use this value *and* update the node
+   resource with that value: therefore a query of the node resource will always tell you what
    value the calico/node container is currently using.
 -  If the `IP` (or `IP6`) environment variable is set to `autodetect`, calico/node will autodetect
-   the IP and subnet configuration using the requested autodetection method when the 
+   the IP and subnet configuration using the requested autodetection method when the
    container starts, *and* update the node resource with the detected value.
--  If the `IP` (or `IP6`) environment variable is not set, and there *is* an `IPv4Address` (or `IPv6Address`) 
+-  If the `IP` (or `IP6`) environment variable is not set, and there *is* an `IPv4Address` (or `IPv6Address`)
    value configured in the node resource, that value will be used for routing.
 -  If the `IP` environment variable is not set, and there is no `IPv4Address` value configured in the node
    resource, calico/node will autodetect an IPv4 address and subnet *and* update the
@@ -39,7 +39,7 @@ following sequence:
 > If you are starting the calico/node container using `calicoctl node run` command,
 > there is a direct mapping between the command line switches and the environment variables that are
 > passed through to the `calico/node` container.  These are listed below:
-> 
+>
 > | Environment | CLI |
 > |-------------|-----|
 > | IP | --ip |
@@ -52,7 +52,7 @@ specify the IP addresses for your nodes.
 
 #### a) Configure the IP and subnet through environment variables
 
-The IPv4 address and subnet may be explicitly specified using the `--ip` option on 
+The IPv4 address and subnet may be explicitly specified using the `--ip` option on
 `calicoctl node run` or the `IP` environment variable if you are starting the container
 directly.  For IPv6, use the equivalent `--ip6` option and `IP6` environment variable.
 
@@ -73,7 +73,7 @@ on `calicoctl node run` or the `IP` environment variable if you are starting the
 directly.
 
 In addition, the `--ip-autodetection-method` argument or the `IP_AUTODETECTION_METHOD`
-environment variable can be used to specify the method used to auto detect the host address 
+environment variable can be used to specify the method used to auto detect the host address
 and subnet.  See [calico/node configuration guide]({{site.baseurl}}/{{page.version}}/reference/node/configuration)
 and [calicoctl command reference]({{site.baseurl}}/{{page.version}}/reference/calicoctl/commands/node/run)
 for details.
@@ -119,9 +119,9 @@ $ calicoctl apply -f - << EOF
 EOF
 ```
 
-> Note that if you plan to edit the resource to configure the IP addresses, make sure 
-> you are not specifying the IP address options or environment variables when starting the 
->`calico/node` container - otherwise those values will overwrite the values 
+> Note that if you plan to edit the resource to configure the IP addresses, make sure
+> you are not specifying the IP address options or environment variables when starting the
+>`calico/node` container - otherwise those values will overwrite the values
 > configured through the resource.
 
 

@@ -255,7 +255,7 @@ cat << EOF | calicoctl create -f -
 EOF
 ```
 
-The above policies provide the same isolation as the previous example.  
+The above policies provide the same isolation as the previous example.
 This works as follows:
 
 -  Containers in the "database" Docker network are assigned the "database"
@@ -295,7 +295,7 @@ richer policy set.
 Extending the previous example, suppose we introduce another network that is
 used for system backups and that we want some of our database containers to be
 on both the database network and the backup network (so that they are able to
-back up the database).  
+back up the database).
 
 One approach for doing this is as follows:
 

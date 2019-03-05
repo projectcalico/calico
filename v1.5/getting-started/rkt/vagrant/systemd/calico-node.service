@@ -14,7 +14,7 @@ Environment="FELIX_ETCDADDR=127.0.0.1:2379"
 Environment="FELIX_ETCDSCHEME=http"
 Environment="IP=<LOCAL_IPV4>"
 Environment="IP6=<LOCAL_IPV6>"
-ExecStart=/usr/bin/rkt run --inherit-env --stage1-image=/usr/share/rkt/stage1-fly.aci --insecure-options=image --volume=birdctl,kind=host,source=/var/run/calico,readOnly=false --mount volume=birdctl,target=/var/run/calico docker://calico/node 
+ExecStart=/usr/bin/rkt run --inherit-env --stage1-image=/usr/share/rkt/stage1-fly.aci --insecure-options=image --volume=birdctl,kind=host,source=/var/run/calico,readOnly=false --mount volume=birdctl,target=/var/run/calico docker://calico/node
 KillMode=mixed
 Restart=always
 

@@ -24,7 +24,7 @@ Felix has the following pre-requisites:
     check the version, run `ipset --version`.
 -   The conntrack, iptables and ipsets kernel modules must be available
     (or compiled-in).
-    
+
 > **Note**: If any of the commands above fail when run with the `--version`
 > flag then you have an old version that doesn't support reporting
 > its version.

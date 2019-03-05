@@ -5,16 +5,16 @@ canonical_url: 'https://docs.projectcalico.org/v3.5/reference/calicoctl/resource
 ---
 
 This section describes the set of valid resource types that can be managed
-through `calicoctl`.  
+through `calicoctl`.
 
-While resources may be supplied in YAML or JSON format, this guide provides examples in YAML. 
+While resources may be supplied in YAML or JSON format, this guide provides examples in YAML.
 
 ## Overview of resource structure
 
 The calicoctl commands for resource management (create, apply, delete, replace, get)
-all take resource manifests as input.  
+all take resource manifests as input.
 
-Each manifest may contain a single resource 
+Each manifest may contain a single resource
 (e.g. a profile resource), or a list of multiple resources (e.g. a profile and two
 hostEndpoint resources).
 
@@ -29,10 +29,10 @@ metadata:
   ...
 spec:
   # Specification of the resource
-  ... 
+  ...
 ```
 
-### Schema 
+### Schema
 
 | Field    | Description           | Accepted Values              | Schema |
 |----------|-----------------------|------------------------------|--------|

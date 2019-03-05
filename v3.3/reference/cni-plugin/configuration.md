@@ -285,8 +285,8 @@ If provided, these IP pools will override any IP pools specified in the CNI conf
 {: .alert .alert-info}
 
 > **Note**: The {{site.prodname}} CNI plugin supports specifying an annotation per namespace.
-> If both the namespace and the pod have this annotation, the pod information will be used. 
-> Otherwise, if only the namespace has the annotation the annotation of the namespace will 
+> If both the namespace and the pod have this annotation, the pod information will be used.
+> Otherwise, if only the namespace has the annotation the annotation of the namespace will
 > be used for each pod in it.
 {: .alert .alert-info}
 

@@ -128,7 +128,7 @@ calicoctl bgp peer show [--ipv4 | --ipv6]
     --ipv4:  Optional flag to show IPv4 peers only
     --ipv6:  Optional flag to show IPv6 peers only
 
-    If neither --ipv4 nor --ipv6 are specified, all peers are displayed.    
+    If neither --ipv4 nor --ipv6 are specified, all peers are displayed.
 ```
 
 Examples:

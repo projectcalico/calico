@@ -59,7 +59,7 @@ Now that we've enabled isolation, the UI can no longer access the pods, and so t
 Apply the following YAMLs to allow access from the management UI.
 
 ```shell
-kubectl create -f {{site.url}}/{{page.version}}/getting-started/kubernetes/tutorials/stars-policy/policies/allow-ui.yaml 
+kubectl create -f {{site.url}}/{{page.version}}/getting-started/kubernetes/tutorials/stars-policy/policies/allow-ui.yaml
 kubectl create -f {{site.url}}/{{page.version}}/getting-started/kubernetes/tutorials/stars-policy/policies/allow-ui-client.yaml
 ```
 

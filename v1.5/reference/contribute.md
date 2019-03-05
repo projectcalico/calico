@@ -21,7 +21,7 @@ Features or any changes to the codebase should be done as follows:
 4.  Create a pull request using GitHub, from your branch to master.
 5.  Reviewer process:
     -   Receive notice of review by GitHub email, GitHub notification,
-        or by checking your assigned issues. 
+        or by checking your assigned issues.
     -   Make markups as comments on the pull request (either line
         comments or top-level comments).
     -   Make a top-level comment saying something along the lines of

@@ -3,9 +3,9 @@ title: Calico Architecture
 canonical_url: 'https://docs.projectcalico.org/v3.5/reference/architecture/'
 ---
 
-This document discusses the various pieces of the Calico's architecture, 
+This document discusses the various pieces of the Calico's architecture,
 with a focus on what specific role each component plays in
-the Calico network. 
+the Calico network.
 
 <!-- TODO(smc) data-model: Link to new data model docs. -->
 

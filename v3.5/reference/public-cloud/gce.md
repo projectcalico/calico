@@ -4,9 +4,9 @@ redirect_from: latest/reference/public-cloud/gce
 canonical_url: https://docs.projectcalico.org/v3.5/reference/public-cloud/gce
 ---
 
-To deploy {{site.prodname}} in [Google Compute Engine][GCE], you must ensure 
-that traffic between containers on different hosts is not dropped by the GCE 
-fabric. There are a few different options for doing this depending on your 
+To deploy {{site.prodname}} in [Google Compute Engine][GCE], you must ensure
+that traffic between containers on different hosts is not dropped by the GCE
+fabric. There are a few different options for doing this depending on your
 deployment.
 
 ## IP-in-IP encapsulation

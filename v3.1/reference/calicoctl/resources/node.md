@@ -7,13 +7,13 @@ A node resource (`Node`) represents a node running {{site.prodname}}.  When addi
 to a {{site.prodname}} cluster, a Node resource needs to be created which contains the
 configuration for the `{{site.nodecontainer}}` instance running on the host.
 
-When starting a `{{site.nodecontainer}}` instance, the name supplied to the instance should 
-match the name configured in the Node resource.  
+When starting a `{{site.nodecontainer}}` instance, the name supplied to the instance should
+match the name configured in the Node resource.
 
-By default, starting a `{{site.nodecontainer}}` instance will automatically create a node resource 
+By default, starting a `{{site.nodecontainer}}` instance will automatically create a node resource
 using the `hostname` of the compute host.
 
-For `calicoctl` [commands]({{site.baseurl}}/{{page.version}}/reference/calicoctl/commands/) that 
+For `calicoctl` [commands]({{site.baseurl}}/{{page.version}}/reference/calicoctl/commands/) that
 specify a resource type on the CLI, the following
 aliases are supported (all case insensitive): `node`, `nodes`, `no`, `nos`.
 
@@ -54,7 +54,7 @@ spec:
 | nodeName    | Name of this node according to the orchestrator. | | string |
 | orchestrator | Name of the orchestrator. | k8s | string |
 
-#### BGP 
+#### BGP
 
 | Field       | Description                 | Accepted Values   | Schema | Default    |
 |-------------|-----------------------------|-------------------|--------|------------|

@@ -1,5 +1,5 @@
 ---
-title: Calicoctl Configuration Overview 
+title: Calicoctl Configuration Overview
 canonical_url: 'https://docs.projectcalico.org/v3.5/usage/calicoctl/configure/'
 ---
 
@@ -17,7 +17,7 @@ environment variables.  Configuration is determined as follows:
 
 Calico currently supports the following datastores:
 
-- [etcdv2](etcdv2) (default, recommended) 
+- [etcdv2](etcdv2) (default, recommended)
 - [Kubernetes API](kubernetes)
 
 Calico supports, but does not require:
@@ -31,6 +31,6 @@ Calico supports, but does not require:
 For detailed information on configuring calicoctl, see the documentation for your chosen
 datastore.
 
-- [etcdv2](etcdv2) (default, recommended) 
+- [etcdv2](etcdv2) (default, recommended)
 - [Kubernetes API](kubernetes)
 

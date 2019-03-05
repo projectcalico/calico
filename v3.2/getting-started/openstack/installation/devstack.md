@@ -7,11 +7,11 @@ The networking-calico project provides a DevStack plugin.  The following
 instructions explain how to set up a single or multiple node DevStack/{{site.prodname}}
 system, and then how to see {{site.prodname}} connectivity in action.
 
-> **Note**: networking-calico includes a 
-> [shell script](https://git.openstack.org/cgit/openstack/networking-calico/tree/devstack/bootstrap.sh) 
-> that implements the following setup instructions. You are welcome to use it, 
-> but we recommend that you read the following description first anyway, and 
-> briefly review the script's code, so that you will understand what the 
+> **Note**: networking-calico includes a
+> [shell script](https://git.openstack.org/cgit/openstack/networking-calico/tree/devstack/bootstrap.sh)
+> that implements the following setup instructions. You are welcome to use it,
+> but we recommend that you read the following description first anyway, and
+> briefly review the script's code, so that you will understand what the
 > script does.
 {: .alert .alert-info}
 

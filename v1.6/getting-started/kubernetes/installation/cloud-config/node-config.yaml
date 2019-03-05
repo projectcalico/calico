@@ -1,7 +1,7 @@
 #cloud-config
 ---
 write_files:
-  # Kubeconfig file. 
+  # Kubeconfig file.
   - path: /etc/kubernetes/worker-kubeconfig.yaml
     owner: root
     permissions: 0755
@@ -23,7 +23,7 @@ write_files:
 
 coreos:
   etcd2:
-    proxy: on 
+    proxy: on
     listen-client-urls: http://127.0.0.1:2379
     initial-cluster: etcdserver=http://kubernetes-master:2380
   fleet:
@@ -49,7 +49,7 @@ coreos:
 
         [Service]
         ExecStartPre=/usr/bin/wget -N -P /opt/cni/bin https://github.com/containernetworking/cni/releases/download/v0.3.0/cni-v0.3.0.tgz
-        ExecStartPre=/usr/bin/tar -xvf /opt/cni/bin/cni-v0.3.0.tgz -C /opt/cni/bin  
+        ExecStartPre=/usr/bin/tar -xvf /opt/cni/bin/cni-v0.3.0.tgz -C /opt/cni/bin
         ExecStartPre=/usr/bin/wget -N -P /opt/bin https://storage.googleapis.com/kubernetes-release/release/v1.4.0/bin/linux/amd64/kubelet
         ExecStartPre=/usr/bin/chmod +x /opt/bin/kubelet
         ExecStartPre=/usr/bin/mkdir -p /opt/cni/bin

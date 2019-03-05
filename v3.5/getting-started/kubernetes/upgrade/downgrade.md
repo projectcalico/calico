@@ -44,7 +44,7 @@ follow the steps here to downgrade.
    ```
    calico-upgrade abort
    ```
-   
+
    > **Important**: Do not use versions of `calicoctl` v3.x after aborting the upgrade.
    > Doing so may result in unexpected behavior and data.
    {: .alert .alert-danger}

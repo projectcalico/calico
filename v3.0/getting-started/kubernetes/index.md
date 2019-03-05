@@ -27,22 +27,22 @@ To deploy a cluster suitable for production, refer to [Installation](/{{page.ver
 [Follow the Kubernetes instructions to install kubeadm](https://kubernetes.io/docs/setup/independent/install-kubeadm/){:target="_blank"}.
 
 > **Note**: After installing kubeadm, do not power down or restart
-the host. Instead, continue directly to the 
+the host. Instead, continue directly to the
 [next section to create your cluster](#create-a-single-host-kubernetes-cluster).
 {: .alert .alert-info}
 
 
 ### Create a single-host Kubernetes cluster
 
-1. As a regular user with sudo privileges, open a terminal on the host that 
-   you installed kubeadm on. 
-   
+1. As a regular user with sudo privileges, open a terminal on the host that
+   you installed kubeadm on.
+
 1. Initialize the master using the following command.
 
    ```
    sudo kubeadm init --pod-network-cidr=192.168.0.0/16
    ```
-   
+
 1. Execute the following commands to configure kubectl (also returned by
    `kubeadm init`).
 
@@ -51,15 +51,15 @@ the host. Instead, continue directly to the
    sudo cp -i /etc/kubernetes/admin.conf $HOME/.kube/config
    sudo chown $(id -u):$(id -g) $HOME/.kube/config
    ```
-   
+
 1. Install {{site.prodname}} and a single node etcd with the following command.
 
    ```
    kubectl apply -f \
    {{site.url}}/{{page.version}}/getting-started/kubernetes/installation/hosted/kubeadm/1.7/calico.yaml
    ```
-   
-   > **Note**: You can also 
+
+   > **Note**: You can also
    > [view the YAML in a new tab]({{site.url}}/{{page.version}}/getting-started/kubernetes/installation/hosted/kubeadm/1.7/calico.yaml){:target="_blank"}.
    {: .alert .alert-info}
 
@@ -78,13 +78,13 @@ the host. Instead, continue directly to the
    clusterrole "calico-kube-controllers" created
    serviceaccount "calico-kube-controllers" created
    ```
-   
+
 1. Confirm that all of the pods are running with the following command.
 
    ```
    watch kubectl get pods --all-namespaces
    ```
-   
+
    Wait until each pod has the `STATUS` of `Running`.
 
    ```
@@ -104,7 +104,7 @@ the host. Instead, continue directly to the
 
 1. Remove the taints on the master so that you can schedule pods
    on it.
-   
+
    ```
    kubectl taint nodes --all node-role.kubernetes.io/master-
    ```
@@ -115,20 +115,20 @@ the host. Instead, continue directly to the
    node "<your-hostname>" untainted
    ```
 
-1. Confirm that you now have a node in your cluster with the 
+1. Confirm that you now have a node in your cluster with the
    following command.
-   
+
    ```
    kubectl get nodes -o wide
    ```
-   
+
    It should return something like the following.
-   
+
    ```
    NAME             STATUS  ROLES   AGE  VERSION  EXTERNAL-IP  OS-IMAGE            KERNEL-VERSION     CONTAINER-RUNTIME
    <your-hostname>  Ready   master  1h   v1.8.x   <none>       Ubuntu 16.04.3 LTS  4.10.0-28-generic  docker://1.12.6
    ```
-   
+
 Congratulations! You now have a single-host Kubernetes cluster
 equipped with {{site.prodname}}.
 

@@ -8,7 +8,7 @@ running on Kubernetes.  It then configures network policy on each service.
 ## Pre-requisites
 
 To create a Kubernetes cluster which supports the Kubernetes network policy API, follow
-one of our [getting started guides]({{site.baseurl}}/{{page.version}}/getting-started/kubernetes).  
+one of our [getting started guides]({{site.baseurl}}/{{page.version}}/getting-started/kubernetes).
 
 ## Running the stars example
 

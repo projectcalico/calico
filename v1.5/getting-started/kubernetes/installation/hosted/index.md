@@ -17,13 +17,13 @@ kubectl apply -f calico.yaml
 
 > **NOTE**
 >
-> If using your own etcd cluster, make sure you configure the provided ConfigMap with the location of the cluster before running the above command. 
+> If using your own etcd cluster, make sure you configure the provided ConfigMap with the location of the cluster before running the above command.
 
 ## How it works
 
 The `calico.yaml` file contains all the necessary resources for installing Calico on each node in your Kubernetes cluster.
 
-It installs the following Kubernetes resources: 
+It installs the following Kubernetes resources:
 
 - The `calico-config` ConfigMap, which contains parameters for configuring the install.
 - Installs the `calico/node` container on each host using a DaemonSet.

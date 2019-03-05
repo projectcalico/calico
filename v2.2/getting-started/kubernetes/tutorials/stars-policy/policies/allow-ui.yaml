@@ -1,12 +1,12 @@
 kind: NetworkPolicy
-apiVersion: extensions/v1beta1 
+apiVersion: extensions/v1beta1
 metadata:
   namespace: stars
-  name: allow-ui 
+  name: allow-ui
 spec:
   podSelector:
   ingress:
     - from:
         - namespaceSelector:
             matchLabels:
-              role: management-ui 
+              role: management-ui

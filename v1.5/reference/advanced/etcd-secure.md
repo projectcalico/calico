@@ -11,17 +11,17 @@ Calico supports insecure and TLS/certificate-enabled etcd clusters.
 To use TLS-enabled etcd, the following environment variables need to be set
 before running any `calicoctl` command:
 
-* **`ETCD_AUTHORITY`**: The `<hostname>:<port_number>` pair representing the 
+* **`ETCD_AUTHORITY`**: The `<hostname>:<port_number>` pair representing the
  access point to the cluster. **Default**: 127.0.0.1:2379
-  * NOTE: When running Etcd with TLS enabled, the address of the ETCD_AUTHORITY 
+  * NOTE: When running Etcd with TLS enabled, the address of the ETCD_AUTHORITY
     must be a hostname value, NOT an IP address, such as `etcd-host:2379`.
-* **`ETCD_SCHEME`**: The http or https protocol used by the etcd datastore. 
+* **`ETCD_SCHEME`**: The http or https protocol used by the etcd datastore.
  **Default**: http
-* **`ETCD_CA_CERT_FILE`**: The full path to the CA certificate file for the 
+* **`ETCD_CA_CERT_FILE`**: The full path to the CA certificate file for the
  Certificate Authority that signed the etcd server key/certificate pair.
-* **`ETCD_CERT_FILE`**: The full path to the client certificate file for 
+* **`ETCD_CERT_FILE`**: The full path to the client certificate file for
  accessing the etcd cluster.
-* **`ETCD_KEY_FILE`**: The full path to the client key file for accessing the 
+* **`ETCD_KEY_FILE`**: The full path to the client key file for accessing the
  etcd cluster.
 
 For example:
@@ -34,7 +34,7 @@ export ETCD_CERT_FILE=/path/to/server.pem
 export ETCD_KEY_FILE=/path/to/server-key.pem
 ```
 
-> NOTE: The file extensions are not important, the files just need to exist and 
+> NOTE: The file extensions are not important, the files just need to exist and
 > be readable.
 
 You can create self-signed certificates using the calico-containers Makefile:
@@ -43,7 +43,7 @@ You can create self-signed certificates using the calico-containers Makefile:
 make ssl-certs
 ```
 
-This will create the CA certificate, a client certificate/key pair, and a 
+This will create the CA certificate, a client certificate/key pair, and a
 server certificate/key pair located at:
 
 ```shell
@@ -55,8 +55,8 @@ server certificate/key pair located at:
 ```
 
 ### Commands that require root
-Some commands are required to be run as root.  The user's environment variables 
-specified above will not be recognized by the root user, so the variables must 
+Some commands are required to be run as root.  The user's environment variables
+specified above will not be recognized by the root user, so the variables must
 be passed into the Calico command.
 
 For example, to run `calicoctl node`, you would call something like this:
@@ -84,7 +84,7 @@ Here's a list of commands that must be run as root:
 - `calicoctl container ip add`
 - `calicoctl container ip remove`
 
-See the [calicoctl reference guide]({{site.baseurl}}/{{page.version}}/reference/calicoctl) for details on specific 
+See the [calicoctl reference guide]({{site.baseurl}}/{{page.version}}/reference/calicoctl) for details on specific
 calicoctl commands.
 
 ### Calico as a Docker network plugin

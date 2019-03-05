@@ -5,7 +5,7 @@ canonical_url: 'https://docs.projectcalico.org/v3.5/reference/calicoctl/resource
 
 > NOTE: ONLY the `calicoctl pool show` command is safe to use when running
 > Calico with the Docker libnetwork driver. The libnetwork driver manages the
-> IP address pools and assignment.  
+> IP address pools and assignment.
 
 This sections describes the `calicoctl pool` commands.
 

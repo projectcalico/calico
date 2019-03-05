@@ -32,7 +32,7 @@ Vagrant.configure(2) do |config|
   # https://www.vagrantup.com/boxes.html
   config.vm.box = "bento/ubuntu-16.04"
 
-  # Workaround 16.04 issue with Virtualbox where Box waits 5 minutes to start 
+  # Workaround 16.04 issue with Virtualbox where Box waits 5 minutes to start
   # if network "cable" is not connected: https://github.com/chef/bento/issues/682
   config.vm.provider "virtualbox" do |vb|
     vb.customize ["modifyvm", :id, "--cableconnected1", "on"]

@@ -16,7 +16,7 @@ powerful way to group together all of your network Policy, makes it easy to
 reuse policy in different networks, and makes it easier to define policy that
 extends across different orchestration systems that use Calico.
 
-When Calico is configured to use container labels, profiles are not created and 
+When Calico is configured to use container labels, profiles are not created and
 have no impact on any container traffic.
 
 ## Enabling Docker Networking Container Labels Policy
@@ -65,7 +65,7 @@ prefixed with `org.projectcalico.label.` for them to be extracted and applied
 to the workload endpoint.
 
 We have decided to use the label `role` indicating the role and a value of
-either `frontend` or `database`.  
+either `frontend` or `database`.
 
 Create the workloads as docker containers with appropriate labels.
 
@@ -170,7 +170,7 @@ One approach for doing this is as follows:
 -  Define global policy "backupnetwork" that allows full access between all
    components with the  `backup = true` label.
 
-For your database containers that also need to be able to access the backup 
+For your database containers that also need to be able to access the backup
 endpoints, launch them assigning both the `role = database` and `backup = true`
 labels.
 

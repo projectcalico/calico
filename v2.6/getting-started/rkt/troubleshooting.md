@@ -2,8 +2,8 @@
 title: Troubleshooting Calico for rkt
 ---
 
-This article contains rkt specific troubleshooting advice for Calico and 
-frequently asked questions. 
+This article contains rkt specific troubleshooting advice for Calico and
+frequently asked questions.
 See also the [main Calico troubleshooting](../../usage/troubleshooting) pages.
 
 ## Frequently Asked Questions

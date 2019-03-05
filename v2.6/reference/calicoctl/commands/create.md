@@ -5,12 +5,12 @@ canonical_url: 'https://docs.projectcalico.org/v3.5/reference/calicoctl/commands
 
 This sections describes the `calicoctl create` command.
 
-Read the [calicoctl command line interface user reference]({{site.baseurl}}/{{page.version}}/reference/calicoctl/) 
+Read the [calicoctl command line interface user reference]({{site.baseurl}}/{{page.version}}/reference/calicoctl/)
 for a full list of calicoctl commands.
 
-> **Note**: The available actions for a specific resource type may be 
-> limited based on the datastore used for Calico (etcdv2 / Kubernetes API). 
-> Please refer to the 
+> **Note**: The available actions for a specific resource type may be
+> limited based on the datastore used for Calico (etcdv2 / Kubernetes API).
+> Please refer to the
 > [Resources section]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/)
 > for details about each resource type.
 {: .alert .alert-info}
@@ -18,7 +18,7 @@ for a full list of calicoctl commands.
 
 ## Displaying the help text for 'calicoctl create' command
 
-Run `calicoctl create --help` to display the following help menu for the 
+Run `calicoctl create --help` to display the following help menu for the
 command.
 
 ```
@@ -78,7 +78,7 @@ $ calicoctl create -f ./resources.yaml
 Successfully created 8 resource(s)
 
 # Create the same set of resources reading from stdin.
-# Results indicate failure because the first resource (in this case a Profile) 
+# Results indicate failure because the first resource (in this case a Profile)
 # already exists.
 $ cat resources.yaml | calicoctl apply -f -
 Failed to create any resources: resource already exists: Profile(name=profile1)

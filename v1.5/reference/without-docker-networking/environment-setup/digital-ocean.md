@@ -12,7 +12,7 @@ These instructions assume a total of two DigitalOcean hosts running CoreOS. For 
 [CoreOS on DigitalOcean documentation][coreos-digitalocean].
 
 ## 1. Spinning up the VMs
-From the DigitalOcean Web Console, select the "Create Droplet" button in the top right corner.  
+From the DigitalOcean Web Console, select the "Create Droplet" button in the top right corner.
 
 In the form that appears, give the machine a hostname, select a desired size (the smallest size should be fine for this
 demo), and choose a region.  You should see something similar to the following:
@@ -30,7 +30,7 @@ You should now see something similar to the following:
 
 ![alt tag]({{site.baseurl}}/images/Create_Droplet_2.png)
 
-Before selecting "Create Droplet", you will need to specify the User Data.  
+Before selecting "Create Droplet", you will need to specify the User Data.
 
 For the first droplet `calico-01`, paste in the cloud config from
 [`user-data-first`]({{site.baseurl}}/{{page.version}}/reference/without-docker-networking/environment-setup/cloud-config/user-data-first).
@@ -82,7 +82,7 @@ Outbound rules:
 ```
 
 Notice that profiles define policy for inbound packets and outbound packets separately.  This profile allows inbound
-traffic from other endpoints with the tag `WEB`, and (implicitly) denies inbound traffic from all other addresses.  
+traffic from other endpoints with the tag `WEB`, and (implicitly) denies inbound traffic from all other addresses.
 It allows all outbound traffic regardless of destination.
 
 Let's modify this profile to make it more appropriate for a public webserver by allowing TCP traffic on ports 80 and

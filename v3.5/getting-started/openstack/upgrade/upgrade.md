@@ -6,7 +6,7 @@ canonical_url: 'https://docs.projectcalico.org/v3.5/getting-started/openstack/up
 
 ## {{site.prodname}} package update
 
-This part of the upgrade procedure varies slightly according to which operating system you are using.  
+This part of the upgrade procedure varies slightly according to which operating system you are using.
 
 - [Upgrading an OpenStack cluster based on CentOS](#upgrading-an-openstack-cluster-based-on-centos)
 

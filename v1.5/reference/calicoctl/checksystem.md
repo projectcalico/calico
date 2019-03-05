@@ -33,7 +33,7 @@ Options:
 This command allows you to verify that your host system is configured correctly
 for calicoctl to manage a Calico network.  The Calico network hosts must be
 configured to have specific networking modules loaded, such as iptables,
-ipsets support, and IP forwarding.  Calico checks for these modules in the  
+ipsets support, and IP forwarding.  Calico checks for these modules in the
 `modules.dep` and `modules.builtin` files under `/lib/modules/<kernel>/`.
 
 Running this command will only check for incompatibilities on the host it is

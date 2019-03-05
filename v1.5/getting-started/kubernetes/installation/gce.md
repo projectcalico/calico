@@ -147,5 +147,5 @@ NAME          STATUS                     AGE
 {% include {{page.version}}/install-k8s-addons.md %}
 
 [calico-cni]: https://github.com/projectcalico/calico-cni
-[coreos-gce]: https://coreos.com/os/docs/latest/booting-on-google-compute-engine.html 
+[coreos-gce]: https://coreos.com/os/docs/latest/booting-on-google-compute-engine.html
 [gcloud-instructions]: https://cloud.google.com/sdk/

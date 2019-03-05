@@ -64,7 +64,7 @@ Received LAUNCH event
 Starting task cni
 Forked command at 1762
 sh -c 'ifconfig'
-eth0      Link encap:Ethernet  HWaddr 1E:49:82:B4:C1:F8  
+eth0      Link encap:Ethernet  HWaddr 1E:49:82:B4:C1:F8
           inet addr:192.168.227.194  Bcast:0.0.0.0  Mask:255.255.255.255
           inet6 addr: fe80::1c49:82ff:feb4:c1f8/64 Scope:Link
           UP BROADCAST RUNNING MULTICAST  MTU:1500  Metric:1

@@ -30,7 +30,7 @@ also [configure the Docker daemon][daemon-cert-config] with the correct
 certificates to allow access.
 
 > **Note**: For Docker 1.10+, you can use the [daemon configuration file][daemon-config-file],
-> or for 1.9 see the appropriate 'Configuring Docker' section in 
+> or for 1.9 see the appropriate 'Configuring Docker' section in
 > [configuring docker][configuring-docker-1.9].
 {: .alert .alert-info}
 
