@@ -121,19 +121,16 @@ func (c Converter) NamespaceToProfile(ns *kapiv1.Namespace) (*model.KVPair, erro
 }
 
 // IsValidCalicoWorkloadEndpoint returns true if the pod should be shown as a workloadEndpoint
-// in the Calico API and false otherwise.  A Pod suitable for Calico should not be host
-// networked and should have been scheduled to a Node.
+// in the Calico API and false otherwise.  Note: since we completely ignore notifications for
+// invalid Pods, it is important that pods can only transition from not-valid to valid and not
+// the other way.  If they transition from valid to invalid, we'll fail to emit a deletion
+// event in the watcher.
 func (c Converter) IsValidCalicoWorkloadEndpoint(pod *kapiv1.Pod) bool {
 	if c.IsHostNetworked(pod) {
 		log.WithField("pod", pod.Name).Debug("Pod is host networked.")
 		return false
 	} else if !c.IsScheduled(pod) {
 		log.WithField("pod", pod.Name).Debug("Pod is not scheduled.")
-		return false
-	} else if c.IsFinished(pod) {
-		// Exclude finished pods.  When a pod finishes, the kubelet releases its IP so
-		// the IP in the pod status no-longer belongs to this endpoint.
-		log.WithField("pod", pod.Name).Debug("Pod has finished.")
 		return false
 	}
 	return true
@@ -226,11 +223,19 @@ func (c Converter) PodToWorkloadEndpoint(pod *kapiv1.Pod) (*model.KVPair, error)
 		return nil, err
 	}
 
-	// An IP address may not yet be assigned (or may have been removed for a Pod deletion), so
-	// handle a missing IP gracefully.
 	ipNets, err := c.GetPodIPs(pod)
 	if err != nil {
+		// IP address was present but malformed in some way, handle as an explicit failure.
 		return nil, err
+	}
+
+	if c.IsFinished(pod) {
+		// Pod is finished but not yet deleted.  In this state the IP will have been freed and returned to the pool
+		// so we need to make sure we don't let the caller believe it still belongs to this endpoint.
+		// Pods with no IPs will get filtered out before they get to Felix in the watcher syncer cache layer.
+		// We can't pretend the workload endpoint is deleted _here_ because that would confuse users of the
+		// native v3 Watch() API.
+		ipNets = nil
 	}
 
 	// Generate the interface name based on workload.  This must match
