@@ -323,7 +323,6 @@ EOF
         svc_json = run("kubectl get svc nginx-rr -n bgp-test -o json")
         svc_dict = json.loads(svc_json)
         svcRoute = svc_dict['spec']['clusterIP']
-        print "svcRoute = %s" % svcRoute
         retry_until_success(lambda: self.assertIn(svcRoute, self.get_routes()))
 
     def test_mainline(self):
