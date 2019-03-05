@@ -15,7 +15,10 @@ import logging
 import os
 import subprocess
 import unittest
+import json
+import yaml
 from time import sleep
+from netaddr import IPAddress
 
 from kubernetes import client, config
 
@@ -96,6 +99,62 @@ protocol bgp Mesh_10_192_0_4 from bgp_template {
 }
 """
 
+# BIRD config for an external node to peer with
+# the in-cluster route reflector on kube-node-2.
+bird_conf_rr = """
+router id 10.192.0.5;
+
+# Configure synchronization between routing tables and kernel.
+protocol kernel {
+  learn;             # Learn all alien routes from the kernel
+  persist;           # Don't remove routes on bird shutdown
+  scan time 2;       # Scan kernel routing table every 2 seconds
+  import all;
+  export all;
+  graceful restart;  # Turn on graceful restart to reduce potential flaps in
+                     # routes when reloading BIRD configuration.  With a full
+                     # automatic mesh, there is no way to prevent BGP from
+                     # flapping since multiple nodes update their BGP
+                     # configuration at the same time, GR is not guaranteed to
+                     # work correctly in this scenario.
+  merge paths on;
+}
+
+# Watch interface up/down events.
+protocol device {
+  debug { states };
+  scan time 2;    # Scan interfaces every 2 seconds
+}
+
+protocol direct {
+  debug { states };
+  interface -"cali*", "*"; # Exclude cali* but include everything else.
+}
+
+# Template for all BGP clients
+template bgp bgp_template {
+  debug { states };
+  description "Connection to BGP peer";
+  local as 64512;
+  multihop;
+  gateway recursive; # This should be the default, but just in case.
+  import all;        # Import all routes, since we don't know what the upstream
+                     # topology is and therefore have to trust the ToR/RR.
+  export all;
+  source address 10.192.0.5;  # The local address we use for the TCP connection
+  add paths on;
+  graceful restart;  # See comment in kernel section about graceful restart.
+  connect delay time 2;
+  connect retry time 5;
+  error wait time 5,30;
+}
+
+# For peer /host/kube-node-2/ip_addr_v4
+protocol bgp Mesh_10_192_0_4 from bgp_template {
+  neighbor 10.192.0.4 as 64512;
+  passive on; # Mesh is unidirectional, peer will connect to us.
+}
+"""
 
 class TestBGPAdvert(TestBase):
 
@@ -126,6 +185,35 @@ spec:
 EOF
 """)
 
+    def setUpRR(self):
+        super(TestBGPAdvert, self).setUp()
+
+        # Create bgp test namespace
+        self.ns = "bgp-test"
+        self.create_namespace(self.ns)
+
+        start_external_node_with_bgp("kube-node-extra", bird_conf_rr)
+
+        # set CALICO_ADVERTISE_CLUSTER_IPS=10.96.0.0/12
+        self.update_ds_env("calico-node", "kube-system", "CALICO_ADVERTISE_CLUSTER_IPS", "10.96.0.0/12")
+
+        # Enable debug logging
+        self.update_ds_env("calico-node", "kube-system", "BGP_LOGSEVERITYSCREEN", "debug")
+
+        # Establish BGPPeer from cluster nodes to node-extra using calicoctl
+        # External peer has IP 10.192.0.5
+        run("""kubectl exec -i -n kube-system calicoctl -- /calicoctl apply -f - << EOF
+apiVersion: projectcalico.org/v3
+kind: BGPPeer
+metadata:
+  name: node-extra.peer
+spec:
+  node: kube-node-2
+  peerIP: 10.192.0.5
+  asNumber: 64512
+EOF
+""")
+
     def tearDown(self):
         super(TestBGPAdvert, self).tearDown()
         self.delete_and_confirm(self.ns, "ns")
@@ -142,6 +230,100 @@ EOF
         for ip in via:
           matchStr += "\n\tnexthop via %s  dev eth0 weight 1" % ip
         retry_until_success(lambda: self.assertIn(matchStr, self.get_routes()))
+
+    def test_rr(self):
+        self.tearDown()
+        self.setUpRR()
+
+        # Create ExternalTrafficPolicy Local service with one endpoint on node-1
+        run("""kubectl apply -f - << EOF
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nginx-rr
+  namespace: bgp-test
+  labels:
+    app: nginx
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: nginx
+      run: nginx-rr
+  template:
+    metadata:
+      labels:
+        app: nginx
+        run: nginx-rr
+    spec:
+      containers:
+      - name: nginx-rr
+        image: nginx:1.7.9
+        ports:
+        - containerPort: 80
+      nodeSelector:
+        beta.kubernetes.io/os: linux
+        kubernetes.io/hostname: kube-node-1
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: nginx-rr
+  namespace: bgp-test
+  labels:
+    app: nginx
+    run: nginx-rr
+spec:
+  ports:
+  - port: 80
+    targetPort: 80
+  selector:
+    app: nginx
+    run: nginx-rr
+  type: NodePort
+  externalTrafficPolicy: Local
+EOF
+""")
+
+        run("kubectl exec -i -n kube-system calicoctl -- /calicoctl get nodes -o yaml")
+        run("kubectl exec -i -n kube-system calicoctl -- /calicoctl get bgppeers -o yaml")
+        run("kubectl exec -i -n kube-system calicoctl -- /calicoctl get bgpconfigs -o yaml")
+
+        # Update the node-2 to behave as a route-reflector
+        json_str = run("kubectl exec -i -n kube-system calicoctl -- /calicoctl get node kube-node-2 -o json")
+        node_dict = json.loads(json_str)
+        node_dict['metadata']['labels']['i-am-a-route-reflector'] = 'true'
+        node_dict['spec']['bgp']['routeReflectorClusterID'] = '224.0.0.1'
+        run("""kubectl exec -i -n kube-system calicoctl -- /calicoctl apply -f - << EOF
+%s
+EOF
+""" % json.dumps(node_dict))
+
+        # Disable node-to-node mesh and configure bgp peering
+        # between node-1 and RR and also between external node and RR
+        run("""kubectl exec -i -n kube-system calicoctl -- /calicoctl apply -f - << EOF
+apiVersion: projectcalico.org/v3
+kind: BGPConfiguration
+metadata: {name: default}
+spec:
+  nodeToNodeMeshEnabled: false
+  asNumber: 64512
+EOF
+""")
+        run("""kubectl exec -i -n kube-system calicoctl -- /calicoctl apply -f - << EOF
+apiVersion: projectcalico.org/v3
+kind: BGPPeer
+metadata: {name: kube-node-1}
+spec:
+  node: kube-node-1
+  peerIP: 10.192.0.4
+  asNumber: 64512
+EOF
+""")
+        svc_json = run("kubectl get svc nginx-rr -n bgp-test -o json")
+        svc_dict = json.loads(svc_json)
+        svcRoute = svc_dict['spec']['clusterIP']
+        retry_until_success(lambda: self.assertIn(svcRoute, self.get_routes()))
 
     def test_mainline(self):
         """
