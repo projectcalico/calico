@@ -351,6 +351,24 @@ var _ = Describe("Test Pod conversion", func() {
 		Expect(err).To(HaveOccurred())
 	})
 
+	It("should return a value for a missing pod IP", func() {
+		pod := kapiv1.Pod{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:            "podA",
+				Namespace:       "default",
+				ResourceVersion: "1234",
+			},
+			Spec: kapiv1.PodSpec{
+				NodeName:   "nodeA",
+				Containers: []kapiv1.Container{},
+			},
+		}
+
+		kvp, err := c.PodToWorkloadEndpoint(&pod)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(kvp.Value).NotTo(BeNil())
+	})
+
 	It("should prioritise PodIP over the calico annotation for the IP", func() {
 		pod := kapiv1.Pod{
 			ObjectMeta: metav1.ObjectMeta{
@@ -381,7 +399,7 @@ var _ = Describe("Test Pod conversion", func() {
 		Expect(wep.Value.(*apiv3.WorkloadEndpoint).Spec.IPNetworks).To(ConsistOf("192.168.0.2/32"))
 	})
 
-	DescribeTable("IsValidCalicoWorkloadEndpoint reject/accept phase tests",
+	DescribeTable("PodToWorkloadEndpoint reject/accept phase tests",
 		func(podPhase kapiv1.PodPhase, expectedResult bool) {
 			pod := kapiv1.Pod{
 				ObjectMeta: metav1.ObjectMeta{
@@ -401,7 +419,13 @@ var _ = Describe("Test Pod conversion", func() {
 					Phase: podPhase,
 				},
 			}
-			Expect(c.IsValidCalicoWorkloadEndpoint(&pod)).To(Equal(expectedResult))
+			kvp, err := c.PodToWorkloadEndpoint(&pod)
+			Expect(err).NotTo(HaveOccurred())
+			if expectedResult {
+				Expect(kvp.Value.(*apiv3.WorkloadEndpoint).Spec.IPNetworks).To(HaveLen(1))
+			} else {
+				Expect(kvp.Value.(*apiv3.WorkloadEndpoint).Spec.IPNetworks).To(HaveLen(0))
+			}
 		},
 		Entry("Pending", kapiv1.PodPending, true),
 		Entry("Running", kapiv1.PodRunning, true),

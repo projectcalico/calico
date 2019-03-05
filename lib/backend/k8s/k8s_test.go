@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2019 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,8 +17,11 @@ package k8s
 import (
 	"context"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
+
+	"github.com/projectcalico/libcalico-go/lib/names"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -183,7 +186,7 @@ func (c cb) ExpectExists(updates []api.Update) {
 		log.Infof("[TEST] Expecting key: %v", update.Key)
 		matches := false
 
-		wait.PollImmediate(1*time.Second, 60*time.Second, func() (bool, error) {
+		_ = wait.PollImmediate(1*time.Second, 60*time.Second, func() (bool, error) {
 			// Get the update.
 			c.Lock.Lock()
 			u, ok := c.State[update.Key.String()]
@@ -193,7 +196,7 @@ func (c cb) ExpectExists(updates []api.Update) {
 			// that the key exists and that it's the correct type.
 			matches = ok && update.UpdateType == u.UpdateType
 
-			log.Infof("[TEST] Key exists? %t matches? %t: %+v", ok, matches, u)
+			log.Infof("[TEST] Key exists? %t matches? %t: expected %v; actual %v", ok, matches, update.UpdateType, u.UpdateType)
 			if matches {
 				// Expected the update to be present, and it is.
 				return true, nil
@@ -215,7 +218,7 @@ func (c cb) ExpectDeleted(kvps []model.KVPair) {
 		log.Infof("[TEST] Not expecting key: %v", kvp.Key)
 		exists := true
 
-		wait.PollImmediate(1*time.Second, 60*time.Second, func() (bool, error) {
+		_ = wait.PollImmediate(1*time.Second, 60*time.Second, func() (bool, error) {
 			// Get the update.
 			c.Lock.Lock()
 			update, ok := c.State[kvp.Key.String()]
@@ -1184,10 +1187,10 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 		})
 	})
 
-	It("should handle a basic Pod", func() {
-		pod := k8sapi.Pod{
+	createPodAndMarkAsRunning := func(name string) (*k8sapi.Pod, string) {
+		pod := &k8sapi.Pod{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      "test-syncer-basic-pod",
+				Name:      name,
 				Namespace: "default",
 			},
 			Spec: k8sapi.PodSpec{
@@ -1201,21 +1204,17 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 				},
 			},
 		}
-		_, err := c.ClientSet.CoreV1().Pods("default").Create(&pod)
-		wepName := "127.0.0.1-k8s-test--syncer--basic--pod-eth0"
-
+		pod, err := c.ClientSet.CoreV1().Pods("default").Create(pod)
 		By("Creating a pod", func() {
 			Expect(err).NotTo(HaveOccurred())
 		})
-
 		By("Assigning an IP", func() {
 			// Update the Pod to have an IP and be running.
 			pod.Status.PodIP = "192.168.1.1"
 			pod.Status.Phase = k8sapi.PodRunning
-			_, err = c.ClientSet.CoreV1().Pods("default").UpdateStatus(&pod)
+			pod, err = c.ClientSet.CoreV1().Pods("default").UpdateStatus(pod)
 			Expect(err).NotTo(HaveOccurred())
 		})
-
 		By("Waiting for the pod to start", func() {
 			// Wait up to 120s for pod to start running.
 			log.Warnf("[TEST] Waiting for pod %s to start", pod.ObjectMeta.Name)
@@ -1233,6 +1232,21 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 			Expect(p.Status.Phase).To(Equal(k8sapi.PodRunning))
 		})
 
+		wepids := names.WorkloadEndpointIdentifiers{
+			Node:         pod.Spec.NodeName,
+			Orchestrator: apiv3.OrchestratorKubernetes,
+			Endpoint:     "eth0",
+			Pod:          pod.Name,
+		}
+		wepName, err := wepids.CalculateWorkloadEndpointName(false)
+		Expect(err).NotTo(HaveOccurred())
+
+		return pod, wepName
+	}
+
+	It("should handle a basic Pod", func() {
+		pod, wepName := createPodAndMarkAsRunning("basic-pod")
+
 		By("Performing a List() operation", func() {
 			// Perform List and ensure it shows up in the Calico API.
 			weps, err := c.List(ctx, model.ResourceListOptions{Kind: apiv3.KindWorkloadEndpoint}, "")
@@ -1247,7 +1261,7 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 			Expect(len(weps.KVPairs)).To(Equal(1))
 		})
 
-		By("Performing a Get() operation", func() {
+		By("Performing a Get() operation then updating the wep", func() {
 			// Perform a Get and ensure no error in the Calico API.
 			wep, err := c.Get(ctx, model.ResourceKey{Name: wepName, Namespace: "default", Kind: apiv3.KindWorkloadEndpoint}, "")
 			Expect(err).NotTo(HaveOccurred())
@@ -1282,17 +1296,141 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 			snapshotCallbacks.ExpectExists([]api.Update{
 				{KVPair: expectedKVP, UpdateType: api.UpdateTypeKVNew},
 			})
-
 		})
 
 		By("Deleting the Pod and expecting the wep to be deleted", func() {
 			var zero int64
 			policy := metav1.DeletePropagationBackground
-			err = c.ClientSet.CoreV1().Pods("default").Delete(pod.ObjectMeta.Name, &metav1.DeleteOptions{
+			err := c.ClientSet.CoreV1().Pods("default").Delete(pod.ObjectMeta.Name, &metav1.DeleteOptions{
 				GracePeriodSeconds: &zero,
 				PropagationPolicy:  &policy,
 			})
 			Expect(err).NotTo(HaveOccurred())
+			cb.ExpectDeleted([]model.KVPair{expectedKVP})
+		})
+	})
+
+	// There are several states that we consider "finished", run the test for each one.
+	for _, finishPhase := range []k8sapi.PodPhase{k8sapi.PodSucceeded, k8sapi.PodFailed} {
+		finishPhase := finishPhase
+		It(fmt.Sprintf("should treat a finished Pod (%v) as a deletion", finishPhase), func() {
+			pod, wepName := createPodAndMarkAsRunning("finished-pod-" + strings.ToLower(string(finishPhase)))
+			var err error
+
+			expectedKVP := model.KVPair{
+				Key: model.WorkloadEndpointKey{
+					Hostname:       "127.0.0.1",
+					OrchestratorID: "k8s",
+					WorkloadID:     fmt.Sprintf("default/%s", pod.ObjectMeta.Name),
+					EndpointID:     "eth0",
+				},
+			}
+
+			By("Expecting an update with type 'UpdateTypeKVNew' on the Syncer API", func() {
+				// The update processor filters out the initial update where the pod has no IP, then we get this
+				// notification when the IP is added.
+				cb.ExpectExists([]api.Update{
+					{KVPair: expectedKVP, UpdateType: api.UpdateTypeKVNew},
+				})
+			})
+
+			By("Checking the pod is visible before we mark it as finished", func() {
+				// Perform a Get and ensure no error in the Calico API.
+				wep, err := c.Get(ctx, model.ResourceKey{Name: wepName, Namespace: "default", Kind: apiv3.KindWorkloadEndpoint}, "")
+				Expect(err).NotTo(HaveOccurred())
+				Expect(wep).NotTo(BeNil())
+
+				// Perform List and ensure it shows up in the Calico API.
+				weps, err := c.List(ctx, model.ResourceListOptions{Kind: apiv3.KindWorkloadEndpoint}, "")
+				Expect(err).NotTo(HaveOccurred())
+				Expect(len(weps.KVPairs)).To(BeNumerically(">", 0))
+			})
+
+			By(fmt.Sprintf("Marking the Pod as finished (%v)", finishPhase), func() {
+				pod.Status.Phase = finishPhase
+				pod, err = c.ClientSet.CoreV1().Pods("default").UpdateStatus(pod)
+				Expect(err).NotTo(HaveOccurred())
+			})
+
+			By("Expecting an update with type 'KVDeleted' on the Syncer API", func() {
+				cb.ExpectDeleted([]model.KVPair{expectedKVP})
+			})
+
+			// Now go back from finished to running again.  This is likely impossible on a real Kubernetes system
+			// but it's helpful for testing out our UpdateType calculation logic.  I.e. since the last update was
+			// a "delete", we should now see a "new", rather than an "update".
+
+			By("Marking the Pod as running again", func() {
+				pod.Status.Phase = k8sapi.PodRunning
+				pod, err = c.ClientSet.CoreV1().Pods("default").UpdateStatus(pod)
+				Expect(err).NotTo(HaveOccurred())
+			})
+
+			By("Expecting an update that creates the wep again", func() {
+				cb.ExpectExists([]api.Update{
+					{KVPair: expectedKVP, UpdateType: api.UpdateTypeKVNew},
+				})
+			})
+
+			By("Checking the pod is gettable", func() {
+				// Perform a Get and ensure no error in the Calico API.
+				_, err := c.Get(ctx, model.ResourceKey{Name: wepName, Namespace: "default", Kind: apiv3.KindWorkloadEndpoint}, "")
+				Expect(err).NotTo(HaveOccurred())
+			})
+
+			By("Deleting the Pod and expecting the wep to be deleted", func() {
+				var zero int64
+				policy := metav1.DeletePropagationBackground
+				err := c.ClientSet.CoreV1().Pods("default").Delete(pod.ObjectMeta.Name, &metav1.DeleteOptions{
+					GracePeriodSeconds: &zero,
+					PropagationPolicy:  &policy,
+				})
+				Expect(err).NotTo(HaveOccurred())
+				cb.ExpectDeleted([]model.KVPair{expectedKVP})
+			})
+		})
+	}
+
+	It("should treat a pod that loses its IP as a deletion", func() {
+		pod, wepName := createPodAndMarkAsRunning("pod-losing-ip")
+		var err error
+
+		expectedKVP := model.KVPair{
+			Key: model.WorkloadEndpointKey{
+				Hostname:       "127.0.0.1",
+				OrchestratorID: "k8s",
+				WorkloadID:     fmt.Sprintf("default/%s", pod.ObjectMeta.Name),
+				EndpointID:     "eth0",
+			},
+		}
+
+		By("Expecting an update with type 'UpdateTypeKVNew' on the Syncer API", func() {
+			// The update processor filters out the initial update where the pod has no IP, then we get this
+			// notification when the IP is added.
+			cb.ExpectExists([]api.Update{
+				{KVPair: expectedKVP, UpdateType: api.UpdateTypeKVNew},
+			})
+		})
+
+		By("Checking the pod is visible before we remove its IP", func() {
+			// Perform a Get and ensure no error in the Calico API.
+			wep, err := c.Get(ctx, model.ResourceKey{Name: wepName, Namespace: "default", Kind: apiv3.KindWorkloadEndpoint}, "")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(wep).NotTo(BeNil())
+
+			// Perform List and ensure it shows up in the Calico API.
+			weps, err := c.List(ctx, model.ResourceListOptions{Kind: apiv3.KindWorkloadEndpoint}, "")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(len(weps.KVPairs)).To(BeNumerically(">", 0))
+		})
+
+		By("Removing its IP", func() {
+			pod.Status.PodIP = ""
+			pod, err = c.ClientSet.CoreV1().Pods("default").UpdateStatus(pod)
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		By("Expecting an update with type 'KVDeleted' on the Syncer API", func() {
 			cb.ExpectDeleted([]model.KVPair{expectedKVP})
 		})
 	})

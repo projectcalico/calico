@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2018 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2019 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -211,14 +211,16 @@ func (st *SyncerTester) ExpectData(kvp model.KVPair) {
 		value := func() interface{} {
 			return st.GetCacheValue(key)
 		}
-		Eventually(value, 6*time.Second, time.Millisecond).Should(Equal(kvp.Value))
-		Consistently(value).Should(Equal(kvp.Value), "KVPair data was incorrect")
+		EventuallyWithOffset(1, value, 6*time.Second, time.Millisecond).Should(Equal(kvp.Value),
+			fmt.Sprintf("Timed out waiting for %v to equal expected value", key))
+		ConsistentlyWithOffset(1, value).Should(Equal(kvp.Value), "KVPair data was incorrect")
 	} else {
 		kv := func() interface{} {
 			return st.GetCacheKVPair(key)
 		}
-		Eventually(kv, 6*time.Second, time.Millisecond).Should(Equal(kvp))
-		Consistently(kv).Should(Equal(kvp), "KVPair data (or revision) was incorrect")
+		EventuallyWithOffset(1, kv, 6*time.Second, time.Millisecond).Should(Equal(kvp),
+			fmt.Sprintf("Timed out waiting for %v to equal expected value @ rev %v", key, kvp.Revision))
+		ConsistentlyWithOffset(1, kv).Should(Equal(kvp), "KVPair data (or revision) was incorrect")
 	}
 }
 
