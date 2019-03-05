@@ -55,7 +55,6 @@ Description:
   See 'calicoctl <command> --help' to read about a specific subcommand.
 `
 	arguments, err := docopt.Parse(doc, nil, true, commands.VERSION_SUMMARY, true, false)
-
 	if err != nil {
 		if _, ok := err.(*docopt.UserError); ok {
 			// the user gave us bad input
