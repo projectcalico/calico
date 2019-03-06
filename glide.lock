@@ -252,7 +252,7 @@ imports:
   subpackages:
   - binder
 - name: github.com/projectcalico/typha
-  version: 3bf2dbdd8e8aa27efd3bb2f778b23ab6837e7e42
+  version: 6a662a6daced6252106a5d696011802f97652844
   subpackages:
   - pkg/syncclient
   - pkg/syncproto
