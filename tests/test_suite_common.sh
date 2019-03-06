@@ -25,6 +25,7 @@ execute_test_suite() {
 	run_extra_test test_node_deletion
 	run_extra_test test_idle_peers
 	run_extra_test test_static_routes
+	run_extra_test test_router_id_hash
 	echo "Extra etcdv3 tests passed"
     fi
 
@@ -476,4 +477,11 @@ compare_templates() {
     fi
 
     return $rc
+}
+
+test_router_id_hash() {
+    export CALICO_ROUTER_ID=HASH
+    run_individual_test_oneshot 'mesh/hash'
+    export -n CALICO_ROUTER_ID
+    unset CALICO_ROUTER_ID
 }

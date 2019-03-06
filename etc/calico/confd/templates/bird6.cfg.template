@@ -7,7 +7,7 @@ include "bird6_ipam.cfg";
 {{- $router_id := getenv "CALICO_ROUTER_ID" ""}}
 
 {{- $node_name := getenv "NODENAME"}}
-router id {{if eq "HASH" ($router_id)}}{{hash $node_name}}{{else}}{{if ne "" ($router_id)}}{{$router_id}}{{else}}{{$node_ip}}{{end}}{{end}}; # Use IPv4 address since router id is 4 octets, even in MP-BGP
+router id {{if eq "HASH" ($router_id)}}{{hash $node_name}}{{else}}{{if ne "" ($router_id)}}{{$router_id}}{{else}}{{$node_ip}}{{end}}{{end}};  # Use IPv4 address since router id is 4 octets, even in MP-BGP
 
 
 {{- define "LOGGING"}}
