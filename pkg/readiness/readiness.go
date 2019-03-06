@@ -28,8 +28,7 @@ import (
 
 const felixReadinessEp = "http://localhost:9099/readiness"
 
-func Run(bird, bird6, felix bool) {
-
+func Run(bird, bird6, felix bool, thresholdTime time.Duration) {
 	if !bird && !felix && !bird6 {
 		fmt.Printf("calico/node readiness check error: must specify at least one of -bird, -bird6, or -felix")
 		os.Exit(1)
@@ -43,14 +42,14 @@ func Run(bird, bird6, felix bool) {
 	}
 
 	if bird {
-		if err := checkBIRDReady("4"); err != nil {
+		if err := checkBIRDReady("4", thresholdTime); err != nil {
 			fmt.Printf("calico/node is not ready: BIRD is not ready: %+v", err)
 			os.Exit(1)
 		}
 	}
 
 	if bird6 {
-		if err := checkBIRDReady("6"); err != nil {
+		if err := checkBIRDReady("6", thresholdTime); err != nil {
 			fmt.Printf("calico/node is not ready: BIRD6 is not ready: %+v", err)
 			os.Exit(1)
 		}
@@ -60,7 +59,13 @@ func Run(bird, bird6, felix bool) {
 // checkBIRDReady checks if BIRD is ready by connecting to the BIRD
 // socket to gather all BGP peer connection status, and overall graceful
 // restart status.
-func checkBIRDReady(ipv string) error {
+func checkBIRDReady(ipv string, thresholdTime time.Duration) error {
+	// Stat nodename file to get the modified time of the file.
+	nodenameFileStat, err := os.Stat("/var/lib/calico/nodename")
+	if err != nil {
+		return fmt.Errorf("Failed to stat() nodename file: %v", err)
+	}
+
 	// Check for unestablished peers
 	peers, err := bird.GetPeers(ipv)
 	log.Debugf("peers: %v", peers)
@@ -69,21 +74,41 @@ func checkBIRDReady(ipv string) error {
 	}
 
 	s := []string{}
+
+	// numEstablishedPeer keeps count of number of peers with bgp state established.
+	numEstablishedPeer := 0
+
 	for _, peer := range peers {
-		if peer.BGPState != "Established" {
+		if peer.BGPState == "Established" {
+			numEstablishedPeer += 1
+		} else {
 			s = append(s, peer.PeerIP)
 		}
 	}
-	if len(s) > 0 {
-		return fmt.Errorf("BGP not established with %+v", strings.Join(s, ","))
-	}
+	log.Infof("Number of node(s) with BGP peering established = %v", numEstablishedPeer)
 
-	// Check for GR
-	gr, err := bird.GRInProgress(ipv)
-	if err != nil {
-		return err
-	} else if gr {
-		return errors.New("graceful restart in progress")
+	if len(peers) == 0 {
+		// In case of no BGP peers return bird to be ready.
+		log.Debugf("There are no bgp peers, returning ready.")
+	} else if time.Since(nodenameFileStat.ModTime()) < thresholdTime {
+		if len(s) > 0 {
+			// When we first start up, only report ready if all our peerings are established.
+			// This prevents rolling update from proceeding until BGP is back up.
+			return fmt.Errorf("BGP not established with %+v", strings.Join(s, ","))
+		}
+		// Check for GR
+		gr, err := bird.GRInProgress(ipv)
+		if err != nil {
+			return err
+		} else if gr {
+			return errors.New("graceful restart in progress")
+		}
+	} else if numEstablishedPeer > 0 {
+		// After a while, only require a single peering to be up.  This prevents the whole mesh
+		// from reporting not-ready if some nodes go down.
+		log.Debugf("There exist(s) %v calico node(s) with BGP peering established.", numEstablishedPeer)
+	} else {
+		return fmt.Errorf("BGP not established with %+v", strings.Join(s, ","))
 	}
 
 	return nil
