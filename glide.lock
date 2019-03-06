@@ -108,7 +108,7 @@ imports:
 - name: github.com/kardianos/osext
   version: ae77be60afb1dcacde03767a8c37337fad28ac14
 - name: github.com/kelseyhightower/confd
-  version: cdb32bf863230b21ec5d071834214f6d4b866402
+  version: 55838eaae17ad7a1ebdce6156c055a99c361a060
   repo: https://github.com/projectcalico/confd.git
   subpackages:
   - pkg/backends
@@ -187,7 +187,7 @@ imports:
 - name: github.com/peterbourgon/diskv
   version: 5f041e8faa004a95c88a202771f4cc3e991971e6
 - name: github.com/projectcalico/felix
-  version: 31409de574d8e6e72553b50e9ab5952def81103c
+  version: a0fcb75be3eb2be23fcd965121877772a3b1954b
   subpackages:
   - buildinfo
   - calc
@@ -279,7 +279,7 @@ imports:
   subpackages:
   - binder
 - name: github.com/projectcalico/typha
-  version: 382fdf23f1407dbf9b0847d6c28a8f01ed4fbac6
+  version: 20d9b14135a2008f6f481b554548b1ddace66911
   subpackages:
   - pkg/syncclient
   - pkg/syncproto
