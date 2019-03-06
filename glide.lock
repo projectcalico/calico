@@ -1,5 +1,5 @@
 hash: 583be455852d939e9e0fa1893c696b20ee4ae2d42f35149b87a1681c1cca87ae
-updated: 2019-03-06T04:12:48.499965013Z
+updated: 2019-03-06T15:08:26.839285168Z
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -16,7 +16,7 @@ imports:
   - autorest/azure
   - autorest/date
 - name: github.com/beorn7/perks
-  version: 3ac7bf7a47d159a033b107610db8a1b6575507a4
+  version: 3a771d992973f24aa725d07868b467d1ddfceafb
   subpackages:
   - quantile
 - name: github.com/containernetworking/cni
