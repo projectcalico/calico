@@ -72,7 +72,7 @@ var (
 	overlapsV6LinkLocal   = "IP pool range overlaps with IPv6 Link Local range fe80::/10"
 	protocolPortsMsg      = "rules that specify ports must set protocol to TCP or UDP"
 	protocolIcmpMsg       = "rules that specify ICMP fields must set protocol to ICMP"
-	protocolAndHTTPMsg    = "rules that specify HTTP fields must set protocol to TCP"
+	protocolAndHTTPMsg    = "rules that specify HTTP fields must set protocol to TCP or empty"
 
 	ipv4LinkLocalNet = net.IPNet{
 		IP:   net.ParseIP("169.254.0.0"),
