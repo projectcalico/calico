@@ -1,6 +1,7 @@
 package template
 
 import (
+	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -9,6 +10,7 @@ import (
 	"os"
 	"path"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -33,6 +35,7 @@ func newFuncMap() map[string]interface{} {
 	m["fileExists"] = isFileExist
 	m["base64Encode"] = Base64Encode
 	m["base64Decode"] = Base64Decode
+	m["hash"] = hashNodeName
 	return m
 }
 
@@ -40,6 +43,20 @@ func addFuncs(out, in map[string]interface{}) {
 	for name, fn := range in {
 		out[name] = fn
 	}
+}
+
+// hashNodeName hashes the node name for ipv6 only systems.
+// This hash is then converted to ipv4 IP to be used as router id.
+func hashNodeName(nodeName string) string {
+	hash := sha256.New()
+	hash.Write([]byte(nodeName))
+	ipv6 := hash.Sum(nil)
+	ip := ipv6[:4]
+	routerId := strconv.Itoa(int(ip[0])) + "." +
+		strconv.Itoa(int(ip[1])) + "." +
+		strconv.Itoa(int(ip[2])) + "." +
+		strconv.Itoa(int(ip[3]))
+	return routerId
 }
 
 // Getenv retrieves the value of the environment variable named by the key.
