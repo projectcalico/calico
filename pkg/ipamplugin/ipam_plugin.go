@@ -159,14 +159,12 @@ func cmdAdd(args *skel.CmdArgs) error {
 	if ipamArgs.IP != nil {
 		logger.Infof("Calico CNI IPAM request IP: %v", ipamArgs.IP)
 
-		// The hostname will be defaulted to the actual hostname if conf.Nodename is empty
 		assignArgs := ipam.AssignIPArgs{
 			IP:       cnet.IP{IP: ipamArgs.IP},
 			HandleID: &handleID,
 			Hostname: nodename,
 			Attrs:    attrs,
 		}
-
 		logger.WithField("assignArgs", assignArgs).Info("Assigning provided IP")
 		err := calicoClient.IPAM().AssignIP(ctx, assignArgs)
 		if err != nil {
