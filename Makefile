@@ -465,9 +465,6 @@ st-checks:
 ## Get the kubeadm-dind-cluster script
 K8ST_VERSION?=v1.12
 DIND_SCR?=dind-cluster-$(K8ST_VERSION).sh
-tests/k8st/dind-cluster-$(K8ST_VERSION).sh:
-	wget -O tests/k8st/$(DIND_SCR) https://raw.githubusercontent.com/neiljerram/kubeadm-dind-cluster/calico-customization-tidy/fixed/$(DIND_SCR)
-	chmod +x tests/k8st/$(DIND_SCR)
 
 .PHONY: k8s-test
 ## Run the k8s tests
