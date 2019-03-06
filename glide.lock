@@ -41,7 +41,7 @@ imports:
   - matchers/support/goraph/util
   - types
 - name: github.com/projectcalico/libcalico-go
-  version: 00179b9410d8f5191e2bc9e3df04d40ff90efa6d
+  version: 88c6b786af81ce2cd3bc835ca6a8915ed7b96769
   subpackages:
   - lib/apis/v3
   - lib/client
