@@ -87,7 +87,10 @@ func checkBIRDReady(ipv string, thresholdTime time.Duration) error {
 	}
 	log.Infof("Number of node(s) with BGP peering established = %v", numEstablishedPeer)
 
-	if time.Since(nodenameFileStat.ModTime()) < thresholdTime {
+	if len(peers) == 0 {
+		// In case of no BGP peers return bird to be ready.
+		log.Debugf("There are no bgp peers, returning ready.")
+	} else if time.Since(nodenameFileStat.ModTime()) < thresholdTime {
 		if len(s) > 0 {
 			// When we first start up, only report ready if all our peerings are established.
 			// This prevents rolling update from proceeding until BGP is back up.
