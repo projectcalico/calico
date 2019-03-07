@@ -1,0 +1,4 @@
+typha:
+  enabled: false
+network: "none"
+calico_ipam: false

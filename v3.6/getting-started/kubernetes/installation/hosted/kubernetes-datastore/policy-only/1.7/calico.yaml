@@ -1,0 +1,8 @@
+---
+layout: null
+---
+{% helm %}
+datastore: kdd
+typha:
+  enabled: true
+{% endhelm %}

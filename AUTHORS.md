@@ -67,6 +67,8 @@ by GitHub for the core repositories within the projectcalico/ organization. It i
 | JG                                       | @elfchief |
 | jie zhang                                | @jiulongzaitian |
 | Joel Bastos                              | @kintoandar |
+| Jonathan Palardy                         | @jpalardy |
+| Jonathan Sokolowski                      | @jsok |
 | Jose Bigio                               | @jose-bigio |
 | Josh Conant                              | @insequent |
 | Justin Nauman                            | @jrnt30 |
@@ -74,6 +76,7 @@ by GitHub for the core repositories within the projectcalico/ organization. It i
 | Karthik Krishnan Ramasubramanian         | @doublek |
 | Ketan Kulkarni                           | @ketkulka |
 | Lance Robson                             | @lwr20 |
+| Laurence Man                             | @lmm |
 | libby kent                               | @libby |
 | lilianrong                               | @nightmeng |
 | Liz Rice                                 | @lizrice |
@@ -81,6 +84,7 @@ by GitHub for the core repositories within the projectcalico/ organization. It i
 | Luiz Filho                               | @luizbafilho |
 | Lv Jiawei                                | @MIBc |
 | maao                                     | @420691301 |
+| Manjunath A Kumatagi                     | @mkumatag |
 | Mark Fermor                              | @markfermor |
 | Mark Petrovic                            | @ae6rt |
 | Martin Evgeniev                          | @suizman |
@@ -110,7 +114,6 @@ by GitHub for the core repositories within the projectcalico/ organization. It i
 | Renan Gonçalves                          | @renan |
 | Ricardo Katz                             | @rikatz |
 | Rob Brockbank                            | @robbrockbank |
-| Roma Sokolkov                            | @r7vme |
 | Rush Tehrani                             | @rushtehrani |
 | Ryan Zhang                               | @ry4nz |
 | Saeid                                    | @sudomakeinstall2 |
@@ -153,6 +156,8 @@ by GitHub for the core repositories within the projectcalico/ organization. It i
 | ---                                      | @mikev |
 | ---                                      | @mofelee |
 | ---                                      | @OwenTuz |
+| ---                                      | @roshanirathi |
 | ---                                      | @rymarchikbot |
 | ---                                      | @saumohos |
 | ---                                      | @svInfra17 |
+| ---                                      | @tathagatachowdhury |
