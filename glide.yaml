@@ -1,7 +1,7 @@
 package: github.com/kelseyhightower/confd
 import:
 - package: github.com/projectcalico/libcalico-go
-  version: release-v3.0
+  version: 20b580a79530e58c5cfb7ec03eb9fd5185d4bd6a
 - package: github.com/coreos/etcd
   version: v3.3.0
 - package: github.com/prometheus/procfs
