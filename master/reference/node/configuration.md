@@ -19,7 +19,7 @@ The `{{site.nodecontainer}}` container is primarily configured through environme
 | DISABLE_NODE_IP_CHECK | Skips checks for duplicate Node IPs. This can reduce the load on the cluster when a large number of Nodes are restarting. [Default: `false`] | boolean |
 | AS | The AS number for this node. When specified, the value is saved in the node resource configuration for this host, overriding any previously configured value. When omitted, if an AS number has been previously configured in the node resource, that AS number is used for the peering.  When omitted, if an AS number has not yet been configured in the node resource, the node will use the global value (see [example modifying Global BGP settings](/{{page.version}}/networking/bgp#example) for details.) | int |
 | CALICO_DISABLE_FILE_LOGGING | Disables logging to file. [Default: "false"] | string |
-| CALICO_ROUTER_ID | Sets the `router id` to use for BGP if no IPv4 address is set on the node. [Default: ``] | string |
+| CALICO_ROUTER_ID | Sets the `router id` to use for BGP if no IPv4 address is set on the node. In case of ipv6 only system, set this to `hash`. It then uses the hash of the nodename to create a 4 byte IP address to be used as router id. [Default: ``] | string |
 | DATASTORE_TYPE | Type of datastore. [Default: `etcdv3`] | kubernetes, etcdv3 |
 | WAIT_FOR_DATASTORE | Wait for connection to datastore before starting. If a successful connection is not made, node will shutdown. [Default: `false`] | boolean |
 | CALICO_K8S_NODE_REF | The name of the corresponding node object in the Kubernetes API. When set, used for correlating this node with events from the Kubernetes API. | string |
@@ -193,3 +193,8 @@ Substitute `[flag]` with one or more of the following.
 The BIRD readiness endpoint ensures that the BGP mesh is healthy by verifying that all BGP peers are established and
 no graceful restart is in progress. If the BIRD readiness check is failing due to unreachable peers that are no longer
 in the cluster, see [decomissioning a node]({{site.baseurl}}/{{page.version}}/maintenance/decommissioning-a-node).
+
+
+### Setting `CALICO_ROUTER_ID` for IPv6 only system
+
+Setting CALICO_ROUTER_ID to value `hash` will use a hash of the configured nodename for the router ID.  This should only be used in IPv6-only systems with no IPv4 address to use for the router ID.  Since each node chooses its own router ID in isolation, it is possible for two nodes to pick the same ID resulting in a clash.  The probability of such a clash grows with cluster size so this feature should not be used in a large cluster (500+ nodes).
