@@ -35,7 +35,7 @@ func newFuncMap() map[string]interface{} {
 	m["fileExists"] = isFileExist
 	m["base64Encode"] = Base64Encode
 	m["base64Decode"] = Base64Decode
-	m["hash"] = hashNodeName
+	m["hash"] = hashToIPv4
 	return m
 }
 
@@ -45,13 +45,13 @@ func addFuncs(out, in map[string]interface{}) {
 	}
 }
 
-// hashNodeName hashes the node name for ipv6 only systems.
+// hashToIPv4 hashes a string for ipv6 only systems.
 // This hash is then converted to ipv4 IP to be used as router id.
-func hashNodeName(nodeName string) string {
+func hashToIPv4(nodeName string) string {
 	hash := sha256.New()
 	hash.Write([]byte(nodeName))
-	ipv6 := hash.Sum(nil)
-	ip := ipv6[:4]
+	hashBytes := hash.Sum(nil)
+	ip := hashBytes[:4]
 	routerId := strconv.Itoa(int(ip[0])) + "." +
 		strconv.Itoa(int(ip[1])) + "." +
 		strconv.Itoa(int(ip[2])) + "." +

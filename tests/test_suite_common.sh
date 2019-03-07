@@ -480,7 +480,7 @@ compare_templates() {
 }
 
 test_router_id_hash() {
-    export CALICO_ROUTER_ID=HASH
+    export CALICO_ROUTER_ID=hash
     run_individual_test_oneshot 'mesh/hash'
     export -n CALICO_ROUTER_ID
     unset CALICO_ROUTER_ID
