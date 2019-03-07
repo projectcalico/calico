@@ -17,13 +17,13 @@ package v3_test
 import (
 	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
-	"k8s.io/apimachinery/pkg/apis/meta/v1"
+	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	apiv1 "github.com/projectcalico/libcalico-go/lib/apis/v1"
 	api "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/libcalico-go/lib/ipip"
 	"github.com/projectcalico/libcalico-go/lib/numorstring"
-	"github.com/projectcalico/libcalico-go/lib/validator/v3"
+	v3 "github.com/projectcalico/libcalico-go/lib/validator/v3"
 )
 
 func init() {
@@ -1158,6 +1158,23 @@ func init() {
 				Action: "Deny",
 				HTTP:   &api.HTTPMatch{Methods: []string{"GET"}},
 			}, false),
+		Entry("should reject non-TCP protocol with HTTP clause",
+			api.Rule{
+				Action:   "Allow",
+				Protocol: protocolFromString("UDP"),
+				HTTP:     &api.HTTPMatch{Methods: []string{"GET"}},
+			}, false),
+		Entry("should accept TCP protocol with HTTP clause",
+			api.Rule{
+				Action:   "Allow",
+				Protocol: protocolFromString("TCP"),
+				HTTP:     &api.HTTPMatch{Methods: []string{"GET"}},
+			}, true),
+		Entry("should accept missing protocol with HTTP clause",
+			api.Rule{
+				Action: "Allow",
+				HTTP:   &api.HTTPMatch{Methods: []string{"GET"}},
+			}, true),
 
 		// (API) BGPPeerSpec
 		Entry("should accept valid BGPPeerSpec", api.BGPPeerSpec{PeerIP: ipv4_1}, true),

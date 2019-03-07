@@ -72,6 +72,7 @@ var (
 	overlapsV6LinkLocal   = "IP pool range overlaps with IPv6 Link Local range fe80::/10"
 	protocolPortsMsg      = "rules that specify ports must set protocol to TCP or UDP"
 	protocolIcmpMsg       = "rules that specify ICMP fields must set protocol to ICMP"
+	protocolAndHTTPMsg    = "rules that specify HTTP fields must set protocol to TCP or empty"
 
 	ipv4LinkLocalNet = net.IPNet{
 		IP:   net.ParseIP("169.254.0.0"),
@@ -756,6 +757,14 @@ func validateRule(structLevel validator.StructLevel) {
 		if len(rule.Destination.NotPorts) > 0 {
 			structLevel.ReportError(reflect.ValueOf(rule.Destination.NotPorts),
 				"Destination.NotPorts", "", reason(protocolPortsMsg), "")
+		}
+	}
+
+	// Check that HTTP must not use non-TCP protocols
+	if rule.HTTP != nil && rule.Protocol != nil {
+		tcp := numorstring.ProtocolFromString("TCP")
+		if *rule.Protocol != tcp {
+			structLevel.ReportError(reflect.ValueOf(rule.Protocol), "Protocol", "", reason(protocolAndHTTPMsg), "")
 		}
 	}
 
