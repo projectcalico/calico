@@ -1,0 +1,8 @@
+---
+layout: null
+---
+{% helm %}
+datastore: etcd
+network: calico
+calico_ipam: true
+{% endhelm %}

@@ -1,0 +1,7 @@
+---
+layout: null
+---
+{% helm %}
+datastore: kdd
+network: flannel
+{% endhelm %}

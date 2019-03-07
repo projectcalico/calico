@@ -2109,6 +2109,30 @@ v2.1:
       version: 1.4.2
       url: http://git.openstack.org/cgit/openstack/networking-calico/commit/?h=1.4.2
 
+# Temporary placeholder until v3.6.0 is cut. This allows nightly builds to be produced 
+# in advance of a GA release.
+v3.6:
+- title: v3.6.0-pre 
+  components:
+     typha:
+      version: release-v3.6
+     calicoctl:
+      version: release-v3.6
+     calico/node:
+      version: release-v3.6
+     calico/cni:
+      version: release-v3.6
+     calico/kube-controllers:
+      version: release-v3.6
+     networking-calico:
+      version: release-v3.6
+     flannel:
+      version: v0.9.1
+     calico/dikastes:
+      version: release-v3.6 
+     flexvol:
+      version: release-v3.6
+
 # The master release stream is used to generate the master version of the docs.  
 master:
 - title: master
