@@ -31,7 +31,7 @@ import:
   - tools/cache
   - tools/clientcmd
 - package: github.com/projectcalico/libcalico-go
-  version: 1c3821be15a5d61c7605a4844e3977193e41f940
+  version: 229538781d88c929baf5e79b20287948df6e4e2e
 - package: github.com/projectcalico/felix
   version: 518dbc352494a962e46d50f8bfe72a70c86951bf
   subpackages:
