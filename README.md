@@ -1,8 +1,11 @@
 # Calico Controllers for Kubernetes
 <img src="http://docs.projectcalico.org/images/felix.png" width="100" height="100">
 
-This repository contains a collection of kubernetes controllers for Calico deployed using the
-etcd datastore.  Note that when using Calico configured to use the [Kubernetes datastore][kdd], the controllers in this repository are not needed.
+This repository contains a collection of kubernetes controllers for Calico. There are several controllers, each of which monitors
+the resources in the Kubernetes API and performs a specific job in response to events. The source for each controller can be found
+in the [pkg/controllers][controllers-src] directory.
+
+For more information on what each does, see [the Calico documentation][calico-docs].
 
 ## Get Started Using Calico
 
@@ -28,4 +31,5 @@ Contributions to this code are welcome!  The code in this repository can be buil
 
 For more information, see `make help`.
 
-[kdd]: http://docs.projectcalico.org/v2.0/getting-started/kubernetes/installation/hosted/k8s-backend/
+[controllers-src]: https://github.com/projectcalico/kube-controllers/tree/master/pkg/controllers
+[calico-docs]: https://docs.projectcalico.org/latest/reference/kube-controllers/configuration
