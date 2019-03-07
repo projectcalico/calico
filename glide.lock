@@ -157,7 +157,7 @@ imports:
 - name: github.com/peterbourgon/diskv
   version: 5f041e8faa004a95c88a202771f4cc3e991971e6
 - name: github.com/projectcalico/felix
-  version: fc66a931597053e4b81543e2f18532e21ebd2b87
+  version: ad7168eb0193942045b0bc932e88dd0d3f267c5b
   subpackages:
   - calc
   - config
