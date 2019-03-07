@@ -45,7 +45,7 @@ func addFuncs(out, in map[string]interface{}) {
 	}
 }
 
-// hashToIPv4 hashes the given string and 
+// hashToIPv4 hashes the given string and
 // formats the resulting 4 bytes as an IPv4 address.
 func hashToIPv4(nodeName string) string {
 	hash := sha256.New()
