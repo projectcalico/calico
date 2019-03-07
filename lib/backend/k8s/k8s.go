@@ -316,6 +316,7 @@ func (c *KubeClient) Clean() error {
 		model.BlockListOptions{},
 		model.BlockAffinityListOptions{},
 		model.BlockAffinityListOptions{},
+		model.IPAMHandleListOptions{},
 	} {
 		if rs, err := c.List(ctx, li, ""); err != nil {
 			log.WithError(err).WithField("Kind", li).Warning("Failed to list resources")
