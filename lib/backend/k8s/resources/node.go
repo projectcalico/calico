@@ -148,7 +148,7 @@ func (c *nodeClient) List(ctx context.Context, list model.ListInterface, revisio
 	// Listing all nodes.
 	nodes, err := c.clientSet.CoreV1().Nodes().List(metav1.ListOptions{ResourceVersion: revision})
 	if err != nil {
-		K8sErrorToCalico(err, list)
+		return nil, K8sErrorToCalico(err, list)
 	}
 
 	for _, node := range nodes.Items {
