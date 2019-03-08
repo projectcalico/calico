@@ -3,59 +3,43 @@ v3.5:
   components:
     calico/node:
       version: v3.5.2
-      url: https://github.com/projectcalico/node/releases/tag/v3.5.2
     calicoctl:
       version: v3.5.2
-      url: https://github.com/projectcalico/calicoctl/releases/tag/v3.5.2
     calico/cni:
       version: v3.5.2
-      url: https://github.com/projectcalico/cni-plugin/releases/tag/v3.5.2
     calico/kube-controllers:
       version: v3.5.2
-      url: https://github.com/projectcalico/k8s-policy/releases/tag/v3.5.2
     networking-calico:
       version: v3.4.0
-      url: http://git.openstack.org/cgit/openstack/networking-calico/commit/?h=3.4.0
     typha:
       version: v3.5.2
-      url: https://github.com/projectcalico/typha/releases/tag/v3.5.2
     flannel:
       version: v0.9.1
     calico/dikastes:
       version: v3.5.2
-      url: https://github.com/projectcalico/app-policy/releases/tag/v3.5.2
     flexvol:
       version: v3.5.2
-      url: https://github.com/projectcalico/pod2daemon/releases/tag/v3.5.2
 
 - title: v3.5.1
   components:
     calico/node:
       version: v3.5.1
-      url: https://github.com/projectcalico/node/releases/tag/v3.5.1
     calicoctl:
       version: v3.5.1
-      url: https://github.com/projectcalico/calicoctl/releases/tag/v3.5.1
     calico/cni:
       version: v3.5.1
-      url: https://github.com/projectcalico/cni-plugin/releases/tag/v3.5.1
     calico/kube-controllers:
       version: v3.5.1
-      url: https://github.com/projectcalico/k8s-policy/releases/tag/v3.5.1
     networking-calico:
       version: v3.4.0
-      url: http://git.openstack.org/cgit/openstack/networking-calico/commit/?h=3.4.0
     typha:
       version: v3.5.1
-      url: https://github.com/projectcalico/typha/releases/tag/v3.5.1
     flannel:
       version: v0.9.1
     calico/dikastes:
       version: v3.5.1
-      url: https://github.com/projectcalico/app-policy/releases/tag/v3.5.1
     flexvol:
       version: v3.5.1
-      url: https://github.com/projectcalico/pod2daemon/releases/tag/v3.5.1
 
 - title: v3.5.0
   components:
