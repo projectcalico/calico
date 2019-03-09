@@ -1,5 +1,5 @@
-hash: 296345ccb46834fe0f7eea168ef5d43766a2d1c8ad978650019cac4b8bb8409c
-updated: 2019-03-08T04:19:21.97247403Z
+hash: 9e297c681402aff82fc91b52a1d0cfb576c1145980a6369f91c74ee660b89204
+updated: 2019-03-09T04:18:42.741039542Z
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -117,7 +117,7 @@ imports:
 - name: github.com/modern-go/reflect2
   version: 94122c33edd36123c84d5368cfb2b69df93a0ec8
 - name: github.com/onsi/ginkgo
-  version: 2e1be8f7d90e9d3e3e58b0ce470f2f14d075406f
+  version: eea6ad008b96acdaa524f5b409513bf062b500ad
   subpackages:
   - config
   - internal/codelocation
@@ -183,7 +183,7 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: 7c4fc37a067f23c47d533523b497e0c898b9c3b0
+  version: 37b52b36c8d956d0be6baaf9f6eba2ac152c5a83
   subpackages:
   - lib/apiconfig
   - lib/apis/v1
