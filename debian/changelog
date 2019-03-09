@@ -1,3 +1,51 @@
+networking-calico (1:3.6.0~bionic) bionic; urgency=low
+
+  * networking-calico release (from Git commit 3c9f389).
+    - Streamline datamodel v1 code
+    - Adapt frozen DHCP agent code to support Pike
+    - Enable native handlers for neutron API operations
+    - Add region config, use for status reporting
+    - DHCP agent reads subnet info from both old and new paths
+    - Write v3 resources with region-dependent namespace
+    - Write subnet data with region-aware etcd path
+    - Do leader election with region-aware etcd path
+    - Validate openstack_region value as a DNS label
+    - Generate label with the OpenStack parent project ID for each VM
+
+ -- Neil Jerram <neil@tigera.io>  Sat, 09 Mar 2019 13:19:57 -0800
+
+networking-calico (1:3.6.0~xenial) xenial; urgency=low
+
+  * networking-calico release (from Git commit 3c9f389).
+    - Streamline datamodel v1 code
+    - Adapt frozen DHCP agent code to support Pike
+    - Enable native handlers for neutron API operations
+    - Add region config, use for status reporting
+    - DHCP agent reads subnet info from both old and new paths
+    - Write v3 resources with region-dependent namespace
+    - Write subnet data with region-aware etcd path
+    - Do leader election with region-aware etcd path
+    - Validate openstack_region value as a DNS label
+    - Generate label with the OpenStack parent project ID for each VM
+
+ -- Neil Jerram <neil@tigera.io>  Sat, 09 Mar 2019 13:19:57 -0800
+
+networking-calico (1:3.6.0~trusty) trusty; urgency=low
+
+  * networking-calico release (from Git commit 3c9f389).
+    - Streamline datamodel v1 code
+    - Adapt frozen DHCP agent code to support Pike
+    - Enable native handlers for neutron API operations
+    - Add region config, use for status reporting
+    - DHCP agent reads subnet info from both old and new paths
+    - Write v3 resources with region-dependent namespace
+    - Write subnet data with region-aware etcd path
+    - Do leader election with region-aware etcd path
+    - Validate openstack_region value as a DNS label
+    - Generate label with the OpenStack parent project ID for each VM
+
+ -- Neil Jerram <neil@tigera.io>  Sat, 09 Mar 2019 13:19:57 -0800
+
 networking-calico (1:3.4.0~xenial) xenial; urgency=low
 
   * networking-calico release (from Git commit 79c7e00).

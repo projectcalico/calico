@@ -1,5 +1,18 @@
 # Changelog
 
+## 3.6.0
+
+- Streamline datamodel v1 code
+- Adapt frozen DHCP agent code to support Pike
+- Enable native handlers for neutron API operations
+- Add region config, use for status reporting
+- DHCP agent reads subnet info from both old and new paths
+- Write v3 resources with region-dependent namespace
+- Write subnet data with region-aware etcd path
+- Do leader election with region-aware etcd path
+- Validate openstack_region value as a DNS label
+- Generate label with the OpenStack parent project ID for each VM
+
 ## 3.4.0
 
 - Rev version number to match current Calico release.

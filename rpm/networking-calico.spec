@@ -3,7 +3,7 @@
 Name:           networking-calico
 Summary:        Project Calico networking for OpenStack/Neutron
 Epoch:          1
-Version:        3.4.0
+Version:        3.6.0
 Release:        1%{?dist}
 License:        Apache-2
 URL:            http://docs.openstack.org/developer/networking-calico/
@@ -161,6 +161,19 @@ rm -rf $RPM_BUILD_ROOT
 
 
 %changelog
+* Sat Mar 09 2019 Neil Jerram <neil@tigera.io> 1:3.6.0-1
+  - networking-calico version 3.6.0 release
+    - Streamline datamodel v1 code
+    - Adapt frozen DHCP agent code to support Pike
+    - Enable native handlers for neutron API operations
+    - Add region config, use for status reporting
+    - DHCP agent reads subnet info from both old and new paths
+    - Write v3 resources with region-dependent namespace
+    - Write subnet data with region-aware etcd path
+    - Do leader election with region-aware etcd path
+    - Validate openstack_region value as a DNS label
+    - Generate label with the OpenStack parent project ID for each VM
+
 * Mon Dec 10 2018 Neil Jerram <neil@tigera.io> 1:3.4.0-1
   - networking-calico version 3.4.0 release
     - Rev version number to match current Calico release.
