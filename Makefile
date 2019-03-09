@@ -165,8 +165,6 @@ clean:
 	docker rmi $(BUILD_IMAGE):latest-$(ARCH) || true
 	docker rmi $(TEST_CONTAINER_NAME) || true
 
-	rm -f tests/k8st/$(DIND_SCR)
-
 ###############################################################################
 # Building the binary
 ###############################################################################
