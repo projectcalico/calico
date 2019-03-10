@@ -363,8 +363,8 @@ release-publish: release-prereqs
 	# Requires ghr: https://github.com/tcnksm/ghr
 	# Requires GITHUB_TOKEN environment variable set.
 	mkdir -p ./bin/github
-	cp $(DIST)/calico ./bin/github
-	cp $(DIST)/calico-ipam ./bin/github
+	cp ./bin/amd64/calico ./bin/github
+	cp ./bin/amd64/calico-ipam ./bin/github
 	ghr -u projectcalico -r cni-plugin \
 		-b "Release notes can be found at https://docs.projectcalico.org" \
 		-n $(VERSION) \
