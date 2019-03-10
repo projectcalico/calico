@@ -1,5 +1,6 @@
 ---
 title: Application layer policy tutorial
+redirect_from: latest/security/app-layer-policy/index
 canonical_url: 'https://docs.projectcalico.org/v3.5/getting-started/kubernetes/tutorials/app-layer-policy/'
 ---
 

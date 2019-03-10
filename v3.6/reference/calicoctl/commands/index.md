@@ -1,5 +1,6 @@
 ---
 title: Command reference
+redirect_from: latest/reference/calicoctl/commands/index
 canonical_url: 'https://docs.projectcalico.org/v3.5/reference/calicoctl/commands/'
 ---
 

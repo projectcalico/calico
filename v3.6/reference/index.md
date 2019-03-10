@@ -1,5 +1,6 @@
 ---
 title: Reference
+redirect_from: latest/reference/index
 canonical_url: 'https://docs.projectcalico.org/master/reference/'
 ---
 

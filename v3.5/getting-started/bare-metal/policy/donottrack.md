@@ -1,6 +1,5 @@
 ---
 title: Untracked policy
-redirect_from: latest/getting-started/bare-metal/policy/donottrack
 canonical_url: 'https://docs.projectcalico.org/v3.5/getting-started/bare-metal/policy/donottrack'
 ---
 

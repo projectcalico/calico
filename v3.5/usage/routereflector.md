@@ -1,6 +1,5 @@
 ---
 title: Route Reflectors
-redirect_from: latest/usage/routereflector
 canonical_url: 'https://docs.projectcalico.org/v3.5/usage/routereflector'
 ---
 

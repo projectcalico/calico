@@ -1,6 +1,5 @@
 ---
 title: AWS
-redirect_from: latest/reference/public-cloud/aws
 canonical_url: https://docs.projectcalico.org/v3.5/reference/public-cloud/aws
 ---
 
