@@ -244,8 +244,17 @@ func (c *Config) InterfacePrefixes() []string {
 	return strings.Split(c.InterfacePrefix, ",")
 }
 
-func (c *Config) InterfaceExcludes() []string {
-	return strings.Split(c.InterfaceExclude, ",")
+func (c *Config) InterfaceExcludes() []*regexp.Regexp {
+	log.Debugf("Compiling regexp values for InterfaceExclude %s \n", c.InterfaceExclude)
+
+	strValues := strings.Split(c.InterfaceExclude, ",")
+	regexpValues := make([]*regexp.Regexp, len(strValues))
+
+	for _, strValue := range strValues {
+		// Will panic if any individual regexp string is invalid (not parsable)
+		regexpValues = append(regexpValues, regexp.MustCompile(strValue))
+	}
+	return regexpValues
 }
 
 func (config *Config) OpenstackActive() bool {
@@ -508,6 +517,7 @@ func loadParams() {
 		case "millis":
 			param = &MillisParam{}
 		case "iface-list":
+			// TODO: What should we allow here given that it's now a regexp?
 			param = &RegexpParam{Regexp: IfaceListRegexp,
 				Msg: "invalid Linux interface name"}
 		case "iface-param":

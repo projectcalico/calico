@@ -15,6 +15,7 @@
 package ifacemonitor
 
 import (
+	"regexp"
 	"syscall"
 	"time"
 
@@ -45,7 +46,7 @@ type AddrStateCallback func(ifaceName string, addrs set.Set)
 
 type Config struct {
 	// List of interface names that dataplane receives no callbacks from them.
-	InterfaceExcludes []string
+	InterfaceExcludes []*regexp.Regexp
 }
 type InterfaceMonitor struct {
 	Config
@@ -136,8 +137,8 @@ readLoop:
 }
 
 func (m *InterfaceMonitor) isExcludedInterface(ifName string) bool {
-	for _, name := range m.InterfaceExcludes {
-		if ifName == name {
+	for _, nameExp := range m.InterfaceExcludes {
+		if nameExp.Match([]byte(ifName)) {
 			return true
 		}
 	}
