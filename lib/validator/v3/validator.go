@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2018 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2019 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -161,6 +161,7 @@ func init() {
 	registerStructValidator(validate, validateNetworkPolicy, api.NetworkPolicy{})
 	registerStructValidator(validate, validateGlobalNetworkPolicy, api.GlobalNetworkPolicy{})
 	registerStructValidator(validate, validateGlobalNetworkSet, api.GlobalNetworkSet{})
+	registerStructValidator(validate, validateNetworkSet, api.NetworkSet{})
 }
 
 // reason returns the provided error reason prefixed with an identifier that
@@ -950,6 +951,23 @@ func validateNetworkPolicy(structLevel validator.StructLevel) {
 			if useALP {
 				structLevel.ReportError(v, f, "", reason("not allowed in egress rule"), "")
 			}
+		}
+	}
+}
+
+func validateNetworkSet(structLevel validator.StructLevel) {
+	ns := structLevel.Current().Interface().(api.NetworkSet)
+	for k := range ns.GetLabels() {
+		if k == "projectcalico.org/namespace" {
+			// The namespace label should only be used when mapping the real namespace through
+			// to the v1 datamodel.  It shouldn't appear in the v3 datamodel.
+			structLevel.ReportError(
+				reflect.ValueOf(k),
+				"Metadata.Labels (label)",
+				"",
+				reason("projectcalico.org/namespace is not a valid label name"),
+				"",
+			)
 		}
 	}
 }

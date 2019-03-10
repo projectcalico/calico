@@ -3,7 +3,7 @@ kind: List
 metadata:
 apiVersion: v1
 items:
-# V1 only CRDs
+# CRDs for Calico v2.x clients
 - apiVersion: apiextensions.k8s.io/v1beta1
   kind: CustomResourceDefinition
   metadata:
@@ -28,7 +28,7 @@ items:
       kind: GlobalBGPConfig
       plural: globalbgpconfigs
       singular: globalbgpconfig
-# V1 and V2 CRDS
+# CRDs for Calico v2.x and v3.x clients
 - apiVersion: apiextensions.k8s.io/v1beta1
   kind: CustomResourceDefinition
   metadata:
@@ -77,7 +77,7 @@ items:
       kind: HostEndpoint
       plural: hostendpoints
       singular: hostendpoint
-# V2 only CRDs.
+# CRDs for Calico v3.x clients
 - apiVersion: apiextensions.k8s.io/v1beta1
   kind: CustomResourceDefinition
   metadata:
@@ -138,6 +138,18 @@ items:
       kind: GlobalNetworkSet
       plural: globalnetworksets
       singular: globalnetworkset
+- apiVersion: apiextensions.k8s.io/v1beta1
+  kind: CustomResourceDefinition
+  metadata:
+    name: networksets.crd.projectcalico.org
+  spec:
+    scope: Namespaced
+    group: crd.projectcalico.org
+    version: v1
+    names:
+      kind: NetworkSet
+      plural: networksets
+      singular: networkset
 - apiVersion: apiextensions.k8s.io/v1beta1
   kind: CustomResourceDefinition
   metadata:

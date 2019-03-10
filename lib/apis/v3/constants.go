@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2018 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2019 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -28,7 +28,7 @@ const (
 	// AllNames is used for List or Watch queries to wildcard the name.
 	AllNames = ""
 
-	// Label used to denote the Namespace.  This is added to the workload endpoints by Calico
+	// Label used to denote the Namespace.  This is added to workload endpoints and network sets by Calico
 	// and may be used for label matches by Policy selectors.
 	LabelNamespace = "projectcalico.org/namespace"
 

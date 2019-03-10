@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2018 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2019 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -310,6 +310,64 @@ func init() {
 					Name: "test$set",
 				},
 				Spec: api.GlobalNetworkSetSpec{
+					Nets: []string{"10.0.0.1"},
+				},
+			},
+			false,
+		),
+		Entry("should accept NetworkSetSpec with CIDRs and IPs",
+			api.NetworkSetSpec{
+				Nets: []string{
+					"10.0.0.1",
+					"11.0.0.0/8",
+					"dead:beef::",
+					"dead:beef::/96",
+				},
+			},
+			true,
+		),
+		Entry("should reject NetworkSetSpec with bad CIDR",
+			api.NetworkSetSpec{
+				Nets: []string{
+					"garbage",
+				},
+			},
+			false,
+		),
+		Entry("should accept NetworkSet with labels",
+			api.NetworkSet{
+				ObjectMeta: v1.ObjectMeta{
+					Name: "testset",
+					Labels: map[string]string{
+						"a": "b",
+					},
+				},
+				Spec: api.NetworkSetSpec{
+					Nets: []string{"10.0.0.1"},
+				},
+			},
+			true,
+		),
+		Entry("should reject NetworkSet with reserved labels",
+			api.NetworkSet{
+				ObjectMeta: v1.ObjectMeta{
+					Name: "testset",
+					Labels: map[string]string{
+						"projectcalico.org/namespace": "foo",
+					},
+				},
+				Spec: api.NetworkSetSpec{
+					Nets: []string{"10.0.0.1"},
+				},
+			},
+			false,
+		),
+		Entry("should reject NetworkSet with bad name",
+			api.NetworkSet{
+				ObjectMeta: v1.ObjectMeta{
+					Name: "test$set",
+				},
+				Spec: api.NetworkSetSpec{
 					Nets: []string{"10.0.0.1"},
 				},
 			},
