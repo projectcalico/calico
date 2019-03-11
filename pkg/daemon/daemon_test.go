@@ -30,13 +30,9 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
-	"github.com/sirupsen/logrus"
-	"k8s.io/apimachinery/pkg/util/rand"
-
 	"github.com/projectcalico/libcalico-go/lib/apiconfig"
 	bapi "github.com/projectcalico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/libcalico-go/lib/clientv3"
-	"github.com/projectcalico/libcalico-go/lib/health"
 	"github.com/projectcalico/libcalico-go/lib/ipam"
 	"github.com/projectcalico/typha/fv-tests"
 	"github.com/projectcalico/typha/pkg/config"
@@ -235,78 +231,6 @@ var _ = Describe("Daemon", func() {
 				})
 			})
 		})
-	})
-})
-
-var _ = Context("Healthcheck command", func() {
-	var d *TyphaDaemon
-	var h *health.HealthAggregator
-	var port int
-
-	healthcheckRC := func(kind string) int {
-		d.ParseCommandLineArgs([]string{
-			"check", kind, fmt.Sprintf("--port=%d", port),
-		})
-		return d.CalculateHealthRC()
-	}
-
-	BeforeEach(func() {
-		d = New()
-		logrus.SetOutput(GinkgoWriter)
-		logrus.SetLevel(logrus.DebugLevel)
-
-		h = health.NewHealthAggregator()
-		port = 19000 + GinkgoParallelNode()*1000 + rand.IntnRange(0, 1000)
-		h.ServeHTTP(true, "127.0.0.1", port)
-		h.RegisterReporter("test", &health.HealthReport{Live: true, Ready: true}, 10*time.Second)
-
-		// Wait for the health server to start...
-		Eventually(func() int {
-			return healthcheckRC("liveness")
-		}).Should(Equal(0))
-	})
-
-	Context("with live and ready", func() {
-		BeforeEach(func() {
-			h.Report("test", &health.HealthReport{Live: true, Ready: true})
-		})
-
-		It("should report ready", func() {
-			Expect(healthcheckRC("readiness")).To(Equal(0))
-		})
-		It("should report live", func() {
-			Expect(healthcheckRC("liveness")).To(Equal(0))
-		})
-	})
-
-	Context("with live only", func() {
-		BeforeEach(func() {
-			h.Report("test", &health.HealthReport{Live: true, Ready: false})
-		})
-
-		It("should not report ready", func() {
-			Expect(healthcheckRC("readiness")).NotTo(Equal(0))
-		})
-		It("should report live", func() {
-			Expect(healthcheckRC("liveness")).To(Equal(0))
-		})
-	})
-
-	Context("with neither ready or live", func() {
-		BeforeEach(func() {
-			h.Report("test", &health.HealthReport{Live: false, Ready: false})
-		})
-
-		It("should not report ready", func() {
-			Expect(healthcheckRC("readiness")).NotTo(Equal(0))
-		})
-		It("should report live", func() {
-			Expect(healthcheckRC("liveness")).NotTo(Equal(0))
-		})
-	})
-
-	AfterEach(func() {
-		h.ServeHTTP(false, "127.0.0.1", port)
 	})
 })
 
