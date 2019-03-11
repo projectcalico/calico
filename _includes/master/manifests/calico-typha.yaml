@@ -92,17 +92,13 @@ spec:
         livenessProbe:
           exec:
             command:
-            - calico-typha
-            - check
-            - liveness
+            - curl https://127.0.0.1:5473/liveness
           periodSeconds: 30
           initialDelaySeconds: 30
         readinessProbe:
           exec:
             command:
-            - calico-typha
-            - check
-            - readiness
+            - curl https://127.0.0.1:5473/readiness
           periodSeconds: 10
 
 ---
