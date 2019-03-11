@@ -1,6 +1,5 @@
 ---
 title: Endpoint Labels
-redirect_from: latest/usage/openstack/labels
 canonical_url: 'https://docs.projectcalico.org/v3.5/usage/openstack/labels'
 ---
 

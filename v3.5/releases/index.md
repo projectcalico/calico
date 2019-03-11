@@ -1,6 +1,5 @@
 ---
 title: Releases
-redirect_from: latest/releases/index
 canonical_url: https://docs.projectcalico.org/v3.5/releases/
 ---
 

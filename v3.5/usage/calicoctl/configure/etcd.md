@@ -1,6 +1,5 @@
 ---
 title: Configuring calicoctl to connect to an etcd datastore
-redirect_from: latest/usage/calicoctl/configure/etcd
 canonical_url: 'https://docs.projectcalico.org/v3.5/usage/calicoctl/configure/etcd'
 ---
 
