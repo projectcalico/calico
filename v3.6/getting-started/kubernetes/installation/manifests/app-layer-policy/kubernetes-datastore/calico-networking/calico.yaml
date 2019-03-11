@@ -1,0 +1,10 @@
+---
+layout: null
+---
+{% helm %}
+datastore: kdd
+network: calico
+typha:
+  enabled: true
+app_layer_policy: true
+{% endhelm %}

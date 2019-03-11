@@ -1,6 +1,5 @@
 ---
 title: Detailed Semantics
-redirect_from: latest/usage/openstack/semantics
 canonical_url: 'https://docs.projectcalico.org/v3.5/usage/openstack/semantics'
 ---
 

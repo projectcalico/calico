@@ -1,0 +1,11 @@
+---
+layout: null
+---
+{% helm %}
+datastore: kdd
+network: calico
+calico_ipam: true
+typha:
+  enabled: true
+{% endhelm %}
+
