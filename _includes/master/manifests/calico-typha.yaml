@@ -90,19 +90,17 @@ spec:
           #- name: TYPHA_PROMETHEUSMETRICSPORT
           #  value: "9093"
         livenessProbe:
-          exec:
-            command:
-            - calico-typha
-            - check
-            - liveness
+          httpGet:
+            path: /liveness
+            port: 9098
+            host: localhost
           periodSeconds: 30
           initialDelaySeconds: 30
         readinessProbe:
-          exec:
-            command:
-            - calico-typha
-            - check
-            - readiness
+          httpGet:
+            path: /readiness
+            port: 9098
+            host: localhost
           periodSeconds: 10
 
 ---
