@@ -1,4 +1,4 @@
-// Copyright (c) 2016 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2019 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -52,6 +52,7 @@ Options:
                             [default: ` + constants.DefaultConfigPath + `]
   -n --namespace=<NS>       Namespace of the resource.
                             Only applicable to NetworkPolicy and WorkloadEndpoint.
+                            Only applicable to NetworkPolicy, NetworkSet, and WorkloadEndpoint.
                             Uses the default namespace if not specified.
 
 Description:
@@ -69,6 +70,7 @@ Description:
     * hostEndpoint
     * ipPool
     * networkPolicy
+    * networkSet
     * node
     * profile
     * workloadEndpoint

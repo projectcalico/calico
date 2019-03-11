@@ -1,4 +1,4 @@
-// Copyright (c) 2018-2019 Tigera, Inc. All rights reserved.
+// Copyright (c) 2019 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -24,35 +24,36 @@ import (
 
 func init() {
 	registerResource(
-		api.NewGlobalNetworkSet(),
-		api.NewGlobalNetworkSetList(),
-		false,
-		[]string{"globalnetworkset", "globalnetworksets", "gnetsets"},
+		api.NewNetworkSet(),
+		api.NewNetworkSetList(),
+		true,
+		[]string{"networkset", "networksets", "netsets"},
 		[]string{"NAME"},
 		[]string{"NAME", "NETS"},
 		map[string]string{
-			"NAME": "{{.ObjectMeta.Name}}",
-			"NETS": "{{joinAndTruncate .Spec.Nets \",\" 80}}",
+			"NAME":      "{{.ObjectMeta.Name}}",
+			"NAMESPACE": "{{.ObjectMeta.Namespace}}",
+			"NETS":      "{{joinAndTruncate .Spec.Nets \",\" 80}}",
 		},
 		func(ctx context.Context, client client.Interface, resource ResourceObject) (ResourceObject, error) {
-			r := resource.(*api.GlobalNetworkSet)
-			return client.GlobalNetworkSets().Create(ctx, r, options.SetOptions{})
+			r := resource.(*api.NetworkSet)
+			return client.NetworkSets().Create(ctx, r, options.SetOptions{})
 		},
 		func(ctx context.Context, client client.Interface, resource ResourceObject) (ResourceObject, error) {
-			r := resource.(*api.GlobalNetworkSet)
-			return client.GlobalNetworkSets().Update(ctx, r, options.SetOptions{})
+			r := resource.(*api.NetworkSet)
+			return client.NetworkSets().Update(ctx, r, options.SetOptions{})
 		},
 		func(ctx context.Context, client client.Interface, resource ResourceObject) (ResourceObject, error) {
-			r := resource.(*api.GlobalNetworkSet)
-			return client.GlobalNetworkSets().Delete(ctx, r.Name, options.DeleteOptions{ResourceVersion: r.ResourceVersion})
+			r := resource.(*api.NetworkSet)
+			return client.NetworkSets().Delete(ctx, r.Namespace, r.Name, options.DeleteOptions{ResourceVersion: r.ResourceVersion})
 		},
 		func(ctx context.Context, client client.Interface, resource ResourceObject) (ResourceObject, error) {
-			r := resource.(*api.GlobalNetworkSet)
-			return client.GlobalNetworkSets().Get(ctx, r.Name, options.GetOptions{ResourceVersion: r.ResourceVersion})
+			r := resource.(*api.NetworkSet)
+			return client.NetworkSets().Get(ctx, r.Namespace, r.Name, options.GetOptions{ResourceVersion: r.ResourceVersion})
 		},
 		func(ctx context.Context, client client.Interface, resource ResourceObject) (ResourceListObject, error) {
-			r := resource.(*api.GlobalNetworkSet)
-			return client.GlobalNetworkSets().List(ctx, options.ListOptions{ResourceVersion: r.ResourceVersion, Name: r.Name})
+			r := resource.(*api.NetworkSet)
+			return client.NetworkSets().List(ctx, options.ListOptions{ResourceVersion: r.ResourceVersion, Namespace: r.Namespace, Name: r.Name})
 		},
 	)
 }

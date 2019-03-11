@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2019 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -52,7 +52,7 @@ Options:
                                configuration in YAML or JSON format.
                                [default: ` + constants.DefaultConfigPath + `]
   -n --namespace=<NS>          Namespace of the resource.
-                               Only applicable to NetworkPolicy and WorkloadEndpoint.
+                               Only applicable to NetworkPolicy, NetworkSet, and WorkloadEndpoint.
                                Uses the default namespace if not specified.
   --overwrite                  If true, overwrite the value when the key is already
                                present in labels. Otherwise reports error when the

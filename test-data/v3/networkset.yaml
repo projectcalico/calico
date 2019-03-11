@@ -1,7 +1,8 @@
 apiVersion: projectcalico.org/v3
-kind: GlobalNetworkSet
+kind: NetworkSet
 metadata:
- name: global-network-set-1
+ name: network-set-1
+ namespace: mynamespace
  labels:
    role: external-db
 spec:

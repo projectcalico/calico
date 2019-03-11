@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2019 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -52,7 +52,7 @@ Options:
                                configuration in YAML or JSON format.
                                [default: ` + constants.DefaultConfigPath + `]
   -n --namespace=<NS>          Namespace of the resource.
-                               Only applicable to NetworkPolicy and WorkloadEndpoint.
+                               Only applicable to NetworkPolicy, NetworkSet, and WorkloadEndpoint.
                                Uses the default namespace if not specified.
   -a --all-namespaces          If present, list the requested object(s) across all namespaces.
   --export                     If present, returns the requested object(s) stripped of
@@ -74,6 +74,7 @@ Description:
     * hostEndpoint
     * ipPool
     * networkPolicy
+    * networkSet
     * node
     * profile
     * workloadEndpoint
@@ -107,7 +108,7 @@ Description:
   input to all of the resource management commands (create, apply, replace,
   delete, get).
 
-  Please refer to the docs at http://docs.projectcalico.org for more details on
+  Please refer to the docs at https://docs.projectcalico.org for more details on
   the output formats, including example outputs, resource structure (required
   for the golang template definitions) and the valid column names (required for
   the custom-columns option).
