@@ -1,4 +1,4 @@
-# Copyright (c) 2015-2017 Tigera, Inc. All rights reserved.
+# Copyright (c) 2015-2019 Tigera, Inc. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -11,7 +11,6 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-import json
 import logging
 import copy
 
@@ -25,7 +24,6 @@ from tests.st.utils.data import *
 
 logging.basicConfig(level=logging.DEBUG, format="%(message)s")
 logger = logging.getLogger(__name__)
-
 
 class TestCalicoctlCommands(TestBase):
     """
@@ -365,28 +363,44 @@ class TestCalicoctlCommands(TestBase):
         rc = calicoctl("delete", data=data1)
         rc.assert_no_error()
 
-    def test_nets_truncation(self):
+    @parameterized.expand([
+        (globalnetworkset_name1_rev1_large,),
+        (networkset_name1_rev1_large,),
+    ])
+    def test_nets_truncation(self, data):
         """
         Test that the list of nets is truncated if it's too long.
         """
-        rc = calicoctl("create", data=globalnetworkset_name1_rev1_large)
+        rc = calicoctl("create", data)
         rc.assert_no_error()
-        rc = calicoctl("get globalnetworkset -o wide")
+
+        kind = data['kind']
+        if kind == "GlobalNetworkSet":
+            rc = calicoctl("get %s -o wide" % kind)
+        else:
+            rc = calicoctl("get %s -o wide -n %s" % (kind, data['metadata']['namespace']))
+
         rc.assert_no_error()
         rc.assert_output_contains("10.0.0.0/28,10.0.1.0/28,10.0.2.0/28,10.0.3.0/28,10.0.4.0/28,10.0.5.0/28,10.0....")
 
-    def test_nets_no_truncation(self):
+    @parameterized.expand([
+        (globalnetworkset_name1_rev1,),
+        (networkset_name1_rev1,),
+    ])
+    def test_nets_no_truncation(self, data):
         """
         Test that the list of nets is shown in full if not too long.
         """
-        rc = calicoctl("create", data=globalnetworkset_name1_rev1)
+        rc = calicoctl("create", data)
         rc.assert_no_error()
-        rc = calicoctl("get globalnetworkset -o wide")
+
+        rc = calicoctl("get %s -o wide" % data['kind'])
         rc.assert_no_error()
         rc.assert_output_contains("10.0.0.1,11.0.0.0/16,feed:beef::1,dead:beef::96")
 
     @parameterized.expand([
         (networkpolicy_name1_rev1,),
+        (networkset_name1_rev1,),
         (workloadendpoint_name1_rev1,),
     ])
     def test_namespaced(self, data):
@@ -439,7 +453,7 @@ class TestCalicoctlCommands(TestBase):
         if kind == "WorkloadEndpoint":
             data1['metadata']['labels']['projectcalico.org/namespace'] = 'default'
 
-        # Get the resource with name1 and namespace2.  For a namespaced
+        # Get the resource with name1 and default namespace.  For a namespaced
         # resource this should match the modified data to default the
         # namespace.
         rc = calicoctl("get %s %s --namespace default -o yaml" % (kind, data1['metadata']['name']))

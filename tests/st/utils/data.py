@@ -1,4 +1,4 @@
-# Copyright (c) 2015-2016 Tigera, Inc. All rights reserved.
+# Copyright (c) 2015-2019 Tigera, Inc. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -359,6 +359,46 @@ globalnetworkset_name1_rev1_large = {
     'kind': 'GlobalNetworkSet',
     'metadata': {
         'name': 'net-set1',
+    },
+    'spec': {
+        'nets': many_nets,
+    }
+}
+
+#
+# Network sets
+#
+
+networkset_name1_rev1 = {
+    'apiVersion': API_VERSION,
+    'kind': 'NetworkSet',
+    'metadata': {
+        'name': 'net-set1'
+    },
+    'spec': {
+        'nets': [
+            "10.0.0.1",
+            "11.0.0.0/16",
+            "feed:beef::1",
+            "dead:beef::96",
+        ]
+    }
+}
+
+# A network set with a large number of entries.  In prototyping this test, I found that there are
+# "upstream" limits that cap how large we can go:
+#
+# - Kubernetes' gRPC API has a 4MB message size limit.
+# - etcdv3 has a 1MB value size limit.
+many_nets = []
+for i in xrange(10000):
+    many_nets.append("10.%s.%s.0/28" % (i >> 8, i % 256))
+networkset_name1_rev1_large = {
+    'apiVersion': API_VERSION,
+    'kind': 'NetworkSet',
+    'metadata': {
+        'name': 'net-set1',
+        'namespace': 'namespace-1'
     },
     'spec': {
         'nets': many_nets,
