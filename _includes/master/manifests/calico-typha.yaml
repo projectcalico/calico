@@ -90,15 +90,17 @@ spec:
           #- name: TYPHA_PROMETHEUSMETRICSPORT
           #  value: "9093"
         livenessProbe:
-          exec:
-            command:
-            - curl https://127.0.0.1:5473/liveness
+          httpGet:
+            path: /liveness
+            port: 5473
+            host: localhost
           periodSeconds: 30
           initialDelaySeconds: 30
         readinessProbe:
-          exec:
-            command:
-            - curl https://127.0.0.1:5473/readiness
+          httpGet:
+            path: /readiness
+            port: 5473
+            host: localhost
           periodSeconds: 10
 
 ---
