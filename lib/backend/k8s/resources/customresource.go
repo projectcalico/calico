@@ -213,9 +213,9 @@ func (c *customK8sResourceClient) Get(ctx context.Context, key model.Key, revisi
 	}
 	namespace := key.(model.ResourceKey).Namespace
 
-	// Add the name to the log context now that we know it, and query
-	// Kubernetes.
-	logContext = logContext.WithField("Name", name)
+	// Add the name and namespace to the log context now that we know it, and query Kubernetes.
+	logContext = logContext.WithFields(log.Fields{"Name": name, "Namespace": namespace})
+
 	logContext.Debug("Get custom Kubernetes resource by name")
 	resOut := reflect.New(c.k8sResourceType).Interface().(Resource)
 	err = c.restClient.Get().

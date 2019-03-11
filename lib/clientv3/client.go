@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2018 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2019 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -78,12 +78,12 @@ func (c client) Nodes() NodeInterface {
 	return nodes{client: c}
 }
 
-// Policies returns an interface for managing policy resources.
+// NetworkPolicies returns an interface for managing policy resources.
 func (c client) NetworkPolicies() NetworkPolicyInterface {
 	return networkPolicies{client: c}
 }
 
-// Policies returns an interface for managing policy resources.
+// GlobalNetworkPolicies returns an interface for managing policy resources.
 func (c client) GlobalNetworkPolicies() GlobalNetworkPolicyInterface {
 	return globalNetworkPolicies{client: c}
 }
@@ -101,6 +101,11 @@ func (c client) Profiles() ProfileInterface {
 // GlobalNetworkSets returns an interface for managing host endpoint resources.
 func (c client) GlobalNetworkSets() GlobalNetworkSetInterface {
 	return globalNetworkSets{client: c}
+}
+
+// NetworkSets returns an interface for managing host endpoint resources.
+func (c client) NetworkSets() NetworkSetInterface {
+	return networkSets{client: c}
 }
 
 // HostEndpoints returns an interface for managing host endpoint resources.

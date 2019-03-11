@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2018 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2019 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -240,7 +240,7 @@ var _ = testutils.E2eDatastoreDescribe("Felix syncer tests", testutils.Datastore
 			)
 			expectedCacheSize++
 			syncTester.ExpectCacheSize(expectedCacheSize)
-			_, expNet, err := net.ParseCIDROrIP("11.0.0.0/16")
+			_, expGNet, err := net.ParseCIDROrIP("11.0.0.0/16")
 			Expect(err).NotTo(HaveOccurred())
 			syncTester.ExpectData(model.KVPair{
 				Key: model.NetworkSetKey{Name: "anetworkset"},
@@ -249,10 +249,43 @@ var _ = testutils.E2eDatastoreDescribe("Felix syncer tests", testutils.Datastore
 						"a": "b",
 					},
 					Nets: []net.IPNet{
-						*expNet,
+						*expGNet,
 					},
 				},
 				Revision: gns.ResourceVersion,
+			})
+
+			By("Creating a NetworkSet")
+			ns := apiv3.NewNetworkSet()
+			ns.Name = "anetworkset"
+			ns.Namespace = "namespace-1"
+			ns.Labels = map[string]string{
+				"a": "b",
+			}
+			ns.Spec.Nets = []string{
+				"11.0.0.0/16",
+			}
+			ns, err = c.NetworkSets().Create(
+				ctx,
+				ns,
+				options.SetOptions{},
+			)
+			expectedCacheSize++
+			syncTester.ExpectCacheSize(expectedCacheSize)
+			_, expNet, err := net.ParseCIDROrIP("11.0.0.0/16")
+			Expect(err).NotTo(HaveOccurred())
+			syncTester.ExpectData(model.KVPair{
+				Key: model.NetworkSetKey{Name: "namespace-1/anetworkset"},
+				Value: &model.NetworkSet{
+					Labels: map[string]string{
+						"a":                           "b",
+						"projectcalico.org/namespace": "namespace-1",
+					},
+					Nets: []net.IPNet{
+						*expNet,
+					},
+				},
+				Revision: ns.ResourceVersion,
 			})
 
 			By("Creating a HostEndpoint")
