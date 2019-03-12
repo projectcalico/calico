@@ -53,7 +53,7 @@ spec:
 | Field     | Description                                                        | Accepted Values                                     | Schema | Default   |
 |-----------|--------------------------------------------------------------------|-----------------------------------------------------|--------|-----------|
 | name      | The name of the network policy. Required.                          | Alphanumeric string with optional `.`, `_`, or `-`. | string |           |
-| namespace | Namespace provides an additional qualification to a resource name. |                                                     | map    | "default" |
+| namespace | Namespace provides an additional qualification to a resource name. |                                                     | string | "default" |
 
 
 #### Spec

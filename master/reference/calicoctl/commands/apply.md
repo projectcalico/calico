@@ -41,6 +41,7 @@ Options:
                             [default: /etc/calico/calicoctl.cfg]
   -n --namespace=<NS>       Namespace of the resource.
                             Only applicable to NetworkPolicy and WorkloadEndpoint.
+                            Only applicable to NetworkPolicy, NetworkSet, and WorkloadEndpoint.
                             Uses the default namespace if not specified.
 
 Description:
@@ -56,6 +57,7 @@ Description:
     * hostEndpoint
     * ipPool
     * networkPolicy
+    * networkSet
     * node
     * profile
     * workloadEndpoint

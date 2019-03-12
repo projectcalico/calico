@@ -41,10 +41,10 @@ spec:
 
 #### Metadata
 
-| Field       | Description                                | Accepted Values   | Schema  |
-|-------------|--------------------------------------------|-------------------|---------|
-| name        | The name of this network set.              | Lower-case alphanumeric with optional `-`  | string  |
-| labels      | A set of labels to apply to this endpoint. |                   | map     |
+| Field       | Description                                | Accepted Values                                     | Schema  |
+|-------------|--------------------------------------------|-----------------------------------------------------|---------|
+| name        | The name of this network set.              | Lower-case alphanumeric with optional `-` or `-`.   | string  |
+| labels      | A set of labels to apply to this endpoint. |                                                     | map     |
 
 #### Spec
 

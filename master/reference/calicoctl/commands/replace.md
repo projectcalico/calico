@@ -39,9 +39,9 @@ Options:
   -c --config=<CONFIG>       Path to the file containing connection
                              configuration in YAML or JSON format.
                              [default: /etc/calico/calicoctl.cfg]
-  -n --namespace=<NS>       Namespace of the resource.
-                            Only applicable to NetworkPolicy and WorkloadEndpoint.
-                            Uses the default namespace if not specified.
+  -n --namespace=<NS>        Namespace of the resource.
+                             Only applicable to NetworkPolicy, NetworkSet, and WorkloadEndpoint.
+                             Uses the default namespace if not specified.
 
 Description:
   The replace command is used to replace a set of resources by filename or
@@ -56,6 +56,7 @@ Description:
     * hostEndpoint
     * ipPool
     * networkPolicy
+    * networkSet
     * node
     * profile
     * workloadEndpoint
