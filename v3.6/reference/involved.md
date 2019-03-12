@@ -1,7 +1,7 @@
 ---
 title: Getting involved
 redirect_from: latest/reference/involved
-canonical_url: 'https://docs.projectcalico.org/v3.5/reference/involved'
+canonical_url: 'https://docs.projectcalico.org/v3.6/reference/involved'
 ---
 
 Calico is an open source project, and we'd love you to get involved.

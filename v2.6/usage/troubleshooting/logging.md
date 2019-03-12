@@ -1,6 +1,6 @@
 ---
 title: Logging
-canonical_url: 'https://docs.projectcalico.org/v3.5/usage/troubleshooting/logging'
+canonical_url: 'https://docs.projectcalico.org/v3.6/usage/troubleshooting/logging'
 ---
 
 ## The calico-node container

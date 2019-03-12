@@ -1,6 +1,6 @@
 ---
 title: Deploying Calico on Azure
-canonical_url: https://docs.projectcalico.org/v3.5/reference/public-cloud/azure
+canonical_url: https://docs.projectcalico.org/v3.6/reference/public-cloud/azure
 ---
 
 ## About {{site.prodname}} on Azure

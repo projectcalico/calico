@@ -1,6 +1,6 @@
 ---
 title: 'The Calico data path: IP routing and iptables'
-canonical_url: 'https://docs.projectcalico.org/v3.5/reference/architecture/data-path'
+canonical_url: 'https://docs.projectcalico.org/v3.6/reference/architecture/data-path'
 ---
 
 

@@ -1,7 +1,7 @@
 ---
 title: Creating users and roles
 redirect_from: latest/reference/etcd-rbac/users-and-roles
-canonical_url: 'https://docs.projectcalico.org/v3.5/reference/advanced/etcd-rbac/users-and-roles'
+canonical_url: 'https://docs.projectcalico.org/v3.6/reference/advanced/etcd-rbac/users-and-roles'
 ---
 
 Providing role based access control within etcd requires the following:

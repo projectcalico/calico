@@ -1,6 +1,6 @@
 ---
 title: Kubernetes API datastore
-canonical_url: https://docs.projectcalico.org/v3.5/getting-started/kubernetes/installation/
+canonical_url: https://docs.projectcalico.org/v3.6/getting-started/kubernetes/installation/
 ---
 
 This document describes how to install {{site.prodname}} on Kubernetes without a separate etcd cluster.

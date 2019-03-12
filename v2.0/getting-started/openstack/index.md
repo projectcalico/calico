@@ -1,6 +1,6 @@
 ---
 title: Calico for OpenStack
-canonical_url: 'https://docs.projectcalico.org/v3.5/getting-started/openstack/'
+canonical_url: 'https://docs.projectcalico.org/v3.6/getting-started/openstack/'
 ---
 
 Calico's integration with OpenStack consists of the following pieces.

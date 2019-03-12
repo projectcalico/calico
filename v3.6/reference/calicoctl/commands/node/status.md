@@ -1,7 +1,7 @@
 ---
 title: calicoctl node status
 redirect_from: latest/reference/calicoctl/commands/node/status
-canonical_url: 'https://docs.projectcalico.org/v3.5/reference/calicoctl/commands/node/status'
+canonical_url: 'https://docs.projectcalico.org/v3.6/reference/calicoctl/commands/node/status'
 ---
 
 This sections describes the `calicoctl node status` command.

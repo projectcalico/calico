@@ -1,7 +1,7 @@
 ---
 title: Verifying your deployment
 redirect_from: latest/getting-started/openstack/verification
-canonical_url: 'https://docs.projectcalico.org/v3.5/getting-started/openstack/verification'
+canonical_url: 'https://docs.projectcalico.org/v3.6/getting-started/openstack/verification'
 ---
 
 This document takes you through the steps you can perform to verify that

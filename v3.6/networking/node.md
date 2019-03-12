@@ -1,7 +1,7 @@
 ---
 title: Configuring a node IP address and subnet
 redirect_from: latest/networking/node
-canonical_url: 'https://docs.projectcalico.org/v3.5/usage/configuration/node'
+canonical_url: 'https://docs.projectcalico.org/v3.6/usage/configuration/node'
 ---
 
 By default, {{site.prodname}} automatically detects each node's IP address and subnet.  In most cases,

@@ -1,6 +1,6 @@
 ---
 title: calicoctl pool
-canonical_url: 'https://docs.projectcalico.org/v3.5/reference/calicoctl/resources/ippool'
+canonical_url: 'https://docs.projectcalico.org/v3.6/reference/calicoctl/resources/ippool'
 ---
 
 > NOTE: ONLY the `calicoctl pool show` command is safe to use when running

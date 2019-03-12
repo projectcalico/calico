@@ -1,7 +1,7 @@
 ---
 title: Host endpoints
 redirect_from: latest/security/host-endpoints/index
-canonical_url: 'https://docs.projectcalico.org/v3.5/getting-started/bare-metal/bare-metal'
+canonical_url: 'https://docs.projectcalico.org/v3.6/getting-started/bare-metal/bare-metal'
 ---
 
 This guide describes how to use {{site.prodname}} to secure the network interfaces

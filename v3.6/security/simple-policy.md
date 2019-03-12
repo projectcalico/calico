@@ -1,7 +1,7 @@
 ---
 title: Simple policy tutorial
 redirect_from: latest/security/simple-policy
-canonical_url: 'https://docs.projectcalico.org/v3.5/getting-started/kubernetes/tutorials/simple-policy'
+canonical_url: 'https://docs.projectcalico.org/v3.6/getting-started/kubernetes/tutorials/simple-policy'
 ---
 
 This guide provides a simple way to try out Kubernetes `NetworkPolicy` with {{site.prodname}}.  It requires a Kubernetes cluster configured with {{site.prodname}} networking, and expects that you have `kubectl` configured to interact with the cluster.

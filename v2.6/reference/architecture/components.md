@@ -1,6 +1,6 @@
 ---
 title: Anatomy of a calico-node container
-canonical_url: 'https://docs.projectcalico.org/v3.5/reference/architecture/components'
+canonical_url: 'https://docs.projectcalico.org/v3.6/reference/architecture/components'
 ---
 
 `calico/node` can be regarded as a helper container that bundles together the

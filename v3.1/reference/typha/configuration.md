@@ -1,6 +1,6 @@
 ---
 title: Configuring Typha
-canonical_url: 'https://docs.projectcalico.org/v3.5/reference/typha/configuration'
+canonical_url: 'https://docs.projectcalico.org/v3.6/reference/typha/configuration'
 ---
 
 Configuration for Typha is read from one of two possible locations, in

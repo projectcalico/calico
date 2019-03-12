@@ -1,6 +1,6 @@
 ---
 title: Configuring IP-in-IP
-canonical_url: 'https://docs.projectcalico.org/v3.5/usage/configuration/ip-in-ip'
+canonical_url: 'https://docs.projectcalico.org/v3.6/usage/configuration/ip-in-ip'
 ---
 
 If your network fabric performs source/destination address checks

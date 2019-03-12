@@ -1,7 +1,7 @@
 ---
 title: Installation
 redirect_from: latest/getting-started/openshift/installation
-canonical_url: 'https://docs.projectcalico.org/v3.5/getting-started/openshift/installation'
+canonical_url: 'https://docs.projectcalico.org/v3.6/getting-started/openshift/installation'
 ---
 
 Installation of {{site.prodname}} in OpenShift is integrated in openshift-ansible.

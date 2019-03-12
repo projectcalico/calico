@@ -1,6 +1,6 @@
 ---
 title: calicoctl bgp
-canonical_url: 'https://docs.projectcalico.org/v3.5/reference/calicoctl/resources/bgppeer'
+canonical_url: 'https://docs.projectcalico.org/v3.6/reference/calicoctl/resources/bgppeer'
 ---
 
 This sections describes the `calicoctl bgp` commands.

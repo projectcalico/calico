@@ -1,7 +1,7 @@
 ---
 title: Prometheus statistics
 redirect_from: latest/reference/felix/prometheus
-canonical_url: 'https://docs.projectcalico.org/v3.5/reference/felix/prometheus'
+canonical_url: 'https://docs.projectcalico.org/v3.6/reference/felix/prometheus'
 ---
 
 Felix can be configured to report a number of metrics through Prometheus.  See the

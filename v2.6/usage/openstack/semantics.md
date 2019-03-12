@@ -1,6 +1,6 @@
 ---
 title: Detailed Semantics
-canonical_url: 'https://docs.projectcalico.org/v3.5/usage/openstack/semantics'
+canonical_url: 'https://docs.projectcalico.org/v3.6/usage/openstack/semantics'
 ---
 
 A 'Calico' network is a Neutron network (either provider or tenant) whose

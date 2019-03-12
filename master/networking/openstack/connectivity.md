@@ -1,6 +1,6 @@
 ---
 title: IP addressing and connectivity
-canonical_url: 'https://docs.projectcalico.org/v3.5/getting-started/openstack/connectivity'
+canonical_url: 'https://docs.projectcalico.org/v3.6/getting-started/openstack/connectivity'
 ---
 
 An OpenStack deployment is of limited use if its VMs cannot reach and be

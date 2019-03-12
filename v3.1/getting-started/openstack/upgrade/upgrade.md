@@ -1,6 +1,6 @@
 ---
 title: Upgrading Calico
-canonical_url: 'https://docs.projectcalico.org/v3.5/getting-started/openstack/upgrade/upgrade'
+canonical_url: 'https://docs.projectcalico.org/v3.6/getting-started/openstack/upgrade/upgrade'
 ---
 
 ## {{site.prodname}} package update

@@ -1,6 +1,6 @@
 ---
 title: Configuring calicoctl - Kubernetes datastore 
-canonical_url: 'https://docs.projectcalico.org/v3.5/usage/calicoctl/configure/kdd'
+canonical_url: 'https://docs.projectcalico.org/v3.6/usage/calicoctl/configure/kdd'
 ---
 
 This document covers the configuration options for calicoctl when using the Kubernetes API as a datastore.  

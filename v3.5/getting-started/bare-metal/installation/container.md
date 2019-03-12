@@ -1,6 +1,6 @@
 ---
 title: Container install
-canonical_url: 'https://docs.projectcalico.org/v3.5/getting-started/bare-metal/installation/container'
+canonical_url: 'https://docs.projectcalico.org/v3.6/getting-started/bare-metal/installation/container'
 ---
 
 If you want to run under Docker, you can use `calicoctl node run --node-image={{page.registry}}{{site.imageNames["node"]}}:{{site.data.versions[page.version].first.title}}` 

@@ -1,7 +1,7 @@
 ---
 title: Apply on forwarded traffic
 redirect_from: latest/security/host-endpoints/forwarded
-canonical_url: 'https://docs.projectcalico.org/v3.5/getting-started/bare-metal/policy/forwarded'
+canonical_url: 'https://docs.projectcalico.org/v3.6/getting-started/bare-metal/policy/forwarded'
 ---
 
 If `applyOnForward` is `false`, the host endpoint policy applies to traffic to/from

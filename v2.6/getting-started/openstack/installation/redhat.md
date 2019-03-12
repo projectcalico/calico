@@ -1,6 +1,6 @@
 ---
 title: Red Hat Enterprise Linux packaged install
-canonical_url: 'https://docs.projectcalico.org/v3.5/getting-started/openstack/installation/redhat'
+canonical_url: 'https://docs.projectcalico.org/v3.6/getting-started/openstack/installation/redhat'
 ---
 
 For this version of {{site.prodname}}, with OpenStack on RHEL or CentOS, we recommend

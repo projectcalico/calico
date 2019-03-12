@@ -1,6 +1,6 @@
 ---
 title: System requirements
-canonical_url: 'https://docs.projectcalico.org/v3.5/getting-started/kubernetes/requirements'
+canonical_url: 'https://docs.projectcalico.org/v3.6/getting-started/kubernetes/requirements'
 ---
 
 {% include {{page.version}}/reqs-sys.md orch="Kubernetes" %}

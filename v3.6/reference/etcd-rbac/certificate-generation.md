@@ -1,7 +1,7 @@
 ---
 title: Generating certificates
 redirect_from: latest/reference/etcd-rbac/certificate-generation
-canonical_url: 'https://docs.projectcalico.org/v3.5/reference/advanced/etcd-rbac/certificate-generation'
+canonical_url: 'https://docs.projectcalico.org/v3.6/reference/advanced/etcd-rbac/certificate-generation'
 ---
 
 The etcd datastore has the concept of users that are linked to roles, where

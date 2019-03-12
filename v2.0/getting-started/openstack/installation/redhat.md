@@ -1,6 +1,6 @@
 ---
 title: Red Hat Enterprise Linux 7 Packaged Install Instructions
-canonical_url: 'https://docs.projectcalico.org/v3.5/getting-started/openstack/installation/redhat'
+canonical_url: 'https://docs.projectcalico.org/v3.6/getting-started/openstack/installation/redhat'
 ---
 
 These instructions will take you through a first-time install of Calico.

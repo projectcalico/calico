@@ -1,6 +1,6 @@
 ---
 title: Calico Repositories
-canonical_url: 'https://docs.projectcalico.org/v3.5/reference/repo-structure'
+canonical_url: 'https://docs.projectcalico.org/v3.6/reference/repo-structure'
 ---
 
 ## The calico-containers repository

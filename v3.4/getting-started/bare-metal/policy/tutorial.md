@@ -1,6 +1,6 @@
 ---
 title: Tutorial
-canonical_url: 'https://docs.projectcalico.org/v3.5/getting-started/bare-metal/policy/tutorial'
+canonical_url: 'https://docs.projectcalico.org/v3.6/getting-started/bare-metal/policy/tutorial'
 ---
 
 Imagine that the administrator of a Kubernetes cluster wants to secure it as much as

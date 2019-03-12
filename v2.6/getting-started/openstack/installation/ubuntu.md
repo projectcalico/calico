@@ -1,6 +1,6 @@
 ---
 title: 'Ubuntu Packaged Install Instructions'
-canonical_url: 'https://docs.projectcalico.org/v3.5/getting-started/openstack/installation/ubuntu'
+canonical_url: 'https://docs.projectcalico.org/v3.6/getting-started/openstack/installation/ubuntu'
 ---
 
 For this version of Calico, with OpenStack on Ubuntu Trusty or Xenial, we

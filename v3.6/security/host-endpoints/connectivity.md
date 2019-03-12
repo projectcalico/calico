@@ -1,7 +1,7 @@
 ---
 title: Creating policy for basic connectivity
 redirect_from: latest/security/host-endpoints/connectivity
-canonical_url: 'https://docs.projectcalico.org/v3.5/getting-started/bare-metal/policy/'
+canonical_url: 'https://docs.projectcalico.org/v3.6/getting-started/bare-metal/policy/'
 ---
 
 
