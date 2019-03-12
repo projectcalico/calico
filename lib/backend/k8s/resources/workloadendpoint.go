@@ -23,6 +23,7 @@ import (
 	log "github.com/sirupsen/logrus"
 	kapiv1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/client-go/kubernetes"
 
 	apiv3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
@@ -219,12 +220,27 @@ func (c *WorkloadEndpointClient) EnsureInitialized() error {
 }
 
 func (c *WorkloadEndpointClient) Watch(ctx context.Context, list model.ListInterface, revision string) (api.WatchInterface, error) {
-	if len(list.(model.ResourceListOptions).Name) != 0 {
-		return nil, fmt.Errorf("cannot watch specific resource instance: %s", list.(model.ResourceListOptions).Name)
+	// Build watch options to pass to k8s.
+	opts := metav1.ListOptions{ResourceVersion: revision, Watch: true}
+	rlo, ok := list.(model.ResourceListOptions)
+	if !ok {
+		return nil, fmt.Errorf("ListInterface is not a ResourceListOptions: %s", list)
+	}
+	if len(rlo.Name) != 0 {
+		if len(rlo.Namespace) == 0 {
+			return nil, errors.New("cannot watch a specific WorkloadEndpoint without a namespace")
+		}
+		// We've been asked to watch a specific workloadendpoint
+		wepids, err := c.converter.ParseWorkloadEndpointName(rlo.Name)
+		if err != nil {
+			return nil, err
+		}
+		log.WithField("name", wepids.Pod).Debug("Watching a single workloadendpoint")
+		opts.FieldSelector = fields.OneTermEqualSelector("metadata.name", wepids.Pod).String()
 	}
 
 	ns := list.(model.ResourceListOptions).Namespace
-	k8sWatch, err := c.clientSet.CoreV1().Pods(ns).Watch(metav1.ListOptions{ResourceVersion: revision})
+	k8sWatch, err := c.clientSet.CoreV1().Pods(ns).Watch(opts)
 	if err != nil {
 		return nil, K8sErrorToCalico(err, list)
 	}

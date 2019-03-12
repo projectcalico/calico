@@ -24,7 +24,9 @@ import (
 	log "github.com/sirupsen/logrus"
 	kapiv1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/types"
+	kwatch "k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/kubernetes"
 
 	"github.com/projectcalico/libcalico-go/lib/backend/api"
@@ -222,9 +224,39 @@ func (c *profileClient) EnsureInitialized() error {
 }
 
 func (c *profileClient) Watch(ctx context.Context, list model.ListInterface, revision string) (api.WatchInterface, error) {
-	resl := list.(model.ResourceListOptions)
-	if len(resl.Name) != 0 {
-		return nil, fmt.Errorf("cannot watch specific resource instance: %s", list.(model.ResourceListOptions).Name)
+	// Build watch options to pass to k8s.
+	opts := metav1.ListOptions{Watch: true}
+	rlo, ok := list.(model.ResourceListOptions)
+	if !ok {
+		return nil, fmt.Errorf("ListInterface is not a ResourceListOptions: %s", list)
+	}
+
+	// Setting to Watch all profiles in all namespaces; overriden below
+	watchNS, watchSA := true, true
+	ns := kapiv1.NamespaceAll
+	sa := ""
+
+	// Watch a specific profile.
+	if len(rlo.Name) != 0 {
+		log.WithField("name", rlo.Name).Debug("Watching a single profile")
+		var err error
+		if strings.HasPrefix(rlo.Name, conversion.NamespaceProfileNamePrefix) {
+			watchSA = false
+			ns, err = c.ProfileNameToNamespace(rlo.Name)
+			if err != nil {
+				return nil, err
+			}
+			opts.FieldSelector = fields.OneTermEqualSelector("metadata.name", ns).String()
+		} else if strings.HasPrefix(rlo.Name, conversion.ServiceAccountProfileNamePrefix) {
+			watchNS = false
+			ns, sa, err = c.ProfileNameToServiceAccount(rlo.Name)
+			if err != nil {
+				return nil, err
+			}
+			opts.FieldSelector = fields.OneTermEqualSelector("metadata.name", sa).String()
+		} else {
+			return nil, fmt.Errorf("Unsupported prefix for resource name: %s", rlo.Name)
+		}
 	}
 
 	nsRev, saRev, err := c.SplitProfileRevision(revision)
@@ -232,45 +264,46 @@ func (c *profileClient) Watch(ctx context.Context, list model.ListInterface, rev
 		return nil, err
 	}
 
-	log.WithFields(log.Fields{
-		"nsRev": nsRev,
-		"saRev": saRev,
-	}).Debug("Watching two resources at individual revisions")
-
-	nsWatch, err := c.clientSet.CoreV1().Namespaces().Watch(metav1.ListOptions{ResourceVersion: nsRev})
-	if err != nil {
-		return nil, K8sErrorToCalico(err, list)
+	opts.ResourceVersion = nsRev
+	var nsWatch kwatch.Interface = kwatch.NewFake()
+	if watchNS {
+		log.Debugf("Watching namespace at revision %q", nsRev)
+		nsWatch, err = c.clientSet.CoreV1().Namespaces().Watch(opts)
+		if err != nil {
+			return nil, K8sErrorToCalico(err, list)
+		}
 	}
 	converter := func(r Resource) (*model.KVPair, error) {
 		k8sNamespace, ok := r.(*kapiv1.Namespace)
 		if !ok {
-			return nil, errors.New("profile conversion with incorrect k8s resource type")
+			return nil, errors.New("Profile conversion with incorrect k8s resource type")
 		}
 		return c.NamespaceToProfile(k8sNamespace)
 	}
-
 	nsWatcher := newK8sWatcherConverter(ctx, "Profile-NS", converter, nsWatch)
 
-	// Watch all service accounts in ALL namespaces
-	saWatch, err := c.clientSet.CoreV1().ServiceAccounts(kapiv1.NamespaceAll).Watch(metav1.ListOptions{ResourceVersion: saRev})
-	if err != nil {
-		nsWatch.Stop()
-		return nil, K8sErrorToCalico(err, list)
+	// Watch all service accounts in relevant namespace(s)
+	opts.ResourceVersion = saRev
+	var saWatch kwatch.Interface = kwatch.NewFake()
+	if watchSA {
+		log.Debugf("Watching serviceAccount at revision %q", saRev)
+		saWatch, err = c.clientSet.CoreV1().ServiceAccounts(ns).Watch(opts)
+		if err != nil {
+			nsWatch.Stop()
+			return nil, K8sErrorToCalico(err, list)
+		}
 	}
-
 	converterSA := func(r Resource) (*model.KVPair, error) {
 		k8sServiceAccount, ok := r.(*kapiv1.ServiceAccount)
 		if !ok {
 			nsWatch.Stop()
-			return nil, errors.New("Profile converion with incorrect k8s resource type")
+			return nil, errors.New("Profile conversion with incorrect k8s resource type")
 		}
 		return c.ServiceAccountToProfile(k8sServiceAccount)
 	}
-
 	saWatcher := newK8sWatcherConverter(ctx, "Profile-SA", converterSA, saWatch)
 
 	return newProfileWatcher(ctx, nsWatcher, saWatcher), nil
-
 }
 
 func newProfileWatcher(ctx context.Context, k8sWatchNS, k8sWatchSA api.WatchInterface) api.WatchInterface {
@@ -372,7 +405,7 @@ func (pw *profileWatcher) processProfileEvents() {
 					},
 				}
 			}
-			log.Debug("Processing SeriveAccount event")
+			log.Debug("Processing ServiceAccount event")
 			isNsEvent = false
 
 		case <-pw.context.Done(): //user cancel

@@ -318,20 +318,21 @@ func (c *customK8sResourceClient) List(ctx context.Context, list model.ListInter
 }
 
 func (c *customK8sResourceClient) Watch(ctx context.Context, list model.ListInterface, revision string) (api.WatchInterface, error) {
-	resl, ok := list.(model.ResourceListOptions)
+	// Build watch options to pass to k8s.
+	opts := metav1.ListOptions{ResourceVersion: revision, Watch: true}
+	rlo, ok := list.(model.ResourceListOptions)
 	if !ok {
-		return nil, errors.New("internal error: custom resource watch invoked for non v3 resource type")
+		return nil, fmt.Errorf("ListInterface is not a ResourceListOptions: %s", list)
 	}
-	if len(resl.Name) != 0 {
-		return nil, fmt.Errorf("cannot watch specific resource instance: %s", resl.Name)
+	fieldSelector := fields.Everything()
+	if len(rlo.Name) != 0 {
+		// We've been asked to watch a specific customresource.
+		log.WithField("name", rlo.Name).Debug("Watching a single customresource")
+		fieldSelector = fields.OneTermEqualSelector("metadata.name", rlo.Name)
 	}
 
-	k8sWatchClient := cache.NewListWatchFromClient(
-		c.restClient,
-		c.resource,
-		resl.Namespace,
-		fields.Everything())
-	k8sWatch, err := k8sWatchClient.WatchFunc(metav1.ListOptions{ResourceVersion: revision})
+	k8sWatchClient := cache.NewListWatchFromClient(c.restClient, c.resource, rlo.Namespace, fieldSelector)
+	k8sWatch, err := k8sWatchClient.WatchFunc(opts)
 	if err != nil {
 		return nil, K8sErrorToCalico(err, list)
 	}
@@ -339,7 +340,7 @@ func (c *customK8sResourceClient) Watch(ctx context.Context, list model.ListInte
 		return c.convertResourceToKVPair(r)
 	}
 
-	return newK8sWatcherConverter(ctx, resl.Kind+" (custom)", toKVPair, k8sWatch), nil
+	return newK8sWatcherConverter(ctx, rlo.Kind+" (custom)", toKVPair, k8sWatch), nil
 }
 
 // EnsureInitialized is a no-op since the CRD should be

@@ -240,6 +240,26 @@ func (c cb) ExpectDeleted(kvps []model.KVPair) {
 	}
 }
 
+// ExpectAddedEvent checks for an api.WatchAdded coming down a specific chan
+// this is used in several tests below
+func ExpectAddedEvent(events <-chan api.WatchEvent) *api.WatchEvent {
+	var receivedEvent *api.WatchEvent
+	for i := 0; i < 10; i++ {
+		select {
+		case e := <-events:
+			// Got an event. Check it's OK.
+			Expect(e.Error).NotTo(HaveOccurred())
+			Expect(e.Type).To(Equal(api.WatchAdded))
+			receivedEvent = &e
+			break
+		default:
+			time.Sleep(50 * time.Millisecond)
+		}
+	}
+	Expect(receivedEvent).NotTo(BeNil(), "Did not receive watch event")
+	return receivedEvent
+}
+
 // GetSyncerValueFunc returns a function that can be used to query the value of
 // an entry in our syncer state store.  It's useful for performing "Eventually" testing.
 //
@@ -1965,6 +1985,242 @@ var _ = testutils.E2eDatastoreDescribe("Test Watch support", testutils.Datastore
 		c = client.(*KubeClient)
 
 		ctx = context.Background()
+	})
+
+	Describe("watching Profiles", func() {
+		createTestServiceAccount := func(name string) {
+			sa := k8sapi.ServiceAccount{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: name,
+				},
+			}
+			_, err := c.ClientSet.CoreV1().ServiceAccounts("default").Create(&sa)
+			Expect(err).NotTo(HaveOccurred())
+		}
+		deleteAllServiceAccounts := func() {
+			var zero int64
+			err := c.ClientSet.CoreV1().ServiceAccounts("default").DeleteCollection(&metav1.DeleteOptions{GracePeriodSeconds: &zero}, metav1.ListOptions{})
+			Expect(err).NotTo(HaveOccurred())
+		}
+		BeforeEach(func() {
+			createTestServiceAccount("test-sa-1")
+			createTestServiceAccount("test-sa-2")
+		})
+		AfterEach(func() {
+			deleteAllServiceAccounts()
+		})
+		It("supports watching a specific profile (from namespace)", func() {
+			watch, err := c.Watch(ctx, model.ResourceListOptions{Name: "kns.default", Kind: apiv3.KindProfile}, "")
+			Expect(err).NotTo(HaveOccurred())
+			event := ExpectAddedEvent(watch.ResultChan())
+			Expect(event.New.Key.String()).To(Equal("Profile(kns.default)"))
+		})
+		It("supports watching a specific profile (from serviceAccount)", func() {
+			watch, err := c.Watch(ctx, model.ResourceListOptions{Name: "ksa.default.test-sa-1", Kind: apiv3.KindProfile}, "")
+			Expect(err).NotTo(HaveOccurred())
+			event := ExpectAddedEvent(watch.ResultChan())
+			Expect(event.New.Key.String()).To(Equal("Profile(ksa.default.test-sa-1)"))
+		})
+		It("supports watching all profiles", func() {
+			watch, err := c.Watch(ctx, model.ResourceListOptions{Kind: apiv3.KindProfile}, "")
+			Expect(err).NotTo(HaveOccurred())
+			ExpectAddedEvent(watch.ResultChan())
+		})
+		It("rejects names without prefixes", func() {
+			_, err := c.Watch(ctx, model.ResourceListOptions{Name: "default", Kind: apiv3.KindProfile}, "")
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(Equal("Unsupported prefix for resource name: default"))
+		})
+	})
+
+	Describe("watching NetworkPolicies (native)", func() {
+		createTestNetworkPolicy := func(name string) {
+			np := networkingv1.NetworkPolicy{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: name,
+				},
+			}
+			_, err := c.ClientSet.NetworkingV1().NetworkPolicies("default").Create(&np)
+			Expect(err).NotTo(HaveOccurred())
+		}
+		deleteAllNetworkPolicies := func() {
+			var zero int64
+			err := c.ClientSet.NetworkingV1().NetworkPolicies("default").DeleteCollection(&metav1.DeleteOptions{GracePeriodSeconds: &zero}, metav1.ListOptions{})
+			Expect(err).NotTo(HaveOccurred())
+		}
+		BeforeEach(func() {
+			createTestNetworkPolicy("test-net-policy-1")
+			createTestNetworkPolicy("test-net-policy-2")
+		})
+		AfterEach(func() {
+			deleteAllNetworkPolicies()
+		})
+		It("supports watching a specific networkpolicy", func() {
+			watch, err := c.Watch(ctx, model.ResourceListOptions{Name: "knp.default.test-net-policy-1", Namespace: "default", Kind: apiv3.KindNetworkPolicy}, "")
+			Expect(err).NotTo(HaveOccurred())
+			event := ExpectAddedEvent(watch.ResultChan())
+			Expect(event.New.Key.String()).To(Equal("NetworkPolicy(default/knp.default.test-net-policy-1)"))
+		})
+		It("rejects watching a specific networkpolicy without a namespace", func() {
+			_, err := c.Watch(ctx, model.ResourceListOptions{Name: "knp.default.test-net-policy-1", Kind: apiv3.KindNetworkPolicy}, "")
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(Equal("cannot watch a specific NetworkPolicy without a namespace"))
+		})
+		It("supports watching all networkpolicies", func() {
+			watch, err := c.Watch(ctx, model.ResourceListOptions{Kind: apiv3.KindNetworkPolicy}, "")
+			Expect(err).NotTo(HaveOccurred())
+			ExpectAddedEvent(watch.ResultChan())
+		})
+	})
+
+	Describe("watching NetworkPolicies (calico)", func() {
+		createTestNetworkPolicy := func(name string) {
+			np := &model.KVPair{
+				Key: model.ResourceKey{
+					Name:      name,
+					Namespace: "default",
+					Kind:      apiv3.KindNetworkPolicy,
+				},
+				Value: &apiv3.NetworkPolicy{
+					TypeMeta: metav1.TypeMeta{
+						Kind:       apiv3.KindNetworkPolicy,
+						APIVersion: apiv3.GroupVersionCurrent,
+					},
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      name,
+						Namespace: "default",
+					},
+				},
+			}
+			_, err := c.Create(ctx, np)
+			Expect(err).NotTo(HaveOccurred())
+		}
+		deleteAllNetworkPolicies := func() {
+			err := c.Clean()
+			Expect(err).NotTo(HaveOccurred())
+		}
+		BeforeEach(func() {
+			createTestNetworkPolicy("test-net-policy-3")
+			createTestNetworkPolicy("test-net-policy-4")
+		})
+		AfterEach(func() {
+			deleteAllNetworkPolicies()
+		})
+		It("supports watching a specific networkpolicy", func() {
+			watch, err := c.Watch(ctx, model.ResourceListOptions{Name: "test-net-policy-3", Namespace: "default", Kind: apiv3.KindNetworkPolicy}, "")
+			Expect(err).NotTo(HaveOccurred())
+			event := ExpectAddedEvent(watch.ResultChan())
+			Expect(event.New.Key.String()).To(Equal("NetworkPolicy(default/test-net-policy-3)"))
+		})
+		It("rejects watching a specific networkpolicy without a namespace", func() {
+			_, err := c.Watch(ctx, model.ResourceListOptions{Name: "test-net-policy-3", Kind: apiv3.KindNetworkPolicy}, "")
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(Equal("cannot watch a specific NetworkPolicy without a namespace"))
+		})
+		It("supports watching all networkpolicies", func() {
+			watch, err := c.Watch(ctx, model.ResourceListOptions{Kind: apiv3.KindNetworkPolicy}, "")
+			Expect(err).NotTo(HaveOccurred())
+			ExpectAddedEvent(watch.ResultChan())
+		})
+	})
+
+	Describe("watching Custom Resources", func() {
+		createTestIPPool := func(name string) {
+			cidr := "192.168.0.0/16"
+			pool := &model.KVPair{
+				Key: model.ResourceKey{
+					Name: name,
+					Kind: apiv3.KindIPPool,
+				},
+				Value: &apiv3.IPPool{
+					TypeMeta: metav1.TypeMeta{
+						Kind:       apiv3.KindIPPool,
+						APIVersion: apiv3.GroupVersionCurrent,
+					},
+					ObjectMeta: metav1.ObjectMeta{
+						Name: name,
+					},
+					Spec: apiv3.IPPoolSpec{
+						CIDR: cidr,
+					},
+				},
+			}
+			_, err := c.Create(ctx, pool)
+			Expect(err).NotTo(HaveOccurred())
+		}
+		deleteAllIPPools := func() {
+			err := c.Clean()
+			Expect(err).NotTo(HaveOccurred())
+		}
+		BeforeEach(func() {
+			createTestIPPool("test-ippool-1")
+			createTestIPPool("test-ippool-2")
+		})
+		AfterEach(func() {
+			deleteAllIPPools()
+		})
+		It("supports watching a specific custom resource (IPPool)", func() {
+			watch, err := c.Watch(ctx, model.ResourceListOptions{Name: "test-ippool-1", Kind: apiv3.KindIPPool}, "")
+			Expect(err).NotTo(HaveOccurred())
+			event := ExpectAddedEvent(watch.ResultChan())
+			Expect(event.New.Key.String()).To(Equal("IPPool(test-ippool-1)"))
+		})
+		It("supports watching all custom resources (IPPool)", func() {
+			watch, err := c.Watch(ctx, model.ResourceListOptions{Kind: apiv3.KindIPPool}, "")
+			Expect(err).NotTo(HaveOccurred())
+			ExpectAddedEvent(watch.ResultChan())
+		})
+	})
+
+	Describe("watching WorkloadEndpoints", func() {
+		createTestPod := func(name string) {
+			pod := &k8sapi.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      name,
+					Namespace: "default",
+				},
+				Spec: k8sapi.PodSpec{
+					NodeName: "127.0.0.1",
+					Containers: []k8sapi.Container{
+						{
+							Name:    "container1",
+							Image:   "busybox",
+							Command: []string{"sleep", "3600"},
+						},
+					},
+				},
+			}
+			_, err := c.ClientSet.CoreV1().Pods("default").Create(pod)
+			Expect(err).NotTo(HaveOccurred())
+		}
+		deleteAllPods := func() {
+			var zero int64
+			err := c.ClientSet.CoreV1().Pods("default").DeleteCollection(&metav1.DeleteOptions{GracePeriodSeconds: &zero}, metav1.ListOptions{})
+			Expect(err).NotTo(HaveOccurred())
+		}
+		BeforeEach(func() {
+			createTestPod("test-pod-1")
+			createTestPod("test-pod-2")
+		})
+		AfterEach(func() {
+			deleteAllPods()
+		})
+		It("supports watching a specific workloadEndpoint", func() {
+			watch, err := c.Watch(ctx, model.ResourceListOptions{Name: "127.0.0.1-k8s-test--pod--1-eth0", Namespace: "default", Kind: apiv3.KindWorkloadEndpoint}, "")
+			Expect(err).NotTo(HaveOccurred())
+			event := ExpectAddedEvent(watch.ResultChan())
+			Expect(event.New.Key.String()).To(Equal("WorkloadEndpoint(default/127.0.0.1-k8s-test--pod--1-eth0)"))
+		})
+		It("rejects watching a specific workloadEndpoint without a namespace", func() {
+			_, err := c.Watch(ctx, model.ResourceListOptions{Name: "127.0.0.1-k8s-test--pod--1-eth0", Kind: apiv3.KindWorkloadEndpoint}, "")
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(Equal("cannot watch a specific WorkloadEndpoint without a namespace"))
+		})
+		It("supports watching all workloadEndpoints", func() {
+			watch, err := c.Watch(ctx, model.ResourceListOptions{Kind: apiv3.KindWorkloadEndpoint}, "")
+			Expect(err).NotTo(HaveOccurred())
+			ExpectAddedEvent(watch.ResultChan())
+		})
 	})
 
 	It("Should support watching Nodes", func() {

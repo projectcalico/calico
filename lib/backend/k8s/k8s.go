@@ -300,6 +300,7 @@ func (c *KubeClient) Clean() error {
 		apiv3.KindFelixConfiguration,
 		apiv3.KindGlobalNetworkPolicy,
 		apiv3.KindGlobalNetworkSet,
+		apiv3.KindNetworkPolicy,
 		apiv3.KindNetworkSet,
 		apiv3.KindIPPool,
 		apiv3.KindHostEndpoint,

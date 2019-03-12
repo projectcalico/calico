@@ -34,10 +34,10 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/types"
+	kwatch "k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
-	"k8s.io/client-go/tools/cache"
 )
 
 const (
@@ -289,9 +289,34 @@ func (c *networkPolicyClient) EnsureInitialized() error {
 }
 
 func (c *networkPolicyClient) Watch(ctx context.Context, list model.ListInterface, revision string) (api.WatchInterface, error) {
-	resl := list.(model.ResourceListOptions)
-	if len(resl.Name) != 0 {
-		return nil, fmt.Errorf("cannot watch specific resource instance: %s", list.(model.ResourceListOptions).Name)
+	// Build watch options to pass to k8s.
+	opts := metav1.ListOptions{Watch: true}
+	rlo, ok := list.(model.ResourceListOptions)
+	if !ok {
+		return nil, fmt.Errorf("ListInterface is not a ResourceListOptions: %s", list)
+	}
+
+	// Setting to Watch all networkPolicies in all namespaces; overriden below
+	watchK8s, watchCrd := true, true
+
+	// Watch a specific networkPolicy
+	if len(rlo.Name) != 0 {
+		if len(rlo.Namespace) == 0 {
+			return nil, errors.New("cannot watch a specific NetworkPolicy without a namespace")
+		}
+		// We've been asked to watch a specific networkpolicy.
+		log.WithField("name", rlo.Name).Debug("Watching a single networkpolicy")
+		// Backed by a NetworkPolicy - extract the name.
+		policyName := rlo.Name
+		if strings.HasPrefix(rlo.Name, conversion.K8sNetworkPolicyNamePrefix) {
+			watchCrd = false
+			policyName = strings.TrimPrefix(rlo.Name, conversion.K8sNetworkPolicyNamePrefix)
+		} else {
+			watchK8s = false
+		}
+		// write back in rlo for custom resource watch below
+		rlo.Name = policyName
+		opts.FieldSelector = fields.OneTermEqualSelector("metadata.name", policyName).String()
 	}
 
 	// If a revision is specified, see if it contains a "/" and if so split into separate
@@ -301,21 +326,14 @@ func (c *networkPolicyClient) Watch(ctx context.Context, list model.ListInterfac
 		return nil, err
 	}
 
-	// The NetworkPolicy watcher needs to stream events from both the Calico CRD-backed Network Policy
-	// and the Kubernetes native Network Policy.
-	log.WithFields(log.Fields{
-		"crdNPRev": crdNPRev,
-		"k8sNPRev": k8sNPRev,
-	}).Debug("Watching two resources at individual revisions")
-
-	k8sWatchClient := cache.NewListWatchFromClient(
-		c.clientSet.NetworkingV1().RESTClient(),
-		"networkpolicies",
-		resl.Namespace,
-		fields.Everything())
-	k8sRawWatch, err := k8sWatchClient.WatchFunc(metav1.ListOptions{ResourceVersion: k8sNPRev})
-	if err != nil {
-		return nil, K8sErrorToCalico(err, list)
+	opts.ResourceVersion = k8sNPRev
+	var k8sRawWatch kwatch.Interface = kwatch.NewFake()
+	if watchK8s {
+		log.Debugf("Watching networkPolicy (k8s) at revision %q", k8sNPRev)
+		k8sRawWatch, err = c.clientSet.NetworkingV1().NetworkPolicies(rlo.Namespace).Watch(opts)
+		if err != nil {
+			return nil, K8sErrorToCalico(err, list)
+		}
 	}
 	converter := func(r Resource) (*model.KVPair, error) {
 		np, ok := r.(*networkingv1.NetworkPolicy)
@@ -326,14 +344,17 @@ func (c *networkPolicyClient) Watch(ctx context.Context, list model.ListInterfac
 	}
 	k8sWatch := newK8sWatcherConverter(ctx, "NetworkPolicy (namespaced)", converter, k8sRawWatch)
 
-	calicoWatch, err := c.crdClient.Watch(ctx, list, crdNPRev)
-	if err != nil {
-		k8sWatch.Stop()
-		return nil, err
+	var calicoWatch api.WatchInterface = api.NewFake()
+	if watchCrd {
+		log.Debugf("Watching networkPolicy (crd) at revision %q", crdNPRev)
+		calicoWatch, err = c.crdClient.Watch(ctx, rlo, crdNPRev)
+		if err != nil {
+			k8sWatch.Stop()
+			return nil, err
+		}
 	}
 
 	return newNetworkPolicyWatcher(ctx, k8sNPRev, crdNPRev, k8sWatch, calicoWatch), nil
-
 }
 
 func newNetworkPolicyWatcher(ctx context.Context, k8sRev, crdRev string, k8sWatch, calicoWatch api.WatchInterface) api.WatchInterface {

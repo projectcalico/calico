@@ -16,6 +16,7 @@ package api
 
 import (
 	"fmt"
+	"sync"
 
 	"context"
 
@@ -212,4 +213,38 @@ type WatchEvent struct {
 
 	// The error, if EventType is Error.
 	Error error
+}
+
+// FakeWatcher is inspired by apimachinery (watch) FakeWatcher
+type FakeWatcher struct {
+	result  chan WatchEvent
+	Stopped bool
+	sync.Mutex
+}
+
+// NewFake constructs a FakeWatcher
+func NewFake() *FakeWatcher {
+	return &FakeWatcher{
+		result: make(chan WatchEvent),
+	}
+}
+
+// Stop implements WatchInterface
+func (f *FakeWatcher) Stop() {
+	f.Lock()
+	defer f.Unlock()
+	if !f.Stopped {
+		close(f.result)
+		f.Stopped = true
+	}
+}
+
+// ResultChan implements WatchInterface
+func (f *FakeWatcher) ResultChan() <-chan WatchEvent {
+	return f.result
+}
+
+// HasTerminated implements WatchInterface
+func (f *FakeWatcher) HasTerminated() bool {
+	return false
 }
