@@ -474,8 +474,8 @@ func (buf *EventSequencer) OnIPPoolUpdate(key model.IPPoolKey, pool *model.IPPoo
 		"key":  key,
 		"pool": pool,
 	}).Debug("IPPool update")
-	buf.pendingIPPoolDeletes.Discard(key)
 	cidr := ip.CIDRFromCalicoNet(key.CIDR)
+	buf.pendingIPPoolDeletes.Discard(cidr)
 	buf.pendingIPPoolUpdates[cidr] = pool
 }
 
