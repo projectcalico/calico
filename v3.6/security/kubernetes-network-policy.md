@@ -1,5 +1,5 @@
 ---
-title: Kubernetes Network Policy
+title: Kubernetes network policy
 ---
 
 ### Big picture
