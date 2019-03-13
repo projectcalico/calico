@@ -44,7 +44,7 @@ Before you create your first network policy, you need to understand the default 
 - If you do not create any Kubernetes network policies, then all pods are allowed to communicate with all other pods. 
 - When you create one or more network policies, any connections that are not explicitly allowed by the policy are treated as **default-deny** when pods are selected. 
 
-You are now ready to start fine-tuning what connections should be allowed. This section describes how to create policies for the following tasks:
+You are now ready to start fine-tuning what connections should be allowed using the following tasks:
 
 - [Create ingress policies](#create-ingress-policies)
 - [Allow ingress connections, pods in same namespace](#allow-ingress-connections-pods-in-same-namespace)
