@@ -822,6 +822,177 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 		})
 	})
 
+	It("should handle a CRUD of Network Sets", func() {
+		kvp1 := &model.KVPair{
+			Key: model.ResourceKey{
+				Name:      "test-syncer-netset1",
+				Kind:      apiv3.KindNetworkSet,
+				Namespace: "test-syncer-ns1",
+			},
+			Value: &apiv3.NetworkSet{
+				TypeMeta: metav1.TypeMeta{
+					Kind:       apiv3.KindNetworkSet,
+					APIVersion: apiv3.GroupVersionCurrent,
+				},
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-syncer-netset1",
+					Namespace: "test-syncer-ns1",
+				},
+				Spec: apiv3.NetworkSetSpec{
+					Nets: []string{
+						"10.11.12.13/32",
+						"100.101.102.103/24",
+					},
+				},
+			},
+		}
+		kvp2 := &model.KVPair{
+			Key: model.ResourceKey{
+				Name:      "test-syncer-netset1",
+				Kind:      apiv3.KindNetworkSet,
+				Namespace: "test-syncer-ns1",
+			},
+			Value: &apiv3.NetworkSet{
+				TypeMeta: metav1.TypeMeta{
+					Kind:       apiv3.KindNetworkSet,
+					APIVersion: apiv3.GroupVersionCurrent,
+				},
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-syncer-netset1",
+					Namespace: "test-syncer-ns1",
+				},
+				Spec: apiv3.NetworkSetSpec{
+					Nets: []string{
+						"192.168.100.111/32",
+					},
+				},
+			},
+		}
+		kvp3 := &model.KVPair{
+			Key: model.ResourceKey{
+				Name:      "test-syncer-netset3",
+				Kind:      apiv3.KindNetworkSet,
+				Namespace: "test-syncer-ns1",
+			},
+			Value: &apiv3.NetworkSet{
+				TypeMeta: metav1.TypeMeta{
+					Kind:       apiv3.KindNetworkSet,
+					APIVersion: apiv3.GroupVersionCurrent,
+				},
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-syncer-netset3",
+					Namespace: "test-syncer-ns1",
+				},
+				Spec: apiv3.NetworkSetSpec{
+					Nets: []string{
+						"8.8.8.8/32",
+						"aa:bb::cc",
+					},
+				},
+			},
+		}
+
+		ns := k8sapi.Namespace{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:        "test-syncer-ns1",
+				Annotations: map[string]string{},
+				Labels:      map[string]string{"label": "value"},
+			},
+		}
+
+		var kvpRes *model.KVPair
+		var err error
+
+		// Check to see if the create succeeded.
+		By("Creating a namespace", func() {
+			_, err := c.ClientSet.CoreV1().Namespaces().Create(&ns)
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		By("Creating a Network Set", func() {
+			kvpRes, err = c.Create(ctx, kvp1)
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		By("Attempting to recreate an existing Network Set", func() {
+			_, err := c.Create(ctx, kvp1)
+			Expect(err).To(HaveOccurred())
+		})
+
+		By("Updating an existing Network Set", func() {
+			kvp2.Revision = kvpRes.Revision
+			_, err := c.Update(ctx, kvp2)
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		By("Listing a specific Network Set but in wrong namespace", func() {
+			kvps, err := c.List(ctx, model.ResourceListOptions{Name: "test-syncer-netset1", Namespace: "default", Kind: apiv3.KindNetworkSet}, "")
+			Expect(err).ToNot(HaveOccurred())
+			Expect(kvps.KVPairs).To(HaveLen(0))
+		})
+
+		By("Listing a specific Network Set", func() {
+			kvps, err := c.List(ctx, model.ResourceListOptions{Name: "test-syncer-netset1", Namespace: ns.ObjectMeta.Name, Kind: apiv3.KindNetworkSet}, "")
+			Expect(err).ToNot(HaveOccurred())
+			Expect(kvps.KVPairs).To(HaveLen(1))
+			Expect(kvps.KVPairs[0].Key).To(Equal(kvp1.Key))
+			Expect(kvps.KVPairs[0].Value.(*apiv3.NetworkSet).ObjectMeta.Name).To(Equal(kvp2.Value.(*apiv3.NetworkSet).ObjectMeta.Name))
+			Expect(kvps.KVPairs[0].Value.(*apiv3.NetworkSet).Spec).To(Equal(kvp2.Value.(*apiv3.NetworkSet).Spec))
+		})
+
+		By("Creating another Network Set in the same namespace", func() {
+			kvpRes, err = c.Create(ctx, kvp3)
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		By("Listing all Network Sets in default namespace", func() {
+			kvps, err := c.List(ctx, model.ResourceListOptions{Namespace: "default", Kind: apiv3.KindNetworkSet}, "")
+			Expect(err).ToNot(HaveOccurred())
+			Expect(kvps.KVPairs).To(HaveLen(0))
+		})
+
+		By("Listing all Network Sets in namespace", func() {
+			kvps, err := c.List(ctx, model.ResourceListOptions{Namespace: ns.ObjectMeta.Name, Kind: apiv3.KindNetworkSet}, "")
+			Expect(err).ToNot(HaveOccurred())
+			Expect(kvps.KVPairs).To(HaveLen(2))
+			keys := []model.Key{}
+			vals := []interface{}{}
+			for _, k := range kvps.KVPairs {
+				keys = append(keys, k.Key)
+				vals = append(vals, k.Value.(*apiv3.NetworkSet).Spec)
+			}
+			Expect(keys).To(ContainElement(kvp2.Key))
+			Expect(keys).To(ContainElement(kvp3.Key))
+			Expect(vals).To(ContainElement(kvp2.Value.(*apiv3.NetworkSet).Spec))
+			Expect(vals).To(ContainElement(kvp3.Value.(*apiv3.NetworkSet).Spec))
+		})
+
+		By("Deleting an existing Network Set", func() {
+			_, err := c.Delete(ctx, kvp2.Key, "")
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		By("Listing all Network Sets in namespace again", func() {
+			kvps, err := c.List(ctx, model.ResourceListOptions{Namespace: ns.ObjectMeta.Name, Kind: apiv3.KindNetworkSet}, "")
+			Expect(err).ToNot(HaveOccurred())
+			Expect(kvps.KVPairs).To(HaveLen(1))
+			Expect(kvps.KVPairs[0].Key).To(Equal(kvp3.Key))
+			Expect(kvps.KVPairs[0].Value.(*apiv3.NetworkSet).ObjectMeta.Name).To(Equal(kvp3.Value.(*apiv3.NetworkSet).ObjectMeta.Name))
+			Expect(kvps.KVPairs[0].Value.(*apiv3.NetworkSet).Spec).To(Equal(kvp3.Value.(*apiv3.NetworkSet).Spec))
+		})
+
+		By("Deleting the namespace", func() {
+			err := c.ClientSet.CoreV1().Namespaces().Delete(ns.ObjectMeta.Name, &metav1.DeleteOptions{})
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		By("Listing all Network Sets in a non-existent namespace", func() {
+			kvps, err := c.List(ctx, model.ResourceListOptions{Namespace: ns.ObjectMeta.Name, Kind: apiv3.KindNetworkSet}, "")
+			Expect(err).ToNot(HaveOccurred())
+			Expect(kvps.KVPairs).To(HaveLen(1))
+		})
+	})
+
 	It("should handle a CRUD of BGP Peer", func() {
 		kvp1a := &model.KVPair{
 			Key: model.ResourceKey{
