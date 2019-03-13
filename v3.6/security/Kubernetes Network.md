@@ -24,7 +24,7 @@ The Kubernetes Network Policy API supports:
 
 ### Concepts
 
-Calico supports the complete Kubernetes Network Policy API, and extends it with additional policy features. For details, see [Calico Network Policy](TBD).
+Calico supports the complete Kubernetes Network Policy API, and extends it with additional policy features. For details, see Calico Network Policy.
 
 The Kubernetes Network Policy API lets you specify rules for controlling network connections. It provides L3/L4 IP address and port-based network segmentation. However, to enforce the network policy rules, you need a network plugin like Calico.
 
