@@ -1,5 +1,5 @@
-hash: 9eee86970faaa12938e3041fdd280a93193edd6707f4b94310ca02b4a8f176b2
-updated: 2019-03-09T04:04:17.1075115Z
+hash: 8f0767ec3295f257acd87ca74d239bae2f43eb25693bcdbe355d83aa09c68101
+updated: 2019-03-13T04:10:19.352307442Z
 imports:
 - name: github.com/docopt/docopt-go
   version: 784ddc588536785e7299f7272f39101f7faccc3f
@@ -27,7 +27,7 @@ imports:
 - name: github.com/lyft/protoc-gen-validate
   version: 930a67cf7ba41b9d9436ad7a1be70a5d5ff6e1fc
 - name: github.com/onsi/gomega
-  version: 65fb64232476ad9046e57c26cd0bff3d3a8dc6cd
+  version: 90e289841c1ed79b7a598a7cd9959750cb5e89e2
   subpackages:
   - format
   - internal/assertion
@@ -41,7 +41,7 @@ imports:
   - matchers/support/goraph/util
   - types
 - name: github.com/projectcalico/libcalico-go
-  version: 37b52b36c8d956d0be6baaf9f6eba2ac152c5a83
+  version: a1cf8b8c4b7b4850280e89a30a8ab9aa114eb119
   subpackages:
   - lib/apis/v3
   - lib/client
@@ -50,7 +50,7 @@ imports:
   - lib/selector/parser
   - lib/selector/tokenizer
 - name: github.com/sirupsen/logrus
-  version: e1e72e9de974bd926e5c56f83753fba2df402ce5
+  version: dae0fa8d5b0c810a8ab733fbd5510c7cae84eca4
 - name: golang.org/x/crypto
   version: 9419663f5a44be8b34ca85f08abc5fe1be11f8a3
   subpackages:
