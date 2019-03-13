@@ -79,7 +79,7 @@ spec:
     - podSelector: {“color”: “red”}
     to:
       ports:
-      - port: **80**
+      - port: 80
 ```
 {: .no-select-button}
 
