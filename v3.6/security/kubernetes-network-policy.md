@@ -46,15 +46,15 @@ Before you create your first network policy, you need to understand the default 
 
 You are now ready to start fine-tuning what connections should be allowed. This section describes how to create policies for the following tasks:
 
-- Create ingress policies
-- Allow ingress connections, pods in same namespace
-- Allow ingress connections, pods in different namespace
-- Create egress policies
-- Allow ingress connections, pods in same namespace
-- Allow ingress connections, pods with IP address or CIDR range
-- Best practice: create deny-all default network policies
-- Create deny-all default ingress policy, pods in a namespace
-- Create deny-all default egress policy, pods in a namespace
+- [Create ingress policies](#create-ingress-policies)
+- [Allow ingress connections, pods in same namespace](#allow-ingress-connections-pods-in-same-namespace)
+- [Allow ingress connections, pods in different namespace](#allow-ingress-connections-pods-in-different-namespace)
+- [Create egress policies](#create-egress-policies)
+- [Allow ingress connections, pods in same namespace](#allow-egress-connections-pods-in-same-namespace)
+- [Allow ingress connections, pods with IP address or CIDR range](#allow-egress-connections-pods-with-ip-address-or-cidr-range)
+- [Best practice: create deny-all default network policies](#best-practice-create-deny-all-default-network-policies)
+- [Create deny-all default ingress policy, pods in same namespace](#create-deny-all-default-ingress-policy-pods-in-same-namespace)
+- [Create deny-all default egress policy, pods in same namespace](create-deny-all-default-egress-policy-pods-in-same-namespace)
 
 #### Create ingress policies
 
@@ -108,7 +108,7 @@ spec:
       namespaceSelector: {“something”: “else”}
     to:
       ports:
-      - port: **80**
+      - port: 80
 ```  
 {: .no-select-button}
 
@@ -163,7 +163,7 @@ spec:
 
 To ensure that all pods in the namespace are secure, a best practice is to create a default network policy. This avoids accidentally exposing an app or version that doesn’t have policy defined. 
 
-##### Create deny-all default ingress and egress policy, pods in a same namespace
+##### Create deny-all default ingress and egress policy, pods in same namespace
 
 The following network policy implements a default, **deny-all** ingress and egress policy that prevents all connections to pods in the **policy-demo** namespace. Note that the policy applies to all pods in the policy-demo namespace, but does not explicitly allow any connections. All pods are selected, but because the default changes when pods are selected by a network policy, the result is: **deny all ingress and egress connections**. (Unless the connection is allowed by another network policy).
 
