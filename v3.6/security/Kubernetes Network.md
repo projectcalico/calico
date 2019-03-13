@@ -44,15 +44,15 @@ Before you create your first network policy, you need to understand the default 
 
 You ready now ready to start fine-tuning what connections should be allowed. 
 
-Create ingress policies
-Allow ingress connections, same namespace
-Allow ingress connections, different namespace
-Create egress policies
-Allow ingress connections, same namespace
-Allow ingress connections, by IP address or CIDR range
-Best practice: create deny-all default network policies
-Create deny-all default ingress policy, all pods in a namespace
-Create deny-all default egress policy, all pods in a namespace
+- Create ingress policies
+- Allow ingress connections, same namespace
+- Allow ingress connections, different namespace
+- Create egress policies
+- Allow ingress connections, same namespace
+- Allow ingress connections, IP address or CIDR range
+- Best practice: create deny-all default network policies
+- Create deny-all default ingress policy, all pods in a namespace
+- Create deny-all default egress policy, all pods in a namespace
 
 #### Create ingress policies
 
@@ -64,7 +64,8 @@ Network policies apply to pods within a specific namespace. Policies can include
 
 In the following example, incoming connections to pods with label **color=blue** are allowed only if it comes from a pod with **color=red**, on port **80**.
 
-```kind: NetworkPolicy
+```
+kind: NetworkPolicy
 apiVersion: networking.k8s.io/v1
 metadata:
   name: allow-same-namespace
@@ -79,6 +80,8 @@ spec:
       ports:
       - port: **80**
 ```
+{: .no-select-button}
+
 ##### Allow ingress connections, pods in a different namespace
 
 To allow connections from pods in a different namespace, use a **namespace selector**. In the following policy, the namespace selector matches one or more Kubernetes namespaces and is combined with the pod selector. 
@@ -88,7 +91,8 @@ To allow connections from pods in a different namespace, use a **namespace selec
 
 In the following example, incoming connections to pods are allowed only if they come from a pod with **color=red**, in a namespace with **something=else**, on port **80**.
 
-```kind: NetworkPolicy
+```
+kind: NetworkPolicy
 apiVersion: networking.k8s.io/v1
 metadata:
   name: allow-same-namespace
@@ -103,7 +107,8 @@ spec:
     to:
       ports:
       - port: **80**
-```      
+```  
+{: .no-select-button}
 
 #### Create egress policies
 
@@ -113,7 +118,8 @@ Create egress network policies to allow outbound connections from pods.
 
 The following policy allows pod outbound connections to other pods in the same namespace that match the pod selector. In the following example, outbound connections are allowed only if they are going to a pod with **color=red**, on port **80**.
 
-```kind: NetworkPolicy
+```
+kind: NetworkPolicy
 apiVersion: networking.k8s.io/v1
 metadata:
   name: allow-egress-same-namespace
@@ -127,14 +133,16 @@ spec:
       ports:
       - port: 80
 ```      
-      
+{: .no-select-button}
+
 ##### Allow egress connections, IP address or CIDR ranges
 
 Egress policies can also be used to allow connections to specific IP addresses and CIDR ranges. Typically, IP addresses/ranges are used to handle connections external to the cluster for static resources or subnets. 
 
 The following policy allows connections to the IP address range, **172.18.0.0/24**.
 
-```kind: NetworkPolicy
+```
+kind: NetworkPolicy
 apiVersion: networking.k8s.io/v1
 metadata:
   name: allow-egress-external
@@ -147,6 +155,7 @@ spec:
     - ipBlock:
         cidr: 172.18.0.0/24
 ```        
+{: .no-select-button}
 
 #### Best practice: create deny-all default network policies
 
@@ -156,7 +165,8 @@ To ensure that all pods in the namespace are secure, a best practice is to creat
 
 The following network policy implements a default, **deny-all** ingress and egress policy that prevents all connections to pods in the **policy-demo** namespace. The policy applies to all pods in the policy-demo namespace, but does not explicitly allow any connections. All pods are selected, but because the default changes when pods are selected by a network policy, the result is: **deny all ingress and egress connections**. (Unless the connection is allowed by another network policy).
 
-```kind: NetworkPolicy
+```
+kind: NetworkPolicy
 apiVersion: networking.k8s.io/v1
 metadata:
   name: default-ingress-deny
@@ -168,6 +178,7 @@ spec:
   - Ingress
 Egress
 ```
+{: .no-select-button}
 
 ### Above and Beyond
 
