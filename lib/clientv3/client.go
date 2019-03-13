@@ -156,6 +156,7 @@ func (p poolAccessor) GetEnabledPools(ipVersion int) ([]v3.IPPool, error) {
 	var enabled []v3.IPPool
 	for _, pool := range pools.Items {
 		if pool.Spec.Disabled {
+			log.Debugf("Skipping disabled IP pool (%s)", pool.Name)
 			continue
 		} else if _, cidr, err := net.ParseCIDR(pool.Spec.CIDR); err == nil && cidr.Version() == ipVersion {
 			log.Debugf("Adding pool (%s) to the enabled IPPool list", cidr.String())

@@ -315,7 +315,11 @@ func (c ipamClient) autoAssign(ctx context.Context, num int, handleID *string, a
 	// Release any emptied blocks still affine to this host but no longer part of an IP Pool which selects this node.
 	for _, block := range affBlocksToRelease {
 		// Determine the pool for each block.
-		pool := c.blockReaderWriter.getPoolForIP(net.IP{block.IP}, allPools)
+		pool, err := c.blockReaderWriter.getPoolForIP(net.IP{block.IP}, allPools)
+		if err != nil {
+			log.WithError(err).Warnf("Failed to get pool for IP")
+			continue
+		}
 		if pool == nil {
 			logCtx.WithFields(log.Fields{"block": block}).Warn("No pool found for block, skipping")
 			continue
@@ -574,7 +578,10 @@ func (c ipamClient) AssignIP(ctx context.Context, args AssignIPArgs) error {
 	}
 	log.Infof("Assigning IP %s to host: %s", args.IP, hostname)
 
-	pool := c.blockReaderWriter.getPoolForIP(args.IP, nil)
+	pool, err := c.blockReaderWriter.getPoolForIP(args.IP, nil)
+	if err != nil {
+		return err
+	}
 	if pool == nil {
 		return errors.New("The provided IP address is not in a configured pool\n")
 	}
@@ -667,7 +674,11 @@ func (c ipamClient) ReleaseIPs(ctx context.Context, ips []net.IP) ([]net.IP, err
 	for _, ip := range ips {
 		var cidrStr string
 
-		pool := c.blockReaderWriter.getPoolForIP(ip, nil)
+		pool, err := c.blockReaderWriter.getPoolForIP(ip, nil)
+		if err != nil {
+			log.WithError(err).Warnf("Failed to get pool for IP")
+			return nil, err
+		}
 		if pool == nil {
 			if cidr, err := c.blockReaderWriter.getBlockForIP(ctx, ip); err != nil {
 				return nil, err
@@ -835,7 +846,10 @@ func (c ipamClient) ClaimAffinity(ctx context.Context, cidr net.IPNet, host stri
 	logCtx := log.WithFields(log.Fields{"host": host, "cidr": cidr})
 
 	// Verify the requested CIDR falls within a configured pool.
-	pool := c.blockReaderWriter.getPoolForIP(net.IP{IP: cidr.IP}, nil)
+	pool, err := c.blockReaderWriter.getPoolForIP(net.IP{IP: cidr.IP}, nil)
+	if err != nil {
+		return nil, nil, err
+	}
 	if pool == nil {
 		estr := fmt.Sprintf("The requested CIDR (%s) is not within any configured pools.", cidr.String())
 		return nil, nil, errors.New(estr)
@@ -906,7 +920,9 @@ func (c ipamClient) ClaimAffinity(ctx context.Context, cidr net.IPNet, host stri
 // If an empty string is passed as the host, then the hostname is automatically detected.
 func (c ipamClient) ReleaseAffinity(ctx context.Context, cidr net.IPNet, host string, mustBeEmpty bool) error {
 	// Verify the requested CIDR falls within a configured pool.
-	pool := c.blockReaderWriter.getPoolForIP(net.IP{IP: cidr.IP}, nil)
+	fields := log.Fields{"cidr": cidr.String(), "host": host, "mustBeEmpty": mustBeEmpty}
+	log.WithFields(fields).Debugf("Releasing affinity for CIDR")
+	pool, err := c.blockReaderWriter.getPoolForIP(net.IP{IP: cidr.IP}, nil)
 	if pool == nil {
 		estr := fmt.Sprintf("The requested CIDR (%s) is not within any configured pools.", cidr.String())
 		return errors.New(estr)
@@ -953,6 +969,7 @@ func (c ipamClient) ReleaseAffinity(ctx context.Context, cidr net.IPNet, host st
 // to the given host.  If an empty string is passed as the host,
 // then the hostname is automatically detected.
 func (c ipamClient) ReleaseHostAffinities(ctx context.Context, host string, mustBeEmpty bool) error {
+	log.Debugf("Releasing affinities for host %s. MustBeEmpty? %v", host, mustBeEmpty)
 	hostname, err := decideHostname(host)
 	if err != nil {
 		return err
@@ -1334,7 +1351,10 @@ func (c ipamClient) decrementHandle(ctx context.Context, handleID string, blockC
 // GetAssignmentAttributes returns the attributes stored with the given IP address
 // upon assignment.
 func (c ipamClient) GetAssignmentAttributes(ctx context.Context, addr net.IP) (map[string]string, error) {
-	pool := c.blockReaderWriter.getPoolForIP(addr, nil)
+	pool, err := c.blockReaderWriter.getPoolForIP(addr, nil)
+	if err != nil {
+		return nil, err
+	}
 	if pool == nil {
 		log.Errorf("Error reading pool for %s", addr.String())
 		return nil, errors.New(fmt.Sprintf("%s is not part of a configured pool", addr))
@@ -1453,7 +1473,11 @@ func (c ipamClient) ensureConsistentAffinity(ctx context.Context, b *model.Alloc
 	}
 
 	// Fetch the pool for the given CIDR and check if it selects the node.
-	pool := c.blockReaderWriter.getPoolForIP(net.IP{b.CIDR.IPNet.IP}, nil)
+	pool, err := c.blockReaderWriter.getPoolForIP(net.IP{b.CIDR.IPNet.IP}, nil)
+	if err != nil {
+		return err
+	}
+
 	if pool == nil {
 		logCtx.Debug("No pools own this block")
 		return nil
