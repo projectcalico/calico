@@ -1,5 +1,5 @@
-hash: 6118062a38c4eb3de82f8b9129e1f88dab0671666cba9dcb6a8f2a4840f7b53a
-updated: 2019-03-12T07:39:26.0641344Z
+hash: 946e63ca5571729b6b4c6365d0b51f48ca08797d24097aac5c1f6c70dfb6642a
+updated: 2019-03-13T07:37:44.255123914Z
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -114,7 +114,7 @@ imports:
 - name: github.com/kardianos/osext
   version: 2bc1f35cddc0cc527b4bc3dce8578fc2a6c11384
 - name: github.com/kelseyhightower/confd
-  version: bec69d2fce7ccce165a7eeb73cb0e060262f390a
+  version: 827941f6746fc313801a3c48b532e559c6fb84f6
   repo: https://github.com/projectcalico/confd.git
   subpackages:
   - pkg/backends
@@ -177,7 +177,7 @@ imports:
   - reporters/stenographer/support/go-isatty
   - types
 - name: github.com/onsi/gomega
-  version: 65fb64232476ad9046e57c26cd0bff3d3a8dc6cd
+  version: 90e289841c1ed79b7a598a7cd9959750cb5e89e2
   subpackages:
   - format
   - internal/assertion
@@ -287,7 +287,7 @@ imports:
   subpackages:
   - binder
 - name: github.com/projectcalico/typha
-  version: a89668c8efed716b3df3ada5f7aafe8f857b2650
+  version: 4b75b0774b9f82d99863558c96a062c64f6dcf08
   subpackages:
   - pkg/syncclient
   - pkg/syncproto
