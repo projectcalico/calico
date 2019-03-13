@@ -1,5 +1,6 @@
-template stuff
-
+---
+title: Kubernetes Network Policy
+---
 
 ### Big picture
 
