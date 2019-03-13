@@ -7,7 +7,7 @@ Kubernetes network policy lets you enforce network traffic patterns using rules.
 
 ### Value
 
-Kubernetes network policy lets developers secure access to and from their applications using the same, simple language they use to deploy them. Developers can focus on their applications without needing to understand low-level networking concepts. Enabling developers to easily secure their applications in this way , supports a “shift left” DevOps environment. 
+Kubernetes network policy lets developers secure access to and from their applications using the same, simple language they use to deploy them. Developers can focus on their applications without needing to understand low-level networking concepts. Enabling developers to easily secure their applications in this way, supports a shift left DevOps environment. 
 
 ### Features
 
@@ -34,13 +34,13 @@ The bulk of securing network traffic typically revolves around defining egress a
 
 #### Default deny/allow 
 
-Default allow means all connections are allowed by default, unless otherwise specified. Default deny means all connections are denied by default, unless explicitly allowed. 
+**Default allow** means all connections are allowed by default, unless otherwise specified. **Default deny** means all connections are denied by default, unless explicitly allowed. 
 
 ### How to
 
 Before you create your first network policy, you need to understand the default network policy behaviors. 
 - If you do not create any Kubernetes network policies, then all pods are allowed to communicate with all other pods. 
-- When you create one or more network policies, any connections that are not explicitly allowed by the policy are treated as “default-deny” when pods are selected. 
+- When you create one or more network policies, any connections that are not explicitly allowed by the policy are treated as **default-deny** when pods are selected. 
 
 You ready now ready to start fine-tuning what traffic should be allowed. 
 
@@ -62,7 +62,7 @@ Network policies apply to pods within a specific namespace. Policies can include
 
 ##### Allow ingress traffic, pods in same namespace
 
-In the following example, incoming traffic to pods with label color=blue is allowed only if it comes from a pod with color=red, on port 80.
+In the following example, incoming traffic to pods with label color=blue is allowed only if it comes from a pod with **color=red**, on port **80**.
 
 kind: NetworkPolicy
 apiVersion: networking.k8s.io/v1
@@ -74,10 +74,10 @@ spec:
     matchLabels: {“color”: “blue”}
   ingress:
   - from:
-    - podSelector: {“color”: “red”}
+    - podSelector: {“**color**”: “**red**”}
     to:
       ports:
-      - port: 80
+      - port: **80**
 
 ##### Allow ingress traffic, pods in a different namespace
 
@@ -85,7 +85,7 @@ To allow traffic from pods in a different namespace, use a namespace selector. I
 
 Note: Namespace selectors can only be used in policy rules. The spec.podSelector applies only to pods in the same namespace as the policy.
 
-In the following example, incoming traffic is allowed only if it comes from a pod with color=red, in a namespace with something=else, on port 80.
+In the following example, incoming traffic is allowed only if it comes from a pod with color=red, in a namespace with **something=else**, on port **80**.
 
 kind: NetworkPolicy
 apiVersion: networking.k8s.io/v1
@@ -98,10 +98,10 @@ spec:
   ingress:
   - from:
     - podSelector: {“color”: “red”}
-      namespaceSelector: {“something”: “else”}
+      namespaceSelector: {“**something**”: “**else**”}
     to:
       ports:
-      - port: 80
+      - port: **80**
 
 #### Create egress policies
 
@@ -109,7 +109,7 @@ Create egress network policies to allow outbound traffic from pods.
 
 ##### Allow egress traffic, same namespace
 
-The following policy allows pod outbound traffic to other pods in the same namespace that match the pod selector. In the following example, traffic is allowed only if it is going to a pod with color=red, on port 80.
+The following policy allows pod outbound traffic to other pods in the same namespace that match the pod selector. In the following example, traffic is allowed only if it is going to a pod with **color=red**, on port **80**.
 
 kind: NetworkPolicy
 apiVersion: networking.k8s.io/v1
@@ -121,15 +121,15 @@ spec:
     matchLabels: {“color”: “blue”}
   egress:
   - to:
-    - podSelector: {“color”: “red”}
+    - podSelector: {“**color**”: “**red**”}
       ports:
-      - port: 80
+      - port: **80**
       
 ##### Allow egress traffic, IP address or CIDR ranges
 
 Egress policies can also be used to allow traffic to specific IP addresses and CIDR ranges. Typically, IP addresses/ranges are used to handle traffic external to the cluster for static resources or subnets. 
 
-The following policy allows traffic to a specific IP address range.
+The following policy allows traffic to the IP address range, **172.18.0.0/24**.
 
 kind: NetworkPolicy
 apiVersion: networking.k8s.io/v1
@@ -150,13 +150,13 @@ To ensure that all pods in the namespace are secure, a best practice is to creat
 
 ##### Create deny-all default ingress and egress policy, all pods in a namespace
 
-The following network policy implements a default, “deny-all” ingress and egress policy that prevents all traffic to pods in the policy-demo namespace. The policy applies to all pods in the namespace, but does not explicitly allow any traffic. All pods are selected, but because the default changes when pods are selected by a network policy, the result is: deny all ingress and egress traffic. (Unless the traffic is allowed by another network policy).
+The following network policy implements a default, **deny-all** ingress and egress policy that prevents all traffic to pods in the policy-demo namespace. The policy applies to all pods in the **policy-demo** namespace, but does not explicitly allow any traffic. All pods are selected, but because the default changes when pods are selected by a network policy, the result is: deny all ingress and egress traffic. (Unless the traffic is allowed by another network policy).
 
 kind: NetworkPolicy
 apiVersion: networking.k8s.io/v1
 metadata:
-  name: default-ingress-deny
-  namespace: policy-demo
+  name: **default-ingress-deny**
+  namespace: **policy-demo**
 spec:
   podSelector:
     matchLabels: {}
