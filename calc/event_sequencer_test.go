@@ -345,14 +345,13 @@ var _ = Describe("IPPool update/remove", func() {
 
 	It("Create an IP Pool and delete it without flushing the event sequencer", func() {
 		uut.OnIPPoolUpdate(model.IPPoolKey{CIDR: mustParseNet("10.0.0.0/16")},
-		&model.IPPool{
-			CIDR: mustParseNet("10.0.0.0/16"),
-		})
+			&model.IPPool{
+				CIDR: mustParseNet("10.0.0.0/16"),
+			})
 		uut.OnIPPoolRemove(model.IPPoolKey{CIDR: mustParseNet("10.0.0.0/16")})
 		Expect(recorder.Messages).To(BeNil())
 	})
 })
-
 
 type dataplaneRecorder struct {
 	Messages []interface{}
