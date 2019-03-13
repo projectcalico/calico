@@ -174,6 +174,45 @@ func (p *RegexpParam) Parse(raw string) (result interface{}, err error) {
 	return
 }
 
+// RegexpPatternListParam differs from RegexpParam (above) in that it validates
+// string values that are (themselves) regular expressions.
+type RegexpPatternListParam struct {
+	Metadata
+	ListRegexp *regexp.Regexp
+	ElemRegexp *regexp.Regexp
+	Delimiter  string
+	Msg        string
+}
+
+// Parse validates whether the given raw string contains a list of valid regular
+// expressions.
+// Uses two levels of validation:
+// 	(1) Attempt to match raw against a regular expression (for custom validation)
+//  (2) Attempt to compile each list element in raw into a valid regular expression
+func (p *RegexpPatternListParam) Parse(raw string) (result interface{}, err error) {
+	// Ensure list in its entirety matches expected structure
+	if !p.ListRegexp.MatchString(raw) {
+		err = p.parseFailed(raw, p.Msg)
+		return
+	}
+
+	// Split into individual elements and validate each one
+	tokens := strings.Split(raw, p.Delimiter)
+	for _, t := range tokens {
+		if p.ElemRegexp.Match([]byte(t)) {
+			// Need to remove the start and end symbols that wrap the actual regexp
+			regexpValue := t[1 : len(t)-1]
+			_, compileErr := regexp.Compile(regexpValue)
+			if compileErr != nil {
+				err = p.parseFailed(raw, p.Msg)
+				return
+			}
+		}
+	}
+	result = raw
+	return
+}
+
 type FileParam struct {
 	Metadata
 	MustExist  bool

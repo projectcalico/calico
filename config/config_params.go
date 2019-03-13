@@ -33,11 +33,19 @@ import (
 )
 
 var (
-	IfaceListRegexp  = regexp.MustCompile(`^[a-zA-Z0-9_-]{1,15}(,[a-zA-Z0-9_-]{1,15})*$`)
-	AuthorityRegexp  = regexp.MustCompile(`^[^:/]+:\d+$`)
-	HostnameRegexp   = regexp.MustCompile(`^[a-zA-Z0-9_.-]+$`)
-	StringRegexp     = regexp.MustCompile(`^.*$`)
-	IfaceParamRegexp = regexp.MustCompile(`^[a-zA-Z0-9:._+-]{1,15}$`)
+	// RegexpIfaceListRegexp differs from IfaceListRegexp in that it allows both
+	// normal interface values but also regex pattern values (which are marked
+	// by '/' at the start and end) in the comma delimited list
+	RegexpIfaceListRegexp = regexp.MustCompile(`^([a-zA-Z0-9_-]{1,15}|(\/[^,\s]+\/))(,([a-zA-Z0-9_-]{1,15}|(\/[^,\s]+\/)))*$`)
+	// RegexpIfaceElemRegexp matches an individual element in the overall list;
+	// assumes the value is marked by '/' at the start and end and cannot have commas
+	// or spaces
+	RegexpIfaceElemRegexp = regexp.MustCompile(`^\/[^,\s]+\/$`)
+	IfaceListRegexp       = regexp.MustCompile(`^[a-zA-Z0-9_-]{1,15}(,[a-zA-Z0-9_-]{1,15})*$`)
+	AuthorityRegexp       = regexp.MustCompile(`^[^:/]+:\d+$`)
+	HostnameRegexp        = regexp.MustCompile(`^[a-zA-Z0-9_.-]+$`)
+	StringRegexp          = regexp.MustCompile(`^.*$`)
+	IfaceParamRegexp      = regexp.MustCompile(`^[a-zA-Z0-9:._+-]{1,15}$`)
 )
 
 const (
@@ -143,7 +151,7 @@ type Config struct {
 	OpenstackRegion string `config:"region;;die-on-fail"`
 
 	InterfacePrefix  string `config:"iface-list;cali;non-zero,die-on-fail"`
-	InterfaceExclude string `config:"iface-list;kube-ipvs0"`
+	InterfaceExclude string `config:"iface-list-regexp;kube-ipvs0;die-on-fail"`
 
 	ChainInsertMode             string `config:"oneof(insert,append);insert;non-zero,die-on-fail"`
 	DefaultEndpointToHostAction string `config:"oneof(DROP,RETURN,ACCEPT);DROP;non-zero,die-on-fail"`
@@ -240,19 +248,29 @@ func (config *Config) UpdateFrom(rawData map[string]string, source Source) (chan
 	return
 }
 
-func (c *Config) InterfacePrefixes() []string {
-	return strings.Split(c.InterfacePrefix, ",")
+func (config *Config) InterfacePrefixes() []string {
+	return strings.Split(config.InterfacePrefix, ",")
 }
 
-func (c *Config) InterfaceExcludes() []*regexp.Regexp {
-	log.Debugf("Compiling regexp values for InterfaceExclude %s \n", c.InterfaceExclude)
+// InterfaceExcludes returns a list of Regexp objects, each representing either an
+// exact interface value match or a class of interface matches. This function will
+// panic if any individual value cannot be parsed / compiled into a Regexp.
+func (config *Config) InterfaceExcludes() []*regexp.Regexp {
+	log.Debugf("Compiling regexp values for InterfaceExclude %s \n", config.InterfaceExclude)
 
-	strValues := strings.Split(c.InterfaceExclude, ",")
+	strValues := strings.Split(config.InterfaceExclude, ",")
 	regexpValues := make([]*regexp.Regexp, len(strValues))
 
 	for _, strValue := range strValues {
-		// Will panic if any individual regexp string is invalid (not parsable)
-		regexpValues = append(regexpValues, regexp.MustCompile(strValue))
+		// All values in interface excludes list will be treated as regular
+		// expressions; any value not in regexp format will be converted into
+		// equivalent regexp that tests for exact match
+		if !RegexpIfaceElemRegexp.Match([]byte(strValue)) {
+			convertedValue := fmt.Sprintf("^%s$", strValue)
+			regexpValues = append(regexpValues, regexp.MustCompile(convertedValue))
+		} else {
+			regexpValues = append(regexpValues, regexp.MustCompile(strValue))
+		}
 	}
 	return regexpValues
 }
@@ -517,9 +535,15 @@ func loadParams() {
 		case "millis":
 			param = &MillisParam{}
 		case "iface-list":
-			// TODO: What should we allow here given that it's now a regexp?
 			param = &RegexpParam{Regexp: IfaceListRegexp,
 				Msg: "invalid Linux interface name"}
+		case "iface-list-regexp":
+			param = &RegexpPatternListParam{
+				ListRegexp: RegexpIfaceListRegexp,
+				ElemRegexp: RegexpIfaceElemRegexp,
+				Delimiter:  ",",
+				Msg:        "list contains invalid Linux interface name or regex pattern",
+			}
 		case "iface-param":
 			param = &RegexpParam{Regexp: IfaceParamRegexp,
 				Msg: "invalid Linux interface parameter"}
