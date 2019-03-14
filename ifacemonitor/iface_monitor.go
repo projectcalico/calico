@@ -142,7 +142,6 @@ func (m *InterfaceMonitor) isExcludedInterface(ifName string) bool {
 			return true
 		}
 	}
-
 	return false
 }
 

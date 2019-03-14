@@ -257,19 +257,18 @@ func (config *Config) InterfacePrefixes() []string {
 // panic if any individual value cannot be parsed / compiled into a Regexp.
 func (config *Config) InterfaceExcludes() []*regexp.Regexp {
 	log.Debugf("Compiling regexp values for InterfaceExclude %s \n", config.InterfaceExclude)
-
 	strValues := strings.Split(config.InterfaceExclude, ",")
 	regexpValues := make([]*regexp.Regexp, len(strValues))
 
-	for _, strValue := range strValues {
-		// All values in interface excludes list will be treated as regular
+	for i, strValue := range strValues {
+		// All values in interface exclude list will be treated as regular
 		// expressions; any value not in regexp format will be converted into
 		// equivalent regexp that tests for exact match
 		if !RegexpIfaceElemRegexp.Match([]byte(strValue)) {
 			convertedValue := fmt.Sprintf("^%s$", strValue)
-			regexpValues = append(regexpValues, regexp.MustCompile(convertedValue))
+			regexpValues[i] = regexp.MustCompile(convertedValue)
 		} else {
-			regexpValues = append(regexpValues, regexp.MustCompile(strValue))
+			regexpValues[i] = regexp.MustCompile(strValue)
 		}
 	}
 	return regexpValues
