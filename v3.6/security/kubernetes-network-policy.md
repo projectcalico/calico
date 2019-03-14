@@ -70,7 +70,7 @@ spec:
   ingress:
   - from:
     - podSelector: 
-      <b>color</b>: <b>red</b>
+        <b>color</b>: <b>red</b>
     to:
       ports:
       - port: <b>80</b>
