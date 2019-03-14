@@ -350,8 +350,14 @@ func (c *customK8sResourceClient) EnsureInitialized() error {
 
 func (c *customK8sResourceClient) listInterfaceToKey(l model.ListInterface) model.Key {
 	pl := l.(model.ResourceListOptions)
+	key := model.ResourceKey{Name: pl.Name, Kind: pl.Kind}
+
+	if c.namespaced && pl.Namespace != "" {
+		key.Namespace = pl.Namespace
+	}
+
 	if pl.Name != "" {
-		return model.ResourceKey{Name: pl.Name, Kind: pl.Kind}
+		return key
 	}
 	return nil
 }
