@@ -65,10 +65,12 @@ metadata:
   namespace: default
 spec:
   podSelector:
-    matchLabels: {“<b>color</b>”: “<b>blue</b>”}
+    matchLabels: 
+      <b>color</b>: <b>blue</b>
   ingress:
   - from:
-    - podSelector: {“<b>color</b>”: “<b>red</b>”}
+    - podSelector: 
+      <b>color</b>: <b>red</b>
     to:
       ports:
       - port: <b>80</b>
@@ -92,11 +94,14 @@ metadata:
   namespace: default
 spec:
   podSelector:
-    matchLabels: {“color”: “blue”}
+    matchLabels:
+      color: blue
   ingress:
   - from:
-    - podSelector: {“<b>color</b>”: “<b>red</b>”}
-      namespaceSelector: {“<b>shape</b>”: “<b>square</b>”}
+    - podSelector:
+      <b>color</b>: <b>red</b>
+      namespaceSelector: 
+        <b>shape</b>: <b>square</b>
     to:
       ports:
       - port: <b>80</b>
@@ -119,10 +124,12 @@ metadata:
   namespace: default
 spec:
   podSelector:
-    matchLabels: {“color”: “blue”}
+    matchLabels:
+      color: blue
   egress:
   - to:
-    - podSelector: {“<b>color</b>”: “<b>red</b>”}
+    - podSelector: 
+      <b>color</b>: <b>red</b>
       ports:
       - port: <b>80</b>
 </pre>     
@@ -142,7 +149,8 @@ metadata:
   namespace: default
 spec:
   podSelector:
-    matchLabels: {“color”: “red”}
+    matchLabels:
+      color: red
   egress:
   - to:
     - ipBlock:
