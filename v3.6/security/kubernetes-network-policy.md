@@ -8,7 +8,7 @@ Kubernetes network policy lets administrators and developers enforce network con
 
 ### Value
 
-Kubernetes network policy lets developers secure access to and from their applications using the same simple language they use to deploy them. Developers can focus on their applications without understanding low-level networking concepts. Enabling developers to easily secure their applications using network policies, supports a shift left DevOps environment. 
+Kubernetes network policy lets developers secure access to and from their applications using the same simple language they use to deploy them. Developers can focus on their applications without understanding low-level networking concepts. Enabling developers to easily secure their applications using network policies supports a shift left DevOps environment. 
 
 ### Features
 
@@ -16,45 +16,36 @@ The Kubernetes Network Policy API supports the following features:
 
 - Policies are namespace scoped
 - Policies are applied to pods using label selectors
-- Policy rules can specify what connections are allowed to/from pods, namespaces, or CIDRs
+- Policy rules can specify the connections that are allowed to/from pods, namespaces, or CIDRs
 - Policy rules can specify protocols (TCP, UDP, SCTP), named ports or port numbers
 
 ### Concepts
 
-The Kubernetes Network Policy API provides a standard way for users to define network policy for controlling network traffic. However, Kubernetes has no built in capability to enforce the network policy. Instead, enforcement of network policy is handled by network plugins such as Calico. 
+The Kubernetes Network Policy API provides a standard way for users to define network policy for controlling network connections. However, Kubernetes has no built-in capability to enforce the network policy. Instead, enforcement of network policy is handled by network plugins such as Calico. 
 
 #### Ingress and egress
 
-The bulk of securing network traffic typically revolves around defining egress and ingress rules. From the point of view of a Kubernetes pod, ingress is incoming connections to the pod and  egress is outgoing connections from the pod. In Kubernetes network policy you create ingress and egress “allow” rules independently (egress, ingress, or both). 
+The bulk of securing network connections typically revolves around defining egress and ingress rules. From the point of view of a Kubernetes pod, ingress is incoming connections to the pod, and egress is outgoing connections from the pod. In Kubernetes network policy you create ingress and egress “allow” rules independently (egress, ingress, or both). 
 
-#### Default deny/allow 
+#### Default deny/allow behavior
 
 **Default allow** means all connections are allowed by default, unless otherwise specified. 
 **Default deny** means all connections are denied by default, unless explicitly allowed. 
 
-### Prerequisites
-
-- A working Kubernetes cluster
-- A supported CNI (Calico is recommended)
-- Pods and namespaces are created
-- You know the connection rules you want to implement across pods
-
 ### How to
 
-Before you create your first network policy, you need to understand the default network policy behaviors. 
-If no Kubernetes network policies apply to a pod then all connections to/from the pod are allowed (default-allow). As a result, if you do not create any network policies then all pods are allowed to communicate freely with all other pods.
-If one or more Kubernetes network policies apply to a pod then only the connections specifically defined in that network policy are allowed (default-deny).
+Before you create your first network policy, you need to understand the default network policy behaviors. If no Kubernetes network policies apply to a pod, then all connections to/from the pod are allowed (default-allow). As a result, if you do not create any network policies, then all pods are allowed to communicate freely with all other pods. If one or more Kubernetes network policies apply to a pod, then only the connections specifically defined in that network policy are allowed (default-deny).
 
-You are now ready to start fine-tuning what traffic should be allowed. 
+You are now ready to start fine-tuning connections that should be allowed. 
 
 - [Create ingress policies](#create-ingress-policies)
-- [Allow ingress connections, pods in same namespace](#allow-ingress-connections-pods-in-same-namespace)
-- [Allow ingress connections, pods in different namespace](#allow-ingress-connections-pods-in-different-namespace)
+- [Allow ingress connections from pods in the same namespace](#allow-ingress-connections-from-pods-in-the-same-namespace)
+- [Allow ingress connections from pods in a different namespace](#allow-ingress-connections-from-pods-in-a-different-namespace)
 - [Create egress policies](#create-egress-policies)
-- [Allow ingress connections, pods in same namespace](#allow-egress-connections-pods-in-same-namespace)
-- [Allow ingress connections, pods with IP address or CIDR range](#allow-egress-connections-pods-with-ip-address-or-cidr-range)
+- [Allow ingress connections from pods in the same namespace](#allow-egress-connections-from-pods-in-the-same-namespace)
+- [Allow ingress connections to IP address or CIDR range](#allow-egress-connections-to-ip-address-or-cidr-range)
 - [Best practice: create deny-all default network policies](#best-practice-create-deny-all-default-network-policies)
-- [Create deny-all default ingress and egress policy, pods in same namespace](#create-deny-all-default-ingress-and-egress-policy-pods-in-same-namespace)
+- [Create deny-all default network policies](#create-deny-all-default-network-policies)
 
 #### Create ingress policies
 
@@ -84,14 +75,14 @@ spec:
 ```
 {: .no-select-button}
 
-##### Allow ingress connections, pods in a different namespace
+##### Allow ingress connections from pods in a different namespace
 
-To allow traffic from pods in a different namespace, use a namespace selector in the ingress policy rule. In the following policy, the namespace selector matches one or more Kubernetes namespaces and is combined with the pod selector that selects pods within those namespaces. 
+To allow connections from pods in a different namespace, use a namespace selector in the ingress policy rule. In the following policy, the namespace selector matches one or more Kubernetes namespaces and is combined with the pod selector that selects pods within those namespaces. 
 
 >**Note**: Namespace selectors can only be used in policy rules. The **spec.podSelector** applies only to pods in the same namespace as the policy.
 {: .alert .alert-info}
 
-In the following example, incoming traffic is allowed only if it comes from a pod with color=red, in a namespace with shape=square, on port 80.
+In the following example, incoming connections are allowed only if they come from a pod with **color=red**, in a namespace with **shape=square**, on port **80**.
 
 ```
 kind: NetworkPolicy
@@ -116,9 +107,9 @@ spec:
 
 Create egress network policies to allow outbound connections from pods. 
 
-##### Allow egress connections to pods in the same namespace
+##### Allow egress connections from pods in the same namespace
 
-The following policy allows pod outbound connections to other pods in the same namespace that match the pod selector. In the following example, outbound connections are allowed only if they are going to a pod with **color=red**, on port **80**.
+The following policy allows pod outbound connections to other pods in the same namespace that match the pod selector. In the following example, outbound connections are allowed only if they go to a pod with **color=red**, on port **80**.
 
 ```
 kind: NetworkPolicy
