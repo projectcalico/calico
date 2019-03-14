@@ -43,9 +43,9 @@ You are now ready to start fine-tuning connections that should be allowed.
 - [Allow ingress connections from pods in a different namespace](#allow-ingress-connections-from-pods-in-a-different-namespace)
 - [Create egress policies](#create-egress-policies)
 - [Allow ingress connections from pods in the same namespace](#allow-egress-connections-from-pods-in-the-same-namespace)
-- [Allow ingress connections to IP address or CIDR range](#allow-egress-connections-to-ip-address-or-cidr-range)
-- [Best practice: create deny-all default network policies](#best-practice-create-deny-all-default-network-policies)
-- [Create deny-all default network policy](#create-deny-all-default-network-policy)
+- [Allow ingress connections to IP addresses or CIDR range](#allow-egress-connections-to-ip-addresses-or-cidr-range)
+- [Best practice: create deny-all default network policy](#best-practice-create-deny-all-default-network-policy)
+- [Create deny-all default ingress and egress network policy](#create-deny-all-default-ingress-and-egress-network-policy)
 
 #### Create ingress policies
 
@@ -150,11 +150,11 @@ spec:
 ```        
 {: .no-select-button}
 
-#### Best practice: create deny-all default network policies
+#### Best practice: create deny-all default network policy
 
 To ensure that all pods in the namespace are secure, a best practice is to create a default network policy. This avoids accidentally exposing an app or version that doesn’t have policy defined. 
 
-##### Create deny-all default ingress and egress policy
+##### Create deny-all default ingress and egress network policy
 
 The following network policy implements a default **deny-all** ingress and egress policy, which prevents all connections to/from pods in the **policy-demo** namespace. Note that the policy applies to all pods in the policy-demo namespace, but does not explicitly allow any connections. All pods are selected, but because the default changes when pods are selected by a network policy, the result is: **deny all ingress and egress connections**. (Unless the connection is allowed by another network policy).
 
