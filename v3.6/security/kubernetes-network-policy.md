@@ -65,7 +65,7 @@ metadata:
   namespace: default
 spec:
   podSelector:
-    matchLabels: {“<b<color</b>”: “<b>blue</b>”}
+    matchLabels: {“<b>color</b>”: “<b>blue</b>”}
   ingress:
   - from:
     - podSelector: {“<b>color</b>”: “<b>red</b>”}
@@ -96,10 +96,10 @@ spec:
   ingress:
   - from:
     - podSelector: {“<b>color</b>”: “<b>red</b>”}
-      namespaceSelector: {“<b>shape</b>”: “<b>square/b>”}
+      namespaceSelector: {“<b>shape</b>”: “<b>square</b>”}
     to:
       ports:
-      - port: 80
+      - port: <b>80</b>
 </pre>  
 {: .no-select-button}
 
@@ -176,5 +176,3 @@ spec:
 ### Above and Beyond
 
 [Kubernetes Network Policy API documentation](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.13/#networkpolicy-v1-networking-k8s-io)
-
-
