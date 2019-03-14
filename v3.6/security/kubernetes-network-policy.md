@@ -99,7 +99,7 @@ spec:
   ingress:
   - from:
     - podSelector:
-      <b>color</b>: <b>red</b>
+        <b>color</b>: <b>red</b>
       namespaceSelector: 
         <b>shape</b>: <b>square</b>
     to:
