@@ -129,7 +129,7 @@ spec:
   egress:
   - to:
     - podSelector: 
-      <b>color</b>: <b>red</b>
+        <b>color</b>: <b>red</b>
       ports:
       - port: <b>80</b>
 </pre>     
