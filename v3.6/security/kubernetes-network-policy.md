@@ -43,7 +43,7 @@ You are now ready to start fine-tuning connections that should be allowed.
 - [Allow ingress connections from pods in a different namespace](#allow-ingress-connections-from-pods-in-a-different-namespace)
 - [Create egress policies](#create-egress-policies)
 - [Allow ingress connections from pods in the same namespace](#allow-egress-connections-from-pods-in-the-same-namespace)
-- [Allow egress connections to IP addresses or CIDR range](#allow-egress-connections-to-ip-addresses-or-cidr-range)
+- [Allow egress connections to IP addresses or CIDR range](#allow-egress-connections-pods-to-ip-addresses-or-cidr-range)
 - [Best practice: create deny-all default network policy](#best-practice-create-deny-all-default-network-policy)
 - [Create deny-all default ingress and egress network policy](#create-deny-all-default-ingress-and-egress-network-policy)
 
