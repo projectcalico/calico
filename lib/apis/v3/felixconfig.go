@@ -106,9 +106,10 @@ type FelixConfigurationSpec struct {
 	// InterfaceExclude is a comma-separated list of interfaces that Felix should exclude when monitoring for host
 	// endpoints.  The default value ensures that Felix ignores Kubernetes' IPVS dummy interface, which is used 
 	// internally by kube-proxy. If you want to exclude multiple interface names using a single value, the list 
-	// supports regular expressions, e.g. to exclude all interfaces that begin with `kube`, simply include an 
-	// entry `/^kube/`. [Default: kube-ipvs0]
-	InterfaceExclude string(regex) `json:"interfaceExclude,omitempty"`
+	// supports regular expressions. For regular expressions you must wrap the value with '/'. For example 
+	// having values '/^kube/,veth1' will exclude all interfaces that begin with 'kube' and also the interface 
+	// 'veth1'. [Default: kube-ipvs0]
+	InterfaceExclude string `json:"interfaceExclude,omitempty"`
 
 	// ChainInsertMode controls whether Felix hooks the kernel’s top-level iptables chains by inserting a rule
 	// at the top of the chain or by appending a rule at the bottom. insert is the safe default since it prevents
