@@ -48,7 +48,7 @@ def release():
     # Temporary workdown, use vX_Y instead of vX.Y
     # https://github.com/jekyll/jekyll/issues/5429 - Fixed in Jekyll 3.3
     shutil.copytree("./_data/master", "./_data/%s" % new_version.replace(".", "_"))
-    shutil.copytree("./_includes/master", "./_includes/%s" % new_version)
+    shutil.copytree("./_includes/master", "./_includes/%s" % new_version, symlinks=True)
 
 if __name__ == "__main__":
     arguments = docopt(__doc__)
