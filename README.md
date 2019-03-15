@@ -17,7 +17,7 @@ processed.  We compute policy based on a global store which is distributed to Di
 Application Layer Policy is described in the [Project Calico docs][docs].
 
  - [Enabling Application Layer Policy](https://docs.projectcalico.org/master/getting-started/kubernetes/installation/app-layer-policy)
- - [Application Layer Policy Tutorial](https://docs.projectcalico.org/master/getting-started/kubernetes/tutorials/app-layer-policy/)
+ - [Application Layer Policy Tutorial](https://docs.projectcalico.org/latest/security/app-layer-policy/)
  
  
  [calico]: https://projectcalico.org
