@@ -68,6 +68,7 @@ Description:
     * hostEndpoint
     * ipPool
     * networkPolicy
+    * networkSet
     * node
     * profile
     * workloadEndpoint
@@ -117,7 +118,7 @@ Description:
                              custom-columns=..., go-template=...,
                              go-template-file=...   [Default: ps]
 -n --namespace=<NS>          Namespace of the resource.
-                             Only applicable to NetworkPolicy and WorkloadEndpoint.
+                             Only applicable to NetworkPolicy, NetworkSet, and WorkloadEndpoint.
                              Uses the default namespace if not specified.
 -a --all-namespaces          If present, list the requested object(s) across
                              all namespaces.

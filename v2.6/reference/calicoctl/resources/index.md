@@ -48,6 +48,7 @@ The following resources are supported:
 - [hostEndpoint]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/hostendpoint)
 - [policy]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/policy)
 - [ipPool]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/ippool)
+- [node]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/node)
 - [profile]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/profile)
 - [workloadEndpoint]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/workloadendpoint)
 
