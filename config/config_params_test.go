@@ -15,8 +15,9 @@
 package config_test
 
 import (
-	. "github.com/projectcalico/felix/config"
 	"regexp"
+
+	. "github.com/projectcalico/felix/config"
 
 	"net"
 	"reflect"
@@ -30,7 +31,7 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
-	"github.com/projectcalico/libcalico-go/lib/apis/v3"
+	v3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/libcalico-go/lib/numorstring"
 )
 
