@@ -178,39 +178,31 @@ func (p *RegexpParam) Parse(raw string) (result interface{}, err error) {
 // string values that are (themselves) regular expressions.
 type RegexpPatternListParam struct {
 	Metadata
-	ListRegexp *regexp.Regexp
-	ElemRegexp *regexp.Regexp
-	Delimiter  string
-	Msg        string
+	RegexpElemRegexp    *regexp.Regexp
+	NonRegexpElemRegexp *regexp.Regexp
+	Delimiter           string
+	Msg                 string
 }
 
-// Parse validates whether the given raw string contains a list of valid regular
-// expressions.
-// Uses two levels of validation:
-// 	(1) Attempt to match raw against a regular expression (for custom validation)
-//  (2) Attempt to compile each list element in raw into a valid regular expression
-func (p *RegexpPatternListParam) Parse(raw string) (result interface{}, err error) {
-	// Ensure list in its entirety matches expected structure
-	if !p.ListRegexp.MatchString(raw) {
-		err = p.parseFailed(raw, p.Msg)
-		return
-	}
-
+// Parse validates whether the given raw string contains a list of valid values.
+// Validation is dictated by two regexp patterns: one for valid regular expression
+// values, another for non-regular expressions.
+func (p *RegexpPatternListParam) Parse(raw string) (interface{}, error) {
 	// Split into individual elements and validate each one
 	tokens := strings.Split(raw, p.Delimiter)
 	for _, t := range tokens {
-		if p.ElemRegexp.Match([]byte(t)) {
+		if p.RegexpElemRegexp.Match([]byte(t)) {
 			// Need to remove the start and end symbols that wrap the actual regexp
 			regexpValue := t[1 : len(t)-1]
 			_, compileErr := regexp.Compile(regexpValue)
 			if compileErr != nil {
-				err = p.parseFailed(raw, p.Msg)
-				return
+				return nil, p.parseFailed(raw, p.Msg)
 			}
+		} else if !p.NonRegexpElemRegexp.Match([]byte(t)) {
+			return nil, p.parseFailed(raw, p.Msg)
 		}
 	}
-	result = raw
-	return
+	return raw, nil
 }
 
 type FileParam struct {

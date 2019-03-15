@@ -16,6 +16,7 @@ package config_test
 
 import (
 	. "github.com/projectcalico/felix/config"
+	"regexp"
 
 	"net"
 	"reflect"
@@ -116,7 +117,8 @@ func fieldsByName(example interface{}) map[string]reflect.StructField {
 var _ = DescribeTable("Config parsing",
 	func(key, value string, expected interface{}, errorExpected ...bool) {
 		config := New()
-		config.UpdateFrom(map[string]string{key: value}, EnvironmentVariable)
+		config.UpdateFrom(map[string]string{key: value},
+			EnvironmentVariable)
 		configPtr := reflect.ValueOf(config)
 		configElem := configPtr.Elem()
 		fieldRef := configElem.FieldByName(key)
@@ -163,9 +165,9 @@ var _ = DescribeTable("Config parsing",
 	Entry("InterfaceExclude one value regexp", "InterfaceExclude", "/kube-ipvs/", "/kube-ipvs/"),
 	Entry("InterfaceExclude list regexp", "InterfaceExclude", "kube-ipvs0,dummy,/^veth*$/", "kube-ipvs0,dummy,/^veth*$/"),
 	Entry("InterfaceExclude no regexp", "InterfaceExclude", "/^kube.*/,/veth/", "/^kube.*/,/veth/"),
-	Entry("InterfaceExclude list regexp invalid", "InterfaceExclude", "kube,//", "kube-ipvs0", true),             // empty regexp value
+	Entry("InterfaceExclude list regexp empty", "InterfaceExclude", "kube,//", "kube-ipvs0", true),               // empty regexp value
 	Entry("InterfaceExclude list regexp invalid comma", "InterfaceExclude", "/kube,/,dummy", "kube-ipvs0", true), // bad comma use
-	Entry("InterfaceExclude list regexp invalid comma", "InterfaceExclude", `/^kube\K/`, "kube-ipvs0", true),     // Invalid regexp
+	Entry("InterfaceExclude list regexp invalid symbol", "InterfaceExclude", `/^kube\K/`, "kube-ipvs0", true),    // Invalid regexp
 
 	Entry("ChainInsertMode append", "ChainInsertMode", "append", "append"),
 	Entry("ChainInsertMode append", "ChainInsertMode", "Append", "append"),
@@ -462,4 +464,34 @@ var _ = DescribeTable("Config validation",
 	Entry("OpenstackRegion too long", map[string]string{
 		"OpenstackRegion": "my-region-has-a-very-long-and-extremely-interesting-name",
 	}, false),
+)
+
+var _ = DescribeTable("Config InterfaceExcludes",
+	func(excludeList string, expected []*regexp.Regexp) {
+		cfg := New()
+		cfg.InterfaceExclude = excludeList
+		regexps := cfg.InterfaceExcludes()
+		Expect(regexps).To(Equal(expected))
+	},
+
+	Entry("empty exclude list", "", []*regexp.Regexp{}),
+	Entry("non-regexp single value", "kube-ipvs0", []*regexp.Regexp{
+		regexp.MustCompile("^kube-ipvs0$"),
+	}),
+	Entry("non-regexp multiple values", "kube-ipvs0,veth1", []*regexp.Regexp{
+		regexp.MustCompile("^kube-ipvs0$"),
+		regexp.MustCompile("^veth1$"),
+	}),
+	Entry("regexp single value", "/^veth.*/", []*regexp.Regexp{
+		regexp.MustCompile("^veth.*"),
+	}),
+	Entry("regexp multiple values", "/veth/,/^kube.*/", []*regexp.Regexp{
+		regexp.MustCompile("veth"),
+		regexp.MustCompile("^kube.*"),
+	}),
+	Entry("both non-regexp and regexp values", "kube-ipvs0,/veth/,/^kube.*/", []*regexp.Regexp{
+		regexp.MustCompile("^kube-ipvs0$"),
+		regexp.MustCompile("veth"),
+		regexp.MustCompile("^kube.*"),
+	}),
 )
