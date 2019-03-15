@@ -103,10 +103,12 @@ type FelixConfigurationSpec struct {
 	// configure this appropriately. For example our Kubernetes and Docker integrations set the ‘cali’ value,
 	// and our OpenStack integration sets the ‘tap’ value. [Default: cali]
 	InterfacePrefix string `json:"interfacePrefix,omitempty"`
-	// InterfaceExclude is a list of interfaces that Felix should exclude when monitoring for host
-	// endpoints.  The default value ensures that Felix ignores Kubernetes' IPVS dummy interface,
-	// which is used internally by kube-proxy.  [Default: kube-ipvs0]
-	InterfaceExclude string `json:"interfaceExclude,omitempty"`
+	// InterfaceExclude is a comma-separated list of interfaces that Felix should exclude when monitoring for host
+	// endpoints.  The default value ensures that Felix ignores Kubernetes' IPVS dummy interface, which is used 
+	// internally by kube-proxy. If you want to exclude multiple interface names using a single value, the list 
+	// supports regular expressions, e.g. to exclude all interfaces that begin with `kube`, simply include an 
+	// entry `/^kube/`. [Default: kube-ipvs0]
+	InterfaceExclude string(regex) `json:"interfaceExclude,omitempty"`
 
 	// ChainInsertMode controls whether Felix hooks the kernel’s top-level iptables chains by inserting a rule
 	// at the top of the chain or by appending a rule at the bottom. insert is the safe default since it prevents
