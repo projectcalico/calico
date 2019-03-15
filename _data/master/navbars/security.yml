@@ -4,6 +4,8 @@ order: 3
 toc:
 - title: Security
   path: /security/
+- title: Kubernetes network policy
+  path: /security/kubernetes-network-policy
 - title: Simple policy tutorial
   path: /security/simple-policy
 - title: Stars policy tutorial
