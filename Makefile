@@ -313,15 +313,6 @@ bin/calico-felix-$(ARCH): $(SRC_FILES) vendor/.up-to-date
 		-e "not a dynamic executable" || \
 		( echo "Error: $@ was not statically linked"; false ) )'
 
-# Cross-compile Felix for Windows
-bin/calico-felix.exe: $(SRC_FILES) vendor/.up-to-date
-	@echo Building felix for Windows...
-	mkdir -p bin
-	$(DOCKER_RUN) $(LOCAL_BUILD_MOUNTS) $(CALICO_BUILD) \
-           sh -c 'GOOS=windows go build -v -o $@ -v $(LDFLAGS) "$(PACKAGE_NAME)/cmd/calico-felix" && \
-		( ldd $@ 2>&1 | grep -q "Not a valid dynamic program" || \
-		( echo "Error: $@ was not statically linked"; false ) )'
-
 # Generate the protobuf bindings for go. The proto/felixbackend.pb.go file is included in SRC_FILES
 protobuf proto/felixbackend.pb.go: proto/felixbackend.proto
 	docker run --rm --user $(LOCAL_USER_ID):$(LOCAL_GROUP_ID) \
@@ -690,7 +681,7 @@ bin/test-connection: $(SRC_FILES) vendor/.up-to-date
 .PHONY: ci cd
 
 ## run CI cycle - build, test, etc.
-ci: image-all bin/calico-felix.exe ut static-checks
+ci: image-all ut static-checks
 ifeq (,$(filter fv, $(EXCEPT)))
 	@$(MAKE) fv
 endif
