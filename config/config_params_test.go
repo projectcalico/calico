@@ -166,9 +166,9 @@ var _ = DescribeTable("Config parsing",
 	Entry("InterfaceExclude one value regexp", "InterfaceExclude", "/kube-ipvs/", "/kube-ipvs/"),
 	Entry("InterfaceExclude list regexp", "InterfaceExclude", "kube-ipvs0,dummy,/^veth*$/", "kube-ipvs0,dummy,/^veth*$/"),
 	Entry("InterfaceExclude no regexp", "InterfaceExclude", "/^kube.*/,/veth/", "/^kube.*/,/veth/"),
-	Entry("InterfaceExclude list regexp empty", "InterfaceExclude", "kube,//", "kube-ipvs0", true),               // empty regexp value
-	Entry("InterfaceExclude list regexp invalid comma", "InterfaceExclude", "/kube,/,dummy", "kube-ipvs0", true), // bad comma use
-	Entry("InterfaceExclude list regexp invalid symbol", "InterfaceExclude", `/^kube\K/`, "kube-ipvs0", true),    // Invalid regexp
+	Entry("InterfaceExclude list empty regexp", "InterfaceExclude", "kube,//", "kube-ipvs0"),
+	Entry("InterfaceExclude list bad comma use", "InterfaceExclude", "/kube,/,dummy", "kube-ipvs0"),
+	Entry("InterfaceExclude list invalid regexp symbol", "InterfaceExclude", `/^kube\K/`, "kube-ipvs0"),
 
 	Entry("ChainInsertMode append", "ChainInsertMode", "append", "append"),
 	Entry("ChainInsertMode append", "ChainInsertMode", "Append", "append"),

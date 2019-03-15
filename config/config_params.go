@@ -150,7 +150,7 @@ type Config struct {
 	OpenstackRegion string `config:"region;;die-on-fail"`
 
 	InterfacePrefix  string `config:"iface-list;cali;non-zero,die-on-fail"`
-	InterfaceExclude string `config:"iface-list-regexp;kube-ipvs0;die-on-fail"`
+	InterfaceExclude string `config:"iface-list-regexp;kube-ipvs0"`
 
 	ChainInsertMode             string `config:"oneof(insert,append);insert;non-zero,die-on-fail"`
 	DefaultEndpointToHostAction string `config:"oneof(DROP,RETURN,ACCEPT);DROP;non-zero,die-on-fail"`
@@ -259,6 +259,19 @@ func (config *Config) InterfaceExcludes() []*regexp.Regexp {
 	strValues := strings.Split(config.InterfaceExclude, ",")
 	regexpValues := []*regexp.Regexp{}
 
+	// Helper function to compile the given string value into regexp format, if invalid
+	// log error instead
+	compileAndAdd := func(s string) {
+		r, err := regexp.Compile(s)
+		if err != nil {
+			log.Errorf(
+				"Failed to parse element in list for %v: %v from source %v. %v",
+				"InterfaceExclude", s, config.InterfaceExclude, err)
+		} else {
+			regexpValues = append(regexpValues, r)
+		}
+	}
+
 	for _, strValue := range strValues {
 		// Ignore empty values
 		if len(strValue) == 0 {
@@ -268,10 +281,10 @@ func (config *Config) InterfaceExcludes() []*regexp.Regexp {
 		// that tests for exact match
 		if !RegexpIfaceElemRegexp.Match([]byte(strValue)) {
 			convertedValue := fmt.Sprintf("^%s$", regexp.QuoteMeta(strValue))
-			regexpValues = append(regexpValues, regexp.MustCompile(convertedValue))
+			compileAndAdd(convertedValue)
 		} else {
 			parsedValue := strValue[1 : len(strValue)-1]
-			regexpValues = append(regexpValues, regexp.MustCompile(parsedValue))
+			compileAndAdd(parsedValue)
 		}
 	}
 	return regexpValues
