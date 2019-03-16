@@ -1,5 +1,5 @@
-hash: 94de911d6f4f404ac3610871ecb08a74c7b4b93f1b80b1f2fa4ddebf3120051e
-updated: 2019-03-15T07:38:21.499930701Z
+hash: f8ee0fd7ae112bcd9c35d4cc4d400e04427fa68e8c84f3b1ffc5ebf4ce315e69
+updated: 2019-03-16T07:56:46.648133556Z
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -134,21 +134,6 @@ imports:
   version: c12348ce28de40eed0136aa2b644d0ee0650e56c
   subpackages:
   - pbutil
-- name: github.com/Microsoft/go-winio
-  version: a6d595ae73cf27a1b8fc32930668708f45ce1c85
-- name: github.com/Microsoft/hcsshim
-  version: 4a468a6f7ae547974bc32911395c51fb1862b7df
-  subpackages:
-  - internal/guid
-  - internal/hcs
-  - internal/hcserror
-  - internal/hns
-  - internal/interop
-  - internal/longpath
-  - internal/mergemaps
-  - internal/safefile
-  - internal/schema1
-  - internal/wclayer
 - name: github.com/mipearson/rfw
   version: 6f0a6f3266ba1058df9ef0c94cda1cecd2e62852
 - name: github.com/modern-go/concurrent
@@ -195,7 +180,7 @@ imports:
 - name: github.com/peterbourgon/diskv
   version: 5f041e8faa004a95c88a202771f4cc3e991971e6
 - name: github.com/projectcalico/felix
-  version: 8d60011429951cc509f7bb22aa885abc60a28d66
+  version: da26fb1395f4f79ffff37b492d701a0f72c6fd63
   subpackages:
   - buildinfo
   - calc
@@ -205,9 +190,6 @@ imports:
   - dataplane
   - dataplane/external
   - dataplane/linux
-  - dataplane/windows
-  - dataplane/windows/ipsets
-  - dataplane/windows/policysets
   - dispatcher
   - hashutils
   - ifacemonitor
