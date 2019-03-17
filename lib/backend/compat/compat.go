@@ -218,6 +218,10 @@ func (c *ModelAdaptor) Delete(ctx context.Context, k model.Key, rev string) (*mo
 	}
 }
 
+func (c *ModelAdaptor) DeleteKVP(ctx context.Context, kvp *model.KVPair) (*model.KVPair, error) {
+	return nil, errors.ErrorOperationNotSupported{Operation: "DeleteKVP", Identifier: kvp.Key}
+}
+
 // Get an entry from the datastore.  This errors if the entry does not exist.
 func (c *ModelAdaptor) Get(ctx context.Context, k model.Key, rev string) (*model.KVPair, error) {
 	switch kt := k.(type) {
