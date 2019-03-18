@@ -161,14 +161,34 @@ var _ = DescribeTable("Config parsing",
 	Entry("InterfacePrefix", "InterfacePrefix", "tap", "tap"),
 	Entry("InterfacePrefix list", "InterfacePrefix", "tap,cali", "tap,cali"),
 
-	Entry("InterfaceExclude one value no regexp", "InterfaceExclude", "kube-ipvs0", "kube-ipvs0"),
-	Entry("InterfaceExclude list no regexp", "InterfaceExclude", "kube-ipvs0,dummy", "kube-ipvs0,dummy"),
-	Entry("InterfaceExclude one value regexp", "InterfaceExclude", "/kube-ipvs/", "/kube-ipvs/"),
-	Entry("InterfaceExclude list regexp", "InterfaceExclude", "kube-ipvs0,dummy,/^veth*$/", "kube-ipvs0,dummy,/^veth*$/"),
-	Entry("InterfaceExclude no regexp", "InterfaceExclude", "/^kube.*/,/veth/", "/^kube.*/,/veth/"),
-	Entry("InterfaceExclude list empty regexp", "InterfaceExclude", "kube,//", "kube-ipvs0"),
-	Entry("InterfaceExclude list bad comma use", "InterfaceExclude", "/kube,/,dummy", "kube-ipvs0"),
-	Entry("InterfaceExclude list invalid regexp symbol", "InterfaceExclude", `/^kube\K/`, "kube-ipvs0"),
+	Entry("InterfaceExclude one value no regexp", "InterfaceExclude", "kube-ipvs0", []*regexp.Regexp{
+		regexp.MustCompile("^kube-ipvs0$"),
+	}),
+	Entry("InterfaceExclude list no regexp", "InterfaceExclude", "kube-ipvs0,dummy", []*regexp.Regexp{
+		regexp.MustCompile("^kube-ipvs0$"),
+		regexp.MustCompile("^dummy$"),
+	}),
+	Entry("InterfaceExclude one value regexp", "InterfaceExclude", "/kube-ipvs/", []*regexp.Regexp{
+		regexp.MustCompile("kube-ipvs"),
+	}),
+	Entry("InterfaceExclude list regexp", "InterfaceExclude", "kube-ipvs0,dummy,/^veth.*$/", []*regexp.Regexp{
+		regexp.MustCompile("^kube-ipvs0$"),
+		regexp.MustCompile("^dummy$"),
+		regexp.MustCompile("^veth.*$"),
+	}),
+	Entry("InterfaceExclude no regexp", "InterfaceExclude", "/^kube.*/,/veth/", []*regexp.Regexp{
+		regexp.MustCompile("^kube.*"),
+		regexp.MustCompile("veth"),
+	}),
+	Entry("InterfaceExclude list empty regexp", "InterfaceExclude", "kube,//", []*regexp.Regexp{
+		regexp.MustCompile("^kube-ipvs0$"),
+	}),
+	Entry("InterfaceExclude list bad comma use", "InterfaceExclude", "/kube,/,dummy", []*regexp.Regexp{
+		regexp.MustCompile("^kube-ipvs0$"),
+	}),
+	Entry("InterfaceExclude list invalid regexp symbol", "InterfaceExclude", `/^kube\K/`, []*regexp.Regexp{
+		regexp.MustCompile("^kube-ipvs0$"),
+	}),
 
 	Entry("ChainInsertMode append", "ChainInsertMode", "append", "append"),
 	Entry("ChainInsertMode append", "ChainInsertMode", "Append", "append"),
@@ -467,15 +487,17 @@ var _ = DescribeTable("Config validation",
 	}, false),
 )
 
-var _ = DescribeTable("Config InterfaceExcludes",
+var _ = DescribeTable("Config InterfaceExclude",
 	func(excludeList string, expected []*regexp.Regexp) {
 		cfg := New()
-		cfg.InterfaceExclude = excludeList
-		regexps := cfg.InterfaceExcludes()
+		cfg.UpdateFrom(map[string]string{"InterfaceExclude": excludeList}, EnvironmentVariable)
+		regexps := cfg.InterfaceExclude
 		Expect(regexps).To(Equal(expected))
 	},
 
-	Entry("empty exclude list", "", []*regexp.Regexp{}),
+	Entry("empty exclude list", "", []*regexp.Regexp{
+		regexp.MustCompile("^kube-ipvs0$"),
+	}),
 	Entry("non-regexp single value", "kube-ipvs0", []*regexp.Regexp{
 		regexp.MustCompile("^kube-ipvs0$"),
 	}),
@@ -494,5 +516,11 @@ var _ = DescribeTable("Config InterfaceExcludes",
 		regexp.MustCompile("^kube-ipvs0$"),
 		regexp.MustCompile("veth"),
 		regexp.MustCompile("^kube.*"),
+	}),
+	Entry("invalid non-regexp value", `not.a.valid.interf@e!!`, []*regexp.Regexp{
+		regexp.MustCompile("^kube-ipvs0$"),
+	}),
+	Entry("invalid regexp value", `/^kube\K/`, []*regexp.Regexp{
+		regexp.MustCompile("^kube-ipvs0$"),
 	}),
 )

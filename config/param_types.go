@@ -188,21 +188,31 @@ type RegexpPatternListParam struct {
 // Validation is dictated by two regexp patterns: one for valid regular expression
 // values, another for non-regular expressions.
 func (p *RegexpPatternListParam) Parse(raw string) (interface{}, error) {
-	// Split into individual elements and validate each one
+	var result []*regexp.Regexp
+	// Split into individual elements, then validate each one and compile to regexp
 	tokens := strings.Split(raw, p.Delimiter)
 	for _, t := range tokens {
 		if p.RegexpElemRegexp.Match([]byte(t)) {
 			// Need to remove the start and end symbols that wrap the actual regexp
+			// Note: There's a coupling here with the assumed pattern in RegexpElemRegexp
+			// i.e. that each value is wrapped by a single char symbol on either side
 			regexpValue := t[1 : len(t)-1]
-			_, compileErr := regexp.Compile(regexpValue)
+			compiledRegexp, compileErr := regexp.Compile(regexpValue)
 			if compileErr != nil {
 				return nil, p.parseFailed(raw, p.Msg)
 			}
-		} else if !p.NonRegexpElemRegexp.Match([]byte(t)) {
+			result = append(result, compiledRegexp)
+		} else if p.NonRegexpElemRegexp.Match([]byte(t)) {
+			compiledRegexp, compileErr := regexp.Compile("^" + regexp.QuoteMeta(t) + "$")
+			if compileErr != nil {
+				return nil, p.parseFailed(raw, p.Msg)
+			}
+			result = append(result, compiledRegexp)
+		} else {
 			return nil, p.parseFailed(raw, p.Msg)
 		}
 	}
-	return raw, nil
+	return result, nil
 }
 
 type FileParam struct {

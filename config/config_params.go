@@ -149,8 +149,8 @@ type Config struct {
 
 	OpenstackRegion string `config:"region;;die-on-fail"`
 
-	InterfacePrefix  string `config:"iface-list;cali;non-zero,die-on-fail"`
-	InterfaceExclude string `config:"iface-list-regexp;kube-ipvs0"`
+	InterfacePrefix  string           `config:"iface-list;cali;non-zero,die-on-fail"`
+	InterfaceExclude []*regexp.Regexp `config:"iface-list-regexp;kube-ipvs0"`
 
 	ChainInsertMode             string `config:"oneof(insert,append);insert;non-zero,die-on-fail"`
 	DefaultEndpointToHostAction string `config:"oneof(DROP,RETURN,ACCEPT);DROP;non-zero,die-on-fail"`
@@ -249,45 +249,6 @@ func (config *Config) UpdateFrom(rawData map[string]string, source Source) (chan
 
 func (c *Config) InterfacePrefixes() []string {
 	return strings.Split(c.InterfacePrefix, ",")
-}
-
-// InterfaceExcludes returns a list of Regexp objects, each representing either an
-// exact interface value match or a class of interface matches. This function will
-// panic if any individual value cannot be parsed / compiled into a Regexp.
-func (config *Config) InterfaceExcludes() []*regexp.Regexp {
-	log.Debugf("Compiling regexp values for InterfaceExclude %s \n", config.InterfaceExclude)
-	strValues := strings.Split(config.InterfaceExclude, ",")
-	regexpValues := []*regexp.Regexp{}
-
-	// Helper function to compile the given string value into regexp format, if invalid
-	// log error instead
-	compileAndAdd := func(s string) {
-		r, err := regexp.Compile(s)
-		if err != nil {
-			log.Errorf(
-				"Failed to parse element in list for %v: %v from source %v. %v",
-				"InterfaceExclude", s, config.InterfaceExclude, err)
-		} else {
-			regexpValues = append(regexpValues, r)
-		}
-	}
-
-	for _, strValue := range strValues {
-		// Ignore empty values
-		if len(strValue) == 0 {
-			continue
-		}
-		// Any value not in regexp format will be converted into equivalent regexp
-		// that tests for exact match
-		if !RegexpIfaceElemRegexp.Match([]byte(strValue)) {
-			convertedValue := fmt.Sprintf("^%s$", regexp.QuoteMeta(strValue))
-			compileAndAdd(convertedValue)
-		} else {
-			parsedValue := strValue[1 : len(strValue)-1]
-			compileAndAdd(parsedValue)
-		}
-	}
-	return regexpValues
 }
 
 func (config *Config) OpenstackActive() bool {
