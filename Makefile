@@ -280,6 +280,15 @@ bin/helm:
 	tar -zxvf $(TMP)/$(HELM_RELEASE) -C $(TMP)
 	mv $(TMP)/linux-amd64/helm bin/helm
 
+.PHONY: values.yml
+values.yml:
+ifndef RELEASE_STREAM
+	$(error RELEASE_STREAM is undefined - run using make values.yaml RELEASE_STREAM=vX.Y)
+endif
+	docker run --rm \
+	  -v $$PWD:/calico \
+	  -w /calico \
+	  ruby:2.5 ruby ./hack/gen_values_yml.rb $(RELEASE_STREAM) >> _includes/$(RELEASE_STREAM)/charts/calico/values.yaml
 
 .PHONY: help
 ## Display this help text
