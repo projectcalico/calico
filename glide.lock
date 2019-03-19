@@ -114,7 +114,7 @@ imports:
 - name: github.com/kardianos/osext
   version: 2bc1f35cddc0cc527b4bc3dce8578fc2a6c11384
 - name: github.com/kelseyhightower/confd
-  version: 990438064b40a2ccaa9e98c205ac5d85d47f93af
+  version: 238cdb043571b17251b0662582c22f462bc7451c
   repo: https://github.com/projectcalico/confd.git
   subpackages:
   - pkg/backends
