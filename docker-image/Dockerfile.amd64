@@ -1,8 +1,13 @@
-FROM alpine:3.8 as base
+FROM debian:9.8-slim as base
 MAINTAINER Shaun Crampton <shaun@tigera.io>
 
 # Since our binary isn't designed to run as PID 1, run it via the tini init daemon.
-RUN apk add --update tini
+ENV TINI_VERSION v0.18.0
+ADD https://github.com/krallin/tini/releases/download/${TINI_VERSION}/tini /sbin/tini
+RUN chmod +x /sbin/tini
+
+# Ensure musl C library is installed 
+RUN apt-get update && apt-get install musl && ln -s /lib/ld-musl-x86_64.so.1 /lib/libc.musl-x86_64.so.1
 
 FROM scratch
 COPY --from=base /tmp /tmp

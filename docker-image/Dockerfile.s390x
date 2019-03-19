@@ -1,26 +1,36 @@
 ARG QEMU_IMAGE=calico/go-build:latest
 FROM ${QEMU_IMAGE} as qemu
 
-FROM s390x/alpine:3.8
+FROM s390x/debian:9.8-slim as base
 MAINTAINER LoZ Open Source Ecosystem (https://www.ibm.com/developerworks/community/groups/community/lozopensource)
 
 # Enable non-native builds of this image on an amd64 hosts.
-# This must be the first RUN command in this file!
-# we only need this for the intermediate "base" image, so we can run all the apk and other commands
+# This must before any RUN command in this image!
+# we only need this for the intermediate "base" image, so we can run all the apt-get and other commands
+# and this is only because of using older kernels
 # when running on a kernel >= 4.8, this will become less relevant
 COPY --from=qemu /usr/bin/qemu-s390x-static /usr/bin/
 
 # Since our binary isn't designed to run as PID 1, run it via the tini init daemon.
-RUN apk add --update tini
-ENTRYPOINT ["/sbin/tini", "--"]
+ENV TINI_VERSION v0.18.0
+ADD https://github.com/krallin/tini/releases/download/${TINI_VERSION}/tini /sbin/tini
+RUN chmod +x /sbin/tini
 
+# Ensure musl C library is installed 
+RUN apt-get update && apt-get install musl && ln -s /lib/ld-musl-s390x.so.1 /lib/libc.musl-s390x.so.1
+
+FROM scratch
+COPY --from=base /sbin/tini /sbin/tini
+COPY --from=base /lib/ld-musl-s390x.so.1 /lib/libc.musl-s390x.so.1  /lib/
+
+# Put our binary in /code rather than directly in /usr/bin.  This allows the downstream builds
+# to more easily extract the build artefacts from the container.
+ADD bin/calico-typha-s390x /code/calico-typha
 ADD typha.cfg /etc/calico/typha.cfg
 
-# Put out binary in /code rather than directly in /usr/bin.  This allows the downstream builds
-# to more easily extract the build artefacts from the container.
-RUN mkdir /code
-ADD bin/calico-typha-s390x /code/calico-typha
 WORKDIR /code
+ENV PATH "$PATH:/code"
 
 # Run Typha by default
+ENTRYPOINT ["/sbin/tini", "--"]
 CMD ["calico-typha"]
