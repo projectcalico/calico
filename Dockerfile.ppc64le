@@ -1,6 +1,6 @@
-FROM ppc64le/alpine:3.8
+FROM ppc64le/debian:9.8-slim
 
-LABEL maintainer "Tom Denham <tom@tigera.io>"
+LABEL maintainer "Casey Davenport <casey@tigera.io>"
 
 ADD bin/ppc64le/ /opt/cni/bin/
 ADD k8s-install/scripts/install-cni.sh /install-cni.sh
