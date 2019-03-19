@@ -13,15 +13,12 @@ COPY --from=qemu /usr/bin/qemu-aarch64-static /usr/bin/
 
 # Since our binary isn't designed to run as PID 1, run it via the tini init daemon.
 ENV TINI_VERSION v0.18.0
-ADD https://github.com/krallin/tini/releases/download/${TINI_VERSION}/tini /sbin/tini
+ADD https://github.com/krallin/tini/releases/download/${TINI_VERSION}/tini-static-arm64 /sbin/tini
 RUN chmod +x /sbin/tini
 
-# Ensure musl C library is installed 
-RUN apt-get update && apt-get install musl && ln -s /lib/ld-musl-aarch64.so.1 /lib/libc.musl-aarch64.so.1
-
 FROM scratch
+COPY --from=base /tmp /tmp
 COPY --from=base /sbin/tini /sbin/tini
-COPY --from=base /lib/ld-musl-aarch64.so.1 /lib/libc.musl-aarch64.so.1  /lib/
 
 # Put our binary in /code rather than directly in /usr/bin.  This allows the downstream builds
 # to more easily extract the build artefacts from the container.
