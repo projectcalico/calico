@@ -5,3 +5,4 @@ vendor
 .go-pkg-cache
 tests/logs/
 /report/*
+etc/calico/confd/config
