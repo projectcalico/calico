@@ -15,6 +15,8 @@
 package ifacemonitor_test
 
 import (
+	"fmt"
+	"regexp"
 	"strings"
 	"sync"
 	"syscall"
@@ -347,7 +349,12 @@ var _ = Describe("ifacemonitor", func() {
 		}
 		resyncC = make(chan time.Time)
 		config := ifacemonitor.Config{
-			InterfaceExcludes: []string{"kube-ipvs0"},
+			// Test the regexp ability of interface excludes
+			InterfaceExcludes: []*regexp.Regexp{
+				regexp.MustCompile("^kube-ipvs.*"),
+				regexp.MustCompile("^veth1$"),
+				regexp.MustCompile("dummy"),
+			},
 		}
 		im = ifacemonitor.NewWithStubs(config, nl, resyncC)
 
@@ -373,36 +380,50 @@ var _ = Describe("ifacemonitor", func() {
 	})
 
 	It("should skip netlink address updates for ipvs", func() {
-		// Should not receives any address callbacks.
-		nl.addLink("kube-ipvs0")
-		resyncC <- time.Time{}
-		dp.notExpectAddrStateCb()
-		dp.notExpectLinkStateCb()
-		nl.addAddr("kube-ipvs0", "10.100.0.1/32")
-		dp.notExpectAddrStateCb()
+		var netlinkUpdates = func(iface string) {
+			// Should not receive any address callbacks.
+			nl.addLink(iface)
+			resyncC <- time.Time{}
+			dp.notExpectAddrStateCb()
+			dp.notExpectLinkStateCb()
+			nl.addAddr(iface, "10.100.0.1/32")
+			dp.notExpectAddrStateCb()
 
-		nl.changeLinkState("kube-ipvs0", "up")
-		dp.expectLinkStateCb("kube-ipvs0", ifacemonitor.StateUp)
-		nl.changeLinkState("kube-ipvs0", "down")
-		dp.expectLinkStateCb("kube-ipvs0", ifacemonitor.StateDown)
+			nl.changeLinkState(iface, "up")
+			dp.expectLinkStateCb(iface, ifacemonitor.StateUp)
+			nl.changeLinkState(iface, "down")
+			dp.expectLinkStateCb(iface, ifacemonitor.StateDown)
 
-		// Should notify down from up on deletion.
-		nl.changeLinkState("kube-ipvs0", "up")
-		dp.expectLinkStateCb("kube-ipvs0", ifacemonitor.StateUp)
-		nl.delLink("kube-ipvs0")
-		dp.notExpectAddrStateCb()
-		dp.expectLinkStateCb("kube-ipvs0", ifacemonitor.StateDown)
+			// Should notify down from up on deletion.
+			nl.changeLinkState(iface, "up")
+			dp.expectLinkStateCb(iface, ifacemonitor.StateUp)
+			nl.delLink(iface)
+			dp.notExpectAddrStateCb()
+			dp.expectLinkStateCb(iface, ifacemonitor.StateDown)
 
-		// Check it can be added again.
-		nl.addLink("kube-ipvs0")
-		resyncC <- time.Time{}
-		dp.notExpectAddrStateCb()
-		dp.notExpectLinkStateCb()
+			// Check it can be added again.
+			nl.addLink(iface)
+			resyncC <- time.Time{}
+			dp.notExpectAddrStateCb()
+			dp.notExpectLinkStateCb()
 
-		// Clean it.
-		nl.delLink("kube-ipvs0")
-		dp.notExpectAddrStateCb()
-		dp.notExpectLinkStateCb()
+			// Clean it.
+			nl.delLink(iface)
+			dp.notExpectAddrStateCb()
+			dp.notExpectLinkStateCb()
+		}
+
+		// Repeat for 3 different interfaces (to test regexp of interface excludes)
+		for index := 0; index < 3; index++ {
+			interfaceName := fmt.Sprintf("kube-ipvs%d", index)
+			netlinkUpdates(interfaceName)
+		}
+
+		// Repeat test for second interface exclude entry
+		netlinkUpdates("veth1")
+
+		// Repeat test for third interface exclude entry
+		netlinkUpdates("0dummy1")
 	})
 
 	It("should handle mainline netlink updates", func() {

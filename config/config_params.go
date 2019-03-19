@@ -33,11 +33,18 @@ import (
 )
 
 var (
-	IfaceListRegexp  = regexp.MustCompile(`^[a-zA-Z0-9_-]{1,15}(,[a-zA-Z0-9_-]{1,15})*$`)
-	AuthorityRegexp  = regexp.MustCompile(`^[^:/]+:\d+$`)
-	HostnameRegexp   = regexp.MustCompile(`^[a-zA-Z0-9_.-]+$`)
-	StringRegexp     = regexp.MustCompile(`^.*$`)
-	IfaceParamRegexp = regexp.MustCompile(`^[a-zA-Z0-9:._+-]{1,15}$`)
+	// RegexpIfaceElemRegexp matches an individual element in the overall interface list;
+	// assumes the value represents a regular expression and is marked by '/' at the start
+	// and end and cannot have spaces
+	RegexpIfaceElemRegexp = regexp.MustCompile(`^\/[^\s]+\/$`)
+	// NonRegexpIfaceElemRegexp matches an individual element in the overall interface list;
+	// assumes the value is between 1-15 chars long and only be alphanumeric or - or _
+	NonRegexpIfaceElemRegexp = regexp.MustCompile(`^[a-zA-Z0-9_-]{1,15}$`)
+	IfaceListRegexp          = regexp.MustCompile(`^[a-zA-Z0-9_-]{1,15}(,[a-zA-Z0-9_-]{1,15})*$`)
+	AuthorityRegexp          = regexp.MustCompile(`^[^:/]+:\d+$`)
+	HostnameRegexp           = regexp.MustCompile(`^[a-zA-Z0-9_.-]+$`)
+	StringRegexp             = regexp.MustCompile(`^.*$`)
+	IfaceParamRegexp         = regexp.MustCompile(`^[a-zA-Z0-9:._+-]{1,15}$`)
 )
 
 const (
@@ -142,8 +149,8 @@ type Config struct {
 
 	OpenstackRegion string `config:"region;;die-on-fail"`
 
-	InterfacePrefix  string `config:"iface-list;cali;non-zero,die-on-fail"`
-	InterfaceExclude string `config:"iface-list;kube-ipvs0"`
+	InterfacePrefix  string           `config:"iface-list;cali;non-zero,die-on-fail"`
+	InterfaceExclude []*regexp.Regexp `config:"iface-list-regexp;kube-ipvs0"`
 
 	ChainInsertMode             string `config:"oneof(insert,append);insert;non-zero,die-on-fail"`
 	DefaultEndpointToHostAction string `config:"oneof(DROP,RETURN,ACCEPT);DROP;non-zero,die-on-fail"`
@@ -242,10 +249,6 @@ func (config *Config) UpdateFrom(rawData map[string]string, source Source) (chan
 
 func (c *Config) InterfacePrefixes() []string {
 	return strings.Split(c.InterfacePrefix, ",")
-}
-
-func (c *Config) InterfaceExcludes() []string {
-	return strings.Split(c.InterfaceExclude, ",")
 }
 
 func (config *Config) OpenstackActive() bool {
@@ -510,6 +513,13 @@ func loadParams() {
 		case "iface-list":
 			param = &RegexpParam{Regexp: IfaceListRegexp,
 				Msg: "invalid Linux interface name"}
+		case "iface-list-regexp":
+			param = &RegexpPatternListParam{
+				NonRegexpElemRegexp: NonRegexpIfaceElemRegexp,
+				RegexpElemRegexp:    RegexpIfaceElemRegexp,
+				Delimiter:           ",",
+				Msg:                 "list contains invalid Linux interface name or regex pattern",
+			}
 		case "iface-param":
 			param = &RegexpParam{Regexp: IfaceParamRegexp,
 				Msg: "invalid Linux interface parameter"}

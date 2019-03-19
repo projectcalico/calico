@@ -1,6 +1,6 @@
 // +build !windows
 
-// Copyright (c) 2017-2018 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2019 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -86,7 +86,7 @@ func StartDataplaneDriver(configParams *config.Config,
 
 		dpConfig := intdataplane.Config{
 			IfaceMonitorConfig: ifacemonitor.Config{
-				InterfaceExcludes: configParams.InterfaceExcludes(),
+				InterfaceExcludes: configParams.InterfaceExclude,
 			},
 			RulesConfig: rules.Config{
 				WorkloadIfacePrefixes: configParams.InterfacePrefixes(),

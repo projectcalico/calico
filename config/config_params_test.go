@@ -15,6 +15,8 @@
 package config_test
 
 import (
+	"regexp"
+
 	. "github.com/projectcalico/felix/config"
 
 	"net"
@@ -29,7 +31,7 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
-	"github.com/projectcalico/libcalico-go/lib/apis/v3"
+	v3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/libcalico-go/lib/numorstring"
 )
 
@@ -158,8 +160,35 @@ var _ = DescribeTable("Config parsing",
 
 	Entry("InterfacePrefix", "InterfacePrefix", "tap", "tap"),
 	Entry("InterfacePrefix list", "InterfacePrefix", "tap,cali", "tap,cali"),
-	Entry("InterfaceExclude", "InterfaceExclude", "kube-ipvs0", "kube-ipvs0"),
-	Entry("InterfaceExclude list", "InterfaceExclude", "kube-ipvs0,dummy", "kube-ipvs0,dummy"),
+
+	Entry("InterfaceExclude one value no regexp", "InterfaceExclude", "kube-ipvs0", []*regexp.Regexp{
+		regexp.MustCompile("^kube-ipvs0$"),
+	}),
+	Entry("InterfaceExclude list no regexp", "InterfaceExclude", "kube-ipvs0,dummy", []*regexp.Regexp{
+		regexp.MustCompile("^kube-ipvs0$"),
+		regexp.MustCompile("^dummy$"),
+	}),
+	Entry("InterfaceExclude one value regexp", "InterfaceExclude", "/kube-ipvs/", []*regexp.Regexp{
+		regexp.MustCompile("kube-ipvs"),
+	}),
+	Entry("InterfaceExclude list regexp", "InterfaceExclude", "kube-ipvs0,dummy,/^veth.*$/", []*regexp.Regexp{
+		regexp.MustCompile("^kube-ipvs0$"),
+		regexp.MustCompile("^dummy$"),
+		regexp.MustCompile("^veth.*$"),
+	}),
+	Entry("InterfaceExclude no regexp", "InterfaceExclude", "/^kube.*/,/veth/", []*regexp.Regexp{
+		regexp.MustCompile("^kube.*"),
+		regexp.MustCompile("veth"),
+	}),
+	Entry("InterfaceExclude list empty regexp", "InterfaceExclude", "kube,//", []*regexp.Regexp{
+		regexp.MustCompile("^kube-ipvs0$"),
+	}),
+	Entry("InterfaceExclude list bad comma use", "InterfaceExclude", "/kube,/,dummy", []*regexp.Regexp{
+		regexp.MustCompile("^kube-ipvs0$"),
+	}),
+	Entry("InterfaceExclude list invalid regexp symbol", "InterfaceExclude", `/^kube\K/`, []*regexp.Regexp{
+		regexp.MustCompile("^kube-ipvs0$"),
+	}),
 
 	Entry("ChainInsertMode append", "ChainInsertMode", "append", "append"),
 	Entry("ChainInsertMode append", "ChainInsertMode", "Append", "append"),
@@ -456,4 +485,42 @@ var _ = DescribeTable("Config validation",
 	Entry("OpenstackRegion too long", map[string]string{
 		"OpenstackRegion": "my-region-has-a-very-long-and-extremely-interesting-name",
 	}, false),
+)
+
+var _ = DescribeTable("Config InterfaceExclude",
+	func(excludeList string, expected []*regexp.Regexp) {
+		cfg := New()
+		cfg.UpdateFrom(map[string]string{"InterfaceExclude": excludeList}, EnvironmentVariable)
+		regexps := cfg.InterfaceExclude
+		Expect(regexps).To(Equal(expected))
+	},
+
+	Entry("empty exclude list", "", []*regexp.Regexp{
+		regexp.MustCompile("^kube-ipvs0$"),
+	}),
+	Entry("non-regexp single value", "kube-ipvs0", []*regexp.Regexp{
+		regexp.MustCompile("^kube-ipvs0$"),
+	}),
+	Entry("non-regexp multiple values", "kube-ipvs0,veth1", []*regexp.Regexp{
+		regexp.MustCompile("^kube-ipvs0$"),
+		regexp.MustCompile("^veth1$"),
+	}),
+	Entry("regexp single value", "/^veth.*/", []*regexp.Regexp{
+		regexp.MustCompile("^veth.*"),
+	}),
+	Entry("regexp multiple values", "/veth/,/^kube.*/", []*regexp.Regexp{
+		regexp.MustCompile("veth"),
+		regexp.MustCompile("^kube.*"),
+	}),
+	Entry("both non-regexp and regexp values", "kube-ipvs0,/veth/,/^kube.*/", []*regexp.Regexp{
+		regexp.MustCompile("^kube-ipvs0$"),
+		regexp.MustCompile("veth"),
+		regexp.MustCompile("^kube.*"),
+	}),
+	Entry("invalid non-regexp value", `not.a.valid.interf@e!!`, []*regexp.Regexp{
+		regexp.MustCompile("^kube-ipvs0$"),
+	}),
+	Entry("invalid regexp value", `/^kube\K/`, []*regexp.Regexp{
+		regexp.MustCompile("^kube-ipvs0$"),
+	}),
 )
