@@ -105,7 +105,7 @@ template bgp bgp_template {
        - before the restart completes, peer B opens its connection
        - peer A sees the new connection and aborts the graceful restart, causing a route flap.
   */ -}}
-  {{if gt $onode_ip $node_ip}}
+  {{if gt $onode_ip $node_ip6 }}
   passive on; # Mesh is unidirectional, peer will connect to us.
   {{- end}}
 }{{end}}{{end}}{{end}}

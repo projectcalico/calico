@@ -14,6 +14,7 @@ metadata:
 spec:
   bgp:
     ipv4Address: 10.192.0.2/16
+    ipv6Address: "2001::103/64"
 
 ---
 
@@ -24,6 +25,7 @@ metadata:
 spec:
   bgp:
     ipv4Address: 10.192.0.3/16
+    ipv6Address: "2001::102/64"
 
 ---
 
@@ -34,6 +36,7 @@ metadata:
 spec:
   bgp:
     ipv4Address: 10.192.0.4/16
+    ipv6Address: "2001::104/64"
 
 ---
 
@@ -43,5 +46,16 @@ metadata:
   name: ippool-1
 spec:
   cidr: 192.168.0.0/16
+  ipipMode: Never
+  natOutgoing: true
+
+---
+
+kind: IPPool
+apiVersion: projectcalico.org/v3
+metadata:
+  name: ippool-2
+spec:
+  cidr: 2002::/64
   ipipMode: Never
   natOutgoing: true

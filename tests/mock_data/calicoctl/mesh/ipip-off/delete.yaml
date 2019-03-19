@@ -6,3 +6,13 @@ spec:
   cidr: 192.168.0.0/16
   ipipMode: Never
   natOutgoing: true
+---
+
+kind: IPPool
+apiVersion: projectcalico.org/v3
+metadata:
+  name: ippool-2
+spec:
+  cidr: 2002::/64
+  ipipMode: Never
+  natOutgoing: true
