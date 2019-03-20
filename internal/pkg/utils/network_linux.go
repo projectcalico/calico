@@ -461,3 +461,7 @@ func CleanUpNamespace(args *skel.CmdArgs, logger *logrus.Entry) error {
 
 	return nil
 }
+
+func updateHostLocalIPAMDataForOS(subnet string, ipamData map[string]interface{}) error {
+	return nil
+}

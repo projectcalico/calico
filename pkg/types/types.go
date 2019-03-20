@@ -78,6 +78,7 @@ type NetConf struct {
 	Args                 Args              `json:"args"`
 	MTU                  int               `json:"mtu"`
 	Nodename             string            `json:"nodename"`
+	NodenameFile         string            `json:"nodename_file"`
 	NodenameFileOptional bool              `json:"nodename_file_optional"`
 	DatastoreType        string            `json:"datastore_type"`
 	EtcdEndpoints        string            `json:"etcd_endpoints"`
