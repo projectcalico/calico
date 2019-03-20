@@ -4,7 +4,7 @@ title: Get started with Kubernetes network policy
 
 ### Big picture
 
-Kubernetes network policy lets administrators and developers enforce network connections using rules. 
+Kubernetes network policy lets administrators and developers enforce which network connections are allowed using rules. 
 
 ### Value
 
