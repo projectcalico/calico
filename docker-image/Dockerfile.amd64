@@ -1,14 +1,14 @@
-FROM alpine:3.8 as base
+FROM debian:9.8-slim as base
 MAINTAINER Shaun Crampton <shaun@tigera.io>
 
 # Since our binary isn't designed to run as PID 1, run it via the tini init daemon.
-RUN apk add --update tini
+ENV TINI_VERSION v0.18.0
+ADD https://github.com/krallin/tini/releases/download/${TINI_VERSION}/tini-static-amd64 /sbin/tini
+RUN chmod +x /sbin/tini
 
 FROM scratch
 COPY --from=base /tmp /tmp
 COPY --from=base /sbin/tini /sbin/tini
-COPY --from=base /lib/ld-musl-x86_64.so.1 /lib/ld-musl-x86_64.so.1
-COPY --from=base /lib/libc.musl-x86_64.so.1 /lib/libc.musl-x86_64.so.1
 
 # Put our binary in /code rather than directly in /usr/bin.  This allows the downstream builds
 # to more easily extract the build artefacts from the container.
