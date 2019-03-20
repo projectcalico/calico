@@ -16,6 +16,7 @@ package main
 
 import (
 	"context"
+	"flag"
 	"fmt"
 	"net/http"
 	"os"
@@ -25,7 +26,7 @@ import (
 	"github.com/coreos/etcd/clientv3"
 	"github.com/coreos/etcd/pkg/transport"
 	log "github.com/sirupsen/logrus"
-	flag "github.com/spf13/pflag"
+	"github.com/spf13/pflag"
 	"k8s.io/apiserver/pkg/storage/etcd3"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
@@ -54,11 +55,20 @@ func main() {
 	// Install a hook that adds file/line no information.
 	log.AddHook(&logutils.ContextHook{})
 
+	// Tell glog (used by client-go) to log into STDERR. Otherwise, we risk
+	// certain kinds of API errors getting logged into a directory not
+	// available in a `FROM scratch` Docker container, causing glog to abort
+	// hard with an exit code > 0.
+	err := flag.Set("logtostderr", "true")
+	if err != nil {
+		log.WithError(err).Fatal("Failed configure logging")
+	}
+
 	// If `-v` is passed, display the version and exit.
 	// Use a new flag set so as not to conflict with existing libraries which use "flag"
-	flagSet := flag.NewFlagSet("Calico", flag.ExitOnError)
+	flagSet := pflag.NewFlagSet("Calico", pflag.ExitOnError)
 	version := flagSet.BoolP("version", "v", false, "Display version")
-	err := flagSet.Parse(os.Args[1:])
+	err = flagSet.Parse(os.Args[1:])
 	if err != nil {
 		log.WithError(err).Fatal("Failed to parse flags")
 	}
