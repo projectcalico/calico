@@ -331,7 +331,7 @@ func (b *mockDatastore) ClusterInformation() clientv3.ClusterInformationInterfac
 	panic("not implemented")
 }
 
-// ClusterInformation returns an interface for managing the cluster information resource.
+// NetworkSets returns an interface for managing the networkSet resources.
 func (b *mockDatastore) NetworkSets() clientv3.NetworkSetInterface {
 	panic("not implemented")
 }
