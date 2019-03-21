@@ -9,15 +9,15 @@
 set -u -e
 
 # Capture the usual signals and exit from the script
-trap 'echo "SIGINT received, simply exiting..."; exit 0' SIGINT
-trap 'echo "SIGTERM received, simply exiting..."; exit 0' SIGTERM
-trap 'echo "SIGHUP received, simply exiting..."; exit 0' SIGHUP
+trap 'echo "INT received, simply exiting..."; exit 0' INT
+trap 'echo "TERM received, simply exiting..."; exit 0' TERM
+trap 'echo "HUP received, simply exiting..."; exit 0' HUP
 
 # Helper function for raising errors
 # Usage:
 # some_command || exit_with_error "some_command_failed: maybe try..."
 exit_with_error(){
-  echo $1
+  echo "$1"
   exit 1
 }
 
@@ -32,18 +32,17 @@ HOST_SECRETS_DIR=${HOST_CNI_NET_DIR}/calico-tls
 # the calico/cni container.
 SECRETS_MOUNT_DIR=${TLS_ASSETS_DIR:-/calico-secrets}
 
-
 # Clean up any existing binaries / config / assets.
 rm -f /host/opt/cni/bin/calico /host/opt/cni/bin/calico-ipam
 rm -f /host/etc/cni/net.d/calico-tls/*
 
 # Copy over any TLS assets from the SECRETS_MOUNT_DIR to the host.
 # First check if the dir exists and has anything in it.
-if [ "$(ls ${SECRETS_MOUNT_DIR} 3>/dev/null)" ];
+if [ "$(ls "${SECRETS_MOUNT_DIR}" 3>/dev/null)" ];
 then
   echo "Installing any TLS assets from ${SECRETS_MOUNT_DIR}"
   mkdir -p /host/etc/cni/net.d/calico-tls
-  cp -p ${SECRETS_MOUNT_DIR}/* /host/etc/cni/net.d/calico-tls/
+  cp -p "${SECRETS_MOUNT_DIR}"/* /host/etc/cni/net.d/calico-tls/
 fi
 
 # If the TLS assets actually exist, update the variables to populate into the
@@ -78,19 +77,19 @@ do
   fi
   for path in /opt/cni/bin/*;
   do
-    filename="$(basename $path)"
+    filename="$(basename "$path")"
     tmp=",$filename,"
     if [ "${SKIP_CNI_BINARIES#*$tmp}" != "$SKIP_CNI_BINARIES" ];
     then
       echo "$filename is in SKIP_CNI_BINARIES, skipping"
       continue
     fi
-    if [ "${UPDATE_CNI_BINARIES}" != "true" -a -f $dir/$filename ];
+    if [ "${UPDATE_CNI_BINARIES}" != "true" ] && [ -f $dir/"$filename" ];
     then
       echo "$dir/$filename is already here and UPDATE_CNI_BINARIES isn't true, skipping"
       continue
     fi
-    cp $path $dir/ || exit_with_error "Failed to copy $path to $dir. This may be caused by selinux configuration on the host, or something else."
+    cp "$path" $dir/ || exit_with_error "Failed to copy $path to $dir. This may be caused by selinux configuration on the host, or something else."
   done
 
   echo "Wrote Calico CNI binaries to $dir"
@@ -99,8 +98,8 @@ done
 
 TMP_CONF='/calico.conf.tmp'
 # If specified, overwrite the network configuration file.
-: ${CNI_NETWORK_CONFIG_FILE:=}
-: ${CNI_NETWORK_CONFIG:=}
+: "${CNI_NETWORK_CONFIG_FILE:=}"
+: "${CNI_NETWORK_CONFIG:=}"
 if [ -e "${CNI_NETWORK_CONFIG_FILE}" ]; then
   echo "Using CNI config template from ${CNI_NETWORK_CONFIG_FILE}."
   cp "${CNI_NETWORK_CONFIG_FILE}" "${TMP_CONF}"
@@ -116,21 +115,23 @@ KUBE_CA_FILE=${KUBE_CA_FILE:-$SERVICE_ACCOUNT_PATH/ca.crt}
 SKIP_TLS_VERIFY=${SKIP_TLS_VERIFY:-false}
 # Pull out service account token.
 SERVICEACCOUNT_TOKEN=$(cat $SERVICE_ACCOUNT_PATH/token)
+# TLS_CFG needs to be set regardless (to avoid error when creating calico-kubeconfig)
+TLS_CFG=""
 
 # Check if we're running as a k8s pod.
 if [ -f "$SERVICE_ACCOUNT_PATH/token" ]; then
   # We're running as a k8d pod - expect some variables.
-  if [ -z ${KUBERNETES_SERVICE_HOST} ]; then
+  if [ -z "${KUBERNETES_SERVICE_HOST}" ]; then
     echo "KUBERNETES_SERVICE_HOST not set"; exit 1;
   fi
-  if [ -z ${KUBERNETES_SERVICE_PORT} ]; then
+  if [ -z "${KUBERNETES_SERVICE_PORT}" ]; then
     echo "KUBERNETES_SERVICE_PORT not set"; exit 1;
   fi
 
-  if [ "$SKIP_TLS_VERIFY" == "true" ]; then
+  if [ "$SKIP_TLS_VERIFY" = "true" ]; then
     TLS_CFG="insecure-skip-tls-verify: true"
   elif [ -f "$KUBE_CA_FILE" ]; then
-    TLS_CFG="certificate-authority-data: $(cat $KUBE_CA_FILE | base64 | tr -d '\n')"
+    TLS_CFG="certificate-authority-data: $(base64 -w 0 "$KUBE_CA_FILE")"
   fi
 
   # Write a kubeconfig file for the CNI plugin.  Do this
@@ -138,7 +139,7 @@ if [ -f "$SERVICE_ACCOUNT_PATH/token" ]; then
   # writing more complete kubeconfig files. This is only used
   # if the provided CNI network config references it.
   touch /host/etc/cni/net.d/calico-kubeconfig
-  chmod ${KUBECONFIG_MODE:-600} /host/etc/cni/net.d/calico-kubeconfig
+  chmod "${KUBECONFIG_MODE:-600}" /host/etc/cni/net.d/calico-kubeconfig
   cat > /host/etc/cni/net.d/calico-kubeconfig <<EOF
 # Kubeconfig file for Calico CNI plugin.
 apiVersion: v1
@@ -162,21 +163,20 @@ EOF
 
 fi
 
-
 # Insert any of the supported "auto" parameters.
-grep "__KUBERNETES_SERVICE_HOST__" $TMP_CONF && sed -i s/__KUBERNETES_SERVICE_HOST__/${KUBERNETES_SERVICE_HOST}/g $TMP_CONF
-grep "__KUBERNETES_SERVICE_PORT__" $TMP_CONF && sed -i s/__KUBERNETES_SERVICE_PORT__/${KUBERNETES_SERVICE_PORT}/g $TMP_CONF
-sed -i s/__KUBERNETES_NODE_NAME__/${KUBERNETES_NODE_NAME:-$(hostname)}/g $TMP_CONF
+grep "__KUBERNETES_SERVICE_HOST__" $TMP_CONF && sed -i s/__KUBERNETES_SERVICE_HOST__/"${KUBERNETES_SERVICE_HOST}"/g $TMP_CONF
+grep "__KUBERNETES_SERVICE_PORT__" $TMP_CONF && sed -i s/__KUBERNETES_SERVICE_PORT__/"${KUBERNETES_SERVICE_PORT}"/g $TMP_CONF
+sed -i s/__KUBERNETES_NODE_NAME__/"${KUBERNETES_NODE_NAME:-$(hostname)}"/g $TMP_CONF
 sed -i s/__KUBECONFIG_FILENAME__/calico-kubeconfig/g $TMP_CONF
-sed -i s/__CNI_MTU__/${CNI_MTU:-1500}/g $TMP_CONF
+sed -i s/__CNI_MTU__/"${CNI_MTU:-1500}"/g $TMP_CONF
 
 # Use alternative command character "~", since these include a "/".
-sed -i s~__KUBECONFIG_FILEPATH__~${HOST_CNI_NET_DIR}/calico-kubeconfig~g $TMP_CONF
-sed -i s~__ETCD_CERT_FILE__~${CNI_CONF_ETCD_CERT:-}~g $TMP_CONF
-sed -i s~__ETCD_KEY_FILE__~${CNI_CONF_ETCD_KEY:-}~g $TMP_CONF
-sed -i s~__ETCD_CA_CERT_FILE__~${CNI_CONF_ETCD_CA:-}~g $TMP_CONF
-sed -i s~__ETCD_ENDPOINTS__~${ETCD_ENDPOINTS:-}~g $TMP_CONF
-sed -i s~__LOG_LEVEL__~${LOG_LEVEL:-warn}~g $TMP_CONF
+sed -i s~__KUBECONFIG_FILEPATH__~"${HOST_CNI_NET_DIR}"/calico-kubeconfig~g $TMP_CONF
+sed -i s~__ETCD_CERT_FILE__~"${CNI_CONF_ETCD_CERT:-}"~g $TMP_CONF
+sed -i s~__ETCD_KEY_FILE__~"${CNI_CONF_ETCD_KEY:-}"~g $TMP_CONF
+sed -i s~__ETCD_CA_CERT_FILE__~"${CNI_CONF_ETCD_CA:-}"~g $TMP_CONF
+sed -i s~__ETCD_ENDPOINTS__~"${ETCD_ENDPOINTS:-}"~g $TMP_CONF
+sed -i s~__LOG_LEVEL__~"${LOG_LEVEL:-warn}"~g $TMP_CONF
 
 CNI_CONF_NAME=${CNI_CONF_NAME:-10-calico.conf}
 CNI_OLD_CONF_NAME=${CNI_OLD_CONF_NAME:-10-calico.conf}
@@ -185,14 +185,14 @@ CNI_OLD_CONF_NAME=${CNI_OLD_CONF_NAME:-10-calico.conf}
 # This way auth token is not visible in the logs.
 echo "CNI config: $(cat ${TMP_CONF})"
 
-sed -i s/__SERVICEACCOUNT_TOKEN__/${SERVICEACCOUNT_TOKEN:-}/g $TMP_CONF
+sed -i s/__SERVICEACCOUNT_TOKEN__/"${SERVICEACCOUNT_TOKEN:-}"/g $TMP_CONF
 
 # Delete old CNI config files for upgrades.
 if [ "${CNI_CONF_NAME}" != "${CNI_OLD_CONF_NAME}" ]; then
     rm -f "/host/etc/cni/net.d/${CNI_OLD_CONF_NAME}"
 fi
 # Move the temporary CNI config into place.
-mv $TMP_CONF /host/etc/cni/net.d/${CNI_CONF_NAME} || \
+mv "$TMP_CONF" /host/etc/cni/net.d/"${CNI_CONF_NAME}" || \
   exit_with_error "Failed to mv files. This may be caused by selinux configuration on the host, or something else."
 
 echo "Created CNI config ${CNI_CONF_NAME}"
@@ -201,17 +201,17 @@ echo "Created CNI config ${CNI_CONF_NAME}"
 # This prevents Kubernetes from restarting the pod repeatedly.
 should_sleep=${SLEEP:-"true"}
 echo "Done configuring CNI.  Sleep=$should_sleep"
-while [ "$should_sleep" == "true"  ]; do
+while [ "$should_sleep" = "true"  ]; do
   # Kubernetes Secrets can be updated.  If so, we need to install the updated
   # version to the host. Just check the timestamp on the certificate to see if it
   # has been updated.  A bit hokey, but likely good enough.
-  if [ -e ${SECRETS_MOUNT_DIR}/etcd-cert ];
+  if [ -e "${SECRETS_MOUNT_DIR}"/etcd-cert ];
   then
-    stat_output=$(stat -c%y ${SECRETS_MOUNT_DIR}/etcd-cert 2>/dev/null)
+    stat_output=$(stat -c%y "${SECRETS_MOUNT_DIR}"/etcd-cert 2>/dev/null)
     sleep 10;
-    if [ "$stat_output" != "$(stat -c%y ${SECRETS_MOUNT_DIR}/etcd-cert 2>/dev/null)" ]; then
+    if [ "$stat_output" != "$(stat -c%y "${SECRETS_MOUNT_DIR}"/etcd-cert 2>/dev/null)" ]; then
       echo "Updating installed secrets at: $(date)"
-      cp -p ${SECRETS_MOUNT_DIR}/* /host/etc/cni/net.d/calico-tls/
+      cp -p "${SECRETS_MOUNT_DIR}"/* /host/etc/cni/net.d/calico-tls/
     fi
   else
     sleep 10
