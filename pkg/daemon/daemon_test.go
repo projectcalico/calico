@@ -34,7 +34,7 @@ import (
 	bapi "github.com/projectcalico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/libcalico-go/lib/ipam"
-	"github.com/projectcalico/typha/fv-tests"
+	fvtests "github.com/projectcalico/typha/fv-tests"
 	"github.com/projectcalico/typha/pkg/config"
 	"github.com/projectcalico/typha/pkg/syncclient"
 	"github.com/projectcalico/typha/pkg/syncserver"
@@ -328,6 +328,11 @@ func (b *mockDatastore) FelixConfigurations() clientv3.FelixConfigurationInterfa
 
 // ClusterInformation returns an interface for managing the cluster information resource.
 func (b *mockDatastore) ClusterInformation() clientv3.ClusterInformationInterface {
+	panic("not implemented")
+}
+
+// ClusterInformation returns an interface for managing the cluster information resource.
+func (b *mockDatastore) NetworkSets() clientv3.NetworkSetInterface {
 	panic("not implemented")
 }
 
