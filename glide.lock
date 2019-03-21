@@ -1,5 +1,5 @@
-hash: 3550ae3da41b873e8ed1117f9662c546f1dbc00d6c3ee056bdaec7d835a86699
-updated: 2019-03-12T06:13:24.103299305Z
+hash: 2d2b044301900bffe7818ffd1b103218f7d6c3d092fcbb0e3b3b66a7b2708014
+updated: 2019-03-21T06:14:19.031199728Z
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -148,17 +148,6 @@ imports:
   version: a6d595ae73cf27a1b8fc32930668708f45ce1c85
 - name: github.com/Microsoft/hcsshim
   version: 4a468a6f7ae547974bc32911395c51fb1862b7df
-  subpackages:
-  - internal/guid
-  - internal/hcs
-  - internal/hcserror
-  - internal/hns
-  - internal/interop
-  - internal/longpath
-  - internal/mergemaps
-  - internal/safefile
-  - internal/schema1
-  - internal/wclayer
 - name: github.com/mipearson/rfw
   version: 6f0a6f3266ba1058df9ef0c94cda1cecd2e62852
 - name: github.com/modern-go/concurrent
@@ -187,7 +176,7 @@ imports:
   - reporters/stenographer/support/go-isatty
   - types
 - name: github.com/onsi/gomega
-  version: 65fb64232476ad9046e57c26cd0bff3d3a8dc6cd
+  version: 90e289841c1ed79b7a598a7cd9959750cb5e89e2
   subpackages:
   - format
   - internal/assertion
@@ -260,7 +249,7 @@ imports:
   subpackages:
   - binder
 - name: github.com/projectcalico/typha
-  version: 4b75b0774b9f82d99863558c96a062c64f6dcf08
+  version: b4aa185dfc1f724088a97ef4ac09d742d924beaf
   subpackages:
   - pkg/syncclient
   - pkg/syncproto
