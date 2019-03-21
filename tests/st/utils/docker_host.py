@@ -690,7 +690,7 @@ class DockerHost(object):
         :param resource: string, resource type to delete
         """
         # Grab all objects of a resource type
-        objects = yaml.load(self.calicoctl("get %s -o yaml" % resource))
+        objects = yaml.safe_load(self.calicoctl("get %s -o yaml" % resource))
         # and delete them (if there are any)
         if len(objects) > 0:
             if 'items' in objects and len(objects['items']) == 0:

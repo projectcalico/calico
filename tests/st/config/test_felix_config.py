@@ -16,7 +16,6 @@ import logging
 import time
 from functools import partial
 
-import yaml
 from tests.st.test_base import TestBase, HOST_IPV4
 from tests.st.utils.docker_host import DockerHost, CLUSTER_STORE_DOCKER_OPTIONS
 from tests.st.utils.utils import log_and_run, retry_until_success, \
