@@ -16,7 +16,6 @@ import os
 import subprocess
 import unittest
 import json
-import yaml
 from time import sleep
 from netaddr import IPAddress
 

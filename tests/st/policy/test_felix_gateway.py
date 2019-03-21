@@ -16,7 +16,6 @@ import json
 import logging
 import subprocess
 
-import yaml
 from tests.st.test_base import TestBase, HOST_IPV4
 from tests.st.utils.docker_host import DockerHost, CLUSTER_STORE_DOCKER_OPTIONS
 from tests.st.utils.utils import get_ip, log_and_run, retry_until_success, \
