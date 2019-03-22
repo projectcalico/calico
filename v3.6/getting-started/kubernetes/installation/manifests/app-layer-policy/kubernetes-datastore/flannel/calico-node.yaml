@@ -5,5 +5,4 @@ layout: null
 datastore: kdd
 network: flannel
 app_layer_policy: true
-variant_name: Canal
 {% endhelm %}
