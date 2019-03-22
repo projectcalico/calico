@@ -25,7 +25,7 @@ imageNames:
   cni: calico/cni
   kubeControllers: calico/kube-controllers
   calico-upgrade: calico/upgrade
-  flannel: coreos/flannel
+  flannel: quay.io/coreos/flannel
   dikastes: calico/dikastes
   pilot-webhook: calico/pilot-webhook
   flexvol: calico/pod2daemon-flexvol

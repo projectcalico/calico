@@ -5,9 +5,6 @@ datastore: kdd
 # Sets the networking mode. Can be 'calico', 'flannel', or 'none'
 network: "none"
 
-# Global docker image registry. This will set the image registry for all images *except* flannel.
-imageRegistry: "calico/"
-
 calico_ipam: false
 app_layer_policy: false
 
