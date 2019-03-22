@@ -2,29 +2,28 @@ def gen_values(versions, imageNames, version, imageRegistry)
     components = versions[version][0]["components"]
     versionsYml = <<~EOF
     node:
-      image: #{imageNames["node"]}
+      image: #{imageRegistry}#{imageNames["node"]}
       tag: #{components["calico/node"]["version"]}
     calicoctl:
-      image: #{imageNames["calicoctl"]}
+      image: #{imageRegistry}#{imageNames["calicoctl"]}
       tag: #{components["calicoctl"]["version"]}
     typha:
-      image: #{imageNames["typha"]}
+      image: #{imageRegistry}#{imageNames["typha"]}
       tag: #{components["typha"]["version"]}
     cni:
-      image: #{imageNames["cni"]}
+      image: #{imageRegistry}#{imageNames["cni"]}
       tag: #{components["calico/cni"]["version"]}
     kubeControllers:
-      image: #{imageNames["kubeControllers"]}
+      image: #{imageRegistry}#{imageNames["kubeControllers"]}
       tag: #{components["calico/kube-controllers"]["version"]}
     flannel:
       image: #{imageNames["flannel"]}
       tag: #{components["flannel"]["version"]}
     dikastes:
-      image: #{imageNames["dikastes"]}
+      image: #{imageRegistry}#{imageNames["dikastes"]}
       tag: #{components["calico/dikastes"]["version"]}
     flexvol:
-      image: #{imageNames["flexvol"]}
+      image: #{imageRegistry}#{imageNames["flexvol"]}
       tag: #{components["flexvol"]["version"]}
-    imageRegistry: #{imageRegistry}
     EOF
 end

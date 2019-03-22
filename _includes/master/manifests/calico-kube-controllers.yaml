@@ -35,7 +35,7 @@ spec:
       serviceAccountName: calico-kube-controllers
       containers:
         - name: calico-kube-controllers
-          image: {{.Values.imageRegistry}}{{.Values.kubeControllers.image}}:{{ .Values.kubeControllers.tag }}
+          image: {{.Values.kubeControllers.image}}:{{ .Values.kubeControllers.tag }}
           env:
             # The location of the etcd cluster.
             - name: ETCD_ENDPOINTS
@@ -124,7 +124,7 @@ spec:
       serviceAccountName: calico-kube-controllers
       containers:
         - name: calico-kube-controllers
-          image: {{.Values.imageRegistry}}{{.Values.kubeControllers.image}}:{{ .Values.kubeControllers.tag }}
+          image: {{.Values.kubeControllers.image}}:{{ .Values.kubeControllers.tag }}
           env:
             # Choose which controllers to run.
             - name: ENABLED_CONTROLLERS
