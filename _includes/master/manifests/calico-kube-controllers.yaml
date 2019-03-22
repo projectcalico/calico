@@ -1,5 +1,4 @@
 {{- if eq .Values.datastore "etcd" -}}
-# This manifest deploys the {{.Values.prodname}} Kubernetes controllers.
 # See https://github.com/projectcalico/kube-controllers
 apiVersion: extensions/v1beta1
 kind: Deployment
@@ -38,7 +37,7 @@ spec:
         - name: calico-kube-controllers
           image: {{.Values.imageRegistry}}{{.Values.kubeControllers.image}}:{{ .Values.kubeControllers.tag }}
           env:
-            # The location of the {{.Values.prodname}} etcd cluster.
+            # The location of the etcd cluster.
             - name: ETCD_ENDPOINTS
               valueFrom:
                 configMapKeyRef:
@@ -92,7 +91,6 @@ metadata:
 
 {{- else if eq .Values.network "calico" -}}
 
-# This manifest deploys the {{.Values.prodname}} node controller.
 # See https://github.com/projectcalico/kube-controllers
 apiVersion: extensions/v1beta1
 kind: Deployment

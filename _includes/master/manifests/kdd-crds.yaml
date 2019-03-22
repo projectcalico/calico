@@ -7,8 +7,6 @@ kdd-crds.yaml acccepts the following include flags:
 | network          | calico, flannel, <unset> |
 
 */ -}}
-# Create all the CustomResourceDefinitions needed for
-# {{.Values.prodname}} {{ if .Values.network }}policy and networking{{ else }}policy-only{{ end }} mode.
 
 apiVersion: apiextensions.k8s.io/v1beta1
 kind: CustomResourceDefinition

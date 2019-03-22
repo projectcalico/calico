@@ -11,7 +11,7 @@ calico-node.yaml acccepts the following include flags:
 
 */ -}}
 # This manifest installs the {{.Values.nodecontainer}} container, as well
-# as the {{.Values.prodname}} CNI plugins and network config on
+# as the CNI plugins and network config on
 # each master and worker node in a Kubernetes cluster.
 kind: DaemonSet
 apiVersion: extensions/v1beta1
@@ -79,7 +79,7 @@ spec:
             - mountPath: /host/opt/cni/bin
               name: cni-bin-dir
 {{- end }}
-        # This container installs the {{.Values.prodname}} CNI binaries
+        # This container installs the CNI binaries
         # and CNI network config file on each node.
         - name: install-cni
           image: {{.Values.imageRegistry}}{{.Values.cni.image}}:{{ .Values.cni.tag }}
@@ -95,7 +95,7 @@ spec:
                   name: {{include "variant_name" . | lower}}-config
                   key: cni_network_config
 {{- if eq .Values.datastore "etcd" }}
-            # The location of the {{.Values.prodname}} etcd cluster.
+            # The location of the etcd cluster.
             - name: ETCD_ENDPOINTS
               valueFrom:
                 configMapKeyRef:
@@ -166,7 +166,7 @@ spec:
           image: {{.Values.imageRegistry}}{{.Values.node.image}}:{{.Values.node.tag}}
           env:
 {{- if eq .Values.datastore "etcd" }}
-            # The location of the {{.Values.prodname}} etcd cluster.
+            # The location of the etcd cluster.
             - name: ETCD_ENDPOINTS
               valueFrom:
                 configMapKeyRef:

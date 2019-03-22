@@ -37,7 +37,7 @@ data:
 
 {{- end }}
 {{- if eq .Values.network "calico" }}
-  # Configure the {{.Values.prodname}} backend to use.
+  # Configure the backend to use.
   calico_backend: "bird"
 
   # Configure the MTU to use
