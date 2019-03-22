@@ -11,4 +11,3 @@ imageRegistry: "calico/"
 calico_ipam: false
 app_layer_policy: false
 
-nodecontainer: node

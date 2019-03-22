@@ -32,7 +32,6 @@ module Jekyll
       imageRegistry = context.registers[:page]["registry"]
       imageNames = context.registers[:site].config["imageNames"]
       versions = context.registers[:site].data["versions"]
-      nodecontainer = context.registers[:site].config["nodecontainer"]
 
       # Load the versions.yml file so it can be rewritten in a standard helm format.
       if not versions.key?(version)
@@ -41,7 +40,7 @@ module Jekyll
         return
       end
 
-      versionsYml = gen_values(versions, imageNames, version, nodecontainer, imageRegistry)
+      versionsYml = gen_values(versions, imageNames, version, imageRegistry)
 
       tv = Tempfile.new("temp_versions.yml")
       tv.write(versionsYml)

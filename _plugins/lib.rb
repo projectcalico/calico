@@ -1,4 +1,4 @@
-def gen_values(versions, imageNames, version, nodecontainer, imageRegistry)
+def gen_values(versions, imageNames, version, imageRegistry)
     components = versions[version][0]["components"]
     versionsYml = <<~EOF
     node:
@@ -25,7 +25,6 @@ def gen_values(versions, imageNames, version, nodecontainer, imageRegistry)
     flexvol:
       image: #{imageNames["flexvol"]}
       tag: #{components["flexvol"]["version"]}
-    nodecontainer: #{nodecontainer}
     imageRegistry: #{imageRegistry}
     EOF
 end
