@@ -329,7 +329,7 @@ spec:
         # This container runs flannel using the kube-subnet-mgr backend
         # for allocating subnets.
         - name: kube-flannel
-          image: quay.io/coreos/flannel:v0.9.1
+          image: {{ .Values.flannel.image }}:{{ .Values.flannel.tag }}
           command: [ "/opt/bin/flanneld", "--ip-masq", "--kube-subnet-mgr" ]
           securityContext:
             privileged: true
@@ -362,7 +362,7 @@ spec:
         # Runs the flannel daemon to enable vxlan networking between
         # container hosts.
         - name: flannel
-          image: quay.io/coreos/flannel:v0.9.1
+          image: {{ .Values.flannel.image }}:{{ .Values.flannel.tag }}
           env:
             # The location of the etcd cluster.
             - name: FLANNELD_ETCD_ENDPOINTS
