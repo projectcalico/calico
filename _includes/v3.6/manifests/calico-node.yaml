@@ -1,15 +1,3 @@
-{{- /*
-calico-node.yaml acccepts the following include flags:
-
-| Name             | Accepted Values          |
-|------------------|--------------------------|
-| datastore        | kdd, etcd                |
-| typha            | true, false              |
-| network          | calico, flannel, <unset> |
-| variant_name     | Calico, Canal            |
-| app_layer_policy | true, false              |
-
-*/ -}}
 # This manifest installs the {{.Values.nodecontainer}} container, as well
 # as the {{.Values.prodname}} CNI plugins and network config on
 # each master and worker node in a Kubernetes cluster.
