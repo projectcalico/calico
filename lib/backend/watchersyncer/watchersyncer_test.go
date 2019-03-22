@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2018 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2019 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -98,6 +98,71 @@ var _ = Describe("Test the backend datastore multi-watch syncer", func() {
 		rs.ExpectStatusUpdate(api.InSync)
 	})
 
+	It("should not change status if watch returns multiple ErrorOperationNotSupported errors", func() {
+		rs := newWatcherSyncerTester([]watchersyncer.ResourceType{r1})
+		rs.ExpectStatusUpdate(api.WaitForDatastore)
+		rs.clientListResponse(r1, emptyList)
+		rs.ExpectStatusUpdate(api.ResyncInProgress)
+		rs.ExpectStatusUpdate(api.InSync)
+		rs.clientWatchResponse(r1, notSupported)
+		rs.ExpectStatusUnchanged()
+		rs.clientWatchResponse(r1, notSupported)
+		rs.ExpectStatusUnchanged()
+		rs.clientWatchResponse(r1, notSupported)
+		rs.ExpectStatusUnchanged()
+		rs.clientWatchResponse(r1, notSupported)
+		rs.ExpectStatusUnchanged()
+		rs.clientWatchResponse(r1, notSupported)
+		rs.ExpectStatusUnchanged()
+	})
+
+	It("should return WaitForDatastore on multiple consecutive watch errors", func() {
+		By("Sending errors to trigger a WaitForDatastore status update")
+
+		defaultThreshold := watchersyncer.ErrorThreshold
+		watchersyncer.ErrorThreshold = 6
+		defer func() {
+			watchersyncer.ErrorThreshold = defaultThreshold
+		}()
+
+		rs := newWatcherSyncerTester([]watchersyncer.ResourceType{r1})
+		rs.ExpectStatusUpdate(api.WaitForDatastore)
+		rs.clientListResponse(r1, emptyList)
+		rs.ExpectStatusUpdate(api.ResyncInProgress)
+		rs.ExpectStatusUpdate(api.InSync)
+
+		rs.clientWatchResponse(r1, genError)
+		rs.ExpectStatusUnchanged()
+		for i := 0; i < watchersyncer.ErrorThreshold-1; i++ {
+			rs.clientListResponse(r1, genError)
+			rs.ExpectStatusUnchanged()
+		}
+
+		rs.clientListResponse(r1, genError)
+		rs.ExpectStatusUpdate(api.WaitForDatastore)
+
+		rs.clientListResponse(r1, emptyList)
+		rs.ExpectStatusUpdate(api.ResyncInProgress)
+		rs.ExpectStatusUpdate(api.InSync)
+
+		By("Going back in-sync and driving WatchError events up to the error threshold")
+		genWatchError := api.WatchEvent{
+			Type:  api.WatchError,
+			Error: genError,
+		}
+
+		rs.clientWatchResponse(r1, nil)
+
+		// Watch is set but is now returning a generic WatchErrors
+		for i := 0; i < watchersyncer.ErrorThreshold; i++ {
+			rs.sendEvent(r1, genWatchError)
+			rs.ExpectStatusUnchanged()
+		}
+
+		rs.sendEvent(r1, genWatchError)
+		rs.ExpectStatusUpdate(api.WaitForDatastore)
+	})
+
 	It("should handle reconnection if watchers fail to be created", func() {
 		rs := newWatcherSyncerTester([]watchersyncer.ResourceType{r1, r2, r3})
 		rs.ExpectStatusUpdate(api.WaitForDatastore)
@@ -107,6 +172,12 @@ var _ = Describe("Test the backend datastore multi-watch syncer", func() {
 		// large to make the measurements more accurate.
 		defer setWatchIntervals(watchersyncer.ListRetryInterval, watchersyncer.WatchPollInterval)
 		setWatchIntervals(500*time.Millisecond, 2000*time.Millisecond)
+
+		defaultThreshold := watchersyncer.ErrorThreshold
+		watchersyncer.ErrorThreshold = 3
+		defer func() {
+			watchersyncer.ErrorThreshold = defaultThreshold
+		}()
 
 		// All of the events should have been consumed within a time frame dictated by the
 		// list retry and poll timers.
@@ -127,16 +198,25 @@ var _ = Describe("Test the backend datastore multi-watch syncer", func() {
 		// - watch succeeds ...
 		//
 		// The longest of these is resource 2 (since the watcher poll timer is longer).  We'll
-		// check that connection succeeds within +- 30% of the expected interval.
+		// check that connection succeeds within -30% and +50% of the expected interval.
 		By("Driving a bunch of List complete, Watch fail events for 2/3 resource types")
 		expectedDuration := watchersyncer.WatchPollInterval * 2
 		minDuration := 70 * expectedDuration / 100
-		maxDuration := 130 * expectedDuration / 100
+		maxDuration := 150 * expectedDuration / 100
+		before := time.Now()
 		rs.clientListResponse(r1, emptyList)
 		rs.ExpectStatusUpdate(api.ResyncInProgress)
 		rs.clientWatchResponse(r1, genError)
-		rs.clientListResponse(r1, genError)
+
+		for i := 0; i < watchersyncer.ErrorThreshold; i++ {
+			rs.clientListResponse(r1, genError)
+		}
+
+		// We've exceeded the default error threshold
+		rs.ExpectStatusUpdate(api.WaitForDatastore)
+
 		rs.clientListResponse(r1, emptyList)
+		rs.ExpectStatusUpdate(api.ResyncInProgress)
 		rs.clientWatchResponse(r1, nil)
 		rs.clientListResponse(r2, emptyList)
 		rs.clientWatchResponse(r2, notSupported)
@@ -145,7 +225,6 @@ var _ = Describe("Test the backend datastore multi-watch syncer", func() {
 		rs.clientListResponse(r2, emptyList)
 		rs.clientWatchResponse(r2, nil)
 		By("Expecting the time for all events to be handled is within a sensible window")
-		before := time.Now()
 		for i := time.Duration(0); i < maxDuration/(10*time.Millisecond); i++ {
 			if rs.allEventsHandled() {
 				break
@@ -168,15 +247,18 @@ var _ = Describe("Test the backend datastore multi-watch syncer", func() {
 		expectedDuration = watchersyncer.WatchPollInterval * watchersyncer.ListRetryInterval
 		minDuration = 70 * expectedDuration / 100
 		maxDuration = 130 * expectedDuration / 100
+		before = time.Now()
 		rs.clientListResponse(r3, emptyList)
 		rs.ExpectStatusUpdate(api.InSync)
 		rs.clientWatchResponse(r3, notSupported)
+		rs.ExpectStatusUnchanged()
 		rs.clientListResponse(r3, genError)
+		rs.ExpectStatusUnchanged()
 		rs.clientListResponse(r3, emptyList)
+		rs.ExpectStatusUnchanged()
 		rs.clientWatchResponse(r3, nil)
+		rs.ExpectStatusUnchanged()
 		By("Expecting the time for the events of the final resource sync to be handled is within sensible window")
-		before = time.Now()
-		Expect(rs.allEventsHandled()).To(BeFalse())
 		for i := time.Duration(0); i < maxDuration/(10*time.Millisecond); i++ {
 			if rs.allEventsHandled() {
 				break
@@ -243,7 +325,9 @@ var _ = Describe("Test the backend datastore multi-watch syncer", func() {
 		By("Syncing no results for resource 2, failing to create a watch, retrying successfully.")
 		rs.clientListResponse(r2, emptyList)
 		rs.clientWatchResponse(r2, genError)
+		rs.ExpectStatusUnchanged()
 		rs.clientListResponse(r2, emptyList)
+		rs.ExpectStatusUnchanged()
 		rs.clientWatchResponse(r2, nil)
 		time.Sleep(130 * watchersyncer.WatchPollInterval / 100)
 		rs.expectAllEventsHandled()
@@ -252,7 +336,7 @@ var _ = Describe("Test the backend datastore multi-watch syncer", func() {
 		rs.sendEvent(r2, eventL2Added1)
 		rs.sendEvent(r2, eventL2Added2)
 
-		By("Syncing no reults for resource 3, creating a watcher and then terminating the watcher.")
+		By("Syncing no results for resource 3, creating a watcher and then terminating the watcher.")
 		rs.clientListResponse(r3, emptyList)
 		rs.ExpectStatusUpdate(api.InSync)
 		rs.clientWatchResponse(r3, nil)
@@ -260,6 +344,7 @@ var _ = Describe("Test the backend datastore multi-watch syncer", func() {
 			Type:  api.WatchError,
 			Error: cerrors.ErrorWatchTerminated{Err: dsError},
 		})
+		rs.ExpectStatusUnchanged()
 		// All events should be handled.
 		rs.expectAllEventsHandled()
 
@@ -282,6 +367,7 @@ var _ = Describe("Test the backend datastore multi-watch syncer", func() {
 		By("Checking that resource 3 can reconnect and then receive events")
 		rs.clientListResponse(r3, emptyList)
 		rs.clientWatchResponse(r3, nil)
+		rs.ExpectStatusUnchanged()
 		rs.sendEvent(r3, eventL3Added1)
 		rs.ExpectUpdates([]api.Update{
 			{
@@ -320,6 +406,7 @@ var _ = Describe("Test the backend datastore multi-watch syncer", func() {
 
 		// The retry thread will be blocked for the watch poll interval.
 		rs.clientWatchResponse(r1, genError)
+		rs.ExpectStatusUnchanged()
 		time.Sleep(watchersyncer.WatchPollInterval)
 
 		By("returning a sync list with one entry removed and a new one added")
@@ -373,6 +460,7 @@ var _ = Describe("Test the backend datastore multi-watch syncer", func() {
 			Type:  api.WatchError,
 			Error: cerrors.ErrorWatchTerminated{Err: dsError},
 		})
+		rs.ExpectStatusUnchanged()
 		rs.clientListResponse(r1, &model.KVPairList{
 			Revision: "12347",
 			KVPairs: []*model.KVPair{
@@ -380,6 +468,7 @@ var _ = Describe("Test the backend datastore multi-watch syncer", func() {
 				eventL1Modified4_2.New,
 			},
 		})
+		rs.ExpectStatusUnchanged()
 		rs.clientWatchResponse(r1, nil)
 
 		By("Expecting mod, delete, mod updates")
@@ -808,10 +897,10 @@ func newWatcherSyncerTester(l []watchersyncer.ResourceType) *watcherSyncerTester
 		name := model.ListOptionsToDefaultPathRoot(r.ListInterface)
 		lws[name] = &listWatchSource{
 			name:            name,
-			watchCallError:  make(chan error, 10),
-			listCallResults: make(chan interface{}, 100),
-			stopEvents:      make(chan struct{}, 100),
-			results:         make(chan api.WatchEvent, 100),
+			watchCallError:  make(chan error, 50),
+			listCallResults: make(chan interface{}, 200),
+			stopEvents:      make(chan struct{}, 200),
+			results:         make(chan api.WatchEvent, 200),
 		}
 	}
 

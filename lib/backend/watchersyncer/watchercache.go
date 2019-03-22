@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2018 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2019 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -42,6 +42,7 @@ type watcherCache struct {
 	oldResources         map[string]cacheEntry
 	results              chan<- interface{}
 	hasSynced            bool
+	errors               int
 	resourceType         ResourceType
 	currentWatchRevision string
 }
@@ -49,6 +50,7 @@ type watcherCache struct {
 var (
 	ListRetryInterval = 1000 * time.Millisecond
 	WatchPollInterval = 5000 * time.Millisecond
+	ErrorThreshold    = 15
 )
 
 // cacheEntry is an entry in our cache.  It groups the a key with the last known
@@ -112,6 +114,7 @@ mainLoop:
 				// Handle a WatchError.  First determine if the error type indicates that the
 				// watch has closed, and if so we'll need to resync and create a new watcher.
 				wc.results <- event.Error
+				wc.onError()
 				if e, ok := event.Error.(cerrors.ErrorWatchTerminated); ok {
 					wc.logger.Debug("Received watch terminated error - recreate watcher")
 					if !e.ClosedByRemote {
@@ -121,6 +124,10 @@ mainLoop:
 						wc.logger.Debug("Watch was not closed by remote - full resync required")
 						wc.currentWatchRevision = ""
 					}
+					wc.resyncAndCreateWatcher(ctx)
+				} else if wc.errors > ErrorThreshold {
+					// For any other error, trigger a full resync if we're past the error threshold.
+					wc.currentWatchRevision = ""
 					wc.resyncAndCreateWatcher(ctx)
 				}
 			default:
@@ -186,6 +193,7 @@ func (wc *watcherCache) resyncAndCreateWatcher(ctx context.Context) {
 			if err != nil {
 				// Failed to perform the list.  Pause briefly (so we don't tight loop) and retry.
 				wc.logger.WithError(err).Info("Failed to perform list of current data during resync")
+				wc.onError()
 				select {
 				case <-time.After(ListRetryInterval):
 					continue
@@ -240,6 +248,7 @@ func (wc *watcherCache) resyncAndCreateWatcher(ctx context.Context) {
 			//      watch retry.  This would require some care to ensure the correct errors are captured
 			//      for the different datastore drivers.
 			wc.logger.WithError(err).WithField("performFullResync", performFullResync).Info("Failed to create watcher")
+			wc.onError()
 			performFullResync = true
 			continue
 		}
@@ -264,13 +273,14 @@ func (wc *watcherCache) cleanExistingWatcher() {
 // We may also need to send deleted messages for old resources that were not validated in the
 // resync (i.e. they must have since been deleted).
 func (wc *watcherCache) finishResync() {
-	// If this is our first synced event then send a synced notification.  The main
-	// watcherSyncer code will send a Synced event when it has received synced events from
-	// each cache.
+	// If we haven't already sent an InSync event (or signalled the inverse by sending a WaitForDatastore event),
+	// then send a synced notification.  The watcherSyncer will send a Synced event when it has received synced
+	// events from each cache.
 	if !wc.hasSynced {
 		wc.logger.Info("Sending synced update")
 		wc.results <- api.InSync
 		wc.hasSynced = true
+		wc.errors = 0
 	}
 
 	// If the watcher failed at any time, we end up recreating a watcher and storing off
@@ -303,6 +313,7 @@ func (wc *watcherCache) handleWatchListEvent(kvp *model.KVPair) {
 	if wc.resourceType.UpdateProcessor == nil {
 		// No update processor - handle immediately.
 		wc.handleConvertedWatchEvent(kvp)
+		wc.errors = 0
 		return
 	}
 
@@ -315,6 +326,8 @@ func (wc *watcherCache) handleWatchListEvent(kvp *model.KVPair) {
 	// If we hit a conversion error, notify the main syncer.
 	if err != nil {
 		wc.results <- err
+	} else {
+		wc.errors = 0
 	}
 }
 
@@ -399,5 +412,15 @@ func (wc *watcherCache) markAsValid(resourceKey string) {
 			wc.resources[resourceKey] = oldResource
 			delete(wc.oldResources, resourceKey)
 		}
+	}
+}
+
+// onError signals to the syncer that this watcherCache is not in-sync if the number of consecutive errors
+// exceeds the error threshold.  See finishResync() for how the watcherCache goes back to in-sync.
+func (wc *watcherCache) onError() {
+	wc.errors++
+	if wc.hasSynced && wc.errors > ErrorThreshold {
+		wc.hasSynced = false
+		wc.results <- api.WaitForDatastore
 	}
 }
