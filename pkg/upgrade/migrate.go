@@ -28,6 +28,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/projectcalico/cni-plugin/internal/pkg/utils"
+	v3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	bapi "github.com/projectcalico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/libcalico-go/lib/backend/k8s"
 	client "github.com/projectcalico/libcalico-go/lib/clientv3"
@@ -74,7 +75,7 @@ func Migrate(ctxt context.Context, c client.Interface, nodename string) error {
 	}
 
 	// Migrate IPIP tunnel address if the field is empty.
-	if node.Spec.BGP.IPv4IPIPTunnelAddr == "" {
+	if node.Spec.BGP == nil || node.Spec.BGP.IPv4IPIPTunnelAddr == "" {
 		log.Info("IPIP tunnel address not found, assigning...")
 
 		// Fetch k8s node.
@@ -95,6 +96,9 @@ func Migrate(ctxt context.Context, c client.Interface, nodename string) error {
 				return fmt.Errorf("Cannot pick an IPv4 tunnel address from the given CIDR: %s", k8sNode.Spec.PodCIDR)
 			}
 			tunIp[3]++
+			if node.Spec.BGP == nil {
+				node.Spec.BGP = &v3.NodeBGPSpec{}
+			}
 			node.Spec.BGP.IPv4IPIPTunnelAddr = tunIp.String()
 
 			// Assign the address via Calico IPAM.
