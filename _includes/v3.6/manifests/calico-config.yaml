@@ -1,15 +1,3 @@
-{{- /*
-calico-config.yaml acccepts the following include flags:
-
-| Name         | Accepted Values          |
-|--------------|--------------------------|
-| datastore    | kdd, etcd                |
-| typha        | true, false              |
-| network      | calico, flannel, <unset> |
-| calico_ipam  | true, false              |
-| variant_name | Calico, Canal            |
-
-*/ -}}
 # This ConfigMap is used to configure a self-hosted {{include "variant_name" .}} installation.
 kind: ConfigMap
 apiVersion: v1

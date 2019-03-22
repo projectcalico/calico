@@ -6,5 +6,4 @@ datastore: kdd
 typha:
   enabled: true
 app_layer_policy: true
-variant_name: Calico
 {% endhelm %}

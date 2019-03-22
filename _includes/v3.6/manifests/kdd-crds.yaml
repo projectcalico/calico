@@ -1,12 +1,4 @@
 {{- if eq .Values.datastore "kdd" -}}
-{{- /*
-kdd-crds.yaml acccepts the following include flags:
-
-| Name             | Accepted Values          |
-|------------------|--------------------------|
-| network          | calico, flannel, <unset> |
-
-*/ -}}
 # Create all the CustomResourceDefinitions needed for
 # {{.Values.prodname}} {{ if .Values.network }}policy and networking{{ else }}policy-only{{ end }} mode.
 

@@ -43,8 +43,6 @@ end
 # then write them in a more standard helm format.
 config = YAML::load_file(@path_to_config)
 imageNames = config["imageNames"]
-prodname = config["prodname"]
-nodecontainer = config["nodecontainer"]
 
 versions = YAML::load_file(@path_to_versions)
 
@@ -54,4 +52,4 @@ if not versions.key?(@version)
     exit 1
 end
 
-print gen_values(versions, imageNames, @version, prodname, nodecontainer, @image_registry)
+print gen_values(versions, imageNames, @version, @image_registry)
