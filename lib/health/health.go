@@ -1,4 +1,4 @@
-// Copyright (c) 2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2019 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -52,6 +52,9 @@ type HealthAggregator struct {
 	// Mutex to protect concurrent access to this health aggregator.
 	mutex *sync.Mutex
 
+	// The previous health summary report which is cached so that we log only when the overall health report changes.
+	lastReport *HealthReport
+
 	// Map from reporter name to corresponding state.
 	reporters map[string]*reporterState
 
@@ -93,6 +96,7 @@ func (aggregator *HealthAggregator) Report(name string, report *HealthReport) {
 func NewHealthAggregator() *HealthAggregator {
 	aggregator := &HealthAggregator{
 		mutex:        &sync.Mutex{},
+		lastReport:   &HealthReport{},
 		reporters:    map[string]*reporterState{},
 		httpServeMux: http.NewServeMux(),
 	}
@@ -122,32 +126,53 @@ func (aggregator *HealthAggregator) Summary() *HealthReport {
 	aggregator.mutex.Lock()
 	defer aggregator.mutex.Unlock()
 
+	logFuncs := []func(){}
+
 	// In the absence of any reporters, default to indicating that we are both live and ready.
 	summary := &HealthReport{Live: true, Ready: true}
 
 	// Now for each reporter...
 	for name, reporter := range aggregator.reporters {
-		log.WithFields(log.Fields{
-			"name":           name,
-			"reporter-state": reporter,
-		}).Debug("Detailed health state")
-
 		// Reset Live to false if that reporter is registered to report liveness and hasn't
 		// recently said that it is live.
-		if summary.Live && reporter.reports.Live && (!reporter.latest.Live ||
-			(reporter.timeout != 0 && time.Since(reporter.timestamp) > reporter.timeout)) {
+		notReportedLive := !reporter.latest.Live || (reporter.timeout != 0 && time.Since(reporter.timestamp) > reporter.timeout)
+		if summary.Live && reporter.reports.Live && notReportedLive {
 			summary.Live = false
 		}
 
 		// Reset Ready to false if that reporter is registered to report readiness and
 		// hasn't recently said that it is ready.
-		if summary.Ready && reporter.reports.Ready && (!reporter.latest.Ready ||
-			(reporter.timeout != 0 && time.Since(reporter.timestamp) > reporter.timeout)) {
+		notReportedReady := !reporter.latest.Ready || (reporter.timeout != 0 && time.Since(reporter.timestamp) > reporter.timeout)
+		if summary.Ready && reporter.reports.Ready && notReportedReady {
 			summary.Ready = false
+		}
+
+		logEntry := log.WithFields(log.Fields{
+			"name":           name,
+			"reporter-state": reporter,
+		})
+
+		if reporter.reports.Live && notReportedLive || reporter.reports.Ready && notReportedReady {
+			logFuncs = append(logFuncs, func() {
+				logEntry.Warn("Unhealthy reporter")
+			})
+		} else {
+			logFuncs = append(logFuncs, func() {
+				logEntry.Debug("Healthy reporter")
+			})
 		}
 	}
 
-	log.WithField("summary", summary).Info("Overall health")
+	// Summary status has changed so update previous status and log.
+	if summary.Live != aggregator.lastReport.Live && summary.Ready != aggregator.lastReport.Ready {
+		aggregator.lastReport = summary
+		log.WithField("lastSummary", summary).Info("Overall health")
+
+		for _, logFunc := range logFuncs {
+			logFunc()
+		}
+
+	}
 	return summary
 }
 
