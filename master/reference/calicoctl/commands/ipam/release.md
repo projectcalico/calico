@@ -5,7 +5,7 @@ canonical_url: 'https://docs.projectcalico.org/v3.5/reference/calicoctl/commands
 
 This section describes the `calicoctl ipam release` command.
 
-Read the [calicoctl Overview]({{site.baseurl}}/{{page.version}}/reference/calicoctl/) for a full list of calicoctl commands.
+Read the [calicoctl overview]({{site.baseurl}}/{{page.version}}/reference/calicoctl/) for a full list of calicoctl commands.
 
 ## Displaying the help text for 'calicoctl ipam release' command
 

@@ -141,7 +141,6 @@ spec:
         # to communicate with Felix over the Policy Sync API.
         - name: flexvol-driver
           image: {{.Values.flexvol.image}}:{{.Values.flexvol.tag}}
-          imagePullPolicy: Always
           volumeMounts:
           - name: flexvol-driver-host
             mountPath: /host/driver

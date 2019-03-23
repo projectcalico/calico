@@ -118,7 +118,7 @@ Options:
                            [default: /etc/calico/calicoctl.cfg]
 
 Description:
-  This command is used to start a calico/node container instance which provides
+  This command is used to start a {{site.nodecontainer}} container instance which provides
   Calico networking and network policy on your compute host.
 ```
 {: .no-select-button}

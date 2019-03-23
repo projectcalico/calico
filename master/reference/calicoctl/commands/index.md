@@ -6,7 +6,7 @@ canonical_url: 'https://docs.projectcalico.org/v3.5/reference/calicoctl/commands
 The command line tool, `calicoctl`, makes it easy to manage {{site.prodname}} network
 and security policy.
 
-This section is a command line reference for calicoctl, organised based on
+This section is a command line reference for `calicoctl`, organized based on
 the command hierarchy.
 
 ## Top level help
