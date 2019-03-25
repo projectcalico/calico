@@ -491,6 +491,10 @@ k8s-stop: tests/k8st/$(DIND_SCR)
 .PHONY: k8s-run-test
 ## Run k8st in an existing k8s cluster
 k8s-run-test: calico_test.created
+## Only execute remove-go-build-image if flag is set
+ifeq ($(REMOVE_GOBUILD_IMG),true)
+	$(MAKE) remove-go-build-image
+endif
 	docker run \
 	    -v $(CURDIR):/code \
 	    -v /var/run/docker.sock:/var/run/docker.sock \
@@ -501,6 +505,12 @@ k8s-run-test: calico_test.created
         $(TEST_CONTAINER_NAME) \
 	    sh -c 'cp /root/.kubeadm-dind-cluster/kubectl /bin/kubectl && ls -ltr /bin/kubectl && which kubectl && cd /code/tests/k8st && \
 	           nosetests $(K8ST_TO_RUN) -v --with-xunit --xunit-file="/code/report/k8s-tests.xml" --with-timer'
+
+# Needed for Semaphore CI (where disk space is a real issue during k8s-test)
+.PHONY: remove-go-build-image
+remove-go-build-image:
+	@echo "Removing $(CALICO_BUILD) image to save space needed for testing ..."
+	@-docker rmi $(CALICO_BUILD)
 
 .PHONY: st
 ## Run the system tests

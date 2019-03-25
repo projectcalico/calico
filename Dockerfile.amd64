@@ -14,13 +14,40 @@
 ARG BIRD_IMAGE=calico/bird:latest
 FROM ${BIRD_IMAGE} as bird
 
-FROM alpine:3.8
-MAINTAINER Tom Denham <tom@projectcalico.org>
+FROM debian:buster-slim
+LABEL maintainer "Casey Davenport <casey@tigera.io>"
 
 ARG ARCH=amd64
 
 # Install remaining runtime deps required for felix from the global repository
-RUN apk add --no-cache ip6tables ipset iputils iproute2 conntrack-tools runit ca-certificates
+RUN apt-get update && apt-get install -y \
+    ipset \
+    # For debian:buster-slim, iptables is v1.8.2 
+    iptables \ 
+    iputils-arping \
+    iputils-ping \
+    iputils-tracepath \
+    # Need arp 
+    net-tools \ 
+    iproute2 \ 
+    conntrack \ 
+    runit \ 
+    # Need kmod to ensure ip6tables-save works correctly
+    kmod \ 
+    # Also needed (provides utilities for browsing procfs like ps) 
+    procps \    
+    ca-certificates
+
+# Starting with iptables v1.8.2 the binary package includes iptables-nft and
+# iptables-legacy, two variants of the iptables command line interface. The
+# nftables-based is the default in Debian Buster and works with the nf_tables
+# Linux kernel subsystem. The legacy one uses the x_tables Linux kernel
+# subsystem. Users can use the update-alternatives system to select one variant
+# or the other.
+# Force iptables and ip6tables to use legacy and output their status afterwards
+RUN update-alternatives --set iptables /usr/sbin/iptables-legacy && \
+    update-alternatives --set ip6tables /usr/sbin/ip6tables-legacy && \ 
+    update-alternatives --get-selections
 
 # Copy our bird binaries in
 COPY --from=bird /bird* /bin/
