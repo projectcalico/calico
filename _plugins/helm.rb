@@ -46,10 +46,12 @@ module Jekyll
       tv.write(versionsYml)
       tv.close
 
-      # execute helm.
+      # Execute helm.
+      # Set the default etcd endpoint placeholder for rendering in the docs.
       cmd = """helm template _includes/#{version}/charts/calico \
         -f #{tv.path} \
-        -f #{t.path}"""
+        -f #{t.path}
+        --set etcd.endpoints=http://<ETCD_IP>:<ETCD_PORT>"""
 
       if @extra_args
         cmd += " " + @extra_args
