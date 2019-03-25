@@ -101,9 +101,13 @@ func (r ipPools) Create(ctx context.Context, res *apiv3.IPPool, opts options.Set
 		}
 	}
 
-	// Enable IPIP globally if required.  Do this before the Create so if it fails the user
+	// Enable IPIP or VXLAN globally if required.  Do this before the Create so if it fails the user
 	// can retry the same command.
 	err = r.maybeEnableIPIP(ctx, res)
+	if err != nil {
+		return nil, err
+	}
+	err = r.maybeEnableVXLAN(ctx, res)
 	if err != nil {
 		return nil, err
 	}
@@ -143,6 +147,10 @@ func (r ipPools) Update(ctx context.Context, res *apiv3.IPPool, opts options.Set
 	// Enable IPIP globally if required.  Do this before the Update so if it fails the user
 	// can retry the same command.
 	err = r.maybeEnableIPIP(ctx, res)
+	if err != nil {
+		return nil, err
+	}
+	err = r.maybeEnableVXLAN(ctx, res)
 	if err != nil {
 		return nil, err
 	}
@@ -417,6 +425,20 @@ func (r ipPools) validateAndSetDefaults(ctx context.Context, new, old *apiv3.IPP
 		new.Spec.IPIPMode = apiv3.IPIPModeNever
 	}
 
+	// Make sure VXLANMode is defaulted to "Never".
+	if len(new.Spec.VXLANMode) == 0 {
+		new.Spec.VXLANMode = apiv3.VXLANModeNever
+	}
+
+	// Make sure only one of VXLAN and IPIP is enabled.
+	if new.Spec.VXLANMode != apiv3.VXLANModeNever && new.Spec.IPIPMode != apiv3.IPIPModeNever {
+		errFields = append(errFields, cerrors.ErroredField{
+			Name:   "IPPool.Spec.VXLANMode",
+			Reason: "Cannot enable both VXLAN and IPIP on the same IPPool",
+			Value:  new.Spec.VXLANMode,
+		})
+	}
+
 	// IPIP cannot be enabled for IPv6.
 	if cidr.Version() == 6 && new.Spec.IPIPMode != apiv3.IPIPModeNever {
 		errFields = append(errFields, cerrors.ErroredField{
@@ -531,5 +553,65 @@ func (c ipPools) maybeEnableIPIP(ctx context.Context, pool *apiv3.IPPool) error 
 
 	// Return the error from the final Update.
 	log.WithError(err).Info("Too many conflict failures attempting to update FelixConfiguration to enable IPIP")
+	return err
+}
+
+// maybeEnableVXLAN enables global VXLAN if a default setting is not already configured
+// and the pool has VXLAN enabled.
+func (c ipPools) maybeEnableVXLAN(ctx context.Context, pool *apiv3.IPPool) error {
+	if pool.Spec.VXLANMode == apiv3.VXLANModeNever {
+		log.Debug("VXLAN is not enabled for this pool - no need to check global setting")
+		return nil
+	}
+
+	var err error
+	ipEnabled := true
+	for i := 0; i < maxApplyRetries; i++ {
+		log.WithField("Retry", i).Debug("Checking global VXLAN setting")
+		res, err := c.client.FelixConfigurations().Get(ctx, "default", options.GetOptions{})
+		if _, ok := err.(cerrors.ErrorResourceDoesNotExist); !ok && err != nil {
+			log.WithError(err).Debug("Error getting current FelixConfiguration resource")
+			return err
+		}
+
+		if res == nil {
+			log.Debug("Global FelixConfiguration does not exist - creating")
+			res = apiv3.NewFelixConfiguration()
+			res.Name = "default"
+		} else if res.Spec.VXLANEnabled != nil {
+			// A value for the default config is set so leave unchanged.  It may be set to false,
+			// so log the actual value - but we shouldn't update it if someone has explicitly
+			// disabled it globally.
+			log.WithField("VXLANEnabled", res.Spec.VXLANEnabled).Debug("Global VXLANEnabled setting is already configured")
+			return nil
+		}
+
+		// Enable IpInIp and do the Create or Update.
+		res.Spec.VXLANEnabled = &ipEnabled
+		if res.ResourceVersion == "" {
+			res, err = c.client.FelixConfigurations().Create(ctx, res, options.SetOptions{})
+			if _, ok := err.(cerrors.ErrorResourceAlreadyExists); ok {
+				log.Debug("FelixConfiguration already exists - retry update")
+				continue
+			}
+		} else {
+			res, err = c.client.FelixConfigurations().Update(ctx, res, options.SetOptions{})
+			if _, ok := err.(cerrors.ErrorResourceUpdateConflict); ok {
+				log.Debug("FelixConfiguration update conflict - retry update")
+				continue
+			}
+		}
+
+		if err == nil {
+			log.Debug("FelixConfiguration updated successfully")
+			return nil
+		}
+
+		log.WithError(err).Debug("Error updating FelixConfiguration to enable VXLAN")
+		return err
+	}
+
+	// Return the error from the final Update.
+	log.WithError(err).Info("Too many conflict failures attempting to update FelixConfiguration to enable VXLAN")
 	return err
 }

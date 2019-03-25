@@ -62,6 +62,7 @@ var (
 	actionRegex           = regexp.MustCompile("^(Allow|Deny|Log|Pass)$")
 	protocolRegex         = regexp.MustCompile("^(TCP|UDP|ICMP|ICMPv6|SCTP|UDPLite)$")
 	ipipModeRegex         = regexp.MustCompile("^(Always|CrossSubnet|Never)$")
+	vxlanModeRegex        = regexp.MustCompile("^(Always|Never)$")
 	logLevelRegex         = regexp.MustCompile("^(Debug|Info|Warning|Error|Fatal)$")
 	datastoreType         = regexp.MustCompile("^(etcdv3|kubernetes)$")
 	dropAcceptReturnRegex = regexp.MustCompile("^(Drop|Accept|Return)$")
@@ -123,6 +124,7 @@ func init() {
 	registerFieldValidator("labels", validateLabels)
 	registerFieldValidator("ipVersion", validateIPVersion)
 	registerFieldValidator("ipIpMode", validateIPIPMode)
+	registerFieldValidator("vxlanMode", validateVXLANMode)
 	registerFieldValidator("policyType", validatePolicyType)
 	registerFieldValidator("logLevel", validateLogLevel)
 	registerFieldValidator("dropAcceptReturn", validateFelixEtoHAction)
@@ -257,6 +259,12 @@ func validateIPIPMode(fl validator.FieldLevel) bool {
 	s := fl.Field().String()
 	log.Debugf("Validate IPIP Mode: %s", s)
 	return ipipModeRegex.MatchString(s)
+}
+
+func validateVXLANMode(fl validator.FieldLevel) bool {
+	s := fl.Field().String()
+	log.Debugf("Validate VXLAN Mode: %s", s)
+	return vxlanModeRegex.MatchString(s)
 }
 
 func validateLogLevel(fl validator.FieldLevel) bool {
@@ -674,6 +682,12 @@ func validateIPPoolSpec(structLevel validator.StructLevel) {
 	if cidr.Version() == 6 && pool.IPIPMode != api.IPIPModeNever {
 		structLevel.ReportError(reflect.ValueOf(pool.IPIPMode),
 			"IPpool.IPIPMode", "", reason("IPIPMode other than 'Never' is not supported on an IPv6 IP pool"), "")
+	}
+
+	// Cannot have both VXLAN and IPIP on the same IP pool.
+	if (pool.IPIPMode == api.IPIPModeAlways || pool.IPIPMode == api.IPIPModeCrossSubnet) && pool.VXLANMode == api.VXLANModeAlways {
+		structLevel.ReportError(reflect.ValueOf(pool.IPIPMode),
+			"IPpool.IPIPMode", "", reason("IPIPMode and VXLANMode cannot both be enabled on the same IP pool"), "")
 	}
 
 	// Default the blockSize

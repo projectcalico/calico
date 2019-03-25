@@ -36,12 +36,13 @@ import (
 )
 
 const (
-	nodeBgpIpv4AddrAnnotation           = "projectcalico.org/IPv4Address"
-	nodeBgpIpv4IPIPTunnelAddrAnnotation = "projectcalico.org/IPv4IPIPTunnelAddr"
-	nodeBgpIpv6AddrAnnotation           = "projectcalico.org/IPv6Address"
-	nodeBgpAsnAnnotation                = "projectcalico.org/ASNumber"
-	nodeBgpCIDAnnotation                = "projectcalico.org/RouteReflectorClusterID"
-	nodeK8sLabelAnnotation              = "projectcalico.org/kube-labels"
+	nodeBgpIpv4AddrAnnotation            = "projectcalico.org/IPv4Address"
+	nodeBgpIpv4IPIPTunnelAddrAnnotation  = "projectcalico.org/IPv4IPIPTunnelAddr"
+	nodeBgpIpv4VXLANTunnelAddrAnnotation = "projectcalico.org/IPv4VXLANTunnelAddr"
+	nodeBgpIpv6AddrAnnotation            = "projectcalico.org/IPv6Address"
+	nodeBgpAsnAnnotation                 = "projectcalico.org/ASNumber"
+	nodeBgpCIDAnnotation                 = "projectcalico.org/RouteReflectorClusterID"
+	nodeK8sLabelAnnotation               = "projectcalico.org/kube-labels"
 )
 
 func NewNodeClient(c *kubernetes.Clientset) K8sResourceClient {
@@ -233,6 +234,9 @@ func K8sNodeToCalico(k8sNode *kapiv1.Node) (*model.KVPair, error) {
 		calicoNode.Spec.BGP = bgpSpec
 	}
 
+	// Set the VXLAN tunnel address based on annotation.
+	calicoNode.Spec.IPv4VXLANTunnelAddr = annotations[nodeBgpIpv4VXLANTunnelAddrAnnotation]
+
 	// Create the resource key from the node name.
 	return &model.KVPair{
 		Key: model.ResourceKey{
@@ -259,6 +263,13 @@ func mergeCalicoNodeIntoK8sNode(calicoNode *apiv3.Node, k8sNode *kapiv1.Node) (*
 	// Set the k8s annotations from the Calico node metadata.
 	SetK8sAnnotationsFromCalicoMetadata(k8sNode, calicoNode)
 
+	// Handle VXLAN address.
+	if calicoNode.Spec.IPv4VXLANTunnelAddr != "" {
+		k8sNode.Annotations[nodeBgpIpv4VXLANTunnelAddrAnnotation] = calicoNode.Spec.IPv4VXLANTunnelAddr
+	} else {
+		delete(k8sNode.Annotations, nodeBgpIpv4VXLANTunnelAddrAnnotation)
+	}
+
 	if calicoNode.Spec.BGP == nil {
 		// If it is a empty NodeBGPSpec, remove all annotations.
 		delete(k8sNode.Annotations, nodeBgpIpv4AddrAnnotation)
@@ -269,6 +280,7 @@ func mergeCalicoNodeIntoK8sNode(calicoNode *apiv3.Node, k8sNode *kapiv1.Node) (*
 		return k8sNode, nil
 	}
 
+	// If the BGP spec is not nil, then handle each field within the BGP spec individually.
 	if calicoNode.Spec.BGP.IPv4Address != "" {
 		k8sNode.Annotations[nodeBgpIpv4AddrAnnotation] = calicoNode.Spec.BGP.IPv4Address
 	} else {

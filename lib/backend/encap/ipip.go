@@ -12,7 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-/*
-Package ipip implements a field type that represent different ipip modes.
-*/
-package ipip
+package encap
+
+type Mode string
+
+const (
+	Undefined   Mode = ""
+	Always           = "always"
+	CrossSubnet      = "cross-subnet"
+)
+
+const DefaultMode = Always

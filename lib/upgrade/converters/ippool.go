@@ -21,8 +21,8 @@ import (
 	apiv1 "github.com/projectcalico/libcalico-go/lib/apis/v1"
 	"github.com/projectcalico/libcalico-go/lib/apis/v1/unversioned"
 	apiv3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
+	"github.com/projectcalico/libcalico-go/lib/backend/encap"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
-	"github.com/projectcalico/libcalico-go/lib/ipip"
 	"github.com/projectcalico/libcalico-go/lib/names"
 )
 
@@ -34,7 +34,7 @@ func (_ IPPool) APIV1ToBackendV1(rIn unversioned.Resource) (*model.KVPair, error
 	p := rIn.(*apiv1.IPPool)
 
 	var ipipInterface string
-	var ipipMode ipip.Mode
+	var ipipMode encap.Mode
 	if p.Spec.IPIP != nil {
 		if p.Spec.IPIP.Enabled {
 			ipipInterface = "tunl0"
@@ -88,7 +88,7 @@ func (_ IPPool) BackendV1ToAPIV3(kvp *model.KVPair) (Resource, error) {
 	return ipp, nil
 }
 
-func convertIPIPMode(mode ipip.Mode, ipipInterface string) apiv3.IPIPMode {
+func convertIPIPMode(mode encap.Mode, ipipInterface string) apiv3.IPIPMode {
 	ipipMode := strings.ToLower(string(mode))
 
 	if ipipInterface == "" {

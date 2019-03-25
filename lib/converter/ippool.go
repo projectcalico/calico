@@ -17,8 +17,8 @@ package converter
 import (
 	api "github.com/projectcalico/libcalico-go/lib/apis/v1"
 	"github.com/projectcalico/libcalico-go/lib/apis/v1/unversioned"
+	"github.com/projectcalico/libcalico-go/lib/backend/encap"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
-	"github.com/projectcalico/libcalico-go/lib/ipip"
 )
 
 // IPPoolConverter implements a set of functions used for converting between
@@ -45,7 +45,7 @@ func (p IPPoolConverter) ConvertAPIToKVPair(a unversioned.Resource) (*model.KVPa
 
 	// Only valid interface for now is tunl0.
 	var ipipInterface string
-	var ipipMode ipip.Mode
+	var ipipMode encap.Mode
 	if ap.Spec.IPIP != nil {
 		if ap.Spec.IPIP.Enabled {
 			ipipInterface = "tunl0"
@@ -81,7 +81,7 @@ func (_ IPPoolConverter) ConvertKVPairToAPI(d *model.KVPair) (unversioned.Resour
 	apiPool.Spec.Disabled = backendPool.Disabled
 
 	// If any IPIP configuration is present then include the IPIP spec..
-	if backendPool.IPIPInterface != "" || backendPool.IPIPMode != ipip.Undefined {
+	if backendPool.IPIPInterface != "" || backendPool.IPIPMode != encap.Undefined {
 		apiPool.Spec.IPIP = &api.IPIPConfiguration{
 			Enabled: backendPool.IPIPInterface != "",
 			Mode:    backendPool.IPIPMode,

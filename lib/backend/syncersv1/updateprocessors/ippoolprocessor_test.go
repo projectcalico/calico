@@ -19,9 +19,9 @@ import (
 	. "github.com/onsi/gomega"
 
 	apiv3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
+	"github.com/projectcalico/libcalico-go/lib/backend/encap"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/libcalico-go/lib/backend/syncersv1/updateprocessors"
-	"github.com/projectcalico/libcalico-go/lib/ipip"
 	"github.com/projectcalico/libcalico-go/lib/net"
 )
 
@@ -62,7 +62,7 @@ var _ = Describe("Test the IPPool update processor", func() {
 			Key: v1PoolKeyCidr1,
 			Value: &model.IPPool{
 				CIDR:       v1PoolKeyCidr1.CIDR,
-				IPIPMode:   ipip.Undefined,
+				IPIPMode:   encap.Undefined,
 				Masquerade: false,
 				IPAM:       true,
 				Disabled:   false,
@@ -101,7 +101,7 @@ var _ = Describe("Test the IPPool update processor", func() {
 				Value: &model.IPPool{
 					CIDR:          v1PoolKeyCidr1.CIDR,
 					IPIPInterface: "tunl0",
-					IPIPMode:      ipip.Always,
+					IPIPMode:      encap.Always,
 					Masquerade:    true,
 					IPAM:          false,
 					Disabled:      true,
@@ -113,7 +113,7 @@ var _ = Describe("Test the IPPool update processor", func() {
 				Value: &model.IPPool{
 					CIDR:          v1PoolKeyCidr2.CIDR,
 					IPIPInterface: "",
-					IPIPMode:      ipip.Undefined,
+					IPIPMode:      encap.Undefined,
 					Masquerade:    false,
 					IPAM:          true,
 					Disabled:      false,

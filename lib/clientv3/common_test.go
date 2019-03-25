@@ -41,6 +41,7 @@ var _ = testutils.E2eDatastoreDescribe("Common resource tests", testutils.Datast
 			spec1 := apiv3.IPPoolSpec{
 				CIDR:         "1.2.3.0/24",
 				IPIPMode:     apiv3.IPIPModeAlways,
+				VXLANMode:    apiv3.VXLANModeNever,
 				BlockSize:    26,
 				NodeSelector: "all()",
 			}

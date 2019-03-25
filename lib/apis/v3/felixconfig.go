@@ -145,6 +145,12 @@ type FelixConfigurationSpec struct {
 	// IPIPMTU is the MTU to set on the tunnel device. See Configuring MTU [Default: 1440]
 	IPIPMTU *int `json:"ipipMTU,omitempty" confignamev1:"IpInIpMtu"`
 
+	VXLANEnabled *bool `json:"vxlanEnabled,omitempty"`
+	// VXLANMTU is the MTU to set on the tunnel device. See Configuring MTU [Default: 1440]
+	VXLANMTU  *int `json:"vxlanMTU,omitempty"`
+	VXLANPort *int `json:"vxlanPort,omitempty"`
+	VXLANVNI  *int `json:"vxlanVNI,omitempty"`
+
 	// ReportingInterval is the interval at which Felix reports its status into the datastore or 0 to disable.
 	// Must be non-zero in OpenStack deployments. [Default: 30s]
 	ReportingInterval *metav1.Duration `json:"reportingInterval,omitempty" configv1timescale:"seconds" confignamev1:"ReportingIntervalSecs"`

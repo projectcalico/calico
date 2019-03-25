@@ -106,6 +106,13 @@ func (b *AllocationBlock) IsDeleted() bool {
 	return b.Deleted
 }
 
+func (b *AllocationBlock) Host() string {
+	if b.Affinity != nil && strings.HasPrefix(*b.Affinity, "host:") {
+		return strings.TrimLeft(*b.Affinity, "host:")
+	}
+	return ""
+}
+
 type AllocationAttribute struct {
 	AttrPrimary   *string           `json:"handle_id"`
 	AttrSecondary map[string]string `json:"secondary"`
