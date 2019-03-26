@@ -9,9 +9,9 @@ The controllers are primarily configured through environment variables. When run
 the controllers as a Kubernetes pod, this is accomplished through the pod manifest `env`
 section.
 
-## The {{page.registry}}{{site.imageNames["kubeControllers"]}} container
+## The {{site.imageNames["kubeControllers"]}} container
 
-The `{{page.registry}}{{site.imageNames["kubeControllers"]}}` container includes the following controllers:
+The `{{site.imageNames["kubeControllers"]}}` container includes the following controllers:
 
 1. policy controller: watches network policies and programs {{site.prodname}} policies.
 1. namespace controller: watches namespaces and programs {{site.prodname}} profiles.
