@@ -448,6 +448,9 @@ configRetry:
 				// Set Ready to false and Live to true when unable to connect to typha
 				healthAggregator.Report(healthName, &health.HealthReport{Live: true, Ready: false})
 				err = typhaConnection.Start(context.Background())
+				if err == nil {
+					break
+				}
 				log.WithError(err).Debug("Retrying to start Typha")
 				time.Sleep(1 * time.Second)
 			}
