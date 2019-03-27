@@ -64,7 +64,7 @@ LOCAL_IP_ENV?=$(shell ip route get 8.8.8.8 | head -1 | awk '{print $$7}')
 CURL=curl -sSf
 
 K8S_VERSION?=v1.11.3
-CNI_VERSION=v0.7.1
+CNI_VERSION=v0.7.5
 
 # Get version from git.
 GIT_VERSION?=$(shell git describe --tags --dirty)
