@@ -443,14 +443,14 @@ configRetry:
 		err := typhaConnection.Start(context.Background())
 		if err != nil {
 			retry := 0
-			for (err != nil && retry < 10) {
+			for err != nil && retry < 10 {
 				// Set Ready and Live to false
-			        healthAggregator.Report(healthName, &health.HealthReport{Live: false, Ready: false})
+				healthAggregator.Report(healthName, &health.HealthReport{Live: false, Ready: false})
 				err = typhaConnection.Start(context.Background())
 				log.WithError(err).Warn("Retrying to start Typha")
 				retry++
 			}
-			if (err != nil && retry > 10) {
+			if err != nil && retry > 10 {
 				log.WithError(err).Fatal("Failed to connect to Typha")
 			}
 		}
