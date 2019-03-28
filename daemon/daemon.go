@@ -442,7 +442,21 @@ configRetry:
 		log.Infof("Starting the Typha connection")
 		err := typhaConnection.Start(context.Background())
 		if err != nil {
-			log.WithError(err).Fatal("Failed to connect to Typha")
+			log.WithError(err).Error("Failed to connect to Typha. Retrying...")
+			startTime := time.Now()
+			for err != nil && time.Since(startTime) < 30*time.Second {
+				// Set Ready to false and Live to true when unable to connect to typha
+				healthAggregator.Report(healthName, &health.HealthReport{Live: true, Ready: false})
+				err = typhaConnection.Start(context.Background())
+				if err == nil {
+					break
+				}
+				log.WithError(err).Debug("Retrying to start Typha")
+				time.Sleep(1 * time.Second)
+			}
+			if err != nil {
+				log.WithError(err).Fatal("Failed to connect to Typha")
+			}
 		}
 		go func() {
 			typhaConnection.Finished.Wait()
