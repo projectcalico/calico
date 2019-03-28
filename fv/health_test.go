@@ -1,6 +1,6 @@
 // +build fvtests
 
-// Copyright (c) 2017-2018 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2019 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -396,6 +396,18 @@ var _ = Describe("health tests", func() {
 		It("felix should report live", func() {
 			Eventually(felixLiveness, "5s", "100ms").Should(BeGood())
 			Consistently(felixLiveness, "10s", "1s").Should(BeGood())
+		})
+	})
+
+	Describe("with Felix connected to bad typha port", func() {
+		BeforeEach(func() {
+			startTypha(k8sInfra.GetDockerArgs)
+			startFelix(typhaContainer.IP+":5474", k8sInfra.GetDockerArgs, "", "", "0.0.0.0")
+		})
+		It("should become unready, then die", func() {
+			Eventually(felixReady, "5s", "1s").ShouldNot(BeGood())
+			Consistently(felixContainer.Stopped, "20s").Should(BeFalse()) // Should stay up for 20+s
+			Eventually(felixContainer.Stopped, "15s").Should(BeTrue())    // Should die at roughly 30s.
 		})
 	})
 })
