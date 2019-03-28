@@ -17,7 +17,6 @@ ADD https://github.com/krallin/tini/releases/download/${TINI_VERSION}/tini-stati
 RUN chmod +x /sbin/tini
 
 FROM scratch
-COPY --from=base /tmp /tmp
 COPY --from=base /sbin/tini /sbin/tini
 
 # Put our binary in /code rather than directly in /usr/bin.  This allows the downstream builds
