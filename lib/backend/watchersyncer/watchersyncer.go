@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2018 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2019 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -222,6 +222,13 @@ func (ws *watcherSyncer) processResult(updates []api.Update, result interface{})
 				updates = ws.sendUpdates(updates)
 				ws.sendStatusUpdate(api.InSync)
 			}
+		} else if r == api.WaitForDatastore {
+			// If we received a WaitForDatastore from a watcherCache and we're in-sync or re-syncing, send a status
+			// update signalling that we're not in-sync.
+			if ws.status == api.InSync || ws.status == api.ResyncInProgress {
+				ws.sendStatusUpdate(api.WaitForDatastore)
+			}
+			ws.numSynced--
 		}
 	}
 

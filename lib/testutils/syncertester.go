@@ -75,15 +75,9 @@ func (st *SyncerTester) OnStatusUpdated(status api.SyncStatus) {
 	// If this is not the first status event then perform additional validation on the status.
 	if current != UnsetSyncStatus {
 		// None of the concrete syncers that we are testing expect should have the same
-		// status update repeated, nor should the status decrease.  Log and panic.
+		// status update repeated.  Log and panic.
 		if status == current {
 			log.WithField("Status", status).Panic("Duplicate identical status updates from syncer")
-		}
-		if status < current {
-			log.WithFields(log.Fields{
-				"NewStatus": status,
-				"OldStatus": st.status,
-			}).Panic("Decrementing status updates from syncer")
 		}
 	}
 
@@ -148,10 +142,9 @@ func (st *SyncerTester) ParseFailed(rawKey string, rawValue string) {
 }
 
 // ExpectStatusUpdate verifies a status update message has been received.  This should only
-// be called *after* a new status change has occurred.  Since the concrete implementations
-// of the syncer API only migrate status in increasing readiness, this means it should be
-// called once each for the following statuses in order:  WaitingForDatastore, ResyncInProgress, InSync.
-// The OnStatusUpdate callback will panic if the above is not true.
+// be called *after* a new status change has occurred.  The possible state changes are:
+// WaitingForDatastore -> ResyncInProgress -> InSync -> WaitingForDatastore.
+// ExpectStatusUpdate will panic if called with the same status twice in a row.
 func (st *SyncerTester) ExpectStatusUpdate(status api.SyncStatus) {
 	log.Infof("Expecting status of: %s", status)
 	cs := func() api.SyncStatus {
