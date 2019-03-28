@@ -146,6 +146,14 @@ release-build: release-prereqs clean
 release-verify: release-prereqs
 	@echo "TODO: Implement release tar verification"
 
+ifneq (,$(findstring $(RELEASE_STREAM),v3.5 v3.4 v3.3 v3.2 v3.1 v3.0 v2.6))
+    # Found: this is an older release.
+    REL_NOTES_PATH:=releases
+else
+    # Not found: this is a newer release.
+    REL_NOTES_PATH:=release-notes
+endif
+
 ## Pushes a github release and release artifacts produced by `make release-build`.
 release-publish: release-prereqs
 	# Push the git tag.
@@ -155,7 +163,7 @@ release-publish: release-prereqs
 	# Requires ghr: https://github.com/tcnksm/ghr
 	# Requires GITHUB_TOKEN environment variable set.
 	ghr -u projectcalico -r calico \
-		-b 'Release notes can be found at https://docs.projectcalico.org/$(RELEASE_STREAM)/releases/' \
+		-b 'Release notes can be found at https://docs.projectcalico.org/$(RELEASE_STREAM)/$(REL_NOTES_PATH)/' \
 		-n $(CALICO_VER) \
 		$(CALICO_VER) $(RELEASE_DIR).tgz
 
