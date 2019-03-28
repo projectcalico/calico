@@ -44,12 +44,7 @@ end
 config = YAML::load_file(@path_to_config)
 imageNames = config["imageNames"]
 
-versions = YAML::load_file(@path_to_versions)
+versions_yml = YAML::load_file(@path_to_versions)
+versions = parse_versions(versions_yml, @version)
 
-# Load the versions.yml file so it can be rewritten in a standard helm format.
-if not versions.key?(@version)
-    puts "Error: version '#{@version}' not present in _versions.yml"
-    exit 1
-end
-
-print gen_values(versions, imageNames, @version, @image_registry)
+print gen_values(versions, imageNames, @image_registry)

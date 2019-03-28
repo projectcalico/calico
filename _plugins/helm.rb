@@ -33,14 +33,8 @@ module Jekyll
       imageNames = context.registers[:site].config["imageNames"]
       versions = context.registers[:site].data["versions"]
 
-      # Load the versions.yml file so it can be rewritten in a standard helm format.
-      if not versions.key?(version)
-        puts "skipping because #{version} not present in _versions.yml"
-        t.unlink
-        return
-      end
-
-      versionsYml = gen_values(versions, imageNames, version, imageRegistry)
+      vs = parse_versions(versions, version)
+      versionsYml = gen_values(vs, imageNames, imageRegistry)
 
       tv = Tempfile.new("temp_versions.yml")
       tv.write(versionsYml)
