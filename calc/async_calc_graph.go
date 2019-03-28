@@ -96,7 +96,7 @@ func NewAsyncCalcGraph(
 	healthAggregator *health.HealthAggregator,
 ) *AsyncCalcGraph {
 	eventBuffer := NewEventSequencer(conf)
-	calcGraph := NewCalculationGraph(eventBuffer, conf.FelixHostname)
+	calcGraph := NewCalculationGraph(eventBuffer, conf)
 	g := &AsyncCalcGraph{
 		CalcGraph:        calcGraph,
 		inputEvents:      make(chan interface{}, 10),

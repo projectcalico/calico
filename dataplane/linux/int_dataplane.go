@@ -91,9 +91,12 @@ func init() {
 }
 
 type Config struct {
+	Hostname string
+
 	IPv6Enabled          bool
 	RuleRendererOverride rules.RuleRenderer
 	IPIPMTU              int
+	VXLANMTU             int
 	IgnoreLooseRPF       bool
 
 	MaxIPSetSize int
@@ -309,8 +312,22 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	dp.iptablesFilterTables = append(dp.iptablesFilterTables, filterTableV4)
 	dp.ipSets = append(dp.ipSets, ipSetsV4)
 
-	routeTableV4 := routetable.New(config.RulesConfig.WorkloadIfacePrefixes, 4, config.NetlinkTimeout)
+	routeTableV4 := routetable.New(config.RulesConfig.WorkloadIfacePrefixes, 4, false, config.NetlinkTimeout)
 	dp.routeTables = append(dp.routeTables, routeTableV4)
+
+	if config.RulesConfig.VXLANEnabled {
+		routeTableVXLAN := routetable.New([]string{"vxlan.calico"}, 4, true, config.NetlinkTimeout)
+		dp.routeTables = append(dp.routeTables, routeTableVXLAN)
+		vxlanManager := newVXLANManager(
+			config.Hostname,
+			routeTableVXLAN,
+			"vxlan.calico",
+			config.RulesConfig.VXLANVNI,
+			config.RulesConfig.VXLANPort,
+		)
+		go vxlanManager.KeepVXLANDeviceInSync(config.VXLANMTU)
+		dp.RegisterManager(vxlanManager)
+	}
 
 	dp.endpointStatusCombiner = newEndpointStatusCombiner(dp.fromDataplane, config.IPv6Enabled)
 
@@ -381,7 +398,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		dp.iptablesMangleTables = append(dp.iptablesMangleTables, mangleTableV6)
 		dp.iptablesFilterTables = append(dp.iptablesFilterTables, filterTableV6)
 
-		routeTableV6 := routetable.New(config.RulesConfig.WorkloadIfacePrefixes, 6, config.NetlinkTimeout)
+		routeTableV6 := routetable.New(config.RulesConfig.WorkloadIfacePrefixes, 6, false, config.NetlinkTimeout)
 		dp.routeTables = append(dp.routeTables, routeTableV6)
 
 		dp.RegisterManager(newIPSetsManager(ipSetsV6, config.MaxIPSetSize))

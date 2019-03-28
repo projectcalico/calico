@@ -36,6 +36,7 @@ import (
 
 type routeTable interface {
 	SetRoutes(ifaceName string, targets []routetable.Target)
+	SetL2Routes(ifaceName string, targets []routetable.L2Target)
 }
 
 // endpointManager manages the dataplane resources that belong to each endpoint as well as

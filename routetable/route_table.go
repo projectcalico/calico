@@ -62,8 +62,27 @@ func init() {
 	prometheus.MustRegister(listIfaceTime, perIfaceSyncTime)
 }
 
+type TargetType string
+
+const (
+	TargetTypeVXLAN TargetType = "vxlan"
+)
+
+type L2Target struct {
+	// For VXLAN targets, this is the node's real IP address.
+	IP ip.Addr
+
+	// For VXLAN targets, this is the MAC address of the remote VTEP.
+	VTEPMAC net.HardwareAddr
+
+	// For VXLAN targets, this is the IP address of the remote VTEP.
+	GW ip.Addr
+}
+
 type Target struct {
+	Type    TargetType
 	CIDR    ip.CIDR
+	GW      ip.Addr
 	DestMAC net.HardwareAddr
 }
 
@@ -84,27 +103,32 @@ type RouteTable struct {
 	ifacePrefixes     set.Set
 	ifacePrefixRegexp *regexp.Regexp
 
-	ifaceNameToTargets        map[string][]Target
-	ifaceNameToFirstSeen      map[string]time.Time
-	pendingIfaceNameToTargets map[string][]Target
+	ifaceNameToTargets          map[string][]Target
+	ifaceNameToL2Targets        map[string][]L2Target
+	ifaceNameToFirstSeen        map[string]time.Time
+	pendingIfaceNameToTargets   map[string][]Target
+	pendingIfaceNameToL2Targets map[string][]L2Target
 
 	pendingConntrackCleanups map[ip.Addr]chan struct{}
 
 	inSync bool
 
-	// Testing shims, swapped with mock versions for UT
+	// Whether this route table is managing vxlan routes.
+	vxlan bool
 
+	// Testing shims, swapped with mock versions for UT
 	newNetlinkHandle  func() (HandleIface, error)
 	addStaticARPEntry func(cidr ip.CIDR, destMAC net.HardwareAddr, ifaceName string) error
 	conntrack         conntrackIface
 	time              timeIface
 }
 
-func New(interfacePrefixes []string, ipVersion uint8, netlinkTimeout time.Duration) *RouteTable {
+func New(interfacePrefixes []string, ipVersion uint8, vxlan bool, netlinkTimeout time.Duration) *RouteTable {
 	return NewWithShims(
 		interfacePrefixes,
 		ipVersion,
 		newNetlinkHandle,
+		vxlan,
 		netlinkTimeout,
 		addStaticARPEntry,
 		conntrack.New(),
@@ -117,6 +141,7 @@ func NewWithShims(
 	interfacePrefixes []string,
 	ipVersion uint8,
 	newNetlinkHandle func() (HandleIface, error),
+	vxlan bool,
 	netlinkTimeout time.Duration,
 	addStaticARPEntry func(cidr ip.CIDR, destMAC net.HardwareAddr, ifaceName string) error,
 	conntrack conntrackIface,
@@ -143,20 +168,23 @@ func NewWithShims(
 		logCxt: log.WithFields(log.Fields{
 			"ipVersion": ipVersion,
 		}),
-		ipVersion:                 ipVersion,
-		netlinkFamily:             family,
-		ifacePrefixes:             prefixSet,
-		ifacePrefixRegexp:         regexp.MustCompile(ifaceNamePattern),
-		ifaceNameToTargets:        map[string][]Target{},
-		ifaceNameToFirstSeen:      map[string]time.Time{},
-		pendingIfaceNameToTargets: map[string][]Target{},
-		dirtyIfaces:               set.New(),
-		pendingConntrackCleanups:  map[ip.Addr]chan struct{}{},
-		newNetlinkHandle:          newNetlinkHandle,
-		netlinkTimeout:            netlinkTimeout,
-		addStaticARPEntry:         addStaticARPEntry,
-		conntrack:                 conntrack,
-		time:                      timeShim,
+		ipVersion:                   ipVersion,
+		netlinkFamily:               family,
+		ifacePrefixes:               prefixSet,
+		ifacePrefixRegexp:           regexp.MustCompile(ifaceNamePattern),
+		ifaceNameToTargets:          map[string][]Target{},
+		ifaceNameToL2Targets:        map[string][]L2Target{},
+		ifaceNameToFirstSeen:        map[string]time.Time{},
+		pendingIfaceNameToTargets:   map[string][]Target{},
+		pendingIfaceNameToL2Targets: map[string][]L2Target{},
+		dirtyIfaces:                 set.New(),
+		pendingConntrackCleanups:    map[ip.Addr]chan struct{}{},
+		newNetlinkHandle:            newNetlinkHandle,
+		netlinkTimeout:              netlinkTimeout,
+		addStaticARPEntry:           addStaticARPEntry,
+		conntrack:                   conntrack,
+		time:                        timeShim,
+		vxlan:                       vxlan,
 	}
 }
 
@@ -182,6 +210,11 @@ func (r *RouteTable) onIfaceSeen(ifaceName string) {
 
 func (r *RouteTable) SetRoutes(ifaceName string, targets []Target) {
 	r.pendingIfaceNameToTargets[ifaceName] = targets
+	r.dirtyIfaces.Add(ifaceName)
+}
+
+func (r *RouteTable) SetL2Routes(ifaceName string, targets []L2Target) {
+	r.pendingIfaceNameToL2Targets[ifaceName] = targets
 	r.dirtyIfaces.Add(ifaceName)
 }
 
@@ -287,6 +320,24 @@ func (r *RouteTable) Apply() error {
 		ifaceName := item.(string)
 		logCxt := r.logCxt.WithField("ifaceName", ifaceName)
 		for retries > 0 {
+			if r.vxlan {
+				// Sync L2 routes first.
+				err := r.syncL2RoutesForLink(ifaceName)
+				if err == IfaceNotPresent {
+					logCxt.Info("Interface missing, will retry if it appears.")
+					break
+				} else if err == IfaceDown {
+					logCxt.Info("Interface down, will retry if it goes up.")
+					break
+				} else if err != nil {
+					logCxt.WithError(err).Warn("Failed to syncronise routes.")
+					retries--
+					continue
+				}
+				logCxt.Debug("Synchronised L2 routes on interface")
+			}
+
+			// Sync L3 routes.
 			err := r.syncRoutesForLink(ifaceName)
 			if err == IfaceNotPresent {
 				logCxt.Info("Interface missing, will retry if it appears.")
@@ -303,7 +354,7 @@ func (r *RouteTable) Apply() error {
 				retries--
 				continue
 			}
-			logCxt.Debug("Synchronised routes on interface")
+			logCxt.Debug("Synchronised L3 routes on interface")
 			break
 		}
 		if retries == 0 {
@@ -326,6 +377,37 @@ func (r *RouteTable) Apply() error {
 		return UpdateFailed
 	}
 
+	return nil
+}
+
+func (r *RouteTable) ensureL2Dataplane(linkAttrs *netlink.LinkAttrs, target L2Target) error {
+	// For each L2 entry we need to program, program it.
+	// Add a static ARP entry.
+	a := &netlink.Neigh{
+		LinkIndex:    linkAttrs.Index,
+		State:        netlink.NUD_PERMANENT,
+		Type:         syscall.RTN_UNICAST,
+		IP:           target.GW.AsNetIP(),
+		HardwareAddr: target.VTEPMAC,
+	}
+	if err := netlink.NeighSet(a); err != nil {
+		return err
+	}
+	log.WithField("entry", a).Debug("Programmed ARP")
+
+	// Add a FDB entry for this neighbor.
+	n := &netlink.Neigh{
+		LinkIndex:    linkAttrs.Index,
+		State:        netlink.NUD_PERMANENT,
+		Family:       syscall.AF_BRIDGE,
+		Flags:        netlink.NTF_SELF,
+		IP:           target.IP.AsNetIP(),
+		HardwareAddr: target.VTEPMAC,
+	}
+	if err := netlink.NeighSet(n); err != nil {
+		return err
+	}
+	log.WithField("entry", n).Debug("Programmed FDB")
 	return nil
 }
 
@@ -437,8 +519,8 @@ func (r *RouteTable) syncRoutesForLink(ifaceName string) error {
 			logCxt.Debug("Syncing routes: Found expected route.")
 			continue
 		}
-		if inGracePeriod {
-			// Don't remove routes from interfaces created recently.
+		if !r.vxlan && inGracePeriod {
+			// Don't remove routes from interfaces created recently. VXLAN routes don't have a grace period.
 			logCxt.Info("Syncing routes: found unexpected route; ignoring due to grace period.")
 			leaveDirty = true
 			continue
@@ -469,6 +551,16 @@ func (r *RouteTable) syncRoutesForLink(ifaceName string) error {
 				Protocol:  syscall.RTPROT_BOOT,
 				Scope:     netlink.SCOPE_LINK,
 			}
+
+			if target.GW != nil {
+				route.Gw = target.GW.AsNetIP()
+			}
+
+			if target.Type == TargetTypeVXLAN {
+				route.Scope = netlink.SCOPE_UNIVERSE
+				route.SetFlag(syscall.RTNH_F_ONLINK)
+			}
+
 			// In case this IP is being re-used, wait for any previous conntrack entry
 			// to be cleaned up.  (No-op if there are no pending deletes.)
 			r.waitForPendingConntrackDeletion(cidr.Addr())
@@ -498,6 +590,101 @@ func (r *RouteTable) syncRoutesForLink(ifaceName string) error {
 	if leaveDirty {
 		// Superfluous routes on a recently created interface.  We'll recheck later.
 		return IfaceGrace
+	}
+
+	return nil
+}
+
+func (r *RouteTable) syncL2RoutesForLink(ifaceName string) error {
+	logCxt := r.logCxt.WithField("ifaceName", ifaceName)
+	logCxt.Debug("Syncing interface L2 routes")
+	if updatedTargets, ok := r.pendingIfaceNameToL2Targets[ifaceName]; ok {
+		logCxt.Debug("Have updated targets.")
+		if updatedTargets == nil {
+			delete(r.ifaceNameToL2Targets, ifaceName)
+		} else {
+			r.ifaceNameToL2Targets[ifaceName] = updatedTargets
+		}
+		delete(r.pendingIfaceNameToL2Targets, ifaceName)
+	}
+	expectedTargets := r.ifaceNameToL2Targets[ifaceName]
+
+	// Try to get the link.  This may fail if it's been deleted out from under us.
+	nl, err := r.getNetlinkHandle()
+	if err != nil {
+		r.logCxt.WithError(err).Error("Failed to connect to netlink, retrying...")
+		return ConnectFailed
+	}
+	link, err := nl.LinkByName(ifaceName)
+	if err != nil {
+		// Filter the error so that we don't spam errors if the interface is being torn down.
+		filteredErr := r.filterErrorByIfaceState(ifaceName, err, GetFailed)
+		if filteredErr == GetFailed {
+			logCxt.WithError(err).Error("Failed to get interface.")
+			r.closeNetlinkHandle() // Defensive: force a netlink reconnection next time.
+		} else {
+			logCxt.WithError(err).Info("Failed to get interface; it's down/gone.")
+		}
+		return filteredErr
+	}
+	linkAttrs := link.Attrs()
+
+	// Build maps based on desired target state, used below to clean up
+	// stale entries. Each L2 target results in an ARP entry as well as
+	// a FDB entry.
+	expectedARPEntries := map[string]net.HardwareAddr{}
+	expectedFDBEntries := map[string]net.HardwareAddr{}
+	for _, target := range expectedTargets {
+		expectedARPEntries[target.GW.String()] = target.VTEPMAC
+		expectedFDBEntries[target.IP.String()] = target.VTEPMAC
+	}
+
+	// Get the current set of neighbors on this interface.
+	existingNeigh, err := netlink.NeighList(linkAttrs.Index, netlink.FAMILY_V4)
+	if err != nil {
+		return err
+	}
+
+	// For each existing neighbor, if it is not present in the expected set, then remove it.
+	var updatesFailed bool
+	for _, existing := range existingNeigh {
+		if existing.Family == syscall.AF_BRIDGE {
+			// FDB entries have family set to bridge.
+			if _, ok := expectedFDBEntries[existing.IP.String()]; !ok {
+				logCxt.WithField("neighbor", existing).Info("Removing old neighbor entry (FDB)")
+				if err := netlink.NeighDel(&existing); err != nil {
+					updatesFailed = true
+					continue
+				}
+			}
+		} else {
+			if _, ok := expectedARPEntries[existing.IP.String()]; !ok {
+				logCxt.WithField("neighbor", existing).Info("Removing old neighbor entry (ARP)")
+				if err := netlink.NeighDel(&existing); err != nil {
+					updatesFailed = true
+					continue
+				}
+			}
+
+		}
+	}
+
+	// For each expected target, ensure that it is programmed. If the value has changed since last programming, this
+	// will update it.
+	for _, target := range expectedTargets {
+		if err = r.ensureL2Dataplane(linkAttrs, target); err != nil {
+			logCxt.WithError(err).Warnf("Failed to sync L2 dataplane for interface")
+			updatesFailed = true
+			continue
+		}
+	}
+
+	if updatesFailed {
+		r.closeNetlinkHandle() // Defensive: force a netlink reconnection next time.
+
+		// Recheck whether the interface exists so we don't produce spammy logs during
+		// interface removal.
+		return r.filterErrorByIfaceState(ifaceName, UpdateFailed, UpdateFailed)
 	}
 
 	return nil

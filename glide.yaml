@@ -63,7 +63,7 @@ import:
   - lib/set
   - lib/validator/v1
 - package: github.com/projectcalico/typha
-  version: 1925c18268d77559e1ab1225af05b9b2f015a22c
+  version: d4a433a6dd315a932f4608549414fb875bf1172a
   subpackages:
   - pkg/syncclient
   - pkg/tlsutils
@@ -72,6 +72,7 @@ import:
   subpackages:
   - binder
 - package: github.com/prometheus/client_golang
+  version: 773f5027234d0b08adf766be34f55df2f312abf7
   subpackages:
   - prometheus
   - prometheus/promhttp

@@ -75,6 +75,7 @@ var _ = Describe("RouteTable", func() {
 			[]string{"cali"},
 			4,
 			dataplane.NewNetlinkHandle,
+			false,
 			10*time.Second,
 			dataplane.AddStaticArpEntry,
 			dataplane,

@@ -18,6 +18,10 @@ service PolicySync {
   //  - ServiceAccountRemove
   //  - NamespaceUpdate
   //  - NamespaceRemove
+  //  - RouteUpdate 
+  //  - RouteRemove
+  //  - VXLANTunnelEndpointUpdate 
+  //  - VXLANTunnelEndpointRemove 
   rpc Sync(SyncRequest) returns (stream ToDataplane);
 }
 
@@ -97,6 +101,16 @@ message ToDataplane {
     NamespaceUpdate namespace_update = 21;
     // NamespaceRemove is sent when a Namespace is removed.
     NamespaceRemove namespace_remove = 22;
+
+    // RouteUpdate is send when a route is added/updated.
+    RouteUpdate route_update = 23;
+    // RouteRemove is send when a route is deleted.
+    RouteRemove route_remove = 24;
+
+    // VXLANTunnelEndpointUpdate is send when a vtep is added/updated.
+    VXLANTunnelEndpointUpdate vtep_update = 25;
+    // VXLANTunnelEndpointRemove is send when a route is deleted.
+    VXLANTunnelEndpointRemove vtep_remove = 26;
   }
 }
 
@@ -443,4 +457,31 @@ message NamespaceRemove {
 
 message NamespaceID {
   string name = 1;
+}
+
+enum RouteType {
+  VXLAN = 0;
+}
+
+message RouteUpdate {
+  RouteType type = 1;
+  string dst = 2;
+  string node = 3;
+  string gw = 4;
+}
+
+message RouteRemove {
+  RouteType type = 1;
+  string dst = 2;
+}
+
+message VXLANTunnelEndpointUpdate {
+  string node = 1;
+  string mac = 2;
+  string ipv4_addr = 3;
+  string parent_device_ip = 4;
+}
+
+message VXLANTunnelEndpointRemove {
+  string node = 1;
 }

@@ -427,10 +427,12 @@ func doStateSequenceTest(expandedTest StateList, flushStrategy flushStrategy) {
 	var lastStats StatsUpdate
 
 	BeforeEach(func() {
+		conf := config.New()
+		conf.FelixHostname = localHostname
 		mockDataplane = mock.NewMockDataplane()
 		eventBuf = NewEventSequencer(mockDataplane)
 		eventBuf.Callback = mockDataplane.OnEvent
-		calcGraph = NewCalculationGraph(eventBuf, localHostname)
+		calcGraph = NewCalculationGraph(eventBuf, conf)
 		statsCollector := NewStatsCollector(func(stats StatsUpdate) error {
 			log.WithField("stats", stats).Info("Stats update")
 			lastStats = stats

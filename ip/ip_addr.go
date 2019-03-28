@@ -180,6 +180,14 @@ func FromNetIP(netIP net.IP) Addr {
 	return nil
 }
 
+func CIDRFromString(cidrStr string) (CIDR, error) {
+	_, cidr, err := net.ParseCIDR(cidrStr)
+	if err != nil {
+		return nil, err
+	}
+	return CIDRFromIPNet(cidr), nil
+}
+
 func CIDRFromCalicoNet(ipNet calinet.IPNet) CIDR {
 	return CIDRFromIPNet(&ipNet.IPNet)
 }

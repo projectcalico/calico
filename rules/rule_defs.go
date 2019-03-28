@@ -233,6 +233,10 @@ type Config struct {
 	OpenStackMetadataPort        uint16
 	OpenStackSpecialCasesEnabled bool
 
+	VXLANEnabled bool
+	VXLANPort    int
+	VXLANVNI     int
+
 	IPIPEnabled bool
 	// IPIPTunnelAddress is an address chosen from an IPAM pool, used as a source address
 	// by the host when sending traffic to a workload over IPIP.
