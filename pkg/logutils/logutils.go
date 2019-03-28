@@ -58,6 +58,7 @@ const logQueueSize = 100
 // ConfigureEarlyLogging installs our logging adapters, and enables early logging to screen
 // if it is enabled by either the TYPHA_EARLYLOGSEVERITYSCREEN or TYPHA_LOGSEVERITYSCREEN
 // environment variable.
+// It also disables glog's log to disk default behaviour.
 func ConfigureEarlyLogging() {
 	// Log to stdout.  This prevents fluentd, for example, from interpreting all our logs as errors by default.
 	log.SetOutput(os.Stdout)
