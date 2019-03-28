@@ -73,8 +73,9 @@ Application layer policy [requires Istio](../requirements#application-layer-poli
 Install Istio according to the [Istio project documentation](https://istio.io/docs/setup/kubernetes/), making sure to enable mutual TLS authentication. For example:
 
 ```bash
-curl -L https://git.io/getLatestIstio | sh -
+curl -L https://git.io/getLatestIstio | ISTIO_VERSION=1.0.6 sh -
 cd $(ls -d istio-*)
+kubectl apply -f install/kubernetes/helm/istio/templates/crds.yaml
 kubectl apply -f install/kubernetes/istio-demo-auth.yaml
 ```
 
@@ -88,7 +89,7 @@ The sidecar injector automatically modifies pods as they are created to work
 with Istio. This step modifies the injector configuration to add Dikastes, a
 {{site.prodname}} component, as sidecar containers.
 
-1. Follow the [Automatic sidecar injection instructions](https://istio.io/docs/setup/kubernetes/sidecar-injection/#automatic-sidecar-injection)
+1. Follow the [Automatic sidecar injection instructions](https://archive.istio.io/v1.0/docs/setup/kubernetes/sidecar-injection/#automatic-sidecar-injection)
    to install the sidecar injector and enable it in your chosen namespace(s).
 
 1. Apply the following ConfigMap to enable injection of Dikastes alongside Envoy.
