@@ -20,8 +20,8 @@ fi
 NODENAME=$(cat /var/lib/calico/nodename)
 export NODENAME
 
-# If possible pre-allocate the IP address on the IPIP tunnel.
-calico-node -allocate-ipip-addr || exit 1
+# If possible pre-allocate any tunnel addresses. 
+calico-node -allocate-tunnel-addrs || exit 1
 
 # Create a directly to put enabled service files
 mkdir /etc/service/enabled

@@ -1,73 +1,19 @@
-package allocateipip
+package allocateip
 
 import (
 	"context"
 	"fmt"
-	"os"
 	"time"
-
-	"github.com/projectcalico/node/pkg/calicoclient"
 
 	api "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	client "github.com/projectcalico/libcalico-go/lib/clientv3"
 	cerrors "github.com/projectcalico/libcalico-go/lib/errors"
 	"github.com/projectcalico/libcalico-go/lib/ipam"
-	"github.com/projectcalico/libcalico-go/lib/logutils"
 	"github.com/projectcalico/libcalico-go/lib/net"
 	"github.com/projectcalico/libcalico-go/lib/options"
 
 	log "github.com/sirupsen/logrus"
 )
-
-// This file contains the main processing for the allocate_ipip_addr binary
-// used by calico/node to set the host's tunnel address to an IPIP-enabled
-// address if there are any available, otherwise it removes any tunnel address
-// that is configured.
-
-func Run() {
-	// Log to stdout.  this prevents our logs from being interpreted as errors by, for example,
-	// fluentd's default configuration.
-	log.SetOutput(os.Stdout)
-
-	// Set log formatting.
-	log.SetFormatter(&logutils.Formatter{})
-
-	// Install a hook that adds file and line number information.
-	log.AddHook(&logutils.ContextHook{})
-
-	// Load the client config from environment.
-	_, c := calicoclient.CreateClient()
-
-	// The allocate_ipip_addr binary is only ever invoked _after_ the
-	// startup binary has been invoked and the modified environments have
-	// been sourced.  Therefore, the NODENAME environment will always be
-	// set at this point.
-	nodename := os.Getenv("NODENAME")
-	if nodename == "" {
-		log.Panic("NODENAME environment is not set")
-	}
-
-	ctx := context.Background()
-	// Get node resource for given nodename.
-	node, err := c.Nodes().Get(ctx, nodename, options.GetOptions{})
-	if err != nil {
-		log.WithError(err).Fatalf("failed to fetch node resource '%s'", nodename)
-	}
-
-	// Get list of ip pools
-	ipPoolList, err := c.IPPools().List(ctx, options.ListOptions{})
-	if err != nil {
-		log.WithError(err).Fatal("Unable to query IP pool configuration")
-	}
-
-	// Query the IPIP enabled pools and either configure the tunnel
-	// address, or remove it.
-	if cidrs := determineIPIPEnabledPoolCIDRs(*node, *ipPoolList); len(cidrs) > 0 {
-		ensureHostTunnelAddress(ctx, c, nodename, cidrs)
-	} else {
-		removeHostTunnelAddr(ctx, c, nodename)
-	}
-}
 
 // ensureHostTunnelAddress that ensures the host has a valid IP address for the
 // IPIP tunnel device. This must be an IP address claimed from one of the IPIP
