@@ -1,5 +1,5 @@
-hash: 18d4bf78b11c7590370267b73a105035fb24d57798254a7b0f22cedf9a04e363
-updated: 2019-03-29T07:41:18.383699897Z
+hash: c973466f15614b649848698b5f6e471e58fff6549a6d5c18ababb76aaa3a193c
+updated: 2019-03-30T07:47:19.850723268Z
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -114,7 +114,7 @@ imports:
 - name: github.com/kardianos/osext
   version: 2bc1f35cddc0cc527b4bc3dce8578fc2a6c11384
 - name: github.com/kelseyhightower/confd
-  version: 62e43789b29fcfc4bd412b67e88b3b0fa1cefbed
+  version: 5653ba73a922a51184652554a704c497eed5aeb3
   repo: https://github.com/projectcalico/confd.git
   subpackages:
   - pkg/backends
@@ -269,7 +269,7 @@ imports:
   subpackages:
   - binder
 - name: github.com/projectcalico/typha
-  version: 623a5350009ff5aa32409265a4c161b99b81bc97
+  version: 077427bf0babcc940aa369f84a3522e7bfd437c0
   subpackages:
   - pkg/syncclient
   - pkg/syncproto
