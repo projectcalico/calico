@@ -55,7 +55,7 @@ func DetermineNodename(conf types.NetConf) (nodename string) {
 	if conf.Nodename != "" {
 		logrus.Debugf("Read node name from CNI conf: %s", conf.Nodename)
 		nodename = conf.Nodename
-	} else if nff := nodenameFromFile(); nff != "" {
+	} else if nff := nodenameFromFile(conf.NodenameFile); nff != "" {
 		logrus.Debugf("Read node name from file: %s", nff)
 		nodename = nff
 	} else if conf.Hostname != "" {
@@ -72,15 +72,18 @@ func DetermineNodename(conf types.NetConf) (nodename string) {
 
 // nodenameFromFile reads the /var/lib/calico/nodename file if it exists and
 // returns the nodename within.
-func nodenameFromFile() string {
-	data, err := ioutil.ReadFile("/var/lib/calico/nodename")
+func nodenameFromFile(filename string) string {
+	if filename == "" {
+		filename = "/var/lib/calico/nodename"
+	}
+	data, err := ioutil.ReadFile(filename)
 	if err != nil {
 		if os.IsNotExist(err) {
 			// File doesn't exist, return empty string.
-			logrus.Info("File /var/lib/calico/nodename does not exist")
+			logrus.Infof("File %s does not exist", filename)
 			return ""
 		}
-		logrus.WithError(err).Error("Failed to read /var/lib/calico/nodename")
+		logrus.WithError(err).Errorf("Failed to read %s", filename)
 		return ""
 	}
 	return string(data)
@@ -308,8 +311,15 @@ func replaceHostLocalIPAMPodCIDR(logger *logrus.Entry, rawIpamData interface{}, 
 		}
 		logger.WithField("podCidr", podCidr).Info("Fetched podCidr")
 		ipamData["subnet"] = podCidr
+		subnet = podCidr
 		logger.Infof("Calico CNI passing podCidr to host-local IPAM: %s", podCidr)
 	}
+
+	err := updateHostLocalIPAMDataForOS(subnet, ipamData)
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -365,6 +375,9 @@ func AddIgnoreUnknownArgs() error {
 // CreateResultFromEndpoint takes a WorkloadEndpoint, extracts IP information
 // and populates that into a CNI Result.
 func CreateResultFromEndpoint(wep *api.WorkloadEndpoint) (*current.Result, error) {
+	if wep == nil {
+		return nil, fmt.Errorf("endpoint not found")
+	}
 	result := &current.Result{}
 	for _, v := range wep.Spec.IPNetworks {
 		parsedIPConfig := current.IPConfig{}
