@@ -20,7 +20,7 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/libcalico-go/lib/backend/watchersyncer"
 	"github.com/sirupsen/logrus"
-	"k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 )
 
 func (c *NodeController) initSyncer() {
@@ -49,7 +49,7 @@ func (c *NodeController) OnUpdates(updates []bapi.Update) {
 			n := upd.KVPair.Value.(*apiv3.Node)
 			if kn := getK8sNodeName(*n); kn != "" {
 				// Create a mapping from Kubernetes node -> Calico node.
-				logrus.Debugf("Mapping Calico -> k8s node. %s -> %s", n.Name, kn)
+				logrus.Debugf("Mapping k8s node -> calico node. %s -> %s", kn, n.Name)
 				c.nodemapLock.Lock()
 				c.nodemapper[kn] = n.Name
 				c.nodemapLock.Unlock()
@@ -67,14 +67,23 @@ func (c *NodeController) OnUpdates(updates []bapi.Update) {
 				c.syncNodeLabels(obj.(*v1.Node))
 			}
 		case bapi.UpdateTypeKVDeleted:
-			n := upd.KVPair.Value.(*apiv3.Node)
-			if kn := getK8sNodeName(*n); kn != "" {
-				// Remove it from the node map.
-				logrus.Debugf("Unmapping Calico -> k8s node. %s -> %s", n.Name, kn)
-				c.nodemapLock.Lock()
-				delete(c.nodemapper, kn)
-				c.nodemapLock.Unlock()
+			if upd.KVPair.Value != nil {
+				logrus.Warnf("KVPair value should be nil for Deleted UpdataType")
 			}
+
+			// Try to perform unmapping based on resource name (calico node name).
+			n := upd.KVPair.Key.(model.ResourceKey).Name
+			for kn, cn := range c.nodemapper {
+				if cn == n {
+					// Remove it from node map.
+					logrus.Debugf("Unmapping k8s node -> calico node. %s -> %s", kn, cn)
+					c.nodemapLock.Lock()
+					delete(c.nodemapper, kn)
+					c.nodemapLock.Unlock()
+					break
+				}
+			}
+
 		default:
 			logrus.Errorf("Unhandled update type")
 		}
