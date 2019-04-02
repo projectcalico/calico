@@ -23,7 +23,7 @@ exec 1>&2
 
 changed_files=$(git diff --cached --name-only)
 changed_py_files=$( { git diff --cached --name-only | grep -E '\.py$'; } || true)
-changed_go_files=$( { git diff --cached --name-only | grep -E '\.go$'; } || true)
+changed_go_files=$( { git diff --cached --name-only | grep -E '\.go$' | grep -v felixbackend.pb.go; } || true)
 
 copyright_owner="Tigera, Inc"
 
