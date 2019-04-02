@@ -67,9 +67,6 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Threshold time for bgp peering
-	fmt.Println("Threshold time for bird readiness check: ", *thresholdTime)
-
 	// Perform some validation on the parsed flags. Only one of the following may be
 	// specified at a time.
 	onlyOne := []*bool{version, runFelix, runStartup, runConfd}
@@ -87,6 +84,7 @@ func main() {
 
 	// If any of the readienss options are provided, check readiness.
 	if *birdReady || *bird6Ready || *felixReady {
+		logrus.Info("Threshold time for bird readiness check: ", *thresholdTime)
 		readiness.Run(*birdReady, *bird6Ready, *felixReady, *thresholdTime)
 		os.Exit(0)
 	}
