@@ -33,7 +33,20 @@ module Jekyll
       imageNames = context.registers[:site].config["imageNames"]
       versions = context.registers[:site].data["versions"]
 
-      vs = parse_versions(versions, version)
+      # If versions.yml doesn't contain component version info for the requested version,
+      # only log a warning if 'ignoreMissingVersions' is set 'true' in their _config.yaml.
+      @ignoreMissingVersions = context.registers[:site].config["ignoreMissingVersions"]
+      begin
+        vs = parse_versions(versions, version)
+      rescue IndexError
+        if !@ignoreMissingVersions
+          raise
+        else
+          puts "ignoring missing version '#{version}'"
+          return
+        end
+      end
+
       versionsYml = gen_values(vs, imageNames, imageRegistry)
 
       tv = Tempfile.new("temp_versions.yml")
