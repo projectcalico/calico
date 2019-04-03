@@ -141,15 +141,15 @@ func (aggregator *HealthAggregator) Summary() *HealthReport {
 	for name, reporter := range aggregator.reporters {
 		// Reset Live to false if that reporter is registered to report liveness and hasn't
 		// recently said that it is live.
-		notReportedLive := !reporter.latest.Live || reporter.TimedOut()
-		if summary.Live && reporter.reports.Live && notReportedLive {
+		stillLive := reporter.latest.Live && !reporter.TimedOut()
+		if summary.Live && reporter.reports.Live && !stillLive {
 			summary.Live = false
 		}
 
 		// Reset Ready to false if that reporter is registered to report readiness and
 		// hasn't recently said that it is ready.
-		notReportedReady := !reporter.latest.Ready || reporter.TimedOut()
-		if summary.Ready && reporter.reports.Ready && notReportedReady {
+		stillReady := reporter.latest.Ready && !reporter.TimedOut()
+		if summary.Ready && reporter.reports.Ready && !stillReady {
 			summary.Ready = false
 		}
 
@@ -158,7 +158,7 @@ func (aggregator *HealthAggregator) Summary() *HealthReport {
 			"reporter-state": reporter,
 		})
 
-		if reporter.reports.Live && notReportedLive || reporter.reports.Ready && notReportedReady {
+		if reporter.reports.Live && !stillLive || reporter.reports.Ready && !stillReady {
 			logFuncs = append(logFuncs, func() {
 				logEntry.Warn("Unhealthy reporter")
 			})
