@@ -43,6 +43,12 @@ type reporterState struct {
 	timestamp time.Time
 }
 
+// TimedOut checks whether the reporterState is due for another report. This is the case when
+// the reports are configured to expire and the time since the last report exceeds the report timeout duration.
+func (r *reporterState) TimedOut() bool {
+	return r.timeout != 0 && time.Since(r.timestamp) > r.timeout
+}
+
 // A HealthAggregator receives health reports from individual reporters (which are typically
 // components of a particular daemon or application) and aggregates them into an overall health
 // summary.  For each monitored kind of health, all of the reporters that report that need to say
@@ -135,14 +141,14 @@ func (aggregator *HealthAggregator) Summary() *HealthReport {
 	for name, reporter := range aggregator.reporters {
 		// Reset Live to false if that reporter is registered to report liveness and hasn't
 		// recently said that it is live.
-		notReportedLive := !reporter.latest.Live || (reporter.timeout != 0 && time.Since(reporter.timestamp) > reporter.timeout)
+		notReportedLive := !reporter.latest.Live || reporter.TimedOut()
 		if summary.Live && reporter.reports.Live && notReportedLive {
 			summary.Live = false
 		}
 
 		// Reset Ready to false if that reporter is registered to report readiness and
 		// hasn't recently said that it is ready.
-		notReportedReady := !reporter.latest.Ready || (reporter.timeout != 0 && time.Since(reporter.timestamp) > reporter.timeout)
+		notReportedReady := !reporter.latest.Ready || reporter.TimedOut()
 		if summary.Ready && reporter.reports.Ready && notReportedReady {
 			summary.Ready = false
 		}
