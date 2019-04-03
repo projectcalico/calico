@@ -1,9 +1,0 @@
----
-layout: null
----
-{% helm %}
-datastore: kdd
-typha:
-  enabled: true
-app_layer_policy: true
-{% endhelm %}
