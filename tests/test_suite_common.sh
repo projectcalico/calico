@@ -372,6 +372,9 @@ run_individual_test_oneshot() {
 	start_typha
     fi
 
+    # Clean up the output directory.
+    rm -f /etc/calico/confd/config/*
+
     # Run confd in oneshot mode.
     BGP_LOGSEVERITYSCREEN="debug" confd -confdir=/etc/calico/confd -onetime >$LOGPATH/logss 2>&1 || true
 

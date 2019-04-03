@@ -5,7 +5,13 @@ include "bird_ipam.cfg";
 {{- $node_ip_key := printf "/host/%s/ip_addr_v4" (getenv "NODENAME")}}{{$node_ip := getv $node_ip_key}}
 {{- $router_id := getenv "CALICO_ROUTER_ID" ""}}
 
-router id {{if ne "" ($router_id)}}{{$router_id}}{{else}}{{$node_ip}}{{end}};
+{{- $node_name := getenv "NODENAME"}}
+
+router id {{if eq "hash" ($router_id) -}}
+	{{hashToIPv4 $node_name}};
+{{- else -}}
+	{{if ne "" ($router_id)}}{{$router_id}}{{else}}{{$node_ip}}{{end}};
+{{- end}}
 
 {{- define "LOGGING"}}
 {{- $node_logging_key := printf "/host/%s/loglevel" (getenv "NODENAME")}}
