@@ -173,6 +173,7 @@ func Migrate(ctxt context.Context, c client.Interface, nodename string) error {
 				if _, ok := err.(errors.ErrorResourceUpdateConflict); ok {
 					log.Info("Encountered update conflict, retrying...")
 					time.Sleep((1 << i) * time.Second)
+					continue
 				}
 				return fmt.Errorf("failed to disable cluster: %s", err)
 			}
