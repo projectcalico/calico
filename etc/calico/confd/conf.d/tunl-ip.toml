@@ -5,4 +5,4 @@ prefix = "/calico/v1/ipam/v4"
 keys = [
     "/pool",
 ]
-reload_cmd = "calico-node -allocate-ipip-addr"
+reload_cmd = "calico-node -allocate-tunnel-addrs"

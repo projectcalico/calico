@@ -12,15 +12,15 @@ import:
   - lib/errors
   - lib/logutils
   - lib/options
-# The 1.11.0 versions of k8s.io/apimachinery and k8s.io/api pin json-iter to 
-# different versions and one of them has a compilation bug.  Pin to the fixed 
+# The 1.11.0 versions of k8s.io/apimachinery and k8s.io/api pin json-iter to
+# different versions and one of them has a compilation bug.  Pin to the fixed
 # version.
 - package: github.com/json-iterator/go
   version: f2b4162afba35581b6d4a50d3b8f34e33c144682
 - package: github.com/sirupsen/logrus
   version: v1.0.4
 - package: github.com/projectcalico/typha
-  version: 077427bf0babcc940aa369f84a3522e7bfd437c0
+  version: 9d9fe1288ae6d5843b3fe8441c605e9d41470580
 testImports:
 - package: github.com/onsi/ginkgo
 - package: github.com/onsi/gomega
