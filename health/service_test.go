@@ -4,6 +4,7 @@ import (
 	"context"
 	"testing"
 
+	. "github.com/onsi/gomega"
 	"github.com/projectcalico/app-policy/proto"
 )
 
@@ -16,6 +17,7 @@ func (r *reporter) Readiness() bool {
 }
 
 func TestHealthService(t *testing.T) {
+	g := NewWithT(t)
 	// Test happy path case where ReadinessReporter reports true.
 	reporter := &reporter{
 		Ready: true,
@@ -24,36 +26,20 @@ func TestHealthService(t *testing.T) {
 
 	req := &proto.HealthCheckRequest{}
 	resp, err := s.CheckReadiness(context.Background(), req)
-	if err != nil {
-		t.Errorf("expected no error checking readiness, got: %s", err)
-	}
-	if !resp.Healthy {
-		t.Error("expected readiness response to be true")
-	}
+	g.Expect(err).ToNot(HaveOccurred())
+	g.Expect(resp.Healthy).To(BeTrue())
 
 	resp, err = s.CheckLiveness(context.Background(), req)
-	if err != nil {
-		t.Errorf("expected no error checking liveness, got: %s", err)
-	}
-	if !resp.Healthy {
-		t.Error("expected liveness response to be true")
-	}
+	g.Expect(err).ToNot(HaveOccurred())
+	g.Expect(resp.Healthy).To(BeTrue())
 
 	// Now with ReadinessReporter returning false.
 	reporter.Ready = false
 	resp, err = s.CheckReadiness(context.Background(), req)
-	if err != nil {
-		t.Errorf("expected no error checking readiness, got: %s", err)
-	}
-	if resp.Healthy {
-		t.Error("expected readiness response to be false")
-	}
+	g.Expect(err).ToNot(HaveOccurred())
+	g.Expect(resp.Healthy).To(BeFalse())
 
 	resp, err = s.CheckLiveness(context.Background(), req)
-	if err != nil {
-		t.Errorf("expected no error checking liveness, got: %s", err)
-	}
-	if !resp.Healthy {
-		t.Error("expected liveness response to be true")
-	}
+	g.Expect(err).ToNot(HaveOccurred())
+	g.Expect(resp.Healthy).To(BeTrue())
 }
