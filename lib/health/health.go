@@ -132,7 +132,8 @@ func (aggregator *HealthAggregator) Summary() *HealthReport {
 	aggregator.mutex.Lock()
 	defer aggregator.mutex.Unlock()
 
-	logFuncs := []func(){}
+	var failedLivenessChecks []string
+	var failedReadinessChecks []string
 
 	// In the absence of any reporters, default to indicating that we are both live and ready.
 	summary := &HealthReport{Live: true, Ready: true}
@@ -153,31 +154,36 @@ func (aggregator *HealthAggregator) Summary() *HealthReport {
 			summary.Ready = false
 		}
 
-		logEntry := log.WithFields(log.Fields{
-			"name":           name,
-			"reporter-state": reporter,
-		})
-
-		if reporter.reports.Live && !stillLive || reporter.reports.Ready && !stillReady {
-			logFuncs = append(logFuncs, func() {
-				logEntry.Warn("Unhealthy reporter")
-			})
-		} else {
-			logFuncs = append(logFuncs, func() {
-				logEntry.Debug("Healthy reporter")
-			})
+		switch {
+		case reporter.reports.Live && !stillLive:
+			failedLivenessChecks = append(failedLivenessChecks, name)
+		case reporter.reports.Ready && !stillReady:
+			failedReadinessChecks = append(failedReadinessChecks, name)
+		default:
+			log.WithFields(log.Fields{
+				"name":           name,
+				"reporter-state": reporter,
+			}).Debug("Reporter is healthy")
 		}
 	}
 
 	// Summary status has changed so update previous status and log.
 	if summary.Live != aggregator.lastReport.Live && summary.Ready != aggregator.lastReport.Ready {
 		aggregator.lastReport = summary
-		log.WithField("lastSummary", summary).Info("Overall health")
+		log.WithField("lastSummary", summary).Info("Overall health status changed")
 
-		for _, logFunc := range logFuncs {
-			logFunc()
+		for _, name := range failedLivenessChecks {
+			log.WithFields(log.Fields{
+				"name":           name,
+				"reporter-state": aggregator.reporters[name],
+			}).Debug("Reporter failed liveness checks")
 		}
-
+		for _, name := range failedReadinessChecks {
+			log.WithFields(log.Fields{
+				"name":           name,
+				"reporter-state": aggregator.reporters[name],
+			}).Debug("Reporter failed readiness checks")
+		}
 	}
 	return summary
 }
