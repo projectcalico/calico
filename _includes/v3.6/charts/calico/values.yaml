@@ -11,3 +11,39 @@ app_layer_policy: false
 
 prodname: Calico
 nodecontainer: node
+
+# Configuration for setting up Calico node
+node:
+  env:
+    # Optional environment variables for configuring Calico node.
+    # - name: FELIX_LOGSEVERITYSCREEN
+    #   value: "debug"
+
+# Configuration for setting up Calico CNI.
+cni:
+  env:
+    # Optional environment variables for configuring Calico CNI.
+    # - name: SLEEP
+    #   value: "false"
+
+# Configuration for setting up Flannel.
+flannel:
+  env:
+    # Optional environment variables for configuring Flannel.
+    # - name: FLANNELD_SUBNET_FILE
+    #   value: "/run/flannel/subnet.env"
+
+# Configuration for setting up Calico kube controllers
+kubeControllers:
+  env:
+    # Optional environment variables for configuring Calico kube controllers.
+    # - name: ENABLED_CONTROLLERS
+    #   value: "policy,namespace,serviceaccount,workloadendpoint,node"
+
+# Configuration for setting up Typha
+typha:
+  enabled: false
+  env:
+    # Optional environment variables for configuring Typha.
+    # - name: TYPHA_PROMETHEUSMETRICSENABLED
+    #   value: "true"
