@@ -154,12 +154,13 @@ func (aggregator *HealthAggregator) Summary() *HealthReport {
 			summary.Ready = false
 		}
 
-		switch {
-		case reporter.reports.Live && !stillLive:
+		if reporter.reports.Live && !stillLive {
 			failedLivenessChecks = append(failedLivenessChecks, name)
-		case reporter.reports.Ready && !stillReady:
+		}
+		if reporter.reports.Ready && !stillReady {
 			failedReadinessChecks = append(failedReadinessChecks, name)
-		default:
+		}
+		if reporter.reports.Live && reporter.reports.Ready && stillLive && stillReady {
 			log.WithFields(log.Fields{
 				"name":           name,
 				"reporter-state": reporter,
