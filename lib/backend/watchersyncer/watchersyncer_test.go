@@ -272,6 +272,12 @@ var _ = Describe("Test the backend datastore multi-watch syncer", func() {
 	})
 
 	It("Should handle reconnection and syncing when the watcher sends a watch terminated error", func() {
+		defaultThreshold := watchersyncer.ErrorThreshold
+		watchersyncer.ErrorThreshold = 0
+		defer func() {
+			watchersyncer.ErrorThreshold = defaultThreshold
+		}()
+
 		rs := newWatcherSyncerTester([]watchersyncer.ResourceType{r1, r2, r3})
 		rs.ExpectStatusUpdate(api.WaitForDatastore)
 		rs.clientListResponse(r1, emptyList)
@@ -287,11 +293,37 @@ var _ = Describe("Test the backend datastore multi-watch syncer", func() {
 			Type:  api.WatchError,
 			Error: cerrors.ErrorWatchTerminated{Err: dsError},
 		})
+		rs.ExpectStatusUpdate(api.WaitForDatastore)
 		rs.clientListResponse(r3, emptyList)
+		rs.ExpectStatusUpdate(api.ResyncInProgress)
 		rs.clientWatchResponse(r3, nil)
+		rs.ExpectStatusUpdate(api.InSync)
 
 		// Watch fails, but gets created again immediately.  This should happen without
 		// additional pauses.
+		rs.expectAllEventsHandled()
+	})
+
+	It("Should not return WaitForDatastore on multiple watch errors due to ClosedByRemote exceeding error threshold", func() {
+		defaultThreshold := watchersyncer.ErrorThreshold
+		watchersyncer.ErrorThreshold = 0
+		defer func() {
+			watchersyncer.ErrorThreshold = defaultThreshold
+		}()
+
+		rs := newWatcherSyncerTester([]watchersyncer.ResourceType{r1})
+		rs.ExpectStatusUpdate(api.WaitForDatastore)
+		rs.clientListResponse(r1, emptyList)
+		rs.ExpectStatusUpdate(api.ResyncInProgress)
+		rs.ExpectStatusUpdate(api.InSync)
+		rs.clientWatchResponse(r1, nil)
+
+		rs.sendEvent(r1, api.WatchEvent{
+			Type:  api.WatchError,
+			Error: cerrors.ErrorWatchTerminated{Err: dsError, ClosedByRemote: true},
+		})
+
+		rs.ExpectStatusUnchanged()
 		rs.expectAllEventsHandled()
 	})
 
