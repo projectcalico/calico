@@ -168,7 +168,7 @@ func (aggregator *HealthAggregator) Summary() *HealthReport {
 	}
 
 	// Summary status has changed so update previous status and log.
-	if summary.Live != aggregator.lastReport.Live && summary.Ready != aggregator.lastReport.Ready {
+	if summary.Live != aggregator.lastReport.Live || summary.Ready != aggregator.lastReport.Ready {
 		aggregator.lastReport = summary
 		log.WithField("lastSummary", summary).Info("Overall health status changed")
 
@@ -176,13 +176,13 @@ func (aggregator *HealthAggregator) Summary() *HealthReport {
 			log.WithFields(log.Fields{
 				"name":           name,
 				"reporter-state": aggregator.reporters[name],
-			}).Debug("Reporter failed liveness checks")
+			}).Warn("Reporter failed liveness checks")
 		}
 		for _, name := range failedReadinessChecks {
 			log.WithFields(log.Fields{
 				"name":           name,
 				"reporter-state": aggregator.reporters[name],
-			}).Debug("Reporter failed readiness checks")
+			}).Warn("Reporter failed readiness checks")
 		}
 	}
 	return summary
