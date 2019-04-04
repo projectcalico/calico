@@ -15,9 +15,8 @@ module Jekyll
   class RenderHelmTagBlock < Liquid::Block
     def initialize(tag_name, extra_args, liquid_options)
       super
-      if not extra_args.empty?
-        @extra_args = extra_args
-      end
+
+      @extra_args = extra_args
     end
     def render(context)
       text = super
@@ -60,9 +59,7 @@ module Jekyll
         -f #{t.path}
         --set etcd.endpoints=http://<ETCD_IP>:<ETCD_PORT>"""
 
-      if @extra_args
-        cmd += " " + @extra_args
-      end
+      cmd += " " + @extra_args.to_s
 
       out = `#{cmd}`
 
