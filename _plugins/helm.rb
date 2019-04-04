@@ -1,5 +1,7 @@
 require "jekyll"
 require "tempfile"
+require "open3"
+
 require_relative "./lib"
 
 # This plugin enables jekyll to render helm charts.
@@ -56,12 +58,15 @@ module Jekyll
       # Set the default etcd endpoint placeholder for rendering in the docs.
       cmd = """helm template _includes/#{version}/charts/calico \
         -f #{tv.path} \
-        -f #{t.path}
-        --set etcd.endpoints=http://<ETCD_IP>:<ETCD_PORT>"""
+        -f #{t.path} \
+        --set etcd.endpoints='http://<ETCD_IP>:<ETCD_PORT>'"""
 
       cmd += " " + @extra_args.to_s
 
-      out = `#{cmd}`
+      out, stderr, status = Open3.capture3(cmd)
+      if status != 0
+        raise "failed to execute helm for '#{context.registers[:page]["path"]}': #{stderr}"
+      end
 
       t.unlink
       tv.unlink
