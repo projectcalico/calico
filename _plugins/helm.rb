@@ -1,5 +1,7 @@
 require "jekyll"
 require "tempfile"
+require "open3"
+
 require_relative "./lib"
 
 # This plugin enables jekyll to render helm charts.
@@ -61,7 +63,10 @@ module Jekyll
 
       cmd += " " + @extra_args.to_s
 
-      out = `#{cmd}`
+      out, stderr, status = Open3.capture3(cmd)
+      if status != 0
+        raise "failed to execute helm for '#{context.registers[:page]["path"]}': #{stderr}"
+      end
 
       t.unlink
       tv.unlink
