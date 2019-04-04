@@ -123,12 +123,13 @@ func (c *NodeController) syncDeleteKDD() error {
 			ns := a.AttrSecondary[ipam.AttributeNamespace]
 			pod := a.AttrSecondary[ipam.AttributePod]
 			ipip := a.AttrSecondary[ipam.AttributeType] == ipam.AttributeTypeIPIP
+			vxlan := a.AttrSecondary[ipam.AttributeType] == ipam.AttributeTypeVXLAN
 
 			// Skip any allocations which are not either a Kubernetes pod, or a node's
-			// IPIP address. In practice, we don't expect these, but they might exist.
+			// IPIP or VXLAN address. In practice, we don't expect these, but they might exist.
 			// When they do, they will need to be released outside of this controller in order for
 			// the block to be cleaned up.
-			if (ns == "" || pod == "") && !ipip {
+			if (ns == "" || pod == "") && !ipip && !vxlan {
 				log.Info("IP allocation is from an unknown source. Will be unable to cleanup block until it is removed.")
 				continue
 			}
