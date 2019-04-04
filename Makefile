@@ -117,7 +117,7 @@ LIBCALICOGO_PATH?=none
 ## Clean enough that a new release build will be clean
 clean:
 	find . -name '*.created-$(ARCH)' -exec rm -f {} +
-	rm -rf bin build certs *.tar vendor
+	rm -rf bin build certs *.tar vendor .go-pkg-cache
 	docker rmi $(BUILD_IMAGE):latest-$(ARCH) || true
 	docker rmi $(BUILD_IMAGE):$(VERSION)-$(ARCH) || true
 ifeq ($(ARCH),amd64)
