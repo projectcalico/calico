@@ -19,10 +19,11 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"reflect"
 	"strings"
 	"sync"
 
-	"k8s.io/apimachinery/pkg/apis/meta/v1"
+	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 
@@ -676,16 +677,23 @@ func (c *client) OnUpdates(updates []api.Update) {
 			for _, kvp := range kvps {
 				log.Debugf("KVP: %#v", kvp)
 				if kvp.Value == nil {
-					c.updateCache(api.UpdateTypeKVDeleted, kvp)
+					if c.updateCache(api.UpdateTypeKVDeleted, kvp) {
+						needUpdatePeersV1 = true
+					}
 				} else {
-					c.updateCache(u.UpdateType, kvp)
+					if c.updateCache(u.UpdateType, kvp) {
+						needUpdatePeersV1 = true
+					}
 				}
 			}
 
 			// Update our cache of node labels.
 			if u.Value == nil {
 				// This was a delete - remove node labels.
-				delete(c.nodeLabels, v3key.Name)
+				if _, ok := c.nodeLabels[v3key.Name]; ok {
+					delete(c.nodeLabels, v3key.Name)
+					needUpdatePeersV1 = true
+				}
 			} else {
 				// This was a create or update - update node labels.
 				v3res, ok := u.Value.(*apiv3.Node)
@@ -693,12 +701,11 @@ func (c *client) OnUpdates(updates []api.Update) {
 					log.Warning("Bad value for Node resource")
 					continue
 				}
-
-				c.nodeLabels[v3key.Name] = v3res.Labels
+				if !reflect.DeepEqual(c.nodeLabels[v3key.Name], v3res.Labels) {
+					c.nodeLabels[v3key.Name] = v3res.Labels
+					needUpdatePeersV1 = true
+				}
 			}
-
-			// Note need to recompute BGP v1 peerings.
-			needUpdatePeersV1 = true
 		}
 
 		if v3key.Kind == apiv3.KindBGPPeer {
@@ -753,36 +760,52 @@ func (c *client) onNewUpdates() {
 	}
 }
 
-func (c *client) updateCache(updateType api.UpdateType, kvp *model.KVPair) {
+// updateChache will update a cache entry. It returns true if the entry was
+// updated and false if there was an error or if the cache was already
+// up-to-date.
+func (c *client) updateCache(updateType api.UpdateType, kvp *model.KVPair) bool {
 	// Update our cache of current entries.
 	k, err := model.KeyToDefaultPath(kvp.Key)
 	if err != nil {
 		log.Errorf("Ignoring update: unable to create path from Key %v: %v", kvp.Key, err)
-		return
+		return false
 	}
+
+	entryUpdated := false
 
 	switch updateType {
 	case api.UpdateTypeKVDeleted:
 		// The bird templates that confd is used to render assume that some global
 		// defaults are always configured.
 		if globalDefault, ok := globalDefaults[k]; ok {
-			c.cache[k] = globalDefault
+			if c.cache[k] != globalDefault {
+				entryUpdated = true
+				c.cache[k] = globalDefault
+			}
 		} else {
-			delete(c.cache, k)
+			if _, ok := c.cache[k]; ok {
+				entryUpdated = true
+				delete(c.cache, k)
+			}
 		}
 	case api.UpdateTypeKVNew, api.UpdateTypeKVUpdated:
 		value, err := model.SerializeValue(kvp)
 		if err != nil {
 			log.Errorf("Ignoring update: unable to serialize value %v: %v", kvp.Value, err)
-			return
+			return false
 		}
-		c.cache[k] = string(value)
+		newValue := string(value)
+		if c.cache[k] != newValue {
+			entryUpdated = true
+			c.cache[k] = newValue
+		}
 	}
 
 	log.Debugf("Cache entry updated from event type %d: %s=%s", updateType, k, c.cache[k])
 	if c.synced {
 		c.keyUpdated(k)
 	}
+	return entryUpdated
 }
 
 // ParseFailed is called from the BGP syncer when an event could not be parsed.
