@@ -6,6 +6,7 @@ import (
 	"os"
 	"time"
 
+	v3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	client "github.com/projectcalico/libcalico-go/lib/clientv3"
 	cerrors "github.com/projectcalico/libcalico-go/lib/errors"
 	"github.com/projectcalico/libcalico-go/lib/ipam"
@@ -88,7 +89,7 @@ func ensureHostTunnelAddress(ctx context.Context, c client.Interface, nodename s
 	var addr string
 	if vxlan {
 		addr = node.Spec.IPv4VXLANTunnelAddr
-	} else {
+	} else if node.Spec.BGP != nil {
 		addr = node.Spec.BGP.IPv4IPIPTunnelAddr
 	}
 
@@ -164,6 +165,9 @@ func assignHostTunnelAddr(ctx context.Context, c client.Interface, nodename stri
 		if vxlan {
 			node.Spec.IPv4VXLANTunnelAddr = ipv4Addrs[0].IP.String()
 		} else {
+			if node.Spec.BGP == nil {
+				node.Spec.BGP = &v3.NodeBGPSpec{}
+			}
 			node.Spec.BGP.IPv4IPIPTunnelAddr = ipv4Addrs[0].IP.String()
 		}
 
@@ -208,7 +212,10 @@ func removeHostTunnelAddr(ctx context.Context, c client.Interface, nodename stri
 			logCtx.WithError(err).Fatalf("Unable to retrieve tunnel address for cleanup. Error getting node '%s'", nodename)
 		}
 
-		if (vxlan && node.Spec.IPv4VXLANTunnelAddr == "") || (!vxlan && node.Spec.BGP.IPv4IPIPTunnelAddr == "") {
+		// Determine if we need to do any work.
+		ipipTunnelAddrExists := (node.Spec.BGP != nil && node.Spec.BGP.IPv4IPIPTunnelAddr != "")
+		vxlanTunnelAddrExists := node.Spec.IPv4VXLANTunnelAddr != ""
+		if (vxlan && !vxlanTunnelAddrExists) || (!vxlan && !ipipTunnelAddrExists) {
 			logCtx.Debug("No tunnel address assigned, and not required")
 			return
 		}
@@ -218,7 +225,7 @@ func removeHostTunnelAddr(ctx context.Context, c client.Interface, nodename stri
 		if vxlan {
 			ipAddr = net.ParseIP(node.Spec.IPv4VXLANTunnelAddr)
 			node.Spec.IPv4VXLANTunnelAddr = ""
-		} else {
+		} else if node.Spec.BGP != nil {
 			ipAddr = net.ParseIP(node.Spec.BGP.IPv4IPIPTunnelAddr)
 			node.Spec.BGP.IPv4IPIPTunnelAddr = ""
 		}
