@@ -30,6 +30,9 @@ type HealthReport struct {
 }
 
 type reporterState struct {
+	// The reporter's name.
+	name string
+
 	// The health indicators that this reporter reports.
 	reports HealthReport
 
@@ -43,7 +46,7 @@ type reporterState struct {
 	timestamp time.Time
 }
 
-// TimedOut checks whether the reporterState is due for another report. This is the case when
+// TimedOut checks whether the reporter is due for another report. This is the case when
 // the reports are configured to expire and the time since the last report exceeds the report timeout duration.
 func (r *reporterState) TimedOut() bool {
 	return r.timeout != 0 && time.Since(r.timestamp) > r.timeout
@@ -79,6 +82,7 @@ func (aggregator *HealthAggregator) RegisterReporter(name string, reports *Healt
 	aggregator.mutex.Lock()
 	defer aggregator.mutex.Unlock()
 	aggregator.reporters[name] = &reporterState{
+		name:      name,
 		reports:   *reports,
 		timeout:   timeout,
 		latest:    HealthReport{Live: true},
@@ -132,14 +136,14 @@ func (aggregator *HealthAggregator) Summary() *HealthReport {
 	aggregator.mutex.Lock()
 	defer aggregator.mutex.Unlock()
 
-	var failedLivenessChecks []string
-	var failedReadinessChecks []string
+	var failedLivenessChecks []*reporterState
+	var failedReadinessChecks []*reporterState
 
 	// In the absence of any reporters, default to indicating that we are both live and ready.
 	summary := &HealthReport{Live: true, Ready: true}
 
 	// Now for each reporter...
-	for name, reporter := range aggregator.reporters {
+	for _, reporter := range aggregator.reporters {
 		// Reset Live to false if that reporter is registered to report liveness and hasn't
 		// recently said that it is live.
 		stillLive := reporter.latest.Live && !reporter.TimedOut()
@@ -155,14 +159,14 @@ func (aggregator *HealthAggregator) Summary() *HealthReport {
 		}
 
 		if reporter.reports.Live && !stillLive {
-			failedLivenessChecks = append(failedLivenessChecks, name)
+			failedLivenessChecks = append(failedLivenessChecks, reporter)
 		}
 		if reporter.reports.Ready && !stillReady {
-			failedReadinessChecks = append(failedReadinessChecks, name)
+			failedReadinessChecks = append(failedReadinessChecks, reporter)
 		}
 		if reporter.reports.Live && reporter.reports.Ready && stillLive && stillReady {
 			log.WithFields(log.Fields{
-				"name":           name,
+				"name":           reporter.name,
 				"reporter-state": reporter,
 			}).Debug("Reporter is healthy")
 		}
@@ -173,16 +177,16 @@ func (aggregator *HealthAggregator) Summary() *HealthReport {
 		aggregator.lastReport = summary
 		log.WithField("lastSummary", summary).Info("Overall health status changed")
 
-		for _, name := range failedLivenessChecks {
+		for _, reporter := range failedLivenessChecks {
 			log.WithFields(log.Fields{
-				"name":           name,
-				"reporter-state": aggregator.reporters[name],
+				"name":           reporter.name,
+				"reporter-state": reporter,
 			}).Warn("Reporter failed liveness checks")
 		}
-		for _, name := range failedReadinessChecks {
+		for _, reporter := range failedReadinessChecks {
 			log.WithFields(log.Fields{
-				"name":           name,
-				"reporter-state": aggregator.reporters[name],
+				"name":           reporter.name,
+				"reporter-state": reporter,
 			}).Warn("Reporter failed readiness checks")
 		}
 	}
