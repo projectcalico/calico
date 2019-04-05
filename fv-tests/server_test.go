@@ -35,10 +35,10 @@ import (
 
 	. "github.com/onsi/ginkgo/extensions/table"
 
-	"github.com/projectcalico/libcalico-go/lib/apis/v3"
+	v3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/libcalico-go/lib/backend/api"
+	"github.com/projectcalico/libcalico-go/lib/backend/encap"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
-	"github.com/projectcalico/libcalico-go/lib/ipip"
 	calinet "github.com/projectcalico/libcalico-go/lib/net"
 	. "github.com/projectcalico/typha/fv-tests"
 	"github.com/projectcalico/typha/pkg/calc"
@@ -91,7 +91,7 @@ var (
 			Value: &model.IPPool{
 				CIDR:          ipPoolCIDR,
 				IPIPInterface: "tunl0",
-				IPIPMode:      ipip.Always,
+				IPIPMode:      encap.Always,
 				Masquerade:    true,
 				IPAM:          true,
 				Disabled:      true,
