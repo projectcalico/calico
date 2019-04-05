@@ -7,9 +7,15 @@ cli:
   project: https://github.com/projectcalico/app-policy.git
 analyze:
   modules:
-  - name: github.com/projectcalico/app-policy
+  - name: github.com/projectcalico/app-policy/cmd/dikastes
     type: go
-    target: github.com/projectcalico/app-policy
-    path: /go/src/github.com/projectcalico/app-policy
+    target: github.com/projectcalico/app-policy/cmd/dikastes
+    path: cmd/dikastes
+    options:
+      allow-unresolved: true
+  - name: github.com/projectcalico/app-policy/cmd/healthz
+    type: go
+    target: github.com/projectcalico/app-policy/cmd/healthz
+    path: cmd/healthz
     options:
       allow-unresolved: true
