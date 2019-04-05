@@ -149,7 +149,7 @@ build-all: $(addprefix bin/dikastes-,$(VALIDARCHES))
 
 .PHONY: build
 ## Build the binary for the current architecture and platform
-build: bin/dikastes-$(ARCH)
+build: bin/dikastes-$(ARCH) bin/healthz-$(ARCH)
 
 ## Create the vendor directory
 vendor: glide.yaml
@@ -205,7 +205,24 @@ bin/dikastes-%: vendor proto $(SRC_FILES)
 	  -e LOCAL_USER_ID=$(LOCAL_USER_ID) \
 	  -e GOCACHE=/go-cache \
 	  -w /go/src/$(PACKAGE_NAME) \
-	  $(CALICO_BUILD) go build -ldflags "-X main.VERSION=$(GIT_VERSION) -s -w" -v -o bin/dikastes-$(ARCH)
+	  $(CALICO_BUILD) go build -ldflags "-X main.VERSION=$(GIT_VERSION) -s -w" -v -o bin/dikastes-$(ARCH) ./cmd/dikastes
+
+bin/healthz-amd64: ARCH=amd64
+bin/healthz-arm64: ARCH=arm64
+bin/healthz-ppc64le: ARCH=ppc64le
+bin/healthz-s390x: ARCH=s390x
+bin/healthz-%: vendor proto $(SRC_FILES)
+	mkdir -p bin || true
+	-mkdir -p .go-pkg-cache || true
+	docker run --rm -ti \
+	  -v $(CURDIR):/go/src/$(PACKAGE_NAME):ro \
+	  -v $(CURDIR)/bin:/go/src/$(PACKAGE_NAME)/bin \
+	  -v $(CURDIR)/.go-pkg-cache:/go-cache/:rw \
+	  $(LOCAL_BUILD_MOUNTS) \
+	  -e LOCAL_USER_ID=$(LOCAL_USER_ID) \
+	  -e GOCACHE=/go-cache \
+	  -w /go/src/$(PACKAGE_NAME) \
+	  $(CALICO_BUILD) go build -ldflags "-X main.VERSION=$(GIT_VERSION) -s -w" -v -o bin/healthz-$(ARCH) ./cmd/healthz
 
 # We use gogofast for protobuf compilation.  Regular gogo is incompatible with
 # gRPC, since gRPC uses golang/protobuf for marshalling/unmarshalling in that
@@ -224,7 +241,7 @@ PROTOC_IMPORTS =  -I $(ENVOY_API) \
 # Also remap the output modules to gogo versions of google/protobuf and google/rpc
 PROTOC_MAPPINGS = Menvoy/api/v2/core/address.proto=github.com/envoyproxy/data-plane-api/envoy/api/v2/core,Menvoy/api/v2/core/base.proto=github.com/envoyproxy/data-plane-api/envoy/api/v2/core,Menvoy/type/http_status.proto=github.com/envoyproxy/data-plane-api/envoy/type,Mgogoproto/gogo.proto=github.com/gogo/protobuf/gogoproto,Mgoogle/protobuf/any.proto=github.com/gogo/protobuf/types,Mgoogle/protobuf/duration.proto=github.com/gogo/protobuf/types,Mgoogle/protobuf/struct.proto=github.com/gogo/protobuf/types,Mgoogle/protobuf/timestamp.proto=github.com/gogo/protobuf/types,Mgoogle/protobuf/wrappers.proto=github.com/gogo/protobuf/types,Mgoogle/rpc/status.proto=github.com/gogo/googleapis/google/rpc
 
-proto: $(EXT_AUTH)external_auth.pb.go $(ADDRESS).pb.go $(V2_BASE).pb.go $(HTTP_STATUS).pb.go $(EXT_AUTH)attribute_context.pb.go proto/felixbackend.pb.go
+proto: $(EXT_AUTH)external_auth.pb.go $(ADDRESS).pb.go $(V2_BASE).pb.go $(HTTP_STATUS).pb.go $(EXT_AUTH)attribute_context.pb.go proto/felixbackend.pb.go proto/healthz.proto
 
 $(EXT_AUTH)external_auth.pb.go $(EXT_AUTH)attribute_context.pb.go: $(EXT_AUTH)external_auth.proto $(EXT_AUTH)attribute_context.proto
 	$(DOCKER_RUN_RM) -v $(CURDIR):/src:rw \
@@ -256,7 +273,14 @@ proto/felixbackend.pb.go: proto/felixbackend.proto
 	              proto/*.proto \
 	              --gogofast_out=plugins=grpc,$(PROTOC_MAPPINGS):proto
 
-###############################################################################
+proto/healthz.pb.go: proto/healthz.proto
+	$(DOCKER_RUN_RM) -v $(CURDIR):/src:rw \
+	              $(PROTOC_CONTAINER) \
+	              $(PROTOC_IMPORTS) \
+	              proto/*.proto \
+	              --gogofast_out=plugins=grpc,$(PROTOC_MAPPINGS):proto
+
+
 # Building the image
 ###############################################################################
 CONTAINER_CREATED=.dikastes.created-$(ARCH)
@@ -267,7 +291,7 @@ sub-image-%:
 	$(MAKE) image ARCH=$*
 
 $(BUILD_IMAGE): $(CONTAINER_CREATED)
-$(CONTAINER_CREATED): Dockerfile.$(ARCH) bin/dikastes-$(ARCH)
+$(CONTAINER_CREATED): Dockerfile.$(ARCH) bin/dikastes-$(ARCH) bin/healthz-$(ARCH)
 	docker build -t $(BUILD_IMAGE):latest-$(ARCH) --build-arg QEMU_IMAGE=$(CALICO_BUILD) -f Dockerfile.$(ARCH) .
 ifeq ($(ARCH),amd64)
 	docker tag $(BUILD_IMAGE):latest-$(ARCH) $(BUILD_IMAGE):latest
@@ -488,3 +512,8 @@ help: # Some kind of magic from https://gist.github.com/rcmachado/af3db315e31383
 	{ helpMsg = $$0 }'                                                  \
 	width=20                                                            \
 	$(MAKEFILE_LIST)
+
+.PHONY: install-git-hooks
+## Install Git hooks
+install-git-hooks:
+	./install-git-hooks

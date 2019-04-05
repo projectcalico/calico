@@ -664,6 +664,10 @@ func TestSyncRestart(t *testing.T) {
 	defer cCancel()
 	go uut.Sync(cCtx, stores)
 
+	if uut.Readiness() {
+		t.Error("Expected syncClient not to be ready before receiving inSync")
+	}
+
 	server.SendInSync()
 	select {
 	case <-time.After(1 * time.Second):
@@ -686,6 +690,10 @@ func TestSyncRestart(t *testing.T) {
 		t.Error("Failed to get sync'd PolicyStore")
 	case <-stores:
 		// pass
+	}
+
+	if !uut.Readiness() {
+		t.Error("Expected syncClient to be ready after receiving inSync")
 	}
 }
 
