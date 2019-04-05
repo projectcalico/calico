@@ -1,5 +1,5 @@
-hash: e5c604ca034ceb0df36b69651c86c68443f05a9f75d2d44a9d96e2d3b550c3bd
-updated: 2019-04-05T04:20:51.667708698Z
+hash: 10084fea4ed53ea299c15ab01fb3baa7d83dfc3e65a9a168a5232d05ac2e1406
+updated: 2019-04-05T07:21:32.067932781-07:00
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -37,7 +37,7 @@ imports:
 - name: github.com/ghodss/yaml
   version: 0ca9ea5df5451ffdf184b4428c902747c2c11cd7
 - name: github.com/go-ini/ini
-  version: ece0e89bb05aec0d6768f7bc1e77f11f03da0d11
+  version: 9c8236e659b76e87bf02044d06fde8683008ff3e
 - name: github.com/go-playground/locales
   version: f63010822830b6fe52288ee52d5a1151088ce039
   subpackages:
@@ -65,7 +65,7 @@ imports:
 - name: github.com/google/btree
   version: 925471ac9e2131377a91e1595defec898166fe49
 - name: github.com/google/gofuzz
-  version: 24818f796faf91cd76ec7bddd72458fbced7a6c1
+  version: 44d81051d367757e1c7c6a5a86423ece9afcf63c
 - name: github.com/googleapis/gnostic
   version: 0c5108395e2debce0d731cf0287ddf7242066aba
   subpackages:
@@ -88,7 +88,7 @@ imports:
 - name: github.com/hashicorp/go-version
   version: d40cf49b3a77bba84a7afdbd7f1dc295d114efb1
 - name: github.com/hashicorp/golang-lru
-  version: 20f1fb78b0740ba8c3cb143a61e86ba5c8669768
+  version: a0d98a5f288019575c6d1f4bb1573fef2d1fcdc4
   subpackages:
   - simplelru
 - name: github.com/hpcloud/tail
@@ -103,7 +103,7 @@ imports:
 - name: github.com/json-iterator/go
   version: f2b4162afba35581b6d4a50d3b8f34e33c144682
 - name: github.com/kardianos/osext
-  version: 2bc1f35cddc0cc527b4bc3dce8578fc2a6c11384
+  version: ae77be60afb1dcacde03767a8c37337fad28ac14
 - name: github.com/kelseyhightower/envconfig
   version: dd1402a4d99de9ac2f396cd6fcb957bc2c695ec1
 - name: github.com/leodido/go-urn
@@ -157,7 +157,7 @@ imports:
 - name: github.com/peterbourgon/diskv
   version: 5f041e8faa004a95c88a202771f4cc3e991971e6
 - name: github.com/projectcalico/felix
-  version: ad7168eb0193942045b0bc932e88dd0d3f267c5b
+  version: dbef0670661d5c3ed767965b543cfaf9ed5af786
   subpackages:
   - calc
   - config
@@ -183,7 +183,7 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: ffdaf369acab3138985dfbb714ebbdb474844b6e
+  version: 60b84d0c72d4f9b99aa0fc82ed2afd00d965b8d9
   subpackages:
   - lib/apiconfig
   - lib/apis/v1
@@ -191,6 +191,7 @@ imports:
   - lib/apis/v3
   - lib/backend
   - lib/backend/api
+  - lib/backend/encap
   - lib/backend/etcdv3
   - lib/backend/k8s
   - lib/backend/k8s/conversion
@@ -202,7 +203,6 @@ imports:
   - lib/hash
   - lib/health
   - lib/ipam
-  - lib/ipip
   - lib/logutils
   - lib/names
   - lib/namespace
@@ -242,7 +242,7 @@ imports:
 - name: github.com/sirupsen/logrus
   version: f006c2ac4710855cf0f916dd6b77acf6b048dc6e
 - name: github.com/spf13/pflag
-  version: e57e3eeb33f795204c1ca35f56c44f83227c6e66
+  version: 583c0c0531f06d5278b7d917446061adc344b5cd
 - name: golang.org/x/crypto
   version: 9419663f5a44be8b34ca85f08abc5fe1be11f8a3
   subpackages:
@@ -423,12 +423,13 @@ imports:
   - pkg/watch
   - third_party/forked/golang/reflect
 - name: k8s.io/apiserver
-  version: 74ad4aa47e795ff8391658576ed6a681034d2304
+  version: b6aa1175dafa586b8042c7bfdcd1585f9ecfaa08
   subpackages:
   - pkg/storage
   - pkg/storage/etcd
   - pkg/storage/etcd3
   - pkg/storage/value
+  - pkg/util/trace
 - name: k8s.io/client-go
   version: 7d04d0e2a0a1a4d4a1cd6baa432a2301492e4e65
   subpackages:
@@ -498,11 +499,4 @@ imports:
   - util/workqueue
 - name: k8s.io/klog
   version: 8139d8cb77af419532b33dfa7dd09fbc5f1d344f
-- name: k8s.io/utils
-  version: c2654d5206da6b7b6ace12841e8f359bb89b443c
-  subpackages:
-  - buffer
-  - integer
-  - pointer
-  - trace
 testImports: []
