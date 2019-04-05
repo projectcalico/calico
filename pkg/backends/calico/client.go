@@ -795,7 +795,7 @@ func (c *client) updateCache(updateType api.UpdateType, kvp *model.KVPair) bool 
 			return false
 		}
 		newValue := string(value)
-		if c.cache[k] != newValue {
+		if currentValue, isSet := c.cache[k]; !isSet || currentValue != newValue {
 			entryUpdated = true
 			c.cache[k] = newValue
 		}
