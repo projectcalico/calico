@@ -14,7 +14,7 @@ import:
   subpackages:
   - fv/containers
 - package: github.com/projectcalico/libcalico-go
-  version: d0e07165e343ced9b0a9207c42ddddaeb1c17ae4
+  version: ffdaf369acab3138985dfbb714ebbdb474844b6e
   subpackages:
   - lib/apiconfig
   - lib/apis/v3
