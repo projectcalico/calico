@@ -395,7 +395,7 @@ much smaller number of BGP connections.
     metadata:
       name: peer-to-rrs
     spec:
-      nodeSelector: !has(i-am-a-route-reflector)
+      nodeSelector: "!has(i-am-a-route-reflector)"
       peerSelector: has(i-am-a-route-reflector)
     EOF
     ```
