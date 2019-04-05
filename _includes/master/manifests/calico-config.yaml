@@ -7,7 +7,7 @@ metadata:
 data:
 {{- if eq .Values.datastore "etcd" }}
   # Configure this with the location of your etcd cluster.
-  etcd_endpoints: "{{ .Values.etcd.endpoints }}"
+  etcd_endpoints: "{{ required "must set etcd.endpoints if using etcd mode" .Values.etcd.endpoints }}"
 
 {{- if include "calico.etcd.tls" . }}
   etcd_ca: "/calico-secrets/etcd-ca"
