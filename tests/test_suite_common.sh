@@ -300,6 +300,7 @@ execute_tests_oneshot() {
         run_individual_test_oneshot 'mesh/ipip-always'
         run_individual_test_oneshot 'mesh/ipip-cross-subnet'
         run_individual_test_oneshot 'mesh/ipip-off'
+        run_individual_test_oneshot 'mesh/vxlan-always'
         run_individual_test_oneshot 'explicit_peering/global'
         run_individual_test_oneshot 'explicit_peering/specific_node'
         run_individual_test_oneshot 'explicit_peering/selectors'

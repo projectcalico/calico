@@ -15,7 +15,7 @@ filter calico_export_to_bgp_peers {
   if ( net ~ {{$data.cidr}} ) then {
     accept;
   }
-{{end}}
+{{- end}}
   reject;
 }
 
@@ -34,7 +34,11 @@ filter calico_kernel_programming {
 {{- end}}
 {{range ls "/v1/ipam/v4/pool"}}{{$data := json (getv (printf "/v1/ipam/v4/pool/%s" .))}}
   if ( net ~ {{$data.cidr}} ) then {
-{{if $data.ipip_mode}}{{if eq $data.ipip_mode "cross-subnet"}}
+{{- if $data.vxlan_mode}}
+    # Don't program VXLAN routes into the kernel - these are handled by Felix.
+    reject;
+  }
+{{- else if $data.ipip_mode}}{{if eq $data.ipip_mode "cross-subnet"}}
     if defined(bgp_next_hop) && ( bgp_next_hop ~ {{$network}} ) then
       krt_tunnel = "";                     {{/* Destination in ipPool, mode is cross sub-net, route from-host on subnet, do not use IPIP */}}
     else
