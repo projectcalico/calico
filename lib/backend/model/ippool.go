@@ -21,8 +21,8 @@ import (
 
 	"reflect"
 
+	"github.com/projectcalico/libcalico-go/lib/backend/encap"
 	"github.com/projectcalico/libcalico-go/lib/errors"
-	"github.com/projectcalico/libcalico-go/lib/ipip"
 	"github.com/projectcalico/libcalico-go/lib/net"
 	log "github.com/sirupsen/logrus"
 )
@@ -96,10 +96,11 @@ func (options IPPoolListOptions) KeyFromDefaultPath(path string) Key {
 }
 
 type IPPool struct {
-	CIDR          net.IPNet `json:"cidr"`
-	IPIPInterface string    `json:"ipip"`
-	IPIPMode      ipip.Mode `json:"ipip_mode"`
-	Masquerade    bool      `json:"masquerade"`
-	IPAM          bool      `json:"ipam"`
-	Disabled      bool      `json:"disabled"`
+	CIDR          net.IPNet  `json:"cidr"`
+	IPIPInterface string     `json:"ipip"`
+	IPIPMode      encap.Mode `json:"ipip_mode"`
+	VXLANMode     encap.Mode `json:"vxlan_mode"`
+	Masquerade    bool       `json:"masquerade"`
+	IPAM          bool       `json:"ipam"`
+	Disabled      bool       `json:"disabled"`
 }

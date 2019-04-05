@@ -72,6 +72,9 @@ func New(client api.Client, callbacks api.SyncerCallbacks) api.Syncer {
 			ListInterface:   model.ResourceListOptions{Kind: apiv3.KindHostEndpoint},
 			UpdateProcessor: updateprocessors.NewHostEndpointUpdateProcessor(),
 		},
+		{
+			ListInterface: model.BlockListOptions{},
+		},
 	}
 
 	return watchersyncer.New(

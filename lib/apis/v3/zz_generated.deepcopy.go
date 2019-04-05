@@ -563,6 +563,26 @@ func (in *FelixConfigurationSpec) DeepCopyInto(out *FelixConfigurationSpec) {
 		*out = new(int)
 		**out = **in
 	}
+	if in.VXLANEnabled != nil {
+		in, out := &in.VXLANEnabled, &out.VXLANEnabled
+		*out = new(bool)
+		**out = **in
+	}
+	if in.VXLANMTU != nil {
+		in, out := &in.VXLANMTU, &out.VXLANMTU
+		*out = new(int)
+		**out = **in
+	}
+	if in.VXLANPort != nil {
+		in, out := &in.VXLANPort, &out.VXLANPort
+		*out = new(int)
+		**out = **in
+	}
+	if in.VXLANVNI != nil {
+		in, out := &in.VXLANVNI, &out.VXLANVNI
+		*out = new(int)
+		**out = **in
+	}
 	if in.ReportingInterval != nil {
 		in, out := &in.ReportingInterval, &out.ReportingInterval
 		*out = new(v1.Duration)

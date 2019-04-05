@@ -41,6 +41,7 @@ const (
 	AttributeNode      = "node"
 	AttributeType      = "type"
 	AttributeTypeIPIP  = "ipipTunnelAddress"
+	AttributeTypeVXLAN = "vxlanTunnelAddress"
 )
 
 var (

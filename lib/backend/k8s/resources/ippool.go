@@ -23,7 +23,7 @@ import (
 	"k8s.io/client-go/rest"
 
 	apiv3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
-	"github.com/projectcalico/libcalico-go/lib/ipip"
+	"github.com/projectcalico/libcalico-go/lib/backend/encap"
 )
 
 const (
@@ -64,7 +64,7 @@ func (c IPPoolv1v3Converter) ConvertFromK8s(inRes Resource) (Resource, error) {
 	if ipp.Spec.IPIP != nil {
 		if !ipp.Spec.IPIP.Enabled {
 			ipp.Spec.IPIPMode = apiv3.IPIPModeNever
-		} else if ipp.Spec.IPIP.Mode == ipip.CrossSubnet {
+		} else if ipp.Spec.IPIP.Mode == encap.CrossSubnet {
 			ipp.Spec.IPIPMode = apiv3.IPIPModeCrossSubnet
 		} else {
 			ipp.Spec.IPIPMode = apiv3.IPIPModeAlways

@@ -114,6 +114,43 @@ var _ = testutils.E2eDatastoreDescribe("Node tests (kdd)", testutils.DatastoreK8
 		// It should now not be nil.
 		Expect(node.Spec.BGP).NotTo(BeNil())
 	})
+
+	It("should update VXLAN tunnel address on a node", func() {
+		c, err := clientv3.New(config)
+		Expect(err).NotTo(HaveOccurred())
+		be, err := backend.NewClient(config)
+		Expect(err).NotTo(HaveOccurred())
+		be.Clean()
+
+		// Get a node.
+		By("Querying a node with no VXLAN tunnel addr")
+		name := "127.0.0.1"
+		node, err := c.Nodes().Get(ctx, name, options.GetOptions{})
+		Expect(err).NotTo(HaveOccurred())
+		Expect(node.Spec.IPv4VXLANTunnelAddr).To(Equal(""))
+
+		// Update the address.
+		By("Updating the tunnel addr")
+		node.Spec.IPv4VXLANTunnelAddr = "192.168.1.1"
+		_, err = c.Nodes().Update(ctx, node, options.SetOptions{})
+		Expect(err).NotTo(HaveOccurred())
+
+		By("Querying the node again")
+		node, err = c.Nodes().Get(ctx, name, options.GetOptions{})
+		Expect(err).NotTo(HaveOccurred())
+		Expect(node.Spec.IPv4VXLANTunnelAddr).To(Equal("192.168.1.1"))
+
+		// Remove the address.
+		By("Removing the tunnel addr")
+		node.Spec.IPv4VXLANTunnelAddr = ""
+		_, err = c.Nodes().Update(ctx, node, options.SetOptions{})
+		Expect(err).NotTo(HaveOccurred())
+
+		By("Querying the node again")
+		node, err = c.Nodes().Get(ctx, name, options.GetOptions{})
+		Expect(err).NotTo(HaveOccurred())
+		Expect(node.Spec.IPv4VXLANTunnelAddr).To(Equal(""))
+	})
 })
 
 var _ = testutils.E2eDatastoreDescribe("Node tests (etcdv3)", testutils.DatastoreEtcdV3, func(config apiconfig.CalicoAPIConfig) {
@@ -122,6 +159,7 @@ var _ = testutils.E2eDatastoreDescribe("Node tests (etcdv3)", testutils.Datastor
 	name1 := "node-1"
 	name2 := "node-2"
 	spec1 := apiv3.NodeSpec{
+		IPv4VXLANTunnelAddr: "2.3.4.5",
 		BGP: &apiv3.NodeBGPSpec{
 			IPv4Address: "1.2.3.4",
 		},

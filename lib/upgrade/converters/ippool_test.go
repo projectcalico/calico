@@ -20,10 +20,10 @@ import (
 
 	apiv1 "github.com/projectcalico/libcalico-go/lib/apis/v1"
 	apiv3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
+	"github.com/projectcalico/libcalico-go/lib/backend/encap"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
-	"github.com/projectcalico/libcalico-go/lib/ipip"
 	cnet "github.com/projectcalico/libcalico-go/lib/net"
-	"k8s.io/apimachinery/pkg/apis/meta/v1"
+	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 var poolTable = []TableEntry{
@@ -35,7 +35,7 @@ var poolTable = []TableEntry{
 			Spec: apiv1.IPPoolSpec{
 				IPIP: &apiv1.IPIPConfiguration{
 					Enabled: true,
-					Mode:    ipip.Undefined,
+					Mode:    encap.Undefined,
 				},
 				NATOutgoing: false,
 				Disabled:    false,
@@ -48,7 +48,7 @@ var poolTable = []TableEntry{
 			Value: &model.IPPool{
 				CIDR:          cnet.MustParseCIDR("10.0.0.1/24"),
 				IPIPInterface: "tunl0",
-				IPIPMode:      ipip.Undefined,
+				IPIPMode:      encap.Undefined,
 				Masquerade:    false,
 				Disabled:      false,
 				IPAM:          true,
@@ -76,7 +76,7 @@ var poolTable = []TableEntry{
 			Spec: apiv1.IPPoolSpec{
 				IPIP: &apiv1.IPIPConfiguration{
 					Enabled: true,
-					Mode:    ipip.Always,
+					Mode:    encap.Always,
 				},
 				NATOutgoing: false,
 				Disabled:    true,
@@ -89,7 +89,7 @@ var poolTable = []TableEntry{
 			Value: &model.IPPool{
 				CIDR:          cnet.MustParseCIDR("2001::/120"),
 				IPIPInterface: "tunl0",
-				IPIPMode:      ipip.Always,
+				IPIPMode:      encap.Always,
 				Masquerade:    false,
 				Disabled:      true,
 				IPAM:          false,
@@ -117,7 +117,7 @@ var poolTable = []TableEntry{
 			Spec: apiv1.IPPoolSpec{
 				IPIP: &apiv1.IPIPConfiguration{
 					Enabled: false,
-					Mode:    ipip.Undefined,
+					Mode:    encap.Undefined,
 				},
 				NATOutgoing: true,
 				Disabled:    true,
@@ -196,7 +196,7 @@ var poolTable = []TableEntry{
 			Spec: apiv1.IPPoolSpec{
 				IPIP: &apiv1.IPIPConfiguration{
 					Enabled: true,
-					Mode:    ipip.CrossSubnet,
+					Mode:    encap.CrossSubnet,
 				},
 				NATOutgoing: false,
 				Disabled:    true,
@@ -210,7 +210,7 @@ var poolTable = []TableEntry{
 				CIDR:          cnet.MustParseCIDR("1.1.1.1/11"),
 				Masquerade:    false,
 				IPIPInterface: "tunl0",
-				IPIPMode:      ipip.CrossSubnet,
+				IPIPMode:      encap.CrossSubnet,
 				Disabled:      true,
 				IPAM:          false,
 			},

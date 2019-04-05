@@ -21,7 +21,7 @@ import (
 
 	apiv1 "github.com/projectcalico/libcalico-go/lib/apis/v1"
 	api "github.com/projectcalico/libcalico-go/lib/apis/v3"
-	"github.com/projectcalico/libcalico-go/lib/ipip"
+	"github.com/projectcalico/libcalico-go/lib/backend/encap"
 	"github.com/projectcalico/libcalico-go/lib/numorstring"
 	v3 "github.com/projectcalico/libcalico-go/lib/validator/v3"
 )
@@ -809,10 +809,17 @@ func init() {
 		Entry("should reject IPIP mode badVal", api.IPPoolSpec{CIDR: "1.2.3.0/24", IPIPMode: "badVal"}, false),
 		Entry("should reject IPIP mode never (lower case)", api.IPPoolSpec{CIDR: "1.2.3.0/24", IPIPMode: "never"}, false),
 
+		// (API) VXLANMode
+		Entry("should reject IPIP mode and VXLAN mode", api.IPPoolSpec{CIDR: "1.2.3.0/24", IPIPMode: "Always", VXLANMode: "Always"}, false),
+		Entry("should accept VXLAN mode Always", api.IPPoolSpec{CIDR: "1.2.3.0/24", VXLANMode: "Always"}, true),
+		Entry("should accept VXLAN mode Never ", api.IPPoolSpec{CIDR: "1.2.3.0/24", VXLANMode: "Never"}, true),
+		Entry("should reject VXLAN mode never", api.IPPoolSpec{CIDR: "1.2.3.0/24", VXLANMode: "never"}, false),
+		Entry("should reject VXLAN mode badVal", api.IPPoolSpec{CIDR: "1.2.3.0/24", VXLANMode: "badVal"}, false),
+
 		// (API) IPIP APIv1 backwards compatibility. Read-only field IPIP
 		Entry("should accept a nil IPIP field", api.IPPoolSpec{CIDR: "1.2.3.0/24", IPIPMode: "Never", IPIP: nil}, true),
 		Entry("should accept it when the IPIP field is not specified", api.IPPoolSpec{CIDR: "1.2.3.0/24", IPIPMode: "Never"}, true),
-		Entry("should reject a non-nil IPIP field", api.IPPoolSpec{CIDR: "1.2.3.0/24", IPIPMode: "Never", IPIP: &apiv1.IPIPConfiguration{Enabled: true, Mode: ipip.Always}}, false),
+		Entry("should reject a non-nil IPIP field", api.IPPoolSpec{CIDR: "1.2.3.0/24", IPIPMode: "Never", IPIP: &apiv1.IPIPConfiguration{Enabled: true, Mode: encap.Always}}, false),
 
 		// (API) NatOutgoing APIv1 backwards compatibility. Read-only field NatOutgoingV1
 		Entry("should accept NATOutgoingV1 field set to true", api.IPPoolSpec{CIDR: "1.2.3.0/24", IPIPMode: "Never", NATOutgoingV1: false}, true),

@@ -19,6 +19,7 @@ import (
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	"github.com/projectcalico/libcalico-go/lib/backend/encap"
 	"github.com/projectcalico/libcalico-go/lib/backend/syncersv1/felixsyncer"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
@@ -28,7 +29,6 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/libcalico-go/lib/clientv3"
-	"github.com/projectcalico/libcalico-go/lib/ipip"
 	"github.com/projectcalico/libcalico-go/lib/net"
 	"github.com/projectcalico/libcalico-go/lib/numorstring"
 	"github.com/projectcalico/libcalico-go/lib/options"
@@ -212,7 +212,7 @@ var _ = testutils.E2eDatastoreDescribe("Felix syncer tests", testutils.Datastore
 				Value: &model.IPPool{
 					CIDR:          poolCIDRNet,
 					IPIPInterface: "tunl0",
-					IPIPMode:      ipip.CrossSubnet,
+					IPIPMode:      encap.CrossSubnet,
 					Masquerade:    true,
 					IPAM:          true,
 					Disabled:      false,

@@ -18,9 +18,9 @@ import (
 	"errors"
 
 	apiv3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
+	"github.com/projectcalico/libcalico-go/lib/backend/encap"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/libcalico-go/lib/backend/watchersyncer"
-	"github.com/projectcalico/libcalico-go/lib/ipip"
 	cnet "github.com/projectcalico/libcalico-go/lib/net"
 )
 
@@ -52,17 +52,25 @@ func convertIPPoolV2ToV1(kvp *model.KVPair) (*model.KVPair, error) {
 		CIDR: *cidr,
 	}
 	var ipipInterface string
-	var ipipMode ipip.Mode
+	var ipipMode encap.Mode
 	switch v3res.Spec.IPIPMode {
 	case apiv3.IPIPModeAlways:
 		ipipInterface = "tunl0"
-		ipipMode = ipip.Always
+		ipipMode = encap.Always
 	case apiv3.IPIPModeCrossSubnet:
 		ipipInterface = "tunl0"
-		ipipMode = ipip.CrossSubnet
+		ipipMode = encap.CrossSubnet
 	default:
 		ipipInterface = ""
-		ipipMode = ipip.Undefined
+		ipipMode = encap.Undefined
+	}
+
+	var vxlanMode encap.Mode
+	switch v3res.Spec.VXLANMode {
+	case apiv3.VXLANModeAlways:
+		vxlanMode = encap.Always
+	default:
+		vxlanMode = encap.Undefined
 	}
 
 	return &model.KVPair{
@@ -71,6 +79,7 @@ func convertIPPoolV2ToV1(kvp *model.KVPair) (*model.KVPair, error) {
 			CIDR:          *cidr,
 			IPIPInterface: ipipInterface,
 			IPIPMode:      ipipMode,
+			VXLANMode:     vxlanMode,
 			Masquerade:    v3res.Spec.NATOutgoing,
 			IPAM:          !v3res.Spec.Disabled,
 			Disabled:      v3res.Spec.Disabled,

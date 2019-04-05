@@ -42,12 +42,19 @@ type IPPool struct {
 type IPPoolSpec struct {
 	// The pool CIDR.
 	CIDR string `json:"cidr" validate:"net"`
+
+	// Contains configuration for VXLAN tunneling for this pool. If not specified,
+	// then this is defaulted to "Never" (i.e. VXLAN tunelling is disabled).
+	VXLANMode VXLANMode `json:"vxlanMode,omitempty" validate:"omitempty,vxlanMode"`
+
 	// Contains configuration for IPIP tunneling for this pool. If not specified,
 	// then this is defaulted to "Never" (i.e. IPIP tunelling is disabled).
 	IPIPMode IPIPMode `json:"ipipMode,omitempty" validate:"omitempty,ipIpMode"`
+
 	// When nat-outgoing is true, packets sent from Calico networked containers in
 	// this pool to destinations outside of this pool will be masqueraded.
 	NATOutgoing bool `json:"natOutgoing,omitempty"`
+
 	// When disabled is true, Calico IPAM will not assign addresses from this pool.
 	Disabled bool `json:"disabled,omitempty"`
 
@@ -82,6 +89,14 @@ func (pool IPPool) SelectsNode(n Node) (bool, error) {
 	return sel.Evaluate(n.Labels), nil
 }
 
+type VXLANMode string
+
+const (
+	VXLANModeNever       VXLANMode = "Never"
+	VXLANModeAlways                = "Always"
+	VXLANModeCrossSubnet           = "CrossSubnet"
+)
+
 type IPIPMode string
 
 const (
@@ -89,7 +104,6 @@ const (
 	IPIPModeAlways               = "Always"
 	IPIPModeCrossSubnet          = "CrossSubnet"
 )
-const DefaultMode = IPIPModeAlways
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 

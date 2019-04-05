@@ -26,9 +26,9 @@ import (
 	apiv1 "github.com/projectcalico/libcalico-go/lib/apis/v1"
 	apiv3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/libcalico-go/lib/backend"
+	"github.com/projectcalico/libcalico-go/lib/backend/encap"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/libcalico-go/lib/clientv3"
-	"github.com/projectcalico/libcalico-go/lib/ipip"
 	"github.com/projectcalico/libcalico-go/lib/options"
 	"github.com/projectcalico/libcalico-go/lib/testutils"
 	"github.com/projectcalico/libcalico-go/lib/watch"
@@ -67,7 +67,7 @@ var _ = testutils.E2eDatastoreDescribe("IPPool KDD v1 to v3 migration tests", te
 				NodeSelector: "all()",
 				IPIP: &apiv1.IPIPConfiguration{
 					Enabled: true,
-					Mode:    ipip.CrossSubnet,
+					Mode:    encap.CrossSubnet,
 				},
 				BlockSize: 26,
 			},
@@ -164,7 +164,7 @@ var _ = testutils.E2eDatastoreDescribe("IPPool KDD v1 to v3 migration tests", te
 				Disabled: false,
 				IPIP: &apiv1.IPIPConfiguration{
 					Enabled: true,
-					Mode:    ipip.Always,
+					Mode:    encap.Always,
 				},
 				NATOutgoing:   true,
 				NATOutgoingV1: false,
