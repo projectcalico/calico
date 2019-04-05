@@ -205,7 +205,7 @@ bin/dikastes-%: vendor proto $(SRC_FILES)
 	  -e LOCAL_USER_ID=$(LOCAL_USER_ID) \
 	  -e GOCACHE=/go-cache \
 	  -w /go/src/$(PACKAGE_NAME) \
-	  $(CALICO_BUILD) go build -ldflags "-X main.VERSION=$(GIT_VERSION) -s -w" -v -o bin/dikastes-$(ARCH) ./cmd/dikastes
+	  $(CALICO_BUILD) go build -ldflags "-X main.VERSION=$(GIT_VERSION) -s -w" -v -o bin/dikastes-$(ARCH)
 
 bin/healthz-amd64: ARCH=amd64
 bin/healthz-arm64: ARCH=arm64
