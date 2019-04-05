@@ -6,6 +6,7 @@ import (
 	"os"
 	"time"
 
+	api "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	v3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	client "github.com/projectcalico/libcalico-go/lib/clientv3"
 	cerrors "github.com/projectcalico/libcalico-go/lib/errors"
@@ -15,6 +16,7 @@ import (
 	"github.com/projectcalico/node/pkg/calicoclient"
 	"github.com/projectcalico/typha/pkg/logutils"
 	"github.com/sirupsen/logrus"
+	log "github.com/sirupsen/logrus"
 )
 
 // This file contains the main processing and common logic for assigning tunnel addresses,
@@ -60,7 +62,7 @@ func Run() {
 
 	// Query the IPIP enabled pools and either configure the tunnel
 	// address, or remove it.
-	if cidrs := determineIPIPEnabledPoolCIDRs(*node, *ipPoolList); len(cidrs) > 0 {
+	if cidrs := determineEnabledPoolCIDRs(*node, *ipPoolList, false); len(cidrs) > 0 {
 		ensureHostTunnelAddress(ctx, c, nodename, cidrs, false)
 	} else {
 		removeHostTunnelAddr(ctx, c, nodename, false)
@@ -68,7 +70,7 @@ func Run() {
 
 	// Query the VXLAN enabled pools and either configure the tunnel
 	// address, or remove it.
-	if cidrs := determineVXLANEnabledPoolCIDRs(*node, *ipPoolList); len(cidrs) > 0 {
+	if cidrs := determineEnabledPoolCIDRs(*node, *ipPoolList, true); len(cidrs) > 0 {
 		ensureHostTunnelAddress(ctx, c, nodename, cidrs, true)
 	} else {
 		removeHostTunnelAddr(ctx, c, nodename, true)
@@ -254,6 +256,40 @@ func removeHostTunnelAddr(ctx context.Context, c client.Interface, nodename stri
 		// Log the error and exit with exit code 1.
 		logCtx.WithError(updateError).Fatal("Unable to remove tunnel address")
 	}
+}
+
+// determineEnabledPools returns all enabled pools. If vxlan is true, then it will only return VXLAN pools. Otherwise
+// it will only return IPIP enabled pools.
+func determineEnabledPoolCIDRs(node api.Node, ipPoolList api.IPPoolList, vxlan bool) []net.IPNet {
+	var cidrs []net.IPNet
+	for _, ipPool := range ipPoolList.Items {
+		_, poolCidr, err := net.ParseCIDR(ipPool.Spec.CIDR)
+		if err != nil {
+			log.WithError(err).Fatalf("Failed to parse CIDR '%s' for IPPool '%s'", ipPool.Spec.CIDR, ipPool.Name)
+		}
+
+		// Check if IP pool selects the node
+		if selects, err := ipPool.SelectsNode(node); err != nil {
+			log.WithError(err).Errorf("Failed to compare nodeSelector '%s' for IPPool '%s', skipping", ipPool.Spec.NodeSelector, ipPool.Name)
+			continue
+		} else if !selects {
+			log.Debugf("IPPool '%s' does not select Node '%s'", ipPool.Name, node.Name)
+			continue
+		}
+
+		// Check if desired encap is enabled in the IP pool, the IP pool is not disabled, and it is IPv4 pool since we don't support encap with IPv6.
+		if vxlan {
+			if (ipPool.Spec.VXLANMode == api.VXLANModeAlways) && !ipPool.Spec.Disabled && poolCidr.Version() == 4 {
+				cidrs = append(cidrs, *poolCidr)
+			}
+		} else {
+			// Check if IPIP is enabled in the IP pool, the IP pool is not disabled, and it is IPv4 pool since we don't support IPIP with IPv6.
+			if (ipPool.Spec.IPIPMode == api.IPIPModeCrossSubnet || ipPool.Spec.IPIPMode == api.IPIPModeAlways) && !ipPool.Spec.Disabled && poolCidr.Version() == 4 {
+				cidrs = append(cidrs, *poolCidr)
+			}
+		}
+	}
+	return cidrs
 }
 
 // isIpInPool returns if the IP address is in one of the supplied pools.
