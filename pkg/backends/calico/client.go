@@ -701,7 +701,8 @@ func (c *client) OnUpdates(updates []api.Update) {
 					log.Warning("Bad value for Node resource")
 					continue
 				}
-				if !reflect.DeepEqual(c.nodeLabels[v3key.Name], v3res.Labels) {
+				existingLabels, isSet := c.nodeLabels[v3key.Name]
+				if !isSet || !reflect.DeepEqual(existingLabels, v3res.Labels) {
 					c.nodeLabels[v3key.Name] = v3res.Labels
 					needUpdatePeersV1 = true
 				}
