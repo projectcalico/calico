@@ -1,7 +1,7 @@
 # Handle old CALICO_NETWORKING environment by converting to the new config.
 if [ -n "$CALICO_NETWORKING" ]; then
-	echo 'WARNING: $CALICO_NETWORKING will be deprecated: use $CALICO_NETWORKING_BACKEND instead'
-	if [ "$CALICO_NETWORKING" == "false" ]; then
+	echo "WARNING: $CALICO_NETWORKING will be deprecated: use $CALICO_NETWORKING_BACKEND instead"
+	if [ "$CALICO_NETWORKING" = "false" ]; then
 		export CALICO_NETWORKING_BACKEND=none
 	else
 		export CALICO_NETWORKING_BACKEND=bird
@@ -17,7 +17,8 @@ if [ ! -f "/var/lib/calico/nodename" ]; then
 	echo "/var/lib/calico/nodename does not exist, exiting"
 	exit 1
 fi
-export NODENAME=$(cat /var/lib/calico/nodename)
+NODENAME=$(cat /var/lib/calico/nodename)
+export NODENAME
 
 # If possible pre-allocate the IP address on the IPIP tunnel.
 calico-node -allocate-ipip-addr || exit 1
@@ -58,12 +59,12 @@ esac
 
 # If running libnetwork plugin in a separate container, CALICO_LIBNETWORK_ENABLED would be false.
 # CALICO_LIBNETWORK_ENABLED is "false" by default. It can be set by passing `--libnetwork` flag while starting the calico/node via calicoctl
-if [ "$CALICO_LIBNETWORK_ENABLED" == "true" ]; then
+if [ "$CALICO_LIBNETWORK_ENABLED" = "true" ]; then
 	echo "Starting libnetwork service"
 	cp -a /etc/service/available/libnetwork  /etc/service/enabled/
 fi
 
-if [ "$CALICO_DISABLE_FILE_LOGGING" == "true" ]; then
+if [ "$CALICO_DISABLE_FILE_LOGGING" = "true" ]; then
 	rm -rf /etc/service/enabled/bird/log
 	rm -rf /etc/service/enabled/bird6/log
 	rm -rf /etc/service/enabled/confd/log

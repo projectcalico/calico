@@ -13,4 +13,4 @@ fi
 # Export the nodename set by the startup procedure. 
 export NODENAME=$(cat /var/lib/calico/nodename)
 
-exec /sbin/runsvdir -P /etc/service/enabled
+exec /usr/bin/runsvdir -P /etc/service/enabled
