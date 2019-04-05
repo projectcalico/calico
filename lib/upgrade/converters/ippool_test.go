@@ -61,6 +61,7 @@ var poolTable = []TableEntry{
 			Spec: apiv3.IPPoolSpec{
 				CIDR:         "10.0.0.1/24",
 				IPIPMode:     apiv3.IPIPModeAlways,
+				VXLANMode:    apiv3.VXLANModeNever,
 				NATOutgoing:  false,
 				Disabled:     false,
 				BlockSize:    26,
@@ -102,6 +103,7 @@ var poolTable = []TableEntry{
 			Spec: apiv3.IPPoolSpec{
 				CIDR:         "2001::/120",
 				IPIPMode:     apiv3.IPIPModeAlways,
+				VXLANMode:    apiv3.VXLANModeNever,
 				NATOutgoing:  false,
 				Disabled:     true,
 				BlockSize:    122,
@@ -109,7 +111,7 @@ var poolTable = []TableEntry{
 			},
 		},
 	),
-	Entry("IPv4 IPPool with IPIPMode blank, should be converted to IPIPMode Always",
+	Entry("IPv4 IPPool with IPIPMode blank, should be converted to IPIPMode Never",
 		&apiv1.IPPool{
 			Metadata: apiv1.IPPoolMetadata{
 				CIDR: cnet.MustParseCIDR("5.5.5.5/25"),
@@ -143,6 +145,7 @@ var poolTable = []TableEntry{
 			Spec: apiv3.IPPoolSpec{
 				CIDR:         "5.5.5.5/25",
 				IPIPMode:     apiv3.IPIPModeNever,
+				VXLANMode:    apiv3.VXLANModeNever,
 				NATOutgoing:  true,
 				Disabled:     true,
 				BlockSize:    26,
@@ -150,7 +153,7 @@ var poolTable = []TableEntry{
 			},
 		},
 	),
-	Entry("IPv4 IPPool with IPIPMode unspecified, should be converted to IPIPMode Always",
+	Entry("IPv4 IPPool with IPIPMode unspecified, should be converted to IPIPMode Never",
 		&apiv1.IPPool{
 			Metadata: apiv1.IPPoolMetadata{
 				CIDR: cnet.MustParseCIDR("6.6.6.6/26"),
@@ -181,6 +184,7 @@ var poolTable = []TableEntry{
 			Spec: apiv3.IPPoolSpec{
 				CIDR:         "6.6.6.6/26",
 				IPIPMode:     apiv3.IPIPModeNever,
+				VXLANMode:    apiv3.VXLANModeNever,
 				NATOutgoing:  true,
 				Disabled:     true,
 				BlockSize:    26,
@@ -222,6 +226,7 @@ var poolTable = []TableEntry{
 			Spec: apiv3.IPPoolSpec{
 				CIDR:         "1.1.1.1/11",
 				IPIPMode:     apiv3.IPIPModeCrossSubnet,
+				VXLANMode:    apiv3.VXLANModeNever,
 				NATOutgoing:  false,
 				Disabled:     true,
 				BlockSize:    26,

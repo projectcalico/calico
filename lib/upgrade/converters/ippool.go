@@ -73,6 +73,7 @@ func (_ IPPool) BackendV1ToAPIV3(kvp *model.KVPair) (Resource, error) {
 	ipp.Spec = apiv3.IPPoolSpec{
 		CIDR:         pool.CIDR.String(),
 		IPIPMode:     convertIPIPMode(pool.IPIPMode, pool.IPIPInterface),
+		VXLANMode:    apiv3.VXLANModeNever,
 		NATOutgoing:  pool.Masquerade,
 		Disabled:     pool.Disabled,
 		NodeSelector: "all()",
