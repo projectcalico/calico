@@ -7,4 +7,5 @@ network: calico
 typha:
   enabled: true
 app_layer_policy: true
+calico_ipam: false
 {% endhelm %}

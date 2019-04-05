@@ -6,4 +6,5 @@ datastore: kdd
 typha:
   enabled: true
 app_layer_policy: true
+network: none
 {% endhelm %}
