@@ -13,8 +13,8 @@ etcd:
     key: null
 
 # Sets the networking mode. Can be 'calico', 'flannel', or 'none'
-network: "none"
+network: calico
 
-calico_ipam: false
+calico_ipam: true
 app_layer_policy: false
 

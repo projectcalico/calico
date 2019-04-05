@@ -5,4 +5,6 @@ layout: null
 datastore: kdd
 typha:
   enabled: true
+network: none
+calico_ipam: false
 {% endhelm %}
