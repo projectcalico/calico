@@ -40,6 +40,7 @@ ippool_name1_rev1_v4 = {
     'spec': {
         'cidr': "10.0.1.0/24",
         'ipipMode': 'Always',
+        'vxlanMode': 'Never',
         'blockSize': 27,
         'nodeSelector': "foo == 'bar'",
     }
@@ -64,6 +65,7 @@ ippool_name1_rev2_v4 = {
     'spec': {
         'cidr': "10.0.1.0/24",
         'ipipMode': 'Never',
+        'vxlanMode': 'Always',
         'nodeSelector': "all()",
     }
 }
@@ -77,6 +79,7 @@ ippool_name2_rev1_v6 = {
     'spec': {
         'cidr': "fed0:8001::/64",
         'ipipMode': 'Never',
+        'vxlanMode': 'Never',
         'blockSize': 123,
         'nodeSelector': "all()",
     }
