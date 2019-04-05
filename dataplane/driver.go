@@ -26,8 +26,8 @@ import (
 	"runtime/debug"
 
 	"github.com/projectcalico/felix/config"
-	"github.com/projectcalico/felix/dataplane/external"
-	"github.com/projectcalico/felix/dataplane/linux"
+	extdataplane "github.com/projectcalico/felix/dataplane/external"
+	intdataplane "github.com/projectcalico/felix/dataplane/linux"
 	"github.com/projectcalico/felix/ifacemonitor"
 	"github.com/projectcalico/felix/ipsets"
 	"github.com/projectcalico/felix/logutils"
@@ -85,6 +85,7 @@ func StartDataplaneDriver(configParams *config.Config,
 		}).Info("Calculated iptables mark bits")
 
 		dpConfig := intdataplane.Config{
+			Hostname: configParams.FelixHostname,
 			IfaceMonitorConfig: ifacemonitor.Config{
 				InterfaceExcludes: configParams.InterfaceExclude,
 			},
@@ -118,6 +119,10 @@ func StartDataplaneDriver(configParams *config.Config,
 				IptablesMarkEndpoint:        markEndpointMark,
 				IptablesMarkNonCaliEndpoint: markEndpointNonCaliEndpoint,
 
+				VXLANEnabled: configParams.VXLANEnabled,
+				VXLANPort:    configParams.VXLANPort,
+				VXLANVNI:     configParams.VXLANVNI,
+
 				IPIPEnabled:       configParams.IpInIpEnabled,
 				IPIPTunnelAddress: configParams.IpInIpTunnelAddr,
 
@@ -135,6 +140,7 @@ func StartDataplaneDriver(configParams *config.Config,
 				IptablesNATOutgoingInterfaceFilter: configParams.IptablesNATOutgoingInterfaceFilter,
 			},
 			IPIPMTU:                        configParams.IpInIpMtu,
+			VXLANMTU:                       configParams.VXLANMTU,
 			IptablesRefreshInterval:        configParams.IptablesRefreshInterval,
 			RouteRefreshInterval:           configParams.RouteRefreshInterval,
 			IPSetsRefreshInterval:          configParams.IpsetsRefreshInterval,

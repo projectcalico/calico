@@ -51,6 +51,7 @@ var _ = Describe("FelixConfig vs ConfigParams parity", func() {
 
 		// Moved to Node.
 		"IpInIpTunnelAddr",
+		"IPv4VXLANTunnelAddr",
 	}
 	cpFieldNameToFC := map[string]string{
 		"IpInIpEnabled":                      "IPIPEnabled",

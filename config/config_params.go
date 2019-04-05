@@ -164,6 +164,12 @@ type Config struct {
 	LogSeverityScreen string `config:"oneof(DEBUG,INFO,WARNING,ERROR,FATAL);INFO"`
 	LogSeveritySys    string `config:"oneof(DEBUG,INFO,WARNING,ERROR,FATAL);INFO"`
 
+	VXLANEnabled        bool   `config:"bool;false"`
+	VXLANPort           int    `config:"int;0"`
+	VXLANVNI            int    `config:"int;0"`
+	VXLANMTU            int    `config:"int;1410;non-zero"`
+	IPv4VXLANTunnelAddr net.IP `config:"ipv4;"`
+
 	IpInIpEnabled    bool   `config:"bool;false"`
 	IpInIpMtu        int    `config:"int;1440;non-zero"`
 	IpInIpTunnelAddr net.IP `config:"ipv4;"`
@@ -408,10 +414,10 @@ func (config *Config) DatastoreConfig() apiconfig.CalicoAPIConfig {
 		}
 	}
 
-	if !config.IpInIpEnabled {
+	if !config.IpInIpEnabled && !config.VXLANEnabled {
 		// Polling k8s for node updates is expensive (because we get many superfluous
 		// updates) so disable if we don't need it.
-		log.Info("IPIP disabled, disabling node poll (if KDD is in use).")
+		log.Info("Encap disabled, disabling node poll (if KDD is in use).")
 		cfg.Spec.K8sDisableNodePoll = true
 	}
 	return *cfg
