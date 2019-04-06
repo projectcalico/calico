@@ -1,5 +1,5 @@
-hash: 49258d244d170bc2c332dffbe62422af79206ad2e048aa2dc76c70e2c17ef5ec
-updated: 2019-04-05T07:45:12.661643006-07:00
+hash: 713402e44abb598023b918fe5bb1890ef19f97a6c100db4c00922ab101e7264c
+updated: 2019-04-06T04:13:03.241503307Z
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -197,7 +197,7 @@ imports:
   - lib/validator/v3
   - lib/watch
 - name: github.com/projectcalico/typha
-  version: 9d9fe1288ae6d5843b3fe8441c605e9d41470580
+  version: d4a433a6dd315a932f4608549414fb875bf1172a
   subpackages:
   - pkg/syncclient
   - pkg/syncproto
