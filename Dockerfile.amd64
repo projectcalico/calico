@@ -34,6 +34,9 @@ RUN apt-get update && apt-get install -y \
     runit \ 
     # Need kmod to ensure ip6tables-save works correctly
     kmod \ 
+    # Need netbase in order for ipset to work correctly 
+    # See https://github.com/kubernetes/kubernetes/issues/68703
+    netbase \ 
     # Also needed (provides utilities for browsing procfs like ps) 
     procps \    
     ca-certificates
