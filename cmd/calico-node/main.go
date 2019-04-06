@@ -23,7 +23,7 @@ import (
 	confd "github.com/kelseyhightower/confd/pkg/run"
 	felix "github.com/projectcalico/felix/daemon"
 
-	"github.com/projectcalico/node/pkg/allocateipip"
+	"github.com/projectcalico/node/pkg/allocateip"
 	"github.com/projectcalico/node/pkg/readiness"
 	"github.com/projectcalico/node/pkg/startup"
 
@@ -38,7 +38,7 @@ var flagSet = flag.NewFlagSet("Calico", flag.ContinueOnError)
 var version = flagSet.Bool("v", false, "Display version")
 var runFelix = flagSet.Bool("felix", false, "Run Felix")
 var runStartup = flagSet.Bool("startup", false, "Initialize a new node")
-var runAllocateIPIP = flagSet.Bool("allocate-ipip-addr", false, "Allocate an IPIP address for this node")
+var allocateTunnelAddrs = flagSet.Bool("allocate-tunnel-addrs", false, "Configure tunnel addresses for this node")
 
 // Options for readiness checks.
 var birdReady = flagSet.Bool("bird-ready", false, "Run BIRD readiness checks")
@@ -106,8 +106,8 @@ func main() {
 			panic(err)
 		}
 		confd.Run(cfg)
-	} else if *runAllocateIPIP {
-		allocateipip.Run()
+	} else if *allocateTunnelAddrs {
+		allocateip.Run()
 	} else {
 		fmt.Println("No valid options provided. Usage:")
 		flagSet.PrintDefaults()

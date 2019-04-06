@@ -684,6 +684,7 @@ func configureIPPools(ctx context.Context, client client.Interface) {
 	}
 
 	ipv4IpipModeEnvVar := strings.ToLower(os.Getenv("CALICO_IPV4POOL_IPIP"))
+	ipv4VXLANModeEnvVar := strings.ToLower(os.Getenv("CALICO_IPV4POOL_VXLAN"))
 
 	// Get a list of all IP Pools
 	poolList, err := client.IPPools().List(ctx, options.ListOptions{})
@@ -739,22 +740,24 @@ func configureIPPools(ctx context.Context, client client.Interface) {
 	if !ipv4Present {
 		log.Debug("Create default IPv4 IP pool")
 		outgoingNATEnabled := evaluateENVBool("CALICO_IPV4POOL_NAT_OUTGOING", true)
-		createIPPool(ctx, client, ipv4Cidr, DEFAULT_IPV4_POOL_NAME, ipv4IpipModeEnvVar, outgoingNATEnabled)
+		createIPPool(ctx, client, ipv4Cidr, DEFAULT_IPV4_POOL_NAME, ipv4IpipModeEnvVar, ipv4VXLANModeEnvVar, outgoingNATEnabled)
 	}
 	if !ipv6Present && ipv6Supported() {
 		log.Debug("Create default IPv6 IP pool")
 		outgoingNATEnabled := evaluateENVBool("CALICO_IPV6POOL_NAT_OUTGOING", false)
 
-		createIPPool(ctx, client, ipv6Cidr, DEFAULT_IPV6_POOL_NAME, string(api.IPIPModeNever), outgoingNATEnabled)
+		createIPPool(ctx, client, ipv6Cidr, DEFAULT_IPV6_POOL_NAME, string(api.IPIPModeNever), string(api.VXLANModeNever), outgoingNATEnabled)
 	}
 }
 
 // createIPPool creates an IP pool using the specified CIDR.  This
 // method is a no-op if the pool already exists.
-func createIPPool(ctx context.Context, client client.Interface, cidr *cnet.IPNet, poolName, ipipModeName string, isNATOutgoingEnabled bool) {
+func createIPPool(ctx context.Context, client client.Interface, cidr *cnet.IPNet, poolName, ipipModeName, vxlanModeName string, isNATOutgoingEnabled bool) {
 	version := cidr.Version()
 	var ipipMode api.IPIPMode
+	var vxlanMode api.VXLANMode
 
+	// Parse the given IPIP mode.
 	switch strings.ToLower(ipipModeName) {
 	case "", "off", "never":
 		ipipMode = api.IPIPModeNever
@@ -767,6 +770,17 @@ func createIPPool(ctx context.Context, client client.Interface, cidr *cnet.IPNet
 		terminate()
 	}
 
+	// Parse the given VXLAN mode.
+	switch strings.ToLower(vxlanModeName) {
+	case "", "off", "never":
+		vxlanMode = api.VXLANModeNever
+	case "always":
+		vxlanMode = api.VXLANModeAlways
+	default:
+		log.Errorf("Unrecognized VXLAN mode specified in CALICO_IPV4POOL_VXLAN'%s'", vxlanModeName)
+		terminate()
+	}
+
 	pool := &api.IPPool{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: poolName,
@@ -775,10 +789,11 @@ func createIPPool(ctx context.Context, client client.Interface, cidr *cnet.IPNet
 			CIDR:        cidr.String(),
 			NATOutgoing: isNATOutgoingEnabled,
 			IPIPMode:    ipipMode,
+			VXLANMode:   vxlanMode,
 		},
 	}
 
-	log.Infof("Ensure default IPv%d pool is created. IPIP mode: %s", version, ipipModeName)
+	log.Infof("Ensure default IPv%d pool is created. IPIP mode: %s, VXLAN mode: %s", version, ipipMode, vxlanMode)
 
 	// Create the pool.  There is a small chance that another node may
 	// beat us to it, so handle the fact that the pool already exists.
@@ -788,8 +803,8 @@ func createIPPool(ctx context.Context, client client.Interface, cidr *cnet.IPNet
 			terminate()
 		}
 	} else {
-		log.Infof("Created default IPv%d pool (%s) with NAT outgoing %t. IPIP mode: %s",
-			version, cidr, isNATOutgoingEnabled, ipipModeName)
+		log.Infof("Created default IPv%d pool (%s) with NAT outgoing %t. IPIP mode: %s, VXLAN mode: %s",
+			version, cidr, isNATOutgoingEnabled, ipipMode, vxlanMode)
 	}
 }
 

@@ -1,5 +1,5 @@
-hash: 739e3ddd4a3c7d98027ac7edaf38a48bc742e049a02700505e8fa5296f8cd23b
-updated: 2019-04-05T07:41:12.838269548Z
+hash: b1e1e239fab230491e52c45ce7cdccf6ae10d86dfda3d8fa4bb66b39ce9eae04
+updated: 2019-04-05T14:09:45.163992199-07:00
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -14,7 +14,7 @@ imports:
   - autorest/azure
   - autorest/date
 - name: github.com/beorn7/perks
-  version: 3a771d992973f24aa725d07868b467d1ddfceafb
+  version: 3ac7bf7a47d159a033b107610db8a1b6575507a4
   subpackages:
   - quantile
 - name: github.com/BurntSushi/toml
@@ -47,7 +47,7 @@ imports:
 - name: github.com/ghodss/yaml
   version: 73d445a93680fa1a78ae23a5839bad48f32ba1ee
 - name: github.com/go-ini/ini
-  version: ece0e89bb05aec0d6768f7bc1e77f11f03da0d11
+  version: 9c8236e659b76e87bf02044d06fde8683008ff3e
 - name: github.com/go-playground/locales
   version: f63010822830b6fe52288ee52d5a1151088ce039
   subpackages:
@@ -112,9 +112,9 @@ imports:
 - name: github.com/json-iterator/go
   version: f2b4162afba35581b6d4a50d3b8f34e33c144682
 - name: github.com/kardianos/osext
-  version: 2bc1f35cddc0cc527b4bc3dce8578fc2a6c11384
+  version: ae77be60afb1dcacde03767a8c37337fad28ac14
 - name: github.com/kelseyhightower/confd
-  version: 49f41216658a73dd7950cb42f6db35220fc15e61
+  version: 3c67b58bc78f9c069ec15adfb45cdada53eeba8c
   repo: https://github.com/projectcalico/confd.git
   subpackages:
   - pkg/backends
@@ -180,7 +180,7 @@ imports:
 - name: github.com/peterbourgon/diskv
   version: 5f041e8faa004a95c88a202771f4cc3e991971e6
 - name: github.com/projectcalico/felix
-  version: 54d787496ff28a2e738acc682d1de2970e6fcedf
+  version: bbc860e9421c600506202dd4fd468cb021df261e
   subpackages:
   - buildinfo
   - calc
@@ -218,7 +218,7 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: ffdaf369acab3138985dfbb714ebbdb474844b6e
+  version: 611aeab61ed6b3f0317416f8254d1333fb893f2b
   subpackages:
   - lib/apiconfig
   - lib/apis/v1
@@ -226,6 +226,7 @@ imports:
   - lib/apis/v3
   - lib/backend
   - lib/backend/api
+  - lib/backend/encap
   - lib/backend/etcdv3
   - lib/backend/k8s
   - lib/backend/k8s/conversion
@@ -240,7 +241,6 @@ imports:
   - lib/hash
   - lib/health
   - lib/ipam
-  - lib/ipip
   - lib/logutils
   - lib/names
   - lib/namespace
@@ -269,7 +269,7 @@ imports:
   subpackages:
   - binder
 - name: github.com/projectcalico/typha
-  version: 077427bf0babcc940aa369f84a3522e7bfd437c0
+  version: 9d9fe1288ae6d5843b3fe8441c605e9d41470580
   subpackages:
   - pkg/syncclient
   - pkg/syncproto
@@ -311,7 +311,7 @@ imports:
 - name: github.com/vishvananda/netns
   version: 13995c7128ccc8e51e9a6bd2b551020a27180abd
 - name: golang.org/x/crypto
-  version: 49796115aa4b964c318aad4f3084fdb41e9aa067
+  version: 9419663f5a44be8b34ca85f08abc5fe1be11f8a3
   subpackages:
   - ssh/terminal
 - name: golang.org/x/net

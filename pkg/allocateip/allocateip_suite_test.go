@@ -1,4 +1,4 @@
-package allocateipip_test
+package allocateip_test
 
 import (
 	. "github.com/onsi/ginkgo"
@@ -16,6 +16,6 @@ func init() {
 
 func TestCommands(t *testing.T) {
 	RegisterFailHandler(Fail)
-	junitReporter := reporters.NewJUnitReporter("../../report/allocateipipaddr_suite.xml")
-	RunSpecsWithDefaultAndCustomReporters(t, "AllocateIPIPAddr Suite", []Reporter{junitReporter})
+	junitReporter := reporters.NewJUnitReporter("../../report/allocateipaddr_suite.xml")
+	RunSpecsWithDefaultAndCustomReporters(t, "AllocateIPAddr Suite", []Reporter{junitReporter})
 }
