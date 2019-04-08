@@ -772,22 +772,20 @@ func (c *client) updateCache(updateType api.UpdateType, kvp *model.KVPair) bool 
 		return false
 	}
 
-	entryUpdated := false
-
 	switch updateType {
 	case api.UpdateTypeKVDeleted:
 		// The bird templates that confd is used to render assume that some global
 		// defaults are always configured.
 		if globalDefault, ok := globalDefaults[k]; ok {
-			if c.cache[k] != globalDefault {
-				entryUpdated = true
-				c.cache[k] = globalDefault
+			if currentValue, hasKey := c.cache[k]; hasKey && currentValue == globalDefault {
+				return false
 			}
+			c.cache[k] = globalDefault
 		} else {
-			if _, ok := c.cache[k]; ok {
-				entryUpdated = true
-				delete(c.cache, k)
+			if _, hasValue := c.cache[k]; !hasValue {
+				return false
 			}
+			delete(c.cache, k)
 		}
 	case api.UpdateTypeKVNew, api.UpdateTypeKVUpdated:
 		value, err := model.SerializeValue(kvp)
@@ -796,17 +794,17 @@ func (c *client) updateCache(updateType api.UpdateType, kvp *model.KVPair) bool 
 			return false
 		}
 		newValue := string(value)
-		if currentValue, isSet := c.cache[k]; !isSet || currentValue != newValue {
-			entryUpdated = true
-			c.cache[k] = newValue
+		if currentValue, isSet := c.cache[k]; isSet && currentValue == newValue {
+			return false
 		}
+		c.cache[k] = newValue
 	}
 
 	log.Debugf("Cache entry updated from event type %d: %s=%s", updateType, k, c.cache[k])
 	if c.synced {
 		c.keyUpdated(k)
 	}
-	return entryUpdated
+	return true
 }
 
 // ParseFailed is called from the BGP syncer when an event could not be parsed.
