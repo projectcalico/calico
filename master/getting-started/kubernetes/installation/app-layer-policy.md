@@ -72,7 +72,7 @@ Application layer policy [requires Istio](../requirements#application-layer-poli
 Install Istio according to the [Istio project documentation](https://istio.io/docs/setup/kubernetes/), making sure to enable mutual TLS authentication. For example:
 
 ```bash
-curl -L https://git.io/getLatestIstio | ISTIO_VERSION=1.0.6 sh -
+curl -L https://git.io/getLatestIstio | ISTIO_VERSION=1.0.7 sh -
 cd $(ls -d istio-*)
 kubectl apply -f install/kubernetes/helm/istio/templates/crds.yaml
 kubectl apply -f install/kubernetes/istio-demo-auth.yaml
