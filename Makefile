@@ -296,7 +296,7 @@ endif
 	docker run --rm \
 	  -v $$PWD:/calico \
 	  -w /calico \
-	  ruby:2.5 ruby ./hack/gen_values_yml.rb $(RELEASE_STREAM) >> _includes/$(RELEASE_STREAM)/charts/calico/values.yaml
+	  ruby:2.5 ruby ./hack/gen_values_yml.rb $(RELEASE_STREAM) > _includes/$(RELEASE_STREAM)/charts/calico/values.yaml
 
 .PHONY: help
 ## Display this help text
