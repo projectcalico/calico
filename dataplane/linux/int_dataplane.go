@@ -208,6 +208,8 @@ type InternalDataplane struct {
 	config Config
 
 	debugHangC <-chan time.Time
+
+	callbacks *callbacks
 }
 
 const (
@@ -335,13 +337,15 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 
 	dp.endpointStatusCombiner = newEndpointStatusCombiner(dp.fromDataplane, config.IPv6Enabled)
 
-	dp.RegisterManager(newIPSetsManager(ipSetsV4, config.MaxIPSetSize))
+	callbacks := newCallbacks()
+	dp.callbacks = callbacks
+	dp.RegisterManager(newIPSetsManager(ipSetsV4, config.MaxIPSetSize, callbacks))
 	dp.RegisterManager(newHostIPManager(
 		config.RulesConfig.WorkloadIfacePrefixes,
 		rules.IPSetIDThisHostIPs,
 		ipSetsV4,
 		config.MaxIPSetSize))
-	dp.RegisterManager(newPolicyManager(rawTableV4, mangleTableV4, filterTableV4, ruleRenderer, 4))
+	dp.RegisterManager(newPolicyManager(rawTableV4, mangleTableV4, filterTableV4, ruleRenderer, 4, callbacks))
 	dp.RegisterManager(newEndpointManager(
 		rawTableV4,
 		mangleTableV4,
@@ -352,7 +356,8 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		epMarkMapper,
 		config.RulesConfig.KubeIPVSSupportEnabled,
 		config.RulesConfig.WorkloadIfacePrefixes,
-		dp.endpointStatusCombiner.OnEndpointStatusUpdate))
+		dp.endpointStatusCombiner.OnEndpointStatusUpdate,
+		callbacks))
 	dp.RegisterManager(newFloatingIPManager(natTableV4, ruleRenderer, 4))
 	dp.RegisterManager(newMasqManager(ipSetsV4, natTableV4, ruleRenderer, config.MaxIPSetSize, 4))
 	if config.RulesConfig.IPIPEnabled {
@@ -405,13 +410,13 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		routeTableV6 := routetable.New(config.RulesConfig.WorkloadIfacePrefixes, 6, false, config.NetlinkTimeout)
 		dp.routeTables = append(dp.routeTables, routeTableV6)
 
-		dp.RegisterManager(newIPSetsManager(ipSetsV6, config.MaxIPSetSize))
+		dp.RegisterManager(newIPSetsManager(ipSetsV6, config.MaxIPSetSize, callbacks))
 		dp.RegisterManager(newHostIPManager(
 			config.RulesConfig.WorkloadIfacePrefixes,
 			rules.IPSetIDThisHostIPs,
 			ipSetsV6,
 			config.MaxIPSetSize))
-		dp.RegisterManager(newPolicyManager(rawTableV6, mangleTableV6, filterTableV6, ruleRenderer, 6))
+		dp.RegisterManager(newPolicyManager(rawTableV6, mangleTableV6, filterTableV6, ruleRenderer, 6, callbacks))
 		dp.RegisterManager(newEndpointManager(
 			rawTableV6,
 			mangleTableV6,
@@ -422,7 +427,8 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			epMarkMapper,
 			config.RulesConfig.KubeIPVSSupportEnabled,
 			config.RulesConfig.WorkloadIfacePrefixes,
-			dp.endpointStatusCombiner.OnEndpointStatusUpdate))
+			dp.endpointStatusCombiner.OnEndpointStatusUpdate,
+			callbacks))
 		dp.RegisterManager(newFloatingIPManager(natTableV6, ruleRenderer, 6))
 		dp.RegisterManager(newMasqManager(ipSetsV6, natTableV6, ruleRenderer, config.MaxIPSetSize, 6))
 	}

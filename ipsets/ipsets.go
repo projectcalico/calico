@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2018 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2019 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -222,6 +222,10 @@ func (s *IPSets) RemoveMembers(setID string, removedMembers []string) {
 func (s *IPSets) QueueResync() {
 	s.logCxt.Info("Asked to resync with the dataplane on next update.")
 	s.resyncRequired = true
+}
+
+func (s *IPSets) GetIPFamily() IPFamily {
+	return s.IPVersionConfig.Family
 }
 
 func (s *IPSets) filterAndCanonicaliseMembers(ipSetType IPSetType, members []string) set.Set {

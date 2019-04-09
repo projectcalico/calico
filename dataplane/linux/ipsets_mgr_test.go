@@ -1,4 +1,4 @@
-// Copyright (c) 2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017, 2019 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -30,7 +30,7 @@ var _ = Describe("IP Sets manager", func() {
 
 	BeforeEach(func() {
 		ipSets = newMockIPSets()
-		ipsetsMgr = newIPSetsManager(ipSets, 1024)
+		ipsetsMgr = newIPSetsManager(ipSets, 1024, newCallbacks())
 	})
 
 	Describe("after sending a replace", func() {
