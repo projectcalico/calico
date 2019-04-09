@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2018 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2019 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -109,6 +109,7 @@ type Config struct {
 	IptablesLockFilePath           string
 	IptablesLockTimeout            time.Duration
 	IptablesLockProbeInterval      time.Duration
+	XDPRefreshInterval             time.Duration
 
 	NetlinkTimeout time.Duration
 
@@ -126,6 +127,9 @@ type Config struct {
 	DebugSimulateDataplaneHangAfter time.Duration
 
 	ExternalNodesCidrs []string
+
+	XDPEnabled      bool
+	XDPAllowGeneric bool
 }
 
 // InternalDataplane implements an in-process Felix dataplane driver based on iptables

@@ -139,6 +139,7 @@ type Config struct {
 	IptablesLockProbeIntervalMillis    time.Duration `config:"millis;50"`
 	IpsetsRefreshInterval              time.Duration `config:"seconds;10"`
 	MaxIpsetSize                       int           `config:"int;1048576;non-zero"`
+	XDPRefreshInterval                 time.Duration `config:"seconds;90"`
 
 	PolicySyncPathPrefix string `config:"file;;"`
 
@@ -221,6 +222,9 @@ type Config struct {
 	Err               error
 
 	IptablesNATOutgoingInterfaceFilter string `config:"iface-param;"`
+
+	XDPEnabled        bool `config:"bool;true"`
+	GenericXDPEnabled bool `config:"bool;false"`
 }
 
 type ProtoPort struct {
