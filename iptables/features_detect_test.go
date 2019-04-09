@@ -1,4 +1,4 @@
-// Copyright (c) 2018 Tigera, Inc. All rights reserved.
+// Copyright (c) 2018-2019 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -109,7 +109,7 @@ func TestFeatureDetection(t *testing.T) {
 			dataplane := newMockDataplane("filter", map[string][]string{})
 			featureDetector := NewFeatureDetector()
 			featureDetector.NewCmd = dataplane.newCmd
-			featureDetector.ReadFile = dataplane.readFile
+			featureDetector.GetKernelVersionReader = dataplane.getKernelVersionReader
 
 			if tst.iptablesVersion == "error" {
 				dataplane.FailNextVersion = true
@@ -118,7 +118,7 @@ func TestFeatureDetection(t *testing.T) {
 			}
 
 			if tst.kernelVersion == "error" {
-				dataplane.FailNextReadFile = true
+				dataplane.FailNextGetKernelVersionReader = true
 			} else {
 				dataplane.KernelVersion = tst.kernelVersion
 			}

@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2018 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2019 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -52,29 +52,29 @@ type chainMod struct {
 }
 
 type mockDataplane struct {
-	Table                  string
-	Chains                 map[string][]string
-	FlushedChains          set.Set
-	ChainMods              set.Set
-	DeletedChains          set.Set
-	Cmds                   []CmdIface
-	CmdNames               []string
-	FailNextRestore        bool
-	FailAllRestores        bool
-	OnPreRestore           func()
-	FailNextSaveRead       bool
-	FailNextSaveStdoutPipe bool
-	FailNextKill           bool
-	FailAllSaves           bool
-	FailNextPipeClose      bool
-	FailNextStart          bool
-	FailNextReadFile       bool
-	PipeBuffers            []*closableBuffer
-	CumulativeSleep        time.Duration
-	Time                   time.Time
-	FailNextVersion        bool
-	Version                string
-	KernelVersion          string
+	Table                          string
+	Chains                         map[string][]string
+	FlushedChains                  set.Set
+	ChainMods                      set.Set
+	DeletedChains                  set.Set
+	Cmds                           []CmdIface
+	CmdNames                       []string
+	FailNextRestore                bool
+	FailAllRestores                bool
+	OnPreRestore                   func()
+	FailNextSaveRead               bool
+	FailNextSaveStdoutPipe         bool
+	FailNextKill                   bool
+	FailAllSaves                   bool
+	FailNextPipeClose              bool
+	FailNextStart                  bool
+	FailNextGetKernelVersionReader bool
+	PipeBuffers                    []*closableBuffer
+	CumulativeSleep                time.Duration
+	Time                           time.Time
+	FailNextVersion                bool
+	Version                        string
+	KernelVersion                  string
 }
 
 func (d *mockDataplane) ResetCmds() {
@@ -124,15 +124,12 @@ func (d *mockDataplane) newCmd(name string, arg ...string) CmdIface {
 	return cmd
 }
 
-func (d *mockDataplane) readFile(name string) ([]byte, error) {
-	if d.FailNextReadFile {
-		d.FailNextReadFile = false
+func (d *mockDataplane) getKernelVersionReader() (io.Reader, error) {
+	if d.FailNextGetKernelVersionReader {
+		d.FailNextGetKernelVersionReader = false
 		return nil, errors.New("dummy error")
 	}
-	if name == "/proc/version" {
-		return []byte(d.KernelVersion), nil
-	}
-	return nil, errors.New("not implemented")
+	return bytes.NewBufferString(d.KernelVersion), nil
 }
 
 func (d *mockDataplane) sleep(duration time.Duration) {
