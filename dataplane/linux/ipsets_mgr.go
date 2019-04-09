@@ -79,6 +79,14 @@ func newIPSetsManager(ipsets_ ipsetsDataplane, maxIPSetSize int, callbacks *call
 	}
 }
 
+func (m *ipSetsManager) GetIPSetType(setID string) (ipsets.IPSetType, error) {
+	return m.ipsetsDataplane.GetTypeOf(setID)
+}
+
+func (m *ipSetsManager) GetIPSetMembers(setID string) (set.Set /*<string>*/, error) {
+	return m.ipsetsDataplane.GetMembers(setID)
+}
+
 func (m *ipSetsManager) OnUpdate(msg interface{}) {
 	switch msg := msg.(type) {
 	// IP set-related messages, these are extremely common.

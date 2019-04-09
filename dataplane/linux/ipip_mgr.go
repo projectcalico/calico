@@ -24,6 +24,8 @@ import (
 	"github.com/projectcalico/felix/ipsets"
 	"github.com/projectcalico/felix/proto"
 	"github.com/projectcalico/felix/rules"
+
+	"github.com/projectcalico/libcalico-go/lib/set"
 )
 
 // ipipManager manages the all-hosts IP set, which is used by some rules in our static chains
@@ -238,4 +240,6 @@ type ipsetsDataplane interface {
 	RemoveMembers(setID string, removedMembers []string)
 	RemoveIPSet(setID string)
 	GetIPFamily() ipsets.IPFamily
+	GetTypeOf(setID string) (ipsets.IPSetType, error)
+	GetMembers(setID string) (set.Set, error)
 }

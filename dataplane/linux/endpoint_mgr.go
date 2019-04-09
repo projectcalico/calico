@@ -1008,3 +1008,8 @@ var allInterfaces = "any-interface-at-all"
 func forAllInterfaces(hep *proto.HostEndpoint) bool {
 	return hep.Name == "*"
 }
+
+// for implementing the endpointsSource interface
+func (m *endpointManager) GetRawHostEndpoints() map[proto.HostEndpointID]*proto.HostEndpoint {
+	return m.rawHostEndpoints
+}
