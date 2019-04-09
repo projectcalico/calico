@@ -7,4 +7,5 @@ apt-get install -y --no-install-recommends \
 apt-get purge --auto-remove && \
 apt-get clean && \
 mkdir -p /src /go && \
+go get -u github.com/gobuffalo/packr/v2/packr2 && \
 rm -rf /go/src
