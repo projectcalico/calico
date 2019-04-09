@@ -34,6 +34,7 @@ import (
 const (
 	// tags of the XDP program, need to be changed if the XDP program changes
 	realTag = "d3b98a39bdd3181e" // as shown by running bpftool prog show
+	mockTag = "e117abe323d75796" // sha-1 of the ELF object truncated to 16 characters
 )
 
 var (
@@ -58,7 +59,7 @@ func cleanup(calicoDir string) error {
 	return nil
 }
 
-func setup() error {
+func setup() {
 	_ = cleanup("")
 
 	bpfCalicoSubdir = "calico_test"
@@ -73,16 +74,13 @@ func setup() error {
 		bpfDP, _ = NewBPFLib()
 		expectedTag = realTag
 	} else {
-		return fmt.Errorf("%s", "Not possible to run BPF lib tests")
+		bpfDP = NewMockBPFLib()
+		expectedTag = mockTag
 	}
-	return nil
 }
 
 func TestMain(m *testing.M) {
-	if err := setup(); err != nil {
-		fmt.Printf("error setting up bpf tests: %v", err)
-		os.Exit(1)
-	}
+	setup()
 	retCode := m.Run()
 	_ = cleanup(bpfDP.GetBPFCalicoDir())
 	os.Exit(retCode)
