@@ -21,6 +21,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"sync"
 
 	"google.golang.org/grpc"
 )
@@ -38,7 +39,7 @@ type Binder interface {
 
 	// Search for pod mounts to bind sockets in.
 	// Send any value over the stop channel to gracefully cancel.
-	SearchAndBind(stop <-chan bool)
+	SearchAndBind(stop <-chan *sync.WaitGroup)
 }
 
 type binder struct {
@@ -69,17 +70,18 @@ func (b *binder) SearchPath() string {
 	return b.searchPath
 }
 
-func (b *binder) SearchAndBind(stop <-chan bool) {
+func (b *binder) SearchAndBind(stop <-chan *sync.WaitGroup) {
 	w := NewWatcher(b.searchPath)
 	stopWatch := make(chan bool)
 	events := w.watch(stopWatch)
 	var event workloadEvent
+	var stopWG *sync.WaitGroup
 EventLoop:
 	for {
 		select {
 		case event = <-events:
 			b.handleEvent(event)
-		case <-stop:
+		case stopWG = <-stop:
 			break EventLoop
 		}
 	}
@@ -89,6 +91,7 @@ EventLoop:
 	for _, wl := range b.workloads.getAll() {
 		wl.listener.Close()
 	}
+	stopWG.Done()
 }
 
 func (b *binder) handleEvent(e workloadEvent) {

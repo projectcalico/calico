@@ -18,6 +18,7 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"sync"
 	"syscall"
 
 	"github.com/spf13/cobra"
@@ -60,14 +61,17 @@ func Run() {
 	signal.Notify(sigc, os.Interrupt, syscall.SIGTERM)
 
 	// Start the binder creating sockets
-	bstop := make(chan bool)
+	bstop := make(chan *sync.WaitGroup)
 	go b.SearchAndBind(bstop)
 
 	// Wait for term signal.
 	<-sigc
 
 	// Shut down the binder.
-	bstop <- true
+	var stopWG sync.WaitGroup
+	stopWG.Add(1)
+	bstop <- &stopWG
+	stopWG.Wait()
 }
 
 func main() {
