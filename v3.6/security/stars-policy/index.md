@@ -16,11 +16,11 @@ one of our [getting started guides]({{site.baseurl}}/{{page.version}}/getting-st
 ### 1) Create the frontend, backend, client, and management-ui apps.
 
 ```shell
-kubectl create -f {{site.url}}/{{page.version}}/getting-started/kubernetes/tutorials/stars-policy/manifests/00-namespace.yaml
-kubectl create -f {{site.url}}/{{page.version}}/getting-started/kubernetes/tutorials/stars-policy/manifests/01-management-ui.yaml
-kubectl create -f {{site.url}}/{{page.version}}/getting-started/kubernetes/tutorials/stars-policy/manifests/02-backend.yaml
-kubectl create -f {{site.url}}/{{page.version}}/getting-started/kubernetes/tutorials/stars-policy/manifests/03-frontend.yaml
-kubectl create -f {{site.url}}/{{page.version}}/getting-started/kubernetes/tutorials/stars-policy/manifests/04-client.yaml
+kubectl create -f {{site.url}}/{{page.version}}/security/stars-policy/manifests/00-namespace.yaml
+kubectl create -f {{site.url}}/{{page.version}}/security/stars-policy/manifests/01-management-ui.yaml
+kubectl create -f {{site.url}}/{{page.version}}/security/stars-policy/manifests/02-backend.yaml
+kubectl create -f {{site.url}}/{{page.version}}/security/stars-policy/manifests/03-frontend.yaml
+kubectl create -f {{site.url}}/{{page.version}}/security/stars-policy/manifests/04-client.yaml
 ```
 
 Wait for all the pods to enter `Running` state.
