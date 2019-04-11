@@ -41,6 +41,10 @@ case "$CALICO_NETWORKING_BACKEND" in
 	# If running in policy only mode, we don't need to run BIRD / Confd.
 	echo "CALICO_NETWORKING_BACKEND is none - no BGP daemon running"
 	;;
+	"vxlan" )
+	# If running in VXLAN-only mode, we don't need to run BIRD / Confd.
+	echo "CALICO_NETWORKING_BACKEND is vxlan - no need to run a BGP daemon"
+	;;
 	"gobgp" )
 	# Run calico-bgp-daemon instead of BIRD / Confd.
 	echo "CALICO_NETWORKING_BACKEND is gobgp - run calico-bgp-daemon"
