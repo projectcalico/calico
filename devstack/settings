@@ -2,18 +2,16 @@
 # Devstack settings that are wanted when using Calico
 # ===================================================
 
-if [[ $HOSTNAME =~ ^ubuntu-xenial ]]; then
-    # We're running in an OpenStack CI test, which only uses a single node.
+if [ "$SERVICE_HOST" = "$HOST_IP" -o "$SERVICE_HOST" = "$HOSTNAME" -o "$SERVICE_HOST" = "127.0.0.1" ]; then
+    # SERVICE_HOST is _this_ host, so we will prepare a combined
+    # controller and compute node.
     CALICO_COMPUTE_ONLY=false
-elif [ x$SERVICE_HOST != x$HOSTNAME -a x$SERVICE_HOST != x127.0.0.1 ]; then
-    # SERVICE_HOST has been set to something that is not the local host name,
-    # or 127.0.0.1, so we will prepare a compute-only node.
+else
+    # SERVICE_HOST is set to something that is not this host, so we
+    # will prepare a compute-only node.
     CALICO_COMPUTE_ONLY=true
     MYSQL_HOST=${MYSQL_HOST:-$SERVICE_HOST}
     RABBIT_HOST=${RABBIT_HOST:-$SERVICE_HOST}
-else
-    # Default: prepare a combined controller and compute node.
-    CALICO_COMPUTE_ONLY=false
 fi
 
 if $CALICO_COMPUTE_ONLY; then
