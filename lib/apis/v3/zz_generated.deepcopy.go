@@ -543,6 +543,11 @@ func (in *FelixConfigurationSpec) DeepCopyInto(out *FelixConfigurationSpec) {
 		*out = new(int)
 		**out = **in
 	}
+	if in.XDPRefreshInterval != nil {
+		in, out := &in.XDPRefreshInterval, &out.XDPRefreshInterval
+		*out = new(v1.Duration)
+		**out = **in
+	}
 	if in.NetlinkTimeout != nil {
 		in, out := &in.NetlinkTimeout, &out.NetlinkTimeout
 		*out = new(v1.Duration)
@@ -717,6 +722,16 @@ func (in *FelixConfigurationSpec) DeepCopyInto(out *FelixConfigurationSpec) {
 	if in.DebugSimulateDataplaneHangAfter != nil {
 		in, out := &in.DebugSimulateDataplaneHangAfter, &out.DebugSimulateDataplaneHangAfter
 		*out = new(v1.Duration)
+		**out = **in
+	}
+	if in.XDPEnabled != nil {
+		in, out := &in.XDPEnabled, &out.XDPEnabled
+		*out = new(bool)
+		**out = **in
+	}
+	if in.GenericXDPEnabled != nil {
+		in, out := &in.GenericXDPEnabled, &out.GenericXDPEnabled
+		*out = new(bool)
 		**out = **in
 	}
 	return

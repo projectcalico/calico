@@ -80,6 +80,11 @@ type FelixConfigurationSpec struct {
 	IpsetsRefreshInterval *metav1.Duration `json:"ipsetsRefreshInterval,omitempty" configv1timescale:"seconds"`
 	MaxIpsetSize          *int             `json:"maxIpsetSize,omitempty"`
 
+	// XDPRefreshInterval is the period at which Felix re-checks all XDP state to ensure that no
+	// other process has accidentally broken Calico's BPF maps or attached programs. Set to 0 to
+	// disable XDP refresh. [Default: 90s]
+	XDPRefreshInterval *metav1.Duration `json"xdpRefreshInterval,omitempty" configv1timescale:"seconds"`
+
 	NetlinkTimeout *metav1.Duration `json:"netlinkTimeout,omitempty" configv1timescale:"seconds" confignamev1:"NetlinkTimeoutSecs"`
 
 	// MetadataAddr is the IP address or domain name of the server that can answer VM queries for
@@ -225,6 +230,14 @@ type FelixConfigurationSpec struct {
 	DebugSimulateDataplaneHangAfter *metav1.Duration `json:"debugSimulateDataplaneHangAfter,omitempty" configv1timescale:"seconds"`
 
 	IptablesNATOutgoingInterfaceFilter string `json:"iptablesNATOutgoingInterfaceFilter,omitempty" validate:"omitempty,ifaceFilter"`
+
+	// XDPEnabled enables XDP acceleration for suitable untracked incoming deny rules. [Default: true]
+	XDPEnabled *bool `json:"xdpEnabled,omitempty" confignamev1:"XDPEnabled"`
+
+	// GenericXDPEnabled enables Generic XDP so network cards that don't support XDP offload or driver
+	// modes can use XDP. This is not recommended since it doesn't provide better performance than
+	// iptables. [Default: false]
+	GenericXDPEnabled *bool `json:"genericXDPEnabled,omitempty" confignamev1:"GenericXDPEnabled"`
 }
 
 // ProtoPort is combination of protocol and port, both must be specified.
