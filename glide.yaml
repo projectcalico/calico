@@ -14,7 +14,7 @@ import:
   - pkg/config
   - pkg/run
 - package: github.com/projectcalico/felix
-  version: fbe8a12edd2c304ba9ff1d3312363381d42b830a
+  version: cbc711eca063b5faa3e5bba4900cfa7c7d83e62d
   subpackages:
   - daemon
 - package: github.com/projectcalico/libcalico-go
@@ -32,8 +32,10 @@ import:
   - lib/options
   - lib/upgrade/migrator
   - lib/upgrade/migrator/clients
+# gobuffalo/logger needs the SetOutput function in the Logger type, so pin
+# the first version that introduces it.
 - package: github.com/sirupsen/logrus
-  version: v1.0.4
+  version: v1.0.6
 - package: k8s.io/apimachinery
   subpackages:
   - pkg/apis/meta/v1
