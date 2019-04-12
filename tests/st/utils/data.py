@@ -52,8 +52,8 @@ ippool_name1_rev1_table = (
 )
 
 ippool_name1_rev1_wide_table = (
-    "NAME           CIDR          NAT     IPIPMODE   DISABLED   SELECTOR       \n"
-    "ippool-name1   10.0.1.0/24   false   Always     false      foo == 'bar'"
+    "NAME           CIDR          NAT     IPIPMODE   VXLANMODE   DISABLED   SELECTOR       \n"
+    "ippool-name1   10.0.1.0/24   false   Always     Never       false      foo == 'bar'"
 )
 
 ippool_name1_rev2_v4 = {

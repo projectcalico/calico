@@ -29,14 +29,15 @@ func init() {
 		false,
 		[]string{"ippool", "ippools", "ipp", "ipps", "pool", "pools"},
 		[]string{"NAME", "CIDR", "SELECTOR"},
-		[]string{"NAME", "CIDR", "NAT", "IPIPMODE", "DISABLED", "SELECTOR"},
+		[]string{"NAME", "CIDR", "NAT", "IPIPMODE", "VXLANMODE", "DISABLED", "SELECTOR"},
 		map[string]string{
-			"NAME":     "{{.ObjectMeta.Name}}",
-			"CIDR":     "{{.Spec.CIDR}}",
-			"NAT":      "{{.Spec.NATOutgoing}}",
-			"IPIPMODE": "{{if .Spec.IPIPMode}}{{.Spec.IPIPMode}}{{else}}Never{{end}}",
-			"DISABLED": "{{.Spec.Disabled}}",
-			"SELECTOR": "{{.Spec.NodeSelector}}",
+			"NAME":      "{{.ObjectMeta.Name}}",
+			"CIDR":      "{{.Spec.CIDR}}",
+			"NAT":       "{{.Spec.NATOutgoing}}",
+			"IPIPMODE":  "{{if .Spec.IPIPMode}}{{.Spec.IPIPMode}}{{else}}Never{{end}}",
+			"VXLANMODE": "{{if .Spec.VXLANMode}}{{.Spec.VXLANMode}}{{else}}Never{{end}}",
+			"DISABLED":  "{{.Spec.Disabled}}",
+			"SELECTOR":  "{{.Spec.NodeSelector}}",
 		},
 		func(ctx context.Context, client client.Interface, resource ResourceObject) (ResourceObject, error) {
 			r := resource.(*api.IPPool)
