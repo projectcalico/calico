@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2018 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2019 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -218,19 +218,19 @@ type ipSet struct {
 
 	// members either contains the members that we've programmed or is nil, indicating that
 	// we're out of sync.
-	members set.Set
+	members set.Set /*<ipSetMember>*/
 
 	// pendingReplace is either nil to indicate that there is no pending replace or a set
 	// containing all the entries that we want to write.
-	pendingReplace set.Set
+	pendingReplace set.Set /*<ipSetMember>*/
 	// pendingAdds contains members that are queued up to add to the IP set.  If pendingReplace
 	// is non-nil then pendingAdds is empty (and we add members directly to pendingReplace
 	// instead).
-	pendingAdds set.Set
+	pendingAdds set.Set /*<ipSetMember>*/
 	// pendingDeletions contains members that are queued up for deletion.  If pendingReplace
 	// is non-nil then pendingDeletions is empty (and we delete members directly from
 	// pendingReplace instead).
-	pendingDeletions set.Set
+	pendingDeletions set.Set /*<ipSetMember>*/
 }
 
 // IPVersionConfig wraps up the metadata for a particular IP version.  It can be used by

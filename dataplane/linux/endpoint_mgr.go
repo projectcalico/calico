@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2018 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2019 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -37,6 +37,59 @@ import (
 type routeTable interface {
 	SetRoutes(ifaceName string, targets []routetable.Target)
 	SetL2Routes(ifaceName string, targets []routetable.L2Target)
+}
+
+type endpointManagerCallbacks struct {
+	addInterface       *AddInterfaceFuncs
+	removeInterface    *RemoveInterfaceFuncs
+	updateInterface    *UpdateInterfaceFuncs
+	updateHostEndpoint *UpdateHostEndpointFuncs
+	removeHostEndpoint *RemoveHostEndpointFuncs
+}
+
+func newEndpointManagerCallbacks(callbacks *callbacks, ipVersion uint8) endpointManagerCallbacks {
+	if ipVersion == 4 {
+		return endpointManagerCallbacks{
+			addInterface:       callbacks.AddInterfaceV4,
+			removeInterface:    callbacks.RemoveInterfaceV4,
+			updateInterface:    callbacks.UpdateInterfaceV4,
+			updateHostEndpoint: callbacks.UpdateHostEndpointV4,
+			removeHostEndpoint: callbacks.RemoveHostEndpointV4,
+		}
+	} else {
+		return endpointManagerCallbacks{
+			addInterface:       &AddInterfaceFuncs{},
+			removeInterface:    &RemoveInterfaceFuncs{},
+			updateInterface:    &UpdateInterfaceFuncs{},
+			updateHostEndpoint: &UpdateHostEndpointFuncs{},
+			removeHostEndpoint: &RemoveHostEndpointFuncs{},
+		}
+	}
+}
+
+func (c *endpointManagerCallbacks) InvokeInterfaceCallbacks(old, new map[string]proto.HostEndpointID) {
+	for ifaceName, oldEpID := range old {
+		if newEpID, ok := new[ifaceName]; ok {
+			if oldEpID != newEpID {
+				c.updateInterface.Invoke(ifaceName, newEpID)
+			}
+		} else {
+			c.removeInterface.Invoke(ifaceName)
+		}
+	}
+	for ifaceName, newEpID := range new {
+		if _, ok := old[ifaceName]; !ok {
+			c.addInterface.Invoke(ifaceName, newEpID)
+		}
+	}
+}
+
+func (c *endpointManagerCallbacks) InvokeUpdateHostEndpoint(hostEpID proto.HostEndpointID) {
+	c.updateHostEndpoint.Invoke(hostEpID)
+}
+
+func (c *endpointManagerCallbacks) InvokeRemoveHostEndpoint(hostEpID proto.HostEndpointID) {
+	c.removeHostEndpoint.Invoke(hostEpID)
 }
 
 // endpointManager manages the dataplane resources that belong to each endpoint as well as
@@ -110,6 +163,7 @@ type endpointManager struct {
 
 	// Callbacks
 	OnEndpointStatusUpdate EndpointStatusUpdateCallback
+	callbacks              endpointManagerCallbacks
 }
 
 type EndpointStatusUpdateCallback func(ipVersion uint8, id interface{}, status string)
@@ -127,6 +181,7 @@ func newEndpointManager(
 	kubeIPVSSupportEnabled bool,
 	wlInterfacePrefixes []string,
 	onWorkloadEndpointStatusUpdate EndpointStatusUpdateCallback,
+	callbacks *callbacks,
 ) *endpointManager {
 	return newEndpointManagerWithShims(
 		rawTable,
@@ -140,6 +195,7 @@ func newEndpointManager(
 		wlInterfacePrefixes,
 		onWorkloadEndpointStatusUpdate,
 		writeProcSys,
+		callbacks,
 	)
 }
 
@@ -155,6 +211,7 @@ func newEndpointManagerWithShims(
 	wlInterfacePrefixes []string,
 	onWorkloadEndpointStatusUpdate EndpointStatusUpdateCallback,
 	procSysWriter procSysWriter,
+	callbacks *callbacks,
 ) *endpointManager {
 	wlIfacesPattern := "^(" + strings.Join(wlInterfacePrefixes, "|") + ").*"
 	wlIfacesRegexp := regexp.MustCompile(wlIfacesPattern)
@@ -206,6 +263,7 @@ func newEndpointManagerWithShims(
 		needToCheckEndpointMarkChains:  true, // Need to do start-of-day update.
 
 		OnEndpointStatusUpdate: onWorkloadEndpointStatusUpdate,
+		callbacks:              newEndpointManagerCallbacks(callbacks, ipVersion),
 	}
 }
 
@@ -218,11 +276,13 @@ func (m *endpointManager) OnUpdate(protoBufMsg interface{}) {
 		m.pendingWlEpUpdates[*msg.Id] = nil
 	case *proto.HostEndpointUpdate:
 		log.WithField("msg", msg).Debug("Host endpoint update")
+		m.callbacks.InvokeUpdateHostEndpoint(*msg.Id)
 		m.rawHostEndpoints[*msg.Id] = msg.Endpoint
 		m.hostEndpointsDirty = true
 		m.epIDsToUpdateStatus.Add(*msg.Id)
 	case *proto.HostEndpointRemove:
 		log.WithField("msg", msg).Debug("Host endpoint removed")
+		m.callbacks.InvokeRemoveHostEndpoint(*msg.Id)
 		delete(m.rawHostEndpoints, *msg.Id)
 		m.hostEndpointsDirty = true
 		m.epIDsToUpdateStatus.Add(*msg.Id)
@@ -791,6 +851,7 @@ func (m *endpointManager) resolveHostEndpoints() {
 		m.rawTable.RemoveChains(chains)
 	}
 
+	m.callbacks.InvokeInterfaceCallbacks(m.activeIfaceNameToHostEpID, newIfaceNameToHostEpID)
 	// Remember the host endpoints that are now in use.
 	m.activeIfaceNameToHostEpID = newIfaceNameToHostEpID
 	m.activeHostEpIDToIfaceNames = newHostEpIDToIfaceNames
@@ -946,4 +1007,9 @@ var allInterfaces = "any-interface-at-all"
 // True if the given host endpoint is for all interfaces, as opposed to for a specific interface.
 func forAllInterfaces(hep *proto.HostEndpoint) bool {
 	return hep.Name == "*"
+}
+
+// for implementing the endpointsSource interface
+func (m *endpointManager) GetRawHostEndpoints() map[proto.HostEndpointID]*proto.HostEndpoint {
+	return m.rawHostEndpoints
 }

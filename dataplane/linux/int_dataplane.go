@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2018 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2019 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,6 +15,7 @@
 package intdataplane
 
 import (
+	"fmt"
 	"io/ioutil"
 	"os"
 	"reflect"
@@ -26,10 +27,12 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	log "github.com/sirupsen/logrus"
 
+	"github.com/projectcalico/felix/bpf"
 	"github.com/projectcalico/felix/ifacemonitor"
 	"github.com/projectcalico/felix/ipsets"
 	"github.com/projectcalico/felix/iptables"
 	"github.com/projectcalico/felix/jitter"
+	"github.com/projectcalico/felix/labelindex"
 	"github.com/projectcalico/felix/proto"
 	"github.com/projectcalico/felix/routetable"
 	"github.com/projectcalico/felix/rules"
@@ -109,6 +112,7 @@ type Config struct {
 	IptablesLockFilePath           string
 	IptablesLockTimeout            time.Duration
 	IptablesLockProbeInterval      time.Duration
+	XDPRefreshInterval             time.Duration
 
 	NetlinkTimeout time.Duration
 
@@ -126,6 +130,9 @@ type Config struct {
 	DebugSimulateDataplaneHangAfter time.Duration
 
 	ExternalNodesCidrs []string
+
+	XDPEnabled      bool
+	XDPAllowGeneric bool
 }
 
 // InternalDataplane implements an in-process Felix dataplane driver based on iptables
@@ -192,6 +199,9 @@ type InternalDataplane struct {
 	// forceRouteRefresh is set by the route refresh timer to indicate that we should
 	// check the routes in the dataplane.
 	forceRouteRefresh bool
+	// forceXDPRefresh is set by the XDP refresh timer to indicate that we should
+	// check the XDP state in the dataplane.
+	forceXDPRefresh bool
 	// doneFirstApply is set after we finish the first update to the dataplane. It indicates
 	// that the dataplane should now be in sync.
 	doneFirstApply bool
@@ -204,6 +214,11 @@ type InternalDataplane struct {
 	config Config
 
 	debugHangC <-chan time.Time
+
+	xdpState          *xdpState
+	endpointsSourceV4 endpointsSource
+	ipsetsSourceV4    ipsetsSource
+	callbacks         *callbacks
 }
 
 const (
@@ -331,14 +346,45 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 
 	dp.endpointStatusCombiner = newEndpointStatusCombiner(dp.fromDataplane, config.IPv6Enabled)
 
-	dp.RegisterManager(newIPSetsManager(ipSetsV4, config.MaxIPSetSize))
+	callbacks := newCallbacks()
+	dp.callbacks = callbacks
+	if config.XDPEnabled {
+		if err := bpf.SupportsXDP(); err != nil {
+			log.WithError(err).Warn("Can't enable XDP acceleration.")
+		} else {
+			st, err := NewXDPState(config.XDPAllowGeneric)
+			if err != nil {
+				log.WithError(err).Warn("Can't enable XDP acceleration.")
+			} else {
+				dp.xdpState = st
+				dp.xdpState.PopulateCallbacks(callbacks)
+				log.Info("XDP acceleration enabled.")
+			}
+		}
+	} else {
+		log.Info("XDP acceleration disabled.")
+	}
+	if dp.xdpState == nil {
+		xdpState, err := NewXDPState(config.XDPAllowGeneric)
+		if err == nil {
+			if err := xdpState.WipeXDP(); err != nil {
+				log.WithError(err).Warn("Failed to cleanup preexisting XDP state")
+			}
+		}
+		// if we can't create an XDP state it means we couldn't get a working
+		// bpffs so there's nothing to clean up
+	}
+
+	ipsetsManager := newIPSetsManager(ipSetsV4, config.MaxIPSetSize, callbacks)
+	dp.RegisterManager(ipsetsManager)
+	dp.ipsetsSourceV4 = ipsetsManager
 	dp.RegisterManager(newHostIPManager(
 		config.RulesConfig.WorkloadIfacePrefixes,
 		rules.IPSetIDThisHostIPs,
 		ipSetsV4,
 		config.MaxIPSetSize))
-	dp.RegisterManager(newPolicyManager(rawTableV4, mangleTableV4, filterTableV4, ruleRenderer, 4))
-	dp.RegisterManager(newEndpointManager(
+	dp.RegisterManager(newPolicyManager(rawTableV4, mangleTableV4, filterTableV4, ruleRenderer, 4, callbacks))
+	epManager := newEndpointManager(
 		rawTableV4,
 		mangleTableV4,
 		filterTableV4,
@@ -348,7 +394,10 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		epMarkMapper,
 		config.RulesConfig.KubeIPVSSupportEnabled,
 		config.RulesConfig.WorkloadIfacePrefixes,
-		dp.endpointStatusCombiner.OnEndpointStatusUpdate))
+		dp.endpointStatusCombiner.OnEndpointStatusUpdate,
+		callbacks)
+	dp.RegisterManager(epManager)
+	dp.endpointsSourceV4 = epManager
 	dp.RegisterManager(newFloatingIPManager(natTableV4, ruleRenderer, 4))
 	dp.RegisterManager(newMasqManager(ipSetsV4, natTableV4, ruleRenderer, config.MaxIPSetSize, 4))
 	if config.RulesConfig.IPIPEnabled {
@@ -401,13 +450,13 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		routeTableV6 := routetable.New(config.RulesConfig.WorkloadIfacePrefixes, 6, false, config.NetlinkTimeout)
 		dp.routeTables = append(dp.routeTables, routeTableV6)
 
-		dp.RegisterManager(newIPSetsManager(ipSetsV6, config.MaxIPSetSize))
+		dp.RegisterManager(newIPSetsManager(ipSetsV6, config.MaxIPSetSize, callbacks))
 		dp.RegisterManager(newHostIPManager(
 			config.RulesConfig.WorkloadIfacePrefixes,
 			rules.IPSetIDThisHostIPs,
 			ipSetsV6,
 			config.MaxIPSetSize))
-		dp.RegisterManager(newPolicyManager(rawTableV6, mangleTableV6, filterTableV6, ruleRenderer, 6))
+		dp.RegisterManager(newPolicyManager(rawTableV6, mangleTableV6, filterTableV6, ruleRenderer, 6, callbacks))
 		dp.RegisterManager(newEndpointManager(
 			rawTableV6,
 			mangleTableV6,
@@ -418,7 +467,8 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			epMarkMapper,
 			config.RulesConfig.KubeIPVSSupportEnabled,
 			config.RulesConfig.WorkloadIfacePrefixes,
-			dp.endpointStatusCombiner.OnEndpointStatusUpdate))
+			dp.endpointStatusCombiner.OnEndpointStatusUpdate,
+			callbacks))
 		dp.RegisterManager(newFloatingIPManager(natTableV6, ruleRenderer, 6))
 		dp.RegisterManager(newMasqManager(ipSetsV6, natTableV6, ruleRenderer, config.MaxIPSetSize, 6))
 	}
@@ -605,6 +655,68 @@ func (d *InternalDataplane) doStaticDataplaneConfig() {
 			Action: iptables.JumpAction{Target: rules.ChainManglePrerouting},
 		}})
 	}
+
+	if d.xdpState != nil {
+		if err := d.setXDPFailsafePorts(); err != nil {
+			log.Warnf("failed to set XDP failsafe ports, disabling XDP: %v", err)
+			d.shutdownXDPCompletely()
+		}
+	}
+}
+
+func stringToProtocol(protocol string) (labelindex.IPSetPortProtocol, error) {
+	switch protocol {
+	case "tcp":
+		return labelindex.ProtocolTCP, nil
+	case "udp":
+		return labelindex.ProtocolUDP, nil
+	}
+	return labelindex.ProtocolNone, fmt.Errorf("unknown protocol %q", protocol)
+}
+
+func (d *InternalDataplane) setXDPFailsafePorts() error {
+	inboundPorts := d.config.RulesConfig.FailsafeInboundHostPorts
+
+	if _, err := d.xdpState.common.bpfLib.NewFailsafeMap(); err != nil {
+		return err
+	}
+
+	for _, p := range inboundPorts {
+		proto, err := stringToProtocol(p.Protocol)
+		if err != nil {
+			return err
+		}
+
+		if err := d.xdpState.common.bpfLib.UpdateFailsafeMap(uint8(proto), p.Port); err != nil {
+			return err
+		}
+	}
+
+	log.Infof("Set XDP failsafe ports: %+v", inboundPorts)
+	return nil
+}
+
+func (d *InternalDataplane) shutdownXDPCompletely() {
+	if d.xdpState == nil {
+		return
+	}
+	if d.callbacks != nil {
+		d.xdpState.DepopulateCallbacks(d.callbacks)
+	}
+	success := false
+	maxTries := 10
+	for i := 0; i < maxTries; i++ {
+		err := d.xdpState.WipeXDP()
+		if err == nil {
+			success = true
+			break
+		}
+		log.WithError(err).WithField("try", i).Warn("failed to wipe the XDP state")
+	}
+	if !success {
+		log.Panicf("Failed to wipe the XDP state after %d tries", maxTries)
+	}
+	d.xdpState = nil
 }
 
 func (d *InternalDataplane) loopUpdatingDataplane() {
@@ -635,6 +747,16 @@ func (d *InternalDataplane) loopUpdatingDataplane() {
 			d.config.RouteRefreshInterval/10,
 		)
 		routeRefreshC = refreshTicker.C
+	}
+	var xdpRefreshC <-chan time.Time
+	if d.config.XDPRefreshInterval > 0 && d.xdpState != nil {
+		log.WithField("interval", d.config.XDPRefreshInterval).Info(
+			"Will refresh XDP on timer")
+		refreshTicker := jitter.NewTicker(
+			d.config.XDPRefreshInterval,
+			d.config.XDPRefreshInterval/10,
+		)
+		xdpRefreshC = refreshTicker.C
 	}
 
 	// Fill the apply throttle leaky bucket.
@@ -741,6 +863,10 @@ func (d *InternalDataplane) loopUpdatingDataplane() {
 		case <-routeRefreshC:
 			log.Debug("Refreshing routes")
 			d.forceRouteRefresh = true
+			d.dataplaneNeedsSync = true
+		case <-xdpRefreshC:
+			log.Debug("Refreshing routes")
+			d.forceXDPRefresh = true
 			d.dataplaneNeedsSync = true
 		case <-d.reschedC:
 			log.Debug("Reschedule kick received")
@@ -886,6 +1012,34 @@ func (d *InternalDataplane) apply() {
 		}
 	}
 
+	if d.xdpState != nil {
+		if d.forceXDPRefresh {
+			// Refresh timer popped.
+			d.xdpState.QueueResync()
+			d.forceXDPRefresh = false
+		}
+
+		var applyXDPError error
+		d.xdpState.ProcessPendingDiffState(d.endpointsSourceV4)
+		if err := d.applyXDPActions(); err != nil {
+			applyXDPError = err
+		} else {
+			err := d.xdpState.ProcessMemberUpdates()
+			d.xdpState.DropPendingDiffState()
+			if err != nil {
+				log.WithError(err).Warning("Failed to process XDP member updates, will resync later...")
+				if err := d.applyXDPActions(); err != nil {
+					applyXDPError = err
+				}
+			}
+			d.xdpState.UpdateState()
+		}
+		if applyXDPError != nil {
+			log.WithError(applyXDPError).Error("failed to apply XDP actions, disabling XDP")
+			d.shutdownXDPCompletely()
+		}
+	}
+
 	if d.forceRouteRefresh {
 		// Refresh timer popped.
 		for _, r := range d.routeTables {
@@ -992,6 +1146,22 @@ func (d *InternalDataplane) apply() {
 		}
 		d.reschedC = d.reschedTimer.C
 	}
+}
+
+func (d *InternalDataplane) applyXDPActions() error {
+	var err error
+	for i := 0; i < 10; i++ {
+		err = d.xdpState.ResyncIfNeeded(d.ipsetsSourceV4)
+		if err != nil {
+			return err
+		}
+		if err = d.xdpState.ApplyBPFActions(d.ipsetsSourceV4); err == nil {
+			return nil
+		} else {
+			log.WithError(err).Warning("Failed to apply XDP BPF actions, will retry with resync...")
+		}
+	}
+	return err
 }
 
 func (d *InternalDataplane) loopReportingStatus() {

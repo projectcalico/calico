@@ -153,6 +153,7 @@ func StartDataplaneDriver(configParams *config.Config,
 			IgnoreLooseRPF:                 configParams.IgnoreLooseRPF,
 			IPv6Enabled:                    configParams.Ipv6Support,
 			StatusReportingInterval:        configParams.ReportingIntervalSecs,
+			XDPRefreshInterval:             configParams.XDPRefreshInterval,
 
 			NetlinkTimeout: configParams.NetlinkTimeoutSecs,
 
@@ -171,6 +172,8 @@ func StartDataplaneDriver(configParams *config.Config,
 			HealthAggregator:                healthAggregator,
 			DebugSimulateDataplaneHangAfter: configParams.DebugSimulateDataplaneHangAfter,
 			ExternalNodesCidrs:              configParams.ExternalNodesCIDRList,
+			XDPEnabled:                      configParams.XDPEnabled,
+			XDPAllowGeneric:                 configParams.GenericXDPEnabled,
 		}
 		intDP := intdataplane.NewIntDataplaneDriver(dpConfig)
 		intDP.Start()
