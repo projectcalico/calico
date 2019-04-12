@@ -57,6 +57,35 @@ want to disable IP-in-IP encapsulation, such as under the following circumstance
 To disable IP-in-IP encapsulation, modify the `CALICO_IPV4POOL_IPIP` section of the
 manifest.  For more information, see [Configuring {{site.nodecontainer}}]({{site.baseurl}}/{{page.version}}/reference/node/configuration).
 
+### Switching from IP-in-IP to VXLAN
+
+By default, the Calico manifests enable IP-in-IP encapsulation.  To use VXLAN instead, do the following before 
+applying the manifest:
+
+- Start with one of the [Calico for policy and networking]({{site.baseurl}}/{{page.version}}/getting-started/kubernetes/installation/calico) manifests.
+- Replace environment variable name `CALICO_IPV4POOL_IPIP` with`CALICO_IPV4POOL_VXLAN`.  Leave the value of the new variable as "Always".
+
+Optionally, completely disable Calico's BGP-based networking, which is not required for a VXLAN-only cluster:
+
+- Replace `calico_backend: "bird"` with `calico_backend: "vxlan"`.
+- Remove the line `- -bird-ready` from the calico/node readiness check:
+
+```yaml
+          readinessProbe:
+            exec:
+              command:
+              - /bin/calico-node
+              - -bird-ready
+              - -felix-ready
+```
+
+For more information, see [Configuring {{site.nodecontainer}}]({{site.baseurl}}/{{page.version}}/reference/node/configuration).
+
+> **Note**: The `CALICO_IPV4POOL_VXLAN` environment variable only takes effect when {{site.nodecontainer}} creates the default 
+> IP pool at installation time.  It has no effect after the pool has already been created.  To update an existing pool,
+> use calicoctl to modify the [IPPool]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/ippool) resource.
+{: .alert .alert-info}
+
 ### Configuring etcd
 
 By default, these manifests do not configure secure access to etcd and assume an

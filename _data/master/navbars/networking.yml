@@ -6,6 +6,8 @@ toc:
   path: /networking/
 - title: Configuring IP-in-IP
   path: /networking/ip-in-ip
+- title: Configuring VXLAN
+  path: /networking/vxlan
 - title: Changing IP pools
   path: /networking/changing-ip-pools
 - title: Route reflectors

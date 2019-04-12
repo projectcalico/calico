@@ -5,15 +5,24 @@ canonical_url: 'https://docs.projectcalico.org/v3.5/usage/configuration/mtu'
 
 Depending on the environment {{site.prodname}} is being deployed into it may be
 helpful or even necessary to configure the MTU of the veth (or TAP) that is
-attached to each workload and the tunnel devices if IP-in-IP is enabled.
+attached to each workload and the tunnel devices if IP-in-IP or VXLAN is enabled.
 
 ### Selecting MTU size
 
-Typically the MTU for your workload interfaces should match the network MTU.
-If you need IP-in-IP then the MTU size for both the workload **and** tunnel
-interfaces should be 20 bytes less than the network MTU for your network.
-This is due to the extra 20 byte header that the tunnel will add to each
-packet.
+Since MTU is a global property of the network path between endpoints, the MTU for 
+workloads needs to be set to the minimum MTU of any path that packets may take.
+
+If you are using an overlay such as IP-in-IP or VXLAN, the extra overlay header
+used by those protocols reduces the MTU by the size of the header.  IP-in-IP uses
+a 20-byte header, VXLAN uses a 50-byte header.  Hence,
+
+- If you use VXLAN anywhere in your pod network, you should select an MTU which is
+  network MTU minus 50.
+- If you do not use VXLAN but you do use IP-in-IP, you should select an MTU which is
+  network MTU minus 20.
+  
+You should set the workload endpoint MTU **and** the tunnel MTUs to the same value.
+This is so that all paths have the same MTU.
 
 #### Common MTU sizes
 
@@ -29,7 +38,8 @@ packet.
 
 The default MTU for workload interfaces is 1500, this is to match the most
 common network MTU size. The default MTU for the IP-in-IP tunnel device
-is 1440 to match the value needed in GCE.
+is 1440 to match the value needed in GCE.  Similarly, the default for VXLAN
+is 1410.
 
 #### Using flannel for networking
 
@@ -40,29 +50,16 @@ configured with VXLAN.
 
 ## MTU configuration
 
-It is the job of the network plugin to create new interfaces, the current
-major plugins are CNI and libnetwork. Currently Docker and the Mesos Docker
-Containerizer integration use libnetwork.
+It is the job of the network plugin to create new interfaces.  The CNI plugin, which is used by
+Kubernetes, supports configuring the MTU of the workload interface through the CNI configuration file.
 
-CNI, which is used by Kubernetes and the Mesos Unified Containerizer, supports
-configuring the MTU through the CNI configuration file.
-
-The user will also want to configure {{site.prodname}}'s IP-in-IP interface MTU when
-IP-in-IP is enabled on the cluster. Refer to the MTU table at the top of the page
+The user will also want to configure {{site.prodname}}'s IP-in-IP/VXLAN interface MTU when
+IP-in-IP/VXLAN is enabled on the cluster. Refer to the MTU table at the top of the page
 to choose the value that matches your environment.
 
 > **Note**: The MTU on existing workloads will not be updated with these changes. To update
 workload MTUs, see the section that corresponds to your plugin type.
 {: .alert .alert-info}
-
-### MTU configuration with libnetwork
-
-The MTU of the veth pairs created by the {{site.prodname}} libnetwork plugin can be configured
-by setting the `CALICO_LIBNETWORK_VETH_MTU` environment variable on the `libnetwork`
-process.
-
-This should either be set on the standalone `libnetwork` service, or on the
-`{{site.nodecontainer}}` container as a whole.
 
 ### MTU configuration with CNI
 
@@ -100,10 +97,10 @@ started will also have the updated MTU value.
 
 ### Setting tunnel MTU with a Felix environment variable
 
-Passing in the environment variable `FELIX_IPINIPMTU` when running the
+Passing in the environment variable `FELIX_IPINIPMTU` (or `FELIX_VXLANMTU`) when running the
 `{{site.nodecontainer}}` container will set the MTU for Felix to use.
 
-When using the Kubernetes self-hosted manifests, Felix derives this value from
+When using the Kubernetes self-hosted manifests, Felix derives the IP-in-IP value from
 the `veth_mtu` field of the calico-config ConfigMap, which is set to `1440` by default.
 
 ### Setting tunnel MTU with calicoctl
@@ -112,10 +109,10 @@ To set the IP-in-IP MTU value for all {{site.prodname}} nodes in your cluster, u
 following command to retrieve the current Felix settings.
 
 ```bash
-calicoctl get felixconfig --export -o yaml > felix.yaml
+calicoctl get felixconfig default --export -o yaml > felix.yaml
 ```
 
-Modify ipipMTU to the intended integer value.
+Modify ipipMTU (or vxlanMTU) to the intended integer value.
 
 ```bash
 vim felix.yaml
@@ -127,6 +124,6 @@ Replace the current felixconfig settings.
 calicoctl replace -f felix.yaml
 ```
 
-> **Note**: Setting the `ipipMTU` config option will result in an immediate
+> **Note**: Setting the `ipipMTU` (of `vxlanMTU`) config option will result in an immediate
 > update of the tunnel interface MTU on all of the active nodes in your cluster.
 {: .alert .alert-info}
