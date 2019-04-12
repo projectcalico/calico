@@ -351,7 +351,7 @@ func (c *VXLANResolver) routeReady(r vxlanRoute) bool {
 	logCxt := logrus.WithField("route", r)
 	gw := c.determineGatewayForRoute(r)
 	if gw == "" {
-		logCxt.Debug("No gateway yet for VXLAN route, skip")
+		logCxt.Info("No gateway yet for VXLAN route, skip")
 		return false
 	}
 	if !c.routeWithinVXLANPool(r) {
@@ -359,7 +359,7 @@ func (c *VXLANResolver) routeReady(r vxlanRoute) bool {
 		return false
 	}
 	if !c.vtepSent(r.node) {
-		logCxt.Debug("Haven't sent VTEP yet for route")
+		logCxt.Info("Don't yet know the VTEP for this route")
 		return false
 	}
 	return true
@@ -395,12 +395,12 @@ func (c *VXLANResolver) sendVTEPUpdate(node string) bool {
 	logCxt := logrus.WithField("node", node)
 	tunlAddr, ok := c.nodeNameToVXLANTunnelAddr[node]
 	if !ok {
-		logCxt.Debug("Missing vxlan tunnel address for node, cannot send VTEP")
+		logCxt.Info("Missing vxlan tunnel address for node, cannot send VTEP yet")
 		return false
 	}
 	parentDeviceIP, ok := c.nodeNameToIPAddr[node]
 	if !ok {
-		logCxt.Debug("Missing IP for node, cannot send VTEP")
+		logCxt.Info("Missing IP for node, cannot send VTEP yet")
 		return false
 	}
 
