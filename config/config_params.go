@@ -166,8 +166,8 @@ type Config struct {
 	LogSeveritySys    string `config:"oneof(DEBUG,INFO,WARNING,ERROR,FATAL);INFO"`
 
 	VXLANEnabled        bool   `config:"bool;false"`
-	VXLANPort           int    `config:"int;0"`
-	VXLANVNI            int    `config:"int;0"`
+	VXLANPort           int    `config:"int;4789"`
+	VXLANVNI            int    `config:"int;4096"`
 	VXLANMTU            int    `config:"int;1410;non-zero"`
 	IPv4VXLANTunnelAddr net.IP `config:"ipv4;"`
 
