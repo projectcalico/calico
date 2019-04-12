@@ -26,12 +26,16 @@ import (
 	"strconv"
 	"strings"
 
+	"k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/validation"
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
 
 	"time"
 
 	"github.com/kardianos/osext"
 	log "github.com/sirupsen/logrus"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	cnet "github.com/projectcalico/libcalico-go/lib/net"
 	"github.com/projectcalico/libcalico-go/lib/numorstring"
@@ -466,6 +470,21 @@ func (c *CIDRListParam) Parse(raw string) (result interface{}, err error) {
 		resultSlice = append(resultSlice, net.String())
 	}
 	return resultSlice, nil
+}
+
+func GetKubernetesService(namespace, svcName string) (*v1.Service, error) {
+	k8sconf, err := rest.InClusterConfig()
+	if err != nil {
+		log.WithError(err).Error("Unable to create Kubernetes config.")
+		return nil, err
+	}
+	clientset, err := kubernetes.NewForConfig(k8sconf)
+	if err != nil {
+		log.WithError(err).Error("Unable to create Kubernetes client set.")
+		return nil, err
+	}
+	svcClient := clientset.CoreV1().Services(namespace)
+	return svcClient.Get(svcName, metav1.GetOptions{})
 }
 
 type RegionParam struct {
