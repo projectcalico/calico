@@ -16,6 +16,7 @@ package model
 
 import (
 	"fmt"
+	"math/big"
 	"reflect"
 	"regexp"
 	"strings"
@@ -23,6 +24,16 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/errors"
 	"github.com/projectcalico/libcalico-go/lib/net"
 	log "github.com/sirupsen/logrus"
+)
+
+const (
+	// Common attributes which may be set on allocations by clients.
+	IPAMBlockAttributePod       = "pod"
+	IPAMBlockAttributeNamespace = "namespace"
+	IPAMBlockAttributeNode      = "node"
+	IPAMBlockAttributeType      = "type"
+	IPAMBlockAttributeTypeIPIP  = "ipipTunnelAddress"
+	IPAMBlockAttributeTypeVXLAN = "vxlanTunnelAddress"
 )
 
 var (
@@ -111,6 +122,60 @@ func (b *AllocationBlock) Host() string {
 		return strings.TrimLeft(*b.Affinity, "host:")
 	}
 	return ""
+}
+
+type Allocation struct {
+	Addr net.IP
+	Host string
+}
+
+func (b *AllocationBlock) NonAffineAllocations() []Allocation {
+	var allocs []Allocation
+	myHost := b.Host()
+	for ordinal, attrIdx := range b.Allocations {
+		if attrIdx == nil {
+			continue // Skip unallocated IPs.
+		}
+		if *attrIdx >= len(b.Attributes) {
+			log.WithField("block", b).Warnf("Missing attributes for IP with ordinal %d", ordinal)
+			continue
+		}
+		attrs := b.Attributes[*attrIdx]
+		host := attrs.AttrSecondary[IPAMBlockAttributeNode]
+		if myHost != "" && host == myHost {
+			continue // Skip allocations that are affine to this block.
+		}
+		a := Allocation{
+			Addr: b.OrdinalToIP(ordinal),
+			Host: host,
+		}
+		allocs = append(allocs, a)
+	}
+	return allocs
+}
+
+// Get number of addresses covered by the block
+func (b *AllocationBlock) NumAddresses() int {
+	ones, size := b.CIDR.Mask.Size()
+	numAddresses := 1 << uint(size-ones)
+	return numAddresses
+}
+
+// Find the ordinal (i.e. how far into the block) a given IP lies.  Returns an error if the IP is outside the block.
+func (b *AllocationBlock) IPToOrdinal(ip net.IP) (int, error) {
+	ipAsInt := net.IPToBigInt(ip)
+	baseInt := net.IPToBigInt(net.IP{b.CIDR.IP})
+	ord := big.NewInt(0).Sub(ipAsInt, baseInt).Int64()
+	if ord < 0 || ord >= int64(b.NumAddresses()) {
+		return 0, fmt.Errorf("IP %s not in block %s", ip, b.CIDR)
+	}
+	return int(ord), nil
+}
+
+// Calculates the IP at the given position within the block.  ord=0 gives the first IP in the block.
+func (b *AllocationBlock) OrdinalToIP(ord int) net.IP {
+	sum := big.NewInt(0).Add(net.IPToBigInt(net.IP{IP: b.CIDR.IP}), big.NewInt(int64(ord)))
+	return net.BigIntToIP(sum)
 }
 
 type AllocationAttribute struct {

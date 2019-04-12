@@ -19,7 +19,7 @@ import (
 	"errors"
 	"fmt"
 
-	v3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
+	"github.com/projectcalico/libcalico-go/lib/apis/v3"
 	log "github.com/sirupsen/logrus"
 
 	bapi "github.com/projectcalico/libcalico-go/lib/backend/api"
@@ -35,13 +35,14 @@ const (
 	datastoreRetries  = 100
 	ipamKeyErrRetries = 3
 
-	// Common attributes which may be set on allocations by clients.
-	AttributePod       = "pod"
-	AttributeNamespace = "namespace"
-	AttributeNode      = "node"
-	AttributeType      = "type"
-	AttributeTypeIPIP  = "ipipTunnelAddress"
-	AttributeTypeVXLAN = "vxlanTunnelAddress"
+	// Common attributes which may be set on allocations by clients.  Moved to the model package so they can be used
+	// by the AllocationBlock code too.
+	AttributePod       = model.IPAMBlockAttributePod
+	AttributeNamespace = model.IPAMBlockAttributeNamespace
+	AttributeNode      = model.IPAMBlockAttributeNode
+	AttributeType      = model.IPAMBlockAttributeType
+	AttributeTypeIPIP  = model.IPAMBlockAttributeTypeIPIP
+	AttributeTypeVXLAN = model.IPAMBlockAttributeTypeVXLAN
 )
 
 var (

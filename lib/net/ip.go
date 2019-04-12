@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2019 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,6 +16,7 @@ package net
 
 import (
 	"encoding/json"
+	"math/big"
 	"net"
 )
 
@@ -103,4 +104,22 @@ func MustParseIP(i string) IP {
 		ip.IP = ip4
 	}
 	return ip
+}
+
+func IPToBigInt(ip IP) *big.Int {
+	if ip.To4() != nil {
+		return big.NewInt(0).SetBytes(ip.To4())
+	} else {
+		return big.NewInt(0).SetBytes(ip.To16())
+	}
+}
+
+func BigIntToIP(ipInt *big.Int) IP {
+	ip := IP{net.IP(ipInt.Bytes())}
+	return ip
+}
+
+func IncrementIP(ip IP, increment *big.Int) IP {
+	sum := big.NewInt(0).Add(IPToBigInt(ip), increment)
+	return BigIntToIP(sum)
 }
