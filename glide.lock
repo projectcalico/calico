@@ -1,5 +1,5 @@
-hash: 956662e6655aa07b7c86bb3a9a643ae0a66a090044bff924375efac4e7d1a91e
-updated: 2019-04-09T04:12:50.221251006Z
+hash: 8770caf02814c80a17b62382af8a2af1b4184ccc542e1ff5d09d5810faea6e24
+updated: 2019-04-12T04:12:50.84682599Z
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -161,7 +161,7 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: 30f1429151738413ea92539178266fd899841508
+  version: 1bc161956072ea9d8d5dba0920caeb26fbc283a1
   subpackages:
   - lib/apiconfig
   - lib/apis/v1
@@ -197,7 +197,7 @@ imports:
   - lib/validator/v3
   - lib/watch
 - name: github.com/projectcalico/typha
-  version: e1d8c1d3bc43bfe59dc542eff4c3d2a4623b58d4
+  version: 5a7ad834a23a0bbea503a08ad849c1ea3b66657b
   subpackages:
   - pkg/syncclient
   - pkg/syncproto

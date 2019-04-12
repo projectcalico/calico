@@ -20,7 +20,7 @@ import:
 - package: github.com/sirupsen/logrus
   version: v1.0.4
 - package: github.com/projectcalico/typha
-  version: e1d8c1d3bc43bfe59dc542eff4c3d2a4623b58d4
+  version: 5a7ad834a23a0bbea503a08ad849c1ea3b66657b
 testImports:
 - package: github.com/onsi/ginkgo
 - package: github.com/onsi/gomega
