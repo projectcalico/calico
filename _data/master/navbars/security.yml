@@ -6,6 +6,8 @@ toc:
   path: /security/
 - title: Kubernetes network policy
   path: /security/kubernetes-network-policy
+- title: Calico network policy
+  path: /security/calico-network-policy
 - title: Simple policy tutorial
   path: /security/simple-policy
 - title: Stars policy tutorial
