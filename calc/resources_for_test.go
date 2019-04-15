@@ -26,9 +26,10 @@ import (
 
 // Canned hostnames.
 var (
- localHostname = "localhostname"
- remoteHostname = "remotehostname"
+	localHostname  = "localhostname"
+	remoteHostname = "remotehostname"
 )
+
 // Canned selectors.
 
 var (
@@ -575,7 +576,7 @@ var remoteHostIP = mustParseIP("192.168.0.2")
 
 var remoteHostVXLANTunnelConfigKey = HostConfigKey{
 	Hostname: remoteHostname,
-	Name: "IPv4VXLANTunnelAddr",
+	Name:     "IPv4VXLANTunnelAddr",
 }
 
 var ipPoolKey = IPPoolKey{
@@ -587,22 +588,23 @@ var ipPoolNoEncap = IPPool{
 }
 
 var ipPoolWithIPIP = IPPool{
-	CIDR: mustParseNet("10.0.0.0/16"),
+	CIDR:     mustParseNet("10.0.0.0/16"),
 	IPIPMode: encap.Always,
 }
 
 var ipPoolWithVXLAN = IPPool{
-	CIDR: mustParseNet("10.0.0.0/16"),
-	IPIPMode: encap.Always,
+	CIDR:      mustParseNet("10.0.0.0/16"),
+	VXLANMode: encap.Always,
 }
 
 var remoteIPAMBlockKey = BlockKey{
 	CIDR: mustParseNet("10.0.1.0/29"),
 }
 
+var remoteHostAffinity = "host:" + remoteHostname
 var remoteIPAMBlock = AllocationBlock{
-	CIDR: mustParseNet("10.0.1.0/29"),
-	Affinity: &remoteHostname,
+	CIDR:        mustParseNet("10.0.1.0/29"),
+	Affinity:    &remoteHostAffinity,
 	Allocations: make([]*int, 8),
 	Unallocated: []int{0, 1, 2, 3, 4, 5, 6, 7},
 }

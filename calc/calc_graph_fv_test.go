@@ -244,13 +244,17 @@ var baseTests = []StateList{
 	// VXLAN
 	{
 		vxlanWithBlock,
+		vxlanBlockDelete,
+		vxlanWithBlock,
+		vxlanHostIPDelete,
+		vxlanWithBlock,
+		vxlanTunnelIPDelete,
 	},
-
-	// TODO(smc): Test config calculation
-	// TODO(smc): Test mutation of endpoints
-	// TODO(smc): Test mutation of host endpoints
-	// TODO(smc): Test validation
-	// TODO(smc): Test rule conversions
+	{
+		vxlanWithBlock,
+		vxlanToIPIPSwitch,
+		vxlanWithBlock,
+	},
 }
 
 var testExpanders = []func(baseTest StateList) (desc string, mappedTests []StateList){
@@ -507,7 +511,10 @@ func doStateSequenceTest(expandedTest StateList, flushStrategy flushStrategy) {
 			"Active profile IDs were incorrect after moving to state: %v",
 			state.Name)
 		Expect(mockDataplane.ActiveVTEPs()).To(Equal(state.ExpectedVTEPs),
-			"Active profile IDs were incorrect after moving to state: %v",
+			"Active VTEPs were incorrect after moving to state: %v",
+			state.Name)
+		Expect(mockDataplane.ActiveRoutes()).To(Equal(state.ExpectedRoutes),
+			"Active routes were incorrect after moving to state: %v",
 			state.Name)
 		Expect(mockDataplane.EndpointToPolicyOrder()).To(Equal(state.ExpectedEndpointPolicyOrder),
 			"Endpoint policy order incorrect after moving to state: %v",

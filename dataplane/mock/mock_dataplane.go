@@ -37,6 +37,7 @@ type MockDataplane struct {
 	activePreDNATPolicies          set.Set
 	activeProfiles                 set.Set
 	activeVTEPs                    set.Set
+	activeRoutes                   set.Set
 	endpointToPolicyOrder          map[string][]TierInfo
 	endpointToUntrackedPolicyOrder map[string][]TierInfo
 	endpointToPreDNATPolicyOrder   map[string][]TierInfo
@@ -108,6 +109,12 @@ func (d *MockDataplane) ActiveVTEPs() set.Set {
 	defer d.Unlock()
 
 	return d.activeVTEPs.Copy()
+}
+func (d *MockDataplane) ActiveRoutes() set.Set {
+	d.Lock()
+	defer d.Unlock()
+
+	return d.activeRoutes.Copy()
 }
 func (d *MockDataplane) EndpointToProfiles() map[string][]string {
 	d.Lock()
@@ -205,6 +212,7 @@ func NewMockDataplane() *MockDataplane {
 		activeProfiles:                 set.New(),
 		activeUntrackedPolicies:        set.New(),
 		activePreDNATPolicies:          set.New(),
+		activeRoutes:                   set.New(),
 		activeVTEPs:                    set.New(),
 		endpointToPolicyOrder:          make(map[string][]TierInfo),
 		endpointToUntrackedPolicyOrder: make(map[string][]TierInfo),
@@ -386,10 +394,20 @@ func (d *MockDataplane) OnEvent(event interface{}) {
 		id := *event.Id
 		Expect(d.namespaces).To(HaveKey(id))
 		delete(d.namespaces, id)
+	case *proto.RouteUpdate:
+		d.activeRoutes.Add(*event)
+	case *proto.RouteRemove:
+		d.activeRoutes.Iter(func(item interface{}) error {
+			r := item.(proto.RouteUpdate)
+			if event.Dst == r.Dst && event.Type == r.Type {
+				return set.RemoveItem
+			}
+			return nil
+		})
 	case *proto.VXLANTunnelEndpointUpdate:
 		d.activeVTEPs.Add(*event)
 	case *proto.VXLANTunnelEndpointRemove:
-		d.activeVTEPs.Iter(func(item interface{}) error{
+		d.activeVTEPs.Iter(func(item interface{}) error {
 			if event.Node == item.(proto.VXLANTunnelEndpointUpdate).Node {
 				return set.RemoveItem
 			}

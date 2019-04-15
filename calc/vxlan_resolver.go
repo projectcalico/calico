@@ -5,6 +5,8 @@ import (
 	"fmt"
 	gonet "net"
 
+	"github.com/sirupsen/logrus"
+
 	"github.com/projectcalico/felix/dispatcher"
 	"github.com/projectcalico/felix/ip"
 	"github.com/projectcalico/felix/proto"
@@ -13,7 +15,6 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/libcalico-go/lib/net"
 	"github.com/projectcalico/libcalico-go/lib/set"
-	"github.com/sirupsen/logrus"
 )
 
 // VXLANResolver is responsible for resolving node IPs, node config, IPAM blocks,
@@ -210,7 +211,8 @@ func (c *VXLANResolver) OnHostConfigUpdate(update api.Update) (_ bool) {
 	case "IPv4VXLANTunnelAddr":
 		nodeName := update.Key.(model.HostConfigKey).Hostname
 		vtepSent := c.vtepSent(nodeName)
-		logCxt := logrus.WithField("node", nodeName)
+		logCxt := logrus.WithField("node", nodeName).WithField("value", update.Value)
+		logCxt.Debug("IPv4VXLANTunnelAddr update")
 		if update.Value != nil {
 			// Update for a VXLAN tunnel address.
 			newIP := update.Value.(string)
@@ -309,6 +311,8 @@ func (c *VXLANResolver) OnPoolUpdate(update api.Update) (_ bool) {
 			return nil
 		})
 		delete(c.vxlanPools, k.String())
+	} else {
+		logrus.WithField("pool", k.CIDR).Debug("Ignoring non-VXLAN IP pool")
 	}
 	return
 }
@@ -354,7 +358,7 @@ func (c *VXLANResolver) routeReady(r vxlanRoute) bool {
 	logCxt := logrus.WithField("route", r)
 	gw := c.determineGatewayForRoute(r)
 	if gw == "" {
-		logCxt.Info("No gateway yet for VXLAN route, skip")
+		logCxt.Debug("No gateway yet for VXLAN route, skip")
 		return false
 	}
 	if !c.routeWithinVXLANPool(r) {
@@ -362,7 +366,7 @@ func (c *VXLANResolver) routeReady(r vxlanRoute) bool {
 		return false
 	}
 	if !c.vtepSent(r.node) {
-		logCxt.Info("Don't yet know the VTEP for this route")
+		logCxt.Debug("Don't yet know the VTEP for this route")
 		return false
 	}
 	return true
