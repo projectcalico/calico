@@ -434,6 +434,7 @@ func doStateSequenceTest(expandedTest StateList, flushStrategy flushStrategy) {
 	BeforeEach(func() {
 		conf := config.New()
 		conf.FelixHostname = localHostname
+		conf.VXLANEnabled = true
 		mockDataplane = mock.NewMockDataplane()
 		eventBuf = NewEventSequencer(mockDataplane)
 		eventBuf.Callback = mockDataplane.OnEvent
@@ -503,6 +504,9 @@ func doStateSequenceTest(expandedTest StateList, flushStrategy flushStrategy) {
 			"Active policy IDs were incorrect after moving to state: %v",
 			state.Name)
 		Expect(mockDataplane.ActiveProfiles()).To(Equal(state.ExpectedProfileIDs),
+			"Active profile IDs were incorrect after moving to state: %v",
+			state.Name)
+		Expect(mockDataplane.ActiveVTEPs()).To(Equal(state.ExpectedVTEPs),
 			"Active profile IDs were incorrect after moving to state: %v",
 			state.Name)
 		Expect(mockDataplane.EndpointToPolicyOrder()).To(Equal(state.ExpectedEndpointPolicyOrder),

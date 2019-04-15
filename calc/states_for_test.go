@@ -886,8 +886,14 @@ var vxlanWithBlock = empty.withKVUpdates(
 	KVPair{Key: ipPoolKey, Value: &ipPoolWithVXLAN},
 	KVPair{Key: remoteIPAMBlockKey, Value: &remoteIPAMBlock},
 	KVPair{Key: remoteHostIPKey, Value: &remoteHostIP},
-	KVPair{Key: remoteHostVXLANTunnelConfigKey, Value: &remoteHostVXLANTunnelIP},
-).withName("VXLAN-1")
+	KVPair{Key: remoteHostVXLANTunnelConfigKey, Value: remoteHostVXLANTunnelIP},
+).withName("VXLAN-1",
+).withVTEP(proto.VXLANTunnelEndpointUpdate{
+	Node:           remoteHostname,
+	Mac:            "66:3e:ca:a4:db:65",
+	Ipv4Addr:       remoteHostVXLANTunnelIP,
+	ParentDeviceIp: remoteHostIP.String(),
+})
 
 type StateList []State
 

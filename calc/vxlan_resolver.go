@@ -127,10 +127,12 @@ func (c *VXLANResolver) OnBlockUpdate(update api.Update) (_ bool) {
 	} else {
 		// Block has been deleted. Clean up routes that were contributed by this block.
 		routes := c.blockToRoutes[key]
-		routes.Iter(func(item interface{}) error {
-			c.withdrawRoute(item.(vxlanRoute))
-			return nil
-		})
+		if routes != nil {
+			routes.Iter(func(item interface{}) error {
+				c.withdrawRoute(item.(vxlanRoute))
+				return nil
+			})
+		}
 		delete(c.blockToRoutes, key)
 	}
 	return
