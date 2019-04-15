@@ -15,11 +15,11 @@ one of our [getting started guides]({{site.baseurl}}/{{page.version}}/getting-st
 ### 1) Create the frontend, backend, client, and management-ui apps.
 
 ```shell
-kubectl create -f {{site.url}}/{{page.version}}/getting-started/kubernetes/tutorials/stars-policy/manifests/00-namespace.yaml
-kubectl create -f {{site.url}}/{{page.version}}/getting-started/kubernetes/tutorials/stars-policy/manifests/01-management-ui.yaml
-kubectl create -f {{site.url}}/{{page.version}}/getting-started/kubernetes/tutorials/stars-policy/manifests/02-backend.yaml
-kubectl create -f {{site.url}}/{{page.version}}/getting-started/kubernetes/tutorials/stars-policy/manifests/03-frontend.yaml
-kubectl create -f {{site.url}}/{{page.version}}/getting-started/kubernetes/tutorials/stars-policy/manifests/04-client.yaml
+kubectl create -f {{site.url}}/{{page.version}}/security/stars-policy/manifests/00-namespace.yaml
+kubectl create -f {{site.url}}/{{page.version}}/security/stars-policy/manifests/01-management-ui.yaml
+kubectl create -f {{site.url}}/{{page.version}}/security/stars-policy/manifests/02-backend.yaml
+kubectl create -f {{site.url}}/{{page.version}}/security/stars-policy/manifests/03-frontend.yaml
+kubectl create -f {{site.url}}/{{page.version}}/security/stars-policy/manifests/04-client.yaml
 ```
 
 Wait for all the pods to enter `Running` state.
@@ -46,8 +46,8 @@ represented by a single node in the graph.
 Running following commands will prevent all access to the frontend, backend, and client Services.
 
 ```shell
-kubectl create -n stars -f {{site.url}}/{{page.version}}/getting-started/kubernetes/tutorials/stars-policy/policies/default-deny.yaml
-kubectl create -n client -f {{site.url}}/{{page.version}}/getting-started/kubernetes/tutorials/stars-policy/policies/default-deny.yaml
+kubectl create -n stars -f {{site.url}}/{{page.version}}/security/stars-policy/policies/default-deny.yaml
+kubectl create -n client -f {{site.url}}/{{page.version}}/security/stars-policy/policies/default-deny.yaml
 ```
 
 #### Confirm isolation
@@ -60,8 +60,8 @@ Now that we've enabled isolation, the UI can no longer access the pods, and so t
 Apply the following YAMLs to allow access from the management UI.
 
 ```shell
-kubectl create -f {{site.url}}/{{page.version}}/getting-started/kubernetes/tutorials/stars-policy/policies/allow-ui.yaml
-kubectl create -f {{site.url}}/{{page.version}}/getting-started/kubernetes/tutorials/stars-policy/policies/allow-ui-client.yaml
+kubectl create -f {{site.url}}/{{page.version}}/security/stars-policy/policies/allow-ui.yaml
+kubectl create -f {{site.url}}/{{page.version}}/security/stars-policy/policies/allow-ui-client.yaml
 ```
 
 After a few seconds, refresh the UI - it should now show the Services, but they should not be able to access each other any more.
@@ -69,7 +69,7 @@ After a few seconds, refresh the UI - it should now show the Services, but they 
 ### 4) Create the backend-policy.yaml file to allow traffic from the frontend to the backend
 
 ```shell
-kubectl create -f {{site.url}}/{{page.version}}/getting-started/kubernetes/tutorials/stars-policy/policies/backend-policy.yaml
+kubectl create -f {{site.url}}/{{page.version}}/security/stars-policy/policies/backend-policy.yaml
 ```
 
 Refresh the UI.  You should see the following:
@@ -81,7 +81,7 @@ Refresh the UI.  You should see the following:
 ### 5) Expose the frontend service to the client namespace
 
 ```shell
-kubectl create -f {{site.url}}/{{page.version}}/getting-started/kubernetes/tutorials/stars-policy/policies/frontend-policy.yaml
+kubectl create -f {{site.url}}/{{page.version}}/security/stars-policy/policies/frontend-policy.yaml
 ```
 
 The client can now access the frontend, but not the backend.  Neither the frontend nor the backend
