@@ -1,10 +1,10 @@
 ---
 title: Configuring VXLAN
-canonical_url: 'https://docs.projectcalico.org/master/usage/configuration/vxlan'
 ---
 
-If you are unable to peer Calico with your fabric over BGP or your fabric imposes source/dest
-checks that prevent Calico's routing, you may wish to use Calico's VXLAN overlay mode.
+In addition to [IP-in-IP]({{site.baseurl}}/{{page.version}}/networking/ip-in-ip) overlay mode, {{site.prodname}} supports VXLAN
+as an overlay protocol.  VXLAN has some trade-offs vs IP-in-IP; VXLAN is supported in some environments where 
+IP-in-IP is not (such as Azure) but it has slightly higher per-packet overhead due to its larger header.
 
 {{site.prodname}} can be configured to use VXLAN encapsulation by setting the `vxlanMode` option
 on the [IP pool resource]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/ippool).
@@ -40,6 +40,6 @@ EOF
 
 ### See also
 
-The [FelixConfiguration resource]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/felixconfig) contains further settings for VXLAN, including the virtual network ID, VXLAN
-port and tunnel MTU.
+The [FelixConfiguration resource]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/felixconfig) contains 
+further settings for VXLAN, including the virtual network ID, VXLAN port and tunnel MTU.
 

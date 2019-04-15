@@ -13,7 +13,7 @@ Since MTU is a global property of the network path between endpoints, the MTU fo
 workloads needs to be set to the minimum MTU of any path that packets may take.
 
 If you are using an overlay such as IP-in-IP or VXLAN, the extra overlay header
-used by those protocols reduces the MTU by the size of the header.  IP-in-IP uses
+used by those protocols reduces the minimum MTU by the size of the header.  IP-in-IP uses
 a 20-byte header, VXLAN uses a 50-byte header.  Hence,
 
 - If you use VXLAN anywhere in your pod network, you should select an MTU which is
@@ -50,7 +50,7 @@ configured with VXLAN.
 
 ## MTU configuration
 
-It is the job of the network plugin to create new interfaces.  The CNI plugin, which is used by
+It is the job of the network plugin to create new workload interfaces.  The CNI plugin, which is used by
 Kubernetes, supports configuring the MTU of the workload interface through the CNI configuration file.
 
 The user will also want to configure {{site.prodname}}'s IP-in-IP/VXLAN interface MTU when

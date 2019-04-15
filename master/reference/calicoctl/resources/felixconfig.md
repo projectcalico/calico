@@ -78,7 +78,7 @@ spec:
 | usageReportingEnabled              | Reports anonymous {{site.prodname}} version number and cluster size to projectcalico.org. Logs warnings returned by the usage server. For example, if a significant security vulnerability has been discovered in the version of {{site.prodname}} being used. | boolean | boolean | `true` |
 | usageReportingInitialDelaySecs     | Minimum initial delay before first usage report, in seconds. | int | int | `300` |
 | usageReportingIntervalSecs         | The interval at which Felix does usage reports, in seconds.  The default is 1 day.  | int | int | `86400` |
-| vxlanEnabled                       | Automatically set when needed: whether Felix should create the VXLAN tunnel device for VXLAN networking. | boolean | boolean | `false` |
+| vxlanEnabled                       | Automatically set when needed, you shouldn't need to change this setting: whether Felix should create the VXLAN tunnel device for VXLAN networking. | boolean | boolean | `false` |
 | vxlanMTU                           | MTU to use for the VXLAN tunnel device. | int | int | `1410` |
 | vxlanPort                          | Port to use for VXLAN traffic. A value of `0` means "use the kernel default". | int | int | `4789` |
 | vxlanVNI                           | Virtual network ID to use for VXLAN traffic. A value of `0` means "use the kernel default". | int | int | `4096` |

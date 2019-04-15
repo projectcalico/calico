@@ -52,8 +52,8 @@ The full list of parameters which can be set is as follows.
 | `UsageReportingEnabled`           | `FELIX_USAGEREPORTINGENABLED`           | Reports anonymous {{site.prodname}} version number and cluster size to projectcalico.org. Logs warnings returned by the usage server. For example, if a significant security vulnerability has been discovered in the version of {{site.prodname}} being used. [Default: `true`] | boolean |
 | `UsageReportingInitialDelaySecs`  | `FELIX_USAGEREPORTINGINITIALDELAYSECS`  | Minimum delay before first usage report, in seconds. [Default: `300`] | int |
 | `UsageReportingIntervalSecs`      | `FELIX_USAGEREPORTINGINTERVALSECS`      | Interval at which to make usage reports, in seconds. [Default: `86400`] | int |
-| `VXLANEnabled`                    | `FELIX_VXLANENABLED`                    | Whether Felix should configure a VXLAN interface on the host. Set automatically to `true` by `{{site.nodecontainer}}` or `calicoctl` when you create a VXLAN-enabled pool. [Default: `false`] | boolean |
-| `VXLANMtu`                        | `FELIX_VXLANMTU`                        | The MTU to set on the VXLAN tunnel device. See [Configuring MTU]({{site.baseurl}}/{{page.version}}/networking/mtu) [Default: `1410`] | int |
+| `VXLANEnabled`                    | `FELIX_VXLANENABLED`                    | Automatically set when needed, you shouldn't need to change this setting: whether Felix should create the VXLAN tunnel device for VXLAN networking. [Default: `false`] | boolean |
+| `VXLANMTU`                        | `FELIX_VXLANMTU`                        | The MTU to set on the VXLAN tunnel device. See [Configuring MTU]({{site.baseurl}}/{{page.version}}/networking/mtu) [Default: `1410`] | int |
 | `VXLANPort`                       | `FELIX_VXLANPORT`                       | The UDP port to use for VXLAN. [Default: `4789`] | int |
 | `VXLANVNI`                        | `FELIX_VXLANVNI`                        | The virtual network ID to use for VXLAN. [Default: `4096`] | int |
 
