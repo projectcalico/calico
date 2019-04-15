@@ -18,16 +18,17 @@ package calc_test
 // the model package.
 
 import (
+	"github.com/projectcalico/libcalico-go/lib/backend/encap"
 	. "github.com/projectcalico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/libcalico-go/lib/net"
 	"github.com/projectcalico/libcalico-go/lib/numorstring"
 )
 
 // Canned hostnames.
-
-const localHostname = "localhostname"
-const remoteHostname = "remotehostname"
-
+var (
+ localHostname = "localhostname"
+ remoteHostname = "remotehostname"
+)
 // Canned selectors.
 
 var (
@@ -568,3 +569,41 @@ var netSet2 = NetworkSet{
 		"a": "b",
 	},
 }
+
+var localHostIP = mustParseIP("192.168.0.1")
+var remoteHostIP = mustParseIP("192.168.0.2")
+
+var remoteHostVXLANTunnelConfigKey = HostConfigKey{
+	Hostname: remoteHostname,
+	Name: "IPv4VXLANTunnelAddr",
+}
+
+var ipPoolKey = IPPoolKey{
+	CIDR: mustParseNet("10.0.0.0/16"),
+}
+
+var ipPoolNoEncap = IPPool{
+	CIDR: mustParseNet("10.0.0.0/16"),
+}
+
+var ipPoolWithIPIP = IPPool{
+	CIDR: mustParseNet("10.0.0.0/16"),
+	IPIPMode: encap.Always,
+}
+
+var ipPoolWithVXLAN = IPPool{
+	CIDR: mustParseNet("10.0.0.0/16"),
+	IPIPMode: encap.Always,
+}
+
+var remoteIPAMBlockKey = BlockKey{
+	CIDR: mustParseNet("10.0.1.0/29"),
+}
+
+var remoteIPAMBlock = AllocationBlock{
+	CIDR: mustParseNet("10.0.1.0/29"),
+	Affinity: &remoteHostname,
+	Allocations: make([]*int, 8),
+	Unallocated: []int{0, 1, 2, 3, 4, 5, 6, 7},
+}
+var remoteHostVXLANTunnelIP = "10.0.1.0"

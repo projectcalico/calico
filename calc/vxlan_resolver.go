@@ -269,6 +269,7 @@ func (c *VXLANResolver) OnPoolUpdate(update api.Update) (_ bool) {
 	pendingSet, sentSet := c.routeSets()
 	if update.Value != nil && update.Value.(*model.IPPool).VXLANMode != encap.Undefined {
 		// This is an add/update of a pool with VXLAN enabled.
+		logrus.WithField("pool", k.CIDR).Info("Update of VXLAN-enabled IP pool.")
 		if curr, ok := c.vxlanPools[k.String()]; ok {
 			// We already know about this IP pool. Check to see if the CIDR has changed.
 			// While this isn't possible directly in the user-facing API, it's possible that

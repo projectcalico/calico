@@ -241,6 +241,11 @@ var baseTests = []StateList{
 		withNonALPPolicy,
 	},
 
+	// VXLAN
+	{
+		vxlanWithBlock,
+	},
+
 	// TODO(smc): Test config calculation
 	// TODO(smc): Test mutation of endpoints
 	// TODO(smc): Test mutation of host endpoints
