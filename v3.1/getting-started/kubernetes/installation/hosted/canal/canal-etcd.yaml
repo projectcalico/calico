@@ -131,7 +131,7 @@ spec:
         # Runs the flannel daemon to enable vxlan networking between
         # container hosts.
         - name: flannel
-          image: {{page.registry}}{{site.imageNames["flannel"]}}:{{site.data.versions[page.version].first.components["flannel"].version}}
+          image: {{site.imageNames["flannel"]}}:{{site.data.versions[page.version].first.components["flannel"].version}}
           env:
             # The location of the etcd cluster.
             - name: FLANNELD_ETCD_ENDPOINTS
