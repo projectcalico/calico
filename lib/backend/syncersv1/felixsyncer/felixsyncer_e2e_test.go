@@ -29,6 +29,7 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/libcalico-go/lib/clientv3"
+	"github.com/projectcalico/libcalico-go/lib/ipam"
 	"github.com/projectcalico/libcalico-go/lib/net"
 	"github.com/projectcalico/libcalico-go/lib/numorstring"
 	"github.com/projectcalico/libcalico-go/lib/options"
@@ -198,6 +199,7 @@ var _ = testutils.E2eDatastoreDescribe("Felix syncer tests", testutils.Datastore
 						CIDR:        poolCIDR,
 						IPIPMode:    apiv3.IPIPModeCrossSubnet,
 						NATOutgoing: true,
+						BlockSize:   30,
 					},
 				},
 				options.SetOptions{},
@@ -348,6 +350,31 @@ var _ = testutils.E2eDatastoreDescribe("Felix syncer tests", testutils.Datastore
 					},
 				},
 				Revision: hep.ResourceVersion,
+			})
+
+			By("Allocating an IP")
+			err = c.IPAM().AssignIP(ctx, ipam.AssignIPArgs{
+				Hostname: "127.0.0.1",
+				IP:       net.MustParseIP("192.124.0.1"),
+			})
+			Expect(err).NotTo(HaveOccurred())
+			expectedCacheSize += 1
+
+			_, cidr, _ := net.ParseCIDR("192.124.0.0/30")
+			affinity := "host:127.0.0.1"
+			zero := 0
+			syncTester.ExpectData(model.KVPair{
+				Key: model.BlockKey{CIDR: *cidr},
+				Value: &model.AllocationBlock{
+					CIDR:           *cidr,
+					Affinity:       &affinity,
+					StrictAffinity: false,
+					Allocations:    []*int{nil, &zero, nil, nil},
+					Unallocated:    []int{0, 2, 3},
+					Attributes: []model.AllocationAttribute{
+						{},
+					},
+				},
 			})
 
 			By("Starting a new syncer and verifying that all current entries are returned before sync status")
