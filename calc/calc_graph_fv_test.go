@@ -240,12 +240,6 @@ var baseTests = []StateList{
 		withHttpMethodPolicy,
 		withNonALPPolicy,
 	},
-
-	// TODO(smc): Test config calculation
-	// TODO(smc): Test mutation of endpoints
-	// TODO(smc): Test mutation of host endpoints
-	// TODO(smc): Test validation
-	// TODO(smc): Test rule conversions
 }
 
 var testExpanders = []func(baseTest StateList) (desc string, mappedTests []StateList){

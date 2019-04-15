@@ -181,7 +181,6 @@ func (c *VXLANResolver) OnHostIPUpdate(update api.Update) (_ bool) {
 			logCxt.Info("Sent VTEP to dataplane, check pending routes")
 			c.kickPendingRoutes(pendingSet)
 		}
-
 	} else {
 		// Withdraw any routes which target this VTEP, followed by the VTEP itself.
 		logCxt.Info("Withdrawing routes and VTEP, node IP address deleted")
@@ -243,7 +242,6 @@ func (c *VXLANResolver) OnHostConfigUpdate(update api.Update) (_ bool) {
 				logCxt.Info("Sent VTEP to dataplane, check pending routes")
 				c.kickPendingRoutes(pendingSet)
 			}
-
 		} else {
 			// Withdraw any routes which target this VTEP, followed by the VTEP itself.
 			logCxt.Info("Withdrawing routes and VTEP, node tunnel address deleted")
@@ -432,19 +430,37 @@ func (c *VXLANResolver) routeWithinVXLANPool(r vxlanRoute) bool {
 }
 
 // routesFromBlock returns a list of routes which should exist based on the provided
-// allocation block. Right now, we only support strict affinity so this will always
-// be the block's CIDR.
+// allocation block.
 func (c *VXLANResolver) routesFromBlock(blockKey string, b *model.AllocationBlock) map[string]vxlanRoute {
+	routes := make(map[string]vxlanRoute)
+
+	for _, alloc := range b.NonAffineAllocations() {
+		if alloc.Host == "" {
+			logrus.WithField("IP", alloc.Addr).Warn(
+				"Unable to create VXLAN route for IP; the node it belongs to was not recorded")
+			continue
+		}
+		r := vxlanRoute{
+			dst:  ip.CIDRFromNetIP(alloc.Addr.IP),
+			node: alloc.Host,
+		}
+		routes[r.Key()] = r
+	}
+
 	if b.Host() == c.hostname {
 		logrus.Debug("Skipping VXLAN routes for local node")
 		return nil
 	}
 
-	r := vxlanRoute{
-		dst:  ip.CIDRFromCalicoNet(b.CIDR),
-		node: b.Host(),
+	if b.Host() != "" {
+		r := vxlanRoute{
+			dst:  ip.CIDRFromCalicoNet(b.CIDR),
+			node: b.Host(),
+		}
+		routes[r.Key()] = r
 	}
-	return map[string]vxlanRoute{r.Key(): r}
+
+	return routes
 }
 
 // determineGatewayForRoute determines which gateway to use for this route. For VXLAN routes, the
