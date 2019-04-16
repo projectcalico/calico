@@ -26,8 +26,8 @@ import (
 
 // Canned hostnames.
 var (
-	localHostname  = "localhostname"
-	remoteHostname = "remotehostname"
+	localHostname   = "localhostname"
+	remoteHostname  = "remotehostname"
 	remoteHostname2 = "remotehostname2"
 )
 
@@ -625,8 +625,8 @@ var remoteIPAMBlock = AllocationBlock{
 	Unallocated: []int{0, 1, 2, 3, 4, 5, 6, 7},
 }
 var remoteIPAMBlockWithBorrows = AllocationBlock{
-	CIDR:        mustParseNet("10.0.1.0/29"),
-	Affinity:    &remoteHostAffinity,
+	CIDR:     mustParseNet("10.0.1.0/29"),
+	Affinity: &remoteHostAffinity,
 	Allocations: []*int{
 		intPtr(0),
 		intPtr(1),
@@ -649,8 +649,8 @@ var remoteIPAMBlockWithBorrows = AllocationBlock{
 	},
 }
 var remoteIPAMBlockWithBorrowsSwitched = AllocationBlock{
-	CIDR:        mustParseNet("10.0.1.0/29"),
-	Affinity:    &remoteHost2Affinity,
+	CIDR:     mustParseNet("10.0.1.0/29"),
+	Affinity: &remoteHost2Affinity,
 	Allocations: []*int{
 		intPtr(0),
 		intPtr(1),
@@ -674,8 +674,8 @@ var remoteIPAMBlockWithBorrowsSwitched = AllocationBlock{
 }
 
 var localIPAMBlockWithBorrows = AllocationBlock{
-	CIDR:        mustParseNet("10.0.0.0/29"),
-	Affinity:    &localHostAffinity,
+	CIDR:     mustParseNet("10.0.0.0/29"),
+	Affinity: &localHostAffinity,
 	Allocations: []*int{
 		intPtr(0),
 		intPtr(1),
@@ -697,9 +697,11 @@ var localIPAMBlockWithBorrows = AllocationBlock{
 		}},
 	},
 }
+
 func intPtr(i int) *int {
 	return &i
 }
+
 var localHostVXLANTunnelIP = "10.0.0.0"
 var remoteHostVXLANTunnelIP = "10.0.1.0"
 var remoteHost2VXLANTunnelIP = "10.0.2.0"

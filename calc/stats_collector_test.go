@@ -26,8 +26,8 @@ import (
 )
 
 var (
-	localHostIPKey  = HostIPKey{localHostname}
-	remoteHostIPKey = HostIPKey{remoteHostname}
+	localHostIPKey   = HostIPKey{localHostname}
+	remoteHostIPKey  = HostIPKey{remoteHostname}
 	remoteHost2IPKey = HostIPKey{remoteHostname2}
 )
 
