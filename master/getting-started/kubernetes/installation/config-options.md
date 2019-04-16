@@ -57,6 +57,38 @@ want to disable IP-in-IP encapsulation, such as under the following circumstance
 To disable IP-in-IP encapsulation, modify the `CALICO_IPV4POOL_IPIP` section of the
 manifest.  For more information, see [Configuring {{site.nodecontainer}}]({{site.baseurl}}/{{page.version}}/reference/node/configuration).
 
+### Switching from IP-in-IP to VXLAN
+
+By default, the Calico manifests enable IP-in-IP encapsulation.  If you are on a network that blocks IP-in-IP, such 
+as Azure, you may wish to switch to [Calico's VXLAN encapsulation mode]({{site.baseurl}}/{{page.version}}/networking/vxlan).  
+To do this at install time (so that Calico creates the default IP pool with VXLAN and no IP-in-IP configuration has to 
+be undone):
+
+- Start with one of the [Calico for policy and networking]({{site.baseurl}}/{{page.version}}/getting-started/kubernetes/installation/calico) manifests.
+- Replace environment variable name `CALICO_IPV4POOL_IPIP` with`CALICO_IPV4POOL_VXLAN`.  Leave the value of the new variable as "Always".
+- Optionally, (to save some resources if you're running a VXLAN-only cluster) completely disable Calico's BGP-based 
+  networking:
+  - Replace `calico_backend: "bird"` with `calico_backend: "vxlan"`.  This disables BIRD.
+  - Comment out the line `- -bird-ready` from the calico/node readiness check (otherwise disabling BIRD will cause the 
+    readiness check to fail on every node):
+
+```yaml
+          readinessProbe:
+            exec:
+              command:
+              - /bin/calico-node
+              # - -bird-ready
+              - -felix-ready
+```
+
+For more information on {{site.nodecontainer}}'s configuration variables, including additional VXLAN settings, see
+ [Configuring {{site.nodecontainer}}]({{site.baseurl}}/{{page.version}}/reference/node/configuration).
+
+> **Note**: The `CALICO_IPV4POOL_VXLAN` environment variable only takes effect when the first {{site.nodecontainer}} to start
+> creates the default IP pool.  It has no effect after the pool has already been created.  To switch to VXLAN mode 
+> after installation time, use calicoctl to modify the [IPPool]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/ippool) resource.
+{: .alert .alert-info}
+
 ### Configuring etcd
 
 By default, these manifests do not configure secure access to etcd and assume an
