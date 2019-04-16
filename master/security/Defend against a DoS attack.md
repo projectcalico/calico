@@ -46,7 +46,7 @@ First, you need to create the host endpoints corresponding to the network interf
 apiVersion: projectcalico.org/v3
 kind: HostEndpoint
 metadata:
-  name: <name of endpoint>
+  name: `name of endpoint`
   labels:
     apply-dos-mitigation: true
 spec:
