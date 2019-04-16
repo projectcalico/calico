@@ -38,6 +38,12 @@ EOF
 > Switching to VXLAN mode can cause disruption to in-progress connections.
 {: .alert .alert-info}
 
+### Disabling BGP networking
+
+When using only VXLAN pools BGP networking is not required.  If you wish to disable BGP entirely so that your cluster 
+has one fewer moving parts, follow the instructions in [Customizing the manifests]({{site.baseurl}}/{{page.version}}/getting-started/kubernetes/installation/config-options)
+to set the `calico_backend` setting to `vxlan` and disable the BGP readiness check.
+
 ### See also
 
 The [FelixConfiguration resource]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/felixconfig) contains 
