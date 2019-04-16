@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2019 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,6 +15,7 @@
 package etcdv3
 
 import (
+	"fmt"
 	"strconv"
 
 	"github.com/coreos/etcd/clientv3"
@@ -56,19 +57,24 @@ func convertWatchEvent(e *clientv3.Event, l model.ListInterface) (*api.WatchEven
 		eventType = api.WatchModified
 	}
 
-	var old, new *model.KVPair
+	var oldKV, newKV *model.KVPair
 	var err error
 	if k := l.KeyFromDefaultPath(string(e.Kv.Key)); k != nil {
 		log.WithField("model-etcdKey", k).Debug("Key is valid and converted to model-etcdKey")
 
 		if eventType != api.WatchDeleted {
-			if new, err = etcdToKVPair(k, e.Kv); err != nil {
+			// Add or modify, parse the new value.
+			if newKV, err = etcdToKVPair(k, e.Kv); err != nil {
 				return nil, err
 			}
 		}
-		if eventType != api.WatchAdded && e.PrevKv != nil && len(e.PrevKv.Value) != 0 {
-			if old, err = etcdToKVPair(k, e.PrevKv); err != nil {
-				return nil, err
+		if eventType != api.WatchAdded {
+			// Delete or modify, parse the old value.
+			if oldKV, err = etcdToKVPair(k, e.PrevKv); err != nil {
+				if eventType == api.WatchDeleted || err != ErrMissingValue {
+					// Ignore missing value for modified events, but we need them for deletion.
+					return nil, err
+				}
 			}
 		}
 	} else {
@@ -77,16 +83,29 @@ func convertWatchEvent(e *clientv3.Event, l model.ListInterface) (*api.WatchEven
 	}
 
 	return &api.WatchEvent{
-		Old:  old,
-		New:  new,
+		Old:  oldKV,
+		New:  newKV,
 		Type: eventType,
 	}, nil
 }
 
+var (
+	ErrMissingValue = fmt.Errorf("missing etcd KV")
+)
+
 // etcdToKVPair converts an etcd KeyValue in to model.KVPair.
 func etcdToKVPair(key model.Key, ekv *mvccpb.KeyValue) (*model.KVPair, error) {
+	if ekv == nil {
+		return nil, ErrMissingValue
+	}
+
 	v, err := model.ParseValue(key, ekv.Value)
 	if err != nil {
+		if len(ekv.Value) == 0 {
+			// We do this check after the ParseValue call because ParseValue has some special-case logic for handling
+			// empty values for some resource types.
+			return nil, ErrMissingValue
+		}
 		return nil, errors.ErrorParsingDatastoreEntry{
 			RawKey:   string(ekv.Key),
 			RawValue: string(ekv.Value),

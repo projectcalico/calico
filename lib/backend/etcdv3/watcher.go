@@ -97,11 +97,11 @@ func (wc *watcher) watchLoop() {
 			return
 		}
 	}
-	opts := []clientv3.OpOption{clientv3.WithRev(wc.initialRev + 1), clientv3.WithPrevKV()}
 
 	// If we are not watching a specific resource then this is a prefix watch.
 	logCxt := log.WithField("list", wc.list)
 	key, opts := calculateListKeyAndOptions(logCxt, wc.list)
+	opts = append(opts, clientv3.WithRev(wc.initialRev+1), clientv3.WithPrevKV())
 	logCxt = logCxt.WithFields(log.Fields{
 		"etcdv3-etcdKey": key,
 		"rev":            wc.initialRev,

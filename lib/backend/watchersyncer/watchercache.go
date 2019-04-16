@@ -108,6 +108,10 @@ mainLoop:
 			case api.WatchDeleted:
 				// Nil out the value to indicate a delete.
 				kvp := event.Old
+				if kvp == nil {
+					// Bug, we're about to panic when we hit the nil pointer, log something useful.
+					wc.logger.WithField("watcher", wc).WithField("event", event).Panic("Deletion event without old value")
+				}
 				kvp.Value = nil
 				wc.handleWatchListEvent(kvp)
 			case api.WatchError:
