@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2019 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -100,17 +100,13 @@ func (wc *watcher) watchLoop() {
 	opts := []clientv3.OpOption{clientv3.WithRev(wc.initialRev + 1), clientv3.WithPrevKV()}
 
 	// If we are not watching a specific resource then this is a prefix watch.
-	key := model.ListOptionsToDefaultPathRoot(wc.list)
-	logCxt := log.WithFields(log.Fields{
-		"etcdv3-key": key,
-		"rev":        wc.initialRev,
+	logCxt := log.WithField("list", wc.list)
+	key, opts := calculateListKeyAndOptions(logCxt, wc.list)
+	logCxt = logCxt.WithFields(log.Fields{
+		"etcdv3-etcdKey": key,
+		"rev":            wc.initialRev,
 	})
 	logCxt.Debug("Starting etcdv3 watch")
-	if !model.ListOptionsIsFullyQualified(wc.list) {
-		logCxt.Debug("Performing prefix watch")
-		opts = append(opts, clientv3.WithPrefix())
-		key += "/"
-	}
 	wch := wc.client.etcdClient.Watch(wc.ctx, key, opts...)
 	for wres := range wch {
 		if wres.Err() != nil {

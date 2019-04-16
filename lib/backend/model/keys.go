@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2018 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2019 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -175,7 +175,7 @@ func ListOptionsToDefaultPathRoot(listOptions ListInterface) string {
 // ListOptionsIsFullyQualified returns true if the options actually specify a fully
 // qualified resource rather than a partial match.
 func ListOptionsIsFullyQualified(listOptions ListInterface) bool {
-	// Contruct the path prefix and then check to see if that actually corresponds to
+	// Construct the path prefix and then check to see if that actually corresponds to
 	// the path of a resource instance.
 	return listOptions.KeyFromDefaultPath(listOptions.defaultPathRoot()) != nil
 }
