@@ -1,7 +1,7 @@
 
 ### Big Picture
 
-Calico automatically enforces certain types of blacklist policies at the earliest possible point in the packet processing pipeline, including offloading to NIC hardware whenever possible.
+Calico automatically enforces certain types of blacklist policies at the earliest possible point in the packet processing pipeline, including offloading to NIC hardware whenever possible. test
 
 ### Value
 When under DoS attack, your cluster can receive massive numbers of connection requests from attackers. The faster these connection requests are dropped, the less flooding and overloading to your hosts. Calico allows you to define DoS mitigation rules in network policy, enforces these as efficiently as possible to minimize the impact in a DoS attack.
