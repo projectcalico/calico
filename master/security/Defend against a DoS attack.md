@@ -40,56 +40,60 @@ The high-level steps to defend against a DoS attack are:
 This example walks through the above required steps, assuming no prior configuration is in place. A best practice is to proactively create the host endpoints, network policy, and global network set. In the event of a DoS attack, you can quickly respond by just adding the blacklist CIDRs to the global network set.
 
 #### Step 1: Create host endpoints
-First, you need to create the host endpoints corresponding to the network interfaces where you want to enforce any DoS mitigation rules. In the following example, the host endpoint secures the interface named **eth0** with IP **10.0.0.1** for a specific host:
+First, you create the host endpoints corresponding to the network interfaces where you want to enforce any DoS mitigation rules. In the following example, the host endpoint secures the interface named **eth0** with IP **10.0.0.1** for hostendpoint on node **jasper**.
 
 <pre>
 apiVersion: projectcalico.org/v3
 kind: HostEndpoint
 metadata:
-  name: `name of endpoint`
+  name: production-host
   labels:
     apply-dos-mitigation: true
 spec:
   interfaceName: <b>eth0</b>
-  node: <node name or hostname>
+  <b>node: jasper</b>
   expectedIPs: ["10.0.0.1"]
 </pre>
 {: .no-select-button}
 
-#### Step 2: Set up blacklist CIDRs in a global network set
-Next, you need to create a Calico global network set, adding the CIDRs that you want to blacklist. In the following example, the global network set blacklists the CIDR ranges `1.2.3.4/32` and `5.6.0.0/16`:
+#### Step 2: Add CIDRs to blacklist in a global network set
+Next, you create a Calico **global network set**, adding the CIDRs that you want to blacklist. In the following example, the global network set blacklists the CIDR ranges `1.2.3.4/32` and `5.6.0.0/16`:
 
-```
+<pre>
 apiVersion: projectcalico.org/v3
-kind: GlobalNetworkSet
+<b>kind: GlobalNetworkSet</b>
 metadata:
   name: dos-mitigation
   labels:
-    dos-blacklist: 'true'
+    dos-blacklist == 'true'
 spec:
-  nets:
+  <b<nets:
   - "1.2.3.4/32"
-  - "5.6.0.0/16"
-```
-#### Step 3: Create deny incoming traffic global network policy 
-Finally, create a Calico global network policy with the `doNotTrack` option. Use the global network set as a selector to deny ingress traffic.
+  - "5.6.0.0/16"</b>
+</pre>
+{: .no-select-button}
 
-```
+#### Step 3: Create deny incoming traffic global network policy 
+Finally, create a Calico global network policy with the **doNotTrack** and **applyOnForward** options. Adding these options more quickly enforces the denial of forwarded traffc to the host at the packet level. Use the global network set in the previous step as a selector (**dos-blacklist**) to deny ingress traffic.
+
+<pre>
 apiVersion: projectcalico.org/v3
 kind: GlobalNetworkPolicy
 metadata:
   name: dos-mitigation
 spec:
   selector: apply-dos-mitigation == 'true'
-  doNotTrack: true
-  applyOnForward: true
+  <b<doNotTrack: true
+  applyOnForward: true</b>
   types:
   - Ingress
   ingress:
   - action: Deny
     source:
       selector: dos-blacklist == 'true'
-```
+</pre>
+{: .no-select-button}
+
 ### Above and beyond
 
 - [Global Network Sets](http://reference/calicoctl/resources/globalnetworkset)
