@@ -1,5 +1,5 @@
-hash: 4d9309f7c9c3d49758e45bcc9e23acfec957d8555189ac07fce45427c4541350
-updated: 2019-04-16T17:14:01.076351653+01:00
+hash: a61dcd6ff9d156da0222baecc7e2a9f7091692bc3a274df0b54794e398f90b28
+updated: 2019-04-16T17:27:54.811575704Z
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -14,7 +14,7 @@ imports:
   - autorest/azure
   - autorest/date
 - name: github.com/beorn7/perks
-  version: 3a771d992973f24aa725d07868b467d1ddfceafb
+  version: 3ac7bf7a47d159a033b107610db8a1b6575507a4
   subpackages:
   - quantile
 - name: github.com/containernetworking/cni
@@ -242,7 +242,7 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: 1bc161956072ea9d8d5dba0920caeb26fbc283a1
+  version: 727a39e77d674af6e7d6684b941916183d80f5de
   subpackages:
   - lib/apiconfig
   - lib/apis/v1
@@ -284,7 +284,7 @@ imports:
   subpackages:
   - binder
 - name: github.com/projectcalico/typha
-  version: 5a7ad834a23a0bbea503a08ad849c1ea3b66657b
+  version: 417c022ffa4866e7fe16ce5498a5e833e0f65b26
   subpackages:
   - pkg/syncclient
   - pkg/syncproto
@@ -301,7 +301,7 @@ imports:
   subpackages:
   - go
 - name: github.com/prometheus/common
-  version: cfeb6f9992ffa54aaa4f2170ade4067ee478b250
+  version: e3fb1a1acd7605367a2b378bc2e2f893c05174b7
   subpackages:
   - expfmt
   - internal/bitbucket.org/ww/goautoneg
@@ -329,11 +329,11 @@ imports:
   subpackages:
   - nl
 - name: github.com/vishvananda/netns
-  version: 8ba1072b58e0c2a240eb5f6120165c7776c3e7b8
+  version: 13995c7128ccc8e51e9a6bd2b551020a27180abd
 - name: github.com/whyrusleeping/go-logging
   version: 0457bb6b88fc1973573aaf6b5145d8d3ae972390
 - name: golang.org/x/crypto
-  version: 49796115aa4b964c318aad4f3084fdb41e9aa067
+  version: 9419663f5a44be8b34ca85f08abc5fe1be11f8a3
   subpackages:
   - ssh/terminal
 - name: golang.org/x/net
