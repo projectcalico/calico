@@ -198,7 +198,7 @@ func (st *SyncerTester) ExpectCacheSize(size int) {
 // revision number is not stable).
 func (st *SyncerTester) ExpectData(kvp model.KVPair) {
 	key, err := model.KeyToDefaultPath(kvp.Key)
-	Expect(err).NotTo(HaveOccurred())
+	Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("failed to convert key to default path: %v", kvp.Key))
 
 	if kvp.Revision == "" {
 		value := func() interface{} {
