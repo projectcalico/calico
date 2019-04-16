@@ -74,7 +74,7 @@ spec:
 {: .no-select-button}
 
 #### Step 3: Create deny incoming traffic global network policy 
-Finally, create a Calico global network policy with the **doNotTrack** and **applyOnForward** options. Adding these options more quickly enforces the denial of forwarded traffc to the host at the packet level. Use the global network set in the previous step as a selector (**dos-blacklist**) to deny ingress traffic.
+Finally, create a Calico global network policy adding the global network set label (**dos-blacklist**) in the previous step as a selector to deny ingress traffic. To more quickly enforce the denial of forwarded traffic to the host at the packet level, use the **doNotTrack** and **applyOnForward** options. 
 
 <pre>
 apiVersion: projectcalico.org/v3
@@ -90,14 +90,14 @@ spec:
   ingress:
   - action: Deny
     source:
-      selector: dos-blacklist == 'true'
+      <b>selector: dos-blacklist == 'true'</b>
 </pre>
 {: .no-select-button}
 
 ### Above and beyond
 
-- [Global Network Sets](http://reference/calicoctl/resources/globalnetworkset)
-- [Global Network Policy](http://reference/calicoctl/resources/globalnetworkpolicy)
-- [Create a Host Endpoint](http://reference/calicoctl/resources/hostendpoint/hostendpointdefinition)
+- [Global Network Sets]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/globalnetworkset)
+- [Global Network Policy]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/globalnetworkpolicy)
+- [Create a Host Endpoint]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/hostendpoint/hostendpointdefinition)
 - [Introduction to XDP](https://www.iovisor.org/technology/xdp)
 - [Advanced XDP Documentation](https://prototype-kernel.readthedocs.io/en/latest/networking/XDP/index.html)
