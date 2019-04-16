@@ -199,7 +199,7 @@ spec:
         # This container runs flannel using the kube-subnet-mgr backend
         # for allocating subnets.
         - name: kube-flannel
-          image: {{page.registry}}{{site.imageNames["flannel"]}}:{{site.data.versions[page.version].first.components["flannel"].version}}
+          image: {{site.imageNames["flannel"]}}:{{site.data.versions[page.version].first.components["flannel"].version}}
           command: [ "/opt/bin/flanneld", "--ip-masq", "--kube-subnet-mgr" ]
           securityContext:
             privileged: true
