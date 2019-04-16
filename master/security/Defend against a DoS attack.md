@@ -67,7 +67,7 @@ metadata:
   labels:
     dos-blacklist == 'true'
 spec:
-  <b<nets:
+  <b>nets:
   - "1.2.3.4/32"
   - "5.6.0.0/16"</b>
 </pre>
