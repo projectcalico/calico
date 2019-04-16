@@ -458,15 +458,14 @@ func (c *VXLANResolver) routesFromBlock(blockKey string, b *model.AllocationBloc
 		routes[r.Key()] = r
 	}
 
-	if b.Host() == c.hostname {
+	host := b.Host()
+	if host == c.hostname {
 		logrus.Debug("Skipping VXLAN routes for local node")
-		return nil
-	}
-
-	if b.Host() != "" {
+	} else if host != "" {
+		logrus.WithField("host", host).Debug("Block has a host, including host route")
 		r := vxlanRoute{
 			dst:  ip.CIDRFromCalicoNet(b.CIDR),
-			node: b.Host(),
+			node: host,
 		}
 		routes[r.Key()] = r
 	}

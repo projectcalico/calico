@@ -287,6 +287,13 @@ var baseTests = []StateList{
 		// Back to base.
 		vxlanWithBlock,
 	},
+	{
+		// Test a local block with some IPs borrowed by another node.
+		vxlanLocalBlockWithBorrows,
+		vxlanWithBlock,
+		vxlanLocalBlockWithBorrows,
+		vxlanWithBlock,
+	},
 }
 
 var testExpanders = []func(baseTest StateList) (desc string, mappedTests []StateList){

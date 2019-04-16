@@ -576,6 +576,10 @@ var localHostIP = mustParseIP("192.168.0.1")
 var remoteHostIP = mustParseIP("192.168.0.2")
 var remoteHost2IP = mustParseIP("192.168.0.3")
 
+var localHostVXLANTunnelConfigKey = HostConfigKey{
+	Hostname: localHostname,
+	Name:     "IPv4VXLANTunnelAddr",
+}
 var remoteHostVXLANTunnelConfigKey = HostConfigKey{
 	Hostname: remoteHostname,
 	Name:     "IPv4VXLANTunnelAddr",
@@ -607,6 +611,11 @@ var remoteIPAMBlockKey = BlockKey{
 	CIDR: mustParseNet("10.0.1.0/29"),
 }
 
+var localIPAMBlockKey = BlockKey{
+	CIDR: mustParseNet("10.0.0.0/29"),
+}
+
+var localHostAffinity = "host:" + localHostname
 var remoteHostAffinity = "host:" + remoteHostname
 var remoteHost2Affinity = "host:" + remoteHostname2
 var remoteIPAMBlock = AllocationBlock{
@@ -663,8 +672,34 @@ var remoteIPAMBlockWithBorrowsSwitched = AllocationBlock{
 		}},
 	},
 }
+
+var localIPAMBlockWithBorrows = AllocationBlock{
+	CIDR:        mustParseNet("10.0.0.0/29"),
+	Affinity:    &localHostAffinity,
+	Allocations: []*int{
+		intPtr(0),
+		intPtr(1),
+		intPtr(2),
+		nil,
+		nil,
+		nil,
+		nil,
+		nil,
+	},
+	Unallocated: []int{3, 4, 5, 6, 7},
+	Attributes: []AllocationAttribute{
+		{},
+		{AttrSecondary: map[string]string{
+			IPAMBlockAttributeNode: localHostname,
+		}},
+		{AttrSecondary: map[string]string{
+			IPAMBlockAttributeNode: remoteHostname,
+		}},
+	},
+}
 func intPtr(i int) *int {
 	return &i
 }
+var localHostVXLANTunnelIP = "10.0.0.0"
 var remoteHostVXLANTunnelIP = "10.0.1.0"
 var remoteHost2VXLANTunnelIP = "10.0.2.0"

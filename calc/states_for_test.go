@@ -901,7 +901,7 @@ var vxlanWithBlock = empty.withKVUpdates(
 	proto.RouteUpdate{
 		Node: remoteHostname,
 		Dst:  "10.0.1.0/29",
-		Gw:   "10.0.1.0",
+		Gw:   remoteHostVXLANTunnelIP,
 		Type: proto.RouteType_VXLAN,
 	},
 )
@@ -930,13 +930,13 @@ var vxlanWithBlockAndBorrows = vxlanWithBlock.withKVUpdates(
 	proto.RouteUpdate{
 		Type: proto.RouteType_VXLAN,
 		Node: remoteHostname,
-		Gw:   "10.0.1.0",
+		Gw:   remoteHostVXLANTunnelIP,
 		Dst:  "10.0.1.0/29",
 	},
 	proto.RouteUpdate{
 		Type: proto.RouteType_VXLAN,
 		Node: remoteHostname2,
-		Gw:   "10.0.2.0",
+		Gw:   remoteHost2VXLANTunnelIP,
 		Dst:  "10.0.1.2/32",
 	},
 )
@@ -948,16 +948,49 @@ var vxlanBlockOwnerSwitch = vxlanWithBlockAndBorrows.withKVUpdates(
 	proto.RouteUpdate{
 		Type: proto.RouteType_VXLAN,
 		Node: remoteHostname2,
-		Gw:   "10.0.2.0",
+		Gw:   remoteHost2VXLANTunnelIP,
 		Dst:  "10.0.1.0/29",
 	},
 	proto.RouteUpdate{
 		Type: proto.RouteType_VXLAN,
 		Node: remoteHostname,
-		Gw:   "10.0.1.0",
+		Gw:   remoteHostVXLANTunnelIP,
 		Dst:  "10.0.1.2/32",
 	},
 ).withName("VXLAN owner switch")
+
+// As above but with the owner of the block and the borrows switched.
+var vxlanLocalBlockWithBorrows = empty.withKVUpdates(
+	KVPair{Key: ipPoolKey, Value: &ipPoolWithVXLAN},
+
+	KVPair{Key: localHostIPKey, Value: &localHostIP},
+	KVPair{Key: localHostVXLANTunnelConfigKey, Value: localHostVXLANTunnelIP},
+
+	KVPair{Key: remoteHostIPKey, Value: &remoteHostIP},
+	KVPair{Key: remoteHostVXLANTunnelConfigKey, Value: remoteHostVXLANTunnelIP},
+
+	KVPair{Key: localIPAMBlockKey, Value: &localIPAMBlockWithBorrows},
+).withVTEPs(
+	proto.VXLANTunnelEndpointUpdate{
+		Node:           remoteHostname,
+		Mac:            "66:3e:ca:a4:db:65",
+		Ipv4Addr:       remoteHostVXLANTunnelIP,
+		ParentDeviceIp: remoteHostIP.String(),
+	},
+	proto.VXLANTunnelEndpointUpdate{
+		Node:           localHostname,
+		Mac:            "66:48:f6:56:dc:f1",
+		Ipv4Addr:       localHostVXLANTunnelIP,
+		ParentDeviceIp: localHostIP.String(),
+	},
+).withRoutes(
+	proto.RouteUpdate{
+		Type: proto.RouteType_VXLAN,
+		Node: remoteHostname,
+		Gw:   remoteHostVXLANTunnelIP,
+		Dst:  "10.0.0.2/32",
+	},
+).withName("VXLAN local with borrows")
 
 // vxlanWithBlockAndBorrows but missing hte VTEP information for the first host.
 var vxlanWithBlockAndBorrowsAndMissingFirstVTEP = vxlanWithBlockAndBorrows.withKVUpdates(
@@ -973,7 +1006,7 @@ var vxlanWithBlockAndBorrowsAndMissingFirstVTEP = vxlanWithBlockAndBorrows.withK
 	proto.RouteUpdate{
 		Node: remoteHostname2,
 		Dst:  "10.0.1.2/32",
-		Gw:   "10.0.2.0",
+		Gw:   remoteHost2VXLANTunnelIP,
 		Type: proto.RouteType_VXLAN,
 	},
 )
