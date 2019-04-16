@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2018 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2019 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -23,11 +23,11 @@ import (
 	"time"
 
 	"github.com/containernetworking/cni/pkg/ns"
-	"github.com/docopt/docopt-go"
-	reuse "github.com/jbenet/go-reuseport"
+	docopt "github.com/docopt/docopt-go"
+	reuse "github.com/libp2p/go-reuseport"
 	log "github.com/sirupsen/logrus"
 
-	"github.com/satori/go.uuid"
+	uuid "github.com/satori/go.uuid"
 
 	"github.com/projectcalico/felix/fv/utils"
 )

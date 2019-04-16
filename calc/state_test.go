@@ -18,6 +18,8 @@ import (
 	"fmt"
 	"reflect"
 
+	"github.com/sirupsen/logrus"
+
 	"github.com/projectcalico/felix/dataplane/mock"
 	"github.com/projectcalico/felix/proto"
 	"github.com/projectcalico/libcalico-go/lib/backend/api"
@@ -37,6 +39,8 @@ type State struct {
 	ExpectedUntrackedPolicyIDs           set.Set
 	ExpectedPreDNATPolicyIDs             set.Set
 	ExpectedProfileIDs                   set.Set
+	ExpectedRoutes                       set.Set
+	ExpectedVTEPs                        set.Set
 	ExpectedEndpointPolicyOrder          map[string][]mock.TierInfo
 	ExpectedUntrackedEndpointPolicyOrder map[string][]mock.TierInfo
 	ExpectedPreDNATEndpointPolicyOrder   map[string][]mock.TierInfo
@@ -58,6 +62,8 @@ func NewState() State {
 		ExpectedUntrackedPolicyIDs:           set.New(),
 		ExpectedPreDNATPolicyIDs:             set.New(),
 		ExpectedProfileIDs:                   set.New(),
+		ExpectedRoutes:                       set.New(),
+		ExpectedVTEPs:                        set.New(),
 		ExpectedEndpointPolicyOrder:          make(map[string][]mock.TierInfo),
 		ExpectedUntrackedEndpointPolicyOrder: make(map[string][]mock.TierInfo),
 		ExpectedPreDNATEndpointPolicyOrder:   make(map[string][]mock.TierInfo),
@@ -85,6 +91,8 @@ func (s State) Copy() State {
 	cpy.ExpectedUntrackedPolicyIDs = s.ExpectedUntrackedPolicyIDs.Copy()
 	cpy.ExpectedPreDNATPolicyIDs = s.ExpectedPreDNATPolicyIDs.Copy()
 	cpy.ExpectedProfileIDs = s.ExpectedProfileIDs.Copy()
+	cpy.ExpectedRoutes = s.ExpectedRoutes.Copy()
+	cpy.ExpectedVTEPs = s.ExpectedVTEPs.Copy()
 	cpy.ExpectedNumberOfALPPolicies = s.ExpectedNumberOfALPPolicies
 
 	cpy.Name = s.Name
@@ -100,13 +108,21 @@ func (s State) withKVUpdates(kvs ...model.KVPair) (newState State) {
 	// But replace the datastoreState, which we're about to modify.
 	newState.DatastoreState = make([]model.KVPair, 0, len(kvs)+len(s.DatastoreState))
 	// Make a set containing the new keys.
-	newKeys := make(map[model.Key]bool)
+	newKeys := make(map[string]bool)
 	for _, kv := range kvs {
-		newKeys[kv.Key] = true
+		path, err := model.KeyToDefaultPath(kv.Key)
+		if err != nil {
+			logrus.WithField("key", kv.Key).Panic("Unable to convert key to default path")
+		}
+		newKeys[path] = true
 	}
 	// Copy across the old KVs, skipping ones that are in the updates set.
 	for _, kv := range s.DatastoreState {
-		if newKeys[kv.Key] {
+		path, err := model.KeyToDefaultPath(kv.Key)
+		if err != nil {
+			logrus.WithField("key", kv.Key).Panic("Unable to convert key to default path")
+		}
+		if newKeys[path] {
 			continue
 		}
 		newState.DatastoreState = append(newState.DatastoreState, kv)
@@ -202,38 +218,58 @@ func (s State) withActiveProfiles(ids ...proto.ProfileID) (newState State) {
 	return newState
 }
 
+func (s State) withVTEPs(vteps ...proto.VXLANTunnelEndpointUpdate) (newState State) {
+	newState = s.Copy()
+	newState.ExpectedVTEPs = set.FromArray(vteps)
+	return newState
+}
+
+func (s State) withRoutes(routes ...proto.RouteUpdate) (newState State) {
+	newState = s.Copy()
+	newState.ExpectedRoutes = set.FromArray(routes)
+	return newState
+}
+
 func (s State) Keys() set.Set {
 	set := set.New()
 	for _, kv := range s.DatastoreState {
-		set.Add(kv.Key)
+		set.Add(kvToPath(kv))
 	}
 	return set
 }
 
-func (s State) KVsCopy() map[model.Key]interface{} {
-	kvs := make(map[model.Key]interface{})
+func (s State) KVsCopy() map[string]interface{} {
+	kvs := make(map[string]interface{})
 	for _, kv := range s.DatastoreState {
-		kvs[kv.Key] = kv.Value
+		kvs[kvToPath(kv)] = kv.Value
 	}
 	return kvs
 }
 
+func kvToPath(kv model.KVPair) string {
+	path, err := model.KeyToDefaultPath(kv.Key)
+	if err != nil {
+		logrus.WithField("key", kv.Key).Panic("Unable to convert key to default path")
+	}
+	return path
+}
+
 func (s State) KVDeltas(prev State) []api.Update {
 	newAndUpdatedKVs := s.KVsCopy()
-	updatedKVs := make(map[model.Key]bool)
+	updatedKVs := make(map[string]bool)
 	for _, kv := range prev.DatastoreState {
-		if reflect.DeepEqual(newAndUpdatedKVs[kv.Key], kv.Value) {
+		if reflect.DeepEqual(newAndUpdatedKVs[kvToPath(kv)], kv.Value) {
 			// Key had same value in both states so we ignore it.
-			delete(newAndUpdatedKVs, kv.Key)
+			delete(newAndUpdatedKVs, kvToPath(kv))
 		} else {
 			// Key has changed
-			updatedKVs[kv.Key] = true
+			updatedKVs[kvToPath(kv)] = true
 		}
 	}
 	currentKeys := s.Keys()
 	deltas := make([]api.Update, 0)
 	for _, kv := range prev.DatastoreState {
-		if !currentKeys.Contains(kv.Key) {
+		if !currentKeys.Contains(kvToPath(kv)) {
 			deltas = append(
 				deltas,
 				api.Update{model.KVPair{Key: kv.Key}, api.UpdateTypeKVDeleted},
@@ -241,9 +277,9 @@ func (s State) KVDeltas(prev State) []api.Update {
 		}
 	}
 	for _, kv := range s.DatastoreState {
-		if _, ok := newAndUpdatedKVs[kv.Key]; ok {
+		if _, ok := newAndUpdatedKVs[kvToPath(kv)]; ok {
 			updateType := api.UpdateTypeKVNew
-			if updatedKVs[kv.Key] {
+			if updatedKVs[kvToPath(kv)] {
 				updateType = api.UpdateTypeKVUpdated
 			}
 			deltas = append(deltas, api.Update{kv, updateType})

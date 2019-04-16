@@ -882,6 +882,39 @@ var hostEp1WithPolicyAndANetworkSetMatchingBEqB = hostEp1WithPolicy.withKVUpdate
 	"12.1.0.0/24",
 })
 
+var vxlanWithBlock = empty.withKVUpdates(
+	KVPair{Key: ipPoolKey, Value: &ipPoolWithVXLAN},
+	KVPair{Key: remoteIPAMBlockKey, Value: &remoteIPAMBlock},
+	KVPair{Key: remoteHostIPKey, Value: &remoteHostIP},
+	KVPair{Key: remoteHostVXLANTunnelConfigKey, Value: remoteHostVXLANTunnelIP},
+).withName("VXLAN-1").withVTEPs(proto.VXLANTunnelEndpointUpdate{
+	Node:           remoteHostname,
+	Mac:            "66:3e:ca:a4:db:65",
+	Ipv4Addr:       remoteHostVXLANTunnelIP,
+	ParentDeviceIp: remoteHostIP.String(),
+}).withRoutes(proto.RouteUpdate{
+	Node: remoteHostname,
+	Dst:  "10.0.1.0/29",
+	Gw:   "10.0.1.0",
+	Type: proto.RouteType_VXLAN,
+})
+
+var vxlanToIPIPSwitch = vxlanWithBlock.withKVUpdates(
+	KVPair{Key: ipPoolKey, Value: &ipPoolWithIPIP},
+).withName("VXLAN switched to IPIP").withRoutes()
+
+var vxlanBlockDelete = vxlanWithBlock.withKVUpdates(
+	KVPair{Key: remoteIPAMBlockKey, Value: nil},
+).withName("VXLAN block removed").withRoutes()
+
+var vxlanHostIPDelete = vxlanWithBlock.withKVUpdates(
+	KVPair{Key: remoteHostIPKey, Value: nil},
+).withName("VXLAN host IP removed").withRoutes().withVTEPs()
+
+var vxlanTunnelIPDelete = vxlanWithBlock.withKVUpdates(
+	KVPair{Key: remoteHostVXLANTunnelConfigKey, Value: nil},
+).withName("VXLAN host tunnel IP removed").withRoutes().withVTEPs()
+
 type StateList []State
 
 func (l StateList) String() string {

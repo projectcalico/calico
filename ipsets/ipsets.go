@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2018 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2019 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -39,7 +39,7 @@ type IPSets struct {
 	nextTempIPSetIdx   uint
 
 	// dirtyIPSetIDs contains IDs of IP sets that need updating.
-	dirtyIPSetIDs  set.Set
+	dirtyIPSetIDs  set.Set //<string>
 	resyncRequired bool
 
 	// pendingTempIPSetDeletions contains names of temporary IP sets that need to be deleted.  We use it to
@@ -224,6 +224,31 @@ func (s *IPSets) QueueResync() {
 	s.resyncRequired = true
 }
 
+func (s *IPSets) GetIPFamily() IPFamily {
+	return s.IPVersionConfig.Family
+}
+
+func (s *IPSets) GetTypeOf(setID string) (IPSetType, error) {
+	ipSet, ok := s.ipSetIDToIPSet[setID]
+	if !ok {
+		return "", fmt.Errorf("ipset %s not found", setID)
+	}
+	return ipSet.Type, nil
+}
+
+func ipSetMemberSetToStringSet(ipsetMembers set.Set /*<ipSetMember>*/) set.Set /*<string>*/ {
+	if ipsetMembers == nil {
+		return nil
+	}
+	stringSet := set.New()
+	ipsetMembers.Iter(func(item interface{}) error {
+		member := item.(ipSetMember)
+		stringSet.Add(member.String())
+		return nil
+	})
+	return stringSet
+}
+
 func (s *IPSets) filterAndCanonicaliseMembers(ipSetType IPSetType, members []string) set.Set {
 	filtered := set.New()
 	wantIPV6 := s.IPVersionConfig.Family == IPFamilyV6
@@ -235,6 +260,33 @@ func (s *IPSets) filterAndCanonicaliseMembers(ipSetType IPSetType, members []str
 		filtered.Add(ipSetType.CanonicaliseMember(member))
 	}
 	return filtered
+}
+
+func (s *IPSets) GetMembers(setID string) (set.Set, error) {
+	ipSet, ok := s.ipSetIDToIPSet[setID]
+	if !ok {
+		return nil, fmt.Errorf("ipset %s not found", setID)
+	}
+
+	if ipSet.pendingReplace != nil {
+		return ipSetMemberSetToStringSet(ipSet.pendingReplace), nil
+	}
+
+	realMembers := ipSet.members.Copy()
+
+	ipSet.pendingAdds.Iter(func(item interface{}) error {
+		m := item.(ipSetMember)
+		realMembers.Add(m)
+		return nil
+	})
+
+	ipSet.pendingDeletions.Iter(func(item interface{}) error {
+		m := item.(ipSetMember)
+		realMembers.Discard(m)
+		return nil
+	})
+
+	return ipSetMemberSetToStringSet(realMembers), nil
 }
 
 func (s *IPSets) ApplyUpdates() {

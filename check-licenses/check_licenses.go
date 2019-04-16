@@ -1,4 +1,4 @@
-// Copyright (c) 2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017, 2019 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -46,6 +46,8 @@ var (
 			license: "BSD 3-clause \"New\" or \"Revised\" License (96%)"},
 		{pkgName: "github.com/projectcalico/felix/vendor/github.com/beorn7/perks/quantile",
 			license: "MIT License (98%)"},
+		{pkgName: "github.com/projectcalico/felix/vendor/github.com/gobuffalo/gogen/goimports",
+			license: "BSD 3-clause \"New\" or \"Revised\" License (96%)"},
 		{pkgName: "github.com/projectcalico/felix/vendor/github.com/gogo/protobuf",
 			license: "BSD 3-clause \"New\" or \"Revised\" License (90%)"},
 		{pkgName: "github.com/projectcalico/felix/vendor/github.com/golang/protobuf",
@@ -56,6 +58,8 @@ var (
 			license: "MIT License (98%)"},
 		{pkgName: "github.com/projectcalico/felix/vendor/github.com/howeyc/gopass",
 			license: "ISC License (98%)"},
+		{pkgName: "github.com/projectcalico/felix/vendor/github.com/karrick/godirwalk",
+			license: "BSD 2-clause \"Simplified\" License (98%)"},
 		{pkgName: "github.com/projectcalico/felix/vendor/github.com/davecgh/go-spew/spew",
 			license: "ISC License (98%)"},
 		{pkgName: "github.com/projectcalico/felix/vendor/github.com/dgrijalva/jwt-go",
@@ -72,6 +76,10 @@ var (
 			license: "BSD 3-clause \"New\" or \"Revised\" License (96%)"},
 		{pkgName: "github.com/projectcalico/felix/vendor/github.com/peterbourgon/diskv",
 			license: "MIT License (98%)"},
+		{pkgName: "github.com/projectcalico/felix/vendor/github.com/pkg/errors",
+			license: "BSD 2-clause \"Simplified\" License"},
+		{pkgName: "github.com/projectcalico/felix/vendor/github.com/rogpeppe/go-internal",
+			license: "BSD 3-clause \"New\" or \"Revised\" License (96%)"},
 		{pkgName: "github.com/projectcalico/felix/vendor/github.com/satori/go.uuid",
 			license: "MIT License (98%)"},
 		{pkgName: "github.com/projectcalico/felix/vendor/github.com/spf13/pflag",

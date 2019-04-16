@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2018 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2019 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -41,7 +41,7 @@ var _ = Describe("Table with an empty dataplane", func() {
 		iptLock = &mockMutex{}
 		featureDetector = NewFeatureDetector()
 		featureDetector.NewCmd = dataplane.newCmd
-		featureDetector.ReadFile = dataplane.readFile
+		featureDetector.GetKernelVersionReader = dataplane.getKernelVersionReader
 		table = NewTable(
 			"filter",
 			4,
@@ -443,7 +443,7 @@ func describePostUpdateCheckTests(enableRefresh bool) {
 		}
 		featureDetector := NewFeatureDetector()
 		featureDetector.NewCmd = dataplane.newCmd
-		featureDetector.ReadFile = dataplane.readFile
+		featureDetector.GetKernelVersionReader = dataplane.getKernelVersionReader
 		table = NewTable(
 			"filter",
 			4,
@@ -636,7 +636,7 @@ func describeDirtyDataplaneTests(appendMode bool) {
 		}
 		featureDetector := NewFeatureDetector()
 		featureDetector.NewCmd = dataplane.newCmd
-		featureDetector.ReadFile = dataplane.readFile
+		featureDetector.GetKernelVersionReader = dataplane.getKernelVersionReader
 		table = NewTable(
 			"filter",
 			4,
@@ -1012,7 +1012,7 @@ var _ = Describe("Table with inserts and a non-Calico chain", func() {
 		iptLock = &mockMutex{}
 		featureDetector := NewFeatureDetector()
 		featureDetector.NewCmd = dataplane.newCmd
-		featureDetector.ReadFile = dataplane.readFile
+		featureDetector.GetKernelVersionReader = dataplane.getKernelVersionReader
 		table = NewTable(
 			"filter",
 			6,

@@ -1,4 +1,4 @@
-// Copyright (c) 2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017, 2019 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -30,6 +30,7 @@ var _ = Describe("Policy manager", func() {
 		mangleTable  *mockTable
 		filterTable  *mockTable
 		ruleRenderer *mockPolRenderer
+		callbacks    *callbacks
 	)
 
 	BeforeEach(func() {
@@ -37,7 +38,8 @@ var _ = Describe("Policy manager", func() {
 		mangleTable = newMockTable("mangle")
 		filterTable = newMockTable("filter")
 		ruleRenderer = newMockPolRenderer()
-		policyMgr = newPolicyManager(rawTable, mangleTable, filterTable, ruleRenderer, 4)
+		callbacks = newCallbacks()
+		policyMgr = newPolicyManager(rawTable, mangleTable, filterTable, ruleRenderer, 4, callbacks)
 	})
 
 	It("shouldn't touch iptables", func() {

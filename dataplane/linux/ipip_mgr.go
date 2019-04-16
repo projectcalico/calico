@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2017, 2019 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -24,6 +24,8 @@ import (
 	"github.com/projectcalico/felix/ipsets"
 	"github.com/projectcalico/felix/proto"
 	"github.com/projectcalico/felix/rules"
+
+	"github.com/projectcalico/libcalico-go/lib/set"
 )
 
 // ipipManager manages the all-hosts IP set, which is used by some rules in our static chains
@@ -237,4 +239,7 @@ type ipsetsDataplane interface {
 	AddMembers(setID string, newMembers []string)
 	RemoveMembers(setID string, removedMembers []string)
 	RemoveIPSet(setID string)
+	GetIPFamily() ipsets.IPFamily
+	GetTypeOf(setID string) (ipsets.IPSetType, error)
+	GetMembers(setID string) (set.Set, error)
 }

@@ -240,6 +240,21 @@ var baseTests = []StateList{
 		withHttpMethodPolicy,
 		withNonALPPolicy,
 	},
+
+	// VXLAN
+	{
+		vxlanWithBlock,
+		vxlanBlockDelete,
+		vxlanWithBlock,
+		vxlanHostIPDelete,
+		vxlanWithBlock,
+		vxlanTunnelIPDelete,
+	},
+	{
+		vxlanWithBlock,
+		vxlanToIPIPSwitch,
+		vxlanWithBlock,
+	},
 }
 
 var testExpanders = []func(baseTest StateList) (desc string, mappedTests []StateList){
@@ -423,6 +438,7 @@ func doStateSequenceTest(expandedTest StateList, flushStrategy flushStrategy) {
 	BeforeEach(func() {
 		conf := config.New()
 		conf.FelixHostname = localHostname
+		conf.VXLANEnabled = true
 		mockDataplane = mock.NewMockDataplane()
 		eventBuf = NewEventSequencer(mockDataplane)
 		eventBuf.Callback = mockDataplane.OnEvent
@@ -493,6 +509,12 @@ func doStateSequenceTest(expandedTest StateList, flushStrategy flushStrategy) {
 			state.Name)
 		Expect(mockDataplane.ActiveProfiles()).To(Equal(state.ExpectedProfileIDs),
 			"Active profile IDs were incorrect after moving to state: %v",
+			state.Name)
+		Expect(mockDataplane.ActiveVTEPs()).To(Equal(state.ExpectedVTEPs),
+			"Active VTEPs were incorrect after moving to state: %v",
+			state.Name)
+		Expect(mockDataplane.ActiveRoutes()).To(Equal(state.ExpectedRoutes),
+			"Active routes were incorrect after moving to state: %v",
 			state.Name)
 		Expect(mockDataplane.EndpointToPolicyOrder()).To(Equal(state.ExpectedEndpointPolicyOrder),
 			"Endpoint policy order incorrect after moving to state: %v",

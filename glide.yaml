@@ -22,7 +22,9 @@ import:
   version: b4deda0973fb4c70b50d226b1af49f3da59f5265
   subpackages:
   - proto
-- package: github.com/jbenet/go-reuseport
+# Need to pin to an older version as our code uses some deprecated functionality.
+- package: github.com/libp2p/go-reuseport
+  version: gx/v0.1.18
 # go-reuseport pulls in go-log without a pin and master is now incompatible with the
 # version of gogo/protobuf that we are using.  Pin to most recent working master revision.
 - package: github.com/ipfs/go-log
@@ -38,6 +40,10 @@ import:
   version: ^1.1.0
   subpackages:
   - types
+# gobuffalo/buffalo-plugins requires the DisableFlagParsing in the Command type,
+# so pin the version that has it.
+- package: github.com/spf13/cobra
+  version: ~0.0.3
 - package: github.com/projectcalico/libcalico-go
   subpackages:
   - lib/apiconfig
@@ -63,7 +69,7 @@ import:
   - lib/set
   - lib/validator/v1
 - package: github.com/projectcalico/typha
-  version: e1d8c1d3bc43bfe59dc542eff4c3d2a4623b58d4
+  version: 5a7ad834a23a0bbea503a08ad849c1ea3b66657b
   subpackages:
   - pkg/syncclient
   - pkg/tlsutils
@@ -82,8 +88,10 @@ import:
   subpackages:
   - xfs
 - package: github.com/satori/go.uuid
+# gobuffalo/logger needs the SetOutput function in the Logger type, so pin
+# the first version that introduces it.
 - package: github.com/sirupsen/logrus
-  version: v1.0.4
+  version: v1.0.6
 - package: github.com/vishvananda/netlink
 # containernetworking/cni pulls in an old version, so pin to the version we need here.
   version: f07d9d5231b9cd05ddf2e5a8ef6582f385bc1770
@@ -125,3 +133,7 @@ import:
   - spew
 - package: github.com/hashicorp/go-version
   version: ^1.0.0
+- package: github.com/gobuffalo/packr
+  version: ~2.0.3
+  subpackages:
+  - v2/packr2
