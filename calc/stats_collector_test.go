@@ -28,6 +28,7 @@ import (
 var (
 	localHostIPKey  = HostIPKey{localHostname}
 	remoteHostIPKey = HostIPKey{remoteHostname}
+	remoteHost2IPKey = HostIPKey{remoteHostname2}
 )
 
 var _ = Describe("Stats collector", func() {

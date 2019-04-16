@@ -28,6 +28,7 @@ import (
 var (
 	localHostname  = "localhostname"
 	remoteHostname = "remotehostname"
+	remoteHostname2 = "remotehostname2"
 )
 
 // Canned selectors.
@@ -573,9 +574,14 @@ var netSet2 = NetworkSet{
 
 var localHostIP = mustParseIP("192.168.0.1")
 var remoteHostIP = mustParseIP("192.168.0.2")
+var remoteHost2IP = mustParseIP("192.168.0.3")
 
 var remoteHostVXLANTunnelConfigKey = HostConfigKey{
 	Hostname: remoteHostname,
+	Name:     "IPv4VXLANTunnelAddr",
+}
+var remoteHost2VXLANTunnelConfigKey = HostConfigKey{
+	Hostname: remoteHostname2,
 	Name:     "IPv4VXLANTunnelAddr",
 }
 
@@ -602,10 +608,63 @@ var remoteIPAMBlockKey = BlockKey{
 }
 
 var remoteHostAffinity = "host:" + remoteHostname
+var remoteHost2Affinity = "host:" + remoteHostname2
 var remoteIPAMBlock = AllocationBlock{
 	CIDR:        mustParseNet("10.0.1.0/29"),
 	Affinity:    &remoteHostAffinity,
 	Allocations: make([]*int, 8),
 	Unallocated: []int{0, 1, 2, 3, 4, 5, 6, 7},
 }
+var remoteIPAMBlockWithBorrows = AllocationBlock{
+	CIDR:        mustParseNet("10.0.1.0/29"),
+	Affinity:    &remoteHostAffinity,
+	Allocations: []*int{
+		intPtr(0),
+		intPtr(1),
+		intPtr(2),
+		nil,
+		nil,
+		nil,
+		nil,
+		nil,
+	},
+	Unallocated: []int{3, 4, 5, 6, 7},
+	Attributes: []AllocationAttribute{
+		{},
+		{AttrSecondary: map[string]string{
+			IPAMBlockAttributeNode: remoteHostname,
+		}},
+		{AttrSecondary: map[string]string{
+			IPAMBlockAttributeNode: remoteHostname2,
+		}},
+	},
+}
+var remoteIPAMBlockWithBorrowsSwitched = AllocationBlock{
+	CIDR:        mustParseNet("10.0.1.0/29"),
+	Affinity:    &remoteHost2Affinity,
+	Allocations: []*int{
+		intPtr(0),
+		intPtr(1),
+		intPtr(2),
+		nil,
+		nil,
+		nil,
+		nil,
+		nil,
+	},
+	Unallocated: []int{3, 4, 5, 6, 7},
+	Attributes: []AllocationAttribute{
+		{},
+		{AttrSecondary: map[string]string{
+			IPAMBlockAttributeNode: remoteHostname2,
+		}},
+		{AttrSecondary: map[string]string{
+			IPAMBlockAttributeNode: remoteHostname,
+		}},
+	},
+}
+func intPtr(i int) *int {
+	return &i
+}
 var remoteHostVXLANTunnelIP = "10.0.1.0"
+var remoteHost2VXLANTunnelIP = "10.0.2.0"

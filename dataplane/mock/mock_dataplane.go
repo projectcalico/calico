@@ -395,6 +395,13 @@ func (d *MockDataplane) OnEvent(event interface{}) {
 		Expect(d.namespaces).To(HaveKey(id))
 		delete(d.namespaces, id)
 	case *proto.RouteUpdate:
+		d.activeRoutes.Iter(func(item interface{}) error {
+			r := item.(proto.RouteUpdate)
+			if event.Dst == r.Dst && event.Type == r.Type {
+				return set.RemoveItem
+			}
+			return nil
+		})
 		d.activeRoutes.Add(*event)
 	case *proto.RouteRemove:
 		d.activeRoutes.Iter(func(item interface{}) error {
