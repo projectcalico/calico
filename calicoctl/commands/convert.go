@@ -21,7 +21,7 @@ import (
 
 	"github.com/docopt/docopt-go"
 	log "github.com/sirupsen/logrus"
-	"k8s.io/apimachinery/pkg/apis/meta/v1"
+	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 
 	"github.com/projectcalico/calicoctl/calicoctl/commands/argutils"
