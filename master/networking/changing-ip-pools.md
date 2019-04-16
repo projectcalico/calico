@@ -5,13 +5,13 @@ title: Changing IP pools
 ## About changing IP pools
 
 When using {{ site.prodname }} IPAM, each workload is assigned an address from the selection of configured IP pools.
-You may want to modify the IP pool of a running cluster for one of the following reasons:
+You may want to modify the CIDR of the IP pool of a running cluster for one of the following reasons:
 - To move to a larger CIDR that can accommodate more workloads.
 - To move off of a CIDR that was used accidentally.
 
 ### Purpose of this page
 
-Provide guidance on how to change from one IP pool to another on a running cluster.
+Provide guidance on how to change from one IP pool CIDR to another on a running cluster.
 
 ## Prerequisites
 
@@ -42,7 +42,7 @@ the availability of your applications.
 Removing an IP pool without following this migration procedure can cause network connectivity disruptions in any running
 workloads with addresses from that IP pool. Namely:
 
-- If IP-in-IP was enabled on the IP pool, those workloads will no longer have their traffic encapsulated.
+- If IP-in-IP or VXLAN was enabled on the IP pool, those workloads will no longer have their traffic encapsulated.
 - If nat-outgoing was enabled on the IP pool, those workloads will no longer have their traffic NAT'd.
 - If using Calico BGP routing, routes to pods will no longer be aggregated.
 
@@ -63,8 +63,8 @@ installed {{ site.prodname }} without setting the default IP pool to match. Runn
 {{site.prodname}} created its default IP pool of `192.168.0.0/16`:
 
 ```
-NAME                  CIDR             NAT    IPIPMODE   DISABLED
-default-ipv4-ippool   192.168.0.0/16   true   Always     false
+NAME                  CIDR             NAT    IPIPMODE   VXLANMODE   DISABLED
+default-ipv4-ippool   192.168.0.0/16   true   Always     Never       false
 ```
 {: .no-select-button}
 
