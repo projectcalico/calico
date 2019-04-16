@@ -1,5 +1,5 @@
-hash: a151e067f70d96ccc94910e8bc2b154fd005a70dd849d518ca5d714d5f9913ad
-updated: 2019-04-11T17:02:55.996238981Z
+hash: c59f2283611a179eee5b9d559cd39e33a04f81618dc7576d79c181d2a8eb3ba9
+updated: 2019-04-16T17:12:17.776163462+01:00
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -33,7 +33,7 @@ imports:
   - pkg/types
   - version
 - name: github.com/coreos/go-semver
-  version: e214231b295a8ea9479f11b70b35d5acf3556d9b
+  version: 8ab6407b697782a06568d4b7f1db25550ec2e4c6
   subpackages:
   - semver
 - name: github.com/davecgh/go-spew
@@ -47,7 +47,7 @@ imports:
 - name: github.com/ghodss/yaml
   version: 73d445a93680fa1a78ae23a5839bad48f32ba1ee
 - name: github.com/go-ini/ini
-  version: 3be5ad479f69d4e08d7fe25edf79bf3346bd658e
+  version: 9c8236e659b76e87bf02044d06fde8683008ff3e
 - name: github.com/go-playground/locales
   version: f63010822830b6fe52288ee52d5a1151088ce039
   subpackages:
@@ -99,7 +99,7 @@ imports:
   subpackages:
   - simplelru
 - name: github.com/hpcloud/tail
-  version: a30252cb686a21eb2d0b98132633053ec2f7f1e5
+  version: a1dbeea552b7c8df4b542c66073e393de198a800
   subpackages:
   - ratelimiter
   - util
@@ -110,13 +110,13 @@ imports:
 - name: github.com/json-iterator/go
   version: f2b4162afba35581b6d4a50d3b8f34e33c144682
 - name: github.com/kardianos/osext
-  version: 2bc1f35cddc0cc527b4bc3dce8578fc2a6c11384
+  version: ae77be60afb1dcacde03767a8c37337fad28ac14
 - name: github.com/kelseyhightower/envconfig
   version: dd1402a4d99de9ac2f396cd6fcb957bc2c695ec1
 - name: github.com/leodido/go-urn
   version: a67a23e1c1af3c66528573bb86a87246477277c1
 - name: github.com/matttproud/golang_protobuf_extensions
-  version: c182affec369e30f25d3eb8cd8a478dee585ae7d
+  version: c12348ce28de40eed0136aa2b644d0ee0650e56c
   subpackages:
   - pbutil
 - name: github.com/mipearson/rfw
@@ -173,7 +173,7 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: 1bc161956072ea9d8d5dba0920caeb26fbc283a1
+  version: 727a39e77d674af6e7d6684b941916183d80f5de
   subpackages:
   - lib/apiconfig
   - lib/apis/v1
@@ -226,11 +226,11 @@ imports:
   - prometheus/internal
   - prometheus/promhttp
 - name: github.com/prometheus/client_model
-  version: fd36f4220a901265f90734c3183c5f0c91daa0b8
+  version: 6f3806018612930941127f2a7c6c453ba2c527d2
   subpackages:
   - go
 - name: github.com/prometheus/common
-  version: a82f4c12f983cc2649298185f296632953e50d3e
+  version: cfeb6f9992ffa54aaa4f2170ade4067ee478b250
   subpackages:
   - expfmt
   - internal/bitbucket.org/ww/goautoneg
@@ -255,7 +255,7 @@ imports:
   - list
   - trie/ctrie
 - name: golang.org/x/crypto
-  version: 38d8ce5564a5b71b2e3a00553993f1b9a7ae852f
+  version: 49796115aa4b964c318aad4f3084fdb41e9aa067
   subpackages:
   - ssh/terminal
 - name: golang.org/x/net
@@ -311,7 +311,7 @@ imports:
   subpackages:
   - rate
 - name: google.golang.org/appengine
-  version: 54a98f90d1c46b7731eb8fb305d2a321c30ef610
+  version: 4a4468ece617fc8205e99368fa2200e9d1fad421
   subpackages:
   - internal
   - internal/app_identity
@@ -347,10 +347,10 @@ imports:
   - status
   - tap
   - transport
-- name: gopkg.in/fsnotify.v1
-  version: 7be54206639f256967dd82fa767397ba5f8f48f5
+- name: gopkg.in/fsnotify/fsnotify.v1
+  version: c2828203cd70a50dcccfb2761f8b1f8ceef9a8e9
 - name: gopkg.in/go-playground/validator.v9
-  version: 46b4b1e301c24cac870ffcb4ba5c8a703d1ef475
+  version: b199fa0642d29caca62b6a99d65cc981ba5edc3b
 - name: gopkg.in/inf.v0
   version: 3887ee99ecf07df5b447e9b00d9c0b2adaa9f3e4
 - name: gopkg.in/tomb.v1
