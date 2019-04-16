@@ -83,7 +83,7 @@ metadata:
   name: dos-mitigation
 spec:
   selector: apply-dos-mitigation == 'true'
-  <b<doNotTrack: true
+  <b>doNotTrack: true
   applyOnForward: true</b>
   types:
   - Ingress
