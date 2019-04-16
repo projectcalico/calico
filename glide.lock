@@ -1,5 +1,5 @@
-hash: 8770caf02814c80a17b62382af8a2af1b4184ccc542e1ff5d09d5810faea6e24
-updated: 2019-04-16T17:15:36.13607598+01:00
+hash: 39547932b851afcc68bdd0afce17b0ea6c067421bb4a01989c29b5225d03b043
+updated: 2019-04-16T18:48:06.784710788+01:00
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -14,7 +14,7 @@ imports:
   - autorest/azure
   - autorest/date
 - name: github.com/beorn7/perks
-  version: 3a771d992973f24aa725d07868b467d1ddfceafb
+  version: 3ac7bf7a47d159a033b107610db8a1b6575507a4
   subpackages:
   - quantile
 - name: github.com/BurntSushi/toml
@@ -161,7 +161,7 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: 1bc161956072ea9d8d5dba0920caeb26fbc283a1
+  version: 727a39e77d674af6e7d6684b941916183d80f5de
   subpackages:
   - lib/apiconfig
   - lib/apis/v1
@@ -197,7 +197,7 @@ imports:
   - lib/validator/v3
   - lib/watch
 - name: github.com/projectcalico/typha
-  version: 5a7ad834a23a0bbea503a08ad849c1ea3b66657b
+  version: 417c022ffa4866e7fe16ce5498a5e833e0f65b26
   subpackages:
   - pkg/syncclient
   - pkg/syncproto
@@ -212,7 +212,7 @@ imports:
   subpackages:
   - go
 - name: github.com/prometheus/common
-  version: cfeb6f9992ffa54aaa4f2170ade4067ee478b250
+  version: e3fb1a1acd7605367a2b378bc2e2f893c05174b7
   subpackages:
   - expfmt
   - internal/bitbucket.org/ww/goautoneg
