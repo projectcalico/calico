@@ -1,15 +1,18 @@
+---
+title: Defend against a DoS attack
+---
 
 ### Big Picture
 
-Calico automatically enforces certain types of blacklist policies at the earliest possible point in the packet processing pipeline, including offloading to NIC hardware whenever possible. test
+Calico automatically enforces specific types of blacklist policies at the earliest possible point in the packet processing pipeline, including offloading to NIC hardware whenever possible. 
 
 ### Value
-When under DoS attack, your cluster can receive massive numbers of connection requests from attackers. The faster these connection requests are dropped, the less flooding and overloading to your hosts. Calico allows you to define DoS mitigation rules in network policy, enforces these as efficiently as possible to minimize the impact in a DoS attack.
+During a DoS attack, your cluster can receive massive numbers of connection requests from attackers. The faster these connection requests are dropped, the less flooding and overloading to your hosts. When you define DoS mitigation rules in Calico network policy, Calico enforces the rules as efficiently as possible to minimize the impact.
 
 ### Features
 This how-to article uses the following Calico features:
 - One or more host endpoints as the policy enforcement point
-- A global network set to manage your blacklisted CIDRs
+- A global network set to manage blacklisted CIDRs
 - A global network policy to deny ingress traffic from IPs in the global network set
 
 ### Concepts
@@ -21,7 +24,7 @@ The earliest point in the packet processing pipeline where packets can be droppe
 | --------------- | ------------------------------------------------------------ | ----------- |
 | NIC hardware    | The NIC supports **XDP offload** mode.                       | Fastest     |
 | NIC driver      | The NIC driver supports **XDP native** mode.                 | Faster      |
-| Kernel          | The kernel is configured with **XDP generic** mode enabled.  (This mode is rarely enabled, and typically used only by Linux networking developers.) | Fast        |
+| Kernel          | The kernel supports **XDP generic mode** and Calico is configured to explicitly use it. This mode is rarely used and has no performance benefits over iptables raw mode below. To configure XDP generic mode, see [Felix Configuration]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/felixconfig) | Fast        |
 | Kernel          | If none of the modes above are available, **iptables raw** mode is used. | Fast        |
 
 **Note**: XDP modes require Linux kernel v4.16 or later.
@@ -29,17 +32,17 @@ The earliest point in the packet processing pipeline where packets can be droppe
 ### How to
 
 The high-level steps to defend against a DoS attack are:
-- Step 1: Create a host endpoint with allowed IPs
-- Step 2: Blacklist CIDRs in a global network set
-- Step 3: Create deny incoming traffic global network policy 
+- [Step 1: Create a host endpoints](#step-1:-create-a-host-endpoints)
+- [Step 2: Add CIDRs to blacklist in a global network set](#step-2:-add-cidrs-to-blacklist-in-a-global-network-set)
+- [Step 3: Create deny incoming traffic global network policy](#step-3:-create-deny-incoming-traffic-global-network-policy)
 
 #### Best practice
-This example walks through the above required steps, assuming no prior configuration is in place.  However, best practice is to pre-create the host endpoints, network policy and global network set so that in the event of DoS attack the only step required is to add the blacklist CIDRs to the global network set.
+This example walks through the above required steps, assuming no prior configuration is in place. A best practice is to proactively create the host endpoints, network policy, and global network set. In the event of a DoS attack, you can quickly respond by just adding the blacklist CIDRs to the global network set.
 
 #### Step 1: Create host endpoints
-First, you need to create the host endpoints corresponding to the network interfaces where you want to enforce any DoS mitigation rules. In the following example, the host endpoint secures the interface named eth0 with IP 10.0.0.1 for a specific host:
+First, you need to create the host endpoints corresponding to the network interfaces where you want to enforce any DoS mitigation rules. In the following example, the host endpoint secures the interface named **eth0** with IP **10.0.0.1** for a specific host:
 
-```
+<pre>
 apiVersion: projectcalico.org/v3
 kind: HostEndpoint
 metadata:
@@ -47,10 +50,11 @@ metadata:
   labels:
     apply-dos-mitigation: true
 spec:
-  interfaceName: eth0
+  interfaceName: <b>eth0</b>
   node: <node name or hostname>
   expectedIPs: ["10.0.0.1"]
-```
+</pre>
+{: .no-select-button}
 
 #### Step 2: Set up blacklist CIDRs in a global network set
 Next, you need to create a Calico global network set, adding the CIDRs that you want to blacklist. In the following example, the global network set blacklists the CIDR ranges `1.2.3.4/32` and `5.6.0.0/16`:
