@@ -84,28 +84,21 @@ func (c *VXLANResolver) OnBlockUpdate(update api.Update) (_ bool) {
 		// for duplicates here. Look at the routes contributed by this block and determine if we
 		// need to send any updates.
 		newRoutes := c.routesFromBlock(key, update.Value.(*model.AllocationBlock))
-		currentRoutes, ok := c.blockToRoutes[key]
+		cachedRoutes, ok := c.blockToRoutes[key]
 		if !ok {
-			currentRoutes = set.New()
-			c.blockToRoutes[key] = currentRoutes
+			cachedRoutes = set.New()
+			c.blockToRoutes[key] = cachedRoutes
 		}
 
-		for _, r := range newRoutes {
-			logCxt := logrus.WithField("newRoute", r)
-			if currentRoutes.Contains(r) {
-				logCxt.Debug("Desired VXLAN route already exists, skip")
-				continue
-			}
-
-			c.blockToRoutes[key].Add(r)
-			adds.Add(r)
-		}
-
-		currentRoutes.Iter(func(item interface{}) error {
+		// Now scan the old routes, looking for any that are no-longer associated with the block.
+		// Remove no longer active routes from the cache and queue up deletions.
+		cachedRoutes.Iter(func(item interface{}) error {
 			r := item.(vxlanRoute)
 
 			// For each existing route which is no longer present, we need to delete it.
-			if _, ok := newRoutes[r.Key()]; ok {
+			// Note: since r.Key() only contains the destination, we need to check equality too in case
+			// the gateway has changed.
+			if newRoute, ok := newRoutes[r.Key()]; ok && newRoute == r {
 				// Exists, and we want it to - nothing to do.
 				return nil
 			}
@@ -113,9 +106,20 @@ func (c *VXLANResolver) OnBlockUpdate(update api.Update) (_ bool) {
 			// Current route is not in new set - we need to withdraw the route, and also
 			// remove it from internal state.
 			deletes.Add(r)
-			c.blockToRoutes[key].Discard(r)
-			return nil
+			return set.RemoveItem
 		})
+
+		// Now scan the new routes, looking for additions.  Cache them and queue up adds.
+		for _, r := range newRoutes {
+			logCxt := logrus.WithField("newRoute", r)
+			if cachedRoutes.Contains(r) {
+				logCxt.Debug("Desired VXLAN route already exists, skip")
+				continue
+			}
+
+			cachedRoutes.Add(r)
+			adds.Add(r)
+		}
 
 		// At this point we've determined the correct diff to perform based on the block update.
 		// Delete any routes which are gone for good, withdraw modified routes, and send updates for
