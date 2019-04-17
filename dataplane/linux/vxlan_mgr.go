@@ -22,6 +22,9 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/projectcalico/felix/ipsets"
+	"github.com/projectcalico/felix/rules"
+
 	"github.com/sirupsen/logrus"
 	log "github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
@@ -51,18 +54,39 @@ type vxlanManager struct {
 	vxlanPort   int
 
 	// Indicates if configuration has changed since the last apply.
-	dirty bool
+	routesDirty       bool
+	ipsetsDataplane   ipsetsDataplane
+	ipSetMetadata     ipsets.IPSetMetadata
+	externalNodeCIDRs []string
+	vtepsDirty        bool
 }
 
-func newVXLANManager(hostname string, routeTable routeTable, deviceName string, vxlanID, port int) *vxlanManager {
+func newVXLANManager(
+	ipsetsDataplane ipsetsDataplane,
+	maxIPSetSize int,
+	hostname string,
+	routeTable routeTable,
+	deviceName string,
+	vxlanID, port int,
+	externalNodeCIDRs []string,
+) *vxlanManager {
 	return &vxlanManager{
-		hostname:     hostname,
-		routeTable:   routeTable,
-		routesByDest: map[string]*proto.RouteUpdate{},
-		vtepsByNode:  map[string]*proto.VXLANTunnelEndpointUpdate{},
-		vxlanDevice:  deviceName,
-		vxlanID:      vxlanID,
-		vxlanPort:    port,
+		ipsetsDataplane: ipsetsDataplane,
+		ipSetMetadata: ipsets.IPSetMetadata{
+			MaxSize: maxIPSetSize,
+			SetID:   rules.IPSetIDAllVXLANSourceNets,
+			Type:    ipsets.IPSetTypeHashNet,
+		},
+		hostname:          hostname,
+		routeTable:        routeTable,
+		routesByDest:      map[string]*proto.RouteUpdate{},
+		vtepsByNode:       map[string]*proto.VXLANTunnelEndpointUpdate{},
+		vxlanDevice:       deviceName,
+		vxlanID:           vxlanID,
+		vxlanPort:         port,
+		externalNodeCIDRs: externalNodeCIDRs,
+		routesDirty:       true,
+		vtepsDirty:        true,
 	}
 }
 
@@ -72,13 +96,13 @@ func (m *vxlanManager) OnUpdate(protoBufMsg interface{}) {
 		if msg.Type == proto.RouteType_VXLAN {
 			logrus.WithField("msg", msg).Debug("VXLAN data plane received route update")
 			m.routesByDest[msg.Dst] = msg
-			m.dirty = true
+			m.routesDirty = true
 		}
 	case *proto.RouteRemove:
 		if msg.Type == proto.RouteType_VXLAN {
 			logrus.WithField("msg", msg).Debug("VXLAN data plane received route remove")
 			delete(m.routesByDest, msg.Dst)
-			m.dirty = true
+			m.routesDirty = true
 		}
 	case *proto.VXLANTunnelEndpointUpdate:
 		logrus.WithField("msg", msg).Debug("VXLAN data plane received VTEP update")
@@ -87,7 +111,8 @@ func (m *vxlanManager) OnUpdate(protoBufMsg interface{}) {
 		} else {
 			m.vtepsByNode[msg.Node] = msg
 		}
-		m.dirty = true
+		m.routesDirty = true
+		m.vtepsDirty = true
 	case *proto.VXLANTunnelEndpointRemove:
 		logrus.WithField("msg", msg).Debug("VXLAN data plane received VTEP remove")
 		if msg.Node == m.hostname {
@@ -95,7 +120,8 @@ func (m *vxlanManager) OnUpdate(protoBufMsg interface{}) {
 		} else {
 			delete(m.vtepsByNode, msg.Node)
 		}
-		m.dirty = true
+		m.routesDirty = true
+		m.vtepsDirty = true
 	}
 }
 
@@ -112,61 +138,75 @@ func (m *vxlanManager) getLocalVTEP() *proto.VXLANTunnelEndpointUpdate {
 }
 
 func (m *vxlanManager) CompleteDeferredWork() error {
-	if !m.dirty {
+	if !m.routesDirty {
 		logrus.Debug("No change since last application, nothing to do")
 		return nil
 	}
-	m.dirty = false
 
-	// The route table accepts the desired state. Start by setting the desired L2 "routes" by iterating
-	// known VTEPs.
-	l2routes := []routetable.L2Target{}
-	for _, u := range m.vtepsByNode {
-		mac, err := net.ParseMAC(u.Mac)
-		if err != nil {
-			// Don't block programming of other VTEPs if somehow we receive one with a bad mac.
-			logrus.WithError(err).Warn("Failed to parse VTEP mac address")
-			continue
-		}
-		l2routes = append(l2routes, routetable.L2Target{
-			VTEPMAC: mac,
-			GW:      ip.FromString(u.Ipv4Addr),
-			IP:      ip.FromString(u.ParentDeviceIp),
-		})
-	}
-	logrus.WithField("l2routes", l2routes).Debug("VXLAN manager sending L2 updates")
-	m.routeTable.SetL2Routes(m.vxlanDevice, l2routes)
-
-	// Iterate through all of our L3 routes and send them through to the route table.
-	routes := []routetable.Target{}
-	for _, r := range m.routesByDest {
-		logCtx := logrus.WithField("route", r)
-		cidr, err := ip.CIDRFromString(r.Dst)
-		if err != nil {
-			// Don't block programming of other routes if somehow we receive one with a bad dst.
-			logCtx.WithError(err).Warn("Failed to parse VXLAN route destination")
-			continue
+	if m.vtepsDirty {
+		var allowedVXLANSources []string
+		if m.vtepsDirty {
+			logrus.Debug("VTEPs are dirty, collecting the allowed VXLAN source set")
+			allowedVXLANSources = append(allowedVXLANSources, m.externalNodeCIDRs...)
 		}
 
-		// Extract the gateway addr for this route based on its remote VTEP.
-		vtep, ok := m.vtepsByNode[r.Node]
-		if !ok {
-			// The calculation graph should by design ensure that we never have a route with no
-			// corresponding VTEP. This branch means there is likely a calc graph bug.
-			logCtx.Warnf("Dataplane has route with no corresponding VTEP")
-			continue
+		// The route table accepts the desired state. Start by setting the desired L2 "routes" by iterating
+		// known VTEPs.
+		var l2routes []routetable.L2Target
+		for _, u := range m.vtepsByNode {
+			mac, err := net.ParseMAC(u.Mac)
+			if err != nil {
+				// Don't block programming of other VTEPs if somehow we receive one with a bad mac.
+				logrus.WithError(err).Warn("Failed to parse VTEP mac address")
+				continue
+			}
+			l2routes = append(l2routes, routetable.L2Target{
+				VTEPMAC: mac,
+				GW:      ip.FromString(u.Ipv4Addr),
+				IP:      ip.FromString(u.ParentDeviceIp),
+			})
+			allowedVXLANSources = append(allowedVXLANSources, u.ParentDeviceIp)
 		}
-
-		routes = append(routes, routetable.Target{
-			Type: routetable.TargetTypeVXLAN,
-			CIDR: cidr,
-			GW:   ip.FromString(vtep.Ipv4Addr),
-		})
+		logrus.WithField("l2routes", l2routes).Debug("VXLAN manager sending L2 updates")
+		m.routeTable.SetL2Routes(m.vxlanDevice, l2routes)
+		m.ipsetsDataplane.AddOrReplaceIPSet(m.ipSetMetadata, allowedVXLANSources)
+		m.vtepsDirty = false
 	}
 
-	logrus.WithField("routes", routes).Debug("VXLAN manager sending L3 updates")
-	logrus.Info("VXLAN Manager completed deferred work")
-	m.routeTable.SetRoutes(m.vxlanDevice, routes)
+	if m.routesDirty {
+		// Iterate through all of our L3 routes and send them through to the route table.
+		var routes []routetable.Target
+		for _, r := range m.routesByDest {
+			logCtx := logrus.WithField("route", r)
+			cidr, err := ip.CIDRFromString(r.Dst)
+			if err != nil {
+				// Don't block programming of other routes if somehow we receive one with a bad dst.
+				logCtx.WithError(err).Warn("Failed to parse VXLAN route destination")
+				continue
+			}
+
+			// Extract the gateway addr for this route based on its remote VTEP.
+			vtep, ok := m.vtepsByNode[r.Node]
+			if !ok {
+				// The calculation graph should by design ensure that we never have a route with no
+				// corresponding VTEP. This branch means there is likely a calc graph bug.
+				logCtx.Warnf("Dataplane has route with no corresponding VTEP")
+				continue
+			}
+
+			routes = append(routes, routetable.Target{
+				Type: routetable.TargetTypeVXLAN,
+				CIDR: cidr,
+				GW:   ip.FromString(vtep.Ipv4Addr),
+			})
+		}
+
+		logrus.WithField("routes", routes).Debug("VXLAN manager sending L3 updates")
+		logrus.Info("VXLAN Manager completed deferred work")
+		m.routeTable.SetRoutes(m.vxlanDevice, routes)
+		m.routesDirty = false
+	}
+
 	return nil
 }
 

@@ -1,4 +1,4 @@
-// Copyright (c) 2018 Tigera, Inc. All rights reserved.
+// Copyright (c) 2018-2019 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -25,6 +25,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/projectcalico/libcalico-go/lib/backend/model"
+
 	. "github.com/onsi/gomega"
 	log "github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
@@ -37,6 +39,7 @@ import (
 	"github.com/projectcalico/felix/fv/utils"
 	"github.com/projectcalico/libcalico-go/lib/apiconfig"
 	api "github.com/projectcalico/libcalico-go/lib/apis/v3"
+	bapi "github.com/projectcalico/libcalico-go/lib/backend/api"
 	client "github.com/projectcalico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/libcalico-go/lib/names"
 	"github.com/projectcalico/libcalico-go/lib/options"
@@ -366,10 +369,31 @@ func (kds *K8sDatastoreInfra) Stop() {
 	cleanupAllNodes(kds.K8sClient)
 	cleanupAllNamespaces(kds.K8sClient)
 	cleanupAllPools(kds.calicoClient)
+	cleanupIPAM(kds.calicoClient)
 	cleanupAllGlobalNetworkPolicies(kds.calicoClient)
 	cleanupAllNetworkPolicies(kds.calicoClient)
 	cleanupAllHostEndpoints(kds.calicoClient)
 	cleanupAllFelixConfigurations(kds.calicoClient)
+}
+
+func cleanupIPAM(calicoClient client.Interface) {
+	c := calicoClient.(interface{ Backend() bapi.Client }).Backend()
+	for _, li := range []model.ListInterface{
+		model.BlockListOptions{},
+		model.BlockAffinityListOptions{},
+		model.BlockAffinityListOptions{},
+		model.IPAMHandleListOptions{},
+	} {
+		if rs, err := c.List(context.Background(), li, ""); err != nil {
+			log.WithError(err).WithField("Kind", li).Warning("Failed to list resources")
+		} else {
+			for _, r := range rs.KVPairs {
+				if _, err = c.DeleteKVP(context.Background(), r); err != nil {
+					log.WithError(err).WithField("Key", r.Key).Warning("Failed to delete entry from KDD")
+				}
+			}
+		}
+	}
 }
 
 func (kds *K8sDatastoreInfra) GetDockerArgs() []string {
