@@ -180,4 +180,50 @@ var _ = infrastructure.DatastoreDescribe("VXLAN topology before adding host IPs 
 			cc.CheckConnectivity()
 		})
 	})
+
+	It("should configure the vxlan device correctly", func() {
+		// The VXLAN device should appear with default MTU, etc.
+		for _, felix := range felixes {
+			Eventually(func() string {
+				out, _ := felix.ExecOutput("ip", "-d", "link", "show", "vxlan.calico")
+				return out
+			}, "10s", "100ms").Should(ContainSubstring("mtu 1410"))
+			Eventually(func() string {
+				out, _ := felix.ExecOutput("ip", "-d", "link", "show", "vxlan.calico")
+				return out
+			}, "10s", "100ms").Should(ContainSubstring("vxlan id 4096"))
+			Eventually(func() string {
+				out, _ := felix.ExecOutput("ip", "-d", "link", "show", "vxlan.calico")
+				return out
+			}, "10s", "100ms").Should(ContainSubstring("dstport 4789"))
+		}
+
+		// Change the MTU.
+		felixConfig, err := client.FelixConfigurations().Get(context.Background(), "default", options.GetOptions{})
+		Expect(err).NotTo(HaveOccurred())
+		mtu := 1400
+		vni := 4097
+		port := 4790
+		felixConfig.Spec.VXLANMTU = &mtu
+		felixConfig.Spec.VXLANPort = &port
+		felixConfig.Spec.VXLANVNI = &vni
+		_, err = client.FelixConfigurations().Update(context.Background(), felixConfig, options.SetOptions{})
+		Expect(err).NotTo(HaveOccurred())
+
+		// Expect the settings to be changed on the device.
+		for _, felix := range felixes {
+			Eventually(func() string {
+				out, _ := felix.ExecOutput("ip", "-d", "link", "show", "vxlan.calico")
+				return out
+			}, "10s", "100ms").Should(ContainSubstring("mtu 1400"))
+			Eventually(func() string {
+				out, _ := felix.ExecOutput("ip", "-d", "link", "show", "vxlan.calico")
+				return out
+			}, "10s", "100ms").Should(ContainSubstring("vxlan id 4097"))
+			Eventually(func() string {
+				out, _ := felix.ExecOutput("ip", "-d", "link", "show", "vxlan.calico")
+				return out
+			}, "10s", "100ms").Should(ContainSubstring("dstport 4790"))
+		}
+	})
 })
