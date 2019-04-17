@@ -145,7 +145,7 @@ imports:
 - name: github.com/karrick/godirwalk
   version: 4e17292779dcc7ed08e10c03bfdd022f7c28b3c3
 - name: github.com/kelseyhightower/confd
-  version: bd82868e007234d0041c51593119836547c8d8a0
+  version: 557fa05ba9b482c8106d5173bb0171794354e335
   repo: https://github.com/projectcalico/confd.git
   subpackages:
   - pkg/backends
@@ -217,7 +217,7 @@ imports:
 - name: github.com/pkg/errors
   version: 27936f6d90f9c8e1145f11ed52ffffbfdb9e0af7
 - name: github.com/projectcalico/felix
-  version: cbc711eca063b5faa3e5bba4900cfa7c7d83e62d
+  version: fac65b42f09b4de24805a14a95bc34f6d6995780
   subpackages:
   - bpf
   - bpf/packrd
@@ -258,7 +258,7 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: 727a39e77d674af6e7d6684b941916183d80f5de
+  version: 43c1da882b70aba9d0325e7de4393439ef202550
   subpackages:
   - lib/apiconfig
   - lib/apis/v1
@@ -309,7 +309,7 @@ imports:
   subpackages:
   - binder
 - name: github.com/projectcalico/typha
-  version: 5a7ad834a23a0bbea503a08ad849c1ea3b66657b
+  version: 483ef038d961b112e37131322000aa6a39310bea
   subpackages:
   - pkg/config
   - pkg/logutils
