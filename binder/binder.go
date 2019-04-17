@@ -38,7 +38,8 @@ type Binder interface {
 	SearchPath() string
 
 	// Search for pod mounts to bind sockets in.
-	// Send any value over the stop channel to gracefully cancel.
+	// Send a wait group over the stop channel to gracefully cancel.  The receiver
+	// should call Done() on the wait group when its shutdown is complete.
 	SearchAndBind(stop <-chan *sync.WaitGroup)
 }
 
