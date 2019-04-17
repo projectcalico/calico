@@ -88,10 +88,12 @@ import:
   subpackages:
   - xfs
 - package: github.com/satori/go.uuid
-# gobuffalo/logger needs the SetOutput function in the Logger type, so pin
-# the first version that introduces it.
+# Use our fork, because v1.0.5 causes test breakages due to problems with our log formatting code,
+# but gobuffalo/logger require newer version because of the SetOutput function. Our fork backports
+# the missing stuff on top of v1.0.4.
 - package: github.com/sirupsen/logrus
-  version: v1.0.6
+  repo: https://github.com/projectcalico/logrus
+  version: v1.0.4-calico
 - package: github.com/vishvananda/netlink
 # containernetworking/cni pulls in an old version, so pin to the version we need here.
   version: f07d9d5231b9cd05ddf2e5a8ef6582f385bc1770
