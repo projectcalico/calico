@@ -67,6 +67,7 @@ function git_version_to_deb {
 	echo $1
     else
 	echo $1 | sed 's/\([0-9]\)-0.dev/\1~0.dev/'
+    fi
 }
 
 # Convert PEP 440 version to RPM.
