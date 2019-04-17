@@ -378,10 +378,12 @@ run-k8s-apiserver: stop-k8s-apiserver run-etcd
 	while ! docker exec st-apiserver kubectl create \
 		clusterrolebinding anonymous-admin \
 		--clusterrole=cluster-admin \
-		--user=system:anonymous; \
-		do echo "Trying to create ClusterRoleBinding"; \
+		--user=system:anonymous 2>/dev/null ; \
+		do echo "Waiting for st-apiserver to come up"; \
 		sleep 1; \
 		done
+
+	# ClusterRoleBinding created
 
 	# Create CustomResourceDefinition (CRD) for Calico resources
 	# from the manifest crds.yaml
