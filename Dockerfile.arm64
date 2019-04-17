@@ -17,6 +17,8 @@ ARG BIRD_IMAGE=calico/bird:latest
 FROM ${QEMU_IMAGE} as qemu
 FROM ${BIRD_IMAGE} as bird
 
+FROM calico/bpftool:v5.0-arm64 as bpftool
+
 FROM arm64v8/alpine:3.8 as base
 MAINTAINER Tom Denham <tom@projectcalico.org>
 
@@ -42,6 +44,8 @@ COPY vendor/github.com/kelseyhightower/confd/etc/calico/ /etc/calico/
 
 # Copy in the calico-node binary
 COPY dist/bin/calico-node-${ARCH} /bin/calico-node
+
+COPY --from=bpftool /bpftool /bin
 
 RUN rm /usr/bin/qemu-aarch64-static
 

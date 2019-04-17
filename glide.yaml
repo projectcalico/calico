@@ -14,7 +14,7 @@ import:
   - pkg/config
   - pkg/run
 - package: github.com/projectcalico/felix
-  version: fbe8a12edd2c304ba9ff1d3312363381d42b830a
+  version: cbc711eca063b5faa3e5bba4900cfa7c7d83e62d
   subpackages:
   - daemon
 - package: github.com/projectcalico/libcalico-go
@@ -32,8 +32,12 @@ import:
   - lib/options
   - lib/upgrade/migrator
   - lib/upgrade/migrator/clients
+# Use our fork, because v1.0.5 causes test breakages due to problems with our log formatting code,
+# but other deps require newer version because of the SetOutput function. Our fork backports
+# the missing stuff on top of v1.0.4.
 - package: github.com/sirupsen/logrus
-  version: v1.0.4
+  repo: https://github.com/projectcalico/logrus
+  version: v1.0.4-calico
 - package: k8s.io/apimachinery
   subpackages:
   - pkg/apis/meta/v1
