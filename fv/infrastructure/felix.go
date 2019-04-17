@@ -29,6 +29,9 @@ type Felix struct {
 	// ExpectedIPIPTunnelAddr contains the IP that the infrastructure expects to
 	// get assigned to the IPIP tunnel.  Filled in by AddNode().
 	ExpectedIPIPTunnelAddr string
+	// ExpectedVXLANTunnelAddr contains the IP that the infrastructure expects to
+	// get assigned to the VXLAN tunnel.  Filled in by AddNode().
+	ExpectedVXLANTunnelAddr string
 }
 
 func (f *Felix) GetFelixPID() int {

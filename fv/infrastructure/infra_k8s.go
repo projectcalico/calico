@@ -27,7 +27,7 @@ import (
 
 	. "github.com/onsi/gomega"
 	log "github.com/sirupsen/logrus"
-	"k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	apierrs "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
@@ -402,6 +402,10 @@ func (kds *K8sDatastoreInfra) SetExpectedIPIPTunnelAddr(felix *Felix, idx int, n
 	felix.ExpectedIPIPTunnelAddr = fmt.Sprintf("10.65.%d.1", idx)
 }
 
+func (kds *K8sDatastoreInfra) SetExpectedVXLANTunnelAddr(felix *Felix, idx int, needBGP bool) {
+	felix.ExpectedVXLANTunnelAddr = fmt.Sprintf("10.65.%d.0", idx)
+}
+
 func (kds *K8sDatastoreInfra) AddNode(felix *Felix, idx int, needBGP bool) {
 	node_in := &v1.Node{
 		ObjectMeta: metav1.ObjectMeta{
@@ -414,6 +418,9 @@ func (kds *K8sDatastoreInfra) AddNode(felix *Felix, idx int, needBGP bool) {
 	}
 	if felix.ExpectedIPIPTunnelAddr != "" {
 		node_in.Annotations["projectcalico.org/IPv4IPIPTunnelAddr"] = felix.ExpectedIPIPTunnelAddr
+	}
+	if felix.ExpectedVXLANTunnelAddr != "" {
+		node_in.Annotations["projectcalico.org/IPv4VXLANTunnelAddr"] = felix.ExpectedVXLANTunnelAddr
 	}
 	log.WithField("node_in", node_in).Debug("Node defined")
 	node_out, err := kds.K8sClient.CoreV1().Nodes().Create(node_in)

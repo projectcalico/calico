@@ -187,6 +187,7 @@ func (m *vxlanManager) KeepVXLANDeviceInSync(mtu int) {
 			time.Sleep(1 * time.Second)
 			continue
 		}
+		logrus.Info("VXLAN tunnel device configured")
 		time.Sleep(10 * time.Second)
 	}
 }
@@ -248,12 +249,9 @@ func (m *vxlanManager) configureVXLANDevice(mtu int, localVTEP *proto.VXLANTunne
 		}
 
 		// The device now exists - requery it to check that the link exists and is a vxlan device.
-		link, err = netlink.LinkByIndex(vxlan.Index)
+		link, err = netlink.LinkByName(m.vxlanDevice)
 		if err != nil {
-			return fmt.Errorf("can't locate created vxlan device with index %v", vxlan.Index)
-		}
-		if _, ok := link.(*netlink.Vxlan); !ok {
-			return fmt.Errorf("created vxlan device with index %v is not vxlan", vxlan.Index)
+			return fmt.Errorf("can't locate created vxlan device %v", m.vxlanDevice)
 		}
 	}
 
