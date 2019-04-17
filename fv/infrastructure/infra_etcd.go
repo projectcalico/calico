@@ -85,9 +85,16 @@ func (eds *EtcdDatastoreInfra) SetExpectedIPIPTunnelAddr(felix *Felix, idx int, 
 	}
 }
 
+func (eds *EtcdDatastoreInfra) SetExpectedVXLANTunnelAddr(felix *Felix, idx int, needBGP bool) {
+	if needBGP {
+		felix.ExpectedVXLANTunnelAddr = fmt.Sprintf("10.65.%d.0", idx)
+	}
+}
+
 func (eds *EtcdDatastoreInfra) AddNode(felix *Felix, idx int, needBGP bool) {
 	felixNode := api.NewNode()
 	felixNode.Name = felix.Hostname
+	felixNode.Spec.IPv4VXLANTunnelAddr = felix.ExpectedVXLANTunnelAddr
 	if needBGP {
 		felixNode.Spec.BGP = &api.NodeBGPSpec{
 			IPv4Address:        felix.IP,

@@ -187,6 +187,7 @@ func (m *vxlanManager) KeepVXLANDeviceInSync(mtu int) {
 			time.Sleep(1 * time.Second)
 			continue
 		}
+		logrus.Info("VXLAN tunnel device configured")
 		time.Sleep(10 * time.Second)
 	}
 }
@@ -216,62 +217,58 @@ func (m *vxlanManager) getParentInterface(localVTEP *proto.VXLANTunnelEndpointUp
 func (m *vxlanManager) configureVXLANDevice(mtu int, localVTEP *proto.VXLANTunnelEndpointUpdate) error {
 	logCxt := logrus.WithFields(logrus.Fields{"device": m.vxlanDevice})
 	logCxt.Debug("Configuring VXLAN tunnel device")
+	parent, err := m.getParentInterface(localVTEP)
+	if err != nil {
+		return err
+	}
+	mac, err := net.ParseMAC(localVTEP.Mac)
+	if err != nil {
+		return err
+	}
+	vxlan := &netlink.Vxlan{
+		LinkAttrs: netlink.LinkAttrs{
+			Name:         m.vxlanDevice,
+			HardwareAddr: mac,
+		},
+		VxlanId:      m.vxlanID,
+		Port:         m.vxlanPort,
+		VtepDevIndex: parent.Attrs().Index,
+		SrcAddr:      ip.FromString(localVTEP.ParentDeviceIp).AsNetIP(),
+	}
+
+	// Try to get the device.
 	link, err := netlink.LinkByName(m.vxlanDevice)
 	if err != nil {
 		logrus.WithError(err).Info("Failed to get VXLAN tunnel device, assuming it isn't present")
-		parent, err := m.getParentInterface(localVTEP)
-		if err != nil {
-			return err
-		}
-		mac, err := net.ParseMAC(localVTEP.Mac)
-		if err != nil {
-			return err
-		}
-		vxlan := &netlink.Vxlan{
-			LinkAttrs: netlink.LinkAttrs{
-				Name:         m.vxlanDevice,
-				HardwareAddr: mac,
-			},
-			VxlanId:      m.vxlanID,
-			Port:         m.vxlanPort,
-			VtepDevIndex: parent.Attrs().Index,
-			SrcAddr:      ip.FromString(localVTEP.ParentDeviceIp).AsNetIP(),
-		}
-
 		if err := netlink.LinkAdd(vxlan); err == syscall.EEXIST {
-			// If the device already exists, we need to check to see if it is
-			// configured properly.
-			logrus.Debug("VXLAN device already exists")
-			existing, err := netlink.LinkByName(vxlan.Name)
-			if err != nil {
-				return err
-			}
-
-			// Check for mismatched configuration. If they match, then we can simply return.
-			incompat := vxlanLinksIncompat(vxlan, existing)
-			if incompat == "" {
-				return nil
-			}
-
-			// Existing device doesn't match desired configuration - delete it and recreate.
-			logrus.Warningf("%q already exists with incompatable configuration: %v; recreating device", vxlan.Name, incompat)
-			if err = netlink.LinkDel(existing); err != nil {
-				return fmt.Errorf("failed to delete interface: %v", err)
-			}
-			if err = netlink.LinkAdd(vxlan); err != nil {
-				return fmt.Errorf("failed to create vxlan interface: %v", err)
-			}
+			// Device already exists - likely a race.
+			logrus.Debug("VXLAN device already exists, likely created by someone else.")
 		} else if err != nil {
+			// Error other than "device exists" - return it.
 			return err
 		}
 
-		ifindex := vxlan.Index
-		link, err = netlink.LinkByIndex(vxlan.Index)
+		// The device now exists - requery it to check that the link exists and is a vxlan device.
+		link, err = netlink.LinkByName(m.vxlanDevice)
 		if err != nil {
-			return fmt.Errorf("can't locate created vxlan device with index %v", ifindex)
+			return fmt.Errorf("can't locate created vxlan device %v", m.vxlanDevice)
 		}
-		if _, ok := link.(*netlink.Vxlan); !ok {
-			return fmt.Errorf("created vxlan device with index %v is not vxlan", ifindex)
+	}
+
+	// At this point, we have successfully queried the existing device, or made sure it exists if it didn't
+	// already. Check for mismatched configuration. If they don't match, recreate the device.
+	if incompat := vxlanLinksIncompat(vxlan, link); incompat != "" {
+		// Existing device doesn't match desired configuration - delete it and recreate.
+		logrus.Warningf("%q exists with incompatable configuration: %v; recreating device", vxlan.Name, incompat)
+		if err = netlink.LinkDel(link); err != nil {
+			return fmt.Errorf("failed to delete interface: %v", err)
+		}
+		if err = netlink.LinkAdd(vxlan); err != nil {
+			return fmt.Errorf("failed to create vxlan interface: %v", err)
+		}
+		link, err = netlink.LinkByName(vxlan.Name)
+		if err != nil {
+			return err
 		}
 	}
 
