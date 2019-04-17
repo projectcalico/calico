@@ -1,3 +1,5 @@
+markdown: NullConverter
+
 exclude:
   - release-scripts
   - LICENSE
