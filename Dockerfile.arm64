@@ -1,4 +1,4 @@
-FROM arm64v8/debian:9.8-slim
+FROM arm64v8/debian:buster-slim
 
 LABEL maintainer "Casey Davenport <casey@tigera.io>"
 
