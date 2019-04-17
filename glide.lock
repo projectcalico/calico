@@ -161,7 +161,7 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: 419f1c6419fc7f07ba2dfc536a12e30d69886294
+  version: 43c1da882b70aba9d0325e7de4393439ef202550
   subpackages:
   - lib/apiconfig
   - lib/apis/v1
@@ -197,7 +197,7 @@ imports:
   - lib/validator/v3
   - lib/watch
 - name: github.com/projectcalico/typha
-  version: 0a336301c9e8b25ec3449e6188327b3aad59d559
+  version: 483ef038d961b112e37131322000aa6a39310bea
   subpackages:
   - pkg/syncclient
   - pkg/syncproto
