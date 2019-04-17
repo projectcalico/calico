@@ -22,10 +22,12 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
 	log "github.com/sirupsen/logrus"
+	"github.com/vishvananda/netlink"
 
 	"github.com/projectcalico/felix/bpf"
 	"github.com/projectcalico/felix/ifacemonitor"
@@ -345,6 +347,14 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		)
 		go vxlanManager.KeepVXLANDeviceInSync(config.VXLANMTU)
 		dp.RegisterManager(vxlanManager)
+	} else {
+		// If VXLAN is not enabled, check to see if there is a VXLAN device and delete it if there is.
+		log.Info("Checking if we need to clean up the VXLAN device")
+		if link, err := netlink.LinkByName("vxlan.calico"); err != nil && err != syscall.ENODEV {
+			log.WithError(err).Warnf("Failed to query VXLAN device")
+		} else if err = netlink.LinkDel(link); err != nil {
+			log.WithError(err).Error("Failed to delete unwanted VXLAN device")
+		}
 	}
 
 	dp.endpointStatusCombiner = newEndpointStatusCombiner(dp.fromDataplane, config.IPv6Enabled)

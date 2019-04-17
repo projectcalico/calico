@@ -226,4 +226,31 @@ var _ = infrastructure.DatastoreDescribe("VXLAN topology before adding host IPs 
 			}, "10s", "100ms").Should(ContainSubstring("dstport 4790"))
 		}
 	})
+
+	It("should delete the vxlan device when vxlan is disabled", func() {
+		// Wait for the VXLAN device to be created.
+		for _, felix := range felixes {
+			Eventually(func() string {
+				out, _ := felix.ExecOutput("ip", "-d", "link", "show", "vxlan.calico")
+				return out
+			}, "10s", "100ms").Should(ContainSubstring("mtu 1410"))
+		}
+
+		// Disable VXLAN in Felix.
+		felixConfig, err := client.FelixConfigurations().Get(context.Background(), "default", options.GetOptions{})
+		Expect(err).NotTo(HaveOccurred())
+		enabled := false
+		felixConfig.Spec.VXLANEnabled = &enabled
+		_, err = client.FelixConfigurations().Update(context.Background(), felixConfig, options.SetOptions{})
+		Expect(err).NotTo(HaveOccurred())
+
+		// Expect the VXLAN device to be deleted.
+		for _, felix := range felixes {
+			Eventually(func() string {
+				out, _ := felix.ExecOutput("ip", "-d", "link", "show", "vxlan.calico")
+				return out
+			}, "10s", "100ms").ShouldNot(ContainSubstring("mtu 1410"))
+		}
+	})
+
 })
