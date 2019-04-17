@@ -29,6 +29,10 @@ The earliest point in the packet processing pipeline that packets can be dropped
 
 **Note**: XDP modes require Linux kernel v4.16 or later.
 
+### Before you begin...
+
+None
+
 ### How to
 
 The high-level steps to defend against a DoS attack are:
@@ -94,6 +98,9 @@ spec:
       <b>selector: dos-blacklist == 'true'</b>
 </pre>
 {: .no-select-button}
+
+### Tutorial
+None
 
 ### Above and beyond
 
