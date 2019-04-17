@@ -1,30 +1,5 @@
-# Builder image for bpftool
-
-FROM debian:buster-slim as bpftool-build
-RUN apt-get update && \
-apt-get upgrade -y && \
-apt-get install -y --no-install-recommends \
-    gpg gpg-agent libelf-dev libmnl-dev libc-dev iptables libgcc-8-dev \
-    bash-completion binutils binutils-dev ca-certificates make git curl \
-    xz-utils gcc pkg-config bison flex build-essential && \
-apt-get purge --auto-remove && \
-apt-get clean
-
-WORKDIR /tmp
-
-RUN \
-git clone --depth 1 -b master git://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git && \
-cd linux/tools/bpf/bpftool/ && \
-sed -i '/CFLAGS += -O2/a CFLAGS += -static' Makefile && \
-sed -i 's/LIBS = -lelf $(LIBBPF)/LIBS = -lelf -lz $(LIBBPF)/g' Makefile && \
-printf 'feature-libbfd=0\nfeature-libelf=1\nfeature-bpf=1\nfeature-libelf-mmap=1' >> FEATURES_DUMP.bpftool && \
-FEATURES_DUMP=`pwd`/FEATURES_DUMP.bpftool make -j `getconf _NPROCESSORS_ONLN` && \
-strip bpftool && \
-ldd bpftool 2>&1 | grep -q -e "Not a valid dynamic program" \
-	-e "not a dynamic executable" || \
-	( echo "Error: bpftool is not statically linked"; false ) && \
-mv bpftool /usr/bin && rm -rf /tmp/linux
-
+# Image containing the bpftool binary
+FROM calico/bpftool:v5.0-amd64 as bpftool
 
 # Main image
 
@@ -41,7 +16,7 @@ ADD calico-felix-wrapper /usr/bin
 # to more easily extract the Felix build artefacts from the container.
 ADD bin/calico-felix-amd64 /code/calico-felix
 RUN ln -s /code/calico-felix /usr/bin
-COPY --from=bpftool-build /usr/bin/bpftool /usr/bin
+COPY --from=bpftool /bpftool /usr/bin
 WORKDIR /code
 
 # Since our binary isn't designed to run as PID 1, run it via the tini init daemon.
