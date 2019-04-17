@@ -45,4 +45,4 @@ toc:
   - title: Securing Calico's Prometheus endpoints
     path: /security/comms/secure-metrics
 - title: Defend against DoS attacks
-  path: /security/
+  path: /security/Defend against DoS attack
