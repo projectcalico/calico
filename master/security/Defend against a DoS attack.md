@@ -24,7 +24,7 @@ The earliest point in the packet processing pipeline that packets can be dropped
 | --------------- | ------------------------------------------------------------ | ----------- |
 | NIC hardware    | The NIC supports **XDP offload** mode.                       | Fastest     |
 | NIC driver      | The NIC driver supports **XDP native** mode.                 | Faster      |
-| Kernel          | The kernel supports **XDP generic mode** and Calico is configured to explicitly use it. This mode is rarely used and has no performance benefits over iptables raw mode below. See [Felix Configuration]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/felixconfig).   | Fast        |
+| Kernel          | The kernel supports **XDP generic mode** and Calico is configured to explicitly use it. This mode is rarely used and has no performance benefits over iptables raw mode below. To enable, see [Felix Configuration]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/felixconfig).   | Fast        |
 | Kernel          | If none of the modes above are available, **iptables raw** mode is used. | Fast        |
 
 **Note**: XDP modes require Linux kernel v4.16 or later.
