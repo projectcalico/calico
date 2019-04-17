@@ -334,11 +334,14 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		routeTableVXLAN := routetable.New([]string{"vxlan.calico"}, 4, true, config.NetlinkTimeout)
 		dp.routeTables = append(dp.routeTables, routeTableVXLAN)
 		vxlanManager := newVXLANManager(
+			ipSetsV4,
+			config.MaxIPSetSize,
 			config.Hostname,
 			routeTableVXLAN,
 			"vxlan.calico",
 			config.RulesConfig.VXLANVNI,
 			config.RulesConfig.VXLANPort,
+			config.ExternalNodesCidrs,
 		)
 		go vxlanManager.KeepVXLANDeviceInSync(config.VXLANMTU)
 		dp.RegisterManager(vxlanManager)
