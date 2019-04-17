@@ -257,6 +257,8 @@ type Config struct {
 
 	NATPortRange                       numorstring.Port
 	IptablesNATOutgoingInterfaceFilter string
+
+	NATOutgoingAddress net.IP
 }
 
 func (c *Config) validate() {
