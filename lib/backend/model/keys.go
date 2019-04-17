@@ -148,11 +148,11 @@ func KeyToValueType(key Key) (reflect.Type, error) {
 //
 // For example,
 // 	KeyToDefaultDeletePaths(WorkloadEndpointKey{
-//		Nodename: "h",
-//		OrchestratorID: "o",
-//		WorkloadID: "w",
-//		EndpointID: "e",
-//	})
+// 		Nodename: "h",
+// 		OrchestratorID: "o",
+// 		WorkloadID: "w",
+// 		EndpointID: "e",
+// 	})
 // returns
 //
 // ["/calico/v1/host/h/workload/o/w/endpoint",
@@ -258,6 +258,8 @@ func KeyFromDefaultPath(path string) Key {
 	} else if k := (GlobalBGPConfigListOptions{}).KeyFromDefaultPath(path); k != nil {
 		return k
 	} else if k := (BlockAffinityListOptions{}).KeyFromDefaultPath(path); k != nil {
+		return k
+	} else if k := (BlockListOptions{}).KeyFromDefaultPath(path); k != nil {
 		return k
 	} else if k := (ResourceListOptions{Kind: v3.KindNode}).KeyFromDefaultPath(path); k != nil {
 		return k
