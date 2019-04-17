@@ -32,10 +32,12 @@ import:
   - lib/options
   - lib/upgrade/migrator
   - lib/upgrade/migrator/clients
-# gobuffalo/logger needs the SetOutput function in the Logger type, so pin
-# the first version that introduces it.
+# Use our fork, because v1.0.5 causes test breakages due to problems with our log formatting code,
+# but other deps require newer version because of the SetOutput function. Our fork backports
+# the missing stuff on top of v1.0.4.
 - package: github.com/sirupsen/logrus
-  version: v1.0.6
+  repo: https://github.com/projectcalico/logrus
+  version: v1.0.4-calico
 - package: k8s.io/apimachinery
   subpackages:
   - pkg/apis/meta/v1
