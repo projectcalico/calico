@@ -25,9 +25,12 @@ import:
 # 1.1.0+ needed since our code expects the v4 uuid creation function to return a single value.
 - package: github.com/satori/go.uuid
   version: ^1.1.0
+# Use our fork, because v1.0.5 causes test breakages due to problems with our log formatting code,
+# but other deps require newer version because of the SetOutput function. Our fork backports
+# the missing stuff on top of v1.0.4.
 - package: github.com/sirupsen/logrus
-  # v1.0.5 causes test breakages due to problems with our log formatting code.
-  version: v1.0.4
+  repo: https://github.com/projectcalico/logrus
+  version: v1.0.4-calico
 - package: golang.org/x/net
   subpackages:
   - context
