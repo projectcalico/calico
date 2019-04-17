@@ -32,9 +32,10 @@ The earliest point in the packet processing pipeline that packets can be dropped
 ### How to
 
 The high-level steps to defend against a DoS attack are:
-- [Step 1: Create host endpoints](#step-1:-create-host-endpoints)
-- [Step 2: Add CIDRs to blacklist in a global network set](#step-2:-add-cidrs-to-blacklist-in-a-global-network-set)
-- [Step 3: Create deny incoming traffic global network policy](#step-3:-create-deny-incoming-traffic-global-network-policy)
+
+- [Step 1: Create host endpoints](#step-1-create-host-endpoints)
+- [Step 2: Add CIDRs to blacklist in a global network set](#step-2-add-cidrs-to-blacklist-in-a-global-network-set)
+- [Step 3: Create deny incoming traffic global network policy](#step-3-create-deny-incoming-traffic-global-network-policy)
 
 #### Best practice
 The following steps walk through the above required steps, assuming no prior configuration is in place. A best practice is to proactively do these steps before an attack (create the host endpoints, network policy, and global network set). In the event of a DoS attack, you can quickly respond by just adding the CIDRs that you want to blacklist to the global network set.
