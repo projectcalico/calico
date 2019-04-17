@@ -1,5 +1,5 @@
-hash: c59f2283611a179eee5b9d559cd39e33a04f81618dc7576d79c181d2a8eb3ba9
-updated: 2019-04-16T17:12:17.776163462+01:00
+hash: 6e3488c192f9d65571c6e4f2c242dd4ab5d5747e3cfcb9e512bd6fcfc8ba914a
+updated: 2019-04-17T11:56:19.817056651+01:00
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -14,7 +14,7 @@ imports:
   - autorest/azure
   - autorest/date
 - name: github.com/beorn7/perks
-  version: 3a771d992973f24aa725d07868b467d1ddfceafb
+  version: 3ac7bf7a47d159a033b107610db8a1b6575507a4
   subpackages:
   - quantile
 - name: github.com/coreos/etcd
@@ -173,7 +173,7 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: 727a39e77d674af6e7d6684b941916183d80f5de
+  version: 419f1c6419fc7f07ba2dfc536a12e30d69886294
   subpackages:
   - lib/apiconfig
   - lib/apis/v1
@@ -230,7 +230,7 @@ imports:
   subpackages:
   - go
 - name: github.com/prometheus/common
-  version: cfeb6f9992ffa54aaa4f2170ade4067ee478b250
+  version: e3fb1a1acd7605367a2b378bc2e2f893c05174b7
   subpackages:
   - expfmt
   - internal/bitbucket.org/ww/goautoneg
