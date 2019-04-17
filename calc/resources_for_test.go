@@ -18,15 +18,18 @@ package calc_test
 // the model package.
 
 import (
+	"github.com/projectcalico/libcalico-go/lib/backend/encap"
 	. "github.com/projectcalico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/libcalico-go/lib/net"
 	"github.com/projectcalico/libcalico-go/lib/numorstring"
 )
 
 // Canned hostnames.
-
-const localHostname = "localhostname"
-const remoteHostname = "remotehostname"
+var (
+	localHostname   = "localhostname"
+	remoteHostname  = "remotehostname"
+	remoteHostname2 = "remotehostname2"
+)
 
 // Canned selectors.
 
@@ -568,3 +571,137 @@ var netSet2 = NetworkSet{
 		"a": "b",
 	},
 }
+
+var localHostIP = mustParseIP("192.168.0.1")
+var remoteHostIP = mustParseIP("192.168.0.2")
+var remoteHost2IP = mustParseIP("192.168.0.3")
+
+var localHostVXLANTunnelConfigKey = HostConfigKey{
+	Hostname: localHostname,
+	Name:     "IPv4VXLANTunnelAddr",
+}
+var remoteHostVXLANTunnelConfigKey = HostConfigKey{
+	Hostname: remoteHostname,
+	Name:     "IPv4VXLANTunnelAddr",
+}
+var remoteHost2VXLANTunnelConfigKey = HostConfigKey{
+	Hostname: remoteHostname2,
+	Name:     "IPv4VXLANTunnelAddr",
+}
+
+var ipPoolKey = IPPoolKey{
+	CIDR: mustParseNet("10.0.0.0/16"),
+}
+
+var ipPoolNoEncap = IPPool{
+	CIDR: mustParseNet("10.0.0.0/16"),
+}
+
+var ipPoolWithIPIP = IPPool{
+	CIDR:     mustParseNet("10.0.0.0/16"),
+	IPIPMode: encap.Always,
+}
+
+var ipPoolWithVXLAN = IPPool{
+	CIDR:      mustParseNet("10.0.0.0/16"),
+	VXLANMode: encap.Always,
+}
+
+var remoteIPAMBlockKey = BlockKey{
+	CIDR: mustParseNet("10.0.1.0/29"),
+}
+
+var localIPAMBlockKey = BlockKey{
+	CIDR: mustParseNet("10.0.0.0/29"),
+}
+
+var localHostAffinity = "host:" + localHostname
+var remoteHostAffinity = "host:" + remoteHostname
+var remoteHost2Affinity = "host:" + remoteHostname2
+var remoteIPAMBlock = AllocationBlock{
+	CIDR:        mustParseNet("10.0.1.0/29"),
+	Affinity:    &remoteHostAffinity,
+	Allocations: make([]*int, 8),
+	Unallocated: []int{0, 1, 2, 3, 4, 5, 6, 7},
+}
+var remoteIPAMBlockWithBorrows = AllocationBlock{
+	CIDR:     mustParseNet("10.0.1.0/29"),
+	Affinity: &remoteHostAffinity,
+	Allocations: []*int{
+		intPtr(0),
+		intPtr(1),
+		intPtr(2),
+		nil,
+		nil,
+		nil,
+		nil,
+		nil,
+	},
+	Unallocated: []int{3, 4, 5, 6, 7},
+	Attributes: []AllocationAttribute{
+		{},
+		{AttrSecondary: map[string]string{
+			IPAMBlockAttributeNode: remoteHostname,
+		}},
+		{AttrSecondary: map[string]string{
+			IPAMBlockAttributeNode: remoteHostname2,
+		}},
+	},
+}
+var remoteIPAMBlockWithBorrowsSwitched = AllocationBlock{
+	CIDR:     mustParseNet("10.0.1.0/29"),
+	Affinity: &remoteHost2Affinity,
+	Allocations: []*int{
+		intPtr(0),
+		intPtr(1),
+		intPtr(2),
+		nil,
+		nil,
+		nil,
+		nil,
+		nil,
+	},
+	Unallocated: []int{3, 4, 5, 6, 7},
+	Attributes: []AllocationAttribute{
+		{},
+		{AttrSecondary: map[string]string{
+			IPAMBlockAttributeNode: remoteHostname2,
+		}},
+		{AttrSecondary: map[string]string{
+			IPAMBlockAttributeNode: remoteHostname,
+		}},
+	},
+}
+
+var localIPAMBlockWithBorrows = AllocationBlock{
+	CIDR:     mustParseNet("10.0.0.0/29"),
+	Affinity: &localHostAffinity,
+	Allocations: []*int{
+		intPtr(0),
+		intPtr(1),
+		intPtr(2),
+		nil,
+		nil,
+		nil,
+		nil,
+		nil,
+	},
+	Unallocated: []int{3, 4, 5, 6, 7},
+	Attributes: []AllocationAttribute{
+		{},
+		{AttrSecondary: map[string]string{
+			IPAMBlockAttributeNode: localHostname,
+		}},
+		{AttrSecondary: map[string]string{
+			IPAMBlockAttributeNode: remoteHostname,
+		}},
+	},
+}
+
+func intPtr(i int) *int {
+	return &i
+}
+
+var localHostVXLANTunnelIP = "10.0.0.0"
+var remoteHostVXLANTunnelIP = "10.0.1.0"
+var remoteHost2VXLANTunnelIP = "10.0.2.0"

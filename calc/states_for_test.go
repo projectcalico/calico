@@ -882,6 +882,151 @@ var hostEp1WithPolicyAndANetworkSetMatchingBEqB = hostEp1WithPolicy.withKVUpdate
 	"12.1.0.0/24",
 })
 
+// Minimal VXLAN set-up, all the data needed for a remote VTEP, a pool and a block.
+var vxlanWithBlock = empty.withKVUpdates(
+	KVPair{Key: ipPoolKey, Value: &ipPoolWithVXLAN},
+	KVPair{Key: remoteIPAMBlockKey, Value: &remoteIPAMBlock},
+	KVPair{Key: remoteHostIPKey, Value: &remoteHostIP},
+	KVPair{Key: remoteHostVXLANTunnelConfigKey, Value: remoteHostVXLANTunnelIP},
+).withName("VXLAN").withVTEPs(
+	// VTEP for the remote node.
+	proto.VXLANTunnelEndpointUpdate{
+		Node:           remoteHostname,
+		Mac:            "66:3e:ca:a4:db:65",
+		Ipv4Addr:       remoteHostVXLANTunnelIP,
+		ParentDeviceIp: remoteHostIP.String(),
+	},
+).withRoutes(
+	// Single route for the block.
+	proto.RouteUpdate{
+		Node: remoteHostname,
+		Dst:  "10.0.1.0/29",
+		Gw:   remoteHostVXLANTunnelIP,
+		Type: proto.RouteType_VXLAN,
+	},
+)
+
+// As above but with a more complex block.  The block has some allocated IPs on the same
+// node as well as one that's borrowed by a second node.  We add the extra VTEP config for the
+// other node.
+var vxlanWithBlockAndBorrows = vxlanWithBlock.withKVUpdates(
+	KVPair{Key: remoteIPAMBlockKey, Value: &remoteIPAMBlockWithBorrows},
+	KVPair{Key: remoteHost2IPKey, Value: &remoteHost2IP},
+	KVPair{Key: remoteHost2VXLANTunnelConfigKey, Value: remoteHost2VXLANTunnelIP},
+).withName("VXLAN borrow").withVTEPs(
+	proto.VXLANTunnelEndpointUpdate{
+		Node:           remoteHostname,
+		Mac:            "66:3e:ca:a4:db:65",
+		Ipv4Addr:       remoteHostVXLANTunnelIP,
+		ParentDeviceIp: remoteHostIP.String(),
+	},
+	proto.VXLANTunnelEndpointUpdate{
+		Node:           remoteHostname2,
+		Mac:            "66:40:18:59:1f:16",
+		Ipv4Addr:       remoteHost2VXLANTunnelIP,
+		ParentDeviceIp: remoteHost2IP.String(),
+	},
+).withRoutes(
+	proto.RouteUpdate{
+		Type: proto.RouteType_VXLAN,
+		Node: remoteHostname,
+		Gw:   remoteHostVXLANTunnelIP,
+		Dst:  "10.0.1.0/29",
+	},
+	proto.RouteUpdate{
+		Type: proto.RouteType_VXLAN,
+		Node: remoteHostname2,
+		Gw:   remoteHost2VXLANTunnelIP,
+		Dst:  "10.0.1.2/32",
+	},
+)
+
+// As above but with the owner of the block and the borrows switched.
+var vxlanBlockOwnerSwitch = vxlanWithBlockAndBorrows.withKVUpdates(
+	KVPair{Key: remoteIPAMBlockKey, Value: &remoteIPAMBlockWithBorrowsSwitched},
+).withRoutes(
+	proto.RouteUpdate{
+		Type: proto.RouteType_VXLAN,
+		Node: remoteHostname2,
+		Gw:   remoteHost2VXLANTunnelIP,
+		Dst:  "10.0.1.0/29",
+	},
+	proto.RouteUpdate{
+		Type: proto.RouteType_VXLAN,
+		Node: remoteHostname,
+		Gw:   remoteHostVXLANTunnelIP,
+		Dst:  "10.0.1.2/32",
+	},
+).withName("VXLAN owner switch")
+
+// As above but with the owner of the block and the borrows switched.
+var vxlanLocalBlockWithBorrows = empty.withKVUpdates(
+	KVPair{Key: ipPoolKey, Value: &ipPoolWithVXLAN},
+
+	KVPair{Key: localHostIPKey, Value: &localHostIP},
+	KVPair{Key: localHostVXLANTunnelConfigKey, Value: localHostVXLANTunnelIP},
+
+	KVPair{Key: remoteHostIPKey, Value: &remoteHostIP},
+	KVPair{Key: remoteHostVXLANTunnelConfigKey, Value: remoteHostVXLANTunnelIP},
+
+	KVPair{Key: localIPAMBlockKey, Value: &localIPAMBlockWithBorrows},
+).withVTEPs(
+	proto.VXLANTunnelEndpointUpdate{
+		Node:           remoteHostname,
+		Mac:            "66:3e:ca:a4:db:65",
+		Ipv4Addr:       remoteHostVXLANTunnelIP,
+		ParentDeviceIp: remoteHostIP.String(),
+	},
+	proto.VXLANTunnelEndpointUpdate{
+		Node:           localHostname,
+		Mac:            "66:48:f6:56:dc:f1",
+		Ipv4Addr:       localHostVXLANTunnelIP,
+		ParentDeviceIp: localHostIP.String(),
+	},
+).withRoutes(
+	proto.RouteUpdate{
+		Type: proto.RouteType_VXLAN,
+		Node: remoteHostname,
+		Gw:   remoteHostVXLANTunnelIP,
+		Dst:  "10.0.0.2/32",
+	},
+).withName("VXLAN local with borrows")
+
+// vxlanWithBlockAndBorrows but missing hte VTEP information for the first host.
+var vxlanWithBlockAndBorrowsAndMissingFirstVTEP = vxlanWithBlockAndBorrows.withKVUpdates(
+	KVPair{Key: remoteHostIPKey, Value: nil},
+).withName("VXLAN borrow missing VTEP").withVTEPs(
+	proto.VXLANTunnelEndpointUpdate{
+		Node:           remoteHostname2,
+		Mac:            "66:40:18:59:1f:16",
+		Ipv4Addr:       remoteHost2VXLANTunnelIP,
+		ParentDeviceIp: remoteHost2IP.String(),
+	},
+).withRoutes(
+	proto.RouteUpdate{
+		Node: remoteHostname2,
+		Dst:  "10.0.1.2/32",
+		Gw:   remoteHost2VXLANTunnelIP,
+		Type: proto.RouteType_VXLAN,
+	},
+)
+
+var vxlanToIPIPSwitch = vxlanWithBlock.withKVUpdates(
+	KVPair{Key: ipPoolKey, Value: &ipPoolWithIPIP},
+).withName("VXLAN switched to IPIP").withRoutes()
+
+var vxlanBlockDelete = vxlanWithBlock.withKVUpdates(
+	KVPair{Key: remoteIPAMBlockKey, Value: nil},
+).withName("VXLAN block removed").withRoutes()
+
+var vxlanHostIPDelete = vxlanWithBlock.withKVUpdates(
+	KVPair{Key: remoteHostIPKey, Value: nil},
+).withName("VXLAN host IP removed").withRoutes().withVTEPs()
+
+var vxlanTunnelIPDelete = vxlanWithBlock.withKVUpdates(
+	KVPair{Key: remoteHostVXLANTunnelConfigKey, Value: nil},
+).withName("VXLAN host tunnel IP removed").withRoutes().withVTEPs()
+
 type StateList []State
 
 func (l StateList) String() string {

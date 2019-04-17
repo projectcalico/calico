@@ -5,6 +5,8 @@ import (
 	"fmt"
 	gonet "net"
 
+	"github.com/sirupsen/logrus"
+
 	"github.com/projectcalico/felix/dispatcher"
 	"github.com/projectcalico/felix/ip"
 	"github.com/projectcalico/felix/proto"
@@ -13,7 +15,6 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/libcalico-go/lib/net"
 	"github.com/projectcalico/libcalico-go/lib/set"
-	"github.com/sirupsen/logrus"
 )
 
 // VXLANResolver is responsible for resolving node IPs, node config, IPAM blocks,
@@ -83,28 +84,21 @@ func (c *VXLANResolver) OnBlockUpdate(update api.Update) (_ bool) {
 		// for duplicates here. Look at the routes contributed by this block and determine if we
 		// need to send any updates.
 		newRoutes := c.routesFromBlock(key, update.Value.(*model.AllocationBlock))
-		currentRoutes, ok := c.blockToRoutes[key]
+		cachedRoutes, ok := c.blockToRoutes[key]
 		if !ok {
-			currentRoutes = set.New()
-			c.blockToRoutes[key] = currentRoutes
+			cachedRoutes = set.New()
+			c.blockToRoutes[key] = cachedRoutes
 		}
 
-		for _, r := range newRoutes {
-			logCxt := logrus.WithField("newRoute", r)
-			if currentRoutes.Contains(r) {
-				logCxt.Debug("Desired VXLAN route already exists, skip")
-				continue
-			}
-
-			c.blockToRoutes[key].Add(r)
-			adds.Add(r)
-		}
-
-		currentRoutes.Iter(func(item interface{}) error {
+		// Now scan the old routes, looking for any that are no-longer associated with the block.
+		// Remove no longer active routes from the cache and queue up deletions.
+		cachedRoutes.Iter(func(item interface{}) error {
 			r := item.(vxlanRoute)
 
 			// For each existing route which is no longer present, we need to delete it.
-			if _, ok := newRoutes[r.Key()]; ok {
+			// Note: since r.Key() only contains the destination, we need to check equality too in case
+			// the gateway has changed.
+			if newRoute, ok := newRoutes[r.Key()]; ok && newRoute == r {
 				// Exists, and we want it to - nothing to do.
 				return nil
 			}
@@ -112,9 +106,20 @@ func (c *VXLANResolver) OnBlockUpdate(update api.Update) (_ bool) {
 			// Current route is not in new set - we need to withdraw the route, and also
 			// remove it from internal state.
 			deletes.Add(r)
-			c.blockToRoutes[key].Discard(r)
-			return nil
+			return set.RemoveItem
 		})
+
+		// Now scan the new routes, looking for additions.  Cache them and queue up adds.
+		for _, r := range newRoutes {
+			logCxt := logrus.WithField("newRoute", r)
+			if cachedRoutes.Contains(r) {
+				logCxt.Debug("Desired VXLAN route already exists, skip")
+				continue
+			}
+
+			cachedRoutes.Add(r)
+			adds.Add(r)
+		}
 
 		// At this point we've determined the correct diff to perform based on the block update.
 		// Delete any routes which are gone for good, withdraw modified routes, and send updates for
@@ -127,10 +132,12 @@ func (c *VXLANResolver) OnBlockUpdate(update api.Update) (_ bool) {
 	} else {
 		// Block has been deleted. Clean up routes that were contributed by this block.
 		routes := c.blockToRoutes[key]
-		routes.Iter(func(item interface{}) error {
-			c.withdrawRoute(item.(vxlanRoute))
-			return nil
-		})
+		if routes != nil {
+			routes.Iter(func(item interface{}) error {
+				c.withdrawRoute(item.(vxlanRoute))
+				return nil
+			})
+		}
 		delete(c.blockToRoutes, key)
 	}
 	return
@@ -181,7 +188,6 @@ func (c *VXLANResolver) OnHostIPUpdate(update api.Update) (_ bool) {
 			logCxt.Info("Sent VTEP to dataplane, check pending routes")
 			c.kickPendingRoutes(pendingSet)
 		}
-
 	} else {
 		// Withdraw any routes which target this VTEP, followed by the VTEP itself.
 		logCxt.Info("Withdrawing routes and VTEP, node IP address deleted")
@@ -208,7 +214,8 @@ func (c *VXLANResolver) OnHostConfigUpdate(update api.Update) (_ bool) {
 	case "IPv4VXLANTunnelAddr":
 		nodeName := update.Key.(model.HostConfigKey).Hostname
 		vtepSent := c.vtepSent(nodeName)
-		logCxt := logrus.WithField("node", nodeName)
+		logCxt := logrus.WithField("node", nodeName).WithField("value", update.Value)
+		logCxt.Debug("IPv4VXLANTunnelAddr update")
 		if update.Value != nil {
 			// Update for a VXLAN tunnel address.
 			newIP := update.Value.(string)
@@ -243,7 +250,6 @@ func (c *VXLANResolver) OnHostConfigUpdate(update api.Update) (_ bool) {
 				logCxt.Info("Sent VTEP to dataplane, check pending routes")
 				c.kickPendingRoutes(pendingSet)
 			}
-
 		} else {
 			// Withdraw any routes which target this VTEP, followed by the VTEP itself.
 			logCxt.Info("Withdrawing routes and VTEP, node tunnel address deleted")
@@ -269,6 +275,7 @@ func (c *VXLANResolver) OnPoolUpdate(update api.Update) (_ bool) {
 	pendingSet, sentSet := c.routeSets()
 	if update.Value != nil && update.Value.(*model.IPPool).VXLANMode != encap.Undefined {
 		// This is an add/update of a pool with VXLAN enabled.
+		logrus.WithField("pool", k.CIDR).Info("Update of VXLAN-enabled IP pool.")
 		if curr, ok := c.vxlanPools[k.String()]; ok {
 			// We already know about this IP pool. Check to see if the CIDR has changed.
 			// While this isn't possible directly in the user-facing API, it's possible that
@@ -306,6 +313,8 @@ func (c *VXLANResolver) OnPoolUpdate(update api.Update) (_ bool) {
 			return nil
 		})
 		delete(c.vxlanPools, k.String())
+	} else {
+		logrus.WithField("pool", k.CIDR).Debug("Ignoring non-VXLAN IP pool")
 	}
 	return
 }
@@ -351,7 +360,7 @@ func (c *VXLANResolver) routeReady(r vxlanRoute) bool {
 	logCxt := logrus.WithField("route", r)
 	gw := c.determineGatewayForRoute(r)
 	if gw == "" {
-		logCxt.Info("No gateway yet for VXLAN route, skip")
+		logCxt.Debug("No gateway yet for VXLAN route, skip")
 		return false
 	}
 	if !c.routeWithinVXLANPool(r) {
@@ -359,7 +368,7 @@ func (c *VXLANResolver) routeReady(r vxlanRoute) bool {
 		return false
 	}
 	if !c.vtepSent(r.node) {
-		logCxt.Info("Don't yet know the VTEP for this route")
+		logCxt.Debug("Don't yet know the VTEP for this route")
 		return false
 	}
 	return true
@@ -432,19 +441,36 @@ func (c *VXLANResolver) routeWithinVXLANPool(r vxlanRoute) bool {
 }
 
 // routesFromBlock returns a list of routes which should exist based on the provided
-// allocation block. Right now, we only support strict affinity so this will always
-// be the block's CIDR.
+// allocation block.
 func (c *VXLANResolver) routesFromBlock(blockKey string, b *model.AllocationBlock) map[string]vxlanRoute {
-	if b.Host() == c.hostname {
-		logrus.Debug("Skipping VXLAN routes for local node")
-		return nil
+	routes := make(map[string]vxlanRoute)
+
+	for _, alloc := range b.NonAffineAllocations() {
+		if alloc.Host == "" {
+			logrus.WithField("IP", alloc.Addr).Warn(
+				"Unable to create VXLAN route for IP; the node it belongs to was not recorded")
+			continue
+		}
+		r := vxlanRoute{
+			dst:  ip.CIDRFromNetIP(alloc.Addr.IP),
+			node: alloc.Host,
+		}
+		routes[r.Key()] = r
 	}
 
-	r := vxlanRoute{
-		dst:  ip.CIDRFromCalicoNet(b.CIDR),
-		node: b.Host(),
+	host := b.Host()
+	if host == c.hostname {
+		logrus.Debug("Skipping VXLAN routes for local node")
+	} else if host != "" {
+		logrus.WithField("host", host).Debug("Block has a host, including host route")
+		r := vxlanRoute{
+			dst:  ip.CIDRFromCalicoNet(b.CIDR),
+			node: host,
+		}
+		routes[r.Key()] = r
 	}
-	return map[string]vxlanRoute{r.Key(): r}
+
+	return routes
 }
 
 // determineGatewayForRoute determines which gateway to use for this route. For VXLAN routes, the

@@ -20,8 +20,9 @@ import (
 	"sync"
 
 	version "github.com/hashicorp/go-version"
-	"github.com/projectcalico/felix/versionparse"
 	log "github.com/sirupsen/logrus"
+
+	"github.com/projectcalico/felix/versionparse"
 )
 
 var (
