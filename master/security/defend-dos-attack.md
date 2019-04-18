@@ -2,7 +2,7 @@
 title: Defend against DoS attacks
 ---
 
-### Big Picture
+### Big Picture 
 
 Calico automatically enforces specific types of blacklist policies at the earliest possible point in the packet processing pipeline, including offloading to NIC hardware whenever possible. 
 
