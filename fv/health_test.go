@@ -327,6 +327,32 @@ var _ = Describe("health tests", func() {
 		})
 	})
 
+	Describe("with Felix unable to connect to Typha at first", func() {
+		BeforeEach(func() {
+			// We have to start Typha first so we can pass its IP to Felix.
+			startTypha(k8sInfra.GetDockerArgs)
+			// Start felix with the wrong Typha port so it won't be able to connect initially.  Then, we'll add a
+			// NAT rule to steer the traffic to the right port below.
+			startFelix(typhaContainer.IP+":5474" /*wrong port!*/, k8sInfra.GetDockerArgs, "", "", "0.0.0.0")
+		})
+
+		AfterEach(func() {
+			felixContainer.Stop()
+			typhaContainer.Stop()
+		})
+
+		It("should report not ready until it connects to Typha, then report ready", func() {
+			Eventually(felixReady, "5s", "100ms").Should(BeBad())
+			Consistently(felixReady, "5s", "100ms").Should(BeBad())
+
+			// Add a NAT rule to steer traffic from the port that Felix is using to the correct Typha port.
+			felixContainer.Exec("iptables", "-t", "nat", "-A", "OUTPUT", "-p", "tcp",
+				"--destination", typhaContainer.IP, "--dport", "5474", "-j", "DNAT", "--to-destination", ":5473")
+
+			Eventually(felixReady, "5s", "100ms").Should(BeGood())
+		})
+	})
+
 	Describe("with typha connected to bad API endpoint", func() {
 		BeforeEach(func() {
 			startTypha(k8sInfra.GetBadEndpointDockerArgs)

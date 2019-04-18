@@ -80,7 +80,7 @@ func (c *Container) Stop() {
 	startTime := time.Now()
 	for {
 		if !c.ListedInDockerPS() {
-			// Container has stopped.  Mkae sure the docker CLI command is dead (it should be already)
+			// Container has stopped.  Make sure the docker CLI command is dead (it should be already)
 			// and wait for its log.
 			logCxt.Info("Container stopped (no longer listed in 'docker ps')")
 			withTimeoutPanic(logCxt, 5*time.Second, func() { c.signalDockerRun(os.Kill) })
