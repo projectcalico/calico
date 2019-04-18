@@ -451,11 +451,14 @@ configRetry:
 				if err == nil {
 					break
 				}
-				log.WithError(err).Debug("Retrying to start Typha")
+				log.WithError(err).Debug("Retrying Typha connection")
 				time.Sleep(1 * time.Second)
 			}
 			if err != nil {
 				log.WithError(err).Fatal("Failed to connect to Typha")
+			} else {
+				log.Info("Connected to Typha after retries.")
+				healthAggregator.Report(healthName, &health.HealthReport{Live: true, Ready: true})
 			}
 		}
 		go func() {
