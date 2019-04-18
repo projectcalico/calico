@@ -1,5 +1,5 @@
 ---
-title: Defend against a DoS attack
+title: Defend against DoS attacks
 ---
 
 ### Big Picture
