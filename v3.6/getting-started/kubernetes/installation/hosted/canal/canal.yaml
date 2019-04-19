@@ -4,4 +4,5 @@ layout: null
 {% helm %}
 datastore: kdd
 network: flannel
+ipam: host-local
 {% endhelm %}

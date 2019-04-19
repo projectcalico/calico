@@ -3,6 +3,7 @@ layout: null
 ---
 {% helm --execute=templates/calico-node.yaml %}
 datastore: kdd
+ipam: host-local
 typha:
   enabled: true
 app_layer_policy: true
