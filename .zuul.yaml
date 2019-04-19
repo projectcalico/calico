@@ -17,7 +17,7 @@
     post-run: playbooks/legacy/tempest-dsvm-networking-calico/post.yaml
     timeout: 7800
     required-projects:
-      - openstack-infra/devstack-gate
+      - openstack/devstack-gate
       - openstack/networking-calico
       - openstack/tempest
     irrelevant-files:
