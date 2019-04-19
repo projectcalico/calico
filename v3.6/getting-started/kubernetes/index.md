@@ -110,7 +110,7 @@ To deploy a cluster suitable for production, refer to [Installation](installatio
    ```
    NAMESPACE    NAME                                       READY  STATUS   RESTARTS  AGE
    kube-system  calico-kube-controllers-6ff88bf6d4-tgtzb   1/1    Running  0         2m45s
-   kube-system  {{site.noderunning}}-24h85                          2/2    Running  0         2m43s
+   kube-system  {{site.noderunning}}-24h85                          1/1    Running  0         2m43s
    kube-system  coredns-846jhw23g9-9af73                   1/1    Running  0         4m5s
    kube-system  coredns-846jhw23g9-hmswk                   1/1    Running  0         4m5s
    kube-system  etcd-jbaker-1                              1/1    Running  0         6m22s
