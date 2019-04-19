@@ -15,6 +15,7 @@ etcd:
 # Sets the networking mode. Can be 'calico', 'flannel', or 'none'
 network: calico
 
-calico_ipam: true
+# Sets the ipam. Can be 'calico-ipam' or 'host-local'
+ipam: calico-ipam
 app_layer_policy: false
 

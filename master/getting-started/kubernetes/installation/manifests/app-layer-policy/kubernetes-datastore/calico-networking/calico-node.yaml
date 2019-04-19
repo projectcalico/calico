@@ -4,7 +4,6 @@ layout: null
 {% helm --execute=templates/calico-node.yaml %}
 datastore: kdd
 network: calico
-calico_ipam: true
 typha:
   enabled: true
 app_layer_policy: true

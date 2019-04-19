@@ -6,5 +6,5 @@ datastore: kdd
 typha:
   enabled: true
 network: none
-calico_ipam: false
+ipam: host-local
 {% endhelm %}

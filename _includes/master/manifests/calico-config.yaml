@@ -105,16 +105,12 @@ data:
   {{- else if eq .Values.network "none" }}
           "mtu": 1500,
   {{- end }}
-  {{- if .Values.calico_ipam }}
           "ipam": {
-              "type": "calico-ipam"
+              "type": "{{ .Values.ipam }}"
+              {{- if eq .Values.ipam "host-local" }},
+              "subnet": "usePodCidr"
+              {{- end }}
           },
-  {{- else }}
-          "ipam": {
-            "type": "host-local",
-            "subnet": "usePodCidr"
-          },
-  {{- end }}
           "policy": {
               "type": "k8s"
           },
