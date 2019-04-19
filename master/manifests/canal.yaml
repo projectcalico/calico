@@ -3,7 +3,6 @@ layout: null
 ---
 {% helm %}
 datastore: kdd
-network: calico
-typha:
-  enabled: true
+network: flannel
+ipam: host-local
 {% endhelm %}

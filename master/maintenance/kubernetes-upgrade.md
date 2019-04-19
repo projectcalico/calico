@@ -23,23 +23,17 @@ procedure varies by datastore type.
 
    **{{site.prodname}} for policy and networking**
    ```bash
-   curl \
-   {{site.url}}/{{page.version}}/getting-started/kubernetes/installation/hosted/kubernetes-datastore/calico-networking/1.7/calico.yaml \
-   -O
+   curl {{site.url}}/{{page.version}}/manifests/calico.yaml -O
    ```
 
    **{{site.prodname}} for policy and flannel for networking**
    ```bash
-   curl \
-   {{site.url}}/{{page.version}}/getting-started/kubernetes/installation/hosted/canal/canal.yaml \
-   -O
+   curl {{site.url}}/{{page.version}}/manifests/canal.yaml -O
    ```
 
    **{{site.prodname}} for policy (advanced)**
    ```bash
-   curl \
-   {{site.url}}/{{page.version}}/getting-started/kubernetes/installation/hosted/kubernetes-datastore/policy-only/1.7/calico.yaml \
-   -O
+   curl {{site.url}}/{{page.version}}/manifests/calico-policy-only.yaml -O
    ```
 
    > **Note**: If you manually modified the manifest, you must manually apply the
@@ -88,16 +82,12 @@ procedure varies by datastore type.
 
    **{{site.prodname}} for policy and networking**
    ```bash
-   curl \
-   {{site.url}}/{{page.version}}/getting-started/kubernetes/installation/hosted/calico.yaml \
-   -O
+   curl {{site.url}}/{{page.version}}/calico-etcd.yaml -O
    ```
 
    **{{site.prodname}} for policy and flannel for networking**
    ```bash
-   curl \
-   {{site.url}}/{{page.version}}/getting-started/kubernetes/installation/hosted/canal/canal-etcd.yaml \
-   -O
+   curl {{site.url}}/{{page.version}}/canal-etcd.yaml -O
    ```
 
    > **Note**: You must must manually apply the changes you made to the manifest

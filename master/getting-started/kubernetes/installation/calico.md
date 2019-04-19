@@ -28,9 +28,7 @@ datastore type and number of nodes.
 1. Download the {{site.prodname}} networking manifest for the Kubernetes API datastore.
 
    ```bash
-   curl \
-   {{site.url}}/{{page.version}}/getting-started/kubernetes/installation/hosted/kubernetes-datastore/calico-networking/1.7/calico.yaml \
-   -O
+   curl {{site.url}}/{{page.version}}/manifests/calico.yaml -O
    ```
 
 {% include {{page.version}}/pod-cidr-sed.md yaml="calico" %}
@@ -49,9 +47,7 @@ datastore type and number of nodes.
 1. Download the {{site.prodname}} networking manifest for the Kubernetes API datastore.
 
    ```bash
-   curl \
-   {{site.url}}/{{page.version}}/getting-started/kubernetes/installation/hosted/kubernetes-datastore/calico-networking/typha/calico.yaml \
-   -O
+   curl {{site.url}}/{{page.version}}/manifests/calico-typha.yaml -O
    ```
 
 {% include {{page.version}}/pod-cidr-sed.md yaml="calico" %}
@@ -73,9 +69,9 @@ datastore type and number of nodes.
 
    We recommend at least one replica for every 200 nodes and no more than
    20 replicas. In production, we recommend a minimum of three replicas to reduce
-   the impact of rolling upgrades and failures.  The number of replicas should 
+   the impact of rolling upgrades and failures.  The number of replicas should
    always be less than the number of nodes, otherwise rolling upgrades will stall.
-   In addition, Typha only helps with scale if there are fewer Typha instances than 
+   In addition, Typha only helps with scale if there are fewer Typha instances than
    there are nodes.
 
    > **Warning**: If you set `typha_service_name` without increasing the replica
@@ -97,9 +93,7 @@ datastore type and number of nodes.
 1. Download the {{site.prodname}} networking manifest for etcd.
 
    ```bash
-   curl \
-   {{site.url}}/{{page.version}}/getting-started/kubernetes/installation/hosted/calico.yaml \
-   -O
+   curl {{site.url}}/{{page.version}}/manifests/calico-etcd.yaml -O
    ```
 
 {% include {{page.version}}/pod-cidr-sed.md yaml="calico" %}
