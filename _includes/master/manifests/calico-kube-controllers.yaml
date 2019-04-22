@@ -33,6 +33,7 @@ spec:
         - key: node-role.kubernetes.io/master
           effect: NoSchedule
       serviceAccountName: calico-kube-controllers
+      priorityClassName: system-cluster-critical
       containers:
         - name: calico-kube-controllers
           image: {{.Values.kubeControllers.image}}:{{ .Values.kubeControllers.tag }}
@@ -122,6 +123,7 @@ spec:
         - key: node-role.kubernetes.io/master
           effect: NoSchedule
       serviceAccountName: calico-kube-controllers
+      priorityClassName: system-cluster-critical
       containers:
         - name: calico-kube-controllers
           image: {{.Values.kubeControllers.image}}:{{ .Values.kubeControllers.tag }}

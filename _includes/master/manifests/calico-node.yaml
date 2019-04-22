@@ -43,6 +43,7 @@ spec:
       # Minimize downtime during a rolling upgrade or deletion; tell Kubernetes to do a "force
       # deletion": https://kubernetes.io/docs/concepts/workloads/pods/pod/#termination-of-pods.
       terminationGracePeriodSeconds: 0
+      priorityClassName: system-node-critical
       initContainers:
 {{- if and (eq .Values.network "calico") (eq .Values.datastore "kdd") }}
         # This container performs upgrade from host-local IPAM to calico-ipam.
