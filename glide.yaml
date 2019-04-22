@@ -1,0 +1,18 @@
+package: github.com/projectcalico/calico
+import: []
+testImport:
+- package: k8s.io/api
+  version: release-1.10
+  subpackages:
+  - apps/v1beta1
+  - core/v1
+  - extensions/v1beta1
+  - policy/v1beta1
+- package: k8s.io/client-go
+  version: release-7.0
+  subpackages:
+  - kubernetes/scheme
+- package: k8s.io/apimachinery
+  version: d49e237a2683fa6dc43a86c7b1b766e0219fb6e7
+- package: github.com/onsi/ginkgo
+- package: github.com/onsi/gomega

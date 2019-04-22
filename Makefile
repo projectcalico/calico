@@ -8,6 +8,11 @@ ifeq ($(DEV),true)
 	CONFIG:=$(CONFIG),_config_dev.yml
 endif
 
+GO_BUILD_VER?=v0.20
+CALICO_BUILD?=calico/go-build:$(GO_BUILD_VER)
+LOCAL_USER_ID?=$(shell id -u $$USER)
+PACKAGE_NAME?=github.com/projectcalico/calico
+
 # Determine whether there's a local yaml installed or use dockerized version.
 # Note in order to install local (faster) yaml: "go get github.com/mikefarah/yaml"
 YAML_CMD:=$(shell which yaml || echo docker run --rm -i calico/yaml)
@@ -65,7 +70,7 @@ clean:
 # CI / test targets
 ###############################################################################
 
-ci: htmlproofer kubeval
+ci: htmlproofer kubeval helm-tests
 
 htmlproofer: _site
 	docker run -ti -e JEKYLL_UID=`id -u` --rm -v $(PWD)/_site:/_site/ quay.io/calico/htmlproofer:$(HP_VERSION) /_site --assume-extension --check-html --empty-alt-ignore --file-ignore $(HP_IGNORE_LOCAL_DIRS) --internal_domains "docs.projectcalico.org" --disable_external --allow-hash-href
@@ -82,6 +87,21 @@ kubeval: _site
 	-rm stderr.out
 	! grep -C3 -P "invalid|\t\*" filtered.out
 	rm filtered.out
+
+helm-tests: vendor bin/helm values.yaml
+ifndef RELEASE_STREAM
+	# Default the version to master if not set
+	$(eval RELEASE_STREAM = master)
+endif
+	mkdir -p .go-pkg-cache && \
+		docker run --rm \
+		--net=host \
+		-v $$(pwd):/go/src/$(PACKAGE_NAME):rw \
+		-v $$(pwd)/.go-pkg-cache:/go/pkg:rw \
+		-v $$(pwd)/bin/helm:/usr/local/bin/helm \
+		-e LOCAL_USER_ID=$(LOCAL_USER_ID) \
+		-w /go/src/$(PACKAGE_NAME) \
+		$(CALICO_BUILD) ginkgo -cover -r -skipPackage vendor ./helm-tests -chart-path=./_includes/$(RELEASE_STREAM)/charts/calico $(GINKGO_ARGS)
 
 ###############################################################################
 # Docs automation
@@ -285,15 +305,28 @@ bin/helm:
 	tar -zxvf $(TMP)/$(HELM_RELEASE) -C $(TMP)
 	mv $(TMP)/linux-amd64/helm bin/helm
 
-.PHONY: values.yml
-values.yml:
+.PHONY: values.yaml
+values.yaml:
 ifndef RELEASE_STREAM
-	$(error RELEASE_STREAM is undefined - run using make values.yaml RELEASE_STREAM=vX.Y)
+	# Default the version to master if not set
+	$(eval RELEASE_STREAM = master)
 endif
 	docker run --rm \
 	  -v $$PWD:/calico \
 	  -w /calico \
-	  ruby:2.5 ruby ./hack/gen_values_yml.rb $(RELEASE_STREAM) >> _includes/$(RELEASE_STREAM)/charts/calico/values.yaml
+          ruby:2.5 ruby ./hack/gen_values_yml.rb $(RELEASE_STREAM) > _includes/$(RELEASE_STREAM)/charts/calico/values.yaml
+
+## Create the vendor directory
+vendor: glide.yaml
+	# Ensure that the glide cache directory exists.
+	mkdir -p $(HOME)/.glide
+
+	docker run --rm -i \
+	  -v $(CURDIR):/go/src/$(PACKAGE_NAME):rw \
+	  -v $(HOME)/.glide:/home/user/.glide:rw \
+	  -e LOCAL_USER_ID=$(LOCAL_USER_ID) \
+	  -w /go/src/$(PACKAGE_NAME) \
+	  $(CALICO_BUILD) glide install -strip-vendor
 
 .PHONY: help
 ## Display this help text
