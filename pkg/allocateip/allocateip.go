@@ -36,7 +36,13 @@ func Run() {
 	logrus.AddHook(&logutils.ContextHook{})
 
 	// Load the client config from environment.
-	_, c := calicoclient.CreateClient()
+	cfg, c := calicoclient.CreateClient()
+
+	// If configured to use host-local IPAM, this script has nothing to do, so just return.
+	if cfg.Spec.K8sUsePodCIDR {
+		logrus.Debug("Using host-local IPAM, no need to allocate a tunnel IP")
+		return
+	}
 
 	// This binary is only ever invoked _after_ the
 	// startup binary has been invoked and the modified environments have
