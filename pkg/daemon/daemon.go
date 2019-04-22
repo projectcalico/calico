@@ -114,7 +114,7 @@ func New() *TyphaDaemon {
 			if err != nil {
 				return nil, err
 			}
-			return ClientV3Shim{client.(RealClientV3)}, nil
+			return ClientV3Shim{client.(RealClientV3), config}, nil
 		},
 		ConfigureEarlyLogging: logutils.ConfigureEarlyLogging,
 		ConfigureLogging:      logutils.ConfigureLogging,
@@ -436,10 +436,11 @@ func (t *TyphaDaemon) WaitAndShutDown(cxt context.Context) {
 // ClientV3Shim wraps a real client, allowing its syncer to be mocked.
 type ClientV3Shim struct {
 	RealClientV3
+	config apiconfig.CalicoAPIConfig
 }
 
 func (s ClientV3Shim) FelixSyncerByIface(callbacks bapi.SyncerCallbacks) bapi.Syncer {
-	return felixsyncer.New(s.Backend(), callbacks)
+	return felixsyncer.New(s.Backend(), s.config.Spec, callbacks)
 }
 
 func (s ClientV3Shim) BGPSyncerByIface(callbacks bapi.SyncerCallbacks) bapi.Syncer {
