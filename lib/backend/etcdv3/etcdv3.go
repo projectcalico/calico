@@ -305,7 +305,7 @@ func (c *etcdV3Client) Delete(ctx context.Context, k model.Key, revision string)
 
 		getResp := txnResp.Responses[0].GetResponseRange()
 		if len(getResp.Kvs) == 0 {
-			logCxt.Debug("Delete transaction failed due resource not existing")
+			logCxt.Debug("Delete transaction failed due to resource not existing")
 			return nil, cerrors.ErrorResourceDoesNotExist{Identifier: k}
 		}
 		latestValue, err := etcdToKVPair(k, getResp.Kvs[0])
@@ -318,7 +318,7 @@ func (c *etcdV3Client) Delete(ctx context.Context, k model.Key, revision string)
 	// The delete response should have succeeded since the Get response did.
 	delResp := txnResp.Responses[0].GetResponseDeleteRange()
 	if delResp.Deleted == 0 {
-		logCxt.Debug("Delete transaction failed due resource not existing")
+		logCxt.Debug("Delete transaction failed due to resource not existing")
 		return nil, cerrors.ErrorResourceDoesNotExist{Identifier: k}
 	}
 
