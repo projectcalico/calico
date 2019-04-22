@@ -31,7 +31,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	log "github.com/sirupsen/logrus"
-	"k8s.io/apimachinery/pkg/apis/meta/v1"
+	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 
@@ -45,6 +45,7 @@ import (
 	"github.com/projectcalico/felix/proto"
 	"github.com/projectcalico/felix/statusrep"
 	"github.com/projectcalico/felix/usagerep"
+	"github.com/projectcalico/libcalico-go/lib/apiconfig"
 	apiv3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/libcalico-go/lib/backend"
 	bapi "github.com/projectcalico/libcalico-go/lib/backend/api"
@@ -155,6 +156,7 @@ func Run(configFile string) {
 	// loop until the datastore is ready.
 	log.Info("Loading configuration...")
 	var backendClient bapi.Client
+	var datastoreConfig apiconfig.CalicoAPIConfig
 	var configParams *config.Config
 	var typhaAddr string
 	var numClientsCreated int
@@ -205,7 +207,7 @@ configRetry:
 
 		// We should now have enough config to connect to the datastore
 		// so we can load the remainder of the config.
-		datastoreConfig := configParams.DatastoreConfig()
+		datastoreConfig = configParams.DatastoreConfig()
 		// Can't dump the whole config because it may have sensitive information...
 		log.WithField("datastore", datastoreConfig.Spec.DatastoreType).Info("Connecting to datastore")
 		backendClient, err = backend.NewClient(datastoreConfig)
@@ -366,7 +368,7 @@ configRetry:
 		)
 	} else {
 		// Use the syncer locally.
-		syncer = felixsyncer.New(backendClient, syncerToValidator)
+		syncer = felixsyncer.New(backendClient, datastoreConfig.Spec, syncerToValidator)
 	}
 	log.WithField("syncer", syncer).Info("Created Syncer")
 
