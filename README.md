@@ -17,13 +17,9 @@ For users who want to learn more about the project or get started with Calico, s
 
 Contributions to this code are welcome!  The code in this repository can be built and tested using the Makefile.
 
-To run the tests locally (requires a full golang environment Go 1.7+):
+To run the fast set of unit tests within a containerized environment (requires a [functioning Docker installation](https://docs.docker.com/engine/installation/)):
 
     make ut
-    
-To run the tests within a containerized environment (requires a [functioning Docker installation](https://docs.docker.com/engine/installation/)):
-
-    make test-containerized
     
 For more information on available targets, see `make help`.
 
