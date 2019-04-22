@@ -32,6 +32,7 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	cerrors "github.com/projectcalico/libcalico-go/lib/errors"
+	"github.com/projectcalico/libcalico-go/lib/net"
 	"github.com/projectcalico/libcalico-go/lib/numorstring"
 )
 
@@ -45,15 +46,17 @@ const (
 	nodeK8sLabelAnnotation               = "projectcalico.org/kube-labels"
 )
 
-func NewNodeClient(c *kubernetes.Clientset) K8sResourceClient {
+func NewNodeClient(c *kubernetes.Clientset, usePodCIDR bool) K8sResourceClient {
 	return &nodeClient{
-		clientSet: c,
+		clientSet:  c,
+		usePodCIDR: usePodCIDR,
 	}
 }
 
 // Implements the api.Client interface for Nodes.
 type nodeClient struct {
-	clientSet *kubernetes.Clientset
+	clientSet  *kubernetes.Clientset
+	usePodCIDR bool
 }
 
 func (c *nodeClient) Create(ctx context.Context, kvp *model.KVPair) (*model.KVPair, error) {
@@ -83,7 +86,7 @@ func (c *nodeClient) Update(ctx context.Context, kvp *model.KVPair) (*model.KVPa
 		return nil, K8sErrorToCalico(err, kvp.Key)
 	}
 
-	newCalicoNode, err := K8sNodeToCalico(newNode)
+	newCalicoNode, err := K8sNodeToCalico(newNode, c.usePodCIDR)
 	if err != nil {
 		log.Errorf("Failed to parse returned Node after call to update %+v", newNode)
 		return nil, err
@@ -111,7 +114,7 @@ func (c *nodeClient) Get(ctx context.Context, key model.Key, revision string) (*
 		return nil, K8sErrorToCalico(err, key)
 	}
 
-	kvp, err := K8sNodeToCalico(node)
+	kvp, err := K8sNodeToCalico(node, c.usePodCIDR)
 	if err != nil {
 		log.WithError(err).Error("Couldn't convert k8s node.")
 		return nil, err
@@ -153,7 +156,7 @@ func (c *nodeClient) List(ctx context.Context, list model.ListInterface, revisio
 	}
 
 	for _, node := range nodes.Items {
-		kvp, err := K8sNodeToCalico(&node)
+		kvp, err := K8sNodeToCalico(&node, c.usePodCIDR)
 		if err != nil {
 			log.Errorf("Unable to convert k8s node to Calico node: node=%s: %v", node.Name, err)
 			continue
@@ -193,13 +196,13 @@ func (c *nodeClient) Watch(ctx context.Context, list model.ListInterface, revisi
 		if !ok {
 			return nil, errors.New("node conversion with incorrect k8s resource type")
 		}
-		return K8sNodeToCalico(k8sNode)
+		return K8sNodeToCalico(k8sNode, c.usePodCIDR)
 	}
 	return newK8sWatcherConverter(ctx, "Node", converter, k8sWatch), nil
 }
 
 // K8sNodeToCalico converts a Kubernetes format node, with Calico annotations, to a Calico Node.
-func K8sNodeToCalico(k8sNode *kapiv1.Node) (*model.KVPair, error) {
+func K8sNodeToCalico(k8sNode *kapiv1.Node, usePodCIDR bool) (*model.KVPair, error) {
 	// Create a new CalicoNode resource and copy the settings across from the k8s Node.
 	calicoNode := apiv3.NewNode()
 	calicoNode.ObjectMeta.Name = k8sNode.Name
@@ -228,6 +231,15 @@ func K8sNodeToCalico(k8sNode *kapiv1.Node) (*model.KVPair, error) {
 		}
 	}
 	bgpSpec.IPv4IPIPTunnelAddr = annotations[nodeBgpIpv4IPIPTunnelAddrAnnotation]
+
+	// If using host-local IPAM, assign an IPIP tunnel address statically.
+	if usePodCIDR && k8sNode.Spec.PodCIDR != "" {
+		// For back compatibility with v2.6.x, always generate a tunnel address if we have the pod CIDR.
+		bgpSpec.IPv4IPIPTunnelAddr, err = getIPIPTunnelAddress(k8sNode)
+		if err != nil {
+			return nil, err
+		}
+	}
 
 	// Only set the BGP spec if it is not empty.
 	if !reflect.DeepEqual(*bgpSpec, apiv3.NodeBGPSpec{}) {
@@ -392,4 +404,25 @@ func restoreCalicoLabels(calicoNode *apiv3.Node) (*apiv3.Node, error) {
 	}
 
 	return calicoNode, nil
+}
+
+// getIPIPTunnelAddress calculates the IPv4 address to use for the IPIP tunnel based on the node's pod CIDR, for use
+// in conjunction with host-local IPAM backed by node.Spec.PodCIDR allocations.
+func getIPIPTunnelAddress(n *kapiv1.Node) (string, error) {
+	ip, _, err := net.ParseCIDR(n.Spec.PodCIDR)
+	if err != nil {
+		log.Warnf("Invalid pod CIDR for node: %s, %s", n.Name, n.Spec.PodCIDR)
+		return "", err
+	}
+
+	// We need to get the IP for the podCIDR and increment it to the
+	// first IP in the CIDR.
+	tunIp := ip.To4()
+	if tunIp == nil {
+		log.WithField("podCIDR", n.Spec.PodCIDR).Infof("Cannot pick an IPv4 tunnel address from the given CIDR")
+		return "", nil
+	}
+	tunIp[3]++
+
+	return tunIp.String(), nil
 }

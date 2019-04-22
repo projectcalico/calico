@@ -55,7 +55,7 @@ var _ = testutils.E2eDatastoreDescribe("Felix syncer tests", testutils.Datastore
 			// Create a SyncerTester to receive the BGP syncer callback events and to allow us
 			// to assert state.
 			syncTester := testutils.NewSyncerTester()
-			syncer := felixsyncer.New(be, syncTester)
+			syncer := felixsyncer.New(be, config.Spec, syncTester)
 			syncer.Start()
 			expectedCacheSize := 0
 
@@ -381,7 +381,7 @@ var _ = testutils.E2eDatastoreDescribe("Felix syncer tests", testutils.Datastore
 			// We need to create a new syncTester and syncer.
 			current := syncTester.GetCacheEntries()
 			syncTester = testutils.NewSyncerTester()
-			syncer = felixsyncer.New(be, syncTester)
+			syncer = felixsyncer.New(be, config.Spec, syncTester)
 			syncer.Start()
 
 			// Verify the data is the same as the data from the previous cache.  We got the cache in the previous
