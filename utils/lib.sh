@@ -46,7 +46,28 @@ function strip_v {
 
 # Convert PEP 440 version to Debian.
 function git_version_to_deb {
-    echo $1 | sed 's/\([0-9]\)-\?\(a\|b\|rc\|pre\)/\1~\2/'
+    # We don't any more use pre-release versions in the form that the
+    # previous regexp here was trying to match.  Instead when
+    # developing for, say, 3.7.0, the base tag is 3.7.0-0.dev.  For
+    # Debian we _should_ translate that to 3.7.0~0.dev (because it's
+    # logically _before_ 3.7.0), and we could achieve that by adding
+    # "\|0.dev" to the previous regexp here.  However switching now
+    # from 3.7.0-0.dev to 3.7.0~0.dev would cause the PPA to reject
+    # all our new package uploads, until 3.7.0 is released and we move
+    # onto a higher version number.
+    #
+    # Meanwhile, the previous regexp here was accidentally matching
+    # and corrupting the Git ID later in the version; for example it
+    # changed "...+fce1a58" to "...+fce1~a58".
+    #
+    # So, for now, the best thing is no change at all.  As soon as our
+    # base version is 3.7.1 (or 3.8.0, or 4.0.0), we should do the
+    # correct tilde translation.
+    if [[ "$1" < "3.7.1" ]]; then
+	echo $1
+    else
+	echo $1 | sed 's/\([0-9]\)-0.dev/\1~0.dev/'
+    fi
 }
 
 # Convert PEP 440 version to RPM.
