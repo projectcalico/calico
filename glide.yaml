@@ -15,7 +15,7 @@ import:
   - json
 - package: github.com/projectcalico/go-yaml-wrapper
 - package: github.com/projectcalico/libcalico-go
-  version: a5d152222cf406fd0d1bb727ce040f20e88a4132
+  version: 43d572414857cc6f4d7242d9a23422cbc552f84a
   subpackages:
   - lib/apiconfig
   - lib/apis/v1
@@ -50,6 +50,12 @@ import:
 # with missing symbols in unix package.
 - package: github.com/vishvananda/netns
   version: 13995c7128ccc8e51e9a6bd2b551020a27180abd
+# Lots of things want golang.org/x/sys, and many pin to an older version.
+# Make sure we're using a relatively modern one since they generally just add
+# new symbols. Specifically, netlink requires a number of symbols from the
+# unix package.
+- package: golang.org/x/sys
+  version: c2f5717e611cf8e89a852a41081355194d80c943
 testImport:
 - package: github.com/onsi/ginkgo
   subpackages:
