@@ -72,6 +72,10 @@ type KubeConfig struct {
 	K8sAPIToken              string `json:"k8sAPIToken" ignore:"true"`
 	K8sInsecureSkipTLSVerify bool   `json:"k8sInsecureSkipTLSVerify" envconfig:"K8S_INSECURE_SKIP_TLS_VERIFY" default:""`
 	K8sDisableNodePoll       bool   `json:"k8sDisableNodePoll" envconfig:"K8S_DISABLE_NODE_POLL" default:""`
+
+	// K8sUsePodCIDR controls whether or not IPAM blocks are generated based on Node.Spec.PodCIDR. Set this
+	// to true when using host-local IPAM, and set to false when using calico-ipam.
+	K8sUsePodCIDR bool `json:"usePodCIDR" envconfig:"USE_POD_CIDR" default:""`
 }
 
 // NewCalicoAPIConfig creates a new (zeroed) CalicoAPIConfig struct with the

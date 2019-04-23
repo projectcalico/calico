@@ -38,24 +38,33 @@ import (
 
 var _ = testutils.E2eDatastoreDescribe("Felix syncer tests", testutils.DatastoreAll, func(config apiconfig.CalicoAPIConfig) {
 
-	ctx := context.Background()
+	var ctx context.Context
+	var c clientv3.Interface
+	var be api.Client
+	var syncTester *testutils.SyncerTester
+	var err error
+
+	BeforeEach(func() {
+		ctx = context.Background()
+		// Create a v3 client to drive data changes (luckily because this is the _test module,
+		// we don't get circular imports.
+		c, err = clientv3.New(config)
+		Expect(err).NotTo(HaveOccurred())
+
+		// Create the backend client to obtain a syncer interface.
+		be, err = backend.NewClient(config)
+		Expect(err).NotTo(HaveOccurred())
+		be.Clean()
+
+		// Create a SyncerTester to receive the BGP syncer callback events and to allow us
+		// to assert state.
+		syncTester = testutils.NewSyncerTester()
+
+	})
 
 	Describe("Felix syncer functionality", func() {
 		It("should receive the synced after return all current data", func() {
-			// Create a v3 client to drive data changes (luckily because this is the _test module,
-			// we don't get circular imports.
-			c, err := clientv3.New(config)
-			Expect(err).NotTo(HaveOccurred())
-
-			// Create the backend client to obtain a syncer interface.
-			be, err := backend.NewClient(config)
-			Expect(err).NotTo(HaveOccurred())
-			be.Clean()
-
-			// Create a SyncerTester to receive the BGP syncer callback events and to allow us
-			// to assert state.
-			syncTester := testutils.NewSyncerTester()
-			syncer := felixsyncer.New(be, syncTester)
+			syncer := felixsyncer.New(be, config.Spec, syncTester)
 			syncer.Start()
 			expectedCacheSize := 0
 
@@ -381,7 +390,7 @@ var _ = testutils.E2eDatastoreDescribe("Felix syncer tests", testutils.Datastore
 			// We need to create a new syncTester and syncer.
 			current := syncTester.GetCacheEntries()
 			syncTester = testutils.NewSyncerTester()
-			syncer = felixsyncer.New(be, syncTester)
+			syncer = felixsyncer.New(be, config.Spec, syncTester)
 			syncer.Start()
 
 			// Verify the data is the same as the data from the previous cache.  We got the cache in the previous
@@ -398,5 +407,42 @@ var _ = testutils.E2eDatastoreDescribe("Felix syncer tests", testutils.Datastore
 			}
 			syncTester.ExpectStatusUpdate(api.InSync)
 		})
+	})
+})
+
+var _ = testutils.E2eDatastoreDescribe("Felix syncer tests (KDD only)", testutils.DatastoreK8s, func(config apiconfig.CalicoAPIConfig) {
+	var be api.Client
+	var syncTester *testutils.SyncerTester
+	var err error
+
+	BeforeEach(func() {
+		// Create the backend client to obtain a syncer interface.
+		config.Spec.K8sUsePodCIDR = true
+		be, err = backend.NewClient(config)
+		Expect(err).NotTo(HaveOccurred())
+		be.Clean()
+
+		// Create a SyncerTester to receive the BGP syncer callback events and to allow us
+		// to assert state.
+		syncTester = testutils.NewSyncerTester()
+	})
+
+	It("should handle IPAM blocks properly for host-local IPAM", func() {
+		config.Spec.K8sUsePodCIDR = true
+		syncer := felixsyncer.New(be, config.Spec, syncTester)
+		syncer.Start()
+
+		// Verify we start a resync.
+		syncTester.ExpectStatusUpdate(api.WaitForDatastore)
+		syncTester.ExpectStatusUpdate(api.ResyncInProgress)
+
+		// Expect a felix config for the IPIP tunnel address, generated from the podCIDR.
+		syncTester.ExpectData(model.KVPair{
+			Key:   model.HostConfigKey{Hostname: "127.0.0.1", Name: "IpInIpTunnelAddr"},
+			Value: "10.10.10.1",
+		})
+
+		// Expect to be in-sync.
+		syncTester.ExpectStatusUpdate(api.InSync)
 	})
 })

@@ -15,6 +15,7 @@
 package felixsyncer
 
 import (
+	"github.com/projectcalico/libcalico-go/lib/apiconfig"
 	apiv3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
@@ -23,7 +24,7 @@ import (
 )
 
 // New creates a new Felix v1 Syncer.
-func New(client api.Client, callbacks api.SyncerCallbacks) api.Syncer {
+func New(client api.Client, cfg apiconfig.CalicoAPIConfigSpec, callbacks api.SyncerCallbacks) api.Syncer {
 	// Create the set of ResourceTypes required for Felix.  Since the update processors
 	// also cache state, we need to create individual ones per syncer rather than create
 	// a common global set.
@@ -72,9 +73,11 @@ func New(client api.Client, callbacks api.SyncerCallbacks) api.Syncer {
 			ListInterface:   model.ResourceListOptions{Kind: apiv3.KindHostEndpoint},
 			UpdateProcessor: updateprocessors.NewHostEndpointUpdateProcessor(),
 		},
-		{
-			ListInterface: model.BlockListOptions{},
-		},
+	}
+
+	// If using Calico IPAM, include IPAM resources the felix cares about.
+	if !cfg.K8sUsePodCIDR {
+		resourceTypes = append(resourceTypes, watchersyncer.ResourceType{ListInterface: model.BlockListOptions{}})
 	}
 
 	return watchersyncer.New(

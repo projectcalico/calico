@@ -61,9 +61,8 @@ func NewIPAMBlockClient(c *kubernetes.Clientset, r *rest.RESTClient) K8sResource
 
 // ipamBlockClient implements the api.Client interface for IPAMBlocks. It handles the translation between
 // v1 objects understood by the IPAM codebase in lib/ipam, and the CRDs which are used
-// to actually store the data in the Kubernetes API.
-// It uses a customK8sResourceClient under the covers to perform CRUD operations on
-// kubernetes CRDs.
+// to actually store the data in the Kubernetes API. It uses a customK8sResourceClient under
+// the covers to perform CRUD operations on kubernetes CRDs.
 type ipamBlockClient struct {
 	rc customK8sResourceClient
 }

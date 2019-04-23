@@ -28,7 +28,6 @@ import (
 )
 
 var _ = Describe("Test Node conversion", func() {
-
 	It("should parse a k8s Node to a Calico Node", func() {
 		l := map[string]string{"net.beta.kubernetes.io/role": "master"}
 		node := k8sapi.Node{
@@ -62,7 +61,7 @@ var _ = Describe("Test Node conversion", func() {
 			},
 		}
 
-		n, err := K8sNodeToCalico(&node)
+		n, err := K8sNodeToCalico(&node, false)
 		Expect(err).NotTo(HaveOccurred())
 
 		// Ensure we got the correct values.
@@ -111,7 +110,7 @@ var _ = Describe("Test Node conversion", func() {
 			},
 		}
 
-		n, err := K8sNodeToCalico(&node)
+		n, err := K8sNodeToCalico(&node, false)
 		Expect(err).NotTo(HaveOccurred())
 
 		// Ensure we got the correct values.
@@ -161,7 +160,7 @@ var _ = Describe("Test Node conversion", func() {
 			},
 		}
 
-		n, err := K8sNodeToCalico(&node)
+		n, err := K8sNodeToCalico(&node, false)
 		Expect(err).NotTo(HaveOccurred())
 
 		// Ensure we got the correct values.
@@ -188,7 +187,7 @@ var _ = Describe("Test Node conversion", func() {
 			},
 		}
 
-		n, err := K8sNodeToCalico(&node)
+		n, err := K8sNodeToCalico(&node, false)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(n.Value.(*apiv3.Node).Spec.BGP).To(BeNil())
 	})
@@ -269,7 +268,7 @@ var _ = Describe("Test Node conversion", func() {
 		// Set the PodCIDR so we can also test the IPIP tunnel field
 		newK8sNode.Spec.PodCIDR = "172.100.0.0/24"
 		calicoNode.Spec.BGP.IPv4IPIPTunnelAddr = ""
-		newCalicoNode, err := K8sNodeToCalico(newK8sNode)
+		newCalicoNode, err := K8sNodeToCalico(newK8sNode, false)
 		Expect(err).NotTo(HaveOccurred())
 
 		calicoNodeWithMergedLabels := calicoNode.DeepCopy()
@@ -312,7 +311,7 @@ var _ = Describe("Test Node conversion", func() {
 		Expect(newK8sNode.Labels).To(Equal(kl))
 
 		By("Converting the k8s node back into a calico node")
-		newCalicoNode, err := K8sNodeToCalico(newK8sNode)
+		newCalicoNode, err := K8sNodeToCalico(newK8sNode, false)
 		Expect(err).NotTo(HaveOccurred())
 
 		// When we merge k8s into Calico, the k8s labels get stashed in an annotation along with the shadowed labels:
@@ -389,7 +388,7 @@ var _ = Describe("Test Node conversion", func() {
 			},
 		}
 
-		n, err := K8sNodeToCalico(&node)
+		n, err := K8sNodeToCalico(&node, false)
 		Expect(err).NotTo(HaveOccurred())
 
 		// Ensure we got the correct values.
@@ -402,5 +401,58 @@ var _ = Describe("Test Node conversion", func() {
 		Expect(bgpIpv4Address).To(Equal(ip.String()))
 		Expect(ipInIpAddr).To(Equal("10.0.0.24"))
 		Expect(asn.String()).To(Equal("2546"))
+	})
+
+	Context("using host-local IPAM backed by pod CIDR", func() {
+		It("should parse a k8s Node to a Calico Node with an IPv4IPIPTunnelAddr", func() {
+			node := k8sapi.Node{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:            "TestNode",
+					ResourceVersion: "1234",
+					Annotations: map[string]string{
+						nodeBgpIpv4AddrAnnotation: "172.17.17.10",
+						nodeBgpAsnAnnotation:      "2546",
+					},
+				},
+				Spec: k8sapi.NodeSpec{
+					PodCIDR: "10.0.0.0/24",
+				},
+			}
+
+			n, err := K8sNodeToCalico(&node, true)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Ensure we got the correct values.
+			bgpIpv4Address := n.Value.(*apiv3.Node).Spec.BGP.IPv4Address
+			ipInIpAddr := n.Value.(*apiv3.Node).Spec.BGP.IPv4IPIPTunnelAddr
+			asn := n.Value.(*apiv3.Node).Spec.BGP.ASNumber
+			ip := net.ParseIP("172.17.17.10")
+
+			Expect(bgpIpv4Address).To(Equal(ip.String()))
+			Expect(ipInIpAddr).To(Equal("10.0.0.1"))
+			Expect(asn.String()).To(Equal("2546"))
+		})
+
+		It("should handle an empty pod CIDR", func() {
+			node := k8sapi.Node{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:            "TestNode",
+					ResourceVersion: "1234",
+					Annotations: map[string]string{
+						nodeBgpIpv4AddrAnnotation: "172.17.17.10",
+						nodeBgpAsnAnnotation:      "2546",
+					},
+				},
+				Spec: k8sapi.NodeSpec{},
+			}
+
+			n, err := K8sNodeToCalico(&node, true)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Ensure we got the correct values.
+			ipInIpAddr := n.Value.(*apiv3.Node).Spec.BGP.IPv4IPIPTunnelAddr
+			Expect(ipInIpAddr).To(Equal(""))
+		})
+
 	})
 })
