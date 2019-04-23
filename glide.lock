@@ -1,5 +1,5 @@
-hash: f4c2e0a568781f8fc72d3be9518ccce3d3cc0230ba7a7796d6430439425ff916
-updated: 2019-04-18T04:15:02.35837006Z
+hash: fb76929f90b18fbaeff13e77721f11ad438444384bac00892141a92b65081d39
+updated: 2019-04-23T18:28:11.778015179Z
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -14,7 +14,7 @@ imports:
   - autorest/azure
   - autorest/date
 - name: github.com/beorn7/perks
-  version: 3ac7bf7a47d159a033b107610db8a1b6575507a4
+  version: 4b2b341e8d7715fae06375aa633dbb6e91b3fb46
   subpackages:
   - quantile
 - name: github.com/BurntSushi/toml
@@ -90,7 +90,7 @@ imports:
   subpackages:
   - simplelru
 - name: github.com/hpcloud/tail
-  version: a1dbeea552b7c8df4b542c66073e393de198a800
+  version: a30252cb686a21eb2d0b98132633053ec2f7f1e5
   subpackages:
   - ratelimiter
   - util
@@ -107,7 +107,7 @@ imports:
 - name: github.com/leodido/go-urn
   version: a67a23e1c1af3c66528573bb86a87246477277c1
 - name: github.com/matttproud/golang_protobuf_extensions
-  version: c12348ce28de40eed0136aa2b644d0ee0650e56c
+  version: c182affec369e30f25d3eb8cd8a478dee585ae7d
   subpackages:
   - pbutil
 - name: github.com/modern-go/concurrent
@@ -161,7 +161,7 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: 43c1da882b70aba9d0325e7de4393439ef202550
+  version: 43d572414857cc6f4d7242d9a23422cbc552f84a
   subpackages:
   - lib/apiconfig
   - lib/apis/v1
@@ -197,7 +197,7 @@ imports:
   - lib/validator/v3
   - lib/watch
 - name: github.com/projectcalico/typha
-  version: 90ed34ae6358ee9f3cb94acad08000480bc21003
+  version: 065d52ab22e27afb0d684a5460a598f14a8d87f7
   subpackages:
   - pkg/syncclient
   - pkg/syncproto
@@ -208,7 +208,7 @@ imports:
   - prometheus
   - prometheus/internal
 - name: github.com/prometheus/client_model
-  version: 6f3806018612930941127f2a7c6c453ba2c527d2
+  version: fd36f4220a901265f90734c3183c5f0c91daa0b8
   subpackages:
   - go
 - name: github.com/prometheus/common
@@ -283,7 +283,7 @@ imports:
   subpackages:
   - rate
 - name: google.golang.org/appengine
-  version: 4a4468ece617fc8205e99368fa2200e9d1fad421
+  version: 54a98f90d1c46b7731eb8fb305d2a321c30ef610
   subpackages:
   - internal
   - internal/app_identity
@@ -319,10 +319,10 @@ imports:
   - status
   - tap
   - transport
-- name: gopkg.in/fsnotify/fsnotify.v1
-  version: c2828203cd70a50dcccfb2761f8b1f8ceef9a8e9
+- name: gopkg.in/fsnotify.v1
+  version: 7be54206639f256967dd82fa767397ba5f8f48f5
 - name: gopkg.in/go-playground/validator.v9
-  version: b199fa0642d29caca62b6a99d65cc981ba5edc3b
+  version: 46b4b1e301c24cac870ffcb4ba5c8a703d1ef475
 - name: gopkg.in/inf.v0
   version: 3887ee99ecf07df5b447e9b00d9c0b2adaa9f3e4
 - name: gopkg.in/tomb.v1
