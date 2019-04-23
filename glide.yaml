@@ -1,5 +1,5 @@
 package: github.com/projectcalico/kube-controllers
-description: Calico Policy Controller
+description: Calico controllers for Kubernetes
 homepage: https://projectcalico.org
 license: Apache-2.0
 import:
@@ -14,7 +14,7 @@ import:
   subpackages:
   - fv/containers
 - package: github.com/projectcalico/libcalico-go
-  version: a5d152222cf406fd0d1bb727ce040f20e88a4132
+  version: 43d572414857cc6f4d7242d9a23422cbc552f84a
   subpackages:
   - lib/apiconfig
   - lib/apis/v3
@@ -45,5 +45,10 @@ import:
   - tools/cache
   - tools/clientcmd
   - util/workqueue
+# The version of k8s.io/ client libraries pinned in libcalico-go import some Azure
+# dependencies that require an older version go-autorest. We can probably ditch this
+# pin once we've updated to a newer version of client-go and friends.
+- package: github.com/Azure/go-autorest
+  version: 1ff28809256a84bb6966640ff3d0371af82ccba4
 - package: github.com/onsi/ginkgo
 - package: github.com/spf13/pflag
