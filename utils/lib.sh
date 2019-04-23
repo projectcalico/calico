@@ -63,7 +63,7 @@ function git_version_to_deb {
     # So, for now, the best thing is no change at all.  As soon as our
     # base version is 3.7.1 (or 3.8.0, or 4.0.0), we should do the
     # correct tilde translation.
-    if [[ "$1" < "3.7.1" ]]; then
+    if [[ "$1" < "v3.7.1" ]]; then
 	echo $1
     else
 	echo $1 | sed 's/\([0-9]\)-0.dev/\1~0.dev/'
