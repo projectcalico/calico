@@ -3,7 +3,7 @@ import:
 - package: github.com/docopt/docopt-go
   version: ^0.6.2
 - package: github.com/projectcalico/libcalico-go
-  version: a5d152222cf406fd0d1bb727ce040f20e88a4132
+  version: 43d572414857cc6f4d7242d9a23422cbc552f84a
   subpackages:
   - lib/apis/v3
   - lib/client
@@ -29,3 +29,4 @@ import:
 - package: github.com/onsi/gomega
   version: ^1.1.0
 - package: github.com/gogo/protobuf
+- package: github.com/golang/protobuf
