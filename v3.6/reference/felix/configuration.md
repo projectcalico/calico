@@ -170,7 +170,7 @@ a global setting and a per-host override.
 1. Get the current felixconfig settings.
 
    ```bash
-   calicoctl get felixconfig -o yaml > felix.yaml
+   calicoctl get felixconfig default -o yaml --export > felix.yaml
    ```
 
 1. Modify logFilePath to your intended path, e.g. "/tmp/felix.log"
