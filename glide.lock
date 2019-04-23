@@ -1,5 +1,5 @@
-hash: a61d23f084c62e047ea970926765b26726eafd9d432dad6a4e741f3b68700f30
-updated: 2019-04-23T04:15:00.740876667Z
+hash: a15e43ef6de78ccf93e2e4c23d0c0d5efdf0b79ddb4244edf083f70a25ccebf8
+updated: 2019-04-23T13:45:56.355013147-07:00
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -126,7 +126,7 @@ imports:
   subpackages:
   - pbutil
 - name: github.com/mcuadros/go-version
-  version: 6d5863ca60fa6fe914b5fd43ed8533d7567c5b0b
+  version: 92cdf37c5b7579ebaf7a036da94b40995972088d
 - name: github.com/modern-go/concurrent
   version: bacd9c7ef1dd9b15be4a9909b8ac7a4e313eec94
 - name: github.com/modern-go/reflect2
@@ -180,7 +180,7 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: a5d152222cf406fd0d1bb727ce040f20e88a4132
+  version: 43d572414857cc6f4d7242d9a23422cbc552f84a
   subpackages:
   - lib/apiconfig
   - lib/apis/v1
@@ -213,10 +213,9 @@ imports:
   - lib/validator/v3
   - lib/watch
 - name: github.com/prometheus/client_golang
-  version: 773f5027234d0b08adf766be34f55df2f312abf7
+  version: 5cec1d0429b02e4323e042eb04dafdb079ddf568
   subpackages:
   - prometheus
-  - prometheus/internal
 - name: github.com/prometheus/client_model
   version: 6f3806018612930941127f2a7c6c453ba2c527d2
   subpackages:
