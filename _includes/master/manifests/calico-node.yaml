@@ -186,6 +186,11 @@ spec:
             # Use Kubernetes API as the backing datastore.
             - name: DATASTORE_TYPE
               value: "kubernetes"
+  {{- if eq .Values.ipam "host-local" }}
+            # Configure route aggregation based on pod CIDR.
+            - name: USE_POD_CIDR
+              value: "true"
+  {{- end }}
   {{- if .Values.typha.enabled }}
             # Typha support: controlled by the ConfigMap.
             - name: FELIX_TYPHAK8SSERVICENAME

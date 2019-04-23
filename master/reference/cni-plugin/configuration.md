@@ -207,7 +207,7 @@ When using `type: k8s`, the {{site.prodname}} CNI plugin requires read-only Kube
 
 ## IPAM
 
-### Using CNI configuration
+### Using host-local IPAM
 
 When using the CNI `host-local` IPAM plugin, a special value `usePodCidr` is allowed for the subnet field (either at the top-level, or in a "range").  This tells the plugin to determine the subnet to use from the Kubernetes API based on the Node.podCIDR field. {{site.prodname}} does not use the `gateway` field of a range so that field is not required and it will be ignored if present.
 
@@ -255,6 +255,12 @@ When using the CNI `host-local` IPAM plugin, a special value `usePodCidr` is all
 
 When making use of the `usePodCidr` option, the {{site.prodname}} CNI plugin requires read-only Kubernetes API access to the `Nodes` resource.
 
+#### BGP route aggregation using host-local IPAM
+
+When using {{side.prodname}} IPAM, routes are automatically aggregated based on per-node allocations. However, when using `host-local` IPAM with the Kubernetes API
+datastore, you must enable BGP route aggregation based on the `Node.podCIDR` field by setting the environment variable `USE_POD_CIDR=true` in {{site.nodecontainer}}. We highly recommend
+setting this to achieve more efficient route distribution.
+
 ### Using Kubernetes annotations
 
 #### Specifying IP pools on a per-namespace or per-pod basis
@@ -292,7 +298,6 @@ If provided, these IP pools will override any IP pools specified in the CNI conf
 > Otherwise, if only the namespace has the annotation the annotation of the namespace will
 > be used for each pod in it.
 {: .alert .alert-info}
-
 
 #### Requesting a specific IP address
 

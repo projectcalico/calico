@@ -83,6 +83,11 @@ spec:
             value: "kubernetes"
           - name: TYPHA_HEALTHENABLED
             value: "true"
+{{- if eq .Values.ipam "host-local" }}
+          # Configure route aggregation based on pod CIDR.
+          - name: USE_POD_CIDR
+            value: "true"
+{{- end }}
           # Uncomment these lines to enable prometheus metrics.  Since Typha is host-networked,
           # this opens a port on the host, which may need to be secured.
           #- name: TYPHA_PROMETHEUSMETRICSENABLED
