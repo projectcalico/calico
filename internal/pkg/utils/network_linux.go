@@ -187,20 +187,35 @@ func DoNetworking(
 				return fmt.Errorf("failed to set net.ipv6.conf.lo.disable_ipv6=0: %s", err)
 			}
 
-			// No need to add a dummy next hop route as the host veth device will already have an IPv6
-			// link local address that can be used as a next hop.
-			// Just fetch the address of the host end of the veth and use it as the next hop.
-			addresses, err := netlink.AddrList(hostVeth, netlink.FAMILY_V6)
-			if err != nil {
-				logger.Errorf("Error listing IPv6 addresses for the host side of the veth pair: %s", err)
-				return err
+			// Retry several times as the LL can take a several micro/miliseconds to initialize and we may be too fast
+			// after these sysctls
+			var err error
+			var addresses []netlink.Addr
+			for i := 0; i < 10; i++ {
+				// No need to add a dummy next hop route as the host veth device will already have an IPv6
+				// link local address that can be used as a next hop.
+				// Just fetch the address of the host end of the veth and use it as the next hop.
+				addresses, err = netlink.AddrList(hostVeth, netlink.FAMILY_V6)
+				if err != nil {
+					logger.Errorf("Error listing IPv6 addresses for the host side of the veth pair: %s", err)
+				}
+
+				if len(addresses) < 1 {
+					// If the hostVeth doesn't have an IPv6 address then this host probably doesn't
+					// support IPv6. Since a IPv6 address has been allocated that can't be used,
+					// return an error.
+					err = fmt.Errorf("failed to get IPv6 addresses for host side of the veth pair")
+				}
+				if err == nil {
+					break
+				}
+
+				logger.Infof("No IPv6 set on interface, retrying..")
+				time.Sleep(50 * time.Millisecond)
 			}
 
-			if len(addresses) < 1 {
-				// If the hostVeth doesn't have an IPv6 address then this host probably doesn't
-				// support IPv6. Since a IPv6 address has been allocated that can't be used,
-				// return an error.
-				return fmt.Errorf("failed to get IPv6 addresses for host side of the veth pair")
+			if err != nil {
+				return err
 			}
 
 			hostIPv6Addr := addresses[0].IP
