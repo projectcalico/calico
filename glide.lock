@@ -1,5 +1,5 @@
-hash: 000a656a87b80caf380c3ddf0e2ba56ca58da8869916e3d21743f41487c7bdb4
-updated: 2019-04-23T14:55:43.570163412-07:00
+hash: 3e265bd5d3cd12c32e527b27ac3faf3b9f6f3c3bdfa446df7cd2622c202bea75
+updated: 2019-04-24T04:16:23.56091822Z
 imports:
 - name: github.com/docopt/docopt-go
   version: 784ddc588536785e7299f7272f39101f7faccc3f
@@ -41,7 +41,7 @@ imports:
   - matchers/support/goraph/util
   - types
 - name: github.com/projectcalico/libcalico-go
-  version: 43d572414857cc6f4d7242d9a23422cbc552f84a
+  version: bd77a00a23e1f23c06b0e0da4348d59600289b32
   subpackages:
   - lib/apis/v3
   - lib/client
