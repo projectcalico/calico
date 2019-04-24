@@ -2435,6 +2435,29 @@ v2.1:
       version: 1.4.2
       url: http://git.openstack.org/cgit/openstack/networking-calico/commit/?h=1.4.2
 
+# Pre-release placeholder for Calico v3.7. Delete this when v3.7.0 goes live.
+v3.7:
+- title: v3.7.0-pre 
+  components:
+     typha:
+      version: release-v3.7
+     calicoctl:
+      version: release-v3.7
+     calico/node:
+      version: release-v3.7
+     calico/cni:
+      version: release-v3.7
+     calico/kube-controllers:
+      version: release-v3.7
+     networking-calico:
+      version: 3.6.0
+     flannel:
+      version: v0.11.0
+     calico/dikastes:
+      version: release-v3.7 
+     flexvol:
+      version: release-v3.7
+
 # The master release stream is used to generate the master version of the docs.  
 master:
 - title: master

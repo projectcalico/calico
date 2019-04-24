@@ -1,0 +1,10 @@
+---
+layout: null
+---
+{% helm --execute=templates/calico-node.yaml %}
+datastore: kdd
+typha:
+  enabled: true
+app_layer_policy: true
+network: none
+{% endhelm %}
