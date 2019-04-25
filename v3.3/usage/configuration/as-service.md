@@ -24,7 +24,7 @@ environment file and starts the `{{site.nodecontainer}}` image as a service.
 
 ```shell
 ETCD_ENDPOINTS=http://localhost:2379
-ETCD_CA_FILE=""
+ETCD_CA_CERT_FILE=""
 ETCD_CERT_FILE=""
 ETCD_KEY_FILE=""
 CALICO_NODENAME=""
