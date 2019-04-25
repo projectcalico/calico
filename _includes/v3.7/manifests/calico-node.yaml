@@ -534,6 +534,7 @@ rules:
     resources:
       - pods
       - nodes
+      - namespaces
     verbs:
       - get
 {{- end }}
