@@ -447,6 +447,15 @@ func TestXDP(t *testing.T) {
 		t.Fatalf("bad xdp id: %v", xdpID)
 	}
 
+	t.Log("Getting the XDP program mode from an iface with an XDP program attached should succeed")
+	xdpMode, err := bpfDP.GetXDPMode("test_A")
+	if err != nil {
+		t.Fatalf("cannot get xdp id: %v", err)
+	}
+	if xdpMode != XDPGeneric {
+		t.Fatalf("bad xdp mode: %v, should be %s", xdpMode.String(), XDPGeneric.String())
+	}
+
 	t.Log("Removing an XDP program from a veth iface should succeed")
 	err = bpfDP.RemoveXDP("test_A", XDPGeneric)
 	if err != nil {
@@ -456,6 +465,11 @@ func TestXDP(t *testing.T) {
 	_, err = bpfDP.GetXDPID("test_A")
 	if err == nil {
 		t.Fatalf("getting xdp id after deletion should have failed: %v", err)
+	}
+
+	_, err = bpfDP.GetXDPMode("test_A")
+	if err == nil {
+		t.Fatalf("getting xdp mode after deletion should have failed: %v", err)
 	}
 
 	_, err = bpfDP.GetMapsFromXDP("test_A")
