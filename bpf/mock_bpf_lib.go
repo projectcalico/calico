@@ -69,6 +69,7 @@ type XDPInfo struct {
 	Id    int
 	Maps  []int
 	Bytes []byte
+	Mode  XDPMode
 }
 
 type MockBPFLib struct {
@@ -188,6 +189,14 @@ func (b *MockBPFLib) GetXDPID(ifName string) (int, error) {
 		return -1, errors.New("XDP program not found")
 	}
 	return info.Id, nil
+}
+
+func (b *MockBPFLib) GetXDPMode(ifName string) (XDPMode, error) {
+	info, ok := b.XDPProgs[ifName]
+	if !ok {
+		return XDPGeneric, errors.New("XDP program not found")
+	}
+	return info.Mode, nil
 }
 
 func (b *MockBPFLib) GetXDPIfaces() ([]string, error) {
@@ -409,8 +418,10 @@ func (b *MockBPFLib) RemoveItemFailsafeMap(proto uint8, port uint16) error {
 }
 
 func (b *MockBPFLib) RemoveXDP(ifName string, mode XDPMode) error {
-	if _, ok := b.XDPProgs[ifName]; !ok {
+	if info, ok := b.XDPProgs[ifName]; !ok {
 		return errors.New("xdp program not found")
+	} else if info.Mode != mode {
+		return fmt.Errorf("xdp program has mode %s, not %s", info.Mode.String(), mode.String())
 	}
 
 	delete(b.XDPProgs, ifName)
@@ -485,6 +496,7 @@ func (b *MockBPFLib) loadXDPRaw(objPath, ifName string, mode XDPMode, mapArgs []
 		Id:    id,
 		Maps:  mapIds,
 		Bytes: bytez,
+		Mode:  mode,
 	}
 
 	id += 1
