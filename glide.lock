@@ -210,7 +210,7 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: 3d935c3b8b860224bcedf1aaa02bedaadf0a180c
+  version: aae6c757ef3745eb6ecb45351470e66c54fd9e13
   subpackages:
   - lib/apiconfig
   - lib/apis/v1
@@ -252,7 +252,7 @@ imports:
   subpackages:
   - binder
 - name: github.com/projectcalico/typha
-  version: 9b7b4e5c14d9ad3f9438db3c0cfd7a608ee8eb5e
+  version: 7f75ac3fb50db19e218351ef67fdb392a23c3db3
   subpackages:
   - pkg/syncclient
   - pkg/syncproto
