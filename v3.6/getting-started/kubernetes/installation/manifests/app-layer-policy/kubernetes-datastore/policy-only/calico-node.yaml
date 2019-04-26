@@ -2,7 +2,7 @@
 layout: null
 ---
 {% helm --execute=templates/calico-node.yaml %}
-datastore: kdd
+datastore: kubernetes
 ipam: host-local
 typha:
   enabled: true

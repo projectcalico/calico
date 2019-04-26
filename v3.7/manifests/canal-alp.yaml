@@ -2,7 +2,7 @@
 layout: null
 ---
 {% helm --execute=templates/calico-node.yaml %}
-datastore: kdd
+datastore: kubernetes
 network: flannel
 app_layer_policy: true
 {% endhelm %}

@@ -2,7 +2,7 @@
 layout: null
 ---
 {% helm %}
-datastore: kdd
+datastore: kubernetes
 network: flannel
 ipam: host-local
 app_layer_policy: true

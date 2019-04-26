@@ -124,7 +124,7 @@ rules:
       # Used to discover service IPs for advertisement.
       - watch
       - list
-{{- if eq .Values.datastore "kdd" }}
+{{- if eq .Values.datastore "kubernetes" }}
       # Used to discover Typhas.
       - get
 {{- end }}
@@ -134,7 +134,7 @@ rules:
     verbs:
       # Needed for clearing NodeNetworkUnavailable flag.
       - patch
-{{- if eq .Values.datastore "kdd" }}
+{{- if eq .Values.datastore "kubernetes" }}
       # Calico stores some configuration information in node annotations.
       - update
   # Watch for changes to Kubernetes NetworkPolicies.

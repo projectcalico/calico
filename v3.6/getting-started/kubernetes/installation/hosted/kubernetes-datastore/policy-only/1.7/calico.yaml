@@ -2,7 +2,7 @@
 layout: null
 ---
 {% helm %}
-datastore: kdd
+datastore: kubernetes
 ipam: host-local
 typha:
   enabled: true

@@ -96,7 +96,7 @@ data:
           "etcd_key_file": "__ETCD_KEY_FILE__",
           "etcd_cert_file": "__ETCD_CERT_FILE__",
           "etcd_ca_cert_file": "__ETCD_CA_CERT_FILE__",
-  {{- else if eq .Values.datastore "kdd" }}
+  {{- else if eq .Values.datastore "kubernetes" }}
           "datastore_type": "kubernetes",
           "nodename": "__KUBERNETES_NODE_NAME__",
   {{- end }}
@@ -126,7 +126,7 @@ data:
       ]
     }
 {{- end }}
-{{- if and (eq .Values.network "flannel") (eq .Values.datastore "kdd") }}
+{{- if and (eq .Values.network "flannel") (eq .Values.datastore "kubernetes") }}
 
   # Flannel network configuration. Mounted into the flannel container.
   net-conf.json: |

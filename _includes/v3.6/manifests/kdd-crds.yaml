@@ -1,4 +1,4 @@
-{{- if eq .Values.datastore "kdd" -}}
+{{- if eq .Values.datastore "kubernetes" -}}
 # Create all the CustomResourceDefinitions needed for
 # {{.Values.prodname}} {{ if .Values.network }}policy and networking{{ else }}policy-only{{ end }} mode.
 
