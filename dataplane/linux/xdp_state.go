@@ -108,14 +108,6 @@ func NewXDPState(allowGenericXDP bool) (*xdpState, error) {
 }
 
 func NewXDPStateWithBPFLibrary(library bpf.BPFDataplane, allowGenericXDP bool) *xdpState {
-	modes := []bpf.XDPMode{
-		bpf.XDPOffload,
-		bpf.XDPDriver,
-	}
-	if allowGenericXDP {
-		modes = append(modes, bpf.XDPGeneric)
-	}
-
 	log.Debug("Created new xdpState.")
 	return &xdpState{
 		ipV4State: newXDPIPState(4),
@@ -123,7 +115,7 @@ func NewXDPStateWithBPFLibrary(library bpf.BPFDataplane, allowGenericXDP bool) *
 			programTag: "",
 			needResync: true,
 			bpfLib:     library,
-			xdpModes:   modes,
+			xdpModes:   getXDPModes(allowGenericXDP),
 		},
 	}
 }
@@ -442,10 +434,11 @@ func (s *xdpIPState) newXDPResyncState(common *xdpStateCommon, isSource ipsetsSo
 	s.logCxt.WithField("ifaces", xdpIfaces).Debug("Interfaces with XDP program installed.")
 	ifacesWithProgs := make(map[string]progInfo, len(xdpIfaces))
 	for _, iface := range xdpIfaces {
-		tag, err := common.bpfLib.GetXDPTag(iface)
+		tag, tagErr := common.bpfLib.GetXDPTag(iface)
+		mode, modeErr := common.bpfLib.GetXDPMode(iface)
 		// error can happen when the program was not pinned in
 		// the bpf filesystem, so we say it's bogus anyway
-		bogus := err != nil || tag != common.programTag
+		bogus := tagErr != nil || tag != common.programTag || modeErr != nil || !isValidMode(mode, common)
 		ifacesWithProgs[iface] = progInfo{
 			bogus: bogus,
 		}
@@ -537,6 +530,15 @@ func (s *xdpIPState) newXDPResyncState(common *xdpStateCommon, isSource ipsetsSo
 		ifacesWithMaps:  ifacesWithMaps,
 		ipsetMembers:    ipsetMembers,
 	}, nil
+}
+
+func isValidMode(mode bpf.XDPMode, common *xdpStateCommon) bool {
+	for _, xdpMode := range common.xdpModes {
+		if xdpMode == mode {
+			return true
+		}
+	}
+	return false
 }
 
 func (s *xdpIPState) getIPSetMembers(setID string, isSource ipsetsSource) (set.Set, error) {
@@ -1755,12 +1757,17 @@ func (a *xdpBPFActions) apply(memberCache *xdpMemberCache, ipsetIDsToMembers *ip
 	var opErr error
 	logCxt := log.WithField("family", memberCache.GetFamily().String())
 
+	// used for dropping programs, to handle the case when generic
+	// xdp is currently disabled and we need to drop a program
+	// installed in generic mode by previous felix instance which
+	// had generic xdp enabled.
+	allXDPModes := getXDPModes(true)
 	logCxt.Debug("Processing BPF actions.")
 	a.UninstallXDP.Iter(func(item interface{}) error {
 		iface := item.(string)
 		var removeErrs []error
 		logCxt.WithField("iface", iface).Debug("Removing XDP programs.")
-		for _, mode := range xdpModes {
+		for _, mode := range allXDPModes {
 			if err := memberCache.bpfLib.RemoveXDP(iface, mode); err != nil {
 				removeErrs = append(removeErrs, err)
 			} else {
@@ -1893,6 +1900,17 @@ func (a *xdpBPFActions) apply(memberCache *xdpMemberCache, ipsetIDsToMembers *ip
 	logCxt.Debug("Finished processing BPF actions.")
 
 	return nil
+}
+
+func getXDPModes(allowGenericXDP bool) []bpf.XDPMode {
+	modes := []bpf.XDPMode{
+		bpf.XDPOffload,
+		bpf.XDPDriver,
+	}
+	if allowGenericXDP {
+		modes = append(modes, bpf.XDPGeneric)
+	}
+	return modes
 }
 
 func getIPSetMembers(ipsetIDsToMembers *ipsetIDsToMembers, setID string, isSource ipsetsSource) (set.Set, error) {
