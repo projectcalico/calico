@@ -890,7 +890,11 @@ func (b *BPFLib) loadXDPRaw(objPath, ifName string, mode XDPMode, mapArgs []stri
 	printCommand(prog, args...)
 	output, err = exec.Command(prog, args...).CombinedOutput()
 	if err != nil {
-		return fmt.Errorf("failed to attach XDP program (%s) to %s: %s\n%s", progPath, ifName, err, output)
+		if removeErr := os.Remove(progPath); removeErr != nil {
+			return fmt.Errorf("failed to attach XDP program (%s) to %s: %s (also failed to remove the pinned program: %s)\n%s", progPath, ifName, err, removeErr, output)
+		} else {
+			return fmt.Errorf("failed to attach XDP program (%s) to %s: %s\n%s", progPath, ifName, err, output)
+		}
 	}
 
 	return nil
