@@ -48,7 +48,7 @@ IP in IP encapsulation can be performed selectively, and only for traffic crossi
 
 To enable this feature, set `ipipMode` to `CrossSubnet`.
 
-<pre>
+```
 apiVersion: projectcalico.org/v3
 kind: IPPool
 metadata:
@@ -57,13 +57,13 @@ spec:
   cidr: 192.168.0.0/16
   ipipMode: CrossSubnet
   natOutgoing: true
-</pre> 
+```
 
 #### Configure IP in IP encapsulation for all inter workload traffic
 
 With `ipipMode` set to `Always`, Calico routes traffic using IP in IP for all traffic originating from a Calico enabled-host, to all Calico networked containers and VMs within the IP pool.
 
-<pre>
+```
 apiVersion: projectcalico.org/v3
 kind: IPPool
 metadata:
@@ -72,13 +72,13 @@ spec:
   cidr: 192.168.0.0/16
   ipipMode: Always
   natOutgoing: true
-</pre>
+```
 
 #### Configure VXLAN encapsulation for all inter workload traffic
 
 With `vxlanMode` set to `Always`, Calico routes traffic using VXLAN for all traffic originating from a Calico enabled host, to all Calico networked containers and VMs within the IP pool.
 
-<pre>
+```
 apiVersion: projectcalico.org/v3
 kind: IPPool
 metadata:
@@ -87,7 +87,7 @@ spec:
   cidr: 192.168.0.0/16
   vxlanMode: Always
   natOutgoing: true
-</pre>
+```
 
 If you use only VXLAN pools, BGP networking is not required. You can disable BGP to reduce the moving parts in your cluster by [Customizing the manifests]({{site.baseurl}}/{{page.version}}/getting-started/kubernetes/installation). Set the `calico_backend` setting to `vxlan`, and disable the BGP readiness check.
 
