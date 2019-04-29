@@ -92,4 +92,4 @@ spec:
 If you use only VXLAN pools, BGP networking is not required. You can disable BGP to reduce the moving parts in your cluster by [Customizing the manifests](https://docs.projectcalico.org/master/getting-started/kubernetes/installation/config-options). Set the `calico_backend` setting to `vxlan`, and disable the BGP readiness check.
 
 ### Above and Beyond
-For details on the IP in IP option, see [IP pools]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/ippool).
+For details on the IP in IP option, see [IP pool]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/ippool).
