@@ -1,6 +1,8 @@
-We must dump all pool data to this file to trigger a re-run of the IPIP tunnel
+We must dump all pool data to this file to trigger a re-run of the tunnel
 address allocation code whenever an IP pool changes.
  
 {{range ls "/pool"}}{{$data := json (getv (printf "/pool/%s" .))}}
-  {{if $data.ipip}}{{if not $data.disabled}}{{$data.cidr}}{{end}}{{end}}
+  {{- if or $data.ipip $data.vxlan_mode}}
+    {{- if not $data.disabled}}{{$data.cidr}}{{end}}
+  {{- end}}
 {{end}}
