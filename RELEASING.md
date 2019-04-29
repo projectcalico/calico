@@ -41,7 +41,7 @@ Some of the release scripts also require **tools to be installed** in your dev e
 
 - [Install and configure](https://github.com/github/hub#installation) the GitHub `hub` tool.
 - Create a [personal access token](https://github.com/settings/tokens) for Github and export it as the `GITHUB_TOKEN`
-  env var (for example by adding it to your `.profile`.
+  env var (for example by adding it to your `.profile`).
 - Install the "GitHub release" tool, `ghr`:
 
     ```
@@ -56,6 +56,15 @@ for the main Calico repo.
 Before attempting to create a Calico release you must do the following.
 
 1. Choose a Calico version number, e.g. `v3.2.0`.
+
+1. Verify that the code and GitHub are in the right state for releasing for the chosen version.
+
+   - Make sure libcalico-go pins are up-to-date if needed.
+   - [Make sure the Milestone is empty](https://github.com/issues?utf8=%E2%9C%93&q=user%3Aprojectcalico+is%3Aopen+milestone%3A%22Calico+vX.Y.Z%22+) either by merging PRs, or kicking them out of the Milestone.
+   - [Make sure that there are no pending cherry-pick PRs](https://github.com/issues?utf8=%E2%9C%93&q=user%3Aprojectcalico+label%3Acherry-pick-candidate) relevant to the release.
+   - [Make sure there are no pending PRs which need docs](https://github.com/pulls?utf8=%E2%9C%93&q=is%3Apr+user%3Aprojectcalico+label%3Adocs-pr-required+) for this release.
+   - [Make sure each PR with a release note is within a Milestone](https://github.com/issues?utf8=%E2%9C%93&q=user%3Aprojectcalico+no%3Amilestone+label%3Arelease-note-required).
+   - [Make sure CI is passing](https://semaphoreci.com/calico) for the target release branch.
 
 1. Select the appropriate component version numbers, and create any necessary releases. Follow the instructions
    in each repository for further information.
@@ -83,7 +92,6 @@ Before attempting to create a Calico release you must do the following.
 
 ## Preparing to cut a Calico release
 
-
 1. Check out the `master` branch of this repository and make sure it is up-to-date
    and [passing Semaphore CI](https://semaphoreci.com/calico/calico/branches/master).
 
@@ -94,13 +102,18 @@ Before attempting to create a Calico release you must do the following.
 Your next steps depend on the type of release:
 
 - [Creating a new major/minor release](#major-minor)
-- [Promoting a release candidate](#promoting)
+  1. [Creating a docs directory prior to release](#docs-dir)
+  1. [Building and publishing a new major/minor release](#build)
+  1. [Promoting a new major/minor release](#promoting)
 - [Creating a patch release](#patch)
+
 
 ## <a name="major-minor"></a> Creating a new major / minor release
 
-This section describes how to create a new major or minor release, which may or may not
-be a release candidate.
+### <a name="docs-dir"></a> Creating a docs directory prior to release
+
+This section describes how to create a docs directory for a new major or minor release. This is typically done
+at the same time that release branches are cut, often well before the release is built and published.
 
 1. Create a new branch off of the latest master.
 
@@ -114,16 +127,21 @@ be a release candidate.
    python2 ./release-scripts/do_release.py
    ```
 
-1. Add the new version to the bottom of `_data/versions.yml`.
+1. Add a new "dummy" version to the bottom of `_data/versions.yml`. Add a comment indicating this is to be removed
+   when the real release is cut.
 
    This ensures the release is not listed as the "Latest release" in the documentation. Populate the
-   section with the chosen component versions for this release.
+   section with tags indicating the corresponding minor release branch.
 
    For example:
 
    ```
     v2.1
-      - title: v2.1.0-rc1
+      # Pre-release placeholder for Calico v2.1. Delete this when v2.1.0 goes live.
+      - title: v2.1.0-pre-release
+        components:
+          typha:
+            version: release-v2.1
         ... etc ...
    ```
 
@@ -143,13 +161,7 @@ be a release candidate.
    - OpenStack `vX.Y/getting-started/openstack/requirements.md`
    - Host protection `vX.Y/getting-started/bare-metal/requirements.md`
 
-1. Update the AUTHORS.md file. This will require `GITHUB_TOKEN` be set in your environment.
-
-   ```
-   make update-authors
-   ```
-
-1. Follow the steps in [writing release notes](#release-notes) to generate candidate release notes.
+1. Follow the steps in [writing release notes](#release-notes) to generate candidate release notes for the dummy release.
 
    Then, add the newly created release note file to git.
 
@@ -157,51 +169,86 @@ be a release candidate.
    git add _data/<VERSION>/release-notes/<VERSION>-release-notes.md
    ```
 
+1. Commit your changes and submit a PR for review. For example:
+
+   ```
+   git commit -a -m "Create docs directory for vX.Y"
+   ```
+
+### <a name="build"></a> Building and publishing a new major/minor release
+
+This section describes how to create a new major or minor release. It assumes that the docs directory has already been created in master
+as described in the section above.
+
+1. Create a new branch off of the latest master.
+
+   ```
+   git checkout -b <NEW_PERSONAL_BRANCH>
+   ```
+
+1. Add the new version to the correct release section in `_data/versions.yml`.
+
+1. Update the AUTHORS.md file. This will require `GITHUB_TOKEN` be set in your environment.
+
+   ```
+   make update-authors
+   ```
+
+1. Follow the steps in [writing release notes](#release-notes) to generate or update candidate release notes.
+
+   Then, add the newly created release note file to git.
+
+   ```
+   git add _data/<VERSION>/release-notes/<VERSION>-release-notes.md
+   ```
+
+1. (Optional) Review `_config_dev.yml` and edit it to exclude any previous releases that are no longer actively developed. This
+   ensures developer builds remain fast by excluding directories which are not in active development.
+
 1. Commit your changes. For example:
 
    ```
-   git commit -m "Updates for release vX.Y"
+   git commit -m "Updates for release vX.Y.Z"
    ```
 
-1. Run the following on your local branch in order to build and publish the release
+1. Run the following on your local branch in order to build the release
    at the newly created commit.
 
    ```
    make RELEASE_STREAM=vX.Y release
    ```
 
-   Then, publish the tag and release.
+   Then, publish the tag and release to github.
 
    ```
    make RELEASE_STREAM=vX.Y release-publish
    ```
-
-   Follow the steps on screen, which will instruct you to upload
-   the `release-<VERSION>.tgz` artifact to the GitHub release.
 
 1. Push your branch and open a pull request. Get it reviewed and wait for it to pass CI.
 
    Once reviewed and CI is passing, merge the PR. This will cause the
    live docs site to be updated (after a few minutes).
 
-1. Review `_config_dev.yml` and edit it to exclude any previous releases that we now don't want to continue testing.
 
 If the release is not a release candidate but in fact a stable release, then you must also
 follow the steps in the next section for promoting a release candidate to a final release.
 
-## <a name="promoting"></a> Promoting a release candidate to a final release
+## <a name="promoting"></a> Promoting to a final release
 
 The following steps outline how to promote a major / minor release candidate to the latest
-release in the documentation. Perform these steps on a branch off of master.
+release in the documentation. These steps should be performed after completing the steps above
+for [building and publishing a new minor / major release](#build).
 
-### Promoting to the latest release
+Perform the following steps on a local branch off of the latest master.
+
+### Promoting to be the latest release in the docs
 
 1. Add TWO new `<li>` entries to the `<span class="dropdown">` in `_layouts/docwithnav.html` file.
 
 1. Modify the redirect in `/index.html` to point to your new release.
 
 1. Move the section for the release in `_data/versions.yml` to the top of the file so that it will be
-   the 'Latest Release', and remove any release candidates from the section.
+   the 'Latest Release', and **remove any release candidates or dummy releases** from the section.
 
 1. Run `make add_redirects_for_latest VERSION=vX.Y` to update the redirects.
 
@@ -241,15 +288,6 @@ release in the documentation. Perform these steps on a branch off of master.
    >       page was deleted, adjust the version number of the canonical URLs to the final copy of the page.
    >       If the page was renamed, update the canonical URLs to the new path.
 
-### Update the custom search engine
-
-1. Go to the [Calico Docs Custom Search Engine](https://cse.google.com/).
-1. Navigate to: search engine -> Search Features -> Refinements -> Add
-1. Add a new refinement name: vX.Y
-1. Navigate to: Setup -> Basics
-1. Under "Sites to search", select "Add", for the url use `docs.projectcalico.org/vX.Y`
-1. Choose vX.Y from the "Label" dropdown.
-
 ## <a name="patch"></a> Performing a "patch" release
 
 ### Creating the release
@@ -267,7 +305,7 @@ release in the documentation. Perform these steps on a branch off of master.
 1. Commit your changes. For example:
 
    ```
-   git commit -m "Updates for release vX.Y"
+   git commit -m "Updates for release vX.Y.Z"
    ```
 
 1. Run the following on your local branch in order to build and publish the release
