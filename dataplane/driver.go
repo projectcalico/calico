@@ -123,8 +123,9 @@ func StartDataplaneDriver(configParams *config.Config,
 				VXLANPort:    configParams.VXLANPort,
 				VXLANVNI:     configParams.VXLANVNI,
 
-				IPIPEnabled:       configParams.IpInIpEnabled,
-				IPIPTunnelAddress: configParams.IpInIpTunnelAddr,
+				IPIPEnabled:        configParams.IpInIpEnabled,
+				IPIPTunnelAddress:  configParams.IpInIpTunnelAddr,
+				VXLANTunnelAddress: configParams.IPv4VXLANTunnelAddr,
 
 				IptablesLogPrefix:         configParams.LogPrefix,
 				EndpointToHostAction:      configParams.DefaultEndpointToHostAction,
