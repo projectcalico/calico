@@ -4,7 +4,7 @@ order: 2
 toc:
 - title: Networking
   path: /networking/
-- title: Connecting workloads that you do not control
+- title: Connecting workloads across networks that you do not control
   path: /networking/vxlan-ipip
 - title: Changing IP pools
   path: /networking/changing-ip-pools

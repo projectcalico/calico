@@ -1,5 +1,5 @@
 ---
-title: Connecting workloads that you do not control
+title: Connecting workloads across networks that you do not control
 ---
 
 ### Big Picture
@@ -8,7 +8,7 @@ Enable inter workload communication across networks that are not workload aware.
 
 ### Value
 
-Calico supports encapsulation so you can send traffic between workloads, without requiring the underlying network to be aware of pod IP addresses.
+Calico supports encapsulation so you can send traffic between workloads, without requiring the underlying network to be aware of workload IP addresses.
 
 ### Features
 
@@ -20,14 +20,18 @@ This how-to guide uses the following features:
 ### Concepts
 
 #### Routing workload IP addresses
-When a network is **aware of workload IP addresses** (either through static routes, BGP route distribution, or another mechanism), it can directly route traffic between workloads. However, not all networks are able to route workload IP addresses. For example, public cloud environments where you don’t own the hardware, AWS across VPC subnet boundaries, and other scenarios where you cannot peer Calico over BGP to the underlay or easily configure static routes. This is why Calico supports encapsulation, so you can send traffic between workloads without requiring the underlying network to be aware of workload IP addresses.
+
+When a network is **aware of workload IP addresses** (either through static routes, BGP route distribution, or another mechanism), it can directly route traffic between workloads. However, not all networks are able to route workload IP addresses. 
+
+For example, public cloud environments where you don’t own the hardware, AWS across VPC subnet boundaries, and other scenarios where you cannot peer Calico over BGP to the underlay or easily configure static routes. This is why Calico supports encapsulation, so you can send traffic between workloads without requiring the underlying network to be aware of workload IP addresses.
 
 #### Encapsulation types
-Calico supports two types of encapsulations: VXLAN and IP in IP.  VXLAN is supported in some environments where IP in IP is not (for example, Azure). However, VXLAN has a slightly higher per-packet overhead because the header is larger.
 
-####
-Cross subnet
-Encapsulation of workload traffic is typically required only when traffic crosses a router (crossing an IP subnet boundary). For IP in IP, Calico can perform encapsulation on: all traffic, no traffic, or only on traffic that crosses a subnet boundary.
+Calico supports two types of encapsulation: VXLAN and IP in IP.  VXLAN is supported in some environments where IP in IP is not (for example, Azure). However, VXLAN has a slightly higher per-packet overhead because the header is larger.
+
+#### Cross subnet
+
+Encapsulation of workload traffic is typically required only when traffic crosses a router that is unable to route workload IP addresses on its own. For IP in IP, Calico can perform encapsulation on: all traffic, no traffic, or only on traffic that crosses a subnet boundary.
 
 ### How to
 
@@ -44,6 +48,7 @@ For IP in IP encapsulation, use the **cross subnet** option to minimize the over
 Be aware that switching encapsulation modes can cause disruption to in-progress connections. Plan accordingly. 
 
 #### Configure IP in IP encapsulation for only cross subnet traffic
+
 IP in IP encapsulation can be performed selectively, and only for traffic crossing subnet boundaries. 
 
 To enable this feature, set `ipipMode` to `CrossSubnet`.
@@ -92,4 +97,5 @@ spec:
 If you use only VXLAN pools, BGP networking is not required. You can disable BGP to reduce the moving parts in your cluster by [Customizing the manifests]({{site.baseurl}}/{{page.version}}/getting-started/kubernetes/installation). Set the `calico_backend` setting to `vxlan`, and disable the BGP readiness check.
 
 ### Above and Beyond
+
 For details on the IP in IP option, see [IP pool]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/ippool).
