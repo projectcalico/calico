@@ -760,14 +760,18 @@ func init() {
 		Entry("should accept IP pool with IPv6 CIDR /122",
 			api.IPPool{ObjectMeta: v1.ObjectMeta{Name: "pool.name"},
 				Spec: api.IPPoolSpec{
-					CIDR:     netv6_3,
-					IPIPMode: api.IPIPModeNever},
+					CIDR:      netv6_3,
+					IPIPMode:  api.IPIPModeNever,
+					VXLANMode: api.VXLANModeNever,
+				},
 			}, true),
 		Entry("should accept IP pool with IPv6 CIDR /10",
 			api.IPPool{ObjectMeta: v1.ObjectMeta{Name: "pool.name"},
 				Spec: api.IPPoolSpec{
-					CIDR:     netv6_4,
-					IPIPMode: api.IPIPModeNever},
+					CIDR:      netv6_4,
+					IPIPMode:  api.IPIPModeNever,
+					VXLANMode: api.VXLANModeNever,
+				},
 			}, true),
 		Entry("should accept a disabled IP pool with IPv4 CIDR /27",
 			api.IPPool{
@@ -780,9 +784,10 @@ func init() {
 			api.IPPool{
 				ObjectMeta: v1.ObjectMeta{Name: "pool.name"},
 				Spec: api.IPPoolSpec{
-					CIDR:     netv6_1,
-					IPIPMode: api.IPIPModeNever,
-					Disabled: true},
+					CIDR:      netv6_1,
+					IPIPMode:  api.IPIPModeNever,
+					VXLANMode: api.VXLANModeNever,
+					Disabled:  true},
 			}, true),
 		Entry("should reject IP pool with IPv4 CIDR /27", api.IPPool{ObjectMeta: v1.ObjectMeta{Name: "pool.name"}, Spec: api.IPPoolSpec{CIDR: netv4_5}}, false),
 		Entry("should reject IP pool with IPv6 CIDR /128", api.IPPool{ObjectMeta: v1.ObjectMeta{Name: "pool.name"}, Spec: api.IPPoolSpec{CIDR: netv6_1}}, false),
@@ -792,8 +797,19 @@ func init() {
 			api.IPPool{
 				ObjectMeta: v1.ObjectMeta{Name: "pool.name"},
 				Spec: api.IPPoolSpec{
-					CIDR:     netv6_1,
-					IPIPMode: api.IPIPModeAlways},
+					CIDR:      netv6_1,
+					IPIPMode:  api.IPIPModeAlways,
+					VXLANMode: api.VXLANModeNever,
+				},
+			}, false),
+		Entry("should reject VXLANMode 'Always' for IPv6 pool",
+			api.IPPool{
+				ObjectMeta: v1.ObjectMeta{Name: "pool.name"},
+				Spec: api.IPPoolSpec{
+					CIDR:      netv6_1,
+					VXLANMode: api.VXLANModeAlways,
+					IPIPMode:  api.IPIPModeNever,
+				},
 			}, false),
 		Entry("should reject IPv4 pool with a CIDR range overlapping with Link Local range",
 			api.IPPool{ObjectMeta: v1.ObjectMeta{Name: "pool.name"}, Spec: api.IPPoolSpec{CIDR: "169.254.5.0/24"}}, false),
@@ -802,7 +818,7 @@ func init() {
 
 		// (API) IPIPMode
 		Entry("should accept IPPool with no IPIP mode specified", api.IPPoolSpec{CIDR: "1.2.3.0/24"}, true),
-		Entry("should accept IPIP mode Never (api)", api.IPPoolSpec{CIDR: "1.2.3.0/24", IPIPMode: api.IPIPModeNever}, true),
+		Entry("should accept IPIP mode Never (api)", api.IPPoolSpec{CIDR: "1.2.3.0/24", IPIPMode: api.IPIPModeNever, VXLANMode: api.VXLANModeNever}, true),
 		Entry("should accept IPIP mode Never", api.IPPoolSpec{CIDR: "1.2.3.0/24", IPIPMode: "Never"}, true),
 		Entry("should accept IPIP mode Always", api.IPPoolSpec{CIDR: "1.2.3.0/24", IPIPMode: "Always"}, true),
 		Entry("should accept IPIP mode CrossSubnet", api.IPPoolSpec{CIDR: "1.2.3.0/24", IPIPMode: "CrossSubnet"}, true),

@@ -44,6 +44,7 @@ var _ = testutils.E2eDatastoreDescribe("IPPool KDD v1 to v3 migration tests", te
 		CIDR:         "1.2.3.0/24",
 		NATOutgoing:  true,
 		IPIPMode:     apiv3.IPIPModeCrossSubnet,
+		VXLANMode:    apiv3.VXLANModeNever,
 		BlockSize:    26,
 		NodeSelector: "all()",
 	}
@@ -65,6 +66,7 @@ var _ = testutils.E2eDatastoreDescribe("IPPool KDD v1 to v3 migration tests", te
 				Disabled:     false,
 				NATOutgoing:  true,
 				NodeSelector: "all()",
+				VXLANMode:    apiv3.VXLANModeNever,
 				IPIP: &apiv1.IPIPConfiguration{
 					Enabled: true,
 					Mode:    encap.CrossSubnet,
@@ -78,6 +80,7 @@ var _ = testutils.E2eDatastoreDescribe("IPPool KDD v1 to v3 migration tests", te
 		CIDR:         "2001::/120",
 		NATOutgoing:  true,
 		IPIPMode:     apiv3.IPIPModeNever,
+		VXLANMode:    apiv3.VXLANModeNever,
 		BlockSize:    122,
 		NodeSelector: "all()",
 	}
@@ -100,6 +103,7 @@ var _ = testutils.E2eDatastoreDescribe("IPPool KDD v1 to v3 migration tests", te
 				NATOutgoing:  true,
 				BlockSize:    122,
 				NodeSelector: "all()",
+				VXLANMode:    apiv3.VXLANModeNever,
 				IPIP: &apiv1.IPIPConfiguration{
 					Enabled: false,
 				},
@@ -111,6 +115,7 @@ var _ = testutils.E2eDatastoreDescribe("IPPool KDD v1 to v3 migration tests", te
 		CIDR:         "1.1.1.0/24",
 		NATOutgoing:  false,
 		IPIPMode:     apiv3.IPIPModeAlways,
+		VXLANMode:    apiv3.VXLANModeNever,
 		BlockSize:    26,
 		NodeSelector: "all()",
 	}
@@ -128,8 +133,9 @@ var _ = testutils.E2eDatastoreDescribe("IPPool KDD v1 to v3 migration tests", te
 				Name: name1,
 			},
 			Spec: apiv3.IPPoolSpec{
-				CIDR:     "1.1.1.0/24",
-				Disabled: false,
+				CIDR:      "1.1.1.0/24",
+				Disabled:  false,
+				VXLANMode: apiv3.VXLANModeNever,
 				IPIP: &apiv1.IPIPConfiguration{
 					Enabled: true,
 				},
@@ -143,6 +149,7 @@ var _ = testutils.E2eDatastoreDescribe("IPPool KDD v1 to v3 migration tests", te
 		CIDR:         "1.2.3.0/24",
 		NATOutgoing:  true,
 		IPIPMode:     apiv3.IPIPModeAlways,
+		VXLANMode:    apiv3.VXLANModeNever,
 		BlockSize:    26,
 		NodeSelector: "all()",
 	}
@@ -160,8 +167,9 @@ var _ = testutils.E2eDatastoreDescribe("IPPool KDD v1 to v3 migration tests", te
 				Name: name1,
 			},
 			Spec: apiv3.IPPoolSpec{
-				CIDR:     "1.2.3.0/24",
-				Disabled: false,
+				CIDR:      "1.2.3.0/24",
+				Disabled:  false,
+				VXLANMode: apiv3.VXLANModeNever,
 				IPIP: &apiv1.IPIPConfiguration{
 					Enabled: true,
 					Mode:    encap.Always,
@@ -178,6 +186,7 @@ var _ = testutils.E2eDatastoreDescribe("IPPool KDD v1 to v3 migration tests", te
 		CIDR:         "1.2.3.0/24",
 		NATOutgoing:  true,
 		IPIPMode:     apiv3.IPIPModeCrossSubnet,
+		VXLANMode:    apiv3.VXLANModeNever,
 		BlockSize:    26,
 		NodeSelector: "has(x)",
 	}
@@ -197,6 +206,7 @@ var _ = testutils.E2eDatastoreDescribe("IPPool KDD v1 to v3 migration tests", te
 			Spec: apiv3.IPPoolSpec{
 				CIDR:          "1.2.3.0/24",
 				Disabled:      false,
+				VXLANMode:     apiv3.VXLANModeNever,
 				IPIPMode:      apiv3.IPIPModeCrossSubnet,
 				IPIP:          nil,
 				NATOutgoing:   false,
