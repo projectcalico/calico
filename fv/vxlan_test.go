@@ -186,7 +186,7 @@ var _ = infrastructure.DatastoreDescribe("VXLAN topology before adding host IPs 
 		BeforeEach(func() {
 			Eventually(func() int {
 				return getNumIPSetMembers(felixes[0].Container, "cali40all-vxlan-net")
-			}, "5s", "200ms").Should(Equal(2))
+			}, "5s", "200ms").Should(Equal(len(felixes) - 1))
 
 			ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 			defer cancel()
@@ -204,7 +204,7 @@ var _ = infrastructure.DatastoreDescribe("VXLAN topology before adding host IPs 
 		It("should have no connectivity from third felix and expected number of IPs in whitelist", func() {
 			Eventually(func() int {
 				return getNumIPSetMembers(felixes[0].Container, "cali40all-vxlan-net")
-			}, "5s", "200ms").Should(Equal(1))
+			}, "5s", "200ms").Should(Equal(len(felixes) - 2))
 
 			cc.ExpectSome(w[0], w[1])
 			cc.ExpectSome(w[1], w[0])
@@ -227,7 +227,7 @@ var _ = infrastructure.DatastoreDescribe("VXLAN topology before adding host IPs 
 				// Wait for Felix to set up the whitelist.
 				Eventually(func() int {
 					return getNumIPSetMembers(f.Container, "cali40all-vxlan-net")
-				}, "5s", "200ms").Should(Equal(2))
+				}, "5s", "200ms").Should(Equal(len(felixes) - 1))
 			}
 
 			// Wait until dataplane has settled.
@@ -248,6 +248,7 @@ var _ = infrastructure.DatastoreDescribe("VXLAN topology before adding host IPs 
 			felixes[0].Exec("ipset", "del", "cali40all-vxlan-net", felixes[2].IP)
 
 			cc.ExpectSome(w[0], w[1])
+			cc.ExpectSome(w[1], w[0])
 			cc.ExpectSome(w[1], w[2])
 			cc.ExpectNone(w[2], w[0])
 			cc.CheckConnectivity()
