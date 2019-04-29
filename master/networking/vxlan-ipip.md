@@ -35,7 +35,7 @@ You can configure each IP pool with different encapsulation configurations. Howe
 
 - [Configure IP in IP encapsulation for only cross subnet traffic](#configure-ip-in-ip-encapsulation-for-only-cross-subnet-traffic)
 - [Configure IP in IP encapsulation for all inter workload traffic](#configure-ip-in-ip-encapsulation-for-all-inter-workload-traffic)
-- [Configure VXLAN encapsulation for all inter workload traffic](#configure-vxlan-encapsluation-for-all-inter-workload-traffic)
+- [Configure VXLAN encapsulation for all inter workload traffic](#configure-vxlan-encapsulation-for-all-inter-workload-traffic)
 
 #### Best practice
 
