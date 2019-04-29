@@ -42,8 +42,8 @@ var _ = infrastructure.DatastoreDescribe("VXLAN topology before adding host IPs 
 		infra   infrastructure.DatastoreInfra
 		felixes []*infrastructure.Felix
 		client  client.Interface
-		w       [2]*workload.Workload
-		hostW   [2]*workload.Workload
+		w       [3]*workload.Workload
+		hostW   [3]*workload.Workload
 		cc      *workload.ConnectivityChecker
 	)
 
@@ -52,7 +52,7 @@ var _ = infrastructure.DatastoreDescribe("VXLAN topology before adding host IPs 
 		topologyOptions := infrastructure.DefaultTopologyOptions()
 		topologyOptions.VXLANEnabled = true
 		topologyOptions.IPIPEnabled = false
-		felixes, client = infrastructure.StartNNodeTopology(2, topologyOptions, infra)
+		felixes, client = infrastructure.StartNNodeTopology(3, topologyOptions, infra)
 
 		// Install a default profile that allows all ingress and egress, in the absence of any Policy.
 		infra.AddDefaultAllow()
@@ -177,6 +177,80 @@ var _ = infrastructure.DatastoreDescribe("VXLAN topology before adding host IPs 
 			// But the rules to allow VXLAN between our hosts let the workload traffic through.
 			cc.ExpectSome(w[0], w[1])
 			cc.ExpectSome(w[1], w[0])
+			cc.CheckConnectivity()
+		})
+	})
+
+	Context("after removing BGP address from third node", func() {
+		// Simulate having a host send VXLAN traffic from an unknown source, should get blocked.
+		BeforeEach(func() {
+			Eventually(func() int {
+				return getNumIPSetMembers(felixes[0].Container, "cali40all-vxlan-net")
+			}, "5s", "200ms").Should(Equal(len(felixes) - 1))
+
+			ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+			defer cancel()
+			node, err := client.Nodes().Get(ctx, felixes[2].Hostname, options.GetOptions{})
+			Expect(err).NotTo(HaveOccurred())
+
+			// Pause felix so it can't touch the dataplane!
+			pid := felixes[2].GetFelixPID()
+			felixes[2].Exec("kill", "-STOP", fmt.Sprint(pid))
+
+			node.Spec.BGP = nil
+			_, err = client.Nodes().Update(ctx, node, options.SetOptions{})
+		})
+
+		It("should have no connectivity from third felix and expected number of IPs in whitelist", func() {
+			Eventually(func() int {
+				return getNumIPSetMembers(felixes[0].Container, "cali40all-vxlan-net")
+			}, "5s", "200ms").Should(Equal(len(felixes) - 2))
+
+			cc.ExpectSome(w[0], w[1])
+			cc.ExpectSome(w[1], w[0])
+			cc.ExpectNone(w[0], w[2])
+			cc.ExpectNone(w[1], w[2])
+			cc.ExpectNone(w[2], w[0])
+			cc.ExpectNone(w[2], w[1])
+			cc.CheckConnectivity()
+		})
+	})
+
+	// Explicitly verify that the VXLAN whitelist IP set is doing its job (since Felix makes multiple dataplane
+	// changes when the BGP IP disappears and we want to make sure that its the whitelist that's causing the
+	// connectivity to drop).
+	Context("after removing BGP address from third node, all felixes paused", func() {
+		// Simulate having a host send VXLAN traffic from an unknown source, should get blocked.
+		BeforeEach(func() {
+			// Check we initially have the expected number of whitelist entries.
+			for _, f := range felixes {
+				// Wait for Felix to set up the whitelist.
+				Eventually(func() int {
+					return getNumIPSetMembers(f.Container, "cali40all-vxlan-net")
+				}, "5s", "200ms").Should(Equal(len(felixes) - 1))
+			}
+
+			// Wait until dataplane has settled.
+			cc.ExpectSome(w[0], w[1])
+			cc.ExpectSome(w[0], w[2])
+			cc.ExpectSome(w[1], w[2])
+			cc.CheckConnectivity()
+			cc.ResetExpectations()
+
+			// Then pause all the felixes.
+			for _, f := range felixes {
+				pid := f.GetFelixPID()
+				f.Exec("kill", "-STOP", fmt.Sprint(pid))
+			}
+		})
+
+		It("after manually removing third node from whitelist should have expected connectivity", func() {
+			felixes[0].Exec("ipset", "del", "cali40all-vxlan-net", felixes[2].IP)
+
+			cc.ExpectSome(w[0], w[1])
+			cc.ExpectSome(w[1], w[0])
+			cc.ExpectSome(w[1], w[2])
+			cc.ExpectNone(w[2], w[0])
 			cc.CheckConnectivity()
 		})
 	})
