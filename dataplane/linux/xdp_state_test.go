@@ -17,6 +17,7 @@ package intdataplane
 import (
 	"fmt"
 	"reflect"
+	"strings"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/ginkgo/extensions/table"
@@ -58,9 +59,14 @@ func stateToBPFDataplane(state map[string]map[string]uint32, family bpf.IPFamily
 	_, err := lib.NewFailsafeMap()
 	Expect(err).NotTo(HaveOccurred())
 	for iface, cidrMap := range state {
+		mode := bpf.XDPDriver
+		if strings.HasSuffix(iface, "_xdpgeneric") {
+			mode = bpf.XDPGeneric
+			iface = strings.TrimSuffix(iface, "_xdpgeneric")
+		}
 		_, err = lib.NewCIDRMap(iface, family)
 		Expect(err).NotTo(HaveOccurred())
-		err = lib.LoadXDPAuto(iface, bpf.XDPGeneric)
+		err = lib.LoadXDPAuto(iface, mode)
 		Expect(err).NotTo(HaveOccurred())
 		for member, refCount := range cidrMap {
 			ip, mask, err := bpf.MemberToIPMask(member)
@@ -1648,6 +1654,7 @@ var _ = Describe("XDP state", func() {
 			type bpfIfaceData struct {
 				hasXDP      bool
 				hasBogusXDP bool
+				hasBadMode  bool
 				mapExists   bool
 				mapBogus    bool
 				mapMismatch bool
@@ -1692,9 +1699,14 @@ var _ = Describe("XDP state", func() {
 							Id:    getNextID(),
 							Maps:  []int{failsafeID, mapID},
 							Bytes: expectedProgramBytes,
+							Mode:  bpf.XDPOffload,
 						}
 						if bpfData.hasBogusXDP {
 							prog.Bytes = bogusProgramBytes
+						}
+						if bpfData.hasBadMode {
+							// generic mode is forbidden in this test
+							prog.Mode = bpf.XDPGeneric
 						}
 						if bpfData.mapMismatch {
 							prog.Maps[1] = getNextID()
@@ -1715,7 +1727,7 @@ var _ = Describe("XDP state", func() {
 			DescribeTable("resync",
 				func(s testStruct) {
 					lib, programTag := bpfStateToBpfLib(s.bpfState)
-					state := NewXDPStateWithBPFLibrary(lib, true)
+					state := NewXDPStateWithBPFLibrary(lib, false)
 					state.common.programTag = programTag
 					ipState := state.ipV4State
 					ipState.newCurrentState = newXDPSystemState()
@@ -1899,7 +1911,7 @@ var _ = Describe("XDP state", func() {
 								"ipset": 1,
 							},
 							// no ifOkMap and ifMismatchedMap here, because they are synced memberwise,
-							// but ipset has no members, no they do not appear anywhere
+							// but ipset has no members, so they do not appear anywhere
 						},
 					},
 				}),
@@ -1968,7 +1980,76 @@ var _ = Describe("XDP state", func() {
 								"ipset": 1,
 							},
 							// no ifOkMap and ifMismatchedMap here, because they are synced memberwise,
-							// but ipset has no members, no they do not appear anywhere
+							// but ipset has no members, so they do not appear anywhere
+						},
+					},
+				}),
+				Entry("has invalid XDP mode and some map problems", testStruct{
+					bpfState: map[string]bpfIfaceData{
+						"ifNoMap": bpfIfaceData{
+							hasXDP:     true,
+							hasBadMode: true,
+							// no map
+						},
+						"ifBogusMap": bpfIfaceData{
+							hasXDP:     true,
+							hasBadMode: true,
+							mapExists:  true,
+							mapBogus:   true,
+						},
+						"ifMismatchedMap": bpfIfaceData{
+							hasXDP:      true,
+							hasBadMode:  true,
+							mapExists:   true,
+							mapMismatch: true,
+						},
+						"ifOkMap": bpfIfaceData{
+							hasXDP:     true,
+							hasBadMode: true,
+							mapExists:  true,
+						},
+					},
+					newCurrentState: map[string]testIfaceData{
+						"ifNoMap": testIfaceData{
+							epID: "ep",
+							policiesToSets: map[string][]string{
+								"policy": []string{"ipset"},
+							},
+						},
+						"ifBogusMap": testIfaceData{
+							epID: "ep",
+							policiesToSets: map[string][]string{
+								"policy": []string{"ipset"},
+							},
+						},
+						"ifMismatchedMap": testIfaceData{
+							epID: "ep",
+							policiesToSets: map[string][]string{
+								"policy": []string{"ipset"},
+							},
+						},
+						"ifOkMap": testIfaceData{
+							epID: "ep",
+							policiesToSets: map[string][]string{
+								"policy": []string{"ipset"},
+							},
+						},
+					},
+					// nil ipsets source
+					actions: &xdpBPFActions{
+						InstallXDP:   set.From("ifNoMap", "ifBogusMap", "ifMismatchedMap", "ifOkMap"),
+						UninstallXDP: set.From("ifNoMap", "ifBogusMap", "ifMismatchedMap", "ifOkMap"),
+						CreateMap:    set.From("ifNoMap", "ifBogusMap"),
+						RemoveMap:    set.From("ifBogusMap"),
+						AddToMap: map[string]map[string]uint32{
+							"ifNoMap": map[string]uint32{
+								"ipset": 1,
+							},
+							"ifBogusMap": map[string]uint32{
+								"ipset": 1,
+							},
+							// no ifOkMap and ifMismatchedMap here, because they are synced memberwise,
+							// but ipset has no members, so they do not appear anywhere
 						},
 					},
 				}),
@@ -2377,7 +2458,7 @@ var _ = Describe("XDP state", func() {
 
 			DescribeTable("",
 				func(s testStruct) {
-					state := NewXDPStateWithBPFLibrary(bpf.NewMockBPFLib(), true)
+					state := NewXDPStateWithBPFLibrary(bpf.NewMockBPFLib(), false)
 					state.ipV4State.bpfActions.InstallXDP.AddAll(s.install)
 					state.ipV4State.bpfActions.UninstallXDP.AddAll(s.uninstall)
 					state.ipV4State.bpfActions.CreateMap.AddAll(s.create)
@@ -2570,6 +2651,38 @@ var _ = Describe("XDP state", func() {
 							"2.2.2.2/32":  1,
 							"8.1.2.0/24":  1,
 							"10.1.1.0/24": 1,
+						},
+					},
+				}),
+				Entry("replace or remove program that has the undesired mode", testStruct{
+					initialState: map[string]map[string]uint32{
+						// the _xdpgeneric suffix won't be
+						// a part of the iface name
+						"eth0_xdpgeneric": map[string]uint32{
+							"10.0.0.10/32": 1,
+						},
+						"eth1_xdpgeneric": map[string]uint32{
+							"10.0.0.10/32": 1,
+						},
+					},
+					ipsetsSrc: &mockIPSetsSource{},
+					ipsetIDsToMembers: &ipsetIDsToMembers{
+						cache:            make(map[string]set.Set),
+						pendingReplaces:  make(map[string]set.Set),
+						pendingAdds:      make(map[string]set.Set),
+						pendingDeletions: make(map[string]set.Set),
+					},
+					install:       []string{"eth0"},
+					uninstall:     []string{"eth0", "eth1"},
+					create:        nil,
+					remove:        nil,
+					addToMap:      nil,
+					removeFromMap: nil,
+					membersToAdd:  nil,
+					membersToDrop: nil,
+					expectedState: map[string]map[string]uint32{
+						"eth0": map[string]uint32{
+							"10.0.0.10/32": 1,
 						},
 					},
 				}),

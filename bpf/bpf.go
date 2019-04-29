@@ -241,6 +241,7 @@ type BPFDataplane interface {
 	GetFailsafeMapID() (int, error)
 	GetMapsFromXDP(ifName string) ([]int, error)
 	GetXDPID(ifName string) (int, error)
+	GetXDPMode(ifName string) (XDPMode, error)
 	GetXDPIfaces() ([]string, error)
 	GetXDPObjTag(objPath string) (string, error)
 	GetXDPObjTagAuto() (string, error)
@@ -889,7 +890,11 @@ func (b *BPFLib) loadXDPRaw(objPath, ifName string, mode XDPMode, mapArgs []stri
 	printCommand(prog, args...)
 	output, err = exec.Command(prog, args...).CombinedOutput()
 	if err != nil {
-		return fmt.Errorf("failed to attach XDP program (%s) to %s: %s\n%s", progPath, ifName, err, output)
+		if removeErr := os.Remove(progPath); removeErr != nil {
+			return fmt.Errorf("failed to attach XDP program (%s) to %s: %s (also failed to remove the pinned program: %s)\n%s", progPath, ifName, err, removeErr, output)
+		} else {
+			return fmt.Errorf("failed to attach XDP program (%s) to %s: %s\n%s", progPath, ifName, err, output)
+		}
 	}
 
 	return nil
@@ -1160,6 +1165,35 @@ func (b *BPFLib) GetXDPID(ifName string) (int, error) {
 	}
 
 	return -1, errors.New("ID not found")
+}
+
+func (b *BPFLib) GetXDPMode(ifName string) (XDPMode, error) {
+	prog := "ip"
+	args := []string{
+		"link",
+		"show",
+		"dev",
+		ifName}
+
+	printCommand(prog, args...)
+	output, err := exec.Command(prog, args...).CombinedOutput()
+	if err != nil {
+		return XDPGeneric, fmt.Errorf("failed to show interface information (%s): %s\n%s", ifName, err, output)
+	}
+
+	s := strings.Fields(string(output))
+	allModes := map[string]XDPMode{
+		XDPDriver.String():  XDPDriver,
+		XDPOffload.String(): XDPOffload,
+		XDPGeneric.String(): XDPGeneric,
+	}
+	for i := range s {
+		if mode, ok := allModes[s[i]]; ok {
+			return mode, nil
+		}
+	}
+
+	return XDPGeneric, errors.New("ID not found")
 }
 
 func (b *BPFLib) GetXDPIfaces() ([]string, error) {
