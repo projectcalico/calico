@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+set -x
+set -e
+
+apt-get update
+apt-get install -y build-essential  \
+                   devscripts \
+                   debhelper \
+                   dh-systemd \
+                   python-all \
+                   python-setuptools \
+                   libyajl2 \
+                   libdatrie1
+apt-get clean -y
