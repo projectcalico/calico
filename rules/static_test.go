@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2018 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2019 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -786,6 +786,64 @@ var _ = Describe("Static", func() {
 					},
 				}))
 			})
+
+			Describe("with VXLAN enabled", func() {
+				BeforeEach(func() {
+					conf.VXLANEnabled = true
+				})
+
+				It("IPv4: Should return expected NAT postrouting chain", func() {
+					Expect(rr.StaticNATPostroutingChains(4)).To(Equal([]*Chain{
+						{
+							Name: "cali-POSTROUTING",
+							Rules: []Rule{
+								{Action: JumpAction{Target: "cali-fip-snat"}},
+								{Action: JumpAction{Target: "cali-nat-outgoing"}},
+								{
+									Match: Match().
+										OutInterface("tunl0").
+										NotSrcAddrType(AddrTypeLocal, true).
+										SrcAddrType(AddrTypeLocal, false),
+									Action: MasqAction{},
+								},
+							},
+						},
+					}))
+				})
+
+				Describe("and tunnel IP", func() {
+					BeforeEach(func() {
+						conf.VXLANTunnelAddress = net.IP{10, 0, 0, 1}
+					})
+
+					It("IPv4: Should return expected NAT postrouting chain", func() {
+						Expect(rr.StaticNATPostroutingChains(4)).To(Equal([]*Chain{
+							{
+								Name: "cali-POSTROUTING",
+								Rules: []Rule{
+									{Action: JumpAction{Target: "cali-fip-snat"}},
+									{Action: JumpAction{Target: "cali-nat-outgoing"}},
+									{
+										Match: Match().
+											OutInterface("tunl0").
+											NotSrcAddrType(AddrTypeLocal, true).
+											SrcAddrType(AddrTypeLocal, false),
+										Action: MasqAction{},
+									},
+									{
+										Match: Match().
+											OutInterface("vxlan.calico").
+											NotSrcAddrType(AddrTypeLocal, true).
+											SrcAddrType(AddrTypeLocal, false),
+										Action: MasqAction{},
+									},
+								},
+							},
+						}))
+					})
+				})
+			})
+
 			It("IPv4: Should return expected NAT postrouting chain", func() {
 				Expect(rr.StaticNATPostroutingChains(6)).To(Equal([]*Chain{
 					{
