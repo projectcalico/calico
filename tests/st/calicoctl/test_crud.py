@@ -1909,6 +1909,7 @@ class InvalidData(TestBase):
                        'kind': 'IPPool',
                        'metadata': {'name': 'invalid-net-6'},
                        'spec': {
+                           'vxlanMode': 'Never',
                            'ipipMode': 'Never',
                            'cidr': "::/128",
                        }
@@ -1932,6 +1933,16 @@ class InvalidData(TestBase):
                            'cidr': "fd5f::1/123",
                        }  # invalid mask
                    }, "CIDR = 'fd5f::1/123'"),
+                   ("pool-invalidNet9", {
+                       'apiVersion': API_VERSION,
+                       'kind': 'IPPool',
+                       'metadata': {'name': 'invalid-net-9'},
+                       'spec': {
+                           'vxlanMode': 'Always',
+                           'ipipMode': 'Never',
+                           'cidr': "::/120",
+                       }
+                   }, "error with field IPpool.VXLANMode = 'Always' (VXLANMode other than 'Never' is not supported on an IPv6 IP pool)"),
                    ("pool-invalidIpIp1", {
                        'apiVersion': API_VERSION,
                        'kind': 'IPPool',
