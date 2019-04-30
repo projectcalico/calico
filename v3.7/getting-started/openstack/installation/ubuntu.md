@@ -1,5 +1,6 @@
 ---
 title: Ubuntu
+redirect_from: latest/getting-started/openstack/installation/ubuntu
 canonical_url: 'https://docs.projectcalico.org/v3.5/getting-started/openstack/installation/ubuntu'
 ---
 

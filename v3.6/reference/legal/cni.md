@@ -1,6 +1,5 @@
 ---
 title: CNI plugin attributions
-redirect_from: latest/reference/legal/cni
 canonical_url: https://docs.projectcalico.org/master/reference/legal/cni
 ---
 

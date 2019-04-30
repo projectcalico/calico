@@ -1,5 +1,6 @@
 ---
 title: Failsafe rules
+redirect_from: latest/security/host-endpoints/failsafe
 canonical_url: 'https://docs.projectcalico.org/v3.5/getting-started/bare-metal/policy/failsafe'
 ---
 

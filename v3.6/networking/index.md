@@ -1,6 +1,5 @@
 ---
 title: Networking
-redirect_from: latest/networking/index
 canonical_url: 'https://docs.projectcalico.org/master/networking/'
 ---
 

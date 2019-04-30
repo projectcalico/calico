@@ -1,6 +1,5 @@
 ---
 title: IBM Cloud
-redirect_from: latest/reference/public-cloud/ibm
 canonical_url: https://docs.projectcalico.org/v3.5/reference/public-cloud/ibm
 ---
 

@@ -1,5 +1,6 @@
 ---
 title: confd attributions
+redirect_from: latest/reference/legal/confd
 canonical_url: https://docs.projectcalico.org/master/reference/legal/confd
 ---
 

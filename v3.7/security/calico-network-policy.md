@@ -1,5 +1,6 @@
 ---
 title: Get started with calico network policy
+redirect_from: latest/security/calico-network-policy
 ---
 
 ### Big Picture

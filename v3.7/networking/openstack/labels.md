@@ -1,5 +1,6 @@
 ---
 title: Endpoint labels and operator policy
+redirect_from: latest/networking/openstack/labels
 canonical_url: 'https://docs.projectcalico.org/v3.5/usage/openstack/labels'
 ---
 

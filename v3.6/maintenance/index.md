@@ -1,6 +1,5 @@
 ---
 title: Maintenance
-redirect_from: latest/maintenance/index
 canonical_url: 'https://docs.projectcalico.org/master/maintenance/'
 ---
 

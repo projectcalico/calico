@@ -1,5 +1,6 @@
 ---
 title: Connection tracking
+redirect_from: latest/security/host-endpoints/conntrack
 canonical_url: 'https://docs.projectcalico.org/v3.5/getting-started/bare-metal/policy/conntrack'
 ---
 
