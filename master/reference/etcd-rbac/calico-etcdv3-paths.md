@@ -70,6 +70,7 @@ component needs access to in etcd to function successfully.
 | /calico/resources/v3/projectcalico.org/globalnetworkpolicies/\* |   RW   |
 | /calico/resources/v3/projectcalico.org/globalnetworksets/\*     |   RW   |
 | /calico/resources/v3/projectcalico.org/networkpolicies/\*       |   RW   |
+| /calico/resources/v3/projectcalico.org/networksets/\*           |   RW   |
 | /calico/resources/v3/projectcalico.org/profiles/\*              |   RW   |
 
 ## calicoctl (full read/write access)
