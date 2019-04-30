@@ -1,6 +1,5 @@
 ---
 title: Configuring Conntrack
-redirect_from: latest/networking/conntrack
 canonical_url: 'https://docs.projectcalico.org/v3.5/usage/configuration/conntrack'
 ---
 

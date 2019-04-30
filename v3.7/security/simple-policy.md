@@ -1,5 +1,6 @@
 ---
 title: Simple policy tutorial
+redirect_from: latest/security/simple-policy
 canonical_url: 'https://docs.projectcalico.org/v3.5/getting-started/kubernetes/tutorials/simple-policy'
 ---
 

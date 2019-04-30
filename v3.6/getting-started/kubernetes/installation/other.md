@@ -1,6 +1,5 @@
 ---
 title: Installing Calico for policy (advanced)
-redirect_from: latest/getting-started/kubernetes/installation/other
 canonical_url: 'https://docs.projectcalico.org/v3.5/getting-started/kubernetes/installation/other'
 ---
 

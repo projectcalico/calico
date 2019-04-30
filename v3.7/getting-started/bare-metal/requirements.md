@@ -1,5 +1,6 @@
 ---
 title: System requirements
+redirect_from: latest/getting-started/bare-metal/requirements
 canonical_url: 'https://docs.projectcalico.org/v3.5/getting-started/bare-metal/requirements'
 ---
 

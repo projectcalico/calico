@@ -1,6 +1,5 @@
 ---
 title: Connecting to a dedicated etcd cluster (optional)
-redirect_from: latest/getting-started/openshift/dedicated-etcd
 canonical_url: https://docs.projectcalico.org/v3.5/getting-started/openshift/dedicated-etcd
 ---
 

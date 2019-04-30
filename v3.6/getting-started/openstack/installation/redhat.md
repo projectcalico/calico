@@ -1,6 +1,5 @@
 ---
 title: Red Hat Enterprise Linux
-redirect_from: latest/getting-started/openstack/installation/redhat
 canonical_url: 'https://docs.projectcalico.org/v3.5/getting-started/openstack/installation/redhat'
 ---
 

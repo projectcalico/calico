@@ -1,5 +1,6 @@
 ---
 title: Stars policy tutorial
+redirect_from: latest/security/stars-policy/index
 canonical_url: 'https://docs.projectcalico.org/v3.5/getting-started/kubernetes/tutorials/stars-policy'
 ---
 The included demo sets up a frontend and backend service, as well as a client service, all

@@ -1,6 +1,5 @@
 ---
 title: Configuring calicoctl
-redirect_from: latest/getting-started/calicoctl/configure/index
 canonical_url: 'https://docs.projectcalico.org/v3.5/usage/calicoctl/configure/'
 ---
 

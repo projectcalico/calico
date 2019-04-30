@@ -1,5 +1,6 @@
 ---
 title: Connecting workloads across networks that you do not control
+redirect_from: latest/networking/vxlan-ipip
 ---
 
 ### Big Picture

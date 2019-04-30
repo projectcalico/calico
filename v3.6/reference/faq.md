@@ -1,6 +1,5 @@
 ---
 title: Frequently asked questions
-redirect_from: latest/reference/faq
 canonical_url: 'https://docs.projectcalico.org/v3.5/usage/troubleshooting/faq'
 ---
 

@@ -1,5 +1,6 @@
 ---
 title: Defend against DoS attacks
+redirect_from: latest/security/defend-dos-attack
 ---
 
 ### Big Picture 

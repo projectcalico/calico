@@ -1,6 +1,5 @@
 ---
 title: Kuryr
-redirect_from: latest/networking/openstack/kuryr
 canonical_url: 'https://docs.projectcalico.org/v3.5/usage/openstack/kuryr'
 ---
 
