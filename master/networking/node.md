@@ -11,7 +11,7 @@ address.  For example:
 -  Your host has multiple external interfaces.
 -  Your host may have multiple IP addresses assigned to each interface.
 -  You want to change the subnet configuration of each Node to use {{site.prodname}}'s
-   [CrossSubnet IPIP]({{site.baseurl}}/{{page.version}}/networking/ip-in-ip) feature.
+   [CrossSubnet IPIP]({{site.baseurl}}/{{page.version}}/networking/vxlan-ipip) feature.
 -  You have changed the IP of your host.
 
 This guide explains the various methods for configuring a Node's IP and subnet.
