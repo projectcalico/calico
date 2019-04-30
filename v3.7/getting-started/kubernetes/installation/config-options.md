@@ -60,7 +60,7 @@ manifest.  For more information, see [Configuring {{site.nodecontainer}}]({{site
 ### Switching from IP-in-IP to VXLAN
 
 By default, the Calico manifests enable IP-in-IP encapsulation.  If you are on a network that blocks IP-in-IP, such
-as Azure, you may wish to switch to [Calico's VXLAN encapsulation mode]({{site.baseurl}}/{{page.version}}/networking/vxlan).
+as Azure, you may wish to switch to [Calico's VXLAN encapsulation mode]({{site.baseurl}}/{{page.version}}/networking/vxlan-ipip).
 To do this at install time (so that Calico creates the default IP pool with VXLAN and no IP-in-IP configuration has to
 be undone):
 
