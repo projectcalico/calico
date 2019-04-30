@@ -58,7 +58,7 @@ subnet. The subnet of each node is configured on the node resource (which may be
 determined when running the `{{site.nodecontainer}}` service).
 
 For details on configuring IP-in-IP on your deployment, please refer to
-[Configuring IP-in-IP]({{site.baseurl}}/{{page.version}}/networking/ip-in-ip).
+[Configuring IP-in-IP]({{site.baseurl}}/{{page.version}}/networking/vxlan-ipip).
 
 
 > **Note**: Setting `natOutgoing` is recommended on any IP Pool with `ipip` enabled.
@@ -69,7 +69,7 @@ Hosts running {{site.prodname}} is asymmetric and may cause traffic to be filter
 
 #### VXLAN
 
-Similarly to IP-in-IP, if `vxlanMode` is set to `Always`, VXLAN encapsulation will be used if the IP of the 
+Similarly to IP-in-IP, if `vxlanMode` is set to `Always`, VXLAN encapsulation will be used if the IP of the
 destination is within the pool.
 
 `CrossSubnet` mode is not supported with VXLAN in this release.
