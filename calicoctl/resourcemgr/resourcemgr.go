@@ -289,27 +289,47 @@ func GetResourceManager(resource runtime.Object) ResourceManager {
 	return helpers[resource.GetObjectKind().GroupVersionKind()]
 }
 
-// Gets resource from arguments.
+// GetResourcesFromArgs gets resources from arguments.
 // This function also inserts resource name, namespace if specified.
 // Example "calicoctl get bgppeer peer123" will return
 // a BGPPeer resource with name field populated to "peer123".
-func GetResourceFromArgs(args map[string]interface{}) (ResourceObject, error) {
+func GetResourcesFromArgs(args map[string]interface{}) ([]ResourceObject, error) {
 	kind := args["<KIND>"].(string)
-	name := argutils.ArgStringOrBlank(args, "<NAME>")
+	argname := "<NAME>"
+
+	var names []string
+
+	switch args[argname].(type) {
+	case string:
+		name := argutils.ArgStringOrBlank(args, argname)
+		names = append(names, name)
+	case []string:
+		names = argutils.ArgStringsOrBlank(args, argname)
+	default:
+		panic(fmt.Errorf("Wrong name format, unexpected type: %T", args[argname]))
+	}
+
 	namespace := argutils.ArgStringOrBlank(args, "--namespace")
 
-	res, ok := kindToRes[strings.ToLower(kind)]
-	if !ok {
-		return nil, fmt.Errorf("resource type '%s' is not supported", kind)
-	}
-	res.(ResourceObject).GetObjectMeta().SetName(name)
+	var ret []ResourceObject
 
-	// Set the namespace if the object kind is namespaced.
-	if helpers[res.GetObjectKind().GroupVersionKind()].isNamespaced {
-		res.(ResourceObject).GetObjectMeta().SetNamespace(namespace)
+	for _, name := range names {
+		res, ok := kindToRes[strings.ToLower(kind)]
+		if !ok {
+			return nil, fmt.Errorf("resource type '%s' is not supported", kind)
+		}
+		res = res.DeepCopyObject().(ResourceObject)
+		res.(ResourceObject).GetObjectMeta().SetName(name)
+
+		// Set the namespace if the object kind is namespaced.
+		if helpers[res.GetObjectKind().GroupVersionKind()].isNamespaced {
+			res.(ResourceObject).GetObjectMeta().SetNamespace(namespace)
+		}
+
+		ret = append(ret, res)
 	}
 
-	return res, nil
+	return ret, nil
 }
 
 // Check if the resource kind is namespaced.

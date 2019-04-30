@@ -76,6 +76,79 @@ class TestCalicoctlCommands(TestBase):
         rc = calicoctl("delete ippool %s" % name(ippool_name2_rev1_v6))
         rc.assert_error(text=NOT_FOUND)
 
+    def test_get_delete_multiple_names(self):
+        """
+        Test get/delete resource kind works with multiple names
+        """
+        # Create ipv6 and ipv4 pools (2 IPPool resources)
+        rc = calicoctl("create", data=ippool_name2_rev1_v6)
+        rc.assert_no_error()
+        rc = calicoctl("create", data=ippool_name1_rev1_v4)
+        rc.assert_no_error()
+
+        # Get the 2 resources by name
+        rc = calicoctl("get ippool %s %s" % (name(ippool_name1_rev1_v4), name(ippool_name2_rev1_v6)))
+        rc.assert_no_error()
+        rc.assert_output_equals(ippool_name1_rev1_table + "   \n\n" + ippool_name2_rev1_table)
+
+        rcNoErr = rc
+
+        # Get the 2 + one that does not exist
+        rc = calicoctl("get ippool %s %s %s" % (name(ippool_name1_rev1_v4), "blah", name(ippool_name2_rev1_v6)))
+        rc.assert_error()
+        rc.assert_output_equals(ippool_name1_rev1_table +
+                "   \n\n" +
+                ippool_name2_rev1_table +
+                "      \n\n" +
+                "resource does not exist: IPPool(blah) with error: <nil>\n")
+
+        rc = calicoctl("get ippool %s %s %s" % (name(ippool_name1_rev1_v4), "blah", name(ippool_name2_rev1_v6)),
+                only_stdout=True)
+
+        # Check that the output with no errors and with some errors equal for
+        # the good cases (XXX some weird benign printer whitespaces at the end)
+        rc.assert_output_equals(rcNoErr.output + "      \n\n")
+
+        # Delete both by name
+        rc = calicoctl("delete ippool %s %s" % (name(ippool_name1_rev1_v4), name(ippool_name2_rev1_v6)))
+        rc.assert_no_error()
+
+        # Assert pools are now deleted
+        rc = calicoctl("get ippool -o yaml")
+        rc.assert_empty_list("IPPool")
+
+        # Create ipv6 and ipv4 pools (2 IPPool resources)
+        rc = calicoctl("create", data=ippool_name2_rev1_v6)
+        rc.assert_no_error()
+        rc = calicoctl("create", data=ippool_name1_rev1_v4)
+        rc.assert_no_error()
+
+        # Delete the 2 + one that does not exist
+        rc = calicoctl("delete ippool %s %s %s" %
+                (name(ippool_name1_rev1_v4), "blah", name(ippool_name2_rev1_v6)))
+        rc.assert_error()
+
+        # Assert pools are now deleted
+        rc = calicoctl("get ippool -o yaml")
+        rc.assert_empty_list("IPPool")
+
+        # Create ipv6 and ipv4 pools (2 IPPool resources)
+        rc = calicoctl("create", data=ippool_name2_rev1_v6)
+        rc.assert_no_error()
+        rc = calicoctl("create", data=ippool_name1_rev1_v4)
+        rc.assert_no_error()
+
+        # Make sure that we do not delete anything unintentionally
+        rcYaml= calicoctl("get ippool -o yaml")
+        rcYaml.assert_no_error()
+
+        rc = calicoctl("delete ippool x y z")
+        rc.assert_error()
+
+        rc= calicoctl("get ippool -o yaml")
+        rc.assert_no_error()
+        rc.assert_output_equals(rcYaml.output)
+
     def test_delete_with_resource_version(self):
         """
         Test that resource version operates correctly with delete, i.e.
