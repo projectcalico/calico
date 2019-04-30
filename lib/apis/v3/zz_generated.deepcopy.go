@@ -724,6 +724,11 @@ func (in *FelixConfigurationSpec) DeepCopyInto(out *FelixConfigurationSpec) {
 		*out = new(v1.Duration)
 		**out = **in
 	}
+	if in.SockmapEnabled != nil {
+		in, out := &in.SockmapEnabled, &out.SockmapEnabled
+		*out = new(bool)
+		**out = **in
+	}
 	if in.XDPEnabled != nil {
 		in, out := &in.XDPEnabled, &out.XDPEnabled
 		*out = new(bool)
