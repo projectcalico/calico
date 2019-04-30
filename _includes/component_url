@@ -14,7 +14,7 @@ https://github.com/projectcalico/cni-plugin/releases/tag/{{ release.components[i
 https://github.com/projectcalico/k8s-policy/releases/tag/{{ release.components[include.component].version }}
 
 {%- when 'networking-calico' -%}
-http://git.openstack.org/cgit/openstack/networking-calico/commit/?h={{ release.components[include.component].version }}
+https://opendev.org/openstack/networking-calico/src/tag/{{ release.components[include.component].version }}
 
 {%- when 'typha' -%}
 https://github.com/projectcalico/typha/releases/tag/{{ release.components[include.component].version }}

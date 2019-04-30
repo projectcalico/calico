@@ -13,6 +13,7 @@ by GitHub for the core repositories within the projectcalico/ organization. It i
 | Alex Rowley                              | @rowleyaj |
 | Alexander Golovko                        | @0xBF |
 | Alexander Hersh                          | @alexhersh |
+| Alina Militaru                           | @asincu |
 | Anatoly Popov                            | @aensidhe |
 | Andrei Nistor                            | @codertux |
 | Andy Randall                             | @ahrkrak |
@@ -20,9 +21,11 @@ by GitHub for the core repositories within the projectcalico/ organization. It i
 | Anton Antonov                            | @syndbg |
 | Artem Panchenko                          | @artem-panchenko |
 | Artyom Rymarchik                         | @mechanicalbot |
+| Ashley                                   | @CallMeFoxie |
 | Avi Deitcher                             | @deitch |
 | Benjamin                                 | @ben-st |
 | Bingshen Wang                            | @BSWANG |
+| Blucher                                  | @GeorgeGuo2018 |
 | Bo Liu                                   | @liubog2008 |
 | Brad Beam                                | @bradbeam |
 | Brad Behle                               | @bradbehle |
