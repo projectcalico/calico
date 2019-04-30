@@ -48,7 +48,7 @@ for package_type in "$@"; do
 		git clean -ffxd
 		{
 		    cat <<EOF
-networking-calico (${debver}~$series) $series; urgency=low
+networking-calico (1:${debver}~$series) $series; urgency=low
 
 EOF
 		    if ${release}; then
