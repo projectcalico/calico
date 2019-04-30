@@ -15,6 +15,7 @@
 # Build directories.
 /bin/
 /bpf/xdp/generated/
+/bpf/sockmap/generated/
 /docker-image/bin/
 /build/
 /dist/
