@@ -1,3 +1,25 @@
+v3.7:
+- title: v3.7.0
+  components:
+     typha:
+      version: v3.7.0
+     calicoctl:
+      version: v3.7.0
+     calico/node:
+      version: v3.7.0
+     calico/cni:
+      version: v3.7.0
+     calico/kube-controllers:
+      version: v3.7.0
+     networking-calico:
+      version: 3.6.0
+     flannel:
+      version: v0.11.0
+     calico/dikastes:
+      version: v3.7.0
+     flexvol:
+      version: v3.7.0
+
 v3.6:
 - title: v3.6.1
   components:
@@ -16,7 +38,7 @@ v3.6:
      flannel:
       version: v0.9.1
      calico/dikastes:
-      version: v3.6.1 
+      version: v3.6.1
      flexvol:
       version: v3.6.1
 
@@ -37,7 +59,7 @@ v3.6:
      flannel:
       version: v0.9.1
      calico/dikastes:
-      version: v3.6.0 
+      version: v3.6.0
      flexvol:
       version: v3.6.0
 
@@ -1284,7 +1306,7 @@ v3.0:
       url: https://github.com/projectcalico/routereflector/releases/tag/v0.5.0
     flannel:
       version: v0.9.1
-    
+
 - title: v3.0.0
   components:
     typha:
@@ -2435,30 +2457,7 @@ v2.1:
       version: 1.4.2
       url: http://git.openstack.org/cgit/openstack/networking-calico/commit/?h=1.4.2
 
-# Pre-release placeholder for Calico v3.7. Delete this when v3.7.0 goes live.
-v3.7:
-- title: v3.7.0-pre 
-  components:
-     typha:
-      version: release-v3.7
-     calicoctl:
-      version: release-v3.7
-     calico/node:
-      version: release-v3.7
-     calico/cni:
-      version: release-v3.7
-     calico/kube-controllers:
-      version: release-v3.7
-     networking-calico:
-      version: 3.6.0
-     flannel:
-      version: v0.11.0
-     calico/dikastes:
-      version: release-v3.7 
-     flexvol:
-      version: release-v3.7
-
-# The master release stream is used to generate the master version of the docs.  
+# The master release stream is used to generate the master version of the docs.
 master:
 - title: master
   note: ""
@@ -2478,6 +2477,6 @@ master:
      flannel:
       version: v0.11.0
      calico/dikastes:
-      version: master 
+      version: master
      flexvol:
       version: master
