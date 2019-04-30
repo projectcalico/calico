@@ -66,6 +66,7 @@ rules:
       - globalnetworksets
       - ippools
       - networkpolicies
+      - networksets
       - hostendpoints
       - ipamblocks
       - blockaffinities
@@ -91,4 +92,3 @@ subjects:
 - kind: ServiceAccount
   name: calicoctl
   namespace: kube-system
-
