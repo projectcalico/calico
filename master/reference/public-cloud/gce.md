@@ -32,6 +32,6 @@ GCE will perform outbound NAT on any traffic which has the source address of a v
 machine instance.  By enabling outgoing NAT on your {{site.prodname}} IP pool, {{site.prodname}} will
 NAT any outbound traffic from the containers hosted on the virtual machine instances.
 
-[IPIP]: {{site.baseurl}}/{{page.version}}/networking/ip-in-ip
+[IPIP]: {{site.baseurl}}/{{page.version}}/networking/vxlan-ipip
 [IPPool]: {{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/ippool
 [GCE]: https://cloud.google.com/compute/

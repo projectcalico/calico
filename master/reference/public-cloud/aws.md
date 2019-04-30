@@ -35,7 +35,7 @@ to enable IPIP and set the mode to "CrossSubnet".
 
 > **Note**: This feature was introduced in {{site.prodname}} v2.1, if your deployment was created with
 > an older version of {{site.prodname}}, or if you if you are unsure whether your deployment
-> is configured correctly, follow the [Configuring IP-in-IP guide]({{site.baseurl}}/{{page.version}}/networking/ip-in-ip)
+> is configured correctly, follow the [Configuring IP-in-IP guide]({{site.baseurl}}/{{page.version}}/networking/vxlan-ipip)
 > which discusses this in more detail.
 >
 {: .alert .alert-info}
