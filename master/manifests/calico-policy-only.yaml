@@ -6,4 +6,5 @@ datastore: kdd
 typha:
   enabled: true
 ipam: host-local
+network: none
 {% endhelm %}
