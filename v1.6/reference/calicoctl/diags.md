@@ -1,6 +1,6 @@
 ---
 title: calicoctl diags
-canonical_url: 'https://docs.projectcalico.org/v3.5/reference/calicoctl/commands/node/diags'
+canonical_url: 'https://docs.projectcalico.org/v1.6/reference/calicoctl/diags'
 ---
 
 # User reference for 'calicoctl diags' commands

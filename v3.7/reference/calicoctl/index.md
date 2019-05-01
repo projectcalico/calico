@@ -1,7 +1,7 @@
 ---
 title: calicoctl user reference
 redirect_from: latest/reference/calicoctl/index
-canonical_url: 'https://docs.projectcalico.org/v3.5/reference/calicoctl/'
+canonical_url: 'https://docs.projectcalico.org/v3.7/reference/calicoctl/index'
 ---
 
 The command line tool, `calicoctl`, makes it easy to manage {{site.prodname}} network and security policy, as well as other

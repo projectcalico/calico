@@ -1,6 +1,6 @@
 ---
 title: Upgrading Calico
-canonical_url: 'https://docs.projectcalico.org/v3.5/getting-started/openstack/upgrade/'
+canonical_url: 'https://docs.projectcalico.org/v3.5/getting-started/openstack/upgrade/index'
 ---
 ## Upgrade procedure
 These documents detail the procedure for upgrading {{site.prodname}} in an OpenStack system. 

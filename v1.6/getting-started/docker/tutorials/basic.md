@@ -1,6 +1,6 @@
 ---
 title: Calico as a Docker network plugin
-canonical_url: 'https://docs.projectcalico.org/v2.6/getting-started/docker/tutorials/ipam'
+canonical_url: 'https://docs.projectcalico.org/v1.6/getting-started/docker/tutorials/basic'
 ---
 
 

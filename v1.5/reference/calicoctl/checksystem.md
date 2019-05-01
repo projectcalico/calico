@@ -1,6 +1,6 @@
 ---
 title: calicoctl checksystem
-canonical_url: 'https://docs.projectcalico.org/v3.5/reference/calicoctl/commands/node/checksystem'
+canonical_url: 'https://docs.projectcalico.org/v1.6/reference/calicoctl/checksystem'
 ---
 This section describes the `calicoctl checksystem` commands.
 

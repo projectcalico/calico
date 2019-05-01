@@ -1,7 +1,7 @@
 ---
 title: calicoctl replace
 redirect_from: latest/reference/calicoctl/commands/replace
-canonical_url: 'https://docs.projectcalico.org/v3.5/reference/calicoctl/commands/replace'
+canonical_url: 'https://docs.projectcalico.org/v3.7/reference/calicoctl/commands/replace'
 ---
 
 This sections describes the `calicoctl replace` command.

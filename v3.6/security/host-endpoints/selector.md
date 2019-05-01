@@ -1,6 +1,6 @@
 ---
 title: Selector-based policies
-canonical_url: 'https://docs.projectcalico.org/v3.5/getting-started/bare-metal/policy/selector'
+canonical_url: 'https://docs.projectcalico.org/v3.7/security/host-endpoints/selector'
 ---
 
 

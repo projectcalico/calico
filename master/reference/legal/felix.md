@@ -1,6 +1,6 @@
 ---
 title: Felix attributions
-canonical_url: https://docs.projectcalico.org/master/reference/legal/felix
+canonical_url: 'https://docs.projectcalico.org/v3.7/reference/legal/felix'
 ---
 
 

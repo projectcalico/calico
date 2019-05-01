@@ -1,6 +1,6 @@
 ---
 title: Networking Mesos Tasks with Calico
-canonical_url: 'https://docs.projectcalico.org/v2.6/getting-started/mesos/tutorials/policy/universal-containerizer'
+canonical_url: 'https://docs.projectcalico.org/v2.1/getting-started/mesos/tutorials/unified'
 ---
 
 ## Prerequisites

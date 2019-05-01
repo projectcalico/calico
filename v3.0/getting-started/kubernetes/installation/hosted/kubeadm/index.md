@@ -1,6 +1,6 @@
 ---
 title: kubeadm Hosted Install
-canonical_url: https://docs.projectcalico.org/v3.5/getting-started/kubernetes/installation/
+canonical_url: 'https://docs.projectcalico.org/v3.0/getting-started/kubernetes/installation/hosted/kubeadm/index'
 ---
 
 This document outlines how to install {{site.prodname}} on a cluster initialized with

@@ -1,6 +1,6 @@
 ---
 title: Stars demo with the Mesos Docker Containerizer
-canonical_url: 'https://docs.projectcalico.org/v1.6/getting-started/mesos/demos/docker/'
+canonical_url: 'https://docs.projectcalico.org/v1.6/getting-started/mesos/demos/docker/index'
 ---
 
 

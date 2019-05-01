@@ -1,6 +1,6 @@
 ---
 title: Securing Calico's Prometheus endpoints
-canonical_url: 'https://docs.projectcalico.org/v3.5/usage/policy/secure-metrics'
+canonical_url: 'https://docs.projectcalico.org/v3.7/security/comms/secure-metrics'
 ---
 
 ## About securing access to {{site.prodname}}'s metrics endpoints

@@ -1,6 +1,6 @@
 ---
 title: Quickstart for Calico on Kubernetes
-canonical_url: 'https://docs.projectcalico.org/v3.5/getting-started/kubernetes/'
+canonical_url: 'https://docs.projectcalico.org/v3.7/getting-started/kubernetes/index'
 ---
 
 

@@ -1,6 +1,6 @@
 ---
 title: calico/node attributions
-canonical_url: https://docs.projectcalico.org/master/reference/legal/node
+canonical_url: 'https://docs.projectcalico.org/v3.7/reference/legal/node'
 ---
 
 

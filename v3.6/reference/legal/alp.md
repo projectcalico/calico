@@ -1,6 +1,6 @@
 ---
 title: Application layer policy attributions
-canonical_url: https://docs.projectcalico.org/master/reference/legal/alp
+canonical_url: 'https://docs.projectcalico.org/v3.7/reference/legal/alp'
 ---
 
 ### Direct dependencies

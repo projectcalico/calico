@@ -1,6 +1,6 @@
 ---
 title: Prerequisites for Calico with Mesos
-canonical_url: 'https://docs.projectcalico.org/v2.6/getting-started/mesos/installation/dc-os/'
+canonical_url: 'https://docs.projectcalico.org/v2.6/getting-started/mesos/installation/prerequisites'
 ---
 
 This guide details a minimal install of the external services required by a Calico-Mesos Agent.

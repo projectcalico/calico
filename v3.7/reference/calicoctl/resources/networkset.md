@@ -1,7 +1,7 @@
 ---
 title: Network set
 redirect_from: latest/reference/calicoctl/resources/networkset
-canonical_url: https://docs.projectcalico.org/master/reference/calicoctl/resources/networkset
+canonical_url: 'https://docs.projectcalico.org/v3.7/reference/calicoctl/resources/networkset'
 ---
 
 A network set resource (NetworkSet) represents an arbitrary set of IP subnetworks/CIDRs,
