@@ -217,16 +217,11 @@ release in the documentation. Perform these steps on a branch off of master.
 
 1. Pull the latest master and check out a _new_ branch.
 
-1. Update the canonical URLs to point at the new release.
-
-   Run the following command  to switch the canonical URLs to the latest release version number. Pass in the number of the previous
-   release via `OLD` and the number of the current latest release via `NEW`.
+1. Run this command to update canonical URLs:
 
    ```
-   make update_canonical_urls OLD=vX.Y NEW=vX.Y
+   make update_canonical_urls
    ```
-
-   Example: `make update_canonical_urls OLD=v3.0 NEW=v3.1`, where `3.0` was the previous latest and `3.1` is the new latest release.
 
 1. Submit a PR with the canonical link changes, make sure it passes CI, and get it reviewed.
 
