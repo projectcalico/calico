@@ -65,7 +65,9 @@ port1 = {'binding:vif_type': 'tap',
          'mac_address': '00:11:22:33:44:55',
          'admin_state_up': True,
          'security_groups': ['SGID-default'],
-         'status': 'ACTIVE'}
+         'status': 'ACTIVE',
+         'allowed_address_pairs': [{"ip_address": "23.23.23.2",
+                                    "mac_address": "fa:16:3e:c4:cd:3f"}]}
 
 port2 = {'binding:vif_type': 'tap',
          'binding:host_id': 'felix-host-1',
@@ -79,7 +81,8 @@ port2 = {'binding:vif_type': 'tap',
          'mac_address': '00:11:22:33:44:66',
          'admin_state_up': True,
          'security_groups': ['SGID-default'],
-         'status': 'ACTIVE'}
+         'status': 'ACTIVE',
+         'allowed_address_pairs': []}
 
 # Port with an IPv6 address.
 port3 = {'binding:vif_type': 'tap',
@@ -94,7 +97,8 @@ port3 = {'binding:vif_type': 'tap',
          'mac_address': '00:11:22:33:44:66',
          'admin_state_up': True,
          'security_groups': ['SGID-default'],
-         'status': 'ACTIVE'}
+         'status': 'ACTIVE',
+         'allowed_address_pairs': []}
 
 floating_ports = [{'fixed_port_id': 'DEADBEEF-1234-5678',
                    'fixed_ip_address': '10.65.0.2',

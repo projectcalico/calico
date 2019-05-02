@@ -377,7 +377,22 @@ def endpoint_spec(port):
             ip_nets.append(ip['ip_address'] + '/32')
             if ip['gateway'] is not None:
                 data['ipv4Gateway'] = ip['gateway']
+
+    # we need to store allowedIPs twice, because
+    # dhcp agent creates dhcp record only for fixed IP
+    # but felix have to create route for both (fixed and allowed ips)
+    allowed_ips = []
+    for aap in port.get('allowed_address_pairs', []):
+        ip_addr = str(aap['ip_address'])
+        if ':' in ip_addr:
+            ip_nets.append(ip_addr + '/128')
+            allowed_ips.append(ip_addr + '/128')
+        else:
+            ip_nets.append(ip_addr + '/32')
+            allowed_ips.append(ip_addr + '/32')
+
     data['ipNetworks'] = ip_nets
+    data['allowedIps'] = allowed_ips
 
     ip_nats = []
     for ip in port['floating_ips']:
