@@ -59,7 +59,9 @@ Before attempting to create a Calico release you must do the following.
 
 1. Verify that the code and GitHub are in the right state for releasing for the chosen version.
 
-   - Make sure libcalico-go pins are up-to-date if needed.
+   - Make sure all components have up-to-date libcalico-go pins.
+   - Make sure node has up-to-date pins for felix and confd.
+   - Make sure felix and confd both have an up-to-date typha pin.
    - [Make sure the Milestone is empty](https://github.com/issues?utf8=%E2%9C%93&q=user%3Aprojectcalico+is%3Aopen+milestone%3A%22Calico+vX.Y.Z%22+) either by merging PRs, or kicking them out of the Milestone.
    - [Make sure that there are no pending cherry-pick PRs](https://github.com/issues?utf8=%E2%9C%93&q=user%3Aprojectcalico+label%3Acherry-pick-candidate) relevant to the release.
    - [Make sure there are no pending PRs which need docs](https://github.com/pulls?utf8=%E2%9C%93&q=is%3Apr+user%3Aprojectcalico+label%3Adocs-pr-required+) for this release.
@@ -67,7 +69,8 @@ Before attempting to create a Calico release you must do the following.
    - [Make sure CI is passing](https://semaphoreci.com/calico) for the target release branch.
 
 1. Select the appropriate component version numbers, and create any necessary releases. Follow the instructions
-   in each repository for further information.
+   in each repository for further information. (See recent release information, e.g. at
+   https://docs.projectcalico.org/v3.7/release-notes/, for the set of components to consider releasing.)
 
    The following components _must_ use the same version number as the Calico version number
    chosen above, and thus must be re-released for every Calico release.
@@ -243,7 +246,7 @@ Perform the following steps on a local branch off of the latest master.
 
 ### Promoting to be the latest release in the docs
 
-1. Add TWO new `<li>` entries to the `<span class="dropdown">` in `_layouts/docwithnav.html` file.
+1. Add a new `<li>` entry to the `<span class="dropdown">` in `_layouts/docwithnav.html` file.
 
 1. Modify the redirect in `/index.html` to point to your new release.
 
@@ -270,18 +273,7 @@ Perform the following steps on a local branch off of the latest master.
    make update_canonical_urls
    ```
 
-1. Submit a PR with the canonical link changes, make sure it passes CI, and get it reviewed.
-
-   ```
-   make htmlproofer
-   ```
-
-   > NOTE: You may experience `htmlproofer` errors at this stage if a page was deleted or renamed in the `master` directory.
-   >       Such errors can also occur if a page was deleted or renamed in the latest release and the `master`
-   >       directories but the canonical links were not updated according to the instructions in CONTRIBUTING_DOCS.md.
-   >       Modify the `canonical_url` metadata of the pages that error out so that they point to valid locations. If the
-   >       page was deleted, adjust the version number of the canonical URLs to the final copy of the page.
-   >       If the page was renamed, update the canonical URLs to the new path.
+1. Submit a PR with the canonical link changes, make sure it passes CI, and get it reviewed and merged.
 
 ## <a name="patch"></a> Performing a "patch" release
 
