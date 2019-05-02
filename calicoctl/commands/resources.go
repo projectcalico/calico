@@ -191,12 +191,26 @@ func executeConfigCommand(args map[string]interface{}, action action) commandRes
 	// error.
 	export := argutils.ArgBoolOrFalse(args, "--export")
 	nameSpecified := false
+	emptyName := false
 	switch a := args["<NAME>"].(type) {
 	case string:
 		nameSpecified = len(a) > 0
+		_, ok := args["<NAME>"]
+		emptyName = !ok || !nameSpecified
 	case []string:
 		nameSpecified = len(a) > 0
+		for _, v := range a {
+			if v == "" {
+				emptyName = true
+			}
+		}
 	}
+
+	if emptyName {
+		fmt.Printf("resource name may not be empty\n")
+		os.Exit(1)
+	}
+
 	for _, r := range resources {
 		res, err := executeResourceAction(args, client, r, action)
 		if err != nil {

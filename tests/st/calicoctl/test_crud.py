@@ -158,6 +158,26 @@ class TestCalicoctlCommands(TestBase):
         rc.assert_error()
         rc.assert_output_contains("Failed to get resources: resource type 'somekind' is not supported")
 
+    def test_empty_name_is_ilegal(self):
+        """
+        Test that we error if empty name is provided
+        """
+
+        rc = calicoctl("get policy \"\"")
+        rc.assert_error()
+
+        rc = calicoctl("get policy x \"\" y")
+        rc.assert_error()
+
+        rc = calicoctl("get delete \"\"")
+        rc.assert_error()
+
+        rc = calicoctl("get delete x \"\" y")
+        rc.assert_error()
+
+        rc = calicoctl("get label \"\" key --remove")
+        rc.assert_error()
+
     def test_delete_with_resource_version(self):
         """
         Test that resource version operates correctly with delete, i.e.
