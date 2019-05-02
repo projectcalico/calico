@@ -2,6 +2,6 @@
 layout: null
 ---
 {% helm %}
-datastore: kdd
+datastore: kubernetes
 network: calico
 {% endhelm %}

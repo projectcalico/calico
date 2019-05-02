@@ -1,6 +1,6 @@
 def gen_values(versions, imageNames, imageRegistry)
     versionsYml = <<~EOF
-    datastore: kdd
+    datastore: kubernetes
     # Config for etcd
     etcd:
       # Endpoints for the etcd instances. This can be a comma separated list of endpoints.

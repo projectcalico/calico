@@ -25,7 +25,7 @@ import (
 var _ = Describe("Typha Helm Chart", func() {
 	Context("With typha enabled with kubernetes datastore", func() {
 		values := HelmValues{
-			Datastore: "kdd",
+			Datastore: "kubernetes",
 			Typha: TyphaSettings{
 				Enabled: true,
 			},
@@ -52,7 +52,7 @@ var _ = Describe("Typha Helm Chart", func() {
 
 	Context("With typha disabled with kubernetes datastore", func() {
 		values := HelmValues{
-			Datastore: "kdd",
+			Datastore: "kubernetes",
 			Typha: TyphaSettings{
 				Enabled: false,
 			},

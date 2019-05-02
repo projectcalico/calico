@@ -2,7 +2,7 @@
 layout: null
 ---
 {% helm %}
-datastore: kdd
+datastore: kubernetes
 typha:
   enabled: true
 network: none

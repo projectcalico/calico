@@ -44,7 +44,7 @@ spec:
       # deletion": https://kubernetes.io/docs/concepts/workloads/pods/pod/#termination-of-pods.
       terminationGracePeriodSeconds: 0
       initContainers:
-{{- if and (eq .Values.network "calico") (eq .Values.datastore "kdd") }}
+{{- if and (eq .Values.network "calico") (eq .Values.datastore "kubernetes") }}
         # This container performs upgrade from host-local IPAM to calico-ipam.
         # It can be deleted if this is a fresh installation, or if you have already
         # upgraded to use calico-ipam.
@@ -109,7 +109,7 @@ spec:
                   name: canal-config
                   key: etcd_cert
   {{- end }}
-{{- else if eq .Values.datastore "kdd" }}
+{{- else if eq .Values.datastore "kubernetes" }}
             # Set the hostname based on the k8s node name.
             - name: KUBERNETES_NODE_NAME
               valueFrom:
@@ -182,7 +182,7 @@ spec:
               valueFrom:
                 fieldRef:
                   fieldPath: spec.nodeName
-{{- else if eq .Values.datastore "kdd" }}
+{{- else if eq .Values.datastore "kubernetes" }}
             # Use Kubernetes API as the backing datastore.
             - name: DATASTORE_TYPE
               value: "kubernetes"
@@ -329,7 +329,7 @@ spec:
               mountPath: /var/run/nodeagent
 {{- end }}
 {{- if eq .Values.network "flannel" }}
-  {{- if eq .Values.datastore "kdd" }}
+  {{- if eq .Values.datastore "kubernetes" }}
         # This container runs flannel using the kube-subnet-mgr backend
         # for allocating subnets.
         - name: kube-flannel
@@ -451,7 +451,7 @@ spec:
           hostPath:
             path: /run/xtables.lock
             type: FileOrCreate
-{{- if and (eq .Values.network "flannel") (eq .Values.datastore "kdd") }}
+{{- if and (eq .Values.network "flannel") (eq .Values.datastore "kubernetes") }}
         # Used by flannel.
         - name: flannel-cfg
           configMap:
@@ -479,7 +479,7 @@ spec:
           secret:
             secretName: calico-etcd-secrets
             defaultMode: 0400
-{{- else if and (eq .Values.network "calico") (eq .Values.datastore "kdd") }}
+{{- else if and (eq .Values.network "calico") (eq .Values.datastore "kubernetes") }}
         # Mount in the directory for host-local IPAM allocations. This is
         # used when upgrading from host-local to calico-ipam, and can be removed
         # if not using the upgrade-ipam init container.
