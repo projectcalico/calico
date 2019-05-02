@@ -1,6 +1,6 @@
 ---
 title: Google Compute Engine
-canonical_url: https://docs.projectcalico.org/v3.5/reference/public-cloud/gce
+canonical_url: 'https://docs.projectcalico.org/v3.7/reference/public-cloud/gce'
 ---
 
 To deploy {{site.prodname}} in [Google Compute Engine (GCE)][GCE], you must ensure

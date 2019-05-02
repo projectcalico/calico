@@ -1,6 +1,6 @@
 ---
 title: Segmenting etcd on Kubernetes (advanced)
-canonical_url: 'https://docs.projectcalico.org/v3.5/reference/advanced/etcd-rbac/kubernetes-advanced'
+canonical_url: 'https://docs.projectcalico.org/v3.7/reference/etcd-rbac/kubernetes-advanced'
 ---
 
 This document describes advanced segmentation of the etcd roles to limit

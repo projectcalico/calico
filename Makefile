@@ -40,7 +40,7 @@ $(info $(shell printf "%-21s = %-10s\n" "TYPHA_VER" $(TYPHA_VER)))
 ##############################################################################
 
 serve: bin/helm
-	# We have to override JEKYLL_DOCKER_TAG which is usually set to 'pages'. 
+	# We have to override JEKYLL_DOCKER_TAG which is usually set to 'pages'.
 	# When set to 'pages', jekyll starts in safe mode which means it will not
 	# load any plugins. Since we're no longer running in github-pages, but would
 	# like to use a docker image that comes preloaded with all the github-pages plugins,
@@ -133,9 +133,8 @@ endif
 	find $(VERSION) \( -name '*.md' -o -name '*.html' \) -exec sed -i 's#^\(redirect_from:.*\)\.md#\1#' '{}' \;
 
 update_canonical_urls:
-	# You must pass two version numbers into this command, e.g., make update_canonical_urls OLD=v3.0 NEW=v3.1
 	# Looks through all directories and replaces previous latest release version numbers in canonical URLs with new
-	find . \( -name '*.md' -o -name '*.html' \) -exec sed -i '/canonical_url:/s/$(OLD)/$(NEW)/g' {} \;
+	python release-scripts/update-canonical-urls.py
 
 ###############################################################################
 # Release targets

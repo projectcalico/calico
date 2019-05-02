@@ -1,7 +1,7 @@
 ---
 title: Reference
 redirect_from: latest/reference/index
-canonical_url: 'https://docs.projectcalico.org/master/reference/'
+canonical_url: 'https://docs.projectcalico.org/v3.7/reference/index'
 ---
 
 This section contains reference information about {{site.prodname}} resources,

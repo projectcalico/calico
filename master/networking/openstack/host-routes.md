@@ -1,6 +1,6 @@
 ---
 title: Host routes
-canonical_url: 'https://docs.projectcalico.org/v3.5/usage/openstack/host-routes'
+canonical_url: 'https://docs.projectcalico.org/v3.7/networking/openstack/host-routes'
 ---
 
 Neutron allows "host routes" to be configured on a subnet, with each host route

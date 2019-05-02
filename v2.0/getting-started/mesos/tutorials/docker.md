@@ -1,6 +1,6 @@
 ---
 title: Calico-Mesos Usage Guide for the Docker Containerizer
-canonical_url: 'https://docs.projectcalico.org/v2.6/getting-started/mesos/tutorials/policy/docker-containerizer'
+canonical_url: 'https://docs.projectcalico.org/v2.1/getting-started/mesos/tutorials/docker'
 ---
 
 This guide shows how to use Marathon to start

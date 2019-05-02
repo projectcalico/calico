@@ -1,7 +1,7 @@
 ---
 title: Multiple regions
 redirect_from: latest/networking/openstack/multiple-regions
-canonical_url: 'https://docs.projectcalico.org/master/networking/openstack/multiple-regions'
+canonical_url: 'https://docs.projectcalico.org/v3.7/networking/openstack/multiple-regions'
 ---
 
 If you use a [multiple region

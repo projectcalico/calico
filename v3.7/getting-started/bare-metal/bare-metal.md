@@ -1,7 +1,7 @@
 ---
 title: Using Calico to Secure Host Interfaces
 redirect_from: latest/getting-started/bare-metal/bare-metal
-canonical_url: 'https://docs.projectcalico.org/v3.5/getting-started/bare-metal/bare-metal'
+canonical_url: 'https://docs.projectcalico.org/v3.7/getting-started/bare-metal/bare-metal'
 ---
 
 This guide describes how to use {{site.prodname}} to secure the network interfaces

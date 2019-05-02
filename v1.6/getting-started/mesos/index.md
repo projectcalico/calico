@@ -1,6 +1,6 @@
 ---
 title: Calico Networking for Mesos
-canonical_url: 'https://docs.projectcalico.org/v2.6/getting-started/mesos/'
+canonical_url: 'https://docs.projectcalico.org/v2.6/getting-started/mesos/index'
 ---
 
 Calico introduces ip-per-container & fine-grained security policies to Mesos, while

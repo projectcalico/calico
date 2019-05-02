@@ -1,7 +1,7 @@
 ---
 title: Command reference
 redirect_from: latest/reference/calicoctl/commands/index
-canonical_url: 'https://docs.projectcalico.org/v3.5/reference/calicoctl/commands/'
+canonical_url: 'https://docs.projectcalico.org/v3.7/reference/calicoctl/commands/index'
 ---
 
 The command line tool, `calicoctl`, makes it easy to manage {{site.prodname}} network

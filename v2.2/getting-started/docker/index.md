@@ -1,6 +1,6 @@
 ---
 title: Calico with Docker
-canonical_url: 'https://docs.projectcalico.org/v2.6/getting-started/docker/'
+canonical_url: 'https://docs.projectcalico.org/v2.6/getting-started/docker/index'
 ---
 
 Calico implements a Docker network plugin that can be used to provide routing and advanced network policy for Docker containers.

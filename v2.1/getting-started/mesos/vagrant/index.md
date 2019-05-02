@@ -1,6 +1,6 @@
 ---
 title: Vagrant Deployed Mesos Cluster with Calico
-canonical_url: 'https://docs.projectcalico.org/v2.6/getting-started/mesos/installation/vagrant-centos/'
+canonical_url: 'https://docs.projectcalico.org/v2.3/getting-started/mesos/vagrant/index'
 ---
 This guide will show you how to use Vagrant to launch a Mesos Cluster
 with Calico installed and ready to network Docker Containerizer tasks.

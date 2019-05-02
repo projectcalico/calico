@@ -1,7 +1,7 @@
 ---
 title: calicoctl version
 redirect_from: latest/reference/calicoctl/commands/version
-canonical_url: 'https://docs.projectcalico.org/v3.5/reference/calicoctl/commands/version'
+canonical_url: 'https://docs.projectcalico.org/v3.7/reference/calicoctl/commands/version'
 ---
 
 This section describes the `calicoctl version` command.

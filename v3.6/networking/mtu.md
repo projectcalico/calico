@@ -1,6 +1,6 @@
 ---
 title: Configuring MTU
-canonical_url: 'https://docs.projectcalico.org/v3.5/usage/configuration/mtu'
+canonical_url: 'https://docs.projectcalico.org/v3.7/networking/mtu'
 ---
 
 Depending on the environment {{site.prodname}} is being deployed into it may be
