@@ -1,12 +1,12 @@
 # Settings in the [build] context are global and are applied to all contexts unless otherwise overridden by more specific contexts.
 # The cp, bundle install and bundle exec parts are only required to work around not being able to put the Gemfile int he root directory. It can't go in the root because that breaks the jekyll/jekyll container.
 [build]
-  command = 'export PATH=$PATH:/opt/build/repo/bin; cp netlify/Gemfile Gemfile; make bin/helm; bundle install && bundle exec jekyll build'
+  command = 'make netlify'
 
 # Deploy Preview context: All Deploy Previews will inherit these settings.
 # Override the build command to include the Preview URL
 [context.deploy-preview]
-  command = 'export PATH=$PATH:/opt/build/repo/bin; cp netlify/Gemfile Gemfile; echo "url: $DEPLOY_PRIME_URL" >_config_url.yml; make bin/helm; bundle install && bundle exec jekyll build --config _config.yml,_config_url.yml'
+  command = 'echo "url: $DEPLOY_PRIME_URL" >_config_url.yml; DEV=true make netlify'
 
 [[headers]]
   for = "/*.yaml"

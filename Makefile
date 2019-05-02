@@ -327,6 +327,16 @@ vendor: glide.yaml
 	  -w /go/src/$(PACKAGE_NAME) \
 	  $(CALICO_BUILD) glide install -strip-vendor
 
+###########################
+# Netlify
+###########################
+.PHONY: netlify
+netlify: bin/helm
+	export PATH=$(PATH):/opt/build/repo/bin
+	cp netlify/Gemfile Gemfile
+	bundle install
+	bundle exec jekyll build $(CONFIG)
+
 .PHONY: help
 ## Display this help text
 help: # Some kind of magic from https://gist.github.com/rcmachado/af3db315e31383502660
