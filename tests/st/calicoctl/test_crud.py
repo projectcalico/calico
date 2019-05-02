@@ -149,6 +149,15 @@ class TestCalicoctlCommands(TestBase):
         rc.assert_no_error()
         rc.assert_output_equals(rcYaml.output)
 
+    def test_reject_unknown_resource(self):
+        """
+        Test that we error if a resource is not know
+        """
+
+        rc = calicoctl("get somekind somename")
+        rc.assert_error()
+        rc.assert_output_contains("Failed to get resources: resource type 'somekind' is not supported")
+
     def test_delete_with_resource_version(self):
         """
         Test that resource version operates correctly with delete, i.e.
