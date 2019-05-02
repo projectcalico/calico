@@ -16,7 +16,6 @@ package commands
 
 import (
 	"fmt"
-	"os"
 	"strings"
 
 	"github.com/docopt/docopt-go"
@@ -25,7 +24,7 @@ import (
 )
 
 // Node function is a switch to node related sub-commands
-func Node(args []string) {
+func Node(args []string) error {
 	var err error
 	doc := constants.DatastoreIntro + `Usage:
   calicoctl node <command> [<args>...]
@@ -46,11 +45,10 @@ Description:
 `
 	arguments, err := docopt.Parse(doc, args, true, "", true, false)
 	if err != nil {
-		fmt.Printf("Invalid option: 'calicoctl %s'. Use flag '--help' to read about a specific subcommand.\n", strings.Join(args, " "))
-		os.Exit(1)
+		return fmt.Errorf("Invalid option: 'calicoctl %s'. Use flag '--help' to read about a specific subcommand.", strings.Join(args, " "))
 	}
 	if arguments["<command>"] == nil {
-		return
+		return nil
 	}
 
 	command := arguments["<command>"].(string)
@@ -58,14 +56,16 @@ Description:
 
 	switch command {
 	case "status":
-		node.Status(args)
+		return node.Status(args)
 	case "diags":
-		node.Diags(args)
+		return node.Diags(args)
 	case "checksystem":
-		node.Checksystem(args)
+		return node.Checksystem(args)
 	case "run":
-		node.Run(args)
+		return node.Run(args)
 	default:
 		fmt.Println(doc)
 	}
+
+	return nil
 }

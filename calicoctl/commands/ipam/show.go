@@ -17,7 +17,6 @@ package ipam
 import (
 	"context"
 	"fmt"
-	"os"
 	"strings"
 
 	"github.com/projectcalico/calicoctl/calicoctl/commands/constants"
@@ -28,7 +27,7 @@ import (
 )
 
 // IPAM takes keyword with an IP address then calls the subcommands.
-func Show(args []string) {
+func Show(args []string) error {
 	doc := constants.DatastoreIntro + `Usage:
   calicoctl ipam show --ip=<IP> [--config=<CONFIG>]
 
@@ -46,11 +45,10 @@ Description:
 `
 	parsedArgs, err := docopt.Parse(doc, args, true, "", false, false)
 	if err != nil {
-		fmt.Printf("Invalid option: 'calicoctl %s'. Use flag '--help' to read about a specific subcommand.\n", strings.Join(args, " "))
-		os.Exit(1)
+		return fmt.Errorf("Invalid option: 'calicoctl %s'. Use flag '--help' to read about a specific subcommand.", strings.Join(args, " "))
 	}
 	if len(parsedArgs) == 0 {
-		return
+		return nil
 	}
 
 	ctx := context.Background()
@@ -60,7 +58,6 @@ Description:
 	client, err := clientmgr.NewClient(cf)
 	if err != nil {
 		fmt.Println(err)
-		os.Exit(1)
 	}
 
 	ipamClient := client.IPAM()
@@ -72,8 +69,7 @@ Description:
 	// `IP 192.168.71.1 is not assigned in block`. This is not exactly an error,
 	// so not returning it to the caller.
 	if err != nil {
-		fmt.Println(err)
-		return
+		return err
 	}
 
 	// IP address is assigned with attributes.
@@ -83,4 +79,6 @@ Description:
 		// IP address is assigned but attributes are not set.
 		fmt.Printf("No attributes defined for IP %s\n", ip)
 	}
+
+	return nil
 }

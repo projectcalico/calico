@@ -207,8 +207,7 @@ func executeConfigCommand(args map[string]interface{}, action action) commandRes
 	}
 
 	if emptyName {
-		fmt.Printf("resource name may not be empty\n")
-		os.Exit(1)
+		return commandResults{err: fmt.Errorf("resource name may not be empty")}
 	}
 
 	for _, r := range resources {

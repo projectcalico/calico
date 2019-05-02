@@ -16,11 +16,9 @@ package commands
 
 import (
 	"fmt"
-	"os"
 )
 
 // Node function is a switch to node related sub-commands
-func Node(args []string) {
-	fmt.Println("Error executing command: 'calicoctl node' commands are not available on this OS")
-	os.Exit(1)
+func Node(args []string) error {
+	return fmt.Errorf("Error executing command: 'calicoctl node' commands are not available on this OS")
 }

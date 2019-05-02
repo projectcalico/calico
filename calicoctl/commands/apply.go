@@ -16,7 +16,6 @@ package commands
 
 import (
 	"fmt"
-	"os"
 	"strings"
 
 	"github.com/docopt/docopt-go"
@@ -25,7 +24,7 @@ import (
 	"github.com/projectcalico/calicoctl/calicoctl/commands/constants"
 )
 
-func Apply(args []string) {
+func Apply(args []string) error {
 	doc := constants.DatastoreIntro + `Usage:
   calicoctl apply --filename=<FILENAME> [--config=<CONFIG>] [--namespace=<NS>]
 
@@ -85,30 +84,27 @@ Description:
 `
 	parsedArgs, err := docopt.Parse(doc, args, true, "", false, false)
 	if err != nil {
-		fmt.Printf("Invalid option: 'calicoctl %s'. Use flag '--help' to read about a specific subcommand.\n", strings.Join(args, " "))
-		os.Exit(1)
+		return fmt.Errorf("Invalid option: 'calicoctl %s'. Use flag '--help' to read about a specific subcommand.", strings.Join(args, " "))
 	}
 	if len(parsedArgs) == 0 {
-		return
+		return nil
 	}
 
 	results := executeConfigCommand(parsedArgs, actionApply)
 	log.Infof("results: %+v", results)
 
 	if results.fileInvalid {
-		fmt.Printf("Failed to execute command: %v\n", results.err)
-		os.Exit(1)
+		return fmt.Errorf("Failed to execute command: %v", results.err)
 	} else if results.numHandled == 0 {
 		if results.numResources == 0 {
-			fmt.Printf("No resources specified in file\n")
+			return fmt.Errorf("No resources specified in file")
 		} else if results.numResources == 1 {
-			fmt.Printf("Failed to apply '%s' resource: %v\n", results.singleKind, results.err)
+			return fmt.Errorf("Failed to apply '%s' resource: %v", results.singleKind, results.err)
 		} else if results.singleKind != "" {
-			fmt.Printf("Failed to apply any '%s' resources: %v\n", results.singleKind, results.err)
+			return fmt.Errorf("Failed to apply any '%s' resources: %v", results.singleKind, results.err)
 		} else {
-			fmt.Printf("Failed to apply any resources: %v\n", results.err)
+			return fmt.Errorf("Failed to apply any resources: %v", results.err)
 		}
-		os.Exit(1)
 	} else if results.err == nil {
 		if results.singleKind != "" {
 			fmt.Printf("Successfully applied %d '%s' resource(s)\n", results.numHandled, results.singleKind)
@@ -124,7 +120,8 @@ Description:
 			fmt.Printf("applied the first %d out of %d resources:\n",
 				results.numHandled, results.numResources)
 		}
-		fmt.Printf("Hit error: %v\n", results.err)
-		os.Exit(1)
+		return fmt.Errorf("Hit error: %v", results.err)
 	}
+
+	return nil
 }

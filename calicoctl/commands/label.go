@@ -16,7 +16,6 @@ package commands
 
 import (
 	"fmt"
-	"os"
 	"strings"
 
 	docopt "github.com/docopt/docopt-go"
@@ -26,7 +25,7 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-func Label(args []string) {
+func Label(args []string) error {
 	doc := constants.DatastoreIntro + `Usage:
   calicoctl label (<KIND> <NAME> 
   	              ( <key>=<value> [--overwrite] |
@@ -91,11 +90,10 @@ Description:
 
 	parsedArgs, err := docopt.Parse(doc, args, true, "", false, false)
 	if err != nil {
-		fmt.Printf("Invalid option: 'calicoctl %s'. Use flag '--help' to read about a specific subcommand.\n", strings.Join(args, " "))
-		os.Exit(1)
+		return fmt.Errorf("Invalid option: 'calicoctl %s'. Use flag '--help' to read about a specific subcommand.", strings.Join(args, " "))
 	}
 	if len(parsedArgs) == 0 {
-		return
+		return nil
 	}
 
 	log.Debugf("parse args: %+v\n", parsedArgs)
@@ -112,8 +110,7 @@ Description:
 	} else {
 		kv := strings.Split(parsedArgs["<key>=<value>"].(string), "=")
 		if len(kv) != 2 {
-			fmt.Printf("invalid label %s\n", parsedArgs["<key>=<value>"])
-			os.Exit(1)
+			return fmt.Errorf("invalid label %s", parsedArgs["<key>=<value>"])
 		}
 		key = kv[0]
 		value = kv[1]
@@ -123,15 +120,12 @@ Description:
 
 	results := executeConfigCommand(parsedArgs, actionGetOrList)
 	if results.fileInvalid {
-		fmt.Printf("Failed to execute command: %v\n", results.err)
-		os.Exit(1)
+		return fmt.Errorf("Failed to execute command: %v", results.err)
 	} else if results.err != nil {
-		fmt.Printf("failed to get %s %s, error %v\n",
+		return fmt.Errorf("failed to get %s %s, error %v",
 			kind, name, results.err)
-		os.Exit(1)
 	} else if len(results.resources) == 0 {
-		fmt.Printf("%s %s not found\n", kind, name)
-		os.Exit(1)
+		return fmt.Errorf("%s %s not found", kind, name)
 	}
 
 	resource := results.resources[0].(resourcemgr.ResourceObject)
@@ -148,9 +142,8 @@ Description:
 		_, ok := labels[key]
 		if !ok {
 			// raise error if the key does not exist.
-			fmt.Printf("can not remove label of %s %s, key %s does not exist\n",
+			return fmt.Errorf("can not remove label of %s %s, key %s does not exist",
 				kind, name, key)
-			os.Exit(1)
 		} else {
 			delete(labels, key)
 		}
@@ -162,9 +155,8 @@ Description:
 				labels[key] = value
 				overwritten = true
 			} else {
-				fmt.Printf("failed to update label of %s %s, key %s is already present. please use '--overwrite' to set a new value.\n",
+				return fmt.Errorf("failed to update label of %s %s, key %s is already present. please use '--overwrite' to set a new value.",
 					kind, name, key)
-				os.Exit(1)
 			}
 		} else {
 			labels[key] = value
@@ -174,8 +166,7 @@ Description:
 	resource.GetObjectMeta().SetLabels(labels)
 	_, err = executeResourceAction(parsedArgs, client, resource, actionUpdate)
 	if err != nil {
-		fmt.Printf("failed to update %s %s, label not changed\n", kind, name)
-		os.Exit(1)
+		return fmt.Errorf("failed to update %s %s, label not changed", kind, name)
 	}
 
 	if remove {
@@ -185,5 +176,5 @@ Description:
 	} else {
 		fmt.Printf("Successfully set label %s on %s %s\n", key, kind, name)
 	}
-	return
+	return nil
 }

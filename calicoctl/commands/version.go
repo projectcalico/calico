@@ -17,7 +17,6 @@ package commands
 import (
 	"context"
 	"fmt"
-	"os"
 	"strings"
 
 	"github.com/docopt/docopt-go"
@@ -33,7 +32,7 @@ func init() {
 	VERSION_SUMMARY = `Run 'calicoctl version' to see version information.`
 }
 
-func Version(args []string) {
+func Version(args []string) error {
 	doc := `Usage:
   calicoctl version [--config=<CONFIG>]
 
@@ -48,11 +47,10 @@ Description:
 `
 	parsedArgs, err := docopt.Parse(doc, args, true, "", false, false)
 	if err != nil {
-		fmt.Printf("Invalid option: 'calicoctl %s'. Use flag '--help' to read about a specific subcommand.\n", strings.Join(args, " "))
-		os.Exit(1)
+		return fmt.Errorf("Invalid option: 'calicoctl %s'. Use flag '--help' to read about a specific subcommand.", strings.Join(args, " "))
 	}
 	if len(parsedArgs) == 0 {
-		return
+		return nil
 	}
 
 	fmt.Println("Client Version:   ", VERSION)
@@ -62,14 +60,12 @@ Description:
 	cf := parsedArgs["--config"].(string)
 	client, err := clientmgr.NewClient(cf)
 	if err != nil {
-		fmt.Println(err)
-		os.Exit(1)
+		return err
 	}
 	ctx := context.Background()
 	ci, err := client.ClusterInformation().Get(ctx, "default", options.GetOptions{})
 	if err != nil {
-		fmt.Println("Unable to retrieve Cluster Version or Type: ", err)
-		os.Exit(1)
+		return fmt.Errorf("Unable to retrieve Cluster Version or Type: %s", err)
 	}
 
 	v := ci.Spec.CalicoVersion
@@ -83,4 +79,6 @@ Description:
 
 	fmt.Println("Cluster Version:  ", v)
 	fmt.Println("Cluster Type:     ", t)
+
+	return nil
 }
