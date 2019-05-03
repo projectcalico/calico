@@ -119,11 +119,11 @@ EOF
 
 	    } | sed -i '/^%changelog/ r /dev/stdin' ${rpm_spec}
 
-	    for elversion in 7 6; do
+	    for elversion in 7; do
 		# Skip the rpm build if we are missing the matching build image.
 		imageid=$(docker images -q calico-build/centos${elversion}:latest)
 		[ -n "$imageid"  ] && ${DOCKER_RUN_RM} -e EL_VERSION=el${elversion} \
-		    $imageid rpm/build-rpms
+		    $imageid ../rpm/build-rpms
 	    done
 
 	    cat <<EOF
