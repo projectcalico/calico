@@ -23,7 +23,7 @@ command.
 
 ```
 Usage:
-  calicoctl delete ( (<KIND> [<NAME>]) |
+  calicoctl delete ( (<KIND> [<NAME...>]) |
                    --filename=<FILE>)
                    [--skip-not-exists] [--config=<CONFIG>] [--namespace=<NS>]
 
@@ -31,11 +31,12 @@ Examples:
   # Delete a policy using the type and name specified in policy.yaml.
   calicoctl delete -f ./policy.yaml
 
+
   # Delete a policy based on the type and name in the YAML passed into stdin.
   cat policy.yaml | calicoctl delete -f -
 
-  # Delete policy with name "foo"
-  calicoctl delete policy foo
+  # Delete policies with names "foo" and "bar"
+  calicoctl delete policy foo bar
 
 Options:
   -h --help                 Show this screen.

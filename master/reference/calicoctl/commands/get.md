@@ -23,7 +23,7 @@ command.
 
 ```
 Usage:
-  calicoctl get ( (<KIND> [<NAME>]) |
+  calicoctl get ( (<KIND> [<NAME...>]) |
                 --filename=<FILENAME>)
                 [--output=<OUTPUT>] [--config=<CONFIG>] [--namespace=<NS>] [--all-namespaces]
 
@@ -31,8 +31,9 @@ Examples:
   # List all policy in default output format.
   calicoctl get policy
 
-  # List a specific policy in YAML format
-  calicoctl get -o yaml policy my-policy-1
+  # List specific policies in YAML format
+  calicoctl get -o yaml policy my-policy-1 my-policy-2
+
 
 Options:
   -h --help                    Show this screen.
