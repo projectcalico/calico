@@ -23,8 +23,17 @@ ifeq ($(ARCH),x86_64)
     override ARCH=amd64
 endif
 
+# Figure out the users UID/GID.  These are needed to run docker containers
+# as the current user and ensure that files built inside containers are
+# owned by the current user.
+LOCAL_USER_ID:=$(shell id -u)
+LOCAL_GROUP_ID:=$(shell id -g)
+
 deb: calico-build/trusty calico-build/xenial calico-build/bionic networking-calico
 	cd networking-calico && ../utils/make-packages.sh deb
+
+rpm: calico-build/centos7 networking-calico
+	cd networking-calico && ../utils/make-packages.sh rpm
 
 # Build a docker image used for building debs for trusty.
 .PHONY: calico-build/trusty
@@ -40,6 +49,24 @@ calico-build/xenial:
 .PHONY: calico-build/bionic
 calico-build/bionic:
 	cd docker-build-images && docker build -f ubuntu-bionic-build.Dockerfile.$(ARCH) -t calico-build/bionic .
+
+# Construct a docker image for building Centos 7 RPMs.
+.PHONY: calico-build/centos7
+calico-build/centos7:
+	cd docker-build-images && \
+	  docker build \
+	  --build-arg=UID=$(LOCAL_USER_ID) \
+	  --build-arg=GID=$(LOCAL_GROUP_ID) \
+	  -f centos7-build.Dockerfile.$(ARCH) \
+	  -t calico-build/centos7 .
+
+ifeq ("$(ARCH)","ppc64le")
+	# Some commands that would typically be run at container build time must be run in a privileged container.
+	@-docker rm -f centos7Tmp
+	docker run --privileged --name=centos7Tmp calico-build/centos7 \
+		/bin/bash -c "/setup-user; /install-centos-build-deps"
+	docker commit centos7Tmp calico-build/centos7:latest
+endif
 
 networking-calico:
 	git clone https://opendev.org/openstack/networking-calico.git

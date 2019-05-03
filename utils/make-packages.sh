@@ -84,8 +84,7 @@ EOF
 	rpm )
 	    debver=`git_version_to_rpm ${version}`
 	    debver=`strip_v ${debver}`
-	    rpm_spec=rpm/felix.spec
-	    cp -f ${rpm_spec}.in ${rpm_spec}
+	    rpm_spec=rpm/networking-calico.spec
 
 	    # Generate RPM version and release.
 	    IFS=_ read ver qual <<< ${debver}
@@ -109,7 +108,7 @@ EOF
 EOF
 		if ${release}; then
 		    cat <<EOF
-  - Felix ${version} (from Git commit ${sha}).
+  - networking-calico ${version} (from Git commit ${sha}).
 EOF
 		else
 		    cat <<EOF
@@ -120,11 +119,11 @@ EOF
 
 	    } | sed -i '/^%changelog/ r /dev/stdin' ${rpm_spec}
 
-	    for elversion in 7 6; do
+	    for elversion in 7; do
 		# Skip the rpm build if we are missing the matching build image.
 		imageid=$(docker images -q calico-build/centos${elversion}:latest)
 		[ -n "$imageid"  ] && ${DOCKER_RUN_RM} -e EL_VERSION=el${elversion} \
-		    $imageid rpm/build-rpms
+		    $imageid ../rpm/build-rpms
 	    done
 
 	    cat <<EOF

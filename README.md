@@ -19,3 +19,4 @@ Still to do:
    -  a particular point in a Git repo
    -  particular changes in Gerrit
    -  current or past PyPI packages.
+-  check ppc64 Dockerfiles against amd64 ones - e.g. the python-pbr install
