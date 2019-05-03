@@ -85,6 +85,12 @@ ippool_name2_rev1_v6 = {
     }
 }
 
+ippool_name2_rev1_table = (
+    "NAME           CIDR             SELECTOR   \n"
+    "ippool-name2   fed0:8001::/64   all()"
+)
+
+
 #
 # BGPPeers
 #

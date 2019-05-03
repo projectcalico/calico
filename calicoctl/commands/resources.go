@@ -100,6 +100,9 @@ type commandResults struct {
 	// The results returned from each invocation
 	resources []runtime.Object
 
+	// Errors associated with individual resources
+	resErrs []error
+
 	// The Calico API client used for the requests (useful if required
 	// again).
 	client client.Interface
@@ -114,16 +117,17 @@ type commandResults struct {
 // 	-  Process each resource individually, fanning out to the appropriate methods on
 //	   the client interface, collate results and exit on the first error.
 func executeConfigCommand(args map[string]interface{}, action action) commandResults {
-	var r interface{}
-	var err error
 	var resources []resourcemgr.ResourceObject
+
+	singleKind := false
 
 	log.Info("Executing config command")
 
 	if filename := args["--filename"]; filename != nil {
 		// Filename is specified, load the resource from file and convert to a slice
 		// of resources for easier handling.
-		if r, err = resourcemgr.CreateResourcesFromFile(filename.(string)); err != nil {
+		r, err := resourcemgr.CreateResourcesFromFile(filename.(string))
+		if err != nil {
 			return commandResults{err: err, fileInvalid: true}
 		}
 
@@ -131,16 +135,17 @@ func executeConfigCommand(args map[string]interface{}, action action) commandRes
 		if err != nil {
 			return commandResults{err: err}
 		}
-	} else if r, err := resourcemgr.GetResourceFromArgs(args); err != nil {
+	} else {
 		// Filename is not specific so extract the resource from the arguments. This
 		// is only useful for delete and get functions - but we don't need to check that
 		// here since the command syntax requires a filename for the other resource
 		// management commands.
-		return commandResults{err: err}
-	} else {
-		// We extracted a single resource type with identifiers from the CLI, convert to
-		// a list for simpler handling.
-		resources = []resourcemgr.ResourceObject{r}
+		var err error
+		singleKind = true
+		resources, err = resourcemgr.GetResourcesFromArgs(args)
+		if err != nil {
+			return commandResults{err: err}
+		}
 	}
 
 	if len(resources) == 0 {
@@ -178,25 +183,51 @@ func executeConfigCommand(args map[string]interface{}, action action) commandRes
 		count[kind] = count[kind] + 1
 		results.numResources = results.numResources + 1
 	}
-	if len(count) == 1 {
+	if len(count) == 1 || singleKind {
 		results.singleKind = kind
 	}
 
 	// Now execute the command on each resource in order, exiting as soon as we hit an
 	// error.
 	export := argutils.ArgBoolOrFalse(args, "--export")
-	nameSpecified := argutils.ArgStringOrBlank(args, "<NAME>")
+	nameSpecified := false
+	emptyName := false
+	switch a := args["<NAME>"].(type) {
+	case string:
+		nameSpecified = len(a) > 0
+		_, ok := args["<NAME>"]
+		emptyName = !ok || !nameSpecified
+	case []string:
+		nameSpecified = len(a) > 0
+		for _, v := range a {
+			if v == "" {
+				emptyName = true
+			}
+		}
+	}
+
+	if emptyName {
+		fmt.Printf("resource name may not be empty\n")
+		os.Exit(1)
+	}
+
 	for _, r := range resources {
 		res, err := executeResourceAction(args, client, r, action)
 		if err != nil {
-			results.err = err
-			break
+			switch action {
+			case actionDelete, actionGetOrList:
+				results.resErrs = append(results.resErrs, err)
+				continue
+			default:
+				results.err = err
+				break
+			}
 		}
 
 		// Remove the cluster specific metadata if the "--export" flag is specified
 		// Skip removing cluster specific metadata if this is is called as a "list"
 		// operation (no specific name is specified).
-		if export && nameSpecified != "" {
+		if export && nameSpecified {
 			for i, _ := range res {
 				rom := res[i].(v1.ObjectMetaAccessor).GetObjectMeta()
 				rom.SetNamespace("")

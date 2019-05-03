@@ -30,7 +30,7 @@ import (
 
 func Get(args []string) {
 	doc := constants.DatastoreIntro + `Usage:
-  calicoctl get ( (<KIND> [<NAME>]) |
+  calicoctl get ( (<KIND> [<NAME>...]) |
                 --filename=<FILENAME>)
                 [--output=<OUTPUT>] [--config=<CONFIG>] [--namespace=<NS>] [--all-namespaces] [--export]
 
@@ -38,8 +38,8 @@ Examples:
   # List all policy in default output format.
   calicoctl get policy
 
-  # List a specific policy in YAML format
-  calicoctl get -o yaml policy my-policy-1
+  # List a specific policies in YAML format
+  calicoctl get -o yaml policy my-policy-1 my-policy-2
 
 Options:
   -h --help                    Show this screen.
@@ -193,5 +193,13 @@ Description:
 	err = rp.print(results.client, results.resources)
 	if err != nil {
 		fmt.Println(err)
+		os.Exit(1)
+	}
+
+	if len(results.resErrs) > 0 {
+		for _, err := range results.resErrs {
+			fmt.Fprintf(os.Stderr, "%+v\n", err)
+		}
+		os.Exit(1)
 	}
 }
