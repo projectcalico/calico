@@ -1,8 +1,8 @@
 
 # Calico packaging
 
-This repo supports building Debian and RPM packages for the current
-master of networking-calico, and publishing the RPM packages.
+This repo supports building and publishing Debian and RPM packages for
+the current master of networking-calico.
 
 -  To build RPMs: `make rpm`
 
@@ -16,9 +16,13 @@ master of networking-calico, and publishing the RPM packages.
    -  Also needs GCLOUD_ARGS and HOST set to indicate the RPM host,
       and a gcloud identity that permits logging into that host.
 
+-  To publish Debs: `./utils/publish-debs.sh <SECRET_KEY_FILE>` (with
+   `<SECRET_KEY_FILE>` containing the GPG secret key for a member of
+   the [Project Calico team on
+   Launchpad](https://launchpad.net/~project-calico)
+
 Still to do:
 
--  publishing for Debian packages
 -  do the same things for Felix
 -  support building packages from other possible source code forms, e.g.
    -  a particular point in a Git repo

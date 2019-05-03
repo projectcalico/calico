@@ -1,0 +1,10 @@
+#!/bin/bash -ex
+
+SECRET_KEY=$1
+keydir=`mktemp -t -d calico-publish-debs.XXXXXX`
+cp -a $SECRET_KEY ${keydir}/key
+
+docker run --rm -v `pwd`:/code -v ${keydir}:/keydir calico-build/bionic /bin/sh -c "gpg --import < /keydir/key && debsign -kCalico networking-calico_*_source.changes"
+for series in trusty xenial bionic; do
+    docker run --rm -v `pwd`:/code calico-build/${series} /bin/sh -c "dput -u ppa:project-calico/master /code/networking-calico_*${series}_source.changes"
+done
