@@ -38,7 +38,7 @@ Examples:
   # List all policy in default output format.
   calicoctl get policy
 
-  # List a specific policies in YAML format
+  # List specific policies in YAML format
   calicoctl get -o yaml policy my-policy-1 my-policy-2
 
 Options:
