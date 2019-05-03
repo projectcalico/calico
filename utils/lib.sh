@@ -1,4 +1,4 @@
-# Library of functions for Felix process and release automation.
+# Library of functions for Calico process and release automation.
 
 # Get the root directory of the Git repository that we are in.
 function git_repo_root {
@@ -139,4 +139,47 @@ function test_validate_version {
     expect_valid v2.0.0-beta.2
     expect_valid v2.0.0-beta.3
     expect_valid v2.0.0-beta-rc1
+}
+
+# Setup for accessing the RPM host.  Requires GCLOUD_ARGS and HOST to
+# be set by the caller.
+ssh_host="gcloud compute ssh ${GCLOUD_ARGS} ${HOST}"
+scp_host="gcloud compute scp ${GCLOUD_ARGS}"
+rpmdir=/usr/share/nginx/html/rpm
+
+function ensure_repo_exists {
+    reponame=$1
+    $ssh_host -- mkdir -p $rpmdir/$reponame
+}
+
+function copy_rpms_to_host {
+    reponame=$1
+    shopt -s nullglob
+    for arch in src noarch x86_64; do
+	set -- `find dist -name "*.$arch.rpm"`
+	if test $# -gt 0; then
+	    $ssh_host -- mkdir -p $rpmdir/$reponame/$arch/
+	    $scp_host "$@" ${HOST}:$rpmdir/$reponame/$arch/
+	fi
+    done
+}
+
+# Clean and update repository metadata.  This includes ensuring that
+# all RPMs are signed with the Project Calico Maintainers secret key,
+# and that the public key is downloadable so that installers can
+# verify RPM signatures.
+#
+# Note, the </dev/null is critical on the RPM signing line; otherwise
+# that command consumes the rest of the here doc when trying to read a
+# pass phrase from stdin.  No pass phrase is actually needed, because
+# our key doesn't have one.
+function update_repo_metadata {
+    reponame=$1
+    $ssh_host <<EOF
+set -x
+rm -f \`repomanage --old $rpmdir/$reponame\`
+rpm --define '_gpg_name Project Calico Maintainers' --resign $rpmdir/$reponame/*/*.rpm </dev/null
+gpg --export -a "Project Calico Maintainers" > $rpmdir/$reponame/key
+createrepo $rpmdir/$reponame
+EOF
 }
