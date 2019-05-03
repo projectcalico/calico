@@ -36,7 +36,7 @@ const minKernelVersion = "2.6.24"
 var requiredModules = []string{"xt_set", "ip6_tables"}
 
 // Checksystem checks host system for compatible versions
-func Checksystem(args []string) {
+func Checksystem(args []string) error {
 	doc := `Usage: 
   calicoctl node checksystem
 
@@ -49,11 +49,10 @@ Description:
 
 	parsedArgs, err := docopt.Parse(doc, args, true, "", false, false)
 	if err != nil {
-		fmt.Printf("Invalid option: 'calicoctl %s'. Use flag '--help' to read about a specific subcommand.\n", strings.Join(args, " "))
-		os.Exit(1)
+		return fmt.Errorf("Invalid option: 'calicoctl %s'. Use flag '--help' to read about a specific subcommand.", strings.Join(args, " "))
 	}
 	if len(parsedArgs) == 0 {
-		return
+		return nil
 	}
 
 	// Make sure the command is run with super user privileges
@@ -75,11 +74,12 @@ Description:
 
 	// If any of the checks fail, print a message and exit
 	if !systemOk {
-		fmt.Printf("System doesn't meet one or more minimum systems requirements to run Calico\n")
-		os.Exit(1)
+		return fmt.Errorf("System doesn't meet one or more minimum systems requirements to run Calico")
 	}
 
 	fmt.Printf("System meets minimum system requirements to run Calico!\n")
+
+	return nil
 }
 
 // checkKernelVersion checks for minimum required kernel version

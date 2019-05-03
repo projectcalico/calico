@@ -17,7 +17,6 @@ package ipam
 import (
 	"context"
 	"fmt"
-	"os"
 	"strings"
 
 	"github.com/projectcalico/libcalico-go/lib/net"
@@ -29,7 +28,7 @@ import (
 )
 
 // IPAM takes keyword with an IP address then calls the subcommands.
-func Release(args []string) {
+func Release(args []string) error {
 	doc := constants.DatastoreIntro + `Usage:
   calicoctl ipam release --ip=<IP> [--config=<CONFIG>]
 
@@ -51,11 +50,10 @@ Description:
 `
 	parsedArgs, err := docopt.Parse(doc, args, true, "", false, false)
 	if err != nil {
-		fmt.Printf("Invalid option: 'calicoctl %s'. Use flag '--help' to read about a specific subcommand.\n", strings.Join(args, " "))
-		os.Exit(1)
+		return fmt.Errorf("Invalid option: 'calicoctl %s'. Use flag '--help' to read about a specific subcommand.", strings.Join(args, " "))
 	}
 	if len(parsedArgs) == 0 {
-		return
+		return nil
 	}
 
 	ctx := context.Background()
@@ -64,8 +62,7 @@ Description:
 	cf := parsedArgs["--config"].(string)
 	client, err := clientmgr.NewClient(cf)
 	if err != nil {
-		fmt.Println(err)
-		os.Exit(1)
+		return err
 	}
 
 	ipamClient := client.IPAM()
@@ -78,17 +75,17 @@ Description:
 	// release was successful else it returns back the slice with the IP passed in.
 	unallocatedIPs, err := ipamClient.ReleaseIPs(ctx, ips)
 	if err != nil {
-		fmt.Printf("Error: %v\n", err)
-		os.Exit(1)
+		return fmt.Errorf("Error: %v", err)
 	}
 
 	// Couldn't release the IP if the slice is not empty or IP might already be released/unassigned.
 	// This is not exactly an error, so not returning it to the caller.
 	if len(unallocatedIPs) != 0 {
-		fmt.Printf("IP address %s is not assigned\n", ip)
-		os.Exit(1)
+		return fmt.Errorf("IP address %s is not assigned", ip)
 	}
 
 	// If unallocatedIPs slice is empty then IP was released Successfully.
 	fmt.Printf("Successfully released IP address %s\n", ip)
+
+	return nil
 }

@@ -16,7 +16,6 @@ package commands
 
 import (
 	"fmt"
-	"os"
 	"strings"
 
 	"github.com/docopt/docopt-go"
@@ -25,7 +24,7 @@ import (
 )
 
 // IPAM takes keyword with an IP address then calls the subcommands.
-func IPAM(args []string) {
+func IPAM(args []string) error {
 	doc := constants.DatastoreIntro + `Usage:
   calicoctl ipam <command> [<args>...]
 
@@ -42,11 +41,10 @@ Description:
 `
 	arguments, err := docopt.Parse(doc, args, true, "", true, false)
 	if err != nil {
-		fmt.Printf("Invalid option: 'calicoctl %s'. Use flag '--help' to read about a specific subcommand.\n", strings.Join(args, " "))
-		os.Exit(1)
+		return fmt.Errorf("Invalid option: 'calicoctl %s'. Use flag '--help' to read about a specific subcommand.", strings.Join(args, " "))
 	}
 	if arguments["<command>"] == nil {
-		return
+		return nil
 	}
 
 	command := arguments["<command>"].(string)
@@ -54,10 +52,12 @@ Description:
 
 	switch command {
 	case "release":
-		ipam.Release(args)
+		return ipam.Release(args)
 	case "show":
-		ipam.Show(args)
+		return ipam.Show(args)
 	default:
 		fmt.Println(doc)
 	}
+
+	return nil
 }

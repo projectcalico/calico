@@ -35,7 +35,7 @@ import (
 )
 
 // Status prints status of the node and returns error (if any)
-func Status(args []string) {
+func Status(args []string) error {
 	doc := `Usage:
   calicoctl node status
 
@@ -49,11 +49,10 @@ Description:
 
 	parsedArgs, err := docopt.Parse(doc, args, true, "", false, false)
 	if err != nil {
-		fmt.Printf("Invalid option: 'calicoctl %s'. Use flag '--help' to read about a specific subcommand.\n", strings.Join(args, " "))
-		os.Exit(1)
+		return fmt.Errorf("Invalid option: 'calicoctl %s'. Use flag '--help' to read about a specific subcommand.", strings.Join(args, " "))
 	}
 	if len(parsedArgs) == 0 {
-		return
+		return nil
 	}
 
 	// Must run this command as root to be able to connect to BIRD sockets
@@ -68,8 +67,7 @@ Description:
 	// For older versions of calico/node, the process was called `calico-felix`. Newer ones use `calico-node -felix`.
 	if !psContains([]string{"calico-felix"}, processes) && !psContains([]string{"calico-node", "-felix"}, processes) {
 		// Return and print message if calico-node is not running
-		fmt.Printf("Calico process is not running.\n")
-		os.Exit(1)
+		return fmt.Errorf("Calico process is not running.")
 	}
 
 	fmt.Printf("Calico process is running.\n")
@@ -77,19 +75,27 @@ Description:
 	if psContains([]string{"bird"}, processes) || psContains([]string{"bird6"}, processes) {
 		// Check if birdv4 process is running, print the BGP peer table if it is, else print a warning
 		if psContains([]string{"bird"}, processes) {
-			printBIRDPeers("4")
+			if err := printBIRDPeers("4"); err != nil {
+				return err
+			}
 		} else {
 			fmt.Printf("\nINFO: BIRDv4 process: 'bird' is not running.\n")
 		}
 		// Check if birdv6 process is running, print the BGP peer table if it is, else print a warning
 		if psContains([]string{"bird6"}, processes) {
-			printBIRDPeers("6")
+			if err := printBIRDPeers("6"); err != nil {
+				return err
+			}
 		} else {
 			fmt.Printf("\nINFO: BIRDv6 process: 'bird6' is not running.\n")
 		}
 	} else if psContains([]string{"calico-bgp-daemon"}, processes) {
-		printGoBGPPeers("4")
-		printGoBGPPeers("6")
+		if err := printGoBGPPeers("4"); err != nil {
+			return err
+		}
+		if err := printGoBGPPeers("6"); err != nil {
+			return err
+		}
 	} else {
 		fmt.Printf("\nNone of the BGP backend processes (BIRD or GoBGP) are running.\n")
 	}
@@ -97,6 +103,8 @@ Description:
 	// Have to manually enter an empty line because the table print
 	// library prints the last line, so can't insert a '\n' there
 	fmt.Println()
+
+	return nil
 }
 
 func psContains(proc []string, procList []*process.Process) bool {
@@ -201,7 +209,7 @@ func (b *bgpPeer) unmarshalBIRD(line, ipSep string) bool {
 }
 
 // printBIRDPeers queries BIRD and displays the local peers in table format.
-func printBIRDPeers(ipv string) {
+func printBIRDPeers(ipv string) error {
 	log.Debugf("Print BIRD peers for IPv%s", ipv)
 	birdSuffix := ""
 	if ipv == "6" {
@@ -219,7 +227,7 @@ func printBIRDPeers(ipv string) {
 		c, err = net.Dial("unix", fmt.Sprintf("/var/run/bird/bird%s.ctl", birdSuffix))
 		if err != nil {
 			fmt.Printf("Error querying BIRD: unable to connect to BIRDv%s socket: %v", ipv, err)
-			return
+			return nil
 		}
 	}
 	defer c.Close()
@@ -231,26 +239,26 @@ func printBIRDPeers(ipv string) {
 	// Send the request.
 	_, err = c.Write([]byte("show protocols\n"))
 	if err != nil {
-		fmt.Printf("Error executing command: unable to write to BIRD socket: %s\n", err)
-		os.Exit(1)
+		return fmt.Errorf("Error executing command: unable to write to BIRD socket: %s", err)
 	}
 
 	// Scan the output and collect parsed BGP peers
 	log.Debugln("Reading output from BIRD")
 	peers, err := scanBIRDPeers(ipv, c)
 	if err != nil {
-		fmt.Printf("Error executing command: %v", err)
-		os.Exit(1)
+		return fmt.Errorf("Error executing command: %v", err)
 	}
 
 	// If no peers were returned then just print a message.
 	if len(peers) == 0 {
 		fmt.Printf("No IPv%s peers found.\n", ipv)
-		return
+		return nil
 	}
 
 	// Finally, print the peers.
 	printPeers(peers)
+
+	return nil
 }
 
 // scanBIRDPeers scans through BIRD output to return a slice of bgpPeer
@@ -323,11 +331,10 @@ func scanBIRDPeers(ipv string, conn net.Conn) ([]bgpPeer, error) {
 }
 
 // printGoBGPPeers queries GoBGP and displays the local peers in table format.
-func printGoBGPPeers(ipv string) {
+func printGoBGPPeers(ipv string) error {
 	client, err := gobgp.New("")
 	if err != nil {
-		fmt.Printf("Error creating gobgp client: %s\n", err)
-		os.Exit(1)
+		return fmt.Errorf("Error creating gobgp client: %s", err)
 	}
 	defer client.Close()
 
@@ -340,8 +347,7 @@ func printGoBGPPeers(ipv string) {
 
 	neighbors, err := client.ListNeighborByTransport(afi)
 	if err != nil {
-		fmt.Printf("Error retrieving neighbor info: %s\n", err)
-		os.Exit(1)
+		return fmt.Errorf("Error retrieving neighbor info: %s", err)
 	}
 
 	formatTimedelta := func(d int64) string {
@@ -406,11 +412,13 @@ func printGoBGPPeers(ipv string) {
 	// If no peers were returned then just print a message.
 	if len(peers) == 0 {
 		fmt.Printf("No IPv%s peers found.\n", ipv)
-		return
+		return nil
 	}
 
 	// Finally, print the peers.
 	printPeers(peers)
+
+	return nil
 }
 
 // printPeers prints out the slice of peers in table format.

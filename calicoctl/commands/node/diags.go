@@ -38,7 +38,7 @@ type diagCmd struct {
 }
 
 // Diags function collects diagnostic information and logs
-func Diags(args []string) {
+func Diags(args []string) error {
 	var err error
 	doc := `Usage:
   calicoctl node diags [--log-dir=<LOG_DIR>]
@@ -63,18 +63,17 @@ Description:
 
 	arguments, err := docopt.Parse(doc, args, true, "", false, false)
 	if err != nil {
-		fmt.Printf("Invalid option: 'calicoctl %s'. Use flag '--help' to read about a specific subcommand.\n", strings.Join(args, " "))
-		os.Exit(1)
+		return fmt.Errorf("Invalid option: 'calicoctl %s'. Use flag '--help' to read about a specific subcommand.", strings.Join(args, " "))
 	}
 	if len(arguments) == 0 {
-		return
+		return nil
 	}
 
-	runDiags(arguments["--log-dir"].(string))
+	return runDiags(arguments["--log-dir"].(string))
 }
 
 // runDiags takes logDir and runs a sequence of commands to collect diagnostics
-func runDiags(logDir string) {
+func runDiags(logDir string) error {
 
 	// Note: in for the cmd field in this struct, it  can't handle args quoted with space in it
 	// For example, you can't add cmd "do this", since after the `strings.Fields` it will become `"do` and `this"`
@@ -102,15 +101,13 @@ func runDiags(logDir string) {
 	// Create a temp directory in /tmp
 	tmpDir, err := ioutil.TempDir("", "calico")
 	if err != nil {
-		fmt.Printf("Error creating temp directory to dump logs: %v\n", err)
-		os.Exit(1)
+		return fmt.Errorf("Error creating temp directory to dump logs: %v", err)
 	}
 
 	fmt.Println("Using temp dir:", tmpDir)
 	err = os.Chdir(tmpDir)
 	if err != nil {
-		fmt.Printf("Error changing directory to temp directory to dump logs: %v\n", err)
-		os.Exit(1)
+		return fmt.Errorf("Error changing directory to temp directory to dump logs: %v", err)
 	}
 
 	os.Mkdir("diagnostics", os.ModeDir)
@@ -158,6 +155,7 @@ such as transfer.sh using curl or similar.  For example:
     curl --upload-file %s https://transfer.sh/%s`, tarFilePath, tarFilePath)
 	fmt.Println()
 
+	return nil
 }
 
 // getNodeContainerLogs will attempt to grab logs for any "calico" named containers for hosted installs.

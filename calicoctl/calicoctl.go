@@ -79,30 +79,35 @@ Description:
 		command := arguments["<command>"].(string)
 		args := append([]string{command}, arguments["<args>"].([]string)...)
 
+		var err error
+
 		switch command {
 		case "create":
-			commands.Create(args)
+			err = commands.Create(args)
 		case "replace":
-			commands.Replace(args)
+			err = commands.Replace(args)
 		case "apply":
-			commands.Apply(args)
+			err = commands.Apply(args)
 		case "delete":
-			commands.Delete(args)
+			err = commands.Delete(args)
 		case "get":
-			commands.Get(args)
+			err = commands.Get(args)
 		case "label":
-			commands.Label(args)
+			err = commands.Label(args)
 		case "convert":
-			commands.Convert(args)
+			err = commands.Convert(args)
 		case "version":
-			commands.Version(args)
+			err = commands.Version(args)
 		case "node":
-			commands.Node(args)
+			err = commands.Node(args)
 		case "ipam":
-			commands.IPAM(args)
+			err = commands.IPAM(args)
 		default:
-			fmt.Fprintf(os.Stderr, "Unknown command: %q\n", command)
-			fmt.Println(doc)
+			err = fmt.Errorf("Unknown command: %q\n%s", command, doc)
+		}
+
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "%s\n", err)
 			os.Exit(1)
 		}
 	}

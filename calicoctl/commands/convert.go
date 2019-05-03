@@ -16,7 +16,6 @@ package commands
 
 import (
 	"fmt"
-	"os"
 	"strings"
 
 	"github.com/docopt/docopt-go"
@@ -32,7 +31,7 @@ import (
 	validator "github.com/projectcalico/libcalico-go/lib/validator/v3"
 )
 
-func Convert(args []string) {
+func Convert(args []string) error {
 	doc := constants.DatastoreIntro + `Usage:
   calicoctl convert --filename=<FILENAME>
                 [--output=<OUTPUT>] [--ignore-validation]
@@ -60,11 +59,10 @@ Description:
 `
 	parsedArgs, err := docopt.Parse(doc, args, true, "", false, false)
 	if err != nil {
-		fmt.Printf("Invalid option: 'calicoctl %s'. Use flag '--help' to read about a specific subcommand.\n", strings.Join(args, " "))
-		os.Exit(1)
+		return fmt.Errorf("Invalid option: 'calicoctl %s'. Use flag '--help' to read about a specific subcommand.", strings.Join(args, " "))
 	}
 	if len(parsedArgs) == 0 {
-		return
+		return nil
 	}
 
 	var rp resourcePrinter
@@ -76,8 +74,7 @@ Description:
 	case "json":
 		rp = resourcePrinterJSON{}
 	default:
-		fmt.Printf("unrecognized output format '%s'\n", output)
-		os.Exit(1)
+		return fmt.Errorf("unrecognized output format '%s'", output)
 	}
 
 	filename := argutils.ArgStringOrBlank(parsedArgs, "--filename")
@@ -86,16 +83,14 @@ Description:
 	// of resources for easier handling.
 	resV1, err := v1resourceloader.CreateResourcesFromFile(filename)
 	if err != nil {
-		fmt.Printf("Failed to execute command: %v\n", err)
-		os.Exit(1)
+		return fmt.Errorf("Failed to execute command: %v", err)
 	}
 
 	var results []runtime.Object
 	for _, v1Resource := range resV1 {
 		v3Resource, err := convertResource(v1Resource)
 		if err != nil {
-			fmt.Printf("Failed to execute command: %v\n", err)
-			os.Exit(1)
+			return fmt.Errorf("Failed to execute command: %v", err)
 		}
 
 		// Remove any extra metadata the object might have.
@@ -111,9 +106,8 @@ Description:
 		ignoreValidation := argutils.ArgBoolOrFalse(parsedArgs, "--ignore-validation")
 		if !ignoreValidation {
 			if err := validator.Validate(v3Resource); err != nil {
-				fmt.Printf("Converted manifest resource(s) failed validation: %s\n", err)
-				fmt.Printf("Re-run the command with '--ignore-validation' flag to see the converted output.\n")
-				os.Exit(1)
+				return fmt.Errorf("Converted manifest resource(s) failed validation: %s"+
+					"Re-run the command with '--ignore-validation' flag to see the converted output.\n", err)
 			}
 		}
 
@@ -124,9 +118,10 @@ Description:
 
 	err = rp.print(nil, results)
 	if err != nil {
-		fmt.Printf("Failed to execute command: %v\n", err)
-		os.Exit(1)
+		return fmt.Errorf("Failed to execute command: %v", err)
 	}
+
+	return nil
 }
 
 // convertResource converts v1 resource into a v3 resource.
