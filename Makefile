@@ -110,7 +110,13 @@ ifeq ($(LOCAL_BUILD),true)
 	GIT_VERSION = $(shell git describe --tags --dirty --always)-dev-build
 endif
 
-SRCFILES=cmd/kube-controllers/main.go $(shell find pkg -name '*.go')
+SRC_FILES=cmd/kube-controllers/main.go $(shell find pkg -name '*.go')
+
+# If local build is set, then always build the binary since we might not
+# detect when another local repository has been modified.
+ifeq ($(LOCAL_BUILD),true)
+.PHONY: $(SRC_FILES)
+endif
 
 ## Removes all build artifacts.
 clean:
@@ -169,7 +175,7 @@ update-libcalico:
           glide up --strip-vendor || glide up --strip-vendor; \
         fi'
 
-bin/kube-controllers-linux-$(ARCH): vendor $(SRCFILES)
+bin/kube-controllers-linux-$(ARCH): vendor $(SRC_FILES)
 	mkdir -p bin
 	-mkdir -p .go-pkg-cache
 	docker run --rm \
@@ -183,7 +189,7 @@ bin/kube-controllers-linux-$(ARCH): vendor $(SRCFILES)
 	  -e GOCACHE=/go-cache \
 	  $(CALICO_BUILD) go build -v -o bin/kube-controllers-$(OS)-$(ARCH) -ldflags "-X main.VERSION=$(GIT_VERSION)" ./cmd/kube-controllers/
 
-bin/check-status-linux-$(ARCH): vendor $(SRCFILES)
+bin/check-status-linux-$(ARCH): vendor $(SRC_FILES)
 	mkdir -p bin
 	-mkdir -p .go-pkg-cache
 	docker run --rm \
