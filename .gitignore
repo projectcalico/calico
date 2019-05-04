@@ -12,6 +12,8 @@ Gemfile.lock
 _output/
 bin
 vendor
+pinned_versions.yml
+pinned_images.yml
 
 # This prevents us from accidentally checking actual files into
 # the helm templates directory, since (for now) we should be
