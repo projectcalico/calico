@@ -132,6 +132,12 @@ GENERATED_GO_FILES:=
 # All Typha go files.
 SRC_FILES:=$(shell find . $(foreach dir,$(NON_TYPHA_DIRS),-path ./$(dir) -prune -o) -type f -name '*.go' -print) $(GENERATED_GO_FILES)
 
+# If local build is set, then always build the binary since we might not
+# detect when another local repository has been modified.
+ifeq ($(LOCAL_BUILD),true)
+.PHONY: $(SRC_FILES)
+endif
+
 # Figure out the users UID/GID.  These are needed to run docker containers
 # as the current user and ensure that files built inside containers are
 # owned by the current user.
@@ -193,7 +199,8 @@ update-vendor:
 
 # vendor is a shortcut for force rebuilding the go vendor directory.
 .PHONY: vendor
-vendor vendor/.up-to-date: glide.lock
+vendor: vendor/.up-to-date
+vendor/.up-to-date: glide.lock
 	mkdir -p $$HOME/.glide
 	$(DOCKER_RUN) $(CALICO_BUILD) glide install --strip-vendor
 	touch vendor/.up-to-date
