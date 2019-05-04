@@ -92,8 +92,14 @@ PUSH_NONMANIFEST_IMAGES=$(filter-out $(PUSH_MANIFEST_IMAGES),$(PUSH_IMAGES))
 DOCKER_CONFIG ?= $(HOME)/.docker/config.json
 
 CALICOCTL_DIR=calicoctl
-CALICOCTL_FILES=$(shell find $(CALICOCTL_DIR) -name '*.go')
 CTL_CONTAINER_CREATED=$(CALICOCTL_DIR)/.calico_ctl.created-$(ARCH)
+SRC_FILES=$(shell find $(CALICOCTL_DIR) -name '*.go')
+
+# If local build is set, then always build the binary since we might not
+# detect when another local repository has been modified.
+ifeq ($(LOCAL_BUILD),true)
+.PHONY: $(SRC_FILES)
+endif
 
 TEST_CONTAINER_NAME ?= calico/test
 
@@ -186,7 +192,7 @@ bin/calicoctl-darwin-amd64: OS=darwin
 bin/calicoctl-windows-amd64: OS=windows
 bin/calicoctl-linux-%: OS=linux
 
-bin/calicoctl-%: $(CALICOCTL_FILES) vendor
+bin/calicoctl-%: $(SRC_FILES) vendor
 	mkdir -p bin
 	-mkdir -p .go-pkg-cache
 	docker run --rm \
