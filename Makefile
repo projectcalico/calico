@@ -145,7 +145,6 @@ ST_OPTIONS?=
 # Variables for building the local binaries that go into the image
 MAKE_SURE_BIN_EXIST := $(shell mkdir -p dist .go-pkg-cache $(NODE_CONTAINER_BIN_DIR))
 NODE_CONTAINER_FILES=$(shell find ./filesystem -type f)
-SRCFILES=$(shell find ./pkg -name '*.go')
 LOCAL_USER_ID?=$(shell id -u $$USER)
 
 LDFLAGS=-ldflags "-X github.com/projectcalico/node/pkg/startup.VERSION=$(CALICO_GIT_VER) \
@@ -154,6 +153,14 @@ LDFLAGS=-ldflags "-X github.com/projectcalico/node/pkg/startup.VERSION=$(CALICO_
 
 PACKAGE_NAME?=github.com/projectcalico/node
 LIBCALICOGO_PATH?=none
+
+SRC_FILES=$(shell find ./pkg -name '*.go')
+
+# If local build is set, then always build the binary since we might not
+# detect when another local repository has been modified.
+ifeq ($(LOCAL_BUILD),true)
+.PHONY: $(SRC_FILES)
+endif
 
 ## Clean enough that a new release build will be clean
 clean:
@@ -222,7 +229,7 @@ update-felix-confd-libcalico:
             glide up --strip-vendor || glide up --strip-vendor; \
           fi'
 
-$(NODE_CONTAINER_BINARY): vendor $(SRCFILES)
+$(NODE_CONTAINER_BINARY): vendor $(SRC_FILES)
 	docker run --rm \
 		-e GOARCH=$(ARCH) \
 		-e GOOS=linux \
@@ -246,6 +253,10 @@ sub-image-%:
 
 $(BUILD_IMAGE): $(NODE_CONTAINER_CREATED)
 $(NODE_CONTAINER_CREATED): register ./Dockerfile.$(ARCH) $(NODE_CONTAINER_FILES) $(NODE_CONTAINER_BINARY)
+ifeq ($(LOCAL_BUILD),true)
+	# If doing a local build, copy in local confd templates in case there are changes.
+	cp -r ../confd/etc/calico/confd/templates vendor/github.com/kelseyhightower/confd/etc/calico/confd
+endif
 	# Check versions of the binaries that we're going to use to build the image.
 	# Since the binaries are built for Linux, run them in a container to allow the
 	# make target to be run on different platforms (e.g. MacOS).
@@ -322,7 +333,7 @@ static-checks: vendor
 .PHONY: fix
 ## Fix static checks
 fix:
-	goimports -w $(SRCFILES)
+	goimports -w $(SRC_FILES)
 
 foss-checks: vendor
 	@echo Running $@...
