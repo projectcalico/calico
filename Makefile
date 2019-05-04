@@ -65,9 +65,15 @@ join_platforms = $(subst $(space),$(comma),$(call prefix_linux,$(strip $1)))
 ###############################################################################
 GO_BUILD_VER ?= v0.20
 
-SRCFILES=$(shell find pkg cmd internal -name '*.go')
-TEST_SRCFILES=$(shell find tests -name '*.go')
+SRC_FILES=$(shell find pkg cmd internal -name '*.go')
+TEST_SRC_FILES=$(shell find tests -name '*.go')
 LOCAL_IP_ENV?=$(shell ip route get 8.8.8.8 | head -1 | awk '{print $$7}')
+
+# If local build is set, then always build the binary since we might not
+# detect when another local repository has been modified.
+ifeq ($(LOCAL_BUILD),true)
+.PHONY: $(SRC_FILES) $(TEST_SRC_FILES)
+endif
 
 # fail if unable to download
 CURL=curl -C - -sSf
@@ -182,7 +188,7 @@ update-libcalico:
 	    fi'
 
 ## Build the Calico network plugin and ipam plugins
-$(BIN)/calico $(BIN)/calico-ipam: $(SRCFILES) vendor
+$(BIN)/calico $(BIN)/calico-ipam: $(SRC_FILES) vendor
 	-mkdir -p .go-pkg-cache
 	docker run --rm \
 	-e ARCH=$(ARCH) \
@@ -287,7 +293,7 @@ static-checks: vendor
 .PHONY: fix
 ## Fix static checks
 fix:
-	goimports -w $(SRCFILES) $(TEST_SRCFILES)
+	goimports -w $(SRC_FILES) $(TEST_SRC_FILES)
 
 .PHONY: install-git-hooks
 ## Install Git hooks
