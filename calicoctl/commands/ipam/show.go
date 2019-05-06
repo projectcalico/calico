@@ -69,7 +69,8 @@ Description:
 	// `IP 192.168.71.1 is not assigned in block`. This is not exactly an error,
 	// so not returning it to the caller.
 	if err != nil {
-		return err
+		fmt.Println(err)
+		return nil
 	}
 
 	// IP address is assigned with attributes.
