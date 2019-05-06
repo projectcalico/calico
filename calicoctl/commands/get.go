@@ -188,8 +188,11 @@ Description:
 
 	if len(results.resErrs) > 0 {
 		var errStr string
-		for _, err := range results.resErrs {
+		for i, err := range results.resErrs {
 			errStr += err.Error()
+			if (i + 1) != len(results.resErrs) {
+				errStr += "\n"
+			}
 		}
 		return fmt.Errorf(errStr)
 	}
