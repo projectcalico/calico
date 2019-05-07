@@ -1,5 +1,5 @@
-hash: 6c2e6830f6a8135ddaeab7db23199b58126673391506b7cc22bef1a2725e2075
-updated: 2019-05-02T07:41:25.359515712Z
+hash: ef6cae8e6a15ef2757733ba5ec6ab8589c60adf56b362b4dec8b33791b746676
+updated: 2019-05-07T07:40:08.546937445Z
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -145,7 +145,7 @@ imports:
 - name: github.com/karrick/godirwalk
   version: 4e17292779dcc7ed08e10c03bfdd022f7c28b3c3
 - name: github.com/kelseyhightower/confd
-  version: c2d4406c42834df6ae448e6ef31dcedbc896972e
+  version: adfab2101ffdbfc7adaf3a1d16a538cbed579574
   repo: https://github.com/projectcalico/confd.git
   subpackages:
   - pkg/backends
