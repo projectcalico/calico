@@ -45,7 +45,7 @@ serve: bin/helm
 	# load any plugins. Since we're no longer running in github-pages, but would
 	# like to use a docker image that comes preloaded with all the github-pages plugins,
 	# its ok to override this variable.
-	docker run --rm \
+	docker run --rm -t \
 	  -v $$PWD/bin/helm:/usr/local/bin/helm:ro \
 	  -v $$PWD:/srv/jekyll \
 	  -e JEKYLL_DOCKER_TAG="" \
