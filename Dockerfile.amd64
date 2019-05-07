@@ -22,9 +22,10 @@ LABEL maintainer "Casey Davenport <casey@tigera.io>"
 ARG ARCH=amd64
 
 # Install a backported version of iptables to ensure we have version 1.6.2
+# Similarly for iproute2, we want a more recent version for BPF support.
 RUN printf "deb http://deb.debian.org/debian stretch-backports main\n" > /etc/apt/sources.list.d/backports.list \ 
     && apt-get update \
-    && apt-get -t stretch-backports install -y iptables 
+    && apt-get -t stretch-backports install -y iptables iproute2
 
 # Install remaining runtime deps required for felix from the global repository
 RUN apt-get update && apt-get install -y \
@@ -34,7 +35,6 @@ RUN apt-get update && apt-get install -y \
     iputils-tracepath \
     # Need arp 
     net-tools \ 
-    iproute2 \ 
     conntrack \ 
     runit \ 
     # Need kmod to ensure ip6tables-save works correctly
