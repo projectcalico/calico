@@ -1,4 +1,25 @@
 v3.7:
+- title: v3.7.0
+  components:
+     typha:
+      version: v3.7.0
+     calicoctl:
+      version: v3.7.0
+     calico/node:
+      version: v3.7.0
+     calico/cni:
+      version: v3.7.0
+     calico/kube-controllers:
+      version: v3.7.0
+     networking-calico:
+      version: 3.6.0
+     flannel:
+      version: v0.11.0
+     calico/dikastes:
+      version: v3.7.0
+     flexvol:
+      version: v3.7.0
+
 - title: v3.7.1
   components:
      typha:
@@ -20,26 +41,6 @@ v3.7:
      flexvol:
       version: v3.7.1
 
-- title: v3.7.0
-  components:
-     typha:
-      version: v3.7.0
-     calicoctl:
-      version: v3.7.0
-     calico/node:
-      version: v3.7.0
-     calico/cni:
-      version: v3.7.0
-     calico/kube-controllers:
-      version: v3.7.0
-     networking-calico:
-      version: 3.6.0
-     flannel:
-      version: v0.11.0
-     calico/dikastes:
-      version: v3.7.0
-     flexvol:
-      version: v3.7.0
 
 v3.6:
 - title: v3.6.1
