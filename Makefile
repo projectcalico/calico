@@ -87,6 +87,12 @@ MY_GID:=$(shell id -g)
 
 SRC_FILES=$(shell find -name '*.go' |grep -v vendor)
 
+# If local build is set, then always build the binary since we might not
+# detect when another local repository has been modified.
+ifeq ($(LOCAL_BUILD),true)
+.PHONY: $(SRC_FILES)
+endif
+
 ############################################################################
 BUILD_IMAGE?=calico/dikastes
 PUSH_IMAGES?=$(BUILD_IMAGE) quay.io/calico/dikastes
