@@ -4,11 +4,13 @@ title: Connecting workloads across networks that you do not control
 
 ### Big Picture
 
-Enable inter workload communication across networks that are not workload aware.
+Enable inter workload communication across networks that are not aware of workload IPs.
 
 ### Value
 
-Calico supports encapsulation so you can send traffic between workloads, without requiring the underlying network to be aware of workload IP addresses.
+We generally recommend running Calico without network overlay/encapsulation.  This gives you the highest performance and simplest network; the packet that leaves your workload is the packet that goes on the wire.  
+
+However, selectively using overlays/encapsulation can be useful when running on top of an underlying network that cannot easily be made aware of workload IPs.  A common example is if you are using Calico networking in AWS across multiple VPCs/subnets.  In this case, Calico can selectively encapsulate only the traffic that is routed between the VPCs/subnets, and run without encapsulation within each VPC/subnet. You might also decide to run your entire Calico network with encapsulation as an overlay network -- as a quick way to get started without setting up BGP peering or other routing information in your underlying network.
 
 ### Features
 
@@ -21,9 +23,7 @@ This how-to guide uses the following features:
 
 #### Routing workload IP addresses
 
-When a network is **aware of workload IP addresses** (either through static routes, BGP route distribution, or another mechanism), it can directly route traffic between workloads. However, not all networks are able to route workload IP addresses. 
-
-For example, public cloud environments where you don’t own the hardware, AWS across VPC subnet boundaries, and other scenarios where you cannot peer Calico over BGP to the underlay or easily configure static routes. This is why Calico supports encapsulation, so you can send traffic between workloads without requiring the underlying network to be aware of workload IP addresses.
+Networks become aware of workload IP addresses through layer 3 routing techniques like static routes or BGP route distribution, or layer 2 address learning. As such, they can route unencapsulated traffic to the right host for the endpoint that is the ultimate destination. However, not all networks are able to route workload IP addresses. For example, public cloud environments where you don’t own the hardware, AWS across VPC subnet boundaries, and other scenarios where you cannot peer Calico over BGP to the underlay, or easily configure static routes. This is why Calico supports encapsulation, so you can send traffic between workloads without requiring the underlying network to be aware of workload IP addresses.
 
 #### Encapsulation types
 
@@ -40,6 +40,10 @@ You can configure each IP pool with different encapsulation configurations. Howe
 - [Configure IP in IP encapsulation for only cross subnet traffic](#configure-ip-in-ip-encapsulation-for-only-cross-subnet-traffic)
 - [Configure IP in IP encapsulation for all inter workload traffic](#configure-ip-in-ip-encapsulation-for-all-inter-workload-traffic)
 - [Configure VXLAN encapsulation for all inter workload traffic](#configure-vxlan-encapsulation-for-all-inter-workload-traffic)
+
+#### ipv4/6 address support
+
+IP in IP and VXLAN support only ipv4 addresses.
 
 #### Best practice
 
