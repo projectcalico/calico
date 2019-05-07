@@ -1,20 +1,20 @@
 
 # Calico packaging
 
-This repo currently only supports building Debian packages for the
-current master of networking-calico.  To do that, run:
+This repo supports building Debian and RPM packages for the current
+master of networking-calico, and publishing the RPM packages.
 
-```
-make deb
-```
+-  To build RPMs: `make rpm`
+
+-  To build Debs: `make deb`
+
+-  To publish RPMs: `./utils/publish-rpms.sh` (with a gcloud identity
+   that permits logging into binaries.projectcalico.org)
 
 Still to do:
 
--  sign those packages
--  dput to [Calico's master PPA on
-   launchpad](https://launchpad.net/~project-calico/+archive/ubuntu/master).
+-  publishing for Debian packages
 -  do the same things for Felix
--  do the same things for RPMs as well as Debs
 -  support building packages from other possible source code forms, e.g.
    -  a particular point in a Git repo
    -  particular changes in Gerrit
