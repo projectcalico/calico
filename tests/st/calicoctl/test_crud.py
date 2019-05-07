@@ -2012,6 +2012,7 @@ class InvalidData(TestBase):
                        'metadata': {'name': 'invalid-net-6'},
                        'spec': {
                            'ipipMode': 'Never',
+                           'vxlanMode': 'Never',
                            'cidr': "::/128",
                        }
                        # nothing
