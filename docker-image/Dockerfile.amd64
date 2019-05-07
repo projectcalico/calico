@@ -44,7 +44,9 @@ RUN apt-get update && apt-get install -y \
     netbase \
     # Also needed (provides utilities for browsing procfs like ps)
     procps \
-    ca-certificates
+    ca-certificates \
+    # Felix FV tests require wget
+    wget
 
 ADD felix.cfg /etc/calico/felix.cfg
 ADD calico-felix-wrapper /usr/bin

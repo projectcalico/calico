@@ -67,9 +67,7 @@ var _ = Context("Latency tests with initialized Felix and etcd datastore", func(
 		_ = felix.GetFelixPID()
 
 		// Install the hping tool, which we use for latency measurments.
-		felix.Exec("sh", "-c", "echo http://dl-cdn.alpinelinux.org/alpine/edge/testing >> /etc/apk/repositories")
-		felix.Exec("apk", "update")
-		felix.Exec("apk", "add", "hping3")
+		felix.Exec("apt-get", "install", "-y", "hping3")
 
 		var err error
 		resultsFile, err = os.OpenFile("latency.log", os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0644)

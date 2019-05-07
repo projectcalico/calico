@@ -273,7 +273,7 @@ func (w *Workload) LatencyTo(ip, port string) time.Duration {
 	if strings.Contains(ip, ":") {
 		ip = fmt.Sprintf("[%s]", ip)
 	}
-	out, err := w.ExecOutput("hping", "-p", port, "-c", "20", "--fast", "-S", "-n", ip)
+	out, err := w.ExecOutput("hping3", "-p", port, "-c", "20", "--fast", "-S", "-n", ip)
 	stderr := ""
 	if err, ok := err.(*exec.ExitError); ok {
 		stderr = string(err.Stderr)
