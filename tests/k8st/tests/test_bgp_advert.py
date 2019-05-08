@@ -229,9 +229,35 @@ EOF
         super(TestBGPAdvert, self).tearDown()
         self.delete_and_confirm(self.ns, "ns")
         try:
+            # Delete the extra node.
             run("docker rm -f kube-node-extra")
         except subprocess.CalledProcessError:
             pass
+
+        # Delete BGPPeers.
+        calicoctl("delete bgppeer node-extra.peer", allow_fail=True)
+        calicoctl("delete bgppeer kube-node-1", allow_fail=True)
+
+        # Restore node-to-node mesh.
+        calicoctl("""apply -f - << EOF
+apiVersion: projectcalico.org/v3
+kind: BGPConfiguration
+metadata: {name: default}
+spec:
+  nodeToNodeMeshEnabled: true
+  asNumber: 64512
+EOF
+""")
+
+        # Remove node-2's route-reflector config.
+        json_str = calicoctl("get node kube-node-2 -o json")
+        node_dict = json.loads(json_str)
+        node_dict['metadata']['labels'].pop('i-am-a-route-reflector', '')
+        node_dict['spec']['bgp'].pop('routeReflectorClusterID', '')
+        calicoctl("""apply -f - << EOF
+%s
+EOF
+""" % json.dumps(node_dict))
 
     def get_svc_cluster_ip(self, svc, ns):
         return run("kubectl get svc %s -n %s -o json | jq -r .spec.clusterIP" % (svc, ns)).strip()
