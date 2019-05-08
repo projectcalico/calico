@@ -1,11 +1,15 @@
 CALICO_DIR=$(shell git rev-parse --show-toplevel)
 VERSIONS_FILE?=$(CALICO_DIR)/_data/versions.yml
+IMAGES_FILE=
 JEKYLL_VERSION=pages
 HP_VERSION=v0.2
 DEV?=false
 CONFIG=--config _config.yml
 ifeq ($(DEV),true)
 	CONFIG:=$(CONFIG),_config_dev.yml
+endif
+ifneq ($(IMAGES_FILE),)
+	CONFIG:=$(CONFIG),/config_images.yml
 endif
 
 GO_BUILD_VER?=v0.20
@@ -32,11 +36,6 @@ CNI_VER := $(shell cat $(VERSIONS_FILE) | $(YAML_CMD) read - '"$(RELEASE_STREAM)
 KUBE_CONTROLLERS_VER := $(shell cat $(VERSIONS_FILE) | $(YAML_CMD) read - '"$(RELEASE_STREAM)".[0].components.calico/kube-controllers.version')
 TYPHA_VER := $(shell cat $(VERSIONS_FILE) | $(YAML_CMD) read - '"$(RELEASE_STREAM)".[0].components.typha.version')
 
-$(info $(shell printf "%-21s = %-10s\n" "NODE_VER" $(NODE_VER)))
-$(info $(shell printf "%-21s = %-10s\n" "CNI_VER" $(CNI_VER)))
-$(info $(shell printf "%-21s = %-10s\n" "CTL_VER" $(CTL_VER)))
-$(info $(shell printf "%-21s = %-10s\n" "KUBE_CONTROLLERS_VER" $(KUBE_CONTROLLERS_VER)))
-$(info $(shell printf "%-21s = %-10s\n" "TYPHA_VER" $(TYPHA_VER)))
 ##############################################################################
 
 serve: bin/helm
@@ -60,11 +59,132 @@ _site build: bin/helm
 	-e JEKYLL_UID=`id -u` \
 	-v $$PWD/bin/helm:/usr/local/bin/helm:ro \
 	-v $$PWD:/srv/jekyll \
+	-v $(VERSIONS_FILE):/srv/jekyll/_data/versions.yml \
+	-v $(IMAGES_FILE):/config_images.yml \
 	jekyll/jekyll:$(JEKYLL_VERSION) jekyll build --incremental $(CONFIG)
 
 ## Clean enough that a new release build will be clean
 clean:
 	rm -rf _output _site .jekyll-metadata
+
+########################################################################################################################
+# Builds locally checked out code using local versions of libcalico, felix, and confd.
+#
+# Example commands:
+#
+#       # Make a build of your locally checked out code with custom registry.
+#	make dev-clean dev-image REGISTRY=caseydavenport
+#
+#	# Build a set of manifests using the produced images.
+#	make dev-manifests REGISTRY=caseydavenport
+#
+#	# Push the built images.
+#	make dev-push REGISTRY=caseydavenport
+#
+#	# Make a build using a specific tag, e.g. calico/node:mytag-amd64.
+#	make dev-clean dev-image TAG_COMMAND='echo mytag'
+#
+########################################################################################################################
+RELEASE_REPOS=felix typha kube-controllers calicoctl cni-plugin app-policy pod2daemon node
+RELEASE_BRANCH_REPOS=$(sort $(RELEASE_REPOS) libcalico-go confd)
+TAG_COMMAND=git describe --tags --dirty --always --long
+REGISTRY?=calico
+LOCAL_BUILD=true
+.PHONY: dev-image dev-test dev-vendor dev-clean
+## Build a local version of Calico based on the checked out codebase.
+dev-image: dev-vendor $(addsuffix -dev-image, $(filter-out calico felix, $(RELEASE_REPOS)))
+$(addsuffix -dev-image,$(RELEASE_REPOS)): %-dev-image: ../%
+	@cd $< && export TAG=$$($(TAG_COMMAND)); make image tag-images \
+		BUILD_IMAGE=$(REGISTRY)/$* \
+		PUSH_IMAGES=$(REGISTRY)/$* \
+		LOCAL_BUILD=$(LOCAL_BUILD) \
+		IMAGETAG=$$TAG
+
+## Push locally built images.
+dev-push: $(addsuffix -dev-push, $(filter-out calico felix, $(RELEASE_REPOS)))
+$(addsuffix -dev-push,$(RELEASE_REPOS)): %-dev-push: ../%
+	@cd $< && export TAG=$$($(TAG_COMMAND)); make push \
+		BUILD_IMAGE=$(REGISTRY)/$* \
+		PUSH_IMAGES=$(REGISTRY)/$* \
+		LOCAL_BUILD=$(LOCAL_BUILD) \
+		IMAGETAG=$$TAG
+
+## Run all tests against currently checked out code. WARNING: This takes a LONG time.
+dev-test: dev-vendor $(addsuffix -dev-test, $(filter-out calico, $(RELEASE_REPOS)))
+$(addsuffix -dev-test,$(RELEASE_REPOS)): %-dev-test: ../%
+	@cd $< && make test LOCAL_BUILD=$(LOCAL_BUILD)
+
+dev-vendor: $(addsuffix -dev-vendor, $(filter-out calico, $(RELEASE_BRANCH_REPOS)))
+$(addsuffix -dev-vendor,$(RELEASE_BRANCH_REPOS)): %-dev-vendor: ../%
+	@cd $< && make vendor
+
+## Run `make clean` across all repos.
+dev-clean: $(addsuffix -dev-clean, $(filter-out calico felix, $(RELEASE_REPOS)))
+$(addsuffix -dev-clean,$(RELEASE_REPOS)): %-dev-clean: ../%
+	@cd $< && export TAG=$$($(TAG_COMMAND)); make clean \
+		BUILD_IMAGE=$(REGISTRY)/$* \
+		PUSH_IMAGES=$(REGISTRY)/$* \
+		LOCAL_BUILD=$(LOCAL_BUILD) \
+		IMAGETAG=$$TAG
+
+dev-manifests: dev-versions-yaml dev-images-file
+	@make bin/helm
+	@make clean _site \
+		VERSIONS_FILE="$$PWD/pinned_versions.yml" \
+		IMAGES_FILE="$$PWD/pinned_images.yml" \
+		DEV=true
+	@mkdir -p _output
+	@cp -r _site/master/manifests _output/dev-manifests
+
+# Builds an images file for help in building the docs manifests. We need this in order
+# to override the default images file with the desired registry and image names as
+# produced by the `dev-image` target.
+dev-images-file:
+	@echo "imageNames:" > pinned_images.yml
+	@echo "  node: $(REGISTRY)/node" >> pinned_images.yml
+	@echo "  calicoctl: $(REGISTRY)/calicoctl" >> pinned_images.yml
+	@echo "  typha: $(REGISTRY)/typha" >> pinned_images.yml
+	@echo "  cni: $(REGISTRY)/cni-plugin" >> pinned_images.yml
+	@echo "  kubeControllers: $(REGISTRY)/kube-controllers" >> pinned_images.yml
+	@echo "  calico-upgrade: $(REGISTRY)/upgrade" >> pinned_images.yml
+	@echo "  flannel: quay.io/coreos/flannel" >> pinned_images.yml
+	@echo "  dikastes: $(REGISTRY)/app-policy" >> pinned_images.yml
+	@echo "  pilot-webhook: $(REGISTRY)/pilot-webhook" >> pinned_images.yml
+	@echo "  flexvol: $(REGISTRY)/pod2daemon" >> pinned_images.yml
+
+
+# Builds a versions.yaml file that corresponds to the versions produced by the `dev-image` target.
+dev-versions-yaml:
+	@export TYPHA_VER=`cd ../typha && $(TAG_COMMAND)`-amd64; \
+	export CTL_VER=`cd ../calicoctl && $(TAG_COMMAND)`-amd64; \
+	export NODE_VER=`cd ../node && $(TAG_COMMAND)`-amd64; \
+	export CNI_VER=`cd ../cni-plugin && $(TAG_COMMAND)`-amd64; \
+	export KUBE_CONTROLLERS_VER=`cd ../kube-controllers && $(TAG_COMMAND)`-amd64; \
+	export APP_POLICY_VER=`cd ../app-policy && $(TAG_COMMAND)`-amd64; \
+	export POD2DAEMON_VER=`cd ../pod2daemon && $(TAG_COMMAND)`-amd64; \
+	/bin/echo -e \
+"master:\\n"\
+"- title: \"dev-build\"\\n"\
+"  note: \"Developer build\"\\n"\
+"  components:\\n"\
+"     typha:\\n"\
+"      version: $$TYPHA_VER\\n"\
+"     calicoctl:\\n"\
+"      version:  $$CTL_VER\\n"\
+"     calico/node:\\n"\
+"      version:  $$NODE_VER\\n"\
+"     calico/cni:\\n"\
+"      version:  $$CNI_VER\\n"\
+"     calico/kube-controllers:\\n"\
+"      version: $$KUBE_CONTROLLERS_VER\\n"\
+"     networking-calico:\\n"\
+"      version: master\\n"\
+"     flannel:\\n"\
+"      version: v0.11.1\\n"\
+"     calico/dikastes:\\n"\
+"      version: $$APP_POLICY_VER\\n"\
+"     flexvol:\\n"\
+"      version: $$POD2DAEMON_VER\\n" > pinned_versions.yml;
 
 ###############################################################################
 # CI / test targets

@@ -20,7 +20,11 @@ for both you and your reviewer!
 Simple bug fixes can just be raised as a pull request. Make sure you describe the bug in the pull request description,
 and please try to reproduce the bug in a unit test. This will help ensure the bug stays fixed!
 
-### Development process
+### Writing, testing, and building the code
+
+For more detailed information on the development process for Calico, see the [developer guide](DEVELOPER_GUIDE.md).
+
+### PR process
 
 Once you've agreed on a design for your bugfix or new feature, development against the Calico codebase should be done using the following steps:
 
