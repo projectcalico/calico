@@ -142,7 +142,8 @@ def function_name(f):
         return "<unknown function>"
 
 
-def run(command, logerr=True):
+def run(command, logerr=True, allow_fail=False):
+    out = ""
     _log.info("[%s] %s", datetime.datetime.now(), command)
     try:
         out = subprocess.check_output(command,
@@ -151,10 +152,19 @@ def run(command, logerr=True):
         _log.info("Output:\n%s", out)
     except subprocess.CalledProcessError as e:
         if logerr:
-          _log.exception("Failure output:\n%s", e.output)
-        raise
+            _log.exception("Failure output:\n%s", e.output)
+        if not allow_fail:
+            raise
     return out
 
+
 def curl(hostname, container="kube-node-extra"):
-    cmd = "docker exec %s curl --connect-timeout 2 -m 3 %s" % (container, hostname)
+    cmd = "docker exec %s curl --connect-timeout 2 -m 3 %s" % (container,
+                                                               hostname)
     return run(cmd)
+
+
+def calicoctl(args, allow_fail=False):
+    return run("kubectl exec -i -n kube-system calicoctl -- /calicoctl " +
+               args,
+               allow_fail=allow_fail)
