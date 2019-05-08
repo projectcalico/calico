@@ -1,4 +1,7 @@
 ---
 layout: null
 ---
-{% include {{page.version}}/manifests/rbac.yaml datastore=etcd network=flannel %}
+{% helm --execute templates/rbac.yaml %}
+datastore: etcd
+network: flannel
+{% endhelm %}
