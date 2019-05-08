@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import datetime
 import functools
 import logging
 import subprocess
@@ -135,7 +136,7 @@ def function_name(f):
 
 
 def run(command, logerr=True):
-    _log.info("Run: %s", command)
+    _log.info("[%s] %s", datetime.datetime.now(), command)
     try:
         out = subprocess.check_output(command,
                                       shell=True,
