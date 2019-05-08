@@ -1,4 +1,7 @@
 ---
 layout: null
 ---
-{% include {{page.version}}/manifests/rbac.yaml datastore=kdd network=calico %}
+{% helm --execute templates/rbac.yaml %}
+datastore: kubernetes
+network: calico
+{% endhelm %}
