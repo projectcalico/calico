@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import datetime
 import functools
 import logging
 import subprocess
@@ -31,6 +32,13 @@ class DiagsCollector(object):
         _log.info("============= COLLECTING DIAGS FOR TEST ===========")
         _log.info("===================================================")
         run("kubectl get deployments,pods,svc,endpoints --all-namespaces -o wide")
+        for resource in ["node", "bgpconfig", "bgppeer", "gnp", "felixconfig"]:
+            _log.info("")
+            run("kubectl exec calicoctl -n kube-system" +
+                " -- /calicoctl get " + resource + " -o yaml")
+        for node in ["kube-master", "kube-node-1", "kube-node-2"]:
+            _log.info("")
+            run("docker exec " + node + " ip r")
         run("kubectl logs -n kube-system -l k8s-app=calico-node")
         _log.info("===================================================")
         _log.info("============= COLLECTED DIAGS FOR TEST ============")
@@ -134,8 +142,9 @@ def function_name(f):
         return "<unknown function>"
 
 
-def run(command, logerr=True):
-    _log.info("Run: %s", command)
+def run(command, logerr=True, allow_fail=False):
+    out = ""
+    _log.info("[%s] %s", datetime.datetime.now(), command)
     try:
         out = subprocess.check_output(command,
                                       shell=True,
@@ -143,10 +152,19 @@ def run(command, logerr=True):
         _log.info("Output:\n%s", out)
     except subprocess.CalledProcessError as e:
         if logerr:
-          _log.exception("Failure output:\n%s", e.output)
-        raise
+            _log.exception("Failure output:\n%s", e.output)
+        if not allow_fail:
+            raise
     return out
 
+
 def curl(hostname, container="kube-node-extra"):
-    cmd = "docker exec %s curl --connect-timeout 2 -m 3 %s" % (container, hostname)
+    cmd = "docker exec %s curl --connect-timeout 2 -m 3 %s" % (container,
+                                                               hostname)
     return run(cmd)
+
+
+def calicoctl(args, allow_fail=False):
+    return run("kubectl exec -i -n kube-system calicoctl -- /calicoctl " +
+               args,
+               allow_fail=allow_fail)

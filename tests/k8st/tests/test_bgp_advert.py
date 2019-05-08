@@ -24,7 +24,7 @@ from kubernetes import client, config
 
 from tests.k8st.test_base import TestBase
 from tests.k8st.utils.utils import start_external_node_with_bgp, \
-        retry_until_success, run, curl, DiagsCollector
+        retry_until_success, run, curl, DiagsCollector, calicoctl
 
 _log = logging.getLogger(__name__)
 
@@ -168,13 +168,19 @@ class TestBGPAdvert(TestBase):
         start_external_node_with_bgp("kube-node-extra", bird_conf)
 
         # set CALICO_ADVERTISE_CLUSTER_IPS=10.96.0.0/12
-        self.update_ds_env("calico-node", "kube-system", "CALICO_ADVERTISE_CLUSTER_IPS", "10.96.0.0/12")
+        self.update_ds_env("calico-node",
+                           "kube-system",
+                           "CALICO_ADVERTISE_CLUSTER_IPS",
+                           "10.96.0.0/12")
 
         # Enable debug logging
-        self.update_ds_env("calico-node", "kube-system", "BGP_LOGSEVERITYSCREEN", "debug")
+        self.update_ds_env("calico-node",
+                           "kube-system",
+                           "BGP_LOGSEVERITYSCREEN",
+                           "debug")
 
-        # Establish BGPPeer from cluster nodes to node-extra using calicoctl
-        run("""kubectl exec -i -n kube-system calicoctl -- /calicoctl apply -f - << EOF
+        # Establish BGPPeer from cluster nodes to node-extra
+        calicoctl("""apply -f - << EOF
 apiVersion: projectcalico.org/v3
 kind: BGPPeer
 metadata:
@@ -195,14 +201,20 @@ EOF
         start_external_node_with_bgp("kube-node-extra", bird_conf_rr)
 
         # set CALICO_ADVERTISE_CLUSTER_IPS=10.96.0.0/12
-        self.update_ds_env("calico-node", "kube-system", "CALICO_ADVERTISE_CLUSTER_IPS", "10.96.0.0/12")
+        self.update_ds_env("calico-node",
+                           "kube-system",
+                           "CALICO_ADVERTISE_CLUSTER_IPS",
+                           "10.96.0.0/12")
 
         # Enable debug logging
-        self.update_ds_env("calico-node", "kube-system", "BGP_LOGSEVERITYSCREEN", "debug")
+        self.update_ds_env("calico-node",
+                           "kube-system",
+                           "BGP_LOGSEVERITYSCREEN",
+                           "debug")
 
         # Establish BGPPeer from cluster nodes to node-extra using calicoctl
         # External peer has IP 10.192.0.5
-        run("""kubectl exec -i -n kube-system calicoctl -- /calicoctl apply -f - << EOF
+        calicoctl("""apply -f - << EOF
 apiVersion: projectcalico.org/v3
 kind: BGPPeer
 metadata:
@@ -218,9 +230,35 @@ EOF
         super(TestBGPAdvert, self).tearDown()
         self.delete_and_confirm(self.ns, "ns")
         try:
+            # Delete the extra node.
             run("docker rm -f kube-node-extra")
         except subprocess.CalledProcessError:
             pass
+
+        # Delete BGPPeers.
+        calicoctl("delete bgppeer node-extra.peer", allow_fail=True)
+        calicoctl("delete bgppeer kube-node-1", allow_fail=True)
+
+        # Restore node-to-node mesh.
+        calicoctl("""apply -f - << EOF
+apiVersion: projectcalico.org/v3
+kind: BGPConfiguration
+metadata: {name: default}
+spec:
+  nodeToNodeMeshEnabled: true
+  asNumber: 64512
+EOF
+""")
+
+        # Remove node-2's route-reflector config.
+        json_str = calicoctl("get node kube-node-2 -o json")
+        node_dict = json.loads(json_str)
+        node_dict['metadata']['labels'].pop('i-am-a-route-reflector', '')
+        node_dict['spec']['bgp'].pop('routeReflectorClusterID', '')
+        calicoctl("""apply -f - << EOF
+%s
+EOF
+""" % json.dumps(node_dict))
 
     def get_svc_cluster_ip(self, svc, ns):
         return run("kubectl get svc %s -n %s -o json | jq -r .spec.clusterIP" % (svc, ns)).strip()
@@ -285,23 +323,23 @@ spec:
 EOF
 """)
 
-        run("kubectl exec -i -n kube-system calicoctl -- /calicoctl get nodes -o yaml")
-        run("kubectl exec -i -n kube-system calicoctl -- /calicoctl get bgppeers -o yaml")
-        run("kubectl exec -i -n kube-system calicoctl -- /calicoctl get bgpconfigs -o yaml")
+        calicoctl("get nodes -o yaml")
+        calicoctl("get bgppeers -o yaml")
+        calicoctl("get bgpconfigs -o yaml")
 
         # Update the node-2 to behave as a route-reflector
-        json_str = run("kubectl exec -i -n kube-system calicoctl -- /calicoctl get node kube-node-2 -o json")
+        json_str = calicoctl("get node kube-node-2 -o json")
         node_dict = json.loads(json_str)
         node_dict['metadata']['labels']['i-am-a-route-reflector'] = 'true'
         node_dict['spec']['bgp']['routeReflectorClusterID'] = '224.0.0.1'
-        run("""kubectl exec -i -n kube-system calicoctl -- /calicoctl apply -f - << EOF
+        calicoctl("""apply -f - << EOF
 %s
 EOF
 """ % json.dumps(node_dict))
 
         # Disable node-to-node mesh and configure bgp peering
         # between node-1 and RR and also between external node and RR
-        run("""kubectl exec -i -n kube-system calicoctl -- /calicoctl apply -f - << EOF
+        calicoctl("""apply -f - << EOF
 apiVersion: projectcalico.org/v3
 kind: BGPConfiguration
 metadata: {name: default}
@@ -310,7 +348,7 @@ spec:
   asNumber: 64512
 EOF
 """)
-        run("""kubectl exec -i -n kube-system calicoctl -- /calicoctl apply -f - << EOF
+        calicoctl("""apply -f - << EOF
 apiVersion: projectcalico.org/v3
 kind: BGPPeer
 metadata: {name: kube-node-1}

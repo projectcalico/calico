@@ -84,7 +84,7 @@ def get_ip(v6=False):
 
 
 # Some of the commands we execute like to mess with the TTY configuration, which can break the
-# output formatting. As a wrokaround, save off the terminal settings and restore them after
+# output formatting. As a workaround, save off the terminal settings and restore them after
 # each command.
 _term_settings = termios.tcgetattr(sys.stdin.fileno())
 
