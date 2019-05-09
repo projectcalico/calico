@@ -87,6 +87,6 @@ spec:
 
 ### Above and 
 
-[Calico Global Network Policy API](https://docs.projectcalico.org/v3.6/reference/calicoctl/resources/globalnetworkpolicy)
-[Blog: When Linux is no longer your friend](https://www.tigera.io/blog/when-linux-conntrack-is-no-longer-your-friend/)
+- [Calico Global Network Policy API](https://docs.projectcalico.org/v3.6/reference/calicoctl/resources/globalnetworkpolicy)
+- [Blog: When Linux is no longer your friend](https://www.tigera.io/blog/when-linux-conntrack-is-no-longer-your-friend/)
 
