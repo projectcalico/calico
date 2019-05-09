@@ -34,8 +34,7 @@ class DiagsCollector(object):
         run("kubectl get deployments,pods,svc,endpoints --all-namespaces -o wide")
         for resource in ["node", "bgpconfig", "bgppeer", "gnp", "felixconfig"]:
             _log.info("")
-            run("kubectl exec calicoctl -n kube-system" +
-                " -- /calicoctl get " + resource + " -o yaml")
+            calicoctl("get " + resource + " -o yaml")
         for node in ["kube-master", "kube-node-1", "kube-node-2"]:
             _log.info("")
             run("docker exec " + node + " ip r")
