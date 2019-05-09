@@ -19,21 +19,46 @@ def gen_values_v3_7(versions, imageNames, imageRegistry)
     node:
       image: #{imageRegistry}#{imageNames["node"]}
       tag: #{versions["calico/node"]}
+      env:
+        # Optional environment variables for configuring Calico node.
+        # These should match the EnvVar spec of the corev1 Kubernetes API. For example:
+        # - name: FELIX_LOGSEVERITYSCREEN
+        #   value: "debug"
     calicoctl:
       image: #{imageRegistry}#{imageNames["calicoctl"]}
       tag: #{versions["calicoctl"]}
     typha:
       image: #{imageRegistry}#{imageNames["typha"]}
       tag: #{versions["typha"]}
+      env:
+        # Optional environment variables for configuring Typha.
+        # These should match the EnvVar spec of the corev1 Kubernetes API. For example:
+        # - name: TYPHA_LOGSEVERITYSYS
+        #   value: debug
     cni:
       image: #{imageRegistry}#{imageNames["cni"]}
       tag: #{versions["calico/cni"]}
+      env:
+        # Optional environment variables for configuring Calico CNI.
+        # These should match the EnvVar spec of the corev1 Kubernetes API. For example:
+        # - name: FOO
+        #   value: bar
     kubeControllers:
       image: #{imageRegistry}#{imageNames["kubeControllers"]}
       tag: #{versions["calico/kube-controllers"]}
+      env:
+        # Optional environment variables for configuring Calico kube controllers.
+        # These should match the EnvVar spec of the corev1 Kubernetes API. For example:
+        # - name: LOG_LEVEL
+        #   value: debug
     flannel:
       image: #{imageNames["flannel"]}
       tag: #{versions["flannel"]}
+      env:
+        # Optional environment variables for configuring Flannel.
+        # These should match the EnvVar spec of the corev1 Kubernetes API. For example:
+        # - name: FOO
+        #   value: bar
     dikastes:
       image: #{imageRegistry}#{imageNames["dikastes"]}
       tag: #{versions["calico/dikastes"]}
