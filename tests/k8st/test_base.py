@@ -22,7 +22,7 @@ from unittest import TestCase
 from deepdiff import DeepDiff
 from kubernetes import client, config
 
-from utils.utils import retry_until_success, run
+from utils.utils import retry_until_success, run, kubectl
 
 logger = logging.getLogger(__name__)
 
@@ -101,7 +101,7 @@ class TestBase(TestCase):
         for pod in pods.items:
             logger.info("%s\t%s\t%s", pod.metadata.name, pod.metadata.namespace, pod.status.phase)
             if pod.status.phase != 'Running':
-                run("kubectl describe po %s -n %s" % (pod.metadata.name, pod.metadata.namespace))
+                kubectl("describe po %s -n %s" % (pod.metadata.name, pod.metadata.namespace))
             assert pod.status.phase == 'Running'
 
     def create_namespace(self, ns_name):
@@ -141,8 +141,8 @@ class TestBase(TestCase):
         Waits for the given deployment to have the desired number of replicas.
         """
         logger.info("Checking status for deployment %s/%s" % (ns, name))
-        run("kubectl -n %s rollout status deployment/%s" % (ns, name))
-        run("kubectl get pods -n %s -o wide" % ns)
+        kubectl("-n %s rollout status deployment/%s" % (ns, name))
+        kubectl("get pods -n %s -o wide" % ns)
 
     def create_service(self, name, app, ns, port, svc_type="NodePort", traffic_policy="Local", cluster_ip=None):
         service = client.V1Service(
@@ -178,17 +178,19 @@ class TestBase(TestCase):
                     retry_until_success(self.check_pod_status, retries=20, wait_time=3, function_args=["kube-system"])
 
     def wait_until_exists(self, name, resource_type, ns="default"):
-        retry_until_success(run, function_args=["kubectl get %s %s -n%s" % (resource_type, name, ns)])
+        retry_until_success(kubectl, function_args=["get %s %s -n%s" %
+                                                    (resource_type, name, ns)])
 
     def delete_and_confirm(self, name, resource_type, ns="default"):
         try:
-            run("kubectl delete %s %s -n%s" % (resource_type, name, ns))
+            kubectl("delete %s %s -n%s" % (resource_type, name, ns))
         except subprocess.CalledProcessError:
             pass
 
         def is_it_gone_yet(res_name, res_type):
             try:
-                run("kubectl get %s %s -n%s" % (res_type, res_name, ns), logerr=False)
+                kubectl("get %s %s -n%s" % (res_type, res_name, ns),
+                        logerr=False)
                 raise self.StillThere
             except subprocess.CalledProcessError:
                 # Success
@@ -227,4 +229,5 @@ class TestBase(TestCase):
                 break
 
     def scale_deployment(self, deployment, ns, replicas):
-        return run("kubectl scale deployment %s -n %s --replicas %s" % (deployment, ns, replicas)).strip()
+        return kubectl("scale deployment %s -n %s --replicas %s" %
+                       (deployment, ns, replicas)).strip()

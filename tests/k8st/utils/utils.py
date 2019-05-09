@@ -32,14 +32,14 @@ class DiagsCollector(object):
         _log.info("===================================================")
         _log.info("============= COLLECTING DIAGS FOR TEST ===========")
         _log.info("===================================================")
-        run("kubectl get deployments,pods,svc,endpoints --all-namespaces -o wide")
+        kubectl("get deployments,pods,svc,endpoints --all-namespaces -o wide")
         for resource in ["node", "bgpconfig", "bgppeer", "gnp", "felixconfig"]:
             _log.info("")
             calicoctl("get " + resource + " -o yaml")
         for node in ["kube-master", "kube-node-1", "kube-node-2"]:
             _log.info("")
             run("docker exec " + node + " ip r")
-        run("kubectl logs -n kube-system -l k8s-app=calico-node")
+        kubectl("logs -n kube-system -l k8s-app=calico-node")
         _log.info("===================================================")
         _log.info("============= COLLECTED DIAGS FOR TEST ============")
         _log.info("===================================================")
@@ -164,7 +164,10 @@ def curl(hostname, container="kube-node-extra"):
     return run(cmd)
 
 
+def kubectl(args, logerr=True, allow_fail=False):
+    return run("kubectl " + args, logerr=logerr, allow_fail=allow_fail)
+
+
 def calicoctl(args, allow_fail=False):
-    return run("kubectl exec -i -n kube-system calicoctl -- /calicoctl " +
-               args,
-               allow_fail=allow_fail)
+    return kubectl("exec -i -n kube-system calicoctl -- /calicoctl " + args,
+                   allow_fail=allow_fail)

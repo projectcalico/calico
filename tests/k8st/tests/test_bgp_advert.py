@@ -12,18 +12,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 import logging
-import os
 import subprocess
-import unittest
 import json
-from time import sleep
-from netaddr import IPAddress
-
-from kubernetes import client, config
 
 from tests.k8st.test_base import TestBase
 from tests.k8st.utils.utils import start_external_node_with_bgp, \
-        retry_until_success, run, curl, DiagsCollector, calicoctl
+        retry_until_success, run, curl, DiagsCollector, calicoctl, kubectl
 
 _log = logging.getLogger(__name__)
 
@@ -260,12 +254,13 @@ EOF
 """ % json.dumps(node_dict))
 
     def get_svc_cluster_ip(self, svc, ns):
-        return run("kubectl get svc %s -n %s -o json | jq -r .spec.clusterIP" % (svc, ns)).strip()
+        return kubectl("get svc %s -n %s -o json | jq -r .spec.clusterIP" %
+                       (svc, ns)).strip()
 
     def assert_ecmp_routes(self, dst, via=["10.192.0.3", "10.192.0.4"]):
         matchStr = dst + " proto bird "
         for ip in via:
-          matchStr += "\n\tnexthop via %s  dev eth0 weight 1" % ip
+            matchStr += "\n\tnexthop via %s  dev eth0 weight 1" % ip
         retry_until_success(lambda: self.assertIn(matchStr, self.get_routes()))
 
     def test_rr(self):
@@ -273,7 +268,7 @@ EOF
         self.setUpRR()
 
         # Create ExternalTrafficPolicy Local service with one endpoint on node-1
-        run("""kubectl apply -f - << EOF
+        kubectl("""apply -f - << EOF
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -357,7 +352,7 @@ spec:
   asNumber: 64512
 EOF
 """)
-        svc_json = run("kubectl get svc nginx-rr -n bgp-test -o json")
+        svc_json = kubectl("get svc nginx-rr -n bgp-test -o json")
         svc_dict = json.loads(svc_json)
         svcRoute = svc_dict['spec']['clusterIP']
         retry_until_success(lambda: self.assertIn(svcRoute, self.get_routes()))
@@ -401,7 +396,7 @@ EOF
             retry_until_success(lambda: self.assertNotIn(cluster_svc_ip, self.get_routes()))
 
             # Create a network policy that only accepts traffic from the external node.
-            run("""docker exec -i kube-master kubectl apply -f - << EOF
+            kubectl("""apply -f - << EOF
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
