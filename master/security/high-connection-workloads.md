@@ -34,7 +34,7 @@ In a doNotTrack policy:
 - Ingress rules apply to all incoming traffic through a host endpoint—regardless of where the traffic is going. 
 - Egress rules apply only to traffic that is sent from the host endpoint (not a local workload)
 
-Finally, you must add an **applyOnForward: true** expression for a **DoNotTrack** policy to work.
+Finally, you must add an **applyOnForward: true** expression for a **DoNotTrack** policy to work
 
 ### Before you begin...
 
