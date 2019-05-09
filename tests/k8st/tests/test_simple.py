@@ -14,12 +14,11 @@
 
 import logging
 import subprocess
-from time import sleep
 
 from kubernetes import client
 
 from tests.k8st.test_base import TestBase
-from tests.k8st.utils.utils import retry_until_success, run, DiagsCollector
+from tests.k8st.utils.utils import retry_until_success, DiagsCollector, kubectl
 
 _log = logging.getLogger(__name__)
 
@@ -57,15 +56,21 @@ class TestSimplePolicy(TestBase):
         # not yet propagated to the IP set for the ingress policy on
         # the server pod - which can confuse test code that is
         # expecting connection failure for some other reason.
-        run("kubectl run --generator=run-pod/v1 access -n policy-demo" +
-            " --image busybox --command /bin/sleep -- 3600")
-        run("kubectl run --generator=run-pod/v1 no-access -n policy-demo" +
-            " --image busybox --command /bin/sleep -- 3600")
+        kubectl("run --generator=run-pod/v1 access -n policy-demo" +
+                " --image busybox --command /bin/sleep -- 3600")
+        kubectl("run --generator=run-pod/v1 no-access -n policy-demo" +
+                " --image busybox --command /bin/sleep -- 3600")
+        kubectl("wait --timeout=2m --for=condition=available" +
+                " deployment/nginx -n policy-demo")
+        kubectl("wait --timeout=2m --for=condition=ready" +
+                " pod/access -n policy-demo")
+        kubectl("wait --timeout=2m --for=condition=ready" +
+                " pod/no-access -n policy-demo")
 
     def tearDown(self):
         # Delete deployment
-        run("kubectl delete --grace-period 0 pod access -n policy-demo")
-        run("kubectl delete --grace-period 0 pod no-access -n policy-demo")
+        kubectl("delete --grace-period 0 pod access -n policy-demo")
+        kubectl("delete --grace-period 0 pod no-access -n policy-demo")
         self.delete_and_confirm("policy-demo", "ns")
 
     def test_simple_policy(self):
@@ -152,8 +157,8 @@ class TestSimplePolicy(TestBase):
     @staticmethod
     def check_connected(name):
         try:
-            run(("kubectl exec %s -n policy-demo" +
-                 " -- /bin/wget -O /dev/null -q --timeout=1 nginx") % name)
+            kubectl("exec " + name + " -n policy-demo" +
+                    " -- /bin/wget -O /dev/null -q --timeout=1 nginx")
         except subprocess.CalledProcessError:
             _log.exception("Failed to wget from nginx service")
             return False
