@@ -20,6 +20,7 @@ import time
 
 _log = logging.getLogger(__name__)
 
+
 # Helps with printing diags after a test.
 class DiagsCollector(object):
     def __enter__(self):
