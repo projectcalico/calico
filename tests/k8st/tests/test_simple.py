@@ -60,6 +60,12 @@ class TestSimplePolicy(TestBase):
                 " --image busybox --command /bin/sleep -- 3600")
         kubectl("run --generator=run-pod/v1 no-access -n policy-demo" +
                 " --image busybox --command /bin/sleep -- 3600")
+        kubectl("wait --timeout=2m --for=condition=available" +
+                " deployment/nginx -n policy-demo")
+        kubectl("wait --timeout=2m --for=condition=ready" +
+                " pod/access -n policy-demo")
+        kubectl("wait --timeout=2m --for=condition=ready" +
+                " pod/no-access -n policy-demo")
 
     def tearDown(self):
         # Delete deployment
