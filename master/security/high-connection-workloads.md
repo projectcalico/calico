@@ -85,7 +85,7 @@ spec:
         #selector: run == 'frontend'
 ```
 
-### Above and 
+### Above and beyond
 
 - [Calico Global Network Policy API](https://docs.projectcalico.org/v3.6/reference/calicoctl/resources/globalnetworkpolicy)
 - [Blog: When Linux is no longer your friend](https://www.tigera.io/blog/when-linux-conntrack-is-no-longer-your-friend/)
