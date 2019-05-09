@@ -49,35 +49,34 @@ toc:
         path: /reference/calicoctl/commands/node/checksystem
     - title: version
       path: /reference/calicoctl/commands/version
-  - title: Resource definitions
-    path: /reference/calicoctl/resources
-    section:
-      - title: Overview
-        path: /reference/calicoctl/resources/
-      - title: BGP peer
-        path: /reference/calicoctl/resources/bgppeer
-      - title: BGP configuration
-        path: /reference/calicoctl/resources/bgpconfig
-      - title: Felix configuration
-        path: /reference/calicoctl/resources/felixconfig
-      - title: Network set
-        path: /reference/calicoctl/resources/networkset
-      - title: Global network set
-        path: /reference/calicoctl/resources/globalnetworkset
-      - title: Host endpoint
-        path: /reference/calicoctl/resources/hostendpoint
-      - title: IP pool
-        path: /reference/calicoctl/resources/ippool
-      - title: Node
-        path: /reference/calicoctl/resources/node
-      - title: Network policy
-        path: /reference/calicoctl/resources/networkpolicy
-      - title: Global network policy
-        path: /reference/calicoctl/resources/globalnetworkpolicy
-      - title: Profile
-        path: /reference/calicoctl/resources/profile
-      - title: Workload endpoint
-        path: /reference/calicoctl/resources/workloadendpoint
+- title: Resource definitions
+  section:
+    - title: Overview
+      path: /reference/resources/
+    - title: BGP configuration
+      path: /reference/resources/bgpconfig
+    - title: BGP peer
+      path: /reference/resources/bgppeer
+    - title: Felix configuration
+      path: /reference/resources/felixconfig
+    - title: Global network policy
+      path: /reference/resources/globalnetworkpolicy
+    - title: Global network set
+      path: /reference/resources/globalnetworkset
+    - title: Host endpoint
+      path: /reference/resources/hostendpoint
+    - title: IP pool
+      path: /reference/resources/ippool
+    - title: Network policy
+      path: /reference/resources/networkpolicy
+    - title: Network set
+      path: /reference/resources/networkset
+    - title: Node
+      path: /reference/resources/node
+    - title: Profile
+      path: /reference/resources/profile
+    - title: Workload endpoint
+      path: /reference/resources/workloadendpoint
 - title: Configuring etcd RBAC
   section:
   - title: Overview

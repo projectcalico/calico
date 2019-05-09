@@ -11,7 +11,7 @@ for a full list of calicoctl commands.
 > **Note**: The available actions for a specific resource type may be
 > limited based on the datastore used for {{site.prodname}} (etcdv3 / Kubernetes API).
 > Please refer to the
-> [Resources section]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/)
+> [Resources section]({{site.baseurl}}/{{page.version}}/reference/resources/)
 > for details about each resource type.
 {: .alert .alert-info}
 
@@ -81,6 +81,6 @@ Description:
 ## See also
 
 -  [Installing calicoctl]({{site.baseurl}}/{{page.version}}/getting-started/calicoctl/install)
--  [Resources]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/) for details on all valid resources, including file format
+-  [Resources]({{site.baseurl}}/{{page.version}}/reference/resources/) for details on all valid resources, including file format
    and schema
 -  [calicoctl get]({{site.baseurl}}/{{page.version}}/reference/calicoctl/commands/get) for details on `calicoctl get` command to get the resources.

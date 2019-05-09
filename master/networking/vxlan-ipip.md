@@ -102,4 +102,4 @@ If you use only VXLAN pools, BGP networking is not required. You can disable BGP
 
 ### Above and Beyond
 
-For details on the IP in IP option, see [IP pool]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/ippool).
+For details on the IP in IP option, see [IP pool]({{site.baseurl}}/{{page.version}}/reference/resources/ippool).

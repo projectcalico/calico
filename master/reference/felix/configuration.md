@@ -22,7 +22,7 @@ The full list of parameters which can be set is as follows.
 
 > **Note**: The following tables detail the configuration file and
 > environment variable parameters. For `FelixConfiguration` resource settings,
-> refer to [Felix Configuration Resource](../calicoctl/resources/felixconfig).
+> refer to [Felix Configuration Resource](../resources/felixconfig).
 {: .alert .alert-info}
 
 #### General configuration
@@ -194,4 +194,4 @@ a global setting and a per-host override.
    calicoctl replace -f felix.yaml
    ```
 
-For more information, see [Felix Configuration Resource](../calicoctl/resources/felixconfig).
+For more information, see [Felix Configuration Resource](../resources/felixconfig).

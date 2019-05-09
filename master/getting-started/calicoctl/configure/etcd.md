@@ -151,4 +151,4 @@ find the full list of commands in the
 
 The full list of resources that can be managed, including a description of each,
 can be found in the
-[Resource Definitions]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/).
+[Resource Definitions]({{site.baseurl}}/{{page.version}}/reference/resources/).

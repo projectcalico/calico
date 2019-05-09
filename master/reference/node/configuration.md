@@ -55,8 +55,8 @@ In addition to the above, `{{site.nodecontainer}}` also supports [the standard F
 ### Node name determination
 
 The `{{site.nodecontainer}}` must know the name of the node on which it is running. The node name is used to
-retrieve the [Node resource](../calicoctl/resources/node) configured for this node if it exists, or to create a new node resource representing the node if it does not. It is
-also used to associate the node with per-node [BGP configuration](../calicoctl/resources/bgpconfig), [felix configuration](../calicoctl/resources/felixconfig), and endpoints.
+retrieve the [Node resource](../resources/node) configured for this node if it exists, or to create a new node resource representing the node if it does not. It is
+also used to associate the node with per-node [BGP configuration](../resources/bgpconfig), [felix configuration](../resources/felixconfig), and endpoints.
 
 When launched, the `{{side.nodecontainer}}` container sets the node name according to the following order of precedence:
 
@@ -83,7 +83,7 @@ The IP (for IPv4) and IP6 (for IPv6) environment variables are used to set,
 force autodetection, or disable auto detection of the address for the
 appropriate IP version for the node. When the environment variable is set,
 the address is saved in the
-[node resource configuration]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/node)
+[node resource configuration]({{site.baseurl}}/{{page.version}}/reference/resources/node)
 for this host, overriding any previously configured value.
 
 #### IP setting special case values

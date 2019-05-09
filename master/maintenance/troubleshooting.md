@@ -11,8 +11,8 @@ canonical_url: 'https://docs.projectcalico.org/v3.7/maintenance/troubleshooting'
 ### Check for mismatched node names
 
 If you notice that a workload has not received network connectivity, check
-that the node name for that host is properly configured. The name for the [node resource](../reference/calicoctl/resources/node) must match
-the node name in the [workload endpoint resources](../reference/calicoctl/resources/workloadendpoint) on that host. If the names are mismatched,
+that the node name for that host is properly configured. The name for the [node resource](../reference/resources/node) must match
+the node name in the [workload endpoint resources](../reference/resources/workloadendpoint) on that host. If the names are mismatched,
 it is likely that all workloads on that node will not receive networking.
 
 To check this, query one of the broken workload endpoints and check its node name:

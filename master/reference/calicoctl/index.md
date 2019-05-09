@@ -15,7 +15,7 @@ The full list of commands is described in the
 section.
 
 The full list of resources that can be managed, including a description of each,
-is described in the [Resource definitions]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/)
+is described in the [Resource definitions]({{site.baseurl}}/{{page.version}}/reference/resources/)
 section.
 
 > **Note**: This section provides full reference information for `calicoctl`. To learn

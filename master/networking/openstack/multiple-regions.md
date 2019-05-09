@@ -14,9 +14,9 @@ The way this works is that all of the regions share the same {{site.prodname}}
 etcd datastore, but each region uses a different {{site.prodname}} namespace.
 For example, when the Neutron server for region "xyz-east" generates
 {{site.prodname}}
-[WorkloadEndpoint]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/workloadendpoint)
+[WorkloadEndpoint]({{site.baseurl}}/{{page.version}}/reference/resources/workloadendpoint)
 and
-[NetworkPolicy]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/networkpolicy)
+[NetworkPolicy]({{site.baseurl}}/{{page.version}}/reference/resources/networkpolicy)
 data automatically from OpenStack VMs and security groups, it writes that into
 the {{site.prodname}} datastore in the namespace "openstack-region-xyz-east".
 

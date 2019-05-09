@@ -187,7 +187,7 @@ This example shows how to limit access to the {{site.nodecontainer}} Prometheus 
    ```
 
    If you would like to grant access to a specific IP network, you
-   can create a [global network set](../../reference/calicoctl/resources/globalnetworkset) using `calicoctl`.
+   can create a [global network set](../../reference/resources/globalnetworkset) using `calicoctl`.
 
    For example, you might want to grant access to your management subnets.
 
@@ -321,7 +321,7 @@ The basic process is as follows:
 
    > **Note**: {{site.prodname}} allows some traffic as a failsafe even after applying this policy. This can
    > be adjusted using the `failsafeInboundHostPorts` and `failsafeOutboundHostPorts` options
-   > on the [FelixConfiguration resource](../../reference/calicoctl/resources/felixconfig).
+   > on the [FelixConfiguration resource](../../reference/resources/felixconfig).
    {: .alert .alert-info}
 
 
@@ -377,7 +377,7 @@ The basic process is as follows:
    ```
 
    If you would like to grant access to a specific IP address in your network, you
-   can create a [global network set](../../reference/calicoctl/resources/globalnetworkset) using `calicoctl`.
+   can create a [global network set](../../reference/resources/globalnetworkset) using `calicoctl`.
 
    For example, creating the following network set would grant access to a host with IP 172.15.0.101.
 

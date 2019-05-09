@@ -11,6 +11,6 @@
 | http        | Match HTTP request parameters. Application layer policy must be enabled to use this field. |                   | [HTTPMatch](#httpmatch)   |            |
 
 An `action` of `Pass` will skip over the remaining policies and jump to the
-first [profile]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/profile) assigned to the endpoint, applying the policy configured in the
+first [profile]({{site.baseurl}}/{{page.version}}/reference/resources/profile) assigned to the endpoint, applying the policy configured in the
 profile; if there are no Profiles configured for the endpoint the default
 applied action is `Deny`.

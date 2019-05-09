@@ -38,7 +38,7 @@ The sections that follow discuss the configurable parameters in greater depth.
 
 ### Configuring the pod IP range
 
-{{site.prodname}} IPAM assigns IP addresses from [IP pools]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/ippool).
+{{site.prodname}} IPAM assigns IP addresses from [IP pools]({{site.baseurl}}/{{page.version}}/reference/resources/ippool).
 
 To change the default IP range used for pods, modify the `CALICO_IPV4POOL_CIDR`
 section of the `calico.yaml` manifest.  For more information, see
@@ -86,7 +86,7 @@ For more information on {{site.nodecontainer}}'s configuration variables, includ
 
 > **Note**: The `CALICO_IPV4POOL_VXLAN` environment variable only takes effect when the first {{site.nodecontainer}} to start
 > creates the default IP pool.  It has no effect after the pool has already been created.  To switch to VXLAN mode
-> after installation time, use calicoctl to modify the [IPPool]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/ippool) resource.
+> after installation time, use calicoctl to modify the [IPPool]({{site.baseurl}}/{{page.version}}/reference/resources/ippool) resource.
 {: .alert .alert-info}
 
 ### Configuring etcd
