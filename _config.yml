@@ -43,6 +43,7 @@ exclude:
   - CONTRIBUTING_CODE.md
   - DOC_STYLE_GUIDE.md
   - hack
+  - vendor
 
 defaults:
   -
