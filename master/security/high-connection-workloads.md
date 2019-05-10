@@ -4,74 +4,76 @@ title: Enable extreme high-connection workloads
 
 ### Big Picture
 
-Use a Calico network policy rule to bypass specific Linux conntrack traffic to improve workload performance.
+Use a Calico network policy rule to bypass Linux conntrack for traffic to extreme high-connection workloads.
 
 ### Value
 
-Using a single Calico network policy rule, you can easily fine-tune the Linux conntrack to improve workload performance. 
-
-A typical use case is a workload that uses a memcached server to speed up page load times and handle spikes in demand. If the server handles more than 50,000+ short-lived connections, its conntrack table can fill up and connections can be rejected or dropped. If you have already tried tweaking the conntrack table size and timeouts, using a Calico network policy may help.
+Extreme high-connection workloads can exceed the number of connections that Linux conntrack can track, which results in connections getting rejected or dropped. Calico network policy can be used to selectively bypass Linux conntrack for traffic to/from these types of workloads.
 
 ### Features
 
 This how-to guide uses the following Calico features:
-- A Calico host endpoint
-- A Calico global network policy with a **doNotTrack** rule
+- A Calico HostEndpoint
+- A Calico GlobalNetworkPolicy with a **doNotTrack** rule
 
 ### Concepts
 
-#### Connection tracking starts early in packet processing
+#### Linux conntrack
 
-The Calico network policy rule, **doNotTrack**, turns off connection tracking for specific traffic. The rule is applied early in the Linux packet processing pipeline, before any regular network policy rules, and is independent of policy order. The benefit of turning off connection tracking to increase performance, can also be used to stop connection flooding on a host during a DoS attack.
+Connection tracking (“conntrack”) is a core feature of the Linux kernel’s networking stack. It allows the kernel to keep track of all logical network connections or flows, and thereby identify all of the packets which make up each flow so they can be handled consistently together. Conntrack is an essential part of the mainline Linux network processing pipeline, normally improving performance, and enabling NAT and stateful access control.
 
-#### Create ingress and egress rules for doNotTrack policies
+#### Extreme high-connection workloads
 
-Linux conntrack improves performance because only the first packet in a flow goes through the full network stack processing. In a normal Calico network policy, you specify only the ingress rule, and connection tracking automatically allows the egress path. 
+Some niche workloads handling extremely high number of simultaneous connections, or very high rate of short lived connections, can exceed the maximum number of connections Linux conntrack is able to track. One real world example of such a workload is an extreme scale memcached server handling 50k+ connections per second.
 
-However, when you disable connection tracking using **doNotTrack** in a policy, conntrack no longer knows what to do with egress traffic. You must explicitly specify the egress traffic to be allowed. For example, for a server on port 999, the policy must include an ingress rule allowing inbound traffic **to** port 999, and an egress rule to allow outbound traffic **from** port 999. If you do not create an egress traffic rule in a doNotTrack policy, the server will stop responding because it does not know what to do. 
+#### Calico doNotTrack network policy
+
+The Calico global network policy option, **doNotTrack**, indicates to apply the rules in the policy before connection tracking, and that packets allowed by these rules should not be tracked. The policy is applied early in the Linux packet processing pipeline, before any regular network policy rules independent of the policy order field. 
+
+Unlike normal network policy rules, doNotTrack network policy rules are stateless, meaning you must explicitly specify rules to allow return traffic that would normally be automatically allowed by conntrack. For example, for a server on port 999, the policy must include an ingress rule allowing inbound traffic to port 999, and an egress rule to allow outbound traffic from port 999. 
 
 In a doNotTrack policy:
-- Ingress rules apply to all incoming traffic through a host endpoint—regardless of where the traffic is going. 
+- Ingress rules apply to all incoming traffic through a host endpoint, regardless of where the traffic is going 
 - Egress rules apply only to traffic that is sent from the host endpoint (not a local workload)
 
-Finally, you must add an **applyOnForward: true** expression for a **DoNotTrack** policy to work
+Finally, you must add an **applyOnForward: true expression** for a **doNotTrack policy** to work.
 
 ### Before you begin...
 
-Before creating a DoNotTrack network policy, read this [blog](https://www.tigera.io/blog/when-linux-conntrack-is-no-longer-your-friend/) to understand use cases, benefits, and trade offs. 
+Before creating a **doNotTrack** network policy, read this [blog](https://www.tigera.io/blog/when-linux-conntrack-is-no-longer-your-friend/) to understand use cases, benefits, and trade offs. 
 
 ### How to
 
 #### Bypass connection traffic for high connection server
 
-In the following example, on the node jasper-node-0, we create a host endpoint for a high-traffic memcached server. Next, we create a global network policy with symmetrical rules for ingress and egress with DoNotTrack and ApplyOnForward set to true.
+In the following example, a memcached server pod with hostNetwork: true was scheduled on the node memcached-node-1 We create a host endpoint for the node. Next, we create a GlobalNetwork Policy with symmetrical rules for ingress and egress with doNotTrack and applyOnForward set to true.
 
 ```
 apiVersion: projectcalico.org/v3
 kind: HostEndpoint
 metadata:
-  name: high-traffic-memcached
+  name: memcached-node-1-eth0
   labels:
-    node: memcached
+    memcached: server
 spec:
-  interfaceName: eng4  
-  node: jasper-node-0  
+  interfaceName: eth0  
+  node: memcached-node-1  
   expectedIPs:
     - 10.128.0.162  
 ---
 apiVersion: projectcalico.org/v3
 kind: GlobalNetworkPolicy
 metadata:
-  name: allow-tcp-12211
+  name: memcached-server
 spec:
-  selector: node == 'memcached'
+  selector: memcached == 'server'
   applyOnForward: true
   doNotTrack: true
   ingress:
     - action: Allow
       protocol: TCP
-      #source:
-        #selector: run == 'frontend'
+      source:
+        selector: memcached == 'client'
       destination:
         ports:
           - 12211
@@ -81,12 +83,12 @@ spec:
       source:
         ports:
           - 12211
-      #destination:
-        #selector: run == 'frontend'
+      destination:
+        selector: memcached == 'client'
 ```
 
 ### Above and beyond
 
-- [Calico Global Network Policy API](https://docs.projectcalico.org/v3.6/reference/calicoctl/resources/globalnetworkpolicy)
-- [Blog: When Linux is no longer your friend](https://www.tigera.io/blog/when-linux-conntrack-is-no-longer-your-friend/)
+- [Calico GlobalNetworkPolicy](https://docs.projectcalico.org/v3.6/reference/calicoctl/resources/globalnetworkpolicy)
+- [Blog: When Linux conntrack is no longer your friend](https://www.tigera.io/blog/when-linux-conntrack-is-no-longer-your-friend/)
 
