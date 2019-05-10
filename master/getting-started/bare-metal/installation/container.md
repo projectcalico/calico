@@ -8,5 +8,5 @@ to start the `{{site.nodecontainer}}` container image. This container packages
 up the core {{site.prodname}} components to provide both {{site.prodname}} 
 networking and network policy. Running the container automatically pre-initializes 
 the etcd database (which the other installations methods do not). See the
-[`calicoctl node run`]({{site.baseurl}}/{{page.version}}/reference/calicoctl/commands/node/run)
+[`calicoctl node run`]({{site.baseurl}}/{{page.version}}/reference/calicoctl/node/run)
 guide for details.

@@ -15,7 +15,7 @@ in a specific namespace only applies to the WorkloadEndpoint in that namespace.
 Two resources are in the same namespace if the namespace value is set the same
 on both.
 
-For `calicoctl` [commands]({{site.baseurl}}/{{page.version}}/reference/calicoctl/commands/)
+For `calicoctl` [commands]({{site.baseurl}}/{{page.version}}/reference/calicoctl/)
 that specify a resource type on the CLI, the following aliases are supported (all case
 insensitive): `workloadendpoint`, `workloadendpoints`, `wep`, `weps`.
 

@@ -15,7 +15,7 @@ See [global network policy resource]({{site.baseurl}}/{{page.version}}/reference
 `NetworkPolicy` resources can be used to define network connectivity rules between groups of {{site.prodname}} endpoints and host endpoints, and
 take precedence over [profile resources]({{site.baseurl}}/{{page.version}}/reference/resources/profile) if any are defined.
 
-For `calicoctl` [commands]({{site.baseurl}}/{{page.version}}/reference/calicoctl/commands/) that specify a resource type on the CLI, the following
+For `calicoctl` [commands]({{site.baseurl}}/{{page.version}}/reference/calicoctl/) that specify a resource type on the CLI, the following
 aliases are supported (all case insensitive): `networkpolicy`, `networkpolicies`, `policy`, `np`, `policies`, `pol`, `pols`.
 
 ### Sample YAML

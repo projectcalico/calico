@@ -83,4 +83,4 @@ Description:
 -  [Installing calicoctl]({{site.baseurl}}/{{page.version}}/getting-started/calicoctl/install)
 -  [Resources]({{site.baseurl}}/{{page.version}}/reference/resources/) for details on all valid resources, including file format
    and schema
--  [calicoctl get]({{site.baseurl}}/{{page.version}}/reference/calicoctl/commands/get) for details on `calicoctl get` command to get the resources.
+-  [calicoctl get]({{site.baseurl}}/{{page.version}}/reference/calicoctl/get) for details on `calicoctl get` command to get the resources.

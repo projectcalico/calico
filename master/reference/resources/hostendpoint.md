@@ -26,7 +26,7 @@ any policy.
 > implemented.
 {: .alert .alert-info}
 
-For `calicoctl` [commands]({{site.baseurl}}/{{page.version}}/reference/calicoctl/commands/) that specify a resource type on the CLI, the following
+For `calicoctl` [commands]({{site.baseurl}}/{{page.version}}/reference/calicoctl/) that specify a resource type on the CLI, the following
 aliases are supported (all case insensitive): `hostendpoint`, `hostendpoints`, `hep`, `heps`.
 
 > **Important**: When rendering security rules on other hosts, {{site.prodname}} uses the
