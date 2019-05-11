@@ -186,4 +186,4 @@ Let's get started.
 ## Next Steps
 
 For more information on the structure of the IP pool resource, see
-[the IP pools reference]({{ site.baseurl }}/{{ page.version }}/reference/calicoctl/resources/ippool).
+[the IP pools reference]({{ site.baseurl }}/{{ page.version }}/reference/resources/ippool).

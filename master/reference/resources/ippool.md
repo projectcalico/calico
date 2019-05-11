@@ -6,7 +6,7 @@ canonical_url: 'https://docs.projectcalico.org/v3.7/reference/calicoctl/resource
 An IP pool resource (`IPPool`) represents a collection of IP addresses from which {{site.prodname}} expects
 endpoint IPs to be assigned.
 
-For `calicoctl` [commands]({{site.baseurl}}/{{page.version}}/reference/calicoctl/commands/) that specify a resource type on the CLI, the following
+For `calicoctl` [commands]({{site.baseurl}}/{{page.version}}/reference/calicoctl/) that specify a resource type on the CLI, the following
 aliases are supported (all case insensitive): `ippool`, `ippools`, `ipp`, `ipps`, `pool`, `pools`.
 
 ### Sample YAML

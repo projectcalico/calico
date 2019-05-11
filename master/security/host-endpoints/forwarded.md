@@ -64,7 +64,7 @@ EOF
 > **Note**: This policy has no `order` field specified which causes it to default
 > to the highest value. Because higher order values have the lowest order of precedence,
 > {{site.prodname}} will apply this policy after all other policies. Refer to the 
-> [policy spec]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/networkpolicy#spec) for
+> [policy spec]({{site.baseurl}}/{{page.version}}/reference/resources/networkpolicy#spec) for
 > more discussion.
 {: .alert .alert-info}
 

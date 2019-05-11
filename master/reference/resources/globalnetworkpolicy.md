@@ -6,16 +6,16 @@ canonical_url: 'https://docs.projectcalico.org/v3.7/reference/calicoctl/resource
 A global network policy resource (`GlobalNetworkPolicy`) represents an ordered set of rules which are applied
 to a collection of endpoints that match a [label selector](#selector).
 
-`GlobalNetworkPolicy` is not a namespaced resource. `GlobalNetworkPolicy` applies to [workload endpoint resources]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/workloadendpoint) in all namespaces, and to [host endpoint resources]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/hostendpoint).
+`GlobalNetworkPolicy` is not a namespaced resource. `GlobalNetworkPolicy` applies to [workload endpoint resources]({{site.baseurl}}/{{page.version}}/reference/resources/workloadendpoint) in all namespaces, and to [host endpoint resources]({{site.baseurl}}/{{page.version}}/reference/resources/hostendpoint).
 Select a namespace in a `GlobalNetworkPolicy` in the standard selector by using
 `projectcalico.org/namespace` as the label name and a `namespace` name as the
 value to compare against, e.g., `projectcalico.org/namespace == "default"`.
-See [network policy resource]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/networkpolicy) for namespaced network policy.
+See [network policy resource]({{site.baseurl}}/{{page.version}}/reference/resources/networkpolicy) for namespaced network policy.
 
 `GlobalNetworkPolicy` resources can be used to define network connectivity rules between groups of {{site.prodname}} endpoints and host endpoints, and
-take precedence over [Profile resources]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/profile) if any are defined.
+take precedence over [Profile resources]({{site.baseurl}}/{{page.version}}/reference/resources/profile) if any are defined.
 
-For `calicoctl` [commands]({{site.baseurl}}/{{page.version}}/reference/calicoctl/commands/) that specify a resource type on the CLI, the following
+For `calicoctl` [commands]({{site.baseurl}}/{{page.version}}/reference/calicoctl/) that specify a resource type on the CLI, the following
 aliases are supported (all case insensitive): `globalnetworkpolicy`, `globalnetworkpolicies`, `gnp`, `gnps`.
 
 ### Sample YAML
@@ -76,10 +76,10 @@ spec:
  | Yes                   | Yes                  | `Ingress, Egress`   |
 
 \*\* The `doNotTrack` and `preDNAT` and `applyOnForward` fields are meaningful
-only when applying policy to a [host endpoint]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/hostendpoint).
+only when applying policy to a [host endpoint]({{site.baseurl}}/{{page.version}}/reference/resources/hostendpoint).
 
 Only one of `doNotTrack` and `preDNAT` may be set to `true` (in a given policy). If they are both `false`, or when applying the policy to a
-[workload endpoint]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/workloadendpoint),
+[workload endpoint]({{site.baseurl}}/{{page.version}}/reference/resources/workloadendpoint),
 the policy is enforced after connection tracking and any DNAT.
 
 `applyOnForward` must be set to `true` if either `doNotTrack` or `preDNAT` is

@@ -44,18 +44,18 @@ spec:
 
 The following resources are supported:
 
-- [BGPPeer]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/bgppeer)
-- [BGPConfiguration]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/bgpconfig)
-- [HostEndpoint]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/hostendpoint)
-- [NetworkPolicy]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/networkpolicy)
-- [GlobalNetworkPolicy]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/globalnetworkpolicy)
-- [NetworkSet]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/networkset)
-- [GlobalNetworkSet]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/globalnetworkset)
-- [Node]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/node)
-- [IPPool]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/ippool)
-- [Profile]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/profile)
-- [FelixConfiguration]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/felixconfig)
-- [WorkloadEndpoint]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/workloadendpoint)
+- [BGPConfiguration]({{site.baseurl}}/{{page.version}}/reference/resources/bgpconfig)
+- [BGPPeer]({{site.baseurl}}/{{page.version}}/reference/resources/bgppeer)
+- [FelixConfiguration]({{site.baseurl}}/{{page.version}}/reference/resources/felixconfig)
+- [GlobalNetworkPolicy]({{site.baseurl}}/{{page.version}}/reference/resources/globalnetworkpolicy)
+- [GlobalNetworkSet]({{site.baseurl}}/{{page.version}}/reference/resources/globalnetworkset)
+- [HostEndpoint]({{site.baseurl}}/{{page.version}}/reference/resources/hostendpoint)
+- [IPPool]({{site.baseurl}}/{{page.version}}/reference/resources/ippool)
+- [NetworkPolicy]({{site.baseurl}}/{{page.version}}/reference/resources/networkpolicy)
+- [NetworkSet]({{site.baseurl}}/{{page.version}}/reference/resources/networkset)
+- [Node]({{site.baseurl}}/{{page.version}}/reference/resources/node)
+- [Profile]({{site.baseurl}}/{{page.version}}/reference/resources/profile)
+- [WorkloadEndpoint]({{site.baseurl}}/{{page.version}}/reference/resources/workloadendpoint)
 
 ### Resource name requirements
 

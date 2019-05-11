@@ -34,5 +34,5 @@ Description:
 Details on the `calicoctl ipam` commands are described in the documents linked below
 organized by sub command.
 
--  [calicoctl ipam release]({{site.baseurl}}/{{page.version}}/reference/calicoctl/commands/ipam/release)
--  [calicoctl ipam show]({{site.baseurl}}/{{page.version}}/reference/calicoctl/commands/ipam/show)
+-  [calicoctl ipam release]({{site.baseurl}}/{{page.version}}/reference/calicoctl/ipam/release)
+-  [calicoctl ipam show]({{site.baseurl}}/{{page.version}}/reference/calicoctl/ipam/show)

@@ -6,7 +6,7 @@ canonical_url: 'https://docs.projectcalico.org/v3.7/reference/calicoctl/resource
 A BGP configuration resource (`BGPConfiguration`) represents BGP specific configuration options for the cluster or a
 specific node.
 
-For `calicoctl` [commands]({{site.baseurl}}/{{page.version}}/reference/calicoctl/commands/) that specify a resource type on the CLI, the following
+For `calicoctl` [commands]({{site.baseurl}}/{{page.version}}/reference/calicoctl/) that specify a resource type on the CLI, the following
 aliases are supported (all case insensitive): `bgpconfiguration`, `bgpconfig`, `bgpconfigurations`, `bgpconfigs`.
 
 ### Sample YAML

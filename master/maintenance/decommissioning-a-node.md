@@ -89,5 +89,5 @@ Below is an example of how to create a file of Nodes and delete them.
    calicoctl delete -f nodes_to_delete.yaml
    ```
 
-[Node resource reference]: {{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/node
+[Node resource reference]: {{site.baseurl}}/{{page.version}}/reference/resources/node
 [calicoctl setup]: ../getting-started/calicoctl/install

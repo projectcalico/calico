@@ -8,13 +8,13 @@ allowing it to be matched by {{site.prodname}} policy.  Network sets are useful 
 coming from (or going to) external, non-{{site.prodname}}, networks.
 
 `NetworkSet` is a namespaced resource. `NetworkSets` in a specific namespace
-only applies to [network policies]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/networkpolicy)
+only applies to [network policies]({{site.baseurl}}/{{page.version}}/reference/resources/networkpolicy)
 in that namespace. Two resources are in the same namespace if the `namespace`
-value is set the same on both. (See [GlobalNetworkSet]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/globalnetworkset) for non-namespaced network sets.)
+value is set the same on both. (See [GlobalNetworkSet]({{site.baseurl}}/{{page.version}}/reference/resources/globalnetworkset) for non-namespaced network sets.)
 
 The metadata for each network set includes a set of labels.  When {{site.prodname}} is calculating the set of
 IPs that should match a source/destination selector within a
-[network policy]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/networkpolicy) rule, it includes
+[network policy]({{site.baseurl}}/{{page.version}}/reference/resources/networkpolicy) rule, it includes
 the CIDRs from any network sets that match the selector.
 
 > **Important**: Since {{site.prodname}} matches packets based on their source/destination IP addresses,

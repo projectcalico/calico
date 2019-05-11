@@ -5,12 +5,12 @@ canonical_url: 'https://docs.projectcalico.org/v3.7/reference/calicoctl/resource
 
 Profiles provide a way to group multiple endpoints so that they inherit a shared set of labels. For historic reasons, Profiles can also include
 policy rules, but that feature is deprecated in favor of the much more
-flexible [NetworkPolicy]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/networkpolicy) and
-[GlobalNetworkPolicy]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/globalnetworkpolicy) resources.
+flexible [NetworkPolicy]({{site.baseurl}}/{{page.version}}/reference/resources/networkpolicy) and
+[GlobalNetworkPolicy]({{site.baseurl}}/{{page.version}}/reference/resources/globalnetworkpolicy) resources.
 
 Each {{site.prodname}} endpoint or host endpoint can be assigned to zero or more profiles.
 
-For `calicoctl` [commands]({{site.baseurl}}/{{page.version}}/reference/calicoctl/commands/) that specify a resource type on the CLI, the following
+For `calicoctl` [commands]({{site.baseurl}}/{{page.version}}/reference/calicoctl/) that specify a resource type on the CLI, the following
 aliases are supported (all case insensitive): `profile`, `profiles`, `pro`, `pros`.
 
 ### Sample YAML

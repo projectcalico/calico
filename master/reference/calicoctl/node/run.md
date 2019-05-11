@@ -365,6 +365,6 @@ terminating `,` character does not need to be specified for those cases.
 ## See also
 
 -  [Installing calicoctl]({{site.baseurl}}/{{page.version}}/getting-started/calicoctl/install)
--  [Resources]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/) for details on all valid resources, including file format
+-  [Resources]({{site.baseurl}}/{{page.version}}/reference/resources/) for details on all valid resources, including file format
    and schema
--  [Policy]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/networkpolicy) for details on the {{site.prodname}} selector-based policy model
+-  [Policy]({{site.baseurl}}/{{page.version}}/reference/resources/networkpolicy) for details on the {{site.prodname}} selector-based policy model

@@ -20,6 +20,7 @@ commands.
 Usage:
   calicoctl node <command> [<args>...]
 
+    run          Run the Calico node container image
     status       View the current status of a Calico node.
     diags        Gather a diagnostics bundle for a Calico node.
     checksystem  Verify the compute host is able to run a Calico node instance.
@@ -40,6 +41,7 @@ Description:
 Details on the `calicoctl node` commands are described in the documents linked below
 organized by sub command.
 
--  [calicoctl node status]({{site.baseurl}}/{{page.version}}/reference/calicoctl/commands/node/status)
--  [calicoctl node diags]({{site.baseurl}}/{{page.version}}/reference/calicoctl/commands/node/diags)
--  [calicoctl node checksystem]({{site.baseurl}}/{{page.version}}/reference/calicoctl/commands/node/checksystem)
+-  [calicoctl node run]({{site.baseurl}}/{{page.version}}/reference/calicoctl/node/run)
+-  [calicoctl node status]({{site.baseurl}}/{{page.version}}/reference/calicoctl/node/status)
+-  [calicoctl node diags]({{site.baseurl}}/{{page.version}}/reference/calicoctl/node/diags)
+-  [calicoctl node checksystem]({{site.baseurl}}/{{page.version}}/reference/calicoctl/node/checksystem)

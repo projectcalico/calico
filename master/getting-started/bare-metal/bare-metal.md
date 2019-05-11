@@ -43,7 +43,7 @@ You can apply host endpoint policies to three types of traffic:
 same host.
 
 Set the `applyOnForward` flag to `true` to apply a policy to forwarded traffic.
-See [GlobalNetworkPolicy spec]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/globalnetworkpolicy#spec).
+See [GlobalNetworkPolicy spec]({{site.baseurl}}/{{page.version}}/reference/resources/globalnetworkpolicy#spec).
 
 > **Note**: Both traffic forwarded between host endpoints and traffic forwarded
 > between a host endpoint and a workload endpoint on the same host is regarded as

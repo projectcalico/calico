@@ -25,10 +25,10 @@ nodes to use the same AS number.
 The AS number for a {{site.prodname}} node is determined:
 
 -  by the
-   [node's]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/node)
+   [node's]({{site.baseurl}}/{{page.version}}/reference/resources/node)
    `spec.bgp.asNumber`, if that is defined;
 -  otherwise by the `spec.asNumber` of the default [BGPConfiguration
-   resource]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/bgpconfig),
+   resource]({{site.baseurl}}/{{page.version}}/reference/resources/bgpconfig),
    if that is defined;
 -  otherwise, is 64512 (which is in the IANA range for private use).
 
@@ -54,7 +54,7 @@ be configured in your {{site.prodname}} network as a global BGP peer or a per-no
 A {{site.prodname}} node can be configured to act as a route reflector for other
 {{site.prodname}} nodes, at the same time as originating routes for its own workloads.  This
 is enabled by setting the
-[node's]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/node)
+[node's]({{site.baseurl}}/{{page.version}}/reference/resources/node)
 `spec.bgp.routeReflectorClusterID`.  Normally you will also add a label to identify that node
 as a route reflector, to make it easy to configure peerings from other {{site.prodname}}
 nodes.
@@ -65,13 +65,13 @@ cluster.
 **BGP peers in general**
 
 The {{site.prodname}} [BGPPeer
-resource]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/bgppeer) provides
+resource]({{site.baseurl}}/{{page.version}}/reference/resources/bgppeer) provides
 several ways to say that some set of {{site.prodname}} nodes should peer with other
 {{site.prodname}} nodes, or with other BGP speakers identified by IP.  These configurations
 can be used in addition to the full node-to-node mesh, or instead of it.  A BGPPeer can
 specify that all {{site.prodname}} nodes should have certain peerings, or just one specific
 {{site.prodname}} node, or the {{site.prodname}} nodes whose labels match a specified [label
-selector]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/networkpolicy#selector).
+selector]({{site.baseurl}}/{{page.version}}/reference/resources/networkpolicy#selector).
 The peers to connect to can be just one peer specified by its IP, or the set of
 {{site.prodname}} nodes that match a given label selector.
 
@@ -93,7 +93,7 @@ model]({{site.baseurl}}/{{page.version}}/networking/design/l3-interconnect-fabri
 discussed in the reference material, each {{site.prodname}} node peers with a route reflector
 in the Top of Rack (ToR) switch.  In this case the BGP peerings are configured on a per-node
 basis, or for a set of nodes as identified by a given [label
-selector]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/networkpolicy#selector)
+selector]({{site.baseurl}}/{{page.version}}/reference/resources/networkpolicy#selector)
 (i.e., these are node-specific peers).  In the AS-per-rack model, each {{site.prodname}} node
 in a rack will be configured with a node-specific peering to the ToR route reflector.
 
@@ -151,7 +151,7 @@ the following steps.
 1. If the resource _does_ exist, skip to step 3. Otherwise, use the following
    command to create the resource. Before issuing the command, adjust the
    `nodeToNodeMeshEnabled` and `asNumber` lines and values as desired.
-   Refer to [BGP Configuration Resource]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/bgpconfig) for details about these settings.
+   Refer to [BGP Configuration Resource]({{site.baseurl}}/{{page.version}}/reference/resources/bgpconfig) for details about these settings.
 
     ```
     cat << EOF | calicoctl create -f -
@@ -176,7 +176,7 @@ the following steps.
 
 1. Open the bgpconfig settings file in your favorite editor, modify
    the `nodeToNodeMeshEnabled` or `asNumber` as desired, and save the file.
-   Refer to [BGP Configuration Resource]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/bgpconfig) for details about these settings.
+   Refer to [BGP Configuration Resource]({{site.baseurl}}/{{page.version}}/reference/resources/bgpconfig) for details about these settings.
 
     ```
     vim bgp.yaml
@@ -349,7 +349,7 @@ much smaller number of BGP connections.
     correct route propagation can continue if some of them require down time for maintenance.
 
 1.  Modify the [Node
-    resource]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/node) for each
+    resource]({{site.baseurl}}/{{page.version}}/reference/resources/node) for each
     of those nodes, to:
 
     -  set the node's `spec.bgp.routeReflectorClusterID` to a non-empty cluster ID such as
@@ -385,7 +385,7 @@ much smaller number of BGP connections.
     {: .alert .alert-info}
 
 1.  Configure a [BGPPeer
-    resource]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/bgppeer) to tell
+    resource]({{site.baseurl}}/{{page.version}}/reference/resources/bgppeer) to tell
     the other {{site.prodname}} nodes to peer with the route reflector nodes:
 
     ```
@@ -401,7 +401,7 @@ much smaller number of BGP connections.
     ```
 
 1.  Configure a [BGPPeer
-    resource]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/bgppeer) to tell
+    resource]({{site.baseurl}}/{{page.version}}/reference/resources/bgppeer) to tell
     the route reflector nodes to peer with each other:
 
     ```
