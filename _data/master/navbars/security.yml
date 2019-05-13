@@ -27,9 +27,7 @@ toc:
   - title: Selector-based policies
     path: /security/host-endpoints/selector
   - title: Failsafe rules
-    path: /security/host-endpoints/failsafe
-  - title: Untracked policy
-    path: /security/host-endpoints/donottrack
+    path: /security/host-endpoints/failsafe 
   - title: Pre-DNAT policy
     path: /security/host-endpoints/pre-dnat
   - title: Apply on forwarded traffic
