@@ -86,7 +86,6 @@ spec:
       destination:
         selector: memcached == 'client'
 ```
-
 ### Above and beyond
 
 - [Calico GlobalNetworkPolicy](https://docs.projectcalico.org/v3.6/reference/calicoctl/resources/globalnetworkpolicy)
