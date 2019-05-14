@@ -78,7 +78,7 @@ endif
 # fail if unable to download
 CURL=curl -C - -sSf
 
-K8S_VERSION?=v1.11.3
+K8S_VERSION?=v1.14.1
 CNI_VERSION=v0.7.5
 
 # Get version from git.
