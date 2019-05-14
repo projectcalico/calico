@@ -128,7 +128,7 @@ DOCKER_RUN_RM:=docker run --rm \
                --user $(LOCAL_USER_ID):$(MY_GID) -v $(CURDIR):/code
 
 ENVOY_API=vendor/github.com/envoyproxy/data-plane-api
-EXT_AUTH=$(ENVOY_API)/envoy/service/auth/v2alpha/
+EXT_AUTH=$(ENVOY_API)/envoy/service/auth/v2/
 ADDRESS=$(ENVOY_API)/envoy/api/v2/core/address
 V2_BASE=$(ENVOY_API)/envoy/api/v2/core/base
 HTTP_STATUS=$(ENVOY_API)/envoy/type/http_status

@@ -29,8 +29,7 @@ import (
 	"github.com/projectcalico/app-policy/syncher"
 	"github.com/projectcalico/app-policy/uds"
 
-	"github.com/docopt/docopt-go"
-	authz "github.com/envoyproxy/data-plane-api/envoy/service/auth/v2alpha"
+	authz "github.com/envoyproxy/data-plane-api/envoy/service/auth/v2"
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 )

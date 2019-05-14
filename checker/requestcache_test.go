@@ -8,7 +8,7 @@ import (
 	"github.com/projectcalico/app-policy/policystore"
 	"github.com/projectcalico/app-policy/proto"
 
-	authz "github.com/envoyproxy/data-plane-api/envoy/service/auth/v2alpha"
+	authz "github.com/envoyproxy/data-plane-api/envoy/service/auth/v2"
 )
 
 // Successful parse should return name and namespace.
