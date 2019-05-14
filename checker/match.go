@@ -165,7 +165,7 @@ func matchLabels(selectorStr string, labels map[string]string) bool {
 		log.Warnf("Could not parse label selector %v, %v", selectorStr, err)
 		return false
 	}
-	log.Debugf("Parsed selector.", sel)
+	log.Debugf("Parsed selector.")
 	return sel.Evaluate(labels)
 }
 
