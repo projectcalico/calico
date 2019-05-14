@@ -58,4 +58,5 @@ metadata:
 spec:
   cidr: 2002::/64
   ipipMode: Never
+  vxlanMode: Never
   natOutgoing: true
