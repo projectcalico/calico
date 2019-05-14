@@ -9,7 +9,7 @@ test: ut fv
 
 # Define some constants
 #######################
-K8S_VERSION      ?= v1.11.3
+K8S_VERSION      ?= v1.14.1
 ETCD_VERSION     ?= v3.3.7
 GO_BUILD_VER     ?= v0.20
 CALICO_BUILD     ?= calico/go-build:$(GO_BUILD_VER)
