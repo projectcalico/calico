@@ -153,7 +153,7 @@ GO_BUILD_VER?=v0.20
 # we do not need to use the arch since go-build:v0.15 now is multi-arch manifest
 CALICO_BUILD=calico/go-build:$(GO_BUILD_VER)
 ETCD_VERSION?=v3.3.7
-K8S_VERSION?=v1.11.3
+K8S_VERSION?=v1.14.1
 PROTOC_VER?=v0.1
 PROTOC_CONTAINER ?=calico/protoc:$(PROTOC_VER)-$(BUILDARCH)
 
