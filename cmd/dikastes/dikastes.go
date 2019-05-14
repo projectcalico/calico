@@ -22,6 +22,8 @@ import (
 	"os/signal"
 	"syscall"
 
+	docopt "github.com/docopt/docopt-go"
+
 	"github.com/projectcalico/app-policy/checker"
 	"github.com/projectcalico/app-policy/health"
 	"github.com/projectcalico/app-policy/policystore"
