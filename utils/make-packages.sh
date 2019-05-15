@@ -68,6 +68,10 @@ EOF
 EOF
 		} > debian/changelog
 
+		# Update PBR_VERSION setting (if present) in
+		# debian/rules.
+		sed -i "s/^export PBR_VERSION=.*$/export PBR_VERSION=${debver}/" debian/rules
+
 		${DOCKER_RUN_RM} -e DEB_VERSION=${debver}~${series} \
 				 calico-build/${series} dpkg-buildpackage -I -S
 	    done
