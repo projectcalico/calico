@@ -16,6 +16,19 @@ Note that the documentation in this repo is targeted at Calico contributors.
 
 For information on `calicoctl` usage, see the [calicoctl reference information](http://docs.projectcalico.org/master/reference/calicoctl/)
 
+### Install
+
+Binary downloads of `calicoctl` can be found on the [Releases page].
+
+Unpack the `calicoctl` binary and add it to your PATH and you are good to go!
+
+If you want to use a package manager:
+
+- [Homebrew] users can use `brew install calicoctl`.
+
+[Releases page]: https://github.com/projectcalico/calicoctl/releases
+[Homebrew]: https://brew.sh/
+
 ### Developing
 
 Print useful actions with `make help`.
@@ -63,15 +76,15 @@ To list all possible targets, run `make help`.
    git clone https://github.com/projectcalico/calicoctl.git $GOPATH/src/github.com/projectcalico/calicoctl
    ```
 
-1. [Install Glide](https://github.com/Masterminds/glide#install).
+2. [Install Glide](https://github.com/Masterminds/glide#install).
 
-2. Populate the `vendor/` directory in the project's root with this project's dependencies:
+3. Populate the `vendor/` directory in the project's root with this project's dependencies:
 
    ```
    glide install -strip-vendor
    ```
 
-3. Build the binary:
+4. Build the binary:
    ```
    make build
    ```
