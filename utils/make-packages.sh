@@ -85,6 +85,7 @@ EOF
 	    debver=`git_version_to_rpm ${version}`
 	    debver=`strip_v ${debver}`
 	    rpm_spec=rpm/networking-calico.spec
+	    [ -f ${rpm_spec}.in ] && cp -f ${rpm_spec}.in ${rpm_spec}
 
 	    # Generate RPM version and release.
 	    IFS=_ read ver qual <<< ${debver}
