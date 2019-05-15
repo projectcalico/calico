@@ -3,7 +3,7 @@
 # Uncomment this to turn on verbose mode.
 #export DH_VERBOSE=1
 
-export PBR_VERSION=3.6.0
+export PBR_VERSION=
 
 %:
 	dh $@  --with python2,systemd
