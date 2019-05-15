@@ -79,7 +79,7 @@ EOF
 	    cat <<EOF
 
     +---------------------------------------------------------------------------+
-    | Debs have been built at dist/bionic, dist/xenial and dist/trusty.         |
+    | Debs have been built.                                                     |
     +---------------------------------------------------------------------------+
 
 EOF
