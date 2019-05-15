@@ -76,7 +76,7 @@ var _ = testutils.E2eDatastoreDescribe("Felix syncer tests", testutils.Datastore
 			// Kubernetes will have a profile for each of the namespaces that is configured.
 			// We expect:  default, kube-system, kube-public, namespace-1, namespace-2
 			if config.Spec.DatastoreType == apiconfig.Kubernetes {
-				expectedCacheSize += 5
+				expectedCacheSize += 6
 				syncTester.ExpectData(model.KVPair{
 					Key: model.ProfileRulesKey{ProfileKey: model.ProfileKey{Name: "kns.default"}},
 					Value: &model.ProfileRules{
@@ -112,6 +112,13 @@ var _ = testutils.E2eDatastoreDescribe("Felix syncer tests", testutils.Datastore
 						OutboundRules: []model.Rule{{Action: "allow"}},
 					},
 				})
+				syncTester.ExpectData(model.KVPair{
+					Key: model.ProfileRulesKey{ProfileKey: model.ProfileKey{Name: "kns.kube-node-lease"}},
+					Value: &model.ProfileRules{
+						InboundRules:  []model.Rule{{Action: "allow"}},
+						OutboundRules: []model.Rule{{Action: "allow"}},
+					},
+				})
 				expectedCacheSize += func(syncTester *testutils.SyncerTester, namespaces []string) int {
 					for _, n := range namespaces {
 						syncTester.ExpectData(model.KVPair{
@@ -123,7 +130,7 @@ var _ = testutils.E2eDatastoreDescribe("Felix syncer tests", testutils.Datastore
 						})
 					}
 					return len(namespaces)
-				}(syncTester, []string{"default", "kube-public", "kube-system", "namespace-1", "namespace-2"})
+				}(syncTester, []string{"default", "kube-public", "kube-system", "namespace-1", "namespace-2", "kube-node-lease"})
 				syncTester.ExpectCacheSize(expectedCacheSize)
 			}
 			syncTester.ExpectCacheSize(expectedCacheSize)
