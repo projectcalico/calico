@@ -68,5 +68,9 @@ ifeq ("$(ARCH)","ppc64le")
 	docker commit centos7Tmp calico-build/centos7:latest
 endif
 
+NETWORKING_CALICO_REPO?=https://opendev.org/openstack/networking-calico.git
+NETWORKING_CALICO_CHECKOUT?=master
+
 networking-calico:
-	git clone https://opendev.org/openstack/networking-calico.git
+	git clone $(NETWORKING_CALICO_REPO)
+	cd networking-calico && git checkout $(NETWORKING_CALICO_CHECKOUT)
