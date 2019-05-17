@@ -1,5 +1,5 @@
-hash: ba06dd9113608c31dd38b1fcecf77567b288be13843e6147b6911d531b505226
-updated: 2019-05-16T07:49:42.61549757Z
+hash: 73ecc98e9c988305d3f7275259e4f38064108e00749b98e0dc333214b625fcb3
+updated: 2019-05-17T07:53:05.668561037Z
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -145,7 +145,7 @@ imports:
 - name: github.com/karrick/godirwalk
   version: 4e17292779dcc7ed08e10c03bfdd022f7c28b3c3
 - name: github.com/kelseyhightower/confd
-  version: b98e919b4c905ae60e7ef4d5a6935a53e3495cd3
+  version: 1e5463ec25bca90df589d8cb410808bc5a24df12
   repo: https://github.com/projectcalico/confd.git
   subpackages:
   - pkg/backends
@@ -217,7 +217,7 @@ imports:
 - name: github.com/pkg/errors
   version: 27936f6d90f9c8e1145f11ed52ffffbfdb9e0af7
 - name: github.com/projectcalico/felix
-  version: 51c1187400df2b28f70fbf391451eb8ef1203a59
+  version: 2c6137c35107d934162462579f9e148ae4c352ec
   subpackages:
   - bpf
   - bpf/packrd
@@ -309,7 +309,7 @@ imports:
   subpackages:
   - binder
 - name: github.com/projectcalico/typha
-  version: 94bf6f738f4137834a9e5863d7a95e81c9547ade
+  version: e04bd52ad85fcb9e9e385cba64c2bbf6350ed820
   subpackages:
   - pkg/config
   - pkg/logutils
