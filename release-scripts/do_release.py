@@ -49,6 +49,7 @@ def release():
     # https://github.com/jekyll/jekyll/issues/5429 - Fixed in Jekyll 3.3
     shutil.copytree("./_data/master", "./_data/%s" % new_version.replace(".", "_"))
     shutil.copytree("./_includes/master", "./_includes/%s" % new_version, symlinks=True)
+    shutil.copytree("./_plugins/master", "./_plugins/%s" % new_version)
 
 if __name__ == "__main__":
     arguments = docopt(__doc__)
