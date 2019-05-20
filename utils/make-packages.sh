@@ -68,6 +68,10 @@ EOF
 EOF
 		} > debian/changelog
 
+		# Update PBR_VERSION setting (if present) in
+		# debian/rules.
+		sed -i "s/^export PBR_VERSION=.*$/export PBR_VERSION=${debver}/" debian/rules
+
 		${DOCKER_RUN_RM} -e DEB_VERSION=${debver}~${series} \
 				 calico-build/${series} dpkg-buildpackage -I -S
 	    done
@@ -75,7 +79,7 @@ EOF
 	    cat <<EOF
 
     +---------------------------------------------------------------------------+
-    | Debs have been built at dist/bionic, dist/xenial and dist/trusty.         |
+    | Debs have been built.                                                     |
     +---------------------------------------------------------------------------+
 
 EOF
@@ -85,6 +89,7 @@ EOF
 	    debver=`git_version_to_rpm ${version}`
 	    debver=`strip_v ${debver}`
 	    rpm_spec=rpm/networking-calico.spec
+	    [ -f ${rpm_spec}.in ] && cp -f ${rpm_spec}.in ${rpm_spec}
 
 	    # Generate RPM version and release.
 	    IFS=_ read ver qual <<< ${debver}
