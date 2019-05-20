@@ -98,7 +98,7 @@ with Istio. This step modifies the injector configuration to add Dikastes, a
    {: .alert .alert-info}
 
 If you have installed a different version of Istio, substitute `1.1.7` in the above URL for your Istio version. We have
-pre-defined `ConfigMaps` for Istio versions 1.1.0 thru 1.1.7. To customize the standard sidecar injector `ConfigMap` or
+pre-defined `ConfigMaps` for Istio versions 1.0.6 thru 1.1.7. To customize the standard sidecar injector `ConfigMap` or
 understand the changes we have made, see
 [Customizing the manifests](config-options).
 
