@@ -20,11 +20,10 @@ import (
 	"sync"
 
 	authz "github.com/envoyproxy/data-plane-api/envoy/service/auth/v2"
+	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/app-policy/policystore"
 	"github.com/projectcalico/app-policy/proto"
-
-	log "github.com/sirupsen/logrus"
 )
 
 // requestCache contains the CheckRequest and cached copies of computed information about the request
