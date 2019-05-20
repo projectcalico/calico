@@ -50,6 +50,10 @@ IP ranges in your network, including:
 ## Application layer policy requirements
 
 - [MutatingAdmissionWebhook](https://kubernetes.io/docs/admin/admission-controllers/#mutatingadmissionwebhook) enabled
-- [Istio v1.0](https://istio.io/about/notes/1.0/)
+- [Istio v1.1](https://istio.io/about/notes/1.1/)
+
+> **Note**: Using Istio 1.0? {{site.prodname}} version [3.7](/v3.7/introduction) and earlier are compatible with Istio 1.0.
+{: .alert .alert-info}
+
 
 {% include {{page.version}}/reqs-kernel.md %}
