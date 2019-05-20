@@ -73,6 +73,14 @@ procedure varies by datastore type.
 
    It should return a `Cluster Version` of `{{page.version}}.x`.
 
+1. If you have [enabled Application Layer Policy](/{{page.version}}/getting-started/kubernetes/installation/app-layer-policy),
+   update the Istio sidecar injector. Skip this step if you are not using Istio with Calico. Replace `<your Istio version>` below with
+   the full version string of your Istio install, for example `1.1.7`.
+
+   ```bash
+   kubectl apply -f {{site.url}}/{{page.version}}/manifests/alp/istio-inject-configmap-<your Istio version>.yaml
+   ```
+
 1. Congratulations! You have upgraded to {{site.prodname}} {{page.version}}.
 
 
@@ -132,5 +140,13 @@ procedure varies by datastore type.
    ```
 
    It should return a `Cluster Version` of `{{page.version}}`.
+
+1. If you have [enabled Application Layer Policy](/{{page.version}}/getting-started/kubernetes/installation/app-layer-policy),
+   update the Istio sidecar injector. Skip this step if you are not using Istio with Calico. Replace `<your Istio version>` below with
+   the full version string of your Istio install, for example `1.1.7`.
+
+   ```bash
+   kubectl apply -f {{site.url}}/{{page.version}}/manifests/alp/istio-inject-configmap-<your Istio version>.yaml
+   ```
 
 1. Congratulations! You have upgraded to {{site.prodname}} {{page.version}}.
