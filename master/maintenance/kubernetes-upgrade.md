@@ -151,7 +151,7 @@ If you have [enabled Application Layer Policy](/{{page.version}}/getting-started
 take the following steps to upgrade the Dikastes sidecars running in your application pods. Skip these steps if you are not using Istio with {{site.prodname}}.
 
 1. Update the Istio sidecar injector template to use the new version of Dikastes. Replace `<your Istio version>` below with
-   the full version string of your Istio install, for example `1.1.7`.
+   the full version string of your Istio install, for example `1.0.7`.
 
    ```bash
    kubectl apply -f {{site.url}}/{{page.version}}/manifests/alp/istio-inject-configmap-<your Istio version>.yaml
