@@ -258,7 +258,7 @@ $(EXT_AUTH)external_auth.pb.go $(EXT_AUTH)attribute_context.pb.go: $(EXT_AUTH)ex
 	              $(EXT_AUTH)*.proto \
 	              --gogofast_out=plugins=grpc,$(PROTOC_MAPPINGS):$(ENVOY_API)
 
-$(EXT_AUTH_V2_ALPHA)external_auth.pb.go: $(EXT_AUTH_V2_ALPHA)external_auth.proto $(EXT_AUTH)external_auth.proto
+$(EXT_AUTH_V2_ALPHA)external_auth.pb.go: $(EXT_AUTH_V2_ALPHA)external_auth.proto
 	$(DOCKER_RUN_RM) -v $(CURDIR):/src:rw \
 	              $(PROTOC_CONTAINER) \
 	              $(PROTOC_IMPORTS) \
