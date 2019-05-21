@@ -74,12 +74,7 @@ procedure varies by datastore type.
    It should return a `Cluster Version` of `{{page.version}}.x`.
 
 1. If you have [enabled Application Layer Policy](/{{page.version}}/getting-started/kubernetes/installation/app-layer-policy),
-   update the Istio sidecar injector. Skip this step if you are not using Istio with Calico. Replace `<your Istio version>` below with
-   the full version string of your Istio install, for example `1.1.7`.
-
-   ```bash
-   kubectl apply -f {{site.url}}/{{page.version}}/manifests/alp/istio-inject-configmap-<your Istio version>.yaml
-   ```
+   follow [the instructions below](#upgrading-if-you-have-application-layer-policy-enabled) to complete your upgrade. Skip this if you are not using Istio with {{site.prodname}}.
 
 1. Congratulations! You have upgraded to {{site.prodname}} {{page.version}}.
 
@@ -142,11 +137,25 @@ procedure varies by datastore type.
    It should return a `Cluster Version` of `{{page.version}}`.
 
 1. If you have [enabled Application Layer Policy](/{{page.version}}/getting-started/kubernetes/installation/app-layer-policy),
-   update the Istio sidecar injector. Skip this step if you are not using Istio with Calico. Replace `<your Istio version>` below with
+   follow [the instructions below](#upgrading-if-you-have-application-layer-policy-enabled) to complete your upgrade. Skip this if you are not using Istio with {{site.prodname}}.
+
+1. Congratulations! You have upgraded to {{site.prodname}} {{page.version}}.
+
+## Upgrading if you have Application Layer Policy enabled
+
+Dikastes is versioned the same as the rest of {{site.prodname}}, but an upgraded `calico-node` will still be able to work with a downlevel Dikastes
+so that you will not lose data plane connectivity during the upgrade.  Once `calico-node` is upgraded, you can begin redeploying your service pods
+with the updated version of Dikastes. 
+
+If you have [enabled Application Layer Policy](/{{page.version}}/getting-started/kubernetes/installation/app-layer-policy),
+take the following steps to upgrade the Dikastes sidecars running in your application pods. Skip these steps if you are not using Istio with {{site.prodname}}.
+
+1. Update the Istio sidecar injector template to use the new version of Dikastes. Replace `<your Istio version>` below with
    the full version string of your Istio install, for example `1.1.7`.
 
    ```bash
    kubectl apply -f {{site.url}}/{{page.version}}/manifests/alp/istio-inject-configmap-<your Istio version>.yaml
    ```
 
-1. Congratulations! You have upgraded to {{site.prodname}} {{page.version}}.
+1. Once the new template is in place, newly created pods use the upgraded version of Dikastes. Perform a rolling update of each of your service deployments
+   to get them on the new version of Dikastes.
