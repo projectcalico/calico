@@ -21,9 +21,10 @@ import (
 	"regexp"
 	"strings"
 
+	log "github.com/sirupsen/logrus"
+
 	"github.com/projectcalico/libcalico-go/lib/errors"
 	"github.com/projectcalico/libcalico-go/lib/net"
-	log "github.com/sirupsen/logrus"
 )
 
 const (
@@ -104,7 +105,7 @@ type AllocationBlock struct {
 	Deleted        bool                  `json:"deleted"`
 
 	// HostAffinity is deprecated in favor of Affinity.
-	// This is only to keep compatiblity with existing deployments.
+	// This is only to keep compatibility with existing deployments.
 	// The data format should be `Affinity: host:hostname` (not `hostAffinity: hostname`).
 	HostAffinity *string `json:"hostAffinity,omitempty"`
 }

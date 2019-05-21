@@ -1,4 +1,4 @@
-// Copyright (c) 2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2019 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -19,4 +19,6 @@ import "github.com/projectcalico/libcalico-go/lib/apis/v3"
 type PoolAccessorInterface interface {
 	// Returns a list of enabled pools sorted in alphanumeric name order.
 	GetEnabledPools(ipVersion int) ([]v3.IPPool, error)
+	// Returns a list of all pools sorted in alphanumeric name order.
+	GetAllPools() ([]v3.IPPool, error)
 }

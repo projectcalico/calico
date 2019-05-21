@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2018 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2019 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -90,4 +90,7 @@ type Interface interface {
 	// RemoveIPAMHost does not release any IP addresses claimed on the given host.
 	// If an empty string is passed as the host then the value returned by os.Hostname is used.
 	RemoveIPAMHost(ctx context.Context, host string) error
+
+	// GetUtilization returns IP utilization info for the specified pools, or for all pools.
+	GetUtilization(ctx context.Context, args GetUtilizationArgs) ([]*PoolUtilization, error)
 }

@@ -65,6 +65,10 @@ func (i *ipPoolAccessor) GetEnabledPools(ipVersion int) ([]v3.IPPool, error) {
 			sorted = append(sorted, p)
 		}
 	}
+	return i.getPools(sorted, ipVersion, "GetEnabledPools"), nil
+}
+
+func (i *ipPoolAccessor) getPools(sorted []string, ipVersion int, caller string) []v3.IPPool {
 	sort.Strings(sorted)
 
 	// Convert to IPNets and sort out the correct IP versions.  Sorting the results
@@ -73,7 +77,7 @@ func (i *ipPoolAccessor) GetEnabledPools(ipVersion int) ([]v3.IPPool, error) {
 	pools := make([]v3.IPPool, 0)
 	for _, p := range sorted {
 		c := cnet.MustParseCIDR(p)
-		if c.Version() == ipVersion {
+		if (ipVersion == 0) || (c.Version() == ipVersion) {
 			pool := v3.IPPool{Spec: v3.IPPoolSpec{CIDR: p, NodeSelector: i.pools[p].nodeSelector}}
 			if i.pools[p].blockSize == 0 {
 				if ipVersion == 4 {
@@ -89,9 +93,18 @@ func (i *ipPoolAccessor) GetEnabledPools(ipVersion int) ([]v3.IPPool, error) {
 		}
 	}
 
-	log.Infof("GetEnabledPools returns: %v", pools)
+	log.Infof("%v returns: %v", caller, pools)
 
-	return pools, nil
+	return pools
+}
+
+func (i *ipPoolAccessor) GetAllPools() ([]v3.IPPool, error) {
+	sorted := make([]string, 0)
+	// Get a sorted list of pool CIDR strings.
+	for p := range i.pools {
+		sorted = append(sorted, p)
+	}
+	return i.getPools(sorted, 0, "GetAllPools"), nil
 }
 
 var (
