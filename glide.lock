@@ -4,10 +4,10 @@ imports:
 - name: github.com/docopt/docopt-go
   version: 784ddc588536785e7299f7272f39101f7faccc3f
 - name: github.com/envoyproxy/data-plane-api
-  version: 5d8712556c09c4c630e8d3479eddf212e9c88cd5
+  version: 4a93c6d2d91783b772666c796390aabf88464173
   subpackages:
   - envoy/api/v2/core
-  - envoy/service/auth/v2alpha
+  - envoy/service/auth/v2
 - name: github.com/gogo/googleapis
   version: d31c731455cb061f42baff3bda55bad0118b126b
   subpackages:

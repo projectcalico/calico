@@ -17,9 +17,9 @@ package checker
 import (
 	"testing"
 
+	authz "github.com/envoyproxy/data-plane-api/envoy/service/auth/v2"
 	. "github.com/onsi/gomega"
 
-	authz "github.com/envoyproxy/data-plane-api/envoy/service/auth/v2alpha"
 	"github.com/projectcalico/app-policy/policystore"
 	"github.com/projectcalico/app-policy/proto"
 )

@@ -18,7 +18,7 @@ import (
 	"testing"
 
 	core "github.com/envoyproxy/data-plane-api/envoy/api/v2/core"
-	auth "github.com/envoyproxy/data-plane-api/envoy/service/auth/v2alpha"
+	auth "github.com/envoyproxy/data-plane-api/envoy/service/auth/v2"
 	. "github.com/onsi/gomega"
 
 	"github.com/projectcalico/app-policy/policystore"
