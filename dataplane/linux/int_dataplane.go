@@ -878,7 +878,7 @@ func (d *InternalDataplane) loopUpdatingDataplane() {
 			d.forceRouteRefresh = true
 			d.dataplaneNeedsSync = true
 		case <-xdpRefreshC:
-			log.Debug("Refreshing routes")
+			log.Debug("Refreshing XDP")
 			d.forceXDPRefresh = true
 			d.dataplaneNeedsSync = true
 		case <-d.reschedC:
