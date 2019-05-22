@@ -224,6 +224,7 @@ type Config struct {
 
 	IptablesNATOutgoingInterfaceFilter string `config:"iface-param;"`
 
+	SockmapEnabled    bool `config:"bool;false"`
 	XDPEnabled        bool `config:"bool;true"`
 	GenericXDPEnabled bool `config:"bool;false"`
 }

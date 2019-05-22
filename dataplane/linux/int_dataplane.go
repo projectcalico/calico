@@ -135,6 +135,8 @@ type Config struct {
 
 	XDPEnabled      bool
 	XDPAllowGeneric bool
+
+	SockmapEnabled bool
 }
 
 // InternalDataplane implements an in-process Felix dataplane driver based on iptables
