@@ -19,6 +19,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"os"
 	"strings"
 	"time"
 
@@ -35,11 +36,12 @@ import (
 const usage = `test-connection: test connection to some target, for Felix FV testing.
 
 Usage:
-  test-connection <namespace-path> <ip-address> <port> [--source-port=<source>] [--protocol=<protocol>]
+  test-connection <namespace-path> <ip-address> <port> [--source-port=<source>] [--protocol=<protocol>] [--loop-with-file=<file>]
 
 Options:
   --source-port=<source>  Source port to use for the connection [default: 0].
-  --protocol=<protocol>  Protocol to test [default: tcp].
+  --protocol=<protocol>   Protocol to test [default: tcp].
+  --loop-with-file=<file>  Whether to send messages repeatedly, file is used for synchronization
 
 If connection is successful, test-connection exits successfully.
 
@@ -60,17 +62,25 @@ func main() {
 	sourcePort := arguments["--source-port"].(string)
 	log.Infof("Test connection from %v:%v to IP %v port %v", namespacePath, sourcePort, ipAddress, port)
 	protocol := arguments["--protocol"].(string)
+	loopFile := ""
+	if arg, ok := arguments["--loop-with-file"]; ok && arg != nil {
+		loopFile = arg.(string)
+	}
 
-	// I found that configuring the timeouts on all the network calls was a bit fiddly.  Since
-	// it leaves the process hung if one of them is missed, use a global timeout instead.
-	go func() {
-		time.Sleep(2 * time.Second)
-		panic("Timed out")
-	}()
+	if loopFile == "" {
+		// I found that configuring the timeouts on all the
+		// network calls was a bit fiddly.  Since it leaves
+		// the process hung if one of them is missed, use a
+		// global timeout instead.
+		go func() {
+			time.Sleep(2 * time.Second)
+			panic("Timed out")
+		}()
+	}
 
 	if namespacePath == "-" {
 		// Test connection from wherever we are already running.
-		err = tryConnect(ipAddress, port, sourcePort, protocol)
+		err = tryConnect(ipAddress, port, sourcePort, protocol, loopFile)
 	} else {
 		// Get the specified network namespace (representing a workload).
 		var namespace ns.NetNS
@@ -82,7 +92,7 @@ func main() {
 
 		// Now, in that namespace, try connecting to the target.
 		err = namespace.Do(func(_ ns.NetNS) error {
-			return tryConnect(ipAddress, port, sourcePort, protocol)
+			return tryConnect(ipAddress, port, sourcePort, protocol, loopFile)
 		})
 	}
 
@@ -91,7 +101,7 @@ func main() {
 	}
 }
 
-func tryConnect(ipAddress, port string, sourcePort string, protocol string) error {
+func tryConnect(ipAddress, port, sourcePort, protocol, loopFile string) error {
 
 	err := utils.RunCommand("ip", "r")
 	if err != nil {
@@ -113,45 +123,118 @@ func tryConnect(ipAddress, port string, sourcePort string, protocol string) erro
 		localAddr = "0.0.0.0:" + sourcePort
 		remoteAddr = ipAddress + ":" + port
 	}
+	ls := newLoopState(loopFile)
+	log.Infof("Connecting from %v to %v over %s", localAddr, remoteAddr, protocol)
 	if protocol == "udp" {
-		log.Infof("Connecting from %v to %v", localAddr, remoteAddr)
 		d.D.LocalAddr, _ = net.ResolveUDPAddr("udp", localAddr)
+		log.WithFields(log.Fields{
+			"addr":     localAddr,
+			"resolved": d.D.LocalAddr,
+		}).Infof("Resolved udp addr")
 		conn, err := d.Dial("udp", remoteAddr)
+		log.Infof(`UDP "connection" established`)
 		if err != nil {
 			panic(err)
 		}
 		defer conn.Close()
 
-		fmt.Fprintf(conn, testMessage+"\n")
-		reply, err := bufio.NewReader(conn).ReadString('\n')
-		if err != nil {
-			panic(err)
-		}
-		reply = strings.TrimSpace(reply)
-		if reply != testMessage {
-			panic(errors.New("Unexpected reply: " + reply))
+		for {
+			fmt.Fprintf(conn, testMessage+"\n")
+			log.WithField("message", testMessage).Info("Sent message over udp")
+			reply, err := bufio.NewReader(conn).ReadString('\n')
+			if err != nil {
+				panic(err)
+			}
+			reply = strings.TrimSpace(reply)
+			log.WithField("reply", reply).Info("Got reply")
+			if reply != testMessage {
+				panic(errors.New("Unexpected reply: " + reply))
+			}
+			if !ls.Next() {
+				break
+			}
 		}
 	} else {
 		d.D.LocalAddr, err = net.ResolveTCPAddr("tcp", localAddr)
 		if err != nil {
 			return err
 		}
+		log.WithFields(log.Fields{
+			"addr":     localAddr,
+			"resolved": d.D.LocalAddr,
+		}).Infof("Resolved tcp addr")
 		conn, err := d.Dial("tcp", remoteAddr)
 		if err != nil {
 			return err
 		}
 		defer conn.Close()
+		log.Infof("TCP connection established")
 
-		fmt.Fprintf(conn, testMessage+"\n")
-		reply, err := bufio.NewReader(conn).ReadString('\n')
-		if err != nil {
-			return err
-		}
-		reply = strings.TrimSpace(reply)
-		if reply != testMessage {
-			return errors.New("Unexpected reply: " + reply)
+		for {
+			fmt.Fprintf(conn, testMessage+"\n")
+			log.WithField("message", testMessage).Info("Sent message over tcp")
+			reply, err := bufio.NewReader(conn).ReadString('\n')
+			if err != nil {
+				return err
+			}
+			reply = strings.TrimSpace(reply)
+			log.WithField("reply", reply).Info("Got reply")
+			if reply != testMessage {
+				return errors.New("Unexpected reply: " + reply)
+			}
+			if !ls.Next() {
+				break
+			}
 		}
 	}
 
 	return nil
+}
+
+type loopState struct {
+	sentInitial bool
+	loopFile    string
+}
+
+func newLoopState(loopFile string) *loopState {
+	return &loopState{
+		sentInitial: false,
+		loopFile:    loopFile,
+	}
+}
+
+func (l *loopState) Next() bool {
+	if l.loopFile == "" {
+		return false
+	}
+
+	if l.sentInitial {
+		// This is after the connection was established in
+		// previous iteration, so we wait for the loop file to
+		// appear (it should be created by other process). If
+		// the file exists, it means that the other process
+		// wants us to delete the file, drop the connection
+		// and quit.
+		if _, err := os.Stat(l.loopFile); err != nil {
+			if !os.IsNotExist(err) {
+				panic(fmt.Errorf("Failed to stat loop file %s: %v", l.loopFile, err))
+			}
+		} else {
+			if err := os.Remove(l.loopFile); err != nil {
+				panic(fmt.Errorf("Could not remove loop file %s: %v", l.loopFile, err))
+			}
+			return false
+		}
+	} else {
+		// A connection was just established and the initial
+		// message was sent so we set the flag to true and
+		// delete the loop file, so other process can continue
+		// with the appropriate checks
+		if err := os.Remove(l.loopFile); err != nil {
+			panic(fmt.Errorf("Could not remove loop file %s: %v", l.loopFile, err))
+		}
+		l.sentInitial = true
+	}
+	time.Sleep(500 * time.Millisecond)
+	return true
 }
