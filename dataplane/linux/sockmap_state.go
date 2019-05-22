@@ -26,8 +26,8 @@ type sockmapState struct {
 	cbIDs  []*CbID
 }
 
-func NewSockmapState() (*sockmapState, error) {
-	lib, err := bpf.NewBPFLib()
+func NewSockmapState(cgroupSubdir string) (*sockmapState, error) {
+	lib, err := bpf.NewBPFLibWithCgroupv2Subdir(cgroupSubdir)
 	if err != nil {
 		return nil, err
 	}

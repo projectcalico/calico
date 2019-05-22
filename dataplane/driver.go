@@ -176,6 +176,7 @@ func StartDataplaneDriver(configParams *config.Config,
 			SockmapEnabled:                  configParams.SockmapEnabled,
 			XDPEnabled:                      configParams.XDPEnabled,
 			XDPAllowGeneric:                 configParams.GenericXDPEnabled,
+			SockmapCgroupv2Subdir:           configParams.SockmapCgroupv2Subdir,
 		}
 		intDP := intdataplane.NewIntDataplaneDriver(dpConfig)
 		intDP.Start()

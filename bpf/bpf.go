@@ -169,6 +169,10 @@ type BPFLib struct {
 }
 
 func NewBPFLib() (*BPFLib, error) {
+	return NewBPFLibWithCgroupv2Subdir("")
+}
+
+func NewBPFLibWithCgroupv2Subdir(cgroupSubdir string) (*BPFLib, error) {
 	_, err := exec.LookPath("bpftool")
 	if err != nil {
 		return nil, errors.New("bpftool not found in $PATH")
@@ -179,7 +183,7 @@ func NewBPFLib() (*BPFLib, error) {
 		return nil, err
 	}
 
-	cgroupV2Dir, err := maybeMountCgroupV2()
+	cgroupV2Dir, err := maybeMountCgroupV2(cgroupSubdir)
 	if err != nil {
 		return nil, err
 	}
@@ -235,7 +239,7 @@ func maybeMountBPFfs() (string, error) {
 	return bpffsPath, err
 }
 
-func maybeMountCgroupV2() (string, error) {
+func maybeMountCgroupV2(cgroupSubdir string) (string, error) {
 	var err error
 	cgroupV2Path := "/run/calico/cgroup"
 
@@ -257,6 +261,13 @@ func maybeMountCgroupV2() (string, error) {
 		err = mountCgroupV2(cgroupV2Path)
 	} else if !fsCgroup {
 		err = fmt.Errorf("something that's not cgroup v2 is already mounted in %s", cgroupV2Path)
+	}
+
+	if err == nil && cgroupSubdir != "" {
+		cgroupV2Path = filepath.Join(cgroupV2Path, cgroupSubdir)
+		if err := os.MkdirAll(cgroupV2Path, 0700); err != nil {
+			return "", err
+		}
 	}
 
 	return cgroupV2Path, err
