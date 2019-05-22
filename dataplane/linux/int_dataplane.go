@@ -220,6 +220,7 @@ type InternalDataplane struct {
 	debugHangC <-chan time.Time
 
 	xdpState          *xdpState
+	sockmapState      *sockmapState
 	endpointsSourceV4 endpointsSource
 	ipsetsSourceV4    ipsetsSource
 	callbacks         *callbacks
@@ -387,6 +388,36 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			}
 		}
 		// if we can't create an XDP state it means we couldn't get a working
+		// bpffs so there's nothing to clean up
+	}
+
+	if config.SockmapEnabled {
+		if err := bpf.SupportsSockmap(); err != nil {
+			log.WithError(err).Warn("Can't enable Sockmap acceleration.")
+		} else {
+			st, err := NewSockmapState()
+			if err != nil {
+				log.WithError(err).Warn("Can't enable Sockmap acceleration.")
+			} else {
+				dp.sockmapState = st
+				dp.sockmapState.PopulateCallbacks(callbacks)
+
+				if err := dp.sockmapState.SetupSockmapAcceleration(); err != nil {
+					dp.sockmapState = nil
+					log.WithError(err).Warn("Failed to set up Sockmap acceleration")
+				} else {
+					log.Info("Sockmap acceleration enabled.")
+				}
+			}
+		}
+	}
+
+	if dp.sockmapState == nil {
+		st, err := NewSockmapState()
+		if err == nil {
+			st.WipeSockmap()
+		}
+		// if we can't create a sockmap state it means we couldn't get a working
 		// bpffs so there's nothing to clean up
 	}
 
