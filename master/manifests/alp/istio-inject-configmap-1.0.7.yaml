@@ -159,6 +159,7 @@ data:
 {% include {{page.version}}/non-helm-manifests/istio-proxy-volume-mounts %}
 {% include {{page.version}}/non-helm-manifests/dikastes-container %}
       volumes:
+{% include {{page.version}}/non-helm-manifests/istio-volumes %}
       - emptyDir:
           medium: Memory
         name: istio-envoy
@@ -170,4 +171,3 @@ data:
           [[ else -]]
           secretName: [[ printf "istio.%s" .Spec.ServiceAccountName ]]
           [[ end -]]
-{% include {{page.version}}/non-helm-manifests/istio-volumes %}
