@@ -473,10 +473,6 @@ func CmdDelK8s(ctx context.Context, c calicoclient.Interface, epIDs utils.WEPIde
 		}
 	}
 
-	// Release the IP address for this container by calling the configured IPAM plugin.
-	logger.Info("Releasing IP address(es)")
-	ipamErr := utils.DeleteIPAM(conf, args, logger)
-
 	// Clean up namespace by removing the interfaces.
 	logger.Info("Cleaning up netns")
 	err = utils.CleanUpNamespace(args, logger)
@@ -484,10 +480,11 @@ func CmdDelK8s(ctx context.Context, c calicoclient.Interface, epIDs utils.WEPIde
 		return err
 	}
 
-	// Return the IPAM error if there was one. The IPAM error will be lost if there was also an error in cleaning up
-	// the device or endpoint, but crucially, the user will know the overall operation failed.
-	if ipamErr != nil {
-		return ipamErr
+	// Release the IP address for this container by calling the configured IPAM plugin.
+	logger.Info("Releasing IP address(es)")
+	err = utils.DeleteIPAM(conf, args, logger)
+	if err != nil {
+		return err
 	}
 
 	logger.Info("Teardown processing complete.")
