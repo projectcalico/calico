@@ -230,7 +230,9 @@ func config(client client.Interface) func(string) string {
 		case "asnumber":
 			if asValue == "" {
 				if bgpConfig, err := client.BGPConfigurations().Get(context.Background(), "default", options.GetOptions{}); err != nil {
-					asValue = "unknown"
+					// Use the default ASNumber of 64512 when there is none configured (first ASN reserved for private use).
+					// https://en.m.wikipedia.org/wiki/Autonomous_system_(Internet)#ASN_Table
+					asValue = "64512"
 				} else {
 					asValue = bgpConfig.Spec.ASNumber.String()
 				}
