@@ -49,12 +49,13 @@ type CalicoAPIConfigSpec struct {
 }
 
 type EtcdConfig struct {
-	EtcdEndpoints  string `json:"etcdEndpoints" envconfig:"ETCD_ENDPOINTS"`
-	EtcdUsername   string `json:"etcdUsername" envconfig:"ETCD_USERNAME"`
-	EtcdPassword   string `json:"etcdPassword" envconfig:"ETCD_PASSWORD"`
-	EtcdKeyFile    string `json:"etcdKeyFile" envconfig:"ETCD_KEY_FILE"`
-	EtcdCertFile   string `json:"etcdCertFile" envconfig:"ETCD_CERT_FILE"`
-	EtcdCACertFile string `json:"etcdCACertFile" envconfig:"ETCD_CA_CERT_FILE"`
+	EtcdEndpoints    string `json:"etcdEndpoints" envconfig:"ETCD_ENDPOINTS"`
+	EtcdDiscoverySrv string `json:"etcdDiscoverySrv" envconfig:"ETCD_DISCOVERY_SRV"`
+	EtcdUsername     string `json:"etcdUsername" envconfig:"ETCD_USERNAME"`
+	EtcdPassword     string `json:"etcdPassword" envconfig:"ETCD_PASSWORD"`
+	EtcdKeyFile      string `json:"etcdKeyFile" envconfig:"ETCD_KEY_FILE"`
+	EtcdCertFile     string `json:"etcdCertFile" envconfig:"ETCD_CERT_FILE"`
+	EtcdCACertFile   string `json:"etcdCACertFile" envconfig:"ETCD_CA_CERT_FILE"`
 
 	// These config file parameters are to support inline certificates, keys and CA / Trusted certificate.
 	// There are no corresponding environment variables to avoid accidental exposure.
