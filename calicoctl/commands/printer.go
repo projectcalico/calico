@@ -230,6 +230,7 @@ func config(client client.Interface) func(string) string {
 		case "asnumber":
 			if asValue == "" {
 				if bgpConfig, err := client.BGPConfigurations().Get(context.Background(), "default", options.GetOptions{}); err != nil {
+					// Use the default ASNumber of 64512 when there is none configured.
 					asValue = "64512"
 				} else {
 					asValue = bgpConfig.Spec.ASNumber.String()
