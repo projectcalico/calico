@@ -137,7 +137,6 @@ spec:
             - mountPath: /calico-secrets
               name: etcd-certs
 {{- end }}
-{{- if .Values.app_layer_policy }}
         # Adds a Flex Volume Driver that creates a per-pod Unix Domain Socket to allow Dikastes
         # to communicate with Felix over the Policy Sync API.
         - name: flexvol-driver
@@ -145,7 +144,6 @@ spec:
           volumeMounts:
           - name: flexvol-driver-host
             mountPath: /host/driver
-{{- end }}
       containers:
         # Runs {{ include "nodeName" . }} container on each Kubernetes node.  This
         # container programs network policy and routes on each
@@ -271,11 +269,6 @@ spec:
               value: "info"
             - name: FELIX_HEALTHENABLED
               value: "true"
-{{- if .Values.app_layer_policy }}
-            # Enable the Policy Sync API between Felix and Dikastes
-            - name: FELIX_POLICYSYNCPATHPREFIX
-              value: "/var/run/nodeagent"
-{{- end }}
           securityContext:
             privileged: true
           resources:
@@ -325,10 +318,8 @@ spec:
             - mountPath: /calico-secrets
               name: etcd-certs
 {{- end }}
-{{- if .Values.app_layer_policy }}
             - name: policysync
               mountPath: /var/run/nodeagent
-{{- end }}
 {{- if eq .Values.network "flannel" }}
   {{- if eq .Values.datastore "kubernetes" }}
         # This container runs flannel using the kube-subnet-mgr backend
@@ -488,7 +479,6 @@ spec:
           hostPath:
             path: /var/lib/cni/networks
 {{- end }}
-{{- if .Values.app_layer_policy }}
         # Used to create per-pod Unix Domain Sockets
         - name: policysync
           hostPath:
@@ -499,7 +489,6 @@ spec:
           hostPath:
             type: DirectoryOrCreate
             path: /usr/libexec/kubernetes/kubelet-plugins/volume/exec/nodeagent~uds
-{{- end }}
 ---
 
 apiVersion: v1

@@ -14,7 +14,6 @@ def gen_values_master(versions, imageNames, imageRegistry)
     network: calico
     # Sets the ipam. Can be 'calico-ipam' or 'host-local'
     ipam: calico-ipam
-    app_layer_policy: false
 
     node:
       image: #{imageRegistry}#{imageNames["node"]}
