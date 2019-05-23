@@ -57,3 +57,10 @@ We recommend setting an alias as follows.
 ```
 alias calicoctl="kubectl exec -i -n kube-system calicoctl /calicoctl -- "
 ```
+
+   > **Note**: In order to use the `calicoctl` alias
+   > when reading manifests, redirect the file into stdin, for example:
+   > ```
+   > calicoctl create -f - < my_manifest.yaml
+   > ```
+   {: .alert .alert-info}
