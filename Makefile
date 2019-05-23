@@ -5,7 +5,7 @@ default: build
 all: build
 
 ## Run the tests for the current platform/architecture
-test: ut st
+test: ut fv st
 
 ###############################################################################
 # Both native and cross architecture builds are supported.
@@ -318,6 +318,20 @@ ut: bin/calicoctl-linux-amd64
 		-e LOCAL_USER_ID=$(LOCAL_USER_ID) \
 		$(LOCAL_BUILD_MOUNTS) \
 		$(CALICO_BUILD) sh -c 'cd /go/src/$(PACKAGE_NAME) && ginkgo -cover -r --skipPackage vendor calicoctl/* $(GINKGO_ARGS)'
+
+###############################################################################
+# FVs
+###############################################################################
+.PHONY: fv
+## Run the tests in a container. Useful for CI, Mac dev.
+fv: bin/calicoctl-linux-amd64 run-etcd-host
+	docker run --rm -v $(CURDIR):/go/src/$(PACKAGE_NAME):rw \
+		--net=host -e LOCAL_USER_ID=$(LOCAL_USER_ID) \
+		$(LOCAL_BUILD_MOUNTS) \
+	        -v $(CURDIR)/.go-pkg-cache:/go-cache/:rw \
+                -e GOCACHE=/go-cache \
+		$(CALICO_BUILD) sh -c 'cd /go/src/$(PACKAGE_NAME) && go test ./tests/fv'
+	$(MAKE) stop-etcd
 
 ###############################################################################
 # STs
