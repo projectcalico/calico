@@ -79,7 +79,7 @@ endif
 CURL=curl -C - -sSf
 
 K8S_VERSION?=v1.14.1
-CNI_VERSION=v0.7.5
+CNI_VERSION=v0.8.0
 
 # Get version from git.
 GIT_VERSION:=$(shell git describe --tags --dirty --always)
@@ -271,11 +271,11 @@ endif
 	touch $@
 
 .PHONY: fetch-cni-bins
-fetch-cni-bins: $(BIN)/flannel $(BIN)/loopback $(BIN)/host-local $(BIN)/portmap $(BIN)/tuning
+fetch-cni-bins: $(BIN)/flannel $(BIN)/loopback $(BIN)/host-local $(BIN)/portmap $(BIN)/tuning $(BIN)/bandwidth
 
-$(BIN)/flannel $(BIN)/loopback $(BIN)/host-local $(BIN)/portmap $(BIN)/tuning:
+$(BIN)/flannel $(BIN)/loopback $(BIN)/host-local $(BIN)/portmap $(BIN)/tuning $(BIN)/bandwidth:
 	mkdir -p $(BIN)
-	$(CURL) -L --retry 5 https://github.com/containernetworking/plugins/releases/download/$(CNI_VERSION)/cni-plugins-$(ARCH)-$(CNI_VERSION).tgz | tar -xz -C $(BIN) ./flannel ./loopback ./host-local ./portmap ./tuning
+	$(CURL) -L --retry 5 https://github.com/containernetworking/plugins/releases/download/$(CNI_VERSION)/cni-plugins-linux-$(ARCH)-$(CNI_VERSION).tgz | tar -xz -C $(BIN) ./flannel ./loopback ./host-local ./portmap ./tuning ./bandwidth
 
 ###############################################################################
 # Static checks
