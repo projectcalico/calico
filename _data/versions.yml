@@ -12,7 +12,7 @@ v3.7:
      calico/kube-controllers:
       version: v3.7.2
      networking-calico:
-      version: 3.6.0
+      version: 3.7.2
      flannel:
       version: v0.11.0
      calico/dikastes:
