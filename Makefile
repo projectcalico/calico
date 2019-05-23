@@ -143,7 +143,7 @@ build-all: $(addprefix bin/calicoctl-linux-,$(VALIDARCHES)) bin/calicoctl-window
 build: bin/calicoctl-$(OS)-$(ARCH)
 
 ## Create the vendor directory
-vendor: glide.yaml
+vendor: glide.lock
 	# Ensure that the glide cache directory exists.
 	mkdir -p $(HOME)/.glide
 
