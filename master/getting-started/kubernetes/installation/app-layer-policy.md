@@ -90,15 +90,16 @@ with Istio. This step modifies the injector configuration to add Dikastes, a
 1. Apply the following ConfigMap to enable injection of Dikastes alongside Envoy.
 
    ```bash
-   kubectl apply -f {{site.url}}/{{page.version}}/manifests/alp/istio-inject-configmap.yaml
+   kubectl apply -f {{site.url}}/{{page.version}}/manifests/alp/istio-inject-configmap-1.0.7.yaml
    ```
 
 	 > **Note**: You can also
-   > [view the manifest in your browser]({{site.url}}/{{page.version}}/manifests/alp/istio-inject-configmap.yaml){:target="_blank"}.
+   > [view the manifest in your browser]({{site.url}}/{{page.version}}/manifests/alp/istio-inject-configmap-1.0.7.yaml){:target="_blank"}.
    {: .alert .alert-info}
 
-If you would like to install a different version of Istio or inspect the changes
-we have made to the standard sidecar injector `ConfigMap`, see
+If you have installed a different version of Istio, substitute `1.0.7` in the above URL for your Istio version. We have
+pre-defined `ConfigMaps` for Istio versions 1.0.6 and 1.0.7. To customize the standard sidecar injector `ConfigMap` or
+understand the changes we have made, see
 [Customizing the manifests](config-options).
 
 ## Adding {{site.prodname}} authorization services to the mesh
