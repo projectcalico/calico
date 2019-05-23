@@ -115,6 +115,7 @@ func (r resourcePrinterTable) print(client client.Interface, resources []runtime
 			return err
 		}
 		log.WithField("template", tpls).Debug("Got resource template")
+
 		// Convert the template string into a template - we need to include the join
 		// function.
 		fns := template.FuncMap{
@@ -126,7 +127,6 @@ func (r resourcePrinterTable) print(client client.Interface, resources []runtime
 		if err != nil {
 			panic(err)
 		}
-		log.Infof("Template: %s", tmpl)
 
 		// Use a tabwriter to write out the template - this provides better formatting.
 		writer := tabwriter.NewWriter(os.Stdout, 5, 1, 3, ' ', 0)
