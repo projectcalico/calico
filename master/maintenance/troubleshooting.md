@@ -6,9 +6,24 @@ canonical_url: 'https://docs.projectcalico.org/v3.7/maintenance/troubleshooting'
 * TOC
 {:toc}
 
-## Containers do not have network connectivity
+## Logs and diagnostics
 
-### Check for mismatched node names
+To collect diagnostics use the calicoctl command line tool with superuser privileges. For example:
+
+```bash
+sudo calicoctl node diags
+```
+
+To view logs, use the following table:
+
+
+
+If you find problem, please [raise an issue in GitHub](https://github.com/projectcalico/calico/issues).
+
+
+#### Containers do not have network connectivity
+
+###### Check for mismatched node names
 
 If you notice that a workload has not received network connectivity, check
 that the node name for that host is properly configured. The name for the [node resource](../reference/resources/node) must match
@@ -57,7 +72,7 @@ To prevent this problem from occurring, we recommend always mounting the `/var/l
 container when installing {{site.prodname}}. This allows all components to detect and use the same node name. See
 [node name determination](../reference/node/configuration#node-name-determination) for more information.
 
-### Check BGP peer status
+###### Check BGP peer status
 
 If you have connectivity between containers on the same host, and between
 containers and the Internet, but not between containers on different hosts, it
@@ -86,7 +101,7 @@ If you do not see this, please check the following.
 
 - Make sure your network allows the requisite BGP traffic on TCP port 179.
 
-### Configure NetworkManager
+###### Configure NetworkManager
 
 Configure [NetworkManager](https://help.ubuntu.com/community/NetworkManager) before
 attempting to use {{site.prodname}} networking.
@@ -103,7 +118,7 @@ NetworkManager from interfering with the interfaces:
 unmanaged-devices=interface-name:cali*;interface-name:tunl*
 ```
 
-## Running sudo calicoctl with environment variables
+#### Running sudo calicoctl with environment variables
 
 If you use `sudo` for commands like `calicoctl node run`, remember that your environment
 variables will not be transferred to the `sudo` environment.  You can run `sudo` with
@@ -133,23 +148,12 @@ Lastly this can occur when BGP connections to non-mesh peers go down. If this
 is a common occurrence in your BGP topology, you can disable BIRD readiness checks. See [node readiness]({{site.baseurl}}/{{page.version}}/reference/node/configuration#node-readiness)
 for more information.
 
-## Collecting diagnostics
 
-If you hit problems, please [raise an issue in GitHub](https://github.com/projectcalico/calico/issues).
 
-Diagnostics can be collected using the calicoctl command line tool. This should be run with superuser privileges,
-for example:
+#### Linux conntrack table is out of space 
 
-```bash
-sudo calicoctl node diags
-```
-
-## Tuning conntrack
-
-A common problem on Linux systems is running out of space in the
-conntrack table, which can cause poor iptables performance. This can
-happen if you run a lot of workloads on a given host, or if your
-workloads create a lot of TCP connections or bidirectional UDP streams.
+A common problem on Linux systems is running out of space in the conntrack table, which can cause poor iptables performance. This can
+happen if you run a lot of workloads on a given host, or if your workloads create a lot of TCP connections or bidirectional UDP streams.
 
 To avoid this becoming a problem, we recommend increasing the conntrack
 table size. To do so, run the following commands:
