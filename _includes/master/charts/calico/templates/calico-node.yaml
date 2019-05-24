@@ -2,7 +2,7 @@
 # as the CNI plugins and network config on
 # each master and worker node in a Kubernetes cluster.
 kind: DaemonSet
-apiVersion: extensions/v1beta1
+apiVersion: apps/v1
 metadata:
   name: {{include "nodeName" . }}
   namespace: kube-system
@@ -511,7 +511,7 @@ metadata:
 {{- if and (eq .Values.datastore "etcd") (eq .Values.network "flannel") }}
 ---
 
-apiVersion: rbac.authorization.k8s.io/v1beta1
+apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
   name: canal
@@ -527,7 +527,7 @@ subjects:
 ---
 
 kind: ClusterRole
-apiVersion: rbac.authorization.k8s.io/v1beta1
+apiVersion: rbac.authorization.k8s.io/v1
 metadata:
   name: canal
 rules:
