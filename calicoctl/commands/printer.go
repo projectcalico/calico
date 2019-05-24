@@ -32,6 +32,7 @@ import (
 	"github.com/projectcalico/go-json/json"
 	"github.com/projectcalico/go-yaml-wrapper"
 	client "github.com/projectcalico/libcalico-go/lib/clientv3"
+	calicoErrors "github.com/projectcalico/libcalico-go/lib/errors"
 	"github.com/projectcalico/libcalico-go/lib/options"
 )
 
@@ -230,9 +231,14 @@ func config(client client.Interface) func(string) string {
 		case "asnumber":
 			if asValue == "" {
 				if bgpConfig, err := client.BGPConfigurations().Get(context.Background(), "default", options.GetOptions{}); err != nil {
-					// Use the default ASNumber of 64512 when there is none configured (first ASN reserved for private use).
-					// https://en.m.wikipedia.org/wiki/Autonomous_system_(Internet)#ASN_Table
-					asValue = "64512"
+					// Check if it was an actual error accessing the data
+					if _, ok := err.(calicoErrors.ErrorResourceDoesNotExist); !ok {
+						asValue = "unknown"
+					} else {
+						// Use the default ASNumber of 64512 when there is none configured (first ASN reserved for private use).
+						// https://en.m.wikipedia.org/wiki/Autonomous_system_(Internet)#ASN_Table
+						asValue = "64512"
+					}
 				} else {
 					asValue = bgpConfig.Spec.ASNumber.String()
 				}
