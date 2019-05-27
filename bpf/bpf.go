@@ -37,6 +37,7 @@ import (
 	"syscall"
 
 	packr "github.com/gobuffalo/packr/v2"
+	version "github.com/hashicorp/go-version"
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/sys/unix"
 
@@ -53,31 +54,63 @@ const (
 )
 
 const (
+	// XDP
 	cidrMapVersion        = "v1"
 	failsafeMapVersion    = "v1"
-	progVersion           = "v1"
+	xdpProgVersion        = "v1"
 	failsafeMapName       = "calico_failsafe_ports_" + failsafeMapVersion
 	failsafeSymbolMapName = "calico_failsafe_ports" // no need to version the symbol name
-	defaultBPFfsPath      = "/sys/fs/bpf"
+
+	// sockmap
+	sockopsProgVersion         = "v1"
+	sockopsProgName            = "calico_sockops_" + sockopsProgVersion
+	skMsgProgVersion           = "v1"
+	skMsgProgName              = "calico_sk_msg_" + skMsgProgVersion
+	sockMapVersion             = "v1"
+	sockMapName                = "calico_sock_map_" + sockMapVersion
+	sockmapEndpointsMapVersion = "v1"
+	sockmapEndpointsMapName    = "calico_sk_endpoints_" + sockmapEndpointsMapVersion
+
+	defaultBPFfsPath = "/sys/fs/bpf"
 )
 
 var (
 	// this holds the compiled XDP binary as an ELF file
-	xdpAsset        []byte
+	xdpAsset []byte
+	// this holds the compiled sockops binary as an ELF file
+	sockopsAsset []byte
+	// this holds the compiled sk_msg binary as an ELF file
+	skmsgAsset      []byte
 	bpfCalicoSubdir = "calico"
 	ifaceRegexp     = regexp.MustCompile(`(?m)^[0-9]+:\s+(?P<name>.+):`)
 	// v4Dot16Dot0 is the first kernel version that has all the
 	// required features we use for XDP filtering
 	v4Dot16Dot0 = versionparse.MustParseVersion("4.16.0")
+	// v4Dot19Dot0 is the first kernel version that has all the
+	// required features we use for sidecar acceleration
+	v4Dot19Dot0 = versionparse.MustParseVersion("4.19.0")
 )
 
 func init() {
-	box := packr.New("xdp", "./xdp/generated")
-	b, err := box.Find("xdp.o")
+	boxXDP := packr.New("xdp", "./xdp/generated")
+	xdpBytes, err := boxXDP.Find("xdp.o")
 	if err != nil {
 		panic(fmt.Sprintf("cannot find xdp.o: %v\n", err))
 	}
-	xdpAsset = b
+
+	boxSockmap := packr.New("sockmap", "./sockmap/generated")
+	sockopsBytes, err := boxSockmap.Find("sockops.o")
+	if err != nil {
+		panic(fmt.Sprintf("cannot find sockops.o: %v\n", err))
+	}
+	skmsgBytes, err := boxSockmap.Find("redir.o")
+	if err != nil {
+		panic(fmt.Sprintf("cannot find redir.o: %v\n", err))
+	}
+
+	xdpAsset = xdpBytes
+	sockopsAsset = sockopsBytes
+	skmsgAsset = skmsgBytes
 }
 
 func (m XDPMode) String() string {
@@ -128,9 +161,11 @@ func printCommand(name string, arg ...string) {
 }
 
 type BPFLib struct {
-	bpfDir    string
-	calicoDir string
-	xdpDir    string
+	bpfDir      string
+	calicoDir   string
+	sockmapDir  string
+	cgroupV2Dir string
+	xdpDir      string
 }
 
 func NewBPFLib() (*BPFLib, error) {
@@ -144,13 +179,21 @@ func NewBPFLib() (*BPFLib, error) {
 		return nil, err
 	}
 
+	cgroupV2Dir, err := maybeMountCgroupV2()
+	if err != nil {
+		return nil, err
+	}
+
 	calicoDir := filepath.Join(bpfDir, bpfCalicoSubdir)
 	xdpDir := filepath.Join(calicoDir, "xdp")
+	sockmapDir := filepath.Join(calicoDir, "sockmap")
 
 	return &BPFLib{
-		bpfDir:    bpfDir,
-		calicoDir: calicoDir,
-		xdpDir:    xdpDir,
+		bpfDir:      bpfDir,
+		calicoDir:   calicoDir,
+		sockmapDir:  sockmapDir,
+		cgroupV2Dir: cgroupV2Dir,
+		xdpDir:      xdpDir,
 	}, nil
 }
 
@@ -192,6 +235,37 @@ func maybeMountBPFfs() (string, error) {
 	return bpffsPath, err
 }
 
+func maybeMountCgroupV2() (string, error) {
+	var err error
+	cgroupV2Path := "/run/calico/cgroup"
+
+	if err := os.MkdirAll(cgroupV2Path, 0700); err != nil {
+		return "", err
+	}
+
+	mnt, err := isMount(cgroupV2Path)
+	if err != nil {
+		return "", fmt.Errorf("error checking if %s is a mount: %v", cgroupV2Path, err)
+	}
+
+	fsCgroup, err := isCgroupV2(cgroupV2Path)
+	if err != nil {
+		return "", fmt.Errorf("error checking if %s is CgroupV2: %v", cgroupV2Path, err)
+	}
+
+	if !mnt {
+		err = mountCgroupV2(cgroupV2Path)
+	} else if !fsCgroup {
+		err = fmt.Errorf("something that's not cgroup v2 is already mounted in %s", cgroupV2Path)
+	}
+
+	return cgroupV2Path, err
+}
+
+func mountCgroupV2(path string) error {
+	return syscall.Mount(path, path, "cgroup2", 0, "")
+}
+
 func isMount(path string) (bool, error) {
 	procPath := "/proc/self/mountinfo"
 
@@ -230,6 +304,17 @@ func isBPF(path string) (bool, error) {
 	return uint32(fsdata.Type) == bpffsMagicNumber, nil
 }
 
+func isCgroupV2(path string) (bool, error) {
+	cgroup2MagicNumber := uint32(0x63677270)
+
+	var fsdata unix.Statfs_t
+	if err := unix.Statfs(path, &fsdata); err != nil {
+		return false, fmt.Errorf("%s is not mounted", path)
+	}
+
+	return uint32(fsdata.Type) == cgroup2MagicNumber, nil
+}
+
 func mountBPFfs(path string) error {
 	return syscall.Mount(path, path, "bpf", 0, "")
 }
@@ -265,6 +350,25 @@ type BPFDataplane interface {
 	UpdateFailsafeMap(proto uint8, port uint16) error
 	loadXDPRaw(objPath, ifName string, mode XDPMode, mapArgs []string) error
 	GetBPFCalicoDir() string
+	AttachToSockmap() error
+	DetachFromSockmap() error
+	RemoveSockmap() error
+	loadBPF(objPath, progPath, progType string, mapArgs []string) error
+	LoadSockops(objPath string) error
+	LoadSockopsAuto() error
+	RemoveSockops() error
+	LoadSkMsg(objPath string) error
+	LoadSkMsgAuto() error
+	RemoveSkMsg() error
+	AttachToCgroup() error
+	DetachFromCgroup() error
+	NewSockmapEndpointsMap() (string, error)
+	NewSockmap() (string, error)
+	UpdateSockmapEndpoints(ip net.IP, mask int) error
+	DumpSockmapEndpointsMap(family IPFamily) ([]CIDRMapKey, error)
+	LookupSockmapEndpointsMap(ip net.IP, mask int) (bool, error)
+	RemoveItemSockmapEndpointsMap(ip net.IP, mask int) error
+	RemoveSockmapEndpointsMap() error
 }
 
 func getCIDRMapName(ifName string, family IPFamily) string {
@@ -272,10 +376,10 @@ func getCIDRMapName(ifName string, family IPFamily) string {
 }
 
 func getProgName(ifName string) string {
-	return fmt.Sprintf("prefilter_%s_%s", progVersion, ifName)
+	return fmt.Sprintf("prefilter_%s_%s", xdpProgVersion, ifName)
 }
 
-func newMap(name, path, kind string, entries, keySize, valueSize int) (string, error) {
+func newMap(name, path, kind string, entries, keySize, valueSize, flags int) (string, error) {
 	// FIXME: for some reason this function was called several times for a
 	// particular map, just assume it's created if the pinned file is there for
 	// now
@@ -305,7 +409,7 @@ func newMap(name, path, kind string, entries, keySize, valueSize int) (string, e
 		"name",
 		name,
 		"flags",
-		"1", // BPF_F_NO_PREALLOC
+		fmt.Sprintf("%d", flags),
 	}
 
 	printCommand(prog, args...)
@@ -324,7 +428,14 @@ func (b *BPFLib) NewFailsafeMap() (string, error) {
 	keySize := 4
 	valueSize := 1
 
-	return newMap(mapName, mapPath, "hash", 65535, keySize, valueSize)
+	return newMap(mapName,
+		mapPath,
+		"hash",
+		65535,
+		keySize,
+		valueSize,
+		1, //BPF_F_NO_PREALLOC
+	)
 }
 
 func (b *BPFLib) GetBPFCalicoDir() string {
@@ -342,7 +453,14 @@ func (b *BPFLib) NewCIDRMap(ifName string, family IPFamily) (string, error) {
 	keySize := 8
 	valueSize := 4
 
-	return newMap(mapName, mapPath, "lpm_trie", 10240, keySize, valueSize)
+	return newMap(mapName,
+		mapPath,
+		"lpm_trie",
+		10240,
+		keySize,
+		valueSize,
+		1, //BPF_F_NO_PREALLOC
+	)
 }
 
 func (b *BPFLib) ListCIDRMaps(family IPFamily) ([]string, error) {
@@ -386,6 +504,12 @@ type mapInfo struct {
 	Err       string `json:"error"`
 }
 
+type getnextEntry struct {
+	Key     []string `json:"key"`
+	NextKey []string `json:"next_key"`
+	Err     string   `json:"error"`
+}
+
 type mapEntry struct {
 	Key   []string `json:"key"`
 	Value []string `json:"value"`
@@ -418,25 +542,32 @@ type ifaceInfo []struct {
 	Xdp      ifaceXdp `json:"xdp"`
 }
 
+type cgroupProgEntry struct {
+	ID          int    `json:"id"`
+	AttachType  string `json:"attach_type"`
+	AttachFlags string `json:"attach_flags"`
+	Name        string `json:"name"`
+	Err         string `json:"error"`
+}
+
 type ProtoPort struct {
 	Proto labelindex.IPSetPortProtocol
 	Port  uint16
 }
 
-func getMapStruct(mapPath string) (*mapInfo, error) {
+func getMapStructGeneral(mapDesc []string) (*mapInfo, error) {
 	prog := "bpftool"
 	args := []string{
 		"--json",
 		"--pretty",
 		"map",
-		"show",
-		"pinned",
-		mapPath}
+		"show"}
+	args = append(args, mapDesc...)
 
 	printCommand(prog, args...)
 	output, err := exec.Command(prog, args...).CombinedOutput()
 	if err != nil {
-		return nil, fmt.Errorf("failed to show map (%s): %s\n%s", mapPath, err, output)
+		return nil, fmt.Errorf("failed to show map (%v): %s\n%s", mapDesc, err, output)
 	}
 
 	m := mapInfo{}
@@ -448,6 +579,10 @@ func getMapStruct(mapPath string) (*mapInfo, error) {
 		return nil, fmt.Errorf("%s", m.Err)
 	}
 	return &m, nil
+}
+
+func getMapStruct(mapPath string) (*mapInfo, error) {
+	return getMapStructGeneral([]string{"pinned", mapPath})
 }
 
 func (b *BPFLib) GetFailsafeMapID() (int, error) {
@@ -851,34 +986,12 @@ func (b *BPFLib) loadXDPRaw(objPath, ifName string, mode XDPMode, mapArgs []stri
 	progName := getProgName(ifName)
 	progPath := filepath.Join(b.xdpDir, progName)
 
-	if err := os.MkdirAll(filepath.Dir(progPath), 0700); err != nil {
+	if err := b.loadBPF(objPath, progPath, "xdp", mapArgs); err != nil {
 		return err
 	}
 
-	prog := "bpftool"
+	prog := "ip"
 	args := []string{
-		"prog",
-		"load",
-		objPath,
-		progPath,
-		"type",
-		"xdp"}
-
-	args = append(args, mapArgs...)
-
-	printCommand(prog, args...)
-	output, err := exec.Command(prog, args...).CombinedOutput()
-	if err != nil {
-		// FIXME: for some reason this function was called several times for a
-		// particular XDP program, just assume the map is loaded if the pinned
-		// file is there for now
-		if _, err := os.Stat(progPath); err != nil {
-			return fmt.Errorf("failed to load XDP program (%s): %s\n%s", objPath, err, output)
-		}
-	}
-
-	prog = "ip"
-	args = []string{
 		"link",
 		"set",
 		"dev",
@@ -888,7 +1001,7 @@ func (b *BPFLib) loadXDPRaw(objPath, ifName string, mode XDPMode, mapArgs []stri
 		progPath}
 
 	printCommand(prog, args...)
-	output, err = exec.Command(prog, args...).CombinedOutput()
+	output, err := exec.Command(prog, args...).CombinedOutput()
 	if err != nil {
 		if removeErr := os.Remove(progPath); removeErr != nil {
 			return fmt.Errorf("failed to attach XDP program (%s) to %s: %s (also failed to remove the pinned program: %s)\n%s", progPath, ifName, err, removeErr, output)
@@ -941,7 +1054,7 @@ func (b *BPFLib) LoadXDP(objPath, ifName string, mode XDPMode) error {
 }
 
 func (b *BPFLib) LoadXDPWithBytes(objBytes []byte, ifName string, mode XDPMode) error {
-	f, err := writeXDPBytes(objBytes)
+	f, err := writeBPFBytes(objBytes)
 	if err != nil {
 		return err
 	}
@@ -1064,7 +1177,7 @@ func (b *BPFLib) GetXDPObjTag(objPath string) (tag string, err error) {
 }
 
 func (b *BPFLib) GetXDPObjTagWithBytes(objBytes []byte) (string, error) {
-	f, err := writeXDPBytes(objBytes)
+	f, err := writeBPFBytes(objBytes)
 	if err != nil {
 		return "", err
 	}
@@ -1077,22 +1190,22 @@ func (b *BPFLib) GetXDPObjTagAuto() (string, error) {
 	return b.GetXDPObjTagWithBytes(xdpAsset)
 }
 
-type xdpFile struct {
+type bpfFile struct {
 	f *os.File
 }
 
-func (f *xdpFile) Close() error {
+func (f *bpfFile) Close() error {
 	err := f.f.Close()
 	os.Remove(f.f.Name())
 	return err
 }
 
-func writeXDPBytes(objBytes []byte) (*xdpFile, error) {
-	f, err := ioutil.TempFile("", "felix-xdp-")
+func writeBPFBytes(objBytes []byte) (*bpfFile, error) {
+	f, err := ioutil.TempFile("", "felix-bpf-")
 	if err != nil {
 		return nil, err
 	}
-	x := &xdpFile{
+	x := &bpfFile{
 		f: f,
 	}
 
@@ -1433,6 +1546,707 @@ func maybeDeleteIface(name string) error {
 }
 
 func SupportsXDP() error {
+	if err := isAtLeastKernel(v4Dot16Dot0); err != nil {
+		return err
+	}
+
+	// Test endianness
+	if nativeEndian != binary.LittleEndian {
+		return fmt.Errorf("this bpf library only supports little endian architectures")
+	}
+
+	return nil
+}
+
+func (b *BPFLib) AttachToSockmap() error {
+	mapPath := filepath.Join(b.sockmapDir, sockMapName)
+	progPath := filepath.Join(b.sockmapDir, skMsgProgName)
+
+	prog := "bpftool"
+	args := []string{
+		"prog",
+		"attach",
+		"pinned",
+		progPath,
+		"msg_verdict",
+		"pinned",
+		mapPath}
+
+	printCommand(prog, args...)
+	output, err := exec.Command(prog, args...).CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("failed to attach sk_msg prog to sockmap: %s\n%s", err, output)
+	}
+
+	return nil
+}
+
+func (b *BPFLib) DetachFromSockmap() error {
+	mapPath := filepath.Join(b.sockmapDir, sockMapName)
+
+	progPath := filepath.Join(b.sockmapDir, skMsgProgName)
+
+	prog := "bpftool"
+	args := []string{
+		"prog",
+		"detach",
+		"pinned",
+		progPath,
+		"msg_verdict",
+		"pinned",
+		mapPath}
+
+	printCommand(prog, args...)
+	output, err := exec.Command(prog, args...).CombinedOutput()
+	if err != nil {
+		progID, err2 := b.getSkMsgID()
+		if err2 != nil {
+			return fmt.Errorf("failed to detach sk_msg prog from sockmap: %s\n%s\n\nfailed to get the id of the program: %s", err, output, err2)
+		}
+		if progID >= 0 {
+			mapID, err2 := b.getSockMapID(progID)
+			if err2 != nil {
+				return fmt.Errorf("failed to detach sk_msg prog from sockmap: %s\n%s\n\nfailed to get the id of the sockmap: %s", err, output, err2)
+			}
+
+			args := []string{
+				"prog",
+				"detach",
+				"id",
+				fmt.Sprintf("%d", progID),
+				"msg_verdict",
+				"id",
+				fmt.Sprintf("%d", mapID)}
+
+			printCommand(prog, args...)
+			output2, err2 := exec.Command(prog, args...).CombinedOutput()
+			if err2 != nil {
+				return fmt.Errorf("failed to detach sk_msg prog from sockmap: %s\n%s\n\nfailed to detach sk_msg prog from sockmap by id: %s\n%s", err, output, err2, output2)
+			}
+		}
+	}
+
+	return nil
+}
+
+func (b *BPFLib) getSkMsgID() (int, error) {
+	progs, err := getAllProgs()
+	if err != nil {
+		return -1, fmt.Errorf("failed to get sk msg prog id: %s", err)
+	}
+
+	for _, p := range progs {
+		if p.Type == "sk_msg" {
+			return p.Id, nil
+		}
+	}
+	return -1, nil
+}
+
+func getAllProgs() ([]progInfo, error) {
+	prog := "bpftool"
+	args := []string{
+		"--json",
+		"--pretty",
+		"prog",
+		"show",
+	}
+
+	printCommand(prog, args...)
+	output, err := exec.Command(prog, args...).CombinedOutput()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get progs: %s\n%s", err, output)
+	}
+
+	var progs []progInfo
+	err = json.Unmarshal(output, &progs)
+	if err != nil {
+		return nil, fmt.Errorf("cannot parse json output: %v\n%s", err, output)
+	}
+
+	return progs, nil
+}
+
+func (b *BPFLib) getAttachedSockopsID() (int, error) {
+	prog := "bpftool"
+	args := []string{
+		"--json",
+		"--pretty",
+		"cgroup",
+		"show",
+		b.cgroupV2Dir}
+
+	printCommand(prog, args...)
+	output, err := exec.Command(prog, args...).CombinedOutput()
+	if err != nil {
+		return -1, fmt.Errorf("failed to get attached sockmap id: %s\n%s", err, output)
+	}
+
+	var al []cgroupProgEntry
+	err = json.Unmarshal(output, &al)
+	if err != nil {
+		return -1, fmt.Errorf("cannot parse json output: %v\n%s", err, output)
+	}
+
+	for _, l := range al {
+		if l.Name == "calico_sockops" && l.AttachType == "sock_ops" {
+			return l.ID, nil
+		}
+	}
+
+	return -1, nil
+}
+
+func (b *BPFLib) getSockMapID(progID int) (int, error) {
+	prog := "bpftool"
+	args := []string{
+		"--json",
+		"--pretty",
+		"prog",
+		"show",
+		"id",
+		fmt.Sprintf("%d", progID)}
+
+	printCommand(prog, args...)
+	output, err := exec.Command(prog, args...).CombinedOutput()
+	if err != nil {
+		return -1, fmt.Errorf("failed to get sockmap ID for prog %d: %s\n%s", progID, err, output)
+	}
+
+	p := progInfo{}
+	err = json.Unmarshal(output, &p)
+	if err != nil {
+		return -1, fmt.Errorf("cannot parse json output: %v\n%s", err, output)
+	}
+	if p.Err != "" {
+		return -1, fmt.Errorf("%s", p.Err)
+	}
+
+	for _, mapID := range p.MapIds {
+		mapInfo, err := getMapStructGeneral([]string{"id", fmt.Sprintf("%d", mapID)})
+		if err != nil {
+			return -1, err
+		}
+		if mapInfo.Type == "sockhash" {
+			return mapID, nil
+		}
+	}
+	return -1, fmt.Errorf("sockhash map for prog %d not found", progID)
+}
+
+func jsonKeyToArgs(jsonKey []string) []string {
+	var ret []string
+	for _, b := range jsonKey {
+		ret = append(ret, strings.TrimPrefix(b, "0x"))
+	}
+
+	return ret
+}
+
+func clearSockmap(mapArgs []string) error {
+	prog := "bpftool"
+
+	var e getnextEntry
+
+	for {
+		args := []string{
+			"map",
+			"--json",
+			"getnext"}
+		args = append(args, mapArgs...)
+
+		printCommand(prog, args...)
+		// don't check error here, we'll catch them parsing the output
+		output, _ := exec.Command(prog, args...).CombinedOutput()
+
+		err := json.Unmarshal(output, &e)
+		if err != nil {
+			return fmt.Errorf("cannot parse json output: %v\n%s", err, output)
+		}
+
+		if e.Err == "can't get next key: No such file or directory" {
+			// reached the end
+			return nil
+		}
+
+		if e.Err != "" {
+			return fmt.Errorf("%s", e.Err)
+		}
+
+		keyArgs := jsonKeyToArgs(e.NextKey)
+		args = []string{
+			"map",
+			"--json",
+			"delete",
+		}
+		args = append(args, mapArgs...)
+		args = append(args, "key", "hex")
+		args = append(args, keyArgs...)
+
+		printCommand(prog, args...)
+		output, err = exec.Command(prog, args...).CombinedOutput()
+		if err != nil {
+			return fmt.Errorf("failed to delete item (%d) from map (%v): %s\n%s", e.NextKey, mapArgs, err, output)
+		}
+	}
+
+	return nil
+}
+
+func (b *BPFLib) RemoveSockmap() error {
+	mapPath := filepath.Join(b.sockmapDir, sockMapName)
+	defer os.Remove(mapPath)
+	if err := clearSockmap([]string{"pinned", mapPath}); err != nil {
+		m, err := b.getSockMap()
+		if err != nil {
+			return err
+		}
+		if m != nil {
+			if err := clearSockmap([]string{"id", fmt.Sprintf("%d", m.Id)}); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func (b *BPFLib) getAllMaps() ([]mapInfo, error) {
+	prog := "bpftool"
+	args := []string{
+		"--json",
+		"--pretty",
+		"map",
+		"show"}
+
+	printCommand(prog, args...)
+	output, err := exec.Command(prog, args...).CombinedOutput()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get all maps: %s\n%s", err, output)
+	}
+
+	var maps []mapInfo
+	err = json.Unmarshal(output, &maps)
+	if err != nil {
+		return nil, fmt.Errorf("cannot parse json output: %v\n%s", err, output)
+	}
+	return maps, nil
+}
+
+func (b *BPFLib) getSockMap() (*mapInfo, error) {
+	maps, err := b.getAllMaps()
+	if err != nil {
+		return nil, err
+	}
+
+	for _, m := range maps {
+		if m.Type == "sockhash" {
+			return &m, nil
+		}
+	}
+	return nil, nil
+}
+
+func (b *BPFLib) loadBPF(objPath, progPath, progType string, mapArgs []string) error {
+	if err := os.MkdirAll(filepath.Dir(progPath), 0700); err != nil {
+		return err
+	}
+
+	prog := "bpftool"
+	args := []string{
+		"prog",
+		"load",
+		objPath,
+		progPath,
+		"type",
+		progType}
+
+	args = append(args, mapArgs...)
+
+	printCommand(prog, args...)
+	output, err := exec.Command(prog, args...).CombinedOutput()
+	if err != nil {
+		// FIXME: for some reason this function was called several times for a
+		// particular XDP program, just assume the map is loaded if the pinned
+		// file is there for now
+		if _, err := os.Stat(progPath); err != nil {
+			return fmt.Errorf("failed to load BPF program (%s): %s\n%s", objPath, err, output)
+		}
+	}
+
+	return nil
+}
+
+func (b *BPFLib) getSockmapArgs() ([]string, error) {
+	sockmapPath := filepath.Join(b.sockmapDir, sockMapName)
+	sockmapEndpointsPath := filepath.Join(b.sockmapDir, sockmapEndpointsMapName)
+
+	// key: symbol of the map definition in the XDP program
+	// value: path where the map is pinned
+	maps := map[string]string{
+		"calico_sock_map": sockmapPath,
+		"endpoints":       sockmapEndpointsPath,
+	}
+
+	var mapArgs []string
+
+	for n, p := range maps {
+		if _, err := os.Stat(p); os.IsNotExist(err) {
+			return nil, fmt.Errorf("map %q needs to be loaded first", p)
+		}
+
+		mapArgs = append(mapArgs, []string{"map", "name", n, "pinned", p}...)
+	}
+
+	return mapArgs, nil
+}
+
+func (b *BPFLib) LoadSockops(objPath string) error {
+	progPath := filepath.Join(b.sockmapDir, sockopsProgName)
+
+	sockmapArgs, err := b.getSockmapArgs()
+	if err != nil {
+		return err
+	}
+
+	return b.loadBPF(objPath, progPath, "sockops", sockmapArgs)
+}
+
+func (b *BPFLib) LoadSockopsWithBytes(objBytes []byte) error {
+	f, err := writeBPFBytes(objBytes)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	return b.LoadSockops(f.f.Name())
+}
+
+func (b *BPFLib) LoadSockopsAuto() error {
+	return b.LoadSockopsWithBytes(sockopsAsset)
+}
+
+func (b *BPFLib) RemoveSockops() error {
+	progPath := filepath.Join(b.sockmapDir, sockopsProgName)
+	return os.Remove(progPath)
+}
+
+func (b *BPFLib) getSkMsgArgs() ([]string, error) {
+	sockmapPath := filepath.Join(b.sockmapDir, sockMapName)
+
+	// key: symbol of the map definition in the XDP program
+	// value: path where the map is pinned
+	maps := map[string]string{
+		"calico_sock_map": sockmapPath,
+	}
+
+	var mapArgs []string
+
+	for n, p := range maps {
+		if _, err := os.Stat(p); os.IsNotExist(err) {
+			return nil, fmt.Errorf("map %q needs to be loaded first", p)
+		}
+
+		mapArgs = append(mapArgs, []string{"map", "name", n, "pinned", p}...)
+	}
+
+	return mapArgs, nil
+}
+
+func (b *BPFLib) LoadSkMsg(objPath string) error {
+	progPath := filepath.Join(b.sockmapDir, skMsgProgName)
+	mapArgs, err := b.getSkMsgArgs()
+	if err != nil {
+		return err
+	}
+
+	return b.loadBPF(objPath, progPath, "sk_msg", mapArgs)
+}
+
+func (b *BPFLib) LoadSkMsgWithBytes(objBytes []byte) error {
+	f, err := writeBPFBytes(objBytes)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	return b.LoadSkMsg(f.f.Name())
+}
+
+func (b *BPFLib) LoadSkMsgAuto() error {
+	return b.LoadSkMsgWithBytes(skmsgAsset)
+}
+
+func (b *BPFLib) RemoveSkMsg() error {
+	progPath := filepath.Join(b.sockmapDir, skMsgProgName)
+	return os.Remove(progPath)
+}
+
+func (b *BPFLib) AttachToCgroup() error {
+	progPath := filepath.Join(b.sockmapDir, sockopsProgName)
+
+	if b.cgroupV2Dir == "" {
+		return errors.New("cgroup V2 not mounted")
+	}
+
+	prog := "bpftool"
+	args := []string{
+		"cgroup",
+		"attach",
+		b.cgroupV2Dir,
+		"sock_ops",
+		"pinned",
+		progPath}
+
+	printCommand(prog, args...)
+	output, err := exec.Command(prog, args...).CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("failed to attach sockops prog to cgroup: %s\n%s", err, output)
+	}
+
+	return nil
+}
+
+func (b *BPFLib) DetachFromCgroup() error {
+	progPath := filepath.Join(b.sockmapDir, sockopsProgName)
+
+	if b.cgroupV2Dir == "" {
+		return errors.New("cgroup V2 not mounted")
+	}
+
+	prog := "bpftool"
+	args := []string{
+		"cgroup",
+		"detach",
+		b.cgroupV2Dir,
+		"sock_ops",
+		"pinned",
+		progPath}
+
+	printCommand(prog, args...)
+	output, err := exec.Command(prog, args...).CombinedOutput()
+	if err != nil {
+		progID, err2 := b.getAttachedSockopsID()
+		if err2 != nil {
+			return fmt.Errorf("failed to detach sockops prog from cgroup: %s\n%s\n\nfailed to get the id of the program: %s", err, output, err2)
+		}
+		if progID >= 0 {
+			args := []string{
+				"cgroup",
+				"detach",
+				b.cgroupV2Dir,
+				"sock_ops",
+				"id",
+				fmt.Sprintf("%d", progID)}
+
+			printCommand(prog, args...)
+			output2, err2 := exec.Command(prog, args...).CombinedOutput()
+			if err2 != nil {
+				return fmt.Errorf("failed to detach sockops prog from cgroup: %s\n%s\n\nfailed to detach sockops prog from cgroup by id: %s\n%s", err, output, err2, output2)
+			}
+		}
+	}
+
+	return nil
+}
+
+func (b *BPFLib) NewSockmap() (string, error) {
+	mapPath := filepath.Join(b.sockmapDir, sockMapName)
+
+	keySize := 12
+	valueSize := 4
+
+	return newMap(sockMapName,
+		mapPath,
+		"sockhash",
+		65535,
+		keySize,
+		valueSize,
+		0,
+	)
+}
+
+func (b *BPFLib) NewSockmapEndpointsMap() (string, error) {
+	mapPath := filepath.Join(b.sockmapDir, sockmapEndpointsMapName)
+
+	keySize := 8
+	valueSize := 4
+
+	return newMap(sockmapEndpointsMapName,
+		mapPath,
+		"lpm_trie",
+		65535,
+		keySize,
+		valueSize,
+		1, //BPF_F_NO_PREALLOC
+	)
+
+}
+
+func (b *BPFLib) UpdateSockmapEndpoints(ip net.IP, mask int) error {
+	mapPath := filepath.Join(b.sockmapDir, sockmapEndpointsMapName)
+
+	if err := os.MkdirAll(b.sockmapDir, 0700); err != nil {
+		return err
+	}
+
+	cidr := fmt.Sprintf("%s/%d", ip.String(), mask)
+
+	hexKey, err := CidrToHex(cidr)
+	if err != nil {
+		return err
+	}
+	hexValue := []string{"01", "00", "00", "00"}
+
+	prog := "bpftool"
+	args := []string{
+		"map",
+		"update",
+		"pinned",
+		mapPath,
+		"key",
+		"hex"}
+	args = append(args, hexKey...)
+	args = append(args, "value", "hex")
+	args = append(args, hexValue...)
+
+	printCommand(prog, args...)
+	output, err := exec.Command(prog, args...).CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("failed to update map (%s) with (%v/%d): %s\n%s", sockmapEndpointsMapName, ip, mask, err, output)
+	}
+
+	return nil
+}
+
+func (b *BPFLib) DumpSockmapEndpointsMap(family IPFamily) ([]CIDRMapKey, error) {
+	mapPath := filepath.Join(b.sockmapDir, sockmapEndpointsMapName)
+
+	if err := os.MkdirAll(b.sockmapDir, 0700); err != nil {
+		return nil, err
+	}
+
+	prog := "bpftool"
+	args := []string{
+		"--json",
+		"--pretty",
+		"map",
+		"dump",
+		"pinned",
+		mapPath}
+
+	printCommand(prog, args...)
+	output, err := exec.Command(prog, args...).CombinedOutput()
+	if err != nil {
+		return nil, fmt.Errorf("failed to dump in map (%s): %s\n%s", sockmapEndpointsMapName, err, output)
+	}
+
+	var al []mapEntry
+	err = json.Unmarshal(output, &al)
+	if err != nil {
+		return nil, fmt.Errorf("cannot parse json output: %v\n%s", err, output)
+	}
+
+	var s []CIDRMapKey
+	for _, l := range al {
+		ipnet, err := hexToIPNet(l.Key, family)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse bpf map key (%v) to ip and mask: %v", l.Key, err)
+		}
+
+		s = append(s, NewCIDRMapKey(ipnet))
+	}
+
+	return s, nil
+}
+
+func (b *BPFLib) LookupSockmapEndpointsMap(ip net.IP, mask int) (bool, error) {
+	mapPath := filepath.Join(b.sockmapDir, sockmapEndpointsMapName)
+
+	if err := os.MkdirAll(b.sockmapDir, 0700); err != nil {
+		return false, err
+	}
+
+	cidr := fmt.Sprintf("%s/%d", ip.String(), mask)
+
+	hexKey, err := CidrToHex(cidr)
+	if err != nil {
+		return false, err
+	}
+
+	prog := "bpftool"
+	args := []string{
+		"--json",
+		"--pretty",
+		"map",
+		"lookup",
+		"pinned",
+		mapPath,
+		"key",
+		"hex"}
+
+	args = append(args, hexKey...)
+
+	printCommand(prog, args...)
+	output, err := exec.Command(prog, args...).CombinedOutput()
+	if err != nil {
+		return false, fmt.Errorf("failed to lookup in map (%s): %s\n%s", sockmapEndpointsMapName, err, output)
+	}
+
+	l := mapEntry{}
+	err = json.Unmarshal(output, &l)
+	if err != nil {
+		return false, fmt.Errorf("cannot parse json output: %v\n%s", err, output)
+	}
+	if l.Err != "" {
+		return false, fmt.Errorf("%s", l.Err)
+	}
+
+	return true, err
+}
+
+func (b *BPFLib) RemoveItemSockmapEndpointsMap(ip net.IP, mask int) error {
+	mapPath := filepath.Join(b.sockmapDir, sockmapEndpointsMapName)
+
+	if err := os.MkdirAll(b.sockmapDir, 0700); err != nil {
+		return err
+	}
+
+	cidr := fmt.Sprintf("%s/%d", ip.String(), mask)
+
+	hexKey, err := CidrToHex(cidr)
+	if err != nil {
+		return err
+	}
+
+	prog := "bpftool"
+	args := []string{
+		"--json",
+		"--pretty",
+		"map",
+		"delete",
+		"pinned",
+		mapPath,
+		"key",
+		"hex"}
+
+	args = append(args, hexKey...)
+
+	printCommand(prog, args...)
+	output, err := exec.Command(prog, args...).CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("failed to lookup in map (%s): %s\n%s", sockmapEndpointsMapName, err, output)
+	}
+
+	return nil
+}
+
+func (b *BPFLib) RemoveSockmapEndpointsMap() error {
+	mapPath := filepath.Join(b.sockmapDir, sockmapEndpointsMapName)
+
+	return os.Remove(mapPath)
+}
+
+func isAtLeastKernel(v *version.Version) error {
 	versionReader, err := versionparse.GetKernelVersionReader()
 	if err != nil {
 		return fmt.Errorf("failed to get kernel version reader: %v", err)
@@ -1443,8 +2257,16 @@ func SupportsXDP() error {
 		return fmt.Errorf("failed to get kernel version: %v", err)
 	}
 
-	if kernelVersion.Compare(v4Dot16Dot0) < 0 {
-		return fmt.Errorf("kernel is too old (have: %v but want at least: %v)", kernelVersion, v4Dot16Dot0)
+	if kernelVersion.Compare(v) < 0 {
+		return fmt.Errorf("kernel is too old (have: %v but want at least: %v)", kernelVersion, v)
+	}
+
+	return nil
+}
+
+func SupportsSockmap() error {
+	if err := isAtLeastKernel(v4Dot19Dot0); err != nil {
+		return err
 	}
 
 	// Test endianness

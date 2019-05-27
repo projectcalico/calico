@@ -227,7 +227,7 @@ func (b *MockBPFLib) GetXDPObjTagAuto() (string, error) {
 }
 
 func (b *MockBPFLib) GetXDPObjTagWithBytes(objBytes []byte) (string, error) {
-	f, err := writeXDPBytes(objBytes)
+	f, err := writeBPFBytes(objBytes)
 	if err != nil {
 		return "", err
 	}
@@ -300,7 +300,7 @@ func (b *MockBPFLib) LoadXDPAuto(ifName string, mode XDPMode) error {
 }
 
 func (b *MockBPFLib) LoadXDPWithBytes(objBytes []byte, ifName string, mode XDPMode) error {
-	f, err := writeXDPBytes(objBytes)
+	f, err := writeBPFBytes(objBytes)
 	if err != nil {
 		return err
 	}
