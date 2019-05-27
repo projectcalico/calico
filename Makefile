@@ -11,6 +11,7 @@ test: ut fv
 #######################
 K8S_VERSION      ?= v1.14.1
 ETCD_VERSION     ?= v3.3.7
+COREDNS_VERSION  ?= 1.5.0
 GO_BUILD_VER     ?= v0.20
 CALICO_BUILD     ?= calico/go-build:$(GO_BUILD_VER)
 PACKAGE_NAME     ?= projectcalico/libcalico-go
@@ -159,9 +160,10 @@ ut: vendor
 
 .PHONY:fv
 ## Run functional tests against a real datastore in a container.
-fv: vendor run-etcd run-etcd-tls run-kubernetes-master
+fv: vendor run-etcd run-etcd-tls run-kubernetes-master run-coredns
 	-mkdir -p .go-pkg-cache
 	docker run --rm -t --privileged --net=host \
+		--dns 127.0.0.1 \
 		-e LOCAL_USER_ID=$(LOCAL_USER_ID) \
 		-v $(CURDIR):/go/src/github.com/$(PACKAGE_NAME):rw \
 		-v $(CURDIR)/.go-pkg-cache:/go-cache/:rw \
@@ -275,6 +277,19 @@ stop-kubernetes-master:
 ## Stop the etcd container (calico-etcd)
 stop-etcd:
 	-docker rm -f calico-etcd
+
+run-coredns: stop-coredns
+	docker run \
+		--detach \
+		--name coredns \
+		--net=host \
+		--rm \
+		-v $(shell pwd)/test/coredns:/etc/coredns \
+		-w /etc/coredns \
+		coredns/coredns:$(COREDNS_VERSION)
+
+stop-coredns:
+	-docker rm -f coredns
 
 ###############################################################################
 # CI

@@ -209,4 +209,19 @@ var _ = Describe("RulesAPIToBackend", func() {
 		})
 		Expect(err).ToNot(HaveOccurred())
 	})
+
+	It("[Datastore] should discover etcd via SRV records", func() {
+		_, err := etcdv3.NewEtcdV3Client(&apiconfig.EtcdConfig{
+			EtcdDiscoverySrv: "etcd.local",
+		})
+		Expect(err).ToNot(HaveOccurred())
+	})
+
+	It("[Datastore] should fail if SRV discovery finds no records", func() {
+		_, err := etcdv3.NewEtcdV3Client(&apiconfig.EtcdConfig{
+			EtcdDiscoverySrv: "fake.local",
+		})
+		Expect(err).To(HaveOccurred())
+		Expect(err).To(MatchError(ContainSubstring("failed to discover etcd endpoints through SRV discovery")))
+	})
 })
