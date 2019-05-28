@@ -1,0 +1,7 @@
+etcd.local:53 {
+    bind 0.0.0.0
+    errors
+    root /etc/coredns/zones
+    file etcd.zone etcd.local
+    log
+}

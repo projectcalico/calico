@@ -16,11 +16,13 @@ package etcd
 
 import (
 	goerrors "errors"
+	"fmt"
 	"strconv"
 	"strings"
 	"time"
 
 	etcd "github.com/coreos/etcd/client"
+	"github.com/coreos/etcd/pkg/srv"
 	"github.com/coreos/etcd/pkg/transport"
 	"github.com/projectcalico/libcalico-go/lib/apis/v1"
 	"github.com/projectcalico/libcalico-go/lib/backend/api"
@@ -47,6 +49,10 @@ type EtcdClient struct {
 }
 
 func NewEtcdClient(config *v1.EtcdConfig) (*EtcdClient, error) {
+	if (config.EtcdAuthority != "" || config.EtcdEndpoints != "") && config.EtcdDiscoverySrv != "" {
+		return nil, goerrors.New("multiple discovery or bootstrap options specified, use either \"etcdEndpoints\" or \"etcdDiscoverySrv\"")
+	}
+
 	// Determine the location from the authority or the endpoints.  The endpoints
 	// takes precedence if both are specified.
 	etcdLocation := []string{}
@@ -55,6 +61,13 @@ func NewEtcdClient(config *v1.EtcdConfig) (*EtcdClient, error) {
 	}
 	if config.EtcdEndpoints != "" {
 		etcdLocation = strings.Split(config.EtcdEndpoints, ",")
+	}
+	if config.EtcdDiscoverySrv != "" {
+		srvs, srvErr := srv.GetClient("etcd-client", config.EtcdDiscoverySrv)
+		if srvErr != nil {
+			return nil, fmt.Errorf("failed to discover etcd endpoints through SRV discovery: %v", srvErr)
+		}
+		etcdLocation = srvs.Endpoints
 	}
 
 	if len(etcdLocation) == 0 {

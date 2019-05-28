@@ -125,6 +125,14 @@ var _ = Describe("RulesAPIToBackend", func() {
 		Expect(err).To(HaveOccurred())
 	})
 
+	It("should raise an error if conflicting endpoint discovery configuration provided", func() {
+		_, err := etcdv3.NewEtcdV3Client(&apiconfig.EtcdConfig{
+			EtcdEndpoints:    "https://127.0.0.1:5007",
+			EtcdDiscoverySrv: "example.com",
+		})
+		Expect(err).To(HaveOccurred())
+	})
+
 	It("[Datastore] should raise an error for providing only inline Key and not Certificate", func() {
 		_, err := etcdv3.NewEtcdV3Client(&apiconfig.EtcdConfig{
 			EtcdCACert:    "",
@@ -200,5 +208,20 @@ var _ = Describe("RulesAPIToBackend", func() {
 			EtcdEndpoints: "https://127.0.0.1:5007",
 		})
 		Expect(err).ToNot(HaveOccurred())
+	})
+
+	It("[Datastore] should discover etcd via SRV records", func() {
+		_, err := etcdv3.NewEtcdV3Client(&apiconfig.EtcdConfig{
+			EtcdDiscoverySrv: "etcd.local",
+		})
+		Expect(err).ToNot(HaveOccurred())
+	})
+
+	It("[Datastore] should fail if SRV discovery finds no records", func() {
+		_, err := etcdv3.NewEtcdV3Client(&apiconfig.EtcdConfig{
+			EtcdDiscoverySrv: "fake.local",
+		})
+		Expect(err).To(HaveOccurred())
+		Expect(err).To(MatchError(ContainSubstring("failed to discover etcd endpoints through SRV discovery")))
 	})
 })
