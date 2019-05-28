@@ -206,6 +206,13 @@ class DockerHost(object):
 
         self.execute(cmd)
 
+    def assert_is_live(self, felix=True):
+        cmd = "docker exec calico-node /bin/calico-node"
+        if felix:
+            cmd += " -felix-live"
+
+        self.execute(cmd)
+
     def execute(self, command, raise_exception_on_failure=True, daemon_mode=False):
         """
         Pass a command into a host container.

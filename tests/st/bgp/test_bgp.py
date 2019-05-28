@@ -31,6 +31,15 @@ class TestReadiness(TestBase):
                         additional_docker_options=CLUSTER_STORE_DOCKER_OPTIONS) as host1:
             retry_until_success(host1.assert_is_ready, retries=30)
 
+    def test_readiness_env_port(self):
+        """
+        A simple base case to check if calico/node becomes ready. Uses environment variable as port number.
+        """
+        with DockerHost('host1',
+                        additional_docker_options=CLUSTER_STORE_DOCKER_OPTIONS, start_calico=False) as host1:
+            host1.start_calico_node(env_options="-e FELIX_HEALTHPORT=9032 -e FELIX_HEALTHENABLED=true")
+            retry_until_success(host1.assert_is_ready, retries=30)
+
     def test_readiness_multihost(self):
         """
         A simple base case to check if calico/node becomes ready.
@@ -41,6 +50,34 @@ class TestReadiness(TestBase):
                            additional_docker_options=CLUSTER_STORE_DOCKER_OPTIONS) as host2:
             retry_until_success(host1.assert_is_ready, retries=30)
             retry_until_success(host2.assert_is_ready, retries=30)
+
+    def test_liveness(self):
+        """
+        A simple base case to check if calico/node becomes live.
+        """
+        with DockerHost('host1',
+                        additional_docker_options=CLUSTER_STORE_DOCKER_OPTIONS) as host1:
+            retry_until_success(host1.assert_is_live, retries=30)
+
+    def test_liveness_env_port(self):
+        """
+        A simple base case to check if calico/node becomes live. Uses environment variable as port number.
+        """
+        with DockerHost('host1',
+                        additional_docker_options=CLUSTER_STORE_DOCKER_OPTIONS, start_calico=False) as host1:
+            host1.start_calico_node(env_options="-e FELIX_HEALTHPORT=9011 -e FELIX_HEALTHENABLED=true")
+            retry_until_success(host1.assert_is_live, retries=30)
+
+    def test_liveness_multihost(self):
+        """
+        A simple base case to check if calico/node becomes live.
+        """
+        with DockerHost('host1',
+                        additional_docker_options=CLUSTER_STORE_DOCKER_OPTIONS) as host1, \
+                DockerHost('host2',
+                           additional_docker_options=CLUSTER_STORE_DOCKER_OPTIONS) as host2:
+            retry_until_success(host1.assert_is_live, retries=30)
+            retry_until_success(host2.assert_is_live, retries=30)
 
     def test_not_ready_with_broken_felix(self):
         """

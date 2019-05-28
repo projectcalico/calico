@@ -11,31 +11,57 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-package readiness
+package health
 
 import (
 	"errors"
 	"fmt"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
 	log "github.com/sirupsen/logrus"
 
-	"github.com/projectcalico/node/pkg/readiness/bird"
+	"github.com/projectcalico/node/pkg/health/bird"
 )
 
-const felixReadinessEp = "http://localhost:9099/readiness"
+var felixReadinessEp string
+var felixLivenessEp string
 
-func Run(bird, bird6, felix bool, thresholdTime time.Duration) {
-	if !bird && !felix && !bird6 {
+func init() {
+	felixPort := os.Getenv("FELIX_HEALTHPORT")
+	if felixPort == "" {
+		felixReadinessEp = "http://localhost:9099/readiness"
+		felixLivenessEp = "http://localhost:9099/liveness"
+		return
+	}
+
+	if _, err := strconv.Atoi(felixPort); err != nil {
+		log.Panicf("Failed to parse value for port %q", felixPort)
+	}
+
+	felixReadinessEp = "http://localhost:" + felixPort + "/readiness"
+	felixLivenessEp = "http://localhost:" + felixPort + "/liveness"
+}
+
+func Run(bird, bird6, felixReady, felixLive bool, thresholdTime time.Duration) {
+	if felixLive {
+		if err := checkFelixHealth(felixLivenessEp, "liveness"); err != nil {
+			fmt.Printf("calico/node is not ready: Felix is not live: %+v", err)
+			os.Exit(1)
+		}
+		os.Exit(0)
+	}
+
+	if !bird && !felixReady && !bird6 {
 		fmt.Printf("calico/node readiness check error: must specify at least one of -bird, -bird6, or -felix")
 		os.Exit(1)
 	}
 
-	if felix {
-		if err := checkFelixReady(); err != nil {
+	if felixReady {
+		if err := checkFelixHealth(felixReadinessEp, "readiness"); err != nil {
 			fmt.Printf("calico/node is not ready: felix is not ready: %+v", err)
 			os.Exit(1)
 		}
@@ -114,11 +140,11 @@ func checkBIRDReady(ipv string, thresholdTime time.Duration) error {
 	return nil
 }
 
-// checkFelixReady checks if felix is ready by making an http request to
-// Felix's readiness endpoint.
-func checkFelixReady() (err error) {
+// checkFelixHealth checks if felix is ready or live by making an http request to
+// Felix's readiness or liveness endpoint.
+func checkFelixHealth(endpoint, probeType string) (err error) {
 	c := &http.Client{Timeout: 5 * time.Second}
-	resp, err := c.Get(felixReadinessEp)
+	resp, err := c.Get(endpoint)
 	if err != nil {
 		return err
 	}
@@ -129,7 +155,7 @@ func checkFelixReady() (err error) {
 	}()
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 400 {
-		return fmt.Errorf("readiness probe reporting %d", resp.StatusCode)
+		return fmt.Errorf("%s probe reporting %d", probeType, resp.StatusCode)
 	}
 	return nil
 }
