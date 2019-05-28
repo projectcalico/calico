@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2018 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2019 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -129,9 +129,6 @@ func (r ipPools) Update(ctx context.Context, res *apiv3.IPPool, opts options.Set
 		resCopy := *res
 		res = &resCopy
 	}
-	if err := validator.Validate(res); err != nil {
-		return nil, err
-	}
 
 	// Get the existing settings, so that we can validate the CIDR and block size have not changed.
 	old, err := r.Get(ctx, res.Name, options.GetOptions{})
@@ -141,6 +138,10 @@ func (r ipPools) Update(ctx context.Context, res *apiv3.IPPool, opts options.Set
 
 	// Validate the IPPool updating the resource.
 	if err := r.validateAndSetDefaults(ctx, res, old); err != nil {
+		return nil, err
+	}
+
+	if err := validator.Validate(res); err != nil {
 		return nil, err
 	}
 
