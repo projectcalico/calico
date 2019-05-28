@@ -1986,8 +1986,8 @@ class InvalidData(TestBase):
                        'metadata': {'name': 'pool-invalid-net-1'},
                        'spec': {
                            'ipipMode': 'Always',
-                           'cidr': "10.0.250.0"}  # no mask
-                   }, "error with field IPpool.CIDR = '10.0.250.0/32' "
+                           'cidr': "10.0.250.0/32"}  # no mask
+                   }, "error with field IPPool.Spec.CIDR = '10.0.250.0/32' "
                       "(IP pool size is too small for use with Calico IPAM. It must be equal to or greater than the block size.)"),
                    ("pool-invalidNet4", {
                        'apiVersion': API_VERSION,
@@ -2016,7 +2016,7 @@ class InvalidData(TestBase):
                            'cidr': "::/128",
                        }
                        # nothing
-                   }, "error with field IPpool.CIDR = '::/128' "
+                   }, "error with field IPPool.Spec.CIDR = '::/128' "
                       "(IP pool size is too small for use with Calico IPAM. It must be equal to or greater than the block size.)"),
                    ("pool-invalidNet7", {
                        'apiVersion': API_VERSION,
@@ -2024,7 +2024,7 @@ class InvalidData(TestBase):
                        'metadata': {'name': 'invalid-net-7'},
                        'spec': {
                            'cidr': "192.168.0.0/27"}  # invalid mask
-                   }, "error with field IPpool.CIDR = '192.168.0.0/27' "
+                   }, "error with field IPPool.Spec.CIDR = '192.168.0.0/27' "
                       "(IP pool size is too small for use with Calico IPAM. It must be equal to or greater than the block size.)"),
                    ("pool-invalidNet8", {
                        'apiVersion': API_VERSION,
@@ -2034,7 +2034,7 @@ class InvalidData(TestBase):
                            'ipipMode': 'Never',
                            'cidr': "fd5f::1/123",
                        }  # invalid mask
-                   }, "CIDR = 'fd5f::1/123'"),
+                   }, "IPPool.Spec.CIDR = 'fd5f::/123'"),
                    ("pool-invalidIpIp1", {
                        'apiVersion': API_VERSION,
                        'kind': 'IPPool',

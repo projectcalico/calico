@@ -403,12 +403,7 @@ func unmarshalResource(tm unstructured.Unstructured, b []byte) ([]runtime.Object
 		return nil, err
 	}
 
-	log.Infof("Type of unpacked data: %v", reflect.TypeOf(unpacked))
-	if err = validator.Validate(unpacked); err != nil {
-		return nil, err
-	}
-
-	log.Infof("Unpacked: %+v", unpacked)
+	log.Infof("Type of unpacked data: %v. Unpacked %+v", reflect.TypeOf(unpacked), unpacked)
 
 	return []runtime.Object{unpacked}, nil
 }
