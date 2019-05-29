@@ -310,6 +310,7 @@ Description:
 	}
 
 	envs["ETCD_ENDPOINTS"] = etcdcfg.EtcdEndpoints
+	envs["ETCD_DISCOVERY_SRV"] = etcdcfg.EtcdDiscoverySrv
 	if etcdcfg.EtcdCACertFile != "" {
 		envs["ETCD_CA_CERT_FILE"] = ETCD_CA_CERT_NODE_FILE
 		vols = append(vols, vol{hostPath: etcdcfg.EtcdCACertFile, containerPath: ETCD_CA_CERT_NODE_FILE})
