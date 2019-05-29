@@ -1529,7 +1529,7 @@ func decideHostname(host string) (string, error) {
 
 // GetUtilization returns IP utilization info for the specified pools, or for all pools.
 func (c ipamClient) GetUtilization(ctx context.Context, args GetUtilizationArgs) ([]*PoolUtilization, error) {
-	var pools []*PoolUtilization
+	var usage []*PoolUtilization
 
 	// Read all pools.
 	allPools, err := c.pools.GetAllPools()
@@ -1545,7 +1545,7 @@ func (c ipamClient) GetUtilization(ctx context.Context, args GetUtilizationArgs)
 		if wantAllPools ||
 			wantedPools.Contains(pool.Name) ||
 			wantedPools.Contains(pool.Spec.CIDR) {
-			pools = append(pools, &PoolUtilization{
+			usage = append(usage, &PoolUtilization{
 				Name: pool.Name,
 				CIDR: net.MustParseNetwork(pool.Spec.CIDR).IPNet,
 			})
@@ -1557,7 +1557,7 @@ func (c ipamClient) GetUtilization(ctx context.Context, args GetUtilizationArgs)
 	// on this being at the end of the list; otherwise it will suck in allocation
 	// blocks that should be reported under other pools.
 	if wantAllPools {
-		pools = append(pools, &PoolUtilization{
+		usage = append(usage, &PoolUtilization{
 			Name: "orphaned allocation blocks",
 			CIDR: net.MustParseNetwork("0.0.0.0/0").IPNet,
 		})
@@ -1573,19 +1573,17 @@ func (c ipamClient) GetUtilization(ctx context.Context, args GetUtilizationArgs)
 		log.Debugf("Got block: %v", b)
 
 		// Find which pool this block belongs to.
-		for _, pool := range pools {
-			if b.CIDR.IsNetOverlap(pool.CIDR) {
-				log.Debugf("Block CIDR %v belongs to pool %v", b.CIDR, pool.Name)
-				pool.Blocks = append(pool.Blocks, BlockUtilization{
+		for _, poolUse := range usage {
+			if b.CIDR.IsNetOverlap(poolUse.CIDR) {
+				log.Debugf("Block CIDR %v belongs to pool %v", b.CIDR, poolUse.Name)
+				poolUse.Blocks = append(poolUse.Blocks, BlockUtilization{
 					CIDR:      b.CIDR.IPNet,
 					Capacity:  b.NumAddresses(),
 					Available: len(b.Unallocated),
 				})
 				break
-			} else {
-				log.Debugf("Block CIDR %v does not overlap pool CIDR %v", b.CIDR, pool.CIDR)
 			}
 		}
 	}
-	return pools, nil
+	return usage, nil
 }
