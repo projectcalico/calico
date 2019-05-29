@@ -564,6 +564,14 @@ func validateFelixConfigSpec(structLevel validator.StructLevel) {
 				"OpenstackRegion", "", reason("must be a valid DNS label"), "")
 		}
 	}
+
+	if c.NATOutgoingAddress != "" {
+		parsedAddress := cnet.ParseIP(c.NATOutgoingAddress)
+		if parsedAddress == nil || parsedAddress.Version() != 4 {
+			structLevel.ReportError(reflect.ValueOf(c.NATOutgoingAddress),
+				"NATOutgoingAddress", "", reason("is not a valid IP address"), "")
+		}
+	}
 }
 
 func validateWorkloadEndpointSpec(structLevel validator.StructLevel) {

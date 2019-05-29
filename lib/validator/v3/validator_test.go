@@ -1733,6 +1733,18 @@ func init() {
 			&api.HTTPMatch{Methods: []string{"GET", "GET", "Foo"}},
 			false,
 		),
+		Entry("should not accept an invalid IP address",
+			api.FelixConfigurationSpec{NATOutgoingAddress: bad_ipv4_1}, false,
+		),
+		Entry("should not accept a masked IP",
+			api.FelixConfigurationSpec{NATOutgoingAddress: netv4_1}, false,
+		),
+		Entry("should not accept an IPV6 address",
+			api.FelixConfigurationSpec{NATOutgoingAddress: ipv6_1}, false,
+		),
+		Entry("should accept a valid IP address",
+			api.FelixConfigurationSpec{NATOutgoingAddress: ipv4_1}, true,
+		),
 	)
 }
 
