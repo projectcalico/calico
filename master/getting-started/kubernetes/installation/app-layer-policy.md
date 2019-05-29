@@ -15,50 +15,24 @@ operate.
 
 ## Enabling application layer policy
 
-**Prerequisite**: [{{site.prodname}} installed]({{site.url}}/{{page.version}}/getting-started/kubernetes/installation/).
+**Prerequisites**: 
 
-Locate the manifest below that matches your installation method and apply it. After applying
-the manifest, your `{{site.nodecontainer}}` containers will restart.
+ - [{{site.prodname}} installed](/{{page.version}}/getting-started/kubernetes/installation/)
+ - [calicoctl installed](/{{page.version}}/getting-started/calicoctl/install) & [configured](/{{page.version}}/getting-started/calicoctl/configure/)
 
-- **{{site.prodname}} for policy and networking with the Kubernetes API datastore**:
+Application layer policy requires the Policy Sync API to be enabled on Felix. To do this cluster-wide, modify the `default`
+FelixConfiguration to set the field `policySyncPathPrefix` to `/var/run/nodeagent`.  The following example uses `sed` to modify your
+existing default config before re-applying it.
 
-  ```bash
-  kubectl apply -f {{site.url}}/{{page.version}}/manifests/alp/node.yaml
-  ```
-
-	> **Note**: You can also
-	> [view the manifest in your browser]({{site.url}}/{{page.version}}/manifests/alp/node.yaml){:target="_blank"}.
-	{: .alert .alert-info}
-
-- **{{site.prodname}} for policy and networking with the etcd datastore**:
-
-  ```bash
-  kubectl apply -f {{site.url}}/{{page.version}}/manifests/alp/node-etcd.yaml
-  ```
-
-	> **Note**: You can also
-	> [view the manifest in your browser]({{site.url}}/{{page.version}}/manifests/alp/node-etcd.yaml){:target="_blank"}.
-	{: .alert .alert-info}
-
-- **{{site.prodname}} for policy and flannel for networking with the Kubernetes API datastore**:
-
-  ```bash
-  kubectl apply -f {{site.url}}/{{page.version}}/manifests/alp/node-canal.yaml
-  ```
-
-	> **Note**: You can also
-	> [view the manifest in your browser]({{site.url}}/{{page.version}}/manifests/alp/node-canal.yaml){:target="_blank"}.
-	{: .alert .alert-info}
-
-- **{{site.prodname}} for policy only**:
-
-  ```bash
-  kubectl apply -f {{site.url}}/{{page.version}}/manifests/alp/node-policy-only.yaml
-  ```
-
-	> **Note**: You can also
-	> [view the manifest in your browser]({{site.url}}/{{page.version}}/manifests/alp/node-policy-only.yaml){:target="_blank"}.
-	{: .alert .alert-info}
+```bash
+calicoctl get felixconfiguration default -o yaml | \
+sed -e '/  creationTimestamp:/d' \
+   -e '/  resourceVersion:/d' \
+   -e '/  uid:/d' \
+   -e '/  policySyncPathPrefix:/d' \
+   -e '$ a\  policySyncPathPrefix: /var/run/nodeagent' > felix-config.yaml
+calicoctl apply -f felix-config.yaml
+```
 
 
 ## Installing Istio
