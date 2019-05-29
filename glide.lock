@@ -1,5 +1,5 @@
-hash: 7e4e52bafb497de2ed5209aba79bc52c033c8cb6ceeac04aba0675d176925372
-updated: 2019-05-16T04:14:42.90799562Z
+hash: 617b0ba45f2dfa20b9e6d9956545e1dc0d98ffff92fb65c2f632b0c8db69d855
+updated: 2019-05-29T04:08:43.847959386Z
 imports:
 - name: github.com/docopt/docopt-go
   version: 784ddc588536785e7299f7272f39101f7faccc3f
@@ -8,6 +8,7 @@ imports:
   subpackages:
   - envoy/api/v2/core
   - envoy/service/auth/v2
+  - envoy/service/auth/v2alpha
 - name: github.com/gogo/googleapis
   version: d31c731455cb061f42baff3bda55bad0118b126b
   subpackages:
@@ -41,7 +42,7 @@ imports:
   - matchers/support/goraph/util
   - types
 - name: github.com/projectcalico/libcalico-go
-  version: 988e0249261adc05e0dadf3ba48242d266bc8738
+  version: 5015d7df3964b074725d251590084a28e2b6ba64
   subpackages:
   - lib/apis/v3
   - lib/client
@@ -50,7 +51,7 @@ imports:
   - lib/selector/parser
   - lib/selector/tokenizer
 - name: github.com/sirupsen/logrus
-  version: 8bdbc7bcc01dcbb8ec23dc8a28e332258d25251f
+  version: 839c75faf7f98a33d445d181f3018b5c3409a45e
 - name: golang.org/x/net
   version: afa5a82059c6356159f699d81beff22a81842231
   subpackages:
