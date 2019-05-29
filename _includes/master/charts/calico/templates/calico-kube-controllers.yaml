@@ -1,4 +1,4 @@
-{{- if eq .Values.datastore "etcd" -}}
+{{- if or (eq .Values.datastore "etcd") (eq .Values.network "calico") }}
 # See https://github.com/projectcalico/kube-controllers
 apiVersion: apps/v1
 kind: Deployment
@@ -26,9 +26,6 @@ spec:
     spec:
       nodeSelector:
         beta.kubernetes.io/os: linux
-      # The controllers must run in the host network namespace so that
-      # it isn't governed by policy that would prevent it from working.
-      hostNetwork: true
       tolerations:
         # Mark the pod as a critical add-on for rescheduling.
         - key: CriticalAddonsOnly
@@ -37,6 +34,10 @@ spec:
           effect: NoSchedule
       serviceAccountName: calico-kube-controllers
       priorityClassName: system-cluster-critical
+{{- if eq .Values.datastore "etcd" }}
+      # The controllers must run in the host network namespace so that
+      # it isn't governed by policy that would prevent it from working.
+      hostNetwork: true
       containers:
         - name: calico-kube-controllers
           image: {{.Values.kubeControllers.image}}:{{ .Values.kubeControllers.tag }}
@@ -84,49 +85,7 @@ spec:
           secret:
             secretName: calico-etcd-secrets
             defaultMode: 0400
-
----
-
-apiVersion: v1
-kind: ServiceAccount
-metadata:
-  name: calico-kube-controllers
-  namespace: kube-system
-
-{{- else if eq .Values.network "calico" -}}
-
-# See https://github.com/projectcalico/kube-controllers
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: calico-kube-controllers
-  namespace: kube-system
-  labels:
-    k8s-app: calico-kube-controllers
-  annotations:
-    scheduler.alpha.kubernetes.io/critical-pod: ''
-spec:
-  # The controller can only have a single active instance.
-  replicas: 1
-  strategy:
-    type: Recreate
-  template:
-    metadata:
-      name: calico-kube-controllers
-      namespace: kube-system
-      labels:
-        k8s-app: calico-kube-controllers
-    spec:
-      nodeSelector:
-        beta.kubernetes.io/os: linux
-      tolerations:
-        # Mark the pod as a critical add-on for rescheduling.
-        - key: CriticalAddonsOnly
-          operator: Exists
-        - key: node-role.kubernetes.io/master
-          effect: NoSchedule
-      serviceAccountName: calico-kube-controllers
-      priorityClassName: system-cluster-critical
+{{- else if eq .Values.network "calico" }}
       containers:
         - name: calico-kube-controllers
           image: {{.Values.kubeControllers.image}}:{{ .Values.kubeControllers.tag }}
@@ -141,6 +100,7 @@ spec:
               command:
               - /usr/bin/check-status
               - -r
+{{- end }}
 
 ---
 
