@@ -2,6 +2,7 @@
     "name": "k8s-pod-network",
     "type": "calico",
     "etcd_endpoints": "__ETCD_ENDPOINTS__",
+    "etcd_discovery_srv": "__ETCD_DISCOVERY_SRV__",
     "etcd_key_file": "__ETCD_KEY_FILE__",
     "etcd_cert_file": "__ETCD_CERT_FILE__",
     "etcd_ca_cert_file": "__ETCD_CA_CERT_FILE__",

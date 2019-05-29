@@ -81,6 +81,7 @@ type NetConf struct {
 	NodenameFileOptional bool              `json:"nodename_file_optional"`
 	DatastoreType        string            `json:"datastore_type"`
 	EtcdEndpoints        string            `json:"etcd_endpoints"`
+	EtcdDiscoverySrv     string            `json:"etcd_discovery_srv"`
 	LogLevel             string            `json:"log_level"`
 	Policy               Policy            `json:"policy"`
 	Kubernetes           Kubernetes        `json:"kubernetes"`
