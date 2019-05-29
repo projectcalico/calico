@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2018 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2019 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -20,6 +20,8 @@ import (
 	"net"
 	"time"
 
+	log "github.com/sirupsen/logrus"
+
 	apiv3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	cerrors "github.com/projectcalico/libcalico-go/lib/errors"
@@ -27,7 +29,6 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/options"
 	validator "github.com/projectcalico/libcalico-go/lib/validator/v3"
 	"github.com/projectcalico/libcalico-go/lib/watch"
-	log "github.com/sirupsen/logrus"
 )
 
 // IPPoolInterface has methods to work with IPPool resources.
@@ -80,23 +81,20 @@ func (r ipPools) Create(ctx context.Context, res *apiv3.IPPool, opts options.Set
 	}
 
 	blocks, err := r.client.backend.List(ctx, model.BlockListOptions{IPVersion: ipVersion}, "")
-	if _, ok := err.(cerrors.ErrorOperationNotSupported); !ok && err != nil {
-		// There was an error and it wasn't OperationNotSupported - return it.
+	if err != nil {
 		return nil, err
-	} else if err == nil {
-		// Skip the block check if the error is OperationUnsupported - IPAM is not supported on KDD.
-		for _, b := range blocks.KVPairs {
-			k := b.Key.(model.BlockKey)
-			ones, _ := k.CIDR.Mask.Size()
-			// Check if this block has a different size to the pool, and that it overlaps with the pool.
-			if ones != poolBlockSize && k.CIDR.IsNetOverlap(*poolCIDR) {
-				return nil, cerrors.ErrorValidation{
-					ErroredFields: []cerrors.ErroredField{{
-						Name:   "IPPool.Spec.BlockSize",
-						Reason: "IPPool blocksSize conflicts with existing allocations that use a different blockSize",
-						Value:  res.Spec.BlockSize,
-					}},
-				}
+	}
+	for _, b := range blocks.KVPairs {
+		k := b.Key.(model.BlockKey)
+		ones, _ := k.CIDR.Mask.Size()
+		// Check if this block has a different size to the pool, and that it overlaps with the pool.
+		if ones != poolBlockSize && k.CIDR.IsNetOverlap(*poolCIDR) {
+			return nil, cerrors.ErrorValidation{
+				ErroredFields: []cerrors.ErroredField{{
+					Name:   "IPPool.Spec.BlockSize",
+					Reason: "IPPool blocksSize conflicts with existing allocations that use a different blockSize",
+					Value:  res.Spec.BlockSize,
+				}},
 			}
 		}
 	}

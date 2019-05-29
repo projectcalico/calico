@@ -19,8 +19,10 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/projectcalico/libcalico-go/lib/apis/v3"
 	log "github.com/sirupsen/logrus"
+
+	"github.com/projectcalico/libcalico-go/lib/apis/v3"
+	"github.com/projectcalico/libcalico-go/lib/set"
 
 	bapi "github.com/projectcalico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
@@ -1523,4 +1525,65 @@ func decideHostname(host string) (string, error) {
 	}
 	log.Debugf("Using hostname=%s", hostname)
 	return hostname, nil
+}
+
+// GetUtilization returns IP utilization info for the specified pools, or for all pools.
+func (c ipamClient) GetUtilization(ctx context.Context, args GetUtilizationArgs) ([]*PoolUtilization, error) {
+	var usage []*PoolUtilization
+
+	// Read all pools.
+	allPools, err := c.pools.GetAllPools()
+	if err != nil {
+		log.WithError(err).Errorf("Error getting IP pools")
+		return nil, err
+	}
+
+	// Identify the ones we want and create a PoolUtilization for each of those.
+	wantAllPools := len(args.Pools) == 0
+	wantedPools := set.FromArray(args.Pools)
+	for _, pool := range allPools {
+		if wantAllPools ||
+			wantedPools.Contains(pool.Name) ||
+			wantedPools.Contains(pool.Spec.CIDR) {
+			usage = append(usage, &PoolUtilization{
+				Name: pool.Name,
+				CIDR: net.MustParseNetwork(pool.Spec.CIDR).IPNet,
+			})
+		}
+	}
+
+	// If we've been asked for all pools, also report utilization for any allocation
+	// blocks for which there is no longer an IP pool.  Note: following code depends
+	// on this being at the end of the list; otherwise it will suck in allocation
+	// blocks that should be reported under other pools.
+	if wantAllPools {
+		usage = append(usage, &PoolUtilization{
+			Name: "orphaned allocation blocks",
+			CIDR: net.MustParseNetwork("0.0.0.0/0").IPNet,
+		})
+	}
+
+	// Read all allocation blocks.
+	blocks, err := c.client.List(ctx, model.BlockListOptions{}, "")
+	if err != nil {
+		return nil, err
+	}
+	for _, kvp := range blocks.KVPairs {
+		b := kvp.Value.(*model.AllocationBlock)
+		log.Debugf("Got block: %v", b)
+
+		// Find which pool this block belongs to.
+		for _, poolUse := range usage {
+			if b.CIDR.IsNetOverlap(poolUse.CIDR) {
+				log.Debugf("Block CIDR %v belongs to pool %v", b.CIDR, poolUse.Name)
+				poolUse.Blocks = append(poolUse.Blocks, BlockUtilization{
+					CIDR:      b.CIDR.IPNet,
+					Capacity:  b.NumAddresses(),
+					Available: len(b.Unallocated),
+				})
+				break
+			}
+		}
+	}
+	return usage, nil
 }

@@ -24,6 +24,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/satori/go.uuid"
+
 	"github.com/projectcalico/libcalico-go/lib/apiconfig"
 	"github.com/projectcalico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/libcalico-go/lib/backend"
@@ -33,7 +35,6 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/net"
 	"github.com/projectcalico/libcalico-go/lib/options"
 	"github.com/projectcalico/libcalico-go/lib/set"
-	"github.com/satori/go.uuid"
 )
 
 // client implements the client.Interface.
@@ -148,26 +149,42 @@ type poolAccessor struct {
 }
 
 func (p poolAccessor) GetEnabledPools(ipVersion int) ([]v3.IPPool, error) {
-	pools, err := p.client.IPPools().List(context.Background(), options.ListOptions{})
-	if err != nil {
-		return nil, err
-	}
-	log.Debugf("Got list of all IPPools: %v", pools)
-	var enabled []v3.IPPool
-	for _, pool := range pools.Items {
+	return p.getPools(func(pool *v3.IPPool) bool {
 		if pool.Spec.Disabled {
 			log.Debugf("Skipping disabled IP pool (%s)", pool.Name)
-			continue
-		} else if _, cidr, err := net.ParseCIDR(pool.Spec.CIDR); err == nil && cidr.Version() == ipVersion {
-			log.Debugf("Adding pool (%s) to the enabled IPPool list", cidr.String())
-			enabled = append(enabled, pool)
+			return false
+		}
+		if _, cidr, err := net.ParseCIDR(pool.Spec.CIDR); err == nil && cidr.Version() == ipVersion {
+			log.Debugf("Adding pool (%s) to the IPPool list", cidr.String())
+			return true
 		} else if err != nil {
 			log.Warnf("Failed to parse the IPPool: %s. Ignoring that IPPool", pool.Spec.CIDR)
 		} else {
 			log.Debugf("Ignoring IPPool: %s. IP version is different.", pool.Spec.CIDR)
 		}
+		return false
+	})
+}
+
+func (p poolAccessor) getPools(filter func(pool *v3.IPPool) bool) ([]v3.IPPool, error) {
+	pools, err := p.client.IPPools().List(context.Background(), options.ListOptions{})
+	if err != nil {
+		return nil, err
 	}
-	return enabled, nil
+	log.Debugf("Got list of all IPPools: %v", pools)
+	var filtered []v3.IPPool
+	for _, pool := range pools.Items {
+		if filter(&pool) {
+			filtered = append(filtered, pool)
+		}
+	}
+	return filtered, nil
+}
+
+func (p poolAccessor) GetAllPools() ([]v3.IPPool, error) {
+	return p.getPools(func(pool *v3.IPPool) bool {
+		return true
+	})
 }
 
 // EnsureInitialized is used to ensure the backend datastore is correctly

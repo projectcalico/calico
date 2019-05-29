@@ -65,6 +65,10 @@ func (i *ipPoolAccessor) GetEnabledPools(ipVersion int) ([]v3.IPPool, error) {
 			sorted = append(sorted, p)
 		}
 	}
+	return i.getPools(sorted, ipVersion, "GetEnabledPools"), nil
+}
+
+func (i *ipPoolAccessor) getPools(sorted []string, ipVersion int, caller string) []v3.IPPool {
 	sort.Strings(sorted)
 
 	// Convert to IPNets and sort out the correct IP versions.  Sorting the results
@@ -73,7 +77,7 @@ func (i *ipPoolAccessor) GetEnabledPools(ipVersion int) ([]v3.IPPool, error) {
 	pools := make([]v3.IPPool, 0)
 	for _, p := range sorted {
 		c := cnet.MustParseCIDR(p)
-		if c.Version() == ipVersion {
+		if (ipVersion == 0) || (c.Version() == ipVersion) {
 			pool := v3.IPPool{Spec: v3.IPPoolSpec{CIDR: p, NodeSelector: i.pools[p].nodeSelector}}
 			if i.pools[p].blockSize == 0 {
 				if ipVersion == 4 {
@@ -89,9 +93,18 @@ func (i *ipPoolAccessor) GetEnabledPools(ipVersion int) ([]v3.IPPool, error) {
 		}
 	}
 
-	log.Infof("GetEnabledPools returns: %v", pools)
+	log.Infof("%v returns: %v", caller, pools)
 
-	return pools, nil
+	return pools
+}
+
+func (i *ipPoolAccessor) GetAllPools() ([]v3.IPPool, error) {
+	sorted := make([]string, 0)
+	// Get a sorted list of pool CIDR strings.
+	for p := range i.pools {
+		sorted = append(sorted, p)
+	}
+	return i.getPools(sorted, 0, "GetAllPools"), nil
 }
 
 var (
@@ -611,6 +624,18 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 		pool2 := cnet.MustParseNetwork("20.0.0.0/24")
 		var block1, block2 cnet.IPNet
 
+		findInUse := func(usage []*PoolUtilization, cidr string, expectedInUse int) bool {
+			for _, poolUse := range usage {
+				for _, blockUse := range poolUse.Blocks {
+					if (blockUse.CIDR.String() == cidr) &&
+						(blockUse.Available == blockUse.Capacity-expectedInUse) {
+						return true
+					}
+				}
+			}
+			return false
+		}
+
 		It("should get an IP from pool1 when explicitly requesting from that pool", func() {
 			bc.Clean()
 			deleteAllPools()
@@ -637,6 +662,16 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 
 			Expect(outErr).NotTo(HaveOccurred())
 			Expect(pool1.IPNet.Contains(v4[0].IP)).To(BeTrue())
+
+			usage, err := ic.GetUtilization(context.Background(), GetUtilizationArgs{})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(findInUse(usage, "10.0.0.0/26", 1)).To(BeTrue())
+
+			usage, err = ic.GetUtilization(context.Background(), GetUtilizationArgs{
+				Pools: []string{"20.0.0.0/24"},
+			})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(findInUse(usage, "10.0.0.0/26", 1)).To(BeFalse())
 		})
 
 		It("should get an IP from pool2 when explicitly requesting from that pool", func() {
@@ -657,6 +692,16 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 
 			Expect(outErr).NotTo(HaveOccurred())
 			Expect(block2.IPNet.Contains(v4[0].IP)).To(BeTrue())
+
+			usage, err := ic.GetUtilization(context.Background(), GetUtilizationArgs{})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(findInUse(usage, "20.0.0.0/26", 1)).To(BeTrue())
+
+			usage, err = ic.GetUtilization(context.Background(), GetUtilizationArgs{
+				Pools: []string{"20.0.0.0/24"},
+			})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(findInUse(usage, "20.0.0.0/26", 1)).To(BeTrue())
 		})
 
 		It("should get an IP from pool1 in the same allocation block as the first IP from pool1", func() {

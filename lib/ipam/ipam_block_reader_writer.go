@@ -24,8 +24,9 @@ import (
 	"net"
 	"time"
 
-	"github.com/projectcalico/libcalico-go/lib/apis/v3"
 	log "github.com/sirupsen/logrus"
+
+	"github.com/projectcalico/libcalico-go/lib/apis/v3"
 
 	bapi "github.com/projectcalico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
@@ -42,8 +43,7 @@ func (rw blockReaderWriter) getAffineBlocks(ctx context.Context, host string, ve
 	blocksInPool = []cnet.IPNet{}
 	blocksNotInPool = []cnet.IPNet{}
 
-	// Lookup all blocks by providing an empty BlockListOptions
-	// to the List operation.
+	// Lookup blocks affine to the specified host.
 	opts := model.BlockAffinityListOptions{Host: host, IPVersion: ver}
 	datastoreObjs, err := rw.client.List(ctx, opts, "")
 	if err != nil {
@@ -51,7 +51,6 @@ func (rw blockReaderWriter) getAffineBlocks(ctx context.Context, host string, ve
 			// The block path does not exist yet.  This is OK - it means
 			// there are no affine blocks.
 			return
-
 		} else {
 			log.Errorf("Error getting affine blocks: %v", err)
 			return
