@@ -72,16 +72,40 @@ type XDPInfo struct {
 	Mode  XDPMode
 }
 
+type SockMapInfo struct {
+	CommonMapInfo
+
+	SkMsg *SkMsgInfo
+}
+
+type SockMap struct {
+	Info SockMapInfo
+	M    map[IPv4Mask]uint32
+}
+
+type SockopsInfo struct {
+	CgroupPath string
+}
+
+type SkMsgInfo struct {
+}
+
 type MockBPFLib struct {
-	XDPProgs    map[string]XDPInfo      // iface -> []maps
-	CIDRMaps    map[CIDRMapsKey]CIDRMap // iface -> map[ip]refCount
-	FailsafeMap FailsafeMap
+	XDPProgs            map[string]XDPInfo      // iface -> []maps
+	CIDRMaps            map[CIDRMapsKey]CIDRMap // iface -> map[ip]refCount
+	SockopsProg         *SockopsInfo
+	SockMap             *SockMap
+	SkMsgProg           *SkMsgInfo
+	SockmapEndpointsMap *CIDRMap
+	FailsafeMap         FailsafeMap
+	CgroupV2Dir         string
 }
 
 func NewMockBPFLib() *MockBPFLib {
 	return &MockBPFLib{
-		XDPProgs: make(map[string]XDPInfo),
-		CIDRMaps: make(map[CIDRMapsKey]CIDRMap),
+		XDPProgs:    make(map[string]XDPInfo),
+		CIDRMaps:    make(map[CIDRMapsKey]CIDRMap),
+		CgroupV2Dir: "/sys/fs/cgroup/unified",
 	}
 }
 
@@ -532,10 +556,233 @@ func NewMockCIDRMap(mapID int) CIDRMap {
 	}
 }
 
+func NewMockSockMap(mapID int) SockMap {
+	return SockMap{
+		Info: SockMapInfo{
+			CommonMapInfo: CommonMapInfo{
+				Id:        mapID,
+				Type:      "sock_hash",
+				KeySize:   8,
+				ValueSize: 4,
+			},
+		},
+		M: make(map[IPv4Mask]uint32),
+	}
+}
+
 func GetMockXDPTag(bytes []byte) string {
 	h := sha1.New()
 	h.Write(bytes)
 	checksum := hex.EncodeToString(h.Sum(nil))
 
 	return string(checksum[:16])
+}
+
+func (b *MockBPFLib) AttachToSockmap() error {
+	if b.SockMap == nil {
+		return errors.New("no sockmap found")
+	}
+
+	if b.SkMsgProg == nil {
+		return errors.New("no sk_msg program found")
+	}
+
+	b.SockMap.Info.SkMsg = b.SkMsgProg
+
+	return nil
+}
+
+func (b *MockBPFLib) DetachFromSockmap() error {
+	b.SockMap.Info.SkMsg = nil
+
+	return nil
+}
+
+func (b *MockBPFLib) RemoveSockmap() error {
+	if b.SockMap == nil {
+		return errors.New("can't find sockmap")
+	}
+
+	b.SockMap = nil
+	return nil
+}
+
+func (b *MockBPFLib) loadBPF(objPath, progPath, progType string, mapArgs []string) error {
+	// this is just a refactoring with no real functionality for the mock BPF
+	// library, just succeed
+	return nil
+}
+
+func (b *MockBPFLib) LoadSockops(objPath string) error {
+	// we don't do anything with the sockops program so just succeed
+	return nil
+}
+
+func (b *MockBPFLib) LoadSockopsWithBytes(objBytes []byte) error {
+	f, err := writeBPFBytes(objBytes)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	return b.LoadSockops(f.f.Name())
+}
+
+func (b *MockBPFLib) LoadSockopsAuto() error {
+	return b.LoadSockopsWithBytes(sockopsAsset)
+}
+
+func (b *MockBPFLib) RemoveSockops() error {
+	if b.SockopsProg == nil {
+		return errors.New("can't find sockops program")
+	}
+
+	b.SockopsProg = nil
+
+	return nil
+
+}
+func (b *MockBPFLib) LoadSkMsg(objPath string) error {
+	// we don't do anything with the sk_msg program so just succeed
+	return nil
+}
+
+func (b *MockBPFLib) LoadSkMsgWithBytes(objBytes []byte) error {
+	f, err := writeBPFBytes(objBytes)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	return b.LoadSkMsg(f.f.Name())
+}
+
+func (b *MockBPFLib) LoadSkMsgAuto() error {
+	return b.LoadSkMsgWithBytes(skmsgAsset)
+}
+
+func (b *MockBPFLib) RemoveSkMsg() error {
+	if b.SkMsgProg == nil {
+		return errors.New("can't find sk_msg program")
+	}
+
+	b.SkMsgProg = nil
+
+	return nil
+}
+
+func (b *MockBPFLib) AttachToCgroup() error {
+	if b.SockopsProg == nil {
+		return errors.New("can't find sockops prog")
+	}
+
+	b.SockopsProg.CgroupPath = b.CgroupV2Dir
+
+	return nil
+}
+
+func (b *MockBPFLib) DetachFromCgroup() error {
+	if b.SockopsProg == nil {
+		return errors.New("can't find sockops prog")
+	}
+
+	b.SockopsProg.CgroupPath = ""
+
+	return nil
+}
+
+func (b *MockBPFLib) NewSockmapEndpointsMap() (string, error) {
+	cidrMap := NewMockCIDRMap(id)
+
+	b.SockmapEndpointsMap = &cidrMap
+
+	id += 1
+
+	return "/sys/fs/bpf/calico/sockmap/calico_sockmap_endpoints", nil
+}
+
+func (b *MockBPFLib) NewSockmap() (string, error) {
+	sockMap := NewMockSockMap(id)
+	b.SockMap = &sockMap
+
+	id += 1
+
+	return "/sys/fs/bpf/calico/sockmap/calico_sock_map", nil
+}
+
+func (b *MockBPFLib) UpdateSockmapEndpoints(ip net.IP, mask int) error {
+	if b.SockmapEndpointsMap == nil {
+		return errors.New("sockmap endpooints not found")
+	}
+
+	l := len(ip)
+	ipm := IPv4Mask{
+		Ip:   [4]byte{ip[l-4], ip[l-3], ip[l-2], ip[l-1]},
+		Mask: mask,
+	}
+	b.SockmapEndpointsMap.M[ipm] = 1
+
+	return nil
+}
+
+func (b *MockBPFLib) DumpSockmapEndpointsMap(family IPFamily) ([]CIDRMapKey, error) {
+	if b.SockmapEndpointsMap == nil {
+		return nil, errors.New("sockmap endpooints not found")
+	}
+
+	var ret []CIDRMapKey
+
+	for k, _ := range b.SockmapEndpointsMap.M {
+		ip := net.IPv4(k.Ip[0], k.Ip[1], k.Ip[2], k.Ip[3])
+		ipnet := net.IPNet{
+			IP:   ip,
+			Mask: net.CIDRMask(k.Mask, 32),
+		}
+		ret = append(ret, NewCIDRMapKey(&ipnet))
+	}
+
+	return ret, nil
+}
+
+func (b *MockBPFLib) LookupSockmapEndpointsMap(ip net.IP, mask int) (bool, error) {
+	if b.SockmapEndpointsMap == nil {
+		return false, errors.New("sockmap endpooints not found")
+	}
+
+	l := len(ip)
+	ipm := IPv4Mask{
+		Ip:   [4]byte{ip[l-4], ip[l-3], ip[l-2], ip[l-1]},
+		Mask: mask,
+	}
+
+	_, ok := b.SockmapEndpointsMap.M[ipm]
+	if !ok {
+		return false, errors.New("CIDR not found")
+	}
+
+	return true, nil
+}
+
+func (b *MockBPFLib) RemoveItemSockmapEndpointsMap(ip net.IP, mask int) error {
+	if b.SockmapEndpointsMap == nil {
+		return errors.New("sockmap endpooints not found")
+	}
+
+	l := len(ip)
+	delete(b.SockmapEndpointsMap.M, IPv4Mask{
+		Ip:   [4]byte{ip[l-4], ip[l-3], ip[l-2], ip[l-1]},
+		Mask: mask,
+	})
+
+	return nil
+}
+
+func (b *MockBPFLib) RemoveSockmapEndpointsMap() error {
+	if b.SockmapEndpointsMap == nil {
+		return errors.New("sockmap endpooints not found")
+	}
+
+	b.SockmapEndpointsMap = nil
+
+	return nil
 }

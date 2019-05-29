@@ -355,9 +355,11 @@ type BPFDataplane interface {
 	RemoveSockmap() error
 	loadBPF(objPath, progPath, progType string, mapArgs []string) error
 	LoadSockops(objPath string) error
+	LoadSockopsWithBytes(objBytes []byte) error
 	LoadSockopsAuto() error
 	RemoveSockops() error
 	LoadSkMsg(objPath string) error
+	LoadSkMsgWithBytes(objBytes []byte) error
 	LoadSkMsgAuto() error
 	RemoveSkMsg() error
 	AttachToCgroup() error
@@ -1786,7 +1788,7 @@ func clearSockmap(mapArgs []string) error {
 		printCommand(prog, args...)
 		output, err = exec.Command(prog, args...).CombinedOutput()
 		if err != nil {
-			return fmt.Errorf("failed to delete item (%d) from map (%v): %s\n%s", e.NextKey, mapArgs, err, output)
+			return fmt.Errorf("failed to delete item (%v) from map (%v): %s\n%s", e.NextKey, mapArgs, err, output)
 		}
 	}
 
