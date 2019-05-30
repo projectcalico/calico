@@ -9,7 +9,13 @@ Please include
 - links to issues that this PR addresses
 -->
 
+## Related issues/PRs
 
+<!-- If appropriate, include a link to the issue this fixes. -->
+fixes <ISSUE LINK>
+
+<!-- If appropriate, add links to any number of PRs documented by this PR -->
+documents <PR LINK>
 
 ## Todos
 
