@@ -398,7 +398,7 @@ foss-checks: vendor
 ###############################################################################
 .PHONY: ci
 ## Run what CI runs
-ci: clean build-all static-checks ut st image-all
+ci: clean build-all static-checks test image-all
 
 ###############################################################################
 # CD
