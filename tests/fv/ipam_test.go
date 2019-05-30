@@ -18,6 +18,7 @@ import (
 	"context"
 	"os"
 	"regexp"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -97,22 +98,21 @@ func TestIPAM(t *testing.T) {
 	Expect(out).To(ContainSubstring("5/64 (8%)"))
 
 	// Find out the allocation block.
-	var allocationBlock string
-	r, err := regexp.Compile("10\\.65\\.[0-9]+")
+	var allocatedIP string
+	r, err := regexp.Compile("(10\\.65\\.[0-9]+\\.)([0-9]+)/26")
 	Expect(err).NotTo(HaveOccurred())
 	for _, line := range strings.Split(out, "\n") {
-		if !strings.Contains(line, "Block") {
-			continue
-		}
-		allocationBlock = r.FindString(line)
-		if allocationBlock != "" {
+		sm := r.FindStringSubmatch(line)
+		if len(sm) > 0 {
+			ordinalBase, err := strconv.Atoi(sm[2])
+			Expect(err).NotTo(HaveOccurred())
+			allocatedIP = sm[1] + strconv.Itoa(ordinalBase+2)
 			break
 		}
 	}
-	Expect(allocationBlock).NotTo(BeEmpty())
+	Expect(allocatedIP).NotTo(BeEmpty())
 
 	// ipam show with specific IP that is now allocated.
-	allocatedIP := allocationBlock + ".2"
 	out = Calicoctl("ipam", "show", "--ip="+allocatedIP)
 	Expect(out).To(ContainSubstring(allocatedIP + " is in use"))
 }
