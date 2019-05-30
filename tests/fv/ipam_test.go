@@ -32,6 +32,7 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/libcalico-go/lib/ipam"
 	"github.com/projectcalico/libcalico-go/lib/logutils"
+	cnet "github.com/projectcalico/libcalico-go/lib/net"
 	"github.com/projectcalico/libcalico-go/lib/options"
 )
 
@@ -115,4 +116,44 @@ func TestIPAM(t *testing.T) {
 	// ipam show with specific IP that is now allocated.
 	out = Calicoctl("ipam", "show", "--ip="+allocatedIP)
 	Expect(out).To(ContainSubstring(allocatedIP + " is in use"))
+
+	// ipam show with an invalid IP.
+	out, err = CalicoctlMayFail("ipam", "show", "--ip=10.240.0.300")
+	Expect(err).To(HaveOccurred())
+	Expect(out).To(ContainSubstring("invalid IP address"))
+
+	// Create a pool with blocksize 29, so we can easily allocate
+	// an entire block.
+	pool = v3.NewIPPool()
+	pool.Name = "ipam-test-v4-b29"
+	pool.Spec.CIDR = "10.66.0.0/16"
+	pool.Spec.BlockSize = 29
+	_, err = client.IPPools().Create(ctx, pool, options.SetOptions{})
+	Expect(err).NotTo(HaveOccurred())
+
+	// Allocate more than one block's worth (8) of IPs from that
+	// pool.
+	// Assign some IPs.
+	client.IPAM().AutoAssign(ctx, ipam.AutoAssignArgs{
+		Num4:      11,
+		IPv4Pools: []cnet.IPNet{cnet.MustParseNetwork(pool.Spec.CIDR)},
+	})
+
+	// ipam show, including blocks.
+	//
+	// Example output here:
+	// +----------+-------------------------------------------+-------------+---------------+
+	// | GROUPING |                   CIDR                    | IPS IN USE  | IPS AVAILABLE |
+	// +----------+-------------------------------------------+-------------+---------------+
+	// | IP Pool  | 10.65.0.0/16                              | 5/64 (8%)   | 59/64 (92%)   |
+	// | Block    | 10.65.79.0/26                             | 5/64 (8%)   | 59/64 (92%)   |
+	// | IP Pool  | 10.66.0.0/16                              | 11/16 (69%) | 5/16 (31%)    |
+	// | Block    | 10.66.137.224/29                          | 8/8 (100%)  | 0/8 (0%)      |
+	// | Block    | 10.66.137.232/29                          | 3/8 (38%)   | 5/8 (63%)     |
+	// | IP Pool  | fd5f:abcd:64::/48                         | 7/64 (11%)  | 57/64 (89%)   |
+	// | Block    | fd5f:abcd:64:4f2c:ec1b:27b9:1989:77c0/122 | 7/64 (11%)  | 57/64 (89%)   |
+	// +----------+-------------------------------------------+-------------+---------------+
+	out = Calicoctl("ipam", "show", "--show-blocks")
+	Expect(out).To(ContainSubstring("8/8 (100%)"))
+	Expect(out).To(ContainSubstring("0/8 (0%)"))
 }

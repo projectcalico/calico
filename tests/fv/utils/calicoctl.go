@@ -25,11 +25,17 @@ import (
 var calicoctl = "/go/src/github.com/projectcalico/calicoctl/bin/calicoctl-linux-amd64"
 
 func Calicoctl(args ...string) string {
+	out, err := CalicoctlMayFail(args...)
+	Expect(err).NotTo(HaveOccurred())
+	return out
+}
+
+func CalicoctlMayFail(args ...string) (string, error) {
 	cmd := exec.Command(calicoctl, args...)
 	cmd.Env = []string{"ETCD_ENDPOINTS=http://127.0.0.1:2379"}
 	out, err := cmd.CombinedOutput()
 	log.Infof("Run: calicoctl %v", strings.Join(args, " "))
 	log.Infof("Output:\n%v", string(out))
-	Expect(err).NotTo(HaveOccurred())
-	return string(out)
+	log.Infof("Error: %v", err)
+	return string(out), err
 }
