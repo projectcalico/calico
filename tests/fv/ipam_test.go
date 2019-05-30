@@ -17,6 +17,8 @@ package fv_test
 import (
 	"context"
 	"os"
+	"regexp"
+	"strings"
 	"testing"
 
 	. "github.com/onsi/gomega"
@@ -94,7 +96,23 @@ func TestIPAM(t *testing.T) {
 	Expect(out).To(ContainSubstring("Block"))
 	Expect(out).To(ContainSubstring("5/64 (8%)"))
 
+	// Find out the allocation block.
+	var allocationBlock string
+	r, err := regexp.Compile("10\\.65\\.[0-9]+")
+	Expect(err).NotTo(HaveOccurred())
+	for _, line := range strings.Split(out, "\n") {
+		if !strings.Contains(line, "Block") {
+			continue
+		}
+		allocationBlock = r.FindString(line)
+		if allocationBlock != "" {
+			break
+		}
+	}
+	Expect(allocationBlock).NotTo(BeEmpty())
+
 	// ipam show with specific IP that is now allocated.
-	out = Calicoctl("ipam", "show", "--ip=10.65.79.2")
-	Expect(out).To(ContainSubstring("10.65.79.2 is in use"))
+	allocatedIP := allocationBlock + ".2"
+	out = Calicoctl("ipam", "show", "--ip="+allocatedIP)
+	Expect(out).To(ContainSubstring(allocatedIP + " is in use"))
 }
