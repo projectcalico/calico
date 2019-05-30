@@ -324,7 +324,8 @@ ut: bin/calicoctl-linux-amd64
 ###############################################################################
 .PHONY: fv
 ## Run the tests in a container. Useful for CI, Mac dev.
-fv: bin/calicoctl-linux-amd64 run-etcd-host
+fv: bin/calicoctl-linux-amd64
+	$(MAKE) run-etcd-host
 	docker run --rm -v $(CURDIR):/go/src/$(PACKAGE_NAME):rw \
 		--net=host -e LOCAL_USER_ID=$(LOCAL_USER_ID) \
 		$(LOCAL_BUILD_MOUNTS) \
@@ -343,7 +344,8 @@ ST_OPTIONS?=
 
 .PHONY: st
 ## Run the STs in a container
-st: bin/calicoctl-linux-amd64 run-etcd-host
+st: bin/calicoctl-linux-amd64
+	$(MAKE) run-etcd-host
 	# Use the host, PID and network namespaces from the host.
 	# Privileged is needed since 'calico node' write to /proc (to enable ip_forwarding)
 	# Map the docker socket in so docker can be used from inside the container
@@ -356,7 +358,6 @@ st: bin/calicoctl-linux-amd64 run-etcd-host
 	           -v /var/run/docker.sock:/var/run/docker.sock \
 	           $(TEST_CONTAINER_NAME) \
 	           sh -c 'nosetests $(ST_TO_RUN) -sv --nologcapture  --with-xunit --xunit-file="/code/report/nosetests.xml" --with-timer $(ST_OPTIONS)'
-
 	$(MAKE) stop-etcd
 
 ## Etcd is used by the STs
