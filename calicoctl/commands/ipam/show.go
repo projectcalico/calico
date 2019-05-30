@@ -97,7 +97,7 @@ Description:
 	}
 	table := tablewriter.NewWriter(os.Stdout)
 	table.SetHeader([]string{"GROUPING", "CIDR", "IPS TOTAL", "IPS IN USE", "IPS FREE"})
-	genRow := func(kind, cidr string, available, capacity float64) []string {
+	genRow := func(kind, cidr string, inUse, capacity float64) []string {
 		return []string{
 			kind,
 			cidr,
@@ -105,15 +105,15 @@ Description:
 			// Note: the '+capacity/2' bits here give us rounding to the nearest
 			// integer, instead of rounding down, and so ensure that the two percentages
 			// add up to 100.
-			fmt.Sprintf("%.5g (%.f%%)", capacity-available, 100*(capacity-available)/capacity),
-			fmt.Sprintf("%.5g (%.f%%)", available, 100*available/capacity),
+			fmt.Sprintf("%.5g (%.f%%)", inUse, 100*inUse/capacity),
+			fmt.Sprintf("%.5g (%.f%%)", capacity-inUse, 100*(capacity-inUse)/capacity),
 		}
 	}
 	for _, poolUse := range usage {
 		var blockRows [][]string
 		var poolInUse float64
 		for _, blockUse := range poolUse.Blocks {
-			blockRows = append(blockRows, genRow("Block", blockUse.CIDR.String(), float64(blockUse.Available), float64(blockUse.Capacity)))
+			blockRows = append(blockRows, genRow("Block", blockUse.CIDR.String(), float64(blockUse.Capacity-blockUse.Available), float64(blockUse.Capacity)))
 			poolInUse += float64(blockUse.Capacity - blockUse.Available)
 		}
 		ones, bits := poolUse.CIDR.Mask.Size()
@@ -121,7 +121,7 @@ Description:
 		if ones > 0 {
 			// Only show the IP Pool row for a real IP Pool and not for the orphaned
 			// block case.
-			table.Append(genRow("IP Pool", poolUse.CIDR.String(), poolCapacity-poolInUse, poolCapacity))
+			table.Append(genRow("IP Pool", poolUse.CIDR.String(), poolInUse, poolCapacity))
 		}
 		if showBlocks {
 			table.AppendBulk(blockRows)
