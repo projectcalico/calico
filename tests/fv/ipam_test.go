@@ -89,14 +89,15 @@ func TestIPAM(t *testing.T) {
 	out = Calicoctl("ipam", "show")
 	Expect(out).To(ContainSubstring("IPS IN USE"))
 	Expect(out).To(ContainSubstring("10.65.0.0/16"))
-	Expect(out).To(ContainSubstring("5/64 (8%)"))
-	Expect(out).To(ContainSubstring("7/64 (11%)"))
+	Expect(out).To(ContainSubstring("5 (0%)"))
+	Expect(out).To(ContainSubstring("65531 (100%)"))
+	Expect(out).To(ContainSubstring("fd5f:abcd:64::/48"))
 
 	// ipam show, including blocks.
 	out = Calicoctl("ipam", "show", "--show-blocks")
-	Expect(out).To(ContainSubstring("IPS IN USE"))
 	Expect(out).To(ContainSubstring("Block"))
-	Expect(out).To(ContainSubstring("5/64 (8%)"))
+	Expect(out).To(ContainSubstring("5 (8%)"))
+	Expect(out).To(ContainSubstring("59 (92%)"))
 
 	// Find out the allocation block.
 	var allocatedIP string
@@ -142,18 +143,18 @@ func TestIPAM(t *testing.T) {
 	// ipam show, including blocks.
 	//
 	// Example output here:
-	// +----------+-------------------------------------------+-------------+---------------+
-	// | GROUPING |                   CIDR                    | IPS IN USE  | IPS AVAILABLE |
-	// +----------+-------------------------------------------+-------------+---------------+
-	// | IP Pool  | 10.65.0.0/16                              | 5/64 (8%)   | 59/64 (92%)   |
-	// | Block    | 10.65.79.0/26                             | 5/64 (8%)   | 59/64 (92%)   |
-	// | IP Pool  | 10.66.0.0/16                              | 11/16 (69%) | 5/16 (31%)    |
-	// | Block    | 10.66.137.224/29                          | 8/8 (100%)  | 0/8 (0%)      |
-	// | Block    | 10.66.137.232/29                          | 3/8 (38%)   | 5/8 (63%)     |
-	// | IP Pool  | fd5f:abcd:64::/48                         | 7/64 (11%)  | 57/64 (89%)   |
-	// | Block    | fd5f:abcd:64:4f2c:ec1b:27b9:1989:77c0/122 | 7/64 (11%)  | 57/64 (89%)   |
-	// +----------+-------------------------------------------+-------------+---------------+
+	// +----------+-------------------------------------------+------------+------------+-------------------+
+	// | GROUPING |                   CIDR                    | IPS TOTAL  | IPS IN USE |     IPS FREE      |
+	// +----------+-------------------------------------------+------------+------------+-------------------+
+	// | IP Pool  | 10.65.0.0/16                              |      65536 | 5 (0%)     | 65531 (100%)      |
+	// | Block    | 10.65.79.0/26                             |         64 | 5 (8%)     | 59 (92%)          |
+	// | IP Pool  | 10.66.0.0/16                              |      65536 | 11 (0%)    | 65525 (100%)      |
+	// | Block    | 10.66.137.224/29                          |          8 | 8 (100%)   | 0 (0%)            |
+	// | Block    | 10.66.137.232/29                          |          8 | 3 (38%)    | 5 (62%)           |
+	// | IP Pool  | fd5f:abcd:64::/48                         | 1.2089e+24 | 0 (0%)     | 1.2089e+24 (100%) |
+	// | Block    | fd5f:abcd:64:4f2c:ec1b:27b9:1989:77c0/122 |         64 | 7 (11%)    | 57 (89%)          |
+	// +----------+-------------------------------------------+------------+------------+-------------------+
 	out = Calicoctl("ipam", "show", "--show-blocks")
-	Expect(out).To(ContainSubstring("8/8 (100%)"))
-	Expect(out).To(ContainSubstring("0/8 (0%)"))
+	Expect(out).To(ContainSubstring("8 (100%)"))
+	Expect(out).To(ContainSubstring("0 (0%)"))
 }
