@@ -5,7 +5,7 @@ default: build
 all: build
 
 ## Run the tests for the current platform/architecture
-test: ut st
+test: ut fv st
 
 ###############################################################################
 # Both native and cross architecture builds are supported.
@@ -143,7 +143,7 @@ build-all: $(addprefix bin/calicoctl-linux-,$(VALIDARCHES)) bin/calicoctl-window
 build: bin/calicoctl-$(OS)-$(ARCH)
 
 ## Create the vendor directory
-vendor: glide.yaml
+vendor: glide.lock
 	# Ensure that the glide cache directory exists.
 	mkdir -p $(HOME)/.glide
 
@@ -320,6 +320,21 @@ ut: bin/calicoctl-linux-amd64
 		$(CALICO_BUILD) sh -c 'cd /go/src/$(PACKAGE_NAME) && ginkgo -cover -r --skipPackage vendor calicoctl/* $(GINKGO_ARGS)'
 
 ###############################################################################
+# FVs
+###############################################################################
+.PHONY: fv
+## Run the tests in a container. Useful for CI, Mac dev.
+fv: bin/calicoctl-linux-amd64
+	$(MAKE) run-etcd-host
+	docker run --rm -v $(CURDIR):/go/src/$(PACKAGE_NAME):rw \
+		--net=host -e LOCAL_USER_ID=$(LOCAL_USER_ID) \
+		$(LOCAL_BUILD_MOUNTS) \
+	        -v $(CURDIR)/.go-pkg-cache:/go-cache/:rw \
+                -e GOCACHE=/go-cache \
+		$(CALICO_BUILD) sh -c 'cd /go/src/$(PACKAGE_NAME) && go test ./tests/fv'
+	$(MAKE) stop-etcd
+
+###############################################################################
 # STs
 ###############################################################################
 LOCAL_IP_ENV?=$(shell ip route get 8.8.8.8 | head -1 | awk '{print $$7}')
@@ -329,7 +344,8 @@ ST_OPTIONS?=
 
 .PHONY: st
 ## Run the STs in a container
-st: bin/calicoctl-linux-amd64 run-etcd-host
+st: bin/calicoctl-linux-amd64
+	$(MAKE) run-etcd-host
 	# Use the host, PID and network namespaces from the host.
 	# Privileged is needed since 'calico node' write to /proc (to enable ip_forwarding)
 	# Map the docker socket in so docker can be used from inside the container
@@ -342,7 +358,6 @@ st: bin/calicoctl-linux-amd64 run-etcd-host
 	           -v /var/run/docker.sock:/var/run/docker.sock \
 	           $(TEST_CONTAINER_NAME) \
 	           sh -c 'nosetests $(ST_TO_RUN) -sv --nologcapture  --with-xunit --xunit-file="/code/report/nosetests.xml" --with-timer $(ST_OPTIONS)'
-
 	$(MAKE) stop-etcd
 
 ## Etcd is used by the STs
@@ -383,7 +398,7 @@ foss-checks: vendor
 ###############################################################################
 .PHONY: ci
 ## Run what CI runs
-ci: clean build-all static-checks ut st image-all
+ci: clean build-all static-checks test image-all
 
 ###############################################################################
 # CD
