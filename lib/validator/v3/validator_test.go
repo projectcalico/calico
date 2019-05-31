@@ -1279,7 +1279,7 @@ func init() {
 		}, true),
 
 		Entry("should reject invalid BGPPeerSpec (selector)", api.BGPPeerSpec{
-			NodeSelector: "kubernetes.io/hostname: == 'casey-crc-kadm-node-4'"
+			NodeSelector: "kubernetes.io/hostname: == 'casey-crc-kadm-node-4'",
 			}, false),
 
 		// (API) NodeSpec
