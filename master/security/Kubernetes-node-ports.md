@@ -16,7 +16,6 @@ This how-to guide uses the following Calico features:
 - **GlobalNetwork policy** with a preDNAT field
 - **HostEndpoint**
 
-
 ### Concepts
 
 #### Calico global network policy with a preDNAT field 
