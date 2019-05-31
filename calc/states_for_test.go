@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2018 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2019 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -1084,9 +1084,14 @@ func reverseKVOrder(baseTests StateList) (desc string, mappedTests []StateList) 
 func insertEmpties(baseTest StateList) (desc string, mappedTests []StateList) {
 	desc = "with empty state inserted between each state"
 	mappedTest := StateList{}
+	first := true
 	for _, state := range baseTest {
+		if !first {
+			mappedTest = append(mappedTest, empty)
+		} else {
+			first = false
+		}
 		mappedTest = append(mappedTest, state)
-		mappedTest = append(mappedTest, empty)
 	}
 	mappedTests = append(mappedTests, mappedTest)
 	return
