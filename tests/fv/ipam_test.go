@@ -151,10 +151,10 @@ func TestIPAM(t *testing.T) {
 	// | IP Pool  | 10.66.0.0/16                              |      65536 | 11 (0%)    | 65525 (100%)      |
 	// | Block    | 10.66.137.224/29                          |          8 | 8 (100%)   | 0 (0%)            |
 	// | Block    | 10.66.137.232/29                          |          8 | 3 (38%)    | 5 (62%)           |
-	// | IP Pool  | fd5f:abcd:64::/48                         | 1.2089e+24 | 0 (0%)     | 1.2089e+24 (100%) |
+	// | IP Pool  | fd5f:abcd:64::/48                         | 1.2089e+24 | 7 (0%)     | 1.2089e+24 (100%) |
 	// | Block    | fd5f:abcd:64:4f2c:ec1b:27b9:1989:77c0/122 |         64 | 7 (11%)    | 57 (89%)          |
 	// +----------+-------------------------------------------+------------+------------+-------------------+
-	out = Calicoctl("ipam", "show", "--show-blocks")
-	Expect(out).To(ContainSubstring("8 (100%)"))
-	Expect(out).To(ContainSubstring("0 (0%)"))
+	outLines := strings.Split(Calicoctl("ipam", "show", "--show-blocks"), "\n")
+	Expect(outLines).To(ContainElement(And(ContainSubstring("Block"), ContainSubstring("10.66"), ContainSubstring("8 (100%)"), ContainSubstring("0 (0%)"))))
+	Expect(outLines).To(ContainElement(And(ContainSubstring("IP Pool"), ContainSubstring("fd5f"), ContainSubstring("7 (0%)"))))
 }
