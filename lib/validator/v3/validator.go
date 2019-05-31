@@ -133,6 +133,7 @@ func init() {
 	registerFieldValidator("mustBeNil", validateMustBeNil)
 	registerFieldValidator("mustBeFalse", validateMustBeFalse)
 	registerFieldValidator("ifaceFilter", validateIfaceFilter)
+	registerFieldValidator("mac", validateMAC)
 
 	// Register network validators (i.e. validating a correctly masked CIDR).  Also
 	// accepts an IP address without a mask (assumes a full mask).
@@ -265,6 +266,16 @@ func validateVXLANMode(fl validator.FieldLevel) bool {
 	s := fl.Field().String()
 	log.Debugf("Validate VXLAN Mode: %s", s)
 	return vxlanModeRegex.MatchString(s)
+}
+
+func validateMAC(fl validator.FieldLevel) bool {
+	s := fl.Field().String()
+	log.Debugf("Validate MAC Address: %s", s)
+
+	if _, err := net.ParseMAC(s); err != nil {
+		return false
+	}
+	return true
 }
 
 func validateLogLevel(fl validator.FieldLevel) bool {
