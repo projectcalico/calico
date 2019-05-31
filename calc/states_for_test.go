@@ -941,6 +941,48 @@ var vxlanWithBlockAndBorrows = vxlanWithBlock.withKVUpdates(
 	},
 )
 
+// vxlanWithBlock but with a different tunnel IP.
+var vxlanWithBlockAndDifferentTunnelIP = vxlanWithBlock.withKVUpdates(
+	KVPair{Key: remoteHostVXLANTunnelConfigKey, Value: remoteHostVXLANTunnelIP2},
+).withName("VXLAN different tunnel IP").withVTEPs(
+	// VTEP for the remote node.
+	proto.VXLANTunnelEndpointUpdate{
+		Node:           remoteHostname,
+		Mac:            "66:3e:ca:a4:db:65",
+		Ipv4Addr:       remoteHostVXLANTunnelIP2,
+		ParentDeviceIp: remoteHostIP.String(),
+	},
+).withRoutes(
+	// Single route for the block.
+	proto.RouteUpdate{
+		Node: remoteHostname,
+		Dst:  "10.0.1.0/29",
+		Gw:   remoteHostVXLANTunnelIP2,
+		Type: proto.RouteType_VXLAN,
+	},
+)
+
+// vxlanWithBlock but with a different node IP.
+var vxlanWithBlockAndDifferentNodeIP = vxlanWithBlock.withKVUpdates(
+	KVPair{Key: remoteHostIPKey, Value: &remoteHost2IP},
+).withName("VXLAN different node IP").withVTEPs(
+	// VTEP for the remote node.
+	proto.VXLANTunnelEndpointUpdate{
+		Node:           remoteHostname,
+		Mac:            "66:3e:ca:a4:db:65",
+		Ipv4Addr:       remoteHostVXLANTunnelIP,
+		ParentDeviceIp: remoteHost2IP.String(),
+	},
+).withRoutes(
+	// Single route for the block.
+	proto.RouteUpdate{
+		Node: remoteHostname,
+		Dst:  "10.0.1.0/29",
+		Gw:   remoteHostVXLANTunnelIP,
+		Type: proto.RouteType_VXLAN,
+	},
+)
+
 // As above but with the owner of the block and the borrows switched.
 var vxlanBlockOwnerSwitch = vxlanWithBlockAndBorrows.withKVUpdates(
 	KVPair{Key: remoteIPAMBlockKey, Value: &remoteIPAMBlockWithBorrowsSwitched},
