@@ -50,3 +50,5 @@ toc:
     path: /security/comms/secure-metrics
 - title: Defend against DoS attacks
   path: /security/defend-dos-attack
+- title: Apply policy to Kubernetes node ports
+  path: /security/apply-policy-to-Kubernetes-node-ports
