@@ -1986,8 +1986,8 @@ class InvalidData(TestBase):
                        'metadata': {'name': 'pool-invalid-net-1'},
                        'spec': {
                            'ipipMode': 'Always',
-                           'cidr': "10.0.250.0"}  # no mask
-                   }, "error with field IPpool.CIDR = '10.0.250.0/32' "
+                           'cidr': "10.0.250.0/32"}  # no mask
+                   }, "error with field IPPool.Spec.CIDR = '10.0.250.0/32' "
                       "(IP pool size is too small for use with Calico IPAM. It must be equal to or greater than the block size.)"),
                    ("pool-invalidNet4", {
                        'apiVersion': API_VERSION,
@@ -2016,7 +2016,7 @@ class InvalidData(TestBase):
                            'cidr': "::/128",
                        }
                        # nothing
-                   }, "error with field IPpool.CIDR = '::/128' "
+                   }, "error with field IPPool.Spec.CIDR = '::/128' "
                       "(IP pool size is too small for use with Calico IPAM. It must be equal to or greater than the block size.)"),
                    ("pool-invalidNet7", {
                        'apiVersion': API_VERSION,
@@ -2024,7 +2024,7 @@ class InvalidData(TestBase):
                        'metadata': {'name': 'invalid-net-7'},
                        'spec': {
                            'cidr': "192.168.0.0/27"}  # invalid mask
-                   }, "error with field IPpool.CIDR = '192.168.0.0/27' "
+                   }, "error with field IPPool.Spec.CIDR = '192.168.0.0/27' "
                       "(IP pool size is too small for use with Calico IPAM. It must be equal to or greater than the block size.)"),
                    ("pool-invalidNet8", {
                        'apiVersion': API_VERSION,
@@ -2034,7 +2034,7 @@ class InvalidData(TestBase):
                            'ipipMode': 'Never',
                            'cidr': "fd5f::1/123",
                        }  # invalid mask
-                   }, "CIDR = 'fd5f::1/123'"),
+                   }, "IPPool.Spec.CIDR = 'fd5f::/123'"),
                    ("pool-invalidIpIp1", {
                        'apiVersion': API_VERSION,
                        'kind': 'IPPool',
@@ -2088,63 +2088,75 @@ class InvalidData(TestBase):
                                         'source': {}}],
                        }
                    }, "error with field Code = '256'"),
-                   ("compound-config", [{
-                       'apiVersion': API_VERSION,
-                       'kind': 'BGPPeer',
-                       'metadata': {
-                           'name': "compound-config",
-                       },
-                       'spec': {
-                           'node': 'node1',
-                           'peerIP': '192.168.0.250',
-                           'asNumber': 64513
-                       }
-                   },
-                   {
-                       'apiVersion': API_VERSION,
-                       'kind': 'Profile',
-                       'metadata': {
-                           'name': 'profile2',
-                       },
-                       'spec': {
-                           'Egress': [{'action': 'Allow',
-                                       'destination': {},
-                                       'source': {}}],
-                           'Ingress': [{'ipVersion': 4,
-                                        'ICMP': {'type': 256,  # 1-byte field
-                                                 'code': 255},
-                                        'action': 'Deny',
-                                        'protocol': 'ICMP',
-                                        'destination': {},
-                                        'source': {}}],
-                           },
-                   }], "error with field Type = '256'"),
                ]
+
+    compound_test_data = [("compound-config", [{
+        'apiVersion': API_VERSION,
+        'kind': 'BGPPeer',
+        'metadata': {
+            'name': "compound-config",
+        },
+        'spec': {
+            'node': 'node1',
+            'peerIP': '192.168.0.250',
+            'asNumber': 64513
+        }
+    },
+        {
+            'apiVersion': API_VERSION,
+            'kind': 'Profile',
+            'metadata': {
+                'name': 'profile2',
+            },
+            'spec': {
+                'Egress': [{'action': 'Allow',
+                            'destination': {},
+                            'source': {}}],
+                'Ingress': [{'ipVersion': 4,
+                             'ICMP': {'type': 256,  # 1-byte field
+                                      'code': 255},
+                             'action': 'Deny',
+                             'protocol': 'ICMP',
+                             'destination': {},
+                             'source': {}}],
+            },
+        }],{"profile2": "error with field Type = '256'"})]
+
+    def check_no_data_in_store(self, testdata):
+        out = calicoctl("get %s --output=yaml" % testdata['kind'])
+        out.assert_output_contains(
+        'apiVersion: %s\n'
+        'items: []\n'
+        'kind: %sList\n'
+        'metadata:\n'
+        '  resourceVersion: ' % (API_VERSION, testdata['kind'])
+    )
+
 
     @parameterized.expand(testdata)
     def test_invalid_profiles_rejected(self, name, testdata, error):
 
-        def check_no_data_in_store(testdata):
-            out = calicoctl("get %s --output=yaml" % testdata['kind'])
-            out.assert_output_contains(
-                'apiVersion: %s\n'
-                'items: []\n'
-                'kind: %sList\n'
-                'metadata:\n'
-                '  resourceVersion: ' % (API_VERSION, testdata['kind'])
-            )
+        log_and_run("cat << EOF > %s\n%s" % ("/tmp/testfile.yaml", testdata))
+        ctl = calicoctl("create", testdata)
+
+        self.check_no_data_in_store(testdata)
+
+        # Assert that we saw the correct error being reported
+        ctl.assert_error(error)
+
+    @parameterized.expand(compound_test_data)
+    def test_invalid_compound_profiles_rejected(self, name, testdata, errors):
 
         log_and_run("cat << EOF > %s\n%s" % ("/tmp/testfile.yaml", testdata))
         ctl = calicoctl("create", testdata)
 
-        if name.startswith('compound'):
-            for data in testdata:
-                check_no_data_in_store(data)
-        else:
-            check_no_data_in_store(testdata)
+        for data in testdata:
+            if data['metadata']['name'] in errors:
+                self.check_no_data_in_store(data)
 
         # Assert that we saw the correct error being reported
-        ctl.assert_error(error)
+        for value in errors.values():
+            ctl.assert_error(value)
 
 # TODO: uncomment this once we have default field handling in libcalico
 # class TestTypes(TestBase):
