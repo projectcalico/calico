@@ -21,6 +21,13 @@ import (
 	"github.com/projectcalico/felix/proto"
 )
 
+type wipeMode uint32
+
+const (
+	wipeFromBPFFSOnly wipeMode = 1 << iota
+	wipeByID
+)
+
 type sockmapState struct {
 	bpfLib bpf.BPFDataplane
 	cbIDs  []*CbID
@@ -109,7 +116,7 @@ func (s *sockmapState) removeWorkload(old *proto.WorkloadEndpoint) {
 
 func (s *sockmapState) SetupSockmapAcceleration() error {
 	log.Debug("Setting up sockmap acceleration.")
-	s.WipeSockmap()
+	s.WipeSockmap(bpf.FindByID)
 
 	log.Debug("Creating sockmap map.")
 	if _, err := s.bpfLib.NewSockmap(); err != nil {
@@ -144,14 +151,14 @@ func (s *sockmapState) SetupSockmapAcceleration() error {
 	return nil
 }
 
-func (s *sockmapState) WipeSockmap() {
+func (s *sockmapState) WipeSockmap(mode bpf.FindObjectMode) {
 	log.Debug("Wiping old sockmap state.")
 	var err error
-	err = s.bpfLib.DetachFromSockmap()
+	err = s.bpfLib.DetachFromSockmap(mode)
 	if err != nil {
 		log.WithError(err).Debug("Failed to detach sk_msg program from sockmap.")
 	}
-	err = s.bpfLib.DetachFromCgroup()
+	err = s.bpfLib.DetachFromCgroup(mode)
 	if err != nil {
 		log.WithError(err).Debug("Failed to detach sockops program from cgroup.")
 	}
@@ -167,7 +174,7 @@ func (s *sockmapState) WipeSockmap() {
 	if err != nil {
 		log.WithError(err).Debug("Failed to remove sockmap endpoints map.")
 	}
-	err = s.bpfLib.RemoveSockmap()
+	err = s.bpfLib.RemoveSockmap(mode)
 	if err != nil {
 		log.WithError(err).Debug("Failed to remove sockmap program.")
 	}

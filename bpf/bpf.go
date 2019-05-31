@@ -53,6 +53,13 @@ const (
 	XDPGeneric
 )
 
+type FindObjectMode uint32
+
+const (
+	FindInBPFFSOnly FindObjectMode = 1 << iota
+	FindByID
+)
+
 const (
 	// XDP
 	cidrMapVersion        = "v1"
@@ -362,8 +369,8 @@ type BPFDataplane interface {
 	loadXDPRaw(objPath, ifName string, mode XDPMode, mapArgs []string) error
 	GetBPFCalicoDir() string
 	AttachToSockmap() error
-	DetachFromSockmap() error
-	RemoveSockmap() error
+	DetachFromSockmap(mode FindObjectMode) error
+	RemoveSockmap(mode FindObjectMode) error
 	loadBPF(objPath, progPath, progType string, mapArgs []string) error
 	LoadSockops(objPath string) error
 	LoadSockopsWithBytes(objBytes []byte) error
@@ -374,7 +381,7 @@ type BPFDataplane interface {
 	LoadSkMsgAuto() error
 	RemoveSkMsg() error
 	AttachToCgroup() error
-	DetachFromCgroup() error
+	DetachFromCgroup(mode FindObjectMode) error
 	NewSockmapEndpointsMap() (string, error)
 	NewSockmap() (string, error)
 	UpdateSockmapEndpoints(ip net.IP, mask int) error
@@ -1594,7 +1601,7 @@ func (b *BPFLib) AttachToSockmap() error {
 	return nil
 }
 
-func (b *BPFLib) DetachFromSockmap() error {
+func (b *BPFLib) DetachFromSockmap(mode FindObjectMode) error {
 	mapPath := filepath.Join(b.sockmapDir, sockMapName)
 
 	progPath := filepath.Join(b.sockmapDir, skMsgProgName)
@@ -1612,6 +1619,9 @@ func (b *BPFLib) DetachFromSockmap() error {
 	printCommand(prog, args...)
 	output, err := exec.Command(prog, args...).CombinedOutput()
 	if err != nil {
+		if mode != FindByID {
+			return fmt.Errorf("failed to detach sk_msg prog from sockmap: %s\n%s", err, output)
+		}
 		progID, err2 := b.getSkMsgID()
 		if err2 != nil {
 			return fmt.Errorf("failed to detach sk_msg prog from sockmap: %s\n%s\n\nfailed to get the id of the program: %s", err, output, err2)
@@ -1806,10 +1816,14 @@ func clearSockmap(mapArgs []string) error {
 	return nil
 }
 
-func (b *BPFLib) RemoveSockmap() error {
+func (b *BPFLib) RemoveSockmap(mode FindObjectMode) error {
 	mapPath := filepath.Join(b.sockmapDir, sockMapName)
 	defer os.Remove(mapPath)
 	if err := clearSockmap([]string{"pinned", mapPath}); err != nil {
+		if mode != FindByID {
+			return fmt.Errorf("failed to clear sock map: %v", err)
+		}
+
 		m, err := b.getSockMap()
 		if err != nil {
 			return err
@@ -2019,7 +2033,7 @@ func (b *BPFLib) AttachToCgroup() error {
 	return nil
 }
 
-func (b *BPFLib) DetachFromCgroup() error {
+func (b *BPFLib) DetachFromCgroup(mode FindObjectMode) error {
 	progPath := filepath.Join(b.sockmapDir, sockopsProgName)
 
 	if b.cgroupV2Dir == "" {
@@ -2038,6 +2052,10 @@ func (b *BPFLib) DetachFromCgroup() error {
 	printCommand(prog, args...)
 	output, err := exec.Command(prog, args...).CombinedOutput()
 	if err != nil {
+		if mode != FindByID {
+			return fmt.Errorf("failed to detach sockops prog from cgroup: %s\n%s", err, output)
+		}
+
 		progID, err2 := b.getAttachedSockopsID()
 		if err2 != nil {
 			return fmt.Errorf("failed to detach sockops prog from cgroup: %s\n%s\n\nfailed to get the id of the program: %s", err, output, err2)

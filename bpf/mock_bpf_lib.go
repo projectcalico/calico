@@ -592,13 +592,13 @@ func (b *MockBPFLib) AttachToSockmap() error {
 	return nil
 }
 
-func (b *MockBPFLib) DetachFromSockmap() error {
+func (b *MockBPFLib) DetachFromSockmap(mode FindObjectMode) error {
 	b.SockMap.Info.SkMsg = nil
 
 	return nil
 }
 
-func (b *MockBPFLib) RemoveSockmap() error {
+func (b *MockBPFLib) RemoveSockmap(mode FindObjectMode) error {
 	if b.SockMap == nil {
 		return errors.New("can't find sockmap")
 	}
@@ -681,7 +681,7 @@ func (b *MockBPFLib) AttachToCgroup() error {
 	return nil
 }
 
-func (b *MockBPFLib) DetachFromCgroup() error {
+func (b *MockBPFLib) DetachFromCgroup(mode FindObjectMode) error {
 	if b.SockopsProg == nil {
 		return errors.New("can't find sockops prog")
 	}

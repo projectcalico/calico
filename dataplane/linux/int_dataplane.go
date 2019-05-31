@@ -417,7 +417,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	if dp.sockmapState == nil {
 		st, err := NewSockmapState(config.SockmapCgroupv2Subdir)
 		if err == nil {
-			st.WipeSockmap()
+			st.WipeSockmap(bpf.FindInBPFFSOnly)
 		}
 		// if we can't create a sockmap state it means we couldn't get a working
 		// bpffs so there's nothing to clean up
