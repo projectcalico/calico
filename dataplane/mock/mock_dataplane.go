@@ -1,4 +1,4 @@
-// Copyright (c) 2018 Tigera, Inc. All rights reserved.
+// Copyright (c) 2018-2019 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -36,7 +36,7 @@ type MockDataplane struct {
 	activeUntrackedPolicies        set.Set
 	activePreDNATPolicies          set.Set
 	activeProfiles                 set.Set
-	activeVTEPs                    set.Set
+	activeVTEPs                    map[string]proto.VXLANTunnelEndpointUpdate
 	activeRoutes                   set.Set
 	endpointToPolicyOrder          map[string][]TierInfo
 	endpointToUntrackedPolicyOrder map[string][]TierInfo
@@ -108,7 +108,12 @@ func (d *MockDataplane) ActiveVTEPs() set.Set {
 	d.Lock()
 	defer d.Unlock()
 
-	return d.activeVTEPs.Copy()
+	cp := set.New()
+	for _, v := range d.activeVTEPs {
+		cp.Add(v)
+	}
+
+	return cp
 }
 func (d *MockDataplane) ActiveRoutes() set.Set {
 	d.Lock()
@@ -213,7 +218,7 @@ func NewMockDataplane() *MockDataplane {
 		activeUntrackedPolicies:        set.New(),
 		activePreDNATPolicies:          set.New(),
 		activeRoutes:                   set.New(),
-		activeVTEPs:                    set.New(),
+		activeVTEPs:                    make(map[string]proto.VXLANTunnelEndpointUpdate),
 		endpointToPolicyOrder:          make(map[string][]TierInfo),
 		endpointToUntrackedPolicyOrder: make(map[string][]TierInfo),
 		endpointToPreDNATPolicyOrder:   make(map[string][]TierInfo),
@@ -412,14 +417,10 @@ func (d *MockDataplane) OnEvent(event interface{}) {
 			return nil
 		})
 	case *proto.VXLANTunnelEndpointUpdate:
-		d.activeVTEPs.Add(*event)
+		d.activeVTEPs[event.Node] = *event
 	case *proto.VXLANTunnelEndpointRemove:
-		d.activeVTEPs.Iter(func(item interface{}) error {
-			if event.Node == item.(proto.VXLANTunnelEndpointUpdate).Node {
-				return set.RemoveItem
-			}
-			return nil
-		})
+		Expect(d.activeVTEPs).To(HaveKey(event.Node), "delete for unknown VTEP")
+		delete(d.activeVTEPs, event.Node)
 	}
 }
 

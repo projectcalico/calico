@@ -275,6 +275,21 @@ var baseTests = []StateList{
 		vxlanToIPIPSwitch,
 	},
 	{
+		vxlanWithBlockAndDifferentTunnelIP,
+	},
+	{
+		// This sequence simulates updating a node's tunnel IP.
+		vxlanWithBlock,
+		vxlanWithBlockAndDifferentTunnelIP,
+		vxlanWithBlock,
+	},
+	{
+		// This sequence simulates updating a node's IP.
+		vxlanWithBlock,
+		vxlanWithBlockAndDifferentNodeIP,
+		vxlanWithBlock,
+	},
+	{
 		// Start with a block.
 		vxlanWithBlock,
 
@@ -383,6 +398,7 @@ var _ = Describe("Async calculation graph state sequencing tests:", func() {
 					// Create the calculation graph.
 					conf := config.New()
 					conf.FelixHostname = localHostname
+					conf.VXLANEnabled = true
 					outputChan := make(chan interface{})
 					asyncGraph := NewAsyncCalcGraph(conf, []chan<- interface{}{outputChan}, nil)
 					// And a validation filter, with a channel between it
