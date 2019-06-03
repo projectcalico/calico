@@ -81,20 +81,24 @@ func (r ipPools) Create(ctx context.Context, res *apiv3.IPPool, opts options.Set
 	}
 
 	blocks, err := r.client.backend.List(ctx, model.BlockListOptions{IPVersion: ipVersion}, "")
-	if err != nil {
+	if _, ok := err.(cerrors.ErrorOperationNotSupported); !ok && err != nil {
+		// There was an error and it wasn't OperationNotSupported - return it.
 		return nil, err
-	}
-	for _, b := range blocks.KVPairs {
-		k := b.Key.(model.BlockKey)
-		ones, _ := k.CIDR.Mask.Size()
-		// Check if this block has a different size to the pool, and that it overlaps with the pool.
-		if ones != poolBlockSize && k.CIDR.IsNetOverlap(*poolCIDR) {
-			return nil, cerrors.ErrorValidation{
-				ErroredFields: []cerrors.ErroredField{{
-					Name:   "IPPool.Spec.BlockSize",
-					Reason: "IPPool blocksSize conflicts with existing allocations that use a different blockSize",
-					Value:  res.Spec.BlockSize,
-				}},
+	} else if err == nil {
+		// Skip the block check if the error is OperationUnsupported - listing blocks is not
+		// supported with host-local IPAM on KDD.
+		for _, b := range blocks.KVPairs {
+			k := b.Key.(model.BlockKey)
+			ones, _ := k.CIDR.Mask.Size()
+			// Check if this block has a different size to the pool, and that it overlaps with the pool.
+			if ones != poolBlockSize && k.CIDR.IsNetOverlap(*poolCIDR) {
+				return nil, cerrors.ErrorValidation{
+					ErroredFields: []cerrors.ErroredField{{
+						Name:   "IPPool.Spec.BlockSize",
+						Reason: "IPPool blocksSize conflicts with existing allocations that use a different blockSize",
+						Value:  res.Spec.BlockSize,
+					}},
+				}
 			}
 		}
 	}
