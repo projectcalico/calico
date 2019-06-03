@@ -40,6 +40,7 @@ const (
 	nodeBgpIpv4AddrAnnotation            = "projectcalico.org/IPv4Address"
 	nodeBgpIpv4IPIPTunnelAddrAnnotation  = "projectcalico.org/IPv4IPIPTunnelAddr"
 	nodeBgpIpv4VXLANTunnelAddrAnnotation = "projectcalico.org/IPv4VXLANTunnelAddr"
+	nodeBgpVXLANTunnelMACAddrAnnotation  = "projectcalico.org/VXLANTunnelMACAddr"
 	nodeBgpIpv6AddrAnnotation            = "projectcalico.org/IPv6Address"
 	nodeBgpAsnAnnotation                 = "projectcalico.org/ASNumber"
 	nodeBgpCIDAnnotation                 = "projectcalico.org/RouteReflectorClusterID"
@@ -248,6 +249,7 @@ func K8sNodeToCalico(k8sNode *kapiv1.Node, usePodCIDR bool) (*model.KVPair, erro
 
 	// Set the VXLAN tunnel address based on annotation.
 	calicoNode.Spec.IPv4VXLANTunnelAddr = annotations[nodeBgpIpv4VXLANTunnelAddrAnnotation]
+	calicoNode.Spec.VXLANTunnelMACAddr = annotations[nodeBgpVXLANTunnelMACAddrAnnotation]
 
 	// Create the resource key from the node name.
 	return &model.KVPair{
@@ -280,6 +282,13 @@ func mergeCalicoNodeIntoK8sNode(calicoNode *apiv3.Node, k8sNode *kapiv1.Node) (*
 		k8sNode.Annotations[nodeBgpIpv4VXLANTunnelAddrAnnotation] = calicoNode.Spec.IPv4VXLANTunnelAddr
 	} else {
 		delete(k8sNode.Annotations, nodeBgpIpv4VXLANTunnelAddrAnnotation)
+	}
+
+	// Handle VXLAN MAC address.
+	if calicoNode.Spec.VXLANTunnelMACAddr != "" {
+		k8sNode.Annotations[nodeBgpVXLANTunnelMACAddrAnnotation] = calicoNode.Spec.VXLANTunnelMACAddr
+	} else {
+		delete(k8sNode.Annotations, nodeBgpVXLANTunnelMACAddrAnnotation)
 	}
 
 	if calicoNode.Spec.BGP == nil {
