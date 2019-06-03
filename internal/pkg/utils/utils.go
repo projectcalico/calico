@@ -482,6 +482,11 @@ func CreateClient(conf types.NetConf) (client.Interface, error) {
 			return nil, err
 		}
 	}
+	if conf.EtcdDiscoverySrv != "" {
+		if err := os.Setenv("ETCD_DISCOVERY_SRV", conf.EtcdDiscoverySrv); err != nil {
+			return nil, err
+		}
+	}
 	if conf.EtcdScheme != "" {
 		if err := os.Setenv("ETCD_SCHEME", conf.EtcdScheme); err != nil {
 			return nil, err
