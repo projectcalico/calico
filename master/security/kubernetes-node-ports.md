@@ -4,7 +4,7 @@ title: Apply policy to Kubernetes node ports
 
 ### Big picture
 
-Apply Calico network policy to Kubernetes node ports
+Restrict access to node ports to specific external clients.
 
 ### Value
 
@@ -13,14 +13,14 @@ Exposing services to external clients using node ports is a standard Kubernetes 
 ### Features
 
 This how-to guide uses the following Calico features:
-- **GlobalNetwork policy** with a preDNAT field
+- **GlobalNetworkPolicy** with a preDNAT field
 - **HostEndpoint**
 
 ### Concepts
 
 #### Calico global network policy with a preDNAT field 
 
-In a Kubernetes cluster, kube-proxy will DNAT a request to the node's port and IP address, to one of the pods that backs the service. For Calico global network policy to both allow normal ingress cluster traffic, and deny other general ingress traffic, it must take effect before DNAT. To do this, you simply add a preDNAT field to a Calico global network policy. The preDNAT field:
+In a Kubernetes cluster, kube-proxy will DNAT a request to the node's port and IP address, to one of the pods that backs the service. For Calico global network policy to both allow normal ingress cluster traffic, and deny other general ingress traffic, it must take effect before DNAT. To do this, you simply add a **preDNAT** field to a Calico global network policy. The preDNAT field:
 
 - Applies only to ingress rules
 - Enforces all ingress traffic through a host endpoint, regardless of destination.  
@@ -37,12 +37,12 @@ In a Kubernetes cluster, kube-proxy will DNAT a request to the node's port and I
 
 To securely expose a Kubernetes service to external clients, you must implement all of the following steps. 
 
-- [Allow cluster ingress traffic, but deny general ingress traffic](#allow-cluster-ingress-traffic,-but-deny-general-ingress-traffic)
+- [Allow cluster ingress traffic, but deny general ingress traffic](#allow-cluster-ingress-traffic-but-deny-general-ingress-traffic)
 - [Allow local host egress traffic](#allow-local-host-egress-traffic)
 - [Create host endpoints with appropriate network policy](#create-host-endpoints-with-appropriate-network-policy)
 - [Allow ingress traffic to specific node ports](#allow-ingress-traffic-to-specific-node-ports)
 
-#### Allow cluster ingress traffic, but deny general ingress traffic
+#### Allow cluster ingress traffic but deny general ingress traffic
 
 In the following example, we create a global network policy to allow cluster ingress traffic (**allow-cluster-internal-ingress**): for the nodes’ IP addresses (**1.2.3.4/16**), and for pod IP addresses assigned by Kubernetes (**100.100.100.0/16**). By adding a preDNAT field, Calico global network policy is applied before regular DNAT on the Kubernetes cluster. 
 
@@ -67,9 +67,9 @@ spec:
     - action: Deny
 ```
 
-#### Allow host local egress traffic   
+#### Allow local host egress traffic   
 
-We also need a global network policy to allow egress traffic through each node's external interface. Otherwise, when we define host endpoints for those interfaces, no egress traffic will be allowed from local processes (except for traffic that is allowed by the [Failsafe rules](({{site.baseurl}}/{{page.version}}/security/hostendpoint/failsaferules).
+We also need a global network policy to allow egress traffic through each node's external interface. Otherwise, when we define host endpoints for those interfaces, no egress traffic will be allowed from local processes (except for traffic that is allowed by the [Failsafe rules]({{site.baseurl}}/{{page.version}}/security/host-endpoints/failsafe).
 
 ```
 apiVersion: projectcalico.org/v3
@@ -83,7 +83,7 @@ spec:
   selector: has(host-endpoint)
 ```
 
-#### Create host endpoints with appropriate policy
+#### Create host endpoints with appropriate network policy
 
 In this example, we assume that you have already defined Calico host endpoints with network policy that is appropriate for the cluster. (For example, you wouldn’t want a host endpoint with a “default deny all traffic to/from this host” network policy because that is counter to the goal of allowing/denying specific traffic.)
 
@@ -129,10 +129,10 @@ To make the NodePort accessible only through particular nodes, give the nodes a 
 nodeport-external-ingress: true
 ```
 
-Then, use **nodeport-external-ingress == ‘true’** as the selector of the **allow-nodeport** policy, instead of **has(host-endpoint)**.
+Then, use **nodeport-external-ingress: true** as the selector of the **allow-nodeport** policy, instead of **has(host-endpoint)**.
 
 
 ### Above and beyond
 
-[Global Network Policy]({{site.baseurl}}/{{page.version}}/reference/resources/globalnetworkpolicy) 
-[Host Endpoints]({{site.baseurl}}/{{page.version}}/security/hostendpoints) 
+- [Global Network Policy]({{site.baseurl}}/{{page.version}}/reference/resources/globalnetworkpolicy) 
+- [Host Endpoints]({{site.baseurl}}/{{page.version}}/reference/resources/hostendpoint)
