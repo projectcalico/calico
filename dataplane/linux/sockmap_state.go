@@ -19,6 +19,7 @@ import (
 
 	"github.com/projectcalico/felix/bpf"
 	"github.com/projectcalico/felix/proto"
+	"github.com/projectcalico/libcalico-go/lib/set"
 )
 
 type wipeMode uint32
@@ -29,8 +30,9 @@ const (
 )
 
 type sockmapState struct {
-	bpfLib bpf.BPFDataplane
-	cbIDs  []*CbID
+	bpfLib            bpf.BPFDataplane
+	cbIDs             []*CbID
+	workloadEndpoints map[string][]string // name -> []CIDR
 }
 
 func NewSockmapState(cgroupSubdir string) (*sockmapState, error) {
@@ -41,8 +43,9 @@ func NewSockmapState(cgroupSubdir string) (*sockmapState, error) {
 
 	log.Debug("Created new Sockmap state.")
 	return &sockmapState{
-		bpfLib: lib,
-		cbIDs:  nil,
+		bpfLib:            lib,
+		cbIDs:             nil,
+		workloadEndpoints: make(map[string][]string),
 	}, nil
 }
 
@@ -61,56 +64,96 @@ func (s *sockmapState) DepopulateCallbacks(cbs *callbacks) {
 	s.cbIDs = nil
 }
 
-func (s *sockmapState) updateWorkload(old, new *proto.WorkloadEndpoint) {
-	if old != nil {
-		for _, cidr := range old.Ipv4Nets {
-			logCxt := log.WithField("cidr", cidr)
-			ip, mask, err := bpf.MemberToIPMask(cidr)
-			if err != nil {
-				logCxt.WithError(err).Error("failed to convert cidr to ip and mask")
-				return
-			}
-
-			if err := s.bpfLib.RemoveItemSockmapEndpointsMap(*ip, mask); err != nil {
-				logCxt.WithError(err).Error("failed to remove item from endpoints map")
-				return
-			}
-
-			log.Infof("[SOCKMAP] removed %v", cidr)
+func (s *sockmapState) flattenWorkloadEndpoints() set.Set {
+	wep := set.New()
+	for _, nets := range s.workloadEndpoints {
+		for _, net := range nets {
+			wep.Add(net)
 		}
 	}
-	for _, cidr := range new.Ipv4Nets {
+
+	return wep
+}
+
+func (s *sockmapState) updateWorkload(old, new *proto.WorkloadEndpoint) {
+	s.workloadEndpoints[new.Name] = new.Ipv4Nets
+
+	desired := s.flattenWorkloadEndpoints()
+
+	if err := s.processWorkloadUpdates(desired); err != nil {
+		log.WithError(err).Error("failed to process workload updates")
+		return
+	}
+}
+
+func (s *sockmapState) processWorkloadUpdates(desired set.Set) error {
+	current := set.New()
+
+	cidrs, err := s.bpfLib.DumpSockmapEndpointsMap(bpf.IPFamilyV4)
+	if err != nil {
+		return err
+	}
+
+	for _, rawCIDR := range cidrs {
+		ipnet := rawCIDR.ToIPNet()
+		current.Add(ipnet.String())
+	}
+
+	toAdd := setDifference(desired, current)
+	toDrop := setDifference(current, desired)
+
+	toDrop.Iter(func(item interface{}) error {
+		cidr := item.(string)
 		logCxt := log.WithField("cidr", cidr)
 
 		ip, mask, err := bpf.MemberToIPMask(cidr)
 		if err != nil {
 			logCxt.WithError(err).Error("failed to convert cidr to ip and mask")
-			return
+			return set.StopIteration
+		}
+
+		if err := s.bpfLib.RemoveItemSockmapEndpointsMap(*ip, mask); err != nil {
+			logCxt.WithError(err).Error("failed to remove item from endpoints map")
+			return set.StopIteration
+		}
+
+		log.Infof("[SOCKMAP] removed %v", cidr)
+
+		return nil
+	})
+
+	toAdd.Iter(func(item interface{}) error {
+		cidr := item.(string)
+
+		logCxt := log.WithField("cidr", cidr)
+
+		ip, mask, err := bpf.MemberToIPMask(cidr)
+		if err != nil {
+			logCxt.WithError(err).Error("failed to convert cidr to ip and mask")
+			return set.StopIteration
 		}
 
 		if err := s.bpfLib.UpdateSockmapEndpoints(*ip, mask); err != nil {
 			logCxt.WithError(err).Error("failed to update item on endpoints map")
-			return
+			return set.StopIteration
 		}
 
 		log.Infof("[SOCKMAP] added %v", cidr)
-	}
+
+		return nil
+	})
+
+	return nil
 }
 
 func (s *sockmapState) removeWorkload(old *proto.WorkloadEndpoint) {
-	for _, cidr := range old.Ipv4Nets {
-		logCxt := log.WithField("cidr", cidr)
-		ip, mask, err := bpf.MemberToIPMask(cidr)
-		if err != nil {
-			logCxt.WithError(err).Error("Failed to convert cidr to ip and mask.")
-			return
-		}
+	delete(s.workloadEndpoints, old.Name)
 
-		if err := s.bpfLib.RemoveItemSockmapEndpointsMap(*ip, mask); err != nil {
-			logCxt.WithError(err).Error("Failed to remove item from sockmap endpoints map.")
-			return
-		}
-		logCxt.Debug("Workload CIDR removed from sockmap endpoints map.")
+	desired := s.flattenWorkloadEndpoints()
+
+	if err := s.processWorkloadUpdates(desired); err != nil {
+		log.WithError(err).Error("failed to process workload updates")
+		return
 	}
 }
 
