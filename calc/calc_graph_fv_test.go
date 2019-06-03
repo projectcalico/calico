@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2018 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2019 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -18,6 +18,8 @@
 package calc_test
 
 import (
+	"os"
+
 	. "github.com/projectcalico/felix/calc"
 	"github.com/projectcalico/felix/dataplane/mock"
 
@@ -273,6 +275,21 @@ var baseTests = []StateList{
 		vxlanToIPIPSwitch,
 	},
 	{
+		vxlanWithBlockAndDifferentTunnelIP,
+	},
+	{
+		// This sequence simulates updating a node's tunnel IP.
+		vxlanWithBlock,
+		vxlanWithBlockAndDifferentTunnelIP,
+		vxlanWithBlock,
+	},
+	{
+		// This sequence simulates updating a node's IP.
+		vxlanWithBlock,
+		vxlanWithBlockAndDifferentNodeIP,
+		vxlanWithBlock,
+	},
+	{
 		// Start with a block.
 		vxlanWithBlock,
 
@@ -296,13 +313,23 @@ var baseTests = []StateList{
 	},
 }
 
-var testExpanders = []func(baseTest StateList) (desc string, mappedTests []StateList){
-	identity,
-	reverseKVOrder,
-	reverseStateOrder,
-	insertEmpties,
-	splitStates,
-	squashStates,
+func testExpanders() (testExpanders []func(baseTest StateList) (desc string, mappedTests []StateList)) {
+	testExpanders = []func(baseTest StateList) (desc string, mappedTests []StateList){
+		identity,
+	}
+
+	if os.Getenv("DISABLE_TEST_EXPANSION") == "true" {
+		log.Info("Test expansion disabled")
+		return
+	}
+	testExpanders = append(testExpanders,
+		reverseKVOrder,
+		reverseStateOrder,
+		insertEmpties,
+		splitStates,
+		squashStates,
+	)
+	return
 }
 
 // These tests drive the calculation graph directly (and synchronously).
@@ -319,15 +346,16 @@ var testExpanders = []func(baseTest StateList) (desc string, mappedTests []State
 var _ = Describe("Calculation graph state sequencing tests:", func() {
 	for _, test := range baseTests {
 		baseTest := test
-		for _, expander := range testExpanders {
+		for _, expander := range testExpanders() {
 			expanderDesc, expandedTests := expander(baseTest)
 			for _, expandedTest := range expandedTests {
-				// Always worth adding an empty to the end of the test.
-				expandedTest = append(expandedTest, empty)
 				desc := fmt.Sprintf("with input states %v %v", baseTest, expanderDesc)
 				Describe(desc+" flushing after each KV", func() {
 					doStateSequenceTest(expandedTest, afterEachKV)
 				})
+				if os.Getenv("DISABLE_TEST_EXPANSION") == "true" {
+					break
+				}
 				Describe(desc+" flushing after each KV and duplicating each update", func() {
 					doStateSequenceTest(expandedTest, afterEachKVAndDupe)
 				})
@@ -352,13 +380,17 @@ var _ = Describe("Calculation graph state sequencing tests:", func() {
 // synchronous test above is passing.  It's much easier to debug a
 // deterministic test!
 var _ = Describe("Async calculation graph state sequencing tests:", func() {
+	if os.Getenv("DISABLE_ASYNC_TESTS") == "true" {
+		log.Info("Async tests disabled")
+		return
+	}
 	for _, test := range baseTests {
 		if len(test) == 0 {
 			continue
 		}
 		baseTest := test
 
-		for _, expander := range testExpanders {
+		for _, expander := range testExpanders() {
 			expanderDesc, expandedTests := expander(baseTest)
 			for _, test := range expandedTests {
 				test := test
@@ -366,6 +398,7 @@ var _ = Describe("Async calculation graph state sequencing tests:", func() {
 					// Create the calculation graph.
 					conf := config.New()
 					conf.FelixHostname = localHostname
+					conf.VXLANEnabled = true
 					outputChan := make(chan interface{})
 					asyncGraph := NewAsyncCalcGraph(conf, []chan<- interface{}{outputChan}, nil)
 					// And a validation filter, with a channel between it
@@ -384,7 +417,11 @@ var _ = Describe("Async calculation graph state sequencing tests:", func() {
 						lastState := empty
 						for _, state := range test {
 							log.WithField("state", state).Info("Injecting next state")
+							_, _ = fmt.Fprintf(GinkgoWriter, "       -> Injecting state (single update): %v\n", state)
 							kvDeltas := state.KVDeltas(lastState)
+							for _, kv := range kvDeltas {
+								_, _ = fmt.Fprintf(GinkgoWriter, "            %v = %v\n", kv.Key, kv.Value)
+							}
 							toValidator.OnUpdates(kvDeltas)
 							lastState = state
 						}
@@ -422,38 +459,48 @@ var _ = Describe("Async calculation graph state sequencing tests:", func() {
 							}
 						}
 					}
-					state := test[len(test)-1]
 
-					// Async tests are slower to run so we do all the assertions
-					// on each test rather than as separate It() blocks.
-					Expect(mockDataplane.IPSets()).To(Equal(state.ExpectedIPSets),
-						"IP sets didn't match expected state after moving to state: %v",
-						state.Name)
-
-					Expect(mockDataplane.ActivePolicies()).To(Equal(state.ExpectedPolicyIDs),
-						"Active policy IDs were incorrect after moving to state: %v",
-						state.Name)
-
-					Expect(mockDataplane.ActiveProfiles()).To(Equal(state.ExpectedProfileIDs),
-						"Active profile IDs were incorrect after moving to state: %v",
-						state.Name)
-
-					Expect(mockDataplane.EndpointToPolicyOrder()).To(Equal(state.ExpectedEndpointPolicyOrder),
-						"Endpoint policy order incorrect after moving to state: %v",
-						state.Name)
-
-					Expect(mockDataplane.EndpointToPreDNATPolicyOrder()).To(Equal(state.ExpectedPreDNATEndpointPolicyOrder),
-						"Endpoint pre-DNAT policy order incorrect after moving to state: %v",
-						state.Name)
-
-					Expect(mockDataplane.EndpointToUntrackedPolicyOrder()).To(Equal(state.ExpectedUntrackedEndpointPolicyOrder),
-						"Endpoint untracked policy order incorrect after moving to state: %v",
-						state.Name)
+					// Do the common sync/async assertions.
+					expectCorrectDataplaneState(mockDataplane, test[len(test)-1])
 				})
 			}
 		}
 	}
 })
+
+func expectCorrectDataplaneState(mockDataplane *mock.MockDataplane, state State) {
+	log.WithField("state", state.Name).Info("Doing assertions on state")
+	Expect(mockDataplane.IPSets()).To(Equal(state.ExpectedIPSets),
+		"IP sets didn't match expected state after moving to state: %v",
+		state.Name)
+	Expect(mockDataplane.ActivePolicies()).To(Equal(state.ExpectedPolicyIDs),
+		"Active policy IDs were incorrect after moving to state: %v",
+		state.Name)
+	Expect(mockDataplane.ActiveProfiles()).To(Equal(state.ExpectedProfileIDs),
+		"Active profile IDs were incorrect after moving to state: %v",
+		state.Name)
+	Expect(mockDataplane.ActiveVTEPs()).To(Equal(state.ExpectedVTEPs),
+		"Active VTEPs were incorrect after moving to state: %v",
+		state.Name)
+	Expect(mockDataplane.ActiveRoutes()).To(Equal(state.ExpectedRoutes),
+		"Active routes were incorrect after moving to state: %v",
+		state.Name)
+	Expect(mockDataplane.EndpointToPolicyOrder()).To(Equal(state.ExpectedEndpointPolicyOrder),
+		"Endpoint policy order incorrect after moving to state: %v",
+		state.Name)
+	Expect(mockDataplane.EndpointToUntrackedPolicyOrder()).To(Equal(state.ExpectedUntrackedEndpointPolicyOrder),
+		"Untracked endpoint policy order incorrect after moving to state: %v",
+		state.Name)
+	Expect(mockDataplane.EndpointToPreDNATPolicyOrder()).To(Equal(state.ExpectedPreDNATEndpointPolicyOrder),
+		"Untracked endpoint policy order incorrect after moving to state: %v",
+		state.Name)
+	Expect(mockDataplane.ActiveUntrackedPolicies()).To(Equal(state.ExpectedUntrackedPolicyIDs),
+		"Untracked policies incorrect after moving to state: %v",
+		state.Name)
+	Expect(mockDataplane.ActivePreDNATPolicies()).To(Equal(state.ExpectedPreDNATPolicyIDs),
+		"PreDNAT policies incorrect after moving to state: %v",
+		state.Name)
+}
 
 type flushStrategy int
 
@@ -505,7 +552,7 @@ func doStateSequenceTest(expandedTest StateList, flushStrategy flushStrategy) {
 					ii, lastState.Name, state.Name))
 				kvDeltas := state.KVDeltas(lastState)
 				for _, kv := range kvDeltas {
-					fmt.Fprintf(GinkgoWriter, "       -> Injecting KV: %v\n", kv)
+					_, _ = fmt.Fprintf(GinkgoWriter, "       -> Injecting KV: %v\n", kv)
 					validationFilter.OnUpdates([]api.Update{kv})
 					if flushStrategy == afterEachKV || flushStrategy == afterEachKVAndDupe {
 						if !sentInSync {
@@ -519,7 +566,7 @@ func doStateSequenceTest(expandedTest StateList, flushStrategy flushStrategy) {
 						eventBuf.Flush()
 					}
 				}
-				fmt.Fprintln(GinkgoWriter, "       -- <<FLUSH>>")
+				_, _ = fmt.Fprintln(GinkgoWriter, "       -- <<FLUSH>>")
 				if flushStrategy == afterEachState {
 					if !sentInSync {
 						validationFilter.OnStatusUpdated(api.InSync)
@@ -534,42 +581,21 @@ func doStateSequenceTest(expandedTest StateList, flushStrategy flushStrategy) {
 				}
 				lastState = state
 			}
+			if flushStrategy == atEnd {
+				validationFilter.OnStatusUpdated(api.InSync)
+				eventBuf.Flush()
+				expectation()
+			}
 		}
 	}
 
 	// Note: these used to be separate It() blocks but combining them knocks ~10s off the
 	// runtime, which is worthwhile!
 	It("should result in correct active state", iterStates(func() {
-		Expect(mockDataplane.IPSets()).To(Equal(state.ExpectedIPSets),
-			"IP sets didn't match expected state after moving to state: %v",
-			state.Name)
-		Expect(mockDataplane.ActivePolicies()).To(Equal(state.ExpectedPolicyIDs),
-			"Active policy IDs were incorrect after moving to state: %v",
-			state.Name)
-		Expect(mockDataplane.ActiveProfiles()).To(Equal(state.ExpectedProfileIDs),
-			"Active profile IDs were incorrect after moving to state: %v",
-			state.Name)
-		Expect(mockDataplane.ActiveVTEPs()).To(Equal(state.ExpectedVTEPs),
-			"Active VTEPs were incorrect after moving to state: %v",
-			state.Name)
-		Expect(mockDataplane.ActiveRoutes()).To(Equal(state.ExpectedRoutes),
-			"Active routes were incorrect after moving to state: %v",
-			state.Name)
-		Expect(mockDataplane.EndpointToPolicyOrder()).To(Equal(state.ExpectedEndpointPolicyOrder),
-			"Endpoint policy order incorrect after moving to state: %v",
-			state.Name)
-		Expect(mockDataplane.EndpointToUntrackedPolicyOrder()).To(Equal(state.ExpectedUntrackedEndpointPolicyOrder),
-			"Untracked endpoint policy order incorrect after moving to state: %v",
-			state.Name)
-		Expect(mockDataplane.EndpointToPreDNATPolicyOrder()).To(Equal(state.ExpectedPreDNATEndpointPolicyOrder),
-			"Untracked endpoint policy order incorrect after moving to state: %v",
-			state.Name)
-		Expect(mockDataplane.ActiveUntrackedPolicies()).To(Equal(state.ExpectedUntrackedPolicyIDs),
-			"Untracked policies incorrect after moving to state: %v",
-			state.Name)
-		Expect(mockDataplane.ActivePreDNATPolicies()).To(Equal(state.ExpectedPreDNATPolicyIDs),
-			"PreDNAT policies incorrect after moving to state: %v",
-			state.Name)
+		// Do common sync/async assertions.
+		expectCorrectDataplaneState(mockDataplane, state)
+
+		// We only track stats in the sync tests.
 		Expect(lastStats.NumPolicies).To(Equal(state.NumPolicies()),
 			"number of policies stat incorrect after moving to state: %v\n%+v",
 			state.Name, spew.Sdump(state.DatastoreState))
