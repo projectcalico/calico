@@ -1,5 +1,5 @@
-hash: c9d82bcf2143151b17b84a02763e8e6774b502f613a12fef8967ec4e20de7b59
-updated: 2019-05-31T07:40:21.767313372Z
+hash: 8cae045146f20a9ddea21b035458f2434c4247259f6aee72b7704aff43164613
+updated: 2019-06-03T10:38:07.549123029Z
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -14,7 +14,7 @@ imports:
   - autorest/azure
   - autorest/date
 - name: github.com/beorn7/perks
-  version: 4b2b341e8d7715fae06375aa633dbb6e91b3fb46
+  version: 3a771d992973f24aa725d07868b467d1ddfceafb
   subpackages:
   - quantile
 - name: github.com/BurntSushi/toml
@@ -47,7 +47,7 @@ imports:
 - name: github.com/ghodss/yaml
   version: 73d445a93680fa1a78ae23a5839bad48f32ba1ee
 - name: github.com/go-ini/ini
-  version: 3be5ad479f69d4e08d7fe25edf79bf3346bd658e
+  version: 9c8236e659b76e87bf02044d06fde8683008ff3e
 - name: github.com/go-playground/locales
   version: f63010822830b6fe52288ee52d5a1151088ce039
   subpackages:
@@ -128,7 +128,7 @@ imports:
   subpackages:
   - simplelru
 - name: github.com/hpcloud/tail
-  version: a30252cb686a21eb2d0b98132633053ec2f7f1e5
+  version: a1dbeea552b7c8df4b542c66073e393de198a800
   subpackages:
   - ratelimiter
   - util
@@ -141,7 +141,7 @@ imports:
 - name: github.com/json-iterator/go
   version: f2b4162afba35581b6d4a50d3b8f34e33c144682
 - name: github.com/kardianos/osext
-  version: 2bc1f35cddc0cc527b4bc3dce8578fc2a6c11384
+  version: ae77be60afb1dcacde03767a8c37337fad28ac14
 - name: github.com/karrick/godirwalk
   version: 4e17292779dcc7ed08e10c03bfdd022f7c28b3c3
 - name: github.com/kelseyhightower/confd
@@ -166,7 +166,7 @@ imports:
 - name: github.com/markbates/safe
   version: 6fea05a5732486546a4836b7a1d596c5ec687b98
 - name: github.com/matttproud/golang_protobuf_extensions
-  version: c182affec369e30f25d3eb8cd8a478dee585ae7d
+  version: c12348ce28de40eed0136aa2b644d0ee0650e56c
   subpackages:
   - pbutil
 - name: github.com/mipearson/rfw
@@ -217,7 +217,7 @@ imports:
 - name: github.com/pkg/errors
   version: 27936f6d90f9c8e1145f11ed52ffffbfdb9e0af7
 - name: github.com/projectcalico/felix
-  version: b77dec191abc29752099963d0c0198e79c1a8b54
+  version: 95bd6920d8c9687470bc146c1eeebd621698e160
   subpackages:
   - bpf
   - bpf/packrd
@@ -258,7 +258,7 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: dca0a22d63708ccfbe94513e317ab54a2290338a
+  version: 957fa58d84de90d1d898e463f14d0213ce2539cc
   subpackages:
   - lib/apiconfig
   - lib/apis/v1
@@ -323,7 +323,7 @@ imports:
   - prometheus/internal
   - prometheus/promhttp
 - name: github.com/prometheus/client_model
-  version: fd36f4220a901265f90734c3183c5f0c91daa0b8
+  version: 6f3806018612930941127f2a7c6c453ba2c527d2
   subpackages:
   - go
 - name: github.com/prometheus/common
@@ -358,7 +358,7 @@ imports:
   subpackages:
   - nl
 - name: github.com/vishvananda/netns
-  version: 54f0e4339ce73702a0607f49922aaa1e749b418d
+  version: 13995c7128ccc8e51e9a6bd2b551020a27180abd
 - name: golang.org/x/crypto
   version: 49796115aa4b964c318aad4f3084fdb41e9aa067
   subpackages:
@@ -416,20 +416,13 @@ imports:
   subpackages:
   - rate
 - name: golang.org/x/tools
-  version: fe54fb35175bb1c0c175e2335e23d7fa90ca987a
+  version: 4735f53fb37db012e63d1a62914417980fb3c023
   subpackages:
   - go/ast/astutil
-  - go/gcexportdata
-  - go/internal/gcimporter
-  - go/internal/packagesdriver
-  - go/packages
   - imports
   - internal/fastwalk
-  - internal/gopathwalk
-  - internal/module
-  - internal/semver
 - name: google.golang.org/appengine
-  version: 54a98f90d1c46b7731eb8fb305d2a321c30ef610
+  version: 4a4468ece617fc8205e99368fa2200e9d1fad421
   subpackages:
   - internal
   - internal/app_identity
@@ -464,10 +457,10 @@ imports:
   - status
   - tap
   - transport
-- name: gopkg.in/fsnotify.v1
-  version: 7be54206639f256967dd82fa767397ba5f8f48f5
+- name: gopkg.in/fsnotify/fsnotify.v1
+  version: c2828203cd70a50dcccfb2761f8b1f8ceef9a8e9
 - name: gopkg.in/go-playground/validator.v9
-  version: 46b4b1e301c24cac870ffcb4ba5c8a703d1ef475
+  version: b199fa0642d29caca62b6a99d65cc981ba5edc3b
 - name: gopkg.in/inf.v0
   version: 3887ee99ecf07df5b447e9b00d9c0b2adaa9f3e4
 - name: gopkg.in/tomb.v1
