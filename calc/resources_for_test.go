@@ -589,6 +589,11 @@ var remoteHost2VXLANTunnelConfigKey = HostConfigKey{
 	Name:     "IPv4VXLANTunnelAddr",
 }
 
+var remoteHostVXLANTunnelMACConfigKey = HostConfigKey{
+	Hostname: remoteHostname,
+	Name:     "VXLANTunnelMACAddr",
+}
+
 var ipPoolKey = IPPoolKey{
 	CIDR: mustParseNet("10.0.0.0/16"),
 }
@@ -706,3 +711,4 @@ var localHostVXLANTunnelIP = "10.0.0.0"
 var remoteHostVXLANTunnelIP = "10.0.1.0"
 var remoteHostVXLANTunnelIP2 = "10.0.1.1"
 var remoteHost2VXLANTunnelIP = "10.0.2.0"
+var remoteHostVXLANTunnelMAC = "66:74:c5:72:3f:01"

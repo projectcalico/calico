@@ -64,6 +64,7 @@ type VXLANResolver struct {
 	// block that contributed them. The following comprises the full internal data model.
 	nodeNameToVXLANTunnelAddr map[string]string
 	nodeNameToIPAddr          map[string]string
+	nodeNameToVXLANMac        map[string]string
 	blockToRoutes             map[string]set.Set
 	vxlanPools                map[string]model.IPPool
 }
@@ -74,6 +75,7 @@ func NewVXLANResolver(hostname string, callbacks PipelineCallbacks) *VXLANResolv
 		callbacks:                 callbacks,
 		nodeNameToVXLANTunnelAddr: map[string]string{},
 		nodeNameToIPAddr:          map[string]string{},
+		nodeNameToVXLANMac:        map[string]string{},
 		blockToRoutes:             map[string]set.Set{},
 		vxlanPools:                map[string]model.IPPool{},
 	}
@@ -278,6 +280,40 @@ func (c *VXLANResolver) OnHostConfigUpdate(update api.Update) (_ bool) {
 				return nil
 			})
 			c.sendVTEPRemove(nodeName)
+		}
+	case "VXLANTunnelMACAddr":
+		nodeName := update.Key.(model.HostConfigKey).Hostname
+		vtepSent := c.vtepSent(nodeName)
+		logCxt := logrus.WithField("node", nodeName).WithField("value", update.Value)
+		logCxt.Debug("VXLANTunnelMACAddr update")
+		if update.Value != nil {
+			// Update for a VXLAN tunnel MAC address.
+			newMAC := update.Value.(string)
+			currMAC := c.vtepMACForHost(nodeName)
+			logCxt = logCxt.WithFields(logrus.Fields{"newMAC": newMAC, "currMAC": currMAC})
+			c.nodeNameToVXLANMac[nodeName] = newMAC
+			if vtepSent {
+				if currMAC == newMAC {
+					// If we've already handled this node, there's nothing to do. Deduplicate.
+					logCxt.Debug("Skipping duplicate tunnel MAC addr update")
+					return
+				}
+
+				// Try sending a VTEP update.
+				if c.sendVTEPUpdate(nodeName) {
+					// We've successfully sent a new VTEP
+					logCxt.Info("Sent VTEP to dataplane")
+				}
+			}
+
+		} else {
+			logCxt.Info("Update the VTEP with the system generated MAC address and send it to dataplane")
+			delete(c.nodeNameToVXLANMac, nodeName)
+
+			if c.sendVTEPUpdate(nodeName) {
+				// We've successfully sent a new VTEP
+				logCxt.Info("Sent VTEP to dataplane")
+			}
 		}
 	}
 	return
@@ -496,9 +532,17 @@ func (c *VXLANResolver) determineGatewayForRoute(r vxlanRoute) string {
 	return c.nodeNameToVXLANTunnelAddr[r.node]
 }
 
+// vtepMACForHost checks if there is new MAC present in host config.
+// If new MAC is present in host config, then vtepMACForHost returns the MAC present in  host config else
 // vtepMACForHost calculates a deterministic MAC address based on the provided host.
 // The returned address matches the address assigned to the VXLAN device on that node.
 func (c *VXLANResolver) vtepMACForHost(nodename string) string {
+	mac := c.nodeNameToVXLANMac[nodename]
+
+	if mac != "" {
+		return mac
+	}
+
 	hasher := sha1.New()
 	hasher.Write([]byte(nodename))
 	sha := hasher.Sum(nil)

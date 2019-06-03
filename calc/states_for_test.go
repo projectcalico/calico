@@ -906,6 +906,19 @@ var vxlanWithBlock = empty.withKVUpdates(
 	},
 )
 
+// Minimal VXLAN set-up with a MAC address.
+var vxlanWithMAC = vxlanWithBlock.withKVUpdates(
+	KVPair{Key: remoteHostVXLANTunnelMACConfigKey, Value: remoteHostVXLANTunnelMAC},
+).withName("VXLAN MAC").withVTEPs(
+	// VTEP for the remote node.
+	proto.VXLANTunnelEndpointUpdate{
+		Node:           remoteHostname,
+		Mac:            remoteHostVXLANTunnelMAC,
+		Ipv4Addr:       remoteHostVXLANTunnelIP,
+		ParentDeviceIp: remoteHostIP.String(),
+	},
+)
+
 // As above but with a more complex block.  The block has some allocated IPs on the same
 // node as well as one that's borrowed by a second node.  We add the extra VTEP config for the
 // other node.

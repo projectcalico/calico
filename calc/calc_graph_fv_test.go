@@ -311,6 +311,16 @@ var baseTests = []StateList{
 		vxlanLocalBlockWithBorrows,
 		vxlanWithBlock,
 	},
+	{
+		// Create a VXLAN scenario with a block and MAC.
+		vxlanWithMAC,
+
+		// Delete the host tunnel MAC address
+		vxlanWithBlock,
+
+		// Add it back again.
+		vxlanWithMAC,
+	},
 }
 
 func testExpanders() (testExpanders []func(baseTest StateList) (desc string, mappedTests []StateList)) {
