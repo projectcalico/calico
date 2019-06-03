@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"math/rand"
 	"path/filepath"
+	"strings"
 	"time"
 
 	. "github.com/onsi/ginkgo"
@@ -132,6 +133,85 @@ var _ = infrastructure.DatastoreDescribe("with initialized Felix", []apiconfig.D
 		otherHost.Stop()
 		host.Stop()
 		felix.Stop()
+		func() {
+			opts := infrastructure.DefaultTopologyOptions()
+			opts.FelixLogSeverity = "debug"
+			opts.ExtraEnvVars["FELIX_XDPENABLED"] = "0"
+			opts.ExtraEnvVars["FELIX_SOCKMAPENABLED"] = "1"
+			opts.ExtraEnvVars["FELIX_SOCKMAPCGROUPV2SUBDIR"] = cgroupSubdir
+			felix, _ = infrastructure.StartSingleNodeTopology(opts, infra)
+			defer felix.Stop()
+			if err := waitForCgroupSubdir(felix, cgroupSubdir); err != nil {
+				log.WithFields(log.Fields{
+					"subdir":      cgroupSubdir,
+					"containerID": felix.Container.Name,
+				}).WithError(err).Info("Failed to wait for cgroup subdir to appear in docker container")
+				return
+			}
+			outputBytes, err := utils.Command(
+				"docker",
+				"exec",
+				felix.Container.Name,
+				"bpftool",
+				"--json",
+				"--pretty",
+				"map",
+				"dump",
+				"pinned",
+				"/sys/fs/bpf/calico/sockmap/calico_sock_map_v1",
+			).CombinedOutput()
+			if err != nil {
+				log.WithFields(log.Fields{
+					"containerID": felix.Container.Name,
+					"output":      string(outputBytes),
+				}).WithError(err).Info("Failed to dump the contents of the sock map, skipping cleanup")
+				return
+			}
+			if strings.TrimSpace(string(outputBytes)) != "[]" {
+				log.WithFields(log.Fields{
+					"containerID": felix.Container.Name,
+					"output":      string(outputBytes),
+				}).Info("Sock map is not empty, skipping cleanup")
+				return
+			}
+			fullCgroupDir := filepath.Join("/run/calico/cgroup", cgroupSubdir)
+			outputBytes, err = utils.Command(
+				"docker",
+				"exec",
+				felix.Container.Name,
+				"bpftool",
+				"cgroup",
+				"detach",
+				fullCgroupDir,
+				"sock_ops",
+				"pinned",
+				"/sys/fs/bpf/calico/sockmap/calico_sockops_v1",
+			).CombinedOutput()
+			if err != nil {
+				log.WithFields(log.Fields{
+					"cgroupdir":   fullCgroupDir,
+					"containerID": felix.Container.Name,
+					"output":      string(outputBytes),
+				}).WithError(err).Info("Failed to detach sockops program from cgroup, skipping cleanup")
+				return
+			}
+			if cgroupSubdir != "" {
+				outputBytes, err = utils.Command(
+					"docker",
+					"exec",
+					felix.Container.Name,
+					"rmdir",
+					fullCgroupDir,
+				).CombinedOutput()
+				if err != nil {
+					log.WithError(err).WithFields(log.Fields{
+						"output": string(outputBytes),
+						"dir":    fullCgroupDir,
+					}).Info("Failed to removing cgroup2 dir, skipping cleanup")
+				}
+			}
+			log.Info("Cleanup finished")
+		}()
 		infra.Stop()
 	})
 
