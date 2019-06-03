@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"github.com/coreos/etcd/clientv3"
+	"github.com/coreos/etcd/pkg/srv"
 	"github.com/coreos/etcd/pkg/transport"
 	log "github.com/sirupsen/logrus"
 	"k8s.io/apiserver/pkg/storage/etcd3"
@@ -295,10 +296,23 @@ func newEtcdV3Client() (*clientv3.Client, error) {
 		return nil, err
 	}
 
+	if config.Spec.EtcdEndpoints != "" && config.Spec.EtcdDiscoverySrv != "" {
+		log.Warning("Multiple etcd endpoint discovery methods specified in etcdv3 API config")
+		return nil, fmt.Errorf("multiple discovery or bootstrap options specified, use either \"etcdEndpoints\" or \"etcdDiscoverySrv\"")
+	}
+
 	// Split the endpoints into a location slice.
 	etcdLocation := []string{}
 	if config.Spec.EtcdEndpoints != "" {
 		etcdLocation = strings.Split(config.Spec.EtcdEndpoints, ",")
+	}
+
+	if config.Spec.EtcdDiscoverySrv != "" {
+		srvs, srvErr := srv.GetClient("etcd-client", config.Spec.EtcdDiscoverySrv)
+		if srvErr != nil {
+			return nil, fmt.Errorf("failed to discover etcd endpoints through SRV discovery: %v", srvErr)
+		}
+		etcdLocation = srvs.Endpoints
 	}
 
 	if len(etcdLocation) == 0 {
