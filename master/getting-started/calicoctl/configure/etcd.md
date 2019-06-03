@@ -9,6 +9,7 @@ canonical_url: 'https://docs.projectcalico.org/v3.7/getting-started/calicoctl/co
 | --------------------------| -------------------- | ------------------------------------------------------------------------------------- | ------
 | `datastoreType`           | `DATASTORE_TYPE`     | Indicates the datastore to use. If unspecified, defaults to `etcdv3`. (optional)      | `kubernetes`, `etcdv3`
 | `etcdEndpoints`           | `ETCD_ENDPOINTS`     | A comma-separated list of etcd endpoints. Example: `http://127.0.0.1:2379,http://127.0.0.2:2379` (required) | string
+| `etcdDiscoverySrv`        | `ETCD_DISCOVERY_SRV` | Domain name to discover etcd endpoints via SRV records. Mutually exclusive with `etcdEndpoints`. Example: `example.com` (optional) | string
 | `etcdUsername`            | `ETCD_USERNAME`      | User name for RBAC. Example: `user` (optional)                                        | string
 | `etcdPassword`            | `ETCD_PASSWORD`      | Password for the given user name. Example: `password` (optional)                      | string
 | `etcdKeyFile`             | `ETCD_KEY_FILE`      | Path to the file containing the private key matching the `calicoctl` client certificate. Enables `calicoctl` to participate in mutual TLS authentication and identify itself to the etcd server. Example: `/etc/calicoctl/key.pem` (optional) | string
@@ -83,6 +84,12 @@ spec:
 
 ```
 ETCD_ENDPOINTS=http://myhost1:2379 calicoctl get bgppeers
+```
+
+#### Example using etcd DNS discovery
+
+```
+ETCD_DISCOVERY_SRV=example.com calicoctl get nodes
 ```
 
 #### Example using IPv6
