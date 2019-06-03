@@ -21,32 +21,36 @@ import (
 )
 
 type callbacks struct {
-	UpdatePolicyV4       *UpdatePolicyDataFuncs
-	RemovePolicyV4       *RemovePolicyDataFuncs
-	AddMembersIPSetV4    *AddMembersIPSetFuncs
-	RemoveMembersIPSetV4 *RemoveMembersIPSetFuncs
-	ReplaceIPSetV4       *ReplaceIPSetFuncs
-	RemoveIPSetV4        *RemoveIPSetFuncs
-	AddInterfaceV4       *AddInterfaceFuncs
-	RemoveInterfaceV4    *RemoveInterfaceFuncs
-	UpdateInterfaceV4    *UpdateInterfaceFuncs
-	UpdateHostEndpointV4 *UpdateHostEndpointFuncs
-	RemoveHostEndpointV4 *RemoveHostEndpointFuncs
+	UpdatePolicyV4           *UpdatePolicyDataFuncs
+	RemovePolicyV4           *RemovePolicyDataFuncs
+	AddMembersIPSetV4        *AddMembersIPSetFuncs
+	RemoveMembersIPSetV4     *RemoveMembersIPSetFuncs
+	ReplaceIPSetV4           *ReplaceIPSetFuncs
+	RemoveIPSetV4            *RemoveIPSetFuncs
+	AddInterfaceV4           *AddInterfaceFuncs
+	RemoveInterfaceV4        *RemoveInterfaceFuncs
+	UpdateInterfaceV4        *UpdateInterfaceFuncs
+	UpdateHostEndpointV4     *UpdateHostEndpointFuncs
+	RemoveHostEndpointV4     *RemoveHostEndpointFuncs
+	UpdateWorkloadEndpointV4 *UpdateWorkloadEndpointFuncs
+	RemoveWorkloadEndpointV4 *RemoveWorkloadEndpointFuncs
 }
 
 func newCallbacks() *callbacks {
 	return &callbacks{
-		UpdatePolicyV4:       &UpdatePolicyDataFuncs{},
-		RemovePolicyV4:       &RemovePolicyDataFuncs{},
-		AddMembersIPSetV4:    &AddMembersIPSetFuncs{},
-		RemoveMembersIPSetV4: &RemoveMembersIPSetFuncs{},
-		ReplaceIPSetV4:       &ReplaceIPSetFuncs{},
-		RemoveIPSetV4:        &RemoveIPSetFuncs{},
-		AddInterfaceV4:       &AddInterfaceFuncs{},
-		RemoveInterfaceV4:    &RemoveInterfaceFuncs{},
-		UpdateInterfaceV4:    &UpdateInterfaceFuncs{},
-		UpdateHostEndpointV4: &UpdateHostEndpointFuncs{},
-		RemoveHostEndpointV4: &RemoveHostEndpointFuncs{},
+		UpdatePolicyV4:           &UpdatePolicyDataFuncs{},
+		RemovePolicyV4:           &RemovePolicyDataFuncs{},
+		AddMembersIPSetV4:        &AddMembersIPSetFuncs{},
+		RemoveMembersIPSetV4:     &RemoveMembersIPSetFuncs{},
+		ReplaceIPSetV4:           &ReplaceIPSetFuncs{},
+		RemoveIPSetV4:            &RemoveIPSetFuncs{},
+		AddInterfaceV4:           &AddInterfaceFuncs{},
+		RemoveInterfaceV4:        &RemoveInterfaceFuncs{},
+		UpdateInterfaceV4:        &UpdateInterfaceFuncs{},
+		UpdateHostEndpointV4:     &UpdateHostEndpointFuncs{},
+		RemoveHostEndpointV4:     &RemoveHostEndpointFuncs{},
+		UpdateWorkloadEndpointV4: &UpdateWorkloadEndpointFuncs{},
+		RemoveWorkloadEndpointV4: &RemoveWorkloadEndpointFuncs{},
 	}
 }
 
@@ -334,6 +338,58 @@ func (fs *RemoveHostEndpointFuncs) Invoke(hostEPID proto.HostEndpointID) {
 }
 
 func (fs *RemoveHostEndpointFuncs) Append(f RemoveHostEndpointFunc) *CbID {
+	if f == nil {
+		return &CbID{
+			dropper: func() {},
+		}
+	}
+	fs.fs = f
+	return &CbID{
+		dropper: func() {
+			fs.fs = nil
+		},
+	}
+}
+
+type UpdateWorkloadEndpointFunc func(old, new *proto.WorkloadEndpoint)
+
+type UpdateWorkloadEndpointFuncs struct {
+	fs UpdateWorkloadEndpointFunc
+}
+
+func (fs *UpdateWorkloadEndpointFuncs) Invoke(old, new *proto.WorkloadEndpoint) {
+	if fs.fs != nil {
+		fs.fs(old, new)
+	}
+}
+
+func (fs *UpdateWorkloadEndpointFuncs) Append(f UpdateWorkloadEndpointFunc) *CbID {
+	if f == nil {
+		return &CbID{
+			dropper: func() {},
+		}
+	}
+	fs.fs = f
+	return &CbID{
+		dropper: func() {
+			fs.fs = nil
+		},
+	}
+}
+
+type RemoveWorkloadEndpointFunc func(old *proto.WorkloadEndpoint)
+
+type RemoveWorkloadEndpointFuncs struct {
+	fs RemoveWorkloadEndpointFunc
+}
+
+func (fs *RemoveWorkloadEndpointFuncs) Invoke(old *proto.WorkloadEndpoint) {
+	if fs.fs != nil {
+		fs.fs(old)
+	}
+}
+
+func (fs *RemoveWorkloadEndpointFuncs) Append(f RemoveWorkloadEndpointFunc) *CbID {
 	if f == nil {
 		return &CbID{
 			dropper: func() {},

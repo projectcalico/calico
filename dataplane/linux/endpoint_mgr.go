@@ -40,29 +40,35 @@ type routeTable interface {
 }
 
 type endpointManagerCallbacks struct {
-	addInterface       *AddInterfaceFuncs
-	removeInterface    *RemoveInterfaceFuncs
-	updateInterface    *UpdateInterfaceFuncs
-	updateHostEndpoint *UpdateHostEndpointFuncs
-	removeHostEndpoint *RemoveHostEndpointFuncs
+	addInterface           *AddInterfaceFuncs
+	removeInterface        *RemoveInterfaceFuncs
+	updateInterface        *UpdateInterfaceFuncs
+	updateHostEndpoint     *UpdateHostEndpointFuncs
+	removeHostEndpoint     *RemoveHostEndpointFuncs
+	updateWorkloadEndpoint *UpdateWorkloadEndpointFuncs
+	removeWorkloadEndpoint *RemoveWorkloadEndpointFuncs
 }
 
 func newEndpointManagerCallbacks(callbacks *callbacks, ipVersion uint8) endpointManagerCallbacks {
 	if ipVersion == 4 {
 		return endpointManagerCallbacks{
-			addInterface:       callbacks.AddInterfaceV4,
-			removeInterface:    callbacks.RemoveInterfaceV4,
-			updateInterface:    callbacks.UpdateInterfaceV4,
-			updateHostEndpoint: callbacks.UpdateHostEndpointV4,
-			removeHostEndpoint: callbacks.RemoveHostEndpointV4,
+			addInterface:           callbacks.AddInterfaceV4,
+			removeInterface:        callbacks.RemoveInterfaceV4,
+			updateInterface:        callbacks.UpdateInterfaceV4,
+			updateHostEndpoint:     callbacks.UpdateHostEndpointV4,
+			removeHostEndpoint:     callbacks.RemoveHostEndpointV4,
+			updateWorkloadEndpoint: callbacks.UpdateWorkloadEndpointV4,
+			removeWorkloadEndpoint: callbacks.RemoveWorkloadEndpointV4,
 		}
 	} else {
 		return endpointManagerCallbacks{
-			addInterface:       &AddInterfaceFuncs{},
-			removeInterface:    &RemoveInterfaceFuncs{},
-			updateInterface:    &UpdateInterfaceFuncs{},
-			updateHostEndpoint: &UpdateHostEndpointFuncs{},
-			removeHostEndpoint: &RemoveHostEndpointFuncs{},
+			addInterface:           &AddInterfaceFuncs{},
+			removeInterface:        &RemoveInterfaceFuncs{},
+			updateInterface:        &UpdateInterfaceFuncs{},
+			updateHostEndpoint:     &UpdateHostEndpointFuncs{},
+			removeHostEndpoint:     &RemoveHostEndpointFuncs{},
+			updateWorkloadEndpoint: &UpdateWorkloadEndpointFuncs{},
+			removeWorkloadEndpoint: &RemoveWorkloadEndpointFuncs{},
 		}
 	}
 }
@@ -90,6 +96,14 @@ func (c *endpointManagerCallbacks) InvokeUpdateHostEndpoint(hostEpID proto.HostE
 
 func (c *endpointManagerCallbacks) InvokeRemoveHostEndpoint(hostEpID proto.HostEndpointID) {
 	c.removeHostEndpoint.Invoke(hostEpID)
+}
+
+func (c *endpointManagerCallbacks) InvokeUpdateWorkload(old, new *proto.WorkloadEndpoint) {
+	c.updateWorkloadEndpoint.Invoke(old, new)
+}
+
+func (c *endpointManagerCallbacks) InvokeRemoveWorkload(old *proto.WorkloadEndpoint) {
+	c.removeWorkloadEndpoint.Invoke(old)
 }
 
 // endpointManager manages the dataplane resources that belong to each endpoint as well as
@@ -550,8 +564,12 @@ func (m *endpointManager) resolveWorkloadEndpoints() {
 			m.activeWlEndpoints[id] = workload
 			m.activeWlIfaceNameToID[workload.Name] = id
 			delete(m.pendingWlEpUpdates, id)
+
+			m.callbacks.InvokeUpdateWorkload(oldWorkload, workload)
 		} else {
 			logCxt.Info("Workload removed, deleting its chains.")
+			m.callbacks.InvokeRemoveWorkload(oldWorkload)
+
 			m.filterTable.RemoveChains(m.activeWlIDToChains[id])
 			delete(m.activeWlIDToChains, id)
 			if oldWorkload != nil {

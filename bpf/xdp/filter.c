@@ -21,7 +21,7 @@
 #include <iproute2/bpf_elf.h>
 #include <stdbool.h>
 
-#include "bpf.h"
+#include "../include/bpf.h"
 
 static __always_inline void *xdp_data(const struct xdp_md *xdp)
 {
