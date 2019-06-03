@@ -1,5 +1,5 @@
-hash: 149c62b165836f81346552bac4b04878b4668e7f6557392b49ab548386fc69d9
-updated: 2019-05-30T04:08:39.163059161Z
+hash: 2e3a54c2f4141258c67c2b8ee51f3546695d839956ab6accf6afd5598e80b0d0
+updated: 2019-06-03T15:30:59.589385067Z
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -33,7 +33,7 @@ imports:
   - pkg/types
   - version
 - name: github.com/coreos/go-semver
-  version: 8ab6407b697782a06568d4b7f1db25550ec2e4c6
+  version: e214231b295a8ea9479f11b70b35d5acf3556d9b
   subpackages:
   - semver
 - name: github.com/davecgh/go-spew
@@ -126,7 +126,7 @@ imports:
 - name: github.com/modern-go/reflect2
   version: 05fbef0ca5da472bbf96c9322b84a53edc03c9fd
 - name: github.com/onsi/ginkgo
-  version: 3774a09d95489ccaa16032e0770d08ea77ba6184
+  version: eea6ad008b96acdaa524f5b409513bf062b500ad
   subpackages:
   - config
   - extensions/table
@@ -147,7 +147,7 @@ imports:
   - reporters/stenographer/support/go-isatty
   - types
 - name: github.com/onsi/gomega
-  version: 5533ce8a0da374da682cd53d70ddcc54adf1a710
+  version: 90e289841c1ed79b7a598a7cd9959750cb5e89e2
   subpackages:
   - format
   - internal/assertion
@@ -173,7 +173,7 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: dca0a22d63708ccfbe94513e317ab54a2290338a
+  version: 7c769d6cd9819ef13852d50eb68dc75bddb696f2
   subpackages:
   - lib/apiconfig
   - lib/apis/v1
@@ -220,7 +220,7 @@ imports:
   - lib/validator/v3
   - lib/watch
 - name: github.com/prometheus/client_golang
-  version: 65d3a96fbaa7c8c9535d7133d6d98cd50eed4db8
+  version: 773f5027234d0b08adf766be34f55df2f312abf7
   subpackages:
   - prometheus
   - prometheus/internal
@@ -236,7 +236,9 @@ imports:
   - internal/bitbucket.org/ww/goautoneg
   - model
 - name: github.com/prometheus/procfs
-  version: 8368d24ba045f26503eb745b624d930cbe214c79
+  version: a6e9df898b1336106c743392c48ee0b71f5c4efa
+  subpackages:
+  - xfs
 - name: github.com/satori/go.uuid
   version: f58768cc1a7a7e77a3bd49e98cdd21419399b6a3
 - name: github.com/sirupsen/logrus
