@@ -170,6 +170,7 @@ type Config struct {
 	VXLANVNI            int    `config:"int;4096"`
 	VXLANMTU            int    `config:"int;1410;non-zero"`
 	IPv4VXLANTunnelAddr net.IP `config:"ipv4;"`
+	VXLANTunnelMACAddr  string `config:"string;"`
 
 	IpInIpEnabled    bool   `config:"bool;false"`
 	IpInIpMtu        int    `config:"int;1440;non-zero"`
