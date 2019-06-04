@@ -110,6 +110,7 @@ rules:
   - apiGroups: [""]
     resources:
       - pods/status
+      - pods
     verbs:
       - patch
   # Calico monitors various CRDs for config.
