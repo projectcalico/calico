@@ -163,7 +163,7 @@ ut: vendor
 fv: vendor run-etcd run-etcd-tls run-kubernetes-master run-coredns
 	-mkdir -p .go-pkg-cache
 	docker run --rm -t --privileged --net=host \
-		--dns 127.0.0.1 \
+		--dns $(shell docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' coredns) \
 		-e LOCAL_USER_ID=$(LOCAL_USER_ID) \
 		-v $(CURDIR):/go/src/github.com/$(PACKAGE_NAME):rw \
 		-v $(CURDIR)/.go-pkg-cache:/go-cache/:rw \
@@ -282,7 +282,6 @@ run-coredns: stop-coredns
 	docker run \
 		--detach \
 		--name coredns \
-		--net=host \
 		--rm \
 		-v $(shell pwd)/test/coredns:/etc/coredns \
 		-w /etc/coredns \
