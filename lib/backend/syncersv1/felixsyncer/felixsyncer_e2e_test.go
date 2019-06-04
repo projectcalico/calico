@@ -138,7 +138,7 @@ var _ = testutils.E2eDatastoreDescribe("Felix syncer tests", testutils.Datastore
 			var node *apiv3.Node
 			if config.Spec.DatastoreType == apiconfig.Kubernetes {
 				// For Kubernetes, update the existing node config to have some BGP configuration.
-				By("Configuring a node with an IP address")
+				By("Configuring a node with an IP address and tunnel MAC address")
 				for i := 0; i < 5; i++ {
 					// This can fail due to an update conflict, so we allow a few retries.
 					node, err = c.Nodes().Get(ctx, "127.0.0.1", options.GetOptions{})
@@ -148,6 +148,7 @@ var _ = testutils.E2eDatastoreDescribe("Felix syncer tests", testutils.Datastore
 						IPv6Address:        "aa:bb::cc/120",
 						IPv4IPIPTunnelAddr: "10.10.10.1",
 					}
+					node.Spec.VXLANTunnelMACAddr = "66:cf:23:df:22:07"
 					node, err = c.Nodes().Update(ctx, node, options.SetOptions{})
 					if err == nil {
 						break
@@ -159,7 +160,11 @@ var _ = testutils.E2eDatastoreDescribe("Felix syncer tests", testutils.Datastore
 					Key:   model.HostConfigKey{Hostname: "127.0.0.1", Name: "IpInIpTunnelAddr"},
 					Value: "10.10.10.1",
 				})
-				expectedCacheSize += 1
+				syncTester.ExpectData(model.KVPair{
+					Key:   model.HostConfigKey{Hostname: "127.0.0.1", Name: "VXLANTunnelMACAddr"},
+					Value: "66:cf:23:df:22:07",
+				})
+				expectedCacheSize += 2
 			} else {
 				// For non-Kubernetes, add a new node with valid BGP configuration.
 				By("Creating a node with an IP address")
@@ -173,6 +178,7 @@ var _ = testutils.E2eDatastoreDescribe("Felix syncer tests", testutils.Datastore
 								IPv6Address:        "aa:bb::cc/120",
 								IPv4IPIPTunnelAddr: "10.10.10.1",
 							},
+							VXLANTunnelMACAddr: "66:cf:23:df:22:07",
 						},
 					},
 					options.SetOptions{},
@@ -192,7 +198,11 @@ var _ = testutils.E2eDatastoreDescribe("Felix syncer tests", testutils.Datastore
 					Key:   model.HostConfigKey{Hostname: "127.0.0.1", Name: "IpInIpTunnelAddr"},
 					Value: "10.10.10.1",
 				})
-				expectedCacheSize += 3
+				syncTester.ExpectData(model.KVPair{
+					Key:   model.HostConfigKey{Hostname: "127.0.0.1", Name: "VXLANTunnelMACAddr"},
+					Value: "66:cf:23:df:22:07",
+				})
+				expectedCacheSize += 4
 			}
 
 			// The HostIP will be added for the IPv4 address

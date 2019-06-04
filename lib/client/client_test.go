@@ -53,8 +53,21 @@ spec:
 		},
 	}
 
-	// Data to test k8s parameters
+	// Data to test ETCD SRV parameter
 	data2 := `
+apiVersion: v1
+kind: calicoApiConfig
+spec:
+  etcdDiscoverySrv: example.com
+`
+	cfg2data := api.NewCalicoAPIConfig()
+	cfg2data.Spec = api.CalicoAPIConfigSpec{
+		DatastoreType: api.EtcdV2,
+		EtcdConfig:    api.EtcdConfig{EtcdDiscoverySrv: "example.com"},
+	}
+
+	// Data to test k8s parameters
+	data3 := `
 apiVersion: v1
 kind: calicoApiConfig
 metadata:
@@ -66,8 +79,8 @@ spec:
   k8sCAFile: foobar
   k8sAPIToken: foobarbaz
 `
-	cfg2data := api.NewCalicoAPIConfig()
-	cfg2data.Spec = api.CalicoAPIConfigSpec{
+	cfg3data := api.NewCalicoAPIConfig()
+	cfg3data.Spec = api.CalicoAPIConfigSpec{
 		DatastoreType: api.EtcdV2,
 		KubeConfig: api.KubeConfig{
 			Kubeconfig:     "filename",
@@ -80,11 +93,11 @@ spec:
 	}
 
 	// Bad data samples.
-	data3 := `
+	data4 := `
 apiVersion: v2
 kind: calicoApiConfig
 `
-	data4 := `
+	data5 := `
 apiVersion: v1
 kind: notCalicoApiConfig
 `
@@ -175,6 +188,21 @@ kind: notCalicoApiConfig
 		},
 	}
 
+	// Environments to test ETCD SRV paramater
+	env5 := map[string]string{
+		"APIV1_ETCD_DISCOVERY_SRV": "example.com",
+	}
+	cfg5env := api.NewCalicoAPIConfig()
+	cfg5env.Spec = api.CalicoAPIConfigSpec{
+		DatastoreType: api.EtcdV2,
+		EtcdConfig: api.EtcdConfig{
+			EtcdScheme:       "",
+			EtcdAuthority:    "",
+			EtcdEndpoints:    "",
+			EtcdDiscoverySrv: "example.com",
+		},
+	}
+
 	DescribeTable("Load client config",
 		func(data string, expected *api.CalicoAPIConfig, expectedErr error) {
 			By("Loading client config and checking results")
@@ -189,9 +217,10 @@ kind: notCalicoApiConfig
 		},
 
 		Entry("valid etcd configuration", data1, cfg1data, nil),
-		Entry("valid k8s configuration", data2, cfg2data, nil),
-		Entry("invalid version", data3, nil, errors.New("invalid config file: unknown APIVersion 'v2'")),
-		Entry("invalid kind", data4, nil, errors.New("invalid config file: expected kind 'calicoApiConfig', got 'notCalicoApiConfig'")),
+		Entry("valid etcd SRV configuration", data2, cfg2data, nil),
+		Entry("valid k8s configuration", data3, cfg3data, nil),
+		Entry("invalid version", data4, nil, errors.New("invalid config file: unknown APIVersion 'v2'")),
+		Entry("invalid kind", data5, nil, errors.New("invalid config file: expected kind 'calicoApiConfig', got 'notCalicoApiConfig'")),
 	)
 
 	DescribeTable("Load client config by environment",
@@ -222,5 +251,6 @@ kind: notCalicoApiConfig
 		Entry("valid k8s configuration", env2, cfg2env, nil),
 		Entry("valid etcd configuration with CALICO_ prefix", env3, cfg3env, nil),
 		Entry("valid k8s configuration (preferential naming)", env4, cfg4env, nil),
+		Entry("valid etcd SRV configuration", env5, cfg5env, nil),
 	)
 })

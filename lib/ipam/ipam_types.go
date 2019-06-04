@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2018 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2019 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,6 +15,8 @@
 package ipam
 
 import (
+	"net"
+
 	cnet "github.com/projectcalico/libcalico-go/lib/net"
 )
 
@@ -83,4 +85,35 @@ type IPAMConfig struct {
 	// allocate blocks of IP address to hosts as needed to assign addresses.
 	// If false, then StrictAffinity must be true.  The default value is true.
 	AutoAllocateBlocks bool
+}
+
+// GetUtilizationArgs defines the set of arguments for requesting IP utilization.
+type GetUtilizationArgs struct {
+	// If specified, the pools whose utilization should be reported.  Each string here
+	// can be a pool name or CIDR.  If not specified, this defaults to all pools.
+	Pools []string
+}
+
+// BlockUtilization reports IP utilization for a single allocation block.
+type BlockUtilization struct {
+	// This block's CIDR.
+	CIDR net.IPNet
+
+	// Number of possible IPs in this block.
+	Capacity int
+
+	// Number of available IPs in this block.
+	Available int
+}
+
+// PoolUtilization reports IP utilization for a single IP pool.
+type PoolUtilization struct {
+	// This pool's name.
+	Name string
+
+	// This pool's CIDR.
+	CIDR net.IPNet
+
+	// Utilization for each of this pool's blocks.
+	Blocks []BlockUtilization
 }

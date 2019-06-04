@@ -231,6 +231,9 @@ type FelixConfigurationSpec struct {
 
 	IptablesNATOutgoingInterfaceFilter string `json:"iptablesNATOutgoingInterfaceFilter,omitempty" validate:"omitempty,ifaceFilter"`
 
+	// SockmapEnabled enables experimental sockmap acceleration [Default: false]
+	SockmapEnabled *bool `json:"sockmapEnabled,omitempty" confignamev1:"SockmapEnabled"`
+
 	// XDPEnabled enables XDP acceleration for suitable untracked incoming deny rules. [Default: true]
 	XDPEnabled *bool `json:"xdpEnabled,omitempty" confignamev1:"XDPEnabled"`
 

@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2018 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2019 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -20,6 +20,8 @@ import (
 	"net"
 	"time"
 
+	log "github.com/sirupsen/logrus"
+
 	apiv3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	cerrors "github.com/projectcalico/libcalico-go/lib/errors"
@@ -27,7 +29,6 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/options"
 	validator "github.com/projectcalico/libcalico-go/lib/validator/v3"
 	"github.com/projectcalico/libcalico-go/lib/watch"
-	log "github.com/sirupsen/logrus"
 )
 
 // IPPoolInterface has methods to work with IPPool resources.
@@ -84,7 +85,8 @@ func (r ipPools) Create(ctx context.Context, res *apiv3.IPPool, opts options.Set
 		// There was an error and it wasn't OperationNotSupported - return it.
 		return nil, err
 	} else if err == nil {
-		// Skip the block check if the error is OperationUnsupported - IPAM is not supported on KDD.
+		// Skip the block check if the error is OperationUnsupported - listing blocks is not
+		// supported with host-local IPAM on KDD.
 		for _, b := range blocks.KVPairs {
 			k := b.Key.(model.BlockKey)
 			ones, _ := k.CIDR.Mask.Size()
@@ -129,9 +131,6 @@ func (r ipPools) Update(ctx context.Context, res *apiv3.IPPool, opts options.Set
 		resCopy := *res
 		res = &resCopy
 	}
-	if err := validator.Validate(res); err != nil {
-		return nil, err
-	}
 
 	// Get the existing settings, so that we can validate the CIDR and block size have not changed.
 	old, err := r.Get(ctx, res.Name, options.GetOptions{})
@@ -141,6 +140,10 @@ func (r ipPools) Update(ctx context.Context, res *apiv3.IPPool, opts options.Set
 
 	// Validate the IPPool updating the resource.
 	if err := r.validateAndSetDefaults(ctx, res, old); err != nil {
+		return nil, err
+	}
+
+	if err := validator.Validate(res); err != nil {
 		return nil, err
 	}
 

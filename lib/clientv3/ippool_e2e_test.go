@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2018 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2018,2019 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -493,6 +493,14 @@ var _ = testutils.E2eDatastoreDescribe("IPPool tests", testutils.DatastoreAll, f
 	})
 
 	Describe("Verify handling of VXLAN mode", func() {
+
+		var missingVxlanPool = apiv3.IPPool{
+			ObjectMeta: metav1.ObjectMeta{Name: "ippool1"},
+			Spec: apiv3.IPPoolSpec{
+				CIDR: "192.168.0.0/16",
+			},
+		}
+
 		var err error
 		var c clientv3.Interface
 
@@ -512,6 +520,23 @@ var _ = testutils.E2eDatastoreDescribe("IPPool tests", testutils.DatastoreAll, f
 			}
 			return cfg.Spec.VXLANEnabled, nil
 		}
+
+		It("should create/update an IPPool when VXLAN is missing", func() {
+			// create an ipppol with missing vxlan
+			ipPoolV1 := missingVxlanPool.DeepCopy()
+			ipPoolV2, err := c.IPPools().Create(ctx, ipPoolV1, options.SetOptions{})
+			Expect(err).NotTo(HaveOccurred())
+
+			// update an ipppol with missing vxlan
+			ipPoolV2.Spec.VXLANMode = ""
+			_, err = c.IPPools().Update(ctx, ipPoolV2, options.SetOptions{})
+			Expect(err).NotTo(HaveOccurred())
+
+			// delete the ipppol
+			_, err = c.IPPools().Delete(ctx, ipPoolV2.Name, options.DeleteOptions{})
+			Expect(err).NotTo(HaveOccurred())
+
+		})
 
 		It("should enable VXLAN globally on an IPPool Create (VXLANModeAlways) if the global setting is not configured", func() {
 			By("Getting the current felix configuration - checking does not exist")
