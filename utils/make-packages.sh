@@ -68,9 +68,16 @@ EOF
 EOF
 		} > debian/changelog
 
+		pbr_version=`${DOCKER_RUN_RM} -e DEB_VERSION=${debver}~${series} -i \
+				 calico-build/${series} python - <<'EOF'
+import pbr.version
+print pbr.version.VersionInfo('networking-calico').release_string()
+EOF`
+		echo PBR-generated version is $pbr_version
+
 		# Update PBR_VERSION setting (if present) in
 		# debian/rules.
-		sed -i "s/^export PBR_VERSION=.*$/export PBR_VERSION=${debver}/" debian/rules
+		sed -i "s/^export PBR_VERSION=.*$/export PBR_VERSION=${pbr_version}/" debian/rules
 
 		${DOCKER_RUN_RM} -e DEB_VERSION=${debver}~${series} \
 				 calico-build/${series} dpkg-buildpackage -I -S
