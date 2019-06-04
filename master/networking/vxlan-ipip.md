@@ -2,7 +2,7 @@
 title: Connecting workloads across networks that you do not control
 ---
 
-### Big Picture
+### Big picture
 
 Enable inter workload communication across networks that are not aware of workload IPs.
 
@@ -16,8 +16,8 @@ However, selectively using overlays/encapsulation can be useful when running on 
 
 This how-to guide uses the following features: 
 
-- IP in IP encapsulation
-- VXLAN encapsulation
+- **IPPool** resource with ipipMode field (IP in IP encapsulation)
+- **IPPool** resource with vxlanMode field (VXLAN encapsulation)
 
 ### Concepts
 
@@ -100,6 +100,6 @@ spec:
 
 If you use only VXLAN pools, BGP networking is not required. You can disable BGP to reduce the moving parts in your cluster by [Customizing the manifests]({{site.baseurl}}/{{page.version}}/getting-started/kubernetes/installation/config-options). Set the `calico_backend` setting to `vxlan`, and disable the BGP readiness check.
 
-### Above and Beyond
+### Above and beyond
 
 For details on the IP in IP option, see [IP pool]({{site.baseurl}}/{{page.version}}/reference/resources/ippool).
