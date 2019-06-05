@@ -83,7 +83,11 @@ func TestIPAM(t *testing.T) {
 	Expect(out).To(ContainSubstring("IPS IN USE"))
 
 	// Assign some IPs.
-	client.IPAM().AutoAssign(ctx, ipam.AutoAssignArgs{Num4: 5, Num6: 7})
+	client.IPAM().AutoAssign(ctx, ipam.AutoAssignArgs{
+		Num4:  5,
+		Num6:  7,
+		Attrs: map[string]string{"note": "reserved by ipam_test.go"},
+	})
 
 	// ipam show, pools only.
 	out = Calicoctl("ipam", "show")
@@ -117,6 +121,8 @@ func TestIPAM(t *testing.T) {
 	// ipam show with specific IP that is now allocated.
 	out = Calicoctl("ipam", "show", "--ip="+allocatedIP)
 	Expect(out).To(ContainSubstring(allocatedIP + " is in use"))
+	Expect(out).To(ContainSubstring("Attributes:"))
+	Expect(out).To(ContainSubstring("note: reserved by ipam_test.go"))
 
 	// ipam show with an invalid IP.
 	out, err = CalicoctlMayFail("ipam", "show", "--ip=10.240.0.300")
