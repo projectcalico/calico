@@ -63,7 +63,7 @@ Description:
 	cf := parsedArgs["--config"].(string)
 	client, err := clientmgr.NewClient(cf)
 	if err != nil {
-		fmt.Println(err)
+		return err
 	}
 
 	showBlocks := parsedArgs["--show-blocks"].(bool)

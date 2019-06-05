@@ -13,6 +13,7 @@
 # limitations under the License.
 import logging
 import copy
+import os
 
 from nose_parameterized import parameterized
 
@@ -38,6 +39,7 @@ class TestCalicoctlCommands(TestBase):
         """
         Test that a basic CRUD flow for pool commands works.
         """
+
         # Create the ipv6 pool using calicoctl, and read it out using an
         # exact get and a list query.
         rc = calicoctl("create", data=ippool_name2_rev1_v6)
@@ -75,6 +77,32 @@ class TestCalicoctlCommands(TestBase):
         # Assert that deleting the pool again fails.
         rc = calicoctl("delete ippool %s" % name(ippool_name2_rev1_v6))
         rc.assert_error(text=NOT_FOUND)
+
+    def test_no_config(self):
+        """
+        Test that broken store configuration does not crash
+        """
+
+        rc = calicoctl("get policy", no_config=True)
+        rc.assert_error()
+
+        rc = calicoctl("get policy x", no_config=True)
+        rc.assert_error()
+
+        rc = calicoctl("create", data=ippool_name2_rev1_v6, no_config=True)
+        rc.assert_error()
+
+        rc = calicoctl("apply", data=bgppeer_name1_rev2_v4, no_config=True)
+        rc.assert_error()
+
+        rc = calicoctl("replace", data=networkpolicy_name1_rev2, no_config=True)
+        rc.assert_error()
+
+        rc = calicoctl("label workloadendpoint node1-k8s-abcd-eth0 app=web --namespace=namespace1", no_config=True)
+        rc.assert_error()
+
+        rc = calicoctl("ipam show", no_config=True)
+        rc.assert_error()
 
     def test_get_delete_multiple_names(self):
         """
