@@ -3,22 +3,25 @@ title: Application layer policy tutorial
 canonical_url: 'https://docs.projectcalico.org/v3.7/security/app-layer-policy/index'
 ---
 
-The included demo sets up a microservices application, then demonstrates the use of application
-layer policy to mitigate some common threats.
+This tutorial sets up a microservices application, then demonstrates how to use Calico application layer policy to mitigate some common threats.
 
 ## Prerequisites
 
-To create a Kubernetes cluster which supports application layer policy, follow
-one of our [getting started guides]({{site.baseurl}}/{{page.version}}/getting-started/),
-and [enable application layer policy]({{site.baseurl}}/{{page.version}}/getting-started/kubernetes/installation/app-layer-policy).
+1. Install [Calico on a Kubernetes cluster]({{site.baseurl}}/{{page.version}}/getting-started/).
 
-You will also need the [calicoctl]({{site.baseurl}}/{{page.version}}/getting-started/calicoctl/install) command line tool.
+2. (Optional) Enable Calico network using [Kubernetes Data Store]({{site.baseurl}}/{{page.version}}/getting-started/kubernetes/installation/calico#installing-with-the-kubernetes-api-datastore50-nodes-or-less) over etcd. 
+  **Note**: You can also use an a non-Calico CNI for networking. 
+
+3. Install [calicoctl command line tool]({{site.baseurl}}/{{page.version}}/getting-started/calicoctl/install). 
+  **Note**: Ensure calicoctl is configured to connect with your datastore. 
+
+4. Install [Istio and configure Calico]({{site.baseurl}}/{{page.version}}/getting-started/kubernetes/installation/app-layer-policy)
+  **Note**: Ensure that you create a default namespace for Istio sidecar injection: 
+  `kubectl label namespace default istio-injection=enabled`
 
 ### Install the demo application
 
-We will use a simple microservice application to demonstrate {{site.prodname}} application layer
-policy.  The [YAO Bank] application creates a customer-facing web application, a microservice that
-serves up account summaries, and an [etcd] datastore.
+We will use a simple microservice application to demonstrate {{site.prodname}} application layer policy.  The [YAO Bank](https://github.com/spikecurtis/yaobank) application creates a customer-facing web application, a microservice that serves up account summaries, and an [etcd](https://github.com/coreos/etcd) datastore.
 
 ```bash
 kubectl apply -f \
@@ -83,7 +86,7 @@ service account.  These keys and X.509 certificates are used to cryptographicall
 traffic in the Istio service mesh, and the corresponding service account identities are used by
 {{site.prodname}} in authorization policy.
 
-### Determining ingress IP & port
+### Determining ingress IP and port
 
 You will use the `istio-ingressgateway` service to access the YAO Bank application.
 
@@ -163,7 +166,7 @@ Notice that from here, we get direct access to the backend database.  For exampl
 
 (Piping to `python -m json.tool` nicely formats the output.)
 
-#### Single factor authorization
+#### Single-factor authentication
 
 The possession of a key and certificate pair is a very strong assertion that a connection is
 authentic because it is based on cryptographic proofs that are believed to be nearly impossible to
@@ -204,7 +207,7 @@ have to pass an `https` URL, the `--key` and `--cert` parameters to `curl` to do
 
 Return to your web browser and refresh to confirm the new balance.
 
-#### Policy
+#### Network policy
 
 We can mitigate both of the above deficiencies with a {{site.prodname}} policy.
 
