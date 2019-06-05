@@ -223,7 +223,7 @@ type FelixConfigurationSpec struct {
 	// NATOutgoingAddress specifies an address to use when performing source NAT for traffic in a natOutgoing pool that
 	// is leaving the network. By default the address used is an address on the interface the traffic is leaving on
 	// (ie it uses the iptables MASQUERADE target)
-	NATOutgoingAddress string `json:"NATOutgoingAddress,omitempty"`
+	NATOutgoingAddress string `json:"natOutgoingAddress,omitempty"`
 
 	// ExternalNodesCIDRList is a list of CIDR's of external-non-calico-nodes which may source tunnel traffic and have
 	// the tunneled traffic be accepted at calico nodes.
