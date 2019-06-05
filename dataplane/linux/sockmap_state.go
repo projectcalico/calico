@@ -35,8 +35,8 @@ type sockmapState struct {
 	workloadEndpoints map[string][]string // name -> []CIDR
 }
 
-func NewSockmapState(cgroupSubdir string) (*sockmapState, error) {
-	lib, err := bpf.NewBPFLibWithCgroupv2Subdir(cgroupSubdir)
+func NewSockmapState() (*sockmapState, error) {
+	lib, err := bpf.NewBPFLib()
 	if err != nil {
 		return nil, err
 	}
