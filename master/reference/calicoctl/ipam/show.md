@@ -48,14 +48,17 @@ Description:
 1. Print the information associated with a different IP address.
 
    ```bash
-   calicoctl ipam show --ip=192.168.1.1
+   calicoctl ipam show --ip=10.244.118.70
    ```
 
-   Output shows that a basic Docker container has the assigned IP.
+   For a Kubernetes pod IP, attributes indicate the pod name and namespace:
 
    ```bash
-   IP 192.168.1.1 is in use
-   No attributes defined
+   IP 10.244.118.70 is in use
+   Attributes:
+     pod: nano-66d4c99f8b-jm5s9
+     namespace: default
+     node: ip-172-16-101-160.us-west-2.compute.internal
    ```
    {: .no-select-button}
 
