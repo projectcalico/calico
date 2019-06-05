@@ -1,4 +1,4 @@
-// Copyright 2015 Tigera Inc
+// Copyright 2015-2019 Tigera Inc
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -27,6 +27,8 @@ import (
 	log "github.com/sirupsen/logrus"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+	corev1 "k8s.io/api/core/v1"
+
 	"github.com/projectcalico/cni-plugin/internal/pkg/utils"
 	v3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	bapi "github.com/projectcalico/libcalico-go/lib/backend/api"
@@ -37,7 +39,6 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/net"
 	cnet "github.com/projectcalico/libcalico-go/lib/net"
 	"github.com/projectcalico/libcalico-go/lib/options"
-	corev1 "k8s.io/api/core/v1"
 )
 
 const (
@@ -299,7 +300,7 @@ func Migrate(ctxt context.Context, c client.Interface, nodename string) error {
 				ipam.AttributeNamespace: pod.Namespace,
 			},
 		}); err != nil {
-			if _, ok := err.(errors.ErrorResourceAlreadyExists); !ok {
+			if _, ok := err.(errors.ErrorResourceAlreadyExists); !(ok || strings.Contains(err.Error(), "already assigned")) {
 				return fmt.Errorf("failed to assign IP to calico backend: %s", err)
 			}
 			// Pod IP already assigned - likely failed to remove the file on the last attempt.
