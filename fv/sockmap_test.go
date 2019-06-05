@@ -135,7 +135,7 @@ var _ = infrastructure.DatastoreDescribe("with initialized Felix", []apiconfig.D
 		infra.Stop()
 	})
 
-	It("should put the IP of the host in sockops endpoints map", func() {
+	It("should put the IP of the host in sockmap endpoints map", func() {
 		hexen := testIPToHex(ip)
 		found := false
 		maxTries := 5
