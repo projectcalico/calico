@@ -3,21 +3,21 @@ title: Application layer policy tutorial
 canonical_url: 'https://docs.projectcalico.org/v3.7/security/app-layer-policy/index'
 ---
 
-This tutorial sets up a microservices application, then demonstrates how to use Calico application layer policy to mitigate some common threats.
+This tutorial sets up a microservices application, then demonstrates how to use {{site.prodname}} application layer policy to mitigate some common threats.
 
 ## Prerequisites
 
-1. Install [Calico on a Kubernetes cluster]({{site.baseurl}}/{{page.version}}/getting-started/).
+1. [Install {{site.prodname}}]({{site.baseurl}}/{{page.version}}/getting-started/) on a running Kubernetes cluster.
 
-2. (Optional) Enable Calico network using [Kubernetes Data Store]({{site.baseurl}}/{{page.version}}/getting-started/kubernetes/installation/calico#installing-with-the-kubernetes-api-datastore50-nodes-or-less) over etcd. 
-  **Note**: You can also use an a non-Calico CNI for networking. 
+2. (Optional) Enable {{site.prodname}} networking using [Kubernetes Data Store]({{site.baseurl}}/{{page.version}}/getting-started/kubernetes/installation/calico#installing-with-the-kubernetes-api-datastore50-nodes-or-less) over etcd.   
+**Note**: You can also use an a non-Calico CNI for networking. 
 
-3. Install [calicoctl command line tool]({{site.baseurl}}/{{page.version}}/getting-started/calicoctl/install). 
-  **Note**: Ensure calicoctl is configured to connect with your datastore. 
+3. Install [calicoctl command line tool]({{site.baseurl}}/{{page.version}}/getting-started/calicoctl/install).   
+**Note**: Ensure calicoctl is configured to connect with your datastore. 
 
-4. Install [Istio and configure Calico]({{site.baseurl}}/{{page.version}}/getting-started/kubernetes/installation/app-layer-policy)
-  **Note**: Ensure that you create a default namespace for Istio sidecar injection: 
-  `kubectl label namespace default istio-injection=enabled`
+4. Install [Istio and configure Calico]({{site.baseurl}}/{{page.version}}/getting-started/kubernetes/installation/app-layer-policy).  
+**Note**: Ensure that you create a default namespace for the Istio sidecar injection:    
+`kubectl label namespace default istio-injection=enabled`
 
 ### Install the demo application
 
