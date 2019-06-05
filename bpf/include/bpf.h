@@ -1,6 +1,7 @@
 // from kernel headers
 #include <asm/byteorder.h>
 #include <stdint.h>
+#include <endian.h>
 
 #ifndef __section
 # define __section(NAME)                  \
