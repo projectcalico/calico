@@ -2,9 +2,9 @@
 title: Enable extreme high-connection workloads 
 ---
 
-### Big Picture
+### Big picture
 
-Use a Calico network policy rule to bypass Linux conntrack for traffic to extreme high-connection workloads.
+Use a Calico network policy rule to bypass Linux conntrack for traffic to workloads that experience extremely large number of connections.
 
 ### Value
 
