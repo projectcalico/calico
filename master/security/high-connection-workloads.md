@@ -8,7 +8,7 @@ Use a Calico network policy rule to bypass Linux conntrack for traffic to worklo
 
 ### Value
 
-When extreme high-connection workloads exceed the number of connections that Linux conntrack can track, connections can be rejected or dropped. Calico network policy can be used to selectively bypass Linux conntrack for traffic to/from these types of workloads.
+When the number of connections on a node exceeds the number of connections that Linux conntrack can track, connections can be rejected or dropped. Calico network policy can be used to selectively bypass Linux conntrack for traffic to/from these types of workloads.
 
 ### Features
 
@@ -88,6 +88,4 @@ spec:
 ```
 ### Above and beyond
 
-- [Calico GlobalNetworkPolicy](https://docs.projectcalico.org/v3.6/reference/calicoctl/resources/globalnetworkpolicy)
-- [Blog: When Linux conntrack is no longer your friend](https://www.tigera.io/blog/when-linux-conntrack-is-no-longer-your-friend/)
-
+[Calico GlobalNetworkPolicy](https://docs.projectcalico.org/v3.6/reference/calicoctl/resources/globalnetworkpolicy)
