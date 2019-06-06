@@ -15,6 +15,9 @@
 package rules_test
 
 import (
+	"fmt"
+	"net"
+
 	. "github.com/projectcalico/felix/rules"
 	"github.com/projectcalico/libcalico-go/lib/numorstring"
 
@@ -49,6 +52,24 @@ var _ = Describe("NAT", func() {
 			Rules: []Rule{
 				{
 					Action: MasqAction{},
+					Match: Match().
+						SourceIPSet("cali40masq-ipam-pools").
+						NotDestIPSet("cali40all-ipam-pools"),
+				},
+			},
+		}))
+	})
+	It("should render rules when active with an explicit SNAT address", func() {
+		snatAddress := "192.168.0.1"
+		localConfig := rrConfigNormal
+		localConfig.NATOutgoingAddress = net.ParseIP(snatAddress)
+		renderer = NewRenderer(localConfig)
+
+		Expect(renderer.NATOutgoingChain(true, 4)).To(Equal(&Chain{
+			Name: "cali-nat-outgoing",
+			Rules: []Rule{
+				{
+					Action: SNATAction{ToAddr: snatAddress},
 					Match: Match().
 						SourceIPSet("cali40masq-ipam-pools").
 						NotDestIPSet("cali40all-ipam-pools"),
@@ -144,6 +165,53 @@ var _ = Describe("NAT", func() {
 						SourceIPSet("cali40masq-ipam-pools").
 						NotDestIPSet("cali40all-ipam-pools").
 						OutInterface("cali-123"),
+				},
+			},
+		}))
+	})
+	It("should render rules when active with explicit port range and an explicit SNAT address", func() {
+
+		snatAddress := "192.168.0.1"
+		//copy struct
+		localConfig := rrConfigNormal
+		localConfig.NATPortRange, _ = numorstring.PortFromRange(99, 100)
+		localConfig.NATOutgoingAddress = net.ParseIP(snatAddress)
+		renderer = NewRenderer(localConfig)
+
+		expectedAddress := fmt.Sprintf("%s:%s", snatAddress, "99-100")
+
+		Expect(renderer.NATOutgoingChain(true, 4)).To(Equal(&Chain{
+			Name: "cali-nat-outgoing",
+			Rules: []Rule{
+				{
+					Action: SNATAction{ToAddr: expectedAddress},
+					Match: Match().
+						SourceIPSet("cali40masq-ipam-pools").
+						NotDestIPSet("cali40all-ipam-pools").Protocol("tcp"),
+				},
+				{
+					Action: ReturnAction{},
+					Match: Match().
+						SourceIPSet("cali40masq-ipam-pools").
+						NotDestIPSet("cali40all-ipam-pools").Protocol("tcp"),
+				},
+				{
+					Action: SNATAction{ToAddr: expectedAddress},
+					Match: Match().
+						SourceIPSet("cali40masq-ipam-pools").
+						NotDestIPSet("cali40all-ipam-pools").Protocol("udp"),
+				},
+				{
+					Action: ReturnAction{},
+					Match: Match().
+						SourceIPSet("cali40masq-ipam-pools").
+						NotDestIPSet("cali40all-ipam-pools").Protocol("udp"),
+				},
+				{
+					Action: SNATAction{ToAddr: snatAddress},
+					Match: Match().
+						SourceIPSet("cali40masq-ipam-pools").
+						NotDestIPSet("cali40all-ipam-pools"),
 				},
 			},
 		}))

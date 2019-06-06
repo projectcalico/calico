@@ -48,18 +48,28 @@ func (r *DefaultRuleRenderer) MakeNatOutgoingRule(protocol string, action iptabl
 func (r *DefaultRuleRenderer) NATOutgoingChain(natOutgoingActive bool, ipVersion uint8) *iptables.Chain {
 	var rules []iptables.Rule
 	if natOutgoingActive {
+		var defaultSnatRule iptables.Action = iptables.MasqAction{}
+		if r.Config.NATOutgoingAddress != nil {
+			defaultSnatRule = iptables.SNATAction{ToAddr: r.Config.NATOutgoingAddress.String()}
+		}
+
 		if r.Config.NATPortRange.MaxPort > 0 {
 			toPorts := fmt.Sprintf("%d-%d", r.Config.NATPortRange.MinPort, r.Config.NATPortRange.MaxPort)
+			var portRangeSnatRule iptables.Action = iptables.MasqAction{ToPorts: toPorts}
+			if r.Config.NATOutgoingAddress != nil {
+				toAddress := fmt.Sprintf("%s:%s", r.Config.NATOutgoingAddress.String(), toPorts)
+				portRangeSnatRule = iptables.SNATAction{ToAddr: toAddress}
+			}
 			rules = []iptables.Rule{
-				r.MakeNatOutgoingRule("tcp", iptables.MasqAction{ToPorts: toPorts}, ipVersion),
+				r.MakeNatOutgoingRule("tcp", portRangeSnatRule, ipVersion),
 				r.MakeNatOutgoingRule("tcp", iptables.ReturnAction{}, ipVersion),
-				r.MakeNatOutgoingRule("udp", iptables.MasqAction{ToPorts: toPorts}, ipVersion),
+				r.MakeNatOutgoingRule("udp", portRangeSnatRule, ipVersion),
 				r.MakeNatOutgoingRule("udp", iptables.ReturnAction{}, ipVersion),
-				r.MakeNatOutgoingRule("", iptables.MasqAction{}, ipVersion),
+				r.MakeNatOutgoingRule("", defaultSnatRule, ipVersion),
 			}
 		} else {
 			rules = []iptables.Rule{
-				r.MakeNatOutgoingRule("", iptables.MasqAction{}, ipVersion),
+				r.MakeNatOutgoingRule("", defaultSnatRule, ipVersion),
 			}
 		}
 	}
