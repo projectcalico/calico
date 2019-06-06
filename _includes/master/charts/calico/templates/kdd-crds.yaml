@@ -162,6 +162,8 @@ spec:
     kind: GlobalNetworkPolicy
     plural: globalnetworkpolicies
     singular: globalnetworkpolicy
+    shortNames:
+      - gnp
 
 ---
 
