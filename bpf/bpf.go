@@ -1381,7 +1381,7 @@ func failsafeToHex(proto uint8, port uint16) ([]string, error) {
 
 	hexStr := fmt.Sprintf("%02x 00 %02x %02x",
 		proto,
-		portBytes[1], portBytes[0])
+		portBytes[0], portBytes[1])
 
 	return strings.Split(hexStr, " "), nil
 }

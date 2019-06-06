@@ -14,17 +14,7 @@ int calico_sk_msg(struct sk_msg_md *msg)
 	dip4 = msg->remote_ip4;
 	sip4 = msg->local_ip4;
 
-	// XXX code works with the following workaround, but why does
-	// the representation change between sockops and sk_msg?
-	//
-	// A simple:
-	//
-	// sport = (bpf_ntohl(msg->local_port) >> 16);
-	//
-	// should work fine.
-	sport = bpf_ntohl(msg->local_port);
-	sport = (sport >> 8) | (sport << 8);
-	sport = sport & 0xffff;
+	sport = bpf_htonl(msg->local_port) >> 16;
 
 	// The verifier doesn't seem to like reading something different than
 	// 32 bits for these fields:

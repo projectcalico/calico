@@ -44,7 +44,7 @@ static inline void bpf_sock_ops_ipv4(struct bpf_sock_ops *skops)
 	dip4 = skops->remote_ip4;
 	sip4 = skops->local_ip4;
 
-	sport = (bpf_ntohl(skops->local_port) >> 16);
+	sport = (bpf_htonl(skops->local_port) >> 16);
 	// The verifier doesn't seem to like reading something different than
 	// 32 bits for these fields:
 	//
