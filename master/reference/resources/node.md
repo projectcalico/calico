@@ -45,6 +45,8 @@ spec:
 | Field  | Description                 | Accepted Values   | Schema | Default    |
 |--------|-----------------------------|-------------------|--------|------------|
 | bgp    | BGP configuration for this node.  Omit if using {{site.prodname}} for policy only. | | [BGP](#bgp) |
+| ipv4VXLANTunnelAddr | IPv4 address of the VXLAN tunnel. This is system configured and should not be updated manually. | | string |
+| vxlanTunnelMACAddr | MAC address of the VXLAN tunnel. This is system configured and should not be updated manually. | | string |
 | orchRefs | Correlates this node to a node in another orchestrator. | | list of [OrchRefs](#OrchRef) |
 
 #### OrchRef
@@ -61,7 +63,7 @@ spec:
 | asNumber    | The AS Number of your `{{site.nodecontainer}}`. | Optional. If omitted the global value is used (see [example modifying Global BGP settings](/{{page.version}}/networking/bgp#example) for details about modifying the `asNumber` setting). | integer |
 | ipv4Address | The IPv4 address and subnet exported as the next-hop for the {{site.prodname}} endpoints on the host | The IPv4 address must be specified if BGP is enabled. | string |
 | ipv6Address | The IPv6 address and subnet exported as the next-hop for the {{site.prodname}} endpoints on the host | Optional | string |
-| ipv4IPIPTunnelAddr | IPv4 address of the IP-in-IP tunnel | Optional IPv4 address | string |
+| ipv4IPIPTunnelAddr | IPv4 address of the IP-in-IP tunnel. This is system configured and should not be updated manually. | Optional IPv4 address | string |
 | routeReflectorClusterID | Enables this node as a route reflector within the given cluster | Optional IPv4 address | string |
 
 ### Supported operations
