@@ -8,11 +8,12 @@ This tutorial sets up a microservices application, then demonstrates how to use 
 ## Prerequisites
 
 1. Build a Kubernetes cluster.
-1. Install [Calico on Kubernetes]({{site.baseurl}}/{{page.version}}/getting-started/kubernetes).  
-If you have an existing Calico implementation, you need: Calico networking with [Kubnernetes Data Store over etcd (recommended)] ({{site.baseurl}}/{{page.version}}/getting-started/kubernetes/installation/calico#installing-with-the-kubernetes-api-datastore50-nodes-or-less) or a non-Calico CNI, and Calico network policy. 
+1. Install Calico on Kubernetes:  
+- If Calico is not installed on Kubernetes, see [Calico on Kubernetes]({{site.baseurl}}/{{page.version}}/getting-started/kubernetes).  
+- If Calico is already installed on Kubernetes, verify that you have: Calico networking with [Kubnernetes Data Store over etcd (recommended)]({{site.baseurl}}/{{page.version}}/getting-started/kubernetes/installation/calico) or a non-Calico CNI, and Calico network policy. 
 1. Install [calicoctl command line tool]({{site.baseurl}}/{{page.version}}/getting-started/calicoctl/install).   
 **Note**: Ensure calicoctl is configured to connect with your datastore.  
-1. Install [Istio and configure Calico]({{site.baseurl}}/{{page.version}}/getting-started/kubernetes/installation/app-layer-policy).  
+1. Enable [application layer policy and install Istio]({{site.baseurl}}/{{page.version}}/getting-started/kubernetes/installation/app-layer-policy).  
 **Note**: Ensure that you annotate the default namespace for the Istio sidecar injection (`istio-injection=enabled`).    
 `kubectl label namespace default istio-injection=enabled`
 
