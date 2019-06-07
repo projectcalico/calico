@@ -16,8 +16,7 @@ However, selectively using overlays/encapsulation can be useful when running on 
 
 This how-to guide uses the following features: 
 
-- **IPPool** resource with ipipMode field (IP in IP encapsulation)
-- **IPPool** resource with vxlanMode field (VXLAN encapsulation)
+**IPPool** resource with ipipMode field for IP in IP encapsulation, and vxlanMode field for VXLAN encapsulation
 
 ### Concepts
 
