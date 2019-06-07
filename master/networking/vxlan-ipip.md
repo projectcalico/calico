@@ -16,7 +16,9 @@ However, selectively using overlays/encapsulation can be useful when running on 
 
 This how-to guide uses the following features: 
 
-**IPPool** resource with ipipMode field for IP in IP encapsulation, and vxlanMode field for VXLAN encapsulation
+**IPPool** resource with:  
+- ipipMode field (IP in IP encapsulation)
+- vxlanMode field (VXLAN encapsulation)
 
 ### Concepts
 
@@ -101,4 +103,4 @@ If you use only VXLAN pools, BGP networking is not required. You can disable BGP
 
 ### Above and beyond
 
-For details on the IP in IP option, see [IP pool]({{site.baseurl}}/{{page.version}}/reference/resources/ippool).
+For details on IP pool resource options, see [IP pool]({{site.baseurl}}/{{page.version}}/reference/resources/ippool).
