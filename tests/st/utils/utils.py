@@ -123,12 +123,13 @@ class CalicoctlOutput:
 
     def assert_error(self, text=None):
         """
-        Assert the calicoctl command exited with an error.
+        Assert the calicoctl command exited with an error and did not panic
         Args:
             text:   (optional) Expected text in the command output.
         """
         assert self.error, "Expected error running command; \n" \
             "command=" + self.command + "\noutput=" + self.output
+        assert not "panic" in self.output, "Exited with an error due to a panic"
         self.assert_output_contains(text)
 
     def assert_no_error(self, text=None):
@@ -168,8 +169,20 @@ class CalicoctlOutput:
             "command=" + self.command + "\noutput=\n" + self.output + \
             "\nexpected=\n" + text
 
+    def assert_output_not_contains(self, text):
+        """
+        Assert the calicoctl command output does not contain the supplied text.
+        Args:
+            text:   Expected text in the command output.
+        """
+        if not text:
+            return
+        assert not text in self.output, "Unxpected text in output; \n" + \
+            "command=" + self.command + "\noutput=\n" + self.output + \
+            "\nunexpected=\n" + text
 
-def calicoctl(command, data=None, load_as_stdin=False, format="yaml", only_stdout=False):
+
+def calicoctl(command, data=None, load_as_stdin=False, format="yaml", only_stdout=False, no_config=False):
     """
     Convenience function for abstracting away calling the calicoctl
     command.
@@ -209,6 +222,7 @@ def calicoctl(command, data=None, load_as_stdin=False, format="yaml", only_stdou
         etcd_auth = "%s:2379" % ETCD_HOSTNAME_SSL
     else:
         etcd_auth = "%s:2379" % get_ip()
+
     # Export the environment, in case the command has multiple parts, e.g.
     # use of | or ;
     #
@@ -220,6 +234,8 @@ def calicoctl(command, data=None, load_as_stdin=False, format="yaml", only_stdou
                 "export DATASTORE_TYPE=%s; %s %s" % \
                 (ETCD_SCHEME+"://"+etcd_auth, ETCD_CA, ETCD_CERT, ETCD_KEY,
                  "etcdv3", stdin, calicoctl_bin)
+    if no_config :
+        calicoctl_env_cmd = calicoctl_bin
     full_cmd = calicoctl_env_cmd + " " + command + option_file
 
     try:
