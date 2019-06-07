@@ -18,20 +18,18 @@ This how-to guide uses the following Calico features:
 
 ### Concepts
 
-#### Calico global network policy with a preDNAT field 
+#### Network policy with preDNAT field 
 
-In a Kubernetes cluster, kube-proxy will DNAT a request to the node's port and IP address, to one of the pods that backs the service. For Calico global network policy to both allow normal ingress cluster traffic, and deny other general ingress traffic, it must take effect before DNAT. To do this, you simply add a **preDNAT** field to a Calico global network policy. The preDNAT field:
+In a Kubernetes cluster, kube-proxy will DNAT a request to the node's port and IP address to one of the pods that backs the service. For Calico global network policy to both allow normal ingress cluster traffic and deny other general ingress traffic, it must take effect before DNAT. To do this, you simply add a **preDNAT** field to a Calico global network policy. The preDNAT field:
 
+- Applies before DNAT
 - Applies only to ingress rules
-- Enforces all ingress traffic through a host endpoint, regardless of destination.  
+- Enforces all ingress traffic through a host endpoint, regardless of destination  
   The destination can be a locally hosted pod, a pod on another node, or a process running on the host. 
-
 
 ### Before you begin...
 
-- For services that you want to expose to external clients, configure Kubernetes services with type **NodePort**. 
-- Define Calico [host endpoints]({{site.baseurl}}/{{page.version}}/reference/resources/hostendpoint) for the Kubernetes nodes with network policy that is appropriate for your cluster.
-
+For services that you want to expose to external clients, configure Kubernetes services with type **NodePort**. 
 
 ### How to
 
@@ -46,7 +44,7 @@ To securely expose a Kubernetes service to external clients, you must implement 
 
 In the following example, we create a global network policy to allow cluster ingress traffic (**allow-cluster-internal-ingress**): for the nodes’ IP addresses (**1.2.3.4/16**), and for pod IP addresses assigned by Kubernetes (**100.100.100.0/16**). By adding a preDNAT field, Calico global network policy is applied before regular DNAT on the Kubernetes cluster. 
 
-In this example, we use the **selector: has(host-endpoint)** -- so the policy is applicable to any endpoint with a **host-endpoint** label (but you can easily specify particular nodes). 
+In this example, we use the **selector: has(kubernetes-host)** -- so the policy is applicable to any endpoint with a **kubernetes-host** label (but you can easily specify particular nodes). 
 
 Finally, when you specify a preDNAT field, you must also add the **applyOnForward: true** field.
 
@@ -63,7 +61,7 @@ spec:
     - action: Allow
       source:
         nets: [1.2.3.4/16, 100.100.100.0/16]
-        selector: has(host-endpoint)
+        selector: has(kubernetes-host)
     - action: Deny
 ```
 
@@ -80,14 +78,14 @@ spec:
   order: 10
   egress:
     - action: Allow
-  selector: has(host-endpoint)
+  selector: has(kubernetes-host)
 ```
 
 #### Create host endpoints with appropriate network policy
 
-In this example, we assume that you have already defined Calico host endpoints with network policy that is appropriate for the cluster. (For example, you wouldn’t want a host endpoint with a “default deny all traffic to/from this host” network policy because that is counter to the goal of allowing/denying specific traffic.)
+In this example, we assume that you have already defined Calico host endpoints with network policy that is appropriate for the cluster. (For example, you wouldn’t want a host endpoint with a “default deny all traffic to/from this host” network policy because that is counter to the goal of allowing/denying specific traffic.) For help, see [host endpoints]({{site.baseurl}}/{{page.version}}/reference/resources/hostendpoint).
 
-All of our previously-defined global network policies have a selector that makes them applicable to any endpoint with a **host-endpoint label**; so we will include that label in our definitions. For example, for **eth0** on **node1**.
+All of our previously-defined global network policies have a selector that makes them applicable to any endpoint with a **kubernetes-host label**; so we will include that label in our definitions. For example, for **eth0** on **node1**.
 
 ```
 apiVersion: projectcalico.org/v3
@@ -95,7 +93,7 @@ kind: HostEndpoint
 metadata:
   name: node1-eth0
   labels:
-    host-endpoint: ingress
+    kubernetes-host: ingress
 spec:
   interfaceName: eth0
   node: node1
@@ -118,9 +116,9 @@ spec:
     - action: Allow
       protocol: TCP
       destination:
-        selector: has(host-endpoint)
+        selector: has(kubernetes-host)
         ports: [31852]
-  selector: has(host-endpoint)
+  selector: has(kubernetes-host)
   ```
 
 To make the NodePort accessible only through particular nodes, give the nodes a particular label. For example:
@@ -129,7 +127,7 @@ To make the NodePort accessible only through particular nodes, give the nodes a 
 nodeport-external-ingress: true
 ```
 
-Then, use **nodeport-external-ingress: true** as the selector of the **allow-nodeport** policy, instead of **has(host-endpoint)**.
+Then, use **nodeport-external-ingress: true** as the selector of the **allow-nodeport** policy, instead of **has(kubernetes-host)**.
 
 
 ### Above and beyond
