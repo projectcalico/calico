@@ -16,6 +16,12 @@ You will also need the [calicoctl]({{site.baseurl}}/{{page.version}}/getting-sta
 
 ### Install the demo application
 
+If you haven't already, label the namespace you will work in for Istio sidecar injection.
+
+```bash
+kubectl label namespace <your namespace name> istio-injection=enabled
+```
+
 We will use a simple microservice application to demonstrate {{site.prodname}} application layer
 policy.  The [YAO Bank] application creates a customer-facing web application, a microservice that
 serves up account summaries, and an [etcd] datastore.
