@@ -76,6 +76,7 @@ spec:
 | reportingIntervalSecs              | Interval at which Felix reports its status into the datastore or 0 to disable.  Must be non-zero in OpenStack deployments. | int | int | `30` |
 | reportingTTLSecs                   | Time-to-live setting for process-wide status reports. | int | int | `90` |
 | routeRefreshIntervalSecs           | Period, in seconds, at which Felix re-checks the routes in the dataplane to ensure that no other process has accidentally broken {{site.prodname}}'s rules. Set to 0 to disable route refresh. | int | int | `90` |
+| sockmapEnabled                     | Enable experimental Sockmap acceleration between application and proxy sidecar when using [application layer policy]({{site.baseurl}}/{{page.version}}/getting-started/kubernetes/installation/app-layer-policy). [Default: `false`] | boolean | boolean | `false` |
 | usageReportingEnabled              | Reports anonymous {{site.prodname}} version number and cluster size to projectcalico.org. Logs warnings returned by the usage server. For example, if a significant security vulnerability has been discovered in the version of {{site.prodname}} being used. | boolean | boolean | `true` |
 | usageReportingInitialDelaySecs     | Minimum initial delay before first usage report, in seconds. | int | int | `300` |
 | usageReportingIntervalSecs         | The interval at which Felix does usage reports, in seconds.  The default is 1 day.  | int | int | `86400` |
