@@ -22,7 +22,7 @@ The full list of parameters which can be set is as follows.
 
 > **Note**: The following tables detail the configuration file and
 > environment variable parameters. For `FelixConfiguration` resource settings,
-> refer to [Felix Configuration Resource](../calicoctl/resources/felixconfig).
+> refer to [Felix Configuration Resource](../resources/felixconfig).
 {: .alert .alert-info}
 
 #### General configuration
@@ -50,6 +50,7 @@ The full list of parameters which can be set is as follows.
 | `PrometheusProcessMetricsEnabled` | `FELIX_PROMETHEUSPROCESSMETRICSENABLED` | Set to `false` to disable process metrics collection, which the Prometheus client does by default. This reduces the number of metrics reported, reducing Prometheus load. [Default: `true`] | boolean |
 | `ReportingIntervalSecs`           | `FELIX_REPORTINGINTERVALSECS`           | Interval at which Felix reports its status into the datastore or `0` to disable. Must be non-zero in OpenStack deployments. [Default: `30`] | int |
 | `ReportingTTLSecs`                | `FELIX_REPORTINGTTLSECS`                | Time-to-live setting for process-wide status reports. [Default: `90`] | int |
+| `SockmapEnabled`                  | `FELIX_SOCKMAPENABLED`                  | Enable experimental Sockmap acceleration between application and proxy sidecar when using [application layer policy]({{site.baseurl}}/{{page.version}}/getting-started/kubernetes/installation/app-layer-policy). [Default: `false`] | boolean |
 | `UsageReportingEnabled`           | `FELIX_USAGEREPORTINGENABLED`           | Reports anonymous {{site.prodname}} version number and cluster size to projectcalico.org. Logs warnings returned by the usage server. For example, if a significant security vulnerability has been discovered in the version of {{site.prodname}} being used. [Default: `true`] | boolean |
 | `UsageReportingInitialDelaySecs`  | `FELIX_USAGEREPORTINGINITIALDELAYSECS`  | Minimum delay before first usage report, in seconds. [Default: `300`] | int |
 | `UsageReportingIntervalSecs`      | `FELIX_USAGEREPORTINGINTERVALSECS`      | Interval at which to make usage reports, in seconds. [Default: `86400`] | int |
@@ -96,6 +97,7 @@ The Kubernetes API datastore driver reads its configuration from Kubernetes-prov
 | `LogPrefix`                          | `FELIX_LOGPREFIX`                          | The log prefix that Felix uses when rendering LOG rules. [Default: `calico-packet`] | string |
 | `MaxIpsetSize`                       | `FELIX_MAXIPSETSIZE`                       | Maximum size for the ipsets used by Felix to implement tags. Should be set to a number that is greater than the maximum number of IP addresses that are ever expected in a tag. [Default: `1048576`] | int |
 | `NATPortRange`                       | `FELIX_NATPORTRANGE`                       | Port range used by iptables for port mapping when doing outgoing NAT. (Example: `32768:65000`).  [Default: iptables maps source ports below 512 to other ports below 512: those between 512 and 1023 inclusive will be mapped to ports below 1024, and other ports will be mapped to 1024 or above. Where possible, no port alteration will occur.]  | string |
+| `NATOutgoingAddress`                       | `FELIX_NATOUTGOINGADDRESS`                       | Source address used by iptables for an SNAT rule when doing outgoing NAT. [Default: an iptables `MASQUERADE` rule is used for outgoing NAT which will use the address on the interface traffic is leaving on.]  | `<IPv4-address>` |
 | `NetlinkTimeoutSecs`                 | `FELIX_NETLINKTIMEOUTSECS`                 | Time, in seconds, that Felix will wait for netlink (i.e. routing table list/update) operations to complete before giving up and retrying. [Default: `10`] | float |
 | `RouteRefreshIntervalSecs`           | `FELIX_ROUTEREFRESHINTERVAL`               | Period, in seconds, at which Felix re-checks the routes in the dataplane to ensure that no other process has accidentally broken {{site.prodname}}'s rules. Set to 0 to disable route refresh. [Default: `90`] | int |
 
@@ -194,4 +196,4 @@ a global setting and a per-host override.
    calicoctl replace -f felix.yaml
    ```
 
-For more information, see [Felix Configuration Resource](../calicoctl/resources/felixconfig).
+For more information, see [Felix Configuration Resource](../resources/felixconfig).

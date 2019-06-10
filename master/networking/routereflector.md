@@ -7,7 +7,7 @@ BGP route reflectors are useful in large scale deployments, to reduce the number
 connections that are needed for correct and complete route propagation.  {{site.prodname}}
 includes optional route reflector function in the {{site.nodecontainer}} image, which is
 enabled by provisioning the `spec.bgp.routeReflectorClusterID` field of the relevant [node
-resource]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/node).
+resource]({{site.baseurl}}/{{page.version}}/reference/resources/node).
 
 Some of the existing {{site.prodname}} nodes in a cluster can be [enabled to behave as route
 reflectors]({{site.baseurl}}/{{page.version}}/networking/bgp#configuring-in-cluster-route-reflectors)
@@ -15,7 +15,7 @@ reflectors]({{site.baseurl}}/{{page.version}}/networking/bgp#configuring-in-clus
 
 To run a standalone route reflector outside the cluster, you can also use the
 {{site.nodecontainer}} image.  Use [calicoctl node
-run]({{site.baseurl}}/{{page.version}}/reference/calicoctl/commands/node/run) to run a
+run]({{site.baseurl}}/{{page.version}}/reference/calicoctl/node/run) to run a
 {{site.nodecontainer}} container, then modify the relevant node resource similarly as in the
 in-cluster case.
 

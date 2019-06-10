@@ -15,50 +15,21 @@ operate.
 
 ## Enabling application layer policy
 
-**Prerequisite**: [{{site.prodname}} installed]({{site.url}}/{{page.version}}/getting-started/kubernetes/installation/).
+**Prerequisites**: 
 
-Locate the manifest below that matches your installation method and apply it. After applying
-the manifest, your `{{site.nodecontainer}}` containers will restart.
+ - [{{site.prodname}} installed](/{{page.version}}/getting-started/kubernetes/installation/)
+ - [calicoctl installed](/{{page.version}}/getting-started/calicoctl/install) & [configured](/{{page.version}}/getting-started/calicoctl/configure/)
 
-- **{{site.prodname}} for policy and networking with the Kubernetes API datastore**:
+Application layer policy requires the Policy Sync API to be enabled on Felix. To do this cluster-wide, modify the `default`
+FelixConfiguration to set the field `policySyncPathPrefix` to `/var/run/nodeagent`.  The following example uses `sed` to modify your
+existing default config before re-applying it.
 
-  ```bash
-  kubectl apply -f {{site.url}}/{{page.version}}/manifests/alp/node.yaml
-  ```
-
-	> **Note**: You can also
-	> [view the manifest in your browser]({{site.url}}/{{page.version}}/manifests/alp/node.yaml){:target="_blank"}.
-	{: .alert .alert-info}
-
-- **{{site.prodname}} for policy and networking with the etcd datastore**:
-
-  ```bash
-  kubectl apply -f {{site.url}}/{{page.version}}/manifests/alp/node-etcd.yaml
-  ```
-
-	> **Note**: You can also
-	> [view the manifest in your browser]({{site.url}}/{{page.version}}/manifests/alp/node-etcd.yaml){:target="_blank"}.
-	{: .alert .alert-info}
-
-- **{{site.prodname}} for policy and flannel for networking with the Kubernetes API datastore**:
-
-  ```bash
-  kubectl apply -f {{site.url}}/{{page.version}}/manifests/alp/node-canal.yaml
-  ```
-
-	> **Note**: You can also
-	> [view the manifest in your browser]({{site.url}}/{{page.version}}/manifests/alp/node-canal.yaml){:target="_blank"}.
-	{: .alert .alert-info}
-
-- **{{site.prodname}} for policy only**:
-
-  ```bash
-  kubectl apply -f {{site.url}}/{{page.version}}/manifests/alp/node-policy-only.yaml
-  ```
-
-	> **Note**: You can also
-	> [view the manifest in your browser]({{site.url}}/{{page.version}}/manifests/alp/node-policy-only.yaml){:target="_blank"}.
-	{: .alert .alert-info}
+```bash
+calicoctl get felixconfiguration default --export -o yaml | \
+sed -e '/  policySyncPathPrefix:/d' \
+    -e '$ a\  policySyncPathPrefix: /var/run/nodeagent' > felix-config.yaml
+calicoctl apply -f felix-config.yaml
+```
 
 
 ## Installing Istio
@@ -68,9 +39,9 @@ Application layer policy [requires Istio](../requirements#application-layer-poli
 Install Istio according to the [Istio project documentation](https://istio.io/docs/setup/kubernetes/), making sure to enable mutual TLS authentication. For example:
 
 ```bash
-curl -L https://git.io/getLatestIstio | ISTIO_VERSION=1.0.7 sh -
+curl -L https://git.io/getLatestIstio | ISTIO_VERSION=1.1.7 sh -
 cd $(ls -d istio-*)
-kubectl apply -f install/kubernetes/helm/istio/templates/crds.yaml
+kubectl apply -f install/kubernetes/helm/istio-init/files/
 kubectl apply -f install/kubernetes/istio-demo-auth.yaml
 ```
 
@@ -90,15 +61,16 @@ with Istio. This step modifies the injector configuration to add Dikastes, a
 1. Apply the following ConfigMap to enable injection of Dikastes alongside Envoy.
 
    ```bash
-   kubectl apply -f {{site.url}}/{{page.version}}/manifests/alp/istio-inject-configmap.yaml
+   kubectl apply -f {{site.url}}/{{page.version}}/manifests/alp/istio-inject-configmap-1.1.7.yaml
    ```
 
 	 > **Note**: You can also
-   > [view the manifest in your browser]({{site.url}}/{{page.version}}/manifests/alp/istio-inject-configmap.yaml){:target="_blank"}.
+   > [view the manifest in your browser]({{site.url}}/{{page.version}}/manifests/alp/istio-inject-configmap-1.1.7.yaml){:target="_blank"}.
    {: .alert .alert-info}
 
-If you would like to install a different version of Istio or inspect the changes
-we have made to the standard sidecar injector `ConfigMap`, see
+If you have installed a different version of Istio, substitute `1.1.7` in the above URL for your Istio version. We have
+pre-defined `ConfigMaps` for Istio versions 1.0.6, 1.0.7, and 1.1.0 through 1.1.7. To customize the standard sidecar injector `ConfigMap` or
+understand the changes we have made, see
 [Customizing the manifests](config-options).
 
 ## Adding {{site.prodname}} authorization services to the mesh

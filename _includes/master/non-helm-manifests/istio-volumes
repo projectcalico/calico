@@ -1,0 +1,6 @@
+      - name: dikastes-sock
+        emptyDir:
+          medium: Memory
+      - name: felix-sync
+        flexVolume:
+          driver: nodeagent/uds

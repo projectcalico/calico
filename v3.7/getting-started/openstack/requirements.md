@@ -17,8 +17,8 @@ However, we recommend using OpenStack Newton or later, and our active support
 and testing of {{site.prodname}} {{page.version}} with OpenStack is limited to
 the following versions:
 
-- Ocata
 - Pike
+- Queens
 
 {% include {{page.version}}/reqs-kernel.md %}
 

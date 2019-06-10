@@ -76,7 +76,7 @@ directly.
 In addition, the `--ip-autodetection-method` argument or the `IP_AUTODETECTION_METHOD`
 environment variable can be used to specify the method used to auto detect the host address
 and subnet.  See [Configuring {{site.nodecontainer}}]({{site.baseurl}}/{{page.version}}/reference/node/configuration)
-and [calicoctl command reference]({{site.baseurl}}/{{page.version}}/reference/calicoctl/commands/node/run)
+and [calicoctl command reference]({{site.baseurl}}/{{page.version}}/reference/calicoctl/node/run)
 for details.
 
 For IPv6, use the equivalent `--ip6` and `--ip6-autodetection-method` options,

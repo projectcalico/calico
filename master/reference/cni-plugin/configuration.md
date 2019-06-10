@@ -54,12 +54,13 @@ The following options are valid when `datastore_type` is `etcdv3`.
 
 Configure access to your etcd cluster using the following options.
 
-| Option name         | Default | Description
-|---------------------|---------|-------------
-| `etcd_endpoints`    | None    | Comma-separated list of endpoints. Example: `http://127.0.0.1:2379,http://127.0.0.2:2379` | string
-| `etcd_key_file`     | None    | Path to the file containing the private key matching the CNI plugin's client certificate. Enables the CNI plugin to participate in mutual TLS authentication and identify itself to the etcd server. Example: `/etc/calico-cni/key.pem` (optional) | string
-| `etcd_cert_file`    | None    | Path to the file containing the client certificate issued to the CNI plugin. Enables the CNI plugin to participate in mutual TLS authentication and identify itself to the etcd server. Example: `/etc/calico-cni/cert.pem` (optional) | string
-| `etcd_ca_cert_file` | None    | Path to the file containing the root certificate of the certificate authority (CA) that issued the etcd server certificate. Configures the CNI plugin to trust the CA that signed the root certificate. The file may contain multiple root certificates, causing the CNI plugin to trust each of the CAs included. | string
+| Option name          | Default | Description
+|----------------------|---------|-------------
+| `etcd_endpoints`     | None    | Comma-separated list of endpoints. Example: `http://127.0.0.1:2379,http://127.0.0.2:2379` | string
+| `etcd_discovery_srv` | None    | Domain name to discover etcd endpoints via SRV records. Mutually exclusive with `etcdEndpoints`. Example: `example.com` (optional) | string
+| `etcd_key_file`      | None    | Path to the file containing the private key matching the CNI plugin's client certificate. Enables the CNI plugin to participate in mutual TLS authentication and identify itself to the etcd server. Example: `/etc/calico-cni/key.pem` (optional) | string
+| `etcd_cert_file`     | None    | Path to the file containing the client certificate issued to the CNI plugin. Enables the CNI plugin to participate in mutual TLS authentication and identify itself to the etcd server. Example: `/etc/calico-cni/cert.pem` (optional) | string
+| `etcd_ca_cert_file`  | None    | Path to the file containing the root certificate of the certificate authority (CA) that issued the etcd server certificate. Configures the CNI plugin to trust the CA that signed the root certificate. The file may contain multiple root certificates, causing the CNI plugin to trust each of the CAs included. | string
 
 The following options are deprecated.
 
@@ -290,7 +291,7 @@ If provided, these IP pools will override any IP pools specified in the CNI conf
 > **Note**: This requires the IP pools to exist before `ipv4pools` or
 > `ipv6pools` annotations are used. Requesting a subset of an IP pool
 > is not supported. IP pools requested in the annotations must exactly
-> match a configured [IPPool]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/ippool) resource.
+> match a configured [IPPool]({{site.baseurl}}/{{page.version}}/reference/resources/ippool) resource.
 {: .alert .alert-info}
 
 > **Note**: The {{site.prodname}} CNI plugin supports specifying an annotation per namespace.
@@ -391,7 +392,7 @@ You can request a floating IP address for a pod through [Kubernetes annotations]
 Nodes will only assign workload addresses from IP pools which select them. By
 default, IP pools select all nodes, but this can be configured using the
 `nodeSelector` field. Check out the [IP pool resource
-document]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/ippool)
+document]({{site.baseurl}}/{{page.version}}/reference/resources/ippool)
 for more details.
 
 Example:

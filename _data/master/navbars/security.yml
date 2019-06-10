@@ -48,5 +48,5 @@ toc:
     path: /security/comms/secure-metrics
 - title: Defend against DoS attacks
   path: /security/defend-dos-attack
-- title: Enable extreme high-connection workloads
-  path: /security/high-connection-workloads  
+- title: Apply policy to Kubernetes node ports
+  path: /security/kubernetes-node-ports

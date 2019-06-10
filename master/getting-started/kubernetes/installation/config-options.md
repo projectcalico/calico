@@ -38,7 +38,7 @@ The sections that follow discuss the configurable parameters in greater depth.
 
 ### Configuring the pod IP range
 
-{{site.prodname}} IPAM assigns IP addresses from [IP pools]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/ippool).
+{{site.prodname}} IPAM assigns IP addresses from [IP pools]({{site.baseurl}}/{{page.version}}/reference/resources/ippool).
 
 To change the default IP range used for pods, modify the `CALICO_IPV4POOL_CIDR`
 section of the `calico.yaml` manifest.  For more information, see
@@ -86,7 +86,7 @@ For more information on {{site.nodecontainer}}'s configuration variables, includ
 
 > **Note**: The `CALICO_IPV4POOL_VXLAN` environment variable only takes effect when the first {{site.nodecontainer}} to start
 > creates the default IP pool.  It has no effect after the pool has already been created.  To switch to VXLAN mode
-> after installation time, use calicoctl to modify the [IPPool]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/ippool) resource.
+> after installation time, use calicoctl to modify the [IPPool]({{site.baseurl}}/{{page.version}}/reference/resources/ippool) resource.
 {: .alert .alert-info}
 
 ### Configuring etcd
@@ -249,32 +249,19 @@ Open the `install/kubernetes/istio-demo-auth.yaml` file in an
 editor, and locate the `istio-sidecar-injector` ConfigMap.  In the existing `istio-proxy` container, add a new `volumeMount`.
 
 ```
-        - mountPath: /var/run/dikastes
-          name: dikastes-sock
+{% include {{page.version}}/non-helm-manifests/istio-proxy-volume-mounts %}
 ```
 
 Add a new container to the template.
 
 ```
-      - name: dikastes
-        image: {{page.registry}}{{site.imageNames["dikastes"]}}:{{site.data.versions[page.version].first.components["calico/dikastes"].version}}
-        args: ["/dikastes", "server", "-l", "/var/run/dikastes/dikastes.sock", "-d", "/var/run/felix/nodeagent/socket", "--debug"]
-        volumeMounts:
-        - mountPath: /var/run/dikastes
-          name: dikastes-sock
-        - mountPath: /var/run/felix
-          name: felix-sync
+{% include {{page.version}}/non-helm-manifests/dikastes-container %}
 ```
 
 Add two new volumes.
 
 ```
-      - name: dikastes-sock
-        emptyDir:
-          medium: Memory
-      - name: felix-sync
-        flexVolume:
-          driver: nodeagent/uds
+{% include {{page.version}}/non-helm-manifests/istio-volumes %}
 ```
 
 The volumes you added are used to create Unix domain sockets that allow
@@ -283,5 +270,5 @@ Felix.  Once created, a Unix domain socket is an in-memory communications
 channel. The volumes are not used for any kind of stateful storage on disk.
 
 Refer to the
-[Calico ConfigMap manifest](./manifests/app-layer-policy/istio-inject-configmap.yaml){:target="_blank"} for an
+[Calico ConfigMap manifest](/{{page.version}}/manifests/alp/istio-inject-configmap-1.0.7.yaml){:target="_blank"} for an
 example with the above changes.

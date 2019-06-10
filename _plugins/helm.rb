@@ -48,7 +48,7 @@ module Jekyll
         end
       end
 
-      versionsYml = gen_values(vs, imageNames, imageRegistry)
+      versionsYml = gen_values(version, vs, imageNames, imageRegistry)
 
       tv = Tempfile.new("temp_versions.yml")
       tv.write(versionsYml)

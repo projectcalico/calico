@@ -8,76 +8,70 @@ toc:
   section:
   - title: Overview
     path: /reference/calicoctl/
-  - title: Command reference
-    path: /reference/calicoctl/commands
+  - title: create
+    path: /reference/calicoctl/create
+  - title: replace
+    path: /reference/calicoctl/replace
+  - title: apply
+    path: /reference/calicoctl/apply
+  - title: delete
+    path: /reference/calicoctl/delete
+  - title: get
+    path: /reference/calicoctl/get
+  - title: label
+    path: /reference/calicoctl/label
+  - title: convert
+    path: /reference/calicoctl/convert
+  - title: ipam
     section:
     - title: Overview
-      path: /reference/calicoctl/commands/
-    - title: get
-      path: /reference/calicoctl/commands/get
-    - title: create
-      path: /reference/calicoctl/commands/create
-    - title: replace
-      path: /reference/calicoctl/commands/replace
-    - title: apply
-      path: /reference/calicoctl/commands/apply
-    - title: delete
-      path: /reference/calicoctl/commands/delete
-    - title: convert
-      path: /reference/calicoctl/commands/convert
-    - title: label
-      path: /reference/calicoctl/commands/label
-    - title: ipam
-      section:
-      - title: Overview
-        path: /reference/calicoctl/commands/ipam/
-      - title: release
-        path: /reference/calicoctl/commands/ipam/release
-      - title: show
-        path: /reference/calicoctl/commands/ipam/show
-    - title: node
-      section:
-      - title: Overview
-        path: /reference/calicoctl/commands/node/
-      - title: run
-        path: /reference/calicoctl/commands/node/run
-      - title: status
-        path: /reference/calicoctl/commands/node/status
-      - title: diags
-        path: /reference/calicoctl/commands/node/diags
-      - title: checksystem
-        path: /reference/calicoctl/commands/node/checksystem
-    - title: version
-      path: /reference/calicoctl/commands/version
-  - title: Resource definitions
-    path: /reference/calicoctl/resources
+      path: /reference/calicoctl/ipam/
+    - title: release
+      path: /reference/calicoctl/ipam/release
+    - title: show
+      path: /reference/calicoctl/ipam/show
+  - title: node
     section:
-      - title: Overview
-        path: /reference/calicoctl/resources/
-      - title: BGP peer
-        path: /reference/calicoctl/resources/bgppeer
-      - title: BGP configuration
-        path: /reference/calicoctl/resources/bgpconfig
-      - title: Felix configuration
-        path: /reference/calicoctl/resources/felixconfig
-      - title: Network set
-        path: /reference/calicoctl/resources/networkset
-      - title: Global network set
-        path: /reference/calicoctl/resources/globalnetworkset
-      - title: Host endpoint
-        path: /reference/calicoctl/resources/hostendpoint
-      - title: IP pool
-        path: /reference/calicoctl/resources/ippool
-      - title: Node
-        path: /reference/calicoctl/resources/node
-      - title: Network policy
-        path: /reference/calicoctl/resources/networkpolicy
-      - title: Global network policy
-        path: /reference/calicoctl/resources/globalnetworkpolicy
-      - title: Profile
-        path: /reference/calicoctl/resources/profile
-      - title: Workload endpoint
-        path: /reference/calicoctl/resources/workloadendpoint
+    - title: Overview
+      path: /reference/calicoctl/node/
+    - title: run
+      path: /reference/calicoctl/node/run
+    - title: status
+      path: /reference/calicoctl/node/status
+    - title: diags
+      path: /reference/calicoctl/node/diags
+    - title: checksystem
+      path: /reference/calicoctl/node/checksystem
+  - title: version
+    path: /reference/calicoctl/version
+- title: Resource definitions
+  section:
+    - title: Overview
+      path: /reference/resources/
+    - title: BGP configuration
+      path: /reference/resources/bgpconfig
+    - title: BGP peer
+      path: /reference/resources/bgppeer
+    - title: Felix configuration
+      path: /reference/resources/felixconfig
+    - title: Global network policy
+      path: /reference/resources/globalnetworkpolicy
+    - title: Global network set
+      path: /reference/resources/globalnetworkset
+    - title: Host endpoint
+      path: /reference/resources/hostendpoint
+    - title: IP pool
+      path: /reference/resources/ippool
+    - title: Network policy
+      path: /reference/resources/networkpolicy
+    - title: Network set
+      path: /reference/resources/networkset
+    - title: Node
+      path: /reference/resources/node
+    - title: Profile
+      path: /reference/resources/profile
+    - title: Workload endpoint
+      path: /reference/resources/workloadendpoint
 - title: Configuring etcd RBAC
   section:
   - title: Overview
