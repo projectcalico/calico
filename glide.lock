@@ -1,5 +1,5 @@
-hash: 1df24442d78735fb3e658b1aa82bb9d61e476ec4ad4d3eccdac1ff3f6e6837e8
-updated: 2019-06-06T09:06:07.065507121Z
+hash: 93bdd59ad5284b9b2e42843191fedc96cc4985025257a720f19c47b41b5eea50
+updated: 2019-06-11T06:15:01.462080064Z
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -31,6 +31,7 @@ imports:
   - etcdserver/api/v3rpc/rpctypes
   - etcdserver/etcdserverpb
   - mvcc/mvccpb
+  - pkg/srv
   - pkg/tlsutil
   - pkg/transport
   - pkg/types
@@ -242,7 +243,7 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: 9131cbc3d1e68099b7f89d2de0b3704542d4a772
+  version: 30711e170029987a2d0b027d49e4351549f3ec5a
   subpackages:
   - lib/apiconfig
   - lib/apis/v1
@@ -284,7 +285,7 @@ imports:
   subpackages:
   - binder
 - name: github.com/projectcalico/typha
-  version: 78910db37d8ae6e1a62cc69059e421bf5d001ef9
+  version: 2997109d587cc264db81ae0106a92c7e8ac52753
   subpackages:
   - pkg/syncclient
   - pkg/syncproto
@@ -322,7 +323,7 @@ imports:
   version: 1f80e3709dfafa8ca8727ba7eb392a11827ac8e2
   repo: https://github.com/projectcalico/logrus
 - name: github.com/spf13/cobra
-  version: 67fc4837d267bc9bfd6e47f77783fcc3dffc68de
+  version: f2b07da1e2c38d5f12845a4f607e2e1018cbb1f5
 - name: github.com/spf13/pflag
   version: 583c0c0531f06d5278b7d917446061adc344b5cd
 - name: github.com/vishvananda/netlink
