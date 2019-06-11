@@ -1,4 +1,4 @@
-// Copyright (c) 2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2019 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -31,7 +31,6 @@ import (
 	api "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	client "github.com/projectcalico/libcalico-go/lib/clientv3"
 	cerrors "github.com/projectcalico/libcalico-go/lib/errors"
-	validator "github.com/projectcalico/libcalico-go/lib/validator/v3"
 	log "github.com/sirupsen/logrus"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -383,12 +382,7 @@ func unmarshalResource(tm unstructured.Unstructured, b []byte) ([]runtime.Object
 		return nil, err
 	}
 
-	log.Infof("Type of unpacked data: %v", reflect.TypeOf(unpacked))
-	if err = validator.Validate(unpacked); err != nil {
-		return nil, err
-	}
-
-	log.Infof("Unpacked: %+v", unpacked)
+	log.Infof("Type of unpacked data: %v. Unpacked %+v", reflect.TypeOf(unpacked), unpacked)
 
 	return []runtime.Object{unpacked}, nil
 }
@@ -412,14 +406,6 @@ func unmarshalSliceOfResources(tml []unstructured.Unstructured, b []byte) ([]run
 
 	if err := yaml.UnmarshalStrict(b, &unpacked); err != nil {
 		return nil, err
-	}
-
-	// Validate the data in the structures.  The validator does not handle slices, so
-	// validate each resource separately.
-	for _, r := range unpacked {
-		if err := validator.Validate(r); err != nil {
-			return nil, err
-		}
 	}
 
 	log.Infof("Unpacked: %+v", unpacked)
