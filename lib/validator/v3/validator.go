@@ -597,7 +597,15 @@ func validateFelixConfigSpec(structLevel validator.StructLevel) {
 		parsedAddress := cnet.ParseIP(c.NATOutgoingAddress)
 		if parsedAddress == nil || parsedAddress.Version() != 4 {
 			structLevel.ReportError(reflect.ValueOf(c.NATOutgoingAddress),
-				"NATOutgoingAddress", "", reason("is not a valid IP address"), "")
+				"NATOutgoingAddress", "", reason("is not a valid IPv4 address"), "")
+		}
+	}
+
+	if c.DeviceRouteSourceAddress != "" {
+		parsedAddress := cnet.ParseIP(c.DeviceRouteSourceAddress)
+		if parsedAddress == nil || parsedAddress.Version() != 4 {
+			structLevel.ReportError(reflect.ValueOf(c.DeviceRouteSourceAddress),
+				"DeviceRouteSourceAddress", "", reason("is not a valid IPv4 address"), "")
 		}
 	}
 }
