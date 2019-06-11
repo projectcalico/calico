@@ -1,0 +1,7 @@
+---
+layout: null
+---
+{% helm --execute templates/rbac.yaml %}
+datastore: etcd
+network: flannel
+{% endhelm %}

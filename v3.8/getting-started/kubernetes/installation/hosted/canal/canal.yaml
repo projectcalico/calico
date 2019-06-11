@@ -1,0 +1,8 @@
+---
+layout: null
+---
+{% helm %}
+datastore: kubernetes
+network: flannel
+ipam: host-local
+{% endhelm %}

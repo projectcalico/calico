@@ -2573,3 +2573,27 @@ master:
       version: master
      flexvol:
       version: master
+
+# Placeholder for v3.8. Delete this when v3.8.0 goes live. 
+v3.8:
+- title: v3.8.0-pre-release
+  note: ""
+  components:
+     typha:
+      version: release-v3.8
+     calicoctl:
+      version: release-v3.8
+     calico/node:
+      version: release-v3.8
+     calico/cni:
+      version: release-v3.8
+     calico/kube-controllers:
+      version: release-v3.8
+     networking-calico:
+      version: release-v3.8
+     flannel:
+      version: v0.11.0
+     calico/dikastes:
+      version: release-v3.8
+     flexvol:
+      version: release-v3.8
