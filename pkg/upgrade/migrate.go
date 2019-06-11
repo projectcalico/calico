@@ -199,7 +199,7 @@ func Migrate(ctxt context.Context, c client.Interface, nodename string) error {
 	// against racing with any remaining host-local processes which might be allocating
 	// IP addresses.
 	log.Info("acquiring lock on host-local IPAM")
-	hostLocal, err := disk.New(ipAllocPath, "")
+	hostLocal, err := disk.New("", ipAllocPath)
 	if err != nil {
 		return fmt.Errorf("failed to initialize host-local IPAM: %s", err)
 	}
