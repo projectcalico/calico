@@ -62,6 +62,7 @@ var _ = Describe("RouteTable", func() {
 			routeKeyToRoute:  map[string]netlink.Route{},
 			addedRouteKeys:   set.New(),
 			deletedRouteKeys: set.New(),
+			updatedRouteKeys: set.New(),
 		}
 		startTime, err := time.Parse(time.RFC3339, "2006-01-02T15:04:05Z")
 		Expect(err).NotTo(HaveOccurred())
@@ -80,6 +81,7 @@ var _ = Describe("RouteTable", func() {
 			dataplane.AddStaticArpEntry,
 			dataplane,
 			t,
+			nil,
 		)
 	})
 
@@ -153,6 +155,134 @@ var _ = Describe("RouteTable", func() {
 				net.ParseIP("10.0.0.1").To4(),
 				net.ParseIP("10.0.0.3").To4(),
 			))
+		})
+		It("Should clear out a source address when source address is not set", func() {
+			updateLink := dataplane.addIface(5, "cali5", true, true)
+			updateRoute := netlink.Route{
+				LinkIndex: updateLink.attrs.Index,
+				Dst:       mustParseCIDR("10.0.0.5/32"),
+				Type:      syscall.RTN_UNICAST,
+				Protocol:  syscall.RTPROT_BOOT,
+				Scope:     netlink.SCOPE_LINK,
+				Src:       net.ParseIP("192.168.0.1"),
+			}
+			dataplane.addMockRoute(&updateRoute)
+			rt.SetRoutes(updateLink.attrs.Name, []Target{
+				{CIDR: ip.MustParseCIDROrIP("10.0.0.5"), DestMAC: mac1},
+			})
+
+			fixedRoute := updateRoute
+			fixedRoute.Src = nil
+
+			rt.Apply()
+			Expect(dataplane.updatedRouteKeys).To(HaveKey(keyForRoute(&updateRoute)))
+			Expect(dataplane.routeKeyToRoute[keyForRoute(&updateRoute)]).To(Equal(fixedRoute))
+
+		})
+		Describe("With a device route source address set", func() {
+			deviceRouteSource := "192.168.0.1"
+			deviceRouteSourceAddress := net.ParseIP(deviceRouteSource)
+			// Modify the route table to have the device route source address set
+			BeforeEach(func() {
+				rt = NewWithShims(
+					[]string{"cali"},
+					4,
+					dataplane.NewNetlinkHandle,
+					false,
+					10*time.Second,
+					dataplane.AddStaticArpEntry,
+					dataplane,
+					t,
+					deviceRouteSourceAddress,
+				)
+			})
+			It("Should delete routes without a source address", func() {
+				rt.Apply()
+				Expect(dataplane.deletedRouteKeys).To(HaveKey(keyForRoute(&cali3Route)))
+				Expect(dataplane.deletedRouteKeys).To(HaveKey(keyForRoute(&cali1Route)))
+			})
+			It("Should add routes with a source address", func() {
+				// Route that needs to be added
+				addLink := dataplane.addIface(6, "cali6", true, true)
+				rt.SetRoutes(addLink.attrs.Name, []Target{
+					{CIDR: ip.MustParseCIDROrIP("10.0.0.6"), DestMAC: mac1},
+				})
+				rt.Apply()
+				Expect(dataplane.routeKeyToRoute["6-10.0.0.6/32"]).To(Equal(netlink.Route{
+						LinkIndex: addLink.attrs.Index,
+						Dst:       mustParseCIDR("10.0.0.6/32"),
+						Type:      syscall.RTN_UNICAST,
+						Protocol:  syscall.RTPROT_BOOT,
+						Scope:     netlink.SCOPE_LINK,
+						Src:       deviceRouteSourceAddress,
+				}))
+			})
+			It("Should not remove routes with a source address", func() {
+				// Route that should be left alone
+				noopLink := dataplane.addIface(4, "cali4", true, true)
+				noopRoute := netlink.Route{
+					LinkIndex: noopLink.attrs.Index,
+					Dst:       mustParseCIDR("10.0.0.4/32"),
+					Type:      syscall.RTN_UNICAST,
+					Protocol:  syscall.RTPROT_BOOT,
+					Scope:     netlink.SCOPE_LINK,
+					Src:       deviceRouteSourceAddress,
+				}
+				rt.SetRoutes(noopLink.attrs.Name, []Target{
+					{CIDR: ip.MustParseCIDROrIP("10.0.0.4/32"), DestMAC: mac1},
+				})
+				dataplane.addMockRoute(&noopRoute)
+
+				rt.Apply()
+				Expect(dataplane.deletedRouteKeys).ToNot(HaveKey(keyForRoute(&noopRoute)))
+				Expect(dataplane.updatedRouteKeys).ToNot(HaveKey(keyForRoute(&noopRoute)))
+			})
+			It("Should update source addresses from nil to a given source", func() {
+				// Route that needs to be updated
+				updateLink := dataplane.addIface(5, "cali5", true, true)
+				updateRoute := netlink.Route{
+					LinkIndex: updateLink.attrs.Index,
+					Dst:       mustParseCIDR("10.0.0.5/32"),
+					Type:      syscall.RTN_UNICAST,
+					Protocol:  syscall.RTPROT_BOOT,
+					Scope:     netlink.SCOPE_LINK,
+				}
+				rt.SetRoutes(updateLink.attrs.Name, []Target{
+					{CIDR: ip.MustParseCIDROrIP("10.0.0.5"), DestMAC: mac1},
+				})
+				dataplane.addMockRoute(&updateRoute)
+
+				fixedRoute := updateRoute
+				fixedRoute.Src = deviceRouteSourceAddress
+
+				rt.Apply()
+				Expect(dataplane.updatedRouteKeys).To(HaveKey(keyForRoute(&updateRoute)))
+				Expect(dataplane.routeKeyToRoute[keyForRoute(&updateRoute)]).To(Equal(fixedRoute))
+			})
+
+			It("Should update source addresses from an old source to a new one", func() {
+				// Route that needs to be updated
+				updateLink := dataplane.addIface(5, "cali5", true, true)
+				updateRoute := netlink.Route{
+					LinkIndex: updateLink.attrs.Index,
+					Dst:       mustParseCIDR("10.0.0.5/32"),
+					Type:      syscall.RTN_UNICAST,
+					Protocol:  syscall.RTPROT_BOOT,
+					Scope:     netlink.SCOPE_LINK,
+					Src:       net.ParseIP("192.168.0.2"),
+				}
+				rt.SetRoutes(updateLink.attrs.Name, []Target{
+					{CIDR: ip.MustParseCIDROrIP("10.0.0.5"), DestMAC: mac1},
+				})
+				dataplane.addMockRoute(&updateRoute)
+
+				fixedRoute := updateRoute
+				fixedRoute.Src = deviceRouteSourceAddress
+
+				rt.Apply()
+				Expect(dataplane.updatedRouteKeys).To(HaveKey(keyForRoute(&updateRoute)))
+				Expect(dataplane.routeKeyToRoute[keyForRoute(&updateRoute)]).To(Equal(fixedRoute))
+			})
 		})
 
 		Describe("with a slow conntrack deletion", func() {
@@ -494,6 +624,7 @@ type mockDataplane struct {
 	routeKeyToRoute  map[string]netlink.Route
 	addedRouteKeys   set.Set
 	deletedRouteKeys set.Set
+	updatedRouteKeys set.Set
 
 	NumNewNetlinkCalls int
 	NetlinkOpen        bool
@@ -636,8 +767,10 @@ func (d *mockDataplane) RouteDel(route *netlink.Route) error {
 	key := keyForRoute(route)
 	log.WithField("routeKey", key).Info("Mock dataplane: RouteDel called")
 	d.deletedRouteKeys.Add(key)
+	// Route was deleted, but is planned on being readded
 	if _, ok := d.routeKeyToRoute[key]; ok {
 		delete(d.routeKeyToRoute, key)
+		d.updatedRouteKeys.Add(key)
 		return nil
 	} else {
 		return nil

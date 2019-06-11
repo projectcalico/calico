@@ -116,6 +116,8 @@ type RouteTable struct {
 	// Whether this route table is managing vxlan routes.
 	vxlan bool
 
+	deviceRouteSourceAddress net.IP
+
 	// Testing shims, swapped with mock versions for UT
 	newNetlinkHandle  func() (HandleIface, error)
 	addStaticARPEntry func(cidr ip.CIDR, destMAC net.HardwareAddr, ifaceName string) error
@@ -123,7 +125,7 @@ type RouteTable struct {
 	time              timeIface
 }
 
-func New(interfacePrefixes []string, ipVersion uint8, vxlan bool, netlinkTimeout time.Duration) *RouteTable {
+func New(interfacePrefixes []string, ipVersion uint8, vxlan bool, netlinkTimeout time.Duration, deviceRouteSourceAddress net.IP) *RouteTable {
 	return NewWithShims(
 		interfacePrefixes,
 		ipVersion,
@@ -133,6 +135,7 @@ func New(interfacePrefixes []string, ipVersion uint8, vxlan bool, netlinkTimeout
 		addStaticARPEntry,
 		conntrack.New(),
 		realTime{},
+		deviceRouteSourceAddress,
 	)
 }
 
@@ -146,6 +149,7 @@ func NewWithShims(
 	addStaticARPEntry func(cidr ip.CIDR, destMAC net.HardwareAddr, ifaceName string) error,
 	conntrack conntrackIface,
 	timeShim timeIface,
+	deviceRouteSourceAddress net.IP,
 ) *RouteTable {
 	prefixSet := set.New()
 	regexpParts := []string{}
@@ -185,6 +189,7 @@ func NewWithShims(
 		conntrack:                   conntrack,
 		time:                        timeShim,
 		vxlan:                       vxlan,
+		deviceRouteSourceAddress:    deviceRouteSourceAddress,
 	}
 }
 
@@ -517,7 +522,14 @@ func (r *RouteTable) syncRoutesForLink(ifaceName string) error {
 		seenCIDRs.Add(dest)
 		if expectedCIDRs.Contains(dest) {
 			logCxt.Debug("Syncing routes: Found expected route.")
-			continue
+			// Check if we need to update this route with a source address
+			if !r.deviceRouteSourceAddress.Equal(route.Src) {
+				logCxt.Debug("Syncing routes: existing route needs modification. Removing.")
+				// Don't skip adding this route
+				seenCIDRs.Discard(dest)
+			} else {
+				continue
+			}
 		}
 		if !r.vxlan && inGracePeriod {
 			// Don't remove routes from interfaces created recently. VXLAN routes don't have a grace period.
@@ -550,6 +562,10 @@ func (r *RouteTable) syncRoutesForLink(ifaceName string) error {
 				Type:      syscall.RTN_UNICAST,
 				Protocol:  syscall.RTPROT_BOOT,
 				Scope:     netlink.SCOPE_LINK,
+			}
+
+			if r.deviceRouteSourceAddress != nil {
+				route.Src = r.deviceRouteSourceAddress
 			}
 
 			if target.GW != nil {
