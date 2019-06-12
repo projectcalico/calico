@@ -136,7 +136,7 @@ type Config struct {
 	XDPEnabled      bool
 	XDPAllowGeneric bool
 
-	SockmapEnabled bool
+	SidecarAccelerationEnabled bool
 
 	SockmapCgroupv2Subdir string
 }
@@ -393,7 +393,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		// bpffs so there's nothing to clean up
 	}
 
-	if config.SockmapEnabled {
+	if config.SidecarAccelerationEnabled {
 		if err := bpf.SupportsSockmap(); err != nil {
 			log.WithError(err).Warn("Can't enable Sockmap acceleration.")
 		} else {

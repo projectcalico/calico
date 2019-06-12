@@ -104,7 +104,7 @@ var _ = infrastructure.DatastoreDescribe("with initialized Felix", []apiconfig.D
 		opts := infrastructure.DefaultTopologyOptions()
 		opts.FelixLogSeverity = "debug"
 		opts.ExtraEnvVars["FELIX_XDPENABLED"] = "0"
-		opts.ExtraEnvVars["FELIX_SOCKMAPENABLED"] = "1"
+		opts.ExtraEnvVars["FELIX_SIDECARACCELERATIONENABLED"] = "1"
 		opts.ExtraEnvVars["FELIX_SOCKMAPCGROUPV2SUBDIR"] = cgroupSubdir
 		felix, _ = infrastructure.StartSingleNodeTopology(opts, infra)
 		Expect(waitForCgroupSubdir(felix, cgroupSubdir)).NotTo(HaveOccurred())
