@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2018 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2019 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -236,8 +236,8 @@ type FelixConfigurationSpec struct {
 
 	IptablesNATOutgoingInterfaceFilter string `json:"iptablesNATOutgoingInterfaceFilter,omitempty" validate:"omitempty,ifaceFilter"`
 
-	// SockmapEnabled enables experimental sockmap acceleration [Default: false]
-	SockmapEnabled *bool `json:"sockmapEnabled,omitempty" confignamev1:"SockmapEnabled"`
+	// SidecarAccelerationEnabled enables experimental sidecar acceleration [Default: false]
+	SidecarAccelerationEnabled *bool `json:"sidecarAccelerationEnabled,omitempty"`
 
 	// XDPEnabled enables XDP acceleration for suitable untracked incoming deny rules. [Default: true]
 	XDPEnabled *bool `json:"xdpEnabled,omitempty" confignamev1:"XDPEnabled"`

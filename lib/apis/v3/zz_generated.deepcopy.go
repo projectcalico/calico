@@ -724,8 +724,8 @@ func (in *FelixConfigurationSpec) DeepCopyInto(out *FelixConfigurationSpec) {
 		*out = new(v1.Duration)
 		**out = **in
 	}
-	if in.SockmapEnabled != nil {
-		in, out := &in.SockmapEnabled, &out.SockmapEnabled
+	if in.SidecarAccelerationEnabled != nil {
+		in, out := &in.SidecarAccelerationEnabled, &out.SidecarAccelerationEnabled
 		*out = new(bool)
 		**out = **in
 	}
