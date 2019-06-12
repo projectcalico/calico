@@ -46,26 +46,26 @@ type reporterState struct {
 	timestamp time.Time
 }
 
-func (r *reporterState) RecentlyReady() bool {
+func (r *reporterState) HasReadinessProblem() bool {
 	if !r.reports.Ready {
-		return true
+		return false
 	}
 	if r.TimedOut() {
 		log.WithField("name", r.name).Warn("Report timed out")
-		return false
+		return true
 	}
-	return r.latest.Ready
+	return !r.latest.Ready
 }
 
-func (r *reporterState) RecentlyLive() bool {
+func (r *reporterState) HasLivenessProblem() bool {
 	if !r.reports.Live {
-		return true
+		return false
 	}
 	if r.TimedOut() {
 		log.WithField("name", r.name).Warn("Report timed out")
-		return false
+		return true
 	}
-	return r.latest.Live
+	return !r.latest.Live
 }
 
 // TimedOut checks whether the reporter is due for another report. This is the case when
@@ -179,11 +179,11 @@ func (aggregator *HealthAggregator) Summary() *HealthReport {
 	// Now for each reporter...
 	for _, reporter := range aggregator.reporters {
 		log.WithField("reporter", reporter).Debug("Checking state of reporter")
-		if !reporter.RecentlyLive() {
+		if reporter.HasLivenessProblem() {
 			log.WithField("name", reporter.name).Warn("Reporter is not live.")
 			summary.Live = false
 		}
-		if !reporter.RecentlyReady() {
+		if reporter.HasReadinessProblem() {
 			log.WithField("name", reporter.name).Warn("Reporter is not ready.")
 			summary.Ready = false
 		}
