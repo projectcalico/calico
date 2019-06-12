@@ -137,8 +137,6 @@ type Config struct {
 	XDPAllowGeneric bool
 
 	SidecarAccelerationEnabled bool
-
-	SockmapCgroupv2Subdir string
 }
 
 // InternalDataplane implements an in-process Felix dataplane driver based on iptables
@@ -397,7 +395,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		if err := bpf.SupportsSockmap(); err != nil {
 			log.WithError(err).Warn("Can't enable Sockmap acceleration.")
 		} else {
-			st, err := NewSockmapState(config.SockmapCgroupv2Subdir)
+			st, err := NewSockmapState()
 			if err != nil {
 				log.WithError(err).Warn("Can't enable Sockmap acceleration.")
 			} else {
@@ -415,7 +413,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	}
 
 	if dp.sockmapState == nil {
-		st, err := NewSockmapState(config.SockmapCgroupv2Subdir)
+		st, err := NewSockmapState()
 		if err == nil {
 			st.WipeSockmap(bpf.FindInBPFFSOnly)
 		}
