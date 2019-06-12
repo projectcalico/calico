@@ -21,6 +21,7 @@ import (
 	"io/ioutil"
 	"os"
 	"reflect"
+	"sort"
 	"strings"
 	"text/tabwriter"
 	"text/template"
@@ -198,10 +199,22 @@ func join(items interface{}, separator string) string {
 // each to its string representation, joins them together with the provided separator
 // string and (if maxLen is >0) truncates the output at the given maximum length.
 func joinAndTruncate(items interface{}, separator string, maxLen int) string {
-	// If the interface is empty, return an empty string. Otherwise, a raw map would
-	// show in the output.
-	if reflect.ValueOf(items).IsNil() {
+	// Nil types.
+	if items == nil {
 		return ""
+	}
+
+	// If it is a map, just convert key,value pairs into slice.
+	mapSlice := []string{}
+	if reflect.TypeOf(items).Kind() == reflect.Map {
+		iterator := reflect.ValueOf(items).MapRange()
+		for iterator.Next() {
+			k := iterator.Key().Interface().(string)
+			v := iterator.Value().Interface().(string)
+			mapSlice = append(mapSlice, k+"="+v)
+		}
+		sort.Strings(mapSlice)
+		items = mapSlice
 	}
 
 	if reflect.TypeOf(items).Kind() != reflect.Slice {
