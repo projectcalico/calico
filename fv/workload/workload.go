@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2018 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2019 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -60,6 +60,8 @@ type Workload struct {
 }
 
 var workloadIdx = 0
+var sideServIdx = 0
+var permConnIdx = 0
 
 func (w *Workload) Stop() {
 	if w == nil {
@@ -77,7 +79,7 @@ func (w *Workload) Stop() {
 	}
 }
 
-func Run(c *infrastructure.Felix, name, profile, ip, ports string, protocol string) (w *Workload) {
+func Run(c *infrastructure.Felix, name, profile, ip, ports, protocol string) (w *Workload) {
 	w, err := run(c, name, profile, ip, ports, protocol)
 	if err != nil {
 		log.WithError(err).Info("Starting workload failed, retrying")
@@ -88,7 +90,7 @@ func Run(c *infrastructure.Felix, name, profile, ip, ports string, protocol stri
 	return w
 }
 
-func run(c *infrastructure.Felix, name, profile, ip, ports string, protocol string) (w *Workload, err error) {
+func run(c *infrastructure.Felix, name, profile, ip, ports, protocol string) (w *Workload, err error) {
 	workloadIdx++
 	n := fmt.Sprintf("%s-idx%v", name, workloadIdx)
 	interfaceName := conversion.VethNameForWorkload(profile, n)
@@ -295,6 +297,160 @@ func (w *Workload) LatencyTo(ip, port string) time.Duration {
 	}
 	meanRtt := rttSum / time.Duration(len(lines))
 	return meanRtt
+}
+
+type SideService struct {
+	W       *Workload
+	Name    string
+	RunCmd  *exec.Cmd
+	PidFile string
+}
+
+func (s *SideService) Stop() {
+	Expect(s.stop()).NotTo(HaveOccurred())
+}
+
+func (s *SideService) stop() error {
+	log.WithField("SideService", s).Info("Stop")
+	output, err := s.W.C.ExecOutput("cat", s.PidFile)
+	if err != nil {
+		log.WithField("pidfile", s.PidFile).WithError(err).Warn("Failed to get contents of a side service's pidfile")
+		return err
+	}
+	pid := strings.TrimSpace(output)
+	err = s.W.C.ExecMayFail("kill", pid)
+	if err != nil {
+		log.WithField("pid", pid).WithError(err).Warn("Failed to kill a side service")
+		return err
+	}
+	s.RunCmd.Process.Wait()
+	log.WithField("SideService", s).Info("Side service now stopped")
+	return nil
+}
+
+func (w *Workload) StartSideService() *SideService {
+	s, err := startSideService(w)
+	Expect(err).NotTo(HaveOccurred())
+	return s
+}
+
+func startSideService(w *Workload) (*SideService, error) {
+	// Ensure that the host has the 'test-workload' binary.
+	w.C.EnsureBinary("test-workload")
+	sideServIdx++
+	n := fmt.Sprintf("%s-ss%d", w.Name, sideServIdx)
+	pidFile := fmt.Sprintf("/tmp/%s-pid", n)
+
+	testWorkloadShArgs := []string{
+		"/test-workload",
+	}
+	if w.Protocol == "udp" {
+		testWorkloadShArgs = append(testWorkloadShArgs, "--udp")
+	}
+	testWorkloadShArgs = append(testWorkloadShArgs,
+		"--sidecar-iptables",
+		"--up-lo",
+		fmt.Sprintf("'--namespace-path=%s'", w.namespacePath),
+		"''", // interface name, not important
+		"127.0.0.1",
+		"15001",
+	)
+	pidCmd := fmt.Sprintf("echo $$ >'%s'", pidFile)
+	testWorkloadCmd := strings.Join(testWorkloadShArgs, " ")
+	dockerWorkloadArgs := []string{
+		"docker",
+		"exec",
+		w.C.Name,
+		"sh", "-c",
+		fmt.Sprintf("%s; exec %s", pidCmd, testWorkloadCmd),
+	}
+	runCmd := utils.Command(dockerWorkloadArgs[0], dockerWorkloadArgs[1:]...)
+	logName := fmt.Sprintf("side service %s", n)
+	if err := utils.LogOutput(runCmd, logName); err != nil {
+		return nil, fmt.Errorf("failed to start output logging for %s", logName)
+	}
+	if err := runCmd.Start(); err != nil {
+		return nil, fmt.Errorf("starting /test-workload as a side service failed: %v", err)
+	}
+	return &SideService{
+		W:       w,
+		Name:    n,
+		RunCmd:  runCmd,
+		PidFile: pidFile,
+	}, nil
+}
+
+type PermanentConnection struct {
+	W        *Workload
+	LoopFile string
+	Name     string
+	RunCmd   *exec.Cmd
+}
+
+func (pc *PermanentConnection) Stop() {
+	Expect(pc.stop()).NotTo(HaveOccurred())
+}
+
+func (pc *PermanentConnection) stop() error {
+	if err := pc.W.C.ExecMayFail("sh", "-c", fmt.Sprintf("echo > %s", pc.LoopFile)); err != nil {
+		log.WithError(err).WithField("loopfile", pc.LoopFile).Warn("Failed to create a loop file to stop the permanent connection")
+		return err
+	}
+	if err := pc.RunCmd.Wait(); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (w *Workload) StartPermanentConnection(ip string, port, sourcePort int) *PermanentConnection {
+	pc, err := startPermanentConnection(w, ip, port, sourcePort)
+	Expect(err).NotTo(HaveOccurred())
+	return pc
+}
+
+func startPermanentConnection(w *Workload, ip string, port, sourcePort int) (*PermanentConnection, error) {
+	// Ensure that the host has the 'test-connection' binary.
+	w.C.EnsureBinary("test-connection")
+	permConnIdx++
+	n := fmt.Sprintf("%s-pc%d", w.Name, permConnIdx)
+	loopFile := fmt.Sprintf("/tmp/%s-loop", n)
+
+	err := w.C.ExecMayFail("sh", "-c", fmt.Sprintf("echo > %s", loopFile))
+	if err != nil {
+		return nil, err
+	}
+
+	runCmd := utils.Command(
+		"docker",
+		"exec",
+		w.C.Name,
+		"/test-connection",
+		w.namespacePath,
+		ip,
+		fmt.Sprintf("%d", port),
+		fmt.Sprintf("--source-port=%d", sourcePort),
+		fmt.Sprintf("--protocol=%s", w.Protocol),
+		fmt.Sprintf("--loop-with-file=%s", loopFile),
+	)
+	logName := fmt.Sprintf("permanent connection %s", n)
+	if err := utils.LogOutput(runCmd, logName); err != nil {
+		return nil, fmt.Errorf("failed to start output logging for %s", logName)
+	}
+	if err := runCmd.Start(); err != nil {
+		return nil, fmt.Errorf("failed to start a permanent connection: %v", err)
+	}
+	Eventually(func() error {
+		return w.C.ExecMayFail("stat", loopFile)
+	}, 5*time.Second, time.Second).Should(
+		HaveOccurred(),
+		"Failed to wait for test-connection to be ready, the loop file did not disappear",
+	)
+	return &PermanentConnection{
+		W:        w,
+		LoopFile: loopFile,
+		Name:     n,
+		RunCmd:   runCmd,
+	}, nil
 }
 
 func (p *Port) CanConnectTo(ip, port, protocol string) bool {

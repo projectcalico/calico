@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2018 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2019 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,6 +15,7 @@
 package utils
 
 import (
+	"bufio"
 	"context"
 	"fmt"
 	"os"
@@ -119,6 +120,40 @@ func Command(name string, args ...string) *exec.Cmd {
 	}).Info("Creating Command.")
 
 	return exec.Command(name, args...)
+}
+
+func LogOutput(cmd *exec.Cmd, name string) error {
+	outPipe, err := cmd.StdoutPipe()
+	if err != nil {
+		return fmt.Errorf("Getting StdoutPipe failed for %s: %v", name, err)
+	}
+	errPipe, err := cmd.StderrPipe()
+	if err != nil {
+		return fmt.Errorf("Getting StderrPipe failed for %s: %v", name, err)
+	}
+	stdoutReader := bufio.NewReader(outPipe)
+	stderrReader := bufio.NewReader(errPipe)
+	go func() {
+		for {
+			line, err := stdoutReader.ReadString('\n')
+			if err != nil {
+				log.WithError(err).Infof("End of %s stdout", name)
+				return
+			}
+			log.Infof("%s stdout: %s", name, strings.TrimSpace(string(line)))
+		}
+	}()
+	go func() {
+		for {
+			line, err := stderrReader.ReadString('\n')
+			if err != nil {
+				log.WithError(err).Infof("End of %s stderr", name)
+				return
+			}
+			log.Infof("%s stderr: %s", name, strings.TrimSpace(string(line)))
+		}
+	}()
+	return nil
 }
 
 func GetEtcdClient(etcdIP string) client.Interface {
