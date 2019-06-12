@@ -28,4 +28,7 @@ var _ = DescribeTable("Testing joinAndTruncate",
 	Entry("slice with multiple value, truncate", []string{"otorhinolaryngological", "psychophysicotherapeutics", "hepaticocholangiogastrostomy"}, ",", 10,
 		"otorhin..."),
 	Entry("slice truncate", []int{12345, 67890}, ",", 6, "123..."),
+	Entry("slice truncate", []int{1234567}, ",", 6, "123..."),
+	Entry("slice no truncate", []int{123456}, ",", 6, "123456"),
+	Entry("string", "HelloWorld", ",", 0, "HelloWorld"),
 )
