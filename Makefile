@@ -328,10 +328,18 @@ protobuf proto/felixbackend.pb.go: proto/felixbackend.proto
 	              --gogofaster_out=plugins=grpc:. \
 	              felixbackend.proto
 
-bpf/xdp/generated/xdp.o: bpf/xdp/filter.c
-	mkdir -p bpf/xdp/generated
+BPF_INC_FILES := bpf/include/bpf.h
+BPF_XDP_INC_FILES :=
+
+CLANG_BUILDER_STAMP := .built-bpf-clang-builder-$(BUILDARCH)
+
+$(CLANG_BUILDER_STAMP): docker-build-images/bpf-clang-builder.Dockerfile.$(BUILDARCH)
 	# the bpf object file is not arch dependent, so we can build with the current ARCH
-	docker build -t calico-build/bpf-clang -f docker-build-images/bpf-clang-builder.Dockerfile.$(BUILDARCH) .
+	docker build -t calico-build/bpf-clang -f docker-build-images/bpf-clang-builder.Dockerfile.$(BUILDARCH) docker-build-images
+	touch "$@"
+
+bpf/xdp/generated/xdp.o: bpf/xdp/filter.c $(BPF_INC_FILES) $(BPF_XDP_INC_FILES) $(CLANG_BUILDER_STAMP)
+	mkdir -p bpf/xdp/generated
 	docker run --rm --user $(LOCAL_USER_ID):$(LOCAL_GROUP_ID) \
 	          -v $(CURDIR):/go/src/$(PACKAGE_NAME):rw \
 	              calico-build/bpf-clang \
@@ -358,10 +366,10 @@ bpf/xdp/generated/xdp.o: bpf/xdp/filter.c
 	                       /go/src/$(PACKAGE_NAME)/bpf/xdp/generated/xdp.ll && \
 	               rm -f /go/src/$(PACKAGE_NAME)/bpf/xdp/generated/xdp.ll"
 
-bpf/sockmap/generated/sockops.o: bpf/sockmap/sockops.c
+BPF_SOCKMAP_INC_FILES := bpf/sockmap/sockops.h
+
+bpf/sockmap/generated/sockops.o: bpf/sockmap/sockops.c $(BPF_INC_FILES) $(BPF_SOCKMAP_INC_FILES) $(CLANG_BUILDER_STAMP)
 	mkdir -p bpf/sockmap/generated
-	# the bpf object file is not arch dependent, so we can build with the current ARCH
-	docker build -t calico-build/bpf-clang -f docker-build-images/bpf-clang-builder.Dockerfile.$(BUILDARCH) .
 	docker run --rm --user $(LOCAL_USER_ID):$(LOCAL_GROUP_ID) \
 	          -v $(CURDIR):/go/src/$(PACKAGE_NAME):rw \
 	              calico-build/bpf-clang \
@@ -388,10 +396,8 @@ bpf/sockmap/generated/sockops.o: bpf/sockmap/sockops.c
 	                       /go/src/$(PACKAGE_NAME)/bpf/sockmap/generated/sockops.ll && \
 	               rm -f /go/src/$(PACKAGE_NAME)/bpf/sockmap/generated/sockops.ll"
 
-bpf/sockmap/generated/redir.o: bpf/sockmap/redir.c
+bpf/sockmap/generated/redir.o: bpf/sockmap/redir.c $(BPF_INC_FILES) $(BPF_SOCKMAP_INC_FILES) $(CLANG_BUILDER_STAMP)
 	mkdir -p bpf/sockmap/generated
-	# the bpf object file is not arch dependent, so we can build with the current ARCH
-	docker build -t calico-build/bpf-clang -f docker-build-images/bpf-clang-builder.Dockerfile.$(BUILDARCH) .
 	docker run --rm --user $(LOCAL_USER_ID):$(LOCAL_GROUP_ID) \
 	          -v $(CURDIR):/go/src/$(PACKAGE_NAME):rw \
 	              calico-build/bpf-clang \
@@ -421,7 +427,7 @@ bpf/sockmap/generated/redir.o: bpf/sockmap/redir.c
 .PHONY: packr
 packr: bpf/bpf-packr.go bpf/packrd/packed-packr.go
 
-bpf/bpf-packr.go bpf/packrd/packed-packr.go: bpf/xdp/generated/xdp.o bpf/sockmap/generated/sockops.o bpf/sockmap/generated/redir.o
+bpf/bpf-packr.go bpf/packrd/packed-packr.go: bpf/xdp/generated/xdp.o bpf/sockmap/generated/sockops.o bpf/sockmap/generated/redir.o $(CLANG_BUILDER_STAMP)
 	docker run --rm --user $(LOCAL_USER_ID):$(LOCAL_GROUP_ID) \
 	          -v $(CURDIR):/go/src/$(PACKAGE_NAME):rw \
 	              calico-build/bpf-clang \
