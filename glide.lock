@@ -1,5 +1,5 @@
-hash: 688193c96f23f0ef6c1deba7d8af30824eba2b11c44fa05c710e734f2c88614e
-updated: 2019-06-07T07:40:38.011406631Z
+hash: 9594ad23a4203acd4ca6f9aac9efddbcb082fd56b638ac71e0afa2419c510c07
+updated: 2019-06-12T09:51:21.691347654+01:00
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -35,7 +35,7 @@ imports:
   - pkg/types
   - version
 - name: github.com/coreos/go-semver
-  version: 8ab6407b697782a06568d4b7f1db25550ec2e4c6
+  version: e214231b295a8ea9479f11b70b35d5acf3556d9b
   subpackages:
   - semver
 - name: github.com/davecgh/go-spew
@@ -47,7 +47,7 @@ imports:
 - name: github.com/ghodss/yaml
   version: 73d445a93680fa1a78ae23a5839bad48f32ba1ee
 - name: github.com/go-ini/ini
-  version: 9c8236e659b76e87bf02044d06fde8683008ff3e
+  version: 3be5ad479f69d4e08d7fe25edf79bf3346bd658e
 - name: github.com/go-playground/locales
   version: f63010822830b6fe52288ee52d5a1151088ce039
   subpackages:
@@ -141,7 +141,7 @@ imports:
 - name: github.com/json-iterator/go
   version: f2b4162afba35581b6d4a50d3b8f34e33c144682
 - name: github.com/kardianos/osext
-  version: ae77be60afb1dcacde03767a8c37337fad28ac14
+  version: 2bc1f35cddc0cc527b4bc3dce8578fc2a6c11384
 - name: github.com/karrick/godirwalk
   version: 4e17292779dcc7ed08e10c03bfdd022f7c28b3c3
 - name: github.com/kelseyhightower/confd
@@ -217,7 +217,7 @@ imports:
 - name: github.com/pkg/errors
   version: 27936f6d90f9c8e1145f11ed52ffffbfdb9e0af7
 - name: github.com/projectcalico/felix
-  version: a19ab458e2b3f90ac5a96720cf1830f6a79091dd
+  version: 9eea1955193b3fbaa9031348a7c32fbfdbf34ceb
   subpackages:
   - bpf
   - bpf/packrd
@@ -258,7 +258,7 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: 9131cbc3d1e68099b7f89d2de0b3704542d4a772
+  version: fa890c26fa97231b5516277681863db3bf8b49ef
   subpackages:
   - lib/apiconfig
   - lib/apis/v1
