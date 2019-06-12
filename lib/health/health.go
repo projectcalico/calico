@@ -46,6 +46,28 @@ type reporterState struct {
 	timestamp time.Time
 }
 
+func (r *reporterState) HasReadinessProblem() bool {
+	if !r.reports.Ready {
+		return false
+	}
+	if r.TimedOut() {
+		log.WithField("name", r.name).Warn("Report timed out")
+		return true
+	}
+	return !r.latest.Ready
+}
+
+func (r *reporterState) HasLivenessProblem() bool {
+	if !r.reports.Live {
+		return false
+	}
+	if r.TimedOut() {
+		log.WithField("name", r.name).Warn("Report timed out")
+		return true
+	}
+	return !r.latest.Live
+}
+
 // TimedOut checks whether the reporter is due for another report. This is the case when
 // the reports are configured to expire and the time since the last report exceeds the report timeout duration.
 func (r *reporterState) TimedOut() bool {
@@ -98,7 +120,18 @@ func (aggregator *HealthAggregator) Report(name string, report *HealthReport) {
 	aggregator.mutex.Lock()
 	defer aggregator.mutex.Unlock()
 	reporter := aggregator.reporters[name]
-	reporter.latest = *report
+
+	logCxt := log.WithFields(log.Fields{
+		"name":       name,
+		"newReport":  report,
+		"lastReport": reporter.latest,
+	})
+
+	logCxt.Debug("New health report")
+	if reporter.latest != *report {
+		logCxt.Info("Health of component changed")
+		reporter.latest = *report
+	}
 	reporter.timestamp = time.Now()
 	return
 }
@@ -114,8 +147,10 @@ func NewHealthAggregator() *HealthAggregator {
 		log.Debug("GET /readiness")
 		status := StatusBad
 		if aggregator.Summary().Ready {
-			log.Debug("Felix is ready")
+			log.Debug("Health: ready")
 			status = StatusGood
+		} else {
+			log.Warn("Health: not ready")
 		}
 		rsp.WriteHeader(status)
 	})
@@ -123,8 +158,10 @@ func NewHealthAggregator() *HealthAggregator {
 		log.Debug("GET /liveness")
 		status := StatusBad
 		if aggregator.Summary().Live {
-			log.Debug("Felix is live")
+			log.Debug("Health: live")
 			status = StatusGood
+		} else {
+			log.Warn("Health: not live")
 		}
 		rsp.WriteHeader(status)
 	})
@@ -136,60 +173,30 @@ func (aggregator *HealthAggregator) Summary() *HealthReport {
 	aggregator.mutex.Lock()
 	defer aggregator.mutex.Unlock()
 
-	var failedLivenessChecks []*reporterState
-	var failedReadinessChecks []*reporterState
-
 	// In the absence of any reporters, default to indicating that we are both live and ready.
 	summary := &HealthReport{Live: true, Ready: true}
 
 	// Now for each reporter...
 	for _, reporter := range aggregator.reporters {
-		// Reset Live to false if that reporter is registered to report liveness and hasn't
-		// recently said that it is live.
-		stillLive := reporter.latest.Live && !reporter.TimedOut()
-		if summary.Live && reporter.reports.Live && !stillLive {
+		log.WithField("reporter", reporter).Debug("Checking state of reporter")
+		if reporter.HasLivenessProblem() {
+			log.WithField("name", reporter.name).Warn("Reporter is not live.")
 			summary.Live = false
 		}
-
-		// Reset Ready to false if that reporter is registered to report readiness and
-		// hasn't recently said that it is ready.
-		stillReady := reporter.latest.Ready && !reporter.TimedOut()
-		if summary.Ready && reporter.reports.Ready && !stillReady {
+		if reporter.HasReadinessProblem() {
+			log.WithField("name", reporter.name).Warn("Reporter is not ready.")
 			summary.Ready = false
-		}
-
-		if reporter.reports.Live && !stillLive {
-			failedLivenessChecks = append(failedLivenessChecks, reporter)
-		}
-		if reporter.reports.Ready && !stillReady {
-			failedReadinessChecks = append(failedReadinessChecks, reporter)
-		}
-		if reporter.reports.Live && reporter.reports.Ready && stillLive && stillReady {
-			log.WithFields(log.Fields{
-				"name":           reporter.name,
-				"reporter-state": reporter,
-			}).Debug("Reporter is healthy")
 		}
 	}
 
 	// Summary status has changed so update previous status and log.
-	if summary.Live != aggregator.lastReport.Live || summary.Ready != aggregator.lastReport.Ready {
+	if aggregator.lastReport == nil || *summary != *aggregator.lastReport {
 		aggregator.lastReport = summary
-		log.WithField("lastSummary", summary).Info("Overall health status changed")
-
-		for _, reporter := range failedLivenessChecks {
-			log.WithFields(log.Fields{
-				"name":           reporter.name,
-				"reporter-state": reporter,
-			}).Warn("Reporter failed liveness checks")
-		}
-		for _, reporter := range failedReadinessChecks {
-			log.WithFields(log.Fields{
-				"name":           reporter.name,
-				"reporter-state": reporter,
-			}).Warn("Reporter failed readiness checks")
-		}
+		log.WithField("newStatus", summary).Info("Overall health status changed")
 	}
+
+	log.WithField("healthResult", summary).Debug("Calculated health summary")
+
 	return summary
 }
 
@@ -243,7 +250,7 @@ func (aggregator *HealthAggregator) ServeHTTP(enabled bool, host string, port in
 	} else {
 		if aggregator.httpServer != nil {
 			log.Info("Health disabled.  Stopping server.")
-			aggregator.httpServer.Close()
+			_ = aggregator.httpServer.Close()
 			aggregator.httpServer = nil
 		}
 	}
