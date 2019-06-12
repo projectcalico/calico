@@ -335,7 +335,7 @@ CLANG_BUILDER_STAMP := .built-bpf-clang-builder-$(BUILDARCH)
 
 $(CLANG_BUILDER_STAMP): docker-build-images/bpf-clang-builder.Dockerfile.$(BUILDARCH)
 	# the bpf object file is not arch dependent, so we can build with the current ARCH
-	docker build -t calico-build/bpf-clang -f docker-build-images/bpf-clang-builder.Dockerfile.$(BUILDARCH) .
+	docker build -t calico-build/bpf-clang -f docker-build-images/bpf-clang-builder.Dockerfile.$(BUILDARCH) docker-build-images
 	touch "$@"
 
 bpf/xdp/generated/xdp.o: bpf/xdp/filter.c $(BPF_INC_FILES) $(BPF_XDP_INC_FILES) $(CLANG_BUILDER_STAMP)

@@ -36,7 +36,7 @@ const usage = `test-workload, test workload for Felix FV testing.
 If <interface-name> is "", the workload will start in the current namespace.
 
 Usage:
-  test-workload [--udp] [--namespace-path=<path>] [--iptables] [--up-lo] <interface-name> <ip-address> <ports>
+  test-workload [--udp] [--namespace-path=<path>] [--sidecar-iptables] [--up-lo] <interface-name> <ip-address> <ports>
 `
 
 func main() {
@@ -55,7 +55,7 @@ func main() {
 	if arg, ok := arguments["--namespace-path"]; ok && arg != nil {
 		nsPath = arg.(string)
 	}
-	iptables := arguments["--iptables"].(bool)
+	sidecarIptables := arguments["--sidecar-iptables"].(bool)
 	upLo := arguments["--up-lo"].(bool)
 	panicIfError(err)
 
@@ -217,9 +217,9 @@ func main() {
 				return fmt.Errorf("failed to bring loopback up: %v", err)
 			}
 		}
-		if iptables {
-			if err := doIptablesSetup(); err != nil {
-				return fmt.Errorf("failed to setup iptables: %v", err)
+		if sidecarIptables {
+			if err := doSidecarIptablesSetup(); err != nil {
+				return fmt.Errorf("failed to setup sidecar-like iptables: %v", err)
 			}
 		}
 		if strings.Contains(ipAddress, ":") {
@@ -338,8 +338,12 @@ func writeProcSys(path, value string) error {
 	return err
 }
 
-func doIptablesSetup() error {
-	// commands based on https://github.com/istio/cni/blob/f1a08bef3f235de1ecb67074b741b0d4c5fd8c44/tools/deb/istio-iptables.sh
+// doSidecarIptablesSetup generates some iptables rules to redirect a
+// traffic to localhost:15001. This is to simulate a sidecar.
+//
+// Commands are a very simplified version of commands from
+// https://github.com/istio/cni/blob/f1a08bef3f235de1ecb67074b741b0d4c5fd8c44/tools/deb/istio-iptables.sh
+func doSidecarIptablesSetup() error {
 	cmds := [][]string{
 		{"iptables", "-t", "nat", "-N", "FV_WL_REDIRECT"},
 		{"iptables", "-t", "nat", "-A", "FV_WL_REDIRECT", "-p", "tcp", "-j", "REDIRECT", "--to-port", "15001"},

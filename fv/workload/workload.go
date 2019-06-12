@@ -312,14 +312,15 @@ func (s *SideService) Stop() {
 
 func (s *SideService) stop() error {
 	log.WithField("SideService", s).Info("Stop")
-	outputBytes, err := utils.Command("docker", "exec", s.W.C.Name,
-		"cat", s.PidFile).CombinedOutput()
+	output, err := s.W.C.ExecOutput("cat", s.PidFile)
 	if err != nil {
+		log.WithField("pidfile", s.PidFile).WithError(err).Warn("Failed to get contents of a side service's pidfile")
 		return err
 	}
-	pid := strings.TrimSpace(string(outputBytes))
-	err = utils.Command("docker", "exec", s.W.C.Name, "kill", pid).Run()
+	pid := strings.TrimSpace(output)
+	err = s.W.C.ExecMayFail("kill", pid)
 	if err != nil {
+		log.WithField("pid", pid).WithError(err).Warn("Failed to kill a side service")
 		return err
 	}
 	s.RunCmd.Process.Wait()
@@ -347,7 +348,7 @@ func startSideService(w *Workload) (*SideService, error) {
 		testWorkloadShArgs = append(testWorkloadShArgs, "--udp")
 	}
 	testWorkloadShArgs = append(testWorkloadShArgs,
-		"--iptables",
+		"--sidecar-iptables",
 		"--up-lo",
 		fmt.Sprintf("'--namespace-path=%s'", w.namespacePath),
 		"''", // interface name, not important
@@ -391,8 +392,8 @@ func (pc *PermanentConnection) Stop() {
 }
 
 func (pc *PermanentConnection) stop() error {
-	if err := utils.Command("docker", "exec", pc.W.C.Name,
-		"sh", "-c", fmt.Sprintf("echo > %s", pc.LoopFile)).Run(); err != nil {
+	if err := pc.W.C.ExecMayFail("sh", "-c", fmt.Sprintf("echo > %s", pc.LoopFile)); err != nil {
+		log.WithError(err).WithField("loopfile", pc.LoopFile).Warn("Failed to create a loop file to stop the permanent connection")
 		return err
 	}
 	if err := pc.RunCmd.Wait(); err != nil {
@@ -414,8 +415,7 @@ func startPermanentConnection(w *Workload, ip string, port, sourcePort int) (*Pe
 	n := fmt.Sprintf("%s-pc%d", w.Name, permConnIdx)
 	loopFile := fmt.Sprintf("/tmp/%s-loop", n)
 
-	err := utils.Command("docker", "exec", w.C.Name,
-		"sh", "-c", fmt.Sprintf("echo > %s", loopFile)).Run()
+	err := w.C.ExecMayFail("sh", "-c", fmt.Sprintf("echo > %s", loopFile))
 	if err != nil {
 		return nil, err
 	}
@@ -439,29 +439,12 @@ func startPermanentConnection(w *Workload, ip string, port, sourcePort int) (*Pe
 	if err := runCmd.Start(); err != nil {
 		return nil, fmt.Errorf("failed to start a permanent connection: %v", err)
 	}
-	waitScript := []string{
-		"for i in $(seq 1 5)",
-		"do :",
-		"  if [ ! -e '" + loopFile + "' ]",
-		"  then :",
-		"    exit 0",
-		"  fi",
-		"  sleep 1",
-		"done",
-		"echo 'Waited long enough for loop file to disappear'",
-		"exit 1",
-	}
-	waitCmd := utils.Command(
-		"docker",
-		"exec",
-		w.C.Name,
-		"sh",
-		"-c",
-		strings.Join(waitScript, "; "),
+	Eventually(func() error {
+		return w.C.ExecMayFail("stat", loopFile)
+	}, 5*time.Second, time.Second).Should(
+		HaveOccurred(),
+		"Failed to wait for test-connection to be ready, the loop file did not disappear",
 	)
-	if out, err := waitCmd.CombinedOutput(); err != nil {
-		return nil, fmt.Errorf("failed to wait for test-connection to be ready: %v\n%s", err, string(out))
-	}
 	return &PermanentConnection{
 		W:        w,
 		LoopFile: loopFile,

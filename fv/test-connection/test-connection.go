@@ -47,6 +47,20 @@ If connection is successful, test-connection exits successfully.
 
 If connection is unsuccessful, test-connection panics and so exits with a failure status.`
 
+// Note about the --loop-with-file=<FILE> flag:
+//
+// This flag takes a path to a file as a value. The file existence is
+// used as a means of synchronization.
+//
+// Before this program is started, the file should exist. When the
+// program establishes a long-running connection and sends the first
+// message, it will remove the file. That way other process can assume
+// that the connection is here when the file disappears and can
+// perform some checks.
+//
+// If the other process creates the file again, it will tell this
+// program to close the connection, remove the file and quit.
+
 func main() {
 	log.SetLevel(log.DebugLevel)
 

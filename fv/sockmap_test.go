@@ -31,7 +31,6 @@ import (
 
 	"github.com/projectcalico/felix/bpf"
 	"github.com/projectcalico/felix/fv/infrastructure"
-	"github.com/projectcalico/felix/fv/utils"
 	"github.com/projectcalico/felix/fv/workload"
 	"github.com/projectcalico/libcalico-go/lib/apiconfig"
 )
@@ -40,26 +39,19 @@ type mapEntry struct {
 	Key []string `json:"key"`
 }
 
-// Meh.
-func strSliceEqual(a, b []string) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	for idx := range a {
-		if a[idx] != b[idx] {
-			return false
-		}
-	}
-	return true
-}
-
 func prepend0xInPlace(hexen []string) {
 	for idx := range hexen {
 		hexen[idx] = "0x" + hexen[idx]
 	}
 }
 
-func getSockmapKeys(ip string, port int) [][]string {
+// getExpectedSockmapKeys returns an array of sockhash map keys in a
+// form similar to what bpftool could print. So each key is an array
+// of 12 strings being a representation of hexadecimal bytes. First
+// four bytes contain passed IP address, next four bytes contain
+// passed port and the last four bytes contain encoded 1 or 0,
+// denoting whether a socket is on the envoy side or not.
+func getExpectedSockmapKeys(ip string, port int) [][]string {
 	key := make([]byte, 12)
 	parsedIP := net.ParseIP(ip)
 	Expect(parsedIP).NotTo(BeNil())
@@ -90,16 +82,8 @@ func testIPToHex(ip string) []string {
 	return hexen
 }
 
-func checkEndpointIP(felix *infrastructure.Felix, ip string) bool {
-	hexen := testIPToHex(ip)
-	log.WithFields(log.Fields{
-		"ip":    ip,
-		"hexen": hexen,
-	}).Info("Looking for IP.")
-	output, err := utils.Command(
-		"docker",
-		"exec",
-		felix.Container.Name,
+func getEndpointsMapContents(felix *infrastructure.Felix) [][]string {
+	output, err := felix.Container.ExecOutput(
 		"bpftool",
 		"--json",
 		"--pretty",
@@ -107,26 +91,32 @@ func checkEndpointIP(felix *infrastructure.Felix, ip string) bool {
 		"dump",
 		"pinned",
 		"/sys/fs/bpf/calico/sockmap/calico_sk_endpoints_v1",
-	).CombinedOutput()
-	log.WithField("output", string(output)).Info("Dump of calico_sk_endpoints_v1")
-	Expect(err).NotTo(HaveOccurred())
-	var entries []mapEntry
-	Expect(json.Unmarshal(output, &entries)).NotTo(HaveOccurred())
-	log.WithField("entries", entries).Info("Checking map entry")
-	for _, entry := range entries {
-		if strSliceEqual(entry.Key, hexen) {
-			return true
-		}
+	)
+	logCtx := log.WithField("output", output)
+	if err != nil {
+		logCtx.WithError(err).Warn("Failed to dump the calico_sk_endpoints_v1 map")
+		return nil
 	}
-	return false
+	logCtx.Info("Dump of calico_sk_endpoints_v1")
+	var entries []mapEntry
+	if err := json.Unmarshal([]byte(output), &entries); err != nil {
+		logCtx.WithError(err).Warn("Failed to parse output as JSON")
+		return nil
+	}
+	logCtx.WithField("entries", entries).Info("Parsed the output")
+	keys := make([][]string, 0, len(entries))
+	for _, entry := range entries {
+		keys = append(keys, entry.Key)
+	}
+	return keys
 }
 
 // unmarshalBpfToolSockhashDumpOutput parses the normal, non-JSON
 // bpftool output, because the JSON output for a command we care about
 // is broken. It's fixed upstream, but we still use the old version.
-func unmarshalBpfToolSockhashDumpOutput(output []byte) []mapEntry {
+func unmarshalBpfToolSockhashDumpOutput(output string) []mapEntry {
 	var al []mapEntry
-	buf := bytes.NewBuffer(output)
+	buf := bytes.NewBufferString(output)
 	// 0 - "key:", 1: actual key, 2: "value:", 3: actual value
 	phase := 0
 	for {
@@ -271,14 +261,20 @@ var _ = infrastructure.DatastoreDescribe("[SOCKMAP] with Felix using sockmap", [
 		defer unlockSockmapTest()
 		host.Stop()
 		felix.Stop()
+		// Clean up the sockmap state. We do this by starting
+		// a new felix instance (after stopping the old one),
+		// so it cleans up the whatever state we ended up
+		// having after the test, and sets up a fresh, empty
+		// one. With such a state we can now try to manually
+		// detach the sockhash map from the cgroup and then
+		// kill felix. This should drop all the references to
+		// programs and maps, so the kernel will just delete
+		// them. That way we will have no leftovers.
 		func() {
 			opts := getSockmapOpts()
 			felix, _ = infrastructure.StartSingleNodeTopology(opts, infra)
 			defer felix.Stop()
-			outputBytes, err := utils.Command(
-				"docker",
-				"exec",
-				felix.Container.Name,
+			output, err := felix.Container.ExecOutput(
 				"bpftool",
 				"--json",
 				"--pretty",
@@ -286,26 +282,23 @@ var _ = infrastructure.DatastoreDescribe("[SOCKMAP] with Felix using sockmap", [
 				"dump",
 				"pinned",
 				"/sys/fs/bpf/calico/sockmap/calico_sock_map_v1",
-			).CombinedOutput()
+			)
 			if err != nil {
 				log.WithFields(log.Fields{
 					"containerID": felix.Container.Name,
-					"output":      string(outputBytes),
+					"output":      output,
 				}).WithError(err).Info("Failed to dump the contents of the sock map, skipping cleanup")
 				return
 			}
-			if strings.TrimSpace(string(outputBytes)) != "[]" {
+			if strings.TrimSpace(output) != "[]" {
 				log.WithFields(log.Fields{
 					"containerID": felix.Container.Name,
-					"output":      string(outputBytes),
+					"output":      output,
 				}).Info("Sock map is not empty, skipping cleanup")
 				return
 			}
 			fullCgroupDir := "/run/calico/cgroup"
-			outputBytes, err = utils.Command(
-				"docker",
-				"exec",
-				felix.Container.Name,
+			output, err = felix.Container.ExecOutput(
 				"bpftool",
 				"cgroup",
 				"detach",
@@ -313,12 +306,12 @@ var _ = infrastructure.DatastoreDescribe("[SOCKMAP] with Felix using sockmap", [
 				"sock_ops",
 				"pinned",
 				"/sys/fs/bpf/calico/sockmap/calico_sockops_v1",
-			).CombinedOutput()
+			)
 			if err != nil {
 				log.WithFields(log.Fields{
 					"cgroupdir":   fullCgroupDir,
 					"containerID": felix.Container.Name,
-					"output":      string(outputBytes),
+					"output":      output,
 				}).WithError(err).Info("Failed to detach sockops program from cgroup, skipping cleanup")
 				return
 			}
@@ -328,79 +321,51 @@ var _ = infrastructure.DatastoreDescribe("[SOCKMAP] with Felix using sockmap", [
 	})
 
 	It("should put the IP of the host in sockmap endpoints map", func() {
-		found := false
-		maxTries := 5
-		for try := 0; try < maxTries; try++ {
-			found = checkEndpointIP(felix, ip)
-			if found {
-				break
-			} else if try+1 < maxTries {
-				time.Sleep(500 * time.Millisecond)
-			}
-		}
-		Expect(found).To(BeTrue())
+		hexen := testIPToHex(ip)
+		log.WithFields(log.Fields{
+			"ip":    ip,
+			"hexen": hexen,
+		}).Info("Looking for IP.")
+		Eventually(func() [][]string {
+			return getEndpointsMapContents(felix)
+		}, 5*time.Second, 500*time.Millisecond).Should(ContainElement(hexen))
 	})
 
 	It("should establish sockmap acceleration", func() {
 		{
-			found := false
-			maxTries := 5
-			for try := 0; try < maxTries; try++ {
-				found = checkEndpointIP(felix, ip)
-				if found {
-					break
-				} else if try+1 < maxTries {
-					time.Sleep(500 * time.Millisecond)
-				}
-			}
-			Expect(found).To(BeTrue())
+			hexen := testIPToHex(ip)
+			Eventually(func() [][]string {
+				return getEndpointsMapContents(felix)
+			}, 5*time.Second, 500*time.Millisecond).Should(ContainElement(hexen))
 		}
 		side := host.StartSideService()
 		defer side.Stop()
 		pc := host.StartPermanentConnection("1.1.1.1", 80, srcPort)
 		defer pc.Stop()
-		maxTries := 5
-		keys := getSockmapKeys(ip, srcPort)
-		foundKeys := make([]int, len(keys))
-		foundAll := false
-		for i := 0; i < maxTries; i++ {
-			output, err := utils.Command(
-				"docker",
-				"exec",
-				felix.Container.Name,
+		expectedKeys := getExpectedSockmapKeys(ip, srcPort)
+		Eventually(func() [][]string {
+			output, err := felix.Container.ExecOutput(
 				"bpftool",
 				"map",
 				"dump",
 				"pinned",
 				"/sys/fs/bpf/calico/sockmap/calico_sock_map_v1",
-			).CombinedOutput()
-			log.WithField("output", string(output)).Info("Dump of calico_sock_map_v1")
-			Expect(err).NotTo(HaveOccurred())
+			)
+			logCxt := log.WithField("output", output)
+			if err != nil {
+				logCxt.WithError(err).Warn("Failed to dump calico_sock_map_v1")
+				return nil
+			}
+			logCxt.Info("Dump of calico_sock_map_v1")
 			al := unmarshalBpfToolSockhashDumpOutput(output)
-			log.WithFields(log.Fields{
-				"keys":    keys,
+			logCxt.WithFields(log.Fields{
 				"entries": al,
-			}).Info("Checking contents of calico_sock_map_v1")
+			}).Info("Parsed contents of calico_sock_map_v1")
+			keys := make([][]string, 0, len(al))
 			for _, l := range al {
-				for idx, key := range keys {
-					if strSliceEqual(l.Key, key) {
-						foundKeys[idx]++
-					}
-				}
+				keys = append(keys, l.Key)
 			}
-			foundAll = true
-			for _, found := range foundKeys {
-				if found != 1 {
-					foundAll = false
-					break
-				}
-			}
-			if foundAll {
-				break
-			} else {
-				time.Sleep(500 * time.Millisecond)
-			}
-		}
-		Expect(foundAll).To(BeTrue())
+			return keys
+		}, 5*time.Second, 500*time.Millisecond).Should(ConsistOf(expectedKeys))
 	})
 })
