@@ -848,18 +848,8 @@ func (t *Table) applyUpdates() error {
 	// be created or flushed.
 	t.dirtyChains.Iter(func(item interface{}) error {
 		chainName := item.(string)
-		chainNeedsToBeFlushed := false
-		if _, ok := t.chainNameToChain[chainName]; !ok {
-			// About to delete this chain, flush it first to sever dependencies.
-			chainNeedsToBeFlushed = true
-		} else if _, ok := t.chainToDataplaneHashes[chainName]; !ok {
-			// Chain doesn't exist in dataplane, mark it for creation.
-			chainNeedsToBeFlushed = true
-		}
-		if chainNeedsToBeFlushed {
-			inputBuf.WriteString(fmt.Sprintf(":%s - -\n", chainName))
-			t.countNumLinesExecuted.Inc()
-		}
+		inputBuf.WriteString(fmt.Sprintf(":%s - -\n", chainName))
+		t.countNumLinesExecuted.Inc()
 		return nil
 	})
 
@@ -870,28 +860,14 @@ func (t *Table) applyUpdates() error {
 		if chain, ok := t.chainNameToChain[chainName]; ok {
 			// Chain update or creation.  Scan the chain against its previous hashes
 			// and replace/append/delete as appropriate.
-			previousHashes := t.chainToDataplaneHashes[chainName]
 			currentHashes := chain.RuleHashes(features)
 			newHashes[chainName] = currentHashes
-			for i := 0; i < len(previousHashes) || i < len(currentHashes); i++ {
+			for i := 0; i < len(currentHashes); i++ {
 				var line string
-				if i < len(previousHashes) && i < len(currentHashes) {
-					if previousHashes[i] == currentHashes[i] {
-						continue
-					}
-					// Hash doesn't match, replace the rule.
-					ruleNum := i + 1 // 1-indexed.
-					prefixFrag := t.commentFrag(currentHashes[i])
-					line = chain.Rules[i].RenderReplace(chainName, ruleNum, prefixFrag, features)
-				} else if i < len(previousHashes) {
-					// previousHashes was longer, remove the old rules from the end.
-					ruleNum := len(currentHashes) + 1 // 1-indexed
-					line = deleteRule(chainName, ruleNum)
-				} else {
-					// currentHashes was longer.  Append.
-					prefixFrag := t.commentFrag(currentHashes[i])
-					line = chain.Rules[i].RenderAppend(chainName, prefixFrag, features)
-				}
+				
+				prefixFrag := t.commentFrag(currentHashes[i])
+				line = chain.Rules[i].RenderAppend(chainName, prefixFrag, features)
+
 				inputBuf.WriteString(line)
 				inputBuf.WriteString("\n")
 				t.countNumLinesExecuted.Inc()
@@ -959,11 +935,34 @@ func (t *Table) applyUpdates() error {
 		return nil // Delay clearing the set until we've programmed iptables.
 	})
 
+	didSomeUpdates := false
+	if inputBuf.Len() > len(tableNameLine) {
+		// We've figured out that we need to make some changes, finish off the input then
+		// execute iptables-restore.  iptables-restore input ends with a COMMIT.
+		inputBuf.WriteString("COMMIT\n")
+		didSomeUpdates = true
+	}
+
 	// Do deletions at the end.  This ensures that we don't try to delete any chains that
 	// are still referenced (because we'll have removed the references in the modify pass
 	// above).  Note: if a chain is being deleted at the same time as a chain that it refers to
 	// then we'll issue a create+flush instruction in the very first pass, which will sever the
 	// references.
+	didSomeDeletes := false
+	t.dirtyChains.Iter(func(item interface{}) error {
+		chainName := item.(string)
+		if _, ok := t.chainNameToChain[chainName]; !ok {
+			if didSomeUpdates && !didSomeDeletes {
+				tableNameLine := fmt.Sprintf("*%s\n", t.Name)
+				inputBuf.WriteString(tableNameLine)
+			}
+			// Chain deletion
+			inputBuf.WriteString(fmt.Sprintf(":%s - -\n", chainName))
+			t.countNumLinesExecuted.Inc()
+			didSomeDeletes = true
+		}
+		return nil // Delay clearing the set until we've programmed iptables.
+	})
 	t.dirtyChains.Iter(func(item interface{}) error {
 		chainName := item.(string)
 		if _, ok := t.chainNameToChain[chainName]; !ok {
@@ -975,10 +974,13 @@ func (t *Table) applyUpdates() error {
 		return nil // Delay clearing the set until we've programmed iptables.
 	})
 
-	if inputBuf.Len() > len(tableNameLine) {
+	if didSomeDeletes {
 		// We've figured out that we need to make some changes, finish off the input then
 		// execute iptables-restore.  iptables-restore input ends with a COMMIT.
 		inputBuf.WriteString("COMMIT\n")
+	}
+
+	if didSomeUpdates || didSomeDeletes {
 
 		// Annoying to have to copy the buffer here but reading from a buffer is
 		// destructive so if we want to trace out the contents after a failure, we have to
@@ -1003,7 +1005,7 @@ func (t *Table) applyUpdates() error {
 			timeoutStr := fmt.Sprintf("%.0f", lockTimeout)
 			intervalStr := fmt.Sprintf("%d", lockProbeMicros)
 			args = append(args,
-				"--wait", timeoutStr, // seconds
+				"--wait", timeoutStr,           // seconds
 				"--wait-interval", intervalStr, // microseconds
 			)
 			log.WithFields(log.Fields{
