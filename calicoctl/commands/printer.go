@@ -205,12 +205,12 @@ func joinAndTruncate(items interface{}, separator string, maxLen int) string {
 	}
 
 	// If it is a map, just convert key,value pairs into slice.
-	mapSlice := []string{}
 	if reflect.TypeOf(items).Kind() == reflect.Map {
-		iterator := reflect.ValueOf(items).MapRange()
-		for iterator.Next() {
-			k := iterator.Key().Interface().(string)
-			v := iterator.Value().Interface().(string)
+		mapSlice := []string{}
+		reflectMap := reflect.ValueOf(items)
+		for _, key := range reflectMap.MapKeys() {
+			k := key.Interface().(string)
+			v := reflectMap.MapIndex(key).Interface().(string)
 			mapSlice = append(mapSlice, k+"="+v)
 		}
 		sort.Strings(mapSlice)
