@@ -107,3 +107,5 @@ int calico_sockops(struct bpf_sock_ops *skops)
 
 	return 0;
 }
+
+char ____license[] __section("license") = "Apache-2.0";
