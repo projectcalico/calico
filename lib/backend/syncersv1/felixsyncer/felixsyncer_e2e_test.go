@@ -19,9 +19,10 @@ import (
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
 	"github.com/projectcalico/libcalico-go/lib/backend/encap"
 	"github.com/projectcalico/libcalico-go/lib/backend/syncersv1/felixsyncer"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/projectcalico/libcalico-go/lib/apiconfig"
 	apiv3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
@@ -43,6 +44,11 @@ var _ = testutils.E2eDatastoreDescribe("Felix syncer tests", testutils.Datastore
 	var be api.Client
 	var syncTester *testutils.SyncerTester
 	var err error
+	var datamodelCleanups []func()
+
+	addCleanup := func(cleanup func()) {
+		datamodelCleanups = append(datamodelCleanups, cleanup)
+	}
 
 	BeforeEach(func() {
 		ctx = context.Background()
@@ -60,6 +66,13 @@ var _ = testutils.E2eDatastoreDescribe("Felix syncer tests", testutils.Datastore
 		// to assert state.
 		syncTester = testutils.NewSyncerTester()
 
+		datamodelCleanups = nil
+	})
+
+	AfterEach(func() {
+		for _, cleanup := range datamodelCleanups {
+			cleanup()
+		}
 	})
 
 	Describe("Felix syncer functionality", func() {
@@ -139,10 +152,25 @@ var _ = testutils.E2eDatastoreDescribe("Felix syncer tests", testutils.Datastore
 			if config.Spec.DatastoreType == apiconfig.Kubernetes {
 				// For Kubernetes, update the existing node config to have some BGP configuration.
 				By("Configuring a node with an IP address and tunnel MAC address")
+				var (
+					oldValuesSaved        bool
+					oldBGPSpec            *apiv3.NodeBGPSpec
+					oldVXLANTunnelMACAddr string
+				)
 				for i := 0; i < 5; i++ {
 					// This can fail due to an update conflict, so we allow a few retries.
 					node, err = c.Nodes().Get(ctx, "127.0.0.1", options.GetOptions{})
 					Expect(err).NotTo(HaveOccurred())
+					if !oldValuesSaved {
+						if node.Spec.BGP == nil {
+							oldBGPSpec = nil
+						} else {
+							bgpSpecCopy := *node.Spec.BGP
+							oldBGPSpec = &bgpSpecCopy
+						}
+						oldVXLANTunnelMACAddr = node.Spec.VXLANTunnelMACAddr
+						oldValuesSaved = true
+					}
 					node.Spec.BGP = &apiv3.NodeBGPSpec{
 						IPv4Address:        "1.2.3.4/24",
 						IPv6Address:        "aa:bb::cc/120",
@@ -155,7 +183,20 @@ var _ = testutils.E2eDatastoreDescribe("Felix syncer tests", testutils.Datastore
 					}
 				}
 				Expect(err).NotTo(HaveOccurred())
-
+				addCleanup(func() {
+					for i := 0; i < 5; i++ {
+						// This can fail due to an update conflict, so we allow a few retries.
+						node, err = c.Nodes().Get(ctx, "127.0.0.1", options.GetOptions{})
+						Expect(err).NotTo(HaveOccurred())
+						node.Spec.BGP = oldBGPSpec
+						node.Spec.VXLANTunnelMACAddr = oldVXLANTunnelMACAddr
+						node, err = c.Nodes().Update(ctx, node, options.SetOptions{})
+						if err == nil {
+							break
+						}
+					}
+					Expect(err).NotTo(HaveOccurred())
+				})
 				syncTester.ExpectData(model.KVPair{
 					Key:   model.HostConfigKey{Hostname: "127.0.0.1", Name: "IpInIpTunnelAddr"},
 					Value: "10.10.10.1",
