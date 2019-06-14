@@ -204,3 +204,5 @@ int xdp_enter(struct xdp_md *xdp)
 {
 	return check_prefilter(xdp);
 }
+
+char ____license[] __section("license")  = "Apache-2.0";
