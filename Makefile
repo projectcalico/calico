@@ -360,6 +360,7 @@ bpf/bpf-packr.go bpf/packrd/packed-packr.go: bpf/xdp/generated/xdp.o
 	              calico-build/bpf-clang \
 	              /bin/sh -c \
 	              "cd /go/src/$(PACKAGE_NAME)/bpf && /go/bin/packr2"
+	$(DOCKER_RUN) $(CALICO_BUILD) goimports -w -local github.com/projectcalico/ bpf/packrd/packed-packr.go bpf/bpf-packr.go
 
 ###############################################################################
 # Building the image
