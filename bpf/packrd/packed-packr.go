@@ -6,7 +6,7 @@
 package packrd
 
 import (
-	"github.com/gobuffalo/packr/v2"
+	packr "github.com/gobuffalo/packr/v2"
 	"github.com/gobuffalo/packr/v2/file/resolver"
 )
 
