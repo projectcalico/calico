@@ -64,7 +64,7 @@ To enable sidecar acceleration for Istio-enabled apps using Calico:
 3. Apply the updated configuration.  
 
    ```
-   $ calicoctl apply -f felix-config.yaml 
+   $ calicoctl apply -f - < felix-config.yaml 
    Successfully applied 1 'FelixConfiguration' resource(s)
    ```
 
