@@ -24,7 +24,7 @@ This how-to guide uses the following Calico features:
 
 #### Sidecar acceleration
 
-The Sidecar acceleration process bypasses several layers of kernel networking, allowing data to flow between the sockets unobstructed and to accelerate. This makes the Envoy proxy (sidecar) to container network path as fast and efficient as possible. 
+The Sidecar acceleration process bypasses several layers of kernel networking, allowing data to flow between the sockets unobstructed. This makes the Envoy proxy (sidecar) to container network path as fast and efficient as possible. 
 
 
 ### Before you begin...
@@ -68,4 +68,4 @@ To enable sidecar acceleration for Istio-enabled apps using Calico:
    Successfully applied 1 'FelixConfiguration' resource(s)
    ```
 
-That’s it!  Network traffic that is routed between apps and the Envoy sidecar is automatically accelerated at this point. (If you have an existing Istio/Calico implementation and you enable sidecar acceleration, existing connections do not benefit from acceleration.)
+That’s it!  Network traffic that is routed between apps and the Envoy sidecar is automatically accelerated at this point. Note that if you have an existing Istio/Calico implementation and you enable sidecar acceleration, existing connections do not benefit from acceleration.
