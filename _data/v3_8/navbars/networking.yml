@@ -1,0 +1,58 @@
+bigheader: "Networking"
+path: /networking
+order: 2
+toc:
+- title: Networking
+  path: /networking/
+- title: Connecting workloads across networks that you do not control
+  path: /networking/vxlan-ipip
+- title: Changing IP pools
+  path: /networking/changing-ip-pools
+- title: Route reflectors
+  path: /networking/routereflector
+- title: Configuring BGP peers
+  path: /networking/bgp
+- title: Enabling IPv6 support
+  path: /networking/ipv6
+- title: Enabling IPVS in Kubernetes
+  path: /networking/enabling-ipvs
+- title: External connectivity
+  path: /networking/external-connectivity
+- title: Configuring a node IP address and subnet
+  path: /networking/node
+- title: Configuring MTU
+  path: /networking/mtu
+- title: Advertising Kubernetes services
+  path: /networking/service-advertisement
+- title: Assigning IP addresses based on topology
+  path: /networking/assigning-ip-addresses-topology
+- title: Calico for OpenStack
+  section:
+  - title: Setting up a development machine
+    path:  /networking/openstack/dev-machine-setup
+  - title: IP addressing and connectivity
+    path: /networking/openstack/connectivity
+  - title: Endpoint labels and operator policy
+    path: /networking/openstack/labels
+  - title: Configuring systems for use with Calico
+    path: /networking/openstack/configuration
+  - title: Detailed semantics
+    path: /networking/openstack/semantics
+  - title: Floating IPs
+    path: /networking/openstack/floating-ips
+  - title: Service IPs
+    path: /networking/openstack/service-ips
+  - title: Host routes
+    path: /networking/openstack/host-routes
+  - title: Multiple regions
+    path: /networking/openstack/multiple-regions
+  - title: Kuryr
+    path: /networking/openstack/kuryr
+  - title: Calico's interpretation of Neutron API calls
+    path: /networking/openstack/neutron-api
+- title: Network design
+  section:
+    - title: Calico over Ethernet fabrics
+      path: /networking/design/l2-interconnect-fabric
+    - title: Calico over IP fabrics
+      path: /networking/design/l3-interconnect-fabric

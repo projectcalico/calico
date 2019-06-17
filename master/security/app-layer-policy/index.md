@@ -85,37 +85,12 @@ traffic in the Istio service mesh, and the corresponding service account identit
 
 ### Determining ingress IP and port
 
-You will use the `istio-ingressgateway` service to access the YAO Bank application.
-
-1. If your Kubernetes cluster is running in an environment that supports external load balancers, the IP address of
-   ingress can be  obtained by the following command:
-
-   ```bash
-   kubectl get svc istio-ingressgateway -n istio-system
-   ```
-
-   whose output should be similar to
+You will use the `istio-ingressgateway` service to access the YAO Bank application. Determine your
+ingress host and port [following the Istio instructions][ingress host port]. Once you have the
+`INGRESS_HOST` and `INGRESS_PORT` variables set, you can set the `GATEWAY_URL` as follows.
 
    ```bash
-   NAME                   TYPE           CLUSTER-IP       EXTERNAL-IP     PORT(S)                                      AGE
-   istio-ingressgateway   LoadBalancer   172.21.109.129   130.211.10.121  80:31380/TCP,443:31390/TCP,31400:31400/TCP   17h
-   ```
-   {: .no-select-button}
-
-   The address of the ingressgateway service is the external IP of the `istio-ingressgateway`, followed by port 80:
-
-   ```bash
-   export GATEWAY_URL=130.211.10.121:80
-   ```
-
-1. If your cluster does not support external load balancers, you can use the public IP of the worker
-node, along with the NodePort, to access the ingress. The IP & port can be obtained from the output
-of the following command:
-
-   ```bash
-   export GATEWAY_URL=$(kubectl get pod -n istio-system -l istio=ingressgateway -o \
-   'jsonpath={.items[0].status.hostIP}'):$(kubectl get svc istio-ingressgateway -n istio-system -o \
-   'jsonpath={.spec.ports[0].nodePort}')
+   export GATEWAY_URL=$INGRESS_HOST:$INGRESS_PORT
    ```
 
 Point your browser to `http://$GATEWAY_URL/` to confirm the YAO Bank application is functioning
@@ -320,3 +295,4 @@ account we disallow the connection.
  [etcd]: https://github.com/coreos/etcd
  [struts cve]: https://nvd.nist.gov/vuln/detail/CVE-2017-5638
  [heartbleed]: http://heartbleed.com/
+ [ingress host port]: https://istio.io/docs/tasks/traffic-management/ingress/#determining-the-ingress-ip-and-ports 

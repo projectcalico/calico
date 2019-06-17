@@ -153,3 +153,9 @@ defaults:
     values:
       version: v3.7
       registry:
+  -
+    scope:
+      path: v3.8
+    values:
+      version: v3.8
+      registry:

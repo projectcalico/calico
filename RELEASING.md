@@ -142,6 +142,7 @@ at the same time that release branches are cut, often well before the release is
     v2.1
       # Pre-release placeholder for Calico v2.1. Delete this when v2.1.0 goes live.
       - title: v2.1.0-pre-release
+        note: ""
         components:
           typha:
             version: release-v2.1
@@ -159,18 +160,11 @@ at the same time that release branches are cut, often well before the release is
    ```
 
 1. If appropriate, update the list of tested versions for different platforms in the appropriate documents.
+
    - Kubernetes `vX.Y/getting-started/kubernetes/requirements.md`
    - OpenShift `vX.Y/getting-started/openshift/requirements.md`
    - OpenStack `vX.Y/getting-started/openstack/requirements.md`
    - Host protection `vX.Y/getting-started/bare-metal/requirements.md`
-
-1. Follow the steps in [writing release notes](#release-notes) to generate candidate release notes for the dummy release.
-
-   Then, add the newly created release note file to git.
-
-   ```
-   git add _data/<VERSION>/release-notes/<VERSION>-release-notes.md
-   ```
 
 1. Commit your changes and submit a PR for review. For example:
 
