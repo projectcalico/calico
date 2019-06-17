@@ -1280,7 +1280,7 @@ func init() {
 
 		Entry("should reject invalid BGPPeerSpec (selector)", api.BGPPeerSpec{
 			NodeSelector: "kubernetes.io/hostname: == 'casey-crc-kadm-node-4'",
-			}, false),
+		}, false),
 
 		// (API) NodeSpec
 		Entry("should accept node with IPv4 BGP", api.NodeSpec{BGP: &api.NodeBGPSpec{IPv4Address: netv4_1}}, true),
