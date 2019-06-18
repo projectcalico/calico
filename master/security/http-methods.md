@@ -8,7 +8,7 @@ Use Calico network policy for Istio-enabled apps to restrict ingress traffic tha
 
 ### Value
 
-Customer-facing applications (like web apps) can benefit from selective restrictions on ingress traffic (for example, HTTP GET requests). 
+Customer-facing applications like web apps can benefit from selective restrictions on ingress traffic (for example, HTTP GET requests). 
 
 ### Features
 
