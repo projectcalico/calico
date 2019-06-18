@@ -50,5 +50,5 @@ toc:
   path: /security/defend-dos-attack
 - title: Apply policy to Kubernetes node ports
   path: /security/kubernetes-node-ports
-- title: Using service accounts in policy rules
+- title: Use service accounts in policy rules
   path: /security/service-accounts
