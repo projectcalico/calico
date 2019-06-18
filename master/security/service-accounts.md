@@ -45,7 +45,7 @@ Like all other Kubernetes objects, service accounts have labels. So you can use 
 - [Limit ingress traffic for workloads by service account name](#limit-ingress-traffic-for-workloads-by-service-account-name)
 - [Limit ingress traffic for workloads by service account label](#limit-ingress-traffic-for-workloads-by-service-account-label)
 
-#### Limit ingress traffic for workloads, service account name
+#### Limit ingress traffic for workloads by service account name
 
 In the following example, ingress traffic is limited to service accounts that match the names, **ingress-sa-in-calico-np** and **ingress-w-in-calico-np**.
 
@@ -68,7 +68,7 @@ spec:
   selector: 'kind == "calico-np"'
 ```
 
-#### Limit ingress traffic for workloads, service account labels
+#### Limit ingress traffic for workloads by service account labels
 
 In the following example, ingress traffic is limited to services accounts that matches the label, **sa-in-calico-np**.
 
