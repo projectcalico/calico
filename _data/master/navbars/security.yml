@@ -50,3 +50,5 @@ toc:
   path: /security/defend-dos-attack
 - title: Apply policy to Kubernetes node ports
   path: /security/kubernetes-node-ports
+- title: Using HTTP methods and paths in policy rules
+  path: /security/http-methods  
