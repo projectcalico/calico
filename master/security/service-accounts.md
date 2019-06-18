@@ -68,7 +68,7 @@ spec:
   selector: 'kind == "calico-np"'
 ```
 
-#### Limit ingress traffic for workloads by service account labels
+#### Limit ingress traffic for workloads by service account label
 
 In the following example, ingress traffic is limited to services accounts that matches the label, **sa-in-calico-np**.
 
