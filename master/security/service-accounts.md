@@ -54,12 +54,12 @@ apiVersion: projectcalico.org/v3
 kind: NetworkPolicy
 metadata: 
   name: demo-calico-np
-  namespace: "{{.Namespace}}"
+  namespace: "prod-engineering"
 spec: 
   ingress: 
     - action: Allow
       source: 
-        namespaceselector: 'ingress == "{{.Namespace}}"'
+        namespaceselector: 'ingress == "prod-engineering"'
         selector: 'ingress == "calico-np-select"'
         serviceAccounts: 
           names: 
@@ -77,7 +77,7 @@ apiVersion: projectcalico.org/v3
 kind: NetworkPolicy
 metadata: 
   name: demo-calico-np
-  namespace: "{{.Namespace}}"
+  namespace: "prod-engineering"
 spec: 
   ingress: 
     - action: Allow
