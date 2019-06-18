@@ -4,18 +4,17 @@ title: Using HTTP methods and paths in policy rules
 
 ### Big picture
 
-Use Calico network policy for Istio-enabled apps to restrict ingress traffic that match HTTP methods or paths. 
+Use Calico network policy for Istio-enabled apps to restrict ingress traffic that matches HTTP methods or paths. 
 
 ### Value
 
-Customer-facing applications like web apps can benefit from selective restrictions on ingress traffic (for example, HTTP GET requests). 
+Istio is ideal for applying policy for operational goals and for security that operates at the application layer. However, for security goals inside a cluster, Calico network policy is required. Using Calico network policy, you can restrict ingress traffic using HTTP methods inside clusters, and outside cluster Update(like web apps).
 
 ### Features
 
 This how-to guide uses the following Calico features:
 
-- **NetworkPolicy** 
-- **GlobalNetworkPolicy** with http match criteria to restrict traffic using:
+- **NetworkPolicy** and **GlobalNetworkPolicy** with http match criteria to restrict traffic using:
   - Standard HTTP methods
   - Paths (exact and prefix)
 
