@@ -30,7 +30,7 @@ The Sidecar acceleration process bypasses several layers of kernel networking, a
 ### Before you begin...
 
 - [Enable application layer policy]({{site.baseurl}}/{{page.version}}/getting-started/kubernetes/installation/app-layer-policy)
-- Verify that hosts installed with Calico are using Linux kernel 4.19 and above
+- Verify that hosts installed with Calico are using Linux kernel 4.20 and above
 
 #### Sidecar acceleration: experimental technology
 
