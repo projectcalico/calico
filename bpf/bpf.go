@@ -93,9 +93,9 @@ var (
 	// v4Dot16Dot0 is the first kernel version that has all the
 	// required features we use for XDP filtering
 	v4Dot16Dot0 = versionparse.MustParseVersion("4.16.0")
-	// v4Dot19Dot0 is the first kernel version that has all the
+	// v4Dot20Dot0 is the first kernel version that has all the
 	// required features we use for sidecar acceleration
-	v4Dot19Dot0 = versionparse.MustParseVersion("4.19.0")
+	v4Dot20Dot0 = versionparse.MustParseVersion("4.20.0")
 )
 
 func init() {
@@ -2285,7 +2285,7 @@ func isAtLeastKernel(v *version.Version) error {
 }
 
 func SupportsSockmap() error {
-	if err := isAtLeastKernel(v4Dot19Dot0); err != nil {
+	if err := isAtLeastKernel(v4Dot20Dot0); err != nil {
 		return err
 	}
 
