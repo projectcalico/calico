@@ -8,7 +8,7 @@ Use Calico network policy for Istio-enabled apps to restrict ingress traffic tha
 
 ### Value
 
-Istio is ideal for applying policy for operational goals and for security that operates at the application layer. However, for security goals inside a cluster, Calico network policy is required. Using Calico network policy, you can restrict ingress traffic using HTTP methods inside clusters, and outside cluster Update(like web apps).
+Istio is ideal for applying policy for operational goals and for security that operates at the application layer. However, for security goals inside and outside the cluster, Calico network policy is required. Using Calico network policy, you can restrict ingress traffic using HTTP methods (for example, GET requests) with matching criteria.
 
 ### Features
 
