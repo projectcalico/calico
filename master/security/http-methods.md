@@ -1,5 +1,5 @@
 ---
-title: Using HTTP methods and paths in policy rules
+title: Use HTTP methods and paths in policy rules
 ---
 
 ### Big picture
