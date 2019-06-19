@@ -50,3 +50,5 @@ toc:
   path: /security/defend-dos-attack
 - title: Apply policy to Kubernetes node ports
   path: /security/kubernetes-node-ports
+- title: Use ICMP/ping in policy rules
+  path: /security/icmp-ping
