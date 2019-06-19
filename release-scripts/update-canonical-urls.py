@@ -26,7 +26,6 @@ if __name__ == "__main__":
         md_files = md_files + [os.path.join(root, f)[2:]
                                for f in filter(lambda fn: fn.endswith(".md"),
                                                files)]
-
     # Process all file names to find the latest available version for
     # each version-masked path.
     masked_to_latest_version = {}
@@ -45,10 +44,13 @@ if __name__ == "__main__":
         version, masked = split_version(f)
         latest_version = masked_to_latest_version.get(masked)
         if latest_version:
-            print f, "->", latest_version
-            c = ("sed -i \"" +
-                 "s,^canonical_url:.*,canonical_url: " +
-                 "'https://docs.projectcalico.org/%s',\" %s" % (
-                     masked.replace(VERSION_MASK, latest_version),
-                     f))
-            os.system(c)
+            path = os.path.abspath(f)
+            replacement = "canonical_url: 'https://docs.projectcalico.org/%s'" % (masked.replace(VERSION_MASK, latest_version))
+            lines = []
+            with open(path, "r") as file:
+                lines = file.readlines()
+                file.close
+            with open(path, "w") as file:
+                for line in lines:
+                    file.write(re.sub(r'^canonical_url: .*', replacement, line))
+                file.close()
