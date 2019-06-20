@@ -1,5 +1,5 @@
-hash: 6e964af8fae6ce3cc2776fb49710e216617c2fb573866bcbeb1f1be27073402d
-updated: 2019-06-15T07:39:48.076767374Z
+hash: 41708bce94d4e4b8080b941460a37e4246f6fab2c3ffd4b612241f7c5a8e277e
+updated: 2019-06-20T07:48:01.491151122Z
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -217,7 +217,7 @@ imports:
 - name: github.com/pkg/errors
   version: 27936f6d90f9c8e1145f11ed52ffffbfdb9e0af7
 - name: github.com/projectcalico/felix
-  version: d1200f5339c8562d9a9fb0629ecb8d97924e881b
+  version: c9a68a9d3245a411fe7878aa9630a1dfcfabddf9
   subpackages:
   - bpf
   - bpf/packrd
