@@ -1278,6 +1278,10 @@ func init() {
 			PeerSelector: "has(mylabel)",
 		}, true),
 
+		Entry("should reject invalid BGPPeerSpec (selector)", api.BGPPeerSpec{
+			NodeSelector: "kubernetes.io/hostname: == 'casey-crc-kadm-node-4'",
+		}, false),
+
 		// (API) NodeSpec
 		Entry("should accept node with IPv4 BGP", api.NodeSpec{BGP: &api.NodeBGPSpec{IPv4Address: netv4_1}}, true),
 		Entry("should accept node with IPv6 BGP", api.NodeSpec{BGP: &api.NodeBGPSpec{IPv6Address: netv6_1}}, true),
