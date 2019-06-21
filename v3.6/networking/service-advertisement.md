@@ -36,7 +36,7 @@ of `10.0.0.0/24`.
 
 ```bash
 kubectl patch ds -n kube-system calico-node --patch \
-    '{"spec": {"template": {"spec": {"containers": [{"name": "calico-node", "env": [{"name": "CALICO_ADVERTISE_CLUSTER_IPS", "value": "10.0.0.0/24"}]}]}}}}’
+    '{"spec": {"template": {"spec": {"containers": [{"name": "calico-node", "env": [{"name": "CALICO_ADVERTISE_CLUSTER_IPS", "value": "10.0.0.0/24"}]}]}}}}'
 ```
 
 ## Behavior
