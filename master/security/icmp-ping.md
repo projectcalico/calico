@@ -22,7 +22,6 @@ This how-to guide uses the following Calico features:
 
 **GlobalNetworkPolicy** or **NetworkPolicy** with ICMPv4 and ICMPv6 and positive/negative match criteria.
 
-
 ### Concepts
 
 #### ICMP packet type and code
@@ -30,6 +29,8 @@ This how-to guide uses the following Calico features:
 Calico network policy also lets you deny and allow specific parts of the ICMP packet for fine-grain control. For example, you can specify ICMP type 5, code 2. For details, see [ICMP type and code](https://en.wikipedia.org/wiki/Internet_Control_Message_Protocol#Control_messages).
 
 ### How to
+
+In this section, we introduce a global "deny all ICMP" policy to show the power of Calico network policy. Keep in mind that this policy **blocks all traffic to and from any workload in a cluster**. If your ultimate goal is to allow some traffic, be sure to have those policies ready before applying the global deny all policy.
 
 - [Deny all ICMP](#deny-all-icmp)
 - [Allow ICMP ping only within a cluster](#allow-icmp-ping-only-within-a-cluster)
