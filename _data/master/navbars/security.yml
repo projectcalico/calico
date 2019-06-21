@@ -52,3 +52,5 @@ toc:
   path: /security/kubernetes-node-ports
 - title: Use service accounts in policy rules
   path: /security/service-accounts
+- title: Using HTTP methods and paths in policy rules
+  path: /security/http-methods
