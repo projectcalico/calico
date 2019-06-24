@@ -16,53 +16,53 @@ def gen_values_master(versions, imageNames, imageRegistry)
     ipam: calico-ipam
 
     node:
-      image: #{imageRegistry}#{imageNames["node"]}
-      tag: #{versions["calico/node"]}
+      image: #{imageRegistry}#{imageNames.fetch("node")}
+      tag: #{versions.fetch("calico/node")}
       env:
         # Optional environment variables for configuring Calico node.
         # These should match the EnvVar spec of the corev1 Kubernetes API. For example:
         # - name: FELIX_LOGSEVERITYSCREEN
         #   value: "debug"
     calicoctl:
-      image: #{imageRegistry}#{imageNames["calicoctl"]}
-      tag: #{versions["calicoctl"]}
+      image: #{imageRegistry}#{imageNames.fetch("calicoctl")}
+      tag: #{versions.fetch("calicoctl")}
     typha:
-      image: #{imageRegistry}#{imageNames["typha"]}
-      tag: #{versions["typha"]}
+      image: #{imageRegistry}#{imageNames.fetch("typha")}
+      tag: #{versions.fetch("typha")}
       env:
         # Optional environment variables for configuring Typha.
         # These should match the EnvVar spec of the corev1 Kubernetes API. For example:
         # - name: TYPHA_LOGSEVERITYSYS
         #   value: debug
     cni:
-      image: #{imageRegistry}#{imageNames["cni"]}
-      tag: #{versions["calico/cni"]}
+      image: #{imageRegistry}#{imageNames.fetch("cni")}
+      tag: #{versions.fetch("calico/cni")}
       env:
         # Optional environment variables for configuring Calico CNI.
         # These should match the EnvVar spec of the corev1 Kubernetes API. For example:
         # - name: FOO
         #   value: bar
     kubeControllers:
-      image: #{imageRegistry}#{imageNames["kubeControllers"]}
-      tag: #{versions["calico/kube-controllers"]}
+      image: #{imageRegistry}#{imageNames.fetch("kubeControllers")}
+      tag: #{versions.fetch("calico/kube-controllers")}
       env:
         # Optional environment variables for configuring Calico kube controllers.
         # These should match the EnvVar spec of the corev1 Kubernetes API. For example:
         # - name: LOG_LEVEL
         #   value: debug
     flannel:
-      image: #{imageNames["flannel"]}
-      tag: #{versions["flannel"]}
+      image: #{imageNames.fetch("flannel")}
+      tag: #{versions.fetch("flannel")}
       env:
         # Optional environment variables for configuring Flannel.
         # These should match the EnvVar spec of the corev1 Kubernetes API. For example:
         # - name: FOO
         #   value: bar
     dikastes:
-      image: #{imageRegistry}#{imageNames["dikastes"]}
-      tag: #{versions["calico/dikastes"]}
+      image: #{imageRegistry}#{imageNames.fetch("dikastes")}
+      tag: #{versions.fetch("calico/dikastes")}
     flexvol:
-      image: #{imageRegistry}#{imageNames["flexvol"]}
-      tag: #{versions["flexvol"]}
+      image: #{imageRegistry}#{imageNames.fetch("flexvol")}
+      tag: #{versions.fetch("flexvol")}
     EOF
 end
