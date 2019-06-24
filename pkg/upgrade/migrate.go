@@ -97,13 +97,9 @@ func Migrate(ctxt context.Context, c client.Interface, nodename string) error {
 				return fmt.Errorf("Cannot pick an IPv4 tunnel address from the given CIDR: %s", k8sNode.Spec.PodCIDR)
 			}
 			tunIp[3]++
-			if node.Spec.BGP == nil {
-				node.Spec.BGP = &v3.NodeBGPSpec{}
-			}
-			node.Spec.BGP.IPv4IPIPTunnelAddr = tunIp.String()
 
 			// Assign the address via Calico IPAM.
-			ipipTunnelAddr := cnet.ParseIP(node.Spec.BGP.IPv4IPIPTunnelAddr)
+			ipipTunnelAddr := cnet.ParseIP(tunIp.String())
 			handle := fmt.Sprintf("ipip-tunnel-addr-%s", nodename)
 			if err = c.IPAM().AssignIP(ctxt, ipam.AssignIPArgs{
 				IP:       *ipipTunnelAddr,
@@ -120,9 +116,26 @@ func Migrate(ctxt context.Context, c client.Interface, nodename string) error {
 				log.Info("IPIP tunnel address already assigned in IPAM, continuing...")
 			}
 
-			// Save the calico node object to the datastore.
-			if node, err = c.Nodes().Update(ctxt, node, options.SetOptions{}); err != nil {
-				return fmt.Errorf("failed to save newly updated node object: %s", err)
+			// Implemented retry on conflict, because we get stuck if the upgrade-ipam
+			// container fails here and retries assigning an IP which is already assigned
+			for i := uint(0); i < 5; i++ {
+				node, err := c.Nodes().Get(ctxt, nodename, options.GetOptions{})
+				if err != nil {
+					return fmt.Errorf("failed to get calico node resource: %s", err)
+				}
+				if node.Spec.BGP == nil {
+					node.Spec.BGP = &v3.NodeBGPSpec{}
+				}
+				node.Spec.BGP.IPv4IPIPTunnelAddr = tunIp.String()
+				if node, err = c.Nodes().Update(ctxt, node, options.SetOptions{}); err != nil {
+					if _, ok := err.(errors.ErrorResourceUpdateConflict); ok {
+						log.Info("Encountered update conflict, retrying...")
+						time.Sleep(1 * time.Second)
+						continue
+					}
+					return fmt.Errorf("failed to update node: %s", err)
+				}
+				break
 			}
 
 			log.WithField("ip", node.Spec.BGP.IPv4IPIPTunnelAddr).Info("Assigned IPIP tunnel address to node")
