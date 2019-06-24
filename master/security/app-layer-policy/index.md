@@ -3,28 +3,23 @@ title: Application layer policy tutorial
 canonical_url: 'https://docs.projectcalico.org/v3.7/security/app-layer-policy/index'
 ---
 
-The included demo sets up a microservices application, then demonstrates the use of application
-layer policy to mitigate some common threats.
+This tutorial sets up a microservices application, then demonstrates how to use {{site.prodname}} application layer policy to mitigate some common threats.
 
 ## Prerequisites
 
-To create a Kubernetes cluster which supports application layer policy, follow
-one of our [getting started guides]({{site.baseurl}}/{{page.version}}/getting-started/),
-and [enable application layer policy]({{site.baseurl}}/{{page.version}}/getting-started/kubernetes/installation/app-layer-policy).
-
-You will also need the [calicoctl]({{site.baseurl}}/{{page.version}}/getting-started/calicoctl/install) command line tool.
+1. Build a Kubernetes cluster.
+2. Install Calico on Kubernetes:
+  - If Calico is not installed on Kubernetes, see [Calico on Kubernetes]({{site.baseurl}}/{{page.version}}/getting-started/kubernetes).  
+  - If Calico is already installed on Kubernetes, verify that [Calico networking]({{site.baseurl}}/{{page.version}}/getting-started/kubernetes/installation/calico) (or a non-Calico CNI) and Calico network policy are installed. 
+3. Install the [calicoctl command line tool]({{site.baseurl}}/{{page.version}}/getting-started/calicoctl/install).   
+  **Note**: Ensure calicoctl is configured to connect with your datastore.  
+4. Enable [application layer policy and install Istio]({{site.baseurl}}/{{page.version}}/getting-started/kubernetes/installation/app-layer-policy).  
+  **Note**: Ensure that you annotate the default namespace for the Istio sidecar injection (`istio-injection=enabled`).    
+  `kubectl label namespace default istio-injection=enabled`
 
 ### Install the demo application
 
-If you haven't already, label the namespace you will work in for Istio sidecar injection.
-
-```bash
-kubectl label namespace <your namespace name> istio-injection=enabled
-```
-
-We will use a simple microservice application to demonstrate {{site.prodname}} application layer
-policy.  The [YAO Bank] application creates a customer-facing web application, a microservice that
-serves up account summaries, and an [etcd] datastore.
+We will use a simple microservice application to demonstrate {{site.prodname}} application layer policy.  The [YAO Bank](https://github.com/spikecurtis/yaobank) application creates a customer-facing web application, a microservice that serves up account summaries, and an [etcd](https://github.com/coreos/etcd) datastore.
 
 ```bash
 kubectl apply -f \
@@ -34,7 +29,6 @@ kubectl apply -f \
 > **Note**: You can also
 > [view the manifest in your browser](manifests/10-yaobank.yaml){:target="_blank"}.
 {: .alert .alert-info}
-
 
 Verify that the application pods have been created and are ready.
 
@@ -87,9 +81,9 @@ summary-token-8kpt1    kubernetes.io/service-account-token   3         21h
 Notice that Istio CA will have created a secret of type `istio.io/key-and-cert` for each
 service account.  These keys and X.509 certificates are used to cryptographically authenticate
 traffic in the Istio service mesh, and the corresponding service account identities are used by
-{{site.prodname}} in authorization policy.
+{{site.prodname}} in authentication policy.
 
-### Determining ingress IP & port
+### Determining ingress IP and port
 
 You will use the `istio-ingressgateway` service to access the YAO Bank application. Determine your
 ingress host and port [following the Istio instructions][ingress host port]. Once you have the
@@ -105,7 +99,7 @@ time you may see 404 or 500 errors.
 
 ### The need for policy
 
-Although {{site.prodname}} & Istio are running in the cluster, we have not defined any authorization
+Although {{site.prodname}} & Istio are running in the cluster, we have not defined any authentication
 policy. Istio was configured to mutually authenticate traffic between the pods in your application,
 so only connections with Istio-issued certificates are allowed, and all inter-pod traffic is encrypted with TLS.  That's already a big step in the right direction.
 
@@ -144,7 +138,7 @@ Notice that from here, we get direct access to the backend database.  For exampl
 
 (Piping to `python -m json.tool` nicely formats the output.)
 
-#### Single factor authorization
+#### Single-factor authentication
 
 The possession of a key and certificate pair is a very strong assertion that a connection is
 authentic because it is based on cryptographic proofs that are believed to be nearly impossible to
@@ -185,7 +179,7 @@ have to pass an `https` URL, the `--key` and `--cert` parameters to `curl` to do
 
 Return to your web browser and refresh to confirm the new balance.
 
-#### Policy
+#### Network policy
 
 We can mitigate both of the above deficiencies with a {{site.prodname}} policy.
 
@@ -292,7 +286,7 @@ You should get no response, and refreshing your browser should not show an incre
 
 You might wonder how {{site.prodname}} was able to detect and prevent this attack—the attacker was
 able to steal the keys which prove identity in our system.  This highlights the value of multi-layer
-authorization checks.  Although our attack pod had the keys to fool the X.509 certificate check,
+authentication checks.  Although our attack pod had the keys to fool the X.509 certificate check,
 {{site.prodname}} also monitors the Kubernetes API Server for which IP addresses are associated with which
 service accounts.  Since our attack pod has an IP not associated with the account summary service
 account we disallow the connection.
