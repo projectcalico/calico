@@ -11,8 +11,7 @@ Use Calico network policy to allow and deny ICMP/ping messages.
 The **Internet Control Message Protocol (ICMP)** provides valuable network diagnostic functions, but it can also be used maliciously. Attackers can use it to learn about your network, or for DoS attacks. Using Calico network policy, you can control where ICMP is used. For example, you can:
 
 - Allow ICMP ping, but only within your cluster 
-- Allow ICMP for specifically labeled pods   
-  For example, allow ICMP for pods launched by operators for diagnostic purposes, but block other uses.
+- Allow ICMP for pods launched by operators for diagnostic purposes, but block other uses
 - Temporarily enable ICMP to diagnose a problem, then disable it after the problem is resolved
 - Deny/allow ICMP messages (ICMPv4 and/or ICMPv6)
 
