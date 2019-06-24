@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"reflect"
 	"time"
 
 	api "github.com/projectcalico/libcalico-go/lib/apis/v3"
@@ -236,6 +237,13 @@ func removeHostTunnelAddr(ctx context.Context, c client.Interface, nodename stri
 		} else if node.Spec.BGP != nil {
 			ipAddr = net.ParseIP(node.Spec.BGP.IPv4IPIPTunnelAddr)
 			node.Spec.BGP.IPv4IPIPTunnelAddr = ""
+		}
+
+		// If removing the tunnel address causes the BGP spec to be empty, then nil it out.
+		// libcalico asserts that if a BGP spec is present, that it not be empty.
+		if node.Spec.BGP != nil && reflect.DeepEqual(*node.Spec.BGP, v3.NodeBGPSpec{}) {
+			logCtx.Debug("BGP spec is now empty, setting to nil")
+			node.Spec.BGP = nil
 		}
 
 		// Release the IP.
