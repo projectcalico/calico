@@ -223,7 +223,7 @@ type Config struct {
 
 	IptablesNATOutgoingInterfaceFilter string `config:"iface-param;"`
 
-	XDPEnabled        bool `config:"bool;true"`
+	XDPEnabled        bool `config:"bool;false"`
 	GenericXDPEnabled bool `config:"bool;false"`
 }
 
