@@ -57,6 +57,9 @@ The full list of parameters which can be set is as follows.
 | `VXLANMTU`                        | `FELIX_VXLANMTU`                        | The MTU to set on the VXLAN tunnel device. See [Configuring MTU]({{site.baseurl}}/{{page.version}}/networking/mtu) [Default: `1410`] | int |
 | `VXLANPort`                       | `FELIX_VXLANPORT`                       | The UDP port to use for VXLAN. [Default: `4789`] | int |
 | `VXLANVNI`                        | `FELIX_VXLANVNI`                        | The virtual network ID to use for VXLAN. [Default: `4096`] | int |
+| `TyphaAddr`                      | `FELIX_TYPHAADDR`                       | IPv4 address of the Typha service used to connect to it. | string |
+| `TyphaK8sServiceName`                    | `FELIX_TYPHAK8SSERVICENAME`             | Name of the Typha kubernetes service | string |
+| `Ipv6Support`                            | `FELIX_IPV6SUPPORT`                     | Set this to True when IPv6 is supported. [Default: `False`] | boolean |
 
 
 #### etcd datastore configuration

@@ -62,6 +62,9 @@ The full list of parameters which can be set is as follows.
 | `VXLANVNI`                        | `FELIX_VXLANVNI`                        | The virtual network ID to use for VXLAN. [Default: `4096`] | int |
 | `XDPRefreshInterval`              | `FELIX_XDPREFRESHINTERVAL`              | Period, in seconds, at which Felix re-checks the XDP state in the dataplane to ensure that no other process has accidentally broken {{site.prodname}}'s rules. Set to 0 to disable XDP refresh. [Default: `90`] | int |
 | `XDPEnabled`                      | `FELIX_XDPENABLED        `              | Enable XDP acceleration for host endpoint policies. [Default: `true`] | boolean |
+| `TyphaAddr`                      | `FELIX_TYPHAADDR`                       | IPv4 address of the Typha service used to connect to it. | string |
+| `TyphaK8sServiceName`                    | `FELIX_TYPHAK8SSERVICENAME`             | Name of the Typha kubernetes service | string |
+| `Ipv6Support`                            | `FELIX_IPV6SUPPORT`                     | Set this to True when IPv6 is supported. [Default: `False`] | boolean |
 
 
 #### etcd datastore configuration

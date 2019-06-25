@@ -51,6 +51,9 @@ The full list of parameters which can be set is as follows.
 | `UsageReportingEnabled`           | `FELIX_USAGEREPORTINGENABLED`           | Reports anonymous {{site.prodname}} version number and cluster size to projectcalico.org. Logs warnings returned by the usage server. For example, if a significant security vulnerability has been discovered in the version of {{site.prodname}} being used. [Default: `true`] | boolean |
 | `UsageReportingInitialDelaySecs`  | `FELIX_USAGEREPORTINGINITIALDELAYSECS`  | Minimum delay before first usage report, in seconds. [Default: `300`] | int |
 | `UsageReportingIntervalSecs`      | `FELIX_USAGEREPORTINGINTERVALSECS`      | Interval at which to make usage reports, in seconds. [Default: `86400`] | int |
+| `TyphaAddr`                      | `FELIX_TYPHAADDR`                       | IPv4 address of the Typha service used to connect to it. | string |
+| `TyphaK8sServiceName`                    | `FELIX_TYPHAK8SSERVICENAME`             | Name of the Typha kubernetes service | string |
+| `Ipv6Support`                            | `FELIX_IPV6SUPPORT`                     | Set this to True when IPv6 is supported. [Default: `False`] | boolean |
 
 
 #### etcd datastore configuration
