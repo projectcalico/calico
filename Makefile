@@ -360,6 +360,7 @@ bpf/bpf-packr.go bpf/packrd/packed-packr.go: bpf/xdp/generated/xdp.o
 	              calico-build/bpf-clang \
 	              /bin/sh -c \
 	              "cd /go/src/$(PACKAGE_NAME)/bpf && /go/bin/packr2"
+	sed -i 's,^	"github.com/gobuffalo/packr/v2",	packr "github.com/gobuffalo/packr/v2",' bpf/packrd/packed-packr.go
 	$(DOCKER_RUN) $(CALICO_BUILD) goimports -w -local github.com/projectcalico/ bpf/packrd/packed-packr.go bpf/bpf-packr.go
 
 ###############################################################################
