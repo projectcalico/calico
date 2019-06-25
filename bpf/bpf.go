@@ -36,7 +36,6 @@ import (
 	"strings"
 	"syscall"
 
-	packr "github.com/gobuffalo/packr/v2"
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/sys/unix"
 
@@ -71,14 +70,14 @@ var (
 	v4Dot16Dot0 = versionparse.MustParseVersion("4.16.0")
 )
 
-func init() {
-	box := packr.New("xdp", "./xdp/generated")
-	b, err := box.Find("xdp.o")
-	if err != nil {
-		panic(fmt.Sprintf("cannot find xdp.o: %v\n", err))
-	}
-	xdpAsset = b
-}
+// func init() {
+// 	box := packr.New("xdp", "./xdp/generated")
+// 	b, err := box.Find("xdp.o")
+// 	if err != nil {
+// 		panic(fmt.Sprintf("cannot find xdp.o: %v\n", err))
+// 	}
+// 	xdpAsset = b
+// }
 
 func (m XDPMode) String() string {
 	switch m {
