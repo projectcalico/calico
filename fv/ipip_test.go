@@ -1,6 +1,6 @@
 // +build fvtests
 
-// Copyright (c) 2017-2018 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2019 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -206,14 +206,18 @@ var _ = infrastructure.DatastoreDescribe("IPIP topology before adding host IPs t
 			defer cancel()
 			l, err := client.Nodes().List(ctx, options.ListOptions{})
 			Expect(err).NotTo(HaveOccurred())
-			// Now remove the BGP configuration from node 0
-			node := l.Items[0]
-			// save the old spec
-			prevBGPSpec := *node.Spec.BGP
-			node.Spec.BGP = nil
-			_, err = client.Nodes().Update(ctx, &node, options.SetOptions{})
-			Expect(err).NotTo(HaveOccurred())
-
+			// Now remove the BGP configuration for felixes[0]
+			var prevBGPSpec api.NodeBGPSpec
+			for _, node := range l.Items {
+				log.Infof("node: %v", node)
+				if node.Name == felixes[0].Name {
+					// save the old spec
+					prevBGPSpec = *node.Spec.BGP
+					node.Spec.BGP = nil
+					_, err = client.Nodes().Update(ctx, &node, options.SetOptions{})
+					Expect(err).NotTo(HaveOccurred())
+				}
+			}
 			// Removing the BGP config triggers a Felix restart. Wait for the ipset to be updated as a signal that Felix
 			// has restarted.
 			for _, f := range felixes {
@@ -228,7 +232,7 @@ var _ = infrastructure.DatastoreDescribe("IPIP topology before adding host IPs t
 				c, err := client.FelixConfigurations().Get(ctx, "default", options.GetOptions{})
 				Expect(err).NotTo(HaveOccurred())
 				c.Spec.ExternalNodesCIDRList = &[]string{addr, "1.1.1.1"}
-				log.WithFields(log.Fields{"felixconfiguration": c, "adding Addr": addr}).Info("Updataing FelixConfiguration ")
+				log.WithFields(log.Fields{"felixconfiguration": c, "adding Addr": addr}).Info("Updating FelixConfiguration ")
 				_, err = client.FelixConfigurations().Update(ctx, c, options.SetOptions{})
 				Expect(err).NotTo(HaveOccurred())
 			}
@@ -243,7 +247,7 @@ var _ = infrastructure.DatastoreDescribe("IPIP topology before adding host IPs t
 
 		It("should have all-hosts-net ipset configured with the external hosts and workloads connect", func() {
 			f := felixes[0]
-			// Add the ip route via tunnel back on the Felix for which we nuked when we removed it's BGP spec.
+			// Add the ip route via tunnel back on the Felix for which we nuked when we removed its BGP spec.
 			f.Exec("ip", "route", "add", w[1].IP, "via", felixes[1].IP, "dev", "tunl0", "onlink")
 			cc.ExpectSome(w[0], w[1])
 			cc.CheckConnectivity()
