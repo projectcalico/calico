@@ -13,13 +13,16 @@ The **Internet Control Message Protocol (ICMP)** provides valuable network diagn
 - Allow ICMP ping, but only within your cluster 
 - Allow ICMP for pods launched by operators for diagnostic purposes, but block other uses
 - Temporarily enable ICMP to diagnose a problem, then disable it after the problem is resolved
-- Deny/allow ICMP messages (ICMPv4 and/or ICMPv6)
+- Deny/allow ICMPv4 and/or ICMPv6
 
 ### Features
 
 This how-to guide uses the following Calico features:
 
-**GlobalNetworkPolicy** or **NetworkPolicy** with ICMPv4 and ICMPv6 and positive/negative match criteria.
+**GlobalNetworkPolicy** or **NetworkPolicy** with:
+- Positive/negative match criteria for ICMP
+- Protocol match for ICMPv4 and ICMPv6
+- Match on ICMP type and code
 
 ### Concepts
 
@@ -29,15 +32,15 @@ Calico network policy also lets you deny and allow specific parts of the ICMP pa
 
 ### How to
 
-In this section, we introduce a global "deny all ICMP" policy to show the power of Calico network policy. Keep in mind that this policy **blocks all traffic to and from any workload in a cluster**. If your ultimate goal is to allow some traffic, be sure to have those policies ready before applying the global deny all policy.
-
 - [Deny all ICMP](#deny-all-icmp)
 - [Allow ICMP ping only within a cluster](#allow-icmp-ping-only-within-a-cluster)
 - [Allow ICMP matching protocol type and code](#allow-icmp-matching-protocol-type-and-code)
 
 #### Deny all ICMP
 
-In this example, all pods are blocked from sending or receiving **ICMPv4** and **ICMPv6** messages. If **ICMPv6** messages are not used in your deployment, it is still good practice to deny them specifically as shown below. 
+In this example, we introduce a "deny all ICMP" GlobalNetworkPolicy. Keep in mind that this policy **blocks all traffic to and from any workload in the cluster**. If your ultimate goal is to allow some traffic, have your regular "allow" policies in place before applying the global deny-all policy.
+
+In this example, all pods are blocked from sending or receiving **ICMPv4** and **ICMPv6** messages. If **ICMPv6** messages are not used in your deployment, it is still good practice to deny them specifically as shown below. In any "deny-all" Calico network policy, be sure to specify a higher order (**order:200**) than regular policies that might allow traffic.   
 
 ```
 apiVersion: projectcalico.org/v3
@@ -45,6 +48,7 @@ kind: GlobalNetworkPolicy
 metadata:
   name: block-icmp
 spec:
+  order: 200
   selector: all()
   types:
   - Ingress
