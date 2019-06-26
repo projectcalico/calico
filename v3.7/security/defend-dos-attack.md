@@ -3,9 +3,9 @@ title: Defend against DoS attacks
 redirect_from: latest/security/defend-dos-attack
 ---
 
-### Big Picture 
+### Big Picture
 
-Calico automatically enforces specific types of blacklist policies at the earliest possible point in the packet processing pipeline, including offloading to NIC hardware whenever possible. 
+Calico automatically enforces specific types of blacklist policies at the earliest possible point in the packet processing pipeline, including offloading to NIC hardware whenever possible.
 
 ### Value
 During a DoS attack, a cluster can receive massive numbers of connection requests from attackers. The faster these connection requests are dropped, the less flooding and overloading to your hosts. When you define DoS mitigation rules in Calico network policy, Calico enforces the rules as efficiently as possible to minimize the impact.
@@ -17,18 +17,6 @@ This how-to article uses the following Calico features:
 - A global network policy to deny ingress traffic from IPs in the global network set
 
 ### Concepts
-
-#### Earliest packet processing
-The earliest point in the packet processing pipeline that packets can be dropped, depends on the Linux kernel version and the capabilities of the NIC driver and NIC hardware. Calico automatically uses the fastest available option.
-
-| Processed by... | Used by Calico if...                                         | Performance |
-| --------------- | ------------------------------------------------------------ | ----------- |
-| NIC hardware    | The NIC supports **XDP offload** mode.                       | Fastest     |
-| NIC driver      | The NIC driver supports **XDP native** mode.                 | Faster      |
-| Kernel          | The kernel supports **XDP generic mode** and Calico is configured to explicitly use it. This mode is rarely used and has no performance benefits over iptables raw mode below. To enable, see [Felix Configuration]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/felixconfig).   | Fast        |
-| Kernel          | If none of the modes above are available, **iptables raw** mode is used. | Fast        |
-
-**Note**: XDP modes require Linux kernel v4.16 or later.
 
 ### How to
 
@@ -75,8 +63,8 @@ spec:
 </pre>
 {: .no-select-button}
 
-#### Step 3: Create deny incoming traffic global network policy 
-Finally, create a Calico global network policy adding the global network set label (**dos-blacklist** in the previous step) as a selector to deny ingress traffic. To more quickly enforce the denial of forwarded traffic to the host at the packet level, use the **doNotTrack** and **applyOnForward** options. 
+#### Step 3: Create deny incoming traffic global network policy
+Finally, create a Calico global network policy adding the global network set label (**dos-blacklist** in the previous step) as a selector to deny ingress traffic. To more quickly enforce the denial of forwarded traffic to the host at the packet level, use the **doNotTrack** and **applyOnForward** options.
 
 <pre>
 apiVersion: projectcalico.org/v3
@@ -101,5 +89,3 @@ spec:
 - [Global Network Sets]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/globalnetworkset)
 - [Global Network Policy]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/globalnetworkpolicy)
 - [Create a Host Endpoint]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/hostendpoint)
-- [Introduction to XDP](https://www.iovisor.org/technology/xdp)
-- [Advanced XDP Documentation](https://prototype-kernel.readthedocs.io/en/latest/networking/XDP/index.html)
