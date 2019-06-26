@@ -56,5 +56,3 @@ toc:
       path: /networking/design/l2-interconnect-fabric
     - title: Calico over IP fabrics
       path: /networking/design/l3-interconnect-fabric
-- title: Accelerating Istio network performance
-  path: /networking/sidecar-acceleration
