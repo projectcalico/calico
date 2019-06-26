@@ -41,13 +41,13 @@ When you create Calico network policies to allow traffic, you can assign an **or
 
 Although you can use any of the following policies to create default deny for Kubernetes pods, we recommend using the Calico policy, non-namespaced.
 
-- [Create default deny-all ingress and egress Calico policy, non-namespaced](#create-default-deny-all-ingress-and-egress-calico-policy-non-namespaced)
-- [Create default deny-all ingress and egress Calico policy, namespaced](#create-default-deny-all-ingress-and-egress-calico-policy-namespaced)
-- [Create default deny all ingress and egress Kubernetes policy, namespaced](#create-default-deny-all-ingress-and-egress-Kubernetes-policy-namespaced)
+- [Create default deny-all traffic Calico policy, non-namespaced](#create-default-deny-all-traffic-calico-policy-non-namespaced)
+- [Create default deny-all traffic Calico policy, namespaced](#create-default-deny-all-traffic-calico-policy-namespaced)
+- [Create default deny all traffic Kubernetes policy, namespaced](#create-default-deny-all-traffic-Kubernetes-policy-namespaced)
 
-#### Create default deny-all ingress and egress Calico policy, non-namespaced
+#### Create default deny-all traffic Calico policy, non-namespaced
 
-In the following example, we specify a default deny global network policy that applies to workload endpoint resources in all namespaces, and host endpoint resources. The absence of rules means no traffice is allowed by the policy. 
+In the following example, we specify a default deny global network policy that applies to workload endpoint resources in all namespaces, and host endpoint resources. The absence of rules means that no traffice is allowed by the policy. 
 
 ```
 apiVersion: projectcalico.org/v3
@@ -61,7 +61,7 @@ spec:
   - Egress
 ```
 
-#### Create default deny-all ingress and egress Calico policy, namespaced  
+#### Create default deny-all traffic Calico policy, namespaced  
 
 In the following example, we specify a default deny Calico network policy for workloads in the namespace, **engineering**. Because Calico network policy is namespaced, the **order:20** is higher relative to policies in this namespace to ensure it remains in effect at all times. Note that the **selector: all()** is not required, but is used for clarity. 
 
@@ -76,16 +76,14 @@ spec:
   selector: all()
   types:
   - Ingress
-  - Egress
-  ingress:
-  - action: Deny
-  egress:
-  - action: Deny   
+  - Egress  
 ```
 
-#### Create default deny-all ingress and egress Kubernetes policy, namespaced
+#### Create default deny-all traffic Kubernetes policy, namespaced
 
-The following example is a Kubernetes default deny-all ingress and egress network policy. It prevents all traffic to/from all pods in the **policy-demo**namespace, and does not explicitly allow any traffic. Because the default changes when pods are selected by a network policy, the result is: **deny all ingress and egress traffic**. (Unless the traffic is allowed by another network policy).
+The following example is a Kubernetes default deny-all ingress and egress network policy. It prevents all traffic to/from all pods in the **policy-demo** namespace, and does not explicitly allow any traffic. 
+
+Because the default changes when pods are selected by a network policy, the result is: **deny all ingress and egress traffic**. (Unless the traffic is allowed by another network policy).
 
 ```
 kind: NetworkPolicy
