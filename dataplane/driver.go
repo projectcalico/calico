@@ -174,9 +174,9 @@ func StartDataplaneDriver(configParams *config.Config,
 			HealthAggregator:                healthAggregator,
 			DebugSimulateDataplaneHangAfter: configParams.DebugSimulateDataplaneHangAfter,
 			ExternalNodesCidrs:              configParams.ExternalNodesCIDRList,
-			SidecarAccelerationEnabled:      configParams.SidecarAccelerationEnabled,
-			XDPEnabled:                      configParams.XDPEnabled,
-			XDPAllowGeneric:                 configParams.GenericXDPEnabled,
+			SidecarAccelerationEnabled:      false,
+			XDPEnabled:                      false,
+			XDPAllowGeneric:                 false,
 		}
 		intDP := intdataplane.NewIntDataplaneDriver(dpConfig)
 		intDP.Start()
