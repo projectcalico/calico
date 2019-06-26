@@ -271,7 +271,7 @@ var (
 	rttRegexp = regexp.MustCompile(`rtt=(.*) ms`)
 )
 
-func (w *Workload) LatencyTo(ip, port string) time.Duration {
+func (w *Workload) LatencyTo(ip, port string) (time.Duration, string) {
 	if strings.Contains(ip, ":") {
 		ip = fmt.Sprintf("[%s]", ip)
 	}
@@ -296,7 +296,7 @@ func (w *Workload) LatencyTo(ip, port string) time.Duration {
 		rttSum += time.Duration(rttMsec * float64(time.Millisecond))
 	}
 	meanRtt := rttSum / time.Duration(len(lines))
-	return meanRtt
+	return meanRtt, out
 }
 
 type SideService struct {
