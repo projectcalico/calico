@@ -48,6 +48,8 @@ toc:
     path: /security/comms/secure-metrics
 - title: Defend against DoS attacks
   path: /security/defend-dos-attack
+- title: Enable default deny for Kubernetes pods
+  path: /security/kubernetes-default-deny  
 - title: Apply policy to Kubernetes node ports
   path: /security/kubernetes-node-ports
 - title: Using HTTP methods and paths in policy rules
