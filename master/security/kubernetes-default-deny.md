@@ -108,5 +108,5 @@ spec:
 
 ### Above and beyond
 
-- [Network Policy]({{site.baseurl}}/{{page.version}}/reference/resources/networkpolicy) 
+- [Network Policy]({{site.baseurl}}/{{page.version}}/reference/resources/globalnetworkpolicy) 
 - [Global Network Policy]({{site.baseurl}}/{{page.version}}/reference/resources/networkpolicy)
