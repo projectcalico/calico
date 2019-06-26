@@ -100,6 +100,8 @@ The Kubernetes API datastore driver reads its configuration from Kubernetes-prov
 | Configuration parameter | Environment variable       | Description  | Schema |
 | ------------------------|----------------------------| ------------ | ------ |
 | `KubeNodePortRanges`    | `FELIX_KUBENODEPORTRANGES` | A list of port ranges that Felix should treat as Kubernetes node ports.  Only when `kube-proxy` is configured to use IPVS mode:  Felix assumes that traffic arriving at the host one one of these ports will ultimately be forwarded instead of being terminated by a host process.  [Default: `30000:32767`] <a id="ipvs-portranges"></a>  | Comma-delimited list of `<min>:<max>` port ranges or single ports. |
+| `KubeServiceHost`       | `KUBERNETES_SERVICE_HOST`  | IP address of the kubernetes service | string |
+| `KubeServicePort`       | `KUBERNETES_SERVICE_PORT`  | Port number on which the kubernetes service is listening | int |
 
 
 > **Note**: <a id="ipvs-bits"></a> When using {{site.prodname}} with Kubernetes' `kube-proxy` in IPVS mode, {{site.prodname}} uses additional iptables mark bits to store an ID for each local {{site.prodname}} endpoint.
