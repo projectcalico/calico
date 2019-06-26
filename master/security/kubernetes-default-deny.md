@@ -47,7 +47,7 @@ Although you can use any of the following policies to create default deny for Ku
 
 #### Create default deny-all ingress and egress Calico policy, non-namespaced
 
-In the following example, we specify a default deny global network policy that applies to workload endpoint resources in all namespaces, and host endpoint resources.  The **order: 500** is set high to ensure that allow traffic policies do not supersede it. 
+In the following example, we specify a default deny global network policy that applies to workload endpoint resources in all namespaces, and host endpoint resources. The absence of rules means no traffice is allowed by the policy. 
 
 ```
 apiVersion: projectcalico.org/v3
@@ -55,15 +55,10 @@ kind: GlobalNetworkPolicy
 metadata:
   name: default-deny
 spec:
-  order: 500
   selector: all()
   types:
   - Ingress
   - Egress
-  ingress:
-  - action: Deny
-  egress:
-  - action: Deny
 ```
 
 #### Create default deny-all ingress and egress Calico policy, namespaced  
