@@ -81,7 +81,7 @@ spec:
 
 #### Create default deny-all traffic Kubernetes policy, namespaced
 
-The following example is a Kubernetes default deny-all ingress and egress network policy. It prevents all traffic to/from all pods in the **policy-demo** namespace, and does not explicitly allow any traffic. 
+The following example is a Kubernetes default deny-all ingress and egress network policy. It prevents all traffic to/from all pods in the default namespace, and does not explicitly allow any traffic. 
 
 Because the default changes when pods are selected by a network policy, the result is: **deny all ingress and egress traffic**. (Unless the traffic is allowed by another network policy).
 
