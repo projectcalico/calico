@@ -31,11 +31,13 @@ For other endpoint types (VMs, host interfaces), **Calico global network policy 
 
 #### Secure resources everywhere
 
-We recommend creating default deny-all policy using **Calico global network policy**. It applies to both workloads (VMs and containers) and hosts (computers that run the hypervisor for VMs, or container runtime for containers). Using a Calico global network policy supports a conservative security stance for protecting resources.
+We recommend creating default deny policy using **Calico global network policy**. It applies to both workloads (VMs and containers) and hosts (computers that run the hypervisor for VMs, or container runtime for containers). Using a Calico global network policy supports a conservative security stance for protecting resources.
 
-#### Best practice: create implicit deny-all policy
+#### Best practice: implicit default deny policy
 
-We recommend that you create a "plain vanilla" deny-all Calico network policy that does not include any other deny rules. Why? The absence of other deny rules ensures that the deny-all policy is implicitly "first/always". If you add other deny rules, you must add an **order number** to ensure the policy always remains in affect (by virtue of being the highest order number across all of your ordered policies). An **implicit deny-all policy** is not only easier, but avoids mistakes. 
+We recommend that you create a "plain vanilla" default deny Calico network policy that does not include other deny rules. Why? The absence of other deny rules ensures that the default deny policy is implicitly "first/always". 
+
+If you add other deny rules, you must also add an **order number** to ensure the policy always remains in affect (by virtue of being the highest order number across all of your ordered policies). An **implicit default deny policy** is not only easier, but avoids mistakes. 
 
 ### How to
 
@@ -47,7 +49,7 @@ Although you can use any of the following policies to create default deny for Ku
 
 #### Create default deny-all traffic Calico policy, non-namespaced
 
-In the following example, we specify a default deny **GlobalNetworkPolicy** (recommended) that applies to workload endpoint resources in all namespaces, and to host endpoint resources. It is an implicit deny-all policy without rules; it will always be in effect, regardless of the ordering scheme that you may specify in normal policies. 
+In the following example, we specify a default deny **GlobalNetworkPolicy** (recommended) that denies all traffic to workload endpoint resources in all namespaces, and to host endpoint resources. It is an implicit default deny policy without rules; it will always be in effect, regardless of the ordering scheme that you may specify in normal policies. 
 
 ```
 apiVersion: projectcalico.org/v3
@@ -63,7 +65,7 @@ spec:
 
 #### Create default deny-all traffic Calico policy, namespaced  
 
-In the following example, we specify a default deny **NetworkPolicy** for workloads in the namespace, **engineering**. It is an implicit deny-all policy without rules; it will always be in effect, regardless of the ordering scheme that you may specify in normal policies. Note that the **selector: all()** is not required, but is used for clarity. 
+In the following example, we specify a default deny **NetworkPolicy** that denies all traffic for workloads in the namespace, **engineering**. It is an implicit default deny policy without rules; it will always be in effect, regardless of the ordering scheme that you may specify in normal policies. Note that the **selector: all()** is not required, but is used for clarity. 
 
 ```
 apiVersion: projectcalico.org/v3
@@ -80,7 +82,7 @@ spec:
 
 #### Create default deny-all traffic Kubernetes policy, namespaced
 
-The following example is a Kubernetes default deny-all traffic network policy. It prevents all traffic to/from all pods in the default namespace, and does not explicitly allow any traffic. 
+The following example is a Kubernetes default deny network policy. It prevents all traffic to/from all pods in the default namespace, and does not explicitly allow any traffic. 
 
 Because the default changes when pods are selected by a network policy, the result is: **deny all ingress and egress traffic**. (Unless the traffic is allowed by another network policy).
 
