@@ -20,7 +20,7 @@ This how-to guide uses the following Calico features:
 
 #### Default deny/allow behavior
 
-Default allow means all traffic is allowed by default, unless otherwise specified. Default deny means all traffic is denied by default, unless explicitly allowed. **Kubernetes pods are default allow, unless network policy is defined to specify otherwise**.
+**Default allow** means all traffic is allowed by default, unless otherwise specified. **Default deny** means all traffic is denied by default, unless explicitly allowed. **Kubernetes pods are default allow**, unless network policy is defined to specify otherwise.
 
 For compatibility with Kubernetes, **Calico network policy** enforcement follows the standard convention for Kubernetes pods:
 - If no network policies apply to a pod, then all traffic to/from that pod is allowed.
@@ -31,11 +31,11 @@ For other endpoint types (VMs, host interfaces), **Calico global network policy 
 
 #### Secure resources everywhere
 
-We recommend creating default deny using **Calico global network policy**, which is non-namespaced. It applies to both workloads (VMs and containers) and hosts (computers that run the hypervisor for VMs, or container runtime for containers). This supports a conservative security stance towards protecting resources.
+We recommend creating default deny-all policy using **Calico global network policy**. It applies to both workloads (VMs and containers) and hosts (computers that run the hypervisor for VMs, or container runtime for containers). Using a Calico global network policy supports a conservative security stance for protecting resources.
 
-#### Calico network policy: order matters
+#### Best practice: create implicit deny-all policy
 
-When you create Calico network policies to allow traffic, you can assign an **order** number that indicates the order you want policy applied relative to other policies. To ensure that your Calico default deny policy remains in effect at all times, assign a significantly higher number than regular policies that allow traffic.
+We recommend that you create a "plain vanilla" deny-all Calico network policy that does not include any other deny rules. Why? The absence of other deny rules ensures that the deny-all policy is implicitly "first/always". If you add other deny rules, you must add an **order number** to ensure the policy always remains in affect (by virtue of being the highest order number across all of your ordered policies). An **implicit deny-all policy** is not only easier, but avoids mistakes. 
 
 ### How to
 
@@ -47,7 +47,7 @@ Although you can use any of the following policies to create default deny for Ku
 
 #### Create default deny-all traffic Calico policy, non-namespaced
 
-In the following example, we specify a default deny global network policy that applies to workload endpoint resources in all namespaces, and host endpoint resources. The absence of rules means that no traffice is allowed by the policy. 
+In the following example, we specify a default deny **GlobalNetworkPolicy** (recommended) that applies to workload endpoint resources in all namespaces, and to host endpoint resources. It is an implicit deny-all policy without rules; it will always be in effect, regardless of the ordering scheme that you may specify in normal policies. 
 
 ```
 apiVersion: projectcalico.org/v3
@@ -63,7 +63,7 @@ spec:
 
 #### Create default deny-all traffic Calico policy, namespaced  
 
-In the following example, we specify a default deny Calico network policy for workloads in the namespace, **engineering**. Because Calico network policy is namespaced, the **order:20** is higher relative to policies in this namespace to ensure it remains in effect at all times. Note that the **selector: all()** is not required, but is used for clarity. 
+In the following example, we specify a default deny **NetworkPolicy** for workloads in the namespace, **engineering**. It is an implicit deny-all policy without rules; it will always be in effect, regardless of the ordering scheme that you may specify in normal policies. Note that the **selector: all()** is not required, but is used for clarity. 
 
 ```
 apiVersion: projectcalico.org/v3
@@ -72,7 +72,6 @@ metadata:
   name: default-deny
   namespace: engineering
 spec:
-  order: 20
   selector: all()
   types:
   - Ingress
@@ -81,7 +80,7 @@ spec:
 
 #### Create default deny-all traffic Kubernetes policy, namespaced
 
-The following example is a Kubernetes default deny-all ingress and egress network policy. It prevents all traffic to/from all pods in the default namespace, and does not explicitly allow any traffic. 
+The following example is a Kubernetes default deny-all traffic network policy. It prevents all traffic to/from all pods in the default namespace, and does not explicitly allow any traffic. 
 
 Because the default changes when pods are selected by a network policy, the result is: **deny all ingress and egress traffic**. (Unless the traffic is allowed by another network policy).
 
@@ -100,5 +99,5 @@ spec:
 
 ### Above and beyond
 
-- [Network Policy]({{site.baseurl}}/{{page.version}}/reference/resources/globalnetworkpolicy) 
-- [Global Network Policy]({{site.baseurl}}/{{page.version}}/reference/resources/networkpolicy)
+- [Network Policy]({{site.baseurl}}/{{page.version}}/reference/resources/networkpolicy) 
+- [Global Network Policy]({{site.baseurl}}/{{page.version}}/reference/resources/globalnetworkpolicy)
