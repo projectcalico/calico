@@ -1,20 +1,19 @@
 #include <linux/bpf.h>
-#include <iproute2/bpf_elf.h>
 
 #include "sockops.h"
 
-__section("sk_msg")
+__attribute__(section("sk_msg"))
 int calico_sk_msg(struct sk_msg_md *msg)
 {
 	struct sock_key key = {};
 	__u32 sip4, dip4, sport, dport;
-	__u64 flags = BPF_F_INGRESS;
 	int err;
 
 	dip4 = msg->remote_ip4;
 	sip4 = msg->local_ip4;
 
-	sport = bpf_htonl(msg->local_port) >> 16;
+	// convert to network byte-order
+	sport = __builtin_bswap32(msg->local_port) >> 16;
 
 	// The verifier doesn't seem to like reading something different than
 	// 32 bits for these fields:
@@ -48,11 +47,11 @@ int calico_sk_msg(struct sk_msg_md *msg)
 		key.envoy_side = 1;
 	}
 
-	err = msg_redirect_hash(msg, &calico_sock_map, &key, flags);
+	err = bpf_msg_redirect_hash(msg, &calico_sock_map, &key, BPF_INGRESS);
 
 	// If the packet couldn't be redirected, pass it to the rest of the
 	// stack.
 	return SK_PASS;
 }
 
-char ____license[] __section("license")  = "Apache-2.0";
+char ____license[] __attribute__((section("license"))  = "Apache-2.0";
