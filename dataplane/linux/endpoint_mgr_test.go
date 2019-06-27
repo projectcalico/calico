@@ -135,11 +135,19 @@ func chainsForIfaces(ifaceMetadata []string,
 	epMarkMapper rules.EndpointMarkMapper,
 	host bool,
 	tableKind string) []*iptables.Chain {
+	const (
+		ProtoUDP  = 17
+		ProtoIPIP = 4
+		VXLANPort = 4789
+		VXLANVNI  = 4096
+	)
+
 	log.WithFields(log.Fields{
 		"ifaces":    ifaceMetadata,
 		"host":      host,
 		"tableKind": tableKind,
 	}).Debug("Calculating chains for interface")
+
 	chains := []*iptables.Chain{}
 	dispatchOut := []iptables.Rule{}
 	dispatchIn := []iptables.Rule{}
@@ -153,6 +161,20 @@ func chainsForIfaces(ifaceMetadata []string,
 	epMarkFromName := "cali-from-endpoint-mark"
 	epMarkSetOnePrefix := "cali-sm-"
 	epmarkFromPrefix := outPrefix[:6]
+	dropEncapRules := []iptables.Rule{
+		{
+			Match: iptables.Match().ProtocolNum(ProtoUDP).
+				DestPorts(uint16(VXLANPort)).
+				VXLANVNI(uint32(VXLANVNI)),
+			Action:  iptables.DropAction{},
+			Comment: "Drop VXLAN encapped packets originating in pods",
+		},
+		{
+			Match:   iptables.Match().ProtocolNum(ProtoIPIP),
+			Action:  iptables.DropAction{},
+			Comment: "Drop IPinIP encapped packets originating in pods",
+		},
+	}
 
 	if host {
 		hostOrWlLetter = "h"
@@ -235,6 +257,9 @@ func chainsForIfaces(ifaceMetadata []string,
 			Match:  iptables.Match(),
 			Action: iptables.ClearMarkAction{Mark: 8},
 		})
+		if !host {
+			outRules = append(outRules, dropEncapRules...)
+		}
 		if egress && polName != "" && tableKind == ifaceKind {
 			outRules = append(outRules, iptables.Rule{
 				Match:   iptables.Match(),
@@ -606,6 +631,8 @@ func endpointManagerTests(ipVersion uint8) func() {
 				IptablesMarkNonCaliEndpoint: 0x0100,
 				KubeIPVSSupportEnabled:      true,
 				WorkloadIfacePrefixes:       []string{"cali", "tap"},
+				VXLANPort:                   4789,
+				VXLANVNI:                    4096,
 			}
 			eth0Addrs = set.New()
 			eth0Addrs.Add(ipv4)

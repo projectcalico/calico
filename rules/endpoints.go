@@ -22,6 +22,11 @@ import (
 	"github.com/projectcalico/felix/proto"
 )
 
+const (
+	dropEncap     = true
+	dontDropEncap = false
+)
+
 func (r *DefaultRuleRenderer) WorkloadEndpointToIptablesChains(
 	ifaceName string,
 	epMarkMapper EndpointMarkMapper,
@@ -44,6 +49,7 @@ func (r *DefaultRuleRenderer) WorkloadEndpointToIptablesChains(
 			chainTypeNormal,
 			adminUp,
 			r.filterAllowAction, // Workload endpoint chains are only used in the filter table
+			dontDropEncap,
 		),
 		// Chain for traffic _from_ the endpoint.
 		r.endpointIptablesChain(
@@ -57,6 +63,7 @@ func (r *DefaultRuleRenderer) WorkloadEndpointToIptablesChains(
 			chainTypeNormal,
 			adminUp,
 			r.filterAllowAction, // Workload endpoint chains are only used in the filter table
+			dropEncap,
 		),
 	)
 
@@ -98,6 +105,7 @@ func (r *DefaultRuleRenderer) HostEndpointToFilterChains(
 			chainTypeNormal,
 			true, // Host endpoints are always admin up.
 			r.filterAllowAction,
+			dontDropEncap,
 		),
 		// Chain for input traffic _from_ the endpoint.
 		r.endpointIptablesChain(
@@ -111,6 +119,7 @@ func (r *DefaultRuleRenderer) HostEndpointToFilterChains(
 			chainTypeNormal,
 			true, // Host endpoints are always admin up.
 			r.filterAllowAction,
+			dontDropEncap,
 		),
 		// Chain for forward traffic _to_ the endpoint.
 		r.endpointIptablesChain(
@@ -124,6 +133,7 @@ func (r *DefaultRuleRenderer) HostEndpointToFilterChains(
 			chainTypeForward,
 			true, // Host endpoints are always admin up.
 			r.filterAllowAction,
+			dontDropEncap,
 		),
 		// Chain for forward traffic _from_ the endpoint.
 		r.endpointIptablesChain(
@@ -137,6 +147,7 @@ func (r *DefaultRuleRenderer) HostEndpointToFilterChains(
 			chainTypeForward,
 			true, // Host endpoints are always admin up.
 			r.filterAllowAction,
+			dontDropEncap,
 		),
 	)
 
@@ -173,6 +184,7 @@ func (r *DefaultRuleRenderer) HostEndpointToRawChains(
 			chainTypeUntracked,
 			true, // Host endpoints are always admin up.
 			AcceptAction{},
+			dontDropEncap,
 		),
 		// Chain for traffic _from_ the endpoint.
 		r.endpointIptablesChain(
@@ -186,6 +198,7 @@ func (r *DefaultRuleRenderer) HostEndpointToRawChains(
 			chainTypeUntracked,
 			true, // Host endpoints are always admin up.
 			AcceptAction{},
+			dontDropEncap,
 		),
 	}
 }
@@ -209,6 +222,7 @@ func (r *DefaultRuleRenderer) HostEndpointToMangleChains(
 			chainTypePreDNAT,
 			true, // Host endpoints are always admin up.
 			r.mangleAllowAction,
+			dontDropEncap,
 		),
 	}
 }
@@ -255,6 +269,7 @@ func (r *DefaultRuleRenderer) endpointIptablesChain(
 	chainType endpointChainType,
 	adminUp bool,
 	allowAction Action,
+	dropEncap bool,
 ) *Chain {
 	rules := []Rule{}
 	chainName := EndpointChainName(endpointPrefix, name)
@@ -293,6 +308,21 @@ func (r *DefaultRuleRenderer) endpointIptablesChain(
 		},
 	})
 
+	if dropEncap {
+		rules = append(rules, Rule{
+			Match: Match().ProtocolNum(ProtoUDP).
+				DestPorts(uint16(r.Config.VXLANPort)).
+				VXLANVNI(uint32(r.Config.VXLANVNI)),
+			Action:  DropAction{},
+			Comment: "Drop VXLAN encapped packets originating in pods",
+		})
+		rules = append(rules, Rule{
+			Match:   Match().ProtocolNum(ProtoIPIP),
+			Action:  DropAction{},
+			Comment: "Drop IPinIP encapped packets originating in pods",
+		})
+	}
+
 	if len(policyNames) > 0 {
 		// Clear the "pass" mark.  If a policy sets that mark, we'll skip the rest of the policies and
 		// continue processing the profiles, if there are any.
@@ -309,6 +339,7 @@ func (r *DefaultRuleRenderer) endpointIptablesChain(
 				policyPrefix,
 				&proto.PolicyID{Name: polID},
 			)
+
 			// If a previous policy didn't set the "pass" mark, jump to the policy.
 			rules = append(rules, Rule{
 				Match:  Match().MarkClear(r.IptablesMarkPass),
