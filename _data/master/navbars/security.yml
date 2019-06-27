@@ -50,7 +50,9 @@ toc:
   path: /security/defend-dos-attack
 - title: Apply policy to Kubernetes node ports
   path: /security/kubernetes-node-ports
+- title: Enforce network policy using Istio
+  path: /security/enforce-policy-istio
 - title: Using HTTP methods and paths in policy rules
   path: /security/http-methods 
 - title: Enable extreme high-connection workloads
-  path: /security/high-connection-workloads   
+  path: /security/high-connection-workloads
