@@ -8,7 +8,7 @@ Change the default for Kubernetes pods from allowing all traffic, to denying all
 
 ### Value
 
-A **default deny** network policy provides an enhanced security posture -- so workloads without policy (or incorrect policy) do not allow traffic until appropriate network policy is defined.
+A **default deny** network policy provides an enhanced security posture -- so any workloads without network policy are isolated until appropriate network policy is defined.
 
 ### Features
 
