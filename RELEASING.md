@@ -305,9 +305,6 @@ Perform the following steps on a local branch off of the latest master.
    ```
 1. Merge the PR. This will cause the live docs site to be updated (after a few minutes).
 
-   Follow the steps on screen, which will instruct you to upload
-   the `release-<VERSION>.tgz` artifact to the GitHub release.
-
 # Release notes
 
 Release notes for a Calico release contain notable changes across Calico repositories. To write
