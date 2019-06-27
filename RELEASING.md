@@ -291,10 +291,7 @@ Perform the following steps on a local branch off of the latest master.
 
 1. Push your branch and open a pull request. Get it reviewed and wait for it to pass CI.
 
-   Once reviewed and CI is passing, merge the PR. This will cause the
-   live docs site to be updated (after a few minutes).
-   
-1. Run the following on your local branch in order to build and publish the release
+1. Once reviewed and CI is passing, run the following on your local branch in order to build and publish the release
    at the newly created commit.
 
    ```
@@ -306,6 +303,7 @@ Perform the following steps on a local branch off of the latest master.
    ```
    make RELEASE_STREAM=vX.Y release-publish
    ```
+1. Merge the PR. This will cause the live docs site to be updated (after a few minutes).
 
    Follow the steps on screen, which will instruct you to upload
    the `release-<VERSION>.tgz` artifact to the GitHub release.
