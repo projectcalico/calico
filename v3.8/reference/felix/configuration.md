@@ -59,9 +59,9 @@ The full list of parameters which can be set is as follows.
 | `VXLANPort`                       | `FELIX_VXLANPORT`                       | The UDP port to use for VXLAN. [Default: `4789`] | int |
 | `VXLANTunnelMACAddr`              |                                         | MAC address of the VXLAN tunnel. This is system configured and should not be updated manually. | string |
 | `VXLANVNI`                        | `FELIX_VXLANVNI`                        | The virtual network ID to use for VXLAN. [Default: `4096`] | int |
-| `TyphaAddr`			    | `FELIX_TYPHAADDR`			      | IPv4 address of the Typha service used to connect to it. | string |
-| `TyphaK8sServiceName`		    | `FELIX_TYPHAK8SSERVICENAME`	      | Name of the Typha kubernetes service | string |
-| `Ipv6Support`			    | `FELIX_IPV6SUPPORT`		      | Set this to True when IPv6 is supported. [Default: `False`] | boolean |
+| `TyphaAddr`                      | `FELIX_TYPHAADDR`                       | IPv4 address at which Felix should connect to Typha. [Default: none] | string |
+| `TyphaK8sServiceName`                    | `FELIX_TYPHAK8SSERVICENAME`             | Name of the Typha Kubernetes service | string |
+| `Ipv6Support`                            | `FELIX_IPV6SUPPORT`                     | Enable {{site.prodname}} networking and security for IPv6 traffic as well as for IPv4. | boolean |
 
 #### etcd datastore configuration
 
@@ -107,8 +107,8 @@ The Kubernetes API datastore driver reads its configuration from Kubernetes-prov
 | Configuration parameter | Environment variable       | Description  | Schema |
 | ------------------------|----------------------------| ------------ | ------ |
 | `KubeNodePortRanges`    | `FELIX_KUBENODEPORTRANGES` | A list of port ranges that Felix should treat as Kubernetes node ports.  Only when `kube-proxy` is configured to use IPVS mode:  Felix assumes that traffic arriving at the host one one of these ports will ultimately be forwarded instead of being terminated by a host process.  [Default: `30000:32767`] <a id="ipvs-portranges"></a>  | Comma-delimited list of `<min>:<max>` port ranges or single ports. |
-| `KubeServiceHost`       | `KUBERNETES_SERVICE_HOST`  | IP address of the kubernetes service | string |
-| `KubeServicePort`       | `KUBERNETES_SERVICE_PORT`  | Port number on which the kubernetes service is listening | int |
+| `KubeServiceHost`       | `KUBERNETES_SERVICE_HOST`  | IP address of the Kubernetes service | string |
+| `KubeServicePort`       | `KUBERNETES_SERVICE_PORT`  | Port number on which the Kubernetes service is listening | int |
 
 
 > **Note**: <a id="ipvs-bits"></a> When using {{site.prodname}} with Kubernetes' `kube-proxy` in IPVS mode, {{site.prodname}} uses additional iptables mark bits to store an ID for each local {{site.prodname}} endpoint.
