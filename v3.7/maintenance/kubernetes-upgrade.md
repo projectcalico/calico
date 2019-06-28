@@ -83,12 +83,12 @@ procedure varies by datastore type.
 
    **{{site.prodname}} for policy and networking**
    ```bash
-   curl {{site.url}}/{{page.version}}/calico-etcd.yaml -O
+   curl {{site.url}}/{{page.version}}/manifests/calico-etcd.yaml -O
    ```
 
    **{{site.prodname}} for policy and flannel for networking**
    ```bash
-   curl {{site.url}}/{{page.version}}/canal-etcd.yaml -O
+   curl {{site.url}}/{{page.version}}/manifests/canal-etcd.yaml -O
    ```
 
    > **Note**: You must must manually apply the changes you made to the manifest
