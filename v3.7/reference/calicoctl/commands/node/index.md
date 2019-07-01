@@ -1,6 +1,5 @@
 ---
 title: calicoctl node
-redirect_from: latest/reference/calicoctl/commands/node/index
 canonical_url: 'https://docs.projectcalico.org/v3.7/reference/calicoctl/commands/node/index'
 ---
 

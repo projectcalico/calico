@@ -1,5 +1,6 @@
 ---
 title: System requirements
+redirect_from: latest/getting-started/openshift/requirements
 canonical_url: 'https://docs.projectcalico.org/v3.7/getting-started/openshift/requirements'
 ---
 

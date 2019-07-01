@@ -1,6 +1,5 @@
 ---
 title: Configuring calico/node
-redirect_from: latest/reference/node/configuration
 canonical_url: 'https://docs.projectcalico.org/v3.7/reference/node/configuration'
 ---
 
