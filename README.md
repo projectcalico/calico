@@ -8,8 +8,13 @@ master of networking-calico, and publishing the RPM packages.
 
 -  To build Debs: `make deb`
 
--  To publish RPMs: `./utils/publish-rpms.sh` (with a gcloud identity
-   that permits logging into binaries.projectcalico.org)
+-  To publish RPMs: `./utils/publish-rpms.sh`
+
+   -  This is to the 'master' repo; set REPO_NAME for a different
+      repo, e.g. `REPO_NAME=calico-3.8 ./utils/publish-rpms.sh`
+
+   -  Also needs GCLOUD_ARGS and HOST set to indicate the RPM host,
+      and a gcloud identity that permits logging into that host.
 
 Still to do:
 
