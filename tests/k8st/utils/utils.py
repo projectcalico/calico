@@ -14,7 +14,10 @@
 
 import datetime
 import functools
+import json
 import logging
+import random
+import string
 import subprocess
 import time
 
@@ -171,3 +174,15 @@ def kubectl(args, logerr=True, allow_fail=False):
 def calicoctl(args, allow_fail=False):
     return kubectl("exec -i -n kube-system calicoctl -- /calicoctl " + args,
                    allow_fail=allow_fail)
+
+
+def calicoctl_apply_dict(object_dict):
+    calicoctl("""apply -f - << EOF
+%s
+EOF
+""" % json.dumps(object_dict))
+
+
+def generate_unique_id(length, prefix=""):
+    random_string = ''.join(random.choice(string.ascii_lowercase + string.digits) for _ in range(length))
+    return "%s-%s" % (prefix, random_string)
