@@ -1,6 +1,5 @@
 ---
 title: About Calico
-redirect_from: latest/introduction/index
 canonical_url: 'https://docs.projectcalico.org/v3.7/introduction/index'
 ---
 ## What is {{site.prodname}}?

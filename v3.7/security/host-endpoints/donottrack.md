@@ -1,6 +1,5 @@
 ---
 title: Untracked policy
-redirect_from: latest/security/host-endpoints/donottrack
 canonical_url: 'https://docs.projectcalico.org/v3.7/security/host-endpoints/donottrack'
 ---
 

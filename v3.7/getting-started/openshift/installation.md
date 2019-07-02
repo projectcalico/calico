@@ -1,6 +1,5 @@
 ---
 title: Installation
-redirect_from: latest/getting-started/openshift/installation
 canonical_url: 'https://docs.projectcalico.org/v3.7/getting-started/openshift/installation'
 ---
 

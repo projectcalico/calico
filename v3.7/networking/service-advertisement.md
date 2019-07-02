@@ -1,6 +1,5 @@
 ---
 title: Advertising Kubernetes services over BGP
-redirect_from: latest/networking/service-advertisement
 canonical_url: 'https://docs.projectcalico.org/v3.7/networking/service-advertisement'
 ---
 

@@ -1,5 +1,6 @@
 ---
 title: Setting up a development machine
+redirect_from: latest/networking/openstack/dev-machine-setup
 canonical_url: 'https://docs.projectcalico.org/v3.7/networking/openstack/dev-machine-setup'
 ---
 
