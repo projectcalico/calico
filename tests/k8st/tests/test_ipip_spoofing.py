@@ -39,21 +39,16 @@ class TestIPIPSpoof(TestBase):
         self.ns_name = generate_unique_id(5, prefix="spoof")
         self.create_namespace(self.ns_name)
         # Create two client pods that live for the duration of the
-        # test.  We will use 'kubectl exec' to try wgets from these at
-        # particular times.
+        # test.  We will use 'kubectl exec' to try sending/receiving
+        # from these at particular times.
         #
-        # We do it this way - instead of one-shot pods that are
-        # created, try wget, and then exit - because it takes a
+        # We do it this way because it takes a
         # relatively long time (7 seconds?) in this test setup for
         # Calico routing and policy to be set up correctly for a newly
-        # created pod.  In particular it's possible that connection
-        # from a just-created pod will fail because that pod's IP has
-        # not yet propagated to the IP set for the ingress policy on
-        # the server pod - which can confuse test code that is
-        # expecting connection failure for some other reason.
+        # created pod.
         kubectl("run --generator=run-pod/v1 "
                 "access "
-                "-n %s "                 
+                "-n %s "
                 "--image busybox "
                 "--overrides='{\"spec\": {\"nodeName\":\"kube-node-1\"}}' "
                 "--command /bin/sh -- -c \"nc -l -u -p 5000 &> /root/snoop.txt\"" % self.ns_name)
@@ -83,7 +78,7 @@ class TestIPIPSpoof(TestBase):
                 " pods -l k8s-app=calico-node -n kube-system")
 
     def test_simple_ipip_spoof(self):
-        #with DiagsCollector():
+        with DiagsCollector():
             # Change pool to use IPIP
             default_pool = json.loads(calicoctl("get ippool default-ipv4-ippool -o json"))
             default_pool["spec"]["vxlanMode"] = "Never"
@@ -100,16 +95,14 @@ class TestIPIPSpoof(TestBase):
 
             # clear conntrack table on all hosts
             self.clear_conntrack()
-            # test connectivity works directly
+            # test connectivity works pod-pod
             retry_until_success(self.send_and_check, function_args=["ipip-normal", remote_pod_ip])
 
             # clear conntrack table on all hosts
             self.clear_conntrack()
 
             def send_and_check_ipip_spoof():
-                # send spoofed packet
                 self.send_spoofed_ipip_packet(self.ns_name, "scapy", "10.192.0.3", remote_pod_ip, "ipip-spoofed")
-                # check listener did not get packet
                 kubectl("exec -t -n %s access grep -- ipip-spoofed /root/snoop.txt" % self.ns_name)
 
             def assert_cannot_spoof_ipip():
@@ -122,10 +115,11 @@ class TestIPIPSpoof(TestBase):
                     print("ERROR - succeeded in sending spoofed IPIP packet")
                     raise ConnectionError
 
+            # test connectivity does NOT work when spoofing
             retry_until_success(assert_cannot_spoof_ipip)
 
     def test_simple_vxlan_spoof(self):
-        #with DiagsCollector():
+        with DiagsCollector():
             # Change pool to use VXLAN
             default_pool = json.loads(calicoctl("get ippool default-ipv4-ippool -o json"))
             default_pool["spec"]["vxlanMode"] = "Always"
@@ -139,19 +133,16 @@ class TestIPIPSpoof(TestBase):
             remote_pod_ip = retry_until_success(self.get_pod_ip, function_args=["access", self.ns_name])
             print(remote_pod_ip)
 
-            # test pod connectivity works normally
             # clear conntrack table on all hosts
             self.clear_conntrack()
+            # test connectivity works pod-pod
             retry_until_success(self.send_and_check, function_args=["vxlan-normal", remote_pod_ip])
 
-            # vxlan case : send spoofed
             # clear conntrack table on all hosts
             self.clear_conntrack()
 
             def send_and_check_vxlan_spoof():
-                # send spoofed packet
                 self.send_spoofed_vxlan_packet(self.ns_name, "scapy", "10.192.0.3", remote_pod_ip, "vxlan-spoofed")
-                # check listener did not get packet
                 kubectl("exec -t -n %s access grep -- vxlan-spoofed /root/snoop.txt" % self.ns_name)
 
             def assert_cannot_spoof_vxlan():
@@ -164,12 +155,11 @@ class TestIPIPSpoof(TestBase):
                     print("ERROR - succeeded in sending spoofed VXLAN packet")
                     raise ConnectionError
 
+            # test connectivity does NOT work when spoofing
             retry_until_success(assert_cannot_spoof_vxlan)
 
     def send_and_check(self, payload, remote_pod_ip):
-        # send packet.
         self.send_packet(self.ns_name, "scapy", remote_pod_ip, payload)
-        # check listener got packet
         kubectl("exec -t -n %s access grep -- %s /root/snoop.txt" % (self.ns_name, payload))
 
     @staticmethod
@@ -187,11 +177,11 @@ class TestIPIPSpoof(TestBase):
     def send_packet(ns_name, name, remote_pod_ip, message):
         try:
             kubectl("exec " + name + " -ti -n %s -- "
-                    "scapy << EOF\n"
-                    "send("
-                    "IP(dst='%s')/"
-                    "UDP(dport=5000, sport=5000)/"
-                    "Raw(load='%s'))\n" % (ns_name, remote_pod_ip, message))
+                                     "scapy << EOF\n"
+                                     "send("
+                                     "IP(dst='%s')/"
+                                     "UDP(dport=5000, sport=5000)/"
+                                     "Raw(load='%s'))\n" % (ns_name, remote_pod_ip, message))
         except subprocess.CalledProcessError:
             _log.exception("Failed to send from scapy")
             return False
@@ -202,12 +192,12 @@ class TestIPIPSpoof(TestBase):
     def send_spoofed_ipip_packet(ns_name, name, remote_node_ip, remote_pod_ip, message):
         try:
             kubectl("exec " + name + " -ti -n %s -- "
-                    "scapy << EOF\n"
-                    "send("
-                    "IP(dst='%s')/"
-                    "IP(dst='%s')/"
-                    "UDP(dport=5000, sport=5000)/"
-                    "Raw(load='%s'))\n" % (ns_name, remote_node_ip, remote_pod_ip, message))
+                                     "scapy << EOF\n"
+                                     "send("
+                                     "IP(dst='%s')/"
+                                     "IP(dst='%s')/"
+                                     "UDP(dport=5000, sport=5000)/"
+                                     "Raw(load='%s'))\n" % (ns_name, remote_node_ip, remote_pod_ip, message))
         except subprocess.CalledProcessError:
             _log.exception("Failed to send spoofed IPIP packet from scapy")
             return False
@@ -218,15 +208,15 @@ class TestIPIPSpoof(TestBase):
     def send_spoofed_vxlan_packet(ns_name, name, remote_node_ip, remote_pod_ip, message):
         try:
             kubectl("exec " + name + " -ti -n %s -- "
-                    "scapy << EOF\n"
-                    "send("
-                    "IP(dst='%s')/"
-                    "UDP(dport=4789)/"
-                    "VXLAN(vni=4096)/"
-                    "Ether()/"              
-                    "IP(dst='%s')/"
-                    "UDP(dport=5000, sport=5000)/"
-                    "Raw(load='%s'))\n" % (ns_name, remote_node_ip, remote_pod_ip, message))
+                                     "scapy << EOF\n"
+                                     "send("
+                                     "IP(dst='%s')/"
+                                     "UDP(dport=4789)/"
+                                     "VXLAN(vni=4096)/"
+                                     "Ether()/"
+                                     "IP(dst='%s')/"
+                                     "UDP(dport=5000, sport=5000)/"
+                                     "Raw(load='%s'))\n" % (ns_name, remote_node_ip, remote_pod_ip, message))
         except subprocess.CalledProcessError:
             _log.exception("Failed to send spoofed VXLAN packet from scapy")
             return False
