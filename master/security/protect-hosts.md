@@ -60,7 +60,7 @@ On hosts that you want to secure with network policy, [install Calico]({{site.ba
 ### How to
 
 - [Avoid accidentally cutting all host connectivity ](#avoid-accidentally-cutting-all-host-connectivity)
-- [Create policy to restrict host traffic](#create-policy-to-restrict-host-traffic)
+- [Use policy to restrict host traffic](#use-policy-to-restrict-host-traffic)
 - [Control default behavior of workload endpoint to host traffic](#control-default-behavior-of-workload-endpoint-to-host-traffic)
 
 #### Avoid accidentally cutting all host connectivity
@@ -146,7 +146,7 @@ spec:
   node: my-host
   expectedIPs: ["10.0.0.1"]
 ```
-##### Control default behavior of workload endpoint to host traffic  
+#### Control default behavior of workload endpoint to host traffic  
 
 The default Calico behavior blocks all connections from workloads to their local host (after traffic passes the host endpoint egress policy). You can change this behavior using the **DefaultEndpointToHostAction** parameter in Felix configuration. This parameter works at the IP table level, where you can specify packet behavior to **Drop** (default), **Accept**, or **Return** (if you have your own rules in IP tables). 
 
