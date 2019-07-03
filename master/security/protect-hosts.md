@@ -150,7 +150,25 @@ spec:
 
 The default Calico behavior blocks all connections from workloads to their local host (after traffic passes the host endpoint egress policy). You can change this behavior using the **DefaultEndpointToHostAction** parameter in Felix configuration. This parameter works at the IP table level, where you can specify packet behavior to **Drop** (default), **Accept**, or **Return** (if you have your own rules in IP tables). 
 
-<TBD - steps to update existing Felix config>
+To change this parameter for all hosts, edit the **FelixConfiguration** object named “default.”
+
+1. Get a copy of the object to edit.
+   `calicoctl get felixconfiguration default --export -o yaml > default-felix-config.yaml`
+1. Open the file in a text editor and add the parameter, **defaultEndpointToHostAction**. For example:
+
+```
+apiVersion: projectcalico.org/v3
+kind: FelixConfiguration
+metadata:
+  name: default
+spec:
+  ipipEnabled: true
+  logSeverityScreen: Info
+  reportingInterval: 0s
+  defaultEndpointToHostAction: Accept
+```
+1. Update the FelixConfiguration on the cluster.
+   `calicoctl apply -f default-felix-config.yaml`
 
 ### Above and beyond
 
