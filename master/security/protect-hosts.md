@@ -60,7 +60,7 @@ On hosts that you want to secure with network policy, [install Calico]({{site.ba
 ### How to
 
 - [Avoid accidentally cutting all host connectivity ](#avoid-accidentally-cutting-all-host-connectivity)
-- [Create policy to restrict host traffic](#create-policy-to-restrict-host-traffic)
+- [Use policy to restrict host traffic](#use-policy-to-restrict-host-traffic)
 - [Control default behavior of workload endpoint to host traffic](#control-default-behavior-of-workload-endpoint-to-host-traffic)
 
 #### Avoid accidentally cutting all host connectivity
