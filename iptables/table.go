@@ -864,7 +864,21 @@ func (t *Table) applyUpdates() error {
 	// Writing a forward reference ensures that the chain exists and that it is empty.
 	t.dirtyChains.Iter(func(item interface{}) error {
 		chainName := item.(string)
-		buf.WriteForwardReference(chainName)
+		chainNeedsToBeFlushed := false
+		if t.nftablesMode {
+			// The nft version of iptables-restore doesn't support fine-grained rule replaces and appends, flush
+			// any chain that we're about to touch.
+			chainNeedsToBeFlushed = true
+		} else if _, ok := t.chainNameToChain[chainName]; !ok {
+			// About to delete this chain, flush it first to sever dependencies.
+			chainNeedsToBeFlushed = true
+		} else if _, ok := t.chainToDataplaneHashes[chainName]; !ok {
+			// Chain doesn't exist in dataplane, mark it for creation.
+			chainNeedsToBeFlushed = true
+		}
+		if chainNeedsToBeFlushed {
+			buf.WriteForwardReference(chainName)
+		}
 		return nil
 	})
 
@@ -873,15 +887,38 @@ func (t *Table) applyUpdates() error {
 	t.dirtyChains.Iter(func(item interface{}) error {
 		chainName := item.(string)
 		if chain, ok := t.chainNameToChain[chainName]; ok {
-			// Chain update or creation.  Rewrite the chain.
+			// Chain update or creation.  Scan the chain against its previous hashes
+			// and replace/append/delete as appropriate.
+			var previousHashes []string
+			if t.nftablesMode {
+				// In iptables nft mode, we can't replace and append because iptables-restore miscalculates the
+				// rule indices.  Instead, we rewrite the whole chain.
+				previousHashes = nil
+			} else {
+				// In iptables legacy mode, we compare the rules one by one and apply deltas rule by rule.
+				previousHashes = t.chainToDataplaneHashes[chainName]
+			}
 			currentHashes := chain.RuleHashes(features)
 			newHashes[chainName] = currentHashes
-			for i := 0; i < len(currentHashes); i++ {
+			for i := 0; i < len(previousHashes) || i < len(currentHashes); i++ {
 				var line string
-
-				prefixFrag := t.commentFrag(currentHashes[i])
-				line = chain.Rules[i].RenderAppend(chainName, prefixFrag, features)
-
+				if i < len(previousHashes) && i < len(currentHashes) {
+					if previousHashes[i] == currentHashes[i] {
+						continue
+					}
+					// Hash doesn't match, replace the rule.
+					ruleNum := i + 1 // 1-indexed.
+					prefixFrag := t.commentFrag(currentHashes[i])
+					line = chain.Rules[i].RenderReplace(chainName, ruleNum, prefixFrag, features)
+				} else if i < len(previousHashes) {
+					// previousHashes was longer, remove the old rules from the end.
+					ruleNum := len(currentHashes) + 1 // 1-indexed
+					line = deleteRule(chainName, ruleNum)
+				} else {
+					// currentHashes was longer.  Append.
+					prefixFrag := t.commentFrag(currentHashes[i])
+					line = chain.Rules[i].RenderAppend(chainName, prefixFrag, features)
+				}
 				buf.WriteLine(line)
 			}
 		}
@@ -949,6 +986,15 @@ func (t *Table) applyUpdates() error {
 		t.countNumLinesExecuted.Add(float64(buf.NumLinesInTransaction))
 		buf.EndTransaction()
 		buf.StartTransaction(t.Name)
+
+		t.dirtyChains.Iter(func(item interface{}) error {
+			chainName := item.(string)
+			if _, ok := t.chainNameToChain[chainName]; !ok {
+				// Chain deletion
+				buf.WriteForwardReference(chainName)
+			}
+			return nil // Delay clearing the set until we've programmed iptables.
+		})
 	}
 
 	// Do deletions at the end.  This ensures that we don't try to delete any chains that
@@ -956,14 +1002,6 @@ func (t *Table) applyUpdates() error {
 	// above).  Note: if a chain is being deleted at the same time as a chain that it refers to
 	// then we'll issue a create+flush instruction in the very first pass, which will sever the
 	// references.
-	t.dirtyChains.Iter(func(item interface{}) error {
-		chainName := item.(string)
-		if _, ok := t.chainNameToChain[chainName]; !ok {
-			// Chain deletion
-			buf.WriteForwardReference(chainName)
-		}
-		return nil // Delay clearing the set until we've programmed iptables.
-	})
 	t.dirtyChains.Iter(func(item interface{}) error {
 		chainName := item.(string)
 		if _, ok := t.chainNameToChain[chainName]; !ok {
@@ -977,7 +1015,9 @@ func (t *Table) applyUpdates() error {
 	t.countNumLinesExecuted.Add(float64(buf.NumLinesInTransaction))
 	buf.EndTransaction()
 
-	if !buf.Empty() {
+	if buf.Empty() {
+		t.logCxt.Debug("Update ended up being no-op, skipping call to ip(6)tables-restore.")
+	} else {
 		// Get the contents of the buffer ready to send to iptables-restore.  Warning: for perf, this is directly
 		// accessing the buffer's internal array; don't touch the buffer after this point.
 		inputBytes := buf.GetBytesAndInvalidate()
@@ -1040,8 +1080,6 @@ func (t *Table) applyUpdates() error {
 		}
 		t.lastWriteTime = t.timeNow()
 		t.postWriteInterval = t.initialPostWriteInterval
-	} else {
-		t.logCxt.Debug("Update ended up being no-op, skipping call to ip(6)tables-restore.")
 	}
 
 	// Now we've successfully updated iptables, clear the dirty sets.  We do this even if we
