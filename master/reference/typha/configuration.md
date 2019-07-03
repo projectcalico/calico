@@ -58,6 +58,12 @@ The full list of parameters which can be set is as follows.
 
 The Kubernetes API datastore driver reads its configuration from Kubernetes-provided environment variables.
 
+##### Environment variables
+
+| Environment   | Description | Schema |
+| ------------- | ----------- | ------ |
+| USE_POD_CIDR | Use the Kubernetes `Node.Spec.PodCIDR` field. This field is required when using the Kubernetes API datastore with host-local IPAM. [Default: false] | boolean |
+
 #### Felix-Typha TLS configuration
 
 | Configuration parameter | Environment variable   | Description | Schema |
