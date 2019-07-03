@@ -1,4 +1,4 @@
-# Copyright (c) 2018 Tigera, Inc. All rights reserved.
+# Copyright (c) 2019 Tigera, Inc. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -33,7 +33,7 @@ class ConnectionError(Exception):
     pass
 
 
-class TestIPIPSpoof(TestBase):
+class TestSpoof(TestBase):
     def setUp(self):
         TestBase.setUp(self)
         self.ns_name = generate_unique_id(5, prefix="spoof")
@@ -77,7 +77,7 @@ class TestIPIPSpoof(TestBase):
         kubectl("wait --timeout=2m --for=condition=ready" +
                 " pods -l k8s-app=calico-node -n kube-system")
 
-    def test_simple_ipip_spoof(self):
+    def test_ipip_spoof(self):
         with DiagsCollector():
             # Change pool to use IPIP if necessary
             default_pool = json.loads(calicoctl("get ippool default-ipv4-ippool -o json"))
@@ -119,7 +119,7 @@ class TestIPIPSpoof(TestBase):
             # test connectivity does NOT work when spoofing
             retry_until_success(assert_cannot_spoof_ipip)
 
-    def test_simple_vxlan_spoof(self):
+    def test_vxlan_spoof(self):
         with DiagsCollector():
             # Change pool to use VXLAN if necessary
             default_pool = json.loads(calicoctl("get ippool default-ipv4-ippool -o json"))
