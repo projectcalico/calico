@@ -155,18 +155,17 @@ To change this parameter for all hosts, edit the **FelixConfiguration** object n
 1. Get a copy of the object to edit.
    `calicoctl get felixconfiguration default --export -o yaml > default-felix-config.yaml`
 1. Open the file in a text editor and add the parameter, **defaultEndpointToHostAction**. For example:
-
-```
-apiVersion: projectcalico.org/v3
-kind: FelixConfiguration
-metadata:
-  name: default
-spec:
-  ipipEnabled: true
-  logSeverityScreen: Info
-  reportingInterval: 0s
-  defaultEndpointToHostAction: Accept
-```
+   ```
+   apiVersion: projectcalico.org/v3
+   kind: FelixConfiguration
+   metadata:
+     name: default
+   spec:
+     ipipEnabled: true
+     logSeverityScreen: Info
+     reportingInterval: 0s
+     defaultEndpointToHostAction: Accept
+   ```
 1. Update the FelixConfiguration on the cluster.
    `calicoctl apply -f default-felix-config.yaml`
 
