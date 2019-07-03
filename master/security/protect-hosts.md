@@ -152,7 +152,7 @@ The default Calico behavior blocks all connections from workloads to their local
 
 To change this parameter for all hosts, edit the **FelixConfiguration** object named “default.”
 
-1. Get a copy of the object to edit.
+1. Get a copy of the object to edit.  
    `calicoctl get felixconfiguration default --export -o yaml > default-felix-config.yaml`
 1. Open the file in a text editor and add the parameter, **defaultEndpointToHostAction**. For example:
    ```
@@ -166,7 +166,7 @@ To change this parameter for all hosts, edit the **FelixConfiguration** object n
      reportingInterval: 0s
      defaultEndpointToHostAction: Accept
    ```
-1. Update the FelixConfiguration on the cluster.
+1. Update the FelixConfiguration on the cluster.  
    `calicoctl apply -f default-felix-config.yaml`
 
 ### Above and beyond
