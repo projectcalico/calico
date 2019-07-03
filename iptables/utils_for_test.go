@@ -159,15 +159,22 @@ func (d *mockDataplane) RuleTouched(chainName string, ruleNum int) bool {
 
 type restoreCmd struct {
 	Dataplane     *mockDataplane
-	Stdin         *bytes.Buffer
+	Stdin         io.Reader
 	CapturedStdin string
 	Stdout        io.Writer
 	Stderr        io.Writer
 }
 
 func (d *restoreCmd) SetStdin(r io.Reader) {
-	d.Stdin = r.(*bytes.Buffer)
-	d.CapturedStdin = d.Stdin.String()
+
+	var buf bytes.Buffer
+	_, err := io.Copy(&buf, r)
+	if err != nil {
+		panic(err)
+	}
+
+	d.Stdin = &buf
+	d.CapturedStdin = buf.String()
 }
 
 func (d *restoreCmd) SetStdout(w io.Writer) {
@@ -325,7 +332,7 @@ func (d *restoreCmd) Run() error {
 		log.Debugf("Updated chain '%s' (len=%v); new contents:\n\t%v",
 			chainName, len(chains[chainName]), strings.Join(chains[chainName], "\n\t"))
 	}
-	Expect(commitSeen).To(BeTrue())
+	Expect(commitSeen).To(BeTrue(), "didn't see a COMMIT line")
 	return nil
 }
 
