@@ -30,7 +30,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/projectcalico/libcalico-go/lib/apiconfig"
-	"github.com/projectcalico/libcalico-go/lib/apis/v3"
+	v3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/libcalico-go/lib/backend"
 	bapi "github.com/projectcalico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/libcalico-go/lib/backend/k8s"
@@ -275,6 +275,80 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 		It("should succeed if the host already doesn't exist", func() {
 			err := ic.RemoveIPAMHost(context.Background(), "randomhost")
 			Expect(err).NotTo(HaveOccurred())
+		})
+	})
+
+	Describe("Allocation attributes tests", func() {
+		var hostname string
+
+		sentinelIP := net.ParseIP("10.0.0.1")
+
+		It("Should return ResourceNotExist on no valid pool", func() {
+			attrs, err := ic.GetAssignmentAttributes(context.Background(), cnet.IP{sentinelIP})
+			Expect(err).To(BeAssignableToTypeOf(cerrors.ErrorResourceDoesNotExist{}))
+			Expect(attrs).To(BeEmpty())
+		})
+
+		Context("With valid pool", func() {
+			BeforeEach(func() {
+				// Remove all data in the datastore.
+				bc.Clean()
+
+				// Create an IP pool
+				applyPool("10.0.0.0/24", true, "all()")
+
+				// Create the node object.
+				hostname = "allocation-attributes"
+				applyNode(bc, kc, hostname, nil)
+			})
+
+			AfterEach(func() {
+				bc.Clean()
+			})
+
+			It("Should return ResourceNotExist error on no block", func() {
+				attrs, err := ic.GetAssignmentAttributes(context.Background(), cnet.IP{sentinelIP})
+				Expect(err).To(BeAssignableToTypeOf(cerrors.ErrorResourceDoesNotExist{}))
+				Expect(attrs).To(BeEmpty())
+			})
+
+			It("Should return correct attributes on allocated ip", func() {
+				ipAttr := map[string]string{
+					AttributeNode: hostname,
+					AttributeType: AttributeTypeVXLAN,
+				}
+				args := AssignIPArgs{
+					IP:       cnet.IP{sentinelIP},
+					Hostname: hostname,
+					Attrs:    ipAttr,
+				}
+				err := ic.AssignIP(context.Background(), args)
+				Expect(err).NotTo(HaveOccurred())
+
+				attrs, err := ic.GetAssignmentAttributes(context.Background(), cnet.IP{sentinelIP})
+				Expect(err).NotTo(HaveOccurred())
+				Expect(attrs).To(Equal(ipAttr))
+			})
+
+			It("Should return ResourceNotExist on unallocated ip", func() {
+				// Allocate an ip in same block
+				ipAttr := map[string]string{
+					AttributeNode: hostname,
+					AttributeType: AttributeTypeVXLAN,
+				}
+				args := AssignIPArgs{
+					IP:       cnet.IP{net.ParseIP("10.0.0.2")},
+					Hostname: hostname,
+					Attrs:    ipAttr,
+				}
+				err := ic.AssignIP(context.Background(), args)
+				Expect(err).NotTo(HaveOccurred())
+
+				// Block exists but sentinel ip is not allocated.
+				attrs, err := ic.GetAssignmentAttributes(context.Background(), cnet.IP{sentinelIP})
+				Expect(err).To(BeAssignableToTypeOf(cerrors.ErrorResourceDoesNotExist{}))
+				Expect(attrs).To(BeEmpty())
+			})
 		})
 	})
 

@@ -22,10 +22,11 @@ import (
 	"reflect"
 	"strings"
 
-	"github.com/projectcalico/libcalico-go/lib/apis/v3"
 	log "github.com/sirupsen/logrus"
 
+	v3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
+	cerrors "github.com/projectcalico/libcalico-go/lib/errors"
 	cnet "github.com/projectcalico/libcalico-go/lib/net"
 )
 
@@ -348,7 +349,8 @@ func (b allocationBlock) attributesForIP(ip cnet.IP) (map[string]string, error) 
 	// Check if allocated.
 	attrIndex := b.Allocations[ordinal]
 	if attrIndex == nil {
-		return nil, errors.New(fmt.Sprintf("IP %s is not currently assigned in block", ip))
+		log.Debugf("IP %s is not currently assigned in block", ip)
+		return nil, cerrors.ErrorResourceDoesNotExist{Identifier: ip.String(), Err: errors.New("IP is unassigned")}
 	}
 	return b.Attributes[*attrIndex].AttrSecondary, nil
 }
