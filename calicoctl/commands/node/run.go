@@ -247,7 +247,6 @@ Description:
 	envs := map[string]string{
 		"NODENAME":                  name,
 		"CALICO_NETWORKING_BACKEND": backend,
-		"CALICO_LIBNETWORK_ENABLED": fmt.Sprint(!disableDockerNw),
 	}
 
 	// Validate the ifprefix to only allow alphanumeric characters
@@ -259,16 +258,6 @@ Description:
 		return fmt.Errorf("Error executing command: invalid to disable Docker Networking and enable Container labels")
 	}
 
-	// Set CALICO_LIBNETWORK_IFPREFIX env variable if Docker network is enabled and set to non-default value.
-	if !disableDockerNw && ifprefix != DEFAULT_DOCKER_IFPREFIX {
-		envs["CALICO_LIBNETWORK_IFPREFIX"] = ifprefix
-	}
-
-	// Add in optional environments.
-	if useDockerContainerLabels {
-		envs["CALICO_LIBNETWORK_CREATE_PROFILES"] = "false"
-		envs["CALICO_LIBNETWORK_LABEL_ENDPOINTS"] = "true"
-	}
 	if nopools {
 		envs["NO_DEFAULT_POOLS"] = "true"
 	}
