@@ -33,7 +33,7 @@ import (
 
 // This file contains shared test infrastructure for testing the iptables package.
 
-func newMockDataplane(table string, chains map[string][]string) *mockDataplane {
+func newMockDataplane(table string, chains map[string][]string, dataplaneMode string) *mockDataplane {
 	return &mockDataplane{
 		Table:         table,
 		Chains:        chains,
@@ -43,6 +43,7 @@ func newMockDataplane(table string, chains map[string][]string) *mockDataplane {
 		Version:       "iptables v1.5.9\n",
 		KernelVersion: "Linux version 4.15.0-34-generic (buildd@lgw01-amd64-037) (gcc version 5.4.0 20160609 " +
 			"(Ubuntu 5.4.0-6ubuntu1~16.04.10)) #37~16.04.1-Ubuntu SMP Tue Aug 28 10:44:06 UTC 2018",
+		NftablesMode: dataplaneMode == "nft",
 	}
 }
 
@@ -75,6 +76,7 @@ type mockDataplane struct {
 	FailNextVersion                bool
 	Version                        string
 	KernelVersion                  string
+	NftablesMode                   bool
 }
 
 func (d *mockDataplane) ResetCmds() {
@@ -99,13 +101,17 @@ func (d *mockDataplane) newCmd(name string, arg ...string) CmdIface {
 	var cmd CmdIface
 	d.CmdNames = append(d.CmdNames, name)
 
+	if d.NftablesMode && name != "iptables" {
+		Expect(name).To(ContainSubstring("-nft"))
+	}
+
 	switch name {
-	case "iptables-restore", "ip6tables-restore":
+	case "iptables-restore", "ip6tables-restore", "iptables-nft-restore", "ip6tables-nft-restore":
 		Expect(arg).To(Equal([]string{"--noflush", "--verbose"}))
 		cmd = &restoreCmd{
 			Dataplane: d,
 		}
-	case "iptables-save", "ip6tables-save":
+	case "iptables-save", "ip6tables-save", "iptables-nft-save", "ip6tables-nft-save":
 		Expect(arg).To(Equal([]string{"-t", d.Table}))
 		cmd = &saveCmd{
 			Dataplane: d,
@@ -253,6 +259,12 @@ func (d *restoreCmd) Run() error {
 		}
 		if strings.HasPrefix(line, "*") {
 			// Start of a table.
+			if tableSeen {
+				Expect(d.Dataplane.NftablesMode).To(BeTrue(), "Only nft mode should use more than one transaction")
+				// We've already had one transaction, check that it was committed
+				Expect(commitSeen).To(BeTrue())
+				commitSeen = false
+			}
 			Expect(line[1:]).To(Equal(d.Dataplane.Table))
 			tableSeen = true
 			continue
@@ -282,6 +294,10 @@ func (d *restoreCmd) Run() error {
 		switch action {
 		case "-A", "--append":
 			chainName = parts[1]
+			if strings.HasPrefix(chainName, "cali") && d.Dataplane.NftablesMode {
+				Expect(d.Dataplane.FlushedChains.Contains(chainName)).To(BeTrue(),
+					"In nft mode, it's not safe to modify chain without flushing")
+			}
 			rest := strings.Join(parts[2:], " ")
 			Expect(chains[chainName]).NotTo(BeNil(), "Append to unknown chain: "+chainName)
 			chains[chainName] = append(chains[chainName], rest)
@@ -298,6 +314,7 @@ func (d *restoreCmd) Run() error {
 			chain[0] = rest
 			d.Dataplane.ChainMods.Add(chainMod{name: chainName, ruleNum: 1})
 		case "-R", "--replace":
+			Expect(d.Dataplane.NftablesMode).To(BeFalse(), "Replace shouldn't be used in nft mode")
 			chainName = parts[1]
 			ruleNum, err := strconv.Atoi(parts[2]) // 1-indexed position of rule.
 			Expect(err).NotTo(HaveOccurred())

@@ -866,8 +866,19 @@ func (t *Table) applyUpdates() error {
 		chainName := item.(string)
 		chainNeedsToBeFlushed := false
 		if t.nftablesMode {
-			// The nft version of iptables-restore doesn't support fine-grained rule replaces and appends, flush
-			// any chain that we're about to touch.
+			// The nft version of iptables-restore doesn't support fine-grained rule replaces and appends.
+			chain := t.chainNameToChain[chainName]
+			currentHashes := chain.RuleHashes(features)
+			previousHashes := t.chainToDataplaneHashes[chainName]
+			t.logCxt.WithFields(log.Fields{
+				"previous": previousHashes,
+				"current":  currentHashes,
+			}).Debug("Comparing old to new hashes.")
+			if len(previousHashes) > 0 && reflect.DeepEqual(currentHashes, previousHashes) {
+				// Chain is already correct, skip it.
+				log.Debug("Chain already correct")
+				return set.RemoveItem
+			}
 			chainNeedsToBeFlushed = true
 		} else if _, ok := t.chainNameToChain[chainName]; !ok {
 			// About to delete this chain, flush it first to sever dependencies.
