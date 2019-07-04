@@ -1,15 +1,11 @@
-# This is from registry.access.redhat.com/ubi8/ubi-minimal:8.2-267
-FROM registry.access.redhat.com/ubi8/ubi-minimal@sha256:7e432c89f285392c7d09343a3100e97158121bd5f73b89c852eba9609e19f9f4
+FROM scratch
 
-LABEL maintainer "Casey Davenport <casey@tigera.io>"
+LABEL maintainer "maintainers@projectcalico.org"
 
 ADD licenses/ /licenses
 ADD LICENSE /licenses/
 
-ADD bin/ppc64le/ /opt/cni/bin/
-ADD k8s-install/scripts/install-cni.sh /install-cni.sh
-ADD k8s-install/scripts/calico.conf.default /calico.conf.tmp
+ADD bin/ppc64le /opt/cni/bin/
 
 ENV PATH=$PATH:/opt/cni/bin
 WORKDIR /opt/cni/bin
-CMD ["/opt/cni/bin/calico"]

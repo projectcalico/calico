@@ -10,13 +10,17 @@ require (
 	github.com/coreos/etcd v3.3.18+incompatible // indirect
 	github.com/coreos/go-iptables v0.3.0 // indirect
 	github.com/gogo/protobuf v1.2.2-0.20190723190241-65acae22fc9d
+	github.com/howeyc/fsnotify v0.9.0
+	github.com/kelseyhightower/envconfig v0.0.0-20180517194557-dd1402a4d99d
 	github.com/mcuadros/go-version v0.0.0-20190308113854-92cdf37c5b75
 	github.com/natefinch/atomic v0.0.0-20150920032501-a62ce929ffcc
+	github.com/nmrshll/go-cp v0.0.0-20180115193924-61436d3b7cfa
 	github.com/onsi/ginkgo v1.10.1
 	github.com/onsi/gomega v1.7.0
 	github.com/philhofer/fwd v1.0.0 // indirect
 	github.com/pquerna/ffjson v0.0.0-20190813045741-dac163c6c0a9 // indirect
 	github.com/projectcalico/libcalico-go v1.7.2-0.20200715213032-ef6b0a698105
+	github.com/prometheus/common v0.4.1
 	github.com/safchain/ethtool v0.0.0-20170622225139-7ff1ba29eca2 // indirect
 	github.com/satori/go.uuid v1.2.0
 	github.com/sirupsen/logrus v1.4.2
@@ -25,6 +29,7 @@ require (
 	github.com/vishvananda/netlink v0.0.0-20170630184320-6e453822d85e
 	github.com/vishvananda/netns v0.0.0-20170219233438-54f0e4339ce7 // indirect
 	golang.org/x/net v0.0.0-20200202094626-16171245cfb2
+	golang.org/x/sys v0.0.0-20200202164722-d101bd2416d5
 	google.golang.org/grpc v1.23.1
 
 	// k8s.io/api v1.16.3 is at 16d7abae0d2a

@@ -1,14 +1,11 @@
-FROM arm64v8/debian:9.8-slim
-
-LABEL maintainer "Casey Davenport <casey@tigera.io>"
+FROM scratch
 
 ADD licenses/ /licenses
 ADD LICENSE /licenses/
 
-ADD bin/arm64/ /opt/cni/bin/
-ADD k8s-install/scripts/install-cni.sh /install-cni.sh
-ADD k8s-install/scripts/calico.conf.default /calico.conf.tmp
+LABEL maintainer "maintainers@projectcalico.org"
+
+ADD bin/arm64 /opt/cni/bin/
 
 ENV PATH=$PATH:/opt/cni/bin
 WORKDIR /opt/cni/bin
-CMD ["/opt/cni/bin/calico"]
