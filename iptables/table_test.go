@@ -171,9 +171,7 @@ func describeEmptyDataplaneTests(dataplaneMode string) {
 					SleepOverride:         dataplane.sleep,
 					InsertMode:            "unknown",
 					BackendMode:           dataplaneMode,
-					LookPathOverride: func(file string) (s string, e error) {
-						return s, nil
-					},
+					LookPathOverride:      lookPathAll,
 				},
 			)
 		}).To(Panic())
