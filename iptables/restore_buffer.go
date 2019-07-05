@@ -21,26 +21,27 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-// RestoreInputBuilder builds an byte slice for use as input to iptables-restore.
+// RestoreInputBuilder builds a byte slice for use as input to iptables-restore.
 //
 // Operations must be done inside a per-table transaction.
 //
 // Example:
 //
+//     buf.Reset() // Reset the buffer, if needed.
 //     buf.StartTransaction("filter")
 //     buf.WriteForwardReference("cali-chain-name")
 //     buf.WriteLine("-A cali-chain-name ...")
 //     buf.EndTransaction()
-//     bytes = buf.GetBytesAndInvalidate()
+//     bytes = buf.GetBytesAndReset()
 //     <write bytes to iptables-restore stdin>
-//     buf.Reset()
 //
 // Transactions are ignored completely if there are no writes between the StartTransaction()
 // and EndTransaction() calls.
 type RestoreInputBuilder struct {
-	buf                   bytes.Buffer
-	currentTableName      string
-	NumLinesInTransaction int
+	buf              bytes.Buffer
+	currentTableName string
+	txnOpenerWritten bool
+	NumLinesWritten  counter
 }
 
 // Empty returns true if there is nothing in the buffer (i.e. all the transactions stored in the buffer were no-ops).
@@ -52,7 +53,7 @@ func (b *RestoreInputBuilder) Empty() bool {
 func (b *RestoreInputBuilder) Reset() {
 	b.buf.Reset()
 	b.currentTableName = ""
-	b.NumLinesInTransaction = 0
+	b.txnOpenerWritten = false
 }
 
 // StartTransaction opens a new transaction context for the named table.
@@ -62,6 +63,7 @@ func (b *RestoreInputBuilder) StartTransaction(tableName string) {
 		log.Panic("StartTransaction() called without ending previous transaction.")
 	}
 	b.currentTableName = tableName
+	b.txnOpenerWritten = false
 }
 
 // EndTransaction ends the open transaction, if the transaction was non-empty, writes a COMMIT.
@@ -70,11 +72,10 @@ func (b *RestoreInputBuilder) EndTransaction() {
 	if b.currentTableName == "" {
 		log.Panic("EndTransaction() called without active transaction.")
 	}
-	if b.NumLinesInTransaction > 0 {
+	if b.txnOpenerWritten {
 		b.writeFormattedLine("COMMIT")
 	}
 	b.currentTableName = ""
-	b.NumLinesInTransaction = 0
 }
 
 // writeFormattedLine writes a line to the internal buffer, appending a new line.
@@ -84,6 +85,9 @@ func (b *RestoreInputBuilder) writeFormattedLine(format string, args ...interfac
 		log.WithError(err).Panic("Failed to write to in-memory buffer")
 	}
 	b.buf.WriteString("\n")
+	if b.NumLinesWritten != nil {
+		b.NumLinesWritten.Inc()
+	}
 }
 
 // maybeWriteTransactionOpener ensures that the transaction opening line has been written.
@@ -92,8 +96,9 @@ func (b *RestoreInputBuilder) maybeWriteTransactionOpener() {
 	if b.currentTableName == "" {
 		log.Panic("maybeWriteTransactionOpener() called without active transaction.")
 	}
-	if b.NumLinesInTransaction == 0 {
+	if !b.txnOpenerWritten {
 		b.writeFormattedLine("*%s", b.currentTableName)
+		b.txnOpenerWritten = true
 	}
 }
 
@@ -103,7 +108,6 @@ func (b *RestoreInputBuilder) maybeWriteTransactionOpener() {
 func (b *RestoreInputBuilder) WriteForwardReference(chainName string) {
 	b.maybeWriteTransactionOpener()
 	b.writeFormattedLine(":%s - -", chainName)
-	b.NumLinesInTransaction++
 }
 
 // WriteLine writes a line of iptables instructions to the buffer.  Intended for writing the actual rules.
@@ -111,17 +115,20 @@ func (b *RestoreInputBuilder) WriteForwardReference(chainName string) {
 func (b *RestoreInputBuilder) WriteLine(line string) {
 	b.maybeWriteTransactionOpener()
 	b.writeFormattedLine(line)
-	b.NumLinesInTransaction++
 }
 
-// GetBytesAndInvalidate returns the contents of the buffer.  For performance, this is a direct reference to the
-// data rather than a copy.  Should be called after EndTransaction; panics if there is a still-open transaction.
-//
-// After calling GetBytesAndInvalidate(), the only valid method to call on this struct is Reset().  The returned slice
-// should not be modified and it is only valid until Reset() is called.
-func (b *RestoreInputBuilder) GetBytesAndInvalidate() []byte {
+// GetBytesAndReset returns the contents of the buffer and, as a side effect, resets the buffer.  For performance,
+// this is a direct reference to the data rather than a copy.  The returned slice is only valid until the next
+// write operation on the builder.  Should be called after EndTransaction; panics if there is a still-open transaction.
+func (b *RestoreInputBuilder) GetBytesAndReset() []byte {
 	if b.currentTableName != "" {
-		log.Panic("GetBytesAndInvalidate() called inside transaction.")
+		log.Panic("GetBytesAndReset() called inside transaction.")
 	}
-	return b.buf.Next(b.buf.Len())
+	buf := b.buf.Next(b.buf.Len())
+	b.Reset()
+	return buf
+}
+
+type counter interface {
+	Inc()
 }

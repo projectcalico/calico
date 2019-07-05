@@ -255,12 +255,14 @@ type Table struct {
 	// Shims for time.XXX functions:
 	timeSleep func(d time.Duration)
 	timeNow   func() time.Time
+	// lookPath is a shim for exec.LookPath.
+	lookPath func(file string) (string, error)
 }
 
 type TableOptions struct {
 	HistoricChainPrefixes    []string
 	ExtraCleanupRegexPattern string
-	NftablesMode             bool
+	BackendMode              string
 	InsertMode               string
 	RefreshInterval          time.Duration
 	PostWriteInterval        time.Duration
@@ -276,6 +278,8 @@ type TableOptions struct {
 	SleepOverride func(d time.Duration)
 	// NowOverride for tests, if non-nil, replacement for time.Now()
 	NowOverride func() time.Time
+	// LookPathOverride for tests, if non-nil, replacement for exec.LookPath()
+	LookPathOverride func(file string) (string, error)
 }
 
 func NewTable(
@@ -344,6 +348,10 @@ func NewTable(
 	if options.NowOverride != nil {
 		now = options.NowOverride
 	}
+	lookPath := exec.LookPath
+	if options.LookPathOverride != nil {
+		lookPath = options.LookPathOverride
+	}
 
 	table := &Table{
 		Name:                   name,
@@ -382,27 +390,59 @@ func NewTable(
 		newCmd:    newCmd,
 		timeSleep: sleep,
 		timeNow:   now,
+		lookPath:  lookPath,
 
 		gaugeNumChains:        gaugeNumChains.WithLabelValues(fmt.Sprintf("%d", ipVersion), name),
 		gaugeNumRules:         gaugeNumRules.WithLabelValues(fmt.Sprintf("%d", ipVersion), name),
 		countNumLinesExecuted: countNumLinesExecuted.WithLabelValues(fmt.Sprintf("%d", ipVersion), name),
 	}
+	table.restoreInputBuffer.NumLinesWritten = table.countNumLinesExecuted
 
+	iptablesVariant := strings.ToLower(options.BackendMode)
+	if iptablesVariant == "" {
+		iptablesVariant = "legacy"
+	}
+	if iptablesVariant == "nft" {
+		log.Info("Enabling iptables-in-nftables-mode workarounds.")
+		table.nftablesMode = true
+	}
+
+	table.iptablesRestoreCmd = table.findBestBinary(ipVersion, iptablesVariant, "restore")
+	table.iptablesSaveCmd = table.findBestBinary(ipVersion, iptablesVariant, "save")
+
+	return table
+}
+
+// findBestBinary tries to find an iptables binary for the specific variant (legacy/nftables mode) and returns the name
+// of the binary.  Falls back on iptables-restore/iptables-save if the specific variant isn't available.
+// Panics if no binary can be found.
+func (t *Table) findBestBinary(ipVersion uint8, backendMode, saveOrRestore string) string {
 	verInfix := ""
 	if ipVersion == 6 {
 		verInfix = "6"
 	}
-	nftInfix := ""
-	if options.NftablesMode {
-		log.Info("Using the nftables backend for iptables.")
-		nftInfix = "nft-"
-		table.nftablesMode = true
+	candidates := []string{
+		"ip" + verInfix + "tables-" + backendMode + "-" + saveOrRestore,
+		"ip" + verInfix + "tables-" + saveOrRestore,
 	}
 
-	table.iptablesRestoreCmd = "ip" + verInfix + "tables-" + nftInfix + "restore"
-	table.iptablesSaveCmd = "ip" + verInfix + "tables-" + nftInfix + "save"
+	logCxt := log.WithFields(log.Fields{
+		"ipVersion":     ipVersion,
+		"backendMode":   backendMode,
+		"saveOrRestore": saveOrRestore,
+		"candidates":    candidates,
+	})
 
-	return table
+	for _, candidate := range candidates {
+		_, err := t.lookPath(candidate)
+		if err == nil {
+			logCxt.WithField("command", candidate).Info("Looked up iptables command")
+			return candidate
+		}
+	}
+
+	logCxt.Panic("Failed to find iptables command")
+	return ""
 }
 
 func (t *Table) SetRuleInsertions(chainName string, rules []Rule) {
@@ -855,7 +895,7 @@ func (t *Table) applyUpdates() error {
 	// Build up the iptables-restore input in an in-memory buffer.  This allows us to log out the exact input after
 	// a failure, which has proven to be a very useful diagnostic tool.
 	buf := &t.restoreInputBuffer
-	buf.Reset()
+	buf.Reset() // Defensive.
 
 	// iptables-restore commands live in per-table transactions.
 	buf.StartTransaction(t.Name)
@@ -866,7 +906,9 @@ func (t *Table) applyUpdates() error {
 		chainName := item.(string)
 		chainNeedsToBeFlushed := false
 		if t.nftablesMode {
-			// The nft version of iptables-restore doesn't support fine-grained rule replaces and appends.
+			// iptables-nft-restore <v1.8.3 has a bug (https://bugzilla.netfilter.org/show_bug.cgi?id=1348)
+			// where only the first replace command sets the rule index.  Work around that by refreshing the
+			// whole chain using a flush.
 			chain := t.chainNameToChain[chainName]
 			currentHashes := chain.RuleHashes(features)
 			previousHashes := t.chainToDataplaneHashes[chainName]
@@ -902,8 +944,7 @@ func (t *Table) applyUpdates() error {
 			// and replace/append/delete as appropriate.
 			var previousHashes []string
 			if t.nftablesMode {
-				// In iptables nft mode, we can't replace and append because iptables-restore miscalculates the
-				// rule indices.  Instead, we rewrite the whole chain.
+				// Due to a bug in iptables nft mode, force a whole-chain rewrite.  (See above.)
 				previousHashes = nil
 			} else {
 				// In iptables legacy mode, we compare the rules one by one and apply deltas rule by rule.
@@ -994,7 +1035,6 @@ func (t *Table) applyUpdates() error {
 		// rules are deleted).  Close the current transaction and open a new one for the deletions in order to
 		// refresh its state.  The buffer will discard a no-op transaction so we don't need to check.
 		t.logCxt.Debug("In nftables mode, restarting transaction between updates and deletions.")
-		t.countNumLinesExecuted.Add(float64(buf.NumLinesInTransaction))
 		buf.EndTransaction()
 		buf.StartTransaction(t.Name)
 
@@ -1023,7 +1063,6 @@ func (t *Table) applyUpdates() error {
 		return nil // Delay clearing the set until we've programmed iptables.
 	})
 
-	t.countNumLinesExecuted.Add(float64(buf.NumLinesInTransaction))
 	buf.EndTransaction()
 
 	if buf.Empty() {
@@ -1031,8 +1070,7 @@ func (t *Table) applyUpdates() error {
 	} else {
 		// Get the contents of the buffer ready to send to iptables-restore.  Warning: for perf, this is directly
 		// accessing the buffer's internal array; don't touch the buffer after this point.
-		inputBytes := buf.GetBytesAndInvalidate()
-		defer buf.Reset()
+		inputBytes := buf.GetBytesAndReset()
 
 		if log.GetLevel() >= log.DebugLevel {
 			// Only convert (potentially very large slice) to string at debug level.

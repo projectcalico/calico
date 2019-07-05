@@ -266,7 +266,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		PostWriteInterval:     config.IptablesPostWriteCheckInterval,
 		LockTimeout:           config.IptablesLockTimeout,
 		LockProbeInterval:     config.IptablesLockProbeInterval,
-		NftablesMode:          config.IptablesBackend == "nft",
+		BackendMode:           config.IptablesBackend,
 	}
 
 	// However, the NAT tables need an extra cleanup regex.

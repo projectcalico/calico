@@ -106,12 +106,16 @@ func (d *mockDataplane) newCmd(name string, arg ...string) CmdIface {
 	}
 
 	switch name {
-	case "iptables-restore", "ip6tables-restore", "iptables-nft-restore", "ip6tables-nft-restore":
+	case "iptables-restore", "ip6tables-restore",
+		"iptables-legacy-restore", "ip6tables-legacy-restore",
+		"iptables-nft-restore", "ip6tables-nft-restore":
 		Expect(arg).To(Equal([]string{"--noflush", "--verbose"}))
 		cmd = &restoreCmd{
 			Dataplane: d,
 		}
-	case "iptables-save", "ip6tables-save", "iptables-nft-save", "ip6tables-nft-save":
+	case "iptables-save", "ip6tables-save",
+		"iptables-legacy-save", "ip6tables-legacy-save",
+		"iptables-nft-save", "ip6tables-nft-save":
 		Expect(arg).To(Equal([]string{"-t", d.Table}))
 		cmd = &saveCmd{
 			Dataplane: d,

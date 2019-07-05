@@ -15,6 +15,9 @@
 package iptables_test
 
 import (
+	"os/exec"
+	"strings"
+
 	. "github.com/projectcalico/felix/iptables"
 
 	. "github.com/onsi/ginkgo"
@@ -32,6 +35,39 @@ var _ = Describe("Table with an empty dataplane (nft)", func() {
 })
 var _ = Describe("Table with an empty dataplane (legacy)", func() {
 	describeEmptyDataplaneTests("legacy")
+
+	It("should find the iptables-legacy-* iptables binaries", func() {
+		dataplane := newMockDataplane("filter", map[string][]string{
+			"FORWARD": {},
+			"INPUT":   {},
+			"OUTPUT":  {},
+		}, "legacy")
+		iptLock := &mockMutex{}
+		featureDetector := NewFeatureDetector()
+		featureDetector.NewCmd = dataplane.newCmd
+		featureDetector.GetKernelVersionReader = dataplane.getKernelVersionReader
+		table := NewTable(
+			"filter",
+			4,
+			rules.RuleHashPrefix,
+			iptLock,
+			featureDetector,
+			TableOptions{
+				HistoricChainPrefixes: rules.AllHistoricChainNamePrefixes,
+				NewCmdOverride:        dataplane.newCmd,
+				SleepOverride:         dataplane.sleep,
+				NowOverride:           dataplane.now,
+				BackendMode:           "legacy",
+				LookPathOverride:      lookPathAll,
+			},
+		)
+
+		table.SetRuleInsertions("FORWARD", []Rule{
+			{Action: DropAction{}},
+		})
+		table.Apply()
+		Expect(dataplane.CmdNames).To(ConsistOf("iptables", "iptables-legacy-save", "iptables-legacy-restore"))
+	})
 })
 
 func describeEmptyDataplaneTests(dataplaneMode string) {
@@ -60,7 +96,8 @@ func describeEmptyDataplaneTests(dataplaneMode string) {
 				NewCmdOverride:        dataplane.newCmd,
 				SleepOverride:         dataplane.sleep,
 				NowOverride:           dataplane.now,
-				NftablesMode:          dataplaneMode == "nft",
+				BackendMode:           dataplaneMode,
+				LookPathOverride:      lookPathNoLegacy,
 			},
 		)
 	})
@@ -133,7 +170,10 @@ func describeEmptyDataplaneTests(dataplaneMode string) {
 					NewCmdOverride:        dataplane.newCmd,
 					SleepOverride:         dataplane.sleep,
 					InsertMode:            "unknown",
-					NftablesMode:          dataplaneMode == "nft",
+					BackendMode:           dataplaneMode,
+					LookPathOverride: func(file string) (s string, e error) {
+						return s, nil
+					},
 				},
 			)
 		}).To(Panic())
@@ -475,7 +515,8 @@ func describePostUpdateCheckTests(enableRefresh bool, dataplaneMode string) {
 			NewCmdOverride:        dataplane.newCmd,
 			SleepOverride:         dataplane.sleep,
 			NowOverride:           dataplane.now,
-			NftablesMode:          dataplaneMode == "nft",
+			BackendMode:           dataplaneMode,
+			LookPathOverride:      lookPathNoLegacy,
 		}
 		if enableRefresh {
 			options.RefreshInterval = 30 * time.Second
@@ -698,7 +739,8 @@ func describeDirtyDataplaneTests(appendMode bool, dataplaneMode string) {
 				NewCmdOverride:           dataplane.newCmd,
 				SleepOverride:            dataplane.sleep,
 				InsertMode:               insertMode,
-				NftablesMode:             dataplaneMode == "nft",
+				BackendMode:              dataplaneMode,
+				LookPathOverride:         lookPathNoLegacy,
 			},
 		)
 	})
@@ -1093,7 +1135,8 @@ func describeInsertAndNonCalicoChainTests(dataplaneMode string) {
 				NewCmdOverride:        dataplane.newCmd,
 				SleepOverride:         dataplane.sleep,
 				NowOverride:           dataplane.now,
-				NftablesMode:          dataplaneMode == "nft",
+				BackendMode:           dataplaneMode,
+				LookPathOverride:      lookPathNoLegacy,
 			},
 		)
 		table.SetRuleInsertions("FORWARD", []Rule{
@@ -1152,4 +1195,15 @@ func (m *mockMutex) Unlock() {
 		Fail("Mutex not held")
 	}
 	m.Held = false
+}
+
+func lookPathNoLegacy(p string) (string, error) {
+	if strings.Contains(p, "legacy") {
+		return "", &exec.Error{}
+	}
+	return p, nil
+}
+
+func lookPathAll(p string) (string, error) {
+	return p, nil
 }
