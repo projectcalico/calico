@@ -15,6 +15,9 @@
 package iptables_test
 
 import (
+	"os/exec"
+	"strings"
+
 	. "github.com/projectcalico/felix/iptables"
 
 	. "github.com/onsi/ginkgo"
@@ -27,7 +30,47 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-var _ = Describe("Table with an empty dataplane", func() {
+var _ = Describe("Table with an empty dataplane (nft)", func() {
+	describeEmptyDataplaneTests("nft")
+})
+var _ = Describe("Table with an empty dataplane (legacy)", func() {
+	describeEmptyDataplaneTests("legacy")
+
+	It("should find the iptables-legacy-* iptables binaries", func() {
+		dataplane := newMockDataplane("filter", map[string][]string{
+			"FORWARD": {},
+			"INPUT":   {},
+			"OUTPUT":  {},
+		}, "legacy")
+		iptLock := &mockMutex{}
+		featureDetector := NewFeatureDetector()
+		featureDetector.NewCmd = dataplane.newCmd
+		featureDetector.GetKernelVersionReader = dataplane.getKernelVersionReader
+		table := NewTable(
+			"filter",
+			4,
+			rules.RuleHashPrefix,
+			iptLock,
+			featureDetector,
+			TableOptions{
+				HistoricChainPrefixes: rules.AllHistoricChainNamePrefixes,
+				NewCmdOverride:        dataplane.newCmd,
+				SleepOverride:         dataplane.sleep,
+				NowOverride:           dataplane.now,
+				BackendMode:           "legacy",
+				LookPathOverride:      lookPathAll,
+			},
+		)
+
+		table.SetRuleInsertions("FORWARD", []Rule{
+			{Action: DropAction{}},
+		})
+		table.Apply()
+		Expect(dataplane.CmdNames).To(ConsistOf("iptables", "iptables-legacy-save", "iptables-legacy-restore"))
+	})
+})
+
+func describeEmptyDataplaneTests(dataplaneMode string) {
 	var dataplane *mockDataplane
 	var table *Table
 	var iptLock *mockMutex
@@ -37,7 +80,7 @@ var _ = Describe("Table with an empty dataplane", func() {
 			"FORWARD": {},
 			"INPUT":   {},
 			"OUTPUT":  {},
-		})
+		}, dataplaneMode)
 		iptLock = &mockMutex{}
 		featureDetector = NewFeatureDetector()
 		featureDetector.NewCmd = dataplane.newCmd
@@ -53,6 +96,8 @@ var _ = Describe("Table with an empty dataplane", func() {
 				NewCmdOverride:        dataplane.newCmd,
 				SleepOverride:         dataplane.sleep,
 				NowOverride:           dataplane.now,
+				BackendMode:           dataplaneMode,
+				LookPathOverride:      lookPathNoLegacy,
 			},
 		)
 	})
@@ -61,10 +106,17 @@ var _ = Describe("Table with an empty dataplane", func() {
 		Expect(dataplane.CmdNames).To(BeEmpty())
 		table.Apply()
 		// Should only load, since there's nothing to so.
-		Expect(dataplane.CmdNames).To(Equal([]string{
-			"iptables",
-			"iptables-save",
-		}))
+		if dataplaneMode == "nft" {
+			Expect(dataplane.CmdNames).To(Equal([]string{
+				"iptables",
+				"iptables-nft-save",
+			}))
+		} else {
+			Expect(dataplane.CmdNames).To(Equal([]string{
+				"iptables",
+				"iptables-save",
+			}))
+		}
 		Expect(iptLock.Held).To(BeFalse())
 		Expect(iptLock.WasTaken).To(BeFalse())
 	})
@@ -82,11 +134,19 @@ var _ = Describe("Table with an empty dataplane", func() {
 		})
 		Expect(dataplane.CmdNames).To(BeEmpty())
 		table.Apply()
-		Expect(dataplane.CmdNames).To(Equal([]string{
-			"iptables",
-			"iptables-save",
-			"iptables-restore",
-		}))
+		if dataplaneMode == "nft" {
+			Expect(dataplane.CmdNames).To(Equal([]string{
+				"iptables",
+				"iptables-nft-save",
+				"iptables-nft-restore",
+			}))
+		} else {
+			Expect(dataplane.CmdNames).To(Equal([]string{
+				"iptables",
+				"iptables-save",
+				"iptables-restore",
+			}))
+		}
 	})
 
 	It("should ignore delete of non-existent chain", func() {
@@ -110,6 +170,8 @@ var _ = Describe("Table with an empty dataplane", func() {
 					NewCmdOverride:        dataplane.newCmd,
 					SleepOverride:         dataplane.sleep,
 					InsertMode:            "unknown",
+					BackendMode:           dataplaneMode,
+					LookPathOverride:      lookPathAll,
 				},
 			)
 		}).To(Panic())
@@ -147,7 +209,11 @@ var _ = Describe("Table with an empty dataplane", func() {
 				"OUTPUT":  {},
 			}))
 			// Should do a save but then figure out that there's nothing to do
-			Expect(dataplane.CmdNames).To(ConsistOf("iptables", "iptables-save"))
+			if dataplaneMode == "nft" {
+				Expect(dataplane.CmdNames).To(ConsistOf("iptables", "iptables-nft-save"))
+			} else {
+				Expect(dataplane.CmdNames).To(ConsistOf("iptables", "iptables-save"))
+			}
 		})
 
 		Describe("after inserting a rule then updating the insertions", func() {
@@ -312,7 +378,11 @@ var _ = Describe("Table with an empty dataplane", func() {
 				dataplane.ResetCmds()
 				table.Apply()
 				// Should do a save but then figure out that there's nothing to do
-				Expect(dataplane.CmdNames).To(ConsistOf("iptables", "iptables-save"))
+				if dataplaneMode == "nft" {
+					Expect(dataplane.CmdNames).To(ConsistOf("iptables", "iptables-nft-save"))
+				} else {
+					Expect(dataplane.CmdNames).To(ConsistOf("iptables", "iptables-save"))
+				}
 			})
 		})
 		Describe("then extending the chain", func() {
@@ -412,16 +482,22 @@ var _ = Describe("Table with an empty dataplane", func() {
 			})
 		})
 	})
+}
+
+var _ = Describe("Tests of post-update recheck behaviour with refresh timer (nft)", func() {
+	describePostUpdateCheckTests(true, "nft")
+})
+var _ = Describe("Tests of post-update recheck behaviour with no refresh timer (nft)", func() {
+	describePostUpdateCheckTests(false, "nft")
+})
+var _ = Describe("Tests of post-update recheck behaviour with refresh timer (legacy)", func() {
+	describePostUpdateCheckTests(true, "legacy")
+})
+var _ = Describe("Tests of post-update recheck behaviour with no refresh timer (legacy)", func() {
+	describePostUpdateCheckTests(false, "legacy")
 })
 
-var _ = Describe("Tests of post-update recheck behaviour with refresh timer", func() {
-	describePostUpdateCheckTests(true)
-})
-var _ = Describe("Tests of post-update recheck behaviour with no refresh timer", func() {
-	describePostUpdateCheckTests(false)
-})
-
-func describePostUpdateCheckTests(enableRefresh bool) {
+func describePostUpdateCheckTests(enableRefresh bool, dataplaneMode string) {
 	var dataplane *mockDataplane
 	var table *Table
 	var requestedDelay time.Duration
@@ -431,12 +507,14 @@ func describePostUpdateCheckTests(enableRefresh bool) {
 			"FORWARD": {},
 			"INPUT":   {},
 			"OUTPUT":  {},
-		})
+		}, dataplaneMode)
 		options := TableOptions{
 			HistoricChainPrefixes: rules.AllHistoricChainNamePrefixes,
 			NewCmdOverride:        dataplane.newCmd,
 			SleepOverride:         dataplane.sleep,
 			NowOverride:           dataplane.now,
+			BackendMode:           dataplaneMode,
+			LookPathOverride:      lookPathNoLegacy,
 		}
 		if enableRefresh {
 			options.RefreshInterval = 30 * time.Second
@@ -466,7 +544,11 @@ func describePostUpdateCheckTests(enableRefresh bool) {
 		}
 	}
 	assertRecheck := func() {
-		Expect(dataplane.CmdNames).To(ConsistOf("iptables", "iptables-save"))
+		if dataplaneMode == "nft" {
+			Expect(dataplane.CmdNames).To(ConsistOf("iptables", "iptables-nft-save"))
+		} else {
+			Expect(dataplane.CmdNames).To(ConsistOf("iptables", "iptables-save"))
+		}
 	}
 	assertDelayMillis := func(delay int64) func() {
 		return func() {
@@ -554,14 +636,20 @@ func describePostUpdateCheckTests(enableRefresh bool) {
 	})
 }
 
-var _ = Describe("Table with a dirty dataplane in append mode", func() {
-	describeDirtyDataplaneTests(true)
+var _ = Describe("Table with a dirty dataplane in append mode (nft)", func() {
+	describeDirtyDataplaneTests(true, "nft")
 })
-var _ = Describe("Table with a dirty dataplane in insert mode", func() {
-	describeDirtyDataplaneTests(false)
+var _ = Describe("Table with a dirty dataplane in insert mode (nft)", func() {
+	describeDirtyDataplaneTests(false, "nft")
+})
+var _ = Describe("Table with a dirty dataplane in append mode (legacy)", func() {
+	describeDirtyDataplaneTests(true, "legacy")
+})
+var _ = Describe("Table with a dirty dataplane in insert mode (legacy)", func() {
+	describeDirtyDataplaneTests(false, "legacy")
 })
 
-func describeDirtyDataplaneTests(appendMode bool) {
+func describeDirtyDataplaneTests(appendMode bool, dataplaneMode string) {
 	// These tests all start with some rules already in the dataplane.  We include a mix of
 	// Calico and non-Calico rules.  Within the Calico rules,we include:
 	// - rules that match what we're going to ask the Table to program
@@ -629,7 +717,7 @@ func describeDirtyDataplaneTests(appendMode bool) {
 	}
 
 	BeforeEach(func() {
-		dataplane = newMockDataplane("filter", initialChains())
+		dataplane = newMockDataplane("filter", initialChains(), dataplaneMode)
 		insertMode := ""
 		if appendMode {
 			insertMode = "append"
@@ -649,6 +737,8 @@ func describeDirtyDataplaneTests(appendMode bool) {
 				NewCmdOverride:           dataplane.newCmd,
 				SleepOverride:            dataplane.sleep,
 				InsertMode:               insertMode,
+				BackendMode:              dataplaneMode,
+				LookPathOverride:         lookPathNoLegacy,
 			},
 		)
 	})
@@ -843,14 +933,26 @@ func describeDirtyDataplaneTests(appendMode bool) {
 			table.Apply()
 			Expect(dataplane.RuleTouched("cali-correct", 1)).To(BeFalse())
 		})
-		It("shouldn't touch already-correct rules", func() {
-			table.Apply()
-			// First two rules are already correct...
-			Expect(dataplane.RuleTouched("cali-foobar", 1)).To(BeFalse())
-			Expect(dataplane.RuleTouched("cali-foobar", 2)).To(BeFalse())
-			// Third rule is incorrect.
-			Expect(dataplane.RuleTouched("cali-foobar", 3)).To(BeTrue())
-		})
+		if dataplaneMode == "legacy" {
+			It("shouldn't touch already-correct rules", func() {
+				table.Apply()
+				// First two rules are already correct...
+				Expect(dataplane.RuleTouched("cali-foobar", 1)).To(BeFalse())
+				Expect(dataplane.RuleTouched("cali-foobar", 2)).To(BeFalse())
+				// Third rule is incorrect.
+				Expect(dataplane.RuleTouched("cali-foobar", 3)).To(BeTrue())
+			})
+		} else {
+			// In nft mode, we have to rewrite the whole chain if there's any change.
+			It("should rewrite whole chain", func() {
+				table.Apply()
+				// First two rules are already correct...
+				Expect(dataplane.RuleTouched("cali-foobar", 1)).To(BeTrue())
+				Expect(dataplane.RuleTouched("cali-foobar", 2)).To(BeTrue())
+				// Third rule is incorrect.
+				Expect(dataplane.RuleTouched("cali-foobar", 3)).To(BeTrue())
+			})
+		}
 		It("with a transient error, it should get to correct final state", func() {
 			// First write to iptables fails; Table should simply retry.
 			log.Info("About to do a failing Apply().")
@@ -1000,7 +1102,14 @@ func describeDirtyDataplaneTests(appendMode bool) {
 	})
 }
 
-var _ = Describe("Table with inserts and a non-Calico chain", func() {
+var _ = Describe("Table with inserts and a non-Calico chain (legacy)", func() {
+	describeInsertAndNonCalicoChainTests("legacy")
+})
+var _ = Describe("Table with inserts and a non-Calico chain (nft)", func() {
+	describeInsertAndNonCalicoChainTests("nft")
+})
+
+func describeInsertAndNonCalicoChainTests(dataplaneMode string) {
 	var dataplane *mockDataplane
 	var table *Table
 	var iptLock *mockMutex
@@ -1008,7 +1117,7 @@ var _ = Describe("Table with inserts and a non-Calico chain", func() {
 		dataplane = newMockDataplane("filter", map[string][]string{
 			"FORWARD":    {},
 			"non-calico": {"-m comment \"foo\""},
-		})
+		}, dataplaneMode)
 		iptLock = &mockMutex{}
 		featureDetector := NewFeatureDetector()
 		featureDetector.NewCmd = dataplane.newCmd
@@ -1024,6 +1133,8 @@ var _ = Describe("Table with inserts and a non-Calico chain", func() {
 				NewCmdOverride:        dataplane.newCmd,
 				SleepOverride:         dataplane.sleep,
 				NowOverride:           dataplane.now,
+				BackendMode:           dataplaneMode,
+				LookPathOverride:      lookPathNoLegacy,
 			},
 		)
 		table.SetRuleInsertions("FORWARD", []Rule{
@@ -1062,7 +1173,7 @@ var _ = Describe("Table with inserts and a non-Calico chain", func() {
 			Expect(iptLock.WasTaken).To(BeFalse())
 		})
 	})
-})
+}
 
 type mockMutex struct {
 	Held     bool
@@ -1082,4 +1193,15 @@ func (m *mockMutex) Unlock() {
 		Fail("Mutex not held")
 	}
 	m.Held = false
+}
+
+func lookPathNoLegacy(p string) (string, error) {
+	if strings.Contains(p, "legacy") {
+		return "", &exec.Error{}
+	}
+	return p, nil
+}
+
+func lookPathAll(p string) (string, error) {
+	return p, nil
 }
