@@ -131,6 +131,7 @@ type Config struct {
 	Ipv6Support    bool `config:"bool;true"`
 	IgnoreLooseRPF bool `config:"bool;false"`
 
+	IptablesBackend                    string        `config:"oneof(legacy,nft);legacy"`
 	RouteRefreshInterval               time.Duration `config:"seconds;90"`
 	IptablesRefreshInterval            time.Duration `config:"seconds;90"`
 	IptablesPostWriteCheckIntervalSecs time.Duration `config:"seconds;1"`

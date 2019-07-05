@@ -1,5 +1,5 @@
-hash: 1df24442d78735fb3e658b1aa82bb9d61e476ec4ad4d3eccdac1ff3f6e6837e8
-updated: 2019-06-06T09:06:07.065507121Z
+hash: 7aefa66318d4191c6d27454d2455251c4d3ca13076c51756f06def51d5eb7020
+updated: 2019-07-08T17:09:59.824033788Z
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -31,6 +31,7 @@ imports:
   - etcdserver/api/v3rpc/rpctypes
   - etcdserver/etcdserverpb
   - mvcc/mvccpb
+  - pkg/srv
   - pkg/tlsutil
   - pkg/transport
   - pkg/types
@@ -47,38 +48,15 @@ imports:
 - name: github.com/go-ini/ini
   version: 3be5ad479f69d4e08d7fe25edf79bf3346bd658e
 - name: github.com/go-playground/locales
-  version: f63010822830b6fe52288ee52d5a1151088ce039
+  version: 630ebbb602847eba93e75ae38bbc7bb7abcf1ff3
   subpackages:
   - currency
 - name: github.com/go-playground/universal-translator
   version: 71201497bace774495daed26a3874fd339e0b538
-- name: github.com/gobuffalo/envy
-  version: 043cb4b8af871b49563291e32c66bb84378a60ac
-- name: github.com/gobuffalo/genny
-  version: 34bef62e8202ea5e6dd1f9ee3d5ac217f1290352
-- name: github.com/gobuffalo/gogen
-  version: 5482e6ef5d999f8cfa9b038a53953c9b4ee090af
-  subpackages:
-  - goimports
-  - gomods
-- name: github.com/gobuffalo/logger
-  version: 86e12af44bc273e0063fad5b6ad588890b8cfe6b
-- name: github.com/gobuffalo/mapi
-  version: 0bb5e840be332d4280e40f2e6c50777c615bbac5
-- name: github.com/gobuffalo/packd
-  version: 9efbb667f2024a9370cadda45a57a0657c88a6fb
 - name: github.com/gobuffalo/packr
   version: 68a5fdc58d980600c4622a82472ebe415048f141
   subpackages:
-  - v2
-  - v2/file
-  - v2/file/resolver
-  - v2/file/resolver/encoding/hex
-  - v2/jam/parser
   - v2/packr2
-  - v2/plog
-- name: github.com/gobuffalo/syncx
-  version: 33c29581e754bd354236e977dfe426e55331c45d
 - name: github.com/gogo/protobuf
   version: c0656edd0d9eab7c66d1eb0c568f9039345796f7
   subpackages:
@@ -144,16 +122,12 @@ imports:
   - tracer
   - tracer/wire
   - writer
-- name: github.com/joho/godotenv
-  version: 5c0e6c6ab1a0a9ef0a8822cba3a05d62f7dad941
 - name: github.com/json-iterator/go
   version: f2b4162afba35581b6d4a50d3b8f34e33c144682
 - name: github.com/kardianos/osext
   version: 2bc1f35cddc0cc527b4bc3dce8578fc2a6c11384
-- name: github.com/karrick/godirwalk
-  version: 4e17292779dcc7ed08e10c03bfdd022f7c28b3c3
 - name: github.com/kelseyhightower/envconfig
-  version: dd1402a4d99de9ac2f396cd6fcb957bc2c695ec1
+  version: 0b417c4ec4a8a82eecc22a1459a504aa55163d61
 - name: github.com/leodido/go-urn
   version: a67a23e1c1af3c66528573bb86a87246477277c1
 - name: github.com/libp2p/go-reuseport
@@ -165,16 +139,12 @@ imports:
   version: 52957a0228cc3d7606fa619c7dde49ba1f1ebbb8
   subpackages:
   - net
-- name: github.com/markbates/oncer
-  version: bf2de49a0be218916e69a11d22866e6cd0a560f2
-- name: github.com/markbates/safe
-  version: 6fea05a5732486546a4836b7a1d596c5ec687b98
 - name: github.com/mattn/go-colorable
-  version: 3a70a971f94a22f2fa562ffcc7a0eb45f5daf045
+  version: 8029fb3788e5a4a9c00e415f586a6d033f5d38b3
 - name: github.com/mattn/go-isatty
-  version: c2a7a6ca930a4cd0bc33a3f298eb71960732a3a7
+  version: 1311e847b0cb909da63b5fecfb5370aa66236465
 - name: github.com/matttproud/golang_protobuf_extensions
-  version: c182affec369e30f25d3eb8cd8a478dee585ae7d
+  version: c12348ce28de40eed0136aa2b644d0ee0650e56c
   subpackages:
   - pbutil
 - name: github.com/Microsoft/go-winio
@@ -231,8 +201,6 @@ imports:
   version: ca53cad383cad2479bbba7f7a1a05797ec1386e4
 - name: github.com/peterbourgon/diskv
   version: 5f041e8faa004a95c88a202771f4cc3e991971e6
-- name: github.com/pkg/errors
-  version: 27936f6d90f9c8e1145f11ed52ffffbfdb9e0af7
 - name: github.com/projectcalico/go-json
   version: 6219dc7339ba20ee4c57df0a8baac62317d19cb1
   subpackages:
@@ -242,7 +210,7 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: fa890c26fa97231b5516277681863db3bf8b49ef
+  version: 5aafce74174a0d78b44593eb9892e1ae26fd7ea2
   subpackages:
   - lib/apiconfig
   - lib/apis/v1
@@ -284,7 +252,7 @@ imports:
   subpackages:
   - binder
 - name: github.com/projectcalico/typha
-  version: 6b8abb0da6cb0b56faa85f613f9dda8748ae51d3
+  version: 4638d4f0eca6211d379b677bbae81c22aad719ab
   subpackages:
   - pkg/syncclient
   - pkg/syncproto
@@ -297,11 +265,11 @@ imports:
   - prometheus/promhttp
   - prometheus/push
 - name: github.com/prometheus/client_model
-  version: fd36f4220a901265f90734c3183c5f0c91daa0b8
+  version: 5c3871d89910bfb32f5fcab2aa4b9ec68e65a99f
   subpackages:
   - go
 - name: github.com/prometheus/common
-  version: c873fb1f9420b83ee703b4361c61183b4619f74d
+  version: 4724e9255275ce38f7179b2478abeae4e28c904f
   subpackages:
   - expfmt
   - internal/bitbucket.org/ww/goautoneg
@@ -310,19 +278,13 @@ imports:
   version: a6e9df898b1336106c743392c48ee0b71f5c4efa
   subpackages:
   - xfs
-- name: github.com/rogpeppe/go-internal
-  version: 438578804ca6f31be148c27683afc419ce47c06e
-  subpackages:
-  - modfile
-  - module
-  - semver
 - name: github.com/satori/go.uuid
   version: f58768cc1a7a7e77a3bd49e98cdd21419399b6a3
 - name: github.com/sirupsen/logrus
   version: 1f80e3709dfafa8ca8727ba7eb392a11827ac8e2
   repo: https://github.com/projectcalico/logrus
 - name: github.com/spf13/cobra
-  version: 67fc4837d267bc9bfd6e47f77783fcc3dffc68de
+  version: f2b07da1e2c38d5f12845a4f607e2e1018cbb1f5
 - name: github.com/spf13/pflag
   version: 583c0c0531f06d5278b7d917446061adc344b5cd
 - name: github.com/vishvananda/netlink
@@ -330,7 +292,7 @@ imports:
   subpackages:
   - nl
 - name: github.com/vishvananda/netns
-  version: 13995c7128ccc8e51e9a6bd2b551020a27180abd
+  version: 8ba1072b58e0c2a240eb5f6120165c7776c3e7b8
 - name: github.com/whyrusleeping/go-logging
   version: 0457bb6b88fc1973573aaf6b5145d8d3ae972390
 - name: golang.org/x/crypto
@@ -388,19 +350,6 @@ imports:
   version: f51c12702a4d776e4c1fa9b0fabab841babae631
   subpackages:
   - rate
-- name: golang.org/x/tools
-  version: fe54fb35175bb1c0c175e2335e23d7fa90ca987a
-  subpackages:
-  - go/ast/astutil
-  - go/gcexportdata
-  - go/internal/gcimporter
-  - go/internal/packagesdriver
-  - go/packages
-  - imports
-  - internal/fastwalk
-  - internal/gopathwalk
-  - internal/module
-  - internal/semver
 - name: google.golang.org/appengine
   version: 54a98f90d1c46b7731eb8fb305d2a321c30ef610
   subpackages:
@@ -440,7 +389,7 @@ imports:
 - name: gopkg.in/fsnotify.v1
   version: 7be54206639f256967dd82fa767397ba5f8f48f5
 - name: gopkg.in/go-playground/validator.v9
-  version: 46b4b1e301c24cac870ffcb4ba5c8a703d1ef475
+  version: 884d31b8cad6a1ec877f2400d555924cea03bbea
 - name: gopkg.in/inf.v0
   version: 3887ee99ecf07df5b447e9b00d9c0b2adaa9f3e4
 - name: gopkg.in/tomb.v1

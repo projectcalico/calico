@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2018 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2019 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -79,6 +79,9 @@ type Chain struct {
 }
 
 func (c *Chain) RuleHashes(features *Features) []string {
+	if c == nil {
+		return nil
+	}
 	hashes := make([]string, len(c.Rules))
 	// First hash the chain name so that identical rules in different chains will get different
 	// hashes.
