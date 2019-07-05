@@ -134,6 +134,7 @@ func init() {
 	registerFieldValidator("mustBeFalse", validateMustBeFalse)
 	registerFieldValidator("ifaceFilter", validateIfaceFilter)
 	registerFieldValidator("mac", validateMAC)
+	registerFieldValidator("iptablesBackend", validateIptablesBackend)
 
 	// Register network validators (i.e. validating a correctly masked CIDR).  Also
 	// accepts an IP address without a mask (assumes a full mask).
@@ -276,6 +277,12 @@ func validateMAC(fl validator.FieldLevel) bool {
 		return false
 	}
 	return true
+}
+
+func validateIptablesBackend(fl validator.FieldLevel) bool {
+	s := fl.Field().String()
+	log.Debugf("Validate Iptables Backend: %s", s)
+	return s == "" || s == api.IptablesBackendNFTables || s == api.IptablesBackendLegacy
 }
 
 func validateLogLevel(fl validator.FieldLevel) bool {

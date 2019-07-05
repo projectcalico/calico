@@ -19,9 +19,13 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+type IptablesBackend string
+
 const (
 	KindFelixConfiguration     = "FelixConfiguration"
 	KindFelixConfigurationList = "FelixConfigurationList"
+	IptablesBackendLegacy      = "Legacy"
+	IptablesBackendNFTables    = "NFT"
 )
 
 // +genclient
@@ -79,6 +83,8 @@ type FelixConfigurationSpec struct {
 	// disable iptables refresh. [Default: 90s]
 	IpsetsRefreshInterval *metav1.Duration `json:"ipsetsRefreshInterval,omitempty" configv1timescale:"seconds"`
 	MaxIpsetSize          *int             `json:"maxIpsetSize,omitempty"`
+	// IptablesBackend specifies which backend of iptables will be used. The default is legacy.
+	IptablesBackend *IptablesBackend `json:"iptablesBackend,omitempty" validate:"omitempty,iptablesBackend"`
 
 	// XDPRefreshInterval is the period at which Felix re-checks all XDP state to ensure that no
 	// other process has accidentally broken Calico's BPF maps or attached programs. Set to 0 to
