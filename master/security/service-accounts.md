@@ -28,7 +28,11 @@ This how-to guide uses the following Calico features:
 
 #### Use smallest set of permissions required
 
-Service accounts are controlled by RBAC so you can grant permissions to trusted entities (code and/or people). To perform any operation in a workload, clients are required to authenticate with the Kubernetes API server. If you do not explicitly assign a service account to a pod, it uses the default ServiceAccount in the namespace. You should not grant broad permissions to the default service account for a namespace. If an application needs access to the Kubernetes API, create separate service accounts with the smallest set of permissions required. 
+Service accounts are controlled by RBAC so you can grant permissions to trusted entities (code and/or people). To perform any operation in a workload, clients are required to authenticate with the Kubernetes API server. 
+
+If you do not explicitly assign a service account to a pod, it uses the default ServiceAccount in the namespace. 
+
+You should not grant broad permissions to the default service account for a namespace. If an application needs access to the Kubernetes API, create separate service accounts with the smallest set of permissions required. 
 
 #### Service account labels
 
@@ -39,7 +43,7 @@ Like all other Kubernetes objects, service accounts have labels. You can use lab
 
 ### Before you begin...
 
-Configure unique Kubernetes service accounts for your applications
+Configure unique Kubernetes service accounts for your applications.
 
 ### How to
 
