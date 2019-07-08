@@ -25,7 +25,7 @@ MAINTAINER David Wilder <wilder@us.ibm.com>
 
 ARG ARCH=ppc64le
 
-# Set the minimum Docker API version required for libnetwork.
+# Set the minimum required Docker API version.
 ENV DOCKER_API_VERSION 1.21
 
 # Enable non-native builds of this image on an amd64 hosts.

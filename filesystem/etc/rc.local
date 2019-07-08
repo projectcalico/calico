@@ -61,19 +61,11 @@ case "$CALICO_NETWORKING_BACKEND" in
 	;;
 esac
 
-# If running libnetwork plugin in a separate container, CALICO_LIBNETWORK_ENABLED would be false.
-# CALICO_LIBNETWORK_ENABLED is "false" by default. It can be set by passing `--libnetwork` flag while starting the calico/node via calicoctl
-if [ "$CALICO_LIBNETWORK_ENABLED" = "true" ]; then
-	echo "Starting libnetwork service"
-	cp -a /etc/service/available/libnetwork  /etc/service/enabled/
-fi
-
 if [ "$CALICO_DISABLE_FILE_LOGGING" = "true" ]; then
 	rm -rf /etc/service/enabled/bird/log
 	rm -rf /etc/service/enabled/bird6/log
 	rm -rf /etc/service/enabled/confd/log
 	rm -rf /etc/service/enabled/felix/log
-	rm -rf /etc/service/enabled/libnetwork/log
 	rm -rf /etc/service/enabled/calico-bgp-daemon/log
 fi
 

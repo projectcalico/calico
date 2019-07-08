@@ -19,11 +19,10 @@ import tempfile
 import uuid
 import yaml
 from functools import partial
-from subprocess import CalledProcessError, check_output, PIPE
+from subprocess import CalledProcessError, check_output
 
 from log_analyzer import LogAnalyzer, FELIX_LOG_FORMAT, TIMESTAMP_FORMAT
-from network import DockerNetwork, DummyNetwork, global_setting, \
-        NETWORKING_CNI, NETWORKING_LIBNETWORK
+from network import DummyNetwork
 from tests.st.utils.constants import DEFAULT_IPV4_POOL_CIDR
 from tests.st.utils.exceptions import CommandExecError
 from utils import get_ip, log_and_run, retry_until_success, ETCD_SCHEME, \
@@ -66,17 +65,7 @@ class DockerHost(object):
     choose an alternate hostname for the host which it will pass to all
     calicoctl components as the HOSTNAME environment variable.  If set
     to False, the HOSTNAME environment is not explicitly set.
-    :param networking: What plugin to use to set up the networking for
-    workloads on this host.  Possible values are None (the default), meaning to
-    use the global setting for the test run; "cni", meaning to use the Calico
-    CNI plugin; and "libnetwork", meaning to use the Docker libnetwork plugin.
-    The global setting for the test run is taken from the environment variable
-    ST_NETWORKING, and is "cni" if that variable is not set.
     """
-
-    # A static list of Docker networks that are created by the tests.  This
-    # list covers all Docker hosts.
-    docker_networks = []
 
     def __init__(self, name, start_calico=True, dind=True,
                  additional_docker_options="",
@@ -84,8 +73,7 @@ class DockerHost(object):
                                        "docker load -q -i /code/busybox.tar"],
                  calico_node_autodetect_ip=False,
                  simulate_gce_routing=False,
-                 override_hostname=False,
-                 networking=None):
+                 override_hostname=False):
         self.name = name
         self.dind = dind
         self.workloads = set()
@@ -107,12 +95,6 @@ class DockerHost(object):
         """
         Create an arbitrary hostname if we want to override.
         """
-
-        if networking is None:
-            self.networking = global_setting()
-        else:
-            self.networking = networking
-        assert self.networking in [NETWORKING_CNI, NETWORKING_LIBNETWORK]
 
         # This variable is used to assert on destruction that this object was
         # cleaned up.  If not used as a context manager, users of this object
@@ -445,8 +427,7 @@ class DockerHost(object):
         """
         for workload in self.workloads:
             try:
-                if self.networking == NETWORKING_CNI:
-                    workload.run_cni("DEL")
+                workload.run_cni("DEL")
                 self.execute("docker rm -f %s" % workload.name)
             except CalledProcessError:
                 # Make best effort attempt to clean containers. Don't fail the
@@ -519,25 +500,19 @@ class DockerHost(object):
 
         logger.info("# Cleaning up host %s", self.name)
         if self.dind:
-            # For Docker-in-Docker, we need to remove all containers and
-            # all images.
-            # Start by just removing the workloads and then attempt cleanup of
-            # networks...
-            self.remove_workloads()
-            self.cleanup_networks()
+            # For Docker-in-Docker, we need to remove all workloads, containers
+            # and images.
 
-            # ...delete any remaining containers and the images...
+            self.remove_workloads()
             self.remove_containers()
             self.remove_images()
 
-            # ...and the outer container for DinD.
+            # Remove the outer container for DinD.
             log_and_run("docker rm -f %s || true" % self.name)
         else:
             # For non Docker-in-Docker, we can only remove the containers we
-            # created - so remove the workloads, attempt cleanup of networks
-            # and delete the calico node.
+            # created - so remove the workloads and delete the calico node.
             self.remove_workloads()
-            self.cleanup_networks()
             log_and_run("docker rm -f calico-node || true")
 
         self._cleaned = True
@@ -545,23 +520,6 @@ class DockerHost(object):
         # Now that tidy-up is complete, re-raise any exceptions found in the logs.
         if log_exception:
             raise log_exception
-
-    def cleanup_networks(self):
-        """
-        Attempt to cleanup any networks that are stored globally.  Note that
-        Docker will not allow a network to be deleted whilst there are
-        endpoints associated with the network - thus any networks that could
-        not be deleted are added back to the global list and will be removed
-        via another docker host cleanup (after removing its endpoints).
-        """
-        q_networks = []
-        while self.docker_networks:
-            nw = self.docker_networks.pop()
-            try:
-                nw.delete(host=self)
-            except CommandExecError:
-                q_networks.append(nw)
-        self.docker_networks.extend(q_networks)
 
     def __del__(self):
         """
@@ -586,36 +544,9 @@ class DockerHost(object):
         self.workloads.add(workload)
         return workload
 
-    def create_network(self, name, driver="calico", ipam_driver="calico-ipam",
-                       subnet=None):
-        """
-        Create a Docker network using this host.  If the DockerHost is used
-        as a context manager, exit processing will attempt deletion of *all*
-        networks created across *all* Docker hosts - if you do not want the
-        tidy up of networks to occur automatically, don't use the DockerHost as
-        a context manager and perform tidy explicitly.
-
-        :param name: The name of the network.  This must be unique per cluster
-        and it is the user-facing identifier for the network.
-        :param driver: The name of the network driver to use.  (The Calico
-        driver is the default.)
-        :param ipam_driver:  The name of the IPAM driver to use.  (The Calico
-        driver is the default.)
-        :param subnet: The subnet IP pool to assign IPs from.
-        :return: A DockerNetwork object.
-        """
-
-        nw = DummyNetwork(name)
-
-        if self.networking == NETWORKING_LIBNETWORK:
-            nw = DockerNetwork(self, name, driver=driver,
-                               ipam_driver=ipam_driver,
-                               subnet=subnet)
-
-        # Store the network so that we can attempt to remove it when this host
-        # or another host exits.
-        self.docker_networks.append(nw)
-        return nw
+    @staticmethod
+    def create_network(name):
+        return DummyNetwork(name)
 
     @staticmethod
     def escape_shell_single_quotes(command):

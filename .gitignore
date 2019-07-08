@@ -13,6 +13,7 @@ vendor
 nosetests.xml
 testfile.yaml
 testfile
+testfile.json
 calico_test.created
 release-notes*
 report/*.xml

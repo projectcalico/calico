@@ -45,7 +45,7 @@ class MultiHostIpam(TestBase):
                                     start_calico=False))
         cls.hosts[0].start_calico_node()
         cls.hosts[1].start_calico_node()
-        cls.network = cls.hosts[0].create_network("testnet1", ipam_driver="calico-ipam")
+        cls.network = cls.hosts[0].create_network("testnet1")
 
     @classmethod
     def tearDownClass(cls):

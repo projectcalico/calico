@@ -50,7 +50,7 @@ FROM s390x/alpine:3.8
 MAINTAINER LoZ Open Source Ecosystem (https://www.ibm.com/developerworks/community/groups/community/lozopensource)
 
 ARG ARCH=s390x
-# Set the minimum Docker API version required for libnetwork.
+# Set the minimum required Docker API version.
 ENV DOCKER_API_VERSION 1.21
 
 # Enable non-native builds of this image on an amd64 hosts.

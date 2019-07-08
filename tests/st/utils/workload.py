@@ -20,7 +20,6 @@ from netaddr import IPAddress
 from exceptions import CommandExecError
 from utils import retry_until_success, debug_failures, get_ip
 from utils import ETCD_SCHEME, ETCD_CA, ETCD_CERT, ETCD_KEY, ETCD_HOSTNAME_SSL
-from network import NETWORKING_CNI, NETWORKING_LIBNETWORK
 
 
 NET_NONE = "none"
@@ -68,9 +67,6 @@ class Workload(object):
             lbl_args += " --label %s" % (label)
 
         net_options = "--net=none"
-        if self.host.networking == NETWORKING_LIBNETWORK:
-            ip_option = (" --ip %s" % ip) if ip else ""
-            net_options = "--net %s%s" % (network, ip_option)
 
         command = "docker run -tid --name %s %s %s %s" % (name,
                                                           net_options,
@@ -79,13 +75,7 @@ class Workload(object):
         docker_run_wl = partial(host.execute, command)
         retry_until_success(docker_run_wl)
 
-        if self.host.networking == NETWORKING_LIBNETWORK:
-            self.ip = host.execute(
-                "docker inspect --format "
-                "'{{.NetworkSettings.Networks.%s.IPAddress}}' %s"
-                % (network, name))
-        else:
-            self.run_cni("ADD", ip=ip)
+        self.run_cni("ADD", ip=ip)
 
     def run_cni(self, add_or_del, ip=None):
         adding = (add_or_del == "ADD")
