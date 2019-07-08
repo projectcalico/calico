@@ -40,29 +40,16 @@ configured with VXLAN.
 
 ## MTU Configuration
 
-It is the job of the network plugin to create new interfaces, the current
-major plugins are CNI and libnetwork. Currently Docker and the Mesos Docker
-Containerizer integration use libnetwork.
+It is the job of the network plugin to create new workload interfaces.  The CNI plugin, which is used by
+Kubernetes, supports configuring the MTU of the workload interface through the CNI configuration file.
 
-CNI, which is used by Kubernetes and the Mesos Unified Containerizer, supports
-configuring the MTU through the CNI configuration file.
-
-The user will also want to configure {{site.prodname}}'s IP-in-IP interface MTU when
-IP-in-IP is enabled on the cluster. Refer to the MTU table at the top of the page
+The user will also want to configure {{site.prodname}}'s IP-in-IP/VXLAN interface MTU when
+IP-in-IP/VXLAN is enabled on the cluster. Refer to the MTU table at the top of the page
 to choose the value that matches your environment.
 
 > **Note**: The MTU on existing workloads will not be updated with these changes. To update
 workload MTUs, see the section that corresponds to your plugin type.
 {: .alert .alert-info}
-
-### MTU configuration with libnetwork
-
-The MTU of the veth pairs created by the {{site.prodname}} libnetwork plugin can be configured
-by setting the `CALICO_LIBNETWORK_VETH_MTU` environment variable on the `libnetwork`
-process.
-
-This should either be set on the standalone `libnetwork` service, or on the
-`{{site.nodecontainer}}` container as a whole.
 
 ### MTU configuration with CNI
 
