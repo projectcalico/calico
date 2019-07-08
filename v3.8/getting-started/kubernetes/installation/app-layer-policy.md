@@ -32,12 +32,11 @@ sed -e '/  policySyncPathPrefix:/d' \
 calicoctl apply -f felix-config.yaml
 ```
 
-
 ## Installing Istio
 
 Application layer policy [requires Istio](../requirements#application-layer-policy-requirements).
 
-Install Istio according to the [Istio project documentation](https://istio.io/docs/setup/kubernetes/), making sure to enable mutual TLS authentication. For example:
+Install Istio according to the [Istio project documentation](https://archive.istio.io/v1.1/docs/setup/kubernetes/), making sure to enable mutual TLS authentication. For example:
 
 ```bash
 curl -L https://git.io/getLatestIstio | ISTIO_VERSION=1.1.7 sh -
@@ -56,7 +55,7 @@ The sidecar injector automatically modifies pods as they are created to work
 with Istio. This step modifies the injector configuration to add Dikastes, a
 {{site.prodname}} component, as sidecar containers.
 
-1. Follow the [Automatic sidecar injection instructions](https://archive.istio.io/v1.0/docs/setup/kubernetes/sidecar-injection/#automatic-sidecar-injection)
+1. Follow the [Automatic sidecar injection instructions](https://archive.istio.io/v1.1/docs/setup/kubernetes/additional-setup/sidecar-injection/#automatic-sidecar-injection)
    to install the sidecar injector and enable it in your chosen namespace(s).
 
 1. Apply the following ConfigMap to enable injection of Dikastes alongside Envoy.
