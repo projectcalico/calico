@@ -48,7 +48,7 @@ Configure unique Kubernetes service accounts for your applications
 
 #### Limit ingress traffic for workloads by service account name
 
-In the following example, ingress traffic is allow from any workload whose service account matches the names **api-service** or **use-auth-service**.
+In the following example, ingress traffic is allowed from any workload whose service account matches the names **api-service** or **user-auth-service**.
 
 ```
 apiVersion: projectcalico.org/v3
@@ -63,12 +63,12 @@ spec:
         serviceAccounts: 
           names: 
             - api-service
-            - use-auth-service
+            - user-auth-service
 ```
 
 #### Limit ingress traffic for workloads by service account label
 
-In the following example, ingress traffic is allowed from any workload whose service account matches the label, **app == web-frontend**.
+In the following example, ingress traffic is allowed from any workload whose service account matches the label selector, **app == web-frontend**.
 
 ```
 apiVersion: projectcalico.org/v3
