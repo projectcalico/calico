@@ -43,8 +43,8 @@ configured with VXLAN.
 It is the job of the network plugin to create new workload interfaces.  The CNI plugin, which is used by
 Kubernetes, supports configuring the MTU of the workload interface through the CNI configuration file.
 
-The user will also want to configure {{site.prodname}}'s IP-in-IP/VXLAN interface MTU when
-IP-in-IP/VXLAN is enabled on the cluster. Refer to the MTU table at the top of the page
+The user will also want to configure {{site.prodname}}'s IP-in-IP interface MTU when
+IP-in-IP is enabled on the cluster. Refer to the MTU table at the top of the page
 to choose the value that matches your environment.
 
 > **Note**: The MTU on existing workloads will not be updated with these changes. To update
