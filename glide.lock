@@ -160,7 +160,7 @@ imports:
 - name: github.com/peterbourgon/diskv
   version: 5f041e8faa004a95c88a202771f4cc3e991971e6
 - name: github.com/projectcalico/felix
-  version: 3774b6b48ee739b326598f9978147fa85650c2a0
+  version: 2da7327f2208a9ab028ef26a35f2403fb4ed15bd
   subpackages:
   - calc
   - config
@@ -187,7 +187,7 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: 9131cbc3d1e68099b7f89d2de0b3704542d4a772
+  version: ac36d966132f2019eb4afc4d3823ed2a98564d2f
   subpackages:
   - lib/apiconfig
   - lib/apis/v1
