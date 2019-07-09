@@ -173,6 +173,22 @@ IP_AUTODETECTION_METHOD=interface=eth.*
 IP6_AUTODETECTION_METHOD=interface=eth.*
 ```
 
+
+#### skip-interface=INTERFACE-REGEX
+
+The `skip-interface` method uses the supplied interface regular expression (golang
+syntax) to exclude interfaces and to return the first IP address on the first
+interface that not matching. The order that both the interfaces
+and the IP addresses are listed is system dependent.
+
+Example with valid IP address on interface exclude enp6s0f0, eth0, eth1, eth2 etc.:
+
+```
+IP_AUTODETECTION_METHOD=skip-interface=enp6s0f0,eth.*
+IP6_AUTODETECTION_METHOD=skip-interface=enp6s0f0,eth.*
+```
+
+
 ### Node readiness
 
 The `calico/node` container supports an exec readiness endpoint.
