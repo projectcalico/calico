@@ -3,6 +3,7 @@ package allocateip
 import (
 	"context"
 	"fmt"
+	gnet "net"
 	"os"
 	"reflect"
 	"time"
@@ -94,27 +95,62 @@ func ensureHostTunnelAddress(ctx context.Context, c client.Interface, nodename s
 		logCtx.WithError(err).Fatalf("Unable to retrieve tunnel address. Error getting node '%s'", nodename)
 	}
 
-	// Get the address
+	// Get the address and ipam attribute string
 	var addr string
+	var attrString string
 	if vxlan {
 		addr = node.Spec.IPv4VXLANTunnelAddr
+		attrString = ipam.AttributeTypeVXLAN
 	} else if node.Spec.BGP != nil {
 		addr = node.Spec.BGP.IPv4IPIPTunnelAddr
+		attrString = ipam.AttributeTypeIPIP
 	}
 
+	// Work out if we need to assign a tunnel address.
+	// In most cases we should not release current address and should assign new one.
+	release := false
+	assign := true
 	if addr == "" {
 		// The tunnel has no IP address assigned, assign one.
-		logCtx.Debug("tunnel is not assigned - assign IP")
-		assignHostTunnelAddr(ctx, c, nodename, cidrs, vxlan)
-	} else if isIpInPool(addr, cidrs) {
-		// The tunnel address is still valid, so leave as it.
-		logCtx.WithField("IP", addr).Info("tunnel address is still valid")
+		logCtx.WithField("Node", nodename).Info("Assign a new tunnel address")
 	} else {
-		// The address that is currently assigned is no longer part
-		// of an encapsulatin-enabled pool, so release the IP, and reassign.
-		logCtx.WithField("IP", addr).Info("Reassigning tunnel address")
+		// Go ahead checking status of current address.
+		ipAddr := gnet.ParseIP(addr)
+		if ipAddr == nil {
+			logCtx.WithError(err).Fatalf("Failed to parse the CIDR '%s'", addr)
+		}
+
+		// Check if we got correct assignment attributes
+		attr, err := c.IPAM().GetAssignmentAttributes(ctx, net.IP{IP: ipAddr})
+		if err == nil {
+			if attr[ipam.AttributeType] == attrString && attr[ipam.AttributeNode] == nodename {
+				// The tunnel address is still assigned to this node, but is it in the correct pool this time?
+				if !isIpInPool(addr, cidrs) {
+					// Wrong pool, release this address.
+					logCtx.WithField("currentAddr", addr).Info("Current address is valid with wrong pool, release it and reassign")
+					release = true
+				} else {
+					// Correct pool, keep this address.
+					logCtx.WithField("currentAddr", addr).Info("Current address is still valid, do nothing")
+					assign = false
+				}
+			} else {
+				// The tunnel address has been allocated to something else, reassign it.
+				logCtx.WithField("currentAddr", addr).Info("Current address is occupied, do not release and reassign")
+			}
+		} else if _, ok := err.(cerrors.ErrorResourceDoesNotExist); ok {
+			// The tunnel address is not assigned, reassign it.
+			logCtx.WithField("currentAddr", addr).Info("Current address is not assigned, do not release and reassign")
+		} else {
+			// Failed to get assignment attributes, datastore connection issues possible, panic
+			logCtx.WithError(err).Panicf("Failed to get assignment attributes for CIDR '%s'", addr)
+		}
+	}
+
+	if release {
+		logCtx.WithField("IP", addr).Info("Release old tunnel address")
 		ipAddr := net.ParseIP(addr)
-		if err != nil {
+		if ipAddr == nil {
 			logCtx.WithError(err).Fatalf("Failed to parse the CIDR '%s'", addr)
 		}
 
@@ -123,8 +159,10 @@ func ensureHostTunnelAddress(ctx context.Context, c client.Interface, nodename s
 		if err != nil {
 			logCtx.WithField("IP", ipAddr.String()).WithError(err).Fatal("Error releasing address")
 		}
+	}
 
-		// Assign a new tunnel address.
+	if assign {
+		logCtx.WithField("IP", addr).Info("Assign new tunnel address")
 		assignHostTunnelAddr(ctx, c, nodename, cidrs, vxlan)
 	}
 }
@@ -137,10 +175,10 @@ func assignHostTunnelAddr(ctx context.Context, c client.Interface, nodename stri
 	attrs := map[string]string{ipam.AttributeNode: nodename}
 	var handle string
 	if vxlan {
-		attrs[ipam.AttributeType] = "vxlanTunnelAddress"
+		attrs[ipam.AttributeType] = ipam.AttributeTypeVXLAN
 		handle = fmt.Sprintf("vxlan-tunnel-addr-%s", nodename)
 	} else {
-		attrs[ipam.AttributeType] = "ipipTunnelAddress"
+		attrs[ipam.AttributeType] = ipam.AttributeTypeIPIP
 		handle = fmt.Sprintf("ipip-tunnel-addr-%s", nodename)
 	}
 	logCtx := getLogger(vxlan)
