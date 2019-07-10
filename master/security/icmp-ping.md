@@ -34,19 +34,19 @@ For details, see [ICMP type and code](https://en.wikipedia.org/wiki/Internet_Con
 
 ### How to
 
-- [Deny all ICMP, all workloads](#deny-all-icmp, all workloads)
+- [Deny all ICMP, all workloads and host endpoints](#deny-all-icmp, all workloads and host endpoints)
 - [Allow ICMP ping, all workloads and host endpoints](#allow-icmp-ping-all-workloads-and-host-endpoints)
 - [Allow ICMP matching protocol type and code, all workloads](#allow-icmp-matching-protocol-type-and-code-all-workloads)
 
-#### Deny all ICMP, all workloads
+#### Deny all ICMP, all workloads and host endpoints
 
 In this example, we introduce a "deny all ICMP" **GlobalNetworkPolicy**. 
 
-This policy **selects all workloads that match a selector**. It enables a default deny for all workloads, in addition to the explicit ICMP deny rules specified in the policy. For more on default deny policy, see [Calico Network Policy]({{site.baseurl}}/{{page.version}}/security/caliconetworkpolicy).   
+This policy **selects all workloads and host endpoints that match a selector**. It enables a default deny for all workloads and host endpoints, in addition to the explicit ICMP deny rules specified in the policy. For more on default deny policy, see [Calico Network Policy]({{site.baseurl}}/{{page.version}}/security/caliconetworkpolicy).   
 
 If your ultimate goal is to allow some traffic, have your regular "allow" policies in place before applying a global deny-all ICMP traffic policy.
 
-In this example, all workloads are blocked from sending or receiving **ICMPv4** and **ICMPv6** messages. Because a GlobalNetworkPolicy applies to hostendpoints as well, to limit the policy to only workloads, we use the selector **projectcalico.org/orchestrator == 'kubernetes'**.
+In this example, all workloads and host endpoints are blocked from sending or receiving **ICMPv4** and **ICMPv6** messages. 
 
 If **ICMPv6** messages are not used in your deployment, it is still good practice to deny them specifically as shown below. 
 
@@ -59,7 +59,7 @@ metadata:
   name: block-icmp
 spec:
   order: 200
-  selector: projectcalico.org/orchestrator == 'kubernetes'
+  selector: all()
   types:
   - Ingress
   - Egress
@@ -77,7 +77,7 @@ spec:
 
 #### Allow ICMP ping, all workloads and host endpoints
 
-In this example, workloads can receive **ICMPv4 type 8** and **ICMPv6 type 128** ping requests.
+In this example, workloads and host endpoints can receive **ICMPv4 type 8** and **ICMPv6 type 128** ping requests.
 
 All other traffic may be allowed by other policies. If traffic is not explicitly allowed, it will be denied by default. 
 
@@ -109,7 +109,7 @@ spec:
 
 #### Allow ICMP matching protocol type and code, all workloads
 
-In this example, only workloads that match the selector **projectcalico.org/orchestrator == 'kubernetes'** are allowed to receive ICMPv4 **code: 1 # host unreachable** messages.
+In this example, only Kubernetes pods that match the selector **projectcalico.org/orchestrator == 'kubernetes'** are allowed to receive ICMPv4 **code: 1 # host unreachable** messages.
 
 ```
 apiVersion: projectcalico.org/v3
