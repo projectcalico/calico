@@ -43,7 +43,7 @@ The `{{site.nodecontainer}}` container is primarily configured through environme
 | K8S_KEY_FILE | Location of a client key for accessing the Kubernetes API.                   | string |
 | K8S_CA_FILE | Location of a CA for accessing the Kubernetes API.                            | string |
 | CALICO_ADVERTISE_CLUSTER_IPS | Enable [advertising Kubernetes service cluster IPs over BGP]({{site.baseurl}}/{{page.version}}/networking/service-advertisement), within the specified CIDR. [Default: disabled] | IPv4 CIDR |
-| USE_POD_CIDR | Use the Kubernetes `Node.Spec.PodCIDR` field for route aggregation. This field is supported only when using the Kubernetes API datastore with host-local IPAM. [Default: false] | boolean |
+| USE_POD_CIDR | Use the Kubernetes `Node.Spec.PodCIDR` field. This field is required when using the Kubernetes API datastore with host-local IPAM. [Default: false] | boolean |
 
 In addition to the above, `{{site.nodecontainer}}` also supports [the standard Felix configuration environment variables](../felix/configuration).
 
@@ -172,6 +172,22 @@ Example with valid IP address on interface eth0, eth1, eth2 etc.:
 IP_AUTODETECTION_METHOD=interface=eth.*
 IP6_AUTODETECTION_METHOD=interface=eth.*
 ```
+
+
+#### skip-interface=INTERFACE-REGEX
+
+The `skip-interface` method uses the supplied interface regular expression (golang
+syntax) to exclude interfaces and to return the first IP address on the first
+interface that not matching. The order that both the interfaces
+and the IP addresses are listed is system dependent.
+
+Example with valid IP address on interface exclude enp6s0f0, eth0, eth1, eth2 etc.:
+
+```
+IP_AUTODETECTION_METHOD=skip-interface=enp6s0f0,eth.*
+IP6_AUTODETECTION_METHOD=skip-interface=enp6s0f0,eth.*
+```
+
 
 ### Node readiness
 

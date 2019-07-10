@@ -1,6 +1,5 @@
 ---
 title: Advertising Kubernetes services over BGP
-redirect_from: latest/networking/service-advertisement
 canonical_url: 'https://docs.projectcalico.org/v3.7/networking/service-advertisement'
 ---
 
@@ -48,8 +47,7 @@ using normal BGP route processing and ECMP routing.
 -  traffic to the cluster IP for a service with `externalTrafficPolicy: Local` will be load-balanced across the
    nodes with endpoints for that service
 
--  traffic to the cluster IP for a service with `externalTrafficPolicy: Cluster` will be load-balanced across all
-   the nodes in the cluster.
+-  traffic to the cluster IP for other services will be load-balanced across all the nodes in the cluster.
 
 In order to implement this behavior, Calico does the following.
 

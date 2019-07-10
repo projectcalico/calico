@@ -1,6 +1,5 @@
 ---
 title: IP pool
-redirect_from: latest/reference/calicoctl/resources/ippool
 canonical_url: 'https://docs.projectcalico.org/v3.7/reference/calicoctl/resources/ippool'
 ---
 

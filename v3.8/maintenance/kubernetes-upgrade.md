@@ -1,5 +1,6 @@
 ---
 title: Upgrading Calico on Kubernetes
+redirect_from: latest/maintenance/kubernetes-upgrade
 canonical_url: 'https://docs.projectcalico.org/v3.7/maintenance/kubernetes-upgrade'
 ---
 
@@ -85,12 +86,12 @@ procedure varies by datastore type.
 
    **{{site.prodname}} for policy and networking**
    ```bash
-   curl {{site.url}}/{{page.version}}/calico-etcd.yaml -O
+   curl {{site.url}}/{{page.version}}/manifests/calico-etcd.yaml -O
    ```
 
    **{{site.prodname}} for policy and flannel for networking**
    ```bash
-   curl {{site.url}}/{{page.version}}/canal-etcd.yaml -O
+   curl {{site.url}}/{{page.version}}/manifests/canal-etcd.yaml -O
    ```
 
    > **Note**: You must must manually apply the changes you made to the manifest
@@ -145,7 +146,7 @@ procedure varies by datastore type.
 
 Dikastes is versioned the same as the rest of {{site.prodname}}, but an upgraded `calico-node` will still be able to work with a downlevel Dikastes
 so that you will not lose data plane connectivity during the upgrade.  Once `calico-node` is upgraded, you can begin redeploying your service pods
-with the updated version of Dikastes. 
+with the updated version of Dikastes.
 
 If you have [enabled Application Layer Policy](/{{page.version}}/getting-started/kubernetes/installation/app-layer-policy),
 take the following steps to upgrade the Dikastes sidecars running in your application pods. Skip these steps if you are not using Istio with {{site.prodname}}.

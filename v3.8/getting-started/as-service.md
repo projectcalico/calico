@@ -1,5 +1,6 @@
 ---
 title: Running calico/node with an init system
+redirect_from: latest/getting-started/as-service
 canonical_url: 'https://docs.projectcalico.org/v3.7/getting-started/as-service'
 ---
 
@@ -24,7 +25,7 @@ environment file and starts the `{{site.nodecontainer}}` image as a service.
 
 ```shell
 ETCD_ENDPOINTS=http://localhost:2379
-ETCD_CA_FILE=""
+ETCD_CA_CERT_FILE=""
 ETCD_CERT_FILE=""
 ETCD_KEY_FILE=""
 CALICO_NODENAME=""
@@ -39,7 +40,7 @@ CALICO_NETWORKING_BACKEND=bird
 Be sure to update this environment file as necessary, such as modifying
 ETCD_ENDPOINTS to point at the correct etcd cluster endpoints.
 
-> **Note**: The `ETCD_CA_FILE`, `ETCD_CERT_FILE`, and `ETCD_KEY_FILE`
+> **Note**: The `ETCD_CA_CERT_FILE`, `ETCD_CERT_FILE`, and `ETCD_KEY_FILE`
 > environment variables are required when using etcd with SSL/TLS. The values
 > here are standard values for a non-SSL version of etcd, but you can use this
 > template to define your SSL values if desired.
