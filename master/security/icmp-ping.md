@@ -34,7 +34,7 @@ For details, see [ICMP type and code](https://en.wikipedia.org/wiki/Internet_Con
 
 ### How to
 
-- [Deny all ICMP, all workloads and host endpoints](#deny-all-icmp, all workloads and host endpoints)
+- [Deny all ICMP, all workloads and host endpoints](#deny-all-icmp-all workloads and host endpoints)
 - [Allow ICMP ping, all workloads and host endpoints](#allow-icmp-ping-all-workloads-and-host-endpoints)
 - [Allow ICMP matching protocol type and code, all workloads](#allow-icmp-matching-protocol-type-and-code-all-workloads)
 
@@ -107,7 +107,7 @@ spec:
       type: 128 # Ping request
 ```
 
-#### Allow ICMP matching protocol type and code, all workloads
+#### Allow ICMP matching protocol type and code, all Kubernetes pods
 
 In this example, only Kubernetes pods that match the selector **projectcalico.org/orchestrator == 'kubernetes'** are allowed to receive ICMPv4 **code: 1 # host unreachable** messages.
 
