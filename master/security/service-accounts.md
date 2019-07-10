@@ -24,7 +24,7 @@ This how-to guide uses the following Calico features:
 
 #### Use smallest set of permissions required
 
-Service accounts are controlled by RBAC so you can grant permissions to trusted entities (code and/or people). To perform any operation in a workload, clients are required to authenticate with the Kubernetes API server. 
+Operations on service accounts are controlled by RBAC, so you can grant permissions only to trusted entities (code and/or people) to create, modify, or delete service accounts. To perform any operation in a workload, clients are required to authenticate with the Kubernetes API server. 
 
 If you do not explicitly assign a service account to a pod, it uses the default ServiceAccount in the namespace. 
 
