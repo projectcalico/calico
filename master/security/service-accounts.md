@@ -8,21 +8,17 @@ Use Calico network policy to allow/deny traffic for Kubernetes services.
 
 ### Value
 
-Using Calico network policy, you can leverage Kubernetes service accounts with RBAC for flexible control over how policies are applied in a cluster. For example, the network security can have RBAC permissions to:
+Kubernetes RBAC allows you to control which users are allowed to create and use service accounts. Combined with Calico network policy, you can control the security boundary between users who can provision service accounts, and those who use them.
 
-- Control which service accounts the developer team can use within a namespace
-- Write high-priority network policies for those service accounts (that the developer team cannot override) 
+For example, using Kubernetes RBAC, you can restrict permissions to provision service accounts to only the network security team, who can then write high-priority network policies that reference those service accounts.
 
-The network security team can maintain full control of security, while selectively allowing developer operations where it makes sense.  
-
-Using **Istio-enabled apps** with Calico network policy, the cryptographic identity associated with the service account is checked (along with the network identity) to achieve two-factor authentication.
+Additionally, when using Istio-enabled apps with Calico network policy, the cryptographic identity associated with the service account is checked (along with the network identity) to achieve two-factor authentication.
 
 ### Features
 
 This how-to guide uses the following Calico features:
 
 **NetworkPolicy** or **GlobalNetworkPolicy** with a service account rule and match criteria.
-
 
 ### Concepts
 
