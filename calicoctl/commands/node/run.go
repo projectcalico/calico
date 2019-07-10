@@ -43,12 +43,10 @@ const (
 	AUTODETECTION_METHOD_CAN_REACH      = "can-reach="
 	AUTODETECTION_METHOD_INTERFACE      = "interface="
 	AUTODETECTION_METHOD_SKIP_INTERFACE = "skip-interface="
-	DEFAULT_DOCKER_IFPREFIX             = "cali"
 )
 
 var (
 	checkLogTimeout = 10 * time.Second
-	ifprefixMatch   = regexp.MustCompile(`^[a-zA-Z0-9]+$`)
 	backendMatch    = regexp.MustCompile("^(none|bird|gobgp)$")
 )
 
@@ -67,9 +65,6 @@ func Run(args []string) error {
                      [--no-default-ippools]
                      [--dryrun]
                      [--init-system]
-                     [--disable-docker-networking]
-                     [--docker-networking-ifprefix=<IFPREFIX>]
-                     [--use-docker-networking-container-labels]
 
 Options:
   -h --help                Show this screen.
@@ -142,20 +137,6 @@ Options:
      --no-default-ippools  Do not create default pools upon startup.
                            Default IP pools will be created if this is not set
                            and there are no pre-existing Calico IP pools.
-     --disable-docker-networking
-                           Disable Docker networking.
-     --docker-networking-ifprefix=<IFPREFIX>
-                           Interface prefix to use for the network interface
-                           within the Docker containers that have been networked
-                           by the Calico driver.
-                           [default: ` + DEFAULT_DOCKER_IFPREFIX + `]
-     --use-docker-networking-container-labels
-                           Extract the Calico-namespaced Docker container labels
-                           (org.projectcalico.label.*) and apply them to the
-                           container endpoints for use with Calico policy.
-                           When this option is enabled traffic must be
-                           explicitly allowed by configuring Calico policies
-                           and Calico profiles are disabled.
   -c --config=<CONFIG>     Path to the file containing connection
                            configuration in YAML or JSON format.
                            [default: ` + constants.DefaultConfigPath + `]
@@ -186,10 +167,7 @@ Description:
 	name := argutils.ArgStringOrBlank(arguments, "--name")
 	nopools := argutils.ArgBoolOrFalse(arguments, "--no-default-ippools")
 	config := argutils.ArgStringOrBlank(arguments, "--config")
-	disableDockerNw := argutils.ArgBoolOrFalse(arguments, "--disable-docker-networking")
 	initSystem := argutils.ArgBoolOrFalse(arguments, "--init-system")
-	ifprefix := argutils.ArgStringOrBlank(arguments, "--docker-networking-ifprefix")
-	useDockerContainerLabels := argutils.ArgBoolOrFalse(arguments, "--use-docker-networking-container-labels")
 
 	// Validate parameters.
 	if ipv4 != "" && ipv4 != "autodetect" {
@@ -247,28 +225,8 @@ Description:
 	envs := map[string]string{
 		"NODENAME":                  name,
 		"CALICO_NETWORKING_BACKEND": backend,
-		"CALICO_LIBNETWORK_ENABLED": fmt.Sprint(!disableDockerNw),
 	}
 
-	// Validate the ifprefix to only allow alphanumeric characters
-	if !ifprefixMatch.MatchString(ifprefix) {
-		return fmt.Errorf("Error executing command: invalid interface prefix '%s'", ifprefix)
-	}
-
-	if disableDockerNw && useDockerContainerLabels {
-		return fmt.Errorf("Error executing command: invalid to disable Docker Networking and enable Container labels")
-	}
-
-	// Set CALICO_LIBNETWORK_IFPREFIX env variable if Docker network is enabled and set to non-default value.
-	if !disableDockerNw && ifprefix != DEFAULT_DOCKER_IFPREFIX {
-		envs["CALICO_LIBNETWORK_IFPREFIX"] = ifprefix
-	}
-
-	// Add in optional environments.
-	if useDockerContainerLabels {
-		envs["CALICO_LIBNETWORK_CREATE_PROFILES"] = "false"
-		envs["CALICO_LIBNETWORK_LABEL_ENDPOINTS"] = "true"
-	}
 	if nopools {
 		envs["NO_DEFAULT_POOLS"] = "true"
 	}
@@ -301,12 +259,6 @@ Description:
 		{hostPath: "/var/lib/calico", containerPath: "/var/lib/calico"},
 		{hostPath: "/lib/modules", containerPath: "/lib/modules"},
 		{hostPath: "/run", containerPath: "/run"},
-	}
-
-	if !disableDockerNw {
-		log.Info("Include docker networking volume mounts")
-		vols = append(vols, vol{hostPath: "/run/docker/plugins", containerPath: "/run/docker/plugins"},
-			vol{hostPath: "/var/run/docker.sock", containerPath: "/var/run/docker.sock"})
 	}
 
 	envs["ETCD_ENDPOINTS"] = etcdcfg.EtcdEndpoints
