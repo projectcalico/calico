@@ -138,6 +138,15 @@ ending with an alphanumeric character.
 | ----------------------- | ----------------------- | ----------- | ------ |
 | `InterfacePrefix`       | `FELIX_INTERFACEPREFIX` | The interface name prefix that identifies workload endpoints and so distinguishes them from host endpoint interfaces. Accepts more than one interface name prefix in comma-delimited format, e.g., `tap,cali`. Note: in environments other than bare metal, the orchestrators configure this appropriately.  For example our Kubernetes and Docker integrations set the `cali` value, and our OpenStack integration sets the `tap` value. [Default: `cali`] | string |
 
+#### Felix-Typha Configuration
+| Configuration parameter | Environment variable        | Description | Schema |
+| ----------------------- | --------------------------- | ----------- | ------ |
+| `TyphaAddr`             | `FELIX_TYPHAADDR`           | Address of the Typha Server when running outside a K8S Cluster, in the format IP:PORT | string |
+| `TyphaK8sServiceName`   | `FELIX_TYPHAK8SSERVICENAME` | Service Name of Typha Deployment when running inside a K8S Cluster | string | 
+| `TyphaK8sNamespace`     | `FELIX_TYPHAK8SNAMESPACE`   | Namespace of Typha Deployment when running inside a K8S Cluster. [Default: `kube-system`] | string | 
+| `TyphaReadTimeout`      | `FELIX_TYPHAREADTIMEOUT`    | Timeout of Felix when reading information from Typha, in seconds. [Default: 30] | int | 
+| `TyphaWriteTimeout`     | `FELIX_TYPHAWRITETIMEOUT`   | Timeout of Felix when writing information to Typha, in seconds. [Default: 30] | int | 
+
 #### Felix-Typha TLS configuration
 
 | Configuration parameter | Environment variable   | Description | Schema |
