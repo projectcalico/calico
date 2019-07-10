@@ -50,7 +50,9 @@ toc:
   path: /security/defend-dos-attack
 - title: Apply policy to Kubernetes node ports
   path: /security/kubernetes-node-ports
-- title: Using HTTP methods and paths in policy rules
-  path: /security/http-methods 
+- title: Use ICMP/ping in policy rules
+  path: /security/icmp-ping
+- title: Use HTTP methods and paths in policy rules
+  path: /security/http-methods
 - title: Enable extreme high-connection workloads
   path: /security/high-connection-workloads   
