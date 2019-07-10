@@ -4,11 +4,12 @@ title: Use ICMP/ping in policy rules
 
 ### Big picture
 
-Use Calico network policy to allow and deny ICMP/ping messages. 
+Use Calico network policy to allow and deny ICMP/ping messages.
 
 ### Value
 
-The **Internet Control Message Protocol (ICMP)** provides valuable network diagnostic functions, but it can also be used maliciously. Attackers can use it to learn about your network, or for DoS attacks. Using Calico network policy, you can control where ICMP is used. For example, you can:
+The **Internet Control Message Protocol (ICMP)** provides valuable network diagnostic functions, but it can also be used maliciously. Attackers can use
+it to learn about your network, or for DoS attacks. Using Calico network policy, you can control where ICMP is used. For example, you can:
 
 - Allow ICMP ping, but only for workloads, host endpoints (or both)
 - Allow ICMP for pods launched by operators for diagnostic purposes, but block other uses
@@ -28,7 +29,7 @@ This how-to guide uses the following Calico features:
 
 #### ICMP packet type and code
 
-Calico network policy also lets you deny and allow ICMP traffic based on specific types and codes. For example, you can specify ICMP type 5, code 2 to match specific ICMP redirect packets. 
+Calico network policy also lets you deny and allow ICMP traffic based on specific types and codes. For example, you can specify ICMP type 5, code 2 to match specific ICMP redirect packets.
 
 For details, see [ICMP type and code](https://en.wikipedia.org/wiki/Internet_Control_Message_Protocol#Control_messages).
 
@@ -40,17 +41,17 @@ For details, see [ICMP type and code](https://en.wikipedia.org/wiki/Internet_Con
 
 #### Deny all ICMP, all workloads and host endpoints
 
-In this example, we introduce a "deny all ICMP" **GlobalNetworkPolicy**. 
+In this example, we introduce a "deny all ICMP" **GlobalNetworkPolicy**.
 
-This policy **selects all workloads and host endpoints that match a selector**. It enables a default deny for all workloads and host endpoints, in addition to the explicit ICMP deny rules specified in the policy. For more on default deny policy, see [Calico Network Policy]({{site.baseurl}}/{{page.version}}/security/caliconetworkpolicy).   
+This policy **selects all workloads and host endpoints**. It enables a default deny for all workloads and host endpoints, in addition to the explicit ICMP deny rules specified in the policy.
 
 If your ultimate goal is to allow some traffic, have your regular "allow" policies in place before applying a global deny-all ICMP traffic policy.
 
-In this example, all workloads and host endpoints are blocked from sending or receiving **ICMPv4** and **ICMPv6** messages. 
+In this example, all workloads and host endpoints are blocked from sending or receiving **ICMPv4** and **ICMPv6** messages.
 
-If **ICMPv6** messages are not used in your deployment, it is still good practice to deny them specifically as shown below. 
+If **ICMPv6** messages are not used in your deployment, it is still good practice to deny them specifically as shown below.
 
-In any "deny-all" Calico network policy, be sure to specify a lower order (**order:200**) than regular policies that might allow traffic.   
+In any "deny-all" Calico network policy, be sure to specify a lower order (**order:200**) than regular policies that might allow traffic.
 
 ```
 apiVersion: projectcalico.org/v3
@@ -72,16 +73,16 @@ spec:
   - action: Deny
     protocol: ICMP
   - action: Deny
-    protocol: ICMPv6    
+    protocol: ICMPv6
 ```
 
 #### Allow ICMP ping, all workloads and host endpoints
 
 In this example, workloads and host endpoints can receive **ICMPv4 type 8** and **ICMPv6 type 128** ping requests that come from other workloads and host endpoints.
 
-All other traffic may be allowed by other policies. If traffic is not explicitly allowed, it will be denied by default. 
+All other traffic may be allowed by other policies. If traffic is not explicitly allowed, it will be denied by default.
 
-The policy applies only to **ingress** traffic. (Egress traffic is not affected, and default deny is not enforced for egress.) 
+The policy applies only to **ingress** traffic. (Egress traffic is not affected, and default deny is not enforced for egress.)
 
 ```
 apiVersion: projectcalico.org/v3
@@ -132,5 +133,5 @@ spec:
 
 For more on the ICMP match criteria, see:
 
-- [Global Network Policy]({{site.baseurl}}/{{page.version}}/reference/resources/globalnetworkpolicy) 
+- [Global Network Policy]({{site.baseurl}}/{{page.version}}/reference/resources/globalnetworkpolicy)
 - [Network Policy]({{site.baseurl}}/{{page.version}}/reference/resources/networkpolicy)
