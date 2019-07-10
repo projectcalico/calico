@@ -34,7 +34,7 @@ For details, see [ICMP type and code](https://en.wikipedia.org/wiki/Internet_Con
 
 ### How to
 
-- [Deny all ICMP, all workloads and host endpoints](#deny-all-icmp-all workloads and host endpoints)
+- [Deny all ICMP, all workloads and host endpoints](#deny-all-icmp-all-workloads-and-host-endpoints)
 - [Allow ICMP ping, all workloads and host endpoints](#allow-icmp-ping-all-workloads-and-host-endpoints)
 - [Allow ICMP matching protocol type and code, all workloads](#allow-icmp-matching-protocol-type-and-code-all-workloads)
 
@@ -77,7 +77,7 @@ spec:
 
 #### Allow ICMP ping, all workloads and host endpoints
 
-In this example, workloads and host endpoints can receive **ICMPv4 type 8** and **ICMPv6 type 128** ping requests.
+In this example, workloads and host endpoints can receive **ICMPv4 type 8** and **ICMPv6 type 128** ping requests that come from other workloads and host endpoints.
 
 All other traffic may be allowed by other policies. If traffic is not explicitly allowed, it will be denied by default. 
 
