@@ -4,7 +4,7 @@ title: Use service accounts in policy rules
 
 ### Big picture
 
-Use Calico network policy to allow/deny traffic for Kubernetes services. 
+Use Calico network policy to allow/deny traffic for Kubernetes service accounts. 
 
 ### Value
 
@@ -64,6 +64,7 @@ spec:
           names: 
             - api-service
             - user-auth-service
+  selector: 'app == "db"'
 ```
 
 #### Limit ingress traffic for workloads by service account label
