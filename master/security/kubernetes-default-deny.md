@@ -4,11 +4,11 @@ title: Enable default deny for Kubernetes pods
 
 ### Big picture
 
-Change the default for Kubernetes pods from allowing all traffic, to denying all traffic using Kubernetes or Calico network policy.  
+Enable a default deny policy for Kubernetes pods using Kubernetes or Calico network policy.  
 
 ### Value
 
-A **default deny** network policy provides an enhanced security posture -- so workloads without policy (or incorrect policy) are not allowed traffic until appropriate network policy is defined.
+A **default deny** network policy provides an enhanced security posture -- so pods without policy (or incorrect policy) are not allowed traffic until appropriate network policy is defined.
 
 ### Features
 
@@ -27,23 +27,23 @@ For compatibility with Kubernetes, **Calico network policy** enforcement follows
 - If one or more network policies apply to a pod with type ingress, then only the ingress traffic specifically allowed by those policies is allowed, and all other traffic to/from the pod is denied.
 - If one or more network policies apply to a pod with type egress, then only the egress traffic specifically allowed by those policies is allowed, and all other traffic to/from the pod is denied.
 
-For other endpoint types (VMs, host interfaces), the default behavior is to deny traffic. Only traffic specifically allowed by network policy is allowed, even if no network policies apply to the endpoint.
+For other endpoint types (VMs, host interfaces) that are supported only in **Calico global network policy**, the default behavior is to deny traffic. Only traffic specifically allowed by network policy is allowed, even if no network policies apply to the endpoint.
 
 #### Best practice: implicit default deny policy
 
-Whether you use a network policy or global network policy, we recommend enabling default-deny for your Kubernetes pods. This best practice ensures that unwanted traffic is denied by default. Note that implicit default deny policy always occurs last; if any other policy allows the traffic, then the deny does not come into effect. The deny is executed only after all other policies are evaluated. 
+We recommend creating an implicit default deny policy for your Kubernetes pods, regardless if you use Calico or Kubernetes network policy. This ensures that unwanted traffic is denied by default. Note that implicit default deny policy always occurs last; if any other policy allows the traffic, then the deny does not come into effect. The deny is executed only after all other policies are evaluated. 
 
 ### How to
 
-Although you can use any of the following policies to create default deny for Kubernetes pods, we recommend using the Calico global network policy. A Calico global network policy applies to both workloads (VMs and containers) and hosts (computers that run the hypervisor for VMs, or container runtime for containers). Using a Calico global network policy supports a conservative security stance for protecting resources. 
+Although you can use any of the following policies to create default deny policy for Kubernetes pods, we recommend using the Calico global network policy. A Calico global network policy applies to both workloads (VMs and containers) and hosts (computers that run the hypervisor for VMs, or container runtime for containers). Using a Calico global network policy supports a conservative security stance for protecting resources. 
 
-- [Create default deny traffic Calico global network policy, non-namespaced](#create-default-deny-traffic-calico-global-network-policy-non-namespaced)
-- [Create default deny traffic Calico network policy, namespaced](#create-default-deny-traffic-calico-network-policy-namespaced)
-- [Create default deny traffic Kubernetes policy, namespaced](#create-default-deny-traffic-Kubernetes-policy-namespaced)
+- [Enable default deny Calico global network policy, non-namespaced](#enable-default-deny-calico-global-network-policy-non-namespaced)
+- [Enable default deny Calico network policy, namespaced](#enable-default-deny-calico-network-policy-namespaced)
+- [Enable default deny Kubernetes policy, namespaced](#enable-default-deny-Kubernetes-policy-namespaced)
 
-#### Create default deny traffic Calico global network policy, non-namespaced
+#### Enable default deny Calico global network policy, non-namespaced
 
-In the following example, we specify a default deny **GlobalNetworkPolicy** for ingress and egress traffic for all workloads and hosts by using the **selector: all()**. 
+In the following example, we enable a default deny **GlobalNetworkPolicy** for all workloads and hosts. 
 
 ```
 apiVersion: projectcalico.org/v3
@@ -57,9 +57,9 @@ spec:
   - Egress
 ```
 
-#### Create default deny traffic Calico network policy, namespaced  
+#### Enable default deny Calico network policy, namespaced  
 
-In the following example, we specify a default deny **NetworkPolicy** that denies all traffic for workloads in the namespace, **engineering**. 
+In the following example, we enable a default deny **NetworkPolicy** for all workloads in the namespace, **engineering**. 
 
 ```
 apiVersion: projectcalico.org/v3
@@ -74,19 +74,18 @@ spec:
   - Egress  
 ```
 
-#### Create default deny traffic Kubernetes policy, namespaced
+#### Enable default deny Kubernetes policy, namespaced
 
-The following example is a Kubernetes default deny network policy. It prevents all traffic to/from all pods in the default namespace, and does not explicitly allow any traffic. 
+In the following example, we enable a default deny **Kubernetes network policy** for all pods in the namespace, **default-deny**. 
 
 ```
-kind: NetworkPolicy
 apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
 metadata:
   name: default-deny
 spec:
-  podSelector:
-    matchLabels: {}
-  types:
+  podSelector: {}
+  policyTypes:
   - Ingress
   - Egress
 ```
