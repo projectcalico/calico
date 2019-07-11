@@ -1,6 +1,5 @@
 ---
 title: Configuring the Calico Kubernetes controllers
-redirect_from: latest/reference/kube-controllers/configuration
 ---
 
 The {{site.prodname}} Kubernetes controllers are deployed in a Kubernetes cluster. The different controllers monitor the Kubernetes API

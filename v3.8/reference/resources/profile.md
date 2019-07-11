@@ -1,5 +1,6 @@
 ---
 title: Profile
+redirect_from: latest/reference/resources/profile
 canonical_url: 'https://docs.projectcalico.org/v3.7/reference/calicoctl/resources/profile'
 ---
 

@@ -1,4 +1,46 @@
+v3.8:
+- title: v3.8.0
+  components:
+     typha:
+      version: v3.8.0
+     calicoctl:
+      version: v3.8.0
+     calico/node:
+      version: v3.8.0
+     calico/cni:
+      version: v3.8.0
+     calico/kube-controllers:
+      version: v3.8.0
+     networking-calico:
+      version: 3.8.0
+     flannel:
+      version: v0.11.0
+     calico/dikastes:
+      version: v3.8.0
+     flexvol:
+      version: v3.8.0
+
 v3.7:
+- title: v3.7.4
+  components:
+     typha:
+      version: v3.7.4
+     calicoctl:
+      version: v3.7.4
+     calico/node:
+      version: v3.7.4
+     calico/cni:
+      version: v3.7.4
+     calico/kube-controllers:
+      version: v3.7.4
+     networking-calico:
+      version: 3.7.2
+     flannel:
+      version: v0.11.0
+     calico/dikastes:
+      version: v3.7.4
+     flexvol:
+      version: v3.7.4
 - title: v3.7.3
   components:
      typha:
@@ -84,6 +126,26 @@ v3.7:
 
 
 v3.6:
+- title: v3.6.4
+  components:
+     typha:
+      version: v3.6.4
+     calicoctl:
+      version: v3.6.4
+     calico/node:
+      version: v3.6.4
+     calico/cni:
+      version: v3.6.4
+     calico/kube-controllers:
+      version: v3.6.4
+     networking-calico:
+      version: 3.6.0
+     flannel:
+      version: v0.9.1
+     calico/dikastes:
+      version: v3.6.4
+     flexvol:
+      version: v3.6.4
 - title: v3.6.3
   components:
      typha:
@@ -169,6 +231,35 @@ v3.6:
       version: v3.6.0
 
 v3.5:
+- title: v3.5.7
+  components:
+    calico/node:
+      version: v3.5.7
+      url: https://github.com/projectcalico/node/releases/tag/v3.5.7
+    calicoctl:
+      version: v3.5.7
+      url: https://github.com/projectcalico/calicoctl/releases/tag/v3.5.7
+    calico/cni:
+      version: v3.5.7
+      url: https://github.com/projectcalico/cni-plugin/releases/tag/v3.5.7
+    calico/kube-controllers:
+      version: v3.5.7
+      url: https://github.com/projectcalico/k8s-policy/releases/tag/v3.5.7
+    networking-calico:
+      version: 3.4.0
+      url: http://git.openstack.org/cgit/openstack/networking-calico/commit/?h=3.4.0
+    typha:
+      version: v3.5.7
+      url: https://github.com/projectcalico/typha/releases/tag/v3.5.7
+    flannel:
+      version: v0.9.1
+    calico/dikastes:
+      version: v3.5.7
+      url: https://github.com/projectcalico/app-policy/releases/tag/v3.5.7
+    flexvol:
+      version: v3.5.7
+      url: https://github.com/projectcalico/pod2daemon/releases/tag/v3.5.7
+
 - title: v3.5.6
   components:
     calico/node:
@@ -2643,27 +2734,3 @@ master:
       version: master
      flexvol:
       version: master
-
-# Placeholder for v3.8. Delete this when v3.8.0 goes live. 
-v3.8:
-- title: v3.8.0-pre-release
-  note: ""
-  components:
-     typha:
-      version: release-v3.8
-     calicoctl:
-      version: release-v3.8
-     calico/node:
-      version: release-v3.8
-     calico/cni:
-      version: release-v3.8
-     calico/kube-controllers:
-      version: release-v3.8
-     networking-calico:
-      version: release-v3.8
-     flannel:
-      version: v0.11.0
-     calico/dikastes:
-      version: release-v3.8
-     flexvol:
-      version: release-v3.8

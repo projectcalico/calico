@@ -1,6 +1,5 @@
 ---
 title: Configuring the Calico CNI plugins
-redirect_from: latest/reference/cni-plugin/configuration
 canonical_url: 'https://docs.projectcalico.org/v3.7/reference/cni-plugin/configuration'
 ---
 
@@ -256,11 +255,9 @@ When using the CNI `host-local` IPAM plugin, a special value `usePodCidr` is all
 
 When making use of the `usePodCidr` option, the {{site.prodname}} CNI plugin requires read-only Kubernetes API access to the `Nodes` resource.
 
-#### BGP route aggregation using host-local IPAM
+#### Configuring node and typha
 
-When using {{side.prodname}} IPAM, routes are automatically aggregated based on per-node allocations. However, when using `host-local` IPAM with the Kubernetes API
-datastore, you must enable BGP route aggregation based on the `Node.podCIDR` field by setting the environment variable `USE_POD_CIDR=true` in {{site.nodecontainer}}. We highly recommend
-setting this to achieve more efficient route distribution.
+When using `host-local` IPAM with the Kubernetes API datastore, you must configure both {{site.nodecontainer}} and the Typha deployemt to use the `Node.podCIDR` field by setting the environment variable `USE_POD_CIDR=true` in each.
 
 ### Using Kubernetes annotations
 

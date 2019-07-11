@@ -1,6 +1,5 @@
 ---
 title: Summary
-redirect_from: latest/security/host-endpoints/summary
 canonical_url: 'https://docs.projectcalico.org/v3.7/security/host-endpoints/summary'
 ---
 
