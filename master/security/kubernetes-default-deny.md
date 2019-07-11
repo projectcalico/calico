@@ -35,8 +35,6 @@ Whether you use a network policy or global network policy, we recommend enabling
 
 ### How to
 
-**Best practice**
-
 Although you can use any of the following policies to create default deny for Kubernetes pods, we recommend using the Calico global network policy. A Calico global network policy applies to both workloads (VMs and containers) and hosts (computers that run the hypervisor for VMs, or container runtime for containers). Using a Calico global network policy supports a conservative security stance for protecting resources. 
 
 - [Create default deny traffic Calico global network policy, non-namespaced](#create-default-deny-traffic-calico-global-network-policy-non-namespaced)
