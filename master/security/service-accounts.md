@@ -4,7 +4,7 @@ title: Use service accounts in policy rules
 
 ### Big picture
 
-Use Calico network policy to allow/deny traffic for Kubernetes service accounts. 
+Use Calico network policy to allow/deny traffic for Kubernetes service accounts.
 
 ### Value
 
@@ -24,11 +24,11 @@ This how-to guide uses the following Calico features:
 
 #### Use smallest set of permissions required
 
-Operations on service accounts are controlled by RBAC, so you can grant permissions only to trusted entities (code and/or people) to create, modify, or delete service accounts. To perform any operation in a workload, clients are required to authenticate with the Kubernetes API server. 
+Operations on service accounts are controlled by RBAC, so you can grant permissions only to trusted entities (code and/or people) to create, modify, or delete service accounts. To perform any operation in a workload, clients are required to authenticate with the Kubernetes API server.
 
-If you do not explicitly assign a service account to a pod, it uses the default ServiceAccount in the namespace. 
+If you do not explicitly assign a service account to a pod, it uses the default ServiceAccount in the namespace.
 
-You should not grant broad permissions to the default service account for a namespace. If an application needs access to the Kubernetes API, create separate service accounts with the smallest set of permissions required. 
+You should not grant broad permissions to the default service account for a namespace. If an application needs access to the Kubernetes API, create separate service accounts with the smallest set of permissions required.
 
 #### Service account labels
 
@@ -53,15 +53,15 @@ In the following example, ingress traffic is allowed from any workload whose ser
 ```
 apiVersion: projectcalico.org/v3
 kind: NetworkPolicy
-metadata: 
+metadata:
   name: demo-calico
   namespace: prod-engineering
-spec: 
-  ingress: 
+spec:
+  ingress:
     - action: Allow
-      source: 
-        serviceAccounts: 
-          names: 
+      source:
+        serviceAccounts:
+          names:
             - api-service
             - user-auth-service
   selector: 'app == "db"'
@@ -74,19 +74,19 @@ In the following example, ingress traffic is allowed from any workload whose ser
 ```
 apiVersion: projectcalico.org/v3
 kind: NetworkPolicy
-metadata: 
-  name: demo-calico
+metadata:
+  name: allow-web-frontend
   namespace: prod-engineering
-spec: 
-  ingress: 
+spec:
+  ingress:
     - action: Allow
-      source: 
-        serviceAccounts: 
+      source:
+        serviceAccounts:
           selector: 'app == "web-frontend"'
   selector: 'app == "db"'
 ```
 
 ### Above and beyond
 
-- [Network Policy]({{site.baseurl}}/{{page.version}}/reference/resources/networkpolicy) 
-- [Global Network Policy]({{site.baseurl}}/{{page.version}}/reference/resources/globalnetworkpolicy) 
+- [Network Policy]({{site.baseurl}}/{{page.version}}/reference/resources/networkpolicy)
+- [Global Network Policy]({{site.baseurl}}/{{page.version}}/reference/resources/globalnetworkpolicy)
