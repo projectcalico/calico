@@ -40,12 +40,8 @@ configured with VXLAN.
 
 ### Setting MTU for workload network interfaces
 
-It is the job of the network plugin to create new interfaces, the current
-major plugins are CNI and libnetwork. Currently Docker and the Mesos Docker
-Containerizer integration use libnetwork.
-
-CNI, which is used by Kubernetes and the Mesos Unified Containerizer, supports
-configuring the MTU through the CNI configuration file.
+It is the job of the network plugin to create new workload interfaces.  The CNI plugin, which is used by
+Kubernetes, supports configuring the MTU of the workload interface through the CNI configuration file.
 
 The user will also want to configure {{site.prodname}}'s IP-in-IP interface MTU when
 IP-in-IP is enabled on the cluster. Refer to the MTU table at the top of the page
