@@ -51,6 +51,13 @@ integrations.
 | calico | binary | Calico networking plugin for any orchestrator that uses the [Container Network Interface](https://github.com/appc/cni), e.g. [rkt](https://github.com/coreos/rkt), [Kubernetes](https://github.com/kubernetes/kubernetes), and [Mesos](https://github.com/apache/mesos). |
 | calico-ipam | binary | Calico CNI IP address management plugin. |
 
+## [libnetwork-plugin](https://github.com/projectcalico/libnetwork-plugin)
+
+| Artifact | Type | Description |
+|---------|-------|-----------|
+| libnetwork-plugin | binary | Docker networking plugin for use with Docker and Docker Swarm. It provides both network and IPAM drivers which may be used when creating networks through Docker. |
+
+
 ## [kube-controllers](https://github.com/projectcalico/kube-controllers)
 
 | Artifact | Type | Description |

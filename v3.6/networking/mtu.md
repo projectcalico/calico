@@ -40,6 +40,10 @@ configured with VXLAN.
 
 ## MTU configuration
 
+It is the job of the network plugin to create new interfaces, the current
+major plugins are CNI and libnetwork. Currently Docker and the Mesos Docker
+Containerizer integration use libnetwork.
+
 CNI, which is used by Kubernetes and the Mesos Unified Containerizer, supports
 configuring the MTU through the CNI configuration file.
 
@@ -50,6 +54,15 @@ to choose the value that matches your environment.
 > **Note**: The MTU on existing workloads will not be updated with these changes. To update
 workload MTUs, see the section that corresponds to your plugin type.
 {: .alert .alert-info}
+
+### MTU configuration with libnetwork
+
+The MTU of the veth pairs created by the {{site.prodname}} libnetwork plugin can be configured
+by setting the `CALICO_LIBNETWORK_VETH_MTU` environment variable on the `libnetwork`
+process.
+
+This should either be set on the standalone `libnetwork` service, or on the
+`{{site.nodecontainer}}` container as a whole.
 
 ### MTU configuration with CNI
 

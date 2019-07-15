@@ -30,6 +30,7 @@ REPOS = [
         "kube-controllers",
         "routereflector",
         "cni-plugin",
+        "libnetwork-plugin",
         "confd",
         "bird",
         "calico-bgp-daemon",

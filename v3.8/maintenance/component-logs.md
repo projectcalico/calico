@@ -115,3 +115,9 @@ editing configuration within the node image.
 
 For more information on the allowed levels, see the
 [documentation](https://github.com/kelseyhightower/confd/blob/master/docs/configuration-guide.md)
+
+## Docker network and IPAM driver
+
+When running {{site.prodname}} as a Docker network plugin, the {{site.prodname}} network driver runs
+inside the `{{site.nodecontainer}}` container.  The logs are output in the `libnetwork` sub-directory
+of the `{{site.nodecontainer}}` logging directory.

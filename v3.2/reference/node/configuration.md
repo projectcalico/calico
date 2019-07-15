@@ -21,6 +21,10 @@ The `{{site.nodecontainer}}` container is primarily configured through environme
 | CALICO_ROUTER_ID | Sets the `router id` to use for BGP if no IPv4 address is set on the node. [Default: ``] | string |
 | DATASTORE_TYPE | Type of datastore. [Default: `etcdv3`] | kubernetes, etcdv3 |
 | WAIT_FOR_DATASTORE | Wait for connection to datastore before starting. If a successful connection is not made, node will shutdown. [Default: `false`] | boolean |
+| CALICO_LIBNETWORK_CREATE_PROFILES | Enables creating a {{site.prodname}} profile resource for each Docker network.  When disabled, no profiles will be processed even if manually created. [Default: `true`] | boolean |
+| CALICO_LIBNETWORK_LABEL_ENDPOINTS | Enables copying a subset of the Docker container labels for use as Calico labels on workloadendpoints. [Default: `false`] | boolean |
+| CALICO_LIBNETWORK_ENABLED | Enables running the docker-libnetwork plugin directly in the `{{site.nodecontainer}}` container. [Default: `true`] | boolean |
+| CALICO_LIBNETWORK_IFPREFIX | Interface prefix to use for the network interface within the Docker containers that have been networked by the {{site.prodname}} driver. [Default: `cali`] | string |
 | CALICO_NETWORKING_BACKEND | Describes which BGP networking backend to use [Default: `bird`] | bird, none |
 | CALICO_IPV4POOL_CIDR | The IPv4 Pool to create if none exists at start up. It is invalid to define this variable and NO_DEFAULT_POOLS. [Default: `192.168.0.0/16`] | IPv4 CIDR |
 | CALICO_IPV6POOL_CIDR | The IPv6 Pool to create if none exists at start up. It is invalid to define this variable and NO_DEFAULT_POOLS. [Default: `<a randomly chosen /48 ULA>`] | IPv6 CIDR |
