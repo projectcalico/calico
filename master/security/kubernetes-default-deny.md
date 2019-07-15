@@ -24,8 +24,8 @@ This how-to guide uses the following Calico features:
 
 For compatibility with Kubernetes, **Calico network policy** enforcement follows the standard convention for Kubernetes pods:
 - If no network policies apply to a pod, then all traffic to/from that pod is allowed.
-- If one or more network policies apply to a pod with type ingress, then only the ingress traffic specifically allowed by those policies is allowed, and all other traffic to/from the pod is denied.
-- If one or more network policies apply to a pod with type egress, then only the egress traffic specifically allowed by those policies is allowed, and all other traffic to/from the pod is denied.
+- If one or more network policies apply to a pod with type ingress, then only the ingress traffic specifically allowed by those policies is allowed.
+- If one or more network policies apply to a pod with type egress, then only the egress traffic specifically allowed by those policies is allowed.
 
 For other endpoint types (VMs, host interfaces) that are supported only in **Calico global network policy**, the default behavior is to deny traffic. Only traffic specifically allowed by network policy is allowed, even if no network policies apply to the endpoint.
 
