@@ -37,7 +37,7 @@ BASEDIR
 └───pod2daemon
 └───node
 └───node
-└───cni-bin
+└───cni-plugin
 ```
 
 ## Building the code
