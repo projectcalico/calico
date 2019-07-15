@@ -36,7 +36,6 @@ BASEDIR
 └───app-policy
 └───pod2daemon
 └───node
-└───node
 └───cni-plugin
 ```
 
