@@ -1686,26 +1686,6 @@ var _ = Describe("Test NetworkPolicy conversion", func() {
 
 	})
 
-	It("should have empty and Nil NetworkPolicyPeer fields when only Except is declared", func() {
-		np := networkingv1.NetworkPolicyPeer{
-			IPBlock: &networkingv1.IPBlock{
-				Except: []string{"192.168.3.0/24", "192.168.4.0/24", "192.168.5.0/24"},
-			},
-		}
-
-		// Parse the policy.
-		podSel, nsSel, nets, notNets := c.k8sPeerToCalicoFields(&np, "default")
-
-		// Assert value fields are correct.
-		Expect(nets).To(BeNil())
-		Expect(notNets).To(BeNil())
-
-		// As this is a IPBlock rule, podSel and nsSel should be empty (not nil!)
-		Expect(podSel).To(BeEmpty())
-		Expect(nsSel).To(BeEmpty())
-
-	})
-
 	It("should parse a NetworkPolicyPeer with an CIDR and Except field", func() {
 		np := networkingv1.NetworkPolicyPeer{
 			IPBlock: &networkingv1.IPBlock{
