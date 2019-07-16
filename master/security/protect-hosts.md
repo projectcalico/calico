@@ -8,7 +8,7 @@ Use Calico network policy to restrict traffic to/from hosts.
 
 ### Value
 
-Restricting traffic between hosts and the outside world is not unique to Calico; many solutions provide this capability. However, the advantage of using Calico to protect the host, it you can use the same Calico policy configuration as workloads. You only need to learn one tool. Write a cluster-wide policy, and it is immediately applied to every host. 
+Restricting traffic between hosts and the outside world is not unique to Calico; many solutions provide this capability. However, the advantage of using Calico to protect the host is you can use the same Calico policy configuration as workloads. You only need to learn one tool. Write a cluster-wide policy, and it is immediately applied to every host. 
 
 ### Features
 
