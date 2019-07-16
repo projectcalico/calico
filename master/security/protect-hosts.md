@@ -47,15 +47,14 @@ If a host endpoint is added and network policy is not in place, the Calico defau
 For the sake of consistency in the Calico control plane, you may wonder about the following use cases.
 
 **Does Calico protect a local host from workloads?** 
-No. Calico only provides protection to apply policy to forwarded traffic on the host. 
- 
-**Does Calico protect workloads from local hosts?** 
-No. Calico cannot reasonably defend workloads from trusted hosts that you select in your resource pool (separation of concerns). 
+Yes. DefaultEdnpointToostAction controls whether or not workloads can acesss their local host.
+
+**Does Calico protect a workload from the host it is running on?** 
+No. Calico allows connections the host makes to the workloads running on that host. Some orchestrators like Kubernetes depend on this connectivity for health checking the workload. Moreover, processes running on the local host are often privileged enough to override local Calico policy. Be very cautious with the processes you allow to run in the host's root network namespace.
 
 ### Before you begin...
 
 On hosts that you want to secure with network policy, [install Calico]({{site.baseurl}}/{{page.version}}/getting-started/bare-metal/installation/binary-mgr) and [install and run Felix]({{site.baseurl}}/{{page.version}}/getting-started/bare-metal/installation/).
-
 
 ### How to
 
@@ -86,7 +85,8 @@ Review the following table to determine if the defaults work for your implementa
 ##### Step 1: Create policy to restrict host traffic
 
 Although failsafe rules provide protection from removing all connectivity to a host, you should create a global network policy policy that restrict host traffic. 
-In the following example, we use a **GlobalNetworkPolicy** that applies to all worker nodes known endpoints. Ingress SSH access is allowed from a defined "management" subnet. 
+
+In the following example, we use a **GlobalNetworkPolicy** that applies to all worker nodes (defined by a label). Ingress SSH access is allowed from a defined "management" subnet. 
 
 **Ingress traffic** is also allowed for ICMP, and on TCP port 10250 (default kubelet port). **Egress** traffic is allowed to etcd on a particular IP, and UDP on port 53 and 67 for DNS and DHCP.
 
@@ -148,7 +148,9 @@ spec:
 ```
 #### Control default behavior of workload endpoint to host traffic  
 
-The default Calico behavior blocks all connections from workloads to their local host (after traffic passes the host endpoint egress policy). You can change this behavior using the **DefaultEndpointToHostAction** parameter in Felix configuration. This parameter works at the IP table level, where you can specify packet behavior to **Drop** (default), **Accept**, or **Return** (if you have your own rules in IP tables). 
+The default Calico behavior blocks all connections from workloads to their local host (after traffic passes any egress policy applied to the workload). You can change this behavior using the **DefaultEndpointToHostAction** parameter in Felix configuration. 
+
+This parameter works at the IP table level, where you can specify packet behavior to **Drop** (default), **Accept**, or **Return** (if you have your own rules in IP tables). 
 
 To change this parameter for all hosts, edit the **FelixConfiguration** object named “default.”
 
