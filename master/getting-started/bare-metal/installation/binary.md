@@ -118,5 +118,7 @@ For debugging, it's sometimes useful to run Felix manually and tell it
 to emit its logs to screen. You can do that with the following command.
 
 ```bash
-FELIX_LOGSEVERITYSCREEN=INFO /usr/local/bin/calico-node -felix
+ETCD_ENDPOINTS=http://<ETCD_IP>:<ETCD_PORT> FELIX_LOGSEVERITYSCREEN=INFO /usr/local/bin/calico-node -felix
 ```
+> **Note**: Add the `ETCD_ENDPOINTS` Env and replace `<ETCD_IP>:<ETCD_PORT>` with your etcd configuration when etcd isn't running locally. 
+{: .alert .alert-info}

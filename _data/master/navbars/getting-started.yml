@@ -63,12 +63,12 @@ toc:
     section:
     - title: Overview
       path: /getting-started/bare-metal/installation/
+    - title: Container install
+      path: /getting-started/bare-metal/installation/container
     - title: Binary install with package manager
       path: /getting-started/bare-metal/installation/binary-mgr
     - title: Binary install without package manager
       path: /getting-started/bare-metal/installation/binary
-    - title: Container install
-      path: /getting-started/bare-metal/installation/container
 
 - title: Running calico/node with an init system
   path: /getting-started/as-service
