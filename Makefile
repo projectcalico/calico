@@ -147,7 +147,7 @@ PUSH_NONMANIFEST_IMAGES=$(filter-out $(PUSH_MANIFEST_IMAGES),$(PUSH_IMAGES))
 # location of docker credentials to push manifests
 DOCKER_CONFIG ?= $(HOME)/.docker/config.json
 
-GO_BUILD_VER?=v0.20
+GO_BUILD_VER?=v0.22
 # For building, we use the go-build image for the *host* architecture, even if the target is different
 # the one for the host should contain all the necessary cross-compilation tools
 # we do not need to use the arch since go-build:v0.15 now is multi-arch manifest
@@ -433,7 +433,6 @@ bpf/bpf-packr.go bpf/packrd/packed-packr.go: bpf/xdp/generated/xdp.o bpf/sockmap
 	              calico-build/bpf-clang \
 	              /bin/sh -c \
 	              "cd /go/src/$(PACKAGE_NAME)/bpf && /go/bin/packr2"
-	sed -i 's,^	"github.com/gobuffalo/packr/v2",	packr "github.com/gobuffalo/packr/v2",' bpf/packrd/packed-packr.go
 	$(DOCKER_RUN) $(CALICO_BUILD) goimports -w -local github.com/projectcalico/ bpf/packrd/packed-packr.go bpf/bpf-packr.go
 
 ###############################################################################
