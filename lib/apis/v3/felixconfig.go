@@ -182,9 +182,11 @@ type FelixConfigurationSpec struct {
 	HealthHost    *string `json:"healthHost,omitempty"`
 	HealthPort    *int    `json:"healthPort,omitempty"`
 
-	// PrometheusMetricsEnabled enables the experimental Prometheus metrics server in Felix if set to true. [Default: false]
+	// PrometheusMetricsEnabled enables the Prometheus metrics server in Felix if set to true. [Default: false]
 	PrometheusMetricsEnabled *bool `json:"prometheusMetricsEnabled,omitempty"`
-	// PrometheusMetricsPort is the TCP port that the experimental Prometheus metrics server should bind to. [Default:9091]
+	// PrometheusMetricsHost is the host that the Prometheus metrics server should bind to. [Default: 0.0.0.0]
+	PrometheusMetricsHost string `json:"prometheusMetricsHost,omitempty" validate:"omitempty,prometheusHost"`
+	// PrometheusMetricsPort is the TCP port that the Prometheus metrics server should bind to. [Default: 9091]
 	PrometheusMetricsPort *int `json:"prometheusMetricsPort,omitempty"`
 	// PrometheusGoMetricsEnabled disables Go runtime metrics collection, which the Prometheus client does by default, when
 	// set to false. This reduces the number of metrics reported, reducing Prometheus load. [Default: true]

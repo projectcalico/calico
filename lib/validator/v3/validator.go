@@ -57,6 +57,9 @@ var (
 	// GlobalNetworkPolicy names must be a simple DNS1123 label format (nameLabelFmt).
 	globalNetworkPolicyNameRegex = regexp.MustCompile("^(" + nameLabelFmt + ")$")
 
+	// Hostname  have to be valid ipv4, ipv6 or strings up to 64 characters.
+	prometheusHostRegexp = regexp.MustCompile(`^[a-zA-Z0-9:._+-]{1,64}$`)
+
 	interfaceRegex        = regexp.MustCompile("^[a-zA-Z0-9_.-]{1,15}$")
 	ifaceFilterRegex      = regexp.MustCompile("^[a-zA-Z0-9:._+-]{1,15}$")
 	actionRegex           = regexp.MustCompile("^(Allow|Deny|Log|Pass)$")
@@ -135,6 +138,7 @@ func init() {
 	registerFieldValidator("ifaceFilter", validateIfaceFilter)
 	registerFieldValidator("mac", validateMAC)
 	registerFieldValidator("iptablesBackend", validateIptablesBackend)
+	registerFieldValidator("prometheusHost", validatePrometheusHost)
 
 	// Register network validators (i.e. validating a correctly masked CIDR).  Also
 	// accepts an IP address without a mask (assumes a full mask).
@@ -233,6 +237,12 @@ func validateContainerID(fl validator.FieldLevel) bool {
 	s := fl.Field().String()
 	log.Debugf("Validate containerID: %s", s)
 	return containerIDRegex.MatchString(s)
+}
+
+func validatePrometheusHost(fl validator.FieldLevel) bool {
+	s := fl.Field().String()
+	log.Debugf("Validate prometheusHost: %s", s)
+	return prometheusHostRegexp.MatchString(s)
 }
 
 func validatePortName(fl validator.FieldLevel) bool {
