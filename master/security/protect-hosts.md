@@ -47,7 +47,7 @@ If a host endpoint is added and network policy is not in place, the Calico defau
 For the sake of consistency in the Calico control plane, you may wonder about the following use cases.
 
 **Does Calico protect a local host from workloads?** 
-Yes. DefaultEdnpointToostAction controls whether or not workloads can acesss their local host.
+Yes. DefaultEndpointToHostAction controls whether or not workloads can acesss their local host.
 
 **Does Calico protect a workload from the host it is running on?** 
 No. Calico allows connections the host makes to the workloads running on that host. Some orchestrators like Kubernetes depend on this connectivity for health checking the workload. Moreover, processes running on the local host are often privileged enough to override local Calico policy. Be very cautious with the processes you allow to run in the host's root network namespace.
