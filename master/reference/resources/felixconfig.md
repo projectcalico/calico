@@ -73,7 +73,8 @@ spec:
 | policySyncPathPrefix               | File system path where Felix notifies services of policy changes over Unix domain sockets. This is only required if you're configuring [application layer policy]({{site.baseurl}}/{{page.version}}/getting-started/kubernetes/installation/app-layer-policy). Set to `""` to disable. | string | string | `""` |
 | prometheusGoMetricsEnabled         | Set to `false` to disable Go runtime metrics collection, which the Prometheus client does by default. This reduces the number of metrics reported, reducing Prometheus load. | boolean | boolean | `true` |
 | prometheusMetricsEnabled           | Set to `true` to enable the experimental Prometheus metrics server in Felix. | boolean | boolean | `false` |
-| prometheusMetricsPort              | Experimental: TCP port that the Prometheus metrics server should bind to. | int | int | `9091` |
+| PrometheusMetricsHost              | TCP network address that the Prometheus metrics server should bind to. | IPv4, IPv6, Hostname | string | `""` |
+| prometheusMetricsPort              | TCP port that the Prometheus metrics server should bind to. | int | int | `9091` |
 | prometheusProcessMetricsEnabled    | Set to `false` to disable process metrics collection, which the Prometheus client does by default. This reduces the number of metrics reported, reducing Prometheus load. | boolean | boolean | `true` |
 | reportingIntervalSecs              | Interval at which Felix reports its status into the datastore or 0 to disable.  Must be non-zero in OpenStack deployments. | int | int | `30` |
 | reportingTTLSecs                   | Time-to-live setting for process-wide status reports. | int | int | `90` |
