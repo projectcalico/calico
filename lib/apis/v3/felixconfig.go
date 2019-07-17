@@ -184,7 +184,7 @@ type FelixConfigurationSpec struct {
 
 	// PrometheusMetricsEnabled enables the Prometheus metrics server in Felix if set to true. [Default: false]
 	PrometheusMetricsEnabled *bool `json:"prometheusMetricsEnabled,omitempty"`
-	// PrometheusMetricsHost is the host that the Prometheus metrics server should bind to. [Default: 0.0.0.0]
+	// PrometheusMetricsHost is the host that the Prometheus metrics server should bind to. [Default: empty]
 	PrometheusMetricsHost string `json:"prometheusMetricsHost,omitempty" validate:"omitempty,prometheusHost"`
 	// PrometheusMetricsPort is the TCP port that the Prometheus metrics server should bind to. [Default: 9091]
 	PrometheusMetricsPort *int `json:"prometheusMetricsPort,omitempty"`
