@@ -5,14 +5,14 @@ default: test
 all: test
 
 ## Run the tests
-test: ut fv
+test: vendor ut fv
 
 # Define some constants
 #######################
 K8S_VERSION      ?= v1.14.1
 ETCD_VERSION     ?= v3.3.7
-COREDNS_VERSION  ?= 1.5.0
-GO_BUILD_VER     ?= v0.20
+COREDNS_VERSION  ?= 1.5.2
+GO_BUILD_VER     ?= v0.23
 CALICO_BUILD     ?= calico/go-build:$(GO_BUILD_VER)
 PACKAGE_NAME     ?= projectcalico/libcalico-go
 LOCAL_USER_ID    ?= $(shell id -u $$USER)
@@ -20,17 +20,33 @@ BINDIR           ?= bin
 LIBCALICO-GO_PKG  = github.com/projectcalico/libcalico-go
 TOP_SRC_DIR       = lib
 MY_UID           := $(shell id -u)
+GINKGO_ARGS      := -mod=vendor
+EXTRA_DOCKER_ARGS := -e GO111MODULE=on
 
-DOCKER_GO_BUILD := mkdir -p .go-pkg-cache && \
-                   docker run --rm \
-                              --net=host \
-                              $(EXTRA_DOCKER_ARGS) \
-                              -e LOCAL_USER_ID=$(LOCAL_USER_ID) \
-                              -v $(HOME)/.glide:/home/user/.glide:rw \
-                              -v $(CURDIR):/go/src/github.com/$(PACKAGE_NAME):rw \
-                              -v $(CURDIR)/.go-pkg-cache:/go/pkg:rw \
-                              -w /go/src/github.com/$(PACKAGE_NAME) \
-                              $(CALICO_BUILD)
+# Volume-mount gopath into the build container if it's explicitly set for persistent caching.
+ifneq ($(GOPATH),)
+# CircleCI's gopath is readonly and readonly gopaths are incompatible with go modules so don't
+# volume mount the cache in that environment
+ifndef CIRCLECI
+	# If the environment is using multiple comma-separated directories for gopath, use the first one, as that
+	# is the default one used by go modules.
+	LOCAL_GOPATH = $(shell echo $(GOPATH) | cut -d':' -f1)
+	EXTRA_DOCKER_ARGS += -v $(LOCAL_GOPATH)/pkg/mod:/go/pkg/mod:rw
+endif
+endif
+
+DOCKER_RUN := mkdir -p .go-pkg-cache && \
+	docker run --rm \
+		--net=host \
+		$(EXTRA_DOCKER_ARGS) \
+		-e LOCAL_USER_ID=$(LOCAL_USER_ID) \
+		-e GOCACHE=/go-cache \
+		-e GOPATH=/go \
+		-v $(CURDIR):/go/src/$(PACKAGE_NAME):rw \
+		-v $(CURDIR)/.go-pkg-cache:/go-cache:rw \
+		-w /go/src/$(PACKAGE_NAME)
+
+DOCKER_GO_BUILD := $(DOCKER_RUN) $(CALICO_BUILD)
 
 # Create a list of files upon which the generated file depends, skip the generated file itself
 UPGRADE_SRCS := $(filter-out ./lib/upgrade/migrator/clients/v1/k8s/custom/zz_generated.deepcopy.go, \
@@ -46,7 +62,7 @@ TEST_CERT_PATH := test/etcd-ut-certs/
 ## Removes all .coverprofile files, the vendor dir, and .go-pkg-cache
 clean:
 	find . -name '*.coverprofile' -type f -delete
-	rm -rf vendor .go-pkg-cache
+	rm -rf vendor
 	rm -rf $(BINDIR)
 	rm -rf checkouts
 
@@ -54,11 +70,8 @@ clean:
 # Building the binary
 ###############################################################################
 # Build the vendor directory.
-vendor: glide.lock
-	# To build without Docker just run "glide install -strip-vendor"
-	# Ensure that the glide cache directory exists.
-	mkdir -p $(HOME)/.glide
-	$(DOCKER_GO_BUILD) glide install --strip-vendor
+vendor: go.mod go.sum
+	$(DOCKER_GO_BUILD) go mod vendor
 
 GENERATED_FILES:=./lib/apis/v3/zz_generated.deepcopy.go \
            ./lib/upgrade/migrator/clients/v1/k8s/custom/zz_generated.deepcopy.go
@@ -70,26 +83,23 @@ gen-files:
 	$(MAKE) $(GENERATED_FILES)
 
 $(BINDIR)/deepcopy-gen: vendor
-	$(DOCKER_GO_BUILD) \
-		sh -c 'go build -o $@ $(LIBCALICO-GO_PKG)/vendor/k8s.io/code-generator/cmd/deepcopy-gen'
+	$(DOCKER_GO_BUILD) sh -c 'go build -mod=vendor -o $@ $(LIBCALICO-GO_PKG)/vendor/k8s.io/code-generator/cmd/deepcopy-gen'
 
 ./lib/upgrade/migrator/clients/v1/k8s/custom/zz_generated.deepcopy.go: $(UPGRADE_SRCS) $(BINDIR)/deepcopy-gen
-	$(DOCKER_GO_BUILD) \
-		sh -c '$(BINDIR)/deepcopy-gen \
-			--v 1 --logtostderr \
-			--go-header-file "./docs/boilerplate.go.txt" \
-			--input-dirs "$(LIBCALICO-GO_PKG)/lib/upgrade/migrator/clients/v1/k8s/custom" \
-			--bounding-dirs "github.com/projectcalico/libcalico-go" \
-			--output-file-base zz_generated.deepcopy'
+	$(DOCKER_GO_BUILD) sh -c '$(BINDIR)/deepcopy-gen \
+		--v 1 --logtostderr \
+		--go-header-file "./docs/boilerplate.go.txt" \
+		--input-dirs "./lib/upgrade/migrator/clients/v1/k8s/custom" \
+		--bounding-dirs "github.com/projectcalico/libcalico-go" \
+		--output-file-base zz_generated.deepcopy'
 
 ./lib/apis/v3/zz_generated.deepcopy.go: $(APIS_SRCS) $(BINDIR)/deepcopy-gen
-	$(DOCKER_GO_BUILD) \
-		sh -c '$(BINDIR)/deepcopy-gen \
-			--v 1 --logtostderr \
-			--go-header-file "./docs/boilerplate.go.txt" \
-			--input-dirs "$(LIBCALICO-GO_PKG)/lib/apis/v3" \
-			--bounding-dirs "github.com/projectcalico/libcalico-go" \
-			--output-file-base zz_generated.deepcopy'
+	$(DOCKER_GO_BUILD) sh -c '$(BINDIR)/deepcopy-gen \
+		--v 1 --logtostderr \
+		--go-header-file "./docs/boilerplate.go.txt" \
+		--input-dirs "./lib/apis/v3" \
+		--bounding-dirs "github.com/projectcalico/libcalico-go" \
+		--output-file-base zz_generated.deepcopy'
 
 ###############################################################################
 # Static checks
@@ -106,7 +116,7 @@ check-gen-files: $(GENERATED_FILES)
 check-format: vendor
 	@if $(DOCKER_GO_BUILD) goimports -l lib | grep -v zz_generated | grep .; then \
 	  echo "Some files in ./lib are not goimported"; \
-	  false; \
+	  false ;\
 	else \
 	  echo "All files in ./lib are goimported"; \
 	fi
@@ -122,20 +132,6 @@ goimports go-fmt format-code fix: vendor
 install-git-hooks:
 	./install-git-hooks
 
-## Check if glide up creates any warnings. Skip if there are any local changes to the glide files.
-check-glide-warnings:
-	@mkdir -p ~/.glide
-	@if ! git status glide.lock glide.yaml --porcelain | grep "."; then \
-		$(DOCKER_GO_BUILD) sh -c 'glide up --strip-vendor 2>&1' | grep '\[WARN\]'; RESULT=$$?; \
-		git checkout -- glide.yaml glide.lock; \
-		if [ $$RESULT -eq 1 ]; then true; else false; fi; \
-	else \
-		echo "Skipping glide checks as there are local updates"; \
-	fi
-	# That can leave a present but empty vendor directory, which
-	# confuses the rest of the Makefile something rotten...
-	-rm -rf vendor
-
 ###############################################################################
 # Tests
 ###############################################################################
@@ -150,26 +146,15 @@ GINKGO_FOCUS?=.*
 .PHONY:ut
 ## Run the fast set of unit tests in a container.
 ut: vendor
-	-mkdir -p .go-pkg-cache
-	docker run --rm -t --privileged --net=host \
-		-e LOCAL_USER_ID=$(LOCAL_USER_ID) \
-		-v $(CURDIR):/go/src/github.com/$(PACKAGE_NAME):rw \
-		-v $(CURDIR)/.go-pkg-cache:/go-cache/:rw \
-		-e GOCACHE=/go-cache \
-		$(CALICO_BUILD) sh -c 'cd /go/src/github.com/$(PACKAGE_NAME) && ginkgo -r --skipPackage vendor -skip "\[Datastore\]" -focus="$(GINKGO_FOCUS)" $(GINKGO_ARGS) $(WHAT)'
+	$(DOCKER_RUN) --privileged $(CALICO_BUILD) \
+		sh -c 'cd /go/src/$(PACKAGE_NAME) && ginkgo -r --skipPackage vendor -skip "\[Datastore\]" -focus="$(GINKGO_FOCUS)" $(GINKGO_ARGS) $(WHAT)'
 
 .PHONY:fv
 ## Run functional tests against a real datastore in a container.
 fv: vendor run-etcd run-etcd-tls run-kubernetes-master run-coredns
-	-mkdir -p .go-pkg-cache
-	docker run --rm -t --privileged --net=host \
-		--dns $(shell docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' coredns) \
-		-e LOCAL_USER_ID=$(LOCAL_USER_ID) \
-		-v $(CURDIR):/go/src/github.com/$(PACKAGE_NAME):rw \
-		-v $(CURDIR)/.go-pkg-cache:/go-cache/:rw \
-		-e GOCACHE=/go-cache \
-		$(CALICO_BUILD) sh -c 'cd /go/src/github.com/$(PACKAGE_NAME) && ginkgo -r --skipPackage vendor -focus "$(GINKGO_FOCUS).*\[Datastore\]|\[Datastore\].*$(GINKGO_FOCUS)" $(GINKGO_ARGS) $(WHAT)'
-
+	$(DOCKER_RUN) --privileged --dns \
+		$(shell docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' coredns) \
+		$(CALICO_BUILD) sh -c 'cd /go/src/$(PACKAGE_NAME) && ginkgo -r --skipPackage vendor -focus "$(GINKGO_FOCUS).*\[Datastore\]|\[Datastore\].*$(GINKGO_FOCUS)" $(GINKGO_ARGS) $(WHAT)'
 	$(MAKE) stop-etcd-tls
 
 ## Run etcd, with tls enabled, as a container (calico-etcd-tls)
@@ -295,7 +280,7 @@ stop-coredns:
 ###############################################################################
 .PHONY: ci
 ## Run what CI runs
-ci: clean check-glide-warnings static-checks test
+ci: clean static-checks test
 
 .PHONY: help
 ## Display this help text

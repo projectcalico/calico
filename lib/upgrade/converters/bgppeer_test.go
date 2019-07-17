@@ -17,7 +17,7 @@ package converters
 import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	"k8s.io/apimachinery/pkg/apis/meta/v1"
+	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	. "github.com/onsi/ginkgo/extensions/table"
 	apiv1 "github.com/projectcalico/libcalico-go/lib/apis/v1"
