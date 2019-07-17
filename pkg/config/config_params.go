@@ -30,10 +30,11 @@ import (
 )
 
 var (
-	IfaceListRegexp = regexp.MustCompile(`^[a-zA-Z0-9_-]{1,15}(,[a-zA-Z0-9_-]{1,15})*$`)
-	AuthorityRegexp = regexp.MustCompile(`^[^:/]+:\d+$`)
-	HostnameRegexp  = regexp.MustCompile(`^[a-zA-Z0-9_.-]+$`)
-	StringRegexp    = regexp.MustCompile(`^.*$`)
+	IfaceListRegexp      = regexp.MustCompile(`^[a-zA-Z0-9_-]{1,15}(,[a-zA-Z0-9_-]{1,15})*$`)
+	AuthorityRegexp      = regexp.MustCompile(`^[^:/]+:\d+$`)
+	HostnameRegexp       = regexp.MustCompile(`^[a-zA-Z0-9_.-]+$`)
+	StringRegexp         = regexp.MustCompile(`^.*$`)
+	PrometheusHostRegexp = regexp.MustCompile(`^[a-zA-Z0-9:._+-]{1,64}$`)
 )
 
 const (
@@ -106,10 +107,11 @@ type Config struct {
 	HealthHost    string `config:"string;localhost"`
 	HealthPort    int    `config:"int(0,65535);9098"`
 
-	PrometheusMetricsEnabled        bool `config:"bool;false"`
-	PrometheusMetricsPort           int  `config:"int(0,65535);9093"`
-	PrometheusGoMetricsEnabled      bool `config:"bool;true"`
-	PrometheusProcessMetricsEnabled bool `config:"bool;true"`
+	PrometheusMetricsEnabled        bool   `config:"bool;false"`
+	PrometheusMetricsHost           string `config:"prometheus-host;"`
+	PrometheusMetricsPort           int    `config:"int(0,65535);9093"`
+	PrometheusGoMetricsEnabled      bool   `config:"bool;true"`
+	PrometheusProcessMetricsEnabled bool   `config:"bool;true"`
 
 	SnapshotCacheMaxBatchSize int `config:"int(1,);100"`
 
@@ -425,6 +427,9 @@ func loadParams() {
 		case "string":
 			param = &RegexpParam{Regexp: StringRegexp,
 				Msg: "invalid string"}
+		case "prometheus-host":
+			param = &RegexpParam{Regexp: PrometheusHostRegexp,
+				Msg: "invalid host for Prometheus"}
 		default:
 			log.Panicf("Unknown type of parameter: %v", kind)
 		}

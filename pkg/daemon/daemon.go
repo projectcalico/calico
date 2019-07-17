@@ -505,7 +505,10 @@ func dumpHeapMemoryProfile(configParams *config.Config) {
 // TODO Typha: Share with Felix.
 func servePrometheusMetrics(configParams *config.Config) {
 	for {
-		log.WithField("port", configParams.PrometheusMetricsPort).Info("Starting prometheus metrics endpoint")
+		log.WithFields(log.Fields{
+			"host": configParams.PrometheusMetricsHost,
+			"port": configParams.PrometheusMetricsPort,
+		}).Info("Starting prometheus metrics endpoint")
 		if configParams.PrometheusGoMetricsEnabled && configParams.PrometheusProcessMetricsEnabled {
 			log.Info("Including Golang & Process metrics")
 		} else {
@@ -519,7 +522,8 @@ func servePrometheusMetrics(configParams *config.Config) {
 			}
 		}
 		http.Handle("/metrics", promhttp.Handler())
-		err := http.ListenAndServe(fmt.Sprintf(":%v", configParams.PrometheusMetricsPort), nil)
+		err := http.ListenAndServe(fmt.Sprintf("[%v]:%v",
+			configParams.PrometheusMetricsHost, configParams.PrometheusMetricsPort), nil)
 		log.WithError(err).Error(
 			"Prometheus metrics endpoint failed, trying to restart it...")
 		time.Sleep(1 * time.Second)
