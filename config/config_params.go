@@ -45,6 +45,8 @@ var (
 	HostnameRegexp           = regexp.MustCompile(`^[a-zA-Z0-9_.-]+$`)
 	StringRegexp             = regexp.MustCompile(`^.*$`)
 	IfaceParamRegexp         = regexp.MustCompile(`^[a-zA-Z0-9:._+-]{1,15}$`)
+	// Hostname  have to be valid ipv4, ipv6 or strings up to 64 characters.
+	PrometheusHostRegexp = regexp.MustCompile(`^[a-zA-Z0-9:._+-]{1,64}$`)
 )
 
 const (
@@ -191,6 +193,7 @@ type Config struct {
 	HealthPort                      int    `config:"int(0,65535);9099"`
 	HealthHost                      string `config:"string;localhost"`
 	PrometheusMetricsEnabled        bool   `config:"bool;false"`
+	PrometheusMetricsHost           string `config:"prometheus-host;"`
 	PrometheusMetricsPort           int    `config:"int(0,65535);9091"`
 	PrometheusGoMetricsEnabled      bool   `config:"bool;true"`
 	PrometheusProcessMetricsEnabled bool   `config:"bool;true"`
@@ -558,6 +561,9 @@ func loadParams() {
 		case "hostname":
 			param = &RegexpParam{Regexp: HostnameRegexp,
 				Msg: "invalid hostname"}
+		case "prometheus-host":
+			param = &RegexpParam{Regexp: PrometheusHostRegexp,
+				Msg: "invalid host for Prometheus"}
 		case "region":
 			param = &RegionParam{}
 		case "oneof":
