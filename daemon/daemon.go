@@ -26,6 +26,7 @@ import (
 	"os/signal"
 	"runtime"
 	"runtime/debug"
+	"strconv"
 	"syscall"
 	"time"
 
@@ -544,8 +545,7 @@ func servePrometheusMetrics(configParams *config.Config) {
 			}
 		}
 		http.Handle("/metrics", promhttp.Handler())
-		err := http.ListenAndServe(fmt.Sprintf("[%v]:%v",
-			configParams.PrometheusMetricsHost, configParams.PrometheusMetricsPort), nil)
+		err := http.ListenAndServe(net.JoinHostPort(configParams.PrometheusMetricsHost, strconv.Itoa(configParams.PrometheusMetricsPort)), nil)
 		log.WithError(err).Error(
 			"Prometheus metrics endpoint failed, trying to restart it...")
 		time.Sleep(1 * time.Second)
