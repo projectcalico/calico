@@ -15,8 +15,9 @@
 package health
 
 import (
-	"fmt"
+	"net"
 	"net/http"
+	"strconv"
 	"sync"
 	"time"
 
@@ -231,7 +232,7 @@ func (aggregator *HealthAggregator) ServeHTTP(enabled bool, host string, port in
 		}
 		logCxt.Info("Health enabled.  Starting server.")
 		aggregator.httpServer = &http.Server{
-			Addr:    fmt.Sprintf("%s:%v", host, port),
+			Addr:    net.JoinHostPort(host, strconv.Itoa(port)),
 			Handler: aggregator.httpServeMux,
 		}
 		go func() {
