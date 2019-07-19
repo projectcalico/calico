@@ -16,7 +16,9 @@ This how-to guide uses the following Calico features:
 
 - **HostEndpoint** resource 
 - **GlobalNetworkPolicy**
-- **FelixConfiguration** resource with **FailsafeInboundHostPorts** and **DefaultEndpointToHostAction** parameters
+- **FelixConfiguration** resource with parameters:
+  - **FailsafeInboundHostPorts** 
+  - **DefaultEndpointToHostAction**
 
 ### Concepts
 
@@ -50,7 +52,7 @@ In terms of design consistency in Calico, you may wonder about the following use
 Yes. DefaultEndpointToHostAction controls whether or not workloads can acesss their local host.<br>
 
 **Does Calico protect a workload from the host it is running on?**<br> 
-No. Calico allows connections the host makes to the workloads running on that host. Some orchestrators like Kubernetes depend on this connectivity for health checking the workload. Moreover, processes running on the local host are often privileged enough to override local Calico policy. Be very cautious with the processes you allow to run in the host's root network namespace.</br>
+No. Calico allows connections the host makes to the workloads running on that host. Some orchestrators like Kubernetes depend on this connectivity for health checking the workload. Moreover, processes running on the local host are often privileged enough to override local Calico policy. Be very cautious with the processes that you allow to run in the host's root network namespace.</br>
 
 ### Before you begin...
 
