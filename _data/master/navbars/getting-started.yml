@@ -10,7 +10,7 @@ toc:
     path: /getting-started/kubernetes/
   - title: System requirements
     path: /getting-started/kubernetes/requirements
-  - title: Managed cloud services
+  - title: Managed public cloud
     path: /getting-started/kubernetes/managed-cloud-services
     section:
     - title: Amazon Elastic Kubernetes Service (EKS)
