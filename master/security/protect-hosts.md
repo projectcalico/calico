@@ -175,10 +175,7 @@ To change this parameter for all hosts, edit the **FelixConfiguration** object n
 
 ### Above and beyond
 
-- [Apply policy to Kubernetes nodeports]({{site.baseurl}}/{{page.version}}/security/kubernetesnodeports) 
-- [Apply policy to services exposed externally as cluster IPs]({{site.baseurl}}/{{page.version}}/security/servicesclusterips) 
-- [Apply policy to host forwarded traffic]({{site.baseurl}}/{{page.version}}/security/hostforwardedtraffic)  
+- [Apply policy to Kubernetes nodeports]({{site.baseurl}}/{{page.version}}/security/kubernetesnodeports)  
 - [Defend against DoS attacks]({{site.baseurl}}/{{page.version}}/security/defenddosattack) 
-- [Felix configuration]({{site.baseurl}}/{{page.version}}/reference/resources/felixconfiguration) 
 - [Global Network Policy]({{site.baseurl}}/{{page.version}}/reference/resources/globalnetworkpolicy) 
 - [Host Endpoints]({{site.baseurl}}/{{page.version}}/reference/resources/hostendpoint)
