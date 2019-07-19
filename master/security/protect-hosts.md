@@ -54,7 +54,7 @@ No. Calico allows connections the host makes to the workloads running on that ho
 
 ### Before you begin...
 
-If you are already running Calico for Kubernetes, you are good to go. If you want to install Calico on a bare-metal machine for only host protection see, [Bare metal hosts]({{site.baseurl}}/{{page.version}}/getting-started/bare-metal/installation/binary-mgr).
+If you are already running Calico for Kubernetes, you are good to go. If you want to install Calico on a bare-metal machine for host protection only see, [Bare metal hosts]({{site.baseurl}}/{{page.version}}/getting-started/bare-metal/installation/binary-mgr).
 
 ### How to
 
