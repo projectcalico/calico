@@ -11,16 +11,15 @@ toc:
   - title: System requirements
     path: /getting-started/kubernetes/requirements
   - title: Managed public cloud
-    path: /getting-started/kubernetes/managed-cloud-services
     section:
     - title: Amazon Elastic Kubernetes Service (EKS)
-      path: /getting-started/kubernetes/managed-cloud-services/eks
+      path: /getting-started/kubernetes/managed-public-cloud/eks
     - title: Google Kubernetes Engine (GKE)
-      path: /getting-started/kubernetes/managed-cloud-services/gke
+      path: /getting-started/kubernetes/managed-public-cloud/gke
     - title: IBM Cloud Kubernetes Service (IKS)
-      path: /getting-started/kubernetes/managed-cloud-services/iks
+      path: /getting-started/kubernetes/managed-public-cloud/iks
     - title: Microsoft Azure Kubernetes Service (AKS)
-      path: /getting-started/kubernetes/managed-cloud-services/aks
+      path: /getting-started/kubernetes/managed-public-cloud/aks
   - title: Installation
     section:
     - title: Introduction
