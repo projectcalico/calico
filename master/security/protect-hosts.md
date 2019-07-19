@@ -26,7 +26,7 @@ In the context of Calico configuration, a **workload** is a virtualized compute 
 
 #### Host endpoints
 
-Each host has one or more network interfaces that it uses to communicate externally. You can use Calico network policy to secure these interfaces (called host endpoints). Calico network policy for hosts can have labels, and they work the same as labels on workload endpoints. The security rules are flexible so workloads and host endpoints can refer to each other using label selectors. 
+Each host has one or more network interfaces that it uses to communicate externally. You can use Calico network policy to secure these interfaces (called host endpoints). Calico host endpoints can have labels, and they work the same as labels on workload endpoints. The network policy rules can apply to both workload and host endpoints using label selectors. 
 
 #### Failsafe rules
 
@@ -34,7 +34,7 @@ It is easy to inadvertently cut all host connectivity because of non-existent or
 
 #### Default behavior of workload to host traffic
 
-By default, Calico blocks all connections from a workload to its local host.You can control whether connections from a workload endpoint to its local host are dropped, returned, or accepted using a simple parameter.
+By default, Calico blocks all connections from a workload to its local host. You can control whether connections from a workload endpoint to its local host are dropped, returned, or accepted using a simple parameter.
 
 Calico allows all connections from processes running on the host to guest workloads on the host. This allows host processes to run health checks and debug guest workloads.
 
@@ -44,17 +44,17 @@ If a host endpoint is added and network policy is not in place, the Calico defau
 
 #### Other host protection
 
-For the sake of consistency in the Calico control plane, you may wonder about the following use cases.
+In terms of design consistency in Calico, you may wonder about the following use cases.
 
-**Does Calico protect a local host from workloads?** 
-Yes. DefaultEndpointToHostAction controls whether or not workloads can acesss their local host.
+**Does Calico protect a local host from workloads?**<br> 
+Yes. DefaultEndpointToHostAction controls whether or not workloads can acesss their local host.<br>
 
-**Does Calico protect a workload from the host it is running on?** 
-No. Calico allows connections the host makes to the workloads running on that host. Some orchestrators like Kubernetes depend on this connectivity for health checking the workload. Moreover, processes running on the local host are often privileged enough to override local Calico policy. Be very cautious with the processes you allow to run in the host's root network namespace.
+**Does Calico protect a workload from the host it is running on?**<br> 
+No. Calico allows connections the host makes to the workloads running on that host. Some orchestrators like Kubernetes depend on this connectivity for health checking the workload. Moreover, processes running on the local host are often privileged enough to override local Calico policy. Be very cautious with the processes you allow to run in the host's root network namespace.</br>
 
 ### Before you begin...
 
-On hosts that you want to secure with network policy, [install Calico]({{site.baseurl}}/{{page.version}}/getting-started/bare-metal/installation/binary-mgr) and [install and run Felix]({{site.baseurl}}/{{page.version}}/getting-started/bare-metal/installation/).
+If you are already running Calico for Kubernetes, you are good to go. If you want to install Calico on a bare-metal machine for only host protection see, [Bare metal hosts]({{site.baseurl}}/{{page.version}}/getting-started/bare-metal/installation/binary-mgr).
 
 ### How to
 
