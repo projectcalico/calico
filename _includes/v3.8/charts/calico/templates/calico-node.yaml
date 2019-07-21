@@ -67,6 +67,8 @@ spec:
               name: host-local-net-dir
             - mountPath: /host/opt/cni/bin
               name: cni-bin-dir
+          securityContext:
+            privileged: true
 {{- end }}
         # This container installs the CNI binaries
         # and CNI network config file on each node.
@@ -140,6 +142,8 @@ spec:
             - mountPath: /calico-secrets
               name: etcd-certs
 {{- end }}
+          securityContext:
+            privileged: true
         # Adds a Flex Volume Driver that creates a per-pod Unix Domain Socket to allow Dikastes
         # to communicate with Felix over the Policy Sync API.
         - name: flexvol-driver
