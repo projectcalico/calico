@@ -8,7 +8,7 @@ Enable Calico in AKS managed Kubernetes service.
 
 ### Value
 
-AKS has built-in support for Calico, providing a robust implementation of the full Kubernetes Network Policy API. AKS users wanting to go beyond Kubernetes network policy capabilities, can make full use of the Calico Network Policy API. 
+AKS has built-in support for Calico, providing a robust implementation of the full Kubernetes Network Policy API. AKS users wanting to go beyond Kubernetes network policy capabilities can make full use of the Calico Network Policy API. 
 
 ### How to
 
