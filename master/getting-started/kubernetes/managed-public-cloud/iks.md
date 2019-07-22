@@ -8,7 +8,7 @@ Enable Calico in IKS managed Kubernetes service.
 
 ### Value
 
-IKS has built-in support for Calico, providing a robust implementation of the full Kubernetes Network Policy API. IKS users wanting to go beyond Kubernetes network policy capabilities, can make full use of the Calico Network Policy API. In addition to using Calico to secure Kubernetes pods, IKS also uses Calico host endpoint capabilities to provide additional security for the nodes in your cluster.
+IKS has built-in support for Calico, providing a robust implementation of the full Kubernetes Network Policy API. IKS users wanting to go beyond Kubernetes network policy capabilities can make full use of the Calico Network Policy API. In addition to using Calico to secure Kubernetes pods, IKS also uses Calico host endpoint capabilities to provide additional security for the nodes in your cluster.
 
 ### How to
 
