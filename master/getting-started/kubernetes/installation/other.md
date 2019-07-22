@@ -51,11 +51,6 @@ complete the following steps.
    failures.  The number of replicas should always be less than the number of nodes, otherwise 
    rolling upgrades will stall. In addition, Typha only helps with scale if there are fewer 
    Typha instances than there are nodes.
-   
-   > **Tip**: If you set `typha_service_name` without increasing the replica
-   > count from its default of `0` Felix will try to connect to Typha, find no
-   > Typha instances to connect to, and fail to start.
-   {: .alert .alert-success}
 
 1. Apply the manifest using the following command.
 
