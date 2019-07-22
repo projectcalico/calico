@@ -33,8 +33,8 @@ Calico network policy is always enforced before OpenStack security groups, and c
 
 ### Before you begin...
 
-- [Set up Calico for OpenStack]({{site.baseurl}}/{{page.version}}networking/openstack/dev-machine-setup)
-- If you are using a multi-region VM deployment, [follow these extra steps]({{site.baseurl}}/{{page.version}}networking/openstack/multiple-regions)
+- [Set up Calico for OpenStack]({{site.baseurl}}/{{page.version}}/networking/openstack/dev-machine-setup)
+- If you are using a multi-region VM deployment, [follow these extra steps]({{site.baseurl}}/{{page.version}}/networking/openstack/multiple-regions)
 
 ### How to
 
