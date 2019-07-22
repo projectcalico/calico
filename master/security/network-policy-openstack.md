@@ -1,5 +1,6 @@
 ---
 title: Get started with Calico network policy for OpenStack
+---
 
 ### Big picture
 
