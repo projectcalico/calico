@@ -35,14 +35,14 @@ complete the following steps.
    You may want to consider changing this for large clusters or production environments.
    
    ```
-   apiVersion: apps/v1beta1
+   apiVersion: apps/v1
    kind: Deployment
    metadata:
-   name: calico-typha
-   ...
+     name: calico-typha
+     ...
    spec:
-   ...
-   replicas: <number of replicas>
+     ...
+     replicas: <number of replicas>
    ```
    {: .no-select-button}
    
