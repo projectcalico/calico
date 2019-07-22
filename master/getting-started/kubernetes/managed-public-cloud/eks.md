@@ -8,7 +8,7 @@ Enable Calico in EKS managed Kubernetes service.
 
 ### Value
 
-EKS has built-in support for Calico, providing a robust implementation of the full Kubernetes Network Policy API. EKS users wanting to go beyond Kubernetes network policy capabilities, can make full use of the Calico Network Policy API.
+EKS has built-in support for Calico, providing a robust implementation of the full Kubernetes Network Policy API. EKS users wanting to go beyond Kubernetes network policy capabilities can make full use of the Calico Network Policy API.
 
 ### How to
 
