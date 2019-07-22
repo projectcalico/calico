@@ -73,6 +73,7 @@ spec:
     singular: ipamconfig
 
 ---
+{{- end }}
 
 apiVersion: apiextensions.k8s.io/v1beta1
 kind: CustomResourceDefinition
@@ -88,7 +89,6 @@ spec:
     singular: bgppeer
 
 ---
-{{- end }}
 
 apiVersion: apiextensions.k8s.io/v1beta1
 kind: CustomResourceDefinition
