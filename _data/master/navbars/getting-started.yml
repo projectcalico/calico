@@ -10,6 +10,16 @@ toc:
     path: /getting-started/kubernetes/
   - title: System requirements
     path: /getting-started/kubernetes/requirements
+  - title: Managed public cloud
+    section:
+    - title: Amazon Elastic Kubernetes Service (EKS)
+      path: /getting-started/kubernetes/managed-public-cloud/eks
+    - title: Google Kubernetes Engine (GKE)
+      path: /getting-started/kubernetes/managed-public-cloud/gke
+    - title: IBM Cloud Kubernetes Service (IKS)
+      path: /getting-started/kubernetes/managed-public-cloud/iks
+    - title: Microsoft Azure Kubernetes Service (AKS)
+      path: /getting-started/kubernetes/managed-public-cloud/aks
   - title: Installation
     section:
     - title: Introduction
@@ -26,7 +36,6 @@ toc:
       path: /getting-started/kubernetes/installation/config-options
     - title: Integration guide (advanced)
       path: /getting-started/kubernetes/installation/integration
-
 - title: OpenShift
   section:
   - title: System requirements
@@ -35,7 +44,6 @@ toc:
     path: /getting-started/openshift/installation
   - title: Connecting to a dedicated etcd cluster (optional)
     path: /getting-started/openshift/dedicated-etcd
-
 - title: OpenStack
   section:
   - title: Overview
@@ -54,7 +62,6 @@ toc:
       path: /getting-started/openstack/installation/devstack
     - title: Verifying your deployment
       path: /getting-started/openstack/verification
-
 - title: Bare metal hosts
   section:
   - title: System requirements
@@ -69,10 +76,8 @@ toc:
       path: /getting-started/bare-metal/installation/binary-mgr
     - title: Binary install without package manager
       path: /getting-started/bare-metal/installation/binary
-
 - title: Running calico/node with an init system
   path: /getting-started/as-service
-
 - title: calicoctl
   section:
   - title: Installing calicoctl
