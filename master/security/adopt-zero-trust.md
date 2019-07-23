@@ -171,7 +171,7 @@ Returning to the example flow graph in the previous section, let’s write the p
 
 Things to notice in this example
 
-**<span style="color:blue; style=font-size:20pt;">1</span>**<br>
+**<span style="color:blue; style=font-size:20em;">1</span>**<br>
 Create a Calico NetworkPolicy in the same namespace as the service you are writing the whitelist for.</br>
 
 2
