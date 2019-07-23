@@ -77,7 +77,7 @@ spec:
 
 #### Allow specific traffic between VMs in different regions
 
-In the following example, we use the predefined VM endpoint label, openstack-<security_group_ID>. Traffic is allowed to VMs with the label, **openstack-a773…** on port 80, from VMs in any region with the label, **openstack-85cc…**.
+In the following example, we use the predefined VM endpoint label, **openstack-security_group_ID**. Traffic is allowed to VMs with the label, **openstack-a773…** on port 80, from VMs in any region with the label, **openstack-85cc…**.
 
 ```
 apiVersion: projectcalico.org/v3
