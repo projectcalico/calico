@@ -62,3 +62,5 @@ toc:
   path: /security/icmp-ping
 - title: Enable extreme high-connection workloads
   path: /security/high-connection-workloads
+- title: Get started with Calico network policy for OpenStack
+  path: /security/network-policy-openstack  
