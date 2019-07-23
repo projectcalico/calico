@@ -42,7 +42,7 @@ Major breaches typically start as a minor compromise of as little as a single co
 
 Zero Trust Networks rely on network access controls with specific requirements:
 
-**Requirement <span style="font-size:6em;">1</span>1**: All network connections are subject to enforcement (not just those that cross zone boundaries).
+**Requirement <span style="color:red"; style="font-size:4em;">1</span>1**: All network connections are subject to enforcement (not just those that cross zone boundaries).
 
 **Requirement 2**: Establishing the identity of a remote endpoint is always based on multiple criteria including strong cryptographic proofs of identity. In particular, network-level identifiers like IP address & port are not sufficient on their own as they can be spoofed by a hostile network.
 
