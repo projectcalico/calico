@@ -1,35 +1,84 @@
 
 # Calico packaging
 
-This repo supports building and publishing Debian and RPM packages for
-the current master of networking-calico.
+This repo aims to automate and document every step needed to build and
+publish Calico packages, for use [with
+OpenStack](https://docs.projectcalico.org/master/getting-started/openstack/installation/)
+or [on bare metal
+hosts](https://docs.projectcalico.org/master/getting-started/bare-metal/installation/).
 
--  To build RPMs: `make rpm`
+The plan is that a single
 
--  To build Debs: `make deb`
+    make master
 
--  To publish RPMs: `./utils/publish-rpms.sh`
+command will build and publish a set of packages corresponding to
+current Calico master code, to our PPA and RPM repo named "master";
+and similarly that
 
-   -  This is to the 'master' repo; set REPO_NAME for a different
-      repo, e.g. `REPO_NAME=calico-3.8 ./utils/publish-rpms.sh`.
+    make calico-X.Y
 
-   -  Also needs GCLOUD_ARGS and HOST set to indicate the RPM host,
-      and a gcloud identity that permits logging into that host.
+will build and publish a set of packages for the latest released code
+in the X.Y series.  For example, if Calico 3.8.2 has just been
+released, `make calico-3.8` will identify the relevant components and
+code tags, build packages from that, and publish those to our PPA and
+RPM repo named "calico-3.8".
 
--  To publish Debs: `./utils/publish-debs.sh`
+For documentation, this file should contain everything needed to
+understand how our packaging works, what components we package, and
+why.
 
-   -  This is to the 'master' PPA; set REPO_NAME for a different PPA,
-      e.g. `REPO_NAME=calico-3.8 ./utils/publish-debs.sh`.
+## Status
 
-   -  Also needs SECRET_KEY set to a file containing the GPG secret
-      key for a member of the [Project Calico team on
-      Launchpad](https://launchpad.net/~project-calico).
+`make master` exists but currently only builds and publishes
+networking-calico packages.
 
-Still to do:
+To do:
 
--  do the same things for Felix
--  support building packages from other possible source code forms, e.g.
-   -  a particular point in a Git repo
-   -  particular changes in Gerrit
-   -  current or past PyPI packages.
--  check ppc64 Dockerfiles against amd64 ones - e.g. the python-pbr install
+-  Also build packages for Felix, etcd3gw and dnsmasq.
+-  Implement `make calico-X.Y` by adding code to identify the relevant
+   Felix and networking-calico tags and building packages from those
+   tags.
+-  If possible, automate new PPA creation (which is currently still a
+   manual step).
+-  Perhaps support preparing a PPA/RPM repo for code that is still in
+   development.
+-  Review support for building packages on ppc64 instead of amd64.
+
+## Usage
+
+`make master`, with the following required environment variables.
+
+-  `HOST` and `GCLOUD_ARGS` set to indicate the GCP name of the RPM
+   host, and a GCP identity that permits logging into that host.
+
+-  `SECRET_KEY` set to a file containing the GPG secret key for a
+   member of the [Project Calico team on
+   Launchpad](https://launchpad.net/~project-calico).
+
+## Packaging platforms
+
+We build and publish packages for these platforms:
+
+-  Ubuntu 14.04 (Trusty), 16.04 (Xenial) and 18.04 (Bionic).  The
+   hosting for these packages is in PPAs at
+   https://launchpad.net/~project-calico.
+
+-  CentOS 7 or RHEL 7.  The hosting for these packages is in RPM repos
+   at binaries.projectcalico.org (for example
+   http://binaries.projectcalico.org/rpm/calico-3.8/).
+
+## Packaged components
+
+The components that we package and host are:
+
+-  networking-calico - for all platforms.
+
+-  Felix - for all platforms.
+
+-  etcd3gw - for CentOS/RHEL 7 only.
+
+   Note: for Ubuntu there is no packaging for etcd3gw, and we instead
+   [document](https://docs.projectcalico.org/master/getting-started/openstack/installation/ubuntu)
+   that the installer must do `pip install etcd3gw`.
+
+-  dnsmasq - for all platforms.
