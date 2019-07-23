@@ -1,5 +1,5 @@
-hash: e18db1f8c41cf1dd4875abbe6bf50304f4f29bed6b4c4d5ca0535ab8c9b5b127
-updated: 2019-07-22T08:18:20.302192197Z
+hash: bf2e3fe03b98da37b64f83aeb1992ea2c62468aa6e4b75a14922cbd0fa3f865c
+updated: 2019-07-23T07:41:03.856955175Z
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -114,7 +114,7 @@ imports:
 - name: github.com/kardianos/osext
   version: 2bc1f35cddc0cc527b4bc3dce8578fc2a6c11384
 - name: github.com/kelseyhightower/confd
-  version: fd4d872769e60644deae686046dc33a24e1be8e6
+  version: 43de907f07daedf2917f29726dc6bdb452e51d4b
   repo: https://github.com/projectcalico/confd.git
   subpackages:
   - pkg/backends
@@ -271,7 +271,7 @@ imports:
   subpackages:
   - binder
 - name: github.com/projectcalico/typha
-  version: b0787ccbf50b77c9ff44d407b74ed905d72fa941
+  version: 03ab421f4fdb78a9a8861a60dcba2593680c7544
   subpackages:
   - pkg/config
   - pkg/logutils
