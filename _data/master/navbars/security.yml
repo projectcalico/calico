@@ -62,3 +62,5 @@ toc:
   path: /security/icmp-ping
 - title: Enable extreme high-connection workloads
   path: /security/high-connection-workloads
+- title: Adopt a zero trust network model for security
+  path: /security/adopt-zero-trust  
