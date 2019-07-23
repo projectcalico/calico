@@ -25,7 +25,6 @@ This how-to guide uses the following Calico features:
 
 ### Concepts
 
-
 #### What is Zero Trust Networking?
 
 Zero Trust Networking is an approach to network security that is unified by the principle that the network is always assumed to be hostile. This is in direct contrast to perimeter and “segmentation” approaches that focus on separating the world into trusted and untrusted network segments.
@@ -42,7 +41,7 @@ Major breaches typically start as a minor compromise of as little as a single co
 
 Zero Trust Networks rely on network access controls with specific requirements:
 
-**Requirement <span style="color:blue; style=font-size:5em;">1</span>**: All network connections are subject to enforcement (not just those that cross zone boundaries).
+**Requirement 1: All network connections are subject to enforcement (not just those that cross zone boundaries).
 
 **Requirement 2**: Establishing the identity of a remote endpoint is always based on multiple criteria including strong cryptographic proofs of identity. In particular, network-level identifiers like IP address & port are not sufficient on their own as they can be spoofed by a hostile network.
 
@@ -85,7 +84,6 @@ In Calico and Istio, workload identities are based on Kubernetes Service Account
 
 [Enable Application Layer Policy]({{site.baseurl}}/{{page.version}}/getting-started/kubernetes/installation/app-layer-policy).
 
-
 ### How to
 
 This section explains how to establish a Zero Trust Network using Calico and Istio. It is written from the perspective of platform and security engineers, but should also be useful for individual developers looking to understand the process.
@@ -101,7 +99,7 @@ In particular, the view that developers build applications which they hand off t
 
 At a high level, you will undertake the following steps to establish a Zero Trust Network:
 
-1.Install Calico.
+1. Install Calico.
 1. Install Istio & enable Calico integration.
 1. Establish workload identity by using Service Accounts.
 1. Write initial whitelist policies for each service.
@@ -144,7 +142,7 @@ There are several approaches to determining the set of identities that should ac
 
 Let’s look at an example application.
 
-[graphic]
+![zero-trust-app]({{site.baseurl}}/images/zero-trust-app.png)
 
 In this example, requests from end-users all flow thru a service called api, where they can trigger calls to other services in the backend. These in turn can call other services. Each arrow in this diagram represents an expected flow, and if two services do not have a connecting arrow, the are not expected to have any network communication. For example, the only services that call the post service are api and search.
 
@@ -173,8 +171,9 @@ Returning to the example flow graph in the previous section, let’s write the p
 
 Things to notice in this example
 
-1
-Create a Calico NetworkPolicy in the same namespace as the service you are writing the whitelist for.
+**<span style="color:blue; style=font-size:20;">1</span>**<br>
+Create a Calico NetworkPolicy in the same namespace as the service you are writing the whitelist for.</br>
+
 2
 The selector controls which pods the policy applies to. It should be the same selector used to define the Kubernetes Service.
 3
