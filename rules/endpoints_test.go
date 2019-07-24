@@ -76,8 +76,7 @@ var _ = Describe("Endpoints", func() {
 
 		dropVXLANRule := Rule{
 			Match: Match().ProtocolNum(ProtoUDP).
-				DestPorts(uint16(VXLANPort)).
-				VXLANVNI(uint32(VXLANVNI)),
+				DestPorts(uint16(VXLANPort)),
 			Action:  DropAction{},
 			Comment: "Drop VXLAN encapped packets originating in pods",
 		}
