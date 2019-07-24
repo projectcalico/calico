@@ -81,10 +81,6 @@ The Calico control plane handles distributing all the policy information from th
 
 In Calico and Istio, workload identities are based on Kubernetes Service Accounts. An Istio component called Citadel handles minting cryptographic keys for each Service Account to prove its identity on the network (Requirement 2) and encrypt traffic (Requirement 5). This allows the Zero Trust Network to be resilient even if attackers compromise network infrastructure like routers or links.
 
-### Before you begin...
-
-[Enable Application Layer Policy]({{site.baseurl}}/{{page.version}}/getting-started/kubernetes/installation/app-layer-policy)
-
 ### How to
 
 This section explains how to establish a Zero Trust Network using Calico and Istio. It is written from the perspective of platform and security engineers, but should also be useful for individual developers looking to understand the process.
@@ -113,7 +109,7 @@ Follow the [install instructions]({{site.baseurl}}/{{page.version}}/getting-star
 
 #### Install Istio and enable Calico integration
 
-Follow the instructions to enable Calico Application Layer Policy.
+Follow the instructions to [Enable Application Layer Policy]({{site.baseurl}}/{{page.version}}/getting-started/kubernetes/installation/app-layer-policy).
 
 The instructions include a “demo” install of Istio for quickly testing out functionality. For a production installation to support a Zero Trust Network, you should instead follow the official Istio install instructions. Be sure to enable mutually authenticated TLS (mTLS) in your install options by setting **global.mtls.enabled to true**.
 
@@ -129,9 +125,10 @@ After you decide on the set of identities you require, create the Kubernetes Ser
 
 #### Write initial whitelist policies for each service
 
-The final step to establishing your Zero Trust Network is to write the policies for each service in your network. The Application Layer Policy Tutorial gives an overview of setting up policies that allow traffic based on Service Account identity.
+The final step to establishing your Zero Trust Network is to write the policies for each service in your network. The [Application Layer Policy Tutorial]({{site.baseurl}}/{{page.version}}/security/app-layer-policy/) gives an overview of setting up policies that allow traffic based on Service Account identity.
 
 For each service you will:
+
 1. Determine the full set of other identities that should access it.
 1. Add rules to allow each of those flows.
 
@@ -152,15 +149,15 @@ For simple applications, especially if they are maintained by a single team, the
 If this is difficult to do from memory, you have several options.
 
 1. Run the application in a test environment with policy enabled.
-  1. Look at service logs to see what connectivity has broken. 
-  1. Add rules that allow those flows and iterate until the application functions normally.
-  1. Move on to the next service and repeat.
+   1. Look at service logs to see what connectivity has broken. 
+   1. Add rules that allow those flows and iterate until the application functions normally.
+   1. Move on to the next service and repeat.
 1. Collect flow logs from a running instance of your application. Tigera Secure Enterprise Edition can be used for this purpose, or the Kiali dashboard that comes with Istio.
-  1. Process the flow logs to determine the set of flows.
-  1. Review the logged flows and add rules for each expected flow.
+   1. Process the flow logs to determine the set of flows.
+   1. Review the logged flows and add rules for each expected flow.
 1. Use Tigera Secure Enterprise Edition for policy, and put it into logging-only mode.
-  1. In this mode “denied” connections are logged instead of dropped.
-  1. Review the “denied” logs and add rules for each expected flow.
+   1. In this mode “denied” connections are logged instead of dropped.
+   1. Review the “denied” logs and add rules for each expected flow.
 
 When determining flows from a running application instance, be sure to review each rule you add with application developers to determine if it is legitimate and expected. The last thing you want is for a breach-in-progress to be enshrined as expected flows in policy!
 
