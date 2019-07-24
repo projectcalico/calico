@@ -64,3 +64,5 @@ toc:
   path: /security/high-connection-workloads
 - title: Adopt a zero trust network model for security
   path: /security/adopt-zero-trust  
+- title: Get started with Calico network policy for OpenStack
+  path: /security/network-policy-openstack  
