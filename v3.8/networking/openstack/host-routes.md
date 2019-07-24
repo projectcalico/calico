@@ -1,5 +1,6 @@
 ---
 title: Host routes
+redirect_from: latest/networking/openstack/host-routes
 canonical_url: 'https://docs.projectcalico.org/v3.7/networking/openstack/host-routes'
 ---
 

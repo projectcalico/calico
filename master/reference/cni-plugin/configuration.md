@@ -219,7 +219,6 @@ When using the CNI `host-local` IPAM plugin, a special value `usePodCidr` is all
 {{site.prodname}} supports the host-local IPAM plugin's `routes` field as follows:
 
 * If there is no `routes` field, {{site.prodname}} will install a default `0.0.0.0/0`, and/or `::/0` route into the pod (depending on whether the pod has an IPv4 and/or IPv6 address).
-
 * If there is a `routes` field then {{site.prodname}} will program *only* the routes in the routes field into the pod.  Since {{site.prodname}} implements a point-to-point link into the pod, the `gw` field is not required and it will be ignored if present.  All routes that {{site.prodname}} installs will have {{site.prodname}}'s link-local IP as the next hop.
 
 {{site.prodname}} CNI plugin configuration:
@@ -256,11 +255,9 @@ When using the CNI `host-local` IPAM plugin, a special value `usePodCidr` is all
 
 When making use of the `usePodCidr` option, the {{site.prodname}} CNI plugin requires read-only Kubernetes API access to the `Nodes` resource.
 
-#### BGP route aggregation using host-local IPAM
+#### Configuring node and typha
 
-When using {{side.prodname}} IPAM, routes are automatically aggregated based on per-node allocations. However, when using `host-local` IPAM with the Kubernetes API
-datastore, you must enable BGP route aggregation based on the `Node.podCIDR` field by setting the environment variable `USE_POD_CIDR=true` in {{site.nodecontainer}}. We highly recommend
-setting this to achieve more efficient route distribution.
+When using `host-local` IPAM with the Kubernetes API datastore, you must configure both {{site.nodecontainer}} and the Typha deployemt to use the `Node.podCIDR` field by setting the environment variable `USE_POD_CIDR=true` in each.
 
 ### Using Kubernetes annotations
 

@@ -1,6 +1,5 @@
 ---
 title: Running calico/node with an init system
-redirect_from: latest/getting-started/as-service
 canonical_url: 'https://docs.projectcalico.org/v3.7/getting-started/as-service'
 ---
 
@@ -33,7 +32,6 @@ CALICO_NO_DEFAULT_POOLS=""
 CALICO_IP=""
 CALICO_IP6=""
 CALICO_AS=""
-CALICO_LIBNETWORK_ENABLED=true
 CALICO_NETWORKING_BACKEND=bird
 ```
 
@@ -91,7 +89,6 @@ ExecStart=/usr/bin/docker run --net=host --privileged \
  -e CALICO_NETWORKING_BACKEND=${CALICO_NETWORKING_BACKEND} \
  -e AS=${CALICO_AS} \
  -e NO_DEFAULT_POOLS=${CALICO_NO_DEFAULT_POOLS} \
- -e CALICO_LIBNETWORK_ENABLED=${CALICO_LIBNETWORK_ENABLED} \
  -e ETCD_ENDPOINTS=${ETCD_ENDPOINTS} \
  -e ETCD_CA_CERT_FILE=${ETCD_CA_CERT_FILE} \
  -e ETCD_CERT_FILE=${ETCD_CERT_FILE} \

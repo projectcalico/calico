@@ -1,5 +1,6 @@
 ---
 title: Getting involved
+redirect_from: latest/reference/involved
 canonical_url: 'https://docs.projectcalico.org/v3.7/reference/involved'
 ---
 
@@ -27,7 +28,6 @@ Repository                                                              | Descri
 [felix](https://github.com/projectcalico/felix)                         | felix policy enforcement agent
 [kube-controllers](https://github.com/projectcalico/kube-controllers)   | Kubernetes controllers
 [libcalico-go](https://github.com/projectcalico/libcalico-go)           | Golang Calico library
-[libnetwork-plugin](https://github.com/projectcalico/libnetwork-plugin) | Calico libnetwork plugin for Docker
 
 ## Contributing
 

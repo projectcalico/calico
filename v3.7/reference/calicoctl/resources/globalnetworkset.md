@@ -1,6 +1,5 @@
 ---
 title: Global network set
-redirect_from: latest/reference/calicoctl/resources/globalnetworkset
 canonical_url: 'https://docs.projectcalico.org/v3.7/reference/calicoctl/resources/globalnetworkset'
 ---
 

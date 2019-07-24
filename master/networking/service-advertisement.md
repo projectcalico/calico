@@ -42,13 +42,13 @@ kubectl patch ds -n kube-system calico-node --patch \
 ## Behavior
 
 Calico implements [external traffic policy][external-traffic-policy] for Kubernetes services
-using normal BGP route processing and ECMP routing.
+using normal BGP route processing and ECMP routing by advertising the service cluster IP range, as well as exact
+cluster IPs for certain services. This means that:
 
 -  traffic to the cluster IP for a service with `externalTrafficPolicy: Local` will be load-balanced across the
-   nodes with endpoints for that service
+   nodes with endpoints for that service.
 
--  traffic to the cluster IP for a service with `externalTrafficPolicy: Cluster` will be load-balanced across all
-   the nodes in the cluster.
+-  traffic to the cluster IP for other services will be load-balanced across all the nodes in the cluster.
 
 In order to implement this behavior, Calico does the following.
 
@@ -58,6 +58,9 @@ In order to implement this behavior, Calico does the following.
 -  for each active service with `externalTrafficPolicy: Local`, the
    cluster IP for that service is advertised as a /32 route from the
    nodes that have endpoints for that service.
+
+>**Note**: in order to set `externalTrafficPolicy: Local` on a service, the service must be of type `LoadBalancer` or `NodePort`.
+{: .alert .alert-info}
 
 [external-traffic-policy]: https://kubernetes.io/docs/tasks/access-application-cluster/create-external-load-balancer/#preserving-the-client-source-ip
 [apiserver]: https://kubernetes.io/docs/reference/command-line-tools-reference/kube-apiserver/

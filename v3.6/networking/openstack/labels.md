@@ -24,8 +24,8 @@ For each security group that the VM belongs to, those labels are:
 
 | Label Name                                                  | Value                   |
 |-------------------------------------------------------------|-------------------------|
-| `sg.projectcalico.org/openstack-<security group ID>`        | `<security group name>` |
-| `sg-name.projectcalico.org/openstack-<security group name>` | `<security group ID>`   |
+| `sg.projectcalico.org/openstack-<security group ID>`        | `<security group ID>`   |
+| `sg-name.projectcalico.org/openstack-<security group name>` | `<security group name>` |
 |-------------------------------------------------------------|-------------------------|
 
 For the VM's {{site.prodname}} namespace, the label is:
