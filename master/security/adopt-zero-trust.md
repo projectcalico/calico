@@ -75,7 +75,7 @@ The How To section of this document explains how to write policy specifically in
 
 ##### Calico control plane
 
-The Calico control plane handles distributing all the policy information from the Calico data store to each enforcement point, ensuring that all network connections are subject to enforcement (Requirement 4). It translates the high-level declarative policy into the detailed enforcement attributes that change as applications scale up down to meet demand, and evolve as developers modify them.
+The Calico control plane handles distributing all the policy information from the Calico data store to each enforcement point, ensuring that all network connections are subject to enforcement (Requirement 4). It translates the high-level declarative policy into the detailed enforcement attributes that change as applications scale up and down to meet demand, and evolve as developers modify them.
 
 ##### Istio Citadel Identity System
 
