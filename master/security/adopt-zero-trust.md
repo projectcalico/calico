@@ -149,7 +149,6 @@ For simple applications, especially if they are maintained by a single team, the
 If this is difficult to do from memory, you have several options.
 
 1. Run the application in a test environment with policy enabled.
-    1. Look at service logs to see what connectivity has broken. 
     1. Add rules that allow those flows and iterate until the application functions normally.
     1. Move on to the next service and repeat.
 1. Collect flow logs from a running instance of your application. Tigera Secure Enterprise Edition can be used for this purpose, or the Kiali dashboard that comes with Istio.
