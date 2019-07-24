@@ -15,19 +15,20 @@ Organizations that embrace the change control model in this How-To will be able 
 ### Features
 
 This how-to guide uses the following Calico features:
-- NetworkPolicy and GlobalNetworkPolicy with:
+
+- **NetworkPolicy** and **GlobalNetworkPolicy** with:
   - Namespaces
   - RBAC
   - Service accounts
-- HostEndpoints
+- **HostEndpoints**
 - Security group integration with AWS
 - Calico with application layer policy for Istio
 
 ### Concepts
 
-#### What is Zero Trust Networking?
+#### The network is always hostile
 
-Zero Trust Networking is an approach to network security that is unified by the principle that the network is always assumed to be hostile. This is in direct contrast to perimeter and “segmentation” approaches that focus on separating the world into trusted and untrusted network segments.
+**Zero Trust Networking** is an approach to network security that is unified by the principle that the network is always assumed to be hostile. This is in direct contrast to perimeter and “segmentation” approaches that focus on separating the world into trusted and untrusted network segments.
 
 Why assume the network is hostile? In many attack scenarios, it is.
 
@@ -35,7 +36,7 @@ Why assume the network is hostile? In many attack scenarios, it is.
 - Deliberate or accidental misconfiguration can route sensitive traffic over untrusted networks, like the public Internet.
 - Other endpoints on a “trusted” network may be compromised: your application may share a network with thousands of other servers, tens of thousands of other containers, thousands of personal laptops, phones, etc.
 
-Major breaches typically start as a minor compromise of as little as a single component, but attackers then use the network to move laterally toward high value targets: your company’s or customers’ data. In a zone or perimeter model, attackers can move freely inside the perimeter or zone once they have compromised a single endpoint. A Zero Trust Network is resilient to this threat because it enforces strong, cryptographic authentication and access control on each and every network connection.
+Major breaches typically start as a minor compromise of as little as a single component, but attackers then use the network to move laterally toward high value targets: your company’s or customers’ data. In a zone or perimeter model, attackers can move freely inside the perimeter or zone after they have compromised a single endpoint. A Zero Trust Network is resilient to this threat because it enforces strong, cryptographic authentication and access control on each and every network connection.
 
 #### Requirements of a Zero Trust Network
 
@@ -43,7 +44,7 @@ Zero Trust Networks rely on network access controls with specific requirements:
 
 **Requirement 1:** All network connections are subject to enforcement (not just those that cross zone boundaries).
 
-**Requirement 2**: Establishing the identity of a remote endpoint is always based on multiple criteria including strong cryptographic proofs of identity. In particular, network-level identifiers like IP address & port are not sufficient on their own as they can be spoofed by a hostile network.
+**Requirement 2**: Establishing the identity of a remote endpoint is always based on multiple criteria including strong cryptographic proofs of identity. In particular, network-level identifiers like IP address and port are not sufficient on their own as they can be spoofed by a hostile network.
 
 **Requirement 3**: All expected and allowed network flows are explicitly whitelisted. Any connection not explicitly whitelisted is denied.
 
@@ -74,7 +75,7 @@ The How To section of this document explains how to write policy specifically in
 
 ##### Calico control plane
 
-The Calico control plane handles distributing all the policy information from the Calico data store to each enforcement point, ensuring that all network connections are subject to enforcement (Requirement 4). It translates the high-level declarative policy into the detailed enforcement attributes that change as applications scale up & down to meet demand, and evolve as developers modify them.
+The Calico control plane handles distributing all the policy information from the Calico data store to each enforcement point, ensuring that all network connections are subject to enforcement (Requirement 4). It translates the high-level declarative policy into the detailed enforcement attributes that change as applications scale up down to meet demand, and evolve as developers modify them.
 
 ##### Istio Citadel Identity System
 
@@ -82,7 +83,7 @@ In Calico and Istio, workload identities are based on Kubernetes Service Account
 
 ### Before you begin...
 
-[Enable Application Layer Policy]({{site.baseurl}}/{{page.version}}/getting-started/kubernetes/installation/app-layer-policy).
+[Enable Application Layer Policy]({{site.baseurl}}/{{page.version}}/getting-started/kubernetes/installation/app-layer-policy)
 
 ### How to
 
@@ -100,7 +101,7 @@ In particular, the view that developers build applications which they hand off t
 At a high level, you will undertake the following steps to establish a Zero Trust Network:
 
 1. Install Calico.
-1. Install Istio & enable Calico integration.
+1. Install Istio and enable Calico integration.
 1. Establish workload identity by using Service Accounts.
 1. Write initial whitelist policies for each service.
 
@@ -114,7 +115,7 @@ Follow the [install instructions]({{site.baseurl}}/{{page.version}}/getting-star
 
 Follow the instructions to enable Calico Application Layer Policy.
 
-The instructions include a “demo” install of Istio for quickly testing functionality out. For a production installation to support a Zero Trust Network, you should instead follow the official Isito install instructions. Be sure to enable mutually authenticated TLS (mTLS) in your install options by setting **global.mtls.enabled** to true.
+The instructions include a “demo” install of Istio for quickly testing out functionality. For a production installation to support a Zero Trust Network, you should instead follow the official Istio install instructions. Be sure to enable mutually authenticated TLS (mTLS) in your install options by setting **global.mtls.enabled to true**.
 
 #### Establish workload identity by using Service Accounts
 
@@ -144,7 +145,7 @@ Let’s look at an example application.
 
 ![zero-trust-app]({{site.baseurl}}/images/zero-trust-app.png)
 
-In this example, requests from end-users all flow thru a service called api, where they can trigger calls to other services in the backend. These in turn can call other services. Each arrow in this diagram represents an expected flow, and if two services do not have a connecting arrow, the are not expected to have any network communication. For example, the only services that call the post service are api and search.
+In this example, requests from end-users all flow through a service called api, where they can trigger calls to other services in the backend. These in turn can call other services. Each arrow in this diagram represents an expected flow, and if two services do not have a connecting arrow, the are not expected to have any network communication. For example, the only services that call the post service are api and search.
 
 For simple applications, especially if they are maintained by a single team, the developers will probably be able to just write down this flow graph from memory or with a quick look at the application code.
 
@@ -194,50 +195,59 @@ spec:
 Things to notice in this example:
 
 - **Namespace**
-  Create a Calico NetworkPolicy in the same namespace as the service you are writing the whitelist for.
+  
+  Create a Calico NetworkPolicy in the same **namespace** as the service for the whitelist (microblog).
 
-  ```
+  <pre>
   metadata:
     name: post-whitelist
     namespace: microblog
   spec:
-  ```
+  </pre>
+  {:.no-select-button}
 
 - **Selectors**
-  The selector controls which pods the policy applies to. It should be the same selector used to define the Kubernetes Service.
+  
+  The selector controls which pods to apply policy. It should be the same selector used to define the Kubernetes Service.
 
-  ```
+  <pre>
   spec:
     selector: svc == 'post'
-  ```  
+  </pre>
+  {:.no-select-button} 
 
--**Source**
-  In the source: selector, allow api and search by name. We’ll discuss alternatives to selecting service accounts by name below.
+- **Service account by name**
+  
+  In the **source:** selector, allow **api** and **search** by name. An alternative to selecting service accounts by name, is by namespaceSelector (next example).
 
-  ```
-  source
+  <pre>
+  source:
     serviceAccount:
       names: ["api", "search"]
-  ```  
+  </pre> 
+  {:.no-select-button} 
 
-- **Service accounts**
+- **Service account by namespaceSelector**
+  
   Service Accounts are uniquely identified by name and namespace. Use a **namespaceSelector** to fully-qualify the Service Accounts you are allowing, so if names are repeated in other namespaces they will not be granted access to the service.
 
-  ```
+  <pre>
   source
     serviceAccount:
-      names: ["api", "search"]
     namespacSelector: app == 'microblog'
-  ```
+  </pre>
+  {:.no-select-button}
 
 - **Rules**
+  
   Scope your rules as tightly as possible. In this case we are allowing connection only on TCP port 8080.
-
-  ```
+  
+  <pre>
   destination:
     ports:
     - 8080
-  ```
+  </pre>
+  {:.no-select-button}
 
 The above example lists the identities that need access to the post service by name. This style of whitelist works best when the developers responsible for a service have explicit knowledge of who needs access to their service.
 
@@ -284,9 +294,11 @@ The size of the security team is often relatively small compared with applicatio
 
 Therefore, we recommend that the authors of the policy changes be developers/devops (i.e. authorship should “shift left”). This allows your change control process to scale naturally as your applications do. When application authors make changes that require policy changes (say, adding a new microservice), they also make the required policy changes to authorize the network activity associated with it.
 
+Here is a simplified application delivery pipeline flow.
+
 ![zero-trust-app]({{site.baseurl}}/images/zero-trust-deploy.png)
 
-A simplified application delivery pipeline appears above.  Developers, DevOps, and/or Operators make changes to applications primarily by making changes to the artifacts at the top of the diagram: the source code and associated deployment configuration.  These artifacts are put in source control (e.g. git) and control over changes to the running applications are managed as commits to this source repository.  In a Kubernetes environment, the deployment configuration is typically the objects that appear on the Kubernetes API, such as Services and Deployment manifests.
+Developers, DevOps, and/or Operators make changes to applications primarily by making changes to the artifacts at the top of the diagram: the source code and associated deployment configuration.  These artifacts are put in source control (e.g. git) and control over changes to the running applications are managed as commits to this source repository.  In a Kubernetes environment, the deployment configuration is typically the objects that appear on the Kubernetes API, such as Services and Deployment manifests.
 
 What you should do is include the NetworkPolicy as part of those deployment config artifacts. In some organizations, these artifacts are in the same repo as the source code, and in others they reside in a separate repo, but the principle is the same: you manage policy change control as commits to the deployment configuration. This config then works its way through the delivery pipeline and is finally applied to the running Kubernetes cluster.
 
@@ -294,10 +306,9 @@ Your developers will likely require training and support from the security team 
 
 You may wish to review every security policy change request (aka pull request in git workflows) at first. If you do, then be sure you have time allotted, and consider rolling out Zero Trust Network policies incrementally, one application or service at a time. As development teams gain confidence you can pull back and have them do their own reviews. Security professionals can do spot checks on change requests or entire policies to ensure quality remains high in the long term.
 
-
 ### Above and beyond
 
-- [Protect hosts](({{site.baseurl}}/{{page.version}}/security/protecthosts)
+- [Protect hosts]({{site.baseurl}}/{{page.version}}/security/protecthosts)
 - [Global Network Policy]({{site.baseurl}}/{{page.version}}/reference/resources/globalnetworkpolicy)
 - [Network Policy]({{site.baseurl}}/{{page.version}}/reference/resources/networkpolicy)
 
