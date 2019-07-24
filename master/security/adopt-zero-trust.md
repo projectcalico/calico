@@ -221,10 +221,23 @@ Things to notice in this example:
   ```  
 
 - **Service accounts**
-  Service Accounts are uniquely identified by name and namespace. Use a namespace selector to fully-qualify the Service Accounts you are allowing, so if names are repeated in other namespaces they will not be granted access to the service.
+  Service Accounts are uniquely identified by name and namespace. Use a **namespaceSelector** to fully-qualify the Service Accounts you are allowing, so if names are repeated in other namespaces they will not be granted access to the service.
+
+  ```
+  source
+    serviceAccount:
+      names: ["api", "search"]
+    namespacSelector: app == 'microblog'
+  ```
 
 - **Rules**
   Scope your rules as tightly as possible. In this case we are allowing connection only on TCP port 8080.
+
+  ```
+  destination:
+    ports:
+    - 8080
+  ```
 
 The above example lists the identities that need access to the post service by name. This style of whitelist works best when the developers responsible for a service have explicit knowledge of who needs access to their service.
 
@@ -271,7 +284,7 @@ The size of the security team is often relatively small compared with applicatio
 
 Therefore, we recommend that the authors of the policy changes be developers/devops (i.e. authorship should “shift left”). This allows your change control process to scale naturally as your applications do. When application authors make changes that require policy changes (say, adding a new microservice), they also make the required policy changes to authorize the network activity associated with it.
 
-[graphic]
+![zero-trust-app]({{site.baseurl}}/images/zero-trust-deploy.png)
 
 A simplified application delivery pipeline appears above.  Developers, DevOps, and/or Operators make changes to applications primarily by making changes to the artifacts at the top of the diagram: the source code and associated deployment configuration.  These artifacts are put in source control (e.g. git) and control over changes to the running applications are managed as commits to this source repository.  In a Kubernetes environment, the deployment configuration is typically the objects that appear on the Kubernetes API, such as Services and Deployment manifests.
 
