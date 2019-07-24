@@ -179,7 +179,7 @@ To change this parameter for all hosts, edit the **FelixConfiguration** object n
 
 ### Above and beyond
 
-- [Apply policy to Kubernetes nodeports]({{site.baseurl}}/{{page.version}}/security/kubernetesnodeports)  
+- [Apply policy to Kubernetes node ports]({{site.baseurl}}/{{page.version}}/security/kubernetesnodeports)  
 - [Defend against DoS attacks]({{site.baseurl}}/{{page.version}}/security/defenddosattack) 
 - [Global network policy]({{site.baseurl}}/{{page.version}}/reference/resources/globalnetworkpolicy) 
 - [Host endpoint]({{site.baseurl}}/{{page.version}}/reference/resources/hostendpoint)
