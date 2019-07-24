@@ -53,4 +53,6 @@ toc:
 - title: Using HTTP methods and paths in policy rules
   path: /security/http-methods 
 - title: Enable extreme high-connection workloads
-  path: /security/high-connection-workloads   
+  path: /security/high-connection-workloads 
+- title: Protect hosts
+  path: /security/protect-hosts
