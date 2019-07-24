@@ -36,6 +36,32 @@ toc:
       path: /getting-started/kubernetes/installation/config-options
     - title: Integration guide (advanced)
       path: /getting-started/kubernetes/installation/integration
+    - title: Calico the Hard Way
+      section:
+      - title: Introduction
+        path: /getting-started/kubernetes/installation/hardway/
+      - title: Standing up Kubernetes
+        path: /getting-started/kubernetes/installation/hardway/standing-up-kubernetes
+      - title: The Calico Data Store
+        path: /getting-started/kubernetes/installation/hardway/the-calico-data-store
+      - title: Configure IP Pools
+        path: /getting-started/kubernetes/installation/hardway/configure-ip-pools
+      - title: Install CNI Plugin
+        path: /getting-started/kubernetes/installation/hardway/install-cni-plugin
+      - title: Install Typha
+        path: /getting-started/kubernetes/installation/hardway/install-typha
+      - title: Install Calico Node
+        path: /getting-started/kubernetes/installation/hardway/install-node
+      - title: Configure BGP Peering
+        path: /getting-started/kubernetes/installation/hardway/configure-bgp-peering
+      - title: Test Networking
+        path: /getting-started/kubernetes/installation/hardway/test-networking
+      - title: Test Network Policy
+        path: /getting-started/kubernetes/installation/hardway/test-network-policy
+      - title: End user RBAC
+        path: /getting-started/kubernetes/installation/hardway/end-user-rbac
+      - title: Istio Integration
+        path: /getting-started/kubernetes/installation/hardway/istio-integration
 - title: OpenShift
   section:
   - title: System requirements
