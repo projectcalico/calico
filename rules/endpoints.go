@@ -311,8 +311,7 @@ func (r *DefaultRuleRenderer) endpointIptablesChain(
 	if dropEncap {
 		rules = append(rules, Rule{
 			Match: Match().ProtocolNum(ProtoUDP).
-				DestPorts(uint16(r.Config.VXLANPort)).
-				VXLANVNI(uint32(r.Config.VXLANVNI)),
+				DestPorts(uint16(r.Config.VXLANPort)),
 			Action:  DropAction{},
 			Comment: "Drop VXLAN encapped packets originating in pods",
 		})

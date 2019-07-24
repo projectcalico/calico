@@ -164,8 +164,7 @@ func chainsForIfaces(ifaceMetadata []string,
 	dropEncapRules := []iptables.Rule{
 		{
 			Match: iptables.Match().ProtocolNum(ProtoUDP).
-				DestPorts(uint16(VXLANPort)).
-				VXLANVNI(uint32(VXLANVNI)),
+				DestPorts(uint16(VXLANPort)),
 			Action:  iptables.DropAction{},
 			Comment: "Drop VXLAN encapped packets originating in pods",
 		},
