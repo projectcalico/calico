@@ -149,15 +149,15 @@ For simple applications, especially if they are maintained by a single team, the
 If this is difficult to do from memory, you have several options.
 
 1. Run the application in a test environment with policy enabled.
-   1. Look at service logs to see what connectivity has broken. 
-   1. Add rules that allow those flows and iterate until the application functions normally.
-   1. Move on to the next service and repeat.
+    1. Look at service logs to see what connectivity has broken. 
+    1. Add rules that allow those flows and iterate until the application functions normally.
+    1. Move on to the next service and repeat.
 1. Collect flow logs from a running instance of your application. Tigera Secure Enterprise Edition can be used for this purpose, or the Kiali dashboard that comes with Istio.
-   1. Process the flow logs to determine the set of flows.
-   1. Review the logged flows and add rules for each expected flow.
+    1. Process the flow logs to determine the set of flows.
+    1. Review the logged flows and add rules for each expected flow.
 1. Use Tigera Secure Enterprise Edition for policy, and put it into logging-only mode.
-   1. In this mode “denied” connections are logged instead of dropped.
-   1. Review the “denied” logs and add rules for each expected flow.
+    1. In this mode “denied” connections are logged instead of dropped.
+    1. Review the “denied” logs and add rules for each expected flow.
 
 When determining flows from a running application instance, be sure to review each rule you add with application developers to determine if it is legitimate and expected. The last thing you want is for a breach-in-progress to be enshrined as expected flows in policy!
 
