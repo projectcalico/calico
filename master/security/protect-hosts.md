@@ -182,4 +182,4 @@ To change this parameter for all hosts, edit the **FelixConfiguration** object n
 - [Apply policy to Kubernetes nodeports]({{site.baseurl}}/{{page.version}}/security/kubernetesnodeports)  
 - [Defend against DoS attacks]({{site.baseurl}}/{{page.version}}/security/defenddosattack) 
 - [Global network policy]({{site.baseurl}}/{{page.version}}/reference/resources/globalnetworkpolicy) 
-- [Host endpoints]({{site.baseurl}}/{{page.version}}/reference/resources/hostendpoint)
+- [Host endpoint]({{site.baseurl}}/{{page.version}}/reference/resources/hostendpoint)
