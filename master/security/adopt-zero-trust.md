@@ -41,7 +41,7 @@ Major breaches typically start as a minor compromise of as little as a single co
 
 Zero Trust Networks rely on network access controls with specific requirements:
 
-**Requirement 1: All network connections are subject to enforcement (not just those that cross zone boundaries).
+**Requirement 1:** All network connections are subject to enforcement (not just those that cross zone boundaries).
 
 **Requirement 2**: Establishing the identity of a remote endpoint is always based on multiple criteria including strong cryptographic proofs of identity. In particular, network-level identifiers like IP address & port are not sufficient on their own as they can be spoofed by a hostile network.
 
@@ -169,40 +169,101 @@ After you have the set of expected flows for each service, you are ready to writ
 
 Returning to the example flow graph in the previous section, let’s write the policy for the post service. For the purpose of this example, assume all the services in the application run in a Kubernetes Namespace called microblog.  We see from the flow graph that the post service is accessed by the api and search services.
 
-Things to notice in this example
+```
+apiVersion: projectcalico.org/v3
+kind: NetworkPolicy
+metadata:
+  name: post-whitelist
+  namespace: microblog
+spec:
+  selector: svc == 'post'
+  types:
+  - Ingress
+  ingress:
+  - action: Allow
+    source
+      serviceAccount:
+        names: ["api", "search"]
+      namespaceSelector: app == 'microblog'
+    protocol: TCP
+    destination:
+      ports:
+      - 8080
+```
 
-**<span style="color:blue; style=font-size:20em;">1</span>**<br>
-Create a Calico NetworkPolicy in the same namespace as the service you are writing the whitelist for.</br>
+Things to notice in this example:
 
-2
-The selector controls which pods the policy applies to. It should be the same selector used to define the Kubernetes Service.
-3
-In the source: selector, allow api and search by name. We’ll discuss alternatives to selecting service accounts by name below.
-4
-Service Accounts are uniquely identified by name and namespace. Use a namespace selector to fully-qualify the Service Accounts you are allowing, so if names are repeated in other namespaces they will not be granted access to the service. 
-5
-Scope your rules as tightly as possible. In this case we are allowing connection only on TCP port 8080.
+- **Namespace**
+  Create a Calico NetworkPolicy in the same namespace as the service you are writing the whitelist for.
+
+  ```
+  metadata:
+    name: post-whitelist
+    namespace: microblog
+  spec:
+  ```
+
+- **Selectors**
+  The selector controls which pods the policy applies to. It should be the same selector used to define the Kubernetes Service.
+
+  ```
+  spec:
+    selector: svc == 'post'
+  ```  
+
+-**Source**
+  In the source: selector, allow api and search by name. We’ll discuss alternatives to selecting service accounts by name below.
+
+  ```
+  source
+    serviceAccount:
+      names: ["api", "search"]
+  ```  
+
+- **Service accounts**
+  Service Accounts are uniquely identified by name and namespace. Use a namespace selector to fully-qualify the Service Accounts you are allowing, so if names are repeated in other namespaces they will not be granted access to the service.
+
+- **Rules**
+  Scope your rules as tightly as possible. In this case we are allowing connection only on TCP port 8080.
 
 The above example lists the identities that need access to the post service by name. This style of whitelist works best when the developers responsible for a service have explicit knowledge of who needs access to their service.
 
 However, some development teams don’t explicitly know who needs access to their service, and don’t need to know. The service might be very generic and used by lots of different applications across the organization---for example: a logging service. Instead of listing the Service Accounts that get access to the service explicitly one-by-one, you can use a label selector that selects on Service Accounts.
 
-[graphic]
+In the following example, we have changed the **serviceAccount** clause. Instead of a name, we use a label selector. The **selector: svc-post = access** label grants access to the post service. 
 
-In this example, we have changed the serviceAccount clause.
-1
-Instead of a name, use a label selector. Define labels that indicate permission to access services in the cluster. In this example, the svc-post = access label will grant access to the post service.
-
-Then, modify the ServiceAccounts for each identity that needs access. In this example, we would add the label svc-post = access to the api and search Service Accounts.
+```
+apiVersion: projectcalico.org/v3
+kind: NetworkPolicy
+metadata:
+  name: post-whitelist
+  namespace: microblog
+spec:
+  selector: svc == 'post'
+  types:
+  - Ingress
+  ingress:
+  - action: Allow
+    source
+      serviceAccount:
+        selector: svc-post == 'access'
+      namespaceSelector: app == 'microblog'
+    protocol: TCP
+    destination:
+      ports:
+      - 8080
+```
+Define labels that indicate permission to access services in the cluster. Then, modify the ServiceAccounts for each identity that needs access. In this example, we would add the label **svc-post = access** to the **api** and **search**Service Accounts.
 
 Whether you choose to explicitly name the Service Accounts or use a label selector is up to you, and you can make a different choice for different services. Using explicit names works best for services that have a small number of clients, or when you want the service owner to be involved in the decision to allow something new to access the service. If some other team wants to get access to the service, they call up the owner of the service and ask them to grant access. In contrast, using labels is good when you want more decentralized control. The service owner defines the labels that grant access to the service and trusts the other development teams to label their Service Accounts when they need access. 
 
 #### Maintain your zero trust network 
 
-The whitelist policies are tightly scoped to the exact expected flows in the applications running in the Zero Trust Network. If these applications are under active development the expected flows will change, and policy, therefore, also needs to change. Maintaining a Zero Trust Network means instituting a change control policy that ensures
-Policies are up to date with application changes
-Policies are tightly scoped to expected flows
-Changes keep up with the pace of application development
+The whitelist policies are tightly scoped to the exact expected flows in the applications running in the Zero Trust Network. If these applications are under active development the expected flows will change, and policy, therefore, also needs to change. Maintaining a Zero Trust Network means instituting a change control policy that ensures:
+
+- Policies are up to date with application changes
+- Policies are tightly scoped to expected flows
+- Changes keep up with the pace of application development
 
 It is difficult to overstate how important the last point is. If your change control process cannot handle the volume of changes, or introduces too much latency in deploying new features, your transition to a Zero Trust Network is very likely to fail. Either your senior leadership will choose business expediency and overrule your security concerns, or competitors that can roll out new versions faster will stifle your market share. On the other hand, if your change control process does keep pace with application development, it will bring security value without sacrificing the pace of innovation.
 
