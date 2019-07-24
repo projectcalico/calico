@@ -66,7 +66,7 @@ If you are already running Calico for Kubernetes, you are good to go. If you wan
 
 #### Avoid accidentally cutting all host connectivity
 
-To avoid inadvertently cutting off all host connectivity because of non-existent or misconfigured network policy, Calico uses failsafe rules that open specific ports on all host endpoints. 
+To avoid inadvertently cutting all host connectivity because of non-existent or misconfigured network policy, Calico uses failsafe rules that open specific ports on all host endpoints. 
 
 Review the following table to determine if the defaults work for your implementation. If not, change the default ports using the parameters, **FailsafeInboundHostPorts** and **FailsafeOutboundHostPorts** in [Configuring Felix]({{site.baseurl}}/{{page.version}}/reference/resources/felixconfig).
 
@@ -86,7 +86,7 @@ Review the following table to determine if the defaults work for your implementa
 
 ##### Step 1: Create policy to restrict host traffic
 
-Although failsafe rules provide protection from removing all connectivity to a host, you should create a global network policy policy that restricts host traffic. 
+Although failsafe rules provide protection from removing all connectivity to a host, you should create a GlobalNetworkPolicy policy that restricts host traffic. 
 
 In the following example, we use a **GlobalNetworkPolicy** that applies to all worker nodes (defined by a label). Ingress SSH access is allowed from a defined "management" subnet. 
 
@@ -129,11 +129,11 @@ spec:
 
 ##### Step 2: Create host endpoints
 
-For each host point that you want to secure with policy, you must create a **host endpoint object**. To do that, you need the name of the Calico node on the host that owns the interface; in most cases, it is the same as the hostname of the host. 
+For each host point that you want to secure with policy, you must create a **HostEndpoint** object. To do that, you need the name of the Calico node on the host that owns the interface; in most cases, it is the same as the hostname of the host. 
 
-In the following example, we create a host endpoint for the host named **my-host** with the interface named **eth0**, with **IP 10.0.0.1**. Note that the value for **node:** must match the hostname used on the Calico node object. 
+In the following example, we create a HostEndpoint for the host named **my-host** with the interface named **eth0**, with **IP 10.0.0.1**. Note that the value for **node:** must match the hostname used on the Calico node object. 
 
-When the host endpoint is created, traffic to or from the interface is dropped unless policy is in place. 
+When the HostEndpoint is created, traffic to or from the interface is dropped unless policy is in place. 
 
 ```
 apiVersion: projectcalico.org/v3
