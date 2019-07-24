@@ -50,7 +50,7 @@ Zero Trust Networks rely on network access controls with specific requirements:
 
 **Requirement 4**: Compromised workloads must not be able to circumvent policy enforcement.
 
-**Requirement 5**: Many Zero Trust Networks also rely on encryption of network traffic to prevent disclosure of sensitive data to hostile entities snooping network traffic. This is not an absolute requirement if private data are not exchanged over the network, but to fit the criteria of a Zero Trust Network, encryption must be used on every network connection if it required at all. A Zero Trust Network does not distinguish between trusted and untrusted network links or paths. Also note that even when not using encryption for data privacy, cryptographic proofs of authenticity are still used to establish identity.
+**Requirement 5**: Many Zero Trust Networks also rely on encryption of network traffic to prevent disclosure of sensitive data to hostile entities snooping network traffic. This is not an absolute requirement if private data are not exchanged over the network, but to fit the criteria of a Zero Trust Network, encryption must be used on every network connection if it is required at all. A Zero Trust Network does not distinguish between trusted and untrusted network links or paths. Also note that even when not using encryption for data privacy, cryptographic proofs of authenticity are still used to establish identity.
 
 #### How Calico and Istio implement Zero Trust Network requirements
 
