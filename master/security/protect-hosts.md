@@ -66,9 +66,9 @@ If you are already running Calico for Kubernetes, you are good to go. If you wan
 
 #### Avoid accidentally cutting all host connectivity
 
-To avoid inadvertently cut off all host connectivity because of non-existent or misconfigured network policy, Calico uses failsafe rules that open specific ports on all host endpoints. 
+To avoid inadvertently cutting off all host connectivity because of non-existent or misconfigured network policy, Calico uses failsafe rules that open specific ports on all host endpoints. 
 
-Review the following table to determine if the defaults work for your implementation. If not, change the default ports using the parameters, **FailsafeInboundHostPorts** and **FailsafeOutboundHostPorts** in [Configuring Felix]().
+Review the following table to determine if the defaults work for your implementation. If not, change the default ports using the parameters, **FailsafeInboundHostPorts** and **FailsafeOutboundHostPorts** in [Configuring Felix]({{site.baseurl}}/{{page.version}}/reference/resources/felixconfig).
 
 | Port   | Protocol | Direction           |              Purpose                           |
 |--------|----------|---------------------|------------------------------------------------|
@@ -86,7 +86,7 @@ Review the following table to determine if the defaults work for your implementa
 
 ##### Step 1: Create policy to restrict host traffic
 
-Although failsafe rules provide protection from removing all connectivity to a host, you should create a global network policy policy that restrict host traffic. 
+Although failsafe rules provide protection from removing all connectivity to a host, you should create a global network policy policy that restricts host traffic. 
 
 In the following example, we use a **GlobalNetworkPolicy** that applies to all worker nodes (defined by a label). Ingress SSH access is allowed from a defined "management" subnet. 
 
@@ -133,7 +133,7 @@ For each host point that you want to secure with policy, you must create a **hos
 
 In the following example, we create a host endpoint for the host named **my-host** with the interface named **eth0**, with **IP 10.0.0.1**. Note that the value for **node:** must match the hostname used on the Calico node object. 
 
-When the host endpoint is created, traffic to or from the interface is dropped unless policy in place. 
+When the host endpoint is created, traffic to or from the interface is dropped unless policy is in place. 
 
 ```
 apiVersion: projectcalico.org/v3
@@ -152,12 +152,14 @@ spec:
 
 The default Calico behavior blocks all connections from workloads to their local host (after traffic passes any egress policy applied to the workload). You can change this behavior using the **DefaultEndpointToHostAction** parameter in Felix configuration. 
 
-This parameter works at the IP table level, where you can specify packet behavior to **Drop** (default), **Accept**, or **Return** (if you have your own rules in IP tables). 
+This parameter works at the IP table level, where you can specify packet behavior to **Drop** (default), **Accept**, or **Return**. 
 
 To change this parameter for all hosts, edit the **FelixConfiguration** object named “default.”
 
 1. Get a copy of the object to edit.  
-   `calicoctl get felixconfiguration default --export -o yaml > default-felix-config.yaml`
+   ```
+   calicoctl get felixconfiguration default --export -o yaml > default-felix-config.yaml
+   ```
 1. Open the file in a text editor and add the parameter, **defaultEndpointToHostAction**. For example:
    ```
    apiVersion: projectcalico.org/v3
@@ -171,7 +173,9 @@ To change this parameter for all hosts, edit the **FelixConfiguration** object n
      defaultEndpointToHostAction: Accept
    ```
 1. Update the FelixConfiguration on the cluster.  
-   `calicoctl apply -f default-felix-config.yaml`
+   ```
+   calicoctl apply -f default-felix-config.yaml
+   ```
 
 ### Above and beyond
 
