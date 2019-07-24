@@ -68,7 +68,7 @@ If you are already running Calico for Kubernetes, you are good to go. If you wan
 
 To avoid inadvertently cutting all host connectivity because of non-existent or misconfigured network policy, Calico uses failsafe rules that open specific ports on all host endpoints. 
 
-Review the following table to determine if the defaults work for your implementation. If not, change the default ports using the parameters, **FailsafeInboundHostPorts** and **FailsafeOutboundHostPorts** in [Configuring Felix]({{site.baseurl}}/{{page.version}}/reference/resources/felixconfig).
+Review the following table to determine if the defaults work for your implementation. If not, change the default ports using the parameters, **FailsafeInboundHostPorts** and **FailsafeOutboundHostPorts** in [Configuring Felix]({{site.baseurl}}/{{page.version}}/reference/felix/configuration#environment-variables).
 
 | Port   | Protocol | Direction           |              Purpose                           |
 |--------|----------|---------------------|------------------------------------------------|
