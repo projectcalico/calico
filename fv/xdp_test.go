@@ -78,6 +78,8 @@ var _ = infrastructure.DatastoreDescribe("with initialized Felix", []apiconfig.D
 				"8055,8056,22,68",
 				protos[ii])
 
+			felix.Exec("apt-get", "install", "-y", "hping3")
+
 			hostEp := api.NewHostEndpoint()
 			hostEp.Name = fmt.Sprintf("host-endpoint-%d", ii)
 			hostEp.Labels = map[string]string{
@@ -163,6 +165,19 @@ var _ = infrastructure.DatastoreDescribe("with initialized Felix", []apiconfig.D
 		cc.ExpectSome(felixes[client], hostW[server].Port(68))
 		cc.CheckConnectivityOffset(1)
 		cc.ResetExpectations()
+	}
+
+	expectTCPSourceFailsafePortBlacklisted := func(cc *workload.ConnectivityChecker) {
+		client, server := clientServerIndexes(cc.Protocol)
+
+		fsPort := &workload.Port{
+			Workload: hostW[client],
+			Port:     2379, // a source failsafe port
+		}
+
+		ccTCP.ExpectNone(fsPort, hostW[server], 8055)
+		ccTCP.CheckConnectivityOffset(1)
+		ccTCP.ResetExpectations()
 	}
 
 	It("should have expected no connectivity at first", func() {
@@ -262,12 +277,60 @@ var _ = infrastructure.DatastoreDescribe("with initialized Felix", []apiconfig.D
 			return hexCIDR
 		}
 
+		Context("blocking server IP", func() {
+			BeforeEach(func() {
+				_, udpServer := clientServerIndexes("udp")
+				_, tcpServer := clientServerIndexes("tcp")
+				_ = applyGlobalNetworkSets("xdpblacklistudp", hostW[udpServer].IP, "/32", false)
+				_ = applyGlobalNetworkSets("xdpblacklisttcp", hostW[tcpServer].IP, "/32", false)
+			})
+
+			It("should allow connections from other IPs to the server", func() {
+				expectAllAllowed(ccTCP)
+				expectAllAllowed(ccUDP)
+			})
+		})
+
 		Context("blocking full IP", func() {
 			BeforeEach(func() {
 				host0HexCIDR = applyGlobalNetworkSets("xdpblacklistudp", hostW[0].IP, "/32", false)
 				host2HexCIDR = applyGlobalNetworkSets("xdpblacklisttcp", hostW[2].IP, "/32", false)
 
 				time.Sleep(applyPeriod)
+			})
+
+			It("should block packets smaller than UDP", func() {
+				client, server := clientServerIndexes("tcp")
+
+				err := utils.RunMayFail("docker", "exec", felixes[client].Name, "hping3", "--rawip", "-c", "1", "-H", "254", "-d", "1", hostW[server].IP)
+				Expect(err).To(HaveOccurred())
+				Expect(utils.LastRunOutput).To(ContainSubstring(`100% packet loss`))
+
+				output, err := felixes[server].ExecOutput("iptables", "-t", "raw", "-v", "-n", "-L", "cali-pi-default.xdp-filter-t")
+				// the only rule that refers to a cali40-prefixed ipset should
+				// have 0 packets/bytes because the raw small packets should've been
+				// blocked by XDP
+				Expect(err).NotTo(HaveOccurred())
+				Expect(output).To(MatchRegexp(`(?m)^\s+0\s+0.*cali40s:`))
+			})
+
+			It("should block connections even if the source port is a failsafe port", func() {
+				expectTCPSourceFailsafePortBlacklisted(ccTCP)
+			})
+
+			It("should block ICMP too", func() {
+				client, server := clientServerIndexes("tcp")
+
+				err := utils.RunMayFail("docker", "exec", felixes[client].Name, "ping", "-c", "1", "-w", "1", hostW[server].IP)
+				Expect(err).To(HaveOccurred())
+				Expect(utils.LastRunOutput).To(ContainSubstring(`100% packet loss`))
+
+				output, err := felixes[server].ExecOutput("iptables", "-t", "raw", "-v", "-n", "-L", "cali-pi-default.xdp-filter-t")
+				// the only rule that refers to a cali40-prefixed ipset should
+				// have 0 packets/bytes because the icmp packets should've been
+				// blocked by XDP
+				Expect(err).NotTo(HaveOccurred())
+				Expect(output).To(MatchRegexp(`(?m)^\s+0\s+0.*cali40s:`))
 			})
 
 			It("should have expected an XDP program attached to eth0 on felixes[1]", func() {
