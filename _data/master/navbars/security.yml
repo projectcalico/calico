@@ -67,5 +67,4 @@ toc:
 - title: Get started with Calico network policy for OpenStack
   path: /security/network-policy-openstack
 - title: Protect hosts
-  path: /security/protect-hosts  
-  
+  path: /security/protect-hosts
