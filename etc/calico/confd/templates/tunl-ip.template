@@ -3,6 +3,6 @@ address allocation code whenever an IP pool changes.
  
 {{range ls "/pool"}}{{$data := json (getv (printf "/pool/%s" .))}}
   {{- if or $data.ipip $data.vxlan_mode}}
-    {{- if not $data.disabled}}{{$data.cidr}}{{end}}
+    {{- if not $data.disabled}}{{$data}}{{end}}
   {{- end}}
 {{end}}
