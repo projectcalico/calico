@@ -58,7 +58,7 @@ spec:
         - 192.0.2.0/24
 ```
 
-#### Limit traffic to/from external networks, global network set 
+#### Limit traffic to or from external networks, global network set 
 
 In this example, we use a {{site.prodname}} **GlobalNetworkSet** and reference it in a **GlobalNetworkPolicy**.
 
