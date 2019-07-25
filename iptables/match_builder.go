@@ -282,6 +282,9 @@ func (m MatchCriteria) NotICMPV6TypeAndCode(t, c uint8) MatchCriteria {
 
 // VXLANVNI matches on the VNI contained within the VXLAN header.  It assumes that this is indeed a VXLAN
 // packet; i.e. it should be used with a protocol==UDP and port==VXLAN port match.
+//
+// Note: the -m u32 option is not supported on iptables in NFT mode.
+// https://wiki.nftables.org/wiki-nftables/index.php/Supported_features_compared_to_xtables#u32
 func (m MatchCriteria) VXLANVNI(vni uint32) MatchCriteria {
 	// This uses the U32 module, a simple VM for extracting bytes from a packet.  See
 	// http://www.stearns.org/doc/iptables-u32.current.html
