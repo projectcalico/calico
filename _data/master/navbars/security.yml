@@ -66,3 +66,5 @@ toc:
   path: /security/network-policy-openstack
 - title: Protect hosts
   path: /security/protect-hosts
+- title: Use external IPs or networks in policy rules
+  path: /security/external-ips-policy  
