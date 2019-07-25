@@ -67,4 +67,4 @@ toc:
 - title: Protect hosts
   path: /security/protect-hosts
 - title: Use namespace in policy rules
-  path: /security/namespace-policy  
+  path: /security/namespace-policy
