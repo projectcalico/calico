@@ -61,7 +61,9 @@ toc:
 - title: Use ICMP/ping in policy rules
   path: /security/icmp-ping
 - title: Enable extreme high-connection workloads
-  path: /security/high-connection-workloads 
+  path: /security/high-connection-workloads
+- title: Adopt a zero trust network model for security
+  path: /security/adopt-zero-trust  
 - title: Get started with Calico network policy for OpenStack
   path: /security/network-policy-openstack
 - title: Protect hosts
