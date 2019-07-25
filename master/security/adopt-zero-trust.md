@@ -304,6 +304,6 @@ You may wish to review every security policy change request (aka pull request in
 
 ### Above and beyond
 
-- [Protect hosts]({{site.baseurl}}/{{page.version}}/security/protecthosts)
+- [Protect hosts]({{site.baseurl}}/{{page.version}}/security/protect-hosts)
 - [Global Network Policy]({{site.baseurl}}/{{page.version}}/reference/resources/globalnetworkpolicy)
 - [Network Policy]({{site.baseurl}}/{{page.version}}/reference/resources/networkpolicy)
