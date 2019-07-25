@@ -14,7 +14,7 @@ Organizations that embrace the change control model in this How-To will be able 
 
 ### Features
 
-This how-to guide uses the following Calico features:
+This how-to guide uses the following {{site.prodname}} features:
 
 - **NetworkPolicy** and **GlobalNetworkPolicy** with:
   - Namespaces
@@ -22,7 +22,7 @@ This how-to guide uses the following Calico features:
   - Service accounts
 - **HostEndpoints**
 - Security group integration with AWS
-- Calico with application layer policy for Istio
+- {{site.prodname}} with application layer policy for Istio
 
 ### Concepts
 
@@ -52,40 +52,40 @@ Zero Trust Networks rely on network access controls with specific requirements:
 
 **Requirement 5**: Many Zero Trust Networks also rely on encryption of network traffic to prevent disclosure of sensitive data to hostile entities snooping network traffic. This is not an absolute requirement if private data are not exchanged over the network, but to fit the criteria of a Zero Trust Network, encryption must be used on every network connection if it is required at all. A Zero Trust Network does not distinguish between trusted and untrusted network links or paths. Also note that even when not using encryption for data privacy, cryptographic proofs of authenticity are still used to establish identity.
 
-#### How Calico and Istio implement Zero Trust Network requirements
+#### How {{site.prodname}} and Istio implement Zero Trust Network requirements
 
-Calico works in concert with the Istio service mesh to implement all you need to build a Zero Trust Network in your Kubernetes cluster.
+{{site.prodname}} works in concert with the Istio service mesh to implement all you need to build a Zero Trust Network in your Kubernetes cluster.
 
 ##### Multiple enforcement points
 
 When operating with Istio, incoming requests to your workloads traverse two distinct enforcement points:
 
-1. The host Linux kernel. Calico policy is enforced in the Linux kernel using iptables at L3-L4.
-1. The Envoy proxy. Calico policy is enforced in the Envoy proxy at L3-7, with requests being cryptographically authenticated. A lightweight policy decision sidecar called Dikastes assists Envoy in this enforcement.
+1. The host Linux kernel. {{site.prodname}} policy is enforced in the Linux kernel using iptables at L3-L4.
+1. The Envoy proxy. {{site.prodname}} policy is enforced in the Envoy proxy at L3-7, with requests being cryptographically authenticated. A lightweight policy decision sidecar called Dikastes assists Envoy in this enforcement.
 
 These multiple enforcement points establish the identity of the remote endpoint based on multiple criteria (Requirement 2). The host Linux kernel enforcement protects your workloads even if the workload pod is compromised and the Envoy proxy bypassed (Requirement 4).
 
-##### Calico policy store
+##### {{site.prodname}} policy store
 
-The policies in the Calico data store encode the whitelist of allowed flows (Requirement 3).
+The policies in the {{site.prodname}} data store encode the whitelist of allowed flows (Requirement 3).
 
-Calico network policy is designed to be flexible to fit many different security paradigms, so it can express, for example, both Zero Trust Network-style whitelists as well as legacy paradigms like zones. You can even layer both of these approaches on top of one another without creating a maintenance mess by composing multiple policy documents.
+{{site.prodname}} network policy is designed to be flexible to fit many different security paradigms, so it can express, for example, both Zero Trust Network-style whitelists as well as legacy paradigms like zones. You can even layer both of these approaches on top of one another without creating a maintenance mess by composing multiple policy documents.
 
 The How To section of this document explains how to write policy specifically in the style of Zero Trust Networks. Conceptually, you will begin by denying all network flows by default, then add rules that allow the specific expected flows that make up your application. When you finish, only legitimate application flows are allowed and all others are denied.
 
-##### Calico control plane
+##### {{site.prodname}} control plane
 
-The Calico control plane handles distributing all the policy information from the Calico data store to each enforcement point, ensuring that all network connections are subject to enforcement (Requirement 4). It translates the high-level declarative policy into the detailed enforcement attributes that change as applications scale up and down to meet demand, and evolve as developers modify them.
+The {{site.prodname}} control plane handles distributing all the policy information from the {{site.prodname}} data store to each enforcement point, ensuring that all network connections are subject to enforcement (Requirement 4). It translates the high-level declarative policy into the detailed enforcement attributes that change as applications scale up and down to meet demand, and evolve as developers modify them.
 
 ##### Istio Citadel Identity System
 
-In Calico and Istio, workload identities are based on Kubernetes Service Accounts. An Istio component called Citadel handles minting cryptographic keys for each Service Account to prove its identity on the network (Requirement 2) and encrypt traffic (Requirement 5). This allows the Zero Trust Network to be resilient even if attackers compromise network infrastructure like routers or links.
+In {{site.prodname}} and Istio, workload identities are based on Kubernetes Service Accounts. An Istio component called Citadel handles minting cryptographic keys for each Service Account to prove its identity on the network (Requirement 2) and encrypt traffic (Requirement 5). This allows the Zero Trust Network to be resilient even if attackers compromise network infrastructure like routers or links.
 
 ### How to
 
-This section explains how to establish a Zero Trust Network using Calico and Istio. It is written from the perspective of platform and security engineers, but should also be useful for individual developers looking to understand the process.
+This section explains how to establish a Zero Trust Network using {{site.prodname}} and Istio. It is written from the perspective of platform and security engineers, but should also be useful for individual developers looking to understand the process.
 
-Building and maintaining a Zero Trust Network is the job of an entire application delivery organization, that is, everyone involved in delivering a networked application to its end users.  This includes:
+Building and maintaining a Zero Trust Network is the job of an entire application delivery organization, that is, everyone involved in delivering a networked application to its end users. This includes:
 
 - Developers, DevOps, and Operators
 - Platform Engineers
@@ -96,18 +96,18 @@ In particular, the view that developers build applications which they hand off t
 
 At a high level, you will undertake the following steps to establish a Zero Trust Network:
 
-1. Install Calico.
-1. Install Istio and enable Calico integration.
+1. Install {{site.prodname}}.
+1. Install Istio and enable {{site.prodname}} integration.
 1. Establish workload identity by using Service Accounts.
 1. Write initial whitelist policies for each service.
 
 After your Zero Trust Network is established, you will need to maintain it. 
 
-#### Install Calico
+#### Install {{site.prodname}}
 
-Follow the [install instructions]({{site.baseurl}}/{{page.version}}/getting-started/kubernetes/installation/) to get Calico software running in your cluster.
+Follow the [install instructions]({{site.baseurl}}/{{page.version}}/getting-started/kubernetes/installation/) to get {{site.prodname}} software running in your cluster.
 
-#### Install Istio and enable Calico integration
+#### Install Istio and enable {{site.prodname}} integration
 
 Follow the instructions to [Enable Application Layer Policy]({{site.baseurl}}/{{page.version}}/getting-started/kubernetes/installation/app-layer-policy).
 
@@ -115,7 +115,7 @@ The instructions include a “demo” install of Istio for quickly testing out f
 
 #### Establish workload identity by using Service Accounts
 
-Our eventual goal is to write access control policy that authorizes individual expected network flows. We want these flows to be scoped as tightly as practical.  In a Calico Zero Trust Network, the cryptographic identities are Kubernetes Service Accounts. Istio handles crypto-key management for you so that each workload can assert its Service Account identity in a secure manner.
+Our eventual goal is to write access control policy that authorizes individual expected network flows. We want these flows to be scoped as tightly as practical.  In a {{site.prodname}} Zero Trust Network, the cryptographic identities are Kubernetes Service Accounts. Istio handles crypto-key management for you so that each workload can assert its Service Account identity in a secure manner.
 
 You have some flexibility in how you assign identities for the purpose of your Zero Trust Network policy. The right balance for most people is to use a unique identity for each Kubernetes Service in your application (or Deployment if you have workloads that don’t accept any incoming connections). Assigning identity to entire applications or namespaces is probably too granular, since applications usually consist of multiple services (or dozens of microservices) with different actual access needs.
 
@@ -162,7 +162,7 @@ When determining flows from a running application instance, be sure to review ea
 
 #### Write policies with allow rules for each flow
 
-After you have the set of expected flows for each service, you are ready to write Calico network policy to whitelist those flows and deny all others.
+After you have the set of expected flows for each service, you are ready to write {{site.prodname}} network policy to whitelist those flows and deny all others.
 
 Returning to the example flow graph in the previous section, let’s write the policy for the post service. For the purpose of this example, assume all the services in the application run in a Kubernetes Namespace called microblog.  We see from the flow graph that the post service is accessed by the api and search services.
 
@@ -192,7 +192,7 @@ Things to notice in this example:
 
 - **Namespace**
   
-  Create a Calico NetworkPolicy in the same **namespace** as the service for the whitelist (microblog).
+  Create a {{site.prodname}} NetworkPolicy in the same **namespace** as the service for the whitelist (microblog).
 
   <pre>
   metadata:
@@ -307,4 +307,3 @@ You may wish to review every security policy change request (aka pull request in
 - [Protect hosts]({{site.baseurl}}/{{page.version}}/security/protecthosts)
 - [Global Network Policy]({{site.baseurl}}/{{page.version}}/reference/resources/globalnetworkpolicy)
 - [Network Policy]({{site.baseurl}}/{{page.version}}/reference/resources/networkpolicy)
-
