@@ -63,7 +63,7 @@ PUSH_IMAGES?=$(BUILD_IMAGE) quay.io/calico/pod2daemon-flexvol
 RELEASE_IMAGES?=
 
 ifeq ($(RELEASE),true)
-# If this is a release, also tag and push GCR images. 
+# If this is a release, also tag and push GCR images.
 PUSH_IMAGES+=$(RELEASE_IMAGES)
 endif
 
@@ -76,7 +76,7 @@ PUSH_NONMANIFEST_IMAGES=$(filter-out $(PUSH_MANIFEST_IMAGES),$(PUSH_IMAGES))
 DOCKER_CONFIG ?= $(HOME)/.docker/config.json
 
 ###############################################################################
-GO_BUILD_VER?=v0.20
+GO_BUILD_VER?=v0.22
 CALICO_BUILD?=calico/go-build:$(GO_BUILD_VER)
 PROTOC_VER?=v0.1
 PROTOC_CONTAINER?=calico/protoc:$(PROTOC_VER)-$(BUILDARCH)
