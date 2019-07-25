@@ -4,15 +4,15 @@ title: Protect hosts
 
 ### Big picture
 
-Use Calico network policy to restrict traffic to/from hosts.
+Use {{site.prodname}} network policy to restrict traffic to/from hosts.
 
 ### Value
 
-Restricting traffic between hosts and the outside world is not unique to Calico; many solutions provide this capability. However, the advantage of using Calico to protect the host is you can use the same Calico policy configuration as workloads. You only need to learn one tool. Write a cluster-wide policy, and it is immediately applied to every host.
+Restricting traffic between hosts and the outside world is not unique to {{site.prodname}}; many solutions provide this capability. However, the advantage of using {{site.prodname}} to protect the host is you can use the same {{site.prodname}} policy configuration as workloads. You only need to learn one tool. Write a cluster-wide policy, and it is immediately applied to every host.
 
 ### Features
 
-This how-to guide uses the following Calico features:
+This how-to guide uses the following {{site.prodname}} features:
 
 - **HostEndpoint** resource
 - **GlobalNetworkPolicy**
@@ -24,39 +24,39 @@ This how-to guide uses the following Calico features:
 
 #### Hosts and workloads
 
-In the context of Calico configuration, a **workload** is a virtualized compute instance, like a VM or container. A **host** is the computer that runs the hypervisor (for VMs), or container runtime (for containers). We say it “hosts” the workloads as guests.
+In the context of {{site.prodname}} configuration, a **workload** is a virtualized compute instance, like a VM or container. A **host** is the computer that runs the hypervisor (for VMs), or container runtime (for containers). We say it “hosts” the workloads as guests.
 
 #### Host endpoints
 
-Each host has one or more network interfaces that it uses to communicate externally. You can use Calico network policy to secure these interfaces (called host endpoints). Calico host endpoints can have labels, and they work the same as labels on workload endpoints. The network policy rules can apply to both workload and host endpoints using label selectors.
+Each host has one or more network interfaces that it uses to communicate externally. You can use {{site.prodname}} network policy to secure these interfaces (called host endpoints). {{site.prodname}} host endpoints can have labels, and they work the same as labels on workload endpoints. The network policy rules can apply to both workload and host endpoints using label selectors.
 
 #### Failsafe rules
 
-It is easy to inadvertently cut all host connectivity because of non-existent or misconfigured network policy. To avoid this, Calico provides failsafe rules with default/configurable ports that are open on all host endpoints.
+It is easy to inadvertently cut all host connectivity because of non-existent or misconfigured network policy. To avoid this, {{site.prodname}} provides failsafe rules with default/configurable ports that are open on all host endpoints.
 
 #### Default behavior of workload to host traffic
 
-By default, Calico blocks all connections from a workload to its local host. You can control whether connections from a workload endpoint to its local host are dropped, returned, or accepted using a simple parameter.
+By default, {{site.prodname}} blocks all connections from a workload to its local host. You can control whether connections from a workload endpoint to its local host are dropped, returned, or accepted using a simple parameter.
 
-Calico allows all connections from processes running on the host to guest workloads on the host. This allows host processes to run health checks and debug guest workloads.
+{{site.prodname}} allows all connections from processes running on the host to guest workloads on the host. This allows host processes to run health checks and debug guest workloads.
 
 #### Default behavior of external traffic to/from host
 
-If a host endpoint is added and network policy is not in place, the Calico default is to deny traffic to/from that endpoint (except for traffic allowed by failsafe rules). For host endpoints, Calico blocks traffic only to/from interfaces that it’s been explicitly told about in network policy. Traffic to/from other interfaces is ignored.
+If a host endpoint is added and network policy is not in place, the {{site.prodname}} default is to deny traffic to/from that endpoint (except for traffic allowed by failsafe rules). For host endpoints, {{site.prodname}} blocks traffic only to/from interfaces that it’s been explicitly told about in network policy. Traffic to/from other interfaces is ignored.
 
 #### Other host protection
 
-In terms of design consistency in Calico, you may wonder about the following use cases.
+In terms of design consistency in {{site.prodname}}, you may wonder about the following use cases.
 
-**Does Calico protect a local host from workloads?**<br>
+**Does {{site.prodname}} protect a local host from workloads?**<br>
 Yes. DefaultEndpointToHostAction controls whether or not workloads can acesss their local host.<br>
 
-**Does Calico protect a workload from the host it is running on?**<br>
-No. Calico allows connections the host makes to the workloads running on that host. Some orchestrators like Kubernetes depend on this connectivity for health checking the workload. Moreover, processes running on the local host are often privileged enough to override local Calico policy. Be very cautious with the processes that you allow to run in the host's root network namespace.</br>
+**Does {{site.prodname}} protect a workload from the host it is running on?**<br>
+No. {{site.prodname}} allows connections the host makes to the workloads running on that host. Some orchestrators like Kubernetes depend on this connectivity for health checking the workload. Moreover, processes running on the local host are often privileged enough to override local {{site.prodname}} policy. Be very cautious with the processes that you allow to run in the host's root network namespace.</br>
 
 ### Before you begin...
 
-If you are already running Calico for Kubernetes, you are good to go. If you want to install Calico on a bare-metal machine for host protection only, see [Bare metal hosts]({{site.baseurl}}/{{page.version}}/getting-started/bare-metal/installation/binary-mgr).
+If you are already running {{site.prodname}} for Kubernetes, you are good to go. If you want to install {{site.prodname}} on a bare-metal machine for host protection only, see [Bare metal hosts]({{site.baseurl}}/{{page.version}}/getting-started/bare-metal/installation/binary-mgr).
 
 ### How to
 
@@ -66,7 +66,7 @@ If you are already running Calico for Kubernetes, you are good to go. If you wan
 
 #### Avoid accidentally cutting all host connectivity
 
-To avoid inadvertently cutting all host connectivity because of non-existent or misconfigured network policy, Calico uses failsafe rules that open specific ports on all host endpoints.
+To avoid inadvertently cutting all host connectivity because of non-existent or misconfigured network policy, {{site.prodname}} uses failsafe rules that open specific ports on all host endpoints.
 
 Review the following table to determine if the defaults work for your implementation. If not, change the default ports using the parameters, **FailsafeInboundHostPorts** and **FailsafeOutboundHostPorts** in [Configuring Felix]({{site.baseurl}}/{{page.version}}/reference/felix/configuration#environment-variables).
 
@@ -76,7 +76,7 @@ Review the following table to determine if the defaults work for your implementa
 |   53   |   UDP    |  Outbound           |             DNS queries                        |
 |   67   |   UDP    |  Outbound           |             DHCP access                        |
 |   68   |   UDP    |  Inbound            |             DHCP access                        |
-|   179  |   TCP    |  Inbound & Outbound |             BGP access (Calico networking)     |
+|   179  |   TCP    |  Inbound & Outbound |             BGP access ({{site.prodname}} networking)     |
 |   2379 |   TCP    |  Inbound & Outbound |             etcd access                        |
 |   2380 |   TCP    |  Inbound & Outbound |             etcd access                        |
 |   6666 |   TCP    |  Inbound & Outbound |             etcd self-hosted service access    |
@@ -129,9 +129,9 @@ spec:
 
 ##### Step 2: Create host endpoints
 
-For each host point that you want to secure with policy, you must create a **HostEndpoint** object. To do that, you need the name of the Calico node on the host that owns the interface; in most cases, it is the same as the hostname of the host.
+For each host point that you want to secure with policy, you must create a **HostEndpoint** object. To do that, you need the name of the {{site.prodname}} node on the host that owns the interface; in most cases, it is the same as the hostname of the host.
 
-In the following example, we create a HostEndpoint for the host named **my-host** with the interface named **eth0**, with **IP 10.0.0.1**. Note that the value for **node:** must match the hostname used on the Calico node object.
+In the following example, we create a HostEndpoint for the host named **my-host** with the interface named **eth0**, with **IP 10.0.0.1**. Note that the value for **node:** must match the hostname used on the {{site.prodname}} node object.
 
 When the HostEndpoint is created, traffic to or from the interface is dropped unless policy is in place.
 
@@ -151,7 +151,7 @@ spec:
 
 #### Control default behavior of workload endpoint to host traffic
 
-The default Calico behavior blocks all connections from workloads to their local host (after traffic passes any egress policy applied to the workload). You can change this behavior using the **DefaultEndpointToHostAction** parameter in Felix configuration.
+The default {{site.prodname}} behavior blocks all connections from workloads to their local host (after traffic passes any egress policy applied to the workload). You can change this behavior using the **DefaultEndpointToHostAction** parameter in Felix configuration.
 
 This parameter works at the IP table level, where you can specify packet behavior to **Drop** (default), **Accept**, or **Return**.
 
