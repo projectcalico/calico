@@ -16,7 +16,7 @@ ARG BIRD_IMAGE=calico/bird:latest
 FROM calico/bpftool:v5.0-amd64 as bpftool
 FROM ${BIRD_IMAGE} as bird
 
-FROM debian:9.8-slim
+FROM debian:10-slim
 LABEL maintainer "Casey Davenport <casey@tigera.io>"
 
 ARG ARCH=amd64
