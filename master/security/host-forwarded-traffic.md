@@ -11,7 +11,7 @@ Enforce Calico policy on traffic transiting a host that is used as a router or N
 
 ### Concepts
 
-![Host forward traffic]({{site.baseurl}}/{{page.version}}/imageshost-forward-traffic.png)
+![Host-forward-traffic]({{site.baseurl}}/images/host-forward-traffic.png)
 
 ### Features
 
