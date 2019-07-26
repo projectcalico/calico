@@ -9,10 +9,10 @@ on every node in the Kubernetes cluster.
 
 ## Provision K8s Account for the plug-in
 
-The CNI Plugin interacts with the Kubernetes APIServer while creating pods, both to obtain additional information,
-and in the case of the Kubernetes data store, to update the data store with information about the pod.
+The CNI Plugin interacts with the Kubernetes APIServer while creating pods, both to obtain additional information
+and to update the data store with information about the pod.
 
-On the Kubernetes master node, create the key and certificate signing request
+On the Kubernetes master node, create a key for the CNI Plugin to authenticate with and certificate signing request.
 
 ```
 openssl req -newkey rsa:4096 \

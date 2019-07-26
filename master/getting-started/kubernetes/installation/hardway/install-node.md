@@ -13,7 +13,7 @@ In this lab we configure and install `calico-node` as a DaemonSet.
 
 ## Provision Certificates
 
-Create the Felix key and certificate signing request (CSR)
+Create the key Felix will use to authenticate with Typha and the certificate signing request (CSR)
 ```
 openssl req -newkey rsa:4096 \
            -keyout felix.key \

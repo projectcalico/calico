@@ -7,6 +7,15 @@ We have configured {{site.prodname}} to distribute routing information over the
 Border Gateway Protocol (BGP). This scalable protocol powers routing on the global
 public Internet.
 
+In many on-premise data centers, each server connects to a top-of-rack (ToR) router
+operating at the IP layer (layer 3). In that situation, we would need to peer each node
+with its corresponding ToR router, so that the ToR learns routes to the containers. That
+configuration is beyond the scope of this guide.
+
+Since we are running in an AWS VPC within a single subnet, the hosts have ethernet (layer 2)
+connectivity with one another, meaning there are no routers between them. Thus, they can peer
+directly with each other.
+
 On one of the nodes in your cluster where you have `calicoctl` installed, check the status.
 
 ```

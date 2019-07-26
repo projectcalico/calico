@@ -9,8 +9,8 @@ A **Workload Endpoint** is the virtual network interface a workload uses to conn
 **IP Pools** are ranges of IP addresses that {{site.prodname}} uses for **Workload Endpoints**.
 
 When we stood up the Kubernetes cluster, we set the Pod CIDR, which is the range of IP addresses Kubernetes thinks
-the pods should be in.  Many Kubernetes components use this setting to determine if an IP belongs to a pod, so it
-is important that all IP Pools we configure are subsets of the Pod CIDR.
+the pods should be in.  Many Kubernetes components use this setting to determine if an IP belongs to a pod, so you
+normally want all IP Pools you configure to be subsets of the Pod CIDR.
 
 Let's define 2 IP Pools for use in this cluster.  You can have a production-ready {{site.prodname}} install with only a single
 pool, but we define 2 so that we can show advanced networking later in this guide.
@@ -53,7 +53,9 @@ EOF
 ```
 
 In this second pool, we set `disabled` to `true`, meaning that {{site.prodname}} will not create new pods with addresses in the pool
-but will still recognize pods with these addresses as part of the {{site.prodname}} network.
+but will still recognize pods with these addresses as part of the {{site.prodname}} network. Later, in the
+[test networking](./test-networking) lab, we will enable this pool and demonstrate how to control which pools your pods are assigned
+addresses from.
 
 The `nodeSelector` is a label selector which determines which nodes use the pool. They are both set to `all()` meaning all
 nodes can use the pools.

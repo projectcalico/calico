@@ -3,8 +3,10 @@ title: Install Typha
 canonical_url: 'https://docs.projectcalico.org/v3.8/getting-started/kubernetes/installation/hardway/install-typha'
 ---
 
-**Typha** fans out updates to the Kubernetes resources and {{site.prodname}} custom resources used by **Felix**, the per-node
-{{site.prodname}} daemon.
+**Typha** sits between the Kubernetes API server and per-node daemons like **Felix** and **confd**.  It watches the
+Kubernetes resources and {{site.prodname}} custom resources used by these daemons, and whenever a resource changes
+it fans out the update to the daemons. This reduces the number of watches the Kubernetes API server needs to serve
+and improves scalability of the cluster.
 
 ## Provision Certificates
 
