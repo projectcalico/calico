@@ -40,14 +40,14 @@ Cluster IPs were originally designed for use within the Kubernetes cluster. {{si
 {{site.prodname}} implements [Kubernetes service external traffic policy](https://kubernetes.io/docs/tasks/access-application-cluster/create-external-load-balancer/#preserving-the-client-source-ip), which controls whether external traffic is routed to node-local or cluster-wide endpoints. The following table summarizes key differences between these settings. The default is **cluster mode**.
 
 
-| **Service setting**                         | **Traffic is load balanced...**                      | **Pros and cons**                                            | **Required service type**                                    |
-| ------------------------------------------- | ---------------------------------------------------- | :----------------------------------------------------------- | ------------------------------------------------------------ |
-| **externalTrafficPolicy: Cluster**(default) | Across all nodes in the cluster                      | <br>Equal distribution of traffic among all pods running a service. </br>Possible unnecessary network hops between nodes for ingress external traffic.</br><br>When packets are rerouted to pods on another node, traffic is SNAT’d (source network address translation). Destination pod can see the proxying node’s IP address rather than the actual client IP. </br> | **ClusterIP**                                                |
-| **externalTrafficPolicy: Local**            | Across the nodes with the endpoints for the service. | <br>Avoids extra hops so better for apps that ingress a lot external traffic.<br/><br>Traffic is not SNAT’d so actual client IPs are preserved. </br><br>Traffic distributed among pods running a service may be imbalanced. | **LoadBalancer** (for cloud providers), or **NodePort** (node’s static port) |
+| **Service setting**                         | **Traffic is load balanced...**                     | **Pros and cons**                                            | **Required service type**                                    |
+| ------------------------------------------- | --------------------------------------------------- | :----------------------------------------------------------- | ------------------------------------------------------------ |
+| **externalTrafficPolicy: Cluster**(default) | Across all nodes in the cluster                     | Equal distribution of traffic among all pods running a service. <br>Possible unnecessary network hops between nodes for ingress external traffic.</br><br>When packets are rerouted to pods on another node, traffic is SNAT’d (source network address translation). Destination pod can see the proxying node’s IP address rather than the actual client IP. </br> | **ClusterIP**                                                |
+| **externalTrafficPolicy: Local**            | Across the nodes with the endpoints for the service | Avoids extra hops so better for apps that ingress a lot external traffic.<br>Traffic is not SNAT’d so actual client IPs are preserved. </br><br>Traffic distributed among pods running a service may be imbalanced.</br> | **LoadBalancer** (for cloud providers), or **NodePort** (node’s static port) |
 
 ### Before you begin...
 
-[Configure Calico to advertise cluster IPs over BGP]({{site.baseurl}}/networking/service-advertisement).
+[Configure Calico to advertise cluster IPs over BGP]({{site.baseurl}}/{{page.version}}/networking/service-advertisement).
 
 ### How to
 
@@ -185,7 +185,6 @@ spec:
       selector: k8s-role == 'node' 
     destination:
       ports: [80, 443]
-
 ```
 
 ##### Step 4: (Optional) Create NetworkPolicies or GlobalNetworkPolicies that allow in-cluster traffic to access the service
