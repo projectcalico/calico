@@ -141,18 +141,6 @@ spec:
     destination:
       nets:
       - 192.168.0.0/16 # Pod CIDR
-  # Allow traffic to the node (not nodePorts, TCP)
-  - action: Allow
-    protocol: TCP
-    destination:
-      selector: k8s-role == 'node'
-      notPorts: ["30000:32767"] # nodePort range
-  # Allow traffic to the node (not nodePorts, UDP)
-  - action: Allow
-    protocol: UDP
-    destination:
-      selector: k8s-role == 'node'
-      notPorts: ["30000:32767"] # nodePort range
 ```
 
 **Add a rule to allow traffic destined for all host endpoints**
