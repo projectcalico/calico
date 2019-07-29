@@ -645,7 +645,7 @@ ut combined.coverprofile: vendor/.up-to-date $(SRC_FILES)
 fv/fv.test: vendor/.up-to-date $(SRC_FILES)
 	# We pre-build the FV test binaries so that we can run them
 	# outside a container and allow them to interact with docker.
-	$(DOCKER_RUN) $(LOCAL_BUILD_MOUNTS) $(CALICO_BUILD) go test ./$(shell dirname $@) -c --tags fvtests -o $@
+	$(DOCKER_RUN) $(LOCAL_BUILD_MOUNTS) $(CALICO_BUILD) go test ./$(shell dirname $@) -c --tags fvtests -mod=vendor -o $@
 
 .PHONY: fv
 # runs all of the fv tests
