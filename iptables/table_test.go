@@ -482,6 +482,65 @@ func describeEmptyDataplaneTests(dataplaneMode string) {
 			})
 		})
 	})
+
+	Describe("applying updates when underlying iptables have changed", func() {
+		BeforeEach(func() {
+			table.UpdateChains([]*Chain{
+				{Name: "FORWARD", Rules: []Rule{
+					{Action: AcceptAction{}, Comment: "first"},
+					{Action: ReturnAction{}, Comment: "second"},
+					{Action: DropAction{}, Comment: "third"},
+				}},
+				{Name: "cali-foobar", Rules: []Rule{
+					{Action: AcceptAction{}},
+					{Action: DropAction{}},
+				}},
+			})
+			table.Apply()
+		})
+		It("should be in the dataplane", func() {
+			Expect(dataplane.Chains).To(Equal(map[string][]string{
+				"FORWARD": {
+					"-m comment --comment \"cali:rG9051jKGMFg8Wml\" -m comment --comment \"first\" --jump ACCEPT",
+					"-m comment --comment \"cali:D4Qxc82HkISWBjxC\" -m comment --comment \"second\" --jump RETURN",
+					"-m comment --comment \"cali:iIVQYhk07jI2vLN3\" -m comment --comment \"third\" --jump DROP",
+				},
+				"INPUT":  {},
+				"OUTPUT": {},
+				"cali-foobar": {
+					"-m comment --comment \"cali:42h7Q64_2XDzpwKe\" --jump ACCEPT",
+					"-m comment --comment \"cali:0sUFHicPNNqNyNx8\" --jump DROP",
+				},
+			}))
+		})
+		Describe("then truncating the chain, with the iptables changed before iptables-restore", func() {
+			BeforeEach(func() {
+				dataplane.InsertRandomRuleInForward = true
+				table.UpdateChains([]*Chain{
+					{Name: "FORWARD", Rules: []Rule{
+						{Action: DropAction{}, Comment: "third"},
+					}},
+					{Name: "cali-foobar", Rules: []Rule{
+						{Action: AcceptAction{}},
+					}},
+				})
+				table.Apply()
+			})
+			It("should be updated", func() {
+				Expect(dataplane.Chains).To(Equal(map[string][]string{
+					"FORWARD": {
+						"1 -m comment --comment \"cali:wlVFyGdTOgtWmgk9\" -m comment --comment \"third\" --jump DROP",
+						"-j randomly-inserted-rule",
+					},
+					"INPUT":  {},
+					"OUTPUT": {},
+					"cali-foobar": {
+						"-m comment --comment \"cali:42h7Q64_2XDzpwKe\" --jump ACCEPT",
+					},
+				}))
+			})
+		})
+	})
 }
 
 var _ = Describe("Tests of post-update recheck behaviour with refresh timer (nft)", func() {

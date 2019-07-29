@@ -70,6 +70,7 @@ type mockDataplane struct {
 	FailNextPipeClose              bool
 	FailNextStart                  bool
 	FailNextGetKernelVersionReader bool
+	InsertRandomRuleInForward      bool
 	PipeBuffers                    []*closableBuffer
 	CumulativeSleep                time.Duration
 	Time                           time.Time
@@ -245,6 +246,15 @@ func (d *restoreCmd) Run() error {
 		log.Warn("Simulating an iptables-restore failure")
 		return errors.New("Simulated failure")
 	}
+	// Alter the dataplane before the restore is applied.
+	if d.Dataplane.InsertRandomRuleInForward {
+		log.Warn("Simulating an insert in FORWARD chain before iptables-restore happens")
+		if chain, found := d.Dataplane.Chains["FORWARD"]; found {
+			log.Warn("FORWARD chain exists; inserting random rule in FORWARD chain")
+			line := prependLine(chain, "-j randomly-inserted-rule")
+			d.Dataplane.Chains["FORWARD"] = line
+		}
+	}
 
 	// Process it line by line.
 	lines := strings.Split(input, "\n")
@@ -312,11 +322,21 @@ func (d *restoreCmd) Run() error {
 			Expect(chains[chainName]).NotTo(BeNil(), "Insert to unknown chain: "+chainName)
 			chains[chainName] = append(chains[chainName], "") // Make room
 			chain := chains[chainName]
-			for i := len(chain) - 1; i > 0; i-- {
-				chain[i] = chain[i-1]
+
+			// If the first arg after the chain name is a line number, then insert by line number.
+			if lineNum, err := strconv.Atoi(parts[2]); err == nil {
+				lineNum = lineNum - 1 // 0-indexed
+				copy(chain[lineNum+1:], chain[lineNum:])
+				chain[lineNum] = rest
+				d.Dataplane.ChainMods.Add(chainMod{name: chainName, ruleNum: lineNum + 1})
+			} else {
+				// Otherwise insert at the top.
+				for i := len(chain) - 1; i > 0; i-- {
+					chain[i] = chain[i-1]
+				}
+				chain[0] = rest
+				d.Dataplane.ChainMods.Add(chainMod{name: chainName, ruleNum: 1})
 			}
-			chain[0] = rest
-			d.Dataplane.ChainMods.Add(chainMod{name: chainName, ruleNum: 1})
 		case "-R", "--replace":
 			Expect(d.Dataplane.NftablesMode).To(BeFalse(), "Replace shouldn't be used in nft mode")
 			chainName = parts[1]
@@ -330,17 +350,43 @@ func (d *restoreCmd) Run() error {
 			d.Dataplane.ChainMods.Add(chainMod{name: chainName, ruleNum: ruleNum})
 		case "-D", "--delete":
 			chainName = parts[1]
-			Expect(len(parts)).To(Equal(3), "--delete only expects two arguments")
-			ruleNum, err := strconv.Atoi(parts[2]) // 1-indexed position of rule.
-			Expect(err).NotTo(HaveOccurred())
-			ruleIdx := ruleNum - 1 // 0-indexed array index of rule.
-			chain := chains[chainName]
-			Expect(len(chain)).To(BeNumerically(">", ruleIdx), "Delete of non-existent rule")
-			for i := ruleIdx; i < len(chain)-1; i++ {
-				chain[i] = chain[i+1]
+			// Deleting cali chains by index
+			if strings.HasPrefix(chainName, "cali") {
+				Expect(len(parts)).To(Equal(3), "--delete only expects two arguments")
+				ruleNum, err := strconv.Atoi(parts[2]) // 1-indexed position of rule.
+				Expect(err).NotTo(HaveOccurred())
+				ruleIdx := ruleNum - 1 // 0-indexed array index of rule.
+				chain := chains[chainName]
+				Expect(len(chain)).To(BeNumerically(">", ruleIdx), "Delete of non-existent rule")
+
+				for i := ruleIdx; i < len(chain)-1; i++ {
+					chain[i] = chain[i+1]
+				}
+				chains[chainName] = chain[:len(chain)-1]
+				d.Dataplane.ChainMods.Add(chainMod{name: chainName, ruleNum: ruleNum})
+				continue
 			}
-			chains[chainName] = chain[:len(chain)-1]
-			d.Dataplane.ChainMods.Add(chainMod{name: chainName, ruleNum: ruleNum})
+
+			// Rule is inserted without chain name
+			rule := strings.Join(parts[2:], " ")
+			log.Debugf("--- deleting rule: %#v\n", rule)
+			chain := chains[chainName]
+			log.Debugf("--- deleting rule: chain: %#v\n", chain)
+			i := 0
+
+			newChain := []string{}
+			var found bool
+			for ; i < len(chain); i++ {
+				if chain[i] == rule {
+					found = true
+					continue
+				}
+				newChain = append(newChain, chain[i])
+			}
+
+			Expect(found).To(BeTrue(), "Delete of non-existent rule")
+			chains[chainName] = newChain
+			d.Dataplane.ChainMods.Add(chainMod{name: chainName, ruleNum: i})
 		case "-X", "--delete-chain":
 			chainName = parts[1]
 			Expect(len(parts)).To(Equal(2), "--delete-chain only has one argument")
@@ -355,6 +401,16 @@ func (d *restoreCmd) Run() error {
 	}
 	Expect(commitSeen).To(BeTrue(), "didn't see a COMMIT line")
 	return nil
+}
+
+func prependLine(src []string, line string) []string {
+	// Make space for the line - the value doesn't matter.
+	src = append(src, "")
+	// "Shift" the elements to the right
+	copy(src[1:], src[0:])
+
+	src[0] = line
+	return src
 }
 
 type saveCmd struct {
