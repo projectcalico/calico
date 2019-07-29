@@ -211,9 +211,6 @@ type Table struct {
 	// chainsToFullRules contains the full rules, mapped from chain name to slices of rules in that chain.
 	chainsToFullRules map[string][]string
 
-	// hashToFullRules contains a mapping of rule hashes to the full rules.
-	hashToFullRules map[string]string
-
 	// hashCommentPrefix holds the prefix that we prepend to our rule-tracking hashes.
 	hashCommentPrefix string
 	// hashCommentRegexp matches the rule-tracking comment, capturing the rule hash.
@@ -522,7 +519,7 @@ func (t *Table) loadDataplaneState() {
 	// Load the hashes from the dataplane.
 	t.logCxt.Info("Loading current iptables state and checking it is correct.")
 	t.lastReadTime = t.timeNow()
-	dataplaneHashes, dataplaneRules, dataplaneHashesToRules := t.getHashesAndRulesFromDataplane()
+	dataplaneHashes, dataplaneRules := t.getHashesAndRulesFromDataplane()
 
 	// Check that the rules we think we've programmed are still there and mark any inconsistent
 	// chains for refresh.
@@ -616,7 +613,6 @@ func (t *Table) loadDataplaneState() {
 	t.logCxt.Debug("Finished loading iptables state")
 	t.chainToDataplaneHashes = dataplaneHashes
 	t.chainsToFullRules = dataplaneRules
-	t.hashToFullRules = dataplaneHashesToRules
 	t.inSyncWithDataPlane = true
 }
 
@@ -647,14 +643,14 @@ func (t *Table) expectedHashesForInsertChain(
 // add to rules.  It returns a map with an entry for each chain in the table.  Each entry is a slice
 // containing the hashes for the rules in that table.  Rules with no hashes are represented by
 // an empty string.
-func (t *Table) getHashesAndRulesFromDataplane() (hashes map[string][]string, rules map[string][]string, hashesToRules map[string]string) {
+func (t *Table) getHashesAndRulesFromDataplane() (hashes map[string][]string, rules map[string][]string) {
 	retries := 3
 	retryDelay := 100 * time.Millisecond
 
 	// Retry a few times before we panic.  This deals with any transient errors and it prevents
 	// us from spamming a panic into the log when we're being gracefully shut down by a SIGTERM.
 	for {
-		hashes, rules, hashesToRules, err := t.attemptToGetHashesAndRulesFromDataplane()
+		hashes, rules, err := t.attemptToGetHashesAndRulesFromDataplane()
 		if err != nil {
 			countNumSaveErrors.Inc()
 			var stderr string
@@ -672,13 +668,13 @@ func (t *Table) getHashesAndRulesFromDataplane() (hashes map[string][]string, ru
 			continue
 		}
 
-		return hashes, rules, hashesToRules
+		return hashes, rules
 	}
 }
 
 // attemptToGetHashesAndRulesFromDataplane starts an iptables-save subprocess and feeds its output to
 // readHashesAndRulesFrom() via a pipe.  It handles the various error cases.
-func (t *Table) attemptToGetHashesAndRulesFromDataplane() (hashes map[string][]string, rules map[string][]string, hashesToRules map[string]string, err error) {
+func (t *Table) attemptToGetHashesAndRulesFromDataplane() (hashes map[string][]string, rules map[string][]string, err error) {
 	cmd := t.newCmd(t.iptablesSaveCmd, "-t", t.Name)
 	countNumSaveCalls.Inc()
 
@@ -698,7 +694,7 @@ func (t *Table) attemptToGetHashesAndRulesFromDataplane() (hashes map[string][]s
 		}
 		return
 	}
-	hashes, rules, hashesToRules, err = t.readHashesAndRulesFrom(stdout)
+	hashes, rules, err = t.readHashesAndRulesFrom(stdout)
 	if err != nil {
 		// In case readHashesAndRulesFrom() returned due to an error that didn't cause the
 		// process to exit, kill it now.
@@ -726,10 +722,9 @@ func (t *Table) attemptToGetHashesAndRulesFromDataplane() (hashes map[string][]s
 // previous versions of Felix, returns a dummy non-zero value.  For rules not written by Felix,
 // returns a zero string.  Hence, the lengths of the returned values are the lengths of the chains
 // whether written by Felix or not.
-func (t *Table) readHashesAndRulesFrom(r io.ReadCloser) (hashes map[string][]string, rules map[string][]string, hashesToRules map[string]string, err error) {
+func (t *Table) readHashesAndRulesFrom(r io.ReadCloser) (hashes map[string][]string, rules map[string][]string, err error) {
 	hashes = map[string][]string{}
 	rules = map[string][]string{}
-	hashesToRules = map[string]string{}
 	scanner := bufio.NewScanner(r)
 
 	// Figure out if debug logging is enabled so we can skip some WithFields() calls in the
@@ -795,17 +790,15 @@ func (t *Table) readHashesAndRulesFrom(r io.ReadCloser) (hashes map[string][]str
 		if _, ok := t.chainToInsertedRules[chainName]; topLevelChains.Contains(chainName) || ok {
 			fullRule := string(line)
 			rules[chainName] = append(rules[chainName], fullRule)
-			hashesToRules[hash] = fullRule
 		}
 	}
 	if scanner.Err() != nil {
 		log.WithError(scanner.Err()).Error("Failed to read hashes from dataplane")
-		return nil, nil, nil, scanner.Err()
+		return nil, nil, scanner.Err()
 	}
 	t.logCxt.Debugf("Read hashes from dataplane: %#v", hashes)
 	t.logCxt.Debugf("Read rules from dataplane: %#v", rules)
-	t.logCxt.Debugf("Read hashes to rules from dataplane: %#v", hashesToRules)
-	return hashes, rules, hashesToRules, nil
+	return hashes, rules, nil
 }
 
 func (t *Table) InvalidateDataplaneCache(reason string) {
