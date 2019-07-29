@@ -254,7 +254,6 @@ clean:
 	       go/docs/calc.pdf \
 	       vendor \
 	       .go-pkg-cache \
-	       check-licenses/dependency-licenses.txt \
 	       release-notes-*
 	find . -name "junit.xml" -type f -delete
 	find . -name "*.coverprofile" -type f -delete
@@ -577,28 +576,14 @@ calico-build/centos6:
 ###############################################################################
 .PHONY: static-checks
 static-checks:
-	$(MAKE) check-typha-pins go-meta-linter check-licenses
+	$(MAKE) check-typha-pins golangci-lint
 
-bin/check-licenses: $(SRC_FILES)
-	$(DOCKER_RUN) $(LOCAL_BUILD_MOUNTS) $(CALICO_BUILD) go build -v -i -o $@ "$(PACKAGE_NAME)/check-licenses"
+# TODO: re-enable these linters !
+LINT_ARGS := --disable staticcheck,ineffassign,gosimple,govet,deadcode,errcheck,unused,varcheck,structcheck
 
-.PHONY: check-licenses
-check-licenses: check-licenses/dependency-licenses.txt bin/check-licenses
-	@echo Checking dependency licenses
-	$(DOCKER_RUN) $(CALICO_BUILD) bin/check-licenses
-
-check-licenses/dependency-licenses.txt: vendor/.up-to-date
-	$(DOCKER_RUN) $(CALICO_BUILD) sh -c 'licenses ./cmd/calico-felix > check-licenses/dependency-licenses.txt'
-
-.PHONY: go-meta-linter
-go-meta-linter: vendor/.up-to-date $(GENERATED_FILES)
-	# Run staticcheck stand-alone since gometalinter runs concurrent copies, which
-	# uses a lot of RAM.
-	$(DOCKER_RUN) $(CALICO_BUILD) sh -c 'glide nv | xargs -n 3 staticcheck'
-	$(DOCKER_RUN) $(CALICO_BUILD) gometalinter --deadline=300s \
-	                                --disable-all \
-	                                --enable=goimports \
-	                                --vendor ./...
+.PHONY: golangci-lint
+golangci-lint: vendor/.up-to-date $(GENERATED_FILES)
+	$(DOCKER_RUN) $(CALICO_BUILD) golangci-lint run --deadline 5m $(LINT_ARGS)
 
 .PHONY: check-packr
 check-packr: bpf/packrd/packed-packr.go
@@ -620,11 +605,11 @@ check-typha-pins: vendor/.up-to-date
 	@echo "changes are reflected in the Typha-Felix API)."
 	@echo
 	@echo "Felix's libcalico-go pin:"
-	@grep libcalico-go glide.lock -A 5 | grep 'version:' | head -n 1
+	@grep libcalico-go go.mod | awk '{print $$2}'
 	@echo "Typha's libcalico-go pin:"
-	@grep libcalico-go vendor/github.com/projectcalico/typha/glide.lock -A 5 | grep 'version:' | head -n 1
-	if [ "`grep libcalico-go glide.lock -A 5 | grep 'version:' | head -n 1`" != \
-	     "`grep libcalico-go vendor/github.com/projectcalico/typha/glide.lock -A 5 | grep 'version:' | head -n 1`" ]; then \
+	@grep libcalico-go vendor/github.com/projectcalico/typha/go.mod | awk '{print $$2}'
+	if [ "`grep libcalico-go vendor/github.com/projectcalico/typha/go.mod | awk '{print $$2}'`" != \
+	     "`grep libcalico-go go.mod | awk '{print $$2}'`" ]; then \
 	     echo "Typha and Felix libcalico-go pins differ."; \
 	     false; \
 	fi
@@ -1034,7 +1019,7 @@ help:
 	@echo
 	@echo "  make update-vendor  Update the vendor directory with new "
 	@echo "                      versions of upstream packages.  Record results"
-	@echo "                      in glide.lock."
+	@echo "                      in go.mod"
 	@echo "  make go-fmt        Format our go code."
 	@echo "  make clean         Remove binary files."
 	@echo "-----------------------------------------"
