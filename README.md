@@ -7,21 +7,18 @@ OpenStack](https://docs.projectcalico.org/master/getting-started/openstack/insta
 or [on bare metal
 hosts](https://docs.projectcalico.org/master/getting-started/bare-metal/installation/).
 
-The plan is that a single
+A single
 
-    make master
+    make release-publish
 
 command will build and publish a set of packages corresponding to
 current Calico master code, to our PPA and RPM repo named "master";
-and similarly that
+similarly,
 
-    make calico-X.Y
+    make release-publish VERSION=vX.Y.Z
 
-will build and publish a set of packages for the latest released code
-in the X.Y series.  For example, if Calico 3.8.2 has just been
-released, `make calico-3.8` will identify the relevant components and
-code tags, build packages from that, and publish those to our PPA and
-RPM repo named "calico-3.8".
+will build and publish a set of packages for version X.Y.Z, to our PPA
+and RPM repo named "calico-X.Y".
 
 For documentation, this file should contain everything needed to
 understand how our packaging works, what components we package, and
@@ -29,15 +26,14 @@ why.
 
 ## Status
 
-`make master` exists but currently only builds and publishes
-networking-calico packages.
+`make release-publish` exists but currently only builds and publishes
+packages for networking-calico master.
 
 To do:
 
 -  Also build packages for Felix, etcd3gw and dnsmasq.
--  Implement `make calico-X.Y` by adding code to identify the relevant
-   Felix and networking-calico tags and building packages from those
-   tags.
+-  Implement `VERSION=vX.Y.Z` by adding code to build from those Felix
+   and networking-calico tags.
 -  If possible, automate new PPA creation (which is currently still a
    manual step).
 -  Perhaps support preparing a PPA/RPM repo for code that is still in
@@ -46,7 +42,8 @@ To do:
 
 ## Usage
 
-`make master`, with the following required environment variables.
+`make release-publish`, with the following required environment
+variables.
 
 -  `HOST` and `GCLOUD_ARGS` set to indicate the GCP name of the RPM
    host, and a GCP identity that permits logging into that host.

@@ -75,8 +75,7 @@ networking-calico:
 	git clone $(NETWORKING_CALICO_REPO)
 	cd networking-calico && git checkout $(NETWORKING_CALICO_CHECKOUT)
 
-.PHONY: master calico-%
-master:
-	REPO_NAME=$@ utils/create-update-packages.sh
-calico-%:
-	REPO_NAME=$@ utils/create-update-packages.sh
+.PHONY: release-publish
+VERSION ?= master
+release-publish:
+	VERSION=$(VERSION) utils/create-update-packages.sh

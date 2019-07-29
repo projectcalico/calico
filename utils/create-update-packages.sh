@@ -15,13 +15,27 @@
 #
 # - Update the RPM repo metadata.
 
-# REPO_NAME must be specified.  It should be either "master" or
-# "calico-X.Y".  For "master" we build and publish packages from the
-# HEAD of the master branch of the relevant Calico components.  For
-# "calico-X.Y" we identify the latest tag of the relevant Calico
-# components that matches X.Y, and build and publish packages from
-# those points.
-test -n "$REPO_NAME"
+# VERSION must be specified.  It should be either "master" or
+# "vX.Y.Z".  For "master" we build and publish packages from the HEAD
+# of the master branch of the relevant Calico components.  For
+# "vX.Y.Z" we build and publish packages from that tag in each
+# relevant Calico component.
+test -n "$VERSION"
+echo VERSION is $VERSION
+
+# Determine REPO_NAME
+if [ $VERSION = master ]; then
+    REPO_NAME=master
+elif [[ $VERSION =~ ^v([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
+    MAJOR=${BASH_REMATCH[1]}
+    MINOR=${BASH_REMATCH[2]}
+    PATCH=${BASH_REMATCH[3]}
+    REPO_NAME=calico-${MAJOR}.${MINOR}
+else
+    echo "ERROR: Unhandled VERSION \"${VERSION}\""
+    exit 1
+fi
+export REPO_NAME
 echo REPO_NAME is $REPO_NAME
 
 # SECRET_KEY must be a file containing the GPG secret key for a member
