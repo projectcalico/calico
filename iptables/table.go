@@ -989,7 +989,7 @@ func (t *Table) applyUpdates() error {
 				} else if i < len(previousHashes) {
 					// previousHashes was longer, remove the old rules from the end.
 					ruleNum := len(currentHashes) + 1 // 1-indexed
-					line = t.deleteRule(chainName, ruleNum)
+					line = t.renderDeleteByIndexLine(chainName, ruleNum)
 				} else {
 					// currentHashes was longer.  Append.
 					prefixFrag := t.commentFrag(currentHashes[i])
@@ -1019,7 +1019,7 @@ func (t *Table) applyUpdates() error {
 		// rules from this chain, then re-insert/re-append them below.
 		for i := 0; i < len(previousHashes); i++ {
 			if previousHashes[i] != "" {
-				line := t.deleteRule(chainName, i)
+				line := t.renderDeleteByValueLine(chainName, i)
 				buf.WriteLine(line)
 			}
 		}
@@ -1173,11 +1173,14 @@ func (t *Table) commentFrag(hash string) string {
 	return fmt.Sprintf(`-m comment --comment "%s%s"`, t.hashCommentPrefix, hash)
 }
 
-func (t *Table) deleteRule(chainName string, ruleNum int) string {
-	if strings.HasPrefix(chainName, "cali") {
-		return fmt.Sprintf("-D %s %d", chainName, ruleNum)
-	}
+// renderDeleteByIndexLine produces a delete line by rule number. This function is used for cali chains.
+func (t *Table) renderDeleteByIndexLine(chainName string, ruleNum int) string {
+	return fmt.Sprintf("-D %s %d", chainName, ruleNum)
+}
 
+// renderDeleteByValueLine produces a delete line by the full rule at the given rule number. This function is
+// used for non-Calico chains.
+func (t *Table) renderDeleteByValueLine(chainName string, ruleNum int) string {
 	// For non-cali chains, get the rule by number but delete using the full rule instead of rule number.
 	rules, ok := t.chainsToFullRules[chainName]
 	if !ok || ruleNum >= len(rules) {
