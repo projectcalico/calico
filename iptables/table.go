@@ -205,6 +205,12 @@ type Table struct {
 	// to what we calculate from chainToContents.
 	chainToDataplaneHashes map[string][]string
 
+	// chainsToFullRules contains the full rules, mapped from chain name to slices of rules in that chain.
+	chainsToFullRules map[string][]string
+
+	// hashToFullRules contains a mapping of rule hashes to the full rules.
+	hashToFullRules map[string]string
+
 	// hashCommentPrefix holds the prefix that we prepend to our rule-tracking hashes.
 	hashCommentPrefix string
 	// hashCommentRegexp matches the rule-tracking comment, capturing the rule hash.
@@ -362,6 +368,7 @@ func NewTable(
 		chainNameToChain:       map[string]*Chain{},
 		dirtyChains:            set.New(),
 		chainToDataplaneHashes: map[string][]string{},
+		chainsToFullRules:      map[string][]string{},
 		logCxt: log.WithFields(log.Fields{
 			"ipVersion": ipVersion,
 			"table":     name,
@@ -512,7 +519,7 @@ func (t *Table) loadDataplaneState() {
 	// Load the hashes from the dataplane.
 	t.logCxt.Info("Loading current iptables state and checking it is correct.")
 	t.lastReadTime = t.timeNow()
-	dataplaneHashes := t.getHashesFromDataplane()
+	dataplaneHashes, dataplaneRules, dataplaneHashesToRules := t.getHashesAndRulesFromDataplane()
 
 	// Check that the rules we think we've programmed are still there and mark any inconsistent
 	// chains for refresh.
@@ -605,6 +612,8 @@ func (t *Table) loadDataplaneState() {
 
 	t.logCxt.Debug("Finished loading iptables state")
 	t.chainToDataplaneHashes = dataplaneHashes
+	t.chainsToFullRules = dataplaneRules
+	t.hashToFullRules = dataplaneHashesToRules
 	t.inSyncWithDataPlane = true
 }
 
@@ -631,18 +640,18 @@ func (t *Table) expectedHashesForInsertChain(
 	return
 }
 
-// getHashesFromDataplane loads the current state of our table and parses out the hashes that we
+// getHashesAndRulesFromDataplane loads the current state of our table and parses out the hashes that we
 // add to rules.  It returns a map with an entry for each chain in the table.  Each entry is a slice
 // containing the hashes for the rules in that table.  Rules with no hashes are represented by
 // an empty string.
-func (t *Table) getHashesFromDataplane() map[string][]string {
+func (t *Table) getHashesAndRulesFromDataplane() (hashes map[string][]string, rules map[string][]string, hashesToRules map[string]string) {
 	retries := 3
 	retryDelay := 100 * time.Millisecond
 
 	// Retry a few times before we panic.  This deals with any transient errors and it prevents
 	// us from spamming a panic into the log when we're being gracefully shut down by a SIGTERM.
 	for {
-		hashes, err := t.attemptToGetHashesFromDataplane()
+		hashes, rules, hashesToRules, err := t.attemptToGetHashesAndRulesFromDataplane()
 		if err != nil {
 			countNumSaveErrors.Inc()
 			var stderr string
@@ -660,13 +669,13 @@ func (t *Table) getHashesFromDataplane() map[string][]string {
 			continue
 		}
 
-		return hashes
+		return hashes, rules, hashesToRules
 	}
 }
 
-// attemptToGetHashesFromDataplane starts an iptables-save subprocess and feeds its output to
-// readHashesFrom() via a pipe.  It handles the various error cases.
-func (t *Table) attemptToGetHashesFromDataplane() (hashes map[string][]string, err error) {
+// attemptToGetHashesAndRulesFromDataplane starts an iptables-save subprocess and feeds its output to
+// readHashesAndRulesFrom() via a pipe.  It handles the various error cases.
+func (t *Table) attemptToGetHashesAndRulesFromDataplane() (hashes map[string][]string, rules map[string][]string, hashesToRules map[string]string, err error) {
 	cmd := t.newCmd(t.iptablesSaveCmd, "-t", t.Name)
 	countNumSaveCalls.Inc()
 
@@ -686,9 +695,9 @@ func (t *Table) attemptToGetHashesFromDataplane() (hashes map[string][]string, e
 		}
 		return
 	}
-	hashes, err = t.readHashesFrom(stdout)
+	hashes, rules, hashesToRules, err = t.readHashesAndRulesFrom(stdout)
 	if err != nil {
-		// In case readHashesFrom() returned due to an error that didn't cause the
+		// In case readHashesAndRulesFrom() returned due to an error that didn't cause the
 		// process to exit, kill it now.
 		log.WithError(err).Warnf("Killing %s process after a failure", t.iptablesSaveCmd)
 		killErr := cmd.Kill()
@@ -708,14 +717,16 @@ func (t *Table) attemptToGetHashesFromDataplane() (hashes map[string][]string, e
 	return
 }
 
-// readHashesFrom scans the given reader containing iptables-save output for this table, extracting
+// readHashesAndRulesFrom scans the given reader containing iptables-save output for this table, extracting
 // our rule hashes.  Entries in the returned map are indexed by chain name.  For rules that we
 // wrote, the hash is extracted from a comment that we added to the rule.  For rules written by
 // previous versions of Felix, returns a dummy non-zero value.  For rules not written by Felix,
 // returns a zero string.  Hence, the lengths of the returned values are the lengths of the chains
 // whether written by Felix or not.
-func (t *Table) readHashesFrom(r io.ReadCloser) (hashes map[string][]string, err error) {
+func (t *Table) readHashesAndRulesFrom(r io.ReadCloser) (hashes map[string][]string, rules map[string][]string, hashesToRules map[string]string, err error) {
 	hashes = map[string][]string{}
+	rules = map[string][]string{}
+	hashesToRules = map[string]string{}
 	scanner := bufio.NewScanner(r)
 
 	// Figure out if debug logging is enabled so we can skip some WithFields() calls in the
@@ -775,13 +786,22 @@ func (t *Table) readHashesFrom(r io.ReadCloser) (hashes map[string][]string, err
 			hash = "OLD INSERT RULE"
 		}
 		hashes[chainName] = append(hashes[chainName], hash)
+
+		// If this is a non-cali chain, store the full rule.
+		if !strings.HasPrefix(chainName, "cali") {
+			fullRule := string(line)
+			rules[chainName] = append(rules[chainName], fullRule)
+			hashesToRules[hash] = fullRule
+		}
 	}
 	if scanner.Err() != nil {
 		log.WithError(scanner.Err()).Error("Failed to read hashes from dataplane")
-		return nil, scanner.Err()
+		return nil, nil, nil, scanner.Err()
 	}
 	t.logCxt.Debugf("Read hashes from dataplane: %#v", hashes)
-	return hashes, nil
+	t.logCxt.Debugf("Read rules from dataplane: %#v", rules)
+	t.logCxt.Debugf("Read hashes to rules from dataplane: %#v", hashesToRules)
+	return hashes, rules, hashesToRules, nil
 }
 
 func (t *Table) InvalidateDataplaneCache(reason string) {
@@ -958,14 +978,27 @@ func (t *Table) applyUpdates() error {
 					if previousHashes[i] == currentHashes[i] {
 						continue
 					}
-					// Hash doesn't match, replace the rule.
-					ruleNum := i + 1 // 1-indexed.
-					prefixFrag := t.commentFrag(currentHashes[i])
-					line = chain.Rules[i].RenderReplace(chainName, ruleNum, prefixFrag, features)
+					// Hash doesn't match, replace the rule. If this is a cali chain, we can replace by
+					// line number. Otherwise, we need to delete the old rule and insert the new rule.
+					if strings.HasPrefix(chainName, "cali") {
+						ruleNum := i + 1 // 1-indexed.
+						prefixFrag := t.commentFrag(currentHashes[i])
+						line = chain.Rules[i].RenderReplace(chainName, ruleNum, prefixFrag, features)
+					} else {
+						line = t.deleteRule(chainName, i)
+						buf.WriteLine(line)
+						prefixFrag := t.commentFrag(currentHashes[i])
+						line = chain.Rules[i].RenderInsertAtRuleNumber(chainName, i+1, prefixFrag, features)
+					}
 				} else if i < len(previousHashes) {
 					// previousHashes was longer, remove the old rules from the end.
-					ruleNum := len(currentHashes) + 1 // 1-indexed
-					line = deleteRule(chainName, ruleNum)
+					// If this is a cali- chain, we can delete rules by index and pass in an index reflecting that.
+					// Otherwise we need to pass in the index of the actual rule.
+					ruleNum := i
+					if strings.HasPrefix(chainName, "cali") {
+						ruleNum = len(currentHashes) + 1 // 1-indexed
+					}
+					line = t.deleteRule(chainName, ruleNum)
 				} else {
 					// currentHashes was longer.  Append.
 					prefixFrag := t.commentFrag(currentHashes[i])
@@ -998,8 +1031,7 @@ func (t *Table) applyUpdates() error {
 		// about to remove.
 		for i := len(previousHashes) - 1; i >= 0; i-- {
 			if previousHashes[i] != "" {
-				ruleNum := i + 1
-				line := deleteRule(chainName, ruleNum)
+				line := t.deleteRule(chainName, i)
 				buf.WriteLine(line)
 			}
 		}
@@ -1153,8 +1185,25 @@ func (t *Table) commentFrag(hash string) string {
 	return fmt.Sprintf(`-m comment --comment "%s%s"`, t.hashCommentPrefix, hash)
 }
 
-func deleteRule(chainName string, ruleNum int) string {
-	return fmt.Sprintf("-D %s %d", chainName, ruleNum)
+func (t *Table) deleteRule(chainName string, ruleNum int) string {
+	if strings.HasPrefix(chainName, "cali") {
+		return fmt.Sprintf("-D %s %d", chainName, ruleNum)
+	}
+
+	// For non-cali chains, get the rule by number but delete using the full rule instead of rule number.
+	rules, ok := t.chainsToFullRules[chainName]
+	if !ok || ruleNum >= len(rules) {
+		t.logCxt.WithFields(log.Fields{
+			"chainName": chainName,
+			"ruleNum":   ruleNum,
+		}).Warn("Rule doesn't exist")
+		return ""
+	}
+
+	rule := rules[ruleNum]
+
+	// Make the append a delete.
+	return strings.Replace(rule, "-A", "-D", 1)
 }
 
 func calculateRuleInsertHashes(chainName string, rules []Rule, features *Features) []string {

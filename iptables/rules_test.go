@@ -94,14 +94,20 @@ var _ = Describe("Hash extraction tests", func() {
 	})
 
 	It("should extract an old felix rule by prefix", func() {
-		hashes, err := table.readHashesFrom(newClosableBuf("-A FORWARD -j felix-FORWARD\n"))
+		hashes, rules, hashesToRules, err := table.readHashesAndRulesFrom(newClosableBuf("-A FORWARD -j felix-FORWARD\n"))
 		Expect(err).NotTo(HaveOccurred())
 		Expect(hashes).To(Equal(map[string][]string{
 			"FORWARD": []string{"OLD INSERT RULE"},
 		}))
+		Expect(rules).To(Equal(map[string][]string{
+			"FORWARD": []string{"-A FORWARD -j felix-FORWARD"},
+		}))
+		Expect(hashesToRules).To(HaveKeyWithValue("OLD INSERT RULE", "-A FORWARD -j felix-FORWARD"))
+
+		Expect(rules).To(Not(BeEmpty()))
 	})
 	It("should extract an old felix rule by special case", func() {
-		hashes, err := table.readHashesFrom(newClosableBuf(
+		hashes, rules, hashesToRules, err := table.readHashesAndRulesFrom(newClosableBuf(
 			"-A FORWARD -j an-old-rule\n" +
 				"-A FORWARD -j ignore-me\n",
 		))
@@ -112,17 +118,31 @@ var _ = Describe("Hash extraction tests", func() {
 				"",
 			},
 		}))
+		Expect(rules).To(Equal(map[string][]string{
+			"FORWARD": {
+				"-A FORWARD -j an-old-rule",
+				"-A FORWARD -j ignore-me",
+			},
+		}))
+		Expect(hashesToRules).To(HaveKeyWithValue("OLD INSERT RULE", "-A FORWARD -j an-old-rule"))
+		Expect(hashesToRules).To(HaveKeyWithValue("", "-A FORWARD -j ignore-me"))
 	})
-	It("should extract a hash", func() {
-		hashes, err := table.readHashesFrom(newClosableBuf(
+	It("should extract a rule with a hash", func() {
+		hashes, rules, hashesToRules, err := table.readHashesAndRulesFrom(newClosableBuf(
 			"-A FORWARD -m comment --comment \"cali:wUHhoiAYhphO9Mso\" -j cali-FORWARD\n"))
 		Expect(err).NotTo(HaveOccurred())
 		Expect(hashes).To(Equal(map[string][]string{
 			"FORWARD": []string{"wUHhoiAYhphO9Mso"},
 		}))
+		Expect(rules).To(Equal(map[string][]string{
+			"FORWARD": {
+				"-A FORWARD -m comment --comment \"cali:wUHhoiAYhphO9Mso\" -j cali-FORWARD",
+			},
+		}))
+		Expect(hashesToRules).To(HaveKeyWithValue("wUHhoiAYhphO9Mso", "-A FORWARD -m comment --comment \"cali:wUHhoiAYhphO9Mso\" -j cali-FORWARD"))
 	})
 	It("should extract a hash or a gap from each rule", func() {
-		hashes, err := table.readHashesFrom(newClosableBuf(
+		hashes, rules, hashesToRules, err := table.readHashesAndRulesFrom(newClosableBuf(
 			"-A FORWARD -m comment --comment \"cali:wUHhoiAYhphO9Mso\" -j cali-FORWARD\n" +
 				"-A FORWARD -m comment --comment \"cali:abcdefghij1234-_\" -j cali-FORWARD\n" +
 				"-A FORWARD --src '1.2.3.4'\n" +
@@ -136,9 +156,22 @@ var _ = Describe("Hash extraction tests", func() {
 				"1234567890093213",
 			},
 		}))
+		Expect(rules).To(Equal(map[string][]string{
+			"FORWARD": {
+				"-A FORWARD -m comment --comment \"cali:wUHhoiAYhphO9Mso\" -j cali-FORWARD",
+				"-A FORWARD -m comment --comment \"cali:abcdefghij1234-_\" -j cali-FORWARD",
+				"-A FORWARD --src '1.2.3.4'",
+				"-A FORWARD -m comment --comment \"cali:1234567890093213\" -j cali-FORWARD",
+			},
+		}))
+		Expect(hashesToRules).To(HaveKeyWithValue("wUHhoiAYhphO9Mso", "-A FORWARD -m comment --comment \"cali:wUHhoiAYhphO9Mso\" -j cali-FORWARD"))
+		Expect(hashesToRules).To(HaveKeyWithValue("abcdefghij1234-_", "-A FORWARD -m comment --comment \"cali:abcdefghij1234-_\" -j cali-FORWARD"))
+		Expect(hashesToRules).To(HaveKeyWithValue("", "-A FORWARD --src '1.2.3.4'"))
+		Expect(hashesToRules).To(HaveKeyWithValue("1234567890093213", "-A FORWARD -m comment --comment \"cali:1234567890093213\" -j cali-FORWARD"))
 	})
+
 	It("should handle multiple chains", func() {
-		hashes, err := table.readHashesFrom(newClosableBuf(
+		hashes, rules, hashesToRules, err := table.readHashesAndRulesFrom(newClosableBuf(
 			"-A cali-abcd -m comment --comment \"cali:wUHhoiAYhphO9Mso\" -j cali-FORWARD\n" +
 				"-A cali-abcd -m comment --comment \"cali:abcdefghij1234-_\" -j cali-FORWARD\n" +
 				"-A FORWARD --src '1.2.3.4'\n" +
@@ -154,6 +187,14 @@ var _ = Describe("Hash extraction tests", func() {
 				"1234567890093213",
 			},
 		}))
+		Expect(rules).To(Equal(map[string][]string{
+			"FORWARD": {
+				"-A FORWARD --src '1.2.3.4'",
+				"-A FORWARD -m comment --comment \"cali:1234567890093213\" -j cali-FORWARD",
+			},
+		}))
+		Expect(hashesToRules).To(HaveKeyWithValue("", "-A FORWARD --src '1.2.3.4'"))
+		Expect(hashesToRules).To(HaveKeyWithValue("1234567890093213", "-A FORWARD -m comment --comment \"cali:1234567890093213\" -j cali-FORWARD"))
 	})
 })
 
