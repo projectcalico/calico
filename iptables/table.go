@@ -208,8 +208,8 @@ type Table struct {
 	// to what we calculate from chainToContents.
 	chainToDataplaneHashes map[string][]string
 
-	// chainsToFullRules contains the full rules, mapped from chain name to slices of rules in that chain.
-	chainsToFullRules map[string][]string
+	// chainToFullRules contains the full rules, mapped from chain name to slices of rules in that chain.
+	chainToFullRules map[string][]string
 
 	// hashCommentPrefix holds the prefix that we prepend to our rule-tracking hashes.
 	hashCommentPrefix string
@@ -368,7 +368,7 @@ func NewTable(
 		chainNameToChain:       map[string]*Chain{},
 		dirtyChains:            set.New(),
 		chainToDataplaneHashes: map[string][]string{},
-		chainsToFullRules:      map[string][]string{},
+		chainToFullRules:       map[string][]string{},
 		logCxt: log.WithFields(log.Fields{
 			"ipVersion": ipVersion,
 			"table":     name,
@@ -612,7 +612,7 @@ func (t *Table) loadDataplaneState() {
 
 	t.logCxt.Debug("Finished loading iptables state")
 	t.chainToDataplaneHashes = dataplaneHashes
-	t.chainsToFullRules = dataplaneRules
+	t.chainToFullRules = dataplaneRules
 	t.inSyncWithDataPlane = true
 }
 
@@ -1175,7 +1175,7 @@ func (t *Table) renderDeleteByIndexLine(chainName string, ruleNum int) string {
 // used for non-Calico chains.
 func (t *Table) renderDeleteByValueLine(chainName string, ruleNum int) string {
 	// For non-cali chains, get the rule by number but delete using the full rule instead of rule number.
-	rules, ok := t.chainsToFullRules[chainName]
+	rules, ok := t.chainToFullRules[chainName]
 	if !ok || ruleNum >= len(rules) {
 		t.logCxt.WithFields(log.Fields{
 			"chainName": chainName,
