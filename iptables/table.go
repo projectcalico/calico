@@ -994,10 +994,17 @@ func (t *Table) applyUpdates() error {
 		return nil // Delay clearing the set until we've programmed iptables.
 	})
 
+	newChainToFullRules := map[string][]string{}
+	for chain, rules := range t.chainToFullRules {
+		newChainToFullRules[chain] = make([]string, len(rules))
+		copy(newChainToFullRules[chain], rules)
+	}
+
 	// Now calculate iptables updates for our inserted rules, which are used to hook top-level chains.
 	t.dirtyInserts.Iter(func(item interface{}) error {
 		chainName := item.(string)
 		previousHashes := t.chainToDataplaneHashes[chainName]
+		newRules := newChainToFullRules[chainName]
 
 		// Calculate the hashes for our inserted rules.
 		newChainHashes, newRuleHashes := t.expectedHashesForInsertChain(
@@ -1014,10 +1021,22 @@ func (t *Table) applyUpdates() error {
 			if previousHashes[i] != "" {
 				line := t.renderDeleteByValueLine(chainName, i)
 				buf.WriteLine(line)
+
+				// So let's just empty out the rule
+				newRules[i] = ""
 			}
 		}
+		// Go over our slice of "new" rules and remove any rules we emptied out while deleting rules.
+		copyOfNewRules := []string{}
+		for _, rule := range newRules{
+			if rule != "" {
+				copyOfNewRules = append(copyOfNewRules, rule)
+			}
+		}
+		newRules = copyOfNewRules
 
 		rules := t.chainToInsertedRules[chainName]
+		insertRuleLines := make([]string, len(rules))
 		if t.insertMode == "insert" {
 			t.logCxt.Debug("Rendering insert rules.")
 			// Since each insert is pushed onto the top of the chain, do the inserts in
@@ -1027,17 +1046,22 @@ func (t *Table) applyUpdates() error {
 				prefixFrag := t.commentFrag(newRuleHashes[i])
 				line := rules[i].RenderInsert(chainName, prefixFrag, features)
 				buf.WriteLine(line)
+				insertRuleLines[i] = line
 			}
+			newRules = append(insertRuleLines, newRules...)
 		} else {
 			t.logCxt.Debug("Rendering append rules.")
 			for i := 0; i < len(rules); i++ {
 				prefixFrag := t.commentFrag(newRuleHashes[i])
 				line := rules[i].RenderAppend(chainName, prefixFrag, features)
 				buf.WriteLine(line)
+				insertRuleLines[i] = line
 			}
+			newRules = append(newRules, insertRuleLines...)
 		}
 
 		newHashes[chainName] = newChainHashes
+		newChainToFullRules[chainName] = newRules
 
 		return nil // Delay clearing the set until we've programmed iptables.
 	})
