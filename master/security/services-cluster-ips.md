@@ -188,7 +188,7 @@ spec:
       ports: [80, 443]
 ```
 
-##### Step 4: (Optional) Create NetworkPolicies or GlobalNetworkPolicies that allow in-cluster traffic to access the service
+##### Step 4: (Optional) Create network polices or global network policies that allow in-cluster traffic to access the service
 
 ##### Step 5: Create HostEndpoints 
 
