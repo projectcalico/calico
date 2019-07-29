@@ -46,6 +46,9 @@ var (
 		"raw":    []string{"PREROUTING", "OUTPUT"},
 	}
 
+	// topLevelChains is the set of top-level chains we insert into.
+	topLevelChains = set.From("INPUT", "OUTPUT", "FORWARD", "PREROUTING", "POSTROUTING")
+
 	// chainCreateRegexp matches iptables-save output lines for chain forward reference lines.
 	// It captures the name of the chain.
 	chainCreateRegexp = regexp.MustCompile(`^:(\S+)`)
@@ -787,8 +790,9 @@ func (t *Table) readHashesAndRulesFrom(r io.ReadCloser) (hashes map[string][]str
 		}
 		hashes[chainName] = append(hashes[chainName], hash)
 
-		// If this is a non-cali chain, store the full rule.
-		if !strings.HasPrefix(chainName, "cali") {
+		// Either we've explicitly inserted a rule into this chain or it's one of the top-level chains that we may have hooked.
+		// Store off the complete contents of the rules so that we can generate precise deletes later if we need to.
+		if _, ok := t.chainToInsertedRules[chainName]; topLevelChains.Contains(chainName) || ok {
 			fullRule := string(line)
 			rules[chainName] = append(rules[chainName], fullRule)
 			hashesToRules[hash] = fullRule
