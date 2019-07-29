@@ -88,10 +88,10 @@ endif
 # assuming that there is a local checkout of libcalico in the same directory as this repo.
 LOCAL_BUILD_MOUNTS ?=
 ifeq ($(LOCAL_BUILD),true)
-LOCAL_BUILD_MOUNTS = -v $(CURDIR)/../libcalico-go:/go/src/$(PACKAGE_NAME)/vendor/github.com/projectcalico/libcalico-go:ro \
-	-v $(CURDIR)/.empty:/go/src/$(PACKAGE_NAME)/vendor/github.com/projectcalico/libcalico-go/vendor:ro \
-	-v $(CURDIR)/../typha:/go/src/$(PACKAGE_NAME)/vendor/github.com/projectcalico/typha:ro \
-	-v $(CURDIR)/.empty:/go/src/$(PACKAGE_NAME)/vendor/github.com/projectcalico/typha/vendor:ro
+LOCAL_BUILD_MOUNTS = -v $(CURDIR)/../libcalico-go:/$(PACKAGE_NAME)/vendor/github.com/projectcalico/libcalico-go:ro \
+	-v $(CURDIR)/.empty:/$(PACKAGE_NAME)/vendor/github.com/projectcalico/libcalico-go/vendor:ro \
+	-v $(CURDIR)/../typha:/$(PACKAGE_NAME)/vendor/github.com/projectcalico/typha:ro \
+	-v $(CURDIR)/.empty:/$(PACKAGE_NAME)/vendor/github.com/projectcalico/typha/vendor:ro
 endif
 
 # we want to be able to run the same recipe on multiple targets keyed on the image name
@@ -147,7 +147,7 @@ PUSH_NONMANIFEST_IMAGES=$(filter-out $(PUSH_MANIFEST_IMAGES),$(PUSH_IMAGES))
 # location of docker credentials to push manifests
 DOCKER_CONFIG ?= $(HOME)/.docker/config.json
 
-GO_BUILD_VER?=v0.22
+GO_BUILD_VER?=v0.23
 # For building, we use the go-build image for the *host* architecture, even if the target is different
 # the one for the host should contain all the necessary cross-compilation tools
 # we do not need to use the arch since go-build:v0.15 now is multi-arch manifest
@@ -221,6 +221,9 @@ endif
 LOCAL_USER_ID:=$(shell id -u)
 LOCAL_GROUP_ID:=$(shell id -g)
 
+EXTRA_DOCKER_ARGS	:= -e GO111MODULE=on
+GINKGO_ARGS		:= -mod=vendor
+
 # Allow libcalico-go and the ssh auth sock to be mapped into the build container.
 ifdef LIBCALICOGO_PATH
   EXTRA_DOCKER_ARGS += -v $(LIBCALICOGO_PATH):/go/src/github.com/projectcalico/libcalico-go:ro
@@ -234,14 +237,14 @@ DOCKER_RUN := mkdir -p .go-pkg-cache && \
                               $(EXTRA_DOCKER_ARGS) \
                               -e LOCAL_USER_ID=$(LOCAL_USER_ID) \
                               -e GOCACHE=/gocache \
-                              -v $(HOME)/.glide:/home/user/.glide:rw \
-                              -v $(CURDIR):/go/src/$(PACKAGE_NAME):rw \
+                              -v $(CURDIR):/$(PACKAGE_NAME):rw \
                               -v $(CURDIR)/.go-pkg-cache:/gocache:rw \
-                              -w /go/src/$(PACKAGE_NAME) \
+                              -w /$(PACKAGE_NAME) \
                               -e GOARCH=$(ARCH)
 
 .PHONY: clean
 clean:
+	-chmod -R +w .go-pkg-cache
 	rm -rf bin \
 	       docker-image/bin \
 	       dist \
@@ -249,7 +252,6 @@ clean:
 	       fv/fv.test \
 	       $(GENERATED_FILES) \
 	       go/docs/calc.pdf \
-	       .glide \
 	       vendor \
 	       .go-pkg-cache \
 	       check-licenses/dependency-licenses.txt \
@@ -268,27 +270,19 @@ build-all: $(addprefix sub-build-,$(VALIDARCHES))
 sub-build-%:
 	$(MAKE) build ARCH=$*
 
-# Update the vendored dependencies with the latest upstream versions matching
-# our glide.yaml.  If there area any changes, this updates glide.lock
-# as a side effect.  Unless you're adding/updating a dependency, you probably
-# want to use the vendor target to install the versions from glide.lock.
 VENDOR_REMADE := false
 .PHONY: update-vendor
-update-vendor glide.lock:
-	mkdir -p $$HOME/.glide
-	$(DOCKER_RUN) $(CALICO_BUILD) glide up --strip-vendor
+update-vendor:
+	$(DOCKER_RUN) $(CALICO_BUILD) go mod vendor
 	touch vendor/.up-to-date
-	# Optimization: since glide up does the job of glide install, flag to the
-	# vendor target that it doesn't need to do anything.
 	$(eval VENDOR_REMADE := true)
 
 # vendor is a shortcut for force rebuilding the go vendor directory.
 .PHONY: vendor
 vendor: vendor/.up-to-date
-vendor/.up-to-date: glide.lock
+vendor/.up-to-date: go.mod go.sum
 	if ! $(VENDOR_REMADE); then \
-	  mkdir -p $$HOME/.glide && \
-	  $(DOCKER_RUN) $(CALICO_BUILD) glide install --strip-vendor && \
+	  $(DOCKER_RUN) $(CALICO_BUILD) go mod vendor; \
 	  touch vendor/.up-to-date; \
 	fi
 
@@ -297,7 +291,7 @@ TYPHA_BRANCH?=$(shell git rev-parse --abbrev-ref HEAD)
 TYPHA_REPO?=github.com/projectcalico/typha
 TYPHA_VERSION?=$(shell git ls-remote git@github.com:projectcalico/typha $(TYPHA_BRANCH) 2>/dev/null | cut -f 1)
 
-## Update typha pin in glide.yaml
+## Update typha pin in go.mod
 update-typha:
 	    $(DOCKER_RUN) $(CALICO_BUILD) sh -c '\
         echo "Updating typha to $(TYPHA_VERSION) from $(TYPHA_REPO)"; \
@@ -341,10 +335,10 @@ $(CLANG_BUILDER_STAMP): docker-build-images/bpf-clang-builder.Dockerfile.$(BUILD
 bpf/xdp/generated/xdp.o: bpf/xdp/filter.c $(BPF_INC_FILES) $(BPF_XDP_INC_FILES) $(CLANG_BUILDER_STAMP)
 	mkdir -p bpf/xdp/generated
 	docker run --rm --user $(LOCAL_USER_ID):$(LOCAL_GROUP_ID) \
-	          -v $(CURDIR):/go/src/$(PACKAGE_NAME):rw \
+	          -v $(CURDIR):/$(PACKAGE_NAME):rw \
 	              calico-build/bpf-clang \
 	              /bin/sh -c \
-	              "cd /go/src/$(PACKAGE_NAME) && \
+	              "cd /$(PACKAGE_NAME) && \
 	               clang \
 	                      -D__KERNEL__ \
 	                      -D__ASM_SYSREG_H \
@@ -357,24 +351,24 @@ bpf/xdp/generated/xdp.o: bpf/xdp/filter.c $(BPF_INC_FILES) $(BPF_XDP_INC_FILES) 
 	                      -fno-stack-protector \
 	                      -O2 \
 	                      -emit-llvm \
-	                      -c /go/src/$(PACKAGE_NAME)/bpf/xdp/filter.c \
-	                      -o /go/src/$(PACKAGE_NAME)/bpf/xdp/generated/xdp.ll && \
+	                      -c /$(PACKAGE_NAME)/bpf/xdp/filter.c \
+	                      -o /$(PACKAGE_NAME)/bpf/xdp/generated/xdp.ll && \
 	               llc \
 	                       -march=bpf \
 	                       -filetype=obj \
-	                       -o /go/src/$(PACKAGE_NAME)/bpf/xdp/generated/xdp.o \
-	                       /go/src/$(PACKAGE_NAME)/bpf/xdp/generated/xdp.ll && \
-	               rm -f /go/src/$(PACKAGE_NAME)/bpf/xdp/generated/xdp.ll"
+	                       -o /$(PACKAGE_NAME)/bpf/xdp/generated/xdp.o \
+	                       /$(PACKAGE_NAME)/bpf/xdp/generated/xdp.ll && \
+	               rm -f /$(PACKAGE_NAME)/bpf/xdp/generated/xdp.ll"
 
 BPF_SOCKMAP_INC_FILES := bpf/sockmap/sockops.h
 
 bpf/sockmap/generated/sockops.o: bpf/sockmap/sockops.c $(BPF_INC_FILES) $(BPF_SOCKMAP_INC_FILES) $(CLANG_BUILDER_STAMP)
 	mkdir -p bpf/sockmap/generated
 	docker run --rm --user $(LOCAL_USER_ID):$(LOCAL_GROUP_ID) \
-	          -v $(CURDIR):/go/src/$(PACKAGE_NAME):rw \
+	          -v $(CURDIR):/$(PACKAGE_NAME):rw \
 	              calico-build/bpf-clang \
 	              /bin/sh -c \
-	              "cd /go/src/$(PACKAGE_NAME) && \
+	              "cd /$(PACKAGE_NAME) && \
 	               clang \
 	                      -D__KERNEL__ \
 	                      -D__ASM_SYSREG_H \
@@ -387,22 +381,22 @@ bpf/sockmap/generated/sockops.o: bpf/sockmap/sockops.c $(BPF_INC_FILES) $(BPF_SO
 	                      -fno-stack-protector \
 	                      -O2 \
 	                      -emit-llvm \
-	                      -c /go/src/$(PACKAGE_NAME)/bpf/sockmap/sockops.c \
-	                      -o /go/src/$(PACKAGE_NAME)/bpf/sockmap/generated/sockops.ll && \
+	                      -c /$(PACKAGE_NAME)/bpf/sockmap/sockops.c \
+	                      -o /$(PACKAGE_NAME)/bpf/sockmap/generated/sockops.ll && \
 	               llc \
 	                       -march=bpf \
 	                       -filetype=obj \
-	                       -o /go/src/$(PACKAGE_NAME)/bpf/sockmap/generated/sockops.o \
-	                       /go/src/$(PACKAGE_NAME)/bpf/sockmap/generated/sockops.ll && \
-	               rm -f /go/src/$(PACKAGE_NAME)/bpf/sockmap/generated/sockops.ll"
+	                       -o /$(PACKAGE_NAME)/bpf/sockmap/generated/sockops.o \
+	                       /$(PACKAGE_NAME)/bpf/sockmap/generated/sockops.ll && \
+	               rm -f /$(PACKAGE_NAME)/bpf/sockmap/generated/sockops.ll"
 
 bpf/sockmap/generated/redir.o: bpf/sockmap/redir.c $(BPF_INC_FILES) $(BPF_SOCKMAP_INC_FILES) $(CLANG_BUILDER_STAMP)
 	mkdir -p bpf/sockmap/generated
 	docker run --rm --user $(LOCAL_USER_ID):$(LOCAL_GROUP_ID) \
-	          -v $(CURDIR):/go/src/$(PACKAGE_NAME):rw \
+	          -v $(CURDIR):/$(PACKAGE_NAME):rw \
 	              calico-build/bpf-clang \
 	              /bin/sh -c \
-	              "cd /go/src/$(PACKAGE_NAME) && \
+	              "cd /$(PACKAGE_NAME) && \
 	               clang \
 	                      -D__KERNEL__ \
 	                      -D__ASM_SYSREG_H \
@@ -415,24 +409,24 @@ bpf/sockmap/generated/redir.o: bpf/sockmap/redir.c $(BPF_INC_FILES) $(BPF_SOCKMA
 	                      -fno-stack-protector \
 	                      -O2 \
 	                      -emit-llvm \
-	                      -c /go/src/$(PACKAGE_NAME)/bpf/sockmap/redir.c \
-	                      -o /go/src/$(PACKAGE_NAME)/bpf/sockmap/generated/redir.ll && \
+	                      -c /$(PACKAGE_NAME)/bpf/sockmap/redir.c \
+	                      -o /$(PACKAGE_NAME)/bpf/sockmap/generated/redir.ll && \
 	               llc \
 	                       -march=bpf \
 	                       -filetype=obj \
-	                       -o /go/src/$(PACKAGE_NAME)/bpf/sockmap/generated/redir.o \
-	                       /go/src/$(PACKAGE_NAME)/bpf/sockmap/generated/redir.ll && \
-	               rm -f /go/src/$(PACKAGE_NAME)/bpf/sockmap/generated/redir.ll"
+	                       -o /$(PACKAGE_NAME)/bpf/sockmap/generated/redir.o \
+	                       /$(PACKAGE_NAME)/bpf/sockmap/generated/redir.ll && \
+	               rm -f /$(PACKAGE_NAME)/bpf/sockmap/generated/redir.ll"
 
 .PHONY: packr
 packr: bpf/bpf-packr.go bpf/packrd/packed-packr.go
 
 bpf/bpf-packr.go bpf/packrd/packed-packr.go: bpf/xdp/generated/xdp.o bpf/sockmap/generated/sockops.o bpf/sockmap/generated/redir.o $(CLANG_BUILDER_STAMP)
 	docker run --rm --user $(LOCAL_USER_ID):$(LOCAL_GROUP_ID) \
-	          -v $(CURDIR):/go/src/$(PACKAGE_NAME):rw \
+	          -v $(CURDIR):/$(PACKAGE_NAME):rw \
 	              calico-build/bpf-clang \
 	              /bin/sh -c \
-	              "cd /go/src/$(PACKAGE_NAME)/bpf && /go/bin/packr2"
+	              "cd /$(PACKAGE_NAME)/bpf && /go/bin/packr2"
 	$(DOCKER_RUN) $(CALICO_BUILD) goimports -w -local github.com/projectcalico/ bpf/packrd/packed-packr.go bpf/bpf-packr.go
 
 ###############################################################################
@@ -646,10 +640,10 @@ install-git-hooks:
 
 foss-checks: vendor
 	@echo Running $@...
-	@docker run --rm -v $(CURDIR):/go/src/$(PACKAGE_NAME):rw \
+	@docker run --rm -v $(CURDIR):/$(PACKAGE_NAME):rw \
 	  -e LOCAL_USER_ID=$(LOCAL_USER_ID) \
 	  -e FOSSA_API_KEY=$(FOSSA_API_KEY) \
-	  -w /go/src/$(PACKAGE_NAME) \
+	  -w /$(PACKAGE_NAME) \
 	  $(CALICO_BUILD) /usr/local/bin/fossa
 
 ###############################################################################
@@ -991,7 +985,6 @@ docs/calc.pdf: docs/calc.dot
 # Install or update the tools used by the build
 .PHONY: update-tools
 update-tools:
-	go get -u github.com/Masterminds/glide
 	go get -u github.com/onsi/ginkgo/ginkgo
 	go get -u github.com/gobuffalo/packr/v2/packr2
 
