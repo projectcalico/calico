@@ -978,26 +978,13 @@ func (t *Table) applyUpdates() error {
 					if previousHashes[i] == currentHashes[i] {
 						continue
 					}
-					// Hash doesn't match, replace the rule. If this is a cali chain, we can replace by
-					// line number. Otherwise, we need to delete the old rule and insert the new rule.
-					if strings.HasPrefix(chainName, "cali") {
-						ruleNum := i + 1 // 1-indexed.
-						prefixFrag := t.commentFrag(currentHashes[i])
-						line = chain.Rules[i].RenderReplace(chainName, ruleNum, prefixFrag, features)
-					} else {
-						line = t.deleteRule(chainName, i)
-						buf.WriteLine(line)
-						prefixFrag := t.commentFrag(currentHashes[i])
-						line = chain.Rules[i].RenderInsertAtRuleNumber(chainName, i+1, prefixFrag, features)
-					}
+					// Hash doesn't match, replace the rule.
+					ruleNum := i + 1 // 1-indexed.
+					prefixFrag := t.commentFrag(currentHashes[i])
+					line = chain.Rules[i].RenderReplace(chainName, ruleNum, prefixFrag, features)
 				} else if i < len(previousHashes) {
 					// previousHashes was longer, remove the old rules from the end.
-					// If this is a cali- chain, we can delete rules by index and pass in an index reflecting that.
-					// Otherwise we need to pass in the index of the actual rule.
-					ruleNum := i
-					if strings.HasPrefix(chainName, "cali") {
-						ruleNum = len(currentHashes) + 1 // 1-indexed
-					}
+					ruleNum := len(currentHashes) + 1 // 1-indexed
 					line = t.deleteRule(chainName, ruleNum)
 				} else {
 					// currentHashes was longer.  Append.
