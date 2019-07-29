@@ -11,15 +11,19 @@ the current master of networking-calico.
 -  To publish RPMs: `./utils/publish-rpms.sh`
 
    -  This is to the 'master' repo; set REPO_NAME for a different
-      repo, e.g. `REPO_NAME=calico-3.8 ./utils/publish-rpms.sh`
+      repo, e.g. `REPO_NAME=calico-3.8 ./utils/publish-rpms.sh`.
 
    -  Also needs GCLOUD_ARGS and HOST set to indicate the RPM host,
       and a gcloud identity that permits logging into that host.
 
--  To publish Debs: `./utils/publish-debs.sh <SECRET_KEY_FILE>` (with
-   `<SECRET_KEY_FILE>` containing the GPG secret key for a member of
-   the [Project Calico team on
-   Launchpad](https://launchpad.net/~project-calico)
+-  To publish Debs: `./utils/publish-debs.sh`
+
+   -  This is to the 'master' PPA; set REPO_NAME for a different PPA,
+      e.g. `REPO_NAME=calico-3.8 ./utils/publish-debs.sh`.
+
+   -  Also needs SECRET_KEY set to a file containing the GPG secret
+      key for a member of the [Project Calico team on
+      Launchpad](https://launchpad.net/~project-calico).
 
 Still to do:
 
