@@ -1017,10 +1017,7 @@ func (t *Table) applyUpdates() error {
 
 		// For simplicity, if we've discovered that we're out-of-sync, remove all our
 		// rules from this chain, then re-insert/re-append them below.
-		//
-		// Remove in reverse order so that we don't disturb the rule numbers of rules we're
-		// about to remove.
-		for i := len(previousHashes) - 1; i >= 0; i-- {
+		for i := 0; i < len(previousHashes); i++ {
 			if previousHashes[i] != "" {
 				line := t.deleteRule(chainName, i)
 				buf.WriteLine(line)
