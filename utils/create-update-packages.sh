@@ -23,14 +23,18 @@
 test -n "$VERSION"
 echo VERSION is $VERSION
 
-# Determine REPO_NAME
+# Determine REPO_NAME.
 if [ $VERSION = master ]; then
     REPO_NAME=master
+    NETWORKING_CALICO_CHECKOUT=master
+    FELIX_CHECKOUT=master
 elif [[ $VERSION =~ ^v([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
     MAJOR=${BASH_REMATCH[1]}
     MINOR=${BASH_REMATCH[2]}
     PATCH=${BASH_REMATCH[3]}
     REPO_NAME=calico-${MAJOR}.${MINOR}
+    NETWORKING_CALICO_CHECKOUT=${MAJOR}.${MINOR}.${PATCH}
+    FELIX_CHECKOUT=v${MAJOR}.${MINOR}.${PATCH}
 else
     echo "ERROR: Unhandled VERSION \"${VERSION}\""
     exit 1
@@ -56,6 +60,7 @@ scriptdir=$(dirname $(realpath $0))
 
 # Include function library.
 . ${scriptdir}/lib.sh
+rootdir=`git_repo_root`
 
 # Check the PPA exists.
 wget -O /dev/null http://ppa.launchpad.net/project-calico/${REPO_NAME}/ubuntu/dists/bionic/main/source/Sources.gz || {
@@ -78,11 +83,41 @@ EOF
 # Create the RPM repo, if it doesn't already exist, on binaries.
 ensure_repo_exists ${REPO_NAME}
 
-# Build and publish networking-calico packages.
-make deb rpm
+# Decide target arch; by default the same as the native arch here.  We
+# conventionally say "amd64", where uname says "x86_64".
+ARCH=${ARCH:-`uname -m`}
+if [ $ARCH = x86_64 ]; then
+    ARCH=amd64
+fi
 
-# Publish Debian packages.
+# Build the docker images that we use for building for each target platform.
+pushd ${rootdir}/docker-build-images
+docker build -f ubuntu-trusty-build.Dockerfile.${ARCH} -t calico-build/trusty .
+docker build -f ubuntu-xenial-build.Dockerfile.${ARCH} -t calico-build/xenial .
+docker build -f ubuntu-bionic-build.Dockerfile.${ARCH} -t calico-build/bionic .
+docker build --build-arg=UID=`id -u` --build-arg=GID=`id -g` -f centos7-build.Dockerfile.${ARCH} -t calico-build/centos7 .
+popd
+if [ $ARCH = ppc64le ]; then
+    # Some commands that would typically be run at container build
+    # time must be run in a privileged container.
+    docker rm -f centos7Tmp
+    docker run --privileged --name=centos7Tmp calico-build/centos7 \
+	   /bin/bash -c "/setup-user; /install-centos-build-deps"
+    docker commit centos7Tmp calico-build/centos7:latest
+fi
+
+# Build networking-calico packages.
+pushd ${rootdir}
+rm -rf networking-calico
+NETWORKING_CALICO_REPO=${NETWORKING_CALICO_REPO:-https://opendev.org/openstack/networking-calico.git}
+git clone $NETWORKING_CALICO_REPO -b $NETWORKING_CALICO_CHECKOUT
+cd networking-calico
+../utils/make-packages deb rpm
+popd
+
+# Publish all packages.  Note, this includes updating the RPM repo
+# metadata.
+pushd ${rootdir}
 ./utils/publish-debs.sh
-
-# Publish RPMs.  Note, this includes updating the RPM repo metadata.
 ./utils/publish-rpms.sh
+popd

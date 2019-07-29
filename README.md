@@ -27,13 +27,11 @@ why.
 ## Status
 
 `make release-publish` exists but currently only builds and publishes
-packages for networking-calico master.
+packages for networking-calico.
 
 To do:
 
 -  Also build packages for Felix, etcd3gw and dnsmasq.
--  Implement `VERSION=vX.Y.Z` by adding code to build from those Felix
-   and networking-calico tags.
 -  If possible, automate new PPA creation (which is currently still a
    manual step).
 -  Perhaps support preparing a PPA/RPM repo for code that is still in
