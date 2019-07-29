@@ -1,13 +1,13 @@
 ---
 title: Install Calico node
-canonical_url: 'https://docs.projectcalico.org/v3.8/getting-started/kubernetes/installation/hardway/install-node'
+canonical_url: 'https://docs.projectcalico.org/master/getting-started/kubernetes/installation/hardway/install-node'
 ---
 
-The `calico-node` container runs 3 daemons
+The `calico-node` container runs three daemons
 
 - Felix, the {{site.prodname}} per-node daemon
 - BIRD, a daemon that speaks the BGP protocol to distribute routing information to other nodes
-- confd, a daemon that watches the {{site.prodname}} data store for config changes and updates BIRD's config files
+- confd, a daemon that watches the {{site.prodname}} datastore for config changes and updates BIRD's config files
 
 In this lab we configure and install `calico-node` as a DaemonSet.
 
@@ -49,7 +49,7 @@ Create the ServiceAccount that the `calico-node` container will run as
 kubectl create serviceaccount -n kube-system calico-node
 ```
 
-Provision a ClusterRole with permissions to read and modify {{site.prodname}} data store objects
+Provision a ClusterRole with permissions to read and modify {{site.prodname}} datastore objects
 
 ```
 kubectl apply -f - <<EOF 
@@ -329,5 +329,5 @@ calico-node-xlpkh   1/1     Running   0          9m12s
 
 ## Next
 
-[Configure BGP Peering](./configure-bgp-peering)
+[Configure BGP peering](./configure-bgp-peering)
 

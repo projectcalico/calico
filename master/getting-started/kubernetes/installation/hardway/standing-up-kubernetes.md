@@ -1,13 +1,13 @@
 ---
 title: Standing up Kubernetes
-canonical_url: 'https://docs.projectcalico.org/v3.8/getting-started/kubernetes/installation/hardway/standing-up-kubernetes'
+canonical_url: 'https://docs.projectcalico.org/master/getting-started/kubernetes/installation/hardway/standing-up-kubernetes'
 ---
 
-We will install {{site.prodname}} on a Kubernetes cluster. To demonstrate a highly available {{site.prodname}} control plane, we will use 5 nodes in this guide. This lab walks you through provisioning a Kubernetes cluster in AWS using Kubeadm.
+We will install {{site.prodname}} on a Kubernetes cluster. To demonstrate a highly available {{site.prodname}} control plane, we will use five nodes in this guide. This lab walks you through provisioning a Kubernetes cluster in AWS using kubeadm.
 
 ## Provision EC2 Nodes
 
-1. Provision 5 nodes
+1. Provision five nodes
     1. Ubuntu 18.04 LTS
     1. T2.medium
     1. Ensure the instances are in the same subnet, and security group policy allows them communicate freely with one another.
@@ -19,8 +19,8 @@ We will install {{site.prodname}} on a Kubernetes cluster. To demonstrate a high
 
 ## Install Kubernetes
 
-1. Install Kubeadm
-1. Choose 1 node as your Kubernetes master. On that node
+1. Install kubeadm
+1. Choose one node as your Kubernetes master. On that node
    `kubeadm init --pod-network-cidr=192.168.0.0/16`
 
    The Kubernetes `pod-network-cidr` is the IP prefix for all pods in the Kubernetes cluster. This range must not clash with other networks in your VPC.
@@ -36,4 +36,4 @@ We will install {{site.prodname}} on a Kubernetes cluster. To demonstrate a high
 
 ## Next
 
-[The Calico Data Store](./the-calico-data-store)
+[The Calico datastore](./the-calico-datastore)

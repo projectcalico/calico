@@ -1,6 +1,6 @@
 ---
-title: Configure IP Pools
-canonical_url: 'https://docs.projectcalico.org/v3.8/getting-started/kubernetes/installation/hardway/configure-ip-pools'
+title: Configure IP pools
+canonical_url: 'https://docs.projectcalico.org/master/getting-started/kubernetes/installation/hardway/configure-ip-pools'
 ---
 
 A *workload* is a container or VM that {{site.prodname}} handles the virtual networking for. In Kubernetes, workloads are Pods.
@@ -12,8 +12,8 @@ When we stood up the Kubernetes cluster, we set the Pod CIDR, which is the range
 the pods should be in.  Many Kubernetes components use this setting to determine if an IP belongs to a pod, so you
 normally want all IP Pools you configure to be subsets of the Pod CIDR.
 
-Let's define 2 IP Pools for use in this cluster.  You can have a production-ready {{site.prodname}} install with only a single
-pool, but we define 2 so that we can show advanced networking later in this guide.
+Let's define two IP Pools for use in this cluster.  You can have a production-ready {{site.prodname}} install with only a single
+pool, but we define two so that we can show advanced networking later in this guide.
 
 ```
 cat > pool1.yaml <<EOF

@@ -1,6 +1,6 @@
 ---
-title: Install CNI plugin
-canonical_url: 'https://docs.projectcalico.org/v3.8/getting-started/kubernetes/installation/hardway/install-cni-plugin'
+title: Install CNI Plugin
+canonical_url: 'https://docs.projectcalico.org/master/getting-started/kubernetes/installation/hardway/install-cni-plugin'
 ---
 
 Kubernetes uses the Container Networking Interface (CNI) to interact with networking providers like {{site.prodname}}.
@@ -10,7 +10,7 @@ on every node in the Kubernetes cluster.
 ## Provision K8s Account for the plug-in
 
 The CNI Plugin interacts with the Kubernetes APIServer while creating pods, both to obtain additional information
-and to update the data store with information about the pod.
+and to update the datastore with information about the pod.
 
 On the Kubernetes master node, create a key for the CNI Plugin to authenticate with and certificate signing request.
 
@@ -71,7 +71,7 @@ apiVersion: rbac.authorization.k8s.io/v1
 metadata:
   name: calico-cni
 rules:
-  # The CNI plugin needs to get pods, nodes, and namespaces.
+  # The CNI Plugin needs to get pods, nodes, and namespaces.
   - apiGroups: [""]
     resources:
       - pods
@@ -79,7 +79,7 @@ rules:
       - namespaces
     verbs:
       - get
-  # The CNI plugin patches pods/status.
+  # The CNI Plugin patches pods/status.
   - apiGroups: [""]
     resources:
       - pods/status

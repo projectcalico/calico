@@ -1,6 +1,6 @@
 ---
 title: Istio integration
-canonical_url: 'https://docs.projectcalico.org/v3.8/getting-started/kubernetes/installation/hardway/istio-integration'
+canonical_url: 'https://docs.projectcalico.org/master/getting-started/kubernetes/installation/hardway/istio-integration'
 ---
 
 {{site.prodname}} policy integrates with [Istio](https://istio.io) to allow you to write policies that enforce against
@@ -35,11 +35,11 @@ total 5.0M
 ```
 {: .no-select-button}
 
-## Enable Application Layer Policy
+## Enable application layer policy
 
 Your cluster is now ready to enable application layer policy, and you can do so using [the standard instructions](/{{page.version}}/getting-started/kubernetes/installation/app-layer-policy).
 
-## Test Application Layer Policy
+## Test application layer policy
 
 You can test application layer policy by following the [Application Layer Policy tutorial](/{{page.version}}/security/app-layer-policy/).
 

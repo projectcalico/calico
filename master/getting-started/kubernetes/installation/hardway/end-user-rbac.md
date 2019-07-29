@@ -1,12 +1,12 @@
 ---
 title: End user RBAC
-canonical_url: 'https://docs.projectcalico.org/v3.8/getting-started/kubernetes/installation/hardway/end-user-rbac'
+canonical_url: 'https://docs.projectcalico.org/master/getting-started/kubernetes/installation/hardway/end-user-rbac'
 ---
 
-In this lab we will set up Role-Based Access Control (RBAC) suitable for running the cluster in production. We will
+In this lab we will set up role-based access control (RBAC) suitable for running the cluster in production. We will
 cover roles for using Calico.  General RBAC for a production Kubernetes cluster is beyond the scope of this lab.
 
-## Network Admin
+## Network admin
 
 A network admin is a person responsible for configuring and operating the Calico network as a whole. As such, they
 will need access to all Calico custom resources, as well as some associated Kubernetes resources.
@@ -150,7 +150,7 @@ Delete the GlobalNetworkSet
 KUBECONFIG=./nik.kubeconfig calicoctl delete globalnetworkset niks-set
 ```
 
-## Service Owner
+## Service owner
 
 A service owner is a person responsible for operating one or more services in Kubernetes. They should be able to define
 network policy for their service, but don't need to view or modify any global configuration related to Calico.
@@ -176,7 +176,7 @@ rules:
 EOF
 ```
 
-To test out the service owner role, we'll create a user named Sam grant them the role.
+To test out the service owner role, we'll create a user named Sam and grant them the role.
 
 On the Kubernetes master node, create the key and certificate signing request.
 
@@ -287,4 +287,4 @@ KUBECONFIG=./sam.kubeconfig calicoctl delete networkset sams-set -n sam
 
 ## Next
 
-[Istio Integration](./istio-integration)
+[Istio integration](./istio-integration)

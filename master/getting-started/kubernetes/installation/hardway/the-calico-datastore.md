@@ -1,37 +1,39 @@
 ---
-title: The Calico data store
-canonical_url: 'https://docs.projectcalico.org/v3.8/getting-started/kubernetes/installation/hardway/the-calico-data-store'
+title: The Calico datastore
+canonical_url: 'https://docs.projectcalico.org/master/getting-started/kubernetes/installation/hardway/the-calico-datastore'
 ---
 
-{{site.prodname}} stores the data about the operational and configuration state of your cluster in a central data store. If the data store is unavailable
+{{site.prodname}} stores the data about the operational and configuration state of your cluster in a central datastore. If the datastore is unavailable
 your {{site.prodname}} network continues operating, but cannot be updated (no new pods can be networked, no policy changes can be applied, etc.).
 
-{{site.prodname}} has two data store drivers you can choose from
+{{site.prodname}} has two datastore drivers you can choose from
 
 - **etcd** - for direct connection to an etcd cluster 
 - **Kubernetes** - for connection to a Kubernetes API Server
 
-## Using Kubernetes as the data store
+## Using Kubernetes as the datastore
 
-This guide uses the Kubernetes data store driver. The advantages of this driver when using {{site.prodname}} on Kubernetes are
+This guide uses the Kubernetes API datastore driver. The advantages of this driver when using {{site.prodname}} on Kubernetes are
 
-- Doesn't require an extra data store, so is simpler to manage
+- Doesn't require an extra datastore, so is simpler to manage
 - You can use Kubernetes RBAC to control access to {{site.prodname}} resources
 - You can use Kubernetes audit logging to generate audit logs of changes to {{site.prodname}} resources
 
 For completeness, the advantages of the etcd driver are
 
 - Allows you to run {{site.prodname}} on non-Kubernetes platforms (e.g. OpenStack)
-- Allows separation of concerns between Kubernetes and {{site.prodname}} resources, for example allowing you to scale the data stores independently
+- Allows separation of concerns between Kubernetes and {{site.prodname}} resources, for example allowing you to scale the datastores independently
+- Allows you to run a {{site.prodname}} cluster that contains more than just a single Kubernetes cluster, for example, bare metal servers with {{site.prodname}}
+  host protection interworking with a Kubernetes cluster; or multiple Kubernetes clusters.
 
 ## Custom Resources
 
-When using the Kubernetes data store driver, most {{site.prodname}} resources are stored as 
+When using the Kubernetes API datastore driver, most {{site.prodname}} resources are stored as 
 [Kubernetes custom resources](https://kubernetes.io/docs/concepts/extend-kubernetes/api-extension/custom-resources/).
 
 A few {{site.prodname}} resources are not stored as custom resources and instead are backed by corresponding native Kubernetes resources. For example, [Workload Endpoints](/{{page.version}}/reference/resources/workloadendpoint) are Kubernetes Pods.
 
-In order to use Kubernetes as the {{site.prodname}} data store, we need to define the custom resources {{site.prodname}} uses.
+In order to use Kubernetes as the {{site.prodname}} datastore, we need to define the custom resources {{site.prodname}} uses.
 
 Download and examine the list of {{site.prodname}} Custom Resource Definitions, and open it in a file editor.
 
@@ -47,7 +49,7 @@ kubectl apply -f crds.yaml
 
 ## calicoctl
 
-To interact directly with the {{site.prodname}} data store, use the `calicoctl` client tool.
+To interact directly with the {{site.prodname}} datastore, use the `calicoctl` client tool.
 
 ### Install
 
@@ -71,7 +73,7 @@ To interact directly with the {{site.prodname}} data store, use the `calicoctl` 
 
 ### Test
 
-Verify `calicoctl` can reach your data store by running
+Verify `calicoctl` can reach your datastore by running
 
 ```
 calicoctl get nodes
@@ -106,4 +108,4 @@ NAME   CIDR   SELECTOR
 
 ## Next
 
-[Configure IP Pools](./configure-ip-pools)
+[Configure IP pools](./configure-ip-pools)

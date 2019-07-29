@@ -1,13 +1,13 @@
 ---
 title: Test networking
-canonical_url: 'https://docs.projectcalico.org/v3.8/getting-started/kubernetes/installation/hardway/test-networking'
+canonical_url: 'https://docs.projectcalico.org/master/getting-started/kubernetes/installation/hardway/test-networking'
 ---
 
 In this lab we will test the {{site.prodname}} cluster to demonstrate networking is working correctly.
 
 ## Pod to pod pings
 
-Create 3 busybox instances
+Create three busybox instances
 
 ```
 kubectl run pingtest --image=busybox --replicas=3 -- sleep infinity
@@ -29,7 +29,7 @@ pingtest-b4b6f8cf-rn9nm   1/1     Running   0          3m28s   192.168.60.64    
 ```
 {: .no-select-button}
 
-Note the IP addresses of the second 2 pods, then exec into the first one. For example
+Note the IP addresses of the second two pods, then exec into the first one. For example
 
 ```
 kubectl exec -ti pingtest-b4b6f8cf-b5z78 sh
@@ -77,7 +77,7 @@ pod is scheduled on, as expected.
 
 ## IPAM allocations from different pools
 
-Recall that we created 2 IPPools, but left one disabled.
+Recall that we created two IPPools, but left one disabled.
 
 ```
 calicoctl get ippools -o wide
@@ -172,4 +172,4 @@ kubectl delete pod pingtest-pool2
 
 ## Next
 
-[Test Network Policy](./test-network-policy)
+[Test network policy](./test-network-policy)

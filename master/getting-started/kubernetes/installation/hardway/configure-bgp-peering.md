@@ -1,6 +1,6 @@
 ---
 title: Configure BGP peering
-canonical_url: 'https://docs.projectcalico.org/v3.8/getting-started/kubernetes/installation/hardway/configure-bgp-peering'
+canonical_url: 'https://docs.projectcalico.org/master/getting-started/kubernetes/installation/hardway/configure-bgp-peering'
 ---
 
 We have configured {{site.prodname}} to distribute routing information over the
@@ -42,7 +42,7 @@ No IPv6 peers found.
 ```
 {: .no-select-button}
 
-Notice there are 4 BGP sessions, one to each other node in the cluster. In a small cluster, this
+Notice there are four BGP sessions, one to each other node in the cluster. In a small cluster, this
 works well and is highly resilient. However, the total number of BGP sessions scales as the square
 of the number of nodes, and in a large cluster this creates a lot of overhead.
 
@@ -53,12 +53,12 @@ if BGP sessions scales linearly with the number of nodes.
 
 ## Choose and label nodes
 
-We will establish 3 route reflectors, which means we avoid a single point of failure even if we take down
-a route reflector node for maintenance. In a 5 node cluster that means that only one BGP session is not
-needed, since the 2 non-reflector nodes don't need to peer with one another, but it will save lots of overhead
+We will establish three route reflectors, which means we avoid a single point of failure even if we take down
+a route reflector node for maintenance. In a five node cluster that means that only one BGP session is not
+needed, since the two non-reflector nodes don't need to peer with one another, but it will save lots of overhead
 in a large cluster.
 
-Choose 3 nodes and perform the following for each of them.
+Choose three nodes and perform the following for each of them.
 
 Save the node YAML.
 
@@ -127,7 +127,7 @@ calicoctl create -f - << EOF
 EOF
 ```
 
-On a non-reflector node, you should now see only 3 peerings.
+On a non-reflector node, you should now see only three peerings.
 
 ```
 sudo calicoctl node status
@@ -154,4 +154,4 @@ No IPv6 peers found.
 
 ## Next
 
-[Test Networking](./test-networking)
+[Test networking](./test-networking)

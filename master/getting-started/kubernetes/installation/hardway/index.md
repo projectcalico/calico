@@ -1,6 +1,6 @@
 ---
-title: Calico the Hard Way
-canonical_url: 'https://docs.projectcalico.org/v3.8/getting-started/kubernetes/installation/hardway/'
+title: Calico the hard way
+canonical_url: 'https://docs.projectcalico.org/master/getting-started/kubernetes/installation/hardway/'
 ---
 
 This tutorial walks you through setting up {{site.prodname}} the hard way.
@@ -10,7 +10,7 @@ This tutorial walks you through setting up {{site.prodname}} the hard way.
 
 {{site.prodname}} the Hard Way is optimized for learning about how {{site.prodname}} works and what the other guides do “under the hood.”
 
-The name “{{site.prodname}} the Hard Way” is inspired by [Kubernetes the Hard Way](https://github.com/kelseyhightower/kubernetes-the-hard-way) by Kelsey Hightower.
+The name “{{site.prodname}} the hard way” is inspired by [Kubernetes the Hard Way](https://github.com/kelseyhightower/kubernetes-the-hard-way) by Kelsey Hightower.
 
 ## Target Audience
 This guide is for someone
@@ -25,7 +25,7 @@ This guide assumes proficiency with either AWS Web Console or CLI for provisioni
 
 The guide will help you install a cluster with the following {{site.prodname}} options
 
- - Kubernetes as the data store
+ - Kubernetes as the datastore
  - {{site.prodname}} CNI Plug-in, with BGP networking
  - {{site.prodname}} IP Address Management (IPAM)
  - No overlays
@@ -35,13 +35,13 @@ The guide will help you install a cluster with the following {{site.prodname}} o
 ## Labs
 
  1. [Standing up Kubernetes](./standing-up-kubernetes)
- 1. [The Calico Data Store](./the-calico-data-store)
- 1. [Configure IP Pools](./configure-ip-pools)
+ 1. [The Calico datastore](./the-calico-datastore)
+ 1. [Configure IP pools](./configure-ip-pools)
  1. [Install CNI Plugin](./install-cni-plugin)
  1. [Install Typha](./install-typha)
  1. [Install {{site.prodname}} Node](./install-node)
- 1. [Configure BGP Peering](./configure-bgp-peering)
- 1. [Test Networking](./test-networking)
- 1. [Test Network Policy](./test-network-policy)
+ 1. [Configure BGP peering](./configure-bgp-peering)
+ 1. [Test networking](./test-networking)
+ 1. [Test network policy](./test-network-policy)
  1. [End user RBAC](./end-user-rbac)
- 1. [Istio Integration](./istio-integration)
+ 1. [Istio integration](./istio-integration)

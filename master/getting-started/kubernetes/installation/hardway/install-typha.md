@@ -1,6 +1,6 @@
 ---
 title: Install Typha
-canonical_url: 'https://docs.projectcalico.org/v3.8/getting-started/kubernetes/installation/hardway/install-typha'
+canonical_url: 'https://docs.projectcalico.org/master/getting-started/kubernetes/installation/hardway/install-typha'
 ---
 
 **Typha** sits between the Kubernetes API server and per-node daemons like **Felix** and **confd**.  It watches the
@@ -63,7 +63,7 @@ Create a ServiceAccount that will be used to run Typha.
 kubectl create serviceaccount -n kube-system calico-typha
 ```
 
-Define a ClusterRole for Typha with permission to watch {{site.prodname}} data store objects.
+Define a ClusterRole for Typha with permission to watch {{site.prodname}} datastore objects.
 
 ```
 kubectl apply -f - <<EOF 
@@ -233,7 +233,7 @@ EOF
 We set `TYPHA_CLIENTCN` to `calico-felix` which is the common name we will use on the certificate Felix will use in the
 next lab.
 
-Verify Typha is up an running with 3 instances
+Verify Typha is up an running with three instances
 
 ```
 kubectl get pods -l k8s-app=calico-typha -n kube-system
