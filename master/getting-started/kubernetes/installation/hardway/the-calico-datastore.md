@@ -9,7 +9,7 @@ your {{site.prodname}} network continues operating, but cannot be updated (no ne
 {{site.prodname}} has two datastore drivers you can choose from
 
 - **etcd** - for direct connection to an etcd cluster 
-- **Kubernetes** - for connection to a Kubernetes API Server
+- **Kubernetes** - for connection to a Kubernetes API server
 
 ## Using Kubernetes as the datastore
 

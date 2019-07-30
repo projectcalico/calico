@@ -7,9 +7,9 @@ Kubernetes uses the Container Network Interface (CNI) to interact with networkin
 The {{site.prodname}} binary that presents this API to Kubernetes is called the **CNI plugin** and must be installed
 on every node in the Kubernetes cluster.
 
-## Provision K8s Account for the plug-in
+## Provision Kubernetes user account for the plugin
 
-The CNI plugin interacts with the Kubernetes APIServer while creating pods, both to obtain additional information
+The CNI plugin interacts with the Kubernetes API server while creating pods, both to obtain additional information
 and to update the datastore with information about the pod.
 
 On the Kubernetes master node, create a key for the CNI plugin to authenticate with and certificate signing request.
@@ -34,7 +34,7 @@ sudo openssl x509 -req -in cni.csr \
 sudo chown ubuntu:ubuntu cni.crt
 ```
 
-Next, we create a kubeconfig file for the CNI.
+Next, we create a kubeconfig file for the CNI plugin to use to access Kubernetes.
 
 ```
 APISERVER=$(kubectl config view -o jsonpath='{.clusters[0].cluster.server}')
@@ -147,7 +147,6 @@ chmod 600 /etc/cni/net.d/calico-kubeconfig
 
 Write the CNI configuration
 ```
-NODENAME=$(hostname)
 cat > /etc/cni/net.d/10-calico.conflist <<EOF
 {
   "name": "k8s-pod-network",
@@ -157,7 +156,6 @@ cat > /etc/cni/net.d/10-calico.conflist <<EOF
       "type": "calico",
       "log_level": "info",
       "datastore_type": "kubernetes",
-      "nodename": "$NODENAME",
       "mtu": 1500,
       "ipam": {
           "type": "calico-ipam"
