@@ -325,10 +325,11 @@ func (d *restoreCmd) Run() error {
 
 			// If the first arg after the chain name is a line number, then insert by line number.
 			if lineNum, err := strconv.Atoi(parts[2]); err == nil {
-				lineNum = lineNum - 1 // 0-indexed
-				copy(chain[lineNum+1:], chain[lineNum:])
-				chain[lineNum] = rest
-				d.Dataplane.ChainMods.Add(chainMod{name: chainName, ruleNum: lineNum + 1})
+				ruleIdx := lineNum - 1 // 0-indexed
+				chain = append(chain, "")
+				copy(chain[ruleIdx+1:], chain[ruleIdx:])
+				chain[ruleIdx] = rest
+				d.Dataplane.ChainMods.Add(chainMod{name: chainName, ruleNum: lineNum})
 			} else {
 				// Otherwise insert at the top.
 				for i := len(chain) - 1; i > 0; i-- {
@@ -353,8 +354,8 @@ func (d *restoreCmd) Run() error {
 
 			// If second arg is numeric, this is a delete by line number.
 			if ruleNum, err := strconv.Atoi(parts[2]); err == nil {
-				Expect(parts).To(HaveLen(3), "calico chain: expected a delete-by-number '--delete '")
-				Expect(chainName).To(HavePrefix("cali"), "deleting non-calico chain by number can cause races")
+				Expect(parts).To(HaveLen(3), "Unexpected argument after rule position in --delete")
+				Expect(chainName).To(HavePrefix("cali"), "Deleting rule from non-calico chain by number can cause races")
 
 				ruleIdx := ruleNum - 1 // 0-indexed array index of rule.
 				chain := chains[chainName]

@@ -515,14 +515,14 @@ func describeEmptyDataplaneTests(dataplaneMode string) {
 			BeforeEach(func() {
 				dataplane.InsertRandomRuleInForward = true
 				table.SetRuleInsertions("FORWARD", []Rule{
-					{Action: DropAction{}},
+					{Action: DropAction{}, Comment: "new drop rule"},
 				})
 				table.Apply()
 			})
 			It("should be updated", func() {
 				Expect(dataplane.Chains).To(Equal(map[string][]string{
 					"FORWARD": {
-						"-m comment --comment \"cali:hecdSCslEjdBPBPo\" --jump DROP",
+						"-m comment --comment \"cali:67cGS74-1PBXlOtK\" -m comment --comment \"new drop rule\" --jump DROP",
 						"-j randomly-inserted-rule",
 					},
 					"INPUT":  {},

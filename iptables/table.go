@@ -1035,11 +1035,6 @@ func (t *Table) applyUpdates() error {
 			if previousHashes[i] != "" {
 				line := t.renderDeleteByValueLine(chainName, i)
 				buf.WriteLine(line)
-
-				// Empty out the rule, if it exists.
-				if i < len(newRules) {
-					newRules[i] = ""
-				}
 			}
 		}
 
