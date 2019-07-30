@@ -13,32 +13,32 @@ In this lab we configure and install `calico/node` as a DaemonSet.
 
 ## Provision Certificates
 
-Create the key Felix will use to authenticate with Typha and the certificate signing request (CSR)
+Create the key `calico/node` will use to authenticate with Typha and the certificate signing request (CSR)
 ```
 openssl req -newkey rsa:4096 \
-           -keyout felix.key \
+           -keyout calico-node.key \
            -nodes \
-           -out felix.csr \
-           -subj "/CN=calico-felix"
+           -out calico-node.csr \
+           -subj "/CN=calico-node"
 ```
 
-The certificate presents the Common Name (CN) as `calico-felix`, which is what we configured Typha to accept
+The certificate presents the Common Name (CN) as `calico-node`, which is what we configured Typha to accept
 in the last lab.
 
 Sign the Felix certificate with the CA we created earlier
 ```
-openssl x509 -req -in felix.csr \
+openssl x509 -req -in calico-node.csr \
                   -CA typhaca.crt \
                   -CAkey typhaca.key \
                   -CAcreateserial \
-                  -out felix.crt \
+                  -out calico-node.crt \
                   -days 365
 ```
 
-Store the Felx key and certificate in a Secret that Felix will access
+Store the key and certificate in a Secret that `calico/node` will access
 
 ```
-kubectl create secret generic -n kube-system calico-felix-certs --from-file=felix.key --from-file=felix.crt
+kubectl create secret generic -n kube-system calico-node-certs --from-file=calico-node.key --from-file=calico-node.crt
 ```
 
 ## Provision RBAC
@@ -235,10 +235,10 @@ spec:
               value: calico-typha
             # Location of the client certificate for connecting to Typha; volume mount
             - name: FELIX_TYPHACERTFILE
-              value: /calico-felix-certs/felix.crt
+              value: /calico-node-certs/calico-node.crt
             # Location of the client certificate key for connecting to Typha; volume mount
             - name: FELIX_TYPHAKEYFILE
-              value: /calico-felix-certs/felix.key
+              value: /calico-node-certs/calico-node.key
           securityContext:
             privileged: true
           resources:
@@ -277,8 +277,8 @@ spec:
             - mountPath: "/calico-typha-ca"
               name: calico-typha-ca
               readOnly: true
-            - mountPath: /calico-felix-certs
-              name: calico-felix-certs
+            - mountPath: /calico-node-certs
+              name: calico-node-certs
               readOnly: true
       volumes:
         # Used by calico-node.
@@ -303,9 +303,9 @@ spec:
         - name: calico-typha-ca
           configMap:
             name: calico-typha-ca
-        - name: calico-felix-certs
+        - name: calico-node-certs
           secret:
-            secretName: calico-felix-certs
+            secretName: calico-node-certs
 EOF
 ```
 

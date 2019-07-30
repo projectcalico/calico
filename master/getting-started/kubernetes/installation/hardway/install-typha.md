@@ -3,14 +3,14 @@ title: Install Typha
 canonical_url: 'https://docs.projectcalico.org/master/getting-started/kubernetes/installation/hardway/install-typha'
 ---
 
-**Typha** sits between the Kubernetes API server and per-node daemons like **Felix** and **confd**.  It watches the
-Kubernetes resources and {{site.prodname}} custom resources used by these daemons, and whenever a resource changes
+**Typha** sits between the Kubernetes API server and per-node daemons like **Felix** and **confd** (running in `calico/node`).
+It watches the Kubernetes resources and {{site.prodname}} custom resources used by these daemons, and whenever a resource changes
 it fans out the update to the daemons. This reduces the number of watches the Kubernetes API server needs to serve
 and improves scalability of the cluster.
 
 ## Provision Certificates
 
-We will use mutually authenticated TLS to ensure that Felix and Typha communicate securely. In this section, we generate a 
+We will use mutually authenticated TLS to ensure that `calico/node` and Typha communicate securely. In this section, we generate a 
 Certificate Authority (CA) and use it to sign a certificate for Typha.
 
 Create the CA certificate and key
@@ -23,7 +23,7 @@ openssl req -x509 -newkey rsa:4096 \
                   -days 365
 ```
 
-Store the CA certificate in a ConfigMap that Typha & Felix will access.
+Store the CA certificate in a ConfigMap that Typha & `calico/node` will access.
 ```
 kubectl create configmap -n kube-system calico-typha-ca --from-file=typhaca.crt
 ```
@@ -37,7 +37,7 @@ openssl req -newkey rsa:4096 \
            -subj "/CN=calico-typha"
 ```
 
-The certificate presents the Common Name (CN) as `calico-typha`. Felix will be configured to verify this name.
+The certificate presents the Common Name (CN) as `calico-typha`. `calico/node` will be configured to verify this name.
 
 Sign the Typha certificate with the CA
 ```
@@ -130,7 +130,7 @@ kubectl create clusterrolebinding calico-typha --clusterrole=calico-typha --serv
 
 ## Install Deployment
 
-Since Typha is required by Felix, and Felix establishes the pod network, we run Typha as a host networked pod to avoid
+Since Typha is required by `calico/node`, and `calico/node` establishes the pod network, we run Typha as a host networked pod to avoid
 a chicken-and-egg problem.  We run 3 replicas of Typha so that even during a rolling update, a single failure does not
 make Typha unavailable.
 
@@ -188,12 +188,12 @@ spec:
             value: "kubernetes"
           - name: TYPHA_HEALTHENABLED
             value: "true"
-          # Location of the CA bundle Typha uses to authenticate Felix; volume mount
+          # Location of the CA bundle Typha uses to authenticate calico/node; volume mount
           - name: TYPHA_CAFILE
             value: /calico-typha-ca/typhaca.crt
-          # Common name on the Felix certificate
+          # Common name on the calico/node certificate
           - name: TYPHA_CLIENTCN
-            value: calico-felix
+            value: calico-node
           # Location of the server certificate for Typha; volume mount
           - name: TYPHA_SERVERCERTFILE
             value: /calico-typha-certs/typha.crt
@@ -230,7 +230,7 @@ spec:
 EOF
 ```
 
-We set `TYPHA_CLIENTCN` to `calico-felix` which is the common name we will use on the certificate Felix will use in the
+We set `TYPHA_CLIENTCN` to `calico-node` which is the common name we will use on the certificate `calico/node` will use in the
 next lab.
 
 Verify Typha is up an running with three instances
@@ -251,7 +251,7 @@ calico-typha-66498ddfbd-scckd   1/1     Running   0          62s
 
 ## Install Service
 
-Felix uses a Kubernetes Service to get load-balanced access to Typha.
+`calico/node` uses a Kubernetes Service to get load-balanced access to Typha.
 
 ```
 kubectl apply -f - <<EOF
@@ -310,7 +310,7 @@ curl: (35) error:14094412:SSL routines:ssl3_read_bytes:sslv3 alert bad certifica
 {: .no-select-button}
 
 This demonstrates that Typha is presenting its TLS certificate and rejecting our connection because we do not present a certificate.
-In the next lab we will deploy Felix with a certificate Typha will accept.
+In the next lab we will deploy `calico/node` with a certificate Typha will accept.
 
 ## Next
 
