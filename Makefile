@@ -226,7 +226,7 @@ GINKGO_ARGS		:= -mod=vendor
 
 # Allow libcalico-go and the ssh auth sock to be mapped into the build container.
 ifdef LIBCALICOGO_PATH
-  EXTRA_DOCKER_ARGS += -v $(LIBCALICOGO_PATH):/go/src/github.com/projectcalico/libcalico-go:ro
+  EXTRA_DOCKER_ARGS += -v $(LIBCALICOGO_PATH):/github.com/projectcalico/libcalico-go:ro
 endif
 ifdef SSH_AUTH_SOCK
   EXTRA_DOCKER_ARGS += -v $(SSH_AUTH_SOCK):/ssh-agent --env SSH_AUTH_SOCK=/ssh-agent
@@ -592,12 +592,12 @@ check-packr: bpf/packrd/packed-packr.go
 		false; \
 	fi
 
+SOURCE_DIRS := "./bpf/ ./buildinfo/ ./calc/ ./check-licenses/ ./cmd/ ./config/ ./conntrack/ ./daemon/ ./dataplane/ ./dispatcher/ ./fv/ ./hashutils/ ./ifacemonitor/ ./ip/ ./ipsets/ ./iptables/ ./jitter/ ./k8sfv/ ./labelindex/ ./logutils/ ./markbits/ ./multidict/ ./policysync/ ./proto/ ./routetable/ ./rules/ ./statusrep/ ./stringutils/ ./testutils/ ./throttle/ ./usagerep/ ./versionparse/"
+
 # Run go fmt on all our go files.
 .PHONY: go-fmt goimports fix
 fix go-fmt goimports:
-	$(DOCKER_RUN) $(CALICO_BUILD) sh -c 'glide nv -x | \
-	      grep -v -e "^\\.$$" | \
-	      xargs goimports -w -local github.com/projectcalico/'
+	$(DOCKER_RUN) $(CALICO_BUILD) sh -c 'echo $(SOURCE_DIRS) | xargs goimports -w -local github.com/projectcalico/'
 
 .PHONY: check-typha-pins
 check-typha-pins: vendor/.up-to-date
@@ -645,7 +645,7 @@ ut combined.coverprofile: vendor/.up-to-date $(SRC_FILES)
 fv/fv.test: vendor/.up-to-date $(SRC_FILES)
 	# We pre-build the FV test binaries so that we can run them
 	# outside a container and allow them to interact with docker.
-	$(DOCKER_RUN) $(LOCAL_BUILD_MOUNTS) $(CALICO_BUILD) go test ./$(shell dirname $@) -c --tags fvtests -mod=vendor -o $@
+	$(DOCKER_RUN) $(LOCAL_BUILD_MOUNTS) $(CALICO_BUILD) go test -mod=vendor ./$(shell dirname $@) -c --tags fvtests -o $@
 
 .PHONY: fv
 # runs all of the fv tests
