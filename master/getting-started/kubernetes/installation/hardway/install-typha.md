@@ -314,4 +314,4 @@ In the next lab we will deploy Felix with a certificate Typha will accept.
 
 ## Next
 
-[Install {{site.prodname}} Node](./install-node)
+[Install calico/node](./install-node)

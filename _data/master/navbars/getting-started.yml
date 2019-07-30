@@ -46,11 +46,11 @@ toc:
         path: /getting-started/kubernetes/installation/hardway/the-calico-datastore
       - title: Configure IP pools
         path: /getting-started/kubernetes/installation/hardway/configure-ip-pools
-      - title: Install CNI Plugin
+      - title: Install CNI plugin
         path: /getting-started/kubernetes/installation/hardway/install-cni-plugin
       - title: Install Typha
         path: /getting-started/kubernetes/installation/hardway/install-typha
-      - title: Install Calico Node
+      - title: Install calico/node
         path: /getting-started/kubernetes/installation/hardway/install-node
       - title: Configure BGP peering
         path: /getting-started/kubernetes/installation/hardway/configure-bgp-peering

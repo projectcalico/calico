@@ -1,18 +1,18 @@
 ---
-title: Install CNI Plugin
+title: Install CNI plugin
 canonical_url: 'https://docs.projectcalico.org/master/getting-started/kubernetes/installation/hardway/install-cni-plugin'
 ---
 
-Kubernetes uses the Container Networking Interface (CNI) to interact with networking providers like {{site.prodname}}.
-The {{site.prodname}} binary that presents this API to Kubernetes is called the **CNI Plugin** and must be installed
+Kubernetes uses the Container Network Interface (CNI) to interact with networking providers like {{site.prodname}}.
+The {{site.prodname}} binary that presents this API to Kubernetes is called the **CNI plugin** and must be installed
 on every node in the Kubernetes cluster.
 
 ## Provision K8s Account for the plug-in
 
-The CNI Plugin interacts with the Kubernetes APIServer while creating pods, both to obtain additional information
+The CNI plugin interacts with the Kubernetes APIServer while creating pods, both to obtain additional information
 and to update the datastore with information about the pod.
 
-On the Kubernetes master node, create a key for the CNI Plugin to authenticate with and certificate signing request.
+On the Kubernetes master node, create a key for the CNI plugin to authenticate with and certificate signing request.
 
 ```
 openssl req -newkey rsa:4096 \
@@ -62,7 +62,7 @@ Copy this `cni.kubeconfig` file to every node in the cluster.
 
 ## Provision RBAC
 
-Define a ClusterRole the CNI Plugin will use to access Kubernetes.
+Define a ClusterRole the CNI plugin will use to access Kubernetes.
 
 ```
 kubectl apply -f - <<EOF 
@@ -71,7 +71,7 @@ apiVersion: rbac.authorization.k8s.io/v1
 metadata:
   name: calico-cni
 rules:
-  # The CNI Plugin needs to get pods, nodes, and namespaces.
+  # The CNI plugin needs to get pods, nodes, and namespaces.
   - apiGroups: [""]
     resources:
       - pods
@@ -79,7 +79,7 @@ rules:
       - namespaces
     verbs:
       - get
-  # The CNI Plugin patches pods/status.
+  # The CNI plugin patches pods/status.
   - apiGroups: [""]
     resources:
       - pods/status
@@ -114,7 +114,7 @@ Bind the ClusterRole to the `calico-cni` account.
 kubectl create clusterrolebinding calico-cni --clusterrole=calico-cni --user=calico-cni
 ```
 
-## Install the plug in
+## Install the plugin
 
 Do these steps on each node in your cluster.
 
@@ -124,7 +124,7 @@ Run these commands as root.
 sudo su
 ```
 
-Install the CNI Plugin Binaries
+Install the CNI plugin Binaries
 
 ```
 curl -L -o /opt/cni/bin/calico https://github.com/projectcalico/cni-plugin/releases/download/v3.8.0/calico-amd64

@@ -3,16 +3,16 @@ title: Configure IP pools
 canonical_url: 'https://docs.projectcalico.org/master/getting-started/kubernetes/installation/hardway/configure-ip-pools'
 ---
 
-A *workload* is a container or VM that {{site.prodname}} handles the virtual networking for. In Kubernetes, workloads are Pods.
-A **Workload Endpoint** is the virtual network interface a workload uses to connect to the {{site.prodname}} network.
+A *workload* is a container or VM that {{site.prodname}} handles the virtual networking for. In Kubernetes, workloads are pods.
+A **workload endpoint** is the virtual network interface a workload uses to connect to the {{site.prodname}} network.
 
-**IP Pools** are ranges of IP addresses that {{site.prodname}} uses for **Workload Endpoints**.
+**IP pools** are ranges of IP addresses that {{site.prodname}} uses for **workload endpoints**.
 
 When we stood up the Kubernetes cluster, we set the Pod CIDR, which is the range of IP addresses Kubernetes thinks
 the pods should be in.  Many Kubernetes components use this setting to determine if an IP belongs to a pod, so you
-normally want all IP Pools you configure to be subsets of the Pod CIDR.
+normally want all IP pools you configure to be subsets of the Pod CIDR.
 
-Let's define two IP Pools for use in this cluster.  You can have a production-ready {{site.prodname}} install with only a single
+Let's define two IP pools for use in this cluster.  You can have a production-ready {{site.prodname}} install with only a single
 pool, but we define two so that we can show advanced networking later in this guide.
 
 ```
@@ -33,7 +33,7 @@ EOF
 The Pod CIDR was `192.168.0.0/16`.  The `/16` means 16 bits of a 32-bit IPv4 address is the fixed prefix, therefore
 16 bits are freely variable within the CIDR, or about 64K addresses.  For our first IPPool, we define the prefix
 `192.168.0.0/18`, leaving only 14 bits free, or about 16K addresses for pods.  This is enough for a very large
-Kubernetes cluster, and it still leaves a lot of room in the Pod CIDR if we want to create some more IP Pools.
+Kubernetes cluster, and it still leaves a lot of room in the Pod CIDR if we want to create some more IP pools.
 
 Let's define a second pool right now.
 
@@ -83,4 +83,4 @@ pool2   192.168.192.0/19   all()
 
 ## Next
 
-[Install CNI Plugin](./install-cni-plugin)
+[Install CNI plugin](./install-cni-plugin)

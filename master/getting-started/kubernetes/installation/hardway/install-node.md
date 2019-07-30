@@ -1,15 +1,15 @@
 ---
-title: Install Calico node
+title: Install calico/node
 canonical_url: 'https://docs.projectcalico.org/master/getting-started/kubernetes/installation/hardway/install-node'
 ---
 
-The `calico-node` container runs three daemons
+`calico/node` runs three daemons
 
 - Felix, the {{site.prodname}} per-node daemon
 - BIRD, a daemon that speaks the BGP protocol to distribute routing information to other nodes
 - confd, a daemon that watches the {{site.prodname}} datastore for config changes and updates BIRD's config files
 
-In this lab we configure and install `calico-node` as a DaemonSet.
+In this lab we configure and install `calico/node` as a DaemonSet.
 
 ## Provision Certificates
 
@@ -43,7 +43,7 @@ kubectl create secret generic -n kube-system calico-felix-certs --from-file=feli
 
 ## Provision RBAC
 
-Create the ServiceAccount that the `calico-node` container will run as
+Create the ServiceAccount that `calico/node` will run as
 
 ```
 kubectl create serviceaccount -n kube-system calico-node
@@ -135,7 +135,7 @@ kubectl create clusterrolebinding calico-node --clusterrole=calico-node --servic
 
 ## Install DaemonSet
 
-`calico-node` runs as a DaemonSet so that it is installed on every node in the cluster.
+`calico/node` runs as a DaemonSet so that it is installed on every node in the cluster.
 
 Create the DaemonSet
 
@@ -309,7 +309,7 @@ spec:
 EOF
 ```
 
-Verify that `calico-node` is running on each node in your cluster, and goes to Ready within a few minutes.
+Verify that `calico/node` is running on each node in your cluster, and goes to Ready within a few minutes.
 
 ```
 kubectl get pod -l k8s-app=calico-node -n kube-system
