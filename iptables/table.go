@@ -205,7 +205,8 @@ type Table struct {
 	// to what we calculate from chainToContents.
 	chainToDataplaneHashes map[string][]string
 
-	// chainToFullRules contains the full rules, mapped from chain name to slices of rules in that chain.
+	// chainToFullRules contains the full rules for any chains that we may be hooking into, mapped from chain name
+	// to slices of rules in that chain.
 	chainToFullRules map[string][]string
 
 	// hashCommentPrefix holds the prefix that we prepend to our rule-tracking hashes.
@@ -636,10 +637,12 @@ func (t *Table) expectedHashesForInsertChain(
 	return
 }
 
-// getHashesAndRulesFromDataplane loads the current state of our table and parses out the hashes that we
-// add to rules.  It returns a map with an entry for each chain in the table.  Each entry is a slice
-// containing the hashes for the rules in that table.  Rules with no hashes are represented by
-// an empty string.
+// getHashesAndRulesFromDataplane loads the current state of our table. It parses out the hashes that we
+// add to rules and, for chains that we insert into, the full rules. The 'hashes' map contains an entry for each chain
+// in the table. Each entry is a slice containing the hashes for the rules in that table. Rules with no hashes are
+// represented by an empty string. The 'rules' map contains an entry for each non-Calico chain in the table that
+// contains inserts. It is used to generate deletes using the full rule, rather than deletes by line number, to avoid
+// race conditions on chains we don't fully control.
 func (t *Table) getHashesAndRulesFromDataplane() (hashes map[string][]string, rules map[string][]string) {
 	retries := 3
 	retryDelay := 100 * time.Millisecond
@@ -714,9 +717,9 @@ func (t *Table) attemptToGetHashesAndRulesFromDataplane() (hashes map[string][]s
 }
 
 // readHashesAndRulesFrom scans the given reader containing iptables-save output for this table, extracting
-// our rule hashes.  Entries in the returned map are indexed by chain name.  For rules that we
-// wrote, the hash is extracted from a comment that we added to the rule.  For rules written by
-// previous versions of Felix, returns a dummy non-zero value.  For rules not written by Felix,
+// our rule hashes and, for all chains we insert into, the full rules.  Entries in the returned map are indexed by
+// chain name.  For rules that we wrote, the hash is extracted from a comment that we added to the rule.
+// For rules written by previous versions of Felix, returns a dummy non-zero value.  For rules not written by Felix,
 // returns a zero string.  Hence, the lengths of the returned values are the lengths of the chains
 // whether written by Felix or not.
 func (t *Table) readHashesAndRulesFrom(r io.ReadCloser) (hashes map[string][]string, rules map[string][]string, err error) {
@@ -1196,6 +1199,7 @@ func (t *Table) applyUpdates() error {
 			t.chainToDataplaneHashes[chainName] = hashes
 		}
 	}
+	t.chainToFullRules = newChainToFullRules
 
 	return nil
 }
