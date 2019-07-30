@@ -18,8 +18,6 @@ import (
 	"os/exec"
 	"strings"
 
-	"github.com/projectcalico/libcalico-go/lib/set"
-
 	. "github.com/projectcalico/felix/iptables"
 
 	. "github.com/onsi/ginkgo"
@@ -794,7 +792,6 @@ func describeDirtyDataplaneTests(appendMode bool, dataplaneMode string) {
 				InsertMode:               insertMode,
 				BackendMode:              dataplaneMode,
 				LookPathOverride:         lookPathNoLegacy,
-				TopLevelChainsOverride:   set.From("INPUT", "OUTPUT", "FORWARD", "PREROUTING", "POSTROUTING", "unexpected-insert"),
 			},
 		)
 	})
