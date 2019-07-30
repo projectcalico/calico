@@ -130,6 +130,13 @@ func (b *binder) addListener(uid string) {
 		log.Printf("failed to listen at %s %v", sockPath, err)
 		return
 	}
+	// We don't know the UID or GID of the pod process, so we need to make this
+	// accessible by anyone.
+	err = os.Chmod(sockPath, 0777)
+	if err != nil {
+		log.Printf("failed to set permissions at %s %v", sockPath, err)
+		return
+	}
 	w.listener = lis
 	b.workloads.store(uid, w)
 
