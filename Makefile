@@ -189,6 +189,8 @@ endif
 # Calculate a timestamp for any build artefacts.
 DATE:=$(shell date -u +'%FT%T%z')
 
+BUILD_FLAGS	:= -mod=vendor
+
 # Linker flags for building Felix.
 #
 # We use -X to insert the version information into the placeholder variables
@@ -307,7 +309,7 @@ bin/calico-felix-$(ARCH): $(SRC_FILES) vendor/.up-to-date
 	@echo Building felix for $(ARCH) on $(BUILDARCH)
 	mkdir -p bin
 	$(DOCKER_RUN) $(LOCAL_BUILD_MOUNTS) $(CALICO_BUILD) \
-	   sh -c 'go build -v -i -o $@ -v $(LDFLAGS) "$(PACKAGE_NAME)/cmd/calico-felix" && \
+	   sh -c 'go build -v -i -o $@ -v $(BUILD_FLAGS) $(LDFLAGS) "$(PACKAGE_NAME)/cmd/calico-felix" && \
 		( ldd $@ 2>&1 | grep -q -e "Not a valid dynamic program" \
 		-e "not a dynamic executable" || \
 		( echo "Error: $@ was not statically linked"; false ) )'
@@ -644,7 +646,7 @@ ut combined.coverprofile: vendor/.up-to-date $(SRC_FILES)
 fv/fv.test: vendor/.up-to-date $(SRC_FILES)
 	# We pre-build the FV test binaries so that we can run them
 	# outside a container and allow them to interact with docker.
-	$(DOCKER_RUN) $(LOCAL_BUILD_MOUNTS) $(CALICO_BUILD) go test -mod=vendor ./$(shell dirname $@) -c --tags fvtests -o $@
+	$(DOCKER_RUN) $(LOCAL_BUILD_MOUNTS) $(CALICO_BUILD) go test $(BUILD_FLAGS) ./$(shell dirname $@) -c --tags fvtests -o $@
 
 .PHONY: fv
 # runs all of the fv tests
@@ -719,7 +721,7 @@ k8sfv-test-existing-felix: bin/k8sfv.test
 bin/k8sfv.test: $(K8SFV_GO_FILES) vendor/.up-to-date
 	@echo Building $@...
 	$(DOCKER_RUN) $(LOCAL_BUILD_MOUNTS) $(CALICO_BUILD) \
-	    sh -c 'go test -c -mod=vendor -o $@ ./k8sfv && \
+	    sh -c 'go test -c $(BUILD_FLAGS) -o $@ ./k8sfv && \
 		( ldd $@ 2>&1 | grep -q -e "Not a valid dynamic program" \
 		-e "not a dynamic executable" || \
 		( echo "Error: $@ was not statically linked"; false ) )'
@@ -760,19 +762,19 @@ bin/iptables-locker: $(SRC_FILES) vendor/.up-to-date
 	@echo Building iptables-locker...
 	mkdir -p bin
 	$(DOCKER_RUN) $(LOCAL_BUILD_MOUNTS) $(CALICO_BUILD) \
-	    sh -c 'go build -v -i -o $@ -v $(LDFLAGS) "$(PACKAGE_NAME)/fv/iptables-locker"'
+	    sh -c 'go build -v -i -o $@ -v $(BUILD_FLAGS) $(LDFLAGS) "$(PACKAGE_NAME)/fv/iptables-locker"'
 
 bin/test-workload: $(SRC_FILES) vendor/.up-to-date
 	@echo Building test-workload...
 	mkdir -p bin
 	$(DOCKER_RUN) $(LOCAL_BUILD_MOUNTS) $(CALICO_BUILD) \
-	    sh -c 'go build -v -i -o $@ -v $(LDFLAGS) "$(PACKAGE_NAME)/fv/test-workload"'
+	    sh -c 'go build -v -i -o $@ -v $(BUILD_FLAGS) $(LDFLAGS) "$(PACKAGE_NAME)/fv/test-workload"'
 
 bin/test-connection: $(SRC_FILES) vendor/.up-to-date
 	@echo Building test-connection...
 	mkdir -p bin
 	$(DOCKER_RUN) $(LOCAL_BUILD_MOUNTS) $(CALICO_BUILD) \
-	    sh -c 'go build -v -i -o $@ -v $(LDFLAGS) "$(PACKAGE_NAME)/fv/test-connection"'
+	    sh -c 'go build -v -i -o $@ -v $(BUILD_FLAGS) $(LDFLAGS) "$(PACKAGE_NAME)/fv/test-connection"'
 
 ###############################################################################
 # CI/CD
