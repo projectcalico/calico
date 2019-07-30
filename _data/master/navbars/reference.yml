@@ -63,7 +63,7 @@ toc:
     - title: Host endpoints
       section:
         - title: Overview
-          path: /reference/resources/hostendpoint/host-endpoints/
+          path: /reference/resources/hostendpoint/host-endpoints
         - title: Creating policy for basic connectivity
           path: /reference/resources/hostendpoint/host-endpoints/connectivity
         - title: Creating host endpoint objects
