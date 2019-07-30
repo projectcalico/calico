@@ -724,6 +724,10 @@ func (t *Table) readHashesAndRulesFrom(r io.ReadCloser) (hashes map[string][]str
 	rules = map[string][]string{}
 	scanner := bufio.NewScanner(r)
 
+	// Keep track of whether the non-Calico chain has inserts. If the chain does not have inserts, we'll remove the
+	// full rules for that chain.
+	nonCalicoChainHasInserts := map[string]bool{}
+
 	// Figure out if debug logging is enabled so we can skip some WithFields() calls in the
 	// tight loop below if the log wouldn't be emitted anyway.
 	debug := log.GetLevel() >= log.DebugLevel
@@ -782,16 +786,24 @@ func (t *Table) readHashesAndRulesFrom(r io.ReadCloser) (hashes map[string][]str
 		}
 		hashes[chainName] = append(hashes[chainName], hash)
 
-		// Either we've explicitly inserted a rule into this chain or it's one of the top-level chains that we may have hooked.
-		// Store off the complete contents of the rules so that we can generate precise deletes later if we need to.
-		if _, ok := t.chainToInsertedRules[chainName]; ok {
+		// Not our chain so cache the full rule in case we need to generate deletes later on.
+		// After scanning the input, we prune any chains of full rules that do not contain inserts.
+		if !t.ourChainsRegexp.MatchString(chainName) {
 			fullRule := string(line)
 			rules[chainName] = append(rules[chainName], fullRule)
+			nonCalicoChainHasInserts[chainName] = true
 		}
 	}
 	if scanner.Err() != nil {
 		log.WithError(scanner.Err()).Error("Failed to read hashes from dataplane")
 		return nil, nil, scanner.Err()
+	}
+
+	// Remove full rules for the non-Calico chain if it does not have inserts.
+	for chainName, _ := range rules {
+		if hasInserts, ok := nonCalicoChainHasInserts[chainName]; ok && !hasInserts {
+			delete(rules, chainName)
+		}
 	}
 	t.logCxt.Debugf("Read hashes from dataplane: %#v", hashes)
 	t.logCxt.Debugf("Read rules from dataplane: %#v", rules)
