@@ -189,8 +189,6 @@ endif
 # Calculate a timestamp for any build artefacts.
 DATE:=$(shell date -u +'%FT%T%z')
 
-BUILD_FLAGS	:= -mod=vendor
-
 # Linker flags for building Felix.
 #
 # We use -X to insert the version information into the placeholder variables
@@ -224,6 +222,7 @@ LOCAL_USER_ID:=$(shell id -u)
 LOCAL_GROUP_ID:=$(shell id -g)
 
 EXTRA_DOCKER_ARGS	:= -e GO111MODULE=on
+BUILD_FLAGS		:= -mod=vendor
 GINKGO_ARGS		:= -mod=vendor
 
 # Allow libcalico-go and the ssh auth sock to be mapped into the build container.
