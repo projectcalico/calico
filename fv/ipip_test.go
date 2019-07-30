@@ -1,6 +1,6 @@
 // +build fvtests
 
-// Copyright (c) 2017-2018 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2019 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -31,6 +31,7 @@ import (
 
 	"github.com/projectcalico/felix/fv/containers"
 	"github.com/projectcalico/felix/fv/infrastructure"
+	"github.com/projectcalico/felix/fv/utils"
 	"github.com/projectcalico/felix/fv/workload"
 	"github.com/projectcalico/libcalico-go/lib/apiconfig"
 	api "github.com/projectcalico/libcalico-go/lib/apis/v3"
@@ -170,6 +171,50 @@ var _ = infrastructure.DatastoreDescribe("IPIP topology before adding host IPs t
 		})
 	})
 
+	Context("with all-interfaces host protection policy in place", func() {
+		BeforeEach(func() {
+			// Make sure our new host endpoints don't cut felix off from the datastore.
+			err := infra.AddAllowToDatastore("host-endpoint=='true'")
+			Expect(err).NotTo(HaveOccurred())
+
+			ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+			defer cancel()
+
+			for _, f := range felixes {
+				hep := api.NewHostEndpoint()
+				hep.Name = "all-interfaces-" + f.Name
+				hep.Labels = map[string]string{
+					"host-endpoint": "true",
+				}
+				hep.Spec.Node = f.Hostname
+				hep.Spec.ExpectedIPs = []string{f.IP}
+				hep.Spec.InterfaceName = "*"
+				_, err := client.HostEndpoints().Create(ctx, hep, options.SetOptions{})
+				Expect(err).NotTo(HaveOccurred())
+			}
+
+			policy := api.NewGlobalNetworkPolicy()
+			policy.Name = "allow-all-prednat"
+			order := float64(20)
+			policy.Spec.Order = &order
+			policy.Spec.PreDNAT = true
+			policy.Spec.ApplyOnForward = true
+			policy.Spec.Ingress = []api.Rule{{Action: api.Allow}}
+			policy.Spec.Selector = "has(host-endpoint)"
+			_, err = client.GlobalNetworkPolicies().Create(utils.Ctx, policy, utils.NoOptions)
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		It("should not block any traffic", func() {
+			// An all-interfaces host endpoint does not block any traffic by default.
+			cc.ExpectSome(felixes[0], hostW[1])
+			cc.ExpectSome(felixes[1], hostW[0])
+			cc.ExpectSome(w[0], w[1])
+			cc.ExpectSome(w[1], w[0])
+			cc.CheckConnectivity()
+		})
+	})
+
 	Context("after removing BGP address from nodes", func() {
 		// Simulate having a host send IPIP traffic from an unknown source, should get blocked.
 		BeforeEach(func() {
@@ -206,14 +251,18 @@ var _ = infrastructure.DatastoreDescribe("IPIP topology before adding host IPs t
 			defer cancel()
 			l, err := client.Nodes().List(ctx, options.ListOptions{})
 			Expect(err).NotTo(HaveOccurred())
-			// Now remove the BGP configuration from node 0
-			node := l.Items[0]
-			// save the old spec
-			prevBGPSpec := *node.Spec.BGP
-			node.Spec.BGP = nil
-			_, err = client.Nodes().Update(ctx, &node, options.SetOptions{})
-			Expect(err).NotTo(HaveOccurred())
-
+			// Now remove the BGP configuration for felixes[0]
+			var prevBGPSpec api.NodeBGPSpec
+			for _, node := range l.Items {
+				log.Infof("node: %v", node)
+				if node.Name == felixes[0].Name {
+					// save the old spec
+					prevBGPSpec = *node.Spec.BGP
+					node.Spec.BGP = nil
+					_, err = client.Nodes().Update(ctx, &node, options.SetOptions{})
+					Expect(err).NotTo(HaveOccurred())
+				}
+			}
 			// Removing the BGP config triggers a Felix restart. Wait for the ipset to be updated as a signal that Felix
 			// has restarted.
 			for _, f := range felixes {
@@ -228,7 +277,7 @@ var _ = infrastructure.DatastoreDescribe("IPIP topology before adding host IPs t
 				c, err := client.FelixConfigurations().Get(ctx, "default", options.GetOptions{})
 				Expect(err).NotTo(HaveOccurred())
 				c.Spec.ExternalNodesCIDRList = &[]string{addr, "1.1.1.1"}
-				log.WithFields(log.Fields{"felixconfiguration": c, "adding Addr": addr}).Info("Updataing FelixConfiguration ")
+				log.WithFields(log.Fields{"felixconfiguration": c, "adding Addr": addr}).Info("Updating FelixConfiguration ")
 				_, err = client.FelixConfigurations().Update(ctx, c, options.SetOptions{})
 				Expect(err).NotTo(HaveOccurred())
 			}
@@ -243,7 +292,7 @@ var _ = infrastructure.DatastoreDescribe("IPIP topology before adding host IPs t
 
 		It("should have all-hosts-net ipset configured with the external hosts and workloads connect", func() {
 			f := felixes[0]
-			// Add the ip route via tunnel back on the Felix for which we nuked when we removed it's BGP spec.
+			// Add the ip route via tunnel back on the Felix for which we nuked when we removed its BGP spec.
 			f.Exec("ip", "route", "add", w[1].IP, "via", felixes[1].IP, "dev", "tunl0", "onlink")
 			cc.ExpectSome(w[0], w[1])
 			cc.CheckConnectivity()

@@ -75,6 +75,10 @@ var _ = Describe("Constructor test", func() {
 			},
 			IPIPMTU:          configParams.IpInIpMtu,
 			HealthAggregator: healthAggregator,
+
+			LookPathOverride: func(file string) (string, error) {
+				return file, nil
+			},
 		}
 	})
 

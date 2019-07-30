@@ -54,3 +54,5 @@ int calico_sk_msg(struct sk_msg_md *msg)
 	// stack.
 	return SK_PASS;
 }
+
+char ____license[] __section("license")  = "Apache-2.0";

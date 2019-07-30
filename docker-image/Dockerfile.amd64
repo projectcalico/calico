@@ -19,13 +19,20 @@
 FROM calico/bpftool:v5.0-amd64 as bpftool
 
 FROM debian:9.8-slim
-LABEL maintainer "Shaun Crampton <shaun@tigera.io>"
+LABEL maintainer="Shaun Crampton <shaun@tigera.io>"
 
-# Install a backported version of iptables to ensure we have version 1.6.2
-# Similarly for iproute2, we want a more recent version for BPF support.
-RUN printf "deb http://deb.debian.org/debian stretch-backports main\n" > /etc/apt/sources.list.d/backports.list \
-    && apt-get update \
-    && apt-get -t stretch-backports install -y iptables iproute2
+# Set up a buster repo so that we can pull in backports of some packages.  Default to
+# the stable repo for other packages.  We need iptables 1.8.x for nftables compatibility.
+RUN echo 'APT::Default-Release "stable";' > /etc/apt/apt.conf.d/99defaultrelease
+RUN echo 'deb     http://ftp.debian.org/debian/    buster main contrib non-free' > /etc/apt/sources.list.d/buster.list
+RUN apt-get update && apt-get install -y -t buster \
+    ipset \
+    iptables \
+    iproute2
+
+# Default to the xtables backend of iptables.
+RUN update-alternatives --set iptables /usr/sbin/iptables-legacy
+RUN update-alternatives --set ip6tables /usr/sbin/ip6tables-legacy
 
 # Install remaining runtime deps required for felix from the global repository
 RUN apt-get update && apt-get install -y \

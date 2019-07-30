@@ -107,8 +107,10 @@ type Config struct {
 
 	MaxIPSetSize int
 
+	IptablesBackend                string
 	IPSetsRefreshInterval          time.Duration
 	RouteRefreshInterval           time.Duration
+	DeviceRouteSourceAddress       net.IP
 	IptablesRefreshInterval        time.Duration
 	IptablesPostWriteCheckInterval time.Duration
 	IptablesInsertMode             string
@@ -137,11 +139,9 @@ type Config struct {
 	XDPEnabled      bool
 	XDPAllowGeneric bool
 
-	SockmapEnabled bool
+	SidecarAccelerationEnabled bool
 
-	SockmapCgroupv2Subdir string
-
-	DeviceRouteSourceAddress net.IP
+	LookPathOverride func(file string) (string, error)
 }
 
 // InternalDataplane implements an in-process Felix dataplane driver based on iptables
@@ -270,6 +270,8 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		PostWriteInterval:     config.IptablesPostWriteCheckInterval,
 		LockTimeout:           config.IptablesLockTimeout,
 		LockProbeInterval:     config.IptablesLockProbeInterval,
+		BackendMode:           config.IptablesBackend,
+		LookPathOverride:      config.LookPathOverride,
 	}
 
 	// However, the NAT tables need an extra cleanup regex.
@@ -396,11 +398,11 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		// bpffs so there's nothing to clean up
 	}
 
-	if config.SockmapEnabled {
+	if config.SidecarAccelerationEnabled {
 		if err := bpf.SupportsSockmap(); err != nil {
 			log.WithError(err).Warn("Can't enable Sockmap acceleration.")
 		} else {
-			st, err := NewSockmapState(config.SockmapCgroupv2Subdir)
+			st, err := NewSockmapState()
 			if err != nil {
 				log.WithError(err).Warn("Can't enable Sockmap acceleration.")
 			} else {
@@ -418,7 +420,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	}
 
 	if dp.sockmapState == nil {
-		st, err := NewSockmapState(config.SockmapCgroupv2Subdir)
+		st, err := NewSockmapState()
 		if err == nil {
 			st.WipeSockmap(bpf.FindInBPFFSOnly)
 		}

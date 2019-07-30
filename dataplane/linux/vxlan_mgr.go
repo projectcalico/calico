@@ -304,6 +304,9 @@ func (m *vxlanManager) configureVXLANDevice(mtu int, localVTEP *proto.VXLANTunne
 			return fmt.Errorf("failed to delete interface: %v", err)
 		}
 		if err = netlink.LinkAdd(vxlan); err != nil {
+			if err == syscall.EEXIST {
+				log.Warnf("Failed to create VXLAN device. Another device with this VNI may already exist")
+			}
 			return fmt.Errorf("failed to create vxlan interface: %v", err)
 		}
 		link, err = netlink.LinkByName(vxlan.Name)

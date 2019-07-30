@@ -209,12 +209,12 @@ var _ = Describe("RouteTable", func() {
 				})
 				rt.Apply()
 				Expect(dataplane.routeKeyToRoute["6-10.0.0.6/32"]).To(Equal(netlink.Route{
-						LinkIndex: addLink.attrs.Index,
-						Dst:       mustParseCIDR("10.0.0.6/32"),
-						Type:      syscall.RTN_UNICAST,
-						Protocol:  syscall.RTPROT_BOOT,
-						Scope:     netlink.SCOPE_LINK,
-						Src:       deviceRouteSourceAddress,
+					LinkIndex: addLink.attrs.Index,
+					Dst:       mustParseCIDR("10.0.0.6/32"),
+					Type:      syscall.RTN_UNICAST,
+					Protocol:  syscall.RTPROT_BOOT,
+					Scope:     netlink.SCOPE_LINK,
+					Src:       deviceRouteSourceAddress,
 				}))
 			})
 			It("Should not remove routes with a source address", func() {

@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2018 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2019 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -36,7 +36,7 @@ const usage = `test-workload, test workload for Felix FV testing.
 If <interface-name> is "", the workload will start in the current namespace.
 
 Usage:
-  test-workload [--udp] <interface-name> <ip-address> <ports>
+  test-workload [--udp] [--namespace-path=<path>] [--sidecar-iptables] [--up-lo] <interface-name> <ip-address> <ports>
 `
 
 func main() {
@@ -51,12 +51,23 @@ func main() {
 	ipAddress := arguments["<ip-address>"].(string)
 	portsStr := arguments["<ports>"].(string)
 	udp := arguments["--udp"].(bool)
+	nsPath := ""
+	if arg, ok := arguments["--namespace-path"]; ok && arg != nil {
+		nsPath = arg.(string)
+	}
+	sidecarIptables := arguments["--sidecar-iptables"].(bool)
+	upLo := arguments["--up-lo"].(bool)
 	panicIfError(err)
 
 	ports := strings.Split(portsStr, ",")
 
 	var namespace ns.NetNS
-	if interfaceName != "" {
+	if nsPath != "" {
+		namespace, err = ns.GetNS(nsPath)
+		if err != nil {
+			log.WithError(err).WithField("namespace path", nsPath).Fatal("Failed to get netns from path")
+		}
+	} else if interfaceName != "" {
 		// Create a new network namespace for the workload.
 		attempts := 0
 		for {
@@ -201,6 +212,16 @@ func main() {
 
 	// Now listen on the specified ports in the workload namespace.
 	err = namespace.Do(func(_ ns.NetNS) error {
+		if upLo {
+			if err := utils.RunCommand("ip", "link", "set", "lo", "up"); err != nil {
+				return fmt.Errorf("failed to bring loopback up: %v", err)
+			}
+		}
+		if sidecarIptables {
+			if err := doSidecarIptablesSetup(); err != nil {
+				return fmt.Errorf("failed to setup sidecar-like iptables: %v", err)
+			}
+		}
 		if strings.Contains(ipAddress, ":") {
 			attempts := 0
 			for {
@@ -315,4 +336,25 @@ func writeProcSys(path, value string) error {
 		err = err1
 	}
 	return err
+}
+
+// doSidecarIptablesSetup generates some iptables rules to redirect a
+// traffic to localhost:15001. This is to simulate a sidecar.
+//
+// Commands are a very simplified version of commands from
+// https://github.com/istio/cni/blob/f1a08bef3f235de1ecb67074b741b0d4c5fd8c44/tools/deb/istio-iptables.sh
+func doSidecarIptablesSetup() error {
+	cmds := [][]string{
+		{"iptables", "-t", "nat", "-N", "FV_WL_REDIRECT"},
+		{"iptables", "-t", "nat", "-A", "FV_WL_REDIRECT", "-p", "tcp", "-j", "REDIRECT", "--to-port", "15001"},
+		{"iptables", "-t", "nat", "-N", "FV_WL_OUTPUT"},
+		{"iptables", "-t", "nat", "-A", "OUTPUT", "-p", "tcp", "-j", "FV_WL_OUTPUT"},
+		{"iptables", "-t", "nat", "-A", "FV_WL_OUTPUT", "!", "-d", "127.0.0.1/32", "-j", "FV_WL_REDIRECT"},
+	}
+	for _, cmd := range cmds {
+		if err := utils.RunCommand(cmd[0], cmd[1:]...); err != nil {
+			return err
+		}
+	}
+	return nil
 }

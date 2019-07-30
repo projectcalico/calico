@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2018 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2019 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -215,6 +215,8 @@ type Table struct {
 	// oldInsertRegexp matches inserted rules from old pre rule-hash versions of felix.
 	oldInsertRegexp *regexp.Regexp
 
+	// nftablesMode should be set to true if iptables is using the nftables backend.
+	nftablesMode       bool
 	iptablesRestoreCmd string
 	iptablesSaveCmd    string
 
@@ -245,16 +247,22 @@ type Table struct {
 	gaugeNumRules         prometheus.Gauge
 	countNumLinesExecuted prometheus.Counter
 
+	// Reusable buffer for writing to iptables.
+	restoreInputBuffer RestoreInputBuilder
+
 	// Factory for making commands, used by UTs to shim exec.Command().
 	newCmd cmdFactory
 	// Shims for time.XXX functions:
 	timeSleep func(d time.Duration)
 	timeNow   func() time.Time
+	// lookPath is a shim for exec.LookPath.
+	lookPath func(file string) (string, error)
 }
 
 type TableOptions struct {
 	HistoricChainPrefixes    []string
 	ExtraCleanupRegexPattern string
+	BackendMode              string
 	InsertMode               string
 	RefreshInterval          time.Duration
 	PostWriteInterval        time.Duration
@@ -270,6 +278,8 @@ type TableOptions struct {
 	SleepOverride func(d time.Duration)
 	// NowOverride for tests, if non-nil, replacement for time.Now()
 	NowOverride func() time.Time
+	// LookPathOverride for tests, if non-nil, replacement for exec.LookPath()
+	LookPathOverride func(file string) (string, error)
 }
 
 func NewTable(
@@ -338,6 +348,10 @@ func NewTable(
 	if options.NowOverride != nil {
 		now = options.NowOverride
 	}
+	lookPath := exec.LookPath
+	if options.LookPathOverride != nil {
+		lookPath = options.LookPathOverride
+	}
 
 	table := &Table{
 		Name:                   name,
@@ -376,20 +390,59 @@ func NewTable(
 		newCmd:    newCmd,
 		timeSleep: sleep,
 		timeNow:   now,
+		lookPath:  lookPath,
 
 		gaugeNumChains:        gaugeNumChains.WithLabelValues(fmt.Sprintf("%d", ipVersion), name),
 		gaugeNumRules:         gaugeNumRules.WithLabelValues(fmt.Sprintf("%d", ipVersion), name),
 		countNumLinesExecuted: countNumLinesExecuted.WithLabelValues(fmt.Sprintf("%d", ipVersion), name),
 	}
+	table.restoreInputBuffer.NumLinesWritten = table.countNumLinesExecuted
 
-	if ipVersion == 4 {
-		table.iptablesRestoreCmd = "iptables-restore"
-		table.iptablesSaveCmd = "iptables-save"
-	} else {
-		table.iptablesRestoreCmd = "ip6tables-restore"
-		table.iptablesSaveCmd = "ip6tables-save"
+	iptablesVariant := strings.ToLower(options.BackendMode)
+	if iptablesVariant == "" {
+		iptablesVariant = "legacy"
 	}
+	if iptablesVariant == "nft" {
+		log.Info("Enabling iptables-in-nftables-mode workarounds.")
+		table.nftablesMode = true
+	}
+
+	table.iptablesRestoreCmd = table.findBestBinary(ipVersion, iptablesVariant, "restore")
+	table.iptablesSaveCmd = table.findBestBinary(ipVersion, iptablesVariant, "save")
+
 	return table
+}
+
+// findBestBinary tries to find an iptables binary for the specific variant (legacy/nftables mode) and returns the name
+// of the binary.  Falls back on iptables-restore/iptables-save if the specific variant isn't available.
+// Panics if no binary can be found.
+func (t *Table) findBestBinary(ipVersion uint8, backendMode, saveOrRestore string) string {
+	verInfix := ""
+	if ipVersion == 6 {
+		verInfix = "6"
+	}
+	candidates := []string{
+		"ip" + verInfix + "tables-" + backendMode + "-" + saveOrRestore,
+		"ip" + verInfix + "tables-" + saveOrRestore,
+	}
+
+	logCxt := log.WithFields(log.Fields{
+		"ipVersion":     ipVersion,
+		"backendMode":   backendMode,
+		"saveOrRestore": saveOrRestore,
+		"candidates":    candidates,
+	})
+
+	for _, candidate := range candidates {
+		_, err := t.lookPath(candidate)
+		if err == nil {
+			logCxt.WithField("command", candidate).Info("Looked up iptables command")
+			return candidate
+		}
+	}
+
+	logCxt.Panic("Failed to find iptables command")
+	return ""
 }
 
 func (t *Table) SetRuleInsertions(chainName string, rules []Rule) {
@@ -836,20 +889,40 @@ func (t *Table) Apply() (rescheduleAfter time.Duration) {
 }
 
 func (t *Table) applyUpdates() error {
-	var inputBuf bytes.Buffer
 	// If needed, detect the dataplane features.
 	features := t.featureDetector.GetFeatures()
 
-	// iptables-restore input starts with a line indicating the table name.
-	tableNameLine := fmt.Sprintf("*%s\n", t.Name)
-	inputBuf.WriteString(tableNameLine)
+	// Build up the iptables-restore input in an in-memory buffer.  This allows us to log out the exact input after
+	// a failure, which has proven to be a very useful diagnostic tool.
+	buf := &t.restoreInputBuffer
+	buf.Reset() // Defensive.
 
-	// Make a pass over the dirty chains and generate a forward reference for any that need to
-	// be created or flushed.
+	// iptables-restore commands live in per-table transactions.
+	buf.StartTransaction(t.Name)
+
+	// Make a pass over the dirty chains and generate a forward reference for any that we're about to update.
+	// Writing a forward reference ensures that the chain exists and that it is empty.
 	t.dirtyChains.Iter(func(item interface{}) error {
 		chainName := item.(string)
 		chainNeedsToBeFlushed := false
-		if _, ok := t.chainNameToChain[chainName]; !ok {
+		if t.nftablesMode {
+			// iptables-nft-restore <v1.8.3 has a bug (https://bugzilla.netfilter.org/show_bug.cgi?id=1348)
+			// where only the first replace command sets the rule index.  Work around that by refreshing the
+			// whole chain using a flush.
+			chain := t.chainNameToChain[chainName]
+			currentHashes := chain.RuleHashes(features)
+			previousHashes := t.chainToDataplaneHashes[chainName]
+			t.logCxt.WithFields(log.Fields{
+				"previous": previousHashes,
+				"current":  currentHashes,
+			}).Debug("Comparing old to new hashes.")
+			if len(previousHashes) > 0 && reflect.DeepEqual(currentHashes, previousHashes) {
+				// Chain is already correct, skip it.
+				log.Debug("Chain already correct")
+				return set.RemoveItem
+			}
+			chainNeedsToBeFlushed = true
+		} else if _, ok := t.chainNameToChain[chainName]; !ok {
 			// About to delete this chain, flush it first to sever dependencies.
 			chainNeedsToBeFlushed = true
 		} else if _, ok := t.chainToDataplaneHashes[chainName]; !ok {
@@ -857,8 +930,7 @@ func (t *Table) applyUpdates() error {
 			chainNeedsToBeFlushed = true
 		}
 		if chainNeedsToBeFlushed {
-			inputBuf.WriteString(fmt.Sprintf(":%s - -\n", chainName))
-			t.countNumLinesExecuted.Inc()
+			buf.WriteForwardReference(chainName)
 		}
 		return nil
 	})
@@ -870,7 +942,14 @@ func (t *Table) applyUpdates() error {
 		if chain, ok := t.chainNameToChain[chainName]; ok {
 			// Chain update or creation.  Scan the chain against its previous hashes
 			// and replace/append/delete as appropriate.
-			previousHashes := t.chainToDataplaneHashes[chainName]
+			var previousHashes []string
+			if t.nftablesMode {
+				// Due to a bug in iptables nft mode, force a whole-chain rewrite.  (See above.)
+				previousHashes = nil
+			} else {
+				// In iptables legacy mode, we compare the rules one by one and apply deltas rule by rule.
+				previousHashes = t.chainToDataplaneHashes[chainName]
+			}
 			currentHashes := chain.RuleHashes(features)
 			newHashes[chainName] = currentHashes
 			for i := 0; i < len(previousHashes) || i < len(currentHashes); i++ {
@@ -892,16 +971,13 @@ func (t *Table) applyUpdates() error {
 					prefixFrag := t.commentFrag(currentHashes[i])
 					line = chain.Rules[i].RenderAppend(chainName, prefixFrag, features)
 				}
-				inputBuf.WriteString(line)
-				inputBuf.WriteString("\n")
-				t.countNumLinesExecuted.Inc()
+				buf.WriteLine(line)
 			}
 		}
 		return nil // Delay clearing the set until we've programmed iptables.
 	})
 
-	// Now calculate iptables updates for our inserted rules, which are used to hook top-level
-	// chains.
+	// Now calculate iptables updates for our inserted rules, which are used to hook top-level chains.
 	t.dirtyInserts.Iter(func(item interface{}) error {
 		chainName := item.(string)
 		previousHashes := t.chainToDataplaneHashes[chainName]
@@ -924,9 +1000,7 @@ func (t *Table) applyUpdates() error {
 			if previousHashes[i] != "" {
 				ruleNum := i + 1
 				line := deleteRule(chainName, ruleNum)
-				inputBuf.WriteString(line)
-				inputBuf.WriteString("\n")
-				t.countNumLinesExecuted.Inc()
+				buf.WriteLine(line)
 			}
 		}
 
@@ -939,18 +1013,14 @@ func (t *Table) applyUpdates() error {
 			for i := len(rules) - 1; i >= 0; i-- {
 				prefixFrag := t.commentFrag(newRuleHashes[i])
 				line := rules[i].RenderInsert(chainName, prefixFrag, features)
-				inputBuf.WriteString(line)
-				inputBuf.WriteString("\n")
-				t.countNumLinesExecuted.Inc()
+				buf.WriteLine(line)
 			}
 		} else {
 			t.logCxt.Debug("Rendering append rules.")
 			for i := 0; i < len(rules); i++ {
 				prefixFrag := t.commentFrag(newRuleHashes[i])
 				line := rules[i].RenderAppend(chainName, prefixFrag, features)
-				inputBuf.WriteString(line)
-				inputBuf.WriteString("\n")
-				t.countNumLinesExecuted.Inc()
+				buf.WriteLine(line)
 			}
 		}
 
@@ -958,6 +1028,25 @@ func (t *Table) applyUpdates() error {
 
 		return nil // Delay clearing the set until we've programmed iptables.
 	})
+
+	if t.nftablesMode {
+		// The nftables version of iptables-restore requires that chains are unreferenced at the start of the
+		// transaction before they can be deleted (i.e. it doesn't seem to update the reference calculation as
+		// rules are deleted).  Close the current transaction and open a new one for the deletions in order to
+		// refresh its state.  The buffer will discard a no-op transaction so we don't need to check.
+		t.logCxt.Debug("In nftables mode, restarting transaction between updates and deletions.")
+		buf.EndTransaction()
+		buf.StartTransaction(t.Name)
+
+		t.dirtyChains.Iter(func(item interface{}) error {
+			chainName := item.(string)
+			if _, ok := t.chainNameToChain[chainName]; !ok {
+				// Chain deletion
+				buf.WriteForwardReference(chainName)
+			}
+			return nil // Delay clearing the set until we've programmed iptables.
+		})
+	}
 
 	// Do deletions at the end.  This ensures that we don't try to delete any chains that
 	// are still referenced (because we'll have removed the references in the modify pass
@@ -968,23 +1057,26 @@ func (t *Table) applyUpdates() error {
 		chainName := item.(string)
 		if _, ok := t.chainNameToChain[chainName]; !ok {
 			// Chain deletion
-			inputBuf.WriteString(fmt.Sprintf("--delete-chain %s\n", chainName))
-			t.countNumLinesExecuted.Inc()
+			buf.WriteLine(fmt.Sprintf("--delete-chain %s", chainName))
 			newHashes[chainName] = nil
 		}
 		return nil // Delay clearing the set until we've programmed iptables.
 	})
 
-	if inputBuf.Len() > len(tableNameLine) {
-		// We've figured out that we need to make some changes, finish off the input then
-		// execute iptables-restore.  iptables-restore input ends with a COMMIT.
-		inputBuf.WriteString("COMMIT\n")
+	buf.EndTransaction()
 
-		// Annoying to have to copy the buffer here but reading from a buffer is
-		// destructive so if we want to trace out the contents after a failure, we have to
-		// take a copy.
-		input := inputBuf.String()
-		t.logCxt.WithField("iptablesInput", input).Debug("Writing to iptables")
+	if buf.Empty() {
+		t.logCxt.Debug("Update ended up being no-op, skipping call to ip(6)tables-restore.")
+	} else {
+		// Get the contents of the buffer ready to send to iptables-restore.  Warning: for perf, this is directly
+		// accessing the buffer's internal array; don't touch the buffer after this point.
+		inputBytes := buf.GetBytesAndReset()
+
+		if log.GetLevel() >= log.DebugLevel {
+			// Only convert (potentially very large slice) to string at debug level.
+			inputStr := string(inputBytes)
+			t.logCxt.WithField("iptablesInput", inputStr).Debug("Writing to iptables")
+		}
 
 		var outputBuf, errBuf bytes.Buffer
 		args := []string{"--noflush", "--verbose"}
@@ -1012,7 +1104,7 @@ func (t *Table) applyUpdates() error {
 			}).Debug("Using native iptables-restore xtables lock.")
 		}
 		cmd := t.newCmd(t.iptablesRestoreCmd, args...)
-		cmd.SetStdin(&inputBuf)
+		cmd.SetStdin(bytes.NewReader(inputBytes))
 		cmd.SetStdout(&outputBuf)
 		cmd.SetStderr(&errBuf)
 		countNumRestoreCalls.Inc()
@@ -1022,11 +1114,14 @@ func (t *Table) applyUpdates() error {
 		err := cmd.Run()
 		t.calicoXtablesLock.Unlock()
 		if err != nil {
+			// To log out the input, we must convert to string here since, after we return, the buffer can be re-used
+			// (and the logger may convert to string on a background thread).
+			inputStr := string(inputBytes)
 			t.logCxt.WithFields(log.Fields{
 				"output":      outputBuf.String(),
 				"errorOutput": errBuf.String(),
 				"error":       err,
-				"input":       input,
+				"input":       inputStr,
 			}).Warn("Failed to execute ip(6)tables-restore command")
 			t.inSyncWithDataPlane = false
 			countNumRestoreErrors.Inc()

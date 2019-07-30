@@ -56,3 +56,4 @@ htmlcov/
 .semaphore-cache/
 /rpm/felix.spec
 /debian/changelog
+/.built-bpf-clang-builder-*

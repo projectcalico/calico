@@ -45,6 +45,8 @@ var (
 	HostnameRegexp           = regexp.MustCompile(`^[a-zA-Z0-9_.-]+$`)
 	StringRegexp             = regexp.MustCompile(`^.*$`)
 	IfaceParamRegexp         = regexp.MustCompile(`^[a-zA-Z0-9:._+-]{1,15}$`)
+	// Hostname  have to be valid ipv4, ipv6 or strings up to 64 characters.
+	HostAddressRegexp = regexp.MustCompile(`^[a-zA-Z0-9:._+-]{1,64}$`)
 )
 
 const (
@@ -131,7 +133,9 @@ type Config struct {
 	Ipv6Support    bool `config:"bool;true"`
 	IgnoreLooseRPF bool `config:"bool;false"`
 
+	IptablesBackend                    string        `config:"oneof(legacy,nft);legacy"`
 	RouteRefreshInterval               time.Duration `config:"seconds;90"`
+	DeviceRouteSourceAddress           net.IP        `config:"ipv4;"`
 	IptablesRefreshInterval            time.Duration `config:"seconds;90"`
 	IptablesPostWriteCheckIntervalSecs time.Duration `config:"seconds;1"`
 	IptablesLockFilePath               string        `config:"file;/run/xtables.lock"`
@@ -188,8 +192,9 @@ type Config struct {
 
 	HealthEnabled                   bool   `config:"bool;false"`
 	HealthPort                      int    `config:"int(0,65535);9099"`
-	HealthHost                      string `config:"string;localhost"`
+	HealthHost                      string `config:"host-address;localhost"`
 	PrometheusMetricsEnabled        bool   `config:"bool;false"`
+	PrometheusMetricsHost           string `config:"host-address;"`
 	PrometheusMetricsPort           int    `config:"int(0,65535);9091"`
 	PrometheusGoMetricsEnabled      bool   `config:"bool;true"`
 	PrometheusProcessMetricsEnabled bool   `config:"bool;true"`
@@ -225,13 +230,9 @@ type Config struct {
 
 	IptablesNATOutgoingInterfaceFilter string `config:"iface-param;"`
 
-	SockmapEnabled    bool `config:"bool;false"`
-	XDPEnabled        bool `config:"bool;true"`
-	GenericXDPEnabled bool `config:"bool;false"`
-
-	SockmapCgroupv2Subdir string `config:"string;;local"`
-
-	DeviceRouteSourceAddress net.IP `config:"ipv4;"`
+	SidecarAccelerationEnabled bool `config:"bool;false"`
+	XDPEnabled                 bool `config:"bool;false"`
+	GenericXDPEnabled          bool `config:"bool;false"`
 }
 
 type ProtoPort struct {
@@ -561,6 +562,9 @@ func loadParams() {
 		case "hostname":
 			param = &RegexpParam{Regexp: HostnameRegexp,
 				Msg: "invalid hostname"}
+		case "host-address":
+			param = &RegexpParam{Regexp: HostAddressRegexp,
+				Msg: "invalid host address"}
 		case "region":
 			param = &RegionParam{}
 		case "oneof":
