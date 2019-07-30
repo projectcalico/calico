@@ -350,11 +350,12 @@ func (d *restoreCmd) Run() error {
 			d.Dataplane.ChainMods.Add(chainMod{name: chainName, ruleNum: ruleNum})
 		case "-D", "--delete":
 			chainName = parts[1]
-			// Deleting cali chains by index
-			if strings.HasPrefix(chainName, "cali") {
-				Expect(len(parts)).To(Equal(3), "--delete only expects two arguments")
-				ruleNum, err := strconv.Atoi(parts[2]) // 1-indexed position of rule.
-				Expect(err).NotTo(HaveOccurred())
+
+			// If second arg is numeric, this is a delete by line number.
+			if ruleNum, err := strconv.Atoi(parts[2]); err == nil {
+				Expect(parts).To(HaveLen(3), "calico chain: expected a delete-by-number '--delete '")
+				Expect(chainName).To(HavePrefix("cali"), "deleting non-calico chain by number can cause races")
+
 				ruleIdx := ruleNum - 1 // 0-indexed array index of rule.
 				chain := chains[chainName]
 				Expect(len(chain)).To(BeNumerically(">", ruleIdx), "Delete of non-existent rule")
@@ -364,30 +365,32 @@ func (d *restoreCmd) Run() error {
 				}
 				chains[chainName] = chain[:len(chain)-1]
 				d.Dataplane.ChainMods.Add(chainMod{name: chainName, ruleNum: ruleNum})
-				continue
-			}
+			} else {
+				// Otherwise, treat this as a delete by full rule.
 
-			// Rule is inserted without chain name
-			rule := strings.Join(parts[2:], " ")
-			chain := chains[chainName]
-			i := 0
+				// Rule is inserted without chain name
+				rule := strings.Join(parts[2:], " ")
+				chain := chains[chainName]
+				i := 0
 
-			newChain := []string{}
-			var found bool
-			for ; i < len(chain); i++ {
-				if chain[i] == rule {
-					found = true
-					continue
+				newChain := []string{}
+				var found bool
+				for ; i < len(chain); i++ {
+					if chain[i] == rule {
+						found = true
+						continue
+					}
+					newChain = append(newChain, chain[i])
 				}
-				newChain = append(newChain, chain[i])
-			}
 
-			Expect(found).To(BeTrue(), "Delete of non-existent rule")
-			chains[chainName] = newChain
-			d.Dataplane.ChainMods.Add(chainMod{name: chainName, ruleNum: i})
+				Expect(found).To(BeTrue(), "Delete of non-existent rule")
+				chains[chainName] = newChain
+				d.Dataplane.ChainMods.Add(chainMod{name: chainName, ruleNum: i})
+
+			}
 		case "-X", "--delete-chain":
 			chainName = parts[1]
-			Expect(len(parts)).To(Equal(2), "--delete-chain only has one argument")
+			Expect(parts).To(HaveLen(2), "--delete-chain only has one argument")
 			Expect(chains[chainName]).To(Equal([]string{}), "Only empty chains can be deleted")
 			delete(chains, chainName)
 			d.Dataplane.DeletedChains.Add(chainName)
