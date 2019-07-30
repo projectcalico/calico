@@ -24,6 +24,11 @@ See [configuring BGP peers][bgp] for more information.
 
 For ECMP load balancing to services, the upstream routers must be configured to use BGP multipath.
 
+**IPPool**
+
+Ensure that you have added service cluster IP-CIDR the same way you added the [pod CIDR via calicoctl][ippool].
+
+
 ## Enabling service cluster IP advertisement
 
 To enable this feature, first determine the cluster IP range in use for your cluster. This value is passed to the Kubernetes API server
