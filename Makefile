@@ -236,9 +236,9 @@ DOCKER_RUN := mkdir -p .go-pkg-cache && \
                               --net=host \
                               $(EXTRA_DOCKER_ARGS) \
                               -e LOCAL_USER_ID=$(LOCAL_USER_ID) \
-                              -e GOCACHE=/gocache \
+                              -e GOCACHE=/go-cache \
                               -v $(CURDIR):/$(PACKAGE_NAME):rw \
-                              -v $(CURDIR)/.go-pkg-cache:/gocache:rw \
+                              -v $(CURDIR)/.go-pkg-cache:/go-cache:rw \
                               -w /$(PACKAGE_NAME) \
                               -e GOARCH=$(ARCH)
 
@@ -288,18 +288,17 @@ vendor/.up-to-date: go.mod go.sum
 # Default the typha repo and version but allow them to be overridden
 TYPHA_BRANCH?=$(shell git rev-parse --abbrev-ref HEAD)
 TYPHA_REPO?=github.com/projectcalico/typha
-TYPHA_VERSION?=$(shell git ls-remote git@github.com:projectcalico/typha $(TYPHA_BRANCH) 2>/dev/null | cut -f 1)
+TYPHA_VERSION?=v0.0.0-$(shell git ls-remote git@github.com:projectcalico/typha $(TYPHA_BRANCH) 2>/dev/null | cut -f 1)
 
 ## Update typha pin in go.mod
 update-typha:
-	    $(DOCKER_RUN) $(CALICO_BUILD) sh -c '\
-        echo "Updating typha to $(TYPHA_VERSION) from $(TYPHA_REPO)"; \
-        export OLD_VER=$$(grep --after 50 typha glide.yaml |grep --max-count=1 --only-matching --perl-regexp "version:\s*\K[^\s]+") ;\
-        echo "Old version: $$OLD_VER";\
-        if [ $(TYPHA_VERSION) != $$OLD_VER ]; then \
-          sed -i "s/$$OLD_VER/$(TYPHA_VERSION)/" glide.yaml && \
-          glide up --strip-vendor || glide up --strip-vendor; \
-        fi'
+	$(DOCKER_RUN) $(CALICO_BUILD) sh -c '\
+	  echo "Updating typha to $(TYPHA_VERSION) from $(TYPHA_REPO)"; \
+	  export OLD_VER=$$(grep typha | awk '{print $2}') ;\
+	  echo "Old version: $$OLD_VER";\
+	  if [ $(TYPHA_VERSION) != $$OLD_VER ]; then \
+	  	sed -i "s/$$OLD_VER/$(TYPHA_VERSION)/" go.mod;
+	  fi'
 
 bin/calico-felix: bin/calico-felix-$(ARCH)
 	ln -f bin/calico-felix-$(ARCH) bin/calico-felix
@@ -720,7 +719,7 @@ k8sfv-test-existing-felix: bin/k8sfv.test
 bin/k8sfv.test: $(K8SFV_GO_FILES) vendor/.up-to-date
 	@echo Building $@...
 	$(DOCKER_RUN) $(LOCAL_BUILD_MOUNTS) $(CALICO_BUILD) \
-	    sh -c 'go test -c -o $@ ./k8sfv && \
+	    sh -c 'go test -c -mod=vendor -o $@ ./k8sfv && \
 		( ldd $@ 2>&1 | grep -q -e "Not a valid dynamic program" \
 		-e "not a dynamic executable" || \
 		( echo "Error: $@ was not statically linked"; false ) )'
