@@ -46,8 +46,8 @@ var (
 		"raw":    []string{"PREROUTING", "OUTPUT"},
 	}
 
-	// topLevelChains is the set of top-level chains we insert into.
-	topLevelChains = set.From("INPUT", "OUTPUT", "FORWARD", "PREROUTING", "POSTROUTING")
+	// defaultTopLevelChains is the default set of top-level chains we insert into.
+	defaultTopLevelChains = set.From("INPUT", "OUTPUT", "FORWARD", "PREROUTING", "POSTROUTING")
 
 	// chainCreateRegexp matches iptables-save output lines for chain forward reference lines.
 	// It captures the name of the chain.
@@ -211,6 +211,9 @@ type Table struct {
 	// chainToFullRules contains the full rules, mapped from chain name to slices of rules in that chain.
 	chainToFullRules map[string][]string
 
+	// topLevelChains is the set of top-level chains we insert into.
+	topLevelChains set.Set
+
 	// hashCommentPrefix holds the prefix that we prepend to our rule-tracking hashes.
 	hashCommentPrefix string
 	// hashCommentRegexp matches the rule-tracking comment, capturing the rule hash.
@@ -286,6 +289,8 @@ type TableOptions struct {
 	NowOverride func() time.Time
 	// LookPathOverride for tests, if non-nil, replacement for exec.LookPath()
 	LookPathOverride func(file string) (string, error)
+	// TopLevelChainsOverride for tests, if non-nil, replacement for t.topLevelChains.
+	TopLevelChainsOverride set.Set
 }
 
 func NewTable(
@@ -358,6 +363,10 @@ func NewTable(
 	if options.LookPathOverride != nil {
 		lookPath = options.LookPathOverride
 	}
+	topLevelChains := defaultTopLevelChains
+	if options.TopLevelChainsOverride != nil {
+		topLevelChains = options.TopLevelChainsOverride
+	}
 
 	table := &Table{
 		Name:                   name,
@@ -369,6 +378,7 @@ func NewTable(
 		dirtyChains:            set.New(),
 		chainToDataplaneHashes: map[string][]string{},
 		chainToFullRules:       map[string][]string{},
+		topLevelChains:         topLevelChains,
 		logCxt: log.WithFields(log.Fields{
 			"ipVersion": ipVersion,
 			"table":     name,
@@ -787,7 +797,7 @@ func (t *Table) readHashesAndRulesFrom(r io.ReadCloser) (hashes map[string][]str
 
 		// Either we've explicitly inserted a rule into this chain or it's one of the top-level chains that we may have hooked.
 		// Store off the complete contents of the rules so that we can generate precise deletes later if we need to.
-		if _, ok := t.chainToInsertedRules[chainName]; topLevelChains.Contains(chainName) || ok {
+		if _, ok := t.chainToInsertedRules[chainName]; t.topLevelChains.Contains(chainName) || ok {
 			fullRule := string(line)
 			rules[chainName] = append(rules[chainName], fullRule)
 		}
@@ -994,6 +1004,8 @@ func (t *Table) applyUpdates() error {
 		return nil // Delay clearing the set until we've programmed iptables.
 	})
 
+	// Make a copy of our full rules map and keep track of all changes made while processing dirtyInserts.
+	// When we've successfully updated iptables, we'll update our cache of chainToFullRules with this map.
 	newChainToFullRules := map[string][]string{}
 	for chain, rules := range t.chainToFullRules {
 		newChainToFullRules[chain] = make([]string, len(rules))
@@ -1022,21 +1034,24 @@ func (t *Table) applyUpdates() error {
 				line := t.renderDeleteByValueLine(chainName, i)
 				buf.WriteLine(line)
 
-				// So let's just empty out the rule
-				newRules[i] = ""
+				// Empty out the rule, if it exists.
+				if i < len(newRules) {
+					newRules[i] = ""
+				}
 			}
 		}
-		// Go over our slice of "new" rules and remove any rules we emptied out while deleting rules.
+
+		// Go over our slice of "new" rules and create a copy of the slice with just the rules we didn't empty out.
 		copyOfNewRules := []string{}
-		for _, rule := range newRules{
+		for _, rule := range newRules {
 			if rule != "" {
 				copyOfNewRules = append(copyOfNewRules, rule)
 			}
 		}
 		newRules = copyOfNewRules
-
 		rules := t.chainToInsertedRules[chainName]
 		insertRuleLines := make([]string, len(rules))
+
 		if t.insertMode == "insert" {
 			t.logCxt.Debug("Rendering insert rules.")
 			// Since each insert is pushed onto the top of the chain, do the inserts in

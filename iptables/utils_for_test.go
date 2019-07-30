@@ -369,9 +369,7 @@ func (d *restoreCmd) Run() error {
 
 			// Rule is inserted without chain name
 			rule := strings.Join(parts[2:], " ")
-			log.Debugf("--- deleting rule: %#v\n", rule)
 			chain := chains[chainName]
-			log.Debugf("--- deleting rule: chain: %#v\n", chain)
 			i := 0
 
 			newChain := []string{}
