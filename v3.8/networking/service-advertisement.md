@@ -26,7 +26,7 @@ For ECMP load balancing to services, the upstream routers must be configured to 
 
 **IPPool**
 
-Ensure that you have added service cluster IP-CIDR the same way you added the [pod CIDR via calicoctl][ippool].
+Ensure that you have added the service cluster IP-CIDR the same way you added the [pod CIDR via calicoctl][ippool].
 
 
 ## Enabling service cluster IP advertisement
