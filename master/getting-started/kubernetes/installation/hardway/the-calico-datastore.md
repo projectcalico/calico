@@ -8,7 +8,7 @@ your {{site.prodname}} network continues operating, but cannot be updated (no ne
 
 {{site.prodname}} has two datastore drivers you can choose from
 
-- **etcd** - for direct connection to an etcd cluster 
+- **etcd** - for direct connection to an etcd cluster
 - **Kubernetes** - for connection to a Kubernetes API server
 
 ## Using Kubernetes as the datastore
@@ -28,7 +28,7 @@ For completeness, the advantages of the etcd driver are
 
 ## Custom Resources
 
-When using the Kubernetes API datastore driver, most {{site.prodname}} resources are stored as 
+When using the Kubernetes API datastore driver, most {{site.prodname}} resources are stored as
 [Kubernetes custom resources](https://kubernetes.io/docs/concepts/extend-kubernetes/api-extension/custom-resources/).
 
 A few {{site.prodname}} resources are not stored as custom resources and instead are backed by corresponding native Kubernetes resources. For example, [workload endpoints](/{{page.version}}/reference/resources/workloadendpoint) are Kubernetes pods.
@@ -79,15 +79,15 @@ Verify `calicoctl` can reach your datastore by running
 calicoctl get nodes
 ```
 
-You should see output similar to 
+You should see output similar to
 
 ```
-NAME                                         
-ip-172-31-37-123                             
-ip-172-31-40-217                             
-ip-172-31-40-30                              
+NAME
+ip-172-31-37-123
+ip-172-31-40-217
+ip-172-31-40-30
 ip-172-31-42-47
-ip-172-31-45-29                           
+ip-172-31-45-29
 ```
 
 Nodes are backed by the Kubernetes node object, so you should see names that match `kubectl get nodes`.
@@ -101,7 +101,7 @@ calicoctl get ippools
 You should see an empty result
 
 ```
-NAME   CIDR   SELECTOR   
+NAME   CIDR   SELECTOR
 
 
 ```

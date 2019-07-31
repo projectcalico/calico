@@ -28,7 +28,7 @@ We will install {{site.prodname}} on a Kubernetes cluster. To demonstrate a high
    `kubeadm join <output from kubeadm init>`
 1. Copy admin credentials
 1. Test Access
-    1. Run 
+    1. Run
 
        `kubectl get nodes`
 

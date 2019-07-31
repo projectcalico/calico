@@ -9,7 +9,7 @@ canonical_url: 'https://docs.projectcalico.org/master/getting-started/kubernetes
 - BIRD, a daemon that speaks the BGP protocol to distribute routing information to other nodes
 - confd, a daemon that watches the {{site.prodname}} datastore for config changes and updates BIRD's config files
 
-In this lab we configure and install `calico/node` as a DaemonSet.
+In this lab we configure and install `calico/node` as a daemon set.
 
 ## Provision Certificates
 
@@ -49,10 +49,10 @@ Create the ServiceAccount that `calico/node` will run as
 kubectl create serviceaccount -n kube-system calico-node
 ```
 
-Provision a ClusterRole with permissions to read and modify {{site.prodname}} datastore objects
+Provision a cluster role with permissions to read and modify {{site.prodname}} datastore objects
 
 ```
-kubectl apply -f - <<EOF 
+kubectl apply -f - <<EOF
 kind: ClusterRole
 apiVersion: rbac.authorization.k8s.io/v1
 metadata:
@@ -127,20 +127,20 @@ rules:
 EOF
 ```
 
-Bind the ClusterRole to the `calico-node` ServiceAccount
+Bind the cluster role to the `calico-node` ServiceAccount
 
 ```
 kubectl create clusterrolebinding calico-node --clusterrole=calico-node --serviceaccount=kube-system:calico-node
 ```
 
-## Install DaemonSet
+## Install daemon set
 
-`calico/node` runs as a DaemonSet so that it is installed on every node in the cluster.
+`calico/node` runs as a daemon set so that it is installed on every node in the cluster.
 
-Create the DaemonSet
+Create the daemon set
 
 ```
-kubectl apply -f - <<EOF 
+kubectl apply -f - <<EOF
 kind: DaemonSet
 apiVersion: apps/v1
 metadata:
@@ -309,7 +309,7 @@ spec:
 EOF
 ```
 
-Verify that `calico/node` is running on each node in your cluster, and goes to Ready within a few minutes.
+Verify that `calico/node` is running on each node in your cluster, and goes to `Running` within a few minutes.
 
 ```
 kubectl get pod -l k8s-app=calico-node -n kube-system

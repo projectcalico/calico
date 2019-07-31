@@ -67,8 +67,8 @@ ip route get 192.168.38.128
 Result
 
 ```
-192.168.38.128 via 172.31.37.123 dev eth0 src 172.31.42.47 uid 1000 
-    cache 
+192.168.38.128 via 172.31.37.123 dev eth0 src 172.31.42.47 uid 1000
+    cache
 ```
 {: .no-select-button}
 
@@ -77,7 +77,7 @@ pod is scheduled on, as expected.
 
 ## IPAM allocations from different pools
 
-Recall that we created two IPPools, but left one disabled.
+Recall that we created two IP pools, but left one disabled.
 
 ```
 calicoctl get ippools -o wide
@@ -86,9 +86,9 @@ calicoctl get ippools -o wide
 Result
 
 ```
-NAME    CIDR               NAT    IPIPMODE   VXLANMODE   DISABLED   SELECTOR   
-pool1   192.168.0.0/18     true   Never      Never       false      all()      
-pool2   192.168.192.0/19   true   Never      Never       true       all()      
+NAME    CIDR               NAT    IPIPMODE   VXLANMODE   DISABLED   SELECTOR
+pool1   192.168.0.0/18     true   Never      Never       false      all()
+pool2   192.168.192.0/19   true   Never      Never       true       all()
 ```
 {: .no-select-button}
 
