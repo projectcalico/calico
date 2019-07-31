@@ -22,7 +22,7 @@ to the interface.  If no profiles or labels are applied, {{site.prodname}} will 
 any policy.
 
 > **Note**: Currently, for host endpoints with `interfaceName: *`, only [pre-DNAT
-> policy]({{site.baseurl}}/{{page.version}}/security/host-endpoints/pre-dnat) is
+> policy]({{site.baseurl}}/{{page.version}}/reference/host-endpoints/pre-dnat) is
 > implemented.
 {: .alert .alert-info}
 
