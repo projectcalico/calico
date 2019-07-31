@@ -44,6 +44,9 @@ toc:
 - title: Apply policy to services exposed externally as cluster IPs
   path: /security/services-cluster-ips   
 
+- title: Apply policy to host forwarded traffic
+  path: /security/host-forwarded-traffic
+
 - title: Enable extreme high-connection workloads
   path: /security/high-connection-workloads
 
@@ -53,30 +56,33 @@ toc:
 - title: Get started with Calico network policy for OpenStack
   path: /security/network-policy-openstack
 
-- title: Securing Calico component communications
+- title: Monitor Calico component metrics 
+  path: /security/monitor-component-metrics  
+
+- title: Secure Calico component communications
   section:
-  - title: Configuring encryption and authentication
+  - title: Configure encryption and authentication
     path: /security/comms/crypto-auth
 
-  - title: Scheduling to well-known nodes
+  - title: Schedule to well-known nodes
     path: /security/comms/reduce-nodes
 
-  - title: Securing Calico's Prometheus endpoints
+  - title: Secure Calico's Prometheus endpoints
     path: /security/comms/secure-metrics
 
 - title: Tutorials
   section:
   - title: Enforce network policy using Istio tutorial
-    path: /security/app-layer-policy/
+    path: /security/tutorials/app-layer-policy/
 
-  - title: Protecting host tutorial
+  - title: Protect host tutorial
     path: /security/protect-hosts
 
   - title: Kubernetes policy, demo
-    path: /security/stars-policy/
+    path: /security/tutorials/kubernetes-policy-demo/kubernetes-demo
 
   - title: Kubernetes policy, basic tutorial
-    path: /security/simple-policy
+    path: /security/tutorials/kubernetes-policy-basic
 
   - title: Kubernetes policy, advanced tutorial
-    path:  /security/advanced-policy
+    path:  /security/tutorials/kubernetes-advanced-policy
