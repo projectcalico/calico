@@ -1,5 +1,5 @@
-hash: 8bda50b34a763f93878628edbe0ac8e589c0ea95db4ab50ee75ebde347f365ad
-updated: 2019-07-27T07:41:48.099629652Z
+hash: 735848c9ca2025bf7376b51125f9278320dd31bc0f8d1be3a78c04ae5292570b
+updated: 2019-07-31T07:42:04.175097292Z
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -180,7 +180,7 @@ imports:
 - name: github.com/peterbourgon/diskv
   version: 5f041e8faa004a95c88a202771f4cc3e991971e6
 - name: github.com/projectcalico/felix
-  version: 6c654cfbd280f2f709c47a6c98513b32ee669d9e
+  version: cceaf8508a92aff8d81b710a6cecf9f93379fd2e
   subpackages:
   - bpf
   - buildinfo
@@ -267,7 +267,7 @@ imports:
   - lib/validator/v3
   - lib/watch
 - name: github.com/projectcalico/pod2daemon
-  version: df2b9c8d2744ebce544742f7f765b59c5e88db0d
+  version: df57fc59e2e150415fafd6fac49399c871066f83
   subpackages:
   - binder
 - name: github.com/projectcalico/typha
