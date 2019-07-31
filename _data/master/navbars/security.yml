@@ -72,3 +72,5 @@ toc:
   path: /security/external-ips-policy  
 - title: Use namespace in policy rules
   path: /security/namespace-policy
+- title: Apply policy to forwarded traffic
+  path: /security/host-forwarded-traffic  
