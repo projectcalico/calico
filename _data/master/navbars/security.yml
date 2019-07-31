@@ -85,4 +85,4 @@ toc:
     path: /security/tutorials/kubernetes-policy-basic
 
   - title: Kubernetes policy, advanced tutorial
-    path:  /security/tutorials/kubernetes-advanced-policy
+    path:  /security/tutorials/kubernetes-policy-advanced
