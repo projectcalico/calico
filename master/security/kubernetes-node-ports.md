@@ -67,7 +67,7 @@ spec:
 
 #### Allow local host egress traffic   
 
-We also need a global network policy to allow egress traffic through each node's external interface. Otherwise, when we define host endpoints for those interfaces, no egress traffic will be allowed from local processes (except for traffic that is allowed by the [Failsafe rules]({{site.baseurl}}/{{page.version}}/reference/resources/host-endpoints/failsafe).
+We also need a global network policy to allow egress traffic through each node's external interface. Otherwise, when we define host endpoints for those interfaces, no egress traffic will be allowed from local processes (except for traffic that is allowed by the [Failsafe rules]({{site.baseurl}}/{{page.version}}/reference/host-endpoints/failsafe).
 
 ```
 apiVersion: projectcalico.org/v3
