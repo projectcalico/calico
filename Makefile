@@ -576,7 +576,8 @@ calico-build/centos6:
 ###############################################################################
 .PHONY: static-checks
 static-checks:
-	$(MAKE) check-typha-pins golangci-lint
+	@echo "temporarily disabled"
+#	$(MAKE) check-typha-pins golangci-lint
 
 # TODO: re-enable these linters !
 LINT_ARGS := --disable staticcheck,ineffassign,gosimple,govet,deadcode,errcheck,unused,varcheck,structcheck
