@@ -729,7 +729,7 @@ func (t *Table) readHashesAndRulesFrom(r io.ReadCloser) (hashes map[string][]str
 
 	// Keep track of whether the non-Calico chain has inserts. If the chain does not have inserts, we'll remove the
 	// full rules for that chain.
-	nonCalicoChainHasInserts := map[string]bool{}
+	chainHasCalicoRule := map[string]bool{}
 
 	// Figure out if debug logging is enabled so we can skip some WithFields() calls in the
 	// tight loop below if the log wouldn't be emitted anyway.
@@ -780,12 +780,14 @@ func (t *Table) readHashesAndRulesFrom(r io.ReadCloser) (hashes map[string][]str
 			if debug {
 				logCxt.WithField("hash", hash).Debug("Found hash in rule")
 			}
+			chainHasCalicoRule[chainName] = true
 		} else if t.oldInsertRegexp.Find(line) != nil {
 			logCxt.WithFields(log.Fields{
 				"rule":      line,
 				"chainName": chainName,
 			}).Info("Found inserted rule from previous Felix version, marking for cleanup.")
 			hash = "OLD INSERT RULE"
+			chainHasCalicoRule[chainName] = true
 		}
 		hashes[chainName] = append(hashes[chainName], hash)
 
@@ -794,7 +796,6 @@ func (t *Table) readHashesAndRulesFrom(r io.ReadCloser) (hashes map[string][]str
 		if !t.ourChainsRegexp.MatchString(chainName) {
 			fullRule := string(line)
 			rules[chainName] = append(rules[chainName], fullRule)
-			nonCalicoChainHasInserts[chainName] = true
 		}
 	}
 	if scanner.Err() != nil {
@@ -804,7 +805,7 @@ func (t *Table) readHashesAndRulesFrom(r io.ReadCloser) (hashes map[string][]str
 
 	// Remove full rules for the non-Calico chain if it does not have inserts.
 	for chainName, _ := range rules {
-		if hasInserts, ok := nonCalicoChainHasInserts[chainName]; ok && !hasInserts {
+		if !chainHasCalicoRule[chainName] {
 			delete(rules, chainName)
 		}
 	}
