@@ -1,5 +1,19 @@
+FROM alpine as build
+RUN mkdir -p /tmp/dikastes
+RUN chmod 0777 /tmp/dikastes
+
 FROM scratch
 
 ADD bin/dikastes-amd64 /dikastes
 ADD bin/healthz-amd64 /healthz
-CMD ["/dikastes"]
+# Typical Linux systems start numbering human users at 1000, reserving 1-999
+# for services, so we pick 999 to be least likely to overlap.  It's not a big
+# deal if we happen to overlap, as it would take a container escape for
+# an attacker to use any privileges that happen to be assigned to this user.
+#
+# Precreate the /var/run/dikastes directory so that we don't need any elevated
+# permission to create the directory at runtime.
+COPY --chown=999 --from=build /tmp/dikastes /var/run/dikastes
+USER 999
+ENTRYPOINT ["/dikastes"]
+CMD ["server"]
