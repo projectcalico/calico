@@ -1,4 +1,4 @@
-FROM alpine
+FROM alpine as build
 RUN mkdir -p /tmp/dikastes
 RUN chmod 0777 /tmp/dikastes
 
@@ -13,7 +13,7 @@ ADD bin/healthz-amd64 /healthz
 #
 # Precreate the /var/run/dikastes directory so that we don't need any elevated
 # permission to create the directory at runtime.
-COPY --chown=999 --from=0 /tmp/dikastes /var/run/dikastes
+COPY --chown=999 --from=build /tmp/dikastes /var/run/dikastes
 USER 999
 ENTRYPOINT ["/dikastes"]
 CMD ["server"]
