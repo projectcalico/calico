@@ -1,6 +1,9 @@
       - name: dikastes
         image: {{page.registry}}{{site.imageNames["dikastes"]}}:{{site.data.versions[page.version].first.components["calico/dikastes"].version}}
-        args: ["/dikastes", "server", "-l", "/var/run/dikastes/dikastes.sock", "-d", "/var/run/felix/nodeagent/socket"]
+        args: ["server", "-l", "/var/run/dikastes/dikastes.sock", "-d", "/var/run/felix/nodeagent/socket"]
+        securityContext:
+          runAsNonRoot: true
+          allowPrivilegeEscalation: false
         livenessProbe:
           exec:
             command:
