@@ -14,7 +14,7 @@ If your host has multiple network interfaces, and is configured as a router, or 
 
 This how-to guide uses the following {{site.prodname}} features:
 
-- **Host Endpoints**
+- **Host Endpoint**
 - **GlobalNetworkPolicy**
   - applyOnForward setting
   - preDNAT setting
@@ -25,7 +25,7 @@ This how-to guide uses the following {{site.prodname}} features:
 
 The following figure shows a host with two network interfaces: eth0 and eth1. We call these **host endpoints (HEPs)**. The host also runs two guest workloads (VMs or containers). We call the virtual interfaces to the guests, **workload endpoints (WEPs)**.  Each has a corresponding configuration object on the {{site.prodname}} API called HostEndpoint and WorkloadEndpoint, respectively. 
 
-The **HostEndpoint API** object is optional, and Calico does not enforce any policy on the HEP if the API object is missing. The **WorkloadEndpoint API** object is required, and is automatically managed by the cluster orchestrator plugin (for example, Kubernetes or OpenStack).
+The `HostEndpoint API` object is optional, and Calico does not enforce any policy on the HEP if the API object is missing. The `WorkloadEndpoint API` object is required, and is automatically managed by the cluster orchestrator plugin (for example, Kubernetes or OpenStack).
 
 Several connections are shown in the figure, numbered 1 through 4. For example, connection 1 ingresses over HEP eth0, is forwarded, and then ingresses Workload A’s WEP. Calico policies select which WEPs or HEPs they apply to. So, for example an ingress policy that selects Workload A’s WEP will apply to connections as shown in number 1.
 
@@ -40,7 +40,7 @@ In contrast, if applyOnForward is set to true for a policy that selects a HEP, t
 - Ingress policy on HEP eth0 affects connections 1 and 2
 - Egress policy on HEP eth1 affects connections 2, 3, and 4
 
-There are also different default action semantics for forwarded traffic (connections 1-4) versus local traffic (connection 4) when it traverses a HEP.  If no applyOnForward policy selects the HEP and direction (ingress vs egress), then forwarded traffic is allowed.  If no policy (regardless of applyOnForward) selects the HEP and direction, then local traffic is denied.
+There are also different default action semantics for forwarded traffic (connections 1-4) versus local traffic (connection 4) when it traverses a HEP.  If no applyOnForward policy selects the HEP and direction (ingress versus egress), then forwarded traffic is allowed.  If no policy (regardless of applyOnForward) selects the HEP and direction, then local traffic is denied.
 
 | **HEP defined?** | **Traffic Type** | **applyOnForward defined?** | **Any policy defined?** | **Default Action** |
 | ---------------- | ---------------- | --------------------------- | ----------------------- | ------------------ |
@@ -55,7 +55,7 @@ There are also different default action semantics for forwarded traffic (connect
 
 #### preDNAT policy
 
-Hosts are often configured to perform Destination Network Address Translation before forwarding certain packets. A common example of this in cloud computing is when the host acts as a reverse-proxy to load balance service requests for a set of backend workload instances. This How To guide on applying policy to Kubernetes nodePorts is a specific example of such a reverse-proxy.
+Hosts are often configured to perform Destination Network Address Translation before forwarding certain packets. A common example of this in cloud computing is when the host acts as a reverse-proxy to load balance service requests for a set of backend workload instances. This How To guide on applying policy to [Kubernetes nodePorts]({{site.baseurl}}/{{page.version}}/security/kubernetes-node-ports) is a specific example of such a reverse-proxy.
 
 When preDNAT is set to false on a global network policy, the policy rules are evaluated on the connection after DNAT is performed. False is the default.  When preDNAT is set to true, the policy rules are evaluated on the connection before DNAT has been performed. 
 
@@ -73,15 +73,14 @@ This is particularly relevant when you want to enforce policy for a host that al
 
 #### Control forwarded traffic in or out of particular networks
 
-1. Choose a labelling scheme for your Host Endpoints (network interfaces).  
+1. Choose a labeling scheme for your Host Endpoints (network interfaces).  
    For example, if you have an application network and management network, you might choose the labels **network = application** and **network = management**.
 1. Write GlobalNetworkPolicies expressing your desired rules.    
-a. applyOnForward set to true.   
-b. Use the **selector:** to choose which Host Endpoints to apply policy.
-1. Create the HostEndpoint objects on the {{site.prodname}} API.    
-a. Label the HostEndpoints according to the label scheme you developed in step 1.    
-b. We recommend that you create policies before you create the Host Endpoints.          
-This ensures that all policies exist before {{site.prodname}} starts enforcing.
+   - applyOnForward set to true.   
+   - Use the **selector:** to choose which Host Endpoints to apply policy.
+1. Create the HostEndpoint objects on the `{{site.prodname}} API`.    
+   - Label the HostEndpoints according to the label scheme you developed in step 1.    
+   - We recommend that you create policies before you create the Host Endpoints. This ensures that all policies exist before {{site.prodname}} starts enforcing.     
 
 ### Tutorial
 
@@ -122,9 +121,9 @@ Save this as allow-ssh-maintenace.yaml.
 
 Apply the policy to the cluster:
 
-```
+<pre>
 calicoctl create -f allow-ssh-maintenance.yaml
-```
+</pre>
 
 Finally, create the host endpoint for the interface that connects to the maintenance network.
 
@@ -144,16 +143,16 @@ spec:
 
 Replace myhost with the node name {{site.prodname}} uses, and the expected IPs with the actual interface IP address(es).  Save this file as hep.yaml.
 
-Apply the HostEndpoint to the cluster:
+Apply the host endpoint to the cluster:
 
-```
+<pre>
 calicoctl create -f hep.yaml
-```
+</pre>
 
 For completeness, you could also create a HostEndpoint for eth0, but because we have not written any policies for the application network yet, you can omit this step.
 
 ### Above and beyond
 
 - [Host endpoint]({{site.baseurl}}/{{page.version}}/reference/resources/hostendpoint)
-- [Host endpoint]({{site.baseurl}}/{{page.version}}/reference/resources/workloadendpoint)
+- [Workload endpoint]({{site.baseurl}}/{{page.version}}/reference/resources/workloadendpoint)
 - [Global network policy]({{site.baseurl}}/{{page.version}}/reference/resources/globalnetworkpolicy)
