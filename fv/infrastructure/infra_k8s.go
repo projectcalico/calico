@@ -236,7 +236,7 @@ func setupK8sDatastoreInfra() (*K8sDatastoreInfra, error) {
 	log.Info("Started controller manager.")
 
 	// Copy CRD registration manifest into the API server container, and apply it.
-	err := kds.k8sApiContainer.CopyFileIntoContainer("../vendor/github.com/projectcalico/libcalico-go/test/crds.yaml", "/crds.yaml")
+	err := kds.k8sApiContainer.CopyFileIntoContainer("infrastructure/crds.yaml", "/crds.yaml")
 	if err != nil {
 		TearDownK8sInfra(kds)
 		return nil, err

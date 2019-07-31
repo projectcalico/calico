@@ -147,8 +147,6 @@ docker run --detach --name ${prefix}-apiserver \
 k8s_ip=$(get_container_ip ${prefix}-apiserver)
 k8s_api_endpoint=https://${k8s_ip}:6443
 
-sleep 120
-
 while ! docker exec ${prefix}-apiserver kubectl create clusterrolebinding anonymous-admin --clusterrole=cluster-admin --user=system:anonymous; do
     sleep 2
 done
