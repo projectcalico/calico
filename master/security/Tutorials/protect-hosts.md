@@ -1,5 +1,5 @@
 ---
-title: Tutorial
+title: Protect hosts tutorial
 canonical_url: 'https://docs.projectcalico.org/v3.7/security/host-endpoints/tutorial'
 ---
 

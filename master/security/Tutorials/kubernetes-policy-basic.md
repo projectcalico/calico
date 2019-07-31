@@ -1,5 +1,5 @@
 ---
-title: Simple policy tutorial
+title: Kubernetes policy, basic tutorial
 canonical_url: 'https://docs.projectcalico.org/v3.7/security/simple-policy'
 ---
 

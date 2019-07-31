@@ -73,10 +73,10 @@ toc:
 - title: Tutorials
   section:
   - title: Enforce network policy using Istio tutorial
-    path: /security/tutorials/app-layer-policy/
+    path: /security/tutorials/app-layer-policy/enforce-policy-istio
 
   - title: Protect host tutorial
-    path: /security/protect-hosts
+    path: /security/tutorials/protect-hosts
 
   - title: Kubernetes policy, demo
     path: /security/tutorials/kubernetes-policy-demo/kubernetes-demo

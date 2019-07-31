@@ -1,5 +1,5 @@
 ---
-title: Application layer policy tutorial
+title: Enforce network policy using Istio tutorial
 canonical_url: 'https://docs.projectcalico.org/v3.7/security/app-layer-policy/index'
 ---
 
