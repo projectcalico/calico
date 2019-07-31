@@ -80,8 +80,8 @@ a. applyOnForward set to true.
 b. Use the **selector:** to choose which Host Endpoints to apply policy.
 1. Create the HostEndpoint objects on the {{site.prodname}} API.    
 a. Label the HostEndpoints according to the label scheme you developed in step 1.    
-b. We recommend that you create policies before you create the Host Endpoints.       
-   This ensures that all policies exist before {{site.prodname}} starts enforcing.
+b. We recommend that you create policies before you create the Host Endpoints.          
+This ensures that all policies exist before {{site.prodname}} starts enforcing.
 
 ### Tutorial
 
