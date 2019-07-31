@@ -74,3 +74,5 @@ toc:
   path: /security/namespace-policy
 - title: Apply policy to services exposed externally as cluster IPs
   path: /security/services-cluster-ips  
+- title: Monitor Calico component metrics
+  path: /security/monitor-component-metrics  
