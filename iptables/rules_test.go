@@ -118,7 +118,7 @@ var _ = Describe("Hash extraction tests", func() {
 		Expect(rules).To(Equal(map[string][]string{
 			"FORWARD": {
 				"-A FORWARD -j an-old-rule",
-				"-A FORWARD -j ignore-me",
+				"-",
 			},
 		}))
 	})
@@ -154,7 +154,7 @@ var _ = Describe("Hash extraction tests", func() {
 			"FORWARD": {
 				"-A FORWARD -m comment --comment \"cali:wUHhoiAYhphO9Mso\" -j cali-FORWARD",
 				"-A FORWARD -m comment --comment \"cali:abcdefghij1234-_\" -j cali-FORWARD",
-				"-A FORWARD --src '1.2.3.4'",
+				"-",
 				"-A FORWARD -m comment --comment \"cali:1234567890093213\" -j cali-FORWARD",
 			},
 		}))
@@ -179,7 +179,7 @@ var _ = Describe("Hash extraction tests", func() {
 		}))
 		Expect(rules).To(Equal(map[string][]string{
 			"FORWARD": {
-				"-A FORWARD --src '1.2.3.4'",
+				"-",
 				"-A FORWARD -m comment --comment \"cali:1234567890093213\" -j cali-FORWARD",
 			},
 		}))

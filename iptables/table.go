@@ -729,7 +729,7 @@ func (t *Table) readHashesAndRulesFrom(r io.ReadCloser) (hashes map[string][]str
 
 	// Keep track of whether the non-Calico chain has inserts. If the chain does not have inserts, we'll remove the
 	// full rules for that chain.
-	chainHasCalicoRule := map[string]bool{}
+	chainHasCalicoRule := set.New()
 
 	// Figure out if debug logging is enabled so we can skip some WithFields() calls in the
 	// tight loop below if the log wouldn't be emitted anyway.
@@ -780,21 +780,28 @@ func (t *Table) readHashesAndRulesFrom(r io.ReadCloser) (hashes map[string][]str
 			if debug {
 				logCxt.WithField("hash", hash).Debug("Found hash in rule")
 			}
-			chainHasCalicoRule[chainName] = true
+			chainHasCalicoRule.Add(chainName)
 		} else if t.oldInsertRegexp.Find(line) != nil {
 			logCxt.WithFields(log.Fields{
 				"rule":      line,
 				"chainName": chainName,
 			}).Info("Found inserted rule from previous Felix version, marking for cleanup.")
 			hash = "OLD INSERT RULE"
-			chainHasCalicoRule[chainName] = true
+			chainHasCalicoRule.Add(chainName)
 		}
 		hashes[chainName] = append(hashes[chainName], hash)
 
 		// Not our chain so cache the full rule in case we need to generate deletes later on.
 		// After scanning the input, we prune any chains of full rules that do not contain inserts.
 		if !t.ourChainsRegexp.MatchString(chainName) {
-			fullRule := string(line)
+			// Only store the full rule for non-Calico rules. Otherwise, we just use the placeholder "-".
+			fullRule := "-"
+			if captures := t.hashCommentRegexp.FindSubmatch(line); captures != nil {
+				fullRule = string(line)
+			} else if t.oldInsertRegexp.Find(line) != nil {
+				fullRule = string(line)
+			}
+
 			rules[chainName] = append(rules[chainName], fullRule)
 		}
 	}
@@ -805,7 +812,7 @@ func (t *Table) readHashesAndRulesFrom(r io.ReadCloser) (hashes map[string][]str
 
 	// Remove full rules for the non-Calico chain if it does not have inserts.
 	for chainName, _ := range rules {
-		if !chainHasCalicoRule[chainName] {
+		if !chainHasCalicoRule.Contains(chainName) {
 			delete(rules, chainName)
 		}
 	}
