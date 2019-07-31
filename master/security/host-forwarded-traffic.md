@@ -73,14 +73,15 @@ This is particularly relevant when you want to enforce policy for a host that al
 
 #### Control forwarded traffic in or out of particular networks
 
-1. Choose a labelling scheme for your Host Endpoints (network interfaces).
-   For example, if you have an application network and management network, you might choose the labels network = application and network = management
+1. Choose a labelling scheme for your Host Endpoints (network interfaces).  
+   For example, if you have an application network and management network, you might choose the labels **network = application** and **network = management**.
 1. Write GlobalNetworkPolicies expressing your desired rules.    
 a. applyOnForward set to true.   
-b. Use the selector: to choose which Host Endpoints to apply policy
+b. Use the **selector:** to choose which Host Endpoints to apply policy.
 1. Create the HostEndpoint objects on the {{site.prodname}} API.    
 a. Label the HostEndpoints according to the label scheme you developed in step 1.    
-b. We recommend that you create policies before you create the Host Endpoints. This ensures that all policies exist before {{site.prodname}} starts enforcing.
+b. We recommend that you create policies before you create the Host Endpoints.       
+   This ensures that all policies exist before {{site.prodname}} starts enforcing.
 
 ### Tutorial
 
@@ -150,7 +151,6 @@ calicoctl create -f hep.yaml
 ```
 
 For completeness, you could also create a HostEndpoint for eth0, but because we have not written any policies for the application network yet, you can omit this step.
-
 
 ### Above and beyond
 
