@@ -12,7 +12,7 @@ A **default deny** network policy provides an enhanced security posture -- so po
 
 ### Features
 
-This how-to guide uses the following Calico features:
+This how-to guide uses the following {{site.prodname}} features:
 - **NetworkPolicy**
 - **GlobalNetworkPolicy**
 
@@ -22,7 +22,7 @@ This how-to guide uses the following Calico features:
 
 **Default allow** means all traffic is allowed by default, unless otherwise specified. **Default deny** means all traffic is denied by default, unless explicitly allowed. **Kubernetes pods are default allow**, unless network policy is defined to specify otherwise.
 
-For compatibility with Kubernetes, **Calico network policy** enforcement follows the standard convention for Kubernetes pods:
+For compatibility with Kubernetes, **{{site.prodname}} network policy** enforcement follows the standard convention for Kubernetes pods:
 - If no network policies apply to a pod, then all traffic to/from that pod is allowed.
 - If one or more network policies apply to a pod with type ingress, then only the ingress traffic specifically allowed by those policies is allowed.
 - If one or more network policies apply to a pod with type egress, then only the egress traffic specifically allowed by those policies is allowed.
@@ -35,10 +35,10 @@ We recommend creating an implicit default deny policy for your Kubernetes pods, 
 
 ### How to
 
-Although you can use any of the following policies to create default deny policy for Kubernetes pods, we recommend using the {{site.prodname}} global network policy. A {{site.prodname}}the hypervisor for VMs, or container runtime for containers). Using a Calico global network policy supports a conservative security stance for protecting resources.
+Although you can use any of the following policies to create default deny policy for Kubernetes pods, we recommend using the {{site.prodname}} global network policy. A {{site.prodname}}the hypervisor for VMs, or container runtime for containers). Using a {{site.prodname}} global network policy supports a conservative security stance for protecting resources.
 
-- [Enable default deny Calico global network policy, non-namespaced](#enable-default-deny-calico-global-network-policy-non-namespaced)
-- [Enable default deny Calico network policy, namespaced](#enable-default-deny-calico-network-policy-namespaced)
+- [Enable default deny {{site.prodname}} global network policy, non-namespaced](#enable-default-deny-calico-global-network-policy-non-namespaced)
+- [Enable default deny {{site.prodname}} network policy, namespaced](#enable-default-deny-calico-network-policy-namespaced)
 - [Enable default deny Kubernetes policy, namespaced](#enable-default-deny-Kubernetes-policy-namespaced)
 
 #### Enable default deny {{site.prodname}} global network policy, non-namespaced
