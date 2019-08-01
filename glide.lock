@@ -1,5 +1,5 @@
-hash: 86f8b62ecae0ac3ac3bc7b01e77be2715f58a4ab5d8fd1d2f00b6aac5ed38885
-updated: 2019-07-22T04:08:48.312688155Z
+hash: bcf725aa08983c3f2bba965dd6b64ff96d1c5acaf3cbdfb708a0316d79fe65ca
+updated: 2019-08-01T16:11:26.624733878+01:00
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -33,7 +33,7 @@ imports:
   - pkg/types
   - version
 - name: github.com/coreos/go-semver
-  version: e214231b295a8ea9479f11b70b35d5acf3556d9b
+  version: 8ab6407b697782a06568d4b7f1db25550ec2e4c6
   subpackages:
   - semver
 - name: github.com/davecgh/go-spew
@@ -49,7 +49,7 @@ imports:
 - name: github.com/go-ini/ini
   version: 3be5ad479f69d4e08d7fe25edf79bf3346bd658e
 - name: github.com/go-playground/locales
-  version: f63010822830b6fe52288ee52d5a1151088ce039
+  version: 630ebbb602847eba93e75ae38bbc7bb7abcf1ff3
   subpackages:
   - currency
 - name: github.com/go-playground/universal-translator
@@ -112,11 +112,11 @@ imports:
 - name: github.com/kardianos/osext
   version: 2bc1f35cddc0cc527b4bc3dce8578fc2a6c11384
 - name: github.com/kelseyhightower/envconfig
-  version: dd1402a4d99de9ac2f396cd6fcb957bc2c695ec1
+  version: 0b417c4ec4a8a82eecc22a1459a504aa55163d61
 - name: github.com/leodido/go-urn
   version: a67a23e1c1af3c66528573bb86a87246477277c1
 - name: github.com/matttproud/golang_protobuf_extensions
-  version: c182affec369e30f25d3eb8cd8a478dee585ae7d
+  version: c12348ce28de40eed0136aa2b644d0ee0650e56c
   subpackages:
   - pbutil
 - name: github.com/mipearson/rfw
@@ -173,7 +173,7 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: 241d8b0486a3c732e938cfe6a7937e65e1bad319
+  version: 68e175bba1ebf524e54a4d0034119e4cf146bffb
   subpackages:
   - lib/apiconfig
   - lib/apis/v1
@@ -226,11 +226,11 @@ imports:
   - prometheus/internal
   - prometheus/promhttp
 - name: github.com/prometheus/client_model
-  version: fd36f4220a901265f90734c3183c5f0c91daa0b8
+  version: 5c3871d89910bfb32f5fcab2aa4b9ec68e65a99f
   subpackages:
   - go
 - name: github.com/prometheus/common
-  version: c873fb1f9420b83ee703b4361c61183b4619f74d
+  version: 4724e9255275ce38f7179b2478abeae4e28c904f
   subpackages:
   - expfmt
   - internal/bitbucket.org/ww/goautoneg
@@ -351,7 +351,7 @@ imports:
 - name: gopkg.in/fsnotify.v1
   version: 7be54206639f256967dd82fa767397ba5f8f48f5
 - name: gopkg.in/go-playground/validator.v9
-  version: 46b4b1e301c24cac870ffcb4ba5c8a703d1ef475
+  version: 884d31b8cad6a1ec877f2400d555924cea03bbea
 - name: gopkg.in/inf.v0
   version: 3887ee99ecf07df5b447e9b00d9c0b2adaa9f3e4
 - name: gopkg.in/tomb.v1
