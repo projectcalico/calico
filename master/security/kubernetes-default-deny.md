@@ -4,7 +4,7 @@ title: Enable default deny for Kubernetes pods
 
 ### Big picture
 
-Enable a default deny policy for Kubernetes pods using Kubernetes or Calico network policy.
+Enable a default deny policy for Kubernetes pods using Kubernetes or {{site.prodname}} network policy.
 
 ### Value
 
@@ -31,17 +31,17 @@ For other endpoint types (VMs, host interfaces), the default behavior is to deny
 
 #### Best practice: implicit default deny policy
 
-We recommend creating an implicit default deny policy for your Kubernetes pods, regardless if you use Calico or Kubernetes network policy. This ensures that unwanted traffic is denied by default. Note that implicit default deny policy always occurs last; if any other policy allows the traffic, then the deny does not come into effect. The deny is executed only after all other policies are evaluated.
+We recommend creating an implicit default deny policy for your Kubernetes pods, regardless if you use {{site.prodname}} or Kubernetes network policy. This ensures that unwanted traffic is denied by default. Note that implicit default deny policy always occurs last; if any other policy allows the traffic, then the deny does not come into effect. The deny is executed only after all other policies are evaluated.
 
 ### How to
 
-Although you can use any of the following policies to create default deny policy for Kubernetes pods, we recommend using the Calico global network policy. A Calico global network policy applies to all workloads (VMs and containers) in all namespaces, as well as hosts (computers that run the hypervisor for VMs, or container runtime for containers). Using a Calico global network policy supports a conservative security stance for protecting resources.
+Although you can use any of the following policies to create default deny policy for Kubernetes pods, we recommend using the {{site.prodname}} global network policy. A {{site.prodname}}the hypervisor for VMs, or container runtime for containers). Using a Calico global network policy supports a conservative security stance for protecting resources.
 
 - [Enable default deny Calico global network policy, non-namespaced](#enable-default-deny-calico-global-network-policy-non-namespaced)
 - [Enable default deny Calico network policy, namespaced](#enable-default-deny-calico-network-policy-namespaced)
 - [Enable default deny Kubernetes policy, namespaced](#enable-default-deny-Kubernetes-policy-namespaced)
 
-#### Enable default deny Calico global network policy, non-namespaced
+#### Enable default deny {{site.prodname}} global network policy, non-namespaced
 
 In the following example, we enable a default deny **GlobalNetworkPolicy** for all workloads and hosts.
 
@@ -57,7 +57,7 @@ spec:
   - Egress
 ```
 
-#### Enable default deny Calico network policy, namespaced
+#### Enable default deny {{site.prodname}} network policy, namespaced
 
 In the following example, we enable a default deny **NetworkPolicy** for all workloads in the namespace, **engineering**.
 
