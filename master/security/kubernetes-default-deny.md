@@ -93,5 +93,5 @@ spec:
 
 ### Above and beyond
 
-- [Network Policy]({{site.baseurl}}/{{page.version}}/reference/resources/networkpolicy)
-- [Global Network Policy]({{site.baseurl}}/{{page.version}}/reference/resources/globalnetworkpolicy)
+- [Network policy]({{site.baseurl}}/{{page.version}}/reference/resources/networkpolicy)
+- [Global network policy]({{site.baseurl}}/{{page.version}}/reference/resources/globalnetworkpolicy)
