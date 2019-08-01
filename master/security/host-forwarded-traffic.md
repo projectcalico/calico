@@ -40,7 +40,7 @@ In contrast, if applyOnForward is set to true for a policy that selects a HEP, t
 - Ingress policy on HEP eth0 affects connections 1 and 2
 - Egress policy on HEP eth1 affects connections 2, 3, and 4
 
-There are also different default action semantics for forwarded traffic (connections 1-4) versus local traffic (connection 4) when it traverses a HEP.  If no applyOnForward policy selects the HEP and direction (ingress versus egress), then forwarded traffic is allowed.  If no policy (regardless of applyOnForward) selects the HEP and direction, then local traffic is denied.
+There are also different default action semantics for forwarded traffic (connections 1-3) versus local traffic (connection 4) when it traverses a HEP.  If no applyOnForward policy selects the HEP and direction (ingress versus egress), then forwarded traffic is allowed.  If no policy (regardless of applyOnForward) selects the HEP and direction, then local traffic is denied.
 
 | **HEP defined?** | **Traffic Type** | **applyOnForward defined?** | **Any policy defined?** | **Default Action** |
 | ---------------- | ---------------- | --------------------------- | ----------------------- | ------------------ |
