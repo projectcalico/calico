@@ -4,36 +4,36 @@ title: Get started with Calico network policy for OpenStack
 
 ### Big picture
 
-Use Calico network policy to extend security beyond OpenStack security groups.
+Use {{site.prodname}} network policy to extend security beyond OpenStack security groups.
 
 ### Value
 
-For **deployment users**, OpenStack security groups provides enough features and flexibility. But for **deployment administrators**, limited labeling in VM security groups makes it difficult to address all security use cases that arise. Calico network policy provides special VM labels so you can identify VMs and impose additional restrictions that cannot be bypassed by users’ security group configuration. 
+For **deployment users**, OpenStack security groups provides enough features and flexibility. But for **deployment administrators**, limited labeling in VM security groups makes it difficult to address all security use cases that arise. {{site.prodname}} network policy provides special VM labels so you can identify VMs and impose additional restrictions that cannot be bypassed by users’ security group configuration. 
 
 ### Features
 
-This how-to guide uses the following Calico features:
+This how-to guide uses the following {{site.prodname}} features:
 
-- Calico predefined **OpenStack VM endpoint labels**
+- {{site.prodname}} predefined **OpenStack VM endpoint labels**
 - **GlobalNetworkPolicy** or **NetworkPolicy**
 
 ### Concepts
 
 #### Multi-region deployments
 
-Using the OpenStack API, it is difficult to apply policy to cross-region network traffic because security groups are local to a single region. In Calico, each region in your OpenStack deployment becomes a separate Calico namespace in a single etcd datastore. With regions mapped to namespaces, you can easily define Calico network policy for communications between VMs in different regions. 
+Using the OpenStack API, it is difficult to apply policy to cross-region network traffic because security groups are local to a single region. In {{site.prodname}}, each region in your OpenStack deployment becomes a separate {{site.prodname}} namespace in a single etcd datastore. With regions mapped to namespaces, you can easily define {{site.prodname}} network policy for communications between VMs in different regions. 
 
 #### Labels: more flexibility, greater security
 
-Calico provides predefined [VM endpoint labels]({{site.baseurl}}/{{page.version}}/networking/openstack/labels) (projects, security groups, and namespaces) for OpenStack deployments. You can use these labels in selector fields in Calico network policy to identify the VMs for allow/deny policy.
+{{site.prodname}} provides predefined [VM endpoint labels]({{site.baseurl}}/{{page.version}}/networking/openstack/labels) (projects, security groups, and namespaces) for OpenStack deployments. You can use these labels in selector fields in {{site.prodname}} network policy to identify the VMs for allow/deny policy.
 
 #### Policy ordering and enforcement
 
-Calico network policy is always enforced before OpenStack security groups, and cannot be overridden by user-level security group configuration. 
+{{site.prodname}} network policy is always enforced before OpenStack security groups, and cannot be overridden by user-level security group configuration. 
 
 ### Before you begin...
 
-- [Set up Calico for OpenStack]({{site.baseurl}}/{{page.version}}/networking/openstack/dev-machine-setup)
+- [Set up {{site.prodname}} for OpenStack]({{site.baseurl}}/{{page.version}}/networking/openstack/dev-machine-setup)
 - If you are using a multi-region VM deployment, [follow these extra steps]({{site.baseurl}}/{{page.version}}/networking/openstack/multiple-regions)
 
 ### How to
@@ -43,7 +43,7 @@ Calico network policy is always enforced before OpenStack security groups, and c
 
 #### Restrict all ingress traffic between specific security groups
 
-In the following example, we create a **GlobalNetworkPolicy** that is applied before any OpenStack security group policy. It prevents all ingress communication between the OpenStack **superman** and **lexluthor** projects. We use the predefined Calico VM endpoint label, **openstack-project-name**, to identify projects.
+In the following example, we create a **GlobalNetworkPolicy** that is applied before any OpenStack security group policy. It prevents all ingress communication between the OpenStack **superman** and **lexluthor** projects. We use the predefined {{site.prodname}} VM endpoint label, **openstack-project-name**, to identify projects.
 
 ```
 apiVersion: projectcalico.org/v3
@@ -100,5 +100,5 @@ spec:
 
 ### Above and beyond
 
-- For additional Calico network policy features, see [Calico network policy]({{site.baseurl}}/{{page.version}}/reference/resources/networkpolicy) and [Calico global network policy]({{site.baseurl}}/{{page.version}}/reference/resources/globalnetworkpolicy)
-- For details on the OpenStack integration with Calico, see [Calico for OpenStack]({{site.baseurl}}/{{page.version}}/networking/openstack/dev-machine-setup)
+- For additional {{site.prodname}}network policy features, see [{{site.prodname}} network policy]({{site.baseurl}}/{{page.version}}/reference/resources/networkpolicy) and [Calico global network policy]({{site.baseurl}}/{{page.version}}/reference/resources/globalnetworkpolicy)
+- For details on the OpenStack integration with {{site.prodname}}, see [{{site.prodname}} for OpenStack]({{site.baseurl}}/{{page.version}}/networking/openstack/dev-machine-setup)
