@@ -13,7 +13,7 @@ This guide walks through using Kubernetes `NetworkPolicy` to define more complex
 - This guide is aimed at Calico v2.6.1+ on top of Kubernetes 1.8+, and will not work on previous versions of Calico or Kubernetes
 - This guide assumes you have a working Kubernetes cluster and access to it using kubectl.
 - This guide assumes that your Kubernetes nodes have connectivity to the public internet.
-- This guide assumes you are familiar with [Kubernetes NetworkPolicy](../security/simple-policy)
+- This guide assumes you are familiar with [Kubernetes NetworkPolicy](kubernetes-policy-basic)
 
 ### Tutorial flow
 
