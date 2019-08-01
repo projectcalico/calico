@@ -4,15 +4,15 @@ title: Use namespace in policy rules
 
 ### Big picture
 
-Use Calico network policy rules to reference pods in other namespaces.
+Use {{site.prodname}} network policy rules to reference pods in other namespaces.
 
 ### Value
 
-Kubernetes namespaces let you group/separate resources to meet a variety of use-cases. For example you can use namespaces to separate development, production, and QA environments, or to allow different teams to use the same cluster. Using namespace selectors in Calico policy rules allows you to allow or deny traffic to/from pods belonging to specific namespaces. 
+Kubernetes namespaces let you group/separate resources to meet a variety of use-cases. For example you can use namespaces to separate development, production, and QA environments, or to allow different teams to use the same cluster. Using namespace selectors in {{site.prodname}} policy rules allows you to allow or deny traffic to/from pods belonging to specific namespaces. 
 
 ### Features
 
-This how-to guide uses the following Calico features:
+This how-to guide uses the following {{site.prodname}} features:
 
 **NetworkPolicy** with namespaceSelector
 
