@@ -4,19 +4,19 @@ title: Use service accounts in policy rules
 
 ### Big picture
 
-Use Calico network policy to allow/deny traffic for Kubernetes service accounts.
+Use {{site.prodname}} network policy to allow/deny traffic for Kubernetes service accounts.
 
 ### Value
 
-Kubernetes RBAC allows you to control which users are allowed to create and use service accounts. Combined with Calico network policy, you can control the security boundary between users who can provision service accounts, and those who use them.
+Kubernetes RBAC allows you to control which users are allowed to create and use service accounts. Combined with {{site.prodname}} network policy, you can control the security boundary between users who can provision service accounts, and those who use them.
 
 For example, using Kubernetes RBAC, you can restrict permissions to provision service accounts to only the network security team, who can then write high-priority network policies that reference those service accounts.
 
-Additionally, when using Istio-enabled apps with Calico network policy, the cryptographic identity associated with the service account is checked (along with the network identity) to achieve two-factor authentication.
+Additionally, when using Istio-enabled apps with {{site.prodname}} network policy, the cryptographic identity associated with the service account is checked (along with the network identity) to achieve two-factor authentication.
 
 ### Features
 
-This how-to guide uses the following Calico features:
+This how-to guide uses the following {{site.prodname}} features:
 
 **NetworkPolicy** or **GlobalNetworkPolicy** with a service account rule and match criteria.
 
@@ -32,7 +32,7 @@ You should not grant broad permissions to the default service account for a name
 
 #### Service account labels
 
-Like all other Kubernetes objects, service accounts have labels. You can use labels to create ‘groups’ of service accounts. Calico network policy lets you select workloads by their service account using:
+Like all other Kubernetes objects, service accounts have labels. You can use labels to create ‘groups’ of service accounts. {{site.prodname}} network policy lets you select workloads by their service account using:
 
 - An exact match on service account name
 - A service account label selector expression
@@ -88,5 +88,5 @@ spec:
 
 ### Above and beyond
 
-- [Network Policy]({{site.baseurl}}/{{page.version}}/reference/resources/networkpolicy)
-- [Global Network Policy]({{site.baseurl}}/{{page.version}}/reference/resources/globalnetworkpolicy)
+- [Network policy]({{site.baseurl}}/{{page.version}}/reference/resources/networkpolicy)
+- [Global network policy]({{site.baseurl}}/{{page.version}}/reference/resources/globalnetworkpolicy)
