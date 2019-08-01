@@ -27,6 +27,7 @@ import (
 	"runtime"
 	"runtime/debug"
 	"strconv"
+	"sync"
 	"syscall"
 	"time"
 
@@ -471,7 +472,7 @@ configRetry:
 	go syncerToValidator.SendTo(validator)
 	asyncCalcGraph.Start()
 	log.Infof("Started the processing graph")
-	var stopSignalChans []chan<- bool
+	var stopSignalChans []chan<- *sync.WaitGroup
 	if configParams.EndpointReportingEnabled {
 		delay := configParams.EndpointReportingDelaySecs
 		log.WithField("delay", delay).Info(
@@ -495,7 +496,7 @@ configRetry:
 		log.WithField("policySyncPathPrefix", configParams.PolicySyncPathPrefix).Info(
 			"Policy sync API enabled.  Starting the policy sync server.")
 		policySyncProcessor.Start()
-		sc := make(chan bool)
+		sc := make(chan *sync.WaitGroup)
 		stopSignalChans = append(stopSignalChans, sc)
 		go policySyncAPIBinder.SearchAndBind(sc)
 	}
@@ -552,7 +553,7 @@ func servePrometheusMetrics(configParams *config.Config) {
 	}
 }
 
-func monitorAndManageShutdown(failureReportChan <-chan string, driverCmd *exec.Cmd, stopSignalChans []chan<- bool) {
+func monitorAndManageShutdown(failureReportChan <-chan string, driverCmd *exec.Cmd, stopSignalChans []chan<- *sync.WaitGroup) {
 	// Ask the runtime to tell us if we get a term/int signal.
 	signalChan := make(chan os.Signal, 1)
 	signal.Notify(signalChan, syscall.SIGTERM)
@@ -595,13 +596,18 @@ func monitorAndManageShutdown(failureReportChan <-chan string, driverCmd *exec.C
 	logCxt := log.WithField("reason", reason)
 	logCxt.Warn("Felix is shutting down")
 
-	// Notify other components to stop.
+	// Notify other components to stop.  Each notified component must call Done() on the wait
+	// group when it has completed its shutdown.
+	var stopWG sync.WaitGroup
 	for _, c := range stopSignalChans {
+		stopWG.Add(1)
 		select {
-		case c <- true:
+		case c <- &stopWG:
 		default:
+			stopWG.Done()
 		}
 	}
+	stopWG.Wait()
 
 	if !driverAlreadyStopped {
 		// Driver may still be running, just in case the driver is
