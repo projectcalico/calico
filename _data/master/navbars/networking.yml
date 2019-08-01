@@ -58,3 +58,5 @@ toc:
       path: /networking/design/l3-interconnect-fabric
 - title: Accelerating Istio network performance
   path: /networking/sidecar-acceleration
+- title: Interoperate with legacy firewalls using IP ranges
+  path: /networking/legacy-firewalls
