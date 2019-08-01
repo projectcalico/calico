@@ -88,4 +88,4 @@ spec:
 ```
 ### Above and beyond
 
-[Global network policy]({{site.baseurl}}/{{page.version}}/resources/globalnetworkpolicy)
+[Global network policy]({{site.baseurl}}/{{page.version}}/reference/resources/globalnetworkpolicy)
