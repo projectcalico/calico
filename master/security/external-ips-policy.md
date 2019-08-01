@@ -114,5 +114,5 @@ spec:
 ### Above and beyond
 
 -  To understand how to use global network sets to mitigate common threats, see [Defend against DoS attacks]({{site.baseurl}}/{{page.version}}/security/defend-dos-attack)
-- See [Global network sets]({{site.baseurl}}/{{page.version}}/reference/resources/globalnetworkset) for reference
-- See [Global network policy]({{site.baseurl}}/{{page.version}}/reference/resources/globalnetworkpolicy) for reference
+- [Global network sets]({{site.baseurl}}/{{page.version}}/reference/resources/globalnetworkset)
+- [Global network policy]({{site.baseurl}}/{{page.version}}/reference/resources/globalnetworkpolicy)
