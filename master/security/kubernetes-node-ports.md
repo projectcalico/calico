@@ -132,5 +132,5 @@ Then, use **nodeport-external-ingress: true** as the selector of the **allow-nod
 
 ### Above and beyond
 
-- [Global Network Policy]({{site.baseurl}}/{{page.version}}/reference/resources/globalnetworkpolicy) 
-- [Host Endpoints]({{site.baseurl}}/{{page.version}}/reference/resources/hostendpoint)
+- [Global network policy]({{site.baseurl}}/{{page.version}}/reference/resources/globalnetworkpolicy) 
+- [Host endpoints]({{site.baseurl}}/{{page.version}}/reference/resources/hostendpoint)
