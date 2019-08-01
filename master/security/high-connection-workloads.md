@@ -88,4 +88,4 @@ spec:
 ```
 ### Above and beyond
 
-[Global network policy](https://docs.projectcalico.org/v3.6/reference/calicoctl/resources/globalnetworkpolicy)
+[Global network policy]({{site.baseurl}}/{{page.version}}/resources/globalnetworkpolicy)
