@@ -233,6 +233,10 @@ type FelixConfigurationSpec struct {
 	// (ie it uses the iptables MASQUERADE target)
 	NATOutgoingAddress string `json:"natOutgoingAddress,omitempty"`
 
+	// This is the source address to use on programmed device routes. By default the source address is left blank,
+	// leaving the kernel to choose the source address used.
+	DeviceRouteSourceAddress string `json:"deviceRouteSourceAddress,omitempty"`
+
 	// ExternalNodesCIDRList is a list of CIDR's of external-non-calico-nodes which may source tunnel traffic and have
 	// the tunneled traffic be accepted at calico nodes.
 	ExternalNodesCIDRList *[]string `json:"externalNodesList,omitempty"`

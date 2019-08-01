@@ -1754,6 +1754,18 @@ func init() {
 		Entry("should accept a valid prometheusMetricsHost value 'fe80::ea7a:70fa:cf74:25d5'", api.FelixConfigurationSpec{PrometheusMetricsHost: "fe80::ea7a:70fa:cf74:25d5"}, true),
 		Entry("should reject an invalid prometheusMetricsHost value 'localhost#'", api.FelixConfigurationSpec{PrometheusMetricsHost: "localhost#"}, false),
 		Entry("should reject an invalid prometheusMetricsHost value '0: 1::1'", api.FelixConfigurationSpec{PrometheusMetricsHost: "0: 1::1"}, false),
+		Entry("should accept a valid IPv4 address",
+			api.FelixConfigurationSpec{DeviceRouteSourceAddress: ipv4_1}, true,
+		),
+		Entry("should not accept a valid IPv6 address",
+			api.FelixConfigurationSpec{DeviceRouteSourceAddress: ipv6_1}, false,
+		),
+		Entry("should not accept an invalid IP address",
+			api.FelixConfigurationSpec{DeviceRouteSourceAddress: bad_ipv4_1}, false,
+		),
+		Entry("should not accept a masked IP address",
+			api.FelixConfigurationSpec{DeviceRouteSourceAddress: netv4_1}, false,
+		),
 	)
 }
 
