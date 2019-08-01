@@ -8,9 +8,9 @@ A **workload endpoint** is the virtual network interface a workload uses to conn
 
 **IP pools** are ranges of IP addresses that {{site.prodname}} uses for **workload endpoints**.
 
-When we stood up the Kubernetes cluster, we set the Pod CIDR, which is the range of IP addresses Kubernetes thinks
+When we stood up the Kubernetes cluster, we set the pod CIDR, which is the range of IP addresses Kubernetes thinks
 the pods should be in.  Many Kubernetes components use this setting to determine if an IP belongs to a pod, so you
-normally want all IP pools you configure to be subsets of the Pod CIDR.
+normally want all IP pools you configure to be subsets of the pod CIDR.
 
 Let's define two IP pools for use in this cluster.  You can have a production-ready {{site.prodname}} install with only a single
 pool, but we define two so that we can show advanced networking later in this guide.
@@ -30,10 +30,10 @@ spec:
 EOF
 ```
 
-The Pod CIDR was `192.168.0.0/16`.  The `/16` means 16 bits of a 32-bit IPv4 address is the fixed prefix, therefore
-16 bits are freely variable within the CIDR, or about 64K addresses.  For our first IPPool, we define the prefix
+The pod CIDR was `192.168.0.0/16`.  The `/16` means 16 bits of a 32-bit IPv4 address is the fixed prefix, therefore
+16 bits are freely variable within the CIDR, or about 64K addresses.  For our first IP pool, we define the prefix
 `192.168.0.0/18`, leaving only 14 bits free, or about 16K addresses for pods.  This is enough for a very large
-Kubernetes cluster, and it still leaves a lot of room in the Pod CIDR if we want to create some more IP pools.
+Kubernetes cluster, and it still leaves a lot of room in the pod CIDR if we want to create some more IP pools.
 
 Let's define a second pool right now.
 
@@ -73,11 +73,11 @@ Verify the pools are created by
 calicoctl get ippools
 ```
 
-You should see output similar to 
+You should see output similar to
 
 ```
-NAME    CIDR               SELECTOR   
-pool1   192.168.0.0/18     all()      
+NAME    CIDR               SELECTOR
+pool1   192.168.0.0/18     all()
 pool2   192.168.192.0/19   all()
 ```
 

@@ -5,20 +5,21 @@ canonical_url: 'https://docs.projectcalico.org/master/getting-started/kubernetes
 
 This tutorial walks you through setting up {{site.prodname}} the hard way.
 
- - If you are looking to get up and running quickly with {{site.prodname}}, to try things out, check out our [Quickstart Guide](/{{page.version}}/getting-started/kubernetes/).
- - If you are looking for the most direct path to a production-ready {{site.prodname}} install, check out our [Install Guides](/{{page.version}}/getting-started/kubernetes/installation/).
+ - If you are looking to get up and running quickly with {{site.prodname}}, to try things out, check out our [quickstart guide](/{{page.version}}/getting-started/kubernetes/).
+ - If you are looking for the most direct path to a production-ready {{site.prodname}} install, check out our [install Guides](/{{page.version}}/getting-started/kubernetes/installation/).
 
-{{site.prodname}} the Hard Way is optimized for learning about how {{site.prodname}} works and what the other guides do “under the hood.”
+{{site.prodname}} the hard way is optimized for learning about how {{site.prodname}} works and what the other guides do “under the hood.”
 
-The name “{{site.prodname}} the hard way” is inspired by [Kubernetes the Hard Way](https://github.com/kelseyhightower/kubernetes-the-hard-way) by Kelsey Hightower.
+The name “{{site.prodname}} the hard way” is inspired by [Kubernetes the hard way](https://github.com/kelseyhightower/kubernetes-the-hard-way) by Kelsey Hightower.
 
 ## Target Audience
+
 This guide is for someone
 
- - evaluating Kubernetes networking & security options looking to deep dive, or 
+ - evaluating Kubernetes networking & security options looking to deep dive, or
  - planning to build and support a {{site.prodname}} cluster in production, wanting to understand how it works
 
-This guide assumes proficiency with either AWS Web Console or CLI for provisioning and accessing nodes.
+This guide assumes proficiency with either AWS web console or CLI for provisioning and accessing nodes.
 
 ## Cluster Details
 {{site.prodname}} runs in many environments and supports many cluster types. To keep things reasonably prescriptive this guide focuses on Kubernetes running on AWS, but the lessons you learn apply to wherever you choose to run {{site.prodname}}. See Getting Started for a full list of cluster types (OpenShift, OpenStack, etc.).
@@ -26,10 +27,10 @@ This guide assumes proficiency with either AWS Web Console or CLI for provisioni
 The guide will help you install a cluster with the following {{site.prodname}} options
 
  - Kubernetes as the datastore
- - {{site.prodname}} CNI Plug-in, with BGP networking
- - {{site.prodname}} IP Address Management (IPAM)
+ - {{site.prodname}} CNI plugin, with BGP networking
+ - {{site.prodname}} IP address management (IPAM)
  - No overlays
- - IPv4 Addresses
+ - IPv4 addresses
  - Highly available Typha with mutually authenticated TLS
 
 ## Labs

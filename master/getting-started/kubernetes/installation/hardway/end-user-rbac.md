@@ -4,12 +4,12 @@ canonical_url: 'https://docs.projectcalico.org/master/getting-started/kubernetes
 ---
 
 In this lab we will set up role-based access control (RBAC) suitable for running the cluster in production. We will
-cover roles for using Calico.  General RBAC for a production Kubernetes cluster is beyond the scope of this lab.
+cover roles for using {{site.prodname}}.  General RBAC for a production Kubernetes cluster is beyond the scope of this lab.
 
 ## Network admin
 
-A network admin is a person responsible for configuring and operating the Calico network as a whole. As such, they
-will need access to all Calico custom resources, as well as some associated Kubernetes resources.
+A network admin is a person responsible for configuring and operating the {{site.prodname}} network as a whole. As such, they
+will need access to all {{site.prodname}} custom resources, as well as some associated Kubernetes resources.
 
 Create the role
 
@@ -115,7 +115,7 @@ Bind the role to the group `network-admins`.
 kubectl create clusterrolebinding network-admins --clusterrole=network-admin --group=network-admins
 ```
 
-Test Nik's access by creating a GlobalNetworkSet
+Test Nik's access by creating a global network set
 
 ```
 KUBECONFIG=./nik.kubeconfig calicoctl apply -f - <<EOF
@@ -130,7 +130,7 @@ spec:
 EOF
 ```
 
-Verify the GlobalNetworkSet exists
+Verify the global network set exists
 
 ```
 KUBECONFIG=./nik.kubeconfig calicoctl get globalnetworkset -o wide
@@ -139,12 +139,12 @@ KUBECONFIG=./nik.kubeconfig calicoctl get globalnetworkset -o wide
 Result
 
 ```
-NAME       NETS                                
-niks-set   110.120.130.0/24,210.220.230.0/24   
+NAME       NETS
+niks-set   110.120.130.0/24,210.220.230.0/24
 ```
 {: .no-select-button}
 
-Delete the GlobalNetworkSet
+Delete the global network set
 
 ```
 KUBECONFIG=./nik.kubeconfig calicoctl delete globalnetworkset niks-set
@@ -153,7 +153,7 @@ KUBECONFIG=./nik.kubeconfig calicoctl delete globalnetworkset niks-set
 ## Service owner
 
 A service owner is a person responsible for operating one or more services in Kubernetes. They should be able to define
-network policy for their service, but don't need to view or modify any global configuration related to Calico.
+network policy for their service, but don't need to view or modify any global configuration related to {{site.prodname}}.
 
 Define the role
 
@@ -236,7 +236,7 @@ Bind the role to Sam in the namespace
 kubectl create rolebinding -n sam network-service-owner-sam --clusterrole=network-service-owner --user=sam
 ```
 
-Sam cannot create GlobalNetworkSet resources (like Nik can as network admin)
+Sam cannot create global network set resources (like Nik can as network admin)
 
 ```
 KUBECONFIG=./sam.kubeconfig calicoctl get globalnetworkset -o wide
@@ -274,8 +274,8 @@ KUBECONFIG=./sam.kubeconfig calicoctl get networksets -n sam
 Result
 
 ```
-NAMESPACE   NAME       
-sam         sams-set   
+NAMESPACE   NAME
+sam         sams-set
 ```
 {: .no-select-button}
 

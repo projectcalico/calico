@@ -62,10 +62,10 @@ Copy this `cni.kubeconfig` file to every node in the cluster.
 
 ## Provision RBAC
 
-Define a ClusterRole the CNI plugin will use to access Kubernetes.
+Define a cluster role the CNI plugin will use to access Kubernetes.
 
 ```
-kubectl apply -f - <<EOF 
+kubectl apply -f - <<EOF
 kind: ClusterRole
 apiVersion: rbac.authorization.k8s.io/v1
 metadata:
@@ -108,7 +108,7 @@ rules:
 EOF
 ```
 
-Bind the ClusterRole to the `calico-cni` account.
+Bind the cluster role to the `calico-cni` account.
 
 ```
 kubectl create clusterrolebinding calico-cni --clusterrole=calico-cni --user=calico-cni
@@ -140,7 +140,7 @@ mkdir -p /etc/cni/net.d/
 ```
 
 Copy the kubeconfig from the previous section
-``` 
+```
 cp cni.kubeconfig /etc/cni/net.d/calico-kubeconfig
 chmod 600 /etc/cni/net.d/calico-kubeconfig
 ```

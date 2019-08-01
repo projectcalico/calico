@@ -10,8 +10,8 @@ and improves scalability of the cluster.
 
 ## Provision Certificates
 
-We will use mutually authenticated TLS to ensure that `calico/node` and Typha communicate securely. In this section, we generate a 
-Certificate Authority (CA) and use it to sign a certificate for Typha.
+We will use mutually authenticated TLS to ensure that `calico/node` and Typha communicate securely. In this section, we generate a
+certificate authority (CA) and use it to sign a certificate for Typha.
 
 Create the CA certificate and key
 ```
@@ -49,7 +49,7 @@ openssl x509 -req -in typha.csr \
                   -days 365
 ```
 
-Store the Typha key and certificate in a Secret that Typha will access
+Store the Typha key and certificate in a secret that Typha will access
 
 ```
 kubectl create secret generic -n kube-system calico-typha-certs --from-file=typha.key --from-file=typha.crt
@@ -63,10 +63,10 @@ Create a ServiceAccount that will be used to run Typha.
 kubectl create serviceaccount -n kube-system calico-typha
 ```
 
-Define a ClusterRole for Typha with permission to watch {{site.prodname}} datastore objects.
+Define a cluster role for Typha with permission to watch {{site.prodname}} datastore objects.
 
 ```
-kubectl apply -f - <<EOF 
+kubectl apply -f - <<EOF
 kind: ClusterRole
 apiVersion: rbac.authorization.k8s.io/v1beta1
 metadata:
@@ -122,7 +122,7 @@ rules:
 EOF
 ```
 
-Bind the ClusterRole to the `calico-typha` ServiceAccount.
+Bind the cluster role to the `calico-typha` ServiceAccount.
 
 ```
 kubectl create clusterrolebinding calico-typha --clusterrole=calico-typha --serviceaccount=kube-system:calico-typha
@@ -199,7 +199,7 @@ spec:
             value: /calico-typha-certs/typha.crt
           # Location of the server certificate key for Typha; volume mount
           - name: TYPHA_SERVERKEYFILE
-            value: /calico-typha-certs/typha.key        
+            value: /calico-typha-certs/typha.key
         livenessProbe:
           httpGet:
             path: /liveness
