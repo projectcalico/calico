@@ -61,5 +61,5 @@ spec:
 ```
 ### Above and beyond
 
-- For more network policy rules, see [Network Policy]({{site.baseurl}}/{{page.version}}/reference/resources/networkpolicy)
-- To apply policy to all namespaces, see [Global Network Policy]({{site.baseurl}}/{{page.version}}/reference/resources/globalnetworkpolicy)
+- For more network policy rules, see [Network policy]({{site.baseurl}}/{{page.version}}/reference/resources/networkpolicy)
+- To apply policy to all namespaces, see [Global network policy]({{site.baseurl}}/{{page.version}}/reference/resources/globalnetworkpolicy)
