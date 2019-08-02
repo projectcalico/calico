@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2018 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2019 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -151,12 +151,18 @@ func (hook ContextHook) Levels() []log.Level {
 }
 
 func (hook ContextHook) Fire(entry *log.Entry) error {
-	pcs := make([]uintptr, 4)
-	if numEntries := runtime.Callers(6, pcs); numEntries > 0 {
+	// We used to do runtime.Callers(6, pcs) here so that we'd skip straight to the expected
+	// frame.  However, if an intermediate frame gets inlined we can skip too many frames in
+	// that case.  The only safe option is to use skip=1 and then let CallersFrames() deal
+	// with any inlining.
+	pcs := make([]uintptr, 10)
+	if numEntries := runtime.Callers(1, pcs); numEntries > 0 {
+		pcs = pcs[:numEntries]
 		frames := runtime.CallersFrames(pcs)
 		for {
 			frame, more := frames.Next()
 			if !shouldSkipFrame(frame) {
+				// We found the frame we were looking for.  Record its file/line number.
 				entry.Data[fieldFileName] = path.Base(frame.File)
 				entry.Data[fieldLineNumber] = frame.Line
 				break
@@ -169,10 +175,21 @@ func (hook ContextHook) Fire(entry *log.Entry) error {
 	return nil
 }
 
+// shouldSkipFrame returns true if the given frame belongs to the logging library (or this utility package).
+// Note: this is on the critical path for every log, if you need to update it, make sure to run the
+// benchmarks.
+//
+// Some things we've tried that were worse than strings.HasSuffix():
+//
+// - using a regexp:            ~100x slower
+// - using strings.LastIndex(): ~10x slower
+// - omitting the package:      no benefit
 func shouldSkipFrame(frame runtime.Frame) bool {
-	return strings.LastIndex(frame.File, "exported.go") > 0 ||
-		strings.LastIndex(frame.File, "logger.go") > 0 ||
-		strings.LastIndex(frame.File, "entry.go") > 0
+	return strings.HasSuffix(frame.File, "github.com/projectcalico/libcalico-go/lib/logutils/logutils.go") ||
+		strings.HasSuffix(frame.File, "github.com/sirupsen/logrus/hooks.go") ||
+		strings.HasSuffix(frame.File, "github.com/sirupsen/logrus/entry.go") ||
+		strings.HasSuffix(frame.File, "github.com/sirupsen/logrus/logger.go") ||
+		strings.HasSuffix(frame.File, "github.com/sirupsen/logrus/exported.go")
 }
 
 type QueuedLog struct {
