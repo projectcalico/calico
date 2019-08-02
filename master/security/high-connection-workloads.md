@@ -4,15 +4,15 @@ title: Enable extreme high-connection workloads
 
 ### Big picture
 
-Use a Calico network policy rule to bypass Linux conntrack for traffic to workloads that experience extremely large number of connections.
+Use a {{site.prodname}} network policy rule to bypass Linux conntrack for traffic to workloads that experience extremely large number of connections.
 
 ### Value
 
-When the number of connections on a node exceeds the number of connections that Linux conntrack can track, connections can be rejected or dropped. Calico network policy can be used to selectively bypass Linux conntrack for traffic to/from these types of workloads.
+When the number of connections on a node exceeds the number of connections that Linux conntrack can track, connections can be rejected or dropped. {{site.prodname}} network policy can be used to selectively bypass Linux conntrack for traffic to/from these types of workloads.
 
 ### Features
 
-This how-to guide uses the following Calico features:
+This how-to guide uses the following {{site.prodname}} features:
 - A HostEndpoint
 - A GlobalNetworkPolicy with a **doNotTrack** rule
 
@@ -26,9 +26,9 @@ Connection tracking (“conntrack”) is a core feature of the Linux kernel’s 
 
 Some niche workloads handling extremely high number of simultaneous connections, or very high rate of short lived connections, can exceed the maximum number of connections Linux conntrack is able to track. One real world example of such a workload is an extreme scale memcached server handling 50k+ connections per second.
 
-#### Calico doNotTrack network policy
+#### {{site.prodname}} doNotTrack network policy
 
-The Calico global network policy option, **doNotTrack**, indicates to apply the rules in the policy before connection tracking, and that packets allowed by these rules should not be tracked. The policy is applied early in the Linux packet processing pipeline, before any regular network policy rules, and independent of the policy order field. 
+The {{site.prodname}} global network policy option, **doNotTrack**, indicates to apply the rules in the policy before connection tracking, and that packets allowed by these rules should not be tracked. The policy is applied early in the Linux packet processing pipeline, before any regular network policy rules, and independent of the policy order field. 
 
 Unlike normal network policy rules, doNotTrack network policy rules are stateless, meaning you must explicitly specify rules to allow return traffic that would normally be automatically allowed by conntrack. For example, for a server on port 999, the policy must include an ingress rule allowing inbound traffic to port 999, and an egress rule to allow outbound traffic from port 999. 
 
@@ -88,4 +88,4 @@ spec:
 ```
 ### Above and beyond
 
-[Calico GlobalNetworkPolicy](https://docs.projectcalico.org/v3.6/reference/calicoctl/resources/globalnetworkpolicy)
+[Global network policy]({{site.baseurl}}/{{page.version}}/reference/resources/globalnetworkpolicy)

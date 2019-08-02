@@ -262,6 +262,6 @@ Spec:
 
 ### Above and beyond
 
-- For additional Calico network policy features, see [Calico Network Policy Reference]({{site.baseurl}}/{{page.version}}/reference/resources/networkpolicy) and [Calico Global Network Policy Reference]({{site.baseurl}}/{{page.version}}/reference/resources/globalnetworkpolicy)
-- For an alternative to using IP addresses or CIDRs in policy, see [Network sets]({{site.baseurl}}/{{page.version}}/reference/resources/) 
+- For additional Calico network policy features, see [Calico network policy]({{site.baseurl}}/{{page.version}}/reference/resources/networkpolicy) and [Calico global network policy]({{site.baseurl}}/{{page.version}}/reference/resources/globalnetworkpolicy)
+- For an alternative to using IP addresses or CIDRs in policy, see [Network sets]({{site.baseurl}}/{{page.version}}/reference/resources/networkset) 
 - For details on the calicoctl command line tool, see [calicoctl user reference]({{site.baseurl}}/{{page.version}}/reference/calicoctl/) 
