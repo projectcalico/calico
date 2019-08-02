@@ -794,7 +794,7 @@ func (t *Table) readHashesAndRulesFrom(r io.ReadCloser) (hashes map[string][]str
 		// Not our chain so cache the full rule in case we need to generate deletes later on.
 		// After scanning the input, we prune any chains of full rules that do not contain inserts.
 		if !t.ourChainsRegexp.MatchString(chainName) {
-			// Only store the full rule for non-Calico rules. Otherwise, we just use the placeholder "-".
+			// Only store the full rule for Calico rules. Otherwise, we just use the placeholder "-".
 			fullRule := "-"
 			if captures := t.hashCommentRegexp.FindSubmatch(line); captures != nil {
 				fullRule = string(line)
@@ -1023,6 +1023,8 @@ func (t *Table) applyUpdates() error {
 	}
 
 	// Now calculate iptables updates for our inserted rules, which are used to hook top-level chains.
+	var deleteRenderingErr error
+	var line string
 	t.dirtyInserts.Iter(func(item interface{}) error {
 		chainName := item.(string)
 		previousHashes := t.chainToDataplaneHashes[chainName]
@@ -1041,7 +1043,10 @@ func (t *Table) applyUpdates() error {
 		// rules from this chain, then re-insert/re-append them below.
 		for i := 0; i < len(previousHashes); i++ {
 			if previousHashes[i] != "" {
-				line := t.renderDeleteByValueLine(chainName, i)
+				line, deleteRenderingErr = t.renderDeleteByValueLine(chainName, i)
+				if deleteRenderingErr != nil {
+					return set.StopIteration
+				}
 				buf.WriteLine(line)
 			}
 		}
@@ -1085,6 +1090,10 @@ func (t *Table) applyUpdates() error {
 
 		return nil // Delay clearing the set until we've programmed iptables.
 	})
+	// If rendering a delete by line number reached an unexpected state, error out so applyUpdates() can be retried.
+	if deleteRenderingErr != nil {
+		return deleteRenderingErr
+	}
 
 	if t.nftablesMode {
 		// The nftables version of iptables-restore requires that chains are unreferenced at the start of the
@@ -1218,21 +1227,17 @@ func (t *Table) renderDeleteByIndexLine(chainName string, ruleNum int) string {
 
 // renderDeleteByValueLine produces a delete line by the full rule at the given rule number. This function is
 // used for non-Calico chains.
-func (t *Table) renderDeleteByValueLine(chainName string, ruleNum int) string {
+func (t *Table) renderDeleteByValueLine(chainName string, ruleNum int) (string, error) {
 	// For non-cali chains, get the rule by number but delete using the full rule instead of rule number.
 	rules, ok := t.chainToFullRules[chainName]
 	if !ok || ruleNum >= len(rules) {
-		t.logCxt.WithFields(log.Fields{
-			"chainName": chainName,
-			"ruleNum":   ruleNum,
-		}).Warn("Rule doesn't exist")
-		return ""
+		return "", fmt.Errorf("Rendering delete for non-existent rule: Rule %d in %q", ruleNum, chainName)
 	}
 
 	rule := rules[ruleNum]
 
 	// Make the append a delete.
-	return strings.Replace(rule, "-A", "-D", 1)
+	return strings.Replace(rule, "-A", "-D", 1), nil
 }
 
 func calculateRuleInsertHashes(chainName string, rules []Rule, features *Features) []string {
