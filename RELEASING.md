@@ -76,49 +76,5 @@ You should have no local changes and tests should be passing.
 
 ## Releasing debs and rpms
 
-After completing the above `make release` process, you should produce and publish
-the deb/rpm artifacts.
-
-### Build the packages
-
-Run `make deb rpm` to build Debian and RPM packages for a release.
-
-### Publish the packages
-
-For an official release, also build and publish the deb and rpm packages with the
-following steps. These steps assume you have the correct GPG keys and accounts set up to
-sign and publish the packages.
-
-#### Debian packages
-
-Perform the following steps in both the `dist/xenial` and `dist/trust` directories.
-
-- Change into the desired `dist/<distro>` directory.
-
-- Sign the package and `.changes` file with
-
-  ```
-  debsign -k<your key ID> *_source.changes
-  ```
-
-- Upload the signed package and `.changes` file with
-
-  ```
-  dput ppa:project-calico/calico-X.Y *_source.changes
-  ```
-
-  replacing `X.Y` with the actual series numbers.
-
-It can take a long time for Launchpad to build and publish binary
-packages. Usually about an hour, but occasionally many hours.
-
-The PPA is only ready for use when the [PPA package detailspage](https://launchpad.net/~project-calico/+archive/ubuntu/calico-2.6/+packages) shows
-all green ticks in its Build Status column.
-
-#### RPMs
-
-- Sign the RPMs
-
-- Copy the signed RPMs to `/usr/share/nginx/html/rpm/calico-X.Y/x86_64` on the binaries server.
-
-For more information, see [the full package release process](https://github.com/tigera/process/blob/master/releases/packages.md)
+After completing the above `make release` process, you should [produce and publish
+the deb/rpm artifacts](https://github.com/projectcalico/packaging/blob/master/README.md).

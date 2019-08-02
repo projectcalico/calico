@@ -3,7 +3,7 @@ Upstream-Name: calico
 Source: http://github.com/projectcalico/felix
 
 Files: *
-Copyright: 2014-2016 Tigera, Inc
+Copyright: 2014-2019 Tigera, Inc
 License: Apache-2
  Licensed under the Apache License, Version 2.0 (the "License");
  you may not use this file except in compliance with the License.
