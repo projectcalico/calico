@@ -563,8 +563,8 @@ func describeEmptyDataplaneTests(dataplaneMode string) {
 		It("should be in the dataplane", func() {
 			Expect(dataplane.Chains).To(Equal(map[string][]string{
 				"FORWARD": {},
-				"INPUT":  {},
-				"OUTPUT": {},
+				"INPUT":   {},
+				"OUTPUT":  {},
 				"non-cali-chain": {
 					"-m comment --comment \"cali:Z-OWODLe_LbHxmqg\" -m comment --comment \"non-cali 1\" --jump ACCEPT",
 					"-m comment --comment \"cali:tq-yEo1_1XQHZnMs\" -m comment --comment \"non-cali 2\" --jump DROP",
@@ -594,11 +594,11 @@ func describeEmptyDataplaneTests(dataplaneMode string) {
 			It("should be updated", func() {
 				Expect(dataplane.Chains).To(Equal(map[string][]string{
 					"FORWARD": {},
-					"INPUT":  {},
-					"OUTPUT": {},
+					"INPUT":   {},
+					"OUTPUT":  {},
 					"non-cali-chain": {
 						"-m comment --comment \"cali:O9yEP97Dd2y-EskM\" -m comment --comment \"new drop rule\" --jump DROP",
-						"-j randomly-inserted-rule",					},
+						"-j randomly-inserted-rule"},
 					"cali-foobar": {
 						"-m comment --comment \"cali:cxE-1zsuD12R9YEG\" -m comment --comment \"cali 1\" --jump ACCEPT",
 						"-m comment --comment \"cali:1cpbPOGLTROlH4Sj\" -m comment --comment \"cali 2\" --jump DROP",
