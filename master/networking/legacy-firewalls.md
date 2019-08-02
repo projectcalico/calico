@@ -8,30 +8,30 @@ Restrict the IP address chosen for a pod to a specific range of IP addresses.
 
 ### Value
 
-When Kubernetes pods interact with external systems that make decisions based on IP ranges, for example legacy firewalls, it can be useful to define several IP ranges and explicitly assign pods to those ranges. Using the Calico CNI plugin and Calico IP Address Management (IPAM), you can restrict a pod to use an address from within a specific range.
+When Kubernetes pods interact with external systems that make decisions based on IP ranges, for example legacy firewalls, it can be useful to define several IP ranges and explicitly assign pods to those ranges. Using {{site.prodname}} IP Address Management (IPAM), you can restrict a pod to use an address from within a specific range.
 
 ### Features
 
 This how-to guide uses the following features: 
 
-- **Calico IPAM**
+- **{{site.prodname}} IPAM**
 - **IPPool resource**  
 
 ### Concepts
 
-#### Kubernetes pod CIDR
+#### Kubernetes pod CIDR 
 
-The **Kubernetes pod CIDR** is the range of IPs Kubernetes expects pod IPs to be assigned from.  It is defined for the entire cluster and is used by various Kubernetes components to determine whether an IP belongs to a pod. For example, kube-proxy treats traffic differently if that traffic is from a pod than if it is not. All pod IPs must be in the CIDR range for Kubernetes to function correctly.
+The **Kubernetes pod CIDR** is the range of IPs Kubernetes expects pod IPs to be assigned from.   It is defined for the entire cluster and is used by various Kubernetes components to determine whether an IP belongs to a pod. For example, kube-proxy treats traffic differently if that traffic is from a pod than if it is not. All pod IPs must be in the CIDR range for Kubernetes to function correctly.
 
 #### IP Pool
 
-**IP pools** are ranges of IP addresses from which Calico assigns pod IPs. By default, Calico creates an IP pool for the entire Kubernetes pod CIDR, but you can change this to break the pod CIDR up into several pools. You can control which pool Calico uses for each pod using node selectors, or annotations on the pod or the pod’s namespace.
+**IP pools** are ranges of IP addresses from which {{site.prodname}} assigns pod IPs. By default, {{site.prodname}} creates an IP pool for the entire Kubernetes pod CIDR, but you can change this to break the pod CIDR up into several pools. You can control which pool {{site.prodname}} uses for each pod using node selectors, or annotations on the pod or the pod’s namespace.
 
 ### Before you begin...
 
 The features in this How to guide require: 
 
-- Calico CNI with Calico IPAM
+- {{site.prodname}} IPAM
 
 If you are not sure, ssh to one of your Kubernetes nodes and examine the CNI configuration.
 
@@ -47,7 +47,7 @@ Look for the entry:
           },
 </pre>
 
-If present, you are using the Calico CNI Plugin with Calico IPAM. If the IPAM is set to something else, or the 10-calico.conflist file does not exist, you cannot use these features in your cluster.
+If it is present, you are using the {{site.prodname}} IPAM. If the IPAM is not {{site.prodname}}, or the 10-calico.conflist file does not exist, you cannot use these features in your cluster.
 
 Also, cluster administrators must have [configured IP pools](https://docs.projectcalico.org/master/reference/resources/ippool) to define the valid IP ranges to use for allocating pod IP addresses.
 
@@ -75,4 +75,4 @@ The annotation must be present at the time the pod is created. Adding it to an e
 
 ### Above and beyond
 
-For help configuring Calico CNI and Calico IPAM, see [Configuring the Calico CNI Plugins]({{site.baseurl}}/{{page.version}}/reference/cni-plugin/configuration).
+For help configuring {{site.prodname}} IPAM, see [Configuring the {{site.prodname}} CNI Plugins]({{site.baseurl}}/{{page.version}}/reference/cni-plugin/configuration).
