@@ -70,7 +70,6 @@ type mockDataplane struct {
 	FailNextPipeClose              bool
 	FailNextStart                  bool
 	FailNextGetKernelVersionReader bool
-	InsertRandomRuleInForward      bool
 	PipeBuffers                    []*closableBuffer
 	CumulativeSleep                time.Duration
 	Time                           time.Time
@@ -245,15 +244,6 @@ func (d *restoreCmd) Run() error {
 	if d.Dataplane.FailAllRestores {
 		log.Warn("Simulating an iptables-restore failure")
 		return errors.New("Simulated failure")
-	}
-	// Alter the dataplane before the restore is applied.
-	if d.Dataplane.InsertRandomRuleInForward {
-		log.Warn("Simulating an insert in FORWARD chain before iptables-restore happens")
-		if chain, found := d.Dataplane.Chains["FORWARD"]; found {
-			log.Warn("FORWARD chain exists; inserting random rule in FORWARD chain")
-			line := prependLine(chain, "-j randomly-inserted-rule")
-			d.Dataplane.Chains["FORWARD"] = line
-		}
 	}
 
 	// Process it line by line.

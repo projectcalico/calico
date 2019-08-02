@@ -515,7 +515,15 @@ func describeEmptyDataplaneTests(dataplaneMode string) {
 		})
 		Describe("then truncating the chain, with the iptables changed before iptables-restore", func() {
 			BeforeEach(func() {
-				dataplane.InsertRandomRuleInForward = true
+				dataplane.OnPreRestore = func() {
+					log.Warn("Simulating an insert in FORWARD chain before iptables-restore happens")
+					if chain, found := dataplane.Chains["FORWARD"]; found {
+						log.Warn("FORWARD chain exists; inserting random rule in FORWARD chain")
+						lines := prependLine(chain, "-j randomly-inserted-rule")
+						dataplane.Chains["FORWARD"] = lines
+					}
+				}
+
 				table.SetRuleInsertions("FORWARD", []Rule{
 					{Action: DropAction{}, Comment: "new drop rule"},
 				})
