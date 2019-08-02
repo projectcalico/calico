@@ -100,5 +100,5 @@ spec:
 
 ### Above and beyond
 
-- For additional {{site.prodname}}network policy features, see [{{site.prodname}} network policy]({{site.baseurl}}/{{page.version}}/reference/resources/networkpolicy) and [Calico global network policy]({{site.baseurl}}/{{page.version}}/reference/resources/globalnetworkpolicy)
+- For additional {{site.prodname}} network policy features, see [{{site.prodname}} network policy]({{site.baseurl}}/{{page.version}}/reference/resources/networkpolicy) and [Calico global network policy]({{site.baseurl}}/{{page.version}}/reference/resources/globalnetworkpolicy)
 - For details on the OpenStack integration with {{site.prodname}}, see [{{site.prodname}} for OpenStack]({{site.baseurl}}/{{page.version}}/networking/openstack/dev-machine-setup)
