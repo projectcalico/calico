@@ -485,7 +485,7 @@ func describeEmptyDataplaneTests(dataplaneMode string) {
 		})
 	})
 
-	Describe("applying updates when underlying iptables have changed", func() {
+	Describe("applying updates when underlying iptables have changed in a whitelisted chain", func() {
 		BeforeEach(func() {
 			table.SetRuleInsertions("FORWARD", []Rule{
 				{Action: AcceptAction{}},
@@ -540,6 +540,68 @@ func describeEmptyDataplaneTests(dataplaneMode string) {
 					"cali-foobar": {
 						"-m comment --comment \"cali:42h7Q64_2XDzpwKe\" --jump ACCEPT",
 						"-m comment --comment \"cali:0sUFHicPNNqNyNx8\" --jump DROP",
+					},
+				}))
+			})
+		})
+	})
+
+	Describe("applying updates when underlying iptables have changed in a non-whitelisted chain", func() {
+		BeforeEach(func() {
+			table.UpdateChains([]*Chain{
+				{Name: "non-cali-chain", Rules: []Rule{
+					{Action: AcceptAction{}, Comment: "non-cali 1"},
+					{Action: DropAction{}, Comment: "non-cali 2"},
+				}},
+				{Name: "cali-foobar", Rules: []Rule{
+					{Action: AcceptAction{}, Comment: "cali 1"},
+					{Action: DropAction{}, Comment: "cali 2"},
+				}},
+			})
+			table.Apply()
+		})
+		It("should be in the dataplane", func() {
+			Expect(dataplane.Chains).To(Equal(map[string][]string{
+				"FORWARD": {},
+				"INPUT":  {},
+				"OUTPUT": {},
+				"non-cali-chain": {
+					"-m comment --comment \"cali:Z-OWODLe_LbHxmqg\" -m comment --comment \"non-cali 1\" --jump ACCEPT",
+					"-m comment --comment \"cali:tq-yEo1_1XQHZnMs\" -m comment --comment \"non-cali 2\" --jump DROP",
+				},
+				"cali-foobar": {
+					"-m comment --comment \"cali:cxE-1zsuD12R9YEG\" -m comment --comment \"cali 1\" --jump ACCEPT",
+					"-m comment --comment \"cali:1cpbPOGLTROlH4Sj\" -m comment --comment \"cali 2\" --jump DROP",
+				},
+			}))
+		})
+		Describe("then truncating the chain, with the iptables changed before iptables-restore", func() {
+			BeforeEach(func() {
+				dataplane.OnPreRestore = func() {
+					log.Warn("Simulating an insert in non-cali-chain before iptables-restore happens")
+					if chain, found := dataplane.Chains["non-cali-chain"]; found {
+						log.Warn("non-cali-chain exists; inserting random rule in non-cali-chain")
+						lines := prependLine(chain, "-j randomly-inserted-rule")
+						dataplane.Chains["non-cali-chain"] = lines
+					}
+				}
+
+				table.SetRuleInsertions("non-cali-chain", []Rule{
+					{Action: DropAction{}, Comment: "new drop rule"},
+				})
+				table.Apply()
+			})
+			It("should be updated", func() {
+				Expect(dataplane.Chains).To(Equal(map[string][]string{
+					"FORWARD": {},
+					"INPUT":  {},
+					"OUTPUT": {},
+					"non-cali-chain": {
+						"-m comment --comment \"cali:O9yEP97Dd2y-EskM\" -m comment --comment \"new drop rule\" --jump DROP",
+						"-j randomly-inserted-rule",					},
+					"cali-foobar": {
+						"-m comment --comment \"cali:cxE-1zsuD12R9YEG\" -m comment --comment \"cali 1\" --jump ACCEPT",
+						"-m comment --comment \"cali:1cpbPOGLTROlH4Sj\" -m comment --comment \"cali 2\" --jump DROP",
 					},
 				}))
 			})
