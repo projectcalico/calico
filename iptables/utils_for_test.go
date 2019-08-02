@@ -336,7 +336,8 @@ func (d *restoreCmd) Run() error {
 					chain[i] = chain[i-1]
 				}
 				chain[0] = rest
-				d.Dataplane.ChainMods.Add(chainMod{name: chainName, ruleNum: 1})
+				ruleNum := d.Dataplane.ChainMods.Len() + 1
+				d.Dataplane.ChainMods.Add(chainMod{name: chainName, ruleNum: ruleNum})
 			}
 		case "-R", "--replace":
 			Expect(d.Dataplane.NftablesMode).To(BeFalse(), "Replace shouldn't be used in nft mode")

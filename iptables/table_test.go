@@ -18,6 +18,8 @@ import (
 	"os/exec"
 	"strings"
 
+	"github.com/projectcalico/libcalico-go/lib/set"
+
 	. "github.com/projectcalico/felix/iptables"
 
 	. "github.com/onsi/ginkgo"
@@ -532,6 +534,98 @@ func describeEmptyDataplaneTests(dataplaneMode string) {
 						"-m comment --comment \"cali:0sUFHicPNNqNyNx8\" --jump DROP",
 					},
 				}))
+			})
+		})
+	})
+
+	Describe("inserting into a non-Calico chain results in the expected writes", func() {
+		BeforeEach(func() {
+			table.SetRuleInsertions("FORWARD", []Rule{
+				{Action: DropAction{}, Comment: "a drop rule"},
+				{Action: AcceptAction{}, Comment: "an accept rule"},
+			})
+			table.Apply()
+		})
+		It("should update the dataplane", func() {
+			Expect(dataplane.Chains).To(Equal(map[string][]string{
+				"FORWARD": {
+					"-m comment --comment \"cali:upaItQyFMdN7MTTl\" -m comment --comment \"a drop rule\" --jump DROP",
+					"-m comment --comment \"cali:EpCg3AYNp_DftVFS\" -m comment --comment \"an accept rule\" --jump ACCEPT",
+				},
+				"INPUT":  {},
+				"OUTPUT": {},
+			}))
+
+			expectedWrites := set.New()
+			expectedWrites.Add(chainMod{name: "FORWARD", ruleNum: 1})
+			expectedWrites.Add(chainMod{name: "FORWARD", ruleNum: 2})
+			Expect(dataplane.ChainMods.ContainsAll(expectedWrites)).To(BeTrue())
+		})
+		Describe("then inserting the same rules", func() {
+			BeforeEach(func() {
+				table.SetRuleInsertions("FORWARD", []Rule{
+					{Action: DropAction{}, Comment: "a drop rule"},
+					{Action: AcceptAction{}, Comment: "an accept rule"},
+				})
+				dataplane.ResetCmds()
+				table.Apply()
+			})
+			It("should result in no inserts", func() {
+				// Do an iptables-save but not a iptables-restore.
+				if dataplaneMode == "nft" {
+					Expect(dataplane.CmdNames).To(ConsistOf("iptables", "iptables-nft-save"))
+				} else {
+					Expect(dataplane.CmdNames).To(ConsistOf("iptables", "iptables-save"))
+				}
+
+				Expect(dataplane.Chains).To(Equal(map[string][]string{
+					"FORWARD": {
+						"-m comment --comment \"cali:upaItQyFMdN7MTTl\" -m comment --comment \"a drop rule\" --jump DROP",
+						"-m comment --comment \"cali:EpCg3AYNp_DftVFS\" -m comment --comment \"an accept rule\" --jump ACCEPT",
+					},
+					"INPUT":  {},
+					"OUTPUT": {},
+				}))
+
+				expectedWrites := set.New()
+				expectedWrites.Add(chainMod{name: "FORWARD", ruleNum: 1})
+				expectedWrites.Add(chainMod{name: "FORWARD", ruleNum: 2})
+				Expect(dataplane.ChainMods.ContainsAll(expectedWrites)).To(BeTrue())
+			})
+		})
+		Describe("then inserting different rules", func() {
+			BeforeEach(func() {
+				table.SetRuleInsertions("FORWARD", []Rule{
+					{Action: DropAction{}, Comment: "a drop rule"},
+					{Action: AcceptAction{}, Comment: "an accept rule"},
+					{Action: DropAction{}, Comment: "a second drop rule"},
+				})
+				dataplane.ResetCmds()
+				table.Apply()
+			})
+			It("should result in modifications", func() {
+				// Do an iptables-save and, this time, an iptables-restore.
+				if dataplaneMode == "nft" {
+					Expect(dataplane.CmdNames).To(ConsistOf("iptables", "iptables-nft-save", "iptables-nft-restore"))
+				} else {
+					Expect(dataplane.CmdNames).To(ConsistOf("iptables", "iptables-save", "iptables-restore"))
+				}
+
+				Expect(dataplane.Chains).To(Equal(map[string][]string{
+					"FORWARD": {
+						"-m comment --comment \"cali:upaItQyFMdN7MTTl\" -m comment --comment \"a drop rule\" --jump DROP",
+						"-m comment --comment \"cali:EpCg3AYNp_DftVFS\" -m comment --comment \"an accept rule\" --jump ACCEPT",
+						"-m comment --comment \"cali:-rA8o5kyVSTHJMe8\" -m comment --comment \"a second drop rule\" --jump DROP",
+					},
+					"INPUT":  {},
+					"OUTPUT": {},
+				}))
+
+				expectedWrites := set.New()
+				expectedWrites.Add(chainMod{name: "FORWARD", ruleNum: 1})
+				expectedWrites.Add(chainMod{name: "FORWARD", ruleNum: 2})
+				expectedWrites.Add(chainMod{name: "FORWARD", ruleNum: 3})
+				Expect(dataplane.ChainMods.ContainsAll(expectedWrites)).To(BeTrue())
 			})
 		})
 	})
