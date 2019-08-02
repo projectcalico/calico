@@ -1,21 +1,20 @@
 ---
 title: Add a floating IP to a pod
-
 ---
 
 ### Big picture
 
-Enable inter workload communication across networks that are not aware of workload IPs.
+Configure one or more floating IPs that can be used as additional IP addresses for reaching a Kubernetes pod.
 
 ### Value
 
-Configure one or more floating IPs that can be used as additional IP addresses for reaching a Kubernetes pod.
+A floating IP is an additional IP address that can be used to reach a pod, and can be reassigned inside the cluster. Like Kubernetes Services, a floating IP provides a stable IP address to reach some network service that might be backed by different pods at different times.  The primary advantage over Kubernetes services is that floating IPs work on all protocols: not just TCP, UDP, and SCTP.  Unlike Kubernetes services, a floating IP fronts a single pod at a time and cannot be used for load balancing.
 
 ### Features
 
-This how-to guide uses the following features: 
+This how-to guide uses the following {{site.prodname}} features: 
 
-**Calico CNI configuration file** with floating_ips feature enabled
+**{{site.prodname}} CNI configuration file** with floating_ips enabled
 
 ### Concepts
 
@@ -27,9 +26,9 @@ A Kubernetes Service assigns a **cluster IP** that allows other endpoints on the
 
 The features in this How to require: 
 
-- Calico CNI plugin
+- {{site.prodname}} CNI plugin
 
-To verify, ssh to one of the Kubernetes nodes and look for at the CNI plugin configuration, usually located at `/etc/cni/net.d/`.  If you see the file, `10-calico.conflist`, you are using the Calico CNI plugin. 
+To verify, ssh to one of the Kubernetes nodes and look for at the CNI plugin configuration, usually located at `/etc/cni/net.d/`.  If you see the file, `10-calico.conflist`, you are using the {{site.prodname}} CNI plugin. 
 
 ### How to
 
