@@ -64,6 +64,7 @@ The following environment variables can be used to configure the {{site.prodname
 | `LOG_LEVEL`           | Minimum log level to be displayed. | debug, info, warning, error | info
 | `KUBECONFIG`          | Path to a kubeconfig file for Kubernetes API access | path |
 | `SYNC_NODE_LABELS`    | When enabled, Kubernetes node labels will be copied to Calico node objects. | boolean | true
+| `COMPACTION_PERIOD` | Compact the etcd database on this interval. Set to "0" to disable. | [duration](https://golang.org/pkg/time/#ParseDuration) | 10m
 
 ## About each controller
 
