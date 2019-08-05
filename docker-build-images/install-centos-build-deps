@@ -10,4 +10,6 @@ yum install -y rpm-build \
                python-setuptools \
                python-pbr \
 	       python2-devel \
-	       python-urllib3
+	       python-urllib3 \
+	       dbus-devel \
+	       libidn-devel

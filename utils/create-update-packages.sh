@@ -24,7 +24,7 @@ scriptdir=$(dirname $(realpath $0))
 rootdir=`git_repo_root`
 
 # Normally, do all the steps.
-: ${STEPS:=ppa rpm_repo bld_images net_cal felix etcd3gw pub_debs pub_rpms}
+: ${STEPS:=ppa rpm_repo bld_images net_cal felix etcd3gw dnsmasq pub_debs pub_rpms}
 
 function require_version {
     # VERSION must be specified.  It should be either "master" or
@@ -126,6 +126,10 @@ function precheck_etcd3gw {
     :
 }
 
+function precheck_dnsmasq {
+    :
+}
+
 function precheck_pub_debs {
     require_deb_secret_key
 }
@@ -201,6 +205,32 @@ function do_felix {
 function do_etcd3gw {
     pushd ${rootdir}/etcd3gw
     PKG_NAME=python-etcd3gw ../utils/make-packages.sh rpm
+    popd
+}
+
+function do_dnsmasq {
+    pushd ${rootdir}
+    rm -rf dnsmasq
+    git clone https://github.com/projectcalico/calico-dnsmasq.git dnsmasq
+    cd dnsmasq
+
+    MY_UID=`id -u`
+    MY_GID=`id -g`
+    DOCKER_RUN_RM="docker run --rm --user ${MY_UID}:${MY_GID} -v $(dirname `pwd`):/code -w /code/$(basename `pwd`)"
+
+    # Ubuntu Trusty
+    git checkout 2.79test1calico1-3-trusty
+    ${DOCKER_RUN_RM} calico-build/trusty dpkg-buildpackage -I -S
+
+    # Ubuntu Xenial
+    git checkout 2.79test1calico1-2-xenial
+    sed -i s/trusty/xenial/g debian/changelog
+    ${DOCKER_RUN_RM} calico-build/xenial dpkg-buildpackage -I -S
+
+    # CentOS/RHEL 7
+    git checkout origin/rpm_2.79
+    ${DOCKER_RUN_RM} -e EL_VERSION=el7 calico-build/centos7 ../rpm/build-rpms
+
     popd
 }
 

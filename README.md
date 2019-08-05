@@ -24,18 +24,6 @@ For documentation, this file should contain everything needed to
 understand how our packaging works, what components we package, and
 why.
 
-## Status
-
-`make release-publish` currently builds and publishes packages for
-Felix, networking-calico and etcd3gw.
-
-Still to do:
-
--  Also build packages for dnsmasq.
--  If possible, automate new PPA creation (which is currently still a
-   manual step).
--  Review support for building packages on ppc64 instead of amd64.
-
 ## Usage
 
 `make release-publish`, with the following required environment
@@ -87,6 +75,8 @@ Supported, optional environment variables:
 
    -  `etcd3gw`: Build etcd3gw packages (RPM only).
 
+   -  `dnsmasq`: Build dnsmasq packages.
+
    -  `pub_debs`: Publish all Debian packages.
 
    -  `pub_rpms`: Publish all RPMs.
@@ -128,4 +118,49 @@ The components that we package and host are:
    [document](https://docs.projectcalico.org/master/getting-started/openstack/installation/ubuntu)
    that the installer must do `pip install etcd3gw`.
 
--  dnsmasq - for all platforms.
+-  dnsmasq - see below.
+
+## Dnsmasq
+
+We have contributed various patches to Dnsmasq since 2014; all of
+these have been accepted
+[upstream](http://www.thekelleys.org.uk/dnsmasq/doc.html).  The
+timeline of those patches and how they interleave with Dnsmasq
+releases is as follows.
+
+-  v2.71
+-  2014-06-11 Allow wildcard aliases in --bridge-interface option
+-  v2.72
+-  2015-03-19 DHCPv4 with --bridge-interface broken by 3rd party - but
+   not realized by us until a year later
+-  2015-06-10 Fix logging of unknown interface in
+   --bridge-interface...
+-  2015-06-10 Extend --bridge-interface aliasing to DHCPv6.
+-  2015-06-10 Allow router advertisements to have the "off-link"...
+-  2015-06-10 Apply --bridge-interface aliasing to solicited router...
+-  2015-06-10 Apply --bridge-interfaces to unsolicited router
+   advertisements.
+-  2015-06-10 Documentation updates for --bridge-interface and "off...
+-  v2.73
+-  v2.74
+-  v2.75
+-  2016-05-03 Fix for DHCP in transmission interface when --bridge...
+-  v2.76
+-  v2.77
+-  2017-09-26 CVE-2017-1449[123456] (see also
+   https://github.com/projectcalico/calico/issues/1169)
+-  v2.78
+-  2018-01-18 Remove limit of 67 on the number of VMs per compute node
+-  v2.79
+
+To get all of these patches requires Dnsmasq v2.79 or later.  Ubuntu
+Bionic has that, but none of our other target platforms do, so we
+build and host v2.79 packages for those platforms ourselves.  The
+source for that comes from the following tags in [our Dnsmasq
+fork](https://github.com/projectcalico/calico-dnsmasq).
+
+-  For Ubuntu Trusty, `2.79test1calico1-3-trusty`.
+-  For Ubuntu Xenial, `2.79test1calico1-2-xenial`.
+-  For CentOS/RHEL 7, `rpm_2.79`.
+
+Note, for some builds may also need "nettle" package.
