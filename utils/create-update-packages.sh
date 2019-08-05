@@ -24,7 +24,7 @@ scriptdir=$(dirname $(realpath $0))
 rootdir=`git_repo_root`
 
 # Normally, do all the steps.
-: ${STEPS:=ppa rpm_repo bld_images net_cal felix pub_debs pub_rpms}
+: ${STEPS:=ppa rpm_repo bld_images net_cal felix etcd3gw pub_debs pub_rpms}
 
 function require_version {
     # VERSION must be specified.  It should be either "master" or
@@ -122,6 +122,10 @@ function precheck_felix {
     test -n FELIX_CHECKOUT || require_version
 }
 
+function precheck_etcd3gw {
+    :
+}
+
 function precheck_pub_debs {
     require_deb_secret_key
 }
@@ -191,6 +195,12 @@ function do_felix {
     PKG_NAME=felix \
 	    NAME=Felix \
 	    ../utils/make-packages.sh deb rpm
+    popd
+}
+
+function do_etcd3gw {
+    pushd ${rootdir}/etcd3gw
+    PKG_NAME=python-etcd3gw ../utils/make-packages.sh rpm
     popd
 }
 

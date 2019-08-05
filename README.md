@@ -27,11 +27,11 @@ why.
 ## Status
 
 `make release-publish` currently builds and publishes packages for
-Felix and networking-calico.
+Felix, networking-calico and etcd3gw.
 
 Still to do:
 
--  Also build packages for etcd3gw and dnsmasq.
+-  Also build packages for dnsmasq.
 -  If possible, automate new PPA creation (which is currently still a
    manual step).
 -  Review support for building packages on ppc64 instead of amd64.
@@ -84,6 +84,8 @@ Supported, optional environment variables:
    -  `net_cal`: Build networking-calico packages.
 
    -  `felix`: Build Felix packages.
+
+   -  `etcd3gw`: Build etcd3gw packages (RPM only).
 
    -  `pub_debs`: Publish all Debian packages.
 

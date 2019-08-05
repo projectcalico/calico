@@ -11,9 +11,6 @@ scriptdir=$(dirname $(realpath $0))
 # Include function library.
 . ${scriptdir}/lib.sh
 
-# Ensure we're in the root of the Git repository.
-cd `git_repo_root`
-
 # Get the version based on Git state, and the Git commit ID.
 version=${FORCE_VERSION:-`git_auto_version`}
 sha=`git_commit_id`
@@ -92,43 +89,45 @@ EOF
 	    ;;
 
 	rpm )
-	    debver=`git_version_to_rpm ${version}`
-	    debver=`strip_v ${debver}`
 	    rpm_spec=rpm/${PKG_NAME}.spec
-	    [ -f ${rpm_spec}.in ] && cp -f ${rpm_spec}.in ${rpm_spec}
+	    if [ -f ${rpm_spec}.in ]; then
+		debver=`git_version_to_rpm ${version}`
+		debver=`strip_v ${debver}`
+		cp -f ${rpm_spec}.in ${rpm_spec}
 
-	    # Generate RPM version and release.
-	    IFS=_ read ver qual <<< ${debver}
-	    if test "${qual}"; then
-		rpmver=${ver}
-		rpmrel=0.1.${qual}
-	    else
-		rpmver=${ver}
-		rpmrel=1
-	    fi
+		# Generate RPM version and release.
+		IFS=_ read ver qual <<< ${debver}
+		if test "${qual}"; then
+		    rpmver=${ver}
+		    rpmrel=0.1.${qual}
+		else
+		    rpmver=${ver}
+		    rpmrel=1
+		fi
 
-	    # Update the Version: and Release: lines.
-	    sed -i "s/^Version:.*$/Version:        ${rpmver#*:}/" ${rpm_spec}
-	    sed -i "s/^Release:.*$/Release:        ${rpmrel}%{?dist}/" ${rpm_spec}
+		# Update the Version: and Release: lines.
+		sed -i "s/^Version:.*$/Version:        ${rpmver#*:}/" ${rpm_spec}
+		sed -i "s/^Release:.*$/Release:        ${rpmrel}%{?dist}/" ${rpm_spec}
 
-	    # Add a stanza to the %changelog section.
-	    timestamp=`date "+%a %b %d %Y"`
-	    {
-		cat <<EOF
+		# Add a stanza to the %changelog section.
+		timestamp=`date "+%a %b %d %Y"`
+		{
+		    cat <<EOF
 * ${timestamp} Neil Jerram <neil@tigera.io> ${rpmver}-${rpmrel}
 EOF
-		if ${release}; then
-		    cat <<EOF
+		    if ${release}; then
+			cat <<EOF
   - ${NAME} ${version} (from Git commit ${sha}).
 EOF
-		else
-		    cat <<EOF
+		    else
+			cat <<EOF
   - Development snapshot (from Git commit ${sha}).
 EOF
-		fi
-		echo
+		    fi
+		    echo
 
-	    } | sed -i '/^%changelog/ r /dev/stdin' ${rpm_spec}
+		} | sed -i '/^%changelog/ r /dev/stdin' ${rpm_spec}
+	    fi
 
 	    elversions=7
 	    if [ ${PKG_NAME} = felix ]; then
