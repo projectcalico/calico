@@ -26,16 +26,14 @@ why.
 
 ## Status
 
-`make release-publish` exists but currently only builds and publishes
-packages for networking-calico.
+`make release-publish` currently builds and publishes packages for
+Felix and networking-calico.
 
-To do:
+Still to do:
 
--  Also build packages for Felix, etcd3gw and dnsmasq.
+-  Also build packages for etcd3gw and dnsmasq.
 -  If possible, automate new PPA creation (which is currently still a
    manual step).
--  Perhaps support preparing a PPA/RPM repo for code that is still in
-   development.
 -  Review support for building packages on ppc64 instead of amd64.
 
 ## Usage
@@ -49,6 +47,58 @@ variables.
 -  `SECRET_KEY` set to a file containing the GPG secret key for a
    member of the [Project Calico team on
    Launchpad](https://launchpad.net/~project-calico).
+
+Supported, optional environment variables:
+
+-  `VERSION`: specify the Calico version to build packages for.
+   Default is `master`.
+
+-  `REPO_NAME`: override the PPA and RPM repo name to publish to.
+   Default is automatically derived from `VERSION`.
+
+-  `FELIX_REPO`: override the Git repository to get Felix code from.
+   Default is https://github.com/projectcalico/felix.git.
+
+-  `FELIX_CHECKOUT`: override the point in the Git repository to check
+   out (a Git commit ID, tag or branch name).  Default is
+   automatically derived from `VERSION`.
+
+-  `NETWORKING_CALICO_REPO`: override the Git repository to get
+   networking-calico code from.  Default is
+   https://opendev.org/openstack/networking-calico.git.
+
+-  `NETWORKING_CALICO_CHECKOUT`: override the point in the Git
+   repository to check out (a Git commit ID, tag or branch name).
+   Default is automatically derived from `VERSION`.
+
+-  `STEPS`: override the parts of the process to execute.  Default is
+   all of the following:
+
+   -  `ppa`: Check that PPA exists.
+
+   -  `rpm_repo`: Ensure that the RPM repository exists.
+
+   -  `bld_images`: Build required container images for building
+      packages for each target platform.
+
+   -  `net_cal`: Build networking-calico packages.
+
+   -  `felix`: Build Felix packages.
+
+   -  `pub_debs`: Publish all Debian packages.
+
+   -  `pub_rpms`: Publish all RPMs.
+
+Note that `pub_debs` means uploading Debian source packages to
+Launchpad, and it can still take a long time for Launchpad to build
+and publish binary Debian packages.  Usually about an hour, but
+occasionally many hours.  A package is only really ready for use when
+its line on the PPA package details page ([for
+example](https://launchpad.net/~project-calico/+archive/ubuntu/master/+packages))
+has a green tick in the Build Status column and a date in the
+Published column.
+
+(RPMs, on the other hand, are ready immediately after the `pub_rpms` step.)
 
 ## Packaging platforms
 
