@@ -2,4 +2,5 @@
 set -x
 set -e
 
-yum install -y rpm-build make git gcc python-setuptools
+yum install -y epel-release
+yum install -y rpm-build make git gcc python-setuptools python-pbr
