@@ -67,7 +67,7 @@ Note the use of the escaped \" for the inner double quotes around the pool names
 
 `cni.projectcalico.org/ipv4pools: "[\"pool-1\", \"pool-2\"]"`
 
-Note the use of the escaped \" for the inner double quotes around the pool names.
+Note the use of the escaped `\"` for the inner double quotes around the pool names.
 
 If both the pod and the pod’s namespace have the annotation, the pod annotation takes precedence.
 
