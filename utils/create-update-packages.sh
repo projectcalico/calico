@@ -24,7 +24,7 @@ scriptdir=$(dirname $(realpath $0))
 rootdir=`git_repo_root`
 
 # Normally, do all the steps.
-: ${STEPS:=ppa rpm_repo bld_images net_cal felix pub_debs pub_rpms}
+: ${STEPS:=ppa rpm_repo bld_images net_cal felix etcd3gw dnsmasq pub_debs pub_rpms}
 
 function require_version {
     # VERSION must be specified.  It should be either "master" or
@@ -87,7 +87,7 @@ fi
 function precheck_ppa {
     # Check the PPA exists.
     require_repo_name
-    wget -O /dev/null http://ppa.launchpad.net/project-calico/${REPO_NAME}/ubuntu/dists/bionic/main/source/Sources.gz || {
+    wget -O - https://launchpad.net/~project-calico/+archive/ubuntu/${REPO_NAME} | grep -F "PPA description" || {
 	cat <<EOF
 
 ERROR: PPA for ${REPO_NAME} does not exist.  Create it, then rerun this job.
@@ -115,11 +115,19 @@ function precheck_bld_images {
 }
 
 function precheck_net_cal {
-    test -n NETWORKING_CALICO_CHECKOUT || require_version
+    test -n "${NETWORKING_CALICO_CHECKOUT}" || require_version
 }
 
 function precheck_felix {
-    test -n FELIX_CHECKOUT || require_version
+    test -n "${FELIX_CHECKOUT}" || require_version
+}
+
+function precheck_etcd3gw {
+    :
+}
+
+function precheck_dnsmasq {
+    :
 }
 
 function precheck_pub_debs {
@@ -191,6 +199,39 @@ function do_felix {
     PKG_NAME=felix \
 	    NAME=Felix \
 	    ../utils/make-packages.sh deb rpm
+    popd
+}
+
+function do_etcd3gw {
+    pushd ${rootdir}/etcd3gw
+    PKG_NAME=python-etcd3gw ../utils/make-packages.sh rpm
+    popd
+}
+
+function do_dnsmasq {
+    pushd ${rootdir}
+    rm -rf dnsmasq
+    git clone https://github.com/projectcalico/calico-dnsmasq.git dnsmasq
+    cd dnsmasq
+
+    MY_UID=`id -u`
+    MY_GID=`id -g`
+    DOCKER_RUN_RM="docker run --rm --user ${MY_UID}:${MY_GID} -v $(dirname `pwd`):/code -w /code/$(basename `pwd`)"
+
+    # Ubuntu Trusty
+    git checkout 2.79test1calico1-3-trusty
+    ${DOCKER_RUN_RM} calico-build/trusty dpkg-buildpackage -I -S
+
+    # Ubuntu Xenial
+    git checkout 2.79test1calico1-2-xenial
+    sed -i s/trusty/xenial/g debian/changelog
+    git commit -a -m "switch trusty to xenial in debian/changelog" --author="Marvin <marvin@tigera.io>"
+    ${DOCKER_RUN_RM} calico-build/xenial dpkg-buildpackage -I -S
+
+    # CentOS/RHEL 7
+    git checkout origin/rpm_2.79
+    ${DOCKER_RUN_RM} -e EL_VERSION=el7 calico-build/centos7 ../rpm/build-rpms
+
     popd
 }
 
