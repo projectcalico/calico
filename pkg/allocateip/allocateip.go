@@ -331,7 +331,7 @@ func determineEnabledPoolCIDRs(node api.Node, ipPoolList api.IPPoolList, vxlan b
 
 		// Check if desired encap is enabled in the IP pool, the IP pool is not disabled, and it is IPv4 pool since we don't support encap with IPv6.
 		if vxlan {
-			if (ipPool.Spec.VXLANMode == api.VXLANModeAlways) && !ipPool.Spec.Disabled && poolCidr.Version() == 4 {
+			if (ipPool.Spec.VXLANMode == api.VXLANModeAlways || ipPool.Spec.VXLANMode == api.VXLANModeCrossSubnet) && !ipPool.Spec.Disabled && poolCidr.Version() == 4 {
 				cidrs = append(cidrs, *poolCidr)
 			}
 		} else {
