@@ -284,6 +284,7 @@ func (w *Workload) LatencyTo(ip, port string) (time.Duration, string) {
 
 	lines := strings.Split(out, "\n")[1:] // Skip header line
 	var rttSum time.Duration
+	var numBuggyRTTs int
 	for _, line := range lines {
 		if len(line) == 0 {
 			continue
@@ -293,8 +294,16 @@ func (w *Workload) LatencyTo(ip, port string) (time.Duration, string) {
 		rttMsecStr := matches[1]
 		rttMsec, err := strconv.ParseFloat(rttMsecStr, 64)
 		Expect(err).ToNot(HaveOccurred())
+		if rttMsec > 1000 {
+			// There's a bug in hping where it occasionally reports RTT+1s instead of RTT.  Work around that
+			// but keep track of the number of workarounds and bail out if we see too many.
+			rttMsec -= 1000
+			numBuggyRTTs++
+		}
 		rttSum += time.Duration(rttMsec * float64(time.Millisecond))
 	}
+	Expect(numBuggyRTTs).To(BeNumerically("<", len(lines)/2),
+		"hping reported a large number of >1s RTTs; full output:\n"+out)
 	meanRtt := rttSum / time.Duration(len(lines))
 	return meanRtt, out
 }
