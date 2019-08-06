@@ -22,7 +22,7 @@ This how-to guide uses the following features:
 
 #### Kubernetes pod CIDR
 
-The **Kubernetes pod CIDR** is the range of IPs assigned to pods by Kubernetes.  It is defined for the entire cluster and is used by various Kubernetes components to determine whether an IP belongs to a pod. For example, kube-proxy treats traffic differently if an IP is from a pod than if it is not. All pod IPs must be in the CIDR range for Kubernetes to function correctly.
+The **Kubernetes pod CIDR** is the range of IPs Kubernetes expects pod IPs to be assigned from.  It is defined for the entire cluster and is used by various Kubernetes components to determine whether an IP belongs to a pod. For example, kube-proxy treats traffic differently if an IP is from a pod than if it is not. All pod IPs must be in the CIDR range for Kubernetes to function correctly.
 
 **IP Pools**
 
@@ -30,7 +30,7 @@ IP pools are ranges of IP addresses from which Calico assigns pod IPs. Static IP
 
 ### Before you begin...
 
-You must be using the Calico CNI Plugin with Calico IPAM.
+You must be using the Calico IPAM.
 
 If you are not sure, ssh to one of your Kubernetes nodes and examine the CNI configuration.
 
@@ -46,7 +46,7 @@ Look for the entry:
           },
 </pre>
 
-If it is present, you are using the Calico CNI Plugin with Calico IPAM. If the IPAM is set to something else, or the 10-calico.conflist file does not exist, you cannot use these features in your cluster.
+If it is present, you are using the Calico IPAM. If the IPAM is set to something else, or the 10-calico.conflist file does not exist, you cannot use these features in your cluster.
 
 ### How to
 
