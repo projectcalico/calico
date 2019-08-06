@@ -56,7 +56,7 @@ Annotate the pod with cni.projectcalico.org/ipAddrs set to a list of IP addresse
   "cni.projectcalico.org/ipAddrs": "[\"192.168.0.1\"]"
 </pre>
 
-Note the use of the escaped \" for the inner double quotes around the addresses.
+Note the use of the escaped `\"` for the inner double quotes around the addresses.
 
 The address must be within a configured Calico IP pool and not currently in use. The annotation must be present when the pod is created; adding it later has no effect.
 
