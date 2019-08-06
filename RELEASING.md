@@ -35,6 +35,16 @@ To release Calico, you need **the following permissions**:
     gcloud auth print-access-token | docker login -u oauth2accesstoken --password-stdin https://gcr.io
     ```
 
+- You must be [signed up as an OpenStack
+  developer](https://docs.openstack.org/infra/manual/developers.html#account-setup) and a member of the
+  [`networking-calico-release` group on Gerrit](https://review.opendev.org/#/admin/groups/1015,members).
+
+- You must be a member of the Project Calico team on Launchpad, and
+  have uploaded a GPG identity to your account, for which you have the
+  secret key.
+
+- You must be able to access binaries.projectcalico.org.
+
 You'll also need **several GB of disk space** (~7GB for v3.4.0, for example).
 
 Some of the release scripts also require **tools to be installed** in your dev environment:
@@ -83,15 +93,28 @@ Before attempting to create a Calico release you must do the following.
    - [calico/typha](https://github.com/projectcalico/typha/releases)
    - [calico/dikastes](https://github.com/projectcalico/app-policy/releases)
    - [calico/pod2daemon-flexvol](https://github.com/projectcalico/pod2daemon/releases)
-
-   The following components _must_ use the same minor revision number as the Calico version number above, but
-   do not always need to be released for every patch. They must be cut as part of a minor release of Calico.
-
    - [networking-calico](https://github.com/openstack/networking-calico)
 
    The following components do not share a version with the Calico release, but are included in the documentation.
 
    - [flannel](https://github.com/coreos/flannel/releases)
+
+## Building and publishing packages
+
+1. Check out the [packaging
+   repository](https://github.com/projectcalico/packaging).
+
+1. In your environment, set `HOST` to the GCP name for
+   binaries.projectcalico.org, `GCLOUD_ARGS` to the `--zone` and
+   `--project` args needed to access that host, and `SECRET_KEY` to
+   the secret key for a GPG identity that you have uploaded to your
+   Launchpad account.
+
+1. Establish GCP credentials so that gcloud with `HOST` and
+   `GCLOUD_ARGS` can access binaries.projectcalico.org.
+
+1. Run `make release-publish VERSION=<version>`, where `<version>` is
+   the Calico version being released.
 
 ## Preparing to cut a Calico release
 
