@@ -109,6 +109,8 @@ class FakePlugin(object):
         """
         LOG.debug("release_dhcp_port: %s %s", network_id, device_id)
 
+    get_networks = None
+
 
 def empty_network(network_id=NETWORK_ID):
     """Construct and return an empty network model."""

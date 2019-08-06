@@ -30,7 +30,7 @@ class RoutedInterfaceDriver(interface.LinuxInterfaceDriver):
 
     DEV_NAME_PREFIX = 'ns-'
 
-    def __init__(self, conf):
+    def __init__(self, conf, get_networks_callback=None):
         super(RoutedInterfaceDriver, self).__init__(conf)
 
     @property
@@ -76,7 +76,12 @@ class RoutedInterfaceDriver(interface.LinuxInterfaceDriver):
             LOG.debug("=> real cidr %s" % net.cidr)
             try:
                 device.route.delete_onlink_route(str(net.cidr))
-            except RuntimeError:
+            except Exception:
+                # The "does not exist" condition used to be a
+                # RuntimeError but is now a pyroute2 NetlinkError,
+                # which apparently does not derive from RuntimeError.
+                # I don't want to code an explicit pyroute2 dependency
+                # here, so fall back to using Exception.
                 LOG.debug("Subnet route %s did not exist" % net.cidr)
 
     def unplug(self, device_name, bridge=None, namespace=None, prefix=None):
