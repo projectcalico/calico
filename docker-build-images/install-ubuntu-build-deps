@@ -10,5 +10,7 @@ apt-get install -y build-essential  \
                    python-all \
                    python-setuptools \
                    libyajl2 \
-                   libdatrie1
+                   libdatrie1 \
+                   python-pbr \
+                   git
 apt-get clean -y

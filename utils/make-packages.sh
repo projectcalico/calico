@@ -45,15 +45,17 @@ for package_type in "$@"; do
 	    # Mar 2016 14:08:51 +0000.
 	    timestamp=`date "+%a, %d %b %Y %H:%M:%S %z"`
 	    for series in trusty xenial bionic; do
-		git clean -ffxd
+		# Clean the Git repo; but in the Felix case, avoid
+		# deleting the calico-felix binary.
+		git clean -ffxd -e bin/calico-felix
 		{
 		    cat <<EOF
-networking-calico (1:${debver}~$series) $series; urgency=low
+${PKG_NAME} (${DEB_EPOCH}${debver}~$series) $series; urgency=low
 
 EOF
 		    if ${release}; then
 			cat <<EOF
-  * networking-calico ${version} (from Git commit ${sha}).
+  * ${NAME} ${version} (from Git commit ${sha}).
 EOF
 		    else
 			cat <<EOF
@@ -68,19 +70,16 @@ EOF
 EOF
 		} > debian/changelog
 
-		pbr_version=`${DOCKER_RUN_RM} -e DEB_VERSION=${debver}~${series} -i \
-				 calico-build/${series} python - <<'EOF'
+		if [ ${PKG_NAME} = networking-calico ]; then
+		    pbr_version=`${DOCKER_RUN_RM} -i calico-build/${series} python - <<'EOF'
 import pbr.version
 print pbr.version.VersionInfo('networking-calico').release_string()
 EOF`
-		echo PBR-generated version is $pbr_version
+		    # Update PBR_VERSION setting in debian/rules.
+		    sed -i "s/^export PBR_VERSION=.*$/export PBR_VERSION=${pbr_version}/" debian/rules
+		fi
 
-		# Update PBR_VERSION setting (if present) in
-		# debian/rules.
-		sed -i "s/^export PBR_VERSION=.*$/export PBR_VERSION=${pbr_version}/" debian/rules
-
-		${DOCKER_RUN_RM} -e DEB_VERSION=${debver}~${series} \
-				 calico-build/${series} dpkg-buildpackage -I -S
+		${DOCKER_RUN_RM} calico-build/${series} dpkg-buildpackage -I -S
 	    done
 
 	    cat <<EOF
@@ -95,7 +94,7 @@ EOF
 	rpm )
 	    debver=`git_version_to_rpm ${version}`
 	    debver=`strip_v ${debver}`
-	    rpm_spec=rpm/networking-calico.spec
+	    rpm_spec=rpm/${PKG_NAME}.spec
 	    [ -f ${rpm_spec}.in ] && cp -f ${rpm_spec}.in ${rpm_spec}
 
 	    # Generate RPM version and release.
@@ -120,7 +119,7 @@ EOF
 EOF
 		if ${release}; then
 		    cat <<EOF
-  - networking-calico ${version} (from Git commit ${sha}).
+  - ${NAME} ${version} (from Git commit ${sha}).
 EOF
 		else
 		    cat <<EOF
@@ -131,7 +130,11 @@ EOF
 
 	    } | sed -i '/^%changelog/ r /dev/stdin' ${rpm_spec}
 
-	    for elversion in 7; do
+	    elversions=7
+	    if [ ${PKG_NAME} = felix ]; then
+		elversions="7 6"
+	    fi
+	    for elversion in ${elversions}; do
 		# Skip the rpm build if we are missing the matching build image.
 		imageid=$(docker images -q calico-build/centos${elversion}:latest)
 		[ -n "$imageid"  ] && ${DOCKER_RUN_RM} -e EL_VERSION=el${elversion} \

@@ -156,7 +156,7 @@ function copy_rpms_to_host {
     reponame=$1
     shopt -s nullglob
     for arch in src noarch x86_64; do
-	set -- `find dist -name "*.$arch.rpm"`
+	set -- `find dist/rpms-el7 -name "*.$arch.rpm"`
 	if test $# -gt 0; then
 	    $ssh_host -- mkdir -p $rpmdir/$reponame/$arch/
 	    $scp_host "$@" ${HOST}:$rpmdir/$reponame/$arch/
