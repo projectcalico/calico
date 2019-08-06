@@ -1,4 +1,4 @@
-# This Makefile builds Felix and packages it in various forms:
+# This Makefile builds Felix and releases it in various forms:
 #
 #                                                                      Go install
 #                                                                         Glide
@@ -17,27 +17,27 @@
 #                                                                 \
 #                                                                  \
 #                                                                   \
-# +----------------------+                                           :
-# | calico-build/centos7 |                                           v
-# | calico-build/xenial  |                                 +------------------+
-# | calico-build/trusty  |                                 | bin/calico-felix |
-# +----------------------+                                 +------------------+
-#                     \                                          /   /
-#                      \             .--------------------------'   /
-#                       \           /                              /
-#                        \         /                      .-------'
-#                         \       /                      /
-#                     rpm/build-rpms                    /
-#                   debian/build-debs                  /
-#                           |                         /
-#                           |                   docker build
-#                           v                         |
-#            +----------------------------+           |
-#            |  RPM packages for Centos7  |           |
-#            |  RPM packages for Centos6  |           v
-#            | Debian packages for Xenial |    +--------------+
-#            | Debian packages for Trusty |    | calico/felix |
-#            +----------------------------+    +--------------+
+#                                                                    :
+#                                                                    v
+#                                                          +------------------+
+#                                                          | bin/calico-felix |
+#                                                          +------------------+
+#                                                                    /
+#                                                                   /
+#                                                                  /
+#                                                         .-------'
+#                                                        /
+#                                                       /
+#                                                      /
+#                                                     /
+#                                               docker build
+#                                                     |
+#                                                     |
+#                                                     |
+#                                                     v
+#                                              +--------------+
+#                                              | calico/felix |
+#                                              +--------------+
 #
 #
 #
@@ -509,75 +509,6 @@ endif
 tag-images-all: imagetag $(addprefix sub-tag-images-,$(VALIDARCHES))
 sub-tag-images-%:
 	$(MAKE) tag-images ARCH=$* IMAGETAG=$(IMAGETAG)
-
-###############################################################################
-# Building OS Packages (debs/RPMS)
-###############################################################################
-# Build all the debs.
-.PHONY: deb
-deb: bin/calico-felix
-ifeq ($(GIT_COMMIT),<unknown>)
-	$(error Package builds must be done from a git working copy in order to calculate version numbers.)
-endif
-	$(MAKE) calico-build/trusty
-	$(MAKE) calico-build/xenial
-	$(MAKE) calico-build/bionic
-	utils/make-packages.sh deb
-
-# Build RPMs.
-.PHONY: rpm
-rpm: bin/calico-felix
-ifeq ($(GIT_COMMIT),<unknown>)
-	$(error Package builds must be done from a git working copy in order to calculate version numbers.)
-endif
-	$(MAKE) calico-build/centos7
-ifneq ("$(ARCH)","ppc64le") # no ppc64le support in centos6
-	$(MAKE) calico-build/centos6
-endif
-	utils/make-packages.sh rpm
-
-# Build a docker image used for building debs for trusty.
-.PHONY: calico-build/trusty
-calico-build/trusty:
-	cd docker-build-images && docker build -f ubuntu-trusty-build.Dockerfile.$(ARCH) -t calico-build/trusty .
-
-# Build a docker image used for building debs for xenial.
-.PHONY: calico-build/xenial
-calico-build/xenial:
-	cd docker-build-images && docker build -f ubuntu-xenial-build.Dockerfile.$(ARCH) -t calico-build/xenial .
-
-# Build a docker image used for building debs for bionic.
-.PHONY: calico-build/bionic
-calico-build/bionic:
-	cd docker-build-images && docker build -f ubuntu-bionic-build.Dockerfile.$(ARCH) -t calico-build/bionic .
-
-# Construct a docker image for building Centos 7 RPMs.
-.PHONY: calico-build/centos7
-calico-build/centos7:
-	cd docker-build-images && \
-	  docker build \
-	  --build-arg=UID=$(LOCAL_USER_ID) \
-	  --build-arg=GID=$(LOCAL_GROUP_ID) \
-	  -f centos7-build.Dockerfile.$(ARCH) \
-	  -t calico-build/centos7 .
-
-ifeq ("$(ARCH)","ppc64le")
-	# Some commands that would typically be run at container build time must be run in a privileged container.
-	@-docker rm -f centos7Tmp
-	docker run --privileged --name=centos7Tmp calico-build/centos7 \
-		/bin/bash -c "/setup-user; /install-centos-build-deps"
-	docker commit centos7Tmp calico-build/centos7:latest
-endif
-
-# Construct a docker image for building Centos 6 RPMs.
-.PHONY: calico-build/centos6
-calico-build/centos6:
-	cd docker-build-images && \
-	  docker build \
-	  --build-arg=UID=$(LOCAL_USER_ID) \
-	  --build-arg=GID=$(LOCAL_GROUP_ID) \
-	  -f centos6-build.Dockerfile.$(ARCH) \
-	  -t calico-build/centos6 .
 
 ###############################################################################
 # Static checks
