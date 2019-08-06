@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2018 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2019 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -116,6 +116,8 @@ type RouteTable struct {
 	// Whether this route table is managing vxlan routes.
 	vxlan bool
 
+	deviceRouteSourceAddress net.IP
+
 	// Testing shims, swapped with mock versions for UT
 	newNetlinkHandle  func() (HandleIface, error)
 	addStaticARPEntry func(cidr ip.CIDR, destMAC net.HardwareAddr, ifaceName string) error
@@ -123,7 +125,7 @@ type RouteTable struct {
 	time              timeIface
 }
 
-func New(interfacePrefixes []string, ipVersion uint8, vxlan bool, netlinkTimeout time.Duration) *RouteTable {
+func New(interfacePrefixes []string, ipVersion uint8, vxlan bool, netlinkTimeout time.Duration, deviceRouteSourceAddress net.IP) *RouteTable {
 	return NewWithShims(
 		interfacePrefixes,
 		ipVersion,
@@ -133,6 +135,7 @@ func New(interfacePrefixes []string, ipVersion uint8, vxlan bool, netlinkTimeout
 		addStaticARPEntry,
 		conntrack.New(),
 		realTime{},
+		deviceRouteSourceAddress,
 	)
 }
 
@@ -146,6 +149,7 @@ func NewWithShims(
 	addStaticARPEntry func(cidr ip.CIDR, destMAC net.HardwareAddr, ifaceName string) error,
 	conntrack conntrackIface,
 	timeShim timeIface,
+	deviceRouteSourceAddress net.IP,
 ) *RouteTable {
 	prefixSet := set.New()
 	regexpParts := []string{}
@@ -185,6 +189,7 @@ func NewWithShims(
 		conntrack:                   conntrack,
 		time:                        timeShim,
 		vxlan:                       vxlan,
+		deviceRouteSourceAddress:    deviceRouteSourceAddress,
 	}
 }
 
@@ -424,7 +429,7 @@ func (r *RouteTable) syncRoutesForLink(ifaceName string) error {
 	// before learning about the endpoint, we give each interface a grace period after we first
 	// see it before we remove routes that we're not expecting.  Check whether the grace period
 	// applies to this interface.
-	inGracePeriod := r.time.Since(r.ifaceNameToFirstSeen[ifaceName]) < cleanupGracePeriod
+	ifaceInGracePeriod := r.time.Since(r.ifaceNameToFirstSeen[ifaceName]) < cleanupGracePeriod
 	leaveDirty := false
 
 	// If this is a modify or delete, grab a copy of the existing targets so we can clean up
@@ -506,7 +511,7 @@ func (r *RouteTable) syncRoutesForLink(ifaceName string) error {
 		return filteredErr
 	}
 
-	seenCIDRs := set.New()
+	alreadyCorrectCIDRs := set.New()
 	updatesFailed := false
 	for _, route := range oldRoutes {
 		var dest ip.CIDR
@@ -514,25 +519,33 @@ func (r *RouteTable) syncRoutesForLink(ifaceName string) error {
 			dest = ip.CIDRFromIPNet(route.Dst)
 		}
 		logCxt := logCxt.WithField("dest", dest)
-		seenCIDRs.Add(dest)
-		if expectedCIDRs.Contains(dest) {
-			logCxt.Debug("Syncing routes: Found expected route.")
+		routeExpected := expectedCIDRs.Contains(dest)
+		var routeProblems []string
+		if !routeExpected {
+			routeProblems = append(routeProblems, "unexpected route")
+		}
+		if !r.deviceRouteSourceAddress.Equal(route.Src) {
+			routeProblems = append(routeProblems, "incorrect source address")
+		}
+		if len(routeProblems) == 0 {
+			alreadyCorrectCIDRs.Add(dest)
 			continue
 		}
-		if !r.vxlan && inGracePeriod {
-			// Don't remove routes from interfaces created recently. VXLAN routes don't have a grace period.
+		gracePeriodApplies := ifaceInGracePeriod && !routeExpected && !r.vxlan
+		if gracePeriodApplies {
+			// Don't remove unexpected routes from interfaces created recently. VXLAN routes don't have a grace period.
 			logCxt.Info("Syncing routes: found unexpected route; ignoring due to grace period.")
 			leaveDirty = true
 			continue
 		}
+		logCxt = logCxt.WithField("routeProblems", routeProblems)
 		logCxt.Info("Syncing routes: removing old route.")
 		if err := nl.RouteDel(&route); err != nil {
 			// Probably a race with the interface being deleted.
-			logCxt.WithError(err).Info(
-				"Route deletion failed, assuming someone got there first.")
+			logCxt.WithError(err).Info("Route deletion failed, assuming someone got there first.")
 			updatesFailed = true
 		}
-		if dest != nil {
+		if !routeExpected && dest != nil {
 			// Collect any old route CIDRs that we find in the dataplane so we
 			// can remove their conntrack entries later.
 			oldCIDRs.Add(dest)
@@ -540,7 +553,7 @@ func (r *RouteTable) syncRoutesForLink(ifaceName string) error {
 	}
 	for _, target := range expectedTargets {
 		cidr := target.CIDR
-		if !seenCIDRs.Contains(cidr) {
+		if !alreadyCorrectCIDRs.Contains(cidr) {
 			logCxt := logCxt.WithField("targetCIDR", target.CIDR)
 			logCxt.Info("Syncing routes: adding new route.")
 			ipNet := cidr.ToIPNet()
@@ -550,6 +563,10 @@ func (r *RouteTable) syncRoutesForLink(ifaceName string) error {
 				Type:      syscall.RTN_UNICAST,
 				Protocol:  syscall.RTPROT_BOOT,
 				Scope:     netlink.SCOPE_LINK,
+			}
+
+			if r.deviceRouteSourceAddress != nil {
+				route.Src = r.deviceRouteSourceAddress
 			}
 
 			if target.GW != nil {
