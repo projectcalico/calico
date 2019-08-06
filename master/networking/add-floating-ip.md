@@ -49,7 +49,7 @@ Modify the calico-config ConfigMap in the kube-system namespace. In the `cni_net
 
 For example, your `cni_network_config` will look similar to the following after the update.
 
-```
+<pre>
  cni_network_config: |-
     {
       "name": "k8s-pod-network",
@@ -81,7 +81,7 @@ For example, your `cni_network_config` will look similar to the following after 
         }
       ]
     }
-```
+</pre>
 
 #### Configure a pod to use a floating IP
 
