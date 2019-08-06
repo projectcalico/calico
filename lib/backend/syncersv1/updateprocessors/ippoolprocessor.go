@@ -69,6 +69,8 @@ func convertIPPoolV2ToV1(kvp *model.KVPair) (*model.KVPair, error) {
 	switch v3res.Spec.VXLANMode {
 	case apiv3.VXLANModeAlways:
 		vxlanMode = encap.Always
+	case apiv3.VXLANModeCrossSubnet:
+		vxlanMode = encap.CrossSubnet
 	default:
 		vxlanMode = encap.Undefined
 	}

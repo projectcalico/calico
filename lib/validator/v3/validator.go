@@ -65,7 +65,7 @@ var (
 	actionRegex           = regexp.MustCompile("^(Allow|Deny|Log|Pass)$")
 	protocolRegex         = regexp.MustCompile("^(TCP|UDP|ICMP|ICMPv6|SCTP|UDPLite)$")
 	ipipModeRegex         = regexp.MustCompile("^(Always|CrossSubnet|Never)$")
-	vxlanModeRegex        = regexp.MustCompile("^(Always|Never)$")
+	vxlanModeRegex        = regexp.MustCompile("^(Always|CrossSubnet|Never)$")
 	logLevelRegex         = regexp.MustCompile("^(Debug|Info|Warning|Error|Fatal)$")
 	datastoreType         = regexp.MustCompile("^(etcdv3|kubernetes)$")
 	dropAcceptReturnRegex = regexp.MustCompile("^(Drop|Accept|Return)$")
@@ -727,7 +727,7 @@ func validateIPPoolSpec(structLevel validator.StructLevel) {
 	}
 
 	// Cannot have both VXLAN and IPIP on the same IP pool.
-	if (pool.IPIPMode == api.IPIPModeAlways || pool.IPIPMode == api.IPIPModeCrossSubnet) && pool.VXLANMode == api.VXLANModeAlways {
+	if ipipModeEnabled(pool.IPIPMode) && vxLanModeEnabled(pool.VXLANMode) {
 		structLevel.ReportError(reflect.ValueOf(pool.IPIPMode),
 			"IPpool.IPIPMode", "", reason("IPIPMode and VXLANMode cannot both be enabled on the same IP pool"), "")
 	}
@@ -780,6 +780,14 @@ func validateIPPoolSpec(structLevel validator.StructLevel) {
 		structLevel.ReportError(reflect.ValueOf(pool.CIDR),
 			"IPpool.CIDR", "", reason(overlapsV6LinkLocal), "")
 	}
+}
+
+func vxLanModeEnabled(mode api.VXLANMode) bool {
+	return mode == api.VXLANModeAlways || mode == api.VXLANModeCrossSubnet
+}
+
+func ipipModeEnabled(mode api.IPIPMode) bool {
+	return mode == api.IPIPModeAlways || mode == api.IPIPModeCrossSubnet
 }
 
 func validateICMPFields(structLevel validator.StructLevel) {

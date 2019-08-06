@@ -1,4 +1,4 @@
-// Copyright (c) 2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2019 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -23,6 +23,7 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/libcalico-go/lib/backend/syncersv1/updateprocessors"
 	"github.com/projectcalico/libcalico-go/lib/net"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 var _ = Describe("Test the IPPool update processor", func() {
@@ -139,6 +140,43 @@ var _ = Describe("Test the IPPool update processor", func() {
 			Key: v3PoolKey2,
 		})
 		Expect(err).To(HaveOccurred())
+	})
+
+	It("should accept VXLANMode CrossSubnet", func() {
+		up := updateprocessors.NewIPPoolUpdateProcessor()
+
+		By("converting an IP Pool with VXLANMode CrossSubnet")
+		res := &apiv3.IPPool{
+			TypeMeta: metav1.TypeMeta{
+				Kind:       apiv3.KindIPPool,
+				APIVersion: apiv3.GroupVersionCurrent,
+			},
+			Spec: apiv3.IPPoolSpec{
+				CIDR:      cidr1str,
+				IPIPMode:  apiv3.IPIPModeNever,
+				VXLANMode: apiv3.VXLANModeCrossSubnet,
+			},
+		}
+
+		kvps, err := up.Process(&model.KVPair{
+			Key:      v3PoolKey1,
+			Value:    res,
+			Revision: "abcde",
+		})
+		Expect(err).NotTo(HaveOccurred())
+		Expect(kvps).To(HaveLen(1))
+		Expect(kvps[0]).To(Equal(&model.KVPair{
+			Key: v1PoolKeyCidr1,
+			Value: &model.IPPool{
+				CIDR:       v1PoolKeyCidr1.CIDR,
+				IPIPMode:   encap.Undefined,
+				Masquerade: false,
+				IPAM:       true,
+				Disabled:   false,
+				VXLANMode:  encap.CrossSubnet,
+			},
+			Revision: "abcde",
+		}))
 	})
 
 	It("should fail to convert an invalid resource", func() {
