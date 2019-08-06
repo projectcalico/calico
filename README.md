@@ -77,6 +77,8 @@ Supported, optional environment variables:
 
    -  `dnsmasq`: Build dnsmasq packages.
 
+   -  `nettle`: Build nettle packages (Ubuntu Xenial only).
+
    -  `pub_debs`: Publish all Debian packages.
 
    -  `pub_rpms`: Publish all RPMs.
@@ -118,7 +120,7 @@ The components that we package and host are:
    [document](https://docs.projectcalico.org/master/getting-started/openstack/installation/ubuntu)
    that the installer must do `pip install etcd3gw`.
 
--  dnsmasq - see below.
+-  dnsmasq and nettle - see below.
 
 ## Dnsmasq
 
@@ -163,4 +165,10 @@ fork](https://github.com/projectcalico/calico-dnsmasq).
 -  For Ubuntu Xenial, `2.79test1calico1-2-xenial`.
 -  For CentOS/RHEL 7, `rpm_2.79`.
 
-Note, for some builds may also need "nettle" package.
+## Nettle
+
+The dnsmasq code that we build for Xenial has a hardcoded
+package-install-time dependency on libnettle6 >= 3.3, which is
+problematic because that version of libnettle is not available in
+Xenial.  Therefore, for Ubuntu Xenial only, we build and upload nettle
+3.3 to our PPA.
