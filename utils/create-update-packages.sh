@@ -87,7 +87,7 @@ fi
 function precheck_ppa {
     # Check the PPA exists.
     require_repo_name
-    wget -O /dev/null http://ppa.launchpad.net/project-calico/${REPO_NAME}/ubuntu/dists/bionic/main/source/Sources.gz || {
+    wget -O - https://launchpad.net/~project-calico/+archive/ubuntu/${REPO_NAME} | grep -F "PPA description" || {
 	cat <<EOF
 
 ERROR: PPA for ${REPO_NAME} does not exist.  Create it, then rerun this job.
@@ -115,11 +115,11 @@ function precheck_bld_images {
 }
 
 function precheck_net_cal {
-    test -n NETWORKING_CALICO_CHECKOUT || require_version
+    test -n "${NETWORKING_CALICO_CHECKOUT}" || require_version
 }
 
 function precheck_felix {
-    test -n FELIX_CHECKOUT || require_version
+    test -n "${FELIX_CHECKOUT}" || require_version
 }
 
 function precheck_etcd3gw {
@@ -225,6 +225,7 @@ function do_dnsmasq {
     # Ubuntu Xenial
     git checkout 2.79test1calico1-2-xenial
     sed -i s/trusty/xenial/g debian/changelog
+    git commit -a -m "switch trusty to xenial in debian/changelog" --author="Marvin <marvin@tigera.io>"
     ${DOCKER_RUN_RM} calico-build/xenial dpkg-buildpackage -I -S
 
     # CentOS/RHEL 7
