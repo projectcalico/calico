@@ -8,7 +8,7 @@ Configure one or more floating IPs that can be used as additional IP addresses f
 
 ### Value
 
-A floating IP is an additional IP address that can be used to reach a pod, and can be reassigned inside the cluster. Like Kubernetes Services, a floating IP provides a stable IP address to reach some network service that might be backed by different pods at different times.  The primary advantage over Kubernetes services is that floating IPs work on all protocols: not just TCP, UDP, and SCTP.  Unlike Kubernetes services, a floating IP fronts a single pod at a time and cannot be used for load balancing.
+Like Kubernetes Services, a floating IP provides a stable IP address to reach some network service that might be backed by different pods at different times.  The primary advantage over Kubernetes services is that floating IPs work on all protocols: not just TCP, UDP, and SCTP.  Unlike Kubernetes services, a floating IP fronts a single pod at a time and cannot be used for load balancing.
 
 ### Features
 
@@ -93,4 +93,4 @@ For example:
 "cni.projectcalico.org/floatingIPs": "[\"10.0.0.1\"]"
 </pre>
 
-Note the use of the escaped \" for the inner double quotes around the addresses.
+Note the use of the escaped `\"` for the inner double quotes around the addresses.
