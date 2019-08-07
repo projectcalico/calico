@@ -60,3 +60,5 @@ toc:
   path: /networking/sidecar-acceleration
 - title: Use specific IP address for a pod
   path: /networking/use-specific-ip
+- title: Add a floating IP to a pod
+  path: /networking/add-floating-ip
