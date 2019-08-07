@@ -1,7 +1,7 @@
 
 # Calico packaging
 
-This repo aims to automate and document every step needed to build and
+This repo automates and documents every step needed to build and
 publish Calico packages, for use [with
 OpenStack](https://docs.projectcalico.org/master/getting-started/openstack/installation/)
 or [on bare metal
@@ -20,9 +20,8 @@ similarly,
 will build and publish a set of packages for version X.Y.Z, to our PPA
 and RPM repo named "calico-X.Y".
 
-For documentation, this file should contain everything needed to
-understand how our packaging works, what components we package, and
-why.
+This file documents everything needed to understand how our packaging
+works, what components we package, and why.
 
 ## Usage
 
@@ -77,6 +76,8 @@ Supported, optional environment variables:
 
    -  `dnsmasq`: Build dnsmasq packages.
 
+   -  `nettle`: Build nettle packages (Ubuntu Xenial only).
+
    -  `pub_debs`: Publish all Debian packages.
 
    -  `pub_rpms`: Publish all RPMs.
@@ -104,6 +105,16 @@ We build and publish packages for these platforms:
    at binaries.projectcalico.org (for example
    http://binaries.projectcalico.org/rpm/calico-3.8/).
 
+## Public PPAs and RPM repositories
+
+There is a PPA and RPM repo, named `calico-X.Y`, for each Calico X.Y
+release series.  Packages are updated through the cycle for an X.Y
+series (X.Y.0, X.Y.1 etc.), so the repo always provides our latest
+packages for that series.
+
+There is also a PPA and RPM repo named `master`, with packages that
+are built every night from our latest development code.
+
 ## Packaged components
 
 The components that we package and host are:
@@ -118,7 +129,10 @@ The components that we package and host are:
    [document](https://docs.projectcalico.org/master/getting-started/openstack/installation/ubuntu)
    that the installer must do `pip install etcd3gw`.
 
--  dnsmasq - see below.
+-  dnsmasq and nettle - see below.
+
+For OpenStack and bare metal installs we don't currently need any
+other Calico components.
 
 ## Dnsmasq
 
@@ -163,4 +177,10 @@ fork](https://github.com/projectcalico/calico-dnsmasq).
 -  For Ubuntu Xenial, `2.79test1calico1-2-xenial`.
 -  For CentOS/RHEL 7, `rpm_2.79`.
 
-Note, for some builds may also need "nettle" package.
+## Nettle
+
+The dnsmasq code that we build for Xenial has a hardcoded
+package-install-time dependency on libnettle6 >= 3.3, which is
+problematic because that version of libnettle is not available in
+Xenial.  Therefore, for Ubuntu Xenial only, we build and upload nettle
+3.3 to our PPA.

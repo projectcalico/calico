@@ -24,7 +24,7 @@ scriptdir=$(dirname $(realpath $0))
 rootdir=`git_repo_root`
 
 # Normally, do all the steps.
-: ${STEPS:=ppa rpm_repo bld_images net_cal felix etcd3gw dnsmasq pub_debs pub_rpms}
+: ${STEPS:=ppa rpm_repo bld_images net_cal felix etcd3gw dnsmasq nettle pub_debs pub_rpms}
 
 function require_version {
     # VERSION must be specified.  It should be either "master" or
@@ -130,6 +130,10 @@ function precheck_dnsmasq {
     :
 }
 
+function precheck_nettle {
+    :
+}
+
 function precheck_pub_debs {
     require_deb_secret_key
 }
@@ -212,29 +216,56 @@ function do_etcd3gw {
     popd
 }
 
+function docker_run_rm {
+    docker run --rm --user `id -u`:`id -g` -v $(dirname `pwd`):/code -w /code/$(basename `pwd`) "$@"
+}
+
 function do_dnsmasq {
     pushd ${rootdir}
     rm -rf dnsmasq
     git clone https://github.com/projectcalico/calico-dnsmasq.git dnsmasq
     cd dnsmasq
 
-    MY_UID=`id -u`
-    MY_GID=`id -g`
-    DOCKER_RUN_RM="docker run --rm --user ${MY_UID}:${MY_GID} -v $(dirname `pwd`):/code -w /code/$(basename `pwd`)"
-
     # Ubuntu Trusty
     git checkout 2.79test1calico1-3-trusty
-    ${DOCKER_RUN_RM} calico-build/trusty dpkg-buildpackage -I -S
+    docker_run_rm calico-build/trusty dpkg-buildpackage -I -S
 
     # Ubuntu Xenial
     git checkout 2.79test1calico1-2-xenial
     sed -i s/trusty/xenial/g debian/changelog
     git commit -a -m "switch trusty to xenial in debian/changelog" --author="Marvin <marvin@tigera.io>"
-    ${DOCKER_RUN_RM} calico-build/xenial dpkg-buildpackage -I -S
+    docker_run_rm calico-build/xenial dpkg-buildpackage -I -S
 
     # CentOS/RHEL 7
     git checkout origin/rpm_2.79
-    ${DOCKER_RUN_RM} -e EL_VERSION=el7 calico-build/centos7 ../rpm/build-rpms
+    docker_run_rm -e EL_VERSION=el7 calico-build/centos7 ../rpm/build-rpms
+
+    popd
+}
+
+function do_nettle {
+    # nettle-3.3 for Ubuntu Xenial - At the point checked out, the
+    # Dnsmasq code had this content in debian/shlibs.local:
+    #
+    # libnettle 6 libnettle6 (>= 3.3)
+    #
+    # This causes the built binary package to depend on libnettle6 >=
+    # 3.3, which is problematic because that version is not available
+    # in Xenial.  So we also build and upload nettle 3.3 to our PPA.
+    pushd ${rootdir}
+    rm -rf nettle
+    mkdir nettle
+    cd nettle
+    wget https://launchpad.net/ubuntu/+archive/primary/+sourcefiles/nettle/3.3-1/nettle_3.3-1.dsc
+    wget https://launchpad.net/ubuntu/+archive/primary/+sourcefiles/nettle/3.3-1/nettle_3.3.orig.tar.gz
+    wget https://launchpad.net/ubuntu/+archive/primary/+sourcefiles/nettle/3.3-1/nettle_3.3-1.debian.tar.xz
+    docker_run_rm calico-build/xenial dpkg-source -x nettle_3.3-1.dsc
+    rm -rf ../nettle-3.3
+    mv nettle-3.3 ../
+    cp -a nettle_3.3.orig.tar.gz ../
+    cd ../nettle-3.3
+    sed -i '1 s/unstable/xenial/' debian/changelog
+    docker_run_rm calico-build/xenial dpkg-buildpackage -S
 
     popd
 }
