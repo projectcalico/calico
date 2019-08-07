@@ -86,10 +86,12 @@ var _ = testutils.E2eDatastoreDescribe("Felix syncer tests", testutils.Datastore
 			syncTester.ExpectCacheSize(expectedCacheSize)
 			syncTester.ExpectStatusUpdate(api.ResyncInProgress)
 			syncTester.ExpectStatusUpdate(api.InSync)
+
 			// Kubernetes will have a profile for each of the namespaces that is configured.
 			// We expect:  default, kube-system, kube-public, namespace-1, namespace-2
 			if config.Spec.DatastoreType == apiconfig.Kubernetes {
-				expectedCacheSize += 6
+				//add one for the node resource
+				expectedCacheSize += 7
 				syncTester.ExpectData(model.KVPair{
 					Key: model.ProfileRulesKey{ProfileKey: model.ProfileKey{Name: "kns.default"}},
 					Value: &model.ProfileRules{
@@ -243,7 +245,8 @@ var _ = testutils.E2eDatastoreDescribe("Felix syncer tests", testutils.Datastore
 					Key:   model.HostConfigKey{Hostname: "127.0.0.1", Name: "VXLANTunnelMACAddr"},
 					Value: "66:cf:23:df:22:07",
 				})
-				expectedCacheSize += 4
+				//add one for the node resource
+				expectedCacheSize += 5
 			}
 
 			// The HostIP will be added for the IPv4 address

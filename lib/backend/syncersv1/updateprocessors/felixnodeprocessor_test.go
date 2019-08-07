@@ -1,4 +1,4 @@
-// Copyright (c) 2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2019 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -29,7 +29,7 @@ var _ = Describe("Test the (Felix) Node update processor", func() {
 		Kind: apiv3.KindNode,
 		Name: "mynode",
 	}
-	numFelixConfigs := 4
+	numFelixConfigs := 5
 	up := updateprocessors.NewFelixNodeUpdateProcessor()
 
 	BeforeEach(func() {
@@ -46,6 +46,7 @@ var _ = Describe("Test the (Felix) Node update processor", func() {
 		res.Name = "mynode"
 		expected := map[string]interface{}{
 			hostIPMarker:       nil,
+			nodeMarker:         res,
 			"IpInIpTunnelAddr": nil,
 		}
 		kvps, err := up.Process(&model.KVPair{
@@ -64,6 +65,7 @@ var _ = Describe("Test the (Felix) Node update processor", func() {
 		res = apiv3.NewNode()
 		res.Name = "mynode"
 		res.Spec.BGP = &apiv3.NodeBGPSpec{}
+		expected[nodeMarker] = res
 		kvps, err = up.Process(&model.KVPair{
 			Key:   v3NodeKey1,
 			Value: res,
@@ -86,6 +88,7 @@ var _ = Describe("Test the (Felix) Node update processor", func() {
 		ip := net.MustParseIP("1.2.3.4")
 		expected = map[string]interface{}{
 			hostIPMarker:       &ip,
+			nodeMarker:         res,
 			"IpInIpTunnelAddr": nil,
 		}
 		kvps, err = up.Process(&model.KVPair{
@@ -110,6 +113,7 @@ var _ = Describe("Test the (Felix) Node update processor", func() {
 		ip = net.MustParseIP("100.200.100.200")
 		expected = map[string]interface{}{
 			hostIPMarker:       &ip,
+			nodeMarker:         res,
 			"IpInIpTunnelAddr": nil,
 		}
 		kvps, err = up.Process(&model.KVPair{
@@ -133,6 +137,7 @@ var _ = Describe("Test the (Felix) Node update processor", func() {
 		}
 		expected = map[string]interface{}{
 			hostIPMarker:       nil,
+			nodeMarker:         res,
 			"IpInIpTunnelAddr": "192.100.100.100",
 		}
 		kvps, err = up.Process(&model.KVPair{
@@ -184,6 +189,7 @@ var _ = Describe("Test the (Felix) Node update processor", func() {
 		Expect(err).To(HaveOccurred())
 		expected := map[string]interface{}{
 			hostIPMarker:       nil,
+			nodeMarker:         res,
 			"IpInIpTunnelAddr": "192.100.100.100",
 		}
 		checkExpectedConfigs(
@@ -208,6 +214,7 @@ var _ = Describe("Test the (Felix) Node update processor", func() {
 		ip := net.MustParseIP("1.2.3.4")
 		expected = map[string]interface{}{
 			hostIPMarker:       &ip,
+			nodeMarker:         res,
 			"IpInIpTunnelAddr": nil,
 		}
 		checkExpectedConfigs(
