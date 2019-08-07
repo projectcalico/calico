@@ -196,6 +196,8 @@ function do_felix {
     # RPM golang build dependencies that is exactly equivalent to our
     # containerized builds.
     make bin/calico-felix
+    rm -f bin/calico-felix-amd64
+    rm -rf vendor .go-pkg-cache
     PKG_NAME=felix \
 	    NAME=Felix \
 	    ../utils/make-packages.sh deb rpm
