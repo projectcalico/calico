@@ -639,7 +639,7 @@ fv/fv.test: $(SRC_FILES)
 
 .PHONY: remote-deps
 remote-deps:
-	curl -L https://raw.githubusercontent.com/projectcalico/libcalico-go/master/test/crds.yaml -o fv/infrastructure/crds.yaml
+	cp `go list -m -f "{{.Dir}}" github.com/projectcalico/libcalico-go`/test/crds.yaml fv/infrastructure/crds.yaml
 
 .PHONY: fv
 # runs all of the fv tests
