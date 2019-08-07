@@ -1,10 +1,5 @@
 # Release process
 
-There are two main steps to complete:
-
-- [Building a release](#building-a-release)
-- [Releasing debs and rpms](#releasing-debs-and-rpms)
-
 ## Preparing for a release
 
 Checkout the branch from which you want to release. For a major or minor release,
@@ -74,7 +69,10 @@ You should have no local changes and tests should be passing.
    make VERSION=<version> release-publish-latest
    ```
 
-## Releasing debs and rpms
+# Debian and RPM packages
 
-After completing the above `make release` process, you should [produce and publish
-the deb/rpm artifacts](https://github.com/projectcalico/packaging/blob/master/README.md).
+For the preparation of Debian and RPM packages, see
+https://github.com/projectcalico/packaging.
+
+(Tigera builds and publishes packages for each Calico release as a
+whole, once all the Calico components have been released.)
