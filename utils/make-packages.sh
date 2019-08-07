@@ -42,9 +42,6 @@ for package_type in "$@"; do
 	    # Mar 2016 14:08:51 +0000.
 	    timestamp=`date "+%a, %d %b %Y %H:%M:%S %z"`
 	    for series in trusty xenial bionic; do
-		# Clean the Git repo; but in the Felix case, avoid
-		# deleting the calico-felix binary.
-		git clean -ffxd -e bin/calico-felix
 		{
 		    cat <<EOF
 ${PKG_NAME} (${DEB_EPOCH}${debver}~$series) $series; urgency=low
