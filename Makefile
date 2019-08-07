@@ -258,7 +258,8 @@ clean:
 	       fv/fv.test \
 	       $(GENERATED_FILES) \
 	       go/docs/calc.pdf \
-	       release-notes-*
+	       release-notes-* \
+	       fv/infrastructure/crds.yaml
 	find . -name "junit.xml" -type f -delete
 	find . -name "*.coverprofile" -type f -delete
 	find . -name "coverage.xml" -type f -delete
@@ -276,17 +277,17 @@ sub-build-%:
 # Default the typha repo and version but allow them to be overridden
 TYPHA_BRANCH?=$(shell git rev-parse --abbrev-ref HEAD)
 TYPHA_REPO?=github.com/projectcalico/typha
-TYPHA_VERSION?=v0.0.0-$(shell git ls-remote git@github.com:projectcalico/typha $(TYPHA_BRANCH) 2>/dev/null | cut -f 1)
+TYPHA_VERSION?=$(shell git ls-remote git@github.com:projectcalico/typha $(TYPHA_BRANCH) 2>/dev/null | cut -f 1)
+TYPHA_OLDVER?=$(shell go list -m -f "{{.Version}}" github.com/projectcalico/typha)
 
 ## Update typha pin in go.mod
 update-typha:
 	$(DOCKER_RUN) $(CALICO_BUILD) sh -c '\
-	  echo "Updating typha to $(TYPHA_VERSION) from $(TYPHA_REPO)"; \
-	  export OLD_VER=$$(grep typha | awk '{print $2}') ;\
-	  echo "Old version: $$OLD_VER";\
-	  if [ $(TYPHA_VERSION) != $$OLD_VER ]; then \
-	  	sed -i "s/$$OLD_VER/$(TYPHA_VERSION)/" go.mod;
-	  fi'
+	if [ $(TYPHA_VERSION) != $(TYPHA_OLDVER) ]; then \
+		echo "Updating typha version $(TYPHA_OLDVER) to $(TYPHA_VERSION) from $(TYPHA_REPO)"; \
+		go mod edit -droprequire github.com/projectcalico/typha; \
+		go get $(TYPHA_REPO)@$(TYPHA_VERSION); \
+	fi'
 
 bin/calico-felix: bin/calico-felix-$(ARCH)
 	ln -f bin/calico-felix-$(ARCH) bin/calico-felix
@@ -563,8 +564,7 @@ calico-build/centos6:
 ###############################################################################
 .PHONY: static-checks
 static-checks:
-	@echo "temporarily disabled"
-#	$(MAKE) check-typha-pins golangci-lint
+	$(MAKE) check-typha-pins golangci-lint
 
 # TODO: re-enable these linters !
 LINT_ARGS := --disable staticcheck,ineffassign,gosimple,govet,deadcode,errcheck,unused,varcheck,structcheck
@@ -580,24 +580,25 @@ check-packr: bpf/packrd/packed-packr.go
 		false; \
 	fi
 
-SOURCE_DIRS := "./bpf/ ./buildinfo/ ./calc/ ./check-licenses/ ./cmd/ ./config/ ./conntrack/ ./daemon/ ./dataplane/ ./dispatcher/ ./fv/ ./hashutils/ ./ifacemonitor/ ./ip/ ./ipsets/ ./iptables/ ./jitter/ ./k8sfv/ ./labelindex/ ./logutils/ ./markbits/ ./multidict/ ./policysync/ ./proto/ ./routetable/ ./rules/ ./statusrep/ ./stringutils/ ./testutils/ ./throttle/ ./usagerep/ ./versionparse/"
-
 # Run go fmt on all our go files.
 .PHONY: go-fmt goimports fix
 fix go-fmt goimports:
-	$(DOCKER_RUN) $(CALICO_BUILD) sh -c 'echo $(SOURCE_DIRS) | xargs goimports -w -local github.com/projectcalico/'
+	$(DOCKER_RUN) $(CALICO_BUILD) sh -c 'find . -iname "*.go" ! -wholename "./vendor/*" | xargs goimports -w -local github.com/projectcalico/'
+
+LIBCALICO_FELIX?=$(shell go list -m -f "{{.Version}}" github.com/projectcalico/libcalico-go)
+TYPHA_GOMOD?=$(shell go list -m -f "{{.GoMod}}" github.com/projectcalico/typha)
+ifneq ($(TYPHA_GOMOD),)
+	LIBCALICO_TYPHA?=$(shell grep libcalico-go $(TYPHA_GOMOD) | cut -d' ' -f2)
+endif
 
 .PHONY: check-typha-pins
 check-typha-pins:
 	@echo "Checking Typha's libcalico-go pin matches ours (so that any datamodel"
 	@echo "changes are reflected in the Typha-Felix API)."
 	@echo
-	@echo "Felix's libcalico-go pin:"
-	@grep libcalico-go go.mod | awk '{print $$2}'
-	@echo "Typha's libcalico-go pin:"
-	@grep libcalico-go vendor/github.com/projectcalico/typha/go.mod | awk '{print $$2}'
-	if [ "`grep libcalico-go vendor/github.com/projectcalico/typha/go.mod | awk '{print $$2}'`" != \
-	     "`grep libcalico-go go.mod | awk '{print $$2}'`" ]; then \
+	@echo "Felix's libcalico-go pin: $(LIBCALICO_FELIX)"
+	@echo "Typha's libcalico-go pin: $(LIBCALICO_TYPHA)"
+	if [ "$(LIBCALICO_FELIX)" != "$(LIBCALICO_TYPHA)" ]; then \
 	     echo "Typha and Felix libcalico-go pins differ."; \
 	     false; \
 	fi
@@ -635,6 +636,10 @@ fv/fv.test: $(SRC_FILES)
 	# outside a container and allow them to interact with docker.
 	$(DOCKER_RUN) $(CALICO_BUILD) go test $(BUILD_FLAGS) ./$(shell dirname $@) -c --tags fvtests -o $@
 
+.PHONY: remote-deps
+remote-deps:
+	curl -L https://raw.githubusercontent.com/projectcalico/libcalico-go/master/test/crds.yaml -o fv/infrastructure/crds.yaml
+
 .PHONY: fv
 # runs all of the fv tests
 # to run it in parallel, decide how many parallel engines you will run, and in each one call:
@@ -649,7 +654,7 @@ fv/fv.test: $(SRC_FILES)
 #         ...
 #         $(MAKE) fv FV_BATCHES_TO_RUN="10" FV_NUM_BATCHES=10    # the tenth 1/10
 #         etc.
-fv fv/latency.log: $(BUILD_IMAGE) bin/iptables-locker bin/test-workload bin/test-connection fv/fv.test
+fv fv/latency.log: remote-deps $(BUILD_IMAGE) bin/iptables-locker bin/test-workload bin/test-connection fv/fv.test
 	cd fv && \
 	  FV_FELIXIMAGE=$(FV_FELIXIMAGE) \
 	  FV_ETCDIMAGE=$(FV_ETCDIMAGE) \
