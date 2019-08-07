@@ -639,7 +639,7 @@ fv/fv.test: $(SRC_FILES)
 
 .PHONY: remote-deps
 remote-deps:
-	cp `go list -m -f "{{.Dir}}" github.com/projectcalico/libcalico-go`/test/crds.yaml fv/infrastructure/crds.yaml
+	$(DOCKER_RUN) $(CALICO_BUILD) sh -c 'cp `go list -m -f "{{.Dir}}" github.com/projectcalico/libcalico-go`/test/crds.yaml fv/infrastructure/crds.yaml'
 
 .PHONY: fv
 # runs all of the fv tests

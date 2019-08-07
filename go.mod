@@ -55,5 +55,3 @@ require (
 )
 
 replace github.com/sirupsen/logrus => github.com/projectcalico/logrus v0.0.0-20180627202928-fc9bbf2f57995271c5cd6911ede7a2ebc5ea7c6f
-
-replace github.com/projectcalico/libcalico-go => ../libcalico-go
