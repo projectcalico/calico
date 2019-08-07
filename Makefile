@@ -617,6 +617,7 @@ foss-checks:
 	@docker run --rm -v $(CURDIR):/go/src/$(PACKAGE_NAME):rw \
 	  -e LOCAL_USER_ID=$(LOCAL_USER_ID) \
 	  -e FOSSA_API_KEY=$(FOSSA_API_KEY) \
+	  -e GO111MODULE=on \
 	  -w /go/src/$(PACKAGE_NAME) \
 	  $(CALICO_BUILD) /usr/local/bin/fossa
 
