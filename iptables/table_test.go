@@ -18,8 +18,6 @@ import (
 	"os/exec"
 	"strings"
 
-	"github.com/projectcalico/libcalico-go/lib/set"
-
 	. "github.com/projectcalico/felix/iptables"
 
 	. "github.com/onsi/ginkgo"
@@ -625,11 +623,11 @@ func describeEmptyDataplaneTests(dataplaneMode string) {
 				"INPUT":  {},
 				"OUTPUT": {},
 			}))
-
-			expectedWrites := set.New()
-			expectedWrites.Add(chainMod{name: "FORWARD", ruleNum: 1})
-			expectedWrites.Add(chainMod{name: "FORWARD", ruleNum: 2})
-			Expect(dataplane.ChainMods.ContainsAll(expectedWrites)).To(BeTrue())
+			if dataplaneMode == "nft" {
+				Expect(dataplane.CmdNames).To(ConsistOf("iptables", "iptables-nft-save", "iptables-nft-restore"))
+			} else {
+				Expect(dataplane.CmdNames).To(ConsistOf("iptables", "iptables-save", "iptables-restore"))
+			}
 		})
 		Describe("then inserting the same rules", func() {
 			BeforeEach(func() {
@@ -656,11 +654,6 @@ func describeEmptyDataplaneTests(dataplaneMode string) {
 					"INPUT":  {},
 					"OUTPUT": {},
 				}))
-
-				expectedWrites := set.New()
-				expectedWrites.Add(chainMod{name: "FORWARD", ruleNum: 1})
-				expectedWrites.Add(chainMod{name: "FORWARD", ruleNum: 2})
-				Expect(dataplane.ChainMods.ContainsAll(expectedWrites)).To(BeTrue())
 			})
 		})
 		Describe("then inserting different rules", func() {
@@ -690,12 +683,6 @@ func describeEmptyDataplaneTests(dataplaneMode string) {
 					"INPUT":  {},
 					"OUTPUT": {},
 				}))
-
-				expectedWrites := set.New()
-				expectedWrites.Add(chainMod{name: "FORWARD", ruleNum: 1})
-				expectedWrites.Add(chainMod{name: "FORWARD", ruleNum: 2})
-				expectedWrites.Add(chainMod{name: "FORWARD", ruleNum: 3})
-				Expect(dataplane.ChainMods.ContainsAll(expectedWrites)).To(BeTrue())
 			})
 		})
 	})
