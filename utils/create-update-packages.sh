@@ -196,6 +196,8 @@ function do_felix {
     # RPM golang build dependencies that is exactly equivalent to our
     # containerized builds.
     make bin/calico-felix
+    # Remove all the files that were added by that build, except for the
+    # bin/calico-felix binary.
     rm -f bin/calico-felix-amd64
     rm -rf vendor .go-pkg-cache
     PKG_NAME=felix \
