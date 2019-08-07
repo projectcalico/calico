@@ -223,7 +223,7 @@ endif
 LOCAL_USER_ID:=$(shell id -u)
 LOCAL_GROUP_ID:=$(shell id -g)
 
-EXTRA_DOCKER_ARGS	:= -e GO111MODULE=on
+EXTRA_DOCKER_ARGS	+= -e GO111MODULE=on
 
 # Allow libcalico-go and the ssh auth sock to be mapped into the build container.
 ifdef LIBCALICOGO_PATH
