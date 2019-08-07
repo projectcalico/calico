@@ -83,15 +83,17 @@ ifeq ($(ARCH),x86_64)
     override ARCH=amd64
 endif
 
-# Build mounts for running in "local build" mode. Mount in libcalico, but null out
-# the vendor directory. This allows an easy build using local development code,
+# Build mounts for running in "local build" mode. This allows an easy build using local development code,
 # assuming that there is a local checkout of libcalico in the same directory as this repo.
-LOCAL_BUILD_MOUNTS ?=
-ifeq ($(LOCAL_BUILD),true)
-LOCAL_BUILD_MOUNTS = -v $(CURDIR)/../libcalico-go:/$(PACKAGE_NAME)/vendor/github.com/projectcalico/libcalico-go:ro \
-	-v $(CURDIR)/.empty:/$(PACKAGE_NAME)/vendor/github.com/projectcalico/libcalico-go/vendor:ro \
-	-v $(CURDIR)/../typha:/$(PACKAGE_NAME)/vendor/github.com/projectcalico/typha:ro \
-	-v $(CURDIR)/.empty:/$(PACKAGE_NAME)/vendor/github.com/projectcalico/typha/vendor:ro
+PHONY:local_build
+
+ifdef LOCAL_BUILD
+EXTRA_DOCKER_ARGS+=-v $(CURDIR)/../libcalico-go:/go/src/github.com/projectcalico/libcalico-go:rw
+local_build:
+	go mod edit -replace=github.com/projectcalico/libcalico-go=../libcalico-go
+else
+local_build:
+	-go mod edit -dropreplace=github.com/projectcalico/libcalico-go
 endif
 
 # we want to be able to run the same recipe on multiple targets keyed on the image name
@@ -222,8 +224,6 @@ LOCAL_USER_ID:=$(shell id -u)
 LOCAL_GROUP_ID:=$(shell id -g)
 
 EXTRA_DOCKER_ARGS	:= -e GO111MODULE=on
-BUILD_FLAGS		:= -mod=vendor
-GINKGO_ARGS		:= -mod=vendor
 
 # Allow libcalico-go and the ssh auth sock to be mapped into the build container.
 ifdef LIBCALICOGO_PATH
@@ -232,20 +232,25 @@ endif
 ifdef SSH_AUTH_SOCK
   EXTRA_DOCKER_ARGS += -v $(SSH_AUTH_SOCK):/ssh-agent --env SSH_AUTH_SOCK=/ssh-agent
 endif
+
+ifdef GOPATH
+	EXTRA_DOCKER_ARGS += -v $(GOPATH)/pkg/mod:/go/pkg/mod:rw
+endif
+
 DOCKER_RUN := mkdir -p .go-pkg-cache && \
-                   docker run --rm \
-                              --net=host \
-                              $(EXTRA_DOCKER_ARGS) \
-                              -e LOCAL_USER_ID=$(LOCAL_USER_ID) \
-                              -e GOCACHE=/go-cache \
-                              -v $(CURDIR):/$(PACKAGE_NAME):rw \
-                              -v $(CURDIR)/.go-pkg-cache:/go-cache:rw \
-                              -w /$(PACKAGE_NAME) \
-                              -e GOARCH=$(ARCH)
+	docker run --rm \
+		--net=host \
+		$(EXTRA_DOCKER_ARGS) \
+		-e LOCAL_USER_ID=$(LOCAL_USER_ID) \
+		-e GOCACHE=/go-cache \
+		-e GOARCH=$(ARCH) \
+		-e GOPATH=/go \
+		-v $(CURDIR):/go/src/$(PACKAGE_NAME):rw \
+		-v $(CURDIR)/.go-pkg-cache:/go-cache:rw \
+		-w /go/src/$(PACKAGE_NAME)
 
 .PHONY: clean
 clean:
-	-chmod -R +w .go-pkg-cache
 	rm -rf bin \
 	       docker-image/bin \
 	       dist \
@@ -253,8 +258,6 @@ clean:
 	       fv/fv.test \
 	       $(GENERATED_FILES) \
 	       go/docs/calc.pdf \
-	       vendor \
-	       .go-pkg-cache \
 	       release-notes-*
 	find . -name "junit.xml" -type f -delete
 	find . -name "*.coverprofile" -type f -delete
@@ -269,22 +272,6 @@ build: bin/calico-felix
 build-all: $(addprefix sub-build-,$(VALIDARCHES))
 sub-build-%:
 	$(MAKE) build ARCH=$*
-
-VENDOR_REMADE := false
-.PHONY: update-vendor
-update-vendor:
-	$(DOCKER_RUN) $(CALICO_BUILD) go mod vendor
-	touch vendor/.up-to-date
-	$(eval VENDOR_REMADE := true)
-
-# vendor is a shortcut for force rebuilding the go vendor directory.
-.PHONY: vendor
-vendor: vendor/.up-to-date
-vendor/.up-to-date: go.mod go.sum
-	if ! $(VENDOR_REMADE); then \
-	  $(DOCKER_RUN) $(CALICO_BUILD) go mod vendor; \
-	  touch vendor/.up-to-date; \
-	fi
 
 # Default the typha repo and version but allow them to be overridden
 TYPHA_BRANCH?=$(shell git rev-parse --abbrev-ref HEAD)
@@ -304,10 +291,10 @@ update-typha:
 bin/calico-felix: bin/calico-felix-$(ARCH)
 	ln -f bin/calico-felix-$(ARCH) bin/calico-felix
 
-bin/calico-felix-$(ARCH): $(SRC_FILES) vendor/.up-to-date
+bin/calico-felix-$(ARCH): $(SRC_FILES) local_build
 	@echo Building felix for $(ARCH) on $(BUILDARCH)
 	mkdir -p bin
-	$(DOCKER_RUN) $(LOCAL_BUILD_MOUNTS) $(CALICO_BUILD) \
+	$(DOCKER_RUN) $(CALICO_BUILD) \
 	   sh -c 'go build -v -i -o $@ -v $(BUILD_FLAGS) $(LDFLAGS) "$(PACKAGE_NAME)/cmd/calico-felix" && \
 		( ldd $@ 2>&1 | grep -q -e "Not a valid dynamic program" \
 		-e "not a dynamic executable" || \
@@ -334,10 +321,10 @@ $(CLANG_BUILDER_STAMP): docker-build-images/bpf-clang-builder.Dockerfile.$(BUILD
 bpf/xdp/generated/xdp.o: bpf/xdp/filter.c $(BPF_INC_FILES) $(BPF_XDP_INC_FILES) $(CLANG_BUILDER_STAMP)
 	mkdir -p bpf/xdp/generated
 	docker run --rm --user $(LOCAL_USER_ID):$(LOCAL_GROUP_ID) \
-	          -v $(CURDIR):/$(PACKAGE_NAME):rw \
+	          -v $(CURDIR):/go/src/$(PACKAGE_NAME):rw \
 	              calico-build/bpf-clang \
 	              /bin/sh -c \
-	              "cd /$(PACKAGE_NAME) && \
+	              "cd /go/src/$(PACKAGE_NAME) && \
 	               clang \
 	                      -D__KERNEL__ \
 	                      -D__ASM_SYSREG_H \
@@ -350,24 +337,24 @@ bpf/xdp/generated/xdp.o: bpf/xdp/filter.c $(BPF_INC_FILES) $(BPF_XDP_INC_FILES) 
 	                      -fno-stack-protector \
 	                      -O2 \
 	                      -emit-llvm \
-	                      -c /$(PACKAGE_NAME)/bpf/xdp/filter.c \
-	                      -o /$(PACKAGE_NAME)/bpf/xdp/generated/xdp.ll && \
+	                      -c /go/src/$(PACKAGE_NAME)/bpf/xdp/filter.c \
+	                      -o /go/src/$(PACKAGE_NAME)/bpf/xdp/generated/xdp.ll && \
 	               llc \
 	                       -march=bpf \
 	                       -filetype=obj \
-	                       -o /$(PACKAGE_NAME)/bpf/xdp/generated/xdp.o \
-	                       /$(PACKAGE_NAME)/bpf/xdp/generated/xdp.ll && \
-	               rm -f /$(PACKAGE_NAME)/bpf/xdp/generated/xdp.ll"
+	                       -o /go/src/$(PACKAGE_NAME)/bpf/xdp/generated/xdp.o \
+	                       /go/src/$(PACKAGE_NAME)/bpf/xdp/generated/xdp.ll && \
+	               rm -f /go/src/$(PACKAGE_NAME)/bpf/xdp/generated/xdp.ll"
 
 BPF_SOCKMAP_INC_FILES := bpf/sockmap/sockops.h
 
 bpf/sockmap/generated/sockops.o: bpf/sockmap/sockops.c $(BPF_INC_FILES) $(BPF_SOCKMAP_INC_FILES) $(CLANG_BUILDER_STAMP)
 	mkdir -p bpf/sockmap/generated
 	docker run --rm --user $(LOCAL_USER_ID):$(LOCAL_GROUP_ID) \
-	          -v $(CURDIR):/$(PACKAGE_NAME):rw \
+	          -v $(CURDIR):/go/src/$(PACKAGE_NAME):rw \
 	              calico-build/bpf-clang \
 	              /bin/sh -c \
-	              "cd /$(PACKAGE_NAME) && \
+	              "cd /go/src/$(PACKAGE_NAME) && \
 	               clang \
 	                      -D__KERNEL__ \
 	                      -D__ASM_SYSREG_H \
@@ -380,22 +367,22 @@ bpf/sockmap/generated/sockops.o: bpf/sockmap/sockops.c $(BPF_INC_FILES) $(BPF_SO
 	                      -fno-stack-protector \
 	                      -O2 \
 	                      -emit-llvm \
-	                      -c /$(PACKAGE_NAME)/bpf/sockmap/sockops.c \
-	                      -o /$(PACKAGE_NAME)/bpf/sockmap/generated/sockops.ll && \
+	                      -c /go/src/$(PACKAGE_NAME)/bpf/sockmap/sockops.c \
+	                      -o /go/src/$(PACKAGE_NAME)/bpf/sockmap/generated/sockops.ll && \
 	               llc \
 	                       -march=bpf \
 	                       -filetype=obj \
-	                       -o /$(PACKAGE_NAME)/bpf/sockmap/generated/sockops.o \
-	                       /$(PACKAGE_NAME)/bpf/sockmap/generated/sockops.ll && \
-	               rm -f /$(PACKAGE_NAME)/bpf/sockmap/generated/sockops.ll"
+	                       -o /go/src/$(PACKAGE_NAME)/bpf/sockmap/generated/sockops.o \
+	                       /go/src/$(PACKAGE_NAME)/bpf/sockmap/generated/sockops.ll && \
+	               rm -f /go/src/$(PACKAGE_NAME)/bpf/sockmap/generated/sockops.ll"
 
 bpf/sockmap/generated/redir.o: bpf/sockmap/redir.c $(BPF_INC_FILES) $(BPF_SOCKMAP_INC_FILES) $(CLANG_BUILDER_STAMP)
 	mkdir -p bpf/sockmap/generated
 	docker run --rm --user $(LOCAL_USER_ID):$(LOCAL_GROUP_ID) \
-	          -v $(CURDIR):/$(PACKAGE_NAME):rw \
+	          -v $(CURDIR):/go/src/$(PACKAGE_NAME):rw \
 	              calico-build/bpf-clang \
 	              /bin/sh -c \
-	              "cd /$(PACKAGE_NAME) && \
+	              "cd /go/src/$(PACKAGE_NAME) && \
 	               clang \
 	                      -D__KERNEL__ \
 	                      -D__ASM_SYSREG_H \
@@ -408,24 +395,24 @@ bpf/sockmap/generated/redir.o: bpf/sockmap/redir.c $(BPF_INC_FILES) $(BPF_SOCKMA
 	                      -fno-stack-protector \
 	                      -O2 \
 	                      -emit-llvm \
-	                      -c /$(PACKAGE_NAME)/bpf/sockmap/redir.c \
-	                      -o /$(PACKAGE_NAME)/bpf/sockmap/generated/redir.ll && \
+	                      -c /go/src/$(PACKAGE_NAME)/bpf/sockmap/redir.c \
+	                      -o /go/src/$(PACKAGE_NAME)/bpf/sockmap/generated/redir.ll && \
 	               llc \
 	                       -march=bpf \
 	                       -filetype=obj \
-	                       -o /$(PACKAGE_NAME)/bpf/sockmap/generated/redir.o \
-	                       /$(PACKAGE_NAME)/bpf/sockmap/generated/redir.ll && \
-	               rm -f /$(PACKAGE_NAME)/bpf/sockmap/generated/redir.ll"
+	                       -o /go/src/$(PACKAGE_NAME)/bpf/sockmap/generated/redir.o \
+	                       /go/src/$(PACKAGE_NAME)/bpf/sockmap/generated/redir.ll && \
+	               rm -f /go/src/$(PACKAGE_NAME)/bpf/sockmap/generated/redir.ll"
 
 .PHONY: packr
 packr: bpf/bpf-packr.go bpf/packrd/packed-packr.go
 
 bpf/bpf-packr.go bpf/packrd/packed-packr.go: bpf/xdp/generated/xdp.o bpf/sockmap/generated/sockops.o bpf/sockmap/generated/redir.o $(CLANG_BUILDER_STAMP)
 	docker run --rm --user $(LOCAL_USER_ID):$(LOCAL_GROUP_ID) \
-	          -v $(CURDIR):/$(PACKAGE_NAME):rw \
+	          -v $(CURDIR):/go/src/$(PACKAGE_NAME):rw \
 	              calico-build/bpf-clang \
 	              /bin/sh -c \
-	              "cd /$(PACKAGE_NAME)/bpf && /go/bin/packr2"
+	              "cd /go/src/$(PACKAGE_NAME)/bpf && /go/bin/packr2"
 	$(DOCKER_RUN) $(CALICO_BUILD) goimports -w -local github.com/projectcalico/ bpf/packrd/packed-packr.go bpf/bpf-packr.go
 
 ###############################################################################
@@ -583,7 +570,7 @@ static-checks:
 LINT_ARGS := --disable staticcheck,ineffassign,gosimple,govet,deadcode,errcheck,unused,varcheck,structcheck
 
 .PHONY: golangci-lint
-golangci-lint: vendor/.up-to-date $(GENERATED_FILES)
+golangci-lint: $(GENERATED_FILES)
 	$(DOCKER_RUN) $(CALICO_BUILD) golangci-lint run --deadline 5m $(LINT_ARGS)
 
 .PHONY: check-packr
@@ -601,7 +588,7 @@ fix go-fmt goimports:
 	$(DOCKER_RUN) $(CALICO_BUILD) sh -c 'echo $(SOURCE_DIRS) | xargs goimports -w -local github.com/projectcalico/'
 
 .PHONY: check-typha-pins
-check-typha-pins: vendor/.up-to-date
+check-typha-pins:
 	@echo "Checking Typha's libcalico-go pin matches ours (so that any datamodel"
 	@echo "changes are reflected in the Typha-Felix API)."
 	@echo
@@ -624,29 +611,29 @@ pre-commit:
 install-git-hooks:
 	./install-git-hooks
 
-foss-checks: vendor
+foss-checks:
 	@echo Running $@...
-	@docker run --rm -v $(CURDIR):/$(PACKAGE_NAME):rw \
+	@docker run --rm -v $(CURDIR):/go/src/$(PACKAGE_NAME):rw \
 	  -e LOCAL_USER_ID=$(LOCAL_USER_ID) \
 	  -e FOSSA_API_KEY=$(FOSSA_API_KEY) \
-	  -w /$(PACKAGE_NAME) \
+	  -w /go/src/$(PACKAGE_NAME) \
 	  $(CALICO_BUILD) /usr/local/bin/fossa
 
 ###############################################################################
 # Unit Tests
 ###############################################################################
 .PHONY: ut
-ut combined.coverprofile: vendor/.up-to-date $(SRC_FILES)
+ut combined.coverprofile: $(SRC_FILES)
 	@echo Running Go UTs.
-	$(DOCKER_RUN) $(LOCAL_BUILD_MOUNTS) $(CALICO_BUILD) ./utils/run-coverage $(GINKGO_ARGS)
+	$(DOCKER_RUN) $(CALICO_BUILD) ./utils/run-coverage $(GINKGO_ARGS)
 
 ###############################################################################
 # FV Tests
 ###############################################################################
-fv/fv.test: vendor/.up-to-date $(SRC_FILES)
+fv/fv.test: $(SRC_FILES)
 	# We pre-build the FV test binaries so that we can run them
 	# outside a container and allow them to interact with docker.
-	$(DOCKER_RUN) $(LOCAL_BUILD_MOUNTS) $(CALICO_BUILD) go test $(BUILD_FLAGS) ./$(shell dirname $@) -c --tags fvtests -o $@
+	$(DOCKER_RUN) $(CALICO_BUILD) go test $(BUILD_FLAGS) ./$(shell dirname $@) -c --tags fvtests -o $@
 
 .PHONY: fv
 # runs all of the fv tests
@@ -718,9 +705,9 @@ k8sfv-test-existing-felix: bin/k8sfv.test
 	PRIVATE_KEY=`pwd`/fv/private.key \
 	k8sfv/run-test
 
-bin/k8sfv.test: $(K8SFV_GO_FILES) vendor/.up-to-date
+bin/k8sfv.test: $(K8SFV_GO_FILES)
 	@echo Building $@...
-	$(DOCKER_RUN) $(LOCAL_BUILD_MOUNTS) $(CALICO_BUILD) \
+	$(DOCKER_RUN) $(CALICO_BUILD) \
 	    sh -c 'go test -c $(BUILD_FLAGS) -o $@ ./k8sfv && \
 		( ldd $@ 2>&1 | grep -q -e "Not a valid dynamic program" \
 		-e "not a dynamic executable" || \
@@ -758,22 +745,22 @@ stop-grafana:
 	@-docker rm -f k8sfv-grafana
 	sleep 2
 
-bin/iptables-locker: $(SRC_FILES) vendor/.up-to-date
+bin/iptables-locker: $(SRC_FILES) local_build
 	@echo Building iptables-locker...
 	mkdir -p bin
-	$(DOCKER_RUN) $(LOCAL_BUILD_MOUNTS) $(CALICO_BUILD) \
+	$(DOCKER_RUN) $(CALICO_BUILD) \
 	    sh -c 'go build -v -i -o $@ -v $(BUILD_FLAGS) $(LDFLAGS) "$(PACKAGE_NAME)/fv/iptables-locker"'
 
-bin/test-workload: $(SRC_FILES) vendor/.up-to-date
+bin/test-workload: $(SRC_FILES) local_build
 	@echo Building test-workload...
 	mkdir -p bin
-	$(DOCKER_RUN) $(LOCAL_BUILD_MOUNTS) $(CALICO_BUILD) \
+	$(DOCKER_RUN) $(CALICO_BUILD) \
 	    sh -c 'go build -v -i -o $@ -v $(BUILD_FLAGS) $(LDFLAGS) "$(PACKAGE_NAME)/fv/test-workload"'
 
-bin/test-connection: $(SRC_FILES) vendor/.up-to-date
+bin/test-connection: $(SRC_FILES) local_build
 	@echo Building test-connection...
 	mkdir -p bin
-	$(DOCKER_RUN) $(LOCAL_BUILD_MOUNTS) $(CALICO_BUILD) \
+	$(DOCKER_RUN) $(CALICO_BUILD) \
 	    sh -c 'go build -v -i -o $@ -v $(BUILD_FLAGS) $(LDFLAGS) "$(PACKAGE_NAME)/fv/test-connection"'
 
 ###############################################################################
@@ -925,12 +912,12 @@ endif
 # Developer helper scripts (not used by build or test)
 ###############################################################################
 .PHONY: ut-no-cover
-ut-no-cover: vendor/.up-to-date $(SRC_FILES)
+ut-no-cover: $(SRC_FILES)
 	@echo Running Go UTs without coverage.
 	$(DOCKER_RUN) $(CALICO_BUILD) ginkgo -r -skipPackage fv,k8sfv,windows $(GINKGO_ARGS)
 
 .PHONY: ut-watch
-ut-watch: vendor/.up-to-date $(SRC_FILES)
+ut-watch: $(SRC_FILES)
 	@echo Watching go UTs for changes...
 	$(DOCKER_RUN) $(CALICO_BUILD) ginkgo watch -r -skipPackage fv,k8sfv,windows $(GINKGO_ARGS)
 
@@ -1018,9 +1005,6 @@ help:
 	@echo
 	@echo "Maintenance:"
 	@echo
-	@echo "  make update-vendor  Update the vendor directory with new "
-	@echo "                      versions of upstream packages.  Record results"
-	@echo "                      in go.mod"
 	@echo "  make go-fmt        Format our go code."
 	@echo "  make clean         Remove binary files."
 	@echo "-----------------------------------------"
