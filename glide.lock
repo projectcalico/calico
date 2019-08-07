@@ -1,5 +1,5 @@
-hash: 18b1430190a742b2fe595998ad4befef0958f100eedb0b42ccc60bd57b0e47ba
-updated: 2019-08-03T07:42:28.632758524Z
+hash: adb7db3f134760ee457f49d84c332279aed3feda727cc5a807c7237df40f27ab
+updated: 2019-08-07T07:52:54.244574121Z
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -114,7 +114,7 @@ imports:
 - name: github.com/kardianos/osext
   version: 2bc1f35cddc0cc527b4bc3dce8578fc2a6c11384
 - name: github.com/kelseyhightower/confd
-  version: f4bfc1d2cdeb6cfda868294e6dd5d393374b2e83
+  version: d66a0aad4f410ae8b1ffa2684222e23b0f7e7e8e
   repo: https://github.com/projectcalico/confd.git
   subpackages:
   - pkg/backends
@@ -180,7 +180,7 @@ imports:
 - name: github.com/peterbourgon/diskv
   version: 5f041e8faa004a95c88a202771f4cc3e991971e6
 - name: github.com/projectcalico/felix
-  version: cceaf8508a92aff8d81b710a6cecf9f93379fd2e
+  version: 505f0a9077969ea63e036f5506d116dd924de69d
   subpackages:
   - bpf
   - buildinfo
@@ -271,7 +271,7 @@ imports:
   subpackages:
   - binder
 - name: github.com/projectcalico/typha
-  version: 130f42fce0d3c6735a032b76a9a863225aa7bed9
+  version: 7b2dfec305587781cfef359dfcfe1cd1913172a4
   subpackages:
   - pkg/config
   - pkg/logutils
