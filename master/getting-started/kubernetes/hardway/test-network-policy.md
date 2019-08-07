@@ -1,6 +1,6 @@
 ---
 title: Test network policy
-canonical_url: 'https://docs.projectcalico.org/master/getting-started/kubernetes/installation/hardway/test-network-policy'
+canonical_url: 'https://docs.projectcalico.org/master/getting-started/kubernetes/hardway/test-network-policy'
 ---
 
 In this lab we will test network policy.
