@@ -5,7 +5,7 @@ canonical_url: 'https://docs.projectcalico.org/master/getting-started/kubernetes
 
 In this lab we will test network policy.
 
-Follow the instructions in the [Simple policy tutorial](/{{page.version}}/security/simple-policy) to verify policy works correctly.
+Follow the instructions in the [Simple policy tutorial](/{{page.version}}/security/tutorials/kubernetes-policy-basic) to verify policy works correctly.
 
 ## Next
 

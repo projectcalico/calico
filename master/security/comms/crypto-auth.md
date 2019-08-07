@@ -1,5 +1,5 @@
 ---
-title: Configuring encryption and authentication
+title: Configure encryption and authentication
 canonical_url: 'https://docs.projectcalico.org/v3.7/security/comms/crypto-auth'
 ---
 

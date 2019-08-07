@@ -1,5 +1,5 @@
 ---
-title: Controlling ingress and egress traffic with network policy
+title: Kubernetes policy, advanced tutorial
 canonical_url: 'https://docs.projectcalico.org/v3.7/security/advanced-policy'
 ---
 
@@ -10,10 +10,10 @@ This guide walks through using Kubernetes `NetworkPolicy` to define more complex
 
 ### Requirements
 
-- This guide is aimed at Calico v2.6.1+ on top of Kubernetes 1.8+, and will not work on previous versions of Calico or Kubernetes
-- This guide assumes you have a working Kubernetes cluster and access to it using kubectl.
-- This guide assumes that your Kubernetes nodes have connectivity to the public internet.
-- This guide assumes you are familiar with [Kubernetes NetworkPolicy](../security/simple-policy)
+- Calico v2.6.1+ with Kubernetes 1.8+
+- A working Kubernetes cluster and access to it using kubectl
+- Your Kubernetes nodes have connectivity to the public internet
+- You are familiar with [Kubernetes NetworkPolicy](kubernetes-policy-basic)
 
 ### Tutorial flow
 

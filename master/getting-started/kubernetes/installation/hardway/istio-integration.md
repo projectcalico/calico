@@ -41,5 +41,5 @@ Your cluster is now ready to enable application layer policy, and you can do so 
 
 ## Test application layer policy
 
-You can test application layer policy by following the [Application Layer Policy tutorial](/{{page.version}}/security/app-layer-policy/).
+You can test application layer policy by following the [Application Layer Policy tutorial](/{{page.version}}/security/tutorials/app-layer-policy/enforce-policy-istio).
 

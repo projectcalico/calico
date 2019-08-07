@@ -55,7 +55,7 @@ An applyOnForward: true policy affects all traffic through the HEP (connections 
 
 #### preDNAT policy
 
-Hosts are often configured to perform Destination Network Address Translation before forwarding certain packets. A common example of this in cloud computing is when the host acts as a reverse-proxy to load balance service requests for a set of backend workload instances. This How To guide on applying policy to [Kubernetes nodePorts]({{site.baseurl}}/{{page.version}}/security/kubernetes-node-ports) is a specific example of such a reverse-proxy.
+Hosts are often configured to perform Destination Network Address Translation before forwarding certain packets. A common example of this in cloud computing is when the host acts as a reverse-proxy to load balance service requests for a set of backend workload instances. To apply policy to a specific example of such a reverse-proxy, see [Kubernetes nodePorts]({{site.baseurl}}/{{page.version}}/security/kubernetes-node-ports).
 
 When preDNAT is set to false on a global network policy, the policy rules are evaluated on the connection after DNAT is performed. False is the default.  When preDNAT is set to true, the policy rules are evaluated on the connection before DNAT has been performed. 
 

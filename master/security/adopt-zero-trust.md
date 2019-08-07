@@ -125,7 +125,7 @@ After you decide on the set of identities you require, create the Kubernetes Ser
 
 #### Write initial whitelist policies for each service
 
-The final step to establishing your Zero Trust Network is to write the policies for each service in your network. The [Application Layer Policy Tutorial]({{site.baseurl}}/{{page.version}}/security/app-layer-policy/) gives an overview of setting up policies that allow traffic based on Service Account identity.
+The final step to establishing your Zero Trust Network is to write the policies for each service in your network. The [Application Layer Policy Tutorial]({{site.baseurl}}/{{page.version}}/security/tutorials/app-layer-policy/enforce-policy-istio) gives an overview of setting up policies that allow traffic based on Service Account identity.
 
 For each service you will:
 
@@ -306,5 +306,5 @@ You may wish to review every security policy change request (aka pull request in
 ### Above and beyond
 
 - [Protect hosts]({{site.baseurl}}/{{page.version}}/security/protect-hosts)
-- [Global Network Policy]({{site.baseurl}}/{{page.version}}/reference/resources/globalnetworkpolicy)
-- [Network Policy]({{site.baseurl}}/{{page.version}}/reference/resources/networkpolicy)
+- [Global network policy]({{site.baseurl}}/{{page.version}}/reference/resources/globalnetworkpolicy)
+- [Network policy]({{site.baseurl}}/{{page.version}}/reference/resources/networkpolicy)

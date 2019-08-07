@@ -40,6 +40,6 @@ You can configure Felix and/or Typha to provide metrics to Prometheus.
 
 #### Best practices
 
-If you enable {{site.prodname}} metrics to Prometheus, a best practice is to use network policy to limit access to the {{site.prodname}} metrics endpoints. For details, see [Securing {{site.prodname}} Prometheus endpoints]({{site.baseurl}}/{{page.version}}/security/comms/secure-metrics).  
+If you enable {{site.prodname}} metrics to Prometheus, a best practice is to use network policy to limit access to the {{site.prodname}} metrics endpoints. For details, see [Secure {{site.prodname}} Prometheus endpoints]({{site.baseurl}}/{{page.version}}/security/comms/secure-metrics).  
 
 If you are not using Prometheus metrics, we recommend disabling the Prometheus ports entirely for more security. 

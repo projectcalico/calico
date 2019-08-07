@@ -60,3 +60,7 @@ toc:
   path: /networking/sidecar-acceleration
 - title: Interoperate with legacy firewalls using IP ranges
   path: /networking/legacy-firewalls
+- title: Use specific IP address for a pod
+  path: /networking/use-specific-ip
+- title: Add a floating IP to a pod
+  path: /networking/add-floating-ip

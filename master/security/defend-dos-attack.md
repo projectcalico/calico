@@ -102,8 +102,8 @@ spec:
 
 ### Above and beyond
 
-- [Global Network Sets]({{site.baseurl}}/{{page.version}}/reference/resources/globalnetworkset)
-- [Global Network Policy]({{site.baseurl}}/{{page.version}}/reference/resources/globalnetworkpolicy)
-- [Create a Host Endpoint]({{site.baseurl}}/{{page.version}}/reference/resources/hostendpoint)
+- [Global network sets]({{site.baseurl}}/{{page.version}}/reference/resources/globalnetworkset)
+- [Global network policy]({{site.baseurl}}/{{page.version}}/reference/resources/globalnetworkpolicy)
+- [Create a host endpoint]({{site.baseurl}}/{{page.version}}/reference/resources/hostendpoint)
 - [Introduction to XDP](https://www.iovisor.org/technology/xdp)
-- [Advanced XDP Documentation](https://prototype-kernel.readthedocs.io/en/latest/networking/XDP/index.html)
+- [Advanced XDP documentation](https://prototype-kernel.readthedocs.io/en/latest/networking/XDP/index.html)

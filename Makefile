@@ -345,7 +345,16 @@ RELEASE_DIR?=$(OUTPUT_DIR)/$(RELEASE_DIR_NAME)
 RELEASE_DIR_K8S_MANIFESTS?=$(RELEASE_DIR)/k8s-manifests
 RELEASE_DIR_IMAGES?=$(RELEASE_DIR)/images
 RELEASE_DIR_BIN?=$(RELEASE_DIR)/bin
-MANIFEST_SRC ?= ./_site/$(RELEASE_STREAM)/manifests
+
+# Determine where the manifests live. For older versions we used
+# a different location, but we still need to package them up for patch
+# releases.
+DEFAULT_MANIFEST_SRC=./_site/$(RELEASE_STREAM)/manifests
+OLD_VERSIONS := v3.0 v3.1 v3.2 v3.3 v3.4 v3.5 v3.6
+ifneq ($(filter $(RELEASE_STREAM),$(OLD_VERSIONS)),)
+DEFAULT_MANIFEST_SRC=./_site/$(RELEASE_STREAM)/getting-started/kubernetes/installation
+endif
+MANIFEST_SRC?=$(DEFAULT_MANIFEST_SRC)
 
 ## Create an archive that contains a complete "Calico" release
 release-archive: release-prereqs $(RELEASE_DIR).tgz

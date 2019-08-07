@@ -4,12 +4,12 @@ title: Use ICMP/ping in policy rules
 
 ### Big picture
 
-Use Calico network policy to allow and deny ICMP/ping messages.
+Use {{site.prodname}} network policy to allow and deny ICMP/ping messages.
 
 ### Value
 
 The **Internet Control Message Protocol (ICMP)** provides valuable network diagnostic functions, but it can also be used maliciously. Attackers can use
-it to learn about your network, or for DoS attacks. Using Calico network policy, you can control where ICMP is used. For example, you can:
+it to learn about your network, or for DoS attacks. Using {{site.prodname}} network policy, you can control where ICMP is used. For example, you can:
 
 - Allow ICMP ping, but only for workloads, host endpoints (or both)
 - Allow ICMP for pods launched by operators for diagnostic purposes, but block other uses
@@ -18,7 +18,7 @@ it to learn about your network, or for DoS attacks. Using Calico network policy,
 
 ### Features
 
-This how-to guide uses the following Calico features:
+This how-to guide uses the following {{site.prodname}} features:
 
 **GlobalNetworkPolicy** or **NetworkPolicy** with:
 
@@ -29,7 +29,7 @@ This how-to guide uses the following Calico features:
 
 #### ICMP packet type and code
 
-Calico network policy also lets you deny and allow ICMP traffic based on specific types and codes. For example, you can specify ICMP type 5, code 2 to match specific ICMP redirect packets.
+{{site.prodname}} network policy also lets you deny and allow ICMP traffic based on specific types and codes. For example, you can specify ICMP type 5, code 2 to match specific ICMP redirect packets.
 
 For details, see [ICMP type and code](https://en.wikipedia.org/wiki/Internet_Control_Message_Protocol#Control_messages).
 
@@ -51,7 +51,7 @@ In this example, all workloads and host endpoints are blocked from sending or re
 
 If **ICMPv6** messages are not used in your deployment, it is still good practice to deny them specifically as shown below.
 
-In any "deny-all" Calico network policy, be sure to specify a lower order (**order:200**) than regular policies that might allow traffic.
+In any "deny-all" {{site.prodname}} network policy, be sure to specify a lower order (**order:200**) than regular policies that might allow traffic.
 
 ```
 apiVersion: projectcalico.org/v3
@@ -133,5 +133,5 @@ spec:
 
 For more on the ICMP match criteria, see:
 
-- [Global Network Policy]({{site.baseurl}}/{{page.version}}/reference/resources/globalnetworkpolicy)
-- [Network Policy]({{site.baseurl}}/{{page.version}}/reference/resources/networkpolicy)
+- [Global network policy]({{site.baseurl}}/{{page.version}}/reference/resources/globalnetworkpolicy)
+- [Network policy]({{site.baseurl}}/{{page.version}}/reference/resources/networkpolicy)
