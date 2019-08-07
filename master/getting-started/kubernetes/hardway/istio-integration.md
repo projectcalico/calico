@@ -1,6 +1,6 @@
 ---
 title: Istio integration
-canonical_url: 'https://docs.projectcalico.org/master/getting-started/kubernetes/installation/hardway/istio-integration'
+canonical_url: 'https://docs.projectcalico.org/master/getting-started/kubernetes/hardway/istio-integration'
 ---
 
 {{site.prodname}} policy integrates with [Istio](https://istio.io) to allow you to write policies that enforce against
