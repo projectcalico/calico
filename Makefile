@@ -166,6 +166,7 @@ LOCAL_USER_ID?=$(shell id -u $$USER)
 clean:
 	rm -rf $(BIN) bin/github $(DEPLOY_CONTAINER_MARKER) .go-pkg-cache k8s-install/scripts/install_cni.test
 	rm -f *.created
+	rm -f crds.yaml
 
 ###############################################################################
 # Building the binary
@@ -279,8 +280,12 @@ $(BIN)/flannel $(BIN)/loopback $(BIN)/host-local $(BIN)/portmap $(BIN)/tuning $(
 ###############################################################################
 .PHONY: static-checks
 ## Perform static checks on the code.
+
+# TODO: re-enable these linters !
+LINT_ARGS := --disable ineffassign,staticcheck,errcheck,gosimple,govet
+
 static-checks:
-	$(DOCKER_RUN) $(CALICO_BUILD) golangci-lint
+	$(DOCKER_RUN) $(CALICO_BUILD) golangci-lint run --deadline 5m $(LINT_ARGS)
 
 .PHONY: fix
 ## Fix static checks
@@ -321,6 +326,7 @@ ut-datastore: local_build
 	-e DATASTORE_TYPE=$(DATASTORE_TYPE) \
 	-e ETCD_ENDPOINTS=http://$(LOCAL_IP_ENV):2379 \
 	-e K8S_API_ENDPOINT=http://127.0.0.1:8080 \
+	-e GO111MODULE=on \
 	-v $(CURDIR):/go/src/$(PACKAGE_NAME):rw \
 	$(CALICO_BUILD) sh -c '\
 			cd  /go/src/$(PACKAGE_NAME) && \
@@ -344,11 +350,18 @@ test-cni-versions:
 		make ut CNI_SPEC_VERSION=$$cniversion; \
 	done
 
+.PHONY: remote-deps
+remote-deps:
+	$(DOCKER_RUN) $(CALICO_BUILD) sh -c ' \
+	go mod download; \
+	cp `go list -m -f "{{.Dir}}" github.com/projectcalico/libcalico-go`/test/crds.yaml crds.yaml; \
+	chmod +w crds.yaml'
+
 ## Kubernetes apiserver used for tests
-run-k8s-apiserver: stop-k8s-apiserver run-etcd
+run-k8s-apiserver: remote-deps stop-k8s-apiserver run-etcd
 	docker run --detach --net=host \
 	  --name calico-k8s-apiserver \
-	  -v `pwd`/vendor/github.com/projectcalico/libcalico-go/test/crds.yaml:/crds.yaml \
+	  -v `pwd`/crds.yaml:/crds.yaml \
 	  -v `pwd`/internal/pkg/testutils/private.key:/private.key \
 	  gcr.io/google_containers/hyperkube-$(ARCH):$(K8S_VERSION) \
 	  /hyperkube apiserver \
