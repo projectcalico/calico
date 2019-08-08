@@ -635,7 +635,7 @@ k8sfv-test: $(BUILD_IMAGE) k8sfv-test-existing-felix
 # Run k8sfv test with whatever is the existing 'calico/felix:latest'
 # container image.  To use some existing Felix version other than
 # 'latest', do 'FELIX_VERSION=<...> make k8sfv-test-existing-felix'.
-k8sfv-test-existing-felix: bin/k8sfv.test
+k8sfv-test-existing-felix: remote-deps bin/k8sfv.test
 	FV_ETCDIMAGE=$(FV_ETCDIMAGE) \
 	FV_TYPHAIMAGE=$(FV_TYPHAIMAGE) \
 	FV_FELIXIMAGE=$(FV_FELIXIMAGE) \
