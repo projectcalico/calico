@@ -21,10 +21,10 @@ BUILDARCH ?= $(shell uname -m)
 
 # canonicalized names for host architecture
 ifeq ($(BUILDARCH),aarch64)
-        BUILDARCH=arm64
+	BUILDARCH=arm64
 endif
 ifeq ($(BUILDARCH),x86_64)
-        BUILDARCH=amd64
+	BUILDARCH=amd64
 endif
 
 # unless otherwise set, I am building for my own architecture, i.e. not cross-compiling
@@ -32,7 +32,7 @@ ARCH ?= $(BUILDARCH)
 
 # canonicalized names for target architecture
 ifeq ($(ARCH),aarch64)
-        override ARCH=arm64
+	override ARCH=arm64
 endif
 ifeq ($(ARCH),x86_64)
     override ARCH=amd64
@@ -63,7 +63,7 @@ PUSH_IMAGES?=$(BUILD_IMAGE) quay.io/calico/pod2daemon-flexvol
 RELEASE_IMAGES?=
 
 ifeq ($(RELEASE),true)
-# If this is a release, also tag and push GCR images. 
+# If this is a release, also tag and push GCR images.
 PUSH_IMAGES+=$(RELEASE_IMAGES)
 endif
 
@@ -76,7 +76,7 @@ PUSH_NONMANIFEST_IMAGES=$(filter-out $(PUSH_MANIFEST_IMAGES),$(PUSH_IMAGES))
 DOCKER_CONFIG ?= $(HOME)/.docker/config.json
 
 ###############################################################################
-GO_BUILD_VER?=v0.20
+GO_BUILD_VER?=v0.23
 CALICO_BUILD?=calico/go-build:$(GO_BUILD_VER)
 PROTOC_VER?=v0.1
 PROTOC_CONTAINER?=calico/protoc:$(PROTOC_VER)-$(BUILDARCH)
@@ -87,13 +87,26 @@ PROTOC_CONTAINER?=calico/protoc:$(PROTOC_VER)-$(BUILDARCH)
 LOCAL_USER_ID:=$(shell id -u)
 MY_GID:=$(shell id -g)
 
-PACKAGE_NAME?=github.com/projectcalico/pod2daemon
-SRC_FILES=$(shell find -name '*.go' |grep -v vendor)
+EXTRA_DOCKER_ARGS	+= -e GO111MODULE=on
 
-# Pre-configured docker run command that runs as this user with the repo
-# checked out to /code, uses the --rm flag to avoid leaving the container
-# around afterwards.
-DOCKER_RUN_RM:=docker run --rm --user $(MY_UID):$(MY_GID) -v ${CURDIR}:/code
+PACKAGE_NAME?=github.com/projectcalico/pod2daemon
+SRC_FILES=$(shell find -name '*.go')
+
+ifdef GOPATH
+	EXTRA_DOCKER_ARGS += -v $(GOPATH)/pkg/mod:/go/pkg/mod:rw
+endif
+
+DOCKER_RUN := mkdir -p .go-pkg-cache && \
+	docker run --rm \
+		--net=host \
+		$(EXTRA_DOCKER_ARGS) \
+		-e LOCAL_USER_ID=$(LOCAL_USER_ID) \
+		-e GOCACHE=/go-cache \
+		-e GOARCH=$(ARCH) \
+		-e GOPATH=/go \
+		-v $(CURDIR):/go/src/$(PACKAGE_NAME):rw \
+		-v $(CURDIR)/.go-pkg-cache:/go-cache:rw \
+		-w /go/src/$(PACKAGE_NAME)
 
 .PHONY: clean
 ## Clean enough that a new release build will be clean
@@ -107,14 +120,6 @@ ifeq ($(ARCH),amd64)
 	docker rmi $(BUILD_IMAGE):latest || true
 	docker rmi $(BUILD_IMAGE):$(VERSION) || true
 endif
-DOCKER_GO_BUILD := mkdir -p .go-pkg-cache && \
-                   docker run --rm -ti \
-                     -v $(CURDIR):/go/src/$(PACKAGE_NAME):rw \
-                         -e LOCAL_USER_ID=$(LOCAL_USER_ID) \
-                         -v $(CURDIR)/.go-pkg-cache:/go-cache/:rw \
-                         -e GOCACHE=/go-cache \
-                         -w /go/src/$(PACKAGE_NAME) \
-                       $(CALICO_BUILD)
 
 ###############################################################################
 # Building the binary
@@ -127,17 +132,13 @@ build-all: $(addprefix bin/flexvol-,$(VALIDARCHES))
 ## Build the binary for the current architecture and platform
 build: bin/flexvol-$(ARCH)
 
-## Create the vendor directory
-vendor: Gopkg.toml
-	$(DOCKER_GO_BUILD) dep ensure -vendor-only
-
 bin/flexvol-amd64: ARCH=amd64
 bin/flexvol-arm64: ARCH=arm64
 bin/flexvol-ppc64le: ARCH=ppc64le
 bin/flexvol-s390x: ARCH=s390x
-bin/flexvol-%: vendor $(SRC_FILES)
+bin/flexvol-%: $(SRC_FILES)
 	mkdir -p bin
-	$(DOCKER_GO_BUILD) go build -v -o bin/flexvol-$(ARCH) flexvol/flexvoldriver.go
+	$(DOCKER_RUN) $(CALICO_BUILD) go build -v -o bin/flexvol-$(ARCH) flexvol/flexvoldriver.go
 
 ###############################################################################
 # Building the image
@@ -212,12 +213,12 @@ sub-tag-images-%:
 ###############################################################################
 ## Perform static checks on the code.
 .PHONY: static-checks
-static-checks: vendor
-	docker run --rm \
-		-e LOCAL_USER_ID=$(LOCAL_USER_ID) \
-		-v $(CURDIR):/go/src/$(PACKAGE_NAME) \
-		-w /go/src/$(PACKAGE_NAME) \
-		$(CALICO_BUILD) gometalinter --deadline=300s --disable-all --enable=goimports --vendor ./...
+
+# TODO: re-enable these linters !
+LINT_ARGS := --disable typecheck,errcheck,ineffassign,gosimple,staticcheck
+
+static-checks:
+	$(DOCKER_RUN) $(CALICO_BUILD) golangci-lint run --deadline 5m $(LINT_ARGS)
 
 .PHONY: fix
 ## Fix static checks
@@ -231,10 +232,7 @@ fix:
 ## Run the tests in a container. Useful for CI, Mac dev
 ut: $(SRC_FILES)
 	mkdir -p report
-	docker run --rm -v $(CURDIR):/go/src/$(PACKAGE_NAME):rw \
-    -e LOCAL_USER_ID=$(LOCAL_USER_ID) \
-    -w /go/src/$(PACKAGE_NAME) \
-    $(CALICO_BUILD) /bin/bash -c "go test -v ./... | go-junit-report > ./report/tests.xml"
+	$(DOCKER_RUN) $(CALICO_BUILD) /bin/bash -c "go test -v ./... | go-junit-report > ./report/tests.xml"
 
 ###############################################################################
 # CI
@@ -342,15 +340,15 @@ endif
 .PHONY: help
 ## Display this help text
 help: # Some kind of magic from https://gist.github.com/rcmachado/af3db315e31383502660
-	@awk '/^[a-zA-Z\-\_0-9\/]+:/ {                                      \
-		nb = sub( /^## /, "", helpMsg );                                \
-		if(nb == 0) {                                                   \
-			helpMsg = $$0;                                              \
-			nb = sub( /^[^:]*:.* ## /, "", helpMsg );                   \
-		}                                                               \
-		if (nb)                                                         \
+	@awk '/^[a-zA-Z\-\_0-9\/]+:/ {				      \
+		nb = sub( /^## /, "", helpMsg );				\
+		if(nb == 0) {						   \
+			helpMsg = $$0;					      \
+			nb = sub( /^[^:]*:.* ## /, "", helpMsg );		   \
+		}							       \
+		if (nb)							 \
 			printf "\033[1;31m%-" width "s\033[0m %s\n", $$1, helpMsg;  \
-	}                                                                   \
-	{ helpMsg = $$0 }'                                                  \
-	width=20                                                            \
+	}								   \
+	{ helpMsg = $$0 }'						  \
+	width=20							    \
 	$(MAKEFILE_LIST)
