@@ -17,6 +17,7 @@ package intdataplane
 import (
 	"fmt"
 	"io/ioutil"
+	"net"
 	"os"
 	"reflect"
 	"strconv"
@@ -109,6 +110,7 @@ type Config struct {
 	IptablesBackend                string
 	IPSetsRefreshInterval          time.Duration
 	RouteRefreshInterval           time.Duration
+	DeviceRouteSourceAddress       net.IP
 	IptablesRefreshInterval        time.Duration
 	IptablesPostWriteCheckInterval time.Duration
 	IptablesInsertMode             string
@@ -337,11 +339,11 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	dp.iptablesFilterTables = append(dp.iptablesFilterTables, filterTableV4)
 	dp.ipSets = append(dp.ipSets, ipSetsV4)
 
-	routeTableV4 := routetable.New(config.RulesConfig.WorkloadIfacePrefixes, 4, false, config.NetlinkTimeout)
+	routeTableV4 := routetable.New(config.RulesConfig.WorkloadIfacePrefixes, 4, false, config.NetlinkTimeout, config.DeviceRouteSourceAddress)
 	dp.routeTables = append(dp.routeTables, routeTableV4)
 
 	if config.RulesConfig.VXLANEnabled {
-		routeTableVXLAN := routetable.New([]string{"vxlan.calico"}, 4, true, config.NetlinkTimeout)
+		routeTableVXLAN := routetable.New([]string{"vxlan.calico"}, 4, true, config.NetlinkTimeout, config.DeviceRouteSourceAddress)
 		dp.routeTables = append(dp.routeTables, routeTableVXLAN)
 		vxlanManager := newVXLANManager(
 			ipSetsV4,
@@ -498,7 +500,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		dp.iptablesMangleTables = append(dp.iptablesMangleTables, mangleTableV6)
 		dp.iptablesFilterTables = append(dp.iptablesFilterTables, filterTableV6)
 
-		routeTableV6 := routetable.New(config.RulesConfig.WorkloadIfacePrefixes, 6, false, config.NetlinkTimeout)
+		routeTableV6 := routetable.New(config.RulesConfig.WorkloadIfacePrefixes, 6, false, config.NetlinkTimeout, config.DeviceRouteSourceAddress)
 		dp.routeTables = append(dp.routeTables, routeTableV6)
 
 		dp.RegisterManager(newIPSetsManager(ipSetsV6, config.MaxIPSetSize, callbacks))
