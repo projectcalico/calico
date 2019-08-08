@@ -1,4 +1,4 @@
-// Copyright (c) 2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2019 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -49,8 +49,10 @@ func (c *FelixNodeUpdateProcessor) Process(kvp *model.KVPair) ([]*model.KVPair, 
 	// just treat that as a delete on the underlying key and return the error alongside
 	// the updates.
 	var ipv4, ipv4Tunl, vxlanTunlIp, vxlanTunlMac interface{}
+	var node *apiv3.Node
+	var ok bool
 	if kvp.Value != nil {
-		node, ok := kvp.Value.(*apiv3.Node)
+		node, ok = kvp.Value.(*apiv3.Node)
 		if !ok {
 			return nil, errors.New("Incorrect value type - expecting resource of kind Node")
 		}
@@ -143,6 +145,14 @@ func (c *FelixNodeUpdateProcessor) Process(kvp *model.KVPair) ([]*model.KVPair, 
 				Name:     "VXLANTunnelMACAddr",
 			},
 			Value:    vxlanTunlMac,
+			Revision: kvp.Revision,
+		},
+		{
+			Key: model.ResourceKey{
+				Name: name,
+				Kind: apiv3.KindNode,
+			},
+			Value:    node,
 			Revision: kvp.Revision,
 		},
 	}, err

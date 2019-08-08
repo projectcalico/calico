@@ -38,6 +38,7 @@ const (
 	isNodeBgpConfig
 
 	hostIPMarker = "*HOSTIP*"
+	nodeMarker   = "*NODEMARKER*"
 )
 
 var _ = Describe("Test the generic configuration update processor and the concrete implementations", func() {
@@ -657,6 +658,10 @@ func checkExpectedConfigs(kvps []*model.KVPair, dataType int, expectedNum int, e
 				Expect(node).To(Equal("mynode"))
 				name = hostIPMarker
 				logrus.Warnf("IP in key: %s", kvp.Value)
+			case model.ResourceKey:
+				node := kt.Name
+				Expect(node).To(Equal("mynode"))
+				name = nodeMarker
 			default:
 				Expect(kvp.Key).To(BeAssignableToTypeOf(model.HostConfigKey{}))
 			}
