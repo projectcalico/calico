@@ -178,15 +178,31 @@ To link to a page not named `index.md`, omit the closing slash. To link to a pag
 | `/getting-started/kubernetes/troubleshooting` | `/getting-started/kubernetes/troubleshooting.md`  |
 
 
-### Relative links and `page.version` variable
+### Relative links, absolute links, and the `page.version` variable
 
-To link to other doc site content, use relative links prefixed with: `/{{page.version}}/`. This allows the content to port across documentation versions without link breakage. Example:
+**Relative Links**
+
+To create clickable links to other doc site content, use relative links prefixed with: `{{ site.baseurl }}`. Relative links will pass CI checks even when a new page is being created as they will correctly link to the local build of the site during testing instead of the live docs site which does not have the content yet. For example:
 
 ```
-[Get started](/{{page.version}}/getting-started/)
+[Get started]({{ site.baseurl }}/{{ page.version }}/getting-started/)
 ```
 
-> **Pro tip**: `page.version` will be inherited from the default set in `_config.yml` for the current page's directory.
+**Absolute Links**
+
+Absolute links should be used whenever you are not creating a clickable `<a href='...'>` element, but instead are showing the user a URL to copy locally. A common example is downloading manifests or showing a user how to `kubectl apply -f https://...` them.
+
+For absolute links, use `{{ site.url }}`. For example:
+
+```
+kubectl apply -f `{{ site.url }}/{{ page.version }}/calicoctl.yaml`
+```
+
+**page.version**
+
+Most links should include the prefix `{{ page.version }}`, as seen in the above examples. This allows the content to port across multiple versions without link breakage.
+
+`page.version` is automatically inherited from `_config.yml` for the current page's directory.
 
 ### Case sensitivity
 
