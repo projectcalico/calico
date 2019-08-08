@@ -640,7 +640,7 @@ fv/fv.test: $(SRC_FILES)
 .PHONY: remote-deps
 remote-deps:
 	$(DOCKER_RUN) $(CALICO_BUILD) sh -c ' \
-	go list -m all; \
+	go list all; \
 	cp `go list -m -f "{{.Dir}}" github.com/projectcalico/libcalico-go`/test/crds.yaml fv/infrastructure/crds.yaml; \
 	chmod +w fv/infrastructure/crds.yaml'
 
