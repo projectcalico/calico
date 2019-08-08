@@ -12,7 +12,7 @@ ifneq ($(IMAGES_FILE),)
 	CONFIG:=$(CONFIG),/config_images.yml
 endif
 
-GO_BUILD_VER?=v0.20
+GO_BUILD_VER?=v0.22
 CALICO_BUILD?=calico/go-build:$(GO_BUILD_VER)
 LOCAL_USER_ID?=$(shell id -u $$USER)
 PACKAGE_NAME?=github.com/projectcalico/calico
