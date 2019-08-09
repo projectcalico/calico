@@ -312,11 +312,22 @@ func (d *restoreCmd) Run() error {
 			Expect(chains[chainName]).NotTo(BeNil(), "Insert to unknown chain: "+chainName)
 			chains[chainName] = append(chains[chainName], "") // Make room
 			chain := chains[chainName]
-			for i := len(chain) - 1; i > 0; i-- {
-				chain[i] = chain[i-1]
+
+			// If the first arg after the chain name is a line number, then insert by line number.
+			if lineNum, err := strconv.Atoi(parts[2]); err == nil {
+				ruleIdx := lineNum - 1 // 0-indexed
+				chain = append(chain, "")
+				copy(chain[ruleIdx+1:], chain[ruleIdx:])
+				chain[ruleIdx] = rest
+				d.Dataplane.ChainMods.Add(chainMod{name: chainName, ruleNum: lineNum})
+			} else {
+				// Otherwise insert at the top.
+				for i := len(chain) - 1; i > 0; i-- {
+					chain[i] = chain[i-1]
+				}
+				chain[0] = rest
+				d.Dataplane.ChainMods.Add(chainMod{name: chainName, ruleNum: 1})
 			}
-			chain[0] = rest
-			d.Dataplane.ChainMods.Add(chainMod{name: chainName, ruleNum: 1})
 		case "-R", "--replace":
 			Expect(d.Dataplane.NftablesMode).To(BeFalse(), "Replace shouldn't be used in nft mode")
 			chainName = parts[1]
@@ -330,20 +341,47 @@ func (d *restoreCmd) Run() error {
 			d.Dataplane.ChainMods.Add(chainMod{name: chainName, ruleNum: ruleNum})
 		case "-D", "--delete":
 			chainName = parts[1]
-			Expect(len(parts)).To(Equal(3), "--delete only expects two arguments")
-			ruleNum, err := strconv.Atoi(parts[2]) // 1-indexed position of rule.
-			Expect(err).NotTo(HaveOccurred())
-			ruleIdx := ruleNum - 1 // 0-indexed array index of rule.
-			chain := chains[chainName]
-			Expect(len(chain)).To(BeNumerically(">", ruleIdx), "Delete of non-existent rule")
-			for i := ruleIdx; i < len(chain)-1; i++ {
-				chain[i] = chain[i+1]
+
+			// If second arg is numeric, this is a delete by line number.
+			if ruleNum, err := strconv.Atoi(parts[2]); err == nil {
+				Expect(parts).To(HaveLen(3), "Unexpected argument after rule position in --delete")
+				Expect(chainName).To(HavePrefix("cali"), "Deleting rule from non-calico chain by number can cause races")
+
+				ruleIdx := ruleNum - 1 // 0-indexed array index of rule.
+				chain := chains[chainName]
+				Expect(len(chain)).To(BeNumerically(">", ruleIdx), "Delete of non-existent rule")
+
+				for i := ruleIdx; i < len(chain)-1; i++ {
+					chain[i] = chain[i+1]
+				}
+				chains[chainName] = chain[:len(chain)-1]
+				d.Dataplane.ChainMods.Add(chainMod{name: chainName, ruleNum: ruleNum})
+			} else {
+				// Otherwise, treat this as a delete by full rule.
+
+				// Rule is inserted without chain name
+				rule := strings.Join(parts[2:], " ")
+				chain := chains[chainName]
+				i := 0
+
+				newChain := []string{}
+				var found bool
+				for ; i < len(chain); i++ {
+					if chain[i] == rule {
+						found = true
+						continue
+					}
+					newChain = append(newChain, chain[i])
+				}
+
+				Expect(found).To(BeTrue(), "Delete of non-existent rule")
+				chains[chainName] = newChain
+				d.Dataplane.ChainMods.Add(chainMod{name: chainName, ruleNum: i})
+
 			}
-			chains[chainName] = chain[:len(chain)-1]
-			d.Dataplane.ChainMods.Add(chainMod{name: chainName, ruleNum: ruleNum})
 		case "-X", "--delete-chain":
 			chainName = parts[1]
-			Expect(len(parts)).To(Equal(2), "--delete-chain only has one argument")
+			Expect(parts).To(HaveLen(2), "--delete-chain only has one argument")
 			Expect(chains[chainName]).To(Equal([]string{}), "Only empty chains can be deleted")
 			delete(chains, chainName)
 			d.Dataplane.DeletedChains.Add(chainName)
@@ -355,6 +393,16 @@ func (d *restoreCmd) Run() error {
 	}
 	Expect(commitSeen).To(BeTrue(), "didn't see a COMMIT line")
 	return nil
+}
+
+func prependLine(src []string, line string) []string {
+	// Make space for the line - the value doesn't matter.
+	src = append(src, "")
+	// "Shift" the elements to the right
+	copy(src[1:], src[0:])
+
+	src[0] = line
+	return src
 }
 
 type saveCmd struct {
