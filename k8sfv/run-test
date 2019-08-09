@@ -76,7 +76,7 @@ fi
 : ${TYPHA_LOG_LEVEL:=info}
 #
 # CRD Manifest to use
-: ${CRD_PATH:=./vendor/github.com/projectcalico/libcalico-go/test/crds.yaml}
+: ${CRD_PATH:=./fv/infrastructure/crds.yaml}
 
 # Generate a unique prefix for the names of the containers that we
 # will create.

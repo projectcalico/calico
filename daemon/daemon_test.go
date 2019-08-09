@@ -15,7 +15,7 @@
 package daemon
 
 import (
-	"k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 
 	"github.com/projectcalico/felix/config"
 
