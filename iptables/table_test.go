@@ -482,6 +482,210 @@ func describeEmptyDataplaneTests(dataplaneMode string) {
 			})
 		})
 	})
+
+	Describe("applying updates when underlying iptables have changed in a whitelisted chain", func() {
+		BeforeEach(func() {
+			table.SetRuleInsertions("FORWARD", []Rule{
+				{Action: AcceptAction{}},
+				{Action: DropAction{}},
+			})
+			table.UpdateChains([]*Chain{
+				{Name: "cali-foobar", Rules: []Rule{
+					{Action: AcceptAction{}},
+					{Action: DropAction{}},
+				}},
+			})
+			table.Apply()
+		})
+		It("should be in the dataplane", func() {
+			Expect(dataplane.Chains).To(Equal(map[string][]string{
+				"FORWARD": {
+					"-m comment --comment \"cali:3gUkOfVeYRgMeHF4\" --jump ACCEPT",
+					"-m comment --comment \"cali:8MgbRleZ5Rc5cBEf\" --jump DROP",
+				},
+				"INPUT":  {},
+				"OUTPUT": {},
+				"cali-foobar": {
+					"-m comment --comment \"cali:42h7Q64_2XDzpwKe\" --jump ACCEPT",
+					"-m comment --comment \"cali:0sUFHicPNNqNyNx8\" --jump DROP",
+				},
+			}))
+		})
+		Describe("then truncating the chain, with the iptables changed before iptables-restore", func() {
+			BeforeEach(func() {
+				dataplane.OnPreRestore = func() {
+					log.Warn("Simulating an insert in FORWARD chain before iptables-restore happens")
+					if chain, found := dataplane.Chains["FORWARD"]; found {
+						log.Warn("FORWARD chain exists; inserting random rule in FORWARD chain")
+						lines := prependLine(chain, "-j randomly-inserted-rule")
+						dataplane.Chains["FORWARD"] = lines
+					}
+				}
+
+				table.SetRuleInsertions("FORWARD", []Rule{
+					{Action: DropAction{}, Comment: "new drop rule"},
+				})
+				table.Apply()
+			})
+			It("should be updated", func() {
+				Expect(dataplane.Chains).To(Equal(map[string][]string{
+					"FORWARD": {
+						"-m comment --comment \"cali:67cGS74-1PBXlOtK\" -m comment --comment \"new drop rule\" --jump DROP",
+						"-j randomly-inserted-rule",
+					},
+					"INPUT":  {},
+					"OUTPUT": {},
+					"cali-foobar": {
+						"-m comment --comment \"cali:42h7Q64_2XDzpwKe\" --jump ACCEPT",
+						"-m comment --comment \"cali:0sUFHicPNNqNyNx8\" --jump DROP",
+					},
+				}))
+			})
+		})
+	})
+
+	Describe("applying updates when underlying iptables have changed in a non-whitelisted chain", func() {
+		BeforeEach(func() {
+			table.UpdateChains([]*Chain{
+				{Name: "non-cali-chain", Rules: []Rule{
+					{Action: AcceptAction{}, Comment: "non-cali 1"},
+					{Action: DropAction{}, Comment: "non-cali 2"},
+				}},
+				{Name: "cali-foobar", Rules: []Rule{
+					{Action: AcceptAction{}, Comment: "cali 1"},
+					{Action: DropAction{}, Comment: "cali 2"},
+				}},
+			})
+			table.Apply()
+		})
+		It("should be in the dataplane", func() {
+			Expect(dataplane.Chains).To(Equal(map[string][]string{
+				"FORWARD": {},
+				"INPUT":   {},
+				"OUTPUT":  {},
+				"non-cali-chain": {
+					"-m comment --comment \"cali:Z-OWODLe_LbHxmqg\" -m comment --comment \"non-cali 1\" --jump ACCEPT",
+					"-m comment --comment \"cali:tq-yEo1_1XQHZnMs\" -m comment --comment \"non-cali 2\" --jump DROP",
+				},
+				"cali-foobar": {
+					"-m comment --comment \"cali:cxE-1zsuD12R9YEG\" -m comment --comment \"cali 1\" --jump ACCEPT",
+					"-m comment --comment \"cali:1cpbPOGLTROlH4Sj\" -m comment --comment \"cali 2\" --jump DROP",
+				},
+			}))
+		})
+		Describe("then truncating the chain, with the iptables changed before iptables-restore", func() {
+			BeforeEach(func() {
+				dataplane.OnPreRestore = func() {
+					log.Warn("Simulating an insert in non-cali-chain before iptables-restore happens")
+					if chain, found := dataplane.Chains["non-cali-chain"]; found {
+						log.Warn("non-cali-chain exists; inserting random rule in non-cali-chain")
+						lines := prependLine(chain, "-j randomly-inserted-rule")
+						dataplane.Chains["non-cali-chain"] = lines
+					}
+				}
+
+				table.SetRuleInsertions("non-cali-chain", []Rule{
+					{Action: DropAction{}, Comment: "new drop rule"},
+				})
+				table.Apply()
+			})
+			It("should be updated", func() {
+				Expect(dataplane.Chains).To(Equal(map[string][]string{
+					"FORWARD": {},
+					"INPUT":   {},
+					"OUTPUT":  {},
+					"non-cali-chain": {
+						"-m comment --comment \"cali:O9yEP97Dd2y-EskM\" -m comment --comment \"new drop rule\" --jump DROP",
+						"-j randomly-inserted-rule"},
+					"cali-foobar": {
+						"-m comment --comment \"cali:cxE-1zsuD12R9YEG\" -m comment --comment \"cali 1\" --jump ACCEPT",
+						"-m comment --comment \"cali:1cpbPOGLTROlH4Sj\" -m comment --comment \"cali 2\" --jump DROP",
+					},
+				}))
+			})
+		})
+	})
+
+	Describe("inserting into a non-Calico chain results in the expected writes", func() {
+		BeforeEach(func() {
+			table.SetRuleInsertions("FORWARD", []Rule{
+				{Action: DropAction{}, Comment: "a drop rule"},
+				{Action: AcceptAction{}, Comment: "an accept rule"},
+			})
+			table.Apply()
+		})
+		It("should update the dataplane", func() {
+			Expect(dataplane.Chains).To(Equal(map[string][]string{
+				"FORWARD": {
+					"-m comment --comment \"cali:upaItQyFMdN7MTTl\" -m comment --comment \"a drop rule\" --jump DROP",
+					"-m comment --comment \"cali:EpCg3AYNp_DftVFS\" -m comment --comment \"an accept rule\" --jump ACCEPT",
+				},
+				"INPUT":  {},
+				"OUTPUT": {},
+			}))
+			if dataplaneMode == "nft" {
+				Expect(dataplane.CmdNames).To(ConsistOf("iptables", "iptables-nft-save", "iptables-nft-restore"))
+			} else {
+				Expect(dataplane.CmdNames).To(ConsistOf("iptables", "iptables-save", "iptables-restore"))
+			}
+		})
+		Describe("then inserting the same rules", func() {
+			BeforeEach(func() {
+				table.SetRuleInsertions("FORWARD", []Rule{
+					{Action: DropAction{}, Comment: "a drop rule"},
+					{Action: AcceptAction{}, Comment: "an accept rule"},
+				})
+				dataplane.ResetCmds()
+				table.Apply()
+			})
+			It("should result in no inserts", func() {
+				// Do an iptables-save but not a iptables-restore.
+				if dataplaneMode == "nft" {
+					Expect(dataplane.CmdNames).To(ConsistOf("iptables", "iptables-nft-save"))
+				} else {
+					Expect(dataplane.CmdNames).To(ConsistOf("iptables", "iptables-save"))
+				}
+
+				Expect(dataplane.Chains).To(Equal(map[string][]string{
+					"FORWARD": {
+						"-m comment --comment \"cali:upaItQyFMdN7MTTl\" -m comment --comment \"a drop rule\" --jump DROP",
+						"-m comment --comment \"cali:EpCg3AYNp_DftVFS\" -m comment --comment \"an accept rule\" --jump ACCEPT",
+					},
+					"INPUT":  {},
+					"OUTPUT": {},
+				}))
+			})
+		})
+		Describe("then inserting different rules", func() {
+			BeforeEach(func() {
+				table.SetRuleInsertions("FORWARD", []Rule{
+					{Action: DropAction{}, Comment: "a drop rule"},
+					{Action: AcceptAction{}, Comment: "an accept rule"},
+					{Action: DropAction{}, Comment: "a second drop rule"},
+				})
+				dataplane.ResetCmds()
+				table.Apply()
+			})
+			It("should result in modifications", func() {
+				// Do an iptables-save and, this time, an iptables-restore.
+				if dataplaneMode == "nft" {
+					Expect(dataplane.CmdNames).To(ConsistOf("iptables", "iptables-nft-save", "iptables-nft-restore"))
+				} else {
+					Expect(dataplane.CmdNames).To(ConsistOf("iptables", "iptables-save", "iptables-restore"))
+				}
+
+				Expect(dataplane.Chains).To(Equal(map[string][]string{
+					"FORWARD": {
+						"-m comment --comment \"cali:upaItQyFMdN7MTTl\" -m comment --comment \"a drop rule\" --jump DROP",
+						"-m comment --comment \"cali:EpCg3AYNp_DftVFS\" -m comment --comment \"an accept rule\" --jump ACCEPT",
+						"-m comment --comment \"cali:-rA8o5kyVSTHJMe8\" -m comment --comment \"a second drop rule\" --jump DROP",
+					},
+					"INPUT":  {},
+					"OUTPUT": {},
+				}))
+			})
+		})
+	})
 }
 
 var _ = Describe("Tests of post-update recheck behaviour with refresh timer (nft)", func() {
