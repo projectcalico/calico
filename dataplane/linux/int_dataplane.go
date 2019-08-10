@@ -649,7 +649,7 @@ func (d *InternalDataplane) doStaticDataplaneConfig() {
 	// Check/configure global kernel parameters.
 	d.configureKernel()
 
-	// Endure that the default value of rp_filter is set to "strict" for newly-created
+	// Ensure that the default value of rp_filter is set to "strict" for newly-created
 	// interfaces.  This is required to prevent a race between starting an interface and
 	// Felix being able to configure it.
 	writeProcSys("/proc/sys/net/ipv4/conf/default/rp_filter", "1")
