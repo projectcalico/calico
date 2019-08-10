@@ -8,7 +8,7 @@ find . -name "*.coverprofile" -type f -delete
 
 echo "Calculating packages to cover..."
 go_dirs=$(find -type f -name '*.go' | \
-	      grep -vE '/vendor/|\./proto/|.glide|check-licenses|cmd/typha-client' | \
+	      grep -vE '\./proto/|.glide|check-licenses|cmd/typha-client|\.go-pkg-cache' | \
 	      xargs -n 1 dirname | \
 	      sort | uniq | \
 	      tr '\n' ',' | \
@@ -17,7 +17,7 @@ echo "Covering: $go_dirs"
 test ! -z "$go_dirs"
 
 test_pkgs=$(go list -f '{{ if .TestGoFiles | or .XTestGoFiles }}{{ .ImportPath }}{{ end }}' \
-                    ./... | grep -v /vendor/ )
+                    ./... )
 test ! -z "$test_pkgs"
 echo "Packages with tests: $test_pkgs"
 
