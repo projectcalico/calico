@@ -112,7 +112,7 @@ const (
 // To avoid having to maintain rarely-used code paths, Felix handles updates to its
 // main config parameters by exiting and allowing itself to be restarted by the init
 // daemon.
-func Run(configFile string, version string, buildDate string, gitRevision string) {
+func Run(configFile string, gitVersion string, buildDate string, gitRevision string) {
 	// Go's RNG is not seeded by default.  Do that now.
 	rand.Seed(time.Now().UTC().UnixNano())
 
@@ -131,7 +131,7 @@ func Run(configFile string, version string, buildDate string, gitRevision string
 	}
 
 	buildInfoLogCxt := log.WithFields(log.Fields{
-		"version":    version,
+		"version":    gitVersion,
 		"buildDate":  buildDate,
 		"gitCommit":  gitRevision,
 		"GOMAXPROCS": runtime.GOMAXPROCS(0),
@@ -351,7 +351,7 @@ configRetry:
 		log.WithField("addr", typhaAddr).Info("Connecting to Typha.")
 		typhaConnection = syncclient.New(
 			typhaAddr,
-			version,
+			gitVersion,
 			configParams.FelixHostname,
 			fmt.Sprintf("Revision: %s; Build date: %s",
 				gitRevision, buildDate),
