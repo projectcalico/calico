@@ -24,7 +24,6 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
-	"runtime"
 	"runtime/debug"
 	"strconv"
 	"sync"
@@ -36,6 +35,7 @@ import (
 	log "github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
 
+	"github.com/projectcalico/felix/buildinfo"
 	"github.com/projectcalico/felix/calc"
 	"github.com/projectcalico/felix/config"
 	_ "github.com/projectcalico/felix/config"
@@ -130,11 +130,17 @@ func Run(configFile string, gitVersion string, buildDate string, gitRevision str
 		debug.SetGCPercent(defaultGCPercent)
 	}
 
-	buildInfoLogCxt := log.WithFields(log.Fields{
-		"version":    gitVersion,
-		"buildDate":  buildDate,
-		"gitCommit":  gitRevision,
-		"GOMAXPROCS": runtime.GOMAXPROCS(0),
+	if len(buildinfo.GitVersion) == 0 && len(gitVersion) != 0 {
+		buildinfo.GitVersion = gitVersion
+		buildinfo.BuildDate = buildDate
+		buildinfo.GitRevision = gitRevision
+	}
+
+	buildInfoLogCxt := log.WithFields(log.fields{
+		"version":    buildinfo.GitVersion,
+		"builddate":  buildinfo.BuildDate,
+		"gitcommit":  buildinfo.GitRevision,
+		"gomaxprocs": runtime.gomaxprocs(0),
 	})
 	buildInfoLogCxt.Info("Felix starting up")
 
@@ -351,10 +357,10 @@ configRetry:
 		log.WithField("addr", typhaAddr).Info("Connecting to Typha.")
 		typhaConnection = syncclient.New(
 			typhaAddr,
-			gitVersion,
+			buildinfo.GitVersion,
 			configParams.FelixHostname,
 			fmt.Sprintf("Revision: %s; Build date: %s",
-				gitRevision, buildDate),
+				buildinfo.GitRevision, buildinfo.BuildDate),
 			syncerToValidator,
 			&syncclient.Options{
 				ReadTimeout:  configParams.TyphaReadTimeout,
