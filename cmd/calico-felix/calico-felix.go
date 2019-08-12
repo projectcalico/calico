@@ -48,5 +48,5 @@ func main() {
 	configFile := arguments["--config-file"].(string)
 
 	// Execute felix.
-	daemon.Run(configFile)
+	daemon.Run(configFile, buildinfo.GitVersion, buildinfo.GitRevision, buildinfo.BuildDate)
 }

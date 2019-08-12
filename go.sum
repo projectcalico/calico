@@ -86,6 +86,7 @@ github.com/jtolds/gls v4.20.0+incompatible h1:xdiiI2gbIgH/gLH7ADydsJ1uDOEzR8yvV7
 github.com/jtolds/gls v4.20.0+incompatible/go.mod h1:QJZ7F/aHp+rZTRtaJ1ow/lLfFfVYBRgL+9YlvaHOwJU=
 github.com/kardianos/osext v0.0.0-20190222173326-2bc1f35cddc0 h1:iQTw/8FWTuc7uiaSepXwyf3o52HaUYcV+Tu66S3F5GA=
 github.com/kardianos/osext v0.0.0-20190222173326-2bc1f35cddc0/go.mod h1:1NbS8ALrpOvjt0rHPNLyCIeMtbizbir8U//inJ+zuB8=
+github.com/kelseyhightower/confd v0.16.0 h1:cZTibejsLOJ+FsyXQNmwbnq+arQJooKh1NH/+VqN40o=
 github.com/kelseyhightower/envconfig v0.0.0-20180517194557-dd1402a4d99d h1:Tqg6yg0as+P38tbKytv9/yk+ifNq0CrvjlgADEniKog=
 github.com/kelseyhightower/envconfig v0.0.0-20180517194557-dd1402a4d99d/go.mod h1:cccZRl6mQpaq41TPp5QxidR+Sa3axMbJDNb//FQX6Gg=
 github.com/kr/pretty v0.1.0 h1:L/CwN0zerZDmRFUapSPitk6f+Q3+0za1rQkzVuMiMFI=

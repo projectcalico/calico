@@ -113,7 +113,7 @@ const (
 // To avoid having to maintain rarely-used code paths, Felix handles updates to its
 // main config parameters by exiting and allowing itself to be restarted by the init
 // daemon.
-func Run(configFile string) {
+func Run(configFile string, gitVersion string, buildDate string, gitRevision string) {
 	// Go's RNG is not seeded by default.  Do that now.
 	rand.Seed(time.Now().UTC().UnixNano())
 
@@ -131,10 +131,16 @@ func Run(configFile string) {
 		debug.SetGCPercent(defaultGCPercent)
 	}
 
+	if len(buildinfo.GitVersion) == 0 && len(gitVersion) != 0 {
+		buildinfo.GitVersion = gitVersion
+		buildinfo.BuildDate = buildDate
+		buildinfo.GitRevision = gitRevision
+	}
+
 	buildInfoLogCxt := log.WithFields(log.Fields{
 		"version":    buildinfo.GitVersion,
-		"buildDate":  buildinfo.BuildDate,
-		"gitCommit":  buildinfo.GitRevision,
+		"builddate":  buildinfo.BuildDate,
+		"gitcommit":  buildinfo.GitRevision,
 		"GOMAXPROCS": runtime.GOMAXPROCS(0),
 	})
 	buildInfoLogCxt.Info("Felix starting up")
