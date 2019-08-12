@@ -24,7 +24,7 @@ scriptdir=$(dirname $(realpath $0))
 rootdir=`git_repo_root`
 
 # Normally, do all the steps.
-: ${STEPS:=ppa rpm_repo bld_images net_cal felix etcd3gw dnsmasq nettle pub_debs pub_rpms}
+: ${STEPS:=bld_images net_cal felix etcd3gw dnsmasq nettle pub_debs pub_rpms}
 
 function require_version {
     # VERSION must be specified.  It should be either "master" or
@@ -84,32 +84,6 @@ fi
 
 # Conditions that we check before running any of the requested steps.
 
-function precheck_ppa {
-    # Check the PPA exists.
-    require_repo_name
-    wget -O - https://launchpad.net/~project-calico/+archive/ubuntu/${REPO_NAME} | grep -F "PPA description" || {
-	cat <<EOF
-
-ERROR: PPA for ${REPO_NAME} does not exist.  Create it, then rerun this job.
-
-(Apologies, this is the only remaining manual step.  To create the PPA:
-
-- Go to https://launchpad.net/~project-calico and note the name and
-  description of the PPA for the previous Calico release series.
-
-- Create a new PPA with similar name and description but for the new
-  series.)
-
-EOF
-	exit 1
-    }
-}
-
-function precheck_rpm_repo {
-    require_repo_name
-    require_rpm_host_vars
-}
-
 function precheck_bld_images {
     :
 }
@@ -135,23 +109,35 @@ function precheck_nettle {
 }
 
 function precheck_pub_debs {
+    # Check the PPA exists.
+    require_repo_name
+    wget -O - https://launchpad.net/~project-calico/+archive/ubuntu/${REPO_NAME} | grep -F "PPA description" || {
+	cat <<EOF
+
+ERROR: PPA for ${REPO_NAME} does not exist.  Create it, then rerun this job.
+
+(Apologies, this is the only remaining manual step.  To create the PPA:
+
+- Go to https://launchpad.net/~project-calico and note the name and
+  description of the PPA for the previous Calico release series.
+
+- Create a new PPA with similar name and description but for the new
+  series.)
+
+EOF
+	exit 1
+    }
+
+    # We'll need a secret key to upload new source packages.
     require_deb_secret_key
 }
 
 function precheck_pub_rpms {
+    require_repo_name
     require_rpm_host_vars
 }
 
 # Execution of the requested steps.
-
-function do_ppa {
-    :
-}
-
-function do_rpm_repo {
-    # Create the RPM repo, if it doesn't already exist, on binaries.
-    ensure_repo_exists ${REPO_NAME}
-}
 
 function do_bld_images {
     # Build the docker images that we use for building for each target platform.
@@ -278,6 +264,9 @@ function do_pub_debs {
 }
 
 function do_pub_rpms {
+    # Create the RPM repo, if it doesn't already exist, on binaries.
+    ensure_repo_exists ${REPO_NAME}
+
     # Publish RPM packages.  Note, this includes updating the RPM repo
     # metadata.
     pushd ${rootdir}
