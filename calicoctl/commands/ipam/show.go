@@ -24,6 +24,7 @@ import (
 	"github.com/olekukonko/tablewriter"
 
 	"github.com/projectcalico/calicoctl/calicoctl/commands/constants"
+	cerrors "github.com/projectcalico/libcalico-go/lib/errors"
 	"github.com/projectcalico/libcalico-go/lib/ipam"
 
 	docopt "github.com/docopt/docopt-go"
@@ -74,12 +75,15 @@ Description:
 		attr, err := ipamClient.GetAssignmentAttributes(ctx, ip)
 
 		if err != nil {
-			// IP address is not assigned.  The detailed error message here is either
-			// "resource does not exist: BlockKey...", if the whole block doesn't exist,
-			// or "resource does not exist: <IP>...", if the IP is not assigned within
-			// the block, but we don't want to expose that detail here.
-			fmt.Printf("%v is not assigned", ip)
-			return nil
+			if _, ok := err.(cerrors.ErrorResourceDoesNotExist); ok {
+				// IP address is not assigned.  The detailed error message here is either
+				// "resource does not exist: BlockKey...", if the whole block doesn't exist,
+				// or "resource does not exist: <IP>...", if the IP is not assigned within
+				// the block, but we don't want to expose that detail here.
+				fmt.Printf("%v is not assigned", ip)
+				return nil
+			}
+			return err
 		}
 
 		// IP address is assigned.
