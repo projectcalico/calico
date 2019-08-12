@@ -57,6 +57,7 @@ require (
 	github.com/projectcalico/go-yaml v0.0.0-20161201183616-955bc3e451ef // indirect
 	github.com/projectcalico/go-yaml-wrapper v0.0.0-20161127220527-598e54215bee // indirect
 	github.com/projectcalico/libcalico-go v0.0.0-20190802144109-bf00054ed881
+	github.com/projectcalico/node v3.8.1+incompatible // indirect
 	github.com/projectcalico/pod2daemon v0.0.0-20190730210055-df57fc59e2e1
 	github.com/projectcalico/typha v0.0.0-20190805040817-7b2dfec30558
 	github.com/prometheus/client_golang v0.0.0-20180907100926-773f5027234d

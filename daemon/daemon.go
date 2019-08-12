@@ -36,7 +36,6 @@ import (
 	log "github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
 
-	"github.com/projectcalico/felix/buildinfo"
 	"github.com/projectcalico/felix/calc"
 	"github.com/projectcalico/felix/config"
 	_ "github.com/projectcalico/felix/config"
@@ -113,7 +112,7 @@ const (
 // To avoid having to maintain rarely-used code paths, Felix handles updates to its
 // main config parameters by exiting and allowing itself to be restarted by the init
 // daemon.
-func Run(configFile string) {
+func Run(configFile string, version string, buildDate string, gitRevision string) {
 	// Go's RNG is not seeded by default.  Do that now.
 	rand.Seed(time.Now().UTC().UnixNano())
 
@@ -132,9 +131,9 @@ func Run(configFile string) {
 	}
 
 	buildInfoLogCxt := log.WithFields(log.Fields{
-		"version":    buildinfo.GitVersion,
-		"buildDate":  buildinfo.BuildDate,
-		"gitCommit":  buildinfo.GitRevision,
+		"version":    version,
+		"buildDate":  buildDate,
+		"gitCommit":  gitRevision,
 		"GOMAXPROCS": runtime.GOMAXPROCS(0),
 	})
 	buildInfoLogCxt.Info("Felix starting up")
@@ -352,10 +351,10 @@ configRetry:
 		log.WithField("addr", typhaAddr).Info("Connecting to Typha.")
 		typhaConnection = syncclient.New(
 			typhaAddr,
-			buildinfo.GitVersion,
+			version,
 			configParams.FelixHostname,
 			fmt.Sprintf("Revision: %s; Build date: %s",
-				buildinfo.GitRevision, buildinfo.BuildDate),
+				gitRevision, buildDate),
 			syncerToValidator,
 			&syncclient.Options{
 				ReadTimeout:  configParams.TyphaReadTimeout,
