@@ -73,11 +73,12 @@ Description:
 		ip := argutils.ValidateIP(passedIP.(string))
 		attr, err := ipamClient.GetAssignmentAttributes(ctx, ip)
 
-		// IP address is not assigned, this prints message like `IP 192.168.71.1
-		// is not assigned in block`. This is not exactly an error, so not
-		// returning it to the caller.
 		if err != nil {
-			fmt.Println(err)
+			// IP address is not assigned.  The detailed error message here is either
+			// "resource does not exist: BlockKey...", if the whole block doesn't exist,
+			// or "resource does not exist: <IP>...", if the IP is not assigned within
+			// the block, but we don't want to expose that detail here.
+			fmt.Printf("%v is not assigned", ip)
 			return nil
 		}
 
