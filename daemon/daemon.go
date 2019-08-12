@@ -24,6 +24,7 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
+	"runtime"
 	"runtime/debug"
 	"strconv"
 	"sync"
@@ -136,11 +137,11 @@ func Run(configFile string, gitVersion string, buildDate string, gitRevision str
 		buildinfo.GitRevision = gitRevision
 	}
 
-	buildInfoLogCxt := log.WithFields(log.fields{
+	buildInfoLogCxt := log.WithFields(log.Fields{
 		"version":    buildinfo.GitVersion,
 		"builddate":  buildinfo.BuildDate,
 		"gitcommit":  buildinfo.GitRevision,
-		"gomaxprocs": runtime.gomaxprocs(0),
+		"GOMAXPROCS": runtime.GOMAXPROCS(0),
 	})
 	buildInfoLogCxt.Info("Felix starting up")
 
