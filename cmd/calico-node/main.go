@@ -23,6 +23,7 @@ import (
 	confd "github.com/kelseyhightower/confd/pkg/run"
 	felix "github.com/projectcalico/felix/daemon"
 
+	"github.com/projectcalico/node/buildinfo"
 	"github.com/projectcalico/node/pkg/allocateip"
 	"github.com/projectcalico/node/pkg/health"
 	"github.com/projectcalico/node/pkg/startup"
@@ -96,7 +97,7 @@ func main() {
 		fmt.Println(startup.VERSION)
 		os.Exit(0)
 	} else if *runFelix {
-		felix.Run("/etc/calico/felix.cfg")
+		felix.Run("/etc/calico/felix.cfg", buildinfo.GitVersion, buildinfo.GitRevision, buildinfo.BuildDate)
 	} else if *runStartup {
 		startup.Run()
 	} else if *runConfd {

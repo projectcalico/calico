@@ -27,17 +27,17 @@ RUN apt-get update && apt-get install -y \
     iputils-arping \
     iputils-ping \
     iputils-tracepath \
-    # Need arp 
-    net-tools \ 
-    conntrack \ 
-    runit \ 
+    # Need arp
+    net-tools \
+    conntrack \
+    runit \
     # Need kmod to ensure ip6tables-save works correctly
-    kmod \ 
-    # Need netbase in order for ipset to work correctly 
+    kmod \
+    # Need netbase in order for ipset to work correctly
     # See https://github.com/kubernetes/kubernetes/issues/68703
-    netbase \ 
-    # Also needed (provides utilities for browsing procfs like ps) 
-    procps \    
+    netbase \
+    # Also needed (provides utilities for browsing procfs like ps)
+    procps \
     ca-certificates
 
 # Install iptables from buster to get version 1.8.2
@@ -59,9 +59,6 @@ COPY --from=bird /bird* /bin/
 
 # Copy in the filesystem - this contains felix, calico-bgp-daemon etc...
 COPY filesystem/ /
-
-# Add in confd config and templates
-COPY vendor/github.com/kelseyhightower/confd/etc/calico/ /etc/calico/
 
 # Copy in the calico-node binary
 COPY dist/bin/calico-node-${ARCH} /bin/calico-node
