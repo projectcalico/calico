@@ -159,9 +159,10 @@ var _ = testutils.E2eDatastoreDescribe("Node tests (etcdv3)", testutils.Datastor
 	name1 := "node-1"
 	name2 := "node-2"
 	spec1 := apiv3.NodeSpec{
-		IPv4VXLANTunnelAddr: "2.3.4.5",
+		IPv4VXLANTunnelAddr: "192.168.50.5",
 		BGP: &apiv3.NodeBGPSpec{
-			IPv4Address: "1.2.3.4",
+			IPv4Address:        "1.2.3.4",
+			IPv4IPIPTunnelAddr: "192.168.50.6",
 		},
 		OrchRefs: []apiv3.OrchRef{
 			{
@@ -200,7 +201,7 @@ var _ = testutils.E2eDatastoreDescribe("Node tests (etcdv3)", testutils.Datastor
 			be.Clean()
 
 			// Create a node.
-			_, err = c.Nodes().Create(ctx, &apiv3.Node{
+			n, err := c.Nodes().Create(ctx, &apiv3.Node{
 				ObjectMeta: metav1.ObjectMeta{Name: name1},
 				Spec:       spec1,
 			}, options.SetOptions{})
@@ -218,9 +219,28 @@ var _ = testutils.E2eDatastoreDescribe("Node tests (etcdv3)", testutils.Datastor
 			_, err = c.IPPools().Create(ctx, &pool, options.SetOptions{})
 			Expect(err).NotTo(HaveOccurred())
 
+			// Allocate IPIP and VXLAN tunnel addresses for the node based
+			// on the values from the node spec.
+			vxlanHandle := "vxlanTunnelAddr"
+			vxlanIP := n.Spec.IPv4VXLANTunnelAddr
+			err = c.IPAM().AssignIP(ctx, ipam.AssignIPArgs{
+				IP:       cnet.MustParseIP(vxlanIP),
+				Hostname: name1,
+				HandleID: &vxlanHandle,
+			})
+			Expect(err).NotTo(HaveOccurred())
+			ipipHandle := "ipipTunnelAddr"
+			ipipIP := n.Spec.BGP.IPv4IPIPTunnelAddr
+			err = c.IPAM().AssignIP(ctx, ipam.AssignIPArgs{
+				IP:       cnet.MustParseIP(ipipIP),
+				Hostname: name1,
+				HandleID: &ipipHandle,
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			// Create a wep and IP address for the wep on the node.
 			swepIp := "192.168.0.1/32"
 			wepIp := net.IP{192, 168, 0, 1}
-
 			affBlock := cnet.IPNet{
 				IPNet: net.IPNet{
 					IP:   net.IP{192, 168, 0, 0},
@@ -308,6 +328,12 @@ var _ = testutils.E2eDatastoreDescribe("Node tests (etcdv3)", testutils.Datastor
 
 			// Check that the wep's IP was released
 			ips, err := c.IPAM().IPsByHandle(ctx, handle)
+			Expect(ips).Should(BeNil())
+
+			// Check that the IPIP and VXLAN tunnel addresses were released.
+			ips, err = c.IPAM().IPsByHandle(ctx, vxlanHandle)
+			Expect(ips).Should(BeNil())
+			ips, err = c.IPAM().IPsByHandle(ctx, ipipHandle)
 			Expect(ips).Should(BeNil())
 
 			// Check that the host affinity pool was released.
