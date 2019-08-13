@@ -36,7 +36,7 @@ The bulk of securing network traffic typically revolves around defining egress a
 
 Before you create your first Kubernetes network policy, you need to understand the default network policy behaviors. If no Kubernetes network policies apply to a pod, then all traffic to/from the pod are allowed (default-allow). As a result, if you do not create any network policies, then all pods are allowed to communicate freely with all other pods. If one or more Kubernetes network policies apply to a pod, then only the traffic specifically defined in that network policy are allowed (default-deny).
 
-You are now ready to start fine-tuning trtaffic that should be allowed.
+You are now ready to start fine-tuning traffic that should be allowed.
 
 - [Create ingress policies](#create-ingress-policies)
 - [Allow ingress traffic from pods in the same namespace](#allow-ingress-traffic-from-pods-in-the-same-namespace)
