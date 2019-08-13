@@ -64,7 +64,8 @@ var _ = Describe("Node labeling tests", func() {
 		Expect(err).NotTo(HaveOccurred())
 		defer os.Remove(kconfigfile.Name())
 		data := fmt.Sprintf(testutils.KubeconfigTemplate, apiserver.IP)
-		kconfigfile.Write([]byte(data))
+		_, err = kconfigfile.Write([]byte(data))
+		Expect(err).NotTo(HaveOccurred())
 
 		// Run the controller.
 		policyController = testutils.RunPolicyController(apiconfig.EtcdV3, etcd.IP, kconfigfile.Name(), "")
@@ -151,7 +152,8 @@ var _ = Describe("Node labeling tests", func() {
 			time.Second*15, 500*time.Millisecond).Should(BeNil())
 
 		// Delete the Kubernetes node.
-		k8sClient.CoreV1().Nodes().Delete(kNodeName, &metav1.DeleteOptions{})
+		err = k8sClient.CoreV1().Nodes().Delete(kNodeName, &metav1.DeleteOptions{})
+		Expect(err).NotTo(HaveOccurred())
 		Eventually(func() *api.Node {
 			node, _ := c.Nodes().Get(context.Background(), cNodeName, options.GetOptions{})
 			return node

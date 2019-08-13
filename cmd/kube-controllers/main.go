@@ -51,23 +51,17 @@ var VERSION string
 var version bool
 
 func init() {
-	// Tell glog (used by client-go) to log into STDERR. Otherwise, we risk
-	// certain kinds of API errors getting logged into a directory not
-	// available in a `FROM scratch` Docker container, causing glog to abort
-	err := flag.Set("logtostderr", "true")
-	if err != nil {
-		log.WithError(err).Fatal("Failed to set logging configuration")
-	}
-
 	// Add a flag to check the version.
 	flag.BoolVar(&version, "version", false, "Display version")
 
-	// Also tell klog to log to STDERR.
+	// Tell klog to log into STDERR. Otherwise, we risk
+	// certain kinds of API errors getting logged into a directory not
+	// available in a `FROM scratch` Docker container, causing us to abort
 	var flags flag.FlagSet
 	klog.InitFlags(&flags)
-	err = flags.Set("logtostderr", "true")
+	err := flags.Set("logtostderr", "true")
 	if err != nil {
-		log.WithError(err).Fatal("Failed to set logging configuration")
+		log.WithError(err).Fatal("Failed to set klog logging configuration")
 	}
 }
 

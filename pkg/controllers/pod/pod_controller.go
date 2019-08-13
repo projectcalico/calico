@@ -31,7 +31,7 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/errors"
 	"github.com/projectcalico/libcalico-go/lib/options"
 
-	"k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/fields"
 	uruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/client-go/kubernetes"
@@ -96,7 +96,7 @@ func NewPodController(ctx context.Context, k8sClientset *kubernetes.Clientset, c
 	workloadEndpointCache := WorkloadEndpointCache{m: make(map[string]api.WorkloadEndpoint)}
 
 	// Create a Pod watcher.
-	listWatcher := cache.NewListWatchFromClient(k8sClientset.Core().RESTClient(), "pods", "", fields.Everything())
+	listWatcher := cache.NewListWatchFromClient(k8sClientset.CoreV1().RESTClient(), "pods", "", fields.Everything())
 
 	// Bind the Calico cache to kubernetes cache with the help of an informer. This way we make sure that
 	// whenever the kubernetes cache is updated, changes get reflected in the Calico cache as well.

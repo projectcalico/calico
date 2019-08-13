@@ -56,7 +56,7 @@ func RunK8sApiserver(etcdIp string) *containers.Container {
 		containers.RunOpts{AutoRemove: true},
 		"-v", os.Getenv("PRIVATE_KEY")+":/private.key",
 		"-v", os.Getenv("CRDS_FILE")+":/crds.yaml",
-		fmt.Sprintf("%s", os.Getenv("HYPERKUBE_IMAGE")),
+		os.Getenv("HYPERKUBE_IMAGE"),
 		"/hyperkube", "apiserver",
 		"--service-cluster-ip-range=10.101.0.0/16",
 		"--authorization-mode=AlwaysAllow",
@@ -71,7 +71,7 @@ func RunK8sControllerManager(apiserverIp string) *containers.Container {
 	c := containers.Run("st-controller-manager",
 		containers.RunOpts{AutoRemove: true},
 		"-v", os.Getenv("PRIVATE_KEY")+":/private.key",
-		fmt.Sprintf("%s", os.Getenv("HYPERKUBE_IMAGE")),
+		os.Getenv("HYPERKUBE_IMAGE"),
 		"/hyperkube", "controller-manager",
 		fmt.Sprintf("--master=%v:8080", apiserverIp),
 		"--min-resync-period=3m",
@@ -86,7 +86,7 @@ func RunK8sControllerManager(apiserverIp string) *containers.Container {
 func RunEtcd() *containers.Container {
 	return containers.Run("etcd-fv",
 		containers.RunOpts{AutoRemove: true},
-		fmt.Sprintf("%s", os.Getenv("ETCD_IMAGE")),
+		os.Getenv("ETCD_IMAGE"),
 		"etcd",
 		"--advertise-client-urls", "http://127.0.0.1:2379",
 		"--listen-client-urls", "http://0.0.0.0:2379")

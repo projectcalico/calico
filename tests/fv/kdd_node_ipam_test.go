@@ -69,7 +69,8 @@ var _ = Describe("kube-controllers FV tests (KDD mode)", func() {
 		Expect(err).NotTo(HaveOccurred())
 		defer os.Remove(kconfigfile.Name())
 		data := fmt.Sprintf(testutils.KubeconfigTemplate, apiserver.IP)
-		kconfigfile.Write([]byte(data))
+		_, err = kconfigfile.Write([]byte(data))
+		Expect(err).NotTo(HaveOccurred())
 
 		k8sClient, err = testutils.GetK8sClient(kconfigfile.Name())
 		Expect(err).NotTo(HaveOccurred())

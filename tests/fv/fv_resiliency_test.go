@@ -64,7 +64,8 @@ var _ = Describe("[Resilience] PolicyController", func() {
 		Expect(err).NotTo(HaveOccurred())
 		defer os.Remove(kconfigfile.Name())
 		data := fmt.Sprintf(testutils.KubeconfigTemplate, apiserver.IP)
-		kconfigfile.Write([]byte(data))
+		_, err = kconfigfile.Write([]byte(data))
+		Expect(err).NotTo(HaveOccurred())
 
 		k8sClient, err = testutils.GetK8sClient(kconfigfile.Name())
 		Expect(err).NotTo(HaveOccurred())
@@ -79,8 +80,7 @@ var _ = Describe("[Resilience] PolicyController", func() {
 		policyName = "jelly"
 		genPolicyName = "knp.default." + policyName
 		policyNamespace = "default"
-		var np *networkingv1.NetworkPolicy
-		np = &networkingv1.NetworkPolicy{
+		np := &networkingv1.NetworkPolicy{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      policyName,
 				Namespace: policyNamespace,
