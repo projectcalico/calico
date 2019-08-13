@@ -50,7 +50,7 @@ datastore type and number of nodes.
    curl {{site.url}}/{{page.version}}/manifests/calico-typha.yaml -o calico.yaml
    ```
 
-{% include {{page.version}}/pod-cidr-sed.md yaml="calico" %}
+{% include {{page.version}}/pod-cidr-sed.md yaml="calico-typha" %}
 
 1. Modify the replica count in the`Deployment` named `calico-typha`
    to the desired number of replicas.
@@ -82,7 +82,7 @@ datastore type and number of nodes.
 1. Apply the manifest.
 
    ```bash
-   kubectl apply -f calico.yaml
+   kubectl apply -f calico-typha.yaml
    ```
 
 1. If you wish to enforce application layer policies and secure workload-to-workload
@@ -96,7 +96,7 @@ datastore type and number of nodes.
    curl {{site.url}}/{{page.version}}/manifests/calico-etcd.yaml -o calico.yaml
    ```
 
-{% include {{page.version}}/pod-cidr-sed.md yaml="calico" %}
+{% include {{page.version}}/pod-cidr-sed.md yaml="calico-etcd" %}
 
 1. In the `ConfigMap` named `calico-config`, set the value of
    `etcd_endpoints` to the IP address and port of your etcd server.
@@ -107,7 +107,7 @@ datastore type and number of nodes.
 1. Apply the manifest using the following command.
 
    ```bash
-   kubectl apply -f calico.yaml
+   kubectl apply -f calico-etcd.yaml
    ```
 
 1. If you wish to enforce application layer policies and secure workload-to-workload
