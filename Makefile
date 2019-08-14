@@ -149,8 +149,11 @@ build: bin/calicoctl-$(OS)-$(ARCH)
 EXTRA_DOCKER_ARGS	+= -e GO111MODULE=on
 
 ifdef GOPATH
+ifneq ($(GOPATH),)
 ifndef CIRCLECI
+	LOCAL_GOPATH = $(shell echo $(GOPATH) | cut -d':' -f1)
 	EXTRA_DOCKER_ARGS += -v $(LOCAL_GOPATH)/pkg/mod:/go/pkg/mod:rw
+endif
 endif
 endif
 
