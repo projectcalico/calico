@@ -187,6 +187,17 @@ update-libcalico:
 		fi;\
 	fi'
 
+git-status:
+	git status --porcelain
+
+git-commit:
+	git commit -m "Semaphore Automatic Update" --author "Semaphore Automatic Update <marvin@tigera.io>" go.mod go.sum
+
+git-push:
+	git push
+
+commit-pin-updates: update-libcalico git-status ci git-commit git-push
+
 # The supported different binary names. For each, ensure that an OS and ARCH is set
 bin/calicoctl-%-amd64: ARCH=amd64
 bin/calicoctl-%-arm64: ARCH=arm64
