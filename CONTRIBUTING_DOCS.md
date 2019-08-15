@@ -178,15 +178,45 @@ To link to a page not named `index.md`, omit the closing slash. To link to a pag
 | `/getting-started/kubernetes/troubleshooting` | `/getting-started/kubernetes/troubleshooting.md`  |
 
 
-### Relative links and `page.version` variable
+### `site.url`, `site.baseurl`, and the `page.version` variable
 
-To link to other doc site content, use relative links prefixed with: `/{{page.version}}/`. This allows the content to port across documentation versions without link breakage. Example:
+**`site.baseurl`**
+
+To create clickable links to other doc site content, use links prefixed with: `{{ site.baseurl }}`. For example:
 
 ```
-[Get started](/{{page.version}}/getting-started/)
+[Get started]({{ site.baseurl }}/{{ page.version }}/getting-started/)
 ```
 
-> **Pro tip**: `page.version` will be inherited from the default set in `_config.yml` for the current page's directory.
+Will render as:
+
+```
+<a href="/v3.8/getting-started/">Getting started</a>
+```
+
+The `site.baseurl` prefix is not strictly required, but allows greater portability if our docs move in the future.
+
+**`site.url`**
+
+The `site.url` prefix must be used whenever you are not creating a clickable `<a href='...'>` element, but instead are showing the user a URL to copy locally. A common example is downloading manifests or showing a user how to `kubectl apply -f https://...` them.
+
+For absolute links, use `{{ site.url }}`. For example:
+
+```
+kubectl apply -f `{{ site.url }}/{{ page.version }}/manifests/calicoctl.yaml`
+```
+
+Will render as:
+
+```
+kubectl apply -f `https://docs.tigera.io/v3.8/manifests/calicoctl.yaml`
+```
+
+**page.version**
+
+Most links should include the prefix `{{ page.version }}`, as seen in the above examples. This allows the content to port across multiple versions without link breakage.
+
+`page.version` is automatically inherited from `_config.yml` for the current page's directory.
 
 ### Case sensitivity
 
