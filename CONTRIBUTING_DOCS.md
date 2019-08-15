@@ -178,24 +178,38 @@ To link to a page not named `index.md`, omit the closing slash. To link to a pag
 | `/getting-started/kubernetes/troubleshooting` | `/getting-started/kubernetes/troubleshooting.md`  |
 
 
-### Relative links, absolute links, and the `page.version` variable
+### `site.url`, `site.baseurl`, and the `page.version` variable
 
-**Relative Links**
+**`site.baseurl`**
 
-To create clickable links to other doc site content, use relative links prefixed with: `{{ site.baseurl }}`. Relative links will pass CI checks even when a new page is being created as they will correctly link to the local build of the site during testing instead of the live docs site which does not have the content yet. For example:
+To create clickable links to other doc site content, use links prefixed with: `{{ site.baseurl }}`. For example:
 
 ```
 [Get started]({{ site.baseurl }}/{{ page.version }}/getting-started/)
 ```
 
-**Absolute Links**
+Will render as:
 
-Absolute links should be used whenever you are not creating a clickable `<a href='...'>` element, but instead are showing the user a URL to copy locally. A common example is downloading manifests or showing a user how to `kubectl apply -f https://...` them.
+```
+<a href="/v3.8/getting-started/">Getting started</a>
+```
+
+The `site.baseurl` prefix is not strictly required, but allows greater portability if our docs move in the future.
+
+**`site.url`**
+
+The `site.url` prefix must be used whenever you are not creating a clickable `<a href='...'>` element, but instead are showing the user a URL to copy locally. A common example is downloading manifests or showing a user how to `kubectl apply -f https://...` them.
 
 For absolute links, use `{{ site.url }}`. For example:
 
 ```
-kubectl apply -f `{{ site.url }}/{{ page.version }}/calicoctl.yaml`
+kubectl apply -f `{{ site.url }}/{{ page.version }}/manifests/calicoctl.yaml`
+```
+
+Will render as:
+
+```
+kubectl apply -f `https://docs.tigera.io/v3.8/manifests/calicoctl.yaml`
 ```
 
 **page.version**
