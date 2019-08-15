@@ -265,7 +265,7 @@ v3.5:
       url: https://github.com/projectcalico/cni-plugin/releases/tag/v3.5.8
     calico/kube-controllers:
       version: v3.5.8
-      url: https://github.com/projectcalico/k8s-policy/releases/tag/v3.5.8
+      url: https://github.com/projectcalico/kube-controllers/releases/tag/v3.5.8
     networking-calico:
       version: 3.4.0
       url: http://git.openstack.org/cgit/openstack/networking-calico/commit/?h=3.4.0
@@ -294,7 +294,7 @@ v3.5:
       url: https://github.com/projectcalico/cni-plugin/releases/tag/v3.5.7
     calico/kube-controllers:
       version: v3.5.7
-      url: https://github.com/projectcalico/k8s-policy/releases/tag/v3.5.7
+      url: https://github.com/projectcalico/kube-controllers/releases/tag/v3.5.7
     networking-calico:
       version: 3.4.0
       url: http://git.openstack.org/cgit/openstack/networking-calico/commit/?h=3.4.0
@@ -323,7 +323,7 @@ v3.5:
       url: https://github.com/projectcalico/cni-plugin/releases/tag/v3.5.6
     calico/kube-controllers:
       version: v3.5.6
-      url: https://github.com/projectcalico/k8s-policy/releases/tag/v3.5.6
+      url: https://github.com/projectcalico/kube-controllers/releases/tag/v3.5.6
     networking-calico:
       version: 3.4.0
       url: http://git.openstack.org/cgit/openstack/networking-calico/commit/?h=3.4.0
@@ -352,7 +352,7 @@ v3.5:
       url: https://github.com/projectcalico/cni-plugin/releases/tag/v3.5.5
     calico/kube-controllers:
       version: v3.5.5
-      url: https://github.com/projectcalico/k8s-policy/releases/tag/v3.5.5
+      url: https://github.com/projectcalico/kube-controllers/releases/tag/v3.5.5
     networking-calico:
       version: 3.4.0
       url: http://git.openstack.org/cgit/openstack/networking-calico/commit/?h=3.4.0
@@ -381,7 +381,7 @@ v3.5:
       url: https://github.com/projectcalico/cni-plugin/releases/tag/v3.5.4
     calico/kube-controllers:
       version: v3.5.4
-      url: https://github.com/projectcalico/k8s-policy/releases/tag/v3.5.4
+      url: https://github.com/projectcalico/kube-controllers/releases/tag/v3.5.4
     networking-calico:
       version: 3.4.0
       url: http://git.openstack.org/cgit/openstack/networking-calico/commit/?h=3.4.0
@@ -410,7 +410,7 @@ v3.5:
       url: https://github.com/projectcalico/cni-plugin/releases/tag/v3.5.3
     calico/kube-controllers:
       version: v3.5.3
-      url: https://github.com/projectcalico/k8s-policy/releases/tag/v3.5.3
+      url: https://github.com/projectcalico/kube-controllers/releases/tag/v3.5.3
     networking-calico:
       version: 3.4.0
       url: http://git.openstack.org/cgit/openstack/networking-calico/commit/?h=3.4.0
@@ -503,7 +503,7 @@ v3.4:
       url: https://github.com/projectcalico/cni-plugin/releases/tag/v3.4.4
     calico/kube-controllers:
       version: v3.4.4
-      url: https://github.com/projectcalico/k8s-policy/releases/tag/v3.4.4
+      url: https://github.com/projectcalico/kube-controllers/releases/tag/v3.4.4
     networking-calico:
       version: v3.4.0
       url: http://git.openstack.org/cgit/openstack/networking-calico/commit/?h=3.4.0
@@ -532,7 +532,7 @@ v3.4:
       url: https://github.com/projectcalico/cni-plugin/releases/tag/v3.4.3
     calico/kube-controllers:
       version: v3.4.3
-      url: https://github.com/projectcalico/k8s-policy/releases/tag/v3.4.3
+      url: https://github.com/projectcalico/kube-controllers/releases/tag/v3.4.3
     networking-calico:
       version: v3.4.0
       url: http://git.openstack.org/cgit/openstack/networking-calico/commit/?h=3.4.0
@@ -561,7 +561,7 @@ v3.4:
       url: https://github.com/projectcalico/cni-plugin/releases/tag/v3.4.2
     calico/kube-controllers:
       version: v3.4.2
-      url: https://github.com/projectcalico/k8s-policy/releases/tag/v3.4.2
+      url: https://github.com/projectcalico/kube-controllers/releases/tag/v3.4.2
     networking-calico:
       version: v3.4.0
       url: http://git.openstack.org/cgit/openstack/networking-calico/commit/?h=3.4.0
@@ -590,7 +590,7 @@ v3.4:
       url: https://github.com/projectcalico/cni-plugin/releases/tag/v3.4.1
     calico/kube-controllers:
       version: v3.4.1
-      url: https://github.com/projectcalico/k8s-policy/releases/tag/v3.4.1
+      url: https://github.com/projectcalico/kube-controllers/releases/tag/v3.4.1
     networking-calico:
       version: v3.4.0
       url: http://git.openstack.org/cgit/openstack/networking-calico/commit/?h=3.4.0
@@ -619,7 +619,7 @@ v3.4:
       url: https://github.com/projectcalico/cni-plugin/releases/tag/v3.4.0
     calico/kube-controllers:
       version: v3.4.0
-      url: https://github.com/projectcalico/k8s-policy/releases/tag/v3.4.0
+      url: https://github.com/projectcalico/kube-controllers/releases/tag/v3.4.0
     networking-calico:
       version: v3.4.0
       url: http://git.openstack.org/cgit/openstack/networking-calico/commit/?h=3.4.0
@@ -649,7 +649,7 @@ v3.3:
       url: https://github.com/projectcalico/cni-plugin/releases/tag/v3.3.6
     calico/kube-controllers:
       version: v3.3.6
-      url: https://github.com/projectcalico/k8s-policy/releases/tag/v3.3.6
+      url: https://github.com/projectcalico/kube-controllers/releases/tag/v3.3.6
     networking-calico:
       version: v3.3.0
       url: http://git.openstack.org/cgit/openstack/networking-calico/commit/?h=3.3.0
@@ -678,7 +678,7 @@ v3.3:
       url: https://github.com/projectcalico/cni-plugin/releases/tag/v3.3.5
     calico/kube-controllers:
       version: v3.3.5
-      url: https://github.com/projectcalico/k8s-policy/releases/tag/v3.3.5
+      url: https://github.com/projectcalico/kube-controllers/releases/tag/v3.3.5
     networking-calico:
       version: v3.3.0
       url: http://git.openstack.org/cgit/openstack/networking-calico/commit/?h=3.3.0
@@ -707,7 +707,7 @@ v3.3:
       url: https://github.com/projectcalico/cni-plugin/releases/tag/v3.3.4
     calico/kube-controllers:
       version: v3.3.4
-      url: https://github.com/projectcalico/k8s-policy/releases/tag/v3.3.4
+      url: https://github.com/projectcalico/kube-controllers/releases/tag/v3.3.4
     networking-calico:
       version: v3.3.0
       url: http://git.openstack.org/cgit/openstack/networking-calico/commit/?h=3.3.0
@@ -736,7 +736,7 @@ v3.3:
       url: https://github.com/projectcalico/cni-plugin/releases/tag/v3.3.3
     calico/kube-controllers:
       version: v3.3.3
-      url: https://github.com/projectcalico/k8s-policy/releases/tag/v3.3.3
+      url: https://github.com/projectcalico/kube-controllers/releases/tag/v3.3.3
     networking-calico:
       version: v3.3.0
       url: http://git.openstack.org/cgit/openstack/networking-calico/commit/?h=3.3.0
@@ -765,7 +765,7 @@ v3.3:
       url: https://github.com/projectcalico/cni-plugin/releases/tag/v3.3.2
     calico/kube-controllers:
       version: v3.3.2
-      url: https://github.com/projectcalico/k8s-policy/releases/tag/v3.3.2
+      url: https://github.com/projectcalico/kube-controllers/releases/tag/v3.3.2
     networking-calico:
       version: v3.3.0
       url: http://git.openstack.org/cgit/openstack/networking-calico/commit/?h=3.3.0
@@ -794,7 +794,7 @@ v3.3:
       url: https://github.com/projectcalico/cni-plugin/releases/tag/v3.3.1
     calico/kube-controllers:
       version: v3.3.1
-      url: https://github.com/projectcalico/k8s-policy/releases/tag/v3.3.1
+      url: https://github.com/projectcalico/kube-controllers/releases/tag/v3.3.1
     networking-calico:
       version: v3.3.0
       url: http://git.openstack.org/cgit/openstack/networking-calico/commit/?h=3.3.0
@@ -823,7 +823,7 @@ v3.3:
       url: https://github.com/projectcalico/cni-plugin/releases/tag/v3.3.0
     calico/kube-controllers:
       version: v3.3.0
-      url: https://github.com/projectcalico/k8s-policy/releases/tag/v3.3.0
+      url: https://github.com/projectcalico/kube-controllers/releases/tag/v3.3.0
     networking-calico:
       version: v3.3.0
       url: http://git.openstack.org/cgit/openstack/networking-calico/commit/?h=3.3.0
@@ -856,7 +856,7 @@ v3.2:
       download_calico_ipam_url: https://github.com/projectcalico/cni-plugin/releases/download/v3.2.7/calico-ipam
     calico/kube-controllers:
       version: v3.2.7
-      url: https://github.com/projectcalico/k8s-policy/releases/tag/v3.2.7
+      url: https://github.com/projectcalico/kube-controllers/releases/tag/v3.2.7
     networking-calico:
       version: 3.2.0
       url: http://git.openstack.org/cgit/openstack/networking-calico/commit/?h=3.2.0
@@ -891,7 +891,7 @@ v3.2:
       download_calico_ipam_url: https://github.com/projectcalico/cni-plugin/releases/download/v3.2.6/calico-ipam
     calico/kube-controllers:
       version: v3.2.6
-      url: https://github.com/projectcalico/k8s-policy/releases/tag/v3.2.6
+      url: https://github.com/projectcalico/kube-controllers/releases/tag/v3.2.6
     networking-calico:
       version: 3.2.0
       url: http://git.openstack.org/cgit/openstack/networking-calico/commit/?h=3.2.0
@@ -926,7 +926,7 @@ v3.2:
       download_calico_ipam_url: https://github.com/projectcalico/cni-plugin/releases/download/v3.2.5/calico-ipam
     calico/kube-controllers:
       version: v3.2.5
-      url: https://github.com/projectcalico/k8s-policy/releases/tag/v3.2.5
+      url: https://github.com/projectcalico/kube-controllers/releases/tag/v3.2.5
     networking-calico:
       version: 3.2.0
       url: http://git.openstack.org/cgit/openstack/networking-calico/commit/?h=3.2.0
@@ -961,7 +961,7 @@ v3.2:
       download_calico_ipam_url: https://github.com/projectcalico/cni-plugin/releases/download/v3.2.4/calico-ipam
     calico/kube-controllers:
       version: v3.2.4
-      url: https://github.com/projectcalico/k8s-policy/releases/tag/v3.2.4
+      url: https://github.com/projectcalico/kube-controllers/releases/tag/v3.2.4
     networking-calico:
       version: 3.2.0
       url: http://git.openstack.org/cgit/openstack/networking-calico/commit/?h=3.2.0
@@ -996,7 +996,7 @@ v3.2:
       download_calico_ipam_url: https://github.com/projectcalico/cni-plugin/releases/download/v3.2.3/calico-ipam
     calico/kube-controllers:
       version: v3.2.3
-      url: https://github.com/projectcalico/k8s-policy/releases/tag/v3.2.3
+      url: https://github.com/projectcalico/kube-controllers/releases/tag/v3.2.3
     networking-calico:
       version: 3.2.0
       url: http://git.openstack.org/cgit/openstack/networking-calico/commit/?h=3.2.0
@@ -1031,7 +1031,7 @@ v3.2:
       download_calico_ipam_url: https://github.com/projectcalico/cni-plugin/releases/download/v3.2.2/calico-ipam
     calico/kube-controllers:
       version: v3.2.2
-      url: https://github.com/projectcalico/k8s-policy/releases/tag/v3.2.2
+      url: https://github.com/projectcalico/kube-controllers/releases/tag/v3.2.2
     networking-calico:
       version: 3.2.0
       url: http://git.openstack.org/cgit/openstack/networking-calico/commit/?h=3.2.0
@@ -1066,7 +1066,7 @@ v3.2:
       download_calico_ipam_url: https://github.com/projectcalico/cni-plugin/releases/download/v3.2.1/calico-ipam
     calico/kube-controllers:
       version: v3.2.1
-      url: https://github.com/projectcalico/k8s-policy/releases/tag/v3.2.1
+      url: https://github.com/projectcalico/kube-controllers/releases/tag/v3.2.1
     networking-calico:
       version: 3.2.0
       url: http://git.openstack.org/cgit/openstack/networking-calico/commit/?h=3.2.0
@@ -1101,7 +1101,7 @@ v3.2:
       download_calico_ipam_url: https://github.com/projectcalico/cni-plugin/releases/download/v3.2.0/calico-ipam
     calico/kube-controllers:
       version: v3.2.0
-      url: https://github.com/projectcalico/k8s-policy/releases/tag/v3.2.0
+      url: https://github.com/projectcalico/kube-controllers/releases/tag/v3.2.0
     networking-calico:
       version: 3.2.0
       url: http://git.openstack.org/cgit/openstack/networking-calico/commit/?h=3.2.0
@@ -1137,7 +1137,7 @@ v3.1:
       download_calico_ipam_url: https://github.com/projectcalico/cni-plugin/releases/download/v3.1.6/calico-ipam
     calico/kube-controllers:
       version: v3.1.6
-      url: https://github.com/projectcalico/k8s-policy/releases/tag/v3.1.6
+      url: https://github.com/projectcalico/kube-controllers/releases/tag/v3.1.6
     networking-calico:
       version: 3.1.3
       url: http://git.openstack.org/cgit/openstack/networking-calico/commit/?h=3.1.3
@@ -1166,7 +1166,7 @@ v3.1:
       download_calico_ipam_url: https://github.com/projectcalico/cni-plugin/releases/download/v3.1.5/calico-ipam
     calico/kube-controllers:
       version: v3.1.5
-      url: https://github.com/projectcalico/k8s-policy/releases/tag/v3.1.5
+      url: https://github.com/projectcalico/kube-controllers/releases/tag/v3.1.5
     networking-calico:
       version: 3.1.3
       url: http://git.openstack.org/cgit/openstack/networking-calico/commit/?h=3.1.3
@@ -1195,7 +1195,7 @@ v3.1:
       download_calico_ipam_url: https://github.com/projectcalico/cni-plugin/releases/download/v3.1.4/calico-ipam
     calico/kube-controllers:
       version: v3.1.4
-      url: https://github.com/projectcalico/k8s-policy/releases/tag/v3.1.4
+      url: https://github.com/projectcalico/kube-controllers/releases/tag/v3.1.4
     networking-calico:
       version: 3.1.3
       url: http://git.openstack.org/cgit/openstack/networking-calico/commit/?h=3.1.3
@@ -1224,7 +1224,7 @@ v3.1:
       download_calico_ipam_url: https://github.com/projectcalico/cni-plugin/releases/download/v3.1.3/calico-ipam
     calico/kube-controllers:
       version: v3.1.3
-      url: https://github.com/projectcalico/k8s-policy/releases/tag/v3.1.3
+      url: https://github.com/projectcalico/kube-controllers/releases/tag/v3.1.3
     networking-calico:
       version: 3.1.3
       url: http://git.openstack.org/cgit/openstack/networking-calico/commit/?h=3.1.3
@@ -1253,7 +1253,7 @@ v3.1:
       download_calico_ipam_url: https://github.com/projectcalico/cni-plugin/releases/download/v3.1.2/calico-ipam
     calico/kube-controllers:
       version: v3.1.2
-      url: https://github.com/projectcalico/k8s-policy/releases/tag/v3.1.2
+      url: https://github.com/projectcalico/kube-controllers/releases/tag/v3.1.2
     networking-calico:
       version: 3.1.2
       url: http://git.openstack.org/cgit/openstack/networking-calico/commit/?h=3.1.2
@@ -1282,7 +1282,7 @@ v3.1:
       download_calico_ipam_url: https://github.com/projectcalico/cni-plugin/releases/download/v3.1.1/calico-ipam
     calico/kube-controllers:
       version: v3.1.1
-      url: https://github.com/projectcalico/k8s-policy/releases/tag/v3.1.1
+      url: https://github.com/projectcalico/kube-controllers/releases/tag/v3.1.1
     networking-calico:
       version: 3.1.1
       url: http://git.openstack.org/cgit/openstack/networking-calico/commit/?h=3.1.1
@@ -1311,7 +1311,7 @@ v3.1:
       download_calico_ipam_url: https://github.com/projectcalico/cni-plugin/releases/download/v3.1.0/calico-ipam
     calico/kube-controllers:
       version: v3.1.0
-      url: https://github.com/projectcalico/k8s-policy/releases/tag/v3.1.0
+      url: https://github.com/projectcalico/kube-controllers/releases/tag/v3.1.0
     networking-calico:
       version: 3.1.0
       url: http://git.openstack.org/cgit/openstack/networking-calico/commit/?h=3.1.0
@@ -1344,7 +1344,7 @@ v3.0:
       download_calico_ipam_url: https://github.com/projectcalico/cni-plugin/releases/download/v3.0.11/calico-ipam
     calico/kube-controllers:
       version: v3.0.11
-      url: https://github.com/projectcalico/k8s-policy/releases/tag/v3.0.11
+      url: https://github.com/projectcalico/kube-controllers/releases/tag/v3.0.11
     calico/routereflector:
       version: v0.5.1
       url: https://github.com/projectcalico/routereflector/releases/tag/v0.5.1
@@ -1370,7 +1370,7 @@ v3.0:
       download_calico_ipam_url: https://github.com/projectcalico/cni-plugin/releases/download/v3.0.10/calico-ipam
     calico/kube-controllers:
       version: v3.0.10
-      url: https://github.com/projectcalico/k8s-policy/releases/tag/v3.0.10
+      url: https://github.com/projectcalico/kube-controllers/releases/tag/v3.0.10
     calico/routereflector:
       version: v0.5.1
       url: https://github.com/projectcalico/routereflector/releases/tag/v0.5.1
@@ -1396,7 +1396,7 @@ v3.0:
       download_calico_ipam_url: https://github.com/projectcalico/cni-plugin/releases/download/v2.0.7/calico-ipam
     calico/kube-controllers:
       version: v2.0.6
-      url: https://github.com/projectcalico/k8s-policy/releases/tag/v2.0.6
+      url: https://github.com/projectcalico/kube-controllers/releases/tag/v2.0.6
     calico/routereflector:
       version: v0.5.1
       url: https://github.com/projectcalico/routereflector/releases/tag/v0.5.1
@@ -1422,7 +1422,7 @@ v3.0:
       download_calico_ipam_url: https://github.com/projectcalico/cni-plugin/releases/download/v2.0.6/calico-ipam
     calico/kube-controllers:
       version: v2.0.5
-      url: https://github.com/projectcalico/k8s-policy/releases/tag/v2.0.5
+      url: https://github.com/projectcalico/kube-controllers/releases/tag/v2.0.5
     calico/routereflector:
       version: v0.5.0
       url: https://github.com/projectcalico/routereflector/releases/tag/v0.5.0
@@ -1448,7 +1448,7 @@ v3.0:
       download_calico_ipam_url: https://github.com/projectcalico/cni-plugin/releases/download/v2.0.5/calico-ipam
     calico/kube-controllers:
       version: v2.0.4
-      url: https://github.com/projectcalico/k8s-policy/releases/tag/v2.0.4
+      url: https://github.com/projectcalico/kube-controllers/releases/tag/v2.0.4
     calico/routereflector:
       version: v0.5.0
       url: https://github.com/projectcalico/routereflector/releases/tag/v0.5.0
@@ -1474,7 +1474,7 @@ v3.0:
       download_calico_ipam_url: https://github.com/projectcalico/cni-plugin/releases/download/v2.0.5/calico-ipam
     calico/kube-controllers:
       version: v2.0.4
-      url: https://github.com/projectcalico/k8s-policy/releases/tag/v2.0.4
+      url: https://github.com/projectcalico/kube-controllers/releases/tag/v2.0.4
     calico/routereflector:
       version: v0.5.0
       url: https://github.com/projectcalico/routereflector/releases/tag/v0.5.0
@@ -1500,7 +1500,7 @@ v3.0:
       download_calico_ipam_url: https://github.com/projectcalico/cni-plugin/releases/download/v2.0.4/calico-ipam
     calico/kube-controllers:
       version: v2.0.3
-      url: https://github.com/projectcalico/k8s-policy/releases/tag/v2.0.3
+      url: https://github.com/projectcalico/kube-controllers/releases/tag/v2.0.3
     calico/routereflector:
       version: v0.5.0
       url: https://github.com/projectcalico/routereflector/releases/tag/v0.5.0
@@ -1526,7 +1526,7 @@ v3.0:
       download_calico_ipam_url: https://github.com/projectcalico/cni-plugin/releases/download/v2.0.3/calico-ipam
     calico/kube-controllers:
       version: v2.0.2
-      url: https://github.com/projectcalico/k8s-policy/releases/tag/v2.0.2
+      url: https://github.com/projectcalico/kube-controllers/releases/tag/v2.0.2
     calico/routereflector:
       version: v0.5.0
       url: https://github.com/projectcalico/routereflector/releases/tag/v0.5.0
@@ -1552,7 +1552,7 @@ v3.0:
       download_calico_ipam_url: https://github.com/projectcalico/cni-plugin/releases/download/v2.0.1/calico-ipam
     calico/kube-controllers:
       version: v2.0.1
-      url: https://github.com/projectcalico/k8s-policy/releases/tag/v2.0.1
+      url: https://github.com/projectcalico/kube-controllers/releases/tag/v2.0.1
     calico/routereflector:
       version: v0.5.0
       url: https://github.com/projectcalico/routereflector/releases/tag/v0.5.0
@@ -1578,7 +1578,7 @@ v3.0:
       download_calico_ipam_url: https://github.com/projectcalico/cni-plugin/releases/download/v2.0.0/calico-ipam
     calico/kube-controllers:
       version: v2.0.0
-      url: https://github.com/projectcalico/k8s-policy/releases/tag/v2.0.0
+      url: https://github.com/projectcalico/kube-controllers/releases/tag/v2.0.0
     calico/routereflector:
       version: v0.5.0
       url: https://github.com/projectcalico/routereflector/releases/tag/v0.5.0
@@ -1604,7 +1604,7 @@ v3.0:
       download_calico_ipam_url: https://github.com/projectcalico/cni-plugin/releases/download/v2.0.0/calico-ipam
     calico/kube-controllers:
       version: v2.0.0
-      url: https://github.com/projectcalico/k8s-policy/releases/tag/v2.0.0
+      url: https://github.com/projectcalico/kube-controllers/releases/tag/v2.0.0
     calico/routereflector:
       version: v0.5.0
       url: https://github.com/projectcalico/routereflector/releases/tag/v0.5.0
@@ -1630,7 +1630,7 @@ v3.0:
       download_calico_ipam_url: https://github.com/projectcalico/cni-plugin/releases/download/v2.0.0/calico-ipam
     calico/kube-controllers:
       version: v2.0.0
-      url: https://github.com/projectcalico/k8s-policy/releases/tag/v2.0.0
+      url: https://github.com/projectcalico/kube-controllers/releases/tag/v2.0.0
     calico/routereflector:
       version: v0.5.0
       url: https://github.com/projectcalico/routereflector/releases/tag/v0.5.0
@@ -1664,7 +1664,7 @@ v2.6:
       url: https://github.com/projectcalico/libnetwork-plugin/releases/tag/v1.1.3
     calico/kube-controllers:
       version: v1.0.5
-      url: https://github.com/projectcalico/k8s-policy/releases/tag/v1.0.5
+      url: https://github.com/projectcalico/kube-controllers/releases/tag/v1.0.5
     calico-bird:
       version: v0.3.2
       url: https://github.com/projectcalico/calico-bird/releases/tag/v0.3.2
@@ -1708,7 +1708,7 @@ v2.6:
       url: https://github.com/projectcalico/libnetwork-plugin/releases/tag/v1.1.3
     calico/kube-controllers:
       version: v1.0.4
-      url: https://github.com/projectcalico/k8s-policy/releases/tag/v1.0.4
+      url: https://github.com/projectcalico/kube-controllers/releases/tag/v1.0.4
     calico-bird:
       version: v0.3.2
       url: https://github.com/projectcalico/calico-bird/releases/tag/v0.3.2
@@ -1752,7 +1752,7 @@ v2.6:
       url: https://github.com/projectcalico/libnetwork-plugin/releases/tag/v1.1.3
     calico/kube-controllers:
       version: v1.0.4
-      url: https://github.com/projectcalico/k8s-policy/releases/tag/v1.0.4
+      url: https://github.com/projectcalico/kube-controllers/releases/tag/v1.0.4
     calico-bird:
       version: v0.3.2
       url: https://github.com/projectcalico/calico-bird/releases/tag/v0.3.2
@@ -1796,7 +1796,7 @@ v2.6:
       url: https://github.com/projectcalico/libnetwork-plugin/releases/tag/v1.1.2
     calico/kube-controllers:
       version: v1.0.4
-      url: https://github.com/projectcalico/k8s-policy/releases/tag/v1.0.4
+      url: https://github.com/projectcalico/kube-controllers/releases/tag/v1.0.4
     calico-bird:
       version: v0.3.2
       url: https://github.com/projectcalico/calico-bird/releases/tag/v0.3.2
@@ -1840,7 +1840,7 @@ v2.6:
       url: https://github.com/projectcalico/libnetwork-plugin/releases/tag/v1.1.2
     calico/kube-controllers:
       version: v1.0.3
-      url: https://github.com/projectcalico/k8s-policy/releases/tag/v1.0.3
+      url: https://github.com/projectcalico/kube-controllers/releases/tag/v1.0.3
     calico-bird:
       version: v0.3.2
       url: https://github.com/projectcalico/calico-bird/releases/tag/v0.3.2
@@ -1884,7 +1884,7 @@ v2.6:
       url: https://github.com/projectcalico/libnetwork-plugin/releases/tag/v1.1.2
     calico/kube-controllers:
       version: v1.0.3
-      url: https://github.com/projectcalico/k8s-policy/releases/tag/v1.0.3
+      url: https://github.com/projectcalico/kube-controllers/releases/tag/v1.0.3
     calico-bird:
       version: v0.3.2
       url: https://github.com/projectcalico/calico-bird/releases/tag/v0.3.2
@@ -1928,7 +1928,7 @@ v2.6:
       url: https://github.com/projectcalico/libnetwork-plugin/releases/tag/v1.1.2
     calico/kube-controllers:
       version: v1.0.3
-      url: https://github.com/projectcalico/k8s-policy/releases/tag/v1.0.3
+      url: https://github.com/projectcalico/kube-controllers/releases/tag/v1.0.3
     calico-bird:
       version: v0.3.1
       url: https://github.com/projectcalico/calico-bird/releases/tag/v0.3.1
@@ -1972,7 +1972,7 @@ v2.6:
       url: https://github.com/projectcalico/libnetwork-plugin/releases/tag/v1.1.2
     calico/kube-controllers:
       version: v1.0.2
-      url: https://github.com/projectcalico/k8s-policy/releases/tag/v1.0.2
+      url: https://github.com/projectcalico/kube-controllers/releases/tag/v1.0.2
     calico-bird:
       version: v0.3.1
       url: https://github.com/projectcalico/calico-bird/releases/tag/v0.3.1
@@ -2020,7 +2020,7 @@ v2.6:
       url: https://github.com/projectcalico/libnetwork-plugin/releases/tag/v1.1.2
     calico/kube-controllers:
       version: v1.0.2
-      url: https://github.com/projectcalico/k8s-policy/releases/tag/v1.0.2
+      url: https://github.com/projectcalico/kube-controllers/releases/tag/v1.0.2
     networking-calico:
       version: 1.4.3
       url: http://git.openstack.org/cgit/openstack/networking-calico/commit/?h=1.4.3
@@ -2062,7 +2062,7 @@ v2.6:
       url: https://github.com/projectcalico/libnetwork-plugin/releases/tag/v1.1.1
     calico/kube-controllers:
       version: v1.0.1
-      url: https://github.com/projectcalico/k8s-policy/releases/tag/v1.0.1
+      url: https://github.com/projectcalico/kube-controllers/releases/tag/v1.0.1
     networking-calico:
       version: 1.4.3
       url: http://git.openstack.org/cgit/openstack/networking-calico/commit/?h=1.4.3
@@ -2101,7 +2101,7 @@ v2.6:
       url: https://github.com/projectcalico/libnetwork-plugin/releases/tag/v1.1.0
     calico/kube-controllers:
       version: v1.0.0
-      url: https://github.com/projectcalico/k8s-policy/releases/tag/v1.0.0
+      url: https://github.com/projectcalico/kube-controllers/releases/tag/v1.0.0
     networking-calico:
       version: 1.4.3
       url: http://git.openstack.org/cgit/openstack/networking-calico/commit/?h=1.4.3
@@ -2141,7 +2141,7 @@ v2.6:
       url: https://github.com/projectcalico/libnetwork-plugin/releases/tag/v1.1.0
     calico/kube-controllers:
       version: v1.0.0
-      url: https://github.com/projectcalico/k8s-policy/releases/tag/v1.0.0
+      url: https://github.com/projectcalico/kube-controllers/releases/tag/v1.0.0
     networking-calico:
       version: 1.4.2
       url: http://git.openstack.org/cgit/openstack/networking-calico/commit/?h=1.4.2
@@ -2181,7 +2181,7 @@ v2.6:
       url: https://github.com/projectcalico/libnetwork-plugin/releases/tag/v1.1.0
     calico/kube-controllers:
       version: v1.0.0
-      url: https://github.com/projectcalico/k8s-policy/releases/tag/v1.0.0
+      url: https://github.com/projectcalico/kube-controllers/releases/tag/v1.0.0
     networking-calico:
       version: 1.4.2
       url: http://git.openstack.org/cgit/openstack/networking-calico/commit/?h=1.4.2
@@ -2230,7 +2230,7 @@ v2.5:
       url: https://github.com/projectcalico/libnetwork-plugin/releases/tag/v1.1.0
     calico/kube-policy-controller:
       version: v0.7.0
-      url: https://github.com/projectcalico/k8s-policy/releases/tag/v0.7.0
+      url: https://github.com/projectcalico/kube-controllers/releases/tag/v0.7.0
     networking-calico:
       version: 1.4.2
       url: http://git.openstack.org/cgit/openstack/networking-calico/commit/?h=1.4.2
@@ -2277,7 +2277,7 @@ v2.5:
       url: https://github.com/projectcalico/libnetwork-plugin/releases/tag/v1.1.0
     calico/kube-policy-controller:
       version: v0.7.0
-      url: https://github.com/projectcalico/k8s-policy/releases/tag/v0.7.0
+      url: https://github.com/projectcalico/kube-controllers/releases/tag/v0.7.0
     networking-calico:
       version: 1.4.2
       url: http://git.openstack.org/cgit/openstack/networking-calico/commit/?h=1.4.2
@@ -2322,7 +2322,7 @@ v2.4:
       url: https://github.com/projectcalico/libnetwork-plugin/releases/tag/v1.1.0
     calico/kube-policy-controller:
       version: v0.7.0
-      url: https://github.com/projectcalico/k8s-policy/releases/tag/v0.7.0
+      url: https://github.com/projectcalico/kube-controllers/releases/tag/v0.7.0
     networking-calico:
       version: 1.4.2
       url: http://git.openstack.org/cgit/openstack/networking-calico/commit/?h=1.4.2
@@ -2365,7 +2365,7 @@ v2.4:
       url: https://github.com/projectcalico/libnetwork-plugin/releases/tag/v1.1.0
     calico/kube-policy-controller:
       version: v0.7.0
-      url: https://github.com/projectcalico/k8s-policy/releases/tag/v0.7.0
+      url: https://github.com/projectcalico/kube-controllers/releases/tag/v0.7.0
     networking-calico:
       version: 1.4.2
       url: http://git.openstack.org/cgit/openstack/networking-calico/commit/?h=1.4.2
@@ -2425,7 +2425,7 @@ v2.3:
       url: https://github.com/projectcalico/libnetwork-plugin/releases/tag/v1.1.0
     calico/kube-policy-controller:
       version: v0.6.0
-      url: https://github.com/projectcalico/k8s-policy/releases/tag/v0.6.0
+      url: https://github.com/projectcalico/kube-controllers/releases/tag/v0.6.0
     networking-calico:
       version: 1.4.2
       url: http://git.openstack.org/cgit/openstack/networking-calico/commit/?h=1.4.2
@@ -2463,7 +2463,7 @@ v2.2:
       url: https://github.com/projectcalico/libnetwork-plugin/releases/tag/v1.1.0
     calico/kube-policy-controller:
       version: v0.6.0
-      url: https://github.com/projectcalico/k8s-policy/releases/tag/v0.6.0
+      url: https://github.com/projectcalico/kube-controllers/releases/tag/v0.6.0
     networking-calico:
       version: 1.4.2
       url: http://git.openstack.org/cgit/openstack/networking-calico/commit/?h=1.4.2
@@ -2511,7 +2511,7 @@ v2.2:
       url: https://github.com/projectcalico/libnetwork-plugin/releases/tag/v1.1.0
     calico/kube-policy-controller:
       version: v0.6.0
-      url: https://github.com/projectcalico/k8s-policy/releases/tag/v0.6.0
+      url: https://github.com/projectcalico/kube-controllers/releases/tag/v0.6.0
     networking-calico:
       version: 1.4.2
       url: http://git.openstack.org/cgit/openstack/networking-calico/commit/?h=1.4.2
@@ -2550,7 +2550,7 @@ v2.1:
       url: https://github.com/projectcalico/libnetwork-plugin/releases/tag/v1.1.0
     calico/kube-policy-controller:
       version: v0.5.4
-      url: https://github.com/projectcalico/k8s-policy/releases/tag/v0.5.4
+      url: https://github.com/projectcalico/kube-controllers/releases/tag/v0.5.4
     networking-calico:
       version: 1.4.2
       url: http://git.openstack.org/cgit/openstack/networking-calico/commit/?h=1.4.2
@@ -2596,7 +2596,7 @@ v2.1:
       url: https://github.com/projectcalico/libnetwork-plugin/releases/tag/v1.1.0
     calico/kube-policy-controller:
       version: v0.5.4
-      url: https://github.com/projectcalico/k8s-policy/releases/tag/v0.5.4
+      url: https://github.com/projectcalico/kube-controllers/releases/tag/v0.5.4
     networking-calico:
       version: 1.4.2
       url: http://git.openstack.org/cgit/openstack/networking-calico/commit/?h=1.4.2
@@ -2635,7 +2635,7 @@ v2.1:
       url: https://github.com/projectcalico/libnetwork-plugin/releases/tag/v1.1.0
     calico/kube-policy-controller:
       version: v0.5.4
-      url: https://github.com/projectcalico/k8s-policy/releases/tag/v0.5.4
+      url: https://github.com/projectcalico/kube-controllers/releases/tag/v0.5.4
     networking-calico:
       version: 1.4.2
       url: http://git.openstack.org/cgit/openstack/networking-calico/commit/?h=1.4.2
@@ -2674,7 +2674,7 @@ v2.1:
       url: https://github.com/projectcalico/libnetwork-plugin/releases/tag/v1.1.0
     calico/kube-policy-controller:
       version: v0.5.4
-      url: https://github.com/projectcalico/k8s-policy/releases/tag/v0.5.4
+      url: https://github.com/projectcalico/kube-controllers/releases/tag/v0.5.4
     networking-calico:
       version: 1.4.2
       url: http://git.openstack.org/cgit/openstack/networking-calico/commit/?h=1.4.2
@@ -2711,7 +2711,7 @@ v2.1:
       url: https://github.com/projectcalico/libnetwork-plugin/releases/tag/v1.1.0
     calico/kube-policy-controller:
       version: v0.5.4
-      url: https://github.com/projectcalico/k8s-policy/releases/tag/v0.5.4
+      url: https://github.com/projectcalico/kube-controllers/releases/tag/v0.5.4
     networking-calico:
       version: 1.4.2
       url: http://git.openstack.org/cgit/openstack/networking-calico/commit/?h=1.4.2
@@ -2756,7 +2756,7 @@ v2.1:
       url: https://github.com/projectcalico/libnetwork-plugin/releases/tag/v1.1.0
     calico/kube-policy-controller:
       version: v0.5.2
-      url: https://github.com/projectcalico/k8s-policy/releases/tag/v0.5.2
+      url: https://github.com/projectcalico/kube-controllers/releases/tag/v0.5.2
     networking-calico:
       version: 1.4.2
       url: http://git.openstack.org/cgit/openstack/networking-calico/commit/?h=1.4.2
