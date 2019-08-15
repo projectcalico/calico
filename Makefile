@@ -149,8 +149,11 @@ build: bin/calicoctl-$(OS)-$(ARCH)
 EXTRA_DOCKER_ARGS	+= -e GO111MODULE=on
 
 ifdef GOPATH
+ifneq ($(GOPATH),)
 ifndef CIRCLECI
+	LOCAL_GOPATH = $(shell echo $(GOPATH) | cut -d':' -f1)
 	EXTRA_DOCKER_ARGS += -v $(LOCAL_GOPATH)/pkg/mod:/go/pkg/mod:rw
+endif
 endif
 endif
 
@@ -183,6 +186,17 @@ update-libcalico:
 			go mod edit -replace github.com/projectcalico/typha=$(LIBCALICO_REPO)@$(LIBCALICO_VERSION); \
 		fi;\
 	fi'
+
+git-status:
+	git status --porcelain
+
+git-commit:
+	git commit -m "Semaphore Automatic Update" --author "Semaphore Automatic Update <marvin@tigera.io>" go.mod go.sum
+
+git-push:
+	git push
+
+commit-pin-updates: update-libcalico git-status ci git-commit git-push
 
 # The supported different binary names. For each, ensure that an OS and ARCH is set
 bin/calicoctl-%-amd64: ARCH=amd64
