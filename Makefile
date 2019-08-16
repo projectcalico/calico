@@ -148,12 +148,15 @@ build: bin/calicoctl-$(OS)-$(ARCH)
 
 EXTRA_DOCKER_ARGS	+= -e GO111MODULE=on
 
-ifdef GOPATH
+# Volume-mount gopath into the build container if it's explicitly set for persistent caching.
 ifneq ($(GOPATH),)
+# CircleCI's gopath is readonly and readonly gopaths are incompatible with go modules so don't
+# volume mount the cache in that environment
 ifndef CIRCLECI
+	# If the environment is using multiple comma-separated directories for gopath, use the first one, as that
+	# is the default one used by go modules.
 	LOCAL_GOPATH = $(shell echo $(GOPATH) | cut -d':' -f1)
 	EXTRA_DOCKER_ARGS += -v $(LOCAL_GOPATH)/pkg/mod:/go/pkg/mod:rw
-endif
 endif
 endif
 
@@ -178,7 +181,7 @@ LIBCALICO_OLDVER?=$(shell go list -m -f "{{.Version}}" github.com/projectcalico/
 ## Update libcalico pin in go.mod
 update-libcalico:
 	$(DOCKER_RUN) -i $(CALICO_BUILD) sh -c '\
-	if [ $(LIBCALICO_VERSION) != $(LIBCALICO_OLDVER) ]; then \
+	if [[ ! -z "$(LIBCALICO_VERSION)" ]] && [[ "$(LIBCALICO_VERSION)" != "$(LIBCALICO_OLDVER)" ]]; then \
 		echo "Updating libcalico version $(LIBCALICO_OLDVER) to $(LIBCALICO_VERSION) from $(LIBCALICO_REPO)"; \
 		go mod edit -droprequire github.com/projectcalico/libcalico-go; \
 		go get $(LIBCALICO_REPO)@$(LIBCALICO_VERSION); \
@@ -191,7 +194,7 @@ git-status:
 	git status --porcelain
 
 git-commit:
-	git commit -m "Semaphore Automatic Update" --author "Semaphore Automatic Update <marvin@tigera.io>" go.mod go.sum
+	git diff-index --quiet HEAD || git commit -m "Semaphore Automatic Update" --author "Semaphore Automatic Update <marvin@tigera.io>" go.mod go.sum
 
 git-push:
 	git push
