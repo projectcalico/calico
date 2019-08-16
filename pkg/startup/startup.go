@@ -565,7 +565,7 @@ func autoDetectCIDR(method string, version int) *cnet.IPNet {
 	}
 
 	// The autodetection method is not recognised and is required.  Exit.
-	log.Errorf("Invalid IP autodection method: %s", method)
+	log.Errorf("Invalid IP autodetection method: %s", method)
 	terminate()
 	return nil
 }
@@ -814,7 +814,7 @@ func checkConflictingNodes(ctx context.Context, client client.Interface, node *a
 	// Get the full set of nodes.
 	var nodes []api.Node
 	if nodeList, err := client.Nodes().List(ctx, options.ListOptions{}); err != nil {
-		log.WithError(err).Errorf("Unable to query node confguration")
+		log.WithError(err).Errorf("Unable to query node configuration")
 		retErr = err
 		return
 	} else {
