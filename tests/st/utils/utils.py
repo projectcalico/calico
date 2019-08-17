@@ -177,7 +177,7 @@ class CalicoctlOutput:
         """
         if not text:
             return
-        assert not text in self.output, "Unxpected text in output; \n" + \
+        assert not text in self.output, "Unexpected text in output; \n" + \
             "command=" + self.command + "\noutput=\n" + self.output + \
             "\nunexpected=\n" + text
 
