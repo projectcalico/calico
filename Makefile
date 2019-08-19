@@ -92,8 +92,16 @@ EXTRA_DOCKER_ARGS	+= -e GO111MODULE=on
 PACKAGE_NAME?=github.com/projectcalico/pod2daemon
 SRC_FILES=$(shell find -name '*.go')
 
-ifdef GOPATH
-	EXTRA_DOCKER_ARGS += -v $(GOPATH)/pkg/mod:/go/pkg/mod:rw
+# Volume-mount gopath into the build container if it's explicitly set for persistent caching.
+ifneq ($(GOPATH),)
+# CircleCI's gopath is readonly and readonly gopaths are incompatible with go modules so don't
+# volume mount the cache in that environment
+ifndef CIRCLECI
+	# If the environment is using multiple comma-separated directories for gopath, use the first one, as that
+	# is the default one used by go modules.
+	LOCAL_GOPATH = $(shell echo $(GOPATH) | cut -d':' -f1)
+	EXTRA_DOCKER_ARGS += -v $(LOCAL_GOPATH)/pkg/mod:/go/pkg/mod:rw
+endif
 endif
 
 DOCKER_RUN := mkdir -p .go-pkg-cache && \
