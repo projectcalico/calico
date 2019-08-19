@@ -186,7 +186,7 @@ imports:
 - name: github.com/peterbourgon/diskv
   version: 5f041e8faa004a95c88a202771f4cc3e991971e6
 - name: github.com/projectcalico/felix
-  version: ac660d7b34d1277b1d563b91e8f908263c05b627
+  version: e2286b8cd55b487ae3d2c6a2746ac292da886f31
   subpackages:
   - binder
   - buildinfo
