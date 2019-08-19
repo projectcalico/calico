@@ -71,8 +71,16 @@ SRC_FILES:=$(shell find . -name '*.go' -not -path "./vendor/*" )
 
 EXTRA_DOCKER_ARGS	:= -e GO111MODULE=on
 
-ifdef GOPATH
-	EXTRA_DOCKER_ARGS += -v $(GOPATH)/pkg/mod:/go/pkg/mod:rw
+# Volume-mount gopath into the build container if it's explicitly set for persistent caching.
+ifneq ($(GOPATH),)
+# CircleCI's gopath is readonly and readonly gopaths are incompatible with go modules so don't
+# volume mount the cache in that environment
+ifndef CIRCLECI
+	# If the environment is using multiple comma-separated directories for gopath, use the first one, as that
+	# is the default one used by go modules.
+	LOCAL_GOPATH = $(shell echo $(GOPATH) | cut -d':' -f1)
+	EXTRA_DOCKER_ARGS += -v $(LOCAL_GOPATH)/pkg/mod:/go/pkg/mod:rw
+endif
 endif
 
 DOCKER_RUN := mkdir -p .go-pkg-cache && \
@@ -104,17 +112,28 @@ sub-build-%:
 # Default the typha repo and version but allow them to be overridden
 TYPHA_BRANCH?=$(shell git rev-parse --abbrev-ref HEAD)
 TYPHA_REPO?=github.com/projectcalico/typha
-TYPHA_VERSION?=v0.0.0-$(shell git ls-remote git@github.com:projectcalico/typha $(TYPHA_BRANCH) 2>/dev/null | cut -f 1)
+TYPHA_VERSION?=$(shell git ls-remote git@github.com:projectcalico/typha $(TYPHA_BRANCH) 2>/dev/null | cut -f 1)
 TYPHA_OLDVER?=$(shell go list -m -f "{{.Version}}" github.com/projectcalico/typha)
 
 ## Update typha pin in go.mod
 update-typha:
 	$(DOCKER_RUN) $(CALICO_BUILD) sh -c '\
-        if [ $(TYPHA_VERSION) != $(TYPHA_OLDVER) ]; then \
+	if [[ ! -z "$(TYPHA_VERSION)" ]] && [[ "$(TYPHA_VERSION)" != "$(TYPHA_OLDVER)" ]]; then \
         	echo "Updating typha version $(TYPHA_OLDVER) to $(TYPHA_VERSION) from $(TYPHA_REPO)"; \
                 go mod edit -droprequire github.com/projectcalico/typha; \
                 go get $(TYPHA_REPO)@$(TYPHA_VERSION); \
 	fi'
+
+git-status:
+	git status --porcelain
+
+git-commit:
+	git diff-index --quiet HEAD || git commit -m "Semaphore Automatic Update" --author "Semaphore Automatic Update <marvin@tigera.io>" go.mod go.sum
+
+git-push:
+	git push
+
+commit-pin-updates: update-typha git-status ci git-commit git-push
 
 bin/confd-$(ARCH): $(SRC_FILES)
 	$(DOCKER_RUN) $(CALICO_BUILD) sh -c 'go build -v -i -o $@ $(LDFLAGS) "$(PACKAGE_NAME)" && \
