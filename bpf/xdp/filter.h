@@ -12,20 +12,26 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <linux/bpf.h>
 #include "../include/bpf.h"
 
-#define ENVOY_IP 0x100007f
-#define ENVOY_PORT 0x993a
-
-struct sock_key {
-	__u32 ip4;
-	__u32 port;
-	__u32 envoy_side;
+struct protoport {
+	__u16 proto;
+	__u16 port;
 };
 
-struct bpf_map_def __attribute__((section("maps"))) calico_sock_map = {
-	.type           = BPF_MAP_TYPE_SOCKHASH,
-	.key_size       = sizeof(struct sock_key),
+struct bpf_map_def __attribute__((section("maps"))) calico_prefilter_v4 = {
+	.type           = BPF_MAP_TYPE_LPM_TRIE,
+	.key_size       = sizeof(union ip4_bpf_lpm_trie_key),
 	.value_size     = sizeof(__u32),
+	.max_entries    = 10240,
+	.map_flags      = BPF_F_NO_PREALLOC,
+};
+
+struct bpf_map_def __attribute__((section("maps"))) calico_failsafe_ports = {
+	.type           = BPF_MAP_TYPE_HASH,
+	.key_size       = sizeof(struct protoport),
+	.value_size     = 1,
 	.max_entries    = 65535,
+	.map_flags      = BPF_F_NO_PREALLOC,
 };

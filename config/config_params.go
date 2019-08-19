@@ -233,7 +233,7 @@ type Config struct {
 	IptablesNATOutgoingInterfaceFilter string `config:"iface-param;"`
 
 	SidecarAccelerationEnabled bool `config:"bool;false"`
-	XDPEnabled                 bool `config:"bool;false"`
+	XDPEnabled                 bool `config:"bool;true"`
 	GenericXDPEnabled          bool `config:"bool;false"`
 
 	loadClientConfigFromEnvironment func() (*apiconfig.CalicoAPIConfig, error)
