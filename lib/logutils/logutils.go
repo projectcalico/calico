@@ -185,11 +185,12 @@ func (hook ContextHook) Fire(entry *log.Entry) error {
 // - using strings.LastIndex(): ~10x slower
 // - omitting the package:      no benefit
 func shouldSkipFrame(frame runtime.Frame) bool {
-	return strings.HasSuffix(frame.File, "github.com/projectcalico/libcalico-go/lib/logutils/logutils.go") ||
-		strings.HasSuffix(frame.File, "github.com/sirupsen/logrus/hooks.go") ||
-		strings.HasSuffix(frame.File, "github.com/sirupsen/logrus/entry.go") ||
-		strings.HasSuffix(frame.File, "github.com/sirupsen/logrus/logger.go") ||
-		strings.HasSuffix(frame.File, "github.com/sirupsen/logrus/exported.go")
+	return strings.HasSuffix(frame.File, "projectcalico/libcalico-go/lib/logutils/logutils.go") ||
+		strings.HasSuffix(frame.File, "sirupsen/logrus/hooks.go") ||
+		strings.HasSuffix(frame.File, "logrus/hooks.go") ||
+		strings.HasSuffix(frame.File, "sirupsen/logrus/entry.go") ||
+		strings.HasSuffix(frame.File, "sirupsen/logrus/logger.go") ||
+		strings.HasSuffix(frame.File, "sirupsen/logrus/exported.go")
 }
 
 type QueuedLog struct {
