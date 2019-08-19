@@ -27,6 +27,11 @@ import (
 )
 
 var _ = Describe("Endpoints", func() {
+	const (
+		ProtoUDP  = 17
+		ProtoIPIP = 4
+	)
+
 	for _, trueOrFalse := range []bool{true, false} {
 		kubeIPVSEnabled := trueOrFalse
 		var rrConfigNormalMangleReturn = Config{
@@ -63,6 +68,12 @@ var _ = Describe("Endpoints", func() {
 		var renderer RuleRenderer
 		var epMarkMapper EndpointMarkMapper
 
+		dropIPIPRule := Rule{
+			Match:   Match().ProtocolNum(ProtoIPIP),
+			Action:  DropAction{},
+			Comment: "Drop IPinIP encapped packets originating in pods",
+		}
+
 		Context("with normal config", func() {
 			BeforeEach(func() {
 				renderer = NewRenderer(rrConfigNormalMangleReturn)
@@ -70,7 +81,7 @@ var _ = Describe("Endpoints", func() {
 					rrConfigNormalMangleReturn.IptablesMarkNonCaliEndpoint)
 			})
 
-			It("Song should render a minimal workload endpoint", func() {
+			It("should render a minimal workload endpoint", func() {
 				Expect(renderer.WorkloadEndpointToIptablesChains(
 					"cali1234", epMarkMapper,
 					true,
@@ -101,6 +112,7 @@ var _ = Describe("Endpoints", func() {
 								Action: DropAction{}},
 
 							{Action: ClearMarkAction{Mark: 0x8}},
+							dropIPIPRule,
 							{Action: DropAction{},
 								Comment: "Drop if no profiles matched"},
 						},
@@ -204,6 +216,7 @@ var _ = Describe("Endpoints", func() {
 								Action: DropAction{}},
 
 							{Action: ClearMarkAction{Mark: 0x8}},
+							dropIPIPRule,
 
 							{Comment: "Start of policies",
 								Action: ClearMarkAction{Mark: 0x10}},
@@ -511,6 +524,7 @@ var _ = Describe("Endpoints", func() {
 								Action: ReturnAction{}},
 
 							{Action: ClearMarkAction{Mark: 0x8}},
+
 							{Action: DropAction{},
 								Comment: "Drop if no profiles matched"},
 						},
@@ -525,6 +539,8 @@ var _ = Describe("Endpoints", func() {
 								Action: ReturnAction{}},
 
 							{Action: ClearMarkAction{Mark: 0x8}},
+							dropIPIPRule,
+
 							{Action: DropAction{},
 								Comment: "Drop if no profiles matched"},
 						},
