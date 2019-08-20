@@ -335,7 +335,7 @@ func (r *RouteTable) Apply() error {
 					logCxt.Info("Interface down, will retry if it goes up.")
 					break
 				} else if err != nil {
-					logCxt.WithError(err).Warn("Failed to syncronise routes.")
+					logCxt.WithError(err).Warn("Failed to synchronise routes.")
 					retries--
 					continue
 				}
@@ -355,7 +355,7 @@ func (r *RouteTable) Apply() error {
 				graceIfaces++
 				return nil
 			} else if err != nil {
-				logCxt.WithError(err).Warn("Failed to syncronise routes.")
+				logCxt.WithError(err).Warn("Failed to synchronise routes.")
 				retries--
 				continue
 			}
