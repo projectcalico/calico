@@ -18,6 +18,8 @@ import (
 	"regexp"
 
 	. "github.com/projectcalico/felix/config"
+	"github.com/projectcalico/felix/testutils"
+	"github.com/projectcalico/libcalico-go/lib/apiconfig"
 
 	"net"
 	"reflect"
@@ -53,6 +55,7 @@ var _ = Describe("FelixConfig vs ConfigParams parity", func() {
 		"IpInIpTunnelAddr",
 		"IPv4VXLANTunnelAddr",
 		"VXLANTunnelMACAddr",
+		"loadClientConfigFromEnvironment",
 	}
 	cpFieldNameToFC := map[string]string{
 		"IpInIpEnabled":                      "IPIPEnabled",
@@ -425,6 +428,87 @@ var _ = Describe("DatastoreConfig tests", func() {
 		})
 		It("should leave node polling enabled", func() {
 			Expect(c.DatastoreConfig().Spec.K8sDisableNodePoll).To(BeTrue())
+		})
+	})
+
+	Describe("with the configuration set only from the common calico configuration", func() {
+		BeforeEach(func() {
+			c = New()
+			c.SetLoadClientConfigFromEnvironmentFunction(func() (*apiconfig.CalicoAPIConfig, error) {
+				return &apiconfig.CalicoAPIConfig{
+					Spec: apiconfig.CalicoAPIConfigSpec{
+						DatastoreType: apiconfig.EtcdV3,
+						EtcdConfig: apiconfig.EtcdConfig{
+							EtcdEndpoints:  "http://localhost:1234",
+							EtcdKeyFile:    testutils.TestDataFile("etcdkeyfile.key"),
+							EtcdCertFile:   testutils.TestDataFile("etcdcertfile.cert"),
+							EtcdCACertFile: testutils.TestDataFile("etcdcacertfile.cert"),
+						},
+					},
+				}, nil
+			})
+		})
+		It("sets the configuration options", func() {
+			spec := c.DatastoreConfig().Spec
+			Expect(spec.DatastoreType).To(Equal(apiconfig.EtcdV3))
+			Expect(spec.EtcdEndpoints).To(Equal("http://localhost:1234"))
+			Expect(spec.EtcdKeyFile).To(Equal(testutils.TestDataFile("etcdkeyfile.key")))
+			Expect(spec.EtcdCertFile).To(Equal(testutils.TestDataFile("etcdcertfile.cert")))
+			Expect(spec.EtcdCACertFile).To(Equal(testutils.TestDataFile("etcdcacertfile.cert")))
+		})
+	})
+	Describe("without setting the DatastoreType and setting the etcdv3 suboptions through the felix configuration", func() {
+		BeforeEach(func() {
+			c = New()
+			c.UpdateFrom(map[string]string{
+				"EtcdEndpoints": "http://localhost:1234",
+				"EtcdKeyFile":   testutils.TestDataFile("etcdkeyfile.key"),
+				"EtcdCertFile":  testutils.TestDataFile("etcdcertfile.cert"),
+				"EtcdCaFile":    testutils.TestDataFile("etcdcacertfile.cert"),
+			}, EnvironmentVariable)
+		})
+		It("sets the etcd suboptions", func() {
+			spec := c.DatastoreConfig().Spec
+			Expect(spec.DatastoreType).To(Equal(apiconfig.EtcdV3))
+			Expect(spec.EtcdEndpoints).To(Equal("http://localhost:1234/"))
+			Expect(spec.EtcdKeyFile).To(Equal(testutils.TestDataFile("etcdkeyfile.key")))
+			Expect(spec.EtcdCertFile).To(Equal(testutils.TestDataFile("etcdcertfile.cert")))
+			Expect(spec.EtcdCACertFile).To(Equal(testutils.TestDataFile("etcdcacertfile.cert")))
+		})
+	})
+	Describe("with the configuration set from the common calico configuration and the felix configuration", func() {
+		BeforeEach(func() {
+			c = New()
+
+			c.SetLoadClientConfigFromEnvironmentFunction(func() (*apiconfig.CalicoAPIConfig, error) {
+				return &apiconfig.CalicoAPIConfig{
+					Spec: apiconfig.CalicoAPIConfigSpec{
+						DatastoreType: apiconfig.Kubernetes,
+						EtcdConfig: apiconfig.EtcdConfig{
+							EtcdEndpoints:  "http://localhost:5432",
+							EtcdKeyFile:    testutils.TestDataFile("etcdkeyfileother.key"),
+							EtcdCertFile:   testutils.TestDataFile("etcdcertfileother.cert"),
+							EtcdCACertFile: testutils.TestDataFile("etcdcacertfileother.cert"),
+						},
+					},
+				}, nil
+			})
+
+			c.UpdateFrom(map[string]string{
+				"DatastoreType": "etcdv3",
+				"EtcdEndpoints": "http://localhost:1234",
+				"EtcdKeyFile":   testutils.TestDataFile("etcdkeyfile.key"),
+				"EtcdCertFile":  testutils.TestDataFile("etcdcertfile.cert"),
+				"EtcdCaFile":    testutils.TestDataFile("etcdcacertfile.cert"),
+			}, EnvironmentVariable)
+		})
+		It("sets the configuration to what the felix configuration is", func() {
+			spec := c.DatastoreConfig().Spec
+			Expect(spec.DatastoreType).To(Equal(apiconfig.EtcdV3))
+			Expect(spec.EtcdEndpoints).To(Equal("http://localhost:1234/"))
+			Expect(spec.EtcdKeyFile).To(Equal(testutils.TestDataFile("etcdkeyfile.key")))
+			Expect(spec.EtcdCertFile).To(Equal(testutils.TestDataFile("etcdcertfile.cert")))
+			Expect(spec.EtcdCACertFile).To(Equal(testutils.TestDataFile("etcdcacertfile.cert")))
 		})
 	})
 })

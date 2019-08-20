@@ -233,6 +233,8 @@ type Config struct {
 	SidecarAccelerationEnabled bool `config:"bool;false"`
 	XDPEnabled                 bool `config:"bool;false"`
 	GenericXDPEnabled          bool `config:"bool;false"`
+
+	loadClientConfigFromEnvironment func() (*apiconfig.CalicoAPIConfig, error)
 }
 
 type ProtoPort struct {
@@ -399,31 +401,48 @@ func (config *Config) DatastoreConfig() apiconfig.CalicoAPIConfig {
 	// To achieve that, first build a CalicoAPIConfig using libcalico-go's
 	// LoadClientConfigFromEnvironment - which means incorporating defaults and CALICO_XXX_YYY
 	// and XXX_YYY variables.
-	cfg, err := apiconfig.LoadClientConfigFromEnvironment()
+	cfg, err := config.loadClientConfigFromEnvironment()
 	if err != nil {
 		log.WithError(err).Panic("Failed to create datastore config")
 	}
 
 	// Now allow FELIX_XXXYYY variables or XxxYyy config file settings to override that, in the
-	// etcd case.
-	if config.setByConfigFileOrEnvironment("DatastoreType") && config.DatastoreType == "etcdv3" {
-		cfg.Spec.DatastoreType = apiconfig.EtcdV3
-		// Endpoints.
-		if config.setByConfigFileOrEnvironment("EtcdEndpoints") && len(config.EtcdEndpoints) > 0 {
-			cfg.Spec.EtcdEndpoints = strings.Join(config.EtcdEndpoints, ",")
-		} else if config.setByConfigFileOrEnvironment("EtcdAddr") {
-			cfg.Spec.EtcdEndpoints = config.EtcdScheme + "://" + config.EtcdAddr
+	// etcd case. Note that that etcd options are set even if the DatastoreType isn't etcdv3.
+	// This allows the user to rely the default DatastoreType being etcdv3 and still being able
+	// to configure the other etcdv3 options. As of the time of this code change, the etcd options
+	// have no affect if the DatastoreType is not etcdv3.
+
+	// Datastore type, either etcdv3 or kubernetes
+	if config.setByConfigFileOrEnvironment("DatastoreType") {
+		log.Infof("Overriding DatastoreType from felix config to %s", config.DatastoreType)
+		if config.DatastoreType == string(apiconfig.EtcdV3) {
+			cfg.Spec.DatastoreType = apiconfig.EtcdV3
+		} else if config.DatastoreType == string(apiconfig.Kubernetes) {
+			cfg.Spec.DatastoreType = apiconfig.Kubernetes
 		}
-		// TLS.
-		if config.setByConfigFileOrEnvironment("EtcdKeyFile") {
-			cfg.Spec.EtcdKeyFile = config.EtcdKeyFile
-		}
-		if config.setByConfigFileOrEnvironment("EtcdCertFile") {
-			cfg.Spec.EtcdCertFile = config.EtcdCertFile
-		}
-		if config.setByConfigFileOrEnvironment("EtcdCaFile") {
-			cfg.Spec.EtcdCACertFile = config.EtcdCaFile
-		}
+	}
+
+	// Endpoints.
+	if config.setByConfigFileOrEnvironment("EtcdEndpoints") && len(config.EtcdEndpoints) > 0 {
+		log.Infof("Overriding EtcdEndpoints from felix config to %s", config.EtcdEndpoints)
+		cfg.Spec.EtcdEndpoints = strings.Join(config.EtcdEndpoints, ",")
+	} else if config.setByConfigFileOrEnvironment("EtcdAddr") {
+		etcdEndpoints := config.EtcdScheme + "://" + config.EtcdAddr
+		log.Infof("Overriding EtcdEndpoints from felix config to %s", etcdEndpoints)
+		cfg.Spec.EtcdEndpoints = etcdEndpoints
+	}
+	// TLS.
+	if config.setByConfigFileOrEnvironment("EtcdKeyFile") {
+		log.Infof("Overriding EtcdKeyFile from felix config to %s", config.EtcdKeyFile)
+		cfg.Spec.EtcdKeyFile = config.EtcdKeyFile
+	}
+	if config.setByConfigFileOrEnvironment("EtcdCertFile") {
+		log.Infof("Overriding EtcdCertFile from felix config to %s", config.EtcdCertFile)
+		cfg.Spec.EtcdCertFile = config.EtcdCertFile
+	}
+	if config.setByConfigFileOrEnvironment("EtcdCaFile") {
+		log.Infof("Overriding EtcdCaFile from felix config to %s", config.EtcdCaFile)
+		cfg.Spec.EtcdCACertFile = config.EtcdCaFile
 	}
 
 	if !config.IpInIpEnabled && !config.VXLANEnabled {
@@ -620,6 +639,10 @@ func (config *Config) RawValues() map[string]string {
 	return config.rawValues
 }
 
+func (config *Config) SetLoadClientConfigFromEnvironmentFunction(fnc func() (*apiconfig.CalicoAPIConfig, error)) {
+	config.loadClientConfigFromEnvironment = fnc
+}
+
 func New() *Config {
 	if knownParams == nil {
 		loadParams()
@@ -638,6 +661,8 @@ func New() *Config {
 		hostname = strings.ToLower(os.Getenv("HOSTNAME"))
 	}
 	p.FelixHostname = hostname
+	p.loadClientConfigFromEnvironment = apiconfig.LoadClientConfigFromEnvironment
+
 	return p
 }
 
