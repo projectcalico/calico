@@ -118,6 +118,9 @@ type RouteTable struct {
 
 	deviceRouteSourceAddress net.IP
 
+	deviceRouteProtocol  int
+	removeExternalRoutes bool
+
 	// Testing shims, swapped with mock versions for UT
 	newNetlinkHandle  func() (HandleIface, error)
 	addStaticARPEntry func(cidr ip.CIDR, destMAC net.HardwareAddr, ifaceName string) error
@@ -125,7 +128,7 @@ type RouteTable struct {
 	time              timeIface
 }
 
-func New(interfacePrefixes []string, ipVersion uint8, vxlan bool, netlinkTimeout time.Duration, deviceRouteSourceAddress net.IP) *RouteTable {
+func New(interfacePrefixes []string, ipVersion uint8, vxlan bool, netlinkTimeout time.Duration, deviceRouteSourceAddress net.IP, deviceRouteProtocol int, removeExternalRoutes bool) *RouteTable {
 	return NewWithShims(
 		interfacePrefixes,
 		ipVersion,
@@ -136,6 +139,8 @@ func New(interfacePrefixes []string, ipVersion uint8, vxlan bool, netlinkTimeout
 		conntrack.New(),
 		realTime{},
 		deviceRouteSourceAddress,
+		deviceRouteProtocol,
+		removeExternalRoutes,
 	)
 }
 
@@ -150,6 +155,8 @@ func NewWithShims(
 	conntrack conntrackIface,
 	timeShim timeIface,
 	deviceRouteSourceAddress net.IP,
+	deviceRouteProtocol int,
+	removeExternalRoutes bool,
 ) *RouteTable {
 	prefixSet := set.New()
 	regexpParts := []string{}
@@ -181,15 +188,17 @@ func NewWithShims(
 		ifaceNameToFirstSeen:        map[string]time.Time{},
 		pendingIfaceNameToTargets:   map[string][]Target{},
 		pendingIfaceNameToL2Targets: map[string][]L2Target{},
-		dirtyIfaces:                 set.New(),
-		pendingConntrackCleanups:    map[ip.Addr]chan struct{}{},
-		newNetlinkHandle:            newNetlinkHandle,
-		netlinkTimeout:              netlinkTimeout,
-		addStaticARPEntry:           addStaticARPEntry,
-		conntrack:                   conntrack,
-		time:                        timeShim,
-		vxlan:                       vxlan,
-		deviceRouteSourceAddress:    deviceRouteSourceAddress,
+		dirtyIfaces:              set.New(),
+		pendingConntrackCleanups: map[ip.Addr]chan struct{}{},
+		newNetlinkHandle:         newNetlinkHandle,
+		netlinkTimeout:           netlinkTimeout,
+		addStaticARPEntry:        addStaticARPEntry,
+		conntrack:                conntrack,
+		time:                     timeShim,
+		vxlan:                    vxlan,
+		deviceRouteSourceAddress: deviceRouteSourceAddress,
+		deviceRouteProtocol:      deviceRouteProtocol,
+		removeExternalRoutes:     removeExternalRoutes,
 	}
 }
 
@@ -519,6 +528,12 @@ func (r *RouteTable) syncRoutesForLink(ifaceName string) error {
 			dest = ip.CIDRFromIPNet(route.Dst)
 		}
 		logCxt := logCxt.WithField("dest", dest)
+		// Check if we should remove routes not added by us
+		if !r.removeExternalRoutes && route.Protocol != r.deviceRouteProtocol {
+			logCxt.Info("Syncing routes: not removing route as its not marked as Felix route")
+			continue
+		}
+
 		routeExpected := expectedCIDRs.Contains(dest)
 		var routeProblems []string
 		if !routeExpected {
@@ -526,6 +541,9 @@ func (r *RouteTable) syncRoutesForLink(ifaceName string) error {
 		}
 		if !r.deviceRouteSourceAddress.Equal(route.Src) {
 			routeProblems = append(routeProblems, "incorrect source address")
+		}
+		if r.deviceRouteProtocol != route.Protocol {
+			routeProblems = append(routeProblems, "incorrect protocol")
 		}
 		if len(routeProblems) == 0 {
 			alreadyCorrectCIDRs.Add(dest)
@@ -561,7 +579,7 @@ func (r *RouteTable) syncRoutesForLink(ifaceName string) error {
 				LinkIndex: linkAttrs.Index,
 				Dst:       &ipNet,
 				Type:      syscall.RTN_UNICAST,
-				Protocol:  syscall.RTPROT_BOOT,
+				Protocol:  r.deviceRouteProtocol,
 				Scope:     netlink.SCOPE_LINK,
 			}
 
