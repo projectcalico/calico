@@ -1,5 +1,5 @@
-hash: 7f0285e3ce3020eb8dd5c662cb8a68c8e166173e33258e58c7a2b5a8248ea9fc
-updated: 2019-08-14T04:08:31.993507292Z
+hash: 8bf74b679935a7f8e0c6a96999f75c83d303f1c6d9b3599f7608d0eaeeceba76
+updated: 2019-08-20T04:05:31.526407484Z
 imports:
 - name: github.com/docopt/docopt-go
   version: 784ddc588536785e7299f7272f39101f7faccc3f
@@ -28,7 +28,7 @@ imports:
 - name: github.com/lyft/protoc-gen-validate
   version: 930a67cf7ba41b9d9436ad7a1be70a5d5ff6e1fc
 - name: github.com/onsi/gomega
-  version: 90e289841c1ed79b7a598a7cd9959750cb5e89e2
+  version: 27d50ea6455b212cf516609fa58b2b5dce1abc81
   subpackages:
   - format
   - internal/assertion
@@ -42,7 +42,7 @@ imports:
   - matchers/support/goraph/util
   - types
 - name: github.com/projectcalico/libcalico-go
-  version: 9f88ebd570c5947489ff1300ae359f3ea6aee480
+  version: 9991f8f632312bdf32ffd59175c534075bb672bc
   subpackages:
   - lib/apis/v3
   - lib/client
