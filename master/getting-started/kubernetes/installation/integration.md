@@ -118,8 +118,8 @@ You can download the [latest relase from GitHub](https://github.com/projectcalic
 Download the correct binaries for your architecture, and place them at `/opt/cni/bin/calico` and `/opt/cni/bin/calico-ipam`.
 {% else %}
 ```bash
-wget -N https://github.com/projectcalico/cni-plugin/releases/download/{{site.data.versions[page.version].first.components["calico/cni"].version}}/calico-amd64
-wget -N https://github.com/projectcalico/cni-plugin/releases/download/{{site.data.versions[page.version].first.components["calico/cni"].version}}/calico-ipam-amd64
+wget -N https://github.com/projectcalico/cni-plugin/releases/download/{{site.data.versions[page.version].first.components["cni"].version}}/calico-amd64
+wget -N https://github.com/projectcalico/cni-plugin/releases/download/{{site.data.versions[page.version].first.components["cni"].version}}/calico-ipam-amd64
 mv ./calico-amd64 /opt/cni/bin/calico
 mv ./calico-ipam-amd64 /opt/cni/bin/calico-ipam
 chmod +x /opt/cni/bin/calico /opt/cni/bin/calico-ipam

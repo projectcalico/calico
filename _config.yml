@@ -18,7 +18,8 @@ prodnamedash: calico
 nodecontainer: calico/node
 noderunning: calico-node
 
-# Image names in case the host changes
+# A lookup map for imageNames based on component names.
+# Keys should be camel-cased *and* match the keys used in versions.yml components.
 imageNames:
   node: calico/node
   calicoctl: calico/ctl

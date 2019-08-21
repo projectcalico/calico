@@ -17,7 +17,7 @@ def gen_values_master(versions, imageNames, imageRegistry)
 
     node:
       image: #{imageRegistry}#{imageNames.fetch("node")}
-      tag: #{versions.fetch("calico/node")}
+      tag: #{versions.fetch("node")}
       env:
         # Optional environment variables for configuring Calico node.
         # These should match the EnvVar spec of the corev1 Kubernetes API. For example:
@@ -36,7 +36,7 @@ def gen_values_master(versions, imageNames, imageRegistry)
         #   value: debug
     cni:
       image: #{imageRegistry}#{imageNames.fetch("cni")}
-      tag: #{versions.fetch("calico/cni")}
+      tag: #{versions.fetch("cni")}
       env:
         # Optional environment variables for configuring Calico CNI.
         # These should match the EnvVar spec of the corev1 Kubernetes API. For example:
@@ -44,7 +44,7 @@ def gen_values_master(versions, imageNames, imageRegistry)
         #   value: bar
     kubeControllers:
       image: #{imageRegistry}#{imageNames.fetch("kubeControllers")}
-      tag: #{versions.fetch("calico/kube-controllers")}
+      tag: #{versions.fetch("kubeControllers")}
       env:
         # Optional environment variables for configuring Calico kube controllers.
         # These should match the EnvVar spec of the corev1 Kubernetes API. For example:
@@ -60,7 +60,7 @@ def gen_values_master(versions, imageNames, imageRegistry)
         #   value: bar
     dikastes:
       image: #{imageRegistry}#{imageNames.fetch("dikastes")}
-      tag: #{versions.fetch("calico/dikastes")}
+      tag: #{versions.fetch("dikastes")}
     flexvol:
       image: #{imageRegistry}#{imageNames.fetch("flexvol")}
       tag: #{versions.fetch("flexvol")}
