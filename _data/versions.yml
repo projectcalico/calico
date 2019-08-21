@@ -1428,7 +1428,7 @@ v3.0:
       url: https://github.com/projectcalico/calico-bgp-daemon/releases/tag/v0.2.1
     networking-calico:
       version: 1.4.3
-      url: http://git.openstack.org/cgit/openstack/networking-calico/commit/?h=1.4.3
+      url: https://opendev.org/openstack/networking-calico/src/tag/1.4.3
     flannel:
       version: v0.9.1
 
