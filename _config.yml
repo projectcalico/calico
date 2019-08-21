@@ -18,8 +18,7 @@ prodnamedash: calico
 nodecontainer: calico/node
 noderunning: calico-node
 
-# A lookup map for imageNames based on component names.
-# Keys should be camel-cased *and* match the keys used in versions.yml components.
+# DEPRECATED: use imageNames stored in per-directory defaults, e.g. 'page.imageNames'
 imageNames:
   node: calico/node
   calicoctl: calico/ctl
@@ -55,6 +54,20 @@ defaults:
       version: master
       sitemap: true
       registry:
+      # A lookup map for imageNames based on component names.
+      # Keys should be camel-cased *and* match the keys used in versions.yml components.
+      imageNames:
+        node: calico/node
+        calicoctl: calico/ctl
+        typha: calico/typha
+        cni: calico/cni
+        kubeControllers: calico/kube-controllers
+        calico-upgrade: calico/upgrade
+        flannel: quay.io/coreos/flannel
+        dikastes: calico/dikastes
+        pilot-webhook: calico/pilot-webhook
+        flexvol: calico/pod2daemon-flexvol
+
   -
     scope:
       path: master

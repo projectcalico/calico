@@ -1,5 +1,5 @@
       - name: dikastes
-        image: {{page.registry}}{{site.imageNames["dikastes"]}}:{{site.data.versions[page.version].first.components["dikastes"].version}}
+        image: {{page.registry}}{{page.imageNames["dikastes"]}}:{{site.data.versions[page.version].first.components["dikastes"].version}}
         args: ["server", "-l", "/var/run/dikastes/dikastes.sock", "-d", "/var/run/felix/nodeagent/socket"]
         securityContext:
           runAsNonRoot: true
