@@ -29,6 +29,7 @@ import (
 	"log/syslog"
 	"os"
 	"os/exec"
+	"regexp"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -364,11 +365,24 @@ func logToSys(caller, inp, opts string) {
 	}
 
 	opt := strings.Join([]string{caller, inp, opts}, "|")
+	opt = sanitizeString(opt)
+
 	if configuration.LogLevel == LOG_LEVEL_WARN {
 		logWriter.Warning(opt)
 	} else {
 		logWriter.Info(opt)
 	}
+}
+
+// sanitizeString removes any characters that are not numbers or letters from a string.
+func sanitizeString(s string) string {
+	r, err := regexp.Compile("[^a-zA-Z0-9]+")
+	if err == nil {
+		out := r.ReplaceAllString(s, "")
+	} else {
+		out := s
+	}
+	return out
 }
 
 // addCredentialFile is used to create a credential file when a workload with the flex-volume volume mounted is created.
