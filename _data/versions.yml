@@ -917,14 +917,14 @@ v3.2:
     calico/cni:
       version: v3.2.8
       url: https://github.com/projectcalico/cni-plugin/releases/tag/v3.2.8
-      download_calico_url: https://github.com/projectcalico/cni-plugin/releases/download/v3.2.8/calico
-      download_calico_ipam_url: https://github.com/projectcalico/cni-plugin/releases/download/v3.2.8/calico-ipam
+      download_calico_url: https://github.com/projectcalico/cni-plugin/releases/download/v3.2.8/calico-amd64
+      download_calico_ipam_url: https://github.com/projectcalico/cni-plugin/releases/download/v3.2.8/calico-ipam-amd64
     calico/kube-controllers:
       version: v3.2.8
       url: https://github.com/projectcalico/kube-controllers/releases/tag/v3.2.8
     networking-calico:
       version: 3.2.0
-      url: http://git.openstack.org/cgit/openstack/networking-calico/commit/?h=3.2.0
+      url: https://opendev.org/openstack/networking-calico/src/tag/3.2.0
     typha:
       version: v3.2.8
       url: https://github.com/projectcalico/typha/releases/tag/v3.2.8
@@ -952,8 +952,8 @@ v3.2:
     calico/cni:
       version: v3.2.7
       url: https://github.com/projectcalico/cni-plugin/releases/tag/v3.2.7
-      download_calico_url: https://github.com/projectcalico/cni-plugin/releases/download/v3.2.7/calico
-      download_calico_ipam_url: https://github.com/projectcalico/cni-plugin/releases/download/v3.2.7/calico-ipam
+      download_calico_url: https://github.com/projectcalico/cni-plugin/releases/download/v3.2.7/calico-amd64
+      download_calico_ipam_url: https://github.com/projectcalico/cni-plugin/releases/download/v3.2.7/calico-ipam-amd64
     calico/kube-controllers:
       version: v3.2.7
       url: https://github.com/projectcalico/kube-controllers/releases/tag/v3.2.7
@@ -987,8 +987,8 @@ v3.2:
     calico/cni:
       version: v3.2.6
       url: https://github.com/projectcalico/cni-plugin/releases/tag/v3.2.6
-      download_calico_url: https://github.com/projectcalico/cni-plugin/releases/download/v3.2.6/calico
-      download_calico_ipam_url: https://github.com/projectcalico/cni-plugin/releases/download/v3.2.6/calico-ipam
+      download_calico_url: https://github.com/projectcalico/cni-plugin/releases/download/v3.2.6/calico-amd64
+      download_calico_ipam_url: https://github.com/projectcalico/cni-plugin/releases/download/v3.2.6/calico-ipam-amd64
     calico/kube-controllers:
       version: v3.2.6
       url: https://github.com/projectcalico/kube-controllers/releases/tag/v3.2.6
@@ -1022,8 +1022,8 @@ v3.2:
     calico/cni:
       version: v3.2.5
       url: https://github.com/projectcalico/cni-plugin/releases/tag/v3.2.5
-      download_calico_url: https://github.com/projectcalico/cni-plugin/releases/download/v3.2.5/calico
-      download_calico_ipam_url: https://github.com/projectcalico/cni-plugin/releases/download/v3.2.5/calico-ipam
+      download_calico_url: https://github.com/projectcalico/cni-plugin/releases/download/v3.2.5/calico-amd64
+      download_calico_ipam_url: https://github.com/projectcalico/cni-plugin/releases/download/v3.2.5/calico-ipam-amd64
     calico/kube-controllers:
       version: v3.2.5
       url: https://github.com/projectcalico/kube-controllers/releases/tag/v3.2.5
@@ -1057,8 +1057,8 @@ v3.2:
     calico/cni:
       version: v3.2.4
       url: https://github.com/projectcalico/cni-plugin/releases/tag/v3.2.4
-      download_calico_url: https://github.com/projectcalico/cni-plugin/releases/download/v3.2.4/calico
-      download_calico_ipam_url: https://github.com/projectcalico/cni-plugin/releases/download/v3.2.4/calico-ipam
+      download_calico_url: https://github.com/projectcalico/cni-plugin/releases/download/v3.2.4/calico-amd64
+      download_calico_ipam_url: https://github.com/projectcalico/cni-plugin/releases/download/v3.2.4/calico-ipam-amd64
     calico/kube-controllers:
       version: v3.2.4
       url: https://github.com/projectcalico/kube-controllers/releases/tag/v3.2.4
@@ -1092,8 +1092,8 @@ v3.2:
     calico/cni:
       version: v3.2.3
       url: https://github.com/projectcalico/cni-plugin/releases/tag/v3.2.3
-      download_calico_url: https://github.com/projectcalico/cni-plugin/releases/download/v3.2.3/calico
-      download_calico_ipam_url: https://github.com/projectcalico/cni-plugin/releases/download/v3.2.3/calico-ipam
+      download_calico_url: https://github.com/projectcalico/cni-plugin/releases/download/v3.2.3/calico-amd64
+      download_calico_ipam_url: https://github.com/projectcalico/cni-plugin/releases/download/v3.2.3/calico-ipam-amd64
     calico/kube-controllers:
       version: v3.2.3
       url: https://github.com/projectcalico/kube-controllers/releases/tag/v3.2.3
