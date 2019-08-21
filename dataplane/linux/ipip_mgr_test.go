@@ -442,6 +442,7 @@ func (d *mockIPIPDataplane) RunCmd(name string, args ...string) error {
 
 type mockLink struct {
 	attrs netlink.LinkAttrs
+	typ   string
 }
 
 func (l *mockLink) Attrs() *netlink.LinkAttrs {
@@ -449,5 +450,9 @@ func (l *mockLink) Attrs() *netlink.LinkAttrs {
 }
 
 func (l *mockLink) Type() string {
-	return "not implemented"
+	if l.typ == "" {
+		return "not implemented"
+	}
+
+	return l.typ
 }

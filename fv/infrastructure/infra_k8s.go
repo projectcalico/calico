@@ -435,7 +435,7 @@ func (kds *K8sDatastoreInfra) AddNode(felix *Felix, idx int, needBGP bool) {
 		ObjectMeta: metav1.ObjectMeta{
 			Name: felix.Hostname,
 			Annotations: map[string]string{
-				"projectcalico.org/IPv4Address": felix.IP,
+				"projectcalico.org/IPv4Address": fmt.Sprintf("%s/%s", felix.IP, felix.IPPrefix),
 			},
 		},
 		Spec: v1.NodeSpec{PodCIDR: fmt.Sprintf("10.65.%d.0/24", idx)},

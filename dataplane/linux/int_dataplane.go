@@ -193,13 +193,11 @@ type InternalDataplane struct {
 
 	endpointStatusCombiner *endpointStatusCombiner
 
-	allManagers []Manager
-
-	ruleRenderer rules.RuleRenderer
+	allManagers             []Manager
+	managersWithRouteTables []ManagerWithRouteTables
+	ruleRenderer            rules.RuleRenderer
 
 	interfacePrefixes []string
-
-	routeTables []*routetable.RouteTable
 
 	// dataplaneNeedsSync is set if the dataplane is dirty in some way, i.e. we need to
 	// call apply().
@@ -260,7 +258,6 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		applyThrottle:     throttle.New(10),
 	}
 	dp.applyThrottle.Refill() // Allow the first apply() immediately.
-
 	dp.ifaceMonitor.Callback = dp.onIfaceStateChange
 	dp.ifaceMonitor.AddrCallback = dp.onIfaceAddrsChange
 
@@ -341,23 +338,17 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	dp.iptablesFilterTables = append(dp.iptablesFilterTables, filterTableV4)
 	dp.ipSets = append(dp.ipSets, ipSetsV4)
 
-	routeTableV4 := routetable.New(config.RulesConfig.WorkloadIfacePrefixes, 4, false, config.NetlinkTimeout, config.DeviceRouteSourceAddress, config.DeviceRouteProtocol, config.RemoveExternalRoutes)
-	dp.routeTables = append(dp.routeTables, routeTableV4)
-
 	if config.RulesConfig.VXLANEnabled {
-		routeTableVXLAN := routetable.New([]string{"vxlan.calico"}, 4, true, config.NetlinkTimeout, config.DeviceRouteSourceAddress, config.DeviceRouteProtocol, config.RemoveExternalRoutes)
-		dp.routeTables = append(dp.routeTables, routeTableVXLAN)
+		routeTableVXLAN := routetable.New([]string{"vxlan.calico"}, 4, true, config.NetlinkTimeout, config.DeviceRouteSourceAddress,
+			config.DeviceRouteProtocol, true)
+
 		vxlanManager := newVXLANManager(
 			ipSetsV4,
-			config.MaxIPSetSize,
-			config.Hostname,
 			routeTableVXLAN,
 			"vxlan.calico",
-			config.RulesConfig.VXLANVNI,
-			config.RulesConfig.VXLANPort,
-			config.ExternalNodesCidrs,
+			config,
 		)
-		go vxlanManager.KeepVXLANDeviceInSync(config.VXLANMTU)
+		go vxlanManager.KeepVXLANDeviceInSync(config.VXLANMTU, 10*time.Second)
 		dp.RegisterManager(vxlanManager)
 	} else {
 		// If VXLAN is not enabled, check to see if there is a VXLAN device and delete it if there is.
@@ -439,6 +430,9 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		ipSetsV4,
 		config.MaxIPSetSize))
 	dp.RegisterManager(newPolicyManager(rawTableV4, mangleTableV4, filterTableV4, ruleRenderer, 4, callbacks))
+
+	routeTableV4 := routetable.New(config.RulesConfig.WorkloadIfacePrefixes, 4, false, config.NetlinkTimeout,
+		config.DeviceRouteSourceAddress, config.DeviceRouteProtocol, config.RemoveExternalRoutes)
 	epManager := newEndpointManager(
 		rawTableV4,
 		mangleTableV4,
@@ -503,7 +497,6 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		dp.iptablesFilterTables = append(dp.iptablesFilterTables, filterTableV6)
 
 		routeTableV6 := routetable.New(config.RulesConfig.WorkloadIfacePrefixes, 6, false, config.NetlinkTimeout, config.DeviceRouteSourceAddress, config.DeviceRouteProtocol, config.RemoveExternalRoutes)
-		dp.routeTables = append(dp.routeTables, routeTableV6)
 
 		dp.RegisterManager(newIPSetsManager(ipSetsV6, config.MaxIPSetSize, callbacks))
 		dp.RegisterManager(newHostIPManager(
@@ -571,7 +564,26 @@ type Manager interface {
 	CompleteDeferredWork() error
 }
 
+type ManagerWithRouteTables interface {
+	Manager
+	GetRouteTables() []routeTable
+}
+
+func (d *InternalDataplane) routeTables() []routeTable {
+	var rts []routeTable
+	for _, mrts := range d.managersWithRouteTables {
+		rts = append(rts, mrts.GetRouteTables()...)
+	}
+
+	return rts
+}
+
 func (d *InternalDataplane) RegisterManager(mgr Manager) {
+	switch mgr.(type) {
+	case ManagerWithRouteTables:
+		log.WithField("manager", mgr).Debug("registering ManagerWithRouteTables")
+		d.managersWithRouteTables = append(d.managersWithRouteTables, mgr.(ManagerWithRouteTables))
+	}
 	d.allManagers = append(d.allManagers, mgr)
 }
 
@@ -845,8 +857,11 @@ func (d *InternalDataplane) loopUpdatingDataplane() {
 		for _, mgr := range d.allManagers {
 			mgr.OnUpdate(ifaceUpdate)
 		}
-		for _, routeTable := range d.routeTables {
-			routeTable.OnIfaceStateChanged(ifaceUpdate.Name, ifaceUpdate.State)
+
+		for _, mgr := range d.managersWithRouteTables {
+			for _, routeTable := range mgr.GetRouteTables() {
+				routeTable.OnIfaceStateChanged(ifaceUpdate.Name, ifaceUpdate.State)
+			}
 		}
 	}
 
@@ -1063,6 +1078,7 @@ func (d *InternalDataplane) apply() {
 	for _, mgr := range d.allManagers {
 		err := mgr.CompleteDeferredWork()
 		if err != nil {
+			log.WithField("manager", mgr).WithError(err).Debug("couldn't complete deferred work for manager, will try again later")
 			d.dataplaneNeedsSync = true
 		}
 	}
@@ -1097,7 +1113,7 @@ func (d *InternalDataplane) apply() {
 
 	if d.forceRouteRefresh {
 		// Refresh timer popped.
-		for _, r := range d.routeTables {
+		for _, r := range d.routeTables() {
 			// Queue a resync on the next Apply().
 			r.QueueResync()
 		}
@@ -1127,9 +1143,9 @@ func (d *InternalDataplane) apply() {
 	// Update the routing table in parallel with the other updates.  We'll wait for it to finish
 	// before we return.
 	var routesWG sync.WaitGroup
-	for _, r := range d.routeTables {
+	for _, r := range d.routeTables() {
 		routesWG.Add(1)
-		go func(r *routetable.RouteTable) {
+		go func(r routeTable) {
 			err := r.Apply()
 			if err != nil {
 				log.Warn("Failed to synchronize routing table, will retry...")

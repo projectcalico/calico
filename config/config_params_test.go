@@ -56,6 +56,9 @@ var _ = Describe("FelixConfig vs ConfigParams parity", func() {
 		"IPv4VXLANTunnelAddr",
 		"VXLANTunnelMACAddr",
 		"loadClientConfigFromEnvironment",
+
+		"loadClientConfigFromEnvironment",
+		"useResourceUpdates",
 	}
 	cpFieldNameToFC := map[string]string{
 		"IpInIpEnabled":                      "IPIPEnabled",

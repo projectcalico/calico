@@ -461,6 +461,7 @@ message NamespaceID {
 
 enum RouteType {
   VXLAN = 0;
+  NOENCAP = 1;
 }
 
 message RouteUpdate {

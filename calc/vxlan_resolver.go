@@ -16,6 +16,7 @@ package calc
 
 import (
 	"crypto/sha1"
+	"errors"
 	"fmt"
 	gonet "net"
 
@@ -24,10 +25,11 @@ import (
 	"github.com/projectcalico/felix/dispatcher"
 	"github.com/projectcalico/felix/ip"
 	"github.com/projectcalico/felix/proto"
+	apiv3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/libcalico-go/lib/backend/encap"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
-	"github.com/projectcalico/libcalico-go/lib/net"
+	cnet "github.com/projectcalico/libcalico-go/lib/net"
 	"github.com/projectcalico/libcalico-go/lib/set"
 )
 
@@ -64,25 +66,34 @@ type VXLANResolver struct {
 	// block that contributed them. The following comprises the full internal data model.
 	nodeNameToVXLANTunnelAddr map[string]string
 	nodeNameToIPAddr          map[string]string
+	nodeNameToNode            map[string]*apiv3.Node
 	nodeNameToVXLANMac        map[string]string
 	blockToRoutes             map[string]set.Set
 	vxlanPools                map[string]model.IPPool
+	useResourceUpdates        bool
 }
 
-func NewVXLANResolver(hostname string, callbacks PipelineCallbacks) *VXLANResolver {
+func NewVXLANResolver(hostname string, callbacks PipelineCallbacks, useResourceUpdates bool) *VXLANResolver {
 	return &VXLANResolver{
 		hostname:                  hostname,
 		callbacks:                 callbacks,
 		nodeNameToVXLANTunnelAddr: map[string]string{},
 		nodeNameToIPAddr:          map[string]string{},
+		nodeNameToNode:            map[string]*apiv3.Node{},
 		nodeNameToVXLANMac:        map[string]string{},
 		blockToRoutes:             map[string]set.Set{},
 		vxlanPools:                map[string]model.IPPool{},
+		useResourceUpdates:        useResourceUpdates,
 	}
 }
 
 func (c *VXLANResolver) RegisterWith(allUpdDispatcher *dispatcher.Dispatcher) {
-	allUpdDispatcher.Register(model.HostIPKey{}, c.OnHostIPUpdate)
+	if c.useResourceUpdates {
+		allUpdDispatcher.Register(model.ResourceKey{}, c.OnResourceUpdate)
+	} else {
+		allUpdDispatcher.Register(model.HostIPKey{}, c.OnHostIPUpdate)
+	}
+
 	allUpdDispatcher.Register(model.HostConfigKey{}, c.OnHostConfigUpdate)
 	allUpdDispatcher.Register(model.BlockKey{}, c.OnBlockUpdate)
 	allUpdDispatcher.Register(model.IPPoolKey{}, c.OnPoolUpdate)
@@ -159,66 +170,105 @@ func (c *VXLANResolver) OnBlockUpdate(update api.Update) (_ bool) {
 	return
 }
 
+func (c *VXLANResolver) OnResourceUpdate(update api.Update) (_ bool) {
+	resourceKey := update.Key.(model.ResourceKey)
+	if resourceKey.Kind != apiv3.KindNode {
+		return
+	}
+
+	nodeName := update.Key.(model.ResourceKey).Name
+	logCxt := logrus.WithField("node", nodeName).WithField("update", update)
+	logCxt.Debug("OnResourceUpdate triggered")
+	if update.Value != nil && update.Value.(*apiv3.Node).Spec.BGP != nil {
+		node := update.Value.(*apiv3.Node)
+		bgp := node.Spec.BGP
+		c.nodeNameToNode[nodeName] = node
+		ipv4, _, err := cnet.ParseCIDROrIP(bgp.IPv4Address)
+		if err != nil {
+			logCxt.WithError(err).Error("couldn't parse ipv4 address from node bgp info")
+			return
+		}
+
+		c.onNodeIPUpdate(nodeName, ipv4.String())
+	} else {
+		delete(c.nodeNameToNode, nodeName)
+		c.onRemoveNode(nodeName)
+	}
+
+	return
+}
+
 // OnHostIPUpdate gets called whenever a node IP address changes. On an add/update,
 // we need to check if there are VTEPs or routes which are now valid, and trigger programming
 // of them to the data plane. On a delete, we need to withdraw any routes and VTEPs associated
 // with the node.
 func (c *VXLANResolver) OnHostIPUpdate(update api.Update) (_ bool) {
 	nodeName := update.Key.(model.HostIPKey).Hostname
-	logCxt := logrus.WithField("node", nodeName)
-	pendingSet, sentSet := c.routeSets()
-	vtepSent := c.vtepSent(nodeName)
+	logrus.WithField("node", nodeName).Debug("OnHostIPUpdate triggered")
+
 	if update.Value != nil {
-		// Host IP updated or added. If it was added, we should check to see if we're ready
-		// to send a VTEP and associated routes. If we already knew about this one, we need to
-		// see if it has changed. If it has, we should remove and reprogram the VTEP and routes.
-		newIP := update.Value.(*net.IP).String()
-		currIP := c.nodeNameToIPAddr[nodeName]
-		logCxt = logCxt.WithFields(logrus.Fields{"newIP": newIP, "currIP": currIP})
-		if vtepSent {
-			if currIP == newIP {
-				// If we've already handled this node, there's nothing to do. Deduplicate.
-				logCxt.Debug("Skipping duplicate node IP update")
-				return
-			}
-
-			// We've already sent a VTEP for this node, and the node's IP address has changed.
-			// We need to revoke it and any routes before sending any updates.
-			logCxt.Info("Withdrawing routes and VTEP, node changed IP address")
-			sentSet.Iter(func(item interface{}) error {
-				r := item.(vxlanRoute)
-				if r.node == nodeName {
-					c.withdrawRoute(r)
-					pendingSet.Add(r)
-				}
-				return nil
-			})
-			c.sendVTEPRemove(nodeName)
-		}
-
-		// Try sending a VTEP update. If we do, this will trigger a kick of any
-		// pending routes which might now be ready to send.
-		c.nodeNameToIPAddr[nodeName] = newIP
-		if c.sendVTEPUpdate(nodeName) {
-			// We've successfully sent a new VTEP - check to see if any pending routes
-			// are now ready to be programmed.
-			logCxt.Info("Sent VTEP to dataplane, check pending routes")
-			c.kickPendingRoutes(pendingSet)
-		}
+		c.onNodeIPUpdate(nodeName, update.Value.(*cnet.IP).String())
 	} else {
-		// Withdraw any routes which target this VTEP, followed by the VTEP itself.
-		logCxt.Info("Withdrawing routes and VTEP, node IP address deleted")
-		delete(c.nodeNameToIPAddr, nodeName)
+		c.onRemoveNode(nodeName)
+	}
+	return
+}
+
+func (c *VXLANResolver) onNodeIPUpdate(nodeName string, newIP string) {
+	logCxt := logrus.WithField("node", nodeName)
+	// Host IP updated or added. If it was added, we should check to see if we're ready
+	// to send a VTEP and associated routes. If we already knew about this one, we need to
+	// see if it has changed. If it has, we should remove and reprogram the VTEP and routes.
+	currIP := c.nodeNameToIPAddr[nodeName]
+	pendingSet, sentSet := c.routeSets()
+	logCxt = logCxt.WithFields(logrus.Fields{"newIP": newIP, "currIP": currIP})
+	if c.vtepSent(nodeName) {
+		if currIP == newIP {
+			// If we've already handled this node, there's nothing to do. Deduplicate.
+			logCxt.Debug("Skipping duplicate node IP update")
+			return
+		}
+
+		// We've already sent a VTEP for this node, and the node's IP address has changed.
+		// We need to revoke it and any routes before sending any updates.
+		logCxt.Info("Withdrawing routes and VTEP, node changed IP address")
 		sentSet.Iter(func(item interface{}) error {
 			r := item.(vxlanRoute)
 			if r.node == nodeName {
 				c.withdrawRoute(r)
+				pendingSet.Add(r)
 			}
 			return nil
 		})
 		c.sendVTEPRemove(nodeName)
 	}
-	return
+
+	// Try sending a VTEP update. If we do, this will trigger a kick of any
+	// pending routes which might now be ready to send.
+	c.nodeNameToIPAddr[nodeName] = newIP
+	if c.sendVTEPUpdate(nodeName) {
+		// We've successfully sent a new VTEP - check to see if any pending routes
+		// are now ready to be programmed.
+		logCxt.Info("Sent VTEP to dataplane, check pending routes")
+		c.kickPendingRoutes(pendingSet)
+	}
+}
+
+func (c *VXLANResolver) onRemoveNode(nodeName string) {
+	_, sentSet := c.routeSets()
+
+	// Withdraw any routes which target this VTEP, followed by the VTEP itself.
+	logCxt := logrus.WithField("node", nodeName)
+	logCxt.Info("Withdrawing routes and VTEP, node IP address deleted")
+	delete(c.nodeNameToIPAddr, nodeName)
+	sentSet.Iter(func(item interface{}) error {
+		r := item.(vxlanRoute)
+		if r.node == nodeName {
+			c.withdrawRoute(r)
+		}
+		return nil
+	})
+	c.sendVTEPRemove(nodeName)
 }
 
 // OnHostConfigUpdate gets called whenever a node's host config changes. We only care about
@@ -410,20 +460,50 @@ func (c *VXLANResolver) vtepSent(node string) bool {
 // false otherwise.
 func (c *VXLANResolver) routeReady(r vxlanRoute) bool {
 	logCxt := logrus.WithField("route", r)
-	gw := c.determineGatewayForRoute(r)
-	if gw == "" {
-		logCxt.Debug("No gateway yet for VXLAN route, skip")
-		return false
-	}
 	if !c.routeWithinVXLANPool(r) {
 		logCxt.Debug("Route not within VXLAN IP pool")
 		return false
 	}
+
+	routeType, err := c.routeTypeForRoute(r)
+	if err != nil {
+		logCxt.WithError(err).Debug("an error occurred getting the route type, will try again later")
+		return false
+	}
+
+	gw := c.determineGatewayForRoute(r, routeType)
+	if gw == "" {
+		logCxt.Debug("No gateway yet for VXLAN route, skip")
+		return false
+	}
+
 	if !c.vtepSent(r.node) {
 		logCxt.Debug("Don't yet know the VTEP for this route")
 		return false
 	}
+
 	return true
+}
+
+func (c *VXLANResolver) nodeCidr(nodeName string) (*cnet.IPNet, error) {
+	logCxt := logrus.WithField("node", nodeName)
+
+	if _, ok := c.nodeNameToNode[nodeName]; !ok {
+		return nil, fmt.Errorf("no node info seen yet for node %s", nodeName)
+	}
+
+	node := c.nodeNameToNode[nodeName]
+
+	//NOTE we don't need to check if this is null because nodes that don't have bgp information aren't added to the map
+	bgp := node.Spec.BGP
+
+	_, cidr, err := cnet.ParseCIDROrIP(bgp.IPv4Address)
+	if err != nil {
+		logCxt.WithError(err).Error("couldn't parse cidr information from bgp ipv4 address")
+		return nil, err
+	}
+
+	return cidr, nil
 }
 
 // kickPendingRoutes loops through the provided routes to see if there are any which are now programmable,
@@ -436,14 +516,62 @@ func (c *VXLANResolver) kickPendingRoutes(pendingRouteUpdates set.Set) {
 			return nil
 		}
 		logCxt.Info("Sending VXLAN route update")
-		c.callbacks.OnRouteUpdate(&proto.RouteUpdate{
-			Type: proto.RouteType_VXLAN,
+
+		routeType, err := c.routeTypeForRoute(r)
+		if err != nil {
+			logCxt.WithError(err).Errorf("an error occurred determining the RouteType for the route")
+			return nil
+		}
+
+		routeUpdate := &proto.RouteUpdate{
+			Type: routeType,
 			Node: r.node,
 			Dst:  r.dst.String(),
-			Gw:   c.determineGatewayForRoute(r),
-		})
+			Gw:   c.determineGatewayForRoute(r, routeType),
+		}
+
+		c.callbacks.OnRouteUpdate(routeUpdate)
 		return nil
 	})
+}
+
+func (c *VXLANResolver) routeTypeForRoute(r vxlanRoute) (proto.RouteType, error) {
+	logCxt := logrus.WithField("route", r)
+	pool := c.vxlanPoolForRoute(r)
+
+	if pool == nil {
+		return proto.RouteType_VXLAN, errors.New("no matching ippool for route")
+	}
+
+	if pool.VXLANMode == encap.CrossSubnet {
+		logCxt.WithField("pool", pool).Debug("pool has VXLAN CrossSubnet mode enabled")
+		// if we're not using resource updates we'll never get the CIDR block need to check if the route's node's subnet
+		// overlaps with this node's subnet
+		if !c.useResourceUpdates {
+			logCxt.WithField("pool", pool).Warning(
+				"CrossSubnet mode detected on pool but resource updates aren't being used. Defaulting to RouteType_VXLAN")
+			return proto.RouteType_VXLAN, nil
+		}
+
+		localNodeCidr, err := c.nodeCidr(c.hostname)
+		if err != nil {
+			return proto.RouteType_VXLAN, err
+		}
+
+		nodeCidr, err := c.nodeCidr(r.node)
+		if err != nil {
+			return proto.RouteType_VXLAN, err
+		}
+
+		if nodeCidr.IsNetOverlap(localNodeCidr.IPNet) {
+			gw := c.nodeNameToIPAddr[r.node]
+			logCxt.Debugf("CrossSubnet enabled and subnets overlap, using node gateway %s for route", gw)
+
+			return proto.RouteType_NOENCAP, nil
+		}
+	}
+
+	return proto.RouteType_VXLAN, nil
 }
 
 // withdrawRoute will send a *proto.RouteRemove for the given route.
@@ -492,6 +620,15 @@ func (c *VXLANResolver) routeWithinVXLANPool(r vxlanRoute) bool {
 	return false
 }
 
+func (c *VXLANResolver) vxlanPoolForRoute(r vxlanRoute) *model.IPPool {
+	for _, pool := range c.vxlanPools {
+		if c.containsRoute(pool, r) {
+			return &pool
+		}
+	}
+	return nil
+}
+
 // routesFromBlock returns a list of routes which should exist based on the provided
 // allocation block.
 func (c *VXLANResolver) routesFromBlock(blockKey string, b *model.AllocationBlock) map[string]vxlanRoute {
@@ -528,8 +665,12 @@ func (c *VXLANResolver) routesFromBlock(blockKey string, b *model.AllocationBloc
 // determineGatewayForRoute determines which gateway to use for this route. For VXLAN routes, the
 // gateway is the remote node's IPv4VXLANTunnelAddr. If we don't know the remote node's tunnel
 // address, this function will return an empty string.
-func (c *VXLANResolver) determineGatewayForRoute(r vxlanRoute) string {
-	return c.nodeNameToVXLANTunnelAddr[r.node]
+func (c *VXLANResolver) determineGatewayForRoute(r vxlanRoute, routeType proto.RouteType) string {
+	if routeType == proto.RouteType_NOENCAP {
+		return c.nodeNameToIPAddr[r.node]
+	} else {
+		return c.nodeNameToVXLANTunnelAddr[r.node]
+	}
 }
 
 // vtepMACForHost checks if there is new MAC present in host config.

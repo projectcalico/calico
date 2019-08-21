@@ -376,6 +376,9 @@ configRetry:
 	} else {
 		// Use the syncer locally.
 		syncer = felixsyncer.New(backendClient, datastoreConfig.Spec, syncerToValidator)
+
+		log.Info("using resource updates where applicable")
+		configParams.SetUseResourceUpdates(true)
 	}
 	log.WithField("syncer", syncer).Info("Created Syncer")
 

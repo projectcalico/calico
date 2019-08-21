@@ -310,7 +310,7 @@ func NewCalculationGraph(callbacks PipelineCallbacks, conf *config.Config) *Calc
 	//      <dataplane>
 	//
 	if conf.VXLANEnabled {
-		vxlanResolver := NewVXLANResolver(hostname, callbacks)
+		vxlanResolver := NewVXLANResolver(hostname, callbacks, conf.UseResourceUpdates())
 		vxlanResolver.RegisterWith(allUpdDispatcher)
 	}
 
