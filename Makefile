@@ -113,7 +113,7 @@ sub-build-%:
 TYPHA_BRANCH?=$(shell git rev-parse --abbrev-ref HEAD)
 TYPHA_REPO?=github.com/projectcalico/typha
 TYPHA_VERSION?=$(shell git ls-remote git@github.com:projectcalico/typha $(TYPHA_BRANCH) 2>/dev/null | cut -f 1)
-TYPHA_OLDVER?=$(shell go list -m -f "{{.Version}}" github.com/projectcalico/typha)
+TYPHA_OLDVER?=$(shell $(DOCKER_RUN) $(CALICO_BUILD) go list -m -f "{{.Version}}" github.com/projectcalico/typha)
 
 ## Update typha pin in go.mod
 update-typha:
