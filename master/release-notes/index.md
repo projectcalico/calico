@@ -23,6 +23,12 @@ Use the version selector at the top-right of this page to view a different relea
 |------------------------|---------|
 {% for component in release.components %}
 {%- capture component_name %}{{ component[0] }}{% endcapture -%}
+
+{%- comment -%}Use the imageName for the component, if it has one, for better readability{%- endcomment -%}
+{%- if page.imageNames[component_name] -%}
+    {%- assign component_name = site.imageNames[component_name] -%}
+{%- endif -%}
+
 | {{ component_name }}   | [{{ component[1].version }}]({% include component_url component=component_name release=release %}) |
 {% endfor %}
 
