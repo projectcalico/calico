@@ -15,7 +15,7 @@ sudo rkt run --stage1-path=/usr/share/rkt/stage1-fly.aci \
   --volume=logs,kind=host,source=/var/log/calico,readOnly=false \
   --mount=volume=logs,target=/var/log/calico \
   --net=host \
-  {{page.registry}}{{site.imageNames["node"]}}:{{site.data.versions[page.version].first.title}} &
+  {{page.registry}}{{page.imageNames["node"]}}:{{site.data.versions[page.version].first.title}} &
 ```
 
 > **Note**: Replace `<ETCD_IP>:<ETCD_PORT>` with your etcd configuration. The `ETCD_ENDPOINTS`
@@ -32,6 +32,6 @@ An example response follows.
 
 ```bash
 UUID      APP	IMAGE NAME                  STATE   CREATED         STARTED         NETWORKS
-b52bba11  node  {{page.registry}}{{site.imageNames["node"]}}:{{site.data.versions[page.version].first.title}}  running 10 seconds ago  10 seconds ago
+b52bba11  node  {{page.registry}}{{page.imageNames["node"]}}:{{site.data.versions[page.version].first.title}}  running 10 seconds ago  10 seconds ago
 ```
 {: .no-select-button}

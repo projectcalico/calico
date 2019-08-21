@@ -2835,17 +2835,17 @@ master:
       version: master
      calicoctl:
       version: master
-     calico/node:
+     node:
       version: master
-     calico/cni:
+     cni:
       version: master
-     calico/kube-controllers:
+     kubeControllers:
       version: master
      networking-calico:
       version: master
      flannel:
       version: v0.11.0
-     calico/dikastes:
+     dikastes:
       version: master
      flexvol:
       version: master

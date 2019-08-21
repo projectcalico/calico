@@ -54,7 +54,7 @@ wget {% include urls component="calicoctl" %}
 sudo chmod +x calicoctl
 
 # Run the {{site.nodecontainer}} container
-sudo ETCD_ENDPOINTS=http://<ETCD_IP>:<ETCD_PORT> ./calicoctl node run --node-image={{page.registry}}{{site.imageNames["node"]}}:{{site.data.versions[page.version].first.title}}
+sudo ETCD_ENDPOINTS=http://<ETCD_IP>:<ETCD_PORT> ./calicoctl node run --node-image={{page.registry}}{{page.imageNames["node"]}}:{{site.data.versions[page.version].first.title}}
 ```
 
 See the [`calicoctl node run` documentation]({{site.baseurl}}/{{page.version}}/reference/calicoctl/node/)
@@ -88,7 +88,7 @@ ExecStart=/usr/bin/docker run --net=host --privileged --name={{site.noderunning}
   -v /var/run/calico:/var/run/calico \
   -v /var/log/calico:/var/log/calico \
   -v /var/lib/calico:/var/lib/calico \
-  {{page.registry}}{{site.imageNames["node"]}}:{{site.data.versions[page.version].first.title}}
+  {{page.registry}}{{page.imageNames["node"]}}:{{site.data.versions[page.version].first.title}}
 ExecStop=/usr/bin/docker rm -f {{site.noderunning}}
 Restart=always
 RestartSec=10
@@ -118,8 +118,8 @@ You can download the [latest relase from GitHub](https://github.com/projectcalic
 Download the correct binaries for your architecture, and place them at `/opt/cni/bin/calico` and `/opt/cni/bin/calico-ipam`.
 {% else %}
 ```bash
-wget -N https://github.com/projectcalico/cni-plugin/releases/download/{{site.data.versions[page.version].first.components["calico/cni"].version}}/calico-amd64
-wget -N https://github.com/projectcalico/cni-plugin/releases/download/{{site.data.versions[page.version].first.components["calico/cni"].version}}/calico-ipam-amd64
+wget -N https://github.com/projectcalico/cni-plugin/releases/download/{{site.data.versions[page.version].first.components["cni"].version}}/calico-amd64
+wget -N https://github.com/projectcalico/cni-plugin/releases/download/{{site.data.versions[page.version].first.components["cni"].version}}/calico-ipam-amd64
 mv ./calico-amd64 /opt/cni/bin/calico
 mv ./calico-ipam-amd64 /opt/cni/bin/calico-ipam
 chmod +x /opt/cni/bin/calico /opt/cni/bin/calico-ipam

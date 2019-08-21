@@ -10,7 +10,7 @@ guide for details. This container packages up the core {{site.prodname}} compone
 networking and network policy.
 
 ```bash
-ETCD_ENDPOINTS=http://<ETCD_IP>:<ETCD_PORT> ./calicoctl node run --node-image={{page.registry}}{{site.imageNames["node"]}}:{{site.data.versions[page.version].first.title}}
+ETCD_ENDPOINTS=http://<ETCD_IP>:<ETCD_PORT> ./calicoctl node run --node-image={{page.registry}}{{page.imageNames["node"]}}:{{site.data.versions[page.version].first.title}}
 ```
 > **Note**: Add the `ETCD_ENDPOINTS` Env and replace `<ETCD_IP>:<ETCD_PORT>` with your etcd configuration when etcd isn't running locally.
 {: .alert .alert-info}

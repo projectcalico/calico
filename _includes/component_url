@@ -1,16 +1,20 @@
 {%- if release.title != "master" -%}
 {%- case include.component -%}
+{%- comment -%}
+note that all 'or's in the below case statement are there to maintain backwards compatability 
+with how image names used to be referenced in config.yml
+{%- endcomment -%}
 
-{%- when 'calico/node' -%}
+{%- when 'node' or 'calico/node' -%}
 https://github.com/projectcalico/node/releases/tag/{{ release.components[include.component].version }}
 
 {%- when 'calicoctl' -%}
 https://github.com/projectcalico/calicoctl/releases/tag/{{ release.components[include.component].version }}
 
-{%- when 'calico/cni' -%}
+{%- when 'cni' or 'calico/cni' -%}
 https://github.com/projectcalico/cni-plugin/releases/tag/{{ release.components[include.component].version }}
 
-{%- when 'calico/kube-controllers' -%}
+{%- when 'kubeControllers' or 'calico/kube-controllers' -%}
 https://github.com/projectcalico/k8s-policy/releases/tag/{{ release.components[include.component].version }}
 
 {%- when 'networking-calico' -%}
@@ -22,7 +26,7 @@ https://github.com/projectcalico/typha/releases/tag/{{ release.components[includ
 {%- when 'flannel' -%}
 https://github.com/coreos/flannel/releases/tag/{{ release.components[include.component].version }}
 
-{%- when 'calico/dikastes' -%}
+{%- when 'dikastes' or 'calico/dikastes' -%}
 https://github.com/projectcalico/app-policy/releases/tag/{{ release.components[include.component].version }}
 
 {%- when 'flexvol' -%}
