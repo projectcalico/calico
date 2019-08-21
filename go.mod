@@ -8,12 +8,12 @@ require (
 	github.com/ghodss/yaml v1.0.0 // indirect
 	github.com/go-openapi/spec v0.19.2 // indirect
 	github.com/gogo/googleapis v1.2.0
-	github.com/gogo/protobuf v1.2.2-0.20190415061611-67e450fba694
+	github.com/gogo/protobuf v1.2.2-0.20190415061611-67e450fba694 // indirect
 	github.com/golang/glog v0.0.0-20160126235308-23def4e6c14b // indirect
 	github.com/kelseyhightower/envconfig v1.4.0 // indirect
 	github.com/konsorten/go-windows-terminal-sequences v1.0.2 // indirect
 	github.com/lyft/protoc-gen-star v0.4.11 // indirect
-	github.com/lyft/protoc-gen-validate v0.0.6
+	github.com/lyft/protoc-gen-validate v0.0.6 // indirect
 	github.com/modern-go/reflect2 v1.0.1 // indirect
 	github.com/onsi/gomega v1.5.0
 	github.com/projectcalico/go-json v0.0.0-20161128004156-6219dc7339ba // indirect
