@@ -227,15 +227,15 @@ build:  $(NODE_CONTAINER_BINARY)
 LIBCALICO_BRANCH?=$(shell git rev-parse --abbrev-ref HEAD)
 LIBCALICO_REPO?=github.com/projectcalico/libcalico-go
 LIBCALICO_VERSION?=$(shell git ls-remote git@github.com:projectcalico/libcalico-go $(LIBCALICO_BRANCH) 2>/dev/null | cut -f 1)
-LIBCALICO_OLDVER?=$(shell go list -m -f "{{.Version}}" github.com/projectcalico/libcalico-go)
+LIBCALICO_OLDVER?=$(shell $(DOCKER_RUN) $(CALICO_BUILD) go list -m -f "{{.Version}}" github.com/projectcalico/libcalico-go)
 FELIX_BRANCH?=$(shell git rev-parse --abbrev-ref HEAD)
 FELIX_REPO?=github.com/projectcalico/felix
 FELIX_VERSION?=$(shell git ls-remote git@github.com:projectcalico/felix $(FELIX_BRANCH) 2>/dev/null | cut -f 1)
-FELIX_OLDVER?=$(shell shell go list -m -f "{{.Version}}" github.com/projectcalico/felix)
+FELIX_OLDVER?=$(shell shell $(DOCKER_RUN) $(CALICO_BUILD) go list -m -f "{{.Version}}" github.com/projectcalico/felix)
 CONFD_BRANCH?=$(shell git rev-parse --abbrev-ref HEAD)
 CONFD_REPO?=github.com/projectcalico/confd
 CONFD_VERSION?=$(shell git ls-remote git@github.com:projectcalico/confd $(CONFD_BRANCH) 2>/dev/null | cut -f 1)
-CONFD_OLDVER?=$(shell go list -m -f "{{.Version}}" github.com/projectcalico/confd)
+CONFD_OLDVER?=$(shell $(DOCKER_RUN) $(CALICO_BUILD) go list -m -f "{{.Version}}" github.com/projectcalico/confd)
 
 update-felix-confd-libcalico:
 	$(DOCKER_RUN) -i $(CALICO_BUILD) sh -c '\
