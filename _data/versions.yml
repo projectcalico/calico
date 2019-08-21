@@ -1391,7 +1391,6 @@ v3.1:
 
 v3.0:
 - title: v3.0.12
-  note: ""
   components:
     felix:
       version: v3.0.12
