@@ -181,11 +181,12 @@ endif
 
 .PHONY: clean
 clean:
-	rm -rf bin \
-	       docker-image/bin \
-	       build \
-	       report/*.xml \
-	       release-notes-*
+	rm -rf .go-pkg-cache \
+		bin \
+		docker-image/bin \
+		build \
+		report/*.xml \
+		release-notes-*
 	find . -name "*.coverprofile" -type f -delete
 	find . -name "coverage.xml" -type f -delete
 	find . -name ".coverage" -type f -delete
@@ -203,7 +204,7 @@ sub-build-%:
 LIBCALICO_BRANCH?=$(shell git rev-parse --abbrev-ref HEAD)
 LIBCALICO_REPO?=github.com/projectcalico/libcalico-go
 LIBCALICO_VERSION?=$(shell git ls-remote git@github.com:projectcalico/libcalico-go $(LIBCALICO_BRANCH) 2>/dev/null | cut -f 1)
-LIBCALICO_OLDVER?=$(shell go list -m -f "{{.Version}}" github.com/projectcalico/libcalico-go)
+LIBCALICO_OLDVER?=$(shell $(DOCKER_RUN) $(CALICO_BUILD) go list -m -f "{{.Version}}" github.com/projectcalico/libcalico-go)
 
 ## Update libcalico pin in go.mod
 update-libcalico:
