@@ -20,7 +20,8 @@ aliases are supported (all case insensitive): `hostendpoint`, `hostendpoints`, `
 {: .alert .alert-danger}
 
 **Default behavior of external traffic to/from host**
-If a host endpoint is added and network policy is not in place, the Calico default is to deny traffic to/from that endpoint (except for traffic allowed by failsafe rules). For host endpoints, Calico blocks traffic only to/from interfaces that it’s been explicitly told about in network policy. Traffic to/from other interfaces is ignored.
+
+If a host endpoint is added and network policy is not in place, the {{ site.prodname }} default is to deny traffic to/from that endpoint (except for traffic allowed by failsafe rules). For host endpoints, {{ site.prodname }} blocks traffic only to/from interfaces that it’s been explicitly told about in network policy. Traffic to/from other interfaces is ignored.
 
 ### Sample YAML
 
