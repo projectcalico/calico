@@ -6,8 +6,11 @@ jobs:
     environment:
       CIRCLE_ARTIFACTS: ~/projectcalico/calicoctl/bin
     steps:
+    - run: |
+          # pre-create the go mod cache directory. otherwise, docker will create it with root ownership
+          mkdir -p /home/circleci/.go_workspace/pkg/mod
     - checkout
     - run: make bin/calicoctl
     - store_artifacts:
         path: ~/projectcalico/calicoctl/bin
-  
+
