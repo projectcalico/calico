@@ -4,10 +4,10 @@ go 1.12
 
 require (
 	github.com/containernetworking/cni v0.5.2
-	github.com/coreos/etcd v3.3.10+incompatible // indirect
 	github.com/davecgh/go-spew v1.1.1
 	github.com/docopt/docopt-go v0.0.0-20160216232012-784ddc588536
 	github.com/go-ini/ini v1.44.0
+	github.com/gobuffalo/packr/v2 v2.5.2
 	github.com/gogo/protobuf v1.2.2-0.20190723190241-65acae22fc9d
 	github.com/golang/protobuf v1.2.0
 	github.com/grpc-ecosystem/go-grpc-middleware v1.0.0 // indirect
@@ -30,7 +30,7 @@ require (
 	github.com/projectcalico/typha v0.0.0-20190830041529-c4078ad2f165
 	github.com/prometheus/client_golang v0.9.1
 	github.com/satori/go.uuid v1.2.0
-	github.com/sirupsen/logrus v1.4.0
+	github.com/sirupsen/logrus v1.4.2
 	github.com/smartystreets/goconvey v0.0.0-20190731233626-505e41936337 // indirect
 	github.com/vishvananda/netlink v0.0.0-20180501223456-f07d9d5231b9
 	github.com/vishvananda/netns v0.0.0-20160430053723-8ba1072b58e0 // indirect
