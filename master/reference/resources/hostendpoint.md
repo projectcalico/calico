@@ -18,8 +18,10 @@ interfaces.
 Each host endpoint may include a set of labels and list of profiles that {{site.prodname}}
 will use to apply
 [policy]({{site.baseurl}}/{{page.version}}/reference/resources/networkpolicy)
-to the interface.  If no profiles or labels are applied, {{site.prodname}} will not apply
-any policy.
+to the interface. 
+
+**Default behavior of external traffic to/from host**
+If a host endpoint is added and network policy is not in place, the Calico default is to deny traffic to/from that endpoint (except for traffic allowed by failsafe rules). For host endpoints, Calico blocks traffic only to/from interfaces that it’s been explicitly told about in network policy. Traffic to/from other interfaces is ignored. 
 
 > **Note**: Currently, for host endpoints with `interfaceName: *`, only [pre-DNAT
 > policy]({{site.baseurl}}/{{page.version}}/reference/host-endpoints/pre-dnat) is
