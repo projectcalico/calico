@@ -342,9 +342,7 @@ func (hook ContextHook) Fire(entry *log.Entry) error {
 		frames := runtime.CallersFrames(pcs)
 		for {
 			frame, more := frames.Next()
-			fmt.Printf("--> %v %v\n", frame.Line, frame.File)
 			if !shouldSkipFrame(frame) {
-				fmt.Printf("----> %v %v\n", frame.Line, frame.File)
 				// We found the frame we were looking for.  Record its file/line number.
 				entry.Data[fieldFileName] = path.Base(frame.File)
 				entry.Data[fieldLineNumber] = frame.Line
