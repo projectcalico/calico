@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2018 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -21,17 +21,28 @@ import (
 	"io"
 	"os"
 	"strings"
+	"sync"
 	"time"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
+	"github.com/prometheus/client_golang/prometheus"
 	log "github.com/sirupsen/logrus"
 
-	"sync"
-
-	. "github.com/projectcalico/typha/pkg/logutils"
+	. "github.com/projectcalico/libcalico-go/lib/logutils"
 )
+
+var (
+	testCounter = prometheus.NewCounter(prometheus.CounterOpts{
+		Name: "test_counter",
+		Help: "Number of logs dropped and errors encountered while logging.",
+	})
+)
+
+func init() {
+	prometheus.MustRegister(testCounter)
+}
 
 var _ = Describe("Logutils", func() {
 	ourHook := ContextHook{}
@@ -90,8 +101,9 @@ var _ = DescribeTable("Formatter",
 			Level: log.InfoLevel,
 			Time:  theTime(),
 			Data: log.Fields{
-				"__file__": "foo.go",
-				"__line__": 123,
+				"__file__":  "foo.go",
+				"__line__":  123,
+				"__flush__": true, // Internal value, should be ignored.
 			},
 			Message: "The answer is 42.",
 		},
@@ -137,6 +149,96 @@ var (
 	}
 )
 
+var _ = Describe("BackgroundHook log flushing tests", func() {
+	var counter prometheus.Counter
+	var bh *BackgroundHook
+	var counterIdx int
+	var c chan QueuedLog
+	var logger *log.Logger
+
+	BeforeEach(func() {
+		// Set up a background hook that will queue its logs to our channel.
+		counter = prometheus.NewCounter(prometheus.CounterOpts{
+			Namespace: "logutilstests",
+			Name:      fmt.Sprint(counterIdx),
+		})
+		counterIdx++
+		c = make(chan QueuedLog, 10)
+		testDest := &Destination{
+			Level:   log.DebugLevel,
+			Channel: c,
+		}
+		bh = NewBackgroundHook(log.AllLevels, log.DebugLevel, []*Destination{testDest}, counter)
+
+		logger = log.New()
+		logger.AddHook(bh)
+
+		// Suppress the output of this logger.
+		logger.Out = &NullWriter{}
+	})
+
+	It("when calling Panic, should block waiting for the background thread", func() {
+		done := make(chan struct{})
+		go func() {
+			defer GinkgoRecover()
+			defer close(done)
+			Expect(func() {
+				logger.Panic("Should flush")
+			}).To(Panic())
+		}()
+
+		timeout := time.After(1 * time.Second)
+
+		select {
+		case <-timeout:
+			Fail("Didn't receive queued log")
+		case ql := <-c:
+			Expect(ql.WaitGroup).ToNot(BeNil())
+			Consistently(done).ShouldNot(BeClosed())
+			ql.WaitGroup.Done()
+			Eventually(done).Should(BeClosed())
+		}
+	})
+
+	It("with FieldForceFlush, should block waiting for the background thread", func() {
+		done := make(chan struct{})
+		go func() {
+			defer close(done)
+			logger.WithField(FieldForceFlush, true).Info("Should flush")
+		}()
+
+		timeout := time.After(1 * time.Second)
+
+		select {
+		case <-timeout:
+			Fail("Didn't receive queued log")
+		case ql := <-c:
+			Expect(ql.WaitGroup).ToNot(BeNil())
+			Consistently(done).ShouldNot(BeClosed())
+			ql.WaitGroup.Done()
+			Eventually(done).Should(BeClosed())
+		}
+	})
+
+	It("without FieldForceFlush, should not block waiting for the background thread", func() {
+		done := make(chan struct{})
+		go func() {
+			defer close(done)
+			logger.Info("Should not flush")
+		}()
+
+		timeout := time.After(1 * time.Second)
+
+		select {
+		case <-timeout:
+			Fail("Didn't receive queued log")
+		case ql := <-c:
+			Expect(ql.WaitGroup).To(BeNil())
+			Eventually(done).Should(BeClosed())
+		}
+	})
+})
+
 var _ = Describe("Stream Destination", func() {
 	var s *Destination
 	var c chan QueuedLog
@@ -151,6 +253,7 @@ var _ = Describe("Stream Destination", func() {
 			pw,
 			c,
 			false,
+			testCounter,
 		)
 	})
 
@@ -187,6 +290,7 @@ var _ = Describe("Stream Destination", func() {
 				pw,
 				c,
 				true,
+				testCounter,
 			)
 		})
 
@@ -277,6 +381,7 @@ var _ = Describe("Syslog Destination", func() {
 			(*mockSyslogWriter)(pw),
 			c,
 			false,
+			testCounter,
 		)
 	})
 
@@ -287,6 +392,7 @@ var _ = Describe("Syslog Destination", func() {
 				(*mockSyslogWriter)(pw),
 				c,
 				true,
+				testCounter,
 			)
 		})
 

@@ -181,11 +181,12 @@ endif
 
 .PHONY: clean
 clean:
-	rm -rf bin \
-	       docker-image/bin \
-	       build \
-	       report/*.xml \
-	       release-notes-*
+	rm -rf .go-pkg-cache \
+		bin \
+		docker-image/bin \
+		build \
+		report/*.xml \
+		release-notes-*
 	find . -name "*.coverprofile" -type f -delete
 	find . -name "coverage.xml" -type f -delete
 	find . -name ".coverage" -type f -delete
