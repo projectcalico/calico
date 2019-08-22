@@ -136,6 +136,8 @@ type Config struct {
 	IptablesBackend                    string        `config:"oneof(legacy,nft);legacy"`
 	RouteRefreshInterval               time.Duration `config:"seconds;90"`
 	DeviceRouteSourceAddress           net.IP        `config:"ipv4;"`
+	DeviceRouteProtocol                int           `config:"int;3"`
+	RemoveExternalRoutes               bool          `config:"bool;true"`
 	IptablesRefreshInterval            time.Duration `config:"seconds;90"`
 	IptablesPostWriteCheckIntervalSecs time.Duration `config:"seconds;1"`
 	IptablesLockFilePath               string        `config:"file;/run/xtables.lock"`
