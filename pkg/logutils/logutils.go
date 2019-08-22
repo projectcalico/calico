@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2019 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2018 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -29,20 +29,10 @@ import (
 	"time"
 
 	"github.com/mipearson/rfw"
-	"github.com/projectcalico/typha/pkg/config"
 	"github.com/prometheus/client_golang/prometheus"
 	log "github.com/sirupsen/logrus"
-)
 
-const (
-	// FieldForceFlush is a field name used to signal to the BackgroundHook that it should flush the log after this
-	// message.  It can be used as follows: logrus.WithField(FieldForceFlush, true).Info("...")
-	FieldForceFlush = "__flush__"
-
-	// fieldFileName is a reserved field name used to pass the filename from the ContextHook to our Formatter.
-	fieldFileName = "__file__"
-	// fieldLineNumber is a reserved field name used to pass the line number from the ContextHook to our Formatter.
-	fieldLineNumber = "__line__"
+	"github.com/projectcalico/typha/pkg/config"
 )
 
 var (
@@ -117,9 +107,9 @@ func ConfigureEarlyLogging() {
 // attaches them to logrus.
 func ConfigureLogging(configParams *config.Config) {
 	// Parse the log levels, defaulting to panic if in doubt.
-	logLevelScreen := SafeParseLogLevel(configParams.LogSeverityScreen)
-	logLevelFile := SafeParseLogLevel(configParams.LogSeverityFile)
-	logLevelSyslog := SafeParseLogLevel(configParams.LogSeveritySys)
+	logLevelScreen := safeParseLogLevel(configParams.LogSeverityScreen)
+	logLevelFile := safeParseLogLevel(configParams.LogSeverityFile)
+	logLevelSyslog := safeParseLogLevel(configParams.LogSeveritySys)
 
 	// Work out the most verbose level that is being logged.
 	mostVerboseLevel := logLevelScreen
@@ -141,7 +131,6 @@ func ConfigureLogging(configParams *config.Config) {
 			os.Stdout,
 			make(chan QueuedLog, logQueueSize),
 			configParams.DebugDisableLogDropping,
-			counterLogErrors,
 		)
 		dests = append(dests, screenDest)
 	}
@@ -159,7 +148,6 @@ func ConfigureLogging(configParams *config.Config) {
 				rotAwareFile,
 				make(chan QueuedLog, logQueueSize),
 				configParams.DebugDisableLogDropping,
-				counterLogErrors,
 			)
 			dests = append(dests, fileDest)
 		}
@@ -185,13 +173,12 @@ func ConfigureLogging(configParams *config.Config) {
 				w,
 				make(chan QueuedLog, logQueueSize),
 				configParams.DebugDisableLogDropping,
-				counterLogErrors,
 			)
 			dests = append(dests, syslogDest)
 		}
 	}
 
-	hook := NewBackgroundHook(FilterLevels(mostVerboseLevel), logLevelSyslog, dests, counterLogErrors)
+	hook := NewBackgroundHook(filterLevels(mostVerboseLevel), logLevelSyslog, dests)
 	hook.Start()
 	log.AddHook(hook)
 
@@ -222,8 +209,8 @@ func ConfigureLogging(configParams *config.Config) {
 	}
 }
 
-// FilterLevels returns all the logrus.Level values <= maxLevel.
-func FilterLevels(maxLevel log.Level) []log.Level {
+// filterLevels returns all the logrus.Level values <= maxLevel.
+func filterLevels(maxLevel log.Level) []log.Level {
 	levels := []log.Level{}
 	for _, l := range log.AllLevels {
 		if l <= maxLevel {
@@ -233,18 +220,10 @@ func FilterLevels(maxLevel log.Level) []log.Level {
 	return levels
 }
 
-// Formatter is our custom log formatter designed to balance ease of machine processing
-// with human readability.  Logs include:
-//    - A sortable millisecond timestamp, for scanning and correlating logs
-//    - The log level, near the beginning of the line, to aid in visual scanning
-//    - The PID of the process to make it easier to spot log discontinuities (If
-//      you are looking at two disjoint chunks of log, were they written by the
-//      same process?  Was there a restart in-between?)
-//    - The file name and line number, as essential context
-//    - The message!
-//    - Log fields appended in sorted order
+// Formatter is our custom log formatter, which mimics the style used by the Python version of
+// Typha.  In particular, it uses a sortable timestamp and it includes the level, PID, file and line
+// number.
 //
-// Example:
 //    2017-01-05 09:17:48.238 [INFO][85386] endpoint_mgr.go 434: Skipping configuration of
 //    interface because it is oper down. ifaceName="cali1234"
 type Formatter struct{}
@@ -253,14 +232,20 @@ func (f *Formatter) Format(entry *log.Entry) ([]byte, error) {
 	stamp := entry.Time.Format("2006-01-02 15:04:05.000")
 	levelStr := strings.ToUpper(entry.Level.String())
 	pid := os.Getpid()
-	fileName := entry.Data[fieldFileName]
-	lineNo := entry.Data[fieldLineNumber]
+	fileName := entry.Data["__file__"]
+	lineNo := entry.Data["__line__"]
 	b := entry.Buffer
 	if b == nil {
 		b = &bytes.Buffer{}
 	}
-	fmt.Fprintf(b, "%s [%s][%d] %v %v: %v", stamp, levelStr, pid, fileName, lineNo, entry.Message)
-	appendKVsAndNewLine(b, entry)
+	_, err := fmt.Fprintf(b, "%s [%s][%d] %v %v: %v", stamp, levelStr, pid, fileName, lineNo, entry.Message)
+	if err != nil {
+		return nil, err
+	}
+	err = appendKVsAndNewLine(b, entry)
+	if err != nil {
+		return nil, err
+	}
 	return b.Bytes(), nil
 }
 
@@ -270,22 +255,28 @@ func (f *Formatter) Format(entry *log.Entry) ([]byte, error) {
 //
 //    INFO endpoint_mgr.go 434: Skipping configuration of interface because it is oper down.
 //    ifaceName="cali1234"
-func FormatForSyslog(entry *log.Entry) string {
+func FormatForSyslog(entry *log.Entry) (string, error) {
 	levelStr := strings.ToUpper(entry.Level.String())
-	fileName := entry.Data[fieldFileName]
-	lineNo := entry.Data[fieldLineNumber]
+	fileName := entry.Data["__file__"]
+	lineNo := entry.Data["__line__"]
 	b := entry.Buffer
 	if b == nil {
 		b = &bytes.Buffer{}
 	}
-	fmt.Fprintf(b, "%s %v %v: %v", levelStr, fileName, lineNo, entry.Message)
-	appendKVsAndNewLine(b, entry)
-	return b.String()
+	_, err := fmt.Fprintf(b, "%s %v %v: %v", levelStr, fileName, lineNo, entry.Message)
+	if err != nil {
+		return "", err
+	}
+	err = appendKVsAndNewLine(b, entry)
+	if err != nil {
+		return "", err
+	}
+	return b.String(), nil
 }
 
 // appendKeysAndNewLine writes the KV pairs attached to the entry to the end of the buffer, then
 // finishes it with a newline.
-func appendKVsAndNewLine(b *bytes.Buffer, entry *log.Entry) {
+func appendKVsAndNewLine(b *bytes.Buffer, entry *log.Entry) error {
 	// Sort the keys for consistent output.
 	var keys []string = make([]string, 0, len(entry.Data))
 	for k := range entry.Data {
@@ -294,7 +285,7 @@ func appendKVsAndNewLine(b *bytes.Buffer, entry *log.Entry) {
 	sort.Strings(keys)
 
 	for _, key := range keys {
-		if key == fieldFileName || key == fieldLineNumber || key == FieldForceFlush {
+		if key == "__file__" || key == "__line__" {
 			continue
 		}
 		var value interface{} = entry.Data[key]
@@ -306,7 +297,10 @@ func appendKVsAndNewLine(b *bytes.Buffer, entry *log.Entry) {
 			stringifiedValue = stringer.String()
 		} else {
 			// No string method, use %#v to get a more thorough dump.
-			fmt.Fprintf(b, " %v=%#v", key, value)
+			_, err := fmt.Fprintf(b, " %v=%#v", key, value)
+			if err != nil {
+				return err
+			}
 			continue
 		}
 		b.WriteByte(' ')
@@ -315,6 +309,7 @@ func appendKVsAndNewLine(b *bytes.Buffer, entry *log.Entry) {
 		b.WriteString(stringifiedValue)
 	}
 	b.WriteByte('\n')
+	return nil
 }
 
 // NullWriter is a dummy writer that always succeeds and does nothing.
@@ -332,20 +327,22 @@ func (hook ContextHook) Levels() []log.Level {
 }
 
 func (hook ContextHook) Fire(entry *log.Entry) error {
-	// We used to do runtime.Callers(6, pcs) here so that we'd skip straight to the expected
-	// frame.  However, if an intermediate frame gets inlined we can skip too many frames in
-	// that case.  The only safe option is to use skip=1 and then let CallersFrames() deal
-	// with any inlining.
-	pcs := make([]uintptr, 20)
-	if numEntries := runtime.Callers(1, pcs); numEntries > 0 {
-		pcs = pcs[:numEntries]
+	pcs := make([]uintptr, 4)
+	if numEntries := runtime.Callers(6, pcs); numEntries > 0 {
 		frames := runtime.CallersFrames(pcs)
 		for {
 			frame, more := frames.Next()
 			if !shouldSkipFrame(frame) {
-				// We found the frame we were looking for.  Record its file/line number.
-				entry.Data[fieldFileName] = path.Base(frame.File)
-				entry.Data[fieldLineNumber] = frame.Line
+				// Make a copy of the map; that ensures that the Entry is thread
+				// safe in case someone else is doing a WithFields() in another
+				// thread.
+				newData := make(log.Fields, len(entry.Data)+2)
+				for k, v := range entry.Data {
+					newData[k] = v
+				}
+				newData["__file__"] = path.Base(frame.File)
+				newData["__line__"] = frame.Line
+				entry.Data = newData
 				break
 			}
 			if !more {
@@ -356,24 +353,10 @@ func (hook ContextHook) Fire(entry *log.Entry) error {
 	return nil
 }
 
-// shouldSkipFrame returns true if the given frame belongs to the logging library (or this utility package).
-// Note: this is on the critical path for every log, if you need to update it, make sure to run the
-// benchmarks.
-//
-// Some things we've tried that were worse than strings.HasSuffix():
-//
-// - using a regexp:	    ~100x slower
-// - using strings.LastIndex(): ~10x slower
-// - omitting the package:      no benefit
 func shouldSkipFrame(frame runtime.Frame) bool {
-	return strings.HasSuffix(frame.File, "projectcalico/typha/pkg/logutils/logutils.go") ||
-		strings.HasSuffix(frame.File, "sirupsen/logrus/hooks.go") ||
-		strings.HasSuffix(frame.File, "logrus/hooks.go") ||
-		strings.HasSuffix(frame.File, "projectcalico/logrus@v1.0.4-calico/hooks.go") ||
-		strings.HasSuffix(frame.File, "projectcalico/logrus@v1.0.4-calico/entry.go") ||
-		strings.HasSuffix(frame.File, "sirupsen/logrus/entry.go") ||
-		strings.HasSuffix(frame.File, "sirupsen/logrus/logger.go") ||
-		strings.HasSuffix(frame.File, "sirupsen/logrus/exported.go")
+	return strings.LastIndex(frame.File, "exported.go") > 0 ||
+		strings.LastIndex(frame.File, "logger.go") > 0 ||
+		strings.LastIndex(frame.File, "entry.go") > 0
 }
 
 type QueuedLog struct {
@@ -398,21 +381,22 @@ func NewStreamDestination(
 	writer io.Writer,
 	c chan QueuedLog,
 	disableLogDropping bool,
-	counter prometheus.Counter,
 ) *Destination {
 	return &Destination{
 		Level:   level,
-		Channel: c,
+		channel: c,
 		writeLog: func(ql QueuedLog) error {
 			if ql.NumSkippedLogs > 0 {
-				fmt.Fprintf(writer, "... dropped %d logs ...\n",
+				_, err := fmt.Fprintf(writer, "... dropped %d logs ...\n",
 					ql.NumSkippedLogs)
+				if err != nil {
+					return err
+				}
 			}
 			_, err := writer.Write(ql.Message)
 			return err
 		},
 		disableLogDropping: disableLogDropping,
-		counter:            counter,
 	}
 }
 
@@ -421,21 +405,19 @@ func NewSyslogDestination(
 	writer syslogWriter,
 	c chan QueuedLog,
 	disableLogDropping bool,
-	counter prometheus.Counter,
 ) *Destination {
 	return &Destination{
 		Level:   level,
-		Channel: c,
+		channel: c,
 		writeLog: func(ql QueuedLog) error {
 			if ql.NumSkippedLogs > 0 {
-				writer.Warning(fmt.Sprintf("... dropped %d logs ...\n",
+				_ = writer.Warning(fmt.Sprintf("... dropped %d logs ...\n",
 					ql.NumSkippedLogs))
 			}
 			err := writeToSyslog(writer, ql)
 			return err
 		},
 		disableLogDropping: disableLogDropping,
-		counter:            counter,
 	}
 }
 
@@ -444,27 +426,24 @@ type Destination struct {
 	Level log.Level
 	// Channel is the channel used to queue logs to the background worker thread.  Public for
 	// test purposes.
-	Channel chan QueuedLog
-	// WriteLog is the function to actually make a log.  The constructors above initialise this
+	channel chan QueuedLog
+	// writeLog is the function to actually make a log.  The constructors above initialise this
 	// with a function that logs to a stream or to syslog, for example.
 	writeLog func(ql QueuedLog) error
 
-	// DisableLogDropping forces all logs to be queued even if the destination blocks.
+	// disableLogDropping forces all logs to be queued even if the destination blocks.
 	disableLogDropping bool
 
-	// Lock protects the numDroppedLogs count.
+	// lock protects the numDroppedLogs count.
 	lock           sync.Mutex
 	numDroppedLogs uint
-
-	// Counter is the prometheus counter for logged errors that this destination will increment
-	counter prometheus.Counter
 }
 
 // Send sends a log to the background thread.  It returns true on success or false if the channel
 // is blocked.
 func (d *Destination) Send(ql QueuedLog) (ok bool) {
 	if d.disableLogDropping {
-		d.Channel <- ql
+		d.channel <- ql
 		ok = true
 		return
 	}
@@ -472,7 +451,7 @@ func (d *Destination) Send(ql QueuedLog) (ok bool) {
 	d.lock.Lock()
 	ql.NumSkippedLogs = d.numDroppedLogs
 	select {
-	case d.Channel <- ql:
+	case d.channel <- ql:
 		// We've now queued reporting of all the dropped logs, zero out the counter.
 		d.numDroppedLogs = 0
 		ok = true
@@ -486,12 +465,11 @@ func (d *Destination) Send(ql QueuedLog) (ok bool) {
 // LoopWritingLogs is intended to be used as a background go-routine.  It processes the logs from
 // the channel.
 func (d *Destination) LoopWritingLogs() {
-	for ql := range d.Channel {
+	for ql := range d.channel {
 		err := d.writeLog(ql)
 		if err != nil {
-			// Increment the number of errors while trying to write to log
-			d.counter.Inc()
-			fmt.Fprintf(os.Stderr, "Failed to write to log: %v", err)
+			counterLogErrors.Inc()
+			_, _ = fmt.Fprintf(os.Stderr, "Failed to write to log: %v", err)
 		}
 		ql.OnLogDone()
 	}
@@ -500,7 +478,7 @@ func (d *Destination) LoopWritingLogs() {
 // Close closes the channel to the background goroutine.  This is only safe to call if you know
 // that the destination is no longer in use by any thread; in tests, for example.
 func (d *Destination) Close() {
-	close(d.Channel)
+	close(d.channel)
 }
 
 type syslogWriter interface {
@@ -545,22 +523,13 @@ type BackgroundHook struct {
 	// Must be read/updated using atomic.XXX.
 	numDroppedLogs  uint64
 	lastDropLogTime time.Duration
-
-	// Counter
-	counter prometheus.Counter
 }
 
-func NewBackgroundHook(
-	levels []log.Level,
-	syslogLevel log.Level,
-	destinations []*Destination,
-	counter prometheus.Counter,
-) *BackgroundHook {
+func NewBackgroundHook(levels []log.Level, syslogLevel log.Level, destinations []*Destination) *BackgroundHook {
 	return &BackgroundHook{
 		destinations: destinations,
 		levels:       levels,
 		syslogLevel:  syslogLevel,
-		counter:      counter,
 	}
 }
 
@@ -590,12 +559,16 @@ func (h *BackgroundHook) Fire(entry *log.Entry) (err error) {
 	if entry.Level <= h.syslogLevel {
 		// syslog gets its own log string since our default log string duplicates a lot of
 		// syslog metadata.  Only calculate that string if it's needed.
-		ql.SyslogMessage = FormatForSyslog(entry)
+		ql.SyslogMessage, err = FormatForSyslog(entry)
+		if err != nil {
+			ql.SyslogMessage = "Failed to format message: " + err.Error()
+		}
 	}
 
 	var waitGroup *sync.WaitGroup
-	if entry.Level <= log.FatalLevel || entry.Data[FieldForceFlush] == true {
-		// If the process is about to be killed (or we're asked to do so), flush the log.
+	if entry.Level <= log.FatalLevel {
+		// This is a panic or a fatal log so we'll get killed immediately after we return.
+		// Use a wait group to wait for the log to get written.
 		waitGroup = &sync.WaitGroup{}
 		ql.WaitGroup = waitGroup
 	}
@@ -619,8 +592,7 @@ func (h *BackgroundHook) Fire(entry *log.Entry) (err error) {
 			if waitGroup != nil {
 				waitGroup.Done()
 			}
-			// Increment the number of dropped logs
-			dest.counter.Inc()
+			counterDroppedLogs.Inc()
 		}
 	}
 	if waitGroup != nil {
@@ -635,9 +607,9 @@ func (h *BackgroundHook) Start() {
 	}
 }
 
-// SafeParseLogLevel parses a string version of a logrus log level, defaulting
+// safeParseLogLevel parses a string version of a logrus log level, defaulting
 // to logrus.PanicLevel on failure.
-func SafeParseLogLevel(logLevel string) log.Level {
+func safeParseLogLevel(logLevel string) log.Level {
 	defaultedLevel := log.PanicLevel
 	if logLevel != "" {
 		parsedLevel, err := log.ParseLevel(logLevel)
