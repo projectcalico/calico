@@ -289,7 +289,7 @@ $(NODE_CONTAINER_BINARY): local_build $(SRC_FILES)
 # Building the image
 ###############################################################################
 ## Create the image for the current ARCH
-image: $(BUILD_IMAGE)
+image: remote-deps $(BUILD_IMAGE)
 ## Create the images for all supported ARCHes
 image-all: $(addprefix sub-image-,$(VALIDARCHES))
 sub-image-%:
