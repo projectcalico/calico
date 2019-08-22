@@ -376,11 +376,12 @@ func logToSys(caller, inp, opts string) {
 
 // sanitizeString removes any characters that are not numbers or letters from a string.
 func sanitizeString(s string) string {
+	var out string
 	r, err := regexp.Compile("[^a-zA-Z0-9]+")
 	if err == nil {
-		out := r.ReplaceAllString(s, "")
+		out = r.ReplaceAllString(s, "")
 	} else {
-		out := s
+		out = s
 	}
 	return out
 }
