@@ -157,19 +157,20 @@ SRC_FILES=$(shell find ./pkg -name '*.go')
 
 EXTRA_DOCKER_ARGS	+= -e GO111MODULE=on
 
-# Volume-mount gopath into the build container if it's explicitly set for persistent caching.
+# Volume-mount gopath into the build container to cache go module's packages. If the environment is using multiple
+# comma-separated directories for gopath, use the first one, as that is the default one used by go modules.
 ifneq ($(GOPATH),)
-# CircleCI's gopath is readonly and readonly gopaths are incompatible with go modules so don't
-# volume mount the cache in that environment
-ifndef CIRCLECI
 	# If the environment is using multiple comma-separated directories for gopath, use the first one, as that
 	# is the default one used by go modules.
-	LOCAL_GOPATH = $(shell echo $(GOPATH) | cut -d':' -f1)
-	EXTRA_DOCKER_ARGS += -v $(LOCAL_GOPATH)/pkg/mod:/go/pkg/mod:rw
-endif
+	GOMOD_CACHE = $(shell echo $(GOPATH) | cut -d':' -f1)/pkg/mod
+else
+	# If gopath is empty, default to $(HOME)/go.
+	GOMOD_CACHE = $(HOME)/go/pkg/mod
 endif
 
-DOCKER_RUN := mkdir -p .go-pkg-cache && \
+EXTRA_DOCKER_ARGS += -v $(GOMOD_CACHE):/go/pkg/mod:rw
+
+DOCKER_RUN := mkdir -p .go-pkg-cache $(GOMOD_CACHE) && \
         docker run --rm \
                 --net=host \
                 $(EXTRA_DOCKER_ARGS) \
@@ -256,7 +257,7 @@ git-status:
 	git status --porcelain
 
 git-commit:
-	git diff-index --quiet HEAD || git commit -m "Semaphore Automatic Update" --author "Semaphore Automatic Update <marvin@tigera.io>" go.mod go.sum
+	git diff-index --quiet HEAD || git commit -m "Semaphore Automatic Update" -c user.name="Semaphore Automatic Update" -c user.email="<marvin@tigera.io>" go.mod go.sum
 
 git-push:
 	git push
@@ -274,6 +275,7 @@ remote-deps:
 	chmod -R +w filesystem/etc/calico/confd/ crds.yaml'
 
 $(NODE_CONTAINER_BINARY): local_build $(SRC_FILES)
+	mkdir -p .go-pkg-cache $(GOMOD_CACHE)
 	docker run --rm \
 		$(EXTRA_DOCKER_ARGS) \
 		-e GOARCH=$(ARCH) \
