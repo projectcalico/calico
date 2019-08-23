@@ -435,6 +435,36 @@ var _ = Describe("determineEnabledPoolCIDRs", func() {
 			Expect(cidrs).To(ContainElement(*cidr1))
 			Expect(cidrs).ToNot(ContainElement(*cidr2))
 		})
+		It("should match ip-pool-1 but not ip-pool-2 for VXLANMode CrossSubnet", func() {
+			// Mock out the node and ip pools
+			n := api.Node{ObjectMeta: metav1.ObjectMeta{Name: "bee-node", Labels: map[string]string{"foo": "bar"}}}
+			pl := api.IPPoolList{
+				Items: []api.IPPool{
+					api.IPPool{
+						ObjectMeta: metav1.ObjectMeta{Name: "ip-pool-1"},
+						Spec: api.IPPoolSpec{
+							Disabled:     false,
+							CIDR:         "172.0.0.0/9",
+							NodeSelector: `foo == "bar"`,
+							VXLANMode:    api.VXLANModeCrossSubnet,
+						},
+					}, api.IPPool{
+						ObjectMeta: metav1.ObjectMeta{Name: "ip-pool-2"},
+						Spec: api.IPPoolSpec{
+							Disabled:     false,
+							CIDR:         "172.128.0.0/9",
+							NodeSelector: `foo != "bar"`,
+							VXLANMode:    api.VXLANModeCrossSubnet,
+						},
+					}}}
+
+			// Execute and test assertions.
+			cidrs := determineEnabledPoolCIDRs(n, pl, true)
+			_, cidr1, _ := net.ParseCIDR("172.0.0.1/9")
+			_, cidr2, _ := net.ParseCIDR("172.128.0.1/9")
+			Expect(cidrs).To(ContainElement(*cidr1))
+			Expect(cidrs).ToNot(ContainElement(*cidr2))
+		})
 	})
 })
 
