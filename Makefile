@@ -134,17 +134,18 @@ LOCAL_GROUP_ID:=$(shell id -g)
 
 EXTRA_DOCKER_ARGS	+= -e GO111MODULE=on
 
-# Volume-mount gopath into the build container if it's explicitly set for persistent caching.
+# Volume-mount gopath into the build container to cache go module's packages. If the environment is using multiple
+# comma-separated directories for gopath, use the first one, as that is the default one used by go modules.
 ifneq ($(GOPATH),)
-# CircleCI's gopath is readonly and readonly gopaths are incompatible with go modules so don't
-# volume mount the cache in that environment
-ifndef CIRCLECI
 	# If the environment is using multiple comma-separated directories for gopath, use the first one, as that
 	# is the default one used by go modules.
-	LOCAL_GOPATH = $(shell echo $(GOPATH) | cut -d':' -f1)
-	EXTRA_DOCKER_ARGS += -v $(LOCAL_GOPATH)/pkg/mod:/go/pkg/mod:rw
+	GOMOD_CACHE = $(shell echo $(GOPATH) | cut -d':' -f1)/pkg/mod
+else
+	# If gopath is empty, default to $(HOME)/go.
+	GOMOD_CACHE = $(HOME)/go/pkg/mod
 endif
-endif
+
+EXTRA_DOCKER_ARGS += -v $(GOMOD_CACHE):/go/pkg/mod:rw
 
 # Allow libcalico-go and the ssh auth sock to be mapped into the build container.
 ifdef LIBCALICOGO_PATH
@@ -154,7 +155,7 @@ ifdef SSH_AUTH_SOCK
   EXTRA_DOCKER_ARGS += -v $(SSH_AUTH_SOCK):/ssh-agent --env SSH_AUTH_SOCK=/ssh-agent
 endif
 
-DOCKER_RUN := mkdir -p .go-pkg-cache && \
+DOCKER_RUN := mkdir -p .go-pkg-cache $(GOMOD_CACHE) && \
 	docker run --rm \
 		--net=host \
 		$(EXTRA_DOCKER_ARGS) \
@@ -222,7 +223,7 @@ git-status:
 	git status --porcelain
 
 git-commit:
-	git diff-index --quiet HEAD || git commit -m "Semaphore Automatic Update" --author "Semaphore Automatic Update <marvin@tigera.io>" go.mod go.sum
+	git diff-index --quiet HEAD || git commit -m "Semaphore Automatic Update" -c user.name="Semaphore Automatic Update" -c user.email="<marvin@tigera.io>" go.mod go.sum
 
 git-push:
 	git push
