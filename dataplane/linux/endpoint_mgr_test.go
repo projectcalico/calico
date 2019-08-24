@@ -18,6 +18,8 @@ import (
 	"errors"
 	"strings"
 
+	"github.com/projectcalico/felix/ifacemonitor"
+
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	log "github.com/sirupsen/logrus"
@@ -560,6 +562,12 @@ func (t *mockRouteTable) SetL2Routes(ifaceName string, targets []routetable.L2Ta
 		"targets":   targets,
 	}).Debug("SetL2Routes")
 	t.currentL2Routes[ifaceName] = targets
+}
+
+func (t *mockRouteTable) OnIfaceStateChanged(string, ifacemonitor.State) {}
+func (t *mockRouteTable) QueueResync()                                   {}
+func (t *mockRouteTable) Apply() error {
+	return nil
 }
 
 func (t *mockRouteTable) checkRoutes(ifaceName string, expected []routetable.Target) {

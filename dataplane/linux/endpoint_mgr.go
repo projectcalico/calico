@@ -37,6 +37,9 @@ import (
 type routeTable interface {
 	SetRoutes(ifaceName string, targets []routetable.Target)
 	SetL2Routes(ifaceName string, targets []routetable.L2Target)
+	OnIfaceStateChanged(string, ifacemonitor.State)
+	QueueResync()
+	Apply() error
 }
 
 type endpointManagerCallbacks struct {
@@ -358,6 +361,10 @@ func (m *endpointManager) CompleteDeferredWork() error {
 	m.updateEndpointStatuses()
 
 	return nil
+}
+
+func (m *endpointManager) GetRouteTables() []routeTable {
+	return []routeTable{m.routeTable}
 }
 
 func (m *endpointManager) markEndpointStatusDirtyByIface(ifaceName string) {

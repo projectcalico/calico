@@ -237,6 +237,8 @@ type Config struct {
 	GenericXDPEnabled          bool `config:"bool;false"`
 
 	loadClientConfigFromEnvironment func() (*apiconfig.CalicoAPIConfig, error)
+
+	useResourceUpdates bool
 }
 
 type ProtoPort struct {
@@ -635,6 +637,14 @@ func loadParams() {
 		}
 		knownParams[strings.ToLower(field.Name)] = param
 	}
+}
+
+func (config *Config) SetUseResourceUpdates(b bool) {
+	config.useResourceUpdates = b
+}
+
+func (config *Config) UseResourceUpdates() bool {
+	return config.useResourceUpdates
 }
 
 func (config *Config) RawValues() map[string]string {

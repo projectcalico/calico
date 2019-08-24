@@ -37,6 +37,7 @@ import (
 type Container struct {
 	Name     string
 	IP       string
+	IPPrefix string
 	Hostname string
 	runCmd   *exec.Cmd
 
@@ -191,6 +192,7 @@ func Run(namePrefix string, opts RunOpts, args ...string) (c *Container) {
 
 	// Fill in rest of container struct.
 	c.IP = c.GetIP()
+	c.IPPrefix = c.GetIPPrefix()
 	c.Hostname = c.GetHostname()
 	c.binaries = set.New()
 	log.WithField("container", c).Info("Container now running")
@@ -296,6 +298,11 @@ func (c *Container) DockerInspect(format string) string {
 
 func (c *Container) GetIP() string {
 	output := c.DockerInspect("{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}")
+	return strings.TrimSpace(output)
+}
+
+func (c *Container) GetIPPrefix() string {
+	output := c.DockerInspect("{{range .NetworkSettings.Networks}}{{.IPPrefixLen}}{{end}}")
 	return strings.TrimSpace(output)
 }
 

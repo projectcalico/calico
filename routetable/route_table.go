@@ -65,7 +65,8 @@ func init() {
 type TargetType string
 
 const (
-	TargetTypeVXLAN TargetType = "vxlan"
+	TargetTypeVXLAN   TargetType = "vxlan"
+	TargetTypeNoEncap TargetType = "noencap"
 )
 
 type L2Target struct {
@@ -188,17 +189,17 @@ func NewWithShims(
 		ifaceNameToFirstSeen:        map[string]time.Time{},
 		pendingIfaceNameToTargets:   map[string][]Target{},
 		pendingIfaceNameToL2Targets: map[string][]L2Target{},
-		dirtyIfaces:              set.New(),
-		pendingConntrackCleanups: map[ip.Addr]chan struct{}{},
-		newNetlinkHandle:         newNetlinkHandle,
-		netlinkTimeout:           netlinkTimeout,
-		addStaticARPEntry:        addStaticARPEntry,
-		conntrack:                conntrack,
-		time:                     timeShim,
-		vxlan:                    vxlan,
-		deviceRouteSourceAddress: deviceRouteSourceAddress,
-		deviceRouteProtocol:      deviceRouteProtocol,
-		removeExternalRoutes:     removeExternalRoutes,
+		dirtyIfaces:                 set.New(),
+		pendingConntrackCleanups:    map[ip.Addr]chan struct{}{},
+		newNetlinkHandle:            newNetlinkHandle,
+		netlinkTimeout:              netlinkTimeout,
+		addStaticARPEntry:           addStaticARPEntry,
+		conntrack:                   conntrack,
+		time:                        timeShim,
+		vxlan:                       vxlan,
+		deviceRouteSourceAddress:    deviceRouteSourceAddress,
+		deviceRouteProtocol:         deviceRouteProtocol,
+		removeExternalRoutes:        removeExternalRoutes,
 	}
 }
 
@@ -591,7 +592,7 @@ func (r *RouteTable) syncRoutesForLink(ifaceName string) error {
 				route.Gw = target.GW.AsNetIP()
 			}
 
-			if target.Type == TargetTypeVXLAN {
+			if target.Type == TargetTypeVXLAN || target.Type == TargetTypeNoEncap {
 				route.Scope = netlink.SCOPE_UNIVERSE
 				route.SetFlag(syscall.RTNH_F_ONLINK)
 			}
