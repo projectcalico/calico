@@ -61,10 +61,6 @@ Supported, optional environment variables:
 -  `STEPS`: override the parts of the process to execute.  Default is
    all of the following:
 
-   -  `ppa`: Check that PPA exists.
-
-   -  `rpm_repo`: Ensure that the RPM repository exists.
-
    -  `bld_images`: Build required container images for building
       packages for each target platform.
 
