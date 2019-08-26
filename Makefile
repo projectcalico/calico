@@ -128,13 +128,17 @@ update-typha:
 git-status:
 	git status --porcelain
 
+git-config:
+	git config --global user.name "Semaphore Automatic Update"
+	git config --global user.email "marvin@tigera.io"
+
 git-commit:
 	git diff-index --quiet HEAD || git commit -m "Semaphore Automatic Update" -c user.name="Semaphore Automatic Update" -c user.email="<marvin@tigera.io>" go.mod go.sum
 
 git-push:
 	git push
 
-commit-pin-updates: update-typha git-status ci git-commit git-push
+commit-pin-updates: update-typha git-status ci git-config git-commit git-push
 
 bin/confd-$(ARCH): $(SRC_FILES)
 	$(DOCKER_RUN) $(CALICO_BUILD) sh -c 'go build -v -i -o $@ $(LDFLAGS) "$(PACKAGE_NAME)" && \
