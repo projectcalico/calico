@@ -8,15 +8,15 @@ Enable inter workload communication across networks that are not aware of worklo
 
 ### Value
 
-In general, we recommend running Calico without network overlay/encapsulation. This gives you the highest performance and simplest network; the packet that leaves your workload is the packet that goes on the wire.  
+In general, we recommend running Calico without network overlay/encapsulation. This gives you the highest performance and simplest network; the packet that leaves your workload is the packet that goes on the wire.
 
 However, selectively using overlays/encapsulation can be useful when running on top of an underlying network that cannot easily be made aware of workload IPs. A common example is if you are using Calico networking in AWS across multiple VPCs/subnets.  In this case, Calico can selectively encapsulate only the traffic that is routed between the VPCs/subnets, and run without encapsulation within each VPC/subnet. You might also decide to run your entire Calico network with encapsulation as an overlay network -- as a quick way to get started without setting up BGP peering or other routing information in your underlying network.
 
 ### Features
 
-This how-to guide uses the following features: 
+This how-to guide uses the following features:
 
-**IPPool** resource with:  
+**IPPool** resource with:
 - ipipMode field (IP in IP encapsulation)
 - vxlanMode field (VXLAN encapsulation)
 
@@ -32,7 +32,7 @@ Calico supports two types of encapsulation: VXLAN and IP in IP.  VXLAN is suppor
 
 #### Cross subnet
 
-Encapsulation of workload traffic is typically required only when traffic crosses a router that is unable to route workload IP addresses on its own. For IP in IP, Calico can perform encapsulation on: all traffic, no traffic, or only on traffic that crosses a subnet boundary.
+Encapsulation of workload traffic is typically required only when traffic crosses a router that is unable to route workload IP addresses on its own. Calico can perform encapsulation on: all traffic, no traffic, or only on traffic that crosses a subnet boundary.
 
 ### How to
 
@@ -40,6 +40,7 @@ You can configure each IP pool with different encapsulation configurations. Howe
 
 - [Configure IP in IP encapsulation for only cross subnet traffic](#configure-ip-in-ip-encapsulation-for-only-cross-subnet-traffic)
 - [Configure IP in IP encapsulation for all inter workload traffic](#configure-ip-in-ip-encapsulation-for-all-inter-workload-traffic)
+- [Configure VXLAN encapsulation for only cross subnet traffic](#configure-vxlan-encapsulation-for-only-cross-subnet-traffic)
 - [Configure VXLAN encapsulation for all inter workload traffic](#configure-vxlan-encapsulation-for-all-inter-workload-traffic)
 
 #### IPv4/6 address support
@@ -48,13 +49,13 @@ IP in IP and VXLAN support only IPv4 addresses.
 
 #### Best practice
 
-For **IP in IP**, Calico has an option to selectively encapsulate only traffic that crosses subnet boundaries.  We recommend using the **cross subnet** option for IP in IP to minimize encapsulation overhead. Cross subnet mode provides better performance in AWS multi-AZ deployments, and on networks where routers are used to connect pools of nodes with L2 connectivity.
+Calico has an option to selectively encapsulate only traffic that crosses subnet boundaries.  We recommend using the **cross subnet** option with IP in IP to minimize encapsulation overhead. Cross subnet mode provides better performance in AWS multi-AZ deployments, and on networks where routers are used to connect pools of nodes with L2 connectivity.
 
-Be aware that switching encapsulation modes can cause disruption to in-progress connections. Plan accordingly. 
+Be aware that switching encapsulation modes can cause disruption to in-progress connections. Plan accordingly.
 
 #### Configure IP in IP encapsulation for only cross subnet traffic
 
-IP in IP encapsulation can be performed selectively, and only for traffic crossing subnet boundaries. 
+IP in IP encapsulation can be performed selectively, and only for traffic crossing subnet boundaries.
 
 To enable this feature, set `ipipMode` to `CrossSubnet`.
 
@@ -62,7 +63,7 @@ To enable this feature, set `ipipMode` to `CrossSubnet`.
 apiVersion: projectcalico.org/v3
 kind: IPPool
 metadata:
-  name: ippool-cross-subnet-1
+  name: ippool-ipip-cross-subnet-1
 spec:
   cidr: 192.168.0.0/16
   ipipMode: CrossSubnet
@@ -81,6 +82,23 @@ metadata:
 spec:
   cidr: 192.168.0.0/16
   ipipMode: Always
+  natOutgoing: true
+```
+
+#### Configure VXLAN encapsulation for only cross subnet traffic
+
+VXLAN encapsulation can be performed selectively, and only for traffic crossing subnet boundaries.
+
+To enable this feature, set `vxlanMode` to `CrossSubnet`.
+
+```
+apiVersion: projectcalico.org/v3
+kind: IPPool
+metadata:
+  name: ippool-vxlan-cross-subnet-1
+spec:
+  cidr: 192.168.0.0/16
+  vxlanMode: CrossSubnet
   natOutgoing: true
 ```
 

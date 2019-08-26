@@ -49,6 +49,7 @@ Ensure that your hosts and firewalls allow the necessary traffic based on your c
 | {{site.prodname}} networking (BGP)                           | All                  | Bidirectional   | TCP 179 |
 | {{site.prodname}} networking with IP-in-IP enabled (default) | All                  | Bidirectional   | IP-in-IP, often represented by its protocol number `4` |
 {%- if include.orch == "Kubernetes" %}
+| {{site.prodname}} networking with VXLAN enabled              | All                  | Bidirectional   | UDP 4789 |
 | {{site.prodname}} networking with Typha enabled              | Typha agent hosts    | Incoming        | TCP 5473 (default) |
 | flannel networking (VXLAN)                                   | All                  | Bidirectional   | UDP 4789 |
 | All                                                          | kube-apiserver host  | Incoming        | Often TCP 443 or 6443\* |
