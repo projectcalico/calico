@@ -5,7 +5,7 @@ canonical_url: 'https://docs.projectcalico.org/v3.7/introduction/index'
 
 <div class="row">
   <div class="col-md-6">
-    <img style="max-width: 330px" class="img-responsive" src="/images/felix_icon.png">
+    <img style="max-width: 330px" class="img-responsive center-block" src="/images/felix_icon.png">
   </div>
   <div class="col-md-6">
     <h3 style="margin-top: 5px">What is {{site.prodname}}?</h3>
@@ -29,7 +29,7 @@ canonical_url: 'https://docs.projectcalico.org/v3.7/introduction/index'
     <p>{{site.prodname}}’s policy engine can enforce the same policy model at the host networking layer and (if using Istio & Envoy) at the service mesh layer, protecting your infrastructure from compromised workloads and protecting your workloads from compromised infrastructure.</p>
   </div>
   <div class="col-md-6">
-    <img class="img-responsive" src="/images/intro/best-practices.png">
+    <img class="img-responsive center-block" src="/images/intro/best-practices.png">
   </div>
 </div>
 
@@ -37,7 +37,7 @@ canonical_url: 'https://docs.projectcalico.org/v3.7/introduction/index'
 
 <div class="row">
   <div class="col-md-6">
-    <img class="img-responsive" src="/images/intro/performance.png">
+    <img class="img-responsive center-block" src="/images/intro/performance.png">
   </div>
   <div class="col-md-6">
     <h3 style="margin-top: 5px">Performance</h3>
@@ -53,7 +53,7 @@ canonical_url: 'https://docs.projectcalico.org/v3.7/introduction/index'
     <p>{{site.prodname}}’s core design principles leverage best practice cloud-native design patterns combined with proven standards based network protocols trusted worldwide by the largest internet carriers. The result is a solution with exceptional scalability that has been running at scale in production for years. {{site.prodname}}’s development test cycle includes regularly testing multi-thousand node clusters.  Whether you are running a 10 node cluster, 100 node cluster, or more, you reap the benefits of the improved performance and scalability characteristics demanded by the largest Kubernetes clusters.</p>
   </div>
   <div class="col-md-6">
-    <img class="img-responsive" src="/images/intro/scale.png">
+    <img class="img-responsive center-block" src="/images/intro/scale.png">
   </div>
 </div>
 
@@ -61,7 +61,7 @@ canonical_url: 'https://docs.projectcalico.org/v3.7/introduction/index'
 
 <div class="row">
   <div class="col-md-6">
-    <img class="img-responsive" src="/images/intro/interoperability.png">
+    <img class="img-responsive center-block" src="/images/intro/interoperability.png">
   </div>
   <div class="col-md-6">
     <h3 style="margin-top: 5px">Interoperability</h3>
@@ -77,7 +77,7 @@ canonical_url: 'https://docs.projectcalico.org/v3.7/introduction/index'
     <p>{{site.prodname}} uses the Linux primitives that existing system administrators are already familiar with. Type in your favorite Linux networking command and you’ll get the results you expect.  In the vast majority of deployments the packet leaving your application is the packet that goes on the wire, with no encapsulation, tunnels, or overlays.  All the existings tools that system and network administrators use to gain visibility and analyze networking issues work as they do today.</p>
   </div>
   <div class="col-md-6">
-    <img class="img-responsive" src="/images/intro/looks-familiar.png">
+    <img class="img-responsive center-block" src="/images/intro/looks-familiar.png">
   </div>
 </div>
 
@@ -85,7 +85,7 @@ canonical_url: 'https://docs.projectcalico.org/v3.7/introduction/index'
 
 <div class="row">
   <div class="col-md-6">
-    <img class="img-responsive" src="/images/intro/deployed.png">
+    <img class="img-responsive center-block" src="/images/intro/deployed.png">
   </div>
   <div class="col-md-6">
     <h3 style="margin-top: 5px">Real world production hardened</h3>
@@ -101,7 +101,7 @@ canonical_url: 'https://docs.projectcalico.org/v3.7/introduction/index'
     <p>{{site.prodname}}’s network policy engine formed the original reference implementation of Kubernetes network policy during the development of the API. {{site.prodname}} is distinguished in that it implements the full set of features defined by the API giving users all the capabilities and flexibility envisaged when the API was defined. And for users that require even more power, {{site.prodname}} supports an extended set of network policy capabilities that work seamlessly alongside the Kubernetes API giving users even more flexibility in how they define their network policies.</p>
   </div>
   <div class="col-md-6">
-    <img class="img-responsive" src="/images/intro/policy.png">
+    <img class="img-responsive center-block" src="/images/intro/policy.png">
   </div>
 </div>
 
@@ -109,7 +109,7 @@ canonical_url: 'https://docs.projectcalico.org/v3.7/introduction/index'
 
 <div class="row">
   <div class="col-md-6">
-    <img class="img-responsive" src="/images/intro/tigera.png">
+    <img class="img-responsive center-block" src="/images/intro/tigera.png">
   </div>
   <div class="col-md-6">
     <h3 style="margin-top: 5px">A contributor community backed by the Tigera team</h3>
