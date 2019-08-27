@@ -194,13 +194,17 @@ update-libcalico:
 git-status:
 	git status --porcelain
 
+git-config:
+	git config --global user.name "Semaphore Automatic Update"
+	git config --global user.email "marvin@tigera.io"
+
 git-commit:
 	git diff-index --quiet HEAD || git commit -m "Semaphore Automatic Update" -c user.name="Semaphore Automatic Update" -c user.email="<marvin@tigera.io>" go.mod go.sum
 
 git-push:
 	git push
 
-commit-pin-updates: update-libcalico git-status ci git-commit git-push
+commit-pin-updates: update-libcalico git-status ci git-config git-commit git-push
 
 # The supported different binary names. For each, ensure that an OS and ARCH is set
 bin/calicoctl-%-amd64: ARCH=amd64
