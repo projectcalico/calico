@@ -32,7 +32,11 @@ data:
 {{- end }}
 {{- if eq .Values.network "calico" }}
   # Configure the backend to use.
+{{- if .Values.flannel_migration }}
+  calico_backend: "vxlan"
+{{- else }}
   calico_backend: "bird"
+{{- end }}
 
   # Configure the MTU to use
   veth_mtu: "1440"
