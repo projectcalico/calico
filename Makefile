@@ -206,13 +206,19 @@ update-libcalico:
 git-status:
 	git status --porcelain
 
+git-config:
+ifdef CONFIRM
+	git config --global user.name "Semaphore Automatic Update"
+	git config --global user.email "marvin@tigera.io"
+endif
+
 git-commit:
 	git diff-index --quiet HEAD || git commit -m "Semaphore Automatic Update" -c user.name="Semaphore Automatic Update" -c user.email="<marvin@tigera.io>" go.mod go.sum
 
 git-push:
 	git push
 
-commit-pin-updates: update-libcalico git-status ci git-commit git-push
+commit-pin-updates: update-libcalico git-status ci git-config git-commit git-push
 
 ## Build the Calico network plugin and ipam plugins
 $(BIN)/calico $(BIN)/calico-ipam: local_build $(SRC_FILES)
