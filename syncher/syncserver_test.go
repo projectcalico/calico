@@ -556,7 +556,7 @@ func TestServiceAccountUpdateDispatch(t *testing.T) {
 	store := policystore.NewPolicyStore()
 	inSync := make(chan struct{})
 
-	update := &proto.ToDataplane{Payload: &proto.ToDataplane_ServiceAccountUpdate{serviceAccount1}}
+	update := &proto.ToDataplane{Payload: &proto.ToDataplane_ServiceAccountUpdate{ServiceAccountUpdate: serviceAccount1}}
 
 	Expect(func() { processUpdate(store, inSync, update) }).ToNot(Panic())
 	Expect(store.ServiceAccountByID).To(Equal(map[proto.ServiceAccountID]*proto.ServiceAccountUpdate{
@@ -595,7 +595,7 @@ func TestNamespaceUpdateDispatch(t *testing.T) {
 	store := policystore.NewPolicyStore()
 	inSync := make(chan struct{})
 
-	update := &proto.ToDataplane{Payload: &proto.ToDataplane_NamespaceUpdate{namespace1}}
+	update := &proto.ToDataplane{Payload: &proto.ToDataplane_NamespaceUpdate{NamespaceUpdate: namespace1}}
 	Expect(func() { processUpdate(store, inSync, update) }).ToNot(Panic())
 	Expect(store.NamespaceByID).To(Equal(map[proto.NamespaceID]*proto.NamespaceUpdate{
 		*namespace1.Id: namespace1,
@@ -802,7 +802,10 @@ func (this *testSyncServer) Sync(_ *proto.SyncRequest, stream proto.PolicySync_S
 		case <-ctx.Done():
 			return nil
 		case update = <-this.updates:
-			stream.Send(&update)
+			err := stream.Send(&update)
+			if err != nil {
+				return err
+			}
 		}
 	}
 }
@@ -830,8 +833,16 @@ func (this *testSyncServer) GetTarget() string {
 }
 
 func (this *testSyncServer) listen() {
+	var err error
+	var wg sync.WaitGroup
+
 	this.listener = openListener(this.path)
-	go this.gRPCServer.Serve(this.listener)
+	go func() {
+		err = this.gRPCServer.Serve(this.listener)
+		wg.Done()
+	}()
+	wg.Wait()
+	Expect(err).ToNot(HaveOccurred())
 }
 
 const ListenerSocket = "policysync.sock"

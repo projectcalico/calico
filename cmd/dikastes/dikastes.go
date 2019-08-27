@@ -52,8 +52,6 @@ Options:
 
 var VERSION string
 
-const NODE_NAME_ENV = "K8S_NODENAME"
-
 func main() {
 	arguments, err := docopt.Parse(usage, nil, true, VERSION, false)
 	if err != nil {
@@ -68,7 +66,6 @@ func main() {
 	} else if arguments["client"].(bool) {
 		runClient(arguments)
 	}
-	return
 }
 
 func runServer(arguments map[string]interface{}) {
@@ -126,7 +123,7 @@ func runServer(arguments map[string]interface{}) {
 
 	// Use a buffered channel so we don't miss any signals
 	c := make(chan os.Signal, 1)
-	signal.Notify(c, os.Interrupt, os.Kill, syscall.SIGTERM)
+	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
 
 	// Block until a signal is received.
 	log.Infof("Got signal: %v", <-c)
@@ -166,5 +163,4 @@ func runClient(arguments map[string]interface{}) {
 		log.Fatalf("Failed %v", err)
 	}
 	log.Infof("Check response:\n %v", resp)
-	return
 }

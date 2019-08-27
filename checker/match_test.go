@@ -27,16 +27,16 @@ import (
 
 var (
 	socketAddressProtocolTCP = &core.Address{
-		&core.Address_SocketAddress{
-			&core.SocketAddress{
+		Address: &core.Address_SocketAddress{
+			SocketAddress: &core.SocketAddress{
 				Protocol: core.TCP,
 			},
 		},
 	}
 
 	socketAddressProtocolUDP = &core.Address{
-		&core.Address_SocketAddress{
-			&core.SocketAddress{
+		Address: &core.Address_SocketAddress{
+			SocketAddress: &core.SocketAddress{
 				Protocol: core.UDP,
 			},
 		},
@@ -119,16 +119,16 @@ func TestMatchHTTPPaths(t *testing.T) {
 		result  bool
 	}{
 		{"empty", []*proto.HTTPMatch_PathMatch{}, "/foo", true},
-		{"exact", []*proto.HTTPMatch_PathMatch{{&proto.HTTPMatch_PathMatch_Exact{Exact: "/foo"}}}, "/foo", true},
-		{"prefix", []*proto.HTTPMatch_PathMatch{{&proto.HTTPMatch_PathMatch_Prefix{Prefix: "/foo"}}}, "/foobar", true},
-		{"exact fail", []*proto.HTTPMatch_PathMatch{{&proto.HTTPMatch_PathMatch_Exact{Exact: "/foo"}}}, "/joo", false},
-		{"exact not match prefix", []*proto.HTTPMatch_PathMatch{{&proto.HTTPMatch_PathMatch_Exact{Exact: "/foo"}}}, "/foobar", false},
-		{"prefix fail", []*proto.HTTPMatch_PathMatch{{&proto.HTTPMatch_PathMatch_Prefix{Prefix: "/foo"}}}, "/joobar", false},
-		{"multiple", []*proto.HTTPMatch_PathMatch{{&proto.HTTPMatch_PathMatch_Prefix{Prefix: "/joo"}}, {&proto.HTTPMatch_PathMatch_Exact{Exact: "/foo"}}}, "/joobar", true},
-		{"exact path with query", []*proto.HTTPMatch_PathMatch{{&proto.HTTPMatch_PathMatch_Exact{Exact: "/foo"}}}, "/foo?xyz", true},
-		{"exact path with fragment", []*proto.HTTPMatch_PathMatch{{&proto.HTTPMatch_PathMatch_Exact{Exact: "/foo"}}}, "/foo#xyz", true},
-		{"prefix path with query fail", []*proto.HTTPMatch_PathMatch{{&proto.HTTPMatch_PathMatch_Prefix{Prefix: "/foobar"}}}, "/foo?bar", false},
-		{"prefix path with fragment fail", []*proto.HTTPMatch_PathMatch{{&proto.HTTPMatch_PathMatch_Prefix{Prefix: "/foobar"}}}, "/foo#bar", false},
+		{"exact", []*proto.HTTPMatch_PathMatch{{PathMatch: &proto.HTTPMatch_PathMatch_Exact{Exact: "/foo"}}}, "/foo", true},
+		{"prefix", []*proto.HTTPMatch_PathMatch{{PathMatch: &proto.HTTPMatch_PathMatch_Prefix{Prefix: "/foo"}}}, "/foobar", true},
+		{"exact fail", []*proto.HTTPMatch_PathMatch{{PathMatch: &proto.HTTPMatch_PathMatch_Exact{Exact: "/foo"}}}, "/joo", false},
+		{"exact not match prefix", []*proto.HTTPMatch_PathMatch{{PathMatch: &proto.HTTPMatch_PathMatch_Exact{Exact: "/foo"}}}, "/foobar", false},
+		{"prefix fail", []*proto.HTTPMatch_PathMatch{{PathMatch: &proto.HTTPMatch_PathMatch_Prefix{Prefix: "/foo"}}}, "/joobar", false},
+		{"multiple", []*proto.HTTPMatch_PathMatch{{PathMatch: &proto.HTTPMatch_PathMatch_Prefix{Prefix: "/joo"}}, {PathMatch: &proto.HTTPMatch_PathMatch_Exact{Exact: "/foo"}}}, "/joobar", true},
+		{"exact path with query", []*proto.HTTPMatch_PathMatch{{PathMatch: &proto.HTTPMatch_PathMatch_Exact{Exact: "/foo"}}}, "/foo?xyz", true},
+		{"exact path with fragment", []*proto.HTTPMatch_PathMatch{{PathMatch: &proto.HTTPMatch_PathMatch_Exact{Exact: "/foo"}}}, "/foo#xyz", true},
+		{"prefix path with query fail", []*proto.HTTPMatch_PathMatch{{PathMatch: &proto.HTTPMatch_PathMatch_Prefix{Prefix: "/foobar"}}}, "/foo?bar", false},
+		{"prefix path with fragment fail", []*proto.HTTPMatch_PathMatch{{PathMatch: &proto.HTTPMatch_PathMatch_Prefix{Prefix: "/foobar"}}}, "/foo#bar", false},
 	}
 
 	for _, tc := range testCases {
@@ -154,7 +154,7 @@ func TestPanicHTTPPaths(t *testing.T) {
 	defer func() {
 		Expect(recover()).To(BeAssignableToTypeOf(&InvalidDataFromDataPlane{}))
 	}()
-	paths := []*proto.HTTPMatch_PathMatch{{&proto.HTTPMatch_PathMatch_Exact{Exact: "/foo"}}}
+	paths := []*proto.HTTPMatch_PathMatch{{PathMatch: &proto.HTTPMatch_PathMatch_Exact{Exact: "/foo"}}}
 	matchHTTPPaths(paths, "foo")
 }
 
@@ -178,7 +178,7 @@ func TestMatchRule(t *testing.T) {
 
 		HttpMatch: &proto.HTTPMatch{
 			Methods: []string{"GET", "POST"},
-			Paths:   []*proto.HTTPMatch_PathMatch{{&proto.HTTPMatch_PathMatch_Prefix{Prefix: "/path"}}, {&proto.HTTPMatch_PathMatch_Exact{Exact: "/pathlong"}}},
+			Paths:   []*proto.HTTPMatch_PathMatch{{PathMatch: &proto.HTTPMatch_PathMatch_Prefix{Prefix: "/path"}}, {PathMatch: &proto.HTTPMatch_PathMatch_Exact{Exact: "/pathlong"}}},
 		},
 		Protocol: &proto.Protocol{
 			NumberOrName: &proto.Protocol_Name{
@@ -287,16 +287,16 @@ func TestMatchRule(t *testing.T) {
 
 	// HTTPPath
 	ohp := rule.HttpMatch.Paths
-	rule.HttpMatch.Paths = []*proto.HTTPMatch_PathMatch{{&proto.HTTPMatch_PathMatch_Exact{"/nopath"}}}
+	rule.HttpMatch.Paths = []*proto.HTTPMatch_PathMatch{{PathMatch: &proto.HTTPMatch_PathMatch_Exact{Exact: "/nopath"}}}
 	Expect(match(rule, reqCache, "")).To(BeFalse())
 	rule.HttpMatch.Paths = ohp
 	Expect(match(rule, reqCache, "")).To(BeTrue())
 
 	// Protocol
 	op := rule.Protocol.GetName()
-	rule.Protocol.NumberOrName = &proto.Protocol_Name{"UDP"}
+	rule.Protocol.NumberOrName = &proto.Protocol_Name{Name: "UDP"}
 	Expect(match(rule, reqCache, "")).To(BeFalse())
-	rule.Protocol.NumberOrName = &proto.Protocol_Name{op}
+	rule.Protocol.NumberOrName = &proto.Protocol_Name{Name: op}
 	Expect(match(rule, reqCache, "")).To(BeTrue())
 
 	// SrcPorts
@@ -440,7 +440,7 @@ func TestMatchL4Protocol(t *testing.T) {
 
 	// With Protocol=TCP rule and default request
 	rule.Protocol = &proto.Protocol{
-		&proto.Protocol_Name{
+		NumberOrName: &proto.Protocol_Name{
 			Name: "TCP",
 		},
 	}
@@ -449,7 +449,7 @@ func TestMatchL4Protocol(t *testing.T) {
 
 	// With Protocol=6 rule and default request
 	rule.Protocol = &proto.Protocol{
-		&proto.Protocol_Number{
+		NumberOrName: &proto.Protocol_Number{
 			Number: 6,
 		},
 	}
@@ -458,7 +458,7 @@ func TestMatchL4Protocol(t *testing.T) {
 
 	// With Protocol=17 rule and default request
 	rule.Protocol = &proto.Protocol{
-		&proto.Protocol_Number{
+		NumberOrName: &proto.Protocol_Number{
 			Number: 17,
 		},
 	}
@@ -467,7 +467,7 @@ func TestMatchL4Protocol(t *testing.T) {
 
 	// With Protocol!=UDP rule and default request
 	rule.NotProtocol = &proto.Protocol{
-		&proto.Protocol_Name{
+		NumberOrName: &proto.Protocol_Name{
 			Name: "UDP",
 		},
 	}
@@ -476,7 +476,7 @@ func TestMatchL4Protocol(t *testing.T) {
 
 	// With Protocol!=6 rule and TCP request
 	rule.NotProtocol = &proto.Protocol{
-		&proto.Protocol_Number{
+		NumberOrName: &proto.Protocol_Number{
 			Number: 6,
 		},
 	}
@@ -487,12 +487,12 @@ func TestMatchL4Protocol(t *testing.T) {
 
 	// With Protocol!=TCP and Protocol == TCP rule and TCP request
 	rule.NotProtocol = &proto.Protocol{
-		&proto.Protocol_Name{
+		NumberOrName: &proto.Protocol_Name{
 			Name: "TCP",
 		},
 	}
 	rule.Protocol = &proto.Protocol{
-		&proto.Protocol_Name{
+		NumberOrName: &proto.Protocol_Name{
 			Name: "TCP",
 		},
 	}
@@ -503,12 +503,12 @@ func TestMatchL4Protocol(t *testing.T) {
 
 	// With Protocol!=TCP and Protocol == TCP rule and UDP request
 	rule.NotProtocol = &proto.Protocol{
-		&proto.Protocol_Name{
+		NumberOrName: &proto.Protocol_Name{
 			Name: "TCP",
 		},
 	}
 	rule.Protocol = &proto.Protocol{
-		&proto.Protocol_Name{
+		NumberOrName: &proto.Protocol_Name{
 			Name: "TCP",
 		},
 	}
@@ -683,7 +683,7 @@ func TestMatchPort(t *testing.T) {
 				Address: &core.Address_SocketAddress{
 					SocketAddress: &core.SocketAddress{
 						Address:       tc.ip,
-						PortSpecifier: &core.SocketAddress_PortValue{tc.port},
+						PortSpecifier: &core.SocketAddress_PortValue{PortValue: tc.port},
 					},
 				},
 			}

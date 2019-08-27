@@ -418,12 +418,9 @@ sub-tag-images-%:
 ###############################################################################
 ## Perform static checks on the code.
 
-# TODO: re-enable these linters !
-LINT_ARGS := --disable gosimple,staticcheck,govet,typecheck,errcheck,deadcode,unused
-
 .PHONY: static-checks
 static-checks: build
-	$(DOCKER_RUN) $(CALICO_BUILD) sh -c 'GO111MODULE=off golangci-lint run --deadline 5m $(LINT_ARGS)'
+	$(DOCKER_RUN) $(CALICO_BUILD) sh -c 'GO111MODULE=off golangci-lint run --deadline 5m'
 
 .PHONY: fix
 ## Fix static checks
