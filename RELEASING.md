@@ -18,7 +18,7 @@ Creating a new release creates the following artifacts:
 Checkout the branch from which you want to release. For a major or minor release,
 you will need to create a new `release-vX.Y` branch based on the target Calico version.
 
-Make sure the branch is in a good state, e.g. Update any pins in glide.yaml, create PR, ensure tests pass and merge.
+Make sure the branch is in a good state, e.g. Update any pins in go.mod, create PR, ensure tests pass and merge.
 
 You should have no local changes and tests should be passing.
 
