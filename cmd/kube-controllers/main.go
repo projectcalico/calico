@@ -1,4 +1,4 @@
-// Copyright (c) 2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2019 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -38,6 +38,7 @@ import (
 
 	"github.com/projectcalico/kube-controllers/pkg/config"
 	"github.com/projectcalico/kube-controllers/pkg/controllers/controller"
+	"github.com/projectcalico/kube-controllers/pkg/controllers/flannelmigration"
 	"github.com/projectcalico/kube-controllers/pkg/controllers/namespace"
 	"github.com/projectcalico/kube-controllers/pkg/controllers/networkpolicy"
 	"github.com/projectcalico/kube-controllers/pkg/controllers/node"
@@ -153,6 +154,18 @@ func main() {
 			controllerCtrl.controllerStates["ServiceAccount"] = &controllerState{
 				controller:  serviceAccountController,
 				threadiness: config.ProfileWorkers,
+			}
+		case "flannelmigration":
+			// Attempt to load Flannel configuration.
+			flannelConfig := new(flannelmigration.Config)
+			if err := flannelConfig.Parse(); err != nil {
+				log.WithError(err).Fatal("Failed to parse Flannel config")
+			}
+			log.WithField("flannelConfig", flannelConfig).Info("Loaded Flannel configuration from environment")
+
+			flannelMigrationController := flannelmigration.NewFlannelMigrationController(ctx, k8sClientset, calicoClient, flannelConfig)
+			controllerCtrl.controllerStates["FlannelMigration"] = &controllerState{
+				controller:  flannelMigrationController,
 			}
 		default:
 			log.Fatalf("Invalid controller '%s' provided.", controllerType)
