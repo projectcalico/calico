@@ -16,6 +16,7 @@ package flannelmigration
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"sort"
 	"time"
@@ -239,7 +240,7 @@ func (c *flannelMigrationController) CheckShouldMigrate() (bool, error) {
 
 	// Update calico-config ConfigMap veth_mtu.
 	// So that it could be populated into calico-node pods.
-	err = updateConfigMapValue(c.k8sClientset, namespaceKubeSystem, calicoConfigMapName, calicoConfigMapMtuKey, string(c.config.FlannelMTU))
+	err = updateConfigMapValue(c.k8sClientset, namespaceKubeSystem, calicoConfigMapName, calicoConfigMapMtuKey, fmt.Sprintf("%d", c.config.FlannelMTU))
 	if err != nil {
 		return false, err
 	}
