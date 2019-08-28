@@ -285,14 +285,13 @@ sub-build-%:
 TYPHA_BRANCH?=$(shell git rev-parse --abbrev-ref HEAD)
 TYPHA_REPO?=github.com/projectcalico/typha
 TYPHA_VERSION?=$(shell git ls-remote git@github.com:projectcalico/typha $(TYPHA_BRANCH) 2>/dev/null | cut -f 1)
-TYPHA_OLDVER?=$(shell go list -m -f "{{.Version}}" github.com/projectcalico/typha)
+TYPHA_OLDVER?=$(shell $(DOCKER_RUN) $(CALICO_BUILD) go list -m -f "{{.Version}}" github.com/projectcalico/typha)
 
 ## Update typha pin in go.mod
 update-typha:
 	$(DOCKER_RUN) $(CALICO_BUILD) sh -c '\
 	if [[ ! -z "$(TYPHA_VERSION)" ]] && [[ "$(TYPHA_VERSION)" != "$(TYPHA_OLDVER)" ]]; then \
 		echo "Updating typha version $(TYPHA_OLDVER) to $(TYPHA_VERSION) from $(TYPHA_REPO)"; \
-		go mod edit -droprequire github.com/projectcalico/typha; \
 		go get $(TYPHA_REPO)@$(TYPHA_VERSION); \
 	fi'
 
@@ -540,10 +539,10 @@ check-packr: bpf/packrd/packed-packr.go
 fix go-fmt goimports:
 	$(DOCKER_RUN) $(CALICO_BUILD) sh -c 'find . -iname "*.go" ! -wholename "./vendor/*" | xargs goimports -w -local github.com/projectcalico/'
 
-LIBCALICO_FELIX?=$(shell go list -m -f "{{.Version}}" github.com/projectcalico/libcalico-go)
-TYPHA_GOMOD?=$(shell go list -m -f "{{.GoMod}}" github.com/projectcalico/typha)
+LIBCALICO_FELIX?=$(shell $(DOCKER_RUN) $(CALICO_BUILD) go list -m -f "{{.Version}}" github.com/projectcalico/libcalico-go)
+TYPHA_GOMOD?=$(shell $(DOCKER_RUN) $(CALICO_BUILD) go list -m -f "{{.GoMod}}" github.com/projectcalico/typha)
 ifneq ($(TYPHA_GOMOD),)
-	LIBCALICO_TYPHA?=$(shell grep libcalico-go $(TYPHA_GOMOD) | cut -d' ' -f2)
+	LIBCALICO_TYPHA?=$(shell $(DOCKER_RUN) $(CALICO_BUILD) grep libcalico-go $(TYPHA_GOMOD) | cut -d' ' -f2)
 endif
 
 .PHONY: check-typha-pins
