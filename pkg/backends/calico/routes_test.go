@@ -5,8 +5,8 @@ import (
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	v1 "k8s.io/api/core/v1"
 
-	"k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/tools/cache"
 )
@@ -52,7 +52,8 @@ var _ = Describe("RouteGenerator", func() {
 		It("should get corresponding service for endpoints", func() {
 			// getServiceForEndpoints
 			svc, ep := buildSimpleService()
-			rg.svcIndexer.Add(svc)
+			err := rg.svcIndexer.Add(svc)
+			Expect(err).NotTo(HaveOccurred())
 			fetchedSvc, key := rg.getServiceForEndpoints(ep)
 			Expect(fetchedSvc.ObjectMeta).To(Equal(svc.ObjectMeta))
 			Expect(key).To(Equal("foo/bar"))
@@ -62,7 +63,8 @@ var _ = Describe("RouteGenerator", func() {
 		It("should get corresponding endpoints for service", func() {
 			// getEndpointsForService
 			svc, ep := buildSimpleService()
-			rg.epIndexer.Add(ep)
+			err := rg.epIndexer.Add(ep)
+			Expect(err).NotTo(HaveOccurred())
 			fetchedEp, key := rg.getEndpointsForService(svc)
 			Expect(fetchedEp.ObjectMeta).To(Equal(ep.ObjectMeta))
 			Expect(key).To(Equal("foo/bar"))
@@ -75,7 +77,8 @@ var _ = Describe("RouteGenerator", func() {
 				svc, ep := buildSimpleService()
 				addEndpointSubset(ep, rg.nodeName)
 
-				rg.epIndexer.Add(ep)
+				err := rg.epIndexer.Add(ep)
+				Expect(err).NotTo(HaveOccurred())
 				rg.setRouteForSvc(svc, nil)
 				Expect(rg.svcRouteMap["foo/bar"]).To(Equal("127.0.0.1/32"))
 				rg.unsetRouteForSvc(ep)
@@ -87,7 +90,8 @@ var _ = Describe("RouteGenerator", func() {
 				svc, ep := buildSimpleService()
 				addEndpointSubset(ep, rg.nodeName)
 
-				rg.svcIndexer.Add(svc)
+				err := rg.svcIndexer.Add(svc)
+				Expect(err).NotTo(HaveOccurred())
 				rg.setRouteForSvc(nil, ep)
 				Expect(rg.svcRouteMap["foo/bar"]).To(Equal("127.0.0.1/32"))
 				rg.unsetRouteForSvc(ep)
@@ -106,8 +110,10 @@ var _ = Describe("RouteGenerator", func() {
 			svc, ep = buildSimpleService()
 
 			addEndpointSubset(ep, rg.nodeName)
-			rg.epIndexer.Add(ep)
-			rg.svcIndexer.Add(svc)
+			err := rg.epIndexer.Add(ep)
+			Expect(err).NotTo(HaveOccurred())
+			err = rg.svcIndexer.Add(svc)
+			Expect(err).NotTo(HaveOccurred())
 		})
 
 		It("should remove clusterIPs when endpoints are deleted", func() {
@@ -120,7 +126,8 @@ var _ = Describe("RouteGenerator", func() {
 
 			// Simulate the remove of the local endpoint. It should withdraw the route.
 			ep.Subsets = []v1.EndpointSubset{}
-			rg.epIndexer.Add(ep)
+			err := rg.epIndexer.Add(ep)
+			Expect(err).NotTo(HaveOccurred())
 			rg.onEPAdd(ep)
 			Expect(rg.client.cacheRevision).To(Equal(initRevision + 2))
 			Expect(rg.svcRouteMap["foo/bar"]).To(Equal(""))

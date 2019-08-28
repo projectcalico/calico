@@ -2,9 +2,7 @@ package config
 
 import (
 	"flag"
-	"fmt"
 	"io/ioutil"
-	"net"
 	"os"
 	"reflect"
 	"strconv"
@@ -132,22 +130,6 @@ func InitConfig(ignoreFlags bool) (*Config, error) {
 	readTyphaConfig(&config.Typha)
 
 	return &config, nil
-}
-
-func getBackendNodesFromSRV(record, scheme string) ([]string, error) {
-	nodes := make([]string, 0)
-
-	// Ignore the CNAME as we don't need it.
-	_, addrs, err := net.LookupSRV("", "", record)
-	if err != nil {
-		return nodes, err
-	}
-	for _, srv := range addrs {
-		host := strings.TrimRight(srv.Target, ".")
-		port := strconv.FormatUint(uint64(srv.Port), 10)
-		nodes = append(nodes, fmt.Sprintf("%s://%s", scheme, net.JoinHostPort(host, port)))
-	}
-	return nodes, nil
 }
 
 // processFlags iterates through each flag set on the command line and

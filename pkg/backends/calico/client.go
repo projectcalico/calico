@@ -544,7 +544,7 @@ func (c *client) nodesWithIPAndAS(ip string, asNum numorstring.ASNumber) []strin
 		asStr = asNum.String()
 	}
 	nodeNames := []string{}
-	for nodeName, _ := range c.nodeLabels {
+	for nodeName := range c.nodeLabels {
 		nodeIPv4, nodeIPv6, nodeAS, _ := c.nodeToBGPFields(nodeName)
 		if (nodeIPv4 != ip) && (nodeIPv6 != ip) {
 			continue

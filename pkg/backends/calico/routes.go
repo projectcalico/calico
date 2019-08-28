@@ -22,7 +22,7 @@ import (
 	"time"
 
 	log "github.com/sirupsen/logrus"
-	"k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
@@ -91,12 +91,12 @@ func NewRouteGenerator(c *client, clusterCIDR string) (rg *routeGenerator, err e
 	}
 
 	// set up services informer
-	svcWatcher := cache.NewListWatchFromClient(client.Core().RESTClient(), "services", "", fields.Everything())
+	svcWatcher := cache.NewListWatchFromClient(client.CoreV1().RESTClient(), "services", "", fields.Everything())
 	svcHandler := cache.ResourceEventHandlerFuncs{AddFunc: rg.onSvcAdd, UpdateFunc: rg.onSvcUpdate, DeleteFunc: rg.onSvcDelete}
 	rg.svcIndexer, rg.svcInformer = cache.NewIndexerInformer(svcWatcher, &v1.Service{}, 0, svcHandler, cache.Indexers{})
 
 	// set up endpoints informer
-	epWatcher := cache.NewListWatchFromClient(client.Core().RESTClient(), "endpoints", "", fields.Everything())
+	epWatcher := cache.NewListWatchFromClient(client.CoreV1().RESTClient(), "endpoints", "", fields.Everything())
 	epHandler := cache.ResourceEventHandlerFuncs{AddFunc: rg.onEPAdd, UpdateFunc: rg.onEPUpdate, DeleteFunc: rg.onEPDelete}
 	rg.epIndexer, rg.epInformer = cache.NewIndexerInformer(epWatcher, &v1.Endpoints{}, 0, epHandler, cache.Indexers{})
 
@@ -124,8 +124,6 @@ func (rg *routeGenerator) Start() {
 		// Notify the main client we're in sync now.
 		rg.client.OnInSync(SourceRouteGenerator)
 	}()
-
-	return
 }
 
 // getServiceForEndpoints retrieves the corresponding svc for the given ep
