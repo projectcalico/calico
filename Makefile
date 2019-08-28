@@ -122,7 +122,7 @@ endif
 # Makefile configuration options
 BUILD_IMAGE?=calico/kube-controllers
 FLANNEL_MIGRATION_BUILD_IMAGE?=calico/flannel-migration-controller
-PUSH_IMAGES?=$(BUILD_IMAGE) quay.io/calico/kube-controllers $(FLANNEL_MIGRATION_IMAGE) quay.io/calico/flannel-migration-controller
+PUSH_IMAGES?=$(BUILD_IMAGE) quay.io/calico/kube-controllers $(FLANNEL_MIGRATION_BUILD_IMAGE) quay.io/calico/flannel-migration-controller
 RELEASE_IMAGES?=
 
 # If this is a release, also tag and push additional images.
@@ -284,12 +284,24 @@ endif
 ## tag images of one arch
 tag-images: imagetag $(addprefix sub-single-tag-images-arch-,$(call escapefs,$(PUSH_IMAGES))) $(addprefix sub-single-tag-images-non-manifest-,$(call escapefs,$(PUSH_NONMANIFEST_IMAGES)))
 sub-single-tag-images-arch-%:
-	docker tag $(BUILD_IMAGE):latest-$(ARCH) $(call unescapefs,$*:$(IMAGETAG)-$(ARCH))
+	@if echo $* | grep -q "flannel-migration"; then \
+		echo "docker tag $(FLANNEL_MIGRATION_BUILD_IMAGE):latest-$(ARCH) $(call unescapefs,$*:$(IMAGETAG)-$(ARCH))"; \
+		docker tag $(FLANNEL_MIGRATION_BUILD_IMAGE):latest-$(ARCH) $(call unescapefs,$*:$(IMAGETAG)-$(ARCH)); \
+	else \
+		echo "docker tag $(BUILD_IMAGE):latest-$(ARCH) $(call unescapefs,$*:$(IMAGETAG)-$(ARCH))"; \
+		docker tag $(BUILD_IMAGE):latest-$(ARCH) $(call unescapefs,$*:$(IMAGETAG)-$(ARCH)); \
+	fi
 
 # because some still do not support multi-arch manifest
 sub-single-tag-images-non-manifest-%:
 ifeq ($(ARCH),amd64)
-	docker tag $(BUILD_IMAGE):latest-$(ARCH) $(call unescapefs,$*:$(IMAGETAG))
+	@if echo $* | grep -q "flannel-migration"; then \
+		echo "docker tag $(FLANNEL_MIGRATION_BUILD_IMAGE):latest-$(ARCH) $(call unescapefs,$*:$(IMAGETAG))"; \
+		docker tag $(FLANNEL_MIGRATION_BUILD_IMAGE):latest-$(ARCH) $(call unescapefs,$*:$(IMAGETAG)); \
+	else \
+		echo "docker tag $(BUILD_IMAGE):latest-$(ARCH) $(call unescapefs,$*:$(IMAGETAG))"; \
+		docker tag $(BUILD_IMAGE):latest-$(ARCH) $(call unescapefs,$*:$(IMAGETAG)); \
+	fi
 else
 	$(NOECHO) $(NOOP)
 endif
