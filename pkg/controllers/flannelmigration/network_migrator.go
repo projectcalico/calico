@@ -79,7 +79,7 @@ func (m *networkMigrator) Initialise() error {
 	}
 	m.calicoCNIConfigName = cniConf
 
-	log.Infof("Network migrator initialised, container image %s, CNI config %s/%s.", m.calicoImage, m.config.CNIConfigDir, m.calicoCNIConfigName)
+	log.Infof("Network migrator initialised, container image %s, CNI config %s/%s.", m.calicoImage, m.config.CniConfigDir, m.calicoCNIConfigName)
 	return nil
 }
 
@@ -97,17 +97,17 @@ func (m *networkMigrator) removeFlannelNetworkAndInstallDummyCalicoCNI(node *v1.
 	if m.config.IsRunningCanal() {
 		// Canal creates tunnel device but with no bridge. It uses Calico CNI.
 		cmd = fmt.Sprintf("ip link show flannel.%d || exit 0 && { echo '%s' > /host/%s/%s ; ip link delete flannel.%d; } && exit 0 || exit 1",
-			m.config.FlannelVNI, dummyCNI, m.config.CNIConfigDir, m.calicoCNIConfigName, m.config.FlannelVNI)
+			m.config.FlannelVNI, dummyCNI, m.config.CniConfigDir, m.calicoCNIConfigName, m.config.FlannelVNI)
 	} else {
 		// Flannel creates cni0 bridge and tunnel device. It delegates to bridge CNI.
 		cmd = fmt.Sprintf("{ ip link show cni0; ip link show flannel.%d; } || exit 0 && { echo '%s' > /host/%s/%s ; ip link delete cni0 type bridge; ip link delete flannel.%d; } && exit 0 || exit 1",
-			m.config.FlannelVNI, dummyCNI, m.config.CNIConfigDir, m.calicoCNIConfigName, m.config.FlannelVNI)
+			m.config.FlannelVNI, dummyCNI, m.config.CniConfigDir, m.calicoCNIConfigName, m.config.FlannelVNI)
 	}
 
 	// Run a remove-flannel pod with specified nodeName, this will bypass kube-scheduler.
 	// https://kubernetes.io/docs/concepts/configuration/assign-pod-node/#nodename
 	pod := k8spod("remove-flannel")
-	podLog, err := pod.RunPodOnNodeTillComplete(m.k8sClientset, namespaceKubeSystem, m.calicoImage, node.Name, cmd, m.config.CNIConfigDir, true, true)
+	podLog, err := pod.RunPodOnNodeTillComplete(m.k8sClientset, namespaceKubeSystem, m.calicoImage, node.Name, cmd, m.config.CniConfigDir, true, true)
 	if podLog != "" {
 		log.Infof("remove-flannel pod logs: %s.", podLog)
 	}

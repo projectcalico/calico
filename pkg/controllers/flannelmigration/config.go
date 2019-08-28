@@ -29,10 +29,13 @@ import (
 )
 
 const (
-	flannelEnvFile        = "/host/run/flannel/subnet.env"
 	canalDaemonsetName    = "canal"
 	calicoConfigMapName   = "calico-config"
 	calicoConfigMapMtuKey = "veth_mtu"
+)
+
+var (
+	FlannelEnvFile = "/host/run/flannel/subnet.env"
 )
 
 //Flannel migration controller configurations
@@ -76,7 +79,7 @@ type Config struct {
 	CalicoDaemonsetName string `default:"calico-node" split_words:"true"`
 
 	// CNI config directory. The full path of the directory in which to search for CNI config files. Default: /etc/cni/net.d
-	CNIConfigDir string `default:"/etc/cni/net.d" split_words:"true"`
+	CniConfigDir string `default:"/etc/cni/net.d" split_words:"true"`
 
 	// Node name which migration controller is running. This ENV is passed via Kubernetes downwards API.
 	PodNodeName string `default:"" split_words:"true"`
@@ -90,7 +93,7 @@ func (c *Config) Parse() error {
 	}
 
 	// Work out config items based on env file.
-	_, err = os.Stat(flannelEnvFile)
+	_, err = os.Stat(FlannelEnvFile)
 	if err != nil {
 		return err
 	}
@@ -152,7 +155,7 @@ func (c *Config) ValidateConfig() error {
 }
 
 func readFlannelEnvFile(key string) (string, error) {
-	items, err := godotenv.Read(flannelEnvFile)
+	items, err := godotenv.Read(FlannelEnvFile)
 	if err != nil {
 		log.Errorf("Failed to read Flannel env file.")
 		return "", err
