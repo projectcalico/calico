@@ -51,7 +51,7 @@ func setClientPrefixes(config Config, trs []*TemplateResource) error {
 			pmap[pk] = true
 		}
 	}
-	for p, _ := range pmap {
+	for p := range pmap {
 		prefixes = append(prefixes, p)
 	}
 

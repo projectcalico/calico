@@ -49,7 +49,10 @@ func addFuncs(out, in map[string]interface{}) {
 // formats the resulting 4 bytes as an IPv4 address.
 func hashToIPv4(nodeName string) string {
 	hash := sha256.New()
-	hash.Write([]byte(nodeName))
+	_, err := hash.Write([]byte(nodeName))
+	if err != nil {
+		return ""
+	}
 	hashBytes := hash.Sum(nil)
 	ip := hashBytes[:4]
 	routerId := strconv.Itoa(int(ip[0])) + "." +
