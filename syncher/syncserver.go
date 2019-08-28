@@ -154,7 +154,6 @@ func processUpdate(store *policystore.PolicyStore, inSync chan<- struct{}, updat
 
 func processInSync(store *policystore.PolicyStore, inSync *proto.InSync) {
 	log.Debug("Processing InSync")
-	return
 }
 
 func processIPSetUpdate(store *policystore.PolicyStore, update *proto.IPSetUpdate) {

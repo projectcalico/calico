@@ -213,7 +213,6 @@ func (n *trieNode) remove(ip net.IP, depth, mask uint64) {
 			}
 		}
 	}
-	return
 }
 
 // okToRemove checks if the trieNode can be removed from the trie

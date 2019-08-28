@@ -65,5 +65,4 @@ func main() {
 		_, _ = fmt.Fprintf(os.Stderr, "healthz endpoint returned unhealthy\n")
 		os.Exit(3)
 	}
-	return
 }

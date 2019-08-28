@@ -397,7 +397,8 @@ func TestCheckStoreWithInvalidData(t *testing.T) {
 			Action: "allow",
 			HttpMatch: &proto.HTTPMatch{
 				Methods: []string{"GET", "POST"},
-				Paths:   []*proto.HTTPMatch_PathMatch{{&proto.HTTPMatch_PathMatch_Exact{"/foo"}}},
+				Paths: []*proto.HTTPMatch_PathMatch{
+					{PathMatch: &proto.HTTPMatch_PathMatch_Exact{Exact: "/foo"}}},
 			},
 		},
 	}}
