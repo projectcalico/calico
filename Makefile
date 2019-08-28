@@ -245,12 +245,12 @@ update-felix-confd-libcalico:
 		go mod edit -droprequire github.com/projectcalico/libcalico-go && go get $(LIBCALICO_REPO)@$(LIBCALICO_VERSION); \
 	fi; \
 	if [[ ! -z "$(FELIX_VERSION)" ]] && [[ "$(FELIX_VERSION)" != "$(FELIX_OLDVER)" ]]; then \
-		echo "Updating felix version $(FELIX_OLDVER) to $(FELIX_VERSION) from $(FELIX_REPO)"
-		go mod edit -droprequire github.com/projectcalico/felix && go get $(FELIX_REPO)@$(FELIX_VERSION)
+		echo "Updating felix version $(FELIX_OLDVER) to $(FELIX_VERSION) from $(FELIX_REPO)"; \
+		go mod edit -droprequire github.com/projectcalico/felix && go get $(FELIX_REPO)@$(FELIX_VERSION); \
 	fi; \
 	if [[ ! -z "$(CONFD_VERSION)" ]] && [[ "$(CONFD_VERSION)" != "$(CONFD_OLDVER)" ]]; then \
-		echo "Updating confd version $(CONFD_OLDVER) to $(CONFD_VERSION) from $(CONFD_REPO)"
-		go mod edit -droprequire github.com/projectcalico/felix && go get $(CONFD_REPO)@$(CONFD_VERSION)
+		echo "Updating confd version $(CONFD_OLDVER) to $(CONFD_VERSION) from $(CONFD_REPO)"; \
+		go mod edit -droprequire github.com/projectcalico/confd && go get $(CONFD_REPO)@$(CONFD_VERSION); \
 	fi'
 
 git-status:
@@ -263,7 +263,7 @@ ifdef CONFIRM
 endif
 
 git-commit:
-	git diff-index --quiet HEAD || git commit -m "Semaphore Automatic Update" -c user.name="Semaphore Automatic Update" -c user.email="<marvin@tigera.io>" go.mod go.sum
+	git diff-index --quiet HEAD || git commit -m "Semaphore Automatic Update" go.mod go.sum
 
 git-push:
 	git push

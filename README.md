@@ -32,7 +32,7 @@ Tests for this repo are divided into the following categories:
 - `st`: System integration tests 
 - `k8s-test`: Kubernetes integration tests 
 
-Assuming you have installed the necessary depedencies (see below for details), you can run any of the above categories using: 
+Assuming you have installed the necessary dependencies (see below for details), you can run any of the above categories using: 
 ```
 make <target>
 ```
@@ -95,13 +95,13 @@ make st DEBUG_FAILURES=true
 - This only applies to `st` tests 
 - A subset of the `st` are wrapped by `debug_failures(fn)` function found in `./tests/st/utils/utils.py`
 - You should be able to wrap whatever test you want 
-- Uses Python's `pdb.set_trace()` library function, allows you to halt executino and step into the containers involved in the test for debugging 
+- Uses Python's `pdb.set_trace()` library function, allows you to halt executing and step into the containers involved in the test for debugging 
 3. Use manual breakpoints 
 - A more primitive approach is just to add your own breakpoints (using something like `time.sleep(x)`)
 - You should know where to add these after reviewing the diagnostic logs for failed tests (by looking at the stacktraces)
 
 ## Linux Dependencies 
-Below is a listing of userspace tools packaged into the node container. The list is not exhuastive, but highlights some of the key dependencies required for node to operate correctly. 
+Below is a listing of userspace tools packaged into the node container. The list is not exhaustive, but highlights some of the key dependencies required for node to operate correctly. 
 
 - [`/user/sbin/arp`](http://man7.org/linux/man-pages/man8/arp.8.html)
     - Manipulate the system ARP cache
