@@ -28,7 +28,7 @@ import (
 
 	. "github.com/projectcalico/calicoctl/tests/fv/utils"
 	"github.com/projectcalico/libcalico-go/lib/apiconfig"
-	"github.com/projectcalico/libcalico-go/lib/apis/v3"
+	v3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/libcalico-go/lib/ipam"
 	"github.com/projectcalico/libcalico-go/lib/logutils"
@@ -83,11 +83,12 @@ func TestIPAM(t *testing.T) {
 	Expect(out).To(ContainSubstring("IPS IN USE"))
 
 	// Assign some IPs.
-	client.IPAM().AutoAssign(ctx, ipam.AutoAssignArgs{
+	_, _, err = client.IPAM().AutoAssign(ctx, ipam.AutoAssignArgs{
 		Num4:  5,
 		Num6:  7,
 		Attrs: map[string]string{"note": "reserved by ipam_test.go"},
 	})
+	Expect(err).NotTo(HaveOccurred())
 
 	// ipam show, pools only.
 	out = Calicoctl("ipam", "show")
@@ -105,7 +106,7 @@ func TestIPAM(t *testing.T) {
 
 	// Find out the allocation block.
 	var allocatedIP string
-	r, err := regexp.Compile("(10\\.65\\.[0-9]+\\.)([0-9]+)/26")
+	r, err := regexp.Compile(`(10\.65\.[0-9]+\.)([0-9]+)/26`)
 	Expect(err).NotTo(HaveOccurred())
 	for _, line := range strings.Split(out, "\n") {
 		sm := r.FindStringSubmatch(line)
@@ -141,10 +142,11 @@ func TestIPAM(t *testing.T) {
 	// Allocate more than one block's worth (8) of IPs from that
 	// pool.
 	// Assign some IPs.
-	client.IPAM().AutoAssign(ctx, ipam.AutoAssignArgs{
+	_, _, err = client.IPAM().AutoAssign(ctx, ipam.AutoAssignArgs{
 		Num4:      11,
 		IPv4Pools: []cnet.IPNet{cnet.MustParseNetwork(pool.Spec.CIDR)},
 	})
+	Expect(err).NotTo(HaveOccurred())
 
 	// ipam show, including blocks.
 	//
