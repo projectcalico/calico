@@ -50,6 +50,9 @@ The code is a little roundabout for a few reasons:
     <link rel="stylesheet" href="{{site.baseurl}}/css/search.css"/>
     <link rel="stylesheet" href="{{site.baseurl}}/css/plugins/offcanvas.css"/>
     <link rel="stylesheet" href="{{site.baseurl}}/css/instantsearch/instantsearch.min.css"/>
+    {% if page.custom_css %}
+    <link rel="stylesheet" href="{{site.baseurl}}/{{ page.custom_css }}"/>
+    {% endif %}
     <link href="https://www.projectcalico.org/wp-content/themes/dante/css/font-awesome.min.css" rel="stylesheet">
     <script src="{{site.baseurl}}/js/jquery-2.2.0.min.js"></script>
     <script src="{{site.baseurl}}/js/bootstrap/bootstrap.min.js"></script>
