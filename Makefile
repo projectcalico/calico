@@ -225,32 +225,26 @@ clean:
 build:  $(NODE_CONTAINER_BINARY)
 
 ## Default the repos and versions but allow them to be overridden
-LIBCALICO_BRANCH?=$(shell git rev-parse --abbrev-ref HEAD)
-LIBCALICO_REPO?=github.com/projectcalico/libcalico-go
-LIBCALICO_VERSION?=$(shell git ls-remote git@github.com:projectcalico/libcalico-go $(LIBCALICO_BRANCH) 2>/dev/null | cut -f 1)
-LIBCALICO_OLDVER?=$(shell $(DOCKER_RUN) $(CALICO_BUILD) go list -m -f "{{.Version}}" github.com/projectcalico/libcalico-go)
 FELIX_BRANCH?=$(shell git rev-parse --abbrev-ref HEAD)
 FELIX_REPO?=github.com/projectcalico/felix
 FELIX_VERSION?=$(shell git ls-remote git@github.com:projectcalico/felix $(FELIX_BRANCH) 2>/dev/null | cut -f 1)
 FELIX_OLDVER?=$(shell $(DOCKER_RUN) $(CALICO_BUILD) go list -m -f "{{.Version}}" github.com/projectcalico/felix)
 CONFD_BRANCH?=$(shell git rev-parse --abbrev-ref HEAD)
 CONFD_REPO?=github.com/projectcalico/confd
+CONFD_REPLACE?=github.com/kelseyhightower/confd
 CONFD_VERSION?=$(shell git ls-remote git@github.com:projectcalico/confd $(CONFD_BRANCH) 2>/dev/null | cut -f 1)
-CONFD_OLDVER?=$(shell $(DOCKER_RUN) $(CALICO_BUILD) go list -m -f "{{.Version}}" github.com/projectcalico/confd)
+CONFD_OLDVER?=$(shell $(DOCKER_RUN) $(CALICO_BUILD) go list -m -f "{{.Version}}" $(CONFD_REPLACE))
 
-update-felix-confd-libcalico:
+# Update felix and confd's pins to the latest versions, which also updates our libcalico dependency to the one required by them.
+update-felix-confd:
 	$(DOCKER_RUN) -i $(CALICO_BUILD) sh -c '\
-	if [[ ! -z "$(LIBCALICO_VERSION)" ]] && [[ "$(LIBCALICO_VERSION)" != "$(LIBCALICO_OLDVER)" ]]; then \
-		echo "Updating libcalico version $(LIBCALICO_OLDVER) to $(LIBCALICO_VERSION) from $(LIBCALICO_REPO)"; \
-		go mod edit -droprequire github.com/projectcalico/libcalico-go && go get $(LIBCALICO_REPO)@$(LIBCALICO_VERSION); \
-	fi; \
 	if [[ ! -z "$(FELIX_VERSION)" ]] && [[ "$(FELIX_VERSION)" != "$(FELIX_OLDVER)" ]]; then \
 		echo "Updating felix version $(FELIX_OLDVER) to $(FELIX_VERSION) from $(FELIX_REPO)"; \
-		go mod edit -droprequire github.com/projectcalico/felix && go get $(FELIX_REPO)@$(FELIX_VERSION); \
+		go get $(FELIX_REPO)@$(FELIX_VERSION); \
 	fi; \
 	if [[ ! -z "$(CONFD_VERSION)" ]] && [[ "$(CONFD_VERSION)" != "$(CONFD_OLDVER)" ]]; then \
 		echo "Updating confd version $(CONFD_OLDVER) to $(CONFD_VERSION) from $(CONFD_REPO)"; \
-		go mod edit -droprequire github.com/projectcalico/confd && go get $(CONFD_REPO)@$(CONFD_VERSION); \
+		go mod edit -replace $(CONFD_REPLACE)=$(CONFD_REPO)@$(CONFD_VERSION); \
 	fi'
 
 git-status:
@@ -268,7 +262,7 @@ git-commit:
 git-push:
 	git push
 
-commit-pin-updates: update-felix-confd-libcalico git-status ci git-config git-commit git-push
+commit-pin-updates: update-felix-confd git-status ci git-config git-commit git-push
 
 remote-deps:
 	mkdir -p filesystem/etc/calico/confd
