@@ -104,7 +104,7 @@ Options:
                              destination IP or domain name.
                            > interface=<IFACE NAME REGEX LIST>
                              Use the first valid IP address found on interfaces
-                             named as per the first matching supplied interface 
+                             named as per the first matching supplied interface
 			     name regex. Regexes are separated by commas
 			     (e.g. eth.*,enp0s.*).
 			   > skip-interface=<IFACE NAME REGEX LIST>
@@ -377,7 +377,10 @@ Description:
 	// Protect against calico processes taking too long to start, or docker
 	// logs hanging without output.
 	time.AfterFunc(checkLogTimeout, func() {
-		logCmd.Process.Kill()
+		err = logCmd.Process.Kill()
+		if err != nil {
+			fmt.Printf("Error attempting to kill process: check logs for details")
+		}
 	})
 
 	// Read stdout until the node fails, or until we see the output
@@ -393,8 +396,14 @@ Description:
 	}
 
 	// Kill the process if it is still running.
-	logCmd.Process.Kill()
-	logCmd.Wait()
+	err = logCmd.Process.Kill()
+	if err != nil {
+		return fmt.Errorf("Error attempting to kill process: check logs for details")
+	}
+	err = logCmd.Wait()
+	if err != nil {
+		return fmt.Errorf("Error waiting for process to exit: check logs for details")
+	}
 
 	// If we didn't successfully start then notify the user.
 	if outScanner.Err() != nil {
@@ -473,7 +482,7 @@ func validateIpAutodetectionMethod(method string, version int) error {
 		}
 
 		for _, ip := range ips {
-			cip := net.IP{ip}
+			cip := net.IP{IP: ip}
 			if cip.Version() == version {
 				return nil
 			}

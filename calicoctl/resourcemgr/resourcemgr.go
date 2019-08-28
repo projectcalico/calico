@@ -17,7 +17,6 @@ package resourcemgr
 import (
 	"bytes"
 	"context"
-	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -341,7 +340,7 @@ func (rh resourceHelper) IsNamespaced() bool {
 func newResource(tm schema.GroupVersionKind) (runtime.Object, error) {
 	rh, ok := helpers[tm]
 	if !ok {
-		return nil, errors.New(fmt.Sprintf("Unknown resource type (%s) and/or version (%s)", tm.Kind, tm.GroupVersion().String()))
+		return nil, fmt.Errorf("Unknown resource type (%s) and/or version (%s)", tm.Kind, tm.GroupVersion().String())
 	}
 	log.Infof("Found resource helper: %s", rh)
 

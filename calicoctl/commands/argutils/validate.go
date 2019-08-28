@@ -33,7 +33,7 @@ func ValidateIP(str string) cnet.IP {
 		fmt.Printf("Error executing command: invalid IP address specified: %s\n", str)
 		os.Exit(1)
 	}
-	return cnet.IP{ip}
+	return cnet.IP{IP: ip}
 }
 
 // ValidateASNumber takes a string as an input and makes sure it's a valid ASNumber.

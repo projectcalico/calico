@@ -110,7 +110,10 @@ func runDiags(logDir string) error {
 		return fmt.Errorf("Error changing directory to temp directory to dump logs: %v", err)
 	}
 
-	os.Mkdir("diagnostics", os.ModeDir)
+	err = os.Mkdir("diagnostics", os.ModeDir)
+	if err != nil {
+		return fmt.Errorf("Error creating diagnostics directory: %v\n", err)
+	}
 	diagsTmpDir := filepath.Join(tmpDir, "diagnostics")
 
 	for _, v := range cmds {
@@ -160,7 +163,11 @@ such as transfer.sh using curl or similar.  For example:
 
 // getNodeContainerLogs will attempt to grab logs for any "calico" named containers for hosted installs.
 func getNodeContainerLogs(logDir string) {
-	os.Mkdir(logDir, os.ModeDir)
+	err := os.Mkdir(logDir, os.ModeDir)
+	if err != nil {
+		fmt.Printf("Error creating log directory: %v\n", err)
+		return
+	}
 
 	// Get a list of Calico containers running on this Node.
 	result, err := exec.Command("docker", "ps", "-a", "--filter", "name=calico", "--format", "{{.Names}}: {{.CreatedAt}}").CombinedOutput()

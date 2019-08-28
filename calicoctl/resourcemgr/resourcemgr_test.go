@@ -119,25 +119,6 @@ func ipPoolSpec(ipPoolSpec string, cidr string, name string, vxlanMode string, i
 	return replace(macros, ipPoolSpec)
 }
 
-func ipPoolSpecMissingVxlan(ipPoolSpec string, cidr string, name string, ipIpMode string) string {
-	macros := map[string]string{
-		"{{NAME}}":     name,
-		"{{CIDR}}":     cidr,
-		"{{IPIPMODE}}": ipIpMode,
-	}
-
-	return replace(macros, ipPoolSpec)
-}
-
-func ipPoolSpecMissingIpIp(ipPoolSpec string, cidr string, name string) string {
-	macros := map[string]string{
-		"{{NAME}}": name,
-		"{{CIDR}}": cidr,
-	}
-
-	return replace(macros, ipPoolSpec)
-}
-
 func replace(macros map[string]string, spec string) string {
 	for macro, replacement := range macros {
 		spec = strings.Replace(spec, macro, replacement, 1)
@@ -168,7 +149,8 @@ func createResources(specs ...string) ([]runtime.Object, error) {
 
 func writeSpec(spec string) *os.File {
 	file, err := ioutil.TempFile("/tmp", "resource")
-	file.WriteString(spec)
+	Expect(err).NotTo(HaveOccurred())
+	_, err = file.WriteString(spec)
 	Expect(err).NotTo(HaveOccurred())
 	return file
 }
