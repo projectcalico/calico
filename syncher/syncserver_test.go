@@ -835,6 +835,7 @@ func (this *testSyncServer) GetTarget() string {
 func (this *testSyncServer) listen() {
 	var err error
 	var wg sync.WaitGroup
+	wg.Add(1)
 
 	this.listener = openListener(this.path)
 	go func() {
