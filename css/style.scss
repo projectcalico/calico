@@ -43,14 +43,17 @@ pre code {
   white-space: pre;
 }
 
+div.highlight {
+  position: relative;
+}
+
 // copy btn style
 .btn-copy-code {
   color: #FF7E00;
-  padding-right: 0px;
-  float: right;
   border: 0;
   font-size: 16px;
-  margin-top: -3px;
+  position: absolute;
+  right: 10px;
   &:hover {
     cursor: pointer;
   }
