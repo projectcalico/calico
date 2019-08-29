@@ -214,6 +214,9 @@ type MsgServerHello struct {
 	// SyncerType the active syncer type; if not specified, implies that the server is an older Typha instance that
 	// only supports SyncerTypeFelix.
 	SyncerType SyncerType
+
+	// SupportsNodeResourceUpdates provides to the client whether this Typha supports node resource updates.
+	SupportsNodeResourceUpdates bool
 }
 type MsgSyncStatus struct {
 	SyncStatus api.SyncStatus

@@ -673,7 +673,8 @@ func (h *connection) doHandshake() error {
 		Version: buildinfo.GitVersion,
 		// Echo back the SyncerType so that up-level clients know that we understood their request.  Down-level
 		// clients will ignore.
-		SyncerType: syncerType,
+		SyncerType:                  syncerType,
+		SupportsNodeResourceUpdates: true,
 	})
 	if err != nil {
 		log.WithError(err).Warning("Failed to send hello to client")

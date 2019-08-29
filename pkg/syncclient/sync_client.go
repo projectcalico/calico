@@ -20,6 +20,7 @@ import (
 	"crypto/x509"
 	"encoding/gob"
 	"errors"
+	"fmt"
 	"io/ioutil"
 	"net"
 	"sync"
@@ -116,6 +117,9 @@ func New(
 		myInfo:     myInfo,
 
 		options: options,
+		handshakeStatus: &handshakeStatus{
+			helloReceivedChan: make(chan struct{}, 1),
+		},
 	}
 }
 
@@ -126,12 +130,19 @@ type SyncerClient struct {
 	myHostname, myVersion, myInfo string
 	options                       *Options
 
-	connection net.Conn
-	encoder    *gob.Encoder
-	decoder    *gob.Decoder
+	connection                  net.Conn
+	encoder                     *gob.Encoder
+	decoder                     *gob.Decoder
+	handshakeStatus             *handshakeStatus
+	supportsNodeResourceUpdates bool
 
 	callbacks api.SyncerCallbacks
 	Finished  sync.WaitGroup
+}
+
+type handshakeStatus struct {
+	helloReceivedChan chan struct{}
+	complete          bool
 }
 
 func (s *SyncerClient) Start(cxt context.Context) error {
@@ -163,6 +174,26 @@ func (s *SyncerClient) Start(cxt context.Context) error {
 		s.Finished.Done()
 	}()
 	return nil
+}
+
+// SupportsNodeResourceUpdates waits for the Typha server to send a hello and returns true if
+// the server supports node resource updates. If the given timeout is reached, an error is returned.
+func (s *SyncerClient) SupportsNodeResourceUpdates(timeout time.Duration) (bool, error) {
+	// If a previous call has already marked the handshake as complete, then just return the value.
+	if s.handshakeStatus.complete {
+		return s.supportsNodeResourceUpdates, nil
+	}
+
+	select {
+	case <-s.handshakeStatus.helloReceivedChan:
+		s.logCxt.Debug("Received MsgServerHello from server")
+		s.handshakeStatus.complete = true
+		return s.supportsNodeResourceUpdates, nil
+	case <-time.After(timeout):
+		// fallthrough
+	}
+
+	return false, fmt.Errorf("Timed out waiting for handshake to complete")
 }
 
 func (s *SyncerClient) connect(cxt context.Context) error {
@@ -323,6 +354,13 @@ func (s *SyncerClient) loop(cxt context.Context, cancelFn context.CancelFunc) {
 			s.callbacks.OnUpdates(updates)
 		case syncproto.MsgServerHello:
 			logCxt.WithField("serverVersion", msg.Version).Info("Server hello message received")
+
+			// Check whether Typha supports node resource updates.
+			if !msg.SupportsNodeResourceUpdates {
+				logCxt.Info("Server responded without support for node resource updates, assuming older Typha")
+			}
+			s.supportsNodeResourceUpdates = msg.SupportsNodeResourceUpdates
+			s.handshakeStatus.helloReceivedChan <- struct{}{}
 
 			// Check the SyncerType reported by the server.  If the server is too old to support SyncerType then
 			// the message will have an empty string in place of the SyncerType.  In that case we only proceed if

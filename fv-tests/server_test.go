@@ -692,9 +692,44 @@ var _ = Describe("With an in-process Server with short ping timeout", func() {
 		// interval for the check to take place.
 		time.Sleep(1 * time.Second)
 
+		// Check that the client knows it can use node resource updates since the server supports it.
+		supportsNodeResourceUpdates, err := client.SupportsNodeResourceUpdates(10 * time.Second)
+		Expect(supportsNodeResourceUpdates).To(BeTrue())
+		Expect(err).To(BeNil())
+
 		// Then send an update.
 		cache.OnStatusUpdated(api.InSync)
 		Eventually(recorder.Status).Should(Equal(api.InSync))
+	})
+
+	It("should return an error if client does not receive a server hello in time", func() {
+		// Start a real client, which will respond correctly to pings.
+		clientCxt, clientCancel := context.WithCancel(context.Background())
+		recorder := NewRecorder()
+
+		client := syncclient.New(
+			serverAddr,
+			"test-version",
+			"test-host",
+			"test-info",
+			recorder,
+			nil,
+		)
+		err := client.Start(clientCxt)
+		Expect(err).NotTo(HaveOccurred())
+		defer func() {
+			clientCancel()
+			client.Finished.Wait()
+		}()
+
+		// Kill the server
+		serverCancel()
+		server.Finished.Wait()
+
+		// Check that the client knows it can use node resource updates since the server supports it.
+		supportsNodeResourceUpdates, err := client.SupportsNodeResourceUpdates(0 * time.Second)
+		Expect(supportsNodeResourceUpdates).To(BeFalse())
+		Expect(err).NotTo(BeNil())
 	})
 
 	Describe("with a raw connection", func() {
