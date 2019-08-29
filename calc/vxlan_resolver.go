@@ -379,21 +379,29 @@ func (c *VXLANResolver) OnPoolUpdate(update api.Update) (_ bool) {
 		// This is an add/update of a pool with VXLAN enabled.
 		logrus.WithField("pool", k.CIDR).Info("Update of VXLAN-enabled IP pool.")
 		if curr, ok := c.vxlanPools[k.String()]; ok {
-			// We already know about this IP pool. Check to see if the CIDR has changed.
+			// We already know about the IP pool. Check to see if any fields have changed.
+			vxlanModeChanged := curr.VXLANMode != update.Value.(*model.IPPool).VXLANMode
+			// Check to see if the CIDR has changed.
 			// While this isn't possible directly in the user-facing API, it's possible that
 			// we see a delete/recreate as an update over the Syncer in rare cases.
-			if curr.CIDR.String() == update.Value.(*model.IPPool).CIDR.String() {
+			cidrChanged := curr.CIDR.String() != update.Value.(*model.IPPool).CIDR.String()
+
+			if !cidrChanged && !vxlanModeChanged {
+				// No change - we can ignore this update.
 				return
 			}
+			fields := logrus.Fields{"cidrChanged": cidrChanged, "modeChanged": vxlanModeChanged, "pool": k.CIDR}
+			logrus.WithFields(fields).Info("IP pool has changed")
 
-			// If the CIDR has changed, treat this as a delete followed by a re-create
+			// The pool has changed, treat this as a delete followed by a re-create
 			// with the new CIDR. Iterate through sent routes and withdraw any within
-			// the old CIDR.
+			// the old pool's CIDR. We'll kick the pending set below to trigger any updates.
 			delete(c.vxlanPools, k.String())
 			sentSet.Iter(func(item interface{}) error {
 				r := item.(vxlanRoute)
-				if !c.containsRoute(curr, r) {
+				if c.containsRoute(curr, r) {
 					c.withdrawRoute(r)
+					pendingSet.Add(r)
 				}
 				return nil
 			})
