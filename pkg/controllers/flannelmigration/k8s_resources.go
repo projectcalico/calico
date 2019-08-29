@@ -23,13 +23,12 @@ import (
 
 	"k8s.io/apimachinery/pkg/fields"
 
+	log "github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
 	apierrs "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
-
-	log "github.com/sirupsen/logrus"
 )
 
 // daemonset holds a collection of helper functions for Kubernetes daemonset.
@@ -337,8 +336,24 @@ func (n k8snode) deletePodsForNode(k8sClientset *kubernetes.Clientset, filter fu
 	return nil
 }
 
-// Wait for a pod starting on a node.
-func (n k8snode) waitPodRunningForNode(k8sClientset *kubernetes.Clientset, namespace string, interval, timeout time.Duration, label map[string]string) error {
+func isPodRunningAndReady(pod *v1.Pod) bool {
+	if pod == nil {
+		log.Fatalf("isPodRunningAndReady get a nil pointer")
+	}
+	if pod.Status.Phase != v1.PodRunning {
+		return false
+	}
+	for _, c := range pod.Status.Conditions {
+		if c.Type == v1.PodReady && c.Status == v1.ConditionTrue {
+			return true
+		}
+	}
+
+	return false
+}
+
+// Wait for a pod becoming ready on a node.
+func (n k8snode) waitPodReadyForNode(k8sClientset *kubernetes.Clientset, namespace string, interval, timeout time.Duration, label map[string]string) error {
 	return wait.PollImmediate(interval, timeout, func() (bool, error) {
 		nodeName := string(n)
 		podList, err := k8sClientset.CoreV1().Pods(namespace).List(
@@ -363,8 +378,8 @@ func (n k8snode) waitPodRunningForNode(k8sClientset *kubernetes.Clientset, names
 		}
 
 		pod := podList.Items[0]
-		if pod.Status.Phase == v1.PodRunning {
-			// Pod running, stop waiting
+		if isPodRunningAndReady(&pod) {
+			// Pod running and ready, stop waiting
 			return true, nil
 		}
 

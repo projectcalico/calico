@@ -27,9 +27,10 @@ import (
 )
 
 const (
-	calicoNodeContainerName = "calico-node"
-	calicoCniContainerName  = "install-cni"
-	calicoCniConfigEnvName  = "CNI_CONF_NAME"
+	calicoNodeContainerName     = "calico-node"
+	calicoCniContainerName      = "install-cni"
+	calicoCniConfigEnvName      = "CNI_CONF_NAME"
+	calicoVxlanTunnelDeviceName = "vxlan.calico"
 
 	// Sync period between kubelet and CNI config file change.
 	// see https://github.com/kubernetes/kubernetes/blob/master/pkg/kubelet/dockershim/network/cni/cni.go#L48
@@ -119,6 +120,20 @@ func (m *networkMigrator) removeFlannelNetworkAndInstallDummyCalicoCNI(node *v1.
 	return err
 }
 
+// Check if node has got Calico vxlan network.
+func (m *networkMigrator) checkCalicoVxlan(node *v1.Node) error {
+	// Check if Calico tunnel device exists for 10 seconds.
+	cmd := fmt.Sprintf("for i in $(seq 1 10); do ip link show %s && code=0 && break || code=$? && sleep 1; done; (exit $code)", calicoVxlanTunnelDeviceName)
+
+	pod := k8spod("check-calico")
+	podLog, err := pod.RunPodOnNodeTillComplete(m.k8sClientset, namespaceKubeSystem, m.calicoImage, node.Name, cmd, m.config.CNIConfigDir, true, true)
+	if podLog != "" {
+		log.Infof("check-calico pod logs: %s.", podLog)
+	}
+
+	return err
+}
+
 // Drain node, remove Flannel and setup Calico network for a node.
 func (m *networkMigrator) setupCalicoNetworkForNode(node *v1.Node) error {
 	log.Infof("Setting node label to disable Flannel daemonset pod on %s.", node.Name)
@@ -169,13 +184,21 @@ func (m *networkMigrator) setupCalicoNetworkForNode(node *v1.Node) error {
 		return err
 	}
 
+	log.Infof("Wait up to 5 minutes for Calico daemonset pod to become Ready on %s.", node.Name)
 	// Calico daemonset pod should start running now.
-	err = n.waitPodRunningForNode(m.k8sClientset, namespaceKubeSystem, 1*time.Second, 5*time.Minute, map[string]string{"k8s-app": "calico-node"})
+	err = n.waitPodReadyForNode(m.k8sClientset, namespaceKubeSystem, 1*time.Second, 5*time.Minute, map[string]string{"k8s-app": "calico-node"})
 	if err != nil {
 		log.WithError(err).Errorf("Calico node pod failed on node %s", node.Name)
 		return err
 	}
-	log.Infof("Calico daemonset pod is running on %s.", node.Name)
+	log.Infof("Calico daemonset pod is Ready on %s.", node.Name)
+
+	// Calico network should have been setup.
+	err = m.checkCalicoVxlan(node)
+	if err != nil {
+		log.WithError(err).Errorf("failed to check calico vxlan network on node %s", node.Name)
+		return err
+	}
 
 	// Uncordon node.
 	err = n.Uncordon()
