@@ -46,6 +46,11 @@ rules:
       - update
   - apiGroups: [""]
     resources:
+      - nodes/status
+    verbs:
+      - update
+  - apiGroups: [""]
+    resources:
       - pods
       - serviceaccounts
     verbs:
