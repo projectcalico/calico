@@ -17,6 +17,7 @@ package flannelmigration_test
 import (
 	"io/ioutil"
 	"os"
+	"path/filepath"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -24,8 +25,10 @@ import (
 )
 
 var _ = Describe("Config", func() {
-	setConfigFile := func(path string) {
-		fm.FlannelEnvFile = path
+	var tmpDir string
+
+	setConfigFile := func(dir, filename string) {
+		fm.FlannelEnvFile = filepath.Join(dir, filename)
 	}
 
 	getConfigFile := func() string {
@@ -63,12 +66,19 @@ var _ = Describe("Config", func() {
 		os.Setenv("FLANNEL_VNI", "somestring")
 	}
 
+	BeforeEach(func() {
+		var err error
+		tmpDir, err = ioutil.TempDir("", "migration-ut")
+		Expect(err).ShouldNot(HaveOccurred())
+	})
+
+	AfterEach(func() {
+		os.RemoveAll(tmpDir)
+	})
+
 	Context("with invalid config file", func() {
 		It("file not exists", func() {
-			oldPath := getConfigFile()
-			defer setConfigFile(oldPath)
-
-			setConfigFile("./file-not-exists")
+			setConfigFile(tmpDir, "file-not-exists")
 
 			config := new(fm.Config)
 			err := config.Parse()
@@ -83,7 +93,7 @@ FLANNEL_SUBNET=10.244.1.1/24
 FLANNEL_MTU=8951
 FLANNEL_IPMASQ=true
 `
-			setConfigFile("./subnet.env")
+			setConfigFile(tmpDir, "subnet.env")
 			data := []byte(subnetEnv)
 			err := ioutil.WriteFile(getConfigFile(), data, 0100)
 			Expect(err).ShouldNot(HaveOccurred())
@@ -105,7 +115,7 @@ FLANNEL_SUBNET=10.244.1.1/24
 FLANNEL_MTU=8951
 FLANNEL_IPMASQ=true
 `
-			setConfigFile("./subnet.env")
+			setConfigFile(tmpDir, "subnet.env")
 			data := []byte(subnetEnv)
 			err := ioutil.WriteFile(getConfigFile(), data, 0644)
 			Expect(err).ShouldNot(HaveOccurred())
@@ -116,9 +126,6 @@ FLANNEL_IPMASQ=true
 		AfterEach(func() {
 			// Unset environment variables
 			unsetEnv()
-
-			err := os.Remove(getConfigFile())
-			Expect(err).ShouldNot(HaveOccurred())
 		})
 
 		It("with default values", func() {
