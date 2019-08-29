@@ -54,6 +54,21 @@ func (d daemonset) CheckNotExists(k8sClientset *kubernetes.Clientset, namespace 
 	return false, err
 }
 
+// Get value of a label for daemonset.
+// Return value if key exists.
+func (d daemonset) getLabelValue(k8sClientset *kubernetes.Clientset, namespace, key string) (bool, string, error) {
+	ds, err := k8sClientset.AppsV1().DaemonSets(namespace).Get(string(d), metav1.GetOptions{})
+	if err != nil {
+		return false, "", err
+	}
+
+	if val, ok := ds.Labels[key]; ok {
+		return true, val, nil
+	}
+
+	return false, "", nil
+}
+
 // Get spec of a container from a daemonset.
 func (d daemonset) getContainerSpec(k8sClientset *kubernetes.Clientset, namespace, containerName string) (*v1.Container, error) {
 	ds, err := k8sClientset.AppsV1().DaemonSets(namespace).Get(string(d), metav1.GetOptions{})
