@@ -126,7 +126,7 @@ func (m *networkMigrator) checkCalicoVxlan(node *v1.Node) error {
 	cmd := fmt.Sprintf("for i in $(seq 1 10); do ip link show %s && code=0 && break || code=$? && sleep 1; done; (exit $code)", calicoVxlanTunnelDeviceName)
 
 	pod := k8spod("check-calico")
-	podLog, err := pod.RunPodOnNodeTillComplete(m.k8sClientset, namespaceKubeSystem, m.calicoImage, node.Name, cmd, m.config.CNIConfigDir, true, true)
+	podLog, err := pod.RunPodOnNodeTillComplete(m.k8sClientset, namespaceKubeSystem, m.calicoImage, node.Name, cmd, m.config.CniConfigDir, true, true)
 	if podLog != "" {
 		log.Infof("check-calico pod logs: %s.", podLog)
 	}

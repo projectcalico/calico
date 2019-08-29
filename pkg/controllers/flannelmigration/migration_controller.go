@@ -34,6 +34,7 @@ import (
 const (
 	namespaceKubeSystem      = "kube-system"
 	migrationNodeSelectorKey = "projectcalico.org/node-network-during-migration"
+	addOnManagerLabelKey     = "addonmanager.kubernetes.io/mode"
 )
 
 // Flannel migration controller consists of three major components.
@@ -235,6 +236,18 @@ func (c *flannelMigrationController) CheckShouldMigrate() (bool, error) {
 
 	if notFound {
 		log.Infof("Daemonset %s not exists, no migration process is needed.", c.config.FlannelDaemonsetName)
+		return false, nil
+	}
+
+	//Check if addon manager label exists
+	found, val, err := d.getLabelValue(c.k8sClientset, namespaceKubeSystem, addOnManagerLabelKey)
+	if err != nil {
+		return false, err
+	}
+
+	if found {
+		log.Infof("Daemonset %s got addon manager label set to %s, abort migration process.",
+			c.config.FlannelDaemonsetName, val)
 		return false, nil
 	}
 
