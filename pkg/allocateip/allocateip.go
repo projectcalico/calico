@@ -16,7 +16,7 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/net"
 	"github.com/projectcalico/libcalico-go/lib/options"
 	"github.com/projectcalico/node/pkg/calicoclient"
-	"github.com/projectcalico/typha/pkg/logutils"
+	"github.com/projectcalico/libcalico-go/lib/logutils"
 	"github.com/sirupsen/logrus"
 	log "github.com/sirupsen/logrus"
 )
