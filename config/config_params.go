@@ -238,7 +238,7 @@ type Config struct {
 
 	loadClientConfigFromEnvironment func() (*apiconfig.CalicoAPIConfig, error)
 
-	useResourceUpdates bool
+	useNodeResourceUpdates bool
 }
 
 type ProtoPort struct {
@@ -639,12 +639,12 @@ func loadParams() {
 	}
 }
 
-func (config *Config) SetUseResourceUpdates(b bool) {
-	config.useResourceUpdates = b
+func (config *Config) SetUseNodeResourceUpdates(b bool) {
+	config.useNodeResourceUpdates = b
 }
 
-func (config *Config) UseResourceUpdates() bool {
-	return config.useResourceUpdates
+func (config *Config) UseNodeResourceUpdates() bool {
+	return config.useNodeResourceUpdates
 }
 
 func (config *Config) RawValues() map[string]string {

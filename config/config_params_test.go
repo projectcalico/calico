@@ -58,7 +58,7 @@ var _ = Describe("FelixConfig vs ConfigParams parity", func() {
 		"loadClientConfigFromEnvironment",
 
 		"loadClientConfigFromEnvironment",
-		"useResourceUpdates",
+		"useNodeResourceUpdates",
 	}
 	cpFieldNameToFC := map[string]string{
 		"IpInIpEnabled":                      "IPIPEnabled",

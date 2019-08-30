@@ -70,10 +70,10 @@ type VXLANResolver struct {
 	nodeNameToVXLANMac        map[string]string
 	blockToRoutes             map[string]set.Set
 	vxlanPools                map[string]model.IPPool
-	useResourceUpdates        bool
+	useNodeResourceUpdates    bool
 }
 
-func NewVXLANResolver(hostname string, callbacks PipelineCallbacks, useResourceUpdates bool) *VXLANResolver {
+func NewVXLANResolver(hostname string, callbacks PipelineCallbacks, useNodeResourceUpdates bool) *VXLANResolver {
 	return &VXLANResolver{
 		hostname:                  hostname,
 		callbacks:                 callbacks,
@@ -83,12 +83,12 @@ func NewVXLANResolver(hostname string, callbacks PipelineCallbacks, useResourceU
 		nodeNameToVXLANMac:        map[string]string{},
 		blockToRoutes:             map[string]set.Set{},
 		vxlanPools:                map[string]model.IPPool{},
-		useResourceUpdates:        useResourceUpdates,
+		useNodeResourceUpdates:    useNodeResourceUpdates,
 	}
 }
 
 func (c *VXLANResolver) RegisterWith(allUpdDispatcher *dispatcher.Dispatcher) {
-	if c.useResourceUpdates {
+	if c.useNodeResourceUpdates {
 		allUpdDispatcher.Register(model.ResourceKey{}, c.OnResourceUpdate)
 	} else {
 		allUpdDispatcher.Register(model.HostIPKey{}, c.OnHostIPUpdate)
@@ -555,7 +555,7 @@ func (c *VXLANResolver) routeTypeForRoute(r vxlanRoute) (proto.RouteType, error)
 		logCxt.WithField("pool", pool).Debug("pool has VXLAN CrossSubnet mode enabled")
 		// if we're not using resource updates we'll never get the CIDR block need to check if the route's node's subnet
 		// overlaps with this node's subnet
-		if !c.useResourceUpdates {
+		if !c.useNodeResourceUpdates {
 			logCxt.WithField("pool", pool).Warning(
 				"CrossSubnet mode detected on pool but resource updates aren't being used. Defaulting to RouteType_VXLAN")
 			return proto.RouteType_VXLAN, nil

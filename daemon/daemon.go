@@ -378,9 +378,51 @@ configRetry:
 		syncer = felixsyncer.New(backendClient, datastoreConfig.Spec, syncerToValidator)
 
 		log.Info("using resource updates where applicable")
-		configParams.SetUseResourceUpdates(true)
+		configParams.SetUseNodeResourceUpdates(true)
 	}
 	log.WithField("syncer", syncer).Info("Created Syncer")
+
+	// Start the background processing threads.
+	if syncer != nil {
+		log.Infof("Starting the datastore Syncer")
+		syncer.Start()
+	} else {
+		log.Infof("Starting the Typha connection")
+		err := typhaConnection.Start(context.Background())
+		if err != nil {
+			log.WithError(err).Error("Failed to connect to Typha. Retrying...")
+			startTime := time.Now()
+			for err != nil && time.Since(startTime) < 30*time.Second {
+				// Set Ready to false and Live to true when unable to connect to typha
+				healthAggregator.Report(healthName, &health.HealthReport{Live: true, Ready: false})
+				err = typhaConnection.Start(context.Background())
+				if err == nil {
+					break
+				}
+				log.WithError(err).Debug("Retrying Typha connection")
+				time.Sleep(1 * time.Second)
+			}
+			if err != nil {
+				log.WithError(err).Fatal("Failed to connect to Typha")
+			} else {
+				log.Info("Connected to Typha after retries.")
+				healthAggregator.Report(healthName, &health.HealthReport{Live: true, Ready: true})
+			}
+		}
+
+		supportsNodeResourceUpdates, err := typhaConnection.SupportsNodeResourceUpdates(10 * time.Second)
+		if err != nil {
+			log.WithError(err).Error("Did not get hello message from Typha in time, assuming it does not support node resource updates")
+			return
+		}
+		log.Debugf("Typha supports node resource updates: %v", supportsNodeResourceUpdates)
+		configParams.SetUseNodeResourceUpdates(supportsNodeResourceUpdates)
+
+		go func() {
+			typhaConnection.Finished.Wait()
+			failureReportChan <- "Connection to Typha failed"
+		}()
+	}
 
 	// Create the ipsets/active policy calculation graph, which will
 	// do the dynamic calculation of ipset memberships and active policies
@@ -446,38 +488,6 @@ configRetry:
 	// calculation graph.
 	validator := calc.NewValidationFilter(asyncCalcGraph)
 
-	// Start the background processing threads.
-	if syncer != nil {
-		log.Infof("Starting the datastore Syncer")
-		syncer.Start()
-	} else {
-		log.Infof("Starting the Typha connection")
-		err := typhaConnection.Start(context.Background())
-		if err != nil {
-			log.WithError(err).Error("Failed to connect to Typha. Retrying...")
-			startTime := time.Now()
-			for err != nil && time.Since(startTime) < 30*time.Second {
-				// Set Ready to false and Live to true when unable to connect to typha
-				healthAggregator.Report(healthName, &health.HealthReport{Live: true, Ready: false})
-				err = typhaConnection.Start(context.Background())
-				if err == nil {
-					break
-				}
-				log.WithError(err).Debug("Retrying Typha connection")
-				time.Sleep(1 * time.Second)
-			}
-			if err != nil {
-				log.WithError(err).Fatal("Failed to connect to Typha")
-			} else {
-				log.Info("Connected to Typha after retries.")
-				healthAggregator.Report(healthName, &health.HealthReport{Live: true, Ready: true})
-			}
-		}
-		go func() {
-			typhaConnection.Finished.Wait()
-			failureReportChan <- "Connection to Typha failed"
-		}()
-	}
 	go syncerToValidator.SendTo(validator)
 	asyncCalcGraph.Start()
 	log.Infof("Started the processing graph")
