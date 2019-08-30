@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"os"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/projectcalico/kube-controllers/pkg/controllers/controller"
@@ -32,9 +33,17 @@ import (
 )
 
 const (
-	namespaceKubeSystem      = "kube-system"
-	migrationNodeSelectorKey = "projectcalico.org/node-network-during-migration"
-	addOnManagerLabelKey     = "addonmanager.kubernetes.io/mode"
+	namespaceKubeSystem        = "kube-system"
+	migrationNodeSelectorKey   = "projectcalico.org/node-network-during-migration"
+	migrationNodeInProgressKey = "projectcalico.org/node-flannel-migration-in-progress"
+	addOnManagerLabelKey       = "addonmanager.kubernetes.io/mode"
+	canalDaemonsetName         = "canal"
+	calicoConfigMapName        = "calico-config"
+	calicoConfigMapMtuKey      = "veth_mtu"
+	migrationConfigMapName     = "flannel-migration-config"
+	migrationConfigMapEnvKey   = "flannel_subnet_env"
+	flannelConfigFile          = "run/flannel/subnet.env"
+	flannelContainerName       = "kube-flannel"
 )
 
 // Flannel migration controller consists of three major components.
@@ -49,8 +58,16 @@ var (
 	// nodeNetworkCalico is a map value indicates a node is becoming part of Calico vxlan network.
 	// This is used both as a nodeSelector for Calico daemonset and a label for a node.
 	nodeNetworkCalico = map[string]string{migrationNodeSelectorKey: "calico"}
-	// nodeNetworkNone is a map value indicates a node is running network migration.
+	// nodeNetworkNone is a map value indicates there should be neither Flannel nor Calico running on the node.
 	nodeNetworkNone = map[string]string{migrationNodeSelectorKey: "none"}
+	// nodeMigrationInProgress is a map value indicates a node is running network migration.
+	nodeMigrationInProgress = map[string]string{migrationNodeInProgressKey: "true"}
+	// Label for Flannel daemonset pod.
+	flannelPodLabel = map[string]string{"app": "flannel"}
+	// Label for Canal daemonset pod.
+	canalPodLabel = map[string]string{"k8s-app": "canal"}
+	// Label for Calico daemonset pod.
+	calicoPodLabel = map[string]string{"k8s-app": "calico-node"}
 )
 
 // flannelMigrationController implements the Controller interface.
@@ -213,6 +230,48 @@ func (c *flannelMigrationController) processNewNode(node *v1.Node) {
 	log.Infof("Complete processing new node %s.", node.Name)
 }
 
+// Get Flannel config from subnet.env file by kubectl exec into Flannel/Canal daemonset pod.
+// Once a valid config has been read, migration controller need to update migration config map.
+// This is because if we just rely on getting config from Flannel/Canal daemonset pod, there are
+// chances that at the final stage of migration, all Flannel/Canal daemonset pod has been deleted
+// but at the same time migration controller restart itself.
+func (c *flannelMigrationController) readAndUpdateFlannelEnvConfig() error {
+	// Work out the Flannel config by kubectl exec into daemonset pod on controller node.
+	log.Infof("Trying to read Flannel env config by executing into daemonet pod.")
+	var podLabel map[string]string
+	if c.config.IsRunningCanal() {
+		podLabel = canalPodLabel
+	} else {
+		podLabel = flannelPodLabel
+	}
+
+	n := k8snode(c.config.PodNodeName)
+	data, err := n.execCommandInPod(c.k8sClientset, namespaceKubeSystem, flannelContainerName,
+		podLabel, "cat", flannelConfigFile)
+	if err != nil {
+		return err
+	}
+
+	if err = c.config.ReadFlannelConfig(data); err != nil {
+		return err
+	}
+	if err = c.config.ValidateFlannelConfig(); err != nil {
+		return err
+	}
+	log.WithField("flannelConfig", c.config).Info("Flannel env config parsed successfully.")
+
+	// Convert subnet.env content to json string and update flannel-migration-config ConfigMap.
+	// So that it could be populated into migration controller pod next time it starts.
+	val := strings.Replace(data, "\n", ";", -1)
+	err = updateConfigMapValue(c.k8sClientset, namespaceKubeSystem, migrationConfigMapName, migrationConfigMapEnvKey, val)
+	if err != nil {
+		return err
+	}
+	log.Infof("Flannel subnet.env stored in migration config map: '%s'.", val)
+
+	return nil
+}
+
 // Check if controller should start migration process.
 func (c *flannelMigrationController) CheckShouldMigrate() (bool, error) {
 	// Check if we are running Canal.
@@ -251,6 +310,14 @@ func (c *flannelMigrationController) CheckShouldMigrate() (bool, error) {
 		return false, nil
 	}
 
+	// Check if we need to read and update Flannel subnet.env config.
+	if !c.config.subnetEnvPopulated() {
+		err = c.readAndUpdateFlannelEnvConfig()
+		if err != nil {
+			return false, err
+		}
+	}
+
 	// Update calico-config ConfigMap veth_mtu.
 	// So that it could be populated into calico-node pods.
 	err = updateConfigMapValue(c.k8sClientset, namespaceKubeSystem, calicoConfigMapName, calicoConfigMapMtuKey, fmt.Sprintf("%d", c.config.FlannelMTU))
@@ -282,17 +349,19 @@ func (c *flannelMigrationController) CheckShouldMigrate() (bool, error) {
 func (c *flannelMigrationController) runIpamMigrationForNodes() ([]*v1.Node, error) {
 	nodes := []*v1.Node{}
 
-	// A node can be in different migration status indicated by the value of label "projectcalico.org/node-network-during-migration".
+	// A node can be in different migration status indicated by the value of labels
+	// "projectcalico.org/node-network-during-migration" (abbr. network) and "projectcalico.org/node-flannel-migration-in-progress" (abbr. in-progress)
 	// case 1. No label at all.
 	//         This is the first time migration controller starts. The node is running Flannel.
 	//         Or in rare cases, the node is a new node added between two separate migration processes. e.g. migration controller restarted.
 	//         The controller will not try to distinguish these two scenarios. It regards the new node as if Flannel is running.
 	//         This simplifies the main controller logic and increases robustness.
-	// case 2. flannel. The node has been identified by previous migration process that Flannel is running.
-	// case 3. unknown. The node has completed ipam migration. However, network migration process has not been done.
-	// case 4. calico. The node is running Calico.
+	// case 2. network == flannel with no in-progress label. The node has been identified by previous migration process that Flannel is running.
+	// case 3. network == none and in-progress == true. The node has completed ipam migration. It started network migration process.
+	// case 4. network == calico and in-progress == true. The node got flannel network removed but has not completed migration process.
+	// case 5. network == calico with no in-progress label. The node is running Calico.
 	//
-	// The controller will start ipam and network migration for all cases except case 4.
+	// The controller will start ipam and network migration for all cases except case 5.
 
 	// Work out list of nodes not running Calico. It could happen that all nodes are running Calico and it returns an empty list.
 	items := c.indexer.List()
@@ -301,12 +370,17 @@ func (c *flannelMigrationController) runIpamMigrationForNodes() ([]*v1.Node, err
 	for _, obj := range items {
 		node := obj.(*v1.Node)
 
-		val, _ := getNodeLabelValue(node, migrationNodeSelectorKey)
-		if val != "calico" {
-			n := k8snode(node.Name)
-			if err := n.addNodeLabels(c.k8sClientset, nodeNetworkFlannel); err != nil {
-				log.WithError(err).Errorf("Error adding node label to node %s.", node.Name)
-				return []*v1.Node{}, err
+		migrationInProgress, _ := getNodeLabelValue(node, migrationNodeInProgressKey)
+		network, _ := getNodeLabelValue(node, migrationNodeSelectorKey)
+
+		if network != "calico" || migrationInProgress == "true" {
+			if network != "calico" && network != "none" {
+				// Allow Flannel to run if the node is not starting to run Calico or Flannel network has been removed.
+				n := k8snode(node.Name)
+				if err := n.addNodeLabels(c.k8sClientset, nodeNetworkFlannel); err != nil {
+					log.WithError(err).Errorf("Error adding node label to node %s.", node.Name)
+					return []*v1.Node{}, err
+				}
 			}
 
 			addToList := true

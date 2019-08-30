@@ -304,30 +304,79 @@ type k8snode string
 
 // Add node labels to node. Perform Get/Check/Update so that it always working on latest version.
 // If node labels has been set already, do nothing.
-func (n k8snode) addNodeLabels(k8sClientset *kubernetes.Clientset, labels map[string]string) error {
+func (n k8snode) addNodeLabels(k8sClientset *kubernetes.Clientset, labelMaps ...map[string]string) error {
 	nodeName := string(n)
-	node, err := k8sClientset.CoreV1().Nodes().Get(nodeName, metav1.GetOptions{})
-	if err != nil {
-		return err
-	}
-
-	needUpdate := false
-	for k, v := range labels {
-		if currentVal, ok := node.Labels[k]; ok && currentVal == v {
-			continue
-		}
-		node.Labels[k] = v
-		needUpdate = true
-	}
-
-	if needUpdate {
-		_, err := k8sClientset.CoreV1().Nodes().Update(node)
+	return wait.PollImmediate(1*time.Second, 1*time.Minute, func() (bool, error) {
+		node, err := k8sClientset.CoreV1().Nodes().Get(nodeName, metav1.GetOptions{})
 		if err != nil {
-			return err
+			return false, err
 		}
-	}
 
-	return nil
+		needUpdate := false
+		for _, labels := range labelMaps {
+			for k, v := range labels {
+				if currentVal, ok := node.Labels[k]; ok && currentVal == v {
+					continue
+				}
+				node.Labels[k] = v
+				needUpdate = true
+			}
+		}
+
+		if needUpdate {
+			_, err := k8sClientset.CoreV1().Nodes().Update(node)
+			if err == nil {
+				return true, nil
+			}
+			if !apierrs.IsConflict(err) {
+				return false, err
+			}
+
+			// Retry on update conflicts.
+			return false, nil
+		}
+
+		// no update needed
+		return true, nil
+	})
+}
+
+// Remove node labels to node. Perform Get/Check/Update so that it always working on latest version.
+// If node labels do not exist, do nothing.
+func (n k8snode) removeNodeLabels(k8sClientset *kubernetes.Clientset, labelMaps ...map[string]string) error {
+	nodeName := string(n)
+	return wait.PollImmediate(1*time.Second, 1*time.Minute, func() (bool, error) {
+		node, err := k8sClientset.CoreV1().Nodes().Get(nodeName, metav1.GetOptions{})
+		if err != nil {
+			return false, err
+		}
+
+		needUpdate := false
+		for _, labels := range labelMaps {
+			for k := range labels {
+				if _, ok := node.Labels[k]; ok {
+					delete(node.Labels, k)
+					needUpdate = true
+				}
+			}
+		}
+
+		if needUpdate {
+			_, err := k8sClientset.CoreV1().Nodes().Update(node)
+			if err == nil {
+				return true, nil
+			}
+			if !apierrs.IsConflict(err) {
+				return false, err
+			}
+
+			// Retry on update conflicts.
+			return false, nil
+		}
+
+		// no update needed
+		return true, nil
+	})
 }
 
 // Start deletion process for pods on a node which satisfy a filter.
@@ -403,17 +452,54 @@ func (n k8snode) waitPodReadyForNode(k8sClientset *kubernetes.Clientset, namespa
 	})
 }
 
+// Execute command in a pod on a node. Get command output.
+func (n k8snode) execCommandInPod(k8sClientset *kubernetes.Clientset, namespace, containerName string, label map[string]string, args ...string) (string, error) {
+	nodeName := string(n)
+	podList, err := k8sClientset.CoreV1().Pods(namespace).List(
+		metav1.ListOptions{
+			FieldSelector: fields.SelectorFromSet(fields.Set{"spec.nodeName": nodeName}).String(),
+			LabelSelector: labels.SelectorFromSet(label).String(),
+		},
+	)
+	if err != nil {
+		return "", err
+	}
+
+	if len(podList.Items) != 1 {
+		// Multiple pods, or no pod.
+		return "", fmt.Errorf("Failed to execute command in pod. Number of pod with label %v on node %s is %d",
+			label, nodeName, len(podList.Items))
+	}
+
+	pod := podList.Items[0]
+	if !isPodRunningAndReady(&pod) {
+		// Pod is not running and ready.
+		return "", fmt.Errorf("Failed to execute command in pod. Pod %s is not ready.", pod.Name)
+	}
+
+	cmdArgs := []string{"exec", pod.Name, fmt.Sprintf("--namespace=%s", namespace), fmt.Sprintf("-c=%s", containerName)}
+	cmdArgs = append(cmdArgs, args...)
+	out, err := exec.Command("/usr/bin/kubectl", cmdArgs...).CombinedOutput()
+	if err != nil {
+		log.Errorf("Kubectl exec %s(%s) error. \n ---%v--- \n%s\n ------", pod.Name, containerName, cmdArgs, string(out))
+		return "", err
+	}
+
+	log.Infof("Kubectl exec %s(%s) completed successfully. \n ---%v--- \n%s\n ------", pod.Name, containerName, cmdArgs, string(out))
+	return string(out), nil
+}
+
 func (n k8snode) Drain() error {
 	nodeName := string(n)
 	log.Infof("Start drain node %s", nodeName)
 	out, err := exec.Command("/usr/bin/kubectl", "drain",
 		"--ignore-daemonsets", "--delete-local-data", "--force", nodeName).CombinedOutput()
 	if err != nil {
-		log.Errorf("Drain node %s. \n ---Drain Node--- \n %s \n ------", nodeName, string(out))
+		log.Errorf("Drain node %s. \n ---Drain Node--- \n%s\n ------", nodeName, string(out))
 		return err
 	}
 
-	log.Infof("Drain node %s completed successfully. \n ---Drain Node Logs--- \n %s \n ------", nodeName, string(out))
+	log.Infof("Drain node %s completed successfully. \n ---Drain Node Logs--- \n%s\n ------", nodeName, string(out))
 	return nil
 }
 
@@ -422,7 +508,7 @@ func (n k8snode) Uncordon() error {
 	log.Infof("Start uncordon node %s", nodeName)
 	out, err := exec.Command("/usr/bin/kubectl", "uncordon", nodeName).CombinedOutput()
 	if err != nil {
-		log.Errorf("Uncordon node %s. \n ---Uncordon Node Logs--- \n %s \n ------", nodeName, string(out))
+		log.Errorf("Uncordon node %s. \n ---Uncordon Node Logs--- \n%s\n ------", nodeName, string(out))
 		return err
 	}
 

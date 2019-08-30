@@ -15,9 +15,7 @@
 package flannelmigration_test
 
 import (
-	"io/ioutil"
 	"os"
-	"path/filepath"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -25,16 +23,6 @@ import (
 )
 
 var _ = Describe("Config", func() {
-	var tmpDir string
-
-	setConfigFile := func(dir, filename string) {
-		fm.FlannelEnvFile = filepath.Join(dir, filename)
-	}
-
-	getConfigFile := func() string {
-		return fm.FlannelEnvFile
-	}
-
 	// unsetEnv() function that unsets environment variables.
 	// required by flannel migration controller.
 	unsetEnv := func() {
@@ -46,6 +34,7 @@ var _ = Describe("Config", func() {
 		os.Unsetenv("CALICO_DAMONSET_NAME")
 		os.Unsetenv("CNI_CONFIG_DIR")
 		os.Unsetenv("POD_NODE_NAME")
+		os.Unsetenv("FLANNEL_SUBNET_ENV")
 	}
 
 	// setEnv() function that sets environment variables.
@@ -58,6 +47,7 @@ var _ = Describe("Config", func() {
 		os.Setenv("CALICO_DAEMONSET_NAME", "calico-daemonset")
 		os.Setenv("CNI_CONFIG_DIR", "/cni/config")
 		os.Setenv("POD_NODE_NAME", "test-node")
+		os.Setenv("FLANNEL_SUBNET_ENV", "FLANNEL_NETWORK=10.244.0.0/16;FLANNEL_SUBNET=10.244.1.1/24;FLANNEL_MTU=8951;FLANNEL_IPMASQ=false;")
 	}
 
 	// setWrongEnv() function sets environment variables
@@ -66,121 +56,70 @@ var _ = Describe("Config", func() {
 		os.Setenv("FLANNEL_VNI", "somestring")
 	}
 
-	BeforeEach(func() {
-		var err error
-		tmpDir, err = ioutil.TempDir("", "migration-ut")
+	It("default values without POD_NODE_NAME", func() {
+		// Parse config
+		config := new(fm.Config)
+		err := config.Parse()
+		Expect(err).Should(HaveOccurred())
+	})
+
+	It("default values with POD_NODE_NAME", func() {
+		os.Setenv("POD_NODE_NAME", "test-node")
+		defer unsetEnv()
+
+		// Parse config
+		config := new(fm.Config)
+		err := config.Parse()
 		Expect(err).ShouldNot(HaveOccurred())
+
+		// Assert default values
+		Expect(config.FlannelNetwork).To(Equal(""))
+		Expect(config.FlannelMTU).To(Equal(0))
+		Expect(config.FlannelIPMasq).To(Equal(true))
+		Expect(config.FlannelDaemonsetName).To(Equal("kube-flannel-ds-amd64"))
+		Expect(config.FlannelSubnetLen).To(Equal(24))
+		Expect(config.FlannelAnnotationPrefix).To(Equal("flannel.alpha.coreos.com"))
+		Expect(config.FlannelVNI).To(Equal(1))
+		Expect(config.FlannelPort).To(Equal(8472))
+		Expect(config.CalicoDaemonsetName).To(Equal("calico-node"))
+		Expect(config.CniConfigDir).To(Equal("/etc/cni/net.d"))
+		Expect(config.PodNodeName).To(Equal("test-node"))
+		Expect(config.FlannelSubnetEnv).To(Equal(""))
 	})
 
-	AfterEach(func() {
-		os.RemoveAll(tmpDir)
+	It("with valid user defined values", func() {
+		// Set environment variables
+		setEnv()
+		defer unsetEnv()
+
+		// Parse config
+		config := new(fm.Config)
+		err := config.Parse()
+		Expect(err).NotTo(HaveOccurred())
+
+		// Assert values
+		Expect(config.FlannelNetwork).To(Equal("10.244.0.0/16"))
+		Expect(config.FlannelMTU).To(Equal(8951))
+		Expect(config.FlannelIPMasq).To(Equal(false))
+		Expect(config.FlannelDaemonsetName).To(Equal("flannel-daemonset"))
+		Expect(config.FlannelSubnetLen).To(Equal(25))
+		Expect(config.FlannelAnnotationPrefix).To(Equal("flannel-prefix"))
+		Expect(config.FlannelVNI).To(Equal(3))
+		Expect(config.FlannelPort).To(Equal(1234))
+		Expect(config.CalicoDaemonsetName).To(Equal("calico-daemonset"))
+		Expect(config.CniConfigDir).To(Equal("/cni/config"))
+		Expect(config.PodNodeName).To(Equal("test-node"))
 	})
 
-	Context("with invalid config file", func() {
-		It("file not exists", func() {
-			setConfigFile(tmpDir, "file-not-exists")
+	It("with invalid user defined values", func() {
 
-			config := new(fm.Config)
-			err := config.Parse()
-			Expect(os.IsNotExist(err)).To(Equal(true))
-		})
+		// Set wrong environment variables
+		setWrongEnv()
+		defer unsetEnv()
 
-		It("file permission is wrong", func() {
-			// Create flannel config file.
-			subnetEnv := `
-FLANNEL_NETWORK=10.244.0.0/16
-FLANNEL_SUBNET=10.244.1.1/24
-FLANNEL_MTU=8951
-FLANNEL_IPMASQ=true
-`
-			setConfigFile(tmpDir, "subnet.env")
-			data := []byte(subnetEnv)
-			err := ioutil.WriteFile(getConfigFile(), data, 0100)
-			Expect(err).ShouldNot(HaveOccurred())
-			defer os.Remove(getConfigFile())
-
-			// Parse config
-			config := new(fm.Config)
-			err = config.Parse()
-			Expect(os.IsPermission(err)).To(Equal(true))
-		})
-	})
-
-	Context("with valid config file ", func() {
-		BeforeEach(func() {
-			// Create flannel config file.
-			subnetEnv := `
-FLANNEL_NETWORK=10.244.0.0/16
-FLANNEL_SUBNET=10.244.1.1/24
-FLANNEL_MTU=8951
-FLANNEL_IPMASQ=true
-`
-			setConfigFile(tmpDir, "subnet.env")
-			data := []byte(subnetEnv)
-			err := ioutil.WriteFile(getConfigFile(), data, 0644)
-			Expect(err).ShouldNot(HaveOccurred())
-
-			os.Setenv("POD_NODE_NAME", "test-node")
-		})
-
-		AfterEach(func() {
-			// Unset environment variables
-			unsetEnv()
-		})
-
-		It("with default values", func() {
-			// Parse config
-			config := new(fm.Config)
-			err := config.Parse()
-			Expect(err).ShouldNot(HaveOccurred())
-
-			// Assert default values
-			Expect(config.FlannelNetwork).To(Equal("10.244.0.0/16"))
-			Expect(config.FlannelMTU).To(Equal(8951))
-			Expect(config.FlannelIPMasq).To(Equal(true))
-			Expect(config.FlannelDaemonsetName).To(Equal("kube-flannel-ds-amd64"))
-			Expect(config.FlannelSubnetLen).To(Equal(24))
-			Expect(config.FlannelAnnotationPrefix).To(Equal("flannel.alpha.coreos.com"))
-			Expect(config.FlannelVNI).To(Equal(1))
-			Expect(config.FlannelPort).To(Equal(8472))
-			Expect(config.CalicoDaemonsetName).To(Equal("calico-node"))
-			Expect(config.CniConfigDir).To(Equal("/etc/cni/net.d"))
-			Expect(config.PodNodeName).To(Equal("test-node"))
-
-		})
-
-		It("with valid user defined values", func() {
-			// Set environment variables
-			setEnv()
-
-			// Parse config
-			config := new(fm.Config)
-			err := config.Parse()
-			Expect(err).NotTo(HaveOccurred())
-
-			// Assert values
-			Expect(config.FlannelNetwork).To(Equal("10.244.0.0/16"))
-			Expect(config.FlannelMTU).To(Equal(8951))
-			Expect(config.FlannelIPMasq).To(Equal(true))
-			Expect(config.FlannelDaemonsetName).To(Equal("flannel-daemonset"))
-			Expect(config.FlannelSubnetLen).To(Equal(25))
-			Expect(config.FlannelAnnotationPrefix).To(Equal("flannel-prefix"))
-			Expect(config.FlannelVNI).To(Equal(3))
-			Expect(config.FlannelPort).To(Equal(1234))
-			Expect(config.CalicoDaemonsetName).To(Equal("calico-daemonset"))
-			Expect(config.CniConfigDir).To(Equal("/cni/config"))
-			Expect(config.PodNodeName).To(Equal("test-node"))
-		})
-
-		It("with invalid user defined values", func() {
-
-			// Set wrong environment variables
-			setWrongEnv()
-
-			// Parse config
-			config := new(fm.Config)
-			err := config.Parse()
-			Expect(err).To(HaveOccurred())
-		})
+		// Parse config
+		config := new(fm.Config)
+		err := config.Parse()
+		Expect(err).To(HaveOccurred())
 	})
 })
