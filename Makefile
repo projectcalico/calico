@@ -208,6 +208,7 @@ vendor: go.mod go.sum
 	$(DOCKER_RUN) $(CALICO_BUILD) bash -c ' \
 	go mod download; \
 	go mod vendor; \
+	git checkout go.sum; \
 	mkdir -p vendor/github.com/envoyproxy; \
 	mkdir -p vendor/github.com/gogo; \
 	mkdir -p vendor/github.com/lyft; \
