@@ -1,3 +1,15 @@
+---
+# This ConfigMap is used to store Flannel subnet.env content.
+kind: ConfigMap
+apiVersion: v1
+metadata:
+  name: flannel-migration-config
+  namespace: kube-system
+data:
+  # Do not edit! This field is updated by migration controller.
+  flannel_subnet_env: ""
+
+---
 # Include a clusterrole for the kube-controllers component,
 # and bind it to the flannel-migration-controller serviceaccount.
 kind: ClusterRole
@@ -31,6 +43,12 @@ rules:
       - list
       - create
       - delete
+  # Pods/exec are created.
+  - apiGroups: [""]
+    resources:
+      - pods/exec
+    verbs:
+      - create
   # Configmaps are updated.
   - apiGroups: [""]
     resources:
@@ -141,6 +159,11 @@ spec:
               value: flannelmigration
             - name: DATASTORE_TYPE
               value: kubernetes
+            - name: FLANNEL_SUBNET_ENV
+              valueFrom:
+                configMapKeyRef:
+                  name: flannel-migration-config
+                  key: flannel_subnet_env
             - name: POD_NODE_NAME
               valueFrom:
                 fieldRef:

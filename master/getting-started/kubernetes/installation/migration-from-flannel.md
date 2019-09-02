@@ -40,7 +40,7 @@ At the end, you will have a fully-functional Calico cluster using VXLAN networki
    ```
 
    The migration controller may be rescheduled several times during the migration when the node hosting
-   the it is upgraded. The installation is complete when the ouput of the above command shows 1/1 completions. For example:
+   it is upgraded. The installation is complete when the output of the above command shows 1/1 completions. For example:
 
    ```
    NAME                COMPLETIONS   DURATION   AGE
@@ -60,13 +60,13 @@ which can be set as environment variables within the pod.
 
 | Configuration options            | Description                                                          | Default                                    |
 |----------------------------------|----------------------------------------------------------------------|--------------------------------------------|
-| FLANNEL_NETWORK                  | IPv4 network CIDR used by flannel for the cluster.                   | <Automatically detected>                   |
+| FLANNEL_NETWORK                  | IPv4 network CIDR used by flannel for the cluster.                   | Automatically detected                     |
 | FLANNEL_DAEMONSET_NAME           | Name of the flannel daemon set in the kube-system namespace.         | kube-flannel-ds-amd64                      |
-| FLANNEL_MTU                      | MTU for the flannel VXLAN device.                                    | <Automatically detected>                   |
-| FLANNEL_IP_MASQ                  | Whether masquerading is enabled for outbound traffic.                | <Automatically detected>                   |
+| FLANNEL_MTU                      | MTU for the flannel VXLAN device.                                    | Automatically detected                     |
+| FLANNEL_IP_MASQ                  | Whether masquerading is enabled for outbound traffic.                | Automatically detected                     |
 | FLANNEL_SUBNET_LEN               | Per-node subnet length used by flannel.                              | 24                                         |
 | FLANNEL_ANNOTATION_PREFIX        | Value provided via the kube-annotation-prefix option to flannel.     |  flannel.alpha.coreos.com                  |
-| FLANNEL_VNI                      | The VNI used for the flannel network.                                |  flannel.alpha.coreos.com                  |
+| FLANNEL_VNI                      | The VNI used for the flannel network.                                |  1                                         |
 | FLANNEL_PORT                     | UDP port used for VXLAN.                                             |  8472                                      |
 | CALICO_DAEMONSET_NAME            | Name of the calico daemon set in the kube-system namespace.          |  calico-node                               |
 | CNI_CONFIG_DIR                   | Full path on the host in which to search for CNI config files.       |  /etc/cni/net.d                            |
