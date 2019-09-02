@@ -29,6 +29,10 @@ spec:
     spec:
       nodeSelector:
         beta.kubernetes.io/os: linux
+{{- if .Values.flannel_migration}}
+        # Only run Calico on nodes that have been migrated.
+        projectcalico.org/node-network-during-migration: calico
+{{- end}}
       hostNetwork: true
       tolerations:
         # Make sure {{include "nodeName" . }} gets scheduled on all nodes.
@@ -282,7 +286,7 @@ spec:
               cpu: 250m
           livenessProbe:
             exec:
-              command: 
+              command:
               - /bin/calico-node
               - -felix-live
             periodSeconds: 10
@@ -293,8 +297,10 @@ spec:
             exec:
               command:
               - /bin/calico-node
-              - -bird-ready
               - -felix-ready
+{{- if not .Values.flannel_migration }}
+              - -bird-ready
+{{- end }}
 {{- else if eq .Values.network "flannel" }}
             httpGet:
               path: /readiness
