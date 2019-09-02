@@ -16,22 +16,14 @@ package flannelmigration
 
 import (
 	"fmt"
-	"os"
 	"strconv"
-
-	log "github.com/sirupsen/logrus"
+	"strings"
 
 	"github.com/kelseyhightower/envconfig"
 
 	"github.com/joho/godotenv"
 
 	cnet "github.com/projectcalico/libcalico-go/lib/net"
-)
-
-const (
-	canalDaemonsetName    = "canal"
-	calicoConfigMapName   = "calico-config"
-	calicoConfigMapMtuKey = "veth_mtu"
 )
 
 var (
@@ -83,6 +75,10 @@ type Config struct {
 
 	// Node name which migration controller is running. This ENV is passed via Kubernetes downwards API.
 	PodNodeName string `default:"" split_words:"true"`
+
+	// FlannelSubnetEnv holds flannel-subnet-env value from migration ConfigMap.
+	// This ENV is passed via ConfigMap.
+	FlannelSubnetEnv string `default:"" split_words:"true"`
 }
 
 // Parse parses envconfig and stores in Config struct.
@@ -92,41 +88,40 @@ func (c *Config) Parse() error {
 		return err
 	}
 
-	// Work out config items based on env file.
-	_, err = os.Stat(FlannelEnvFile)
-	if err != nil {
+	// Check pod node name is set.
+	if c.PodNodeName == "" {
+		return fmt.Errorf("Missing PodNodeName config")
+	}
+
+	// Check if FlannelSubnetEnv has been populated via ConfigMap.
+	if !c.subnetEnvPopulated() {
+		// Do nothing. This means migration controller is running the very first time.
+		// Some of the config items will be auto detected by migration controller main thread.
+		return nil
+	}
+
+	// Restore from json string to subnet.env file content.
+	data := strings.Replace(c.FlannelSubnetEnv, ";", "\n", -1)
+	if err = c.ReadFlannelConfig(data); err != nil {
+		return err
+	}
+	if err = c.ValidateFlannelConfig(); err != nil {
 		return err
 	}
 
-	if c.FlannelNetwork, err = readFlannelEnvFile("FLANNEL_NETWORK"); err != nil {
-		return err
-	}
-
-	var masq string
-	if masq, err = readFlannelEnvFile("FLANNEL_IPMASQ"); err != nil {
-		return err
-	}
-	if c.FlannelIPMasq, err = strconv.ParseBool(masq); err != nil {
-		return err
-	}
-
-	var mtu string
-	if mtu, err = readFlannelEnvFile("FLANNEL_MTU"); err != nil {
-		return err
-	}
-	if c.FlannelMTU, err = strconv.Atoi(mtu); err != nil {
-		return err
-	}
-
-	return c.ValidateConfig()
+	return nil
 }
 
 func (c *Config) IsRunningCanal() bool {
 	return c.FlannelDaemonsetName == canalDaemonsetName
 }
 
+func (c *Config) subnetEnvPopulated() bool {
+	return c.FlannelSubnetEnv != ""
+}
+
 // Validate Flannel migration controller configurations.
-func (c *Config) ValidateConfig() error {
+func (c *Config) ValidateFlannelConfig() error {
 	// Check cluster pod CIDR
 	if c.FlannelNetwork == "" {
 		return fmt.Errorf("Missing FlannelNetwork config")
@@ -146,24 +141,36 @@ func (c *Config) ValidateConfig() error {
 		return fmt.Errorf("Missing FlannelMTU config")
 	}
 
-	// Check pod node name
-	if c.PodNodeName == "" {
-		return fmt.Errorf("Missing PodNodeName config")
-	}
-
 	return nil
 }
 
-func readFlannelEnvFile(key string) (string, error) {
-	items, err := godotenv.Read(FlannelEnvFile)
+// Read Flannel config from content of /run/flannel/subnet.env.
+func (c *Config) ReadFlannelConfig(data string) error {
+	reader := strings.NewReader(data)
+	config, err := godotenv.Parse(reader)
 	if err != nil {
-		log.Errorf("Failed to read Flannel env file.")
-		return "", err
+		return err
 	}
 
-	if val, ok := items[key]; ok {
-		return val, nil
+	var ok bool
+	if c.FlannelNetwork, ok = config["FLANNEL_NETWORK"]; !ok {
+		return fmt.Errorf("Failed to get config item FLANNEL_NETWORK")
 	}
 
-	return "", fmt.Errorf("key %s not found in Flannel env file", key)
+	var masq string
+	if masq, ok = config["FLANNEL_IPMASQ"]; !ok {
+		return fmt.Errorf("Failed to get config item FLANNEL_IPMASQ")
+	}
+	if c.FlannelIPMasq, err = strconv.ParseBool(masq); err != nil {
+		return err
+	}
+
+	var mtu string
+	if mtu, ok = config["FLANNEL_MTU"]; !ok {
+		return fmt.Errorf("Failed to get config item FLANNEL_MTU")
+	}
+	if c.FlannelMTU, err = strconv.Atoi(mtu); err != nil {
+		return err
+	}
+	return nil
 }

@@ -137,12 +137,14 @@ func (m *networkMigrator) checkCalicoVxlan(node *v1.Node) error {
 // Drain node, remove Flannel and setup Calico network for a node.
 func (m *networkMigrator) setupCalicoNetworkForNode(node *v1.Node) error {
 	log.Infof("Setting node label to disable Flannel daemonset pod on %s.", node.Name)
-	// Set node label so no Flannel pod can be scheduled on this node.
-	// Flannel pod currently running on the node starts to be evicted as the side effect.
+	// Set two node labels at the beginning of network migration.
+	// - Label nodeNetworkNone stops Flannel pod from being scheduled on this node.
+	//   Flannel pod currently running on the node starts to be evicted as the side effect.
+	// - Label nodeMigrationInProgress marks that the node is in migration process.
 	n := k8snode(node.Name)
-	err := n.addNodeLabels(m.k8sClientset, nodeNetworkNone)
+	err := n.addNodeLabels(m.k8sClientset, nodeNetworkNone, nodeMigrationInProgress)
 	if err != nil {
-		log.WithError(err).Errorf("Error adding node label to disable Flannel network for node %s.", node.Name)
+		log.WithError(err).Errorf("Error adding node labels to disable Flannel network and mark migration in process for node %s.", node.Name)
 		return err
 	}
 
@@ -186,7 +188,7 @@ func (m *networkMigrator) setupCalicoNetworkForNode(node *v1.Node) error {
 
 	log.Infof("Wait up to 5 minutes for Calico daemonset pod to become Ready on %s.", node.Name)
 	// Calico daemonset pod should start running now.
-	err = n.waitPodReadyForNode(m.k8sClientset, namespaceKubeSystem, 1*time.Second, 5*time.Minute, map[string]string{"k8s-app": "calico-node"})
+	err = n.waitPodReadyForNode(m.k8sClientset, namespaceKubeSystem, 1*time.Second, 5*time.Minute, calicoPodLabel)
 	if err != nil {
 		log.WithError(err).Errorf("Calico node pod failed on node %s", node.Name)
 		return err
@@ -204,6 +206,14 @@ func (m *networkMigrator) setupCalicoNetworkForNode(node *v1.Node) error {
 	err = n.Uncordon()
 	if err != nil {
 		log.WithError(err).Errorf("failed to uncordon node %s", node.Name)
+		return err
+	}
+
+	// Remove nodeMigrationInProgress label so that if migration controller restarts,
+	// it will not try to to migrate this node again.
+	err = n.removeNodeLabels(m.k8sClientset, nodeMigrationInProgress)
+	if err != nil {
+		log.WithError(err).Errorf("failed to remove node migration in process label for node %s", node.Name)
 		return err
 	}
 
