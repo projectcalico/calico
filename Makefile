@@ -518,7 +518,7 @@ sub-tag-images-%:
 ###############################################################################
 .PHONY: static-checks
 static-checks:
-	$(MAKE) check-typha-pins golangci-lint
+	$(MAKE) check-typha-pins golangci-lint check-packr
 
 # TODO: re-enable these linters !
 LINT_ARGS := --disable staticcheck,ineffassign,gosimple,govet,deadcode,errcheck,unused,varcheck,structcheck
@@ -732,7 +732,7 @@ bin/test-connection: $(SRC_FILES) local_build
 .PHONY: ci cd
 
 ## run CI cycle - build, test, etc.
-ci: image-all ut static-checks
+ci: image-all ut static-checks check-packr
 ifeq (,$(filter fv, $(EXCEPT)))
 	@$(MAKE) fv
 endif
