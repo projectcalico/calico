@@ -105,6 +105,8 @@ If you are installing {{site.prodname}} using [{{site.prodname}} the hard way](h
 
 If you are using IP in IP and/or VXLAN for Calico overlay networking, you must also set the tunnel MTU to match the value that you configured for the veth MTU. 
 
+##### View existing tunnel MTU values
+
 To view the existing tunnel size, use the command: 
 
 `ip addr sh`
