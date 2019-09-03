@@ -40,6 +40,7 @@ import (
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/sys/unix"
 
+	"github.com/gobuffalo/packr/v2"
 	"github.com/projectcalico/felix/labelindex"
 	"github.com/projectcalico/felix/versionparse"
 )
@@ -97,27 +98,27 @@ var (
 	v4Dot20Dot0 = versionparse.MustParseVersion("4.20.0")
 )
 
-// func init() {
-// 	boxXDP := packr.New("xdp", "./xdp/generated")
-// 	xdpBytes, err := boxXDP.Find("xdp.o")
-// 	if err != nil {
-// 		panic(fmt.Sprintf("cannot find xdp.o: %v\n", err))
-// 	}
+func init() {
+	boxXDP := packr.New("xdp", "./xdp/generated")
+	xdpBytes, err := boxXDP.Find("xdp.o")
+	if err != nil {
+		panic(fmt.Sprintf("cannot find xdp.o: %v\n", err))
+	}
 
-// 	boxSockmap := packr.New("sockmap", "./sockmap/generated")
-// 	sockopsBytes, err := boxSockmap.Find("sockops.o")
-// 	if err != nil {
-// 		panic(fmt.Sprintf("cannot find sockops.o: %v\n", err))
-// 	}
-// 	skmsgBytes, err := boxSockmap.Find("redir.o")
-// 	if err != nil {
-// 		panic(fmt.Sprintf("cannot find redir.o: %v\n", err))
-// 	}
+	boxSockmap := packr.New("sockmap", "./sockmap/generated")
+	sockopsBytes, err := boxSockmap.Find("sockops.o")
+	if err != nil {
+		panic(fmt.Sprintf("cannot find sockops.o: %v\n", err))
+	}
+	skmsgBytes, err := boxSockmap.Find("redir.o")
+	if err != nil {
+		panic(fmt.Sprintf("cannot find redir.o: %v\n", err))
+	}
 
-// 	xdpAsset = xdpBytes
-// 	sockopsAsset = sockopsBytes
-// 	skmsgAsset = skmsgBytes
-// }
+	xdpAsset = xdpBytes
+	sockopsAsset = sockopsBytes
+	skmsgAsset = skmsgBytes
+}
 
 func (m XDPMode) String() string {
 	switch m {
@@ -1898,8 +1899,8 @@ func (b *BPFLib) getSockmapArgs() ([]string, error) {
 	// key: symbol of the map definition in the XDP program
 	// value: path where the map is pinned
 	maps := map[string]string{
-		"calico_sock_map": sockmapPath,
-		"endpoints":       sockmapEndpointsPath,
+		"calico_sock_map":     sockmapPath,
+		"calico_sk_endpoints": sockmapEndpointsPath,
 	}
 
 	var mapArgs []string

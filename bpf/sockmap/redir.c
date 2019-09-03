@@ -1,37 +1,28 @@
 #include <linux/bpf.h>
-#include <iproute2/bpf_elf.h>
 
 #include "sockops.h"
 
-__section("sk_msg")
-int calico_sk_msg(struct sk_msg_md *msg)
+__attribute__((section("calico_sk_msg_func")))
+enum sk_action calico_sk_msg(struct sk_msg_md *msg)
 {
 	struct sock_key key = {};
-	__u32 sip4, dip4, sport, dport;
-	__u64 flags = BPF_F_INGRESS;
+	__u32 sip, sport, dip, dport;
 	int err;
 
-	dip4 = msg->remote_ip4;
-	sip4 = msg->local_ip4;
+	dip = msg->remote_ip4;
+	sip = msg->local_ip4;
 
-	sport = bpf_htonl(msg->local_port) >> 16;
+	sport = port_to_host(msg->local_port);
+	dport = safe_extract_port(msg->remote_port);
 
-	// The verifier doesn't seem to like reading something different than
-	// 32 bits for these fields:
-	//
-	// https://github.com/torvalds/linux/commit/303def35f64e37bcd5401d202889f5fbc0241179#diff-ecd5cf968e9720d49c4360acef3e8e32R5160
-	//
-	// Trick the optimizer to load the full 32 bits
-	// instead of only 16.
-	dport = (msg->remote_port >> 16) | (msg->remote_port & 0xffff);
-
+	if (sip == ENVOY_IP && sport == ENVOY_PORT) {
 	// If the source is envoy, we need to redirect to the socket to the
 	// other end. That is, not on the envoy side and with an IP/port
 	// matching the destination IP/port.
-	if (sip4 == ENVOY_IP && sport == ENVOY_PORT) {
-		key.ip4 = dip4;
+		key.ip4 = dip;
 		key.port = dport;
 		key.envoy_side = 0;
+	} else {
 	// The destination IP/port is usually never envoy in our testing
 	// because we get executed before the destination address is rewritten
 	// by iptables so the packet from the app still has the destination
@@ -42,17 +33,16 @@ int calico_sk_msg(struct sk_msg_md *msg)
 	// rest of the stack). We need to redirect to the socket envoy is
 	// listening on, which is addressed by setting envoy side and the
 	// IP/port of the app.
-	} else {
-		key.ip4 = sip4;
+		key.ip4 = sip;
 		key.port = sport;
 		key.envoy_side = 1;
 	}
 
-	err = msg_redirect_hash(msg, &calico_sock_map, &key, flags);
+	err = bpf_msg_redirect_hash(msg, &calico_sock_map, &key, BPF_REDIR_INGRESS);
 
 	// If the packet couldn't be redirected, pass it to the rest of the
 	// stack.
 	return SK_PASS;
 }
 
-char ____license[] __section("license")  = "Apache-2.0";
+char ____license[] __attribute__((section("license")))  = "Apache-2.0";

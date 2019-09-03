@@ -3,7 +3,7 @@ ENV GOPATH /go
 RUN apt-get update && \
 apt-get upgrade -y && \
 apt-get install -y --no-install-recommends \
-    llvm clang linux-headers-amd64 make binutils git file iproute2 golang-go ca-certificates && \
+    llvm clang libbpf-dev linux-headers-amd64 make binutils git file iproute2 golang-go ca-certificates && \
 apt-get purge --auto-remove && \
 apt-get clean && \
 mkdir -p /src /go && \
