@@ -334,12 +334,8 @@ sub-tag-images-%:
 # Static checks
 ###############################################################################
 .PHONY: static-checks
-
-# TODO: re-enable these linters !
-LINT_ARGS := --disable gosimple,errcheck,deadcode,govet,unused
-
 static-checks:
-	$(DOCKER_RUN) $(CALICO_BUILD) golangci-lint run --deadline 5m $(LINT_ARGS)
+	$(DOCKER_RUN) $(CALICO_BUILD) golangci-lint run --deadline 5m
 
 foss-checks:
 	@echo Running $@...
@@ -349,13 +345,6 @@ foss-checks:
 	  -e GO111MODULE=on \
 	  -w /go/src/$(PACKAGE_NAME) \
 	  $(CALICO_BUILD) /usr/local/bin/fossa
-
-# TODO: re-enable these linters !
-LINT_ARGS := --disable gosimple,govet,structcheck,errcheck,goimports,unused
-
-.PHONY: golangci-lint
-golangci-lint:
-	$(DOCKER_RUN) $(CALICO_BUILD) golangci-lint run --deadline 5m $(LINT_ARGS)
 
 # Run go fmt on all our go files.
 .PHONY: go-fmt goimports fix

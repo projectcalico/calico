@@ -86,8 +86,9 @@ var _ = DescribeTable("Config parsing",
 var _ = DescribeTable("Config validation",
 	func(settings map[string]string, ok bool) {
 		cfg := New()
-		cfg.UpdateFrom(settings, ConfigFile)
-		err := cfg.Validate()
+		_, err := cfg.UpdateFrom(settings, ConfigFile)
+		Expect(err).NotTo(HaveOccurred())
+		err = cfg.Validate()
 		log.WithError(err).Info("Validation result")
 		if !ok {
 			Expect(err).To(HaveOccurred())

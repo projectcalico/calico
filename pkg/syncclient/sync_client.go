@@ -372,7 +372,7 @@ func (s *SyncerClient) loop(cxt context.Context, cancelFn context.CancelFunc) {
 				serverSyncerType = syncproto.SyncerTypeFelix
 			}
 			if ourSyncerType != serverSyncerType {
-				logCxt.Error("We require SyncerType %s but Typha server doesn't support it.", ourSyncerType)
+				logCxt.Errorf("We require SyncerType %s but Typha server doesn't support it.", ourSyncerType)
 				return
 			}
 		}

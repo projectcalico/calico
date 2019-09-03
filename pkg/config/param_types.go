@@ -15,7 +15,6 @@
 package config
 
 import (
-	"errors"
 	"fmt"
 	"net"
 	"net/url"
@@ -50,9 +49,8 @@ func (m *Metadata) GetMetadata() *Metadata {
 }
 
 func (m *Metadata) parseFailed(raw, msg string) error {
-	return errors.New(
-		fmt.Sprintf("Failed to parse config parameter %v; value %#v: %v",
-			m.Name, raw, msg))
+	return fmt.Errorf("Failer to parse config parameter %v; value %#v: %v",
+		m.Name, raw, msg)
 }
 
 func (m *Metadata) setDefault(config *Config) {
@@ -215,10 +213,11 @@ type Ipv4Param struct {
 }
 
 func (p *Ipv4Param) Parse(raw string) (result interface{}, err error) {
-	result = net.ParseIP(raw)
-	if result == nil {
+	res := net.ParseIP(raw)
+	if res == nil {
 		err = p.parseFailed(raw, "invalid IP")
 	}
+	result = res
 	return
 }
 

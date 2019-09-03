@@ -375,7 +375,7 @@ var _ = Describe("With an in-process Server", func() {
 				"/calico/v1/host/foobar/bird_ip": {
 					KVPair: model.KVPair{
 						Key:      model.HostIPKey{Hostname: "foobar"},
-						Value:    &calinet.IP{net.ParseIP("10.0.0.1")},
+						Value:    &calinet.IP{IP: net.ParseIP("10.0.0.1")},
 						Revision: "1234",
 					},
 					UpdateType: api.UpdateTypeKVNew,

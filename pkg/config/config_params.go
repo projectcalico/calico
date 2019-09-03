@@ -150,8 +150,6 @@ type Config struct {
 	// nameToSource tracks where we loaded each config param from.
 	sourceToRawConfig map[Source]map[string]string
 	rawValues         map[string]string
-
-	numIptablesBitsAllocated int
 }
 
 type ProtoPort struct {
@@ -437,18 +435,18 @@ func loadParams() {
 		metadata := param.GetMetadata()
 		metadata.Name = field.Name
 		metadata.ZeroValue = reflect.ValueOf(config).FieldByName(field.Name).Interface()
-		if strings.Index(flags, "non-zero") > -1 {
+		if strings.Contains(flags, "non-zero") {
 			metadata.NonZero = true
 		}
-		if strings.Index(flags, "die-on-fail") > -1 {
+		if strings.Contains(flags, "die-on-fail") {
 			metadata.DieOnParseFailure = true
 		}
-		if strings.Index(flags, "local") > -1 {
+		if strings.Contains(flags, "local") {
 			metadata.Local = true
 		}
 
 		if defaultStr != "" {
-			if strings.Index(flags, "skip-default-validation") > -1 {
+			if strings.Contains(flags, "skip-default-validation") {
 				metadata.Default = defaultStr
 			} else {
 				// Parse the default value and save it in the metadata. Doing

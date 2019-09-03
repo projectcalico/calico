@@ -410,12 +410,6 @@ func (s *Server) serve(cxt context.Context) {
 	}
 }
 
-func (s *Server) atConnLimit() bool {
-	s.connTrackingLock.Lock()
-	defer s.connTrackingLock.Unlock()
-	return len(s.connIDToConn) >= s.maxConns
-}
-
 func (s *Server) recordConnection(conn *connection) {
 	s.connTrackingLock.Lock()
 	s.connIDToConn[conn.ID] = conn

@@ -65,7 +65,7 @@ func (v *ValidationFilter) OnUpdates(updates []api.Update) {
 				// TODO: This should be in its own filter.
 				// Special case: we can't serialize Node keys but Felix only cares
 				// about the host metadata anyway.  Extract the Host IP.
-				update.Key = model.HostIPKey{Hostname: k.Hostname}
+				update.Key = model.HostIPKey(k)
 				if update.Value != nil {
 					node, ok := update.Value.(*model.Node)
 					if ok {

@@ -21,8 +21,8 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	log "github.com/sirupsen/logrus"
 
-	"github.com/projectcalico/typha/pkg/config"
 	"github.com/projectcalico/libcalico-go/lib/logutils"
+	"github.com/projectcalico/typha/pkg/config"
 )
 
 var (
@@ -161,10 +161,10 @@ func ConfigureLogging(configParams *config.Config) {
 		log.WithError(fileOpenErr).WithField("file", configParams.LogFilePath).
 			Fatal("Failed to open log file.")
 	}
+	// We don't bail out if we can't connect to syslog because our default is to try to
+	// connect but it's very common for syslog to be disabled when we're run in a
+	// container.
 	if sysErr != nil {
-		// We don't bail out if we can't connect to syslog because our default is to try to
-		// connect but it's very common for syslog to be disabled when we're run in a
-		// container.
 		log.WithError(sysErr).Error(
 			"Failed to connect to syslog. To prevent this error, either set config " +
 				"parameter LogSeveritySys=none or configure a local syslog service.")
