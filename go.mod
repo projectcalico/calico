@@ -8,7 +8,7 @@ require (
 	github.com/ghodss/yaml v1.0.0 // indirect
 	github.com/go-openapi/spec v0.19.2 // indirect
 	github.com/gogo/googleapis v1.2.0
-	github.com/gogo/protobuf v1.2.2-0.20190415061611-67e450fba694
+	github.com/gogo/protobuf v1.2.2-0.20190415061611-67e450fba694 // indirect
 	github.com/golang/glog v0.0.0-20160126235308-23def4e6c14b // indirect
 	github.com/kelseyhightower/envconfig v1.4.0 // indirect
 	github.com/konsorten/go-windows-terminal-sequences v1.0.2 // indirect
