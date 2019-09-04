@@ -220,6 +220,9 @@ github.com/projectcalico/pod2daemon v0.0.0-20190730210055-df57fc59e2e1 h1:JPzqAb
 github.com/projectcalico/pod2daemon v0.0.0-20190730210055-df57fc59e2e1/go.mod h1:TgmA+ArLHObRADfET11mFF1aTK5i++4ZhqIuE4IV+IU=
 github.com/projectcalico/typha v0.0.0-20190830041529-c4078ad2f165 h1:LfoIgc/owBONP/nKj/tIVENsknvdeKeQTv8KHieHQZ4=
 github.com/projectcalico/typha v0.0.0-20190830041529-c4078ad2f165/go.mod h1:6Au4AA4fb2KSwyrR2C01pKJrxn18xC5fLEiFwfCECeI=
+github.com/projectcalico/typha v0.0.0-20190903204930-d6439faa3c71 h1:iNDUlCF7GhS2M59i0mZbCP/Sy1JPxoNfaysfvUShP3M=
+github.com/projectcalico/typha v0.0.0-20190903204930-d6439faa3c71/go.mod h1:6Au4AA4fb2KSwyrR2C01pKJrxn18xC5fLEiFwfCECeI=
+github.com/projectcalico/typha v3.8.2+incompatible h1:gzjm+SMnol9qLb3Ny46mTODry3o7zq56PNI9pqeHil4=
 github.com/prometheus/client_golang v0.0.0-20171005112915-5cec1d0429b0/go.mod h1:7SWBe2y4D6OKWSNQJUaRYU/AaXPKyh/dDVn+NZz0KFw=
 github.com/prometheus/client_golang v0.9.1 h1:K47Rk0v/fkEfwfQet2KWhscE0cJzjgCCDBG2KHZoVno=
 github.com/prometheus/client_golang v0.9.1/go.mod h1:7SWBe2y4D6OKWSNQJUaRYU/AaXPKyh/dDVn+NZz0KFw=
