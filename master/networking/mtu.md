@@ -122,11 +122,11 @@ The IP in IP tunnel appears as tunlx (for example, tunl0), along with the MTU si
 
 ##### Set tunnel MTU values in FelixConfiguration
 
-You can set tunnel MTU using FelixConfiguration:
+You can set tunnel MTU using [Felix configuration file](https://docs.projectcalico.org/master/reference/resources/felixconfig):
 
 - **Felix environment variables** 
   
-  Pass the following environment variable(s)in the [Felix configuration file](https://docs.projectcalico.org/master/reference/resources/felixconfig):  
+  Pass the following environment variable(s):  
    - FELIX_IPINIPMTU
    - FELIX_VXLANMTU
 
