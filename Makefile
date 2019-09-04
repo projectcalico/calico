@@ -367,6 +367,7 @@ fv: remote-deps tests/fv/fv.test image
 	cd tests/fv && ETCD_IMAGE=$(ETCD_IMAGE) \
 		HYPERKUBE_IMAGE=$(HYPERKUBE_IMAGE) \
 		CONTAINER_NAME=$(BUILD_IMAGE):latest-$(ARCH) \
+		MIGRATION_CONTAINER_NAME=$(FLANNEL_MIGRATION_BUILD_IMAGE):latest-$(ARCH) \
 		PRIVATE_KEY=`pwd`/private.key \
 		CRDS_FILE=${PWD}/tests/crds.yaml \
 		GO111MODULE=on \

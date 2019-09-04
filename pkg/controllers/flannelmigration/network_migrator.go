@@ -136,7 +136,7 @@ func (m *networkMigrator) checkCalicoVxlan(node *v1.Node) error {
 
 // Drain node, remove Flannel and setup Calico network for a node.
 func (m *networkMigrator) setupCalicoNetworkForNode(node *v1.Node) error {
-	log.Infof("Setting node label to disable Flannel daemonset pod on %s.", node.Name)
+	log.Infof("Setting node label to disable Flannel daemonset pod on node %s.", node.Name)
 	// Set two node labels at the beginning of network migration.
 	// - Label nodeNetworkNone stops Flannel pod from being scheduled on this node.
 	//   Flannel pod currently running on the node starts to be evicted as the side effect.
@@ -224,7 +224,7 @@ func (m *networkMigrator) setupCalicoNetworkForNode(node *v1.Node) error {
 // MigrateNodes setup Calico network for array of nodes.
 func (m *networkMigrator) MigrateNodes(nodes []*v1.Node) error {
 	log.Infof("Start network migration process for %d nodes.", len(nodes))
-	for _, node := range nodes {
+	for i, node := range nodes {
 		// This is for testing purpose.
 		// Pause until user remove a pause-seconds label.
 		// This label has to be added to node before running migration controller.
@@ -241,6 +241,7 @@ func (m *networkMigrator) MigrateNodes(nodes []*v1.Node) error {
 			}
 		}
 
+		log.Infof("Start setting up Calico network for node %s[index %d].", node.Name, i)
 		err = m.setupCalicoNetworkForNode(node)
 		if err != nil {
 			// Error migrating a node. However, if the node has been removed before migration controller started,

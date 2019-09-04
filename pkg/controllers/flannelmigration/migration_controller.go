@@ -118,14 +118,30 @@ func NewFlannelMigrationController(ctx context.Context, k8sClientset *kubernetes
 	return mc
 }
 
+// Wait before start.
+func (c *flannelMigrationController) waitBeforeStart() {
+	if c.config.DebugWaitBeforeStart > 0 {
+		time.Sleep(time.Duration(c.config.DebugWaitBeforeStart) * time.Second)
+	}
+}
+
+// Wait before exit.
+func (c *flannelMigrationController) waitBeforeExit() {
+	if c.config.DebugWaitBeforeExit > 0 {
+		time.Sleep(time.Duration(c.config.DebugWaitBeforeExit) * time.Second)
+	}
+}
+
 // Handle error by simply exit 1. Allow controller to restart.
 func (c *flannelMigrationController) HandleError(err error) {
+	c.waitBeforeExit()
 	log.Fatalf("Migration controller stopped.")
 }
 
 // Migration Completed. Stop controller.
 func (c *flannelMigrationController) StopController(msg string) {
 	log.Infof("%s", msg)
+	c.waitBeforeExit()
 	os.Exit(0)
 }
 
@@ -134,6 +150,7 @@ func (c *flannelMigrationController) StopController(msg string) {
 func (c *flannelMigrationController) Run(threadiness int, reconcilerPeriod string, stopCh chan struct{}) {
 	defer uruntime.HandleCrash()
 
+	c.waitBeforeStart()
 	log.Info("Starting Migration controller")
 
 	// Check the status of the cluster to see if we need to migrate.
