@@ -77,6 +77,7 @@ rules:
       - get
       - list
       - create
+      - update
       - delete
   - apiGroups: ["crd.projectcalico.org"]
     resources:
