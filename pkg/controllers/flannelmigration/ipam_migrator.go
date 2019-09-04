@@ -266,8 +266,11 @@ func setupCalicoNodeVxlan(ctx context.Context, c client.Interface, nodeName stri
 }
 
 // createIPPool creates an IP pool using the specified CIDR.
-// If migrating from Flannel, return error if vxlan is not enabled.
-// If migrating from Canal, set vxlan enabled.
+// If migrating from Flannel,
+// - create or validate existing ippool.
+// If migrating from Canal, default ippool would have vxlan disabled.
+// - if vxlan is disabled, delete default ippool and create new one.
+// - if vxlan is enabled, validate existing ippool.
 func createDefaultVxlanIPPool(ctx context.Context, client client.Interface, cidr *cnet.IPNet, blockSize int, isNATOutgoingEnabled, checkVxlan bool) error {
 	pool := &api.IPPool{
 		ObjectMeta: metav1.ObjectMeta{
@@ -282,36 +285,66 @@ func createDefaultVxlanIPPool(ctx context.Context, client client.Interface, cidr
 		},
 	}
 
-	log.Infof("Ensure default IPv4 pool (cidr %s, blockSize %d, nat %t).", cidr.String(), blockSize, isNATOutgoingEnabled)
+	log.Infof("Ensure default IPv4 pool (cidr %s, blockSize %d, nat %t, vxlanMode %s).", cidr.String(), blockSize, isNATOutgoingEnabled, api.VXLANModeAlways)
 
-	// Create the pool.
-	// Validate if pool already exists.
-	_, err := client.IPPools().Create(ctx, pool, options.SetOptions{})
-	if err == nil {
-		log.Info("Created default IPv4 pool.")
-		return nil
+	var defaultPool *api.IPPool
+	var err error
+	createPool := true
+	if !checkVxlan {
+		// Canal will always create a default ippool with vxlan disabled.
+		defaultPool, err = client.IPPools().Get(ctx, defaultIpv4PoolName, options.GetOptions{})
+		if err == nil {
+			if defaultPool.Spec.VXLANMode != api.VXLANModeAlways {
+				// ippool is created by Canal. Delete it
+				_, err := client.IPPools().Delete(ctx, defaultIpv4PoolName, options.DeleteOptions{})
+				if err != nil {
+					log.WithError(err).Errorf("Failed to delete existing default IPv4 IP pool")
+					return err
+				}
+			} else {
+				// We have a default pool and vxlan mode is enabled.
+				createPool = false
+			}
+		} else {
+			if _, ok := err.(cerrors.ErrorResourceDoesNotExist); !ok {
+				log.WithError(err).Errorf("Failed to get default IPv4 pool for Canal")
+				return err
+			}
+			log.WithError(err).Warnf("Default IPv4 pool for Canal not exists")
+		}
 	}
 
-	if _, ok := err.(cerrors.ErrorResourceAlreadyExists); !ok {
-		log.WithError(err).Errorf("Failed to create default IPv4 pool (%s)", cidr.String())
-		return err
-	}
+	if createPool {
+		// Create the pool.
+		// Validate if pool already exists.
+		_, err = client.IPPools().Create(ctx, pool, options.SetOptions{})
+		if err == nil {
+			log.Info("Created default IPv4 pool.")
+			return nil
+		}
 
-	// Default pool exists.
-	defaultPool, err := client.IPPools().Get(ctx, defaultIpv4PoolName, options.GetOptions{})
-	if err != nil {
-		log.WithError(err).Errorf("Failed to get existing default IPv4 IP pool")
-		return err
+		if _, ok := err.(cerrors.ErrorResourceAlreadyExists); !ok {
+			log.WithError(err).Errorf("Failed to create default IPv4 pool (%s)", cidr.String())
+			return err
+		}
+
+		// Default pool exists.
+		defaultPool, err = client.IPPools().Get(ctx, defaultIpv4PoolName, options.GetOptions{})
+		if err != nil {
+			log.WithError(err).Errorf("Failed to get existing default IPv4 IP pool")
+			return err
+		}
 	}
 
 	// Check CIDR/blockSize/NATOutgoing for existing pool.
 	if defaultPool.Spec.CIDR != cidr.String() ||
 		defaultPool.Spec.BlockSize != blockSize ||
-		defaultPool.Spec.NATOutgoing != isNATOutgoingEnabled {
-		msg := fmt.Sprintf("current [cidr:%s, blocksize:%d, nat:%t], expected [cidr:%s, blocksize:%d, nat:%t]",
-			defaultPool.Spec.CIDR, defaultPool.Spec.BlockSize, defaultPool.Spec.NATOutgoing,
-			cidr.String(), blockSize, isNATOutgoingEnabled)
-		log.Errorf("Failed to validate existing default IPv4 IP pool (cidr/blocksize/nat) %+v", defaultPool.Spec)
+		defaultPool.Spec.NATOutgoing != isNATOutgoingEnabled ||
+		defaultPool.Spec.VXLANMode != api.VXLANModeAlways {
+		msg := fmt.Sprintf("current [cidr:%s, blocksize:%d, nat:%t, vxlanMode %s], expected [cidr:%s, blocksize:%d, nat:%t, vxlanMode %s]",
+			defaultPool.Spec.CIDR, defaultPool.Spec.BlockSize, defaultPool.Spec.NATOutgoing, defaultPool.Spec.VXLANMode,
+			cidr.String(), blockSize, isNATOutgoingEnabled, api.VXLANModeAlways)
+		log.Errorf("Failed to validate existing default IPv4 IP pool (cidr/blocksize/nat/vxlanMode) %+v", defaultPool.Spec)
 		return cerrors.ErrorValidation{
 			ErroredFields: []cerrors.ErroredField{{
 				Name:   "pool.Spec",
@@ -320,32 +353,7 @@ func createDefaultVxlanIPPool(ctx context.Context, client client.Interface, cidr
 		}
 	}
 
-	// Check if vxlan enabled is set.
-	if defaultPool.Spec.VXLANMode == api.VXLANModeAlways {
-		log.Info("Use existing default IPv4 pool.")
-		return nil
-	}
-
-	// vxlan enabled is not set.
-	if checkVxlan {
-		log.Errorf("Failed to validate existing default IPv4 IP pool (vxlan is not enabled) %+v", defaultPool.Spec)
-		return cerrors.ErrorValidation{
-			ErroredFields: []cerrors.ErroredField{{
-				Name:   "pool.Spec",
-				Reason: "Failed to validate existing default IPv4 IP pool",
-			}},
-		}
-	}
-
-	// Update vxlan enabled.
-	defaultPool.Spec.VXLANMode = api.VXLANModeAlways
-	_, err = client.IPPools().Update(ctx, defaultPool, options.SetOptions{})
-	if err != nil {
-		log.WithError(err).Errorf("Failed to update default ippool.")
-		return err
-	}
-
-	log.Info("default ippool updated successfully")
+	log.Info("Use current default IPv4 pool.")
 	return nil
 }
 
