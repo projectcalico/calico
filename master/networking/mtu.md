@@ -131,11 +131,11 @@ You can set tunnel MTU using [Felix configuration file](https://docs.projectcali
    - FELIX_VXLANMTU
 
 - **felixconfig file**
-  - Open the Felix configuration file.  
+  1. Open the Felix configuration file.  
     `calicoctl get felixconfig default --export -o yaml > felix.yaml`
-  - Change the MTU value for: ipipMTU and/or vxlanMTU   
+  2. Change the MTU value for: ipipMTU and/or vxlanMTU   
     `vim felix.yaml`
-  - Apply the new settings.  
+  3. Apply the new settings.  
     `calicoctl replace -f felix.yaml`
 
 All active nodes in the cluster are updated immediately.
