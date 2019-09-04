@@ -76,8 +76,7 @@ When using flannel for networking, the MTU for network interfaces should match t
   
 When you set the MTU it applies to new workloads. To apply MTU changes to existing workloads, you must restart calico nodes. Restarting the calico/node pods also updates any Calico tunnel network interfaces on that node. 
 
-1. Edit `calico-config ConfigMap`.
-2. Update the veth MTU value for your environment. For example: 
+Edit `calico-config ConfigMap` with the veth MTU value for your environment. For example: 
 
 ```
 # The CNI network configuration to install on each node.
@@ -98,8 +97,7 @@ When you set the MTU it applies to new workloads. To apply MTU changes to existi
 
 If you are using IP in IP and/or VXLAN for Calico overlay networking, set the tunnel MTU to match the value that you configured for the veth MTU. 
 
-1. Edit `calico-config ConfigMap`.
-2. Update the MTU tunnel values for your environment. For example: 
+Edit `calico-config ConfigMap` with the MTU tunnel values for your environment. For example: 
 
 ```
 # Set MTU for tunnel device used if ipip is enabled
@@ -124,18 +122,19 @@ The IP in IP tunnel appears as tunlx (for example, tunl0), along with the MTU si
 
 You can set tunnel MTU using [Felix configuration file](https://docs.projectcalico.org/master/reference/resources/felixconfig):
 
-- **Felix environment variables** 
+**Felix environment variables** 
   
-  Pass the following environment variable(s):  
-   - FELIX_IPINIPMTU
-   - FELIX_VXLANMTU
+Pass the following environment variable(s):  
+- FELIX_IPINIPMTU
+- FELIX_VXLANMTU
 
-- **felixconfig file**
-  1. Open the Felix configuration file.  
-    `calicoctl get felixconfig default --export -o yaml > felix.yaml`
-  2. Change the MTU value for: ipipMTU and/or vxlanMTU   
-    `vim felix.yaml`
-  3. Apply the new settings.  
-    `calicoctl replace -f felix.yaml`
+**FelixConfiguration file**
+
+1. Open the Felix configuration file.    
+   `calicoctl get felixconfig default --export -o yaml > felix.yaml`   
+2. Change the MTU value for: ipipMTU and/or vxlanMTU.           
+   `vim felix.yaml` . 
+3. Apply the new settings.      
+   `calicoctl replace -f felix.yaml`
 
 All active nodes in the cluster are updated immediately.
