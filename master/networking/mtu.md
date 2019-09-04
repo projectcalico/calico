@@ -17,9 +17,8 @@ Increasing the MTU can improve performance, and decreasing the MTU when it is to
 
 This how-to guide uses the following {{site.prodname}} features:
 
-- calico-config file
-- CNI configuration file
-- Felix environment variables
+- calico-config ConfigMap file
+- FelixConfiguration file
 
 ### Concepts
 
@@ -43,7 +42,7 @@ For help using IP in IP and/or VXLAN overlays, see [Configure overlay networking
 
 ### How to
 
-- [Determine MTU size](#determine-mtu- size)
+- [Determine MTU size](#determine-mtu-size)
 - [Configure MTU for workloads](#configure-mtu-for-workloads)
 - [Configure MTU for overlay networking](#configure-mtu-for-overlay-networking)
 
@@ -74,36 +73,42 @@ The extra overlay header used in IP in IP and VXLAN protocols, reduces the minim
 When using flannel for networking, the MTU for network interfaces should match the MTU of the flannel interface. If using flannel with VXLAN, use the “Calico MTU with VXLAN” column in the table above for common sizes. 
 
 #### Configure MTU for workloads
-
-When you set the MTU it applies to new workloads. To apply MTU changes to existing workloads, you must restart calico nodes. Restarting the calico/node pods also updates any {{site.prodname}} tunnel network interfaces on that node. 
-
-**Configure MTU in calico-config**
   
-Edit the `calico-config.yaml` file and update the veth value for your environment. For example:
-  
-`veth_mtu: “1440”`
+When you set the MTU it applies to new workloads. To apply MTU changes to existing workloads, you must restart calico nodes. Restarting the calico/node pods also updates any Calico tunnel network interfaces on that node. 
 
-**(Advanced) Configure MTU in the CNI configuration file**
-
-If you are installing {{site.prodname}} using [{{site.prodname}} the hard way](https://docs.projectcalico.org/master/getting-started/kubernetes/hardway/), you can update the MTU directly in the CNI configuration file. For example:
+1. Edit `calico-config ConfigMap`.
+2. Update the veth MTU value for your environment. For example: 
 
 ```
-{
-   "name": "any_name",
-    "cniVersion": "0.1.0",
-   "type": "calico",
-   "mtu": 1480,
-   "ipam": {
-     "type": "calico-ipam"
-   }
-}
+# The CNI network configuration to install on each node.
+  cni_network_config: |-
+    {
+        "name": "k8s-pod-network",
+        "cniVersion": "0.1.0",
+        "type": "calico",
+        "etcd_endpoints": "__ETCD_ENDPOINTS__",
+        "etcd_key_file": "__ETCD_KEY_FILE__",
+        "etcd_cert_file": "__ETCD_CERT_FILE__",
+        "etcd_ca_cert_file": "__ETCD_CA_CERT_FILE__",
+        "log_level": "info",
+        "mtu": 1440,
 ```
->**Note**: When using Kubernetes self-hosted manifests, the CNI plugin gets the MTU value from the `veth_mtu` field of the calico-config ConfigMap, and is set to `1440` by default. On restart of the `{{site.nodecontainer}}` workloads, any references to `__CNI_MTU__` are replaced with the `veth_mtu` value and inserted into the CNI configuration file (aka conflist) at the directory specified by Kubernetes (currently defaults to `/etc/cni/net.d/`).
-{: .alert .alert-info}
 
 #### Configure MTU for overlay networking
 
-If you are using IP in IP and/or VXLAN for Calico overlay networking, you must also set the tunnel MTU to match the value that you configured for the veth MTU. 
+If you are using IP in IP and/or VXLAN for Calico overlay networking, set the tunnel MTU to match the value that you configured for the veth MTU. 
+
+1. Edit `calico-config ConfigMap`.
+2. Update the MTU tunnel values for your environment. For example: 
+
+```
+# Set MTU for tunnel device used if ipip is enabled
+            - name: FELIX_IPINIPMTU
+              value: "1440"
+# Set MTU for tunnel device used if vxlan is enabled
+           - name: FELIX_VXLAN
+              value: “1440”
+```
 
 ##### View existing tunnel MTU values
 
@@ -115,9 +120,9 @@ The IP in IP tunnel appears as tunlx (for example, tunl0), along with the MTU si
 
 ![Tunnel MTU]({{site.baseurl}}/images/tunnel.png)
 
-##### Set tunnel MTU values
+##### Set tunnel MTU values in FelixConfiguration
 
-To set tunnel MTU for all calico nodes in a cluster, use one of the following methods:
+You can set tunnel MTU using FelixConfiguration:
 
 - **Felix environment variables** 
   
