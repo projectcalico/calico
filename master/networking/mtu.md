@@ -125,8 +125,8 @@ You can set tunnel MTU using [Felix configuration file](https://docs.projectcali
 **Felix environment variables** 
   
 Pass the following environment variable(s):  
-- FELIX_IPINIPMTU
-- FELIX_VXLANMTU
+- `FELIX_IPINIPMTU`
+- `FELIX_VXLANMTU`
 
 **FelixConfiguration file**
 
