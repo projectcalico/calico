@@ -17,8 +17,8 @@ Increasing the MTU can improve performance, and decreasing the MTU when it is to
 
 This how-to guide uses the following {{site.prodname}} features:
 
-- calico-config ConfigMap file
-- FelixConfiguration file
+- **calico-config ConfigMap** file
+- **FelixConfiguration** file
 
 ### Concepts
 
