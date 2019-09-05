@@ -252,8 +252,10 @@ func setupCalicoNodeVxlan(ctx context.Context, c client.Interface, nodeName stri
 
 	log.Infof("Calico Node current value: %+v.", node)
 
-	node.Spec.BGP = &api.NodeBGPSpec{} // set public ip for node
-	node.Spec.BGP.IPv4Address = publicIP
+	node.Spec.BGP = &api.NodeBGPSpec{}
+	// Set public ip with subnet /32.
+	// The subnet part is required to pass Felix validation.
+	node.Spec.BGP.IPv4Address = fmt.Sprintf("%s/32", publicIP)
 	node.Spec.IPv4VXLANTunnelAddr = vtepIP.String()
 	node.Spec.VXLANTunnelMACAddr = mac
 	_, err = c.Nodes().Update(ctx, node, options.SetOptions{})

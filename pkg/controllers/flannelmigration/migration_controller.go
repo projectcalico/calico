@@ -216,7 +216,8 @@ func (c *flannelMigrationController) processNewNode(node *v1.Node) {
 	log.Infof("Start processing new node %s.", node.Name)
 	err = c.ipamMigrator.SetupCalicoIPAMForNode(node)
 	if err != nil {
-		log.WithError(err).Fatalf("Error running ipam migration for new node %s.", node.Name)
+		log.WithError(err).Infof("Error running ipam migration for new node %s. This node has not got Flannel yet. Just need restart to handle it.", node.Name)
+		log.Fatal("Migration controller will restart and continue...")
 		return
 	}
 
