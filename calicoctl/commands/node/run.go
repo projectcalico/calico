@@ -1,4 +1,4 @@
-// Copyright (c) 2016 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2019 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -400,10 +400,10 @@ Description:
 	if err != nil {
 		return fmt.Errorf("Error attempting to kill process: check logs for details")
 	}
+	// Wait for the logging process to terminate.  We expect an error here, because we
+	// just killed it.
 	err = logCmd.Wait()
-	if err != nil {
-		return fmt.Errorf("Error waiting for process to exit: check logs for details")
-	}
+	log.WithError(err).Info("Expected error after killing docker logs command")
 
 	// If we didn't successfully start then notify the user.
 	if outScanner.Err() != nil {
