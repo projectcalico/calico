@@ -62,8 +62,8 @@ var (
 	nodeNetworkNone = map[string]string{migrationNodeSelectorKey: "none"}
 	// nodeMigrationInProgress is a map value indicates a node is running network migration.
 	nodeMigrationInProgress = map[string]string{migrationNodeInProgressKey: "true"}
-	// Label for Flannel daemonset pod.
-	flannelPodLabel = map[string]string{"app": "flannel"}
+	// Possible Labels for Flannel daemonset pod.
+	flannelPodLabel = map[string]string{"app": "flannel", "k8s-app": "flannel"}
 	// Label for Canal daemonset pod.
 	canalPodLabel = map[string]string{"k8s-app": "canal"}
 	// Label for Calico daemonset pod.

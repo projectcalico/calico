@@ -455,23 +455,31 @@ func (n k8snode) waitPodReadyForNode(k8sClientset *kubernetes.Clientset, namespa
 // Execute command in a pod on a node. Get command output.
 func (n k8snode) execCommandInPod(k8sClientset *kubernetes.Clientset, namespace, containerName string, label map[string]string, args ...string) (string, error) {
 	nodeName := string(n)
-	podList, err := k8sClientset.CoreV1().Pods(namespace).List(
-		metav1.ListOptions{
-			FieldSelector: fields.SelectorFromSet(fields.Set{"spec.nodeName": nodeName}).String(),
-			LabelSelector: labels.SelectorFromSet(label).String(),
-		},
-	)
-	if err != nil {
-		return "", err
+	var pod v1.Pod
+	found := false
+	for k, v := range label {
+		podList, err := k8sClientset.CoreV1().Pods(namespace).List(
+			metav1.ListOptions{
+				FieldSelector: fields.SelectorFromSet(fields.Set{"spec.nodeName": nodeName}).String(),
+				LabelSelector: labels.SelectorFromSet(map[string]string{k: v}).String(),
+			},
+		)
+		if err != nil {
+			return "", err
+		}
+
+		if len(podList.Items) == 1 {
+			found = true
+			pod = podList.Items[0]
+			break
+		}
 	}
 
-	if len(podList.Items) != 1 {
-		// Multiple pods, or no pod.
-		return "", fmt.Errorf("Failed to execute command in pod. Number of pod with label %v on node %s is %d",
-			label, nodeName, len(podList.Items))
+	if !found {
+		// Can not find pod.
+		return "", fmt.Errorf("Failed to execute command in pod. Can not find pod with label in %v on node %s", label, nodeName)
 	}
 
-	pod := podList.Items[0]
 	if !isPodRunningAndReady(&pod) {
 		// Pod is not running and ready.
 		return "", fmt.Errorf("Failed to execute command in pod. Pod %s is not ready.", pod.Name)
