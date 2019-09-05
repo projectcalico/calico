@@ -62,8 +62,8 @@ var (
 	nodeNetworkNone = map[string]string{migrationNodeSelectorKey: "none"}
 	// nodeMigrationInProgress is a map value indicates a node is running network migration.
 	nodeMigrationInProgress = map[string]string{migrationNodeInProgressKey: "true"}
-	// Label for Flannel daemonset pod.
-	flannelPodLabel = map[string]string{"app": "flannel"}
+	// Possible Labels for Flannel daemonset pod.
+	flannelPodLabel = map[string]string{"app": "flannel", "k8s-app": "flannel"}
 	// Label for Canal daemonset pod.
 	canalPodLabel = map[string]string{"k8s-app": "canal"}
 	// Label for Calico daemonset pod.
@@ -216,7 +216,8 @@ func (c *flannelMigrationController) processNewNode(node *v1.Node) {
 	log.Infof("Start processing new node %s.", node.Name)
 	err = c.ipamMigrator.SetupCalicoIPAMForNode(node)
 	if err != nil {
-		log.WithError(err).Fatalf("Error running ipam migration for new node %s.", node.Name)
+		log.WithError(err).Infof("Error running ipam migration for new node %s. This node has not got Flannel yet. Just need restart to handle it.", node.Name)
+		log.Fatal("Migration controller will restart and continue...")
 		return
 	}
 
