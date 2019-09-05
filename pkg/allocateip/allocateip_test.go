@@ -52,7 +52,7 @@ func allocateIPDescribe(description string, tunnelType []string, body func(tunne
 					body(tt)
 				})
 		default:
-			panic(errors.New(fmt.Sprintf("Unknown tunnelType, %s", tt)))
+			panic(fmt.Errorf("Unknown tunnelType, %s", tt))
 		}
 	}
 
@@ -65,7 +65,7 @@ func setTunnelAddressForNode(tunnelType string, n *api.Node, addr string) {
 	} else if tunnelType == "vxlan" {
 		n.Spec.IPv4VXLANTunnelAddr = addr
 	} else {
-		panic(errors.New(fmt.Sprintf("Unknown tunnelType, %s", tunnelType)))
+		panic(fmt.Errorf("Unknown tunnelType, %s", tunnelType))
 	}
 }
 
@@ -79,7 +79,7 @@ func checkTunnelAddressEmpty(c client.Interface, tunnelType string, nodeName str
 	} else if tunnelType == "vxlan" {
 		Expect(n.Spec.IPv4VXLANTunnelAddr).To(Equal(""))
 	} else {
-		panic(errors.New(fmt.Sprintf("Unknown tunnelType, %s", tunnelType)))
+		panic(fmt.Errorf("Unknown tunnelType, %s", tunnelType))
 	}
 }
 
@@ -99,7 +99,7 @@ func checkTunnelAddressForNode(c client.Interface, tunnelType string, nodeName s
 		Expect(n.Spec.IPv4VXLANTunnelAddr).To(Equal(addr))
 		Expect(attr[ipam.AttributeType]).To(Equal(ipam.AttributeTypeVXLAN))
 	} else {
-		panic(errors.New(fmt.Sprintf("Unknown tunnelType, %s", tunnelType)))
+		panic(fmt.Errorf("Unknown tunnelType, %s", tunnelType))
 	}
 }
 
@@ -122,7 +122,8 @@ var _ = allocateIPDescribe("ensureHostTunnelAddress", []string{"ipip", "vxlan"},
 		// Clear out datastore
 		be, err := backend.NewClient(*cfg)
 		Expect(err).ToNot(HaveOccurred())
-		be.Clean()
+		err = be.Clean()
+		Expect(err).ToNot(HaveOccurred())
 
 		//create client.
 		c, _ = client.New(*cfg)
@@ -328,11 +329,13 @@ var _ = allocateIPDescribe("removeHostTunnelAddress", []string{"ipip", "vxlan"},
 		// Clear out datastore
 		be, err := backend.NewClient(*cfg)
 		Expect(err).ToNot(HaveOccurred())
-		be.Clean()
+		err = be.Clean()
+		Expect(err).ToNot(HaveOccurred())
 
 		//create client and IPPool
 		c, _ = client.New(*cfg)
-		c.IPPools().Create(ctx, makeIPv4Pool("pool1", "172.16.0.0/24", 26), options.SetOptions{})
+		_, err = c.IPPools().Create(ctx, makeIPv4Pool("pool1", "172.16.0.0/24", 26), options.SetOptions{})
+		Expect(err).ToNot(HaveOccurred())
 	})
 
 	It("should remove tunnel address from node", func() {
