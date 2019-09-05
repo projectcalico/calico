@@ -84,7 +84,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 	if err != nil {
 		return fmt.Errorf("error getting ClusterInformation: %v", err)
 	}
-	if *ci.Spec.DatastoreReady != true {
+	if !*ci.Spec.DatastoreReady {
 		logrus.Info("Upgrade may be in progress, ready flag is not set")
 		return fmt.Errorf("Calico is currently not ready to process requests")
 	}
@@ -423,7 +423,7 @@ func cmdDel(args *skel.CmdArgs) error {
 	if err != nil {
 		return fmt.Errorf("error getting ClusterInformation: %v", err)
 	}
-	if *ci.Spec.DatastoreReady != true {
+	if !*ci.Spec.DatastoreReady {
 		logrus.Info("Upgrade may be in progress, ready flag is not set")
 		return fmt.Errorf("Calico is currently not ready to process requests")
 	}

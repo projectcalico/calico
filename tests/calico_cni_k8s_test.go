@@ -674,8 +674,8 @@ var _ = Describe("Kubernetes CNI tests", func() {
 					         }
 					       ],
 					       [
-					         { 
-					             "subnet": "10.100.0.0/24" 
+					         {
+					             "subnet": "10.100.0.0/24"
 					         }
 					       ],
 					       [
@@ -735,8 +735,8 @@ var _ = Describe("Kubernetes CNI tests", func() {
 					           }
 					       ],
 					       [
-					           { 
-					               "subnet": "10.100.0.0/24" 
+					           {
+					               "subnet": "10.100.0.0/24"
 					           }
 					       ],
 					       [
@@ -851,7 +851,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 					log.Infof("All container IPs: %v", contAddresses)
 					Expect(pod2IP).Should(Equal(expectedIP))
 
-					contNs.Do(func(_ ns.NetNS) error {
+					err = contNs.Do(func(_ ns.NetNS) error {
 						defer GinkgoRecover()
 						out, err := exec.Command("ip", "route", "show").Output()
 						Expect(err).NotTo(HaveOccurred())
@@ -878,6 +878,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 
 						return nil
 					})
+					Expect(err).ShouldNot(HaveOccurred())
 
 					_, err = testutils.DeleteContainer(netconfHostLocalIPAM, contNs.Path(), name2, testutils.K8S_TEST_NS)
 					Expect(err).ShouldNot(HaveOccurred())
@@ -1970,7 +1971,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 		// - CNI DEL using containerIDY (should actually delete the container)
 		It("should handle deletes for stale container IDs", func() {
 			// ADD the container with passing a CNI_CONTAINERID of "X".
-			_, result, _, _, _, contNs, err := testutils.CreateContainerWithId(netconf, name, testutils.K8S_TEST_NS, "", cniContainerIDX)
+			_, result, _, _, _, _, err := testutils.CreateContainerWithId(netconf, name, testutils.K8S_TEST_NS, "", cniContainerIDX)
 			Expect(err).ShouldNot(HaveOccurred())
 			log.Printf("Unmarshaled result: %v\n", result)
 
@@ -1999,7 +2000,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 			}
 
 			// ADD the container with passing a CNI_CONTAINERID of "Y"
-			_, result, _, _, _, contNs, err = testutils.CreateContainerWithId(netconf, name, testutils.K8S_TEST_NS, "", cniContainerIDY)
+			_, result, _, _, _, contNs, err := testutils.CreateContainerWithId(netconf, name, testutils.K8S_TEST_NS, "", cniContainerIDY)
 			Expect(err).ShouldNot(HaveOccurred())
 			log.Printf("Unmarshaled result: %v\n", result)
 

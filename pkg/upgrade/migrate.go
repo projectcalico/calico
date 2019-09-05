@@ -127,7 +127,7 @@ func Migrate(ctxt context.Context, c client.Interface, nodename string) error {
 					node.Spec.BGP = &v3.NodeBGPSpec{}
 				}
 				node.Spec.BGP.IPv4IPIPTunnelAddr = tunIp.String()
-				if node, err = c.Nodes().Update(ctxt, node, options.SetOptions{}); err != nil {
+				if _, err = c.Nodes().Update(ctxt, node, options.SetOptions{}); err != nil {
 					if _, ok := err.(errors.ErrorResourceUpdateConflict); ok {
 						log.Info("Encountered update conflict, retrying...")
 						time.Sleep(1 * time.Second)

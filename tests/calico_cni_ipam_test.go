@@ -17,7 +17,7 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/names"
 	cnet "github.com/projectcalico/libcalico-go/lib/net"
 	"github.com/projectcalico/libcalico-go/lib/options"
-	"github.com/satori/go.uuid"
+	uuid "github.com/satori/go.uuid"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
 )
@@ -335,7 +335,7 @@ var _ = Describe("Calico IPAM Tests", func() {
 				result, _, _ := testutils.RunIPAMPlugin(netconf, "ADD", "IP=192.168.123.123", cid, cniVersion)
 				Expect(len(result.IPs)).Should(Equal(1))
 				Expect(result.IPs[0].Address.String()).Should(Equal("192.168.123.123/32"))
-				result, _, exitCode := testutils.RunIPAMPlugin(netconf, "ADD", "IP=192.168.123.123", cid, cniVersion)
+				_, _, exitCode := testutils.RunIPAMPlugin(netconf, "ADD", "IP=192.168.123.123", cid, cniVersion)
 				Expect(exitCode).Should(BeNumerically(">", 0))
 			})
 		})

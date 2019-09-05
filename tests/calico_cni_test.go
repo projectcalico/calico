@@ -227,7 +227,7 @@ var _ = Describe("CalicoCni", func() {
 				Expect(err).ShouldNot(HaveOccurred())
 				r := false
 				ci.Spec.DatastoreReady = &r
-				ci, err = calicoClient.ClusterInformation().Update(ctx, ci, options.SetOptions{})
+				_, err = calicoClient.ClusterInformation().Update(ctx, ci, options.SetOptions{})
 				Expect(err).ShouldNot(HaveOccurred())
 				_, _, _, _, _, _, err = testutils.CreateContainer(netconf, "", testutils.TEST_DEFAULT_NS, "")
 				Expect(err).Should(HaveOccurred())
@@ -241,7 +241,7 @@ var _ = Describe("CalicoCni", func() {
 				Expect(err).ShouldNot(HaveOccurred())
 				r := false
 				ci.Spec.DatastoreReady = &r
-				ci, err = calicoClient.ClusterInformation().Update(ctx, ci, options.SetOptions{})
+				_, err = calicoClient.ClusterInformation().Update(ctx, ci, options.SetOptions{})
 				Expect(err).ShouldNot(HaveOccurred())
 
 				exitCode, err := testutils.DeleteContainer(netconf, contNs.Path(), "", testutils.TEST_DEFAULT_NS)

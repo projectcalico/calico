@@ -306,12 +306,8 @@ $(BIN)/flannel $(BIN)/loopback $(BIN)/host-local $(BIN)/portmap $(BIN)/tuning $(
 ###############################################################################
 .PHONY: static-checks
 ## Perform static checks on the code.
-
-# TODO: re-enable these linters !
-LINT_ARGS := --disable ineffassign,staticcheck,errcheck,gosimple,govet
-
 static-checks:
-	$(DOCKER_RUN) $(CALICO_BUILD) golangci-lint run --deadline 5m $(LINT_ARGS)
+	$(DOCKER_RUN) $(CALICO_BUILD) golangci-lint run --deadline 5m
 
 .PHONY: fix
 ## Fix static checks

@@ -269,8 +269,6 @@ func CreateContainer(netconf, podName, podNamespace, ip string) (containerID str
 }
 
 // Create container with the giving containerId when containerId is not empty
-//
-// Deprecated: Please call CreateContainerNamespace and then RunCNIPluginWithID directly.
 func CreateContainerWithId(netconf, podName, podNamespace, ip, overrideContainerID string) (containerID string, result *current.Result, contVeth netlink.Link, contAddr []netlink.Addr, contRoutes []netlink.Route, targetNs ns.NetNS, err error) {
 	targetNs, containerID, err = CreateContainerNamespace()
 	if err != nil {
@@ -512,13 +510,13 @@ func Cmd(cmd string) string {
 	_, _ = ginkgo.GinkgoWriter.Write([]byte(fmt.Sprintf("Running command [%s]\n", cmd)))
 	out, err := exec.Command("bash", "-c", cmd).Output()
 	if err != nil {
-		_, err = ginkgo.GinkgoWriter.Write(out)
-		if err != nil {
-			panic(err)
+		_, writeErr := ginkgo.GinkgoWriter.Write(out)
+		if writeErr != nil {
+			panic(writeErr)
 		}
-		_, err = ginkgo.GinkgoWriter.Write(err.(*exec.ExitError).Stderr)
-		if err != nil {
-			panic(err)
+		_, writeErr = ginkgo.GinkgoWriter.Write(err.(*exec.ExitError).Stderr)
+		if writeErr != nil {
+			panic(writeErr)
 		}
 		ginkgo.Fail("Command failed")
 	}
@@ -555,7 +553,6 @@ func CheckSysctlValue(sysctlPath, value string) error {
 
 func AddNode(c client.Interface, kc *kubernetes.Clientset, host string) error {
 	var err error
-	err = nil
 	if os.Getenv("DATASTORE_TYPE") == "kubernetes" {
 		// create the node in Kubernetes.
 		n := corev1.Node{
@@ -584,12 +581,11 @@ func AddNode(c client.Interface, kc *kubernetes.Clientset, host string) error {
 }
 
 func DeleteNode(c client.Interface, kc *kubernetes.Clientset, host string) error {
-	var err error
-	err = nil
+	var err error = nil
 	if os.Getenv("DATASTORE_TYPE") == "kubernetes" {
 		// delete the node in Kubernetes.
-		err := kc.CoreV1().Nodes().Delete(host, &metav1.DeleteOptions{})
-		log.WithError(err).Info("node deleted")
+		deleteErr := kc.CoreV1().Nodes().Delete(host, &metav1.DeleteOptions{})
+		log.WithError(deleteErr).Info("node deleted")
 	} else {
 		// Otherwise, delete it in Calico.
 		n := api.NewNode()

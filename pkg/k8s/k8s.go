@@ -158,7 +158,6 @@ func CmdAddK8s(ctx context.Context, args *skel.CmdArgs, conf types.NetConf, epID
 
 	labels := make(map[string]string)
 	annot := make(map[string]string)
-	annotNS := make(map[string]string)
 
 	var ports []api.EndpointPort
 	var profiles []string
@@ -169,9 +168,7 @@ func CmdAddK8s(ctx context.Context, args *skel.CmdArgs, conf types.NetConf, epID
 	// run the plugin under Kubernetes without needing it to access the
 	// Kubernetes API
 	if conf.Policy.PolicyType == "k8s" {
-		var err error
-
-		annotNS, err = getK8sNSInfo(client, epIDs.Namespace)
+		annotNS, err := getK8sNSInfo(client, epIDs.Namespace)
 		if err != nil {
 			return nil, err
 		}

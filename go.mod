@@ -41,7 +41,7 @@ require (
 	github.com/projectcalico/go-json v0.0.0-20161128004156-6219dc7339ba
 	github.com/projectcalico/go-yaml v0.0.0-20161201183616-955bc3e451ef
 	github.com/projectcalico/go-yaml-wrapper v0.0.0-20161127220527-598e54215bee
-	github.com/projectcalico/libcalico-go v3.9.0-0.dev.0.20190813183411-9f88ebd570c5+incompatible // indirect
+	github.com/projectcalico/libcalico-go v3.9.0-0.dev.0.20190813183411-9f88ebd570c5+incompatible
 	github.com/prometheus/client_golang v0.0.0-20171005112915-5cec1d0429b0
 	github.com/prometheus/client_model v0.0.0-20170216185247-6f3806018612
 	github.com/prometheus/common v0.0.0-20171104095907-e3fb1a1acd76
