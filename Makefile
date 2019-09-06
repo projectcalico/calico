@@ -96,7 +96,7 @@ ifeq ($(LOCAL_BUILD),true)
 endif
 
 # Versions and location of dependencies used in the build.
-BIRD_VER?=v0.3.3-0-g1e8dd375
+BIRD_VER?=v0.3.3-138-ge37e4770
 BIRD_IMAGE ?= calico/bird:$(BIRD_VER)-$(ARCH)
 
 # Versions and locations of dependencies used in tests.
