@@ -13,7 +13,9 @@ At the end, you will have a fully-functional Calico cluster using VXLAN networki
 - A cluster with flannel for networking using the VXLAN backend.
 - Flannel version v0.9.1 or greater (Canal version v3.7.0 or greater).
 - Flannel must be configured to use the Kubernetes API for storing its configuration (as opposed to etcd).
+- Flannel must be configured with `DirectRouting` disabled which is the default value.
 - Flannel must have been installed using a Kubernetes daemon set.
+- Cluster must allow for adding/deleting/modifying node labels.
 - Cluster must allow for modification and removal of the flannel daemon set.
 - For example, it must not be installed using the Kubernetes add-on manager.
 
