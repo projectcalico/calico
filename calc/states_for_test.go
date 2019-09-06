@@ -100,15 +100,15 @@ var localEp1WithPolicy = withPolicy.withKVUpdates(
 	"10.0.0.2/32",
 	"fc00:fe11::2/128",
 }).withActivePolicies(
-	proto.PolicyID{"default", "pol-1"},
+	proto.PolicyID{Tier: "default", Name: "pol-1"},
 ).withActiveProfiles(
-	proto.ProfileID{"prof-1"},
-	proto.ProfileID{"prof-2"},
-	proto.ProfileID{"prof-missing"},
+	proto.ProfileID{Name: "prof-1"},
+	proto.ProfileID{Name: "prof-2"},
+	proto.ProfileID{Name: "prof-missing"},
 ).withEndpoint(
 	localWlEp1Id,
 	[]mock.TierInfo{
-		{"default", []string{"pol-1"}, []string{"pol-1"}},
+		{Name: "default", IngressPolicyNames: []string{"pol-1"}, EgressPolicyNames: []string{"pol-1"}},
 	},
 ).withName("ep1 local, policy")
 
@@ -138,11 +138,11 @@ var localEp1WithNegatedNamedPortPolicy = empty.withKVUpdates(
 	"fc00:fe11::1/128",
 	"fc00:fe11::2/128",
 }).withActivePolicies(
-	proto.PolicyID{"default", "pol-1"},
+	proto.PolicyID{Tier: "default", Name: "pol-1"},
 ).withActiveProfiles(
-	proto.ProfileID{"prof-1"},
-	proto.ProfileID{"prof-2"},
-	proto.ProfileID{"prof-missing"},
+	proto.ProfileID{Name: "prof-1"},
+	proto.ProfileID{Name: "prof-2"},
+	proto.ProfileID{Name: "prof-missing"},
 ).withEndpoint(
 	localWlEp1Id,
 	[]mock.TierInfo{
@@ -176,13 +176,13 @@ var localHostEp1WithNamedPortPolicy = empty.withKVUpdates(
 	"10.0.0.2/32",
 	"fc00:fe11::2/128",
 }).withActivePolicies(
-	proto.PolicyID{"default", "pol-1"},
+	proto.PolicyID{Tier: "default", Name: "pol-1"},
 ).withActiveProfiles(
-	proto.ProfileID{"prof-1"},
+	proto.ProfileID{Name: "prof-1"},
 ).withEndpoint(
 	"named",
 	[]mock.TierInfo{
-		{"default", []string{"pol-1"}, []string{"pol-1"}},
+		{Name: "default", IngressPolicyNames: []string{"pol-1"}, EgressPolicyNames: []string{"pol-1"}},
 	},
 ).withName("Host endpoint, named port policy")
 
@@ -205,15 +205,15 @@ var localEp1WithIngressPolicy = withPolicyIngressOnly.withKVUpdates(
 	"10.0.0.2/32", // ep1 and ep2
 	"fc00:fe11::2/128",
 }).withActivePolicies(
-	proto.PolicyID{"default", "pol-1"},
+	proto.PolicyID{Tier: "default", Name: "pol-1"},
 ).withActiveProfiles(
-	proto.ProfileID{"prof-1"},
-	proto.ProfileID{"prof-2"},
-	proto.ProfileID{"prof-missing"},
+	proto.ProfileID{Name: "prof-1"},
+	proto.ProfileID{Name: "prof-2"},
+	proto.ProfileID{Name: "prof-missing"},
 ).withEndpoint(
 	localWlEp1Id,
 	[]mock.TierInfo{
-		{"default", []string{"pol-1"}, nil},
+		{Name: "default", IngressPolicyNames: []string{"pol-1"}, EgressPolicyNames: nil},
 	},
 ).withName("ep1 local, ingress-only policy")
 
@@ -240,15 +240,15 @@ var hostEp1WithPolicy = withPolicy.withKVUpdates(
 	"10.0.0.2/32",
 	"fc00:fe11::2/128",
 }).withActivePolicies(
-	proto.PolicyID{"default", "pol-1"},
+	proto.PolicyID{Tier: "default", Name: "pol-1"},
 ).withActiveProfiles(
-	proto.ProfileID{"prof-1"},
-	proto.ProfileID{"prof-2"},
-	proto.ProfileID{"prof-missing"},
+	proto.ProfileID{Name: "prof-1"},
+	proto.ProfileID{Name: "prof-2"},
+	proto.ProfileID{Name: "prof-missing"},
 ).withEndpoint(
 	hostEpWithNameId,
 	[]mock.TierInfo{
-		{"default", []string{"pol-1"}, []string{"pol-1"}},
+		{Name: "default", IngressPolicyNames: []string{"pol-1"}, EgressPolicyNames: []string{"pol-1"}},
 	},
 ).withName("host ep1, policy")
 
@@ -260,15 +260,15 @@ var hostEp1WithIngressPolicy = withPolicyIngressOnly.withKVUpdates(
 	"10.0.0.2/32", // ep1 and ep2
 	"fc00:fe11::2/128",
 }).withActivePolicies(
-	proto.PolicyID{"default", "pol-1"},
+	proto.PolicyID{Tier: "default", Name: "pol-1"},
 ).withActiveProfiles(
-	proto.ProfileID{"prof-1"},
-	proto.ProfileID{"prof-2"},
-	proto.ProfileID{"prof-missing"},
+	proto.ProfileID{Name: "prof-1"},
+	proto.ProfileID{Name: "prof-2"},
+	proto.ProfileID{Name: "prof-missing"},
 ).withEndpoint(
 	hostEpWithNameId,
 	[]mock.TierInfo{
-		{"default", []string{"pol-1"}, nil},
+		{Name: "default", IngressPolicyNames: []string{"pol-1"}, EgressPolicyNames: nil},
 	},
 ).withName("host ep1, ingress-only policy")
 
@@ -280,15 +280,15 @@ var hostEp1WithEgressPolicy = withPolicyEgressOnly.withKVUpdates(
 	"10.0.0.2/32",
 	"fc00:fe11::2/128",
 }).withActivePolicies(
-	proto.PolicyID{"default", "pol-1"},
+	proto.PolicyID{Tier: "default", Name: "pol-1"},
 ).withActiveProfiles(
-	proto.ProfileID{"prof-1"},
-	proto.ProfileID{"prof-2"},
-	proto.ProfileID{"prof-missing"},
+	proto.ProfileID{Name: "prof-1"},
+	proto.ProfileID{Name: "prof-2"},
+	proto.ProfileID{Name: "prof-missing"},
 ).withEndpoint(
 	hostEpWithNameId,
 	[]mock.TierInfo{
-		{"default", nil, []string{"pol-1"}},
+		{Name: "default", IngressPolicyNames: nil, EgressPolicyNames: []string{"pol-1"}},
 	},
 ).withName("host ep1, egress-only policy")
 
@@ -305,18 +305,18 @@ var hostEp1WithUntrackedPolicy = withUntrackedPolicy.withKVUpdates(
 	"10.0.0.2/32",
 	"fc00:fe11::2/128",
 }).withActivePolicies(
-	proto.PolicyID{"default", "pol-1"},
+	proto.PolicyID{Tier: "default", Name: "pol-1"},
 ).withUntrackedPolicies(
-	proto.PolicyID{"default", "pol-1"},
+	proto.PolicyID{Tier: "default", Name: "pol-1"},
 ).withActiveProfiles(
-	proto.ProfileID{"prof-1"},
-	proto.ProfileID{"prof-2"},
-	proto.ProfileID{"prof-missing"},
+	proto.ProfileID{Name: "prof-1"},
+	proto.ProfileID{Name: "prof-2"},
+	proto.ProfileID{Name: "prof-missing"},
 ).withEndpointUntracked(
 	hostEpWithNameId,
 	[]mock.TierInfo{},
 	[]mock.TierInfo{
-		{"default", []string{"pol-1"}, []string{"pol-1"}},
+		{Name: "default", IngressPolicyNames: []string{"pol-1"}, EgressPolicyNames: []string{"pol-1"}},
 	},
 	[]mock.TierInfo{},
 ).withName("host ep1, untracked policy")
@@ -329,34 +329,34 @@ var hostEp1WithPreDNATPolicy = withPreDNATPolicy.withKVUpdates(
 	"10.0.0.2/32", // ep1 and ep2
 	"fc00:fe11::2/128",
 }).withActivePolicies(
-	proto.PolicyID{"default", "pre-dnat-pol-1"},
+	proto.PolicyID{Tier: "default", Name: "pre-dnat-pol-1"},
 ).withPreDNATPolicies(
-	proto.PolicyID{"default", "pre-dnat-pol-1"},
+	proto.PolicyID{Tier: "default", Name: "pre-dnat-pol-1"},
 ).withActiveProfiles(
-	proto.ProfileID{"prof-1"},
-	proto.ProfileID{"prof-2"},
-	proto.ProfileID{"prof-missing"},
+	proto.ProfileID{Name: "prof-1"},
+	proto.ProfileID{Name: "prof-2"},
+	proto.ProfileID{Name: "prof-missing"},
 ).withEndpointUntracked(
 	hostEpWithNameId,
 	[]mock.TierInfo{},
 	[]mock.TierInfo{},
 	[]mock.TierInfo{
-		{"default", []string{"pre-dnat-pol-1"}, nil},
+		{Name: "default", IngressPolicyNames: []string{"pre-dnat-pol-1"}, EgressPolicyNames: nil},
 	},
 ).withName("host ep1, pre-DNAT policy")
 
 var hostEp1WithTrackedAndUntrackedPolicy = hostEp1WithUntrackedPolicy.withKVUpdates(
 	KVPair{Key: PolicyKey{Name: "pol-2"}, Value: &policy1_order20},
 ).withActivePolicies(
-	proto.PolicyID{"default", "pol-1"},
-	proto.PolicyID{"default", "pol-2"},
+	proto.PolicyID{Tier: "default", Name: "pol-1"},
+	proto.PolicyID{Tier: "default", Name: "pol-2"},
 ).withEndpointUntracked(
 	hostEpWithNameId,
 	[]mock.TierInfo{
-		{"default", []string{"pol-2"}, []string{"pol-2"}},
+		{Name: "default", IngressPolicyNames: []string{"pol-2"}, EgressPolicyNames: []string{"pol-2"}},
 	},
 	[]mock.TierInfo{
-		{"default", []string{"pol-1"}, []string{"pol-1"}},
+		{Name: "default", IngressPolicyNames: []string{"pol-1"}, EgressPolicyNames: []string{"pol-1"}},
 	},
 	[]mock.TierInfo{},
 ).withName("host ep1, tracked+untracked policy")
@@ -369,14 +369,14 @@ var hostEp2WithPolicy = withPolicy.withKVUpdates(
 	"10.0.0.3/32", // ep2
 	"fc00:fe11::3/128",
 }).withIPSet(bEqBSelectorId, []string{}).withActivePolicies(
-	proto.PolicyID{"default", "pol-1"},
+	proto.PolicyID{Tier: "default", Name: "pol-1"},
 ).withActiveProfiles(
-	proto.ProfileID{"prof-2"},
-	proto.ProfileID{"prof-3"},
+	proto.ProfileID{Name: "prof-2"},
+	proto.ProfileID{Name: "prof-3"},
 ).withEndpoint(
 	hostEpNoNameId,
 	[]mock.TierInfo{
-		{"default", []string{"pol-1"}, []string{"pol-1"}},
+		{Name: "default", IngressPolicyNames: []string{"pol-1"}, EgressPolicyNames: []string{"pol-1"}},
 	},
 ).withName("host ep2, policy")
 
@@ -421,17 +421,17 @@ func policyOrderState(policyOrders [3]float64, expectedOrder [3]string) State {
 		"10.0.0.2/32",
 		"fc00:fe11::2/128",
 	}).withActivePolicies(
-		proto.PolicyID{"default", "pol-1"},
-		proto.PolicyID{"default", "pol-2"},
-		proto.PolicyID{"default", "pol-3"},
+		proto.PolicyID{Tier: "default", Name: "pol-1"},
+		proto.PolicyID{Tier: "default", Name: "pol-2"},
+		proto.PolicyID{Tier: "default", Name: "pol-3"},
 	).withActiveProfiles(
-		proto.ProfileID{"prof-1"},
-		proto.ProfileID{"prof-2"},
-		proto.ProfileID{"prof-missing"},
+		proto.ProfileID{Name: "prof-1"},
+		proto.ProfileID{Name: "prof-2"},
+		proto.ProfileID{Name: "prof-missing"},
 	).withEndpoint(
 		localWlEp1Id,
 		[]mock.TierInfo{
-			{"default", expectedOrder[:], expectedOrder[:]},
+			{Name: "default", IngressPolicyNames: expectedOrder[:], EgressPolicyNames: expectedOrder[:]},
 		},
 	).withName(fmt.Sprintf("ep1 local, 1 tier, policies %v", expectedOrder[:]))
 	return state
@@ -449,14 +449,14 @@ var localEp2WithPolicy = withPolicy.withKVUpdates(
 }).withIPSet(
 	bEqBSelectorId, []string{},
 ).withActivePolicies(
-	proto.PolicyID{"default", "pol-1"},
+	proto.PolicyID{Tier: "default", Name: "pol-1"},
 ).withActiveProfiles(
-	proto.ProfileID{"prof-2"},
-	proto.ProfileID{"prof-3"},
+	proto.ProfileID{Name: "prof-2"},
+	proto.ProfileID{Name: "prof-3"},
 ).withEndpoint(
 	localWlEp2Id,
 	[]mock.TierInfo{
-		{"default", []string{"pol-1"}, []string{"pol-1"}},
+		{Name: "default", IngressPolicyNames: []string{"pol-1"}, EgressPolicyNames: []string{"pol-1"}},
 	},
 ).withName("ep2 local, policy")
 
@@ -480,21 +480,21 @@ var localEpsWithPolicy = withPolicy.withKVUpdates(
 	"10.0.0.2/32",
 	"fc00:fe11::2/128",
 }).withActivePolicies(
-	proto.PolicyID{"default", "pol-1"},
+	proto.PolicyID{Tier: "default", Name: "pol-1"},
 ).withActiveProfiles(
-	proto.ProfileID{"prof-1"},
-	proto.ProfileID{"prof-2"},
-	proto.ProfileID{"prof-3"},
-	proto.ProfileID{"prof-missing"},
+	proto.ProfileID{Name: "prof-1"},
+	proto.ProfileID{Name: "prof-2"},
+	proto.ProfileID{Name: "prof-3"},
+	proto.ProfileID{Name: "prof-missing"},
 ).withEndpoint(
 	localWlEp1Id,
 	[]mock.TierInfo{
-		{"default", []string{"pol-1"}, []string{"pol-1"}},
+		{Name: "default", IngressPolicyNames: []string{"pol-1"}, EgressPolicyNames: []string{"pol-1"}},
 	},
 ).withEndpoint(
 	localWlEp2Id,
 	[]mock.TierInfo{
-		{"default", []string{"pol-1"}, []string{"pol-1"}},
+		{Name: "default", IngressPolicyNames: []string{"pol-1"}, EgressPolicyNames: []string{"pol-1"}},
 	},
 ).withName("2 local, overlapping IPs & a policy")
 
@@ -548,7 +548,7 @@ var localEpsWithOverlappingIPsAndInheritedLabels = empty.withKVUpdates(
 	// Two local endpoints with overlapping IPs.
 	KVPair{Key: localWlEpKey1, Value: &localWlEp1},
 	KVPair{Key: localWlEpKey2, Value: &localWlEp2},
-	KVPair{Key: ProfileLabelsKey{ProfileKey{"prof-1"}}, Value: profileLabels1},
+	KVPair{Key: ProfileLabelsKey{ProfileKey: ProfileKey{Name: "prof-1"}}, Value: profileLabels1},
 ).withEndpoint(
 	localWlEp1Id,
 	[]mock.TierInfo{},
@@ -556,10 +556,10 @@ var localEpsWithOverlappingIPsAndInheritedLabels = empty.withKVUpdates(
 	localWlEp2Id,
 	[]mock.TierInfo{},
 ).withActiveProfiles(
-	proto.ProfileID{"prof-1"},
-	proto.ProfileID{"prof-2"},
-	proto.ProfileID{"prof-3"},
-	proto.ProfileID{"prof-missing"},
+	proto.ProfileID{Name: "prof-1"},
+	proto.ProfileID{Name: "prof-2"},
+	proto.ProfileID{Name: "prof-3"},
+	proto.ProfileID{Name: "prof-missing"},
 )
 
 // Building on the above, we add a policy to match on the inherited label, which should produce
@@ -590,7 +590,7 @@ var localEpsAndNamedPortPolicyMatchingInheritedLabelOnEP1 = localEpsWithOverlapp
 
 // Add a second profile with the same labels so that both endpoints now match.
 var localEpsAndNamedPortPolicyMatchingInheritedLabelBothEPs = localEpsAndNamedPortPolicyMatchingInheritedLabelOnEP1.withKVUpdates(
-	KVPair{Key: ProfileLabelsKey{ProfileKey{"prof-2"}}, Value: profileLabels1},
+	KVPair{Key: ProfileLabelsKey{ProfileKey: ProfileKey{Name: "prof-2"}}, Value: profileLabels1},
 ).withIPSet(namedPortInheritIPSetID, []string{
 	"10.0.0.1,tcp:8080", // ep1
 	"fc00:fe11::1,tcp:8080",
@@ -624,7 +624,7 @@ var localEpsAndNamedPortPolicyDuplicatePorts = localEpsAndNamedPortPolicyMatchin
 
 // Then, change the label on EP2 so it no-longer matches.
 var localEpsAndNamedPortPolicyNoLongerMatchingInheritedLabelOnEP2 = localEpsAndNamedPortPolicyMatchingInheritedLabelBothEPs.withKVUpdates(
-	KVPair{Key: ProfileLabelsKey{ProfileKey{"prof-2"}}, Value: profileLabels2},
+	KVPair{Key: ProfileLabelsKey{ProfileKey: ProfileKey{Name: "prof-2"}}, Value: profileLabels2},
 ).withIPSet(namedPortInheritIPSetID, []string{
 	"10.0.0.1,tcp:8080", // ep1
 	"fc00:fe11::1,tcp:8080",
@@ -635,7 +635,7 @@ var localEpsAndNamedPortPolicyNoLongerMatchingInheritedLabelOnEP2 = localEpsAndN
 
 // Then, change the label on EP1 so it no-longer matches.
 var localEpsAndNamedPortPolicyNoLongerMatchingInheritedLabelOnEP1 = localEpsAndNamedPortPolicyNoLongerMatchingInheritedLabelOnEP2.withKVUpdates(
-	KVPair{Key: ProfileLabelsKey{ProfileKey{"prof-1"}}, Value: profileLabels2},
+	KVPair{Key: ProfileLabelsKey{ProfileKey: ProfileKey{Name: "prof-1"}}, Value: profileLabels2},
 ).withIPSet(namedPortInheritIPSetID, []string{
 	// No longer any matches.
 }).withName("2 local WEPs with policy not matching inherited labels")
@@ -650,9 +650,9 @@ var localEpsAndNamedPortPolicyEP2ProfileRemoved = localEpsAndNamedPortPolicyMatc
 	"fc00:fe11::2,tcp:8080",
 	// ep2 no longer matches
 }).withActiveProfiles(
-	proto.ProfileID{"prof-1"},
-	proto.ProfileID{"prof-2"},
-	proto.ProfileID{"prof-missing"},
+	proto.ProfileID{Name: "prof-1"},
+	proto.ProfileID{Name: "prof-2"},
+	proto.ProfileID{Name: "prof-missing"},
 ).withName("2 local WEPs with policy matching inherited label on WEP1; WEP2 has no profile")
 
 // Then do the same for EP1.
@@ -687,9 +687,9 @@ var localEpsWithPolicyUpdatedIPs = localEpsWithPolicy.withKVUpdates(
 
 // withProfile adds a profile to the initialised state.
 var withProfile = initialisedStore.withKVUpdates(
-	KVPair{Key: ProfileRulesKey{ProfileKey{"prof-1"}}, Value: &profileRules1},
-	KVPair{Key: ProfileTagsKey{ProfileKey{"prof-1"}}, Value: profileTags1},
-	KVPair{Key: ProfileLabelsKey{ProfileKey{"prof-1"}}, Value: profileLabels1},
+	KVPair{Key: ProfileRulesKey{ProfileKey: ProfileKey{Name: "prof-1"}}, Value: &profileRules1},
+	KVPair{Key: ProfileTagsKey{ProfileKey: ProfileKey{Name: "prof-1"}}, Value: profileTags1},
+	KVPair{Key: ProfileLabelsKey{ProfileKey: ProfileKey{Name: "prof-1"}}, Value: profileLabels1},
 ).withName("profile")
 
 // localEpsWithProfile contains a pair of overlapping IP endpoints and a profile
@@ -711,10 +711,10 @@ var localEpsWithProfile = withProfile.withKVUpdates(
 	"10.0.0.2/32",
 	"fc00:fe11::2/128",
 }).withActiveProfiles(
-	proto.ProfileID{"prof-1"},
-	proto.ProfileID{"prof-2"},
-	proto.ProfileID{"prof-3"},
-	proto.ProfileID{"prof-missing"},
+	proto.ProfileID{Name: "prof-1"},
+	proto.ProfileID{Name: "prof-2"},
+	proto.ProfileID{Name: "prof-3"},
+	proto.ProfileID{Name: "prof-missing"},
 ).withEndpoint(
 	localWlEp1Id,
 	[]mock.TierInfo{},
@@ -740,7 +740,7 @@ var localEpsWithNonMatchingProfile = withProfile.withKVUpdates(
 // localEpsWithUpdatedProfile Follows on from localEpsWithProfile, changing the
 // profile to use a different tag and selector.
 var localEpsWithUpdatedProfile = localEpsWithProfile.withKVUpdates(
-	KVPair{Key: ProfileRulesKey{ProfileKey{"prof-1"}}, Value: &profileRules1TagUpdate},
+	KVPair{Key: ProfileRulesKey{ProfileKey: ProfileKey{Name: "prof-1"}}, Value: &profileRules1TagUpdate},
 ).withIPSet(
 	tag1LabelID, nil,
 ).withIPSet(
@@ -761,15 +761,15 @@ var localEpsWithUpdatedProfile = localEpsWithProfile.withKVUpdates(
 ).withName("2 local, overlapping IPs & updated profile")
 
 var localEpsWithUpdatedProfileNegatedTags = localEpsWithUpdatedProfile.withKVUpdates(
-	KVPair{Key: ProfileRulesKey{ProfileKey{"prof-1"}}, Value: &profileRules1NegatedTagSelUpdate},
+	KVPair{Key: ProfileRulesKey{ProfileKey: ProfileKey{Name: "prof-1"}}, Value: &profileRules1NegatedTagSelUpdate},
 )
 
 // withProfileTagInherit adds a profile that includes rules that match on
 // tags as labels.  I.e. a tag of name foo should be equivalent to label foo=""
 var withProfileTagInherit = initialisedStore.withKVUpdates(
-	KVPair{Key: ProfileRulesKey{ProfileKey{"prof-1"}}, Value: &profileRulesWithTagInherit},
-	KVPair{Key: ProfileTagsKey{ProfileKey{"prof-1"}}, Value: profileTags1},
-	KVPair{Key: ProfileLabelsKey{ProfileKey{"prof-1"}}, Value: profileLabels1},
+	KVPair{Key: ProfileRulesKey{ProfileKey: ProfileKey{Name: "prof-1"}}, Value: &profileRulesWithTagInherit},
+	KVPair{Key: ProfileTagsKey{ProfileKey: ProfileKey{Name: "prof-1"}}, Value: profileTags1},
+	KVPair{Key: ProfileLabelsKey{ProfileKey: ProfileKey{Name: "prof-1"}}, Value: profileLabels1},
 ).withName("profile")
 
 var localEpsWithTagInheritProfile = withProfileTagInherit.withKVUpdates(
@@ -784,10 +784,10 @@ var localEpsWithTagInheritProfile = withProfileTagInherit.withKVUpdates(
 }).withIPSet(
 	tagFoobarSelectorId, []string{},
 ).withActiveProfiles(
-	proto.ProfileID{"prof-1"},
-	proto.ProfileID{"prof-2"},
-	proto.ProfileID{"prof-3"},
-	proto.ProfileID{"prof-missing"},
+	proto.ProfileID{Name: "prof-1"},
+	proto.ProfileID{Name: "prof-2"},
+	proto.ProfileID{Name: "prof-3"},
+	proto.ProfileID{Name: "prof-missing"},
 ).withEndpoint(
 	localWlEp1Id, []mock.TierInfo{},
 ).withEndpoint(
@@ -795,9 +795,9 @@ var localEpsWithTagInheritProfile = withProfileTagInherit.withKVUpdates(
 ).withName("2 local, overlapping IPs & a tag inherit profile")
 
 var withProfileTagOverriden = initialisedStore.withKVUpdates(
-	KVPair{Key: ProfileRulesKey{ProfileKey{"prof-1"}}, Value: &profileRulesWithTagInherit},
-	KVPair{Key: ProfileTagsKey{ProfileKey{"prof-1"}}, Value: profileTags1},
-	KVPair{Key: ProfileLabelsKey{ProfileKey{"prof-1"}}, Value: profileLabelsTag1},
+	KVPair{Key: ProfileRulesKey{ProfileKey: ProfileKey{Name: "prof-1"}}, Value: &profileRulesWithTagInherit},
+	KVPair{Key: ProfileTagsKey{ProfileKey: ProfileKey{Name: "prof-1"}}, Value: profileTags1},
+	KVPair{Key: ProfileLabelsKey{ProfileKey: ProfileKey{Name: "prof-1"}}, Value: profileLabelsTag1},
 ).withName("profile")
 
 // localEpsWithTagOverriddenProfile Checks that tags-inherited labels can be
@@ -817,10 +817,10 @@ var localEpsWithTagOverriddenProfile = withProfileTagOverriden.withKVUpdates(
 	"10.0.0.2/32", // ep1 and ep2
 	"fc00:fe11::2/128",
 }).withActiveProfiles(
-	proto.ProfileID{"prof-1"},
-	proto.ProfileID{"prof-2"},
-	proto.ProfileID{"prof-3"},
-	proto.ProfileID{"prof-missing"},
+	proto.ProfileID{Name: "prof-1"},
+	proto.ProfileID{Name: "prof-2"},
+	proto.ProfileID{Name: "prof-3"},
+	proto.ProfileID{Name: "prof-missing"},
 ).withEndpoint(
 	localWlEp1Id,
 	[]mock.TierInfo{},

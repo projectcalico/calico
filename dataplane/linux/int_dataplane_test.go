@@ -35,7 +35,8 @@ var _ = Describe("Constructor test", func() {
 
 	JustBeforeEach(func() {
 		configParams = config.New()
-		configParams.UpdateFrom(map[string]string{"InterfaceExclude": "/^kube.*/,/veth/,eth2"}, config.EnvironmentVariable)
+		_, err := configParams.UpdateFrom(map[string]string{"InterfaceExclude": "/^kube.*/,/veth/,eth2"}, config.EnvironmentVariable)
+		Expect(err).NotTo(HaveOccurred())
 		dpConfig = intdataplane.Config{
 			IfaceMonitorConfig: ifacemonitor.Config{
 				InterfaceExcludes: configParams.InterfaceExclude,

@@ -45,11 +45,9 @@ var (
 
 	mac1 = testutils.MustParseMAC("00:11:22:33:44:51")
 	mac2 = testutils.MustParseMAC("00:11:22:33:44:52")
-	mac3 = testutils.MustParseMAC("00:11:22:33:44:53")
 
 	ip1  = ip.MustParseCIDROrIP("10.0.0.1/32").ToIPNet()
 	ip2  = ip.MustParseCIDROrIP("10.0.0.2/32").ToIPNet()
-	ip3  = ip.MustParseCIDROrIP("10.0.0.3/32").ToIPNet()
 	ip13 = ip.MustParseCIDROrIP("10.0.1.3/32").ToIPNet()
 )
 
@@ -128,33 +126,39 @@ var _ = Describe("RouteTable", func() {
 		})
 		It("should wait for the route cleanup delay", func() {
 			t.setAutoIncrement(0 * time.Second)
-			rt.Apply()
+			err := rt.Apply()
+			Expect(err).ToNot(HaveOccurred())
 			Expect(dataplane.routeKeyToRoute).To(ConsistOf(cali1Route, cali3Route, gatewayRoute))
 			Expect(dataplane.addedRouteKeys).To(BeEmpty())
 			t.incrementTime(11 * time.Second)
-			rt.Apply()
+			err = rt.Apply()
+			Expect(err).ToNot(HaveOccurred())
 			Expect(dataplane.routeKeyToRoute).To(ConsistOf(gatewayRoute))
 			Expect(dataplane.addedRouteKeys).To(BeEmpty())
 		})
 		It("should wait for the route cleanup delay when resyncing", func() {
 			t.setAutoIncrement(0 * time.Second)
 			rt.QueueResync()
-			rt.Apply()
+			err := rt.Apply()
+			Expect(err).ToNot(HaveOccurred())
 			Expect(dataplane.routeKeyToRoute).To(ConsistOf(cali1Route, cali3Route, gatewayRoute))
 			Expect(dataplane.addedRouteKeys).To(BeEmpty())
 			t.incrementTime(11 * time.Second)
 			rt.QueueResync()
-			rt.Apply()
+			err = rt.Apply()
+			Expect(err).ToNot(HaveOccurred())
 			Expect(dataplane.routeKeyToRoute).To(ConsistOf(gatewayRoute))
 			Expect(dataplane.addedRouteKeys).To(BeEmpty())
 		})
 		It("should clean up only our routes", func() {
-			rt.Apply()
+			err := rt.Apply()
+			Expect(err).ToNot(HaveOccurred())
 			Expect(dataplane.routeKeyToRoute).To(ConsistOf(gatewayRoute))
 			Expect(dataplane.addedRouteKeys).To(BeEmpty())
 		})
 		It("should delete only our conntrack entries", func() {
-			rt.Apply()
+			err := rt.Apply()
+			Expect(err).ToNot(HaveOccurred())
 			Eventually(dataplane.GetDeletedConntrackEntries).Should(ConsistOf(
 				net.ParseIP("10.0.0.1").To4(),
 				net.ParseIP("10.0.0.3").To4(),
@@ -178,7 +182,8 @@ var _ = Describe("RouteTable", func() {
 			fixedRoute := updateRoute
 			fixedRoute.Src = nil
 
-			rt.Apply()
+			err := rt.Apply()
+			Expect(err).ToNot(HaveOccurred())
 			Expect(dataplane.updatedRouteKeys).To(HaveKey(keyForRoute(&updateRoute)))
 			Expect(dataplane.routeKeyToRoute[keyForRoute(&updateRoute)]).To(Equal(fixedRoute))
 
@@ -203,7 +208,8 @@ var _ = Describe("RouteTable", func() {
 				)
 			})
 			It("Should delete routes without a source address", func() {
-				rt.Apply()
+				err := rt.Apply()
+				Expect(err).ToNot(HaveOccurred())
 				Expect(dataplane.deletedRouteKeys).To(HaveKey(keyForRoute(&cali3Route)))
 				Expect(dataplane.deletedRouteKeys).To(HaveKey(keyForRoute(&cali1Route)))
 			})
@@ -213,7 +219,8 @@ var _ = Describe("RouteTable", func() {
 				rt.SetRoutes(addLink.attrs.Name, []Target{
 					{CIDR: ip.MustParseCIDROrIP("10.0.0.6"), DestMAC: mac1},
 				})
-				rt.Apply()
+				err := rt.Apply()
+				Expect(err).ToNot(HaveOccurred())
 				Expect(dataplane.routeKeyToRoute["6-10.0.0.6/32"]).To(Equal(netlink.Route{
 					LinkIndex: addLink.attrs.Index,
 					Dst:       mustParseCIDR("10.0.0.6/32"),
@@ -239,7 +246,8 @@ var _ = Describe("RouteTable", func() {
 				})
 				dataplane.addMockRoute(&noopRoute)
 
-				rt.Apply()
+				err := rt.Apply()
+				Expect(err).ToNot(HaveOccurred())
 				Expect(dataplane.deletedRouteKeys).ToNot(HaveKey(keyForRoute(&noopRoute)))
 				Expect(dataplane.updatedRouteKeys).ToNot(HaveKey(keyForRoute(&noopRoute)))
 			})
@@ -261,7 +269,8 @@ var _ = Describe("RouteTable", func() {
 				fixedRoute := updateRoute
 				fixedRoute.Src = deviceRouteSourceAddress
 
-				rt.Apply()
+				err := rt.Apply()
+				Expect(err).ToNot(HaveOccurred())
 				Expect(dataplane.updatedRouteKeys).To(HaveKey(keyForRoute(&updateRoute)))
 				Expect(dataplane.routeKeyToRoute[keyForRoute(&updateRoute)]).To(Equal(fixedRoute))
 			})
@@ -285,7 +294,8 @@ var _ = Describe("RouteTable", func() {
 				fixedRoute := updateRoute
 				fixedRoute.Src = deviceRouteSourceAddress
 
-				rt.Apply()
+				err := rt.Apply()
+				Expect(err).ToNot(HaveOccurred())
 				Expect(dataplane.updatedRouteKeys).To(HaveKey(keyForRoute(&updateRoute)))
 				Expect(dataplane.routeKeyToRoute[keyForRoute(&updateRoute)]).To(Equal(fixedRoute))
 			})
@@ -310,7 +320,8 @@ var _ = Describe("RouteTable", func() {
 				)
 			})
 			It("Should delete routes without a protocol", func() {
-				rt.Apply()
+				err := rt.Apply()
+				Expect(err).ToNot(HaveOccurred())
 				Expect(dataplane.deletedRouteKeys).To(HaveKey(keyForRoute(&cali3Route)))
 				Expect(dataplane.deletedRouteKeys).To(HaveKey(keyForRoute(&cali1Route)))
 			})
@@ -320,7 +331,8 @@ var _ = Describe("RouteTable", func() {
 				rt.SetRoutes(addLink.attrs.Name, []Target{
 					{CIDR: ip.MustParseCIDROrIP("10.0.0.6"), DestMAC: mac1},
 				})
-				rt.Apply()
+				err := rt.Apply()
+				Expect(err).ToNot(HaveOccurred())
 				Expect(dataplane.routeKeyToRoute["6-10.0.0.6/32"]).To(Equal(netlink.Route{
 					LinkIndex: addLink.attrs.Index,
 					Dst:       mustParseCIDR("10.0.0.6/32"),
@@ -344,7 +356,8 @@ var _ = Describe("RouteTable", func() {
 				})
 				dataplane.addMockRoute(&noopRoute)
 
-				rt.Apply()
+				err := rt.Apply()
+				Expect(err).ToNot(HaveOccurred())
 				Expect(dataplane.deletedRouteKeys).ToNot(HaveKey(keyForRoute(&noopRoute)))
 				Expect(dataplane.updatedRouteKeys).ToNot(HaveKey(keyForRoute(&noopRoute)))
 			})
@@ -365,7 +378,8 @@ var _ = Describe("RouteTable", func() {
 				fixedRoute := updateRoute
 				fixedRoute.Protocol = deviceRouteProtocol
 
-				rt.Apply()
+				err := rt.Apply()
+				Expect(err).ToNot(HaveOccurred())
 				Expect(dataplane.updatedRouteKeys).To(HaveKey(keyForRoute(&updateRoute)))
 				Expect(dataplane.routeKeyToRoute[keyForRoute(&updateRoute)]).To(Equal(fixedRoute))
 			})
@@ -388,7 +402,8 @@ var _ = Describe("RouteTable", func() {
 				fixedRoute := updateRoute
 				fixedRoute.Protocol = deviceRouteProtocol
 
-				rt.Apply()
+				err := rt.Apply()
+				Expect(err).ToNot(HaveOccurred())
 				Expect(dataplane.updatedRouteKeys).To(HaveKey(keyForRoute(&updateRoute)))
 				Expect(dataplane.routeKeyToRoute[keyForRoute(&updateRoute)]).To(Equal(fixedRoute))
 			})
@@ -402,25 +417,29 @@ var _ = Describe("RouteTable", func() {
 			It("should block a route add until conntrack finished", func() {
 				// Initial apply starts a background thread to delete
 				// 10.0.0.1 and 10.0.0.3.
-				rt.Apply()
+				err := rt.Apply()
+				Expect(err).ToNot(HaveOccurred())
 				// We try to add 10.0.0.1 back in.
 				rt.SetRoutes("cali1", []Target{
 					{CIDR: ip.MustParseCIDROrIP("10.0.0.1/32"), DestMAC: mac1},
 				})
 				start := time.Now()
-				rt.Apply()
+				err = rt.Apply()
+				Expect(err).ToNot(HaveOccurred())
 				Expect(time.Since(start)).To(BeNumerically(">=", delay*9/10))
 			})
 			It("should not block an unrelated route add ", func() {
 				// Initial apply starts a background thread to delete
 				// 10.0.0.1 and 10.0.0.3.
-				rt.Apply()
+				err := rt.Apply()
+				Expect(err).ToNot(HaveOccurred())
 				// We try to add 10.0.0.10, which hasn't been seen before.
 				rt.SetRoutes("cali1", []Target{
 					{CIDR: ip.MustParseCIDROrIP("10.0.0.10/32"), DestMAC: mac1},
 				})
 				start := time.Now()
-				rt.Apply()
+				err = rt.Apply()
+				Expect(err).ToNot(HaveOccurred())
 				Expect(time.Since(start)).To(BeNumerically("<", delay/2))
 			})
 		})
@@ -434,7 +453,7 @@ var _ = Describe("RouteTable", func() {
 				for i := 0; i < 3; i++ {
 					Expect(rt.Apply()).To(Equal(ConnectFailed))
 				}
-				Expect(func() { rt.Apply() }).To(Panic())
+				Expect(func() { _ = rt.Apply() }).To(Panic())
 			})
 		})
 
@@ -544,7 +563,8 @@ var _ = Describe("RouteTable", func() {
 							Scope:     netlink.SCOPE_LINK,
 						}
 						dataplane.addMockRoute(&cali1Route2)
-						rt.Apply()
+						err := rt.Apply()
+						Expect(err).ToNot(HaveOccurred())
 					})
 
 					It("shouldn't spot the update", func() {
@@ -553,7 +573,8 @@ var _ = Describe("RouteTable", func() {
 					})
 					It("after a QueueResync() should not remove the route", func() {
 						rt.QueueResync()
-						rt.Apply()
+						err := rt.Apply()
+						Expect(err).ToNot(HaveOccurred())
 						Expect(dataplane.routeKeyToRoute).To(HaveLen(4))
 						Expect(dataplane.routeKeyToRoute).NotTo(ContainElement(cali1Route2))
 					})
@@ -562,7 +583,8 @@ var _ = Describe("RouteTable", func() {
 				Describe("after an external route remove with route removal disabled", func() {
 					JustBeforeEach(func() {
 						dataplane.removeMockRoute(&cali1Route)
-						rt.Apply()
+						err := rt.Apply()
+						Expect(err).ToNot(HaveOccurred())
 					})
 
 					It("shouldn't spot the update", func() {
@@ -571,7 +593,8 @@ var _ = Describe("RouteTable", func() {
 					})
 					It("after a QueueResync() should remove the route", func() {
 						rt.QueueResync()
-						rt.Apply()
+						err := rt.Apply()
+						Expect(err).ToNot(HaveOccurred())
 						Expect(dataplane.routeKeyToRoute).To(HaveLen(4))
 						Expect(dataplane.routeKeyToRoute).To(ContainElement(cali1Route))
 					})
@@ -614,37 +637,41 @@ var _ = Describe("RouteTable", func() {
 			It(fmt.Sprintf("with a %v failure, it shouldn't leave the interface dirty", failure), func() {
 				// First Apply() with a failure.
 				dataplane.failuresToSimulate = failure
-				rt.Apply()
+				err := rt.Apply()
+				Expect(err).ToNot(HaveOccurred())
 				// All failures should have been hit.
 				Expect(dataplane.failuresToSimulate).To(BeZero())
 				// Try another Apply(), the interface shouldn't be marked dirty
 				// so nothing should happen.
-				err := rt.Apply()
-				Expect(err).To(BeNil())
+				err = rt.Apply()
+				Expect(err).ToNot(HaveOccurred())
 				Expect(dataplane.routeKeyToRoute).To(ConsistOf(cali1Route))
 			})
 			It(fmt.Sprintf("with a %v failure it should ignore Down updates", failure), func() {
 				// First Apply() with a failure.
 				dataplane.failuresToSimulate = failure
-				rt.Apply()
+				err := rt.Apply()
+				Expect(err).ToNot(HaveOccurred())
 				// Fire in the update.
 				rt.OnIfaceStateChanged("cali1", ifacemonitor.StateDown)
 				// Try another Apply(), the interface shouldn't be marked dirty
 				// so nothing should happen.
-				err := rt.Apply()
-				Expect(err).To(BeNil())
+				err = rt.Apply()
+				Expect(err).ToNot(HaveOccurred())
 				Expect(dataplane.routeKeyToRoute).To(ConsistOf(cali1Route))
 			})
 			It(fmt.Sprintf("with a %v failure, then an interface kick, it should sync", failure), func() {
 				dataplane.failuresToSimulate = failure
-				rt.Apply()
+				err := rt.Apply()
+				Expect(err).ToNot(HaveOccurred())
 
 				// Set interface up
 				rt.OnIfaceStateChanged("cali1", ifacemonitor.StateUp)
 				cali1 = dataplane.addIface(1, "cali1", true, true)
 
 				// Now, the apply should work.
-				rt.Apply()
+				err = rt.Apply()
+				Expect(err).ToNot(HaveOccurred())
 				Expect(dataplane.routeKeyToRoute).To(BeEmpty())
 			})
 		}

@@ -22,7 +22,6 @@ import (
 
 	"github.com/vishvananda/netlink"
 
-	"github.com/projectcalico/felix/conntrack"
 	"github.com/projectcalico/felix/ip"
 )
 
@@ -38,10 +37,6 @@ type HandleIface interface {
 	RouteAdd(route *netlink.Route) error
 	RouteDel(route *netlink.Route) error
 	Delete()
-}
-
-type realDataplane struct {
-	conntrack *conntrack.Conntrack
 }
 
 func newNetlinkHandle() (HandleIface, error) {

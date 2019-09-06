@@ -22,13 +22,6 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/set"
 )
 
-type wipeMode uint32
-
-const (
-	wipeFromBPFFSOnly wipeMode = 1 << iota
-	wipeByID
-)
-
 type sockmapState struct {
 	bpfLib            bpf.BPFDataplane
 	cbIDs             []*CbID
@@ -196,8 +189,7 @@ func (s *sockmapState) SetupSockmapAcceleration() error {
 
 func (s *sockmapState) WipeSockmap(mode bpf.FindObjectMode) {
 	log.Debug("Wiping old sockmap state.")
-	var err error
-	err = s.bpfLib.DetachFromSockmap(mode)
+	err := s.bpfLib.DetachFromSockmap(mode)
 	if err != nil {
 		log.WithError(err).Debug("Failed to detach sk_msg program from sockmap.")
 	}

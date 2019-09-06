@@ -65,7 +65,7 @@ func (md stringToString) ContainsKey(key string) bool {
 }
 
 func (md stringToString) Iter(key string, f func(value string)) {
-	for value, _ := range md[key] {
+	for value := range md[key] {
 		f(value)
 	}
 }
@@ -122,13 +122,13 @@ func (md ifaceToIfaceMap) ContainsKey(key interface{}) bool {
 }
 
 func (md ifaceToIfaceMap) IterKeys(f func(value interface{})) {
-	for k, _ := range md {
+	for k := range md {
 		f(k)
 	}
 }
 
 func (md ifaceToIfaceMap) Iter(key interface{}, f func(value interface{})) {
-	for value, _ := range md[key] {
+	for value := range md[key] {
 		f(value)
 	}
 }
@@ -183,7 +183,7 @@ func (md ifaceToStringMap) ContainsKey(key interface{}) bool {
 }
 
 func (md ifaceToStringMap) Iter(key interface{}, f func(value string)) {
-	for value, _ := range md[key] {
+	for value := range md[key] {
 		f(value)
 	}
 }
@@ -245,13 +245,13 @@ func (md stringToIfaceMap) ContainsKey(key string) bool {
 }
 
 func (md stringToIfaceMap) Iter(key string, f func(value interface{})) {
-	for value, _ := range md[key] {
+	for value := range md[key] {
 		f(value)
 	}
 }
 
 func (md stringToIfaceMap) IterKeys(f func(key string)) {
-	for k, _ := range md {
+	for k := range md {
 		f(k)
 	}
 }

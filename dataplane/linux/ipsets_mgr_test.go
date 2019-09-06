@@ -39,7 +39,8 @@ var _ = Describe("IP Sets manager", func() {
 				Id:      "id1",
 				Members: []string{"10.0.0.1", "10.0.0.2"},
 			})
-			ipsetsMgr.CompleteDeferredWork()
+			err := ipsetsMgr.CompleteDeferredWork()
+			Expect(err).ToNot(HaveOccurred())
 		})
 		It("should create the IP set", func() {
 			Expect(ipSets.AddOrReplaceCalled).To(BeTrue())
@@ -58,7 +59,8 @@ var _ = Describe("IP Sets manager", func() {
 					AddedMembers:   []string{"10.0.0.3", "10.0.0.4"},
 					RemovedMembers: []string{"10.0.0.1"},
 				})
-				ipsetsMgr.CompleteDeferredWork()
+				err := ipsetsMgr.CompleteDeferredWork()
+				Expect(err).ToNot(HaveOccurred())
 			})
 			It("should not replace the IP set", func() {
 				Expect(ipSets.AddOrReplaceCalled).To(BeFalse())
@@ -73,7 +75,8 @@ var _ = Describe("IP Sets manager", func() {
 					ipsetsMgr.OnUpdate(&proto.IPSetRemove{
 						Id: "id1",
 					})
-					ipsetsMgr.CompleteDeferredWork()
+					err := ipsetsMgr.CompleteDeferredWork()
+					Expect(err).ToNot(HaveOccurred())
 				})
 				It("should remove the IP set", func() {
 					Expect(ipSets.Members["id1"]).To(BeNil())
@@ -88,7 +91,8 @@ var _ = Describe("IP Sets manager", func() {
 					Id:      "id1",
 					Members: []string{"10.0.0.2", "10.0.0.3"},
 				})
-				ipsetsMgr.CompleteDeferredWork()
+				err := ipsetsMgr.CompleteDeferredWork()
+				Expect(err).ToNot(HaveOccurred())
 			})
 			It("should replace the IP set", func() {
 				Expect(ipSets.AddOrReplaceCalled).To(BeTrue())

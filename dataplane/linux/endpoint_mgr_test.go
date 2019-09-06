@@ -141,7 +141,6 @@ func chainsForIfaces(ifaceMetadata []string,
 		ProtoUDP  = 17
 		ProtoIPIP = 4
 		VXLANPort = 4789
-		VXLANVNI  = 4096
 	)
 
 	log.WithFields(log.Fields{
@@ -574,10 +573,6 @@ func (t *mockRouteTable) checkRoutes(ifaceName string, expected []routetable.Tar
 	Expect(t.currentRoutes[ifaceName]).To(Equal(expected))
 }
 
-func (t *mockRouteTable) checkL2Routes(ifaceName string, expected []routetable.Target) {
-	Expect(t.currentL2Routes[ifaceName]).To(Equal(expected))
-}
-
 type statusReportRecorder struct {
 	currentState map[interface{}]string
 }
@@ -741,7 +736,8 @@ func endpointManagerTests(ipVersion uint8) func() {
 						ExpectedIpv6Addrs: spec.ipv6Addrs,
 					},
 				})
-				epMgr.CompleteDeferredWork()
+				err := epMgr.CompleteDeferredWork()
+				Expect(err).ToNot(HaveOccurred())
 			}
 		}
 
@@ -783,7 +779,8 @@ func endpointManagerTests(ipVersion uint8) func() {
 						EndpointId: id,
 					},
 				})
-				epMgr.CompleteDeferredWork()
+				err := epMgr.CompleteDeferredWork()
+				Expect(err).ToNot(HaveOccurred())
 			}
 		}
 
@@ -805,7 +802,8 @@ func endpointManagerTests(ipVersion uint8) func() {
 					Name:  "lo",
 					Addrs: loAddrs,
 				})
-				epMgr.CompleteDeferredWork()
+				err := epMgr.CompleteDeferredWork()
+				Expect(err).ToNot(HaveOccurred())
 			})
 
 			It("should have empty dispatch chains", expectEmptyChains())
@@ -1105,7 +1103,8 @@ func endpointManagerTests(ipVersion uint8) func() {
 							Name:  "eth1",
 							Addrs: eth1Addrs,
 						})
-						epMgr.CompleteDeferredWork()
+						err := epMgr.CompleteDeferredWork()
+						Expect(err).ToNot(HaveOccurred())
 					})
 
 					It("should have expected chains", expectChainsFor("eth0"))
@@ -1308,7 +1307,8 @@ func endpointManagerTests(ipVersion uint8) func() {
 						Name:  "eth0",
 						Addrs: eth0Addrs,
 					})
-					epMgr.CompleteDeferredWork()
+					err := epMgr.CompleteDeferredWork()
+					Expect(err).ToNot(HaveOccurred())
 				})
 				It("should have expected chains", expectChainsFor("eth0"))
 				It("should report id3 up", func() {
@@ -1359,7 +1359,8 @@ func endpointManagerTests(ipVersion uint8) func() {
 							Ipv6Nets:   []string{"2001:db8:2::2/128"},
 						},
 					})
-					epMgr.CompleteDeferredWork()
+					err := epMgr.CompleteDeferredWork()
+					Expect(err).ToNot(HaveOccurred())
 				})
 
 				Context("with policy", func() {
@@ -1428,7 +1429,8 @@ func endpointManagerTests(ipVersion uint8) func() {
 							Name:  "cali12345-ab",
 							Addrs: set.New(),
 						})
-						epMgr.CompleteDeferredWork()
+						err := epMgr.CompleteDeferredWork()
+						Expect(err).ToNot(HaveOccurred())
 					})
 					It("should report the interface in error", func() {
 						Expect(statusReportRec.currentState).To(Equal(map[interface{}]string{
@@ -1447,7 +1449,8 @@ func endpointManagerTests(ipVersion uint8) func() {
 							Name:  "cali12345-ab",
 							Addrs: set.New(),
 						})
-						epMgr.CompleteDeferredWork()
+						err := epMgr.CompleteDeferredWork()
+						Expect(err).ToNot(HaveOccurred())
 					})
 
 					It("should have expected chains", expectWlChainsFor("cali12345-ab"))
@@ -1496,7 +1499,8 @@ func endpointManagerTests(ipVersion uint8) func() {
 									},
 								},
 							})
-							epMgr.CompleteDeferredWork()
+							err := epMgr.CompleteDeferredWork()
+							Expect(err).ToNot(HaveOccurred())
 						})
 
 						It("should have expected chains", expectWlChainsFor("cali12345-ab"))
@@ -1541,7 +1545,8 @@ func endpointManagerTests(ipVersion uint8) func() {
 							epMgr.OnUpdate(&proto.WorkloadEndpointRemove{
 								Id: &wlEPID1,
 							})
-							epMgr.CompleteDeferredWork()
+							err := epMgr.CompleteDeferredWork()
+							Expect(err).ToNot(HaveOccurred())
 						})
 
 						It("should have empty dispatch chains", expectEmptyChains())
@@ -1576,7 +1581,8 @@ func endpointManagerTests(ipVersion uint8) func() {
 									Ipv6Nets:   []string{"2001:db8:2::2/128"},
 								},
 							})
-							epMgr.CompleteDeferredWork()
+							err := epMgr.CompleteDeferredWork()
+							Expect(err).ToNot(HaveOccurred())
 						})
 
 						It("should have expected chains", expectWlChainsFor("cali12345-cd"))
@@ -1626,7 +1632,8 @@ func endpointManagerTests(ipVersion uint8) func() {
 							Ipv6Nets:   []string{"2001:db8:2::2/128"},
 						},
 					})
-					epMgr.CompleteDeferredWork()
+					err := epMgr.CompleteDeferredWork()
+					Expect(err).ToNot(HaveOccurred())
 				})
 
 				It("should have expected chains", func() {

@@ -76,7 +76,8 @@ var _ = Describe("Masquerade manager", func() {
 					Masquerade: true,
 				},
 			})
-			masqMgr.CompleteDeferredWork()
+			err := masqMgr.CompleteDeferredWork()
+			Expect(err).ToNot(HaveOccurred())
 		})
 
 		It("should add the pool to the masq IP set", func() {
@@ -101,7 +102,8 @@ var _ = Describe("Masquerade manager", func() {
 		})
 		It("an extra CompleteDeferredWork should be a no-op", func() {
 			natTable.UpdateCalled = false
-			masqMgr.CompleteDeferredWork()
+			err := masqMgr.CompleteDeferredWork()
+			Expect(err).ToNot(HaveOccurred())
 			Expect(natTable.UpdateCalled).To(BeFalse())
 		})
 		It("an unrelated update shouldn't trigger work", func() {
@@ -110,7 +112,8 @@ var _ = Describe("Masquerade manager", func() {
 				Hostname: "foo",
 				Ipv4Addr: "10.0.0.17",
 			})
-			masqMgr.CompleteDeferredWork()
+			err := masqMgr.CompleteDeferredWork()
+			Expect(err).ToNot(HaveOccurred())
 			Expect(natTable.UpdateCalled).To(BeFalse())
 		})
 
@@ -123,7 +126,8 @@ var _ = Describe("Masquerade manager", func() {
 						Masquerade: false,
 					},
 				})
-				masqMgr.CompleteDeferredWork()
+				err := masqMgr.CompleteDeferredWork()
+				Expect(err).ToNot(HaveOccurred())
 			})
 
 			It("should not add the pool to the masq IP set", func() {
@@ -152,7 +156,8 @@ var _ = Describe("Masquerade manager", func() {
 					masqMgr.OnUpdate(&proto.IPAMPoolRemove{
 						Id: "pool-1",
 					})
-					masqMgr.CompleteDeferredWork()
+					err := masqMgr.CompleteDeferredWork()
+					Expect(err).ToNot(HaveOccurred())
 				})
 				It("should remove from the masq IP set", func() {
 					Expect(ipSets.Members["masq-ipam-pools"]).To(Equal(set.New()))
@@ -173,7 +178,8 @@ var _ = Describe("Masquerade manager", func() {
 						masqMgr.OnUpdate(&proto.IPAMPoolRemove{
 							Id: "pool-2",
 						})
-						masqMgr.CompleteDeferredWork()
+						err := masqMgr.CompleteDeferredWork()
+						Expect(err).ToNot(HaveOccurred())
 					})
 					It("masq set should be empty", func() {
 						Expect(ipSets.Members["masq-ipam-pools"]).To(Equal(set.New()))
@@ -201,7 +207,8 @@ var _ = Describe("Masquerade manager", func() {
 					Masquerade: false,
 				},
 			})
-			masqMgr.CompleteDeferredWork()
+			err := masqMgr.CompleteDeferredWork()
+			Expect(err).ToNot(HaveOccurred())
 		})
 
 		It("should not add the pool to the masq IP set", func() {

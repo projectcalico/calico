@@ -26,9 +26,9 @@ import (
 )
 
 var (
-	localHostIPKey   = HostIPKey{localHostname}
-	remoteHostIPKey  = HostIPKey{remoteHostname}
-	remoteHost2IPKey = HostIPKey{remoteHostname2}
+	localHostIPKey   = HostIPKey{Hostname: localHostname}
+	remoteHostIPKey  = HostIPKey{Hostname: remoteHostname}
+	remoteHost2IPKey = HostIPKey{Hostname: remoteHostname2}
 )
 
 var _ = Describe("Stats collector", func() {
@@ -48,15 +48,15 @@ var _ = Describe("Stats collector", func() {
 	Describe("before in-sync", func() {
 		It("should do nothing on IP update", func() {
 			sc.OnUpdate(api.Update{
-				KVPair{Key: localHostIPKey},
-				api.UpdateTypeKVNew,
+				KVPair:     KVPair{Key: localHostIPKey},
+				UpdateType: api.UpdateTypeKVNew,
 			})
 			Expect(lastStatsUpdate).To(BeNil())
 		})
 		It("should do nothing on workload update", func() {
 			sc.OnUpdate(api.Update{
-				KVPair{Key: localWlEpKey1},
-				api.UpdateTypeKVNew,
+				KVPair:     KVPair{Key: localWlEpKey1},
+				UpdateType: api.UpdateTypeKVNew,
 			})
 			Expect(lastStatsUpdate).To(BeNil())
 		})
@@ -71,25 +71,26 @@ var _ = Describe("Stats collector", func() {
 			sc.OnStatusUpdate(api.InSync)
 		})
 		It("should count an IP create", func() {
-			sc.OnUpdate(api.Update{KVPair{Key: localHostIPKey}, api.UpdateTypeKVNew})
+			sc.OnUpdate(api.Update{KVPair: KVPair{Key: localHostIPKey}, UpdateType: api.UpdateTypeKVNew})
 			Expect(*lastStatsUpdate).To(Equal(StatsUpdate{NumHosts: 1}))
 		})
 		It("should count a workload create", func() {
-			sc.OnUpdate(api.Update{KVPair{Key: localWlEpKey1}, api.UpdateTypeKVNew})
+			sc.OnUpdate(api.Update{KVPair: KVPair{Key: localWlEpKey1}, UpdateType: api.UpdateTypeKVNew})
 			Expect(*lastStatsUpdate).To(Equal(StatsUpdate{
 				NumHosts:             1,
 				NumWorkloadEndpoints: 1,
 			}))
 		})
 		It("should count a host endpoint create", func() {
-			sc.OnUpdate(api.Update{KVPair{Key: hostEpWithNameKey}, api.UpdateTypeKVNew})
+			sc.OnUpdate(api.Update{KVPair: KVPair{Key: hostEpWithNameKey}, UpdateType: api.UpdateTypeKVNew})
 			Expect(*lastStatsUpdate).To(Equal(StatsUpdate{
 				NumHosts:         1,
 				NumHostEndpoints: 1,
 			}))
 		})
 		It("should count a host config create", func() {
-			sc.OnUpdate(api.Update{KVPair{Key: HostConfigKey{localHostname, "foo"}}, api.UpdateTypeKVNew})
+			sc.OnUpdate(api.Update{KVPair: KVPair{Key: HostConfigKey{Name: localHostname, Hostname: "foo"}},
+				UpdateType: api.UpdateTypeKVNew})
 			Expect(*lastStatsUpdate).To(Equal(StatsUpdate{
 				NumHosts: 1,
 			}))
@@ -115,30 +116,30 @@ var _ = Describe("Stats collector", func() {
 
 		It("should ignore malformed updates", func() {
 			lastStatsUpdate = nil
-			sc.OnUpdate(api.Update{KVPair{}, api.UpdateTypeKVNew})
+			sc.OnUpdate(api.Update{KVPair: KVPair{}, UpdateType: api.UpdateTypeKVNew})
 			Expect(lastStatsUpdate).To(BeNil())
 		})
 		It("should ignore idempotent updates", func() {
-			sc.OnUpdate(api.Update{KVPair{Key: localHostIPKey}, api.UpdateTypeKVNew})
+			sc.OnUpdate(api.Update{KVPair: KVPair{Key: localHostIPKey}, UpdateType: api.UpdateTypeKVNew})
 			Expect(*lastStatsUpdate).To(Equal(StatsUpdate{NumHosts: 1}))
 			lastStatsUpdate = nil
-			sc.OnUpdate(api.Update{KVPair{Key: localHostIPKey}, api.UpdateTypeKVUpdated})
+			sc.OnUpdate(api.Update{KVPair: KVPair{Key: localHostIPKey}, UpdateType: api.UpdateTypeKVUpdated})
 			Expect(lastStatsUpdate).To(BeNil())
 		})
 		It("should handle errors from the callback", func() {
 			updateErr = errors.New("dummy error")
-			sc.OnUpdate(api.Update{KVPair{Key: localHostIPKey}, api.UpdateTypeKVNew})
+			sc.OnUpdate(api.Update{KVPair: KVPair{Key: localHostIPKey}, UpdateType: api.UpdateTypeKVNew})
 			Expect(*lastStatsUpdate).To(Equal(StatsUpdate{NumHosts: 1}))
 			lastStatsUpdate = nil
 			// Now send an update, which would normally not call the callback.
-			sc.OnUpdate(api.Update{KVPair{Key: localHostIPKey}, api.UpdateTypeKVUpdated})
+			sc.OnUpdate(api.Update{KVPair: KVPair{Key: localHostIPKey}, UpdateType: api.UpdateTypeKVUpdated})
 			Expect(*lastStatsUpdate).To(Equal(StatsUpdate{NumHosts: 1}))
 		})
 
 		Describe("after adding a local and remote workload", func() {
 			BeforeEach(func() {
-				sc.OnUpdate(api.Update{KVPair{Key: localWlEpKey1}, api.UpdateTypeKVNew})
-				sc.OnUpdate(api.Update{KVPair{Key: remoteWlEpKey1}, api.UpdateTypeKVNew})
+				sc.OnUpdate(api.Update{KVPair: KVPair{Key: localWlEpKey1}, UpdateType: api.UpdateTypeKVNew})
+				sc.OnUpdate(api.Update{KVPair: KVPair{Key: remoteWlEpKey1}, UpdateType: api.UpdateTypeKVNew})
 			})
 			It("should say there are two hosts", func() {
 				Expect(*lastStatsUpdate).To(Equal(StatsUpdate{
@@ -148,7 +149,7 @@ var _ = Describe("Stats collector", func() {
 			})
 			Describe("after updating one workload", func() {
 				BeforeEach(func() {
-					sc.OnUpdate(api.Update{KVPair{Key: localWlEpKey1}, api.UpdateTypeKVUpdated})
+					sc.OnUpdate(api.Update{KVPair: KVPair{Key: localWlEpKey1}, UpdateType: api.UpdateTypeKVUpdated})
 				})
 				It("should say there are two hosts", func() {
 					Expect(*lastStatsUpdate).To(Equal(StatsUpdate{
@@ -158,7 +159,7 @@ var _ = Describe("Stats collector", func() {
 				})
 				Describe("after removing one workload", func() {
 					BeforeEach(func() {
-						sc.OnUpdate(api.Update{KVPair{Key: localWlEpKey1}, api.UpdateTypeKVDeleted})
+						sc.OnUpdate(api.Update{KVPair: KVPair{Key: localWlEpKey1}, UpdateType: api.UpdateTypeKVDeleted})
 					})
 					It("should say there is one host", func() {
 						Expect(*lastStatsUpdate).To(Equal(StatsUpdate{
@@ -168,7 +169,7 @@ var _ = Describe("Stats collector", func() {
 					})
 					Describe("after removing other workload", func() {
 						BeforeEach(func() {
-							sc.OnUpdate(api.Update{KVPair{Key: remoteWlEpKey1}, api.UpdateTypeKVDeleted})
+							sc.OnUpdate(api.Update{KVPair: KVPair{Key: remoteWlEpKey1}, UpdateType: api.UpdateTypeKVDeleted})
 						})
 						It("should say there are no hosts", func() {
 							Expect(*lastStatsUpdate).To(Equal(StatsUpdate{}))

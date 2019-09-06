@@ -47,7 +47,7 @@ func rotateLabels(clientset *kubernetes.Clientset, nsPrefix string) error {
 	// Create pods.
 	waiter := sync.WaitGroup{}
 	waiter.Add(len(nsMaturity))
-	for nsName, _ := range nsMaturity {
+	for nsName := range nsMaturity {
 		nsName := nsName
 		go func() {
 			for _, role := range []string{"1", "2", "3", "4", "5"} {
@@ -86,6 +86,9 @@ func rotateLabels(clientset *kubernetes.Clientset, nsPrefix string) error {
 				}
 				ns_in.ObjectMeta.Labels["maturity"] = changeTo[ii]
 				ns_out, err := clientset.CoreV1().Namespaces().Update(ns_in)
+				if err != nil {
+					log.WithField("ns_in", ns_in).Error("failed to update namespace")
+				}
 				log.WithField("ns_out", ns_out).Debug("Updated namespace")
 			}
 		}

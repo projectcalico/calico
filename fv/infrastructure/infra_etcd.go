@@ -138,7 +138,6 @@ func (eds *EtcdDatastoreInfra) AddDefaultAllow() {
 	defaultProfile.Spec.Ingress = []api.Rule{{Action: api.Allow}}
 	_, err := eds.GetCalicoClient().Profiles().Create(utils.Ctx, defaultProfile, utils.NoOptions)
 	Expect(err).NotTo(HaveOccurred())
-	return
 }
 
 func (eds *EtcdDatastoreInfra) AddDefaultDeny() error {

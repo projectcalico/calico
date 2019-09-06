@@ -35,8 +35,8 @@ import (
 
 var testIP = mustParseIP("10.0.0.1")
 var testIP2 = mustParseIP("10.0.0.2")
-var testIPAs6 = net.IP{testIP.To16()}
-var testIPAs4 = net.IP{testIP.To4()}
+var testIPAs6 = net.IP{IP: testIP.To16()}
+var testIPAs4 = net.IP{IP: testIP.To4()}
 
 var _ = DescribeTable("Calculation graph pass-through tests",
 	func(key model.Key, input interface{}, expUpdate interface{}, expRemove interface{}) {

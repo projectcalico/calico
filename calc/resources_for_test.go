@@ -56,10 +56,10 @@ var (
 
 // Canned workload endpoints.
 
-var localWlEpKey1 = WorkloadEndpointKey{localHostname, "orch", "wl1", "ep1"}
-var remoteWlEpKey1 = WorkloadEndpointKey{remoteHostname, "orch", "wl1", "ep1"}
+var localWlEpKey1 = WorkloadEndpointKey{Hostname: localHostname, OrchestratorID: "orch", WorkloadID: "wl1", EndpointID: "ep1"}
+var remoteWlEpKey1 = WorkloadEndpointKey{Hostname: remoteHostname, OrchestratorID: "orch", WorkloadID: "wl1", EndpointID: "ep1"}
 var localWlEp1Id = "orch/wl1/ep1"
-var localWlEpKey2 = WorkloadEndpointKey{localHostname, "orch", "wl2", "ep2"}
+var localWlEpKey2 = WorkloadEndpointKey{Hostname: localHostname, OrchestratorID: "orch", WorkloadID: "wl2", EndpointID: "ep2"}
 var localWlEp2Id = "orch/wl2/ep2"
 
 var localWlEp1 = WorkloadEndpoint{
@@ -148,13 +148,6 @@ var localWlEp1DifferentIPs = WorkloadEndpoint{
 		"a":  "a",
 		"b":  "b",
 	},
-}
-
-var ep1IPs = []string{
-	"10.0.0.1", // ep1
-	"fc00:fe11::1",
-	"10.0.0.2", // shared with ep2
-	"fc00:fe11::2",
 }
 
 var localWlEp2 = WorkloadEndpoint{
@@ -595,10 +588,6 @@ var remoteHostVXLANTunnelMACConfigKey = HostConfigKey{
 }
 
 var ipPoolKey = IPPoolKey{
-	CIDR: mustParseNet("10.0.0.0/16"),
-}
-
-var ipPoolNoEncap = IPPool{
 	CIDR: mustParseNet("10.0.0.0/16"),
 }
 

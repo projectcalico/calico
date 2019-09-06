@@ -267,7 +267,8 @@ func TestCIDRMapContent(t *testing.T) {
 			t.Fatalf("Invalid value in the map: %v", value)
 		}
 		netip := ipmask.ToIPNet()
-		if bytes.Compare(netip.IP.To16(), wantedIP.To16()) != 0 {
+		comp := bytes.Compare(netip.IP.To16(), wantedIP.To16())
+		if comp != 0 {
 			t.Fatalf("Invalid ip %v, expected %v", netip.IP, wantedIP)
 		}
 		ones, _ := netip.Mask.Size()
@@ -276,7 +277,6 @@ func TestCIDRMapContent(t *testing.T) {
 		}
 		visited[value] = struct{}{}
 	}
-	visited = nil
 
 	t.Log("Removing a non-existent element of a CIDR map should fail")
 	err = bpfDP.RemoveItemCIDRMap("foo1", IPFamilyV4, ipWrong, mask2)

@@ -74,7 +74,10 @@ func (w *Workload) Stop() {
 		pid := strings.TrimSpace(string(outputBytes))
 		err = utils.Command("docker", "exec", w.C.Name, "kill", pid).Run()
 		Expect(err).NotTo(HaveOccurred())
-		w.runCmd.Process.Wait()
+		_, err = w.runCmd.Process.Wait()
+		if err != nil {
+			log.WithField("workload", w).Error("failed to wait for process")
+		}
 		log.WithField("workload", w).Info("Workload now stopped")
 	}
 }
@@ -332,7 +335,11 @@ func (s *SideService) stop() error {
 		log.WithField("pid", pid).WithError(err).Warn("Failed to kill a side service")
 		return err
 	}
-	s.RunCmd.Process.Wait()
+	_, err = s.RunCmd.Process.Wait()
+	if err != nil {
+		log.WithField("side service", s).Error("failed to wait for process")
+	}
+
 	log.WithField("SideService", s).Info("Side service now stopped")
 	return nil
 }
@@ -463,7 +470,6 @@ func startPermanentConnection(w *Workload, ip string, port, sourcePort int) (*Pe
 }
 
 func (p *Port) CanConnectTo(ip, port, protocol string) bool {
-
 	// Ensure that the host has the 'test-connection' binary.
 	p.C.EnsureBinary("test-connection")
 
@@ -471,7 +477,7 @@ func (p *Port) CanConnectTo(ip, port, protocol string) bool {
 		// If this is a retry then we may have stale conntrack entries and we don't want those
 		// to influence the connectivity check.  Only an issue for UDP due to the lack of a
 		// sequence number.
-		p.C.ExecMayFail("conntrack", "-D", "-p", "udp", "-s", p.Workload.IP, "-d", ip)
+		_ = p.C.ExecMayFail("conntrack", "-D", "-p", "udp", "-s", p.Workload.IP, "-d", ip)
 	}
 
 	// Run 'test-connection' to the target.

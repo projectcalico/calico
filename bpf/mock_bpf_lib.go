@@ -24,6 +24,7 @@ import (
 	"strconv"
 
 	"github.com/projectcalico/felix/labelindex"
+	log "github.com/sirupsen/logrus"
 )
 
 var id = 0
@@ -170,7 +171,7 @@ func (b *MockBPFLib) DumpFailsafeMap() ([]ProtoPort, error) {
 		return nil, fmt.Errorf("failsafe map not found")
 	}
 
-	for k, _ := range b.FailsafeMap.M {
+	for k := range b.FailsafeMap.M {
 		ret = append(ret, k)
 	}
 
@@ -225,7 +226,7 @@ func (b *MockBPFLib) GetXDPMode(ifName string) (XDPMode, error) {
 
 func (b *MockBPFLib) GetXDPIfaces() ([]string, error) {
 	var ret []string
-	for ifName, _ := range b.XDPProgs {
+	for ifName := range b.XDPProgs {
 		ret = append(ret, ifName)
 	}
 	return ret, nil
@@ -289,7 +290,7 @@ func (b *MockBPFLib) IsValidMap(ifName string, family IPFamily) (bool, error) {
 func (b *MockBPFLib) ListCIDRMaps(family IPFamily) ([]string, error) {
 	var ret []string
 
-	for k, _ := range b.CIDRMaps {
+	for k := range b.CIDRMaps {
 		ret = append(ret, k.IfName)
 	}
 
@@ -572,7 +573,10 @@ func NewMockSockMap(mapID int) SockMap {
 
 func GetMockXDPTag(bytes []byte) string {
 	h := sha1.New()
-	h.Write(bytes)
+	_, err := h.Write(bytes)
+	if err != nil {
+		log.WithError(err).Panic("failed to write rule hash")
+	}
 	checksum := hex.EncodeToString(h.Sum(nil))
 
 	return string(checksum[:16])
@@ -607,14 +611,14 @@ func (b *MockBPFLib) RemoveSockmap(mode FindObjectMode) error {
 	return nil
 }
 
-func (b *MockBPFLib) loadBPF(objPath, progPath, progType string, mapArgs []string) error {
-	// this is just a refactoring with no real functionality for the mock BPF
-	// library, just succeed
+func (b *MockBPFLib) LoadSockops(objPath string) error {
+	// we don't do anything with the sockops program so just succeed
 	return nil
 }
 
-func (b *MockBPFLib) LoadSockops(objPath string) error {
-	// we don't do anything with the sockops program so just succeed
+func (b *MockBPFLib) loadBPF(objPath, progPath, progType string, mapArgs []string) error {
+	// this is just a refactoring with no real functionality for the mock BPF
+	// library, just succeed
 	return nil
 }
 
@@ -732,7 +736,7 @@ func (b *MockBPFLib) DumpSockmapEndpointsMap(family IPFamily) ([]CIDRMapKey, err
 
 	var ret []CIDRMapKey
 
-	for k, _ := range b.SockmapEndpointsMap.M {
+	for k := range b.SockmapEndpointsMap.M {
 		ip := net.IPv4(k.Ip[0], k.Ip[1], k.Ip[2], k.Ip[3])
 		ipnet := net.IPNet{
 			IP:   ip,

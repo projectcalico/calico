@@ -32,10 +32,10 @@ var ruleTestData = []TableEntry{
 	// Non-negated matches...
 
 	Entry("Protocol name", 4,
-		proto.Rule{Protocol: &proto.Protocol{NumberOrName: &proto.Protocol_Name{"tcp"}}},
+		proto.Rule{Protocol: &proto.Protocol{NumberOrName: &proto.Protocol_Name{Name: "tcp"}}},
 		"-p tcp"),
 	Entry("Protocol num", 4,
-		proto.Rule{Protocol: &proto.Protocol{NumberOrName: &proto.Protocol_Number{8}}},
+		proto.Rule{Protocol: &proto.Protocol{NumberOrName: &proto.Protocol_Number{Number: 8}}},
 		"-p 8"),
 
 	Entry("Source net", 4,
@@ -93,10 +93,10 @@ var ruleTestData = []TableEntry{
 	// Negated matches...
 
 	Entry("Protocol name", 4,
-		proto.Rule{NotProtocol: &proto.Protocol{NumberOrName: &proto.Protocol_Name{"tcp"}}},
+		proto.Rule{NotProtocol: &proto.Protocol{NumberOrName: &proto.Protocol_Name{Name: "tcp"}}},
 		"! -p tcp"),
 	Entry("Protocol num", 4,
-		proto.Rule{NotProtocol: &proto.Protocol{NumberOrName: &proto.Protocol_Number{8}}},
+		proto.Rule{NotProtocol: &proto.Protocol{NumberOrName: &proto.Protocol_Number{Number: 8}}},
 		"! -p 8"),
 
 	Entry("Negated source net", 4,

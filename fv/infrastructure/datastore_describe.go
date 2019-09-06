@@ -14,7 +14,6 @@
 package infrastructure
 
 import (
-	"errors"
 	"fmt"
 
 	. "github.com/onsi/ginkgo"
@@ -45,7 +44,7 @@ func DatastoreDescribe(description string, datastores []apiconfig.DatastoreType,
 					body(createK8sDatastoreInfra)
 				})
 		default:
-			panic(errors.New(fmt.Sprintf("Unknown DatastoreType, %s", ds)))
+			panic(fmt.Errorf("Unknown DatastoreType, %s", ds))
 		}
 	}
 

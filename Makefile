@@ -520,12 +520,14 @@ sub-tag-images-%:
 static-checks:
 	$(MAKE) check-typha-pins golangci-lint check-packr
 
-# TODO: re-enable these linters !
-LINT_ARGS := --disable staticcheck,ineffassign,gosimple,govet,deadcode,errcheck,unused,varcheck,structcheck
+# gosimple uses too much memory for Semaphore
+ifneq ($(CI),)
+LINT_ARGS := --disable govet
+endif
 
 .PHONY: golangci-lint
 golangci-lint: $(GENERATED_FILES)
-	$(DOCKER_RUN) $(CALICO_BUILD) golangci-lint run --deadline 5m $(LINT_ARGS)
+	$(DOCKER_RUN) $(CALICO_BUILD) golangci-lint run --deadline 5m --max-issues-per-linter 0 --max-same-issues 0 $(LINT_ARGS)
 
 .PHONY: check-packr
 check-packr: bpf/packrd/packed-packr.go

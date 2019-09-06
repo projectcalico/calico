@@ -63,7 +63,11 @@ func DumpCPUProfile(fileName string) {
 	defer f.Close()
 
 	logCxt.Info("Writing CPU profile...")
-	pprof.StartCPUProfile(f)
+	err = pprof.StartCPUProfile(f)
+	if err != nil {
+		logCxt.WithError(err).Error("Could not start CPU profile")
+		return
+	}
 	defer pprof.StopCPUProfile()
 	time.Sleep(10 * time.Second)
 	logCxt.Info("Finished writing CPU profile")

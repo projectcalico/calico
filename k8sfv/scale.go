@@ -76,8 +76,6 @@ func addEndpoints(
 		BeNumerically("==", numEndpoints),
 		"Addition of pods wasn't reflected in Felix metrics",
 	)
-
-	return
 }
 
 func addNamespaces(clientset *kubernetes.Clientset, nsPrefix string) {
@@ -85,5 +83,4 @@ func addNamespaces(clientset *kubernetes.Clientset, nsPrefix string) {
 		nsName := fmt.Sprintf("%s-%03d", nsPrefix, ii%1000)
 		createNamespace(clientset, nsName, nil)
 	}
-	return
 }

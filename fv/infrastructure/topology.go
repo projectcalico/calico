@@ -222,7 +222,8 @@ func StartNNodeTopology(n int, opts TopologyOptions, infra DatastoreInfra) (feli
 func mustInitDatastore(client client.Interface) {
 	Eventually(func() error {
 		log.Info("Initializing the datastore...")
-		ctx, _ := context.WithTimeout(context.Background(), 10*time.Second)
+		ctx, cancelFun := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancelFun()
 		err := client.EnsureInitialized(
 			ctx,
 			"v3.0.0-test",

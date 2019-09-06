@@ -60,7 +60,8 @@ var _ = Describe("Policy manager", func() {
 					},
 				},
 			})
-			policyMgr.CompleteDeferredWork()
+			err := policyMgr.CompleteDeferredWork()
+			Expect(err).ToNot(HaveOccurred())
 		})
 
 		It("should install the in and out chain", func() {
@@ -102,7 +103,8 @@ var _ = Describe("Policy manager", func() {
 					Untracked: true,
 				},
 			})
-			policyMgr.CompleteDeferredWork()
+			err := policyMgr.CompleteDeferredWork()
+			Expect(err).ToNot(HaveOccurred())
 		})
 
 		It("should install the raw chains", func() {
@@ -157,7 +159,8 @@ var _ = Describe("Policy manager", func() {
 					PreDnat: true,
 				},
 			})
-			policyMgr.CompleteDeferredWork()
+			err := policyMgr.CompleteDeferredWork()
+			Expect(err).ToNot(HaveOccurred())
 		})
 
 		It("should install the raw chains", func() {
@@ -211,7 +214,8 @@ var _ = Describe("Policy manager", func() {
 					},
 				},
 			})
-			policyMgr.CompleteDeferredWork()
+			err := policyMgr.CompleteDeferredWork()
+			Expect(err).ToNot(HaveOccurred())
 		})
 
 		It("should install the in and out chain", func() {

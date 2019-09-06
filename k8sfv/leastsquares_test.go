@@ -25,10 +25,10 @@ var _ = Context("least squares", func() {
 
 	It("should fit a straight line", func() {
 		p := []leastsquares.Point{
-			{1, 1},
-			{2, 2},
-			{3, 3},
-			{4, 4},
+			{X: 1, Y: 1},
+			{X: 2, Y: 2},
+			{X: 3, Y: 3},
+			{X: 4, Y: 4},
 		}
 		gradient, constant := leastsquares.LeastSquaresMethod(p)
 		Expect(gradient).To(BeNumerically("==", 1))

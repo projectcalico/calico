@@ -521,18 +521,10 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		dp.RegisterManager(newMasqManager(ipSetsV6, natTableV6, ruleRenderer, config.MaxIPSetSize, 6))
 	}
 
-	for _, t := range dp.iptablesMangleTables {
-		dp.allIptablesTables = append(dp.allIptablesTables, t)
-	}
-	for _, t := range dp.iptablesNATTables {
-		dp.allIptablesTables = append(dp.allIptablesTables, t)
-	}
-	for _, t := range dp.iptablesFilterTables {
-		dp.allIptablesTables = append(dp.allIptablesTables, t)
-	}
-	for _, t := range dp.iptablesRawTables {
-		dp.allIptablesTables = append(dp.allIptablesTables, t)
-	}
+	dp.allIptablesTables = append(dp.allIptablesTables, dp.iptablesMangleTables...)
+	dp.allIptablesTables = append(dp.allIptablesTables, dp.iptablesNATTables...)
+	dp.allIptablesTables = append(dp.allIptablesTables, dp.iptablesFilterTables...)
+	dp.allIptablesTables = append(dp.allIptablesTables, dp.iptablesRawTables...)
 
 	// Register that we will report liveness and readiness.
 	if config.HealthAggregator != nil {
@@ -666,7 +658,10 @@ func (d *InternalDataplane) doStaticDataplaneConfig() {
 	// Ensure that the default value of rp_filter is set to "strict" for newly-created
 	// interfaces.  This is required to prevent a race between starting an interface and
 	// Felix being able to configure it.
-	writeProcSys("/proc/sys/net/ipv4/conf/default/rp_filter", "1")
+	err := writeProcSys("/proc/sys/net/ipv4/conf/default/rp_filter", "1")
+	if err != nil {
+		log.Warnf("failed to set rp_filter to '1': %v\n", err)
+	}
 
 	for _, t := range d.iptablesRawTables {
 		rawChains := d.ruleRenderer.StaticRawTableChains(t.IPVersion)
@@ -1045,7 +1040,10 @@ func (d *InternalDataplane) configureKernel() {
 
 	// Make sure the default for new interfaces is set to strict checking so that there's no
 	// race when a new interface is added and felix hasn't configured it yet.
-	writeProcSys("/proc/sys/net/ipv4/conf/default/rp_filter", "1")
+	err = writeProcSys("/proc/sys/net/ipv4/conf/default/rp_filter", "1")
+	if err != nil {
+		log.Warnf("failed to set rp_filter to '1': %v\n", err)
+	}
 }
 
 func readRPFilter() (value int64, err error) {

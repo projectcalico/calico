@@ -811,7 +811,7 @@ func (t *Table) readHashesAndRulesFrom(r io.ReadCloser) (hashes map[string][]str
 	}
 
 	// Remove full rules for the non-Calico chain if it does not have inserts.
-	for chainName, _ := range rules {
+	for chainName := range rules {
 		if !chainHasCalicoRule.Contains(chainName) {
 			delete(rules, chainName)
 		}

@@ -92,15 +92,37 @@ func (c *Chain) RuleHashes(features *Features) []string {
 	// First hash the chain name so that identical rules in different chains will get different
 	// hashes.
 	s := sha256.New224()
-	s.Write([]byte(c.Name))
+	_, err := s.Write([]byte(c.Name))
+	if err != nil {
+		log.WithFields(log.Fields{
+			"chain": c.Name,
+		}).WithError(err).Panic("Failed to write suffix to hash.")
+		return nil
+	}
+
 	hash := s.Sum(nil)
 	for ii, rule := range c.Rules {
 		// Each hash chains in the previous hash, so that its position in the chain and
 		// the rules before it affect its hash.
 		s.Reset()
-		s.Write(hash)
+		_, err = s.Write(hash)
+		if err != nil {
+			log.WithFields(log.Fields{
+				"action":   rule.Action,
+				"position": ii,
+				"chain":    c.Name,
+			}).WithError(err).Panic("Failed to write suffix to hash.")
+		}
 		ruleForHashing := rule.RenderAppend(c.Name, "HASH", features)
-		s.Write([]byte(ruleForHashing))
+		_, err = s.Write([]byte(ruleForHashing))
+		if err != nil {
+			log.WithFields(log.Fields{
+				"ruleFragment": ruleForHashing,
+				"action":       rule.Action,
+				"position":     ii,
+				"chain":        c.Name,
+			}).WithError(err).Panic("Failed to write rule for hashing.")
+		}
 		hash = s.Sum(hash[0:0])
 		// Encode the hash using a compact character set.  We use the URL-safe base64
 		// variant because it uses '-' and '_', which are more shell-friendly.

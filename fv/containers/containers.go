@@ -144,7 +144,11 @@ func (c *Container) signalDockerRun(sig os.Signal) {
 	if c.runCmd == nil {
 		return
 	}
-	c.runCmd.Process.Signal(sig)
+	err := c.runCmd.Process.Signal(sig)
+	if err != nil {
+		logCxt.WithError(err).Error("failed to signal 'docker run' process")
+		return
+	}
 	logCxt.Info("Signalled docker run")
 }
 
@@ -403,7 +407,10 @@ func (c *Container) EnsureBinary(name string) {
 	defer c.mutex.Unlock()
 
 	if !c.binaries.Contains(name) {
-		utils.Command("docker", "cp", "../bin/"+name, c.Name+":/"+name).Run()
+		err := utils.Command("docker", "cp", "../bin/"+name, c.Name+":/"+name).Run()
+		if err != nil {
+			log.WithField("name", name).Error("Failed to run 'docker cp' command")
+		}
 		c.binaries.Add(name)
 	}
 }

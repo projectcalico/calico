@@ -216,8 +216,6 @@ func removeLocalPodNetworking(pod *v1.Pod) {
 		// Delete local networking details.
 		delete(localNetworkingMap, key)
 	}
-
-	return
 }
 
 var GetNextPodAddr = ipAddrAllocator("10.28.%d.%d")

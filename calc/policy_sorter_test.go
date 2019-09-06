@@ -32,10 +32,10 @@ var _ = DescribeTable("PolKV should stringify correctly",
 		Expect(kv.String()).To(Equal(expected))
 	},
 	Entry("zero", PolKV{}, "(nil policy)"),
-	Entry("nil policy", PolKV{Key: model.PolicyKey{"name"}}, "name(nil policy)"),
+	Entry("nil policy", PolKV{Key: model.PolicyKey{Name: "name"}}, "name(nil policy)"),
 	Entry("nil order",
-		PolKV{Key: model.PolicyKey{"name"}, Value: &model.Policy{}}, "name(default)"),
+		PolKV{Key: model.PolicyKey{Name: "name"}, Value: &model.Policy{}}, "name(default)"),
 	Entry("order set",
-		PolKV{Key: model.PolicyKey{"name"}, Value: &model.Policy{Order: &tenPointFive}},
+		PolKV{Key: model.PolicyKey{Name: "name"}, Value: &model.Policy{Order: &tenPointFive}},
 		"name(10.5)"),
 )

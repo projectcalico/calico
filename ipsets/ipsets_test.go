@@ -39,11 +39,7 @@ const (
 )
 
 var (
-	v4Members1And2  = []string{"10.0.0.1", "10.0.0.2"}
-	v4Members12And3 = []string{"10.0.0.1", "10.0.0.2", "10.0.0.3"}
-	v4Members2And3  = []string{"10.0.0.2", "10.0.0.3"}
-
-	v6Members1And2 = []string{"fe80::1", "fe80::2"}
+	v4Members1And2 = []string{"10.0.0.1", "10.0.0.2"}
 )
 
 var _ = Describe("IPSetType", func() {

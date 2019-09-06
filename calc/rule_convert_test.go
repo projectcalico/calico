@@ -97,7 +97,7 @@ var fullyLoadedProtoRule = proto.Rule{
 	IpVersion: proto.IPVersion_IPV4,
 
 	Protocol: &proto.Protocol{
-		NumberOrName: &proto.Protocol_Number{123},
+		NumberOrName: &proto.Protocol_Number{Number: 123},
 	},
 
 	SrcNet:   []string{"10.0.0.0/8"},
@@ -105,7 +105,7 @@ var fullyLoadedProtoRule = proto.Rule{
 	DstNet:   []string{"11.0.0.0/16"},
 	DstPorts: []*proto.PortRange{{First: 123, Last: 456}},
 
-	Icmp: &proto.Rule_IcmpTypeCode{&proto.IcmpTypeAndCode{
+	Icmp: &proto.Rule_IcmpTypeCode{IcmpTypeCode: &proto.IcmpTypeAndCode{
 		Type: 10,
 		Code: 12,
 	}},
@@ -114,7 +114,7 @@ var fullyLoadedProtoRule = proto.Rule{
 	DstIpSetIds: []string{"dstID1", "dstID2"},
 
 	NotProtocol: &proto.Protocol{
-		NumberOrName: &proto.Protocol_Name{"tcp"},
+		NumberOrName: &proto.Protocol_Name{Name: "tcp"},
 	},
 
 	NotSrcNet:   []string{"12.0.0.0/8"},
@@ -127,7 +127,7 @@ var fullyLoadedProtoRule = proto.Rule{
 	NotSrcNamedPortIpSetIds: []string{"notSrcNP"},
 	NotDstNamedPortIpSetIds: []string{"notDstNP"},
 
-	NotIcmp: &proto.Rule_NotIcmpTypeCode{&proto.IcmpTypeAndCode{
+	NotIcmp: &proto.Rule_NotIcmpTypeCode{NotIcmpTypeCode: &proto.IcmpTypeAndCode{
 		Type: 11,
 		Code: 13,
 	}},
@@ -152,9 +152,8 @@ var fullyLoadedProtoRule = proto.Rule{
 	},
 
 	HttpMatch: &proto.HTTPMatch{Methods: []string{"GET", "POST"},
-		Paths: []*proto.HTTPMatch_PathMatch{
-			{&proto.HTTPMatch_PathMatch_Exact{Exact: "/foo"}},
-			{&proto.HTTPMatch_PathMatch_Prefix{Prefix: "/bar"}},
+		Paths: []*proto.HTTPMatch_PathMatch{{PathMatch: &proto.HTTPMatch_PathMatch_Exact{Exact: "/foo"}},
+			{PathMatch: &proto.HTTPMatch_PathMatch_Prefix{Prefix: "/bar"}},
 		}},
 }
 
@@ -274,5 +273,5 @@ func mustParseCalicoIPNet(s string) *net.IPNet {
 	if err != nil {
 		panic(err)
 	}
-	return &net.IPNet{*ipNet}
+	return &net.IPNet{IPNet: *ipNet}
 }

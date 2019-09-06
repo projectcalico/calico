@@ -62,16 +62,6 @@ import (
 	"github.com/projectcalico/typha/pkg/syncclient"
 )
 
-const usage = `Felix, the Calico per-host daemon.
-
-Usage:
-  calico-felix [options]
-
-Options:
-  -c --config-file=<filename>  Config file to load [default: /etc/calico/felix.cfg].
-  --version                    Print the version and exit.
-`
-
 const (
 	// Our default value for GOGC if it is not set.  This is the percentage that heap usage must
 	// grow by to trigger a garbage collection.  Go's default is 100, meaning that 50% of the
@@ -193,16 +183,16 @@ configRetry:
 			continue configRetry
 		}
 		// Parse and merge the local config.
-		configParams.UpdateFrom(envConfig, config.EnvironmentVariable)
-		if configParams.Err != nil {
-			log.WithError(configParams.Err).WithField("configFile", configFile).Error(
+		_, err = configParams.UpdateFrom(envConfig, config.EnvironmentVariable)
+		if err != nil {
+			log.WithError(err).WithField("configFile", configFile).Error(
 				"Failed to parse configuration environment variable")
 			time.Sleep(1 * time.Second)
 			continue configRetry
 		}
-		configParams.UpdateFrom(fileConfig, config.ConfigFile)
-		if configParams.Err != nil {
-			log.WithError(configParams.Err).WithField("configFile", configFile).Error(
+		_, err = configParams.UpdateFrom(fileConfig, config.ConfigFile)
+		if err != nil {
+			log.WithError(err).WithField("configFile", configFile).Error(
 				"Failed to parse configuration file")
 			time.Sleep(1 * time.Second)
 			continue configRetry
@@ -238,14 +228,23 @@ configRetry:
 				time.Sleep(1 * time.Second)
 				continue configRetry
 			}
-			configParams.UpdateFrom(globalConfig, config.DatastoreGlobal)
-			configParams.UpdateFrom(hostConfig, config.DatastorePerHost)
+			_, err = configParams.UpdateFrom(globalConfig, config.DatastoreGlobal)
+			if err != nil {
+				log.WithError(err).Error("Failed update global config from datastore")
+				time.Sleep(1 * time.Second)
+				continue configRetry
+			}
+			_, err = configParams.UpdateFrom(hostConfig, config.DatastorePerHost)
+			if err != nil {
+				log.WithError(err).Error("Failed update host config from datastore")
+				time.Sleep(1 * time.Second)
+				continue configRetry
+			}
 			break
 		}
-		configParams.Validate()
-		if configParams.Err != nil {
-			log.WithError(configParams.Err).Error(
-				"Failed to parse/validate configuration from datastore.")
+		err = configParams.Validate()
+		if err != nil {
+			log.WithError(err).Error("Failed to parse/validate configuration from datastore.")
 			time.Sleep(1 * time.Second)
 			continue configRetry
 		}
@@ -641,13 +640,16 @@ func monitorAndManageShutdown(failureReportChan <-chan string, driverCmd *exec.C
 			log.Fatal("Failed to wait for driver to exit, giving up.")
 		}()
 		// Signal to the driver to exit.
-		driverCmd.Process.Signal(syscall.SIGTERM)
+		err := driverCmd.Process.Signal(syscall.SIGTERM)
+		if err != nil {
+			logCxt.Error("failed to signal driver to exit")
+		}
 		select {
 		case <-driverStoppedC:
 			logCxt.Info("Driver shut down after SIGTERM")
 		case <-giveUpOnSigTerm:
 			logCxt.Error("Driver did not respond to SIGTERM, sending SIGKILL")
-			driverCmd.Process.Kill()
+			_ = driverCmd.Process.Kill()
 			<-driverStoppedC
 			logCxt.Info("Driver shut down after SIGKILL")
 		}

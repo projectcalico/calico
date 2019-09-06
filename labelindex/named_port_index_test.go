@@ -46,7 +46,7 @@ var _ = Describe("SelectorAndNamedPortIndex", func() {
 					Key: model.NetworkSetKey{Name: "blinky"},
 					Value: &model.NetworkSet{
 						Nets: []calinet.IPNet{
-							{net.IPNet{
+							{IPNet: net.IPNet{
 								IP:   net.IP{192, 168, 4, 10},
 								Mask: net.IPMask{255, 255, 0, 0},
 							}},
@@ -60,7 +60,7 @@ var _ = Describe("SelectorAndNamedPortIndex", func() {
 					Key: model.NetworkSetKey{Name: "inky"},
 					Value: &model.NetworkSet{
 						Nets: []calinet.IPNet{
-							{net.IPNet{
+							{IPNet: net.IPNet{
 								IP:   net.IP{192, 168, 20, 1},
 								Mask: net.IPMask{255, 255, 0, 0},
 							}},

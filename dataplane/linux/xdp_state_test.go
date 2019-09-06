@@ -1661,10 +1661,6 @@ var _ = Describe("XDP state", func() {
 				mapContents map[bpf.IPv4Mask]uint32
 			}
 
-			type bpfState struct {
-				m map[string]bpfIfaceData
-			}
-
 			bpfStateToBpfLib := func(bpfState map[string]bpfIfaceData) (bpf.BPFDataplane, string) {
 				id := 0
 				getNextID := func() int {

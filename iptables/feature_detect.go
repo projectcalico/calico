@@ -26,8 +26,7 @@ import (
 )
 
 var (
-	vXDotYDotZRegexp    = regexp.MustCompile(`v(\d+\.\d+\.\d+)`)
-	kernelVersionRegexp = regexp.MustCompile(`Linux version (\d+\.\d+\.\d+)`)
+	vXDotYDotZRegexp = regexp.MustCompile(`v(\d+\.\d+\.\d+)`)
 
 	// iptables versions:
 	// v1Dot4Dot7 is the oldest version we've ever supported.

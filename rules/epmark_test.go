@@ -151,5 +151,4 @@ func (h *mockHash32) Sum32() uint32 {
 }
 
 func (h *mockHash32) Reset() {
-	return
 }

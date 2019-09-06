@@ -126,7 +126,7 @@ func fieldsByName(example interface{}) map[string]reflect.StructField {
 var _ = DescribeTable("Config parsing",
 	func(key, value string, expected interface{}, errorExpected ...bool) {
 		config := New()
-		config.UpdateFrom(map[string]string{key: value},
+		_, err := config.UpdateFrom(map[string]string{key: value},
 			EnvironmentVariable)
 		configPtr := reflect.ValueOf(config)
 		configElem := configPtr.Elem()
@@ -134,8 +134,10 @@ var _ = DescribeTable("Config parsing",
 		newVal := fieldRef.Interface()
 		Expect(newVal).To(Equal(expected))
 		if len(errorExpected) > 0 && errorExpected[0] {
+			Expect(err).To(HaveOccurred())
 			Expect(config.Err).To(HaveOccurred())
 		} else {
+			Expect(err).NotTo(HaveOccurred())
 			Expect(config.Err).NotTo(HaveOccurred())
 		}
 	},
@@ -356,14 +358,14 @@ var _ = DescribeTable("Config parsing",
 	),
 	Entry("KubeNodePortRanges empty", "KubeNodePortRanges", "",
 		[]numorstring.Port{
-			{30000, 32767, ""},
+			{MinPort: 30000, MaxPort: 32767, PortName: ""},
 		},
 	),
 	Entry("KubeNodePortRanges range", "KubeNodePortRanges", "30001:30002,30030:30040,30500:30600",
 		[]numorstring.Port{
-			{30001, 30002, ""},
-			{30030, 30040, ""},
-			{30500, 30600, ""},
+			{MinPort: 30001, MaxPort: 30002, PortName: ""},
+			{MinPort: 30030, MaxPort: 30040, PortName: ""},
+			{MinPort: 30500, MaxPort: 30600, PortName: ""},
 		},
 	),
 
@@ -463,12 +465,13 @@ var _ = Describe("DatastoreConfig tests", func() {
 	Describe("without setting the DatastoreType and setting the etcdv3 suboptions through the felix configuration", func() {
 		BeforeEach(func() {
 			c = New()
-			c.UpdateFrom(map[string]string{
+			_, err := c.UpdateFrom(map[string]string{
 				"EtcdEndpoints": "http://localhost:1234",
 				"EtcdKeyFile":   testutils.TestDataFile("etcdkeyfile.key"),
 				"EtcdCertFile":  testutils.TestDataFile("etcdcertfile.cert"),
 				"EtcdCaFile":    testutils.TestDataFile("etcdcacertfile.cert"),
 			}, EnvironmentVariable)
+			Expect(err).NotTo(HaveOccurred())
 		})
 		It("sets the etcd suboptions", func() {
 			spec := c.DatastoreConfig().Spec
@@ -497,13 +500,14 @@ var _ = Describe("DatastoreConfig tests", func() {
 				}, nil
 			})
 
-			c.UpdateFrom(map[string]string{
+			_, err := c.UpdateFrom(map[string]string{
 				"DatastoreType": "etcdv3",
 				"EtcdEndpoints": "http://localhost:1234",
 				"EtcdKeyFile":   testutils.TestDataFile("etcdkeyfile.key"),
 				"EtcdCertFile":  testutils.TestDataFile("etcdcertfile.cert"),
 				"EtcdCaFile":    testutils.TestDataFile("etcdcacertfile.cert"),
 			}, EnvironmentVariable)
+			Expect(err).NotTo(HaveOccurred())
 		})
 		It("sets the configuration to what the felix configuration is", func() {
 			spec := c.DatastoreConfig().Spec
@@ -580,7 +584,8 @@ var _ = DescribeTable("Config validation",
 var _ = DescribeTable("Config InterfaceExclude",
 	func(excludeList string, expected []*regexp.Regexp) {
 		cfg := New()
-		cfg.UpdateFrom(map[string]string{"InterfaceExclude": excludeList}, EnvironmentVariable)
+		_, err := cfg.UpdateFrom(map[string]string{"InterfaceExclude": excludeList}, EnvironmentVariable)
+		Expect(err).NotTo(HaveOccurred())
 		regexps := cfg.InterfaceExclude
 		Expect(regexps).To(Equal(expected))
 	},

@@ -47,7 +47,7 @@ var _ = Describe("Real 20ms + 10ms Ticker", func() {
 		for i := 0; i < 40; i++ {
 			<-ticker.C
 			now := time.Now()
-			duration := time.Now().Sub(lastTime)
+			duration := time.Since(lastTime)
 			logrus.WithField("duration", duration).Debug("Tick")
 			if duration < 25*time.Millisecond {
 				foundLT5 = true

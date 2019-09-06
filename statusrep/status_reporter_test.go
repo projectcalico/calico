@@ -63,10 +63,6 @@ var wlEPUp = model.WorkloadEndpointStatus{
 	Status: "up",
 }
 
-var wlEPUpRegion = model.WorkloadEndpointStatus{
-	Status: "up",
-}
-
 var wlEPDown = model.WorkloadEndpointStatus{
 	Status: "down",
 }

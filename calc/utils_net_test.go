@@ -27,7 +27,7 @@ func mustParseMac(m string) *net.MAC {
 	if err != nil {
 		log.Panicf("Failed to parse MAC: %v; %v", m, err)
 	}
-	return &net.MAC{hwAddr}
+	return &net.MAC{HardwareAddr: hwAddr}
 }
 
 func mustParseNet(n string) net.IPNet {
@@ -40,5 +40,5 @@ func mustParseNet(n string) net.IPNet {
 
 func mustParseIP(s string) net.IP {
 	ip := net2.ParseIP(s)
-	return net.IP{ip}
+	return net.IP{IP: ip}
 }

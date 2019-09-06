@@ -112,11 +112,11 @@ var _ = Context("with a k8s clientset", func() {
 				if ii >= ignore {
 					heapInUseMeasurements = append(
 						heapInUseMeasurements,
-						leastsquares.Point{float64(ii) - iiAverage, heapInUse},
+						leastsquares.Point{X: float64(ii) - iiAverage, Y: heapInUse},
 					)
 					heapAllocMeasurements = append(
 						heapAllocMeasurements,
-						leastsquares.Point{float64(ii) - iiAverage, heapAlloc},
+						leastsquares.Point{X: float64(ii) - iiAverage, Y: heapAlloc},
 					)
 				}
 
@@ -222,6 +222,7 @@ var _ = Context("with a k8s clientset", func() {
 })
 
 func triggerFelixGCAndMemoryDump() {
-	exec.Command("pkill", "-USR1", "calico-felix").Run()
+	err := exec.Command("pkill", "-USR1", "calico-felix").Run()
+	Expect(err).ToNot(HaveOccurred())
 	time.Sleep(2 * time.Second)
 }

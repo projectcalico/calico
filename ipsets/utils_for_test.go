@@ -299,7 +299,7 @@ func (c *restoreCmd) main() {
 			log.WithField("setMetadata", setMetadata).Info("Set created")
 
 			if _, ok := c.Dataplane.IPSetMembers[name]; ok {
-				c.Stderr.Write([]byte("set exists"))
+				_, _ = c.Stderr.Write([]byte("set exists"))
 				result = &exec.ExitError{}
 				return
 			}
@@ -311,12 +311,12 @@ func (c *restoreCmd) main() {
 			name := parts[1]
 			c.Dataplane.AttemptedDestroys = append(c.Dataplane.AttemptedDestroys, name)
 			if _, ok := c.Dataplane.IPSetMembers[name]; !ok {
-				c.Stderr.Write([]byte("set doesn't exist"))
+				_, _ = c.Stderr.Write([]byte("set doesn't exist"))
 				result = &exec.ExitError{}
 				return
 			}
 			if c.Dataplane.FailDestroyNames.Contains(name) {
-				c.Stderr.Write([]byte("set is in use"))
+				_, _ = c.Stderr.Write([]byte("set is in use"))
 				result = &exec.ExitError{}
 				return
 			}
@@ -328,14 +328,14 @@ func (c *restoreCmd) main() {
 			newMember := parts[2]
 			logCxt := log.WithField("setName", name)
 			if currentMembers, ok := c.Dataplane.IPSetMembers[name]; !ok {
-				c.Stderr.Write([]byte("set doesn't exist"))
+				_, _ = c.Stderr.Write([]byte("set doesn't exist"))
 				result = &exec.ExitError{}
 				return
 			} else {
 				if currentMembers.Contains(newMember) {
 					c.Dataplane.TriedToAddExistent = true
 					logCxt.Warn("Add of existing member")
-					c.Stderr.Write([]byte("member already exists"))
+					_, _ = c.Stderr.Write([]byte("member already exists"))
 					result = &exec.ExitError{}
 					return
 				}
@@ -349,7 +349,7 @@ func (c *restoreCmd) main() {
 			Expect(parts[3]).To(Equal("--exist"))
 			logCxt := log.WithField("setName", name)
 			if currentMembers, ok := c.Dataplane.IPSetMembers[name]; !ok {
-				c.Stderr.Write([]byte("set doesn't exist"))
+				_, _ = c.Stderr.Write([]byte("set doesn't exist"))
 				result = &exec.ExitError{}
 				return
 			} else {
@@ -380,12 +380,12 @@ func (c *restoreCmd) main() {
 
 			if set1, ok := c.Dataplane.IPSetMembers[name1]; !ok {
 				log.WithField("name", name1).Warn("IP set doesn't exist")
-				c.Stderr.Write([]byte("set doesn't exist"))
+				_, _ = c.Stderr.Write([]byte("set doesn't exist"))
 				result = &exec.ExitError{}
 				return
 			} else if set2, ok := c.Dataplane.IPSetMembers[name2]; !ok {
 				log.WithField("name", name2).Warn("IP set doesn't exist")
-				c.Stderr.Write([]byte("set doesn't exist"))
+				_, _ = c.Stderr.Write([]byte("set doesn't exist"))
 				result = &exec.ExitError{}
 				return
 			} else {

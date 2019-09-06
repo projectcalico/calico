@@ -182,18 +182,16 @@ func (d *MockDataplane) NumEventsRecorded() int {
 }
 
 func copyPolOrder(in map[string][]TierInfo) map[string][]TierInfo {
-	copy := map[string][]TierInfo{}
+	localCopy := map[string][]TierInfo{}
 	for k, v := range in {
 		if v == nil {
-			copy[k] = nil
+			localCopy[k] = nil
 		}
 		vCopy := make([]TierInfo, len(v))
-		for i := range v {
-			vCopy[i] = v[i]
-		}
-		copy[k] = vCopy
+		copy(vCopy, v)
+		localCopy[k] = vCopy
 	}
-	return copy
+	return localCopy
 }
 
 func (d *MockDataplane) Config() map[string]string {
@@ -203,11 +201,11 @@ func (d *MockDataplane) Config() map[string]string {
 	if d.config == nil {
 		return nil
 	}
-	copy := map[string]string{}
+	localCopy := map[string]string{}
 	for k, v := range d.config {
-		copy[k] = v
+		localCopy[k] = v
 	}
-	return copy
+	return localCopy
 }
 
 func NewMockDataplane() *MockDataplane {

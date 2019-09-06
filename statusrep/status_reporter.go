@@ -323,9 +323,9 @@ func (esr *EndpointStatusReporter) writeEndpointStatus(ctx context.Context, epID
 		logCxt.Info("Writing endpoint status")
 		switch epID.(type) {
 		case model.HostEndpointStatusKey:
-			kv.Value = &model.HostEndpointStatus{status}
+			kv.Value = &model.HostEndpointStatus{Status: status}
 		case model.WorkloadEndpointStatusKey:
-			kv.Value = &model.WorkloadEndpointStatus{status}
+			kv.Value = &model.WorkloadEndpointStatus{Status: status}
 		}
 		applyCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
 		_, err = esr.datastore.Apply(applyCtx, &kv)

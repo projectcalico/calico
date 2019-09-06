@@ -533,24 +533,6 @@ type progInfo struct {
 	Err    string `json:"error"`
 }
 
-type ifaceXdpProg struct {
-	Id  int    `json:"id"`
-	Tag string `json:"tag"`
-}
-
-type ifaceXdp struct {
-	Mode int          `json:"mode"`
-	Prog ifaceXdpProg `json:"prog"`
-}
-
-type ifaceInfo []struct {
-	IfIndex  int      `json:"ifindex"`
-	IfName   string   `json:"ifname"`
-	Link     string   `json:"link"` // other side of the veth pair
-	LinkType string   `json:"link_type"`
-	Xdp      ifaceXdp `json:"xdp"`
-}
-
 type cgroupProgEntry struct {
 	ID          int    `json:"id"`
 	AttachType  string `json:"attach_type"`
@@ -1801,8 +1783,6 @@ func clearSockmap(mapArgs []string) error {
 			return fmt.Errorf("failed to delete item (%v) from map (%v): %s\n%s", e.NextKey, mapArgs, err, output)
 		}
 	}
-
-	return nil
 }
 
 func (b *BPFLib) RemoveSockmap(mode FindObjectMode) error {

@@ -43,13 +43,19 @@ func parsedRulesToProtoRules(in []*ParsedRule, ruleIDSeed string) (out []*proto.
 
 func fillInRuleIDs(rules []*proto.Rule, ruleIDSeed string) {
 	s := sha256.New224()
-	s.Write([]byte(ruleIDSeed))
+	_, err := s.Write([]byte(ruleIDSeed))
+	if err != nil {
+		log.WithError(err).Panic("failed to write rule hash")
+	}
 	hash := s.Sum(nil)
 	for ii, rule := range rules {
 		// Each hash chains in the previous hash, so that its position in the chain and
 		// the rules before it affect its hash.
 		s.Reset()
-		s.Write(hash)
+		_, err = s.Write(hash)
+		if err != nil {
+			log.WithError(err).WithField("rule", rule).Panic("Failed to write hash for rule")
+		}
 
 		// We need a form of the rule that we can hash.  Convert it to the protobuf
 		// binary representation, which is deterministic, at least for a given rev of the
@@ -60,7 +66,10 @@ func fillInRuleIDs(rules []*proto.Rule, ruleIDSeed string) {
 		if err != nil {
 			log.WithError(err).WithField("rule", rule).Panic("Failed to marshal rule")
 		}
-		s.Write(data)
+		_, err = s.Write(data)
+		if err != nil {
+			log.WithError(err).WithField("rule", rule).Panic("Failed to write marshalled rule")
+		}
 		hash = s.Sum(hash[0:0])
 		// Encode the hash using a compact character set.  We use the URL-safe base64
 		// variant because it uses '-' and '_', which are more shell-friendly.

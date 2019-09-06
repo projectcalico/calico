@@ -813,7 +813,6 @@ func (s *xdpIPState) fixupBlacklistContentsExistingMap(resyncState *xdpResyncSta
 			return nil
 		})
 	}
-	setIDsInNS = nil
 	for mapKey, actualRefCount := range membersInBpfMap {
 		member := mapKey.ToIPNet().String()
 		expectedRefCount := membersInNS[member]

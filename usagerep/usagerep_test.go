@@ -20,6 +20,7 @@ import (
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	log "github.com/sirupsen/logrus"
 
 	"context"
 	"fmt"
@@ -52,7 +53,11 @@ var _ = Describe("UsageReporter with mocked URL and short interval", func() {
 		httpHandler = &requestRecorder{}
 		go func() {
 			defer GinkgoRecover()
-			http.Serve(tcpListener, httpHandler)
+			// TODO: Investigate why this call sometimes returns an error.
+			err = http.Serve(tcpListener, httpHandler)
+			if err != nil {
+				log.WithError(err).Error("Failed to start HTTP server.")
+			}
 		}()
 
 		// Channels to send data to the UsageReporter.
@@ -209,16 +214,15 @@ func (h *requestRecorder) ServeHTTP(resp http.ResponseWriter, req *http.Request)
 	defer h.lock.Unlock()
 	h.requestsReceived = append(h.requestsReceived, req.RequestURI)
 
-	resp.Write([]byte(`{"usage_warning": "Warning!"}`))
+	_, err := resp.Write([]byte(`{"usage_warning": "Warning!"}`))
+	Expect(err).NotTo(HaveOccurred())
 }
 
 func (h *requestRecorder) GetRequestURIs() []string {
 	h.lock.Lock()
 	defer h.lock.Unlock()
 	var result []string
-	for _, r := range h.requestsReceived {
-		result = append(result, r)
-	}
+	result = append(result, h.requestsReceived...)
 	return result
 }
 

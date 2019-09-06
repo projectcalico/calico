@@ -41,9 +41,10 @@ var _ = Describe("Typha address discovery", func() {
 
 	It("should bracket an IPv6 Typha address", func() {
 		configParams := config.New()
-		configParams.UpdateFrom(map[string]string{
+		_, err := configParams.UpdateFrom(map[string]string{
 			"TyphaK8sServiceName": "calico-typha",
 		}, config.EnvironmentVariable)
+		Expect(err).NotTo(HaveOccurred())
 		typhaAddr, err := discoverTyphaAddr(configParams, getKubernetesService)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(typhaAddr).To(Equal("[fd5f:65af::2]:8156"))

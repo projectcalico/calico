@@ -272,7 +272,7 @@ func (s State) KVDeltas(prev State) []api.Update {
 		if !currentKeys.Contains(kvToPath(kv)) {
 			deltas = append(
 				deltas,
-				api.Update{model.KVPair{Key: kv.Key}, api.UpdateTypeKVDeleted},
+				api.Update{KVPair: model.KVPair{Key: kv.Key}, UpdateType: api.UpdateTypeKVDeleted},
 			)
 		}
 	}
@@ -282,7 +282,7 @@ func (s State) KVDeltas(prev State) []api.Update {
 			if updatedKVs[kvToPath(kv)] {
 				updateType = api.UpdateTypeKVUpdated
 			}
-			deltas = append(deltas, api.Update{kv, updateType})
+			deltas = append(deltas, api.Update{KVPair: kv, UpdateType: updateType})
 		}
 	}
 	return deltas

@@ -79,10 +79,7 @@ func NewWithStubs(config Config, netlinkStub netlinkStub, resyncC <-chan time.Ti
 
 func IsInterfacePresent(name string) bool {
 	link, _ := netlink.LinkByName(name)
-	if link != nil {
-		return true
-	}
-	return false
+	return link != nil
 }
 
 func (m *InterfaceMonitor) MonitorInterfaces() {
