@@ -1,0 +1,8 @@
+---
+layout: null
+---
+{% helm %}
+datastore: kubernetes
+network: calico
+flannel_migration: true
+{% endhelm %}

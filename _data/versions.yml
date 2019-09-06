@@ -2973,6 +2973,30 @@ v2.1:
       version: 1.4.2
       url: https://opendev.org/openstack/networking-calico/src/tag/1.4.2
 
+v3.9:
+# Dummy release - remove this when v3.9.0 goes live.
+- title: v3.9-pre
+  note: ""
+  components:
+     typha:
+      version: master
+     calicoctl:
+      version: master
+     node:
+      version: master
+     cni:
+      version: master
+     kubeControllers:
+      version: master
+     networking-calico:
+      version: master
+     flannel:
+      version: v0.11.0
+     dikastes:
+      version: master
+     flexvol:
+      version: master
+
 # The master release stream is used to generate the master version of the docs.
 master:
 - title: master
