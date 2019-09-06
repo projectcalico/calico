@@ -2979,23 +2979,23 @@ v3.9:
   note: ""
   components:
      typha:
-      version: master
+      version: release-v3.9
      calicoctl:
-      version: master
-     node:
-      version: master
-     cni:
-      version: master
-     kubeControllers:
-      version: master
+      version: release-v3.9
+     calico/node:
+      version: release-v3.9
+     calico/cni:
+      version: release-v3.9
+     calico/kube-controllers:
+      version: release-v3.9
      networking-calico:
-      version: master
+      version: release-v3.9
      flannel:
       version: v0.11.0
-     dikastes:
-      version: master
+     calico/dikastes:
+      version: release-v3.9
      flexvol:
-      version: master
+      version: release-v3.9
 
 # The master release stream is used to generate the master version of the docs.
 master:
