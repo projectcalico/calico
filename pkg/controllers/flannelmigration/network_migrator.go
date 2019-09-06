@@ -243,6 +243,16 @@ func (m *networkMigrator) MigrateNodes(nodes []*v1.Node) error {
 
 		err = m.setupCalicoNetworkForNode(node)
 		if err != nil {
+			// Error migrating a node. However, if the node has been removed before migration controller started,
+			// just log and continue on to next node.
+			n := k8snode(node.Name)
+			notFound, checkErr := n.CheckNotExists(m.k8sClientset)
+			if checkErr != nil {
+				log.WithError(checkErr).Errorf("Check existence of %s failed.", node.Name)
+			} else if notFound {
+				log.Infof("Node %s has been removed, continue on to next node...", node.Name)
+				continue
+			}
 			return err
 		}
 	}
