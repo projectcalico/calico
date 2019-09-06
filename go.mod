@@ -41,7 +41,7 @@ require (
 	github.com/prometheus/common v0.0.0-20171104095907-e3fb1a1acd76 // indirect
 	github.com/prometheus/procfs v0.0.0-20171017214025-a6e9df898b13 // indirect
 	github.com/satori/go.uuid v1.2.0
-	github.com/sirupsen/logrus v0.0.0-00010101000000-000000000000
+	github.com/sirupsen/logrus v1.4.2
 	github.com/soheilhy/cmux v0.1.4 // indirect
 	github.com/tinylib/msgp v1.1.0 // indirect
 	github.com/tmc/grpc-websocket-proxy v0.0.0-20190109142713-0ad062ec5ee5 // indirect
