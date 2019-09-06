@@ -3006,17 +3006,17 @@ master:
       version: master
      calicoctl:
       version: master
-     node:
+     calico/node:
       version: master
-     cni:
+     calico/cni:
       version: master
-     kubeControllers:
+     calico/kube-controllers:
       version: master
      networking-calico:
       version: master
      flannel:
       version: v0.11.0
-     dikastes:
+     calico/dikastes:
       version: master
      flexvol:
       version: master
