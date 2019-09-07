@@ -44,6 +44,7 @@ type Container struct {
 	mutex         sync.Mutex
 	binaries      set.Set
 	stdoutWatches []*watch
+	stderrWatches []*watch
 
 	logFinished sync.WaitGroup
 }
@@ -188,7 +189,7 @@ func Run(namePrefix string, opts RunOpts, args ...string) (c *Container) {
 	// Merge container's output into our own logging.
 	c.logFinished.Add(2)
 	go c.copyOutputToLog("stdout", stdout, &c.logFinished, &c.stdoutWatches)
-	go c.copyOutputToLog("stderr", stderr, &c.logFinished, nil)
+	go c.copyOutputToLog("stderr", stderr, &c.logFinished, &c.stderrWatches)
 
 	// Note: it might take a long time for the container to start running, e.g. if the image
 	// needs to be downloaded.
@@ -201,6 +202,23 @@ func Run(namePrefix string, opts RunOpts, args ...string) (c *Container) {
 	c.binaries = set.New()
 	log.WithField("container", c).Info("Container now running")
 	return
+}
+
+func (c *Container) WatchStderrFor(re *regexp.Regexp) chan struct{} {
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
+
+	log.WithFields(log.Fields{
+		"container": c.Name,
+		"regex":     re,
+	}).Info("Start watching stderr")
+
+	ch := make(chan struct{})
+	c.stderrWatches = append(c.stderrWatches, &watch{
+		regexp: re,
+		c:      ch,
+	})
+	return ch
 }
 
 func (c *Container) WatchStdoutFor(re *regexp.Regexp) chan struct{} {
