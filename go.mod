@@ -25,9 +25,9 @@ require (
 	github.com/onsi/gomega v1.5.0
 	github.com/opentracing/opentracing-go v0.0.0-20190704175813-135aa78c6f95 // indirect
 	github.com/pkg/errors v0.8.1 // indirect
-	github.com/projectcalico/libcalico-go v0.0.0-20190905235925-4321d26bc57d
+	github.com/projectcalico/libcalico-go v0.0.0-20190909144507-d0b62f71c979
 	github.com/projectcalico/pod2daemon v0.0.0-20190730210055-df57fc59e2e1
-	github.com/projectcalico/typha v0.0.0-20190906041856-92ace1ba0584
+	github.com/projectcalico/typha v0.0.0-20190909183257-4a0fda01b791
 	github.com/prometheus/client_golang v0.9.1
 	github.com/satori/go.uuid v1.2.0
 	github.com/sirupsen/logrus v1.4.2
