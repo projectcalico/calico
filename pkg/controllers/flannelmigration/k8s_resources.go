@@ -592,3 +592,14 @@ func (n k8snode) waitForNodeLabelDisappear(k8sClientset *kubernetes.Clientset, k
 		return false, nil
 	})
 }
+
+// Return true if a node does not exist in the cluster.
+func (n k8snode) CheckNotExists(k8sClientset *kubernetes.Clientset) (bool, error) {
+	nodeName := string(n)
+	_, err := k8sClientset.CoreV1().Nodes().Get(nodeName, metav1.GetOptions{})
+	if apierrs.IsNotFound(err) {
+		return true, nil
+	}
+
+	return false, err
+}
