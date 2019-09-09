@@ -15,6 +15,7 @@ At the end, you will have a fully-functional Calico cluster using VXLAN networki
 - Flannel must be configured to use the Kubernetes API for storing its configuration (as opposed to etcd).
 - Flannel must be configured with `DirectRouting` disabled which is the default value.
 - Flannel must have been installed using a Kubernetes daemon set.
+- Cluster nodes must have rp_filter set to strict (1).  (Check with `sysctl net.ipv4.conf.all.rp_filter`)
 - Cluster must allow for adding/deleting/modifying node labels.
 - Cluster must allow for modification and removal of the flannel daemon set.
 - For example, it must not be installed using the Kubernetes add-on manager.
@@ -116,7 +117,7 @@ Then, for each node found above, run the following commands to delete Calico.
 1. Cordon and drain the node.
 
    ```
-   kubectl drain node <node name>
+   kubectl drain <node name>
    ```
 
 1. Log in to the node and remove the CNI configuration.
@@ -130,13 +131,13 @@ Then, for each node found above, run the following commands to delete Calico.
 1. Enable flannel on the node.
 
    ```
-   kubectl label node <node name> projectcalico.org/node-network-during-migration=flannel
+   kubectl label node <node name> projectcalico.org/node-network-during-migration=flannel --overwrite
    ```
 
 1. Uncordon the node.
 
    ```
-   kubectl uncordon node <node name>
+   kubectl uncordon <node name>
    ```
 
 Once the above steps have been completed on each node, perform the following steps.
