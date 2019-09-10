@@ -4,6 +4,7 @@ go 1.12
 
 require (
 	github.com/Azure/go-autorest v11.1.0+incompatible // indirect
+	github.com/apparentlymart/go-cidr v1.0.1
 	github.com/coreos/etcd v3.3.10+incompatible
 	github.com/gophercloud/gophercloud v0.0.0-20190126172459-c818fa66e4c8 // indirect
 	github.com/imdario/mergo v0.3.5 // indirect
@@ -25,6 +26,7 @@ require (
 )
 
 replace (
+	github.com/sirupsen/logrus => github.com/projectcalico/logrus v0.0.0-20180627202928-fc9bbf2f57995271c5cd6911ede7a2ebc5ea7c6f
 	k8s.io/api => k8s.io/api v0.0.0-20190409021203-6e4e0e4f393b
 	k8s.io/apimachinery => k8s.io/apimachinery v0.0.0-20190404173353-6a84e37a896d
 	k8s.io/client-go => k8s.io/client-go v11.0.1-0.20190409021438-1a26190bd76a+incompatible

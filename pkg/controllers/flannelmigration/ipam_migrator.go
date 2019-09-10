@@ -108,8 +108,6 @@ func (m ipamMigrator) InitialiseIPPoolAndFelixConfig() error {
 
 // Create Calico IPAM blocks for a Kubernetes node.
 func (m ipamMigrator) SetupCalicoIPAMForNode(node *v1.Node) error {
-	log.Infof("Start setting up Calico IPAM for node %s.", node.Name)
-
 	if node == nil {
 		return fmt.Errorf("nil pointer for node")
 	}
@@ -183,7 +181,8 @@ func (m ipamMigrator) SetupCalicoIPAMForNode(node *v1.Node) error {
 // MigrateNodes setup Calico IPAM for array of nodes.
 func (m ipamMigrator) MigrateNodes(nodes []*v1.Node) error {
 	log.Infof("Start IPAM migration process for %d nodes.", len(nodes))
-	for _, node := range nodes {
+	for i, node := range nodes {
+		log.Infof("Start setting up Calico IPAM for node %s[index %d].", node.Name, i)
 		err := m.SetupCalicoIPAMForNode(node)
 		if err != nil {
 			return err

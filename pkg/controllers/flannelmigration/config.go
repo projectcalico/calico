@@ -79,6 +79,14 @@ type Config struct {
 	// FlannelSubnetEnv holds flannel-subnet-env value from migration ConfigMap.
 	// This ENV is passed via ConfigMap.
 	FlannelSubnetEnv string `default:"" split_words:"true"`
+
+	// Total seconds to wait before migration controller exits.
+	// This is used for debug/test purpose.
+	DebugWaitBeforeExit int `default:"0" split_words:"true"`
+
+	// Total seconds to wait before migration controller main thread starts.
+	// This is used for debug/test purpose.
+	DebugWaitBeforeStart int `default:"0" split_words:"true"`
 }
 
 // Parse parses envconfig and stores in Config struct.
