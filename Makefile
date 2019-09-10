@@ -563,7 +563,7 @@ endif
 	    --net host \
         $(TEST_CONTAINER_NAME) \
 	    sh -c 'cp /root/.kubeadm-dind-cluster/kubectl /bin/kubectl && ls -ltr /bin/kubectl && which kubectl && cd /code/tests/k8st && \
-	           nosetests $(K8ST_TO_RUN) -v --with-xunit --xunit-file="/code/report/k8s-tests.xml" --with-timer'
+	           nosetests $(K8ST_TO_RUN) --nologcapture -s -v --with-xunit --xunit-file="/code/report/k8s-tests.xml" --with-timer'
 
 # Needed for Semaphore CI (where disk space is a real issue during k8s-test)
 .PHONY: remove-go-build-image

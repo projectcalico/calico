@@ -8,10 +8,10 @@ require (
 	github.com/kelseyhightower/memkv v0.1.1 // indirect
 	github.com/onsi/ginkgo v1.8.0
 	github.com/onsi/gomega v1.5.0
-	github.com/projectcalico/felix v0.0.0-20190830001837-7753943d5841
-	github.com/projectcalico/libcalico-go v0.0.0-20190822155120-15c0fc659f30
-	github.com/projectcalico/typha v0.0.0-20190829203445-96045911fce7
-	github.com/sirupsen/logrus v1.4.0
+	github.com/projectcalico/felix v0.0.0-20190910002408-d60a3c648288
+	github.com/projectcalico/libcalico-go v0.0.0-20190909234443-18c0a7f471bb
+	github.com/projectcalico/typha v0.0.0-20190910002346-0371b3148d28
+	github.com/sirupsen/logrus v1.4.2
 	github.com/ugorji/go/codec v1.1.7
 	github.com/vishvananda/netns v0.0.0-20180720170159-13995c7128cc // indirect
 	k8s.io/api v0.0.0-20180628040859-072894a440bd
