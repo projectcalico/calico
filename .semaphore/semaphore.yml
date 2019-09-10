@@ -1,0 +1,15 @@
+version: v1.0
+name: node
+agent:
+  machine:
+    type: e1-standard-2
+    os_image: ubuntu1804
+blocks:
+  - name: Run k8s-tests
+    task:
+      jobs:
+      - name: Download code and run tests
+        commands:
+          # Checkout the code and run the Kubernetes tests.
+          - checkout
+          - make k8s-test
