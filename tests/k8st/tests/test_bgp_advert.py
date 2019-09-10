@@ -160,17 +160,13 @@ class TestBGPAdvert(TestBase):
 
         start_external_node_with_bgp("kube-node-extra", bird_conf)
 
-        # set CALICO_ADVERTISE_CLUSTER_IPS=10.96.0.0/12
-        self.update_ds_env("calico-node",
-                           "kube-system",
-                           "CALICO_ADVERTISE_CLUSTER_IPS",
-                           "10.96.0.0/12")
-
-        # Enable debug logging
-        self.update_ds_env("calico-node",
-                           "kube-system",
-                           "BGP_LOGSEVERITYSCREEN",
-                           "debug")
+        # Set CALICO_ADVERTISE_CLUSTER_IPS=10.96.0.0/12 and enable
+        # debug logging.
+        self.update_ds_env("calico-node", "kube-system", {
+            "CALICO_ADVERTISE_CLUSTER_IPS": "10.96.0.0/12",
+            "BGP_LOGSEVERITYSCREEN": "debug",
+            "FELIX_XDPENABLED": "false",
+        })
 
         # Establish BGPPeer from cluster nodes to node-extra
         calicoctl("""apply -f - << EOF
@@ -193,17 +189,13 @@ EOF
 
         start_external_node_with_bgp("kube-node-extra", bird_conf_rr)
 
-        # set CALICO_ADVERTISE_CLUSTER_IPS=10.96.0.0/12
-        self.update_ds_env("calico-node",
-                           "kube-system",
-                           "CALICO_ADVERTISE_CLUSTER_IPS",
-                           "10.96.0.0/12")
-
-        # Enable debug logging
-        self.update_ds_env("calico-node",
-                           "kube-system",
-                           "BGP_LOGSEVERITYSCREEN",
-                           "debug")
+        # Set CALICO_ADVERTISE_CLUSTER_IPS=10.96.0.0/12 and enable
+        # debug logging.
+        self.update_ds_env("calico-node", "kube-system", {
+            "CALICO_ADVERTISE_CLUSTER_IPS": "10.96.0.0/12",
+            "BGP_LOGSEVERITYSCREEN": "debug",
+            "FELIX_XDPENABLED": "false",
+        })
 
         # Establish BGPPeer from cluster nodes to node-extra using calicoctl
         # External peer has IP 10.192.0.5
