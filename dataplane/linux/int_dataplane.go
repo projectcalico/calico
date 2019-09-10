@@ -1106,7 +1106,7 @@ func (d *InternalDataplane) apply() {
 			d.xdpState.UpdateState()
 		}
 		if applyXDPError != nil {
-			log.WithError(applyXDPError).Error("failed to apply XDP actions, disabling XDP")
+			log.WithError(applyXDPError).Info("Applying XDP actions did not succeed, disabling XDP")
 			d.shutdownXDPCompletely()
 		}
 	}
@@ -1229,7 +1229,7 @@ func (d *InternalDataplane) applyXDPActions() error {
 		if err = d.xdpState.ApplyBPFActions(d.ipsetsSourceV4); err == nil {
 			return nil
 		} else {
-			log.WithError(err).Warning("Failed to apply XDP BPF actions, will retry with resync...")
+			log.WithError(err).Info("Applying XDP BPF actions did not succeed, will retry with resync...")
 		}
 	}
 	return err

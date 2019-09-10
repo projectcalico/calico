@@ -189,7 +189,7 @@ func (x *xdpState) ApplyBPFActions(isSource ipsetsSource) error {
 		err := x.ipV4State.bpfActions.apply(memberCacheV4, x.ipV4State.ipsetIDsToMembers, newConvertingIPSetsSource(isSource), x.common.xdpModes)
 		x.ipV4State.bpfActions = newXDPBPFActions()
 		if err != nil {
-			log.WithError(err).Warning("Applying BPF actions failed. Queueing XDP resync.")
+			log.WithError(err).Info("Applying BPF actions did not succeed. Queueing XDP resync.")
 			x.QueueResync()
 			return err
 		}
@@ -202,7 +202,7 @@ func (x *xdpState) ProcessMemberUpdates() error {
 		memberCacheV4 := newXDPMemberCache(x.ipV4State.getBpfIPFamily(), x.common.bpfLib)
 		err := x.ipV4State.processMemberUpdates(memberCacheV4)
 		if err != nil {
-			log.WithError(err).Warning("Processing member updates failed. Queueing XDP resync.")
+			log.WithError(err).Info("Processing member updates did not succeed. Queueing XDP resync.")
 			x.QueueResync()
 			return err
 		}
