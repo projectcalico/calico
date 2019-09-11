@@ -5,3 +5,4 @@ proto/*.pb.go
 bin
 *.created-*
 report/
+release-notes-*
