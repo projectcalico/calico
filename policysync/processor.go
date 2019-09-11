@@ -1,4 +1,4 @@
-// Copyright (c) 2018 Tigera, Inc. All rights reserved.
+// Copyright (c) 2018-2019 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -726,7 +726,7 @@ func splitIPSetDeltaUpdate(update *proto.IPSetDeltaUpdate) []proto.ToDataplane {
 		// Put removes on the message if they fit, but work from end end of the list since that is where
 		// partial slices will be.
 		end := len(dels) - 1
-		log.Errorf("end %d", end)
+		log.Debugf("end %d", end)
 		if len(dels) > 0 && (len(update.AddedMembers)+len(dels[end])) <= MaxMembersPerMessage {
 			update.RemovedMembers = dels[end]
 			dels = dels[0:end]
