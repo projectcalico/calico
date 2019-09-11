@@ -64,3 +64,5 @@ toc:
   path: /networking/use-specific-ip
 - title: Add a floating IP to a pod
   path: /networking/add-floating-ip
+- title: Get started with IP address management
+  path: /networking/get-started-ip-addresses
