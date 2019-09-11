@@ -1,71 +1,82 @@
 ---
-title: Accelerating Istio network performance
+title: Get started with IP address management
 ---
 
 ### Big picture
 
-Use Calico to accelerate network performance of routing network traffic via Istio Envoy sidecar.
-
-> **Warning!** This feature is experimental and should not be used in production clusters. It uses a recent Linux kernel feature (eBPF SOCKMAP), which our testing confirms requires upstream kernel enhancements to reliably and securely support production clusters. We are contributing fixes to the kernel where needed.
-{: .alert .alert-danger }
+Understand how IP address management (IPAM) functions in a Kubernetes cluster using Calico.
 
 ### Value
 
-Istio directs all application network traffic through an Envoy sidecar in each pod, which introduces network overhead for all traffic. Calico can greatly reduce this network overhead by automatically optimizing the Linux network path for this traffic.
+Different IPAM techniques provide different feature sets. Calico’s IPAM provides additional IP allocation efficiency and flexibility compared to other address management approaches. 
 
 ### Features
 
 This how-to guide uses the following Calico features:
 
-**Felix configuration** with **SidecarAccelerationEnabled** configuration option. 
-
+- **Calico IPAM**
+- **Integration with host-local IPAM**
+- **IPPool resource**
 
 ### Concepts
 
-#### Sidecar acceleration
+#### IPAM in Kubernetes 
 
-The Sidecar acceleration process bypasses several layers of kernel networking, allowing data to flow between the sockets unobstructed. This makes the Envoy proxy (sidecar) to container network path as fast and efficient as possible. 
+Kubernetes uses IPAM plugins to allocate and manage IP addresses assigned to pods. Different IPAM plugins provide different feature sets. Calico provides its own IPAM plugin called **calico-ipam** which is designed to work well with Calico and includes a number of features. 
 
+#### Calico IPAM
 
-### Before you begin...
+The **calico-ipam** plugin uses Calico’s IP pool resource to control how IP addresses are allocated to pods within the cluster. This is the default plugin used by most Calico installations.
 
-- [Enable application layer policy]({{site.baseurl}}/{{page.version}}/getting-started/kubernetes/installation/app-layer-policy)
-- Verify that hosts installed with Calico are using Linux kernel 4.19 and above
+By default, Calico uses a single IP pool for the entire Kubenretes pod CIDR, but you can divide the pod CIDR into several pools. You can assign separate IP pools to particular selections of **nodes**, or to teams, users, or applications within a cluster using **namespaces**. 
 
-#### Sidecar acceleration: experimental technology
+You can control which pools Calico uses for each pod using
 
-The sidecar app acceleration feature is disabled by default in Calico because the technology is currently not production ready. Use only in test environments until the technology is hardened for production security.
+- node selectors
+- an annotation on the pod’s namespace, or
+- an annotation on the pod’s namespace
+
+Calico also supports the **host-local** IPAM plugin. However, when using the host-local IPAM plugin some Calico features are not available. 
+
+#### Calico IPAM blocks
+
+In Calico IPAM, IP pools are subdivided into blocks -- smaller chunks that are associated with a particular node in the cluster. Each node in the cluster can have one or more blocks associated with it. Calico will automatically create and destroy blocks as needed as the number of nodes and pods in the cluster grows or shrinks.
+
+Blocks allow Calico to efficiently aggregate addresses assigned to pods on the same node, reducing the size of the routing table. By default Calico will try to allocate IP addresses from within an associated block, creating a new block if necessary. Calico can also assign addresses to pods on a node that are not within a block associated with that node. This allows for IP allocations independent of the node on which a pod is launched.
+
+By default, Calico creates blocks with room for 64 addresses (a /26), but you can control block sizes for each IP pool.
+
+#### Host-local IPAM
+
+The host-local plugin is a simple IP address management plugin. It uses predetermined CIDRs statically allocated to each node in order to choose addresses for pods. Once set, the CIDR for a node cannot be modified. Pods can be assigned addresses only from within the CIDR allocated to the node.
+
+Calico can use the host-local IPAM plugin, using the **Node.Spec.PodCIDR** field in the Kubernetes API to determine the CIDR to use for each node. However, per-node, per-pod, and per-namespace IP allocation features are not available using the host-local plugin.
+
+The host-local IPAM plugin is primarily used by other methods of routing pod traffic from one host to another. For example, it is used when installing Calico for policy enforcement with flannel networking, as well as when using Calico in Google Kubernetes Engine (GKE).
 
 ### How to
 
-To enable sidecar acceleration for Istio-enabled apps using Calico:
+#### Install Calico with calico-ipam
 
-1. Get the default Felix configuration. 
+Follow one of the [getting started guides]({{site.baseurl}}/{{page.version}}/getstarted) to install Calico.
 
-    `calicoctl get felixconfiguration default --export -o yaml > felix-config.yaml`
+#### Install Calico with host-local IPAM
 
-2. Edit felix-config.yaml and add the option, `SidecarAccelerationEnabled: true` to the end.  
+Follow one of the [getting started guides]({{site.baseurl}}/{{page.version}}/getstarted) to install Calico with flannel networking, or on GKE.
 
-   ```
-   apiVersion: projectcalico.org/v3
-   kind: FelixConfiguration
-   metadata:
-     creationTimestamp: null
-     name: default
-   spec:
-     XDPRefreshInterval: null
-     ipipEnabled: true
-     logSeverityScreen: Info
-     policySyncPathPrefix: /var/run/nodeagent
-     reportingInterval: 0s
-     sidecarAccelerationEnabled: true
-   ``` 
+Or, see the [reference documentation on host-local IPAM]({{site.baseurl}}/{{page.version}}/reference/cni-plugin/configuration#using-host-local-ipam).
 
-3. Apply the updated configuration.  
+### Tutorial
 
-   ```
-   calicoctl apply -f - < felix-config.yaml 
-   Successfully applied 1 'FelixConfiguration' resource(s)
-   ```
+For a blog/tutorial on IP pools, see [Calico IPAM: Explained and Enhanced](https://www.tigera.io/blog/calico-ipam-explained-and-enhanced/)
 
-That’s it!  Network traffic that is routed between apps and the Envoy sidecar is automatically accelerated at this point. Note that if you have an existing Istio/Calico implementation and you enable sidecar acceleration, existing connections do not benefit from acceleration.
+### Above and beyond
+
+- [IP Pool]({{site.baseurl}}/{{page.version}}/reference/resources/ippool#spec)
+
+There are several other ways to leverage Calico IPAM including:
+
+- [Assign addresses based on topology]({{site.baseurl}}/{{page.version}}/networking/assigning-ip-addresses-topology)
+- [Use a specific address for a pod]({{site.baseurl}}/{{page.version}}/networking/use-specific-ip)
+- [Migrate from one IP to another]({{site.baseurl}}/{{page.version}}/networking/changing-ip-pools)
+- [Interoperate with legacy firewalls using IP ranges]({{site.baseurl}}/{{page.version}}/networking/legacy-firewalls)
