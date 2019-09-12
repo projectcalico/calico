@@ -1,5 +1,6 @@
 ---
 title: Install CNI plugin
+redirect_from: latest/getting-started/kubernetes/hardway/install-cni-plugin
 canonical_url: 'https://docs.projectcalico.org/master/getting-started/kubernetes/hardway/install-cni-plugin'
 ---
 

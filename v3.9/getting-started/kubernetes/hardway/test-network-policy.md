@@ -1,5 +1,6 @@
 ---
 title: Test network policy
+redirect_from: latest/getting-started/kubernetes/hardway/test-network-policy
 canonical_url: 'https://docs.projectcalico.org/master/getting-started/kubernetes/hardway/test-network-policy'
 ---
 

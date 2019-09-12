@@ -1,5 +1,6 @@
 ---
 title: Use service accounts in policy rules
+redirect_from: latest/security/service-accounts
 ---
 
 ### Big picture

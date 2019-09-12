@@ -1,6 +1,5 @@
 ---
 title: Controlling ingress and egress traffic with network policy
-redirect_from: latest/security/advanced-policy
 canonical_url: 'https://docs.projectcalico.org/v3.7/security/advanced-policy'
 ---
 

@@ -1,6 +1,5 @@
 ---
 title: IP addressing and connectivity
-redirect_from: latest/networking/openstack/connectivity
 canonical_url: 'https://docs.projectcalico.org/v3.7/networking/openstack/connectivity'
 ---
 

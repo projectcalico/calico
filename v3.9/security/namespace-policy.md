@@ -1,5 +1,6 @@
 ---
 title: Use namespace in policy rules
+redirect_from: latest/security/namespace-policy
 ---
 
 ### Big picture

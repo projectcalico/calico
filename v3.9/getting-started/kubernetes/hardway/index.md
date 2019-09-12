@@ -1,5 +1,6 @@
 ---
 title: Calico the hard way
+redirect_from: latest/getting-started/kubernetes/hardway/index
 canonical_url: 'https://docs.projectcalico.org/master/getting-started/kubernetes/hardway/'
 ---
 

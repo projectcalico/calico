@@ -1,6 +1,5 @@
 ---
 title: Segmenting etcd on Kubernetes (advanced)
-redirect_from: latest/reference/etcd-rbac/kubernetes-advanced
 canonical_url: 'https://docs.projectcalico.org/v3.7/reference/etcd-rbac/kubernetes-advanced'
 ---
 

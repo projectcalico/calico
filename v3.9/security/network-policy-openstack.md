@@ -1,5 +1,6 @@
 ---
 title: Get started with Calico network policy for OpenStack
+redirect_from: latest/security/network-policy-openstack
 ---
 
 ### Big picture

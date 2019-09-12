@@ -1,6 +1,5 @@
 ---
 title: Kubernetes controllers attributions
-redirect_from: latest/reference/legal/kube-controllers
 canonical_url: 'https://docs.projectcalico.org/v3.7/reference/legal/kube-controllers'
 ---
 

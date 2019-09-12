@@ -1,5 +1,6 @@
 ---
 title: Test networking
+redirect_from: latest/getting-started/kubernetes/hardway/test-networking
 canonical_url: 'https://docs.projectcalico.org/master/getting-started/kubernetes/hardway/test-networking'
 ---
 

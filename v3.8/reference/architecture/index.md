@@ -1,6 +1,5 @@
 ---
 title: Calico architecture
-redirect_from: latest/reference/architecture/index
 canonical_url: 'https://docs.projectcalico.org/v3.7/reference/architecture/index'
 ---
 
