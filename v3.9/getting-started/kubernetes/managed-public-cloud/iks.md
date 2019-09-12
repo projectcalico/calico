@@ -1,5 +1,6 @@
 ---
 title: IBM Cloud Kubernetes Service (IKS)
+redirect_from: latest/getting-started/kubernetes/managed-public-cloud/iks
 ---
 
 ### Big picture

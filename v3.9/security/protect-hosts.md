@@ -1,5 +1,6 @@
 ---
 title: Protect hosts
+redirect_from: latest/security/protect-hosts
 ---
 
 ### Big picture

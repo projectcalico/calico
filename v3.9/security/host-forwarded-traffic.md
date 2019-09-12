@@ -1,5 +1,6 @@
 ---
 title: Apply policy to forwarded traffic
+redirect_from: latest/security/host-forwarded-traffic
 ---
 
 ### Big picture

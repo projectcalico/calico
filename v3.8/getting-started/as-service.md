@@ -1,6 +1,5 @@
 ---
 title: Running calico/node with an init system
-redirect_from: latest/getting-started/as-service
 canonical_url: 'https://docs.projectcalico.org/v3.7/getting-started/as-service'
 ---
 

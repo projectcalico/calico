@@ -1,5 +1,6 @@
 ---
 title: calicoctl attributions
+redirect_from: latest/reference/legal/calicoctl
 canonical_url: 'https://docs.projectcalico.org/v3.7/reference/legal/calicoctl'
 ---
 

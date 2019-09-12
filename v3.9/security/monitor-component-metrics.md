@@ -1,5 +1,6 @@
 ---
 title: Monitor Calico component metrics
+redirect_from: latest/security/monitor-component-metrics
 ---
 
 ### Big picture

@@ -1,5 +1,6 @@
 ---
 title: calicoctl delete
+redirect_from: latest/reference/calicoctl/delete
 canonical_url: 'https://docs.projectcalico.org/v3.7/reference/calicoctl/commands/delete'
 ---
 

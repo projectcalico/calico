@@ -1,6 +1,5 @@
 ---
 title: Apply on forwarded traffic
-redirect_from: latest/security/host-endpoints/forwarded
 canonical_url: 'https://docs.projectcalico.org/v3.7/security/host-endpoints/forwarded'
 ---
 

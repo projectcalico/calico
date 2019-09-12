@@ -1,5 +1,6 @@
 ---
 title: calicoctl node checksystem
+redirect_from: latest/reference/calicoctl/node/checksystem
 canonical_url: 'https://docs.projectcalico.org/v3.7/reference/calicoctl/commands/node/checksystem'
 ---
 
