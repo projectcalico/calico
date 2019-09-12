@@ -6,13 +6,17 @@
 {{- canonical_path | split: "/" | first -}}
 {% endcapture %}
 
+{% capture canonical_parts %}
+{{- canonical_path | split: "/" | remove: canonical_version -}}
+{% endcapture %}
+
 {% if page.version != site.data.versions.first[0] %}
   <div class="alert alert-warning" role="alert">
     <strong>Warning:</strong>
     {% if canonical_version == site.data.versions.first[0] %}
       You're not viewing the <a href="{{site.baseurl}}/{{canonical_path}}">latest copy of this page</a>.
     {% else %}
-      You're not viewing the <a href="{{site.baseurl}}/latest">latest {{site.prodname}} documentation</a>.
+      You're not viewing the <a href="{{site.baseurl}}/latest{{canonical_parts}}">latest {{site.prodname}} documentation</a>.
     {% endif %}
   </div>
 {% endif %}
