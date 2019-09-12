@@ -58,11 +58,11 @@ The host-local IPAM plugin is primarily used by other methods of routing pod tra
 
 #### Install Calico with calico-ipam
 
-Follow one of the [getting started guides]({{site.baseurl}}/{{page.version}}/getting-started) to install Calico.
+Follow one of the [getting started guides]({{site.baseurl}}/{{page.version}}/getting-started/) to install Calico.
 
 #### Install Calico with host-local IPAM
 
-Follow one of the [getting started guides]({{site.baseurl}}/{{page.version}}/getting-started) to install Calico with flannel networking, or on GKE.
+Follow one of the [getting started guides]({{site.baseurl}}/{{page.version}}/getting-started/) to install Calico with flannel networking, or on GKE.
 
 Or, see the [reference documentation on host-local IPAM]({{site.baseurl}}/{{page.version}}/reference/cni-plugin/configuration#using-host-local-ipam).
 
