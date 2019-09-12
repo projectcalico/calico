@@ -78,5 +78,7 @@ There are several other ways to leverage Calico IPAM including:
 
 - [Assign addresses based on topology]({{site.baseurl}}/{{page.version}}/networking/assigning-ip-addresses-topology)
 - [Use a specific address for a pod]({{site.baseurl}}/{{page.version}}/networking/use-specific-ip)
-- [Migrate from one IP to another]({{site.baseurl}}/{{page.version}}/networking/changing-ip-pools)
+- [Migrate from one IP pool to another]({{site.baseurl}}/{{page.version}}/networking/changing-ip-pools)
 - [Interoperate with legacy firewalls using IP ranges]({{site.baseurl}}/{{page.version}}/networking/legacy-firewalls)
+- [View IP address utilization]({{site.baseurl}}/{{page.version}}/reference/calicoctl/ipam/show)
+- [Change IP block size]({{site.baseurl}}/{{page.version}}/reference/calicoctl/reference/resources/ippool#block-sizes)
