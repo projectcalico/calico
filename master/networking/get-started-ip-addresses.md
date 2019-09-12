@@ -81,4 +81,4 @@ There are several other ways to leverage Calico IPAM including:
 - [Migrate from one IP pool to another]({{site.baseurl}}/{{page.version}}/networking/changing-ip-pools)
 - [Interoperate with legacy firewalls using IP ranges]({{site.baseurl}}/{{page.version}}/networking/legacy-firewalls)
 - [View IP address utilization]({{site.baseurl}}/{{page.version}}/reference/calicoctl/ipam/show)
-- [Change IP block size]({{site.baseurl}}/{{page.version}}/reference/calicoctl/reference/resources/ippool#block-sizes)
+- [Change IP address block size]({{site.baseurl}}/{{page.version}}/reference/calicoctl/reference/resources/ippool#block-sizes)
