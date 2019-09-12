@@ -1,3 +1,25 @@
+v3.9:
+- title: v3.9.0
+  components:
+     typha:
+      version: v3.9.0
+     calicoctl:
+      version: v3.9.0
+     calico/node:
+      version: v3.9.0
+     calico/cni:
+      version: v3.9.0
+     calico/kube-controllers:
+      version: v3.9.0
+     networking-calico:
+      version: 3.9.0
+     flannel:
+      version: v0.11.0
+     calico/dikastes:
+      version: v3.9.0
+     flexvol:
+      version: v3.9.0
+
 v3.8:
 - title: v3.8.2
   components:
@@ -2972,30 +2994,6 @@ v2.1:
     networking-calico:
       version: 1.4.2
       url: https://opendev.org/openstack/networking-calico/src/tag/1.4.2
-
-v3.9:
-# Dummy release - remove this when v3.9.0 goes live.
-- title: v3.9-pre
-  note: ""
-  components:
-     typha:
-      version: release-v3.9
-     calicoctl:
-      version: release-v3.9
-     calico/node:
-      version: release-v3.9
-     calico/cni:
-      version: release-v3.9
-     calico/kube-controllers:
-      version: release-v3.9
-     networking-calico:
-      version: release-v3.9
-     flannel:
-      version: v0.11.0
-     calico/dikastes:
-      version: release-v3.9
-     flexvol:
-      version: release-v3.9
 
 # The master release stream is used to generate the master version of the docs.
 master:
