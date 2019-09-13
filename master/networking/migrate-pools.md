@@ -24,20 +24,20 @@ This how-to guide uses the following Calico features:
 
 ### Before you begin...
 
-- You must be using {{site.prodname}} CNI with IPAM.  
+- You must be using {{site.prodname}} IPAM.  
   If you are not sure, ssh to one of your Kubernetes nodes and examine the CNI configuration.
 
       `cat /etc/cni/net.d/10-calico.conflist`
 
   Look for the "type" entry:
 
-      ```
-         "ipam": {
-              "type": "calico-ipam"
-          },
-      ``` 
+  ```
+     "ipam": {
+           "type": "calico-ipam"
+      },
+  ``` 
 
-   If type is “calico-ipam,” you are good to go. If the IPAM is set to something else, or the 10-calico.conflist file does not exist, you cannot use this feature in your cluster. 
+   If the type is “calico-ipam,” you are good to go. If the IPAM is set to something else, or the 10-calico.conflist file does not exist, you cannot use this feature in your cluster. 
 
 - Although Kubernetes supports changing the pod network CIDR, not all orchestrators do. For example, OpenShift does not support this feature as described in [`osm_cluster_network_cidr configuration` field](https://docs.openshift.org/latest/install_config/install/advanced_install.html#configuring-cluster-variables). Check your orchestrator documentation to verify that it supports changing the pod CIDR. 
 
