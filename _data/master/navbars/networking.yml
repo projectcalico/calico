@@ -6,8 +6,8 @@ toc:
   path: /networking/
 - title: Connecting workloads across networks that you do not control
   path: /networking/vxlan-ipip
-- title: Changing IP pools
-  path: /networking/changing-ip-pools
+- title: Migrate from one IP pool to another
+  path: /networking/migrate-pools
 - title: Route reflectors
   path: /networking/routereflector
 - title: Configuring BGP peers
