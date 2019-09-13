@@ -29,7 +29,7 @@ This how-to guide uses the following Calico features:
 
       `cat /etc/cni/net.d/10-calico.conflist`
 
-      Look for the type entry:
+  Look for the "type" entry:
 
       ```
          "ipam": {
@@ -39,7 +39,7 @@ This how-to guide uses the following Calico features:
 
    If type is “calico-ipam,” you are good to go. If the IPAM is set to something else, or the 10-calico.conflist file does not exist, you cannot use this feature in your cluster. 
 
-- Although Kubernetes supports changing the pod network CIDR, not all orchestrators do. For example, OpenShift does not support this feature [osm_cluster_network_cidr configuration field](https://docs.openshift.org/latest/install_config/install/advanced_install.html#configuring-cluster-variables). Check your orchestrator documentation to verify that it supports changing the pod CIDR. 
+- Although Kubernetes supports changing the pod network CIDR, not all orchestrators do. For example, OpenShift does not support this feature as described in [`osm_cluster_network_cidr configuration` field](https://docs.openshift.org/latest/install_config/install/advanced_install.html#configuring-cluster-variables). Check your orchestrator documentation to verify that it supports changing the pod CIDR. 
 
 ### How to
 
@@ -105,7 +105,7 @@ new-pool              10.0.0.0/16      true   Always     false
 
 #### Step 2: Disable the old IP pool
 
-**List the existing IP pool definition**.
+List the existing IP pool definition.
 
 `calicoctl get ippool -o yaml > pool.yaml`
 
@@ -130,7 +130,7 @@ items:
     natOutgoing: true
 ```
 
-**Edit pool.yaml**.
+Edit pool.yaml.
 
 Disable this IP pool by setting: `disabled: true`
 
@@ -146,13 +146,13 @@ spec:
   disabled: true
 ```
 
-**Apply the changes**. 
+Apply the changes. 
 
 Remember, disabling a pool only affects new IP allocations; networking for existing pods is not affected.
 
 `calicoctl apply -f pool.yaml`
 
-**Verify the changes**.
+Verify the changes.
 
 `calicoctl get ippool -o wide`
 
@@ -170,20 +170,20 @@ Next, we delete all of the existing pods from the old IP pool. (In our example, 
 
 #### Step 4: Verify that new pods get an address from the new IP pool
 
-1. Create a test namespace and nginx pod.
+1. Create a test namespace and nginx pod.  
    `kubectl create ns ippool-test`
 
-1. Create an nginx pod
+1. Create an nginx pod. 
    `kubectl run --namespace=ippool-test nginx --replicas=1 --image=nginx`
 
-1. Verify that the new pod gets an IP address from the new range.
+1. Verify that the new pod gets an IP address from the new range.  
    `kubectl -n ippool-test get pods -l run=nginx -o wide`
 
-1. Clean up the ippool-test namespace
+1. Clean up the ippool-test namespace. 
    `kubectl delete ns ippool-test`
 
 
-Step 5: Delete the old IP pool
+#### Step 5: Delete the old IP pool
 
 Now that you've verified that pods are getting IPs from the new range, you can safely delete the old pool.
 
