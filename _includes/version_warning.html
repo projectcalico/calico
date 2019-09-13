@@ -7,7 +7,7 @@
 {% endcapture %}
 
 {% capture canonical_parts %}
-{{- page.url | split: "/" | shift | join: "/" -}}
+{{- page.url | remove: "https://docs.projectcalico.org/" | split: "/" | shift | join: "/" -}}
 {% endcapture %}
 
 {% if page.version != site.data.versions.first[0] %}
