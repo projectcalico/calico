@@ -20,7 +20,7 @@ This how-to guide uses the following Calico features:
 
 #### IP pools and cluster CIDRs
 
-{{site.prodname}} supports changing IP pools for pods if the IP pool you are changing to is within the same cluster CIDR. Although it is technically feasible to change a pod to an IP pool outside the cluster CIDR, we do not recommend it; this requires restarting components (affecting application availability), and if you make a mistake and change to a CIDR range that doesn’t include the already-assigned value, existing pods can lose connectivity.
+{{site.prodname}} supports changing IP pools for pods if the IP pool you are changing to is within the same cluster CIDR. Although it is technically feasible to change a pod to an IP pool outside the cluster CIDR, we do not recommend it; this requires restarting components (affecting application availability), and if you make a mistake and change to a CIDR range that doesn’t include the already-assigned value, existing pods will lose connectivity.
 
 ### Before you begin...
 
@@ -39,7 +39,7 @@ This how-to guide uses the following Calico features:
 
    If the type is “calico-ipam,” you are good to go. If the IPAM is set to something else, or the 10-calico.conflist file does not exist, you cannot use this feature in your cluster. 
 
-- Your orchestrator must support changing the pod network CIDR. 
+- Your orchestrator must support changing the pod network CIDR.   
   Although Kubernetes supports changing the pod network CIDR, not all orchestrators do. For example, OpenShift does not support this feature as described in [`osm_cluster_network_cidr configuration`](https://docs.openshift.org/latest/install_config/install/advanced_install.html#configuring-cluster-variables). Check your orchestrator documentation to verify. 
 
 ### How to
@@ -48,10 +48,10 @@ This how-to guide uses the following Calico features:
 
 Follow these steps to migrate pods from one IP pool to another pool in the same cluster CIDR. 
 
-> **Important!** If you follow these steps, existing pod connectivity will not be affected. (If you delete the old IP pool before you create and verify the new pool, existing pods **will be affected**.) When pods are deleted, applications may be temporarily unavailable (depending on the type of application); plan accordingly. 
+> **Important!** If you follow these steps, existing pod connectivity will not be affected. (If you delete the old IP pool before you create and verify the new pool, existing pods will be affected.) When pods are deleted, applications may be temporarily unavailable (depending on the type of application); plan accordingly. 
 {: .alert .alert-danger }
 
-1. Add a new IP pool.
+1. Add a new IP pool.  
    **Note**: The new IP pool must be within the same cluster CIDR.
 1. Disable the old IP pool.  
    **Note**: Disabling an IP pool only prevents new IP address allocations; it does not affect the networking of existing pods.
