@@ -7,7 +7,7 @@
 {% endcapture %}
 
 {% capture canonical_parts %}
-{{- canonical_path | split: "/" | shift | join: "/" -}}
+{{- page.url | split: "/" | shift | join: "/" -}}
 {% endcapture %}
 
 {% if page.version != site.data.versions.first[0] %}
