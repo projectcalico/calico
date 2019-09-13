@@ -25,17 +25,18 @@ This how-to guide uses the following Calico features:
 ### Before you begin...
 
 - You must be using {{site.prodname}} IPAM.  
-  If you are not sure, ssh to one of your Kubernetes nodes and examine the CNI configuration.
+  If you are not sure, ssh to one of your Kubernetes nodes and examine the CNI configuration. 
 
-      `cat /etc/cni/net.d/10-calico.conflist`
-
+  <pre>
+  `cat /etc/cni/net.d/10-calico.conflist`
+  </pre>
   Look for the "type" entry:
 
-  ```
+  <pre>
      "ipam": {
            "type": "calico-ipam"
-      },
-  ``` 
+      }, 
+  </pre>
 
    If the type is “calico-ipam,” you are good to go. If the IPAM is set to something else, or the 10-calico.conflist file does not exist, you cannot use this feature in your cluster. 
 
@@ -47,7 +48,8 @@ This how-to guide uses the following Calico features:
 
 Follow these steps to migrate pods from one IP pool to another pool in the same cluster CIDR. 
 
-Note: If you follow these steps, existing pod connectivity will not be affected. (If you delete the old IP before you create and verify the new one, existing pods will be affected.)
+> **Important!** If you follow these steps, existing pod connectivity will not be affected. (If you delete the old IP before you create and verify the new one, existing pods will be affected.) Depending on your application, when you delete a pod, applications may be temporarily unavailable; plan accordingly. 
+{: .alert .alert-danger }
 
 1. Add a new IP pool.
 1. Disable the old IP pool.  
