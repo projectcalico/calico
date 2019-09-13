@@ -288,6 +288,8 @@ github.com/projectcalico/confd v0.0.0-20190907042226-37c5efe836a5 h1:XgiaMdVYMkq
 github.com/projectcalico/confd v0.0.0-20190907042226-37c5efe836a5/go.mod h1:TMH/N98ASTAz2P1+e1UHaBET45BlAmZF8kRzaVnIcR0=
 github.com/projectcalico/confd v0.0.0-20190910042248-adc7460da37f h1:BXotoeLz8TNP2Bf6/9B5KLHjFM/qyuF5GQakic08Mgk=
 github.com/projectcalico/confd v0.0.0-20190910042248-adc7460da37f/go.mod h1:LNbLpDk6hDs+aAH5pOavSUacrwuWKlvmz9HsRLdnfz8=
+github.com/projectcalico/confd v0.0.0-20190912073602-1906ef3330a1 h1:sg96smK7UcOud4vEUX2HjdZYodXTaOxwTamc7sQpFAA=
+github.com/projectcalico/confd v0.0.0-20190912073602-1906ef3330a1/go.mod h1:LNbLpDk6hDs+aAH5pOavSUacrwuWKlvmz9HsRLdnfz8=
 github.com/projectcalico/felix v0.0.0-20190812220553-086942afe17f h1:s6ECE29XorwGSUR2jU6eJMLLxyBDebbf9kTb0jipTHI=
 github.com/projectcalico/felix v0.0.0-20190812220553-086942afe17f/go.mod h1:ba877Im1gr5J/Td2xgnHiH5P7kq3uVlnUOo9mMrou90=
 github.com/projectcalico/felix v0.0.0-20190812234840-12081e1f16c9 h1:6tsZoxLE8qsmYAj3Q9RobQUe1ZpiTHMKIRjfJUqL5pk=
@@ -304,6 +306,8 @@ github.com/projectcalico/felix v0.0.0-20190910064712-17270ade2229 h1:A9n7siHgERc
 github.com/projectcalico/felix v0.0.0-20190910064712-17270ade2229/go.mod h1:+SafKOyRyqSDF+fBS26kPacyvjGTMU2Bst48quljack=
 github.com/projectcalico/felix v0.0.0-20190910200733-dbc6c9a3b31b h1:w34OqaQf2gglgCB7Fen2hqtnlRld7ERfjHbTH9bkbJM=
 github.com/projectcalico/felix v0.0.0-20190910200733-dbc6c9a3b31b/go.mod h1:+SafKOyRyqSDF+fBS26kPacyvjGTMU2Bst48quljack=
+github.com/projectcalico/felix v0.0.0-20190911132439-ef886302fe44 h1:7ozwb2dYPjGvpqkiMXdcoMyMTgl3ckLc71K+jU+IPUU=
+github.com/projectcalico/felix v0.0.0-20190911132439-ef886302fe44/go.mod h1:+SafKOyRyqSDF+fBS26kPacyvjGTMU2Bst48quljack=
 github.com/projectcalico/felix v3.8.1+incompatible h1:NvSktEqLz9y+dJoTLzAnbOnHcXnNo6RNpD1vrLf4CnU=
 github.com/projectcalico/felix v3.8.2+incompatible h1:cz0MaUs5qTjPWjTxK5J1D1zEIfrtSYUyyf2nAjCos9c=
 github.com/projectcalico/go-json v0.0.0-20161128004156-6219dc7339ba h1:aaF2byUCZhzszHsfPEr2M3qcU4ibtD/yk/il2R7T1PU=
