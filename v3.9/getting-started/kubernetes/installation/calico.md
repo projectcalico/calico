@@ -34,6 +34,8 @@ datastore type and number of nodes.
 
 {% include {{page.version}}/pod-cidr-sed.md yaml="calico" %}
 
+{% include {{page.version}}/coreos-flexvol-driver.md yaml="calico" %}
+
 1. Apply the manifest using the following command.
 
    ```bash
