@@ -63,7 +63,7 @@ Follow these steps to migrate pods from one IP pool to another pool.
 
 ### Tutorial
 
-In the following example, we create a Kubernetes cluster using **kubeadm**. When we installed calico nodes in this cluster, a default IP pool was assigned: **192.168.0.0/16**. Now, we want pods in the cluster to use IPs in the CIDR: **10.0.0.0/16** (within the cluster CIDR). 
+In the following example, we created a Kubernetes cluster using **kubeadm**. When we installed calico nodes in this cluster, a default IP pool was assigned: **192.168.0.0/16**. Now, we want pods in the cluster to use IPs in the CIDR: **10.0.0.0/16** (within the cluster CIDR). 
 
 Let’s run `calicoctl get ippool -o wide` to see the default IP pool, **default-ipv4-ippool**.
 
