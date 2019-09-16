@@ -8,7 +8,7 @@ Migrate pods from one IP pool to another on a running cluster without network di
 
 ### Value
 
-Pods are assigned IP addresses from IP pools that you configure in {{site.prodname}}. As pods increase, you may want pods to move a larger CIDR. Or, you may need to move pods from a CIDR that was used by mistake. {{site.prodname}} provides a way to migrate to a different IP pool on a running cluster without network disruption. 
+Pods are assigned IP addresses from IP pools that you configure in {{site.prodname}}. As pods increase, you may want pods to move a larger CIDR. Or, you may need to move pods from a CIDR that was used by mistake. {{site.prodname}} lets you migrate from one IP pool to another one on a running cluster without network disruption. 
 
 ### Features
 
@@ -20,12 +20,13 @@ This how-to guide uses the following Calico features:
 
 #### IP pools and cluster CIDRs
 
-{{site.prodname}} supports changing IP pools for pods if the IP pool you are changing to is within the same cluster CIDR. Although it is technically feasible to change a pod to an IP pool outside the cluster CIDR, we do not recommend it; this requires restarting components (affecting application availability), and if you make a mistake and change to a CIDR range that doesn’t include the already-assigned value, existing pods will lose connectivity.
+{{site.prodname}} supports changing IP pools for pods if the IP pool you are changing to is within the same cluster CIDR. Although it is technically feasible to change a pod to an IP pool outside the cluster CIDR, we do not recommend it; this requires restarting components (affecting application availability), and if you change to a CIDR range that doesn’t include the already-assigned value, existing pods will lose connectivity.
 
 ### Before you begin...
 
-- You must be using {{site.prodname}} IPAM
-  If you are not sure, ssh to one of your Kubernetes nodes and examine the CNI configuration.  
+- You must be using {{site.prodname}} IPAM. 
+
+  To verify, ssh to one of your Kubernetes nodes and view the CNI configuration.  
 
   `cat /etc/cni/net.d/10-calico.conflist`
 
@@ -46,7 +47,7 @@ This how-to guide uses the following Calico features:
 
 #### Migrate from one IP pool to another
 
-Follow these steps to migrate pods from one IP pool to another pool in the same cluster CIDR. 
+Follow these steps to migrate pods from one IP pool to another pool. 
 
 > **Important!** If you follow these steps, existing pod connectivity will not be affected. (If you delete the old IP pool before you create and verify the new pool, existing pods will be affected.) When pods are deleted, applications may be temporarily unavailable (depending on the type of application); plan accordingly. 
 {: .alert .alert-danger }
