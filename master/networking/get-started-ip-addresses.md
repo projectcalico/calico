@@ -28,7 +28,7 @@ Kubernetes uses IPAM plugins to allocate and manage IP addresses assigned to pod
 
 The **calico-ipam** plugin uses Calico’s IP pool resource to control how IP addresses are allocated to pods within the cluster. This is the default plugin used by most Calico installations.
 
-By default, Calico uses a single IP pool for the entire Kubenretes pod CIDR, but you can divide the pod CIDR into several pools. You can assign separate IP pools to particular selections of **nodes**, or to teams, users, or applications within a cluster using **namespaces**. 
+By default, Calico uses a single IP pool for the entire Kubernetes pod CIDR, but you can divide the pod CIDR into several pools. You can assign separate IP pools to particular selections of **nodes**, or to teams, users, or applications within a cluster using **namespaces**. 
 
 You can control which pools Calico uses for each pod using
 
