@@ -30,6 +30,10 @@ import (
 	cnet "github.com/projectcalico/libcalico-go/lib/net"
 )
 
+// windwowsReservedHandle is the handle used to reserve addresses required for Windows
+// networking so that workloads do not get assigned these addresses.
+const windowsReservedHandle = "windows-reserved-IPAM-handle"
+
 // Wrap the backend AllocationBlock struct so that we can
 // attach methods to it.
 type allocationBlock struct {
@@ -145,8 +149,25 @@ func (b allocationBlock) numFreeAddresses() int {
 	return len(b.Unallocated)
 }
 
+// empty returns true if the block has released all of its assignable addresses,
+// and returns false if any assignable addresses are in use.
 func (b allocationBlock) empty() bool {
-	return b.numFreeAddresses() == b.NumAddresses()
+	return b.containsOnlyReservedIPs()
+}
+
+// containsOnlyReservedIPs returns true if the block is empty excepted for
+// expected "reserved" IP addresses.
+func (b *allocationBlock) containsOnlyReservedIPs() bool {
+	for _, attrIdx := range b.Allocations {
+		if attrIdx == nil {
+			continue
+		}
+		attrs := b.Attributes[*attrIdx]
+		if attrs.AttrPrimary == nil || *attrs.AttrPrimary != windowsReservedHandle {
+			return false
+		}
+	}
+	return true
 }
 
 func (b *allocationBlock) release(addresses []cnet.IP) ([]cnet.IP, map[string]int, error) {
