@@ -17,7 +17,6 @@ import eventlet
 import functools
 import json
 import re
-from types import StringTypes
 
 from etcd3gw.exceptions import ConnectionFailedError
 from networking_calico.compat import log
@@ -38,6 +37,17 @@ ACTION_MAPPING = {
     "expire": "delete",
 }
 WATCH_TIMEOUT_SECS = 10
+
+
+# Replacement for "if isinstance(v, StringTypes)" that works with
+# Python 2 and 3, as advised by
+# https://github.com/mk-fg/layered-yaml-attrdict-config/pull/5 and
+# https://stackoverflow.com/questions/4232111/stringtype-and-nonetype-in-python3-x.
+def _is_string_instance(obj):
+    try:
+        return isinstance(obj, basestring)
+    except NameError:
+        return isinstance(obj, str)
 
 
 class PathDispatcher(object):
@@ -390,7 +400,7 @@ def intern_dict(d, fields_to_intern=None):
         # keys should be ASCII anyway.  Use the utf8 encoding just in case.
         k = intern(k.encode("utf8"))
         if k in fields_to_intern:
-            if isinstance(v, StringTypes):
+            if _is_string_instance(v):
                 v = intern(v.encode("utf8"))
             elif isinstance(v, list):
                 v = intern_list(v)
@@ -408,7 +418,7 @@ def intern_list(l):
     """
     out = []
     for item in l:
-        if isinstance(item, StringTypes):
+        if _is_string_instance(item):
             item = intern(item.encode("utf8"))
         out.append(item)
     return out
