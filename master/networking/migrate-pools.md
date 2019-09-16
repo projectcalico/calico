@@ -28,7 +28,7 @@ This how-to guide uses the following {{site.prodname}} features:
 
   To verify, ssh to one of your Kubernetes nodes and view the CNI configuration.  
 
-  `cat /etc/cni/net.d/10-calico.conflist`
+  ```cat /etc/cni/net.d/10-calico.conflist```
 
   Look for the "type" entry:
 
@@ -38,7 +38,7 @@ This how-to guide uses the following {{site.prodname}} features:
       }, 
   </pre>
 
-   If the type is “calico-ipam,” you are good to go. If the IPAM is set to something else, or the 10-calico.conflist file does not exist, you cannot use this feature in your cluster. 
+   If the type is “calico-ipam”, you are good to go. If the IPAM is set to something else, or the 10-calico.conflist file does not exist, you cannot use this feature in your cluster. 
 
 - Verify orchestrator support for changing the pod network CIDR   
   Although Kubernetes supports changing the pod network CIDR, not all orchestrators do. For example, OpenShift does not support this feature as described in [`osm_cluster_network_cidr configuration`](https://docs.openshift.org/latest/install_config/install/advanced_install.html#configuring-cluster-variables). Check your orchestrator documentation to verify. 
@@ -86,16 +86,14 @@ Let’s get started changing this pod to the new IP pool (10.0.0.0/16).
 We add a new **IPPool** with the CIDR range, **10.0.0.0/16**.
 
 <pre>
-cat <<EOF | calicoctl apply -f -
 apiVersion: projectcalico.org/v3
 kind: IPPool
 metadata:
-name: new-pool
+  name: new-pool
 spec:
-cidr: 10.0.0.0/16
-ipipMode: Always
-natOutgoing: true
-EOF
+  cidr: 10.0.0.0/16
+  ipipMode: Always
+  natOutgoing: true
 </pre>
 
 Let’s verify the new IP pool.
