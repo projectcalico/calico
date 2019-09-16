@@ -496,9 +496,8 @@ gateway, with Calico.
 
 ## Are the Calico manifests compatible with CoreOS?
 
-As it stands, the majority of the provided manifests are compatible with CoreOS systems.
-
-The only required change is as follows:
+As it stands, the majority of the provided manifests are compatible with CoreOS systems. The
+only required change is as follows:
 
 As `/usr` on CoreOS is readonly, the default path of the `flexvol-driver-host` volume will
 need to be changed to match the path of the `--flex-volume-plugin-dir` flag passed to the

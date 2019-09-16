@@ -10,7 +10,7 @@ Ensure that you have a Kubernetes cluster that meets the
 {{site.prodname}} [system requirements](../requirements). If you don't,
 follow the steps in [Using kubeadm to create a cluster](http://kubernetes.io/docs/getting-started-guides/kubeadm/).
 
-If you're installing on CoreOS, you should also see this [FAQ](../../../reference/faq.md#are-the-calico-manifests-compatible-with-coreos) as there are required changes to the provided manifests.
+If you're installing on CoreOS, you should also see this [FAQ](../../../reference/faq#are-the-calico-manifests-compatible-with-coreos) as there are required changes to the provided manifests.
 
 ## Installing {{site.prodname}} for policy and networking
 
