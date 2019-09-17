@@ -49,6 +49,8 @@ from networking_calico import datamodel_v2
 from networking_calico import datamodel_v3
 from networking_calico import etcdutils
 
+from etcd3gw.exceptions import Etcd3Exception
+
 LOG = logging.getLogger(__name__)
 
 NETWORK_ID = 'calico'
@@ -519,6 +521,10 @@ class SubnetWatcher(etcdutils.EtcdWatcher):
         # Catch and report any exceptions that escape here.
         try:
             super(SubnetWatcher, self).start()
+        except Etcd3Exception as e3e:
+            LOG.exception("Etcd3Exception in SubnetWatcher.start():\n%s",
+                          e3e.detail_text)
+            raise
         except:                 # noqa
             LOG.exception("Exception in SubnetWatcher.start()")
             raise

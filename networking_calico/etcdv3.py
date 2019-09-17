@@ -384,7 +384,8 @@ def logging_exceptions(fn):
         try:
             return fn(self, *args, **kwargs)
         except Etcd3Exception as e:
-            LOG.warning("Etcd3Exception, re-raising: %r", e)
+            LOG.warning("Etcd3Exception, re-raising: %r:\n%s",
+                        e, e.detail_text)
             raise
     return wrapped
 

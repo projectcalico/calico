@@ -21,6 +21,8 @@ import mock
 import os
 import sys
 
+from etcd3gw.exceptions import Etcd3Exception
+
 import networking_calico.plugins.ml2.drivers.calico.test.lib as lib
 
 from networking_calico import etcdv3
@@ -257,3 +259,40 @@ class TestCompaction(unittest.TestCase):
             self.client.put.mock_calls
         )
         self.client.post.assert_not_called()
+
+    def test_exception_detail_logging(self):
+        LOG.info("Logging detail for etcd3 failure exception")
+
+        # This is like test_iter_5, except we arrange for the
+        # etcdv3.request_compaction call to raise an exception, and
+        # check the resulting logging.
+        e3e = Etcd3Exception('revision has been compacted')
+        self.client.post.side_effect = e3e
+        self.client.get.side_effect = iter([
+            # Read trigger: not found.
+            [],
+            # Read last.
+            [('100', {'mod_revision': '1100'})],
+        ])
+        self.client.status.return_value = {'header': {
+            'cluster_id': '12345',
+            'revision': '1200',
+        }}
+
+        with mock.patch.object(
+                mech_calico.LOG,
+                'info') as mock_li:
+            mech_calico.check_request_etcd_compaction()
+            self.assertEqual([
+                mock.call('/calico/compaction/v1/last', '1200', lease=None),
+                mock.call('/calico/compaction/v1/trigger',
+                          self.pid,
+                          lease=mock.ANY),
+                ],
+                self.client.put.mock_calls
+            )
+            self.client.post.assert_called()
+            mock_li.assert_called_with(
+                'Someone else has requested etcd compaction:\n%s',
+                'revision has been compacted',
+            )

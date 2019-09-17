@@ -1338,7 +1338,7 @@ def check_request_etcd_compaction():
         LOG.info("Request compaction at %r", compact_revision)
         try:
             etcdv3.request_compaction(compact_revision)
-        except etcdv3.Etcd3Exception:
+        except etcdv3.Etcd3Exception as e3e:
             # An exception here most likely means that the revision we're
             # asking to compact at has already been compacted - which means
             # that there is some other service in the deployment which is also
@@ -1355,7 +1355,8 @@ def check_request_etcd_compaction():
             # (On the other hand, if the exception is for some other reason
             # such as connectivity to the etcd cluster, the following write
             # will hit that too, and that will be handled below.)
-            LOG.info("Someone else has requested etcd compaction")
+            LOG.info("Someone else has requested etcd compaction:\n%s",
+                     e3e.detail_text)
             write_compaction_keys(current_revision)
             return
 

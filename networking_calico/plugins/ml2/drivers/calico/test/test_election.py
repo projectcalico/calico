@@ -23,6 +23,7 @@ import logging
 import mock
 import sys
 
+from networking_calico.compat import log
 from networking_calico import etcdv3
 from networking_calico.plugins.ml2.drivers.calico import election
 from networking_calico.plugins.ml2.drivers.calico.test import stub_etcd
@@ -168,7 +169,9 @@ class TestElection(unittest.TestCase):
         LOG.debug("test_initial_read_exceptions")
 
         etcdv3._client = client = stub_etcd.Client()
-        client.add_read_exception(e3e.Etcd3Exception())
+        client.add_read_exception(e3e.Etcd3Exception(
+            detail_text="Unauthorised user")
+        )
         client.add_read_exception(e3e.InternalServerError())
         client.add_read_exception(e3e.ConnectionFailedError())
         client.add_read_exception(e3e.PreconditionFailedError())
@@ -177,6 +180,31 @@ class TestElection(unittest.TestCase):
                                    interval=5,
                                    ttl=15)
         self._wait_and_stop(client, elector)
+
+    def test_exception_detail_logging(self):
+        LOG.debug("test_exception_detail_logging")
+
+        with mock.patch.object(
+                log.getLogger(
+                    'networking_calico.plugins.ml2.drivers.calico.election'),
+                'warning') as mock_lw:
+            etcdv3._client = client = stub_etcd.Client()
+            exc = e3e.Etcd3Exception(detail_text="Unauthorised user")
+            client.add_read_exception(exc)
+            elector = election.Elector("test_basic",
+                                       "/bloop",
+                                       interval=5,
+                                       ttl=15)
+            self._wait_and_stop(client, elector)
+
+            # Check that Etcd3Exception detail was logged.
+            mock_lw.assert_called_with(
+                'Failed to %s - key %s: %r:\n%s',
+                'read current master',
+                '/bloop',
+                exc,
+                'Unauthorised user'
+            )
 
     def test_later_exceptions(self):
         LOG.debug("test_later_read_exceptions")
