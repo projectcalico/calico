@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# Copyright (c) 2018 Tigera, Inc. All rights reserved.
+# Copyright (c) 2018-2019 Tigera, Inc. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -394,6 +394,93 @@ def logging_exceptions(fn):
 _client = None
 
 
+# Wrap Etcd3Client to authenticate when needed and add an
+# Authorization header to the session headers.
+#
+# All of networking-calico's etcd operations go through either (1)
+# etcd3gw.client.Etcd3Client.post, or (2) etcd3gw.watch.Watcher.
+# Here, we hook (1) so as to authenticate when the normal POST request
+# fails; then we add the returned auth token as an Authorization
+# header on the underlying session.  Adding that header to the session
+# means that it will apply to etcd3gw.watch.Watcher, as well as to
+# POST requests for all non-watch operations.
+#
+# The question arises what happens if we do a watch operation before
+# there is correct Authorization on the session?  Firstly this is
+# unlikely, because we always watch following a preceding get of the
+# same key or subtree; but it might still be possible if the etcd
+# server is restarted after the get and before the watch.  Secondly,
+# we handle the watch request failing and loop round to retry the get
+# again.  Overall, therefore, we are safe on this point.
+class Etcd3AuthClient(Etcd3Client):
+    def __init__(self, host='localhost', port=2379, protocol="http",
+                 ca_cert=None, cert_key=None, cert_cert=None, timeout=None,
+                 username=None, password=None):
+        super(Etcd3AuthClient, self).__init__(host=host,
+                                              port=port,
+                                              protocol=protocol,
+                                              ca_cert=ca_cert,
+                                              cert_key=cert_key,
+                                              cert_cert=cert_cert,
+                                              timeout=timeout)
+        self.username = username
+        self.password = password
+
+    def authenticate(self):
+        # When authenticating, there mustn't be an Authorization
+        # header with an old token, or else etcd responds with
+        # "Unauthorized: invalid auth token".  So remove any existing
+        # Authorization header.
+        if 'Authorization' in self.session.headers:
+            del self.session.headers['Authorization']
+
+        # Send authenticate request.  If this raises an exception,
+        # e.g. because of a connectivity issue to the etcd server,
+        # it's OK for that to bubble up and be handled in the code
+        # that called post.
+        response = super(Etcd3AuthClient, self).post(
+            self.get_url('/auth/authenticate'),
+            json={"name": self.username, "password": self.password}
+        )
+
+        # Add Authorization header with the received token to the
+        # underlying requests session.  This covers all subsequent
+        # requests, and is needed in particular for watches, because
+        # the watch code does not use client.post and so could not be
+        # covered by adding a header to kwargs in the following post
+        # method.
+        self.session.headers['Authorization'] = response['token']
+
+    def post(self, *args, **kwargs):
+        # Impose a maximum timeout, according to the [calico]
+        # etcd_timeout config parameter.  Imposing a timeout is
+        # generally a good idea, and specifically we want to protect
+        # this code from the apparent etcdserver hang bug at
+        # https://github.com/etcd-io/etcd/issues/11377.
+        if 'timeout' not in kwargs or \
+           kwargs['timeout'] > cfg.CONF.calico.etcd_timeout:
+            kwargs['timeout'] = cfg.CONF.calico.etcd_timeout
+        try:
+            # Try the post.  If no authentication is needed, or if an
+            # Authorization token has been added to the session's
+            # headers, and is still valid, this should succeed.
+            return super(Etcd3AuthClient, self).post(*args, **kwargs)
+        except Etcd3Exception as e:
+            if self.username and self.password:
+                # Etcd auth credentials are configured, so assume the
+                # problem might be that we need to authenticate or
+                # re-authenticate.
+                LOG.info("Might need to (re)authenticate: %r:\n%s",
+                         e, e.detail_text)
+
+                # Authenticate and then reissue the request.
+                self.authenticate()
+                return super(Etcd3AuthClient, self).post(*args, **kwargs)
+
+            # Otherwise re-raise.
+            raise
+
+
 def _get_client():
     global _client
     if not _client:
@@ -406,15 +493,19 @@ def _get_client():
         if any(tls_config_params):
             LOG.info("TLS to etcd is enabled with key file %s; "
                      "cert file %s; CA cert file %s", *tls_config_params)
-            _client = Etcd3Client(host=calico_cfg.etcd_host,
-                                  port=calico_cfg.etcd_port,
-                                  protocol="https",
-                                  ca_cert=calico_cfg.etcd_ca_cert_file,
-                                  cert_key=calico_cfg.etcd_key_file,
-                                  cert_cert=calico_cfg.etcd_cert_file)
+            _client = Etcd3AuthClient(host=calico_cfg.etcd_host,
+                                      port=calico_cfg.etcd_port,
+                                      protocol="https",
+                                      ca_cert=calico_cfg.etcd_ca_cert_file,
+                                      cert_key=calico_cfg.etcd_key_file,
+                                      cert_cert=calico_cfg.etcd_cert_file,
+                                      username=calico_cfg.etcd_username,
+                                      password=calico_cfg.etcd_password)
         else:
             LOG.info("TLS disabled, using HTTP to connect to etcd.")
-            _client = Etcd3Client(host=calico_cfg.etcd_host,
-                                  port=calico_cfg.etcd_port,
-                                  protocol="http")
+            _client = Etcd3AuthClient(host=calico_cfg.etcd_host,
+                                      port=calico_cfg.etcd_port,
+                                      protocol="http",
+                                      username=calico_cfg.etcd_username,
+                                      password=calico_cfg.etcd_password)
     return _client

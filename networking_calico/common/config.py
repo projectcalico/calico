@@ -34,6 +34,16 @@ SHARED_OPTS = [
     cfg.StrOpt('etcd_ca_cert_file',
                help="The path to the TLS CA certificate file to use with "
                     "etcd."),
+    cfg.StrOpt('etcd_username',
+               help="User name for accessing an etcd cluster with "
+                    "authentication enabled."),
+    cfg.StrOpt('etcd_password',
+               help="Password for accessing an etcd cluster with "
+                    "authentication enabled."),
+    # Large etcd subtree snapshot reads can take time, hence the
+    # default of 60 seconds here as opposed to something much shorter.
+    cfg.IntOpt('etcd_timeout', default=60,
+               help="Timeout (in seconds) for etcd requests."),
     cfg.StrOpt('openstack_region',
                help="When in a multi-region OpenStack deployment, a unique "
                     "name for the region that this node (controller or "
