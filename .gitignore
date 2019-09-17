@@ -17,3 +17,4 @@ install_cni.test
 *.swp
 *.coverprofile
 report/*.xml
+crds.yaml
