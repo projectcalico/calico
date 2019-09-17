@@ -24,24 +24,28 @@ This how-to guide uses the following {{site.prodname}} features:
 
 ### Before you begin...
 
-- You must be using {{site.prodname}} IPAM. 
+**Verify that you are using {{site.prodname}} IPAM**. 
 
-  To verify, ssh to one of your Kubernetes nodes and view the CNI configuration.  
+To verify, ssh to one of your Kubernetes nodes and view the CNI configuration.  
 
-  ```cat /etc/cni/net.d/10-calico.conflist```
+```
+cat /etc/cni/net.d/10-calico.conflist
 
-  Look for the "type" entry:
+```
 
-  <pre>
-     "ipam": {
-           "type": "calico-ipam"
-      }, 
-  </pre>
+Look for the "type" entry:
 
-   If the type is “calico-ipam”, you are good to go. If the IPAM is set to something else, or the 10-calico.conflist file does not exist, you cannot use this feature in your cluster. 
+<pre>
+   "ipam": {
+         "type": "calico-ipam"
+    }, 
+</pre>
 
-- Verify orchestrator support for changing the pod network CIDR   
-  Although Kubernetes supports changing the pod network CIDR, not all orchestrators do. For example, OpenShift does not support this feature as described in [`osm_cluster_network_cidr configuration`](https://docs.openshift.org/latest/install_config/install/advanced_install.html#configuring-cluster-variables). Check your orchestrator documentation to verify. 
+If the type is “calico-ipam”, you are good to go. If the IPAM is set to something else, or the 10-calico.conflist file does not exist, you cannot use this feature in your cluster. 
+
+**Verify orchestrator support for changing the pod network CIDR**.
+
+Although Kubernetes supports changing the pod network CIDR, not all orchestrators do. For example, OpenShift does not support this feature as described in [`osm_cluster_network_cidr configuration`](https://docs.openshift.org/latest/install_config/install/advanced_install.html#configuring-cluster-variables). Check your orchestrator documentation to verify. 
 
 ### How to
 
@@ -98,8 +102,10 @@ spec:
 
 Let’s verify the new IP pool.
 
-```calicoctl get ippool -o wide```
+```
+calicoctl get ippool -o wide
 
+```
 <pre>
 NAME                  CIDR             NAT    IPIPMODE   DISABLED
 default-ipv4-ippool   192.168.0.0/16   true   Always     false
@@ -110,7 +116,10 @@ new-pool              10.0.0.0/16      true   Always     false
 
 List the existing IP pool definition.
 
-```calicoctl get ippool -o yaml > pool.yaml```
+```
+calicoctl get ippool -o yaml > pool.yaml
+
+```
 
 <pre>
 apiVersion: projectcalico.org/v3
@@ -153,11 +162,17 @@ Apply the changes.
 
 Remember, disabling a pool only affects new IP allocations; networking for existing pods is not affected.
 
-```calicoctl apply -f pool.yaml```
+```
+calicoctl apply -f pool.yaml
+
+```
 
 Verify the changes.
 
-```calicoctl get ippool -o wide```
+```
+calicoctl get ippool -o wide
+
+```
 
 <pre>
 NAME                  CIDR             NAT    IPIPMODE   DISABLED
@@ -169,27 +184,49 @@ new-pool              10.0.0.0/16      true   Always     false
 
 Next, we delete all of the existing pods from the old IP pool. (In our example, **coredns** is our only pod; for multiple pods you would trigger a deletion for all pods in the cluster.)
 
-```kubectl delete pod -n kube-system coredns-6f4fd4bdf-8q7zp```
+```
+kubectl delete pod -n kube-system coredns-6f4fd4bdf-8q7zp
+
+```
 
 #### Step 4: Verify that new pods get an address from the new IP pool
 
-1. Create a test namespace and nginx pod.  
-   ```kubectl create ns ippool-test```
+1. Create a test namespace and nginx pod. 
+ 
+   ```
+   kubectl create ns ippool-test
 
-1. Create an nginx pod.   
-   ```kubectl -n ippool-test create deployment nginx --image nginx```
+   ```
 
-1. Verify that the new pod gets an IP address from the new range.    
-   ```kubectl -n ippool-test get pods -l app=nginx -o wide```
+1. Create an nginx pod. 
+  
+   ```
+   kubectl -n ippool-test create deployment nginx --image nginx
 
-1. Clean up the ippool-test namespace.   
-   ```kubectl delete ns ippool-test```
+   ```
+
+1. Verify that the new pod gets an IP address from the new range.
+    
+   ```
+   kubectl -n ippool-test get pods -l app=nginx -o wide
+
+   ```
+
+1. Clean up the ippool-test namespace.  
+ 
+   ```
+   kubectl delete ns ippool-test
+
+   ```
 
 #### Step 5: Delete the old IP pool
 
 Now that you've verified that pods are getting IPs from the new range, you can safely delete the old pool.
 
-```calicoctl delete pool default-ipv4-ippool```
+```
+calicoctl delete pool default-ipv4-ippool
+
+```
 
 ### Above and beyond
 
