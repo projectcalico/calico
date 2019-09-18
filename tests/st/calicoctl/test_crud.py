@@ -1023,10 +1023,45 @@ class TestCalicoctlCommands(TestBase):
         rc = calicoctl("label nodes node1 cluster --remove")
         rc.assert_error("can not remove label")
 
+    def test_patch(self):
+        """
+        Test that a basic CRUD flow for patch command works.
+        """
+        
+        # test patching a node
+        rc = calicoctl("create", data=node_name1_rev1)
+        rc.assert_no_error()
 
+        rc = calicoctl("patch nodes node1 -p '{\"spec\":{\"bgp\": {\"routeReflectorClusterID\": \"192.168.0.1\"}}}'")
+        rc.assert_no_error()
 
+        rc = calicoctl("get nodes node1 -o yaml")
+        rc.assert_no_error()
+        node1_rev1 = rc.decoded
+        self.assertEqual("192.168.0.1",node1_rev1['spec']['bgp']['routeReflectorClusterID'])
+        
+        # test patching an ippool
+        rc = calicoctl("create", data=ippool_name1_rev1_v4)
+        rc.assert_no_error()
 
-#
+        rc = calicoctl(
+                "patch ippool %s -p '{\"spec\":{\"natOutgoing\": true}}'" % name(ippool_name1_rev1_v4))
+        rc.assert_no_error()
+
+        rc = calicoctl(
+                "get ippool %s -o yaml" % name(ippool_name1_rev1_v4))
+        rc.assert_no_error()
+        ippool1_rev1 = rc.decoded
+        self.assertEqual(True,ippool1_rev1['spec']['natOutgoing'])
+
+        # test patching invalid networkpolicy
+        rc = calicoctl('create', data=networkpolicy_name2_rev1)
+        rc.assert_no_error()
+
+        rc = calicoctl(
+                "patch networkpolicy %s -p '{\"http\": {\"exact\": \"path/to/match\"}}'" % name(networkpolicy_name2_rev1))
+        rc.assert_error()
+
 #
 # class TestCreateFromFile(TestBase):
 #     """
