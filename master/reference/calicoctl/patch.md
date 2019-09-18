@@ -1,6 +1,6 @@
 ---
 title: calicoctl patch
-canonical_url: 'https://docs.projectcalico.org/v3.10/reference/calicoctl/commands/patch'
+canonical_url: 'https://docs.projectcalico.org/master/reference/calicoctl/commands/patch'
 ---
 
 This sections describes the `calicoctl patch` command.
