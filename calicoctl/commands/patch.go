@@ -29,19 +29,18 @@ func Patch(args []string) error {
 
 Examples:
   # Partially update a node using a strategic merge patch.
-  calicoctl patch node node-0 --patch '{"spec":{"unschedulable":true}}'
+  calicoctl patch node node-0 --patch '{"spec":{"bgp": {"routeReflectorClusterID": "CLUSTER_ID"}}}'
 
   # Partially update a node using a json merge patch.
-  calicoctl patch node node-0 --patch '{"spec":{"unschedulable":true}}' --type json
+  calicoctl patch node node-0 --patch '{"spec":{"bgp": {"routeReflectorClusterID": "CLUSTER_ID"}}}' --type json
 
 Options:
   -h --help                  Show this screen.
-  -p --patch=<PATCH>         Spec to use to patch the resource.  If set
-                             to "-" loads from stdin.
+  -p --patch=<PATCH>         Spec to use to patch the resource.
   -t --type=<TYPE>           Format of patch type:
+                                strategic   Strategic merge patch (default)
                                 json        JSON Patch, RFC 6902 (not yet implemented)
                                 merge       JSON Merge Patch, RFC 7386 (not yet implemented)
-                                strategic   Strategic merge patch (default)
   -c --config=<CONFIG>       Path to the file containing connection
                              configuration in YAML or JSON format.
                              [default: ` + constants.DefaultConfigPath + `]
