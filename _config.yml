@@ -121,7 +121,6 @@ defaults:
     values:
       version: v2.6
       sitemap: false
-
   -
     scope:
       path: v3.0
