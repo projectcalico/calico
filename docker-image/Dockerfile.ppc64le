@@ -27,6 +27,7 @@ ADD typha.cfg /etc/calico/typha.cfg
 WORKDIR /code
 ENV PATH "$PATH:/code"
 
+USER 999
 # Run Typha by default
 ENTRYPOINT ["/sbin/tini", "--"]
 CMD ["calico-typha"]
