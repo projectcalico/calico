@@ -108,6 +108,9 @@ spec:
             host: localhost
           periodSeconds: 30
           initialDelaySeconds: 30
+        securityContext:
+          runAsNonRoot: true
+          allowPrivilegeEscalation: false
         readinessProbe:
           httpGet:
             path: /readiness
