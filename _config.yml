@@ -74,6 +74,7 @@ defaults:
     values:
       version: master
       registry:
+      sitemap: false
   -
     scope:
       path: v1.5
@@ -119,63 +120,75 @@ defaults:
       path: v2.6
     values:
       version: v2.6
+      sitemap: false
+
   -
     scope:
       path: v3.0
     values:
       version: v3.0
       registry: quay.io/
+      sitemap: false
   -
     scope:
       path: v3.1
     values:
       version: v3.1
       registry: quay.io/
+      sitemap: false
   -
     scope:
       path: v3.2
     values:
       version: v3.2
       registry: quay.io/
+      sitemap: false
   -
     scope:
       path: v3.3
     values:
       version: v3.3
       registry:
+      sitemap: false
   -
     scope:
       path: v3.4
     values:
       version: v3.4
       registry:
+      sitemap: false
   -
     scope:
       path: v3.5
     values:
       version: v3.5
       registry:
+      sitemap: false
   -
     scope:
       path: v3.6
     values:
       version: v3.6
       registry:
+      sitemap: false
   -
     scope:
       path: v3.7
     values:
       version: v3.7
       registry:
+      sitemap: false
   -
     scope:
       path: v3.8
     values:
       version: v3.8
       registry:
+      sitemap: false
   -
     scope:
       path: v3.9
     values:
       version: v3.9
       registry:
+      sitemap: false
