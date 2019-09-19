@@ -44,15 +44,30 @@ var _ = testutils.E2eDatastoreDescribe("BGPConfiguration tests", testutils.Datas
 	ptrFalse := false
 	nodeASNumber1 := numorstring.ASNumber(6512)
 	nodeASNumber2 := numorstring.ASNumber(6511)
+	ipCidr1 := "104.244.42.129/32"
+	ipCidr2 := "172.217.3.0/24"
 	specDefault1 := apiv3.BGPConfigurationSpec{
 		LogSeverityScreen:     "Info",
 		NodeToNodeMeshEnabled: &ptrTrue,
 		ASNumber:              &nodeASNumber1,
+		ServiceExternalIPs: []apiv3.SvcExternalIPBlock{
+			apiv3.SvcExternalIPBlock{
+				CIDR: ipCidr1,
+			},
+			apiv3.SvcExternalIPBlock{
+				CIDR: ipCidr2,
+			},
+		},
 	}
 	specDefault2 := apiv3.BGPConfigurationSpec{
 		LogSeverityScreen:     "Warning",
 		NodeToNodeMeshEnabled: &ptrFalse,
 		ASNumber:              &nodeASNumber2,
+		ServiceExternalIPs: []apiv3.SvcExternalIPBlock{
+			apiv3.SvcExternalIPBlock{
+				CIDR: ipCidr1,
+			},
+		},
 	}
 	specInfo := apiv3.BGPConfigurationSpec{
 		LogSeverityScreen: "Info",

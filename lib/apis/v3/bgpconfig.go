@@ -45,6 +45,15 @@ type BGPConfigurationSpec struct {
 	NodeToNodeMeshEnabled *bool `json:"nodeToNodeMeshEnabled,omitempty" validate:"omitempty" confignamev1:"node_mesh"`
 	// ASNumber is the default AS number used by a node. [Default: 64512]
 	ASNumber *numorstring.ASNumber `json:"asNumber,omitempty" validate:"omitempty" confignamev1:"as_num"`
+	// ServiceExternalIPs are the CIDR blocks for service Kubernetes External IPs.
+	// Kubernetes Service ExternalIPs will only be advertised if they are within
+	// one of these blocks.
+	ServiceExternalIPs []SvcExternalIPBlock `json:"serviceExternalIPs,omitempty" validate:"omitempty" confignamev1:"svc_external_ips"`
+}
+
+// SvcExternalIPBlock represents a single whitelisted CIDR External IP block.
+type SvcExternalIPBlock struct {
+	CIDR string `json:"cidr,omitempty" validate:"omitempty,net"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
