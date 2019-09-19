@@ -73,47 +73,56 @@ defaults:
       path: master
     values:
       version: master
+      sitemap: false
       registry:
   -
     scope:
       path: v1.5
     values:
       version: v1.5
+      sitemap: false
   -
     scope:
       path: v1.6
     values:
       version: v1.6
+      sitemap: false
   -
     scope:
       path: v2.0
     values:
       version: v2.0
+      sitemap: false
   -
     scope:
       path: v2.1
     values:
       version: v2.1
+      sitemap: false
   -
     scope:
       path: v2.2
     values:
       version: v2.2
+      sitemap: false
   -
     scope:
       path: v2.3
     values:
       version: v2.3
+      sitemap: false
   -
     scope:
       path: v2.4
     values:
       version: v2.4
+      sitemap: false
   -
     scope:
       path: v2.5
     values:
       version: v2.5
+      sitemap: false
   -
     scope:
       path: v2.6
