@@ -45,8 +45,10 @@ type routeGenerator struct {
 	nodeName                string
 	svcInformer, epInformer cache.Controller
 	svcIndexer, epIndexer   cache.Indexer
-	svcRouteMap             map[string]string
+	svcRouteMap             map[string]map[string]bool
+	routeAdvertisementCount map[string]int
 	clusterCIDR             string
+	externalIPNets          []*net.IPNet
 }
 
 // NewRouteGenerator initializes a kube-api client and the informers
@@ -68,10 +70,12 @@ func NewRouteGenerator(c *client, clusterCIDR string) (rg *routeGenerator, err e
 
 	// initialize empty route generator
 	rg = &routeGenerator{
-		client:      c,
-		nodeName:    nodename,
-		svcRouteMap: make(map[string]string),
-		clusterCIDR: clusterCIDR,
+		client:                  c,
+		nodeName:                nodename,
+		svcRouteMap:             make(map[string]map[string]bool),
+		routeAdvertisementCount: make(map[string]int),
+		clusterCIDR:             clusterCIDR,
+		externalIPNets:          make([]*net.IPNet, 0),
 	}
 
 	// set up k8s client
@@ -188,29 +192,157 @@ func (rg *routeGenerator) setRouteForSvc(svc *v1.Service, ep *v1.Endpoints) {
 			return
 		}
 	}
-	logc := log.WithField("svc", fmt.Sprintf("%s/%s", svc.Namespace, svc.Name))
 
 	// see if any endpoints are on this node and advertise if so
 	// else remove the route if it also already exists
 	rg.Lock()
-	if rg.advertiseThisService(svc, ep) {
-		route := svc.Spec.ClusterIP + "/32"
-		if cur, exists := rg.svcRouteMap[key]; !exists {
-			// This is a new route - send it through.
-			rg.advertiseRoute(key, route)
-		} else if route != cur {
-			// The route has changed somehow. Send a delete for the old one
-			// and add the new one. We don't expect to hit this, since cluster IPs
-			// are immutable. But, handle it for good measure.
-			logc.Warn("ClusterIP for service changed, adjusting")
-			rg.withdrawRoute(key, cur)
+	defer rg.Unlock()
+
+	advertise := rg.advertiseThisService(svc, ep)
+	if advertise {
+		routes := rg.getAllRoutesForService(svc)
+		rg.setRoutesForKey(key, routes)
+	} else {
+		routes := rg.getAdvertisedRoutes(key)
+		rg.withdrawRoutesForKey(key, routes)
+	}
+
+}
+
+// onBGPConfigurationUpdate is called from the calico client, whenever there
+// is a change to the svc_external_ips. The set of whitelisted external IP networks
+// will be updated to the new values specified in the default BGP configuration.
+// All of the routes advertised for each service will then be updated to reflect
+// this change.
+func (rg *routeGenerator) onBGPConfigurationUpdate(newExternalNets []*net.IPNet) {
+
+	rg.Lock()
+	rg.externalIPNets = newExternalNets
+	rg.Unlock()
+
+	// Get all the services that we know about
+	svcIfaces := rg.svcIndexer.List()
+	for _, svcIface := range svcIfaces {
+		svc, ok := svcIface.(*v1.Service)
+		if !ok {
+			log.Error("Type assertion failed for rg.svcIndexer result member. Will not process updates to routes advertised for service.")
+			continue
+		}
+
+		// Update the routes advertised for this service
+		rg.setRouteForSvc(svc, nil)
+	}
+
+}
+
+// getAllRoutesForService returns all the routes that should be advertised
+// for the given service.
+func (rg *routeGenerator) getAllRoutesForService(svc *v1.Service) []string {
+
+	routes := make([]string, 0)
+	routes = append(routes, svc.Spec.ClusterIP)
+
+	if svc.Spec.ExternalIPs != nil {
+		for _, externalIP := range svc.Spec.ExternalIPs {
+
+			// Only advertise whitelisted external IP's
+			if !rg.isAllowedExternalIP(externalIP) {
+				log.Infof("External IP not advertised as not whitelisted: %s", externalIP)
+				continue
+			}
+
+			routes = append(routes, externalIP)
+		}
+	}
+
+	return addSuffix(routes, "/32")
+
+}
+
+// getAdvertisedRoutes returns the routes that are currently advertised and
+// associated with the given key.
+func (rg *routeGenerator) getAdvertisedRoutes(key string) []string {
+
+	routes := make([]string, 0)
+
+	if rg.svcRouteMap[key] != nil {
+		for route := range rg.svcRouteMap[key] {
+			routes = append(routes, route)
+		}
+	}
+
+	return routes
+
+}
+
+// setRoutesForKey associates only the given routes with the given key,
+// and advertises the given routes. It also withdraws any routes that are no
+// longer associated with the given key.
+func (rg *routeGenerator) setRoutesForKey(key string, routes []string) {
+
+	advertisedRoutes := rg.svcRouteMap[key]
+	if advertisedRoutes == nil {
+		advertisedRoutes = make(map[string]bool)
+	}
+
+	// Withdraw any routes we are advertising that are no longer associated
+	// with this key.
+	for route := range advertisedRoutes {
+		if !contains(routes, route) {
+			rg.withdrawRoute(key, route)
+		}
+	}
+
+	// Advertise all routes that are not already advertised.
+	for _, route := range routes {
+
+		// Advertise route if not already advertised
+		if _, ok := advertisedRoutes[route]; !ok {
 			rg.advertiseRoute(key, route)
 		}
-	} else if cur, exists := rg.svcRouteMap[key]; exists {
-		// We were advertising this route, but should no longer do so.
-		rg.withdrawRoute(key, cur)
+
 	}
-	rg.Unlock()
+
+}
+
+// isAllowedExternalIP determines if the given IP is in the list of
+// whitelisted External IP CIDR's given in the default bgpconfiguration.
+func (rg *routeGenerator) isAllowedExternalIP(externalIP string) bool {
+
+	ip := net.ParseIP(externalIP)
+	if ip == nil {
+		log.Errorf("Could not parse service External IP: %s", externalIP)
+		return false
+	}
+
+	for _, allowedNet := range rg.externalIPNets {
+		if allowedNet.Contains(ip) {
+			return true
+		}
+	}
+
+	// Guilty until proven innocent
+	return false
+
+}
+
+// addSuffix returns a new slice, with the suffix appended onto every item.
+func addSuffix(items []string, suffix string) []string {
+	res := make([]string, 0)
+	for _, item := range items {
+		res = append(res, item+suffix)
+	}
+	return res
+}
+
+// contains returns true if items contains the target.
+func contains(items []string, target string) bool {
+	for _, item := range items {
+		if item == target {
+			return true
+		}
+	}
+	return false
 }
 
 // advertiseThisService returns true if this service should be advertised on this node,
@@ -250,7 +382,7 @@ func (rg *routeGenerator) advertiseThisService(svc *v1.Service, ep *v1.Endpoints
 	return false
 }
 
-// unsetRouteForSvc removes the route from the svcRouteMap
+// unsetRouteForSvc removes the route from the svcClusterRouteMap
 // but checks to see if it wasn't already deleted by its sibling resource
 func (rg *routeGenerator) unsetRouteForSvc(obj interface{}) {
 	// generate key
@@ -264,22 +396,56 @@ func (rg *routeGenerator) unsetRouteForSvc(obj interface{}) {
 	rg.Lock()
 	defer rg.Unlock()
 
-	// Remove the route if it exists.
-	if route, exists := rg.svcRouteMap[key]; exists {
-		rg.withdrawRoute(key, route)
+	routes := rg.getAdvertisedRoutes(key)
+	rg.withdrawRoutesForKey(key, routes)
+
+}
+
+// advertiseRoute advertises a route associated with the given key and
+// caches it.
+func (rg *routeGenerator) advertiseRoute(key, route string) {
+	if _, hasKey := rg.svcRouteMap[key]; !hasKey {
+		rg.svcRouteMap[key] = make(map[string]bool)
+	}
+
+	rg.client.AddStaticRoutes([]string{route})
+	rg.svcRouteMap[key][route] = true
+
+	rg.routeAdvertisementCount[route]++
+}
+
+// withdrawRoute withdraws a route associated with the given key and
+// removes it from the cache.
+func (rg *routeGenerator) withdrawRoute(key, route string) {
+	// Only remove the advertisement if there are no other reasons this route
+	// should be advertised. For example, k8s will allow you to manually assign
+	// the same External IP to two different services; assign an External IP to
+	// a service which is the same as the service's cluster IP,
+	// and assign the same External IP twice to a service. In all of these
+	// scenarios, you would end up in a situation where the same route is
+	// "legitimately" being advertised twice from a node.
+	if rg.routeAdvertisementCount[route] == 1 {
+		rg.client.DeleteStaticRoutes([]string{route})
+		delete(rg.routeAdvertisementCount, route)
+	} else {
+		rg.routeAdvertisementCount[route]--
+	}
+
+	if rg.svcRouteMap[key] != nil {
+		delete(rg.svcRouteMap[key], route)
+
+		if len(rg.svcRouteMap[key]) == 0 {
+			delete(rg.svcRouteMap, key)
+		}
 	}
 }
 
-// advertiseRoute advertises a route and caches it.
-func (rg *routeGenerator) advertiseRoute(key, route string) {
-	rg.svcRouteMap[key] = route
-	rg.client.AddStaticRoutes([]string{route})
-}
-
-// withdrawRoute withdraws a route and removes it from the cache.
-func (rg *routeGenerator) withdrawRoute(key, route string) {
-	rg.client.DeleteStaticRoutes([]string{route})
-	delete(rg.svcRouteMap, key)
+// withdrawRoutesForKey withdraws the given routes associated with the given key
+// and removes them from the cache.
+func (rg *routeGenerator) withdrawRoutesForKey(key string, routes []string) {
+	for _, route := range routes {
+		rg.withdrawRoute(key, route)
+	}
 }
 
 // onSvcAdd is called when a k8s service is created

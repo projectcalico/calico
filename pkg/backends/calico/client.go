@@ -177,10 +177,10 @@ func NewCalicoClient(confdConfig *config.Config) (*client, error) {
 	// Create and start route generator.
 	clusterCIDR := os.Getenv(envAdvertiseClusterIPs)
 	if len(clusterCIDR) > 0 {
-		if rg, err := NewRouteGenerator(c, clusterCIDR); err != nil {
+		if c.rg, err = NewRouteGenerator(c, clusterCIDR); err != nil {
 			log.WithError(err).Fatal("Failed to start route generator")
 		} else {
-			rg.Start()
+			c.rg.Start()
 		}
 	} else {
 		log.Info(envAdvertiseClusterIPs + " not specified, no cluster ips will be advertised")
@@ -254,6 +254,9 @@ type client struct {
 	nodeV1Processor watchersyncer.SyncerUpdateProcessor
 	nodeLabels      map[string]map[string]string
 	bgpPeers        map[string]*apiv3.BGPPeer
+
+	// The route generator
+	rg *routeGenerator
 
 	// Readiness signals for individual data sources.
 	syncerReady, rgReady bool
@@ -346,6 +349,23 @@ func (c *client) OnInSync(source string) {
 		// based on the datastore config.
 		c.updateLogLevel()
 	}
+}
+
+func parseExternalIPNets(v1Str string) []*net.IPNet {
+	ipCIDRs := strings.Split(v1Str, ",")
+
+	ipNets := make([]*net.IPNet, 0)
+	for _, CIDR := range ipCIDRs {
+		_, ipNet, err := net.ParseCIDR(CIDR)
+		if err != nil {
+			log.WithError(err).Errorf("Failed to parse External IP CIDR: %s.", CIDR)
+			continue
+		}
+
+		ipNets = append(ipNets, ipNet)
+	}
+
+	return ipNets
 }
 
 type bgpPeer struct {
@@ -652,6 +672,17 @@ func (c *client) OnUpdates(updates []api.Update) {
 				if cfgKey.Name == "as_num" {
 					log.Debugf("Global AS number update, recalculate peers")
 					needUpdatePeersV1 = true
+				}
+
+				if cfgKey.Name == "svc_external_ips" {
+					log.Debugf("Global serviceExternalIPs changed.")
+					if u.UpdateType == api.UpdateTypeKVDeleted {
+						c.rg.onBGPConfigurationUpdate(nil)
+					} else {
+						v1Str := u.Value.(string)
+						nets := parseExternalIPNets(v1Str)
+						c.rg.onBGPConfigurationUpdate(nets)
+					}
 				}
 			}
 
