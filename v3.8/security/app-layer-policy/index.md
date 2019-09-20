@@ -1,6 +1,6 @@
 ---
 title: Application layer policy tutorial
-canonical_url: 'https://docs.projectcalico.org/v3.7/security/app-layer-policy/index'
+canonical_url: 'https://docs.projectcalico.org/v3.8/security/app-layer-policy/index'
 ---
 
 The included demo sets up a microservices application, then demonstrates the use of application

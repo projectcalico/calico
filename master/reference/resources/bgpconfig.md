@@ -1,6 +1,6 @@
 ---
 title: BGP configuration
-canonical_url: 'https://docs.projectcalico.org/v3.7/reference/calicoctl/resources/bgpconfig'
+canonical_url: 'https://docs.projectcalico.org/v3.9/reference/resources/bgpconfig'
 ---
 
 A BGP configuration resource (`BGPConfiguration`) represents BGP specific configuration options for the cluster or a

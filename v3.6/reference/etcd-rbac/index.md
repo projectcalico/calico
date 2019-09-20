@@ -1,6 +1,6 @@
 ---
 title: Setting up etcd certificates for RBAC
-canonical_url: 'https://docs.projectcalico.org/v3.7/reference/etcd-rbac/index'
+canonical_url: 'https://docs.projectcalico.org/v3.9/reference/etcd-rbac/index'
 ---
 
 When using etcd it is a good idea to protect the data stored there. This is
