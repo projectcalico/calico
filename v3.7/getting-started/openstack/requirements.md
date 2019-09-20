@@ -1,6 +1,6 @@
 ---
 title: System requirements
-canonical_url: 'https://docs.projectcalico.org/v3.7/getting-started/openstack/requirements'
+canonical_url: 'https://docs.projectcalico.org/v3.9/getting-started/openstack/requirements'
 ---
 
 {% include {{page.version}}/reqs-sys.md orch="OpenStack" %}

@@ -1,7 +1,7 @@
 ---
 title: End user RBAC
 redirect_from: latest/getting-started/kubernetes/hardway/end-user-rbac
-canonical_url: 'https://docs.projectcalico.org/master/getting-started/kubernetes/hardway/end-user-rbac'
+canonical_url: 'https://docs.projectcalico.org/v3.9/getting-started/kubernetes/hardway/end-user-rbac'
 ---
 
 In this lab we will set up role-based access control (RBAC) suitable for running the cluster in production. We will

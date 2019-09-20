@@ -1,7 +1,7 @@
 ---
 title: calicoctl get
 redirect_from: latest/reference/calicoctl/get
-canonical_url: 'https://docs.projectcalico.org/v3.7/reference/calicoctl/commands/get'
+canonical_url: 'https://docs.projectcalico.org/v3.9/reference/calicoctl/get'
 ---
 
 This sections describes the `calicoctl get` command.

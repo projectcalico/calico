@@ -1,6 +1,6 @@
 ---
 title: calicoctl user reference
-canonical_url: 'https://docs.projectcalico.org/v3.7/reference/calicoctl/index'
+canonical_url: 'https://docs.projectcalico.org/v3.9/reference/calicoctl/index'
 ---
 
 The command line tool, `calicoctl`, makes it easy to manage {{site.prodname}}

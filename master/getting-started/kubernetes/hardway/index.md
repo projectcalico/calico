@@ -1,6 +1,6 @@
 ---
 title: Calico the hard way
-canonical_url: 'https://docs.projectcalico.org/master/getting-started/kubernetes/hardway/'
+canonical_url: 'https://docs.projectcalico.org/v3.9/getting-started/kubernetes/hardway/index'
 ---
 
 This tutorial walks you through setting up {{site.prodname}} the hard way.
