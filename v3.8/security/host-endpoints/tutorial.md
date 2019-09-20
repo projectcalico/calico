@@ -1,7 +1,6 @@
 ---
 title: Tutorial
-redirect_from: latest/security/host-endpoints/tutorial
-canonical_url: 'https://docs.projectcalico.org/v3.7/security/host-endpoints/tutorial'
+canonical_url: 'https://docs.projectcalico.org/v3.8/security/host-endpoints/tutorial'
 ---
 
 Imagine that the administrator of a Kubernetes cluster wants to secure it as much as

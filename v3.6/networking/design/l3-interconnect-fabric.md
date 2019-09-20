@@ -1,6 +1,6 @@
 ---
 title: Calico over IP fabrics
-canonical_url: 'https://docs.projectcalico.org/v3.7/networking/design/l3-interconnect-fabric'
+canonical_url: 'https://docs.projectcalico.org/v3.9/networking/design/l3-interconnect-fabric'
 ---
 
 

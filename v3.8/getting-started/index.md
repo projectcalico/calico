@@ -1,7 +1,6 @@
 ---
 title: Getting started
-redirect_from: latest/getting-started/index
-canonical_url: 'https://docs.projectcalico.org/v3.7/getting-started/index'
+canonical_url: 'https://docs.projectcalico.org/v3.9/getting-started/index'
 ---
 
 This section provides instructions for installing {{site.prodname}} with popular orchestrators, on bare metal hosts,

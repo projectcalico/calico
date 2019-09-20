@@ -1,6 +1,6 @@
 ---
 title: Frequently asked questions
-canonical_url: 'https://docs.projectcalico.org/v3.7/reference/faq'
+canonical_url: 'https://docs.projectcalico.org/v3.9/reference/faq'
 ---
 
 * TOC
@@ -492,3 +492,20 @@ gateway, with Calico.
     networking for OpenStack.
 
 1.  Calico's iptables rules generally do not allow a VM to contact its host.
+
+## Are the Calico manifests compatible with CoreOS?
+
+As it stands, the majority of the provided manifests are compatible with CoreOS systems. The
+only required change is as follows:
+
+As `/usr` on CoreOS is readonly, the default path of the `flexvol-driver-host` volume will
+need to be changed to match the path of the `--flex-volume-plugin-dir` flag passed to the
+`kube-controller-manager`.
+
+For example:
+```yaml
+- name: flexvol-driver-host
+    hostPath:
+      type: DirectoryOrCreate
+      path: /var/lib/kubelet/volumeplugins/nodeagent~uds
+```

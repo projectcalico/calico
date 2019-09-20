@@ -1,6 +1,6 @@
 ---
 title: Calico Integrations
-canonical_url: 'https://docs.projectcalico.org/v3.7/getting-started/index'
+canonical_url: 'https://docs.projectcalico.org/v3.9/getting-started/index'
 ---
 
 To get started using {{site.prodname}}, we recommend running through one or more of the

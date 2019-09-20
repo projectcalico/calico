@@ -11,7 +11,7 @@ toc:
 - title: Get started with Kubernetes network policy
   path: /security/kubernetes-network-policy
 
-- title: Get started wtih Calico network policy
+- title: Get started with Calico network policy
   path: /security/calico-network-policy
 
 - title: Enforce network policy using Istio

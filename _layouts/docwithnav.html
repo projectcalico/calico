@@ -42,6 +42,9 @@ The code is a little roundabout for a few reasons:
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="docsearch:version" content="{{page.version}}">
+    {% if page.description %}
+    <meta name="description" content="{{ page.description }}">
+    {% endif %}
     <link rel="shortcut icon" type="image/png" href="{{site.baseurl}}/images/favicon.png">
     <link href='https://fonts.googleapis.com/css?family=Roboto:400,100,100italic,300,300italic,400italic,500,500italic,700,700italic,900,900italic' rel='stylesheet' type='text/css'>
     <link href="https://fonts.googleapis.com/css?family=Lato" rel="stylesheet">
@@ -103,9 +106,10 @@ The code is a little roundabout for a few reasons:
           <div id="tigera-navbar" class="navbar-collapse collapse">
             <ul class="nav navbar-nav navbar-right">
 
-              <li class="active"><a href="{{site.baseurl}}/v3.6/introduction"><strong>{% if page.version == 'master' %}nightly{% else %}{{page.version}}{% endif %}<span class="caret"></span></strong></a>
+              <li class="active"><a href="{{site.baseurl}}/latest/introduction"><strong>{% if page.version == 'master' %}nightly{% else %}{{page.version}}{% endif %}<span class="caret"></span></strong></a>
                 <ul>
-                    <li><a href="{{site.baseurl}}/v3.8/introduction">v3.8 (latest)</a></li>
+                    <li><a href="{{site.baseurl}}/v3.9/introduction">v3.9 (latest)</a></li>
+                    <li><a href="{{site.baseurl}}/v3.8/introduction">v3.8</a></li>
                     <li><a href="{{site.baseurl}}/v3.7/introduction">v3.7</a></li>
                     <li><a href="{{site.baseurl}}/v3.6/introduction">v3.6</a></li>
                     <li><a href="{{site.baseurl}}/v3.5/introduction">v3.5</a></li>

@@ -1,7 +1,6 @@
 ---
 title: Calico for OpenStack
-redirect_from: latest/getting-started/openstack/index
-canonical_url: 'https://docs.projectcalico.org/v3.7/getting-started/openstack/index'
+canonical_url: 'https://docs.projectcalico.org/v3.9/getting-started/openstack/index'
 ---
 
 {{site.prodname}}'s integration with OpenStack consists of the following pieces.

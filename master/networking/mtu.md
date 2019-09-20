@@ -1,6 +1,6 @@
 ---
-title: Configure MTU to maximize network performance
-canonical_url: 'https://docs.projectcalico.org/v3.7/networking/mtu'
+title: Configuring MTU
+canonical_url: 'https://docs.projectcalico.org/v3.9/networking/mtu'
 ---
 
 ### Big picture

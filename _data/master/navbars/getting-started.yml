@@ -26,8 +26,6 @@ toc:
       path: /getting-started/kubernetes/installation/
     - title: Installing Calico for policy and networking (recommended)
       path: /getting-started/kubernetes/installation/calico
-    - title: Installing Calico for policy and flannel for networking
-      path: /getting-started/kubernetes/installation/flannel
     - title: Installing Calico for policy (advanced)
       path: /getting-started/kubernetes/installation/other
     - title: Enabling application layer policy (optional)
@@ -36,6 +34,12 @@ toc:
       path: /getting-started/kubernetes/installation/config-options
     - title: Integration guide (advanced)
       path: /getting-started/kubernetes/installation/integration
+  - title: Flannel
+    section:
+    - title: Installing Calico for policy and flannel for networking
+      path: /getting-started/kubernetes/installation/flannel
+    - title: Migrating a cluster from flannel to Calico
+      path: /getting-started/kubernetes/installation/migration-from-flannel     
   - title: Calico the hard way
     section:
     - title: Introduction

@@ -1,7 +1,6 @@
 ---
 title: calicoctl ipam
-redirect_from: latest/reference/calicoctl/ipam/show
-canonical_url: 'https://docs.projectcalico.org/v3.7/reference/calicoctl/commands/ipam/show'
+canonical_url: 'https://docs.projectcalico.org/v3.9/reference/calicoctl/ipam/show'
 ---
 
 This section describes the `calicoctl ipam show` command.

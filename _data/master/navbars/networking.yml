@@ -6,8 +6,8 @@ toc:
   path: /networking/
 - title: Connecting workloads across networks that you do not control
   path: /networking/vxlan-ipip
-- title: Changing IP pools
-  path: /networking/changing-ip-pools
+- title: Migrate from one IP pool to another
+  path: /networking/migrate-pools
 - title: Route reflectors
   path: /networking/routereflector
 - title: Configuring BGP peers
@@ -26,7 +26,7 @@ toc:
   path: /networking/service-advertisement
 - title: Assigning IP addresses based on topology
   path: /networking/assigning-ip-addresses-topology
-- title: Calico for OpenStack
+- title: Calico networking for OpenStack
   section:
   - title: Setting up a development machine
     path:  /networking/openstack/dev-machine-setup
@@ -64,3 +64,5 @@ toc:
   path: /networking/use-specific-ip
 - title: Add a floating IP to a pod
   path: /networking/add-floating-ip
+- title: Get started with IP address management
+  path: /networking/get-started-ip-addresses

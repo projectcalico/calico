@@ -1,7 +1,6 @@
 ---
 title: confd attributions
-redirect_from: latest/reference/legal/confd
-canonical_url: 'https://docs.projectcalico.org/v3.7/reference/legal/confd'
+canonical_url: 'https://docs.projectcalico.org/v3.9/reference/legal/confd'
 ---
 
 ### Direct dependencies

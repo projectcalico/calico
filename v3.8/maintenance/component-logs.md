@@ -1,7 +1,6 @@
 ---
 title: Component logs
-redirect_from: latest/maintenance/component-logs
-canonical_url: 'https://docs.projectcalico.org/v3.7/maintenance/component-logs'
+canonical_url: 'https://docs.projectcalico.org/v3.9/maintenance/component-logs'
 ---
 
 ## The {{site.nodecontainer}} container

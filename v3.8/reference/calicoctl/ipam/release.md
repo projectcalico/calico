@@ -1,7 +1,6 @@
 ---
 title: calicoctl ipam
-redirect_from: latest/reference/calicoctl/ipam/release
-canonical_url: 'https://docs.projectcalico.org/v3.7/reference/calicoctl/commands/ipam/release'
+canonical_url: 'https://docs.projectcalico.org/v3.9/reference/calicoctl/ipam/release'
 ---
 
 This section describes the `calicoctl ipam release` command.

@@ -1,7 +1,6 @@
 ---
 title: Configuring systems for use with Calico
-redirect_from: latest/networking/openstack/configuration
-canonical_url: 'https://docs.projectcalico.org/v3.7/networking/openstack/configuration'
+canonical_url: 'https://docs.projectcalico.org/v3.9/networking/openstack/configuration'
 ---
 
 When running {{site.prodname}} with OpenStack, you also need to configure various

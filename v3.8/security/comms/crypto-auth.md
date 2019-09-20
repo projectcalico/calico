@@ -1,7 +1,6 @@
 ---
 title: Configuring encryption and authentication
-redirect_from: latest/security/comms/crypto-auth
-canonical_url: 'https://docs.projectcalico.org/v3.7/security/comms/crypto-auth'
+canonical_url: 'https://docs.projectcalico.org/v3.9/security/comms/crypto-auth'
 ---
 
 ## Connections from {{site.prodname}} components to etcd
