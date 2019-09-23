@@ -8,14 +8,6 @@ This sections describes the `calicoctl patch` command.
 Read the [calicoctl command line interface user reference]({{site.baseurl}}/{{page.version}}/reference/calicoctl/)
 for a full list of calicoctl commands.
 
-> **Note**: The available actions for a specific resource type may be
-> limited based on the datastore used for {{site.prodname}} (etcdv3 / Kubernetes API).
-> Please refer to the
-> [Resources section]({{site.baseurl}}/{{page.version}}/reference/resources/)
-> for details about each resource type.
-{: .alert .alert-info}
-
-
 ## Displaying the help text for 'calicoctl patch' command
 
 Run `calicoctl patch --help` to display the following help menu for the
@@ -78,7 +70,7 @@ Description:
 
 ### Examples
 
-1. Patch an ipPool to enable outgoing NAT:
+1. Patch an IP Pool to enable outgoing NAT:
 
    ```bash
    calicoctl patch ippool ippool1 -p '{"spec":{"natOutgoing": true}}'
