@@ -212,7 +212,7 @@ ifdef CONFIRM
 endif
 
 git-commit:
-	git diff-index --quiet HEAD || git commit -m "Semaphore Automatic Update" go.mod go.sum
+	git diff --quiet || git commit -m "Semaphore Automatic Update" go.mod go.sum
 
 git-push:
 	git push
