@@ -47,6 +47,7 @@ template bgp bgp_template {
 protocol bgp Mesh_with_master_node from bgp_template {
   neighbor %s as 64512;
   passive on; # Mesh is unidirectional, peer will connect to us.
+  password "very-secret";
 }
 
 protocol bgp Mesh_with_node_1 from bgp_template {
@@ -57,11 +58,13 @@ protocol bgp Mesh_with_node_1 from bgp_template {
 protocol bgp Mesh_with_node_2 from bgp_template {
   neighbor %s as 64512;
   passive on; # Mesh is unidirectional, peer will connect to us.
+  password "very-secret";
 }
 
 protocol bgp Mesh_with_node_3 from bgp_template {
   neighbor %s as 64512;
   passive on; # Mesh is unidirectional, peer will connect to us.
+  password "very-secret";
 }
 """
 
@@ -120,6 +123,18 @@ metadata:
   name: node-extra.peer%s
 EOF
 """ % self.get_extra_peer_spec())
+
+        kubectl("""apply -f - <<EOF
+apiVersion: v1
+kind: Secret
+metadata:
+  name: bgp-secrets
+  namespace: kube-system
+type: Opaque
+stringData:
+  rr-password: very-secret
+EOF
+""")
 
     def tearDown(self):
         super(_TestBGPAdvert, self).tearDown()
@@ -199,6 +214,10 @@ class TestBGPAdvert(_TestBGPAdvert):
 spec:
   peerIP: %s
   asNumber: 64512
+  password:
+    secretKeyRef:
+      name: bgp-secrets
+      key: rr-password
 """ % self.external_node_ip
 
     def test_cluster_ip_advertisement(self):
