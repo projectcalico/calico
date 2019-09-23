@@ -96,14 +96,16 @@ type FlexVolumeInputs struct {
 }
 
 const (
-	SYSLOGTAG      string = "FlexVolNodeAgent"
-	VER_K8S        string = "1.8"
-	VER            string = "0.1"
-	CONFIG_FILE    string = "/etc/flexvolume/nodeagent.json"
-	NODEAGENT_HOME string = "/var/run/nodeagent"
-	MOUNT_DIR      string = "/mount"
-	CREDS_DIR      string = "/creds"
-	LOG_LEVEL_WARN string = "WARNING"
+	SYSLOGTAG       string = "FlexVolNodeAgent"
+	VER_K8S         string = "1.8"
+	VER             string = "0.1"
+	CONFIG_FILE     string = "/etc/flexvolume/nodeagent.json"
+	NODEAGENT_HOME  string = "/var/run/nodeagent"
+	MOUNT_DIR       string = "/mount"
+	CREDS_DIR       string = "/creds"
+	LOG_LEVEL_WARN  string = "WARNING"
+	syslogOnlyTrue  bool   = true
+	syslogOnlyFalse bool   = false
 )
 
 var (
@@ -212,7 +214,7 @@ func doMount(destinationDir string, ninputs *creds.Credentials, workloadPath str
 	newDir := configuration.NodeAgentWorkloadHomeDir + "/" + workloadPath
 	err := os.MkdirAll(newDir, 0777)
 	if err != nil {
-		failure("doMount", inp, fmt.Sprintf("failed to create directory %s\n", newDir))
+		logError("doMount", inp, fmt.Sprintf("failed to create directory %s\n", newDir), syslogOnlyTrue)
 		return err
 	}
 
@@ -231,11 +233,11 @@ func doMount(destinationDir string, ninputs *creds.Credentials, workloadPath str
 		cmd := exec.Command("/bin/unmount", destinationDir)
 		e := cmd.Run()
 		if e != nil {
-			failure("doMount", inp, fmt.Sprintf("failed to unmount %s\n", destinationDir))
+			logError("doMount", inp, fmt.Sprintf("failed to unmount %s\n", destinationDir), syslogOnlyTrue)
 		}
 		e = os.RemoveAll(newDir)
 		if e != nil {
-			failure("doMount", inp, fmt.Sprintf("failed to clear %s\n", newDir))
+			logError("doMount", inp, fmt.Sprintf("failed to clear %s\n", newDir), syslogOnlyTrue)
 		}
 		return err
 	}
@@ -247,11 +249,11 @@ func doMount(destinationDir string, ninputs *creds.Credentials, workloadPath str
 		cmd = exec.Command("/bin/umount", destinationDir)
 		e := cmd.Run()
 		if e != nil {
-			failure("doMount", inp, fmt.Sprintf("failed to unmount %s\n", destinationDir))
+			logError("doMount", inp, fmt.Sprintf("failed to unmount %s\n", destinationDir), syslogOnlyTrue)
 		}
 		e = os.RemoveAll(newDir)
 		if e != nil {
-			failure("doMount", inp, fmt.Sprintf("failed to clear %s\n", newDir))
+			logError("doMount", inp, fmt.Sprintf("failed to clear %s\n", newDir), syslogOnlyTrue)
 		}
 		return err
 	}
@@ -276,19 +278,19 @@ func mount(dir, opts string) error {
 
 	ninputs, workloadPath, s := checkValidMountOpts(opts)
 	if !s {
-		failure("mount", inp, "Incomplete inputs")
+		logError("mount", inp, "Incomplete inputs", syslogOnlyTrue)
 		return fmt.Errorf("invalid mount options")
 	}
 
 	if err := doMount(dir, ninputs, workloadPath); err != nil {
 		sErr := "Failure to mount: " + err.Error()
-		failure("mount", inp, sErr)
+		logError("mount", inp, sErr, syslogOnlyTrue)
 		return err
 	}
 
 	if err := addCredentialFile(ninputs); err != nil {
 		sErr := "Failure to create credentials: " + err.Error()
-		failure("mount", inp, sErr)
+		logError("mount", inp, sErr, syslogOnlyTrue)
 		return err
 	}
 
@@ -304,7 +306,7 @@ func unmount(dir string) error {
 	comps := strings.Split(dir, "/")
 	if len(comps) < 6 {
 		sErr := fmt.Sprintf("Failure to notify nodeagent dir %v", dir)
-		failure("unmount", dir, sErr)
+		logError("unmount", dir, sErr, syslogOnlyTrue)
 		return fmt.Errorf("invalid path to unount")
 	}
 
@@ -319,12 +321,12 @@ func unmount(dir string) error {
 	// unmount the bind mount
 	err := doUnmount(dir + "/nodeagent")
 	if err != nil {
-		failure("umount", dir, fmt.Sprintf("failed to unmount %s/nodeagent\n", dir))
+		logError("umount", dir, fmt.Sprintf("failed to unmount %s/nodeagent\n", dir), syslogOnlyTrue)
 	}
 	// unmount the tmpfs
 	err = doUnmount(dir)
 	if err != nil {
-		failure("unmount", dir, fmt.Sprintf("failed to unmount %s\n", dir))
+		logError("unmount", dir, fmt.Sprintf("failed to unmount %s\n", dir), syslogOnlyTrue)
 	}
 	// delete the directory that was created.
 	delDir := strings.Join([]string{configuration.NodeAgentWorkloadHomeDir, uid}, "/")
@@ -353,11 +355,15 @@ func genericSuccess(caller, inp, msg string) error {
 	return nil
 }
 
-// failure prints an error message to the kubelet.
-func failure(caller, inp, msg string) {
+// logError prints an error message to the kubelet and the system log. The 'syslogOnly' argument can be used to prevent messages from
+// getting sent to kubelet. This option should be used if a type of error can lead to a flood of similar messages, such as in
+// periodic activity or in retry loops.
+func logError(caller, inp, msg string, syslogOnly bool) {
 	resp, err := json.Marshal(&Response{Status: "Failure", Message: msg})
 	if err == nil {
-		fmt.Println(string(resp))
+		if !syslogOnly {
+			fmt.Println(string(resp))
+		}
 		logToSys(caller, inp, string(resp))
 	}
 }
@@ -374,7 +380,7 @@ func genericUnsupported(caller, inp, msg string) error {
 	return nil
 }
 
-// logToSys is a helper routine to genericSuccess(), failure() and genericUnsupported().
+// logToSys is a helper routine to genericSuccess(), logError() and genericUnsupported().
 // Routines needing to log messages should call those functions and NOT logToSys() or logWriter methods directly.
 func logToSys(caller, inp, opts string) {
 	if logWriter == nil {
@@ -430,14 +436,14 @@ func initConfiguration() {
 
 	bytes, err := ioutil.ReadFile(CONFIG_FILE)
 	if err != nil {
-		failure("initConfiguration", "", fmt.Sprintf("Not able to read %s: %s\n", CONFIG_FILE, err.Error()))
+		logError("initConfiguration", "", fmt.Sprintf("Not able to read %s: %s\n", CONFIG_FILE, err.Error()), syslogOnlyFalse)
 		return
 	}
 
 	var config ConfigurationOptions
 	err = json.Unmarshal(bytes, &config)
 	if err != nil {
-		failure("initConfiguration", "", fmt.Sprintf("Not able to parst %s: %s\n", CONFIG_FILE, err.Error()))
+		logError("initConfiguration", "", fmt.Sprintf("Not able to parst %s: %s\n", CONFIG_FILE, err.Error()), syslogOnlyFalse)
 		return
 	}
 
