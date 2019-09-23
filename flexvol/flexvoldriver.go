@@ -25,11 +25,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
-	"log"
 	"log/syslog"
 	"os"
 	"os/exec"
-	"regexp"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -210,9 +208,11 @@ func checkValidMountOpts(opts string) (*creds.Credentials, string, bool) {
 // * create a sub-directory ('nodeagent') there
 // * do a bind mount of the nodeagent's directory on the node to the destinationDir/nodeagent.
 func doMount(destinationDir string, ninputs *creds.Credentials, workloadPath string) error {
+	inp := strings.Join([]string{destinationDir, workloadPath}, "|")
 	newDir := configuration.NodeAgentWorkloadHomeDir + "/" + workloadPath
 	err := os.MkdirAll(newDir, 0777)
 	if err != nil {
+		failure("doMount", inp, fmt.Sprintf("failed to create directory %s\n", newDir))
 		return err
 	}
 
@@ -231,11 +231,11 @@ func doMount(destinationDir string, ninputs *creds.Credentials, workloadPath str
 		cmd := exec.Command("/bin/unmount", destinationDir)
 		e := cmd.Run()
 		if e != nil {
-			_ = logWriter.Warning(fmt.Sprintf("failed to unmount %s\n", destinationDir))
+			failure("doMount", inp, fmt.Sprintf("failed to unmount %s\n", destinationDir))
 		}
 		e = os.RemoveAll(newDir)
 		if e != nil {
-			_ = logWriter.Warning(fmt.Sprintf("failed to clear %s\n", newDir))
+			failure("doMount", inp, fmt.Sprintf("failed to clear %s\n", newDir))
 		}
 		return err
 	}
@@ -247,11 +247,11 @@ func doMount(destinationDir string, ninputs *creds.Credentials, workloadPath str
 		cmd = exec.Command("/bin/umount", destinationDir)
 		e := cmd.Run()
 		if e != nil {
-			_ = logWriter.Warning(fmt.Sprintf("failed to unmount %s\n", destinationDir))
+			failure("doMount", inp, fmt.Sprintf("failed to unmount %s\n", destinationDir))
 		}
 		e = os.RemoveAll(newDir)
 		if e != nil {
-			_ = logWriter.Warning(fmt.Sprintf("failed to clear %s\n", newDir))
+			failure("doMount", inp, fmt.Sprintf("failed to clear %s\n", newDir))
 		}
 		return err
 	}
@@ -276,17 +276,20 @@ func mount(dir, opts string) error {
 
 	ninputs, workloadPath, s := checkValidMountOpts(opts)
 	if !s {
-		return failure("mount", inp, "Incomplete inputs")
+		failure("mount", inp, "Incomplete inputs")
+		return fmt.Errorf("invalid mount options")
 	}
 
 	if err := doMount(dir, ninputs, workloadPath); err != nil {
 		sErr := "Failure to mount: " + err.Error()
-		return failure("mount", inp, sErr)
+		failure("mount", inp, sErr)
+		return err
 	}
 
 	if err := addCredentialFile(ninputs); err != nil {
 		sErr := "Failure to create credentials: " + err.Error()
-		return failure("mount", inp, sErr)
+		failure("mount", inp, sErr)
+		return err
 	}
 
 	return genericSuccess("mount", inp, "Mount ok.")
@@ -301,7 +304,8 @@ func unmount(dir string) error {
 	comps := strings.Split(dir, "/")
 	if len(comps) < 6 {
 		sErr := fmt.Sprintf("Failure to notify nodeagent dir %v", dir)
-		return failure("unmount", dir, sErr)
+		failure("unmount", dir, sErr)
+		return fmt.Errorf("invalid path to unount")
 	}
 
 	uid := comps[5]
@@ -315,19 +319,19 @@ func unmount(dir string) error {
 	// unmount the bind mount
 	err := doUnmount(dir + "/nodeagent")
 	if err != nil {
-		_ = logWriter.Warning(fmt.Sprintf("failed to unmount %s/nodeagent\n", dir))
+		failure("umount", dir, fmt.Sprintf("failed to unmount %s/nodeagent\n", dir))
 	}
 	// unmount the tmpfs
 	err = doUnmount(dir)
 	if err != nil {
-		_ = logWriter.Warning(fmt.Sprintf("failed to unmount %s\n", dir))
+		failure("unmount", dir, fmt.Sprintf("failed to unmount %s\n", dir))
 	}
 	// delete the directory that was created.
 	delDir := strings.Join([]string{configuration.NodeAgentWorkloadHomeDir, uid}, "/")
 	err = os.Remove(delDir)
 	if err != nil {
 		emsgs = append(emsgs, fmt.Sprintf("unmount del failure %s: %s", delDir, err.Error()))
-		// go head and return ok.
+		// go ahead and return indicating success
 	}
 
 	if len(emsgs) == 0 {
@@ -337,32 +341,25 @@ func unmount(dir string) error {
 	return genericSuccess("unmount", dir, strings.Join(emsgs, ","))
 }
 
-// printAndLog is used to print to stdout and to the syslog.
-func printAndLog(caller, inp, s string) {
-	fmt.Println(s)
-	logToSys(caller, inp, s)
-}
-
-// genericSuccess is to print a success response to the kubelet.
+// genericSuccess prints a success message to the kubelet.
 func genericSuccess(caller, inp, msg string) error {
 	resp, err := json.Marshal(&Response{Status: "Success", Message: msg})
 	if err != nil {
 		return err
 	}
 
-	printAndLog(caller, inp, string(resp))
+	fmt.Println(string(resp))
+	logToSys(caller, inp, string(resp))
 	return nil
 }
 
-// failure is to print a failure response to the kubelet.
-func failure(caller, inp, msg string) error {
+// failure prints an error message to the kubelet.
+func failure(caller, inp, msg string) {
 	resp, err := json.Marshal(&Response{Status: "Failure", Message: msg})
-	if err != nil {
-		return err
+	if err == nil {
+		fmt.Println(string(resp))
+		logToSys(caller, inp, string(resp))
 	}
-
-	printAndLog(caller, inp, string(resp))
-	return nil
 }
 
 // genericUnsupported is to print a un-supported response to the kubelet.
@@ -372,36 +369,25 @@ func genericUnsupported(caller, inp, msg string) error {
 		return err
 	}
 
-	printAndLog(caller, inp, string(resp))
+	fmt.Println(string(resp))
+	logToSys(caller, inp, string(resp))
 	return nil
 }
 
-// logToSys is to write to syslog.
+// logToSys is a helper routine to genericSuccess(), failure() and genericUnsupported().
+// Routines needing to log messages should call those functions and NOT logToSys() or logWriter methods directly.
 func logToSys(caller, inp, opts string) {
 	if logWriter == nil {
 		return
 	}
 
 	opt := strings.Join([]string{caller, inp, opts}, "|")
-	opt = sanitizeString(opt)
 
 	if configuration.LogLevel == LOG_LEVEL_WARN {
 		_ = logWriter.Warning(opt)
 	} else {
 		_ = logWriter.Info(opt)
 	}
-}
-
-// sanitizeString removes any characters that are not numbers or letters from a string.
-func sanitizeString(s string) string {
-	var out string
-	r, err := regexp.Compile("[^a-zA-Z0-9]+")
-	if err == nil {
-		out = r.ReplaceAllString(s, "")
-	} else {
-		out = s
-	}
-	return out
 }
 
 // addCredentialFile is used to create a credential file when a workload with the flex-volume volume mounted is created.
@@ -444,14 +430,14 @@ func initConfiguration() {
 
 	bytes, err := ioutil.ReadFile(CONFIG_FILE)
 	if err != nil {
-		_ = logWriter.Warning(fmt.Sprintf("Not able to read %s: %s\n", CONFIG_FILE, err.Error()))
+		failure("initConfiguration", "", fmt.Sprintf("Not able to read %s: %s\n", CONFIG_FILE, err.Error()))
 		return
 	}
 
 	var config ConfigurationOptions
 	err = json.Unmarshal(bytes, &config)
 	if err != nil {
-		_ = logWriter.Warning(fmt.Sprintf("Not able to parst %s: %s\n", CONFIG_FILE, err.Error()))
+		failure("initConfiguration", "", fmt.Sprintf("Not able to parst %s: %s\n", CONFIG_FILE, err.Error()))
 		return
 	}
 
@@ -500,12 +486,12 @@ func init() {
 }
 
 func main() {
+	// Note that we ignore the error from syslog.New() and continue without the capability to log to syslog.
 	var err error
 	logWriter, err = syslog.New(syslog.LOG_WARNING|syslog.LOG_DAEMON, SYSLOGTAG)
-	if err != nil {
-		log.Fatal(err)
+	if err == nil {
+		defer logWriter.Close()
 	}
-	defer logWriter.Close()
 
 	initConfiguration()
 
