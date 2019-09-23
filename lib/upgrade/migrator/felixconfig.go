@@ -15,7 +15,6 @@
 package migrator
 
 import (
-	"errors"
 	"fmt"
 	"reflect"
 	"strconv"
@@ -297,7 +296,7 @@ func (m *migrationHelper) parseFelixConfigV1IntoResourceV3(
 }
 
 func (m *migrationHelper) parseProtoPortFailed(msg string) error {
-	return errors.New(fmt.Sprintf("failed to parse ProtoPort-%s", msg))
+	return fmt.Errorf("failed to parse ProtoPort-%s", msg)
 }
 
 func (m *migrationHelper) parseProtoPort(raw string) (*[]apiv3.ProtoPort, error) {

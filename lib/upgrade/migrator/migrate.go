@@ -787,8 +787,8 @@ func (m *migrationHelper) CanMigrate() error {
 		// v3.0+ version in the v1 API data which suggests a modified/hacked set up which we
 		// cannot migrate from.
 		m.statusBullet("unexpected version in the v1 API datastore: should not have a version v3.0+")
-		return errors.New(fmt.Sprintf("unexpected Calico version '%s': migration to v3 should be from a tagged "+
-			"release of Calico v%s+", v, minUpgradeVersion))
+		return fmt.Errorf("unexpected Calico version '%s': migration to v3 should be from a tagged "+
+			"release of Calico v%s+", v, minUpgradeVersion)
 	}
 	m.statusBullet("the v1 API data can be migrated to the v3 API")
 	return nil
