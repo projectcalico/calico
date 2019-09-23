@@ -1,6 +1,6 @@
 ---
 title: Floating IPs
-canonical_url: 'https://docs.projectcalico.org/v3.7/networking/openstack/floating-ips'
+canonical_url: 'https://docs.projectcalico.org/v3.9/networking/openstack/floating-ips'
 ---
 
 networking-calico includes beta support for floating IPs.  Currently this

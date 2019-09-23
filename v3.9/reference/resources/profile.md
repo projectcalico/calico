@@ -1,7 +1,7 @@
 ---
 title: Profile
 redirect_from: latest/reference/resources/profile
-canonical_url: 'https://docs.projectcalico.org/v3.7/reference/calicoctl/resources/profile'
+canonical_url: 'https://docs.projectcalico.org/v3.9/reference/resources/profile'
 ---
 
 Profiles provide a way to group multiple endpoints so that they inherit a shared set of labels. For historic reasons, Profiles can also include

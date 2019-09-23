@@ -1,7 +1,7 @@
 ---
 title: calicoctl convert
 redirect_from: latest/reference/calicoctl/convert
-canonical_url: 'https://docs.projectcalico.org/v3.7/reference/calicoctl/commands/convert'
+canonical_url: 'https://docs.projectcalico.org/v3.9/reference/calicoctl/convert'
 ---
 
 This sections describes the `calicoctl convert` command.

@@ -1,7 +1,7 @@
 ---
 title: Connection tracking
 redirect_from: latest/reference/host-endpoints/conntrack
-canonical_url: 'https://docs.projectcalico.org/v3.7/security/host-endpoints/conntrack'
+canonical_url: 'https://docs.projectcalico.org/v3.9/reference/host-endpoints/conntrack'
 ---
 
 

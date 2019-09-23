@@ -1,7 +1,7 @@
 ---
 title: Test networking
 redirect_from: latest/getting-started/kubernetes/hardway/test-networking
-canonical_url: 'https://docs.projectcalico.org/master/getting-started/kubernetes/hardway/test-networking'
+canonical_url: 'https://docs.projectcalico.org/v3.9/getting-started/kubernetes/hardway/test-networking'
 ---
 
 In this lab we will test the {{site.prodname}} cluster to demonstrate networking is working correctly.

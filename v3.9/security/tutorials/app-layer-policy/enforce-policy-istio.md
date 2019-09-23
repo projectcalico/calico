@@ -1,7 +1,7 @@
 ---
 title: Enforce network policy using Istio tutorial
 redirect_from: latest/security/tutorials/app-layer-policy/enforce-policy-istio
-canonical_url: 'https://docs.projectcalico.org/v3.7/security/app-layer-policy/index'
+canonical_url: 'https://docs.projectcalico.org/v3.9/security/tutorials/app-layer-policy/enforce-policy-istio'
 ---
 
 This tutorial sets up a microservices application, then demonstrates how to use {{site.prodname}} application layer policy to mitigate some common threats.
