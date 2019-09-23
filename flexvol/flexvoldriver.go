@@ -229,8 +229,14 @@ func doMount(destinationDir string, ninputs *creds.Credentials, workloadPath str
 	err = os.MkdirAll(newDestianationDir, 0777)
 	if err != nil {
 		cmd := exec.Command("/bin/unmount", destinationDir)
-		cmd.Run()
-		os.RemoveAll(newDir)
+		e := cmd.Run()
+		if e != nil {
+			_ = logWriter.Warning(fmt.Sprintf("failed to unmount %s\n", destinationDir))
+		}
+		e = os.RemoveAll(newDir)
+		if e != nil {
+			_ = logWriter.Warning(fmt.Sprintf("failed to clear %s\n", newDir))
+		}
 		return err
 	}
 
@@ -239,8 +245,14 @@ func doMount(destinationDir string, ninputs *creds.Credentials, workloadPath str
 	err = cmd.Run()
 	if err != nil {
 		cmd = exec.Command("/bin/umount", destinationDir)
-		cmd.Run()
-		os.RemoveAll(newDir)
+		e := cmd.Run()
+		if e != nil {
+			_ = logWriter.Warning(fmt.Sprintf("failed to unmount %s\n", destinationDir))
+		}
+		e = os.RemoveAll(newDir)
+		if e != nil {
+			_ = logWriter.Warning(fmt.Sprintf("failed to clear %s\n", newDir))
+		}
 		return err
 	}
 
@@ -263,7 +275,7 @@ func mount(dir, opts string) error {
 	inp := strings.Join([]string{dir, opts}, "|")
 
 	ninputs, workloadPath, s := checkValidMountOpts(opts)
-	if s == false {
+	if !s {
 		return failure("mount", inp, "Incomplete inputs")
 	}
 
@@ -301,12 +313,18 @@ func unmount(dir string) error {
 	}
 
 	// unmount the bind mount
-	doUnmount(dir + "/nodeagent")
+	err := doUnmount(dir + "/nodeagent")
+	if err != nil {
+		_ = logWriter.Warning(fmt.Sprintf("failed to unmount %s/nodeagent\n", dir))
+	}
 	// unmount the tmpfs
-	doUnmount(dir)
+	err = doUnmount(dir)
+	if err != nil {
+		_ = logWriter.Warning(fmt.Sprintf("failed to unmount %s\n", dir))
+	}
 	// delete the directory that was created.
 	delDir := strings.Join([]string{configuration.NodeAgentWorkloadHomeDir, uid}, "/")
-	err := os.Remove(delDir)
+	err = os.Remove(delDir)
 	if err != nil {
 		emsgs = append(emsgs, fmt.Sprintf("unmount del failure %s: %s", delDir, err.Error()))
 		// go head and return ok.
@@ -368,9 +386,9 @@ func logToSys(caller, inp, opts string) {
 	opt = sanitizeString(opt)
 
 	if configuration.LogLevel == LOG_LEVEL_WARN {
-		logWriter.Warning(opt)
+		_ = logWriter.Warning(opt)
 	} else {
-		logWriter.Info(opt)
+		_ = logWriter.Info(opt)
 	}
 }
 
@@ -389,8 +407,7 @@ func sanitizeString(s string) string {
 // addCredentialFile is used to create a credential file when a workload with the flex-volume volume mounted is created.
 func addCredentialFile(ninputs *creds.Credentials) error {
 	//Make the directory and then write the ninputs as json to it.
-	var err error
-	err = os.MkdirAll(configuration.NodeAgentCredentialsHomeDir, 0755)
+	err := os.MkdirAll(configuration.NodeAgentCredentialsHomeDir, 0755)
 	if err != nil {
 		return err
 	}
@@ -402,7 +419,7 @@ func addCredentialFile(ninputs *creds.Credentials) error {
 	}
 
 	credsFileTmp := strings.Join([]string{configuration.NodeAgentManagementHomeDir, ninputs.UID + ".json"}, "/")
-	err = ioutil.WriteFile(credsFileTmp, attrs, 0644)
+	_ = ioutil.WriteFile(credsFileTmp, attrs, 0644)
 
 	// Move it to the right location now.
 	credsFile := strings.Join([]string{configuration.NodeAgentCredentialsHomeDir, ninputs.UID + ".json"}, "/")
@@ -427,14 +444,14 @@ func initConfiguration() {
 
 	bytes, err := ioutil.ReadFile(CONFIG_FILE)
 	if err != nil {
-		logWriter.Warning(fmt.Sprintf("Not able to read %s: %s\n", CONFIG_FILE, err.Error()))
+		_ = logWriter.Warning(fmt.Sprintf("Not able to read %s: %s\n", CONFIG_FILE, err.Error()))
 		return
 	}
 
 	var config ConfigurationOptions
 	err = json.Unmarshal(bytes, &config)
 	if err != nil {
-		logWriter.Warning(fmt.Sprintf("Not able to parst %s: %s\n", CONFIG_FILE, err.Error()))
+		_ = logWriter.Warning(fmt.Sprintf("Not able to parst %s: %s\n", CONFIG_FILE, err.Error()))
 		return
 	}
 
@@ -493,6 +510,6 @@ func main() {
 	initConfiguration()
 
 	if err = rootCmd.Execute(); err != nil {
-		genericUnsupported("not supported", "", err.Error())
+		_ = genericUnsupported("not supported", "", err.Error())
 	}
 }
