@@ -78,13 +78,13 @@ Description:
 
 ### Examples
 
-1. Patch and ipPool to enable outgoing NAT:
+1. Patch an ipPool to enable outgoing NAT:
 
    ```bash
    calicoctl patch ippool ippool1 -p '{"spec":{"natOutgoing": true}}'
    ```
 
-   Results indicate that 8 resources were successfully applied
+   Results indicate that a resource was successfully patched:
 
    ```bash
    Successfully patched 1 'ipPool' resource
@@ -119,4 +119,3 @@ Description:
 -  [Installing calicoctl]({{site.baseurl}}/{{page.version}}/getting-started/calicoctl/install)
 -  [Resources]({{site.baseurl}}/{{page.version}}/reference/resources/) for details on all valid resources, including file format
    and schema
--  [NetworkPolicy]({{site.baseurl}}/{{page.version}}/reference/resources/networkpolicy) for details on the {{site.prodname}} selector-based policy model

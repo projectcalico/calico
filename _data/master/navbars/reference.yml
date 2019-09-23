@@ -18,6 +18,8 @@ toc:
     path: /reference/calicoctl/delete
   - title: get
     path: /reference/calicoctl/get
+  - title: patch
+    path: /reference/calicoctl/patch
   - title: label
     path: /reference/calicoctl/label
   - title: convert
