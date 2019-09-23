@@ -447,7 +447,7 @@ test-install-cni: image k8s-install/scripts/install_cni.test
 ###############################################################################
 .PHONY: ci
 ## Run what CI runs
-ci: clean static-checks test-cni-versions image-all test-install-cni
+ci: clean build assert-not-dirty static-checks test-cni-versions image-all test-install-cni
 
 ## Deploys images to registry
 cd:
@@ -459,6 +459,12 @@ ifndef BRANCH_NAME
 endif
 	$(MAKE) tag-images-all push-all push-manifests push-non-manifests  IMAGETAG=${BRANCH_NAME} EXCLUDEARCH="$(EXCLUDEARCH)"
 	$(MAKE) tag-images-all push-all push-manifests push-non-manifests  IMAGETAG=$(shell git describe --tags --dirty --always --long) EXCLUDEARCH="$(EXCLUDEARCH)"
+
+
+# Assert no local changes after a clean build. This helps catch errors resulting from
+# misconfigured go.mod / go.sum / gitignore, etc.
+assert-not-dirty: 
+	@./hack/check-dirty.sh
 
 ###############################################################################
 # Release
