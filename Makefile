@@ -450,7 +450,7 @@ test-install-cni: image k8s-install/scripts/install_cni.test
 ci: clean build assert-not-dirty static-checks test-cni-versions image-all test-install-cni
 
 ## Deploys images to registry
-cd:
+cd: assert-not-dirty
 ifndef CONFIRM
 	$(error CONFIRM is undefined - run using make <target> CONFIRM=true)
 endif
