@@ -11,7 +11,7 @@ custom_css: css/intro.css
   </div>
   <div class="col-md-6">
     <h3 style="margin-top: 5px">What is {{site.prodname}}?</h3>
-    <p>{{site.prodname}} is an open source networking and network security solution for containers, virtual machines, and native host-based workloads. {{site.prodname}}supports a broad range of platforms including Kubernetes, OpenShift, Docker EE, OpenStack, and bare metal services.</p>
+    <p>{{site.prodname}} is an open source networking and network security solution for containers, virtual machines, and native host-based workloads. {{site.prodname}} supports a broad range of platforms including Kubernetes, OpenShift, Docker EE, OpenStack, and bare metal services.</p>
     <p>{{site.prodname}} combines flexible networking capabilities with run-anywhere security enforcement to provide a solution with native Linux kernel performance and true cloud-native scalability. {{site.prodname}} provides developers and cluster operators with a consistent experience and set of capabilities whether running in public cloud or on-prem, on a single node or across a multi-thousand node cluster.</p>
   </div>
 </div>
@@ -28,7 +28,7 @@ custom_css: css/intro.css
   <div class="col-md-6">
     <h3 style="margin-top: 5px">Best practices for network security</h3>
     <p>{{site.prodname}}’s rich network policy model makes it easy to lock down communication so the only traffic that flows is the traffic you want to flow. You can think of {{site.prodname}}’s security enforcement as wrapping each of your workloads with its own personal firewall that is dynamically re-configured in real time as you deploy new services or scale your application up or down.</p>
-    <p>{{site.prodname}}’s policy engine can enforce the same policy model at the host networking layer and (if using Istio & Envoy) at the service mesh layer, protecting your infrastructure from compromised workloads and protecting your workloads from compromised infrastructure.</p>
+    <p>{{site.prodname}}’s policy engine can enforce the same policy model at the host networking layer and (if using Istio & Envoy) at the service mesh layer, thus protecting infrastructure from potentially comprimised workloads (while also protecting workloads from any rogue elements in your infrastructure).</p>
   </div>
   <div class="col-md-6">
     <img class="img-responsive center-block" src="/images/intro/best-practices.png">
@@ -43,7 +43,7 @@ custom_css: css/intro.css
   </div>
   <div class="col-md-6">
     <h3 style="margin-top: 5px">Performance</h3>
-    <p>{{site.prodname}} uses the Linux kernel’s built-in highly optimized forwarding and access control capabilities to deliver native Linux networking dataplane performance, typically without requiring any of the encap/decap overheads associated with first generation SDN networks. {{site.prodname}}’s control plane and policy engine has been fine tuned over many years of production use to minimize overall CPU usage and occupancy.</p>
+    <p>{{site.prodname}} uses the Linux kernel’s built-in, highly optimized forwarding and access control capabilities to deliver native Linux networking dataplane performance (note that this is done in {{site.prodname}} *without* requiring any of the encap/decap overheads associated with first generation SDN networks). {{site.prodname}}’s control plane and policy engine has been fine-tuned over several years in production use cases, and is known to be one of the most efficient CNI implementations for kubernetes in terms of CPU usage and occupancy, while under high load.</p>
   </div>
 </div>
 
@@ -100,7 +100,7 @@ custom_css: css/intro.css
 <div id="why-use-calico-8" class="row">
   <div class="col-md-6">
     <h3 style="margin-top: 5px">Full Kubernetes network policy support</h3>
-    <p>{{site.prodname}}’s network policy engine formed the original reference implementation of Kubernetes network policy during the development of the API. {{site.prodname}} is distinguished in that it implements the full set of features defined by the API giving users all the capabilities and flexibility envisaged when the API was defined. And for users that require even more power, {{site.prodname}} supports an extended set of network policy capabilities that work seamlessly alongside the Kubernetes API giving users even more flexibility in how they define their network policies.</p>
+    <p>{{site.prodname}}’s network policy engine formed the original reference implementation of Kubernetes network policy during the development of the API. {{site.prodname}} is distinguished in that it implements the full set of features defined by the API giving users all the capabilities and flexibility envisaged when the API was defined. For users that require even more power, {{site.prodname}} supports an extended set of network policy capabilities that work seamlessly alongside the Kubernetes API giving users even more flexibility, by supporting kubernetes native definition of custom network policies.</p>
   </div>
   <div class="col-md-6">
     <img class="img-responsive center-block" src="/images/intro/policy.png">
