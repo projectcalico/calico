@@ -278,19 +278,19 @@ func mount(dir, opts string) error {
 
 	ninputs, workloadPath, s := checkValidMountOpts(opts)
 	if !s {
-		logError("mount", inp, "Incomplete inputs", sysLogOnlyFalse)
+		logError("mount", inp, "Incomplete inputs", syslogOnlyFalse)
 		return fmt.Errorf("invalid mount options")
 	}
 
 	if err := doMount(dir, ninputs, workloadPath); err != nil {
 		sErr := "Failure to mount: " + err.Error()
-		logError("mount", inp, sErr, sysLogOnlyFalse)
+		logError("mount", inp, sErr, syslogOnlyFalse)
 		return err
 	}
 
 	if err := addCredentialFile(ninputs); err != nil {
 		sErr := "Failure to create credentials: " + err.Error()
-		logError("mount", inp, sErr, sysLogOnlyFalse)
+		logError("mount", inp, sErr, syslogOnlyFalse)
 		return err
 	}
 
@@ -306,7 +306,7 @@ func unmount(dir string) error {
 	comps := strings.Split(dir, "/")
 	if len(comps) < 6 {
 		sErr := fmt.Sprintf("Failure to notify nodeagent dir %v", dir)
-		logError("unmount", dir, sErr, sysLogOnlyFalse)
+		logError("unmount", dir, sErr, syslogOnlyFalse)
 		return fmt.Errorf("invalid path to unount")
 	}
 
