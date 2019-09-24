@@ -57,3 +57,6 @@ htmlcov/
 /rpm/felix.spec
 /debian/changelog
 /.built-bpf-clang-builder-*
+
+# CRDs used in the FV tests, pulled from libcalico.
+fv/infrastructure/crds.yaml
