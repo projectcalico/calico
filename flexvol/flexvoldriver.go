@@ -278,19 +278,19 @@ func mount(dir, opts string) error {
 
 	ninputs, workloadPath, s := checkValidMountOpts(opts)
 	if !s {
-		logError("mount", inp, "Incomplete inputs", syslogOnlyTrue)
+		logError("mount", inp, "Incomplete inputs", sysLogOnlyFalse)
 		return fmt.Errorf("invalid mount options")
 	}
 
 	if err := doMount(dir, ninputs, workloadPath); err != nil {
 		sErr := "Failure to mount: " + err.Error()
-		logError("mount", inp, sErr, syslogOnlyTrue)
+		logError("mount", inp, sErr, sysLogOnlyFalse)
 		return err
 	}
 
 	if err := addCredentialFile(ninputs); err != nil {
 		sErr := "Failure to create credentials: " + err.Error()
-		logError("mount", inp, sErr, syslogOnlyTrue)
+		logError("mount", inp, sErr, sysLogOnlyFalse)
 		return err
 	}
 
@@ -306,7 +306,7 @@ func unmount(dir string) error {
 	comps := strings.Split(dir, "/")
 	if len(comps) < 6 {
 		sErr := fmt.Sprintf("Failure to notify nodeagent dir %v", dir)
-		logError("unmount", dir, sErr, syslogOnlyTrue)
+		logError("unmount", dir, sErr, sysLogOnlyFalse)
 		return fmt.Errorf("invalid path to unount")
 	}
 
@@ -436,14 +436,14 @@ func initConfiguration() {
 
 	bytes, err := ioutil.ReadFile(CONFIG_FILE)
 	if err != nil {
-		logError("initConfiguration", "", fmt.Sprintf("Not able to read %s: %s\n", CONFIG_FILE, err.Error()), syslogOnlyFalse)
+		logError("initConfiguration", "", fmt.Sprintf("Not able to read %s: %s\n", CONFIG_FILE, err.Error()), syslogOnlyTrue)
 		return
 	}
 
 	var config ConfigurationOptions
 	err = json.Unmarshal(bytes, &config)
 	if err != nil {
-		logError("initConfiguration", "", fmt.Sprintf("Not able to parst %s: %s\n", CONFIG_FILE, err.Error()), syslogOnlyFalse)
+		logError("initConfiguration", "", fmt.Sprintf("Not able to parst %s: %s\n", CONFIG_FILE, err.Error()), syslogOnlyTrue)
 		return
 	}
 
