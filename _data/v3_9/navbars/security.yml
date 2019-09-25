@@ -56,9 +56,6 @@ toc:
 - title: Get started with Calico network policy for OpenStack
   path: /security/network-policy-openstack
 
-- title: Monitor Calico component metrics 
-  path: /security/monitor-component-metrics  
-
 - title: Secure Calico component communications
   section:
   - title: Configure encryption and authentication
