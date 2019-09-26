@@ -98,7 +98,7 @@ Where auto-detection methods are based on:
 
 - **IP or domain name** 
 
-  A reachable destination using an IP address or domain. For example: 
+  A reachable destination (IP address or domain). For example: 
 
   ```
   calicoctl node run  --ip-autodetection-method=can-reach=8.8.8.8
