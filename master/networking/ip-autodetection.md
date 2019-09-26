@@ -85,11 +85,13 @@ As noted previously, the default auto detection method is **first valid interfac
 
 - **IPv4**
 
-  ```calicoctl node run  --ip-autodetection-method=<autodetection-method>
+  ```
+     calicoctl node run  --ip-autodetection-method=<autodetection-method>
   ``` 	
 - **IPv6** 
 
-  ```calicoctl node run --ip6-autodetection-method=<autodetection-method>
+  ```
+     calicoctl node run --ip6-autodetection-method=<autodetection-method>
   ``` 	
 
 Where auto-detection methods are based on:
