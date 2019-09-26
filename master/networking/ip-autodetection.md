@@ -50,7 +50,7 @@ By default, {{site.prodname}} uses the **first-found** method; the first valid I
 - regex to include matching interfaces (**interface**)
 - regex to exclude matching interfaces (**skip-interface**)
 
-For details on auto detection methods, see [calicoctl node run]({{site.baseurl}}/{{page.version}}/reference/calicoctl/node/run#ip-auto-detection-method-examples).
+For details on auto detection methods, see [calicoctl node run]({{site.baseurl}}/{{page.version}}/reference/calicoctl/node/run#displaying-the-help-text-for-calicoctl-node-run-command).
 
 #### Manually configure IP address and subnet
 
