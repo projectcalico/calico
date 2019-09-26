@@ -188,6 +188,6 @@ spec:
 
 ### Above and beyond
 
-- For details on auto detection methods, see [calicoctl node run]({{site.baseurl}}/{{page.version}}/reference/calicoctl/node/run#ip-auto-detection-method-examples)
+- For details on auto detection methods, see [calicoctl node run]({{site.baseurl}}/{{page.version}}/reference/calicoctl/node/run#displaying-the-help-text-for-calicoctl-node-run-command)
 - For calicoctl environment variables, see [Configuring {{site.nodecontainer}}]({{site.baseurl}}/{{page.version}}/reference/node/configuration)
 - [Node resource]({{site.baseurl}}/{{page.version}}/reference/resources/node)
