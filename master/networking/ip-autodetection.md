@@ -86,12 +86,12 @@ As noted previously, the default auto detection method is **first valid interfac
 - **IPv4**
 
   ```
-     calicoctl node run  --ip-autodetection-method=<autodetection-method>
+  calicoctl node run  --ip-autodetection-method=<autodetection-method>
   ``` 	
 - **IPv6** 
 
   ```
-     calicoctl node run --ip6-autodetection-method=<autodetection-method>
+  calicoctl node run --ip6-autodetection-method=<autodetection-method>
   ``` 	
 
 Where auto-detection methods are based on:
@@ -101,8 +101,8 @@ Where auto-detection methods are based on:
   A reachable destination using an IP address or domain. For example: 
 
   ```
-     calicoctl node run  --ip-autodetection-method=can-reach=8.8.8.8
-     calicoctl node run  --ip-autodetection-method=can-reach=www.google.com
+  calicoctl node run  --ip-autodetection-method=can-reach=8.8.8.8
+  calicoctl node run  --ip-autodetection-method=can-reach=www.google.com
   ```   
 
 - **Including matching interfaces**  
@@ -110,7 +110,7 @@ Where auto-detection methods are based on:
   A regular expression in golang syntax that includes interfaces that match. For example:
 
   ```
-     calicoctl node run  --ip-autodetection-method=interface=eth.*
+  calicoctl node run  --ip-autodetection-method=interface=eth.*
   ```
 
 - **Excluding matching interfaces**  
@@ -118,7 +118,7 @@ Where auto-detection methods are based on:
   A regular expression in golang syntax that excludes interfaces that match. For example:
 
   ```
-     calicoctl node run --ip6-autodetection-method=skip-interface=eth.*
+  calicoctl node run --ip6-autodetection-method=skip-interface=eth.*
   ```
 
 #### Manually configure IP address and subnet for a node
@@ -137,7 +137,7 @@ You caN configure specific IP address and subnet for a node using environment va
 To configure IP and subnet values using environment variables, use the `calicoctl node run` command. For example:
 
 ```
-   calicoctl node run --ip=10.0.2.10/24 --ip6=fd80:24e2:f998:72d6::/120
+calicoctl node run --ip=10.0.2.10/24 --ip6=fd80:24e2:f998:72d6::/120
 ```
 
 Where: 
@@ -159,7 +159,7 @@ You can also configure the IP address and subnet on a Node resource.
 Use **calicoctl** to query the current node configuration. For example:
 
 ```
-   calicoctl get node node2 -o yaml
+calicoctl get node node2 -o yaml
 ```
 
 **Sample output**
