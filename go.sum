@@ -50,6 +50,7 @@ github.com/envoyproxy/data-plane-api v0.0.0-20190920015348-f40ad8054a36 h1:907yM
 github.com/envoyproxy/data-plane-api v0.0.0-20190920201403-619157fd6fde h1:crs/W+F3geKTidCYfiE9hTraVGmU5J7kgkmjKDHPX1E=
 github.com/envoyproxy/data-plane-api v0.0.0-20190923231843-2b4ad5bc45d9 h1:Ed8QuODedowAuYzXvOv3g/OKBYvr0cwGf+1cnIo8VlU=
 github.com/envoyproxy/data-plane-api v0.0.0-20190924163129-fe7c3e1970c3 h1:S3x83xNzUnDieZBT/lxCcE9s7udPDVe1P9m2L5TJ5Go=
+github.com/envoyproxy/data-plane-api v0.0.0-20190925203433-13c23555c9e4 h1:NWOsKA7xAC/PZDGwxCqpHTLAB/u/OCXwER3w2BQOJPA=
 github.com/fsnotify/fsnotify v1.4.7 h1:IXs+QLmnXW2CcXuY+8Mzv/fWEsPGWxqefPtCP5CnV9I=
 github.com/fsnotify/fsnotify v1.4.7/go.mod h1:jwhsz4b93w/PPRr/qN1Yymfu8t87LnFCMoQvtojpjFo=
 github.com/ghodss/yaml v0.0.0-20150909031657-73d445a93680/go.mod h1:4dBDuWmgqj2HViK6kFavaiC9ZROes6MMH2rRYeMEF04=
