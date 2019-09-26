@@ -59,11 +59,11 @@ type timeIface interface {
 // realTime is the real implementation of timeIface, which calls through to the real time package.
 type realTime struct{}
 
-func (_ realTime) Now() time.Time {
+func (realTime) Now() time.Time {
 	return time.Now()
 }
 
-func (_ realTime) Since(t time.Time) time.Duration {
+func (realTime) Since(t time.Time) time.Duration {
 	return time.Since(t)
 }
 

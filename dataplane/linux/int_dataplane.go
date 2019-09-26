@@ -571,10 +571,10 @@ func (d *InternalDataplane) routeTables() []routeTable {
 }
 
 func (d *InternalDataplane) RegisterManager(mgr Manager) {
-	switch mgr.(type) {
+	switch mgr := mgr.(type) {
 	case ManagerWithRouteTables:
 		log.WithField("manager", mgr).Debug("registering ManagerWithRouteTables")
-		d.managersWithRouteTables = append(d.managersWithRouteTables, mgr.(ManagerWithRouteTables))
+		d.managersWithRouteTables = append(d.managersWithRouteTables, mgr)
 	}
 	d.allManagers = append(d.allManagers, mgr)
 }
