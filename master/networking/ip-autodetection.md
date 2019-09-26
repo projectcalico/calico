@@ -44,43 +44,44 @@ spec:
 
 #### Auto detection methods 
 
-By default, {{site.prodname}} uses the **first-found** method; the first valid IP address on the first interface (excluding local interfaces such as the docker bridge.) However, you can change the default method to any of these user-specified methods:
+By default, {{site.prodname}} uses the **first-found** method; the first valid IP address on the first interface (excluding local interfaces such as the docker bridge). However, you can change the default method to any of the following:
 
 - IP addresses or domains (**can-reach**)
 - regex to include matching interfaces (**interface**)
 - regex to exclude matching interfaces (**skip-interface**)
 
-For details on auto detection methods, see [calicoctl node run](https://docs.projectcalico.org/master/reference/calicoctl/node/run#ip-auto-detection-method-examples).
+For details on auto detection methods, see [calicoctl node run]({{site.baseurl}}/{{page.version}}/reference/calicoctl/node/run#ip-auto-detection-method-examples).
 
 #### Manually configure IP address and subnet
 
 There are two ways to manually configure an IP address and subnet:
 
-- {{site.prodname}} node container (start/restart)
+- {{site.prodname}} node container (start/restart)   
   Use environment variables and command line options to set values for nodes. 
-- {{site.prodname}} node resource
+
+- {{site.prodname}} node resource   
   Update the node resource.
 
 ##### Using environment variables and node resource
 
 Because you can configure IP address and subnet using either environment variables or node resource, the following table describes how values are synchronized. 
 
-| **If these environment variables...** | **Are...**                                            | **Then...**                                                  |
-| ------------------------------------- | ----------------------------------------------------- | ------------------------------------------------------------ |
-| IP/IP6                                | Explicitly set                                        | The specified values are used, and the Node resource is updated. |
-| IP/IP6                                | Set to auto detect                                     | Auto detects using the requested method (first-found, can-reach, interface, skip-interface), and updates the Node resource. |
-| IP/IP6                                | Not set, but node resource has IP/IP6 values          | Node resource value is used.                                 |
-| IP                                    | Not set, and there is no IP value in node resource    | Auto detects an IPv4 address and subnet, and updates Node resource. |
-| IP6                                   | Not set, and there is a notIP6 value in Node resource | No IP6 routing is performed on the node.                     |
+| **If this environment variable...** | **Is...**                                             | **Then...**                                                  |
+| ----------------------------------- | ----------------------------------------------------- | ------------------------------------------------------------ |
+| IP/IP6                              | Explicitly set                                        | The specified values are used, and the Node resource is updated. |
+|                                     | Set to autodetect                                     | The requested method is used (first-found, can-reach, interface, skip-interface), and the Node resource is updated. |
+|                                     | Not set, but Node resource has IP/IP6 values          | Node resource value is used.                                 |
+| IP                                  | Not set, and there is no IP value in Node resource    | Auto detects an IPv4 address and subnet, and updates Node resource. |
+| IP6                                 | Not set, and there is a notIP6 value in Node resource | No IP6 routing is performed on the node.                     |
 
 ### How to
 
 - [Change the auto detection method](#change-the-auto-detection-method)
-- [Manually configure IP address and subnet for node](#manually-configure-ip-address-and-subnet-for-node)
+- [Manually configure IP address and subnet for a node](#manually-configure-ip-address-and-subnet-for-a-node)
 
 #### Change the auto detection method
 
-As noted, the default auto detection method is **first valid interface found** (first-found). To use a different auto detection method, use the {{site.prodnamedash}} node run command:
+As noted previously, the default auto detection method is **first valid interface found** (first-found). To use a different auto detection method, use the following {{site.prodnamedash}} node run command, specifying the method:
 
 - **IPv4**
 
@@ -91,25 +92,28 @@ As noted, the default auto detection method is **first valid interface found** (
   ```calicoctl node run --ip6-autodetection-method=<autodetection-method>
   ``` 	
 
-Where <auto_detection> methods are:
+Where auto-detection methods are based on:
 
-- IP or domain name
-  An IP addresses or domains to reach a destination. For example: 
+- **IP or domain name** 
+
+  A reachable destination using an IP address or domain. For example: 
 
   ```
      calicoctl node run  --ip-autodetection-method=can-reach=8.8.8.8
      calicoctl node run  --ip-autodetection-method=can-reach=www.google.com
   ```   
 
-- regex expression to include matching interfaces
-  A regular expression in golang syntax for including interfaces that match. For example:
+- **Including matching interfaces**  
+
+  A regular expression in golang syntax that includes interfaces that match. For example:
 
   ```
      calicoctl node run  --ip-autodetection-method=interface=eth.*
   ```
 
-- regex expression to exclude matching interfaces
-  A regular expression in golang syntax for excluding the interfaces that match. For example:
+- **Excluding matching interfaces**  
+
+  A regular expression in golang syntax that excludes interfaces that match. For example:
 
   ```
      calicoctl node run --ip6-autodetection-method=skip-interface=eth.*
@@ -124,11 +128,11 @@ In the following scenarios, you may want to configure a specific IP and subnet:
 - Changes to subnet for cross subnet feature for packet encapsulation
 - Changes to host IP address
 
-You configure specific IP address and subnet for a node using environment variables or updating the node resource.
+You caN configure specific IP address and subnet for a node using environment variables or by updating the [Node resource]({{site.baseurl}}/{{page.version}}/reference/resources/node).
 
 ##### Configure IP and subnet using environment variables
 
-To configure IP and subnet values using environment variables, use the calicoctl node run command. For example:
+To configure IP and subnet values using environment variables, use the `calicoctl node run` command. For example:
 
 ```
    calicoctl node run --ip=10.0.2.10/24 --ip6=fd80:24e2:f998:72d6::/120
@@ -145,9 +149,9 @@ Where:
 
 ##### Configure IP and subnet using node resource
 
-You can also set the IP address and subnet on a node resource. 
+You can also configure the IP address and subnet on a Node resource. 
 
->**Tip**: When setting IP addresses on a node resource, you may want to disable IP address options or environment variables on the node. IP options on the container take precedence, and will overwrite the values you configure on the node resource.
+>**Tip**: When configuring the IP address on a Node resource, you may want to disable IP address options or environment variables on the node. IP options on the container take precedence, and will overwrite the values you configure on the node resource.
 {: .alert .alert-info}
 
 Use **calicoctl** to query the current node configuration. For example:
@@ -159,30 +163,31 @@ Use **calicoctl** to query the current node configuration. For example:
 **Sample output**
 
 ```
-- apiVersion: projectcalico.org/v3
-  kind: Node
-  metadata:
-    name: node2
-  spec:
-    bgp:
-      ipv4Address: 10.0.2.10/32
-      ipv6Address: fd80:24e2:f998:72d6::/128
+apiVersion: projectcalico.org/v3
+kind: Node
+metadata:
+  name: node2
+spec:
+  bgp:
+    ipv4Address: 10.0.2.10/32
+    ipv6Address: fd80:24e2:f998:72d6::/128
 ```
 
-Next, reconfigure the node. Ror example, with an ipv4Address and subnet.
+Next, reconfigure the node with a different ipv4Address and subnet. For example:
 
 ```
-- apiVersion: projectcalico.org/v3
-  kind: Node
-  metadata:
-    name: node2
-  spec:
-    bgp:
-      ipv4Address: 10.0.2.10/24
-      ipv6Address: fd80:24e2:f998:72d6::/120
+apiVersion: projectcalico.org/v3
+kind: Node
+metadata:
+  name: node2
+spec:
+  bgp:
+    ipv4Address: 10.0.2.10/24
+    ipv6Address: fd80:24e2:f998:72d6::/120
 ```
 
 ### Above and beyond
 
-- For details on all auto detection methods, see [calicoctl node run]({{site.baseurl}}/{{page.version}}/reference/calicoctl/node/run#ip-auto-detection-method-examples)
-- For calicoctl environment variables, see [Configuring calico/node]({{site.baseurl}}/{{page.version}}/reference/node/configuration)
+- For details on auto detection methods, see [calicoctl node run]({{site.baseurl}}/{{page.version}}/reference/calicoctl/node/run#ip-auto-detection-method-examples)
+- For calicoctl environment variables, see [Configuring {{site.nodecontainer}}]({{site.baseurl}}/{{page.version}}/reference/node/configuration)
+- [Node resource]({{site.baseurl}}/{{page.version}}/reference/resources/node)
