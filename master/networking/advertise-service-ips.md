@@ -57,7 +57,7 @@ Advertising a service’s external IPs works similarly to cluster IP, except tha
 
 ### Before you begin...
 
-- You must[configure BGP peering]({{site.baseurl}}/{{page.version}}/networking/bgp) between {{site.prodname}} and your network infrastructure
+- [Configure BGP peering]({{site.baseurl}}/{{page.version}}/networking/bgp) between {{site.prodname}} and your network infrastructure
 - You need at least one external node outside the cluster that acts as a router, route reflector, or ToR that is peered with calico nodes inside the cluster.
 - Services must be configured with the correct service type (“Cluster” or “Local”) for your implementation. For `externalTrafficPolicy: Local`, the service must be type `LoadBalancer` or `Nodeport`.
 
