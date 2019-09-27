@@ -320,6 +320,8 @@ github.com/projectcalico/felix v0.0.0-20190920064810-f3ee365d84de h1:eCgo/jfoWU8
 github.com/projectcalico/felix v0.0.0-20190920064810-f3ee365d84de/go.mod h1:ocCZqlvGzJHkeamlti9EhMh1FO7a4KVxcbz6afVj8Ro=
 github.com/projectcalico/felix v0.0.0-20190924025501-0d5748b898f9 h1:Yb6wo7rHexKp71/RSxlpduyQ27WMGqCNFxOHveCPtuQ=
 github.com/projectcalico/felix v0.0.0-20190924025501-0d5748b898f9/go.mod h1:ocCZqlvGzJHkeamlti9EhMh1FO7a4KVxcbz6afVj8Ro=
+github.com/projectcalico/felix v0.0.0-20190927064842-cbcfa199d067 h1:Z8Zo0D/slCSU+ndYc+vHLJ4fnkPfIQYJxQmoqHGiyUQ=
+github.com/projectcalico/felix v0.0.0-20190927064842-cbcfa199d067/go.mod h1:NQZMp8c1sZomDBf6HWd4dwvluV4usTU7RLENSoiz/pk=
 github.com/projectcalico/felix v3.8.1+incompatible h1:NvSktEqLz9y+dJoTLzAnbOnHcXnNo6RNpD1vrLf4CnU=
 github.com/projectcalico/felix v3.8.2+incompatible h1:cz0MaUs5qTjPWjTxK5J1D1zEIfrtSYUyyf2nAjCos9c=
 github.com/projectcalico/go-json v0.0.0-20161128004156-6219dc7339ba h1:aaF2byUCZhzszHsfPEr2M3qcU4ibtD/yk/il2R7T1PU=

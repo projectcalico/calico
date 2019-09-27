@@ -8,7 +8,7 @@ require (
 	github.com/mattn/go-isatty v0.0.8 // indirect
 	github.com/onsi/ginkgo v1.8.0
 	github.com/onsi/gomega v1.5.0
-	github.com/projectcalico/felix v0.0.0-20190924025501-0d5748b898f9
+	github.com/projectcalico/felix v0.0.0-20190927064842-cbcfa199d067
 	github.com/projectcalico/libcalico-go v0.0.0-20190920181452-f4749162e052
 	github.com/projectcalico/typha v0.0.0-20190923041634-cd399ce72718
 	github.com/sirupsen/logrus v1.4.2
