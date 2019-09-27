@@ -10,7 +10,7 @@ Enable {{site.prodname}} to advertise Kubernetes service IPs outside a cluster. 
 
 Typically, Kubernetes service cluster IPs are accessible only within the cluster, so external access to the service requires a dedicated load balancer or ingress controller. In cases where a service’s cluster IP is not routable, the service can be accessed using its external IP.
 
-Just as {{site.prodname}} supports advertising pod IPs over BGP, it supports advertising Kubernetes service IPs outside a cluster over BGP. This avoids the need for a dedicated load balancer. This feature also supports equal cost multi-path (ECMP) load balancing across nodes in the cluster, as well as source IP address preservation for local services when you need more control. 
+Just as {{site.prodname}} supports advertising **pod IPs** over BGP, it also supports advertising Kubernetes service IPs outside a cluster over BGP. This avoids the need for a dedicated load balancer. This feature also supports equal cost multi-path (ECMP) load balancing across nodes in the cluster, as well as source IP address preservation for local services when you need more control. 
 
 It’s easy to implement advertisement of Kubernetes service IPs in {{site.prodname}}. To advertise a service cluster IPs, just add the advertisement CIDR block to your calico manifest. For advertisting service’s external IPs, you add the advertisement CIDR block in a cluster’s default BGP configuration resource.
 
@@ -35,7 +35,7 @@ In Kubernetes, all requests for a service are redirected to an appropriate endpo
 
 If your deployment is configured to peer with BGP routers outside the cluster, those routers (plus any other upstream places the routers propagate to) can send traffic to a Kubernetes service cluster IP for routing to one of the available endpoints for that service.
 
-#### How advertisting service cluster IP addresses works
+#### About advertising service cluster IP addresses
 
 {{site.prodname}} implements the Kubernetes **externalTrafficPolicy** using kube-proxy to direct incoming traffic to a correct pod. Cluster IP advertisement is handled differently based on the service type that you configure for your service.
 
@@ -44,7 +44,7 @@ If your deployment is configured to peer with BGP routers outside the cluster, t
 | Cluster (default) | All nodes in the cluster statically advertise a route to the CIDR. | Load balanced across nodes in the cluster using ECMP, then forwarded to appropriate pod in the service. Involves SNAT so provides more even load balancing. |
 | Local             | Only nodes running a pod backing the service advertise routes to the CIDR, and to specific /32 routes. | Load balanced across nodes with endpoints for the service. Removes SNAT so may provide less even load balancing. (Other traffic is load balanced across nodes in the cluster.) |
 
-#### How advertising service external IP addresses works
+#### About advertising service external IP addresses
 
 Advertising a service’s external IPs works similarly to cluster IP, except that you add the CIDR blocks corresponding to each service’s external IPs to your BGP configuration resource. For a service’s external IPs to be advertised, the service must configured with **externalTrafficPolicy: Local**.
 
