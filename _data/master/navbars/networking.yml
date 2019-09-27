@@ -22,8 +22,6 @@ toc:
   path: /networking/node
 - title: Configuring MTU
   path: /networking/mtu
-- title: Advertising Kubernetes services
-  path: /networking/service-advertisement
 - title: Assigning IP addresses based on topology
   path: /networking/assigning-ip-addresses-topology
 - title: Calico networking for OpenStack
@@ -66,3 +64,5 @@ toc:
   path: /networking/add-floating-ip
 - title: Get started with IP address management
   path: /networking/get-started-ip-addresses
+- title: Advertise Kubernetes service IP addresses
+  path: /networking/advertise-service-ips   
