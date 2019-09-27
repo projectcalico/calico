@@ -75,13 +75,10 @@ Advertising a service’s external IPs works similarly to cluster IP, except tha
    Default: 10.0.0.0/24. To view existing range, pass the option `--service-cluster-ip-range` to the Kubernetes API server. For help, see the [Kubernetes API server reference guide](https://kubernetes.io/docs/reference/command-line-tools-reference/kube-apiserver/).
 1. Set the `CALICO_ADVERTISE_CLUSTER_IPS` environment variable to the service cluster IP range for the cluster in the calico-node daemonset.   
  **Note**: The value for `CALICO_ADVERTISE_CLUSTER_IPS` must not include the pod or node CIDR.
-
-For example: 
-
-```
-kubectl patch ds -n kube-system calico-node --patch \
-    '{"spec": {"template": {"spec": {"containers": [{"name": "calico-node", "env": [{"name": "CALICO_ADVERTISE_CLUSTER_IPS", "value": "10.0.0.0/24"}]}]}}}}'
-```
+ ```
+ kubectl patch ds -n kube-system calico-node --patch \
+     '{"spec": {"template": {"spec": {"containers": [{"name": "calico-node", "env": [{"name": "CALICO_ADVERTISE_CLUSTER_IPS",   "value": "10.0.0.0/24"}]}]}}}}'
+ ```
 
 #### Adverstise service external IP addresses
 
