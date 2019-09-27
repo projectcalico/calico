@@ -46,7 +46,7 @@ If your deployment is configured to peer with BGP routers outside the cluster, t
 
 #### How service external IP advertisement works
 
-Advertising a service’s external IPs works similarly to cluster IP, except that you add the CIDR blocks corresponding to each service’s external IPs to your BGP configuration resource. For a service’s external IPs to be advertised, the service must have **externalTrafficPolicy: Local**.
+Advertising a service’s external IPs works similarly to cluster IP, except that you add the CIDR blocks corresponding to each service’s external IPs to your BGP configuration resource. For a service’s external IPs to be advertised, the service must configured with **externalTrafficPolicy: Local**.
 
 #### Tips for success
 
