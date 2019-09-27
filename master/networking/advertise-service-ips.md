@@ -92,14 +92,14 @@ kubectl patch ds -n kube-system calico-node --patch \
    ```
 1. Based on above results, update or create a BGPConfiguration. 
 
-   **Update default BGPConfiguration**
+   **Update default BGPConfiguration**  
    Patch the BGPConfiguration using the following command, adding your own service external IP CIDRs:
 
    ```
    calicoctl patch BGPConfig default --patch \
       '{"spec": {"serviceExternalIPs": [{"cidr": "x.x.x.x"}, {"cidr": "y.y.y.y"}]}}'
    ```
-   **Create default BGPConfiguration** 
+   **Create default BGPConfiguration**    
    Use the following sample command to create a default BGPConfiguration. Add your CIDR blocks for each external IP to be advertised in the `serviceExternalIPs` field. 
 
    ```
