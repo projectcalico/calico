@@ -51,7 +51,7 @@ Advertising a service’s external IPs works similarly to cluster IP, except tha
 #### Tips for success
 
 - Generally, we recommend using “Local” for the following reasons:    
-  - Network policies that refer to a source IP address, work as expected because the original source address is preserved.
+  - Network policies that refer to a source IP address work as expected because the original source address is preserved.
   - Return traffic is routed directly to the source IP because “Local” services do not require undoing the source NAT (unlike “Cluster” services).  
 - Cluster IP advertisement works best with a route reflector/ToR that supports ECMP. Otherwise, all traffic for a given route is directed to a single node. 
 
