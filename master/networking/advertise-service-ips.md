@@ -46,7 +46,7 @@ If your deployment is configured to peer with BGP routers outside the cluster, t
 
 #### How service external IP advertisement works
 
-Advertising a service’s external IP works similarly to cluster IP, except that you add the CIDR blocks to your BGP configuration resource.
+Advertising a service’s external IPs works similarly to cluster IP, except that you add the CIDR blocks corresponding to each service’s external IPs to your BGP configuration resource. For a service’s external IPs to be advertised, the service must have **externalTrafficPolicy: Local**.
 
 #### Tips for success
 
@@ -57,7 +57,7 @@ Advertising a service’s external IP works similarly to cluster IP, except that
 
 ### Before you begin...
 
-- [Configure BGP peering]({{site.baseurl}}/{{page.version}}/networking/bgp) between {{site.prodname}} and your network infrastructure.
+- You must[configure BGP peering]({{site.baseurl}}/{{page.version}}/networking/bgp) between {{site.prodname}} and your network infrastructure
 - You need at least one external node outside the cluster that acts as a router, route reflector, or ToR that is peered with calico nodes inside the cluster.
 - Services must be configured with the correct service type (“Cluster” or “Local”) for your implementation. For `externalTrafficPolicy: Local`, the service must be type `LoadBalancer` or `Nodeport`.
 
@@ -82,12 +82,40 @@ kubectl patch ds -n kube-system calico-node --patch \
 
 #### Enable service external IP address advertisement
 
-1. Before you start, ensure that you’ve enabled cluster IP address advertisement.  
-   External IP advertisement uses the same `CALICO_ADVERTISE_CLUSTER_IPS` environment variable to enable the service advertisement feature.
+1. Verify the following:
+   - Cluster IP address advertisement is enabled. (External IP advertisement uses the same `CALICO_ADVERTISE_CLUSTER_IPS` environment variable to enable the service advertisement feature.)
+   - Services for advertising external IPs are configured with **externalTrafficPolicy: Local**
 1. Identify the external IPs of all services that you want to advertise outside of the {{site.prodname}} cluster.
-1. Update the default BGPConfiguration resource.
-   In the `serviceExternalIPs` field, add CIDR blocks for each external IP to be advertised. For help see, [BGP configuration resource]({{site.baseurl}}/{{page.version}}/reference/resources/bgpconfig).
+1. Check to see if you have a default BGPConfiguration. 
+   ```
+   calicoctl get bgpconfig default
+   ```
+1. Based on above results, update or create a BGPConfiguration. 
 
+   **Update default BGPConfiguration**
+   Patch the BGPConfiguration using the following command, adding your own service external IP CIDRs:
+
+   ```
+   calicoctl patch BGPConfig default --patch \
+      '{"spec": {"serviceExternalIPs": [{"cidr": "x.x.x.x"}, {"cidr": "y.y.y.y"}]}}'
+   ```
+   **Create default BGPConfiguration** 
+   Use the following sample command to create a default BGPConfiguration. Add your CIDR blocks for each external IP to be advertised in the `serviceExternalIPs` field. 
+
+   ```
+   calicoctl create -f - <<EOF
+   apiVersion: projectcalico.org/v3
+   kind: BGPConfiguration
+   metadata:
+     name: default
+   spec:
+     serviceExternalIPs:
+     - cidr: x.x.x.x/32
+     - cidr: y.y.y.y/32
+   EOF
+   ```
+   For help see, [BGP configuration resource]({{site.baseurl}}/{{page.version}}/reference/resources/bgpconfig).
+   
 ### Tutorial
 
 For a tutorial on how service advertisement works with {{site.prodname}}, see the blog [Kubernetes Service IP Route Advertisement](https://www.projectcalico.org/kubernetes-service-ip-route-advertisement/).
