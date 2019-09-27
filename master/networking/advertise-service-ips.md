@@ -18,13 +18,13 @@ It’s easy to implement advertisement of Kubernetes service IPs in {{site.prodn
 
 This how-to guide uses the following {{site.prodname}} features:
 
-**Cluster IP advertisement**:
+**Advertise cluster IP addresses**:
 
-- **calico-config ConfigMap** with CALICO_ADVERTISE_CLUSTER_IPS environment variable
+- **calico-config ConfigMap** with `CALICO_ADVERTISE_CLUSTER_IPS` environment variable
 
-**External IP advertisement**:
+**Advertise external IP addresses**:
 
-- **BGPConfiguration** resource with serviceExternalIPs field
+- **BGPConfiguration** resource with `serviceExternalIPs` field
 
 
 ### Concepts
@@ -35,7 +35,7 @@ In Kubernetes, all requests for a service are redirected to an appropriate endpo
 
 If your deployment is configured to peer with BGP routers outside the cluster, those routers (plus any other upstream places the routers propagate to) can send traffic to a Kubernetes service cluster IP for routing to one of the available endpoints for that service.
 
-#### How service cluster IP advertisement works
+#### How advertisting service cluster IP addresses works
 
 {{site.prodname}} implements the Kubernetes **externalTrafficPolicy** using kube-proxy to direct incoming traffic to a correct pod. Cluster IP advertisement is handled differently based on the service type that you configure for your service.
 
@@ -44,7 +44,7 @@ If your deployment is configured to peer with BGP routers outside the cluster, t
 | Cluster (default) | All nodes in the cluster statically advertise a route to the CIDR. | Load balanced across nodes in the cluster using ECMP, then forwarded to appropriate pod in the service. Involves SNAT so provides more even load balancing. |
 | Local             | Only nodes running a pod backing the service advertise routes to the CIDR, and to specific /32 routes. | Load balanced across nodes with endpoints for the service. Removes SNAT so may provide less even load balancing. (Other traffic is load balanced across nodes in the cluster.) |
 
-#### How service external IP advertisement works
+#### How advertising service external IP addresses works
 
 Advertising a service’s external IPs works similarly to cluster IP, except that you add the CIDR blocks corresponding to each service’s external IPs to your BGP configuration resource. For a service’s external IPs to be advertised, the service must configured with **externalTrafficPolicy: Local**.
 
@@ -63,10 +63,10 @@ Advertising a service’s external IPs works similarly to cluster IP, except tha
 
 ### How to
 
-- [Enable service cluster IP address advertisement](#enable-service-cluster-ip-address-advertisement)
-- [Enable service external IP address advertisement](#enable-service-external-ip-address-advertisement)
+- [Advertise service cluster IP addresses](#advertise-service-cluster-IP-addresses)
+- [Adverstise service external IP addresses](#advertise-service-cluster-IP-addresses)
 
-#### Enable service cluster IP address advertisement
+#### Advertise service cluster IP addresses
 
 1. Determine the service cluster IP range.  
    Default: 10.0.0.0/24. To view existing range, pass the option `--service-cluster-ip-range` to the Kubernetes API server. For help, see the [Kubernetes API server reference guide](https://kubernetes.io/docs/reference/command-line-tools-reference/kube-apiserver/).
@@ -80,7 +80,7 @@ kubectl patch ds -n kube-system calico-node --patch \
     '{"spec": {"template": {"spec": {"containers": [{"name": "calico-node", "env": [{"name": "CALICO_ADVERTISE_CLUSTER_IPS", "value": "10.0.0.0/24"}]}]}}}}'
 ```
 
-#### Enable service external IP address advertisement
+#### Adverstise service external IP addresses
 
 1. Verify the following:
    - Cluster IP address advertisement is enabled. (External IP advertisement uses the same `CALICO_ADVERTISE_CLUSTER_IPS` environment variable to enable the service advertisement feature.)
