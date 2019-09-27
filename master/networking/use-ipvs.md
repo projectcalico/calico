@@ -52,7 +52,7 @@ When {{site.prodname}} detects that kube-proxy is running in IPVS mode (during o
 
 ### How to
 
-As previously discussed, there is nothing you need to do in {{site.prodname}} to use IPVS mode; if enabled, the mode is automatically detected. However, if your default Kubernetes NodePort range changes, use the instructions that follow to update {{site.prodname}} nodeport ranges to stay in sync. 
+As previously discussed, there is nothing you need to do in {{site.prodname}} to use IPVS mode; if enabled, the mode is automatically detected. However, if your default Kubernetes NodePort range changes, use the following instructions to update {{site.prodname}} nodeport ranges to stay in sync. 
 
 #### Change {{site.prodname}} default nodeport range
 
