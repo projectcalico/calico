@@ -42,7 +42,7 @@ If your deployment is configured to peer with BGP routers outside the cluster, t
 | **Service type**  | **Cluster IP advertisement**                                 | **Traffic is...**                                            | Source IP address is... |
 | ----------------- | ------------------------------------------------------------ | ------------------------------------------------------------ | ----------------------- |
 | Cluster (default) | All nodes in the cluster statically advertise a route to the CIDR. | Load balanced across nodes in the cluster using ECMP, then forwarded to appropriate pod in the service. May incur second hop to another node, but good overall load balancing. | Obscured by SNAT        |
-| Local             | Only nodes running a pod backing the service advertise routes to the CIDR, and to specific /32 routes. | Load balanced across nodes with endpoints for the service.  (Other traffic is load balanced across nodes in the cluster.) Avoids second hop for LoadBalancer and NodePort type services, traffic maybe be unevenly load balanced. | Preserved (no SNAT)     |
+| Local             | Only nodes running a pod backing the service advertise routes to the CIDR, and to specific /32 routes. | Load balanced across nodes with endpoints for the service.  Avoids second hop for LoadBalancer and NodePort type services, traffic may be unevenly load balanced. (Other traffic is load balanced across nodes in the cluster.) | Preserved               |
 
 Also, if your Calico deployment is configured to peer with BGP routers outside the cluster, those routers - plus any further upstream places that those routers propagate to - will be able to send traffic to a Kubernetes service cluster IP, and that traffic is routed to one of the available endpoints for that service.
 
@@ -53,7 +53,7 @@ Advertising a service’s external IPs works similarly to cluster IP, except tha
 #### Tips for success
 
 - Generally, we recommend using “Local” for the following reasons:    
-  - Network policies that refer to a source IP address work as expected because the original source address is preserved.
+  - If any of your network policy uses rules to match by specific source IP addresses, using Local is the obvious choice because the source IP address is not altered, and the policy will still work.
   - Return traffic is routed directly to the source IP because “Local” services do not require undoing the source NAT (unlike “Cluster” services).  
 - Cluster IP advertisement works best with a route reflector/ToR that supports ECMP. Otherwise, all traffic for a given route is directed to a single node. 
 
