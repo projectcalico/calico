@@ -12,7 +12,7 @@ Typically, Kubernetes service cluster IPs are accessible only within the cluster
 
 Just as {{site.prodname}} supports advertising **pod IPs** over BGP, it also supports advertising Kubernetes **service IPs** outside a cluster over BGP. This avoids the need for a dedicated load balancer. This feature also supports equal cost multi-path (ECMP) load balancing across nodes in the cluster, as well as source IP address preservation for local services when you need more control. 
 
-It’s easy to implement advertisement of Kubernetes service IPs in {{site.prodname}}. To advertise a service cluster IPs, just add the advertisement CIDR block to your calico manifest. For advertisting service’s external IPs, you add the advertisement CIDR block in a cluster’s default BGP configuration resource.
+Finally, it’s easy to implement. To advertise a service cluster IPs, just add the advertisement CIDR block to your calico manifest. For advertisting service’s external IPs, you add the advertisement CIDR block in a cluster’s default BGP configuration resource.
 
 ### Features
 
