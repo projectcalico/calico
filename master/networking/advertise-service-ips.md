@@ -35,18 +35,18 @@ In Kubernetes, all requests for a service are redirected to an appropriate endpo
 
 If your deployment is configured to peer with BGP routers outside the cluster, those routers (plus any other upstream places the routers propagate to) can send traffic to a Kubernetes service cluster IP for routing to one of the available endpoints for that service.
 
-#### About advertising service cluster IP addresses
+#### Advertising service cluster IPs: quick glance
 
 {{site.prodname}} implements the Kubernetes **externalTrafficPolicy** using kube-proxy to direct incoming traffic to a correct pod. Cluster IP advertisement is handled differently based on the service type that you configure for your service.
 
 | **Service type**  | **Cluster IP advertisement**                                 | **Traffic is...**                                            | Source IP address is... |
 | ----------------- | ------------------------------------------------------------ | ------------------------------------------------------------ | ----------------------- |
-| Cluster (default) | All nodes in the cluster statically advertise a route to the CIDR. | Load balanced across nodes in the cluster using ECMP, then forwarded to appropriate pod in the service. May incur second hop to another node, but good overall load balancing. | Obscured by SNAT        |
+| Cluster (default) | All nodes in the cluster statically advertise a route to the CIDR. | Load balanced across nodes in the cluster using ECMP, then forwarded to appropriate pod in the service using SNAT. May incur second hop to another node, but good overall load balancing. | Obscured by SNAT        |
 | Local             | Only nodes running a pod backing the service advertise routes to the CIDR, and to specific /32 routes. | Load balanced across nodes with endpoints for the service.  Avoids second hop for LoadBalancer and NodePort type services, traffic may be unevenly load balanced. (Other traffic is load balanced across nodes in the cluster.) | Preserved               |
 
 Also, if your Calico deployment is configured to peer with BGP routers outside the cluster, those routers - plus any further upstream places that those routers propagate to - will be able to send traffic to a Kubernetes service cluster IP, and that traffic is routed to one of the available endpoints for that service.
 
-#### About advertising service external IP addresses
+#### Advertising service external IPs: quick glance
 
 Advertising a service’s external IPs works similarly to cluster IP, except that you add the CIDR blocks corresponding to each service’s external IPs to your BGP configuration resource. For a service’s external IPs to be advertised, the service must configured with **externalTrafficPolicy: Local**.
 
