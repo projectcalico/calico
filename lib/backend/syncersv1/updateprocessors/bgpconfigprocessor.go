@@ -35,6 +35,7 @@ func NewBGPConfigUpdateProcessor() watchersyncer.SyncerUpdateProcessor {
 			"loglevel":         logLevelToBirdLogLevel,
 			"node_mesh":        nodeMeshToString,
 			"svc_external_ips": svcExternalIpsToString,
+			"svc_cluster_ips":  svcClusterIpsToString,
 		},
 	)
 }
@@ -64,10 +65,28 @@ var nodeMeshToString = func(value interface{}) interface{} {
 	return nodeToNodeMeshDisabled
 }
 
-// We wrap each Service External IP in a SvcExternalIPBlock struct to
+// We wrap each Service external IP in a ServiceExternalIPBlock struct to
 // achieve the desired API structure. This unpacks that.
 var svcExternalIpsToString = func(value interface{}) interface{} {
-	ipBlocks := value.([]apiv3.SvcExternalIPBlock)
+	ipBlocks := value.([]apiv3.ServiceExternalIPBlock)
+
+	// Processor expects all empty fields to be nil.
+	if len(ipBlocks) == 0 {
+		return nil
+	}
+
+	ipCidrs := make([]string, 0)
+	for _, ipBlock := range ipBlocks {
+		ipCidrs = append(ipCidrs, ipBlock.CIDR)
+	}
+
+	return strings.Join(ipCidrs, ",")
+}
+
+// We wrap each Service Cluster IP in a ServiceClusterIPBlock to
+// achieve the desired API structure. This unpacks that.
+var svcClusterIpsToString = func(value interface{}) interface{} {
+	ipBlocks := value.([]apiv3.ServiceClusterIPBlock)
 
 	// Processor expects all empty fields to be nil.
 	if len(ipBlocks) == 0 {
