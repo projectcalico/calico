@@ -8,9 +8,9 @@ require (
 	github.com/mattn/go-isatty v0.0.8 // indirect
 	github.com/onsi/ginkgo v1.8.0
 	github.com/onsi/gomega v1.5.0
-	github.com/projectcalico/felix v0.0.0-20190927064842-cbcfa199d067
-	github.com/projectcalico/libcalico-go v0.0.0-20190920181452-f4749162e052
-	github.com/projectcalico/typha v0.0.0-20190923041634-cd399ce72718
+	github.com/projectcalico/felix v0.0.0-20190930212430-7103830d61de
+	github.com/projectcalico/libcalico-go v0.0.0-20190930172755-3e9f97a04dc5
+	github.com/projectcalico/typha v0.0.0-20190930175822-667233ccc5dc
 	github.com/sirupsen/logrus v1.4.2
 	github.com/ugorji/go/codec v1.1.7
 	github.com/vishvananda/netns v0.0.0-20180720170159-13995c7128cc // indirect
@@ -21,4 +21,4 @@ require (
 
 replace github.com/sirupsen/logrus => github.com/projectcalico/logrus v0.0.0-20180627202928-fc9bbf2f57995271c5cd6911ede7a2ebc5ea7c6f
 
-replace github.com/kelseyhightower/confd => github.com/projectcalico/confd v0.0.0-20190924042332-fdd27fe5317a
+replace github.com/kelseyhightower/confd => github.com/projectcalico/confd v0.0.0-20190930204323-d41026f65c69
