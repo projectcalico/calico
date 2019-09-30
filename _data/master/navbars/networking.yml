@@ -67,4 +67,4 @@ toc:
 - title: Get started with IP address management
   path: /networking/get-started-ip-addresses
 - title: Allow workloads access outside cluster
-  path: /networking/workloads-outside-cluster  
+  path: /networking/workloads-outside-cluster
