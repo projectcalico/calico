@@ -271,6 +271,8 @@ github.com/projectcalico/libcalico-go v0.0.0-20190919175705-6dc16419eb4d h1:q9dd
 github.com/projectcalico/libcalico-go v0.0.0-20190919175705-6dc16419eb4d/go.mod h1:UhwqglrBKH97bgKjpmQM76rT8FZPbGsNuMIQ+tCao6I=
 github.com/projectcalico/libcalico-go v0.0.0-20190920181452-f4749162e052 h1:R/kBG3Vb7IpglNydDtfcNQOHXRZin62wgiOpM9PuNU0=
 github.com/projectcalico/libcalico-go v0.0.0-20190920181452-f4749162e052/go.mod h1:UhwqglrBKH97bgKjpmQM76rT8FZPbGsNuMIQ+tCao6I=
+github.com/projectcalico/libcalico-go v0.0.0-20190930172755-3e9f97a04dc5 h1:f51eREmDztbAvBemSOAywm1NEtthFAuNoN4CW+L0JCU=
+github.com/projectcalico/libcalico-go v0.0.0-20190930172755-3e9f97a04dc5/go.mod h1:UhwqglrBKH97bgKjpmQM76rT8FZPbGsNuMIQ+tCao6I=
 github.com/projectcalico/logrus v0.0.0-20180627202928-fc9bbf2f57995271c5cd6911ede7a2ebc5ea7c6f h1:C2wKicEbskyr0DaQY7AmWNi8xq24cGtboczIBG8vB5M=
 github.com/projectcalico/logrus v0.0.0-20180627202928-fc9bbf2f57995271c5cd6911ede7a2ebc5ea7c6f/go.mod h1:DfgrchabbtEO9wjOz5lVae+XRvjFKKWEA9GTMme6A8g=
 github.com/projectcalico/logrus v1.0.6-0.20180701205716-fc9bbf2f5799 h1:dDZ0K34D+kPetUNiAZNVnbHpxNyFhQuTBx9Pvnjyrsc=
@@ -289,6 +291,8 @@ github.com/projectcalico/typha v0.0.0-20190920041827-5f597282c12a h1:MfZZNiuLVio
 github.com/projectcalico/typha v0.0.0-20190920041827-5f597282c12a/go.mod h1:HBgtMHWWPfV56QIYuDfhoMuqU7ve0vMBKnAp3tMkZec=
 github.com/projectcalico/typha v0.0.0-20190923041634-cd399ce72718 h1:kyAR2aFdJtNjHez7o90GAmAZJHYeV274ApUauKgXQyA=
 github.com/projectcalico/typha v0.0.0-20190923041634-cd399ce72718/go.mod h1:zbenHq+R7UqrWlGuMVakC69VQLO7iYXuMyZYBceqwkw=
+github.com/projectcalico/typha v0.0.0-20190930175822-667233ccc5dc h1:lf45b1fEjvuwCLKroMWO3dKAfUMHEqKxlkivDwReMw8=
+github.com/projectcalico/typha v0.0.0-20190930175822-667233ccc5dc/go.mod h1:KDfEWiWBNsG/nuZ/SOTa66gpkvuvbqX31SofE/vPdp0=
 github.com/projectcalico/typha v3.8.2+incompatible h1:gzjm+SMnol9qLb3Ny46mTODry3o7zq56PNI9pqeHil4=
 github.com/prometheus/client_golang v0.0.0-20171005112915-5cec1d0429b0/go.mod h1:7SWBe2y4D6OKWSNQJUaRYU/AaXPKyh/dDVn+NZz0KFw=
 github.com/prometheus/client_golang v0.0.0-20180907100926-773f5027234d h1:5uR+Va+FdN8swCl8jWZ/r1sWCavYgailkiakyHWtBus=

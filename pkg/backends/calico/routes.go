@@ -17,7 +17,7 @@ import (
 	"fmt"
 	"net"
 	"os"
-	"strings"
+	"reflect"
 	"sync"
 	"time"
 
@@ -47,18 +47,12 @@ type routeGenerator struct {
 	svcIndexer, epIndexer   cache.Indexer
 	svcRouteMap             map[string]map[string]bool
 	routeAdvertisementCount map[string]int
-	clusterCIDR             string
+	clusterCIDRs            []string
 	externalIPNets          []*net.IPNet
 }
 
 // NewRouteGenerator initializes a kube-api client and the informers
-func NewRouteGenerator(c *client, clusterCIDR string) (rg *routeGenerator, err error) {
-	// Parse clusterCIDR to make sure it is valid.
-	cidr := strings.TrimSpace(clusterCIDR)
-	if _, _, err := net.ParseCIDR(cidr); err != nil {
-		return nil, fmt.Errorf("failed to parse cluster CIDR %s: %s", clusterCIDR, err)
-	}
-
+func NewRouteGenerator(c *client) (rg *routeGenerator, err error) {
 	// Determine the node name we'll use to check for local endpoints.
 	// This value should match the name of the node in the Kubernetes API.
 	// Prefer CALICO_K8S_NODE_REF, and fall back to the Calico node name.
@@ -74,7 +68,6 @@ func NewRouteGenerator(c *client, clusterCIDR string) (rg *routeGenerator, err e
 		nodeName:                nodename,
 		svcRouteMap:             make(map[string]map[string]bool),
 		routeAdvertisementCount: make(map[string]int),
-		clusterCIDR:             clusterCIDR,
 		externalIPNets:          make([]*net.IPNet, 0),
 	}
 
@@ -113,13 +106,8 @@ func (rg *routeGenerator) Start() {
 	go rg.svcInformer.Run(ch)
 	go rg.epInformer.Run(ch)
 
-	// Don't program routes within the cluster CIDR.
-	rg.client.AddRejectCIDRs([]string{rg.clusterCIDR})
-
-	// But, do advertise it.
-	rg.client.AddStaticRoutes([]string{rg.clusterCIDR})
-
 	// Wait for informers to sync, then notify the main client.
+	log.Info("Starting RouteGenerator for Kubernetes services")
 	go func() {
 		for !rg.svcInformer.HasSynced() || !rg.epInformer.HasSynced() {
 			time.Sleep(100 * time.Millisecond)
@@ -127,6 +115,7 @@ func (rg *routeGenerator) Start() {
 
 		// Notify the main client we're in sync now.
 		rg.client.OnInSync(SourceRouteGenerator)
+		log.Info("RouteGenerator in sync")
 	}()
 }
 
@@ -173,7 +162,6 @@ func (rg *routeGenerator) getEndpointsForService(svc *v1.Service) (*v1.Endpoints
 // setRouteForSvc handles the main logic to check if a specified service or endpoint
 // should have its route advertised by the node running this code
 func (rg *routeGenerator) setRouteForSvc(svc *v1.Service, ep *v1.Endpoints) {
-
 	// ensure both are not nil
 	if svc == nil && ep == nil {
 		log.Error("setRouteForSvc: both service and endpoint cannot be nil, passing...")
@@ -206,21 +194,81 @@ func (rg *routeGenerator) setRouteForSvc(svc *v1.Service, ep *v1.Endpoints) {
 		routes := rg.getAdvertisedRoutes(key)
 		rg.withdrawRoutesForKey(key, routes)
 	}
-
 }
 
-// onBGPConfigurationUpdate is called from the calico client, whenever there
+// onExternalIPsUpdate is called from the calico client, whenever there
 // is a change to the svc_external_ips. The set of whitelisted external IP networks
 // will be updated to the new values specified in the default BGP configuration.
 // All of the routes advertised for each service will then be updated to reflect
 // this change.
-func (rg *routeGenerator) onBGPConfigurationUpdate(newExternalNets []*net.IPNet) {
-
+func (rg *routeGenerator) onExternalIPsUpdate(newExternalNets []string) {
 	rg.Lock()
-	rg.externalIPNets = newExternalNets
+	// Check if it differs from our current configuration.
+	if reflect.DeepEqual(parseIPNets(newExternalNets), rg.externalIPNets) {
+		// No change, there's no work to do.
+		rg.Unlock()
+		return
+	}
+
+	// Determine the diff, and update the dataplane with it. First, find
+	// which CIDRs we should withdraw.
+	withdraws := []string{}
+	for _, existing := range rg.externalIPNets {
+		if !contains(newExternalNets, existing.String()) {
+			withdraws = append(withdraws, existing.String())
+		}
+	}
+	rg.externalIPNets = parseIPNets(newExternalNets)
 	rg.Unlock()
 
-	// Get all the services that we know about
+	// Withdraw the old CIDRs and add the new.
+	rg.client.AddRejectCIDRs(newExternalNets)
+	rg.client.AddStaticRoutes(newExternalNets)
+	rg.client.DeleteRejectCIDRs(withdraws)
+	rg.client.DeleteStaticRoutes(withdraws)
+
+	// Resync routes.
+	rg.resyncKnownRoutes()
+	log.Infof("Updated with new external IP CIDRs: %s", newExternalNets)
+}
+
+// onClusterIPsUpdate is called from the calico client, whenever there
+// is a change to the svc_cluster_ips.
+func (rg *routeGenerator) onClusterIPsUpdate(newClusterNets []string) {
+	rg.Lock()
+	// Check if it differs from our current configuration.
+	if reflect.DeepEqual(newClusterNets, rg.clusterCIDRs) {
+		// No change, there's no work to do.
+		rg.Unlock()
+		return
+	}
+
+	// Determine the diff, and update the dataplane with it. First, find
+	// which CIDRs we should withdraw.
+	withdraws := []string{}
+	for _, existing := range rg.clusterCIDRs {
+		if !contains(newClusterNets, existing) {
+			withdraws = append(withdraws, existing)
+		}
+	}
+	// Update known CIDRs.
+	rg.clusterCIDRs = newClusterNets
+	rg.Unlock()
+
+	// Withdraw the old CIDRs and add the new.
+	rg.client.AddRejectCIDRs(newClusterNets)
+	rg.client.AddStaticRoutes(newClusterNets)
+	rg.client.DeleteRejectCIDRs(withdraws)
+	rg.client.DeleteStaticRoutes(withdraws)
+
+	// Resync routes.
+	rg.resyncKnownRoutes()
+	log.Infof("Updated with new Cluster CIDRs: %s", newClusterNets)
+}
+
+func (rg *routeGenerator) resyncKnownRoutes() {
+	// Get all the services that we know about and check if
+	// we need to change advertisement for them.
 	svcIfaces := rg.svcIndexer.List()
 	for _, svcIface := range svcIfaces {
 		svc, ok := svcIface.(*v1.Service)
@@ -228,35 +276,32 @@ func (rg *routeGenerator) onBGPConfigurationUpdate(newExternalNets []*net.IPNet)
 			log.Error("Type assertion failed for rg.svcIndexer result member. Will not process updates to routes advertised for service.")
 			continue
 		}
-
 		// Update the routes advertised for this service
 		rg.setRouteForSvc(svc, nil)
 	}
-
 }
 
 // getAllRoutesForService returns all the routes that should be advertised
 // for the given service.
 func (rg *routeGenerator) getAllRoutesForService(svc *v1.Service) []string {
-
 	routes := make([]string, 0)
-	routes = append(routes, svc.Spec.ClusterIP)
+	if len(rg.clusterCIDRs) != 0 {
+		// Only advertise cluster IPs if we've been told to.
+		routes = append(routes, svc.Spec.ClusterIP)
+	}
 
 	if svc.Spec.ExternalIPs != nil {
 		for _, externalIP := range svc.Spec.ExternalIPs {
-
-			// Only advertise whitelisted external IP's
+			// Only advertise whitelisted external IPs
 			if !rg.isAllowedExternalIP(externalIP) {
 				log.Infof("External IP not advertised as not whitelisted: %s", externalIP)
 				continue
 			}
-
 			routes = append(routes, externalIP)
 		}
 	}
 
 	return addSuffix(routes, "/32")
-
 }
 
 // getAdvertisedRoutes returns the routes that are currently advertised and
@@ -352,7 +397,7 @@ func (rg *routeGenerator) advertiseThisService(svc *v1.Service, ep *v1.Endpoints
 
 	// do nothing if the svc is not a relevant type
 	if (svc.Spec.Type != v1.ServiceTypeClusterIP) && (svc.Spec.Type != v1.ServiceTypeNodePort) && (svc.Spec.Type != v1.ServiceTypeLoadBalancer) {
-		logc.Debugf("Skipping service with cluster type %s", svc.Spec.Type)
+		logc.Debugf("Skipping service with type %s", svc.Spec.Type)
 		return false
 	}
 
@@ -368,7 +413,7 @@ func (rg *routeGenerator) advertiseThisService(svc *v1.Service, ep *v1.Endpoints
 		return false
 	}
 
-	// advertise clusterIP if node contains at least one endpoint for svc
+	// Otherwise, advertise if node contains at least one endpoint for svc
 	for _, subset := range ep.Subsets {
 		// not interested in subset.NotReadyAddresses
 		for _, address := range subset.Addresses {
@@ -496,4 +541,21 @@ func (rg *routeGenerator) onEPUpdate(_, obj interface{}) {
 // onEPDelete is called when a k8s endpoint is deleted
 func (rg *routeGenerator) onEPDelete(obj interface{}) {
 	rg.unsetRouteForSvc(obj)
+}
+
+// parseIPNets takes a v1 formatted, comma separated string of CIDRs and
+// returns a list of net.IPNet object pointers.
+func parseIPNets(ipCIDRs []string) []*net.IPNet {
+	ipNets := make([]*net.IPNet, 0)
+	for _, CIDR := range ipCIDRs {
+		_, ipNet, err := net.ParseCIDR(CIDR)
+		if err != nil {
+			log.WithError(err).Errorf("Failed to parse CIDR: %s.", CIDR)
+			continue
+		}
+
+		ipNets = append(ipNets, ipNet)
+	}
+
+	return ipNets
 }

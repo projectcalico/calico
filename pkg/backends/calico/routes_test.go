@@ -82,6 +82,7 @@ var _ = Describe("RouteGenerator", func() {
 			epIndexer:               cache.NewIndexer(cache.MetaNamespaceKeyFunc, nil),
 			svcRouteMap:             make(map[string]map[string]bool),
 			routeAdvertisementCount: make(map[string]int),
+			clusterCIDRs:            []string{"10.0.0.0/16"},
 			externalIPNets: []*net.IPNet{
 				ipNet1,
 				ipNet2,

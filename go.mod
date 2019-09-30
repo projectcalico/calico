@@ -11,8 +11,8 @@ require (
 	github.com/kelseyhightower/memkv v0.1.1
 	github.com/onsi/ginkgo v1.8.0
 	github.com/onsi/gomega v1.5.0
-	github.com/projectcalico/libcalico-go v0.0.0-20190920181452-f4749162e052
-	github.com/projectcalico/typha v0.0.0-20190923041634-cd399ce72718
+	github.com/projectcalico/libcalico-go v0.0.0-20190930172755-3e9f97a04dc5
+	github.com/projectcalico/typha v0.0.0-20190930175822-667233ccc5dc
 	github.com/samuel/go-zookeeper v0.0.0-20190801204459-3c104360edc8 // indirect
 	github.com/sirupsen/logrus v1.4.2
 	github.com/ugorji/go v1.1.7 // indirect
