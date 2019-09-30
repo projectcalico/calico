@@ -14,7 +14,7 @@ toc:
   path: /networking/bgp
 - title: Enabling IPv6 support
   path: /networking/ipv6
-- title: Enabling IPVS in Kubernetes
+- title: Enable IPVS in Kubernetes
   path: /networking/enabling-ipvs
 - title: External connectivity
   path: /networking/external-connectivity

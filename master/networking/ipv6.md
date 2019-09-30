@@ -1,5 +1,5 @@
 ---
-title: Enabling IPv6 support
+title: Enable IPv6 support
 canonical_url: 'https://docs.projectcalico.org/v3.9/networking/ipv6'
 ---
 
