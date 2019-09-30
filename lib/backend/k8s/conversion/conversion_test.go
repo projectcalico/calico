@@ -682,27 +682,113 @@ var _ = Describe("Test NetworkPolicy conversion", func() {
 					Selector: "projectcalico.org/orchestrator == 'k8s' && k == 'v' && k2 == 'v2'",
 				},
 				Destination: apiv3.EntityRule{
-					Ports: []numorstring.Port{numorstring.SinglePort(80)},
-				},
-			},
-			apiv3.Rule{
-				Action:   "Allow",
-				Protocol: &protoTCP, // Defaulted to TCP.
-				Source: apiv3.EntityRule{
-					Selector: "projectcalico.org/orchestrator == 'k8s' && k == 'v' && k2 == 'v2'",
-				},
-				Destination: apiv3.EntityRule{
-					Ports: []numorstring.Port{numorstring.NamedPort("foo")},
+					Ports: []numorstring.Port{numorstring.SinglePort(80), {MinPort: 0, MaxPort: 0, PortName: "foo"}},
 				},
 			},
 		))
 
-		// There should be no Egress rules
-		Expect(pol.Value.(*apiv3.NetworkPolicy).Spec.Egress).To(HaveLen(0))
-
 		// Check that Types field exists and has only 'ingress'
 		Expect(len(pol.Value.(*apiv3.NetworkPolicy).Spec.Types)).To(Equal(1))
 		Expect(pol.Value.(*apiv3.NetworkPolicy).Spec.Types[0]).To(Equal(apiv3.PolicyTypeIngress))
+
+		// There should be no Egress rules
+		Expect(pol.Value.(*apiv3.NetworkPolicy).Spec.Egress).To(HaveLen(0))
+	})
+
+	It("should parse a k8s NetworkPolicy with no ports", func() {
+		np := networkingv1.NetworkPolicy{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "test.policy",
+				Namespace: "default",
+			},
+			Spec: networkingv1.NetworkPolicySpec{
+				PodSelector: metav1.LabelSelector{
+					MatchLabels: map[string]string{
+						"label":  "value",
+						"label2": "value2",
+					},
+				},
+				Ingress: []networkingv1.NetworkPolicyIngressRule{
+					{
+						From: []networkingv1.NetworkPolicyPeer{
+							{
+								PodSelector: &metav1.LabelSelector{
+									MatchLabels: map[string]string{
+										"k":  "v",
+										"k2": "v2",
+									},
+								},
+							},
+						},
+					},
+				},
+				PolicyTypes: []networkingv1.PolicyType{networkingv1.PolicyTypeIngress},
+			},
+		}
+
+		// Parse the policy.
+		pol, err := c.K8sNetworkPolicyToCalico(&np)
+		Expect(err).NotTo(HaveOccurred())
+
+		Expect(pol.Value.(*apiv3.NetworkPolicy).Spec.Ingress).To(ConsistOf(
+			apiv3.Rule{
+				Action:   "Allow",
+				Protocol: nil, // We only default to TCP when ports exist
+				Source: apiv3.EntityRule{
+					Selector: "projectcalico.org/orchestrator == 'k8s' && k == 'v' && k2 == 'v2'",
+				},
+				Destination: apiv3.EntityRule{},
+			},
+		))
+	})
+
+	It("should parse a k8s NetworkPolicy with blank ports", func() {
+		port80 := intstr.FromInt(80)
+		np := networkingv1.NetworkPolicy{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "test.policy",
+				Namespace: "default",
+			},
+			Spec: networkingv1.NetworkPolicySpec{
+				PodSelector: metav1.LabelSelector{
+					MatchLabels: map[string]string{
+						"label":  "value",
+						"label2": "value2",
+					},
+				},
+				Ingress: []networkingv1.NetworkPolicyIngressRule{
+					{
+						Ports: []networkingv1.NetworkPolicyPort{{Port: &port80}, {}},
+						From: []networkingv1.NetworkPolicyPeer{
+							{
+								PodSelector: &metav1.LabelSelector{
+									MatchLabels: map[string]string{
+										"k":  "v",
+										"k2": "v2",
+									},
+								},
+							},
+						},
+					},
+				},
+				PolicyTypes: []networkingv1.PolicyType{networkingv1.PolicyTypeIngress},
+			},
+		}
+
+		// Parse the policy.
+		pol, err := c.K8sNetworkPolicyToCalico(&np)
+		Expect(err).NotTo(HaveOccurred())
+
+		Expect(pol.Value.(*apiv3.NetworkPolicy).Spec.Ingress).To(ConsistOf(
+			apiv3.Rule{
+				Action:   "Allow",
+				Protocol: nil, // We only default to TCP when ports exist
+				Source: apiv3.EntityRule{
+					Selector: "projectcalico.org/orchestrator == 'k8s' && k == 'v' && k2 == 'v2'",
+				},
+				Destination: apiv3.EntityRule{},
+			},
+		))
 	})
 
 	It("should drop rules with invalid ports in a k8s NetworkPolicy", func() {
@@ -765,8 +851,8 @@ var _ = Describe("Test NetworkPolicy conversion", func() {
 
 		protoTCP := numorstring.ProtocolFromString("TCP")
 
-		// Only the two valid rules should exist. The third should have been dropped.
-		Expect(len(pol.Value.(*apiv3.NetworkPolicy).Spec.Ingress)).To(Equal(2))
+		// Only the two valid ports should exist. The third should have been dropped.
+		Expect(len(pol.Value.(*apiv3.NetworkPolicy).Spec.Ingress)).To(Equal(1))
 
 		Expect(pol.Value.(*apiv3.NetworkPolicy).Spec.Ingress).To(ConsistOf(
 			apiv3.Rule{
@@ -776,17 +862,7 @@ var _ = Describe("Test NetworkPolicy conversion", func() {
 					Selector: "projectcalico.org/orchestrator == 'k8s' && k == 'v' && k2 == 'v2'",
 				},
 				Destination: apiv3.EntityRule{
-					Ports: []numorstring.Port{numorstring.SinglePort(80)},
-				},
-			},
-			apiv3.Rule{
-				Action:   "Allow",
-				Protocol: &protoTCP, // Defaulted to TCP.
-				Source: apiv3.EntityRule{
-					Selector: "projectcalico.org/orchestrator == 'k8s' && k == 'v' && k2 == 'v2'",
-				},
-				Destination: apiv3.EntityRule{
-					Ports: []numorstring.Port{numorstring.NamedPort("foo")},
+					Ports: []numorstring.Port{numorstring.SinglePort(80), numorstring.NamedPort("foo")},
 				},
 			},
 		))
@@ -999,17 +1075,7 @@ var _ = Describe("Test NetworkPolicy conversion", func() {
 					Selector: "projectcalico.org/orchestrator == 'k8s' && ! has(toast)",
 				},
 				Destination: apiv3.EntityRule{
-					Ports: []numorstring.Port{numorstring.SinglePort(80)},
-				},
-			},
-			apiv3.Rule{
-				Action:   "Allow",
-				Protocol: &protoTCP, // Defaulted to TCP.
-				Source: apiv3.EntityRule{
-					Selector: "projectcalico.org/orchestrator == 'k8s' && ! has(toast)",
-				},
-				Destination: apiv3.EntityRule{
-					Ports: []numorstring.Port{numorstring.NamedPort("foo")},
+					Ports: []numorstring.Port{numorstring.SinglePort(80), numorstring.NamedPort("foo")},
 				},
 			},
 		))
@@ -1100,16 +1166,16 @@ var _ = Describe("Test NetworkPolicy conversion", func() {
 			Expect(pol.Value.(*apiv3.NetworkPolicy).Spec.Types[0]).To(Equal(apiv3.PolicyTypeIngress))
 
 			Expect(pol.Value.(*apiv3.NetworkPolicy).Spec.Ingress[0].Source.Selector).To(Equal("projectcalico.org/orchestrator == 'k8s' && k == 'v'"))
-			Expect(pol.Value.(*apiv3.NetworkPolicy).Spec.Ingress[0].Destination.Ports).To(Equal([]numorstring.Port{ninety}))
+			Expect(pol.Value.(*apiv3.NetworkPolicy).Spec.Ingress[0].Destination.Ports).To(Equal([]numorstring.Port{eighty}))
 
 			Expect(pol.Value.(*apiv3.NetworkPolicy).Spec.Ingress[1].Source.Selector).To(Equal("projectcalico.org/orchestrator == 'k8s' && k2 == 'v2'"))
-			Expect(pol.Value.(*apiv3.NetworkPolicy).Spec.Ingress[1].Destination.Ports).To(Equal([]numorstring.Port{ninety}))
+			Expect(pol.Value.(*apiv3.NetworkPolicy).Spec.Ingress[1].Destination.Ports).To(Equal([]numorstring.Port{eighty}))
 
 			Expect(pol.Value.(*apiv3.NetworkPolicy).Spec.Ingress[2].Source.Selector).To(Equal("projectcalico.org/orchestrator == 'k8s' && k == 'v'"))
-			Expect(pol.Value.(*apiv3.NetworkPolicy).Spec.Ingress[2].Destination.Ports).To(Equal([]numorstring.Port{eighty}))
+			Expect(pol.Value.(*apiv3.NetworkPolicy).Spec.Ingress[2].Destination.Ports).To(Equal([]numorstring.Port{ninety}))
 
 			Expect(pol.Value.(*apiv3.NetworkPolicy).Spec.Ingress[3].Source.Selector).To(Equal("projectcalico.org/orchestrator == 'k8s' && k2 == 'v2'"))
-			Expect(pol.Value.(*apiv3.NetworkPolicy).Spec.Ingress[3].Destination.Ports).To(Equal([]numorstring.Port{eighty}))
+			Expect(pol.Value.(*apiv3.NetworkPolicy).Spec.Ingress[3].Destination.Ports).To(Equal([]numorstring.Port{ninety}))
 		})
 	})
 
@@ -1626,13 +1692,13 @@ var _ = Describe("Test NetworkPolicy conversion", func() {
 		Expect(int(*pol.Value.(*apiv3.NetworkPolicy).Spec.Order)).To(Equal(1000))
 		Expect(pol.Value.(*apiv3.NetworkPolicy).Spec.Selector).To(Equal("projectcalico.org/orchestrator == 'k8s'"))
 		Expect(len(pol.Value.(*apiv3.NetworkPolicy).Spec.Egress)).To(Equal(2))
-		Expect(pol.Value.(*apiv3.NetworkPolicy).Spec.Egress[0].Destination.Ports).To(Equal([]numorstring.Port{ninetyName}))
+		Expect(pol.Value.(*apiv3.NetworkPolicy).Spec.Egress[0].Destination.Ports).To(Equal([]numorstring.Port{eightyName}))
 		Expect(pol.Value.(*apiv3.NetworkPolicy).Spec.Egress[0].Destination.Nets[0]).To(Equal("192.168.0.0/16"))
 		Expect(pol.Value.(*apiv3.NetworkPolicy).Spec.Egress[0].Destination.NotNets[0]).To(Equal("192.168.3.0/24"))
 		Expect(pol.Value.(*apiv3.NetworkPolicy).Spec.Egress[0].Destination.NotNets[1]).To(Equal("192.168.4.0/24"))
 		Expect(pol.Value.(*apiv3.NetworkPolicy).Spec.Egress[0].Destination.NotNets[2]).To(Equal("192.168.5.0/24"))
 
-		Expect(pol.Value.(*apiv3.NetworkPolicy).Spec.Egress[1].Destination.Ports).To(Equal([]numorstring.Port{eightyName}))
+		Expect(pol.Value.(*apiv3.NetworkPolicy).Spec.Egress[1].Destination.Ports).To(Equal([]numorstring.Port{ninetyName}))
 		Expect(pol.Value.(*apiv3.NetworkPolicy).Spec.Egress[1].Destination.Nets[0]).To(Equal("192.168.0.0/16"))
 		Expect(pol.Value.(*apiv3.NetworkPolicy).Spec.Egress[1].Destination.NotNets[0]).To(Equal("192.168.3.0/24"))
 		Expect(pol.Value.(*apiv3.NetworkPolicy).Spec.Egress[1].Destination.NotNets[1]).To(Equal("192.168.4.0/24"))
@@ -2026,16 +2092,16 @@ var _ = Describe("Test NetworkPolicy conversion (k8s <= 1.7, no policyTypes)", f
 			Expect(pol.Value.(*apiv3.NetworkPolicy).Spec.Types[0]).To(Equal(apiv3.PolicyTypeIngress))
 
 			Expect(pol.Value.(*apiv3.NetworkPolicy).Spec.Ingress[0].Source.Selector).To(Equal("projectcalico.org/orchestrator == 'k8s' && k == 'v'"))
-			Expect(pol.Value.(*apiv3.NetworkPolicy).Spec.Ingress[0].Destination.Ports).To(Equal([]numorstring.Port{ninety}))
+			Expect(pol.Value.(*apiv3.NetworkPolicy).Spec.Ingress[0].Destination.Ports).To(Equal([]numorstring.Port{eighty}))
 
 			Expect(pol.Value.(*apiv3.NetworkPolicy).Spec.Ingress[1].Source.Selector).To(Equal("projectcalico.org/orchestrator == 'k8s' && k2 == 'v2'"))
-			Expect(pol.Value.(*apiv3.NetworkPolicy).Spec.Ingress[1].Destination.Ports).To(Equal([]numorstring.Port{ninety}))
+			Expect(pol.Value.(*apiv3.NetworkPolicy).Spec.Ingress[1].Destination.Ports).To(Equal([]numorstring.Port{eighty}))
 
 			Expect(pol.Value.(*apiv3.NetworkPolicy).Spec.Ingress[2].Source.Selector).To(Equal("projectcalico.org/orchestrator == 'k8s' && k == 'v'"))
-			Expect(pol.Value.(*apiv3.NetworkPolicy).Spec.Ingress[2].Destination.Ports).To(Equal([]numorstring.Port{eighty}))
+			Expect(pol.Value.(*apiv3.NetworkPolicy).Spec.Ingress[2].Destination.Ports).To(Equal([]numorstring.Port{ninety}))
 
 			Expect(pol.Value.(*apiv3.NetworkPolicy).Spec.Ingress[3].Source.Selector).To(Equal("projectcalico.org/orchestrator == 'k8s' && k2 == 'v2'"))
-			Expect(pol.Value.(*apiv3.NetworkPolicy).Spec.Ingress[3].Destination.Ports).To(Equal([]numorstring.Port{eighty}))
+			Expect(pol.Value.(*apiv3.NetworkPolicy).Spec.Ingress[3].Destination.Ports).To(Equal([]numorstring.Port{ninety}))
 		})
 	})
 
