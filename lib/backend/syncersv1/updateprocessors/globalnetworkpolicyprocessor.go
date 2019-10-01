@@ -16,8 +16,10 @@ package updateprocessors
 
 import (
 	"errors"
+	"strings"
 
 	apiv3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
+	"github.com/projectcalico/libcalico-go/lib/backend/k8s/conversion"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/libcalico-go/lib/backend/watchersyncer"
 )
@@ -43,16 +45,28 @@ func convertGlobalNetworkPolicyV2ToV1Value(val interface{}) (interface{}, error)
 	if !ok {
 		return nil, errors.New("Value is not a valid GlobalNetworkPolicy resource value")
 	}
-	return convertGlobalPolicyV2ToV1Spec(v3res.Spec)
-}
 
-func convertGlobalPolicyV2ToV1Spec(spec apiv3.GlobalNetworkPolicySpec) (*model.Policy, error) {
+	spec := v3res.Spec
+	selector := spec.Selector
+
+	nsSelector := spec.NamespaceSelector
+	if nsSelector != "" {
+		selector = prefixAndAppendSelector(selector, nsSelector, conversion.NamespaceLabelPrefix)
+		selector = strings.Replace(selector, "all()", "has(projectcalico.org/namespace)", -1)
+	}
+
+	saSelector := spec.ServiceAccountSelector
+	if saSelector != "" {
+		selector = prefixAndAppendSelector(selector, saSelector, conversion.ServiceAccountLabelPrefix)
+		selector = strings.Replace(selector, "all()", "has(projectcalico.org/serviceaccount)", -1)
+	}
+
 	v1value := &model.Policy{
 		Namespace:      "", // Empty string used to signal a GlobalNetworkPolicy.
 		Order:          spec.Order,
 		InboundRules:   RulesAPIV2ToBackend(spec.Ingress, ""),
 		OutboundRules:  RulesAPIV2ToBackend(spec.Egress, ""),
-		Selector:       spec.Selector,
+		Selector:       selector,
 		Types:          policyTypesAPIV2ToBackend(spec.Types),
 		DoNotTrack:     spec.DoNotTrack,
 		PreDNAT:        spec.PreDNAT,

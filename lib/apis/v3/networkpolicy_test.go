@@ -27,7 +27,7 @@ import (
 var (
 	// gnpExtraFields is the set of fields that should be in GlobalNetworkPolicy but not
 	// NetworkPolicy.
-	gnpExtraFields = set.From("DoNotTrack", "PreDNAT", "ApplyOnForward")
+	gnpExtraFields = set.From("DoNotTrack", "PreDNAT", "ApplyOnForward", "NamespaceSelector")
 
 	// npExtraFields is the set of fields that should be in NetworkPolicy but not
 	// GlobalNetworkPolicy.

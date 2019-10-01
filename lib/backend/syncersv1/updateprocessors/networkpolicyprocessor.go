@@ -20,6 +20,7 @@ import (
 	"strings"
 
 	apiv3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
+	"github.com/projectcalico/libcalico-go/lib/backend/k8s/conversion"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/libcalico-go/lib/backend/watchersyncer"
 )
@@ -37,7 +38,6 @@ func convertNetworkPolicyV2ToV1Key(v3key model.ResourceKey) (model.Key, error) {
 	return model.PolicyKey{
 		Name: v3key.Namespace + "/" + v3key.Name,
 	}, nil
-
 }
 
 func convertNetworkPolicyV2ToV1Value(val interface{}) (interface{}, error) {
@@ -46,9 +46,9 @@ func convertNetworkPolicyV2ToV1Value(val interface{}) (interface{}, error) {
 		return nil, errors.New("Value is not a valid NetworkPolicy resource value")
 	}
 
-	// If this policy is namespaced, then add a namespace selector.
 	spec := v3res.Spec
 	selector := spec.Selector
+
 	if v3res.Namespace != "" {
 		nsSelector := fmt.Sprintf("%s == '%s'", apiv3.LabelNamespace, v3res.Namespace)
 		if selector == "" {
@@ -57,6 +57,8 @@ func convertNetworkPolicyV2ToV1Value(val interface{}) (interface{}, error) {
 			selector = fmt.Sprintf("(%s) && %s", selector, nsSelector)
 		}
 	}
+
+	selector = prefixAndAppendSelector(selector, spec.ServiceAccountSelector, conversion.ServiceAccountLabelPrefix)
 
 	v1value := &model.Policy{
 		Namespace:      v3res.Namespace,
