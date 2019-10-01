@@ -12,7 +12,7 @@ toc:
   path: /networking/routereflector
 - title: Configuring BGP peers
   path: /networking/bgp
-- title: Enabling IPv6 support
+- title: Enable IPv6
   path: /networking/ipv6
 - title: Enabling IPVS in Kubernetes
   path: /networking/enabling-ipvs
@@ -65,4 +65,4 @@ toc:
 - title: Get started with IP address management
   path: /networking/get-started-ip-addresses
 - title: Advertise Kubernetes service IP addresses
-  path: /networking/advertise-service-ips   
+  path: /networking/advertise-service-ips
