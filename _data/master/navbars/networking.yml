@@ -12,7 +12,7 @@ toc:
   path: /networking/routereflector
 - title: Configuring BGP peers
   path: /networking/bgp
-- title: Enabling IPv6 support
+- title: Enable IPv6 support
   path: /networking/ipv6
 - title: Enabling IPVS in Kubernetes
   path: /networking/enabling-ipvs
