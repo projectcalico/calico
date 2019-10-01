@@ -378,6 +378,10 @@ func init() {
 		Entry("should reject an invalid BGP logging level: info", api.BGPConfigurationSpec{LogSeverityScreen: "info"}, false),
 		Entry("should reject an invalid BGP logging level: INFO", api.BGPConfigurationSpec{LogSeverityScreen: "INFO"}, false),
 		Entry("should reject an invalid BGP logging level: invalidLvl", api.BGPConfigurationSpec{LogSeverityScreen: "invalidLvl"}, false),
+		Entry("should accept a valid BGP clusterIPs: 1.2.3.4", api.BGPConfigurationSpec{ServiceClusterIPs: []api.ServiceClusterIPBlock{{"1.2.3.4"}}}, true),
+		Entry("should accept a valid BGP externalIPs: 8.8.8.8", api.BGPConfigurationSpec{ServiceExternalIPs: []api.ServiceExternalIPBlock{{"8.8.8.8"}}}, true),
+		Entry("should reject invalid BGP clusterIPs: x.x.x.x", api.BGPConfigurationSpec{ServiceClusterIPs: []api.ServiceClusterIPBlock{{"x.x.x.x"}}}, false),
+		Entry("should reject invalid BGP externalIPs: x.x.x.x", api.BGPConfigurationSpec{ServiceExternalIPs: []api.ServiceExternalIPBlock{{"y.y.y.y"}}}, false),
 
 		// (API) IP version.
 		Entry("should accept IP version 4", api.Rule{Action: "Allow", IPVersion: &V4}, true),
