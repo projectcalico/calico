@@ -56,7 +56,7 @@ If your {{site.prodname}} deployment is configured to peer with BGP routers outs
 ### How to
 
 - [Advertise service cluster IP addresses](#advertise-service-cluster-IP-addresses)
-- [Adverstise service external IP addresses](#advertise-service-cluster-IP-addresses)
+- [Adverstise service external IP addresses](#advertise-service-external-IP-addresses)
 
 #### Advertise service cluster IP addresses
 
@@ -98,7 +98,7 @@ If your {{site.prodname}} deployment is configured to peer with BGP routers outs
 
    For help see, [BGP configuration resource]({{site.baseurl}}/{{page.version}}/reference/resources/bgpconfig).
 
-#### Adverstise service external IP addresses
+#### Advertise service external IP addresses
 
 1. Identify the external IP ranges of all services that you want to advertise outside of the {{site.prodname}} cluster.
 
