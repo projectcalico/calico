@@ -38,13 +38,15 @@ ifeq ($(ARCH),x86_64)
 	override ARCH=amd64
 endif
 
-EXTRA_DOCKER_ARGS	+= -e GO111MODULE=on
-
 # Figure out the users UID/GID.  These are needed to run docker containers
 # as the current user and ensure that files built inside containers are
 # owned by the current user.
 LOCAL_USER_ID:=$(shell id -u)
 LOCAL_GROUP_ID:=$(shell id -g)
+
+GO_BUILD_VER?=v0.24
+CALICO_BUILD?=calico/go-build:$(GO_BUILD_VER)
+PACKAGE_NAME?=github.com/projectcalico/kube-controllers
 
 # Volume-mount gopath into the build container to cache go module's packages. If the environment is using multiple
 # comma-separated directories for gopath, use the first one, as that is the default one used by go modules.
@@ -57,7 +59,7 @@ else
 	GOMOD_CACHE = $(HOME)/go/pkg/mod
 endif
 
-EXTRA_DOCKER_ARGS += -v $(GOMOD_CACHE):/go/pkg/mod:rw
+EXTRA_DOCKER_ARGS	+= -e GO111MODULE=on -v $(GOMOD_CACHE):/go/pkg/mod:rw
 
 DOCKER_RUN := mkdir -p .go-pkg-cache $(GOMOD_CACHE) && \
 	docker run --rm \
@@ -107,8 +109,6 @@ VALIDARCHES = $(filter-out $(EXCLUDEARCH),$(ARCHES))
 # Determine which OS.
 OS?=$(shell uname -s | tr A-Z a-z)
 ###############################################################################
-GO_BUILD_VER?=v0.23
-
 K8S_VERSION?=v1.14.1
 KUBECTL_VERSION?=v1.15.3
 HYPERKUBE_IMAGE?=gcr.io/google_containers/hyperkube-$(ARCH):$(K8S_VERSION)
@@ -127,7 +127,7 @@ RELEASE_IMAGES?=
 
 # If this is a release, also tag and push additional images.
 ifeq ($(RELEASE),true)
-PUSH_IMAGES+=$(RELEASE_IMAGES)
+	PUSH_IMAGES+=$(RELEASE_IMAGES)
 endif
 
 # remove from the list to push to manifest any registries that do not support multi-arch
@@ -137,11 +137,6 @@ PUSH_NONMANIFEST_IMAGES=$(filter-out $(PUSH_MANIFEST_IMAGES),$(PUSH_IMAGES))
 
 # location of docker credentials to push manifests
 DOCKER_CONFIG ?= $(HOME)/.docker/config.json
-
-PACKAGE_NAME?=github.com/projectcalico/kube-controllers
-CALICO_BUILD?=calico/go-build:$(GO_BUILD_VER)
-LIBCALICOGO_PATH?=none
-LOCAL_USER_ID?=$(shell id -u $$USER)
 
 # Get version from git.
 GIT_VERSION?=$(shell git describe --tags --dirty --always)
@@ -169,30 +164,31 @@ clean:
 	rm -f tests/crds.yaml
 
 ###############################################################################
-# Building the binary
+# Updating pins
 ###############################################################################
-build: bin/kube-controllers-linux-$(ARCH) bin/check-status-linux-$(ARCH)
-build-all: $(addprefix sub-build-,$(VALIDARCHES))
-sub-build-%:
-	$(MAKE) build ARCH=$*
+PIN_BRANCH?=$(shell git rev-parse --abbrev-ref HEAD)
 
-# Default the libcalico repo and version but allow them to be overridden
-LIBCALICO_BRANCH?=$(shell git rev-parse --abbrev-ref HEAD)
-LIBCALICO_REPO?=github.com/projectcalico/libcalico-go
-LIBCALICO_VERSION?=$(shell git ls-remote git@github.com:projectcalico/libcalico-go $(LIBCALICO_BRANCH) 2>/dev/null | cut -f 1)
-LIBCALICO_OLDVER?=$(shell $(DOCKER_RUN) $(CALICO_BUILD) go list -m -f "{{.Version}}" github.com/projectcalico/libcalico-go)
+define get_remote_version
+	$(shell git ls-remote http://$(1) $(2) 2>/dev/null | cut -f 1)
+endef
 
-## Update libcalico pin in go.mod
-update-libcalico:
+# update_pin updates the given package's version to the latest available in the specified repo and branch.
+# $(1) should be the name of the package, $(2) and $(3) the repository and branch from which to update it.
+define update_pin
+	$(eval new_ver := $(call get_remote_version,$(2),$(3)))
+
 	$(DOCKER_RUN) -i $(CALICO_BUILD) sh -c '\
-	if [[ ! -z "$(LIBCALICO_VERSION)" ]] && [[ "$(LIBCALICO_VERSION)" != "$(LIBCALICO_OLDVER)" ]]; then \
-		echo "Updating libcalico version $(LIBCALICO_OLDVER) to $(LIBCALICO_VERSION) from $(LIBCALICO_REPO)"; \
-		go mod edit -droprequire github.com/projectcalico/libcalico-go; \
-		go get $(LIBCALICO_REPO)@$(LIBCALICO_VERSION); \
-		if [ $(LIBCALICO_REPO) != "github.com/projectcalico/libcalico-go" ]; then \
-			go mod edit -replace github.com/projectcalico/libcalico-go=$(LIBCALICO_REPO)@$(LIBCALICO_VERSION); \
-		fi;\
-	fi'
+		if [[ ! -z "$(new_ver)" ]]; then \
+			go get $(1)@$(new_ver); \
+			go mod download; \
+		fi'
+endef
+
+LIBCALICO_BRANCH?=$(PIN_BRANCH)
+LIBCALICO_REPO?=github.com/projectcalico/libcalico-go
+
+update-libcalico-pin:
+	$(call update_pin,github.com/projectcalico/libcalico-go,$(LIBCALICO_REPO),$(LIBCALICO_BRANCH))
 
 git-status:
 	git status --porcelain
@@ -200,16 +196,26 @@ git-status:
 git-config:
 ifdef CONFIRM
 	git config --global user.name "Semaphore Automatic Update"
-	git config --global user.email "marvin@tigera.io"
+	git config --global user.email "marvin@projectcalico.io"
 endif
 
 git-commit:
-	git diff-index --quiet HEAD || git commit -m "Semaphore Automatic Update" go.mod go.sum
+	git diff --quiet HEAD || git commit -m "Semaphore Automatic Update" go.mod go.sum
 
 git-push:
 	git push
 
-commit-pin-updates: update-libcalico git-status ci git-config git-commit git-push
+update-pins: update-libcalico-pin
+
+commit-pin-updates: update-pins git-status ci git-config git-commit git-push
+
+###############################################################################
+# Building the binary
+###############################################################################
+build: bin/kube-controllers-linux-$(ARCH) bin/check-status-linux-$(ARCH)
+build-all: $(addprefix sub-build-,$(VALIDARCHES))
+sub-build-%:
+	$(MAKE) build ARCH=$*
 
 bin/kube-controllers-linux-$(ARCH): local_build $(SRC_FILES)
 	mkdir -p bin
@@ -315,13 +321,15 @@ sub-tag-images-%:
 # Static checks
 ###############################################################################
 .PHONY: static-checks
-## Perform static checks on the code.
-
+LINT_ARGS := --deadline 5m --max-issues-per-linter 0 --max-same-issues 0
+ifdef CI
+	# govet uses too much memory for CI
+	LINT_ARGS += --disable govet
+endif
 static-checks:
-	$(DOCKER_RUN) $(CALICO_BUILD) golangci-lint run --deadline 5m
+	$(DOCKER_RUN) $(CALICO_BUILD) golangci-lint run $(LINT_ARGS)
 
 .PHONY: fix
-## Fix static checks
 fix goimports:
 	goimports -l -w ./pkg
 	goimports -l -w ./cmd/kube-controllers/main.go
@@ -329,7 +337,6 @@ fix goimports:
 	goimports -l -w ./tests
 
 .PHONY: install-git-hooks
-## Install Git hooks
 install-git-hooks:
 	./install-git-hooks
 
@@ -338,20 +345,14 @@ check-copyright:
 	./check-copyrights.sh
 
 foss-checks:
-	@echo Running $@...
-	@docker run --rm -v $(CURDIR):/go/src/$(PACKAGE_NAME):rw \
-	  -e LOCAL_USER_ID=$(LOCAL_USER_ID) \
-	  -e FOSSA_API_KEY=$(FOSSA_API_KEY) \
-	  -e GO111MODULE=on \
-	  -w /go/src/$(PACKAGE_NAME) \
-	  $(CALICO_BUILD) /usr/local/bin/fossa
+	$(DOCKER_RUN) -e FOSSA_API_KEY=$(FOSSA_API_KEY) $(CALICO_BUILD) /usr/local/bin/fossa
 
 .PHONY: remote-deps
 remote-deps:
 	$(DOCKER_RUN) $(CALICO_BUILD) sh -c ' \
-        go mod download; \
-        cp `go list -m -f "{{.Dir}}" github.com/projectcalico/libcalico-go`/test/crds.yaml tests/crds.yaml; \
-        chmod +w tests/crds.yaml'
+		go mod download; \
+		cp `go list -m -f "{{.Dir}}" github.com/projectcalico/libcalico-go`/test/crds.yaml tests/crds.yaml; \
+		chmod +w tests/crds.yaml'
 
 ###############################################################################
 # Tests
@@ -381,8 +382,12 @@ tests/fv/fv.test: local_build $(shell find ./tests -type f -name '*.go' -print)
 ###############################################################################
 # CI
 ###############################################################################
+.PHONY: mod-download
+mod-download:
+	-$(DOCKER_RUN) $(CALICO_BUILD) go mod download
+
 .PHONY: ci
-ci: clean image-all static-checks ut fv
+ci: clean mod-download image-all static-checks ut fv
 
 ###############################################################################
 # CD
