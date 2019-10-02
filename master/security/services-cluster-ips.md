@@ -4,7 +4,7 @@ title: Apply policy to services exposed externally as cluster IPs
 
 ### Big picture
 
-Control access to services exposed through clusterIPs that are advertised outside the cluster using BGP. 
+Control access to services exposed through clusterIPs that are advertised outside the cluster using BGP.
 
 ### Value
 
@@ -17,7 +17,7 @@ Control access to services exposed through clusterIPs that are advertised outsid
 
 This how-to guide uses the following {{site.prodname}} features:
 
-- {{site.prodname}} cluster IP advertisement 
+- {{site.prodname}} cluster IP advertisement
 - **HostEndpoints**
 - **GlobalNetworkPolicy**
   - applyOnForward
@@ -28,7 +28,7 @@ This how-to guide uses the following {{site.prodname}} features:
 
 #### Advertise cluster IPs outside the cluster
 
-A **cluster IP** is a virtual IP address that represents a Kubernetes Service. Kube Proxy on each host translates the clusterIP into a pod IP for one of the pods backing the service, acting as a reverse proxy and load balancer. 
+A **cluster IP** is a virtual IP address that represents a Kubernetes Service. Kube Proxy on each host translates the clusterIP into a pod IP for one of the pods backing the service, acting as a reverse proxy and load balancer.
 
 Cluster IPs were originally designed for use within the Kubernetes cluster. {{site.prodname}} allows you to advertise Cluster IPs externally -- so external clients can use them to access services hosted inside the cluster. This means that {{site.prodname}} ingress policy can be applied at **one or both** of the following locations:
 
@@ -47,7 +47,7 @@ Cluster IPs were originally designed for use within the Kubernetes cluster. {{si
 
 ### Before you begin...
 
-[Configure Calico to advertise cluster IPs over BGP]({{site.baseurl}}/{{page.version}}/networking/service-advertisement).
+[Configure Calico to advertise cluster IPs over BGP]({{site.baseurl}}/{{page.version}}/networking/advertise-service-ips).
 
 ### How to
 
@@ -58,7 +58,7 @@ Selecting which mode to use depends on your goals and resources. At an operation
 
 #### Secure externally exposed cluster IPs, local mode
 
-Using **local mode**, the original source address of external traffic is preserved, and you can define policy directly using standard {{site.prodname}} network policy. 
+Using **local mode**, the original source address of external traffic is preserved, and you can define policy directly using standard {{site.prodname}} network policy.
 
 1. Create {{site.prodname}} **NetworkPolicies** or **GlobalNetworkPolicies** that select the same set of pods as your Kubernetes Service.
 1. Add rules to allow the external traffic.
@@ -74,7 +74,7 @@ Ensure that your Kubernetes Service manifest explicitly lists the clusterIP; do 
 
 ##### Step 2: Create global network policy at the host interface
 
-In this step, you create a **GlobalNetworkPolicy** that selects all **host endpoints**. It controls access to the cluster IP, and prevents unauthorized clients from outside the cluster from accessing it. The hosts then forwards only authorized traffic. 
+In this step, you create a **GlobalNetworkPolicy** that selects all **host endpoints**. It controls access to the cluster IP, and prevents unauthorized clients from outside the cluster from accessing it. The hosts then forwards only authorized traffic.
 
 **Set policy to allow external traffic for cluster IPs**
 
@@ -96,7 +96,7 @@ spec:
   - action: Allow
     source:
       nets:
-      - 50.60.0.0/16 
+      - 50.60.0.0/16
     destination:
       nets:
       - 10.20.30.40/32 # Cluster IP A
@@ -104,7 +104,7 @@ spec:
   - action: Allow
     source:
       nets:
-      - 70.80.90.0/24 
+      - 70.80.90.0/24
     destination:
       nets:
       - 10.20.30.41/32 # Cluster IP B
@@ -177,27 +177,27 @@ spec:
   - action: Allow
     protocol: TCP
     source:
-      selector: k8s-role == 'node' 
+      selector: k8s-role == 'node'
     destination:
       ports: [80, 443]
   - action: Allow
     protocol: UDP
     source:
-      selector: k8s-role == 'node' 
+      selector: k8s-role == 'node'
     destination:
       ports: [80, 443]
 ```
 
 ##### Step 4: (Optional) Create network polices or global network policies that allow in-cluster traffic to access the service
 
-##### Step 5: Create HostEndpoints 
+##### Step 5: Create HostEndpoints
 
-Create HostEndpoints for the interface of each host that will receive traffic for the clusterIPs. Be sure to label them so they are selected by the policy in Step 2 (Add a rule to allow traffic destined for the pod CIDR), and the rules in Step 3. 
+Create HostEndpoints for the interface of each host that will receive traffic for the clusterIPs. Be sure to label them so they are selected by the policy in Step 2 (Add a rule to allow traffic destined for the pod CIDR), and the rules in Step 3.
 
 In the previous example policies, the label **k8s-role: node** is used to identify these HostEndpoints.
 
 ### Above and beyond
 
-- [Enable service cluster IP advertisement]({{site.baseurl}}/{{page.version}}/networking/service-advertisement#enabling-service-cluster-ip-advertisement)
+- [Enable service IP advertisement]({{site.baseurl}}/{{page.version}}/networking/advertise-service-ips)
 - [Defend against DoS attacks]({{site.baseurl}}/{{page.version}}/security/defend-dos-attack)
 - [Global network policy]({{site.baseurl}}/{{page.version}}/reference/resources/globalnetworkpolicy)
