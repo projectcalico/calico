@@ -50,11 +50,11 @@ type BGPConfigurationSpec struct {
 
 	// ServiceExternalIPs are the CIDR blocks for Kubernetes Service External IPs.
 	// Kubernetes Service ExternalIPs will only be advertised if they are within one of these blocks.
-	ServiceExternalIPs []ServiceExternalIPBlock `json:"serviceExternalIPs,omitempty" validate:"omitempty" confignamev1:"svc_external_ips"`
+	ServiceExternalIPs []ServiceExternalIPBlock `json:"serviceExternalIPs,omitempty" validate:"omitempty,dive" confignamev1:"svc_external_ips"`
 
 	// ServiceClusterIPs are the CIDR blocks from which service cluster IPs are allocated.
 	// If specified, Calico will advertise these blocks, as well as any cluster IPs within them.
-	ServiceClusterIPs []ServiceClusterIPBlock `json:"serviceClusterIPs,omitempty" validate:"omitempty" confignamev1:"svc_cluster_ips"`
+	ServiceClusterIPs []ServiceClusterIPBlock `json:"serviceClusterIPs,omitempty" validate:"omitempty,dive" confignamev1:"svc_cluster_ips"`
 }
 
 // ServiceExternalIPBlock represents a single whitelisted CIDR External IP block.
