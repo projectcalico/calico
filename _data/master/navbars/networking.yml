@@ -66,5 +66,5 @@ toc:
   path: /networking/add-floating-ip
 - title: Get started with IP address management
   path: /networking/get-started-ip-addresses
-- title: Allow workloads access outside cluster
+- title: Configure workloads access outside cluster
   path: /networking/workloads-outside-cluster

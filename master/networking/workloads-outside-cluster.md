@@ -1,5 +1,5 @@
 ---
-title: Allow workloads access outside the cluster
+title: Enable workload access outside the cluster
 ---
 
 ### Big picture
@@ -14,21 +14,21 @@ You control which {{site.prodname}} IP pools are subject to outbound NAT to enab
 
 This how-to guide uses the following {{site.prodname}} features:
 
-- **IPPool** resource with NAT-outgoing field
+- **IPPool** resource with natOutgoing field
 
 ### Concepts
 
 #### Outgoing NAT on each node
 
-For all networking options, you can allow your workloads to access the internet (subject to network policy, of course!) by enabling outbound NAT on the IP pool.  When enabled, traffic from pods in that pool go to a destination outside all {{site.prodname}} pools are NATed.  The source address is masqueraded to an IP of the node on which each workload is hosted, allowing the network to understand the traffic. By default, the NAT outgoing option is automatically enabled for the pool that is created when you install {{site.prodname}}.  
+For all networking options, you can allow your workloads to access the internet (subject to network policy, of course!) by enabling outbound NAT on the IP pool.  When enabled, traffic from pods in that pool go to a destination outside all {{site.prodname}} pools will be NATed.  The source address is masqueraded to an IP of the node on which each workload is hosted, allowing the network to understand the traffic. By default, the NAT outgoing option is automatically enabled for the pool that is created when you install {{site.prodname}}.  
 
 #### BGP peering with out-of-cluster NAT
 
-When {{site.prodname}} is [BGP peered with your physical network infrastructure](), you can use the infrastructure to NAT traffic from pods to the internet.  In this case, you would want to disable the {{site.prodname}} NAT outgoing option. 
+When {{site.prodname}} is [BGP peered with your physical network infrastructure]({{site.baseurl}}/{{page.version}}/networking/bgp), you can use the infrastructure to NAT traffic from pods to the internet.  In this case, you should disable the {{site.prodname}} NAT outgoing option. 
 
 #### Expose pods directly on the internet
 
-If you want your pods to have public internet IPs, you should:
+If you want your pods to have public internet IPs:
 
 - Configure {{site.prodname}}to peer with your physical network infrastructure
 - Create an IP pool for those pods that contain public IP addresses that are routed to your network with `nat-outgoing: false`
@@ -41,9 +41,9 @@ If you want your pods to have public internet IPs, you should:
 
 #### Allow workloads access to internet, private IP addresses
 
-To allow workloads with a private IP address access to the internet, you can use your existing NAT capabilities, or you can enable NAT outgoing on the {{site.prodname}} IPPool. 
+To allow workloads with a private IP address access to the internet, you can use your existing NAT capabilities, or you can enable natOutgoing on the {{site.prodname}} IPPool. 
 
-In the following example, we create a {{site.prodname}} IPPool with NAT outgoing enabled. Outbound NAT is performed locally on the node on which each workload in the pool is hosted.
+In the following example, we create a {{site.prodname}} IPPool with natOutgoing enabled. Outbound NAT is performed locally on the node where each workload in the pool is hosted.
 
 ```
   apiVersion: v1
@@ -57,7 +57,7 @@ In the following example, we create a {{site.prodname}} IPPool with NAT outgoing
 
 #### NAT traffic only to specific IP address ranges
 
-You can create additional IPPools that are not used for IP address management to prevent NAT to certain CIDR blocks. This can be useful if you want nodes to NAT traffic to the internet, but not to IPs in certain internal ranges.  For example, if you did not want to NAT traffic from pods to 10.0.0.0/8, you could create the following pool.  You must ensure that the network between the cluster and 10.0.0.0/8 can route pod IPs.
+You can create additional IPPools that are not used for IP address management that prevent NAT to certain CIDR blocks. This can be useful if you want nodes to NAT traffic to the internet, but not to IPs in certain internal ranges.  For example, if you did not want to NAT traffic from pods to 10.0.0.0/8, you could create the following pool.  You must ensure that the network between the cluster and 10.0.0.0/8 can route pod IPs.
 
 ```
   apiVersion: v1
@@ -70,4 +70,5 @@ You can create additional IPPools that are not used for IP address management to
 ```
 
 ### Above and beyond
-TBD
+
+To enable NAT for incoming traffic to workloads, see [FAQ]({{site.baseurl}}/{{page.version}}/reference/faq#how-can-i-enable-nat-for-outgoing-traffic-from-containers-with-private-ip-addresses)
