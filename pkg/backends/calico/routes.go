@@ -183,10 +183,12 @@ func (rg *routeGenerator) setRouteForSvc(svc *v1.Service, ep *v1.Endpoints) {
 
 	// see if any endpoints are on this node and advertise if so
 	// else remove the route if it also already exists
+	logCtx := log.WithField("svc", fmt.Sprintf("%s/%s", svc.Namespace, svc.Name))
 	rg.Lock()
 	defer rg.Unlock()
 
 	advertise := rg.advertiseThisService(svc, ep)
+	logCtx.WithField("advertise", advertise).Debug("Checking routes for service")
 	if advertise {
 		routes := rg.getAllRoutesForService(svc)
 		rg.setRoutesForKey(key, routes)
@@ -294,7 +296,8 @@ func (rg *routeGenerator) getAllRoutesForService(svc *v1.Service) []string {
 		for _, externalIP := range svc.Spec.ExternalIPs {
 			// Only advertise whitelisted external IPs
 			if !rg.isAllowedExternalIP(externalIP) {
-				log.Infof("External IP not advertised as not whitelisted: %s", externalIP)
+				svc := fmt.Sprintf("%s/%s", svc.Namespace, svc.Name)
+				log.WithFields(log.Fields{"ip": externalIP, "svc": svc}).Info("Cannot advertise External IP - not whitelisted")
 				continue
 			}
 			routes = append(routes, externalIP)
@@ -329,6 +332,7 @@ func (rg *routeGenerator) setRoutesForKey(key string, routes []string) {
 	if advertisedRoutes == nil {
 		advertisedRoutes = make(map[string]bool)
 	}
+	log.WithFields(log.Fields{"key": key, "routes": routes}).Debug("Setting routes for key")
 
 	// Withdraw any routes we are advertising that are no longer associated
 	// with this key.

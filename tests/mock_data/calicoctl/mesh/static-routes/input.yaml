@@ -3,6 +3,8 @@ apiVersion: projectcalico.org/v3
 metadata:
   name: default
 spec:
+  serviceClusterIPs:
+  - cidr: 10.101.0.0/16
 
 ---
 

@@ -3,6 +3,7 @@ package calico
 import (
 	"fmt"
 	"net"
+	"strings"
 	"sync"
 
 	. "github.com/onsi/ginkgo"
@@ -11,6 +12,16 @@ import (
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/tools/cache"
+)
+
+const (
+	// Range and specific IP for external IP test.
+	externalIPRange1 = "45.12.0.0/16"
+	externalIP1      = "45.12.70.5"
+
+	// Range and specific IP for external IP test.
+	externalIPRange2 = "172.217.3.5/32"
+	externalIP2      = "172.217.3.5"
 )
 
 func addEndpointSubset(ep *v1.Endpoints, nodename string) {
@@ -28,10 +39,7 @@ func buildSimpleService() (svc *v1.Service, ep *v1.Endpoints) {
 			Type:                  v1.ServiceTypeClusterIP,
 			ClusterIP:             "127.0.0.1",
 			ExternalTrafficPolicy: v1.ServiceExternalTrafficPolicyTypeLocal,
-			ExternalIPs: []string{
-				"45.12.70.5",
-				"172.217.3.5",
-			},
+			ExternalIPs:           []string{externalIP1, externalIP2},
 		}}
 	ep = &v1.Endpoints{
 		ObjectMeta: meta,
@@ -47,10 +55,7 @@ func buildSimpleService2() (svc *v1.Service, ep *v1.Endpoints) {
 			Type:                  v1.ServiceTypeClusterIP,
 			ClusterIP:             "127.0.0.5",
 			ExternalTrafficPolicy: v1.ServiceExternalTrafficPolicyTypeLocal,
-			ExternalIPs: []string{
-				"45.12.70.5",
-				"172.217.3.5",
-			},
+			ExternalIPs:           []string{externalIP1, externalIP2},
 		}}
 	ep = &v1.Endpoints{
 		ObjectMeta: meta,
@@ -325,6 +330,43 @@ var _ = Describe("RouteGenerator", func() {
 				Expect(rg.routeAdvertisementCount["172.217.3.5/32"]).To(Equal(0))
 				Expect(rg.client.cache).ToNot(HaveKey("/calico/staticroutes/172.217.3.5-32"))
 				Expect(rg.client.cache).ToNot(HaveKey("/calico/staticroutes/127.0.0.1-32"))
+			})
+		})
+
+		Context("On BGP configuration changes from the syncer", func() {
+			It("should only advertise external IPs within the configured ranges", func() {
+				// Simulate an event from the syncer which sets the External IP range containing the first IP.
+				rg.onExternalIPsUpdate([]string{externalIPRange1})
+
+				// We should now advertise the first external IP, but not the second.
+				Expect(rg.client.cache["/calico/staticroutes/"+externalIP1+"-32"]).To(Equal(externalIP1 + "/32"))
+				Expect(rg.client.cache["/calico/staticroutes/"+externalIP2+"-32"]).To(BeEmpty())
+
+				// It should also reject the full range into the data plane.
+				Expect(rg.client.cache["/calico/rejectcidrs/"+strings.Replace(externalIPRange1, "/", "-", -1)]).To(Equal(externalIPRange1))
+
+				// Simulate an event from the syncer which updates to use the second range (removing the first)
+				rg.onExternalIPsUpdate([]string{externalIPRange2})
+
+				// We should now advertise the second external IP, but not the first.
+				Expect(rg.client.cache["/calico/staticroutes/"+externalIP1+"-32"]).To(BeEmpty())
+				Expect(rg.client.cache["/calico/staticroutes/"+externalIP2+"-32"]).To(Equal(externalIP2 + "/32"))
+
+				// It should now allow the range in the data plane.
+				Expect(rg.client.cache["/calico/rejectcidrs/"+strings.Replace(externalIPRange1, "/", "-", -1)]).To(BeEmpty())
+			})
+
+			It("should not advertise cluster IPs unless a range is specified", func() {
+				// Show cluster CIDRs are advertised.
+				rg.onSvcAdd(svc)
+				rg.onEPAdd(ep)
+				Expect(rg.client.cache["/calico/staticroutes/127.0.0.1-32"]).To(Equal("127.0.0.1/32"))
+
+				// Withdraw the cluster CIDR from the syncer.
+				rg.onClusterIPsUpdate([]string{})
+
+				// We should no longer see cluster CIDRs to be advertised.
+				Expect(rg.client.cache["/calico/staticroutes/127.0.0.1-32"]).To(BeEmpty())
 			})
 		})
 	})

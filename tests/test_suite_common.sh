@@ -24,7 +24,6 @@ execute_test_suite() {
     if [ "$DATASTORE_TYPE" = etcdv3 ]; then
 	run_extra_test test_node_deletion
 	run_extra_test test_idle_peers
-	run_extra_test test_static_routes
 	run_extra_test test_router_id_hash
 	echo "Extra etcdv3 tests passed"
     fi
@@ -53,13 +52,6 @@ run_extra_test() {
     echo "==============================="
     eval $1
     echo "==============================="
-}
-
-test_static_routes() {
-    export CALICO_ADVERTISE_CLUSTER_IPS=10.101.0.0/16
-    run_individual_test_oneshot 'mesh/static-routes'
-    export -n CALICO_ADVERTISE_CLUSTER_IPS
-    unset CALICO_ADVERTISE_CLUSTER_IPS
 }
 
 test_node_deletion() {
@@ -305,6 +297,7 @@ execute_tests_oneshot() {
         run_individual_test_oneshot 'explicit_peering/specific_node'
         run_individual_test_oneshot 'explicit_peering/selectors'
         run_individual_test_oneshot 'explicit_peering/route_reflector'
+        run_individual_test_oneshot 'mesh/static-routes'
     done
 }
 
