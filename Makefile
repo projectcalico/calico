@@ -12,16 +12,14 @@ test: vendor ut fv
 K8S_VERSION      ?= v1.16.0
 ETCD_VERSION     ?= v3.3.7
 COREDNS_VERSION  ?= 1.5.2
-GO_BUILD_VER     ?= v0.23
+GO_BUILD_VER     ?= v0.24
 CALICO_BUILD     ?= calico/go-build:$(GO_BUILD_VER)
-PACKAGE_NAME     ?= projectcalico/libcalico-go
+PACKAGE_NAME     ?= github.com/projectcalico/libcalico-go
 LOCAL_USER_ID    ?= $(shell id -u $$USER)
 BINDIR           ?= bin
-LIBCALICO-GO_PKG  = github.com/projectcalico/libcalico-go
 TOP_SRC_DIR       = lib
 MY_UID           := $(shell id -u)
 GINKGO_ARGS      := -mod=vendor
-EXTRA_DOCKER_ARGS := -e GO111MODULE=on
 
 # Volume-mount gopath into the build container to cache go module's packages. If the environment is using multiple
 # comma-separated directories for gopath, use the first one, as that is the default one used by go modules.
@@ -34,7 +32,7 @@ else
 	GOMOD_CACHE = $(HOME)/go/pkg/mod
 endif
 
-EXTRA_DOCKER_ARGS += -v $(GOMOD_CACHE):/go/pkg/mod:rw
+EXTRA_DOCKER_ARGS += -e GO111MODULE=on -v $(GOMOD_CACHE):/go/pkg/mod:rw
 
 DOCKER_RUN := mkdir -p .go-pkg-cache $(GOMOD_CACHE) && \
 	docker run --rm \
@@ -60,10 +58,9 @@ APIS_SRCS := $(filter-out ./lib/apis/v3/zz_generated.deepcopy.go, $(wildcard ./l
 TEST_CERT_PATH := test/etcd-ut-certs/
 
 .PHONY: clean
-## Removes all .coverprofile files, the vendor dir, and .go-pkg-cache
 clean:
-	find . -name '*.coverprofile' -type f -delete
 	rm -rf .go-pkg-cache vendor $(BINDIR) checkouts
+	find . -name '*.coverprofile' -type f -delete
 
 ###############################################################################
 # Building the binary
@@ -82,13 +79,13 @@ gen-files:
 	$(MAKE) $(GENERATED_FILES)
 
 $(BINDIR)/deepcopy-gen: vendor
-	$(DOCKER_GO_BUILD) sh -c 'go build -mod=vendor -o $@ $(LIBCALICO-GO_PKG)/vendor/k8s.io/code-generator/cmd/deepcopy-gen'
+	$(DOCKER_GO_BUILD) sh -c 'go build -mod=vendor -o $@ $(PACKAGE_NAME)/vendor/k8s.io/code-generator/cmd/deepcopy-gen'
 
 ./lib/upgrade/migrator/clients/v1/k8s/custom/zz_generated.deepcopy.go: $(UPGRADE_SRCS) $(BINDIR)/deepcopy-gen
 	$(DOCKER_GO_BUILD) sh -c '$(BINDIR)/deepcopy-gen \
 		--v 1 --logtostderr \
 		--go-header-file "./docs/boilerplate.go.txt" \
-		--input-dirs "./lib/upgrade/migrator/clients/v1/k8s/custom" \
+		--input-dirs "$(PACKAGE_NAME)/lib/upgrade/migrator/clients/v1/k8s/custom" \
 		--bounding-dirs "github.com/projectcalico/libcalico-go" \
 		--output-file-base zz_generated.deepcopy'
 
@@ -96,7 +93,7 @@ $(BINDIR)/deepcopy-gen: vendor
 	$(DOCKER_GO_BUILD) sh -c '$(BINDIR)/deepcopy-gen \
 		--v 1 --logtostderr \
 		--go-header-file "./docs/boilerplate.go.txt" \
-		--input-dirs "./lib/apis/v3" \
+		--input-dirs "$(PACKAGE_NAME)/lib/apis/v3" \
 		--bounding-dirs "github.com/projectcalico/libcalico-go" \
 		--output-file-base zz_generated.deepcopy'
 
