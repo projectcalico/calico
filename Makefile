@@ -196,7 +196,7 @@ git-status:
 git-config:
 ifdef CONFIRM
 	git config --global user.name "Semaphore Automatic Update"
-	git config --global user.email "marvin@projectcalico.io"
+	git config --global user.email "marvin@tigera.io"
 endif
 
 git-commit:
