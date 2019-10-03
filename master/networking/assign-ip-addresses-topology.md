@@ -127,7 +127,7 @@ default-ipv4-ippool   192.168.0.0/16   true   Always     false      all()
      ipipMode: Always
      natOutgoing: true
      nodeSelector: rack == "0"
-EOF
+   EOF
    ```
 
    ```
@@ -141,11 +141,10 @@ EOF
      ipipMode: Always
      natOutgoing: true
      nodeSelector: rack == "1"
-EOF
+   EOF
    ```
 
-   We should now have two enabled IP pools, which we can see when running
-   `calicoctl get ippool -o wide`:
+   We should now have two enabled IP pools, which we can see when running `calicoctl get ippool -o wide`:
 
    ```
    NAME                  CIDR             NAT    IPIPMODE   DISABLED   SELECTOR
@@ -189,4 +188,4 @@ EOF
 
 ### Above and beyond
 
-[Calico IPAM]({{site.baseurl}}/{{page.version}}/reference/resources/cni-plugin/configuration)
+[Calico IPAM]({{site.baseurl}}/{{page.version}}/reference/cni-plugin/configuration)
