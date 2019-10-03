@@ -51,6 +51,7 @@ defaults:
       path: ""
     values:
       layout: docwithnav
+      show_title: true
       version: master
       sitemap: true
       registry:

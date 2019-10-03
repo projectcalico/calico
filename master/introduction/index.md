@@ -1,5 +1,6 @@
 ---
-title: ''
+title: About Calico
+show_title: false
 canonical_url: 'https://docs.projectcalico.org/v3.9/introduction/index'
 custom_css: css/intro.css
 ---
