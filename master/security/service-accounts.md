@@ -1,5 +1,5 @@
 ---
-title: Use service accounts in policy rules
+title: Use service accounts in policy
 ---
 
 ### Big picture
