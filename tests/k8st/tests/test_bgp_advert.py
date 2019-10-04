@@ -160,12 +160,6 @@ class TestBGPAdvert(TestBase):
 
         start_external_node_with_bgp("kube-node-extra", bird_conf)
 
-        # set CALICO_ADVERTISE_CLUSTER_IPS=10.96.0.0/12
-        self.update_ds_env("calico-node",
-                           "kube-system",
-                           "CALICO_ADVERTISE_CLUSTER_IPS",
-                           "10.96.0.0/12")
-
         # Enable debug logging
         self.update_ds_env("calico-node",
                            "kube-system",
@@ -192,12 +186,6 @@ EOF
         self.create_namespace(self.ns)
 
         start_external_node_with_bgp("kube-node-extra", bird_conf_rr)
-
-        # set CALICO_ADVERTISE_CLUSTER_IPS=10.96.0.0/12
-        self.update_ds_env("calico-node",
-                           "kube-system",
-                           "CALICO_ADVERTISE_CLUSTER_IPS",
-                           "10.96.0.0/12")
 
         # Enable debug logging
         self.update_ds_env("calico-node",
@@ -263,6 +251,15 @@ EOF
             matchStr += "\n\tnexthop via %s  dev eth0 weight 1" % ip
         retry_until_success(lambda: self.assertIn(matchStr, self.get_routes()))
 
+    def get_svc_host_ip(self, svc, ns):
+        return kubectl("get po -l app=%s -n %s -o json | jq -r .items[0].status.hostIP" %
+                       (svc, ns)).strip()
+
+    def add_svc_external_ips(self, svc, ns, ips):
+        ipsStr = ','.join('"{0}"'.format(ip) for ip in ips)
+        patchStr = "{\"spec\": {\"externalIPs\": [%s]}}" % (ipsStr)
+        return kubectl("patch svc %s -n %s --patch '%s'" % (svc, ns, patchStr)).strip()
+
     def test_rr(self):
         self.tearDown()
         self.setUpRR()
@@ -306,6 +303,8 @@ metadata:
     app: nginx
     run: nginx-rr
 spec:
+  externalIPs:
+  - 175.200.1.1
   ports:
   - port: 80
     targetPort: 80
@@ -331,17 +330,23 @@ EOF
 EOF
 """ % json.dumps(node_dict))
 
-        # Disable node-to-node mesh and configure bgp peering
-        # between node-1 and RR and also between external node and RR
+        # Disable node-to-node mesh and add cluster and external IPs CIDRs to advertise.
+        # Configure bgp peering between node-1 and RR and also between external node and RR.
         calicoctl("""apply -f - << EOF
 apiVersion: projectcalico.org/v3
 kind: BGPConfiguration
-metadata: {name: default}
+metadata:
+  name: default
 spec:
   nodeToNodeMeshEnabled: false
   asNumber: 64512
+  serviceClusterIPs:
+  - cidr: 10.96.0.0/12
+  serviceExternalIPs:
+  - cidr: 175.200.0.0/16
 EOF
 """)
+
         calicoctl("""apply -f - << EOF
 apiVersion: projectcalico.org/v3
 kind: BGPPeer
@@ -354,20 +359,33 @@ EOF
 """)
         svc_json = kubectl("get svc nginx-rr -n bgp-test -o json")
         svc_dict = json.loads(svc_json)
-        svcRoute = svc_dict['spec']['clusterIP']
-        retry_until_success(lambda: self.assertIn(svcRoute, self.get_routes()))
+        cluster_ip = svc_dict['spec']['clusterIP']
+        external_ip = svc_dict['spec']['externalIPs'][0]
+        retry_until_success(lambda: self.assertIn(cluster_ip, self.get_routes()))
+        retry_until_success(lambda: self.assertIn(external_ip, self.get_routes()))
 
-    def test_mainline(self):
+    def test_cluster_ip_advertisement(self):
         """
-        Runs the mainline tests for service ip advertisement
+        Runs the tests for service cluster IP advertisement
         - Create both a Local and a Cluster type NodePort service with a single replica.
           - assert only local and cluster CIDR routes are advertised.
           - assert /32 routes are used, source IP is preserved.
-        - Create a local LoadBalancer service with clusterIP = None, assert no change.
         - Scale the Local NP service so it is running on multiple nodes, assert ECMP routing, source IP is preserved.
         - Delete both services, assert only cluster CIDR route is advertised.
         """
         with DiagsCollector():
+
+            calicoctl("""apply -f - << EOF
+apiVersion: projectcalico.org/v3
+kind: BGPConfiguration
+metadata:
+  name: default
+spec:
+  serviceClusterIPs:
+  - cidr: 10.96.0.0/12
+EOF
+""")
+
             # Assert that a route to the service IP range is present.
             retry_until_success(lambda: self.assertIn("10.96.0.0/12", self.get_routes()))
 
@@ -437,18 +455,124 @@ EOF
             for i in range(attempts):
               retry_until_success(curl, function_args=[local_svc_ip])
 
+            # Delete both services.
+            self.delete_and_confirm(local_svc, "svc", self.ns)
+            self.delete_and_confirm(cluster_svc, "svc", self.ns)
+
+            # Assert that clusterIP is no longer an advertised route.
+            retry_until_success(lambda: self.assertNotIn(local_svc_ip, self.get_routes()))
+
+    def test_external_ip_advertisement(self):
+        """
+        Runs the tests for service external IP advertisement
+        """
+        with DiagsCollector():
+
+            # Whitelist two IP ranges for the external IPs we'll test with
+            calicoctl("""apply -f - << EOF
+apiVersion: projectcalico.org/v3
+kind: BGPConfiguration
+metadata:
+  name: default
+spec:
+  serviceExternalIPs:
+  - cidr: 175.200.0.0/16
+  - cidr: 200.255.0.0/24
+EOF
+""")
+
+            # Assert that a route to the service IP range is present.
+            retry_until_success(lambda: self.assertIn("10.192.0.0/24", self.get_routes()))
+
+            # Create both a Local and a Cluster type NodePort service with a single replica.
+            local_svc = "nginx-local"
+            cluster_svc = "nginx-cluster"
+            self.deploy("nginx:1.7.9", local_svc, self.ns, 80)
+            self.deploy("nginx:1.7.9", cluster_svc, self.ns, 80, traffic_policy="Cluster")
+            self.wait_until_exists(local_svc, "svc", self.ns)
+            self.wait_until_exists(cluster_svc, "svc", self.ns)
+
+            # Get clusterIPs.
+            local_svc_ip = self.get_svc_cluster_ip(local_svc, self.ns)
+            cluster_svc_ip = self.get_svc_cluster_ip(cluster_svc, self.ns)
+
+            # Wait for the deployments to roll out.
+            self.wait_for_deployment(local_svc, self.ns)
+            self.wait_for_deployment(cluster_svc, self.ns)
+
+            # Assert that clusterIPs are not advertised.
+            retry_until_success(lambda: self.assertNotIn(local_svc_ip, self.get_routes()))
+            retry_until_success(lambda: self.assertNotIn(cluster_svc_ip, self.get_routes()))
+
+            # Create a network policy that only accepts traffic from the external node.
+            kubectl("""apply -f - << EOF
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-tcp-80-ex
+  namespace: bgp-test
+spec:
+  podSelector: {}
+  policyTypes:
+  - Ingress
+  ingress:
+  - from:
+    - ipBlock: { cidr: 10.192.0.5/32 }
+    ports:
+    - protocol: TCP
+      port: 80
+EOF
+""")
+
+            # Get host IPs for the nginx pods.
+            local_svc_host_ip = self.get_svc_host_ip(local_svc, self.ns)
+            cluster_svc_host_ip = self.get_svc_host_ip(cluster_svc, self.ns)
+
+            # Select an IP from each external IP CIDR.
+            local_svc_external_ip = "175.200.1.1"
+            cluster_svc_external_ip = "200.255.255.1"
+
+            # Add external IPs to the two services.
+            self.add_svc_external_ips(local_svc, self.ns, [local_svc_external_ip])
+            self.add_svc_external_ips(cluster_svc, self.ns, [cluster_svc_external_ip])
+
+            # Verify that external IPs for local service is advertised but not the cluster service.
+            local_svc_externalips_route = "%s via %s" % (local_svc_external_ip, local_svc_host_ip)
+            cluster_svc_externalips_route = "%s via %s" % (cluster_svc_external_ip, cluster_svc_host_ip)
+            retry_until_success(lambda: self.assertIn(local_svc_externalips_route, self.get_routes()))
+            retry_until_success(lambda: self.assertNotIn(cluster_svc_externalips_route, self.get_routes()))
+
+            # Scale the local_svc to 4 replicas.
+            self.scale_deployment(local_svc, self.ns, 4)
+            self.wait_for_deployment(local_svc, self.ns)
+
+            # Verify that we have ECMP routes for the external IP of the local service.
+            retry_until_success(lambda: self.assert_ecmp_routes(local_svc_external_ip))
+
             # Delete both services, assert only cluster CIDR route is advertised.
             self.delete_and_confirm(local_svc, "svc", self.ns)
             self.delete_and_confirm(cluster_svc, "svc", self.ns)
 
-            # Assert that clusterIP is no longer and advertised route
-            retry_until_success(lambda: self.assertNotIn(local_svc_ip, self.get_routes()))
+            # Assert that external IP is no longer an advertised route.
+            retry_until_success(lambda: self.assertNotIn(local_svc_externalips_route, self.get_routes()))
 
     def test_many_services(self):
         """
         Creates a lot of services quickly
         """
         with DiagsCollector():
+
+            calicoctl("""apply -f - << EOF
+apiVersion: projectcalico.org/v3
+kind: BGPConfiguration
+metadata:
+  name: default
+spec:
+  serviceClusterIPs:
+  - cidr: 10.96.0.0/12
+EOF
+""")
+
             # Assert that a route to the service IP range is present.
             retry_until_success(lambda: self.assertIn("10.96.0.0/12", self.get_routes()))
 
