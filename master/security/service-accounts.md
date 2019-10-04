@@ -86,6 +86,29 @@ spec:
   selector: 'app == "db"'
 ```
 
+#### Restrict label assignment with service account selectors
+
+Network policies can be applied to endpoints using selectors that match labels on either the endpoint itself, the endpoint's namespace, or the endpoint's service account. By specifying selectors based on the endpoint's service account we can employ Kubernetes RBAC to limit which users are allowed to apply labels. In the following example, users with the **intern** role will only be allowed to communicate with endpoints that have that same role.
+
+```
+apiVersion: projectcalico.org/v3
+kind: NetworkPolicy
+metadata:
+  name: restrict-intern-access
+  namespace: prod-engineering
+spec:
+  serviceAccountSelector: 'role == "intern"'
+  ingress:
+    - action: Allow
+      source:
+        serviceAccountSelector: 'role == "intern"'
+  egress:
+    - action: Allow
+      destination:
+        serviceAccountSelector: 'role == "intern"'
+
+```
+
 ### Above and beyond
 
 - [Network policy]({{site.baseurl}}/{{page.version}}/reference/resources/networkpolicy)

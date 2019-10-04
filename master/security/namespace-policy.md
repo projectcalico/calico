@@ -1,5 +1,5 @@
 ---
-title: Use namespace in policy rules
+title: Use namespace in policy
 ---
 
 ### Big picture
@@ -8,7 +8,7 @@ Use {{site.prodname}} network policy rules to reference pods in other namespaces
 
 ### Value
 
-Kubernetes namespaces let you group/separate resources to meet a variety of use-cases. For example you can use namespaces to separate development, production, and QA environments, or to allow different teams to use the same cluster. Using namespace selectors in {{site.prodname}} policy rules allows you to allow or deny traffic to/from pods belonging to specific namespaces. 
+Kubernetes namespaces let you group/separate resources to meet a variety of use-cases. For example you can use namespaces to separate development, production, and QA environments, or to allow different teams to use the same cluster. Using namespace selectors in {{site.prodname}} policy rules allows you to allow or deny traffic to/from pods belonging to specific namespaces.
 
 ### Features
 
@@ -59,6 +59,29 @@ spec:
       ports:
       - 6379
 ```
+
+#### Restrict label assignment with namespace selectors
+
+Network policies can be applied to endpoints using selectors that match labels on either the endpoint itself, the endpoint's namespace, or the endpoint's service account. By specifying selectors based on the endpoint's namespace we can employ Kubernetes RBAC to limit which users are allowed to apply labels. In the following example, users in the **development** environment will only be allowed to communicate with endpoints in that same namespace.
+
+```
+apiVersion: projectcalico.org/v3
+kind: NetworkPolicy
+metadata:
+  name: restrict-development-access
+  namespace: prod-engineering
+spec:
+  namespaceSelector: 'environment == "development"'
+  ingress:
+    - action: Allow
+      source:
+        namespaceSelector: 'environment == "development"'
+  egress:
+    - action: Allow
+      destination:
+        namespaceSelector: 'environment == "development"'
+```
+
 ### Above and beyond
 
 - For more network policy rules, see [Network policy]({{site.baseurl}}/{{page.version}}/reference/resources/networkpolicy)
