@@ -270,6 +270,8 @@ github.com/projectcalico/libcalico-go v0.0.0-20191001220937-262b6a92960b h1:Z0vl
 github.com/projectcalico/libcalico-go v0.0.0-20191001220937-262b6a92960b/go.mod h1:UhwqglrBKH97bgKjpmQM76rT8FZPbGsNuMIQ+tCao6I=
 github.com/projectcalico/libcalico-go v0.0.0-20191002165503-ce68b855671e h1:Cc1oYcIZwekSWuSHxsuSBgGI+fONZhM+R8m9qTE78FY=
 github.com/projectcalico/libcalico-go v0.0.0-20191002165503-ce68b855671e/go.mod h1:UhwqglrBKH97bgKjpmQM76rT8FZPbGsNuMIQ+tCao6I=
+github.com/projectcalico/libcalico-go v0.0.0-20191004201451-6ccf3381fd14 h1:VzZGzo0uw6XVhIOTqU0w1m0FbFyC0FvGYVbelSOYERk=
+github.com/projectcalico/libcalico-go v0.0.0-20191004201451-6ccf3381fd14/go.mod h1:UhwqglrBKH97bgKjpmQM76rT8FZPbGsNuMIQ+tCao6I=
 github.com/projectcalico/logrus v0.0.0-20180627202928-fc9bbf2f57995271c5cd6911ede7a2ebc5ea7c6f h1:C2wKicEbskyr0DaQY7AmWNi8xq24cGtboczIBG8vB5M=
 github.com/projectcalico/logrus v0.0.0-20180627202928-fc9bbf2f57995271c5cd6911ede7a2ebc5ea7c6f/go.mod h1:DfgrchabbtEO9wjOz5lVae+XRvjFKKWEA9GTMme6A8g=
 github.com/projectcalico/pod2daemon v0.0.0-20190730210055-df57fc59e2e1/go.mod h1:TgmA+ArLHObRADfET11mFF1aTK5i++4ZhqIuE4IV+IU=
