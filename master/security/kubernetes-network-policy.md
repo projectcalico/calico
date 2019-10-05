@@ -1,5 +1,6 @@
 ---
 title: Get started with Kubernetes network policy
+description: Learn Kubernetes policy syntax, rules, and features for controlling network traffic.
 ---
 
 ### Big picture

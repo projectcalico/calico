@@ -1,5 +1,6 @@
 ---
 title: Get started with Calico network policy for OpenStack
+description: Extend OpenStack security groups by applying Calico network policy and using labels to identify VMs within network policy rules.
 ---
 
 ### Big picture

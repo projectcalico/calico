@@ -1,5 +1,6 @@
 ---
 title: Enable default deny for Kubernetes pods
+description: Create a default deny network policy so pods that are missing policy are not allowed traffic until appropriate network policy is defined.
 ---
 
 ### Big picture
