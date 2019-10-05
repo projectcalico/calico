@@ -204,6 +204,14 @@ func (rg *routeGenerator) setRouteForSvc(svc *v1.Service, ep *v1.Endpoints) {
 // All of the routes advertised for each service will then be updated to reflect
 // this change.
 func (rg *routeGenerator) onExternalIPsUpdate(newExternalNets []string) {
+	for _, n := range newExternalNets {
+		_, _, err := net.ParseCIDR(n)
+		if err != nil {
+			log.Warnf("Invalid externalIPs in update: %s. Skipping update.", newExternalNets)
+			return
+		}
+	}
+
 	rg.Lock()
 	// Check if it differs from our current configuration.
 	if reflect.DeepEqual(parseIPNets(newExternalNets), rg.externalIPNets) {
@@ -237,6 +245,14 @@ func (rg *routeGenerator) onExternalIPsUpdate(newExternalNets []string) {
 // onClusterIPsUpdate is called from the calico client, whenever there
 // is a change to the svc_cluster_ips.
 func (rg *routeGenerator) onClusterIPsUpdate(newClusterNets []string) {
+	for _, n := range newClusterNets {
+		_, _, err := net.ParseCIDR(n)
+		if err != nil {
+			log.Warnf("Invalid clusterIPs in update: %s. Skipping update.", newClusterNets)
+			return
+		}
+	}
+
 	rg.Lock()
 	// Check if it differs from our current configuration.
 	if reflect.DeepEqual(newClusterNets, rg.clusterCIDRs) {

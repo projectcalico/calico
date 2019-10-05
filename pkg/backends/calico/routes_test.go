@@ -122,6 +122,42 @@ var _ = Describe("RouteGenerator", func() {
 		})
 	})
 
+	testRouteGeneratorUpdatesOnlyWithValidCIDRs := func(f func([]string)) {
+		verifyInitialState := func() {
+			Expect(rg.client.cache["/calico/staticroutes/192.168.0.0-16"]).To(Equal("192.168.0.0/16"))
+			Expect(rg.client.cache["/calico/rejectcidrs/192.168.0.0-16"]).To(Equal("192.168.0.0/16"))
+		}
+
+		f([]string{"192.168.0.0/16"})
+		verifyInitialState()
+
+		invalidNets := [][]string{
+			{""},
+			{"10.10.1.0/24", ""},
+			{"10.10.1.0/24", "x.y.z.z/12"},
+		}
+		for _, n := range invalidNets {
+			f(n)
+			verifyInitialState()
+		}
+
+		f([]string{"10.10.1.0/24"})
+		Expect(rg.client.cache["/calico/staticroutes/10.10.1.0-24"]).To(Equal("10.10.1.0/24"))
+		Expect(rg.client.cache["/calico/rejectcidrs/10.10.1.0-24"]).To(Equal("10.10.1.0/24"))
+	}
+
+	Describe("onClusterIPsUpdate", func() {
+		It("should do updates only if the new nets are valid", func() {
+			testRouteGeneratorUpdatesOnlyWithValidCIDRs(rg.onClusterIPsUpdate)
+		})
+	})
+
+	Describe("onExternalIPsUpdate", func() {
+		It("should do updates only if the new nets are valid", func() {
+			testRouteGeneratorUpdatesOnlyWithValidCIDRs(rg.onExternalIPsUpdate)
+		})
+	})
+
 	Describe("(un)setRouteForSvc", func() {
 		Context("svc = svc, ep = nil", func() {
 			It("should set and unset routes for a service", func() {
