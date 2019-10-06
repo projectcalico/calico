@@ -11,6 +11,6 @@ analyze:
   - name: github.com/kelseyhightower/confd
     type: go
     target: github.com/kelseyhightower/confd
-    path: /go/src/github.com/kelseyhightower/confd
+    path: .
     options:
       allow-unresolved: true
