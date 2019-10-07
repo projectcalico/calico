@@ -18,6 +18,9 @@ This how-to guide uses the following {{site.prodname}} features:
 
 ### How to
 
+- [Control traffic to/from endpoints in a namespace](#control-traffic-to/from-endpoints-in-a-namespace)
+- [Use Kubernetes RBAC to control namespace label assignment](#use-kubernetes-rbac-to-control-namespace-label-assignment)
+
 #### Control traffic to/from endpoints in a namespace
 
 In the following example, ingress traffic is allowed to endpoints in the **namespace: production** with label **color: red**, and only from a pod in the same namespace with **color: blue**, on **port 6379**.
@@ -62,9 +65,9 @@ spec:
 
 #### Use Kubernetes RBAC to control namespace label assignment
 
-Network policies can be applied to endpoints using selectors that match labels on either the endpoint itself, the endpoint's namespace, or the endpoint's service account. By specifying selectors based on the endpoint's namespace we can employ Kubernetes RBAC to control which users can assign labels to service accounts. That group may be separate from the group of users who are allowed to deploy pods.
+Network policies can be applied to endpoints using selectors that match labels on either the endpoint itself, the endpoint's namespace, or the endpoint's namespace. By specifying selectors based on the endpoint's namespace we can employ Kubernetes RBAC to control which users can assign labels to namespaces. That group may be separate from the group of users who are allowed to deploy pods.
 
-In the following example, users in the **development** environment will only be allowed to communicate with other pods that have namespace labels `enfironment == "development"`.
+In the following example, users in the **development** environment will only be allowed to communicate with other pods that have namespace labels `environment == "development"`.
 
 ```
 apiVersion: projectcalico.org/v3

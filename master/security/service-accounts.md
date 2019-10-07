@@ -45,6 +45,7 @@ Configure unique Kubernetes service accounts for your applications.
 
 - [Limit ingress traffic for workloads by service account name](#limit-ingress-traffic-for-workloads-by-service-account-name)
 - [Limit ingress traffic for workloads by service account label](#limit-ingress-traffic-for-workloads-by-service-account-label)
+- [Use Kubernetes RBAC to control service account label assignment](#use-kubernetes-rbac-to-control-service-account-label-assignment)
 
 #### Limit ingress traffic for workloads by service account name
 
@@ -108,7 +109,6 @@ spec:
     - action: Allow
       destination:
         serviceAccountSelector: 'role == "intern"'
-
 ```
 
 ### Above and beyond
