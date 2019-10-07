@@ -455,6 +455,14 @@ func (c *Container) ExecOutput(args ...string) (string, error) {
 	arg := []string{"exec", c.Name}
 	arg = append(arg, args...)
 	cmd := exec.Command("docker", arg...)
+	stderr, err := cmd.StderrPipe()
+	if err != nil {
+		return "", err
+	}
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go c.copyOutputToLog("exec-err", stderr, &wg, nil)
+	defer wg.Wait()
 	out, err := cmd.Output()
 	if err != nil {
 		if out == nil {

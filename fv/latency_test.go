@@ -19,6 +19,7 @@ package fv_test
 import (
 	"fmt"
 	"os"
+	"regexp"
 	"strconv"
 	"time"
 
@@ -192,12 +193,18 @@ var _ = Context("Latency tests with initialized Felix and etcd datastore", func(
 
 					// The all() selector should now map to an IP set with 10,002 IPs in it.
 					ipSetName := utils.IPSetNameForSelector(c.ipVersion, sourceSelector)
-					Eventually(func() int {
-						return getNumIPSetMembers(
-							felix.Container,
-							ipSetName,
-						)
-					}, "100s", "1000ms").Should(Equal(10002))
+					if os.Getenv("FELIX_FV_ENABLE_BPF") == "true" {
+						Eventually(func() int {
+							return getTotalIPSetMembers(felix)
+						}, "10s", "1000ms").Should(Equal(10002))
+					} else {
+						Eventually(func() int {
+							return getNumIPSetMembers(
+								felix.Container,
+								ipSetName,
+							)
+						}, "100s", "1000ms").Should(Equal(10002))
+					}
 				})
 
 				It("should have good latency", func() {
@@ -254,4 +261,23 @@ func generateIPv6s(n int) (result []string) {
 		}
 	}
 	panic("too many IPs")
+}
+
+func getTotalIPSetMembers(felix *infrastructure.Felix) int {
+	out, err := felix.ExecOutput("bpftool", "map", "dump", "pinned", "/sys/fs/bpf/tc/globals/calico_ip_sets")
+	if err != nil {
+		log.WithError(err).WithField("output", out).Warn("Failed to run bpftool")
+		return -1
+	}
+	r := regexp.MustCompile(`Found (\d+) elements`)
+	m := r.FindStringSubmatch(out)
+	if m != nil {
+		count, err := strconv.ParseInt(m[1], 10, 64)
+		if err != nil {
+			log.WithError(err).Panic("Failed to parse bpftool output")
+		}
+		return int(count)
+	}
+	log.WithField("out", out).Warn("bpftool didn't return a Found n elements line")
+	return -1
 }
