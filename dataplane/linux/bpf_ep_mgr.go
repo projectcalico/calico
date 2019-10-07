@@ -227,15 +227,33 @@ func findIPSetIDs(policy *proto.Policy) set.Set {
 }
 
 func (m *bpfEndpointManager) CompleteDeferredWork() error {
+	var mutex sync.Mutex
+	errs := map[proto.WorkloadEndpointID]error{}
+	var wg sync.WaitGroup
+
+	m.dirtyWorkloads.Iter(func(item interface{}) error {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			wlID := item.(proto.WorkloadEndpointID)
+			err := m.applyPolicy(wlID)
+			mutex.Lock()
+			errs[wlID] = err
+			mutex.Unlock()
+		}()
+		return nil
+	})
+
+	wg.Wait()
+
 	m.dirtyWorkloads.Iter(func(item interface{}) error {
 		wlID := item.(proto.WorkloadEndpointID)
-		err := m.applyPolicy(wlID)
+		err := errs[wlID]
 		if err == nil {
 			log.WithField("id", wlID).Info("Applied policy to workload")
 			return set.RemoveItem
-		} else {
-			log.WithError(err).Warn("Failed to apply policy to endpoint")
 		}
+		log.WithError(err).Warn("Failed to apply policy to endpoint")
 		return nil
 	})
 	return nil
@@ -256,150 +274,161 @@ func (m *bpfEndpointManager) applyPolicy(wlID proto.WorkloadEndpointID) error {
 	cmd = exec.Command("tc", "qdisc", "add", "dev", wep.Name, "clsact")
 	_ = cmd.Run()
 
-	for _, direction := range []string{"ingress", "egress"} {
-		var tiers [][][]*proto.Rule
-		for _, tier := range wep.Tiers {
-			var pols [][]*proto.Rule
+	var ingressErr, egressErr error
+	var wg sync.WaitGroup
 
-			directionalPols := tier.IngressPolicies
-			if direction == "egress" {
-				directionalPols = tier.EgressPolicies
-			}
+	wg.Add(2)
+	go func() {
+		defer wg.Done()
+		ingressErr = m.applyPolicyDirection(wep, "ingress")
+	}()
+	go func() {
+		defer wg.Done()
+		egressErr = m.applyPolicyDirection(wep, "egress")
+	}()
+	wg.Wait()
 
-			if len(directionalPols) == 0 {
-				continue
-			}
+	if ingressErr != nil {
+		return ingressErr
+	}
+	if egressErr != nil {
+		return egressErr
+	}
 
-			for _, polName := range directionalPols {
-				pol := m.policies[proto.PolicyID{Tier: tier.Name, Name: polName}]
-				if direction == "ingress" {
-					pols = append(pols, pol.InboundRules)
-				} else {
-					pols = append(pols, pol.OutboundRules)
-				}
-			}
-			tiers = append(tiers, pols)
-		}
+	applyTime := time.Since(startTime)
+	log.WithField("timeTaken", applyTime).Info("Finished applying BPF programs for workload")
+	return nil
+}
 
-		var profs [][]*proto.Rule
-		for _, profName := range wep.ProfileIds {
-			prof := m.profiles[proto.ProfileID{Name: profName}]
-			if direction == "ingress" {
-				profs = append(profs, prof.InboundRules)
-			} else {
-				profs = append(profs, prof.OutboundRules)
-			}
-		}
-		tiers = append(tiers, profs)
+func (m *bpfEndpointManager) applyPolicyDirection(wep *proto.WorkloadEndpoint, direction string) error {
+	var tiers [][][]*proto.Rule
+	for _, tier := range wep.Tiers {
+		var pols [][]*proto.Rule
 
-		tempDir, err := ioutil.TempDir("", "calico-compile")
-		if err != nil {
-			log.WithError(err).Panic("Failed to make temporary directory")
-		}
-		defer func() {
-			_ = os.RemoveAll(tempDir)
-		}()
-
-		oFileName := tempDir + "/redir_tc.o"
-
-		clang := exec.Command("clang",
-			"-x", "c",
-			"-D__KERNEL__",
-			"-D__ASM_SYSREG_H",
-			"-Wno-unused-value",
-			"-Wno-pointer-sign",
-			"-Wno-compare-distinct-pointer-types",
-			"-Wunused",
-			"-Wall",
-			"-Werror",
-			"-fno-stack-protector",
-			"-O2",
-			"-emit-llvm",
-			"-c", "-", "-o", "-")
-		clang.Dir = "/code/bpf/xdp"
-
-		clangStdin, err := clang.StdinPipe()
-		if err != nil {
-			return err
-		}
-		clangStdout, err := clang.StdoutPipe()
-		if err != nil {
-			return err
-		}
-		clangStderr, err := clang.StderrPipe()
-		if err != nil {
-			return err
-		}
-
-		err = clang.Start()
-		if err != nil {
-			log.WithError(err).Panic("Failed to write C file.")
-			return err
-		}
-
-		var wg sync.WaitGroup
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			scanner := bufio.NewScanner(clangStderr)
-			for scanner.Scan() {
-				log.Warnf("clang stderr: %s", scanner.Text())
-			}
-			if err != nil {
-				log.WithError(err).Error("Error while reading clang stderr")
-			}
-		}()
-
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			pg := bpf.NewProgramGenerator(clangStdin)
-			err = pg.WriteProgram(tiers)
-			if err != nil {
-				log.WithError(err).Panic("Failed to write C file.")
-			}
-			err = clangStdin.Close()
-			if err != nil {
-				log.WithError(err).Panic("Failed to write C file to clang stdin (Close() failed).")
-			}
-		}()
-
-		llc := exec.Command("llc", "-march=bpf", "-filetype=obj", "-o", oFileName)
-		llc.Stdin = clangStdout
-		out, err := llc.CombinedOutput()
-		if err != nil {
-			log.WithError(err).WithField("out", string(out)).Error("Failed to compile C program (llc step)")
-			return err
-		}
-
-		err = clang.Wait()
-		if err != nil {
-			log.WithError(err).Error("Clang failed.")
-			return err
-		}
-		wg.Wait()
-
-		// Hook is relative to the host rather than the endpoint so we need to flip it.
-		hook := "egress"
-		sec := "calico_to_workload"
+		directionalPols := tier.IngressPolicies
 		if direction == "egress" {
-			hook = "ingress"
-			sec = "calico_from_workload"
+			directionalPols = tier.EgressPolicies
 		}
 
-		tc := exec.Command("tc",
-			"filter", "add", "dev", wep.Name,
-			hook,
-			"bpf", "da", "obj", oFileName,
-			"sec", sec)
-		out, err = tc.CombinedOutput()
-		if err != nil {
-			log.WithError(err).WithField("out", string(out)).WithField("command", tc).Error("Failed to attach BPF program")
-			return err
+		if len(directionalPols) == 0 {
+			continue
+		}
+
+		for _, polName := range directionalPols {
+			pol := m.policies[proto.PolicyID{Tier: tier.Name, Name: polName}]
+			if direction == "ingress" {
+				pols = append(pols, pol.InboundRules)
+			} else {
+				pols = append(pols, pol.OutboundRules)
+			}
+		}
+		tiers = append(tiers, pols)
+	}
+	var profs [][]*proto.Rule
+	for _, profName := range wep.ProfileIds {
+		prof := m.profiles[proto.ProfileID{Name: profName}]
+		if direction == "ingress" {
+			profs = append(profs, prof.InboundRules)
+		} else {
+			profs = append(profs, prof.OutboundRules)
 		}
 	}
-	applyTime := time.Since(startTime)
-	log.WithField("timeTaken", applyTime).Info("Finished applying BPF programs")
+	tiers = append(tiers, profs)
+	tempDir, err := ioutil.TempDir("", "calico-compile")
+	if err != nil {
+		log.WithError(err).Panic("Failed to make temporary directory")
+	}
+	defer func() {
+		_ = os.RemoveAll(tempDir)
+	}()
+	oFileName := tempDir + "/redir_tc.o"
+	clang := exec.Command("clang",
+		"-x", "c",
+		"-D__KERNEL__",
+		"-D__ASM_SYSREG_H",
+		"-Wno-unused-value",
+		"-Wno-pointer-sign",
+		"-Wno-compare-distinct-pointer-types",
+		"-Wunused",
+		"-Wall",
+		"-Werror",
+		"-fno-stack-protector",
+		"-O2",
+		"-emit-llvm",
+		"-c", "-", "-o", "-")
+	clang.Dir = "/code/bpf/xdp"
+	clangStdin, err := clang.StdinPipe()
+	if err != nil {
+		return err
+	}
+	clangStdout, err := clang.StdoutPipe()
+	if err != nil {
+		return err
+	}
+	clangStderr, err := clang.StderrPipe()
+	if err != nil {
+		return err
+	}
+	err = clang.Start()
+	if err != nil {
+		log.WithError(err).Panic("Failed to write C file.")
+		return err
+	}
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		scanner := bufio.NewScanner(clangStderr)
+		for scanner.Scan() {
+			log.Warnf("clang stderr: %s", scanner.Text())
+		}
+		if err != nil {
+			log.WithError(err).Error("Error while reading clang stderr")
+		}
+	}()
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		pg := bpf.NewProgramGenerator(clangStdin)
+		err = pg.WriteProgram(tiers)
+		if err != nil {
+			log.WithError(err).Panic("Failed to write C file.")
+		}
+		err = clangStdin.Close()
+		if err != nil {
+			log.WithError(err).Panic("Failed to write C file to clang stdin (Close() failed).")
+		}
+	}()
+	llc := exec.Command("llc", "-march=bpf", "-filetype=obj", "-o", oFileName)
+	llc.Stdin = clangStdout
+	out, err := llc.CombinedOutput()
+	if err != nil {
+		log.WithError(err).WithField("out", string(out)).Error("Failed to compile C program (llc step)")
+		return err
+	}
+	err = clang.Wait()
+	if err != nil {
+		log.WithError(err).Error("Clang failed.")
+		return err
+	}
+	wg.Wait()
+	// Hook is relative to the host rather than the endpoint so we need to flip it.
+	hook := "egress"
+	sec := "calico_to_workload"
+	if direction == "egress" {
+		hook = "ingress"
+		sec = "calico_from_workload"
+	}
+	tc := exec.Command("tc",
+		"filter", "add", "dev", wep.Name,
+		hook,
+		"bpf", "da", "obj", oFileName,
+		"sec", sec)
+	out, err = tc.CombinedOutput()
+	if err != nil {
+		log.WithError(err).WithField("out", string(out)).WithField("command", tc).Error("Failed to attach BPF program")
+		return err
+	}
 	return nil
 }
 
