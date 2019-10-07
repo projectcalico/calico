@@ -105,11 +105,13 @@ spec:
   ingress:
     - action: Allow
       source:
-        serviceAccountSelector: 'role == "intern"'
+        serviceAccounts:
+          selector: 'role == "intern"'
   egress:
     - action: Allow
       destination:
-        serviceAccountSelector: 'role == "intern"'
+        serviceAccounts:
+          selector: 'role == "intern"'
 ```
 
 ### Above and beyond

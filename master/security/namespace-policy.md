@@ -72,10 +72,9 @@ In the following example, users in the **development** environment will only be 
 
 ```
 apiVersion: projectcalico.org/v3
-kind: NetworkPolicy
+kind: GlobalNetworkPolicy
 metadata:
   name: restrict-development-access
-  namespace: prod-engineering
 spec:
   namespaceSelector: 'environment == "development"'
   ingress:
