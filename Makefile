@@ -103,16 +103,12 @@ PUSH_NONMANIFEST_IMAGES=$(filter-out $(PUSH_MANIFEST_IMAGES),$(PUSH_IMAGES))
 # location of docker credentials to push manifests
 DOCKER_CONFIG ?= $(HOME)/.docker/config.json
 
-EXTRA_DOCKER_ARGS       += -e GO111MODULE=on
-BUILD_FLAGS	     += -mod=vendor
-GINKGO_ARGS	     += -mod=vendor
+BUILD_FLAGS		+= -mod=vendor
+GINKGO_ARGS		+= -mod=vendor
 
-# Allow libcalico-go and the ssh auth sock to be mapped into the build container.
-ifdef LIBCALICOGO_PATH
-  EXTRA_DOCKER_ARGS += -v $(LIBCALICOGO_PATH):/go/src/github.com/projectcalico/libcalico-go:ro
-endif
+# Allow the ssh auth sock to be mapped into the build container.
 ifdef SSH_AUTH_SOCK
-  EXTRA_DOCKER_ARGS += -v $(SSH_AUTH_SOCK):/ssh-agent --env SSH_AUTH_SOCK=/ssh-agent
+	EXTRA_DOCKER_ARGS += -v $(SSH_AUTH_SOCK):/ssh-agent --env SSH_AUTH_SOCK=/ssh-agent
 endif
 
 # Volume-mount gopath into the build container to cache go module's packages. If the environment is using multiple
@@ -126,7 +122,20 @@ else
 	GOMOD_CACHE = $(HOME)/go/pkg/mod
 endif
 
-EXTRA_DOCKER_ARGS += -v $(GOMOD_CACHE):/go/pkg/mod:rw
+EXTRA_DOCKER_ARGS	+= -e GO111MODULE=on -v $(GOMOD_CACHE):/go/pkg/mod:rw
+
+# Build mounts for running in "local build" mode. This allows an easy build using local development code,
+# assuming that there is a local checkout of libcalico in the same directory as this repo.
+PHONY:local_build
+
+ifdef LOCAL_BUILD
+EXTRA_DOCKER_ARGS+=-v $(CURDIR)/../libcalico-go:/go/src/github.com/projectcalico/libcalico-go:rw
+local_build:
+	$(DOCKER_RUN) $(CALICO_BUILD) go mod edit -replace=github.com/projectcalico/libcalico-go=../libcalico-go
+else
+local_build:
+	-$(DOCKER_RUN) $(CALICO_BUILD) go mod edit -dropreplace=github.com/projectcalico/libcalico-go
+endif
 
 DOCKER_RUN := mkdir -p .go-pkg-cache $(GOMOD_CACHE) && \
 	docker run --rm \
@@ -157,19 +166,6 @@ DOCKER_RUN_PB := docker run --rm \
 		--user $(LOCAL_USER_ID):$(MY_GID) \
 		-v $(CURDIR):/code
 
-# Build mounts for running in "local build" mode. This allows an easy build using local development code,
-# assuming that there is a local checkout of libcalico in the same directory as this repo.
-PHONY:local_build
-
-ifdef LOCAL_BUILD
-EXTRA_DOCKER_ARGS+=-v $(CURDIR)/../libcalico-go:/go/src/github.com/projectcalico/libcalico-go:rw
-local_build:
-	$(DOCKER_RUN) $(CALICO_BUILD) go mod edit -replace=github.com/projectcalico/libcalico-go=../libcalico-go
-else
-local_build:
-	-$(DOCKER_RUN) $(CALICO_BUILD) go mod edit -dropreplace=github.com/projectcalico/libcalico-go
-endif
-
 ENVOY_API=vendor/github.com/envoyproxy/data-plane-api
 EXT_AUTH=$(ENVOY_API)/envoy/service/auth/v2/
 EXT_AUTH_V2_ALPHA=$(ENVOY_API)/envoy/service/auth/v2alpha/
@@ -192,6 +188,52 @@ ifeq ($(ARCH),amd64)
 	-docker rmi $(BUILD_IMAGE):latest
 	-docker rmi $(BUILD_IMAGE):$(VERSION)
 endif
+###############################################################################
+# Updating pins
+###############################################################################
+PIN_BRANCH?=$(shell git rev-parse --abbrev-ref HEAD)
+
+define get_remote_version
+	$(shell git ls-remote http://$(1) $(2) 2>/dev/null | cut -f 1)
+endef
+
+# update_pin updates the given package's version to the latest available in the specified repo and branch.
+# $(1) should be the name of the package, $(2) and $(3) the repository and branch from which to update it.
+define update_pin
+	$(eval new_ver := $(call get_remote_version,$(2),$(3)))
+
+	$(DOCKER_RUN) $(CALICO_BUILD) sh -c '\
+		if [[ ! -z "$(new_ver)" ]]; then \
+			go get $(1)@$(new_ver); \
+			go mod download; \
+		fi'
+endef
+
+LIBCALICO_BRANCH?=$(PIN_BRANCH)
+LIBCALICO_REPO?=github.com/projectcalico/libcalico-go
+
+update-libcalico-pin:
+	$(call update_pin,github.com/projectcalico/libcalico-go,$(LIBCALICO_REPO),$(LIBCALICO_BRANCH))
+
+git-status:
+	git status --porcelain
+
+git-config:
+ifdef CONFIRM
+	git config --global user.name "Semaphore Automatic Update"
+	git config --global user.email "marvin@tigera.io"
+endif
+
+git-commit:
+	git diff --quiet HEAD || git commit -m "Semaphore Automatic Update" go.mod go.sum
+
+git-push:
+	git push
+
+update-pins: update-libcalico-pin
+
+commit-pin-updates: update-pins git-status ci git-config git-commit git-push
+
 ###############################################################################
 # Building the binary
 ###############################################################################
@@ -217,42 +259,6 @@ vendor: go.mod go.sum
 	cp -fr `go list -m -f "{{.Dir}}" github.com/lyft/protoc-gen-validate` vendor/github.com/lyft/protoc-gen-validate; \
 	cp -fr `go list -m -f "{{.Dir}}" github.com/golang/protobuf`/* vendor/github.com/golang/protobuf'
 	chmod -R +w vendor/github.com
-
-# Default the libcalico repo and version but allow them to be overridden
-LIBCALICO_BRANCH?=$(shell git rev-parse --abbrev-ref HEAD)
-LIBCALICO_REPO?=github.com/projectcalico/libcalico-go
-LIBCALICO_VERSION?=$(shell git ls-remote git@github.com:projectcalico/libcalico-go $(LIBCALICO_BRANCH) 2>/dev/null | cut -f 1)
-LIBCALICO_OLDVER?=$(shell $(DOCKER_RUN) $(CALICO_BUILD) go list -m -f "{{.Version}}" github.com/projectcalico/libcalico-go)
-
-## Update libcalico pin in glide.yaml
-update-libcalico:
-	$(DOCKER_RUN) -i $(CALICO_BUILD) sh -c '\
-	if [[ ! -z "$(LIBCALICO_VERSION)" ]] && [[ "$(LIBCALICO_VERSION)" != "$(LIBCALICO_OLDVER)" ]]; then \
-		echo "Updating libcalico version $(LIBCALICO_OLDVER) to $(LIBCALICO_VERSION) from $(LIBCALICO_REPO)"; \
-		go mod edit -droprequire github.com/projectcalico/libcalico-go; \
-		go get $(LIBCALICO_REPO)@$(LIBCALICO_VERSION); \
-		if [ "$(LIBCALICO_REPO)" != "github.com/projectcalico/libcalico-go" ]; then \
-			go mod edit -replace github.com/projectcalico/libcalico-go=$(LIBCALICO_REPO)@$(LIBCALICO_VERSION); \
-		fi;\
-		go mod vendor; \
-	fi'
-
-git-status:
-	git status --porcelain
-
-git-config:
-ifdef CONFIRM
-	git config --global user.name "Semaphore Automatic Update"
-	git config --global user.email "marvin@tigera.io"
-endif
-
-git-commit:
-	git diff-index --quiet HEAD || git commit -m "Semaphore Automatic Update" go.mod go.sum
-
-git-push:
-	git push
-
-commit-pin-updates: update-libcalico git-status ci git-config git-commit git-push
 
 bin/dikastes-amd64: ARCH=amd64
 bin/dikastes-arm64: ARCH=arm64
@@ -416,25 +422,17 @@ sub-tag-images-%:
 ###############################################################################
 # Static checks
 ###############################################################################
-## Perform static checks on the code.
-
 .PHONY: static-checks
+LINT_ARGS := --deadline 5m --max-issues-per-linter 0 --max-same-issues 0
 static-checks: build
-	$(DOCKER_RUN) $(CALICO_BUILD) sh -c 'GO111MODULE=off golangci-lint run --deadline 5m'
+	$(DOCKER_RUN) $(CALICO_BUILD) sh -c 'GO111MODULE=off golangci-lint run $(LINT_ARGS)'
 
 .PHONY: fix
-## Fix static checks
 fix:
 	goimports -w $(SRC_FILES)
 
 foss-checks: build-all
-	@echo Running $@...
-	@docker run --rm -v $(CURDIR):/go/src/$(PACKAGE_NAME):rw \
-	  -e LOCAL_USER_ID=$(LOCAL_USER_ID) \
-	  -e FOSSA_API_KEY=$(FOSSA_API_KEY) \
-	  -e GO111MODULE=on \
-	  -w /go/src/$(PACKAGE_NAME) \
-	  $(CALICO_BUILD) /usr/local/bin/fossa
+	  $(DOCKER_RUN) -e FOSSA_API_KEY=$(FOSSA_API_KEY) $(CALICO_BUILD) /usr/local/bin/fossa
 
 ###############################################################################
 # UTs
@@ -448,9 +446,12 @@ ut: local_build proto
 ###############################################################################
 # CI
 ###############################################################################
+.PHONY: mod-download
+mod-download:
+	-$(DOCKER_RUN) $(CALICO_BUILD) go mod download
+
 .PHONY: ci
-## Run what CI runs
-ci: clean build-all static-checks ut
+ci: clean mod-download build-all static-checks ut
 
 ###############################################################################
 # CD
