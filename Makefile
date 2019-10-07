@@ -360,7 +360,7 @@ $(CLANG_BUILDER_STAMP): docker-build-images/bpf-clang-builder.Dockerfile.$(BUILD
 bpf-builder: $(CLANG_BUILDER_STAMP)
 
 ifndef LOCAL
-xdp: bpf-builder
+xdp bpf/xdp/generated/xdp.o: bpf-builder
 	docker run --rm --user $(LOCAL_USER_ID):$(LOCAL_GROUP_ID) \
 	          -v $(CURDIR):/go/src/$(PACKAGE_NAME):rw \
 	              calico-build/bpf-clang \
@@ -374,7 +374,7 @@ xdp-clean:
 	              /bin/sh -c \
 	              "cd /go/src/$(PACKAGE_NAME) && make -C bpf/xdp clean"
 else
-xdp:
+xdp bpf/xdp/generated/xdp.o:
 	$(MAKE) -C bpf/xdp
 
 xdp-clean:
