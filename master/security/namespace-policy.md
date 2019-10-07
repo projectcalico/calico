@@ -62,7 +62,7 @@ spec:
 
 #### Restrict label assignment with namespace selectors
 
-Network policies can be applied to endpoints using selectors that match labels on either the endpoint itself, the endpoint's namespace, or the endpoint's service account. By specifying selectors based on the endpoint's namespace we can employ Kubernetes RBAC to limit which users are allowed to apply labels. In the following example, users in the **development** environment will only be allowed to communicate with endpoints in that same namespace.
+Network policies can be applied to endpoints using selectors that match labels on either the endpoint itself, the endpoint's namespace, or the endpoint's service account. By specifying selectors based on the endpoint's namespace we can employ Kubernetes RBAC to limit which users are allowed to apply labels. In the following example, users in the **development** environment will only be allowed to communicate with endpoints in any namespace with the label `environment: development`.
 
 ```
 apiVersion: projectcalico.org/v3
