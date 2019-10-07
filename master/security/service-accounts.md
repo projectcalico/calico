@@ -86,9 +86,11 @@ spec:
   selector: 'app == "db"'
 ```
 
-#### Restrict label assignment with service account selectors
+#### Use Kubernetes RBAC to control service account label assignment
 
-Network policies can be applied to endpoints using selectors that match labels on either the endpoint itself, the endpoint's namespace, or the endpoint's service account. By specifying selectors based on the endpoint's service account we can employ Kubernetes RBAC to limit which users are allowed to apply labels. In the following example, pods with an **intern** service account will only be allowed to communicate with other pods with service accounts labeled `role: intern`.
+Network policies can be applied to endpoints using selectors that match labels on either the endpoint itself, the endpoint's namespace, or the endpoint's service account. By specifying selectors based on the endpoint's service account we can employ Kubernetes RBAC to control which users can assign labels to service accounts. That group may be separate from the group of users who are allowed to deploy pods.
+
+In the following example, pods with an **intern** service account will only be allowed to communicate with other pods with service accounts labeled `role: intern`.
 
 ```
 apiVersion: projectcalico.org/v3

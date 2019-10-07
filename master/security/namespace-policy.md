@@ -4,11 +4,11 @@ title: Use namespace in policy
 
 ### Big picture
 
-Use {{site.prodname}} network policy rules to reference pods in other namespaces.
+Use {{site.prodname}} network policies to reference pods in other namespaces.
 
 ### Value
 
-Kubernetes namespaces let you group/separate resources to meet a variety of use-cases. For example you can use namespaces to separate development, production, and QA environments, or to allow different teams to use the same cluster. Using namespace selectors in {{site.prodname}} policy rules allows you to allow or deny traffic to/from pods belonging to specific namespaces.
+Kubernetes namespaces let you group/separate resources to meet a variety of use-cases. For example you can use namespaces to separate development, production, and QA environments, or to allow different teams to use the same cluster. Using namespace selectors in {{site.prodname}} network policies allows you to allow or deny traffic to/from pods belonging to specific namespaces.
 
 ### Features
 
@@ -60,9 +60,11 @@ spec:
       - 6379
 ```
 
-#### Restrict label assignment with namespace selectors
+#### Use Kubernetes RBAC to control namespace label assignment
 
-Network policies can be applied to endpoints using selectors that match labels on either the endpoint itself, the endpoint's namespace, or the endpoint's service account. By specifying selectors based on the endpoint's namespace we can employ Kubernetes RBAC to limit which users are allowed to apply labels. In the following example, users in the **development** environment will only be allowed to communicate with endpoints in any namespace with the label `environment: development`.
+Network policies can be applied to endpoints using selectors that match labels on either the endpoint itself, the endpoint's namespace, or the endpoint's service account. By specifying selectors based on the endpoint's namespace we can employ Kubernetes RBAC to control which users can assign labels to service accounts. That group may be separate from the group of users who are allowed to deploy pods.
+
+In the following example, users in the **development** environment will only be allowed to communicate with other pods that have namespace labels `enfironment == "development"`.
 
 ```
 apiVersion: projectcalico.org/v3
@@ -84,5 +86,5 @@ spec:
 
 ### Above and beyond
 
-- For more network policy rules, see [Network policy]({{site.baseurl}}/{{page.version}}/reference/resources/networkpolicy)
+- For more network policies, see [Network policy]({{site.baseurl}}/{{page.version}}/reference/resources/networkpolicy)
 - To apply policy to all namespaces, see [Global network policy]({{site.baseurl}}/{{page.version}}/reference/resources/globalnetworkpolicy)
