@@ -348,34 +348,23 @@ protobuf proto/felixbackend.pb.go: proto/felixbackend.proto
 BPF_INC_FILES := bpf/include/bpf.h bpf/xdp/*.h
 BPF_XDP_INC_FILES :=
 
-CLANG_BUILDER_STAMP := .built-bpf-clang-builder-$(BUILDARCH)
-
-$(CLANG_BUILDER_STAMP): docker-build-images/bpf-clang-builder.Dockerfile.$(BUILDARCH)
-	# the bpf object file is not arch dependent, so we can build with the current ARCH
-	docker build -t calico-build/bpf-clang -f docker-build-images/bpf-clang-builder.Dockerfile.$(BUILDARCH) docker-build-images
-	touch "$@"
-
-.PHONY: xdp bpf-builder
-
-bpf-builder: $(CLANG_BUILDER_STAMP)
+.PHONY: xdp
 
 ifndef LOCAL
-xdp bpf/xdp/generated/xdp.o: bpf-builder
-	docker run --rm --user $(LOCAL_USER_ID):$(LOCAL_GROUP_ID) \
-	          -v $(CURDIR):/go/src/$(PACKAGE_NAME):rw \
-	              calico-build/bpf-clang \
-	              /bin/sh -c \
-	              "cd /go/src/$(PACKAGE_NAME) && make -C bpf/xdp all"
+xdp bpf/xdp/generated/xdp.o:
+	$(DOCKER_RUN) $(CALICO_BUILD) \
+	              /bin/sh -c "make -C bpf/xdp all"
+	mkdir -p bpf/xdp/generated/
+	cp bpf/xdp/filter.o bpf/xdp/generated/xdp.o
 
 xdp-clean:
-	docker run --rm --user $(LOCAL_USER_ID):$(LOCAL_GROUP_ID) \
-	          -v $(CURDIR):/go/src/$(PACKAGE_NAME):rw \
-	              calico-build/bpf-clang \
-	              /bin/sh -c \
-	              "cd /go/src/$(PACKAGE_NAME) && make -C bpf/xdp clean"
+	$(DOCKER_RUN) $(CALICO_BUILD) \
+	              /bin/sh -c "make -C bpf/xdp clean"
 else
 xdp bpf/xdp/generated/xdp.o:
 	$(MAKE) -C bpf/xdp
+	mkdir -p bpf/xdp/generated/
+	cp bpf/xdp/filter.o bpf/xdp/generated/xdp.o
 
 xdp-clean:
 	$(MAKE) -C bpf/xdp clean
@@ -383,14 +372,11 @@ endif
 
 BPF_SOCKMAP_INC_FILES := bpf/sockmap/sockops.h
 
-bpf/sockmap/generated/sockops.o: bpf/sockmap/sockops.c $(BPF_INC_FILES) $(BPF_SOCKMAP_INC_FILES) $(CLANG_BUILDER_STAMP)
+bpf/sockmap/generated/sockops.o: bpf/sockmap/sockops.c $(BPF_INC_FILES) $(BPF_SOCKMAP_INC_FILES) 
 	mkdir -p bpf/sockmap/generated
-	docker run --rm --user $(LOCAL_USER_ID):$(LOCAL_GROUP_ID) \
-		  -v $(CURDIR):/go/src/$(PACKAGE_NAME):rw \
-		      calico-build/bpf-clang \
+	$(DOCKER_RUN) $(CALICO_BUILD) \
 		      /bin/sh -c \
-		      "cd /go/src/$(PACKAGE_NAME) && \
-		       clang \
+		      "clang \
 			      -D__KERNEL__ \
 			      -D__ASM_SYSREG_H \
 			      -Wno-unused-value \
@@ -411,14 +397,11 @@ bpf/sockmap/generated/sockops.o: bpf/sockmap/sockops.c $(BPF_INC_FILES) $(BPF_SO
 			       /go/src/$(PACKAGE_NAME)/bpf/sockmap/generated/sockops.ll && \
 		       rm -f /go/src/$(PACKAGE_NAME)/bpf/sockmap/generated/sockops.ll"
 
-bpf/sockmap/generated/redir.o: bpf/sockmap/redir.c $(BPF_INC_FILES) $(BPF_SOCKMAP_INC_FILES) $(CLANG_BUILDER_STAMP)
+bpf/sockmap/generated/redir.o: bpf/sockmap/redir.c $(BPF_INC_FILES) $(BPF_SOCKMAP_INC_FILES) 
 	mkdir -p bpf/sockmap/generated
-	docker run --rm --user $(LOCAL_USER_ID):$(LOCAL_GROUP_ID) \
-		  -v $(CURDIR):/go/src/$(PACKAGE_NAME):rw \
-		      calico-build/bpf-clang \
+	$(DOCKER_RUN) $(CALICO_BUILD) \
 		      /bin/sh -c \
-		      "cd /go/src/$(PACKAGE_NAME) && \
-		       clang \
+		      "clang \
 			      -D__KERNEL__ \
 			      -D__ASM_SYSREG_H \
 			      -Wno-unused-value \
@@ -442,12 +425,10 @@ bpf/sockmap/generated/redir.o: bpf/sockmap/redir.c $(BPF_INC_FILES) $(BPF_SOCKMA
 .PHONY: packr
 packr: bpf/bpf-packr.go bpf/packrd/packed-packr.go
 
-bpf/bpf-packr.go bpf/packrd/packed-packr.go: bpf/xdp/generated/xdp.o bpf/sockmap/generated/sockops.o bpf/sockmap/generated/redir.o $(CLANG_BUILDER_STAMP)
-	docker run --rm --user $(LOCAL_USER_ID):$(LOCAL_GROUP_ID) \
-		  -v $(CURDIR):/go/src/$(PACKAGE_NAME):rw \
-		      calico-build/bpf-clang \
+bpf/bpf-packr.go bpf/packrd/packed-packr.go: bpf/xdp/generated/xdp.o bpf/sockmap/generated/sockops.o bpf/sockmap/generated/redir.o 
+	$(DOCKER_RUN) $(CALICO_BUILD) \
 		      /bin/sh -c \
-		      "cd /go/src/$(PACKAGE_NAME)/bpf && /go/bin/packr2"
+		      "go get -u github.com/gobuffalo/packr/v2/packr2 && cd /go/src/$(PACKAGE_NAME)/bpf && /go/bin/packr2"
 	$(DOCKER_RUN) $(CALICO_BUILD) goimports -w -local github.com/projectcalico/ bpf/packrd/packed-packr.go bpf/bpf-packr.go
 
 ###############################################################################

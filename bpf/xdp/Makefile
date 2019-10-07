@@ -14,7 +14,7 @@ CFLAGS +=  \
 CC := clang
 LD := llc
 
-OBJS := redir_tc.o
+OBJS := redir_tc.o filter.o
 
 # cancel the build-in rule
 %.o: %.c
