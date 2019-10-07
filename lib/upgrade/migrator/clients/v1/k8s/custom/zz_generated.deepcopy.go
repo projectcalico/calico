@@ -53,7 +53,7 @@ func (in *GlobalBGPConfig) DeepCopyObject() runtime.Object {
 func (in *GlobalBGPConfigList) DeepCopyInto(out *GlobalBGPConfigList) {
 	*out = *in
 	out.TypeMeta = in.TypeMeta
-	out.ListMeta = in.ListMeta
+	in.ListMeta.DeepCopyInto(&out.ListMeta)
 	if in.Items != nil {
 		in, out := &in.Items, &out.Items
 		*out = make([]GlobalBGPConfig, len(*in))
@@ -129,7 +129,7 @@ func (in *GlobalFelixConfig) DeepCopyObject() runtime.Object {
 func (in *GlobalFelixConfigList) DeepCopyInto(out *GlobalFelixConfigList) {
 	*out = *in
 	out.TypeMeta = in.TypeMeta
-	out.ListMeta = in.ListMeta
+	in.ListMeta.DeepCopyInto(&out.ListMeta)
 	if in.Items != nil {
 		in, out := &in.Items, &out.Items
 		*out = make([]GlobalFelixConfig, len(*in))
