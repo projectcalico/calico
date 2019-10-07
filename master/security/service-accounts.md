@@ -1,5 +1,6 @@
 ---
 title: Use service accounts in policy
+description: Use Kubernetes service accounts in policy rules to validate cryptographic identities and/or manage RBAC controlled high-priority rules across teams.
 ---
 
 ### Big picture

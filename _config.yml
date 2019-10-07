@@ -51,6 +51,7 @@ defaults:
       path: ""
     values:
       layout: docwithnav
+      show_title: true
       version: master
       sitemap: true
       registry:
@@ -186,4 +187,10 @@ defaults:
       path: v3.9
     values:
       version: v3.9
+      registry:
+  -
+    scope:
+      path: v3.10
+    values:
+      version: v3.10
       registry:

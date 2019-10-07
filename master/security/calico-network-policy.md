@@ -1,6 +1,6 @@
 ---
 title: Get started with Calico network policy
-description: Calico extends Kubernetes network policy to provide a richer set of capabilities including policy ordering/priority, deny rules, and more flexible match rules.
+description: Create your first Calico network policies. Shows the rich features using sample policies that extend native Kubernetes network policy.
 ---
 
 ### Big picture

@@ -1,0 +1,4 @@
+---
+layout: null
+---
+{% include {{page.version}}/non-helm-manifests/istio-app-layer-policy.yaml %}
