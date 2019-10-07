@@ -19,7 +19,7 @@ This how-to guide uses the following {{site.prodname}} features:
 
 ### How to
 
-- [Control traffic to/from endpoints in a namespace](#control-traffic-to/from-endpoints-in-a-namespace)
+- [Control traffic to/from endpoints in a namespace](#control-traffic-to-from-endpoints-in-a-namespace)
 - [Use Kubernetes RBAC to control namespace label assignment](#use-kubernetes-rbac-to-control-namespace-label-assignment)
 
 #### Control traffic to/from endpoints in a namespace
