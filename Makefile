@@ -35,7 +35,7 @@ ifeq ($(ARCH),aarch64)
 	override ARCH=arm64
 endif
 ifeq ($(ARCH),x86_64)
-    override ARCH=amd64
+	override ARCH=amd64
 endif
 
 # we want to be able to run the same recipe on multiple targets keyed on the image name
@@ -76,7 +76,7 @@ PUSH_NONMANIFEST_IMAGES=$(filter-out $(PUSH_MANIFEST_IMAGES),$(PUSH_IMAGES))
 DOCKER_CONFIG ?= $(HOME)/.docker/config.json
 
 ###############################################################################
-GO_BUILD_VER?=v0.23
+GO_BUILD_VER?=v0.24
 CALICO_BUILD?=calico/go-build:$(GO_BUILD_VER)
 PROTOC_VER?=v0.1
 PROTOC_CONTAINER?=calico/protoc:$(PROTOC_VER)-$(BUILDARCH)
@@ -86,8 +86,6 @@ PROTOC_CONTAINER?=calico/protoc:$(PROTOC_VER)-$(BUILDARCH)
 # owned by the current user.
 LOCAL_USER_ID:=$(shell id -u)
 MY_GID:=$(shell id -g)
-
-EXTRA_DOCKER_ARGS	+= -e GO111MODULE=on
 
 PACKAGE_NAME?=github.com/projectcalico/pod2daemon
 SRC_FILES=$(shell find -name '*.go')
@@ -103,7 +101,7 @@ else
 	GOMOD_CACHE = $(HOME)/go/pkg/mod
 endif
 
-EXTRA_DOCKER_ARGS += -v $(GOMOD_CACHE):/go/pkg/mod:rw
+EXTRA_DOCKER_ARGS	+= -e GO111MODULE=on -v $(GOMOD_CACHE):/go/pkg/mod:rw
 
 DOCKER_RUN := mkdir -p .go-pkg-cache $(GOMOD_CACHE) && \
 	docker run --rm \
@@ -220,13 +218,12 @@ sub-tag-images-%:
 ###############################################################################
 # Static checks
 ###############################################################################
-## Perform static checks on the code.
 .PHONY: static-checks
+LINT_ARGS := --deadline 5m --max-issues-per-linter 0 --max-same-issues 0
 static-checks:
-	$(DOCKER_RUN) $(CALICO_BUILD) golangci-lint run --deadline 5m
+	$(DOCKER_RUN) $(CALICO_BUILD) golangci-lint run $(LINT_ARGS)
 
 .PHONY: fix
-## Fix static checks
 fix:
 	goimports -w $(SRC_FILES)
 
@@ -242,9 +239,12 @@ ut: $(SRC_FILES)
 ###############################################################################
 # CI
 ###############################################################################
+.PHONY: mod-download
+mod-download:
+	-$(DOCKER_RUN) $(CALICO_BUILD) go mod download
+
 .PHONY: ci
-## Run what CI runs
-ci: clean build-all static-checks ut
+ci: clean mod-download build-all static-checks ut
 
 ###############################################################################
 # CD
