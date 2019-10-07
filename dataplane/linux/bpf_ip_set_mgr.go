@@ -52,7 +52,7 @@ type mapManager struct {
 // uint8 pad            +1 = 20
 const ipSetEntrySize = 20
 
-type ipsetEntry [ipSetEntrySize]byte
+type IPSetEntry [ipSetEntrySize]byte
 
 func newBPFMapManager() *mapManager {
 	return &mapManager{
@@ -60,32 +60,44 @@ func newBPFMapManager() *mapManager {
 		keysToAddByIPSetID:    map[uint64]set.Set{},
 		keysToRemoveByIPSetID: map[uint64]set.Set{},
 		dirtyIPSetIDs:         set.New(),
-		ipSetMap: bpf.NewPinnedMap(
-			"calico_ip_sets",
-			"/sys/fs/bpf/tc/globals/calico_ip_sets",
-			"lpm_trie",
-			ipSetEntrySize,
-			4,
-			1024*1024,
-			unix.BPF_F_NO_PREALLOC),
-		resyncScheduled: true,
+		ipSetMap:              IPSetsMap(),
+		resyncScheduled:       true,
 	}
 }
 
-func (e ipsetEntry) SetID() uint64 {
+func IPSetsMap() bpf.Map {
+	return bpf.NewPinnedMap(
+		"calico_ip_sets",
+		"/sys/fs/bpf/tc/globals/calico_ip_sets",
+		"lpm_trie",
+		ipSetEntrySize,
+		4,
+		1024*1024,
+		unix.BPF_F_NO_PREALLOC)
+}
+
+func (e IPSetEntry) SetID() uint64 {
 	return binary.BigEndian.Uint64(e[4:12])
 }
 
-func (e ipsetEntry) Addr() net.IP {
+func (e IPSetEntry) Addr() net.IP {
 	return e[12:16]
 }
 
-func (e ipsetEntry) PrefixLen() uint32 {
+func (e IPSetEntry) PrefixLen() uint32 {
 	return binary.LittleEndian.Uint32(e[:4])
 }
 
-func makeBPFIPSetEntry(setID uint64, cidr ip.V4CIDR, port uint16, proto uint8) ipsetEntry {
-	var entry ipsetEntry
+func (e IPSetEntry) Protocol() uint8 {
+	return e[18]
+}
+
+func (e IPSetEntry) Port() uint32 {
+	return binary.LittleEndian.Uint32(e[16:18])
+}
+
+func makeBPFIPSetEntry(setID uint64, cidr ip.V4CIDR, port uint16, proto uint8) IPSetEntry {
+	var entry IPSetEntry
 	// TODO Detect endianness
 	if proto == 0 {
 		// Normal CIDR-based lookup.
@@ -131,7 +143,7 @@ func (m *mapManager) OnUpdate(msg interface{}) {
 			m.keysToRemoveByIPSetID[id].Discard(entry)
 		}
 		oldMembers.Iter(func(item interface{}) error {
-			entry := item.(ipsetEntry)
+			entry := item.(IPSetEntry)
 			m.keysToRemoveByIPSetID[id].Add(entry)
 			return nil
 		})
@@ -150,7 +162,7 @@ func (m *mapManager) OnUpdate(msg interface{}) {
 			m.keysToRemoveByIPSetID[id] = set.New()
 		}
 		oldMembers.Iter(func(item interface{}) error {
-			entry := item.(ipsetEntry)
+			entry := item.(IPSetEntry)
 			m.keysToRemoveByIPSetID[id].Add(entry)
 			return nil
 		})
@@ -180,7 +192,7 @@ func (m *mapManager) OnUpdate(msg interface{}) {
 	}
 }
 
-func parseIPSetMember(id uint64, member string) ipsetEntry {
+func parseIPSetMember(id uint64, member string) IPSetEntry {
 	var cidrStr string
 	var port uint16
 	var protocol uint8
@@ -241,7 +253,7 @@ func (m *mapManager) CompleteDeferredWork() error {
 		}
 
 		err := m.ipSetMap.Iter(func(k, v []byte) {
-			var entry ipsetEntry
+			var entry IPSetEntry
 			copy(entry[:], k)
 			setID := entry.SetID()
 			if debug {
@@ -305,7 +317,7 @@ func (m *mapManager) CompleteDeferredWork() error {
 
 		setID := item.(uint64)
 		m.keysToRemoveByIPSetID[setID].Iter(func(item interface{}) error {
-			entry := item.(ipsetEntry)
+			entry := item.(IPSetEntry)
 			if debug {
 				log.WithFields(log.Fields{"setID": setID, "entry": entry}).Debug("Removing entry from IP set")
 			}
@@ -324,7 +336,7 @@ func (m *mapManager) CompleteDeferredWork() error {
 			delete(m.keysToRemoveByIPSetID, setID)
 		} else {
 			m.keysToAddByIPSetID[setID].Iter(func(item interface{}) error {
-				entry := item.(ipsetEntry)
+				entry := item.(IPSetEntry)
 				if debug {
 					log.WithFields(log.Fields{"setID": setID, "entry": entry}).Debug("Adding entry to IP set")
 				}
