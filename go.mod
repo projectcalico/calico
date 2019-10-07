@@ -11,6 +11,7 @@ require (
 	github.com/kelseyhightower/memkv v0.1.1
 	github.com/onsi/ginkgo v1.8.0
 	github.com/onsi/gomega v1.5.0
+	github.com/projectcalico/confd v3.2.0+incompatible // indirect
 	github.com/projectcalico/libcalico-go v0.0.0-20191002165503-ce68b855671e
 	github.com/projectcalico/typha v0.0.0-20191004184630-bb3d326e47e8
 	github.com/samuel/go-zookeeper v0.0.0-20190801204459-3c104360edc8 // indirect
