@@ -17,6 +17,8 @@ package intdataplane
 import (
 	"encoding/binary"
 	"net"
+	"strconv"
+	"strings"
 	"time"
 
 	"golang.org/x/sys/unix"
@@ -42,6 +44,16 @@ type mapManager struct {
 	resyncScheduled bool
 }
 
+// uint32 prefixLen HE  4
+// uint64 set_id BE     +8 = 12
+// uint32 addr BE       +4 = 16
+// uint16 port HE       +2 = 18
+// uint8 proto          +1 = 19
+// uint8 pad            +1 = 20
+const ipSetEntrySize = 20
+
+type ipsetEntry [ipSetEntrySize]byte
+
 func newBPFMapManager() *mapManager {
 	return &mapManager{
 		desiredKeysByIPSetID:  map[uint64]set.Set{},
@@ -52,7 +64,7 @@ func newBPFMapManager() *mapManager {
 			"calico_ip_sets",
 			"/sys/fs/bpf/tc/globals/calico_ip_sets",
 			"lpm_trie",
-			16,
+			ipSetEntrySize,
 			4,
 			1024*1024,
 			unix.BPF_F_NO_PREALLOC),
@@ -60,11 +72,10 @@ func newBPFMapManager() *mapManager {
 	}
 }
 
-type ipsetEntry [16]byte
-
 func (e ipsetEntry) SetID() uint64 {
 	return binary.BigEndian.Uint64(e[4:12])
 }
+
 func (e ipsetEntry) Addr() net.IP {
 	return e[12:16]
 }
@@ -73,12 +84,20 @@ func (e ipsetEntry) PrefixLen() uint32 {
 	return binary.LittleEndian.Uint32(e[:4])
 }
 
-func makeBPFIPSetEntry(setID uint64, cidr ip.V4CIDR) ipsetEntry {
+func makeBPFIPSetEntry(setID uint64, cidr ip.V4CIDR, port uint16, proto uint8) ipsetEntry {
 	var entry ipsetEntry
 	// TODO Detect endianness
-	binary.LittleEndian.PutUint32(entry[0:4], uint32(cidr.Prefix()+64))
+	if proto == 0 {
+		// Normal CIDR-based lookup.
+		binary.LittleEndian.PutUint32(entry[0:4], uint32(64 /* ID */ +cidr.Prefix()))
+	} else {
+		// Named port lookup, use full length of key.
+		binary.LittleEndian.PutUint32(entry[0:4], 64 /* ID */ +32 /* IP */ +16 /* Port */ +8 /* protocol */)
+	}
 	binary.BigEndian.PutUint64(entry[4:12], setID)
 	binary.BigEndian.PutUint32(entry[12:16], cidr.Addr().(ip.V4Addr).AsUint32())
+	binary.LittleEndian.PutUint16(entry[16:18], port)
+	entry[18] = proto
 	return entry
 }
 
@@ -103,9 +122,7 @@ func (m *mapManager) OnUpdate(msg interface{}) {
 			m.keysToRemoveByIPSetID[id] = set.New()
 		}
 		for _, member := range msg.Members {
-			// FIXME doesn't handle named ports or IPv6.
-			cidr := ip.MustParseCIDROrIP(member).(ip.V4CIDR)
-			entry := makeBPFIPSetEntry(id, cidr)
+			entry := parseIPSetMember(id, member)
 			newMembers.Add(entry)
 			if !oldMembers.Contains(entry) {
 				m.keysToAddByIPSetID[id].Add(entry)
@@ -147,15 +164,13 @@ func (m *mapManager) OnUpdate(msg interface{}) {
 		id := bpf.IPSetIDToU64(msg.Id)
 
 		for _, member := range msg.RemovedMembers {
-			cidr := ip.MustParseCIDROrIP(member).(ip.V4CIDR)
-			entry := makeBPFIPSetEntry(id, cidr)
+			entry := parseIPSetMember(id, member)
 			m.desiredKeysByIPSetID[id].Discard(entry)
 			m.keysToAddByIPSetID[id].Discard(entry)
 			m.keysToRemoveByIPSetID[id].Add(entry)
 		}
 		for _, member := range msg.AddedMembers {
-			cidr := ip.MustParseCIDROrIP(member).(ip.V4CIDR)
-			entry := makeBPFIPSetEntry(id, cidr)
+			entry := parseIPSetMember(id, member)
 			m.desiredKeysByIPSetID[id].Add(entry)
 			m.keysToAddByIPSetID[id].Add(entry)
 			m.keysToRemoveByIPSetID[id].Discard(entry)
@@ -163,6 +178,36 @@ func (m *mapManager) OnUpdate(msg interface{}) {
 
 		m.dirtyIPSetIDs.Add(id)
 	}
+}
+
+func parseIPSetMember(id uint64, member string) ipsetEntry {
+	var cidrStr string
+	var port uint16
+	var protocol uint8
+	if strings.Contains(member, ",") {
+		// Named port
+		parts := strings.Split(member, ",")
+		cidrStr = parts[0]
+		parts = strings.Split(parts[1], ":")
+		switch parts[0] {
+		case "tcp":
+			protocol = 6
+		case "udp":
+			protocol = 17
+		default:
+			log.WithField("member", member).Panic("Unknown protocol in named port member")
+		}
+		port64, err := strconv.ParseUint(parts[1], 10, 16)
+		if err != nil {
+			log.WithField("member", member).WithError(err).Panic("Failed to parse port")
+		}
+		port = uint16(port64)
+	} else {
+		cidrStr = member
+	}
+	cidr := ip.MustParseCIDROrIP(cidrStr).(ip.V4CIDR)
+	entry := makeBPFIPSetEntry(id, cidr, port, protocol)
+	return entry
 }
 
 var dummyValue = []byte{1, 0, 0, 0}

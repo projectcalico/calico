@@ -200,8 +200,11 @@ struct bpf_map_def_extended __attribute__((section("maps"))) calico_pol_aof = {
 
 struct ip4setkey {
 	__u32 mask;
-	__u64 set_id;
-	__u32 addr;
+	__be64 set_id;
+	__be32 addr;
+	__u16 port;
+	__u8 protocol;
+	__u8 pad;
 } __attribute__((packed));
 
 union ip4_set_bpf_lpm_trie_key {

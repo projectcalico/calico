@@ -1,6 +1,6 @@
 // +build fvtests
 
-// Copyright (c) 2017-2018 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2019 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -705,7 +705,7 @@ func describeNamedPortTests(testSourcePorts bool, protocol string) {
 }
 
 // This test reproduces a particular Kubernetes failure scenario seen during FV testing named ports.
-var _ = Describe("with a simulated kubernetes nginx and client", func() {
+var _ = Describe("TCP: named port with a simulated kubernetes nginx and client", func() {
 	var (
 		etcd              *containers.Container
 		felix             *infrastructure.Felix

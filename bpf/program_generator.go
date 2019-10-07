@@ -148,17 +148,17 @@ func (r *ProgramGenerator) writeRule(rule *proto.Rule, passLabel string) {
 	}
 
 	if len(rule.SrcPorts) > 0 {
-		r.writePortsMatch(false, "sport", rule.SrcPorts)
+		r.writePortsMatch(false, "saddr", "sport", rule.SrcPorts, rule.SrcNamedPortIpSetIds)
 	}
 	if len(rule.NotSrcPorts) > 0 {
-		r.writePortsMatch(true, "sport", rule.NotSrcPorts)
+		r.writePortsMatch(true, "saddr", "sport", rule.NotSrcPorts, rule.NotSrcNamedPortIpSetIds)
 	}
 
 	if len(rule.DstPorts) > 0 {
-		r.writePortsMatch(false, "dport", rule.DstPorts)
+		r.writePortsMatch(false, "daddr", "dport", rule.DstPorts, rule.DstNamedPortIpSetIds)
 	}
 	if len(rule.NotDstPorts) > 0 {
-		r.writePortsMatch(true, "dport", rule.NotDstPorts)
+		r.writePortsMatch(true, "daddr", "dport", rule.NotDstPorts, rule.NotDstNamedPortIpSetIds)
 	}
 
 	// TODO ICMP
@@ -196,10 +196,13 @@ func (r *ProgramGenerator) writeCIDRSMatch(negate bool, field string, cidrs []st
 	r.printf(");\n")
 }
 
-func (r *ProgramGenerator) writePortsMatch(negate bool, field string, ports []*proto.PortRange) {
-	r.printf("RULE_MATCH_PORT_RANGES(%d, %t, %s", r.ruleID, negate, field)
+func (r *ProgramGenerator) writePortsMatch(negate bool, addrField, portField string, ports []*proto.PortRange, namedPorts []string) {
+	r.printf("RULE_MATCH_PORT_RANGES(%d, %t, %s, %s", r.ruleID, negate, addrField, portField)
 	for _, portRange := range ports {
-		r.printf(", {%d, %d}", portRange.First, portRange.Last)
+		r.printf(", {0, %d, %d}", portRange.First, portRange.Last)
+	}
+	for _, ipSetID := range namedPorts {
+		r.printf(", {%#x, 0, 0}", IPSetIDToU64(ipSetID))
 	}
 	r.printf(");\n")
 }

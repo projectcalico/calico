@@ -75,6 +75,7 @@ enum calico_policy_result {
 };
 
 struct port_range {
+	__u64 ip_set_id;
 	__u16 min, max;
 };
 
@@ -95,16 +96,34 @@ struct cidr {
 	CALICO_DEBUG_AT("  check protocol %d (pkt) == %d (rule)\n", (int)ip_header->protocol, (int)protocol_number); \
 	RULE_MATCH(id, (protocol_number) == ip_header->protocol, negate)
 
-#define RULE_MATCH_PORT_RANGES(id, negate, sport_or_dport, ...) do { \
+#define RULE_MATCH_PORT_RANGES(id, negate, saddr_or_daddr, sport_or_dport, ...) do { \
 		struct port_range port_ranges[] = {__VA_ARGS__}; \
 		bool match = false; \
 		_Pragma("clang loop unroll(full)") \
 		for (int i = 0; i < (sizeof(port_ranges)/sizeof(struct port_range)); i++) { \
-			CALICO_DEBUG_AT("  check " #sport_or_dport " against %d <= %d (pkt) <= %d\n", (int)port_ranges[i].min, (int)(sport_or_dport)->port, (int)port_ranges[i].max); \
-			if ((sport_or_dport)->port >= port_ranges[i].min && (sport_or_dport)->port <= port_ranges[i].max) { \
-				match = true; \
-				break; \
-			} \
+			if (port_ranges[i].ip_set_id == 0) {\
+				/* Normal port match*/ \
+				CALICO_DEBUG_AT("  check " #sport_or_dport " against %d <= %d (pkt) <= %d\n", (int)port_ranges[i].min, (int)(sport_or_dport)->port, (int)port_ranges[i].max); \
+				if ((sport_or_dport)->port >= port_ranges[i].min && (sport_or_dport)->port <= port_ranges[i].max) { \
+					match = true; \
+					break; \
+				} \
+			} else {\
+				/* Named port match; actually maps through to an IP set */ \
+				CALICO_DEBUG_AT("  look up " #saddr_or_daddr ":port (%x:%d) in IP set %llx\n", \
+						        be32_to_host(ip_header->saddr_or_daddr), (int)(sport_or_dport)->port, port_ranges[i].ip_set_id); \
+				union ip4_set_bpf_lpm_trie_key k; \
+				k.ip.mask = sizeof(struct ip4setkey)*8 ; \
+				k.ip.set_id = host_to_be64(port_ranges[i].ip_set_id); \
+				k.ip.addr = ip_header->saddr_or_daddr; \
+				k.ip.port = (sport_or_dport)->port; \
+				k.ip.protocol = ip_header->protocol; \
+				k.ip.pad = 0; \
+				if (bpf_map_lookup_elem(&calico_ip_sets, &k)) { \
+					match=true; \
+					break; \
+				} \
+			}\
 		} \
 		RULE_MATCH(id, match, negate); \
 	} while (false)
@@ -130,6 +149,9 @@ struct cidr {
 		k.ip.mask = sizeof(struct ip4setkey)*8 ; \
 		k.ip.set_id = host_to_be64(ip_set_id); \
 		k.ip.addr = ip_header->saddr_or_daddr; \
+		k.ip.protocol = 0; \
+		k.ip.port = 0; \
+		k.ip.pad = 0; \
 		if (bpf_map_lookup_elem(&calico_ip_sets, &k)) { \
 			match=true; \
 		} \
