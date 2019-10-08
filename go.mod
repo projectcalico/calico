@@ -12,8 +12,8 @@ require (
 	github.com/onsi/ginkgo v1.8.0
 	github.com/onsi/gomega v1.5.0
 	github.com/projectcalico/confd v3.2.0+incompatible // indirect
-	github.com/projectcalico/libcalico-go v0.0.0-20191002165503-ce68b855671e
-	github.com/projectcalico/typha v0.0.0-20191004184630-bb3d326e47e8
+	github.com/projectcalico/libcalico-go v0.0.0-20191006160109-16b05e93ecfd
+	github.com/projectcalico/typha v0.0.0-20191007235416-b3a6c6b01e3a
 	github.com/samuel/go-zookeeper v0.0.0-20190801204459-3c104360edc8 // indirect
 	github.com/sirupsen/logrus v1.4.2
 	github.com/ugorji/go v1.1.7 // indirect
