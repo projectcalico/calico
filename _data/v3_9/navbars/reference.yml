@@ -95,7 +95,11 @@ toc:
   - title: Prometheus statistics
     path: /reference/felix/prometheus
 - title: Typha
-  path: /reference/typha/configuration
+  section:
+  - title: Overview
+    path: /reference/typha/
+  - title: Configuration
+    path: /reference/typha/configuration
 - title: Dikastes
   path: /reference/dikastes/configuration
 - title: Calico CNI plugins
