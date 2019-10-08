@@ -258,12 +258,17 @@ FELIX_BRANCH?=$(PIN_BRANCH)
 FELIX_REPO?=github.com/projectcalico/felix
 CONFD_BRANCH?=$(PIN_BRANCH)
 CONFD_REPO?=github.com/projectcalico/confd
+LIBCALICO_BRANCH?=$(PIN_BRANCH)
+LIBCALICO_REPO?=github.com/projectcalico/libcalico-go
 
 update-felix-pin:
 	$(call update_pin,github.com/projectcalico/felix,$(FELIX_REPO),$(FELIX_BRANCH))
 
 update-confd-pin:
 	$(call update_replace_pin,github.com/kelseyhightower/confd,$(CONFD_REPO),$(CONFD_BRANCH))
+
+update-libcalico-pin:
+	$(call update_pin,github.com/projectcalico/libcalico-go,$(LIBCALICO_REPO),$(LIBCALICO_BRANCH))
 
 git-status:
 	git status --porcelain
@@ -280,7 +285,7 @@ git-commit:
 git-push:
 	git push
 
-update-pins: update-felix-pin update-confd-pin
+update-pins: update-libcalico-pin update-felix-pin update-confd-pin
 
 commit-pin-updates: update-pins git-status ci git-config git-commit git-push
 
