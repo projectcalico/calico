@@ -90,7 +90,7 @@ spec:
 
 #### Use Kubernetes RBAC to control service account label assignment
 
-Network policies can be applied to endpoints using selectors that match labels on the endpoint, the endpoint's namespace, or the endpoint's service account. By applying selectors based on the endpoint's service account, you can use Kubernetes RBAC to control which users can assign labels to namespaces. This allows you to separate groups who can deploy pods from those who can assign labels to namespaces.
+Network policies can be applied to endpoints using selectors that match labels on the endpoint, the endpoint's namespace, or the endpoint's service account. By applying selectors based on the endpoint's service account, you can use Kubernetes RBAC to control which users can assign labels to service accounts. This allows you to separate groups who can deploy pods from those who can assign labels to service accounts.
 
 In the following example, pods with an intern service account can communicate only with pods with service accounts labeled, `role: intern`.
 
