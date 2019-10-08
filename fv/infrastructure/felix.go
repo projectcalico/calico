@@ -48,24 +48,34 @@ func RunFelix(infra DatastoreInfra, options TopologyOptions) *Felix {
 	ipv6Enabled := fmt.Sprint(options.EnableIPv6)
 
 	args := infra.GetDockerArgs()
-	args = append(args,
-		"--privileged",
-		"-e", "FELIX_LOGSEVERITYSCREEN="+options.FelixLogSeverity,
-		"-e", "FELIX_PROMETHEUSMETRICSENABLED=true",
-		"-e", "FELIX_USAGEREPORTINGENABLED=false",
-		"-e", "FELIX_IPV6SUPPORT="+ipv6Enabled,
-		"-v", "/lib/modules:/lib/modules",
-	)
+	args = append(args, "--privileged")
 
-	if os.Getenv("FELIX_FV_ENABLE_BPF") == "true" {
-		args = append(args, "-e", "FELIX_BPFENABLED=true")
+	// Add in the environment variables.
+	envVars := map[string]string{
+		"FELIX_LOGSEVERITYSCREEN":        options.FelixLogSeverity,
+		"FELIX_PROMETHEUSMETRICSENABLED": "true",
+		"FELIX_BPFLOGLEVEL":              "debug",
+		"FELIX_USAGEREPORTINGENABLED":    "false",
+		"FELIX_IPV6SUPPORT":              ipv6Enabled,
 	}
-
 	for k, v := range options.ExtraEnvVars {
+		envVars[k] = v
+	}
+	if os.Getenv("FELIX_FV_ENABLE_BPF") == "true" {
+		envVars["FELIX_BPFENABLED"] = "true"
+	}
+	for k, v := range envVars {
 		args = append(args, "-e", fmt.Sprintf("%s=%s", k, v))
 	}
 
+	// Add in the volumes.
+	volumes := map[string]string{
+		"/lib/modules": "/lib/modules",
+	}
 	for k, v := range options.ExtraVolumes {
+		volumes[k] = v
+	}
+	for k, v := range volumes {
 		args = append(args, "-v", fmt.Sprintf("%s:%s", k, v))
 	}
 

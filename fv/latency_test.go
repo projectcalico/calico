@@ -63,6 +63,7 @@ var _ = Context("Latency tests with initialized Felix and etcd datastore", func(
 	BeforeEach(func() {
 		topologyOptions := infrastructure.DefaultTopologyOptions()
 		topologyOptions.EnableIPv6 = true
+		topologyOptions.ExtraEnvVars["FELIX_BPFLOGLEVEL"] = "none" // For best perf.
 
 		felix, etcd, client = infrastructure.StartSingleNodeEtcdTopology(topologyOptions)
 		_ = felix.GetFelixPID()
