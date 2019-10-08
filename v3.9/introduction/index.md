@@ -43,7 +43,7 @@ custom_css: css/intro.css
   </div>
   <div class="col-md-6">
     <h3 style="margin-top: 5px">Performance</h3>
-    <p>{{site.prodname}} uses the Linux kernel’s built-in highly optimized forwarding and access control capabilities to deliver native Linux networking dataplane performance, typically without requiring any of the encap/decap overheads associated with first generation SDN networks. {{site.prodname}}’s control plane and policy engine has been fine tuned over many years of production use (there are interesting articles about this online conducted by various external parties which attempt to objectively illustrate this metric under various scenarios, but we do not endorse any one benchmark specifically in our official documentation).</p>
+    <p>{{site.prodname}} uses the Linux kernel’s built-in, highly optimized forwarding and access control capabilities to deliver native Linux networking dataplane performance, typically without requiring any of the encap/decap overheads associated with first generation SDN networks. {{site.prodname}}’s control plane and policy engine has been fine-tuned over many years of production use to minimize overall CPU usage and occupancy.</p>
   </div>
 </div>
 
