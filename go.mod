@@ -25,9 +25,9 @@ require (
 	github.com/onsi/gomega v1.5.0
 	github.com/opentracing/opentracing-go v0.0.0-20190704175813-135aa78c6f95 // indirect
 	github.com/pkg/errors v0.8.1 // indirect
-	github.com/projectcalico/libcalico-go v0.0.0-20191006160109-16b05e93ecfd
+	github.com/projectcalico/libcalico-go v0.0.0-20191008172221-1ba69f71d8c4
 	github.com/projectcalico/pod2daemon v0.0.0-20190730210055-df57fc59e2e1
-	github.com/projectcalico/typha v0.0.0-20191007235416-b3a6c6b01e3a
+	github.com/projectcalico/typha v0.0.0-20191009003249-55ee7f22cd4f
 	github.com/prometheus/client_golang v0.9.1
 	github.com/satori/go.uuid v1.2.0
 	github.com/sirupsen/logrus v1.4.2
@@ -42,9 +42,9 @@ require (
 	golang.org/x/sys v0.0.0-20190616124812-15dcb6c0061f
 	google.golang.org/grpc v1.19.0
 	gopkg.in/ini.v1 v1.46.0 // indirect
-	k8s.io/api v0.0.0-20180628040859-072894a440bd
-	k8s.io/apimachinery v0.0.0-20180621070125-103fd098999d
-	k8s.io/client-go v8.0.0+incompatible
+	k8s.io/api v0.0.0-20190620084959-7cf5895f2711
+	k8s.io/apimachinery v0.0.0-20190612205821-1799e75a0719
+	k8s.io/client-go v12.0.0+incompatible
 )
 
 replace github.com/sirupsen/logrus => github.com/projectcalico/logrus v0.0.0-20180627202928-fc9bbf2f57995271c5cd6911ede7a2ebc5ea7c6f

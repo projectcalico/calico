@@ -297,9 +297,14 @@ endef
 
 TYPHA_BRANCH?=$(PIN_BRANCH)
 TYPHA_REPO?=github.com/projectcalico/typha
+LIBCALICO_BRANCH?=$(PIN_BRANCH)
+LIBCALICO_REPO?=github.com/projectcalico/libcalico-go
 
 update-typha-pin:
 	$(call update_pin,github.com/projectcalico/typha,$(TYPHA_REPO),$(TYPHA_BRANCH))
+
+update-libcalico-pin:
+	$(call update_pin,github.com/projectcalico/libcalico-go,$(LIBCALICO_REPO),$(LIBCALICO_BRANCH))
 
 git-status:
 	git status --porcelain
@@ -316,7 +321,7 @@ git-commit:
 git-push:
 	git push
 
-update-pins: update-typha-pin
+update-pins: update-libcalico-pin update-typha-pin
 
 commit-pin-updates: update-pins git-status ci git-config git-commit git-push
 
