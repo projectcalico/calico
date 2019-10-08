@@ -98,6 +98,11 @@ If your {{site.prodname}} deployment is configured to peer with BGP routers outs
 
    For help see, [BGP configuration resource]({{site.baseurl}}/{{page.version}}/reference/resources/bgpconfig).
 
+> **Note**: If you are setting a cluster CIDR using the legacy environment variable CALICO_ADVERTISE_CLUSTER_IPS,
+> note that it takes precedence over any serviceClusterIPs defined in BGPConfiguration. We recommend removing the
+> deprecated CALICO_ADVERTISE_CLUSTER_IPS and replacing it with BGPConfiguration.
+{: .alert .alert-info}
+
 #### Advertise service external IP addresses
 
 1. Identify the external IP ranges of all services that you want to advertise outside of the {{site.prodname}} cluster.
