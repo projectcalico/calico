@@ -26,6 +26,7 @@ import (
 const kitchenSink = `// Start of tier 0
 // Start of policy 0
 // Start of rule 0
+RULE_START(0);
 RULE_MATCH_PROTOCOL(0, false, 6);
 RULE_MATCH_PROTOCOL(0, true, 6);
 RULE_MATCH_CIDRS(0, false, saddr, {0xff000000, 0xa000000});
@@ -36,15 +37,16 @@ RULE_MATCH_IP_SET(0, false, saddr, 0x684b8f3987d0f29a);
 RULE_MATCH_IP_SET(0, true, saddr, 0x9c682697bb48145e);
 RULE_MATCH_IP_SET(0, false, daddr, 0xfb195f795561b40e);
 RULE_MATCH_IP_SET(0, true, daddr, 0x87210273bf1e9ac7);
-RULE_MATCH_PORT_RANGES(0, false, sport, {80, 81}, {8080, 8081});
-RULE_MATCH_PORT_RANGES(0, true, sport, {5000, 5000});
-RULE_MATCH_PORT_RANGES(0, false, dport, {3000, 3001});
-RULE_MATCH_PORT_RANGES(0, true, dport, {4000, 4000});
+RULE_MATCH_PORT_RANGES(0, false, saddr, sport, {0, 80, 81}, {0, 8080, 8081}, {0x1a4affe5d7e391b8, 0, 0});
+RULE_MATCH_PORT_RANGES(0, true, saddr, sport, {0, 5000, 5000}, {0xc68192c70d9692e5, 0, 0});
+RULE_MATCH_PORT_RANGES(0, false, daddr, dport, {0, 3000, 3001}, {0x246b16a8bb4b9ef8, 0, 0});
+RULE_MATCH_PORT_RANGES(0, true, daddr, dport, {0, 4000, 4000}, {0xc68192c70d9692e5, 0, 0});
 RULE_END(0, allow);
 // End of rule 0
 
 // End of policy 0
 // End of tier drop
+RULE_START(1);
 RULE_END(1, deny);
 end_of_tier_0:;
 

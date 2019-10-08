@@ -441,6 +441,7 @@ static CALICO_BPF_INLINE int calico_tc(struct __sk_buff *skb, enum calico_tc_fla
 		if (ct_data->ct_type == CALICO_CT_TYPE_ALLOW) {
 			if (connCloser) {
 				// FIXME proper conntrack fin/rst handling.
+				CALICO_DEBUG_AT("CT: FIN/RST deleting conntrack entry\n");
 				bpf_map_delete_elem(&calico_ct_map_v4, &ct_key);
 			}
 			CALICO_DEBUG_AT("CT: Allow\n");

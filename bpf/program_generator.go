@@ -53,9 +53,6 @@ type ProgramGenerator struct {
 }
 
 func NewProgramGenerator(w io.Writer) *ProgramGenerator {
-	if ProgPrefix == nil {
-		initProgs()
-	}
 	return &ProgramGenerator{
 		w: w,
 		// On the critical path so it's worth skipping log entry creation if debug is not enabled.
@@ -81,6 +78,9 @@ func (r *ProgramGenerator) writeBytes(b []byte) {
 }
 
 func (r *ProgramGenerator) WriteProgram(tiers [][][]*proto.Rule) error {
+	if ProgPrefix == nil {
+		initProgs()
+	}
 	r.writeBytes(ProgPrefix)
 	_ = r.WriteCalicoRules(tiers)
 	r.writeBytes(ProgSuffix)
@@ -117,7 +117,6 @@ func (r *ProgramGenerator) WriteCalicoRules(tiers [][][]*proto.Rule) error {
 
 func (r *ProgramGenerator) writeRule(rule *proto.Rule, passLabel string) {
 	// TODO IP version
-	// TODO Protocol
 	r.writeStartOfRule()
 
 	if rule.Protocol != nil {
@@ -170,7 +169,6 @@ func (r *ProgramGenerator) writeRule(rule *proto.Rule, passLabel string) {
 	}
 
 	// TODO ICMP
-	// TODO Named ports
 
 	r.writeEndOfRule(rule, passLabel)
 	r.ruleID++
