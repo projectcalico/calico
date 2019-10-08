@@ -103,20 +103,21 @@ struct cidr {
 		for (int i = 0; i < (sizeof(port_ranges)/sizeof(struct port_range)); i++) { \
 			if (port_ranges[i].ip_set_id == 0) {\
 				/* Normal port match*/ \
-				CALICO_DEBUG_AT("  check " #sport_or_dport " against %d <= %d (pkt) <= %d\n", (int)port_ranges[i].min, (int)(sport_or_dport)->port, (int)port_ranges[i].max); \
-				if ((sport_or_dport)->port >= port_ranges[i].min && (sport_or_dport)->port <= port_ranges[i].max) { \
+				CALICO_DEBUG_AT("  check " #sport_or_dport " against %d <= %d (pkt) <= %d\n", \
+								(int)port_ranges[i].min, (int)(sport_or_dport), (int)port_ranges[i].max); \
+				if ((sport_or_dport) >= port_ranges[i].min && (sport_or_dport) <= port_ranges[i].max) { \
 					match = true; \
 					break; \
 				} \
 			} else {\
 				/* Named port match; actually maps through to an IP set */ \
 				CALICO_DEBUG_AT("  look up " #saddr_or_daddr ":port (%x:%d) in IP set %llx\n", \
-						        be32_to_host(ip_header->saddr_or_daddr), (int)(sport_or_dport)->port, port_ranges[i].ip_set_id); \
+						        be32_to_host(ip_header->saddr_or_daddr), (int)(sport_or_dport), port_ranges[i].ip_set_id); \
 				union ip4_set_bpf_lpm_trie_key k; \
 				k.ip.mask = sizeof(struct ip4setkey)*8 ; \
 				k.ip.set_id = host_to_be64(port_ranges[i].ip_set_id); \
 				k.ip.addr = ip_header->saddr_or_daddr; \
-				k.ip.port = (sport_or_dport)->port; \
+				k.ip.port = (sport_or_dport); \
 				k.ip.protocol = ip_header->protocol; \
 				k.ip.pad = 0; \
 				if (bpf_map_lookup_elem(&calico_ip_sets, &k)) { \
@@ -168,7 +169,7 @@ struct cidr {
 	rule_no_match_ ## id: do {;} while (false)
 
 
-static CALICO_BPF_INLINE enum calico_policy_result execute_policy_norm(struct iphdr *ip_header, struct protoport *sport, struct protoport *dport, enum calico_tc_flags flags) {
+static CALICO_BPF_INLINE enum calico_policy_result execute_policy_norm(struct iphdr *ip_header, __u16 sport, __u16 dport, enum calico_tc_flags flags) {
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wunused-label"
 
@@ -182,7 +183,7 @@ static CALICO_BPF_INLINE enum calico_policy_result execute_policy_norm(struct ip
 #pragma clang diagnostic pop
 }
 
-static CALICO_BPF_INLINE enum calico_policy_result execute_policy_aof(struct iphdr *ip_header, struct protoport *sport, struct protoport *dport, enum calico_tc_flags flags) {
+static CALICO_BPF_INLINE enum calico_policy_result execute_policy_aof(struct iphdr *ip_header, __u16 sport, __u16 dport, enum calico_tc_flags flags) {
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wunused-label"
 
@@ -196,7 +197,7 @@ static CALICO_BPF_INLINE enum calico_policy_result execute_policy_aof(struct iph
 #pragma clang diagnostic pop
 }
 
-static CALICO_BPF_INLINE enum calico_policy_result execute_policy_pre_dnat(struct iphdr *ip_header, struct protoport *sport, struct protoport *dport, enum calico_tc_flags flags) {
+static CALICO_BPF_INLINE enum calico_policy_result execute_policy_pre_dnat(struct iphdr *ip_header, __u16 sport, __u16 dport, enum calico_tc_flags flags) {
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wunused-label"
 
@@ -210,7 +211,7 @@ static CALICO_BPF_INLINE enum calico_policy_result execute_policy_pre_dnat(struc
 #pragma clang diagnostic pop
 }
 
-static CALICO_BPF_INLINE enum calico_policy_result execute_policy_do_not_track(struct iphdr *ip_header, struct protoport *sport, struct protoport *dport, enum calico_tc_flags flags) {
+static CALICO_BPF_INLINE enum calico_policy_result execute_policy_do_not_track(struct iphdr *ip_header, __u16 sport, __u16 dport, enum calico_tc_flags flags) {
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wunused-label"
 
@@ -248,13 +249,14 @@ static CALICO_BPF_INLINE int calico_tc(struct __sk_buff *skb, enum calico_tc_fla
 
     struct ethhdr *eth_hdr = (void *)(long)skb->data;
     struct iphdr *ip_header = (void *)(eth_hdr+1);
-    struct protoport sport = {};
-    struct protoport dport = {};
+
 
     struct tcphdr *tcp_header;
     struct udphdr *udp_header;
     struct icmphdr *icmp_header;
 
+    __u16 sport = 0;
+    __u16 dport = 0;
 	__be32 orig_ip_src = ip_header->saddr;
 	__be32 orig_ip_dst = ip_header->daddr;
 	__u8 ip_proto = ip_header->protocol;
@@ -263,7 +265,8 @@ static CALICO_BPF_INLINE int calico_tc(struct __sk_buff *skb, enum calico_tc_fla
 	bool connCloser = false;
 
     CALICO_DEBUG_AT("IP; s=%x d=%x\n", be32_to_host(ip_header->saddr), be32_to_host(ip_header->daddr));
-	switch (sport.proto = dport.proto = ip_header->protocol) {
+
+	switch (ip_proto) {
 	case IPPROTO_TCP:
 		// Re-check buffer space for TCP (has larger headers than UDP).
 		CALICO_DEBUG_AT("Packet is TCP\n");
@@ -274,26 +277,28 @@ static CALICO_BPF_INLINE int calico_tc(struct __sk_buff *skb, enum calico_tc_fla
 			goto deny;
 		}
 
-		// FIXME Deal with IP header with options.
+		// TODO Deal with IP header with options.
+
 		connOpener = tcp_header->syn && ! tcp_header->ack;
 		connCloser = tcp_header->rst || tcp_header->fin;
 
-		sport.port = be16_to_host(tcp_header->source);
-		dport.port = be16_to_host(tcp_header->dest);
-		CALICO_DEBUG_AT("TCP; ports: s=%d d=%d\n", sport.port, dport.port);
+		sport = be16_to_host(tcp_header->source);
+		dport = be16_to_host(tcp_header->dest);
+
+		CALICO_DEBUG_AT("TCP; ports: s=%d d=%d\n", sport, dport);
 		break;
 	case IPPROTO_UDP:
 		CALICO_DEBUG_AT("Packet is UDP\n");
 		udp_header = (void*)(ip_header + 1);
-		sport.port = be16_to_host(udp_header->source);
-		dport.port = be16_to_host(udp_header->dest);
-		CALICO_DEBUG_AT("UDP; ports: s=%d d=%d\n", sport.port, dport.port);
+		sport = be16_to_host(udp_header->source);
+		dport = be16_to_host(udp_header->dest);
+		CALICO_DEBUG_AT("UDP; ports: s=%d d=%d\n", sport, dport);
 		break;
 	case IPPROTO_ICMP:
 		icmp_header = (void*)(ip_header + 1);
 		CALICO_DEBUG_AT("Packet is ICMP\n");
-		sport.port = 0;
-		dport.port = 0;
+		sport = 0;
+		dport = 0;
 		break;
 	}
 
@@ -301,7 +306,7 @@ static CALICO_BPF_INLINE int calico_tc(struct __sk_buff *skb, enum calico_tc_fla
 	if ((flags & CALICO_TC_HOST_EP) &&
 			((flags & CALICO_TC_INGRESS) ||
 			 !(skb->mark & CALICO_SKB_MARK_FROM_WORKLOAD))) {
-		CALICO_DEBUG_AT("Applying failsafe ports.\n");
+		//CALICO_DEBUG_AT("Applying failsafe ports.\n");
 
 		// Check failsafe ports.
 		// struct protoport *local_port = (flags & CALICO_TC_INGRESS) ? &dport : &sport;
@@ -322,8 +327,8 @@ static CALICO_BPF_INLINE int calico_tc(struct __sk_buff *skb, enum calico_tc_fla
 		if (CALICO_LOG_LEVEL >= CALICO_LOG_LEVEL_DEBUG) pol_start_time = bpf_ktime_get_ns();
 		enum calico_policy_result do_not_track_rc = execute_policy_do_not_track(
 				ip_header,
-				&sport,
-				&dport,
+				sport,
+				dport,
 				flags);
 		if (CALICO_LOG_LEVEL >= CALICO_LOG_LEVEL_DEBUG) {
 			uint64_t pol_end_time = bpf_ktime_get_ns();
@@ -351,26 +356,23 @@ static CALICO_BPF_INLINE int calico_tc(struct __sk_buff *skb, enum calico_tc_fla
 	}
 
 	// Now do a lookup in our connection tracking table.
-	struct calico_ct_key ct_key = {};
-	struct calico_ct_key ct_rev_key = {};
-	ct_key.dst_addr = orig_ip_dst;
-	ct_key.src_addr = orig_ip_src;
-	ct_key.src_port = sport.port;
-	ct_key.dst_port = dport.port;
-	ct_key.protocol = ip_header->protocol;
+	struct calico_ct_key ct_key = {
+		.dst_addr = orig_ip_dst,
+		.src_addr = orig_ip_src,
+		.src_port = sport,
+		.dst_port = dport,
+		.protocol = ip_proto,
+	};
 
-	// TODO Avoid double conntrack lookup when both pods on same host
+	struct calico_ct_key ct_rev_key = {};
+
 	// Skip conntrack lookup for the SYN packet.
 	struct calico_ct_value *ct_data = NULL;
 	if (!connOpener) {
 		ct_data = bpf_map_lookup_elem(&calico_ct_map_v4, &ct_key);
 	}
-	if (ct_data && (
-			((flags & CALICO_TC_HOST_EP) && (ct_data->flags & CALICO_CT_F_HOST_APPROVED)) ||
-			(!(flags & CALICO_TC_HOST_EP) && (ct_data->flags & CALICO_CT_F_WORKLOAD_APPROVED))
-		)) {
-		// Got a conntrack hit that has been approved by this policy hook.  Short-circuit further processing.
-		// TODO When we get a conntrack hit from another layer, update the entry after we make our policy decision.
+	if (ct_data) {
+		// Got a conntrack hit.
 		if (ct_data->ct_type == CALICO_CT_TYPE_ALLOW) {
 			if (connCloser) {
 				// FIXME proper conntrack fin/rst handling.
@@ -394,10 +396,10 @@ static CALICO_BPF_INLINE int calico_tc(struct __sk_buff *skb, enum calico_tc_fla
 					bpf_l4_csum_replace(skb, csum_offset, orig_ip_src, ct_data->data.ct_nat.src_addr, BPF_F_PSEUDO_HDR | 4);
 				if (orig_ip_dst != ct_data->data.ct_nat.dst_addr)
 					bpf_l4_csum_replace(skb, csum_offset, orig_ip_dst, ct_data->data.ct_nat.dst_addr, BPF_F_PSEUDO_HDR | 4);
-				if (host_to_be16(sport.port) != ct_data->data.ct_nat.src_port)
-					bpf_l4_csum_replace(skb, csum_offset, host_to_be16(sport.port),  ct_data->data.ct_nat.src_port, 2);
-				if (host_to_be16(dport.port) != ct_data->data.ct_nat.dst_port)
-					bpf_l4_csum_replace(skb, csum_offset, host_to_be16(dport.port),  ct_data->data.ct_nat.dst_port, 2);
+				if (host_to_be16(sport) != ct_data->data.ct_nat.src_port)
+					bpf_l4_csum_replace(skb, csum_offset, host_to_be16(sport),  ct_data->data.ct_nat.src_port, 2);
+				if (host_to_be16(dport) != ct_data->data.ct_nat.dst_port)
+					bpf_l4_csum_replace(skb, csum_offset, host_to_be16(dport),  ct_data->data.ct_nat.dst_port, 2);
 
 				eth_hdr = (void *)(long)skb->data;
 				ip_header = (void *)(eth_hdr+1);
@@ -416,10 +418,10 @@ static CALICO_BPF_INLINE int calico_tc(struct __sk_buff *skb, enum calico_tc_fla
 					bpf_l4_csum_replace(skb, csum_offset, orig_ip_src, ct_data->data.ct_nat.src_addr, BPF_F_PSEUDO_HDR | 4);
 				if (orig_ip_dst != ct_data->data.ct_nat.dst_addr)
 					bpf_l4_csum_replace(skb, csum_offset, orig_ip_dst, ct_data->data.ct_nat.dst_addr, BPF_F_PSEUDO_HDR | 4);
-				if (host_to_be16(sport.port) != ct_data->data.ct_nat.src_port)
-					bpf_l4_csum_replace(skb, csum_offset, host_to_be16(sport.port),  ct_data->data.ct_nat.src_port, 2);
-				if (host_to_be16(dport.port) != ct_data->data.ct_nat.dst_port)
-					bpf_l4_csum_replace(skb, csum_offset, host_to_be16(dport.port),  ct_data->data.ct_nat.dst_port, 2);
+				if (host_to_be16(sport) != ct_data->data.ct_nat.src_port)
+					bpf_l4_csum_replace(skb, csum_offset, host_to_be16(sport),  ct_data->data.ct_nat.src_port, 2);
+				if (host_to_be16(dport) != ct_data->data.ct_nat.dst_port)
+					bpf_l4_csum_replace(skb, csum_offset, host_to_be16(dport),  ct_data->data.ct_nat.dst_port, 2);
 
 				eth_hdr = (void *)(long)skb->data;
 				ip_header = (void *)(eth_hdr+1);
@@ -463,8 +465,8 @@ static CALICO_BPF_INLINE int calico_tc(struct __sk_buff *skb, enum calico_tc_fla
 		// execute the pre-DNAT policy.
 		enum calico_policy_result pre_dnat_rc = execute_policy_pre_dnat(
 				ip_header,
-				&sport,
-				&dport,
+				sport,
+				dport,
 				flags);
 		if (pre_dnat_rc == CALICO_POL_ALLOW) {
 			CALICO_DEBUG_AT("Allowed by pre-DNAT policy\n");
@@ -486,8 +488,8 @@ static CALICO_BPF_INLINE int calico_tc(struct __sk_buff *skb, enum calico_tc_fla
 		// Now, for traffic towards the host, do a lookup in the NAT table to see if we should NAT this packet.
 		struct calico_nat_v4_key nat_key = {};
 		nat_key.addr = ip_header->daddr;
-		nat_key.port = dport.port;
-		nat_key.protocol = dport.proto;
+		nat_key.port = dport;
+		nat_key.protocol = ip_proto;
 
 
 		timer_start_time = bpf_ktime_get_ns();
@@ -523,7 +525,7 @@ static CALICO_BPF_INLINE int calico_tc(struct __sk_buff *skb, enum calico_tc_fla
 		case IPPROTO_TCP:
 			csum_offset = sizeof(struct ethhdr) + sizeof(struct iphdr) + offsetof(struct tcphdr, check);
 			bpf_l4_csum_replace(skb, csum_offset, orig_ip_dst, nat2_val->addr, 4);
-			bpf_l4_csum_replace(skb, csum_offset, host_to_be16(dport.port), nat2_val->port, 2);
+			bpf_l4_csum_replace(skb, csum_offset, host_to_be16(dport), nat2_val->port, 2);
 
 			eth_hdr = (void *)(long)skb->data;
 			ip_header = (void *)(eth_hdr+1);
@@ -538,7 +540,7 @@ static CALICO_BPF_INLINE int calico_tc(struct __sk_buff *skb, enum calico_tc_fla
 		case IPPROTO_UDP:
 			csum_offset = sizeof(struct ethhdr) + sizeof(struct iphdr) + offsetof(struct udphdr, check);
 			bpf_l4_csum_replace(skb, csum_offset, orig_ip_dst, nat2_val->addr, 4);
-			bpf_l4_csum_replace(skb, csum_offset, host_to_be16(dport.port), nat2_val->port, 2);
+			bpf_l4_csum_replace(skb, csum_offset, host_to_be16(dport), nat2_val->port, 2);
 
 			eth_hdr = (void *)(long)skb->data;
 			ip_header = (void *)(eth_hdr+1);
@@ -569,32 +571,32 @@ static CALICO_BPF_INLINE int calico_tc(struct __sk_buff *skb, enum calico_tc_fla
 		ct_rev_key.src_addr = nat2_val->addr;
 		ct_rev_key.src_port = be16_to_host(nat2_val->port);
 		ct_rev_key.dst_addr = orig_ip_src;
-		ct_rev_key.dst_port = sport.port;
-		ct_rev_key.protocol = ip_header->protocol;
+		ct_rev_key.dst_port = sport;
+		ct_rev_key.protocol = ip_proto;
 
 		CALICO_DEBUG_AT("CT rev key src=%x dst=%x\n", ct_rev_key.src_addr , ct_rev_key.dst_addr);
 		CALICO_DEBUG_AT("CT rev key sport=%x dport=%x\n", ct_rev_key.src_port, ct_rev_key.dst_port);
 		ct_value.ct_type = CALICO_CT_TYPE_NAT;
 		ct_value.data.ct_nat.src_addr = orig_ip_src;
-		ct_value.data.ct_nat.src_port = host_to_be16(sport.port);
+		ct_value.data.ct_nat.src_port = host_to_be16(sport);
 		ct_value.data.ct_nat.dst_addr = nat2_val->addr;
 		ct_value.data.ct_nat.dst_port = nat2_val->port;
 		ct_value.flags |= (flags & CALICO_TC_HOST_EP) ? CALICO_CT_F_HOST_APPROVED : CALICO_CT_F_WORKLOAD_APPROVED;
 
 		ct_rev_value.ct_type = CALICO_CT_TYPE_NAT;
 		ct_rev_value.data.ct_nat.src_addr = orig_ip_dst;
-		ct_rev_value.data.ct_nat.src_port = host_to_be16(dport.port);
+		ct_rev_value.data.ct_nat.src_port = host_to_be16(dport);
 		ct_rev_value.data.ct_nat.dst_addr = orig_ip_src;
-		ct_rev_value.data.ct_nat.dst_port = host_to_be16(sport.port);
+		ct_rev_value.data.ct_nat.dst_port = host_to_be16(sport);
 		ct_rev_value.flags |= (flags & CALICO_TC_HOST_EP) ? CALICO_CT_F_HOST_APPROVED : CALICO_CT_F_WORKLOAD_APPROVED;
 		timer_end_time = bpf_ktime_get_ns();
 	} else {
 		// Did not do a DNAT, set up the reverse conntrack key accordingly.
 		ct_rev_key.dst_addr = orig_ip_src;
 		ct_rev_key.src_addr = orig_ip_dst;
-		ct_rev_key.src_port = dport.port;
-		ct_rev_key.dst_port = sport.port;
-		ct_rev_key.protocol = ip_header->protocol;
+		ct_rev_key.src_port = dport;
+		ct_rev_key.dst_port = sport;
+		ct_rev_key.protocol = ip_proto;
 
 		ct_value.ct_type = CALICO_CT_TYPE_ALLOW;
 		ct_value.flags |= (flags & CALICO_TC_HOST_EP) ? CALICO_CT_F_HOST_APPROVED : CALICO_CT_F_WORKLOAD_APPROVED;
@@ -610,14 +612,14 @@ static CALICO_BPF_INLINE int calico_tc(struct __sk_buff *skb, enum calico_tc_fla
 		if (bpf_map_lookup_elem(&calico_local_ips, ip)) {
 			// IP is local, apply normal policy.
 			CALICO_DEBUG_AT("Local destination, using normal rules.\n");
-			norm_rc = execute_policy_norm(ip_header, &sport, &dport, flags);
+			norm_rc = execute_policy_norm(ip_header, sport, dport, flags);
 		} else {
 			CALICO_DEBUG_AT("Remote destination, using apply-on-forward rules.\n");
-			norm_rc = execute_policy_aof(ip_header, &sport, &dport, flags);
+			norm_rc = execute_policy_aof(ip_header, sport, dport, flags);
 		}
 	} else {
 		CALICO_DEBUG_AT("Workload: applying normal policy.\n");
-		norm_rc = execute_policy_norm(ip_header, &sport, &dport, flags);
+		norm_rc = execute_policy_norm(ip_header, sport, dport, flags);
 	}
 
 
@@ -649,9 +651,9 @@ static CALICO_BPF_INLINE int calico_tc(struct __sk_buff *skb, enum calico_tc_fla
 		CALICO_DEBUG_AT("Traffic is towards the host namespace, doing Linux FIB lookup\n");
 		struct bpf_fib_lookup params = {};
 		params.family = 2; // AF_INET
-		params.l4_protocol = ip_header->protocol;
-		params.sport = sport.port;
-		params.dport = dport.port;
+		params.l4_protocol = ip_proto;
+		params.sport = sport;
+		params.dport = dport;
 		params.tot_len = be16_to_host(ip_header->tot_len);
 		params.ipv4_src = ip_header->saddr;
 		params.ipv4_dst = ip_header->daddr;

@@ -8,10 +8,11 @@
 struct calico_ct_key {
 	__be32 src_addr; // NBO
 	__be32 dst_addr; // NBO
-    uint16_t src_port;
-    uint16_t dst_port;
+    uint16_t src_port; // HBO
+    uint16_t dst_port; // HBO
     uint8_t protocol;
-};
+} __attribute__((packed));
+
 
 enum calico_ct_type {
      CALICO_CT_TYPE_ALLOW = 0,
