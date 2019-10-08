@@ -133,6 +133,43 @@ bgppeer_name2_rev1_v6 = {
     },
 }
 
+bgppeer_invalid = {
+    'apiVersion': API_VERSION,
+    'kind': 'BGPPeer',
+    'metadata': {
+        'name': 'bgppeer-name-123abc',
+    },
+    'spec':  {
+        'node': 'node2',
+        'peerIP': 'badpeerIP',
+        'asNumber': 64515,
+    },
+}
+
+bgppeer_multiple_invalid = [{
+    'apiVersion': API_VERSION,
+    'kind': 'BGPPeer',
+    'metadata': {
+        'name': 'bgppeer-invalid1',
+    },
+    'spec':  {
+        'node': 'node1',
+        'peerIP': 'badpeerIP',
+        'asNumber': 64515,
+    },
+}, {
+    'apiVersion': API_VERSION,
+    'kind': 'BGPPeer',
+    'metadata': {
+        'name': 'bgppeer-invalid2',
+    },
+    'spec':  {
+        'node': 'node2',
+        'peerIP': 'badpeerIP',
+        'asNumber': 64515,
+    }
+}]
+
 #
 # Network Policy
 #

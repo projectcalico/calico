@@ -96,28 +96,30 @@ Description:
 		if results.numResources == 0 {
 			return fmt.Errorf("No resources specified in file")
 		} else if results.numResources == 1 {
-			return fmt.Errorf("Failed to create '%s' resource: %v", results.singleKind, results.err)
+			return fmt.Errorf("Failed to create '%s' resource: %v", results.singleKind, results.resErrs)
 		} else if results.singleKind != "" {
-			return fmt.Errorf("Failed to create any '%s' resources: %v", results.singleKind, results.err)
+			return fmt.Errorf("Failed to create any '%s' resources: %v", results.singleKind, results.resErrs)
 		} else {
-			return fmt.Errorf("Failed to create any resources: %v", results.err)
+			return fmt.Errorf("Failed to create any resources: %v", results.resErrs)
 		}
-	} else if results.err == nil {
+	} else if len(results.resErrs) == 0 {
 		if results.singleKind != "" {
 			fmt.Printf("Successfully created %d '%s' resource(s)\n", results.numHandled, results.singleKind)
 		} else {
 			fmt.Printf("Successfully created %d resource(s)\n", results.numHandled)
 		}
 	} else {
-		fmt.Printf("Partial success: ")
-		if results.singleKind != "" {
-			fmt.Printf("created the first %d out of %d '%s' resources:\n",
-				results.numHandled, results.numResources, results.singleKind)
-		} else {
-			fmt.Printf("created the first %d out of %d resources:\n",
-				results.numHandled, results.numResources)
+		if results.numHandled - len(results.resErrs) > 0 {
+			fmt.Printf("Partial success: ")
+			if results.singleKind != "" {
+				fmt.Printf("created the first %d out of %d '%s' resources:\n",
+					results.numHandled, results.numResources, results.singleKind)
+			} else {
+				fmt.Printf("created the first %d out of %d resources:\n",
+					results.numHandled, results.numResources)
+			}
 		}
-		return fmt.Errorf("Hit error: %v", results.err)
+		return fmt.Errorf("Hit error: %v", results.resErrs)
 	}
 
 	return nil
