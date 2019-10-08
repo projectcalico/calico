@@ -70,6 +70,7 @@ ADD bin/calico-felix-amd64 /code/calico-felix
 ADD bin/calico-bpf /usr/bin/calico-bpf
 
 ADD bpf/include/bpf.h /code/bpf/include/bpf.h
+ADD bpf/include/conntrack.h /code/bpf/include/conntrack.h
 ADD bpf/xdp/redir_tc.c /code/bpf/xdp/redir_tc.c
 ADD bpf/xdp/bpf_maps.h /code/bpf/xdp/bpf_maps.h
 

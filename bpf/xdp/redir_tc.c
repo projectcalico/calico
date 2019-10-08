@@ -224,79 +224,6 @@ static CALICO_BPF_INLINE enum calico_policy_result execute_policy_do_not_track(s
 #pragma clang diagnostic pop
 }
 
-#pragma clang diagnostic ignored "-Wunused-function"
-static CALICO_BPF_INLINE enum calico_policy_result execute_policy_map(void *pol_map, struct iphdr *ip_header, __be32 *addr, struct protoport *sport, struct protoport *dport, enum calico_tc_flags flags) {
-	struct calico_policy *pol;
-	union ip4_bpf_lpm_trie_key key;
-
-	CALICO_DEBUG_AT("Applying policy map; doing lookup on IP: %x.\n", be32_to_host(*addr));
-
-	key.lpm.prefixlen = 32;
-	__builtin_memcpy(&key.lpm.data, addr, 4);
-	pol = bpf_map_lookup_elem(pol_map, &key);
-	if (pol) {
-		size_t opIdx = 0;
-#pragma clang loop unroll(full)
-		for (int i = 0; i < CALICO_NUM_POL_OPS; i++) {
-			struct calico_policy_op *curOp;
-			if (opIdx >=0 && opIdx <CALICO_NUM_POL_OPS) {
-				curOp = &pol->ops[opIdx];
-				bool match = false;
-				switch (curOp->match_type & CALICO_MATCH_MASK_ACTION) {
-				case CALICO_MATCH_DENY:
-					return CALICO_POL_DENY;
-				case CALICO_MATCH_ALLOW:
-					return CALICO_POL_ALLOW;
-				case CALICO_MATCH_SRC_PORT:
-					match = curOp->port_range.min <= sport->port && curOp->port_range.max >= sport->port;
-					break;
-				case CALICO_MATCH_DEST_PORT:
-					match = curOp->port_range.min <= dport->port && curOp->port_range.max >= dport->port;
-					break;
-				case CALICO_MATCH_PROTOCOL:
-					match = ip_header->protocol == curOp->protocol;
-					break;
-				case CALICO_MATCH_SRC_IP:
-				    match = (ip_header->saddr & curOp->ip_match.mask) == curOp->ip_match.addr;
-				    break;
-				case CALICO_MATCH_DEST_IP:
-				    match = (ip_header->saddr & curOp->ip_match.mask) == curOp->ip_match.addr;
-				    break;
-				case CALICO_MATCH_SRC_IP_SET:
-				{
-		            union ip4_set_bpf_lpm_trie_key k;
-				    k.ip.mask = 12;
-				    k.ip.set_id = curOp->ip_set_id;
-				    k.ip.addr = ip_header->saddr;
-				    if (bpf_map_lookup_elem(&calico_ip_sets, &k)) {
-				        match=true;
-				    }
-				    break;
-				}
-				case CALICO_MATCH_DEST_IP_SET:
-				{
-				    union ip4_set_bpf_lpm_trie_key k;
-				    k.ip.mask = 12;
-				    k.ip.set_id = curOp->ip_set_id;
-				    k.ip.addr = ip_header->daddr;
-				    if (bpf_map_lookup_elem(&calico_ip_sets, &k)) {
-				        match=true;
-				    }
-				    break;
-				}
-				}
-
-				if (curOp->match_type & CALICO_MATCH_NEGATE ? !match : match) {
-					opIdx += 1;
-				} else {
-					opIdx += curOp->jump_no_match;
-				}
-			}
-		}
-	}
-	return CALICO_POL_NO_MATCH;
-}
-
 static CALICO_BPF_INLINE int calico_tc(struct __sk_buff *skb, enum calico_tc_flags flags) {
 	enum calico_reason reason = CALICO_REASON_UNKNOWN;
 	uint64_t prog_start_time = bpf_ktime_get_ns();
@@ -309,7 +236,7 @@ static CALICO_BPF_INLINE int calico_tc(struct __sk_buff *skb, enum calico_tc_fla
 	if (skb->protocol != be16_to_host(ETH_P_IP)) {
 		CALICO_DEBUG_AT("Skipping ethertype %x\n", skb->protocol);
 		reason = CALICO_REASON_NOT_IP;
-		goto allow_no_fib;
+		goto allow_skip_fib;
 	}
 	CALICO_DEBUG_AT("Packet is IP\n");
 
@@ -377,15 +304,15 @@ static CALICO_BPF_INLINE int calico_tc(struct __sk_buff *skb, enum calico_tc_fla
 		CALICO_DEBUG_AT("Applying failsafe ports.\n");
 
 		// Check failsafe ports.
-		struct protoport *local_port = (flags & CALICO_TC_INGRESS) ? &dport : &sport;
+		// struct protoport *local_port = (flags & CALICO_TC_INGRESS) ? &dport : &sport;
 
 		// FIXME Need to only do failsafes for local IP.
 		// FIXME Conntrack for failsafes?
-		if (bpf_map_lookup_elem(&calico_failsafe_ports, local_port)) {
-			CALICO_DEBUG_AT("Packet is to/from a failsafe port.\n");
-			reason = CALICO_REASON_FAILSAFE;
-			goto allow;
-		}
+//		if (bpf_map_lookup_elem(&calico_failsafe_ports, local_port)) {
+//			CALICO_DEBUG_AT("Packet is to/from a failsafe port.\n");
+//			reason = CALICO_REASON_FAILSAFE;
+//			goto allow;
+//		}
 
 		// TODO Whitelist our VXLAN/IPIP traffic (or just include it in the do-not-track policy)?
 
@@ -715,60 +642,41 @@ static CALICO_BPF_INLINE int calico_tc(struct __sk_buff *skb, enum calico_tc_fla
 	bpf_map_update_elem(&calico_ct_map_v4, &ct_rev_key, &ct_rev_value, 0);
 
 	// Try a short-circuit FIB lookup.
-	struct calico_mac_sw_value *value;
 	allow:
 
 	if (((flags & CALICO_TC_HOST_EP) && (flags & CALICO_TC_INGRESS)) ||
 			(!(flags & CALICO_TC_HOST_EP) && !(flags & CALICO_TC_INGRESS))) {
-		if (CALICO_USE_LINUX_FIB) {
-			CALICO_DEBUG_AT("Traffic is towards the host namespace, doing Linux FIB lookup\n");
-			struct bpf_fib_lookup params = {};
-			params.family = 2; // AF_INET
-			params.l4_protocol = ip_header->protocol;
-			params.sport = sport.port;
-			params.dport = dport.port;
-			params.tot_len = be16_to_host(ip_header->tot_len);
-			params.ipv4_src = ip_header->saddr;
-			params.ipv4_dst = ip_header->daddr;
-			params.ifindex = skb->ingress_ifindex;
+		CALICO_DEBUG_AT("Traffic is towards the host namespace, doing Linux FIB lookup\n");
+		struct bpf_fib_lookup params = {};
+		params.family = 2; // AF_INET
+		params.l4_protocol = ip_header->protocol;
+		params.sport = sport.port;
+		params.dport = dport.port;
+		params.tot_len = be16_to_host(ip_header->tot_len);
+		params.ipv4_src = ip_header->saddr;
+		params.ipv4_dst = ip_header->daddr;
+		params.ifindex = skb->ingress_ifindex;
 
-			rc =  bpf_fib_lookup(skb, &params, sizeof(params), 0);
-			if (rc == 0) {
-				CALICO_DEBUG_AT("FIB lookup succeeded\n");
-				// Update the MACs.
-				__builtin_memcpy(&eth_hdr->h_source, &params.smac, sizeof(eth_hdr->h_source));
-				__builtin_memcpy(&eth_hdr->h_dest, &params.dmac, sizeof(eth_hdr->h_dest));
+		rc =  bpf_fib_lookup(skb, &params, sizeof(params), 0);
+		if (rc == 0) {
+			CALICO_DEBUG_AT("FIB lookup succeeded\n");
+			// Update the MACs.
+			__builtin_memcpy(&eth_hdr->h_source, &params.smac, sizeof(eth_hdr->h_source));
+			__builtin_memcpy(&eth_hdr->h_dest, &params.dmac, sizeof(eth_hdr->h_dest));
 
-				// Redirect the packet.
-				CALICO_DEBUG_AT("Got Linux FIB hit, redirecting to iface %d.\n",params.ifindex);
-				rc = bpf_redirect(params.ifindex, 0);
-			} else if (rc < 0) {
-				CALICO_DEBUG_AT("FIB lookup failed (bad input): %d.\n", rc);
-				rc = TC_ACT_UNSPEC;
-			} else {
-				CALICO_DEBUG_AT("FIB lookup failed (FIB problem): %d.\n", rc);
-				rc = TC_ACT_UNSPEC;
-			}
+			// Redirect the packet.
+			CALICO_DEBUG_AT("Got Linux FIB hit, redirecting to iface %d.\n",params.ifindex);
+			rc = bpf_redirect(params.ifindex, 0);
+		} else if (rc < 0) {
+			CALICO_DEBUG_AT("FIB lookup failed (bad input): %d.\n", rc);
+			rc = TC_ACT_UNSPEC;
 		} else {
-			CALICO_DEBUG_AT("Traffic is towards the host namespace, doing Calico FIB lookup");
-			value = bpf_map_lookup_elem(&calico_mac_sw_map, &ip_header->daddr);
-			if (value) {
-				// Update the MACs.
-				__builtin_memcpy(&eth_hdr->h_source, &value->new_src, sizeof(eth_hdr->h_source));
-				__builtin_memcpy(&eth_hdr->h_dest, &value->new_dst, sizeof(eth_hdr->h_dest));
-
-				// Redirect the packet.
-				CALICO_DEBUG_AT("Got Calico FIB hit, redirecting to iface %d.\n",value->dst_iface);
-				uint32_t flags = 0;
-				if (value->flags && CALICO_MAC_SW_FLAG_INGRESS) {
-					CALICO_DEBUG_AT("Doing an ingress redirect.\n");
-					flags |= BPF_F_INGRESS;
-				}
-				rc = bpf_redirect(value->dst_iface, flags);
-			}
+			CALICO_DEBUG_AT("FIB lookup failed (FIB problem): %d.\n", rc);
+			rc = TC_ACT_UNSPEC;
 		}
 	}
-	allow_no_fib:
+
+	allow_skip_fib:
 	if (!(flags & CALICO_TC_HOST_EP) && !(flags & CALICO_TC_INGRESS)) {
 		// Packet is leaving workload, mark it so any downstream programs know this traffic was from a workload.
 		skb->mark |= CALICO_SKB_MARK_FROM_WORKLOAD;
@@ -812,98 +720,5 @@ int tc_calico_to_host_endpoint(struct __sk_buff *skb) {
 	return calico_tc(skb, CALICO_TC_HOST_EP);
 }
 
-
-
-
-static CALICO_BPF_INLINE int redir(struct __sk_buff *skb) {
-    if (skb->protocol != be16_to_host(ETH_P_IP)) {
-        CALICO_DEBUG("Skipping protocol %x\n", skb->protocol);
-        return TC_ACT_UNSPEC;
-    }
-
-    void *data_start = (void *)(long)skb->data;
-    void *data_end = (void *)(long)skb->data_end;
-
-    if (data_start + sizeof(struct ethhdr) + sizeof(struct iphdr) > data_end) {
-        CALICO_DEBUG("Too short\n");
-        return TC_ACT_SHOT;
-    }
-
-    struct ethhdr *eth_hdr = data_start;
-    struct iphdr *ip_header = (void *)(eth_hdr+1);
-
-    // Look up the destination.
-    struct calico_mac_sw_value *value = bpf_map_lookup_elem(&calico_mac_sw_map, &ip_header->daddr);
-    if (!value) {
-        CALICO_DEBUG("No match for dest addr %x\n", ip_header->daddr);
-        return TC_ACT_UNSPEC;
-    }
-
-    // Update the MACs.
-    __builtin_memcpy(&eth_hdr->h_source, &value->new_src, sizeof(eth_hdr->h_source));
-    __builtin_memcpy(&eth_hdr->h_dest, &value->new_dst, sizeof(eth_hdr->h_dest));
-
-    // Redirect the packet.
-    CALICO_DEBUG("REDIR: Dest iface %d\n",value->dst_iface );
-    uint32_t flags = 0;
-    if (value->flags && CALICO_MAC_SW_FLAG_INGRESS) {
-        flags |= BPF_F_INGRESS;
-    }
-    int rc = bpf_redirect(value->dst_iface, flags);
-    CALICO_DEBUG("RC = %d\n", rc);
-    return rc;
-}
-
-__attribute__((section("redirect")))
-int tc_redirect(struct __sk_buff *skb) {
-    return redir(skb);
-}
-
-static CALICO_BPF_INLINE int nat(struct __sk_buff *skb) {
-    if (skb->protocol != be16_to_host(ETH_P_IP)) {
-        CALICO_DEBUG("Skipping protocol %x\n", skb->protocol);
-        return TC_ACT_UNSPEC;
-    }
-
-    void *data_start = (void *)(long)skb->data;
-    void *data_end = (void *)(long)skb->data_end;
-
-    if (data_start + sizeof(struct ethhdr) + sizeof(struct iphdr) > data_end) {
-        CALICO_DEBUG("Too short\n");
-        return TC_ACT_SHOT;
-    }
-
-    struct ethhdr *eth_hdr = data_start;
-    struct iphdr *ip_header = (void *)(eth_hdr+1);
-
-    uint32_t new_src = ip_header->saddr;
-    bpf_skb_store_bytes(skb, sizeof(struct ethhdr) + offsetof(struct iphdr, saddr), &new_src, 4, BPF_F_RECOMPUTE_CSUM);
-
-    return TC_ACT_UNSPEC;
-}
-
-__attribute__((section("nat")))
-int tc_nat(struct __sk_buff *skb) {
-    return nat(skb);
-}
-
-__attribute__((section("allow_all")))
-int tc_allow_all(struct __sk_buff *skb)
-{
-    return TC_ACT_UNSPEC;
-}
-
-__attribute__((section("log_and_allow")))
-int tc_log_and_allow(struct __sk_buff *skb)
-{
-	printk("log-and-allow proto=%d\n", skb->protocol);
-    return TC_ACT_UNSPEC;
-}
-
-__attribute__((section("drop_all")))
-int tc_drop_all(struct __sk_buff *skb)
-{
-	return TC_ACT_SHOT;
-}
 
 char ____license[] __attribute__((section("license"), used)) = "GPL";

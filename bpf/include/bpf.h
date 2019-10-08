@@ -105,4 +105,17 @@ CALICO_BPF_INLINE __u32 safe_extract_port(__u32 port) {
 	return (port >> 16) | (port & 0xffff);
 }
 
+// Extended map definition for compatibility with iproute2 loader.
+struct bpf_map_def_extended {
+	__u32 type;
+	__u32 key_size;
+	__u32 value_size;
+	__u32 max_entries;
+	__u32 map_flags;
+	__u32 map_id;
+	__u32 pinning_strategy;
+	__u32 unused1;
+	__u32 unused2;
+};
+
 #endif /* __CALICO_BPF_H__ */
