@@ -333,7 +333,9 @@ static CALICO_BPF_INLINE int calico_tc(struct __sk_buff *skb, enum calico_tc_fla
 	__u8 ip_proto = ip_header->protocol;
 
 	bool connOpener = false;
+	bool connCloser = false;
 
+    CALICO_DEBUG_AT("IP; s=%x d=%x\n", be32_to_host(ip_header->saddr), be32_to_host(ip_header->daddr));
 	switch (sport.proto = dport.proto = ip_header->protocol) {
 	case IPPROTO_TCP:
 		// Re-check buffer space for TCP (has larger headers than UDP).
@@ -347,17 +349,18 @@ static CALICO_BPF_INLINE int calico_tc(struct __sk_buff *skb, enum calico_tc_fla
 
 		// FIXME Deal with IP header with options.
 		connOpener = tcp_header->syn && ! tcp_header->ack;
+		connCloser = tcp_header->rst || tcp_header->fin;
 
 		sport.port = be16_to_host(tcp_header->source);
 		dport.port = be16_to_host(tcp_header->dest);
-		CALICO_DEBUG_AT("TCP; ports: %d %d\n", sport.port, dport.port);
+		CALICO_DEBUG_AT("TCP; ports: s=%d d=%d\n", sport.port, dport.port);
 		break;
 	case IPPROTO_UDP:
 		CALICO_DEBUG_AT("Packet is UDP\n");
 		udp_header = (void*)(ip_header + 1);
 		sport.port = be16_to_host(udp_header->source);
 		dport.port = be16_to_host(udp_header->dest);
-		CALICO_DEBUG_AT("UDP; ports: %d %d\n", sport.port, dport.port);
+		CALICO_DEBUG_AT("UDP; ports: s=%d d=%d\n", sport.port, dport.port);
 		break;
 	case IPPROTO_ICMP:
 		icmp_header = (void*)(ip_header + 1);
@@ -436,6 +439,10 @@ static CALICO_BPF_INLINE int calico_tc(struct __sk_buff *skb, enum calico_tc_fla
 		// Got a conntrack hit that has been approved by this policy hook.  Short-circuit further processing.
 		// TODO When we get a conntrack hit from another layer, update the entry after we make our policy decision.
 		if (ct_data->ct_type == CALICO_CT_TYPE_ALLOW) {
+			if (connCloser) {
+				// FIXME proper conntrack fin/rst handling.
+				bpf_map_delete_elem(&calico_ct_map_v4, &ct_key);
+			}
 			CALICO_DEBUG_AT("CT: Allow\n");
 			reason = CALICO_REASON_CT;
 			goto allow;
