@@ -16,6 +16,7 @@ package intdataplane
 
 import (
 	"bufio"
+	"fmt"
 	"io/ioutil"
 	"os"
 	"os/exec"
@@ -44,9 +45,11 @@ type bpfEndpointManager struct {
 	profilesToWorkloads map[proto.ProfileID]set.Set /*proto.WorkloadEndpointID*/
 
 	dirtyWorkloads set.Set
+
+	bpfLogLevel string
 }
 
-func newBPFEndpointManager() *bpfEndpointManager {
+func newBPFEndpointManager(bpfLogLevel string) *bpfEndpointManager {
 	return &bpfEndpointManager{
 		wlEps:               map[proto.WorkloadEndpointID]*proto.WorkloadEndpoint{},
 		policies:            map[proto.PolicyID]*proto.Policy{},
@@ -54,6 +57,7 @@ func newBPFEndpointManager() *bpfEndpointManager {
 		policiesToWorkloads: map[proto.PolicyID]set.Set{},
 		profilesToWorkloads: map[proto.ProfileID]set.Set{},
 		dirtyWorkloads:      set.New(),
+		bpfLogLevel:         bpfLogLevel,
 	}
 }
 
@@ -346,6 +350,7 @@ func (m *bpfEndpointManager) applyPolicyDirection(wep *proto.WorkloadEndpoint, d
 		"-x", "c",
 		"-D__KERNEL__",
 		"-D__ASM_SYSREG_H",
+		fmt.Sprintf("-DCALICO_LOG_LEVEL=CALICO_LOG_LEVEL_%s", strings.ToUpper(m.bpfLogLevel)),
 		"-Wno-unused-value",
 		"-Wno-pointer-sign",
 		"-Wno-compare-distinct-pointer-types",

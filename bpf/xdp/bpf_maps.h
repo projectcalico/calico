@@ -80,6 +80,7 @@ enum calico_ct_flags {
 
 enum calico_skb_mark {
 	CALICO_SKB_MARK_FROM_WORKLOAD = 0xca110000,
+	CALICO_SKB_MARK_FROM_WORKLOAD_MASK = 0xffff0000,
 	CALICO_SKB_MARK_NO_TRACK      = 1<<1,
 };
 

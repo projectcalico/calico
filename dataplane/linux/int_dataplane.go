@@ -139,6 +139,7 @@ type Config struct {
 	ExternalNodesCidrs []string
 
 	BPFEnabled      bool
+	BPFLogLevel     string
 	XDPEnabled      bool
 	XDPAllowGeneric bool
 
@@ -439,7 +440,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 
 	if config.BPFEnabled {
 		log.Info("BPF enabled, starting BPF endpoint manager and map manager.")
-		dp.RegisterManager(newBPFEndpointManager())
+		dp.RegisterManager(newBPFEndpointManager(config.BPFLogLevel))
 		dp.RegisterManager(newBPFMapManager())
 	}
 

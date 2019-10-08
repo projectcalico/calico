@@ -28,7 +28,7 @@ enum calico_tc_flags {
 #define CALICO_LOG_LEVEL_DEBUG 10
 
 #ifndef CALICO_LOG_LEVEL
-#define CALICO_LOG_LEVEL CALICO_LOG_LEVEL_INFO
+#define CALICO_LOG_LEVEL CALICO_LOG_LEVEL_NONE
 #endif
 
 #define CALICO_USE_LINUX_FIB true
@@ -415,6 +415,12 @@ static CALICO_BPF_INLINE int calico_tc(struct __sk_buff *skb, enum calico_tc_fla
 		}
 		CALICO_DEBUG_AT("No match in do-not-track policy\n");
 		// else CALICO_POL_NO_MATCH, fall through to next stage...
+	}
+
+	if (!connOpener && (skb->mark & CALICO_SKB_MARK_FROM_WORKLOAD_MASK) == CALICO_SKB_MARK_FROM_WORKLOAD) {
+		CALICO_DEBUG_AT("CT: Allow - already checked by ingress hook\n");
+		reason = CALICO_REASON_CT;
+		goto allow;
 	}
 
 	// Now do a lookup in our connection tracking table.
