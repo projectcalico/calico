@@ -1,6 +1,6 @@
 ---
 title: Use service accounts in policy
-description: Use Kubernetes service accounts in policy rules to validate cryptographic identities and/or manage RBAC controlled high-priority rules across teams.
+description: Use Kubernetes service accounts in policies to validate cryptographic identities and/or manage RBAC controlled high-priority rules across teams.
 ---
 
 ### Big picture
@@ -90,9 +90,9 @@ spec:
 
 #### Use Kubernetes RBAC to control service account label assignment
 
-Network policies can be applied to endpoints using selectors that match labels on either the endpoint itself, the endpoint's namespace, or the endpoint's service account. By specifying selectors based on the endpoint's service account we can employ Kubernetes RBAC to control which users can assign labels to service accounts. That group may be separate from the group of users who are allowed to deploy pods.
+Network policies can be applied to endpoints using selectors that match labels on the endpoint, the endpoint's namespace, or the endpoint's service account. By applying selectors based on the endpoint's service account, you can use Kubernetes RBAC to control which users can assign labels to namespaces. This allows you to separate groups who can deploy pods from those who can assign labels to namespaces.
 
-In the following example, pods with an **intern** service account will only be allowed to communicate with other pods with service accounts labeled `role: intern`.
+In the following example, pods with an intern service account can communicate only with pods with service accounts labeled, `role: intern`.
 
 ```
 apiVersion: projectcalico.org/v3
