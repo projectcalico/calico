@@ -192,12 +192,12 @@ var _ = Context("Latency tests with initialized Felix and etcd datastore", func(
 					Expect(err).NotTo(HaveOccurred())
 
 					// The all() selector should now map to an IP set with 10,002 IPs in it.
-					ipSetName := utils.IPSetNameForSelector(c.ipVersion, sourceSelector)
 					if os.Getenv("FELIX_FV_ENABLE_BPF") == "true" {
 						Eventually(func() int {
-							return getTotalIPSetMembers(felix)
+							return getTotalBPFIPSetMembers(felix)
 						}, "10s", "1000ms").Should(Equal(10002))
 					} else {
+						ipSetName := utils.IPSetNameForSelector(c.ipVersion, sourceSelector)
 						Eventually(func() int {
 							return getNumIPSetMembers(
 								felix.Container,
@@ -263,7 +263,7 @@ func generateIPv6s(n int) (result []string) {
 	panic("too many IPs")
 }
 
-func getTotalIPSetMembers(felix *infrastructure.Felix) int {
+func getTotalBPFIPSetMembers(felix *infrastructure.Felix) int {
 	out, err := felix.ExecOutput("bpftool", "map", "dump", "pinned", "/sys/fs/bpf/tc/globals/calico_ip_sets")
 	if err != nil {
 		log.WithError(err).WithField("output", out).Warn("Failed to run bpftool")

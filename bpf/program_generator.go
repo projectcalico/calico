@@ -49,18 +49,26 @@ type ProgramGenerator struct {
 	w      io.Writer
 	err    error
 	ruleID int
+	debug  bool
 }
 
 func NewProgramGenerator(w io.Writer) *ProgramGenerator {
 	if ProgPrefix == nil {
 		initProgs()
 	}
-	return &ProgramGenerator{w: w}
+	return &ProgramGenerator{
+		w: w,
+		// On the critical path so it's worth skipping log entry creation if debug is not enabled.
+		debug: log.GetLevel() >= log.DebugLevel,
+	}
 }
 
 func (r *ProgramGenerator) printf(f string, args ...interface{}) {
 	if r.err != nil {
 		return
+	}
+	if r.debug {
+		log.Debugf("Writing C program: "+f, args...)
 	}
 	_, r.err = fmt.Fprintf(r.w, f, args...)
 }
@@ -147,17 +155,17 @@ func (r *ProgramGenerator) writeRule(rule *proto.Rule, passLabel string) {
 		r.writeIPSetMatch(true, "daddr", rule.NotDstIpSetIds)
 	}
 
-	if len(rule.SrcPorts) > 0 {
+	if len(rule.SrcPorts) > 0 || len(rule.SrcNamedPortIpSetIds) > 0 {
 		r.writePortsMatch(false, "saddr", "sport", rule.SrcPorts, rule.SrcNamedPortIpSetIds)
 	}
-	if len(rule.NotSrcPorts) > 0 {
+	if len(rule.NotSrcPorts) > 0 || len(rule.NotSrcNamedPortIpSetIds) > 0 {
 		r.writePortsMatch(true, "saddr", "sport", rule.NotSrcPorts, rule.NotSrcNamedPortIpSetIds)
 	}
 
-	if len(rule.DstPorts) > 0 {
+	if len(rule.DstPorts) > 0 || len(rule.DstNamedPortIpSetIds) > 0 {
 		r.writePortsMatch(false, "daddr", "dport", rule.DstPorts, rule.DstNamedPortIpSetIds)
 	}
-	if len(rule.NotDstPorts) > 0 {
+	if len(rule.NotDstPorts) > 0 || len(rule.NotDstNamedPortIpSetIds) > 0 {
 		r.writePortsMatch(true, "daddr", "dport", rule.NotDstPorts, rule.NotDstNamedPortIpSetIds)
 	}
 

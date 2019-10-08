@@ -92,8 +92,8 @@ func (e IPSetEntry) Protocol() uint8 {
 	return e[18]
 }
 
-func (e IPSetEntry) Port() uint32 {
-	return binary.LittleEndian.Uint32(e[16:18])
+func (e IPSetEntry) Port() uint16 {
+	return binary.LittleEndian.Uint16(e[16:18])
 }
 
 func makeBPFIPSetEntry(setID uint64, cidr ip.V4CIDR, port uint16, proto uint8) IPSetEntry {
