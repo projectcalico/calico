@@ -67,6 +67,7 @@ ADD calico-felix-wrapper /usr/bin
 # Put our binary in /code rather than directly in /usr/bin.  This allows the downstream builds
 # to more easily extract the Felix build artefacts from the container.
 ADD bin/calico-felix-amd64 /code/calico-felix
+ADD bin/calico-bpf /usr/bin/calico-bpf
 
 ADD bpf/include/bpf.h /code/bpf/include/bpf.h
 ADD bpf/xdp/redir_tc.c /code/bpf/xdp/redir_tc.c

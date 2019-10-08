@@ -445,10 +445,11 @@ sub-image-%:
 
 image: $(BUILD_IMAGE)
 $(BUILD_IMAGE): $(BUILD_IMAGE)-$(ARCH)
-$(BUILD_IMAGE)-$(ARCH): bin/calico-felix-$(ARCH) register
+$(BUILD_IMAGE)-$(ARCH): bin/calico-felix-$(ARCH) register bin/calico-bpf
 	rm -rf docker-image/bin
 	mkdir -p docker-image/bin
 	cp bin/calico-felix-$(ARCH) docker-image/bin/
+	cp bin/calico-bpf docker-image/bin/
 	cp -r bpf docker-image/
 	docker build --pull -t $(BUILD_IMAGE):latest-$(ARCH) --build-arg QEMU_IMAGE=$(CALICO_BUILD) --file ./docker-image/Dockerfile.$(ARCH) docker-image
 ifeq ($(ARCH),amd64)
@@ -601,7 +602,7 @@ remote-deps:
 #	 ...
 #	 $(MAKE) fv FV_BATCHES_TO_RUN="10" FV_NUM_BATCHES=10    # the tenth 1/10
 #	 etc.
-fv fv/latency.log: remote-deps $(BUILD_IMAGE) bin/iptables-locker bin/test-workload bin/test-connection fv/fv.test
+fv fv/latency.log: remote-deps $(BUILD_IMAGE) bin/iptables-locker bin/test-workload bin/test-connection bin/calico-bpf fv/fv.test
 	cd fv && \
 	  FV_FELIXIMAGE=$(FV_FELIXIMAGE) \
 	  FV_ETCDIMAGE=$(FV_ETCDIMAGE) \
@@ -697,6 +698,12 @@ run-grafana: stop-grafana run-prometheus
 stop-grafana:
 	@-docker rm -f k8sfv-grafana
 	sleep 2
+
+bin/calico-bpf: $(SRC_FILES) local_build
+	@echo Building calico-bpf...
+	mkdir -p bin
+	$(DOCKER_RUN) $(CALICO_BUILD) \
+	    sh -c 'go build -v -i -o $@ -v $(BUILD_FLAGS) $(LDFLAGS) "$(PACKAGE_NAME)/cmd/calico-bpf"'
 
 bin/iptables-locker: $(SRC_FILES) local_build
 	@echo Building iptables-locker...

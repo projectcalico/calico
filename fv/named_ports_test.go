@@ -193,6 +193,8 @@ func describeNamedPortTests(testSourcePorts bool, protocol string) {
 					utils.AddToTestOutput(fmt.Sprintf("%v\n", n))
 				}
 			}
+
+			felix.Exec("calico-bpf", "dump", "ipsets")
 		}
 
 		for ii := range w {

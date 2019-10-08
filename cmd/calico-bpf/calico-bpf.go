@@ -26,7 +26,7 @@ import (
 	"github.com/projectcalico/felix/buildinfo"
 )
 
-const bpfUsage = `calico-bpf, tool for interrogating Calico BPF state.
+const usage = `calico-bpf, tool for interrogating Calico BPF state.
 
 Usage:
   calico-bpf dump ipsets
@@ -75,7 +75,7 @@ func main() {
 	})
 
 	for _, setID := range setIDs {
-		fmt.Println("IP set ", setID)
+		fmt.Printf("IP set %#x\n", setID)
 		for _, member := range membersBySet[setID] {
 			fmt.Println("  ", member)
 		}
