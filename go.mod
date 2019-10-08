@@ -3,8 +3,8 @@ module github.com/projectcalico/cni-plugin
 go 1.12
 
 require (
-	cloud.google.com/go v0.26.0
-	github.com/Azure/go-autorest v10.6.2+incompatible
+	cloud.google.com/go v0.34.0
+	github.com/Azure/go-autorest v11.1.2+incompatible
 	github.com/alexflint/go-filemutex v0.0.0-20171022225611-72bdc8eae2ae
 	github.com/beorn7/perks v0.0.0-20180321164747-3a771d992973
 	github.com/containernetworking/cni v0.0.0-20180705210735-e67bb289cccf
@@ -22,10 +22,10 @@ require (
 	github.com/google/btree v0.0.0-20161005200959-925471ac9e21
 	github.com/google/gofuzz v1.0.0
 	github.com/googleapis/gnostic v0.0.0-20170729233727-0c5108395e2d
-	github.com/gophercloud/gophercloud v0.0.0-20180330165814-781450b3c4fc
+	github.com/gophercloud/gophercloud v0.0.0-20190126172459-c818fa66e4c8
 	github.com/gregjones/httpcache v0.0.0-20170728041850-787624de3eb7
-	github.com/hashicorp/golang-lru v0.0.0-20160207214719-a0d98a5f2880
-	github.com/imdario/mergo v0.0.0-20141206190957-6633656539c1
+	github.com/hashicorp/golang-lru v0.5.0
+	github.com/imdario/mergo v0.3.5
 	github.com/json-iterator/go v1.1.7
 	github.com/kelseyhightower/envconfig v0.0.0-20180517194557-dd1402a4d99d
 	github.com/leodido/go-urn v0.0.0-20181204092800-a67a23e1c1af
@@ -41,7 +41,7 @@ require (
 	github.com/projectcalico/go-json v0.0.0-20161128004156-6219dc7339ba
 	github.com/projectcalico/go-yaml v0.0.0-20161201183616-955bc3e451ef
 	github.com/projectcalico/go-yaml-wrapper v0.0.0-20161127220527-598e54215bee
-	github.com/projectcalico/libcalico-go v0.0.0-20190920181452-f4749162e052
+	github.com/projectcalico/libcalico-go v0.0.0-20191008172221-1ba69f71d8c4
 	github.com/prometheus/client_golang v0.0.0-20171005112915-5cec1d0429b0
 	github.com/prometheus/client_model v0.0.0-20170216185247-6f3806018612
 	github.com/prometheus/common v0.0.0-20171104095907-e3fb1a1acd76
@@ -54,17 +54,18 @@ require (
 	github.com/vishvananda/netns v0.0.0-20170219233438-54f0e4339ce7
 	golang.org/x/crypto v0.0.0-20190611184440-5c40567a22f8
 	golang.org/x/net v0.0.0-20190812203447-cdfb69ac37fc
-	golang.org/x/oauth2 v0.0.0-20180821212333-d2e6202438be
+	golang.org/x/oauth2 v0.0.0-20190402181905-9f3314589c9a
 	golang.org/x/sys v0.0.0-20190616124812-15dcb6c0061f
 	golang.org/x/text v0.3.2
 	golang.org/x/time v0.0.0-20170420181420-c06e80d9300e
-	google.golang.org/appengine v1.3.0
+	google.golang.org/appengine v1.5.0
 	google.golang.org/genproto v0.0.0-20180817151627-c66870c02cf8
 	google.golang.org/grpc v1.19.0
 	gopkg.in/go-playground/validator.v9 v9.27.0
 	gopkg.in/inf.v0 v0.9.0
+	gopkg.in/yaml.v1 v1.0.0-20140924161607-9f9df34309c0 // indirect
 	gopkg.in/yaml.v2 v2.2.2
-	k8s.io/api v0.0.0-20180628040859-072894a440bd
-	k8s.io/apimachinery v0.0.0-20180621070125-103fd098999d
-	k8s.io/client-go v8.0.0+incompatible
+	k8s.io/api v0.0.0-20190620084959-7cf5895f2711
+	k8s.io/apimachinery v0.0.0-20190612205821-1799e75a0719
+	k8s.io/client-go v12.0.0+incompatible
 )
