@@ -26,15 +26,11 @@ As such, Kubernetes annotations cannot be used because annotations are only per-
 
 #### Node-selection IP address management
 
-Node selection-based IP address assignment is exactly what it sounds like: node labels are set, and then the appropriate node selectors on the desired IP pool resources are set. 
+Node selection-based IP address assignment is exactly what it sounds like: node labels are set, and Calico uses node selectors to decide whih IP pools to use when assigning IP addresses to the node.
 
 #### Best practice
 
 Nodes only assign workload addresses from IP pools which select them. To avoid having a workload not get an IP and fail to start, it is important to ensure that all nodes are selected by at least one IP pool.
-
-### Before you begin
-
-**Required**: etcd datatstore
 
 ### How to
 
