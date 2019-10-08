@@ -23,6 +23,7 @@ import (
 	"os"
 	"reflect"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -49,6 +50,8 @@ import (
 
 const (
 	DEFAULT_IPV4_POOL_CIDR              = "192.168.0.0/16"
+	DEFAULT_IPV4_POOL_BLOCK_SIZE        = 26
+	DEFAULT_IPV6_POOL_BLOCK_SIZE        = 122
 	DEFAULT_IPV4_POOL_NAME              = "default-ipv4-ippool"
 	DEFAULT_IPV6_POOL_NAME              = "default-ipv6-ippool"
 	AUTODETECTION_METHOD_FIRST          = "first-found"
@@ -513,6 +516,31 @@ func validateIP(ipn string) {
 	log.Warnf("Unable to confirm IPv%d address %s is assigned to this host", ipAddr.Version(), ipAddr)
 }
 
+func parseBlockSizeEnvironment(envValue string) int {
+	i, err := strconv.Atoi(envValue)
+	if err != nil {
+		log.WithError(err).Error("Unable to convert blocksize to int")
+		terminate()
+	}
+	return i
+}
+
+// validateBlockSize check if blockSize is valid
+func validateBlockSize(version int, blockSize int) {
+	// 20 to 32 (inclusive) for IPv4 and 116 to 128 (inclusive) for IPv6
+	if version == 4 {
+		if blockSize < 20 || blockSize > 32 {
+			log.Errorf("Invalid blocksize %d for version %d", blockSize, version)
+			terminate()
+		}
+	} else if version == 6 {
+		if blockSize < 116 || blockSize > 128 {
+			log.Errorf("Invalid blocksize %d for version %d", blockSize, version)
+			terminate()
+		}
+	}
+}
+
 // evaluateENVBool evaluates a passed environment variable
 // Returns True if the envVar is defined and set to true.
 // Returns False if the envVar is defined and set to false.
@@ -685,6 +713,25 @@ func configureIPPools(ctx context.Context, client client.Interface) {
 	ipv4IpipModeEnvVar := strings.ToLower(os.Getenv("CALICO_IPV4POOL_IPIP"))
 	ipv4VXLANModeEnvVar := strings.ToLower(os.Getenv("CALICO_IPV4POOL_VXLAN"))
 
+	var (
+		ipv4BlockSize int
+		ipv6BlockSize int
+	)
+	ipv4BlockSizeEnvVar := os.Getenv("CALICO_IPV4POOL_BLOCK_SIZE")
+	if ipv4BlockSizeEnvVar != "" {
+		ipv4BlockSize = parseBlockSizeEnvironment(ipv4BlockSizeEnvVar)
+	} else {
+		ipv4BlockSize = DEFAULT_IPV4_POOL_BLOCK_SIZE
+	}
+	validateBlockSize(ipv4BlockSize, 4)
+	ipv6BlockSizeEnvVar := os.Getenv("CALICO_IPV6POOL_BLOCK_SIZE")
+	if ipv6BlockSizeEnvVar != "" {
+		ipv6BlockSize = parseBlockSizeEnvironment(ipv6BlockSizeEnvVar)
+	} else {
+		ipv6BlockSize = DEFAULT_IPV6_POOL_BLOCK_SIZE
+	}
+	validateBlockSize(ipv6BlockSize, 6)
+
 	// Get a list of all IP Pools
 	poolList, err := client.IPPools().List(ctx, options.ListOptions{})
 	if err != nil {
@@ -739,19 +786,20 @@ func configureIPPools(ctx context.Context, client client.Interface) {
 	if !ipv4Present {
 		log.Debug("Create default IPv4 IP pool")
 		outgoingNATEnabled := evaluateENVBool("CALICO_IPV4POOL_NAT_OUTGOING", true)
-		createIPPool(ctx, client, ipv4Cidr, DEFAULT_IPV4_POOL_NAME, ipv4IpipModeEnvVar, ipv4VXLANModeEnvVar, outgoingNATEnabled)
+
+		createIPPool(ctx, client, ipv4Cidr, DEFAULT_IPV4_POOL_NAME, ipv4IpipModeEnvVar, ipv4VXLANModeEnvVar, outgoingNATEnabled, ipv4BlockSize)
 	}
 	if !ipv6Present && ipv6Supported() {
 		log.Debug("Create default IPv6 IP pool")
 		outgoingNATEnabled := evaluateENVBool("CALICO_IPV6POOL_NAT_OUTGOING", false)
 
-		createIPPool(ctx, client, ipv6Cidr, DEFAULT_IPV6_POOL_NAME, string(api.IPIPModeNever), string(api.VXLANModeNever), outgoingNATEnabled)
+		createIPPool(ctx, client, ipv6Cidr, DEFAULT_IPV6_POOL_NAME, string(api.IPIPModeNever), string(api.VXLANModeNever), outgoingNATEnabled, ipv6BlockSize)
 	}
 }
 
 // createIPPool creates an IP pool using the specified CIDR.  This
 // method is a no-op if the pool already exists.
-func createIPPool(ctx context.Context, client client.Interface, cidr *cnet.IPNet, poolName, ipipModeName, vxlanModeName string, isNATOutgoingEnabled bool) {
+func createIPPool(ctx context.Context, client client.Interface, cidr *cnet.IPNet, poolName, ipipModeName, vxlanModeName string, isNATOutgoingEnabled bool, blockSize int) {
 	version := cidr.Version()
 	var ipipMode api.IPIPMode
 	var vxlanMode api.VXLANMode
@@ -791,6 +839,7 @@ func createIPPool(ctx context.Context, client client.Interface, cidr *cnet.IPNet
 			NATOutgoing: isNATOutgoingEnabled,
 			IPIPMode:    ipipMode,
 			VXLANMode:   vxlanMode,
+			BlockSize:   blockSize,
 		},
 	}
 
