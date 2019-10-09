@@ -98,9 +98,9 @@ If your {{site.prodname}} deployment is configured to peer with BGP routers outs
 
    For help see, [BGP configuration resource]({{site.baseurl}}/{{page.version}}/reference/resources/bgpconfig).
 
-> **Note**: If you are setting a cluster CIDR using the legacy environment variable CALICO_ADVERTISE_CLUSTER_IPS,
-> note that it takes precedence over any serviceClusterIPs defined in BGPConfiguration. We recommend removing the
-> deprecated CALICO_ADVERTISE_CLUSTER_IPS and replacing it with BGPConfiguration.
+> **Note**: In earlier versions of Calico, service cluster IP advertisement was configured via the environment variable CALICO_ADVERTISE_CLUSTER_IPS.
+> That environment variable takes precedence over any serviceClusterIPs configured in the default BGPConfiguration. We recommend replacing the
+> deprecated CALICO_ADVERTISE_CLUSTER_IPS with BGPConfiguration.
 {: .alert .alert-info}
 
 #### Advertise service external IP addresses
