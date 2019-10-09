@@ -1,0 +1,63 @@
+version: v1.0
+name: Felix
+agent:
+  machine:
+    type: e1-standard-2
+    os_image: ubuntu1804
+blocks:
+  - name: Build
+    task:
+      jobs:
+        - name: Build
+          commands:
+            - checkout
+            - cache restore go-pkg-cache
+            - >-
+              make image-all fv/fv.test bin/test-workload bin/test-connection
+              bin/calico-felix
+            - 'cache store bin-${SEMAPHORE_GIT_SHA} bin'
+            - cache store go-pkg-cache .go-pkg-cache
+  - name: Tests
+    task:
+      prologue:
+        commands:
+          - checkout
+          - 'cache restore bin-${SEMAPHORE_GIT_SHA}'
+          - touch bin/*
+      jobs:
+        - name: UT
+          commands:
+            - make ut
+        - name: Static checks
+          commands:
+            - make static-checks
+        - name: Kubernetes FV tests with Typha
+          commands:
+            - make k8sfv-test JUST_A_MINUTE=true USE_TYPHA=true
+        - name: Kubernetes FV tests without Typha
+          commands:
+            - make k8sfv-test JUST_A_MINUTE=true USE_TYPHA=false
+        - name: FV batch 1
+          commands:
+            - make fv FV_BATCHES_TO_RUN="1" FV_NUM_BATCHES=8
+        - name: FV batch 2
+          commands:
+            - make fv FV_BATCHES_TO_RUN="2" FV_NUM_BATCHES=8
+        - name: FV batch 3
+          commands:
+            - make fv FV_BATCHES_TO_RUN="3" FV_NUM_BATCHES=8
+        - name: FV batch 4
+          commands:
+            - make fv FV_BATCHES_TO_RUN="4" FV_NUM_BATCHES=8
+        - name: FV batch 5
+          commands:
+            - make fv FV_BATCHES_TO_RUN="5" FV_NUM_BATCHES=8
+        - name: FV batch 6
+          commands:
+            - make fv FV_BATCHES_TO_RUN="6" FV_NUM_BATCHES=8
+        - name: FV batch 7
+          commands:
+            - make fv FV_BATCHES_TO_RUN="7" FV_NUM_BATCHES=8
+        - name: FV batch 8
+          commands:
+            - make fv FV_BATCHES_TO_RUN="8" FV_NUM_BATCHES=8
