@@ -106,7 +106,7 @@ or
 make cover-browser
 ```
 
-## How can a subset of the go unit tests?
+## How can I run a subset of the Go unit tests?
 
 If you want to be able to run unit tests for specific packages for more iterative
 development, you'll need to install
