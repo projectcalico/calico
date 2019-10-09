@@ -62,6 +62,7 @@ github.com/envoyproxy/data-plane-api v0.0.0-20191001212645-93bc80088e45 h1:70qWE
 github.com/envoyproxy/data-plane-api v0.0.0-20191003221017-0dfbe163fe8d h1:YG9CGrRzGXzOv70jDYkoaFBkIinOktjk0xkiF0WV3IM=
 github.com/envoyproxy/data-plane-api v0.0.0-20191006001722-5d9127830950 h1:uX25oJibz5g0MSvdRIL5mz/nyz9X0warQQcNwzSVx4I=
 github.com/envoyproxy/data-plane-api v0.0.0-20191008025259-9e32c7b1e4ef h1:O3yp0ZXzSWt0gZDpDAc/8GBwRJmyk74pUSCLZwQWb38=
+github.com/envoyproxy/data-plane-api v0.0.0-20191009033031-d32ca215c34a h1:toILMb81HUmPSbw/niUatBwJwaxTTzVtGXEiDKchU6Y=
 github.com/evanphx/json-patch v0.0.0-20190203023257-5858425f7550/go.mod h1:50XU6AFN0ol/bzJsmQLiYLvXMP4fmwYFNcr97nuDLSk=
 github.com/fsnotify/fsnotify v1.4.7 h1:IXs+QLmnXW2CcXuY+8Mzv/fWEsPGWxqefPtCP5CnV9I=
 github.com/fsnotify/fsnotify v1.4.7/go.mod h1:jwhsz4b93w/PPRr/qN1Yymfu8t87LnFCMoQvtojpjFo=
@@ -217,6 +218,8 @@ github.com/projectcalico/libcalico-go v0.0.0-20191006160109-16b05e93ecfd h1:auU/
 github.com/projectcalico/libcalico-go v0.0.0-20191006160109-16b05e93ecfd/go.mod h1:UhwqglrBKH97bgKjpmQM76rT8FZPbGsNuMIQ+tCao6I=
 github.com/projectcalico/libcalico-go v0.0.0-20191007210439-736345a44dd7 h1:Al66Mb+SZJ22PIJ+uGAQ2Jxotj1Q93kmp7Yc/pkOA/s=
 github.com/projectcalico/libcalico-go v0.0.0-20191007210439-736345a44dd7/go.mod h1:tUt8rirmysRy7TR1S80XDriwBK1z2igwwX79lnUrSf4=
+github.com/projectcalico/libcalico-go v0.0.0-20191008172221-1ba69f71d8c4 h1:LWhM2G99jjqxB/8AEwA+nmkhsC4GZs/DjRldW/SVD6k=
+github.com/projectcalico/libcalico-go v0.0.0-20191008172221-1ba69f71d8c4/go.mod h1:tUt8rirmysRy7TR1S80XDriwBK1z2igwwX79lnUrSf4=
 github.com/projectcalico/libcalico-go v1.7.3 h1:qcbxAhsq/5zqZqpHE24VqMHfmoBVdXZV0Kf82+5rbqU=
 github.com/projectcalico/libcalico-go v1.7.3/go.mod h1:0b/n/rPzNXjhn4ywFcEJuQdA/5olt9UxFIATz57xkbc=
 github.com/prometheus/client_golang v0.0.0-20171005112915-5cec1d0429b0/go.mod h1:7SWBe2y4D6OKWSNQJUaRYU/AaXPKyh/dDVn+NZz0KFw=
