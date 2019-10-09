@@ -1,5 +1,5 @@
 hash: 13f8e016ba6001f5b37b9f957f0c8f782c2559ba8707067dfc067fea9e5542ca
-updated: 2019-10-11T00:15:03.49700612Z
+updated: 2019-10-10T18:02:24.740453292-07:00
 imports:
 - name: cloud.google.com/go
   version: 0ebda48a7f143b1cce9eb37a8c1106ac762a3430
@@ -406,6 +406,8 @@ imports:
   - tap
   - transport
 - name: gopkg.in/fsnotify.v1
+  version: c2828203cd70a50dcccfb2761f8b1f8ceef9a8e9
+- name: gopkg.in/fsnotify/fsnotify.v1
   version: c2828203cd70a50dcccfb2761f8b1f8ceef9a8e9
 - name: gopkg.in/go-playground/validator.v9
   version: 556b9da3c05f2a935bc086fb5a0bb55dd8112d2d
