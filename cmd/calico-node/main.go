@@ -25,6 +25,7 @@ import (
 
 	"github.com/projectcalico/node/buildinfo"
 	"github.com/projectcalico/node/pkg/allocateip"
+	"github.com/projectcalico/node/pkg/cni"
 	"github.com/projectcalico/node/pkg/health"
 	"github.com/projectcalico/node/pkg/startup"
 
@@ -40,6 +41,7 @@ var version = flagSet.Bool("v", false, "Display version")
 var runFelix = flagSet.Bool("felix", false, "Run Felix")
 var runStartup = flagSet.Bool("startup", false, "Initialize a new node")
 var allocateTunnelAddrs = flagSet.Bool("allocate-tunnel-addrs", false, "Configure tunnel addresses for this node")
+var monitorToken = flagSet.Bool("monitor-token", false, "Watch for Kubernetes token changes, update CNI config")
 
 // Options for liveness checks.
 var felixLive = flagSet.Bool("felix-live", false, "Run felix liveness checks")
@@ -111,6 +113,8 @@ func main() {
 		confd.Run(cfg)
 	} else if *allocateTunnelAddrs {
 		allocateip.Run()
+	} else if *monitorToken {
+		cni.Run()
 	} else {
 		fmt.Println("No valid options provided. Usage:")
 		flagSet.PrintDefaults()
