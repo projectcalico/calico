@@ -98,7 +98,7 @@ If your {{site.prodname}} deployment is configured to peer with BGP routers outs
 
    For help see, [BGP configuration resource]({{site.baseurl}}/{{page.version}}/reference/resources/bgpconfig).
 
-> **Note**: In earlier versions of Calico, service cluster IP advertisement was configured via the environment variable CALICO_ADVERTISE_CLUSTER_IPS.
+> **Note**: In earlier versions of {{site.prodname}}, service cluster IP advertisement was configured via the environment variable CALICO_ADVERTISE_CLUSTER_IPS.
 > That environment variable takes precedence over any serviceClusterIPs configured in the default BGPConfiguration. We recommend replacing the
 > deprecated CALICO_ADVERTISE_CLUSTER_IPS with BGPConfiguration.
 {: .alert .alert-info}
