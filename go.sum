@@ -296,9 +296,14 @@ github.com/posener/complete v1.1.1/go.mod h1:em0nMJCgc9GFtwrmVmEMR/ZL6WyhyjMBndr
 github.com/pquerna/ffjson v0.0.0-20190813045741-dac163c6c0a9/go.mod h1:YARuvh7BUWHNhzDq2OM5tzR2RiCcN2D7sapiKyCel/M=
 github.com/projectcalico/confd v0.0.0-20191008042421-f72fb251ecf1 h1:+n+C9eqepift7xiB49afZoM87Ml3KR+jf8CxxuHWfZg=
 github.com/projectcalico/confd v0.0.0-20191008042421-f72fb251ecf1/go.mod h1:a3VNKhED2SmHdkXDZYh1toyde/gNNrMbyeIOmDOiM6I=
+github.com/projectcalico/confd v0.0.0-20191009042231-6f38ca62c08f h1:XV0eoW0sWRsXodGyKtjZda5DWjxX4YVZ8uZ4S5AS/4g=
+github.com/projectcalico/confd v0.0.0-20191009042231-6f38ca62c08f/go.mod h1:Nam6uJ0q5svc9vPE8kNWyOQpHMyrRN+oqRh75So9Ts4=
 github.com/projectcalico/confd v3.2.0+incompatible/go.mod h1:kUM7VZ267QKU9j3n60w/bB792J5qNVF1jAltjl7AzRM=
 github.com/projectcalico/felix v0.0.0-20191008064910-3286f617f736 h1:0gBhEnn80lrV5wKNEJU+JcaKzH3fMUUYVOIxwrsOj+o=
 github.com/projectcalico/felix v0.0.0-20191008064910-3286f617f736/go.mod h1:gPk9yuWnPnC8HIyFOecFBg4FUwwTYFF0pox6AYTTH74=
+github.com/projectcalico/felix v0.0.0-20191009070319-990c81f708a7 h1:XNIf8iKc1IpXWAXza6fQ2JdCCZpm6/BtSpJe433ICEE=
+github.com/projectcalico/felix v0.0.0-20191009070319-990c81f708a7/go.mod h1:ngPet0h0U1ihv+cG/XfFtOtKxHxNSDnskjvO/QoXcaw=
+github.com/projectcalico/felix v3.8.2+incompatible h1:cz0MaUs5qTjPWjTxK5J1D1zEIfrtSYUyyf2nAjCos9c=
 github.com/projectcalico/go-json v0.0.0-20161128004156-6219dc7339ba h1:aaF2byUCZhzszHsfPEr2M3qcU4ibtD/yk/il2R7T1PU=
 github.com/projectcalico/go-json v0.0.0-20161128004156-6219dc7339ba/go.mod h1:q8EdCgBdMQzgiX/uk4GXLWLk+gIHd1a7mWUAamJKDb4=
 github.com/projectcalico/go-yaml v0.0.0-20161201183616-955bc3e451ef h1:Di9BaA9apb6DEstin8RdhKmlzQG76UMbmjPzjCVkMpc=
@@ -317,6 +322,8 @@ github.com/projectcalico/pod2daemon v0.0.0-20190730210055-df57fc59e2e1 h1:JPzqAb
 github.com/projectcalico/pod2daemon v0.0.0-20190730210055-df57fc59e2e1/go.mod h1:TgmA+ArLHObRADfET11mFF1aTK5i++4ZhqIuE4IV+IU=
 github.com/projectcalico/typha v0.0.0-20191007235416-b3a6c6b01e3a h1:cVlSiKG1bXBKMZ0pg1apOEW4ccYnccHsGmqEWiEIybU=
 github.com/projectcalico/typha v0.0.0-20191007235416-b3a6c6b01e3a/go.mod h1:WR+J5pLej0QX4ZuKsZ41jRpw24/wqugfQSnUExXh/94=
+github.com/projectcalico/typha v0.0.0-20191009003249-55ee7f22cd4f h1:uO8staCBCo8GuRZeULMVDRcSlk/wbM6MXes1/uz8Z78=
+github.com/projectcalico/typha v0.0.0-20191009003249-55ee7f22cd4f/go.mod h1:e5Ak6/tMY+igWzUlEt8g7SYg1PewNKi8dTEkVEO0YWw=
 github.com/prometheus/client_golang v0.0.0-20171005112915-5cec1d0429b0/go.mod h1:7SWBe2y4D6OKWSNQJUaRYU/AaXPKyh/dDVn+NZz0KFw=
 github.com/prometheus/client_golang v0.9.1 h1:K47Rk0v/fkEfwfQet2KWhscE0cJzjgCCDBG2KHZoVno=
 github.com/prometheus/client_golang v0.9.1/go.mod h1:7SWBe2y4D6OKWSNQJUaRYU/AaXPKyh/dDVn+NZz0KFw=
