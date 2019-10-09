@@ -24,6 +24,8 @@ blocks:
       prologue:
         commands:
           - checkout
+          - cache restore go-pkg-cache
+          - cache restore go-mod-cache
           - 'cache restore bin-${SEMAPHORE_GIT_SHA}'
           - touch bin/*
       jobs:
