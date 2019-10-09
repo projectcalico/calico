@@ -1,5 +1,6 @@
 ---
-title: Use service accounts in policy rules
+title: Use service accounts in policy
+description: Use Kubernetes service accounts in policies to validate cryptographic identities and/or manage RBAC controlled high-priority rules across teams.
 ---
 
 ### Big picture
@@ -45,6 +46,7 @@ Configure unique Kubernetes service accounts for your applications.
 
 - [Limit ingress traffic for workloads by service account name](#limit-ingress-traffic-for-workloads-by-service-account-name)
 - [Limit ingress traffic for workloads by service account label](#limit-ingress-traffic-for-workloads-by-service-account-label)
+- [Use Kubernetes RBAC to control service account label assignment](#use-kubernetes-rbac-to-control-service-account-label-assignment)
 
 #### Limit ingress traffic for workloads by service account name
 
@@ -84,6 +86,32 @@ spec:
         serviceAccounts:
           selector: 'app == "web-frontend"'
   selector: 'app == "db"'
+```
+
+#### Use Kubernetes RBAC to control service account label assignment
+
+Network policies can be applied to endpoints using selectors that match labels on the endpoint, the endpoint's namespace, or the endpoint's service account. By applying selectors based on the endpoint's service account, you can use Kubernetes RBAC to control which users can assign labels to service accounts. This allows you to separate groups who can deploy pods from those who can assign labels to service accounts.
+
+In the following example, pods with an intern service account can communicate only with pods with service accounts labeled, `role: intern`.
+
+```
+apiVersion: projectcalico.org/v3
+kind: NetworkPolicy
+metadata:
+  name: restrict-intern-access
+  namespace: prod-engineering
+spec:
+  serviceAccountSelector: 'role == "intern"'
+  ingress:
+    - action: Allow
+      source:
+        serviceAccounts:
+          selector: 'role == "intern"'
+  egress:
+    - action: Allow
+      destination:
+        serviceAccounts:
+          selector: 'role == "intern"'
 ```
 
 ### Above and beyond
