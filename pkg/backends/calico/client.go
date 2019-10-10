@@ -804,10 +804,17 @@ func (c *client) OnUpdates(updates []api.Update) {
 		}
 
 		if c.rg != nil {
-			// Update CIDRs. In v1 format, they are a single comma-separate string. Split on the comma
-			// and pass a list of strings to the route generator.
-			externalIPs := strings.Split(c.cache["/calico/bgp/v1/global/svc_external_ips"], ",")
-			clusterCIDRs := strings.Split(c.cache["/calico/bgp/v1/global/svc_cluster_ips"], ",")
+			// Update CIDRs. In v1 format, they are a single comma-separate string. If the string isn't empty,
+			// split on the comma and pass a list of strings to the route generator.
+			// An empty string indicates a withdrawal of that set of service IPs.
+			var externalIPs []string
+			if len(c.cache["/calico/bgp/v1/global/svc_external_ips"]) > 0 {
+				externalIPs = strings.Split(c.cache["/calico/bgp/v1/global/svc_external_ips"], ",")
+			}
+			var clusterCIDRs []string
+			if len(c.cache["/calico/bgp/v1/global/svc_cluster_ips"]) > 0 {
+				clusterCIDRs = strings.Split(c.cache["/calico/bgp/v1/global/svc_cluster_ips"], ",")
+			}
 
 			// Run these as separate goroutines so that we don't block. We're already holding the lock,
 			// and these calls may attempt to take the lock in order to update the cache.
