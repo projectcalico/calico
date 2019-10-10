@@ -59,7 +59,7 @@ type fakeClient struct {
 // We don't implement any of the CRUD related methods, just the Watch method to return
 // a fake watcher that the test code will drive.
 func (c *fakeClient) Create(ctx context.Context, object *model.KVPair) (*model.KVPair, error) {
-	if f, ok := c.createFuncs[fmt.Sprintf("%s", object.Key)]; ok {
+	if f, ok := c.createFuncs[object.Key.String()]; ok {
 		return f(ctx, object)
 	} else if f, ok := c.createFuncs["default"]; ok {
 		return f(ctx, object)
@@ -69,7 +69,7 @@ func (c *fakeClient) Create(ctx context.Context, object *model.KVPair) (*model.K
 	return nil, nil
 }
 func (c *fakeClient) Update(ctx context.Context, object *model.KVPair) (*model.KVPair, error) {
-	if f, ok := c.updateFuncs[fmt.Sprintf("%s", object.Key)]; ok {
+	if f, ok := c.updateFuncs[object.Key.String()]; ok {
 		return f(ctx, object)
 	} else if f, ok := c.updateFuncs["default"]; ok {
 		return f(ctx, object)
@@ -84,7 +84,7 @@ func (c *fakeClient) Apply(ctx context.Context, object *model.KVPair) (*model.KV
 }
 
 func (c *fakeClient) DeleteKVP(ctx context.Context, kvp *model.KVPair) (*model.KVPair, error) {
-	if f, ok := c.deleteKVPFuncs[fmt.Sprintf("%s", kvp.Key)]; ok {
+	if f, ok := c.deleteKVPFuncs[kvp.Key.String()]; ok {
 		return f(ctx, kvp)
 	} else if f, ok := c.deleteKVPFuncs["default"]; ok {
 		return f(ctx, kvp)
@@ -95,7 +95,7 @@ func (c *fakeClient) DeleteKVP(ctx context.Context, kvp *model.KVPair) (*model.K
 }
 
 func (c *fakeClient) Delete(ctx context.Context, key model.Key, revision string) (*model.KVPair, error) {
-	if f, ok := c.deleteFuncs[fmt.Sprintf("%s", key)]; ok {
+	if f, ok := c.deleteFuncs[key.String()]; ok {
 		return f(ctx, key, revision)
 	} else if f, ok := c.deleteFuncs["default"]; ok {
 		return f(ctx, key, revision)
@@ -106,7 +106,7 @@ func (c *fakeClient) Delete(ctx context.Context, key model.Key, revision string)
 }
 
 func (c *fakeClient) Get(ctx context.Context, key model.Key, revision string) (*model.KVPair, error) {
-	if f, ok := c.getFuncs[fmt.Sprintf("%s", key)]; ok {
+	if f, ok := c.getFuncs[key.String()]; ok {
 		return f(ctx, key, revision)
 	} else if f, ok := c.getFuncs["default"]; ok {
 		return f(ctx, key, revision)
@@ -464,7 +464,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 				// Sneak in a side-effect such that when hostA-proc1 tries to create the block,
 				// it actually simulates the other process marking the affinity as pending delete
 				// and deletes the block.
-				fc.createFuncs[fmt.Sprintf("%s", blockKVP.Key)] = func(ctx context.Context, object *model.KVPair) (*model.KVPair, error) {
+				fc.createFuncs[blockKVP.Key.String()] = func(ctx context.Context, object *model.KVPair) (*model.KVPair, error) {
 					// Mark the affinity pending deletion. Query the affinity and update it.
 					a, err := bc.Get(ctx, affinityKVP.Key, "")
 					if err != nil {
@@ -545,7 +545,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 				// Sneak in a side-effect such that when hostA-proc1 tries to delete the block,
 				// it actually simulates the other process marking the affinity as pending
 				// and creating the block.
-				fc.deleteKVPFuncs[fmt.Sprintf("%s", blockKVP.Key)] = func(ctx context.Context, kvp *model.KVPair) (*model.KVPair, error) {
+				fc.deleteKVPFuncs[blockKVP.Key.String()] = func(ctx context.Context, kvp *model.KVPair) (*model.KVPair, error) {
 					// Delete the block, but then immediately create it again below to simulate another process claiming
 					// the block.
 					kvp, err := bc.DeleteKVP(ctx, kvp)
@@ -624,7 +624,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 				Value: &model.BlockAffinity{State: model.StateConfirmed},
 			}
 
-			fc.createFuncs[fmt.Sprintf("%s", affKVP.Key)] = func(ctx context.Context, object *model.KVPair) (*model.KVPair, error) {
+			fc.createFuncs[affKVP.Key.String()] = func(ctx context.Context, object *model.KVPair) (*model.KVPair, error) {
 				// Create the affinity for the other racing host.
 				_, err := bc.Create(ctx, affKVP2)
 				if err != nil {
@@ -652,7 +652,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 				Key:   model.BlockKey{CIDR: *net},
 				Value: b2.AllocationBlock,
 			}
-			fc.createFuncs[fmt.Sprintf("%s", blockKVP.Key)] = func(ctx context.Context, object *model.KVPair) (*model.KVPair, error) {
+			fc.createFuncs[blockKVP.Key.String()] = func(ctx context.Context, object *model.KVPair) (*model.KVPair, error) {
 				// Create the "stolen" block from the other racing host.
 				_, err := bc.Create(ctx, blockKVP2)
 				if err != nil {
@@ -666,7 +666,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 			// Get function for the block. The first time, it should return nil to indicate nobody has the block. On subsequent calls,
 			// return the real data from etcd representing the block belonging to another host.
 			calls := 0
-			fc.getFuncs[fmt.Sprintf("%s", blockKVP.Key)] = func(ctx context.Context, k model.Key, r string) (*model.KVPair, error) {
+			fc.getFuncs[blockKVP.Key.String()] = func(ctx context.Context, k model.Key, r string) (*model.KVPair, error) {
 				return func(ctx context.Context, k model.Key, r string) (*model.KVPair, error) {
 					calls++
 
@@ -685,7 +685,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 			// Delete function for the affinity - this should fail, triggering the scenario under test where two hosts now think they
 			// have affinity to the block.
 			deleteCalls := 0
-			fc.deleteKVPFuncs[fmt.Sprintf("%s", affKVP.Key)] = func(ctx context.Context, kvp *model.KVPair) (*model.KVPair, error) {
+			fc.deleteKVPFuncs[affKVP.Key.String()] = func(ctx context.Context, kvp *model.KVPair) (*model.KVPair, error) {
 				return func(ctx context.Context, kvp *model.KVPair) (*model.KVPair, error) {
 					deleteCalls = deleteCalls + 1
 
@@ -797,7 +797,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM affine block allocation tests", tes
 				// Sneak in a side-effect such that when hostA-proc1 tries to release the affinity of an empty block,
 				// another IP will get allocated from it.
 				call := 0
-				fc.updateFuncs[fmt.Sprintf("%s", affinityKVP.Key)] = func(ctx context.Context, object *model.KVPair) (*model.KVPair, error) {
+				fc.updateFuncs[affinityKVP.Key.String()] = func(ctx context.Context, object *model.KVPair) (*model.KVPair, error) {
 					updated, err := bc.Update(ctx, object)
 					if err != nil {
 						return nil, err
