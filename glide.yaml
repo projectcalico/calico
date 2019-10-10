@@ -12,7 +12,7 @@ import:
 - package: github.com/kardianos/osext
 - package: github.com/mipearson/rfw
 - package: github.com/projectcalico/libcalico-go
-  version: ac36d966132f2019eb4afc4d3823ed2a98564d2f
+  version: 896f59d614d5c47df94d47a78b1c01a909077bd7
   subpackages:
   - lib/apiconfig
   - lib/backend/api
@@ -24,10 +24,6 @@ import:
   - lib/upgrade/migrator
   - lib/upgrade/migrator/clients
   - lib/validator/v1
-- package: github.com/prometheus/client_golang
-  subpackages:
-  - prometheus
-  - prometheus/promhttp
 # Use our fork, because v1.0.5 causes test breakages due to problems with our log formatting code,
 # but other deps require newer version because of the SetOutput function. Our fork backports
 # the missing stuff on top of v1.0.4.
@@ -50,9 +46,3 @@ import:
   version: c873fb1f9420b83ee703b4361c61183b4619f74d
 - package: github.com/prometheus/procfs
   version: a6e9df898b1336106c743392c48ee0b71f5c4efa
-testImport:
-- package: github.com/onsi/ginkgo
-  subpackages:
-  - extensions/table
-- package: github.com/onsi/gomega
-
