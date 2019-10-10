@@ -12,13 +12,13 @@ require (
 	github.com/lyft/protoc-gen-star v0.4.11 // indirect
 	github.com/lyft/protoc-gen-validate v0.0.6 // indirect
 	github.com/onsi/gomega v1.5.0
-	github.com/projectcalico/libcalico-go v0.0.0-20191002165503-ce68b855671e
+	github.com/projectcalico/libcalico-go v0.0.0-20191008175127-399044ecb659
 	github.com/prometheus/client_golang v1.1.0 // indirect
 	github.com/sirupsen/logrus v1.4.2
 	github.com/spf13/afero v1.2.2 // indirect
 	golang.org/x/net v0.0.0-20190812203447-cdfb69ac37fc
 	google.golang.org/grpc v1.19.0
 	gopkg.in/inf.v0 v0.9.1 // indirect
-	k8s.io/apimachinery v0.0.0-20180628120320-b593b18191da // indirect
+	k8s.io/client-go v12.0.0+incompatible // indirect
 	k8s.io/kube-openapi v0.0.0-20190722073852-5e22f3d471e6 // indirect
 )
