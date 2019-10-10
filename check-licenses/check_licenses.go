@@ -59,7 +59,7 @@ var (
 		{pkgName: "github.com/projectcalico/typha/vendor/github.com/gogo/protobuf",
 			license: "BSD 3-clause \"New\" or \"Revised\" License (90%)"},
 		{pkgName: "github.com/projectcalico/typha/vendor/github.com/golang/protobuf",
-			license: "BSD 3-clause \"New\" or \"Revised\" License (92%)"},
+			license: "BSD 3-clause \"New\" or \"Revised\" License (96%)"},
 		{pkgName: "github.com/projectcalico/typha/vendor/github.com/golang/protobuf/proto",
 			license: "BSD 3-clause \"New\" or \"Revised\" License (92%)"},
 		{pkgName: "github.com/projectcalico/typha/vendor/github.com/gregjones/httpcache/diskcache",
@@ -74,7 +74,7 @@ var (
 			license: "MIT License (98%)"},
 		{pkgName: "github.com/projectcalico/typha/vendor/github.com/mailru/easyjson",
 			license: "MIT License (98%)"},
-		{pkgName: "github.com/projectcalico/typha/vendor/github.com/pborman/uuid",
+		{pkgName: "github.com/projectcalico/typha/vendor/github.com/google/uuid",
 			license: "BSD 3-clause \"New\" or \"Revised\" License (96%)"},
 		{pkgName: "github.com/projectcalico/typha/vendor/github.com/peterbourgon/diskv",
 			license: "MIT License (98%)"},
@@ -88,13 +88,15 @@ var (
 			license: "BSD 3-clause \"New\" or \"Revised\" License (97%)"},
 		{pkgName: "github.com/projectcalico/typha/vendor/github.com/dustin/go-humanize",
 			license: "MIT License (96%)"},
+		{pkgName: "github.com/projectcalico/typha/vendor/github.com/google/go-cmp/cmp/internal",
+			license: "BSD 3-clause \"New\" or \"Revised\" License (96%)"},
 
 		// Mixed license, Apache and some files under BSD-like.
-		{pkgName: "github.com/projectcalico/typha/vendor/github.com/ghodss/yaml",
+		{pkgName: "github.com/projectcalico/typha/vendor/sigs.k8s.io/yaml",
 			license: "? (BSD 3-clause \"New\" or \"Revised\" License, 83%)"},
 
 		// Apache license with copyright statement in file.
-		{pkgName: "github.com/projectcalico/typha/vendor/github.com/Azure/go-autorest/autorest",
+		{pkgName: "github.com/projectcalico/typha/vendor/github.com/Azure/go-autorest",
 			license: "Apache License 2.0 (96%)"},
 		{pkgName: "github.com/projectcalico/typha/vendor/github.com/gophercloud/gophercloud",
 			license: "Apache License 2.0 (96%)"},
