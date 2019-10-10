@@ -36,6 +36,7 @@ import (
 	cnet "github.com/projectcalico/libcalico-go/lib/net"
 	"github.com/projectcalico/libcalico-go/lib/numorstring"
 	"github.com/projectcalico/libcalico-go/lib/options"
+	"github.com/projectcalico/libcalico-go/lib/selector"
 	"github.com/projectcalico/libcalico-go/lib/upgrade/migrator"
 	"github.com/projectcalico/libcalico-go/lib/upgrade/migrator/clients"
 	log "github.com/sirupsen/logrus"
@@ -541,6 +542,15 @@ func validateBlockSize(version int, blockSize int) {
 	}
 }
 
+// validateNodeSelector checks if selector is valid
+func validateNodeSelector(version int, s string) {
+	_, err := selector.Parse(s)
+	if err != nil {
+		log.Errorf("Invalid node selector '%s' for version %d: %s", s, version, err)
+		terminate()
+	}
+}
+
 // evaluateENVBool evaluates a passed environment variable
 // Returns True if the envVar is defined and set to true.
 // Returns False if the envVar is defined and set to false.
@@ -731,6 +741,10 @@ func configureIPPools(ctx context.Context, client client.Interface) {
 		ipv6BlockSize = DEFAULT_IPV6_POOL_BLOCK_SIZE
 	}
 	validateBlockSize(ipv6BlockSize, 6)
+	ipv4NodeSelector := os.Getenv("CALICO_IPV4POOL_NODE_SELECTOR")
+	validateNodeSelector(4, ipv4NodeSelector)
+	ipv6NodeSelector := os.Getenv("CALICO_IPV6POOL_NODE_SELECTOR")
+	validateNodeSelector(6, ipv6NodeSelector)
 
 	// Get a list of all IP Pools
 	poolList, err := client.IPPools().List(ctx, options.ListOptions{})
@@ -787,19 +801,19 @@ func configureIPPools(ctx context.Context, client client.Interface) {
 		log.Debug("Create default IPv4 IP pool")
 		outgoingNATEnabled := evaluateENVBool("CALICO_IPV4POOL_NAT_OUTGOING", true)
 
-		createIPPool(ctx, client, ipv4Cidr, DEFAULT_IPV4_POOL_NAME, ipv4IpipModeEnvVar, ipv4VXLANModeEnvVar, outgoingNATEnabled, ipv4BlockSize)
+		createIPPool(ctx, client, ipv4Cidr, DEFAULT_IPV4_POOL_NAME, ipv4IpipModeEnvVar, ipv4VXLANModeEnvVar, outgoingNATEnabled, ipv4BlockSize, ipv4NodeSelector)
 	}
 	if !ipv6Present && ipv6Supported() {
 		log.Debug("Create default IPv6 IP pool")
 		outgoingNATEnabled := evaluateENVBool("CALICO_IPV6POOL_NAT_OUTGOING", false)
 
-		createIPPool(ctx, client, ipv6Cidr, DEFAULT_IPV6_POOL_NAME, string(api.IPIPModeNever), string(api.VXLANModeNever), outgoingNATEnabled, ipv6BlockSize)
+		createIPPool(ctx, client, ipv6Cidr, DEFAULT_IPV6_POOL_NAME, string(api.IPIPModeNever), string(api.VXLANModeNever), outgoingNATEnabled, ipv6BlockSize, ipv6NodeSelector)
 	}
 }
 
 // createIPPool creates an IP pool using the specified CIDR.  This
 // method is a no-op if the pool already exists.
-func createIPPool(ctx context.Context, client client.Interface, cidr *cnet.IPNet, poolName, ipipModeName, vxlanModeName string, isNATOutgoingEnabled bool, blockSize int) {
+func createIPPool(ctx context.Context, client client.Interface, cidr *cnet.IPNet, poolName, ipipModeName, vxlanModeName string, isNATOutgoingEnabled bool, blockSize int, nodeSelector string) {
 	version := cidr.Version()
 	var ipipMode api.IPIPMode
 	var vxlanMode api.VXLANMode
@@ -835,11 +849,12 @@ func createIPPool(ctx context.Context, client client.Interface, cidr *cnet.IPNet
 			Name: poolName,
 		},
 		Spec: api.IPPoolSpec{
-			CIDR:        cidr.String(),
-			NATOutgoing: isNATOutgoingEnabled,
-			IPIPMode:    ipipMode,
-			VXLANMode:   vxlanMode,
-			BlockSize:   blockSize,
+			CIDR:         cidr.String(),
+			NATOutgoing:  isNATOutgoingEnabled,
+			IPIPMode:     ipipMode,
+			VXLANMode:    vxlanMode,
+			BlockSize:    blockSize,
+			NodeSelector: nodeSelector,
 		},
 	}
 
