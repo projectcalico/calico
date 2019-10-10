@@ -20,6 +20,8 @@ spec:
   logSeverityScreen: Info
   nodeToNodeMeshEnabled: true
   asNumber: 63400
+  serviceClusterIPs:
+  - cidr: 10.96.0.0/12
   serviceExternalIPs:
   - cidr: 104.244.42.129/32
   - cidr: 172.217.3.0/24
@@ -43,7 +45,8 @@ spec:
 | logSeverityScreen | Global log level | Debug, Info, Warning, Error, Fatal | string | `Info` |
 | nodeToNodeMeshEnabled | Full BGP node-to-node mesh. Only valid on the global `default` BGPConfiguration. | true, false  | string | true |
 | asNumber | The default local AS Number that {{site.prodname}} should use when speaking with BGP peers. Only valid on the global `default` BGPConfiguration; to set a per-node override, use the `bgp` field on the [Node resource](./node). | A valid AS Number, may be specified in dotted notation. | integer/string | 64512 |
-| serviceExternalIPs | The CIDR blocks for Kubernetes Service External IPs. Kubernetes Service External IPs will only be advertised if they are within one of these blocks. Only valid on the global `default` BGPConfiguration: will be ignored otherwise. | A list of valid IPv4 CIDR blocks. | List of `cidr: XXX.XXX.XXX.XXX/XX` values. | Empty List |
+| serviceClusterIPs | The CIDR blocks for Kubernetes Service Cluster IPs to be advertised over BGP. Only valid on the global `default` BGPConfiguration: will be ignored otherwise. | A list of valid IPv4 CIDR blocks. | List of `cidr: XXX.XXX.XXX.XXX/XX` values. | Empty List |
+| serviceExternalIPs | The CIDR blocks for Kubernetes Service External IPs to be advertised over BGP. Kubernetes Service External IPs will only be advertised if they are within one of these blocks. Only valid on the global `default` BGPConfiguration: will be ignored otherwise. | A list of valid IPv4 CIDR blocks. | List of `cidr: XXX.XXX.XXX.XXX/XX` values. | Empty List |
 
 ### Supported operations
 
