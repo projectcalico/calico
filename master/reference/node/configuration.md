@@ -32,6 +32,8 @@ The `{{site.nodecontainer}}` container is primarily configured through environme
 | CALICO_IPV4POOL_VXLAN | VXLAN Mode to use for the IPv4 POOL created at start up.  If set to a value other than `Never`, `CALICO_IPV4POOL_IPIP` should not be set. [Default: `Never`] | Always, CrossSubnet, Never |
 | CALICO_IPV4POOL_NAT_OUTGOING | Controls NAT Outgoing for the IPv4 Pool created at start up. [Default: `true`] | boolean |
 | CALICO_IPV6POOL_NAT_OUTGOING | Controls NAT Outgoing for the IPv6 Pool created at start up. [Default: `false`] | boolean |
+| CALICO_IPV4POOL_NODE_SELECTOR | Controls the NodeSelector for the IPv4 Pool created at start up. [Default: `all()`] | [selector](../resources/ippool#node-selector) |
+| CALICO_IPV6POOL_NODE_SELECTOR | Controls the NodeSelector for the IPv6 Pool created at start up. [Default: `all()`] | [selector](../resources/ippool#node-selector) |
 | CALICO_STARTUP_LOGLEVEL      | The log severity above which startup `{{site.nodecontainer}}` logs are sent to the stdout. [Default: `ERROR`] | DEBUG, INFO, WARNING, ERROR, CRITICAL, or NONE (case-insensitive) |
 | CLUSTER_TYPE | Contains comma delimited list of indicators about this cluster.  e.g. k8s, mesos, kubeadm, canal, bgp | string |
 | ETCD_ENDPOINTS     | A comma separated list of etcd endpoints [Example: `http://127.0.0.1:2379,http://127.0.0.2:2379`] (required) | string |
