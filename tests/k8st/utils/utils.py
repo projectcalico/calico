@@ -71,8 +71,8 @@ def start_external_node_with_bgp(name, config):
             time.sleep(20)
 
     # Install bird on extra node
-    run("docker exec %s apt update" % name)
-    run("docker exec %s apt install -y bird" % name)
+    run("docker exec %s apt-get update --fix-missing" % name)
+    run("docker exec %s apt-get install -y bird" % name)
     run("docker exec %s mkdir /run/bird" % name)
     with open('bird.conf', 'w') as birdconfig:
         birdconfig.write(config)
