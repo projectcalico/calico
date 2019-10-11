@@ -132,8 +132,8 @@ var _ = Describe("RouteGenerator", func() {
 		verifyInitialState()
 
 		invalidNets := [][]string{
-			{""},
-			{"10.10.1.0/24", ""},
+			{"invalid"},
+			{"10.10.1.0/24", "invalid"},
 			{"10.10.1.0/24", "x.y.z.z/12"},
 		}
 		for _, n := range invalidNets {
