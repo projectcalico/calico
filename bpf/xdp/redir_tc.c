@@ -134,7 +134,7 @@ static CALICO_BPF_INLINE int calico_tc_tcp(struct __sk_buff *skb, struct ethhdr 
 	}
 
 	// Now, do conntrack lookup.
-	struct calico_ct_result ct_result = calico_ct_v4_tcp_lookup(ip_src, ip_dst, sport, dport, tcp_header);
+	struct calico_ct_result ct_result = calico_ct_v4_tcp_lookup(ip_src, ip_dst, sport, dport, tcp_header, flags);
 
 	switch (ct_result.rc){
 	case CALICO_CT_NEW:
@@ -190,6 +190,12 @@ static CALICO_BPF_INLINE int calico_tc_tcp(struct __sk_buff *skb, struct ethhdr 
 			// No NAT for this packet, record a simple entry.
 			calico_ct_v4_tcp_create(ip_src, ip_dst, sport, dport, tcp_header);
 		}
+
+		fib_params->l4_protocol = IPPROTO_TCP;
+		fib_params->sport = sport;
+		fib_params->dport = dport;
+		fib_params->ipv4_src = ip_src;
+		fib_params->ipv4_dst = ip_dst;
 
 		return TC_ACT_UNSPEC;
 	case CALICO_CT_ESTABLISHED:
@@ -252,6 +258,8 @@ static CALICO_BPF_INLINE int calico_tc(struct __sk_buff *skb, enum calico_tc_fla
 	int rc = TC_ACT_UNSPEC;
 
 	// Parse the packet.
+
+	CALICO_DEBUG_AT("Packet, ingress iface %d\n", skb->ingress_ifindex);
 
     // TODO Do we need to handle any odd-ball frames here (e.g. with a 0 VLAN header)?
 	if (skb->protocol != be16_to_host(ETH_P_IP)) {
@@ -630,7 +638,7 @@ static CALICO_BPF_INLINE int calico_tc(struct __sk_buff *skb, enum calico_tc_fla
 			__builtin_memcpy(&eth_hdr->h_dest, &fib_params.dmac, sizeof(eth_hdr->h_dest));
 
 			// Redirect the packet.
-			CALICO_DEBUG_AT("Got Linux FIB hit, redirecting to iface %d.\n",fib_params.ifindex);
+			CALICO_DEBUG_AT("Got Linux FIB hit, redirecting to iface %d.\n", fib_params.ifindex);
 			rc = bpf_redirect(fib_params.ifindex, 0);
 		} else if (rc < 0) {
 			CALICO_DEBUG_AT("FIB lookup failed (bad input): %d.\n", rc);
@@ -644,12 +652,16 @@ static CALICO_BPF_INLINE int calico_tc(struct __sk_buff *skb, enum calico_tc_fla
 	allow_skip_fib:
 	if (!(flags & CALICO_TC_HOST_EP) && !(flags & CALICO_TC_INGRESS)) {
 		// Packet is leaving workload, mark it so any downstream programs know this traffic was from a workload.
-		skb->mark |= CALICO_SKB_MARK_FROM_WORKLOAD;
+		CALICO_DEBUG_AT("Traffic is from workload, applying packet mark.\n");
+		// FIXME: this ignores the mask that we should be using.  However, if we mask off the bits, then
+		// clang spots that it can do a 16-bit store instead of a 32-bit load/modify/store, which trips
+		// up the validator.
+		skb->mark = CALICO_SKB_MARK_FROM_WORKLOAD;
 	}
 
 	if (CALICO_LOG_LEVEL >= CALICO_LOG_LEVEL_INFO) {
 		uint64_t prog_end_time = bpf_ktime_get_ns();
-		CALICO_INFO_AT("Final result=ALLOW (%x). Program execution time: %lluns T: %lluns\n", reason, prog_end_time-prog_start_time, timer_end_time-timer_start_time);
+		CALICO_INFO_AT("Final result=ALLOW (%d). Program execution time: %lluns T: %lluns\n", rc, prog_end_time-prog_start_time, timer_end_time-timer_start_time);
 	}
 	return rc;
 

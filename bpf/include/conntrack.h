@@ -24,9 +24,11 @@ struct calico_ct_tcp_state {
 	__u32 syn_seen :1;
 	__u32 ack_seen :1;
 	__u32 fin_seen :1;
+	__u32 rst_seen :1;
 };
 
 struct calico_ct_value {
+	__u64 last_seen;
 	__u32 type;
 	union {
 		// CALICO_CT_TYPE_NORMAL and CALICO_CT_TYPE_NAT_REV.
@@ -41,7 +43,7 @@ struct calico_ct_value {
 		// CALICO_CT_TYPE_NAT_FWD; key for the CALICO_CT_TYPE_NAT_REV entry.
 		struct calico_ct_key nat_rev_key;
 	};
-} __attribute__((packed));
+};
 
 struct bpf_map_def_extended __attribute__((section("maps"))) calico_ct_map_v4 = {
 	.type = BPF_MAP_TYPE_HASH,
@@ -54,7 +56,9 @@ struct bpf_map_def_extended __attribute__((section("maps"))) calico_ct_map_v4 = 
 
 static CALICO_BPF_INLINE int calico_ct_v4_tcp_create_tracking(struct calico_ct_key *k, enum CALICO_CT_TYPE type,
 		__be32 ip_src, __be32 ip_dst, __u16 sport, __u16 dport, __be32 orig_dst, __u16 orig_dport, struct tcphdr *tcp_header) {
-	struct calico_ct_value ct_value = {};
+	struct calico_ct_value ct_value = {
+		.last_seen = bpf_ktime_get_ns()
+	};
 	ct_value.type = type;
 	ct_value.orig_dst = orig_dst;
 	ct_value.orig_port = orig_dport;
@@ -81,7 +85,10 @@ static CALICO_BPF_INLINE int calico_ct_v4_tcp_create_tracking(struct calico_ct_k
 }
 
 static CALICO_BPF_INLINE int calico_ct_v4_tcp_create_nat_fwd(struct calico_ct_key *rk, __be32 ip_src, __be32 ip_dst, __u16 sport, __u16 dport) {
-	struct calico_ct_value ct_value = {.type = CALICO_CT_TYPE_NAT_FWD};
+	struct calico_ct_value ct_value = {
+		.type = CALICO_CT_TYPE_NAT_FWD,
+		.last_seen = bpf_ktime_get_ns(),
+	};
 	bool srcLTDest = (ip_src < ip_dst) || ((ip_src == ip_dst) && sport < dport);
 	if (srcLTDest) {
 		struct calico_ct_key k = {
@@ -131,8 +138,19 @@ struct calico_ct_result {
 	__u32 nat_port;
 };
 
-static CALICO_BPF_INLINE struct calico_ct_result calico_ct_v4_tcp_lookup(__be32 ip_src, __be32 ip_dst, __u16 sport, __u16 dport, struct tcphdr *tcp_header) {
+static CALICO_BPF_INLINE struct calico_ct_result calico_ct_v4_tcp_lookup(
+		__be32 ip_src, __be32 ip_dst, __u16 sport, __u16 dport, struct tcphdr *tcp_header, enum calico_tc_flags flags) {
+
+	CALICO_DEBUG_AT("CT-TCP lookup from %x:%d\n", be32_to_host(ip_src), sport);
+	CALICO_DEBUG_AT("CT-TCP lookup to   %x:%d\n", be32_to_host(ip_dst), dport);
+
 	struct calico_ct_result result = {};
+
+	if (tcp_header->syn && !tcp_header->ack) {
+		// SYN should always go through policy.
+		CALICO_DEBUG_AT("CT-TCP Packet is a SYN, short-circuiting lookup.\n");
+		goto out_lookup_fail;
+	}
 
 	bool srcLTDest = (ip_src < ip_dst) || ((ip_src == ip_dst) && sport < dport);
 	struct calico_ct_key k;
@@ -152,37 +170,108 @@ static CALICO_BPF_INLINE struct calico_ct_result calico_ct_v4_tcp_lookup(__be32 
 
 	struct calico_ct_value *v = bpf_map_lookup_elem(&calico_ct_map_v4, &k);
 	if (!v) {
+		CALICO_DEBUG_AT("CT-TCP Miss.\n");
 		goto out_lookup_fail;
 	}
 
-	// TODO connection state tracking!
+	__u64 now = bpf_ktime_get_ns();
+	v->last_seen = now;
+
+	struct calico_ct_tcp_state *our_dir, *oth_dir;
+
 	struct calico_ct_value *tracking_v;
 	switch (v->type) {
 	case CALICO_CT_TYPE_NAT_FWD:
+		// This is a forward NAT entry; since we do the bookkeeping on the reverse entry, we need
+		// to do a second lookup.
+		CALICO_DEBUG_AT("CT-TCP Hit! NAT FWD entry, doing secondary lookup.\n");
 		tracking_v = bpf_map_lookup_elem(&calico_ct_map_v4, &v->nat_rev_key);
 		if (!tracking_v) {
+			CALICO_DEBUG_AT("CT-TCP Miss when looking for secondary entry.\n");
 			goto out_lookup_fail;
 		}
+		// Record timestamp.
+		tracking_v->last_seen = now;
+
+		if (ip_src == v->nat_rev_key.addr_a && sport == v->nat_rev_key.port_a) {
+			our_dir = &tracking_v->a_to_b;
+			oth_dir = &tracking_v->b_to_a;
+		} else {
+			our_dir = &tracking_v->b_to_a;
+			oth_dir = &tracking_v->a_to_b;
+		}
+
 		// Since we found a forward NAT entry, we know that it's the destination that needs to be NATted.
 		result.rc =	CALICO_CT_ESTABLISHED_DNAT;
 		result.nat_ip = tracking_v->orig_dst;
 		result.nat_port = tracking_v->orig_port;
-		goto out;
+		break;
 	case CALICO_CT_TYPE_NAT_REV:
-		// Since we found a reverse NAT entry, we know that it's the source that needs to be NATted.
+		// Since we found a reverse NAT entry, we know that this is response traffic so we'll need to SNAT it.
+		CALICO_DEBUG_AT("CT-TCP Hit! NAT REV entry.\n");
 		result.rc =	CALICO_CT_ESTABLISHED_SNAT;
 		result.nat_ip = v->orig_dst;
 		result.nat_port = v->orig_port;
-		goto out;
+
+		if (srcLTDest) {
+			our_dir = &v->a_to_b;
+			oth_dir = &v->b_to_a;
+		} else {
+			our_dir = &v->b_to_a;
+			oth_dir = &v->a_to_b;
+		}
+
+		break;
 	case CALICO_CT_TYPE_NORMAL:
+		CALICO_DEBUG_AT("CT-TCP Hit! NORMAL entry.\n");
 		result.rc =	CALICO_CT_ESTABLISHED;
-		goto out;
+
+		if (srcLTDest) {
+			our_dir = &v->a_to_b;
+			oth_dir = &v->b_to_a;
+		} else {
+			our_dir = &v->b_to_a;
+			oth_dir = &v->a_to_b;
+		}
+
+		break;
+	default:
+		CALICO_DEBUG_AT("CT-TCP Hit! UNKNOWN entry type.\n");
+		goto out_lookup_fail;
 	}
+
+	if (tcp_header->rst) {
+		CALICO_DEBUG_AT("CT-TCP RST seen, marking CT entry.\n");
+		our_dir->rst_seen = 1;
+	}
+	if (tcp_header->fin) {
+		CALICO_DEBUG_AT("CT-TCP FIN seen, marking CT entry.\n");
+		our_dir->fin_seen = 1;
+	}
+
+	if (tcp_header->syn && tcp_header->ack) {
+		CALICO_DEBUG_AT("CT-TCP SYN+ACK seen, marking CT entry.\n");
+		our_dir->syn_seen = 1;
+		our_dir->ack_seen = 1;
+	} else if (tcp_header->ack && !our_dir->ack_seen && our_dir->syn_seen) {
+		CALICO_DEBUG_AT("CT-TCP First ACK seen, marking CT entry.\n");
+		our_dir->ack_seen = 1;
+	} else {
+		// Normal packet, check that the handshake is complete.
+		if (!oth_dir->ack_seen) {
+			CALICO_DEBUG_AT("CT-TCP Non-flagged packet but other side has never ACKed.\n");
+			result.rc = CALICO_CT_INVALID;
+			return result;
+		}
+		CALICO_DEBUG_AT("CT-TCP Non-flagged packet and other side has ACKed.\n");
+	}
+
+	CALICO_DEBUG_AT("CT-TCP result: %d.\n", result.rc);
+	return result;
 
 	out_lookup_fail:
 	result.rc = CALICO_CT_NEW;
-
-	out:
+	CALICO_DEBUG_AT("CT-TCP result: NEW.\n");
 	return result;
 }
 
