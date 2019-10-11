@@ -1,20 +1,21 @@
-hash: 4badeaf88da3bc6c8edca389f095f8e99579796be611281f07a20f62b26696f6
-updated: 2019-06-06T04:27:43.924955179Z
+hash: 8cdb1ca6e4d98181225b7541198e884d60a56959685a20d6a33cb00dd58771fd
+updated: 2019-10-11T15:09:32.505222418-07:00
 imports:
 - name: cloud.google.com/go
-  version: 3b1ae45394a234c385be014e9a488f2bb6eef821
+  version: 0ebda48a7f143b1cce9eb37a8c1106ac762a3430
   subpackages:
   - compute/metadata
-  - internal
 - name: github.com/Azure/go-autorest
-  version: 1ff28809256a84bb6966640ff3d0371af82ccba4
+  version: 1ffcc8896ef6dfe022d90a4317d866f925cf0f9e
   subpackages:
   - autorest
   - autorest/adal
   - autorest/azure
   - autorest/date
+  - logger
+  - version
 - name: github.com/beorn7/perks
-  version: 3a771d992973f24aa725d07868b467d1ddfceafb
+  version: 3ac7bf7a47d159a033b107610db8a1b6575507a4
   subpackages:
   - quantile
 - name: github.com/coreos/etcd
@@ -30,17 +31,15 @@ imports:
   - pkg/transport
   - pkg/types
 - name: github.com/davecgh/go-spew
-  version: 8991bc29aa16c548c550c7ff78260e27b9ab7c73
+  version: 782f4967f2dc4564575ca782fe2d04090b5faca8
   subpackages:
   - spew
 - name: github.com/dgrijalva/jwt-go
   version: d2709f9f1f31ebcda9651b03077758c1f3a0018c
-- name: github.com/ghodss/yaml
-  version: 0ca9ea5df5451ffdf184b4428c902747c2c11cd7
 - name: github.com/go-ini/ini
-  version: 9c8236e659b76e87bf02044d06fde8683008ff3e
+  version: 8659100d2d9ecf3760a41838b1886db49426d001
 - name: github.com/go-playground/locales
-  version: f63010822830b6fe52288ee52d5a1151088ce039
+  version: 630ebbb602847eba93e75ae38bbc7bb7abcf1ff3
   subpackages:
   - currency
 - name: github.com/go-playground/universal-translator
@@ -52,8 +51,6 @@ imports:
   - proto
   - protoc-gen-gogo/descriptor
   - sortkeys
-- name: github.com/golang/glog
-  version: 23def4e6c14b4da8ac2ed8007337bc5eb5007998
 - name: github.com/golang/protobuf
   version: 1e59b77b52bf8e4b449a57e6f79f21226d571845
   subpackages:
@@ -63,12 +60,18 @@ imports:
   - ptypes/any
   - ptypes/duration
   - ptypes/timestamp
-- name: github.com/google/btree
-  version: 925471ac9e2131377a91e1595defec898166fe49
+- name: github.com/google/go-cmp
+  version: 6f77996f0c42f7b84e5a2b252227263f93432e9b
+  subpackages:
+  - cmp
+  - cmp/internal/diff
+  - cmp/internal/flags
+  - cmp/internal/function
+  - cmp/internal/value
 - name: github.com/google/gofuzz
   version: 24818f796faf91cd76ec7bddd72458fbced7a6c1
 - name: github.com/google/uuid
-  version: d460ce9f8df2e77fb1ba55ca87fafed96c607494
+  version: 8c31c18f31ede9fc8eae72290a7e7a8064e9b3e3
 - name: github.com/googleapis/gnostic
   version: 0c5108395e2debce0d731cf0287ddf7242066aba
   subpackages:
@@ -84,10 +87,6 @@ imports:
   - openstack/identity/v3/tokens
   - openstack/utils
   - pagination
-- name: github.com/gregjones/httpcache
-  version: 787624de3eb7bd915c329cba748687a3b22666a6
-  subpackages:
-  - diskcache
 - name: github.com/hashicorp/go-version
   version: ac23dc3fea5d1a983c43f6a0f6e2c13f0195d8bd
 - name: github.com/hashicorp/golang-lru
@@ -104,11 +103,11 @@ imports:
 - name: github.com/imdario/mergo
   version: 9316a62528ac99aaecb4e47eadd6dc8aa6533d58
 - name: github.com/json-iterator/go
-  version: f2b4162afba35581b6d4a50d3b8f34e33c144682
+  version: ab8a2e0c74be9d3be70b3184d9acc634935ded82
 - name: github.com/kardianos/osext
-  version: ae77be60afb1dcacde03767a8c37337fad28ac14
+  version: 2bc1f35cddc0cc527b4bc3dce8578fc2a6c11384
 - name: github.com/kelseyhightower/envconfig
-  version: dd1402a4d99de9ac2f396cd6fcb957bc2c695ec1
+  version: 0b417c4ec4a8a82eecc22a1459a504aa55163d61
 - name: github.com/leodido/go-urn
   version: a67a23e1c1af3c66528573bb86a87246477277c1
 - name: github.com/matttproud/golang_protobuf_extensions
@@ -155,12 +154,8 @@ imports:
   - types
 - name: github.com/patrickmn/go-cache
   version: 5633e0862627c011927fa39556acae8b1f1df58a
-- name: github.com/pborman/uuid
-  version: 8b1b92947f46224e3b97bb1a3a5b0382be00d31e
-- name: github.com/peterbourgon/diskv
-  version: 5f041e8faa004a95c88a202771f4cc3e991971e6
 - name: github.com/projectcalico/felix
-  version: 2da7327f2208a9ab028ef26a35f2403fb4ed15bd
+  version: f57a408321fdb535ea6e98cfef9181d25491aefa
   subpackages:
   - calc
   - config
@@ -187,7 +182,7 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: ac36d966132f2019eb4afc4d3823ed2a98564d2f
+  version: 896f59d614d5c47df94d47a78b1c01a909077bd7
   subpackages:
   - lib/apiconfig
   - lib/apis/v1
@@ -257,7 +252,6 @@ imports:
   version: 66aacef3dd8a676686c7ae3716979581e8b03c47
   subpackages:
   - context
-  - context/ctxhttp
   - html
   - html/atom
   - html/charset
@@ -344,39 +338,46 @@ imports:
 - name: gopkg.in/fsnotify.v1
   version: c2828203cd70a50dcccfb2761f8b1f8ceef9a8e9
 - name: gopkg.in/go-playground/validator.v9
-  version: b199fa0642d29caca62b6a99d65cc981ba5edc3b
+  version: 556b9da3c05f2a935bc086fb5a0bb55dd8112d2d
 - name: gopkg.in/inf.v0
   version: 3887ee99ecf07df5b447e9b00d9c0b2adaa9f3e4
 - name: gopkg.in/tomb.v1
   version: dd632973f1e7218eb1089048e0798ec9ae7dceb8
 - name: gopkg.in/yaml.v2
-  version: cd8b52f8269e0feb286dfeef29f8fe4d5b397e0b
+  version: 51d6538a90f86fe93ac480b35f37b2be17fef232
 - name: k8s.io/api
-  version: 072894a440bdee3a891dea811fe42902311cd2a3
+  version: 7cf5895f2711098d7d9527db0a4a49fb0dff7de2
   subpackages:
-  - admissionregistration/v1alpha1
   - admissionregistration/v1beta1
   - apps/v1
   - apps/v1beta1
   - apps/v1beta2
+  - auditregistration/v1alpha1
   - authentication/v1
   - authentication/v1beta1
   - authorization/v1
   - authorization/v1beta1
   - autoscaling/v1
   - autoscaling/v2beta1
+  - autoscaling/v2beta2
   - batch/v1
   - batch/v1beta1
   - batch/v2alpha1
   - certificates/v1beta1
+  - coordination/v1
+  - coordination/v1beta1
   - core/v1
   - events/v1beta1
   - extensions/v1beta1
   - networking/v1
+  - networking/v1beta1
+  - node/v1alpha1
+  - node/v1beta1
   - policy/v1beta1
   - rbac/v1
   - rbac/v1alpha1
   - rbac/v1beta1
+  - scheduling/v1
   - scheduling/v1alpha1
   - scheduling/v1beta1
   - settings/v1alpha1
@@ -384,7 +385,7 @@ imports:
   - storage/v1alpha1
   - storage/v1beta1
 - name: k8s.io/apimachinery
-  version: 103fd098999dc9c0c88536f5c9ad2e5da39373ae
+  version: 1799e75a07195de9460b8ef7300883499f12127b
   subpackages:
   - pkg/api/errors
   - pkg/api/meta
@@ -415,6 +416,7 @@ imports:
   - pkg/util/framer
   - pkg/util/intstr
   - pkg/util/json
+  - pkg/util/naming
   - pkg/util/net
   - pkg/util/runtime
   - pkg/util/sets
@@ -427,42 +429,48 @@ imports:
   - pkg/watch
   - third_party/forked/golang/reflect
 - name: k8s.io/apiserver
-  version: cc449ec47086d4fe7a0b97fea7398a4f80734adc
+  version: f881eae9ec04b8c996ef0d24309c860ea188acd1
   subpackages:
   - pkg/storage
   - pkg/storage/etcd
-  - pkg/storage/etcd/metrics
   - pkg/storage/etcd3
   - pkg/storage/value
 - name: k8s.io/client-go
-  version: 7d04d0e2a0a1a4d4a1cd6baa432a2301492e4e65
+  version: 78d2af792babf2dd937ba2e2a8d99c753a5eda89
   subpackages:
   - discovery
   - kubernetes
   - kubernetes/scheme
-  - kubernetes/typed/admissionregistration/v1alpha1
   - kubernetes/typed/admissionregistration/v1beta1
   - kubernetes/typed/apps/v1
   - kubernetes/typed/apps/v1beta1
   - kubernetes/typed/apps/v1beta2
+  - kubernetes/typed/auditregistration/v1alpha1
   - kubernetes/typed/authentication/v1
   - kubernetes/typed/authentication/v1beta1
   - kubernetes/typed/authorization/v1
   - kubernetes/typed/authorization/v1beta1
   - kubernetes/typed/autoscaling/v1
   - kubernetes/typed/autoscaling/v2beta1
+  - kubernetes/typed/autoscaling/v2beta2
   - kubernetes/typed/batch/v1
   - kubernetes/typed/batch/v1beta1
   - kubernetes/typed/batch/v2alpha1
   - kubernetes/typed/certificates/v1beta1
+  - kubernetes/typed/coordination/v1
+  - kubernetes/typed/coordination/v1beta1
   - kubernetes/typed/core/v1
   - kubernetes/typed/events/v1beta1
   - kubernetes/typed/extensions/v1beta1
   - kubernetes/typed/networking/v1
+  - kubernetes/typed/networking/v1beta1
+  - kubernetes/typed/node/v1alpha1
+  - kubernetes/typed/node/v1beta1
   - kubernetes/typed/policy/v1beta1
   - kubernetes/typed/rbac/v1
   - kubernetes/typed/rbac/v1alpha1
   - kubernetes/typed/rbac/v1beta1
+  - kubernetes/typed/scheduling/v1
   - kubernetes/typed/scheduling/v1alpha1
   - kubernetes/typed/scheduling/v1beta1
   - kubernetes/typed/settings/v1alpha1
@@ -492,19 +500,23 @@ imports:
   - tools/pager
   - tools/reference
   - transport
-  - util/buffer
   - util/cert
   - util/connrotation
   - util/flowcontrol
   - util/homedir
-  - util/integer
   - util/jsonpath
+  - util/keyutil
   - util/retry
   - util/workqueue
 - name: k8s.io/klog
-  version: e531227889390a39d9533dde61f590fe9f4b0035
+  version: 8e90cee79f823779174776412c13478955131846
 - name: k8s.io/utils
   version: c2654d5206da6b7b6ace12841e8f359bb89b443c
   subpackages:
+  - buffer
+  - integer
+  - pointer
   - trace
+- name: sigs.k8s.io/yaml
+  version: fd68e9863619f6ec2fdd8625fe1f02e7c877e480
 testImports: []

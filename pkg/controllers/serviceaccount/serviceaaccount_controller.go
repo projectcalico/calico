@@ -30,7 +30,7 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/errors"
 	"github.com/projectcalico/libcalico-go/lib/options"
 
-	"k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
 	uruntime "k8s.io/apimachinery/pkg/util/runtime"
@@ -88,7 +88,7 @@ func NewServiceAccountController(ctx context.Context, k8sClientset *kubernetes.C
 	ccache := rcache.NewResourceCache(cacheArgs)
 
 	// Create a ServiceAccount watcher.
-	listWatcher := cache.NewListWatchFromClient(k8sClientset.Core().RESTClient(), "serviceaccounts", "", fields.Everything())
+	listWatcher := cache.NewListWatchFromClient(k8sClientset.CoreV1().RESTClient(), "serviceaccounts", "", fields.Everything())
 
 	// Bind the calico cache to kubernetes cache with the help of an informer. This way we make sure that
 	// whenever the kubernetes cache is updated, changes get reflected in the Calico cache as well.
