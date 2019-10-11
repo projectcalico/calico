@@ -695,16 +695,30 @@ func (d *InternalDataplane) setUpIptablesBPF() {
 	// TODO Any BPF SNAT we need to do
 
 	for _, t := range d.iptablesFilterTables {
-		t.SetRuleInsertions("FORWARD", []iptables.Rule{{
-			// TODO Make "from workload" mark configurable
-			Match:  iptables.Match().MarkMatchesWithMask(0xca110000, 0xffff0000),
-			Action: iptables.AcceptAction{},
-		}, {
-			// TODO Make interface name mark configurable
-			Match:  iptables.Match().OutInterface("cali+"),
-			Action: iptables.AcceptAction{},
-		},
-		})
+		rules := []iptables.Rule{
+			{
+				// TODO Make "from workload" mark configurable
+				Match:  iptables.Match().MarkMatchesWithMask(0xca110000, 0xffff0000),
+				Action: iptables.AcceptAction{},
+			},
+		}
+		for _, prefix := range d.config.RulesConfig.WorkloadIfacePrefixes {
+			rules = append(rules,
+				iptables.Rule{
+					Match:   iptables.Match().InInterface(prefix + "+"),
+					Action:  iptables.DropAction{},
+					Comment: "From workload without BPF ACCEPT mark",
+				})
+		}
+		for _, prefix := range d.config.RulesConfig.WorkloadIfacePrefixes {
+			rules = append(rules,
+				iptables.Rule{
+					Match:   iptables.Match().OutInterface(prefix + "+"),
+					Action:  iptables.AcceptAction{},
+					Comment: "To workload, BPF will handle.",
+				})
+		}
+		t.SetRuleInsertions("FORWARD", rules)
 	}
 }
 
