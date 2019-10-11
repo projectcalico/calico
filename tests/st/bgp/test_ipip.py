@@ -415,7 +415,7 @@ class TestIPIP(TestBase):
                         simulate_gce_routing=True,
                         start_calico=False) as host2:
 
-            self._test_gce_int(with_ipip, backend, host1, host2, False)
+            self._test_gce_int(with_ipip, backend, host1, host2, None)
 
     @parameterized.expand([
         (False,),
@@ -433,9 +433,12 @@ class TestIPIP(TestBase):
                         start_calico=False) as host2, \
              RouteReflectorCluster(1, 1) as rrc:
 
-            self._test_gce_int(with_ipip, 'bird', host1, host2, rrc)
+            rr_ip = None
+            for rr in rrc.get_redundancy_group():
+                rr_ip = rr.ip
+            self._test_gce_int(with_ipip, 'bird', host1, host2, rr_ip)
 
-    def _test_gce_int(self, with_ipip, backend, host1, host2, rrc):
+    def _test_gce_int(self, with_ipip, backend, host1, host2, rr_ip):
 
         host1.start_calico_node("--backend={0}".format(backend))
         host2.start_calico_node("--backend={0}".format(backend))
@@ -443,14 +446,13 @@ class TestIPIP(TestBase):
         # Before creating any workloads, set the initial IP-in-IP state.
         host1.set_ipip_enabled(with_ipip)
 
-        if rrc:
+        if rr_ip:
             # Set the default AS number - as this is used by the RR mesh,
             # and turn off the node-to-node mesh (do this from any host).
             update_bgp_config(host1, asNum=64513, nodeMesh=False)
             # Peer from each host to the route reflector.
             for host in [host1, host2]:
-                for rr in rrc.get_redundancy_group():
-                    create_bgp_peer(host, "node", rr.ip, 64513, metadata={'name':host.name})
+                create_bgp_peer(host, "node", rr_ip, 64513, metadata={'name':host.name})
 
         # Create a network and a workload on each host.
         network1 = host1.create_network("subnet1")
@@ -482,6 +484,18 @@ class TestIPIP(TestBase):
                     # following changes test.
                     host.execute("ip l")
                     host.execute("ip a")
+
+                    if rr_ip:
+                        # Check that this host has received the /26 route from
+                        # the route reflector.  Otherwise this could show up
+                        # during the following monitoring, as it might be a
+                        # little slower than what is needed for the workload
+                        # connectivity tested above.
+                        expected_route_string = "/26 via " + rr_ip
+                        def check():
+                            self.assertIn(expected_route_string,
+                                          host.execute("ip r"))
+                        retry_until_success(check, retries=10)
 
                     # Check that routes are not flapping, on either host, by
                     # running 'ip monitor' for 10s and checking that it does
@@ -523,7 +537,7 @@ class TestIPIP(TestBase):
                 self.assert_false(
                     workload_host1.check_can_ping(workload_host2.ip, retries=10))
 
-            if not rrc:
+            if not rr_ip:
                 # Check the BGP status on each host.
                 check_bird_status(host1, [("node-to-node mesh", host2.ip, "Established")])
                 check_bird_status(host2, [("node-to-node mesh", host1.ip, "Established")])
