@@ -64,6 +64,9 @@ var _ = Describe("Test the NetworkSet update processor", func() {
 				Labels: map[string]string{
 					apiv3.LabelNamespace: ns1,
 				},
+				ProfileIDs: []string{
+					"kns." + ns1,
+				},
 			},
 			Revision: "abcde",
 		}))
@@ -86,6 +89,9 @@ var _ = Describe("Test the NetworkSet update processor", func() {
 				Nets: []net.IPNet{*cidr1IPNet, *cidr2IPNet},
 				Labels: map[string]string{
 					apiv3.LabelNamespace: ns1,
+				},
+				ProfileIDs: []string{
+					"kns." + ns1,
 				},
 			},
 			Revision: "abcde",
@@ -125,6 +131,9 @@ var _ = Describe("Test the NetworkSet update processor", func() {
 				Nets: []net.IPNet{*cidr1IPNet},
 				Labels: map[string]string{
 					apiv3.LabelNamespace: ns1,
+				},
+				ProfileIDs: []string{
+					"kns." + ns1,
 				},
 			},
 			Revision: "abcde",

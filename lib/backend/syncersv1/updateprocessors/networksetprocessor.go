@@ -17,11 +17,13 @@ package updateprocessors
 import (
 	"errors"
 
+	log "github.com/sirupsen/logrus"
+
 	apiv3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
+	"github.com/projectcalico/libcalico-go/lib/backend/k8s/conversion"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/libcalico-go/lib/backend/watchersyncer"
 	cnet "github.com/projectcalico/libcalico-go/lib/net"
-	log "github.com/sirupsen/logrus"
 )
 
 // Create a new SyncerUpdateProcessor to sync NetworkSet data in v1 format for consumption by Felix.
@@ -63,9 +65,15 @@ func convertNetworkSetV2ToV1Value(val interface{}) (interface{}, error) {
 	}
 	labelsWithCalicoNamespace[apiv3.LabelNamespace] = v3res.Namespace
 
+	// Also include the namespace profile in the profile IDs so that we get namespace label inheritance.
+	// This is a wonky compared to Pods where the profile is included in the pod->WEP conversion and is therefore
+	// conceptually limited to k8s, but then namespaces are themselves a k8s only concept.
 	v1value := &model.NetworkSet{
 		Nets:   addrs,
 		Labels: labelsWithCalicoNamespace,
+		ProfileIDs: []string{
+			conversion.NamespaceProfileNamePrefix + v3res.Namespace,
+		},
 	}
 
 	return v1value, nil

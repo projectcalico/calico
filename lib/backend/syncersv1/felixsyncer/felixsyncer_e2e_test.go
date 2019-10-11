@@ -356,6 +356,9 @@ var _ = testutils.E2eDatastoreDescribe("Felix syncer tests", testutils.Datastore
 					Nets: []net.IPNet{
 						*expNet,
 					},
+					ProfileIDs: []string{
+						"kns.namespace-1",
+					},
 				},
 				Revision: ns.ResourceVersion,
 			})
