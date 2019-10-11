@@ -118,4 +118,10 @@ struct bpf_map_def_extended {
 	__u32 unused2;
 };
 
+
+enum calico_tc_flags {
+	CALICO_TC_HOST_EP = 1<<0,
+	CALICO_TC_INGRESS = 1<<1,
+};
+
 #endif /* __CALICO_BPF_H__ */

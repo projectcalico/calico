@@ -73,47 +73,6 @@ struct bpf_map_def_extended __attribute__((section("maps"))) calico_ip_sets = {
 	.pinning_strategy        = 2 /* global namespace */,
 };
 
-// Map: NAT level one.  Dest IP and port -> ID and num backends.
-
-struct calico_nat_v4_key {
-    uint32_t addr; // NBO
-    uint16_t port; // HBO
-    uint8_t protocol;
-};
-
-struct calico_nat_v4_value {
-    uint32_t id;
-    uint32_t count;
-};
-
-struct bpf_map_def_extended __attribute__((section("maps"))) calico_nat_map_v4 = {
-    .type           = BPF_MAP_TYPE_HASH,
-    .key_size       = sizeof(struct calico_nat_v4_key),
-    .value_size     = sizeof(struct calico_nat_v4_value),
-    .map_flags          = BPF_F_NO_PREALLOC,
-    .max_entries       = 511000, // arbitrary
-};
-
-// Map: NAT level two.  ID and ordinal -> new dest and port.
-
-struct calico_nat_secondary_v4_key {
-    uint32_t id;
-    uint32_t ordinal;
-};
-
-struct calico_nat_secondary_v4_value {
-    uint32_t addr;
-    uint16_t port;
-};
-
-struct bpf_map_def_extended __attribute__((section("maps"))) calico_nat_secondary_map_v4 = {
-    .type           = BPF_MAP_TYPE_HASH,
-    .key_size       = sizeof(struct calico_nat_secondary_v4_key),
-    .value_size     = sizeof(struct calico_nat_secondary_v4_value),
-    .map_flags          = BPF_F_NO_PREALLOC,
-    .max_entries       = 510000, // arbitrary
-};
-
 struct bpf_map_def_extended __attribute__((section("maps"))) calico_local_ips = {
     .type           = BPF_MAP_TYPE_HASH,
     .key_size       = sizeof(uint32_t),
