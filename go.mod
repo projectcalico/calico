@@ -9,16 +9,16 @@ require (
 	github.com/onsi/ginkgo v1.8.0
 	github.com/onsi/gomega v1.5.0
 	github.com/projectcalico/felix v0.0.0-20191003065011-e01caf688c90
-	github.com/projectcalico/libcalico-go v0.0.0-20191002165503-ce68b855671e
-	github.com/projectcalico/typha v0.0.0-20191003041517-d59f99ba14c5
+	github.com/projectcalico/libcalico-go v0.0.0-20191008175127-399044ecb659
+	github.com/projectcalico/typha v0.0.0-20191009174525-7576f11000c9
 	github.com/sirupsen/logrus v1.4.2
 	github.com/ugorji/go/codec v1.1.7
 	github.com/vishvananda/netns v0.0.0-20180720170159-13995c7128cc // indirect
-	k8s.io/api v0.0.0-20180628040859-072894a440bd
-	k8s.io/apimachinery v0.0.0-20180621070125-103fd098999d
-	k8s.io/client-go v8.0.0+incompatible
+	k8s.io/api v0.0.0-20190620084959-7cf5895f2711
+	k8s.io/apimachinery v0.0.0-20190612205821-1799e75a0719
+	k8s.io/client-go v12.0.0+incompatible
 )
 
 replace github.com/sirupsen/logrus => github.com/projectcalico/logrus v0.0.0-20180627202928-fc9bbf2f57995271c5cd6911ede7a2ebc5ea7c6f
 
-replace github.com/kelseyhightower/confd => github.com/projectcalico/confd v0.0.0-20191003042443-c6a88e7c8ac8
+replace github.com/kelseyhightower/confd => github.com/projectcalico/confd v0.0.0-20191010042443-cb39656af364
