@@ -9,10 +9,9 @@
 #
 # {"calico/node"=>"v3.6.0",
 #   "typha"=>"v3.6.0"}
-#
 def parse_versions(versions_yml, version)
   if not versions_yml.key?(version)
-    raise IndexError.new "requested version '#{version}' not present in versions.yml"
+    raise IndexError.new "requested version '#{version}' not present in provided versions.yml input: #{versions_yml}).  Cannot proceed !!!"
   end
 
   components = versions_yml[version][0]["components"].clone

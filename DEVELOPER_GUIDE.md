@@ -8,7 +8,7 @@ This guide is broken into the following main sections:
 - [Deploying your code on Kubernetes](#deploying-your-code-on-kubernetes)
 - [Running automated tests](#running-automated-tests)
 
-## Requirements
+## Prerequisites:
 
 These build instructions assume you have a Linux build environment
 with:
@@ -19,32 +19,30 @@ with:
 
 ## Checking out the code
 
-Calico code is distributed across several different components, each of which lives in its own git repository. To build
-all of Calico, you will need to check out each repository into a common base directory (for example, `$GOPATH/src/github.com/projectcalico`).
+Calico code is distributed across several different components, each of which lives in its own git repository (inside of projectcalico on github). To build *all* of Calico, you will need to check out each repository into a common base directory (for example, `$GOPATH/src/github.com/projectcalico`).
 
 You will need the following repositories cloned on your development machine:
 
 ```
 BASEDIR
-└───calico
-└───libcalico-go
-└───confd
-└───felix
-└───typha
-└───kube-controllers
-└───calicoctl
-└───app-policy
-└───pod2daemon
-└───node
-└───cni-plugin
+└───calico (https://github.com/projectcalico/calico.git)
+└───libcalico-go (https://github.com/projectcalico/libcalico-go.git)
+└───confd git (https://github.com/projectcalico/confd.git)
+└───felix git (https://github.com/projectcalico/felix.git)
+└───typha git (https://github.com/projectcalico/typha.git)
+└───kube-controllers (https://github.com/projectcalico/kube-controllers.git)
+└───calicoctl (https://github.com/projectcalico/calicoctl.git)
+└───app-policy (https://github.com/projectcalico/app-policy.git)
+└───pod2daemon (https://github.com/projectcalico/pod2daemon.git)
+└───node git (https://github.com/projectcalico/node.git)
+└───cni-plugin (https://github.com/projectcalico/cni-plugin.git)
 ```
 
 ## Building the code
 
 ### Building everything
 
-Once the code is checked out, try building it to make sure your development environment is configured properly. Run the following command from
-within the `calico` repository to build all container images from your locally checked out code.
+Once the code is checked out, try building it to make sure your development environment is configured properly. Run the following command from within the `calico` repository to build all container images from your locally checked out code.
 
 ```
 make dev-image
@@ -127,3 +125,4 @@ the following command in the `calico` repo.
 ```
 make dev-test
 ```
+
