@@ -4,7 +4,7 @@ redirect_from: latest/getting-started/kubernetes/hardway/install-typha
 canonical_url: 'https://docs.projectcalico.org/v3.9/getting-started/kubernetes/hardway/install-typha'
 ---
 
-**Typha** sits between the Kubernetes API server and per-node daemons like **Felix** and **confd** (running in `calico/node`).
+**Typha** is an optional add on to calico for performance optimization when you have a large number of nodes in a cluster.  It sits between the Kubernetes API server and per-node daemons like **Felix** and **confd** (running in `calico/node`).
 It watches the Kubernetes resources and {{site.prodname}} custom resources used by these daemons, and whenever a resource changes
 it fans out the update to the daemons. This reduces the number of watches the Kubernetes API server needs to serve
 and improves scalability of the cluster.
