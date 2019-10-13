@@ -56,7 +56,7 @@ Store the Typha key and certificate in a secret that Typha will access
 kubectl create secret generic -n kube-system calico-typha-certs --from-file=typha.key --from-file=typha.crt
 ```
 
-## Provision RBAC
+## Provision RBAC rules for Typha API access 
 
 Create a ServiceAccount that will be used to run Typha.
 
@@ -129,11 +129,9 @@ Bind the cluster role to the `calico-typha` ServiceAccount.
 kubectl create clusterrolebinding calico-typha --clusterrole=calico-typha --serviceaccount=kube-system:calico-typha
 ```
 
-## Install Deployment
+## Install Typha Deployment
 
-Since Typha is required by `calico/node`, and `calico/node` establishes the pod network, we run Typha as a host networked pod to avoid
-a chicken-and-egg problem.  We run 3 replicas of Typha so that even during a rolling update, a single failure does not
-make Typha unavailable.
+Since Typha is required by `calico/node`, and `calico/node` establishes the pod network, we run Typha as a host networked pod to avoid a chicken-and-egg problem.  We run 3 replicas of Typha so that even during a rolling update, a single failure does not make Typha unavailable.  
 
 ```
 kubectl apply -f - <<EOF
@@ -234,13 +232,13 @@ EOF
 We set `TYPHA_CLIENTCN` to `calico-node` which is the common name we will use on the certificate `calico/node` will use in the
 next lab.
 
-Verify Typha is up an running with three instances
+Verify Typha is up an running with three instances (NOTE: all typha pods bind to a host port, as described above.  IF you have less then 3 nodes in your cluster, some typha instances will not be up).
 
 ```
 kubectl get pods -l k8s-app=calico-typha -n kube-system
 ```
 
-Result:
+Typical Result (For a cluster with 3+ nodes):
 
 ```
 NAME                            READY   STATUS    RESTARTS   AGE
