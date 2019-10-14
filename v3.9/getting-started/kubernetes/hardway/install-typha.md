@@ -240,7 +240,7 @@ Verify Typha is up an running with three instances (NOTE: all typha pods bind to
 kubectl get pods -l k8s-app=calico-typha -n kube-system
 ```
 
-Typical Result (For a cluster with 3+ nodes):
+Typical Result:
 
 ```
 NAME                            READY   STATUS    RESTARTS   AGE
