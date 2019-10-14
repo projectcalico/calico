@@ -90,9 +90,9 @@ RELEASE_BRANCH_REPOS=$(sort $(RELEASE_REPOS) libcalico-go confd)
 TAG_COMMAND=git describe --tags --dirty --always --long
 REGISTRY?=calico
 LOCAL_BUILD=true
-.PHONY: dev-image dev-test dev-vendor dev-clean
+.PHONY: dev-image dev-test dev-clean
 ## Build a local version of Calico based on the checked out codebase.
-dev-image: dev-vendor $(addsuffix -dev-image, $(filter-out calico felix, $(RELEASE_REPOS)))
+dev-image: $(addsuffix -dev-image, $(filter-out calico felix, $(RELEASE_REPOS)))
 $(addsuffix -dev-image,$(RELEASE_REPOS)): %-dev-image: ../%
 	@cd $< && export TAG=$$($(TAG_COMMAND)); make image tag-images \
 		BUILD_IMAGE=$(REGISTRY)/$* \
@@ -110,13 +110,9 @@ $(addsuffix -dev-push,$(RELEASE_REPOS)): %-dev-push: ../%
 		IMAGETAG=$$TAG
 
 ## Run all tests against currently checked out code. WARNING: This takes a LONG time.
-dev-test: dev-vendor $(addsuffix -dev-test, $(filter-out calico, $(RELEASE_REPOS)))
+dev-test:  $(addsuffix -dev-test, $(filter-out calico, $(RELEASE_REPOS)))
 $(addsuffix -dev-test,$(RELEASE_REPOS)): %-dev-test: ../%
 	@cd $< && make test LOCAL_BUILD=$(LOCAL_BUILD)
-
-dev-vendor: $(addsuffix -dev-vendor, $(filter-out calico, $(RELEASE_BRANCH_REPOS)))
-$(addsuffix -dev-vendor,$(RELEASE_BRANCH_REPOS)): %-dev-vendor: ../%
-	@cd $< && make vendor
 
 ## Run `make clean` across all repos.
 dev-clean: $(addsuffix -dev-clean, $(filter-out calico felix, $(RELEASE_REPOS)))
