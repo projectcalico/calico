@@ -14,7 +14,7 @@ import:
   subpackages:
   - fv/containers
 - package: github.com/projectcalico/libcalico-go
-  version: ac36d966132f2019eb4afc4d3823ed2a98564d2f
+  version: 896f59d614d5c47df94d47a78b1c01a909077bd7
   subpackages:
   - lib/apiconfig
   - lib/apis/v3
@@ -40,15 +40,13 @@ import:
   subpackages:
   - pkg/storage/etcd3
 - package: k8s.io/client-go
+  version: v12.0.0
   subpackages:
   - kubernetes
   - tools/cache
   - tools/clientcmd
   - util/workqueue
-# The version of k8s.io/ client libraries pinned in libcalico-go import some Azure
-# dependencies that require an older version go-autorest. We can probably ditch this
-# pin once we've updated to a newer version of client-go and friends.
-- package: github.com/Azure/go-autorest
-  version: 1ff28809256a84bb6966640ff3d0371af82ccba4
 - package: github.com/onsi/ginkgo
 - package: github.com/spf13/pflag
+- package: gopkg.in/yaml.v2
+  version: v2.2.2
