@@ -10,9 +10,7 @@ require (
 	github.com/onsi/gomega v1.5.0
 	github.com/projectcalico/felix v0.0.0-20191003065011-e01caf688c90
 	github.com/projectcalico/libcalico-go v0.0.0-20191008175127-399044ecb659
-	github.com/projectcalico/typha v0.0.0-20191009174525-7576f11000c9
 	github.com/sirupsen/logrus v1.4.2
-	github.com/ugorji/go/codec v1.1.7
 	github.com/vishvananda/netns v0.0.0-20180720170159-13995c7128cc // indirect
 	k8s.io/api v0.0.0-20190620084959-7cf5895f2711
 	k8s.io/apimachinery v0.0.0-20190612205821-1799e75a0719
