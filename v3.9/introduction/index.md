@@ -12,7 +12,7 @@ custom_css: css/intro.css
   </div>
   <div class="col-md-6">
     <h3 style="margin-top: 5px">What is {{site.prodname}}?</h3>
-    <p>{{site.prodname}} is an open source networking and network security solution for containers, virtual machines, and native host-based workloads. {{site.prodname}}supports a broad range of platforms including Kubernetes, OpenShift, Docker EE, OpenStack, and bare metal services.</p>
+    <p>{{site.prodname}} is an open source networking and network security solution for containers, virtual machines, and native host-based workloads. {{site.prodname}} supports a broad range of platforms including Kubernetes, OpenShift, Docker EE, OpenStack, and bare metal services.</p>
     <p>{{site.prodname}} combines flexible networking capabilities with run-anywhere security enforcement to provide a solution with native Linux kernel performance and true cloud-native scalability. {{site.prodname}} provides developers and cluster operators with a consistent experience and set of capabilities whether running in public cloud or on-prem, on a single node or across a multi-thousand node cluster.</p>
   </div>
 </div>
@@ -44,7 +44,7 @@ custom_css: css/intro.css
   </div>
   <div class="col-md-6">
     <h3 style="margin-top: 5px">Performance</h3>
-    <p>{{site.prodname}} uses the Linux kernel’s built-in highly optimized forwarding and access control capabilities to deliver native Linux networking dataplane performance, typically without requiring any of the encap/decap overheads associated with first generation SDN networks. {{site.prodname}}’s control plane and policy engine has been fine tuned over many years of production use to minimize overall CPU usage and occupancy.</p>
+    <p>{{site.prodname}} uses the Linux kernel’s built-in, highly optimized forwarding and access control capabilities to deliver native Linux networking dataplane performance, typically without requiring any of the encap/decap overheads associated with first generation SDN networks. {{site.prodname}}’s control plane and policy engine has been fine-tuned over many years of production use to minimize overall CPU usage and occupancy.</p>
   </div>
 </div>
 
