@@ -21,13 +21,14 @@ enum CALICO_CT_TYPE {
 struct calico_ct_tcp_state {
 	__u32 seqno;
 
-	__u32 syn_seen :1;
-	__u32 ack_seen :1;
-	__u32 fin_seen :1;
-	__u32 rst_seen :1;
+	__u32 syn_seen:1;
+	__u32 ack_seen:1;
+	__u32 fin_seen:1;
+	__u32 rst_seen:1;
 };
 
 struct calico_ct_value {
+	__u64 created;
 	__u64 last_seen;
 	__u32 type;
 	union {
@@ -55,9 +56,12 @@ struct bpf_map_def_extended __attribute__((section("maps"))) calico_ct_map_v4 = 
 };
 
 static CALICO_BPF_INLINE int calico_ct_v4_tcp_create_tracking(struct calico_ct_key *k, enum CALICO_CT_TYPE type,
-		__be32 ip_src, __be32 ip_dst, __u16 sport, __u16 dport, __be32 orig_dst, __u16 orig_dport, struct tcphdr *tcp_header) {
+		__be32 ip_src, __be32 ip_dst, __u16 sport, __u16 dport, __be32 orig_dst, __u16 orig_dport, struct tcphdr *tcp_header, enum calico_tc_flags flags) {
+	__u64 now = bpf_ktime_get_ns();
+	CALICO_DEBUG_AT("CT-TCP Creating entry at %llu.\n", now);
 	struct calico_ct_value ct_value = {
-		.last_seen = bpf_ktime_get_ns()
+		.last_seen = now,
+		.created = now,
 	};
 	ct_value.type = type;
 	ct_value.orig_dst = orig_dst;
@@ -84,10 +88,13 @@ static CALICO_BPF_INLINE int calico_ct_v4_tcp_create_tracking(struct calico_ct_k
 	}
 }
 
-static CALICO_BPF_INLINE int calico_ct_v4_tcp_create_nat_fwd(struct calico_ct_key *rk, __be32 ip_src, __be32 ip_dst, __u16 sport, __u16 dport) {
+static CALICO_BPF_INLINE int calico_ct_v4_tcp_create_nat_fwd(struct calico_ct_key *rk, __be32 ip_src, __be32 ip_dst, __u16 sport, __u16 dport, enum calico_tc_flags flags) {
+	__u64 now = bpf_ktime_get_ns();
+	CALICO_DEBUG_AT("CT-TCP Creating entry at %llu.\n", now);
 	struct calico_ct_value ct_value = {
 		.type = CALICO_CT_TYPE_NAT_FWD,
-		.last_seen = bpf_ktime_get_ns(),
+		.last_seen = now,
+		.created = now,
 	};
 	bool srcLTDest = (ip_src < ip_dst) || ((ip_src == ip_dst) && sport < dport);
 	if (srcLTDest) {
@@ -109,16 +116,16 @@ static CALICO_BPF_INLINE int calico_ct_v4_tcp_create_nat_fwd(struct calico_ct_ke
 	}
 }
 
-static CALICO_BPF_INLINE int calico_ct_v4_tcp_create(__be32 ip_src, __be32 ip_dst, __u16 sport, __u16 dport, struct tcphdr *tcp_header) {
+static CALICO_BPF_INLINE int calico_ct_v4_tcp_create(__be32 ip_src, __be32 ip_dst, __u16 sport, __u16 dport, struct tcphdr *tcp_header, enum calico_tc_flags flags) {
 	struct calico_ct_key k;
-	return calico_ct_v4_tcp_create_tracking(&k, CALICO_CT_TYPE_NORMAL, ip_src, ip_dst, sport, dport, 0, 0, tcp_header);
+	return calico_ct_v4_tcp_create_tracking(&k, CALICO_CT_TYPE_NORMAL, ip_src, ip_dst, sport, dport, 0, 0, tcp_header, flags);
 }
 
 static CALICO_BPF_INLINE int calico_ct_v4_tcp_create_nat(__be32 orig_src, __be32 orig_dst, __u16 orig_sport, __u16 orig_dport,
-				__be32 nat_dst, __u16 nat_dport, struct tcphdr *tcp_header) {
+				__be32 nat_dst, __u16 nat_dport, struct tcphdr *tcp_header, enum calico_tc_flags flags) {
 	struct calico_ct_key k;
-	calico_ct_v4_tcp_create_tracking(&k, CALICO_CT_TYPE_NAT_REV, orig_src, nat_dst, orig_sport, nat_dport, orig_dst, orig_dport, tcp_header);
-	calico_ct_v4_tcp_create_nat_fwd(&k, orig_src, orig_dst, orig_sport, orig_dport);
+	calico_ct_v4_tcp_create_tracking(&k, CALICO_CT_TYPE_NAT_REV, orig_src, nat_dst, orig_sport, nat_dport, orig_dst, orig_dport, tcp_header, flags);
+	calico_ct_v4_tcp_create_nat_fwd(&k, orig_src, orig_dst, orig_sport, orig_dport, flags);
 	return 0;
 }
 
@@ -138,11 +145,42 @@ struct calico_ct_result {
 	__u32 nat_port;
 };
 
+static CALICO_BPF_INLINE void calico_ct_v4_tcp_delete(
+		__be32 ip_src, __be32 ip_dst, __u16 sport, __u16 dport, enum calico_tc_flags flags) {
+	CALICO_DEBUG_AT("CT-TCP delete from %x:%d\n", be32_to_host(ip_src), sport);
+	CALICO_DEBUG_AT("CT-TCP delete to   %x:%d\n", be32_to_host(ip_dst), dport);
+
+	bool srcLTDest = (ip_src < ip_dst) || ((ip_src == ip_dst) && sport < dport);
+	struct calico_ct_key k;
+	if (srcLTDest) {
+		k = (struct calico_ct_key) {
+			.protocol = IPPROTO_TCP,
+			.addr_a = ip_src, .port_a = sport,
+			.addr_b = ip_dst, .port_b = dport,
+		};
+	} else  {
+		k = (struct calico_ct_key) {
+			.protocol = IPPROTO_TCP,
+			.addr_a = ip_dst, .port_a = dport,
+			.addr_b = ip_src, .port_b = sport,
+		};
+	}
+
+	int rc = bpf_map_delete_elem(&calico_ct_map_v4, &k);
+	CALICO_DEBUG_AT("CT-TCP delete result: %d\n", rc);
+}
+
 static CALICO_BPF_INLINE struct calico_ct_result calico_ct_v4_tcp_lookup(
 		__be32 ip_src, __be32 ip_dst, __u16 sport, __u16 dport, struct tcphdr *tcp_header, enum calico_tc_flags flags) {
 
 	CALICO_DEBUG_AT("CT-TCP lookup from %x:%d\n", be32_to_host(ip_src), sport);
 	CALICO_DEBUG_AT("CT-TCP lookup to   %x:%d\n", be32_to_host(ip_dst), dport);
+	CALICO_DEBUG_AT("CT-TCP   packet seq = %u\n", tcp_header->seq);
+	CALICO_DEBUG_AT("CT-TCP   packet ack_seq = %u\n", tcp_header->ack_seq);
+	CALICO_DEBUG_AT("CT-TCP   packet syn = %d\n", tcp_header->syn);
+	CALICO_DEBUG_AT("CT-TCP   packet ack = %d\n", tcp_header->ack);
+	CALICO_DEBUG_AT("CT-TCP   packet fin = %d\n", tcp_header->fin);
+	CALICO_DEBUG_AT("CT-TCP   packet rst = %d\n", tcp_header->rst);
 
 	struct calico_ct_result result = {};
 
@@ -224,6 +262,19 @@ static CALICO_BPF_INLINE struct calico_ct_result calico_ct_v4_tcp_lookup(
 		break;
 	case CALICO_CT_TYPE_NORMAL:
 		CALICO_DEBUG_AT("CT-TCP Hit! NORMAL entry.\n");
+		CALICO_DEBUG_AT("CT-TCP   Created: %llu.\n", v->created);
+		CALICO_DEBUG_AT("CT-TCP   Last seen: %llu.\n", v->last_seen);
+		CALICO_DEBUG_AT("CT-TCP   A-to-B: seqno %u.\n", v->a_to_b.seqno);
+		CALICO_DEBUG_AT("CT-TCP   A-to-B: syn_seen %d.\n", v->a_to_b.syn_seen);
+		CALICO_DEBUG_AT("CT-TCP   A-to-B: ack_seen %d.\n", v->a_to_b.ack_seen);
+		CALICO_DEBUG_AT("CT-TCP   A-to-B: fin_seen %d.\n", v->a_to_b.fin_seen);
+		CALICO_DEBUG_AT("CT-TCP   A-to-B: rst_seen %d.\n", v->a_to_b.rst_seen);
+		CALICO_DEBUG_AT("CT-TCP   B-to-A: seqno %d.\n", v->b_to_a.seqno);
+		CALICO_DEBUG_AT("CT-TCP   B-to-A: syn_seen %d.\n", v->b_to_a.syn_seen);
+		CALICO_DEBUG_AT("CT-TCP   B-to-A: ack_seen %d.\n", v->b_to_a.ack_seen);
+		CALICO_DEBUG_AT("CT-TCP   B-to-A: fin_seen %d.\n", v->b_to_a.fin_seen);
+		CALICO_DEBUG_AT("CT-TCP   B-to-A: rst_seen %d.\n", v->b_to_a.rst_seen);
+
 		result.rc =	CALICO_CT_ESTABLISHED;
 
 		if (srcLTDest) {
@@ -250,20 +301,33 @@ static CALICO_BPF_INLINE struct calico_ct_result calico_ct_v4_tcp_lookup(
 	}
 
 	if (tcp_header->syn && tcp_header->ack) {
-		CALICO_DEBUG_AT("CT-TCP SYN+ACK seen, marking CT entry.\n");
-		our_dir->syn_seen = 1;
-		our_dir->ack_seen = 1;
+		if (oth_dir->syn_seen && (oth_dir->seqno + 1) == tcp_header->ack_seq) {
+			CALICO_DEBUG_AT("CT-TCP SYN+ACK seen, marking CT entry.\n");
+			our_dir->syn_seen = 1;
+			our_dir->ack_seen = 1;
+			our_dir->seqno = tcp_header->seq;
+		} else {
+			CALICO_DEBUG_AT("CT-TCP SYN+ACK seen but packet's ACK (%u) doesn't match other side's SYN (%u).\n",
+					tcp_header->ack_seq, oth_dir->seqno);
+			// Have to let this through so source can reset?
+		}
 	} else if (tcp_header->ack && !our_dir->ack_seen && our_dir->syn_seen) {
-		CALICO_DEBUG_AT("CT-TCP First ACK seen, marking CT entry.\n");
-		our_dir->ack_seen = 1;
+		if (oth_dir->syn_seen && (oth_dir->seqno + 1) == tcp_header->ack_seq) {
+			CALICO_DEBUG_AT("CT-TCP ACK seen, marking CT entry.\n");
+			our_dir->ack_seen = 1;
+		} else {
+			CALICO_DEBUG_AT("CT-TCP ACK seen but packet's ACK (%u) doesn't match other side's SYN (%u).\n",
+					tcp_header->ack_seq, oth_dir->seqno);
+			// Have to let this through so source can reset?
+		}
 	} else {
 		// Normal packet, check that the handshake is complete.
 		if (!oth_dir->ack_seen) {
 			CALICO_DEBUG_AT("CT-TCP Non-flagged packet but other side has never ACKed.\n");
-			result.rc = CALICO_CT_INVALID;
-			return result;
+			// Have to let this through so source can reset?
+		} else {
+			CALICO_DEBUG_AT("CT-TCP Non-flagged packet and other side has ACKed.\n");
 		}
-		CALICO_DEBUG_AT("CT-TCP Non-flagged packet and other side has ACKed.\n");
 	}
 
 	CALICO_DEBUG_AT("CT-TCP result: %d.\n", result.rc);
