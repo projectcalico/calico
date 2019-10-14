@@ -131,7 +131,9 @@ kubectl create clusterrolebinding calico-typha --clusterrole=calico-typha --serv
 
 ## Install Typha Deployment
 
-Since Typha is required by `calico/node`, and `calico/node` establishes the pod network, we run Typha as a host networked pod to avoid a chicken-and-egg problem.  We run 3 replicas of Typha so that even during a rolling update, a single failure does not make Typha unavailable.  
+The pod network is *not* available when initially installing `calico/node`, and if using `calico/node` with `typha`, typha is required for pod network establishment. Thus, we cannot rely on the pod network at the time of `calico/node` installation in this scenario, and we bind `typha` to the `hostNetwork`, for direct, non k8s communication during bootstrapping.  We run 3 replicas of Typha so that even during a rolling update, a single failure does not make Typha unavailable.  
+
+Thus, the following deployment will only completely schedule if there are 3 nodes  in your cluster - that is ok, however, since you only need 1 healthy typha endpoint per host.
 
 ```
 kubectl apply -f - <<EOF
