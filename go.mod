@@ -3,29 +3,24 @@ module github.com/projectcalico/kube-controllers
 go 1.12
 
 require (
-	github.com/Azure/go-autorest v11.1.0+incompatible // indirect
-	github.com/coreos/etcd v3.3.10+incompatible
-	github.com/gophercloud/gophercloud v0.0.0-20190126172459-c818fa66e4c8 // indirect
-	github.com/imdario/mergo v0.3.5 // indirect
+	cloud.google.com/go v0.38.0 // indirect
+	github.com/coreos/etcd v3.3.15+incompatible
+	github.com/dgrijalva/jwt-go v3.2.0+incompatible // indirect
+	github.com/gophercloud/gophercloud v0.1.0 // indirect
 	github.com/joho/godotenv v1.3.0
 	github.com/kelseyhightower/envconfig v0.0.0-20180517194557-dd1402a4d99d
-	github.com/onsi/ginkgo v1.8.0
-	github.com/onsi/gomega v1.5.0
+	github.com/onsi/ginkgo v1.10.1
+	github.com/onsi/gomega v1.7.0
 	github.com/patrickmn/go-cache v0.0.0-20180815053127-5633e0862627
 	github.com/projectcalico/felix v0.0.0-20190910002408-d60a3c648288
-	github.com/projectcalico/libcalico-go v0.0.0-20190918012520-5129d8f8aff0
+	github.com/projectcalico/libcalico-go v0.0.0-20191007235924-bda281e2d6ef
 	github.com/satori/go.uuid v1.2.0
 	github.com/sirupsen/logrus v1.4.2
 	github.com/spf13/pflag v1.0.3
-	k8s.io/api v0.0.0-20190419092548-c5cad27821f6
-	k8s.io/apimachinery v0.0.0-20190419212445-b874eabb9a4e
-	k8s.io/apiserver v0.0.0-20190423173055-cc449ec47086
-	k8s.io/client-go v11.0.1-0.20190409021438-1a26190bd76a+incompatible
-	k8s.io/klog v0.4.0
-)
-
-replace (
-	k8s.io/api => k8s.io/api v0.0.0-20190409021203-6e4e0e4f393b
-	k8s.io/apimachinery => k8s.io/apimachinery v0.0.0-20190404173353-6a84e37a896d
-	k8s.io/client-go => k8s.io/client-go v11.0.1-0.20190409021438-1a26190bd76a+incompatible
+	golang.org/x/oauth2 v0.0.0-20190604053449-0f29369cfe45 // indirect
+	k8s.io/api v0.0.0-20191010143144-fbf594f18f80
+	k8s.io/apimachinery v0.0.0-20191006235458-f9f2f3f8ab02
+	k8s.io/apiserver v0.0.0-20191010200905-b803d9d0d3eb
+	k8s.io/client-go v12.0.0+incompatible
+	k8s.io/klog v1.0.0
 )
