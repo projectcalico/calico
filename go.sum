@@ -339,6 +339,7 @@ github.com/projectcalico/typha v0.0.0-20191009003249-55ee7f22cd4f/go.mod h1:e5Ak
 github.com/projectcalico/typha v0.0.0-20191014041603-c3b890f2e12e h1:ZFLy3JCUihgyr5pApfKcwn7aP9rdkth/aPpTuVO4oHQ=
 github.com/projectcalico/typha v0.0.0-20191014041603-c3b890f2e12e/go.mod h1:5+xW4Rr+e+ToaotVCfiW5UmXSIZvbXA//kv+mqzZaK0=
 github.com/projectcalico/typha v3.8.2+incompatible h1:gzjm+SMnol9qLb3Ny46mTODry3o7zq56PNI9pqeHil4=
+github.com/projectcalico/typha v3.8.3+incompatible h1:4pUqq0THOQpsOHVU45iZlFIw69Uk5mO5BaCD3jk7w7M=
 github.com/prometheus/client_golang v0.0.0-20171005112915-5cec1d0429b0/go.mod h1:7SWBe2y4D6OKWSNQJUaRYU/AaXPKyh/dDVn+NZz0KFw=
 github.com/prometheus/client_golang v0.0.0-20180907100926-773f5027234d h1:5uR+Va+FdN8swCl8jWZ/r1sWCavYgailkiakyHWtBus=
 github.com/prometheus/client_golang v0.0.0-20180907100926-773f5027234d/go.mod h1:7SWBe2y4D6OKWSNQJUaRYU/AaXPKyh/dDVn+NZz0KFw=
