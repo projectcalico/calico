@@ -183,12 +183,12 @@ static CALICO_BPF_INLINE int calico_tc_tcp(struct __sk_buff *skb, struct ethhdr 
 		// If we get here, we've passed policy.
 		if (nat_dest != NULL) {
 			// Packet is to be NATted, need to record a NAT entry.
-			calico_ct_v4_tcp_create_nat(ip_src, ip_dst, sport, dport, post_nat_ip_dst, post_nat_dport, tcp_header, flags);
+			calico_ct_v4_tcp_create_nat(skb, ip_src, ip_dst, sport, dport, post_nat_ip_dst, post_nat_dport, tcp_header, flags);
 
 			// TODO NAT conntrack
 		} else {
 			// No NAT for this packet, record a simple entry.
-			calico_ct_v4_tcp_create(ip_src, ip_dst, sport, dport, tcp_header, flags);
+			calico_ct_v4_tcp_create(skb, ip_src, ip_dst, sport, dport, tcp_header, flags);
 		}
 
 		fib_params->l4_protocol = IPPROTO_TCP;

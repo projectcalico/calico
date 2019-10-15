@@ -124,4 +124,11 @@ enum calico_tc_flags {
 	CALICO_TC_INGRESS = 1<<1,
 };
 
+enum calico_skb_mark {
+	// TODO allocate marks from the mark pool.
+	CALICO_SKB_MARK_FROM_WORKLOAD = 0xca110000,
+	CALICO_SKB_MARK_FROM_WORKLOAD_MASK = 0xffff0000,
+	CALICO_SKB_MARK_NO_TRACK      = 1<<1,
+};
+
 #endif /* __CALICO_BPF_H__ */

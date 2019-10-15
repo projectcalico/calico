@@ -10,7 +10,7 @@ struct calico_ct_key {
 	uint32_t protocol;
 	__be32 addr_a, addr_b; // NBO
 	uint16_t port_a, port_b; // HBO
-};
+} __attribute__((packed));
 
 enum CALICO_CT_TYPE {
 	CALICO_CT_TYPE_NORMAL = 0,  // Non-NATted entry.
@@ -25,6 +25,9 @@ struct calico_ct_tcp_state {
 	__u32 ack_seen:1;
 	__u32 fin_seen:1;
 	__u32 rst_seen:1;
+
+	__u32 egress_whitelisted:1;
+	__u32 ingress_whitelisted:1;
 };
 
 struct calico_ct_value {
@@ -39,6 +42,7 @@ struct calico_ct_value {
 			// CALICO_CT_TYPE_NAT_REV only.
 			__u32 orig_dst;
 			__u16 orig_port;
+
 		};
 
 		// CALICO_CT_TYPE_NAT_FWD; key for the CALICO_CT_TYPE_NAT_REV entry.
@@ -55,17 +59,77 @@ struct bpf_map_def_extended __attribute__((section("maps"))) calico_ct_map_v4 = 
 	.pinning_strategy = 2 /* global namespace */,
 };
 
-static CALICO_BPF_INLINE int calico_ct_v4_tcp_create_tracking(struct calico_ct_key *k, enum CALICO_CT_TYPE type,
-		__be32 ip_src, __be32 ip_dst, __u16 sport, __u16 dport, __be32 orig_dst, __u16 orig_dport, struct tcphdr *tcp_header, enum calico_tc_flags flags) {
-	__u64 now = bpf_ktime_get_ns();
+static CALICO_BPF_INLINE void dump_ct_key(struct calico_ct_key *k, enum calico_tc_flags flags) {
+	CALICO_DEBUG_AT("CT-TCP   key A=%x:%d proto=%d\n", be32_to_host(k->addr_a), k->port_a, (int)k->protocol);
+	CALICO_DEBUG_AT("CT-TCP   key B=%x:%d size=%d\n", be32_to_host(k->addr_b), k->port_b, (int)sizeof(struct calico_ct_key));
+}
+
+static CALICO_BPF_INLINE int calico_ct_v4_tcp_create_tracking(
+		struct __sk_buff *skb,
+		struct calico_ct_key *k, enum CALICO_CT_TYPE type,
+		__be32 ip_src, __be32 ip_dst, __u16 sport, __u16 dport,
+		__be32 orig_dst, __u16 orig_dport,
+		struct tcphdr *tcp_header, enum calico_tc_flags flags) {
+
+	if ((skb->mark & CALICO_SKB_MARK_FROM_WORKLOAD_MASK) == CALICO_SKB_MARK_FROM_WORKLOAD) {
+		// Packet already marked as being from another workload, which will
+		// have created a conntrack entry.  Look that one up instead of
+		// creating one.
+		CALICO_DEBUG_AT("CT-TCP Asked to create entry but packet is marked as "
+				"from another workload, doing lookup\n");
+		bool srcLTDest = (ip_src < ip_dst) || ((ip_src == ip_dst) && sport < dport);
+		if (srcLTDest) {
+			*k = (struct calico_ct_key) {
+				.protocol = IPPROTO_TCP,
+				.addr_a = ip_src, .port_a = sport,
+				.addr_b = ip_dst, .port_b = dport,
+			};
+		} else  {
+			*k = (struct calico_ct_key) {
+				.protocol = IPPROTO_TCP,
+				.addr_a = ip_dst, .port_a = dport,
+				.addr_b = ip_src, .port_b = sport,
+			};
+		}
+		dump_ct_key(k, flags);
+		struct calico_ct_value *ct_value = bpf_map_lookup_elem(&calico_ct_map_v4, k);
+		if (!ct_value) {
+			CALICO_DEBUG_AT("CT-TCP Packet marked as from workload but got a conntrack miss!\n");
+			goto create;
+		}
+		CALICO_DEBUG_AT("CT-TCP Found expected create entry, updating...\n");
+		if (srcLTDest) {
+			ct_value->a_to_b.seqno = tcp_header->seq;
+			ct_value->a_to_b.syn_seen = 1;
+			if (flags & CALICO_TC_INGRESS) {
+				ct_value->b_to_a.ingress_whitelisted = 1;
+			} else {
+				ct_value->a_to_b.egress_whitelisted = 1;
+			}
+		} else  {
+			ct_value->b_to_a.seqno = tcp_header->seq;
+			ct_value->b_to_a.syn_seen = 1;
+			if (flags & CALICO_TC_INGRESS) {
+				ct_value->a_to_b.ingress_whitelisted = 1;
+			} else {
+				ct_value->b_to_a.egress_whitelisted = 1;
+			}
+		}
+
+		return 0;
+	}
+
+	__u64 now;
+	create:
+	now = bpf_ktime_get_ns();
 	CALICO_DEBUG_AT("CT-TCP Creating entry at %llu.\n", now);
-	struct calico_ct_value ct_value = {
-		.last_seen = now,
-		.created = now,
-	};
+	struct calico_ct_value ct_value = {};
+	ct_value.created=now;
+	ct_value.last_seen=now;
 	ct_value.type = type;
 	ct_value.orig_dst = orig_dst;
 	ct_value.orig_port = orig_dport;
+	struct calico_ct_tcp_state *our_dir, *oth_dir;
 	bool srcLTDest = (ip_src < ip_dst) || ((ip_src == ip_dst) && sport < dport);
 	if (srcLTDest) {
 		*k = (struct calico_ct_key) {
@@ -73,22 +137,35 @@ static CALICO_BPF_INLINE int calico_ct_v4_tcp_create_tracking(struct calico_ct_k
 			.addr_a = ip_src, .port_a = sport,
 			.addr_b = ip_dst, .port_b = dport,
 		};
-		ct_value.a_to_b.seqno = tcp_header->seq;
-		ct_value.a_to_b.syn_seen = 1;
-		return bpf_map_update_elem(&calico_ct_map_v4, k, &ct_value, 0);
+		our_dir = &ct_value.a_to_b;
+		oth_dir = &ct_value.b_to_a;
 	} else  {
 		*k = (struct calico_ct_key) {
 			.protocol = IPPROTO_TCP,
 			.addr_a = ip_dst, .port_a = dport,
 			.addr_b = ip_src, .port_b = sport,
 		};
-		ct_value.b_to_a.seqno = tcp_header->seq;
-		ct_value.b_to_a.syn_seen = 1;
-		return bpf_map_update_elem(&calico_ct_map_v4, k, &ct_value, 0);
+		our_dir = &ct_value.b_to_a;
+		oth_dir = &ct_value.a_to_b;
 	}
+
+	dump_ct_key(k, flags);
+
+	our_dir->seqno = tcp_header->seq;
+	our_dir->syn_seen = 1;
+	if (flags & CALICO_TC_INGRESS) {
+		oth_dir->ingress_whitelisted = true;
+	} else {
+		our_dir->egress_whitelisted = true;
+	}
+	int err = bpf_map_update_elem(&calico_ct_map_v4, k, &ct_value, 0);
+	CALICO_DEBUG_AT("CT-TCP Create result: %d.\n", err);
+	return err;
 }
 
-static CALICO_BPF_INLINE int calico_ct_v4_tcp_create_nat_fwd(struct calico_ct_key *rk, __be32 ip_src, __be32 ip_dst, __u16 sport, __u16 dport, enum calico_tc_flags flags) {
+static CALICO_BPF_INLINE int calico_ct_v4_tcp_create_nat_fwd(
+		struct calico_ct_key *rk, __be32 ip_src,
+		__be32 ip_dst, __u16 sport, __u16 dport, enum calico_tc_flags flags) {
 	__u64 now = bpf_ktime_get_ns();
 	CALICO_DEBUG_AT("CT-TCP Creating entry at %llu.\n", now);
 	struct calico_ct_value ct_value = {
@@ -103,29 +180,45 @@ static CALICO_BPF_INLINE int calico_ct_v4_tcp_create_nat_fwd(struct calico_ct_ke
 			.addr_a = ip_src, .port_a = sport,
 			.addr_b = ip_dst, .port_b = dport,
 		};
+		dump_ct_key(&k, flags);
 		ct_value.nat_rev_key = *rk;
-		return bpf_map_update_elem(&calico_ct_map_v4, &k, &ct_value, 0);
+		int err = bpf_map_update_elem(&calico_ct_map_v4, &k, &ct_value, 0);
+		CALICO_DEBUG_AT("CT-TCP Create result: %d.\n", err);
+		return err;
 	} else  {
 		struct calico_ct_key k = {
 			.protocol = IPPROTO_TCP,
 			.addr_a = ip_dst, .port_a = dport,
 			.addr_b = ip_src, .port_b = sport,
 		};
+		dump_ct_key(&k, flags);
 		ct_value.nat_rev_key = *rk;
-		return bpf_map_update_elem(&calico_ct_map_v4, &k, &ct_value, 0);
+		int err = bpf_map_update_elem(&calico_ct_map_v4, &k, &ct_value, 0);
+		CALICO_DEBUG_AT("CT-TCP Create result: %d.\n", err);
+		return err;
 	}
 }
 
-static CALICO_BPF_INLINE int calico_ct_v4_tcp_create(__be32 ip_src, __be32 ip_dst, __u16 sport, __u16 dport, struct tcphdr *tcp_header, enum calico_tc_flags flags) {
+static CALICO_BPF_INLINE int calico_ct_v4_tcp_create(
+		struct __sk_buff *skb,
+		__be32 ip_src, __be32 ip_dst, __u16 sport, __u16 dport,
+		struct tcphdr *tcp_header, enum calico_tc_flags flags) {
 	struct calico_ct_key k;
-	return calico_ct_v4_tcp_create_tracking(&k, CALICO_CT_TYPE_NORMAL, ip_src, ip_dst, sport, dport, 0, 0, tcp_header, flags);
+	return calico_ct_v4_tcp_create_tracking(skb, &k, CALICO_CT_TYPE_NORMAL,
+			ip_src, ip_dst, sport, dport, 0, 0, tcp_header, flags);
 }
 
-static CALICO_BPF_INLINE int calico_ct_v4_tcp_create_nat(__be32 orig_src, __be32 orig_dst, __u16 orig_sport, __u16 orig_dport,
-				__be32 nat_dst, __u16 nat_dport, struct tcphdr *tcp_header, enum calico_tc_flags flags) {
+static CALICO_BPF_INLINE int calico_ct_v4_tcp_create_nat(
+		struct __sk_buff *skb,
+		__be32 orig_src, __be32 orig_dst, __u16 orig_sport, __u16 orig_dport,
+		__be32 nat_dst, __u16 nat_dport, struct tcphdr *tcp_header,
+		enum calico_tc_flags flags) {
 	struct calico_ct_key k;
-	calico_ct_v4_tcp_create_tracking(&k, CALICO_CT_TYPE_NAT_REV, orig_src, nat_dst, orig_sport, nat_dport, orig_dst, orig_dport, tcp_header, flags);
-	calico_ct_v4_tcp_create_nat_fwd(&k, orig_src, orig_dst, orig_sport, orig_dport, flags);
+	calico_ct_v4_tcp_create_tracking(skb, &k, CALICO_CT_TYPE_NAT_REV, orig_src,
+			nat_dst, orig_sport, nat_dport, orig_dst, orig_dport, tcp_header,
+			flags);
+	calico_ct_v4_tcp_create_nat_fwd(&k, orig_src, orig_dst, orig_sport,
+			orig_dport, flags);
 	return 0;
 }
 
@@ -146,7 +239,8 @@ struct calico_ct_result {
 };
 
 static CALICO_BPF_INLINE void calico_ct_v4_tcp_delete(
-		__be32 ip_src, __be32 ip_dst, __u16 sport, __u16 dport, enum calico_tc_flags flags) {
+		__be32 ip_src, __be32 ip_dst, __u16 sport, __u16 dport,
+		enum calico_tc_flags flags) {
 	CALICO_DEBUG_AT("CT-TCP delete from %x:%d\n", be32_to_host(ip_src), sport);
 	CALICO_DEBUG_AT("CT-TCP delete to   %x:%d\n", be32_to_host(ip_dst), dport);
 
@@ -166,12 +260,15 @@ static CALICO_BPF_INLINE void calico_ct_v4_tcp_delete(
 		};
 	}
 
+	dump_ct_key(&k, flags);
+
 	int rc = bpf_map_delete_elem(&calico_ct_map_v4, &k);
 	CALICO_DEBUG_AT("CT-TCP delete result: %d\n", rc);
 }
 
 static CALICO_BPF_INLINE struct calico_ct_result calico_ct_v4_tcp_lookup(
-		__be32 ip_src, __be32 ip_dst, __u16 sport, __u16 dport, struct tcphdr *tcp_header, enum calico_tc_flags flags) {
+		__be32 ip_src, __be32 ip_dst, __u16 sport, __u16 dport,
+		struct tcphdr *tcp_header, enum calico_tc_flags flags) {
 
 	CALICO_DEBUG_AT("CT-TCP lookup from %x:%d\n", be32_to_host(ip_src), sport);
 	CALICO_DEBUG_AT("CT-TCP lookup to   %x:%d\n", be32_to_host(ip_dst), dport);
@@ -205,6 +302,7 @@ static CALICO_BPF_INLINE struct calico_ct_result calico_ct_v4_tcp_lookup(
 			.addr_b = ip_src, .port_b = sport,
 		};
 	}
+	dump_ct_key(&k, flags);
 
 	struct calico_ct_value *v = bpf_map_lookup_elem(&calico_ct_map_v4, &k);
 	if (!v) {
@@ -220,8 +318,8 @@ static CALICO_BPF_INLINE struct calico_ct_result calico_ct_v4_tcp_lookup(
 	struct calico_ct_value *tracking_v;
 	switch (v->type) {
 	case CALICO_CT_TYPE_NAT_FWD:
-		// This is a forward NAT entry; since we do the bookkeeping on the reverse entry, we need
-		// to do a second lookup.
+		// This is a forward NAT entry; since we do the bookkeeping on the
+		// reverse entry, we need to do a second lookup.
 		CALICO_DEBUG_AT("CT-TCP Hit! NAT FWD entry, doing secondary lookup.\n");
 		tracking_v = bpf_map_lookup_elem(&calico_ct_map_v4, &v->nat_rev_key);
 		if (!tracking_v) {
@@ -239,13 +337,15 @@ static CALICO_BPF_INLINE struct calico_ct_result calico_ct_v4_tcp_lookup(
 			oth_dir = &tracking_v->a_to_b;
 		}
 
-		// Since we found a forward NAT entry, we know that it's the destination that needs to be NATted.
+		// Since we found a forward NAT entry, we know that it's the destination
+		// that needs to be NATted.
 		result.rc =	CALICO_CT_ESTABLISHED_DNAT;
 		result.nat_ip = tracking_v->orig_dst;
 		result.nat_port = tracking_v->orig_port;
 		break;
 	case CALICO_CT_TYPE_NAT_REV:
-		// Since we found a reverse NAT entry, we know that this is response traffic so we'll need to SNAT it.
+		// Since we found a reverse NAT entry, we know that this is response
+		// traffic so we'll need to SNAT it.
 		CALICO_DEBUG_AT("CT-TCP Hit! NAT REV entry.\n");
 		result.rc =	CALICO_CT_ESTABLISHED_SNAT;
 		result.nat_ip = v->orig_dst;
@@ -269,11 +369,15 @@ static CALICO_BPF_INLINE struct calico_ct_result calico_ct_v4_tcp_lookup(
 		CALICO_DEBUG_AT("CT-TCP   A-to-B: ack_seen %d.\n", v->a_to_b.ack_seen);
 		CALICO_DEBUG_AT("CT-TCP   A-to-B: fin_seen %d.\n", v->a_to_b.fin_seen);
 		CALICO_DEBUG_AT("CT-TCP   A-to-B: rst_seen %d.\n", v->a_to_b.rst_seen);
-		CALICO_DEBUG_AT("CT-TCP   B-to-A: seqno %d.\n", v->b_to_a.seqno);
+		CALICO_DEBUG_AT("CT-TCP   A: egress_whitelisted %d.\n", v->a_to_b.egress_whitelisted);
+		CALICO_DEBUG_AT("CT-TCP   A: ingress_whitelisted %d.\n", v->a_to_b.ingress_whitelisted);
+		CALICO_DEBUG_AT("CT-TCP   B-to-A: seqno %u.\n", v->b_to_a.seqno);
 		CALICO_DEBUG_AT("CT-TCP   B-to-A: syn_seen %d.\n", v->b_to_a.syn_seen);
 		CALICO_DEBUG_AT("CT-TCP   B-to-A: ack_seen %d.\n", v->b_to_a.ack_seen);
 		CALICO_DEBUG_AT("CT-TCP   B-to-A: fin_seen %d.\n", v->b_to_a.fin_seen);
 		CALICO_DEBUG_AT("CT-TCP   B-to-A: rst_seen %d.\n", v->b_to_a.rst_seen);
+		CALICO_DEBUG_AT("CT-TCP   B: egress_whitelisted %d.\n", v->b_to_a.egress_whitelisted);
+		CALICO_DEBUG_AT("CT-TCP   B: ingress_whitelisted %d.\n", v->b_to_a.ingress_whitelisted);
 
 		result.rc =	CALICO_CT_ESTABLISHED;
 
@@ -291,8 +395,30 @@ static CALICO_BPF_INLINE struct calico_ct_result calico_ct_v4_tcp_lookup(
 		goto out_lookup_fail;
 	}
 
+	// TODO Update once host endpoints come along.
+	// Packet towards a workload.
+	if (our_dir->ingress_whitelisted || our_dir->egress_whitelisted) {
+		// Packet was whitelisted by the policy attached to this workload.
+		CALICO_DEBUG_AT("CT-TCP Packet whitelisted by this workload's policy.\n");
+	} else if (oth_dir->ingress_whitelisted) {
+		// Traffic between two workloads on the same host; the only way
+		// the the ingress flag can get set on the other side of the
+		// connection is if this workload opened the connection and it
+		// was whitelisted at the other side.
+		CALICO_DEBUG_AT("CT-TCP Packet whitelisted by other workload's policy.\n");
+	} else {
+		// oth_dir->egress_whitelisted?  In this case, the other workload
+		// sent us a connection but we never upgraded it to
+		// ingress_whitelisted; it must not have passed our local ingress
+		// policy.
+		CALICO_DEBUG_AT("CT-TCP Packet not allowed by ingress/egress whitelist flags.\n");
+		result.rc = CALICO_CT_INVALID;
+	}
+
 	if (tcp_header->rst) {
 		CALICO_DEBUG_AT("CT-TCP RST seen, marking CT entry.\n");
+		// TODO: We should only take account of RST packets that are in
+		// the right window.
 		our_dir->rst_seen = 1;
 	}
 	if (tcp_header->fin) {
@@ -307,7 +433,8 @@ static CALICO_BPF_INLINE struct calico_ct_result calico_ct_v4_tcp_lookup(
 			our_dir->ack_seen = 1;
 			our_dir->seqno = tcp_header->seq;
 		} else {
-			CALICO_DEBUG_AT("CT-TCP SYN+ACK seen but packet's ACK (%u) doesn't match other side's SYN (%u).\n",
+			CALICO_DEBUG_AT("CT-TCP SYN+ACK seen but packet's ACK (%u) "
+					"doesn't match other side's SYN (%u).\n",
 					tcp_header->ack_seq, oth_dir->seqno);
 			// Have to let this through so source can reset?
 		}
@@ -316,7 +443,8 @@ static CALICO_BPF_INLINE struct calico_ct_result calico_ct_v4_tcp_lookup(
 			CALICO_DEBUG_AT("CT-TCP ACK seen, marking CT entry.\n");
 			our_dir->ack_seen = 1;
 		} else {
-			CALICO_DEBUG_AT("CT-TCP ACK seen but packet's ACK (%u) doesn't match other side's SYN (%u).\n",
+			CALICO_DEBUG_AT("CT-TCP ACK seen but packet's ACK (%u) doesn't "
+					"match other side's SYN (%u).\n",
 					tcp_header->ack_seq, oth_dir->seqno);
 			// Have to let this through so source can reset?
 		}

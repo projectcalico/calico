@@ -28,13 +28,6 @@ struct bpf_map_def_extended __attribute__((section("maps"))) calico_config = {
 	.max_entries    = 1,
 };
 
-enum calico_skb_mark {
-	// TODO allocate marks from the mark pool.
-	CALICO_SKB_MARK_FROM_WORKLOAD = 0xca110000,
-	CALICO_SKB_MARK_FROM_WORKLOAD_MASK = 0xffff0000,
-	CALICO_SKB_MARK_NO_TRACK      = 1<<1,
-};
-
 enum calico_reason {
 	CALICO_REASON_UNKNOWN = 0x00,
 	CALICO_REASON_SHORT = 0x01,
