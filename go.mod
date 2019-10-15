@@ -13,7 +13,7 @@ require (
 	github.com/lyft/protoc-gen-validate v0.0.6 // indirect
 	github.com/onsi/gomega v1.5.0
 	github.com/pborman/uuid v0.0.0-20150603214016-ca53cad383ca // indirect
-	github.com/projectcalico/libcalico-go v0.0.0-20191011214144-df344e329d7b
+	github.com/projectcalico/libcalico-go v0.0.0-20191014173613-3dc8f2c35936
 	github.com/prometheus/client_golang v1.1.0 // indirect
 	github.com/sirupsen/logrus v1.4.2
 	github.com/spf13/afero v1.2.2 // indirect
