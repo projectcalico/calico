@@ -10,7 +10,7 @@ struct calico_ct_key {
 	uint32_t protocol;
 	__be32 addr_a, addr_b; // NBO
 	uint16_t port_a, port_b; // HBO
-} __attribute__((packed));
+};
 
 enum CALICO_CT_TYPE {
 	CALICO_CT_TYPE_NORMAL = 0,  // Non-NATted entry.
@@ -33,20 +33,30 @@ struct calico_ct_tcp_state {
 struct calico_ct_value {
 	__u64 created;
 	__u64 last_seen;
-	__u32 type;
+	__u8 type;
+
+	// Important to use explicit padding, otherwise the compiler can decide
+	// not to zero the padding bytes, which upsets the verifier.  Worse than
+	// that, debug logging often prevents such optimisation resulting in
+	// failures when debug logging is compiled out only :-).
+	__u8 pad0[7];
 	union {
 		// CALICO_CT_TYPE_NORMAL and CALICO_CT_TYPE_NAT_REV.
 		struct {
-			struct calico_ct_tcp_state a_to_b, b_to_a;
+			struct calico_ct_tcp_state a_to_b; // 8
+			struct calico_ct_tcp_state b_to_a; // 16
 
 			// CALICO_CT_TYPE_NAT_REV only.
-			__u32 orig_dst;
-			__u16 orig_port;
-
+			__u32 orig_dst;                    // 20
+			__u16 orig_port;                   // 22
+			__u8 pad1[2];                      // 24
 		};
 
 		// CALICO_CT_TYPE_NAT_FWD; key for the CALICO_CT_TYPE_NAT_REV entry.
-		struct calico_ct_key nat_rev_key;
+		struct {
+			struct calico_ct_key nat_rev_key;  // 16
+			__u8 pad2[8];                      // 24
+		};
 	};
 };
 

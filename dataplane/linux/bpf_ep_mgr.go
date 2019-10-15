@@ -346,11 +346,15 @@ func (m *bpfEndpointManager) applyPolicyDirection(wep *proto.WorkloadEndpoint, d
 		_ = os.RemoveAll(tempDir)
 	}()
 	oFileName := tempDir + "/redir_tc.o"
+	logLevel := strings.ToUpper(m.bpfLogLevel)
+	if logLevel == "" {
+		logLevel = "OFF"
+	}
 	clang := exec.Command("clang",
 		"-x", "c",
 		"-D__KERNEL__",
 		"-D__ASM_SYSREG_H",
-		fmt.Sprintf("-DCALICO_LOG_LEVEL=CALICO_LOG_LEVEL_%s", strings.ToUpper(m.bpfLogLevel)),
+		fmt.Sprintf("-DCALICO_LOG_LEVEL=CALICO_LOG_LEVEL_%s", logLevel),
 		"-Wno-unused-value",
 		"-Wno-pointer-sign",
 		"-Wno-compare-distinct-pointer-types",
