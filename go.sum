@@ -426,6 +426,8 @@ golang.org/x/tools v0.0.0-20191014141550-5fa5b1782b2c h1:PCDsQ/i3XTQEuyIMOOa9pgQ
 golang.org/x/tools v0.0.0-20191014141550-5fa5b1782b2c/go.mod h1:b+2E5dAYhXwXZwtnZ6UAqBI28+e2cm9otk0dWdXHAEo=
 golang.org/x/tools v0.0.0-20191014205221-18e3458ac98b h1:EsQHTYgcM562dq02r6y2Yt9VpvvLNIyNECx96XQeolA=
 golang.org/x/tools v0.0.0-20191014205221-18e3458ac98b/go.mod h1:b+2E5dAYhXwXZwtnZ6UAqBI28+e2cm9otk0dWdXHAEo=
+golang.org/x/tools v0.0.0-20191015150414-f936694f27bf h1:60bAcFbqQ3hW1i1JqrAcVJhY4qUUJhgBAimCcAKNvDE=
+golang.org/x/tools v0.0.0-20191015150414-f936694f27bf/go.mod h1:b+2E5dAYhXwXZwtnZ6UAqBI28+e2cm9otk0dWdXHAEo=
 golang.org/x/xerrors v0.0.0-20190717185122-a985d3407aa7/go.mod h1:I/5z698sn9Ka8TeJc9MKroUUfqBBauWjQqLJ2OPfmY0=
 gonum.org/v1/gonum v0.0.0-20190331200053-3d26580ed485/go.mod h1:2ltnJ7xHfj0zHS40VVPYEAAMTa3ZGguvHGBSJeRWqE0=
 gonum.org/v1/netlib v0.0.0-20190313105609-8cb42192e0e0/go.mod h1:wa6Ws7BG/ESfp6dHfk7C6KdzKA7wR7u/rKwOGE66zvw=

@@ -16,6 +16,7 @@ package intdataplane
 
 import (
 	"bufio"
+	"bytes"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -435,7 +436,15 @@ func (m *bpfEndpointManager) applyPolicyDirection(wep *proto.WorkloadEndpoint, d
 		"sec", sec)
 	out, err = tc.CombinedOutput()
 	if err != nil {
-		log.WithError(err).WithField("out", string(out)).WithField("command", tc).Error("Failed to attach BPF program")
+		var buf bytes.Buffer
+		pg := bpf.NewProgramGenerator(&buf)
+		err = pg.WriteProgram(tiers)
+		if err != nil {
+			log.WithError(err).Panic("Failed to write C file to buffer.")
+		}
+
+		log.WithError(err).WithFields(log.Fields{"out": string(out),
+			"program": buf.String()}).WithField("command", tc).Error("Failed to attach BPF program")
 		return err
 	}
 	return nil
