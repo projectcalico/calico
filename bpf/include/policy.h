@@ -1,6 +1,15 @@
 #ifndef __CALICO_POLICY_H__
 #define __CALICO_POLICY_H__
 
+struct port_range {
+       __u64 ip_set_id;
+       __u16 min, max;
+};
+
+struct cidr {
+       __be32 mask, addr;
+};
+
 #define RULE_MATCH(id, test, negate) do { \
 		if ((negate) ? (test) : !(test)) { \
 			/* Match failed, skip to next rule. */ \
