@@ -54,7 +54,7 @@ func RunFelix(infra DatastoreInfra, options TopologyOptions) *Felix {
 	envVars := map[string]string{
 		"FELIX_LOGSEVERITYSCREEN":        options.FelixLogSeverity,
 		"FELIX_PROMETHEUSMETRICSENABLED": "true",
-		"FELIX_BPFLOGLEVEL":              "debug",
+		"FELIX_BPFLOGLEVEL":              "off",
 		"FELIX_USAGEREPORTINGENABLED":    "false",
 		"FELIX_IPV6SUPPORT":              ipv6Enabled,
 	}
