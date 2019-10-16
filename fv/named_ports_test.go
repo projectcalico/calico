@@ -46,10 +46,10 @@ var _ = Context("_BPF-SAFE_ TCP: Source named ports: with initialized Felix, etc
 	describeNamedPortTests(true, "tcp")
 })
 
-var _ = Context("UDP: Destination named ports: with initialized Felix, etcd datastore, 3 workloads, allow-all profile", func() {
+var _ = Context("_BPF-SAFE_ UDP: Destination named ports: with initialized Felix, etcd datastore, 3 workloads, allow-all profile", func() {
 	describeNamedPortTests(false, "udp")
 })
-var _ = Context("UDP: Source named ports: with initialized Felix, etcd datastore, 3 workloads, allow-all profile", func() {
+var _ = Context("_BPF-SAFE_ UDP: Source named ports: with initialized Felix, etcd datastore, 3 workloads, allow-all profile", func() {
 	describeNamedPortTests(true, "udp")
 })
 
