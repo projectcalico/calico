@@ -30,6 +30,7 @@ import (
 	"k8s.io/apiserver/pkg/storage/etcd3"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
+	"k8s.io/klog"
 
 	"github.com/projectcalico/libcalico-go/lib/apiconfig"
 	client "github.com/projectcalico/libcalico-go/lib/clientv3"
@@ -52,6 +53,14 @@ var version bool
 func init() {
 	// Add a flag to check the version.
 	flag.BoolVar(&version, "version", false, "Display version")
+
+	// Tell klog to log to STDERR.
+	var flags flag.FlagSet
+	klog.InitFlags(&flags)
+	err := flags.Set("logtostderr", "true")
+	if err != nil {
+		log.WithError(err).Fatal("Failed to set logging configuration")
+	}
 }
 
 func main() {
