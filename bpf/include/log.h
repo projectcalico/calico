@@ -4,6 +4,7 @@
 #define CALI_LOG_LEVEL_OFF 0
 #define CALI_LOG_LEVEL_INFO 5
 #define CALI_LOG_LEVEL_DEBUG 10
+#define CALI_LOG_LEVEL_VERB 20
 
 #ifndef CALI_LOG_LEVEL
 #define CALI_LOG_LEVEL CALI_LOG_LEVEL_OFF
@@ -23,6 +24,8 @@
 	CALI_LOG_IF_FLAG(CALI_LOG_LEVEL_INFO, flags, fmt, ## __VA_ARGS__)
 #define CALI_DEBUG(fmt, ...) \
 	CALI_LOG_IF_FLAG(CALI_LOG_LEVEL_DEBUG, flags, fmt, ## __VA_ARGS__)
+#define CALI_VERB(fmt, ...) \
+	CALI_LOG_IF_FLAG(CALI_LOG_LEVEL_VERB, flags, fmt, ## __VA_ARGS__)
 
 #define CALI_LOG_IF(level, fmt, ...) do { \
 	if (CALI_LOG_LEVEL >= (level))    \

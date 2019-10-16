@@ -70,8 +70,8 @@ struct bpf_map_def_extended __attribute__((section("maps"))) calico_ct_map_v4 = 
 };
 
 static CALI_BPF_INLINE void dump_ct_key(struct calico_ct_key *k, enum calico_tc_flags flags) {
-	CALI_DEBUG("CT-TCP   key A=%x:%d proto=%d\n", be32_to_host(k->addr_a), k->port_a, (int)k->protocol);
-	CALI_DEBUG("CT-TCP   key B=%x:%d size=%d\n", be32_to_host(k->addr_b), k->port_b, (int)sizeof(struct calico_ct_key));
+	CALI_VERB("CT-TCP   key A=%x:%d proto=%d\n", be32_to_host(k->addr_a), k->port_a, (int)k->protocol);
+	CALI_VERB("CT-TCP   key B=%x:%d size=%d\n", be32_to_host(k->addr_b), k->port_b, (int)sizeof(struct calico_ct_key));
 }
 
 static CALI_BPF_INLINE int calico_ct_v4_create_tracking(
@@ -86,7 +86,7 @@ static CALI_BPF_INLINE int calico_ct_v4_create_tracking(
 		// Packet already marked as being from another workload, which will
 		// have created a conntrack entry.  Look that one up instead of
 		// creating one.
-		CALI_DEBUG("CT-TCP Asked to create entry but packet is marked as "
+		CALI_DEBUG("CT-ALL Asked to create entry but packet is marked as "
 				"from another workload, doing lookup\n");
 		bool srcLTDest = (ip_src < ip_dst) || ((ip_src == ip_dst) && sport < dport);
 		if (srcLTDest) {
@@ -105,10 +105,10 @@ static CALI_BPF_INLINE int calico_ct_v4_create_tracking(
 		dump_ct_key(k, flags);
 		struct calico_ct_value *ct_value = bpf_map_lookup_elem(&calico_ct_map_v4, k);
 		if (!ct_value) {
-			CALI_DEBUG("CT-TCP Packet marked as from workload but got a conntrack miss!\n");
+			CALI_DEBUG("CT Packet marked as from workload but got a conntrack miss!\n");
 			goto create;
 		}
-		CALI_DEBUG("CT-TCP Found expected create entry, updating...\n");
+		CALI_DEBUG("CT Found expected create entry, updating...\n");
 		if (srcLTDest) {
 			ct_value->a_to_b.seqno = seq;
 			ct_value->a_to_b.syn_seen = syn;
@@ -133,7 +133,7 @@ static CALI_BPF_INLINE int calico_ct_v4_create_tracking(
 	__u64 now;
 	create:
 	now = bpf_ktime_get_ns();
-	CALI_DEBUG("CT-TCP Creating entry at %llu.\n", now);
+	CALI_DEBUG("CT-ALL Creating entry at %llu.\n", now);
 	struct calico_ct_value ct_value = {};
 	ct_value.created=now;
 	ct_value.last_seen=now;
@@ -170,7 +170,7 @@ static CALI_BPF_INLINE int calico_ct_v4_create_tracking(
 		our_dir->egress_whitelisted = true;
 	}
 	int err = bpf_map_update_elem(&calico_ct_map_v4, k, &ct_value, 0);
-	CALI_DEBUG("CT-TCP Create result: %d.\n", err);
+	CALI_DEBUG("CT-ALL Create result: %d.\n", err);
 	return err;
 }
 
@@ -425,22 +425,22 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_tcp_lookup(
 		break;
 	case CALI_CT_TYPE_NORMAL:
 		CALI_DEBUG("CT-TCP Hit! NORMAL entry.\n");
-		CALI_DEBUG("CT-TCP   Created: %llu.\n", v->created);
-		CALI_DEBUG("CT-TCP   Last seen: %llu.\n", v->last_seen);
-		CALI_DEBUG("CT-TCP   A-to-B: seqno %u.\n", v->a_to_b.seqno);
-		CALI_DEBUG("CT-TCP   A-to-B: syn_seen %d.\n", v->a_to_b.syn_seen);
-		CALI_DEBUG("CT-TCP   A-to-B: ack_seen %d.\n", v->a_to_b.ack_seen);
-		CALI_DEBUG("CT-TCP   A-to-B: fin_seen %d.\n", v->a_to_b.fin_seen);
-		CALI_DEBUG("CT-TCP   A-to-B: rst_seen %d.\n", v->a_to_b.rst_seen);
-		CALI_DEBUG("CT-TCP   A: egress_whitelisted %d.\n", v->a_to_b.egress_whitelisted);
-		CALI_DEBUG("CT-TCP   A: ingress_whitelisted %d.\n", v->a_to_b.ingress_whitelisted);
-		CALI_DEBUG("CT-TCP   B-to-A: seqno %u.\n", v->b_to_a.seqno);
-		CALI_DEBUG("CT-TCP   B-to-A: syn_seen %d.\n", v->b_to_a.syn_seen);
-		CALI_DEBUG("CT-TCP   B-to-A: ack_seen %d.\n", v->b_to_a.ack_seen);
-		CALI_DEBUG("CT-TCP   B-to-A: fin_seen %d.\n", v->b_to_a.fin_seen);
-		CALI_DEBUG("CT-TCP   B-to-A: rst_seen %d.\n", v->b_to_a.rst_seen);
-		CALI_DEBUG("CT-TCP   B: egress_whitelisted %d.\n", v->b_to_a.egress_whitelisted);
-		CALI_DEBUG("CT-TCP   B: ingress_whitelisted %d.\n", v->b_to_a.ingress_whitelisted);
+		CALI_VERB("CT-TCP   Created: %llu.\n", v->created);
+		CALI_VERB("CT-TCP   Last seen: %llu.\n", v->last_seen);
+		CALI_VERB("CT-TCP   A-to-B: seqno %u.\n", v->a_to_b.seqno);
+		CALI_VERB("CT-TCP   A-to-B: syn_seen %d.\n", v->a_to_b.syn_seen);
+		CALI_VERB("CT-TCP   A-to-B: ack_seen %d.\n", v->a_to_b.ack_seen);
+		CALI_VERB("CT-TCP   A-to-B: fin_seen %d.\n", v->a_to_b.fin_seen);
+		CALI_VERB("CT-TCP   A-to-B: rst_seen %d.\n", v->a_to_b.rst_seen);
+		CALI_VERB("CT-TCP   A: egress_whitelisted %d.\n", v->a_to_b.egress_whitelisted);
+		CALI_VERB("CT-TCP   A: ingress_whitelisted %d.\n", v->a_to_b.ingress_whitelisted);
+		CALI_VERB("CT-TCP   B-to-A: seqno %u.\n", v->b_to_a.seqno);
+		CALI_VERB("CT-TCP   B-to-A: syn_seen %d.\n", v->b_to_a.syn_seen);
+		CALI_VERB("CT-TCP   B-to-A: ack_seen %d.\n", v->b_to_a.ack_seen);
+		CALI_VERB("CT-TCP   B-to-A: fin_seen %d.\n", v->b_to_a.fin_seen);
+		CALI_VERB("CT-TCP   B-to-A: rst_seen %d.\n", v->b_to_a.rst_seen);
+		CALI_VERB("CT-TCP   B: egress_whitelisted %d.\n", v->b_to_a.egress_whitelisted);
+		CALI_VERB("CT-TCP   B: ingress_whitelisted %d.\n", v->b_to_a.ingress_whitelisted);
 
 		result.rc =	CALI_CT_ESTABLISHED;
 
@@ -485,28 +485,28 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_tcp_lookup(
 		our_dir->rst_seen = 1;
 	}
 	if (tcp_header->fin) {
-		CALI_DEBUG("CT-TCP FIN seen, marking CT entry.\n");
+		CALI_VERB("CT-TCP FIN seen, marking CT entry.\n");
 		our_dir->fin_seen = 1;
 	}
 
 	if (tcp_header->syn && tcp_header->ack) {
 		if (oth_dir->syn_seen && (oth_dir->seqno + 1) == tcp_header->ack_seq) {
-			CALI_DEBUG("CT-TCP SYN+ACK seen, marking CT entry.\n");
+			CALI_VERB("CT-TCP SYN+ACK seen, marking CT entry.\n");
 			our_dir->syn_seen = 1;
 			our_dir->ack_seen = 1;
 			our_dir->seqno = tcp_header->seq;
 		} else {
-			CALI_DEBUG("CT-TCP SYN+ACK seen but packet's ACK (%u) "
+			CALI_VERB("CT-TCP SYN+ACK seen but packet's ACK (%u) "
 					"doesn't match other side's SYN (%u).\n",
 					tcp_header->ack_seq, oth_dir->seqno);
 			// Have to let this through so source can reset?
 		}
 	} else if (tcp_header->ack && !our_dir->ack_seen && our_dir->syn_seen) {
 		if (oth_dir->syn_seen && (oth_dir->seqno + 1) == tcp_header->ack_seq) {
-			CALI_DEBUG("CT-TCP ACK seen, marking CT entry.\n");
+			CALI_VERB("CT-TCP ACK seen, marking CT entry.\n");
 			our_dir->ack_seen = 1;
 		} else {
-			CALI_DEBUG("CT-TCP ACK seen but packet's ACK (%u) doesn't "
+			CALI_VERB("CT-TCP ACK seen but packet's ACK (%u) doesn't "
 					"match other side's SYN (%u).\n",
 					tcp_header->ack_seq, oth_dir->seqno);
 			// Have to let this through so source can reset?
@@ -514,10 +514,10 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_tcp_lookup(
 	} else {
 		// Normal packet, check that the handshake is complete.
 		if (!oth_dir->ack_seen) {
-			CALI_DEBUG("CT-TCP Non-flagged packet but other side has never ACKed.\n");
+			CALI_VERB("CT-TCP Non-flagged packet but other side has never ACKed.\n");
 			// Have to let this through so source can reset?
 		} else {
-			CALI_DEBUG("CT-TCP Non-flagged packet and other side has ACKed.\n");
+			CALI_VERB("CT-TCP Non-flagged packet and other side has ACKed.\n");
 		}
 	}
 
@@ -566,7 +566,7 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_udp_lookup(
 	__u64 now = bpf_ktime_get_ns();
 	v->last_seen = now;
 
-	struct calico_ct_leg *our_dir, *oth_dir;
+	struct calico_ct_leg *pkt_dir, *rtn_dir;
 
 	struct calico_ct_value *tracking_v;
 	switch (v->type) {
@@ -583,11 +583,11 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_udp_lookup(
 		tracking_v->last_seen = now;
 
 		if (ip_src == v->nat_rev_key.addr_a && sport == v->nat_rev_key.port_a) {
-			our_dir = &tracking_v->a_to_b;
-			oth_dir = &tracking_v->b_to_a;
+			pkt_dir = &tracking_v->a_to_b;
+			rtn_dir = &tracking_v->b_to_a;
 		} else {
-			our_dir = &tracking_v->b_to_a;
-			oth_dir = &tracking_v->a_to_b;
+			pkt_dir = &tracking_v->b_to_a;
+			rtn_dir = &tracking_v->a_to_b;
 		}
 
 		// Since we found a forward NAT entry, we know that it's the destination
@@ -605,57 +605,61 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_udp_lookup(
 		result.nat_port = v->orig_port;
 
 		if (srcLTDest) {
-			our_dir = &v->a_to_b;
-			oth_dir = &v->b_to_a;
+			pkt_dir = &v->a_to_b;
+			rtn_dir = &v->b_to_a;
 		} else {
-			our_dir = &v->b_to_a;
-			oth_dir = &v->a_to_b;
+			pkt_dir = &v->b_to_a;
+			rtn_dir = &v->a_to_b;
 		}
 
 		break;
 	case CALI_CT_TYPE_NORMAL:
 		CALI_DEBUG("CT-UDP Hit! NORMAL entry.\n");
-		CALI_DEBUG("CT-UDP   Created: %llu.\n", v->created);
-		CALI_DEBUG("CT-UDP   Last seen: %llu.\n", v->last_seen);
-		CALI_DEBUG("CT-UDP   A: egress_whitelisted %d.\n", v->a_to_b.egress_whitelisted);
-		CALI_DEBUG("CT-UDP   A: ingress_whitelisted %d.\n", v->a_to_b.ingress_whitelisted);
-		CALI_DEBUG("CT-UDP   B: egress_whitelisted %d.\n", v->b_to_a.egress_whitelisted);
-		CALI_DEBUG("CT-UDP   B: ingress_whitelisted %d.\n", v->b_to_a.ingress_whitelisted);
+		CALI_VERB("CT-UDP   Created: %llu.\n", v->created);
+		CALI_VERB("CT-UDP   Last seen: %llu.\n", v->last_seen);
+		CALI_VERB("CT-UDP   A: egress_whitelisted %d.\n", v->a_to_b.egress_whitelisted);
+		CALI_VERB("CT-UDP   A: ingress_whitelisted %d.\n", v->a_to_b.ingress_whitelisted);
+		CALI_VERB("CT-UDP   B: egress_whitelisted %d.\n", v->b_to_a.egress_whitelisted);
+		CALI_VERB("CT-UDP   B: ingress_whitelisted %d.\n", v->b_to_a.ingress_whitelisted);
 
 		result.rc =	CALI_CT_ESTABLISHED;
 
 		if (srcLTDest) {
-			our_dir = &v->a_to_b;
-			oth_dir = &v->b_to_a;
+			pkt_dir = &v->a_to_b;
+			rtn_dir = &v->b_to_a;
+
+			if (CALI_TC_FLAGS_TO_HOST(flags)) {
+				// Workload egress hook.  Our side is the "packet" side.
+				if (!pkt_dir->ingress_whitelisted && !pkt_dir->egress_whitelisted) {
+					result.rc = CALI_CT_NEW;
+				}
+			} else {
+				// Workload ingress.  Our side is the "return" side.
+				if (!rtn_dir->ingress_whitelisted && !rtn_dir->egress_whitelisted) {
+					result.rc = CALI_CT_NEW;
+				}
+			}
 		} else {
-			our_dir = &v->b_to_a;
-			oth_dir = &v->a_to_b;
+			pkt_dir = &v->b_to_a;
+			rtn_dir = &v->a_to_b;
+
+			if (CALI_TC_FLAGS_TO_HOST(flags)) {
+				// Workload egress hook.  Our side is the "packet" side.
+				if (!pkt_dir->ingress_whitelisted && !pkt_dir->egress_whitelisted) {
+					result.rc = CALI_CT_NEW;
+				}
+			} else {
+				// Workload ingress.  Our side is the "return" side.
+				if (!rtn_dir->ingress_whitelisted && !rtn_dir->egress_whitelisted) {
+					result.rc = CALI_CT_NEW;
+				}
+			}
 		}
 
 		break;
 	default:
 		CALI_DEBUG("CT-UDP Hit! UNKNOWN entry type.\n");
 		goto out_lookup_fail;
-	}
-
-	// TODO Update once host endpoints come along.
-	// Packet towards a workload.
-	if (our_dir->ingress_whitelisted || our_dir->egress_whitelisted) {
-		// Packet was whitelisted by the policy attached to this workload.
-		CALI_DEBUG("CT-UDP Packet whitelisted by this workload's policy.\n");
-	} else if (oth_dir->ingress_whitelisted) {
-		// Traffic between two workloads on the same host; the only way
-		// the the ingress flag can get set on the other side of the
-		// connection is if this workload opened the connection and it
-		// was whitelisted at the other side.
-		CALI_DEBUG("CT-UDP Packet whitelisted by other workload's policy.\n");
-	} else {
-		// oth_dir->egress_whitelisted?  In this case, the other workload
-		// sent us a connection but we never upgraded it to
-		// ingress_whitelisted; it must not have passed our local ingress
-		// policy.
-		CALI_DEBUG("CT-UDP Packet not allowed by ingress/egress whitelist flags.\n");
-		result.rc = CALI_CT_INVALID;
 	}
 
 	CALI_DEBUG("CT-UDP result: %d.\n", result.rc);
@@ -750,12 +754,12 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_icmp_lookup(
 		break;
 	case CALI_CT_TYPE_NORMAL:
 		CALI_DEBUG("CT-ICMP Hit! NORMAL entry.\n");
-		CALI_DEBUG("CT-ICMP   Created: %llu.\n", v->created);
-		CALI_DEBUG("CT-ICMP   Last seen: %llu.\n", v->last_seen);
-		CALI_DEBUG("CT-ICMP   A: egress_whitelisted %d.\n", v->a_to_b.egress_whitelisted);
-		CALI_DEBUG("CT-ICMP   A: ingress_whitelisted %d.\n", v->a_to_b.ingress_whitelisted);
-		CALI_DEBUG("CT-ICMP   B: egress_whitelisted %d.\n", v->b_to_a.egress_whitelisted);
-		CALI_DEBUG("CT-ICMP   B: ingress_whitelisted %d.\n", v->b_to_a.ingress_whitelisted);
+		CALI_VERB("CT-ICMP   Created: %llu.\n", v->created);
+		CALI_VERB("CT-ICMP   Last seen: %llu.\n", v->last_seen);
+		CALI_VERB("CT-ICMP   A: egress_whitelisted %d.\n", v->a_to_b.egress_whitelisted);
+		CALI_VERB("CT-ICMP   A: ingress_whitelisted %d.\n", v->a_to_b.ingress_whitelisted);
+		CALI_VERB("CT-ICMP   B: egress_whitelisted %d.\n", v->b_to_a.egress_whitelisted);
+		CALI_VERB("CT-ICMP   B: ingress_whitelisted %d.\n", v->b_to_a.ingress_whitelisted);
 
 		result.rc =	CALI_CT_ESTABLISHED;
 
@@ -777,19 +781,19 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_icmp_lookup(
 	// Packet towards a workload.
 	if (our_dir->ingress_whitelisted || our_dir->egress_whitelisted) {
 		// Packet was whitelisted by the policy attached to this workload.
-		CALI_DEBUG("CT-ICMP Packet whitelisted by this workload's policy.\n");
+		CALI_VERB("CT-ICMP Packet whitelisted by this workload's policy.\n");
 	} else if (oth_dir->ingress_whitelisted) {
 		// Traffic between two workloads on the same host; the only way
 		// the the ingress flag can get set on the other side of the
 		// connection is if this workload opened the connection and it
 		// was whitelisted at the other side.
-		CALI_DEBUG("CT-ICMP Packet whitelisted by other workload's policy.\n");
+		CALI_VERB("CT-ICMP Packet whitelisted by other workload's policy.\n");
 	} else {
 		// oth_dir->egress_whitelisted?  In this case, the other workload
 		// sent us a connection but we never upgraded it to
 		// ingress_whitelisted; it must not have passed our local ingress
 		// policy.
-		CALI_DEBUG("CT-ICMP Packet not allowed by ingress/egress whitelist flags.\n");
+		CALI_VERB("CT-ICMP Packet not allowed by ingress/egress whitelist flags.\n");
 		result.rc = CALI_CT_INVALID;
 	}
 
