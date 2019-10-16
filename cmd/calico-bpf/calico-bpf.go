@@ -16,7 +16,11 @@ package main
 
 import (
 	"fmt"
+	"net"
+	"os"
 	"sort"
+	"strings"
+	"syscall"
 
 	"github.com/docopt/docopt-go"
 	log "github.com/sirupsen/logrus"
@@ -29,7 +33,8 @@ import (
 const usage = `calico-bpf, tool for interrogating Calico BPF state.
 
 Usage:
-  calico-bpf dump ipsets
+  calico-bpf ipsets dump 
+  calico-bpf conntrack remove <proto> <ip1> <ip2>
 
 Options:
   --version                    Print the version and exit.
@@ -41,17 +46,91 @@ func main() {
 	version := "Version:            " + buildinfo.GitVersion + "\n" +
 		"Full git commit ID: " + buildinfo.GitRevision + "\n" +
 		"Build date:         " + buildinfo.BuildDate + "\n"
-	arguments, err := docopt.Parse(usage, nil, true, version, false)
+
+	arguments, err := docopt.ParseArgs(usage, os.Args[1:], version)
 	if err != nil {
 		println(usage)
 		log.Fatalf("Failed to parse usage, exiting: %v", err)
 	}
 
-	_ = arguments
+	var args struct {
+		IPSets bool `docopt:"ipsets"`
+		Dump   bool
 
+		Conntrack bool
+		Remove    bool
+		Proto     string `docopt:"<proto>"`
+
+		IP1 string `docopt:"<ip1>"`
+		IP2 string `docopt:"<ip2>"`
+	}
+
+	err = arguments.Bind(&args)
+	if err != nil {
+		println(usage)
+		log.WithError(err).Error("Failed to bind arguments")
+	}
+
+	if args.IPSets && args.Dump {
+		dumpIPSets()
+	} else if args.Conntrack && args.Remove {
+		removeConntrackEntries(args.Proto, args.IP1, args.IP2)
+	}
+}
+
+func removeConntrackEntries(rawProto, rawIP1, rawIP2 string) {
+	log.WithField("ip1", rawIP1).WithField("ip2", rawIP2).Info("Removing conntrack entries for IP")
+
+	var proto uint8
+	switch strings.ToLower(rawProto) {
+	case "udp":
+		proto = 17
+	case "tcp":
+		proto = 6
+	}
+
+	ip1 := net.ParseIP(rawIP1)
+	ip2 := net.ParseIP(rawIP2)
+
+	ctMap := intdataplane.ConntrackMap()
+	var keysToRemove []intdataplane.ConntrackKey
+	err := ctMap.Iter(func(k, v []byte) {
+		var ctKey intdataplane.ConntrackKey
+		if len(k) != len(ctKey) {
+			log.Panic("Key has unexpected length")
+		}
+		copy(ctKey[:], k[:])
+
+		log.Infof("Examining conntrack key: %v", ctKey)
+
+		if ctKey.Proto() != proto {
+			return
+		}
+
+		if ctKey.AddrA().Equal(ip1) && ctKey.AddrB().Equal(ip2) {
+			log.Info("Match")
+			keysToRemove = append(keysToRemove, ctKey)
+		} else if ctKey.AddrB().Equal(ip1) && ctKey.AddrA().Equal(ip2) {
+			log.Info("Match")
+			keysToRemove = append(keysToRemove, ctKey)
+		}
+	})
+	if err != nil {
+		log.WithError(err).Fatal("Failed to iterate over conntrack entries")
+	}
+
+	for _, k := range keysToRemove {
+		err := ctMap.Delete(k[:])
+		if err != nil {
+			log.WithError(err).WithField("key", k).Warning("Failed to delete entry from map")
+		}
+	}
+}
+
+func dumpIPSets() {
 	ipsets := intdataplane.IPSetsMap()
 	membersBySet := map[uint64][]string{}
-	err = ipsets.Iter(func(k, v []byte) {
+	err := ipsets.Iter(func(k, v []byte) {
 		var entry intdataplane.IPSetEntry
 		copy(entry[:], k[:])
 		var member string
@@ -64,6 +143,7 @@ func main() {
 	})
 	if err != nil {
 		log.WithError(err).Error("Failed to dump IP sets map.")
+		syscall.Exit(1)
 	}
 	var setIDs []uint64
 	for k, v := range membersBySet {
@@ -73,7 +153,6 @@ func main() {
 	sort.Slice(setIDs, func(i, j int) bool {
 		return setIDs[i] < setIDs[j]
 	})
-
 	for _, setID := range setIDs {
 		fmt.Printf("IP set %#x\n", setID)
 		for _, member := range membersBySet[setID] {

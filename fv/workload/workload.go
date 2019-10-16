@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"os"
 	"os/exec"
 	"reflect"
 	"regexp"
@@ -477,7 +478,11 @@ func (p *Port) CanConnectTo(ip, port, protocol string) bool {
 		// If this is a retry then we may have stale conntrack entries and we don't want those
 		// to influence the connectivity check.  Only an issue for UDP due to the lack of a
 		// sequence number.
-		_ = p.C.ExecMayFail("conntrack", "-D", "-p", "udp", "-s", p.Workload.IP, "-d", ip)
+		if os.Getenv("FELIX_FV_ENABLE_BPF") == "true" {
+			p.C.Exec("calico-bpf", "conntrack", "remove", "udp", p.Workload.IP, ip)
+		} else {
+			_ = p.C.ExecMayFail("conntrack", "-D", "-p", "udp", "-s", p.Workload.IP, "-d", ip)
+		}
 	}
 
 	// Run 'test-connection' to the target.

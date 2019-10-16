@@ -42,11 +42,9 @@ import (
 //
 // // bpf_attr_setup_delete_elem sets up the bpf_attr union for use with BPF_MAP_DELETE_ELEM.
 // // A C function makes this easier because unions aren't easy to access from Go.
-// void bpf_attr_setup_delete_elem(union bpf_attr *attr, __u32 map_fd, void *pointer_to_key, __u64 flags) {
+// void bpf_attr_setup_delete_elem(union bpf_attr *attr, __u32 map_fd, void *pointer_to_key) {
 //    attr->map_fd = map_fd;
 //    attr->key = (__u64)(unsigned long)pointer_to_key;
-//    attr->value = 0;
-//    attr->flags = flags;
 // }
 import "C"
 
@@ -57,13 +55,13 @@ func (f MapFD) Close() error {
 }
 
 func GetPinnedMapFD(filename string) (MapFD, error) {
-	var b C.union_bpf_attr
+	var bpfAttr C.union_bpf_attr
 
 	cFilename := C.CString(filename)
 	defer C.free(unsafe.Pointer(cFilename))
 
-	C.bpf_attr_setup_obj_get(&b, cFilename, 0)
-	fd, _, errno := unix.Syscall(unix.SYS_BPF, unix.BPF_OBJ_GET, uintptr(unsafe.Pointer(&b)), C.sizeof_union_bpf_attr)
+	C.bpf_attr_setup_obj_get(&bpfAttr, cFilename, 0)
+	fd, _, errno := unix.Syscall(unix.SYS_BPF, unix.BPF_OBJ_GET, uintptr(unsafe.Pointer(&bpfAttr)), C.sizeof_union_bpf_attr)
 	if errno != 0 {
 		return 0, errno
 	}
@@ -72,14 +70,14 @@ func GetPinnedMapFD(filename string) (MapFD, error) {
 }
 
 func UpdateMapEntry(mapFD MapFD, k, v []byte) error {
-	var b C.union_bpf_attr
+	var bpfAttr C.union_bpf_attr
 
 	cK := C.CBytes(k)
 	cV := C.CBytes(v)
 
-	C.bpf_attr_setup_update_elem(&b, C.uint(mapFD), cK, cV, unix.BPF_ANY)
+	C.bpf_attr_setup_update_elem(&bpfAttr, C.uint(mapFD), cK, cV, unix.BPF_ANY)
 
-	_, _, errno := unix.Syscall(unix.SYS_BPF, unix.BPF_MAP_UPDATE_ELEM, uintptr(unsafe.Pointer(&b)), C.sizeof_union_bpf_attr)
+	_, _, errno := unix.Syscall(unix.SYS_BPF, unix.BPF_MAP_UPDATE_ELEM, uintptr(unsafe.Pointer(&bpfAttr)), C.sizeof_union_bpf_attr)
 
 	C.free(cK)
 	C.free(cV)
@@ -91,17 +89,17 @@ func UpdateMapEntry(mapFD MapFD, k, v []byte) error {
 }
 
 func DeleteMapEntry(mapFD MapFD, k []byte) error {
-	var b C.union_bpf_attr
+	var bpfAttr C.union_bpf_attr
 
 	cK := C.CBytes(k)
 
-	C.bpf_attr_setup_delete_elem(&b, C.uint(mapFD), cK, unix.BPF_ANY)
+	C.bpf_attr_setup_delete_elem(&bpfAttr, C.uint(mapFD), cK)
 
-	_, _, errno := unix.Syscall(unix.SYS_BPF, unix.BPF_MAP_DELETE_ELEM, uintptr(unsafe.Pointer(&b)), C.sizeof_union_bpf_attr)
+	r, _, errno := unix.Syscall(unix.SYS_BPF, unix.BPF_MAP_DELETE_ELEM, uintptr(unsafe.Pointer(&bpfAttr)), C.sizeof_union_bpf_attr)
 
 	C.free(cK)
 
-	if errno != 0 {
+	if r != 0 {
 		return errno
 	}
 	return nil

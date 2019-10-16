@@ -15,6 +15,10 @@
 package intdataplane
 
 import (
+	"encoding/binary"
+	"fmt"
+	"net"
+
 	"golang.org/x/sys/unix"
 
 	log "github.com/sirupsen/logrus"
@@ -26,8 +30,39 @@ type conntrackManager struct {
 	ctMap bpf.Map
 }
 
+// struct calico_ct_key {
+//   uint32_t protocol;
+//   __be32 addr_a, addr_b; // NBO
+//   uint16_t port_a, port_b; // HBO
+// };
 const conntrackKeySize = 16
 const conntrackValueSize = 48
+
+type ConntrackKey [conntrackKeySize]byte
+
+func (k ConntrackKey) Proto() uint8 {
+	return uint8(binary.LittleEndian.Uint32(k[:4]))
+}
+
+func (k ConntrackKey) AddrA() net.IP {
+	return k[4:8]
+}
+
+func (k ConntrackKey) PortA() uint16 {
+	return binary.LittleEndian.Uint16(k[12:14])
+}
+
+func (k ConntrackKey) AddrB() net.IP {
+	return k[8:12]
+}
+
+func (k ConntrackKey) PortB() uint16 {
+	return binary.LittleEndian.Uint16(k[14:16])
+}
+
+func (k ConntrackKey) String() string {
+	return fmt.Sprintf("proto=%v %v:%v <-> %v:%v", k.Proto(), k.AddrA(), k.PortA(), k.AddrB(), k.PortB())
+}
 
 type ConntrackEntry [conntrackValueSize]byte
 

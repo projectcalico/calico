@@ -131,7 +131,18 @@ func appendBytes(strings []string, bytes []byte) []string {
 }
 
 func (b *PinnedMap) Delete(k []byte) error {
-	return DeleteMapEntry(b.fd, k)
+	args := make([]string, 0, 10+len(k))
+	args = append(args, "map", "delete",
+		"pinned", b.Filename,
+		"key")
+	args = appendBytes(args, k)
+
+	cmd := exec.Command("bpftool", args...)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		logrus.WithField("out", string(out)).Error("Failed to run bpftool")
+	}
+	return err
 }
 
 func (b *PinnedMap) EnsureExists() error {

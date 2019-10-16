@@ -194,7 +194,7 @@ func describeNamedPortTests(testSourcePorts bool, protocol string) {
 				}
 			}
 
-			felix.Exec("calico-bpf", "dump", "ipsets")
+			felix.Exec("calico-bpf", "ipsets", "dump")
 			felix.Exec("bpftool", "map")
 			felix.Exec("bpftool", "prog")
 		}

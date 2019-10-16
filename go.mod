@@ -5,7 +5,7 @@ go 1.12
 require (
 	github.com/containernetworking/cni v0.5.2
 	github.com/davecgh/go-spew v1.1.1
-	github.com/docopt/docopt-go v0.0.0-20160216232012-784ddc588536
+	github.com/docopt/docopt-go v0.0.0-20180111231733-ee0de3bc6815
 	github.com/go-ini/ini v1.44.0
 	github.com/gobuffalo/packr/v2 v2.7.1
 	github.com/gogo/protobuf v1.2.2-0.20190723190241-65acae22fc9d
