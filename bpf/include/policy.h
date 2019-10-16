@@ -1,5 +1,5 @@
-#ifndef __CALICO_POLICY_H__
-#define __CALICO_POLICY_H__
+#ifndef __CALI_POLICY_H__
+#define __CALI_POLICY_H__
 
 struct port_range {
        __u64 ip_set_id;
@@ -13,13 +13,13 @@ struct cidr {
 #define RULE_MATCH(id, test, negate) do { \
 		if ((negate) ? (test) : !(test)) { \
 			/* Match failed, skip to next rule. */ \
-			CALICO_DEBUG_AT("  rule didn't match -> fall through\n"); \
+			CALI_DEBUG("  rule didn't match -> fall through\n"); \
 			goto rule_no_match_ ## id; \
 		} \
 	} while (false)
 
 #define RULE_MATCH_PROTOCOL(id, negate, protocol_number) \
-	CALICO_DEBUG_AT("  check protocol %d (pkt) == %d (rule)\n", (int)ip_proto, (int)protocol_number); \
+	CALI_DEBUG("  check protocol %d (pkt) == %d (rule)\n", (int)ip_proto, (int)protocol_number); \
 	RULE_MATCH(id, (protocol_number) == ip_proto, negate)
 
 #define RULE_MATCH_PORT_RANGES(id, negate, saddr_or_daddr, sport_or_dport, ...) do { \
@@ -29,7 +29,7 @@ struct cidr {
 		for (int i = 0; i < (sizeof(port_ranges)/sizeof(struct port_range)); i++) { \
 			if (port_ranges[i].ip_set_id == 0) {\
 				/* Normal port match*/ \
-				CALICO_DEBUG_AT("  check " #sport_or_dport " against %d <= %d (pkt) <= %d\n", \
+				CALI_DEBUG("  check " #sport_or_dport " against %d <= %d (pkt) <= %d\n", \
 								(int)port_ranges[i].min, (int)(sport_or_dport), (int)port_ranges[i].max); \
 				if ((sport_or_dport) >= port_ranges[i].min && (sport_or_dport) <= port_ranges[i].max) { \
 					match = true; \
@@ -37,7 +37,7 @@ struct cidr {
 				} \
 			} else {\
 				/* Named port match; actually maps through to an IP set */ \
-				CALICO_DEBUG_AT("  look up " #saddr_or_daddr ":port (%x:%d) in IP set %llx\n", \
+				CALI_DEBUG("  look up " #saddr_or_daddr ":port (%x:%d) in IP set %llx\n", \
 						        be32_to_host(saddr_or_daddr), (int)(sport_or_dport), port_ranges[i].ip_set_id); \
 				union ip4_set_bpf_lpm_trie_key k; \
 				k.ip.mask = sizeof(struct ip4setkey)*8 ; \
@@ -70,7 +70,7 @@ struct cidr {
 	} while (false)
 
 #define RULE_MATCH_IP_SET(id, negate, saddr_or_daddr, ip_set_id) do { \
-		CALICO_DEBUG_AT("  look up " #saddr_or_daddr " (%x) in IP set " #ip_set_id "\n", be32_to_host(saddr_or_daddr)); \
+		CALI_DEBUG("  look up " #saddr_or_daddr " (%x) in IP set " #ip_set_id "\n", be32_to_host(saddr_or_daddr)); \
 		bool match = false; \
 		union ip4_set_bpf_lpm_trie_key k; \
 		k.ip.mask = sizeof(struct ip4setkey)*8 ; \
@@ -87,12 +87,12 @@ struct cidr {
 
 
 #define RULE_START(id) \
-	CALICO_DEBUG_AT("Rule " #id " \n");
+	CALI_DEBUG("Rule " #id " \n");
 
 #define RULE_END(id, action) \
-	CALICO_DEBUG_AT("  MATCH -> " #action "\n"); \
+	CALI_DEBUG("  MATCH -> " #action "\n"); \
 	goto action; /* Reach here if the rule matched. */ \
 	rule_no_match_ ## id: do {;} while (false)
 
 
-#endif /* __CALICO_POLICY_H__ */
+#endif /* __CALI_POLICY_H__ */

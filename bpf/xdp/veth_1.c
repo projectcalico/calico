@@ -219,11 +219,11 @@ static __always_inline int veth_main(struct xdp_md *xdp)
     if (ct_value) {
         // Got a conntrack hit, figure out what type.
         switch (ct_value->ct_type) {
-        case CALICO_CT_TYPE_ALLOW:
+        case CALI_CT_TYPE_ALLOW:
             printk("Got conntrack hit: ALLOW.\n");
             allowed_by_conntrack = true;
             break;
-        case CALICO_CT_TYPE_NAT:
+        case CALI_CT_TYPE_NAT:
             printk("Got conntrack hit: NAT.\n");
             allowed_by_conntrack = true;
             break;
@@ -284,7 +284,7 @@ static __always_inline int veth_main(struct xdp_md *xdp)
     return result;
 
 //        // FIXME Policy should do this tail call
-//        tail_call(xdp, &calico_programs_map, CALICO_PROG_ID_VETH_POST_POLICY);
+//        tail_call(xdp, &calico_programs_map, CALI_PROG_ID_VETH_POST_POLICY);
 //        printk("Tail call failed.\n");
 //        return XDP_DROP;
     }

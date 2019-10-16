@@ -13,7 +13,7 @@
 #include "bpf.h"
 #include "bpf_maps.h"
 
-static CALICO_BPF_INLINE int mac_sw_redir(struct xdp_md *xdp) {
+static CALI_BPF_INLINE int mac_sw_redir(struct xdp_md *xdp) {
     void *data_start = (void *)(long)xdp->data;
     void *data_end = (void *)(long)xdp->data_end;
     struct ethhdr *eth_hdr = data_start;

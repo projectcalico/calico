@@ -355,7 +355,7 @@ func (m *bpfEndpointManager) applyPolicyDirection(wep *proto.WorkloadEndpoint, d
 		"-x", "c",
 		"-D__KERNEL__",
 		"-D__ASM_SYSREG_H",
-		fmt.Sprintf("-DCALICO_LOG_LEVEL=CALICO_LOG_LEVEL_%s", logLevel),
+		fmt.Sprintf("-DCALI_LOG_LEVEL=CALI_LOG_LEVEL_%s", logLevel),
 		"-Wno-unused-value",
 		"-Wno-pointer-sign",
 		"-Wno-compare-distinct-pointer-types",

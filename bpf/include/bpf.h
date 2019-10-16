@@ -12,13 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef __CALICO_BPF_H__
-#define __CALICO_BPF_H__
+#ifndef __CALI_BPF_H__
+#define __CALI_BPF_H__
 
 #include <linux/bpf.h>
 #include <bpf/libbpf.h>    // for bpftool dyn loader struct 'bpf_map_def'
 
-#define CALICO_BPF_INLINE inline __attribute__((always_inline))
+#define CALI_BPF_INLINE inline __attribute__((always_inline))
 
 #if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
 #define be64_to_host(value) __builtin_bswap64(value)
@@ -84,17 +84,17 @@ union ip4_bpf_lpm_trie_key {
 };
 
 // helper functions
-CALICO_BPF_INLINE void ip4val_to_lpm(
+CALI_BPF_INLINE void ip4val_to_lpm(
 	union ip4_bpf_lpm_trie_key *ret, __u32 mask, __u32 addr) {
 	ret->lpm.prefixlen = mask;
 	ret->ip.addr = addr;
 }
 
-CALICO_BPF_INLINE __u32 port_to_host(__u32 port) {
+CALI_BPF_INLINE __u32 port_to_host(__u32 port) {
 	return be32_to_host(port) >> 16;
 }
 
-CALICO_BPF_INLINE __u32 safe_extract_port(__u32 port) {
+CALI_BPF_INLINE __u32 safe_extract_port(__u32 port) {
 	// The verifier doesn't seem to like reading something different than
 	// 32 bits for these fields:
 	//
@@ -120,15 +120,20 @@ struct bpf_map_def_extended {
 
 
 enum calico_tc_flags {
-	CALICO_TC_HOST_EP = 1<<0,
-	CALICO_TC_INGRESS = 1<<1,
+	CALI_TC_HOST_EP = 1<<0,
+	CALI_TC_INGRESS = 1<<1,
 };
+
+#define CALI_TC_FLAGS_TO_HOST(flags) (((flags & CALI_TC_HOST_EP) && (flags & CALI_TC_INGRESS)) || \
+		(!(flags & CALI_TC_HOST_EP) && !(flags & CALI_TC_INGRESS)))
+
+#define CALI_TC_FLAGS_FROM_WORKLOAD(flags) (!(flags & CALI_TC_HOST_EP) && !(flags & CALI_TC_INGRESS))
 
 enum calico_skb_mark {
 	// TODO allocate marks from the mark pool.
-	CALICO_SKB_MARK_FROM_WORKLOAD = 0xca110000,
-	CALICO_SKB_MARK_FROM_WORKLOAD_MASK = 0xffff0000,
-	CALICO_SKB_MARK_NO_TRACK      = 1<<1,
+	CALI_SKB_MARK_FROM_WORKLOAD = 0xca110000,
+	CALI_SKB_MARK_FROM_WORKLOAD_MASK = 0xffff0000,
+	CALI_SKB_MARK_NO_TRACK      = 1<<1,
 };
 
-#endif /* __CALICO_BPF_H__ */
+#endif /* __CALI_BPF_H__ */

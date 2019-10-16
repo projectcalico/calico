@@ -1,5 +1,5 @@
-#ifndef __CALICO_BPF_MAPS_H__
-#define __CALICO_BPF_MAPS_H__
+#ifndef __CALI_BPF_MAPS_H__
+#define __CALI_BPF_MAPS_H__
 
 #include <assert.h>
 #include <stdint.h>
@@ -29,16 +29,16 @@ struct bpf_map_def_extended __attribute__((section("maps"))) calico_config = {
 };
 
 enum calico_reason {
-	CALICO_REASON_UNKNOWN = 0x00,
-	CALICO_REASON_SHORT = 0x01,
-	CALICO_REASON_NOT_IP = 0xea,
-	CALICO_REASON_FAILSAFE = 0xfa,
-	CALICO_REASON_DNT = 0xd0,
-	CALICO_REASON_PREDNAT = 0xd1,
-	CALICO_REASON_POL = 0xbe,
-	CALICO_REASON_CT = 0xc0,
-	CALICO_REASON_CT_NAT = 0xc1,
-	CALICO_REASON_CSUM_FAIL= 0xcf,
+	CALI_REASON_UNKNOWN = 0x00,
+	CALI_REASON_SHORT = 0x01,
+	CALI_REASON_NOT_IP = 0xea,
+	CALI_REASON_FAILSAFE = 0xfa,
+	CALI_REASON_DNT = 0xd0,
+	CALI_REASON_PREDNAT = 0xd1,
+	CALI_REASON_POL = 0xbe,
+	CALI_REASON_CT = 0xc0,
+	CALI_REASON_CT_NAT = 0xc1,
+	CALI_REASON_CSUM_FAIL= 0xcf,
 };
 
 // IP sets, all stored in one big map with a prefix to identify the set.
@@ -74,4 +74,4 @@ struct bpf_map_def_extended __attribute__((section("maps"))) calico_local_ips = 
     .max_entries       = 1024, // arbitrary
 };
 
-#endif /* __CALICO_BPF_MAPS_H__ */
+#endif /* __CALI_BPF_MAPS_H__ */

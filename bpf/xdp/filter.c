@@ -21,7 +21,7 @@
 #include <linux/udp.h>
 #include "filter.h"
 
-CALICO_BPF_INLINE static int extract_ports(__u32 len, struct iphdr * h,
+CALI_BPF_INLINE static int extract_ports(__u32 len, struct iphdr * h,
 	struct protoport *dport)
 {
 	struct tcphdr * thdr;

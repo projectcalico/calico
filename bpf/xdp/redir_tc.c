@@ -23,59 +23,59 @@
 #include "bpf_maps.h"
 
 enum calico_policy_result {
-	CALICO_POL_NO_MATCH,
-	CALICO_POL_ALLOW,
-	CALICO_POL_DENY
+	CALI_POL_NO_MATCH,
+	CALI_POL_ALLOW,
+	CALI_POL_DENY,
 };
 
-static CALICO_BPF_INLINE enum calico_policy_result execute_policy_norm(struct __sk_buff *skb,__u8 ip_proto, __u32 saddr, __u32 daddr, __u16 sport, __u16 dport, enum calico_tc_flags flags) {
+static CALI_BPF_INLINE enum calico_policy_result execute_policy_norm(struct __sk_buff *skb,__u8 ip_proto, __u32 saddr, __u32 daddr, __u16 sport, __u16 dport, enum calico_tc_flags flags) {
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wunused-label"
 
 	// __NORMAL_POLICY__
 
-	return CALICO_POL_NO_MATCH;
+	return CALI_POL_NO_MATCH;
 	deny:
-	return CALICO_POL_DENY;
+	return CALI_POL_DENY;
 	allow:
-	return CALICO_POL_ALLOW;
+	return CALI_POL_ALLOW;
 #pragma clang diagnostic pop
 }
 
-static CALICO_BPF_INLINE enum calico_policy_result execute_policy_aof(struct __sk_buff *skb,__u8 ip_proto, __u32 saddr, __u32 daddr, __u16 sport, __u16 dport, enum calico_tc_flags flags) {
+static CALI_BPF_INLINE enum calico_policy_result execute_policy_aof(struct __sk_buff *skb,__u8 ip_proto, __u32 saddr, __u32 daddr, __u16 sport, __u16 dport, enum calico_tc_flags flags) {
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wunused-label"
 
 	// __AOF_POLICY__
 
-	return CALICO_POL_NO_MATCH;
+	return CALI_POL_NO_MATCH;
 	deny:
-	return CALICO_POL_DENY;
+	return CALI_POL_DENY;
 	allow:
-	return CALICO_POL_ALLOW;
+	return CALI_POL_ALLOW;
 #pragma clang diagnostic pop
 }
 
-static CALICO_BPF_INLINE enum calico_policy_result maybe_execute_policy_pre_dnat(struct __sk_buff *skb, __u8 ip_proto, __u32 saddr, __u32 daddr, __u16 sport, __u16 dport, enum calico_tc_flags flags) {
+static CALI_BPF_INLINE enum calico_policy_result maybe_execute_policy_pre_dnat(struct __sk_buff *skb, __u8 ip_proto, __u32 saddr, __u32 daddr, __u16 sport, __u16 dport, enum calico_tc_flags flags) {
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wunused-label"
 
 	// __PRE_DNAT_POLICY__
 
-	return CALICO_POL_NO_MATCH;
+	return CALI_POL_NO_MATCH;
 	deny:
-	return CALICO_POL_DENY;
+	return CALI_POL_DENY;
 	allow:
-	return CALICO_POL_ALLOW;
+	return CALI_POL_ALLOW;
 #pragma clang diagnostic pop
 }
 
-static CALICO_BPF_INLINE enum calico_policy_result maybe_execute_policy_do_not_track(struct __sk_buff *skb, __u8 ip_proto, __u32 saddr, __u32 daddr, __u16 sport, __u16 dport, enum calico_tc_flags flags) {
-	if (!(flags & CALICO_TC_HOST_EP) || !(flags & CALICO_TC_INGRESS)) {
-		return CALICO_POL_NO_MATCH;
+static CALI_BPF_INLINE enum calico_policy_result maybe_execute_policy_do_not_track(struct __sk_buff *skb, __u8 ip_proto, __u32 saddr, __u32 daddr, __u16 sport, __u16 dport, enum calico_tc_flags flags) {
+	if (!(flags & CALI_TC_HOST_EP) || !(flags & CALI_TC_INGRESS)) {
+		return CALI_POL_NO_MATCH;
 	}
-	if ((skb->mark & CALICO_SKB_MARK_FROM_WORKLOAD_MASK) == CALICO_SKB_MARK_FROM_WORKLOAD) {
-		return CALICO_POL_NO_MATCH;
+	if ((skb->mark & CALI_SKB_MARK_FROM_WORKLOAD_MASK) == CALI_SKB_MARK_FROM_WORKLOAD) {
+		return CALI_POL_NO_MATCH;
 	}
 
 #pragma clang diagnostic push
@@ -83,18 +83,18 @@ static CALICO_BPF_INLINE enum calico_policy_result maybe_execute_policy_do_not_t
 
 	// __DO_NOT_TRACK_POLICY__
 
-	return CALICO_POL_NO_MATCH;
+	return CALI_POL_NO_MATCH;
 	deny:
-	return CALICO_POL_DENY;
+	return CALI_POL_DENY;
 	allow:
-	return CALICO_POL_ALLOW;
+	return CALI_POL_ALLOW;
 #pragma clang diagnostic pop
 }
 
-static CALICO_BPF_INLINE int calico_tc(struct __sk_buff *skb, enum calico_tc_flags flags) {
-	enum calico_reason reason = CALICO_REASON_UNKNOWN;
+static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb, enum calico_tc_flags flags) {
+	enum calico_reason reason = CALI_REASON_UNKNOWN;
 	uint64_t prog_start_time;
-	if (CALICO_LOG_LEVEL >= CALICO_LOG_LEVEL_INFO) {
+	if (CALI_LOG_LEVEL >= CALI_LOG_LEVEL_INFO) {
 		prog_start_time = bpf_ktime_get_ns();
 	}
 	uint64_t timer_start_time = 0 , timer_end_time = 0;
@@ -102,19 +102,19 @@ static CALICO_BPF_INLINE int calico_tc(struct __sk_buff *skb, enum calico_tc_fla
 
 	// Parse the packet.
 
-	CALICO_DEBUG_AT("Packet, ingress iface %d\n", skb->ingress_ifindex);
+	CALI_DEBUG("Packet, ingress iface %d\n", skb->ingress_ifindex);
 
     // TODO Do we need to handle any odd-ball frames here (e.g. with a 0 VLAN header)?
 	if (skb->protocol != be16_to_host(ETH_P_IP)) {
-		CALICO_DEBUG_AT("Skipping ethertype %x\n", skb->protocol);
-		reason = CALICO_REASON_NOT_IP;
+		CALI_DEBUG("Skipping ethertype %x\n", skb->protocol);
+		reason = CALI_REASON_NOT_IP;
 		goto allow_skip_fib;
 	}
-	CALICO_DEBUG_AT("Packet is IP\n");
+	CALI_DEBUG("Packet is IP\n");
 
     if ((void *)(long)skb->data + sizeof(struct ethhdr) + sizeof(struct iphdr) + sizeof(struct udphdr) > (void *)(long)skb->data_end) {
-		CALICO_DEBUG_AT("Too short\n");
-		reason = CALICO_REASON_SHORT;
+		CALI_DEBUG("Too short\n");
+		reason = CALI_REASON_SHORT;
 		goto deny;
 	}
 
@@ -127,7 +127,7 @@ static CALICO_BPF_INLINE int calico_tc(struct __sk_buff *skb, enum calico_tc_fla
 	struct udphdr *udp_header = (void*)(ip_header+1);
 	struct icmphdr *icmp_header = (void*)(ip_header+1);
 
-    CALICO_DEBUG_AT("IP; s=%x d=%x\n", be32_to_host(ip_header->saddr), be32_to_host(ip_header->daddr));
+    CALI_DEBUG("IP; s=%x d=%x\n", be32_to_host(ip_header->saddr), be32_to_host(ip_header->daddr));
 
     __u8 ip_proto = ip_header->protocol;
 
@@ -143,30 +143,30 @@ static CALICO_BPF_INLINE int calico_tc(struct __sk_buff *skb, enum calico_tc_fla
 	switch (ip_proto) {
 	case IPPROTO_TCP:
 		// Re-check buffer space for TCP (has larger headers than UDP).
-		CALICO_DEBUG_AT("Packet is TCP\n");
+		CALI_DEBUG("Packet is TCP\n");
 		if ((void*)(tcp_header+1) > (void *)(long)skb->data_end) {
-			CALICO_DEBUG_AT("Too short for TCP: DROP\n");
+			CALI_DEBUG("Too short for TCP: DROP\n");
 			goto deny;
 		}
 		sport = be16_to_host(tcp_header->source);
 		dport = be16_to_host(tcp_header->dest);
-		CALICO_DEBUG_AT("TCP; ports: s=%d d=%d\n", sport, dport);
+		CALI_DEBUG("TCP; ports: s=%d d=%d\n", sport, dport);
 		break;
 	case IPPROTO_UDP:
 		udp_header = (void*)(ip_header+1);
 		sport = be16_to_host(udp_header->source);
 		dport = be16_to_host(udp_header->dest);
-		CALICO_DEBUG_AT("UDP; ports: s=%d d=%d\n", sport, dport);
+		CALI_DEBUG("UDP; ports: s=%d d=%d\n", sport, dport);
 		break;
 	case IPPROTO_ICMP:
 		icmp_header = (void*)(ip_header+1);
 		sport = 0;
 		dport = 0;
-		CALICO_DEBUG_AT("ICMP; ports: type=%d code=%d\n",
+		CALI_DEBUG("ICMP; ports: type=%d code=%d\n",
 				icmp_header->type, icmp_header->code);
 		break;
 	default:
-		CALICO_DEBUG_AT("Unknown protocol, unable to extract ports\n");
+		CALI_DEBUG("Unknown protocol, unable to extract ports\n");
 		sport = 0;
 		dport = 0;
 	}
@@ -177,11 +177,11 @@ static CALICO_BPF_INLINE int calico_tc(struct __sk_buff *skb, enum calico_tc_fla
 	enum calico_policy_result pol_rc = maybe_execute_policy_do_not_track(
 			skb, ip_proto, ip_src, ip_dst, sport, dport, flags);
 	switch (pol_rc) {
-	case CALICO_POL_DENY:
-		CALICO_DEBUG_AT("Denied by do-not-track policy: DROP\n");
+	case CALI_POL_DENY:
+		CALI_DEBUG("Denied by do-not-track policy: DROP\n");
 		goto deny;
-	case CALICO_POL_ALLOW:
-		CALICO_DEBUG_AT("Allowed by do-not-track policy: ACCEPT\n");
+	case CALI_POL_ALLOW:
+		CALI_DEBUG("Allowed by do-not-track policy: ACCEPT\n");
 		goto allow;
 	default:
 		break;
@@ -205,13 +205,13 @@ static CALICO_BPF_INLINE int calico_tc(struct __sk_buff *skb, enum calico_tc_fla
 
 	size_t csum_offset;
 	switch (ct_result.rc){
-	case CALICO_CT_NEW:
+	case CALI_CT_NEW:
 		// New connection, apply policy.
 
 		// Execute pre-DNAT policy.
 		pol_rc = maybe_execute_policy_pre_dnat(skb, ip_proto, ip_src, ip_dst,  sport,  dport, flags);
-		if (pol_rc == CALICO_POL_DENY) {
-			CALICO_DEBUG_AT("Denied by do-not-track policy: DROP\n");
+		if (pol_rc == CALI_POL_DENY) {
+			CALI_DEBUG("Denied by do-not-track policy: DROP\n");
 			goto deny;
 		} // Other RCs handled below.
 
@@ -229,7 +229,7 @@ static CALICO_BPF_INLINE int calico_tc(struct __sk_buff *skb, enum calico_tc_fla
 			post_nat_dport = dport;
 		}
 
-		if (pol_rc == CALICO_POL_NO_MATCH) {
+		if (pol_rc == CALI_POL_NO_MATCH) {
 			// No match in pre-DNAT policy, apply normal policy.
 			// TODO apply-on-forward policy
 			if (false) {
@@ -238,14 +238,14 @@ static CALICO_BPF_INLINE int calico_tc(struct __sk_buff *skb, enum calico_tc_fla
 			pol_rc = execute_policy_norm(skb, ip_proto, ip_src, post_nat_ip_dst,  sport,  post_nat_dport, flags);
 		}
 		switch (pol_rc) {
-		case CALICO_POL_NO_MATCH:
-			CALICO_DEBUG_AT("Implicitly denied by normal policy: DROP\n");
+		case CALI_POL_NO_MATCH:
+			CALI_DEBUG("Implicitly denied by normal policy: DROP\n");
 			goto deny;
-		case CALICO_POL_DENY:
-			CALICO_DEBUG_AT("Denied by normal policy: DROP\n");
+		case CALI_POL_DENY:
+			CALI_DEBUG("Denied by normal policy: DROP\n");
 			goto deny;
-		case CALICO_POL_ALLOW:
-			CALICO_DEBUG_AT("Allowed by normal policy: ACCEPT\n");
+		case CALI_POL_ALLOW:
+			CALI_DEBUG("Allowed by normal policy: ACCEPT\n");
 		}
 
 		// If we get here, we've passed policy.
@@ -254,7 +254,7 @@ static CALICO_BPF_INLINE int calico_tc(struct __sk_buff *skb, enum calico_tc_fla
 			switch (ip_proto) {
 			case IPPROTO_TCP:
 				if ((void*)(tcp_header+1) > (void *)(long)skb->data_end) {
-					CALICO_DEBUG_AT("Too short for TCP: DROP\n");
+					CALI_DEBUG("Too short for TCP: DROP\n");
 					goto deny;
 				}
 				calico_ct_v4_tcp_create_nat(skb, ip_src, ip_dst, sport, dport, post_nat_ip_dst, post_nat_dport, tcp_header, flags);
@@ -292,7 +292,7 @@ static CALICO_BPF_INLINE int calico_tc(struct __sk_buff *skb, enum calico_tc_fla
 			switch (ip_proto) {
 			case IPPROTO_TCP:
 				if ((void*)(tcp_header+1) > (void *)(long)skb->data_end) {
-					CALICO_DEBUG_AT("Too short for TCP: DROP\n");
+					CALI_DEBUG("Too short for TCP: DROP\n");
 					goto deny;
 				}
 				calico_ct_v4_tcp_create(skb, ip_src, ip_dst, sport, dport, tcp_header, flags);
@@ -312,7 +312,7 @@ static CALICO_BPF_INLINE int calico_tc(struct __sk_buff *skb, enum calico_tc_fla
 		fib_params.ipv4_dst = post_nat_ip_dst;
 
 		goto allow;
-	case CALICO_CT_ESTABLISHED:
+	case CALI_CT_ESTABLISHED:
 		fib_params.l4_protocol = ip_proto;
 		fib_params.sport = sport;
 		fib_params.dport = dport;
@@ -320,8 +320,8 @@ static CALICO_BPF_INLINE int calico_tc(struct __sk_buff *skb, enum calico_tc_fla
 		fib_params.ipv4_dst = ip_dst;
 
 		goto allow;
-	case CALICO_CT_ESTABLISHED_DNAT:
-		CALICO_DEBUG_AT("CT: DNAT\n");
+	case CALI_CT_ESTABLISHED_DNAT:
+		CALI_DEBUG("CT: DNAT\n");
 
 		// Actually do the NAT.
 		ip_header->daddr = ct_result.nat_ip;
@@ -352,8 +352,8 @@ static CALICO_BPF_INLINE int calico_tc(struct __sk_buff *skb, enum calico_tc_fla
 		fib_params.ipv4_dst = ct_result.nat_ip;
 
 		goto allow;
-	case CALICO_CT_ESTABLISHED_SNAT:
-		CALICO_DEBUG_AT("CT: SNAT\n");
+	case CALI_CT_ESTABLISHED_SNAT:
+		CALI_DEBUG("CT: SNAT\n");
 
 		// Actually do the NAT.
 		ip_header->saddr = ct_result.nat_ip;
@@ -391,18 +391,17 @@ static CALICO_BPF_INLINE int calico_tc(struct __sk_buff *skb, enum calico_tc_fla
 	// Try a short-circuit FIB lookup.
 	allow:
 
-	if (((flags & CALICO_TC_HOST_EP) && (flags & CALICO_TC_INGRESS)) ||
-			(!(flags & CALICO_TC_HOST_EP) && !(flags & CALICO_TC_INGRESS))) {
-		CALICO_DEBUG_AT("Traffic is towards the host namespace, doing Linux FIB lookup\n");
+	if (CALI_TC_FLAGS_TO_HOST(flags)) {
+		CALI_DEBUG("Traffic is towards the host namespace, doing Linux FIB lookup\n");
 		fib_params.l4_protocol = ip_proto;
 		rc =  bpf_fib_lookup(skb, &fib_params, sizeof(fib_params), 0);
 		if (rc == 0) {
-			CALICO_DEBUG_AT("FIB lookup succeeded\n");
+			CALI_DEBUG("FIB lookup succeeded\n");
 			// Update the MACs.  NAT may have invalidated pointer into the packet so need to
 			// revalidate.
 		    if ((void *)(long)skb->data + sizeof(struct ethhdr) > (void *)(long)skb->data_end) {
-				CALICO_DEBUG_AT("BUG: packet got shorter?\n");
-				reason = CALICO_REASON_SHORT;
+				CALI_DEBUG("BUG: packet got shorter?\n");
+				reason = CALI_REASON_SHORT;
 				goto deny;
 			}
 		    eth_hdr = (void *)(long)skb->data;
@@ -410,37 +409,37 @@ static CALICO_BPF_INLINE int calico_tc(struct __sk_buff *skb, enum calico_tc_fla
 			__builtin_memcpy(&eth_hdr->h_dest, &fib_params.dmac, sizeof(eth_hdr->h_dest));
 
 			// Redirect the packet.
-			CALICO_DEBUG_AT("Got Linux FIB hit, redirecting to iface %d.\n", fib_params.ifindex);
+			CALI_DEBUG("Got Linux FIB hit, redirecting to iface %d.\n", fib_params.ifindex);
 			rc = bpf_redirect(fib_params.ifindex, 0);
 		} else if (rc < 0) {
-			CALICO_DEBUG_AT("FIB lookup failed (bad input): %d.\n", rc);
+			CALI_DEBUG("FIB lookup failed (bad input): %d.\n", rc);
 			rc = TC_ACT_UNSPEC;
 		} else {
-			CALICO_DEBUG_AT("FIB lookup failed (FIB problem): %d.\n", rc);
+			CALI_DEBUG("FIB lookup failed (FIB problem): %d.\n", rc);
 			rc = TC_ACT_UNSPEC;
 		}
 	}
 
 	allow_skip_fib:
-	if (!(flags & CALICO_TC_HOST_EP) && !(flags & CALICO_TC_INGRESS)) {
+	if (CALI_TC_FLAGS_FROM_WORKLOAD(flags)) {
 		// Packet is leaving workload, mark it so any downstream programs know this traffic was from a workload.
-		CALICO_DEBUG_AT("Traffic is from workload, applying packet mark.\n");
+		CALI_DEBUG("Traffic is from workload, applying packet mark.\n");
 		// FIXME: this ignores the mask that we should be using.  However, if we mask off the bits, then
 		// clang spots that it can do a 16-bit store instead of a 32-bit load/modify/store, which trips
 		// up the validator.
-		skb->mark = CALICO_SKB_MARK_FROM_WORKLOAD;
+		skb->mark = CALI_SKB_MARK_FROM_WORKLOAD;
 	}
 
-	if (CALICO_LOG_LEVEL >= CALICO_LOG_LEVEL_INFO) {
+	if (CALI_LOG_LEVEL >= CALI_LOG_LEVEL_INFO) {
 		uint64_t prog_end_time = bpf_ktime_get_ns();
-		CALICO_INFO_AT("Final result=ALLOW (%d). Program execution time: %lluns T: %lluns\n", rc, prog_end_time-prog_start_time, timer_end_time-timer_start_time);
+		CALI_INFO("Final result=ALLOW (%d). Program execution time: %lluns T: %lluns\n", rc, prog_end_time-prog_start_time, timer_end_time-timer_start_time);
 	}
 	return rc;
 
 	deny:
-	if (CALICO_LOG_LEVEL >= CALICO_LOG_LEVEL_INFO) {
+	if (CALI_LOG_LEVEL >= CALI_LOG_LEVEL_INFO) {
 		uint64_t prog_end_time = bpf_ktime_get_ns();
-		CALICO_INFO_AT("Final result=DENY (%x). Program execution time: %lluns\n", reason, prog_end_time-prog_start_time);
+		CALI_INFO("Final result=DENY (%x). Program execution time: %lluns\n", reason, prog_end_time-prog_start_time);
 	}
 	return TC_ACT_SHOT;
 }
@@ -454,19 +453,19 @@ int tc_calico_from_workload(struct __sk_buff *skb) {
 // Handle packets that going to a workload from the host namespace..
 __attribute__((section("calico_to_workload")))
 int tc_calico_to_workload(struct __sk_buff *skb) {
-	return calico_tc(skb, CALICO_TC_INGRESS);
+	return calico_tc(skb, CALI_TC_INGRESS);
 }
 
 // Handle packets that arrive at the host namespace from a host endpoint.
 __attribute__((section("calico_from_host_endpoint")))
 int tc_calico_from_host_endpoint(struct __sk_buff *skb) {
-	return calico_tc(skb, CALICO_TC_HOST_EP | CALICO_TC_INGRESS);
+	return calico_tc(skb, CALI_TC_HOST_EP | CALI_TC_INGRESS);
 }
 
 // Handle packets that are leaving a host towards a host endpoint.
 __attribute__((section("calico_to_host_endpoint")))
 int tc_calico_to_host_endpoint(struct __sk_buff *skb) {
-	return calico_tc(skb, CALICO_TC_HOST_EP);
+	return calico_tc(skb, CALI_TC_HOST_EP);
 }
 
 
