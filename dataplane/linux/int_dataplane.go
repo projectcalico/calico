@@ -443,6 +443,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		// Register map managers first since they create the maps that will be used by the endpoint manager.
 		dp.RegisterManager(newBPFIPSetManager())
 		dp.RegisterManager(newBPFConntrackManager())
+		dp.RegisterManager(newBPFNATManager())
 
 		dp.RegisterManager(newBPFEndpointManager(config.BPFLogLevel))
 	}
