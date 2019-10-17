@@ -335,12 +335,12 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_tcp_lookup(
 
 	CALI_DEBUG("CT-TCP lookup from %x:%d\n", be32_to_host(ip_src), sport);
 	CALI_DEBUG("CT-TCP lookup to   %x:%d\n", be32_to_host(ip_dst), dport);
-	CALI_DEBUG("CT-TCP   packet seq = %u\n", tcp_header->seq);
-	CALI_DEBUG("CT-TCP   packet ack_seq = %u\n", tcp_header->ack_seq);
-	CALI_DEBUG("CT-TCP   packet syn = %d\n", tcp_header->syn);
-	CALI_DEBUG("CT-TCP   packet ack = %d\n", tcp_header->ack);
-	CALI_DEBUG("CT-TCP   packet fin = %d\n", tcp_header->fin);
-	CALI_DEBUG("CT-TCP   packet rst = %d\n", tcp_header->rst);
+	CALI_VERB("CT-TCP   packet seq = %u\n", tcp_header->seq);
+	CALI_VERB("CT-TCP   packet ack_seq = %u\n", tcp_header->ack_seq);
+	CALI_VERB("CT-TCP   packet syn = %d\n", tcp_header->syn);
+	CALI_VERB("CT-TCP   packet ack = %d\n", tcp_header->ack);
+	CALI_VERB("CT-TCP   packet fin = %d\n", tcp_header->fin);
+	CALI_VERB("CT-TCP   packet rst = %d\n", tcp_header->rst);
 
 	struct calico_ct_result result = {};
 

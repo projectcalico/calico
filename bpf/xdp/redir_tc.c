@@ -102,15 +102,12 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb, enum calico_tc_flags
 
 	// Parse the packet.
 
-	CALI_DEBUG("Packet, ingress iface %d\n", skb->ingress_ifindex);
-
-    // TODO Do we need to handle any odd-ball frames here (e.g. with a 0 VLAN header)?
+	// TODO Do we need to handle any odd-ball frames here (e.g. with a 0 VLAN header)?
 	if (skb->protocol != be16_to_host(ETH_P_IP)) {
-		CALI_DEBUG("Skipping ethertype %x\n", skb->protocol);
+		CALI_DEBUG("Non-IP packet (ethertype %x)\n", skb->protocol);
 		reason = CALI_REASON_NOT_IP;
 		goto allow_skip_fib;
 	}
-	CALI_DEBUG("Packet is IP\n");
 
     if ((void *)(long)skb->data + sizeof(struct ethhdr) + sizeof(struct iphdr) + sizeof(struct udphdr) > (void *)(long)skb->data_end) {
 		CALI_DEBUG("Too short\n");
