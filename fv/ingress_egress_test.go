@@ -30,9 +30,6 @@ import (
 	client "github.com/projectcalico/libcalico-go/lib/clientv3"
 )
 
-// So that we can say 'HaveConnectivityTo' without the 'workload.' prefix...
-var HaveConnectivityTo = workload.HaveConnectivityTo
-
 var _ = Context("_INGRESS-EGRESS_ _BPF-SAFE_ with initialized Felix, etcd datastore, 3 workloads", func() {
 
 	var (
@@ -40,6 +37,7 @@ var _ = Context("_INGRESS-EGRESS_ _BPF-SAFE_ with initialized Felix, etcd datast
 		felix  *infrastructure.Felix
 		client client.Interface
 		w      [3]*workload.Workload
+		cc     *workload.ConnectivityChecker
 	)
 
 	BeforeEach(func() {
@@ -64,6 +62,8 @@ var _ = Context("_INGRESS-EGRESS_ _BPF-SAFE_ with initialized Felix, etcd datast
 			w[ii] = workload.Run(felix, "w"+iiStr, "default", "10.65.0.1"+iiStr, "8055", "tcp")
 			w[ii].Configure(client)
 		}
+
+		cc = &workload.ConnectivityChecker{}
 	})
 
 	AfterEach(func() {
@@ -85,10 +85,11 @@ var _ = Context("_INGRESS-EGRESS_ _BPF-SAFE_ with initialized Felix, etcd datast
 	})
 
 	It("full connectivity to and from workload 0", func() {
-		Expect(w[1]).To(HaveConnectivityTo(w[0]))
-		Expect(w[2]).To(HaveConnectivityTo(w[0]))
-		Expect(w[0]).To(HaveConnectivityTo(w[1]))
-		Expect(w[0]).To(HaveConnectivityTo(w[2]))
+		cc.ExpectSome(w[1], w[0])
+		cc.ExpectSome(w[2], w[0])
+		cc.ExpectSome(w[0], w[1])
+		cc.ExpectSome(w[0], w[2])
+		cc.CheckConnectivity()
 	})
 
 	Context("with ingress-only restriction for workload 0", func() {
@@ -110,10 +111,11 @@ var _ = Context("_INGRESS-EGRESS_ _BPF-SAFE_ with initialized Felix, etcd datast
 		})
 
 		It("only w1 can connect into w0, but egress from w0 is unrestricted", func() {
-			Eventually(w[2], "10s", "1s").ShouldNot(HaveConnectivityTo(w[0]))
-			Expect(w[1]).To(HaveConnectivityTo(w[0]))
-			Expect(w[0]).To(HaveConnectivityTo(w[1]))
-			Expect(w[0]).To(HaveConnectivityTo(w[1]))
+			cc.ExpectNone(w[2], w[0])
+			cc.ExpectSome(w[1], w[0])
+			cc.ExpectSome(w[0], w[1])
+			cc.ExpectSome(w[0], w[2])
+			cc.CheckConnectivity()
 		})
 	})
 
@@ -136,10 +138,11 @@ var _ = Context("_INGRESS-EGRESS_ _BPF-SAFE_ with initialized Felix, etcd datast
 		})
 
 		It("ingress to w0 is unrestricted, but w0 can only connect out to w1", func() {
-			Eventually(w[0], "10s", "1s").ShouldNot(HaveConnectivityTo(w[2]))
-			Expect(w[1]).To(HaveConnectivityTo(w[0]))
-			Expect(w[2]).To(HaveConnectivityTo(w[0]))
-			Expect(w[0]).To(HaveConnectivityTo(w[1]))
+			cc.ExpectNone(w[0], w[2])
+			cc.ExpectSome(w[1], w[0])
+			cc.ExpectSome(w[2], w[0])
+			cc.ExpectSome(w[0], w[1])
+			cc.CheckConnectivity()
 		})
 	})
 
@@ -163,10 +166,11 @@ var _ = Context("_INGRESS-EGRESS_ _BPF-SAFE_ with initialized Felix, etcd datast
 		})
 
 		It("only w1 can connect into w0, and all egress from w0 is denied", func() {
-			Eventually(w[2], "10s", "1s").ShouldNot(HaveConnectivityTo(w[0]))
-			Expect(w[1]).To(HaveConnectivityTo(w[0]))
-			Expect(w[0]).NotTo(HaveConnectivityTo(w[1]))
-			Expect(w[0]).NotTo(HaveConnectivityTo(w[2]))
+			cc.ExpectNone(w[2], w[0])
+			cc.ExpectSome(w[1], w[0])
+			cc.ExpectNone(w[0], w[1])
+			cc.ExpectNone(w[0], w[2])
+			cc.CheckConnectivity()
 		})
 	})
 
@@ -199,10 +203,11 @@ var _ = Context("_INGRESS-EGRESS_ _BPF-SAFE_ with initialized Felix, etcd datast
 			})
 
 			It("only w1 can connect into w0, and all egress from w0 is allowed", func() {
-				Eventually(w[2], "10s", "1s").ShouldNot(HaveConnectivityTo(w[0]))
-				Expect(w[1]).To(HaveConnectivityTo(w[0]))
-				Expect(w[0]).To(HaveConnectivityTo(w[1]))
-				Expect(w[0]).To(HaveConnectivityTo(w[2]))
+				cc.ExpectNone(w[2], w[0])
+				cc.ExpectSome(w[1], w[0])
+				cc.ExpectSome(w[0], w[1])
+				cc.ExpectSome(w[0], w[2])
+				cc.CheckConnectivity()
 			})
 		})
 
@@ -212,10 +217,11 @@ var _ = Context("_INGRESS-EGRESS_ _BPF-SAFE_ with initialized Felix, etcd datast
 			})
 
 			It("only w1 can connect into w0, and all egress from w0 is blocked", func() {
-				Eventually(w[2], "10s", "1s").ShouldNot(HaveConnectivityTo(w[0]))
-				Expect(w[1]).To(HaveConnectivityTo(w[0]))
-				Expect(w[0]).NotTo(HaveConnectivityTo(w[1]))
-				Expect(w[0]).NotTo(HaveConnectivityTo(w[2]))
+				cc.ExpectNone(w[2], w[0])
+				cc.ExpectSome(w[1], w[0])
+				cc.ExpectNone(w[0], w[1])
+				cc.ExpectNone(w[0], w[2])
+				cc.CheckConnectivity()
 			})
 		})
 	})
@@ -228,6 +234,7 @@ var _ = Context("with Typha and Felix-Typha TLS", func() {
 		felix  *infrastructure.Felix
 		client client.Interface
 		w      [3]*workload.Workload
+		cc     *workload.ConnectivityChecker
 	)
 
 	BeforeEach(func() {
@@ -255,6 +262,8 @@ var _ = Context("with Typha and Felix-Typha TLS", func() {
 			w[ii] = workload.Run(felix, "w"+iiStr, "default", "10.65.0.1"+iiStr, "8055", "tcp")
 			w[ii].Configure(client)
 		}
+
+		cc = &workload.ConnectivityChecker{}
 	})
 
 	AfterEach(func() {
@@ -276,10 +285,11 @@ var _ = Context("with Typha and Felix-Typha TLS", func() {
 	})
 
 	It("full connectivity to and from workload 0", func() {
-		Expect(w[1]).To(HaveConnectivityTo(w[0]))
-		Expect(w[2]).To(HaveConnectivityTo(w[0]))
-		Expect(w[0]).To(HaveConnectivityTo(w[1]))
-		Expect(w[0]).To(HaveConnectivityTo(w[2]))
+		cc.ExpectSome(w[1], w[0])
+		cc.ExpectSome(w[2], w[0])
+		cc.ExpectSome(w[0], w[1])
+		cc.ExpectSome(w[0], w[2])
+		cc.CheckConnectivity()
 	})
 
 	Context("with ingress-only restriction for workload 0", func() {
@@ -301,10 +311,11 @@ var _ = Context("with Typha and Felix-Typha TLS", func() {
 		})
 
 		It("only w1 can connect into w0, but egress from w0 is unrestricted", func() {
-			Eventually(w[2], "10s", "1s").ShouldNot(HaveConnectivityTo(w[0]))
-			Expect(w[1]).To(HaveConnectivityTo(w[0]))
-			Expect(w[0]).To(HaveConnectivityTo(w[1]))
-			Expect(w[0]).To(HaveConnectivityTo(w[1]))
+			cc.ExpectNone(w[2], w[0])
+			cc.ExpectSome(w[1], w[0])
+			cc.ExpectSome(w[0], w[1])
+			cc.ExpectSome(w[0], w[2])
+			cc.CheckConnectivity()
 		})
 	})
 })
