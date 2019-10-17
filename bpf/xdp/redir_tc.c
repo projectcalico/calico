@@ -103,10 +103,18 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb, enum calico_tc_flags
 	// Parse the packet.
 
 	// TODO Do we need to handle any odd-ball frames here (e.g. with a 0 VLAN header)?
-	if (skb->protocol != be16_to_host(ETH_P_IP)) {
-		CALI_DEBUG("Non-IP packet (ethertype %x)\n", skb->protocol);
-		reason = CALI_REASON_NOT_IP;
+	switch (skb->protocol) {
+	case be16_to_host(ETH_P_IP):
+		break;
+	case be16_to_host(ETH_P_ARP):
+		CALI_DEBUG("ARP: allowing packet");
 		goto allow_skip_fib;
+	case be16_to_host(ETH_P_IPV6):
+		CALI_DEBUG("IPv6: drop\n");
+		return TC_ACT_SHOT;
+	default:
+		CALI_DEBUG("Unknown ethertype (%x), drop\n", be16_to_host(skb->protocol));
+		goto deny;
 	}
 
     if ((void *)(long)skb->data + sizeof(struct ethhdr) + sizeof(struct iphdr) + sizeof(struct udphdr) > (void *)(long)skb->data_end) {
