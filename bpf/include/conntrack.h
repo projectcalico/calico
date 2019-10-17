@@ -28,6 +28,8 @@ struct calico_ct_leg {
 
 	__u32 egress_whitelisted:1;
 	__u32 ingress_whitelisted:1;
+
+	__u32 opener:1;
 };
 
 struct calico_ct_value {
@@ -164,10 +166,11 @@ static CALI_BPF_INLINE int calico_ct_v4_create_tracking(
 
 	our_dir->seqno = seq;
 	our_dir->syn_seen = syn;
+	our_dir->opener = 1;
 	if (flags & CALI_TC_INGRESS) {
-		oth_dir->ingress_whitelisted = true;
+		oth_dir->ingress_whitelisted = 1;
 	} else {
-		our_dir->egress_whitelisted = true;
+		our_dir->egress_whitelisted = 1;
 	}
 	int err = bpf_map_update_elem(&calico_ct_map_v4, k, &ct_value, 0);
 	CALI_VERB("CT-ALL Create result: %d.\n", err);
@@ -395,28 +398,25 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_tcp_lookup(
 		if (ip_src == v->nat_rev_key.addr_a && sport == v->nat_rev_key.port_a) {
 			our_dir = &tracking_v->a_to_b;
 			oth_dir = &tracking_v->b_to_a;
+			result.nat_ip = v->nat_rev_key.addr_b;
+			result.nat_port = v->nat_rev_key.port_b;
 		} else {
 			our_dir = &tracking_v->b_to_a;
 			oth_dir = &tracking_v->a_to_b;
+			result.nat_ip = v->nat_rev_key.addr_a;
+			result.nat_port = v->nat_rev_key.port_a;
 		}
 
 		if (CALI_TC_FLAGS_TO_HOST(flags)) {
 			// Since we found a forward NAT entry, we know that it's the destination
 			// that needs to be NATted.
 			result.rc =	CALI_CT_ESTABLISHED_DNAT;
-			result.nat_ip = tracking_v->orig_dst;
-			result.nat_port = tracking_v->orig_port;
 		} else {
 			result.rc =	CALI_CT_ESTABLISHED;
 		}
 		break;
 	case CALI_CT_TYPE_NAT_REV:
-		// Since we found a reverse NAT entry, we know that this is response
-		// traffic so we'll need to SNAT it.
 		CALI_DEBUG("CT-TCP Hit! NAT REV entry.\n");
-		result.rc =	CALI_CT_ESTABLISHED_SNAT;
-		result.nat_ip = v->orig_dst;
-		result.nat_port = v->orig_port;
 
 		if (srcLTDest) {
 			our_dir = &v->a_to_b;
@@ -424,6 +424,18 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_tcp_lookup(
 		} else {
 			our_dir = &v->b_to_a;
 			oth_dir = &v->a_to_b;
+		}
+
+		if (oth_dir->opener) {
+			// The destination of the packet was the opener of the NAT session,
+			// need to SNAT the traffic back to its original request.
+			result.rc =	CALI_CT_ESTABLISHED_SNAT;
+			result.nat_ip = v->orig_dst;
+			result.nat_port = v->orig_port;
+		} else {
+			// Source of the packet was the opener of the NAT session so the NAT
+			// has just occured and we have nothing to do.
+			result.rc =	CALI_CT_ESTABLISHED;
 		}
 
 		break;
