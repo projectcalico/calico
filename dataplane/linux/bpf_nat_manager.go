@@ -60,16 +60,20 @@ const natBackendValueSize = 8
 
 type NATKey [natKeySize]byte
 
-func NewNatKey(addr net.IP, port uint16, protocol uint8) NATKey {
+func NewNATKey(addr net.IP, port uint16, protocol uint8) NATKey {
 	var k NATKey
+	addr = addr.To4()
+	if len(addr) != 4 {
+		log.WithField("ip", addr).Panic("Bad IP")
+	}
 	copy(k[:4], addr)
 	binary.LittleEndian.PutUint16(k[4:6], port)
-	k[7] = protocol
+	k[6] = protocol
 	return k
 }
 
 func (k NATKey) Proto() uint8 {
-	return k[7]
+	return k[6]
 }
 
 func (k NATKey) Addr() net.IP {
@@ -130,6 +134,10 @@ type NATBackendValue [natBackendValueSize]byte
 
 func NewNATBackendValue(addr net.IP, port uint16) NATBackendValue {
 	var k NATBackendValue
+	addr = addr.To4()
+	if len(addr) != 4 {
+		log.WithField("ip", addr).Panic("Bad IP")
+	}
 	copy(k[:4], addr)
 	binary.LittleEndian.PutUint16(k[4:6], port)
 	return k
@@ -156,8 +164,8 @@ func newBPFNATManager() *bpfNATManager {
 
 func NATMap() bpf.Map {
 	return bpf.NewPinnedMap(
-		"calico_nat_map_v4",
-		"/sys/fs/bpf/tc/globals/calico_nat_map_v4",
+		"cali_nat_v4",
+		"/sys/fs/bpf/tc/globals/cali_nat_v4",
 		"hash",
 		natKeySize,
 		natValueSize,
@@ -167,8 +175,8 @@ func NATMap() bpf.Map {
 
 func BackendMap() bpf.Map {
 	return bpf.NewPinnedMap(
-		"calico_nat_secondary_map_v4",
-		"/sys/fs/bpf/tc/globals/calico_nat_secondary_map_v4",
+		"cali_natbe_v4",
+		"/sys/fs/bpf/tc/globals/cali_natbe_v4",
 		"hash",
 		natKeySize,
 		natValueSize,
@@ -188,5 +196,25 @@ func (m *bpfNATManager) CompleteDeferredWork() error {
 	if err != nil {
 		log.WithError(err).Panic("Failed to create NAT map")
 	}
+
+	bk := NewNATBackendKey(123, 0)
+	wlAddr := net.ParseIP("10.65.0.10")
+	bv := NewNATBackendValue(wlAddr, 8055)
+	err = m.backendMap.Update(bk[:], bv[:])
+	if err != nil {
+		log.WithError(err).Panic("Failed to update backend NAT map.")
+	}
+
+	natAddr := net.ParseIP("10.96.0.10")
+	nk := NewNATKey(natAddr, 80, 6)
+	nv := NewNATValue(123, 1)
+	err = m.natMap.Update(nk[:], nv[:])
+	if err != nil {
+		log.WithError(err).Panic("Failed to update NAT map.")
+	}
+
+	log.Info("Updated NAT mappings")
+
+	// Make sure we get retried.
 	return nil
 }

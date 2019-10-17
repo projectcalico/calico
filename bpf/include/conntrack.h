@@ -170,7 +170,7 @@ static CALI_BPF_INLINE int calico_ct_v4_create_tracking(
 		our_dir->egress_whitelisted = true;
 	}
 	int err = bpf_map_update_elem(&calico_ct_map_v4, k, &ct_value, 0);
-	CALI_DEBUG("CT-ALL Create result: %d.\n", err);
+	CALI_VERB("CT-ALL Create result: %d.\n", err);
 	return err;
 }
 
@@ -195,7 +195,7 @@ static CALI_BPF_INLINE int calico_ct_v4_create_nat_fwd(
 		dump_ct_key(&k, flags);
 		ct_value.nat_rev_key = *rk;
 		int err = bpf_map_update_elem(&calico_ct_map_v4, &k, &ct_value, 0);
-		CALI_DEBUG("CT-TCP Create result: %d.\n", err);
+		CALI_VERB("CT-TCP Create result: %d.\n", err);
 		return err;
 	} else  {
 		struct calico_ct_key k = {
@@ -206,7 +206,7 @@ static CALI_BPF_INLINE int calico_ct_v4_create_nat_fwd(
 		dump_ct_key(&k, flags);
 		ct_value.nat_rev_key = *rk;
 		int err = bpf_map_update_elem(&calico_ct_map_v4, &k, &ct_value, 0);
-		CALI_DEBUG("CT-TCP Create result: %d.\n", err);
+		CALI_VERB("CT-TCP Create result: %d.\n", err);
 		return err;
 	}
 }
@@ -400,11 +400,15 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_tcp_lookup(
 			oth_dir = &tracking_v->a_to_b;
 		}
 
-		// Since we found a forward NAT entry, we know that it's the destination
-		// that needs to be NATted.
-		result.rc =	CALI_CT_ESTABLISHED_DNAT;
-		result.nat_ip = tracking_v->orig_dst;
-		result.nat_port = tracking_v->orig_port;
+		if (CALI_TC_FLAGS_TO_HOST(flags)) {
+			// Since we found a forward NAT entry, we know that it's the destination
+			// that needs to be NATted.
+			result.rc =	CALI_CT_ESTABLISHED_DNAT;
+			result.nat_ip = tracking_v->orig_dst;
+			result.nat_port = tracking_v->orig_port;
+		} else {
+			result.rc =	CALI_CT_ESTABLISHED;
+		}
 		break;
 	case CALI_CT_TYPE_NAT_REV:
 		// Since we found a reverse NAT entry, we know that this is response

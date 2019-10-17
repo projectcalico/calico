@@ -107,7 +107,7 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb, enum calico_tc_flags
 	case be16_to_host(ETH_P_IP):
 		break;
 	case be16_to_host(ETH_P_ARP):
-		CALI_DEBUG("ARP: allowing packet");
+		CALI_DEBUG("ARP: allowing packet\n");
 		goto allow_skip_fib;
 	case be16_to_host(ETH_P_IPV6):
 		CALI_DEBUG("IPv6: drop\n");
@@ -148,7 +148,6 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb, enum calico_tc_flags
 	switch (ip_proto) {
 	case IPPROTO_TCP:
 		// Re-check buffer space for TCP (has larger headers than UDP).
-		CALI_DEBUG("Packet is TCP\n");
 		if ((void*)(tcp_header+1) > (void *)(long)skb->data_end) {
 			CALI_DEBUG("Too short for TCP: DROP\n");
 			goto deny;
@@ -208,7 +207,6 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb, enum calico_tc_flags
 		goto deny;
 	}
 
-	size_t csum_offset;
 	switch (ct_result.rc){
 	case CALI_CT_NEW:
 		// New connection, apply policy.
@@ -278,16 +276,16 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb, enum calico_tc_flags
 
 			switch (ip_proto) {
 			case IPPROTO_TCP:
-				tcp_header->dest = post_nat_dport;
+				tcp_header->dest = host_to_be16(post_nat_dport);
 				csum_offset = sizeof(struct ethhdr) + sizeof(struct iphdr) + offsetof(struct tcphdr, check);
 				bpf_l4_csum_replace(skb, csum_offset, ip_dst, post_nat_ip_dst, BPF_F_PSEUDO_HDR | 4);
-				bpf_l4_csum_replace(skb, csum_offset, host_to_be16(dport),  post_nat_dport, 2);
+				bpf_l4_csum_replace(skb, csum_offset, host_to_be16(dport),  host_to_be16(post_nat_dport), 2);
 				break;
 			case IPPROTO_UDP:
-				udp_header->dest = post_nat_dport;
+				udp_header->dest = host_to_be16(post_nat_dport);
 				csum_offset = sizeof(struct ethhdr) + sizeof(struct iphdr) + offsetof(struct udphdr, check);
 				bpf_l4_csum_replace(skb, csum_offset, ip_dst, post_nat_ip_dst, BPF_F_PSEUDO_HDR | 4);
-				bpf_l4_csum_replace(skb, csum_offset, host_to_be16(dport),  post_nat_dport, 2);
+				bpf_l4_csum_replace(skb, csum_offset, host_to_be16(dport),  host_to_be16(post_nat_dport), 2);
 				break;
 			}
 
@@ -326,50 +324,50 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb, enum calico_tc_flags
 
 		goto allow;
 	case CALI_CT_ESTABLISHED_DNAT:
-		CALI_DEBUG("CT: DNAT\n");
+		CALI_DEBUG("CT: DNAT to %x:%d\n", be32_to_host(ct_result.nat_ip), ct_result.nat_port);
 
 		// Actually do the NAT.
-		ip_header->daddr = ct_result.nat_ip;
+		post_nat_ip_dst = ct_result.nat_ip;
+		post_nat_dport = ct_result.nat_port;
+		ip_header->daddr = post_nat_ip_dst;
+		size_t csum_offset;
 
 		switch (ip_proto) {
 		case IPPROTO_TCP:
-			tcp_header->dest = ct_result.nat_port;
+			tcp_header->dest = host_to_be16(post_nat_dport);
 			csum_offset = sizeof(struct ethhdr) + sizeof(struct iphdr) + offsetof(struct tcphdr, check);
-			bpf_l4_csum_replace(skb, csum_offset, ip_dst, ct_result.nat_ip, BPF_F_PSEUDO_HDR | 4);
-			bpf_l4_csum_replace(skb, csum_offset, host_to_be16(dport),  ct_result.nat_port, 2);
+			bpf_l4_csum_replace(skb, csum_offset, ip_dst, post_nat_ip_dst, BPF_F_PSEUDO_HDR | 4);
+			bpf_l4_csum_replace(skb, csum_offset, host_to_be16(dport),  host_to_be16(post_nat_dport), 2);
 			break;
 		case IPPROTO_UDP:
-			udp_header->dest = ct_result.nat_port;
+			udp_header->dest = host_to_be16(post_nat_dport);
 			csum_offset = sizeof(struct ethhdr) + sizeof(struct iphdr) + offsetof(struct udphdr, check);
-			bpf_l4_csum_replace(skb, csum_offset, ip_dst, ct_result.nat_ip, BPF_F_PSEUDO_HDR | 4);
-			bpf_l4_csum_replace(skb, csum_offset, host_to_be16(dport),  ct_result.nat_port, 2);
+			bpf_l4_csum_replace(skb, csum_offset, ip_dst, post_nat_ip_dst, BPF_F_PSEUDO_HDR | 4);
+			bpf_l4_csum_replace(skb, csum_offset, host_to_be16(dport),  host_to_be16(post_nat_dport), 2);
 			break;
-		default:
-			// ICMP has no checksum.
-			goto skip_l4_csum;
 		}
 
-		bpf_l3_csum_replace(skb, sizeof(struct ethhdr) + offsetof(struct iphdr, check), ip_dst, ct_result.nat_ip, 4);
+		bpf_l3_csum_replace(skb, sizeof(struct ethhdr) + offsetof(struct iphdr, check), ip_dst, post_nat_ip_dst, 4);
 
 		fib_params.sport = sport;
-		fib_params.dport = ct_result.nat_port;
+		fib_params.dport = post_nat_dport;
 		fib_params.ipv4_src = ip_src;
-		fib_params.ipv4_dst = ct_result.nat_ip;
+		fib_params.ipv4_dst = post_nat_ip_dst;
 
 		goto allow;
 	case CALI_CT_ESTABLISHED_SNAT:
-		CALI_DEBUG("CT: SNAT\n");
+		CALI_DEBUG("CT: SNAT to %x:%d\n", be32_to_host(ct_result.nat_ip), ct_result.nat_port);
 
 		// Actually do the NAT.
 		ip_header->saddr = ct_result.nat_ip;
 
 		switch (ip_proto) {
 		case IPPROTO_TCP:
-			tcp_header->source = ct_result.nat_port;
+			tcp_header->source = host_to_be16(ct_result.nat_port);
 			csum_offset = sizeof(struct ethhdr) + sizeof(struct iphdr) + offsetof(struct tcphdr, check);
 			break;
 		case IPPROTO_UDP:
-			udp_header->source = ct_result.nat_port;
+			udp_header->source = host_to_be16(ct_result.nat_port);
 			csum_offset = sizeof(struct ethhdr) + sizeof(struct iphdr) + offsetof(struct udphdr, check);
 			break;
 		default:
@@ -378,7 +376,7 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb, enum calico_tc_flags
 		}
 
 		bpf_l4_csum_replace(skb, csum_offset, ip_src, ct_result.nat_ip, BPF_F_PSEUDO_HDR | 4);
-		bpf_l4_csum_replace(skb, csum_offset, host_to_be16(sport),  ct_result.nat_port, 2);
+		bpf_l4_csum_replace(skb, csum_offset, host_to_be16(sport),  host_to_be16(ct_result.nat_port), 2);
 
 	skip_l4_csum:
 		bpf_l3_csum_replace(skb, sizeof(struct ethhdr) + offsetof(struct iphdr, check), ip_src, ct_result.nat_ip, 4);

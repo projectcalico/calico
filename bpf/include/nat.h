@@ -18,7 +18,7 @@ struct calico_nat_v4_value {
 	uint32_t count;
 };
 
-struct bpf_map_def_extended __attribute__((section("maps"))) calico_nat_map_v4 = {
+struct bpf_map_def_extended __attribute__((section("maps"))) cali_nat_v4 = {
 	.type = BPF_MAP_TYPE_HASH,
 	.key_size = sizeof(struct calico_nat_v4_key),
 	.value_size = sizeof(struct calico_nat_v4_value),
@@ -40,7 +40,7 @@ struct calico_nat_dest {
 	uint8_t pad[2];
 };
 
-struct bpf_map_def_extended __attribute__((section("maps"))) calico_nat_secondary_map_v4 = {
+struct bpf_map_def_extended __attribute__((section("maps"))) cali_natbe_v4 = {
 	.type = BPF_MAP_TYPE_HASH,
 	.key_size = sizeof(struct calico_nat_secondary_v4_key),
 	.value_size = sizeof(struct calico_nat_dest),
@@ -63,11 +63,12 @@ struct calico_nat_dest* calico_v4_nat_lookup(__u8 ip_proto, __be32 ip_dst, __u16
 		.protocol = ip_proto,
 	};
 
-	struct calico_nat_v4_value *nat_lv1_val = bpf_map_lookup_elem(&calico_nat_map_v4, &nat_key);
-	CALI_DEBUG("NAT: 1st level lookup addr=%x port=%x protocol=%x.\n",
-		(int)be32_to_host(nat_key.addr), (int)be16_to_host(nat_key.port),
+	struct calico_nat_v4_value *nat_lv1_val = bpf_map_lookup_elem(&cali_nat_v4, &nat_key);
+	CALI_DEBUG("NAT: 1st level lookup addr=%x port=%d protocol=%d.\n",
+		(int)be32_to_host(nat_key.addr), (int)dport,
 		(int)(nat_key.protocol));
 	if (!nat_lv1_val) {
+		CALI_DEBUG("NAT: Miss.\n");
 		return NULL;
 	}
 
@@ -76,8 +77,13 @@ struct calico_nat_dest* calico_v4_nat_lookup(__u8 ip_proto, __be32 ip_dst, __u16
 		.ordinal = bpf_get_prandom_u32() % nat_lv1_val->count,
 	};
 	CALI_DEBUG("NAT: 1st level hit; id=%d ordinal=%d\n", nat_lv2_key.id, nat_lv2_key.ordinal);
-	struct calico_nat_dest *nat_lv2_val = bpf_map_lookup_elem(&calico_nat_secondary_map_v4,
+	struct calico_nat_dest *nat_lv2_val = bpf_map_lookup_elem(&cali_natbe_v4,
 		&nat_lv2_key);
+	if (nat_lv2_val) {
+		CALI_DEBUG("NAT: backend selected %x:%d\n", be32_to_host(nat_lv2_val->addr), nat_lv2_val->port);
+	} else {
+		CALI_DEBUG("NAT: backend miss\n");
+	}
 	return nat_lv2_val;
 }
 
