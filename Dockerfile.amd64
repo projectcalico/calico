@@ -22,7 +22,7 @@ LABEL maintainer "Casey Davenport <casey@tigera.io>"
 ARG ARCH=amd64
 
 # Install remaining runtime deps required for felix from the global repository
-RUN apt-get update && apt-get install -y \
+RUN apt-get update && apt-get upgrade && apt-get install -y \
     ipset \
     iputils-arping \
     iputils-ping \
