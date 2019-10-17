@@ -441,7 +441,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	if config.BPFEnabled {
 		log.Info("BPF enabled, starting BPF endpoint manager and map manager.")
 		// Register map managers first since they create the maps that will be used by the endpoint manager.
-		dp.RegisterManager(newBPFMapManager())
+		dp.RegisterManager(newBPFIPSetManager())
 		dp.RegisterManager(newBPFConntrackManager())
 
 		dp.RegisterManager(newBPFEndpointManager(config.BPFLogLevel))

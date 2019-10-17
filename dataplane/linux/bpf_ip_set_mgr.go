@@ -31,7 +31,7 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/set"
 )
 
-type mapManager struct {
+type bpfIPSetManager struct {
 	// Caches.  Updated immediately for now.
 	desiredKeysByIPSetID map[uint64]set.Set
 
@@ -54,8 +54,8 @@ const ipSetEntrySize = 20
 
 type IPSetEntry [ipSetEntrySize]byte
 
-func newBPFMapManager() *mapManager {
-	return &mapManager{
+func newBPFIPSetManager() *bpfIPSetManager {
+	return &bpfIPSetManager{
 		desiredKeysByIPSetID:  map[uint64]set.Set{},
 		keysToAddByIPSetID:    map[uint64]set.Set{},
 		keysToRemoveByIPSetID: map[uint64]set.Set{},
@@ -113,7 +113,7 @@ func makeBPFIPSetEntry(setID uint64, cidr ip.V4CIDR, port uint16, proto uint8) I
 	return entry
 }
 
-func (m *mapManager) OnUpdate(msg interface{}) {
+func (m *bpfIPSetManager) OnUpdate(msg interface{}) {
 	switch msg := msg.(type) {
 	// IP set-related messages, these are extremely common.
 	case *proto.IPSetUpdate:
@@ -224,7 +224,7 @@ func parseIPSetMember(id uint64, member string) IPSetEntry {
 
 var dummyValue = []byte{1, 0, 0, 0}
 
-func (m *mapManager) CompleteDeferredWork() error {
+func (m *bpfIPSetManager) CompleteDeferredWork() error {
 	var numAdds, numDels uint
 	startTime := time.Now()
 
