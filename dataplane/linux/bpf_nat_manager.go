@@ -85,7 +85,7 @@ func (k NATKey) Port() uint16 {
 }
 
 func (k NATKey) String() string {
-	return fmt.Sprintf("proto=%v %v:%v", k.Proto(), k.Addr(), k.Port())
+	return fmt.Sprintf("NATKey{Proto:%v Addr:%v Port:%v}", k.Proto(), k.Addr(), k.Port())
 }
 
 type NATValue [natValueSize]byte
@@ -152,7 +152,7 @@ func (k NATBackendValue) Port() uint16 {
 }
 
 func (k NATBackendValue) String() string {
-	return fmt.Sprintf("%v:%v", k.Addr(), k.Port())
+	return fmt.Sprintf("NATBackendValue{Addr:%v Port:%v}", k.Addr(), k.Port())
 }
 
 func newBPFNATManager() *bpfNATManager {
