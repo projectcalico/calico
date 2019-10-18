@@ -1,6 +1,5 @@
 v3.10:
 - title: v3.10
-  note: ""
   components:
      typha:
       version: v3.10
