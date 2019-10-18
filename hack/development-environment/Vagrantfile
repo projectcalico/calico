@@ -14,8 +14,8 @@ Vagrant.configure("2") do |config|
       ip = "172.17.8.#{i+100}"
       node.vm.network "private_network", ip: ip
       node.vm.provider "virtualbox" do |vb|
-        vb.memory = "16000"
-        vb.cpus = 3
+        vb.memory = "8192"
+        vb.cpus = 2
         vb.name = "node#{i}"
       end
       if (node.vm.hostname == "node1")
