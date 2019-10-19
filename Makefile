@@ -12,6 +12,12 @@ ifneq ($(IMAGES_FILE),)
 	CONFIG:=$(CONFIG),/config_images.yml
 endif
 
+# Set DEV_NULL=true to enable the Null Converter which renders the docs site as markdown. 
+# This is useful for comparing changes to templates & includes.
+ifeq ($(DEV_NULL),true)
+	CONFIG:=$(CONFIG),_config_null.yml
+endif
+
 GO_BUILD_VER?=v0.22
 CALICO_BUILD?=calico/go-build:$(GO_BUILD_VER)
 LOCAL_USER_ID?=$(shell id -u $$USER)
