@@ -1,6 +1,5 @@
 ---
 title: The Calico datastore
-redirect_from: latest/getting-started/kubernetes/hardway/the-calico-datastore
 canonical_url: 'https://docs.projectcalico.org/v3.9/getting-started/kubernetes/hardway/the-calico-datastore'
 ---
 

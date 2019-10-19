@@ -1,5 +1,6 @@
 ---
 title: Use namespace in policy
+redirect_from: latest/security/namespace-policy
 description: Use namespaces and namespaceSelectors in Calico network policy to group or separate resources. Use network policies to allow or deny traffic to/from pods belonging to specific namespaces.
 ---
 

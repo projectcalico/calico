@@ -1,5 +1,6 @@
 ---
 title: Enable extreme high-connection workloads 
+redirect_from: latest/security/high-connection-workloads
 ---
 
 ### Big picture

@@ -1,5 +1,6 @@
 ---
 title: Amazon Elastic Kubernetes Service (EKS)
+redirect_from: latest/getting-started/kubernetes/managed-public-cloud/eks
 ---
 
 ### Big picture

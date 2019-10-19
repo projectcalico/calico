@@ -1,5 +1,6 @@
 ---
 title: Interoperate with legacy firewalls using IP ranges
+redirect_from: latest/networking/legacy-firewalls
 ---
 
 ### Big picture

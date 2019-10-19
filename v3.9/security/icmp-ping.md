@@ -1,6 +1,5 @@
 ---
 title: Use ICMP/ping in policy rules
-redirect_from: latest/security/icmp-ping
 ---
 
 ### Big picture

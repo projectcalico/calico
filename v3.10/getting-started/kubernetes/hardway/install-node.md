@@ -1,5 +1,6 @@
 ---
 title: Install calico/node
+redirect_from: latest/getting-started/kubernetes/hardway/install-node
 canonical_url: 'https://docs.projectcalico.org/v3.9/getting-started/kubernetes/hardway/install-node'
 ---
 

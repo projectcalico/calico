@@ -1,5 +1,6 @@
 ---
 title: Apply policy to Kubernetes node ports
+redirect_from: latest/security/kubernetes-node-ports
 ---
 
 ### Big picture

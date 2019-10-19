@@ -1,6 +1,5 @@
 ---
 title: Add a floating IP to a pod
-redirect_from: latest/networking/add-floating-ip
 ---
 
 ### Big picture

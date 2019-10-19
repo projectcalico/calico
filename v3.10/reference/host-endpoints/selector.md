@@ -1,5 +1,6 @@
 ---
 title: Selector-based policies
+redirect_from: latest/reference/host-endpoints/selector
 canonical_url: 'https://docs.projectcalico.org/v3.9/reference/host-endpoints/selector'
 ---
 

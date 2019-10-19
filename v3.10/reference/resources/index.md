@@ -1,5 +1,6 @@
 ---
 title: Resource definitions
+redirect_from: latest/reference/resources/index
 canonical_url: 'https://docs.projectcalico.org/v3.9/reference/resources/index'
 ---
 

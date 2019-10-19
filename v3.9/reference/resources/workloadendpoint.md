@@ -1,6 +1,5 @@
 ---
 title: Workload endpoint
-redirect_from: latest/reference/resources/workloadendpoint
 canonical_url: 'https://docs.projectcalico.org/v3.9/reference/resources/workloadendpoint'
 ---
 
