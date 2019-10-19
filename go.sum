@@ -306,6 +306,8 @@ github.com/projectcalico/confd v0.0.0-20191015042200-d3bf49485e58 h1:Ht6EPnYilgX
 github.com/projectcalico/confd v0.0.0-20191015042200-d3bf49485e58/go.mod h1:zGndhOHefIAz3/7z6MQvlyHextz333v1x8k5nF8W5IE=
 github.com/projectcalico/confd v0.0.0-20191017042506-9c87bbe1435d h1:h5cG681vyNs66FQVebI33Dw6TXCN9tddcmSR1y6suYY=
 github.com/projectcalico/confd v0.0.0-20191017042506-9c87bbe1435d/go.mod h1:gjWTpjNDGestdByzns0EhSRCF5wjchLYFRjlyIEe174=
+github.com/projectcalico/confd v0.0.0-20191018042136-799a92ecf822 h1:TxXNvsYIgkyg9cnluzm5hqop0lrVRRHrhFDVVIdORos=
+github.com/projectcalico/confd v0.0.0-20191018042136-799a92ecf822/go.mod h1:gjWTpjNDGestdByzns0EhSRCF5wjchLYFRjlyIEe174=
 github.com/projectcalico/confd v3.2.0+incompatible/go.mod h1:kUM7VZ267QKU9j3n60w/bB792J5qNVF1jAltjl7AzRM=
 github.com/projectcalico/felix v0.0.0-20191008064910-3286f617f736 h1:0gBhEnn80lrV5wKNEJU+JcaKzH3fMUUYVOIxwrsOj+o=
 github.com/projectcalico/felix v0.0.0-20191008064910-3286f617f736/go.mod h1:gPk9yuWnPnC8HIyFOecFBg4FUwwTYFF0pox6AYTTH74=
@@ -315,8 +317,11 @@ github.com/projectcalico/felix v0.0.0-20191014065316-041b8c991d9e h1:AyIINUm+HuZ
 github.com/projectcalico/felix v0.0.0-20191014065316-041b8c991d9e/go.mod h1:gg4HerIv8gE6kS7eoMZ9AdeKWUTu1flcM+lm0Z78aiM=
 github.com/projectcalico/felix v0.0.0-20191017064825-fce3634d3ca4 h1:Ks7mpSjU7fupW8SAyvs87cIEgLBgsNNwhl8Vr8lupd8=
 github.com/projectcalico/felix v0.0.0-20191017064825-fce3634d3ca4/go.mod h1:wyaUTv0cSc46IKzfEJr7LcTXKxgRG9T6q9enqgPIKg8=
+github.com/projectcalico/felix v0.0.0-20191019064825-e14e05b8734a h1:XIQKgu7ToZxADDh/SQ65JfVNkH0yWGe18SjqyNfcFi4=
+github.com/projectcalico/felix v0.0.0-20191019064825-e14e05b8734a/go.mod h1:wyaUTv0cSc46IKzfEJr7LcTXKxgRG9T6q9enqgPIKg8=
 github.com/projectcalico/felix v3.8.2+incompatible h1:cz0MaUs5qTjPWjTxK5J1D1zEIfrtSYUyyf2nAjCos9c=
 github.com/projectcalico/felix v3.8.3+incompatible h1:bDA7IJlXWQZV0Ti0NKG8l4Q7HBqnEcNbCUX//qnzLZQ=
+github.com/projectcalico/felix v3.8.4+incompatible h1:F35xKHnqHiVuhbQAP3wLIa+wnHkaMlWcWoICngU1nqM=
 github.com/projectcalico/go-json v0.0.0-20161128004156-6219dc7339ba h1:aaF2byUCZhzszHsfPEr2M3qcU4ibtD/yk/il2R7T1PU=
 github.com/projectcalico/go-json v0.0.0-20161128004156-6219dc7339ba/go.mod h1:q8EdCgBdMQzgiX/uk4GXLWLk+gIHd1a7mWUAamJKDb4=
 github.com/projectcalico/go-yaml v0.0.0-20161201183616-955bc3e451ef h1:Di9BaA9apb6DEstin8RdhKmlzQG76UMbmjPzjCVkMpc=
