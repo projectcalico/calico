@@ -1,7 +1,1 @@
----
-layout: null
----
-{% helm %}
-datastore: etcd
-network: calico
-{% endhelm %}
+../../../../manifests/calico-etcd.yaml
