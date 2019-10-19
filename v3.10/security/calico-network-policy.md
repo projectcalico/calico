@@ -1,5 +1,6 @@
 ---
 title: Get started with Calico network policy
+redirect_from: latest/security/calico-network-policy
 description: Calico extends Kubernetes network policy to provide a richer set of capabilities including policy ordering/priority, deny rules, and more flexible match rules.
 ---
 

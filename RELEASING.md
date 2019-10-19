@@ -272,12 +272,6 @@ Perform the following steps on a local branch off of the latest master.
 
 1. Commit your current changes.
 
-1. Update `sitemap-latest.xml` in the root of the repository. This is still a manual process. Use `_site/sitemap.xml` as a guide.
-
-1. Commit the sitemap changes as a new commit and open a pull request, make sure it passes CI and get it reviewed.
-
-   Once reviewed and CI has passed, merge the PR. This will cause the live docs site to be updated (after a few minutes).
-
 ### Updating canonical redirects
 
 1. Pull the latest master and check out a _new_ branch.

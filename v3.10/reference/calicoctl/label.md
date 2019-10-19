@@ -1,5 +1,6 @@
 ---
 title: calicoctl label
+redirect_from: latest/reference/calicoctl/label
 canonical_url: 'https://docs.projectcalico.org/v3.9/reference/calicoctl/label'
 ---
 

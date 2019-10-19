@@ -1,6 +1,5 @@
 ---
 title: Install Typha
-redirect_from: latest/getting-started/kubernetes/hardway/install-typha
 canonical_url: 'https://docs.projectcalico.org/v3.9/getting-started/kubernetes/hardway/install-typha'
 ---
 

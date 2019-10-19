@@ -1,6 +1,5 @@
 ---
 title: Felix configuration
-redirect_from: latest/reference/resources/felixconfig
 canonical_url: 'https://docs.projectcalico.org/v3.9/reference/resources/felixconfig'
 ---
 

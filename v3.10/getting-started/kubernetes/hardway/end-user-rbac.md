@@ -1,5 +1,6 @@
 ---
 title: End user RBAC
+redirect_from: latest/getting-started/kubernetes/hardway/end-user-rbac
 canonical_url: 'https://docs.projectcalico.org/v3.9/getting-started/kubernetes/hardway/end-user-rbac'
 ---
 

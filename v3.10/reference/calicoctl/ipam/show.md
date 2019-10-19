@@ -1,5 +1,6 @@
 ---
 title: calicoctl ipam
+redirect_from: latest/reference/calicoctl/ipam/show
 canonical_url: 'https://docs.projectcalico.org/v3.9/reference/calicoctl/ipam/show'
 ---
 

@@ -1,5 +1,6 @@
 ---
 title: Configure IP pools
+redirect_from: latest/getting-started/kubernetes/hardway/configure-ip-pools
 canonical_url: 'https://docs.projectcalico.org/v3.9/getting-started/kubernetes/hardway/configure-ip-pools'
 ---
 

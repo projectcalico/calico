@@ -1,5 +1,6 @@
 ---
 title: Enforce network policy using Istio
+redirect_from: latest/security/enforce-policy-istio
 ---
 
 ### Big picture

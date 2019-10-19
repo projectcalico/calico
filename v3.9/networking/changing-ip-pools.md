@@ -1,6 +1,5 @@
 ---
 title: Changing IP pools
-redirect_from: latest/networking/changing-ip-pools
 ---
 
 ## About changing IP pools

@@ -1,6 +1,5 @@
 ---
 title: calico/node attributions
-redirect_from: latest/reference/legal/node
 canonical_url: 'https://docs.projectcalico.org/v3.9/reference/legal/node'
 ---
 
