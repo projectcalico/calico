@@ -27,6 +27,7 @@ imageNames:
   kubeControllers: calico/kube-controllers
   calico-upgrade: calico/upgrade
   flannel: quay.io/coreos/flannel
+  flannelMigration: calico/flannel-migration-controller
   dikastes: calico/dikastes
   pilot-webhook: calico/pilot-webhook
   flexvol: calico/pod2daemon-flexvol
@@ -65,6 +66,7 @@ defaults:
         calico/kube-controllers: calico/kube-controllers
         calico-upgrade: calico/upgrade
         flannel: quay.io/coreos/flannel
+        flannelMigration: calico/flannel-migration-controller
         calico/dikastes: calico/dikastes
         pilot-webhook: calico/pilot-webhook
         flexvol: calico/pod2daemon-flexvol
