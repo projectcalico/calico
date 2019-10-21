@@ -43,7 +43,9 @@
           export PYTHONUNBUFFERED=true
           export DEVSTACK_GATE_NEUTRON=1
           export DEVSTACK_GATE_TEMPEST=1
-          export BRANCH_OVERRIDE=default
+          if [ -n "{{ branch_override }}" ]; then
+              export BRANCH_OVERRIDE={{ branch_override }}
+          fi
           if [ "$BRANCH_OVERRIDE" != "default" ] ; then
               export OVERRIDE_ZUUL_BRANCH=$BRANCH_OVERRIDE
           fi
