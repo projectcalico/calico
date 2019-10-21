@@ -31,7 +31,7 @@ When {{site.prodname}} is [BGP peered with your physical network infrastructure]
 If you want your pods to have public internet IPs:
 
 - Configure {{site.prodname}} to peer with your physical network infrastructure
-- Create an IP pool for those pods that contain public IP addresses that are routed to your network with `nat-outgoing: false`
+- Create an IP pool for those pods that contain public IP addresses that are routed to your network with `natOutgoing: false`
 - Verify that other network equipment does not NAT the pod traffic
 
 ### How to
