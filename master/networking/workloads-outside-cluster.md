@@ -20,7 +20,7 @@ This how-to guide uses the following {{site.prodname}} features:
 
 #### Outgoing NAT on each node
 
-For all networking options, you can allow your workloads to access the internet (subject to network policy, of course!) by enabling outbound NAT on the IP pool.  When enabled, traffic from pods in that pool go to a destination outside all {{site.prodname}} pools will be NATed.  The source address is masqueraded to an IP of the node on which each workload is hosted, allowing the network to understand the traffic. By default, the NAT outgoing option is automatically enabled for the pool that is created when you install {{site.prodname}}.  
+For all networking options, you can allow your workloads to access the internet (subject to network policy, of course!) by enabling outbound NAT on the IP pool.  When enabled, traffic from pods in that pool going to a destination outside all {{site.prodname}} pools will be NATed.  The source address is masqueraded to an IP of the node on which each workload is hosted, allowing the network to understand the traffic. By default, the NAT outgoing option is automatically enabled for the pool that is created when you install {{site.prodname}}.  
 
 #### BGP peering with out-of-cluster NAT
 
