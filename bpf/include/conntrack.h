@@ -142,7 +142,7 @@ static CALI_BPF_INLINE int calico_ct_v4_create_tracking(
 	ct_value.type = type;
 	ct_value.orig_dst = orig_dst;
 	ct_value.orig_port = orig_dport;
-	struct calico_ct_leg *our_dir, *oth_dir;
+	struct calico_ct_leg *src_to_dst, *dst_to_src;
 	bool srcLTDest = (ip_src < ip_dst) || ((ip_src == ip_dst) && sport < dport);
 	if (srcLTDest) {
 		*k = (struct calico_ct_key) {
@@ -150,27 +150,27 @@ static CALI_BPF_INLINE int calico_ct_v4_create_tracking(
 			.addr_a = ip_src, .port_a = sport,
 			.addr_b = ip_dst, .port_b = dport,
 		};
-		our_dir = &ct_value.a_to_b;
-		oth_dir = &ct_value.b_to_a;
+		src_to_dst = &ct_value.a_to_b;
+		dst_to_src = &ct_value.b_to_a;
 	} else  {
 		*k = (struct calico_ct_key) {
 			.protocol = ip_proto,
 			.addr_a = ip_dst, .port_a = dport,
 			.addr_b = ip_src, .port_b = sport,
 		};
-		our_dir = &ct_value.b_to_a;
-		oth_dir = &ct_value.a_to_b;
+		src_to_dst = &ct_value.b_to_a;
+		dst_to_src = &ct_value.a_to_b;
 	}
 
 	dump_ct_key(k, flags);
 
-	our_dir->seqno = seq;
-	our_dir->syn_seen = syn;
-	our_dir->opener = 1;
+	src_to_dst->seqno = seq;
+	src_to_dst->syn_seen = syn;
+	src_to_dst->opener = 1;
 	if (flags & CALI_TC_INGRESS) {
-		oth_dir->ingress_whitelisted = 1;
+		dst_to_src->ingress_whitelisted = 1;
 	} else {
-		our_dir->egress_whitelisted = 1;
+		src_to_dst->egress_whitelisted = 1;
 	}
 	int err = bpf_map_update_elem(&calico_ct_map_v4, k, &ct_value, 0);
 	CALI_VERB("CT-ALL Create result: %d.\n", err);
@@ -379,7 +379,7 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_tcp_lookup(
 	__u64 now = bpf_ktime_get_ns();
 	v->last_seen = now;
 
-	struct calico_ct_leg *our_dir, *oth_dir;
+	struct calico_ct_leg *src_to_dst, *dst_to_src;
 
 	struct calico_ct_value *tracking_v;
 	switch (v->type) {
@@ -396,13 +396,13 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_tcp_lookup(
 		tracking_v->last_seen = now;
 
 		if (ip_src == v->nat_rev_key.addr_a && sport == v->nat_rev_key.port_a) {
-			our_dir = &tracking_v->a_to_b;
-			oth_dir = &tracking_v->b_to_a;
+			src_to_dst = &tracking_v->a_to_b;
+			dst_to_src = &tracking_v->b_to_a;
 			result.nat_ip = v->nat_rev_key.addr_b;
 			result.nat_port = v->nat_rev_key.port_b;
 		} else {
-			our_dir = &tracking_v->b_to_a;
-			oth_dir = &tracking_v->a_to_b;
+			src_to_dst = &tracking_v->b_to_a;
+			dst_to_src = &tracking_v->a_to_b;
 			result.nat_ip = v->nat_rev_key.addr_a;
 			result.nat_port = v->nat_rev_key.port_a;
 		}
@@ -419,14 +419,14 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_tcp_lookup(
 		CALI_DEBUG("CT-TCP Hit! NAT REV entry.\n");
 
 		if (srcLTDest) {
-			our_dir = &v->a_to_b;
-			oth_dir = &v->b_to_a;
+			src_to_dst = &v->a_to_b;
+			dst_to_src = &v->b_to_a;
 		} else {
-			our_dir = &v->b_to_a;
-			oth_dir = &v->a_to_b;
+			src_to_dst = &v->b_to_a;
+			dst_to_src = &v->a_to_b;
 		}
 
-		if (oth_dir->opener) {
+		if (dst_to_src->opener) {
 			// The destination of the packet was the opener of the NAT session,
 			// need to SNAT the traffic back to its original request.
 			result.rc =	CALI_CT_ESTABLISHED_SNAT;
@@ -461,11 +461,11 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_tcp_lookup(
 		result.rc =	CALI_CT_ESTABLISHED;
 
 		if (srcLTDest) {
-			our_dir = &v->a_to_b;
-			oth_dir = &v->b_to_a;
+			src_to_dst = &v->a_to_b;
+			dst_to_src = &v->b_to_a;
 		} else {
-			our_dir = &v->b_to_a;
-			oth_dir = &v->a_to_b;
+			src_to_dst = &v->b_to_a;
+			dst_to_src = &v->a_to_b;
 		}
 
 		break;
@@ -474,62 +474,65 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_tcp_lookup(
 		goto out_lookup_fail;
 	}
 
-	// TODO Update once host endpoints come along.
-	// Packet towards a workload.
-	if (our_dir->ingress_whitelisted || our_dir->egress_whitelisted) {
-		// Packet was whitelisted by the policy attached to this workload.
-		CALI_DEBUG("CT-TCP Packet whitelisted by this workload's policy.\n");
-	} else if (oth_dir->ingress_whitelisted) {
-		// Traffic between two workloads on the same host; the only way
-		// the the ingress flag can get set on the other side of the
-		// connection is if this workload opened the connection and it
-		// was whitelisted at the other side.
-		CALI_DEBUG("CT-TCP Packet whitelisted by other workload's policy.\n");
+	if (CALI_TC_FLAGS_TO_HOST(flags)) {
+		// Source of the packet is the workload, so check the src whitelist.
+		if (src_to_dst->ingress_whitelisted || src_to_dst->egress_whitelisted) {
+			// Packet was whitelisted by the policy attached to this workload.
+			CALI_VERB("CT-ICMP Packet whitelisted by this workload's policy.\n");
+		} else {
+			// Only whitelisted by the other side?
+			CALI_VERB("CT-ICMP Packet not allowed by ingress/egress whitelist flags.\n");
+			result.rc = CALI_CT_INVALID;
+		}
 	} else {
-		// oth_dir->egress_whitelisted?  In this case, the other workload
-		// sent us a connection but we never upgraded it to
-		// ingress_whitelisted; it must not have passed our local ingress
-		// policy.
-		CALI_DEBUG("CT-TCP Packet not allowed by ingress/egress whitelist flags.\n");
-		result.rc = CALI_CT_INVALID;
+		// Dest of the packet is the workload, so check the dest whitelist.
+		if (dst_to_src->ingress_whitelisted || dst_to_src->egress_whitelisted) {
+			// Packet was whitelisted by the policy attached to this workload.
+			CALI_VERB("CT-ICMP Packet whitelisted by this workload's policy.\n");
+		} else {
+			// Only whitelisted by the other side?
+			CALI_VERB("CT-ICMP Packet not allowed by ingress/egress whitelist flags.\n");
+			result.rc = CALI_CT_INVALID;
+		}
 	}
 
 	if (tcp_header->rst) {
 		CALI_DEBUG("CT-TCP RST seen, marking CT entry.\n");
 		// TODO: We should only take account of RST packets that are in
 		// the right window.
-		our_dir->rst_seen = 1;
+		// TODO if we trust the RST, could just drop the CT entry.
+		src_to_dst->rst_seen = 1;
 	}
 	if (tcp_header->fin) {
 		CALI_VERB("CT-TCP FIN seen, marking CT entry.\n");
-		our_dir->fin_seen = 1;
+		src_to_dst->fin_seen = 1;
 	}
 
 	if (tcp_header->syn && tcp_header->ack) {
-		if (oth_dir->syn_seen && (oth_dir->seqno + 1) == tcp_header->ack_seq) {
+		if (dst_to_src->syn_seen && (dst_to_src->seqno + 1) == tcp_header->ack_seq) {
 			CALI_VERB("CT-TCP SYN+ACK seen, marking CT entry.\n");
-			our_dir->syn_seen = 1;
-			our_dir->ack_seen = 1;
-			our_dir->seqno = tcp_header->seq;
+			src_to_dst->syn_seen = 1;
+			src_to_dst->ack_seen = 1;
+			src_to_dst->seqno = tcp_header->seq;
 		} else {
 			CALI_VERB("CT-TCP SYN+ACK seen but packet's ACK (%u) "
 					"doesn't match other side's SYN (%u).\n",
-					tcp_header->ack_seq, oth_dir->seqno);
+					tcp_header->ack_seq, dst_to_src->seqno);
 			// Have to let this through so source can reset?
 		}
-	} else if (tcp_header->ack && !our_dir->ack_seen && our_dir->syn_seen) {
-		if (oth_dir->syn_seen && (oth_dir->seqno + 1) == tcp_header->ack_seq) {
+	} else if (tcp_header->ack && !src_to_dst->ack_seen && src_to_dst->syn_seen) {
+		if (dst_to_src->syn_seen && (dst_to_src->seqno + 1) == tcp_header->ack_seq) {
 			CALI_VERB("CT-TCP ACK seen, marking CT entry.\n");
-			our_dir->ack_seen = 1;
+			src_to_dst->ack_seen = 1;
 		} else {
 			CALI_VERB("CT-TCP ACK seen but packet's ACK (%u) doesn't "
 					"match other side's SYN (%u).\n",
-					tcp_header->ack_seq, oth_dir->seqno);
+					tcp_header->ack_seq, dst_to_src->seqno);
 			// Have to let this through so source can reset?
 		}
 	} else {
 		// Normal packet, check that the handshake is complete.
-		if (!oth_dir->ack_seen) {
+		if (!dst_to_src->ack_seen) {
 			CALI_VERB("CT-TCP Non-flagged packet but other side has never ACKed.\n");
 			// Have to let this through so source can reset?
 		} else {
@@ -551,8 +554,8 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_udp_lookup(
 		__be32 ip_src, __be32 ip_dst, __u16 sport, __u16 dport,
 		 enum calico_tc_flags flags) {
 
-	CALI_DEBUG("CT-UDP lookup from %x:%d\n", be32_to_host(ip_src), sport);
-	CALI_DEBUG("CT-UDP lookup to   %x:%d\n", be32_to_host(ip_dst), dport);
+	CALI_VERB("CT-UDP lookup from %x:%d\n", be32_to_host(ip_src), sport);
+	CALI_VERB("CT-UDP lookup to   %x:%d\n", be32_to_host(ip_dst), dport);
 
 	struct calico_ct_result result = {};
 
@@ -589,10 +592,10 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_udp_lookup(
 	case CALI_CT_TYPE_NAT_FWD:
 		// This is a forward NAT entry; since we do the bookkeeping on the
 		// reverse entry, we need to do a second lookup.
-		CALI_DEBUG("CT-UDP Hit! NAT FWD entry, doing secondary lookup.\n");
+		CALI_VERB("CT-UDP Hit! NAT FWD entry, doing secondary lookup.\n");
 		tracking_v = bpf_map_lookup_elem(&calico_ct_map_v4, &v->nat_rev_key);
 		if (!tracking_v) {
-			CALI_DEBUG("CT-UDP Miss when looking for secondary entry.\n");
+			CALI_VERB("CT-UDP Miss when looking for secondary entry.\n");
 			goto out_lookup_fail;
 		}
 		// Record timestamp.
@@ -615,7 +618,7 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_udp_lookup(
 	case CALI_CT_TYPE_NAT_REV:
 		// Since we found a reverse NAT entry, we know that this is response
 		// traffic so we'll need to SNAT it.
-		CALI_DEBUG("CT-UDP Hit! NAT REV entry.\n");
+		CALI_VERB("CT-UDP Hit! NAT REV entry.\n");
 		result.rc =	CALI_CT_ESTABLISHED_SNAT;
 		result.nat_ip = v->orig_dst;
 		result.nat_port = v->orig_port;
@@ -630,7 +633,7 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_udp_lookup(
 
 		break;
 	case CALI_CT_TYPE_NORMAL:
-		CALI_DEBUG("CT-UDP Hit! NORMAL entry.\n");
+		CALI_VERB("CT-UDP Hit! NORMAL entry.\n");
 		CALI_VERB("CT-UDP   Created: %llu.\n", v->created);
 		CALI_VERB("CT-UDP   Last seen: %llu.\n", v->last_seen);
 		CALI_VERB("CT-UDP   A: egress_whitelisted %d.\n", v->a_to_b.egress_whitelisted);
@@ -674,16 +677,16 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_udp_lookup(
 
 		break;
 	default:
-		CALI_DEBUG("CT-UDP Hit! UNKNOWN entry type.\n");
+		CALI_VERB("CT-UDP Hit! UNKNOWN entry type.\n");
 		goto out_lookup_fail;
 	}
 
-	CALI_DEBUG("CT-UDP result: %d.\n", result.rc);
+	CALI_VERB("CT-UDP result: %d.\n", result.rc);
 	return result;
 
 	out_lookup_fail:
 	result.rc = CALI_CT_NEW;
-	CALI_DEBUG("CT-UDP result: NEW.\n");
+	CALI_VERB("CT-UDP result: NEW.\n");
 	return result;
 }
 
@@ -723,7 +726,7 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_icmp_lookup(
 	__u64 now = bpf_ktime_get_ns();
 	v->last_seen = now;
 
-	struct calico_ct_leg *our_dir, *oth_dir;
+	struct calico_ct_leg *src_to_dst, *dst_to_src;
 
 	struct calico_ct_value *tracking_v;
 	switch (v->type) {
@@ -740,11 +743,11 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_icmp_lookup(
 		tracking_v->last_seen = now;
 
 		if (ip_src == v->nat_rev_key.addr_a && sport == v->nat_rev_key.port_a) {
-			our_dir = &tracking_v->a_to_b;
-			oth_dir = &tracking_v->b_to_a;
+			src_to_dst = &tracking_v->a_to_b;
+			dst_to_src = &tracking_v->b_to_a;
 		} else {
-			our_dir = &tracking_v->b_to_a;
-			oth_dir = &tracking_v->a_to_b;
+			src_to_dst = &tracking_v->b_to_a;
+			dst_to_src = &tracking_v->a_to_b;
 		}
 
 		// Since we found a forward NAT entry, we know that it's the destination
@@ -760,11 +763,11 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_icmp_lookup(
 		result.nat_ip = v->orig_dst;
 
 		if (srcLTDest) {
-			our_dir = &v->a_to_b;
-			oth_dir = &v->b_to_a;
+			src_to_dst = &v->a_to_b;
+			dst_to_src = &v->b_to_a;
 		} else {
-			our_dir = &v->b_to_a;
-			oth_dir = &v->a_to_b;
+			src_to_dst = &v->b_to_a;
+			dst_to_src = &v->a_to_b;
 		}
 
 		break;
@@ -780,11 +783,11 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_icmp_lookup(
 		result.rc =	CALI_CT_ESTABLISHED;
 
 		if (srcLTDest) {
-			our_dir = &v->a_to_b;
-			oth_dir = &v->b_to_a;
+			src_to_dst = &v->a_to_b;
+			dst_to_src = &v->b_to_a;
 		} else {
-			our_dir = &v->b_to_a;
-			oth_dir = &v->a_to_b;
+			src_to_dst = &v->b_to_a;
+			dst_to_src = &v->a_to_b;
 		}
 
 		break;
@@ -793,24 +796,26 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_icmp_lookup(
 		goto out_lookup_fail;
 	}
 
-	// TODO Update once host endpoints come along.
-	// Packet towards a workload.
-	if (our_dir->ingress_whitelisted || our_dir->egress_whitelisted) {
-		// Packet was whitelisted by the policy attached to this workload.
-		CALI_VERB("CT-ICMP Packet whitelisted by this workload's policy.\n");
-	} else if (oth_dir->ingress_whitelisted) {
-		// Traffic between two workloads on the same host; the only way
-		// the the ingress flag can get set on the other side of the
-		// connection is if this workload opened the connection and it
-		// was whitelisted at the other side.
-		CALI_VERB("CT-ICMP Packet whitelisted by other workload's policy.\n");
+	if (CALI_TC_FLAGS_TO_HOST(flags)) {
+		// Source of the packet is the workload, so check the src whitelist.
+		if (src_to_dst->ingress_whitelisted || src_to_dst->egress_whitelisted) {
+			// Packet was whitelisted by the policy attached to this workload.
+			CALI_VERB("CT-ICMP Packet whitelisted by this workload's policy.\n");
+		} else {
+			// Only whitelisted by the other side?
+			CALI_VERB("CT-ICMP Packet not allowed by ingress/egress whitelist flags.\n");
+			result.rc = CALI_CT_INVALID;
+		}
 	} else {
-		// oth_dir->egress_whitelisted?  In this case, the other workload
-		// sent us a connection but we never upgraded it to
-		// ingress_whitelisted; it must not have passed our local ingress
-		// policy.
-		CALI_VERB("CT-ICMP Packet not allowed by ingress/egress whitelist flags.\n");
-		result.rc = CALI_CT_INVALID;
+		// Dest of the packet is the workload, so check the dest whitelist.
+		if (dst_to_src->ingress_whitelisted || dst_to_src->egress_whitelisted) {
+			// Packet was whitelisted by the policy attached to this workload.
+			CALI_VERB("CT-ICMP Packet whitelisted by this workload's policy.\n");
+		} else {
+			// Only whitelisted by the other side?
+			CALI_VERB("CT-ICMP Packet not allowed by ingress/egress whitelist flags.\n");
+			result.rc = CALI_CT_INVALID;
+		}
 	}
 
 	CALI_DEBUG("CT-ICMP result: %d.\n", result.rc);
