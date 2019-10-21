@@ -33,7 +33,7 @@ import (
 var ProgPrefix, ProgSuffix []byte
 
 func initProgs() {
-	template, err := ioutil.ReadFile("bpf/xdp/redir_tc.c")
+	template, err := ioutil.ReadFile("/code/bpf/xdp/redir_tc.c")
 	if err != nil {
 		log.WithError(err).Panic("Failed to read BPF program template")
 	}
