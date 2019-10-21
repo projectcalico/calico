@@ -31,6 +31,7 @@ import (
 	"github.com/vishvananda/netlink"
 
 	"github.com/projectcalico/felix/bpf"
+	bpfproxy "github.com/projectcalico/felix/bpf/proxy"
 	"github.com/projectcalico/felix/ifacemonitor"
 	"github.com/projectcalico/felix/ipsets"
 	"github.com/projectcalico/felix/iptables"
@@ -448,7 +449,9 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		fibLookupEnabled := !config.RulesConfig.IPIPEnabled && !config.RulesConfig.VXLANEnabled
 		dp.RegisterManager(newBPFEndpointManager(config.BPFLogLevel, fibLookupEnabled))
 
-		panic("start kube-proxy")
+		if err := bpfproxy.StartKubeProxy(config.Hostname, bpfproxy.WithImmediateSync()); err != nil {
+			panic(err)
+		}
 	}
 
 	routeTableV4 := routetable.New(config.RulesConfig.WorkloadIfacePrefixes, 4, false, config.NetlinkTimeout,
