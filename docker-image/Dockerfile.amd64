@@ -18,25 +18,15 @@
 # userspace environment as it will be deployed in calico/node.
 FROM calico/bpftool:v5.0-amd64 as bpftool
 
-FROM debian:9.8-slim
+FROM debian:10-slim
 LABEL maintainer="Shaun Crampton <shaun@tigera.io>"
 
-# Set up a buster repo so that we can pull in backports of some packages.  Default to
-# the stable repo for other packages.  We need iptables 1.8.x for nftables compatibility.
-RUN echo 'APT::Default-Release "stable";' > /etc/apt/apt.conf.d/99defaultrelease
-RUN echo 'deb     http://ftp.debian.org/debian/    buster main contrib non-free' > /etc/apt/sources.list.d/buster.list
-RUN apt-get update && apt-get install -y -t buster \
-    ipset \
-    iptables \
-    iproute2
-
-# Default to the xtables backend of iptables.
-RUN update-alternatives --set iptables /usr/sbin/iptables-legacy
-RUN update-alternatives --set ip6tables /usr/sbin/ip6tables-legacy
 
 # Install remaining runtime deps required for felix from the global repository
 RUN apt-get update && apt-get install -y \
     ipset \
+    iptables \
+    iproute2 \
     iputils-arping \
     iputils-ping \
     iputils-tracepath \
@@ -60,6 +50,10 @@ RUN apt-get update && apt-get install -y \
     libbpf-dev \
     linux-headers-amd64 \
     binutils
+
+# Default to the xtables backend of iptables.
+RUN update-alternatives --set iptables /usr/sbin/iptables-legacy
+RUN update-alternatives --set ip6tables /usr/sbin/ip6tables-legacy
 
 ADD felix.cfg /etc/calico/felix.cfg
 ADD calico-felix-wrapper /usr/bin
