@@ -443,11 +443,12 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		// Register map managers first since they create the maps that will be used by the endpoint manager.
 		dp.RegisterManager(newBPFIPSetManager())
 		dp.RegisterManager(newBPFConntrackManager())
-		dp.RegisterManager(newBPFNATManager())
 
 		// Forwarding into a tunnel seems to fail silently, disable FIB lookup if tunnel is enabled for now.
 		fibLookupEnabled := !config.RulesConfig.IPIPEnabled && !config.RulesConfig.VXLANEnabled
 		dp.RegisterManager(newBPFEndpointManager(config.BPFLogLevel, fibLookupEnabled))
+
+		panic("start kube-proxy")
 	}
 
 	routeTableV4 := routetable.New(config.RulesConfig.WorkloadIfacePrefixes, 4, false, config.NetlinkTimeout,

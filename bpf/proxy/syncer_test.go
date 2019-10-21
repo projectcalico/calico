@@ -12,7 +12,7 @@ import (
 	k8sp "k8s.io/kubernetes/pkg/proxy"
 
 	proxy "github.com/projectcalico/felix/bpf/proxy"
-	bpfm "github.com/projectcalico/felix/dataplane/linux"
+	bpfm "github.com/projectcalico/felix/bpf/proxy/maps"
 )
 
 func init() {

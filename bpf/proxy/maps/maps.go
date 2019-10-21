@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package intdataplane
+package maps
 
 import (
 	"encoding/binary"
@@ -155,13 +155,6 @@ func (k NATBackendValue) String() string {
 	return fmt.Sprintf("NATBackendValue{Addr:%v Port:%v}", k.Addr(), k.Port())
 }
 
-func newBPFNATManager() *bpfNATManager {
-	return &bpfNATManager{
-		natMap:     NATMap(),
-		backendMap: BackendMap(),
-	}
-}
-
 func NATMap() bpf.Map {
 	return bpf.NewPinnedMap(
 		"cali_nat_v4",
@@ -182,41 +175,4 @@ func BackendMap() bpf.Map {
 		natValueSize,
 		510000,
 		unix.BPF_F_NO_PREALLOC)
-}
-
-func (m *bpfNATManager) OnUpdate(msg interface{}) {
-}
-
-func (m *bpfNATManager) CompleteDeferredWork() error {
-	err := m.natMap.EnsureExists()
-	if err != nil {
-		log.WithError(err).Panic("Failed to create NAT map")
-	}
-	err = m.backendMap.EnsureExists()
-	if err != nil {
-		log.WithError(err).Panic("Failed to create NAT map")
-	}
-
-	// 10.96.0.1:80 -> 10.65.0.1:8055
-
-	bk := NewNATBackendKey(123, 0)
-	wlAddr := net.ParseIP("10.65.0.2")
-	bv := NewNATBackendValue(wlAddr, 8055)
-	err = m.backendMap.Update(bk[:], bv[:])
-	if err != nil {
-		log.WithError(err).Panic("Failed to update backend NAT map.")
-	}
-
-	natAddr := net.ParseIP("10.101.0.10")
-	nk := NewNATKey(natAddr, 80, 6)
-	nv := NewNATValue(123, 1)
-	err = m.natMap.Update(nk[:], nv[:])
-	if err != nil {
-		log.WithError(err).Panic("Failed to update NAT map.")
-	}
-
-	log.Info("Updated NAT mappings")
-
-	// Make sure we get retried.
-	return nil
 }
