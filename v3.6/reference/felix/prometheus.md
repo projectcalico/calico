@@ -4,7 +4,7 @@ canonical_url: 'https://docs.projectcalico.org/v3.9/reference/felix/prometheus'
 ---
 
 Felix can be configured to report a number of metrics through Prometheus.  See the
-[configuration reference](configuration) for how to enable metrics reporting.
+[configuration reference](configuration.md) for how to enable metrics reporting.
 
 ## Metric reference
 
