@@ -117,30 +117,30 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb, enum calico_tc_flags
 		goto deny;
 	}
 
-    if ((void *)(long)skb->data + sizeof(struct ethhdr) + sizeof(struct iphdr) + sizeof(struct udphdr) > (void *)(long)skb->data_end) {
+	if ((void *)(long)skb->data + sizeof(struct ethhdr) + sizeof(struct iphdr) + sizeof(struct udphdr) > (void *)(long)skb->data_end) {
 		CALI_DEBUG("Too short\n");
 		reason = CALI_REASON_SHORT;
 		goto deny;
 	}
 
-    struct ethhdr *eth_hdr = (void *)(long)skb->data;
-    struct iphdr *ip_header = (void *)(eth_hdr+1);
+	struct ethhdr *eth_hdr = (void *)(long)skb->data;
+	struct iphdr *ip_header = (void *)(eth_hdr+1);
 	// TODO Deal with IP header with options.
 
-    // Setting all of these up-front to keep the verifier happy.
-    struct tcphdr *tcp_header = (void*)(ip_header+1);
+	// Setting all of these up-front to keep the verifier happy.
+	struct tcphdr *tcp_header = (void*)(ip_header+1);
 	struct udphdr *udp_header = (void*)(ip_header+1);
 	struct icmphdr *icmp_header = (void*)(ip_header+1);
 
-    CALI_DEBUG("IP; s=%x d=%x\n", be32_to_host(ip_header->saddr), be32_to_host(ip_header->daddr));
+	CALI_DEBUG("IP; s=%x d=%x\n", be32_to_host(ip_header->saddr), be32_to_host(ip_header->daddr));
 
-    __u8 ip_proto = ip_header->protocol;
+	__u8 ip_proto = ip_header->protocol;
 
-    struct bpf_fib_lookup fib_params = {
+	struct bpf_fib_lookup fib_params = {
 		.family = 2, /* AF_INET */
 		.tot_len = be16_to_host(ip_header->tot_len),
 		.ifindex = skb->ingress_ifindex,
-    };
+	};
 
 	__u16 sport;
 	__u16 dport;
@@ -397,17 +397,17 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb, enum calico_tc_flags
 	if (CALI_TC_FLAGS_TO_HOST(flags)) {
 		CALI_DEBUG("Traffic is towards the host namespace, doing Linux FIB lookup\n");
 		fib_params.l4_protocol = ip_proto;
-		rc =  bpf_fib_lookup(skb, &fib_params, sizeof(fib_params), 0);
+		rc = bpf_fib_lookup(skb, &fib_params, sizeof(fib_params), 0);
 		if (rc == 0) {
 			CALI_DEBUG("FIB lookup succeeded\n");
 			// Update the MACs.  NAT may have invalidated pointer into the packet so need to
 			// revalidate.
-		    if ((void *)(long)skb->data + sizeof(struct ethhdr) > (void *)(long)skb->data_end) {
+			if ((void *)(long)skb->data + sizeof(struct ethhdr) > (void *)(long)skb->data_end) {
 				CALI_DEBUG("BUG: packet got shorter?\n");
 				reason = CALI_REASON_SHORT;
 				goto deny;
 			}
-		    eth_hdr = (void *)(long)skb->data;
+			eth_hdr = (void *)(long)skb->data;
 			__builtin_memcpy(&eth_hdr->h_source, &fib_params.smac, sizeof(eth_hdr->h_source));
 			__builtin_memcpy(&eth_hdr->h_dest, &fib_params.dmac, sizeof(eth_hdr->h_dest));
 
