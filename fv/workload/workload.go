@@ -211,7 +211,7 @@ func (w *Workload) Configure(client client.Interface) {
 	wep.Namespace = "fv"
 	var err error
 	w.WorkloadEndpoint, err = client.WorkloadEndpoints().Create(utils.Ctx, w.WorkloadEndpoint, utils.NoOptions)
-	Expect(err).NotTo(HaveOccurred())
+	Expect(err).NotTo(HaveOccurred(), "Failed to create workload in the calico datastore.")
 }
 
 func (w *Workload) RemoveFromDatastore(client client.Interface) {

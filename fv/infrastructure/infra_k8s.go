@@ -374,6 +374,7 @@ func (kds *K8sDatastoreInfra) Stop() {
 	cleanupAllNetworkPolicies(kds.calicoClient)
 	cleanupAllHostEndpoints(kds.calicoClient)
 	cleanupAllFelixConfigurations(kds.calicoClient)
+	cleanupAllServices(kds.K8sClient)
 }
 
 func cleanupIPAM(calicoClient client.Interface) {
@@ -757,6 +758,38 @@ func cleanupAllFelixConfigurations(client client.Interface) {
 		_, err = client.FelixConfigurations().Delete(ctx, fc.Name, options.DeleteOptions{})
 		if err != nil {
 			panic(err)
+		}
+	}
+}
+
+func cleanupAllServices(clientset *kubernetes.Clientset) {
+	coreV1 := clientset.CoreV1()
+	namespaceList, err := coreV1.Namespaces().List(metav1.ListOptions{})
+	if err != nil {
+		panic(err)
+	}
+	for _, ns := range namespaceList.Items {
+		serviceInterface := coreV1.Services(ns.Name)
+		services, err := serviceInterface.List(metav1.ListOptions{})
+		if err != nil {
+			panic(err)
+		}
+		for _, s := range services.Items {
+			err := serviceInterface.Delete(s.Name, &metav1.DeleteOptions{})
+			if err != nil {
+				panic(err)
+			}
+		}
+		endpointsInterface := coreV1.Endpoints(ns.Name)
+		endpoints, err := endpointsInterface.List(metav1.ListOptions{})
+		if err != nil {
+			panic(err)
+		}
+		for _, ep := range endpoints.Items {
+			err := endpointsInterface.Delete(ep.Name, &metav1.DeleteOptions{})
+			if err != nil {
+				panic(err)
+			}
 		}
 	}
 }
