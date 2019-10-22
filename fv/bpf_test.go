@@ -80,8 +80,10 @@ var _ = infrastructure.DatastoreDescribe("_BPF-NAT_ _BPF-SAFE_ BPF NAT tests", [
 			// Two workloads on each host so we can check the same host and other host cases.
 			iiStr := strconv.Itoa(ii)
 			w[ii][0] = workload.Run(felix, "w"+iiStr+"0", "default", "10.65."+iiStr+".2", "8055", "tcp")
+			w[ii][0].WorkloadEndpoint.Labels = map[string]string{"name": w[ii][0].Name}
 			w[ii][0].ConfigureInDatastore(infra)
 			w[ii][1] = workload.Run(felix, "w"+iiStr+"1", "default", "10.65."+iiStr+".3", "8056", "tcp")
+			w[ii][1].WorkloadEndpoint.Labels = map[string]string{"name": w[ii][1].Name}
 			w[ii][1].ConfigureInDatastore(infra)
 		}
 
@@ -107,6 +109,14 @@ var _ = infrastructure.DatastoreDescribe("_BPF-NAT_ _BPF-SAFE_ BPF NAT tests", [
 				felix.Exec("calico-bpf", "ipsets", "dump")
 			}
 		}
+	})
+
+	AfterEach(func() {
+		for _, f := range felixes {
+			f.Stop()
+		}
+		infra.Stop()
+		externalClient.Stop()
 	})
 
 	It("should deny all by default", func() {
@@ -169,61 +179,40 @@ var _ = infrastructure.DatastoreDescribe("_BPF-NAT_ _BPF-SAFE_ BPF NAT tests", [
 		})
 
 		It("connectivity from all workloads via workload 0's main IP", func() {
-			//cc.ExpectSome(w[0][1], w[0][0])
+			cc.ExpectSome(w[0][1], w[0][0])
 			cc.ExpectSome(w[1][0], w[0][0])
-			//cc.ExpectSome(w[1][1], w[0][0])
+			cc.ExpectSome(w[1][1], w[0][0])
 			cc.CheckConnectivity()
 		})
 
 		Context("with nat configured 10.96.0.1:80 -> 10.65.0.1:8055 (w[0][0])", func() {
-			testSvc := &v1.Service{
-				TypeMeta:   typeMetaV1("Service"),
-				ObjectMeta: objectMetaV1("testService"),
-				Spec: v1.ServiceSpec{
-					ClusterIP: "10.96.0.1",
-					Type:      v1.ServiceTypeClusterIP,
-					Selector: map[string]string{
-						"app": "test",
-					},
-					Ports: []v1.ServicePort{
-						{
-							Protocol: v1.ProtocolTCP,
-							Port:     80,
-						},
-					},
-				},
-			}
-
-			testSvcEps := &v1.Endpoints{
-				TypeMeta:   typeMetaV1("Endpoints"),
-				ObjectMeta: objectMetaV1("testService"),
-				Subsets: []v1.EndpointSubset{
-					{
-						Addresses: []v1.EndpointAddress{
-							{
-								IP: "10.65.0.1",
-							},
-						},
-						Ports: []v1.EndpointPort{
-							{
-								Port: 8055,
-							},
-						},
-					},
-				},
-			}
-
 			BeforeEach(func() {
+				testSvc := &v1.Service{
+					TypeMeta:   typeMetaV1("Service"),
+					ObjectMeta: objectMetaV1("test-service"),
+					Spec: v1.ServiceSpec{
+						ClusterIP: "10.101.0.10",
+						Type:      v1.ServiceTypeClusterIP,
+						Selector: map[string]string{
+							"name": w[0][0].Name,
+						},
+						Ports: []v1.ServicePort{
+							{
+								Protocol: v1.ProtocolTCP,
+								Port:     80,
+							},
+						},
+					},
+				}
+
 				_, err := k8sClient.CoreV1().Services("default").Create(testSvc)
-				Expect(err).NotTo(HaveOccurred())
-				_, err = k8sClient.CoreV1().Endpoints("default").Create(testSvcEps)
 				Expect(err).NotTo(HaveOccurred())
 			})
 
 			It("connectivity from all workloads via workload 0's NAT", func() {
-				cc.ExpectSome(w[0][1], workload.IP("10.96.0.1"), 80)
-				cc.ExpectSome(w[1][0], workload.IP("10.96.0.1"), 80)
-				cc.ExpectSome(w[1][1], workload.IP("10.96.0.1"), 80)
+				cc.ExpectSome(w[0][1], workload.IP("10.101.0.10"), 80)
+				cc.ExpectSome(w[1][0], workload.IP("10.101.0.10"), 80)
+				cc.ExpectSome(w[1][1], workload.IP("10.101.0.10"), 80)
 				cc.CheckConnectivity()
 			})
 		})

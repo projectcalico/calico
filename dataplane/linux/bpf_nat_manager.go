@@ -197,15 +197,17 @@ func (m *bpfNATManager) CompleteDeferredWork() error {
 		log.WithError(err).Panic("Failed to create NAT map")
 	}
 
+	// 10.96.0.1:80 -> 10.65.0.1:8055
+
 	bk := NewNATBackendKey(123, 0)
-	wlAddr := net.ParseIP("10.65.0.10")
+	wlAddr := net.ParseIP("10.65.0.1")
 	bv := NewNATBackendValue(wlAddr, 8055)
 	err = m.backendMap.Update(bk[:], bv[:])
 	if err != nil {
 		log.WithError(err).Panic("Failed to update backend NAT map.")
 	}
 
-	natAddr := net.ParseIP("10.96.0.10")
+	natAddr := net.ParseIP("10.101.0.10")
 	nk := NewNATKey(natAddr, 80, 6)
 	nv := NewNATValue(123, 1)
 	err = m.natMap.Update(nk[:], nv[:])

@@ -16,12 +16,13 @@ package proxy
 
 import (
 	"fmt"
-	"github.com/pkg/errors"
 	"net"
 	"strconv"
 
+	"github.com/pkg/errors"
+
 	log "github.com/sirupsen/logrus"
-	"k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	k8sp "k8s.io/kubernetes/pkg/proxy"
 
 	"github.com/projectcalico/felix/bpf"
