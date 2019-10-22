@@ -419,7 +419,7 @@ Example:
    ```
 
 Check out the usage guide on [assigning IP addresses based on
-topology]({{site.baseurl}}/{{page.version}}/networking/assigning-ip-addresses-topology)
+topology]({{site.baseurl}}/{{page.version}}/networking/assign-ip-addresses-topology)
 for a full example.
 
 ### CNI network configuration lists
