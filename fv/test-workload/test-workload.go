@@ -23,7 +23,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/containernetworking/cni/pkg/ns"
+	"github.com/containernetworking/plugins/pkg/ns"
+	nsutils "github.com/containernetworking/plugins/pkg/testutils"
 	"github.com/docopt/docopt-go"
 	log "github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
@@ -71,7 +72,7 @@ func main() {
 		// Create a new network namespace for the workload.
 		attempts := 0
 		for {
-			namespace, err = ns.NewNS()
+			namespace, err = nsutils.NewNS()
 			if err == nil {
 				break
 			}
