@@ -23,7 +23,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/containernetworking/cni/pkg/ns"
+	"github.com/containernetworking/plugins/pkg/ns"
 	docopt "github.com/docopt/docopt-go"
 	reuse "github.com/libp2p/go-reuseport"
 	log "github.com/sirupsen/logrus"
