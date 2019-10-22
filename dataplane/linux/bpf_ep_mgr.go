@@ -47,10 +47,11 @@ type bpfEndpointManager struct {
 
 	dirtyWorkloads set.Set
 
-	bpfLogLevel string
+	bpfLogLevel      string
+	fibLookupEnabled bool
 }
 
-func newBPFEndpointManager(bpfLogLevel string) *bpfEndpointManager {
+func newBPFEndpointManager(bpfLogLevel string, fibLookupEnabled bool) *bpfEndpointManager {
 	return &bpfEndpointManager{
 		wlEps:               map[proto.WorkloadEndpointID]*proto.WorkloadEndpoint{},
 		policies:            map[proto.PolicyID]*proto.Policy{},
@@ -59,6 +60,7 @@ func newBPFEndpointManager(bpfLogLevel string) *bpfEndpointManager {
 		profilesToWorkloads: map[proto.ProfileID]set.Set{},
 		dirtyWorkloads:      set.New(),
 		bpfLogLevel:         bpfLogLevel,
+		fibLookupEnabled:    fibLookupEnabled,
 	}
 }
 
@@ -355,6 +357,7 @@ func (m *bpfEndpointManager) applyPolicyDirection(wep *proto.WorkloadEndpoint, d
 		"-x", "c",
 		"-D__KERNEL__",
 		"-D__ASM_SYSREG_H",
+		fmt.Sprintf("-DCALI_FIB_LOOKUP_ENABLED=%v", m.fibLookupEnabled),
 		fmt.Sprintf("-DCALI_LOG_LEVEL=CALI_LOG_LEVEL_%s", logLevel),
 		"-Wno-unused-value",
 		"-Wno-pointer-sign",

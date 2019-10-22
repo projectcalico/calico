@@ -445,7 +445,9 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		dp.RegisterManager(newBPFConntrackManager())
 		dp.RegisterManager(newBPFNATManager())
 
-		dp.RegisterManager(newBPFEndpointManager(config.BPFLogLevel))
+		// Forwarding into a tunnel seems to fail silently, disable FIB lookup if tunnel is enabled for now.
+		fibLookupEnabled := !config.RulesConfig.IPIPEnabled && !config.RulesConfig.VXLANEnabled
+		dp.RegisterManager(newBPFEndpointManager(config.BPFLogLevel, fibLookupEnabled))
 	}
 
 	routeTableV4 := routetable.New(config.RulesConfig.WorkloadIfacePrefixes, 4, false, config.NetlinkTimeout,

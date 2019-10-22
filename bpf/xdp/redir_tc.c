@@ -22,6 +22,10 @@
 #include "../include/nat.h"
 #include "bpf_maps.h"
 
+#ifndef CALI_FIB_LOOKUP_ENABLED
+#define CALI_FIB_LOOKUP_ENABLED true
+#endif
+
 enum calico_policy_result {
 	CALI_POL_NO_MATCH,
 	CALI_POL_ALLOW,
@@ -394,7 +398,7 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb, enum calico_tc_flags
 	// Try a short-circuit FIB lookup.
 	allow:
 
-	if (CALI_TC_FLAGS_TO_HOST(flags)) {
+	if (CALI_FIB_LOOKUP_ENABLED && CALI_TC_FLAGS_TO_HOST(flags)) {
 		CALI_DEBUG("Traffic is towards the host namespace, doing Linux FIB lookup\n");
 		fib_params.l4_protocol = ip_proto;
 		rc = bpf_fib_lookup(skb, &fib_params, sizeof(fib_params), 0);
