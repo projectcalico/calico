@@ -143,6 +143,7 @@ var (
 type RuleRenderer interface {
 	StaticFilterTableChains(ipVersion uint8) []*iptables.Chain
 	StaticNATTableChains(ipVersion uint8) []*iptables.Chain
+	StaticNATPostroutingChains(ipVersion uint8) []*iptables.Chain
 	StaticRawTableChains(ipVersion uint8) []*iptables.Chain
 	StaticMangleTableChains(ipVersion uint8) []*iptables.Chain
 

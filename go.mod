@@ -52,7 +52,7 @@ require (
 
 replace (
 	github.com/sirupsen/logrus => github.com/projectcalico/logrus v0.0.0-20180701205716-fc9bbf2f5799
-	k8s.io/api => k8s.io/api v0.0.0-20190620084959-7cf5895f2711
+	k8s.io/api v0.0.0 => k8s.io/api v0.0.0-20190620084959-7cf5895f2711
 	k8s.io/apiextensions-apiserver => k8s.io/apiextensions-apiserver v0.0.0-20190620085554-14e95df34f1f
 	k8s.io/apimachinery => k8s.io/apimachinery v0.0.0-20190612205821-1799e75a0719
 	k8s.io/apiserver => k8s.io/apiserver v0.0.0-20190620085212-47dc9a115b18

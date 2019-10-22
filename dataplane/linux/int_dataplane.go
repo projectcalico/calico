@@ -726,6 +726,12 @@ func (d *InternalDataplane) setUpIptablesBPF() {
 		}
 		t.SetRuleInsertions("FORWARD", rules)
 	}
+	for _, t := range d.iptablesNATTables {
+		t.UpdateChains(d.ruleRenderer.StaticNATPostroutingChains(t.IPVersion))
+		t.SetRuleInsertions("POSTROUTING", []iptables.Rule{{
+			Action: iptables.JumpAction{Target: rules.ChainNATPostrouting},
+		}})
+	}
 }
 
 func (d *InternalDataplane) setUpIptablesNormal() {
