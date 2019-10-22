@@ -416,7 +416,6 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_tcp_lookup(
 		}
 		break;
 	case CALI_CT_TYPE_NAT_REV:
-		CALI_DEBUG("CT-TCP Hit! NAT REV entry.\n");
 
 		if (srcLTDest) {
 			src_to_dst = &v->a_to_b;
@@ -426,15 +425,15 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_tcp_lookup(
 			dst_to_src = &v->a_to_b;
 		}
 
-		if (dst_to_src->opener) {
-			// The destination of the packet was the opener of the NAT session,
-			// need to SNAT the traffic back to its original request.
+		if (!CALI_TC_FLAGS_TO_HOST(flags) && dst_to_src->opener) {
+			// Packet is heading into a workload and the destination was the opener of the
+			// connection, reverse the NAT.
+			CALI_DEBUG("CT-TCP Hit! NAT REV entry at ingress to connection opener: SNAT.\n");
 			result.rc =	CALI_CT_ESTABLISHED_SNAT;
 			result.nat_ip = v->orig_dst;
 			result.nat_port = v->orig_port;
 		} else {
-			// Source of the packet was the opener of the NAT session so the NAT
-			// has just occured and we have nothing to do.
+			CALI_DEBUG("CT-TCP Hit! NAT REV entry but not connection opener: ESTABLISHED.\n");
 			result.rc =	CALI_CT_ESTABLISHED;
 		}
 

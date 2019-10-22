@@ -200,7 +200,7 @@ func (m *bpfNATManager) CompleteDeferredWork() error {
 	// 10.96.0.1:80 -> 10.65.0.1:8055
 
 	bk := NewNATBackendKey(123, 0)
-	wlAddr := net.ParseIP("10.65.0.1")
+	wlAddr := net.ParseIP("10.65.0.2")
 	bv := NewNATBackendValue(wlAddr, 8055)
 	err = m.backendMap.Update(bk[:], bv[:])
 	if err != nil {
