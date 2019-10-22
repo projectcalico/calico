@@ -308,6 +308,8 @@ github.com/projectcalico/confd v0.0.0-20191017042506-9c87bbe1435d h1:h5cG681vyNs
 github.com/projectcalico/confd v0.0.0-20191017042506-9c87bbe1435d/go.mod h1:gjWTpjNDGestdByzns0EhSRCF5wjchLYFRjlyIEe174=
 github.com/projectcalico/confd v0.0.0-20191018042136-799a92ecf822 h1:TxXNvsYIgkyg9cnluzm5hqop0lrVRRHrhFDVVIdORos=
 github.com/projectcalico/confd v0.0.0-20191018042136-799a92ecf822/go.mod h1:gjWTpjNDGestdByzns0EhSRCF5wjchLYFRjlyIEe174=
+github.com/projectcalico/confd v0.0.0-20191021190754-83755aa5909a h1:U0kmR6BXahHw+Xu+C7ReKBu0YAujfdgUPC1UIN0t2Zs=
+github.com/projectcalico/confd v0.0.0-20191021190754-83755aa5909a/go.mod h1:gjWTpjNDGestdByzns0EhSRCF5wjchLYFRjlyIEe174=
 github.com/projectcalico/confd v3.2.0+incompatible/go.mod h1:kUM7VZ267QKU9j3n60w/bB792J5qNVF1jAltjl7AzRM=
 github.com/projectcalico/felix v0.0.0-20191008064910-3286f617f736 h1:0gBhEnn80lrV5wKNEJU+JcaKzH3fMUUYVOIxwrsOj+o=
 github.com/projectcalico/felix v0.0.0-20191008064910-3286f617f736/go.mod h1:gPk9yuWnPnC8HIyFOecFBg4FUwwTYFF0pox6AYTTH74=
