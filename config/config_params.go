@@ -101,8 +101,10 @@ type Config struct {
 	// Configuration parameters.
 	UseInternalDataplaneDriver bool   `config:"bool;true"`
 	DataplaneDriver            string `config:"file(must-exist,executable);calico-iptables-plugin;non-zero,die-on-fail,skip-default-validation"`
-	BPFEnabled                 bool   `config:"bool;false"`
-	BPFLogLevel                string `config:"oneof(off,info,debug);off"`
+
+	BPFEnabled          bool           `config:"bool;false"`
+	BPFLogLevel         string         `config:"oneof(off,info,debug);off"`
+	BPFDataIfacePattern *regexp.Regexp `config:"regexp;^en.*|eth.*"`
 
 	DatastoreType string `config:"oneof(kubernetes,etcdv3);etcdv3;non-zero,die-on-fail,local"`
 
@@ -563,6 +565,8 @@ func loadParams() {
 				Delimiter:           ",",
 				Msg:                 "list contains invalid Linux interface name or regex pattern",
 			}
+		case "regexp":
+			param = &RegexpPatternParam{}
 		case "iface-param":
 			param = &RegexpParam{Regexp: IfaceParamRegexp,
 				Msg: "invalid Linux interface parameter"}

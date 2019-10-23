@@ -176,6 +176,22 @@ func (p *RegexpParam) Parse(raw string) (result interface{}, err error) {
 	return
 }
 
+// RegexpPatternParam differs from RegexpParam (above) in that it validates
+// string values that are (themselves) regular expressions.
+type RegexpPatternParam struct {
+	Metadata
+}
+
+// Parse validates whether the given raw string contains a valid regexp pattern.
+func (p *RegexpPatternParam) Parse(raw string) (interface{}, error) {
+	var result *regexp.Regexp
+	result, compileErr := regexp.Compile(raw)
+	if compileErr != nil {
+		return nil, p.parseFailed(raw, "invalid regexp")
+	}
+	return result, nil
+}
+
 // RegexpPatternListParam differs from RegexpParam (above) in that it validates
 // string values that are (themselves) regular expressions.
 type RegexpPatternListParam struct {

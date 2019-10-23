@@ -21,10 +21,13 @@ import (
 	"io/ioutil"
 	"os"
 	"os/exec"
+	"regexp"
 	"sort"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/projectcalico/felix/ifacemonitor"
 
 	"github.com/projectcalico/felix/bpf"
 
@@ -40,153 +43,207 @@ type bpfEndpointManager struct {
 	wlEps    map[proto.WorkloadEndpointID]*proto.WorkloadEndpoint
 	policies map[proto.PolicyID]*proto.Policy
 	profiles map[proto.ProfileID]*proto.Profile
+	ifaces   map[string]ifacemonitor.State
 
 	// Indexes
 	policiesToWorkloads map[proto.PolicyID]set.Set  /*proto.WorkloadEndpointID*/
 	profilesToWorkloads map[proto.ProfileID]set.Set /*proto.WorkloadEndpointID*/
 
 	dirtyWorkloads set.Set
+	dirtyIfaces    set.Set
 
 	bpfLogLevel      string
 	fibLookupEnabled bool
+	dataIfaceRegex   *regexp.Regexp
 }
 
-func newBPFEndpointManager(bpfLogLevel string, fibLookupEnabled bool) *bpfEndpointManager {
+func newBPFEndpointManager(bpfLogLevel string, fibLookupEnabled bool, dataIfaceRegex *regexp.Regexp) *bpfEndpointManager {
 	return &bpfEndpointManager{
 		wlEps:               map[proto.WorkloadEndpointID]*proto.WorkloadEndpoint{},
 		policies:            map[proto.PolicyID]*proto.Policy{},
 		profiles:            map[proto.ProfileID]*proto.Profile{},
+		ifaces:              map[string]ifacemonitor.State{},
 		policiesToWorkloads: map[proto.PolicyID]set.Set{},
 		profilesToWorkloads: map[proto.ProfileID]set.Set{},
 		dirtyWorkloads:      set.New(),
+		dirtyIfaces:         set.New(),
 		bpfLogLevel:         bpfLogLevel,
 		fibLookupEnabled:    fibLookupEnabled,
+		dataIfaceRegex:      dataIfaceRegex,
 	}
 }
 
 func (m *bpfEndpointManager) OnUpdate(msg interface{}) {
 	switch msg := msg.(type) {
+	// Updates from the dataplane:
+
+	// Interface updates.
+	case *ifaceUpdate:
+		m.onInterfaceUpdate(msg)
+
+	// Updates from the datamodel:
+
 	// Workloads.
 	case *proto.WorkloadEndpointUpdate:
-		wlID := *msg.Id
-		oldWL := m.wlEps[wlID]
-		wl := msg.Endpoint
-		if oldWL != nil {
-			for _, t := range oldWL.Tiers {
-				for _, pol := range t.IngressPolicies {
-					polSet := m.policiesToWorkloads[proto.PolicyID{
-						Tier: t.Name,
-						Name: pol,
-					}]
-					if polSet == nil {
-						continue
-					}
-					polSet.Discard(wlID)
-				}
-				for _, pol := range t.EgressPolicies {
-					polSet := m.policiesToWorkloads[proto.PolicyID{
-						Tier: t.Name,
-						Name: pol,
-					}]
-					if polSet == nil {
-						continue
-					}
-					polSet.Discard(wlID)
-				}
-			}
-
-			for _, profName := range oldWL.ProfileIds {
-				profID := proto.ProfileID{Name: profName}
-				profSet := m.profilesToWorkloads[profID]
-				if profSet == nil {
-					continue
-				}
-				profSet.Discard(wlID)
-			}
-		}
-		m.wlEps[wlID] = msg.Endpoint
-		for _, t := range wl.Tiers {
-			for _, pol := range t.IngressPolicies {
-				polID := proto.PolicyID{
-					Tier: t.Name,
-					Name: pol,
-				}
-				if m.policiesToWorkloads[polID] == nil {
-					m.policiesToWorkloads[polID] = set.New()
-				}
-				m.policiesToWorkloads[polID].Add(wlID)
-			}
-			for _, pol := range t.EgressPolicies {
-				polID := proto.PolicyID{
-					Tier: t.Name,
-					Name: pol,
-				}
-				if m.policiesToWorkloads[polID] == nil {
-					m.policiesToWorkloads[polID] = set.New()
-				}
-				m.policiesToWorkloads[polID].Add(wlID)
-			}
-			for _, profName := range wl.ProfileIds {
-				profID := proto.ProfileID{Name: profName}
-				profSet := m.profilesToWorkloads[profID]
-				if profSet == nil {
-					profSet = set.New()
-					m.profilesToWorkloads[profID] = profSet
-				}
-				profSet.Add(wlID)
-			}
-		}
-		m.dirtyWorkloads.Add(wlID)
+		m.onWorkloadEndpointUpdate(msg)
 	case *proto.WorkloadEndpointRemove:
-		wlID := *msg.Id
-		wl := m.wlEps[wlID]
-		for _, t := range wl.Tiers {
-			for _, pol := range t.IngressPolicies {
-				polSet := m.policiesToWorkloads[proto.PolicyID{
-					Tier: t.Name,
-					Name: pol,
-				}]
-				if polSet == nil {
-					continue
-				}
-				polSet.Discard(wlID)
-			}
-			for _, pol := range t.EgressPolicies {
-				polSet := m.policiesToWorkloads[proto.PolicyID{
-					Tier: t.Name,
-					Name: pol,
-				}]
-				if polSet == nil {
-					continue
-				}
-				polSet.Discard(wlID)
-			}
-		}
-		delete(m.wlEps, wlID)
-		m.dirtyWorkloads.Add(wlID)
-
+		m.onWorkloadEnpdointRemove(msg)
 	// Policies.
 	case *proto.ActivePolicyUpdate:
-		polID := *msg.Id
-		m.policies[polID] = msg.Policy
-		m.markPolicyUsersDirty(polID)
+		m.onPolicyUpdate(msg)
 	case *proto.ActivePolicyRemove:
-		polID := *msg.Id
-		m.markPolicyUsersDirty(polID)
-		delete(m.policies, polID)
-		delete(m.policiesToWorkloads, polID)
-
+		m.onPolicyRemove(msg)
 	// Profiles.
 	case *proto.ActiveProfileUpdate:
-		profID := *msg.Id
-		m.profiles[profID] = msg.Profile
-		m.markProfileUsersDirty(profID)
+		m.onProfileUpdate(msg)
 	case *proto.ActiveProfileRemove:
-		profID := *msg.Id
-		m.markProfileUsersDirty(profID)
-		delete(m.profiles, profID)
-		delete(m.profilesToWorkloads, profID)
+		m.onProfileRemove(msg)
 	}
+}
+
+func (m *bpfEndpointManager) onInterfaceUpdate(update *ifaceUpdate) {
+	if update.State == ifacemonitor.StateUnknown {
+		delete(m.ifaces, update.Name)
+	} else {
+		m.ifaces[update.Name] = update.State
+	}
+	m.dirtyIfaces.Add(update.Name)
+}
+
+// onWorkloadEndpointUpdate adds/updates the workload in the cache along with the index from active policy to
+// workloads using that policy.
+func (m *bpfEndpointManager) onWorkloadEndpointUpdate(msg *proto.WorkloadEndpointUpdate) {
+	wlID := *msg.Id
+	oldWL := m.wlEps[wlID]
+	wl := msg.Endpoint
+	if oldWL != nil {
+		for _, t := range oldWL.Tiers {
+			for _, pol := range t.IngressPolicies {
+				polSet := m.policiesToWorkloads[proto.PolicyID{
+					Tier: t.Name,
+					Name: pol,
+				}]
+				if polSet == nil {
+					continue
+				}
+				polSet.Discard(wlID)
+			}
+			for _, pol := range t.EgressPolicies {
+				polSet := m.policiesToWorkloads[proto.PolicyID{
+					Tier: t.Name,
+					Name: pol,
+				}]
+				if polSet == nil {
+					continue
+				}
+				polSet.Discard(wlID)
+			}
+		}
+
+		for _, profName := range oldWL.ProfileIds {
+			profID := proto.ProfileID{Name: profName}
+			profSet := m.profilesToWorkloads[profID]
+			if profSet == nil {
+				continue
+			}
+			profSet.Discard(wlID)
+		}
+	}
+	m.wlEps[wlID] = msg.Endpoint
+	for _, t := range wl.Tiers {
+		for _, pol := range t.IngressPolicies {
+			polID := proto.PolicyID{
+				Tier: t.Name,
+				Name: pol,
+			}
+			if m.policiesToWorkloads[polID] == nil {
+				m.policiesToWorkloads[polID] = set.New()
+			}
+			m.policiesToWorkloads[polID].Add(wlID)
+		}
+		for _, pol := range t.EgressPolicies {
+			polID := proto.PolicyID{
+				Tier: t.Name,
+				Name: pol,
+			}
+			if m.policiesToWorkloads[polID] == nil {
+				m.policiesToWorkloads[polID] = set.New()
+			}
+			m.policiesToWorkloads[polID].Add(wlID)
+		}
+		for _, profName := range wl.ProfileIds {
+			profID := proto.ProfileID{Name: profName}
+			profSet := m.profilesToWorkloads[profID]
+			if profSet == nil {
+				profSet = set.New()
+				m.profilesToWorkloads[profID] = profSet
+			}
+			profSet.Add(wlID)
+		}
+	}
+	m.dirtyWorkloads.Add(wlID)
+}
+
+// onWorkloadEndpointRemove removes the workload from the cache and the index, which maps from policy to workload.
+func (m *bpfEndpointManager) onWorkloadEnpdointRemove(msg *proto.WorkloadEndpointRemove) {
+	wlID := *msg.Id
+	wl := m.wlEps[wlID]
+	for _, t := range wl.Tiers {
+		for _, pol := range t.IngressPolicies {
+			polSet := m.policiesToWorkloads[proto.PolicyID{
+				Tier: t.Name,
+				Name: pol,
+			}]
+			if polSet == nil {
+				continue
+			}
+			polSet.Discard(wlID)
+		}
+		for _, pol := range t.EgressPolicies {
+			polSet := m.policiesToWorkloads[proto.PolicyID{
+				Tier: t.Name,
+				Name: pol,
+			}]
+			if polSet == nil {
+				continue
+			}
+			polSet.Discard(wlID)
+		}
+	}
+	delete(m.wlEps, wlID)
+	m.dirtyWorkloads.Add(wlID)
+}
+
+// onPolicyUpdate stores the policy in the cache and marks any endpoints using it dirty.
+func (m *bpfEndpointManager) onPolicyUpdate(msg *proto.ActivePolicyUpdate) {
+	polID := *msg.Id
+	m.policies[polID] = msg.Policy
+	m.markPolicyUsersDirty(polID)
+}
+
+// onPolicyRemove removes the policy from the cache and marks any endpoints using it dirty.
+// The latter should be a no-op due to the ordering guarantees of the calc graph.
+func (m *bpfEndpointManager) onPolicyRemove(msg *proto.ActivePolicyRemove) {
+	polID := *msg.Id
+	m.markPolicyUsersDirty(polID)
+	delete(m.policies, polID)
+	delete(m.policiesToWorkloads, polID)
+}
+
+// onProfileUpdate stores the profile in the cache and marks any endpoints that use it as dirty.
+func (m *bpfEndpointManager) onProfileUpdate(msg *proto.ActiveProfileUpdate) {
+	profID := *msg.Id
+	m.profiles[profID] = msg.Profile
+	m.markProfileUsersDirty(profID)
+}
+
+// onProfileRemove removes the profile from the cache and marks any endpoints that were using it as dirty.
+// The latter should be a no-op due to the ordering guarantees of the calc graph.
+func (m *bpfEndpointManager) onProfileRemove(msg *proto.ActiveProfileRemove) {
+	profID := *msg.Id
+	m.markProfileUsersDirty(profID)
+	delete(m.profiles, profID)
+	delete(m.profilesToWorkloads, profID)
 }
 
 func (m *bpfEndpointManager) markPolicyUsersDirty(id proto.PolicyID) {
@@ -234,10 +291,57 @@ func findIPSetIDs(policy *proto.Policy) set.Set {
 }
 
 func (m *bpfEndpointManager) CompleteDeferredWork() error {
+	m.applyProgramsToDirtyDataInterfaces()
+	m.applyPolicyToAllDirtyEndpoints()
+
+	// TODO: handle cali interfaces with no WEP
+	return nil
+}
+
+func (m *bpfEndpointManager) applyProgramsToDirtyDataInterfaces() {
+	var mutex sync.Mutex
+	errs := map[string]error{}
+	var wg sync.WaitGroup
+	m.dirtyIfaces.Iter(func(item interface{}) error {
+		iface := item.(string)
+		if !m.dataIfaceRegex.MatchString(iface) {
+			log.WithField("iface", iface).Debug(
+				"Ignoring interface that doesn't match the host data interface regex")
+			return set.RemoveItem
+		}
+		if m.ifaces[iface] != ifacemonitor.StateUp {
+			log.WithField("iface", iface).Debug(
+				"Ignoring interface that is down")
+			return set.RemoveItem
+		}
+
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			err := m.compileAndAttachDataIfaceProgram(iface)
+			mutex.Lock()
+			errs[iface] = err
+			mutex.Unlock()
+		}()
+		return nil
+	})
+	wg.Wait()
+	m.dirtyIfaces.Iter(func(item interface{}) error {
+		iface := item.(string)
+		err := errs[iface]
+		if err == nil {
+			log.WithField("id", iface).Info("Applied program to host interface")
+			return set.RemoveItem
+		}
+		log.WithError(err).Warn("Failed to apply policy to interface")
+		return nil
+	})
+}
+
+func (m *bpfEndpointManager) applyPolicyToAllDirtyEndpoints() {
 	var mutex sync.Mutex
 	errs := map[proto.WorkloadEndpointID]error{}
 	var wg sync.WaitGroup
-
 	m.dirtyWorkloads.Iter(func(item interface{}) error {
 		wg.Add(1)
 		go func() {
@@ -250,9 +354,7 @@ func (m *bpfEndpointManager) CompleteDeferredWork() error {
 		}()
 		return nil
 	})
-
 	wg.Wait()
-
 	m.dirtyWorkloads.Iter(func(item interface{}) error {
 		wlID := item.(proto.WorkloadEndpointID)
 		err := errs[wlID]
@@ -263,7 +365,6 @@ func (m *bpfEndpointManager) CompleteDeferredWork() error {
 		log.WithError(err).Warn("Failed to apply policy to endpoint")
 		return nil
 	})
-	return nil
 }
 
 // applyPolicy actually applies the policy to the given workload.
@@ -274,11 +375,12 @@ func (m *bpfEndpointManager) applyPolicy(wlID proto.WorkloadEndpointID) error {
 		// TODO clean up old workloads
 		return nil
 	}
+	ifaceName := wep.Name
 
 	// FIXME Avoid flapping the tc program and qdisc
-	cmd := exec.Command("tc", "qdisc", "del", "dev", wep.Name, "clsact")
+	cmd := exec.Command("tc", "qdisc", "del", "dev", ifaceName, "clsact")
 	_ = cmd.Run()
-	cmd = exec.Command("tc", "qdisc", "add", "dev", wep.Name, "clsact")
+	cmd = exec.Command("tc", "qdisc", "add", "dev", ifaceName, "clsact")
 	_ = cmd.Run()
 
 	var ingressErr, egressErr error
@@ -287,11 +389,11 @@ func (m *bpfEndpointManager) applyPolicy(wlID proto.WorkloadEndpointID) error {
 	wg.Add(2)
 	go func() {
 		defer wg.Done()
-		ingressErr = m.applyPolicyDirection(wep, "ingress")
+		ingressErr = m.compileAndAttachWorkloadProgram(wep, "ingress")
 	}()
 	go func() {
 		defer wg.Done()
-		egressErr = m.applyPolicyDirection(wep, "egress")
+		egressErr = m.compileAndAttachWorkloadProgram(wep, "egress")
 	}()
 	wg.Wait()
 
@@ -307,9 +409,53 @@ func (m *bpfEndpointManager) applyPolicy(wlID proto.WorkloadEndpointID) error {
 	return nil
 }
 
-func (m *bpfEndpointManager) applyPolicyDirection(wep *proto.WorkloadEndpoint, direction string) error {
-	var tiers [][][]*proto.Rule
-	for _, tier := range wep.Tiers {
+func (m *bpfEndpointManager) compileAndAttachWorkloadProgram(endpoint *proto.WorkloadEndpoint, polDirection string) error {
+	rules := m.extractRules(endpoint.Tiers, endpoint.ProfileIds, polDirection)
+	ap := calculateTCAttachPoint("workload", polDirection, endpoint.Name)
+	return m.compileAndAttachProgram(rules, ap)
+}
+
+func (m *bpfEndpointManager) compileAndAttachDataIfaceProgram(ifaceName string) error {
+	return nil
+}
+
+type TCAttachPoint struct {
+	Section string
+	Hook    string
+	Iface   string
+}
+
+func calculateTCAttachPoint(endpointType, policyDirection, ifaceName string) TCAttachPoint {
+	var ap TCAttachPoint
+
+	if endpointType == "workload" {
+		// Policy direction is relative to the workload so, from the host namespace it's flipped.
+		if policyDirection == "ingress" {
+			ap.Hook = "egress"
+		} else {
+			ap.Hook = "ingress"
+		}
+	} else {
+		// Host endpoints have the natural relationship between policy direction and hook.
+		ap.Hook = policyDirection
+	}
+
+	var fromOrTo string
+	if ap.Hook == "ingress" {
+		fromOrTo = "from"
+	} else {
+		fromOrTo = "to"
+	}
+
+	ap.Section = fmt.Sprintf("calico_%s_%s_ep", fromOrTo, endpointType)
+	ap.Iface = ifaceName
+
+	return ap
+}
+
+func (m *bpfEndpointManager) extractRules(tiers2 []*proto.TierInfo, profileNames []string, direction string) [][][]*proto.Rule {
+	var allRules [][][]*proto.Rule
+	for _, tier := range tiers2 {
 		var pols [][]*proto.Rule
 
 		directionalPols := tier.IngressPolicies
@@ -329,10 +475,10 @@ func (m *bpfEndpointManager) applyPolicyDirection(wep *proto.WorkloadEndpoint, d
 				pols = append(pols, pol.OutboundRules)
 			}
 		}
-		tiers = append(tiers, pols)
+		allRules = append(allRules, pols)
 	}
 	var profs [][]*proto.Rule
-	for _, profName := range wep.ProfileIds {
+	for _, profName := range profileNames {
 		prof := m.profiles[proto.ProfileID{Name: profName}]
 		if direction == "ingress" {
 			profs = append(profs, prof.InboundRules)
@@ -340,7 +486,11 @@ func (m *bpfEndpointManager) applyPolicyDirection(wep *proto.WorkloadEndpoint, d
 			profs = append(profs, prof.OutboundRules)
 		}
 	}
-	tiers = append(tiers, profs)
+	allRules = append(allRules, profs)
+	return allRules
+}
+
+func (m *bpfEndpointManager) compileAndAttachProgram(allRules [][][]*proto.Rule, attachPoint TCAttachPoint) error {
 	tempDir, err := ioutil.TempDir("", "calico-compile")
 	if err != nil {
 		log.WithError(err).Panic("Failed to make temporary directory")
@@ -403,7 +553,7 @@ func (m *bpfEndpointManager) applyPolicyDirection(wep *proto.WorkloadEndpoint, d
 	go func() {
 		defer wg.Done()
 		pg := bpf.NewProgramGenerator(clangStdin)
-		err = pg.WriteProgram(tiers)
+		err = pg.WriteProgram(allRules)
 		if err != nil {
 			log.WithError(err).Panic("Failed to write C file.")
 		}
@@ -426,22 +576,16 @@ func (m *bpfEndpointManager) applyPolicyDirection(wep *proto.WorkloadEndpoint, d
 	}
 	wg.Wait()
 	// Hook is relative to the host rather than the endpoint so we need to flip it.
-	hook := "egress"
-	sec := "calico_to_workload"
-	if direction == "egress" {
-		hook = "ingress"
-		sec = "calico_from_workload"
-	}
 	tc := exec.Command("tc",
-		"filter", "add", "dev", wep.Name,
-		hook,
+		"filter", "add", "dev", attachPoint.Iface,
+		attachPoint.Hook,
 		"bpf", "da", "obj", oFileName,
-		"sec", sec)
+		"sec", attachPoint.Section)
 	out, err = tc.CombinedOutput()
 	if err != nil {
 		var buf bytes.Buffer
 		pg := bpf.NewProgramGenerator(&buf)
-		err = pg.WriteProgram(tiers)
+		err = pg.WriteProgram(allRules)
 		if err != nil {
 			log.WithError(err).Panic("Failed to write C file to buffer.")
 		}
