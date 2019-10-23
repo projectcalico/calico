@@ -16,6 +16,7 @@ package proxy
 
 import (
 	"github.com/pkg/errors"
+	log "github.com/sirupsen/logrus"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 
@@ -23,15 +24,29 @@ import (
 )
 
 // StartKubeProxy start a new kube-proxy if there was no error
-func StartKubeProxy(hostname string, opts ...Option) error {
-	syncer, err := NewSyncer(nil, maps.NATMap(), maps.BackendMap())
+func StartKubeProxy(k8sconf *rest.Config, hostname string, opts ...Option) error {
+	natMap := maps.NATMap()
+	err := natMap.EnsureExists()
+	if err != nil {
+		return errors.Errorf("failed to create NAT map: %s", err)
+	}
+	backendMap := maps.BackendMap()
+	err = backendMap.EnsureExists()
+	if err != nil {
+		return errors.Errorf("failed to create NAT backend map: %s", err)
+	}
+
+	syncer, err := NewSyncer(nil, natMap, backendMap)
 	if err != nil {
 		return errors.WithMessage(err, "new bpf syncer")
 	}
 
-	k8sconf, err := rest.InClusterConfig()
-	if err != nil {
-		return errors.Errorf("unable to create k8s config: %s", err)
+	if k8sconf == nil {
+		var err error
+		k8sconf, err = rest.InClusterConfig()
+		if err != nil {
+			return errors.Errorf("unable to create k8s config: %s", err)
+		}
 	}
 	clientset, err := kubernetes.NewForConfig(k8sconf)
 	if err != nil {
@@ -42,6 +57,8 @@ func StartKubeProxy(hostname string, opts ...Option) error {
 	if err != nil {
 		return errors.WithMessage(err, "new proxy")
 	}
+
+	log.Infof("kube-proxy started, hostname=%q", hostname)
 
 	return nil
 }

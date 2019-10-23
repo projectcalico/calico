@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/pkg/errors"
+	log "github.com/sirupsen/logrus"
 )
 
 // Option defines Proxy options
@@ -40,6 +41,7 @@ func makeOption(f func(*proxy) error) Option {
 func WithMinSyncPeriod(min time.Duration) Option {
 	return makeOption(func(p *proxy) error {
 		p.minDPSyncPeriod = min
+		log.Infof("proxy.WithMinSyncPeriod(%s)", min)
 		return nil
 	})
 }
