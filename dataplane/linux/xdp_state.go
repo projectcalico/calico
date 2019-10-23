@@ -158,7 +158,7 @@ func (x *xdpState) ProcessPendingDiffState(epSourceV4 endpointsSource) {
 	}
 }
 
-func (x *xdpState) ResyncIfNeeded(isSourceV4 ipsetsSource) error {
+func (x *xdpState) ResyncIfNeeded(ipsSourceV4 ipsetsSource) error {
 	var err error
 	if !x.common.needResync {
 		return nil
@@ -170,7 +170,7 @@ func (x *xdpState) ResyncIfNeeded(isSourceV4 ipsetsSource) error {
 			log.Info("Retrying after an XDP update failure...")
 		}
 		log.Info("Resyncing XDP state with dataplane.")
-		err = x.tryResync(newConvertingIPSetsSource(isSourceV4))
+		err = x.tryResync(newConvertingIPSetsSource(ipsSourceV4))
 		if err == nil {
 			success = true
 			break
@@ -183,10 +183,10 @@ func (x *xdpState) ResyncIfNeeded(isSourceV4 ipsetsSource) error {
 	return nil
 }
 
-func (x *xdpState) ApplyBPFActions(isSource ipsetsSource) error {
+func (x *xdpState) ApplyBPFActions(ipsSource ipsetsSource) error {
 	if x.ipV4State != nil {
 		memberCacheV4 := newXDPMemberCache(x.ipV4State.getBpfIPFamily(), x.common.bpfLib)
-		err := x.ipV4State.bpfActions.apply(memberCacheV4, x.ipV4State.ipsetIDsToMembers, newConvertingIPSetsSource(isSource), x.common.xdpModes)
+		err := x.ipV4State.bpfActions.apply(memberCacheV4, x.ipV4State.ipsetIDsToMembers, newConvertingIPSetsSource(ipsSource), x.common.xdpModes)
 		x.ipV4State.bpfActions = newXDPBPFActions()
 		if err != nil {
 			log.WithError(err).Info("Applying BPF actions did not succeed. Queueing XDP resync.")
@@ -223,6 +223,7 @@ func (x *xdpState) UpdateState() {
 	}
 }
 
+// WipeXDP clears any previously set XDP state, returning an error if synchronization fails.
 func (x *xdpState) WipeXDP() error {
 	savedIPV4State := x.ipV4State
 	x.ipV4State = newXDPIPState(4)
@@ -234,18 +235,18 @@ func (x *xdpState) WipeXDP() error {
 	// because we are about to drop everything, and when
 	// we only drop stuff, the code does not call
 	// ipsetsSource functions at all.
-	isSource := &nilIPSetsSource{}
-	if err := x.tryResync(isSource); err != nil {
+	ipsSource := &nilIPSetsSource{}
+	if err := x.tryResync(ipsSource); err != nil {
 		return err
 	}
-	if err := x.ApplyBPFActions(isSource); err != nil {
+	if err := x.ApplyBPFActions(ipsSource); err != nil {
 		return err
 	}
 	x.QueueResync()
 	return nil
 }
 
-func (x *xdpState) tryResync(isSourceV4 ipsetsSource) error {
+func (x *xdpState) tryResync(ipsSourceV4 ipsetsSource) error {
 	if x.common.programTag == "" {
 		tag, err := x.common.bpfLib.GetXDPObjTagAuto()
 		if err != nil {
@@ -254,7 +255,7 @@ func (x *xdpState) tryResync(isSourceV4 ipsetsSource) error {
 		x.common.programTag = tag
 	}
 	if x.ipV4State != nil {
-		if err := x.ipV4State.tryResync(&x.common, isSourceV4); err != nil {
+		if err := x.ipV4State.tryResync(&x.common, ipsSourceV4); err != nil {
 			return err
 		}
 	}
@@ -426,31 +427,31 @@ func (s *xdpIPState) getBpfIPFamily() bpf.IPFamily {
 	return bpf.IPFamilyUnknown
 }
 
-func (s *xdpIPState) newXDPResyncState(common *xdpStateCommon, isSource ipsetsSource) (*xdpResyncState, error) {
-	xdpIfaces, err := common.bpfLib.GetXDPIfaces()
+// newXDPResyncState creates the xdpResyncState object, returning an error on failure.
+func (s *xdpIPState) newXDPResyncState(bpfLib bpf.BPFDataplane, ipsSource ipsetsSource, programTag string, xpdModes []bpf.XDPMode) (*xdpResyncState, error) {
+	xdpIfaces, err := bpfLib.GetXDPIfaces()
 	if err != nil {
 		return nil, err
 	}
 	s.logCxt.WithField("ifaces", xdpIfaces).Debug("Interfaces with XDP program installed.")
 	ifacesWithProgs := make(map[string]progInfo, len(xdpIfaces))
 	for _, iface := range xdpIfaces {
-		tag, tagErr := common.bpfLib.GetXDPTag(iface)
-		mode, modeErr := common.bpfLib.GetXDPMode(iface)
-		// error can happen when the program was not pinned in
-		// the bpf filesystem, so we say it's bogus anyway
-		bogus := tagErr != nil || tag != common.programTag || modeErr != nil || !isValidMode(mode, common)
+		tag, tagErr := bpfLib.GetXDPTag(iface)
+		mode, modeErr := bpfLib.GetXDPMode(iface)
+		// error can happen when the program was not pinned in the bpf filesystem, so we say it's bogus anyway
+		bogus := tagErr != nil || tag != programTag || modeErr != nil || !isValidMode(mode, xpdModes)
 		ifacesWithProgs[iface] = progInfo{
 			bogus: bogus,
 		}
 	}
-	ifacesWithPinnedMaps, err := common.bpfLib.ListCIDRMaps(s.getBpfIPFamily())
+	ifacesWithPinnedMaps, err := bpfLib.ListCIDRMaps(s.getBpfIPFamily())
 	if err != nil {
 		return nil, err
 	}
 	s.logCxt.WithField("ifaces", ifacesWithPinnedMaps).Debug("Interfaces with BPF blacklist maps.")
 	ifacesWithMaps := make(map[string]mapInfo, len(ifacesWithPinnedMaps))
 	for _, iface := range ifacesWithPinnedMaps {
-		mapOk, err := common.bpfLib.IsValidMap(iface, s.getBpfIPFamily())
+		mapOk, err := bpfLib.IsValidMap(iface, s.getBpfIPFamily())
 		if err != nil {
 			return nil, err
 		}
@@ -459,11 +460,11 @@ func (s *xdpIPState) newXDPResyncState(common *xdpStateCommon, isSource ipsetsSo
 			if _, ok := ifacesWithProgs[iface]; !ok {
 				return false, nil
 			}
-			mapID, err := common.bpfLib.GetCIDRMapID(iface, s.getBpfIPFamily())
+			mapID, err := bpfLib.GetCIDRMapID(iface, s.getBpfIPFamily())
 			if err != nil {
 				return false, err
 			}
-			mapIDs, err := common.bpfLib.GetMapsFromXDP(iface)
+			mapIDs, err := bpfLib.GetMapsFromXDP(iface)
 			if err != nil {
 				return false, err
 			}
@@ -481,7 +482,7 @@ func (s *xdpIPState) newXDPResyncState(common *xdpStateCommon, isSource ipsetsSo
 		}
 		var mapContents map[bpf.CIDRMapKey]uint32
 		if !mapBogus {
-			dump, err := common.bpfLib.DumpCIDRMap(iface, s.getBpfIPFamily())
+			dump, err := bpfLib.DumpCIDRMap(iface, s.getBpfIPFamily())
 			if err != nil {
 				return nil, err
 			}
@@ -507,7 +508,7 @@ func (s *xdpIPState) newXDPResyncState(common *xdpStateCommon, isSource ipsetsSo
 				if visited.Contains(setID) {
 					return nil
 				}
-				members, err := s.getIPSetMembers(setID, isSource)
+				members, err := s.getIPSetMembers(setID, ipsSource)
 				if err != nil {
 					opErr = err
 					return set.StopIteration
@@ -532,8 +533,8 @@ func (s *xdpIPState) newXDPResyncState(common *xdpStateCommon, isSource ipsetsSo
 	}, nil
 }
 
-func isValidMode(mode bpf.XDPMode, common *xdpStateCommon) bool {
-	for _, xdpMode := range common.xdpModes {
+func isValidMode(mode bpf.XDPMode, xdpModes []bpf.XDPMode) bool {
+	for _, xdpMode := range xdpModes {
 		if xdpMode == mode {
 			return true
 		}
@@ -541,25 +542,26 @@ func isValidMode(mode bpf.XDPMode, common *xdpStateCommon) bool {
 	return false
 }
 
-func (s *xdpIPState) getIPSetMembers(setID string, isSource ipsetsSource) (set.Set, error) {
-	return getIPSetMembers(s.ipsetIDsToMembers, setID, isSource)
+func (s *xdpIPState) getIPSetMembers(setID string, ipsSource ipsetsSource) (set.Set, error) {
+	return getIPSetMembers(s.ipsetIDsToMembers, setID, ipsSource)
 }
 
-// tryResync performs the resynchronization of the XDP state. It
-// modifies the BPF actions based on the state of XDP on the system
+// tryResync reconciles the system's XDP state (derived from xdpStateCommon)
+// with desired state (see ipsSource and the IpSetsManager for implementation details).
+// It modifies the BPF actions based on the state of XDP on the system
 // and on the desired state. It also repopulates the members cache.
 //
 // This function ensures that after applying the BPF actions, the XDP
 // state will be consistent. Which means making sure that XDP programs
 // are installed in desired interfaces, that they are referencing
 // correct maps, and that maps contain the desired ipsets.
-func (s *xdpIPState) tryResync(common *xdpStateCommon, isSource ipsetsSource) error {
+func (s *xdpIPState) tryResync(common *xdpStateCommon, ipsSource ipsetsSource) error {
 	resyncStart := time.Now()
 	defer func() {
 		s.logCxt.WithField("resyncDuration", time.Since(resyncStart)).Info("Finished XDP resync.")
 	}()
 	s.ipsetIDsToMembers.Clear()
-	resyncState, err := s.newXDPResyncState(common, isSource)
+	resyncState, err := s.newXDPResyncState(common.bpfLib, ipsSource, common.programTag, common.xdpModes)
 	if err != nil {
 		return err
 	}
@@ -1752,7 +1754,7 @@ func newXDPBPFActions() *xdpBPFActions {
 // installs XDP programs, creates and removes BPF maps, adds and
 // removes whole ipsets into/from the BPF maps, adds and removes
 // certain members to/from BPF maps.
-func (a *xdpBPFActions) apply(memberCache *xdpMemberCache, ipsetIDsToMembers *ipsetIDsToMembers, isSource ipsetsSource, xdpModes []bpf.XDPMode) error {
+func (a *xdpBPFActions) apply(memberCache *xdpMemberCache, ipsetIDsToMembers *ipsetIDsToMembers, ipsSource ipsetsSource, xdpModes []bpf.XDPMode) error {
 	var opErr error
 	logCxt := log.WithField("family", memberCache.GetFamily().String())
 
@@ -1826,7 +1828,7 @@ func (a *xdpBPFActions) apply(memberCache *xdpMemberCache, ipsetIDsToMembers *ip
 				"setID":    setID,
 				"refCount": refCount,
 			}).Debug("Adding members of ipset to BPF blacklist map.")
-			members, err := getIPSetMembers(ipsetIDsToMembers, setID, isSource)
+			members, err := getIPSetMembers(ipsetIDsToMembers, setID, ipsSource)
 			if err != nil {
 				return err
 			}
@@ -1912,13 +1914,13 @@ func getXDPModes(allowGenericXDP bool) []bpf.XDPMode {
 	return modes
 }
 
-func getIPSetMembers(ipsetIDsToMembers *ipsetIDsToMembers, setID string, isSource ipsetsSource) (set.Set, error) {
+func getIPSetMembers(ipsetIDsToMembers *ipsetIDsToMembers, setID string, ipsSource ipsetsSource) (set.Set, error) {
 	members, ok := ipsetIDsToMembers.GetCached(setID)
 	if ok {
 		return members, nil
 	}
 
-	members, err := isSource.GetIPSetMembers(setID)
+	members, err := ipsSource.GetIPSetMembers(setID)
 	if err != nil {
 		return nil, err
 	}
