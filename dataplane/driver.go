@@ -17,11 +17,15 @@
 package dataplane
 
 import (
+	"crypto/tls"
 	"math/bits"
 	"net"
+	"net/http"
 	"os/exec"
+	"time"
 
 	log "github.com/sirupsen/logrus"
+	"k8s.io/client-go/rest"
 
 	"runtime/debug"
 
@@ -183,7 +187,28 @@ func StartDataplaneDriver(configParams *config.Config,
 			BPFLogLevel:                     configParams.BPFLogLevel,
 			XDPEnabled:                      configParams.XDPEnabled,
 			XDPAllowGeneric:                 configParams.GenericXDPEnabled,
+
+			// XXX THIS IS A TEMP HACK TO MAKE THE BPF TESTS PASS
+			K8sconf: &rest.Config{
+				Host: configParams.DatastoreConfig().Spec.KubeConfig.K8sAPIEndpoint,
+				Transport: &http.Transport{
+					Proxy: http.ProxyFromEnvironment,
+					DialContext: (&net.Dialer{
+						Timeout:   30 * time.Second,
+						KeepAlive: 30 * time.Second,
+						DualStack: true,
+					}).DialContext,
+					MaxIdleConns:        100,
+					IdleConnTimeout:     90 * time.Second,
+					TLSHandshakeTimeout: 10 * time.Second,
+					TLSClientConfig: &tls.Config{
+						InsecureSkipVerify: true,
+					},
+					ExpectContinueTimeout: 1 * time.Second,
+				},
+			},
 		}
+
 		intDP := intdataplane.NewIntDataplaneDriver(dpConfig)
 		intDP.Start()
 
