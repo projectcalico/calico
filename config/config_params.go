@@ -104,7 +104,7 @@ type Config struct {
 
 	BPFEnabled          bool           `config:"bool;false"`
 	BPFLogLevel         string         `config:"oneof(off,info,debug);off"`
-	BPFDataIfacePattern *regexp.Regexp `config:"regexp;^en.*|eth.*"`
+	BPFDataIfacePattern *regexp.Regexp `config:"regexp;^(en.*|eth.*|tunl0$)"`
 
 	DatastoreType string `config:"oneof(kubernetes,etcdv3);etcdv3;non-zero,die-on-fail,local"`
 
