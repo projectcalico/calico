@@ -2702,7 +2702,7 @@ var _ = Describe("XDP state", func() {
 					state := NewXDPStateWithBPFLibrary(bpf.NewMockBPFLib(), true)
 					state.ipV4State.newCurrentState = newXDPSystemState()
 					ipsetsSrc := &nilIPSetsSource{}
-					resyncState, err := state.ipV4State.newXDPResyncState(&state.common, ipsetsSrc)
+					resyncState, err := state.ipV4State.newXDPResyncState(state.common.bpfLib, ipsetsSrc, state.common.programTag, state.common.xdpModes)
 					Expect(err).NotTo(HaveOccurred())
 					state.ipV4State.bpfActions.InstallXDP.AddAll(s.install)
 					state.ipV4State.bpfActions.UninstallXDP.AddAll(s.uninstall)

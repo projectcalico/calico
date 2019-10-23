@@ -721,7 +721,9 @@ func (d *InternalDataplane) doStaticDataplaneConfig() {
 	if d.xdpState != nil {
 		if err := d.setXDPFailsafePorts(); err != nil {
 			log.Warnf("failed to set XDP failsafe ports, disabling XDP: %v", err)
-			d.shutdownXDPCompletely()
+			if err := d.shutdownXDPCompletely(); err != nil {
+				log.Warnf("failed to disable XDP: %v, will proceed anyway.", err)
+			}
 		}
 	}
 }
@@ -758,27 +760,28 @@ func (d *InternalDataplane) setXDPFailsafePorts() error {
 	return nil
 }
 
-func (d *InternalDataplane) shutdownXDPCompletely() {
+// shutdownXDPCompletely attempts to disable XDP state.  This could fail in cases where XDP isn't working properly.
+func (d *InternalDataplane) shutdownXDPCompletely() error {
 	if d.xdpState == nil {
-		return
+		return nil
 	}
 	if d.callbacks != nil {
 		d.xdpState.DepopulateCallbacks(d.callbacks)
 	}
-	success := false
+	// spend 1 second attempting to wipe XDP, in case of a hiccup.
 	maxTries := 10
+	waitInterval := 100 * time.Millisecond
+	var err error
 	for i := 0; i < maxTries; i++ {
-		err := d.xdpState.WipeXDP()
+		err = d.xdpState.WipeXDP()
 		if err == nil {
-			success = true
-			break
+			d.xdpState = nil
+			return nil
 		}
 		log.WithError(err).WithField("try", i).Warn("failed to wipe the XDP state")
+		time.Sleep(waitInterval)
 	}
-	if !success {
-		log.Panicf("Failed to wipe the XDP state after %d tries", maxTries)
-	}
-	d.xdpState = nil
+	return fmt.Errorf("Failed to wipe the XDP state after %v tries over %v seconds: Error %v", maxTries, waitInterval, err)
 }
 
 func (d *InternalDataplane) loopUpdatingDataplane() {
@@ -1105,7 +1108,9 @@ func (d *InternalDataplane) apply() {
 		}
 		if applyXDPError != nil {
 			log.WithError(applyXDPError).Info("Applying XDP actions did not succeed, disabling XDP")
-			d.shutdownXDPCompletely()
+			if err := d.shutdownXDPCompletely(); err != nil {
+				log.Warnf("failed to disable XDP: %v, will proceed anyway.", err)
+			}
 		}
 	}
 
@@ -1218,7 +1223,7 @@ func (d *InternalDataplane) apply() {
 }
 
 func (d *InternalDataplane) applyXDPActions() error {
-	var err error
+	var err error = nil
 	for i := 0; i < 10; i++ {
 		err = d.xdpState.ResyncIfNeeded(d.ipsetsSourceV4)
 		if err != nil {
