@@ -31,6 +31,7 @@ import (
 	"github.com/projectcalico/felix/proto"
 	"github.com/projectcalico/felix/routetable"
 	"github.com/projectcalico/felix/rules"
+	"github.com/projectcalico/libcalico-go/lib/names"
 	"github.com/projectcalico/libcalico-go/lib/set"
 )
 
@@ -147,6 +148,10 @@ type endpointManager struct {
 	activeWlDispatchChains     map[string]*iptables.Chain
 	activeEPMarkDispatchChains map[string]*iptables.Chain
 
+	// Workload endpoints that would be locally active but are 'shadowed' by other endpoints
+	// with the same interface name.
+	shadowedWlEndpoints map[proto.WorkloadEndpointID]*proto.WorkloadEndpoint
+
 	// wlIfaceNamesToReconfigure contains names of workload interfaces that need to have
 	// their configuration (sysctls etc.) refreshed.
 	wlIfaceNamesToReconfigure set.Set
@@ -256,6 +261,8 @@ func newEndpointManagerWithShims(
 		activeWlEndpoints:     map[proto.WorkloadEndpointID]*proto.WorkloadEndpoint{},
 		activeWlIfaceNameToID: map[string]proto.WorkloadEndpointID{},
 		activeWlIDToChains:    map[proto.WorkloadEndpointID][]*iptables.Chain{},
+
+		shadowedWlEndpoints: map[proto.WorkloadEndpointID]*proto.WorkloadEndpoint{},
 
 		wlIfaceNamesToReconfigure: set.New(),
 
@@ -489,111 +496,161 @@ func (m *endpointManager) resolveWorkloadEndpoints() {
 		m.needToCheckDispatchChains = true
 	}
 
-	// Update any dirty endpoints.
-	for id, workload := range m.pendingWlEpUpdates {
-		logCxt := log.WithField("id", id)
-		oldWorkload := m.activeWlEndpoints[id]
-		if workload != nil {
-			logCxt.Info("Updating per-endpoint chains.")
-			if oldWorkload != nil && oldWorkload.Name != workload.Name {
-				logCxt.Debug("Interface name changed, cleaning up old state")
-				m.epMarkMapper.ReleaseEndpointMark(oldWorkload.Name)
-				m.filterTable.RemoveChains(m.activeWlIDToChains[id])
-				m.routeTable.SetRoutes(oldWorkload.Name, nil)
-				m.wlIfaceNamesToReconfigure.Discard(oldWorkload.Name)
-				delete(m.activeWlIfaceNameToID, oldWorkload.Name)
-			}
-			var ingressPolicyNames, egressPolicyNames []string
-			if len(workload.Tiers) > 0 {
-				ingressPolicyNames = workload.Tiers[0].IngressPolicies
-				egressPolicyNames = workload.Tiers[0].EgressPolicies
-			}
-			adminUp := workload.State == "active"
-			chains := m.ruleRenderer.WorkloadEndpointToIptablesChains(
-				workload.Name,
-				m.epMarkMapper,
-				adminUp,
-				ingressPolicyNames,
-				egressPolicyNames,
-				workload.ProfileIds,
-			)
-			m.filterTable.UpdateChains(chains)
-			m.activeWlIDToChains[id] = chains
-
-			// Collect the IP prefixes that we want to route locally to this endpoint:
-			logCxt.Info("Updating endpoint routes.")
-			var (
-				ipStrings  []string
-				natInfos   []*proto.NatInfo
-				addrSuffix string
-			)
-			if m.ipVersion == 4 {
-				ipStrings = workload.Ipv4Nets
-				natInfos = workload.Ipv4Nat
-				addrSuffix = "/32"
-			} else {
-				ipStrings = workload.Ipv6Nets
-				natInfos = workload.Ipv6Nat
-				addrSuffix = "/128"
-			}
-			if len(natInfos) != 0 {
-				old := ipStrings
-				ipStrings = make([]string, len(old)+len(natInfos))
-				copy(ipStrings, old)
-				for ii, natInfo := range natInfos {
-					ipStrings[len(old)+ii] = natInfo.ExtIp + addrSuffix
-				}
-			}
-
-			var mac net.HardwareAddr
-			if workload.Mac != "" {
-				var err error
-				mac, err = net.ParseMAC(workload.Mac)
-				if err != nil {
-					logCxt.WithError(err).Error(
-						"Failed to parse endpoint's MAC address")
-				}
-			}
-			var routeTargets []routetable.Target
-			if adminUp {
-				logCxt.Debug("Endpoint up, adding routes")
-				for _, s := range ipStrings {
-					routeTargets = append(routeTargets, routetable.Target{
-						CIDR:    ip.MustParseCIDROrIP(s),
-						DestMAC: mac,
-					})
-				}
-			} else {
-				logCxt.Debug("Endpoint down, removing routes")
-			}
-			m.routeTable.SetRoutes(workload.Name, routeTargets)
-			m.wlIfaceNamesToReconfigure.Add(workload.Name)
-			m.activeWlEndpoints[id] = workload
-			m.activeWlIfaceNameToID[workload.Name] = id
-			delete(m.pendingWlEpUpdates, id)
-
-			m.callbacks.InvokeUpdateWorkload(oldWorkload, workload)
-		} else {
-			logCxt.Info("Workload removed, deleting its chains.")
-			m.callbacks.InvokeRemoveWorkload(oldWorkload)
-
-			m.filterTable.RemoveChains(m.activeWlIDToChains[id])
-			delete(m.activeWlIDToChains, id)
-			if oldWorkload != nil {
-				m.epMarkMapper.ReleaseEndpointMark(oldWorkload.Name)
-				// Remove any routes from the routing table.  The RouteTable will
-				// remove any conntrack entries as a side-effect.
-				logCxt.Info("Workload removed, deleting old state.")
-				m.routeTable.SetRoutes(oldWorkload.Name, nil)
-				m.wlIfaceNamesToReconfigure.Discard(oldWorkload.Name)
-				delete(m.activeWlIfaceNameToID, oldWorkload.Name)
-			}
-			delete(m.activeWlEndpoints, id)
-			delete(m.pendingWlEpUpdates, id)
+	removeActiveWorkload := func(logCxt *log.Entry, oldWorkload *proto.WorkloadEndpoint, id proto.WorkloadEndpointID) {
+		m.callbacks.InvokeRemoveWorkload(oldWorkload)
+		m.filterTable.RemoveChains(m.activeWlIDToChains[id])
+		delete(m.activeWlIDToChains, id)
+		if oldWorkload != nil {
+			m.epMarkMapper.ReleaseEndpointMark(oldWorkload.Name)
+			// Remove any routes from the routing table.  The RouteTable will remove any
+			// conntrack entries as a side-effect.
+			logCxt.Info("Workload removed, deleting old state.")
+			m.routeTable.SetRoutes(oldWorkload.Name, nil)
+			m.wlIfaceNamesToReconfigure.Discard(oldWorkload.Name)
+			delete(m.activeWlIfaceNameToID, oldWorkload.Name)
 		}
+		delete(m.activeWlEndpoints, id)
+	}
 
-		// Update or deletion, make sure we update the interface status.
-		m.epIDsToUpdateStatus.Add(id)
+	// Repeat the following loop until the pending update map is empty.  Note that it's possible
+	// for an endpoint deletion to add a further update into the map (for a previously shadowed
+	// endpoint), so we cannot assume that a single iteration will always be enough.
+	for len(m.pendingWlEpUpdates) > 0 {
+		// Handle pending workload endpoint updates.
+		for id, workload := range m.pendingWlEpUpdates {
+			logCxt := log.WithField("id", id)
+			oldWorkload := m.activeWlEndpoints[id]
+			if workload != nil {
+				// Check if there is already an active workload endpoint with the same
+				// interface name.
+				if existingId, ok := m.activeWlIfaceNameToID[workload.Name]; ok && existingId != id {
+					// There is.  We need to decide which endpoint takes preference.
+					// (We presume this is some kind of make before break logic, and the
+					// situation will shortly be resolved by one of the endpoints being
+					// removed.  But in the meantime we must have predictable
+					// behaviour.)
+					logCxt.WithFields(log.Fields{
+						"interfaceName": workload.Name,
+						"existingId":    existingId,
+					}).Info("New endpoint has same iface name as existing")
+					if wlIdToUniqueName(&existingId) < wlIdToUniqueName(&id) {
+						logCxt.Info("Existing endpoint takes preference")
+						m.shadowedWlEndpoints[id] = workload
+						delete(m.pendingWlEpUpdates, id)
+						continue
+					}
+					logCxt.Info("New endpoint takes preference; remove existing")
+					m.shadowedWlEndpoints[existingId] = m.activeWlEndpoints[existingId]
+					removeActiveWorkload(logCxt, m.activeWlEndpoints[existingId], existingId)
+				}
+				logCxt.Info("Updating per-endpoint chains.")
+				if oldWorkload != nil && oldWorkload.Name != workload.Name {
+					logCxt.Debug("Interface name changed, cleaning up old state")
+					m.epMarkMapper.ReleaseEndpointMark(oldWorkload.Name)
+					m.filterTable.RemoveChains(m.activeWlIDToChains[id])
+					m.routeTable.SetRoutes(oldWorkload.Name, nil)
+					m.wlIfaceNamesToReconfigure.Discard(oldWorkload.Name)
+					delete(m.activeWlIfaceNameToID, oldWorkload.Name)
+				}
+				var ingressPolicyNames, egressPolicyNames []string
+				if len(workload.Tiers) > 0 {
+					ingressPolicyNames = workload.Tiers[0].IngressPolicies
+					egressPolicyNames = workload.Tiers[0].EgressPolicies
+				}
+				adminUp := workload.State == "active"
+				chains := m.ruleRenderer.WorkloadEndpointToIptablesChains(
+					workload.Name,
+					m.epMarkMapper,
+					adminUp,
+					ingressPolicyNames,
+					egressPolicyNames,
+					workload.ProfileIds,
+				)
+				m.filterTable.UpdateChains(chains)
+				m.activeWlIDToChains[id] = chains
+
+				// Collect the IP prefixes that we want to route locally to this endpoint:
+				logCxt.Info("Updating endpoint routes.")
+				var (
+					ipStrings  []string
+					natInfos   []*proto.NatInfo
+					addrSuffix string
+				)
+				if m.ipVersion == 4 {
+					ipStrings = workload.Ipv4Nets
+					natInfos = workload.Ipv4Nat
+					addrSuffix = "/32"
+				} else {
+					ipStrings = workload.Ipv6Nets
+					natInfos = workload.Ipv6Nat
+					addrSuffix = "/128"
+				}
+				if len(natInfos) != 0 {
+					old := ipStrings
+					ipStrings = make([]string, len(old)+len(natInfos))
+					copy(ipStrings, old)
+					for ii, natInfo := range natInfos {
+						ipStrings[len(old)+ii] = natInfo.ExtIp + addrSuffix
+					}
+				}
+
+				var mac net.HardwareAddr
+				if workload.Mac != "" {
+					var err error
+					mac, err = net.ParseMAC(workload.Mac)
+					if err != nil {
+						logCxt.WithError(err).Error(
+							"Failed to parse endpoint's MAC address")
+					}
+				}
+				var routeTargets []routetable.Target
+				if adminUp {
+					logCxt.Debug("Endpoint up, adding routes")
+					for _, s := range ipStrings {
+						routeTargets = append(routeTargets, routetable.Target{
+							CIDR:    ip.MustParseCIDROrIP(s),
+							DestMAC: mac,
+						})
+					}
+				} else {
+					logCxt.Debug("Endpoint down, removing routes")
+				}
+				m.routeTable.SetRoutes(workload.Name, routeTargets)
+				m.wlIfaceNamesToReconfigure.Add(workload.Name)
+				m.activeWlEndpoints[id] = workload
+				m.activeWlIfaceNameToID[workload.Name] = id
+				delete(m.pendingWlEpUpdates, id)
+
+				m.callbacks.InvokeUpdateWorkload(oldWorkload, workload)
+			} else {
+				logCxt.Info("Workload removed, deleting its chains.")
+				removeActiveWorkload(logCxt, oldWorkload, id)
+				delete(m.pendingWlEpUpdates, id)
+				delete(m.shadowedWlEndpoints, id)
+
+				if oldWorkload != nil {
+					// Check for another endpoint with the same interface name,
+					// that should now become active.
+					bestShadowedId := proto.WorkloadEndpointID{}
+					for sId, sWorkload := range m.shadowedWlEndpoints {
+						logCxt.Infof("Old workload %v", oldWorkload)
+						logCxt.Infof("Shadowed workload %v", sWorkload)
+						if sWorkload.Name == oldWorkload.Name {
+							if bestShadowedId.EndpointId == "" || wlIdToUniqueName(&sId) < wlIdToUniqueName(&bestShadowedId) {
+								bestShadowedId = sId
+							}
+						}
+					}
+					if bestShadowedId.EndpointId != "" {
+						m.pendingWlEpUpdates[bestShadowedId] = m.shadowedWlEndpoints[bestShadowedId]
+						delete(m.shadowedWlEndpoints, bestShadowedId)
+					}
+				}
+			}
+
+			// Update or deletion, make sure we update the interface status.
+			m.epIDsToUpdateStatus.Add(id)
+		}
 	}
 
 	if m.needToCheckDispatchChains {
@@ -615,6 +672,20 @@ func (m *endpointManager) resolveWorkloadEndpoints() {
 		}
 		return set.RemoveItem
 	})
+}
+
+func wlIdToUniqueName(id *proto.WorkloadEndpointID) string {
+	ids := names.WorkloadEndpointIdentifiers{
+		// Passing "default" for the Orchestrator field tells CalculateWorkloadEndpointName
+		// to construct a name based only on the following fields, which is what we want.
+		Orchestrator: "default",
+		Node:         "local",
+		Endpoint:     id.EndpointId,
+		Workload:     id.WorkloadId,
+	}
+	name, _ := ids.CalculateWorkloadEndpointName(true)
+	log.WithField("id", id).Debugf("Unique wlEp name %v", name)
+	return name
 }
 
 func (m *endpointManager) resolveEndpointMarks() {
