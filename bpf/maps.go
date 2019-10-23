@@ -15,12 +15,13 @@
 package bpf
 
 import (
-	"bufio"
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
 	"strconv"
 
+	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 )
 
@@ -65,58 +66,41 @@ func (b *PinnedMap) Close() error {
 }
 
 func (b *PinnedMap) Iter(f func(k, v []byte)) error {
-	cmd := exec.Command("bpftool", "map", "dump", "pinned", b.Filename)
-	out, err := cmd.StdoutPipe()
-	if err != nil {
-		return err
-	}
-	defer func() {
-		_ = out.Close()
-	}()
-
-	err = cmd.Start()
-	if err != nil {
-		return err
+	prog := "bpftool"
+	args := []string{
+		"--json",
+		"--pretty",
+		"map",
+		"dump",
+		"pinned",
+		b.Filename,
 	}
 
-	scanner := bufio.NewScanner(out)
-	scanner.Split(bufio.ScanWords)
+	printCommand(prog, args...)
+	output, err := exec.Command(prog, args...).CombinedOutput()
+	if err != nil {
+		return errors.Errorf("failed to dump in map (%s): %s\n%s", b.Filename, err, output)
+	}
 
-	var k, v []byte
-	seenKey := false
-	for scanner.Scan() {
-		text := scanner.Text()
-		if text == "key:" {
-			if seenKey {
-				f(k, v)
-				seenKey = false
-				k = k[:0]
-				v = v[:0]
-			}
-			continue
-		}
-		if text == "value:" {
-			seenKey = true
-			continue
-		}
-		if text == "Found" {
-			break
-		}
-		i, err := strconv.ParseUint(text, 16, 8)
+	var mp []mapEntry
+	err = json.Unmarshal(output, &mp)
+	if err != nil {
+		return errors.Errorf("cannot parse json output: %v\n%s", err, output)
+	}
+
+	for _, me := range mp {
+		k, err := hexStringsToBytes(me.Key)
 		if err != nil {
-			return err
+			return errors.Errorf("failed parsing map %s entry %s key: %e", b.Filename, me, err)
 		}
-		b := byte(i)
-		if seenKey {
-			v = append(k, b)
-		} else {
-			k = append(k, b)
+		v, err := hexStringsToBytes(me.Value)
+		if err != nil {
+			return errors.Errorf("failed parsing map %s entry %s val: %e", b.Filename, me, err)
 		}
-	}
-	if seenKey && scanner.Err() == nil {
 		f(k, v)
 	}
-	return scanner.Err()
+
+	return nil
 }
 
 func (b *PinnedMap) Update(k, v []byte) error {
