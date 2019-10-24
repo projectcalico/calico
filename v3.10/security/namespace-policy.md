@@ -1,14 +1,16 @@
 ---
-title: Use namespace in policy rules
+title: Use namespace in policy
+redirect_from: latest/security/namespace-policy
+description: Use namespaces and namespaceSelectors in Calico network policy to group or separate resources. Use network policies to allow or deny traffic to/from pods belonging to specific namespaces.
 ---
 
 ### Big picture
 
-Use {{site.prodname}} network policy rules to reference pods in other namespaces.
+Use {{site.prodname}} network policies to reference pods in other namespaces.
 
 ### Value
 
-Kubernetes namespaces let you group/separate resources to meet a variety of use-cases. For example you can use namespaces to separate development, production, and QA environments, or to allow different teams to use the same cluster. Using namespace selectors in {{site.prodname}} policy rules allows you to allow or deny traffic to/from pods belonging to specific namespaces. 
+Kubernetes namespaces let you group/separate resources to meet a variety of use cases. For example, you can use namespaces to separate development, production, and QA environments, or allow different teams to use the same cluster. You can use namespace selectors in {{site.prodname}} network policies to allow or deny traffic to/from pods in specific namespaces.
 
 ### Features
 
@@ -17,6 +19,9 @@ This how-to guide uses the following {{site.prodname}} features:
 **NetworkPolicy** with namespaceSelector
 
 ### How to
+
+- [Control traffic to/from endpoints in a namespace](#control-traffic-tofrom-endpoints-in-a-namespace)
+- [Use Kubernetes RBAC to control namespace label assignment](#use-kubernetes-rbac-to-control-namespace-label-assignment)
 
 #### Control traffic to/from endpoints in a namespace
 
@@ -59,7 +64,31 @@ spec:
       ports:
       - 6379
 ```
+
+#### Use Kubernetes RBAC to control namespace label assignment
+
+Network policies can be applied to endpoints using selectors that match labels on the endpoint, the endpoint's namespace, or the endpoint's service account. By applying selectors based on the endpoint's namespace, you can use Kubernetes RBAC to control which users can assign labels to namespaces. This allows you to separate groups who can deploy pods from those who can assign labels to namespaces.
+
+In the following example, users in the development environment can communicate only with pods that have a namespace labeled, `environment == "development"`.
+
+```
+apiVersion: projectcalico.org/v3
+kind: GlobalNetworkPolicy
+metadata:
+  name: restrict-development-access
+spec:
+  namespaceSelector: 'environment == "development"'
+  ingress:
+    - action: Allow
+      source:
+        namespaceSelector: 'environment == "development"'
+  egress:
+    - action: Allow
+      destination:
+        namespaceSelector: 'environment == "development"'
+```
+
 ### Above and beyond
 
-- For more network policy rules, see [Network policy]({{site.baseurl}}/{{page.version}}/reference/resources/networkpolicy)
+- For more network policies, see [Network policy]({{site.baseurl}}/{{page.version}}/reference/resources/networkpolicy)
 - To apply policy to all namespaces, see [Global network policy]({{site.baseurl}}/{{page.version}}/reference/resources/globalnetworkpolicy)

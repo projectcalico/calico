@@ -1,5 +1,6 @@
 ---
 title: Migrate from one IP pool to another
+redirect_from: latest/networking/migrate-pools
 ---
 
 ### Big picture

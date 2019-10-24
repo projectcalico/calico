@@ -1,5 +1,6 @@
 ---
 title: Istio integration
+redirect_from: latest/getting-started/kubernetes/hardway/istio-integration
 canonical_url: 'https://docs.projectcalico.org/v3.9/getting-started/kubernetes/hardway/istio-integration'
 ---
 

@@ -1,5 +1,6 @@
 ---
 title: IP pool
+redirect_from: latest/reference/resources/ippool
 canonical_url: 'https://docs.projectcalico.org/v3.9/reference/resources/ippool'
 ---
 
@@ -94,7 +95,7 @@ Reducing the block size from the default (e.g., using `28` for IPv4 to give 16 a
 {% include {{page.version}}/selectors.md %}
 
 For details on configuring IP pool node selectors, please read the
-[Assigning IP addresses based on topology guide.]({{site.baseurl}}/{{page.version}}/networking/assigning-ip-addresses-topology).
+[Assigning IP addresses based on topology guide.]({{site.baseurl}}/{{page.version}}/networking/assign-ip-addresses-topology).
 
 > **Note**: The pool's `disabled` field takes higher precedence than
 > `nodeSelector`. This means that {{site.prodname}} IPAM will not allocate any

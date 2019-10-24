@@ -58,6 +58,9 @@ def gen_values_master(versions, imageNames, imageRegistry)
         # These should match the EnvVar spec of the corev1 Kubernetes API. For example:
         # - name: FOO
         #   value: bar
+    flannelMigration:
+      image: #{imageNames.fetch("flannelMigration")}
+      tag: #{versions.fetch("calico/kube-controllers")}
     dikastes:
       image: #{imageRegistry}#{imageNames.fetch("dikastes")}
       tag: #{versions.fetch("calico/dikastes")}

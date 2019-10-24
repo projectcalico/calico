@@ -1,8 +1,1 @@
----
-layout: null
----
-{% helm %}
-datastore: etcd
-network: flannel
-ipam: host-local
-{% endhelm %}
+../../../../../manifests/canal-etcd.yaml

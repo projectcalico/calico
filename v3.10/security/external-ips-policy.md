@@ -1,5 +1,6 @@
 ---
 title: Use external IPs or networks in policy rules
+redirect_from: latest/security/external-ips-policy
 ---
 
 ### Big picture

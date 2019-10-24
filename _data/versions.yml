@@ -1,4 +1,47 @@
+v3.10:
+- title: v3.10.0
+  components:
+     typha:
+      version: v3.10.0
+     calicoctl:
+      version: v3.10.0
+     calico/node:
+      version: v3.10.0
+     calico/cni:
+      version: v3.10.0
+     calico/kube-controllers:
+      version: v3.10.0
+     networking-calico:
+      version: 3.10.0
+     flannel:
+      version: v0.11.0
+     calico/dikastes:
+      version: v3.10.0
+     flexvol:
+      version: v3.10.0
+
 v3.9:
+- title: v3.9.2
+  components:
+     typha:
+      version: v3.9.2
+     calicoctl:
+      version: v3.9.2
+     calico/node:
+      version: v3.9.2
+     calico/cni:
+      version: v3.9.2
+     calico/kube-controllers:
+      version: v3.9.2
+     networking-calico:
+      version: 3.9.2
+     flannel:
+      version: v0.11.0
+     calico/dikastes:
+      version: v3.9.2
+     flexvol:
+      version: v3.9.2
+
 - title: v3.9.1
   components:
      typha:
@@ -41,6 +84,48 @@ v3.9:
       version: v3.9.0
 
 v3.8:
+- title: v3.8.4
+  components:
+     typha:
+      version: v3.8.4
+     calicoctl:
+      version: v3.8.4
+     calico/node:
+      version: v3.8.4
+     calico/cni:
+      version: v3.8.4
+     calico/kube-controllers:
+      version: v3.8.4
+     networking-calico:
+      version: 3.8.4
+     flannel:
+      version: v0.11.0
+     calico/dikastes:
+      version: v3.8.4
+     flexvol:
+      version: v3.8.4
+
+- title: v3.8.3
+  components:
+     typha:
+      version: v3.8.3
+     calicoctl:
+      version: v3.8.3
+     calico/node:
+      version: v3.8.3
+     calico/cni:
+      version: v3.8.3
+     calico/kube-controllers:
+      version: v3.8.3
+     networking-calico:
+      version: 3.8.3
+     flannel:
+      version: v0.11.0
+     calico/dikastes:
+      version: v3.8.3
+     flexvol:
+      version: v3.8.3
+
 - title: v3.8.2
   components:
      typha:
@@ -3039,26 +3124,3 @@ master:
      flexvol:
       version: master
 
-v3.10:
-# Pre-release placeholder for Calico v3.10. Delete this when v3.10 goes live.
-- title: release-v3.10
-  note: ""
-  components:
-     typha:
-      version: release-v3.10
-     calicoctl:
-      version: release-v3.10
-     calico/node:
-      version: release-v3.10
-     calico/cni:
-      version: release-v3.10
-     calico/kube-controllers:
-      version: release-v3.10
-     networking-calico:
-      version: release-v3.10
-     flannel:
-      version: v0.11.0
-     calico/dikastes:
-      version: release-v3.10
-     flexvol:
-      version: release-v3.10

@@ -22,8 +22,8 @@ toc:
   path: /networking/node
 - title: Configuring MTU
   path: /networking/mtu
-- title: Assigning IP addresses based on topology
-  path: /networking/assigning-ip-addresses-topology
+- title: Assign IP addresses based on topology
+  path: /networking/assign-ip-addresses-topology
 - title: Calico networking for OpenStack
   section:
   - title: Setting up a development machine
@@ -66,5 +66,7 @@ toc:
   path: /networking/get-started-ip-addresses
 - title: Configure IP auto detection
   path: /networking/ip-autodetection  
+- title: Configure workload access outside cluster
+  path: /networking/workloads-outside-cluster
 - title: Advertise Kubernetes service IP addresses
   path: /networking/advertise-service-ips

@@ -1,7 +1,1 @@
----
-layout: null
----
-{% helm %}
-datastore: kubernetes
-network: calico
-{% endhelm %}
+../../../../../../../manifests/calico.yaml

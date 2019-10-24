@@ -76,7 +76,7 @@ For a blog/tutorial on IP pools, see [Calico IPAM: Explained and Enhanced](https
 
 There are several other ways to leverage Calico IPAM including:
 
-- [Assign addresses based on topology]({{site.baseurl}}/{{page.version}}/networking/assigning-ip-addresses-topology)
+- [Assign addresses based on topology]({{site.baseurl}}/{{page.version}}/networking/assign-ip-addresses-topology)
 - [Use a specific address for a pod]({{site.baseurl}}/{{page.version}}/networking/use-specific-ip)
 - [Migrate from one IP pool to another]({{site.baseurl}}/{{page.version}}/networking/migrate-pools)
 - [Interoperate with legacy firewalls using IP ranges]({{site.baseurl}}/{{page.version}}/networking/legacy-firewalls)

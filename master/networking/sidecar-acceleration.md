@@ -17,7 +17,7 @@ Istio directs all application network traffic through an Envoy sidecar in each p
 
 This how-to guide uses the following Calico features:
 
-**Felix configuration** with **SidecarAccelerationEnabled** configuration option. 
+**Felix configuration** with **sidecarAccelerationEnabled** configuration option. 
 
 
 ### Concepts
@@ -44,7 +44,7 @@ To enable sidecar acceleration for Istio-enabled apps using Calico:
 
     `calicoctl get felixconfiguration default --export -o yaml > felix-config.yaml`
 
-2. Edit felix-config.yaml and add the option, `SidecarAccelerationEnabled: true` to the end.  
+2. Edit felix-config.yaml and add the option, `sidecarAccelerationEnabled: true` to the end.  
 
    ```
    apiVersion: projectcalico.org/v3

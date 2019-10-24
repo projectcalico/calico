@@ -1,5 +1,6 @@
 ---
 title: Enabling application layer policy (optional)
+redirect_from: latest/getting-started/kubernetes/installation/app-layer-policy
 canonical_url: 'https://docs.projectcalico.org/v3.9/getting-started/kubernetes/installation/app-layer-policy'
 ---
 
@@ -19,6 +20,7 @@ operate.
 
  - [{{site.prodname}} installed](/{{page.version}}/getting-started/kubernetes/installation/)
  - [calicoctl installed](/{{page.version}}/getting-started/calicoctl/install) & [configured](/{{page.version}}/getting-started/calicoctl/configure/)
+ - Kubernetes 1.15 or older (Istio 1.1.7 does not support Kubernetes 1.16+. Please see this [issue](https://github.com/projectcalico/calico/issues/2943) for details and workaround.)
 
 Application layer policy requires the Policy Sync API to be enabled on Felix. To do this cluster-wide, modify the `default`
 FelixConfiguration to set the field `policySyncPathPrefix` to `/var/run/nodeagent`.  The following example uses `sed` to modify your

@@ -1,6 +1,5 @@
 ---
 title: Standing up Kubernetes
-redirect_from: latest/getting-started/kubernetes/hardway/standing-up-kubernetes
 canonical_url: 'https://docs.projectcalico.org/v3.9/getting-started/kubernetes/hardway/standing-up-kubernetes'
 ---
 

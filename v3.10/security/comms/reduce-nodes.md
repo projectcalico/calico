@@ -1,5 +1,6 @@
 ---
 title: Schedule to well-known nodes
+redirect_from: latest/security/comms/reduce-nodes
 canonical_url: 'https://docs.projectcalico.org/v3.9/security/comms/reduce-nodes'
 ---
 

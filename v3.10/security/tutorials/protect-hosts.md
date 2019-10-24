@@ -1,5 +1,6 @@
 ---
 title: Protect hosts tutorial
+redirect_from: latest/security/tutorials/protect-hosts
 canonical_url: 'https://docs.projectcalico.org/v3.9/security/tutorials/protect-hosts'
 ---
 

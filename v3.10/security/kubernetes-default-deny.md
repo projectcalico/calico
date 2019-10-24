@@ -1,5 +1,6 @@
 ---
 title: Enable default deny for Kubernetes pods
+redirect_from: latest/security/kubernetes-default-deny
 ---
 
 ### Big picture

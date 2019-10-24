@@ -1,5 +1,6 @@
 ---
 title: Microsoft Azure Kubernetes Service (AKS)
+redirect_from: latest/getting-started/kubernetes/managed-public-cloud/aks
 ---
 
 ### Big picture

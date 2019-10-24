@@ -1,6 +1,5 @@
 ---
 title: Adopt a zero trust network model for security
-redirect_from: latest/security/adopt-zero-trust
 ---
 
 ### Big picture 

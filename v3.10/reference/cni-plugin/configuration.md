@@ -1,5 +1,6 @@
 ---
 title: Configuring the Calico CNI plugins
+redirect_from: latest/reference/cni-plugin/configuration
 canonical_url: 'https://docs.projectcalico.org/v3.9/reference/cni-plugin/configuration'
 ---
 
@@ -418,7 +419,7 @@ Example:
    ```
 
 Check out the usage guide on [assigning IP addresses based on
-topology]({{site.baseurl}}/{{page.version}}/networking/assigning-ip-addresses-topology)
+topology]({{site.baseurl}}/{{page.version}}/networking/assign-ip-addresses-topology)
 for a full example.
 
 ### CNI network configuration lists

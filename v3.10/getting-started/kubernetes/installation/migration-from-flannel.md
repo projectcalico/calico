@@ -1,5 +1,6 @@
 ---
 title: Migrating a cluster from flannel to Calico
+redirect_from: latest/getting-started/kubernetes/installation/migration-from-flannel
 ---
 
 # About
