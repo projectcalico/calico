@@ -13,7 +13,7 @@ require (
 	github.com/onsi/gomega v1.5.0
 	github.com/projectcalico/confd v3.2.0+incompatible // indirect
 	github.com/projectcalico/libcalico-go v0.0.0-20191015222346-3d38c58337f2
-	github.com/projectcalico/typha v0.0.0-20191016041539-8040c2117e58
+	github.com/projectcalico/typha v0.0.0-20191023235600-5701853ec0f3
 	github.com/samuel/go-zookeeper v0.0.0-20190801204459-3c104360edc8 // indirect
 	github.com/sirupsen/logrus v1.4.2
 	github.com/ugorji/go v1.1.7 // indirect
