@@ -20,6 +20,7 @@ import (
 	"net"
 	"os"
 	"reflect"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -140,10 +141,11 @@ type Config struct {
 
 	ExternalNodesCidrs []string
 
-	BPFEnabled      bool
-	BPFLogLevel     string
-	XDPEnabled      bool
-	XDPAllowGeneric bool
+	BPFEnabled          bool
+	BPFLogLevel         string
+	BPFDataIfacePattern *regexp.Regexp
+	XDPEnabled          bool
+	XDPAllowGeneric     bool
 
 	SidecarAccelerationEnabled bool
 
@@ -450,7 +452,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 
 		// Forwarding into a tunnel seems to fail silently, disable FIB lookup if tunnel is enabled for now.
 		fibLookupEnabled := !config.RulesConfig.IPIPEnabled && !config.RulesConfig.VXLANEnabled
-		dp.RegisterManager(newBPFEndpointManager(config.BPFLogLevel, fibLookupEnabled))
+		dp.RegisterManager(newBPFEndpointManager(config.BPFLogLevel, fibLookupEnabled, config.BPFDataIfacePattern))
 
 		err := bpfproxy.StartKubeProxy(
 			config.K8sconf,

@@ -185,6 +185,7 @@ func StartDataplaneDriver(configParams *config.Config,
 			SidecarAccelerationEnabled:      configParams.SidecarAccelerationEnabled,
 			BPFEnabled:                      configParams.BPFEnabled,
 			BPFLogLevel:                     configParams.BPFLogLevel,
+			BPFDataIfacePattern:             configParams.BPFDataIfacePattern,
 			XDPEnabled:                      configParams.XDPEnabled,
 			XDPAllowGeneric:                 configParams.GenericXDPEnabled,
 

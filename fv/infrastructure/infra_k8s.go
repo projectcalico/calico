@@ -22,6 +22,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"strings"
 	"sync"
 	"time"
 
@@ -476,7 +477,25 @@ func (kds *K8sDatastoreInfra) ensureNamespace(name string) {
 }
 
 func (kds *K8sDatastoreInfra) AddWorkload(wep *api.WorkloadEndpoint) (*api.WorkloadEndpoint, error) {
-	pod_in := &v1.Pod{
+	podIP := wep.Spec.IPNetworks[0]
+	if strings.Contains(podIP, "/") {
+		// Our WEP will have a /32 rather than an IP, strip it off.
+		podIP = strings.Split(podIP, "/")[0]
+	}
+	desiredStatus := v1.PodStatus{
+		Phase: v1.PodRunning,
+		Conditions: []v1.PodCondition{
+			{
+				Type:   v1.PodScheduled,
+				Status: v1.ConditionTrue,
+			},
+			{
+				Type:   v1.PodReady,
+				Status: v1.ConditionTrue,
+			}},
+		PodIP: podIP,
+	}
+	podIn := &v1.Pod{
 		ObjectMeta: metav1.ObjectMeta{Name: wep.Spec.Workload, Namespace: wep.Namespace},
 		Spec: v1.PodSpec{Containers: []v1.Container{{
 			Name:  wep.Spec.Endpoint,
@@ -484,32 +503,25 @@ func (kds *K8sDatastoreInfra) AddWorkload(wep *api.WorkloadEndpoint) (*api.Workl
 		}},
 			NodeName: wep.Spec.Node,
 		},
-		Status: v1.PodStatus{
-			Phase: v1.PodRunning,
-			Conditions: []v1.PodCondition{{
-				Type:   v1.PodScheduled,
-				Status: v1.ConditionTrue,
-			}},
-			PodIP: wep.Spec.IPNetworks[0],
-		},
+		Status: desiredStatus,
 	}
 	if wep.Labels != nil {
-		pod_in.ObjectMeta.Labels = wep.Labels
+		podIn.ObjectMeta.Labels = wep.Labels
 	}
-	log.WithField("pod_in", pod_in).Debug("Pod defined")
+	log.WithField("podIn", podIn).Debug("Creating Pod for workload")
 	kds.ensureNamespace(wep.Namespace)
-	pod_out, err := kds.K8sClient.CoreV1().Pods(wep.Namespace).Create(pod_in)
+	podOut, err := kds.K8sClient.CoreV1().Pods(wep.Namespace).Create(podIn)
 	if err != nil {
 		panic(err)
 	}
-	log.WithField("pod_out", pod_out).Debug("Created pod")
-	pod_in = pod_out
-	pod_in.Status.PodIP = wep.Spec.IPNetworks[0]
-	pod_out, err = kds.K8sClient.CoreV1().Pods(wep.Namespace).UpdateStatus(pod_in)
+	log.WithField("podOut", podOut).Debug("Created pod")
+	podIn = podOut
+	podIn.Status = desiredStatus
+	podOut, err = kds.K8sClient.CoreV1().Pods(wep.Namespace).UpdateStatus(podIn)
 	if err != nil {
 		panic(err)
 	}
-	log.WithField("pod_out", pod_out).Debug("Updated pod")
+	log.WithField("podOut", podOut).Debug("Updated pod status")
 
 	wepid := names.WorkloadEndpointIdentifiers{
 		Node:         wep.Spec.Node,

@@ -37,8 +37,9 @@ type netlinkStub interface {
 type State string
 
 const (
-	StateUp   = "up"
-	StateDown = "down"
+	StateUnknown = ""
+	StateUp      = "up"
+	StateDown    = "down"
 )
 
 type InterfaceStateCallback func(ifaceName string, ifaceState State)

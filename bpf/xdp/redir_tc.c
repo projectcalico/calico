@@ -452,25 +452,25 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb, enum calico_tc_flags
 }
 
 // Handle packets that arrive at the host namespace from a workload.
-__attribute__((section("calico_from_workload")))
+__attribute__((section("calico_from_workload_ep")))
 int tc_calico_from_workload(struct __sk_buff *skb) {
 	return calico_tc(skb, 0);
 }
 
 // Handle packets that going to a workload from the host namespace..
-__attribute__((section("calico_to_workload")))
+__attribute__((section("calico_to_workload_ep")))
 int tc_calico_to_workload(struct __sk_buff *skb) {
 	return calico_tc(skb, CALI_TC_INGRESS);
 }
 
 // Handle packets that arrive at the host namespace from a host endpoint.
-__attribute__((section("calico_from_host_endpoint")))
+__attribute__((section("calico_from_host_ep")))
 int tc_calico_from_host_endpoint(struct __sk_buff *skb) {
 	return calico_tc(skb, CALI_TC_HOST_EP | CALI_TC_INGRESS);
 }
 
 // Handle packets that are leaving a host towards a host endpoint.
-__attribute__((section("calico_to_host_endpoint")))
+__attribute__((section("calico_to_host_ep")))
 int tc_calico_to_host_endpoint(struct __sk_buff *skb) {
 	return calico_tc(skb, CALI_TC_HOST_EP);
 }
