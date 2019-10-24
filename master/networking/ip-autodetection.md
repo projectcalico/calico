@@ -127,7 +127,7 @@ In the following scenarios, you may want to configure a specific IP and subnet:
 
 - Hosts with multiple external interfaces
 - Host interfaces with multiple IP addresses
-- Changes to subnet for cross subnet feature for packet encapsulation
+- Changes to cross subnet packet encapsulation
 - Changes to host IP address
 
 You can configure specific IP address and subnet for a node using environment variables or by updating the [Node resource]({{site.baseurl}}/{{page.version}}/reference/resources/node).
