@@ -290,7 +290,7 @@ func findIPSetIDs(policy *proto.Policy) set.Set {
 
 func (m *bpfEndpointManager) CompleteDeferredWork() error {
 	m.applyProgramsToDirtyDataInterfaces()
-	m.applyPolicyToAllDirtyEndpoints()
+	m.applyProgramsToDirtyWorkloadEndpoints()
 
 	// TODO: handle cali interfaces with no WEP
 	return nil
@@ -315,7 +315,11 @@ func (m *bpfEndpointManager) applyProgramsToDirtyDataInterfaces() {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			err := m.compileAndAttachDataIfaceProgram(iface)
+			m.ensureQdisc(iface)
+			err := m.compileAndAttachDataIfaceProgram(iface, "ingress")
+			if err == nil {
+				err = m.compileAndAttachDataIfaceProgram(iface, "egress")
+			}
 			mutex.Lock()
 			errs[iface] = err
 			mutex.Unlock()
@@ -335,7 +339,7 @@ func (m *bpfEndpointManager) applyProgramsToDirtyDataInterfaces() {
 	})
 }
 
-func (m *bpfEndpointManager) applyPolicyToAllDirtyEndpoints() {
+func (m *bpfEndpointManager) applyProgramsToDirtyWorkloadEndpoints() {
 	var mutex sync.Mutex
 	errs := map[proto.WorkloadEndpointID]error{}
 	var wg sync.WaitGroup
@@ -374,11 +378,7 @@ func (m *bpfEndpointManager) applyPolicy(wlID proto.WorkloadEndpointID) error {
 	}
 	ifaceName := wep.Name
 
-	// FIXME Avoid flapping the tc program and qdisc
-	cmd := exec.Command("tc", "qdisc", "del", "dev", ifaceName, "clsact")
-	_ = cmd.Run()
-	cmd = exec.Command("tc", "qdisc", "add", "dev", ifaceName, "clsact")
-	_ = cmd.Run()
+	m.ensureQdisc(ifaceName)
 
 	var ingressErr, egressErr error
 	var wg sync.WaitGroup
@@ -406,15 +406,23 @@ func (m *bpfEndpointManager) applyPolicy(wlID proto.WorkloadEndpointID) error {
 	return nil
 }
 
+func (m *bpfEndpointManager) ensureQdisc(ifaceName string) {
+	// FIXME Avoid flapping the tc program and qdisc
+	cmd := exec.Command("tc", "qdisc", "del", "dev", ifaceName, "clsact")
+	_ = cmd.Run()
+	cmd = exec.Command("tc", "qdisc", "add", "dev", ifaceName, "clsact")
+	_ = cmd.Run()
+}
+
 func (m *bpfEndpointManager) compileAndAttachWorkloadProgram(endpoint *proto.WorkloadEndpoint, polDirection string) error {
 	rules := m.extractRules(endpoint.Tiers, endpoint.ProfileIds, polDirection)
 	ap := calculateTCAttachPoint("workload", polDirection, endpoint.Name)
 	return m.compileAndAttachProgram(rules, ap)
 }
 
-func (m *bpfEndpointManager) compileAndAttachDataIfaceProgram(ifaceName string) error {
+func (m *bpfEndpointManager) compileAndAttachDataIfaceProgram(ifaceName string, polDirection string) error {
 	rules := [][][]*proto.Rule{{{{Action: "Allow"}}}}
-	ap := calculateTCAttachPoint("host", "ingress", ifaceName)
+	ap := calculateTCAttachPoint("host", polDirection, ifaceName)
 	return m.compileAndAttachProgram(rules, ap)
 }
 

@@ -26,8 +26,7 @@ struct calico_ct_leg {
 	__u32 fin_seen:1;
 	__u32 rst_seen:1;
 
-	__u32 egress_whitelisted:1;
-	__u32 ingress_whitelisted:1;
+	__u32 whitelisted:1;
 
 	__u32 opener:1;
 };
@@ -115,17 +114,17 @@ static CALI_BPF_INLINE int calico_ct_v4_create_tracking(
 			ct_value->a_to_b.seqno = seq;
 			ct_value->a_to_b.syn_seen = syn;
 			if (flags & CALI_TC_INGRESS) {
-				ct_value->b_to_a.ingress_whitelisted = 1;
+				ct_value->b_to_a.whitelisted = 1;
 			} else {
-				ct_value->a_to_b.egress_whitelisted = 1;
+				ct_value->a_to_b.whitelisted = 1;
 			}
 		} else  {
 			ct_value->b_to_a.seqno = seq;
 			ct_value->b_to_a.syn_seen = syn;
 			if (flags & CALI_TC_INGRESS) {
-				ct_value->a_to_b.ingress_whitelisted = 1;
+				ct_value->a_to_b.whitelisted = 1;
 			} else {
-				ct_value->b_to_a.egress_whitelisted = 1;
+				ct_value->b_to_a.whitelisted = 1;
 			}
 		}
 
@@ -167,10 +166,10 @@ static CALI_BPF_INLINE int calico_ct_v4_create_tracking(
 	src_to_dst->seqno = seq;
 	src_to_dst->syn_seen = syn;
 	src_to_dst->opener = 1;
-	if (flags & CALI_TC_INGRESS) {
-		dst_to_src->ingress_whitelisted = 1;
+	if (CALI_TC_FLAGS_TO_HOST(flags)) {
+		src_to_dst->whitelisted = 1;
 	} else {
-		src_to_dst->egress_whitelisted = 1;
+		dst_to_src->whitelisted = 1;
 	}
 	int err = bpf_map_update_elem(&calico_ct_map_v4, k, &ct_value, 0);
 	CALI_VERB("CT-ALL Create result: %d.\n", err);
@@ -447,15 +446,13 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_tcp_lookup(
 		CALI_VERB("CT-TCP   A-to-B: ack_seen %d.\n", v->a_to_b.ack_seen);
 		CALI_VERB("CT-TCP   A-to-B: fin_seen %d.\n", v->a_to_b.fin_seen);
 		CALI_VERB("CT-TCP   A-to-B: rst_seen %d.\n", v->a_to_b.rst_seen);
-		CALI_VERB("CT-TCP   A: egress_whitelisted %d.\n", v->a_to_b.egress_whitelisted);
-		CALI_VERB("CT-TCP   A: ingress_whitelisted %d.\n", v->a_to_b.ingress_whitelisted);
+		CALI_VERB("CT-TCP   A: whitelisted %d.\n", v->a_to_b.whitelisted);
 		CALI_VERB("CT-TCP   B-to-A: seqno %u.\n", v->b_to_a.seqno);
 		CALI_VERB("CT-TCP   B-to-A: syn_seen %d.\n", v->b_to_a.syn_seen);
 		CALI_VERB("CT-TCP   B-to-A: ack_seen %d.\n", v->b_to_a.ack_seen);
 		CALI_VERB("CT-TCP   B-to-A: fin_seen %d.\n", v->b_to_a.fin_seen);
 		CALI_VERB("CT-TCP   B-to-A: rst_seen %d.\n", v->b_to_a.rst_seen);
-		CALI_VERB("CT-TCP   B: egress_whitelisted %d.\n", v->b_to_a.egress_whitelisted);
-		CALI_VERB("CT-TCP   B: ingress_whitelisted %d.\n", v->b_to_a.ingress_whitelisted);
+		CALI_VERB("CT-TCP   B: whitelisted %d.\n", v->b_to_a.whitelisted);
 
 		result.rc =	CALI_CT_ESTABLISHED;
 
@@ -474,23 +471,23 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_tcp_lookup(
 	}
 
 	if (CALI_TC_FLAGS_TO_HOST(flags)) {
-		// Source of the packet is the workload, so check the src whitelist.
-		if (src_to_dst->ingress_whitelisted || src_to_dst->egress_whitelisted) {
+		// Source of the packet is the endpoint, so check the src whitelist.
+		if (src_to_dst->whitelisted) {
 			// Packet was whitelisted by the policy attached to this workload.
-			CALI_VERB("CT-ICMP Packet whitelisted by this workload's policy.\n");
+			CALI_VERB("CT-TCP Packet whitelisted by this workload's policy.\n");
 		} else {
 			// Only whitelisted by the other side?
-			CALI_VERB("CT-ICMP Packet not allowed by ingress/egress whitelist flags.\n");
+			CALI_DEBUG("CT-TCP Packet not allowed by ingress/egress whitelist flags.\n");
 			result.rc = CALI_CT_INVALID;
 		}
 	} else {
 		// Dest of the packet is the workload, so check the dest whitelist.
-		if (dst_to_src->ingress_whitelisted || dst_to_src->egress_whitelisted) {
-			// Packet was whitelisted by the policy attached to this workload.
-			CALI_VERB("CT-ICMP Packet whitelisted by this workload's policy.\n");
+		if (dst_to_src->whitelisted) {
+			// Packet was whitelisted by the policy attached to this endpoint.
+			CALI_VERB("CT-TCP Packet whitelisted by this workload's policy.\n");
 		} else {
 			// Only whitelisted by the other side?
-			CALI_VERB("CT-ICMP Packet not allowed by ingress/egress whitelist flags.\n");
+			CALI_DEBUG("CT-TCP Packet not allowed by ingress/egress whitelist flags.\n");
 			result.rc = CALI_CT_INVALID;
 		}
 	}
@@ -499,7 +496,7 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_tcp_lookup(
 		CALI_DEBUG("CT-TCP RST seen, marking CT entry.\n");
 		// TODO: We should only take account of RST packets that are in
 		// the right window.
-		// TODO if we trust the RST, could just drop the CT entry.
+		// TODO if we trust the RST, could just drop the CT entries.
 		src_to_dst->rst_seen = 1;
 	}
 	if (tcp_header->fin) {
@@ -635,10 +632,8 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_udp_lookup(
 		CALI_VERB("CT-UDP Hit! NORMAL entry.\n");
 		CALI_VERB("CT-UDP   Created: %llu.\n", v->created);
 		CALI_VERB("CT-UDP   Last seen: %llu.\n", v->last_seen);
-		CALI_VERB("CT-UDP   A: egress_whitelisted %d.\n", v->a_to_b.egress_whitelisted);
-		CALI_VERB("CT-UDP   A: ingress_whitelisted %d.\n", v->a_to_b.ingress_whitelisted);
-		CALI_VERB("CT-UDP   B: egress_whitelisted %d.\n", v->b_to_a.egress_whitelisted);
-		CALI_VERB("CT-UDP   B: ingress_whitelisted %d.\n", v->b_to_a.ingress_whitelisted);
+		CALI_VERB("CT-UDP   A: whitelisted %d.\n", v->a_to_b.whitelisted);
+		CALI_VERB("CT-UDP   B: whitelisted %d.\n", v->b_to_a.whitelisted);
 
 		result.rc =	CALI_CT_ESTABLISHED;
 
@@ -648,12 +643,12 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_udp_lookup(
 
 			if (CALI_TC_FLAGS_TO_HOST(flags)) {
 				// Workload egress hook.  Our side is the "packet" side.
-				if (!pkt_dir->ingress_whitelisted && !pkt_dir->egress_whitelisted) {
+				if (!pkt_dir->whitelisted) {
 					result.rc = CALI_CT_NEW;
 				}
 			} else {
 				// Workload ingress.  Our side is the "return" side.
-				if (!rtn_dir->ingress_whitelisted && !rtn_dir->egress_whitelisted) {
+				if (!rtn_dir->whitelisted) {
 					result.rc = CALI_CT_NEW;
 				}
 			}
@@ -663,12 +658,12 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_udp_lookup(
 
 			if (CALI_TC_FLAGS_TO_HOST(flags)) {
 				// Workload egress hook.  Our side is the "packet" side.
-				if (!pkt_dir->ingress_whitelisted && !pkt_dir->egress_whitelisted) {
+				if (!pkt_dir->whitelisted) {
 					result.rc = CALI_CT_NEW;
 				}
 			} else {
 				// Workload ingress.  Our side is the "return" side.
-				if (!rtn_dir->ingress_whitelisted && !rtn_dir->egress_whitelisted) {
+				if (!rtn_dir->whitelisted) {
 					result.rc = CALI_CT_NEW;
 				}
 			}
@@ -774,10 +769,8 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_icmp_lookup(
 		CALI_DEBUG("CT-ICMP Hit! NORMAL entry.\n");
 		CALI_VERB("CT-ICMP   Created: %llu.\n", v->created);
 		CALI_VERB("CT-ICMP   Last seen: %llu.\n", v->last_seen);
-		CALI_VERB("CT-ICMP   A: egress_whitelisted %d.\n", v->a_to_b.egress_whitelisted);
-		CALI_VERB("CT-ICMP   A: ingress_whitelisted %d.\n", v->a_to_b.ingress_whitelisted);
-		CALI_VERB("CT-ICMP   B: egress_whitelisted %d.\n", v->b_to_a.egress_whitelisted);
-		CALI_VERB("CT-ICMP   B: ingress_whitelisted %d.\n", v->b_to_a.ingress_whitelisted);
+		CALI_VERB("CT-ICMP   A: whitelisted %d.\n", v->a_to_b.whitelisted);
+		CALI_VERB("CT-ICMP   B: whitelisted %d.\n", v->b_to_a.whitelisted);
 
 		result.rc =	CALI_CT_ESTABLISHED;
 
@@ -797,7 +790,7 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_icmp_lookup(
 
 	if (CALI_TC_FLAGS_TO_HOST(flags)) {
 		// Source of the packet is the workload, so check the src whitelist.
-		if (src_to_dst->ingress_whitelisted || src_to_dst->egress_whitelisted) {
+		if (src_to_dst->whitelisted) {
 			// Packet was whitelisted by the policy attached to this workload.
 			CALI_VERB("CT-ICMP Packet whitelisted by this workload's policy.\n");
 		} else {
@@ -807,7 +800,7 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_icmp_lookup(
 		}
 	} else {
 		// Dest of the packet is the workload, so check the dest whitelist.
-		if (dst_to_src->ingress_whitelisted || dst_to_src->egress_whitelisted) {
+		if (dst_to_src->whitelisted) {
 			// Packet was whitelisted by the policy attached to this workload.
 			CALI_VERB("CT-ICMP Packet whitelisted by this workload's policy.\n");
 		} else {

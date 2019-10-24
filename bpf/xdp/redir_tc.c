@@ -173,6 +173,13 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb, enum calico_tc_flags
 		CALI_DEBUG("ICMP; ports: type=%d code=%d\n",
 				icmp_header->type, icmp_header->code);
 		break;
+	case 4:
+		// IPIP
+		if (flags & CALI_TC_HOST_EP) {
+			// TODO IPIP whitelist.
+			CALI_DEBUG("IPIP: allow");
+			goto allow_skip_fib;
+		}
 	default:
 		CALI_DEBUG("Unknown protocol, unable to extract ports\n");
 		sport = 0;

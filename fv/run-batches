@@ -29,7 +29,8 @@ for batch in ${FV_BATCHES_TO_RUN}; do
                -ginkgo.seed 1 \
                -ginkgo.randomizeAllSpecs=true \
                -ginkgo.slowSpecThreshold ${FV_SLOW_SPEC_THRESH} \
-               -ginkgo.focus="${GINKGO_FOCUS}"
+               -ginkgo.focus="${GINKGO_FOCUS}" \
+               ${GINKGO_ARGS}
      status=$?
      echo "Test batch $batch completed with status $status"
      exit $status
