@@ -4,15 +4,15 @@ title: Configure IP auto detection
 
 ### Big picture
 
-Configure IP auto detection for calico nodes to ensure the correct IP address is used for routing.
+Configure IP auto detection for {{site.prodname}} nodes to ensure the correct IP address is used for routing.
 
 ### Value
 
-When you install {{site.prodname}} on a node, an IP address and subnet is automatically detected using data from your datastore. {{site.prodname}} provides several ways to configure IP/subnet auto detection, and supports configuring specific IPs for:
+When you install {{site.prodname}} on a node, an IP address and subnet is automatically detected. {{site.prodname}} provides several ways to configure IP/subnet auto detection, and supports configuring specific IPs for:
 
 - Hosts with multiple external interfaces
 - Host interfaces with multiple IP addresses
-- Changes to subnet for cross subnet feature for packet encapsulation
+- [Changes to cross subnet packet encapsulation]({{site.baseurl}}/{{page.version}}/networking/vxlan-ipip)
 - Changes to host IP address
 
 ### Features
@@ -25,7 +25,7 @@ This how-to guide uses the following {{site.prodname}} features:
 
 #### Auto detecting node IP address and subnet
 
-For internode routing, each {{site.prodname}} node must be configured with an IPv4 address and/or an IPv6 address. When you install {{site.prodname}} on a node, a node resource is automatically created using default routing information from the datastore. For most deployments, you’ll want to update auto detection to ensure nodes get the correct IP address.
+For internode routing, each {{site.prodname}} node must be configured with an IPv4 address and/or an IPv6 address. When you install {{site.prodname}} on a node, a node resource is automatically created using routing information that is detected from the host. For some deployments, you may want to update auto detection to ensure nodes get the correct IP address.
 
 **Sample default node resource after installation**
 
@@ -46,9 +46,9 @@ spec:
 
 By default, {{site.prodname}} uses the **first-found** method; the first valid IP address on the first interface (excluding local interfaces such as the docker bridge). However, you can change the default method to any of the following:
 
-- IP addresses or domains (**can-reach**)
-- regex to include matching interfaces (**interface**)
-- regex to exclude matching interfaces (**skip-interface**)
+- Address used by the node to reach a particular IP or domain (**can-reach**)
+- Regex to include matching interfaces (**interface**)
+- Regex to exclude matching interfaces (**skip-interface**)
 
 For details on auto detection methods, see [calicoctl node run]({{site.baseurl}}/{{page.version}}/reference/calicoctl/node/run#displaying-the-help-text-for-calicoctl-node-run-command).
 
@@ -130,7 +130,7 @@ In the following scenarios, you may want to configure a specific IP and subnet:
 - Changes to subnet for cross subnet feature for packet encapsulation
 - Changes to host IP address
 
-You caN configure specific IP address and subnet for a node using environment variables or by updating the [Node resource]({{site.baseurl}}/{{page.version}}/reference/resources/node).
+You can configure specific IP address and subnet for a node using environment variables or by updating the [Node resource]({{site.baseurl}}/{{page.version}}/reference/resources/node).
 
 ##### Configure IP and subnet using environment variables
 
