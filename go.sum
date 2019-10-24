@@ -292,6 +292,8 @@ github.com/projectcalico/typha v0.0.0-20191014041603-c3b890f2e12e h1:ZFLy3JCUihg
 github.com/projectcalico/typha v0.0.0-20191014041603-c3b890f2e12e/go.mod h1:5+xW4Rr+e+ToaotVCfiW5UmXSIZvbXA//kv+mqzZaK0=
 github.com/projectcalico/typha v0.0.0-20191016041539-8040c2117e58 h1:oWXk8CP4wuZwo9o1UXVABysPmYKolWs9OgUx/QwJuRY=
 github.com/projectcalico/typha v0.0.0-20191016041539-8040c2117e58/go.mod h1:7t4l76Qk7/auJrmitY+//c/Og3oPlErbn+jXd0TUYrk=
+github.com/projectcalico/typha v0.0.0-20191023235600-5701853ec0f3 h1:o8muA8YdXYlqQOuNibeyJxchAWXJaeyryoQTA2OfJDk=
+github.com/projectcalico/typha v0.0.0-20191023235600-5701853ec0f3/go.mod h1:7t4l76Qk7/auJrmitY+//c/Og3oPlErbn+jXd0TUYrk=
 github.com/projectcalico/typha v3.8.2+incompatible h1:gzjm+SMnol9qLb3Ny46mTODry3o7zq56PNI9pqeHil4=
 github.com/projectcalico/typha v3.8.3+incompatible h1:4pUqq0THOQpsOHVU45iZlFIw69Uk5mO5BaCD3jk7w7M=
 github.com/projectcalico/typha v3.8.4+incompatible h1:xxcxG9ySP772ODQ+m13cByQMzDY6yaSNKX7hUkTBbC8=
