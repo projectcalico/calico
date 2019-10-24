@@ -65,6 +65,7 @@ spec:
 | types    | Applies the policy based on the direction of the traffic. To apply the policy to inbound traffic, set to `Ingress`. To apply the policy to outbound traffic, set to `Egress`. To apply the policy to both, set to `Ingress, Egress`. | `Ingress`, `Egress` | List of strings | Depends on presence of ingress/egress rules\* |
 | ingress  | Ordered list of ingress rules applied by policy.                                                    |                 | List of [Rule](#rule) |         |
 | egress   | Ordered list of egress rules applied by this policy.                                                |                 | List of [Rule](#rule) |         |
+ serviceAccountSelector | Selects the service account(s) to which this policy applies.                           |                 | [selector](#selector)  | all()   |
 
 \* If `types` has no value, {{site.prodname}} defaults as follows.
 

@@ -1,6 +1,5 @@
 ---
 title: Kubernetes policy, advanced tutorial
-redirect_from: latest/security/tutorials/kubernetes-policy-advanced
 canonical_url: 'https://docs.projectcalico.org/v3.9/security/tutorials/kubernetes-policy-advanced'
 ---
 

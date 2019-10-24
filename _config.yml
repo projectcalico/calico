@@ -27,6 +27,7 @@ imageNames:
   kubeControllers: calico/kube-controllers
   calico-upgrade: calico/upgrade
   flannel: quay.io/coreos/flannel
+  flannelMigration: calico/flannel-migration-controller
   dikastes: calico/dikastes
   pilot-webhook: calico/pilot-webhook
   flexvol: calico/pod2daemon-flexvol
@@ -51,6 +52,7 @@ defaults:
       path: ""
     values:
       layout: docwithnav
+      show_title: true
       version: master
       sitemap: true
       registry:
@@ -64,6 +66,7 @@ defaults:
         calico/kube-controllers: calico/kube-controllers
         calico-upgrade: calico/upgrade
         flannel: quay.io/coreos/flannel
+        flannelMigration: calico/flannel-migration-controller
         calico/dikastes: calico/dikastes
         pilot-webhook: calico/pilot-webhook
         flexvol: calico/pod2daemon-flexvol
@@ -186,4 +189,10 @@ defaults:
       path: v3.9
     values:
       version: v3.9
+      registry:
+  -
+    scope:
+      path: v3.10
+    values:
+      version: v3.10
       registry:

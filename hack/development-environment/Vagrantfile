@@ -1,0 +1,29 @@
+
+Vagrant.configure("2") do |config|
+  config.vm.box_check_update = false
+  config.vm.provider 'virtualbox' do |vb|
+   vb.customize [ "guestproperty", "set", :id, "/VirtualBox/GuestAdd/VBoxService/--timesync-set-threshold", 1000 ]
+  end  
+  config.vm.synced_folder ".", "/vagrant", type: "rsync"
+  config.vm.synced_folder "../../../", "/calico_all", type: "rsync"
+  $num_instances = 1
+  (1..$num_instances).each do |i|
+    config.vm.define "node#{i}" do |node|
+      node.vm.box = "centos/7"
+      node.vm.hostname = "node#{i}"
+      ip = "172.17.8.#{i+100}"
+      node.vm.network "private_network", ip: ip
+      node.vm.provider "virtualbox" do |vb|
+        vb.memory = "8192"
+        vb.cpus = 2
+        vb.name = "node#{i}"
+      end
+      if (node.vm.hostname == "node1")
+        node.vm.provision "shell", path: "install.sh", args: [i, ip, "master"]
+      else
+	# Note that be default, with 1 instance, you only have a master.
+        node.vm.provision "shell", path: "install.sh", args: [i, ip, "worker"]
+      end
+    end
+  end
+end

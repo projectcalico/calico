@@ -1,5 +1,6 @@
 ---
-title: Use service accounts in policy rules
+title: Use service accounts in policy
+description: Use Kubernetes service accounts in policies to validate cryptographic identities and/or manage RBAC controlled high-priority rules across teams.
 ---
 
 ### Big picture
@@ -8,11 +9,14 @@ Use {{site.prodname}} network policy to allow/deny traffic for Kubernetes servic
 
 ### Value
 
-Kubernetes RBAC allows you to control which users are allowed to create and use service accounts. Combined with {{site.prodname}} network policy, you can control the security boundary between users who can provision service accounts, and those who use them.
+Using {{site.prodname}} network policy, you can leverage Kubernetes service accounts with RBAC for flexible control over how policies are applied in a cluster. For example, the security team can have RBAC permissions to:
 
-For example, using Kubernetes RBAC, you can restrict permissions to provision service accounts to only the network security team, who can then write high-priority network policies that reference those service accounts.
+- Control which service accounts the developer team can use within a namespace
+- Write high-priority network policies for those service accounts (that the developer team cannot override) 
 
-Additionally, when using Istio-enabled apps with {{site.prodname}} network policy, the cryptographic identity associated with the service account is checked (along with the network identity) to achieve two-factor authentication.
+The network security team can maintain full control of security, while selectively allowing developer operations where it makes sense.  
+
+Using **Istio-enabled apps** with {{site.prodname}} network policy, the cryptographic identity associated with the service account is checked (along with the network identity) to achieve two-factor authentication.
 
 ### Features
 
@@ -45,6 +49,7 @@ Configure unique Kubernetes service accounts for your applications.
 
 - [Limit ingress traffic for workloads by service account name](#limit-ingress-traffic-for-workloads-by-service-account-name)
 - [Limit ingress traffic for workloads by service account label](#limit-ingress-traffic-for-workloads-by-service-account-label)
+- [Use Kubernetes RBAC to control service account label assignment](#use-kubernetes-rbac-to-control-service-account-label-assignment)
 
 #### Limit ingress traffic for workloads by service account name
 
@@ -84,6 +89,32 @@ spec:
         serviceAccounts:
           selector: 'app == "web-frontend"'
   selector: 'app == "db"'
+```
+
+#### Use Kubernetes RBAC to control service account label assignment
+
+Network policies can be applied to endpoints using selectors that match labels on the endpoint, the endpoint's namespace, or the endpoint's service account. By applying selectors based on the endpoint's service account, you can use Kubernetes RBAC to control which users can assign labels to service accounts. This allows you to separate groups who can deploy pods from those who can assign labels to service accounts.
+
+In the following example, pods with an intern service account can communicate only with pods with service accounts labeled, `role: intern`.
+
+```
+apiVersion: projectcalico.org/v3
+kind: NetworkPolicy
+metadata:
+  name: restrict-intern-access
+  namespace: prod-engineering
+spec:
+  serviceAccountSelector: 'role == "intern"'
+  ingress:
+    - action: Allow
+      source:
+        serviceAccounts:
+          selector: 'role == "intern"'
+  egress:
+    - action: Allow
+      destination:
+        serviceAccounts:
+          selector: 'role == "intern"'
 ```
 
 ### Above and beyond

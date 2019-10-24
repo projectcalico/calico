@@ -1,47 +1,64 @@
 ---
-title: Assigning IP addresses based on topology
-canonical_url: 'https://docs.projectcalico.org/v3.9/networking/assigning-ip-addresses-topology'
+title: Assign IP addresses based on topology
+canonical_url: 'https://docs.projectcalico.org/v3.10/networking/assign-ip-addresses-topology'
 ---
 
-## About IP address assignment
+### Big picture
 
-{{site.prodname}} can be configured to use specific IP pools for different
-topological areas. For example, you may want workloads in a particular rack,
-zone, or region to receive addresses from the same IP pool. This may be
-desirable either to reduce the number of routes required in the network or to
-meet requirements imposed by an external firewall device or policy.
+Assign blocks of IP addresses from an IP pool for different topological areas.
 
-There are three approaches to configuring IP address assignment behavior which
-the [IPAM section of the cni-plugin configuration reference
-document]({{site.baseurl}}/{{page.version}}/reference/cni-plugin/configuration#ipam)
-explains in detail. For the purposes of topology, IP address
-assignment must be per-host (node) which disqualifies Kubernetes annotations
-as an option since it is only configurable on a per-namespace or per-pod level.
-Left between using CNI configuration and IP pool node selectors, the
-latter is preferred as it does not require making any changes within the
-host's file system which the former does.
+### Value
 
-At a high level, node selection-based IP address assignment is exactly what it
-sounds like: node labels are set and then the appropriate node selectors
-on the desired IP pool resources are set. The remainder of this article goes
-into a detailed example of using this feature to configure IP address
-assignment based on a certain rack affinity.
+If you have workloads in different regions, zones, or rack, you may want them to get IP addresses from the same IP pool. This strategy is useful for reducing the number of routes that are required in the network, or to meet requirements imposed by an external firewall device or policy. {{site.prodname}} makes it easy to do this using an IP pool resource with node labels and node selectors.
 
-> **Important**: If Calico is unable to determine an IP pool for a workload
-> based on the above order, or if there are no IP addresses left in the
-> determined IP pools, then the workload will not be assigned an address and
-> will fail to start. To prevent this, we recommend ensuring that all nodes are
-> selected by at least one IP pool.
-{: .alert .alert-danger}
+### Features
 
-## Prerequisites
+This how-to guide uses the following {{site.prodname}} features:
 
-This feature requires {{site.prodname}} for networking in etcd mode.
+- **IPPool** resource
 
-### Example: Kubernetes
+### Concepts
 
-In this example, we created a cluster with four nodes across two racks
-(two nodes/rack). Consider the following:
+#### IP address assignment
+
+Topology-based IP address assignment requires addresses to be per-host (node). 
+As such, Kubernetes annotations cannot be used because annotations are only per-namespace and per-pod. And although you can configure IP addresses for nodes in the CNI configuration, you are making changes within the host’s file system. The best option is to use node-selection IP address assignment using IP pools.
+
+#### Node-selection IP address management
+
+Node selection-based IP address assignment is exactly what it sounds like: node labels are set, and Calico uses node selectors to decide whih IP pools to use when assigning IP addresses to the node.
+
+#### Best practice
+
+Nodes only assign workload addresses from IP pools which select them. To avoid having a workload not get an IP and fail to start, it is important to ensure that all nodes are selected by at least one IP pool.
+
+### How to
+
+#### Create an IP pool, specific nodes
+
+In the following example, we create an IP pool that only allocates IP addresses for nodes with the label, **zone=west**.
+
+```
+apiVersion: projectcalico.org/v3
+kind: IPPool
+metadata:
+   name: zone-west-ippool
+spec:
+   cidr: 192.168.0.0/24
+   ipipMode: Always
+   natOutgoing: true
+   nodeSelector: zone == "west"
+```
+
+Then, we label a node with zone=west. For example:
+
+```
+kubectl label nodes kube-node-0 zone=west
+```
+
+### Tutorial
+
+In this tutorial, we create a cluster with four nodes across two racks (two nodes/rack). 
 
 ```
        -------------------
@@ -61,7 +78,6 @@ In this example, we created a cluster with four nodes across two racks
 Using the pod IP range `192.168.0.0/16`, we target the following setup: reserve
 the `192.168.0.0/24` and `192.168.1.0/24` pools for `rack-0`, `rack-1`. Let's
 get started.
-
 
 By installing {{ site.prodname }} without setting the default IP pool to match,
 running `calicoctl get ippool -o wide` shows that {{site.prodname}} created its
@@ -107,7 +123,7 @@ default-ipv4-ippool   192.168.0.0/16   true   Always     false      all()
      ipipMode: Always
      natOutgoing: true
      nodeSelector: rack == "0"
-EOF
+   EOF
    ```
 
    ```
@@ -121,11 +137,10 @@ EOF
      ipipMode: Always
      natOutgoing: true
      nodeSelector: rack == "1"
-EOF
+   EOF
    ```
 
-   We should now have two enabled IP pools, which we can see when running
-   `calicoctl get ippool -o wide`:
+   We should now have two enabled IP pools, which we can see when running `calicoctl get ippool -o wide`:
 
    ```
    NAME                  CIDR             NAT    IPIPMODE   DISABLED   SELECTOR
@@ -167,7 +182,6 @@ EOF
 > before going into production or during a maintenance window.
 {: .alert .alert-info}
 
-## Related links
+### Above and beyond
 
-For more information on the structure of the IP pool resource, see
-[the IP pools reference]({{ site.baseurl }}/{{ page.version }}/reference/resources/ippool).
+[Calico IPAM]({{site.baseurl}}/{{page.version}}/reference/cni-plugin/configuration)

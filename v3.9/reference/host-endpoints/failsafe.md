@@ -1,6 +1,5 @@
 ---
 title: Failsafe rules
-redirect_from: latest/reference/host-endpoints/failsafe
 canonical_url: 'https://docs.projectcalico.org/v3.9/reference/host-endpoints/failsafe'
 ---
 
