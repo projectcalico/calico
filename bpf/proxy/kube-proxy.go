@@ -18,13 +18,12 @@ import (
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
 	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/rest"
 
 	"github.com/projectcalico/felix/bpf/proxy/maps"
 )
 
 // StartKubeProxy start a new kube-proxy if there was no error
-func StartKubeProxy(k8sconf *rest.Config, hostname string, opts ...Option) error {
+func StartKubeProxy(k8sClientSet *kubernetes.Clientset, hostname string, opts ...Option) error {
 	natMap := maps.NATMap()
 	err := natMap.EnsureExists()
 	if err != nil {
@@ -41,19 +40,7 @@ func StartKubeProxy(k8sconf *rest.Config, hostname string, opts ...Option) error
 		return errors.WithMessage(err, "new bpf syncer")
 	}
 
-	if k8sconf == nil {
-		var err error
-		k8sconf, err = rest.InClusterConfig()
-		if err != nil {
-			return errors.Errorf("unable to create k8s config: %s", err)
-		}
-	}
-	clientset, err := kubernetes.NewForConfig(k8sconf)
-	if err != nil {
-		return errors.Errorf("unable to create k8s client set: %s", err)
-	}
-
-	_, err = New(clientset, syncer, hostname, opts...)
+	_, err = New(k8sClientSet, syncer, hostname, opts...)
 	if err != nil {
 		return errors.WithMessage(err, "new proxy")
 	}

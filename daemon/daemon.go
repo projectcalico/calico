@@ -31,10 +31,16 @@ import (
 	"syscall"
 	"time"
 
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
+
+	"github.com/projectcalico/libcalico-go/lib/backend/k8s"
+
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	log "github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/projectcalico/felix/buildinfo"
 	"github.com/projectcalico/felix/calc"
@@ -157,6 +163,7 @@ func Run(configFile string, gitVersion string, buildDate string, gitRevision str
 	var configParams *config.Config
 	var typhaAddr string
 	var numClientsCreated int
+	var k8sClientSet *kubernetes.Clientset
 configRetry:
 	for {
 		if numClientsCreated > 60 {
@@ -262,8 +269,36 @@ configRetry:
 		}
 		numClientsCreated++
 
+		// Try to get a Kubernetes client.  This is needed for discovering Typha and for the BPF mode of the dataplane.
+		k8sClientSet = nil
+		if kc, ok := backendClient.(*k8s.KubeClient); ok {
+			// Opportunistically share the k8s client with the datastore driver.  This is the best option since
+			// it reduces the number of connections and it lets us piggy-back on the datastore driver's config.
+			log.Info("Using Kubernetes datastore driver, sharing Kubernetes client with datastore driver.")
+			k8sClientSet = kc.ClientSet
+		} else {
+			// Not using KDD, fall back on trying to get a Kubernetes client from the environment.
+			log.Info("Not using Kubernetes datastore driver, trying to get a Kubernetes client...")
+			k8sconf, err := rest.InClusterConfig()
+			if err != nil {
+				log.WithError(err).Info("Kubernetes in-cluster config not available. " +
+					"Assuming we're not in a Kubernetes deployment.")
+			}
+			k8sClientSet, err = kubernetes.NewForConfig(k8sconf)
+			if err != nil {
+				log.WithError(err).Error("Got in-cluster config but failed to create Kubernetes client.")
+				time.Sleep(1 * time.Second)
+				continue configRetry
+			}
+		}
+
 		// If we're configured to discover Typha, do that now so we can retry if we fail.
-		typhaAddr, err = discoverTyphaAddr(configParams, config.GetKubernetesService)
+		typhaAddr, err = discoverTyphaAddr(configParams, func(namespace, name string) (service *v1.Service, e error) {
+			if k8sClientSet == nil {
+				return nil, errors.New("failed to look up Typha, no Kubernetes client available")
+			}
+			return k8sClientSet.CoreV1().Services(namespace).Get(name, metav1.GetOptions{})
+		})
 		if err != nil {
 			log.WithError(err).Error("Typha discovery enabled but discovery failed.")
 			time.Sleep(1 * time.Second)
@@ -301,7 +336,7 @@ configRetry:
 	failureReportChan := make(chan string)
 	configChangedRestartCallback := func() { failureReportChan <- reasonConfigChanged }
 
-	dpDriver, dpDriverCmd = dp.StartDataplaneDriver(configParams, healthAggregator, configChangedRestartCallback)
+	dpDriver, dpDriverCmd = dp.StartDataplaneDriver(configParams, healthAggregator, configChangedRestartCallback, k8sClientSet)
 
 	// Initialise the glue logic that connects the calculation graph to/from the dataplane driver.
 	log.Info("Connect to the dataplane driver.")

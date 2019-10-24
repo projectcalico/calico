@@ -27,10 +27,11 @@ import (
 	"syscall"
 	"time"
 
+	"k8s.io/client-go/kubernetes"
+
 	"github.com/prometheus/client_golang/prometheus"
 	log "github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
-	"k8s.io/client-go/rest"
 
 	"github.com/projectcalico/felix/bpf"
 	bpfproxy "github.com/projectcalico/felix/bpf/proxy"
@@ -151,7 +152,7 @@ type Config struct {
 
 	LookPathOverride func(file string) (string, error)
 
-	K8sconf *rest.Config
+	KubeClientSet *kubernetes.Clientset
 }
 
 // InternalDataplane implements an in-process Felix dataplane driver based on iptables
@@ -455,7 +456,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		dp.RegisterManager(newBPFEndpointManager(config.BPFLogLevel, fibLookupEnabled, config.BPFDataIfacePattern))
 
 		err := bpfproxy.StartKubeProxy(
-			config.K8sconf,
+			config.KubeClientSet,
 			config.Hostname,
 			bpfproxy.WithImmediateSync(),
 		)
