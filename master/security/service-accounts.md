@@ -9,11 +9,14 @@ Use {{site.prodname}} network policy to allow/deny traffic for Kubernetes servic
 
 ### Value
 
-Kubernetes RBAC allows you to control which users are allowed to create and use service accounts. Combined with {{site.prodname}} network policy, you can control the security boundary between users who can provision service accounts, and those who use them.
+Using {{site.prodname}} network policy, you can leverage Kubernetes service accounts with RBAC for flexible control over how policies are applied in a cluster. For example, the security team can have RBAC permissions to:
 
-For example, using Kubernetes RBAC, you can restrict permissions to provision service accounts to only the network security team, who can then write high-priority network policies that reference those service accounts.
+- Control which service accounts the developer team can use within a namespace
+- Write high-priority network policies for those service accounts (that the developer team cannot override) 
 
-Additionally, when using Istio-enabled apps with {{site.prodname}} network policy, the cryptographic identity associated with the service account is checked (along with the network identity) to achieve two-factor authentication.
+The network security team can maintain full control of security, while selectively allowing developer operations where it makes sense.  
+
+Using **Istio-enabled apps** with {{site.prodname}} network policy, the cryptographic identity associated with the service account is checked (along with the network identity) to achieve two-factor authentication.
 
 ### Features
 
