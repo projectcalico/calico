@@ -21,13 +21,13 @@ Tests for etcd utility function.
 """
 
 import logging
-import types
 import unittest
 
 from mock import call
 from mock import Mock
 from mock import patch
 
+from networking_calico.etcdutils import _is_string_instance
 from networking_calico.etcdutils import EtcdWatcher
 from networking_calico.etcdutils import PathDispatcher
 from networking_calico.etcdutils import Response
@@ -70,7 +70,7 @@ class _TestPathDispatcherBase(unittest.TestCase):
     def assert_handled(self, key, exp_handler=SAME_AS_KEY, **exp_captures):
         if exp_handler is SAME_AS_KEY:
             exp_handler = key
-        if isinstance(exp_handler, types.StringTypes):
+        if _is_string_instance(exp_handler):
             exp_handler = exp_handler.strip("/")
         m_response = Mock(spec=Response)
         m_response.key = key
