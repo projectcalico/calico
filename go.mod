@@ -8,7 +8,7 @@ require (
 	github.com/mattn/go-isatty v0.0.8 // indirect
 	github.com/onsi/ginkgo v1.8.0
 	github.com/onsi/gomega v1.5.0
-	github.com/projectcalico/felix v0.0.0-20191019064825-e14e05b8734a
+	github.com/projectcalico/felix v0.0.0-20191024064755-df875d9fde44
 	github.com/projectcalico/libcalico-go v0.0.0-20191015222346-3d38c58337f2
 	github.com/sirupsen/logrus v1.4.2
 	github.com/vishvananda/netns v0.0.0-20180720170159-13995c7128cc // indirect
@@ -19,6 +19,6 @@ require (
 )
 
 replace (
-	github.com/kelseyhightower/confd => github.com/projectcalico/confd v0.0.0-20191021190754-83755aa5909a
+	github.com/kelseyhightower/confd => github.com/projectcalico/confd v0.0.0-20191024041052-5706f57f78b9
 	github.com/sirupsen/logrus => github.com/projectcalico/logrus v1.0.4-calico
 )
