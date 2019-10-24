@@ -19,9 +19,11 @@ package fv_test
 import (
 	"fmt"
 	"strconv"
+	"strings"
 
 	log "github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/client-go/kubernetes"
 
 	"github.com/projectcalico/libcalico-go/lib/apiconfig"
@@ -56,6 +58,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-NAT_ _BPF-SAFE_ BPF NAT tests", [
 		infra = getInfra()
 
 		options := infrastructure.DefaultTopologyOptions()
+		options.FelixLogSeverity = "debug"
 		felixes, client = infrastructure.StartNNodeTopology(2, options, infra)
 		cc = &workload.ConnectivityChecker{}
 
@@ -198,8 +201,10 @@ var _ = infrastructure.DatastoreDescribe("_BPF-NAT_ _BPF-SAFE_ BPF NAT tests", [
 						},
 						Ports: []v1.ServicePort{
 							{
-								Protocol: v1.ProtocolTCP,
-								Port:     80,
+								Protocol:   v1.ProtocolTCP,
+								Port:       80,
+								Name:       "port-8055",
+								TargetPort: intstr.FromInt(8055),
 							},
 						},
 					},
@@ -207,6 +212,10 @@ var _ = infrastructure.DatastoreDescribe("_BPF-NAT_ _BPF-SAFE_ BPF NAT tests", [
 
 				_, err := k8sClient.CoreV1().Services("default").Create(testSvc)
 				Expect(err).NotTo(HaveOccurred())
+
+				workloadEpsForSvc(k8sClient, w[0][0],
+					testSvc.ObjectMeta.Name, testSvc.ObjectMeta.Namespace)
+
 			})
 
 			It("connectivity from all workloads via workload 0's NAT", func() {
@@ -231,4 +240,53 @@ func objectMetaV1(name string) metav1.ObjectMeta {
 		Name:      name,
 		Namespace: "default",
 	}
+}
+
+func portsUnique(ports string) []int {
+	pstrs := strings.Split(ports, ",")
+
+	m := make(map[string]struct{})
+	for _, ps := range pstrs {
+		m[ps] = struct{}{}
+	}
+
+	var ret []int
+	for ps := range m {
+		i, err := strconv.Atoi(ps)
+		if err == nil {
+			ret = append(ret, i)
+		}
+	}
+
+	return ret
+}
+
+func workloadEpsForSvc(k8s kubernetes.Interface, w *workload.Workload, svc, ns string) {
+	eps := &v1.Endpoints{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "Endpoints",
+			APIVersion: "v1",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      svc,
+			Namespace: ns,
+		},
+		Subsets: []v1.EndpointSubset{{Addresses: []v1.EndpointAddress{{IP: w.IP}}}},
+	}
+
+	ps := w.Ports
+	if w.DefaultPort != "" {
+		ps = ps + "," + w.DefaultPort
+	}
+	ports := portsUnique(ps)
+
+	for _, p := range ports {
+		eps.Subsets[0].Ports = append(eps.Subsets[0].Ports, v1.EndpointPort{
+			Name: fmt.Sprintf("port-%d", p),
+			Port: int32(p),
+		})
+	}
+
+	_, err := k8s.CoreV1().Endpoints("default").Create(eps)
+	Expect(err).NotTo(HaveOccurred())
 }
