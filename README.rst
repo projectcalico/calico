@@ -23,5 +23,5 @@ features with Calico, please see http://docs.projectcalico.org/master.
 
 * Free software: Apache license
 * Documentation: http://docs.projectcalico.org/master
-* Source: http://git.openstack.org/cgit/openstack/networking-calico
+* Source: http://opendev.org/openstack/networking-calico
 * Bugs: http://bugs.launchpad.net/networking-calico

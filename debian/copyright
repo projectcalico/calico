@@ -1,6 +1,6 @@
 Format: http://dep.debian.net/deps/dep5
 Upstream-Name: networking-calico
-Source: http://git.openstack.org/cgit/openstack/networking-calico/
+Source: http://opendev.org/openstack/networking-calico/
 
 Files: *
 Copyright: 2015 Metaswitch Networks
