@@ -46,9 +46,9 @@ COPY requirements.txt /requirements.txt
 RUN pip install -r /requirements.txt
 
 # Install etcdctl
-RUN wget https://github.com/coreos/etcd/releases/download/v2.3.3/etcd-v2.3.3-linux-amd64.tar.gz && \
-    tar -xzf etcd-v2.3.3-linux-amd64.tar.gz && \
-    cd etcd-v2.3.3-linux-amd64 && \
+RUN wget https://github.com/coreos/etcd/releases/download/v3.2.4/etcd-v3.2.4-linux-arm64.tar.gz && \
+    tar -xzf etcd-v3.2.4-linux-arm64.tar.gz && \
+    cd etcd-v3.2.4-linux-arm64 && \
     ln -s etcdctl /usr/local/bin/
 
 # The container is used by mounting the code-under-test to /code
