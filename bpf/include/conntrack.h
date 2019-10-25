@@ -83,7 +83,7 @@ static CALI_BPF_INLINE int calico_ct_v4_create_tracking(
 		__be32 orig_dst, __u16 orig_dport,
 		__be32 seq, bool syn, enum calico_tc_flags flags) {
 
-	if ((skb->mark & CALI_SKB_MARK_FROM_WORKLOAD_MASK) == CALI_SKB_MARK_FROM_WORKLOAD) {
+	if ((skb->mark & CALI_SKB_MARK_SEEN_MASK) == CALI_SKB_MARK_SEEN) {
 		// Packet already marked as being from another workload, which will
 		// have created a conntrack entry.  Look that one up instead of
 		// creating one.
@@ -109,22 +109,22 @@ static CALI_BPF_INLINE int calico_ct_v4_create_tracking(
 			CALI_DEBUG("CT Packet marked as from workload but got a conntrack miss!\n");
 			goto create;
 		}
-		CALI_DEBUG("CT Found expected create entry, updating...\n");
+		CALI_DEBUG("CT Found expected entry, updating...\n");
 		if (srcLTDest) {
 			ct_value->a_to_b.seqno = seq;
 			ct_value->a_to_b.syn_seen = syn;
-			if (flags & CALI_TC_INGRESS) {
-				ct_value->b_to_a.whitelisted = 1;
-			} else {
+			if (CALI_TC_FLAGS_TO_HOST(flags)) {
 				ct_value->a_to_b.whitelisted = 1;
+			} else {
+				ct_value->b_to_a.whitelisted = 1;
 			}
 		} else  {
 			ct_value->b_to_a.seqno = seq;
 			ct_value->b_to_a.syn_seen = syn;
-			if (flags & CALI_TC_INGRESS) {
-				ct_value->a_to_b.whitelisted = 1;
-			} else {
+			if (CALI_TC_FLAGS_TO_HOST(flags)) {
 				ct_value->b_to_a.whitelisted = 1;
+			} else {
+				ct_value->a_to_b.whitelisted = 1;
 			}
 		}
 
@@ -167,8 +167,10 @@ static CALI_BPF_INLINE int calico_ct_v4_create_tracking(
 	src_to_dst->syn_seen = syn;
 	src_to_dst->opener = 1;
 	if (CALI_TC_FLAGS_TO_HOST(flags)) {
+		CALI_VERB("CT-ALL Whitelisted source side\n");
 		src_to_dst->whitelisted = 1;
 	} else {
+		CALI_VERB("CT-ALL Whitelisted dest side\n");
 		dst_to_src->whitelisted = 1;
 	}
 	int err = bpf_map_update_elem(&calico_ct_map_v4, k, &ct_value, 0);
@@ -473,7 +475,7 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_tcp_lookup(
 	if (CALI_TC_FLAGS_TO_HOST(flags)) {
 		// Source of the packet is the endpoint, so check the src whitelist.
 		if (src_to_dst->whitelisted) {
-			// Packet was whitelisted by the policy attached to this workload.
+			// Packet was whitelisted by the policy attached to this endpoint.
 			CALI_VERB("CT-TCP Packet whitelisted by this workload's policy.\n");
 		} else {
 			// Only whitelisted by the other side?

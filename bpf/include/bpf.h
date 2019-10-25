@@ -122,6 +122,7 @@ struct bpf_map_def_extended {
 enum calico_tc_flags {
 	CALI_TC_HOST_EP = 1<<0,
 	CALI_TC_INGRESS = 1<<1,
+	CALI_TC_TUNNEL  = 1<<2,
 };
 
 #define CALI_TC_FLAGS_TO_HOST(flags) (((flags & CALI_TC_HOST_EP) && (flags & CALI_TC_INGRESS)) || \
@@ -129,10 +130,14 @@ enum calico_tc_flags {
 
 #define CALI_TC_FLAGS_FROM_WORKLOAD(flags) (!(flags & CALI_TC_HOST_EP) && !(flags & CALI_TC_INGRESS))
 
+#define CALI_TC_FLAGS_L3(flags) ((flags & CALI_TC_HOST_EP) && !(flags & CALI_TC_INGRESS) && (flags & CALI_TC_TUNNEL))
+
+#define CALI_TC_FLAGS_ENCAPPED(flags) ((flags & CALI_TC_INGRESS) && (flags & CALI_TC_TUNNEL))
+
 enum calico_skb_mark {
 	// TODO allocate marks from the mark pool.
-	CALI_SKB_MARK_FROM_WORKLOAD = 0xca110000,
-	CALI_SKB_MARK_FROM_WORKLOAD_MASK = 0xffff0000,
+	CALI_SKB_MARK_SEEN = 0xca110000,
+	CALI_SKB_MARK_SEEN_MASK = 0xffff0000,
 	CALI_SKB_MARK_NO_TRACK      = 1<<1,
 };
 

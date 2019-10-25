@@ -78,7 +78,7 @@ static CALI_BPF_INLINE enum calico_policy_result maybe_execute_policy_do_not_tra
 	if (!(flags & CALI_TC_HOST_EP) || !(flags & CALI_TC_INGRESS)) {
 		return CALI_POL_NO_MATCH;
 	}
-	if ((skb->mark & CALI_SKB_MARK_FROM_WORKLOAD_MASK) == CALI_SKB_MARK_FROM_WORKLOAD) {
+	if ((skb->mark & CALI_SKB_MARK_SEEN_MASK) == CALI_SKB_MARK_SEEN) {
 		return CALI_POL_NO_MATCH;
 	}
 
@@ -121,14 +121,38 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb, enum calico_tc_flags
 		goto deny;
 	}
 
-	if ((void *)(long)skb->data + sizeof(struct ethhdr) + sizeof(struct iphdr) + sizeof(struct udphdr) > (void *)(long)skb->data_end) {
-		CALI_DEBUG("Too short\n");
-		reason = CALI_REASON_SHORT;
-		goto deny;
+	struct ethhdr *eth_hdr;
+	struct iphdr *ip_header;
+	if (CALI_TC_FLAGS_ENCAPPED(flags)) {
+		// At this TC hook we expect the skb to start with the IPIP header rather than the ethernet header.
+		if ((void *)(long)skb->data + sizeof(struct ethhdr) + 2*sizeof(struct iphdr) + sizeof(struct udphdr) > (void *)(long)skb->data_end) {
+			CALI_DEBUG("Too short\n");
+			reason = CALI_REASON_SHORT;
+			goto deny;
+		}
+		eth_hdr = (void *)(long)skb->data;
+		struct iphdr *ipip_header = (void *)(eth_hdr+1);
+		ip_header = ipip_header+1;
+		CALI_DEBUG("IPIP; inner s=%x d=%x\n", be32_to_host(ip_header->saddr), be32_to_host(ip_header->daddr));
+	} else if (CALI_TC_FLAGS_L3(flags)) {
+		// At this TC hook we expect the skb to start with the L3 header rather than the ethernet header.
+		if ((void *)(long)skb->data + sizeof(struct iphdr) + sizeof(struct udphdr) > (void *)(long)skb->data_end) {
+			CALI_DEBUG("Too short\n");
+			reason = CALI_REASON_SHORT;
+			goto deny;
+		}
+		ip_header = (void *)(long)skb->data;
+		CALI_DEBUG("IP; (L3) s=%x d=%x\n", be32_to_host(ip_header->saddr), be32_to_host(ip_header->daddr));
+	} else {
+		if ((void *)(long)skb->data + sizeof(struct ethhdr) + sizeof(struct iphdr) + sizeof(struct udphdr) > (void *)(long)skb->data_end) {
+			CALI_DEBUG("Too short\n");
+			reason = CALI_REASON_SHORT;
+			goto deny;
+		}
+		eth_hdr = (void *)(long)skb->data;
+		ip_header = (void *)(eth_hdr+1);
+		CALI_DEBUG("IP; s=%x d=%x\n", be32_to_host(ip_header->saddr), be32_to_host(ip_header->daddr));
 	}
-
-	struct ethhdr *eth_hdr = (void *)(long)skb->data;
-	struct iphdr *ip_header = (void *)(eth_hdr+1);
 	// TODO Deal with IP header with options.
 
 	// Setting all of these up-front to keep the verifier happy.
@@ -136,7 +160,6 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb, enum calico_tc_flags
 	struct udphdr *udp_header = (void*)(ip_header+1);
 	struct icmphdr *icmp_header = (void*)(ip_header+1);
 
-	CALI_DEBUG("IP; s=%x d=%x\n", be32_to_host(ip_header->saddr), be32_to_host(ip_header->daddr));
 
 	__u8 ip_proto = ip_header->protocol;
 
@@ -177,11 +200,11 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb, enum calico_tc_flags
 		// IPIP
 		if (flags & CALI_TC_HOST_EP) {
 			// TODO IPIP whitelist.
-			CALI_DEBUG("IPIP: allow");
+			CALI_DEBUG("IPIP: allow\n");
 			goto allow_skip_fib;
 		}
 	default:
-		CALI_DEBUG("Unknown protocol, unable to extract ports\n");
+		CALI_DEBUG("Unknown protocol (%d), unable to extract ports\n", (int)ip_proto);
 		sport = 0;
 		dport = 0;
 	}
@@ -405,7 +428,7 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb, enum calico_tc_flags
 	// Try a short-circuit FIB lookup.
 	allow:
 
-	if (CALI_FIB_LOOKUP_ENABLED && CALI_TC_FLAGS_TO_HOST(flags)) {
+	if (!CALI_TC_FLAGS_L3(flags) && CALI_FIB_LOOKUP_ENABLED && CALI_TC_FLAGS_TO_HOST(flags)) {
 		CALI_DEBUG("Traffic is towards the host namespace, doing Linux FIB lookup\n");
 		fib_params.l4_protocol = ip_proto;
 		rc = bpf_fib_lookup(skb, &fib_params, sizeof(fib_params), 0);
@@ -435,13 +458,13 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb, enum calico_tc_flags
 	}
 
 	allow_skip_fib:
-	if (CALI_TC_FLAGS_FROM_WORKLOAD(flags)) {
+	if (CALI_TC_FLAGS_TO_HOST(flags)) {
 		// Packet is leaving workload, mark it so any downstream programs know this traffic was from a workload.
-		CALI_DEBUG("Traffic is from workload, applying packet mark.\n");
+		CALI_DEBUG("Traffic is towards host namespace, marking.\n");
 		// FIXME: this ignores the mask that we should be using.  However, if we mask off the bits, then
 		// clang spots that it can do a 16-bit store instead of a 32-bit load/modify/store, which trips
 		// up the validator.
-		skb->mark = CALI_SKB_MARK_FROM_WORKLOAD;
+		skb->mark = CALI_SKB_MARK_SEEN;
 	}
 
 	if (CALI_LOG_LEVEL >= CALI_LOG_LEVEL_INFO) {
@@ -480,6 +503,18 @@ int tc_calico_from_host_endpoint(struct __sk_buff *skb) {
 __attribute__((section("calico_to_host_ep")))
 int tc_calico_to_host_endpoint(struct __sk_buff *skb) {
 	return calico_tc(skb, CALI_TC_HOST_EP);
+}
+
+// Handle packets that arrive at the host namespace from a tunnel.
+__attribute__((section("calico_from_tunnel_ep")))
+int tc_calico_from_tunnel_endpoint(struct __sk_buff *skb) {
+	return calico_tc(skb, CALI_TC_TUNNEL | CALI_TC_HOST_EP | CALI_TC_INGRESS);
+}
+
+// Handle packets that are leaving a host towards a tunnel.
+__attribute__((section("calico_to_tunnel_ep")))
+int tc_calico_to_tunnel_endpoint(struct __sk_buff *skb) {
+	return calico_tc(skb, CALI_TC_TUNNEL | CALI_TC_HOST_EP);
 }
 
 

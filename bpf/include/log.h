@@ -39,14 +39,17 @@
 
 #define CALI_LOG_FLAG(flags, fmt, ...) do { \
 	if (((flags) & CALI_TC_HOST_EP) && ((flags) & CALI_TC_INGRESS)) { \
-		CALI_LOG("HI: " fmt, ## __VA_ARGS__); \
+		CALI_LOG(XSTR(CALI_LOG_PFX) "-I: " fmt, ## __VA_ARGS__); \
 	} else if ((flags) & CALI_TC_HOST_EP) { \
-		CALI_LOG("HE: " fmt, ## __VA_ARGS__); \
+		CALI_LOG(XSTR(CALI_LOG_PFX) "-E: " fmt, ## __VA_ARGS__); \
 	} else if ((flags) & CALI_TC_INGRESS) { \
-		CALI_LOG("WI: " fmt, ## __VA_ARGS__); \
+		CALI_LOG(XSTR(CALI_LOG_PFX) "-I: " fmt, ## __VA_ARGS__); \
 	} else { \
-		CALI_LOG("WE: " fmt, ## __VA_ARGS__); \
+		CALI_LOG(XSTR(CALI_LOG_PFX) "-E: " fmt, ## __VA_ARGS__); \
 	} \
 } while (0)
+
+#define XSTR(S) STR(S)
+#define STR(S) #S
 
 #endif /* __CALI_LOG_H__ */

@@ -422,7 +422,11 @@ func (m *bpfEndpointManager) compileAndAttachWorkloadProgram(endpoint *proto.Wor
 
 func (m *bpfEndpointManager) compileAndAttachDataIfaceProgram(ifaceName string, polDirection string) error {
 	rules := [][][]*proto.Rule{{{{Action: "Allow"}}}}
-	ap := calculateTCAttachPoint("host", polDirection, ifaceName)
+	epType := "host"
+	if ifaceName == "tunl0" {
+		epType = "tunnel"
+	}
+	ap := calculateTCAttachPoint(epType, polDirection, ifaceName)
 	return m.compileAndAttachProgram(rules, ap)
 }
 
@@ -510,12 +514,15 @@ func (m *bpfEndpointManager) compileAndAttachProgram(allRules [][][]*proto.Rule,
 	if logLevel == "" {
 		logLevel = "OFF"
 	}
+
+	logPfx := os.Getenv("BPF_LOG_PFX") + attachPoint.Iface
 	clang := exec.Command("clang",
 		"-x", "c",
 		"-D__KERNEL__",
 		"-D__ASM_SYSREG_H",
 		fmt.Sprintf("-DCALI_FIB_LOOKUP_ENABLED=%v", m.fibLookupEnabled),
 		fmt.Sprintf("-DCALI_LOG_LEVEL=CALI_LOG_LEVEL_%s", logLevel),
+		fmt.Sprintf("-DCALI_LOG_PFX=%v", logPfx),
 		"-Wno-unused-value",
 		"-Wno-pointer-sign",
 		"-Wno-compare-distinct-pointer-types",
