@@ -177,23 +177,14 @@ func BackendMap() bpf.Map {
 		unix.BPF_F_NO_PREALLOC)
 }
 
+// NATMapMem represents NATMap loaded into memory
+type NATMapMem map[NATKey]NATValue
+
 // LoadNATMap loads the NAT map into a go map or returns an error
-func LoadNATMap(m bpf.Map) (map[NATKey]NATValue, error) {
-	ret := make(map[NATKey]NATValue)
+func LoadNATMap(m bpf.Map) (NATMapMem, error) {
+	ret := make(NATMapMem)
 
-	ks := len(NATKey{})
-	vs := len(NATValue{})
-
-	err := m.Iter(func(k, v []byte) {
-		var key NATKey
-		copy(key[:ks], k[:ks])
-
-		var val NATValue
-		copy(val[:vs], v[:vs])
-
-		ret[key] = val
-	})
-
+	err := m.Iter(NATMapMemIter(ret))
 	if err != nil {
 		ret = nil
 	}
@@ -201,26 +192,49 @@ func LoadNATMap(m bpf.Map) (map[NATKey]NATValue, error) {
 	return ret, err
 }
 
-// LoadNATBackendMap loads the NATBackend map into a go map or returns an error
-func LoadNATBackendMap(m bpf.Map) (map[NATBackendKey]NATBackendValue, error) {
-	ret := make(map[NATBackendKey]NATBackendValue)
+// NATMapMemIter returns bpf.MapIter that loads the provided NATMapMem
+func NATMapMemIter(m NATMapMem) bpf.MapIter {
+	ks := len(NATKey{})
+	vs := len(NATValue{})
 
+	return func(k, v []byte) {
+		var key NATKey
+		copy(key[:ks], k[:ks])
+
+		var val NATValue
+		copy(val[:vs], v[:vs])
+
+		m[key] = val
+	}
+}
+
+// NATBackendMapMem represents a NATBackend loaded into memory
+type NATBackendMapMem map[NATBackendKey]NATBackendValue
+
+// LoadNATBackendMap loads the NATBackend map into a go map or returns an error
+func LoadNATBackendMap(m bpf.Map) (NATBackendMapMem, error) {
+	ret := make(NATBackendMapMem)
+
+	err := m.Iter(NATBackendMapMemIter(ret))
+	if err != nil {
+		ret = nil
+	}
+
+	return ret, err
+}
+
+// NATBackendMapMemIter returns bpf.MapIter that loads the provided NATBackendMapMem
+func NATBackendMapMemIter(m NATBackendMapMem) bpf.MapIter {
 	ks := len(NATBackendKey{})
 	vs := len(NATBackendValue{})
 
-	err := m.Iter(func(k, v []byte) {
+	return func(k, v []byte) {
 		var key NATBackendKey
 		copy(key[:ks], k[:ks])
 
 		var val NATBackendValue
 		copy(val[:vs], v[:vs])
 
-		ret[key] = val
-	})
-
-	if err != nil {
-		ret = nil
+		m[key] = val
 	}
-
-	return ret, err
 }

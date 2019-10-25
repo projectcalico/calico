@@ -84,8 +84,8 @@ type Syncer struct {
 	// synced is true after reconciling the first Apply
 	synced bool
 	// origs are deallocated after the first Apply reconciles
-	origSvcs map[bpfm.NATKey]bpfm.NATValue
-	origEps  map[bpfm.NATBackendKey]bpfm.NATBackendValue
+	origSvcs bpfm.NATMapMem
+	origEps  bpfm.NATBackendMapMem
 }
 
 // NewSyncer returns a new Syncer that uses the 2 provided maps

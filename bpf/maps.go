@@ -25,9 +25,11 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+type MapIter func(k, v []byte)
+
 type Map interface {
 	EnsureExists() error
-	Iter(func(k, v []byte)) error
+	Iter(MapIter) error
 	Update(k, v []byte) error
 	Delete(k []byte) error
 }
@@ -65,25 +67,27 @@ func (b *PinnedMap) Close() error {
 	return err
 }
 
-func (b *PinnedMap) Iter(f func(k, v []byte)) error {
-	prog := "bpftool"
-	args := []string{
-		"--json",
-		"--pretty",
-		"map",
-		"dump",
-		"pinned",
-		b.Filename,
+// DumpMapCmd returns the command that can be used to dump a map or an error
+func DumpMapCmd(m Map) ([]string, error) {
+	if pm, ok := m.(*PinnedMap); ok {
+		return []string{
+			"bpftool",
+			"--json",
+			"--pretty",
+			"map",
+			"dump",
+			"pinned",
+			pm.Filename,
+		}, nil
 	}
 
-	printCommand(prog, args...)
-	output, err := exec.Command(prog, args...).CombinedOutput()
-	if err != nil {
-		return errors.Errorf("failed to dump in map (%s): %s\n%s", b.Filename, err, output)
-	}
+	return nil, errors.Errorf("unrecognized map type %T", m)
+}
 
+// IterMapCmdOutput iterates over the outout of a command obtained by DumpMapCmd
+func IterMapCmdOutput(output []byte, f MapIter) error {
 	var mp []mapEntry
-	err = json.Unmarshal(output, &mp)
+	err := json.Unmarshal(output, &mp)
 	if err != nil {
 		return errors.Errorf("cannot parse json output: %v\n%s", err, output)
 	}
@@ -91,13 +95,35 @@ func (b *PinnedMap) Iter(f func(k, v []byte)) error {
 	for _, me := range mp {
 		k, err := hexStringsToBytes(me.Key)
 		if err != nil {
-			return errors.Errorf("failed parsing map %s entry %s key: %e", b.Filename, me, err)
+			return errors.Errorf("failed parsing entry %s key: %e", me, err)
 		}
 		v, err := hexStringsToBytes(me.Value)
 		if err != nil {
-			return errors.Errorf("failed parsing map %s entry %s val: %e", b.Filename, me, err)
+			return errors.Errorf("failed parsing entry %s val: %e", me, err)
 		}
 		f(k, v)
+	}
+
+	return nil
+}
+
+func (b *PinnedMap) Iter(f MapIter) error {
+	cmd, err := DumpMapCmd(b)
+	if err != nil {
+		return err
+	}
+
+	prog := cmd[0]
+	args := cmd[1:]
+
+	printCommand(prog, args...)
+	output, err := exec.Command(prog, args...).CombinedOutput()
+	if err != nil {
+		return errors.Errorf("failed to dump in map (%s): %s\n%s", b.Filename, err, output)
+	}
+
+	if err := IterMapCmdOutput(output, f); err != nil {
+		return errors.WithMessagef(err, "map %s", b.Filename)
 	}
 
 	return nil
