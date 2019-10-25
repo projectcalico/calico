@@ -1374,7 +1374,7 @@ func endpointManagerTests(ipVersion uint8) func() {
 
 					It("should have expected chains", expectWlChainsFor("cali12345-ab_policy1"))
 
-					Context("with another endpoint with the same interface name and earlier workload ID", func() {
+					Context("with another endpoint with the same interface name and earlier workload ID, and no policy", func() {
 
 						JustBeforeEach(func() {
 							epMgr.OnUpdate(&proto.WorkloadEndpointUpdate{
@@ -1388,7 +1388,7 @@ func endpointManagerTests(ipVersion uint8) func() {
 									Mac:        "01:02:03:04:05:06",
 									Name:       "cali12345-ab",
 									ProfileIds: []string{},
-									Tiers:      tiers,
+									Tiers:      []*proto.TierInfo{},
 									Ipv4Nets:   []string{"10.0.240.2/24"},
 									Ipv6Nets:   []string{"2001:db8:2::2/128"},
 								},
@@ -1397,7 +1397,7 @@ func endpointManagerTests(ipVersion uint8) func() {
 							Expect(err).ToNot(HaveOccurred())
 						})
 
-						It("should have expected chains", expectWlChainsFor("cali12345-ab_policy1"))
+						It("should have expected chains with no policy", expectWlChainsFor("cali12345-ab"))
 
 						Context("with the first endpoint removed", func() {
 
@@ -1409,7 +1409,7 @@ func endpointManagerTests(ipVersion uint8) func() {
 								Expect(err).ToNot(HaveOccurred())
 							})
 
-							It("should have expected chains", expectWlChainsFor("cali12345-ab_policy1"))
+							It("should have expected chains with no policy", expectWlChainsFor("cali12345-ab"))
 
 							Context("with the second endpoint removed", func() {
 
@@ -1430,7 +1430,7 @@ func endpointManagerTests(ipVersion uint8) func() {
 						})
 					})
 
-					Context("with another endpoint with the same interface name and later workload ID", func() {
+					Context("with another endpoint with the same interface name and later workload ID, and no policy", func() {
 
 						JustBeforeEach(func() {
 							epMgr.OnUpdate(&proto.WorkloadEndpointUpdate{
@@ -1444,7 +1444,7 @@ func endpointManagerTests(ipVersion uint8) func() {
 									Mac:        "01:02:03:04:05:06",
 									Name:       "cali12345-ab",
 									ProfileIds: []string{},
-									Tiers:      tiers,
+									Tiers:      []*proto.TierInfo{},
 									Ipv4Nets:   []string{"10.0.240.2/24"},
 									Ipv6Nets:   []string{"2001:db8:2::2/128"},
 								},
@@ -1465,7 +1465,7 @@ func endpointManagerTests(ipVersion uint8) func() {
 								Expect(err).ToNot(HaveOccurred())
 							})
 
-							It("should have expected chains", expectWlChainsFor("cali12345-ab_policy1"))
+							It("should have expected chains with no policy", expectWlChainsFor("cali12345-ab"))
 
 							Context("with the second endpoint removed", func() {
 
