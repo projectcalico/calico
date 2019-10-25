@@ -107,38 +107,20 @@ func NewSyncer(nodePortIPs []net.IP, svcsmap, epsmap bpf.Map) (*Syncer, error) {
 
 func (s *Syncer) loadOrigs() error {
 
-	s.origSvcs = make(map[bpfm.NATKey]bpfm.NATValue)
-	s.origEps = make(map[bpfm.NATBackendKey]bpfm.NATBackendValue)
-
-	ks := len(bpfm.NATKey{})
-	vs := len(bpfm.NATValue{})
-	err := s.bpfSvcs.Iter(func(k, v []byte) {
-		var key bpfm.NATKey
-		copy(key[:ks], k[:ks])
-
-		var val bpfm.NATValue
-		copy(val[:vs], v[:vs])
-
-		s.origSvcs[key] = val
-	})
-
+	svcs, err := bpfm.LoadNATMap(s.bpfSvcs)
 	if err != nil {
 		return err
 	}
 
-	ks = len(bpfm.NATBackendKey{})
-	vs = len(bpfm.NATBackendValue{})
-	err = s.bpfEps.Iter(func(k, v []byte) {
-		var key bpfm.NATBackendKey
-		copy(key[:ks], k[:ks])
+	eps, err := bpfm.LoadNATBackendMap(s.bpfEps)
+	if err != nil {
+		return err
+	}
 
-		var val bpfm.NATBackendValue
-		copy(val[:vs], v[:vs])
+	s.origSvcs = svcs
+	s.origEps = eps
 
-		s.origEps[key] = val
-	})
-
-	return err
+	return nil
 }
 
 func (s *Syncer) startupSync(state DPSyncerState) error {
@@ -172,7 +154,7 @@ func (s *Syncer) startupSync(state DPSyncerState) error {
 			if !ok {
 				log.Debugf("s.origSvcs = %+v\n", s.origSvcs)
 				log.Debugf("s.origEps = %+v\n", s.origEps)
-				return errors.Errorf("inconsistend backed map, missing ep %s", epk)
+				return errors.Errorf("inconsistent backed map, missing ep %s", epk)
 			}
 			s.prevEpsMap[svckey.sname] = append(s.prevEpsMap[svckey.sname],
 				&k8sp.BaseEndpointInfo{

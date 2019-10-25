@@ -176,3 +176,51 @@ func BackendMap() bpf.Map {
 		510000,
 		unix.BPF_F_NO_PREALLOC)
 }
+
+// LoadNATMap loads the NAT map into a go map or returns an error
+func LoadNATMap(m bpf.Map) (map[NATKey]NATValue, error) {
+	ret := make(map[NATKey]NATValue)
+
+	ks := len(NATKey{})
+	vs := len(NATValue{})
+
+	err := m.Iter(func(k, v []byte) {
+		var key NATKey
+		copy(key[:ks], k[:ks])
+
+		var val NATValue
+		copy(val[:vs], v[:vs])
+
+		ret[key] = val
+	})
+
+	if err != nil {
+		ret = nil
+	}
+
+	return ret, err
+}
+
+// LoadNATBackendMap loads the NATBackend map into a go map or returns an error
+func LoadNATBackendMap(m bpf.Map) (map[NATBackendKey]NATBackendValue, error) {
+	ret := make(map[NATBackendKey]NATBackendValue)
+
+	ks := len(NATBackendKey{})
+	vs := len(NATBackendValue{})
+
+	err := m.Iter(func(k, v []byte) {
+		var key NATBackendKey
+		copy(key[:ks], k[:ks])
+
+		var val NATBackendValue
+		copy(val[:vs], v[:vs])
+
+		ret[key] = val
+	})
+
+	if err != nil {
+		ret = nil
+	}
+
+	return ret, err
+}
