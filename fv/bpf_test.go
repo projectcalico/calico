@@ -218,7 +218,7 @@ var _ = infrastructure.DatastoreDescribe("_BPF-NAT_ _BPF-SAFE_ BPF NAT tests", [
 					log.WithField("endpoints", spew.Sprint(ep)).Info("Got endpoints for test-service")
 					return ep.Subsets
 				}
-				Eventually(getEndpointSubsets(), "10s").Should(HaveLen(1),
+				Eventually(getEndpointSubsets, "10s").Should(HaveLen(1),
 					"Service endpoints didn't get created? Is controller-manager happy?")
 			})
 
