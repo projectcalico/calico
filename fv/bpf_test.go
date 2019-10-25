@@ -33,6 +33,8 @@ import (
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+	"github.com/projectcalico/felix/bpf"
+	bpfm "github.com/projectcalico/felix/bpf/proxy/maps"
 	"github.com/projectcalico/felix/fv/containers"
 	"github.com/projectcalico/felix/fv/infrastructure"
 	"github.com/projectcalico/felix/fv/utils"
@@ -106,10 +108,14 @@ var _ = infrastructure.DatastoreDescribe("_BPF-NAT_ _BPF-SAFE_ BPF NAT tests", [
 
 	JustAfterEach(func() {
 		if CurrentGinkgoTestDescription().Failed {
-			for _, felix := range felixes {
+			currBpfsvcs, currBpfeps := dumpNATmaps(felixes)
+
+			for i, felix := range felixes {
 				felix.Exec("iptables-save", "-c")
 				felix.Exec("ip", "r")
 				felix.Exec("calico-bpf", "ipsets", "dump")
+				log.Infof("[%d]NATMap: %+v", i, currBpfsvcs[i])
+				log.Infof("[%d]NATBackend: %+v", i, currBpfeps[i])
 			}
 		}
 	})
@@ -188,29 +194,43 @@ var _ = infrastructure.DatastoreDescribe("_BPF-NAT_ _BPF-SAFE_ BPF NAT tests", [
 			cc.CheckConnectivity()
 		})
 
-		Context("with nat configured 10.96.0.1:80 -> 10.65.0.1:8055 (w[0][0])", func() {
-			BeforeEach(func() {
-				testSvc := &v1.Service{
-					TypeMeta:   typeMetaV1("Service"),
-					ObjectMeta: objectMetaV1("test-service"),
-					Spec: v1.ServiceSpec{
-						ClusterIP: "10.101.0.10",
-						Type:      v1.ServiceTypeClusterIP,
-						Selector: map[string]string{
-							"name": w[0][0].Name,
-						},
-						Ports: []v1.ServicePort{
-							{
-								Protocol:   v1.ProtocolTCP,
-								Port:       80,
-								Name:       "port-8055",
-								TargetPort: intstr.FromInt(8055),
-							},
+		var testSvc *v1.Service
+		var getTestSvcEps func() []v1.EndpointSubset
+
+		BeforeEach(func() {
+			testSvc = &v1.Service{
+				TypeMeta:   typeMetaV1("Service"),
+				ObjectMeta: objectMetaV1("test-service"),
+				Spec: v1.ServiceSpec{
+					ClusterIP: "10.101.0.10",
+					Type:      v1.ServiceTypeClusterIP,
+					Selector: map[string]string{
+						"name": w[0][0].Name,
+					},
+					Ports: []v1.ServicePort{
+						{
+							Protocol:   v1.ProtocolTCP,
+							Port:       80,
+							Name:       "port-8055",
+							TargetPort: intstr.FromInt(8055),
 						},
 					},
-				}
+				},
+			}
 
-				_, err := k8sClient.CoreV1().Services("default").Create(testSvc)
+			getTestSvcEps = func() []v1.EndpointSubset {
+				ep, _ := k8sClient.CoreV1().
+					Endpoints(testSvc.ObjectMeta.Namespace).
+					Get(testSvc.ObjectMeta.Name, metav1.GetOptions{})
+				log.WithField("endpoints",
+					spew.Sprint(ep)).Infof("Got endpoints for %s", testSvc.ObjectMeta.Name)
+				return ep.Subsets
+			}
+		})
+
+		Context("with test-service configured 10.101.0.10:80 -> w[0][0].IP:8055", func() {
+			BeforeEach(func() {
+				_, err := k8sClient.CoreV1().Services(testSvc.ObjectMeta.Namespace).Create(testSvc)
 				Expect(err).NotTo(HaveOccurred())
 
 				getEndpointSubsets := func() []v1.EndpointSubset {
@@ -222,11 +242,47 @@ var _ = infrastructure.DatastoreDescribe("_BPF-NAT_ _BPF-SAFE_ BPF NAT tests", [
 					"Service endpoints didn't get created? Is controller-manager happy?")
 			})
 
-			It("connectivity from all workloads via workload 0's NAT", func() {
-				cc.ExpectSome(w[0][1], workload.IP("10.101.0.10"), 80)
-				cc.ExpectSome(w[1][0], workload.IP("10.101.0.10"), 80)
-				cc.ExpectSome(w[1][1], workload.IP("10.101.0.10"), 80)
+			It("should have connectivity from all workloads via a service to workload 0", func() {
+				ip := testSvc.Spec.ClusterIP
+				port := uint16(testSvc.Spec.Ports[0].Port)
+
+				cc.ExpectSome(w[0][1], workload.IP(ip), port)
+				cc.ExpectSome(w[1][0], workload.IP(ip), port)
+				cc.ExpectSome(w[1][1], workload.IP(ip), port)
 				cc.CheckConnectivity()
+
+			})
+
+			Context("with test-service removed", func() {
+				var (
+					prevBpfsvcs []bpfm.NATMapMem
+					prevBpfeps  []bpfm.NATBackendMapMem
+				)
+
+				BeforeEach(func() {
+					prevBpfsvcs, prevBpfeps = dumpNATmaps(felixes)
+					err := k8sClient.CoreV1().
+						Services(testSvc.ObjectMeta.Namespace).
+						Delete(testSvc.ObjectMeta.Name, &metav1.DeleteOptions{})
+					Expect(err).NotTo(HaveOccurred())
+					Eventually(getTestSvcEps, "10s").Should(HaveLen(0))
+				})
+
+				It("should not have connectivity from workloads via a service to workload 0", func() {
+					ip := testSvc.Spec.ClusterIP
+					port := uint16(testSvc.Spec.Ports[0].Port)
+
+					cc.ExpectNone(w[0][1], workload.IP(ip), port)
+					cc.ExpectNone(w[1][0], workload.IP(ip), port)
+					cc.ExpectNone(w[1][1], workload.IP(ip), port)
+					cc.CheckConnectivity()
+
+					natmaps, natbacks := dumpNATmaps(felixes)
+					for i := range felixes {
+						Expect(natmaps[i]).To(HaveLen(len(prevBpfsvcs[i]) - 1))
+						Expect(natbacks[i]).To(HaveLen(len(prevBpfeps[i]) - 1))
+					}
+				})
 			})
 		})
 	})
@@ -244,4 +300,32 @@ func objectMetaV1(name string) metav1.ObjectMeta {
 		Name:      name,
 		Namespace: "default",
 	}
+}
+
+func dumpNATmaps(felixes []*infrastructure.Felix) ([]bpfm.NATMapMem, []bpfm.NATBackendMapMem) {
+	bpfsvcs := make([]bpfm.NATMapMem, len(felixes))
+	bpfeps := make([]bpfm.NATBackendMapMem, len(felixes))
+
+	for i, felix := range felixes {
+		// just one map to get the file names and cmds, it is the same for all felixes
+		bm := bpfm.NATMap()
+		cmd, err := bpf.DumpMapCmd(bm)
+		Expect(err).NotTo(HaveOccurred())
+		bpfsvcs[i] = make(bpfm.NATMapMem)
+		out, err := felix.ExecOutput(cmd...)
+		Expect(err).NotTo(HaveOccurred())
+		err = bpf.IterMapCmdOutput([]byte(out), bpfm.NATMapMemIter(bpfsvcs[i]))
+		Expect(err).NotTo(HaveOccurred())
+
+		bb := bpfm.BackendMap()
+		cmd, err = bpf.DumpMapCmd(bb)
+		Expect(err).NotTo(HaveOccurred())
+		bpfeps[i] = make(bpfm.NATBackendMapMem)
+		out, err = felix.ExecOutput(cmd...)
+		Expect(err).NotTo(HaveOccurred())
+		err = bpf.IterMapCmdOutput([]byte(out), bpfm.NATBackendMapMemIter(bpfeps[i]))
+		Expect(err).NotTo(HaveOccurred())
+	}
+
+	return bpfsvcs, bpfeps
 }
