@@ -198,6 +198,8 @@ func NewCalicoClient(confdConfig *config.Config) (*client, error) {
 		// We only turn it on if configured to do so, to avoid needing to watch services / endpoints.
 		if c.rg, err = NewRouteGenerator(c); err != nil {
 			log.WithError(err).Error("Failed to start route generator, routes will not be advertised")
+			c.OnInSync(SourceRouteGenerator)
+			c.rg = nil
 		} else {
 			c.rg.onClusterIPsUpdate(clusterCIDRs)
 			c.rg.onExternalIPsUpdate(externalCIDRs)
