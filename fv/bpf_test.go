@@ -18,6 +18,7 @@ package fv_test
 
 import (
 	"fmt"
+	"net"
 	"strconv"
 
 	"github.com/davecgh/go-spew/spew"
@@ -194,51 +195,20 @@ var _ = infrastructure.DatastoreDescribe("_BPF-NAT_ _BPF-SAFE_ BPF NAT tests", [
 			cc.CheckConnectivity()
 		})
 
-		var testSvc *v1.Service
-		var getTestSvcEps func() []v1.EndpointSubset
-
-		BeforeEach(func() {
-			testSvc = &v1.Service{
-				TypeMeta:   typeMetaV1("Service"),
-				ObjectMeta: objectMetaV1("test-service"),
-				Spec: v1.ServiceSpec{
-					ClusterIP: "10.101.0.10",
-					Type:      v1.ServiceTypeClusterIP,
-					Selector: map[string]string{
-						"name": w[0][0].Name,
-					},
-					Ports: []v1.ServicePort{
-						{
-							Protocol:   v1.ProtocolTCP,
-							Port:       80,
-							Name:       "port-8055",
-							TargetPort: intstr.FromInt(8055),
-						},
-					},
-				},
-			}
-
-			getTestSvcEps = func() []v1.EndpointSubset {
-				ep, _ := k8sClient.CoreV1().
-					Endpoints(testSvc.ObjectMeta.Namespace).
-					Get(testSvc.ObjectMeta.Name, metav1.GetOptions{})
-				log.WithField("endpoints",
-					spew.Sprint(ep)).Infof("Got endpoints for %s", testSvc.ObjectMeta.Name)
-				return ep.Subsets
-			}
-		})
-
 		Context("with test-service configured 10.101.0.10:80 -> w[0][0].IP:8055", func() {
-			BeforeEach(func() {
-				_, err := k8sClient.CoreV1().Services(testSvc.ObjectMeta.Namespace).Create(testSvc)
-				Expect(err).NotTo(HaveOccurred())
+			var (
+				testSvc          *v1.Service
+				testSvcNamespace string
+			)
 
-				getEndpointSubsets := func() []v1.EndpointSubset {
-					ep, _ := k8sClient.CoreV1().Endpoints("default").Get("test-service", metav1.GetOptions{})
-					log.WithField("endpoints", spew.Sprint(ep)).Info("Got endpoints for test-service")
-					return ep.Subsets
-				}
-				Eventually(getEndpointSubsets, "10s").Should(HaveLen(1),
+			testSvcName := "test-service"
+
+			BeforeEach(func() {
+				testSvc = k8sService(testSvcName, "10.101.0.10", w[0][0], 80, 8055)
+				testSvcNamespace = testSvc.ObjectMeta.Namespace
+				_, err := k8sClient.CoreV1().Services(testSvcNamespace).Create(testSvc)
+				Expect(err).NotTo(HaveOccurred())
+				Eventually(k8sGetEpsForServiceFunc(k8sClient, testSvc), "10s").Should(HaveLen(1),
 					"Service endpoints didn't get created? Is controller-manager happy?")
 			})
 
@@ -253,22 +223,41 @@ var _ = infrastructure.DatastoreDescribe("_BPF-NAT_ _BPF-SAFE_ BPF NAT tests", [
 
 			})
 
-			Context("with test-service removed", func() {
+			Context("with test-service port updated", func() {
+
 				var (
-					prevBpfsvcs []bpfm.NATMapMem
-					prevBpfeps  []bpfm.NATBackendMapMem
+					testSvcUpdated      *v1.Service
+					natBackBeforeUpdate []bpfm.NATBackendMapMem
 				)
 
 				BeforeEach(func() {
-					prevBpfsvcs, prevBpfeps = dumpNATmaps(felixes)
-					err := k8sClient.CoreV1().
-						Services(testSvc.ObjectMeta.Namespace).
-						Delete(testSvc.ObjectMeta.Name, &metav1.DeleteOptions{})
+					_, natBackBeforeUpdate = dumpNATmaps(felixes)
+
+					testSvcUpdated = k8sService(testSvcName, "10.101.0.10", w[0][0], 88, 8055)
+
+					svc, err := k8sClient.CoreV1().
+						Services(testSvcNamespace).
+						Get(testSvcName, metav1.GetOptions{})
+
+					testSvcUpdated.ObjectMeta.ResourceVersion = svc.ObjectMeta.ResourceVersion
+
+					_, err = k8sClient.CoreV1().Services(testSvcNamespace).Update(testSvcUpdated)
 					Expect(err).NotTo(HaveOccurred())
-					Eventually(getTestSvcEps, "10s").Should(HaveLen(0))
+					Eventually(k8sGetEpsForServiceFunc(k8sClient, testSvc), "10s").Should(HaveLen(1),
+						"Service endpoints didn't get created? Is controller-manager happy?")
 				})
 
-				It("should not have connectivity from workloads via a service to workload 0", func() {
+				It("should have connectivity from all workloads via the new port", func() {
+					ip := testSvcUpdated.Spec.ClusterIP
+					port := uint16(testSvcUpdated.Spec.Ports[0].Port)
+
+					cc.ExpectSome(w[0][1], workload.IP(ip), port)
+					cc.ExpectSome(w[1][0], workload.IP(ip), port)
+					cc.ExpectSome(w[1][1], workload.IP(ip), port)
+					cc.CheckConnectivity()
+				})
+
+				It("should not have connectivity from all workloads via the old port", func() {
 					ip := testSvc.Spec.ClusterIP
 					port := uint16(testSvc.Spec.Ports[0].Port)
 
@@ -279,9 +268,45 @@ var _ = infrastructure.DatastoreDescribe("_BPF-NAT_ _BPF-SAFE_ BPF NAT tests", [
 
 					natmaps, natbacks := dumpNATmaps(felixes)
 					for i := range felixes {
-						Expect(natmaps[i]).To(HaveLen(len(prevBpfsvcs[i]) - 1))
-						Expect(natbacks[i]).To(HaveLen(len(prevBpfeps[i]) - 1))
+						Expect(equalNATBackendMapVals(natbacks[i], natBackBeforeUpdate[i])).To(BeTrue())
+						ipv4 := net.ParseIP(ip)
+						portNew := uint16(testSvcUpdated.Spec.Ports[0].Port)
+						Expect(natmaps[i]).To(HaveKey(bpfm.NewNATKey(ipv4, portNew, 6)))
+						portOld := uint16(testSvc.Spec.Ports[0].Port)
+						Expect(natmaps[i]).NotTo(HaveKey(bpfm.NewNATKey(ipv4, portOld, 6)))
 					}
+				})
+
+				Context("with test-service removed", func() {
+					var (
+						prevBpfsvcs []bpfm.NATMapMem
+						prevBpfeps  []bpfm.NATBackendMapMem
+					)
+
+					BeforeEach(func() {
+						prevBpfsvcs, prevBpfeps = dumpNATmaps(felixes)
+						err := k8sClient.CoreV1().
+							Services(testSvcNamespace).
+							Delete(testSvcName, &metav1.DeleteOptions{})
+						Expect(err).NotTo(HaveOccurred())
+						Eventually(k8sGetEpsForServiceFunc(k8sClient, testSvc), "10s").Should(HaveLen(0))
+					})
+
+					It("should not have connectivity from workloads via a service to workload 0", func() {
+						ip := testSvcUpdated.Spec.ClusterIP
+						port := uint16(testSvcUpdated.Spec.Ports[0].Port)
+
+						cc.ExpectNone(w[0][1], workload.IP(ip), port)
+						cc.ExpectNone(w[1][0], workload.IP(ip), port)
+						cc.ExpectNone(w[1][1], workload.IP(ip), port)
+						cc.CheckConnectivity()
+
+						natmaps, natbacks := dumpNATmaps(felixes)
+						for i := range felixes {
+							Expect(natmaps[i]).To(HaveLen(len(prevBpfsvcs[i]) - 1))
+							Expect(natbacks[i]).To(HaveLen(len(prevBpfeps[i]) - 1))
+						}
+					})
 				})
 			})
 		})
@@ -328,4 +353,74 @@ func dumpNATmaps(felixes []*infrastructure.Felix) ([]bpfm.NATMapMem, []bpfm.NATB
 	}
 
 	return bpfsvcs, bpfeps
+}
+
+func k8sService(name, clusterIP string, w *workload.Workload, port, tgtPort int) *v1.Service {
+	return &v1.Service{
+		TypeMeta:   typeMetaV1("Service"),
+		ObjectMeta: objectMetaV1(name),
+		Spec: v1.ServiceSpec{
+			ClusterIP: clusterIP,
+			Type:      v1.ServiceTypeClusterIP,
+			Selector: map[string]string{
+				"name": w.Name,
+			},
+			Ports: []v1.ServicePort{
+				{
+					Protocol:   v1.ProtocolTCP,
+					Port:       int32(port),
+					Name:       fmt.Sprintf("port-%d", tgtPort),
+					TargetPort: intstr.FromInt(tgtPort),
+				},
+			},
+		},
+	}
+}
+
+func k8sGetEpsForService(k8s kubernetes.Interface, svc *v1.Service) []v1.EndpointSubset {
+	ep, _ := k8s.CoreV1().
+		Endpoints(svc.ObjectMeta.Namespace).
+		Get(svc.ObjectMeta.Name, metav1.GetOptions{})
+	log.WithField("endpoints",
+		spew.Sprint(ep)).Infof("Got endpoints for %s", svc.ObjectMeta.Name)
+	return ep.Subsets
+}
+
+func k8sGetEpsForServiceFunc(k8s kubernetes.Interface, svc *v1.Service) func() []v1.EndpointSubset {
+	return func() []v1.EndpointSubset {
+		return k8sGetEpsForService(k8s, svc)
+	}
+}
+
+func equalNATBackendMapVals(m1, m2 bpfm.NATBackendMapMem) bool {
+	if len(m1) != len(m2) {
+		return false
+	}
+
+	mm1 := make(map[bpfm.NATBackendValue]int)
+	mm2 := make(map[bpfm.NATBackendValue]int)
+
+	for _, v := range m1 {
+		c := mm1[v]
+		mm1[v] = c + 1
+	}
+
+	for _, v := range m2 {
+		c := mm2[v]
+		mm2[v] = c + 1
+	}
+
+	if len(mm1) != len(mm2) {
+		return false
+	}
+
+	for k1, v1 := range mm1 {
+		if v2, ok := mm2[k1]; !ok {
+			return false
+		} else if v1 != v2 {
+			return false
+		}
+	}
+
+	return true
 }

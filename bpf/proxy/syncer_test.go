@@ -49,12 +49,14 @@ var _ = Describe("BPF Syncer", func() {
 		},
 	}
 
+	JustAfterEach(func() {
+		log("svcs = %+v\n", svcs)
+		log("eps = %+v\n", eps)
+	})
+
 	It("should be possible to insert a service with endpoint", func() {
 		err := s.Apply(state)
 		Expect(err).NotTo(HaveOccurred())
-
-		log("svcs = %+v\n", svcs)
-		log("eps = %+v\n", eps)
 
 		Expect(svcs).To(HaveLen(1))
 		val, ok := svcs[bpfm.NewNATKey(net.IPv4(10, 0, 0, 1), 1234, proxy.ProtoV1ToIntPanic(v1.ProtocolTCP))]
@@ -88,9 +90,6 @@ var _ = Describe("BPF Syncer", func() {
 		err := s.Apply(state)
 		Expect(err).NotTo(HaveOccurred())
 
-		log("svcs = %+v\n", svcs)
-		log("eps = %+v\n", eps)
-
 		Expect(svcs).To(HaveLen(2))
 		val, ok := svcs[bpfm.NewNATKey(net.IPv4(10, 0, 0, 1), 1234, proxy.ProtoV1ToIntPanic(v1.ProtocolTCP))]
 		Expect(ok).To(BeTrue())
@@ -113,9 +112,6 @@ var _ = Describe("BPF Syncer", func() {
 		err := s.Apply(state)
 		Expect(err).NotTo(HaveOccurred())
 
-		log("svcs = %+v\n", svcs)
-		log("eps = %+v\n", eps)
-
 		Expect(svcs).To(HaveLen(1))
 		val, ok := svcs[bpfm.NewNATKey(net.IPv4(10, 0, 0, 2), 2222, proxy.ProtoV1ToIntPanic(v1.ProtocolTCP))]
 		Expect(ok).To(BeTrue())
@@ -135,9 +131,6 @@ var _ = Describe("BPF Syncer", func() {
 
 		err := s.Apply(state)
 		Expect(err).NotTo(HaveOccurred())
-
-		log("svcs = %+v\n", svcs)
-		log("eps = %+v\n", eps)
 
 		Expect(svcs).To(HaveLen(1))
 		val, ok := svcs[bpfm.NewNATKey(net.IPv4(10, 0, 0, 2), 2222, proxy.ProtoV1ToIntPanic(v1.ProtocolTCP))]
@@ -164,9 +157,6 @@ var _ = Describe("BPF Syncer", func() {
 		err := s.Apply(state)
 		Expect(err).NotTo(HaveOccurred())
 
-		log("svcs = %+v\n", svcs)
-		log("eps = %+v\n", eps)
-
 		Expect(svcs).To(HaveLen(1))
 		val, ok := svcs[bpfm.NewNATKey(net.IPv4(10, 0, 0, 2), 2222, proxy.ProtoV1ToIntPanic(v1.ProtocolTCP))]
 		Expect(ok).To(BeTrue())
@@ -189,9 +179,6 @@ var _ = Describe("BPF Syncer", func() {
 
 		err := s.Apply(state)
 		Expect(err).NotTo(HaveOccurred())
-
-		log("svcs = %+v\n", svcs)
-		log("eps = %+v\n", eps)
 
 		Expect(svcs).To(HaveLen(2))
 
@@ -218,9 +205,6 @@ var _ = Describe("BPF Syncer", func() {
 		err := s.Apply(state)
 		Expect(err).NotTo(HaveOccurred())
 
-		log("svcs = %+v\n", svcs)
-		log("eps = %+v\n", eps)
-
 		Expect(svcs).To(HaveLen(1))
 
 		val, ok := svcs[bpfm.NewNATKey(net.IPv4(10, 0, 0, 2), 2222, proxy.ProtoV1ToIntPanic(v1.ProtocolTCP))]
@@ -245,9 +229,6 @@ var _ = Describe("BPF Syncer", func() {
 		checkAfterResync = func() {
 			err := s.Apply(state)
 			Expect(err).NotTo(HaveOccurred())
-
-			log("svcs = %+v\n", svcs)
-			log("eps = %+v\n", eps)
 
 			Expect(svcs).To(HaveLen(3))
 
@@ -313,11 +294,29 @@ var _ = Describe("BPF Syncer", func() {
 
 		val2, ok := svcs[bpfm.NewNATKey(net.IPv4(10, 0, 0, 3), 3333, proxy.ProtoV1ToIntPanic(v1.ProtocolUDP))]
 		Expect(ok).To(BeTrue())
-		Expect(val2.ID()).To(Equal(val1.ID() + 1))
+		Expect(val2.ID()).To(Equal(val1.ID()+1), "wrongly recycled svc ID?")
+	})
 
-		log("svcs = %+v\n", svcs)
-		log("eps = %+v\n", eps)
+	It("should be possible to update a port of a service", func() {
+		state.SvcMap[svcKey3] = &k8sp.BaseServiceInfo{
+			ClusterIP: net.IPv4(10, 0, 0, 3),
+			Port:      3355,
+			Protocol:  v1.ProtocolUDP,
+		}
+		state.EpsMap[svcKey3] = []k8sp.Endpoint{
+			&k8sp.BaseEndpointInfo{"10.3.0.1:3434", false},
+		}
 
+		err := s.Apply(state)
+		Expect(err).NotTo(HaveOccurred())
+
+		Expect(svcs).To(HaveLen(4))
+		Expect(eps).To(HaveLen(2))
+
+		Expect(svcs).To(HaveKey(
+			bpfm.NewNATKey(net.IPv4(10, 0, 0, 3), 3355, proxy.ProtoV1ToIntPanic(v1.ProtocolUDP))))
+		Expect(svcs).NotTo(HaveKey(
+			bpfm.NewNATKey(net.IPv4(10, 0, 0, 3), 3333, proxy.ProtoV1ToIntPanic(v1.ProtocolUDP))))
 	})
 
 	It("should delete the services", func() {
@@ -326,9 +325,6 @@ var _ = Describe("BPF Syncer", func() {
 
 		err := s.Apply(state)
 		Expect(err).NotTo(HaveOccurred())
-
-		log("svcs = %+v\n", svcs)
-		log("eps = %+v\n", eps)
 
 		Expect(svcs).To(HaveLen(0))
 		Expect(eps).To(HaveLen(0))
@@ -386,21 +382,6 @@ func (m mockNATMap) Delete(k []byte) error {
 	return nil
 }
 
-func (m mockNATMap) Equal(cmp mockNATMap) bool {
-	if len(m) != len(cmp) {
-		return false
-	}
-
-	for k, v := range m {
-		v2, ok := cmp[k]
-		if !ok || v != v2 {
-			return false
-		}
-	}
-
-	return true
-}
-
 type mockNATBackendMap map[bpfm.NATBackendKey]bpfm.NATBackendValue
 
 func (m mockNATBackendMap) EnsureExists() error {
@@ -450,19 +431,4 @@ func (m mockNATBackendMap) Delete(k []byte) error {
 	delete(m, key)
 
 	return nil
-}
-
-func (m mockNATBackendMap) Equal(cmp mockNATBackendMap) bool {
-	if len(m) != len(cmp) {
-		return false
-	}
-
-	for k, v := range m {
-		v2, ok := cmp[k]
-		if !ok || v != v2 {
-			return false
-		}
-	}
-
-	return true
 }

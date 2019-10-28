@@ -180,6 +180,22 @@ func BackendMap() bpf.Map {
 // NATMapMem represents NATMap loaded into memory
 type NATMapMem map[NATKey]NATValue
 
+// Equal compares keys and values of the NATMapMem
+func (m NATMapMem) Equal(cmp NATMapMem) bool {
+	if len(m) != len(cmp) {
+		return false
+	}
+
+	for k, v := range m {
+		v2, ok := cmp[k]
+		if !ok || v != v2 {
+			return false
+		}
+	}
+
+	return true
+}
+
 // LoadNATMap loads the NAT map into a go map or returns an error
 func LoadNATMap(m bpf.Map) (NATMapMem, error) {
 	ret := make(NATMapMem)
@@ -210,6 +226,22 @@ func NATMapMemIter(m NATMapMem) bpf.MapIter {
 
 // NATBackendMapMem represents a NATBackend loaded into memory
 type NATBackendMapMem map[NATBackendKey]NATBackendValue
+
+// Equal compares keys and values of the NATBackendMapMem
+func (m NATBackendMapMem) Equal(cmp NATBackendMapMem) bool {
+	if len(m) != len(cmp) {
+		return false
+	}
+
+	for k, v := range m {
+		v2, ok := cmp[k]
+		if !ok || v != v2 {
+			return false
+		}
+	}
+
+	return true
+}
 
 // LoadNATBackendMap loads the NATBackend map into a go map or returns an error
 func LoadNATBackendMap(m bpf.Map) (NATBackendMapMem, error) {

@@ -141,7 +141,7 @@ func (s *Syncer) startupSync(state DPSyncerState) error {
 		delete(s.origSvcs, svck)
 
 		if id >= s.nextSvcID {
-			s.nextSvcID++
+			s.nextSvcID = id + 1
 		}
 
 		if svckey.extra != "" {
@@ -190,10 +190,20 @@ func (s *Syncer) applyClusterIP(skey svcKey, sinfo k8sp.ServicePort,
 		count int
 	)
 
-	if old, ok := s.prevSvcMap[skey]; ok {
-		id = old.id
-		count, err = s.updateExistingSvc(skey.sname, sinfo, id, old.count, epsMap)
-	} else {
+	old, exists := s.prevSvcMap[skey]
+	if exists {
+		if old.svc == sinfo {
+			id = old.id
+			count, err = s.updateExistingSvc(skey.sname, sinfo, id, old.count, epsMap)
+		} else {
+			if err := s.deleteSvc(old.svc, old.id, old.count); err != nil {
+				return err
+			}
+
+			exists = false
+		}
+	}
+	if !exists {
 		id = s.newSvcID()
 		count, err = s.newSvc(skey.sname, sinfo, id, epsMap)
 	}
