@@ -231,7 +231,7 @@ define update_pin
 	$(eval new_ver := $(call get_remote_version,$(2),$(3)))
 
 	$(DOCKER_RUN) -i $(CALICO_BUILD) sh -c '\
-		if [[ ! -z "$(new_ver)" ]]; then \
+		if [ ! -z "$(new_ver)" ]; then \
 			go get $(1)@$(new_ver); \
 			go mod download; \
 		fi'
@@ -244,7 +244,7 @@ define update_replace_pin
 	$(eval new_ver := $(call get_remote_version,$(2),$(3)))
 
 	$(DOCKER_RUN) -i $(CALICO_BUILD) sh -c '\
-		if [[ ! -z "$(new_ver)" ]]; then \
+		if [ ! -z "$(new_ver)" ]; then \
 			go mod edit -replace $(1)=$(2)@$(new_ver); \
 			go mod download; \
 		fi'
