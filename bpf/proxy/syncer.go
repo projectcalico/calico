@@ -229,15 +229,19 @@ func (s *Syncer) applyDerived(skey svcKey, sinfo k8sp.ServicePort,
 		return errors.Errorf("no ClusterIP for derived service type %s", skey.extra)
 	}
 
-	if err := s.writeSvc(sinfo, svc.id, svc.count); err != nil {
-		return err
-	}
-
-	s.newSvcMap[skey] = svcInfo{
+	newInfo := svcInfo{
 		id:    svc.id,
 		count: svc.count,
 		svc:   sinfo,
 	}
+
+	if oldInfo, ok := s.prevSvcMap[skey]; !ok || oldInfo != newInfo {
+		if err := s.writeSvc(sinfo, svc.id, svc.count); err != nil {
+			return err
+		}
+	}
+
+	s.newSvcMap[skey] = newInfo
 
 	return nil
 }
