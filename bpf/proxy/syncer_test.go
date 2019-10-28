@@ -11,6 +11,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	k8sp "k8s.io/kubernetes/pkg/proxy"
 
+	"github.com/projectcalico/felix/bpf"
 	proxy "github.com/projectcalico/felix/bpf/proxy"
 	bpfm "github.com/projectcalico/felix/bpf/proxy/maps"
 )
@@ -340,7 +341,7 @@ func (m mockNATMap) EnsureExists() error {
 	return nil
 }
 
-func (m mockNATMap) Iter(iter func(k, v []byte)) error {
+func (m mockNATMap) Iter(iter bpf.MapIter) error {
 	ks := len(bpfm.NATKey{})
 	vs := len(bpfm.NATValue{})
 	for k, v := range m {
@@ -406,7 +407,7 @@ func (m mockNATBackendMap) EnsureExists() error {
 	return nil
 }
 
-func (m mockNATBackendMap) Iter(iter func(k, v []byte)) error {
+func (m mockNATBackendMap) Iter(iter bpf.MapIter) error {
 	ks := len(bpfm.NATKey{})
 	vs := len(bpfm.NATValue{})
 	for k, v := range m {
