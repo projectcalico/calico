@@ -16,7 +16,7 @@ package constants
 
 const (
 	DatastoreIntro = `Set the Calico datastore access information in the environment variables or
-or supply details in a config file.
+supply details in a config file.
 
 `
 	DefaultConfigPath = "/etc/calico/calicoctl.cfg"
