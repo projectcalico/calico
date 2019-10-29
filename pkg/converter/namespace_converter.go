@@ -52,7 +52,7 @@ func (nc *namespaceConverter) Convert(k8sObj interface{}) (interface{}, error) {
 	profile := kvp.Value.(*api.Profile)
 
 	// Isolate the metadata fields that we care about. ResourceVersion, CreationTimeStamp, etc are
-	// not relevant so we ignore them. This prevents uncessary updates.
+	// not relevant so we ignore them. This prevents unnecessary updates.
 	profile.ObjectMeta = metav1.ObjectMeta{Name: profile.Name}
 
 	return *profile, nil

@@ -19,7 +19,7 @@ type Converter interface {
 	// Converts kubernetes object to calico representation of it.
 	Convert(k8sObj interface{}) (interface{}, error)
 
-	// Returns apporpriate key for the object
+	// Returns appropriate key for the object
 	GetKey(obj interface{}) string
 
 	// DeleteArgsFromKey returns name and namespace of the object to pass to Delete
