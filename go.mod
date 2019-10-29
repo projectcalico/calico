@@ -21,6 +21,7 @@ require (
 	github.com/libp2p/go-sockaddr v0.0.0-20190411201116-52957a0228cc // indirect
 	github.com/mattn/go-colorable v0.0.0-20190708054220-c52ace132bf4 // indirect
 	github.com/mipearson/rfw v0.0.0-20170619235010-6f0a6f3266ba
+	github.com/mitchellh/go-homedir v1.1.0
 	github.com/onsi/ginkgo v1.8.0
 	github.com/onsi/gomega v1.5.0
 	github.com/opentracing/opentracing-go v0.0.0-20190704175813-135aa78c6f95 // indirect
@@ -33,16 +34,18 @@ require (
 	github.com/satori/go.uuid v1.2.0
 	github.com/sirupsen/logrus v1.4.2
 	github.com/smartystreets/goconvey v0.0.0-20190731233626-505e41936337 // indirect
+	github.com/spf13/cobra v0.0.5
 	github.com/spf13/pflag v1.0.5 // indirect
+	github.com/spf13/viper v1.3.2
 	github.com/vishvananda/netlink v0.0.0-20181108222139-023a6dafdcdf
 	github.com/whyrusleeping/go-logging v0.0.0-20170515211332-0457bb6b88fc // indirect
 	go.uber.org/atomic v1.4.0 // indirect
 	go.uber.org/multierr v1.1.0 // indirect
 	go.uber.org/zap v1.10.0 // indirect
-	golang.org/x/crypto v0.0.0-20191011191535-87dc89f01550 // indirect
+	golang.org/x/crypto v0.0.0-20191029031824-8986dd9e96cf // indirect
 	golang.org/x/net v0.0.0-20190812203447-cdfb69ac37fc
-	golang.org/x/sys v0.0.0-20191025090151-53bf42e6b339
-	golang.org/x/tools v0.0.0-20191025023517-2077df36852e // indirect
+	golang.org/x/sys v0.0.0-20191029155521-f43be2a4598c
+	golang.org/x/tools v0.0.0-20191031160344-02d0efc0fb61 // indirect
 	google.golang.org/grpc v1.19.0
 	gopkg.in/ini.v1 v1.46.0 // indirect
 	k8s.io/api v0.0.0
