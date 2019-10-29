@@ -57,7 +57,7 @@ func (p *policyConverter) Convert(k8sObj interface{}) (interface{}, error) {
 	cnp := kvp.Value.(*api.NetworkPolicy)
 
 	// Isolate the metadata fields that we care about. ResourceVersion, CreationTimeStamp, etc are
-	// not relevant so we ignore them. This prevents uncessary updates.
+	// not relevant so we ignore them. This prevents unnecessary updates.
 	cnp.ObjectMeta = metav1.ObjectMeta{Name: cnp.Name, Namespace: cnp.Namespace}
 
 	return *cnp, err
