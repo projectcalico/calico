@@ -30,34 +30,31 @@ import (
 	"github.com/projectcalico/felix/proto"
 )
 
-var ProgPrefix, ProgSuffix []byte
+type ProgramGenerator struct {
+	w          io.Writer
+	err        error
+	ruleID     int
+	debug      bool
+	progPrefix []byte
+	progSuffix []byte
+}
 
-func initProgs() {
-	template, err := ioutil.ReadFile("/code/bpf/xdp/redir_tc.c")
+func NewProgramGenerator(src string) (*ProgramGenerator, error) {
+	template, err := ioutil.ReadFile(src)
 	if err != nil {
-		log.WithError(err).Panic("Failed to read BPF program template")
+		return nil, fmt.Errorf("failed to read BPF program template from %s", src)
 	}
 	splits := bytes.Split(template, []byte("// __NORMAL_POLICY__\n"))
 	if len(splits) != 2 {
-		log.WithError(err).Panic("Failed to split BPF program template")
+		return nil, fmt.Errorf("Failed to split BPF program template %s", src)
 	}
-	ProgPrefix = splits[0]
-	ProgSuffix = splits[1]
-}
 
-type ProgramGenerator struct {
-	w      io.Writer
-	err    error
-	ruleID int
-	debug  bool
-}
-
-func NewProgramGenerator(w io.Writer) *ProgramGenerator {
 	return &ProgramGenerator{
-		w: w,
 		// On the critical path so it's worth skipping log entry creation if debug is not enabled.
-		debug: log.GetLevel() >= log.DebugLevel,
-	}
+		debug:      log.GetLevel() >= log.DebugLevel,
+		progPrefix: splits[0],
+		progSuffix: splits[1],
+	}, nil
 }
 
 func (r *ProgramGenerator) printf(f string, args ...interface{}) {
@@ -77,17 +74,28 @@ func (r *ProgramGenerator) writeBytes(b []byte) {
 	_, r.err = r.w.Write(b)
 }
 
-func (r *ProgramGenerator) WriteProgram(tiers [][][]*proto.Rule) error {
-	if ProgPrefix == nil {
-		initProgs()
+func (r *ProgramGenerator) WriteProgram(w io.Writer, tiers [][][]*proto.Rule) error {
+	// XXX a quick fix to make things local
+	if w == nil {
+		return fmt.Errorf("no writer")
 	}
-	r.writeBytes(ProgPrefix)
-	_ = r.WriteCalicoRules(tiers)
-	r.writeBytes(ProgSuffix)
+
+	r.w = w
+
+	r.writeBytes(r.progPrefix)
+	_ = r.WriteCalicoRules(w, tiers)
+	r.writeBytes(r.progSuffix)
 	return r.err
 }
 
-func (r *ProgramGenerator) WriteCalicoRules(tiers [][][]*proto.Rule) error {
+func (r *ProgramGenerator) WriteCalicoRules(w io.Writer, tiers [][][]*proto.Rule) error {
+	// XXX a quick fix to make things local
+	if w == nil {
+		return fmt.Errorf("no writer")
+	}
+
+	r.w = w
+
 	for tierIdx, tier := range tiers {
 		endOfTierLabel := fmt.Sprint("end_of_tier_", tierIdx)
 

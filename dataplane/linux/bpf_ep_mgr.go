@@ -509,6 +509,8 @@ func (m *bpfEndpointManager) compileAndAttachProgram(allRules [][][]*proto.Rule,
 	defer func() {
 		_ = os.RemoveAll(tempDir)
 	}()
+	srcDir := "/code/bpf/xdp"
+	srcFileName := srcDir + "/redir_tc.c"
 	oFileName := tempDir + "/redir_tc.o"
 	logLevel := strings.ToUpper(m.bpfLogLevel)
 	if logLevel == "" {
@@ -516,13 +518,135 @@ func (m *bpfEndpointManager) compileAndAttachProgram(allRules [][][]*proto.Rule,
 	}
 
 	logPfx := os.Getenv("BPF_LOG_PFX") + attachPoint.Iface
-	clang := exec.Command("clang",
-		"-x", "c",
+
+	err = CompileTCProgramToFile(allRules,
+		CompileWithWorkingDir(srcDir),
+		CompileWithSourceName(srcFileName),
+		CompileWithOutputName(oFileName),
+		CompileWithFIBEnabled(m.fibLookupEnabled),
+		CompileWithLogLevel(logLevel),
+		CompileWithLogPrefix(logPfx),
+	)
+	if err != nil {
+		return err
+	}
+
+	err = AttachTCProgram(oFileName, attachPoint)
+	if err != nil {
+		var buf bytes.Buffer
+		pg, err := bpf.NewProgramGenerator(srcFileName)
+		if err != nil {
+			log.WithError(err).Panic("Failed to write get code generator.")
+		}
+		err = pg.WriteProgram(&buf, allRules)
+		if err != nil {
+			log.WithError(err).Panic("Failed to write C file to buffer.")
+		}
+
+		log.WithError(err).WithFields(log.Fields{"program": buf.String()}).
+			Error("Failed BPF program")
+		return err
+	}
+	return nil
+}
+
+// AttachTCProgram attaches a BPF program froma file to the TC attach point
+func AttachTCProgram(fname string, attachPoint TCAttachPoint) error {
+	// Hook is relative to the host rather than the endpoint so we need to flip it.
+	tc := exec.Command("tc",
+		"filter", "add", "dev", attachPoint.Iface,
+		attachPoint.Hook,
+		"bpf", "da", "obj", fname,
+		"sec", attachPoint.Section)
+
+	out, err := tc.CombinedOutput()
+	if err != nil {
+		log.WithError(err).WithFields(log.Fields{"out": string(out)}).
+			WithField("command", tc).Error("Failed to attach BPF program")
+	}
+
+	return err
+}
+
+// CompileTCOption specifies additional compile options for TC programs
+type CompileTCOption func(interface{})
+
+type compileTCOpts struct {
+	extraArgs []string
+	dir       string
+	srcFile   string
+	outFile   string
+}
+
+func (o *compileTCOpts) appendExtraArg(a string) {
+	o.extraArgs = append(o.extraArgs, a)
+}
+
+// CompileWithFIBEnabled sets whether FIB lookup is allowed
+func CompileWithFIBEnabled(enabled bool) CompileTCOption {
+	return func(opts interface{}) {
+		opts.(*compileTCOpts).appendExtraArg(fmt.Sprintf("-DCALI_FIB_LOOKUP_ENABLED=%v", enabled))
+	}
+}
+
+// CompileWithLogLevel sets the log level of the resulting program
+func CompileWithLogLevel(level string) CompileTCOption {
+	return func(opts interface{}) {
+		opts.(*compileTCOpts).appendExtraArg(fmt.Sprintf("-DCALI_LOG_LEVEL=CALI_LOG_LEVEL_%s", level))
+	}
+}
+
+// CompileWithLogPrefix sets a specific log prefix for the resulting program
+func CompileWithLogPrefix(prefix string) CompileTCOption {
+	return func(opts interface{}) {
+		opts.(*compileTCOpts).appendExtraArg(fmt.Sprintf("-DCALI_LOG_PFX=%v", prefix))
+	}
+}
+
+// CompileWithSourceName sets the source file name
+func CompileWithSourceName(f string) CompileTCOption {
+	return func(opts interface{}) {
+		opts.(*compileTCOpts).srcFile = f
+	}
+}
+
+// CompileWithOutputName sets the output name
+func CompileWithOutputName(f string) CompileTCOption {
+	return func(opts interface{}) {
+		opts.(*compileTCOpts).outFile = f
+	}
+}
+
+// CompileWithWorkingDir sets the working directory
+func CompileWithWorkingDir(dir string) CompileTCOption {
+	return func(opts interface{}) {
+		opts.(*compileTCOpts).dir = dir
+	}
+}
+
+// CompileTCProgramToFile takes policy rules and compiles them into a tc-bpf
+// program and saves it into the provided file. Extra CFLAGS can be provided
+func CompileTCProgramToFile(allRules [][][]*proto.Rule, opts ...CompileTCOption) error {
+	compileOpts := compileTCOpts{
+		srcFile: "/code/bpf/xdp/redir_tc.c",
+		outFile: "/tmp/redir_tc.o",
+		dir:     "/code/bpf/xdp",
+	}
+
+	for _, o := range opts {
+		o(&compileOpts)
+	}
+
+	args := []string{
+		"-x",
+		"c",
 		"-D__KERNEL__",
 		"-D__ASM_SYSREG_H",
-		fmt.Sprintf("-DCALI_FIB_LOOKUP_ENABLED=%v", m.fibLookupEnabled),
-		fmt.Sprintf("-DCALI_LOG_LEVEL=CALI_LOG_LEVEL_%s", logLevel),
-		fmt.Sprintf("-DCALI_LOG_PFX=%v", logPfx),
+	}
+
+	args = append(args, compileOpts.extraArgs...)
+
+	args = append(args, []string{
 		"-Wno-unused-value",
 		"-Wno-pointer-sign",
 		"-Wno-compare-distinct-pointer-types",
@@ -532,8 +656,11 @@ func (m *bpfEndpointManager) compileAndAttachProgram(allRules [][][]*proto.Rule,
 		"-fno-stack-protector",
 		"-O2",
 		"-emit-llvm",
-		"-c", "-", "-o", "-")
-	clang.Dir = "/code/bpf/xdp"
+		"-c", "-", "-o", "-",
+	}...)
+
+	clang := exec.Command("clang", args...)
+	clang.Dir = compileOpts.dir
 	clangStdin, err := clang.StdinPipe()
 	if err != nil {
 		return err
@@ -566,8 +693,11 @@ func (m *bpfEndpointManager) compileAndAttachProgram(allRules [][][]*proto.Rule,
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		pg := bpf.NewProgramGenerator(clangStdin)
-		err = pg.WriteProgram(allRules)
+		pg, err := bpf.NewProgramGenerator(compileOpts.srcFile)
+		if err != nil {
+			log.WithError(err).Panic("Failed to create code generator")
+		}
+		err = pg.WriteProgram(clangStdin, allRules)
 		if err != nil {
 			log.WithError(err).Panic("Failed to write C file.")
 		}
@@ -576,7 +706,7 @@ func (m *bpfEndpointManager) compileAndAttachProgram(allRules [][][]*proto.Rule,
 			log.WithError(err).Panic("Failed to write C file to clang stdin (Close() failed).")
 		}
 	}()
-	llc := exec.Command("llc", "-march=bpf", "-filetype=obj", "-o", oFileName)
+	llc := exec.Command("llc", "-march=bpf", "-filetype=obj", "-o", compileOpts.outFile)
 	llc.Stdin = clangStdout
 	out, err := llc.CombinedOutput()
 	if err != nil {
@@ -589,24 +719,6 @@ func (m *bpfEndpointManager) compileAndAttachProgram(allRules [][][]*proto.Rule,
 		return err
 	}
 	wg.Wait()
-	// Hook is relative to the host rather than the endpoint so we need to flip it.
-	tc := exec.Command("tc",
-		"filter", "add", "dev", attachPoint.Iface,
-		attachPoint.Hook,
-		"bpf", "da", "obj", oFileName,
-		"sec", attachPoint.Section)
-	out, err = tc.CombinedOutput()
-	if err != nil {
-		var buf bytes.Buffer
-		pg := bpf.NewProgramGenerator(&buf)
-		err = pg.WriteProgram(allRules)
-		if err != nil {
-			log.WithError(err).Panic("Failed to write C file to buffer.")
-		}
 
-		log.WithError(err).WithFields(log.Fields{"out": string(out),
-			"program": buf.String()}).WithField("command", tc).Error("Failed to attach BPF program")
-		return err
-	}
 	return nil
 }
