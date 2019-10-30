@@ -1,5 +1,9 @@
-# Ignore everything except the filesystem that gets copied in and the generated binaries
+# Ignore everything except:
 *
+# - The filesystem that gets copied in and the generated binaries
 !filesystem
 !dist/bin
 !vendor/github.com/kelseyhightower/confd/etc/calico/confd
+# - CentOS repository file and our license
+!centos.repo
+!LICENSE

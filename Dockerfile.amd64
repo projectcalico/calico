@@ -1,4 +1,4 @@
-# Copyright (c) 2015-2016 Tigera, Inc. All rights reserved.
+# Copyright (c) 2015-2019 Tigera, Inc. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -11,57 +11,156 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+ARG ARCH=x86_64
+ARG GIT_VERSION=unknown
+ARG IPTABLES_VER=1.8.2-9
+ARG RUNIT_VER=2.1.2
 ARG BIRD_IMAGE=calico/bird:latest
+
 
 FROM calico/bpftool:v5.0-amd64 as bpftool
 FROM ${BIRD_IMAGE} as bird
 
-FROM debian:10-slim
-LABEL maintainer "Casey Davenport <casey@tigera.io>"
+# Use this build stage to build iptables rpm and runit binaries.
+# We need to rebuild the iptables rpm because the prepackaged rpm does not have legacy iptables binaries.
+# We need to build runit because there aren't any rpms for it in CentOS or ubi repositories.
+FROM centos:8 as centos
 
-ARG ARCH=amd64
+ARG ARCH
+ARG IPTABLES_VER
+ARG RUNIT_VER
+ARG CENTOS_MIRROR_BASE_URL=http://vault.centos.org/8.0.1905
+ARG LIBNFTNL_VER=1.1.1-4
+ARG LIBNFTNL_SOURCERPM_URL=${CENTOS_MIRROR_BASE_URL}/BaseOS/Source/SPackages/libnftnl-${LIBNFTNL_VER}.el8.src.rpm
+ARG IPTABLES_SOURCERPM_URL=${CENTOS_MIRROR_BASE_URL}/BaseOS/Source/SPackages/iptables-${IPTABLES_VER}.el8_0.1.src.rpm
 
-# Install remaining runtime deps required for felix from the global repository
-RUN apt-get update && apt-get upgrade && apt-get install -y \
+# Install build dependencies and security updates.
+RUN dnf install -y 'dnf-command(config-manager)' && \
+    # Enable PowerTools repo for '-devel' packages
+    dnf config-manager --set-enabled PowerTools && \
+    # Install required packages for building rpms. yum-utils is not required but it gives us yum-builddep to easily install build deps.
+    yum install -y rpm-build yum-utils make && \
+    # Need these to build runit.
+    yum install -y wget glibc-static gcc && \
+    # Ensure security updates are installed.
+    yum -y update-minimal --security --sec-severity=Important --sec-severity=Critical
+
+# In order to rebuild the iptables RPM, we first need to rebuild the libnftnl RPM because building
+# iptables requires libnftnl-devel but libnftnl-devel is not available on ubi or CentOS repos.
+# (Note: it's not in RHEL8.1 either https://bugzilla.redhat.com/show_bug.cgi?id=1711361).
+# Rebuilding libnftnl will give us libnftnl-devel too.
+RUN rpm -i ${LIBNFTNL_SOURCERPM_URL} && \
+    yum-builddep -y --spec /root/rpmbuild/SPECS/libnftnl.spec && \
+    rpmbuild -bb /root/rpmbuild/SPECS/libnftnl.spec && \
+    # Now install libnftnl and libnftnl-devel
+    rpm -Uv /root/rpmbuild/RPMS/${ARCH}/libnftnl-${LIBNFTNL_VER}.el8.${ARCH}.rpm && \
+    rpm -Uv /root/rpmbuild/RPMS/${ARCH}/libnftnl-devel-${LIBNFTNL_VER}.el8.${ARCH}.rpm && \
+    # Install source RPM for iptables and install its build dependencies.
+    rpm -i ${IPTABLES_SOURCERPM_URL} && \
+    yum-builddep -y --spec /root/rpmbuild/SPECS/iptables.spec
+
+# Patch the iptables build spec so that we keep the legacy iptables binaries.
+RUN sed -i '/drop all legacy tools/,/sbindir.*legacy/d' /root/rpmbuild/SPECS/iptables.spec
+
+# Patch the iptables build spec to drop the renaming of nft binaries. Instead of renaming binaries,
+# we will use alternatives to set the canonical iptables binaries.
+RUN sed -i '/rename nft versions to standard name/,/^done/d' /root/rpmbuild/SPECS/iptables.spec
+
+# Patch the iptables build spec so that legacy and nft iptables binaries are verified to be in the resulting rpm.
+RUN sed -i '/%files$/a \
+\%\{_sbindir\}\/xtables-legacy-multi \n\
+\%\{_sbindir\}\/ip6tables-legacy \n\
+\%\{_sbindir\}\/ip6tables-legacy-restore \n\
+\%\{_sbindir\}\/ip6tables-legacy-save \n\
+\%\{_sbindir\}\/iptables-legacy \n\
+\%\{_sbindir\}\/iptables-legacy-restore \n\
+\%\{_sbindir\}\/iptables-legacy-save \n\
+\%\{_sbindir\}\/ip6tables-nft\n\
+\%\{_sbindir\}\/ip6tables-nft-restore\n\
+\%\{_sbindir\}\/ip6tables-nft-save\n\
+\%\{_sbindir\}\/iptables-nft\n\
+\%\{_sbindir\}\/iptables-nft-restore\n\
+\%\{_sbindir\}\/iptables-nft-save\n\
+' /root/rpmbuild/SPECS/iptables.spec
+
+# Finally rebuild iptables.
+RUN rpmbuild -bb /root/rpmbuild/SPECS/iptables.spec
+
+# runit is not available in ubi or CentOS repos so build it.
+RUN wget -P /tmp http://smarden.org/runit/runit-${RUNIT_VER}.tar.gz && \
+    gunzip /tmp/runit-${RUNIT_VER}.tar.gz && \
+    tar -xpf /tmp/runit-${RUNIT_VER}.tar -C /tmp && \
+    cd /tmp/admin/runit-${RUNIT_VER}/ && \
+    package/install
+
+FROM registry.access.redhat.com/ubi8/ubi-minimal:latest
+ARG ARCH
+ARG GIT_VERSION
+ARG IPTABLES_VER
+ARG RUNIT_VER
+
+# Required labels for certification
+LABEL name="Calico node" \
+      vendor="Project Calico" \
+      version=$GIT_VERSION \
+      release="1" \
+      summary="Calico node handles networking and policy for Calico" \
+      description="Calico node handles networking and policy for Calico" \
+      maintainer="laurence@tigera.io"
+
+# Copy in runit binaries
+COPY --from=centos  /tmp/admin/runit-${RUNIT_VER}/command/* /usr/local/bin/
+
+# Copy in our rpms
+COPY --from=centos  /root/rpmbuild/RPMS/${ARCH}/* /tmp/rpms/
+
+# Install the necessary packages, making sure that we're using only CentOS repos.
+# Since the ubi repos do not contain all the packages we need (they're missing conntrack-tools),
+# we're using CentOS repos for all our packages. Using packages from a single source (CentOS) makes
+# it less likely we'll run into package dependency version mismatches.
+COPY centos.repo /etc/yum.repos.d/
+RUN rm /etc/yum.repos.d/ubi.repo && \
+    microdnf install --nodocs \
+    # Needed for iptables
+    libpcap libmnl libnfnetlink libnftnl libnetfilter_conntrack \
     ipset \
-    iputils-arping \
-    iputils-ping \
-    iputils-tracepath \
+    iputils \
     # Need arp
     net-tools \
-    conntrack \
-    runit \
     # Need kmod to ensure ip6tables-save works correctly
     kmod \
-    # Need netbase in order for ipset to work correctly
-    # See https://github.com/kubernetes/kubernetes/issues/68703
-    netbase \
     # Also needed (provides utilities for browsing procfs like ps)
     procps \
-    ca-certificates
-
-# Install iptables from buster to get version 1.8.2
-# Similarly for iproute2, we want a more recent version for BPF support.
-RUN echo 'APT::Default-Release "stable";' > /etc/apt/apt.conf.d/99defaultrelease
-RUN echo 'deb     http://ftp.de.debian.org/debian/    buster main contrib non-free' > /etc/apt/sources.list.d/buster.list
-RUN apt-get update && apt-get install -y -t buster \
-    ipset \
-    iptables \
-    iproute2
-
-# Set the iptables and ip6tables binaries to link to the legacy backend
-# version of the commands, by default they link to the nft backend.
-RUN update-alternatives --set iptables /usr/sbin/iptables-legacy
-RUN update-alternatives --set ip6tables /usr/sbin/ip6tables-legacy
+    iproute \
+    # Needed for conntrack
+    libnetfilter_cthelper libnetfilter_cttimeout libnetfilter_queue \
+    conntrack-tools \
+    # Needed for runit startup script
+    which && \
+    microdnf clean all && \
+    # Install iptables via rpms. The libs must be force installed because the iptables source RPM has the release
+    # version '9.el8_0.1' while the existing iptables-libs (pulled in by the iputils package) has version '9.el8.1'.
+    rpm --force -i /tmp/rpms/iptables-libs-${IPTABLES_VER}.el8.1.${ARCH}.rpm && \
+    rpm -i /tmp/rpms/iptables-${IPTABLES_VER}.el8.1.${ARCH}.rpm && \
+    # Set alternatives
+    alternatives --install /usr/sbin/iptables iptables /usr/sbin/iptables-legacy 1 && \
+    alternatives --install /usr/sbin/ip6tables ip6tables /usr/sbin/ip6tables-legacy 1
 
 # Copy our bird binaries in
 COPY --from=bird /bird* /bin/
 
-# Copy in the filesystem - this contains felix, calico-bgp-daemon etc...
+# Copy in the filesystem - this contains felix, calico-bgp-daemon, licenses, etc...
 COPY filesystem/ /
 
+# Add symlink to modprobe where iptables expects it to be.
+# This has to come after copying over filesystem/, since that may overwrite /sbin depending on the base image.
+RUN ln -s /usr/sbin/modprobe /sbin/modprobe
+
+# Add in top-level license file
+COPY LICENSE /licenses
+
 # Copy in the calico-node binary
-COPY dist/bin/calico-node-${ARCH} /bin/calico-node
+COPY dist/bin/calico-node-amd64 /bin/calico-node
 
 COPY --from=bpftool /bpftool /bin
 
