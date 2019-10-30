@@ -406,12 +406,17 @@ func (m *bpfEndpointManager) applyPolicy(wlID proto.WorkloadEndpointID) error {
 	return nil
 }
 
-func (m *bpfEndpointManager) ensureQdisc(ifaceName string) {
+// EnsureQdisc makes sure that qdisc is attached to the given interface
+func EnsureQdisc(ifaceName string) {
 	// FIXME Avoid flapping the tc program and qdisc
 	cmd := exec.Command("tc", "qdisc", "del", "dev", ifaceName, "clsact")
 	_ = cmd.Run()
 	cmd = exec.Command("tc", "qdisc", "add", "dev", ifaceName, "clsact")
 	_ = cmd.Run()
+}
+
+func (m *bpfEndpointManager) ensureQdisc(ifaceName string) {
+	EnsureQdisc(ifaceName)
 }
 
 func (m *bpfEndpointManager) compileAndAttachWorkloadProgram(endpoint *proto.WorkloadEndpoint, polDirection string) error {
@@ -576,6 +581,7 @@ type compileTCOpts struct {
 	dir       string
 	srcFile   string
 	outFile   string
+	bpftool   bool
 }
 
 func (o *compileTCOpts) appendExtraArg(a string) {
@@ -624,6 +630,12 @@ func CompileWithWorkingDir(dir string) CompileTCOption {
 	}
 }
 
+func CompileWithBpftoolLoader() CompileTCOption {
+	return func(opts interface{}) {
+		opts.(*compileTCOpts).bpftool = true
+	}
+}
+
 // CompileTCProgramToFile takes policy rules and compiles them into a tc-bpf
 // program and saves it into the provided file. Extra CFLAGS can be provided
 func CompileTCProgramToFile(allRules [][][]*proto.Rule, opts ...CompileTCOption) error {
@@ -642,6 +654,10 @@ func CompileTCProgramToFile(allRules [][][]*proto.Rule, opts ...CompileTCOption)
 		"c",
 		"-D__KERNEL__",
 		"-D__ASM_SYSREG_H",
+	}
+
+	if compileOpts.bpftool {
+		args = append(args, "-D__BPFTOOL_LOADER__")
 	}
 
 	args = append(args, compileOpts.extraArgs...)

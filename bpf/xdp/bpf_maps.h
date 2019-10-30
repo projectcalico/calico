@@ -64,7 +64,9 @@ struct bpf_map_def_extended __attribute__((section("maps"))) calico_ip_sets = {
 	.value_size     = sizeof(uint32_t),
 	.max_entries       = 1024*1024,
 	.map_flags          = BPF_F_NO_PREALLOC,
+#ifndef __BPFTOOL_LOADER__
 	.pinning_strategy        = 2 /* global namespace */,
+#endif
 };
 
 struct bpf_map_def_extended __attribute__((section("maps"))) calico_local_ips = {

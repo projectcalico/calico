@@ -113,9 +113,11 @@ struct bpf_map_def_extended {
 	__u32 max_entries;
 	__u32 map_flags;
 	__u32 map_id;
+#ifndef __BPFTOOL_LOADER__
 	__u32 pinning_strategy;
 	__u32 unused1;
 	__u32 unused2;
+#endif
 };
 
 
