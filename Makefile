@@ -880,12 +880,25 @@ endif
 .PHONY: ut-no-cover
 ut-no-cover: $(SRC_FILES)
 	@echo Running Go UTs without coverage.
-	$(DOCKER_RUN) $(CALICO_BUILD) ginkgo -r -skipPackage fv,k8sfv,windows $(GINKGO_ARGS)
+	$(DOCKER_RUN) $(CALICO_BUILD) ginkgo -r -skipPackage fv,k8sfv,windows,bpf/ut $(GINKGO_ARGS)
 
 .PHONY: ut-watch
 ut-watch: $(SRC_FILES)
 	@echo Watching go UTs for changes...
-	$(DOCKER_RUN) $(CALICO_BUILD) ginkgo watch -r -skipPackage fv,k8sfv,windows $(GINKGO_ARGS)
+	$(DOCKER_RUN) $(CALICO_BUILD) ginkgo watch -r -skipPackage fv,k8sfv,windows,bpf/ut $(GINKGO_ARGS)
+
+.PHONY: bin/bpf.test
+bin/bpf.test:
+	$(DOCKER_RUN) $(CALICO_BUILD) go test $(BUILD_FLAGS) ./bpf/ut -c -o $@
+
+.PHONY: bpf-ut
+bpf-ut: bin/bpf.test
+	$(DOCKER_RUN) \
+		-v /usr/local/sbin/bpftool:/usr/local/sbin/bpftool \
+		--privileged calico/felix:latest sh -c ' \
+		mount bpffs /sys/fs/bpf -t bpf && \
+		cd /go/src/$(PACKAGE_NAME)/bpf/ut && \
+		../../bin/bpf.test'
 
 # Launch a browser with Go coverage stats for the whole project.
 .PHONY: cover-browser
