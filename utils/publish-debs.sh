@@ -6,7 +6,18 @@ test -n "$SECRET_KEY"
 keydir=`mktemp -t -d calico-publish-debs.XXXXXX`
 cp -a $SECRET_KEY ${keydir}/key
 
-docker run --rm -ti -v `pwd`:/code -v ${keydir}:/keydir calico-build/bionic /bin/sh -c "gpg --import --batch < /keydir/key && debsign -kCalico *_*_source.changes"
+# Sign all source packages.
+if [ -t 0 ]; then
+    # STDIN is a terminal, so whoever is running this code can provide a pass phrase for
+    # their GPG key.  Pass STDIN through to the Docker container, to enable that.
+    interactive=-ti
+else
+    # STDIN is not a terminal - probably we're running in our CI system.  We mustn't pass
+    # -ti to docker-run, and $SECRET_KEY must not require a pass phrase.
+    interactive=
+fi
+docker run --rm ${interactive} -v `pwd`:/code -v ${keydir}:/keydir calico-build/bionic /bin/sh -c "gpg --import --batch < /keydir/key && debsign -kCalico *_*_source.changes"
+
 for series in trusty xenial bionic; do
     # Get the packages and versions that already exist in the PPA, so we can avoid
     # uploading the same package and version as already exist.  (As they would be rejected
