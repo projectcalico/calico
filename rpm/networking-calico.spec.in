@@ -152,7 +152,7 @@ rm -rf $RPM_BUILD_ROOT
 # For EL7, install systemd service files
 %if 0%{?el7}
     install -d -m 755 %{buildroot}%{_unitdir}
-    install -p -D -m 755 %{SOURCE45} %{buildroot}%{_unitdir}/calico-dhcp-agent.service
+    install -p -D -m 644 %{SOURCE45} %{buildroot}%{_unitdir}/calico-dhcp-agent.service
 %endif
 
 
