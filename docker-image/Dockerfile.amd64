@@ -55,6 +55,10 @@ RUN apt-get update && apt-get install -y \
 RUN update-alternatives --set iptables /usr/sbin/iptables-legacy
 RUN update-alternatives --set ip6tables /usr/sbin/ip6tables-legacy
 
+# Install tini, the init daemon we use.
+ENV TINI_VERSION v0.18.0
+ADD https://github.com/krallin/tini/releases/download/${TINI_VERSION}/tini-static-amd64 /sbin/tini
+
 ADD felix.cfg /etc/calico/felix.cfg
 ADD calico-felix-wrapper /usr/bin
 
@@ -76,8 +80,6 @@ COPY --from=bpftool /bpftool /usr/bin
 WORKDIR /code
 
 # Since our binary isn't designed to run as PID 1, run it via the tini init daemon.
-ENV TINI_VERSION v0.18.0
-ADD https://github.com/krallin/tini/releases/download/${TINI_VERSION}/tini-static-amd64 /sbin/tini
 RUN chmod +x /sbin/tini
 ENTRYPOINT ["/sbin/tini", "--"]
 

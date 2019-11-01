@@ -65,7 +65,7 @@ func (r *ProgramGenerator) printf(f string, args ...interface{}) {
 		return
 	}
 	if r.debug {
-		log.Debugf("Writing C program: "+f, args...)
+		log.Debugf("Writing C program: "+strings.TrimRight(f, "\n"), args...)
 	}
 	_, r.err = fmt.Fprintf(r.w, f, args...)
 }

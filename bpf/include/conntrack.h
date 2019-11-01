@@ -88,7 +88,7 @@ static CALI_BPF_INLINE int calico_ct_v4_create_tracking(
 		// have created a conntrack entry.  Look that one up instead of
 		// creating one.
 		CALI_DEBUG("CT-ALL Asked to create entry but packet is marked as "
-				"from another workload, doing lookup\n");
+				"from another endpoint, doing lookup\n");
 		bool srcLTDest = (ip_src < ip_dst) || ((ip_src == ip_dst) && sport < dport);
 		if (srcLTDest) {
 			*k = (struct calico_ct_key) {
@@ -106,10 +106,10 @@ static CALI_BPF_INLINE int calico_ct_v4_create_tracking(
 		dump_ct_key(k, flags);
 		struct calico_ct_value *ct_value = bpf_map_lookup_elem(&calico_ct_map_v4, k);
 		if (!ct_value) {
-			CALI_DEBUG("CT Packet marked as from workload but got a conntrack miss!\n");
+			CALI_VERB("CT Packet marked as from workload but got a conntrack miss!\n");
 			goto create;
 		}
-		CALI_DEBUG("CT Found expected entry, updating...\n");
+		CALI_VERB("CT Found expected entry, updating...\n");
 		if (srcLTDest) {
 			ct_value->a_to_b.seqno = seq;
 			ct_value->a_to_b.syn_seen = syn;
@@ -167,11 +167,11 @@ static CALI_BPF_INLINE int calico_ct_v4_create_tracking(
 	src_to_dst->syn_seen = syn;
 	src_to_dst->opener = 1;
 	if (CALI_TC_FLAGS_TO_HOST(flags)) {
-		CALI_VERB("CT-ALL Whitelisted source side\n");
 		src_to_dst->whitelisted = 1;
+		CALI_DEBUG("CT-ALL Whitelisted source side\n");
 	} else {
-		CALI_VERB("CT-ALL Whitelisted dest side\n");
 		dst_to_src->whitelisted = 1;
+		CALI_DEBUG("CT-ALL Whitelisted dest side\n");
 	}
 	int err = bpf_map_update_elem(&calico_ct_map_v4, k, &ct_value, 0);
 	CALI_VERB("CT-ALL Create result: %d.\n", err);
@@ -417,6 +417,10 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_tcp_lookup(
 		}
 		break;
 	case CALI_CT_TYPE_NAT_REV:
+		// A reverse NAT entry; this means that the conntrack entry was keyed on the post-NAT
+		// IPs.  We'll only ever see a NAT entry if the NAT happened on this host.  However,
+		// if the source and destination of the traffic are on the same host then we'll end up here
+		// in both the source workload's ingress hook and the destination workload's ingress hook.
 
 		if (srcLTDest) {
 			src_to_dst = &v->a_to_b;
@@ -427,8 +431,8 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_tcp_lookup(
 		}
 
 		if (!CALI_TC_FLAGS_TO_HOST(flags) && dst_to_src->opener) {
-			// Packet is heading into a workload and the destination was the opener of the
-			// connection, reverse the NAT.
+			// Packet is heading away from the host namespace; either entering a workload or
+			// leaving via a host endpoint, actually reverse the NAT.
 			CALI_DEBUG("CT-TCP Hit! NAT REV entry at ingress to connection opener: SNAT.\n");
 			result.rc =	CALI_CT_ESTABLISHED_SNAT;
 			result.nat_ip = v->orig_dst;
@@ -479,7 +483,7 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_tcp_lookup(
 			CALI_VERB("CT-TCP Packet whitelisted by this workload's policy.\n");
 		} else {
 			// Only whitelisted by the other side?
-			CALI_DEBUG("CT-TCP Packet not allowed by ingress/egress whitelist flags.\n");
+			CALI_DEBUG("CT-TCP Packet not allowed by ingress/egress whitelist flags (TH).\n");
 			result.rc = CALI_CT_INVALID;
 		}
 	} else {
@@ -489,7 +493,7 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_tcp_lookup(
 			CALI_VERB("CT-TCP Packet whitelisted by this workload's policy.\n");
 		} else {
 			// Only whitelisted by the other side?
-			CALI_DEBUG("CT-TCP Packet not allowed by ingress/egress whitelist flags.\n");
+			CALI_DEBUG("CT-TCP Packet not allowed by ingress/egress whitelist flags (FH).\n");
 			result.rc = CALI_CT_INVALID;
 		}
 	}
@@ -691,8 +695,8 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_icmp_lookup(
 		__be32 ip_src, __be32 ip_dst, struct icmphdr *icmp_header,
 		 enum calico_tc_flags flags) {
 
-	CALI_DEBUG("CT-ICMP lookup from %x\n", be32_to_host(ip_src));
-	CALI_DEBUG("CT-ICMP lookup to   %x\n", be32_to_host(ip_dst));
+	CALI_VERB("CT-ICMP lookup from %x\n", be32_to_host(ip_src));
+	CALI_VERB("CT-ICMP lookup to   %x\n", be32_to_host(ip_dst));
 
 	struct calico_ct_result result = {};
 	__u16 sport=0, dport=0;
