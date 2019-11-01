@@ -587,7 +587,7 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_udp_lookup(
 	__u64 now = bpf_ktime_get_ns();
 	v->last_seen = now;
 
-	struct calico_ct_leg *pkt_dir, *rtn_dir;
+	struct calico_ct_leg *src_to_dst, *dst_to_src;
 
 	struct calico_ct_value *tracking_v;
 	switch (v->type) {
@@ -604,33 +604,49 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_udp_lookup(
 		tracking_v->last_seen = now;
 
 		if (ip_src == v->nat_rev_key.addr_a && sport == v->nat_rev_key.port_a) {
-			pkt_dir = &tracking_v->a_to_b;
-			rtn_dir = &tracking_v->b_to_a;
+			src_to_dst = &tracking_v->a_to_b;
+			dst_to_src = &tracking_v->b_to_a;
+			result.nat_ip = v->nat_rev_key.addr_b;
+			result.nat_port = v->nat_rev_key.port_b;
 		} else {
-			pkt_dir = &tracking_v->b_to_a;
-			rtn_dir = &tracking_v->a_to_b;
+			src_to_dst = &tracking_v->b_to_a;
+			dst_to_src = &tracking_v->a_to_b;
+			result.nat_ip = v->nat_rev_key.addr_a;
+			result.nat_port = v->nat_rev_key.port_a;
 		}
 
-		// Since we found a forward NAT entry, we know that it's the destination
-		// that needs to be NATted.
-		result.rc =	CALI_CT_ESTABLISHED_DNAT;
-		result.nat_ip = tracking_v->orig_dst;
-		result.nat_port = tracking_v->orig_port;
+		if (CALI_TC_FLAGS_TO_HOST(flags)) {
+			// Since we found a forward NAT entry, we know that it's the destination
+			// that needs to be NATted.
+			result.rc =	CALI_CT_ESTABLISHED_DNAT;
+		} else {
+			result.rc =	CALI_CT_ESTABLISHED;
+		}
 		break;
 	case CALI_CT_TYPE_NAT_REV:
-		// Since we found a reverse NAT entry, we know that this is response
-		// traffic so we'll need to SNAT it.
-		CALI_VERB("CT-UDP Hit! NAT REV entry.\n");
-		result.rc =	CALI_CT_ESTABLISHED_SNAT;
-		result.nat_ip = v->orig_dst;
-		result.nat_port = v->orig_port;
+		// A reverse NAT entry; this means that the conntrack entry was keyed on the post-NAT
+		// IPs.  We'll only ever see a NAT entry if the NAT happened on this host.  However,
+		// if the source and destination of the traffic are on the same host then we'll end up here
+		// in both the source workload's ingress hook and the destination workload's ingress hook.
 
 		if (srcLTDest) {
-			pkt_dir = &v->a_to_b;
-			rtn_dir = &v->b_to_a;
+			src_to_dst = &v->a_to_b;
+			dst_to_src = &v->b_to_a;
 		} else {
-			pkt_dir = &v->b_to_a;
-			rtn_dir = &v->a_to_b;
+			src_to_dst = &v->b_to_a;
+			dst_to_src = &v->a_to_b;
+		}
+
+		if (!CALI_TC_FLAGS_TO_HOST(flags) && dst_to_src->opener) {
+			// Packet is heading away from the host namespace; either entering a workload or
+			// leaving via a host endpoint, actually reverse the NAT.
+			CALI_DEBUG("CT-UDP Hit! NAT REV entry at ingress to connection opener: SNAT.\n");
+			result.rc =	CALI_CT_ESTABLISHED_SNAT;
+			result.nat_ip = v->orig_dst;
+			result.nat_port = v->orig_port;
+		} else {
+			CALI_DEBUG("CT-UDP Hit! NAT REV entry but not connection opener: ESTABLISHED.\n");
+			result.rc =	CALI_CT_ESTABLISHED;
 		}
 
 		break;
@@ -644,41 +660,39 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_udp_lookup(
 		result.rc =	CALI_CT_ESTABLISHED;
 
 		if (srcLTDest) {
-			pkt_dir = &v->a_to_b;
-			rtn_dir = &v->b_to_a;
-
-			if (CALI_TC_FLAGS_TO_HOST(flags)) {
-				// Workload egress hook.  Our side is the "packet" side.
-				if (!pkt_dir->whitelisted) {
-					result.rc = CALI_CT_NEW;
-				}
-			} else {
-				// Workload ingress.  Our side is the "return" side.
-				if (!rtn_dir->whitelisted) {
-					result.rc = CALI_CT_NEW;
-				}
-			}
+			src_to_dst = &v->a_to_b;
+			dst_to_src = &v->b_to_a;
 		} else {
-			pkt_dir = &v->b_to_a;
-			rtn_dir = &v->a_to_b;
-
-			if (CALI_TC_FLAGS_TO_HOST(flags)) {
-				// Workload egress hook.  Our side is the "packet" side.
-				if (!pkt_dir->whitelisted) {
-					result.rc = CALI_CT_NEW;
-				}
-			} else {
-				// Workload ingress.  Our side is the "return" side.
-				if (!rtn_dir->whitelisted) {
-					result.rc = CALI_CT_NEW;
-				}
-			}
+			src_to_dst = &v->b_to_a;
+			dst_to_src = &v->a_to_b;
 		}
 
 		break;
 	default:
 		CALI_VERB("CT-UDP Hit! UNKNOWN entry type.\n");
 		goto out_lookup_fail;
+	}
+
+	if (CALI_TC_FLAGS_TO_HOST(flags)) {
+		// Source of the packet is the endpoint, so check the src whitelist.
+		if (src_to_dst->whitelisted) {
+			// Packet was whitelisted by the policy attached to this endpoint.
+			CALI_VERB("CT-TCP Packet whitelisted by this workload's policy.\n");
+		} else {
+			// Only whitelisted by the other side?
+			CALI_DEBUG("CT-TCP Packet not allowed by ingress/egress whitelist flags (TH).\n");
+			result.rc = CALI_CT_INVALID;
+		}
+	} else {
+		// Dest of the packet is the workload, so check the dest whitelist.
+		if (dst_to_src->whitelisted) {
+			// Packet was whitelisted by the policy attached to this endpoint.
+			CALI_VERB("CT-TCP Packet whitelisted by this workload's policy.\n");
+		} else {
+			// Only whitelisted by the other side?
+			CALI_DEBUG("CT-TCP Packet not allowed by ingress/egress whitelist flags (FH).\n");
+			result.rc = CALI_CT_INVALID;
+		}
 	}
 
 	CALI_VERB("CT-UDP result: %d.\n", result.rc);
