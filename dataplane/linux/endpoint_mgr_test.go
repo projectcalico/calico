@@ -1373,6 +1373,118 @@ func endpointManagerTests(ipVersion uint8) func() {
 					})
 
 					It("should have expected chains", expectWlChainsFor("cali12345-ab_policy1"))
+
+					Context("with another endpoint with the same interface name and earlier workload ID, and no policy", func() {
+
+						JustBeforeEach(func() {
+							epMgr.OnUpdate(&proto.WorkloadEndpointUpdate{
+								Id: &proto.WorkloadEndpointID{
+									OrchestratorId: "k8s",
+									WorkloadId:     "pod-10a",
+									EndpointId:     "endpoint-id-11",
+								},
+								Endpoint: &proto.WorkloadEndpoint{
+									State:      "active",
+									Mac:        "01:02:03:04:05:06",
+									Name:       "cali12345-ab",
+									ProfileIds: []string{},
+									Tiers:      []*proto.TierInfo{},
+									Ipv4Nets:   []string{"10.0.240.2/24"},
+									Ipv6Nets:   []string{"2001:db8:2::2/128"},
+								},
+							})
+							err := epMgr.CompleteDeferredWork()
+							Expect(err).ToNot(HaveOccurred())
+						})
+
+						It("should have expected chains with no policy", expectWlChainsFor("cali12345-ab"))
+
+						Context("with the first endpoint removed", func() {
+
+							JustBeforeEach(func() {
+								epMgr.OnUpdate(&proto.WorkloadEndpointRemove{
+									Id: &wlEPID1,
+								})
+								err := epMgr.CompleteDeferredWork()
+								Expect(err).ToNot(HaveOccurred())
+							})
+
+							It("should have expected chains with no policy", expectWlChainsFor("cali12345-ab"))
+
+							Context("with the second endpoint removed", func() {
+
+								JustBeforeEach(func() {
+									epMgr.OnUpdate(&proto.WorkloadEndpointRemove{
+										Id: &proto.WorkloadEndpointID{
+											OrchestratorId: "k8s",
+											WorkloadId:     "pod-10a",
+											EndpointId:     "endpoint-id-11",
+										},
+									})
+									err := epMgr.CompleteDeferredWork()
+									Expect(err).ToNot(HaveOccurred())
+								})
+
+								It("should have empty dispatch chains", expectEmptyChains())
+							})
+						})
+					})
+
+					Context("with another endpoint with the same interface name and later workload ID, and no policy", func() {
+
+						JustBeforeEach(func() {
+							epMgr.OnUpdate(&proto.WorkloadEndpointUpdate{
+								Id: &proto.WorkloadEndpointID{
+									OrchestratorId: "k8s",
+									WorkloadId:     "pod-11a",
+									EndpointId:     "endpoint-id-11",
+								},
+								Endpoint: &proto.WorkloadEndpoint{
+									State:      "active",
+									Mac:        "01:02:03:04:05:06",
+									Name:       "cali12345-ab",
+									ProfileIds: []string{},
+									Tiers:      []*proto.TierInfo{},
+									Ipv4Nets:   []string{"10.0.240.2/24"},
+									Ipv6Nets:   []string{"2001:db8:2::2/128"},
+								},
+							})
+							err := epMgr.CompleteDeferredWork()
+							Expect(err).ToNot(HaveOccurred())
+						})
+
+						It("should have expected chains", expectWlChainsFor("cali12345-ab_policy1"))
+
+						Context("with the first endpoint removed", func() {
+
+							JustBeforeEach(func() {
+								epMgr.OnUpdate(&proto.WorkloadEndpointRemove{
+									Id: &wlEPID1,
+								})
+								err := epMgr.CompleteDeferredWork()
+								Expect(err).ToNot(HaveOccurred())
+							})
+
+							It("should have expected chains with no policy", expectWlChainsFor("cali12345-ab"))
+
+							Context("with the second endpoint removed", func() {
+
+								JustBeforeEach(func() {
+									epMgr.OnUpdate(&proto.WorkloadEndpointRemove{
+										Id: &proto.WorkloadEndpointID{
+											OrchestratorId: "k8s",
+											WorkloadId:     "pod-11a",
+											EndpointId:     "endpoint-id-11",
+										},
+									})
+									err := epMgr.CompleteDeferredWork()
+									Expect(err).ToNot(HaveOccurred())
+								})
+
+								It("should have empty dispatch chains", expectEmptyChains())
+							})
+						})
+					})
 				})
 
 				Context("with ingress-only policy", func() {
