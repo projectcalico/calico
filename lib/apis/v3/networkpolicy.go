@@ -1,4 +1,4 @@
-// Copyright (c) 2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017,2019 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -71,7 +71,7 @@ type NetworkPolicySpec struct {
 	// 	type in {"frontend", "backend"}
 	// 	deployment != "dev"
 	// 	! has(label_name)
-	Selector string `json:"selector" validate:"selector"`
+	Selector string `json:"selector,omitempty" validate:"selector"`
 	// Types indicates whether this policy applies to ingress, or to egress, or to both.  When
 	// not explicitly specified (and so the value on creation is empty or nil), Calico defaults
 	// Types according to what Ingress and Egress are present in the policy.  The
