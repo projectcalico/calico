@@ -31,7 +31,6 @@ import (
 	"github.com/projectcalico/felix/proto"
 	"github.com/projectcalico/felix/routetable"
 	"github.com/projectcalico/felix/rules"
-	"github.com/projectcalico/libcalico-go/lib/names"
 	"github.com/projectcalico/libcalico-go/lib/set"
 )
 
@@ -533,7 +532,7 @@ func (m *endpointManager) resolveWorkloadEndpoints() {
 						"interfaceName": workload.Name,
 						"existingId":    existingId,
 					}).Info("New endpoint has same iface name as existing")
-					if wlIdToUniqueName(&existingId) < wlIdToUniqueName(&id) {
+					if wlIdsAscending(&existingId, &id) {
 						logCxt.Info("Existing endpoint takes preference")
 						m.shadowedWlEndpoints[id] = workload
 						delete(m.pendingWlEpUpdates, id)
@@ -636,7 +635,7 @@ func (m *endpointManager) resolveWorkloadEndpoints() {
 						logCxt.Infof("Old workload %v", oldWorkload)
 						logCxt.Infof("Shadowed workload %v", sWorkload)
 						if sWorkload.Name == oldWorkload.Name {
-							if bestShadowedId.EndpointId == "" || wlIdToUniqueName(&sId) < wlIdToUniqueName(&bestShadowedId) {
+							if bestShadowedId.EndpointId == "" || wlIdsAscending(&sId, &bestShadowedId) {
 								bestShadowedId = sId
 							}
 						}
@@ -674,18 +673,16 @@ func (m *endpointManager) resolveWorkloadEndpoints() {
 	})
 }
 
-func wlIdToUniqueName(id *proto.WorkloadEndpointID) string {
-	ids := names.WorkloadEndpointIdentifiers{
-		// Passing "default" for the Orchestrator field tells CalculateWorkloadEndpointName
-		// to construct a name based only on the following fields, which is what we want.
-		Orchestrator: "default",
-		Node:         "local",
-		Endpoint:     id.EndpointId,
-		Workload:     id.WorkloadId,
+func wlIdsAscending(id1, id2 *proto.WorkloadEndpointID) bool {
+	if id1.OrchestratorId == id2.OrchestratorId {
+		// Need to compare WorkloadId.
+		if id1.WorkloadId == id2.WorkloadId {
+			// Need to compare EndpointId.
+			return id1.EndpointId < id2.EndpointId
+		}
+		return id1.WorkloadId < id2.WorkloadId
 	}
-	name, _ := ids.CalculateWorkloadEndpointName(true)
-	log.WithField("id", id).Debugf("Unique wlEp name %v", name)
-	return name
+	return id1.OrchestratorId < id2.OrchestratorId
 }
 
 func (m *endpointManager) resolveEndpointMarks() {
