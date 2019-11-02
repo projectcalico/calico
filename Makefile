@@ -12,7 +12,7 @@ test: vendor ut fv
 K8S_VERSION      ?= v1.16.0
 ETCD_VERSION     ?= v3.3.7
 COREDNS_VERSION  ?= 1.5.2
-GO_BUILD_VER     ?= v0.24
+GO_BUILD_VER     ?= v0.26
 CALICO_BUILD     ?= calico/go-build:$(GO_BUILD_VER)
 PACKAGE_NAME     ?= github.com/projectcalico/libcalico-go
 LOCAL_USER_ID    ?= $(shell id -u $$USER)
