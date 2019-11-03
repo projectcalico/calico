@@ -325,6 +325,8 @@ github.com/projectcalico/felix v0.0.0-20191019064825-e14e05b8734a h1:XIQKgu7ToZx
 github.com/projectcalico/felix v0.0.0-20191019064825-e14e05b8734a/go.mod h1:wyaUTv0cSc46IKzfEJr7LcTXKxgRG9T6q9enqgPIKg8=
 github.com/projectcalico/felix v0.0.0-20191024064755-df875d9fde44 h1:xH05TCPzjrCpuMOJrec3akgLnG3r+EyLFfKDpEzHm0M=
 github.com/projectcalico/felix v0.0.0-20191024064755-df875d9fde44/go.mod h1:35new4RxhxexO7pDzA3ISAXcLUq8I1mPNziCLwVvVBs=
+github.com/projectcalico/felix v0.0.0-20191101150513-b17543659d18 h1:kMmmfu4A8dzVpjOxbY+ThkqwNgoqt2MwLyoQsy8wl2Y=
+github.com/projectcalico/felix v0.0.0-20191101150513-b17543659d18/go.mod h1:35new4RxhxexO7pDzA3ISAXcLUq8I1mPNziCLwVvVBs=
 github.com/projectcalico/felix v3.8.2+incompatible h1:cz0MaUs5qTjPWjTxK5J1D1zEIfrtSYUyyf2nAjCos9c=
 github.com/projectcalico/felix v3.8.3+incompatible h1:bDA7IJlXWQZV0Ti0NKG8l4Q7HBqnEcNbCUX//qnzLZQ=
 github.com/projectcalico/felix v3.8.4+incompatible h1:F35xKHnqHiVuhbQAP3wLIa+wnHkaMlWcWoICngU1nqM=
@@ -346,6 +348,8 @@ github.com/projectcalico/libcalico-go v0.0.0-20191014173613-3dc8f2c35936 h1:Sm7c
 github.com/projectcalico/libcalico-go v0.0.0-20191014173613-3dc8f2c35936/go.mod h1:tUt8rirmysRy7TR1S80XDriwBK1z2igwwX79lnUrSf4=
 github.com/projectcalico/libcalico-go v0.0.0-20191015222346-3d38c58337f2 h1:PiwVSuDy9wMxBax2pddnkmPub+CUTco3zwWWqU0PvBY=
 github.com/projectcalico/libcalico-go v0.0.0-20191015222346-3d38c58337f2/go.mod h1:tUt8rirmysRy7TR1S80XDriwBK1z2igwwX79lnUrSf4=
+github.com/projectcalico/libcalico-go v0.0.0-20191102064855-8540fc6352a2 h1:brfj7M0Mdq2nqdq4YU9mZBPF0yk57N2L1OAjwWbhsk0=
+github.com/projectcalico/libcalico-go v0.0.0-20191102064855-8540fc6352a2/go.mod h1:tUt8rirmysRy7TR1S80XDriwBK1z2igwwX79lnUrSf4=
 github.com/projectcalico/logrus v1.0.4-calico h1:bHJ2KLGTFzoWpRISe13CO7HVxxrKunDjyUz/wFiBY8c=
 github.com/projectcalico/logrus v1.0.4-calico/go.mod h1:DfgrchabbtEO9wjOz5lVae+XRvjFKKWEA9GTMme6A8g=
 github.com/projectcalico/pod2daemon v0.0.0-20190730210055-df57fc59e2e1 h1:JPzqAbV448lrNn83iqWiMM+Lxh0EyGlZC+ZYDZt+oGo=
