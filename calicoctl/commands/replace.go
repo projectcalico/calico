@@ -70,7 +70,7 @@ Description:
   terminating error.
 
   The output of the command indicates how many resources were successfully
-  eplaced, and the error reason if an error occurred.
+  replaced, and the error reason if an error occurred.
 
   The resources are replaced in the order they are specified.  In the event of
   a failure replacing a specific resource it is possible to work out which
