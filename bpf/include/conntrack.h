@@ -418,9 +418,10 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_tcp_lookup(
 		break;
 	case CALI_CT_TYPE_NAT_REV:
 		// A reverse NAT entry; this means that the conntrack entry was keyed on the post-NAT
-		// IPs.  We'll only ever see a NAT entry if the NAT happened on this host.  However,
-		// if the source and destination of the traffic are on the same host then we'll end up here
-		// in both the source workload's ingress hook and the destination workload's ingress hook.
+		// IPs.  We _want_ to hit this entry at ingress to the source workload (i.e. reply packets
+		// that need to be SNATted back to the service IP before they reach the workload).  However,
+		// we also hit this for request packets that traverse more than one endpoint on the same
+		// host so we need to distinguish those cases.
 
 		if (srcLTDest) {
 			src_to_dst = &v->a_to_b;
@@ -677,21 +678,25 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_udp_lookup(
 		// Source of the packet is the endpoint, so check the src whitelist.
 		if (src_to_dst->whitelisted) {
 			// Packet was whitelisted by the policy attached to this endpoint.
-			CALI_VERB("CT-TCP Packet whitelisted by this workload's policy.\n");
+			CALI_VERB("CT-UDP Packet whitelisted by this workload's policy.\n");
 		} else {
-			// Only whitelisted by the other side?
-			CALI_DEBUG("CT-TCP Packet not allowed by ingress/egress whitelist flags (TH).\n");
-			result.rc = CALI_CT_INVALID;
+			// Only whitelisted by the other side so far.  Unlike TCP we have no way to distinguish
+			// packets that open a new connection so we have to return NEW here in order to invoke
+			// policy.
+			CALI_DEBUG("CT-UDP Packet not allowed by ingress/egress whitelist flags (TH).\n");
+			result.rc = CALI_CT_NEW;
 		}
 	} else {
 		// Dest of the packet is the workload, so check the dest whitelist.
 		if (dst_to_src->whitelisted) {
 			// Packet was whitelisted by the policy attached to this endpoint.
-			CALI_VERB("CT-TCP Packet whitelisted by this workload's policy.\n");
+			CALI_VERB("CT-UDP Packet whitelisted by this workload's policy.\n");
 		} else {
-			// Only whitelisted by the other side?
-			CALI_DEBUG("CT-TCP Packet not allowed by ingress/egress whitelist flags (FH).\n");
-			result.rc = CALI_CT_INVALID;
+			// Only whitelisted by the other side? Unlike TCP we have no way to distinguish
+			// packets that open a new connection so we have to return NEW here in order to invoke
+			// policy.
+			CALI_DEBUG("CT-UDP Packet not allowed by ingress/egress whitelist flags (FH).\n");
+			result.rc = CALI_CT_NEW;
 		}
 	}
 
