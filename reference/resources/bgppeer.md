@@ -54,6 +54,10 @@ spec:
 
 #### BGPPassword
 
+> **Note:** BGP passwords must be 80 characters or fewer.  If a password longer than that
+> is configured, the BGP sessions with that password will fail to be established.
+{: .alert .alert-info}
+
 | Field        | Description                     | Schema           |
 |--------------|---------------------------------|------------------|
 | secretKeyRef | Get the password from a secret. | [KeyRef](#keyref) |
