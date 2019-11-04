@@ -37,6 +37,7 @@ enum calico_reason {
 	CALI_REASON_PREDNAT = 0xd1,
 	CALI_REASON_POL = 0xbe,
 	CALI_REASON_CT = 0xc0,
+	CALI_REASON_BYPASS = 0xbb,
 	CALI_REASON_CT_NAT = 0xc1,
 	CALI_REASON_CSUM_FAIL= 0xcf,
 };

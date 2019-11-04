@@ -104,6 +104,15 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb, enum calico_tc_flags
 	uint64_t timer_start_time = 0 , timer_end_time = 0;
 	int rc = TC_ACT_UNSPEC;
 
+
+	if (!CALI_TC_FLAGS_TO_HOST(flags) && skb->mark == CALI_SKB_MARK_BYPASS) {
+		CALI_DEBUG("Packet pre-approved by another hook, allow.\n");
+		reason = CALI_REASON_BYPASS;
+		goto allow;
+	}
+
+	uint32_t seen_mark = CALI_SKB_MARK_SEEN;
+
 	// Parse the packet.
 
 	// TODO Do we need to handle any odd-ball frames here (e.g. with a 0 VLAN header)?
@@ -253,6 +262,11 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb, enum calico_tc_flags
 		ct_result = calico_ct_v4_icmp_lookup(ip_src, ip_dst, icmp_header, flags);
 		break;
 	default:
+		if (flags & CALI_TC_HOST_EP) {
+			// FIXME: allow unknown protocols through on host endpoints.
+			goto allow;
+		}
+		// FIXME non-port based conntrack.
 		goto deny;
 	}
 
@@ -366,6 +380,9 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb, enum calico_tc_flags
 		fib_params.ipv4_dst = post_nat_ip_dst;
 
 		goto allow;
+	case CALI_CT_ESTABLISHED_BYPASS:
+		seen_mark = CALI_SKB_MARK_BYPASS;
+		// fall through
 	case CALI_CT_ESTABLISHED:
 		fib_params.l4_protocol = ip_proto;
 		fib_params.sport = sport;
@@ -488,11 +505,11 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb, enum calico_tc_flags
 	if (CALI_TC_FLAGS_TO_HOST(flags)) {
 		// Packet is towards host namespace, mark it so that downstream programs know that they're
 		// not the first to see the packet.
-		CALI_DEBUG("Traffic is towards host namespace, marking.\n");
+		CALI_DEBUG("Traffic is towards host namespace, marking with %x.\n", seen_mark);
 		// FIXME: this ignores the mask that we should be using.  However, if we mask off the bits,
 		// then clang spots that it can do a 16-bit store instead of a 32-bit load/modify/store,
 		// which trips up the validator.
-		skb->mark = CALI_SKB_MARK_SEEN;
+		skb->mark = seen_mark;
 	}
 
 	if (CALI_LOG_LEVEL >= CALI_LOG_LEVEL_INFO) {

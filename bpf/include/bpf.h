@@ -141,6 +141,7 @@ enum calico_tc_flags {
 enum calico_skb_mark {
 	// TODO allocate marks from the mark pool.
 	CALI_SKB_MARK_SEEN = 0xca110000,
+	CALI_SKB_MARK_BYPASS = 0xca100000,
 	CALI_SKB_MARK_SEEN_MASK = 0xffff0000,
 	CALI_SKB_MARK_NO_TRACK      = 1<<1,
 };

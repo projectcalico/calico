@@ -719,7 +719,7 @@ func (d *InternalDataplane) setUpIptablesBPF() {
 		rules := []iptables.Rule{
 			{
 				// TODO Make "from workload" mark configurable
-				Match:  iptables.Match().MarkMatchesWithMask(0xca110000, 0xffff0000),
+				Match:  iptables.Match().MarkMatchesWithMask(0xca100000, 0xfffe0000),
 				Action: iptables.AcceptAction{},
 			},
 		}

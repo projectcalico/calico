@@ -292,6 +292,7 @@ static CALI_BPF_INLINE int calico_ct_v4_icmp_create_nat(
 enum calico_ct_result_type {
 	CALI_CT_NEW,
 	CALI_CT_ESTABLISHED,
+	CALI_CT_ESTABLISHED_BYPASS,
 	CALI_CT_ESTABLISHED_SNAT,
 	CALI_CT_ESTABLISHED_DNAT,
 	CALI_CT_INVALID,
@@ -461,7 +462,11 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_tcp_lookup(
 		CALI_VERB("CT-TCP   B-to-A: rst_seen %d.\n", v->b_to_a.rst_seen);
 		CALI_VERB("CT-TCP   B: whitelisted %d.\n", v->b_to_a.whitelisted);
 
-		result.rc =	CALI_CT_ESTABLISHED;
+		if (v->a_to_b.whitelisted && v->b_to_a.whitelisted) {
+			result.rc = CALI_CT_ESTABLISHED_BYPASS;
+		} else {
+			result.rc = CALI_CT_ESTABLISHED;
+		}
 
 		if (srcLTDest) {
 			src_to_dst = &v->a_to_b;
