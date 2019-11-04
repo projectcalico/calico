@@ -821,7 +821,7 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_icmp_lookup(
 		} else {
 			// Only whitelisted by the other side?
 			CALI_VERB("CT-ICMP Packet not allowed by ingress/egress whitelist flags.\n");
-			result.rc = CALI_CT_INVALID;
+			result.rc = CALI_CT_NEW;
 		}
 	} else {
 		// Dest of the packet is the workload, so check the dest whitelist.
@@ -831,7 +831,7 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_icmp_lookup(
 		} else {
 			// Only whitelisted by the other side?
 			CALI_VERB("CT-ICMP Packet not allowed by ingress/egress whitelist flags.\n");
-			result.rc = CALI_CT_INVALID;
+			result.rc = CALI_CT_NEW;
 		}
 	}
 
