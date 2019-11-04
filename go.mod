@@ -9,7 +9,7 @@ require (
 	github.com/onsi/ginkgo v1.8.0
 	github.com/onsi/gomega v1.5.0
 	github.com/projectcalico/felix v0.0.0-20191003065011-e01caf688c90
-	github.com/projectcalico/libcalico-go v0.0.0-20191008175127-399044ecb659
+	github.com/projectcalico/libcalico-go v0.0.0-20191104213956-8f81e1e344ce
 	github.com/sirupsen/logrus v1.4.2
 	github.com/vishvananda/netns v0.0.0-20180720170159-13995c7128cc // indirect
 	k8s.io/api v0.0.0-20190620084959-7cf5895f2711
