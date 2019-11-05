@@ -76,21 +76,11 @@ When using flannel for networking, the MTU for network interfaces should match t
   
 When you set the MTU it applies to new workloads. To apply MTU changes to existing workloads, you must restart calico nodes. Restarting the calico/node pods also updates any Calico tunnel network interfaces on that node. 
 
-Edit `calico-config ConfigMap` with the veth MTU value for your environment. For example: 
+Update the `calico-config` ConfigMap with the veth MTU value for your environment with the following command (replacing `NEW_MTU`):
 
 ```
-# The CNI network configuration to install on each node.
-  cni_network_config: |-
-    {
-        "name": "k8s-pod-network",
-        "cniVersion": "0.1.0",
-        "type": "calico",
-        "etcd_endpoints": "__ETCD_ENDPOINTS__",
-        "etcd_key_file": "__ETCD_KEY_FILE__",
-        "etcd_cert_file": "__ETCD_CERT_FILE__",
-        "etcd_ca_cert_file": "__ETCD_CA_CERT_FILE__",
-        "log_level": "info",
-        "mtu": 1440,
+kubectl patch configmap/{{site.prodname}}-config -n kube-system --type merge \
+  -p '{"data":{"veth_mtu": "NEW_MTU"}}'
 ```
 
 #### Configure MTU for overlay networking
