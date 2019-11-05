@@ -619,7 +619,7 @@ fv fv/latency.log: remote-deps $(BUILD_IMAGE) bin/iptables-locker bin/test-workl
 	  GINKGO_ARGS='$(GINKGO_ARGS)' \
 	  GINKGO_FOCUS="$(GINKGO_FOCUS)" \
 	  FELIX_FV_ENABLE_BPF="$(FELIX_FV_ENABLE_BPF)" \
-	  ./run-batches | tee ../fv.log
+	  ./run-batches
 	@if [ -e fv/latency.log ]; then \
 	   echo; \
 	   echo "Latency results:"; \
