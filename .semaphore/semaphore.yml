@@ -14,7 +14,7 @@ blocks:
             - cache restore go-pkg-cache
             - cache restore go-mod-cache
             - >-
-              make image-all fv/fv.test bin/test-workload bin/test-connection
+              make image fv/fv.test bin/test-workload bin/test-connection
               bin/calico-felix
             - 'cache store bin-${SEMAPHORE_GIT_SHA} bin'
             - cache store go-pkg-cache .go-pkg-cache
