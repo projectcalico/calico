@@ -312,6 +312,8 @@ github.com/projectcalico/confd v0.0.0-20191021190754-83755aa5909a h1:U0kmR6BXahH
 github.com/projectcalico/confd v0.0.0-20191021190754-83755aa5909a/go.mod h1:gjWTpjNDGestdByzns0EhSRCF5wjchLYFRjlyIEe174=
 github.com/projectcalico/confd v0.0.0-20191024041052-5706f57f78b9 h1:bWSVsIYM0mmLc19TERtmMB5teIH4IPq6hjicEE2kZW4=
 github.com/projectcalico/confd v0.0.0-20191024041052-5706f57f78b9/go.mod h1:0HEaE0R+NnaHz5w37lLfGhpz5YjyWHc0RuMIjphXnLM=
+github.com/projectcalico/confd v0.0.0-20191105041247-dedea56efead h1:pTwd9zT9jqwdXnsT6mc0dDXMJympqLuA29+4UWJUQ+E=
+github.com/projectcalico/confd v0.0.0-20191105041247-dedea56efead/go.mod h1:ql45KHbIY+KzG9hk2pjWxeAkOllNB2ep6nwyTF3V2Rk=
 github.com/projectcalico/confd v3.2.0+incompatible/go.mod h1:kUM7VZ267QKU9j3n60w/bB792J5qNVF1jAltjl7AzRM=
 github.com/projectcalico/felix v0.0.0-20191008064910-3286f617f736 h1:0gBhEnn80lrV5wKNEJU+JcaKzH3fMUUYVOIxwrsOj+o=
 github.com/projectcalico/felix v0.0.0-20191008064910-3286f617f736/go.mod h1:gPk9yuWnPnC8HIyFOecFBg4FUwwTYFF0pox6AYTTH74=
@@ -329,6 +331,8 @@ github.com/projectcalico/felix v0.0.0-20191101150513-b17543659d18 h1:kMmmfu4A8dz
 github.com/projectcalico/felix v0.0.0-20191101150513-b17543659d18/go.mod h1:35new4RxhxexO7pDzA3ISAXcLUq8I1mPNziCLwVvVBs=
 github.com/projectcalico/felix v0.0.0-20191104064758-9bb8daac66f5 h1:685rCyxVIOK4d6GgAAR/ZUh4qVKqTP2HO3jmYs081hU=
 github.com/projectcalico/felix v0.0.0-20191104064758-9bb8daac66f5/go.mod h1:LlJeVEovgdeGFdwFAeyWpgj2WOZ4+gPo21wjNohHMZM=
+github.com/projectcalico/felix v0.0.0-20191105004011-a2a24b7fe187 h1:ZBpbukF2Il17a6WPdSTUyzCYHBe+bjfXwZv6a9X6fF4=
+github.com/projectcalico/felix v0.0.0-20191105004011-a2a24b7fe187/go.mod h1:4nmUxrFWbIXDul/x/AwbAKbz46bsjUJJCuGMGE9lUtA=
 github.com/projectcalico/felix v3.8.2+incompatible h1:cz0MaUs5qTjPWjTxK5J1D1zEIfrtSYUyyf2nAjCos9c=
 github.com/projectcalico/felix v3.8.3+incompatible h1:bDA7IJlXWQZV0Ti0NKG8l4Q7HBqnEcNbCUX//qnzLZQ=
 github.com/projectcalico/felix v3.8.4+incompatible h1:F35xKHnqHiVuhbQAP3wLIa+wnHkaMlWcWoICngU1nqM=
@@ -352,6 +356,8 @@ github.com/projectcalico/libcalico-go v0.0.0-20191015222346-3d38c58337f2 h1:PiwV
 github.com/projectcalico/libcalico-go v0.0.0-20191015222346-3d38c58337f2/go.mod h1:tUt8rirmysRy7TR1S80XDriwBK1z2igwwX79lnUrSf4=
 github.com/projectcalico/libcalico-go v0.0.0-20191102064855-8540fc6352a2 h1:brfj7M0Mdq2nqdq4YU9mZBPF0yk57N2L1OAjwWbhsk0=
 github.com/projectcalico/libcalico-go v0.0.0-20191102064855-8540fc6352a2/go.mod h1:tUt8rirmysRy7TR1S80XDriwBK1z2igwwX79lnUrSf4=
+github.com/projectcalico/libcalico-go v0.0.0-20191104214504-aa6a608ee1fe h1:nu96Y/l6FMPB8L/MW0PMXdAFpZucmWdkK7ErRKv0vbk=
+github.com/projectcalico/libcalico-go v0.0.0-20191104214504-aa6a608ee1fe/go.mod h1:tUt8rirmysRy7TR1S80XDriwBK1z2igwwX79lnUrSf4=
 github.com/projectcalico/logrus v1.0.4-calico h1:bHJ2KLGTFzoWpRISe13CO7HVxxrKunDjyUz/wFiBY8c=
 github.com/projectcalico/logrus v1.0.4-calico/go.mod h1:DfgrchabbtEO9wjOz5lVae+XRvjFKKWEA9GTMme6A8g=
 github.com/projectcalico/pod2daemon v0.0.0-20190730210055-df57fc59e2e1 h1:JPzqAbV448lrNn83iqWiMM+Lxh0EyGlZC+ZYDZt+oGo=
@@ -368,6 +374,8 @@ github.com/projectcalico/typha v0.0.0-20191023235600-5701853ec0f3 h1:o8muA8YdXYl
 github.com/projectcalico/typha v0.0.0-20191023235600-5701853ec0f3/go.mod h1:7t4l76Qk7/auJrmitY+//c/Og3oPlErbn+jXd0TUYrk=
 github.com/projectcalico/typha v0.0.0-20191104041650-0760f16ae6ed h1:CTVJhbe2IV36iYMRwB1KaDy/rT+0L75pjfILOfJhAO0=
 github.com/projectcalico/typha v0.0.0-20191104041650-0760f16ae6ed/go.mod h1:PbpXJ7M2G5qCKQ2woUANjL4bDDcBBi8UdYXsCIFcnyM=
+github.com/projectcalico/typha v0.0.0-20191104234117-ab7cc2290b27 h1:RjC5KbYv7UxT3DiwWUD9iwuuf1nrxqsP5pPMkByKKFg=
+github.com/projectcalico/typha v0.0.0-20191104234117-ab7cc2290b27/go.mod h1:+xMmYyn9jW+85tY3tBxE+WeS7Te/2TPDbiYjlTDTjPw=
 github.com/prometheus/client_golang v0.0.0-20171005112915-5cec1d0429b0/go.mod h1:7SWBe2y4D6OKWSNQJUaRYU/AaXPKyh/dDVn+NZz0KFw=
 github.com/prometheus/client_golang v0.9.1 h1:K47Rk0v/fkEfwfQet2KWhscE0cJzjgCCDBG2KHZoVno=
 github.com/prometheus/client_golang v0.9.1/go.mod h1:7SWBe2y4D6OKWSNQJUaRYU/AaXPKyh/dDVn+NZz0KFw=
