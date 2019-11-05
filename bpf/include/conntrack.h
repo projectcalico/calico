@@ -183,7 +183,7 @@ static CALI_BPF_INLINE int calico_ct_v4_create_nat_fwd(
 		struct calico_ct_key *rk, __be32 ip_src,
 		__be32 ip_dst, __u16 sport, __u16 dport, enum calico_tc_flags flags) {
 	__u64 now = bpf_ktime_get_ns();
-	CALI_DEBUG("CT-TCP Creating entry at %llu.\n", now);
+	CALI_DEBUG("CT-%d Creating entry at %llu.\n", ip_proto, now);
 	struct calico_ct_value ct_value = {
 		.type = CALI_CT_TYPE_NAT_FWD,
 		.last_seen = now,
@@ -199,7 +199,7 @@ static CALI_BPF_INLINE int calico_ct_v4_create_nat_fwd(
 		dump_ct_key(&k, flags);
 		ct_value.nat_rev_key = *rk;
 		int err = bpf_map_update_elem(&calico_ct_map_v4, &k, &ct_value, 0);
-		CALI_VERB("CT-TCP Create result: %d.\n", err);
+		CALI_VERB("CT-%d Create result: %d.\n", ip_proto, err);
 		return err;
 	} else  {
 		struct calico_ct_key k = {
@@ -210,7 +210,7 @@ static CALI_BPF_INLINE int calico_ct_v4_create_nat_fwd(
 		dump_ct_key(&k, flags);
 		ct_value.nat_rev_key = *rk;
 		int err = bpf_map_update_elem(&calico_ct_map_v4, &k, &ct_value, 0);
-		CALI_VERB("CT-TCP Create result: %d.\n", err);
+		CALI_VERB("CT-%d Create result: %d.\n", ip_proto, err);
 		return err;
 	}
 }
