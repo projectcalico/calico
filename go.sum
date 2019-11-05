@@ -52,6 +52,7 @@ github.com/containerd/typeurl v0.0.0-20190228175220-2a93cfde8c20/go.mod h1:Cm3kw
 github.com/containernetworking/cni v0.6.0/go.mod h1:LGwApLUm2FpoOfxTDEeq8T9ipbpZ61X79hmU3w8FmsY=
 github.com/containernetworking/cni v0.7.0 h1:1Qy7EwdC08mx5wUB0DpjCuBrk6e/uXg9yI9TvAvgox8=
 github.com/containernetworking/cni v0.7.0/go.mod h1:LGwApLUm2FpoOfxTDEeq8T9ipbpZ61X79hmU3w8FmsY=
+github.com/containernetworking/cni v0.7.1 h1:fE3r16wpSEyaqY4Z4oFrLMmIGfBYIKpPrHK31EJ9FzE=
 github.com/containernetworking/plugins v0.8.2 h1:5lnwfsAYO+V7yXhysJKy3E1A2Gy9oVut031zfdOzI9w=
 github.com/containernetworking/plugins v0.8.2/go.mod h1:TxALKWZpWL79BC3GOYKJzzXr7U8R23PdhwaLp6F3adc=
 github.com/coreos/bbolt v1.3.1-coreos.6/go.mod h1:iRUV2dpdMOn7Bo10OQBFzIJO9kkE559Wcmn+qkEiiKk=
@@ -176,6 +177,7 @@ github.com/golangplus/bytes v0.0.0-20160111154220-45c989fe5450/go.mod h1:Bk6SMAO
 github.com/golangplus/fmt v0.0.0-20150411045040-2a5d6d7d2995/go.mod h1:lJgMEyOkYFkPcDKwRXegd+iM6E7matEszMG5HhwytU8=
 github.com/golangplus/testing v0.0.0-20180327235837-af21d9c3145e/go.mod h1:0AA//k/eakGydO4jKRoRL2j92ZKSzTgj9tclaCrvXHk=
 github.com/google/btree v0.0.0-20160524151835-7d79101e329e/go.mod h1:lNA+9X1NB3Zf8V7Ke586lFgjr2dZNuvo3lPJSGZ5JPQ=
+github.com/google/btree v0.0.0-20161005200959-925471ac9e21 h1:eQuZ9QxVbMIeFAhxvtYmoxIhvmJCHj767J8EuwvQ1nA=
 github.com/google/btree v0.0.0-20161005200959-925471ac9e21/go.mod h1:lNA+9X1NB3Zf8V7Ke586lFgjr2dZNuvo3lPJSGZ5JPQ=
 github.com/google/cadvisor v0.33.2-0.20190411163913-9db8c7dee20a/go.mod h1:1nql6U13uTHaLYB8rLS5x9IJc2qT6Xd/Tr1sTX6NE48=
 github.com/google/certificate-transparency-go v1.0.21/go.mod h1:QeJfpSbVSfYc7RgB3gJFj9cbuQMMchQxrWXz8Ruopmg=
@@ -284,6 +286,7 @@ github.com/magiconair/properties v1.8.0/go.mod h1:PppfXfuXeibc/6YijjN8zIbojt8czP
 github.com/mailru/easyjson v0.0.0-20180823135443-60711f1a8329/go.mod h1:C1wdFJiN94OJF2b5HbByQZoLdCWB1Yqtg26g4irojpc=
 github.com/mailru/easyjson v0.0.0-20190626092158-b2ccc519800e/go.mod h1:C1wdFJiN94OJF2b5HbByQZoLdCWB1Yqtg26g4irojpc=
 github.com/marstr/guid v0.0.0-20170427235115-8bdf7d1a087c/go.mod h1:74gB1z2wpxxInTG6yaqA7KrtM0NZ+RbrcqDvYHefzho=
+github.com/mattn/go-colorable v0.0.0-20190708054220-c52ace132bf4 h1:VxXD9d4ehH3lorlbBVAbcT1qcxNoXkEU2ZAF15msmEQ=
 github.com/mattn/go-colorable v0.0.0-20190708054220-c52ace132bf4/go.mod h1:U0ppj6V5qS13XJ6of8GYAs25YV2eR4EVcfRqFIhoBtE=
 github.com/mattn/go-isatty v0.0.8 h1:HLtExJ+uU2HOZ+wI0Tt5DtUDrx8yhUqDcp7fYERX4CE=
 github.com/mattn/go-isatty v0.0.8/go.mod h1:Iq45c/XA43vh69/j3iqttzPXn0bhXyGjM0Hdxcsrc5s=
@@ -361,6 +364,7 @@ github.com/projectcalico/logrus v0.0.0-20180701205716-fc9bbf2f5799 h1:9jp4YoHqZv
 github.com/projectcalico/logrus v0.0.0-20180701205716-fc9bbf2f5799/go.mod h1:DfgrchabbtEO9wjOz5lVae+XRvjFKKWEA9GTMme6A8g=
 github.com/projectcalico/pod2daemon v0.0.0-20190730210055-df57fc59e2e1 h1:JPzqAbV448lrNn83iqWiMM+Lxh0EyGlZC+ZYDZt+oGo=
 github.com/projectcalico/pod2daemon v0.0.0-20190730210055-df57fc59e2e1/go.mod h1:TgmA+ArLHObRADfET11mFF1aTK5i++4ZhqIuE4IV+IU=
+github.com/projectcalico/typha v0.0.0-20191007041628-d0edd16642bc h1:UVJJ32oAcQYx8pZw/K36Ea/2+vgijIA80zlY21IfhCs=
 github.com/projectcalico/typha v0.0.0-20191007041628-d0edd16642bc/go.mod h1:WR+J5pLej0QX4ZuKsZ41jRpw24/wqugfQSnUExXh/94=
 github.com/prometheus/client_golang v0.0.0-20171005112915-5cec1d0429b0/go.mod h1:7SWBe2y4D6OKWSNQJUaRYU/AaXPKyh/dDVn+NZz0KFw=
 github.com/prometheus/client_golang v0.9.1/go.mod h1:7SWBe2y4D6OKWSNQJUaRYU/AaXPKyh/dDVn+NZz0KFw=
