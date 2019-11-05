@@ -85,17 +85,17 @@ kubectl patch configmap/{{site.prodname}}-config -n kube-system --type merge \
 
 #### Configure MTU for overlay networking
 
-If you are using IP in IP and/or VXLAN for Calico overlay networking, set the tunnel MTU to match the value that you configured for the veth MTU. 
+If you are using IP in IP and/or VXLAN for {{site.prodname}} overlay networking, set the tunnel MTU to match the value that you configured for the veth MTU.
 
 Edit `calico-config ConfigMap` with the MTU tunnel values for your environment. For example: 
 
 ```
 # Set MTU for tunnel device used if ipip is enabled
-            - name: FELIX_IPINIPMTU
-              value: "1440"
+           - name: FELIX_IPINIPMTU
+             value: "1440"
 # Set MTU for tunnel device used if vxlan is enabled
-           - name: FELIX_VXLAN
-              value: “1440”
+           - name: FELIX_VXLANMTU
+             value: “1440”
 ```
 
 ##### View existing tunnel MTU values
