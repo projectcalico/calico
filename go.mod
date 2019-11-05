@@ -14,7 +14,7 @@ require (
 	github.com/onsi/gomega v1.7.0
 	github.com/patrickmn/go-cache v0.0.0-20180815053127-5633e0862627
 	github.com/projectcalico/felix v0.0.0-20190909220014-9e5ec5eca469
-	github.com/projectcalico/libcalico-go v0.0.0-20191102064855-8540fc6352a2
+	github.com/projectcalico/libcalico-go v0.0.0-20191104214504-aa6a608ee1fe
 	github.com/satori/go.uuid v1.2.0
 	github.com/sirupsen/logrus v1.4.2
 	github.com/spf13/pflag v1.0.3
