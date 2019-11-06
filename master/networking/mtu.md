@@ -90,7 +90,7 @@ veth_mtu: "1440"
 
 #### View current tunnel MTU values
 
-To view the current tunnel size, use the command: 
+To view the current tunnel size, use the following command: 
 
 `ip link show`
 
