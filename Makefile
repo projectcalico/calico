@@ -62,6 +62,13 @@ BUILD_IMAGE?=calico/pod2daemon-flexvol
 PUSH_IMAGES?=$(BUILD_IMAGE) quay.io/calico/pod2daemon-flexvol
 RELEASE_IMAGES?=
 
+
+# Get version from git.
+GIT_VERSION:=$(shell git describe --tags --dirty --always)
+ifeq ($(LOCAL_BUILD),true)
+	GIT_VERSION = $(shell git describe --tags --dirty --always)-dev-build
+endif
+
 ifeq ($(RELEASE),true)
 # If this is a release, also tag and push GCR images.
 PUSH_IMAGES+=$(RELEASE_IMAGES)
@@ -159,7 +166,7 @@ sub-image-%:
 
 $(BUILD_IMAGE): $(CONTAINER_CREATED)
 $(CONTAINER_CREATED): Dockerfile.$(ARCH) bin/flexvol-$(ARCH)
-	docker build -t $(BUILD_IMAGE):latest-$(ARCH) --build-arg QEMU_IMAGE=$(CALICO_BUILD) -f Dockerfile.$(ARCH) .
+	docker build -t $(BUILD_IMAGE):latest-$(ARCH) --build-arg QEMU_IMAGE=$(CALICO_BUILD) --build-arg GIT_VERSION=$(GIT_VERSION) -f Dockerfile.$(ARCH) .
 ifeq ($(ARCH),amd64)
 	docker tag $(BUILD_IMAGE):latest-$(ARCH) $(BUILD_IMAGE):latest
 endif
