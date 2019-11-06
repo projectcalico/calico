@@ -68,9 +68,9 @@ When using flannel for networking, the MTU for network interfaces should match t
 
 #### Configure MTU for workloads
   
-When you set the MTU it applies to new workloads. Use the calico-config ConfigMap to set the values for FelixConfiguration. To apply MTU changes to existing workloads, you must restart calico nodes. Restarting the calico/node pods also updates any Calico tunnel network interfaces on that node. Use the calico-config ConfigMap to set values in FelixConfiguration.
+When you set the MTU, it applies to new workloads. To apply MTU changes to existing workloads, you must restart calico nodes. Restarting the calico/node pods takes values from the ConfigMap and starts rolling updates for any Calico tunnel network interfaces on the node. 
 
-Edit the `calico-config` ConfigMap with the **veth_mtu:** values for your environment. For example:
+Edit the `calico-config` ConfigMap to set values in FelixConfiguration. For example:
 
 ```
 kubectl patch configmap/{{site.prodname}}-config -n kube-system --type merge \
@@ -79,9 +79,9 @@ kubectl patch configmap/{{site.prodname}}-config -n kube-system --type merge \
 
 #### Configure MTU for overlay networking
 
-If you are using IP in IP and/or VXLAN for {{site.prodname}} overlay networking, set the tunnel MTU to match the value that you configured for the veth MTU. Use the calico-config ConfigMap to set values in FelixConfiguration.
+If you are using IP in IP and/or VXLAN for {{site.prodname}} overlay networking, set the tunnel MTU to match the value that you configured for the veth MTU. 
 
-Edit `calico-config ConfigMap` with the MTU tunnel values for your environment. For example: 
+Edit `calico-config ConfigMap` to set the MTU tunnel values in FelixConfiguration. For example: 
 
 ```
 # Configure the MTU to use
