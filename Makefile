@@ -38,6 +38,8 @@ ifeq ($(ARCH),x86_64)
 	override ARCH=amd64
 endif
 
+PACKAGE_NAME?=github.com/projectcalico/kube-controllers
+
 EXTRA_DOCKER_ARGS	+= -e GO111MODULE=on
 
 # Figure out the users UID/GID.  These are needed to run docker containers
@@ -138,7 +140,6 @@ PUSH_NONMANIFEST_IMAGES=$(filter-out $(PUSH_MANIFEST_IMAGES),$(PUSH_IMAGES))
 # location of docker credentials to push manifests
 DOCKER_CONFIG ?= $(HOME)/.docker/config.json
 
-PACKAGE_NAME?=github.com/projectcalico/kube-controllers
 CALICO_BUILD?=calico/go-build:$(GO_BUILD_VER)
 LIBCALICOGO_PATH?=none
 LOCAL_USER_ID?=$(shell id -u $$USER)
