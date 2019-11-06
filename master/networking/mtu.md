@@ -64,11 +64,11 @@ The extra overlay header used in IP in IP and VXLAN protocols, reduces the minim
 
 **MTU for flannel networking**
 
-When using flannel for networking, the MTU for network interfaces should match the MTU of the flannel interface. If using flannel with VXLAN, use the “Calico MTU with VXLAN” column in the table above for common sizes. 
+When using flannel for networking, the MTU for network interfaces should match the MTU of the flannel interface. If using flannel with VXLAN, use the “{{site.prodname}} MTU with VXLAN” column in the table above for common sizes. 
 
 #### Configure MTU for workloads
   
-When you set the MTU, it applies to new workloads. To apply MTU changes to existing workloads, you must restart calico nodes. Restarting the calico/node pods takes values from the ConfigMap and starts rolling updates for any Calico tunnel network interfaces on the node. 
+When you set the MTU, it applies to new workloads. To apply MTU changes to existing workloads, you must restart calico nodes. Restarting the calico/node pods takes values from the ConfigMap and starts rolling updates for any {{site.prodname}} tunnel network interfaces on the node. 
 
 Edit the `calico-config` ConfigMap to set values in FelixConfiguration. For example:
 
