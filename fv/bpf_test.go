@@ -19,6 +19,7 @@ package fv_test
 import (
 	"fmt"
 	"net"
+	"os"
 	"strconv"
 
 	"github.com/davecgh/go-spew/spew"
@@ -62,6 +63,10 @@ func describeBPFTests(protocol string) bool {
 		)
 
 		BeforeEach(func() {
+			if os.Getenv("FELIX_FV_ENABLE_BPF") != "true" {
+				Skip("Skipping BPF test in non-BPF run.")
+			}
+
 			var err error
 			infra = getInfra()
 

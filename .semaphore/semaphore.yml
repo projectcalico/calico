@@ -7,6 +7,10 @@ agent:
 blocks:
   - name: Build
     task:
+      agent:
+        machine:
+          type: e1-standard-4
+          os_image: ubuntu1804
       jobs:
         - name: Build
           commands:
@@ -19,6 +23,8 @@ blocks:
             - 'cache store bin-${SEMAPHORE_GIT_SHA} bin'
             - cache store go-pkg-cache .go-pkg-cache
             - 'cache store go-mod-cache ${HOME}/go/pkg/mod/cache'
+            - docker save -o /tmp/calico-felix.tar calico/felix:latest-amd64
+            - 'cache store felix-image-${SEMAPHORE_GIT_SHA} /tmp/calico-felix.tar'
   - name: Tests
     task:
       prologue:
@@ -27,13 +33,14 @@ blocks:
           - cache restore go-pkg-cache
           - cache restore go-mod-cache
           - 'cache restore bin-${SEMAPHORE_GIT_SHA}'
+          - 'cache restore felix-image-${SEMAPHORE_GIT_SHA}'
+          - docker load -i /tmp/calico-felix.tar
+          - rm /tmp/calico-felix.tar
           - touch bin/*
       jobs:
-        - name: UT
+        - name: UT and static checks
           commands:
             - make ut
-        - name: Static checks
-          commands:
             - make static-checks
         - name: Kubernetes FV tests with Typha
           commands:

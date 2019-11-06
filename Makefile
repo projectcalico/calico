@@ -134,11 +134,13 @@ PUSH_NONMANIFEST_IMAGES=$(filter-out $(PUSH_MANIFEST_IMAGES),$(PUSH_IMAGES))
 # location of docker credentials to push manifests
 DOCKER_CONFIG ?= $(HOME)/.docker/config.json
 
-GO_BUILD_VER?=v0.25-deb-cgo
+GO_BUILD_VER?=v0.25
+CGO_BUILD_VER?=v0.25-deb-cgo
 # For building, we use the go-build image for the *host* architecture, even if the target is different
 # the one for the host should contain all the necessary cross-compilation tools
 # we do not need to use the arch since go-build:v0.15 now is multi-arch manifest
 CALICO_BUILD=calico/go-build:$(GO_BUILD_VER)
+CALICO_BUILD_CGO=calico/go-build:$(CGO_BUILD_VER)
 ETCD_VERSION?=v3.3.7
 K8S_VERSION?=v1.14.1
 PROTOC_VER?=v0.1
@@ -339,8 +341,10 @@ bin/calico-felix: bin/calico-felix-$(ARCH)
 bin/calico-felix-$(ARCH): $(SRC_FILES) local_build
 	@echo Building felix for $(ARCH) on $(BUILDARCH)
 	mkdir -p bin
-	$(DOCKER_RUN) $(CALICO_BUILD) \
-	   sh -c 'go build -v -i -o $@ -v $(BUILD_FLAGS) $(LDFLAGS) "$(PACKAGE_NAME)/cmd/calico-felix"'
+	if [ "$(SEMAPHORE)" != "true" -o ! -e $@ ] ; then \
+	  $(DOCKER_RUN) $(CALICO_BUILD_CGO) \
+	     sh -c 'go build -v -i -o $@ -v $(BUILD_FLAGS) $(LDFLAGS) "$(PACKAGE_NAME)/cmd/calico-felix"'; \
+	fi
 
 # Generate the protobuf bindings for go. The proto/felixbackend.pb.go file is included in SRC_FILES
 protobuf proto/felixbackend.pb.go: proto/felixbackend.proto
@@ -357,13 +361,13 @@ BPF_XDP_INC_FILES :=
 
 ifndef LOCAL
 xdp bpf/xdp/generated/xdp.o:
-	$(DOCKER_RUN) $(CALICO_BUILD) \
+	$(DOCKER_RUN) $(CALICO_BUILD_CGO) \
 	              /bin/sh -c "make -C bpf/xdp all"
 	mkdir -p bpf/xdp/generated/
 	cp bpf/xdp/filter.o bpf/xdp/generated/xdp.o
 
 xdp-clean:
-	$(DOCKER_RUN) $(CALICO_BUILD) \
+	$(DOCKER_RUN) $(CALICO_BUILD_CGO) \
 	              /bin/sh -c "make -C bpf/xdp clean"
 else
 xdp bpf/xdp/generated/xdp.o:
@@ -379,7 +383,7 @@ BPF_SOCKMAP_INC_FILES := bpf/sockmap/sockops.h
 
 bpf/sockmap/generated/sockops.o: bpf/sockmap/sockops.c $(BPF_INC_FILES) $(BPF_SOCKMAP_INC_FILES) 
 	mkdir -p bpf/sockmap/generated
-	$(DOCKER_RUN) $(CALICO_BUILD) \
+	$(DOCKER_RUN) $(CALICO_BUILD_CGO) \
 		      /bin/sh -c \
 		      "clang \
 			      -D__KERNEL__ \
@@ -404,7 +408,7 @@ bpf/sockmap/generated/sockops.o: bpf/sockmap/sockops.c $(BPF_INC_FILES) $(BPF_SO
 
 bpf/sockmap/generated/redir.o: bpf/sockmap/redir.c $(BPF_INC_FILES) $(BPF_SOCKMAP_INC_FILES) 
 	mkdir -p bpf/sockmap/generated
-	$(DOCKER_RUN) $(CALICO_BUILD) \
+	$(DOCKER_RUN) $(CALICO_BUILD_CGO) \
 		      /bin/sh -c \
 		      "clang \
 			      -D__KERNEL__ \
@@ -431,7 +435,7 @@ bpf/sockmap/generated/redir.o: bpf/sockmap/redir.c $(BPF_INC_FILES) $(BPF_SOCKMA
 packr: bpf/bpf-packr.go bpf/packrd/packed-packr.go
 
 bpf/bpf-packr.go bpf/packrd/packed-packr.go: bpf/xdp/generated/xdp.o bpf/sockmap/generated/sockops.o bpf/sockmap/generated/redir.o 
-	$(DOCKER_RUN) $(CALICO_BUILD) \
+	$(DOCKER_RUN) $(CALICO_BUILD_CGO) \
 		      /bin/sh -c \
 		      "go get -u github.com/gobuffalo/packr/v2/packr2 && cd /go/src/$(PACKAGE_NAME)/bpf && /go/bin/packr2"
 	$(DOCKER_RUN) $(CALICO_BUILD) goimports -w -local github.com/projectcalico/ bpf/packrd/packed-packr.go bpf/bpf-packr.go
@@ -456,7 +460,9 @@ $(BUILD_IMAGE)-$(ARCH): bin/calico-felix-$(ARCH) register bin/calico-bpf
 	cp bin/calico-felix-$(ARCH) docker-image/bin/
 	cp bin/calico-bpf docker-image/bin/
 	cp -r bpf docker-image/
-	docker build --pull -t $(BUILD_IMAGE):latest-$(ARCH) --build-arg QEMU_IMAGE=$(CALICO_BUILD) --file ./docker-image/Dockerfile.$(ARCH) docker-image
+	if [ "$(SEMAPHORE)" != "true" -o "$$(docker images -q $(BUILD_IMAGE):latest-$(ARCH) 2> /dev/null)" = "" ] ; then \
+ 	  docker build --pull -t $(BUILD_IMAGE):latest-$(ARCH) --build-arg QEMU_IMAGE=$(CALICO_BUILD) --file ./docker-image/Dockerfile.$(ARCH) docker-image; \
+	fi
 ifeq ($(ARCH),amd64)
 	docker tag $(BUILD_IMAGE):latest-$(ARCH) $(BUILD_IMAGE):latest
 endif
@@ -576,7 +582,7 @@ foss-checks:
 .PHONY: ut
 ut combined.coverprofile: $(SRC_FILES)
 	@echo Running Go UTs.
-	$(DOCKER_RUN) $(CALICO_BUILD) ./utils/run-coverage $(GINKGO_ARGS)
+	$(DOCKER_RUN) $(CALICO_BUILD_CGO) ./utils/run-coverage $(GINKGO_ARGS)
 
 ###############################################################################
 # FV Tests
@@ -584,7 +590,7 @@ ut combined.coverprofile: $(SRC_FILES)
 fv/fv.test: $(SRC_FILES)
 	# We pre-build the FV test binaries so that we can run them
 	# outside a container and allow them to interact with docker.
-	$(DOCKER_RUN) $(CALICO_BUILD) go test $(BUILD_FLAGS) ./$(shell dirname $@) -c --tags fvtests -o $@
+	$(DOCKER_RUN) $(CALICO_BUILD_CGO) go test $(BUILD_FLAGS) ./$(shell dirname $@) -c --tags fvtests -o $@
 
 .PHONY: remote-deps
 remote-deps:
@@ -707,7 +713,7 @@ stop-grafana:
 bin/calico-bpf: $(SRC_FILES) local_build
 	@echo Building calico-bpf...
 	mkdir -p bin
-	$(DOCKER_RUN) $(CALICO_BUILD) \
+	$(DOCKER_RUN) $(CALICO_BUILD_CGO) \
 	    sh -c 'go build -v -i -o $@ -v $(BUILD_FLAGS) $(LDFLAGS) "$(PACKAGE_NAME)/cmd/calico-bpf"'
 
 bin/iptables-locker: $(SRC_FILES) local_build
