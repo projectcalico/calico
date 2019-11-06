@@ -17,7 +17,7 @@ Increasing the MTU can improve performance, and decreasing the MTU can resolve p
 
 This how-to guide uses the following {{site.prodname}} features:
 
-- **FelixConfiguration**
+- **FelixConfiguration** resource
 
 ### Concepts
 
