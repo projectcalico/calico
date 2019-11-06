@@ -18,7 +18,7 @@ Increasing the MTU can improve performance, and decreasing the MTU when it is to
 This how-to guide uses the following {{site.prodname}} features:
 
 - **calico-config ConfigMap** file
-- **FelixConfiguration** file
+- **FelixConfiguration**
 
 ### Concepts
 
@@ -26,13 +26,7 @@ This how-to guide uses the following {{site.prodname}} features:
 
 The maximum transmission unit (MTU) setting determines the largest packet size that can be transmitted through your network. MTU is configured on the veth attached to each workload, and tunnel devices (if you enable IP in IP and/or VXLAN).
 
-The default MTU sizes are:
-
-- Workloads (veth), 1440
-- IP in IP (tunnel device), 1440
-- VXLAN (tunnel device), 1410
-
-In general, maximum performance is achieved by using the highest MTU value that does not cause fragmentation or drop packets on the path.  Maximum bandwidth increases, and CPU consumption for a given traffic rate may drop.  The improvement is often more significant when pod to pod traffic is being encapsulated (IP in IP or VXLAN), and splitting and combining such traffic cannot be offloaded to your NICs.
+In general, maximum performance is achieved by using the highest MTU value that does not cause fragmentation or drop packets on the path.  Maximum bandwidth increases and CPU consumption may drop for a given traffic rate.  The improvement is often more significant when pod to pod traffic is being encapsulated (IP in IP or VXLAN), and splitting and combining such traffic cannot be offloaded to your NICs.
 
 For example, if you are using AWS, you may be able to use jumbo frames up to 9000 bytes. If you are using {{site.prodname}} overlay networks, you may need to adjust the MTU settings to ensure packets aren’t lost or dropped from the size is being too high or too low.
 
