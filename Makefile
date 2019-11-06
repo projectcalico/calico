@@ -40,6 +40,8 @@ endif
 
 BIN=bin/$(ARCH)
 
+PACKAGE_NAME?=github.com/projectcalico/cni-plugin
+
 # Figure out the users UID/GID.  These are needed to run docker containers
 # as the current user and ensure that files built inside containers are
 # owned by the current user.
@@ -132,8 +134,6 @@ BUILD_IMAGE_ORG?=calico
 CNI_SPEC_VERSION?=0.3.1
 
 CALICO_BUILD?=$(BUILD_IMAGE_ORG)/go-build:$(GO_BUILD_VER)
-
-PACKAGE_NAME?=github.com/projectcalico/cni-plugin
 
 BUILD_IMAGE?=calico/cni
 DEPLOY_CONTAINER_MARKER=cni_deploy_container-$(ARCH).created
