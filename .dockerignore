@@ -2,3 +2,4 @@
 !k8s-install/scripts/install-cni.sh
 !k8s-install/scripts/calico.conf.default
 !bin/
+!LICENSE
