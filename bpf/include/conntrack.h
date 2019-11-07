@@ -61,6 +61,20 @@ struct calico_ct_value {
 	};
 };
 
+struct ct_ctx {
+	struct __sk_buff *skb;
+	enum calico_tc_flags flags;
+	__u8 proto;
+	__be32 src;
+	__be32 orig_dst;
+	__be32 dst;
+	__u16 sport;
+	__u16 dport;
+	__u16 orig_dport;
+	struct tcphdr *tcp;
+};
+
+
 struct bpf_map_def_extended __attribute__((section("maps"))) calico_ct_map_v4 = {
 	.type = BPF_MAP_TYPE_HASH,
 	.key_size = sizeof(struct calico_ct_key),
@@ -77,15 +91,29 @@ static CALI_BPF_INLINE void dump_ct_key(struct calico_ct_key *k, enum calico_tc_
 	CALI_VERB("CT-TCP   key B=%x:%d size=%d\n", be32_to_host(k->addr_b), k->port_b, (int)sizeof(struct calico_ct_key));
 }
 
-static CALI_BPF_INLINE int calico_ct_v4_create_tracking(
-		struct __sk_buff *skb,
-		__u8 ip_proto,
-		struct calico_ct_key *k, enum CALI_CT_TYPE type,
-		__be32 ip_src, __be32 ip_dst, __u16 sport, __u16 dport,
-		__be32 orig_dst, __u16 orig_dport,
-		__be32 seq, bool syn, enum calico_tc_flags flags) {
+static CALI_BPF_INLINE int calico_ct_v4_create_tracking(struct ct_ctx *ctx,
+							struct calico_ct_key *k,
+							enum CALI_CT_TYPE type)
+{
+	__be32 ip_src = ctx->src;
+	__be32 ip_dst = ctx->dst;
+	__u16 sport = ctx->sport;
+	__u16 dport = ctx->dport;
+	__be32 orig_dst = ctx->orig_dst;
+	__u16 orig_dport = ctx->orig_dport;
 
-	if ((skb->mark & CALI_SKB_MARK_SEEN_MASK) == CALI_SKB_MARK_SEEN) {
+
+	__be32 seq = 0;
+	bool syn = false;
+
+	if (ctx->tcp) {
+		seq = ctx->tcp->seq;
+		syn = ctx->tcp->syn;
+	}
+
+	enum calico_tc_flags flags = ctx->flags;
+
+	if ((ctx->skb->mark & CALI_SKB_MARK_SEEN_MASK) == CALI_SKB_MARK_SEEN) {
 		// Packet already marked as being from another workload, which will
 		// have created a conntrack entry.  Look that one up instead of
 		// creating one.
@@ -94,13 +122,13 @@ static CALI_BPF_INLINE int calico_ct_v4_create_tracking(
 		bool srcLTDest = (ip_src < ip_dst) || ((ip_src == ip_dst) && sport < dport);
 		if (srcLTDest) {
 			*k = (struct calico_ct_key) {
-				.protocol = ip_proto,
+				.protocol = ctx->proto,
 				.addr_a = ip_src, .port_a = sport,
 				.addr_b = ip_dst, .port_b = dport,
 			};
 		} else  {
 			*k = (struct calico_ct_key) {
-				.protocol = ip_proto,
+				.protocol = ctx->proto,
 				.addr_a = ip_dst, .port_a = dport,
 				.addr_b = ip_src, .port_b = sport,
 			};
@@ -147,7 +175,7 @@ static CALI_BPF_INLINE int calico_ct_v4_create_tracking(
 	bool srcLTDest = (ip_src < ip_dst) || ((ip_src == ip_dst) && sport < dport);
 	if (srcLTDest) {
 		*k = (struct calico_ct_key) {
-			.protocol = ip_proto,
+			.protocol = ctx->proto,
 			.addr_a = ip_src, .port_a = sport,
 			.addr_b = ip_dst, .port_b = dport,
 		};
@@ -155,7 +183,7 @@ static CALI_BPF_INLINE int calico_ct_v4_create_tracking(
 		dst_to_src = &ct_value.b_to_a;
 	} else  {
 		*k = (struct calico_ct_key) {
-			.protocol = ip_proto,
+			.protocol = ctx->proto,
 			.addr_a = ip_dst, .port_a = dport,
 			.addr_b = ip_src, .port_b = sport,
 		};
@@ -217,77 +245,22 @@ static CALI_BPF_INLINE int calico_ct_v4_create_nat_fwd(
 	}
 }
 
-static CALI_BPF_INLINE int calico_ct_v4_tcp_create(
-		struct __sk_buff *skb,
-		__be32 ip_src, __be32 ip_dst, __u16 sport, __u16 dport,
-		struct tcphdr *tcp_header, enum calico_tc_flags flags) {
+static CALI_BPF_INLINE int calico_ct_v4_create(struct ct_ctx *ctx)
+{
 	struct calico_ct_key k;
-	return calico_ct_v4_create_tracking(skb,
-			IPPROTO_TCP, &k, CALI_CT_TYPE_NORMAL,
-			ip_src, ip_dst, sport, dport, 0, 0,
-			tcp_header->seq, tcp_header->syn, flags);
+
+	return calico_ct_v4_create_tracking(ctx, &k, CALI_CT_TYPE_NORMAL);
 }
 
-static CALI_BPF_INLINE int calico_ct_v4_udp_create(
-		struct __sk_buff *skb,
-		__be32 ip_src, __be32 ip_dst, __u16 sport, __u16 dport,
-		enum calico_tc_flags flags) {
+static CALI_BPF_INLINE int calico_ct_v4_create_nat(struct ct_ctx *ctx)
+{
 	struct calico_ct_key k;
-	return calico_ct_v4_create_tracking(skb,
-			IPPROTO_UDP, &k, CALI_CT_TYPE_NORMAL,
-			ip_src, ip_dst, sport, dport, 0, 0, 0, 0, flags);
-}
 
-static CALI_BPF_INLINE int calico_ct_v4_icmp_create(
-		struct __sk_buff *skb,
-		__be32 ip_src, __be32 ip_dst,
-		enum calico_tc_flags flags) {
-	struct calico_ct_key k;
-	return calico_ct_v4_create_tracking(skb,
-			IPPROTO_ICMP, &k, CALI_CT_TYPE_NORMAL,
-			ip_src, ip_dst, 0, 0, 0, 0, 0, 0, flags);
-}
+	calico_ct_v4_create_tracking(ctx, &k, CALI_CT_TYPE_NAT_REV);
 
-static CALI_BPF_INLINE int calico_ct_v4_tcp_create_nat(
-		struct __sk_buff *skb,
-		__be32 orig_src, __be32 orig_dst, __u16 orig_sport, __u16 orig_dport,
-		__be32 nat_dst, __u16 nat_dport, struct tcphdr *tcp_header,
-		enum calico_tc_flags flags) {
-	struct calico_ct_key k;
-	calico_ct_v4_create_tracking(skb,
-			IPPROTO_TCP, &k, CALI_CT_TYPE_NAT_REV, orig_src,
-			nat_dst, orig_sport, nat_dport, orig_dst, orig_dport,
-			tcp_header->seq, tcp_header->syn, flags);
-	calico_ct_v4_create_nat_fwd(IPPROTO_TCP, &k, orig_src, orig_dst, orig_sport,
-			orig_dport, flags);
-	return 0;
-}
+	calico_ct_v4_create_nat_fwd(ctx->proto, &k, ctx->src, ctx->orig_dst, ctx->sport,
+			ctx->orig_dport, ctx->flags);
 
-static CALI_BPF_INLINE int calico_ct_v4_udp_create_nat(
-		struct __sk_buff *skb,
-		__be32 orig_src, __be32 orig_dst, __u16 orig_sport, __u16 orig_dport,
-		__be32 nat_dst, __u16 nat_dport,
-		enum calico_tc_flags flags) {
-	struct calico_ct_key k;
-	calico_ct_v4_create_tracking(skb,
-			IPPROTO_UDP, &k, CALI_CT_TYPE_NAT_REV, orig_src,
-			nat_dst, orig_sport, nat_dport, orig_dst, orig_dport,
-			0, 0, flags);
-	calico_ct_v4_create_nat_fwd(IPPROTO_UDP, &k, orig_src, orig_dst, orig_sport,
-			orig_dport, flags);
-	return 0;
-}
-
-static CALI_BPF_INLINE int calico_ct_v4_icmp_create_nat(
-		struct __sk_buff *skb,
-		__be32 orig_src, __be32 orig_dst,
-		__be32 nat_dst,
-		enum calico_tc_flags flags) {
-	struct calico_ct_key k;
-	calico_ct_v4_create_tracking(skb,
-			IPPROTO_ICMP, &k, CALI_CT_TYPE_NAT_REV, orig_src,
-			nat_dst, 0, 0, orig_dst, 0, 0, 0, flags);
-	calico_ct_v4_create_nat_fwd(IPPROTO_ICMP, &k, orig_src, orig_dst, 0, 0, flags);
 	return 0;
 }
 

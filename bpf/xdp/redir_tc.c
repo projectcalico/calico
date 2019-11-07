@@ -316,23 +316,33 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb, enum calico_tc_flags
 			CALI_DEBUG("Allowed by normal policy: ACCEPT\n");
 		}
 
+		struct ct_ctx ctx = {
+			.skb	= skb,
+			.proto	= ip_proto,
+			.flags	= flags,
+			.src	= ip_src,
+			.sport	= sport,
+			.dst	= post_nat_ip_dst,
+			.dport	= post_nat_dport,
+		};
+
 		// If we get here, we've passed policy.
 		if (nat_dest != NULL) {
 			// Packet is to be NATted, need to record a NAT entry.
+			ctx.orig_dst = ip_dst;
+			ctx.orig_dport = dport;
+
 			switch (ip_proto) {
 			case IPPROTO_TCP:
 				if ((void*)(tcp_header+1) > (void *)(long)skb->data_end) {
 					CALI_DEBUG("Too short for TCP: DROP\n");
 					goto deny;
 				}
-				calico_ct_v4_tcp_create_nat(skb, ip_src, ip_dst, sport, dport, post_nat_ip_dst, post_nat_dport, tcp_header, flags);
-				break;
+				ctx.tcp = tcp_header;
+				/* fall through */
 			case IPPROTO_UDP:
-				calico_ct_v4_udp_create_nat(skb, ip_src, ip_dst, sport, dport, post_nat_ip_dst, post_nat_dport, flags);
-				break;
 			case IPPROTO_ICMP:
-				calico_ct_v4_icmp_create_nat(skb, ip_src, ip_dst, post_nat_ip_dst, flags);
-				break;
+				calico_ct_v4_create_nat(&ctx);
 			}
 
 			// Actually do the NAT.
@@ -363,13 +373,11 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb, enum calico_tc_flags
 					CALI_DEBUG("Too short for TCP: DROP\n");
 					goto deny;
 				}
-				calico_ct_v4_tcp_create(skb, ip_src, ip_dst, sport, dport, tcp_header, flags);
-				break;
+				ctx.tcp = tcp_header;
+				/* fall through */
 			case IPPROTO_UDP:
-				calico_ct_v4_udp_create(skb, ip_src, ip_dst, sport, dport, flags);
-				break;
 			case IPPROTO_ICMP:
-				calico_ct_v4_icmp_create(skb, ip_src, ip_dst, flags);
+				calico_ct_v4_create(&ctx);
 				break;
 			}
 		}
