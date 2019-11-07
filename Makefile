@@ -533,7 +533,7 @@ endif
 
 .PHONY: golangci-lint
 golangci-lint: $(GENERATED_FILES)
-	$(DOCKER_RUN) $(CALICO_BUILD_CGO) golangci-lint run $(LINT_ARGS)
+	$(DOCKER_RUN) -e GOGC=10 $(CALICO_BUILD_CGO) golangci-lint run $(LINT_ARGS)
 
 .PHONY: check-packr
 check-packr: bpf/packrd/packed-packr.go
