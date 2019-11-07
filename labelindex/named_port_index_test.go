@@ -82,7 +82,7 @@ var _ = Describe("SelectorAndNamedPortIndex", func() {
 		It("should inherit labels from profiles", func() {
 			uut.OnUpdate(api.Update{
 				KVPair: model.KVPair{
-					Key:   model.ProfileLabelsKey{model.ProfileKey{Name: "doo"}},
+					Key:   model.ProfileLabelsKey{ProfileKey: model.ProfileKey{Name: "doo"}},
 					Value: map[string]string{"superhero": "scooby"},
 				},
 			})
