@@ -88,7 +88,7 @@ func runDiags(logDir string) error {
 		{"Dumping iptables (IPv4)", "iptables-save -c", "ipv4_tables"},
 		{"Dumping iptables (IPv6)", "ip6tables-save -c", "ipv6_tables"},
 		{"Dumping ipsets", "ipset list", "ipsets"},
-		{"Dumping ipsets (container)", "docker run --privileged --net=host calico/node ipset list", "ipset_container"},
+		{"Dumping ipsets (container)", "docker run --rm --privileged --net=host calico/node ipset list", "ipset_container"},
 		{"Copying journal for calico-node.service", "journalctl -u calico-node.service --no-pager", "journalctl_calico_node"},
 		{"Dumping felix stats", "pkill -SIGUSR1 felix", ""},
 	}
