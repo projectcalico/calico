@@ -55,7 +55,7 @@ v3.9:
      calico/kube-controllers:
       version: v3.9.3
      networking-calico:
-      version: 3.9.3
+      version: 3.9.2
      flannel:
       version: v0.11.0
      calico/dikastes:
@@ -139,7 +139,7 @@ v3.8:
      calico/kube-controllers:
       version: v3.8.4
      networking-calico:
-      version: 3.8.4
+      version: 3.8.3
      flannel:
       version: v0.11.0
      calico/dikastes:
