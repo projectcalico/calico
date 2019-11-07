@@ -45,7 +45,7 @@ var _ = Describe("BPF Syncer", func() {
 			},
 		},
 		EpsMap: k8sp.EndpointsMap{
-			svcKey: []k8sp.Endpoint{&k8sp.BaseEndpointInfo{"10.1.0.1:5555", false}},
+			svcKey: []k8sp.Endpoint{&k8sp.BaseEndpointInfo{Endpoint: "10.1.0.1:5555"}},
 		},
 	}
 
@@ -83,8 +83,8 @@ var _ = Describe("BPF Syncer", func() {
 			Protocol:  v1.ProtocolTCP,
 		}
 		state.EpsMap[svcKey2] = []k8sp.Endpoint{
-			&k8sp.BaseEndpointInfo{"10.2.0.1:1111", false},
-			&k8sp.BaseEndpointInfo{"10.2.0.1:2222", false},
+			&k8sp.BaseEndpointInfo{Endpoint: "10.2.0.1:1111"},
+			&k8sp.BaseEndpointInfo{Endpoint: "10.2.0.1:2222"},
 		}
 
 		err := s.Apply(state)
@@ -126,7 +126,7 @@ var _ = Describe("BPF Syncer", func() {
 
 	It("should be possible to delete one second-service backend", func() {
 		state.EpsMap[svcKey2] = []k8sp.Endpoint{
-			&k8sp.BaseEndpointInfo{"10.2.0.1:2222", false},
+			&k8sp.BaseEndpointInfo{Endpoint: "10.2.0.1:2222"},
 		}
 
 		err := s.Apply(state)
@@ -151,7 +151,7 @@ var _ = Describe("BPF Syncer", func() {
 		}
 
 		state.EpsMap[nosvcKey] = []k8sp.Endpoint{
-			&k8sp.BaseEndpointInfo{"10.2.0.1:6666", false},
+			&k8sp.BaseEndpointInfo{Endpoint: "10.2.0.1:6666"},
 		}
 
 		err := s.Apply(state)
@@ -280,7 +280,7 @@ var _ = Describe("BPF Syncer", func() {
 			Protocol:  v1.ProtocolUDP,
 		}
 		state.EpsMap[svcKey3] = []k8sp.Endpoint{
-			&k8sp.BaseEndpointInfo{"10.3.0.1:3434", false},
+			&k8sp.BaseEndpointInfo{Endpoint: "10.3.0.1:3434"},
 		}
 
 		err := s.Apply(state)
@@ -314,7 +314,7 @@ var _ = Describe("BPF Syncer", func() {
 			Protocol:  v1.ProtocolUDP,
 		}
 		state.EpsMap[svcKey3] = []k8sp.Endpoint{
-			&k8sp.BaseEndpointInfo{"10.3.0.1:3434", false},
+			&k8sp.BaseEndpointInfo{Endpoint: "10.3.0.1:3434"},
 		}
 
 		err := s.Apply(state)

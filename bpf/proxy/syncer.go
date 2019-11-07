@@ -393,7 +393,7 @@ func (s *Syncer) writeSvcBackend(svcID uint32, idx uint32, ep k8sp.Endpoint) err
 
 	log.Debugf("bpf map writing %s:%s", key, val)
 	if err := s.bpfEps.Update(key[:], val[:]); err != nil {
-		errors.Errorf("bpfEps.Update: %s", err)
+		return errors.Errorf("bpfEps.Update: %s", err)
 	}
 	return nil
 }
@@ -402,7 +402,7 @@ func (s *Syncer) deleteSvcBackend(svcID uint32, idx uint32) error {
 	key := bpfm.NewNATBackendKey(svcID, uint32(idx))
 	log.Debugf("bpf map deleting %s", key)
 	if err := s.bpfEps.Delete(key[:]); err != nil {
-		errors.Errorf("bpfEps.Delete: %s", err)
+		return errors.Errorf("bpfEps.Delete: %s", err)
 	}
 	return nil
 }

@@ -525,7 +525,7 @@ sub-tag-images-%:
 static-checks:
 	$(MAKE) check-typha-pins golangci-lint check-packr
 
-LINT_ARGS := --deadline 5m --max-issues-per-linter 0 --max-same-issues 0
+LINT_ARGS := --deadline 5m --max-issues-per-linter 0 --max-same-issues 0 --skip-dirs=docker-image
 ifneq ($(CI),)
 	# govet uses too much memory for CI
 	LINT_ARGS += --disable govet
@@ -533,7 +533,7 @@ endif
 
 .PHONY: golangci-lint
 golangci-lint: $(GENERATED_FILES)
-	$(DOCKER_RUN) $(CALICO_BUILD) golangci-lint run $(LINT_ARGS)
+	$(DOCKER_RUN) $(CALICO_BUILD_CGO) golangci-lint run $(LINT_ARGS)
 
 .PHONY: check-packr
 check-packr: bpf/packrd/packed-packr.go

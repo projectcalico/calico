@@ -268,26 +268,6 @@ func (m *bpfEndpointManager) markProfileUsersDirty(id proto.ProfileID) {
 	})
 }
 
-func findIPSetIDs(policy *proto.Policy) set.Set {
-	if policy == nil {
-		return set.Empty()
-	}
-	ids := set.New()
-	for _, rules := range [][]*proto.Rule{policy.InboundRules, policy.OutboundRules} {
-		for _, r := range rules {
-			ids.AddAll(r.DstIpSetIds)
-			ids.AddAll(r.DstNamedPortIpSetIds)
-			ids.AddAll(r.SrcIpSetIds)
-			ids.AddAll(r.SrcNamedPortIpSetIds)
-			ids.AddAll(r.NotDstIpSetIds)
-			ids.AddAll(r.NotDstNamedPortIpSetIds)
-			ids.AddAll(r.NotSrcIpSetIds)
-			ids.AddAll(r.NotSrcNamedPortIpSetIds)
-		}
-	}
-	return ids
-}
-
 func (m *bpfEndpointManager) CompleteDeferredWork() error {
 	m.applyProgramsToDirtyDataInterfaces()
 	m.applyProgramsToDirtyWorkloadEndpoints()

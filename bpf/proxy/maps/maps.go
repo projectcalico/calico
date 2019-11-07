@@ -26,11 +26,6 @@ import (
 	"github.com/projectcalico/felix/bpf"
 )
 
-type bpfNATManager struct {
-	natMap     bpf.Map
-	backendMap bpf.Map
-}
-
 // struct calico_nat_v4_key {
 //    uint32_t addr; // NBO
 //    uint16_t port; // HBO

@@ -100,7 +100,8 @@ func main() {
 	version := "Version:            " + buildinfo.GitVersion + "\n" +
 		"Full git commit ID: " + buildinfo.GitRevision + "\n" +
 		"Build date:         " + buildinfo.BuildDate + "\n"
-	args, err := docopt.Parse(usage, nil, true, version, false)
+
+	args, err := docopt.ParseArgs(usage, nil, version)
 	if err != nil {
 		println(usage)
 		log.Fatalf("Failed to parse usage, exiting: %v", err)
