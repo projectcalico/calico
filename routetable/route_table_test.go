@@ -1,4 +1,4 @@
-// Copyright (c) 2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2019 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -50,6 +50,68 @@ var (
 	ip2  = ip.MustParseCIDROrIP("10.0.0.2/32").ToIPNet()
 	ip13 = ip.MustParseCIDROrIP("10.0.1.3/32").ToIPNet()
 )
+
+var _ = Describe("RouteTable v6", func() {
+	var dataplane *mockDataplane
+	var t *mockTime
+	var rt *RouteTable
+
+	BeforeEach(func() {
+		dataplane = &mockDataplane{
+			nameToLink:       map[string]netlink.Link{},
+			routeKeyToRoute:  map[string]netlink.Route{},
+			addedRouteKeys:   set.New(),
+			deletedRouteKeys: set.New(),
+			updatedRouteKeys: set.New(),
+		}
+		startTime, err := time.Parse(time.RFC3339, "2006-01-02T15:04:05Z")
+		Expect(err).NotTo(HaveOccurred())
+		t = &mockTime{
+			currentTime: startTime,
+		}
+		// Setting an auto-increment greater than the route cleanup delay effectively
+		// disables the grace period for these tests.
+		t.setAutoIncrement(11 * time.Second)
+		rt = NewWithShims(
+			[]string{"cali"},
+			6,
+			dataplane.NewNetlinkHandle,
+			false,
+			10*time.Second,
+			dataplane.AddStaticArpEntry,
+			dataplane,
+			t,
+			nil,
+			FelixRouteProtocol,
+			true,
+		)
+	})
+
+	It("should be constructable", func() {
+		Expect(rt).ToNot(BeNil())
+	})
+
+	It("should not remove the IPv6 link local route", func() {
+		// Route that should be left alone
+		noopLink := dataplane.addIface(4, "cali4", true, true)
+		noopRoute := netlink.Route{
+			LinkIndex: noopLink.attrs.Index,
+			Dst:       mustParseCIDR("fe80::/64"),
+			Type:      syscall.RTN_UNICAST,
+			Protocol:  syscall.RTPROT_KERNEL,
+			Scope:     netlink.SCOPE_LINK,
+		}
+		rt.SetRoutes(noopLink.attrs.Name, []Target{
+			{CIDR: ip.MustParseCIDROrIP("10.0.0.4/32"), DestMAC: mac1},
+		})
+		dataplane.addMockRoute(&noopRoute)
+
+		err := rt.Apply()
+		Expect(err).ToNot(HaveOccurred())
+		Expect(dataplane.deletedRouteKeys).ToNot(HaveKey(keyForRoute(&noopRoute)))
+		Expect(dataplane.updatedRouteKeys).ToNot(HaveKey(keyForRoute(&noopRoute)))
+	})
+})
 
 var _ = Describe("RouteTable", func() {
 	var dataplane *mockDataplane
