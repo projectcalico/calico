@@ -33,8 +33,8 @@ struct calico_ct_leg {
 
 struct calico_ct_value {
 	__u64 created;
-	__u64 last_seen;
-	__u8 type;
+	__u64 last_seen; // 8
+	__u8 type;		 // 16
 
 	// Important to use explicit padding, otherwise the compiler can decide
 	// not to zero the padding bytes, which upsets the verifier.  Worse than
@@ -44,19 +44,19 @@ struct calico_ct_value {
 	union {
 		// CALI_CT_TYPE_NORMAL and CALI_CT_TYPE_NAT_REV.
 		struct {
-			struct calico_ct_leg a_to_b; // 8
-			struct calico_ct_leg b_to_a; // 16
+			struct calico_ct_leg a_to_b; // 24
+			struct calico_ct_leg b_to_a; // 32
 
 			// CALI_CT_TYPE_NAT_REV only.
-			__u32 orig_dst;                    // 20
-			__u16 orig_port;                   // 22
-			__u8 pad1[2];                      // 24
+			__u32 orig_dst;                    // 40
+			__u16 orig_port;                   // 44
+			__u8 pad1[2];                      // 46
 		};
 
 		// CALI_CT_TYPE_NAT_FWD; key for the CALI_CT_TYPE_NAT_REV entry.
 		struct {
-			struct calico_ct_key nat_rev_key;  // 16
-			__u8 pad2[8];                      // 24
+			struct calico_ct_key nat_rev_key;  // 24
+			__u8 pad2[8];
 		};
 	};
 };
