@@ -146,4 +146,13 @@ enum calico_skb_mark {
 	CALI_SKB_MARK_NO_TRACK      = 1<<1,
 };
 
+#define skb_shorter(skb, len) ((void *)(long)(skb)->data + (len) > (void *)(long)skb->data_end)
+#define skb_offset(skb, ptr) ((long)(ptr) - (long)(skb)->data)
+#define skb_has_data_after(skb, ptr, size) (!skb_shorter(skb, skb_offset(skb, ptr) + \
+					     sizeof(*ptr) + (size)))
+#define skb_tail_len(skb, ptr) ((skb)->data_end - (long)ptr)
+
+#define IPV4_UDP_SIZE		(sizeof(struct iphdr) + sizeof(struct udphdr))
+#define ETH_IPV4_UDP_SIZE	(sizeof(struct ethhdr) + IPV4_UDP_SIZE)
+
 #endif /* __CALI_BPF_H__ */
