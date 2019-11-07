@@ -135,7 +135,7 @@ PUSH_NONMANIFEST_IMAGES=$(filter-out $(PUSH_MANIFEST_IMAGES),$(PUSH_IMAGES))
 DOCKER_CONFIG ?= $(HOME)/.docker/config.json
 
 GO_BUILD_VER?=v0.25
-CGO_BUILD_VER?=v0.25-deb-cgo
+CGO_BUILD_VER?=v0.25-deb-cgo-2
 # For building, we use the go-build image for the *host* architecture, even if the target is different
 # the one for the host should contain all the necessary cross-compilation tools
 # we do not need to use the arch since go-build:v0.15 now is multi-arch manifest

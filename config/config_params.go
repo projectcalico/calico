@@ -102,9 +102,10 @@ type Config struct {
 	UseInternalDataplaneDriver bool   `config:"bool;true"`
 	DataplaneDriver            string `config:"file(must-exist,executable);calico-iptables-plugin;non-zero,die-on-fail,skip-default-validation"`
 
-	BPFEnabled          bool           `config:"bool;false"`
-	BPFLogLevel         string         `config:"oneof(off,info,debug);off"`
-	BPFDataIfacePattern *regexp.Regexp `config:"regexp;^(en.*|eth.*|tunl0$)"`
+	// FIXME: add these to libcalico-go and remove "local"
+	BPFEnabled          bool           `config:"bool;false;local"`
+	BPFLogLevel         string         `config:"oneof(off,info,debug);off;local"`
+	BPFDataIfacePattern *regexp.Regexp `config:"regexp;^(en.*|eth.*|tunl0$);local"`
 
 	DatastoreType string `config:"oneof(kubernetes,etcdv3);etcdv3;non-zero,die-on-fail,local"`
 
