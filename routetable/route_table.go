@@ -543,7 +543,7 @@ func (r *RouteTable) syncRoutesForLink(ifaceName string) error {
 		if !r.deviceRouteSourceAddress.Equal(route.Src) {
 			routeProblems = append(routeProblems, "incorrect source address")
 		}
-		if r.deviceRouteProtocol != route.Protocol {
+		if dest != ipV6LinkLocalCIDR && r.deviceRouteProtocol != route.Protocol {
 			routeProblems = append(routeProblems, "incorrect protocol")
 		}
 		if len(routeProblems) == 0 {
