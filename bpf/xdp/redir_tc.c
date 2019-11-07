@@ -145,7 +145,7 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb, enum calico_tc_flags
 	struct iphdr *ip_header;
 	if (CALI_TC_FLAGS_IPIP_ENCAPPED(flags)) {
 		// Ingress on an IPIP tunnel: skb is [ether|outer IP|inner IP|payload]
-		if ((void *)(long)skb->data + sizeof(struct ethhdr) + 2*sizeof(struct iphdr) + sizeof(struct udphdr) > (void *)(long)skb->data_end) {
+		if (skb_shorter(skb, ETH_IPV4_UDP_SIZE + sizeof(struct iphdr))) {
 			CALI_DEBUG("Too short\n");
 			reason = CALI_REASON_SHORT;
 			goto deny;
@@ -156,7 +156,7 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb, enum calico_tc_flags
 		CALI_DEBUG("IPIP; inner s=%x d=%x\n", be32_to_host(ip_header->saddr), be32_to_host(ip_header->daddr));
 	} else if (CALI_TC_FLAGS_L3(flags)) {
 		// Egress on an IPIP tunnel: skb is [inner IP|payload]
-		if ((void *)(long)skb->data + sizeof(struct iphdr) + sizeof(struct udphdr) > (void *)(long)skb->data_end) {
+		if (skb_shorter(skb, IPV4_UDP_SIZE)) {
 			CALI_DEBUG("Too short\n");
 			reason = CALI_REASON_SHORT;
 			goto deny;
@@ -165,7 +165,7 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb, enum calico_tc_flags
 		CALI_DEBUG("IP; (L3) s=%x d=%x\n", be32_to_host(ip_header->saddr), be32_to_host(ip_header->daddr));
 	} else {
 		// Normal L2 interface: skb is [ether|IP|payload]
-		if ((void *)(long)skb->data + sizeof(struct ethhdr) + sizeof(struct iphdr) + sizeof(struct udphdr) > (void *)(long)skb->data_end) {
+		if (skb_shorter(skb, ETH_IPV4_UDP_SIZE)) {
 			CALI_DEBUG("Too short\n");
 			reason = CALI_REASON_SHORT;
 			goto deny;
