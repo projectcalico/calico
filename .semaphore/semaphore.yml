@@ -133,3 +133,4 @@ blocks:
     - name: UT
       commands:
       - make ut
+      - make bpf-ut
