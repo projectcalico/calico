@@ -85,7 +85,8 @@ struct bpf_map_def_extended __attribute__((section("maps"))) calico_ct_map_v4 = 
 #endif
 };
 
-static CALI_BPF_INLINE void dump_ct_key(struct calico_ct_key *k, enum calico_tc_flags flags) {
+static CALI_BPF_INLINE void dump_ct_key(struct calico_ct_key *k, enum calico_tc_flags flags)
+{
 	CALI_VERB("CT-TCP   key A=%x:%d proto=%d\n", be32_to_host(k->addr_a), k->port_a, (int)k->protocol);
 	CALI_VERB("CT-TCP   key B=%x:%d size=%d\n", be32_to_host(k->addr_b), k->port_b, (int)sizeof(struct calico_ct_key));
 }
@@ -285,7 +286,8 @@ struct calico_ct_result {
 
 static CALI_BPF_INLINE void calico_ct_v4_tcp_delete(
 		__be32 ip_src, __be32 ip_dst, __u16 sport, __u16 dport,
-		enum calico_tc_flags flags) {
+		enum calico_tc_flags flags)
+{
 	CALI_DEBUG("CT-TCP delete from %x:%d\n", be32_to_host(ip_src), sport);
 	CALI_DEBUG("CT-TCP delete to   %x:%d\n", be32_to_host(ip_dst), dport);
 
@@ -313,8 +315,8 @@ static CALI_BPF_INLINE void calico_ct_v4_tcp_delete(
 
 static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_tcp_lookup(
 		__be32 ip_src, __be32 ip_dst, __u16 sport, __u16 dport,
-		struct tcphdr *tcp_header, enum calico_tc_flags flags) {
-
+		struct tcphdr *tcp_header, enum calico_tc_flags flags)
+{
 	CALI_DEBUG("CT-TCP lookup from %x:%d\n", be32_to_host(ip_src), sport);
 	CALI_DEBUG("CT-TCP lookup to   %x:%d\n", be32_to_host(ip_dst), dport);
 	CALI_VERB("CT-TCP   packet seq = %u\n", tcp_header->seq);
@@ -537,8 +539,8 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_tcp_lookup(
 
 static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_udp_lookup(
 		__be32 ip_src, __be32 ip_dst, __u16 sport, __u16 dport,
-		 enum calico_tc_flags flags) {
-
+		 enum calico_tc_flags flags)
+{
 	CALI_VERB("CT-UDP lookup from %x:%d\n", be32_to_host(ip_src), sport);
 	CALI_VERB("CT-UDP lookup to   %x:%d\n", be32_to_host(ip_dst), dport);
 
@@ -694,8 +696,8 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_udp_lookup(
 
 static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_icmp_lookup(
 		__be32 ip_src, __be32 ip_dst, struct icmphdr *icmp_header,
-		 enum calico_tc_flags flags) {
-
+		 enum calico_tc_flags flags)
+{
 	CALI_VERB("CT-ICMP lookup from %x\n", be32_to_host(ip_src));
 	CALI_VERB("CT-ICMP lookup to   %x\n", be32_to_host(ip_dst));
 
