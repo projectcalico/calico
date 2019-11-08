@@ -6,7 +6,7 @@
 %endif
 
 Name:           python-%{pypi_name}
-Version:        0.2.4
+Version:        0.2.4.1.19abd85
 Release:        1%{?dist}
 Summary:        A python client for etcd3 grpc-gateway
 
@@ -48,7 +48,7 @@ A python client for etcd3 grpc-gateway
 
 %files -n python2-%{pypi_name}
 %license LICENSE
-%doc README.md AUTHORS ChangeLog CONTRIBUTING.rst HACKING.rst
+%doc README.md CONTRIBUTING.rst HACKING.rst
 %defattr(-,root,root,-)
 %{python_sitelib}/%{pypi_name}*
 
@@ -84,4 +84,3 @@ centos-release-openstack-<version> package to install python dependencies.
 
 %install
 %py2_install
-
