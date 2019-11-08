@@ -235,6 +235,8 @@ func (s *Syncer) applyClusterIP(skey svcKey, sinfo k8sp.ServicePort,
 		svc:   sinfo,
 	}
 
+	log.Debugf("applied a service update: sinfo=%v", s.newSvcMap[skey])
+
 	return nil
 }
 
@@ -260,6 +262,7 @@ func (s *Syncer) applyDerived(skey svcKey, sinfo k8sp.ServicePort,
 	}
 
 	s.newSvcMap[skey] = newInfo
+	log.Debugf("applied a derived service update: sinfo=%v", s.newSvcMap[skey])
 
 	return nil
 }
@@ -321,6 +324,7 @@ func (s *Syncer) apply(state DPSyncerState) error {
 			// do not delete backends if only deleting a service derived from a
 			// ClusterIP, that is ExternalIP or NodePort
 			count = 0
+			log.Debugf("deleting derived svc")
 		}
 
 		if err := s.deleteSvc(sinfo.svc, sinfo.id, count); err != nil {
