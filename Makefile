@@ -897,7 +897,7 @@ ut-watch: $(SRC_FILES)
 	$(DOCKER_RUN) $(CALICO_BUILD_CGO) ginkgo watch -r -skipPackage $(UT_PACKAGES_TO_SKIP) $(GINKGO_ARGS)
 
 .PHONY: bin/bpf.test
-bin/bpf.test:
+bin/bpf.test: $(GENERATED_FILES)
 	$(DOCKER_RUN) $(CALICO_BUILD_CGO) go test $(BUILD_FLAGS) ./bpf/ut -c -o $@
 
 .PHONY: bpf-ut
