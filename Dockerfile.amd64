@@ -12,16 +12,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-FROM registry.access.redhat.com/ubi8/ubi-minimal:latest
+FROM registry.access.redhat.com/ubi8/ubi-minimal:8.1
 
 ARG GIT_VERSION=unknown
 
-LABEL name="Calico pod2daemon" \
+LABEL name="Calico FlexVolume driver installer" \
       vendor="Project Calico" \
       version=$GIT_VERSION \
       release="1" \
-      summary="Secure connections from Kubernetes pods to local daemons using FlexVolume + Unix Domain Socket" \
-      description="Secure connections from Kubernetes pods to local daemons using FlexVolume + Unix Domain Socket" \
+      summary="Calico FlexVolume driver installer to setup secure connections from Kubernetes pods to local daemons" \
+      description="Calico FlexVolume driver installer to setup secure connections from Kubernetes pods to local daemons" \
       maintainer="Laurence Man <laurence@tigera.io>"
 
 RUN mkdir /licenses
