@@ -35,10 +35,6 @@ Print useful actions with `make help`.
 
 ### Building `calicoctl`
 
-There are two ways to build calicoctl: natively, and dockerized
-
-##### Dockerized Builds
-
 For simplicity, `calicoctl` can be built in a Docker container, eliminating
 the need for any dependencies in your host developer environment, using the following command:
 
@@ -66,19 +62,6 @@ $ make build OS=darwin ARCH=amd64
 ```
 
 To list all possible targets, run `make help`.
-
-##### Native Builds
-
-1. Ensure you've cloned this repository into your Go project path:
-
-   ```
-   git clone https://github.com/projectcalico/calicoctl.git $GOPATH/src/github.com/projectcalico/calicoctl
-   ```
-
-2. Build the binary:
-   ```
-   make build
-   ```
 
 ## Tests
 
