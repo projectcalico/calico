@@ -200,6 +200,24 @@ func (s *Syncer) applyClusterIP(skey svcKey, sinfo k8sp.ServicePort,
 				return err
 			}
 
+			delete(s.prevSvcMap, skey)
+
+			// also delete all derived
+			for _, si := range s.prevSvcMap {
+				if si.id == old.id {
+					key, err := getSvcNATKey(si.svc)
+					if err != nil {
+						return err
+					}
+
+					log.Debugf("bpf map deleting derived %s:%s", key,
+						bpfm.NewNATValue(old.id, uint32(count)))
+					if err := s.bpfSvcs.Delete(key[:]); err != nil {
+						return errors.Errorf("bpfSvcs.Delete: %s", err)
+					}
+				}
+			}
+
 			exists = false
 		}
 	}

@@ -338,6 +338,38 @@ var _ = Describe("BPF Syncer", func() {
 		Expect(val4).To(Equal(val2))
 	})
 
+	It("should be possible to update a NodePort of a service", func() {
+		state.SvcMap[svcKey3] = &k8sp.BaseServiceInfo{
+			ClusterIP: net.IPv4(10, 0, 0, 3),
+			Port:      3355,
+			NodePort:  1212,
+			Protocol:  v1.ProtocolUDP,
+		}
+		state.EpsMap[svcKey3] = []k8sp.Endpoint{
+			&k8sp.BaseEndpointInfo{Endpoint: "10.3.0.1:3434"},
+		}
+
+		err := s.Apply(state)
+		Expect(err).NotTo(HaveOccurred())
+
+		Expect(svcs).To(HaveLen(6))
+		Expect(eps).To(HaveLen(2))
+
+		Expect(svcs).NotTo(HaveKey(
+			bpfm.NewNATKey(net.IPv4(10, 0, 0, 3), 3333, proxy.ProtoV1ToIntPanic(v1.ProtocolUDP))))
+
+		val2, ok := svcs[bpfm.NewNATKey(net.IPv4(10, 0, 0, 3), 3355, proxy.ProtoV1ToIntPanic(v1.ProtocolUDP))]
+		Expect(ok).To(BeTrue())
+
+		val3, ok := svcs[bpfm.NewNATKey(net.IPv4(192, 168, 0, 1), 1212, proxy.ProtoV1ToIntPanic(v1.ProtocolUDP))]
+		Expect(ok).To(BeTrue())
+		Expect(val3).To(Equal(val2))
+
+		val4, ok := svcs[bpfm.NewNATKey(net.IPv4(10, 123, 0, 1), 1212, proxy.ProtoV1ToIntPanic(v1.ProtocolUDP))]
+		Expect(ok).To(BeTrue())
+		Expect(val4).To(Equal(val2))
+	})
+
 	It("should delete the services", func() {
 		delete(state.SvcMap, svcKey2)
 		delete(state.SvcMap, svcKey3)
