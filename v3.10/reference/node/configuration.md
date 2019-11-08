@@ -49,6 +49,7 @@ The `{{site.nodecontainer}}` container is primarily configured through environme
 | K8S_CA_FILE | Location of a CA for accessing the Kubernetes API.                            | string |
 | CALICO_ADVERTISE_CLUSTER_IPS | Deprecated. Use [BGPConfiguration](/{{page.version}}/reference/resources/bgpconfig) resource instead. Note: if this variable is defined, then any serviceClusterIPs defined in BGPConfiguration are ignored. [Default: ""] | IPv4 CIDR |
 | USE_POD_CIDR | Use the Kubernetes `Node.Spec.PodCIDR` field. This field is required when using the Kubernetes API datastore with host-local IPAM. [Default: false] | boolean |
+| CALICO_MANAGE_CNI | Tells Calico to update the kubeconfig file at /host/etc/cni/net.d/calico-kubeconfig on credentials change. [Default: false] | boolean |
 
 In addition to the above, `{{site.nodecontainer}}` also supports [the standard Felix configuration environment variables](../felix/configuration).
 
