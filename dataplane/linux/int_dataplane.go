@@ -455,13 +455,17 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		fibLookupEnabled := !config.RulesConfig.IPIPEnabled && !config.RulesConfig.VXLANEnabled
 		dp.RegisterManager(newBPFEndpointManager(config.BPFLogLevel, fibLookupEnabled, config.BPFDataIfacePattern))
 
-		err := bpfproxy.StartKubeProxy(
-			config.KubeClientSet,
-			config.Hostname,
-			bpfproxy.WithImmediateSync(),
-		)
-		if err != nil {
-			panic(err)
+		if config.KubeClientSet != nil {
+			err := bpfproxy.StartKubeProxy(
+				config.KubeClientSet,
+				config.Hostname,
+				bpfproxy.WithImmediateSync(),
+			)
+			if err != nil {
+				panic(err)
+			}
+		} else {
+			log.Info("BPF enabled but no Kubernetes client available, unable to run kube-proxy module.")
 		}
 	}
 

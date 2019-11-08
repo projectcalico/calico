@@ -30,7 +30,7 @@ var versionCmd = &cobra.Command{
 		version := "Version:            " + buildinfo.GitVersion + "\n" +
 			"Full git commit ID: " + buildinfo.GitRevision + "\n" +
 			"Build date:         " + buildinfo.BuildDate + "\n"
-		fmt.Printf(version)
+		fmt.Print(version)
 	},
 }
 

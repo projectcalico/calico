@@ -229,10 +229,10 @@ func (p *proxy) invokeDPSyncer() {
 	}
 
 	if err := p.healthChecker.SyncServices(svcUpdateResult.HCServiceNodePorts); err != nil {
-		// TODO	klog.Errorf("Error syncing healthcheck services: %v", err)
+		log.WithError(err).Error("Error syncing healthcheck services")
 	}
 	if err := p.healthChecker.SyncEndpoints(epsUpdateResult.HCEndpointsLocalIPSize); err != nil {
-		// TODO klog.Errorf("Error syncing healthcheck endpoints: %v", err)
+		log.WithError(err).Error("Error syncing healthcheck endpoints")
 	}
 	err := p.dpSyncer.Apply(DPSyncerState{
 		SvcMap:       p.svcMap,

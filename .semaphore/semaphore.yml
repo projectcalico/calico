@@ -5,63 +5,131 @@ agent:
     type: e1-standard-2
     os_image: ubuntu1804
 blocks:
-  - name: Build
-    task:
-      jobs:
-        - name: Build
-          commands:
-            - checkout
-            - cache restore go-pkg-cache
-            - cache restore go-mod-cache
-            - >-
-              make image-all fv/fv.test bin/test-workload bin/test-connection
-              bin/calico-felix
-            - 'cache store bin-${SEMAPHORE_GIT_SHA} bin'
-            - cache store go-pkg-cache .go-pkg-cache
-            - 'cache store go-mod-cache ${HOME}/go/pkg/mod/cache'
-  - name: Tests
-    task:
-      prologue:
+- name: Build
+  dependencies: []
+  task:
+    agent:
+      machine:
+        type: e1-standard-4
+        os_image: ubuntu1804
+    jobs:
+    - name: Build
+      commands:
+      - checkout
+      - cache restore go-pkg-cache
+      - cache restore go-mod-cache
+      - >-
+        make image fv/fv.test bin/test-workload bin/test-connection
+        bin/calico-felix
+      - 'cache store bin-${SEMAPHORE_GIT_SHA} bin'
+      - cache store go-pkg-cache .go-pkg-cache
+      - 'cache store go-mod-cache ${HOME}/go/pkg/mod/cache'
+      - docker save -o /tmp/calico-felix.tar calico/felix:latest-amd64
+      - 'cache store felix-image-${SEMAPHORE_GIT_SHA} /tmp/calico-felix.tar'
+- name: FV Tests
+  dependencies: ["Build"]
+  task:
+    prologue:
+      commands:
+      - checkout
+      - cache restore go-pkg-cache
+      - cache restore go-mod-cache
+      - 'cache restore bin-${SEMAPHORE_GIT_SHA}'
+      - 'cache restore felix-image-${SEMAPHORE_GIT_SHA}'
+      - docker load -i /tmp/calico-felix.tar
+      - rm /tmp/calico-felix.tar
+      - touch bin/*
+    jobs:
+    - name: FV Test matrix
+      commands:
+      - make fv FV_BATCHES_TO_RUN="${SEMAPHORE_JOB_INDEX}" FV_NUM_BATCHES=${SEMAPHORE_JOB_COUNT}
+      parallelism: 5
+- name: Kubernetes FV Tests
+  dependencies: ["Build"]
+  task:
+    agent:
+      machine:
+        # k8sfv tests need more RAM.
+        type: e1-standard-8
+        os_image: ubuntu1804
+    prologue:
+      commands:
+      - checkout
+      - cache restore go-pkg-cache
+      - cache restore go-mod-cache
+      - 'cache restore bin-${SEMAPHORE_GIT_SHA}'
+      - 'cache restore felix-image-${SEMAPHORE_GIT_SHA}'
+      - docker load -i /tmp/calico-felix.tar
+      - rm /tmp/calico-felix.tar
+      - touch bin/*
+    jobs:
+    - name: Kubernetes FV tests
+      commands:
+      - make k8sfv-test JUST_A_MINUTE=true USE_TYPHA=true
+      - make k8sfv-test JUST_A_MINUTE=true USE_TYPHA=false
+- name: BPF FV tests on new kernel
+  dependencies: []
+  task:
+    prologue:
+      commands:
+      - chmod 600 ~/.ssh/id_rsa
+      - checkout
+      - export GOOGLE_APPLICATION_CREDENTIALS=$HOME/secrets/secret.google-service-account-key.json
+      - export SHORT_WORKFLOW_ID=$(echo ${SEMAPHORE_WORKFLOW_ID} | sha256sum | cut -c -8)
+      - export VM_NAME=sem-${SEMAPHORE_PROJECT_NAME}-${SHORT_WORKFLOW_ID}-${SEMAPHORE_JOB_INDEX}
+      - echo VM_NAME=${VM_NAME}
+      - gcloud config set project unique-caldron-775
+      - gcloud auth activate-service-account --key-file=$HOME/secrets/secret.google-service-account-key.json
+      - >-
+        gcloud --quiet compute instances create ${VM_NAME} \
+               --zone=europe-west3-c \
+               --machine-type=n1-standard-4 \
+               --image=ubuntu-1910-eoan-v20191022 \
+               --image-project=ubuntu-os-cloud \
+               --boot-disk-size=20GB \
+               --boot-disk-type=pd-standard
+      - gcloud --quiet compute ssh --zone=europe-west3-c ubuntu@${VM_NAME} -- sudo apt-get update -y
+      - gcloud --quiet compute ssh --zone=europe-west3-c ubuntu@${VM_NAME} -- sudo apt-get install -y --no-install-recommends git make iproute2 docker.io
+      - gcloud --quiet compute ssh --zone=europe-west3-c ubuntu@${VM_NAME} -- sudo usermod -a -G docker ubuntu
+      - "gcloud --quiet compute scp --zone=europe-west3-c --recurse --compress `pwd` ubuntu@${VM_NAME}:"
+    jobs:
+    - name: FV on remote
+      commands:
+      - gcloud --quiet compute ssh --zone=europe-west3-c ubuntu@${VM_NAME} -- make --directory=$(basename $(pwd)) fv-bpf GINKGO_FOCUS=BPF-SAFE FV_NUM_BATCHES=${SEMAPHORE_JOB_COUNT} FV_BATCHES_TO_RUN="${SEMAPHORE_JOB_INDEX}"
+      parallelism: 5
+    epilogue:
+      always:
         commands:
-          - checkout
-          - cache restore go-pkg-cache
-          - cache restore go-mod-cache
-          - 'cache restore bin-${SEMAPHORE_GIT_SHA}'
-          - touch bin/*
-      jobs:
-        - name: UT
-          commands:
-            - make ut
-        - name: Static checks
-          commands:
-            - make static-checks
-        - name: Kubernetes FV tests with Typha
-          commands:
-            - make k8sfv-test JUST_A_MINUTE=true USE_TYPHA=true
-        - name: Kubernetes FV tests without Typha
-          commands:
-            - make k8sfv-test JUST_A_MINUTE=true USE_TYPHA=false
-        - name: FV batch 1
-          commands:
-            - make fv FV_BATCHES_TO_RUN="1" FV_NUM_BATCHES=8
-        - name: FV batch 2
-          commands:
-            - make fv FV_BATCHES_TO_RUN="2" FV_NUM_BATCHES=8
-        - name: FV batch 3
-          commands:
-            - make fv FV_BATCHES_TO_RUN="3" FV_NUM_BATCHES=8
-        - name: FV batch 4
-          commands:
-            - make fv FV_BATCHES_TO_RUN="4" FV_NUM_BATCHES=8
-        - name: FV batch 5
-          commands:
-            - make fv FV_BATCHES_TO_RUN="5" FV_NUM_BATCHES=8
-        - name: FV batch 6
-          commands:
-            - make fv FV_BATCHES_TO_RUN="6" FV_NUM_BATCHES=8
-        - name: FV batch 7
-          commands:
-            - make fv FV_BATCHES_TO_RUN="7" FV_NUM_BATCHES=8
-        - name: FV batch 8
-          commands:
-            - make fv FV_BATCHES_TO_RUN="8" FV_NUM_BATCHES=8
+        - gcloud --quiet compute instances delete ${VM_NAME} --zone=europe-west3-c
+    secrets:
+    - name: marvin-github-ssh-private-key
+    - name: google-service-account-for-gcr
+- name: Static checks
+  dependencies: []
+  task:
+    agent:
+      machine:
+        # Linters use a lot of RAM so use a bigger machine type.
+        type: e1-standard-8
+        os_image: ubuntu1804
+    prologue:
+      commands:
+      - checkout
+      - cache restore go-pkg-cache
+      - cache restore go-mod-cache
+    jobs:
+    - name: Static checks
+      commands:
+      - make static-checks
+- name: Unit tests
+  dependencies: []
+  task:
+    prologue:
+      commands:
+      - checkout
+      - cache restore go-pkg-cache
+      - cache restore go-mod-cache
+    jobs:
+    - name: UT
+      commands:
+      - make ut

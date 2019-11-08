@@ -22,8 +22,6 @@ import (
 	"os/exec"
 	"strings"
 
-	"github.com/projectcalico/felix/bpf"
-
 	"github.com/kelseyhightower/envconfig"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -169,10 +167,6 @@ func GetEtcdClient(etcdIP string) client.Interface {
 	})
 	Expect(err).NotTo(HaveOccurred())
 	return client
-}
-
-func BPFIPSetIDForSelector(rawSelector string) uint64 {
-	return bpf.IPSetIDToU64(IPSetIDForSelector(rawSelector))
 }
 
 func IPSetIDForSelector(rawSelector string) string {

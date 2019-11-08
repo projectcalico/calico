@@ -61,10 +61,89 @@ func (k ConntrackKey) PortB() uint16 {
 }
 
 func (k ConntrackKey) String() string {
-	return fmt.Sprintf("proto=%v %v:%v <-> %v:%v", k.Proto(), k.AddrA(), k.PortA(), k.AddrB(), k.PortB())
+	return fmt.Sprintf("ConntrackKey{proto=%v %v:%v <-> %v:%v}",
+		k.Proto(), k.AddrA(), k.PortA(), k.AddrB(), k.PortB())
 }
 
 type ConntrackEntry [conntrackValueSize]byte
+
+func (e ConntrackEntry) Type() uint8 {
+	return uint8(e[16])
+}
+
+const (
+	ConntrackTypeNormal uint8 = iota
+	ConntrackTypeNatFwd
+	ConntrackTypeNatRev
+)
+
+func (e ConntrackEntry) FwdKey() ConntrackKey {
+	var ret ConntrackKey
+
+	l := len(ConntrackKey{})
+	copy(ret[:l], e[24:24+l])
+
+	return ret
+}
+
+type ConntrackLeg struct {
+	Seqno      uint32
+	SynSeen    bool
+	AckSeen    bool
+	FinSeen    bool
+	RstSeen    bool
+	Whitlisted bool
+	Opener     bool
+}
+
+func bitSet(bits uint32, bit uint8) bool {
+	return (bits & (1 << bit)) != 0
+}
+
+func readConntrackLeg(b []byte) ConntrackLeg {
+	bits := binary.LittleEndian.Uint32(b[4:8])
+	return ConntrackLeg{
+		Seqno:      binary.BigEndian.Uint32(b[0:4]),
+		SynSeen:    bitSet(bits, 0),
+		AckSeen:    bitSet(bits, 1),
+		FinSeen:    bitSet(bits, 2),
+		RstSeen:    bitSet(bits, 3),
+		Whitlisted: bitSet(bits, 4),
+		Opener:     bitSet(bits, 5),
+	}
+}
+
+type ConntrackEntryData struct {
+	A2B      ConntrackLeg
+	B2A      ConntrackLeg
+	OrigDst  net.IP
+	OrigPort uint16
+}
+
+func (e ConntrackEntry) Data() ConntrackEntryData {
+	ip := e[40:44]
+	return ConntrackEntryData{
+		A2B:      readConntrackLeg(e[24:32]),
+		B2A:      readConntrackLeg(e[32:40]),
+		OrigDst:  net.IPv4(ip[0], ip[1], ip[2], ip[3]),
+		OrigPort: binary.LittleEndian.Uint16(e[44:46]),
+	}
+}
+
+func (e ConntrackEntry) String() string {
+	ret := fmt.Sprintf("ConntrackEntry{Type :%d, ", e.Type())
+
+	switch e.Type() {
+	case ConntrackTypeNatFwd:
+		ret += fmt.Sprintf("REVKey : %s", e.FwdKey().String())
+	case ConntrackTypeNormal, ConntrackTypeNatRev:
+		ret += fmt.Sprintf("Data: %+v", e.Data())
+	default:
+		ret += "TYPE INVALID"
+	}
+
+	return ret + "}"
+}
 
 func newBPFConntrackManager() *conntrackManager {
 	return &conntrackManager{

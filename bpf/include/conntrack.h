@@ -33,8 +33,8 @@ struct calico_ct_leg {
 
 struct calico_ct_value {
 	__u64 created;
-	__u64 last_seen;
-	__u8 type;
+	__u64 last_seen; // 8
+	__u8 type;		 // 16
 
 	// Important to use explicit padding, otherwise the compiler can decide
 	// not to zero the padding bytes, which upsets the verifier.  Worse than
@@ -44,19 +44,19 @@ struct calico_ct_value {
 	union {
 		// CALI_CT_TYPE_NORMAL and CALI_CT_TYPE_NAT_REV.
 		struct {
-			struct calico_ct_leg a_to_b; // 8
-			struct calico_ct_leg b_to_a; // 16
+			struct calico_ct_leg a_to_b; // 24
+			struct calico_ct_leg b_to_a; // 32
 
 			// CALI_CT_TYPE_NAT_REV only.
-			__u32 orig_dst;                    // 20
-			__u16 orig_port;                   // 22
-			__u8 pad1[2];                      // 24
+			__u32 orig_dst;                    // 40
+			__u16 orig_port;                   // 44
+			__u8 pad1[2];                      // 46
 		};
 
 		// CALI_CT_TYPE_NAT_FWD; key for the CALI_CT_TYPE_NAT_REV entry.
 		struct {
-			struct calico_ct_key nat_rev_key;  // 16
-			__u8 pad2[8];                      // 24
+			struct calico_ct_key nat_rev_key;  // 24
+			__u8 pad2[8];
 		};
 	};
 };
@@ -185,7 +185,7 @@ static CALI_BPF_INLINE int calico_ct_v4_create_nat_fwd(
 		struct calico_ct_key *rk, __be32 ip_src,
 		__be32 ip_dst, __u16 sport, __u16 dport, enum calico_tc_flags flags) {
 	__u64 now = bpf_ktime_get_ns();
-	CALI_DEBUG("CT-TCP Creating entry at %llu.\n", now);
+	CALI_DEBUG("CT-%d Creating entry at %llu.\n", ip_proto, now);
 	struct calico_ct_value ct_value = {
 		.type = CALI_CT_TYPE_NAT_FWD,
 		.last_seen = now,
@@ -201,7 +201,7 @@ static CALI_BPF_INLINE int calico_ct_v4_create_nat_fwd(
 		dump_ct_key(&k, flags);
 		ct_value.nat_rev_key = *rk;
 		int err = bpf_map_update_elem(&calico_ct_map_v4, &k, &ct_value, 0);
-		CALI_VERB("CT-TCP Create result: %d.\n", err);
+		CALI_VERB("CT-%d Create result: %d.\n", ip_proto, err);
 		return err;
 	} else  {
 		struct calico_ct_key k = {
@@ -212,7 +212,7 @@ static CALI_BPF_INLINE int calico_ct_v4_create_nat_fwd(
 		dump_ct_key(&k, flags);
 		ct_value.nat_rev_key = *rk;
 		int err = bpf_map_update_elem(&calico_ct_map_v4, &k, &ct_value, 0);
-		CALI_VERB("CT-TCP Create result: %d.\n", err);
+		CALI_VERB("CT-%d Create result: %d.\n", ip_proto, err);
 		return err;
 	}
 }

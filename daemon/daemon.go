@@ -283,12 +283,13 @@ configRetry:
 			if err != nil {
 				log.WithError(err).Info("Kubernetes in-cluster config not available. " +
 					"Assuming we're not in a Kubernetes deployment.")
-			}
-			k8sClientSet, err = kubernetes.NewForConfig(k8sconf)
-			if err != nil {
-				log.WithError(err).Error("Got in-cluster config but failed to create Kubernetes client.")
-				time.Sleep(1 * time.Second)
-				continue configRetry
+			} else {
+				k8sClientSet, err = kubernetes.NewForConfig(k8sconf)
+				if err != nil {
+					log.WithError(err).Error("Got in-cluster config but failed to create Kubernetes client.")
+					time.Sleep(1 * time.Second)
+					continue configRetry
+				}
 			}
 		}
 

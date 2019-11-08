@@ -92,11 +92,6 @@ var _ = Context("_INGRESS-EGRESS_ _BPF-SAFE_ with initialized Felix, etcd datast
 		cc.CheckConnectivity()
 	})
 
-	It("connectivity via workload 0's NAT", func() {
-		cc.ExpectSome(w[1], workload.IP("10.96.0.10"), 80)
-		cc.CheckConnectivity()
-	})
-
 	Context("with ingress-only restriction for workload 0", func() {
 
 		BeforeEach(func() {

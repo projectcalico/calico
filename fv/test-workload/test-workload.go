@@ -43,7 +43,7 @@ Usage:
 func main() {
 	log.SetLevel(log.DebugLevel)
 
-	arguments, err := docopt.Parse(usage, nil, true, "v0.1", false)
+	arguments, err := docopt.ParseArgs(usage, nil, "v0.1")
 	if err != nil {
 		println(usage)
 		log.WithError(err).Fatal("Failed to parse usage")

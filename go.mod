@@ -43,10 +43,10 @@ require (
 	go.uber.org/atomic v1.4.0 // indirect
 	go.uber.org/multierr v1.1.0 // indirect
 	go.uber.org/zap v1.10.0 // indirect
-	golang.org/x/crypto v0.0.0-20191029031824-8986dd9e96cf // indirect
+	golang.org/x/crypto v0.0.0-20191107222254-f4817d981bb6 // indirect
 	golang.org/x/net v0.0.0-20190812203447-cdfb69ac37fc
-	golang.org/x/sys v0.0.0-20191104094858-e8c54fb511f6
-	golang.org/x/tools v0.0.0-20191101200257-8dbcdeb83d3f // indirect
+	golang.org/x/sys v0.0.0-20191105231009-c1f44814a5cd
+	golang.org/x/tools v0.0.0-20191107235519-f7ea15e60b12 // indirect
 	google.golang.org/grpc v1.19.0
 	gopkg.in/ini.v1 v1.46.0 // indirect
 	k8s.io/api v0.0.0
