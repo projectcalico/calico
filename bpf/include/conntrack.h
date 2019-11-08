@@ -207,41 +207,46 @@ static CALI_BPF_INLINE int calico_ct_v4_create_tracking(struct ct_ctx *ctx,
 	return err;
 }
 
-static CALI_BPF_INLINE int calico_ct_v4_create_nat_fwd(
-		__u8 ip_proto,
-		struct calico_ct_key *rk, __be32 ip_src,
-		__be32 ip_dst, __u16 sport, __u16 dport, enum calico_tc_flags flags) {
+static CALI_BPF_INLINE int calico_ct_v4_create_nat_fwd(struct ct_ctx *ctx,
+						       struct calico_ct_key *rk)
+{
+	__u8 ip_proto = ctx->proto;
+	__be32 ip_src = ctx->src;
+	__be32 ip_dst = ctx->orig_dst;
+	__u16 sport = ctx->sport;
+	__u16 dport = ctx->orig_dport;
+	enum calico_tc_flags flags = ctx->flags;
+
 	__u64 now = bpf_ktime_get_ns();
+
 	CALI_DEBUG("CT-%d Creating entry at %llu.\n", ip_proto, now);
 	struct calico_ct_value ct_value = {
 		.type = CALI_CT_TYPE_NAT_FWD,
 		.last_seen = now,
 		.created = now,
 	};
-	bool srcLTDest = (ip_src < ip_dst) || ((ip_src == ip_dst) && sport < dport);
-	if (srcLTDest) {
-		struct calico_ct_key k = {
+
+	struct calico_ct_key k;
+
+	if ((ip_src < ip_dst) || ((ip_src == ip_dst) && sport < dport)) {
+		k = (struct calico_ct_key) {
 			.protocol = ip_proto,
 			.addr_a = ip_src, .port_a = sport,
 			.addr_b = ip_dst, .port_b = dport,
 		};
-		dump_ct_key(&k, flags);
-		ct_value.nat_rev_key = *rk;
-		int err = bpf_map_update_elem(&calico_ct_map_v4, &k, &ct_value, 0);
-		CALI_VERB("CT-%d Create result: %d.\n", ip_proto, err);
-		return err;
 	} else  {
-		struct calico_ct_key k = {
+		k = (struct calico_ct_key) {
 			.protocol = ip_proto,
 			.addr_a = ip_dst, .port_a = dport,
 			.addr_b = ip_src, .port_b = sport,
 		};
-		dump_ct_key(&k, flags);
-		ct_value.nat_rev_key = *rk;
-		int err = bpf_map_update_elem(&calico_ct_map_v4, &k, &ct_value, 0);
-		CALI_VERB("CT-%d Create result: %d.\n", ip_proto, err);
-		return err;
 	}
+
+	dump_ct_key(&k, flags);
+	ct_value.nat_rev_key = *rk;
+	int err = bpf_map_update_elem(&calico_ct_map_v4, &k, &ct_value, 0);
+	CALI_VERB("CT-%d Create result: %d.\n", ip_proto, err);
+	return err;
 }
 
 static CALI_BPF_INLINE int calico_ct_v4_create(struct ct_ctx *ctx)
@@ -256,9 +261,7 @@ static CALI_BPF_INLINE int calico_ct_v4_create_nat(struct ct_ctx *ctx)
 	struct calico_ct_key k;
 
 	calico_ct_v4_create_tracking(ctx, &k, CALI_CT_TYPE_NAT_REV);
-
-	calico_ct_v4_create_nat_fwd(ctx->proto, &k, ctx->src, ctx->orig_dst, ctx->sport,
-			ctx->orig_dport, ctx->flags);
+	calico_ct_v4_create_nat_fwd(ctx, &k);
 
 	return 0;
 }
