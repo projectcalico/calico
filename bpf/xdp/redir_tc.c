@@ -103,6 +103,7 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb, enum calico_tc_flags
 	}
 	uint64_t timer_start_time = 0 , timer_end_time = 0;
 	int rc = TC_ACT_UNSPEC;
+	size_t csum_offset;
 
 
 	if (!CALI_TC_FLAGS_TO_HOST(flags) && skb->mark == CALI_SKB_MARK_BYPASS) {
@@ -326,66 +327,53 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb, enum calico_tc_flags
 			.dport	= post_nat_dport,
 		};
 
-		// If we get here, we've passed policy.
+		if (ip_proto == IPPROTO_TCP) {
+			if (!skb_has_data_after(skb, ip_header, sizeof(struct tcphdr))) {
+				CALI_DEBUG("Too short for TCP: DROP\n");
+				goto deny;
+			}
+			tcp_header = (void*)(ip_header+1);
+			ctx.tcp = tcp_header;
+		}
+
 		if (nat_dest != NULL) {
-			// Packet is to be NATted, need to record a NAT entry.
+			// Packet is to be NATted, need to record a NAT rev entry.
 			ctx.orig_dst = ip_dst;
 			ctx.orig_dport = dport;
-
-			switch (ip_proto) {
-			case IPPROTO_TCP:
-				if ((void*)(tcp_header+1) > (void *)(long)skb->data_end) {
-					CALI_DEBUG("Too short for TCP: DROP\n");
-					goto deny;
-				}
-				ctx.tcp = tcp_header;
-				/* fall through */
-			case IPPROTO_UDP:
-			case IPPROTO_ICMP:
-				calico_ct_v4_create_nat(&ctx);
-			}
-
-			// Actually do the NAT.
-			ip_header->daddr = post_nat_ip_dst;
-			size_t csum_offset;
-
-			switch (ip_proto) {
-			case IPPROTO_TCP:
-				tcp_header->dest = host_to_be16(post_nat_dport);
-				csum_offset = sizeof(struct ethhdr) + sizeof(struct iphdr) + offsetof(struct tcphdr, check);
-				bpf_l4_csum_replace(skb, csum_offset, ip_dst, post_nat_ip_dst, BPF_F_PSEUDO_HDR | 4);
-				bpf_l4_csum_replace(skb, csum_offset, host_to_be16(dport),  host_to_be16(post_nat_dport), 2);
-				break;
-			case IPPROTO_UDP:
-				udp_header->dest = host_to_be16(post_nat_dport);
-				csum_offset = sizeof(struct ethhdr) + sizeof(struct iphdr) + offsetof(struct udphdr, check);
-				bpf_l4_csum_replace(skb, csum_offset, ip_dst, post_nat_ip_dst, BPF_F_PSEUDO_HDR | 4);
-				bpf_l4_csum_replace(skb, csum_offset, host_to_be16(dport),  host_to_be16(post_nat_dport), 2);
-				break;
-			}
-
-			bpf_l3_csum_replace(skb, sizeof(struct ethhdr) + offsetof(struct iphdr, check), ip_dst, post_nat_ip_dst, 4);
-		} else {
-			// No NAT for this packet, record a simple entry.
-			switch (ip_proto) {
-			case IPPROTO_TCP:
-				if ((void*)(tcp_header+1) > (void *)(long)skb->data_end) {
-					CALI_DEBUG("Too short for TCP: DROP\n");
-					goto deny;
-				}
-				ctx.tcp = tcp_header;
-				/* fall through */
-			case IPPROTO_UDP:
-			case IPPROTO_ICMP:
-				calico_ct_v4_create(&ctx);
-				break;
-			}
 		}
+
+		// If we get here, we've passed policy.
+
+		conntrack_create(&ctx, nat_dest != NULL);
 
 		fib_params.sport = sport;
 		fib_params.dport = post_nat_dport;
 		fib_params.ipv4_src = ip_src;
 		fib_params.ipv4_dst = post_nat_ip_dst;
+
+		if (nat_dest == NULL) {
+			goto allow;
+		}
+
+		// Actually do the NAT.
+		ip_header->daddr = post_nat_ip_dst;
+
+		switch (ip_proto) {
+		case IPPROTO_TCP:
+			tcp_header->dest = host_to_be16(post_nat_dport);
+			csum_offset = sizeof(struct ethhdr) + sizeof(struct iphdr) + offsetof(struct tcphdr, check);
+			bpf_l4_csum_replace(skb, csum_offset, ip_dst, post_nat_ip_dst, BPF_F_PSEUDO_HDR | 4);
+			bpf_l4_csum_replace(skb, csum_offset, host_to_be16(dport),  host_to_be16(post_nat_dport), 2);
+			break;
+		case IPPROTO_UDP:
+			udp_header->dest = host_to_be16(post_nat_dport);
+			csum_offset = sizeof(struct ethhdr) + sizeof(struct iphdr) + offsetof(struct udphdr, check);
+			bpf_l4_csum_replace(skb, csum_offset, ip_dst, post_nat_ip_dst, BPF_F_PSEUDO_HDR | 4);
+			bpf_l4_csum_replace(skb, csum_offset, host_to_be16(dport),  host_to_be16(post_nat_dport), 2);
+			break;
+		}
+
+		bpf_l3_csum_replace(skb, sizeof(struct ethhdr) + offsetof(struct iphdr, check), ip_dst, post_nat_ip_dst, 4);
 
 		goto allow;
 	case CALI_CT_ESTABLISHED_BYPASS:
@@ -406,7 +394,6 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb, enum calico_tc_flags
 		post_nat_ip_dst = ct_result.nat_ip;
 		post_nat_dport = ct_result.nat_port;
 		ip_header->daddr = post_nat_ip_dst;
-		size_t csum_offset;
 
 		switch (ip_proto) {
 		case IPPROTO_TCP:

@@ -74,7 +74,6 @@ struct ct_ctx {
 	struct tcphdr *tcp;
 };
 
-
 struct bpf_map_def_extended __attribute__((section("maps"))) calico_ct_map_v4 = {
 	.type = BPF_MAP_TYPE_HASH,
 	.key_size = sizeof(struct calico_ct_key),
@@ -824,5 +823,17 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_icmp_lookup(
 	return result;
 }
 
+/* creates connection tracking for tracked protocols */
+static CALI_BPF_INLINE int conntrack_create(struct ct_ctx * ctx, bool nat)
+{
+	switch (ctx->proto) {
+	case IPPROTO_TCP:
+	case IPPROTO_UDP:
+	case IPPROTO_ICMP:
+		return nat ? calico_ct_v4_create_nat(ctx) : calico_ct_v4_create(ctx);
+	default:
+		return 0;
+	}
+}
 
 #endif /* __CALI_CONNTRACK_H__ */
