@@ -93,7 +93,9 @@ RUN wget -P /tmp http://smarden.org/runit/runit-${RUNIT_VER}.tar.gz && \
     cd /tmp/admin/runit-${RUNIT_VER}/ && \
     package/install
 
-FROM registry.access.redhat.com/ubi8/ubi-minimal:latest
+# Pin image to ubi:8.0 for now. ubi:8.1 addresses low/moderate CVEs and includes updates to preinstalled packages.
+# However, CentOS packages for those CVE updates lag behind upstream so we will need to wait until those packages are available
+FROM registry.access.redhat.com/ubi8/ubi-minimal:8.0
 ARG ARCH
 ARG GIT_VERSION
 ARG IPTABLES_VER
@@ -145,6 +147,10 @@ RUN rm /etc/yum.repos.d/ubi.repo && \
     # Set alternatives
     alternatives --install /usr/sbin/iptables iptables /usr/sbin/iptables-legacy 1 && \
     alternatives --install /usr/sbin/ip6tables ip6tables /usr/sbin/ip6tables-legacy 1
+
+# Add mitigation for https://access.redhat.com/security/cve/CVE-2019-15718
+# This can be removed once we update to ubi:8.1
+RUN systemctl disable systemd-resolved
 
 # Copy our bird binaries in
 COPY --from=bird /bird* /bin/
