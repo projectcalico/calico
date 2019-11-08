@@ -294,12 +294,12 @@ func describeBPFTests(protocol string) bool {
 
 					Context("with test-service removed", func() {
 						var (
-						// prevBpfsvcs []bpfm.NATMapMem
-						// prevBpfeps  []bpfm.NATBackendMapMem
+							prevBpfsvcs []bpfm.NATMapMem
+							prevBpfeps  []bpfm.NATBackendMapMem
 						)
 
 						BeforeEach(func() {
-							// prevBpfsvcs, prevBpfeps = dumpNATmaps(felixes)
+							prevBpfsvcs, prevBpfeps = dumpNATmaps(felixes)
 							err := k8sClient.CoreV1().
 								Services(testSvcNamespace).
 								Delete(testSvcName, &metav1.DeleteOptions{})
@@ -316,12 +316,10 @@ func describeBPFTests(protocol string) bool {
 							cc.ExpectNone(w[1][1], workload.IP(ip), port)
 							cc.CheckConnectivity()
 
-							/* XXX disable until fixed
 							for i, f := range felixes {
 								Eventually(func() bpfm.NATMapMem { return dumpNATMap(f) }).Should(HaveLen(len(prevBpfsvcs[i]) - 1))
 								Eventually(func() bpfm.NATBackendMapMem { return dumpEPMap(f) }).Should(HaveLen(len(prevBpfeps[i]) - 1))
 							}
-							*/
 						})
 					})
 				})
