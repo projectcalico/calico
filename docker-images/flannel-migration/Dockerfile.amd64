@@ -11,9 +11,24 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-FROM scratch
-LABEL maintainer "Song Jiang <song@tigera.io>"
 
+ARG GIT_VERSION=unknown
+FROM registry.access.redhat.com/ubi8/ubi-minimal:latest as base
+
+# Add in top-level license file
+RUN mkdir /licenses
+COPY LICENSE /licenses
+
+FROM scratch
+LABEL name="Calico Flannel migration controller" \
+      vendor="Project Calico" \
+      version=$GIT_VERSION \
+      release="1" \
+      summary="Calico Flannel migration controller updates a flannel cluster to Calico" \
+      description="Calico Flannel migration controller updates a flannel cluster to Calico" \
+      maintainer="Song Jiang <song@tigera.io>"
+
+COPY --from=base /licenses /licenses
 ADD bin/kubectl-amd64 /usr/bin/kubectl
 ADD bin/kube-controllers-linux-amd64 /usr/bin/kube-controllers
 ADD bin/check-status-linux-amd64 /usr/bin/check-status

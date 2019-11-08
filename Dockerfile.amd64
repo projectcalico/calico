@@ -11,9 +11,25 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-FROM scratch
-LABEL maintainer "Casey Davenport <casey@tigera.io>"
 
+ARG GIT_VERSION=unknown
+FROM registry.access.redhat.com/ubi8/ubi-minimal:latest as base
+
+# Add in top-level license file
+RUN mkdir /licenses
+COPY LICENSE /licenses
+
+FROM scratch
+ARG GIT_VERSION
+LABEL name="Calico Kubernetes controllers" \
+      vendor="Project Calico" \
+      version=$GIT_VERSION \
+      release="1" \
+      summary="Calico Kubernetes controllers monitor the Kubernetes API and perform actions based on cluster state" \
+      description="Calico Kubernetes controllers monitor the Kubernetes API and perform actions based on cluster state" \
+      maintainer="Casey Davenport <casey@tigera.io>"
+
+COPY --from=base /licenses /licenses
 ADD bin/kube-controllers-linux-amd64 /usr/bin/kube-controllers
 ADD bin/check-status-linux-amd64 /usr/bin/check-status
 ENTRYPOINT ["/usr/bin/kube-controllers"]
