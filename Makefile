@@ -579,10 +579,13 @@ foss-checks:
 ###############################################################################
 # Unit Tests
 ###############################################################################
+
+UT_PACKAGES_TO_SKIP?=fv,k8sfv,bpf/ut
+
 .PHONY: ut
 ut combined.coverprofile: $(SRC_FILES)
 	@echo Running Go UTs.
-	$(DOCKER_RUN) $(CALICO_BUILD_CGO) ./utils/run-coverage $(GINKGO_ARGS)
+	$(DOCKER_RUN) $(CALICO_BUILD_CGO) ./utils/run-coverage -skipPackage $(UT_PACKAGES_TO_SKIP) $(GINKGO_ARGS)
 
 ###############################################################################
 # FV Tests
@@ -886,12 +889,24 @@ endif
 .PHONY: ut-no-cover
 ut-no-cover: $(SRC_FILES)
 	@echo Running Go UTs without coverage.
-	$(DOCKER_RUN) $(CALICO_BUILD) ginkgo -r -skipPackage fv,k8sfv,windows $(GINKGO_ARGS)
+	$(DOCKER_RUN) $(CALICO_BUILD_CGO) ginkgo -r -skipPackage $(UT_PACKAGES_TO_SKIP) $(GINKGO_ARGS)
 
 .PHONY: ut-watch
 ut-watch: $(SRC_FILES)
 	@echo Watching go UTs for changes...
-	$(DOCKER_RUN) $(CALICO_BUILD) ginkgo watch -r -skipPackage fv,k8sfv,windows $(GINKGO_ARGS)
+	$(DOCKER_RUN) $(CALICO_BUILD_CGO) ginkgo watch -r -skipPackage $(UT_PACKAGES_TO_SKIP) $(GINKGO_ARGS)
+
+.PHONY: bin/bpf.test
+bin/bpf.test:
+	$(DOCKER_RUN) $(CALICO_BUILD_CGO) go test $(BUILD_FLAGS) ./bpf/ut -c -o $@
+
+.PHONY: bpf-ut
+bpf-ut: bin/bpf.test image
+	$(DOCKER_RUN) \
+		--privileged calico/felix:latest sh -c ' \
+		mount bpffs /sys/fs/bpf -t bpf && \
+		cd /go/src/$(PACKAGE_NAME)/bpf/ut && \
+		../../bin/bpf.test'
 
 # Launch a browser with Go coverage stats for the whole project.
 .PHONY: cover-browser

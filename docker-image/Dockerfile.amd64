@@ -16,7 +16,7 @@
 # NOTE: This Dockerfile should be kept in-sync with the one in calico/node.
 # This ensures that testing of Felix in this repository is done in the same
 # userspace environment as it will be deployed in calico/node.
-FROM calico/bpftool:v5.0-amd64 as bpftool
+FROM calico/bpftool:v5.3-amd64 as bpftool
 
 FROM debian:10-slim
 LABEL maintainer="Shaun Crampton <shaun@tigera.io>"

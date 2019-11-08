@@ -24,7 +24,9 @@ struct bpf_map_def_extended __attribute__((section("maps"))) cali_nat_v4 = {
 	.value_size = sizeof(struct calico_nat_v4_value),
 	.map_flags = BPF_F_NO_PREALLOC,
 	.max_entries = 511000, // arbitrary
+#ifndef __BPFTOOL_LOADER__
 	.pinning_strategy = 2 /* global namespace */,
+#endif
 };
 
 // Map: NAT level two.  ID and ordinal -> new dest and port.
@@ -46,7 +48,9 @@ struct bpf_map_def_extended __attribute__((section("maps"))) cali_natbe_v4 = {
 	.value_size = sizeof(struct calico_nat_dest),
 	.map_flags = BPF_F_NO_PREALLOC,
 	.max_entries = 510000, // arbitrary
+#ifndef __BPFTOOL_LOADER__
 	.pinning_strategy = 2 /* global namespace */,
+#endif
 };
 
 static CALI_BPF_INLINE struct calico_nat_dest* calico_v4_nat_lookup(__u8 ip_proto, __be32 ip_dst, __u16 dport,

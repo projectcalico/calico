@@ -58,9 +58,10 @@ func TestBPFProgramGeneration(t *testing.T) {
 	var buf bytes.Buffer
 
 	buf.Reset()
-	pg = NewProgramGenerator(&buf)
+	pg, err := NewProgramGenerator("xdp/redir_tc.c")
+	Expect(err).NotTo(HaveOccurred())
 
-	err := pg.WriteCalicoRules([][][]*proto.Rule{{{{
+	err = pg.WriteCalicoRules(&buf, [][][]*proto.Rule{{{{
 		Action:                  "Allow",
 		IpVersion:               4,
 		Protocol:                &proto.Protocol{NumberOrName: &proto.Protocol_Number{Number: 6}},

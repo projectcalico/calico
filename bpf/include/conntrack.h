@@ -67,7 +67,9 @@ struct bpf_map_def_extended __attribute__((section("maps"))) calico_ct_map_v4 = 
 	.value_size = sizeof(struct calico_ct_value),
 	.map_flags = BPF_F_NO_PREALLOC,
 	.max_entries = 512000, // arbitrary
+#ifndef __BPFTOOL_LOADER__
 	.pinning_strategy = 2 /* global namespace */,
+#endif
 };
 
 static CALI_BPF_INLINE void dump_ct_key(struct calico_ct_key *k, enum calico_tc_flags flags) {

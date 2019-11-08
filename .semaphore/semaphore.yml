@@ -76,27 +76,17 @@ blocks:
       - checkout
       - export GOOGLE_APPLICATION_CREDENTIALS=$HOME/secrets/secret.google-service-account-key.json
       - export SHORT_WORKFLOW_ID=$(echo ${SEMAPHORE_WORKFLOW_ID} | sha256sum | cut -c -8)
-      - export VM_NAME=sem-${SEMAPHORE_PROJECT_NAME}-${SHORT_WORKFLOW_ID}-${SEMAPHORE_JOB_INDEX}
+      - export VM_NAME=sem-${SEMAPHORE_PROJECT_NAME}-${SHORT_WORKFLOW_ID}-${SEMAPHORE_JOB_INDEX:-ut}
       - echo VM_NAME=${VM_NAME}
-      - gcloud config set project unique-caldron-775
-      - gcloud auth activate-service-account --key-file=$HOME/secrets/secret.google-service-account-key.json
-      - >-
-        gcloud --quiet compute instances create ${VM_NAME} \
-               --zone=europe-west3-c \
-               --machine-type=n1-standard-4 \
-               --image=ubuntu-1910-eoan-v20191022 \
-               --image-project=ubuntu-os-cloud \
-               --boot-disk-size=20GB \
-               --boot-disk-type=pd-standard
-      - gcloud --quiet compute ssh --zone=europe-west3-c ubuntu@${VM_NAME} -- sudo apt-get update -y
-      - gcloud --quiet compute ssh --zone=europe-west3-c ubuntu@${VM_NAME} -- sudo apt-get install -y --no-install-recommends git make iproute2 docker.io
-      - gcloud --quiet compute ssh --zone=europe-west3-c ubuntu@${VM_NAME} -- sudo usermod -a -G docker ubuntu
-      - "gcloud --quiet compute scp --zone=europe-west3-c --recurse --compress `pwd` ubuntu@${VM_NAME}:"
+      - ./.semaphore/create-test-vm ${VM_NAME}
     jobs:
     - name: FV on remote
       commands:
       - gcloud --quiet compute ssh --zone=europe-west3-c ubuntu@${VM_NAME} -- make --directory=$(basename $(pwd)) fv-bpf GINKGO_FOCUS=BPF-SAFE FV_NUM_BATCHES=${SEMAPHORE_JOB_COUNT} FV_BATCHES_TO_RUN="${SEMAPHORE_JOB_INDEX}"
       parallelism: 5
+    - name: BPF UTs
+      commands:
+      - gcloud --quiet compute ssh --zone=europe-west3-c ubuntu@${VM_NAME} -- make --directory=$(basename $(pwd)) bpf-ut
     epilogue:
       always:
         commands:
