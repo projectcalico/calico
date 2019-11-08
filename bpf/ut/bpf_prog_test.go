@@ -87,7 +87,8 @@ func TestCompileTemplateRun(tt *testing.T) {
 	)
 	t.Expect(err).NotTo(HaveOccurred())
 
-	ioutil.WriteFile(dataInFname, pkt.Bytes(), 0644)
+	err = ioutil.WriteFile(dataInFname, pkt.Bytes(), 0644)
+	t.Expect(err).NotTo(HaveOccurred())
 
 	res, err := bpftoolProgRun(bpfFsDir+"/calico_to_workload_ep", dataInFname)
 	t.Expect(err).NotTo(HaveOccurred())
