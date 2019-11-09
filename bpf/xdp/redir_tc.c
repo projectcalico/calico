@@ -250,17 +250,10 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb, enum calico_tc_flags
 		}
 	}
 
-	struct calico_ct_result ct_result;
 	switch (ip_proto) {
 	case IPPROTO_TCP:
-		// Now, do conntrack lookup.
-		ct_result = calico_ct_v4_tcp_lookup(ip_src, ip_dst, sport, dport, tcp_header, flags);
-		break;
 	case IPPROTO_UDP:
-		ct_result = calico_ct_v4_udp_lookup(ip_src, ip_dst, sport, dport, flags);
-		break;
 	case IPPROTO_ICMP:
-		ct_result = calico_ct_v4_icmp_lookup(ip_src, ip_dst, icmp_header, flags);
 		break;
 	default:
 		if (flags & CALI_TC_HOST_EP) {
@@ -270,6 +263,28 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb, enum calico_tc_flags
 		// FIXME non-port based conntrack.
 		goto deny;
 	}
+
+	// Now, do conntrack lookup.
+	struct ct_ctx ct_lookup_ctx = {
+		.proto	= ip_proto,
+		.flags	= flags,
+		.src	= ip_src,
+		.sport	= sport,
+		.dst	= ip_dst,
+		.dport	= dport,
+	};
+
+	if (ip_proto == IPPROTO_TCP) {
+		if (!skb_has_data_after(skb, ip_header, sizeof(struct tcphdr))) {
+			CALI_DEBUG("Too short for TCP: DROP\n");
+			goto deny;
+		}
+		tcp_header = (void*)(ip_header+1);
+		ct_lookup_ctx.tcp = tcp_header;
+	}
+
+	struct calico_ct_result ct_result;
+	ct_result = calico_ct_v4_lookup(&ct_lookup_ctx);
 
 	switch (ct_result.rc){
 	case CALI_CT_NEW:
@@ -317,7 +332,7 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb, enum calico_tc_flags
 			CALI_DEBUG("Allowed by normal policy: ACCEPT\n");
 		}
 
-		struct ct_ctx ctx = {
+		struct ct_ctx ct_nat_ctx =  {
 			.skb	= skb,
 			.proto	= ip_proto,
 			.flags	= flags,
@@ -333,18 +348,18 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb, enum calico_tc_flags
 				goto deny;
 			}
 			tcp_header = (void*)(ip_header+1);
-			ctx.tcp = tcp_header;
+			ct_nat_ctx.tcp = tcp_header;
 		}
 
 		if (nat_dest != NULL) {
 			// Packet is to be NATted, need to record a NAT rev entry.
-			ctx.orig_dst = ip_dst;
-			ctx.orig_dport = dport;
+			ct_nat_ctx.orig_dst = ip_dst;
+			ct_nat_ctx.orig_dport = dport;
 		}
 
 		// If we get here, we've passed policy.
 
-		conntrack_create(&ctx, nat_dest != NULL);
+		conntrack_create(&ct_nat_ctx, nat_dest != NULL);
 
 		fib_params.sport = sport;
 		fib_params.dport = post_nat_dport;
