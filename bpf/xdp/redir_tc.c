@@ -103,6 +103,7 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb, enum calico_tc_flags
 	}
 	uint64_t timer_start_time = 0 , timer_end_time = 0;
 	int rc = TC_ACT_UNSPEC;
+	size_t csum_offset;
 
 
 	if (!CALI_TC_FLAGS_TO_HOST(flags) && skb->mark == CALI_SKB_MARK_BYPASS) {
@@ -249,17 +250,10 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb, enum calico_tc_flags
 		}
 	}
 
-	struct calico_ct_result ct_result;
 	switch (ip_proto) {
 	case IPPROTO_TCP:
-		// Now, do conntrack lookup.
-		ct_result = calico_ct_v4_tcp_lookup(ip_src, ip_dst, sport, dport, tcp_header, flags);
-		break;
 	case IPPROTO_UDP:
-		ct_result = calico_ct_v4_udp_lookup(ip_src, ip_dst, sport, dport, flags);
-		break;
 	case IPPROTO_ICMP:
-		ct_result = calico_ct_v4_icmp_lookup(ip_src, ip_dst, icmp_header, flags);
 		break;
 	default:
 		if (flags & CALI_TC_HOST_EP) {
@@ -269,6 +263,28 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb, enum calico_tc_flags
 		// FIXME non-port based conntrack.
 		goto deny;
 	}
+
+	// Now, do conntrack lookup.
+	struct ct_ctx ct_lookup_ctx = {
+		.proto	= ip_proto,
+		.flags	= flags,
+		.src	= ip_src,
+		.sport	= sport,
+		.dst	= ip_dst,
+		.dport	= dport,
+	};
+
+	if (ip_proto == IPPROTO_TCP) {
+		if (!skb_has_data_after(skb, ip_header, sizeof(struct tcphdr))) {
+			CALI_DEBUG("Too short for TCP: DROP\n");
+			goto deny;
+		}
+		tcp_header = (void*)(ip_header+1);
+		ct_lookup_ctx.tcp = tcp_header;
+	}
+
+	struct calico_ct_result ct_result;
+	ct_result = calico_ct_v4_lookup(&ct_lookup_ctx);
 
 	switch (ct_result.rc){
 	case CALI_CT_NEW:
@@ -316,68 +332,63 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb, enum calico_tc_flags
 			CALI_DEBUG("Allowed by normal policy: ACCEPT\n");
 		}
 
-		// If we get here, we've passed policy.
-		if (nat_dest != NULL) {
-			// Packet is to be NATted, need to record a NAT entry.
-			switch (ip_proto) {
-			case IPPROTO_TCP:
-				if ((void*)(tcp_header+1) > (void *)(long)skb->data_end) {
-					CALI_DEBUG("Too short for TCP: DROP\n");
-					goto deny;
-				}
-				calico_ct_v4_tcp_create_nat(skb, ip_src, ip_dst, sport, dport, post_nat_ip_dst, post_nat_dport, tcp_header, flags);
-				break;
-			case IPPROTO_UDP:
-				calico_ct_v4_udp_create_nat(skb, ip_src, ip_dst, sport, dport, post_nat_ip_dst, post_nat_dport, flags);
-				break;
-			case IPPROTO_ICMP:
-				calico_ct_v4_icmp_create_nat(skb, ip_src, ip_dst, post_nat_ip_dst, flags);
-				break;
-			}
+		struct ct_ctx ct_nat_ctx =  {
+			.skb	= skb,
+			.proto	= ip_proto,
+			.flags	= flags,
+			.src	= ip_src,
+			.sport	= sport,
+			.dst	= post_nat_ip_dst,
+			.dport	= post_nat_dport,
+		};
 
-			// Actually do the NAT.
-			ip_header->daddr = post_nat_ip_dst;
-			size_t csum_offset;
-
-			switch (ip_proto) {
-			case IPPROTO_TCP:
-				tcp_header->dest = host_to_be16(post_nat_dport);
-				csum_offset = sizeof(struct ethhdr) + sizeof(struct iphdr) + offsetof(struct tcphdr, check);
-				bpf_l4_csum_replace(skb, csum_offset, ip_dst, post_nat_ip_dst, BPF_F_PSEUDO_HDR | 4);
-				bpf_l4_csum_replace(skb, csum_offset, host_to_be16(dport),  host_to_be16(post_nat_dport), 2);
-				break;
-			case IPPROTO_UDP:
-				udp_header->dest = host_to_be16(post_nat_dport);
-				csum_offset = sizeof(struct ethhdr) + sizeof(struct iphdr) + offsetof(struct udphdr, check);
-				bpf_l4_csum_replace(skb, csum_offset, ip_dst, post_nat_ip_dst, BPF_F_PSEUDO_HDR | 4);
-				bpf_l4_csum_replace(skb, csum_offset, host_to_be16(dport),  host_to_be16(post_nat_dport), 2);
-				break;
+		if (ip_proto == IPPROTO_TCP) {
+			if (!skb_has_data_after(skb, ip_header, sizeof(struct tcphdr))) {
+				CALI_DEBUG("Too short for TCP: DROP\n");
+				goto deny;
 			}
-
-			bpf_l3_csum_replace(skb, sizeof(struct ethhdr) + offsetof(struct iphdr, check), ip_dst, post_nat_ip_dst, 4);
-		} else {
-			// No NAT for this packet, record a simple entry.
-			switch (ip_proto) {
-			case IPPROTO_TCP:
-				if ((void*)(tcp_header+1) > (void *)(long)skb->data_end) {
-					CALI_DEBUG("Too short for TCP: DROP\n");
-					goto deny;
-				}
-				calico_ct_v4_tcp_create(skb, ip_src, ip_dst, sport, dport, tcp_header, flags);
-				break;
-			case IPPROTO_UDP:
-				calico_ct_v4_udp_create(skb, ip_src, ip_dst, sport, dport, flags);
-				break;
-			case IPPROTO_ICMP:
-				calico_ct_v4_icmp_create(skb, ip_src, ip_dst, flags);
-				break;
-			}
+			tcp_header = (void*)(ip_header+1);
+			ct_nat_ctx.tcp = tcp_header;
 		}
+
+		if (nat_dest != NULL) {
+			// Packet is to be NATted, need to record a NAT rev entry.
+			ct_nat_ctx.orig_dst = ip_dst;
+			ct_nat_ctx.orig_dport = dport;
+		}
+
+		// If we get here, we've passed policy.
+
+		conntrack_create(&ct_nat_ctx, nat_dest != NULL);
 
 		fib_params.sport = sport;
 		fib_params.dport = post_nat_dport;
 		fib_params.ipv4_src = ip_src;
 		fib_params.ipv4_dst = post_nat_ip_dst;
+
+		if (nat_dest == NULL) {
+			goto allow;
+		}
+
+		// Actually do the NAT.
+		ip_header->daddr = post_nat_ip_dst;
+
+		switch (ip_proto) {
+		case IPPROTO_TCP:
+			tcp_header->dest = host_to_be16(post_nat_dport);
+			csum_offset = sizeof(struct ethhdr) + sizeof(struct iphdr) + offsetof(struct tcphdr, check);
+			bpf_l4_csum_replace(skb, csum_offset, ip_dst, post_nat_ip_dst, BPF_F_PSEUDO_HDR | 4);
+			bpf_l4_csum_replace(skb, csum_offset, host_to_be16(dport),  host_to_be16(post_nat_dport), 2);
+			break;
+		case IPPROTO_UDP:
+			udp_header->dest = host_to_be16(post_nat_dport);
+			csum_offset = sizeof(struct ethhdr) + sizeof(struct iphdr) + offsetof(struct udphdr, check);
+			bpf_l4_csum_replace(skb, csum_offset, ip_dst, post_nat_ip_dst, BPF_F_PSEUDO_HDR | 4);
+			bpf_l4_csum_replace(skb, csum_offset, host_to_be16(dport),  host_to_be16(post_nat_dport), 2);
+			break;
+		}
+
+		bpf_l3_csum_replace(skb, sizeof(struct ethhdr) + offsetof(struct iphdr, check), ip_dst, post_nat_ip_dst, 4);
 
 		goto allow;
 	case CALI_CT_ESTABLISHED_BYPASS:
@@ -398,7 +409,6 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb, enum calico_tc_flags
 		post_nat_ip_dst = ct_result.nat_ip;
 		post_nat_dport = ct_result.nat_port;
 		ip_header->daddr = post_nat_ip_dst;
-		size_t csum_offset;
 
 		switch (ip_proto) {
 		case IPPROTO_TCP:
