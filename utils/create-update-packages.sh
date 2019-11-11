@@ -167,6 +167,13 @@ function do_net_cal {
     NETWORKING_CALICO_REPO=${NETWORKING_CALICO_REPO:-https://opendev.org/openstack/networking-calico.git}
     git clone $NETWORKING_CALICO_REPO -b $NETWORKING_CALICO_CHECKOUT
     cd networking-calico
+    # When NETWORKING_CALICO_CHECKOUT is a Git tag, set FORCE_VERSION
+    # to ensure that we build packages with version equal to _that_
+    # tag.  Otherwise, if there are other tags on the checkout commit,
+    # we might pick up one of those by mistake.
+    if [ "`git tag -l $NETWORKING_CALICO_CHECKOUT --points-at`" = $NETWORKING_CALICO_CHECKOUT ]; then
+	export FORCE_VERSION=$NETWORKING_CALICO_CHECKOUT
+    fi
     PKG_NAME=networking-calico \
 	    NAME=networking-calico \
 	    DEB_EPOCH=1: \
