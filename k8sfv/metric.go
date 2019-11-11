@@ -1,4 +1,4 @@
-// Copyright (c) 2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017,2019 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -50,6 +50,14 @@ func getFelixFloatMetric(name string) float64 {
 	metricS, err := getFelixMetric(name)
 	panicIfError(err)
 	metric, err := strconv.ParseFloat(metricS, 64)
+	panicIfError(err)
+	return metric
+}
+
+func getFelixIntMetric(name string) int64 {
+	metricS, err := getFelixMetric(name)
+	panicIfError(err)
+	metric, err := strconv.ParseInt(metricS, 10, 64)
 	panicIfError(err)
 	return metric
 }

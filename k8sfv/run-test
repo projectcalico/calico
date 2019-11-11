@@ -68,8 +68,8 @@ fi
 : ${USE_TYPHA:=true}
 #
 if  ${USE_TYPHA} && test -z "${FV_TYPHAIMAGE}" ; then
-	echo FV_TYPHAIMAGE must be set to indicate the hyperkube image to use.
-	exit -1
+	echo FV_TYPHAIMAGE must be set to indicate the Typha image to use.
+	exit 1
 fi
 #
 # Typha logging level.
@@ -86,6 +86,7 @@ prefix=k8sfv${UNIQUE}
 # we create.
 function cleanup {
     # Clean up the containers that this script generates.
+    echo "run-test cleanup running..."
     docker rm -f ${prefix}-felix || true
     docker rm -f ${prefix}-typha || true
     docker rm -f ${prefix}-controller-manager || true
@@ -93,6 +94,7 @@ function cleanup {
     docker rm -f ${prefix}-etcd || true
     # List all remaining containers.
     docker ps -a
+    echo "run-test cleanup done."
 }
 if ${CLEANUP}; then
     trap cleanup EXIT SIGINT SIGQUIT
@@ -200,8 +202,8 @@ if ${USE_TYPHA}; then
        -e K8S_CA_FILE=/testcode/k8sfv/output/apiserver.crt \
        -v ${PWD}:/testcode \
        -w /testcode/k8sfv/output \
-       $FV_TYPHAIMAGE \
-       /bin/sh -c "for n in 1 2; do calico-typha; done"
+       --restart=on-failure:2 \
+       $FV_TYPHAIMAGE
     typha_ip=$(get_container_ip ${prefix}-typha)
     typha_hostname=$(get_container_hostname ${prefix}-typha)
     typha_felix_args="-e FELIX_TYPHAADDR=${typha_ip}:5473"
@@ -250,6 +252,7 @@ elif ${JUST_A_MINUTE}; then
     cmdStatus=${PIPESTATUS[0]}
     if [ $cmdStatus -ne 0 ]; then
         echo "docker or k7sfv.test command failed with RC $cmdStatus"
+        echo "Status 137 can be caused by the felix container (in which we run the test binary) dying."
         rm -f $tmp
         exit 1
     fi
