@@ -270,3 +270,5 @@ On each compute node, perform the following steps:
     ```
     service calico-felix restart
     ```
+
+{% include {{page.version}}/openstack-etcd-auth.md %}
