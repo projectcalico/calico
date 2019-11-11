@@ -54,21 +54,13 @@ These steps are detailed in this section.
     apt-get update
     ```
 
-1.  Install the `etcd3gw` Python package, if it is not already installed on
-    your system.  `etcd3gw` is needed by {{site.prodname}}'s OpenStack driver
-    and DHCP agent, but is not yet packaged for Ubuntu, so you should install
-    it with `pip`.  First check in case it has already been pulled in by your
-    OpenStack installation.
-
-    ```
-    find /usr/lib/python2.7/ -name etcd3gw
-    ```
-
-    If you see no output there, install `etcd3gw` with pip.
+1.  Install the `etcd3-gateway` Python package.  A current copy of that code is
+    needed by {{site.prodname}}'s OpenStack driver and DHCP agent, so you
+    should install it with `pip`.
 
     ```
     apt-get install -y python-pip
-    pip install etcd3gw
+    pip install git+https://github.com/dims/etcd3-gateway.git@19abd85b710682b326702e2290a30d084fb0af71
     ```
 
 ## Control node install
