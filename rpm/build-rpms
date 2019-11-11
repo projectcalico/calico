@@ -21,10 +21,21 @@ if [ ${pkg} = networking-calico ]; then
     # --exclude-vcs) from the source tarball that we pass to rpmbuild,
     # so we calculate PBR_VERSION now and then add that to the
     # environment for rpmbuild.
-    export PBR_VERSION=`python - <<'EOF'
+    if [ "$FORCE_VERSION" ]; then
+	# When FORCE_VERSION is specified, that is also the PBR version
+	# that we should set.  Note: this is relevant in particular when
+	# there are multiple version tags on the same networking-calico
+	# commit (which is quite common as networking-calico doesn't
+	# change much).  The alternative, automated method, just below,
+	# is currently broken when there are multiple tags on the same
+	# commit; see https://bugs.launchpad.net/pbr/+bug/1453996.
+	export PBR_VERSION=$FORCE_VERSION
+    else
+	export PBR_VERSION=`python - <<'EOF'
 import pbr.version
 print pbr.version.VersionInfo('networking-calico').release_string()
 EOF`
+    fi
 fi
 
 mkdir -p /tmp/rpmbuild/BUILD \

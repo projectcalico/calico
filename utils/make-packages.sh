@@ -65,10 +65,21 @@ EOF
 		} > debian/changelog
 
 		if [ ${PKG_NAME} = networking-calico ]; then
-		    pbr_version=`${DOCKER_RUN_RM} -i calico-build/${series} python - <<'EOF'
+		    if [ "$FORCE_VERSION" ]; then
+			# When FORCE_VERSION is specified, that is also the PBR version
+			# that we should set.  Note: this is relevant in particular when
+			# there are multiple version tags on the same networking-calico
+			# commit (which is quite common as networking-calico doesn't
+			# change much).  The alternative, automated method, just below,
+			# is currently broken when there are multiple tags on the same
+			# commit; see https://bugs.launchpad.net/pbr/+bug/1453996.
+			pbr_version=$FORCE_VERSION
+		    else
+			pbr_version=`${DOCKER_RUN_RM} -i calico-build/${series} python - <<'EOF'
 import pbr.version
 print pbr.version.VersionInfo('networking-calico').release_string()
 EOF`
+		    fi
 		    # Update PBR_VERSION setting in debian/rules.
 		    sed -i "s/^export PBR_VERSION=.*$/export PBR_VERSION=${pbr_version}/" debian/rules
 		fi
@@ -134,6 +145,7 @@ EOF
 		# Skip the rpm build if we are missing the matching build image.
 		imageid=$(docker images -q calico-build/centos${elversion}:latest)
 		[ -n "$imageid"  ] && ${DOCKER_RUN_RM} -e EL_VERSION=el${elversion} \
+		    -e FORCE_VERSION=${FORCE_VERSION} \
 		    $imageid ../rpm/build-rpms
 	    done
 
