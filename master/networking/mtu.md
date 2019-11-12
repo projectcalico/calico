@@ -1,5 +1,6 @@
 ---
 title: Configuring MTU
+Description: Optimize network performance for workloads by configuring the MTU in Calico to best suit your underlying network.
 canonical_url: 'https://docs.projectcalico.org/v3.9/networking/mtu'
 ---
 
