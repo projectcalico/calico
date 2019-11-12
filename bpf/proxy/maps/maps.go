@@ -151,25 +151,27 @@ func (k NATBackendValue) String() string {
 }
 
 func NATMap() bpf.Map {
-	return bpf.NewPinnedMap(
-		"cali_nat_v4",
-		"/sys/fs/bpf/tc/globals/cali_nat_v4",
-		"hash",
-		natKeySize,
-		natValueSize,
-		511000,
-		unix.BPF_F_NO_PREALLOC)
+	return bpf.NewPinnedMap(bpf.MapParameters{
+		Filename:   "/sys/fs/bpf/tc/globals/cali_nat_v4",
+		Type:       "hash",
+		KeySize:    natKeySize,
+		ValueSize:  natValueSize,
+		MaxEntries: 511000,
+		Name:       "cali_nat_v4",
+		Flags:      unix.BPF_F_NO_PREALLOC,
+	})
 }
 
 func BackendMap() bpf.Map {
-	return bpf.NewPinnedMap(
-		"cali_natbe_v4",
-		"/sys/fs/bpf/tc/globals/cali_natbe_v4",
-		"hash",
-		natKeySize,
-		natValueSize,
-		510000,
-		unix.BPF_F_NO_PREALLOC)
+	return bpf.NewPinnedMap(bpf.MapParameters{
+		Filename:   "/sys/fs/bpf/tc/globals/cali_natbe_v4",
+		Type:       "hash",
+		KeySize:    natBackendKeySize,
+		ValueSize:  natBackendValueSize,
+		MaxEntries: 510000,
+		Name:       "cali_natbe_v4",
+		Flags:      unix.BPF_F_NO_PREALLOC,
+	})
 }
 
 // NATMapMem represents NATMap loaded into memory

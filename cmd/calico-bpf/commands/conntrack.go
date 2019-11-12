@@ -15,18 +15,20 @@
 package commands
 
 import (
+	"fmt"
 	"net"
 	"strings"
+
+	"github.com/projectcalico/felix/bpf/conntrack"
 
 	"github.com/docopt/docopt-go"
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
-
-	intdataplane "github.com/projectcalico/felix/dataplane/linux"
 )
 
 func init() {
+	conntrackCmd.AddCommand(newConntrackDumpCmd())
 	conntrackCmd.AddCommand(newConntrackRemoveCmd())
 	rootCmd.AddCommand(conntrackCmd)
 }
@@ -35,6 +37,60 @@ func init() {
 var conntrackCmd = &cobra.Command{
 	Use:   "conntrack",
 	Short: "Manipulates connection tracking",
+}
+
+type conntrackDumpCmd struct {
+	*cobra.Command
+}
+
+func newConntrackDumpCmd() *cobra.Command {
+	cmd := &conntrackDumpCmd{
+		Command: &cobra.Command{
+			Use:   "dump",
+			Short: "Dumps connection tracking table",
+		},
+	}
+
+	cmd.Command.Args = cmd.Args
+	cmd.Command.Run = cmd.Run
+
+	return cmd.Command
+}
+
+func (cmd *conntrackDumpCmd) Args(c *cobra.Command, args []string) error {
+	a, err := docopt.ParseArgs(makeDocUsage(c), args, "")
+	if err != nil {
+		return errors.New(err.Error())
+	}
+
+	err = a.Bind(cmd)
+	if err != nil {
+		return errors.New(err.Error())
+	}
+
+	return nil
+}
+
+func (cmd *conntrackDumpCmd) Run(c *cobra.Command, _ []string) {
+	ctMap := conntrack.Map()
+	err := ctMap.Iter(func(k, v []byte) {
+		var ctKey conntrack.Key
+		if len(k) != len(ctKey) {
+			log.Panic("Key has unexpected length")
+		}
+		copy(ctKey[:], k[:])
+
+		var ctVal conntrack.Entry
+		if len(v) != len(ctVal) {
+			log.Panic("Value has unexpected length")
+		}
+		copy(ctVal[:], v[:])
+
+		fmt.Printf("%v -> %v\n", ctKey, ctVal)
+	})
+	if err != nil {
+		log.WithError(err).Fatal("Failed to iterate over conntrack entries")
+	}
 }
 
 type conntrackRemoveCmd struct {
@@ -97,10 +153,10 @@ func (cmd *conntrackRemoveCmd) Args(c *cobra.Command, args []string) error {
 }
 
 func (cmd *conntrackRemoveCmd) Run(c *cobra.Command, _ []string) {
-	ctMap := intdataplane.ConntrackMap()
-	var keysToRemove []intdataplane.ConntrackKey
+	ctMap := conntrack.Map()
+	var keysToRemove []conntrack.Key
 	err := ctMap.Iter(func(k, v []byte) {
-		var ctKey intdataplane.ConntrackKey
+		var ctKey conntrack.Key
 		if len(k) != len(ctKey) {
 			log.Panic("Key has unexpected length")
 		}

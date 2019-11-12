@@ -66,14 +66,15 @@ func newBPFIPSetManager() *bpfIPSetManager {
 }
 
 func IPSetsMap() bpf.Map {
-	return bpf.NewPinnedMap(
-		"calico_ip_sets",
-		"/sys/fs/bpf/tc/globals/calico_ip_sets",
-		"lpm_trie",
-		ipSetEntrySize,
-		4,
-		1024*1024,
-		unix.BPF_F_NO_PREALLOC)
+	return bpf.NewPinnedMap(bpf.MapParameters{
+		Filename:   "/sys/fs/bpf/tc/globals/calico_ip_sets",
+		Type:       "lpm_trie",
+		KeySize:    ipSetEntrySize,
+		ValueSize:  4,
+		MaxEntries: 1024 * 1024,
+		Name:       "calico_ip_sets",
+		Flags:      unix.BPF_F_NO_PREALLOC,
+	})
 }
 
 func (e IPSetEntry) SetID() uint64 {
