@@ -40,6 +40,15 @@ import (
 //    attr->flags = flags;
 // }
 //
+// // bpf_attr_setup_get_elem sets up the bpf_attr union for use with BPF_MAP_GET_ELEM.
+// // A C function makes this easier because unions aren't easy to access from Go.
+// void bpf_attr_setup_get_elem(union bpf_attr *attr, __u32 map_fd, void *pointer_to_key, void *pointer_to_value, __u64 flags) {
+//    attr->map_fd = map_fd;
+//    attr->key = (__u64)(unsigned long)pointer_to_key;
+//    attr->value = (__u64)(unsigned long)pointer_to_value;
+//    attr->flags = flags;
+// }
+//
 // // bpf_attr_setup_delete_elem sets up the bpf_attr union for use with BPF_MAP_DELETE_ELEM.
 // // A C function makes this easier because unions aren't easy to access from Go.
 // void bpf_attr_setup_delete_elem(union bpf_attr *attr, __u32 map_fd, void *pointer_to_key) {
@@ -86,6 +95,36 @@ func UpdateMapEntry(mapFD MapFD, k, v []byte) error {
 		return errno
 	}
 	return nil
+}
+
+func GetMapEntry(mapFD MapFD, k []byte, valueSize int) ([]byte, error) {
+	var bpfAttr C.union_bpf_attr
+
+	// Have to make C-heap copies here because passing these to the syscalls is done via pointers in an
+	// intermediate struct.
+	cK := C.CBytes(k)
+	cV := C.malloc(C.size_t(valueSize))
+
+	C.bpf_attr_setup_update_elem(&bpfAttr, C.uint(mapFD), cK, cV, unix.BPF_ANY)
+
+	_, _, errno := unix.Syscall(unix.SYS_BPF, unix.BPF_MAP_LOOKUP_ELEM, uintptr(unsafe.Pointer(&bpfAttr)), C.sizeof_union_bpf_attr)
+
+	v := C.GoBytes(cV, C.int(valueSize))
+
+	C.free(cK)
+	C.free(cV)
+
+	if errno != 0 {
+		return nil, errno
+	}
+	return v, nil
+}
+
+func IsNotExists(err error) bool {
+	if err == unix.ENOENT {
+		return true
+	}
+	return false
 }
 
 func DeleteMapEntry(mapFD MapFD, k []byte) error {

@@ -18,8 +18,9 @@ import (
 	"encoding/binary"
 	"fmt"
 	"net"
+	"time"
 
-	"github.com/sirupsen/logrus"
+	log "github.com/sirupsen/logrus"
 	"golang.org/x/sys/unix"
 
 	"github.com/projectcalico/felix/bpf"
@@ -34,6 +35,10 @@ const conntrackKeySize = 16
 const conntrackValueSize = 48
 
 type Key [conntrackKeySize]byte
+
+func (k Key) AsBytes() []byte {
+	return k[:]
+}
 
 func (k Key) Proto() uint8 {
 	return uint8(binary.LittleEndian.Uint32(k[:4]))
@@ -194,7 +199,125 @@ func KTimeNanos() int64 {
 	var ts unix.Timespec
 	err := unix.ClockGettime(unix.CLOCK_MONOTONIC, &ts)
 	if err != nil {
-		logrus.WithError(err).Panic("Failed to read system clock")
+		log.WithError(err).Panic("Failed to read system clock")
 	}
 	return ts.Nano()
+}
+
+type Timeouts struct {
+	CreationGracePeriod time.Duration
+
+	TCPPreEstablished time.Duration
+	TCPEstablished    time.Duration
+	TCPFinsSeen       time.Duration
+	TCPResetSeen      time.Duration
+
+	UDPLastSeen time.Duration
+
+	ICMPLastSeen time.Duration
+}
+
+type LivenessCalculator struct {
+	timeouts Timeouts
+	ctMap    bpf.Map
+	NowNanos func() int64
+}
+
+const (
+	ProtoICMP = 1
+	ProtoTCP  = 6
+	ProtoUDP  = 17
+)
+
+func (l *LivenessCalculator) Scan() {
+	err := l.ctMap.Iter(func(k, v []byte) {
+		ctKey := keyFromBytes(k)
+		ctVal := entryFromBytes(v)
+		log.WithFields(log.Fields{
+			"key":   ctKey,
+			"entry": ctVal,
+		}).Debug("Examining conntrack entry")
+
+		now := l.NowNanos()
+		sinceCreation := time.Duration(now - ctVal.Created())
+
+		if sinceCreation < l.timeouts.CreationGracePeriod {
+			log.Debug("Conntrack entry in creation grace period. Ignoring.")
+			return
+		}
+
+		switch ctVal.Type() {
+		case ValueTypeNATForward:
+			// Look up the reverse entry, where we do the book-keeping.
+			revEntryBytes, err := l.ctMap.Get(ctVal.ReverseNATKey().AsBytes())
+			if err != nil && bpf.IsNotExists(err) {
+				// Forward entry exists but no reverse entry (and the grace period has expired).
+				log.Info("Found a forward NAT conntrack entry with no reverse entry, removing...")
+				err := l.ctMap.Delete(k)
+				if err != nil && !bpf.IsNotExists(err) {
+					log.WithError(err).Warn("Failed to delete conntrack entry.")
+				}
+				return
+			} else if err != nil {
+				log.WithError(err).Warn("Failed to look up conntrack entry.")
+				return
+			}
+			revEntry := entryFromBytes(revEntryBytes)
+			if EntryExpired(now, ctKey.Proto(), revEntry) {
+				log.Debug("Deleting expired conntrack forward-NAT entry")
+				err := l.ctMap.Delete(k)
+				if err != nil && !bpf.IsNotExists(err) {
+					log.WithError(err).Warn("Failed to delete expired conntrack forward-NAT entry.")
+				}
+				err = l.ctMap.Delete(ctVal.ReverseNATKey().AsBytes())
+				if err != nil && !bpf.IsNotExists(err) {
+					log.WithError(err).Warn("Failed to delete expired conntrack reverse-NAT entry.")
+				}
+			}
+		case ValueTypeNATReverse:
+			if EntryExpired(now, ctKey.Proto(), ctVal) {
+				log.Debug("Deleting expired conntrack reverse-NAT entry")
+				err := l.ctMap.Delete(k)
+				if err != nil && !bpf.IsNotExists(err) {
+					log.WithError(err).Warn("Failed to delete expired conntrack forward-NAT entry.")
+				}
+				// TODO Handle forward entry.
+			}
+		case ValueTypeNormal:
+			if EntryExpired(now, ctKey.Proto(), ctVal) {
+				log.Debug("Deleting expired normal conntrack entry")
+				err := l.ctMap.Delete(k)
+				if err != nil && !bpf.IsNotExists(err) {
+					log.WithError(err).Warn("Failed to delete expired conntrack forward-NAT entry.")
+				}
+			}
+		default:
+			log.WithField("type", ctVal.Type()).Warn("Unknown conntrack entry type!")
+		}
+	})
+	if err != nil {
+		log.WithError(err).Warn("Failed to iterate over conntrack map")
+	}
+}
+
+func EntryExpired(nowNanos int64, proto uint8, entry Entry) bool {
+	return false
+}
+
+func keyFromBytes(k []byte) Key {
+	var ctKey Key
+	if len(k) != len(ctKey) {
+		log.Panic("Key has unexpected length")
+	}
+	copy(ctKey[:], k[:])
+	return ctKey
+}
+
+func entryFromBytes(v []byte) Entry {
+	var ctVal Entry
+	if len(v) != len(ctVal) {
+		log.Panic("Value has unexpected length")
+	}
+	copy(ctVal[:], v[:])
+	return ctVal
 }

@@ -31,6 +31,7 @@ type Map interface {
 	EnsureExists() error
 	Iter(MapIter) error
 	Update(k, v []byte) error
+	Get(k []byte) ([]byte, error)
 	Delete(k []byte) error
 }
 
@@ -129,6 +130,10 @@ func (b *PinnedMap) Iter(f MapIter) error {
 
 func (b *PinnedMap) Update(k, v []byte) error {
 	return UpdateMapEntry(b.fd, k, v)
+}
+
+func (b *PinnedMap) Get(k []byte) ([]byte, error) {
+	return GetMapEntry(b.fd, k, b.ValueSize)
 }
 
 func appendBytes(strings []string, bytes []byte) []string {
