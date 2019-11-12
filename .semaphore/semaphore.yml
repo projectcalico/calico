@@ -50,7 +50,7 @@ blocks:
     agent:
       machine:
         # k8sfv tests need more RAM.
-        type: e1-standard-8
+        type: e1-standard-2
         os_image: ubuntu1804
     prologue:
       commands:
@@ -72,7 +72,6 @@ blocks:
   task:
     prologue:
       commands:
-      - chmod 600 ~/.ssh/id_rsa
       - checkout
       - export GOOGLE_APPLICATION_CREDENTIALS=$HOME/secrets/secret.google-service-account-key.json
       - export SHORT_WORKFLOW_ID=$(echo ${SEMAPHORE_WORKFLOW_ID} | sha256sum | cut -c -8)
@@ -92,8 +91,7 @@ blocks:
         commands:
         - gcloud --quiet compute instances delete ${VM_NAME} --zone=europe-west3-c
     secrets:
-    - name: marvin-github-ssh-private-key
-    - name: google-service-account-for-gcr
+    - name: google-service-account-for-gce
 - name: Static checks
   dependencies: []
   task:
