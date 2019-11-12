@@ -417,8 +417,8 @@ Example:
    kubectl label nodes kube-node-0 rack=0
    ```
 
-Check out the usage guide on [assigning IP addresses based on
-topology]({{site.baseurl}}/{{page.version}}/networking/assigning-ip-addresses-topology)
+Check out the usage guide on [assign IP addresses based on
+topology]({{site.baseurl}}/{{page.version}}/networking/assign-ip-addresses-topology)
 for a full example.
 
 ### CNI network configuration lists

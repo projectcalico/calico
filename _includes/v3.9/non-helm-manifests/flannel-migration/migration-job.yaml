@@ -152,8 +152,7 @@ spec:
       restartPolicy: OnFailure
       containers:
         - name: flannel-migration-controller
-          # TODO: image: {{page.registry}}flannel-migration-controller:{{site.data.versions[page.version].first.components["calico/kube-controllers"].version}}
-          image: quay.io/calico/flannel-migration-controller:master
+          image: {{page.registry}}{{page.imageNames["flannelMigration"]}}:{{site.data.versions[page.version].first.components["calico/kube-controllers"].version}}
           env:
             # Choose which controllers to run.
             - name: ENABLED_CONTROLLERS

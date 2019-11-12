@@ -11,14 +11,12 @@ canonical_url: 'https://docs.projectcalico.org/v3.9/getting-started/kubernetes/r
 
 We test {{site.prodname}} {{page.version}} against the following Kubernetes versions.
 
-- 1.12
-- 1.13
 - 1.14
+- 1.15
+- 1.16
 
 Other versions are likely to work, but we do not actively test {{site.prodname}}
 {{page.version}} against them.
-
-Application Layer Policy requires Kubernetes 1.9 or later.
 
 #### CNI plug-in enabled
 

@@ -1,6 +1,5 @@
 ---
 title: Release notes
-redirect_from: latest/release-notes/index
 canonical_url: 'https://docs.projectcalico.org/v3.9/release-notes/index'
 ---
 

@@ -1,6 +1,5 @@
 ---
 title: Apply policy to Kubernetes node ports
-redirect_from: latest/security/kubernetes-node-ports
 ---
 
 ### Big picture
@@ -62,8 +61,8 @@ spec:
     - action: Allow
       source:
         nets: [1.2.3.4/16, 100.100.100.0/16]
-        selector: has(kubernetes-host)
     - action: Deny
+  selector: has(kubernetes-host)
 ```
 
 #### Allow local host egress traffic   

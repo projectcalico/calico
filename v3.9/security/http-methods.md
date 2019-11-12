@@ -1,6 +1,5 @@
 ---
 title: Use HTTP methods and paths in policy rules
-redirect_from: latest/security/http-methods
 ---
 
 ### Big picture

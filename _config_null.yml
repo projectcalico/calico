@@ -1,0 +1,2 @@
+# Pass this config file to jekyll to render all pages as raw markdown.
+markdown: NullConverter

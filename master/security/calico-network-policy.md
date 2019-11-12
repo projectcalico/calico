@@ -1,6 +1,6 @@
 ---
 title: Get started with Calico network policy
-description: Calico extends Kubernetes network policy to provide a richer set of capabilities including policy ordering/priority, deny rules, and more flexible match rules.
+description: Create your first Calico network policies. Shows the rich features using sample policies that extend native Kubernetes network policy.
 ---
 
 ### Big picture
@@ -68,7 +68,9 @@ metadata:
   name: allow-tcp-port-6379
 ```
 
-**Calico network policies and Calico global network policies** are applied using calicoctl. Syntax is similar to Kubernetes, but there a few differences. For help, see [calicoctl user reference]({{site.baseurl}}/{{page.version}}/reference/calicoctl/).
+#### kubectl vs calicoctl
+
+Calico network policies and Calico global network policies are applied using calicoctl. Syntax is similar to Kubernetes, but there a few differences. For help, see [calicoctl user reference]({{site.baseurl}}/{{page.version}}/reference/calicoctl/).
 
 #### Ingress and egress
 

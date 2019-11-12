@@ -1,6 +1,5 @@
 ---
 title: Use a specific IP address with a pod
-redirect_from: latest/networking/use-specific-ip
 ---
 
 ### Big picture

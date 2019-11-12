@@ -1,5 +1,6 @@
 ---
 title: Apply policy to Kubernetes node ports
+description: Restrict access to Kubernetes node ports using Calico global network policy. Learn the 4 steps to secure the host, the node ports, and the cluster. 
 ---
 
 ### Big picture
@@ -61,8 +62,8 @@ spec:
     - action: Allow
       source:
         nets: [1.2.3.4/16, 100.100.100.0/16]
-        selector: has(kubernetes-host)
     - action: Deny
+  selector: has(kubernetes-host)
 ```
 
 #### Allow local host egress traffic   

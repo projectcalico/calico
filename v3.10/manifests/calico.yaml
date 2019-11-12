@@ -1,0 +1,7 @@
+---
+layout: null
+---
+{% helm %}
+datastore: kubernetes
+network: calico
+{% endhelm %}

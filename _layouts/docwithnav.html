@@ -42,9 +42,6 @@ The code is a little roundabout for a few reasons:
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="docsearch:version" content="{{page.version}}">
-    {% if page.description %}
-    <meta name="description" content="{{ page.description }}">
-    {% endif %}
     <link rel="shortcut icon" type="image/png" href="{{site.baseurl}}/images/favicon.png">
     <link href='https://fonts.googleapis.com/css?family=Roboto:400,100,100italic,300,300italic,400italic,500,500italic,700,700italic,900,900italic' rel='stylesheet' type='text/css'>
     <link href="https://fonts.googleapis.com/css?family=Lato" rel="stylesheet">
@@ -57,6 +54,7 @@ The code is a little roundabout for a few reasons:
     <link rel="stylesheet" href="{{site.baseurl}}/{{ page.custom_css }}"/>
     {% endif %}
     <link href="https://www.projectcalico.org/wp-content/themes/dante/css/font-awesome.min.css" rel="stylesheet">
+    <link href="https://www.projectcalico.org/wp-content/plugins/wpfront-notification-bar/css/wpfront-notification-bar.css?ver=1.7.1" rel="stylesheet" type="text/css" media="all">
     <script src="{{site.baseurl}}/js/jquery-2.2.0.min.js"></script>
     <script src="{{site.baseurl}}/js/bootstrap/bootstrap.min.js"></script>
     <script src="{{site.baseurl}}/js/instantsearch/instantsearch.min.js"></script>
@@ -84,6 +82,7 @@ The code is a little roundabout for a few reasons:
     {% seo %}
   </head>
   <body>
+    <div id="wpfront-notification-bar-spacer" style="display: block; top: 0px; height: 55px;"><div id="wpfront-notification-bar-open-button" class="top wpfront-bottom-shadow" style="top: 0px; position: fixed; display: none;"></div><div id="wpfront-notification-bar" class="wpfront-fixed " style="top: 0px; height: 55px; position: fixed; visibility: visible; background-color: #004078;"><table border="0" cellspacing="0" cellpadding="0" style="height: 100%;"><tbody style="height: 100%;"><tr style="height: 100%;"><td><div class="wpfront-message">Will you be at KubeCon this year? Join us for CalicoCon 2019!</div><div><a class="wpfront-button" href="https://www.tigera.io/calicocon-2019/" target="_blank" style="background: #ff6f22; color: #fff; margin-left: 10px;">Learn More</a></div></td></tr></tbody></table></div></div>
     <!-- Google Tag Manager (noscript) -->
     <noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-5FQ2QV4" height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
     <!-- End Google Tag Manager (noscript) -->
@@ -108,7 +107,8 @@ The code is a little roundabout for a few reasons:
 
               <li class="active"><a href="{{site.baseurl}}/latest/introduction"><strong>{% if page.version == 'master' %}nightly{% else %}{{page.version}}{% endif %}<span class="caret"></span></strong></a>
                 <ul>
-                    <li><a href="{{site.baseurl}}/v3.9/introduction">v3.9 (latest)</a></li>
+                    <li><a href="{{site.baseurl}}/v3.10/introduction">v3.10 (latest)</a></li>
+                    <li><a href="{{site.baseurl}}/v3.9/introduction">v3.9</a></li>
                     <li><a href="{{site.baseurl}}/v3.8/introduction">v3.8</a></li>
                     <li><a href="{{site.baseurl}}/v3.7/introduction">v3.7</a></li>
                     <li><a href="{{site.baseurl}}/v3.6/introduction">v3.6</a></li>
@@ -204,7 +204,9 @@ The code is a little roundabout for a few reasons:
               <a data-proofer-ignore href="https://github.com/projectcalico/calico/tree/master/{{page.path}}" style="color: #999; text-decoration: none; float: right;" target="_blank"><i class="fa fa-github" aria-hidden="true"></i> Edit this page</a></div>
               <!-- END TOP DOCUMENTATION PAGE NAVBAR -->
               {% include version_warning.html %}
+              {% if page.show_title -%}
               <h1>{{ page.title }}</h1>
+              {% endif -%}
               {{ content }}
 
               <!-- BOTTOM DOCUMENTATION PAGE NAVBAR -->
@@ -274,5 +276,6 @@ The code is a little roundabout for a few reasons:
         window.initializeSearch('{{page.version}}', '.search-input-container', '.search-container', '.search-container__results', '.search-container__pagination');
       });
     </script>
+    <script src="https://www.projectcalico.org/wp-content/plugins/wpfront-notification-bar/js/wpfront-notification-bar.js?ver=1.7.1" type="text/javascript" ></script>
   </body>
 </html>

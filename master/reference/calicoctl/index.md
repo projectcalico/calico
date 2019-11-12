@@ -33,6 +33,7 @@ Usage:
     replace   Replace a resource by filename or stdin.
     apply     Apply a resource by filename or stdin.  This creates a resource
               if it does not exist, and replaces a resource if it does exists.
+    patch     Patch a pre-exisiting resource in place.
     delete    Delete a resource identified by file, stdin or resource type and
               name.
     get       Get a resource identified by file, stdin or resource type and
@@ -65,6 +66,7 @@ organized by top level command.
 -  [calicoctl create]({{site.baseurl}}/{{page.version}}/reference/calicoctl/create)
 -  [calicoctl replace]({{site.baseurl}}/{{page.version}}/reference/calicoctl/replace)
 -  [calicoctl apply]({{site.baseurl}}/{{page.version}}/reference/calicoctl/apply)
+-  [calicoctl patch]({{site.baseurl}}/{{page.version}}/reference/calicoctl/patch)
 -  [calicoctl delete]({{site.baseurl}}/{{page.version}}/reference/calicoctl/delete)
 -  [calicoctl get]({{site.baseurl}}/{{page.version}}/reference/calicoctl/get)
 -  [calicoctl label]({{site.baseurl}}/{{page.version}}/reference/calicoctl/label)
