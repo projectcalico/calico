@@ -235,7 +235,7 @@ func (s *Syncer) applyClusterIP(skey svcKey, sinfo k8sp.ServicePort,
 		svc:   sinfo,
 	}
 
-	log.Debugf("applied a service update: sinfo=%v", s.newSvcMap[skey])
+	log.Debugf("applied a service update: sinfo=%+v", s.newSvcMap[skey])
 
 	return nil
 }
@@ -262,7 +262,7 @@ func (s *Syncer) applyDerived(skey svcKey, sinfo k8sp.ServicePort,
 	}
 
 	s.newSvcMap[skey] = newInfo
-	log.Debugf("applied a derived service update: sinfo=%v", s.newSvcMap[skey])
+	log.Debugf("applied a derived service update: sinfo=%+v", s.newSvcMap[skey])
 
 	return nil
 }
@@ -362,7 +362,7 @@ func (s *Syncer) updateExistingSvc(sname k8sp.ServicePortName, sinfo k8sp.Servic
 
 	// No need to delete any old entries if we do reduce the number of backends
 	// as all the key:value are going to be rewritten/updated
-	if oldCount > len(eps) {
+	if oldCount > len(eps[sname]) {
 		for i := 0; i < oldCount; i++ {
 			if err := s.deleteSvcBackend(id, uint32(i)); err != nil {
 				return 0, err
@@ -386,11 +386,6 @@ func (s *Syncer) newSvc(sname k8sp.ServicePortName, sinfo k8sp.ServicePort, id u
 
 		cpEps = append(cpEps, ep)
 		i++
-	}
-
-	if i == 0 {
-		// probably never happens, but better to generate a lookup miss
-		return 0, nil
 	}
 
 	if err := s.writeSvc(sinfo, id, i); err != nil {

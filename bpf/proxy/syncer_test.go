@@ -370,6 +370,39 @@ var _ = Describe("BPF Syncer", func() {
 		Expect(val4).To(Equal(val2))
 	})
 
+	It("should delete backends if there are none for a service BPF-147", func() {
+		val, ok := svcs[bpfm.NewNATKey(net.IPv4(10, 0, 0, 2), 2222, proxy.ProtoV1ToIntPanic(v1.ProtocolTCP))]
+		Expect(ok).To(BeTrue())
+		count := val.Count()
+		for i := uint32(0); i < count; i++ {
+			Expect(eps).To(HaveKey(bpfm.NewNATBackendKey(val.ID(), i)))
+		}
+
+		// This testcase assumes there are at least as many backends in the
+		// EpsMap for other services left than the original number of services
+		// for the one being updated.`
+		delete(state.EpsMap, svcKey2)
+		Expect(int(count)).To(BeNumerically(">=", func() int {
+			cnt := 0
+			for _, v := range state.EpsMap {
+				cnt += len(v)
+			}
+			return cnt
+		}()))
+
+		log("state.SvcMap = %+v\n", state.SvcMap)
+		log("state.EpsMap = %+v\n", state.EpsMap)
+		err := s.Apply(state)
+		Expect(err).NotTo(HaveOccurred())
+
+		val, ok = svcs[bpfm.NewNATKey(net.IPv4(10, 0, 0, 2), 2222, proxy.ProtoV1ToIntPanic(v1.ProtocolTCP))]
+		Expect(ok).To(BeTrue())
+		Expect(val.Count()).To(Equal(uint32(0)))
+		for i := uint32(0); i < count; i++ {
+			Expect(eps).NotTo(HaveKey(bpfm.NewNATBackendKey(val.ID(), i)))
+		}
+	})
+
 	It("should delete the services", func() {
 		delete(state.SvcMap, svcKey2)
 		delete(state.SvcMap, svcKey3)
