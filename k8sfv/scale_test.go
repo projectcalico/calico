@@ -92,8 +92,8 @@ var _ = Context("with a k8s clientset", func() {
 				triggerFelixGCAndMemoryDump()
 
 				// Get current occupancy.
-				heapInUse := getFelixFloatMetric("go_memstats_heap_inuse_bytes")
-				heapAlloc := getFelixFloatMetric("go_memstats_heap_alloc_bytes")
+				heapInUse := getFelixFloatMetricOrPanic("go_memstats_heap_inuse_bytes")
+				heapAlloc := getFelixFloatMetricOrPanic("go_memstats_heap_alloc_bytes")
 				log.WithFields(log.Fields{
 					"iteration": ii,
 					"heapInUse": heapInUse,
@@ -225,7 +225,13 @@ var _ = Context("with a k8s clientset", func() {
 
 func expectFelixReady() {
 	EventuallyWithOffset(1,
-		func() int64 { return getFelixIntMetric("felix_resync_state") }, "10s").Should(
+		func() int64 {
+			state, err := getFelixIntMetric("felix_resync_state")
+			if err != nil {
+				log.WithError(err).Error("Failed to get felix stat.")
+			}
+			return state
+		}, "10s").Should(
 		BeNumerically("==", 3), "Felix never reported in-sync with datastore")
 }
 

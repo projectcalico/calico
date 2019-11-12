@@ -46,7 +46,7 @@ func getFelixMetric(name string) (metric string, err error) {
 	return
 }
 
-func getFelixFloatMetric(name string) float64 {
+func getFelixFloatMetricOrPanic(name string) float64 {
 	metricS, err := getFelixMetric(name)
 	panicIfError(err)
 	metric, err := strconv.ParseFloat(metricS, 64)
@@ -54,12 +54,16 @@ func getFelixFloatMetric(name string) float64 {
 	return metric
 }
 
-func getFelixIntMetric(name string) int64 {
+func getFelixIntMetric(name string) (int64, error) {
 	metricS, err := getFelixMetric(name)
-	panicIfError(err)
+	if err != nil {
+		return -1, err
+	}
 	metric, err := strconv.ParseInt(metricS, 10, 64)
-	panicIfError(err)
-	return metric
+	if err != nil {
+		return -1, err
+	}
+	return metric, nil
 }
 
 func getNumEndpoints() (int64, error) {
