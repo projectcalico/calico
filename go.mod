@@ -26,8 +26,7 @@ require (
 	github.com/philhofer/fwd v1.0.0 // indirect
 	github.com/pquerna/ffjson v0.0.0-20190813045741-dac163c6c0a9 // indirect
 	github.com/projectcalico/go-json v0.0.0-20161128004156-6219dc7339ba // indirect
-	github.com/projectcalico/go-yaml v0.0.0-20161201183616-955bc3e451ef // indirect
-	github.com/projectcalico/go-yaml-wrapper v0.0.0-20161127220527-598e54215bee
+	github.com/projectcalico/go-yaml-wrapper v0.0.0-20191112210931-090425220c54
 	github.com/prometheus/client_golang v0.0.0-20171005112915-5cec1d0429b0
 	github.com/prometheus/client_model v0.0.0-20170216185247-6f3806018612 // indirect
 	github.com/prometheus/common v0.0.0-20171104095907-e3fb1a1acd76 // indirect
@@ -47,6 +46,7 @@ require (
 	gopkg.in/go-playground/assert.v1 v1.2.1 // indirect
 	gopkg.in/go-playground/validator.v9 v9.27.0
 	gopkg.in/tchap/go-patricia.v2 v2.2.6
+	gopkg.in/yaml.v2 v2.2.5 // indirect
 	k8s.io/api v0.0.0-20190620084959-7cf5895f2711
 	k8s.io/apimachinery v0.0.0-20190612205821-1799e75a0719
 	k8s.io/client-go v12.0.0+incompatible
