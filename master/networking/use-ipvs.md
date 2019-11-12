@@ -14,7 +14,7 @@ No matter where you are on your journey with container networking, iptables will
 
 This how-to guide uses the following {{site.prodname}} features:
 
-- **FelixConfiguration** with KubeNodePortRanges environment variable
+- **FelixConfiguration** with KubeNodePortRanges
 
 ### Concepts
 
@@ -56,4 +56,4 @@ As previously discussed, there is nothing you need to do in {{site.prodname}} to
 
 #### Change {{site.prodname}} default nodeport range
 
-Using the Felix environment variable, `FELIX_KUBENODEPORTRANGES`, change the default node port range in {{site.prodname}} to match your new default range in Kubernetes. For help, see [Felix environment variables](https://docs.projectcalico.org/master/reference/felix/configuration#ipvs-bits). 
+In the FelixConfiguration resource, change the configuration parameter for the default node port range (`KubeNodePortRange`,) in {{site.prodname}} to match your new default range in Kubernetes. For help, see [FelixConfiguration](https://docs.projectcalico.org/master/reference/felix/configuration#). 
