@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2018 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2019 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -240,12 +240,13 @@ func (idx *SelectorAndNamedPortIndex) OnUpdate(update api.Update) (_ bool) {
 			// Figure out what's changed and update the cache.
 			log.Debugf("Updating NamedPortIndex for network set %v", key)
 			netSet := update.Value.(*model.NetworkSet)
+			profileIDs := netSet.ProfileIDs
 			idx.UpdateEndpointOrSet(
 				key,
 				netSet.Labels,
 				extractCIDRsFromNetworkSet(netSet),
 				nil,
-				nil)
+				profileIDs)
 		} else {
 			log.Debugf("Deleting network set %v from NamedPortIndex", key)
 			idx.DeleteEndpoint(key)

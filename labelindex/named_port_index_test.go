@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2019 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -73,6 +73,38 @@ var _ = Describe("SelectorAndNamedPortIndex", func() {
 			Expect(err).ToNot(HaveOccurred())
 			uut.UpdateIPSet("villains", s, ProtocolNone, "")
 			set, ok := recorder.ipsets["villains"]
+			Expect(ok).To(BeTrue())
+			Expect(set).To(HaveLen(1))
+		})
+	})
+
+	Describe("NetworkSet profiles", func() {
+		It("should inherit labels from profiles", func() {
+			uut.OnUpdate(api.Update{
+				KVPair: model.KVPair{
+					Key:   model.ProfileLabelsKey{ProfileKey: model.ProfileKey{Name: "doo"}},
+					Value: map[string]string{"superhero": "scooby"},
+				},
+			})
+			uut.OnUpdate(api.Update{
+				KVPair: model.KVPair{
+					Key: model.NetworkSetKey{Name: "scary-ns"},
+					Value: &model.NetworkSet{
+						Nets: []calinet.IPNet{
+							{IPNet: net.IPNet{
+								IP:   net.IP{192, 168, 20, 1},
+								Mask: net.IPMask{255, 255, 0, 0},
+							}},
+						},
+						Labels:     map[string]string{"villain": "ghost"},
+						ProfileIDs: []string{"doo"},
+					},
+				},
+			})
+			s, err := selector.Parse("villain == 'ghost' && superhero == 'scooby'")
+			Expect(err).ToNot(HaveOccurred())
+			uut.UpdateIPSet("scoobydoobydoo", s, ProtocolNone, "")
+			set, ok := recorder.ipsets["scoobydoobydoo"]
 			Expect(ok).To(BeTrue())
 			Expect(set).To(HaveLen(1))
 		})

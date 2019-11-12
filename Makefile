@@ -148,14 +148,14 @@ PROTOC_CONTAINER ?=calico/protoc:$(PROTOC_VER)-$(BUILDARCH)
 
 FV_ETCDIMAGE?=quay.io/coreos/etcd:$(ETCD_VERSION)-$(BUILDARCH)
 FV_K8SIMAGE?=gcr.io/google_containers/hyperkube-$(BUILDARCH):$(K8S_VERSION)
-FV_TYPHAIMAGE?=calico/typha:latest-$(BUILDARCH)
+FV_TYPHAIMAGE?=calico/typha:master-$(BUILDARCH)
 FV_FELIXIMAGE?=calico/felix:latest-$(BUILDARCH)
 
 # If building on amd64 omit the arch in the container name.  Fixme!
 ifeq ($(BUILDARCH),amd64)
 	FV_ETCDIMAGE=quay.io/coreos/etcd:$(ETCD_VERSION)
 	FV_K8SIMAGE=gcr.io/google_containers/hyperkube:$(K8S_VERSION)
-	FV_TYPHAIMAGE=calico/typha:v0.7.2-25-g4314704
+	FV_TYPHAIMAGE=calico/typha:master
 endif
 
 # Total number of ginkgo batches to run.  The CI system sets this according to the number
@@ -242,9 +242,7 @@ local_build:
 	$(DOCKER_RUN) $(CALICO_BUILD) go mod edit -replace=github.com/projectcalico/pod2daemon=../pod2daemon
 else
 local_build:
-	-$(DOCKER_RUN) $(CALICO_BUILD) go mod edit -dropreplace=github.com/projectcalico/libcalico-go
-	-$(DOCKER_RUN) $(CALICO_BUILD) go mod edit -dropreplace=github.com/projectcalico/typha
-	-$(DOCKER_RUN) $(CALICO_BUILD) go mod edit -dropreplace=github.com/projectcalico/pod2daemon
+	@echo "Building felix"
 endif
 
 DOCKER_RUN := mkdir -p .go-pkg-cache $(GOMOD_CACHE) && \

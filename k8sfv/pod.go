@@ -198,25 +198,20 @@ func removeLocalPodNetworking(pod *v1.Pod) {
 	if ln != nil {
 		log.WithField("key", key).Info("Cleanup local networking")
 
-		// Delete pod-side interface.
-		err := ln.namespace.Do(func(_ ns.NetNS) error {
-			return netlink.LinkDel(ln.podIf)
-		})
+		// Delete host-side interface.  This deletes the pod-side as a side-effect.
+		err := netlink.LinkDel(ln.hostIf)
 		panicIfError(err)
-
-		// Delete host-side interface.  Actually it seems this has already happened as part
-		// of the pod-side interface being deleted just above; so we don't need a separate
-		// operation here.
-		//err = netlink.LinkDel(ln.hostIf)
-		//panicIfError(err)
+		log.WithField("key", key).Info("Cleaned up pod iface")
 
 		// Delete namespace.
 		err = ln.namespace.Close()
 		panicIfError(err)
+		log.WithField("key", key).Info("Closed namespace")
 
 		// Delete local networking details.
 		delete(localNetworkingMap, key)
 	}
+	log.WithField("key", key).Info("Removed pod networking")
 }
 
 var GetNextPodAddr = ipAddrAllocator("10.28.%d.%d")
@@ -224,9 +219,8 @@ var GetNextPodAddr = ipAddrAllocator("10.28.%d.%d")
 func cleanupAllPods(clientset *kubernetes.Clientset, nsPrefix string) {
 	log.WithField("nsPrefix", nsPrefix).Info("Cleaning up all pods...")
 	nsList, err := clientset.CoreV1().Namespaces().List(metav1.ListOptions{})
-	if err != nil {
-		panic(err)
-	}
+	panicIfError(err)
+
 	log.WithField("count", len(nsList.Items)).Info("Namespaces present")
 	podsDeleted := 0
 	admission := make(chan int, 10)
@@ -234,21 +228,24 @@ func cleanupAllPods(clientset *kubernetes.Clientset, nsPrefix string) {
 	waiter.Add(len(nsList.Items))
 	for _, ns := range nsList.Items {
 		nsName := ns.ObjectMeta.Name
+		log.Infof("Queueing examination of namespace: %v", nsName)
 		go func() {
 			admission <- 1
 			if strings.HasPrefix(nsName, nsPrefix) {
+				log.Infof("Namespace matches prefix, getting pods: %v", nsName)
+
 				podList, err := clientset.CoreV1().Pods(nsName).List(metav1.ListOptions{})
-				if err != nil {
-					panic(err)
-				}
+				panicIfError(err)
+
 				log.WithField("count", len(podList.Items)).WithField("namespace", nsName).Debug(
 					"Pods present")
 				for _, pod := range podList.Items {
+					log.Infof("Deleting pod: %v", pod.ObjectMeta.Name)
 					err = clientset.CoreV1().Pods(nsName).Delete(pod.ObjectMeta.Name, deleteImmediately)
-					if err != nil {
-						panic(err)
-					}
+					panicIfError(err)
+					log.Infof("Deleted pod, cleaning up its netns: %v", pod.ObjectMeta.Name)
 					removeLocalPodNetworking(&pod)
+					log.Infof("Cleaned up pod netns: %v", pod.ObjectMeta.Name)
 				}
 				podsDeleted += len(podList.Items)
 			}
@@ -258,11 +255,12 @@ func cleanupAllPods(clientset *kubernetes.Clientset, nsPrefix string) {
 	}
 	waiter.Wait()
 
+	log.WithField("podsDeleted", podsDeleted).Info("Cleaned up all pods, checking metrics...")
 	Eventually(getNumEndpointsDefault(-1), "30s", "1s").Should(
 		BeNumerically("==", 0),
 		"Removal of pods wasn't reflected in Felix metrics",
 	)
-	log.WithField("podsDeleted", podsDeleted).Info("Cleaned up all pods")
+	log.WithField("podsDeleted", podsDeleted).Info("Pod cleanup done.")
 }
 
 var zeroGracePeriod int64 = 0

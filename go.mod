@@ -26,9 +26,9 @@ require (
 	github.com/onsi/gomega v1.5.0
 	github.com/opentracing/opentracing-go v0.0.0-20190704175813-135aa78c6f95 // indirect
 	github.com/pkg/errors v0.8.1
-	github.com/projectcalico/libcalico-go v0.0.0-20191006160109-16b05e93ecfd
+	github.com/projectcalico/libcalico-go v0.0.0-20191104214504-aa6a608ee1fe
 	github.com/projectcalico/pod2daemon v0.0.0-20190730210055-df57fc59e2e1
-	github.com/projectcalico/typha v0.0.0-20191007041628-d0edd16642bc
+	github.com/projectcalico/typha v0.0.0-20191104234117-ab7cc2290b27
 	github.com/prometheus/client_golang v0.9.2
 	github.com/rogpeppe/go-internal v1.5.0 // indirect
 	github.com/satori/go.uuid v1.2.0
@@ -50,7 +50,7 @@ require (
 	gopkg.in/ini.v1 v1.46.0 // indirect
 	k8s.io/api v0.0.0
 	k8s.io/apimachinery v0.0.0
-	k8s.io/client-go v8.0.0+incompatible
+	k8s.io/client-go v12.0.0+incompatible
 	k8s.io/kubernetes v1.15.0
 )
 

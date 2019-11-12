@@ -1,4 +1,4 @@
-// Copyright (c) 2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017,2019 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -22,7 +22,6 @@ import (
 )
 
 var _ = Context("least squares", func() {
-
 	It("should fit a straight line", func() {
 		p := []leastsquares.Point{
 			{X: 1, Y: 1},
