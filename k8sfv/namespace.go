@@ -1,4 +1,4 @@
-// Copyright (c) 2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017,2019 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -86,9 +86,7 @@ func cleanupAllNamespaces(clientset *kubernetes.Clientset, nsPrefix string) {
 	for _, ns := range nsList.Items {
 		if strings.HasPrefix(ns.ObjectMeta.Name, nsPrefix) {
 			err = clientset.CoreV1().Namespaces().Delete(ns.ObjectMeta.Name, deleteImmediately)
-			if err != nil {
-				panic(err)
-			}
+			panicIfError(err)
 		} else {
 			log.WithField("name", ns.ObjectMeta.Name).Debug("Namespace skipped")
 		}
@@ -119,7 +117,7 @@ func createNetworkPolicy(clientset *kubernetes.Clientset, namespace string) {
 			},
 		},
 	}
-	_, err := clientset.NetworkingV1().NetworkPolicies("").Create(&np)
+	_, err := clientset.NetworkingV1().NetworkPolicies(namespace).Create(&np)
 	if err != nil {
 		log.WithField("name", namespace).WithError(err).Error("failed to create namespace for network policy")
 	}
