@@ -1,130 +1,100 @@
 ---
-title: Configuring MTU
-redirect_from: latest/networking/mtu
-canonical_url: 'https://docs.projectcalico.org/v3.9/networking/mtu'
+title: Configure MTU to maximize network performance
+Description: Optimize network performance for workloads by configuring the MTU in Calico to best suit your underlying network.
+canonical_url: 'https://docs.projectcalico.org/v3.10/networking/mtu'
 ---
 
-Depending on the environment {{site.prodname}} is being deployed into it may be
-helpful or even necessary to configure the MTU of the veth (or TAP) that is
-attached to each workload and the tunnel devices if IP-in-IP or VXLAN is enabled.
+### Big picture
 
-### Selecting MTU size
+Configure the maximum transmission unit (MTU) for your {{site.prodname}} environment.
 
-Since MTU is a global property of the network path between endpoints, the MTU for 
-workloads needs to be set to the minimum MTU of any path that packets may take.
+### Value
 
-If you are using an overlay such as IP-in-IP or VXLAN, the extra overlay header
-used by those protocols reduces the minimum MTU by the size of the header.  IP-in-IP uses
-a 20-byte header, VXLAN uses a 50-byte header.  Hence,
+Optimize network performance for workloads by configuring the MTU in {{site.prodname}} to best suit your underlying network.
 
-- If you use VXLAN anywhere in your pod network, you should select an MTU which is
-  network MTU minus 50.
-- If you do not use VXLAN but you do use IP-in-IP, you should select an MTU which is
-  network MTU minus 20.
+Increasing the MTU can improve performance, and decreasing the MTU can resolve packet loss and fragmentation problems when it is too high.
+
+### Features
+
+This how-to guide uses the following {{site.prodname}} features:
+
+- **FelixConfiguration** resource
+
+### Concepts
+
+#### MTU and {{site.prodname}} defaults
+
+The maximum transmission unit (MTU) setting determines the largest packet size that can be transmitted through your network. MTU is configured on the veth attached to each workload, and tunnel devices (if you enable IP in IP and/or VXLAN).
+
+In general, maximum performance is achieved by using the highest MTU value that does not cause fragmentation or drop packets on the path.  Maximum bandwidth increases and CPU consumption may drop for a given traffic rate.  The improvement is often more significant when pod to pod traffic is being encapsulated (IP in IP or VXLAN), and splitting and combining such traffic cannot be offloaded to your NICs.
+
+For example, if you are using AWS, you may be able to use jumbo frames up to 9000 bytes. If you are using {{site.prodname}} overlay networks, you may need to adjust the MTU settings to ensure packets aren’t lost or dropped from the size is being too high.
+
+### Before you begin...
+
+For help using IP in IP and/or VXLAN overlays, see [Configure overlay networking]({{site.baseurl}}/{{page.version}}/networking/vxlan-ipip).
+
+### How to
+
+- [Determine MTU size](#determine-mtu-size)
+- [Configure MTU for workloads](#configure-mtu-for-workloads)
+- [Configure MTU for overlay networking](#configure-mtu-for-overlay-networking)
+- [View current tunnel MTU values](#view-current-tunnel-mtu-values)
+
+#### Determine MTU size
+
+The following table lists common MTU sizes for {{site.prodname}} environments. Because MTU is a global property of the network path between endpoints, you should set the MTU to the minimum MTU of any path that packets may take. 
+
+**Common MTU sizes**
+
+| Network MTU            | {{site.prodname}} MTU | {{site.prodname}} MTU with IP-in-IP (IPv4) | {{site.prodname}} MTU with VXLAN (IPv4) |
+| ---------------------- | --------------------- | ------------------------------------------ | --------------------------------------- |
+| 1500                   | 1500                  | 1480                                       | 1450                                    |
+| 9000                   | 9000                  | 8980                                       | 8950                                    |
+| 1460 (GCE)             | 1460                  | 1440                                       | 1410                                    |
+| 9001 (AWS Jumbo)       | 9001                  | 8981                                       | 8951                                    |
+| 1450 (OpenStack VXLAN) | 1450                  | 1430                                       | 1400                                    |
+
+**Recommended MTU for overlay networking**
+
+The extra overlay header used in IP in IP and VXLAN protocols, reduces the minimum MTU by the size of the header. (IP in IP uses a 20-byte header, and VXLAN uses a 50-byte header). Therefore, we recommend the following:
+
+- If you use VXLAN anywhere in your pod network, configure MTU size as “physical network MTU size minus 50”. 
+- If you use only IP in IP, configure MTU size as “physical network MTU size minus 20”
+- Set the workload endpoint MTU and the tunnel MTUs to the same value (so all paths have the same MTU)
+
+**MTU for flannel networking**
+
+When using flannel for networking, the MTU for network interfaces should match the MTU of the flannel interface. If using flannel with VXLAN, use the “{{site.prodname}} MTU with VXLAN” column in the table above for common sizes. 
+
+#### Configure MTU for workloads
   
-You should set the workload endpoint MTU **and** the tunnel MTUs to the same value.
-This is so that all paths have the same MTU.
+When you set the MTU, it applies to new workloads. To apply MTU changes to existing workloads, you must restart calico nodes. Restarting the calico/node pods takes values from the ConfigMap and starts rolling updates for any {{site.prodname}} tunnel network interfaces on the node. 
 
-#### Common MTU sizes
+Edit the `calico-config` ConfigMap to set values in FelixConfiguration. For example:
 
-| Network MTU | {{site.prodname}} MTU | {{site.prodname}} MTU with IP-in-IP | {{site.prodname}} MTU with VXLAN (IPv4) |
-|-------------|------------|--------------------------|------------------------------|
-| 1500 | 1500 | 1480 | 1450 |
-| 9000 | 9000 | 8980 | 8950 |
-| 1460 (GCE) | 1460 | 1440 | 1410 |
-| 9001 (AWS Jumbo) | 9001 | 8981 | 8951 |
-| 1450 (OpenStack VXLAN) | 1450 | 1430 | 1400 |
-
-#### Default MTU sizes
-
-The default MTU for workload interfaces is 1500, this is to match the most
-common network MTU size. The default MTU for the IP-in-IP tunnel device
-is 1440 to match the value needed in GCE.  Similarly, the default for VXLAN
-is 1410.
-
-#### Using flannel for networking
-
-When using flannel for networking, the MTU for the network interfaces
-should match the MTU of the flannel interface.  In the above table the 4th
-column "{{site.prodname}} MTU with VXLAN" is the expected MTU when using flannel
-configured with VXLAN.
-
-## MTU configuration
-
-It is the job of the network plugin to create new workload interfaces.  The CNI plugin, which is used by
-Kubernetes, supports configuring the MTU of the workload interface through the CNI configuration file.
-
-The user will also want to configure {{site.prodname}}'s IP-in-IP/VXLAN interface MTU when
-IP-in-IP/VXLAN is enabled on the cluster. Refer to the MTU table at the top of the page
-to choose the value that matches your environment.
-
-> **Note**: The MTU on existing workloads will not be updated with these changes. To update
-workload MTUs, see the section that corresponds to your plugin type.
-{: .alert .alert-info}
-
-### MTU configuration with CNI
-
-MTU is set in the by the `"mtu": <MTU size>` field of the CNI configuration. Example:
-
-```json
-  {
-    "name": "any_name",
-    "cniVersion": "0.1.0",
-    "type": "calico",
-    "mtu": 1480,
-    "ipam": {
-      "type": "calico-ipam"
-    }
-  }
+```
+kubectl patch configmap/{{site.prodname}}-config -n kube-system --type merge \
+  -p '{"data":{"veth_mtu": "1440"}}'
 ```
 
-> **Note**: If using Kubernetes self-hosted manifests, you should modify the
-`veth_mtu` value in the {{site.prodname}} ConfigMap instead, and leave `"mtu"` here
-set to `__CNI_MTU__`. See below for more details.
-{: .alert .alert-info}
+#### Configure MTU for overlay networking
 
-### MTU configuration with Kubernetes self-hosted manifests
+If you are using IP in IP and/or VXLAN for {{site.prodname}} overlay networking, set the tunnel MTU to match the value that you configured for the veth MTU. 
 
-When using Kubernetes self-hosted manifests, the CNI plugin derives the MTU value
-from the `veth_mtu` field of the calico-config ConfigMap, and it is set to `1440`
-by default. On restart of the `{{site.nodecontainer}}` pods, any references to
-`__CNI_MTU__` are replaced by the `veth_mtu` value and inserted into the CNI
-configuration file (aka conflist) at the directory specified by Kubernetes
-(currently defaults to `/etc/cni/net.d/`).
+Edit `calico-config ConfigMap` to set the MTU tunnel values in FelixConfiguration. For example: 
 
-Restarting the `{{site.nodecontainer}}` pods will also update any {{site.prodname}}
-tunnel network interfaces on that node. From this point forward, any pods
-started will also have the updated MTU value.
-
-### Setting tunnel MTU with a Felix environment variable
-
-Passing in the environment variable `FELIX_IPINIPMTU` (or `FELIX_VXLANMTU`) when running the
-`{{site.nodecontainer}}` container will set the MTU for Felix to use.
-
-When using the Kubernetes self-hosted manifests, Felix derives the IP-in-IP value from
-the `veth_mtu` field of the calico-config ConfigMap, which is set to `1440` by default.
-
-### Setting tunnel MTU with calicoctl
-
-To set the IP-in-IP MTU value for all {{site.prodname}} nodes in your cluster, use the
-following command to retrieve the current Felix settings.
-
-```bash
-calicoctl get felixconfig default --export -o yaml > felix.yaml
+```
+# Configure the MTU to use
+veth_mtu: "1440" 
 ```
 
-Modify ipipMTU (or vxlanMTU) to the intended integer value.
+#### View current tunnel MTU values
 
-```bash
-vim felix.yaml
-```
+To view the current tunnel size, use the following command: 
 
-Replace the current felixconfig settings.
+`ip link show`
 
-```bash
-calicoctl replace -f felix.yaml
-```
+The IP in IP tunnel appears as tunlx (for example, tunl0), along with the MTU size. For example:
 
-> **Note**: Setting the `ipipMTU` (of `vxlanMTU`) config option will result in an immediate
-> update of the tunnel interface MTU on all of the active nodes in your cluster.
-{: .alert .alert-info}
+![Tunnel MTU]({{site.baseurl}}/images/tunnel.png)

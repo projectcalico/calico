@@ -20,7 +20,7 @@ toc:
   path: /networking/external-connectivity
 - title: Configuring a node IP address and subnet
   path: /networking/node
-- title: Configuring MTU
+- title: Configure MTU to maximize network performance
   path: /networking/mtu
 - title: Advertising Kubernetes services
   path: /networking/service-advertisement
