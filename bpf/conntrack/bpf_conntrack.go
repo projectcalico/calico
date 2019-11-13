@@ -282,12 +282,6 @@ func (l *LivenessScanner) Scan() {
 		}).Debug("Examining conntrack entry")
 
 		now := l.NowNanos()
-		sinceCreation := time.Duration(now - ctVal.Created())
-
-		if sinceCreation < l.timeouts.CreationGracePeriod {
-			log.Debug("Conntrack entry in creation grace period. Ignoring.")
-			return
-		}
 
 		switch ctVal.Type() {
 		case ValueTypeNATForward:
@@ -344,6 +338,12 @@ func (l *LivenessScanner) Scan() {
 }
 
 func (l *LivenessScanner) EntryExpired(nowNanos int64, proto uint8, entry Entry) (reason string, expired bool) {
+	sinceCreation := time.Duration(nowNanos - entry.Created())
+	if sinceCreation < l.timeouts.CreationGracePeriod {
+		log.Debug("Conntrack entry in creation grace period. Ignoring.")
+		return
+	}
+
 	age := time.Duration(nowNanos - entry.LastSeen())
 	switch proto {
 	case ProtoTCP:

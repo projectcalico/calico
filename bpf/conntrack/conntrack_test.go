@@ -20,6 +20,8 @@ import (
 	"net"
 	"time"
 
+	"github.com/projectcalico/felix/bpf"
+
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
@@ -38,7 +40,7 @@ var (
 	icmpKey = conntrack.MakeKey(conntrack.ProtoICMP, ip1, 1234, ip2, 3456)
 
 	timeouts = conntrack.Timeouts{
-		CreationGracePeriod: 10 * time.Second,
+		CreationGracePeriod: 1 * time.Second,
 		TCPPreEstablished:   20 * time.Second,
 		TCPEstablished:      time.Hour,
 		TCPFinsSeen:         30 * time.Second,
@@ -58,7 +60,7 @@ var (
 	tcpJustCreated        = tcpEntry(now-1, now-1, conntrack.Leg{SynSeen: true}, conntrack.Leg{})
 	tcpHandshakeTimeout   = tcpEntry(now-22*time.Second, now-21*time.Second, conntrack.Leg{SynSeen: true}, conntrack.Leg{})
 	tcpHandshakeTimeout2  = tcpEntry(now-22*time.Second, now-21*time.Second, conntrack.Leg{SynSeen: true}, conntrack.Leg{SynSeen: true, AckSeen: true})
-	tcpEstablished        = tcpEntry(now-time.Second, now-1, conntrack.Leg{SynSeen: true, AckSeen: true}, conntrack.Leg{SynSeen: true, AckSeen: true})
+	tcpEstablished        = tcpEntry(now-(10*time.Second), now-1, conntrack.Leg{SynSeen: true, AckSeen: true}, conntrack.Leg{SynSeen: true, AckSeen: true})
 	tcpEstablishedTimeout = tcpEntry(now-(3*time.Hour), now-(2*time.Hour), conntrack.Leg{SynSeen: true, AckSeen: true}, conntrack.Leg{SynSeen: true, AckSeen: true})
 	tcpSingleFin          = tcpEntry(now-(3*time.Hour), now-(50*time.Minute), conntrack.Leg{SynSeen: true, AckSeen: true, FinSeen: true}, conntrack.Leg{SynSeen: true, AckSeen: true})
 	tcpSingleFinTimeout   = tcpEntry(now-(3*time.Hour), now-(2*time.Hour), conntrack.Leg{SynSeen: true, AckSeen: true, FinSeen: true}, conntrack.Leg{SynSeen: true, AckSeen: true})
@@ -82,6 +84,9 @@ var _ = Describe("BPF Conntrack LivenessCalculator", func() {
 	BeforeEach(func() {
 		ctMap = mock.NewMockMap(conntrack.MapParams)
 		lc = conntrack.NewLivenessScanner(timeouts, ctMap)
+		lc.NowNanos = func() int64 {
+			return int64(now)
+		}
 	})
 
 	DescribeTable(
@@ -104,6 +109,28 @@ var _ = Describe("BPF Conntrack LivenessCalculator", func() {
 			if expired {
 				Expect(reason).ToNot(BeEmpty())
 			}
+
+			By("correctly handling the entry as part of a scan")
+			err := ctMap.Update(key.AsBytes(), entry[:])
+			Expect(err).NotTo(HaveOccurred())
+
+			lc.Scan()
+			_, err = ctMap.Get(key.AsBytes())
+			if expExpired {
+				Expect(bpf.IsNotExists(err)).To(BeTrue(), "Scan() should have cleaned up entry")
+			} else {
+				Expect(err).NotTo(HaveOccurred(), "Scan() deleted entry unexpectedly")
+			}
+
+			By("always deleting the entry if we fast-forward time")
+			err = ctMap.Update(key.AsBytes(), entry[:])
+			Expect(err).NotTo(HaveOccurred())
+			lc.NowNanos = func() int64 {
+				return int64(now + 2*time.Hour)
+			}
+			lc.Scan()
+			_, err = ctMap.Get(key.AsBytes())
+			Expect(bpf.IsNotExists(err)).To(BeTrue(), "Scan() should have cleaned up entry")
 		},
 		Entry("TCP just created", tcpKey, tcpJustCreated, false),
 		Entry("TCP handshake timeout", tcpKey, tcpHandshakeTimeout, true),
