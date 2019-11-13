@@ -25,22 +25,21 @@ gcloud config set project $project
 gcloud auth activate-service-account --key-file=$HOME/secrets/secret.google-service-account-key.json
 
 function create-vm() {
-  set -e
   gcloud --quiet compute instances create "${vm_name}" \
            --zone=${zone} \
            --machine-type=n1-standard-4 \
            --image=ubuntu-1910-eoan-v20191022 \
            --image-project=ubuntu-os-cloud \
            --boot-disk-size=20GB \
-           --boot-disk-type=pd-standard
+           --boot-disk-type=pd-standard && \
   for ssh_try in $(seq 1 10); do
     echo "Trying to SSH in: $ssh_try"
     gcloud --quiet compute ssh --zone=${zone} "ubuntu@${vm_name}" -- echo "Success" && break
     sleep 1
-  done
-  gcloud --quiet compute ssh --zone=${zone} "ubuntu@${vm_name}" -- sudo apt-get update -y
-  gcloud --quiet compute ssh --zone=${zone} "ubuntu@${vm_name}" -- sudo apt-get install -y --no-install-recommends git make iproute2 docker.io
-  gcloud --quiet compute ssh --zone=${zone} "ubuntu@${vm_name}" -- sudo usermod -a -G docker ubuntu
+  done  && \
+  gcloud --quiet compute ssh --zone=${zone} "ubuntu@${vm_name}" -- sudo apt-get update -y && \
+  gcloud --quiet compute ssh --zone=${zone} "ubuntu@${vm_name}" -- sudo apt-get install -y --no-install-recommends git make iproute2 docker.io && \
+  gcloud --quiet compute ssh --zone=${zone} "ubuntu@${vm_name}" -- sudo usermod -a -G docker ubuntu && \
   gcloud --quiet compute scp --zone=${zone} --recurse --compress "$(pwd)" "ubuntu@${vm_name}:"
 }
 

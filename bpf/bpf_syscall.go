@@ -121,10 +121,7 @@ func GetMapEntry(mapFD MapFD, k []byte, valueSize int) ([]byte, error) {
 }
 
 func IsNotExists(err error) bool {
-	if err == unix.ENOENT {
-		return true
-	}
-	return false
+	return err == unix.ENOENT
 }
 
 func DeleteMapEntry(mapFD MapFD, k []byte) error {
