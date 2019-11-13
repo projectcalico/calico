@@ -139,6 +139,10 @@ function precheck_pub_rpms {
 
 # Execution of the requested steps.
 
+function docker_run_rm {
+    docker run --rm --user `id -u`:`id -g` -v $(dirname `pwd`):/code -w /code/$(basename `pwd`) "$@"
+}
+
 function do_bld_images {
     # Build the docker images that we use for building for each target platform.
     pushd ${rootdir}/docker-build-images
@@ -167,16 +171,39 @@ function do_net_cal {
     NETWORKING_CALICO_REPO=${NETWORKING_CALICO_REPO:-https://opendev.org/openstack/networking-calico.git}
     git clone $NETWORKING_CALICO_REPO -b $NETWORKING_CALICO_CHECKOUT
     cd networking-calico
-    # When NETWORKING_CALICO_CHECKOUT is a Git tag, set FORCE_VERSION
-    # to ensure that we build packages with version equal to _that_
-    # tag.  Otherwise, if there are other tags on the checkout commit,
-    # we might pick up one of those by mistake.
-    if [ "`git tag -l $NETWORKING_CALICO_CHECKOUT --points-at`" = $NETWORKING_CALICO_CHECKOUT ]; then
-	export FORCE_VERSION=$NETWORKING_CALICO_CHECKOUT
+    if [ "`git tag -l $NETWORKING_CALICO_CHECKOUT --points-at HEAD`" = $NETWORKING_CALICO_CHECKOUT ]; then
+	# NETWORKING_CALICO_CHECKOUT is a Git tag, so set to build
+	# packages with version equal to _that_ tag.
+	nc_ver_pbr=$NETWORKING_CALICO_CHECKOUT
+	nc_ver_deb=$NETWORKING_CALICO_CHECKOUT
+	nc_ver_rpm=$NETWORKING_CALICO_CHECKOUT
+    else
+	# NETWORKING_CALICO_CHECKOUT is not a Git tag - which usually
+	# means it is 'master', but it could also be an arbitrary
+	# commit that we are packaging for pre-release testing.  In
+	# this case use PBR to compute a nice version; this will be
+	# <tag>.dev<num>, where <tag> is the latest tag that is an
+	# ancestor of the current commit, and <num> is the number of
+	# commits since that tag.
+	nc_ver_pbr=`docker_run_rm -i calico-build/bionic python - <<'EOF'
+import pbr.version
+print pbr.version.VersionInfo('networking-calico').release_string()
+EOF`
+	nc_ver_deb=`docker_run_rm -i calico-build/bionic python - <<'EOF'
+import pbr.version
+print pbr.version.VersionInfo('networking-calico').semantic_version().debian_string()
+EOF`
+	nc_ver_rpm=`docker_run_rm -i calico-build/bionic python - <<'EOF'
+import pbr.version
+print pbr.version.VersionInfo('networking-calico').semantic_version().rpm_string()
+EOF`
     fi
     PKG_NAME=networking-calico \
 	    NAME=networking-calico \
 	    DEB_EPOCH=1: \
+	    FORCE_VERSION=${nc_ver_pbr} \
+	    FORCE_VERSION_DEB=${nc_ver_deb} \
+	    FORCE_VERSION_RPM=${nc_ver_rpm} \
 	    ../utils/make-packages.sh deb rpm
     popd
 }
@@ -207,10 +234,6 @@ function do_etcd3gw {
     pushd ${rootdir}/etcd3gw
     PKG_NAME=python-etcd3gw ../utils/make-packages.sh rpm
     popd
-}
-
-function docker_run_rm {
-    docker run --rm --user `id -u`:`id -g` -v $(dirname `pwd`):/code -w /code/$(basename `pwd`) "$@"
 }
 
 function do_dnsmasq {

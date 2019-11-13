@@ -35,7 +35,7 @@ for package_type in "$@"; do
 
 	deb )
 	    # The Debian version that we are about to generate.
-	    debver=`git_version_to_deb ${version}`
+	    debver=${FORCE_VERSION_DEB:-`git_version_to_deb ${version}`}
 	    debver=`strip_v ${debver}`
 
 	    # Current time in Debian changelog format; e.g. Wed, 02
@@ -65,23 +65,8 @@ EOF
 		} > debian/changelog
 
 		if [ ${PKG_NAME} = networking-calico ]; then
-		    if [ "$FORCE_VERSION" ]; then
-			# When FORCE_VERSION is specified, that is also the PBR version
-			# that we should set.  Note: this is relevant in particular when
-			# there are multiple version tags on the same networking-calico
-			# commit (which is quite common as networking-calico doesn't
-			# change much).  The alternative, automated method, just below,
-			# is currently broken when there are multiple tags on the same
-			# commit; see https://bugs.launchpad.net/pbr/+bug/1453996.
-			pbr_version=$FORCE_VERSION
-		    else
-			pbr_version=`${DOCKER_RUN_RM} -i calico-build/${series} python - <<'EOF'
-import pbr.version
-print pbr.version.VersionInfo('networking-calico').release_string()
-EOF`
-		    fi
 		    # Update PBR_VERSION setting in debian/rules.
-		    sed -i "s/^export PBR_VERSION=.*$/export PBR_VERSION=${pbr_version}/" debian/rules
+		    sed -i "s/^export PBR_VERSION=.*$/export PBR_VERSION=${FORCE_VERSION}/" debian/rules
 		fi
 
 		${DOCKER_RUN_RM} calico-build/${series} dpkg-buildpackage -I -S
@@ -99,7 +84,7 @@ EOF
 	rpm )
 	    rpm_spec=rpm/${PKG_NAME}.spec
 	    if [ -f ${rpm_spec}.in ]; then
-		debver=`git_version_to_rpm ${version}`
+		debver=${FORCE_VERSION_RPM:-`git_version_to_rpm ${version}`}
 		debver=`strip_v ${debver}`
 		cp -f ${rpm_spec}.in ${rpm_spec}
 
