@@ -13,7 +13,8 @@ require (
 	github.com/onsi/ginkgo v1.8.0
 	github.com/onsi/gomega v1.5.0
 	github.com/pborman/uuid v0.0.0-20150603214016-ca53cad383ca // indirect
-	github.com/projectcalico/libcalico-go v0.0.0-20191104214504-aa6a608ee1fe
+	github.com/projectcalico/go-yaml v0.0.0-20161201183616-955bc3e451ef // indirect
+	github.com/projectcalico/libcalico-go v0.0.0-20191112223013-362a04d5e109
 	github.com/prometheus/client_golang v0.9.1
 	github.com/prometheus/client_model v0.0.0-20190129233127-fd36f4220a90 // indirect
 	github.com/prometheus/common v0.0.0-20190416093430-c873fb1f9420 // indirect
