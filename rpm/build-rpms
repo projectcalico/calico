@@ -11,33 +11,6 @@ fi
 repo=`pwd`
 pkg=`basename $repo`
 
-if [ ${pkg} = networking-calico ]; then
-    # networking-calico uses an OpenStack thing called PBR (Python
-    # Build Reasonableness), which is responsible among other things
-    # for automatically computing the Python package-level version.
-    # It does this from the Git context (tags etc.), or from an
-    # environment variable PBR_VERSION if Git context is not
-    # available.  We have Git context here, but will remove that (with
-    # --exclude-vcs) from the source tarball that we pass to rpmbuild,
-    # so we calculate PBR_VERSION now and then add that to the
-    # environment for rpmbuild.
-    if [ "$FORCE_VERSION" ]; then
-	# When FORCE_VERSION is specified, that is also the PBR version
-	# that we should set.  Note: this is relevant in particular when
-	# there are multiple version tags on the same networking-calico
-	# commit (which is quite common as networking-calico doesn't
-	# change much).  The alternative, automated method, just below,
-	# is currently broken when there are multiple tags on the same
-	# commit; see https://bugs.launchpad.net/pbr/+bug/1453996.
-	export PBR_VERSION=$FORCE_VERSION
-    else
-	export PBR_VERSION=`python - <<'EOF'
-import pbr.version
-print pbr.version.VersionInfo('networking-calico').release_string()
-EOF`
-    fi
-fi
-
 mkdir -p /tmp/rpmbuild/BUILD \
          /tmp/rpmbuild/RPMS \
          /tmp/rpmbuild/SOURCES \
@@ -61,6 +34,10 @@ case ${pkg} in
 	dir=${pkg}-${version}
 	cp -a ${repo} /tmp/$dir
 	tar -C /tmp --exclude-vcs -czf /tmp/rpmbuild/SOURCES/${dir}.tar.gz $dir
+	# For networking-calico, FORCE_VERSION is always set, and the
+	# PBR version should be the same as that.  (For other repos,
+	# PBR_VERSION is irrelevant.)
+	export PBR_VERSION=$FORCE_VERSION
 	;;
     etcd3gw)
 	t=`mktemp -d -t etcd3gw.XXXXXX`
