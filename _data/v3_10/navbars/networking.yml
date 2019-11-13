@@ -20,7 +20,7 @@ toc:
   path: /networking/external-connectivity
 - title: Configuring a node IP address and subnet
   path: /networking/node
-- title: Configuring MTU
+- title: Configure MTU to maximize network performance
   path: /networking/mtu
 - title: Assign IP addresses based on topology
   path: /networking/assign-ip-addresses-topology
