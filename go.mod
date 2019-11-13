@@ -52,8 +52,8 @@ require (
 	github.com/peterbourgon/diskv v2.0.1+incompatible
 	github.com/projectcalico/go-json v0.0.0-20161128004156-6219dc7339ba
 	github.com/projectcalico/go-yaml v0.0.0-20161201183616-955bc3e451ef
-	github.com/projectcalico/go-yaml-wrapper v0.0.0-20161127220527-598e54215bee
-	github.com/projectcalico/libcalico-go v0.0.0-20191104214504-aa6a608ee1fe
+	github.com/projectcalico/go-yaml-wrapper v0.0.0-20191112210931-090425220c54
+	github.com/projectcalico/libcalico-go v0.0.0-20191112223013-362a04d5e109
 	github.com/prometheus/client_golang v0.9.0
 	github.com/prometheus/client_model v0.0.0-20180712105110-5c3871d89910
 	github.com/prometheus/common v0.0.0-20181020173914-7e9e6cabbd39
@@ -85,7 +85,7 @@ require (
 	gopkg.in/tomb.v1 v1.0.0-20141024135613-dd632973f1e7
 	gopkg.in/tomb.v2 v2.0.0-20161208151619-d5d1b5820637
 	gopkg.in/yaml.v1 v1.0.0-20140924161607-9f9df34309c0 // indirect
-	gopkg.in/yaml.v2 v2.2.2
+	gopkg.in/yaml.v2 v2.2.5
 	k8s.io/api v0.0.0-20190620084959-7cf5895f2711
 	k8s.io/apimachinery v0.0.0-20190612205821-1799e75a0719
 	k8s.io/client-go v12.0.0+incompatible
