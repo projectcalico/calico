@@ -254,7 +254,7 @@ type Timeouts struct {
 
 func DefaultTimeouts() Timeouts {
 	return Timeouts{
-		CreationGracePeriod: 1 * time.Second,
+		CreationGracePeriod: 10 * time.Second,
 		TCPPreEstablished:   20 * time.Second,
 		TCPEstablished:      time.Hour,
 		TCPFinsSeen:         30 * time.Second,
@@ -303,6 +303,7 @@ func (l *LivenessScanner) Scan() {
 				// Forward entry exists but no reverse entry (and the grace period has expired).
 				log.Info("Found a forward NAT conntrack entry with no reverse entry, removing...")
 				err := l.ctMap.Delete(k)
+				log.WithError(err).Debug("Deletion result")
 				if err != nil && !bpf.IsNotExists(err) {
 					log.WithError(err).Warn("Failed to delete conntrack entry.")
 				}
@@ -315,10 +316,12 @@ func (l *LivenessScanner) Scan() {
 			if reason, expired := l.EntryExpired(now, ctKey.Proto(), revEntry); expired {
 				log.WithField("reason", reason).Debug("Deleting expired conntrack forward-NAT entry")
 				err := l.ctMap.Delete(k)
+				log.WithError(err).Debug("Deletion result")
 				if err != nil && !bpf.IsNotExists(err) {
 					log.WithError(err).Warn("Failed to delete expired conntrack forward-NAT entry.")
 				}
 				err = l.ctMap.Delete(ctVal.ReverseNATKey().AsBytes())
+				log.WithError(err).Debug("Deletion result")
 				if err != nil && !bpf.IsNotExists(err) {
 					log.WithError(err).Warn("Failed to delete expired conntrack reverse-NAT entry.")
 				}
@@ -327,6 +330,7 @@ func (l *LivenessScanner) Scan() {
 			if reason, expired := l.EntryExpired(now, ctKey.Proto(), ctVal); expired {
 				log.WithField("reason", reason).Debug("Deleting expired conntrack reverse-NAT entry")
 				err := l.ctMap.Delete(k)
+				log.WithError(err).Debug("Deletion result")
 				if err != nil && !bpf.IsNotExists(err) {
 					log.WithError(err).Warn("Failed to delete expired conntrack forward-NAT entry.")
 				}
@@ -336,6 +340,7 @@ func (l *LivenessScanner) Scan() {
 			if reason, expired := l.EntryExpired(now, ctKey.Proto(), ctVal); expired {
 				log.WithField("reason", reason).Debug("Deleting expired normal conntrack entry")
 				err := l.ctMap.Delete(k)
+				log.WithError(err).Debug("Deletion result")
 				if err != nil && !bpf.IsNotExists(err) {
 					log.WithError(err).Warn("Failed to delete expired conntrack forward-NAT entry.")
 				}
