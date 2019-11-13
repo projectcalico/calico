@@ -21,6 +21,8 @@ import (
 	"net"
 	"os/exec"
 
+	"github.com/projectcalico/felix/bpf/conntrack"
+
 	"k8s.io/client-go/kubernetes"
 
 	log "github.com/sirupsen/logrus"
@@ -187,6 +189,7 @@ func StartDataplaneDriver(configParams *config.Config,
 			BPFDataIfacePattern:             configParams.BPFDataIfacePattern,
 			XDPEnabled:                      configParams.XDPEnabled,
 			XDPAllowGeneric:                 configParams.GenericXDPEnabled,
+			BPFConntrackTimeouts:            conntrack.DefaultTimeouts(), // FIXME make timeouts configurable
 
 			KubeClientSet: k8sClientSet,
 		}

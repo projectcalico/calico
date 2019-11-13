@@ -28,11 +28,14 @@ import (
 type conntrackManager struct {
 	ctMap   bpf.Map
 	started bool
+	scanner *conntrack.LivenessScanner
 }
 
-func newBPFConntrackManager() *conntrackManager {
+func newBPFConntrackManager(timeouts conntrack.Timeouts) *conntrackManager {
+	ctMap := conntrack.Map()
 	return &conntrackManager{
-		ctMap: conntrack.Map(),
+		ctMap:   ctMap,
+		scanner: conntrack.NewLivenessScanner(timeouts, ctMap),
 	}
 }
 
@@ -46,7 +49,8 @@ func (m *conntrackManager) CompleteDeferredWork() error {
 	}
 
 	if !m.started {
-		m.CleanUpConntrack()
+		log.Info("Doing start-of-day conntrack scan.")
+		m.scanner.Scan()
 		log.Info("Starting conntrack cleanup goroutine.")
 		go m.PeriodicallyCleanUp()
 		m.started = true
@@ -60,26 +64,6 @@ func (m *conntrackManager) PeriodicallyCleanUp() {
 	ticker := jitter.NewTicker(10*time.Second, 100*time.Millisecond)
 	for range ticker.C {
 		log.Debug("Conntrack cleanup timer popped")
-		m.CleanUpConntrack()
-	}
-}
-
-func (m *conntrackManager) CleanUpConntrack() {
-	log.Debug("Starting conntrack cleanup.")
-	err := m.ctMap.Iter(func(rawK, rawV []byte) {
-		var k conntrack.Key
-		var v conntrack.Entry
-		copy(k[:], rawK)
-		copy(v[:], rawV)
-
-		log.WithFields(log.Fields{
-			"key":   k,
-			"value": v,
-		}).Debug("Examining conntrack entry.")
-	})
-	if err != nil {
-		log.WithError(err).Error("Conntrack cleanup failed.")
-	} else {
-		log.Debug("Conntrack cleanup complete.")
+		m.scanner.Scan()
 	}
 }

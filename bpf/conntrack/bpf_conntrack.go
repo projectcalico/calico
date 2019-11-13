@@ -252,6 +252,18 @@ type Timeouts struct {
 	ICMPLastSeen time.Duration
 }
 
+func DefaultTimeouts() Timeouts {
+	return Timeouts{
+		CreationGracePeriod: 1 * time.Second,
+		TCPPreEstablished:   20 * time.Second,
+		TCPEstablished:      time.Hour,
+		TCPFinsSeen:         30 * time.Second,
+		TCPResetSeen:        40 * time.Second,
+		UDPLastSeen:         60 * time.Second,
+		ICMPLastSeen:        5 * time.Second,
+	}
+}
+
 type LivenessScanner struct {
 	timeouts Timeouts
 	ctMap    bpf.Map

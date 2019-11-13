@@ -39,15 +39,7 @@ var (
 	udpKey  = conntrack.MakeKey(conntrack.ProtoUDP, ip1, 1234, ip2, 3456)
 	icmpKey = conntrack.MakeKey(conntrack.ProtoICMP, ip1, 1234, ip2, 3456)
 
-	timeouts = conntrack.Timeouts{
-		CreationGracePeriod: 1 * time.Second,
-		TCPPreEstablished:   20 * time.Second,
-		TCPEstablished:      time.Hour,
-		TCPFinsSeen:         30 * time.Second,
-		TCPResetSeen:        40 * time.Second,
-		UDPLastSeen:         60 * time.Second,
-		ICMPLastSeen:        5 * time.Second,
-	}
+	timeouts = conntrack.DefaultTimeouts()
 
 	udpJustCreated    = tcpEntry(now-1, now-1, conntrack.Leg{}, conntrack.Leg{})
 	udpAlmostTimedOut = tcpEntry(now-(2*time.Minute), now-(59*time.Second), conntrack.Leg{Whitelisted: true}, conntrack.Leg{})
