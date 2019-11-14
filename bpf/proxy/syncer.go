@@ -19,6 +19,8 @@ import (
 	"net"
 	"strconv"
 
+	"github.com/projectcalico/felix/bpf/nat"
+
 	"github.com/pkg/errors"
 
 	log "github.com/sirupsen/logrus"
@@ -26,7 +28,6 @@ import (
 	k8sp "k8s.io/kubernetes/pkg/proxy"
 
 	"github.com/projectcalico/felix/bpf"
-	bpfm "github.com/projectcalico/felix/bpf/proxy/maps"
 )
 
 type svcInfo struct {
@@ -84,8 +85,8 @@ type Syncer struct {
 	// synced is true after reconciling the first Apply
 	synced bool
 	// origs are deallocated after the first Apply reconciles
-	origSvcs bpfm.NATMapMem
-	origEps  bpfm.NATBackendMapMem
+	origSvcs nat.MapMem
+	origEps  nat.BackendMapMem
 }
 
 // NewSyncer returns a new Syncer that uses the 2 provided maps
@@ -107,12 +108,12 @@ func NewSyncer(nodePortIPs []net.IP, svcsmap, epsmap bpf.Map) (*Syncer, error) {
 
 func (s *Syncer) loadOrigs() error {
 
-	svcs, err := bpfm.LoadNATMap(s.bpfSvcs)
+	svcs, err := nat.LoadFrontendMap(s.bpfSvcs)
 	if err != nil {
 		return err
 	}
 
-	eps, err := bpfm.LoadNATBackendMap(s.bpfEps)
+	eps, err := nat.LoadBackendMap(s.bpfEps)
 	if err != nil {
 		return err
 	}
@@ -149,7 +150,7 @@ func (s *Syncer) startupSync(state DPSyncerState) error {
 		}
 
 		for i := 0; i < count; i++ {
-			epk := bpfm.NewNATBackendKey(id, uint32(i))
+			epk := nat.NewNATBackendKey(id, uint32(i))
 			ep, ok := s.origEps[epk]
 			if !ok {
 				log.Debugf("s.origSvcs = %+v\n", s.origSvcs)
@@ -211,7 +212,7 @@ func (s *Syncer) applyClusterIP(skey svcKey, sinfo k8sp.ServicePort,
 					}
 
 					log.Debugf("bpf map deleting derived %s:%s", key,
-						bpfm.NewNATValue(old.id, uint32(count)))
+						nat.NewNATValue(old.id, uint32(count)))
 					if err := s.bpfSvcs.Delete(key[:]); err != nil {
 						return errors.Errorf("bpfSvcs.Delete: %s", err)
 					}
@@ -400,13 +401,13 @@ func (s *Syncer) newSvc(sname k8sp.ServicePortName, sinfo k8sp.ServicePort, id u
 func (s *Syncer) writeSvcBackend(svcID uint32, idx uint32, ep k8sp.Endpoint) error {
 	ip := net.ParseIP(ep.IP())
 
-	key := bpfm.NewNATBackendKey(svcID, uint32(idx))
+	key := nat.NewNATBackendKey(svcID, uint32(idx))
 
 	tgtPort, err := ep.Port()
 	if err != nil {
 		return errors.Errorf("no port for endpoint %q: %s", ep, err)
 	}
-	val := bpfm.NewNATBackendValue(ip, uint16(tgtPort))
+	val := nat.NewNATBackendValue(ip, uint16(tgtPort))
 
 	log.Debugf("bpf map writing %s:%s", key, val)
 	if err := s.bpfEps.Update(key[:], val[:]); err != nil {
@@ -416,7 +417,7 @@ func (s *Syncer) writeSvcBackend(svcID uint32, idx uint32, ep k8sp.Endpoint) err
 }
 
 func (s *Syncer) deleteSvcBackend(svcID uint32, idx uint32) error {
-	key := bpfm.NewNATBackendKey(svcID, uint32(idx))
+	key := nat.NewNATBackendKey(svcID, uint32(idx))
 	log.Debugf("bpf map deleting %s", key)
 	if err := s.bpfEps.Delete(key[:]); err != nil {
 		return errors.Errorf("bpfEps.Delete: %s", err)
@@ -424,19 +425,19 @@ func (s *Syncer) deleteSvcBackend(svcID uint32, idx uint32) error {
 	return nil
 }
 
-func getSvcNATKey(svc k8sp.ServicePort) (bpfm.NATKey, error) {
+func getSvcNATKey(svc k8sp.ServicePort) (nat.FrontendKey, error) {
 	ip := net.ParseIP(svc.ClusterIPString())
 	if ip == nil {
-		return bpfm.NATKey{}, errors.Errorf("failed to parse ClusterIP %q", svc.ClusterIPString())
+		return nat.FrontendKey{}, errors.Errorf("failed to parse ClusterIP %q", svc.ClusterIPString())
 	}
 	// XXX will fail if we change the type, 1.16 provides ServicePort.Port()
 	port := svc.(*k8sp.BaseServiceInfo).Port
 	proto, err := protoV1ToInt(svc.GetProtocol())
 	if err != nil {
-		return bpfm.NATKey{}, err
+		return nat.FrontendKey{}, err
 	}
 
-	key := bpfm.NewNATKey(ip, uint16(port), proto)
+	key := nat.NewNATKey(ip, uint16(port), proto)
 
 	return key, nil
 }
@@ -447,7 +448,7 @@ func (s *Syncer) writeSvc(svc k8sp.ServicePort, svcID uint32, count int) error {
 		return err
 	}
 
-	val := bpfm.NewNATValue(svcID, uint32(count))
+	val := nat.NewNATValue(svcID, uint32(count))
 
 	log.Debugf("bpf map writing %s:%s", key, val)
 	if err := s.bpfSvcs.Update(key[:], val[:]); err != nil {
@@ -469,7 +470,7 @@ func (s *Syncer) deleteSvc(svc k8sp.ServicePort, svcID uint32, count int) error 
 		return err
 	}
 
-	log.Debugf("bpf map deleting %s:%s", key, bpfm.NewNATValue(svcID, uint32(count)))
+	log.Debugf("bpf map deleting %s:%s", key, nat.NewNATValue(svcID, uint32(count)))
 	if err := s.bpfSvcs.Delete(key[:]); err != nil {
 		return errors.Errorf("bpfSvcs.Delete: %s", err)
 	}
@@ -507,7 +508,7 @@ func (s *Syncer) newSvcID() uint32 {
 	return id
 }
 
-func (s *Syncer) matchBpfSvc(bsvc bpfm.NATKey, svcs k8sp.ServiceMap) *svcKey {
+func (s *Syncer) matchBpfSvc(bsvc nat.FrontendKey, svcs k8sp.ServiceMap) *svcKey {
 	for svc, info := range svcs {
 		if bsvc.Proto() != ProtoV1ToIntPanic(info.GetProtocol()) {
 			continue

@@ -33,6 +33,10 @@ func (m Map) EnsureExists() error {
 	return nil
 }
 
+func (m *Map) Path() string {
+	return m.Filename
+}
+
 func (m Map) Iter(f bpf.MapIter) error {
 	for kstr, vstr := range m.Contents {
 		f([]byte(kstr), []byte(vstr))

@@ -25,6 +25,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/projectcalico/felix/bpf/nat"
+
 	"github.com/projectcalico/felix/bpf/conntrack"
 
 	"github.com/davecgh/go-spew/spew"
@@ -41,7 +43,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/projectcalico/felix/bpf"
-	bpfm "github.com/projectcalico/felix/bpf/proxy/maps"
 	"github.com/projectcalico/felix/fv/containers"
 	"github.com/projectcalico/felix/fv/infrastructure"
 	"github.com/projectcalico/felix/fv/utils"
@@ -131,7 +132,7 @@ func describeBPFTests(protocol string) bool {
 					felix.Exec("iptables-save", "-c")
 					felix.Exec("ip", "r")
 					felix.Exec("calico-bpf", "ipsets", "dump")
-					log.Infof("[%d]NATMap: %+v", i, currBpfsvcs[i])
+					log.Infof("[%d]FrontendMap: %+v", i, currBpfsvcs[i])
 					log.Infof("[%d]NATBackend: %+v", i, currBpfeps[i])
 				}
 			}
@@ -285,7 +286,7 @@ func describeBPFTests(protocol string) bool {
 
 					var (
 						testSvcUpdated      *v1.Service
-						natBackBeforeUpdate []bpfm.NATBackendMapMem
+						natBackBeforeUpdate []nat.BackendMapMem
 					)
 
 					BeforeEach(func() {
@@ -333,16 +334,16 @@ func describeBPFTests(protocol string) bool {
 							if protocol == "udp" {
 								numericProto = 17
 							}
-							Expect(natmaps[i]).To(HaveKey(bpfm.NewNATKey(ipv4, portNew, numericProto)))
+							Expect(natmaps[i]).To(HaveKey(nat.NewNATKey(ipv4, portNew, numericProto)))
 							portOld := uint16(testSvc.Spec.Ports[0].Port)
-							Expect(natmaps[i]).NotTo(HaveKey(bpfm.NewNATKey(ipv4, portOld, numericProto)))
+							Expect(natmaps[i]).NotTo(HaveKey(nat.NewNATKey(ipv4, portOld, numericProto)))
 						}
 					})
 
 					Context("with test-service removed", func() {
 						var (
-							prevBpfsvcs []bpfm.NATMapMem
-							prevBpfeps  []bpfm.NATBackendMapMem
+							prevBpfsvcs []nat.MapMem
+							prevBpfeps  []nat.BackendMapMem
 						)
 
 						BeforeEach(func() {
@@ -364,8 +365,8 @@ func describeBPFTests(protocol string) bool {
 							cc.CheckConnectivity()
 
 							for i, f := range felixes {
-								Eventually(func() bpfm.NATMapMem { return dumpNATMap(f) }).Should(HaveLen(len(prevBpfsvcs[i]) - 1))
-								Eventually(func() bpfm.NATBackendMapMem { return dumpEPMap(f) }).Should(HaveLen(len(prevBpfeps[i]) - 1))
+								Eventually(func() nat.MapMem { return dumpNATMap(f) }).Should(HaveLen(len(prevBpfsvcs[i]) - 1))
+								Eventually(func() nat.BackendMapMem { return dumpEPMap(f) }).Should(HaveLen(len(prevBpfeps[i]) - 1))
 							}
 						})
 					})
@@ -389,9 +390,9 @@ func objectMetaV1(name string) metav1.ObjectMeta {
 	}
 }
 
-func dumpNATmaps(felixes []*infrastructure.Felix) ([]bpfm.NATMapMem, []bpfm.NATBackendMapMem) {
-	bpfsvcs := make([]bpfm.NATMapMem, len(felixes))
-	bpfeps := make([]bpfm.NATBackendMapMem, len(felixes))
+func dumpNATmaps(felixes []*infrastructure.Felix) ([]nat.MapMem, []nat.BackendMapMem) {
+	bpfsvcs := make([]nat.MapMem, len(felixes))
+	bpfeps := make([]nat.BackendMapMem, len(felixes))
 
 	for i, felix := range felixes {
 		bpfsvcs[i], bpfeps[i] = dumpNATMaps(felix)
@@ -400,30 +401,30 @@ func dumpNATmaps(felixes []*infrastructure.Felix) ([]bpfm.NATMapMem, []bpfm.NATB
 	return bpfsvcs, bpfeps
 }
 
-func dumpNATMaps(felix *infrastructure.Felix) (bpfm.NATMapMem, bpfm.NATBackendMapMem) {
+func dumpNATMaps(felix *infrastructure.Felix) (nat.MapMem, nat.BackendMapMem) {
 	return dumpNATMap(felix), dumpEPMap(felix)
 }
 
-func dumpNATMap(felix *infrastructure.Felix) bpfm.NATMapMem {
-	bm := bpfm.NATMap()
+func dumpNATMap(felix *infrastructure.Felix) nat.MapMem {
+	bm := nat.FrontendMap()
 	cmd, err := bpf.DumpMapCmd(bm)
 	Expect(err).NotTo(HaveOccurred())
-	bpfsvcs := make(bpfm.NATMapMem)
+	bpfsvcs := make(nat.MapMem)
 	out, err := felix.ExecOutput(cmd...)
 	Expect(err).NotTo(HaveOccurred())
-	err = bpf.IterMapCmdOutput([]byte(out), bpfm.NATMapMemIter(bpfsvcs))
+	err = bpf.IterMapCmdOutput([]byte(out), nat.MapMemIter(bpfsvcs))
 	Expect(err).NotTo(HaveOccurred())
 	return bpfsvcs
 }
 
-func dumpEPMap(felix *infrastructure.Felix) bpfm.NATBackendMapMem {
-	bb := bpfm.BackendMap()
+func dumpEPMap(felix *infrastructure.Felix) nat.BackendMapMem {
+	bb := nat.BackendMap()
 	cmd, err := bpf.DumpMapCmd(bb)
 	Expect(err).NotTo(HaveOccurred())
-	bpfeps := make(bpfm.NATBackendMapMem)
+	bpfeps := make(nat.BackendMapMem)
 	out, err := felix.ExecOutput(cmd...)
 	Expect(err).NotTo(HaveOccurred())
-	err = bpf.IterMapCmdOutput([]byte(out), bpfm.NATBackendMapMemIter(bpfeps))
+	err = bpf.IterMapCmdOutput([]byte(out), nat.BackendMapMemIter(bpfeps))
 	Expect(err).NotTo(HaveOccurred())
 	return bpfeps
 }
@@ -469,13 +470,13 @@ func k8sGetEpsForServiceFunc(k8s kubernetes.Interface, svc *v1.Service) func() [
 	}
 }
 
-func equalNATBackendMapVals(m1, m2 bpfm.NATBackendMapMem) bool {
+func equalNATBackendMapVals(m1, m2 nat.BackendMapMem) bool {
 	if len(m1) != len(m2) {
 		return false
 	}
 
-	mm1 := make(map[bpfm.NATBackendValue]int)
-	mm2 := make(map[bpfm.NATBackendValue]int)
+	mm1 := make(map[nat.BackendValue]int)
+	mm2 := make(map[nat.BackendValue]int)
 
 	for _, v := range m1 {
 		c := mm1[v]

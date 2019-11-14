@@ -41,7 +41,7 @@ int connect_balancer(struct bpf_sock_addr *ctx)
 	}
 
 	ctx->user_ip4 = nat_dest->addr;
-	ctx->user_port = host_to_be32((uint32_t)nat_dest->port);
+	ctx->user_port = host_to_be32(((uint32_t)nat_dest->port)<<16);
 
 out:
 	return verdict;

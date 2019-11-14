@@ -19,23 +19,12 @@ import (
 	log "github.com/sirupsen/logrus"
 	"k8s.io/client-go/kubernetes"
 
-	"github.com/projectcalico/felix/bpf/proxy/maps"
+	"github.com/projectcalico/felix/bpf"
 )
 
 // StartKubeProxy start a new kube-proxy if there was no error
-func StartKubeProxy(k8sClientSet *kubernetes.Clientset, hostname string, opts ...Option) error {
-	natMap := maps.NATMap()
-	err := natMap.EnsureExists()
-	if err != nil {
-		return errors.Errorf("failed to create NAT map: %s", err)
-	}
-	backendMap := maps.BackendMap()
-	err = backendMap.EnsureExists()
-	if err != nil {
-		return errors.Errorf("failed to create NAT backend map: %s", err)
-	}
-
-	syncer, err := NewSyncer(nil, natMap, backendMap)
+func StartKubeProxy(k8sClientSet *kubernetes.Clientset, hostname string, frontendMap, backendMap bpf.Map, opts ...Option) error {
+	syncer, err := NewSyncer(nil, frontendMap, backendMap)
 	if err != nil {
 		return errors.WithMessage(err, "new bpf syncer")
 	}

@@ -182,12 +182,12 @@ func NewBPFLib() (*BPFLib, error) {
 		return nil, errors.New("bpftool not found in $PATH")
 	}
 
-	bpfDir, err := maybeMountBPFfs()
+	bpfDir, err := MaybeMountBPFfs()
 	if err != nil {
 		return nil, err
 	}
 
-	cgroupV2Dir, err := maybeMountCgroupV2()
+	cgroupV2Dir, err := MaybeMountCgroupV2()
 	if err != nil {
 		return nil, err
 	}
@@ -205,7 +205,7 @@ func NewBPFLib() (*BPFLib, error) {
 	}, nil
 }
 
-func maybeMountBPFfs() (string, error) {
+func MaybeMountBPFfs() (string, error) {
 	var err error
 	bpffsPath := defaultBPFfsPath
 
@@ -243,7 +243,7 @@ func maybeMountBPFfs() (string, error) {
 	return bpffsPath, err
 }
 
-func maybeMountCgroupV2() (string, error) {
+func MaybeMountCgroupV2() (string, error) {
 	var err error
 	cgroupV2Path := "/run/calico/cgroup"
 
