@@ -32,6 +32,19 @@ enum calico_policy_result {
 	CALI_POL_DENY,
 };
 
+#ifdef CALI_DEBUG_ALLOW_ALL
+
+/* If we want to just compile the code without defining any policies and to
+ * avoid compiling out code paths that are not reachable if traffic is denied,
+ * we can compile it with allow all
+ */
+#define execute_policy_norm(...)			CALI_POL_ALLOW
+#define execute_policy_aof(...) 			CALI_POL_NO_MATCH
+#define execute_policy_pre_dnat(...)		CALI_POL_NO_MATCH
+#define execute_policy_do_not_track(...)	CALI_POL_NO_MATCH
+
+#else
+
 static CALI_BPF_INLINE enum calico_policy_result execute_policy_norm(struct __sk_buff *skb,__u8 ip_proto, __u32 saddr, __u32 daddr, __u16 sport, __u16 dport, enum calico_tc_flags flags) {
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wunused-label"
@@ -94,6 +107,8 @@ static CALI_BPF_INLINE enum calico_policy_result execute_policy_do_not_track(str
 	return CALI_POL_ALLOW;
 #pragma clang diagnostic pop
 }
+
+#endif /* CALI_DEBUG_ALLOW_ALL */
 
 static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb, enum calico_tc_flags flags) {
 	enum calico_reason reason = CALI_REASON_UNKNOWN;
