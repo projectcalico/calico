@@ -31,23 +31,11 @@ type Map interface {
 	EnsureExists() error
 	Iter(MapIter) error
 	Update(k, v []byte) error
+	Get(k []byte) ([]byte, error)
 	Delete(k []byte) error
 }
 
-func NewPinnedMap(name, filename string, mapType string, keySize, valueSize int, maxEntries int, flags int) Map {
-	m := &PinnedMap{
-		Filename:   filename,
-		Type:       mapType,
-		KeySize:    keySize,
-		ValueSize:  valueSize,
-		MaxEntries: maxEntries,
-		Name:       name,
-		Flags:      flags,
-	}
-	return m
-}
-
-type PinnedMap struct {
+type MapParameters struct {
 	Filename   string
 	Type       string
 	KeySize    int
@@ -55,6 +43,17 @@ type PinnedMap struct {
 	MaxEntries int
 	Name       string
 	Flags      int
+}
+
+func NewPinnedMap(params MapParameters) Map {
+	m := &PinnedMap{
+		MapParameters: params,
+	}
+	return m
+}
+
+type PinnedMap struct {
+	MapParameters
 
 	fdLoaded bool
 	fd       MapFD
@@ -131,6 +130,10 @@ func (b *PinnedMap) Iter(f MapIter) error {
 
 func (b *PinnedMap) Update(k, v []byte) error {
 	return UpdateMapEntry(b.fd, k, v)
+}
+
+func (b *PinnedMap) Get(k []byte) ([]byte, error) {
+	return GetMapEntry(b.fd, k, b.ValueSize)
 }
 
 func appendBytes(strings []string, bytes []byte) []string {

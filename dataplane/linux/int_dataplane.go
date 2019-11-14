@@ -27,6 +27,8 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/projectcalico/felix/bpf/conntrack"
+
 	"k8s.io/client-go/kubernetes"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -142,11 +144,12 @@ type Config struct {
 
 	ExternalNodesCidrs []string
 
-	BPFEnabled          bool
-	BPFLogLevel         string
-	BPFDataIfacePattern *regexp.Regexp
-	XDPEnabled          bool
-	XDPAllowGeneric     bool
+	BPFEnabled           bool
+	BPFLogLevel          string
+	BPFDataIfacePattern  *regexp.Regexp
+	XDPEnabled           bool
+	XDPAllowGeneric      bool
+	BPFConntrackTimeouts conntrack.Timeouts
 
 	SidecarAccelerationEnabled bool
 
@@ -449,7 +452,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		log.Info("BPF enabled, starting BPF endpoint manager and map manager.")
 		// Register map managers first since they create the maps that will be used by the endpoint manager.
 		dp.RegisterManager(newBPFIPSetManager())
-		dp.RegisterManager(newBPFConntrackManager())
+		dp.RegisterManager(newBPFConntrackManager(config.BPFConntrackTimeouts))
 
 		// Forwarding into a tunnel seems to fail silently, disable FIB lookup if tunnel is enabled for now.
 		fibLookupEnabled := !config.RulesConfig.IPIPEnabled && !config.RulesConfig.VXLANEnabled

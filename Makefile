@@ -248,6 +248,7 @@ endif
 DOCKER_RUN := mkdir -p .go-pkg-cache $(GOMOD_CACHE) && \
 	docker run --rm \
 		--net=host \
+		--init \
 		$(EXTRA_DOCKER_ARGS) \
 		-e LOCAL_USER_ID=$(LOCAL_USER_ID) \
 		-e GOCACHE=/go-cache \
@@ -742,7 +743,7 @@ bin/test-connection: $(SRC_FILES) local_build
 mod-download:
 	-$(DOCKER_RUN) $(CALICO_BUILD) go mod download
 
-ci: mod-download image-all ut static-checks check-packr
+ci: mod-download image ut static-checks check-packr
 ifeq (,$(filter fv, $(EXCEPT)))
 	@$(MAKE) fv
 endif

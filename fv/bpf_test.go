@@ -20,7 +20,12 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"regexp"
 	"strconv"
+	"strings"
+	"time"
+
+	"github.com/projectcalico/felix/bpf/conntrack"
 
 	"github.com/davecgh/go-spew/spew"
 	log "github.com/sirupsen/logrus"
@@ -231,7 +236,49 @@ func describeBPFTests(protocol string) bool {
 					cc.ExpectSome(w[1][0], workload.IP(ip), port)
 					cc.ExpectSome(w[1][1], workload.IP(ip), port)
 					cc.CheckConnectivity()
+				})
 
+				It("should create sane conntrack entries and clean them up", func() {
+					By("Generating some traffic")
+					ip := testSvc.Spec.ClusterIP
+					port := uint16(testSvc.Spec.Ports[0].Port)
+
+					cc.ExpectSome(w[0][1], workload.IP(ip), port)
+					cc.ExpectSome(w[1][0], workload.IP(ip), port)
+					cc.CheckConnectivity()
+
+					By("Checking tiemstamps on conntrack entries are sane")
+					// This test verifies that we correctly interpret conntrack entry timestamps by reading them back
+					// and checking that they're (a) in the past and (b) sensibly recent.
+					ctDump, err := felixes[0].ExecOutput("calico-bpf", "conntrack", "dump")
+					Expect(err).NotTo(HaveOccurred())
+					re := regexp.MustCompile(`LastSeen:\s*(\d+)`)
+					matches := re.FindAllStringSubmatch(ctDump, -1)
+					Expect(matches).ToNot(BeEmpty(), "didn't find any conntrack entries")
+					for _, match := range matches {
+						lastSeenNanos, err := strconv.ParseInt(match[1], 10, 64)
+						Expect(err).NotTo(HaveOccurred())
+						nowNanos := conntrack.KTimeNanos()
+						age := time.Duration(nowNanos - lastSeenNanos)
+						Expect(age).To(BeNumerically(">", 0))
+						Expect(age).To(BeNumerically("<", 60*time.Second))
+					}
+
+					By("Checking conntrack entries are cleaned up")
+					// We have UTs that check that all kinds of entries eventually get cleaned up.  This
+					// test is mainly to check that the cleanup code actually runs and is able to actually delete
+					// entries.
+					numWl0ConntrackEntries := func() int {
+						ctDump, err := felixes[0].ExecOutput("calico-bpf", "conntrack", "dump")
+						Expect(err).NotTo(HaveOccurred())
+						return strings.Count(ctDump, w[0][0].IP)
+					}
+
+					startingCTEntries := numWl0ConntrackEntries()
+					Expect(startingCTEntries).To(BeNumerically(">", 0))
+
+					// TODO reduce timeouts just for this test.
+					Eventually(numWl0ConntrackEntries, "180s", "5s").Should(BeNumerically("<", startingCTEntries))
 				})
 
 				Context("with test-service port updated", func() {
