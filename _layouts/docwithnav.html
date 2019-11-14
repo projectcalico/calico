@@ -164,20 +164,6 @@ The code is a little roundabout for a few reasons:
             </form>
           </div>
         </div>
-        <div id="navbar" class="navbar-inverse navbar-collapse collapse">
-          <div class="container">
-            <ul class="nav navbar-nav">
-              {% for navbar in navbars %}
-                <li{% if this_pages_navbar == navbar %} class="active"{% endif %}>
-                  <a href="{{site.baseurl}}/{{page.version}}{{navbar.path}}"><span>{{ navbar.bigheader }}</span></a>
-                </li>
-              {% endfor %}
-            </ul>
-          </div>
-          <div class="row">
-            <div class="col-sm-0"></div>
-          </div>
-        </div>
       </nav>
       <div class="container">
         <div class="row row-offcanvas row-offcanvas-left">
@@ -193,7 +179,28 @@ The code is a little roundabout for a few reasons:
               </div>
             </div>
             <div id="sidebar">
-            	{% include sidebar.html sidebar=this_pages_navbar.toc prefix="nav" %}
+              <div class="panel-group" id="sidebar-accordion">
+                {% for navbar in navbars %}
+                  <div class="panel panel-default">
+                    <div class="panel-heading">
+                      <h4 class="panel-title">
+                          <a data-toggle="collapse" data-parent="#sidebar-accordion" data-target="{{ navbar.path }}" href="{{site.baseurl}}/{{page.version}}{{navbar.path}}">
+                            <span>{{ navbar.bigheader }}</span>
+                          </a>
+                      </h4>
+                    </div>
+                    <div id="{{site.baseurl}}/{{page.version}}{{navbar.path}}" class="panel-collapse collapse {% if this_pages_navbar == navbar %}in{% endif %}">
+                        <div class="panel-body">
+                            {% assign availableToc = navbar.toc | where_exp: "item", "item.title != navbar.bigheader" %}
+                            {% include sidebar.html sidebar=availableToc prefix="nav" %}
+                        </div> 
+                    </div>
+                  </div>
+                {% endfor %}
+              </div>
+              <div class="row">
+                <div class="col-sm-0"></div>
+              </div>
             </div>
           </div>
           <div class="col-xs-12 col-sm-8 col-md-9">
