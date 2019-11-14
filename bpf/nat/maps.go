@@ -79,6 +79,10 @@ func (k FrontendKey) Port() uint16 {
 	return binary.LittleEndian.Uint16(k[4:6])
 }
 
+func (k FrontendKey) AsBytes() []byte {
+	return k[:]
+}
+
 func (k FrontendKey) String() string {
 	return fmt.Sprintf("NATKey{Proto:%v Addr:%v Port:%v}", k.Proto(), k.Addr(), k.Port())
 }
@@ -104,6 +108,10 @@ func (v FrontendValue) String() string {
 	return fmt.Sprintf("NATValue{ID:%d,Count:%d}", v.ID(), v.Count())
 }
 
+func (v FrontendValue) AsBytes() []byte {
+	return v[:]
+}
+
 type BackendKey [backendKeySize]byte
 
 func NewNATBackendKey(id, ordinal uint32) BackendKey {
@@ -123,6 +131,10 @@ func (v BackendKey) Count() uint32 {
 
 func (v BackendKey) String() string {
 	return fmt.Sprintf("NATBackendKey{ID:%d,Ordinal:%d}", v.ID(), v.Count())
+}
+
+func (k BackendKey) AsBytes() []byte {
+	return k[:]
 }
 
 type BackendValue [backendValueSize]byte
@@ -148,6 +160,10 @@ func (k BackendValue) Port() uint16 {
 
 func (k BackendValue) String() string {
 	return fmt.Sprintf("NATBackendValue{Addr:%v Port:%v}", k.Addr(), k.Port())
+}
+
+func (k BackendValue) AsBytes() []byte {
+	return k[:]
 }
 
 var FrontendMapParameters = bpf.MapParameters{
