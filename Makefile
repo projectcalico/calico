@@ -370,6 +370,14 @@ xdp bpf/xdp/generated/xdp.o:
 xdp-clean:
 	$(DOCKER_RUN) $(CALICO_BUILD_CGO) \
 	              /bin/sh -c "make -C bpf/xdp clean"
+
+bpf-cgroup bpf/cgroup/connect_balance.o:
+	$(DOCKER_RUN) $(CALICO_BUILD_CGO) \
+	              /bin/sh -c "make -C bpf/cgroup all"
+
+bpf-cgroup-clean:
+	$(DOCKER_RUN) $(CALICO_BUILD_CGO) \
+	              /bin/sh -c "make -C bpf/cgroup clean"
 else
 xdp bpf/xdp/generated/xdp.o:
 	$(MAKE) -C bpf/xdp

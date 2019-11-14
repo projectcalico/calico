@@ -38,7 +38,9 @@
 } while (0)
 
 #define CALI_LOG_FLAG(flags, fmt, ...) do { \
-	if (((flags) & CALI_TC_HOST_EP) && ((flags) & CALI_TC_INGRESS)) { \
+	if ((flags) & CALI_CGROUP) { \
+		CALI_LOG(XSTR(CALI_LOG_PFX) "-C: " fmt, ## __VA_ARGS__); \
+	} else if (((flags) & CALI_TC_HOST_EP) && ((flags) & CALI_TC_INGRESS)) { \
 		CALI_LOG(XSTR(CALI_LOG_PFX) "-I: " fmt, ## __VA_ARGS__); \
 	} else if ((flags) & CALI_TC_HOST_EP) { \
 		CALI_LOG(XSTR(CALI_LOG_PFX) "-E: " fmt, ## __VA_ARGS__); \

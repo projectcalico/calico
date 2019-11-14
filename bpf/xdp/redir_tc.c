@@ -14,7 +14,6 @@
 #include <stdint.h>
 #include <stddef.h>
 
-#include <linux/bpf.h>
 #include "../include/bpf.h"
 #include "../include/log.h"
 #include "../include/policy.h"
