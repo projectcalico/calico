@@ -49,7 +49,7 @@ Flannel routes pod traffic using static per-node CIDRs. It provides a number of 
 
 ##### Google cloud networking
 
-Google cloud routes and [Alias IP ranges](https://cloud.google.com/vpc/docs/alias-ip) can be used to provide pod networking on Google cloud, and is the default for Google Kubernetes Engine (GKE), with {{site.prodname}} for [network policy enforcement]({{site.baseurl}}/{{page.version}}security/calico-network-policy).
+Google cloud routes and [Alias IP ranges](https://cloud.google.com/vpc/docs/alias-ip) can be used to provide pod networking on Google cloud, and is the default for Google Kubernetes Engine (GKE), with {{site.prodname}} for [network policy enforcement]({{site.baseurl}}/{{page.version}}/security/calico-network-policy).
 
 #### Networking options 
 
@@ -83,7 +83,7 @@ This section provides more details on {{site.prodname}}’s built-in networking 
 - Resources outside your cluster can talk directly to your pods without NAT
 - You can even expose pods directly to the internet if you want!
 
-To configure BGP peering and determine the right topology, see [Configure BGP peering]({{site.baseurl}}/{{page.version}}/networking/bgp).  This option requires the ability to configure BGP peers on your routers.  If this is not an option, see the next section.
+To configure BGP peering and determine the right topology, see [Configure BGP peering]({{site.baseurl}}/{{page.version}}/networking/bgp). This option requires the ability to configure BGP peers on your routers.  If this is not an option, see the next section.
 
 #### Unencapsulated, not peered with physical infrastructure
 
@@ -93,7 +93,7 @@ This option also provides near host-to-host levels of performance and allows the
   
 Traffic cannot be routed between pods and destinations that aren’t also in the {{site.prodname}} cluster without [NAT](new-how-to), or [peering with the infrastructure](#unencapsulated-peered-with-physical-infrastructure).
 
-> **Tip**: On AWS, you can disable source/destination checking to use this option within a VPC subnet. [Can I run Calico in a public cloud environment?](https://docs.projectcalico.org/master/reference/faq#can-i-run-calico-in-a-public-cloud-environment).
+> **Tip**: On AWS, you can disable source/destination checking to use this option within a VPC subnet. [Can I run Calico in a public cloud environment?]({{site.baseurl}}/{{page.version}}/reference/faq#can-i-run-calico-in-a-public-cloud-environment).
 {: .alert .alert-info}
 
 #### IP in IP or VXLAN encapsulation
