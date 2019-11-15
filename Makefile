@@ -354,7 +354,8 @@ protobuf proto/felixbackend.pb.go: proto/felixbackend.proto
 		      --gogofaster_out=plugins=grpc:. \
 		      felixbackend.proto
 
-BPF_INC_FILES := bpf/include/bpf.h bpf/xdp/*.h
+BPF_INC_FILES := $(shell find bpf -name '*.h')
+BPF_C_FILES := $(shell find bpf -name '*.c')
 BPF_XDP_INC_FILES :=
 
 .PHONY: xdp
@@ -454,12 +455,30 @@ sub-image-%:
 
 image: $(BUILD_IMAGE)
 $(BUILD_IMAGE): $(BUILD_IMAGE)-$(ARCH)
-$(BUILD_IMAGE)-$(ARCH): bin/calico-felix-$(ARCH) register bin/calico-bpf
+$(BUILD_IMAGE)-$(ARCH): bin/calico-felix-$(ARCH) \
+                        bin/calico-bpf \
+                        $(BPF_INC_FILES) \
+                        $(BPF_C_FILES) \
+                        docker-image/calico-felix-wrapper \
+                        docker-image/felix.cfg \
+                        docker-image/Dockerfile*
+	$(MAKE) register
+	# Reconstruct the bin and bpf directories because we don't want to accidentally add
+	# leftover files (say from a build on another branch) into the docker image.
 	rm -rf docker-image/bin
 	mkdir -p docker-image/bin
 	cp bin/calico-felix-$(ARCH) docker-image/bin/
 	cp bin/calico-bpf docker-image/bin/
-	cp -r bpf docker-image/
+	rm -rf docker-image/bpf
+	mkdir -p docker-image/bpf/include
+	mkdir -p docker-image/bpf/xdp
+	cp bpf/include/bpf.h docker-image/bpf/include/bpf.h
+	cp bpf/include/conntrack.h docker-image/bpf/include/conntrack.h
+	cp bpf/include/log.h docker-image/bpf/include/log.h
+	cp bpf/include/nat.h docker-image/bpf/include/nat.h
+	cp bpf/include/policy.h docker-image/bpf/include/policy.h
+	cp bpf/xdp/redir_tc.c docker-image/bpf/xdp/redir_tc.c
+	cp bpf/xdp/bpf_maps.h docker-image/bpf/xdp/bpf_maps.h
 	if [ "$(SEMAPHORE)" != "true" -o "$$(docker images -q $(BUILD_IMAGE):latest-$(ARCH) 2> /dev/null)" = "" ] ; then \
  	  docker build --pull -t $(BUILD_IMAGE):latest-$(ARCH) --build-arg QEMU_IMAGE=$(CALICO_BUILD) --file ./docker-image/Dockerfile.$(ARCH) docker-image; \
 	fi
