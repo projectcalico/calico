@@ -1,5 +1,6 @@
 #!/bin/bash
 
+# Thanks to https://alexbrand.dev/post/creating-a-kind-cluster-with-calico-networking/ for this snippet :)
 cat << EOF > calico-conf.yaml
 kind: Cluster
 apiVersion: kind.sigs.k8s.io/v1alpha3
