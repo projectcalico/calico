@@ -57,6 +57,10 @@ type K8sDatastoreInfra struct {
 	BadEndpoint string
 
 	CertFileName string
+
+	// needsCleanup is set when we're told to Stop() in order to trigger deferred cleanup
+	// before the next test.  (If there is no next test, we'll skip the cleanup.)
+	needsCleanup bool
 }
 
 var (
@@ -349,6 +353,10 @@ func setupK8sDatastoreInfra() (*K8sDatastoreInfra, error) {
 }
 
 func (kds *K8sDatastoreInfra) EnsureReady() {
+	if kds.needsCleanup {
+		log.Info("Infra marked for clean up, cleaning up before test.")
+		kds.CleanUp()
+	}
 	info, err := kds.GetCalicoClient().ClusterInformation().Get(
 		context.Background(),
 		"default",
@@ -370,6 +378,17 @@ func (kds *K8sDatastoreInfra) EnsureReady() {
 }
 
 func (kds *K8sDatastoreInfra) Stop() {
+	// We don't actually stop the infra between tests because it's too expensive.
+	// Instead, mark all our resources for cleanup, but defer the cleanup until the
+	// start of the next test (this allows us to skip the cleanup if we happen to
+	// be the last test to run, which is a big win when manually running a single
+	// test for debugging.)
+	log.Info("K8sDatastoreInfra told to stop, deferring cleanup...")
+	kds.needsCleanup = true
+}
+
+func (kds *K8sDatastoreInfra) CleanUp() {
+	log.Info("Cleaning up kubernetes datastore")
 	cleanupAllPods(kds.K8sClient)
 	cleanupAllNodes(kds.K8sClient)
 	cleanupAllNamespaces(kds.K8sClient)
@@ -379,6 +398,7 @@ func (kds *K8sDatastoreInfra) Stop() {
 	cleanupAllNetworkPolicies(kds.calicoClient)
 	cleanupAllHostEndpoints(kds.calicoClient)
 	cleanupAllFelixConfigurations(kds.calicoClient)
+	kds.needsCleanup = false
 }
 
 func cleanupIPAM(calicoClient client.Interface) {
