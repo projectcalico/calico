@@ -102,9 +102,10 @@ func (c *Container) Stop() {
 		time.Sleep(200 * time.Millisecond)
 	}
 	c.WaitNotRunning(60 * time.Second)
-	logCxt.Info("Container stopped")
 	withTimeoutPanic(logCxt, 5*time.Second, func() { c.signalDockerRun(os.Kill) })
 	withTimeoutPanic(logCxt, 10*time.Second, func() { c.logFinished.Wait() })
+
+	logCxt.Info("Container stopped")
 }
 
 func withTimeoutPanic(logCxt *log.Entry, t time.Duration, f func()) {

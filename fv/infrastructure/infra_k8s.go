@@ -89,6 +89,7 @@ var (
 )
 
 func TearDownK8sInfra(kds *K8sDatastoreInfra) {
+	log.Info("TearDownK8sInfra starting")
 	if kds.etcdContainer != nil {
 		kds.etcdContainer.Stop()
 	}
@@ -98,6 +99,7 @@ func TearDownK8sInfra(kds *K8sDatastoreInfra) {
 	if kds.k8sControllerManager != nil {
 		kds.k8sControllerManager.Stop()
 	}
+	log.Info("TearDownK8sInfra done")
 }
 
 func createK8sDatastoreInfra() DatastoreInfra {
@@ -404,6 +406,7 @@ func (kds *K8sDatastoreInfra) CleanUp() {
 }
 
 func cleanupIPAM(calicoClient client.Interface) {
+	log.Info("Cleaning up IPAM")
 	c := calicoClient.(interface{ Backend() bapi.Client }).Backend()
 	for _, li := range []model.ListInterface{
 		model.BlockListOptions{},
@@ -689,6 +692,7 @@ func cleanupAllNodes(clientset *kubernetes.Clientset) {
 	log.Info("Cleaned up all nodes")
 }
 func cleanupAllPods(clientset *kubernetes.Clientset) {
+	log.Info("Cleaning up Pods")
 	nsList, err := clientset.CoreV1().Namespaces().List(metav1.ListOptions{})
 	if err != nil {
 		panic(err)
@@ -725,6 +729,7 @@ func cleanupAllPods(clientset *kubernetes.Clientset) {
 }
 
 func cleanupAllPools(client client.Interface) {
+	log.Info("Cleaning up IPAM pools")
 	ctx := context.Background()
 	pools, err := client.IPPools().List(ctx, options.ListOptions{})
 	if err != nil {
@@ -737,6 +742,7 @@ func cleanupAllPools(client client.Interface) {
 			panic(err)
 		}
 	}
+	log.Info("Cleaned up IPAM")
 }
 
 func cleanupAllGlobalNetworkPolicies(client client.Interface) {
@@ -755,6 +761,7 @@ func cleanupAllGlobalNetworkPolicies(client client.Interface) {
 }
 
 func cleanupAllNetworkPolicies(client client.Interface) {
+	log.Info("Cleaning up network policies")
 	ctx := context.Background()
 	nps, err := client.NetworkPolicies().List(ctx, options.ListOptions{})
 	if err != nil {
@@ -767,9 +774,11 @@ func cleanupAllNetworkPolicies(client client.Interface) {
 			panic(err)
 		}
 	}
+	log.Info("Cleaned up network policies")
 }
 
 func cleanupAllHostEndpoints(client client.Interface) {
+	log.Info("Cleaning up host endpoints")
 	ctx := context.Background()
 	heps, err := client.HostEndpoints().List(ctx, options.ListOptions{})
 	if err != nil {
@@ -782,9 +791,11 @@ func cleanupAllHostEndpoints(client client.Interface) {
 			panic(err)
 		}
 	}
+	log.Info("Cleaned up host endpoints")
 }
 
 func cleanupAllFelixConfigurations(client client.Interface) {
+	log.Info("Cleaning up felix configurations")
 	ctx := context.Background()
 	fcs, err := client.FelixConfigurations().List(ctx, options.ListOptions{})
 	if err != nil {
@@ -797,9 +808,11 @@ func cleanupAllFelixConfigurations(client client.Interface) {
 			panic(err)
 		}
 	}
+	log.Info("Cleaned up felix configurations")
 }
 
 func cleanupAllServices(clientset *kubernetes.Clientset) {
+	log.Info("Cleaning up services")
 	coreV1 := clientset.CoreV1()
 	namespaceList, err := coreV1.Namespaces().List(metav1.ListOptions{})
 	if err != nil {
@@ -829,4 +842,5 @@ func cleanupAllServices(clientset *kubernetes.Clientset) {
 			}
 		}
 	}
+	log.Info("Cleaned up services")
 }
