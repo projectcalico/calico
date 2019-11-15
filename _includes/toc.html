@@ -72,7 +72,7 @@
 
         {% assign space = '' %}
         {% for i in (1..indentAmount) %}
-            {% assign space = space | prepend: '    ' %}
+            {% assign space = space | prepend: '  ' %}
         {% endfor %}
 
         {% unless include.item_class == blank %}

@@ -87,6 +87,23 @@ div.highlight {
   width: 20%;
 
   color: #004078;
+
+  list-style-type: none;
+
+  &__nested {
+    list-style-type: none;
+  }
+
+  @media only screen and (max-width: 800px) {
+    position: inherit;
+
+    width: auto;
+
+    margin-left: auto;
+    margin-right: auto;
+
+    left: 75px;
+  }
 }
 
 .container-fix {
@@ -96,6 +113,7 @@ div.highlight {
 .current {
   color: #f79518;
 }
+
 
 input.gsc-input, .gsc-input-box, .gsc-input-box-hover, .gsc-input-box-focus, .gsc-search-button {
     box-sizing: content-box;
