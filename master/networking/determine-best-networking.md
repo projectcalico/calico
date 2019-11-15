@@ -37,15 +37,15 @@ For details of {{site.prodname}} network design and architecture, see a lightboa
 
 ##### Amazon AWS VPC CNI
 
-The Amazon VPC CNI plugin uses AWS elastic network interfaces to provide pod networking. It is the default networking used in Amazon EKS, with {{site.prodname}} for [network policy enforcement]({{site.baseurl}}/{{page.version}}security/calico-network-policy). 
+The Amazon VPC CNI plugin uses AWS elastic network interfaces to provide pod networking. It is the default networking used in Amazon EKS, with {{site.prodname}} for [network policy enforcement]({{site.baseurl}}/{{page.version}}/security/calico-network-policy). 
 
 ##### Azure CNI
 
-The Azure CNI plugin configures the Azure virtual network to provide pod networking. It is the default networking used in Microsoft AKS, with {{site.prodname}} for [network policy enforcement]({{site.baseurl}}/{{page.version}}security/calico-network-policy).
+The Azure CNI plugin configures the Azure virtual network to provide pod networking. It is the default networking used in Microsoft AKS, with {{site.prodname}} for [network policy enforcement]({{site.baseurl}}/{{page.version}}/security/calico-network-policy).
 
 ##### Flannel
 
-Flannel routes pod traffic using static per-node CIDRs. It provides a number of networking backends. [Calico can be used for network policy enforcement]({{site.baseurl}}/{{page.version}}security/calico-network-policy).
+Flannel routes pod traffic using static per-node CIDRs. It provides a number of networking backends. [Calico can be used for network policy enforcement]({{site.baseurl}}/{{page.version}}/security/calico-network-policy).
 
 ##### Google cloud networking
 
@@ -57,8 +57,8 @@ The table below shows common networking options when using {{site.prodname}}.
 
 | **Networking Option**                                        | **Suitable Environments**                    | **Dataplane Performance and Visibility**                 | **Setup Complexity** | **Notes**                                                    |
 | ------------------------------------------------------------ | -------------------------------------------- | -------------------------------------------------------- | -------------------- | ------------------------------------------------------------ |
-| {{site.prodname}}, [Unencapsulated, peered ](#unencapsulated-peered-with-physical-infrastructure)with infrastructure | On-prem                                      | Best                                                     | Moderate             | Allows pods to be directly accessed from outside the cluster |
-| {{site.prodname}}, [Unencapsulated, not peered](#unencapsulated-not-peered-with-infrastructure) with infrastructure | On-prem L2 networks, AWS                     | Best                                                     | Low                  | IP in IP or VXLAN can be added for cross-subnet traffic      |
+| {{site.prodname}}, [Unencapsulated, peered ](#unencapsulated-peered-with-physical-infrastructure) with infrastructure | On-prem                                      | Best                                                     | Moderate             | Allows pods to be directly accessed from outside the cluster |
+| {{site.prodname}}, [Unencapsulated, not peered-with-infrastructure](#unencapsulated-not-peered-with-infrastructure) with infrastructure | On-prem L2 networks, AWS                     | Best                                                     | Low                  | IP in IP or VXLAN can be added for cross-subnet traffic      |
 | {{site.prodname}}, [Encapsulated, IPIP](#ip-in-ip-or-vxlan-encapsulation)   | On-prem, most public clouds other than Azure | Good to excellent depending on NIC hardware capabilities | Low                  |                                                              |
 | {{site.prodname}}, [Encapsulated, VXLAN](#ip-in-ip-or-vxlan-encapsulation)  | On-prem, most public clouds                  | Low                                                      |                      |                                                              |
 | AWS VPC CNI                                                  | Amazon EKS                                   | Excellent                                                | Low                  | Does not support full {{site.prodname}} IPAM feature set, limited to respective cloud provider. |
@@ -89,7 +89,7 @@ To configure BGP peering and determine the right topology, see [Configure BGP pe
 
 This option also provides near host-to-host levels of performance and allows the network direct visibility of traffic.
 
-{{site.prodname}} can route pod traffic between nodes without encapsulation when all nodes are on a single L2 subnet, and if the underlying network doesn’t enforce IP address checks.  If your network consists of multiple L2 subnets then you can either [peer over BGP with your routers]({{site.baseurl}}/{{page.version}}/networking/bgp), or use [cross-subnet encapsulation](#ipinip-or-vxlan-encapsulation) to encapsulate only traffic that crosses subnet boundaries.
+{{site.prodname}} can route pod traffic between nodes without encapsulation when all nodes are on a single L2 subnet, and if the underlying network doesn’t enforce IP address checks.  If your network consists of multiple L2 subnets then you can either [peer over BGP with your routers]({{site.baseurl}}/{{page.version}}/networking/bgp), or use [cross-subnet encapsulation](#ip-in-ip-or-vxlan-encapsulation) to encapsulate only traffic that crosses subnet boundaries.
   
 Traffic cannot be routed between pods and destinations that aren’t also in the {{site.prodname}} cluster without [NAT](new-how-to), or [peering with the infrastructure](#unencapsulated-peered-with-physical-infrastructure).
 
@@ -102,7 +102,7 @@ If possible, we recommend running {{site.prodname}} without network overlay/enca
 
 However, selectively using overlays (IP in IP or VXLAN) can be useful when running on top of an underlying network that cannot easily be made aware of workload IPs. {{site.prodname}} can perform encapsulation on: all traffic, no traffic, or only on traffic that crosses a subnet boundary. 
 
-IP in IP or VXLAN encapsulation can also be used selectively between subnets -- this provides the performance benefits of unencapsulated traffic within subnets, for environments where the fabric contains multiple L2 networks and peering isn’t available. For example, if you are using {{site.prodname}} networking in AWS across multiple VPCs/subnets, {{site.prodname}}can selectively encapsulate only the traffic that is routed between the VPCs/subnets, and run without encapsulation within each VPC/subnet. 
+IP in IP or VXLAN encapsulation can also be used selectively between subnets -- this provides the performance benefits of unencapsulated traffic within subnets, for environments where the fabric contains multiple L2 networks and peering isn’t available. For example, if you are using {{site.prodname}} networking in AWS across multiple VPCs/subnets, {{site.prodname}} can selectively encapsulate only the traffic that is routed between the VPCs/subnets, and run without encapsulation within each VPC/subnet. 
 
 ### Above and beyond
 
