@@ -40,6 +40,10 @@
 #	   +--------------+
 #
 ###############################################################################
+
+# Disable built-in rules
+.SUFFIXES:
+
 # Shortcut targets
 default: build
 
@@ -230,19 +234,16 @@ EXTRA_DOCKER_ARGS	+= -e GO111MODULE=on -v $(GOMOD_CACHE):/go/pkg/mod:rw
 
 # Build mounts for running in "local build" mode. This allows an easy build using local development code,
 # assuming that there is a local checkout of libcalico, typha and pod2daemon in the same directory as this repo.
-PHONY: local_build
-
 ifdef LOCAL_BUILD
+PHONY: set-up-local-build
+LOCAL_BUILD_DEP:=set-up-local-build
 EXTRA_DOCKER_ARGS+=-v $(CURDIR)/../libcalico-go:/go/src/github.com/projectcalico/libcalico-go:rw
 EXTRA_DOCKER_ARGS+=-v $(CURDIR)/../typha:/go/src/github.com/projectcalico/typha:rw
 EXTRA_DOCKER_ARGS+=-v $(CURDIR)/../pod2daemon:/go/src/github.com/projectcalico/pod2daemon:rw
-local_build:
+set-up-local-build:
 	$(DOCKER_RUN) $(CALICO_BUILD) go mod edit -replace=github.com/projectcalico/libcalico-go=../libcalico-go
 	$(DOCKER_RUN) $(CALICO_BUILD) go mod edit -replace=github.com/projectcalico/typha=../typha
 	$(DOCKER_RUN) $(CALICO_BUILD) go mod edit -replace=github.com/projectcalico/pod2daemon=../pod2daemon
-else
-local_build:
-	@echo "Building felix"
 endif
 
 DOCKER_RUN := mkdir -p .go-pkg-cache $(GOMOD_CACHE) && \
@@ -337,7 +338,7 @@ sub-build-%:
 bin/calico-felix: bin/calico-felix-$(ARCH)
 	ln -f bin/calico-felix-$(ARCH) bin/calico-felix
 
-bin/calico-felix-$(ARCH): $(SRC_FILES) local_build
+bin/calico-felix-$(ARCH): $(SRC_FILES) $(LOCAL_BUILD_DEP)
 	@echo Building felix for $(ARCH) on $(BUILDARCH)
 	mkdir -p bin
 	if [ "$(SEMAPHORE)" != "true" -o ! -e $@ ] ; then \
@@ -353,7 +354,8 @@ protobuf proto/felixbackend.pb.go: proto/felixbackend.proto
 		      --gogofaster_out=plugins=grpc:. \
 		      felixbackend.proto
 
-BPF_INC_FILES := bpf/include/bpf.h bpf/xdp/*.h
+BPF_INC_FILES := $(shell find bpf -name '*.h')
+BPF_C_FILES := $(shell find bpf -name '*.c')
 BPF_XDP_INC_FILES :=
 
 .PHONY: xdp
@@ -380,7 +382,7 @@ endif
 
 BPF_SOCKMAP_INC_FILES := bpf/sockmap/sockops.h
 
-bpf/sockmap/generated/sockops.o: bpf/sockmap/sockops.c $(BPF_INC_FILES) $(BPF_SOCKMAP_INC_FILES) 
+bpf/sockmap/generated/sockops.o: bpf/sockmap/sockops.c $(BPF_INC_FILES) $(BPF_SOCKMAP_INC_FILES)
 	mkdir -p bpf/sockmap/generated
 	$(DOCKER_RUN) $(CALICO_BUILD_CGO) \
 		      /bin/sh -c \
@@ -405,7 +407,7 @@ bpf/sockmap/generated/sockops.o: bpf/sockmap/sockops.c $(BPF_INC_FILES) $(BPF_SO
 			       /go/src/$(PACKAGE_NAME)/bpf/sockmap/generated/sockops.ll && \
 		       rm -f /go/src/$(PACKAGE_NAME)/bpf/sockmap/generated/sockops.ll"
 
-bpf/sockmap/generated/redir.o: bpf/sockmap/redir.c $(BPF_INC_FILES) $(BPF_SOCKMAP_INC_FILES) 
+bpf/sockmap/generated/redir.o: bpf/sockmap/redir.c $(BPF_INC_FILES) $(BPF_SOCKMAP_INC_FILES)
 	mkdir -p bpf/sockmap/generated
 	$(DOCKER_RUN) $(CALICO_BUILD_CGO) \
 		      /bin/sh -c \
@@ -433,7 +435,7 @@ bpf/sockmap/generated/redir.o: bpf/sockmap/redir.c $(BPF_INC_FILES) $(BPF_SOCKMA
 .PHONY: packr
 packr: bpf/bpf-packr.go bpf/packrd/packed-packr.go
 
-bpf/bpf-packr.go bpf/packrd/packed-packr.go: bpf/xdp/generated/xdp.o bpf/sockmap/generated/sockops.o bpf/sockmap/generated/redir.o 
+bpf/bpf-packr.go bpf/packrd/packed-packr.go: bpf/xdp/generated/xdp.o bpf/sockmap/generated/sockops.o bpf/sockmap/generated/redir.o
 	$(DOCKER_RUN) $(CALICO_BUILD_CGO) \
 		      /bin/sh -c \
 		      "go get -u github.com/gobuffalo/packr/v2/packr2 && cd /go/src/$(PACKAGE_NAME)/bpf && /go/bin/packr2"
@@ -453,12 +455,30 @@ sub-image-%:
 
 image: $(BUILD_IMAGE)
 $(BUILD_IMAGE): $(BUILD_IMAGE)-$(ARCH)
-$(BUILD_IMAGE)-$(ARCH): bin/calico-felix-$(ARCH) register bin/calico-bpf
+$(BUILD_IMAGE)-$(ARCH): bin/calico-felix-$(ARCH) \
+                        bin/calico-bpf \
+                        $(BPF_INC_FILES) \
+                        $(BPF_C_FILES) \
+                        docker-image/calico-felix-wrapper \
+                        docker-image/felix.cfg \
+                        docker-image/Dockerfile*
+	$(MAKE) register
+	# Reconstruct the bin and bpf directories because we don't want to accidentally add
+	# leftover files (say from a build on another branch) into the docker image.
 	rm -rf docker-image/bin
 	mkdir -p docker-image/bin
 	cp bin/calico-felix-$(ARCH) docker-image/bin/
 	cp bin/calico-bpf docker-image/bin/
-	cp -r bpf docker-image/
+	rm -rf docker-image/bpf
+	mkdir -p docker-image/bpf/include
+	mkdir -p docker-image/bpf/xdp
+	cp bpf/include/bpf.h docker-image/bpf/include/bpf.h
+	cp bpf/include/conntrack.h docker-image/bpf/include/conntrack.h
+	cp bpf/include/log.h docker-image/bpf/include/log.h
+	cp bpf/include/nat.h docker-image/bpf/include/nat.h
+	cp bpf/include/policy.h docker-image/bpf/include/policy.h
+	cp bpf/xdp/redir_tc.c docker-image/bpf/xdp/redir_tc.c
+	cp bpf/xdp/bpf_maps.h docker-image/bpf/xdp/bpf_maps.h
 	if [ "$(SEMAPHORE)" != "true" -o "$$(docker images -q $(BUILD_IMAGE):latest-$(ARCH) 2> /dev/null)" = "" ] ; then \
  	  docker build --pull -t $(BUILD_IMAGE):latest-$(ARCH) --build-arg QEMU_IMAGE=$(CALICO_BUILD) --file ./docker-image/Dockerfile.$(ARCH) docker-image; \
 	fi
@@ -594,8 +614,9 @@ fv/fv.test: $(SRC_FILES)
 	# outside a container and allow them to interact with docker.
 	$(DOCKER_RUN) $(CALICO_BUILD_CGO) go test $(BUILD_FLAGS) ./$(shell dirname $@) -c --tags fvtests -o $@
 
-.PHONY: remote-deps
-remote-deps:
+REMOTE_DEPS=fv/infrastructure/crds.yaml
+
+fv/infrastructure/crds.yaml: go.mod go.sum
 	$(DOCKER_RUN) $(CALICO_BUILD) sh -c ' \
 	go list all; \
 	cp `go list -m -f "{{.Dir}}" github.com/projectcalico/libcalico-go`/test/crds.yaml fv/infrastructure/crds.yaml; \
@@ -615,7 +636,7 @@ remote-deps:
 #	 ...
 #	 $(MAKE) fv FV_BATCHES_TO_RUN="10" FV_NUM_BATCHES=10    # the tenth 1/10
 #	 etc.
-fv fv/latency.log: remote-deps $(BUILD_IMAGE) bin/iptables-locker bin/test-workload bin/test-connection bin/calico-bpf fv/fv.test
+fv fv/latency.log: $(REMOTE_DEPS) $(BUILD_IMAGE) bin/iptables-locker bin/test-workload bin/test-connection bin/calico-bpf fv/fv.test
 	cd fv && \
 	  FV_FELIXIMAGE=$(FV_FELIXIMAGE) \
 	  FV_ETCDIMAGE=$(FV_ETCDIMAGE) \
@@ -667,7 +688,7 @@ k8sfv-test: $(BUILD_IMAGE) k8sfv-test-existing-felix
 # Run k8sfv test with whatever is the existing 'calico/felix:latest'
 # container image.  To use some existing Felix version other than
 # 'latest', do 'FELIX_VERSION=<...> make k8sfv-test-existing-felix'.
-k8sfv-test-existing-felix: remote-deps bin/k8sfv.test
+k8sfv-test-existing-felix: $(REMOTE_DEPS) bin/k8sfv.test
 	FV_ETCDIMAGE=$(FV_ETCDIMAGE) \
 	FV_TYPHAIMAGE=$(FV_TYPHAIMAGE) \
 	FV_FELIXIMAGE=$(FV_FELIXIMAGE) \
@@ -712,25 +733,25 @@ stop-grafana:
 	@-docker rm -f k8sfv-grafana
 	sleep 2
 
-bin/calico-bpf: $(SRC_FILES) local_build
+bin/calico-bpf: $(SRC_FILES) $(LOCAL_BUILD_DEP)
 	@echo Building calico-bpf...
 	mkdir -p bin
 	$(DOCKER_RUN) $(CALICO_BUILD_CGO) \
 	    sh -c 'go build -v -i -o $@ -v $(BUILD_FLAGS) $(LDFLAGS) "$(PACKAGE_NAME)/cmd/calico-bpf"'
 
-bin/iptables-locker: $(SRC_FILES) local_build
+bin/iptables-locker: $(SRC_FILES) $(LOCAL_BUILD_DEP)
 	@echo Building iptables-locker...
 	mkdir -p bin
 	$(DOCKER_RUN) $(CALICO_BUILD) \
 	    sh -c 'go build -v -i -o $@ -v $(BUILD_FLAGS) $(LDFLAGS) "$(PACKAGE_NAME)/fv/iptables-locker"'
 
-bin/test-workload: $(SRC_FILES) local_build
+bin/test-workload: $(SRC_FILES) $(LOCAL_BUILD_DEP)
 	@echo Building test-workload...
 	mkdir -p bin
 	$(DOCKER_RUN) $(CALICO_BUILD) \
 	    sh -c 'go build -v -i -o $@ -v $(BUILD_FLAGS) $(LDFLAGS) "$(PACKAGE_NAME)/fv/test-workload"'
 
-bin/test-connection: $(SRC_FILES) local_build
+bin/test-connection: $(SRC_FILES) $(LOCAL_BUILD_DEP)
 	@echo Building test-connection...
 	mkdir -p bin
 	$(DOCKER_RUN) $(CALICO_BUILD) \
