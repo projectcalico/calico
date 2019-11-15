@@ -170,7 +170,7 @@ func (c *profileClient) List(ctx context.Context, list model.ListInterface, revi
 
 		kvps = append(kvps, kvp)
 		return &model.KVPairList{
-			KVPairs:  []*model.KVPair{kvp},
+			KVPairs:  kvps,
 			Revision: revision,
 		}, nil
 	}
