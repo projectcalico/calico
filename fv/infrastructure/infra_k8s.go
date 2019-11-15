@@ -156,6 +156,9 @@ func runK8sControllerManager(apiserverIp string) *containers.Container {
 }
 
 func setupK8sDatastoreInfra() (*K8sDatastoreInfra, error) {
+	log.Info("Starting Kubernetes infrastructure")
+
+	log.Info("Starting etcd")
 	kds := &K8sDatastoreInfra{}
 
 	// Start etcd, which will back the k8s API server.
@@ -163,6 +166,7 @@ func setupK8sDatastoreInfra() (*K8sDatastoreInfra, error) {
 	if kds.etcdContainer == nil {
 		return nil, errors.New("failed to create etcd container")
 	}
+	log.Info("Started etcd")
 
 	// Start the k8s API server.
 	//
@@ -174,6 +178,7 @@ func setupK8sDatastoreInfra() (*K8sDatastoreInfra, error) {
 	// authorization mode.  So we specify the "RBAC" authorization mode instead, and create a
 	// ClusterRoleBinding that gives the "system:anonymous" user unlimited power (aka the
 	// "cluster-admin" role).
+	log.Info("Starting API server")
 	kds.k8sApiContainer = runK8sApiserver(kds.etcdContainer.IP)
 
 	if kds.k8sApiContainer == nil {
@@ -239,6 +244,7 @@ func setupK8sDatastoreInfra() (*K8sDatastoreInfra, error) {
 	}
 	log.Info("List namespaces successfully.")
 
+	log.Info("Starting controller manager.")
 	kds.k8sControllerManager = runK8sControllerManager(kds.k8sApiContainer.IP)
 	if kds.k8sApiContainer == nil {
 		TearDownK8sInfra(kds)
