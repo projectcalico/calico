@@ -139,11 +139,13 @@ func describeBPFTests(protocol string) bool {
 		})
 
 		AfterEach(func() {
+			log.Info("AfterEach starting")
 			for _, f := range felixes {
 				f.Stop()
 			}
 			infra.Stop()
 			externalClient.Stop()
+			log.Info("AfterEach done")
 		})
 
 		It("should deny all by default", func() {
@@ -171,7 +173,7 @@ func describeBPFTests(protocol string) bool {
 		}
 		_ = updatePolicy
 
-		Context("with a policy allowing ingress to w[0][0]", func() {
+		Context("with a policy allowing ingress to w[0][0] from all workloads", func() {
 			var (
 				pol       *api.GlobalNetworkPolicy
 				k8sClient *kubernetes.Clientset
@@ -237,6 +239,40 @@ func describeBPFTests(protocol string) bool {
 					cc.ExpectSome(w[1][0], workload.IP(ip), port)
 					cc.ExpectSome(w[1][1], workload.IP(ip), port)
 					cc.CheckConnectivity()
+				})
+
+				It("should not have connectivity from the hosts via a service to workload 0", func() {
+					ip := testSvc.Spec.ClusterIP
+					port := uint16(testSvc.Spec.Ports[0].Port)
+
+					cc.ExpectNone(felixes[0], workload.IP(ip), port)
+					cc.ExpectNone(felixes[1], workload.IP(ip), port)
+					cc.CheckConnectivity()
+				})
+
+				Describe("after updating the policy to allow traffic from hosts", func() {
+					BeforeEach(func() {
+						pol.Spec.Ingress = []api.Rule{
+							{
+								Action: "Allow",
+								Source: api.EntityRule{
+									Nets: []string{felixes[0].IP+"/32", felixes[1].IP+"/32"},
+								},
+							},
+						}
+						pol = updatePolicy(pol)
+					})
+
+					It("should have connectivity from the hosts via a service to workload 0", func() {
+						ip := testSvc.Spec.ClusterIP
+						port := uint16(testSvc.Spec.Ports[0].Port)
+
+						cc.ExpectSome(felixes[0], workload.IP(ip), port)
+						// cc.ExpectSome(felixes[1], workload.IP(ip), port)
+						// cc.ExpectNone(w[0][1], workload.IP(ip), port)
+						// cc.ExpectNone(w[1][0], workload.IP(ip), port)
+						cc.CheckConnectivity()
+					})
 				})
 
 				It("should create sane conntrack entries and clean them up", func() {
