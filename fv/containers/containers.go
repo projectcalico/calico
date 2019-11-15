@@ -125,7 +125,7 @@ func withTimeoutPanic(logCxt *log.Entry, t time.Duration, f func()) {
 func (c *Container) execDockerStop() {
 	logCxt := log.WithField("container", c.Name)
 	logCxt.Info("Executing 'docker stop'")
-	cmd := exec.Command("docker", "stop", c.Name)
+	cmd := exec.Command("docker", "stop", "-t0", c.Name)
 	err := cmd.Run()
 	if err != nil {
 		logCxt.WithError(err).WithField("cmd", cmd).Error("docker stop command failed")
