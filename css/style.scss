@@ -79,6 +79,24 @@ div.highlight {
     box-sizing: content-box;
 }
 
+.right-toc {
+  position: absolute;
+
+  right: 25px;
+
+  width: 20%;
+
+  color: #004078;
+}
+
+.container-fix {
+  margin-left: 50px;
+}
+
+.current {
+  color: #f79518;
+}
+
 input.gsc-input, .gsc-input-box, .gsc-input-box-hover, .gsc-input-box-focus, .gsc-search-button {
     box-sizing: content-box;
     line-height: normal;

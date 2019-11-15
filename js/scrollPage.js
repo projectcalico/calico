@@ -1,63 +1,51 @@
 
 (function() {
     let globalLink = undefined;
+    
+    document.body.addEventListener("scroll", function () {        
+        const calculationPoint = window.pageYOffset;
+    
+        const toc = document.getElementById("right-toc");
+        const links = Array.from(toc.getElementsByTagName("a"));
+        const ids = links.map(l => {
+            const href = l.href.split("#");
+            const id = href[1];
 
-    function scrollPage() {    
-        const viewHeight = window.innerHeight;
-        const calculationPoint = viewHeight * 0.3;
-    
-        const firstHeadings = Array.from(document.getElementsByTagName("h1"));
-        const secondHeadings = Array.from(document.getElementsByTagName("h2"));
-        const thirdHeadings = Array.from(document.getElementsByTagName("h3"));
-        const forthHeadings = Array.from(document.getElementsByTagName("h4"));
-        const fifthHeadings = Array.from(document.getElementsByTagName("h5"));
-        const sixsHeadings = Array.from(document.getElementsByTagName("h6"));
-    
-        document.get
-    
-        const allHeadings = [
-            ...firstHeadings,
-            ...secondHeadings,
-            ...thirdHeadings,
-            ...forthHeadings,
-            ...fifthHeadings,
-            ...sixsHeadings,
-        ];
+            return id;
+        })
     
         let nearestId = '';
         let currentNearestPos = Number.MAX_SAFE_INTEGER;
         
-        allHeadings.forEach(h => {
-            const headingRect = h.getBoundingClientRect();
+        for(let i of ids) {
+            const heading = document.getElementById(i);
+            const headingRect = heading.getBoundingClientRect();
             const yPosition = headingRect.y;
     
             if (yPosition === calculationPoint) {
-                nearestId = h.id;
+                nearestId = i;
                 currentNearestPos = 0;
     
-                return;
+                break;
             }
     
             const diff = yPosition < calculationPoint
-                ? calculationPoint - yPosition
+                ? Number.MAX_SAFE_INTEGER
                 : yPosition - calculationPoint;
     
             if (currentNearestPos > diff) {
                 currentNearestPos = yPosition;
-                nearestId = h.id;
-    
-                return;
+                nearestId = i;
             }
-        })
+        };
     
-        var link = document.querySelectorAll(`a[href=#${nearestId}]`)[0];
-        link.className = 'current';
+        var link = links.find(l => l.href.split("#")[1] === nearestId);
     
         if (globalLink) {
             globalLink.className = '';
-            globalLink = link;
         }
-    };
-    
-    window.addEventListener("scroll", scrollPage);
+        globalLink = link;
+
+        link.className = 'current';
+    });
 })()

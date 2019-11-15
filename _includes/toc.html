@@ -89,8 +89,6 @@
 {{ my_toc | lstrip }}{% endcapture %}
     {% endif %}
 
-    {% if include.id %}
-        {% capture my_toc %}{: #{{ include.id }}}
+        {% capture my_toc %}{: #right-toc}
 {{ my_toc | lstrip }}{% endcapture %}
-    {% endif %}
 {% endcapture %}{% assign tocWorkspace = '' %}{{ my_toc | markdownify | strip }}
