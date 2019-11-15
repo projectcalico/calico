@@ -1,5 +1,5 @@
 ---
-title: Use IPVS kube-proxy 
+title: Use IPVS kube-proxy
 ---
 
 ### Big picture
@@ -8,7 +8,7 @@ Use IPVS kube-proxy mode for load balancing traffic across pods.
 
 ### Value
 
-No matter where you are on your journey with container networking, iptables will serve you well. However, if you are scaling above 1,000 services, it’s worth looking at potential performance improvements using kube-proxy IPVS mode. 
+No matter where you are on your journey with container networking, iptables will serve you well. However, if you are scaling above 1,000 services, it’s worth looking at potential performance improvements using kube-proxy IPVS mode.
 
 ### Features
 
@@ -20,7 +20,7 @@ This how-to guide uses the following {{site.prodname}} features:
 
 #### Kubernetes kube-proxy
 
-Kube-proxy process handles everything related to Services on each node. It ensures that connections to the service cluster IP and port go to a pod that backs the service. If backed by more than one service, kube-proxy load-balances traffic across pods. 
+Kube-proxy process handles everything related to Services on each node. It ensures that connections to the service cluster IP and port go to a pod that backs the service. If backed by more than one service, kube-proxy load-balances traffic across pods.
 
 Kube-proxy runs in three modes: **userspace**, **iptables**, and **ipvs**. (Userspace is old, slow and not recommended.) Here’s a quick summary of iptables and ipvs modes.
 
@@ -33,15 +33,15 @@ If you are wondering about the performance differences between iptables and ipvs
 
 #### IPVS mode and NodePort ranges
 
-Kube-proxy IPVS mode supports NodePort services and cluster IPs. {{site.prodname}} also uses NodePorts for routing traffic to the cluster, including the same default Kubernetes NodePort range (30000:32767).  If you change your default NodePort range in Kubernetes, you must also change it on {{site.prodname}} to maintain ipvs coverage. 
+Kube-proxy IPVS mode supports NodePort services and cluster IPs. {{site.prodname}} also uses NodePorts for routing traffic to the cluster, including the same default Kubernetes NodePort range (30000:32767).  If you change your default NodePort range in Kubernetes, you must also change it on {{site.prodname}} to maintain ipvs coverage.
 
 #### iptables: when to change mark bits
 
-To police traffic in IPVS mode, {{site.prodname}} uses additional iptables mark bits to store an ID for each local {{site.prodname}} endpoint. If you are planning to run more than 1,022 pods per host with IPVS enabled, you may need to adjust the mark bit size using the `IptablesMarkMask` parameter in {{site.prodname}} [FelixConfiguration]({{site.baseurl}}/{{page.version}}/reference/felix/configuration#ipvs-bits). 
+To police traffic in IPVS mode, {{site.prodname}} uses additional iptables mark bits to store an ID for each local {{site.prodname}} endpoint. If you are planning to run more than 1,022 pods per host with IPVS enabled, you may need to adjust the mark bit size using the `IptablesMarkMask` parameter in {{site.prodname}} [FelixConfiguration]({{site.baseurl}}/{{page.version}}/reference/felix/configuration#ipvs-bits).
 
 #### {{site.prodname}} auto detects ipvs mode
 
-When {{site.prodname}} detects that kube-proxy is running in IPVS mode (during or after installation), IPVS support is automatically activated. 
+When {{site.prodname}} detects that kube-proxy is running in IPVS mode (during or after installation), IPVS support is automatically activated.
 
 ### Before you begin...
 
@@ -52,8 +52,8 @@ When {{site.prodname}} detects that kube-proxy is running in IPVS mode (during o
 
 ### How to
 
-As previously discussed, there is nothing you need to do in {{site.prodname}} to use IPVS mode; if enabled, the mode is automatically detected. However, if your default Kubernetes NodePort range changes, use the following instructions to update {{site.prodname}} nodeport ranges to stay in sync. 
+As previously discussed, there is nothing you need to do in {{site.prodname}} to use IPVS mode; if enabled, the mode is automatically detected. However, if your default Kubernetes NodePort range changes, use the following instructions to update {{site.prodname}} nodeport ranges to stay in sync.
 
 #### Change {{site.prodname}} default nodeport range
 
-In the FelixConfiguration resource, change the configuration parameter for the default node port range (`KubeNodePortRange`,) in {{site.prodname}} to match your new default range in Kubernetes. For help, see [FelixConfiguration](https://docs.projectcalico.org/master/reference/felix/configuration#). 
+In the FelixConfiguration resource, change the configuration parameter for the default node port range (`KubeNodePortRange`,) in {{site.prodname}} to match your new default range in Kubernetes. For help, see [FelixConfiguration](https://docs.projectcalico.org/master/reference/felix/configuration).
