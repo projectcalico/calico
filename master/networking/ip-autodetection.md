@@ -19,7 +19,7 @@ When you install {{site.prodname}} on a node, an IP address and subnet is automa
 
 This how-to guide uses the following {{site.prodname}} features:
 
-- **Node** resource 
+- **Node** resource
 
 ### Concepts
 
@@ -42,7 +42,7 @@ spec:
     ipv4IPIPTunnelAddr: 192.168.0.1
 ```
 
-#### Auto detection methods 
+#### Auto detection methods
 
 By default, {{site.prodname}} uses the **first-found** method; the first valid IP address on the first interface (excluding local interfaces such as the docker bridge). However, you can change the default method to any of the following:
 
@@ -50,21 +50,21 @@ By default, {{site.prodname}} uses the **first-found** method; the first valid I
 - Regex to include matching interfaces (**interface**)
 - Regex to exclude matching interfaces (**skip-interface**)
 
-For details on auto detection methods, see [calicoctl node run]({{site.baseurl}}/{{page.version}}/reference/calicoctl/node/run#displaying-the-help-text-for-calicoctl-node-run-command).
+For details on auto detection methods, see [node configuration]({{site.baseurl}}/{{page.version}}/reference/node/configuration#ip-autodetection-methods) reference.
 
 #### Manually configure IP address and subnet
 
 There are two ways to manually configure an IP address and subnet:
 
-- {{site.prodname}} node container (start/restart)   
-  Use environment variables and command line options to set values for nodes. 
+- {{site.prodname}} node container (start/restart)
+  Use environment variables to set values for nodes.
 
-- {{site.prodname}} node resource   
+- {{site.prodname}} node resource
   Update the node resource.
 
 ##### Using environment variables and node resource
 
-Because you can configure IP address and subnet using either environment variables or node resource, the following table describes how values are synchronized. 
+Because you can configure IP address and subnet using either environment variables or node resource, the following table describes how values are synchronized.
 
 | **If this environment variable...** | **Is...**                                             | **Then...**                                                  |
 | ----------------------------------- | ----------------------------------------------------- | ------------------------------------------------------------ |
@@ -81,44 +81,52 @@ Because you can configure IP address and subnet using either environment variabl
 
 #### Change the auto detection method
 
-As noted previously, the default auto detection method is **first valid interface found** (first-found). To use a different auto detection method, use the following {{site.prodnamedash}} node run command, specifying the method:
+As noted previously, the default auto detection method is **first valid interface found** (first-found). To use a different auto detection method, use the following `kubectl patch` command, specifying the method:
 
 - **IPv4**
 
   ```
-  calicoctl node run  --ip-autodetection-method=<autodetection-method>
-  ``` 	
-- **IPv6** 
+  kubectl patch ds -n kube-system calico-node --patch \
+      '{"spec": {"template": {"spec": {"containers": [{"name": "calico-node", "env": [{"name": "IP_AUTODETECTION_METHOD", "value": "<autodetection-method>"}]}]}}}}'
+  ```
+
+- **IPv6**
 
   ```
-  calicoctl node run --ip6-autodetection-method=<autodetection-method>
-  ``` 	
+  kubectl patch ds -n kube-system calico-node --patch \
+      '{"spec": {"template": {"spec": {"containers": [{"name": "calico-node", "env": [{"name": "IP6_AUTODETECTION_METHOD", "value": "<autodetection-method>"}]}]}}}}'
+  ```
 
 Where auto-detection methods are based on:
 
-- **IP or domain name** 
+- **IP or domain name**
 
-  A reachable destination (IP address or domain). For example: 
+  A reachable destination (IP address or domain). For example:
 
   ```
-  calicoctl node run  --ip-autodetection-method=can-reach=8.8.8.8
-  calicoctl node run  --ip-autodetection-method=can-reach=www.google.com
-  ```   
+  kubectl patch ds -n kube-system calico-node --patch \
+      '{"spec": {"template": {"spec": {"containers": [{"name": "calico-node", "env": [{"name": "IP_AUTODETECTION_METHOD", "value": "can-reach=8.8.8.8"}]}]}}}}'
 
-- **Including matching interfaces**  
+  kubectl patch ds -n kube-system calico-node --patch \
+      '{"spec": {"template": {"spec": {"containers": [{"name": "calico-node", "env": [{"name": "IP_AUTODETECTION_METHOD", "value": "can-reach=www.google.com"}]}]}}}}'
+  ```
+
+- **Including matching interfaces**
 
   A regular expression in golang syntax that includes interfaces that match. For example:
 
   ```
-  calicoctl node run  --ip-autodetection-method=interface=eth.*
+  kubectl patch ds -n kube-system calico-node --patch \
+      '{"spec": {"template": {"spec": {"containers": [{"name": "calico-node", "env": [{"name": "IP_AUTODETECTION_METHOD", "value": "interface=eth.*"}]}]}}}}'
   ```
 
-- **Excluding matching interfaces**  
+- **Excluding matching interfaces**
 
   A regular expression in golang syntax that excludes interfaces that match. For example:
 
   ```
-  calicoctl node run --ip6-autodetection-method=skip-interface=eth.*
+  kubectl patch ds -n kube-system calico-node --patch \
+      '{"spec": {"template": {"spec": {"containers": [{"name": "calico-node", "env": [{"name": "IP_AUTODETECTION_METHOD", "value": "skip-interface=eth.*"}]}]}}}}'
   ```
 
 #### Manually configure IP address and subnet for a node
@@ -134,13 +142,14 @@ You can configure specific IP address and subnet for a node using environment va
 
 ##### Configure IP and subnet using environment variables
 
-To configure IP and subnet values using environment variables, use the `calicoctl node run` command. For example:
+To configure IP and subnet values using environment variables, use a `kubectl patch` command. For example:
 
 ```
-calicoctl node run --ip=10.0.2.10/24 --ip6=fd80:24e2:f998:72d6::/120
+kubectl patch ds -n kube-system calico-node --patch \
+    '{"spec": {"template": {"spec": {"containers": [{"name": "calico-node", "env": [{"name": "IP", "value": "10.0.2.10/24"}, {"name": "IP6", "value": "fd80:24e2:f998:72d6::/120"}]}]}}}}'
 ```
 
-Where: 
+Where:
 
 - IP4 flag: --ip
 - IP6 flag: --ip6
@@ -151,7 +160,7 @@ Where:
 
 ##### Configure IP and subnet using node resource
 
-You can also configure the IP address and subnet on a Node resource. 
+You can also configure the IP address and subnet on a Node resource.
 
 >**Tip**: When configuring the IP address on a Node resource, you may want to disable IP address options or environment variables on the node. IP options on the container take precedence, and will overwrite the values you configure on the node resource.
 {: .alert .alert-info}
@@ -190,6 +199,6 @@ spec:
 
 ### Above and beyond
 
-- For details on auto detection methods, see [calicoctl node run]({{site.baseurl}}/{{page.version}}/reference/calicoctl/node/run#displaying-the-help-text-for-calicoctl-node-run-command)
+- For details on auto detection methods, see the [node configuration]({{site.baseurl}}/{{page.version}}/reference/node/configuration#ip-autodetection-methods) reference.
 - For calicoctl environment variables, see [Configuring {{site.nodecontainer}}]({{site.baseurl}}/{{page.version}}/reference/node/configuration)
 - [Node resource]({{site.baseurl}}/{{page.version}}/reference/resources/node)
