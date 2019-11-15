@@ -134,10 +134,15 @@ func runK8sControllerManager(apiserverIp string) *containers.Container {
 		utils.Config.K8sImage,
 		"/hyperkube", "controller-manager",
 		fmt.Sprintf("--master=%v:8080", apiserverIp),
+		// We run trivially small clusters, so increase the QPS to get the
+		// cluster to start up as fast as possible.
+		"--kube-api-qps=100",
+		"--kube-api-burst=200",
 		"--min-resync-period=3m",
-		"--allocate-node-cidrs=true",
-		"--cluster-cidr=192.168.0.0/16",
-		"--v=5",
+		// Disable node CIDRs since the controller manager stalls for 10s if
+		// they are enabled.
+		"--allocate-node-cidrs=false",
+		"--v=3",
 		"--service-account-private-key-file=/private.key",
 	)
 	return c
