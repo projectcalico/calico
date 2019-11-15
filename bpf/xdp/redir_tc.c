@@ -124,7 +124,7 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb, enum calico_tc_flags
 	if (!CALI_TC_FLAGS_TO_HOST(flags) && skb->mark == CALI_SKB_MARK_BYPASS) {
 		CALI_DEBUG("Packet pre-approved by another hook, allow.\n");
 		reason = CALI_REASON_BYPASS;
-		goto allow;
+		goto allow_bypass;
 	}
 
 	uint32_t seen_mark = CALI_SKB_MARK_SEEN;
@@ -494,9 +494,9 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb, enum calico_tc_flags
 		}
 	}
 
-	// Try a short-circuit FIB lookup.
-	allow:
+allow:
 
+	// Try a short-circuit FIB lookup.
 	if (!CALI_TC_FLAGS_L3(flags) && CALI_FIB_LOOKUP_ENABLED && CALI_TC_FLAGS_TO_HOST(flags)) {
 		CALI_DEBUG("Traffic is towards the host namespace, doing Linux FIB lookup\n");
 		fib_params.l4_protocol = ip_proto;
@@ -526,7 +526,8 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb, enum calico_tc_flags
 		}
 	}
 
-	allow_skip_fib:
+allow_skip_fib:
+allow_bypass:
 	if (CALI_TC_FLAGS_TO_HOST(flags)) {
 		// Packet is towards host namespace, mark it so that downstream programs know that they're
 		// not the first to see the packet.
@@ -543,7 +544,7 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb, enum calico_tc_flags
 	}
 	return rc;
 
-	deny:
+deny:
 	if (CALI_LOG_LEVEL >= CALI_LOG_LEVEL_INFO) {
 		uint64_t prog_end_time = bpf_ktime_get_ns();
 		CALI_INFO("Final result=DENY (%x). Program execution time: %lluns\n", reason, prog_end_time-prog_start_time);
