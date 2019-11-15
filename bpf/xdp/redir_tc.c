@@ -110,6 +110,46 @@ static CALI_BPF_INLINE enum calico_policy_result execute_policy_do_not_track(str
 
 #endif /* CALI_DEBUG_ALLOW_ALL */
 
+static CALI_BPF_INLINE struct iphdr *skb_iphdr(struct __sk_buff *skb, enum calico_tc_flags flags)
+{
+	struct ethhdr *eth;
+	struct iphdr *ip = NULL;
+
+	if (CALI_TC_FLAGS_IPIP_ENCAPPED(flags)) {
+		// Ingress on an IPIP tunnel: skb is [ether|outer IP|inner IP|payload]
+
+		struct iphdr *ipip;
+
+		if (skb_shorter(skb, ETH_IPV4_UDP_SIZE + sizeof(struct iphdr))) {
+			goto deny;
+		}
+
+		eth = (void *)(long)skb->data;
+		ipip = (void *)(eth + 1);
+		ip = ipip + 1;
+		CALI_DEBUG("IPIP; inner s=%x d=%x\n", be32_to_host(ip->saddr), be32_to_host(ip->daddr));
+	} else if (CALI_TC_FLAGS_L3(flags)) {
+		// Egress on an IPIP tunnel: skb is [inner IP|payload]
+		if (skb_shorter(skb, IPV4_UDP_SIZE)) {
+			goto deny;
+		}
+		ip = (void *)(long)skb->data;
+		CALI_DEBUG("IP; (L3) s=%x d=%x\n", be32_to_host(ip->saddr), be32_to_host(ip->daddr));
+	} else {
+		// Normal L2 interface: skb is [ether|IP|payload]
+		if (skb_shorter(skb, ETH_IPV4_UDP_SIZE)) {
+			goto deny;
+		}
+		eth = (void *)(long)skb->data;
+		ip = (void *)(eth + 1);
+		CALI_DEBUG("IP; s=%x d=%x\n", be32_to_host(ip->saddr), be32_to_host(ip->daddr));
+	}
+	// TODO Deal with IP header with options.
+
+deny:
+	return ip;
+}
+
 static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb, enum calico_tc_flags flags) {
 	enum calico_reason reason = CALI_REASON_UNKNOWN;
 	uint64_t prog_start_time;
@@ -132,13 +172,13 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb, enum calico_tc_flags
 	// Parse the packet.
 
 	// TODO Do we need to handle any odd-ball frames here (e.g. with a 0 VLAN header)?
-	switch (skb->protocol) {
-	case be16_to_host(ETH_P_IP):
+	switch (host_to_be16(skb->protocol)) {
+	case ETH_P_IP:
 		break;
-	case be16_to_host(ETH_P_ARP):
+	case ETH_P_ARP:
 		CALI_DEBUG("ARP: allowing packet\n");
 		goto allow_skip_fib;
-	case be16_to_host(ETH_P_IPV6):
+	case ETH_P_IPV6:
 		if (!(flags & CALI_TC_HOST_EP)) {
 			CALI_DEBUG("IPv6 from workload: drop\n");
 			return TC_ACT_SHOT;
@@ -157,40 +197,13 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb, enum calico_tc_flags
 		}
 	}
 
-	struct ethhdr *eth_hdr;
-	struct iphdr *ip_header;
-	if (CALI_TC_FLAGS_IPIP_ENCAPPED(flags)) {
-		// Ingress on an IPIP tunnel: skb is [ether|outer IP|inner IP|payload]
-		if (skb_shorter(skb, ETH_IPV4_UDP_SIZE + sizeof(struct iphdr))) {
-			CALI_DEBUG("Too short\n");
-			reason = CALI_REASON_SHORT;
-			goto deny;
-		}
-		eth_hdr = (void *)(long)skb->data;
-		struct iphdr *ipip_header = (void *)(eth_hdr+1);
-		ip_header = ipip_header+1;
-		CALI_DEBUG("IPIP; inner s=%x d=%x\n", be32_to_host(ip_header->saddr), be32_to_host(ip_header->daddr));
-	} else if (CALI_TC_FLAGS_L3(flags)) {
-		// Egress on an IPIP tunnel: skb is [inner IP|payload]
-		if (skb_shorter(skb, IPV4_UDP_SIZE)) {
-			CALI_DEBUG("Too short\n");
-			reason = CALI_REASON_SHORT;
-			goto deny;
-		}
-		ip_header = (void *)(long)skb->data;
-		CALI_DEBUG("IP; (L3) s=%x d=%x\n", be32_to_host(ip_header->saddr), be32_to_host(ip_header->daddr));
-	} else {
-		// Normal L2 interface: skb is [ether|IP|payload]
-		if (skb_shorter(skb, ETH_IPV4_UDP_SIZE)) {
-			CALI_DEBUG("Too short\n");
-			reason = CALI_REASON_SHORT;
-			goto deny;
-		}
-		eth_hdr = (void *)(long)skb->data;
-		ip_header = (void *)(eth_hdr+1);
-		CALI_DEBUG("IP; s=%x d=%x\n", be32_to_host(ip_header->saddr), be32_to_host(ip_header->daddr));
+	struct iphdr *ip_header = NULL;
+
+	if (!(ip_header = skb_iphdr(skb, flags))) {
+		reason = CALI_REASON_SHORT;
+		CALI_DEBUG("Too short\n");
+		goto deny;
 	}
-	// TODO Deal with IP header with options.
 
 	// Setting all of these up-front to keep the verifier happy.
 	struct tcphdr *tcp_header = (void*)(ip_header+1);
@@ -510,7 +523,7 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb, enum calico_tc_flags
 				reason = CALI_REASON_SHORT;
 				goto deny;
 			}
-			eth_hdr = (void *)(long)skb->data;
+			struct ethhdr *eth_hdr = (void *)(long)skb->data;
 			__builtin_memcpy(&eth_hdr->h_source, &fib_params.smac, sizeof(eth_hdr->h_source));
 			__builtin_memcpy(&eth_hdr->h_dest, &fib_params.dmac, sizeof(eth_hdr->h_dest));
 
