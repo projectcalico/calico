@@ -16,13 +16,20 @@ It then uses vagrant to
 
 ## How to use the Kind Recipe (Recommended)
 
+Options:
+
+	- BUILD_CALICO: if "false", wont compile all the source before deploying.
+	- ROOT_CALICO_REPOS_DIR: the place where all your source is stored.
+
 Example:
 
 ```
-	ROOT_CALICO_REPOS_DIR=/home/jayunit100/calico_all ./kind-local-up.sh
+	ROOT_CALICO_REPOS_DIR=~/calico_all/ BUILD_CALICO=true ./kind-local-up.sh
 	echo "play with your cluster for a while"
-	kind delete cluster
+	kind delete cluster calico-test
 ```
+
+
 
 The kind recipe uses kubernetes' kind to run locally build images and starts a kind cluster, you can run
 it easily, and it will *build* all of calico for you as well, by just running "ROOT_CALICO_REPOS_DIR=/calico_all kind-local-up.sh" .  Of course, that assumes you've cloned all of the calico repositories into /calico_all.  IF they are somewhere else, thats also fine.  Make sure you can run *docker* as the user who starts this script, and that you've installed *kind* as well as *kubectl*.  IF you don't have any of these tools, the Vagrant recipe might be easier for you to adopt, as it
