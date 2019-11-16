@@ -64,6 +64,8 @@ toc:
   path: /networking/add-floating-ip
 - title: Get started with IP address management
   path: /networking/get-started-ip-addresses
+- title: Use IPVS kube-proxy
+  path: /networking/use-ipvs  
 - title: Configure workload access outside cluster
   path: /networking/workloads-outside-cluster
 - title: Advertise Kubernetes service IP addresses
