@@ -5,8 +5,7 @@ If your etcd cluster has authentication enabled, you must also configure the
 relevant {{site.prodname}} components with an etcd user name and password.  You
 can create a single etcd user for {{site.prodname}} that has permission to read
 and write any key beginning with `/calico/`, or you can create specific etcd
-users for each component, with the more precise permissions that that component
-needs.
+users for each component, with more precise permissions.
 
 This table sets out where to configure each component of {{site.prodname}} for
 OpenStack, and the detailed access permissions that each component needs:
