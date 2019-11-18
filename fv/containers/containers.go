@@ -159,10 +159,19 @@ type RunOpts struct {
 }
 
 func Run(namePrefix string, opts RunOpts, args ...string) (c *Container) {
+	name := UniqueName(namePrefix)
+	return RunWithFixedName(name, opts, args...)
+}
 
+func UniqueName(namePrefix string) string {
 	// Build unique container name and struct.
 	containerIdx++
-	c = &Container{Name: fmt.Sprintf("%v-%d-%d-felixfv", namePrefix, os.Getpid(), containerIdx)}
+	name := fmt.Sprintf("%v-%d-%d-felixfv", namePrefix, os.Getpid(), containerIdx)
+	return name
+}
+
+func RunWithFixedName(name string, opts RunOpts, args ...string) (c *Container) {
+	c = &Container{Name: name}
 
 	// Prep command to run the container.
 	log.WithField("container", c).Info("About to run container")

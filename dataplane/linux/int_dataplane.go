@@ -150,6 +150,7 @@ type Config struct {
 	XDPEnabled           bool
 	XDPAllowGeneric      bool
 	BPFConntrackTimeouts conntrack.Timeouts
+	BPFCgroupV2          string
 
 	SidecarAccelerationEnabled bool
 
@@ -487,7 +488,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		}
 
 		// Activate the connect-time load balancer.
-		err = nat.InstallConnectTimeLoadBalancer(frontendMap, backendMap)
+		err = nat.InstallConnectTimeLoadBalancer(frontendMap, backendMap, config.BPFCgroupV2)
 		if err != nil {
 			log.WithError(err).Panic("Failed to attach connect-time load balancer.")
 		}

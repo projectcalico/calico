@@ -256,7 +256,7 @@ func describeBPFTests(protocol string) bool {
 							{
 								Action: "Allow",
 								Source: api.EntityRule{
-									Nets: []string{felixes[0].IP+"/32", felixes[1].IP+"/32"},
+									Nets: []string{felixes[0].IP + "/32", felixes[1].IP + "/32"},
 								},
 							},
 						}
@@ -268,9 +268,9 @@ func describeBPFTests(protocol string) bool {
 						port := uint16(testSvc.Spec.Ports[0].Port)
 
 						cc.ExpectSome(felixes[0], workload.IP(ip), port)
-						// cc.ExpectSome(felixes[1], workload.IP(ip), port)
-						// cc.ExpectNone(w[0][1], workload.IP(ip), port)
-						// cc.ExpectNone(w[1][0], workload.IP(ip), port)
+						cc.ExpectSome(felixes[1], workload.IP(ip), port)
+						cc.ExpectNone(w[0][1], workload.IP(ip), port)
+						cc.ExpectNone(w[1][0], workload.IP(ip), port)
 						cc.CheckConnectivity()
 					})
 				})

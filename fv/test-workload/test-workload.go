@@ -20,6 +20,7 @@ import (
 	"net"
 	"os"
 	"os/exec"
+	"path"
 	"strings"
 	"time"
 
@@ -42,6 +43,36 @@ Usage:
 
 func main() {
 	log.SetLevel(log.DebugLevel)
+
+	cgroup := os.Getenv("FELIX_BPFCGROUPV2")
+	if cgroup != "" {
+		log.WithField("cgroup", cgroup).Info("Moving to cgroup")
+		cgroupPath := path.Join("/run/calico/cgroup/", cgroup)
+		startTime := time.Now()
+		for {
+			if _, err := os.Stat(cgroupPath); err == nil {
+				myPid := os.Getpid()
+				file, err := os.OpenFile(path.Join(cgroupPath, "cgroup.procs"), os.O_WRONLY, 0700)
+				if err != nil {
+					log.WithError(err).Panic("Failed to open cgroup.procs")
+				}
+				_, err = file.WriteString(fmt.Sprint(myPid, "\n"))
+				if err != nil {
+					log.WithError(err).Panic("Failed to write cgroup")
+				}
+				err = file.Close()
+				if err != nil {
+					log.WithError(err).Panic("Failed to close cgroup")
+				}
+				break
+			}
+			if time.Since(startTime) > 10*time.Second {
+				log.Panic("cgroup never appeared")
+			}
+			time.Sleep(time.Second)
+		}
+		log.WithField("cgroup", cgroup).Info("Moved to cgroup")
+	}
 
 	arguments, err := docopt.ParseArgs(usage, nil, "v0.1")
 	if err != nil {

@@ -17,6 +17,7 @@ package infrastructure
 import (
 	"fmt"
 	"os"
+	"path"
 
 	log "github.com/sirupsen/logrus"
 
@@ -43,7 +44,7 @@ func (f *Felix) GetFelixPIDs() []int {
 	return f.GetPIDs("calico-felix")
 }
 
-func RunFelix(infra DatastoreInfra, options TopologyOptions) *Felix {
+func RunFelix(infra DatastoreInfra, id int, options TopologyOptions) *Felix {
 	log.Info("Starting felix")
 	ipv6Enabled := fmt.Sprint(options.EnableIPv6)
 
@@ -58,11 +59,17 @@ func RunFelix(infra DatastoreInfra, options TopologyOptions) *Felix {
 		"FELIX_USAGEREPORTINGENABLED":    "false",
 		"FELIX_IPV6SUPPORT":              ipv6Enabled,
 	}
+
 	for k, v := range options.ExtraEnvVars {
 		envVars[k] = v
 	}
+
+	containerName := containers.UniqueName(fmt.Sprintf("felix-%d", id))
 	if os.Getenv("FELIX_FV_ENABLE_BPF") == "true" {
 		envVars["FELIX_BPFENABLED"] = "true"
+		// FIXME: isolate individual Felix instances in their own cgroups.  Unfortunately, this doesn't work on systems that are using cgroupv1
+		// see https://elixir.bootlin.com/linux/v5.3.11/source/include/linux/cgroup-defs.h#L788 for explanation.
+		// envVars["FELIX_BPFCGROUPV2"] = containerName
 	}
 	for k, v := range envVars {
 		args = append(args, "-e", fmt.Sprintf("%s=%s", k, v))
@@ -83,7 +90,7 @@ func RunFelix(infra DatastoreInfra, options TopologyOptions) *Felix {
 		utils.Config.FelixImage,
 	)
 
-	c := containers.Run("felix",
+	c := containers.RunWithFixedName(containerName,
 		containers.RunOpts{AutoRemove: true},
 		args...,
 	)
@@ -114,4 +121,10 @@ func RunFelix(infra DatastoreInfra, options TopologyOptions) *Felix {
 	return &Felix{
 		Container: c,
 	}
+}
+
+func (f *Felix) Stop() {
+	// FIXME need to detach programs.
+	_ = f.ExecMayFail("rmdir", path.Join("/run/calico/cgroup/", f.Name))
+	f.Container.Stop()
 }
