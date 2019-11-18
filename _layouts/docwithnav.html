@@ -20,7 +20,7 @@ The code is a little roundabout for a few reasons:
 {% endcomment %}
 
 {% assign current_page = page.path | replace_first: page.version,"" | split: "/" %}
-{% assign current_page = current_page[1] | prepend: "/" %}
+{% assign current_page = current_page[1] | prepend: "/" | append: "/" %}
 
 {% capture version %}{{ page.version | replace: ".","_" }}{% endcapture %}
 
@@ -183,19 +183,28 @@ The code is a little roundabout for a few reasons:
             <div id="sidebar">
               <div class="panel-group" id="sidebar-accordion">
                 {% for navbar in navbars %}
+                  {% assign navbar_id = navbar.path | replace: "/", "-" | prepend: "navbar" %}
                   <div class="panel panel-default">
-                    <div class="panel-heading">
+                    <div
+                      class="panel-heading{% if this_pages_navbar == navbar %} current-page {% endif %}"
+                      role="button"
+                      data-toggle="collapse"
+                      data-target="#{{ navbar_id }}"
+                      aria-controls="{{ navbar_id }}"
+                    >
                       <h4 class="panel-title">
-                          <a data-toggle="collapse" data-parent="#sidebar-accordion" data-target="{{ navbar.path }}" href="{{site.baseurl}}/{{page.version}}{{navbar.path}}">
+                          <a href="{{site.baseurl}}/{{page.version}}{{navbar.path}}">
                             <span>{{ navbar.bigheader }}</span>
                           </a>
                       </h4>
                     </div>
-                    {% assign availableToc = navbar.toc | where_exp: "item", "item.title != navbar.bigheader" %}
-                    <div id="{{site.baseurl}}/{{page.version}}{{navbar.path}}" class="panel-collapse collapse {% if this_pages_navbar == navbar and availableToc.size > 0 %}in{% endif %}">
-                        <div class="panel-body">
-                            {% include sidebar.html sidebar=availableToc prefix="nav" %}
-                        </div> 
+                    {% assign availableToc = navbar.section | where_exp: "item", "item.title != navbar.bigheader" %}
+                    <div id="{{ navbar_id }}" class="panel-collapse collapse {% if this_pages_navbar == navbar and availableToc.size > 0 %}in{% endif %}">
+                        {% if availableToc %}
+                          <div class="panel-body">
+                              {% include sidebar.html sidebar=availableToc prefix="nav" %}
+                          </div> 
+                        {% endif %}
                     </div>
                   </div>
                 {% endfor %}
@@ -216,7 +225,7 @@ The code is a little roundabout for a few reasons:
               {% if page.show_title -%}
               <h1>{{ page.title }}</h1>
               {% endif -%}
-              {% include section_index.html section_index=this_pages_navbar.toc %}
+              {% include section_index.html section_index=navbars %}
               {{ content }}
 
               <!-- BOTTOM DOCUMENTATION PAGE NAVBAR -->

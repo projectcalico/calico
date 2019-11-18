@@ -1,7 +1,7 @@
 bigheader: "Introduction"
-path: /introduction
+path: /introduction/
 order: 0
-toc:
+section:
 - title: About Calico
   path: /introduction/
 - title: Sample deployments
