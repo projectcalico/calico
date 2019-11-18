@@ -165,6 +165,10 @@ func (d daemonset) AddNodeSelector(k8sClientset *kubernetes.Clientset, namespace
 		return err
 	}
 
+	if ds.Spec.Template.Spec.NodeSelector == nil {
+		ds.Spec.Template.Spec.NodeSelector = make(map[string]string)
+	}
+
 	needUpdate := false
 	for k, v := range selector {
 		if currentVal, ok := ds.Spec.Template.Spec.NodeSelector[k]; ok && currentVal == v {
