@@ -156,7 +156,7 @@ endif
 
 ## Removes all build artifacts.
 clean:
-	rm -rf bin image.created-$(ARCH)
+	rm -rf .go-pkg-cache bin image.created-$(ARCH) build report/*.xml release-notes-*
 	-docker rmi $(BUILD_IMAGE)
 	-docker rmi $(BUILD_IMAGE):latest-amd64
 	-docker rmi $(FLANNEL_MIGRATION_BUILD_IMAGE)
