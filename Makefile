@@ -166,7 +166,7 @@ LOCAL_USER_ID?=$(shell id -u $$USER)
 
 .PHONY: clean
 clean:
-	rm -rf $(BIN) bin/github $(DEPLOY_CONTAINER_MARKER) .go-pkg-cache k8s-install/scripts/install_cni.test
+	rm -rf $(BIN) bin $(DEPLOY_CONTAINER_MARKER) .go-pkg-cache k8s-install/scripts/install_cni.test
 	rm -f *.created
 	rm -f crds.yaml
 
