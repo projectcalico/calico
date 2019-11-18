@@ -189,9 +189,9 @@ The code is a little roundabout for a few reasons:
                           </a>
                       </h4>
                     </div>
-                    <div id="{{site.baseurl}}/{{page.version}}{{navbar.path}}" class="panel-collapse collapse {% if this_pages_navbar == navbar %}in{% endif %}">
+                    {% assign availableToc = navbar.toc | where_exp: "item", "item.title != navbar.bigheader" %}
+                    <div id="{{site.baseurl}}/{{page.version}}{{navbar.path}}" class="panel-collapse collapse {% if this_pages_navbar == navbar and availableToc.size > 0 %}in{% endif %}">
                         <div class="panel-body">
-                            {% assign availableToc = navbar.toc | where_exp: "item", "item.title != navbar.bigheader" %}
                             {% include sidebar.html sidebar=availableToc prefix="nav" %}
                         </div> 
                     </div>
