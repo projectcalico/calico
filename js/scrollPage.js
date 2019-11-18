@@ -14,7 +14,7 @@
             return id;
         })
     
-        let nearestId = '';
+        let nearestId = globalLink ? globalLink.href.split("#")[1] : '';
         let currentNearestPos = Number.MAX_SAFE_INTEGER;
         
         for(let i of ids) {
