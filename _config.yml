@@ -53,6 +53,7 @@ defaults:
     values:
       layout: docwithnav
       show_title: true
+      show_read_time: true
       version: master
       sitemap: true
       registry:

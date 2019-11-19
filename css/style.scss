@@ -190,3 +190,12 @@ input.gsc-input, .gsc-input-box, .gsc-input-box-hover, .gsc-input-box-focus, .gs
         }
     }
 }
+
+div.read-time {
+  padding-bottom: 10px;
+  color: #666;
+
+  &__caption {
+    margin-bottom: 2px;
+  }
+}

@@ -216,6 +216,9 @@ The code is a little roundabout for a few reasons:
               {% if page.show_title -%}
               <h1>{{ page.title }}</h1>
               {% endif -%}
+              {% if page.show_read_time -%}
+                {% include read_time.html %}
+              {% endif -%}
               {% include section_index.html section_index=this_pages_navbar.toc %}
               {{ content }}
 
