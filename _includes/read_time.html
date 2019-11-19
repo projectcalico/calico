@@ -1,7 +1,7 @@
 {% assign words = content | number_of_words %}
 <div class="read-time">
-  <span class="glyphicon glyphicon-time read_time__icon"></span>
-  <span class="read_time__caption">
+  <span class="glyphicon glyphicon-time read-time__icon"></span>
+  <span class="read-time__caption">
     {% if words < 360 %}1{% else %}{{ words | divided_by:180 }}{% endif %} MINUTE READ
   </span>
 </div>
