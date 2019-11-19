@@ -80,34 +80,21 @@ div.highlight {
 }
 
 .right-toc {
-  position: absolute;
-
-  right: 25px;
-
-  width: 20%;
-
   color: #004078;
-
   list-style-type: none;
 
   &__nested {
     list-style-type: none;
   }
 
-  @media only screen and (max-width: 800px) {
-    position: inherit;
-
-    width: auto;
-
-    margin-left: auto;
-    margin-right: auto;
-
-    left: 75px;
+  ul {
+    padding-left: 15px;
   }
-}
 
-.container-fix {
-  margin-left: 50px;
+  a:hover,
+  a:focus {
+    color: #f69432;
+  }
 }
 
 .current {

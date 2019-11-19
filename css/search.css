@@ -2,6 +2,10 @@
     display: none;
 }
 
+.search-input-container .ais-search-box {
+    max-width: unset;
+}
+
 .search-input-container input:focus {
     outline: none;
 }

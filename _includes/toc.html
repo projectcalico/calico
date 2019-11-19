@@ -76,7 +76,7 @@
         {% endfor %}
 
         {% unless include.item_class == blank %}
-            {% capture listItemClass %}{:.{{ include.item_class | replace: '%level%', headerLevel }}}{% endcapture %}
+            {% capture listItemClass %}{: {{ include.item_class | replace: '%level%', headerLevel }} }{% endcapture %}
         {% endunless %}
 
         {% capture heading_body %}{% if include.sanitize %}{{ header | strip_html }}{% else %}{{ header }}{% endif %}{% endcapture %}
@@ -85,7 +85,7 @@
     {% endfor %}
 
     {% if include.class %}
-        {% capture my_toc %}{:.{{ include.class }}}
+        {% capture my_toc %}{: {{ include.class }} }
 {{ my_toc | lstrip }}{% endcapture %}
     {% endif %}
 
