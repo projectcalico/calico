@@ -1,10 +1,7 @@
 bigheader: "Security"
-path: /security
+path: /security/
 order: 3
-toc:
-- title: Security
-  description: /security/
-  path: /security/
+section:
 - title: Adopt a zero trust network model for security
   description: /security/adopt-zero-trust
   path: /security/adopt-zero-trust

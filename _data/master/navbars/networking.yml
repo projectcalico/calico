@@ -1,10 +1,7 @@
 bigheader: "Networking"
-path: /networking
+path: /networking/
 order: 2
-toc:
-- title: Networking
-  description: /networking/
-  path: /networking/
+section:
 - title: Connecting workloads across networks that you do not control
   description: /networking/vxlan-ipip
   path: /networking/vxlan-ipip
