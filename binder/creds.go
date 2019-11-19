@@ -95,7 +95,6 @@ func (s *workloadStore) delete(uid string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	delete(s.creds, uid)
-	return
 }
 
 func (s *workloadStore) store(uid string, w workload) {
