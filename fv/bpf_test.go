@@ -66,12 +66,15 @@ func describeBPFTests(protocol string) bool {
 			client         client.Interface
 			cc             *workload.ConnectivityChecker
 			externalClient *containers.Container
+			bpfLog         *containers.Container
 		)
 
 		BeforeEach(func() {
 			if os.Getenv("FELIX_FV_ENABLE_BPF") != "true" {
 				Skip("Skipping BPF test in non-BPF run.")
 			}
+
+			bpfLog = containers.Run("bpf-log", containers.RunOpts{AutoRemove: true}, "--privileged", "calico/bpftool:v5.3-amd64", "/bpftool", "prog", "tracelog")
 
 			var err error
 			infra = getInfra()
@@ -145,6 +148,7 @@ func describeBPFTests(protocol string) bool {
 			}
 			infra.Stop()
 			externalClient.Stop()
+			bpfLog.Stop()
 			log.Info("AfterEach done")
 		})
 
@@ -256,7 +260,12 @@ func describeBPFTests(protocol string) bool {
 							{
 								Action: "Allow",
 								Source: api.EntityRule{
-									Nets: []string{felixes[0].IP + "/32", felixes[1].IP + "/32"},
+									Nets: []string{
+										felixes[0].IP + "/32",
+										felixes[1].IP + "/32",
+										felixes[0].ExpectedIPIPTunnelAddr + "/32",
+										felixes[1].ExpectedIPIPTunnelAddr + "/32",
+									},
 								},
 							},
 						}
