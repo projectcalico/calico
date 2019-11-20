@@ -178,7 +178,7 @@ type WatchInterface interface {
 
 	// Returns a chan which will receive all the events.  This channel is closed when:
 	// -  Stop() is called, or
-	// -  A error of type errors.ErrorWatchTerminated is received.
+	// -  An error of type errors.ErrorWatchTerminated is received.
 	// In both cases the watcher will be cleaned up, and the client should stop receiving
 	// from this channel.
 	ResultChan() <-chan WatchEvent

@@ -25,7 +25,7 @@ import (
 // API and backend representations of the IPPool resource.
 type IPPoolConverter struct{}
 
-// ConvertMetadataToKey converts a IPPoolMetadata to a IPPoolKey.
+// ConvertMetadataToKey converts an IPPoolMetadata to an IPPoolKey.
 func (p IPPoolConverter) ConvertMetadataToKey(m unversioned.ResourceMetadata) (model.Key, error) {
 	pm := m.(api.IPPoolMetadata)
 	k := model.IPPoolKey{

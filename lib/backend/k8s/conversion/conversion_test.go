@@ -1726,7 +1726,7 @@ var _ = Describe("Test NetworkPolicy conversion", func() {
 		Expect(nets[0]).To(Equal("192.168.0.0/16"))
 		Expect(notNets).To(BeNil())
 
-		// As this is a IPBlock rule, podSel and nsSel should be empty (not nil!)
+		// As this is an IPBlock rule, podSel and nsSel should be empty (not nil!)
 		Expect(podSel).To(BeEmpty())
 		Expect(nsSel).To(BeEmpty())
 
@@ -1746,7 +1746,7 @@ var _ = Describe("Test NetworkPolicy conversion", func() {
 		Expect(nets).To(BeNil())
 		Expect(notNets).To(BeNil())
 
-		// As this is a IPBlock rule, podSel and nsSel should be empty (not nil!)
+		// As this is an IPBlock rule, podSel and nsSel should be empty (not nil!)
 		Expect(podSel).To(BeEmpty())
 		Expect(nsSel).To(BeEmpty())
 
@@ -1769,7 +1769,7 @@ var _ = Describe("Test NetworkPolicy conversion", func() {
 		Expect(notNets[1]).To(Equal("192.168.4.0/24"))
 		Expect(notNets[2]).To(Equal("192.168.5.0/24"))
 
-		// As this is a IPBlock rule, podSel and nsSel should be empty (not nil!)
+		// As this is an IPBlock rule, podSel and nsSel should be empty (not nil!)
 		Expect(podSel).To(BeEmpty())
 		Expect(nsSel).To(BeEmpty())
 

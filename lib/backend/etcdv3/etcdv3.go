@@ -183,7 +183,7 @@ func (c *etcdV3Client) Create(ctx context.Context, d *model.KVPair) (*model.KVPa
 
 // Update an entry in the datastore.  If the entry does not exist, this will return
 // an ErrorResourceDoesNotExist error.  The ResourceVersion must be specified, and if
-// incorrect will return a ErrorResourceUpdateConflict error and the current entry.
+// incorrect will return an ErrorResourceUpdateConflict error and the current entry.
 func (c *etcdV3Client) Update(ctx context.Context, d *model.KVPair) (*model.KVPair, error) {
 	logCxt := log.WithFields(log.Fields{"model-etcdKey": d.Key, "value": d.Value, "ttl": d.TTL, "rev": d.Revision})
 	logCxt.Debug("Processing Update request")
@@ -219,7 +219,7 @@ func (c *etcdV3Client) Update(ctx context.Context, d *model.KVPair) (*model.KVPa
 		return nil, cerrors.ErrorDatastoreError{Err: err}
 	}
 
-	// Etcd V3 does not return a error when compare condition fails we must verify the
+	// Etcd V3 does not return an error when compare condition fails we must verify the
 	// response Succeeded field instead.  If the compare did not succeed then check for
 	// a successful get to return either an UpdateConflict or a ResourceDoesNotExist error.
 	if !txnResp.Succeeded {

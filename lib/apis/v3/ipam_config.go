@@ -35,7 +35,7 @@ type IPAMConfig struct {
 	Spec IPAMConfigSpec `json:"spec,omitempty"`
 }
 
-// IPAMConfigSpec contains the specification for a IPAMConfig resource.
+// IPAMConfigSpec contains the specification for an IPAMConfig resource.
 type IPAMConfigSpec struct {
 	StrictAffinity     bool `json:"strictAffinity"`
 	AutoAllocateBlocks bool `json:"autoAllocateBlocks"`

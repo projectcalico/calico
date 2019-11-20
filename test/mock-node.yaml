@@ -1,5 +1,5 @@
 # This is a Node used by the k8s FV tests.  A number of tests
-# rely on this Node exising in the Kubernetes API.
+# rely on this Node existing in the Kubernetes API.
 kind: Node
 apiVersion: v1
 metadata:

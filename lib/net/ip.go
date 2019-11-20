@@ -91,7 +91,7 @@ func (i *IP) Network() *IPNet {
 	return n
 }
 
-// MustParseIP parses the string into a IP.
+// MustParseIP parses the string into an IP.
 func MustParseIP(i string) IP {
 	var ip IP
 	err := ip.UnmarshalText([]byte(i))

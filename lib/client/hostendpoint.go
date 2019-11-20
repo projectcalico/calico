@@ -30,15 +30,15 @@ type HostEndpointInterface interface {
 
 	// Get returns the host endpoint resource matching the supplied metadata.  The metadata
 	// should contain all identifiers to uniquely identify a single resource.  If the
-	// resource does not exist, a errors.ErrorResourceNotFound error is returned.
+	// resource does not exist, an errors.ErrorResourceNotFound error is returned.
 	Get(api.HostEndpointMetadata) (*api.HostEndpoint, error)
 
 	// Create will create a new host endpoint resource.  If the resource already exists,
-	// a errors.ErrorResourceAlreadyExists error is returned.
+	// an errors.ErrorResourceAlreadyExists error is returned.
 	Create(*api.HostEndpoint) (*api.HostEndpoint, error)
 
 	// Update will update an existing host endpoint resource.  If the resource does not exist,
-	// a errors.ErrorResourceDoesNotExist error is returned.
+	// an errors.ErrorResourceDoesNotExist error is returned.
 	Update(*api.HostEndpoint) (*api.HostEndpoint, error)
 
 	// Apply with update an existing host endpoint resource, or create a new one if it does
