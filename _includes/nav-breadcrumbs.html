@@ -1,4 +1,4 @@
-<nav class="breadcrumbs bootstrap hidden-sm-down" {% if (page.url == '/') and (site.breadcrumbs.root.hide) %}{{ 'style="display: none;"' }}{% endif %}>
+<nav class="breadcrumbs bootstrap hidden-sm-down">
   <ol class="breadcrumb list-unstyled" vocab="http://schema.org/" typeof="BreadcrumbList">
     {% assign position = 0 %}
     {% assign breadcrumbsSize = breadcrumbs.size %}
@@ -7,7 +7,8 @@
       {% assign position = position  | plus: 1 %}
 
       {% if forloop.first and site.breadcrumbs.root.image %}
-        {% include icon.html class="breadcrumb-item" color=include.color %}
+        <!-- Here can be added custom image instead of first root.
+        Image flag in config should be set to true. -->
         {% continue %}
       {% endif %}
 
