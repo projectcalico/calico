@@ -116,16 +116,6 @@ input.gsc-input, .gsc-input-box, .gsc-input-box-hover, .gsc-input-box-focus, .gs
     }
 }
 
-// BREADCRUMBS
-.breadcrumb {
-	display: inline-block;
-	background: none;
-	border: none;
-	margin: 0;
-	padding: 0;
-	text-transform: capitalize;
-}
-
 // Submenu Navigation for Desktop
 #tigera-navbar ul.nav li ul {
     position: absolute;
@@ -134,6 +124,69 @@ input.gsc-input, .gsc-input-box, .gsc-input-box-hover, .gsc-input-box-focus, .gs
     margin-left: -10px !important;
     background: #004078;
     z-index: 1000;
+}
+
+nav.breadcrumbs.bootstrap {
+  /* from Twitter Bootstrap 4 */
+  /* If you already use Twitter, you do not need these css lines above, cause they already in Twitter Bootstrap */
+  /* Additions: image integration */
+}
+nav.breadcrumbs.bootstrap ol {
+  margin-left: 0
+}
+nav.breadcrumbs.bootstrap .breadcrumb {
+  font-size: 15px;
+  padding: 0.75rem 1rem;
+  margin-bottom: 1rem;
+  list-style: none;
+  background-color: #f1f2ed;
+  border-radius: 0.25rem;
+}
+nav.breadcrumbs.bootstrap .breadcrumb::after {
+  content: "";
+  display: table;
+  clear: both;
+}
+nav.breadcrumbs.bootstrap .breadcrumb-item {
+  float: left;
+}
+nav.breadcrumbs.bootstrap .breadcrumb-item + .breadcrumb-item::before {
+  display: inline-block;
+  padding-right: 0.5rem;
+  padding-left: 0.5rem;
+  color: #818a91;
+  content: "/";
+}
+nav.breadcrumbs.bootstrap .breadcrumb-item + .breadcrumb-item:hover::before {
+  text-decoration: underline;
+}
+nav.breadcrumbs.bootstrap .breadcrumb-item + .breadcrumb-item:hover::before {
+  text-decoration: none;
+}
+nav.breadcrumbs.bootstrap .breadcrumb-item-active {
+  color: #818a91;
+}
+
+nav.breadcrumbs.bootstrap .breadcrumb a.breadcrumb-item:after {
+  display: inline-block;
+  padding-right: 0.5rem;
+  padding-left: 0.5rem;
+  content: "/";
+  text-decoration: none;
+}
+nav.breadcrumbs.bootstrap .breadcrumb .icon:after {
+  display: inline-block;
+  padding-right: 0.5rem;
+  padding-left: 0.5rem;
+  color: #818a91;
+  content: "/";
+}
+nav.breadcrumbs.bootstrap .breadcrumb .icon {
+  display: inline-block;
+}
+nav.breadcrumbs.bootstrap .breadcrumb .icon svg {
+  height: 0.7rem;
+  width: 0.7rem;
 }
 
 @media screen and (min-width: 999px) {
