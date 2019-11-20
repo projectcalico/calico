@@ -370,6 +370,14 @@ xdp bpf/xdp/generated/xdp.o:
 xdp-clean:
 	$(DOCKER_RUN) $(CALICO_BUILD_CGO) \
 	              /bin/sh -c "make -C bpf/xdp clean"
+
+bpf-cgroup bpf/cgroup/connect_balance.o:
+	$(DOCKER_RUN) $(CALICO_BUILD_CGO) \
+	              /bin/sh -c "make -C bpf/cgroup all"
+
+bpf-cgroup-clean:
+	$(DOCKER_RUN) $(CALICO_BUILD_CGO) \
+	              /bin/sh -c "make -C bpf/cgroup clean"
 else
 xdp bpf/xdp/generated/xdp.o:
 	$(MAKE) -C bpf/xdp
@@ -472,6 +480,7 @@ $(BUILD_IMAGE)-$(ARCH): bin/calico-felix-$(ARCH) \
 	rm -rf docker-image/bpf
 	mkdir -p docker-image/bpf/include
 	mkdir -p docker-image/bpf/xdp
+	mkdir -p docker-image/bpf/cgroup
 	cp bpf/include/bpf.h docker-image/bpf/include/bpf.h
 	cp bpf/include/conntrack.h docker-image/bpf/include/conntrack.h
 	cp bpf/include/log.h docker-image/bpf/include/log.h
@@ -479,6 +488,7 @@ $(BUILD_IMAGE)-$(ARCH): bin/calico-felix-$(ARCH) \
 	cp bpf/include/policy.h docker-image/bpf/include/policy.h
 	cp bpf/xdp/redir_tc.c docker-image/bpf/xdp/redir_tc.c
 	cp bpf/xdp/bpf_maps.h docker-image/bpf/xdp/bpf_maps.h
+	cp bpf/cgroup/connect_balancer.c docker-image/bpf/cgroup/connect_balancer.c
 	if [ "$(SEMAPHORE)" != "true" -o "$$(docker images -q $(BUILD_IMAGE):latest-$(ARCH) 2> /dev/null)" = "" ] ; then \
  	  docker build --pull -t $(BUILD_IMAGE):latest-$(ARCH) --build-arg QEMU_IMAGE=$(CALICO_BUILD) --file ./docker-image/Dockerfile.$(ARCH) docker-image; \
 	fi

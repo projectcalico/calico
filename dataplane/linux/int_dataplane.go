@@ -27,8 +27,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/projectcalico/felix/bpf/conntrack"
-
 	"k8s.io/client-go/kubernetes"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -36,6 +34,8 @@ import (
 	"github.com/vishvananda/netlink"
 
 	"github.com/projectcalico/felix/bpf"
+	"github.com/projectcalico/felix/bpf/conntrack"
+	"github.com/projectcalico/felix/bpf/nat"
 	bpfproxy "github.com/projectcalico/felix/bpf/proxy"
 	"github.com/projectcalico/felix/ifacemonitor"
 	"github.com/projectcalico/felix/ipsets"
@@ -150,6 +150,7 @@ type Config struct {
 	XDPEnabled           bool
 	XDPAllowGeneric      bool
 	BPFConntrackTimeouts conntrack.Timeouts
+	BPFCgroupV2          string
 
 	SidecarAccelerationEnabled bool
 
@@ -458,17 +459,38 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		fibLookupEnabled := !config.RulesConfig.IPIPEnabled && !config.RulesConfig.VXLANEnabled
 		dp.RegisterManager(newBPFEndpointManager(config.BPFLogLevel, fibLookupEnabled, config.BPFDataIfacePattern))
 
+		// Pre-create the NAT maps so that later operations can assume access.
+		frontendMap := nat.FrontendMap()
+		err := frontendMap.EnsureExists()
+		if err != nil {
+			log.WithError(err).Panic("Failed to create NAT frontend BPF map.")
+		}
+		backendMap := nat.BackendMap()
+		err = backendMap.EnsureExists()
+		if err != nil {
+			log.WithError(err).Panic("Failed to create NAT backend BPF map.")
+		}
+
 		if config.KubeClientSet != nil {
+			// We have a Kubernetes connection, start watching services and populating the NAT maps.
 			err := bpfproxy.StartKubeProxy(
 				config.KubeClientSet,
 				config.Hostname,
+				frontendMap,
+				backendMap,
 				bpfproxy.WithImmediateSync(),
 			)
 			if err != nil {
-				panic(err)
+				log.WithError(err).Panic("Failed to start kube-proxy.")
 			}
 		} else {
 			log.Info("BPF enabled but no Kubernetes client available, unable to run kube-proxy module.")
+		}
+
+		// Activate the connect-time load balancer.
+		err = nat.InstallConnectTimeLoadBalancer(frontendMap, backendMap, config.BPFCgroupV2)
+		if err != nil {
+			log.WithError(err).Panic("Failed to attach connect-time load balancer.")
 		}
 	}
 

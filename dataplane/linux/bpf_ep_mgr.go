@@ -546,6 +546,12 @@ func AttachTCProgram(fname string, attachPoint TCAttachPoint) error {
 
 	out, err := tc.CombinedOutput()
 	if err != nil {
+		if bytes.Contains(out, []byte("Cannot find device")) {
+			// Avoid a big, spammy log when the issue is that the interface isn't present.
+			log.WithField("iface", attachPoint.Iface).Warn(
+				"Failed to attach BPF program; interface not found.  Will retry if it show up.")
+			return nil
+		}
 		log.WithError(err).WithFields(log.Fields{"out": string(out)}).
 			WithField("command", tc).Error("Failed to attach BPF program")
 	}

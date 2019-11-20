@@ -33,6 +33,7 @@ type Map interface {
 	Update(k, v []byte) error
 	Get(k []byte) ([]byte, error)
 	Delete(k []byte) error
+	Path() string
 }
 
 type MapParameters struct {
@@ -57,6 +58,10 @@ type PinnedMap struct {
 
 	fdLoaded bool
 	fd       MapFD
+}
+
+func (b *PinnedMap) Path() string {
+	return b.Filename
 }
 
 func (b *PinnedMap) Close() error {
@@ -163,7 +168,7 @@ func (b *PinnedMap) EnsureExists() error {
 		return nil
 	}
 
-	_, err := maybeMountBPFfs()
+	_, err := MaybeMountBPFfs()
 	if err != nil {
 		logrus.WithError(err).Error("Failed to mount bpffs")
 		return err

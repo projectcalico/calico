@@ -18,7 +18,7 @@ import (
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 
-	"github.com/projectcalico/felix/bpf/proxy/maps"
+	"github.com/projectcalico/felix/bpf/nat"
 )
 
 func init() {
@@ -45,29 +45,29 @@ var natDumpCmd = &cobra.Command{
 }
 
 func dump(cmd *cobra.Command) error {
-	nat, err := maps.LoadNATMap(maps.NATMap())
+	natMap, err := nat.LoadFrontendMap(nat.FrontendMap())
 	if err != nil {
 		return err
 	}
 
-	back, err := maps.LoadNATBackendMap(maps.BackendMap())
+	back, err := nat.LoadBackendMap(nat.BackendMap())
 	if err != nil {
 		return err
 	}
 
-	dumpNice(cmd.Printf, nat, back)
+	dumpNice(cmd.Printf, natMap, back)
 	return nil
 }
 
 type printfFn func(format string, i ...interface{})
 
-func dumpNice(printf printfFn, nat maps.NATMapMem, back maps.NATBackendMapMem) {
-	for nk, nv := range nat {
+func dumpNice(printf printfFn, natMap nat.MapMem, back nat.BackendMapMem) {
+	for nk, nv := range natMap {
 		count := nv.Count()
 		id := nv.ID()
 		printf("%s port %d proto %d id %d count %d\n", nk.Addr(), nk.Port(), nk.Proto(), id, count)
 		for i := uint32(0); i < count; i++ {
-			bk := maps.NewNATBackendKey(id, i)
+			bk := nat.NewNATBackendKey(id, i)
 			bv, ok := back[bk]
 			printf("\t%d:%d\t ", id, i)
 			if !ok {

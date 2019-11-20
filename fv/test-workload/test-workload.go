@@ -23,6 +23,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/projectcalico/felix/fv/cgroup"
+
 	"github.com/containernetworking/plugins/pkg/ns"
 	nsutils "github.com/containernetworking/plugins/pkg/testutils"
 	"github.com/docopt/docopt-go"
@@ -42,6 +44,9 @@ Usage:
 
 func main() {
 	log.SetLevel(log.DebugLevel)
+
+	// If we've been told to, move into this felix's cgroup.
+	cgroup.MaybeMoveToFelixCgroupv2()
 
 	arguments, err := docopt.ParseArgs(usage, nil, "v0.1")
 	if err != nil {

@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package maps
+package nat
 
 import (
 	"encoding/binary"
@@ -32,31 +32,31 @@ import (
 //    uint8_t protocol;
 //    uint8_t pad;
 // };
-const natKeySize = 8
+const frontendKeySize = 8
 
 // struct calico_nat_v4_value {
 //    uint32_t id;
 //    uint32_t count;
 // };
-const natValueSize = 8
+const frontendValueSize = 8
 
 // struct calico_nat_secondary_v4_key {
 //   uint32_t id;
 //   uint32_t ordinal;
 // };
-const natBackendKeySize = 8
+const backendKeySize = 8
 
 // struct calico_nat_dest {
 //    uint32_t addr;
 //    uint16_t port;
 //    uint8_t pad[2];
 // };
-const natBackendValueSize = 8
+const backendValueSize = 8
 
-type NATKey [natKeySize]byte
+type FrontendKey [frontendKeySize]byte
 
-func NewNATKey(addr net.IP, port uint16, protocol uint8) NATKey {
-	var k NATKey
+func NewNATKey(addr net.IP, port uint16, protocol uint8) FrontendKey {
+	var k FrontendKey
 	addr = addr.To4()
 	if len(addr) != 4 {
 		log.WithField("ip", addr).Panic("Bad IP")
@@ -67,68 +67,68 @@ func NewNATKey(addr net.IP, port uint16, protocol uint8) NATKey {
 	return k
 }
 
-func (k NATKey) Proto() uint8 {
+func (k FrontendKey) Proto() uint8 {
 	return k[6]
 }
 
-func (k NATKey) Addr() net.IP {
+func (k FrontendKey) Addr() net.IP {
 	return k[:4]
 }
 
-func (k NATKey) Port() uint16 {
+func (k FrontendKey) Port() uint16 {
 	return binary.LittleEndian.Uint16(k[4:6])
 }
 
-func (k NATKey) String() string {
+func (k FrontendKey) String() string {
 	return fmt.Sprintf("NATKey{Proto:%v Addr:%v Port:%v}", k.Proto(), k.Addr(), k.Port())
 }
 
-type NATValue [natValueSize]byte
+type FrontendValue [frontendValueSize]byte
 
-func NewNATValue(id, count uint32) NATValue {
-	var v NATValue
+func NewNATValue(id, count uint32) FrontendValue {
+	var v FrontendValue
 	binary.LittleEndian.PutUint32(v[:4], id)
 	binary.LittleEndian.PutUint32(v[4:8], count)
 	return v
 }
 
-func (v NATValue) ID() uint32 {
+func (v FrontendValue) ID() uint32 {
 	return binary.LittleEndian.Uint32(v[:4])
 }
 
-func (v NATValue) Count() uint32 {
+func (v FrontendValue) Count() uint32 {
 	return binary.LittleEndian.Uint32(v[4:8])
 }
 
-func (v NATValue) String() string {
+func (v FrontendValue) String() string {
 	return fmt.Sprintf("NATValue{ID:%d,Count:%d}", v.ID(), v.Count())
 }
 
-type NATBackendKey [natBackendKeySize]byte
+type BackendKey [backendKeySize]byte
 
-func NewNATBackendKey(id, ordinal uint32) NATBackendKey {
-	var v NATBackendKey
+func NewNATBackendKey(id, ordinal uint32) BackendKey {
+	var v BackendKey
 	binary.LittleEndian.PutUint32(v[:4], id)
 	binary.LittleEndian.PutUint32(v[4:8], ordinal)
 	return v
 }
 
-func (v NATBackendKey) ID() uint32 {
+func (v BackendKey) ID() uint32 {
 	return binary.LittleEndian.Uint32(v[:4])
 }
 
-func (v NATBackendKey) Count() uint32 {
+func (v BackendKey) Count() uint32 {
 	return binary.LittleEndian.Uint32(v[4:8])
 }
 
-func (v NATBackendKey) String() string {
+func (v BackendKey) String() string {
 	return fmt.Sprintf("NATBackendKey{ID:%d,Ordinal:%d}", v.ID(), v.Count())
 }
 
-type NATBackendValue [natBackendValueSize]byte
+type BackendValue [backendValueSize]byte
 
-func NewNATBackendValue(addr net.IP, port uint16) NATBackendValue {
-	var k NATBackendValue
+func NewNATBackendValue(addr net.IP, port uint16) BackendValue {
+	var k BackendValue
 	addr = addr.To4()
 	if len(addr) != 4 {
 		log.WithField("ip", addr).Panic("Bad IP")
@@ -138,51 +138,51 @@ func NewNATBackendValue(addr net.IP, port uint16) NATBackendValue {
 	return k
 }
 
-func (k NATBackendValue) Addr() net.IP {
+func (k BackendValue) Addr() net.IP {
 	return k[:4]
 }
 
-func (k NATBackendValue) Port() uint16 {
+func (k BackendValue) Port() uint16 {
 	return binary.LittleEndian.Uint16(k[4:6])
 }
 
-func (k NATBackendValue) String() string {
+func (k BackendValue) String() string {
 	return fmt.Sprintf("NATBackendValue{Addr:%v Port:%v}", k.Addr(), k.Port())
 }
 
-var NATMapParameters = bpf.MapParameters{
+var FrontendMapParameters = bpf.MapParameters{
 	Filename:   "/sys/fs/bpf/tc/globals/cali_nat_v4",
 	Type:       "hash",
-	KeySize:    natKeySize,
-	ValueSize:  natValueSize,
+	KeySize:    frontendKeySize,
+	ValueSize:  frontendValueSize,
 	MaxEntries: 511000,
 	Name:       "cali_nat_v4",
 	Flags:      unix.BPF_F_NO_PREALLOC,
 }
 
-func NATMap() bpf.Map {
-	return bpf.NewPinnedMap(NATMapParameters)
+func FrontendMap() bpf.Map {
+	return bpf.NewPinnedMap(FrontendMapParameters)
 }
 
-var NATBackendMapParameters = bpf.MapParameters{
+var BackendMapParameters = bpf.MapParameters{
 	Filename:   "/sys/fs/bpf/tc/globals/cali_natbe_v4",
 	Type:       "hash",
-	KeySize:    natBackendKeySize,
-	ValueSize:  natBackendValueSize,
+	KeySize:    backendKeySize,
+	ValueSize:  backendValueSize,
 	MaxEntries: 510000,
 	Name:       "cali_natbe_v4",
 	Flags:      unix.BPF_F_NO_PREALLOC,
 }
 
 func BackendMap() bpf.Map {
-	return bpf.NewPinnedMap(NATBackendMapParameters)
+	return bpf.NewPinnedMap(BackendMapParameters)
 }
 
-// NATMapMem represents NATMap loaded into memory
-type NATMapMem map[NATKey]NATValue
+// NATMapMem represents FrontendMap loaded into memory
+type MapMem map[FrontendKey]FrontendValue
 
 // Equal compares keys and values of the NATMapMem
-func (m NATMapMem) Equal(cmp NATMapMem) bool {
+func (m MapMem) Equal(cmp MapMem) bool {
 	if len(m) != len(cmp) {
 		return false
 	}
@@ -197,11 +197,11 @@ func (m NATMapMem) Equal(cmp NATMapMem) bool {
 	return true
 }
 
-// LoadNATMap loads the NAT map into a go map or returns an error
-func LoadNATMap(m bpf.Map) (NATMapMem, error) {
-	ret := make(NATMapMem)
+// LoadFrontendMap loads the NAT map into a go map or returns an error
+func LoadFrontendMap(m bpf.Map) (MapMem, error) {
+	ret := make(MapMem)
 
-	err := m.Iter(NATMapMemIter(ret))
+	err := m.Iter(MapMemIter(ret))
 	if err != nil {
 		ret = nil
 	}
@@ -209,16 +209,16 @@ func LoadNATMap(m bpf.Map) (NATMapMem, error) {
 	return ret, err
 }
 
-// NATMapMemIter returns bpf.MapIter that loads the provided NATMapMem
-func NATMapMemIter(m NATMapMem) bpf.MapIter {
-	ks := len(NATKey{})
-	vs := len(NATValue{})
+// MapMemIter returns bpf.MapIter that loads the provided NATMapMem
+func MapMemIter(m MapMem) bpf.MapIter {
+	ks := len(FrontendKey{})
+	vs := len(FrontendValue{})
 
 	return func(k, v []byte) {
-		var key NATKey
+		var key FrontendKey
 		copy(key[:ks], k[:ks])
 
-		var val NATValue
+		var val FrontendValue
 		copy(val[:vs], v[:vs])
 
 		m[key] = val
@@ -226,10 +226,10 @@ func NATMapMemIter(m NATMapMem) bpf.MapIter {
 }
 
 // NATBackendMapMem represents a NATBackend loaded into memory
-type NATBackendMapMem map[NATBackendKey]NATBackendValue
+type BackendMapMem map[BackendKey]BackendValue
 
 // Equal compares keys and values of the NATBackendMapMem
-func (m NATBackendMapMem) Equal(cmp NATBackendMapMem) bool {
+func (m BackendMapMem) Equal(cmp BackendMapMem) bool {
 	if len(m) != len(cmp) {
 		return false
 	}
@@ -244,11 +244,11 @@ func (m NATBackendMapMem) Equal(cmp NATBackendMapMem) bool {
 	return true
 }
 
-// LoadNATBackendMap loads the NATBackend map into a go map or returns an error
-func LoadNATBackendMap(m bpf.Map) (NATBackendMapMem, error) {
-	ret := make(NATBackendMapMem)
+// LoadBackendMap loads the NATBackend map into a go map or returns an error
+func LoadBackendMap(m bpf.Map) (BackendMapMem, error) {
+	ret := make(BackendMapMem)
 
-	err := m.Iter(NATBackendMapMemIter(ret))
+	err := m.Iter(BackendMapMemIter(ret))
 	if err != nil {
 		ret = nil
 	}
@@ -256,16 +256,16 @@ func LoadNATBackendMap(m bpf.Map) (NATBackendMapMem, error) {
 	return ret, err
 }
 
-// NATBackendMapMemIter returns bpf.MapIter that loads the provided NATBackendMapMem
-func NATBackendMapMemIter(m NATBackendMapMem) bpf.MapIter {
-	ks := len(NATBackendKey{})
-	vs := len(NATBackendValue{})
+// BackendMapMemIter returns bpf.MapIter that loads the provided NATBackendMapMem
+func BackendMapMemIter(m BackendMapMem) bpf.MapIter {
+	ks := len(BackendKey{})
+	vs := len(BackendValue{})
 
 	return func(k, v []byte) {
-		var key NATBackendKey
+		var key BackendKey
 		copy(key[:ks], k[:ks])
 
-		var val NATBackendValue
+		var val BackendValue
 		copy(val[:vs], v[:vs])
 
 		m[key] = val

@@ -23,6 +23,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/projectcalico/felix/fv/cgroup"
+
 	"github.com/containernetworking/plugins/pkg/ns"
 	docopt "github.com/docopt/docopt-go"
 	reuse "github.com/libp2p/go-reuseport"
@@ -63,6 +65,9 @@ If connection is unsuccessful, test-connection panics and so exits with a failur
 
 func main() {
 	log.SetLevel(log.DebugLevel)
+
+	// If we've been told to, move into this felix's cgroup.
+	cgroup.MaybeMoveToFelixCgroupv2()
 
 	arguments, err := docopt.ParseArgs(usage, nil, "v0.1")
 	if err != nil {
