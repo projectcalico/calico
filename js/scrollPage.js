@@ -2,9 +2,7 @@
 (function() {
     let globalLink = undefined;
 
-    function scrollPage() {        
-        const calculationPoint = window.pageYOffset;
-    
+    function scrollPage() {    
         const toc = document.getElementById("right-toc");
         const links = Array.from(toc.getElementsByTagName("a"));
         const ids = links.map(l => {
@@ -15,26 +13,22 @@
         })
     
         let nearestId = globalLink ? globalLink.href.split("#")[1] : '';
-        let currentNearestPos = Number.MAX_SAFE_INTEGER;
-        
+        let currentNearestPos = undefined;
+
         for(let i of ids) {
             const heading = document.getElementById(i);
             const headingRect = heading.getBoundingClientRect();
             const yPosition = headingRect.y;
-    
-            if (yPosition === calculationPoint) {
+
+            if (yPosition === 0) {
                 nearestId = i;
-                currentNearestPos = 0;
-    
                 break;
             }
     
-            const diff = yPosition < calculationPoint
-                ? Number.MAX_SAFE_INTEGER
-                : yPosition - calculationPoint;
-    
-            if (currentNearestPos > diff) {
-                currentNearestPos = yPosition;
+
+            const diff = yPosition * yPosition;
+            if (!currentNearestPos || diff <= currentNearestPos) {
+                currentNearestPos = diff;
                 nearestId = i;
             }
         };
@@ -50,5 +44,5 @@
     }
     
     scrollPage();
-    document.body.addEventListener("scroll", scrollPage);
+    window.addEventListener("scroll", scrollPage);
 })()
