@@ -1,32 +1,96 @@
 $(document).ready(function() {
-   $('pre.highlight').each(function(i) {
-      if (!$(this).parents().hasClass('no-select-button')) {
+  var codeToolbarClass = 'code-toolbar';
+  var copyButtonClass = `${codeToolbarClass}__copy-button`;
+  var downloadButtonClass = `${codeToolbarClass}__download-button`;
+  var printButtonClass = `${codeToolbarClass}__print-button`;
 
-        // create an id for the current code section
-        var currentId = "codeblock" + (i + 1);
+  $('pre.highlight').each(function(i) {
+    if (!$(this).parents().hasClass('no-select-button')) {
+      var codeSectionContainer = $(this).closest('div.highlighter-rouge')[0];
+      var currentCodeSectionId = "codeblock-" + (i + 1);
+      var codeSection = $(this).find('code');
+      var code = codeSection[0].innerText;
+      codeSection.attr('id', currentCodeSectionId);
 
-        // find the code section and add the id to it
-        var codeSection = $(this).find('code');
-        codeSection.attr('id', currentId);
+      $(function () {
+        $('[data-toggle="tooltip"]').tooltip();
+      });
 
-        $(function () {
-          $('[data-toggle="tooltip"]').tooltip();
-        });
+      var copyButton = document.createElement('a');
+      copyButton.setAttribute('type', 'btn');
+      copyButton.setAttribute('class', copyButtonClass);
+      copyButton.setAttribute('data-clipboard-target', '#' + currentCodeSectionId);
+      copyButton.innerHTML = '<i class="glyphicon glyphicon-copy" data-toggle="tooltip" data-placement="bottom" title="Copy"></i>';
 
-        // now create the button, setting the clipboard target to the id
-        var btn = document.createElement('a');
-        btn.setAttribute('type', 'btn');
-        btn.setAttribute('class', 'btn-copy-code');
-        btn.setAttribute('data-clipboard-target', '#' + currentId);
-        btn.innerHTML = '<i class="glyphicon glyphicon-copy" data-toggle="tooltip" data-placement="bottom" title="Copy"></i>';
-        this.insertBefore(btn, this.firstChild);
+      var downloadButton = document.createElement('a');
+      downloadButton.setAttribute('type', 'btn');
+      downloadButton.setAttribute('class', downloadButtonClass);
+      downloadButton.innerHTML = '<i class="glyphicon glyphicon-download-alt" data-toggle="tooltip" data-placement="bottom" title="Download"></i>';
+      downloadButton.onclick = function() {
+        var language = "";
+
+        for (var c of codeSectionContainer.classList) {
+          if (!c) {
+            continue;
+          }
+
+          if (c.startsWith("language-")) {
+            language = c.substr(9);
+            break;
+          }
+        }
+
+        if (language === "shell") {
+          language = "sh";
+        } else if (language === "") {
+          language = "txt";
+        }
+
+        var downloadas = `${document.title}.${language}`;
+        saveFile(downloadas, code);
       }
-    });
 
-    var clipboard = new ClipboardJS('.btn-copy-code');
+      var printButton = document.createElement('a');
+      printButton.setAttribute('type', 'btn');
+      printButton.setAttribute('class', printButtonClass);
+      printButton.innerHTML = '<i class="glyphicon glyphicon-print" data-toggle="tooltip" data-placement="bottom" title="Print"></i>';
+      printButton.onclick = function() {
+        printText(code);
+      }
 
-    clipboard.on('success', function(e) {
-      e.clearSelection();
-    });
-
+      var toolbarDiv = document.createElement('div');
+      toolbarDiv.setAttribute('class', codeToolbarClass);
+      toolbarDiv.appendChild(printButton);
+      toolbarDiv.appendChild(downloadButton);
+      toolbarDiv.appendChild(copyButton);
+      this.insertBefore(toolbarDiv, this.firstChild);
+    }
   });
+
+  var clipboard = new ClipboardJS(`.${copyButtonClass}`);
+  clipboard.on('success', function(e) {
+    e.clearSelection();
+  });
+});
+
+function saveFile(filename, text) {
+  var element = document.createElement("a");
+  element.setAttribute("href", "data:text/plain;charset=utf-8," + encodeURIComponent(text));
+  element.setAttribute("download", filename);
+  element.style.display = "none";
+  document.body.appendChild(element);
+  element.click();
+  document.body.removeChild(element);
+}
+
+function printText(text) {
+  const html = "<html><body><pre><code>" + text + "</code></pre></html>";
+  const printWin = window.open("", "", "left=0,top=0,width=100,height=100,toolbar=0,scrollbars=0,status=0,location=0,menubar=0", false);
+  if (printWin) {
+      printWin.document.write(html);
+      printWin.document.close();
+      printWin.focus();
+      printWin.print();
+      printWin.close();
+  }
+}

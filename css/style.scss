@@ -54,15 +54,20 @@ div.highlight {
   position: relative;
 }
 
-// copy btn style
-.btn-copy-code {
-  color: #FF7E00;
-  border: 0;
-  font-size: 16px;
+.code-toolbar {
   position: absolute;
   right: 10px;
-  &:hover {
-    cursor: pointer;
+
+  &__copy-button,
+  &__download-button,
+  &__print-button {
+    margin-left: 10px;
+    font-size: 16px;
+    color: #FF7E00;
+
+    &:hover {
+      cursor: pointer;
+    }
   }
 }
 
