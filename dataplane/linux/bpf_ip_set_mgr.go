@@ -21,6 +21,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/projectcalico/felix/idalloc"
+
 	"golang.org/x/sys/unix"
 
 	log "github.com/sirupsen/logrus"
@@ -38,6 +40,8 @@ type bpfIPSetManager struct {
 	keysToAddByIPSetID    map[uint64]set.Set
 	keysToRemoveByIPSetID map[uint64]set.Set
 
+	ipSetIDAllocator *idalloc.IDAllocator
+
 	ipSetMap bpf.Map
 
 	dirtyIPSetIDs   set.Set
@@ -54,7 +58,7 @@ const ipSetEntrySize = 20
 
 type IPSetEntry [ipSetEntrySize]byte
 
-func newBPFIPSetManager() *bpfIPSetManager {
+func newBPFIPSetManager(ipSetIDAllocator *idalloc.IDAllocator) *bpfIPSetManager {
 	return &bpfIPSetManager{
 		desiredKeysByIPSetID:  map[uint64]set.Set{},
 		keysToAddByIPSetID:    map[uint64]set.Set{},
@@ -62,6 +66,7 @@ func newBPFIPSetManager() *bpfIPSetManager {
 		dirtyIPSetIDs:         set.New(),
 		ipSetMap:              IPSetsMap(),
 		resyncScheduled:       true,
+		ipSetIDAllocator:      ipSetIDAllocator,
 	}
 }
 
@@ -118,8 +123,8 @@ func (m *bpfIPSetManager) OnUpdate(msg interface{}) {
 	switch msg := msg.(type) {
 	// IP set-related messages, these are extremely common.
 	case *proto.IPSetUpdate:
-		log.WithField("id", msg.Id).Info("IP set added")
-		id := bpf.IPSetIDToU64(msg.Id)
+		id := m.ipSetIDAllocator.GetOrAlloc(msg.Id)
+		log.WithFields(log.Fields{"stringID": msg.Id, "uint64ID": id}).Info("IP set added")
 
 		oldMembers := m.desiredKeysByIPSetID[id]
 		if oldMembers == nil {
@@ -151,8 +156,11 @@ func (m *bpfIPSetManager) OnUpdate(msg interface{}) {
 
 		m.dirtyIPSetIDs.Add(id)
 	case *proto.IPSetRemove:
-		log.WithField("id", msg.Id).Info("IP set removed")
-		id := bpf.IPSetIDToU64(msg.Id)
+		id := m.ipSetIDAllocator.GetAndRelease(msg.Id)
+		log.WithFields(log.Fields{"stringID": msg.Id, "uint64ID": id}).Info("IP set removed")
+		if id == 0 {
+			log.WithField("setID", msg.Id).Panic("Received deletion for unknown IP set")
+		}
 
 		oldMembers := m.desiredKeysByIPSetID[id]
 		if oldMembers == nil {
@@ -173,8 +181,13 @@ func (m *bpfIPSetManager) OnUpdate(msg interface{}) {
 
 		m.dirtyIPSetIDs.Add(id)
 	case *proto.IPSetDeltaUpdate:
-		log.WithField("id", msg.Id).WithField("added", len(msg.AddedMembers)).WithField("removed", len(msg.RemovedMembers)).Info("IP delta")
-		id := bpf.IPSetIDToU64(msg.Id)
+		id := m.ipSetIDAllocator.GetOrAlloc(msg.Id)
+		log.WithFields(log.Fields{
+			"stringID": msg.Id,
+			"uint64ID": id,
+			"added":    len(msg.AddedMembers),
+			"removed":  len(msg.RemovedMembers),
+		}).Info("IP delta update")
 
 		for _, member := range msg.RemovedMembers {
 			entry := parseIPSetMember(id, member)

@@ -16,8 +16,6 @@ package bpf
 
 import (
 	"bytes"
-	"crypto/sha256"
-	"encoding/binary"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -31,15 +29,20 @@ import (
 )
 
 type ProgramGenerator struct {
-	w          io.Writer
-	err        error
-	ruleID     int
-	debug      bool
-	progPrefix []byte
-	progSuffix []byte
+	w               io.Writer
+	err             error
+	ruleID          int
+	debug           bool
+	progPrefix      []byte
+	progSuffix      []byte
+	ipSetIDProvider ipSetIDProvider
 }
 
-func NewProgramGenerator(src string) (*ProgramGenerator, error) {
+type ipSetIDProvider interface {
+	GetOrAlloc(ipSetID string) uint64
+}
+
+func NewProgramGenerator(src string, ipSetIDProvider ipSetIDProvider) (*ProgramGenerator, error) {
 	template, err := ioutil.ReadFile(src)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read BPF program template from %s", src)
@@ -51,9 +54,10 @@ func NewProgramGenerator(src string) (*ProgramGenerator, error) {
 
 	return &ProgramGenerator{
 		// On the critical path so it's worth skipping log entry creation if debug is not enabled.
-		debug:      log.GetLevel() >= log.DebugLevel,
-		progPrefix: splits[0],
-		progSuffix: splits[1],
+		debug:           log.GetLevel() >= log.DebugLevel,
+		progPrefix:      splits[0],
+		progSuffix:      splits[1],
+		ipSetIDProvider: ipSetIDProvider,
 	}, nil
 }
 
@@ -216,14 +220,14 @@ func (r *ProgramGenerator) writePortsMatch(negate bool, addrField, portField str
 		r.printf(", {0, %d, %d}", portRange.First, portRange.Last)
 	}
 	for _, ipSetID := range namedPorts {
-		r.printf(", {%#x, 0, 0}", IPSetIDToU64(ipSetID))
+		r.printf(", {%#x, 0, 0}", r.ipSetIDProvider.GetOrAlloc(ipSetID))
 	}
 	r.printf(");\n")
 }
 
 func (r *ProgramGenerator) writeIPSetMatch(negate bool, field string, ipSets []string) {
 	for _, ipSetID := range ipSets {
-		id := IPSetIDToU64(ipSetID)
+		id := r.ipSetIDProvider.GetOrAlloc(ipSetID)
 		r.printf("RULE_MATCH_IP_SET(%d, %t, %s, %#x);\n", r.ruleID, negate, field, id)
 	}
 }
@@ -246,12 +250,4 @@ func protocolToNumber(protocol *proto.Protocol) uint8 {
 		pcol = uint8(p.Number)
 	}
 	return pcol
-}
-
-func IPSetIDToU64(id string) uint64 { // FIXME Lossy conversion to uint64!
-	hasher := sha256.New()
-	_, _ = hasher.Write([]byte(id))
-	var hash [16]byte
-	result := hasher.Sum(hash[:0])
-	return binary.LittleEndian.Uint64(result[:8])
 }

@@ -26,6 +26,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/projectcalico/felix/idalloc"
+
 	"github.com/projectcalico/felix/ifacemonitor"
 
 	"github.com/projectcalico/felix/bpf"
@@ -53,9 +55,10 @@ type bpfEndpointManager struct {
 	bpfLogLevel      string
 	fibLookupEnabled bool
 	dataIfaceRegex   *regexp.Regexp
+	ipSetIDAlloc     *idalloc.IDAllocator
 }
 
-func newBPFEndpointManager(bpfLogLevel string, fibLookupEnabled bool, dataIfaceRegex *regexp.Regexp) *bpfEndpointManager {
+func newBPFEndpointManager(bpfLogLevel string, fibLookupEnabled bool, dataIfaceRegex *regexp.Regexp, ipSetIDAlloc *idalloc.IDAllocator) *bpfEndpointManager {
 	return &bpfEndpointManager{
 		wlEps:               map[proto.WorkloadEndpointID]*proto.WorkloadEndpoint{},
 		policies:            map[proto.PolicyID]*proto.Policy{},
@@ -68,6 +71,7 @@ func newBPFEndpointManager(bpfLogLevel string, fibLookupEnabled bool, dataIfaceR
 		bpfLogLevel:         bpfLogLevel,
 		fibLookupEnabled:    fibLookupEnabled,
 		dataIfaceRegex:      dataIfaceRegex,
+		ipSetIDAlloc:        ipSetIDAlloc,
 	}
 }
 
@@ -505,6 +509,7 @@ func (m *bpfEndpointManager) compileAndAttachProgram(allRules [][][]*proto.Rule,
 	logPfx := os.Getenv("BPF_LOG_PFX") + attachPoint.Iface
 
 	err = CompileTCProgramToFile(allRules,
+		m.ipSetIDAlloc,
 		CompileWithWorkingDir(srcDir),
 		CompileWithSourceName(srcFileName),
 		CompileWithOutputName(oFileName),
@@ -519,7 +524,7 @@ func (m *bpfEndpointManager) compileAndAttachProgram(allRules [][][]*proto.Rule,
 	err = AttachTCProgram(oFileName, attachPoint)
 	if err != nil {
 		var buf bytes.Buffer
-		pg, err := bpf.NewProgramGenerator(srcFileName)
+		pg, err := bpf.NewProgramGenerator(srcFileName, m.ipSetIDAlloc)
 		if err != nil {
 			log.WithError(err).Panic("Failed to write get code generator.")
 		}
@@ -624,7 +629,7 @@ func CompileWithBpftoolLoader() CompileTCOption {
 
 // CompileTCProgramToFile takes policy rules and compiles them into a tc-bpf
 // program and saves it into the provided file. Extra CFLAGS can be provided
-func CompileTCProgramToFile(allRules [][][]*proto.Rule, opts ...CompileTCOption) error {
+func CompileTCProgramToFile(allRules [][][]*proto.Rule, ipSetIDAlloc *idalloc.IDAllocator, opts ...CompileTCOption) error {
 	compileOpts := compileTCOpts{
 		srcFile: "/code/bpf/xdp/redir_tc.c",
 		outFile: "/tmp/redir_tc.o",
@@ -695,7 +700,7 @@ func CompileTCProgramToFile(allRules [][][]*proto.Rule, opts ...CompileTCOption)
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		pg, err := bpf.NewProgramGenerator(compileOpts.srcFile)
+		pg, err := bpf.NewProgramGenerator(compileOpts.srcFile, ipSetIDAlloc)
 		if err != nil {
 			log.WithError(err).Panic("Failed to create code generator")
 		}
