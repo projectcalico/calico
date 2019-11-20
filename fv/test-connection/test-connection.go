@@ -18,12 +18,12 @@ import (
 	"bufio"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"net"
 	"os"
-	"path"
 	"strings"
 	"time"
+
+	"github.com/projectcalico/felix/fv/cgroup"
 
 	"github.com/containernetworking/plugins/pkg/ns"
 	docopt "github.com/docopt/docopt-go"
@@ -66,45 +66,8 @@ If connection is unsuccessful, test-connection panics and so exits with a failur
 func main() {
 	log.SetLevel(log.DebugLevel)
 
-	cgroup := os.Getenv("FELIX_BPFCGROUPV2")
-	if cgroup != "" {
-		myPid := os.Getpid()
-		log.WithFields(log.Fields{"cgroup": cgroup, "pid": myPid}).Info("Moving this process to cgroup")
-		cgroupPath := path.Join("/run/calico/cgroup/", cgroup)
-		startTime := time.Now()
-		for {
-			if _, err := os.Stat(cgroupPath); err == nil {
-				file, err := os.OpenFile(path.Join(cgroupPath, "cgroup.procs"), os.O_WRONLY, 0700)
-				if err != nil {
-					log.WithError(err).Panic("Failed to open cgroup.procs")
-				}
-				_, err = file.WriteString(fmt.Sprint(myPid, "\n"))
-				if err != nil {
-					log.WithError(err).Panic("Failed to write cgroup")
-				}
-				err = file.Close()
-				if err != nil {
-					log.WithError(err).Panic("Failed to close cgroup")
-				}
-				break
-			}
-			if time.Since(startTime) > 10*time.Second {
-				log.Panic("cgroup never appeared")
-			}
-			time.Sleep(time.Second)
-		}
-		log.WithField("cgroup", cgroup).Info("Moved to cgroup")
-
-		file, err := os.Open(path.Join(cgroupPath, "cgroup.procs"))
-		if err != nil {
-			log.WithError(err).Panic("Failed to open cgroup.procs for read back")
-		}
-		cgroupProcs, err := ioutil.ReadAll(file)
-		if err != nil {
-			log.WithError(err).Panic("Failed to read back cgroup.procs")
-		}
-		log.WithField("procs", string(cgroupProcs)).Info("Read back cgroup members")
-	}
+	// If we've been told to, move into this felix's cgroup.
+	cgroup.MaybeMoveToFelixCgroupv2()
 
 	arguments, err := docopt.ParseArgs(usage, nil, "v0.1")
 	if err != nil {
