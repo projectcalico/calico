@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"os/exec"
 	"strconv"
 	"strings"
 	"time"
@@ -46,10 +47,18 @@ func init() {
 	felixLivenessEp = "http://localhost:" + felixPort + "/liveness"
 }
 
-func Run(bird, bird6, felixReady, felixLive bool, thresholdTime time.Duration) {
+func Run(bird, bird6, felixReady, felixLive bool, birdLive bool, thresholdTime time.Duration) {
 	if felixLive {
 		if err := checkFelixHealth(felixLivenessEp, "liveness"); err != nil {
 			fmt.Printf("calico/node is not ready: Felix is not live: %+v", err)
+			os.Exit(1)
+		}
+		os.Exit(0)
+	}
+
+	if birdLive {
+		if err := checkBIRDLive(); err != nil {
+			fmt.Printf("calico/node is not ready: Bird/ConfD is not live: %+v", err)
 			os.Exit(1)
 		}
 		os.Exit(0)
@@ -80,6 +89,40 @@ func Run(bird, bird6, felixReady, felixLive bool, thresholdTime time.Duration) {
 			os.Exit(1)
 		}
 	}
+}
+
+func checkBIRDLive() error {
+	error := checkService("confd")
+	if error != nil {
+		return error
+	}
+
+	error = checkService("bird")
+	if error != nil {
+		return error
+	}
+
+	error = checkService("bird6")
+	if error != nil {
+		return error
+	}
+
+	return nil
+}
+
+func checkService(serviceName string) error {
+	var svCheck = fmt.Sprintf("sv status /etc/service/enabled/%s", serviceName)
+	out, err := exec.Command(svCheck).Output()
+	if err != nil {
+		return err
+	}
+
+	var cmdOutput = string(out)
+	if !strings.HasPrefix(cmdOutput, "run") {
+		return fmt.Errorf(fmt.Sprintf("Service %s is not running. Output << %s >>", serviceName, cmdOutput))
+	}
+
+	return nil
 }
 
 // checkBIRDReady checks if BIRD is ready by connecting to the BIRD

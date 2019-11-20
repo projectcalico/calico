@@ -45,6 +45,7 @@ var monitorToken = flagSet.Bool("monitor-token", false, "Watch for Kubernetes to
 
 // Options for liveness checks.
 var felixLive = flagSet.Bool("felix-live", false, "Run felix liveness checks")
+var birdLive = flagSet.Bool("bird-live", false, "Run bird liveness checks")
 
 // Options for readiness checks.
 var birdReady = flagSet.Bool("bird-ready", false, "Run BIRD readiness checks")
@@ -89,8 +90,8 @@ func main() {
 	}
 
 	// Check for liveness / readiness flags. Will only run checks specified by flags.
-	if *felixLive || *birdReady || *bird6Ready || *felixReady {
-		health.Run(*birdReady, *bird6Ready, *felixReady, *felixLive, *thresholdTime)
+	if *felixLive || *birdReady || *bird6Ready || *felixReady || *birdLive {
+		health.Run(*birdReady, *bird6Ready, *felixReady, *felixLive, *birdLive, *thresholdTime)
 		os.Exit(0)
 	}
 
