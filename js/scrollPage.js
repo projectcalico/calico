@@ -1,8 +1,8 @@
 
 (function() {
     let globalLink = undefined;
-    
-    document.body.addEventListener("scroll", function () {        
+
+    function scrollPage() {        
         const calculationPoint = window.pageYOffset;
     
         const toc = document.getElementById("right-toc");
@@ -47,5 +47,8 @@
         globalLink = link;
 
         link.className = 'current';
-    });
+    }
+    
+    scrollPage();
+    document.body.addEventListener("scroll", scrollPage);
 })()

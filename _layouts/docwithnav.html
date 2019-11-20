@@ -213,7 +213,11 @@ The code is a little roundabout for a few reasons:
               </div>
             </div>
           </div>
-          {% include toc.html html=content class=".right-toc .col-xs-12 .col-sm-8 .col-md-3 .col-md-push-6 .col-lg-2 .col-lg-push-8" item_class=".right-toc__nested" %}
+          <div class="col-xs-12 col-sm-8 col-md-3 col-md-push-6 col-lg-2 col-lg-push-8">
+            <div class="right-toc-container" data-spy="affix" data-offset-top="75">
+              {% include toc.html html=content class=".right-toc" item_class=".right-toc__nested" %}
+            </div>
+          </div>
           <div class="col-xs-12 col-sm-8 col-md-6 col-md-pull-3 col-lg-8 col-lg-pull-2">
             <div id="content-main">
               <!-- TOP DOCUMENTATION PAGE NAVBAR -->
