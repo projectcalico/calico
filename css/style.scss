@@ -33,7 +33,6 @@ html {
   height: 100%;
 }
 body {
-  height: 100%;
   -webkit-overflow-scrolling: touch;
 }
 
@@ -77,6 +76,19 @@ div.highlight {
     -webkit-box-sizing: content-box;
     -moz-box-sizing: content-box;
     box-sizing: content-box;
+}
+
+.right-toc-container {
+  &.affix {
+    $wpfront-notification-bar-spacer-height: 55px;
+    top: $wpfront-notification-bar-spacer-height + $navbar-margin-bottom;
+  }
+
+  @media (max-width: $screen-sm-max) {
+    &.affix {
+        position: static;
+    }
+  }
 }
 
 .right-toc {
