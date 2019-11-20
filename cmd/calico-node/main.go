@@ -44,6 +44,7 @@ var allocateTunnelAddrs = flagSet.Bool("allocate-tunnel-addrs", false, "Configur
 // Options for liveness checks.
 var felixLive = flagSet.Bool("felix-live", false, "Run felix liveness checks")
 var birdLive = flagSet.Bool("bird-live", false, "Run bird liveness checks")
+var bird6Live = flagSet.Bool("bird6-live", false, "Run bird6 liveness checks")
 
 // Options for readiness checks.
 var birdReady = flagSet.Bool("bird-ready", false, "Run BIRD readiness checks")
@@ -88,8 +89,8 @@ func main() {
 	}
 
 	// Check for liveness / readiness flags. Will only run checks specified by flags.
-	if *felixLive || *birdReady || *bird6Ready || *felixReady || *birdLive {
-		health.Run(*birdReady, *bird6Ready, *felixReady, *felixLive, *birdLive, *thresholdTime)
+	if *felixLive || *birdReady || *bird6Ready || *felixReady || *birdLive || *bird6Live {
+		health.Run(*birdReady, *bird6Ready, *felixReady, *felixLive, *birdLive, *bird6Live, *thresholdTime)
 		os.Exit(0)
 	}
 
