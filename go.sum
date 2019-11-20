@@ -345,6 +345,8 @@ github.com/projectcalico/felix v0.0.0-20191115153506-55521ca9396f h1:sm5DZxbKMPu
 github.com/projectcalico/felix v0.0.0-20191115153506-55521ca9396f/go.mod h1:TcM4SJIn+WleHmOWXiV42larEZwXF1v+b86uOggUBrg=
 github.com/projectcalico/felix v0.0.0-20191119064945-bc9f3fb41aa4 h1:/+PRJft688TEM0Tm0D3xSv8xUBrNL4taqAJP+sDXpLg=
 github.com/projectcalico/felix v0.0.0-20191119064945-bc9f3fb41aa4/go.mod h1:dfjZNr2VpYSBJzqhku20p3c9TBzV++SPs8di0cBZwNM=
+github.com/projectcalico/felix v0.0.0-20191120064849-59269b7760f3 h1:6JoChHt0zvpyV/fEzZOR7Vza/+vUTaB116a7PEVbq2k=
+github.com/projectcalico/felix v0.0.0-20191120064849-59269b7760f3/go.mod h1:l+v5MTU6J58UUlncxVZId7ybyIEZ59rcyihWNgEbmuU=
 github.com/projectcalico/felix v3.8.2+incompatible h1:cz0MaUs5qTjPWjTxK5J1D1zEIfrtSYUyyf2nAjCos9c=
 github.com/projectcalico/felix v3.8.3+incompatible h1:bDA7IJlXWQZV0Ti0NKG8l4Q7HBqnEcNbCUX//qnzLZQ=
 github.com/projectcalico/felix v3.8.4+incompatible h1:F35xKHnqHiVuhbQAP3wLIa+wnHkaMlWcWoICngU1nqM=
@@ -376,6 +378,8 @@ github.com/projectcalico/libcalico-go v0.0.0-20191112223013-362a04d5e109 h1:IDD3
 github.com/projectcalico/libcalico-go v0.0.0-20191112223013-362a04d5e109/go.mod h1:zrsiZ92yHku+0gLXkFtvTxtG4ezT4QHsKZGQ7wBwqrg=
 github.com/projectcalico/libcalico-go v0.0.0-20191115193732-24505bb8ceab h1:qVyKWQMUF8JsYQZcDi08pygyTrkIonS+dzV49uPRKiA=
 github.com/projectcalico/libcalico-go v0.0.0-20191115193732-24505bb8ceab/go.mod h1:zrsiZ92yHku+0gLXkFtvTxtG4ezT4QHsKZGQ7wBwqrg=
+github.com/projectcalico/libcalico-go v0.0.0-20191119183141-c072e7a2fae4 h1:/gk4sNa20tc4zUiuwzudXTzFT0c+8Tky0KsmgSRZ9wk=
+github.com/projectcalico/libcalico-go v0.0.0-20191119183141-c072e7a2fae4/go.mod h1:SQsP5/DbXwwGVWDl7Hp4WbC7MCGApUVOj6LtOMx76BU=
 github.com/projectcalico/logrus v1.0.4-calico h1:bHJ2KLGTFzoWpRISe13CO7HVxxrKunDjyUz/wFiBY8c=
 github.com/projectcalico/logrus v1.0.4-calico/go.mod h1:DfgrchabbtEO9wjOz5lVae+XRvjFKKWEA9GTMme6A8g=
 github.com/projectcalico/pod2daemon v0.0.0-20190730210055-df57fc59e2e1 h1:JPzqAbV448lrNn83iqWiMM+Lxh0EyGlZC+ZYDZt+oGo=
@@ -398,6 +402,8 @@ github.com/projectcalico/typha v0.0.0-20191113041616-fda30a87ce29 h1:J2OL2C130Du
 github.com/projectcalico/typha v0.0.0-20191113041616-fda30a87ce29/go.mod h1:t7EJwYstYVDm+4qD4CudORwka3BriFRuddOc2oiYrpc=
 github.com/projectcalico/typha v0.0.0-20191118041444-25082beaecc6 h1:7ZooHKbERJC7EB6vidhkADryn+M3vr0/LcO0Yy+FJKk=
 github.com/projectcalico/typha v0.0.0-20191118041444-25082beaecc6/go.mod h1:2nyVR6xLQmc1UArwM2Jyx3YMWzmQonbGy0kiaLbp6vs=
+github.com/projectcalico/typha v0.0.0-20191120041510-00ee52d13a55 h1:dcum3Czc3ATK+aSVqFaKYWy9aTVYcNpBgZvvbUAoqDE=
+github.com/projectcalico/typha v0.0.0-20191120041510-00ee52d13a55/go.mod h1:h8g4rfFG6Wfjmsoc8OC6LmgYKJs2FcyeeZRUUknWC6c=
 github.com/prometheus/client_golang v0.0.0-20171005112915-5cec1d0429b0/go.mod h1:7SWBe2y4D6OKWSNQJUaRYU/AaXPKyh/dDVn+NZz0KFw=
 github.com/prometheus/client_golang v0.9.1 h1:K47Rk0v/fkEfwfQet2KWhscE0cJzjgCCDBG2KHZoVno=
 github.com/prometheus/client_golang v0.9.1/go.mod h1:7SWBe2y4D6OKWSNQJUaRYU/AaXPKyh/dDVn+NZz0KFw=
@@ -632,10 +638,13 @@ k8s.io/api v0.0.0-20180628040859-072894a440bd h1:HzgYeLDS1jLxw8DGr68KJh9cdQ5iZJi
 k8s.io/api v0.0.0-20180628040859-072894a440bd/go.mod h1:iuAfoD4hCxJ8Onx9kaTIt30j7jUFS00AXQi6QMi99vA=
 k8s.io/api v0.0.0-20190620084959-7cf5895f2711 h1:BblVYz/wE5WtBsD/Gvu54KyBUTJMflolzc5I2DTvh50=
 k8s.io/api v0.0.0-20190620084959-7cf5895f2711/go.mod h1:TBhBqb1AWbBQbW3XRusr7n7E4v2+5ZY8r8sAMnyFC5A=
+k8s.io/api v0.0.0-20190718183219-b59d8169aab5 h1:X3LHYU4fwu75lvvWypbppCKuhqg1KrvcZ1lLaAgmE/g=
+k8s.io/api v0.0.0-20190718183219-b59d8169aab5/go.mod h1:TBhBqb1AWbBQbW3XRusr7n7E4v2+5ZY8r8sAMnyFC5A=
 k8s.io/apimachinery v0.0.0-20180621070125-103fd098999d h1:MZjlsu9igBoVPZkXpIGoxI6EonqNsXXZU7hhvfQLkd4=
 k8s.io/apimachinery v0.0.0-20180621070125-103fd098999d/go.mod h1:ccL7Eh7zubPUSh9A3USN90/OzHNSVN6zxzde07TDCL0=
 k8s.io/apimachinery v0.0.0-20190612205821-1799e75a0719 h1:uV4S5IB5g4Nvi+TBVNf3e9L4wrirlwYJ6w88jUQxTUw=
 k8s.io/apimachinery v0.0.0-20190612205821-1799e75a0719/go.mod h1:I4A+glKBHiTgiEjQiCCQfCAIcIMFGt291SmsvcrFzJA=
+k8s.io/client-go v0.0.0-20190620085101-78d2af792bab/go.mod h1:E95RaSlHr79aHaX0aGSwcPNfygDiPKOVXdmivCIZT0k=
 k8s.io/client-go v8.0.0+incompatible h1:tTI4hRmb1DRMl4fG6Vclfdi6nTM82oIrTT7HfitmxC4=
 k8s.io/client-go v8.0.0+incompatible/go.mod h1:7vJpHMYJwNQCWgzmNV+VYUl1zCObLyodBc8nIyt8L5s=
 k8s.io/client-go v12.0.0+incompatible h1:YlJxncpeVUC98/WMZKC3JZGk/OXQWCZjAB4Xr3B17RY=

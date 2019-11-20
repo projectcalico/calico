@@ -8,12 +8,12 @@ require (
 	github.com/mattn/go-isatty v0.0.8 // indirect
 	github.com/onsi/ginkgo v1.8.0
 	github.com/onsi/gomega v1.5.0
-	github.com/projectcalico/felix v0.0.0-20191119064945-bc9f3fb41aa4
-	github.com/projectcalico/libcalico-go v0.0.0-20191115193732-24505bb8ceab
+	github.com/projectcalico/felix v0.0.0-20191120064849-59269b7760f3
+	github.com/projectcalico/libcalico-go v0.0.0-20191119183141-c072e7a2fae4
 	github.com/sirupsen/logrus v1.4.2
 	github.com/vishvananda/netns v0.0.0-20180720170159-13995c7128cc // indirect
 	gopkg.in/fsnotify/fsnotify.v1 v1.4.7
-	k8s.io/api v0.0.0-20190620084959-7cf5895f2711
+	k8s.io/api v0.0.0-20190718183219-b59d8169aab5
 	k8s.io/apimachinery v0.0.0-20190612205821-1799e75a0719
 	k8s.io/client-go v12.0.0+incompatible
 )
