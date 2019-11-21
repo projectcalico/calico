@@ -1,6 +1,5 @@
 ---
 title: Installing Calico on Kubernetes
-show_read_time: true
 canonical_url: 'https://docs.projectcalico.org/v3.9/getting-started/kubernetes/installation/introduction'
 ---
 

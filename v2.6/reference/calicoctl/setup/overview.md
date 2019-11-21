@@ -1,6 +1,5 @@
 ---
 title: Calicoctl Configuration Overview
-show_read_time: true
 canonical_url: 'https://docs.projectcalico.org/v3.5/reference/calicoctl/setup/overview'
 ---
 

@@ -1,6 +1,5 @@
 ---
 title: calicoctl config
-show_read_time: true
 ---
 
 This sections describes the `calicoctl config` commands.

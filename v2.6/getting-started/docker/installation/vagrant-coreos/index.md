@@ -1,6 +1,5 @@
 ---
 title: Running the Calico tutorials on CoreOS Container Linux using Vagrant and VirtualBox
-show_read_time: true
 canonical_url: 'https://docs.projectcalico.org/v2.6/getting-started/docker/installation/vagrant-coreos/index'
 ---
 

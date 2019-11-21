@@ -1,6 +1,5 @@
 ---
 title: Anatomy of a calico-node container
-show_read_time: true
 canonical_url: 'https://docs.projectcalico.org/v3.2/reference/architecture/components'
 ---
 

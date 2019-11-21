@@ -1,6 +1,5 @@
 ---
 title: Using etcd RBAC to segment Kubernetes and Calico
-show_read_time: true
 ---
 
 When using etcd with RBAC, all components that access etcd must be configured

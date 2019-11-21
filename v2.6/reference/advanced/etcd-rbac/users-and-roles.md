@@ -1,6 +1,5 @@
 ---
 title: Creating Users and Roles in etcd
-show_read_time: true
 ---
 
 Providing role based access control within etcd requires the following:

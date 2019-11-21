@@ -1,6 +1,5 @@
 ---
 title: Setting up etcd certificates for RBAC
-show_read_time: true
 ---
 
 When using etcd it is a good idea to protect the data stored there.  This is

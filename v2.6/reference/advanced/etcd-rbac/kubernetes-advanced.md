@@ -1,6 +1,5 @@
 ---
 title: Advanced etcd segmentation for Calico
-show_read_time: true
 ---
 
 This document describes advanced segmentation of the etcd roles to limit

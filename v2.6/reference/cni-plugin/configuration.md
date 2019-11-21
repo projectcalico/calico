@@ -1,6 +1,5 @@
 ---
 title: Configuring the Calico CNI plugins
-show_read_time: true
 canonical_url: 'https://docs.projectcalico.org/v3.9/reference/cni-plugin/configuration'
 ---
 
