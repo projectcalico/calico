@@ -25,6 +25,10 @@
 #define CALI_FIB_LOOKUP_ENABLED true
 #endif
 
+#ifndef CALI_HOST_IPS_IP_SET_ID
+#define CALI_HOST_IPS_IP_SET_ID 0
+#endif
+
 enum calico_policy_result {
 	CALI_POL_NO_MATCH,
 	CALI_POL_ALLOW,
@@ -346,7 +350,16 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb, enum calico_tc_flags
 			if (false) {
 				pol_rc = execute_policy_aof(skb, ip_proto, ip_src, post_nat_ip_dst,  sport,  post_nat_dport, flags);
 			}
-			pol_rc = execute_policy_norm(skb, ip_proto, ip_src, post_nat_ip_dst,  sport,  post_nat_dport, flags);
+			if (CALI_TC_FLAGS_TO_WORKLOAD(flags) &&
+					skb->mark != CALI_SKB_MARK_SEEN &&
+					cali_ip_set_lookup(CALI_HOST_IPS_IP_SET_ID, ip_src)) {
+				// Host to workload traffic always allowed.  We discount traffic that was seen by
+				// another program since it must have come in via another interface.
+				CALI_DEBUG("Packet is from the host: ACCEPT\n");
+				pol_rc = CALI_POL_ALLOW;
+			} else {
+				pol_rc = execute_policy_norm(skb, ip_proto, ip_src, post_nat_ip_dst,  sport,  post_nat_dport, flags);
+			}
 		}
 		switch (pol_rc) {
 		case CALI_POL_NO_MATCH:

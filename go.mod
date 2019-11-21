@@ -7,6 +7,7 @@ require (
 	github.com/davecgh/go-spew v1.1.1
 	github.com/docopt/docopt-go v0.0.0-20180111231733-ee0de3bc6815
 	github.com/go-ini/ini v1.44.0
+	github.com/gobuffalo/envy v1.8.0 // indirect
 	github.com/gobuffalo/packr/v2 v2.7.1
 	github.com/gogo/protobuf v1.2.2-0.20190723190241-65acae22fc9d
 	github.com/golang/protobuf v1.3.1
@@ -45,8 +46,8 @@ require (
 	go.uber.org/zap v1.10.0 // indirect
 	golang.org/x/crypto v0.0.0-20191119213627-4f8c1d86b1ba // indirect
 	golang.org/x/net v0.0.0-20190812203447-cdfb69ac37fc
-	golang.org/x/sys v0.0.0-20191120130536-6bfc516c8699
-	golang.org/x/tools v0.0.0-20191120143758-e97fc272220f // indirect
+	golang.org/x/sys v0.0.0-20191120155948-bd437916bb0e
+	golang.org/x/tools v0.0.0-20191121040551-947d4aa89328 // indirect
 	google.golang.org/grpc v1.19.0
 	gopkg.in/ini.v1 v1.46.0 // indirect
 	k8s.io/api v0.0.0

@@ -405,15 +405,6 @@ func (m *bpfEndpointManager) ensureQdisc(ifaceName string) {
 
 func (m *bpfEndpointManager) compileAndAttachWorkloadProgram(endpoint *proto.WorkloadEndpoint, polDirection string) error {
 	rules := m.extractRules(endpoint.Tiers, endpoint.ProfileIds, polDirection)
-	if polDirection == "ingress" {
-		// We define our policy model so that the host can always reach its workloads.
-		// FIXME: make sure we don't accept SNATted packets here.
-		log.Debug("Ingress workload policy, pre-pending allow-from-host rule")
-		if len(rules) == 0 {
-			rules = [][][]*proto.Rule{nil}
-		}
-		rules[0] = append([][]*proto.Rule{{{Action: "Allow", SrcIpSetIds: []string{SpecialIPSetIDHostIPs}}}}, rules[0]...)
-	}
 	ap := calculateTCAttachPoint("workload", polDirection, endpoint.Name)
 	return m.compileAndAttachProgram(rules, ap)
 }
@@ -525,6 +516,7 @@ func (m *bpfEndpointManager) compileAndAttachProgram(allRules [][][]*proto.Rule,
 		CompileWithFIBEnabled(m.fibLookupEnabled),
 		CompileWithLogLevel(logLevel),
 		CompileWithLogPrefix(logPfx),
+		CompileWithHostIPSetID(SpecialIPSetIDHostIPs),
 	)
 	if err != nil {
 		return err
@@ -574,14 +566,15 @@ func AttachTCProgram(fname string, attachPoint TCAttachPoint) error {
 }
 
 // CompileTCOption specifies additional compile options for TC programs
-type CompileTCOption func(interface{})
+type CompileTCOption func(*compileTCOpts)
 
 type compileTCOpts struct {
-	extraArgs []string
-	dir       string
-	srcFile   string
-	outFile   string
-	bpftool   bool
+	extraArgs   []string
+	dir         string
+	srcFile     string
+	outFile     string
+	bpftool     bool
+	hostIPSetID string
 }
 
 func (o *compileTCOpts) appendExtraArg(a string) {
@@ -590,49 +583,55 @@ func (o *compileTCOpts) appendExtraArg(a string) {
 
 // CompileWithFIBEnabled sets whether FIB lookup is allowed
 func CompileWithFIBEnabled(enabled bool) CompileTCOption {
-	return func(opts interface{}) {
-		opts.(*compileTCOpts).appendExtraArg(fmt.Sprintf("-DCALI_FIB_LOOKUP_ENABLED=%v", enabled))
+	return func(opts *compileTCOpts) {
+		opts.appendExtraArg(fmt.Sprintf("-DCALI_FIB_LOOKUP_ENABLED=%v", enabled))
 	}
 }
 
 // CompileWithLogLevel sets the log level of the resulting program
 func CompileWithLogLevel(level string) CompileTCOption {
-	return func(opts interface{}) {
-		opts.(*compileTCOpts).appendExtraArg(fmt.Sprintf("-DCALI_LOG_LEVEL=CALI_LOG_LEVEL_%s", level))
+	return func(opts *compileTCOpts) {
+		opts.appendExtraArg(fmt.Sprintf("-DCALI_LOG_LEVEL=CALI_LOG_LEVEL_%s", level))
 	}
 }
 
 // CompileWithLogPrefix sets a specific log prefix for the resulting program
 func CompileWithLogPrefix(prefix string) CompileTCOption {
-	return func(opts interface{}) {
-		opts.(*compileTCOpts).appendExtraArg(fmt.Sprintf("-DCALI_LOG_PFX=%v", prefix))
+	return func(opts *compileTCOpts) {
+		opts.appendExtraArg(fmt.Sprintf("-DCALI_LOG_PFX=%v", prefix))
 	}
 }
 
 // CompileWithSourceName sets the source file name
 func CompileWithSourceName(f string) CompileTCOption {
-	return func(opts interface{}) {
-		opts.(*compileTCOpts).srcFile = f
+	return func(opts *compileTCOpts) {
+		opts.srcFile = f
 	}
 }
 
 // CompileWithOutputName sets the output name
 func CompileWithOutputName(f string) CompileTCOption {
-	return func(opts interface{}) {
-		opts.(*compileTCOpts).outFile = f
+	return func(opts *compileTCOpts) {
+		opts.outFile = f
 	}
 }
 
 // CompileWithWorkingDir sets the working directory
 func CompileWithWorkingDir(dir string) CompileTCOption {
-	return func(opts interface{}) {
-		opts.(*compileTCOpts).dir = dir
+	return func(opts *compileTCOpts) {
+		opts.dir = dir
 	}
 }
 
 func CompileWithBpftoolLoader() CompileTCOption {
-	return func(opts interface{}) {
-		opts.(*compileTCOpts).bpftool = true
+	return func(opts *compileTCOpts) {
+		opts.bpftool = true
+	}
+}
+
+func CompileWithHostIPSetID(id string) CompileTCOption {
+	return func(opts *compileTCOpts) {
+		opts.hostIPSetID = id
 	}
 }
 
@@ -649,11 +648,14 @@ func CompileTCProgramToFile(allRules [][][]*proto.Rule, ipSetIDAlloc *idalloc.ID
 		o(&compileOpts)
 	}
 
+	hostIPSetID := ipSetIDAlloc.GetOrAlloc(compileOpts.hostIPSetID)
+
 	args := []string{
 		"-x",
 		"c",
 		"-D__KERNEL__",
 		"-D__ASM_SYSREG_H",
+		fmt.Sprintf("-DCALI_HOST_IPS_IP_SET_ID=%#x", hostIPSetID),
 	}
 
 	if compileOpts.bpftool {

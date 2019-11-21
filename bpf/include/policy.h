@@ -1,6 +1,8 @@
 #ifndef __CALI_POLICY_H__
 #define __CALI_POLICY_H__
 
+#include "../xdp/bpf_maps.h"
+
 struct port_range {
        __u64 ip_set_id;
        __u16 min, max;
@@ -69,19 +71,20 @@ struct cidr {
 		RULE_MATCH(id, match, negate); \
 	} while (false)
 
+bool cali_ip_set_lookup(uint64_t ip_set_id, __be32 addr) {
+	union ip4_set_bpf_lpm_trie_key k;
+	k.ip.mask = sizeof(struct ip4setkey)*8;
+	k.ip.set_id = host_to_be64(ip_set_id);
+	k.ip.addr = addr;
+	k.ip.protocol = 0;
+	k.ip.port = 0;
+	k.ip.pad = 0;
+	return bpf_map_lookup_elem(&calico_ip_sets, &k) != NULL;
+}
+
 #define RULE_MATCH_IP_SET(id, negate, saddr_or_daddr, ip_set_id) do { \
 		CALI_DEBUG("  look up " #saddr_or_daddr " (%x) in IP set " #ip_set_id "\n", be32_to_host(saddr_or_daddr)); \
-		bool match = false; \
-		union ip4_set_bpf_lpm_trie_key k; \
-		k.ip.mask = sizeof(struct ip4setkey)*8 ; \
-		k.ip.set_id = host_to_be64(ip_set_id); \
-		k.ip.addr = saddr_or_daddr; \
-		k.ip.protocol = 0; \
-		k.ip.port = 0; \
-		k.ip.pad = 0; \
-		if (bpf_map_lookup_elem(&calico_ip_sets, &k)) { \
-			match=true; \
-		} \
+		bool match = cali_ip_set_lookup(id, saddr_or_daddr); \
 		RULE_MATCH(id, match, negate); \
 	} while (false)
 
