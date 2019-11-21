@@ -196,6 +196,10 @@ input.gsc-input, .gsc-input-box, .gsc-input-box-hover, .gsc-input-box-focus, .gs
     display: none;
   }
 
+  .sidebar-container {
+    z-index: 1;
+  }
+
   @media (max-width: $screen-xs-max) {
     .sidebar-container {
       padding-right: $grid-column-gap;
