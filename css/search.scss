@@ -1,3 +1,5 @@
+@import "../css/variables";
+
 .search-container {
     display: none;
 }
@@ -10,9 +12,14 @@
     outline: none;
 }
 
-.popover {
-    max-width: unset;
-    width: 600px;
+.search {
+    .popover {
+        min-width: 300px;
+
+        @media (min-width: $screen-sm-min) {
+            min-width: 600px;
+        }
+    }
 }
 
 .columns-layout {
