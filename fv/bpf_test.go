@@ -152,13 +152,16 @@ func describeBPFTests(protocol string) bool {
 			log.Info("AfterEach done")
 		})
 
-		It("should deny all by default", func() {
+		It("should only allow traffic from the local host by default", func() {
 			// Same host, other workload.
 			cc.ExpectNone(w[0][0], w[0][1])
 			cc.ExpectNone(w[0][1], w[0][0])
-			// Other host.
+			// Workloads on other host.
 			cc.ExpectNone(w[0][0], w[1][0])
 			cc.ExpectNone(w[1][0], w[0][0])
+			// Hosts.
+			cc.ExpectSome(felixes[0], w[0][0])
+			cc.ExpectNone(felixes[1], w[0][0])
 			cc.CheckConnectivity()
 		})
 

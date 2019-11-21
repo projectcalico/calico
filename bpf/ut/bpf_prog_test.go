@@ -16,13 +16,14 @@ package ut_test
 
 import (
 	"encoding/json"
-	"github.com/projectcalico/felix/idalloc"
 	"io/ioutil"
 	"net"
 	"os"
 	"os/exec"
 	"path"
 	"testing"
+
+	"github.com/projectcalico/felix/idalloc"
 
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"

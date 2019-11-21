@@ -405,6 +405,15 @@ func (m *bpfEndpointManager) ensureQdisc(ifaceName string) {
 
 func (m *bpfEndpointManager) compileAndAttachWorkloadProgram(endpoint *proto.WorkloadEndpoint, polDirection string) error {
 	rules := m.extractRules(endpoint.Tiers, endpoint.ProfileIds, polDirection)
+	if polDirection == "ingress" {
+		// We define our policy model so that the host can always reach its workloads.
+		// FIXME: make sure we don't accept SNATted packets here.
+		log.Debug("Ingress workload policy, pre-pending allow-from-host rule")
+		if len(rules) == 0 {
+			rules = [][][]*proto.Rule{nil}
+		}
+		rules[0] = append([][]*proto.Rule{{{Action: "Allow", SrcIpSetIds: []string{SpecialIPSetIDHostIPs}}}}, rules[0]...)
+	}
 	ap := calculateTCAttachPoint("workload", polDirection, endpoint.Name)
 	return m.compileAndAttachProgram(rules, ap)
 }
