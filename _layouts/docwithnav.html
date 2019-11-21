@@ -46,15 +46,15 @@ The code is a little roundabout for a few reasons:
     <link href='https://fonts.googleapis.com/css?family=Roboto:400,100,100italic,300,300italic,400italic,500,500italic,700,700italic,900,900italic' rel='stylesheet' type='text/css'>
     <link href="https://fonts.googleapis.com/css?family=Lato" rel="stylesheet">
     <link rel="stylesheet" href='https://fonts.googleapis.com/css?family=Roboto+Mono' type='text/css'>
-    <link rel="stylesheet" href="{{site.baseurl}}/css/style.css"/>
-    <link rel="stylesheet" href="{{site.baseurl}}/css/search.css"/>
-    <link rel="stylesheet" href="{{site.baseurl}}/css/plugins/offcanvas.css"/>
-    <link rel="stylesheet" href="{{site.baseurl}}/css/instantsearch/instantsearch.min.css"/>
     {% if page.custom_css %}
     <link rel="stylesheet" href="{{site.baseurl}}/{{ page.custom_css }}"/>
     {% endif %}
     <link href="https://www.projectcalico.org/wp-content/themes/dante/css/font-awesome.min.css" rel="stylesheet">
     <link href="https://www.projectcalico.org/wp-content/plugins/wpfront-notification-bar/css/wpfront-notification-bar.css?ver=1.7.1" rel="stylesheet" type="text/css" media="all">
+    <link rel="stylesheet" href="{{site.baseurl}}/css/plugins/offcanvas.css"/>
+    <link rel="stylesheet" href="{{site.baseurl}}/css/instantsearch/instantsearch.min.css"/>
+    <link rel="stylesheet" href="{{site.baseurl}}/css/search.css"/>
+    <link rel="stylesheet" href="{{site.baseurl}}/css/style.css"/>
     <script src="{{site.baseurl}}/js/jquery-2.2.0.min.js"></script>
     <script src="{{site.baseurl}}/js/bootstrap/bootstrap.min.js"></script>
     <script src="{{site.baseurl}}/js/instantsearch/instantsearch.min.js"></script>
@@ -167,63 +167,63 @@ The code is a little roundabout for a few reasons:
         </div>
       </nav>
       <div class="container-fluid">
-        <div class="row row-offcanvas row-offcanvas-left">
-          <p class="pull-left visible-xs">
-            <button type="button" class="btn btn-primary btn-xs" data-toggle="offcanvas">Toggle nav</button>
-          </p>
-          <div class="col-xs-6 col-sm-4 col-md-3 col-lg-2 sidebar-offcanvas">
-            <div>
-              <div class="search-input-container" data-toggle="popover" data-placement="bottom"></div>
-              <div class="search-container">
-                <div class="search-container__results"></div>
-                <div class="search-container__pagination"></div>
+        <div class="row-offcanvas row-offcanvas-left main-content">
+          <div class="sidebar-container sidebar-offcanvas">
+            <div class="sidebar">
+              <div>
+                <div class="search-input-container" data-toggle="popover" data-placement="bottom"></div>
+                <div class="search-container">
+                  <div class="search-container__results"></div>
+                  <div class="search-container__pagination"></div>
+                </div>
               </div>
-            </div>
-            <div id="sidebar">
-              <div class="panel-group" id="sidebar-accordion">
-                {% for navbar in navbars %}
-                  {% assign navbar_id = navbar.path | replace: "/", "-" | prepend: "navbar" %}
-                  <div class="panel panel-default">
-                    <div
-                      class="panel-heading{% if this_pages_navbar == navbar %} current-page {% endif %}"
-                      role="button"
-                      data-toggle="collapse"
-                      data-target="#{{ navbar_id }}"
-                      aria-controls="{{ navbar_id }}"
-                    >
-                      <h4 class="panel-title">
-                          <a href="{{site.baseurl}}/{{page.version}}{{navbar.path}}">
-                            <span>{{ navbar.bigheader }}</span>
-                          </a>
-                      </h4>
+              <div id="sidebar">
+                <div class="panel-group" id="sidebar-accordion">
+                  {% for navbar in navbars %}
+                    {% assign navbar_id = navbar.path | replace: "/", "-" | prepend: "navbar" %}
+                    <div class="panel panel-default">
+                      <div
+                        class="panel-heading{% if this_pages_navbar == navbar %} current-page {% endif %}"
+                        role="button"
+                        data-toggle="collapse"
+                        data-target="#{{ navbar_id }}"
+                        aria-controls="{{ navbar_id }}"
+                      >
+                        <h4 class="panel-title">
+                            <a href="{{site.baseurl}}/{{page.version}}{{navbar.path}}">
+                              <span>{{ navbar.bigheader }}</span>
+                            </a>
+                        </h4>
+                      </div>
+                      {% assign availableToc = navbar.section | where_exp: "item", "item.title != navbar.bigheader" %}
+                      <div id="{{ navbar_id }}" class="panel-collapse collapse {% if this_pages_navbar == navbar and availableToc.size > 0 %}in{% endif %}">
+                          {% if availableToc %}
+                            <div class="panel-body">
+                                {% include sidebar.html sidebar=availableToc prefix="nav" %}
+                            </div> 
+                          {% endif %}
+                      </div>
                     </div>
-                    {% assign availableToc = navbar.section | where_exp: "item", "item.title != navbar.bigheader" %}
-                    <div id="{{ navbar_id }}" class="panel-collapse collapse {% if this_pages_navbar == navbar and availableToc.size > 0 %}in{% endif %}">
-                        {% if availableToc %}
-                          <div class="panel-body">
-                              {% include sidebar.html sidebar=availableToc prefix="nav" %}
-                          </div> 
-                        {% endif %}
-                    </div>
-                  </div>
-                {% endfor %}
-              </div>
-              <div class="row">
-                <div class="col-sm-0"></div>
+                  {% endfor %}
+                </div>
+                <div class="row">
+                  <div class="col-sm-0"></div>
+                </div>
               </div>
             </div>
           </div>
-          <div class="col-xs-12 col-sm-8 col-md-3 col-md-push-6 col-lg-2 col-lg-push-8">
-            <div class="right-toc-container" data-spy="affix" data-offset-top="75">
-              {% include toc.html html=content class=".right-toc" item_class=".right-toc__nested" %}
-            </div>
-          </div>
-          <div class="col-xs-12 col-sm-8 col-md-6 col-md-pull-3 col-lg-8 col-lg-pull-2">
+          <div class="article-container">
             <div id="content-main">
+              <p class="pull-left visible-xs">
+                <button type="button" class="btn btn-primary btn-xs" data-toggle="offcanvas">Toggle nav</button>
+              </p>
               <!-- TOP DOCUMENTATION PAGE NAVBAR -->
               <div style="text-align: left; padding: 18px 0 9px 0; overflow-x: hidden;">
-
-              <a data-proofer-ignore href="https://github.com/projectcalico/calico/tree/master/{{page.path}}" style="color: #999; text-decoration: none; float: right;" target="_blank"><i class="fa fa-github" aria-hidden="true"></i> Edit this page</a></div>
+                <a data-proofer-ignore href="https://github.com/projectcalico/calico/tree/master/{{page.path}}" style="color: #999; text-decoration: none; float: right;" target="_blank">
+                  <i class="fa fa-github" aria-hidden="true"></i>
+                  Edit this page
+                </a>
+              </div>
               <!-- END TOP DOCUMENTATION PAGE NAVBAR -->
               {% include nav-breadcrumbs.html %}
               {% include version_warning.html %}
@@ -233,6 +233,9 @@ The code is a little roundabout for a few reasons:
               {% if page.show_read_time -%}
                 {% include read_time.html %}
               {% endif -%}
+              <div class="visible-xs visible-sm">
+                {% include toc.html html=content class=".toc" item_class=".toc__nested" %}
+              </div>
               {% include section_index.html section_index=navbars %}
               {{ content }}
 
@@ -243,6 +246,11 @@ The code is a little roundabout for a few reasons:
                 <a href="https://www.projectcalico.org/training" style="margin-left: 30px; color: #999; text-decoration: none;" target="_blank"><i class="fa fa-graduation-cap" aria-hidden="true"></i> Training</a>
               </div>
               <!-- END BOTTOM DOCUMENTATION PAGE NAVBAR -->
+            </div>
+          </div>
+          <div class="toc-container">
+            <div class="sticky-toc">
+              {% include toc.html html=content class=".toc" item_class=".toc__nested" %}
             </div>
           </div>
         </div>

@@ -1,48 +1,50 @@
 
-(function() {
-    let globalLink = undefined;
+(function () {
+    const tocs = document.querySelectorAll('.toc');
+    tocs.forEach(toc => {
+        let globalLink = undefined;
 
-    function scrollPage() {    
-        const toc = document.getElementById("right-toc");
-        const links = Array.from(toc.getElementsByTagName("a"));
-        const ids = links.map(l => {
-            const href = l.href.split("#");
-            const id = href[1];
+        function handleScroll() {
+            const links = Array.from(toc.getElementsByTagName("a"));
+            const ids = links.map(l => {
+                const href = l.href.split("#");
+                const id = href[1];
 
-            return id;
-        })
-    
-        let nearestId = globalLink ? globalLink.href.split("#")[1] : '';
-        let currentNearestPos = undefined;
+                return id;
+            })
 
-        for(let i of ids) {
-            const heading = document.getElementById(i);
-            const headingRect = heading.getBoundingClientRect();
-            const yPosition = headingRect.y;
+            let nearestId = globalLink ? globalLink.href.split("#")[1] : '';
+            let currentNearestPos = undefined;
 
-            if (yPosition === 0) {
-                nearestId = i;
-                break;
+            for (const id of ids) {
+                const heading = document.getElementById(id);
+                const headingRect = heading.getBoundingClientRect();
+                const yPosition = headingRect.y;
+
+                if (yPosition === 0) {
+                    nearestId = id;
+                    break;
+                }
+
+
+                const diff = yPosition * yPosition;
+                if (!currentNearestPos || diff <= currentNearestPos) {
+                    currentNearestPos = diff;
+                    nearestId = id;
+                }
+            };
+
+            const link = links.find(l => l.href.split("#")[1] === nearestId);
+
+            if (globalLink) {
+                globalLink.className = '';
             }
-    
+            globalLink = link;
 
-            const diff = yPosition * yPosition;
-            if (!currentNearestPos || diff <= currentNearestPos) {
-                currentNearestPos = diff;
-                nearestId = i;
-            }
-        };
-    
-        var link = links.find(l => l.href.split("#")[1] === nearestId);
-    
-        if (globalLink) {
-            globalLink.className = '';
+            link.className = 'current';
         }
-        globalLink = link;
 
-        link.className = 'current';
-    }
-    
-    scrollPage();
-    window.addEventListener("scroll", scrollPage);
+        handleScroll();
+        window.addEventListener("scroll", handleScroll);
+    });
 })()

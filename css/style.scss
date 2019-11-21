@@ -30,10 +30,14 @@ blockquote {
 
 // Set height to prevent weird bug where sidebar is clipped at bottom.
 html {
-  height: 100%;
+  overflow-y: scroll;
+  position: relative;
+  min-height: 100%;
 }
+
 body {
   -webkit-overflow-scrolling: touch;
+  overflow-x: visible;
 }
 
 h2,h3,h4,h5,h6 {
@@ -82,22 +86,10 @@ div.highlight {
     box-sizing: content-box;
 }
 
-.right-toc-container {
-  &.affix {
-    $wpfront-notification-bar-spacer-height: 55px;
-    top: $wpfront-notification-bar-spacer-height + $navbar-margin-bottom;
-  }
-
-  @media (max-width: $screen-sm-max) {
-    &.affix {
-        position: static;
-    }
-  }
-}
-
-.right-toc {
+.toc {
   color: #004078;
   list-style-type: none;
+  padding-left: 0;
 
   &__nested {
     list-style-type: none;
@@ -190,5 +182,67 @@ input.gsc-input, .gsc-input-box, .gsc-input-box-hover, .gsc-input-box-focus, .gs
 
   &__icon {
     top: 2px;
+  }
+}
+
+.main-content {
+  $grid-column-gap: 20px;
+  display: grid;
+  grid-template-columns: [article] 100%;
+  grid-column-gap: $grid-column-gap;
+
+  .toc-container {
+    display: none;
+  }
+
+  @media (max-width: $screen-xs-max) {
+    .sidebar-container {
+      padding-right: $grid-column-gap;
+    }
+  }
+
+  @media (min-width: $screen-sm-min) {
+    grid-template-columns: [sidebar] 30% [article] calc(70% - #{$grid-column-gap});
+  }
+
+  @media (min-width: $screen-md-min) {
+    grid-template-columns: [sidebar] 20% [article] calc(60% - #{$grid-column-gap * 2}) [toc] 20%;
+
+    .toc-container {
+      display: block;
+    }
+  }
+
+  @media (min-width: $screen-lg-min) {
+    grid-template-columns: [sidebar] 15% [article] calc(70% - #{$grid-column-gap * 2}) [toc] 15%;
+  }
+}
+
+$wpfront-notification-bar-spacer-height: 55px;
+$sticky-top: $wpfront-notification-bar-spacer-height + $navbar-margin-bottom;
+
+.sidebar {
+  position: sticky;
+  top: $sticky-top;
+
+  #sidebar-accordion {
+    max-height: calc(100vh - 250px);
+
+    @media (min-width: $screen-sm-min) {
+      overflow-y: auto;
+    }
+  }
+}
+
+.sticky-toc {
+  position: sticky;
+  top: $sticky-top;
+
+  .toc {
+    max-height: calc(100vh - 250px);
+
+    @media (min-width: $screen-md-min) {
+      overflow-y: auto;
+    }
   }
 }
