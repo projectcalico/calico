@@ -20,8 +20,8 @@ toc:
     path: /networking/use-ipvs  
   - title: Accelerate Istio network performance
     path: /networking/sidecar-acceleration  
- - title: Customize IP address management
-   section:
+- title: Customize IP address management
+  section:
    - title: Get started with IP address management
      path: /networking/get-started-ip-addresses
    - title: Configure IP autodetection
