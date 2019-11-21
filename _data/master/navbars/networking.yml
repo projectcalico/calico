@@ -4,26 +4,59 @@ order: 2
 toc:
 - title: Networking
   path: /networking/
-- title: Connecting workloads across networks that you do not control
-  path: /networking/vxlan-ipip
-- title: Migrate from one IP pool to another
-  path: /networking/migrate-pools
-- title: Route reflectors
-  path: /networking/routereflector
-- title: Configuring BGP peers
-  path: /networking/bgp
-- title: Enable IPv6
-  path: /networking/ipv6
-- title: Enabling IPVS in Kubernetes
-  path: /networking/enabling-ipvs
-- title: External connectivity
-  path: /networking/external-connectivity
-- title: Configuring a node IP address and subnet
-  path: /networking/node
-- title: Configure MTU to maximize network performance
-  path: /networking/mtu
-- title: Assign IP addresses based on topology
-  path: /networking/assign-ip-addresses-topology
+
+- title: Determine best networking option
+  path: /networking/
+
+- title: Configure networking
+  section:
+  - title: Configuring BGP peers
+    path: /networking/bgp 
+
+  - title: Configure overlay networking
+    path: /networking/vxlan-ipip 
+
+  - title: Configure MTU to maximize network performance
+    path: /networking/mtu
+
+  - title: Configure workload access outside cluster
+    path: /networking/workloads-outside-cluster
+
+  - title: Use IPVS kube-proxy
+    path: /networking/use-ipvs  
+
+  - title: Accelerate Istio network performance
+    path: /networking/sidecar-acceleration  
+
+ - title: Customize IP address management
+   section:
+   - title: Get started with IP address management
+     path: /networking/get-started-ip-addresses
+
+   - title: Configure IP autodetection
+     path: /networking/ipautodetection
+
+   - title: Enable IPv6
+     path: /networking/ipv6  
+
+   - title: Advertise Kubernetes service IP addresses
+     path: /networking/advertise-service-ips   
+
+   - title: Add a floating IP to a pod
+     path: /networking/add-floating-ip
+
+   - title: Use specific IP address for a pod
+     path: /networking/use-specific-ip
+
+   - title: Assign IP addresses based on topology
+     path: /networking/assign-ip-addresses-topology
+
+   - title: Migrate from one IP pool to another
+     path: /networking/migrate-pools
+
+   - title: Interoperate with legacy firewalls using IP ranges
+     path: /networking/legacy-firewalls
+
 - title: Calico networking for OpenStack
   section:
   - title: Setting up a development machine
@@ -47,26 +80,4 @@ toc:
   - title: Kuryr
     path: /networking/openstack/kuryr
   - title: Calico's interpretation of Neutron API calls
-    path: /networking/openstack/neutron-api
-- title: Network design
-  section:
-    - title: Calico over Ethernet fabrics
-      path: /networking/design/l2-interconnect-fabric
-    - title: Calico over IP fabrics
-      path: /networking/design/l3-interconnect-fabric
-- title: Accelerating Istio network performance
-  path: /networking/sidecar-acceleration
-- title: Interoperate with legacy firewalls using IP ranges
-  path: /networking/legacy-firewalls
-- title: Use specific IP address for a pod
-  path: /networking/use-specific-ip
-- title: Add a floating IP to a pod
-  path: /networking/add-floating-ip
-- title: Get started with IP address management
-  path: /networking/get-started-ip-addresses
-- title: Use IPVS kube-proxy
-  path: /networking/use-ipvs  
-- title: Configure workload access outside cluster
-  path: /networking/workloads-outside-cluster
-- title: Advertise Kubernetes service IP addresses
-  path: /networking/advertise-service-ips
+    path: /networking/openstack/neutron-api 
