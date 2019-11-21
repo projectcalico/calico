@@ -63,6 +63,9 @@ func TestCompileTemplateRun(tt *testing.T) {
 	t.Expect(err).NotTo(HaveOccurred())
 
 	err = bpftoolProgLoadAll(objFname, bpfFsDir)
+	if err != nil {
+		tt.Log("Error:", string(err.(*exec.ExitError).Stderr))
+	}
 	t.Expect(err).NotTo(HaveOccurred())
 
 	dataInFname := tempDir + "/data_in"
