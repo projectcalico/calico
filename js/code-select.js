@@ -2,7 +2,6 @@ $(document).ready(function() {
   var codeToolbarClass = 'code-toolbar';
   var copyButtonClass = `${codeToolbarClass}__copy-button`;
   var downloadButtonClass = `${codeToolbarClass}__download-button`;
-  var printButtonClass = `${codeToolbarClass}__print-button`;
 
   $('pre.highlight').each(function(i) {
     if (!$(this).parents().hasClass('no-select-button')) {
@@ -50,17 +49,8 @@ $(document).ready(function() {
         saveFile(downloadas, code);
       }
 
-      var printButton = document.createElement('a');
-      printButton.setAttribute('type', 'btn');
-      printButton.setAttribute('class', printButtonClass);
-      printButton.innerHTML = '<i class="glyphicon glyphicon-print" data-toggle="tooltip" data-placement="bottom" title="Print"></i>';
-      printButton.onclick = function() {
-        printText(code);
-      }
-
       var toolbarDiv = document.createElement('div');
       toolbarDiv.setAttribute('class', codeToolbarClass);
-      toolbarDiv.appendChild(printButton);
       toolbarDiv.appendChild(downloadButton);
       toolbarDiv.appendChild(copyButton);
       this.insertBefore(toolbarDiv, this.firstChild);
@@ -81,16 +71,4 @@ function saveFile(filename, text) {
   document.body.appendChild(element);
   element.click();
   document.body.removeChild(element);
-}
-
-function printText(text) {
-  const html = "<html><body><pre><code>" + text + "</code></pre></html>";
-  const printWin = window.open("", "", "left=0,top=0,width=100,height=100,toolbar=0,scrollbars=0,status=0,location=0,menubar=0", false);
-  if (printWin) {
-      printWin.document.write(html);
-      printWin.document.close();
-      printWin.focus();
-      printWin.print();
-      printWin.close();
-  }
 }
