@@ -71,7 +71,7 @@ struct cidr {
 		RULE_MATCH(id, match, negate); \
 	} while (false)
 
-bool cali_ip_set_lookup(uint64_t ip_set_id, __be32 addr) {
+static CALI_BPF_INLINE bool cali_ip_set_lookup(uint64_t ip_set_id, __be32 addr) {
 	union ip4_set_bpf_lpm_trie_key k;
 	k.ip.mask = sizeof(struct ip4setkey)*8;
 	k.ip.set_id = host_to_be64(ip_set_id);
