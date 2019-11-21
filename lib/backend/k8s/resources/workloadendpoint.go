@@ -19,6 +19,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 
 	log "github.com/sirupsen/logrus"
 	kapiv1 "k8s.io/api/core/v1"
@@ -79,10 +80,10 @@ func (c *WorkloadEndpointClient) Delete(ctx context.Context, key model.Key, revi
 	}
 }
 
-// patchPodIP PATCHes the Kubernetes Pod associated with the given KVPair with the IP address it contains.
+// patchPodIP PATCHes the Kubernetes Pod associated with the given KVPair with the IP addresses it contains.
 // This is a no-op if there is no IP address.
 //
-// We store the IP address in an annotation because patching the PodIP directly races with changes that
+// We store the IP addresses in annotations because patching the PodStatus directly races with changes that
 // kubelet makes so kubelet can undo our changes.
 func (c *WorkloadEndpointClient) patchPodIP(ctx context.Context, kvp *model.KVPair) (*model.KVPair, error) {
 	ips := kvp.Value.(*apiv3.WorkloadEndpoint).Spec.IPNetworks
@@ -90,7 +91,7 @@ func (c *WorkloadEndpointClient) patchPodIP(ctx context.Context, kvp *model.KVPa
 		return kvp, nil
 	}
 
-	log.Debugf("PATCHing pod with IP: %v", ips[0])
+	log.Debugf("PATCHing pod with IPs: %v", ips)
 	wepID, err := c.converter.ParseWorkloadEndpointName(kvp.Key.(model.ResourceKey).Name)
 	if err != nil {
 		return nil, err
@@ -98,10 +99,13 @@ func (c *WorkloadEndpointClient) patchPodIP(ctx context.Context, kvp *model.KVPa
 	if wepID.Pod == "" {
 		return nil, cerrors.ErrorInsufficientIdentifiers{Name: kvp.Key.(model.ResourceKey).Name}
 	}
-	// Write the IP address into an annotation.  This generates an event more quickly than
-	// waiting for kubelet to update the Status.PodIP field.
+	// Write the IP addresses into annotations.  This generates an event more quickly than
+	// waiting for kubelet to update the PodStatus PodIP and PodIPs fields.
 	ns := kvp.Key.(model.ResourceKey).Namespace
-	patch, err := calculateAnnotationPatch(conversion.AnnotationPodIP, ips[0])
+	patch, err := calculateAnnotationPatch(
+		conversion.AnnotationPodIP, ips[0],
+		conversion.AnnotationPodIPs, strings.Join(ips, ","),
+	)
 	if err != nil {
 		log.WithError(err).Error("Failed to calculate Pod patch.")
 		return nil, err
@@ -114,19 +118,24 @@ func (c *WorkloadEndpointClient) patchPodIP(ctx context.Context, kvp *model.KVPa
 	return c.converter.PodToWorkloadEndpoint(pod)
 }
 
-const annotationPatchTemplate = `{"metadata": {"annotations": {%s: %s}}}`
+const annotationNameValueTemplate = `%s: %s`
+const annotationPatchTemplate = `{"metadata": {"annotations": {%s}}}`
 
-func calculateAnnotationPatch(name, value string) ([]byte, error) {
-	// Marshal the key and value in order to make sure all the escaping is done correctly.
-	nameJson, err := json.Marshal(name)
-	if err != nil {
-		return nil, err
+func calculateAnnotationPatch(namesAndValues ...string) ([]byte, error) {
+	settings := []string{}
+	for i := 0; i < len(namesAndValues); i += 2 {
+		// Marshal the key and value in order to make sure all the escaping is done correctly.
+		nameJson, err := json.Marshal(namesAndValues[i])
+		if err != nil {
+			return nil, err
+		}
+		valueJson, err := json.Marshal(namesAndValues[i+1])
+		if err != nil {
+			return nil, err
+		}
+		settings = append(settings, fmt.Sprintf(annotationNameValueTemplate, nameJson, valueJson))
 	}
-	valueJson, err := json.Marshal(value)
-	if err != nil {
-		return nil, err
-	}
-	patch := []byte(fmt.Sprintf(annotationPatchTemplate, nameJson, valueJson))
+	patch := []byte(fmt.Sprintf(annotationPatchTemplate, strings.Join(settings, ", ")))
 	return patch, nil
 }
 

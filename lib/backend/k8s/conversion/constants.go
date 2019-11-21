@@ -1,4 +1,4 @@
-// Copyright (c) 2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2019 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -26,4 +26,6 @@ const (
 	// since we write it ourselves, we can make sure that it is written synchronously
 	// and quickly.
 	AnnotationPodIP = "cni.projectcalico.org/podIP"
+	// AnnotationPodIPs is similar for the plural PodIPs field.
+	AnnotationPodIPs = "cni.projectcalico.org/podIPs"
 )
