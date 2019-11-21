@@ -1,6 +1,7 @@
 ---
 title: IP Interconnect Fabrics in Calico
 lead_text: 'Where large-scale IP networks and hardware collide'
+show_read_time: true
 canonical_url: 'https://docs.projectcalico.org/v3.5/reference/private-cloud/l3-interconnect-fabric'
 ---
 

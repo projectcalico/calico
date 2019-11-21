@@ -1,5 +1,6 @@
 ---
 title: Kubernetes Datastore
+show_read_time: true
 ---
 
 This document describes how to install Calico on Kubernetes in a mode that does not require access to an etcd cluster.

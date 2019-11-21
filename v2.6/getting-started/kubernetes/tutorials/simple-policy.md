@@ -1,5 +1,6 @@
 ---
 title: Simple Policy Demo
+show_read_time: true
 canonical_url: 'https://docs.projectcalico.org/v3.5/getting-started/kubernetes/tutorials/simple-policy'
 ---
 

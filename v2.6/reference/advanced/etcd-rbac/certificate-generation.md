@@ -1,5 +1,6 @@
 ---
 title: Generating Certificates for etcd RBAC
+show_read_time: true
 canonical_url: 'https://docs.projectcalico.org/v3.5/reference/advanced/etcd-rbac/certificate-generation'
 ---
 

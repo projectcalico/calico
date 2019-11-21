@@ -1,5 +1,6 @@
 ---
 title: IPv6 Support
+show_read_time: true
 canonical_url: 'https://docs.projectcalico.org/v3.5/usage/ipv6'
 ---
 

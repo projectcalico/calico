@@ -1,5 +1,6 @@
 ---
 title: Previous releases
+show_read_time: true
 ---
 
 

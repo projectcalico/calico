@@ -1,5 +1,6 @@
 ---
 title: Network Policy (Universal Containerizer)
+show_read_time: true
 canonical_url: 'https://docs.projectcalico.org/v2.6/getting-started/mesos/tutorials/policy/universal-containerizer'
 ---
 

@@ -1,5 +1,6 @@
 ---
 title: Releases
+show_read_time: true
 ---
 
 The following table shows component versioning for Calico  **{{ page.version }}**.

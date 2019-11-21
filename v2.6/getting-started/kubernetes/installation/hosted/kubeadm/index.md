@@ -1,5 +1,6 @@
 ---
 title: kubeadm Hosted Install
+show_read_time: true
 canonical_url: 'https://docs.projectcalico.org/v3.0/getting-started/kubernetes/installation/hosted/kubeadm/index'
 ---
 

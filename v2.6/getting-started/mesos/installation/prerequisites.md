@@ -1,5 +1,6 @@
 ---
 title: Requirements for Calico with Mesos
+show_read_time: true
 canonical_url: 'https://docs.projectcalico.org/v2.6/getting-started/mesos/installation/prerequisites'
 ---
 

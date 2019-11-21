@@ -1,5 +1,6 @@
 ---
 title: Calico key and path prefixes in etcd v2
+show_read_time: true
 canonical_url: 'https://docs.projectcalico.org/v2.6/reference/advanced/etcd-rbac/calico-etcdv2-paths'
 ---
 
