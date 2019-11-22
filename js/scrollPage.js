@@ -19,7 +19,7 @@
             for (const id of ids) {
                 const heading = document.getElementById(id);
                 const headingRect = heading.getBoundingClientRect();
-                const yPosition = headingRect.y;
+                const yPosition = headingRect.top;
 
                 if (yPosition === 0) {
                     nearestId = id;
