@@ -1,7 +1,7 @@
 bigheader: "Usage"
 path: /usage/
 order: 2
-toc:
+section:
 - title: calicoctl
   description: /usage/calicoctl/
   path: /usage/calicoctl/
