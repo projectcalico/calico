@@ -63,29 +63,37 @@ div.highlight {
   position: relative;
 }
 
-.code-toolbar {
-  position: absolute;
-  right: 10px;
+.code-snippet {
+  max-height: 410px;
+  overflow: auto;
+  overflow-x: hidden;
 
-  &__copy-button,
-  &__download-button {
-    margin-left: 10px;
-    font-size: 16px;
-    color: #FF7E00;
+  &__toolbar {
+    vertical-align: top;
+    float: right;
+  }
 
-    &:hover {
-      cursor: pointer;
+  &-toolbar {
+    &__copy-button,
+    &__download-button {
+      margin-left: 10px;
+      font-size: 16px;
+      color: #FF7E00;
+  
+      &:hover {
+        cursor: pointer;
+      }
     }
   }
-}
 
-.code-command-prefix {
-  -webkit-touch-callout: none;
-  -webkit-user-select: none;
-  -khtml-user-select: none;
-  -moz-user-select: none;
-  -ms-user-select: none;
-  user-select: none;
+  &__command-prefix {
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    -khtml-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    user-select: none;
+  }
 }
 
 #toplevel-nav {

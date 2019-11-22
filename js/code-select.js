@@ -1,10 +1,12 @@
 $(document).ready(function() {
-  var codeToolbarClass = 'code-toolbar';
+  var codeSnippetClass = 'code-snippet';
+  var codeToolbarClass = `code-snippet-toolbar`;
   var copyButtonClass = `${codeToolbarClass}__copy-button`;
   var downloadButtonClass = `${codeToolbarClass}__download-button`;
 
   $('pre.highlight').each(function(i) {
     if (!$(this).parents().hasClass('no-select-button')) {
+      $(this).addClass(codeSnippetClass);
       var codeSectionContainer = $(this).closest('div.highlighter-rouge')[0];
       var currentCodeSectionId = "codeblock-" + (i + 1);
       var codeSection = $(this).find('code');
@@ -49,7 +51,7 @@ $(document).ready(function() {
 
           var codeLineIsCommand = !isPartOfMultilineCommand && !isEndOfMultilineCommand && !isPartOfEof && !isEndOfEof;
           if (!!trimmedCodeLine && codeLineIsCommand) {
-            codeLinesHtml[i] = `<span class='code-command-prefix'>$ </span>${codeLinesHtml[i]}`;
+            codeLinesHtml[i] = `<span class='code-snippet__command-prefix'>$ </span>${codeLinesHtml[i]}`;
           }
         }
 
@@ -78,7 +80,7 @@ $(document).ready(function() {
       }
 
       var toolbarDiv = document.createElement('div');
-      toolbarDiv.setAttribute('class', codeToolbarClass);
+      toolbarDiv.setAttribute('class', `${codeSnippetClass}__toolbar ${codeToolbarClass}`);
       toolbarDiv.appendChild(downloadButton);
       toolbarDiv.appendChild(copyButton);
       this.insertBefore(toolbarDiv, this.firstChild);
