@@ -37,15 +37,7 @@ toc:
   
     - title: Get started with Calico network policy for OpenStack
       path: /security/calico-policy/network-policy-openstack 
-
-- title: Policy for services
-  section: 
-  - title: Apply policy to Kubernetes node ports
-    path: /security/kubernetes-node-ports
-
-  - title: Apply policy to services exposed externally as cluster IPs
-    path: /security/services-cluster-ips 
-
+      
 - title: Policy rules       
   section:
 
@@ -60,7 +52,7 @@ toc:
 
   - title: Use ICMP/ping in policy rules
     path: /security/icmp-ping
-   
+    
 - title: Policy for hosts
   section:   
  
@@ -72,6 +64,14 @@ toc:
 
   - title: Apply policy to host forwarded traffic
     path: /security/host-forwarded-traffic
+    
+- title: Policy for services
+  section: 
+  - title: Apply policy to Kubernetes node ports
+    path: /security/kubernetes-node-ports
+
+  - title: Apply policy to services exposed externally as cluster IPs
+    path: /security/services-cluster-ips 
 
 - title: Policy for Istio 
   section:
