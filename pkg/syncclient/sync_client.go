@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2018 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2019 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -209,6 +209,8 @@ func (s *SyncerClient) connect(cxt context.Context) error {
 			return err
 		}
 		tlsConfig := tls.Config{Certificates: []tls.Certificate{cert}}
+		// go 1.13 defaults to TLS13, which causes some test issues. Set it to TLS12 for now.
+		tlsConfig.MaxVersion = tls.VersionTLS12
 
 		// Set InsecureSkipVerify true, because when it's false crypto/tls insists on
 		// verifying the server's hostname or IP address against tlsConfig.ServerName, and

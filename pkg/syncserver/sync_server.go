@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2018 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2019 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -290,6 +290,8 @@ func (s *Server) serve(cxt context.Context) {
 		}
 		tlsConfig := tls.Config{Certificates: []tls.Certificate{cert}}
 		tlsConfig.Rand = rand.Reader
+		// go 1.13 defaults to TLS13, which causes some test issues. Set it to TLS12 for now.
+		tlsConfig.MaxVersion = tls.VersionTLS12
 
 		// Arrange for server to verify the clients' certificates.
 		logCxt.Info("Will verify client certificates")
