@@ -233,6 +233,7 @@ $wpfront-notification-bar-spacer-height: 55px;
 $sticky-top: $wpfront-notification-bar-spacer-height + $navbar-margin-bottom;
 
 .sidebar {
+  position: -webkit-sticky;
   position: sticky;
   top: $sticky-top;
 
@@ -246,6 +247,7 @@ $sticky-top: $wpfront-notification-bar-spacer-height + $navbar-margin-bottom;
 }
 
 .sticky-toc {
+  position: -webkit-sticky;
   position: sticky;
   top: $sticky-top;
 
