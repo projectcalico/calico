@@ -1,0 +1,5 @@
+---
+title: Securing Calico component communications
+show_read_time: false
+canonical_url: 'https://docs.projectcalico.org/v3.5/usage/securing/index'
+---
