@@ -11,6 +11,15 @@ toc:
 - title: Get started
   section:
   
+  - title: Calico policy
+    section:
+    
+    - title: Get started with Calico network policy
+      path: /security/calico-network-policy
+  
+    - title: Get started with Calico network policy for OpenStack
+      path: /security/network-policy-openstack 
+  
   - title: Kubernetes policy
     section: 
 
@@ -28,16 +37,7 @@ toc:
 
     - title: Kubernetes policy, advanced tutorial
       path: /security/kubernetes-policy-advanced
-      
-  - title: Calico policy
-    section:
-    
-    - title: Get started with Calico network policy
-      path: /security/calico-network-policy
-  
-    - title: Get started with Calico network policy for OpenStack
-      path: /security/network-policy-openstack 
-      
+           
 - title: Policy rules       
   section:
 
