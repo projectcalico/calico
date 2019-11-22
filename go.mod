@@ -21,8 +21,8 @@ require (
 	github.com/kelseyhightower/envconfig v0.0.0-20180517194557-dd1402a4d99d
 	github.com/leodido/go-urn v0.0.0-20181204092800-a67a23e1c1af // indirect
 	github.com/matttproud/golang_protobuf_extensions v1.0.1 // indirect
-	github.com/onsi/ginkgo v1.6.0
-	github.com/onsi/gomega v1.4.2
+	github.com/onsi/ginkgo v1.10.1
+	github.com/onsi/gomega v1.7.0
 	github.com/philhofer/fwd v1.0.0 // indirect
 	github.com/pquerna/ffjson v0.0.0-20190813045741-dac163c6c0a9 // indirect
 	github.com/projectcalico/go-json v0.0.0-20161128004156-6219dc7339ba // indirect
@@ -39,7 +39,7 @@ require (
 	github.com/ugorji/go v0.0.0-20171019201919-bdcc60b419d1 // indirect
 	github.com/xiang90/probing v0.0.0-20190116061207-43a291ad63a2 // indirect
 	go.etcd.io/bbolt v1.3.3 // indirect
-	golang.org/x/net v0.0.0-20190812203447-cdfb69ac37fc
+	golang.org/x/net v0.0.0-20191004110552-13f9640d40b9
 	golang.org/x/time v0.0.0-20170420181420-c06e80d9300e // indirect
 	gopkg.in/airbrake/gobrake.v2 v2.0.9 // indirect
 	gopkg.in/gemnasium/logrus-airbrake-hook.v2 v2.1.2 // indirect
@@ -47,8 +47,8 @@ require (
 	gopkg.in/go-playground/validator.v9 v9.27.0
 	gopkg.in/tchap/go-patricia.v2 v2.2.6
 	gopkg.in/yaml.v2 v2.2.5 // indirect
-	k8s.io/api v0.0.0-20190718183219-b59d8169aab5
-	k8s.io/apimachinery v0.0.0-20190612205821-1799e75a0719
+	k8s.io/api v0.0.0-20191121175643-4ed536977f46
+	k8s.io/apimachinery v0.0.0-20191121175448-79c2a76c473a
 	k8s.io/client-go v0.0.0-20190620085101-78d2af792bab
 	k8s.io/code-generator v0.0.0-20190814140513-6483f25b1faf
 )
