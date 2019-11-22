@@ -10,17 +10,33 @@ toc:
 
 - title: Get started
   section:
-  - title: Get started with Kubernetes network policy
-    path: /security/kubernetes-network-policy
+  
+  - title: Kubernetes policy
+    section: 
 
-  - title: Get started with Calico network policy
-    path: /security/calico-network-policy
+    - title: Get started with Kubernetes network policy
+      path: /security/kubernetes-policy/kubernetes-network-policy
 
-  - title: Enable default deny for Kubernetes pods
-    path: /security/kubernetes-default-deny 
+    - title: Enable default deny for Kubernetes pods
+      path: /security/kubernetes-policy/kubernetes-default-deny 
 
-  - title: Get started with Calico network policy for OpenStack
-    path: /security/network-policy-openstack 
+    - title: Kubernetes policy, demo
+      path: /security/kubernetes-policy/kubernetes-demo
+
+    - title: Kubernetes policy, basic tutorial
+      path: /security/kubernetes-policy/kubernetes-policy-basic
+
+    - title: Kubernetes policy, advanced tutorial
+      path: /security/kubernetes-policy/kubernetes-policy-advanced
+      
+  - title: Calico policy
+    section:
+    
+    - title: Get started with Calico network policy
+      path: /security/calico-policy/calico-network-policy
+  
+    - title: Get started with Calico network policy for OpenStack
+      path: /security/calico-policy/network-policy-openstack 
 
 - title: Policy for services
   section: 
