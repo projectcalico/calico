@@ -5,7 +5,7 @@ toc:
 - title: Networking
   path: /networking/
 - title: Determine best networking option
-  path: /networking/foobar
+  path: /networking/determine-best-networking
 - title: Configure networking
   section:
   - title: Configuring BGP peers
