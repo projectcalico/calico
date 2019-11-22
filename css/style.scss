@@ -6,6 +6,7 @@
 @import "../css/sidebar";
 @import "../css/section_index";
 @import "../css/search";
+@import "../css/plugins/offcanvas";
 
 // By default bootstrap doesn't apply many styles to table elements
 // unless they have class .table and .table-bordered
@@ -39,6 +40,10 @@ html {
 body {
   -webkit-overflow-scrolling: touch;
   overflow-x: visible;
+
+  @media (max-width: $screen-xs-max) {
+    overflow-x: hidden;
+  }
 }
 
 h2,h3,h4,h5,h6 {
@@ -207,19 +212,20 @@ input.gsc-input, .gsc-input-box, .gsc-input-box-hover, .gsc-input-box-focus, .gs
   }
 
   @media (min-width: $screen-sm-min) {
-    grid-template-columns: [sidebar] 30% [article] calc(70% - #{$grid-column-gap});
+    grid-template-columns: [sidebar] 30% [article] auto;
   }
 
   @media (min-width: $screen-md-min) {
-    grid-template-columns: [sidebar] 20% [article] calc(60% - #{$grid-column-gap * 2}) [toc] 20%;
+    $sidebars-min-width: 200px;
+    $sidebars-max-width: 300px;
+    grid-template-columns:
+      [sidebar] minmax($sidebars-min-width, $sidebars-max-width)
+      [article] minmax(calc(#{$screen-md-min} - #{$sidebars-min-width * 2} - #{$grid-column-gap * 2}), 1fr)
+      [toc] minmax($sidebars-min-width, $sidebars-max-width);
 
     .toc-container {
       display: block;
     }
-  }
-
-  @media (min-width: $screen-lg-min) {
-    grid-template-columns: [sidebar] 15% [article] calc(70% - #{$grid-column-gap * 2}) [toc] 15%;
   }
 }
 
