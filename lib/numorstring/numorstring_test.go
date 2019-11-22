@@ -21,6 +21,7 @@ import (
 
 	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
+
 	"github.com/projectcalico/libcalico-go/lib/numorstring"
 )
 

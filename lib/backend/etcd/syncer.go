@@ -25,11 +25,12 @@ import (
 
 	"github.com/coreos/etcd/client"
 	etcd "github.com/coreos/etcd/client"
+	log "github.com/sirupsen/logrus"
+	"golang.org/x/net/context"
+
 	"github.com/projectcalico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/libcalico-go/lib/hwm"
-	log "github.com/sirupsen/logrus"
-	"golang.org/x/net/context"
 )
 
 // defaultEtcdClusterID is default value that an etcd cluster uses if it

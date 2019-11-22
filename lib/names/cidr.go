@@ -17,8 +17,9 @@ package names
 import (
 	"strings"
 
-	"github.com/projectcalico/libcalico-go/lib/net"
 	"github.com/sirupsen/logrus"
+
+	"github.com/projectcalico/libcalico-go/lib/net"
 )
 
 // CIDRToName converts a CIDR to a valid resource name.

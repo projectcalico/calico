@@ -19,6 +19,8 @@ import (
 
 	"fmt"
 
+	log "github.com/sirupsen/logrus"
+
 	apiv3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	"github.com/projectcalico/libcalico-go/lib/errors"
 	"github.com/projectcalico/libcalico-go/lib/names"
@@ -27,7 +29,6 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/options"
 	validator "github.com/projectcalico/libcalico-go/lib/validator/v3"
 	"github.com/projectcalico/libcalico-go/lib/watch"
-	log "github.com/sirupsen/logrus"
 )
 
 // NodeInterface has methods to work with Node resources.

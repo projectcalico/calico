@@ -22,6 +22,8 @@ import (
 	"reflect"
 
 	"github.com/kelseyhightower/envconfig"
+	log "github.com/sirupsen/logrus"
+
 	"github.com/projectcalico/go-yaml-wrapper"
 	"github.com/projectcalico/libcalico-go/lib/apiconfig"
 	api "github.com/projectcalico/libcalico-go/lib/apis/v1"
@@ -30,7 +32,6 @@ import (
 	bapi "github.com/projectcalico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	validator "github.com/projectcalico/libcalico-go/lib/validator/v1"
-	log "github.com/sirupsen/logrus"
 )
 
 // Client contains

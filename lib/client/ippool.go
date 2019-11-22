@@ -15,11 +15,12 @@
 package client
 
 import (
+	log "github.com/sirupsen/logrus"
+
 	api "github.com/projectcalico/libcalico-go/lib/apis/v1"
 	"github.com/projectcalico/libcalico-go/lib/apis/v1/unversioned"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/libcalico-go/lib/converter"
-	log "github.com/sirupsen/logrus"
 )
 
 // PoolInterface has methods to work with Pool resources.

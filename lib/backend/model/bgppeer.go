@@ -20,10 +20,11 @@ import (
 
 	"reflect"
 
+	log "github.com/sirupsen/logrus"
+
 	"github.com/projectcalico/libcalico-go/lib/errors"
 	"github.com/projectcalico/libcalico-go/lib/net"
 	"github.com/projectcalico/libcalico-go/lib/numorstring"
-	log "github.com/sirupsen/logrus"
 )
 
 var (

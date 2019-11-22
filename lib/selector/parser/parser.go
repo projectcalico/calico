@@ -18,8 +18,9 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/projectcalico/libcalico-go/lib/selector/tokenizer"
 	log "github.com/sirupsen/logrus"
+
+	"github.com/projectcalico/libcalico-go/lib/selector/tokenizer"
 )
 
 const parserDebug = false

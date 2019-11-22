@@ -24,12 +24,13 @@ import (
 	etcd "github.com/coreos/etcd/client"
 	"github.com/coreos/etcd/pkg/srv"
 	"github.com/coreos/etcd/pkg/transport"
+	log "github.com/sirupsen/logrus"
+	"golang.org/x/net/context"
+
 	v1 "github.com/projectcalico/libcalico-go/lib/apis/v1"
 	"github.com/projectcalico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/libcalico-go/lib/errors"
-	log "github.com/sirupsen/logrus"
-	"golang.org/x/net/context"
 )
 
 var (

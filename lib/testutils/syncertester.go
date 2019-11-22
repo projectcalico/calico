@@ -23,6 +23,7 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	gomegatypes "github.com/onsi/gomega/types"
+
 	"github.com/projectcalico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 )

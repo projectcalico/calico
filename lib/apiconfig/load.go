@@ -6,9 +6,10 @@ import (
 	"io/ioutil"
 
 	"github.com/kelseyhightower/envconfig"
+	log "github.com/sirupsen/logrus"
+
 	yaml "github.com/projectcalico/go-yaml-wrapper"
 	apiv3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
-	log "github.com/sirupsen/logrus"
 )
 
 // LoadClientConfig loads the ClientConfig from the specified file (if specified)
