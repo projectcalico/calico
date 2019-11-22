@@ -10,7 +10,7 @@ toc:
   section:
   - title: Configuring BGP peers
     path: /networking/bgp 
-  - title: Configure overlay networking
+  - title: Connect workloads across networks that you do not control
     path: /networking/vxlan-ipip 
   - title: Configure MTU to maximize network performance
     path: /networking/mtu
