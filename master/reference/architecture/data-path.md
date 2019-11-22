@@ -28,7 +28,7 @@ route -n
 
 You will see something like this:
 
-```bash
+```
 Kernel IP routing table
 Destination     Gateway         Genmask         Flags Metric Ref    Use Iface
 0.0.0.0         172.18.203.1    0.0.0.0         UG    0      0        0 eth0

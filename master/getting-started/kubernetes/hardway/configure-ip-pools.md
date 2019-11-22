@@ -15,7 +15,7 @@ normally want all IP pools you configure to be subsets of the pod CIDR.
 Let's define two IP pools for use in this cluster.  You can have a production-ready {{site.prodname}} install with only a single
 pool, but we define two so that we can show advanced networking later in this guide.
 
-```
+```bash
 cat > pool1.yaml <<EOF
 apiVersion: projectcalico.org/v3
 kind: IPPool
@@ -37,7 +37,7 @@ Kubernetes cluster, and it still leaves a lot of room in the pod CIDR if we want
 
 Let's define a second pool right now.
 
-```
+```bash
 cat > pool2.yaml <<EOF
 apiVersion: projectcalico.org/v3
 kind: IPPool
@@ -62,14 +62,14 @@ nodes can use the pools.
 
 Add these pools to {{site.prodname}}
 
-```
+```bash
 calicoctl create -f pool1.yaml
 calicoctl create -f pool2.yaml
 ```
 
 Verify the pools are created by
 
-```
+```bash
 calicoctl get ippools
 ```
 

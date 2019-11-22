@@ -228,19 +228,19 @@ working directory.
 Open the `install/kubernetes/istio-demo-auth.yaml` file in an
 editor, and locate the `istio-sidecar-injector` ConfigMap.  In the existing `istio-proxy` container, add a new `volumeMount`.
 
-```
+```yaml
 {% include {{page.version}}/non-helm-manifests/istio-proxy-volume-mounts %}
 ```
 
 Add a new container to the template.
 
-```
+```yaml
 {% include {{page.version}}/non-helm-manifests/dikastes-container %}
 ```
 
 Add two new volumes.
 
-```
+```yaml
 {% include {{page.version}}/non-helm-manifests/istio-volumes %}
 ```
 

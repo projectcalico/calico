@@ -23,7 +23,7 @@ correctly obtain IP addresses.
 You'll want to make sure that your new instances are evenly striped
 across your hypervisors. On your control node, run:
 
-```
+```bash
 nova list --fields host
 ```
 
@@ -81,7 +81,7 @@ If you find that none of the advice below solves your problems, please
 use our diagnostics gathering script to generate diagnostics, and then
 raise a GitHub issue against our repository. To generate the diags, run:
 
-```
+```bash
 /usr/bin/calico-diags
 ```
 
@@ -161,7 +161,7 @@ This is likely a problem encountered with mapping devices in `cinder`,
 OpenStack's logical volume management component. Many of these can be
 resolved by restarting `cinder`.
 
-```
+```bash
 service cinder-volume restart
 service cinder-scheduler restart
 service cinder-api restart
@@ -174,6 +174,6 @@ This is caused by having not restarted libvirt after you add lines to
 the end of `/etc/libvirt/qemu.conf`. This can be fixed by either
 rebooting your entire system or running:
 
-```
+```bash
 service libvirt-bin restart
 ```

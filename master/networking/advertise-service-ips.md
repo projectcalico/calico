@@ -67,7 +67,7 @@ If your {{site.prodname}} deployment is configured to peer with BGP routers outs
 
 1. Check to see if you have a default BGPConfiguration.
 
-   ```
+   ```bash
    calicoctl get bgpconfig default
    ```
 
@@ -76,7 +76,7 @@ If your {{site.prodname}} deployment is configured to peer with BGP routers outs
    **Update default BGPConfiguration**
    Patch the BGPConfiguration using the following command, using your own service cluster IP CIDR:
 
-   ```
+   ```bash
    calicoctl patch BGPConfig default --patch \
       '{"spec": {"serviceClusterIPs": [{"cidr": "10.0.0.0/24"}]}}'
    ```
@@ -84,7 +84,7 @@ If your {{site.prodname}} deployment is configured to peer with BGP routers outs
    **Create default BGPConfiguration**
    Use the following sample command to create a default BGPConfiguration. Add your CIDR blocks for each cluster IP to be advertised in the `serviceClusterIPs` field.
 
-   ```
+   ```bash
    calicoctl create -f - <<EOF
    apiVersion: projectcalico.org/v3
    kind: BGPConfiguration
@@ -110,7 +110,7 @@ If your {{site.prodname}} deployment is configured to peer with BGP routers outs
 
 1. Check to see if you have a default BGPConfiguration.
 
-   ```
+   ```bash
    calicoctl get bgpconfig default
    ```
 
@@ -119,7 +119,7 @@ If your {{site.prodname}} deployment is configured to peer with BGP routers outs
    **Update default BGPConfiguration**
    Patch the BGPConfiguration using the following command, adding your own service external IP CIDRs:
 
-   ```
+   ```bash
    calicoctl patch BGPConfig default --patch \
       '{"spec": {"serviceExternalIPs": [{"cidr": "x.x.x.x"}, {"cidr": "y.y.y.y"}]}}'
    ```
@@ -127,7 +127,7 @@ If your {{site.prodname}} deployment is configured to peer with BGP routers outs
    **Create default BGPConfiguration**
    Use the following sample command to create a default BGPConfiguration. Add your CIDR blocks for external IPs to be advertised in the `serviceExternalIPs` field.
 
-   ```
+   ```bash
    calicoctl create -f - <<EOF
    apiVersion: projectcalico.org/v3
    kind: BGPConfiguration

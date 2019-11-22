@@ -8,8 +8,53 @@ $(document).ready(function() {
       var codeSectionContainer = $(this).closest('div.highlighter-rouge')[0];
       var currentCodeSectionId = "codeblock-" + (i + 1);
       var codeSection = $(this).find('code');
-      var code = codeSection[0].innerText;
       codeSection.attr('id', currentCodeSectionId);
+      var codeSectionContent = codeSection[0];
+      var code = codeSectionContent.innerText;
+      var codeHtml = codeSectionContent.innerHTML;
+
+      var language;
+      for (var c of codeSectionContainer.classList) {
+        if (!c) {
+          continue;
+        }
+
+        if (c.startsWith("language-")) {
+          language = c.substr(9);
+          break;
+        }
+      }
+
+      if (language === "bash") {
+        var isEofStarted = false;
+        var isMultilineCommandStarted = false;
+        var codeLines = code.split('\n');
+        var codeLinesHtml = codeHtml.split('\n');
+
+        for (var i = 0; i < codeLines.length; i++) {
+          var trimmedCodeLine = codeLines[i].trim();
+
+          var isPartOfEof = isEofStarted && trimmedCodeLine !== "EOF";
+          var isEndOfEof = isEofStarted && trimmedCodeLine === "EOF";
+          if (!isPartOfEof) {
+            isEofStarted = !isEofStarted && trimmedCodeLine.includes("<<EOF");
+          }
+
+          var codeLineEndsWithMultilineSeparator = trimmedCodeLine.endsWith(" \\");
+          var isPartOfMultilineCommand = isMultilineCommandStarted && codeLineEndsWithMultilineSeparator;
+          var isEndOfMultilineCommand = isMultilineCommandStarted && !codeLineEndsWithMultilineSeparator;
+          if (!isPartOfMultilineCommand) {
+            isMultilineCommandStarted = !isMultilineCommandStarted && codeLineEndsWithMultilineSeparator;
+          }
+
+          var codeLineIsCommand = !isPartOfMultilineCommand && !isEndOfMultilineCommand && !isPartOfEof && !isEndOfEof;
+          if (!!trimmedCodeLine && codeLineIsCommand) {
+            codeLinesHtml[i] = `<span class='code-command-prefix'>$ </span>${codeLinesHtml[i]}`;
+          }
+        }
+
+        codeSectionContent.innerHTML = codeLinesHtml.join('\n');
+      }
 
       $(function () {
         $('[data-toggle="tooltip"]').tooltip();
@@ -26,27 +71,10 @@ $(document).ready(function() {
       downloadButton.setAttribute('class', downloadButtonClass);
       downloadButton.innerHTML = '<i class="glyphicon glyphicon-download-alt" data-toggle="tooltip" data-placement="bottom" title="Download"></i>';
       downloadButton.onclick = function() {
-        var language = "";
+        var fileExtension = language || "txt";
+        var fileName = `${document.title}.${fileExtension}`;
 
-        for (var c of codeSectionContainer.classList) {
-          if (!c) {
-            continue;
-          }
-
-          if (c.startsWith("language-")) {
-            language = c.substr(9);
-            break;
-          }
-        }
-
-        if (language === "shell") {
-          language = "sh";
-        } else if (language === "") {
-          language = "txt";
-        }
-
-        var downloadas = `${document.title}.${language}`;
-        saveFile(downloadas, code);
+        saveFile(fileName, code);
       }
 
       var toolbarDiv = document.createElement('div');

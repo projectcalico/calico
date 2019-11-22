@@ -13,7 +13,7 @@ canonical_url: 'https://docs.projectcalico.org/v3.9/getting-started/bare-metal/i
 
 1. Confirm that the image has loaded by typing `docker images`.
 
-   ```bash
+   ```
    REPOSITORY       TAG           IMAGE ID       CREATED         SIZE
    {{site.nodecontainer}}      {{site.data.versions[page.version].first.components["calico/node"].version}}        e07d59b0eb8a   2 minutes ago   42MB
    ```

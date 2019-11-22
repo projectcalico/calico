@@ -78,7 +78,7 @@ Description:
 
    Results indicate that a resource was successfully patched:
 
-   ```bash
+   ```
    Successfully patched 1 'ipPool' resource
    ```
    {: .no-select-button}

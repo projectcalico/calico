@@ -14,7 +14,7 @@ and to update the datastore with information about the pod.
 
 On the Kubernetes master node, create a key for the CNI plugin to authenticate with and certificate signing request.
 
-```
+```bash
 openssl req -newkey rsa:4096 \
            -keyout cni.key \
            -nodes \
@@ -24,7 +24,7 @@ openssl req -newkey rsa:4096 \
 
 We will sign this certificate using the main Kubernetes CA.
 
-```
+```bash
 sudo openssl x509 -req -in cni.csr \
                   -CA /etc/kubernetes/pki/ca.crt \
                   -CAkey /etc/kubernetes/pki/ca.key \
@@ -36,7 +36,7 @@ sudo chown ubuntu:ubuntu cni.crt
 
 Next, we create a kubeconfig file for the CNI plugin to use to access Kubernetes.
 
-```
+```bash
 APISERVER=$(kubectl config view -o jsonpath='{.clusters[0].cluster.server}')
 kubectl config set-cluster kubernetes \
     --certificate-authority=/etc/kubernetes/pki/ca.crt \
@@ -64,7 +64,7 @@ Copy this `cni.kubeconfig` file to every node in the cluster.
 
 Define a cluster role the CNI plugin will use to access Kubernetes.
 
-```
+```bash
 kubectl apply -f - <<EOF
 kind: ClusterRole
 apiVersion: rbac.authorization.k8s.io/v1
@@ -110,7 +110,7 @@ EOF
 
 Bind the cluster role to the `calico-cni` account.
 
-```
+```bash
 kubectl create clusterrolebinding calico-cni --clusterrole=calico-cni --user=calico-cni
 ```
 
@@ -120,13 +120,13 @@ Do these steps on each node in your cluster.
 
 Run these commands as root.
 
-```
+```bash
 sudo su
 ```
 
 Install the CNI plugin Binaries
 
-```
+```bash
 curl -L -o /opt/cni/bin/calico https://github.com/projectcalico/cni-plugin/releases/download/v3.8.0/calico-amd64
 chmod 755 /opt/cni/bin/calico
 curl -L -o /opt/cni/bin/calico-ipam https://github.com/projectcalico/cni-plugin/releases/download/v3.8.0/calico-ipam-amd64
@@ -135,18 +135,18 @@ chmod 755 /opt/cni/bin/calico-ipam
 
 Create the config directory
 
-```
+```bash
 mkdir -p /etc/cni/net.d/
 ```
 
 Copy the kubeconfig from the previous section
-```
+```bash
 cp cni.kubeconfig /etc/cni/net.d/calico-kubeconfig
 chmod 600 /etc/cni/net.d/calico-kubeconfig
 ```
 
 Write the CNI configuration
-```
+```bash
 cat > /etc/cni/net.d/10-calico.conflist <<EOF
 {
   "name": "k8s-pod-network",

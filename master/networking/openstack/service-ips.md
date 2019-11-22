@@ -45,7 +45,7 @@ We begin by creating a test VM that will be the target of the service IP.
    ```
    It should return a list of the images and their names.
 
-   ```bash
+   ```
    WARNING: Command image-list is deprecated and will be removed after Nova 15.0.0 is released. Use python-glanceclient or openstackclient instead.
    +--------------------------------------+---------------------+--------+--------+
    | ID                                   | Name                | Status | Server |
@@ -109,7 +109,7 @@ We begin by creating a test VM that will be the target of the service IP.
 
    You should see your VM with the following statuses.
 
-   ```bash
+   ```
    +--------------------------------------+---------+--------+------------+-------------+----------------------------------------------+
    | ID                                   | Name    | Status | Task State | Power State | Networks                                     |
    +--------------------------------------+---------+--------+------------+-------------+----------------------------------------------+
@@ -126,7 +126,7 @@ We begin by creating a test VM that will be the target of the service IP.
 
    It should return something like the following.
 
-   ```bash
+   ```
    +--------------------------------------+------------------------------------------------------------+
    | Property                             | Value                                                      |
    +--------------------------------------+------------------------------------------------------------+
@@ -173,7 +173,7 @@ We begin by creating a test VM that will be the target of the service IP.
 
    It should look something like the following.
 
-   ```bash
+   ```
    +--------------------------------------+------+-------------------+------------------------------------------------------------------------------------------------+
    | id                                   | name | mac_address       | fixed_ips                                                                                      |
    +--------------------------------------+------+-------------------+------------------------------------------------------------------------------------------------+
@@ -201,7 +201,7 @@ initially points to that VM, `testvm1`.
 
 1. It should return a confirmation message.
 
-   ```bash
+   ```
    Updated port: 9a7e0868-da7a-419e-a7ad-9d37e11091b8
    ```
    {: .no-select-button}
@@ -249,7 +249,7 @@ initially points to that VM, `testvm1`.
 
    We see that we have a route to `10.28.0.23`.
 
-   ```bash
+   ```
    default via 10.240.0.1 dev eth0  proto static  metric 100
    10.28.0.13 via 192.168.8.3 dev l2tpeth8-1  proto bird
    10.28.0.23 via 192.168.8.3 dev l2tpeth8-1  proto bird
@@ -274,7 +274,7 @@ initially points to that VM, `testvm1`.
 
    It should return something like the following.
 
-   ```bash
+   ```
    default via 10.240.0.1 dev eth0
    10.28.0.13 dev tap9a7e0868-da  scope link
    10.28.0.23 dev tap9a7e0868-da  scope link
@@ -304,7 +304,7 @@ initially points to that VM, `testvm1`.
 
    It should return something like the following.
 
-   ```bash
+   ```
    1: lo: <LOOPBACK,UP,LOWER_UP> mtu 16436 qdisc noqueue
        link/loopback 00:00:00:00:00:00 brd 00:00:00:00:00:00
        inet 127.0.0.1/8 scope host lo
@@ -332,7 +332,7 @@ initially points to that VM, `testvm1`.
 
    The interfaces should now look more like the following.
 
-   ```bash
+   ```
    1: lo: <LOOPBACK,UP,LOWER_UP> mtu 16436 qdisc noqueue
        link/loopback 00:00:00:00:00:00 brd 00:00:00:00:00:00
        inet 127.0.0.1/8 scope host lo
@@ -349,7 +349,7 @@ initially points to that VM, `testvm1`.
 
 1. Exit the SSH session.
 
-   ```bash
+   ```
    Connection to 10.28.0.13 closed.
    ```
    {: .no-select-button}
@@ -379,7 +379,7 @@ initially points to that VM, `testvm1`.
 
    It should return something like the following.
 
-   ```bash
+   ```
    +--------------------------------------+---------+----------------------------------------------------------------------+
    | id                                   | name    | security_group_rules                                                 |
    +--------------------------------------+---------+----------------------------------------------------------------------+
@@ -418,7 +418,7 @@ cycle the active VM).
 
    You should see the new VM in the list.
 
-   ```bash
+   ```
    +--------------------------------------+---------+--------+------------+-------------+----------------------------------------------+
    | ID                                   | Name    | Status | Task State | Power State | Networks                                     |    +--------------------------------------+---------+--------+------------+-------------+----------------------------------------------+
    | b6d8a3c4-9674-4972-9151-11107b60d622 | testvm1 | ACTIVE | -          | Running     | demo-net=10.28.0.13, 10.28.0.23              |
@@ -435,7 +435,7 @@ cycle the active VM).
 
    It should return something like the following.
 
-   ```bash
+   ```
    +--------------------------------------+------+-------------------+------------------------------------------------------------------------------------------------+
    | id                                   | name | mac_address       | fixed_ips                                                                                      |
    +--------------------------------------+------+-------------------+------------------------------------------------------------------------------------------------+
@@ -529,7 +529,7 @@ cycle the active VM).
 
    It should return:
 
-   ```bash  
+   ```  
    testvm2
    ```
    {: .no-select-button}
@@ -542,7 +542,7 @@ cycle the active VM).
 
    They should look something like the following.
 
-   ```bash    
+   ```    
    1: lo: <LOOPBACK,UP,LOWER_UP> mtu 16436 qdisc noqueue
        link/loopback 00:00:00:00:00:00 brd 00:00:00:00:00:00
        inet 127.0.0.1/8 scope host lo

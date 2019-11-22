@@ -200,7 +200,7 @@ The `calico/node` container supports an exec readiness endpoint.
 
 To access this endpoint, use the following command.
 
-```
+```bash
 docker exec calico-node /bin/calico-node [flag]
 ```
 
