@@ -91,7 +91,7 @@ This option also provides near host-to-host levels of performance and allows the
 
 {{site.prodname}} can route pod traffic between nodes without encapsulation when all nodes are on a single L2 subnet, and if the underlying network doesn’t enforce IP address checks.  If your network consists of multiple L2 subnets then you can either [peer over BGP with your routers]({{site.baseurl}}/{{page.version}}/networking/bgp), or use [cross-subnet encapsulation](#ip-in-ip-or-vxlan-encapsulation) to encapsulate only traffic that crosses subnet boundaries.
   
-Traffic cannot be routed between pods and destinations that aren’t also in the {{site.prodname}} cluster without allowing workload access outside cluster, or [peering with the infrastructure](#unencapsulated-peered-with-physical-infrastructure).
+Traffic cannot be routed between pods and destinations that aren’t also in the {{site.prodname}} cluster without allowing workload access outside cluster, or peering with infrastructure.
 
 > **Tip**: On AWS, you can disable source/destination checking to use this option within a VPC subnet. [Can I run Calico in a public cloud environment?]({{site.baseurl}}/{{page.version}}/reference/faq#can-i-run-calico-in-a-public-cloud-environment).
 {: .alert .alert-info}
