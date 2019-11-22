@@ -1,0 +1,5 @@
+---
+title: calico/node
+show_read_time: false
+canonical_url: 'https://docs.projectcalico.org/v3.9/reference/node/index'
+---
