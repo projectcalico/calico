@@ -107,5 +107,4 @@ IP in IP or VXLAN encapsulation can also be used selectively between subnets -- 
 ### Above and beyond
 
 - [Configure BGP peering]({{site.baseurl}}/{{page.version}}/networking/bgp)
-- [Configure overlay networking]({{site.baseurl}}/{{page.version}}/networking/configure-overlay)
 - [Interoperate with legacy firewalls using IP ranges]({{site.baseurl}}/{{page.version}}/networking/legacy-firewalls)
