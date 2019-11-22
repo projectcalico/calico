@@ -8,7 +8,7 @@ toc:
   path: /networking/determine-best-networking
 - title: Configure networking
   section:
-  - title: Configuring BGP peers
+  - title: Configure BGP peers
     path: /networking/bgp 
   - title: Connect workloads across networks that you do not control
     path: /networking/vxlan-ipip 
