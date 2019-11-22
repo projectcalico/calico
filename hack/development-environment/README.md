@@ -31,9 +31,22 @@ Example:
 
 
 
-The kind recipe uses kubernetes' kind to run locally build images and starts a kind cluster, you can run
-it easily, and it will *build* all of calico for you as well, by just running "ROOT_CALICO_REPOS_DIR=/calico_all kind-local-up.sh" .  Of course, that assumes you've cloned all of the calico repositories into /calico_all.  IF they are somewhere else, thats also fine.  Make sure you can run *docker* as the user who starts this script, and that you've installed *kind* as well as *kubectl*.  IF you don't have any of these tools, the Vagrant recipe might be easier for you to adopt, as it
-will bootstrap your entire machine for you.
+=======
+Example:
+
+```
+	ROOT_CALICO_REPOS_DIR=/home/jayunit100/calico_all ./kind-local-up.sh
+	echo "play with your cluster for a while"
+	kind delete cluster
+```
+
+This  kind recipe uses kubernetes' kind to run locally build images and starts a kind cluster, you can run it easily, and it will *build* all of calico for you as well, by just running "ROOT_CALICO_REPOS_DIR=/calico_all kind-local-up.sh" .
+
+- Of course, that assumes you've cloned all of the calico repositories into /calico_all.  IF they are somewhere else, thats also fine.  
+- Make sure you can run *docker* as the user who starts this script.
+- Make sure that you've installed *kind* as well as *kubectl*.  
+
+IF you don't have any of these tools, the Vagrant recipe might be easier for you to adopt, as it will bootstrap your entire machine for you.
 
 ## How to use this recipe: Centos
 
@@ -59,5 +72,4 @@ your own calico builds in house.
 are welcome to extendt the install.sh with other optional test/make targets, but ideally, the smoke
 test for building calico from scratch should be able to run in under 10 minutes, so that it is 
 developer friendly.
-- 
 
