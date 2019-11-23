@@ -25,7 +25,7 @@ toc:
    - title: Get started with IP address management
      path: /networking/get-started-ip-addresses
    - title: Configure IP autodetection
-     path: /networking/ipautodetection
+     path: /networking/node
    - title: Enable IPv6
      path: /networking/ipv6  
    - title: Advertise Kubernetes service IP addresses
