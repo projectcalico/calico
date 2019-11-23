@@ -5,7 +5,7 @@ toc:
 - title: Networking
   path: /networking/
 - title: Determine best networking option
-  path: /networking/determine-best-networking
+  path: /networking/
 - title: Configure networking
   section:
   - title: Configure BGP peers
