@@ -60,7 +60,7 @@ toc:
     path: /security/protect-hosts
     
   - title: Protect host tutorial
-    path: /security/tutorials/protect-hosts
+    path: /security/protect-hosts
 
   - title: Apply policy to host forwarded traffic
     path: /security/host-forwarded-traffic
