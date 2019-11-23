@@ -1,3 +1,24 @@
+PACKAGE_NAME=github.com/projectcalico/calico
+GO_BUILD_VER=v0.27
+
+###############################################################################
+# Download and include Makefile.common
+#   Additions to EXTRA_DOCKER_ARGS need to happen before the include since
+#   that variable is evaluated when we declare DOCKER_RUN and siblings.
+###############################################################################
+MAKE_BRANCH?=$(GO_BUILD_VER)
+MAKE_REPO?=https://raw.githubusercontent.com/projectcalico/go-build/$(MAKE_BRANCH)
+WGET?=/usr/bin/wget
+
+Makefile.common: Makefile.common.$(MAKE_BRANCH)
+	cp "$<" "$@"
+Makefile.common.$(MAKE_BRANCH): $(WGET)
+	# Clean up any files downloaded from other branches so they don't accumulate.
+	rm -f Makefile.common.*
+	$(WGET) -nv $(MAKE_REPO)/Makefile.common -O "$@"
+
+###############################################################################
+
 CALICO_DIR=$(shell git rev-parse --show-toplevel)
 VERSIONS_FILE?=$(CALICO_DIR)/_data/versions.yml
 IMAGES_FILE=
@@ -12,16 +33,12 @@ ifneq ($(IMAGES_FILE),)
 	CONFIG:=$(CONFIG),/config_images.yml
 endif
 
-# Set DEV_NULL=true to enable the Null Converter which renders the docs site as markdown. 
+# Set DEV_NULL=true to enable the Null Converter which renders the docs site as markdown.
 # This is useful for comparing changes to templates & includes.
 ifeq ($(DEV_NULL),true)
 	CONFIG:=$(CONFIG),_config_null.yml
 endif
 
-GO_BUILD_VER?=v0.22
-CALICO_BUILD?=calico/go-build:$(GO_BUILD_VER)
-LOCAL_USER_ID?=$(shell id -u $$USER)
-PACKAGE_NAME?=github.com/projectcalico/calico
 
 # Determine whether there's a local yaml installed or use dockerized version.
 # Note in order to install local (faster) yaml: "go get github.com/mikefarah/yq.v2"
@@ -457,20 +474,3 @@ vendor: glide.yaml
 	  -e LOCAL_USER_ID=$(LOCAL_USER_ID) \
 	  -w /go/src/$(PACKAGE_NAME) \
 	  $(CALICO_BUILD) glide install -strip-vendor
-
-.PHONY: help
-## Display this help text
-help: # Some kind of magic from https://gist.github.com/rcmachado/af3db315e31383502660
-	$(info Available targets)
-	@awk '/^[a-zA-Z\-\_0-9\/]+:/ {                                      \
-		nb = sub( /^## /, "", helpMsg );                                \
-		if(nb == 0) {                                                   \
-			helpMsg = $$0;                                              \
-			nb = sub( /^[^:]*:.* ## /, "", helpMsg );                   \
-		}                                                               \
-		if (nb)                                                         \
-			printf "\033[1;31m%-" width "s\033[0m %s\n", $$1, helpMsg;  \
-	}                                                                   \
-	{ helpMsg = $$0 }'                                                  \
-	width=20                                                            \
-	$(MAKEFILE_LIST)
