@@ -56,14 +56,12 @@ var _ = describeBPFTests("tcp")
 var _ = describeBPFTests("udp")
 
 func describeBPFTests(protocol string) bool {
-	return infrastructure.DatastoreDescribe(fmt.Sprintf("_BPF-NAT_ _BPF-SAFE_ BPF NAT tests (%s)", protocol), []apiconfig.DatastoreType{apiconfig.Kubernetes}, func(getInfra infrastructure.InfraFactory) {
+	return infrastructure.DatastoreDescribe(fmt.Sprintf("_BPF_ _BPF-SAFE_ BPF tests (%s)", protocol), []apiconfig.DatastoreType{apiconfig.Kubernetes}, func(getInfra infrastructure.InfraFactory) {
 
 		var (
 			infra          infrastructure.DatastoreInfra
 			felixes        []*infrastructure.Felix
-			w              [2][2]*workload.Workload // 1st workload on each host
-			hostW          [2]*workload.Workload
-			client         client.Interface
+			calicoClient   client.Interface
 			cc             *workload.ConnectivityChecker
 			externalClient *containers.Container
 			bpfLog         *containers.Container
@@ -73,58 +71,11 @@ func describeBPFTests(protocol string) bool {
 			if os.Getenv("FELIX_FV_ENABLE_BPF") != "true" {
 				Skip("Skipping BPF test in non-BPF run.")
 			}
-
 			bpfLog = containers.Run("bpf-log", containers.RunOpts{AutoRemove: true}, "--privileged", "calico/bpftool:v5.3-amd64", "/bpftool", "prog", "tracelog")
-
-			var err error
 			infra = getInfra()
 
-			options := infrastructure.DefaultTopologyOptions()
-			options.FelixLogSeverity = "debug"
-			felixes, client = infrastructure.StartNNodeTopology(2, options, infra)
 			cc = &workload.ConnectivityChecker{}
 			cc.Protocol = protocol
-
-			// Start a host networked workload on each host for connectivity checks.
-			for ii, felix := range felixes {
-				// We tell each host-networked workload to open:
-				// TODO: Copied from another test
-				// - its normal (uninteresting) port, 8055
-				// - port 2379, which is both an inbound and an outbound failsafe port
-				// - port 22, which is an inbound failsafe port.
-				// This allows us to test the interaction between do-not-track policy and failsafe
-				// ports.
-				const portsToOpen = "8055,2379,22"
-				hostW[ii] = workload.Run(
-					felixes[ii],
-					fmt.Sprintf("host%d", ii),
-					"default",
-					felixes[ii].IP, // Same IP as felix means "run in the host's namespace"
-					portsToOpen,
-					protocol)
-
-				// Two workloads on each host so we can check the same host and other host cases.
-				iiStr := strconv.Itoa(ii)
-				w[ii][0] = workload.Run(felix, "w"+iiStr+"0", "default", "10.65."+iiStr+".2", "8055", protocol)
-				w[ii][0].WorkloadEndpoint.Labels = map[string]string{"name": w[ii][0].Name}
-				w[ii][0].ConfigureInDatastore(infra)
-				w[ii][1] = workload.Run(felix, "w"+iiStr+"1", "default", "10.65."+iiStr+".3", "8056", protocol)
-				w[ii][1].WorkloadEndpoint.Labels = map[string]string{"name": w[ii][1].Name}
-				w[ii][1].ConfigureInDatastore(infra)
-			}
-
-			// We will use this container to model an external client trying to connect into
-			// workloads on a host.  Create a route in the container for the workload CIDR.
-			// TODO: Copied from another test
-			externalClient = containers.Run("external-client",
-				containers.RunOpts{AutoRemove: true},
-				"--privileged", // So that we can add routes inside the container.
-				utils.Config.BusyboxImage,
-				"/bin/sh", "-c", "sleep 1000")
-			_ = externalClient
-
-			err = infra.AddDefaultDeny()
-			Expect(err).To(BeNil())
 		})
 
 		JustAfterEach(func() {
@@ -152,212 +103,218 @@ func describeBPFTests(protocol string) bool {
 			log.Info("AfterEach done")
 		})
 
-		It("should only allow traffic from the local host by default", func() {
-			// Same host, other workload.
-			cc.ExpectNone(w[0][0], w[0][1])
-			cc.ExpectNone(w[0][1], w[0][0])
-			// Workloads on other host.
-			cc.ExpectNone(w[0][0], w[1][0])
-			cc.ExpectNone(w[1][0], w[0][0])
-			// Hosts.
-			cc.ExpectSome(felixes[0], w[0][0])
-			cc.ExpectNone(felixes[1], w[0][0])
-			cc.CheckConnectivity()
-		})
-
 		createPolicy := func(policy *api.GlobalNetworkPolicy) *api.GlobalNetworkPolicy {
 			log.WithField("policy", dumpResource(policy)).Info("Creating policy")
-			policy, err := client.GlobalNetworkPolicies().Create(utils.Ctx, policy, utils.NoOptions)
+			policy, err := calicoClient.GlobalNetworkPolicies().Create(utils.Ctx, policy, utils.NoOptions)
 			Expect(err).NotTo(HaveOccurred())
 			return policy
 		}
 
 		updatePolicy := func(policy *api.GlobalNetworkPolicy) *api.GlobalNetworkPolicy {
 			log.WithField("policy", dumpResource(policy)).Info("Updating policy")
-			policy, err := client.GlobalNetworkPolicies().Update(utils.Ctx, policy, utils.NoOptions)
+			policy, err := calicoClient.GlobalNetworkPolicies().Update(utils.Ctx, policy, utils.NoOptions)
 			Expect(err).NotTo(HaveOccurred())
 			return policy
 		}
 		_ = updatePolicy
 
-		Context("with a policy allowing ingress to w[0][0] from all workloads", func() {
+		Describe("with a single node and an allow-all policy", func() {
 			var (
-				pol       *api.GlobalNetworkPolicy
-				k8sClient *kubernetes.Clientset
+				hostW   *workload.Workload
+				w       [2]*workload.Workload
+				options infrastructure.TopologyOptions
 			)
 
 			BeforeEach(func() {
-				pol = api.NewGlobalNetworkPolicy()
+				options = infrastructure.DefaultTopologyOptions()
+				options.FelixLogSeverity = "debug"
+			})
+
+			JustBeforeEach(func() {
+				felixes, calicoClient = infrastructure.StartNNodeTopology(1, options, infra)
+
+				hostW = workload.Run(
+					felixes[0],
+					"host",
+					"default",
+					felixes[0].IP, // Same IP as felix means "run in the host's namespace"
+					"8055",
+					protocol)
+
+				// Start a couple of workloads so we can check workload-to-workload and workload-to-host.
+				for i := 0; i < 2; i++ {
+					w[i] = workload.Run(felixes[0], fmt.Sprintf("w%d", i), "default", fmt.Sprintf("10.65.0.%d", i+2), "8055", protocol)
+					w[i].WorkloadEndpoint.Labels = map[string]string{"name": w[i].Name}
+					w[i].ConfigureInDatastore(infra)
+				}
+
+				err := infra.AddDefaultDeny()
+				Expect(err).NotTo(HaveOccurred())
+
+				pol := api.NewGlobalNetworkPolicy()
 				pol.Namespace = "fv"
 				pol.Name = "policy-1"
-				pol.Spec.Ingress = []api.Rule{
-					{
-						Action: "Allow",
-						Source: api.EntityRule{
-							Selector: "all()",
-						},
-					},
-				}
-				pol.Spec.Egress = []api.Rule{
-					{
-						Action: "Allow",
-						Source: api.EntityRule{
-							Selector: "all()",
-						},
-					},
-				}
+				pol.Spec.Ingress = []api.Rule{{Action: "Allow"}}
+				pol.Spec.Egress = []api.Rule{{Action: "Allow"}}
 				pol.Spec.Selector = "all()"
 
 				pol = createPolicy(pol)
-
-				k8sClient = infra.(*infrastructure.K8sDatastoreInfra).K8sClient
-				_ = k8sClient
 			})
 
-			It("connectivity from all workloads via workload 0's main IP", func() {
-				cc.ExpectSome(w[0][1], w[0][0])
-				cc.ExpectSome(w[1][0], w[0][0])
-				cc.ExpectSome(w[1][1], w[0][0])
+			Describe("with DefaultEndpointToHostAction=DROP", func() {
+				BeforeEach(func() {
+					options.ExtraEnvVars["FELIX_DefaultEndpointToHostAction"] = "DROP"
+				})
+				It("should only allow traffic from workload to workload", func() {
+					cc.ExpectSome(w[0], w[1])
+					cc.ExpectSome(w[1], w[0])
+					cc.ExpectNone(w[1], hostW)
+					cc.ExpectSome(hostW, w[0])
+					cc.CheckConnectivity()
+				})
+			})
+
+			Describe("with DefaultEndpointToHostAction=ACCEPT", func() {
+				BeforeEach(func() {
+					options.ExtraEnvVars["FELIX_DefaultEndpointToHostAction"] = "ACCEPT"
+				})
+				It("should traffic from workload to workload and to/from host", func() {
+					cc.ExpectSome(w[0], w[1])
+					cc.ExpectSome(w[1], w[0])
+					cc.ExpectSome(w[1], hostW)
+					cc.ExpectSome(hostW, w[0])
+					cc.CheckConnectivity()
+				})
+			})
+		})
+
+		Describe("with a two node cluster", func() {
+			var (
+				w     [2][2]*workload.Workload // 1st workload on each host
+				hostW [2]*workload.Workload
+			)
+
+			BeforeEach(func() {
+				options := infrastructure.DefaultTopologyOptions()
+				options.FelixLogSeverity = "debug"
+				felixes, calicoClient = infrastructure.StartNNodeTopology(2, options, infra)
+
+				// Start a host networked workload on each host for connectivity checks.
+				for ii, felix := range felixes {
+					// We tell each host-networked workload to open:
+					// TODO: Copied from another test
+					// - its normal (uninteresting) port, 8055
+					// - port 2379, which is both an inbound and an outbound failsafe port
+					// - port 22, which is an inbound failsafe port.
+					// This allows us to test the interaction between do-not-track policy and failsafe
+					// ports.
+					const portsToOpen = "8055,2379,22"
+					hostW[ii] = workload.Run(
+						felixes[ii],
+						fmt.Sprintf("host%d", ii),
+						"default",
+						felixes[ii].IP, // Same IP as felix means "run in the host's namespace"
+						portsToOpen,
+						protocol)
+
+					// Two workloads on each host so we can check the same host and other host cases.
+					iiStr := strconv.Itoa(ii)
+					w[ii][0] = workload.Run(felix, "w"+iiStr+"0", "default", "10.65."+iiStr+".2", "8055", protocol)
+					w[ii][0].WorkloadEndpoint.Labels = map[string]string{"name": w[ii][0].Name}
+					w[ii][0].ConfigureInDatastore(infra)
+					w[ii][1] = workload.Run(felix, "w"+iiStr+"1", "default", "10.65."+iiStr+".3", "8056", protocol)
+					w[ii][1].WorkloadEndpoint.Labels = map[string]string{"name": w[ii][1].Name}
+					w[ii][1].ConfigureInDatastore(infra)
+				}
+
+				// We will use this container to model an external client trying to connect into
+				// workloads on a host.  Create a route in the container for the workload CIDR.
+				// TODO: Copied from another test
+				externalClient = containers.Run("external-client",
+					containers.RunOpts{AutoRemove: true},
+					"--privileged", // So that we can add routes inside the container.
+					utils.Config.BusyboxImage,
+					"/bin/sh", "-c", "sleep 1000")
+				_ = externalClient
+
+				err := infra.AddDefaultDeny()
+				Expect(err).NotTo(HaveOccurred())
+			})
+
+			It("should only allow traffic from the local host by default", func() {
+				// Same host, other workload.
+				cc.ExpectNone(w[0][0], w[0][1])
+				cc.ExpectNone(w[0][1], w[0][0])
+				// Workloads on other host.
+				cc.ExpectNone(w[0][0], w[1][0])
+				cc.ExpectNone(w[1][0], w[0][0])
+				// Hosts.
+				cc.ExpectSome(felixes[0], w[0][0])
+				cc.ExpectNone(felixes[1], w[0][0])
 				cc.CheckConnectivity()
 			})
 
-			Context("with test-service configured 10.101.0.10:80 -> w[0][0].IP:8055", func() {
+			Context("with a policy allowing ingress to w[0][0] from all workloads", func() {
 				var (
-					testSvc          *v1.Service
-					testSvcNamespace string
+					pol       *api.GlobalNetworkPolicy
+					k8sClient *kubernetes.Clientset
 				)
 
-				testSvcName := "test-service"
-
 				BeforeEach(func() {
-					testSvc = k8sService(testSvcName, "10.101.0.10", w[0][0], 80, 8055, protocol)
-					testSvcNamespace = testSvc.ObjectMeta.Namespace
-					_, err := k8sClient.CoreV1().Services(testSvcNamespace).Create(testSvc)
-					Expect(err).NotTo(HaveOccurred())
-					Eventually(k8sGetEpsForServiceFunc(k8sClient, testSvc), "10s").Should(HaveLen(1),
-						"Service endpoints didn't get created? Is controller-manager happy?")
-				})
-
-				It("should have connectivity from all workloads via a service to workload 0", func() {
-					ip := testSvc.Spec.ClusterIP
-					port := uint16(testSvc.Spec.Ports[0].Port)
-
-					cc.ExpectSome(w[0][1], workload.IP(ip), port)
-					cc.ExpectSome(w[1][0], workload.IP(ip), port)
-					cc.ExpectSome(w[1][1], workload.IP(ip), port)
-					cc.CheckConnectivity()
-				})
-
-				It("should only have connectivity from from the local host via a service to workload 0", func() {
-					// Local host is always white-listed (for kubelet health checks).
-					ip := testSvc.Spec.ClusterIP
-					port := uint16(testSvc.Spec.Ports[0].Port)
-
-					cc.ExpectSome(felixes[0], workload.IP(ip), port)
-					cc.ExpectNone(felixes[1], workload.IP(ip), port)
-					cc.CheckConnectivity()
-				})
-
-				Describe("after updating the policy to allow traffic from hosts", func() {
-					BeforeEach(func() {
-						pol.Spec.Ingress = []api.Rule{
-							{
-								Action: "Allow",
-								Source: api.EntityRule{
-									Nets: []string{
-										felixes[0].IP + "/32",
-										felixes[1].IP + "/32",
-										felixes[0].ExpectedIPIPTunnelAddr + "/32",
-										felixes[1].ExpectedIPIPTunnelAddr + "/32",
-									},
-								},
+					pol = api.NewGlobalNetworkPolicy()
+					pol.Namespace = "fv"
+					pol.Name = "policy-1"
+					pol.Spec.Ingress = []api.Rule{
+						{
+							Action: "Allow",
+							Source: api.EntityRule{
+								Selector: "all()",
 							},
-						}
-						pol = updatePolicy(pol)
-					})
+						},
+					}
+					pol.Spec.Egress = []api.Rule{
+						{
+							Action: "Allow",
+							Source: api.EntityRule{
+								Selector: "all()",
+							},
+						},
+					}
+					pol.Spec.Selector = "all()"
 
-					It("should have connectivity from the hosts via a service to workload 0", func() {
-						ip := testSvc.Spec.ClusterIP
-						port := uint16(testSvc.Spec.Ports[0].Port)
+					pol = createPolicy(pol)
 
-						cc.ExpectSome(felixes[0], workload.IP(ip), port)
-						cc.ExpectSome(felixes[1], workload.IP(ip), port)
-						cc.ExpectNone(w[0][1], workload.IP(ip), port)
-						cc.ExpectNone(w[1][0], workload.IP(ip), port)
-						cc.CheckConnectivity()
-					})
+					k8sClient = infra.(*infrastructure.K8sDatastoreInfra).K8sClient
+					_ = k8sClient
 				})
 
-				It("should create sane conntrack entries and clean them up", func() {
-					By("Generating some traffic")
-					ip := testSvc.Spec.ClusterIP
-					port := uint16(testSvc.Spec.Ports[0].Port)
-
-					cc.ExpectSome(w[0][1], workload.IP(ip), port)
-					cc.ExpectSome(w[1][0], workload.IP(ip), port)
+				It("connectivity from all workloads via workload 0's main IP", func() {
+					cc.ExpectSome(w[0][1], w[0][0])
+					cc.ExpectSome(w[1][0], w[0][0])
+					cc.ExpectSome(w[1][1], w[0][0])
 					cc.CheckConnectivity()
-
-					By("Checking tiemstamps on conntrack entries are sane")
-					// This test verifies that we correctly interpret conntrack entry timestamps by reading them back
-					// and checking that they're (a) in the past and (b) sensibly recent.
-					ctDump, err := felixes[0].ExecOutput("calico-bpf", "conntrack", "dump")
-					Expect(err).NotTo(HaveOccurred())
-					re := regexp.MustCompile(`LastSeen:\s*(\d+)`)
-					matches := re.FindAllStringSubmatch(ctDump, -1)
-					Expect(matches).ToNot(BeEmpty(), "didn't find any conntrack entries")
-					for _, match := range matches {
-						lastSeenNanos, err := strconv.ParseInt(match[1], 10, 64)
-						Expect(err).NotTo(HaveOccurred())
-						nowNanos := conntrack.KTimeNanos()
-						age := time.Duration(nowNanos - lastSeenNanos)
-						Expect(age).To(BeNumerically(">", 0))
-						Expect(age).To(BeNumerically("<", 60*time.Second))
-					}
-
-					By("Checking conntrack entries are cleaned up")
-					// We have UTs that check that all kinds of entries eventually get cleaned up.  This
-					// test is mainly to check that the cleanup code actually runs and is able to actually delete
-					// entries.
-					numWl0ConntrackEntries := func() int {
-						ctDump, err := felixes[0].ExecOutput("calico-bpf", "conntrack", "dump")
-						Expect(err).NotTo(HaveOccurred())
-						return strings.Count(ctDump, w[0][0].IP)
-					}
-
-					startingCTEntries := numWl0ConntrackEntries()
-					Expect(startingCTEntries).To(BeNumerically(">", 0))
-
-					// TODO reduce timeouts just for this test.
-					Eventually(numWl0ConntrackEntries, "180s", "5s").Should(BeNumerically("<", startingCTEntries))
 				})
 
-				Context("with test-service port updated", func() {
-
+				Context("with test-service configured 10.101.0.10:80 -> w[0][0].IP:8055", func() {
 					var (
-						testSvcUpdated      *v1.Service
-						natBackBeforeUpdate []nat.BackendMapMem
+						testSvc          *v1.Service
+						testSvcNamespace string
 					)
 
+					testSvcName := "test-service"
+
 					BeforeEach(func() {
-						_, natBackBeforeUpdate = dumpNATmaps(felixes)
-
-						testSvcUpdated = k8sService(testSvcName, "10.101.0.10", w[0][0], 88, 8055, protocol)
-
-						svc, err := k8sClient.CoreV1().
-							Services(testSvcNamespace).
-							Get(testSvcName, metav1.GetOptions{})
-
-						testSvcUpdated.ObjectMeta.ResourceVersion = svc.ObjectMeta.ResourceVersion
-
-						_, err = k8sClient.CoreV1().Services(testSvcNamespace).Update(testSvcUpdated)
+						testSvc = k8sService(testSvcName, "10.101.0.10", w[0][0], 80, 8055, protocol)
+						testSvcNamespace = testSvc.ObjectMeta.Namespace
+						_, err := k8sClient.CoreV1().Services(testSvcNamespace).Create(testSvc)
 						Expect(err).NotTo(HaveOccurred())
 						Eventually(k8sGetEpsForServiceFunc(k8sClient, testSvc), "10s").Should(HaveLen(1),
 							"Service endpoints didn't get created? Is controller-manager happy?")
 					})
 
-					It("should have connectivity from all workloads via the new port", func() {
-						ip := testSvcUpdated.Spec.ClusterIP
-						port := uint16(testSvcUpdated.Spec.Ports[0].Port)
+					It("should have connectivity from all workloads via a service to workload 0", func() {
+						ip := testSvc.Spec.ClusterIP
+						port := uint16(testSvc.Spec.Ports[0].Port)
 
 						cc.ExpectSome(w[0][1], workload.IP(ip), port)
 						cc.ExpectSome(w[1][0], workload.IP(ip), port)
@@ -365,58 +322,176 @@ func describeBPFTests(protocol string) bool {
 						cc.CheckConnectivity()
 					})
 
-					It("should not have connectivity from all workloads via the old port", func() {
+					It("should only have connectivity from from the local host via a service to workload 0", func() {
+						// Local host is always white-listed (for kubelet health checks).
 						ip := testSvc.Spec.ClusterIP
 						port := uint16(testSvc.Spec.Ports[0].Port)
 
-						cc.ExpectNone(w[0][1], workload.IP(ip), port)
-						cc.ExpectNone(w[1][0], workload.IP(ip), port)
-						cc.ExpectNone(w[1][1], workload.IP(ip), port)
+						cc.ExpectSome(felixes[0], workload.IP(ip), port)
+						cc.ExpectNone(felixes[1], workload.IP(ip), port)
 						cc.CheckConnectivity()
-
-						natmaps, natbacks := dumpNATmaps(felixes)
-						for i := range felixes {
-							Expect(equalNATBackendMapVals(natbacks[i], natBackBeforeUpdate[i])).To(BeTrue())
-							ipv4 := net.ParseIP(ip)
-							portNew := uint16(testSvcUpdated.Spec.Ports[0].Port)
-							numericProto := uint8(6)
-							if protocol == "udp" {
-								numericProto = 17
-							}
-							Expect(natmaps[i]).To(HaveKey(nat.NewNATKey(ipv4, portNew, numericProto)))
-							portOld := uint16(testSvc.Spec.Ports[0].Port)
-							Expect(natmaps[i]).NotTo(HaveKey(nat.NewNATKey(ipv4, portOld, numericProto)))
-						}
 					})
 
-					Context("with test-service removed", func() {
+					Describe("after updating the policy to allow traffic from hosts", func() {
+						BeforeEach(func() {
+							pol.Spec.Ingress = []api.Rule{
+								{
+									Action: "Allow",
+									Source: api.EntityRule{
+										Nets: []string{
+											felixes[0].IP + "/32",
+											felixes[1].IP + "/32",
+											felixes[0].ExpectedIPIPTunnelAddr + "/32",
+											felixes[1].ExpectedIPIPTunnelAddr + "/32",
+										},
+									},
+								},
+							}
+							pol = updatePolicy(pol)
+						})
+
+						It("should have connectivity from the hosts via a service to workload 0", func() {
+							ip := testSvc.Spec.ClusterIP
+							port := uint16(testSvc.Spec.Ports[0].Port)
+
+							cc.ExpectSome(felixes[0], workload.IP(ip), port)
+							cc.ExpectSome(felixes[1], workload.IP(ip), port)
+							cc.ExpectNone(w[0][1], workload.IP(ip), port)
+							cc.ExpectNone(w[1][0], workload.IP(ip), port)
+							cc.CheckConnectivity()
+						})
+					})
+
+					It("should create sane conntrack entries and clean them up", func() {
+						By("Generating some traffic")
+						ip := testSvc.Spec.ClusterIP
+						port := uint16(testSvc.Spec.Ports[0].Port)
+
+						cc.ExpectSome(w[0][1], workload.IP(ip), port)
+						cc.ExpectSome(w[1][0], workload.IP(ip), port)
+						cc.CheckConnectivity()
+
+						By("Checking tiemstamps on conntrack entries are sane")
+						// This test verifies that we correctly interpret conntrack entry timestamps by reading them back
+						// and checking that they're (a) in the past and (b) sensibly recent.
+						ctDump, err := felixes[0].ExecOutput("calico-bpf", "conntrack", "dump")
+						Expect(err).NotTo(HaveOccurred())
+						re := regexp.MustCompile(`LastSeen:\s*(\d+)`)
+						matches := re.FindAllStringSubmatch(ctDump, -1)
+						Expect(matches).ToNot(BeEmpty(), "didn't find any conntrack entries")
+						for _, match := range matches {
+							lastSeenNanos, err := strconv.ParseInt(match[1], 10, 64)
+							Expect(err).NotTo(HaveOccurred())
+							nowNanos := conntrack.KTimeNanos()
+							age := time.Duration(nowNanos - lastSeenNanos)
+							Expect(age).To(BeNumerically(">", 0))
+							Expect(age).To(BeNumerically("<", 60*time.Second))
+						}
+
+						By("Checking conntrack entries are cleaned up")
+						// We have UTs that check that all kinds of entries eventually get cleaned up.  This
+						// test is mainly to check that the cleanup code actually runs and is able to actually delete
+						// entries.
+						numWl0ConntrackEntries := func() int {
+							ctDump, err := felixes[0].ExecOutput("calico-bpf", "conntrack", "dump")
+							Expect(err).NotTo(HaveOccurred())
+							return strings.Count(ctDump, w[0][0].IP)
+						}
+
+						startingCTEntries := numWl0ConntrackEntries()
+						Expect(startingCTEntries).To(BeNumerically(">", 0))
+
+						// TODO reduce timeouts just for this test.
+						Eventually(numWl0ConntrackEntries, "180s", "5s").Should(BeNumerically("<", startingCTEntries))
+					})
+
+					Context("with test-service port updated", func() {
+
 						var (
-							prevBpfsvcs []nat.MapMem
-							prevBpfeps  []nat.BackendMapMem
+							testSvcUpdated      *v1.Service
+							natBackBeforeUpdate []nat.BackendMapMem
 						)
 
 						BeforeEach(func() {
-							prevBpfsvcs, prevBpfeps = dumpNATmaps(felixes)
-							err := k8sClient.CoreV1().
+							_, natBackBeforeUpdate = dumpNATmaps(felixes)
+
+							testSvcUpdated = k8sService(testSvcName, "10.101.0.10", w[0][0], 88, 8055, protocol)
+
+							svc, err := k8sClient.CoreV1().
 								Services(testSvcNamespace).
-								Delete(testSvcName, &metav1.DeleteOptions{})
+								Get(testSvcName, metav1.GetOptions{})
+
+							testSvcUpdated.ObjectMeta.ResourceVersion = svc.ObjectMeta.ResourceVersion
+
+							_, err = k8sClient.CoreV1().Services(testSvcNamespace).Update(testSvcUpdated)
 							Expect(err).NotTo(HaveOccurred())
-							Eventually(k8sGetEpsForServiceFunc(k8sClient, testSvc), "10s").Should(HaveLen(0))
+							Eventually(k8sGetEpsForServiceFunc(k8sClient, testSvc), "10s").Should(HaveLen(1),
+								"Service endpoints didn't get created? Is controller-manager happy?")
 						})
 
-						It("should not have connectivity from workloads via a service to workload 0", func() {
+						It("should have connectivity from all workloads via the new port", func() {
 							ip := testSvcUpdated.Spec.ClusterIP
 							port := uint16(testSvcUpdated.Spec.Ports[0].Port)
+
+							cc.ExpectSome(w[0][1], workload.IP(ip), port)
+							cc.ExpectSome(w[1][0], workload.IP(ip), port)
+							cc.ExpectSome(w[1][1], workload.IP(ip), port)
+							cc.CheckConnectivity()
+						})
+
+						It("should not have connectivity from all workloads via the old port", func() {
+							ip := testSvc.Spec.ClusterIP
+							port := uint16(testSvc.Spec.Ports[0].Port)
 
 							cc.ExpectNone(w[0][1], workload.IP(ip), port)
 							cc.ExpectNone(w[1][0], workload.IP(ip), port)
 							cc.ExpectNone(w[1][1], workload.IP(ip), port)
 							cc.CheckConnectivity()
 
-							for i, f := range felixes {
-								Eventually(func() nat.MapMem { return dumpNATMap(f) }).Should(HaveLen(len(prevBpfsvcs[i]) - 1))
-								Eventually(func() nat.BackendMapMem { return dumpEPMap(f) }).Should(HaveLen(len(prevBpfeps[i]) - 1))
+							natmaps, natbacks := dumpNATmaps(felixes)
+							for i := range felixes {
+								Expect(equalNATBackendMapVals(natbacks[i], natBackBeforeUpdate[i])).To(BeTrue())
+								ipv4 := net.ParseIP(ip)
+								portNew := uint16(testSvcUpdated.Spec.Ports[0].Port)
+								numericProto := uint8(6)
+								if protocol == "udp" {
+									numericProto = 17
+								}
+								Expect(natmaps[i]).To(HaveKey(nat.NewNATKey(ipv4, portNew, numericProto)))
+								portOld := uint16(testSvc.Spec.Ports[0].Port)
+								Expect(natmaps[i]).NotTo(HaveKey(nat.NewNATKey(ipv4, portOld, numericProto)))
 							}
+						})
+
+						Context("with test-service removed", func() {
+							var (
+								prevBpfsvcs []nat.MapMem
+								prevBpfeps  []nat.BackendMapMem
+							)
+
+							BeforeEach(func() {
+								prevBpfsvcs, prevBpfeps = dumpNATmaps(felixes)
+								err := k8sClient.CoreV1().
+									Services(testSvcNamespace).
+									Delete(testSvcName, &metav1.DeleteOptions{})
+								Expect(err).NotTo(HaveOccurred())
+								Eventually(k8sGetEpsForServiceFunc(k8sClient, testSvc), "10s").Should(HaveLen(0))
+							})
+
+							It("should not have connectivity from workloads via a service to workload 0", func() {
+								ip := testSvcUpdated.Spec.ClusterIP
+								port := uint16(testSvcUpdated.Spec.Ports[0].Port)
+
+								cc.ExpectNone(w[0][1], workload.IP(ip), port)
+								cc.ExpectNone(w[1][0], workload.IP(ip), port)
+								cc.ExpectNone(w[1][1], workload.IP(ip), port)
+								cc.CheckConnectivity()
+
+								for i, f := range felixes {
+									Eventually(func() nat.MapMem { return dumpNATMap(f) }).Should(HaveLen(len(prevBpfsvcs[i]) - 1))
+									Eventually(func() nat.BackendMapMem { return dumpEPMap(f) }).Should(HaveLen(len(prevBpfeps[i]) - 1))
+								}
+							})
 						})
 					})
 				})
