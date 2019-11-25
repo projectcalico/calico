@@ -650,6 +650,7 @@ func (c *ConnectivityChecker) ActualConnectivity() []string {
 	for i, exp := range c.expectations {
 		wg.Add(1)
 		go func(i int, exp expectation) {
+			defer GinkgoRecover()
 			defer wg.Done()
 			p := "tcp"
 			if c.Protocol != "" {

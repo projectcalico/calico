@@ -26,6 +26,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/projectcalico/felix/idalloc"
+
 	"github.com/projectcalico/felix/ifacemonitor"
 
 	"github.com/projectcalico/felix/bpf"
@@ -53,9 +55,10 @@ type bpfEndpointManager struct {
 	bpfLogLevel      string
 	fibLookupEnabled bool
 	dataIfaceRegex   *regexp.Regexp
+	ipSetIDAlloc     *idalloc.IDAllocator
 }
 
-func newBPFEndpointManager(bpfLogLevel string, fibLookupEnabled bool, dataIfaceRegex *regexp.Regexp) *bpfEndpointManager {
+func newBPFEndpointManager(bpfLogLevel string, fibLookupEnabled bool, dataIfaceRegex *regexp.Regexp, ipSetIDAlloc *idalloc.IDAllocator) *bpfEndpointManager {
 	return &bpfEndpointManager{
 		wlEps:               map[proto.WorkloadEndpointID]*proto.WorkloadEndpoint{},
 		policies:            map[proto.PolicyID]*proto.Policy{},
@@ -68,6 +71,7 @@ func newBPFEndpointManager(bpfLogLevel string, fibLookupEnabled bool, dataIfaceR
 		bpfLogLevel:         bpfLogLevel,
 		fibLookupEnabled:    fibLookupEnabled,
 		dataIfaceRegex:      dataIfaceRegex,
+		ipSetIDAlloc:        ipSetIDAlloc,
 	}
 }
 
@@ -505,12 +509,14 @@ func (m *bpfEndpointManager) compileAndAttachProgram(allRules [][][]*proto.Rule,
 	logPfx := os.Getenv("BPF_LOG_PFX") + attachPoint.Iface
 
 	err = CompileTCProgramToFile(allRules,
+		m.ipSetIDAlloc,
 		CompileWithWorkingDir(srcDir),
 		CompileWithSourceName(srcFileName),
 		CompileWithOutputName(oFileName),
 		CompileWithFIBEnabled(m.fibLookupEnabled),
 		CompileWithLogLevel(logLevel),
 		CompileWithLogPrefix(logPfx),
+		CompileWithHostIPSetID(SpecialIPSetIDHostIPs),
 	)
 	if err != nil {
 		return err
@@ -519,7 +525,7 @@ func (m *bpfEndpointManager) compileAndAttachProgram(allRules [][][]*proto.Rule,
 	err = AttachTCProgram(oFileName, attachPoint)
 	if err != nil {
 		var buf bytes.Buffer
-		pg, err := bpf.NewProgramGenerator(srcFileName)
+		pg, err := bpf.NewProgramGenerator(srcFileName, m.ipSetIDAlloc)
 		if err != nil {
 			log.WithError(err).Panic("Failed to write get code generator.")
 		}
@@ -560,14 +566,15 @@ func AttachTCProgram(fname string, attachPoint TCAttachPoint) error {
 }
 
 // CompileTCOption specifies additional compile options for TC programs
-type CompileTCOption func(interface{})
+type CompileTCOption func(*compileTCOpts)
 
 type compileTCOpts struct {
-	extraArgs []string
-	dir       string
-	srcFile   string
-	outFile   string
-	bpftool   bool
+	extraArgs   []string
+	dir         string
+	srcFile     string
+	outFile     string
+	bpftool     bool
+	hostIPSetID string
 }
 
 func (o *compileTCOpts) appendExtraArg(a string) {
@@ -576,55 +583,61 @@ func (o *compileTCOpts) appendExtraArg(a string) {
 
 // CompileWithFIBEnabled sets whether FIB lookup is allowed
 func CompileWithFIBEnabled(enabled bool) CompileTCOption {
-	return func(opts interface{}) {
-		opts.(*compileTCOpts).appendExtraArg(fmt.Sprintf("-DCALI_FIB_LOOKUP_ENABLED=%v", enabled))
+	return func(opts *compileTCOpts) {
+		opts.appendExtraArg(fmt.Sprintf("-DCALI_FIB_LOOKUP_ENABLED=%v", enabled))
 	}
 }
 
 // CompileWithLogLevel sets the log level of the resulting program
 func CompileWithLogLevel(level string) CompileTCOption {
-	return func(opts interface{}) {
-		opts.(*compileTCOpts).appendExtraArg(fmt.Sprintf("-DCALI_LOG_LEVEL=CALI_LOG_LEVEL_%s", level))
+	return func(opts *compileTCOpts) {
+		opts.appendExtraArg(fmt.Sprintf("-DCALI_LOG_LEVEL=CALI_LOG_LEVEL_%s", level))
 	}
 }
 
 // CompileWithLogPrefix sets a specific log prefix for the resulting program
 func CompileWithLogPrefix(prefix string) CompileTCOption {
-	return func(opts interface{}) {
-		opts.(*compileTCOpts).appendExtraArg(fmt.Sprintf("-DCALI_LOG_PFX=%v", prefix))
+	return func(opts *compileTCOpts) {
+		opts.appendExtraArg(fmt.Sprintf("-DCALI_LOG_PFX=%v", prefix))
 	}
 }
 
 // CompileWithSourceName sets the source file name
 func CompileWithSourceName(f string) CompileTCOption {
-	return func(opts interface{}) {
-		opts.(*compileTCOpts).srcFile = f
+	return func(opts *compileTCOpts) {
+		opts.srcFile = f
 	}
 }
 
 // CompileWithOutputName sets the output name
 func CompileWithOutputName(f string) CompileTCOption {
-	return func(opts interface{}) {
-		opts.(*compileTCOpts).outFile = f
+	return func(opts *compileTCOpts) {
+		opts.outFile = f
 	}
 }
 
 // CompileWithWorkingDir sets the working directory
 func CompileWithWorkingDir(dir string) CompileTCOption {
-	return func(opts interface{}) {
-		opts.(*compileTCOpts).dir = dir
+	return func(opts *compileTCOpts) {
+		opts.dir = dir
 	}
 }
 
 func CompileWithBpftoolLoader() CompileTCOption {
-	return func(opts interface{}) {
-		opts.(*compileTCOpts).bpftool = true
+	return func(opts *compileTCOpts) {
+		opts.bpftool = true
+	}
+}
+
+func CompileWithHostIPSetID(id string) CompileTCOption {
+	return func(opts *compileTCOpts) {
+		opts.hostIPSetID = id
 	}
 }
 
 // CompileTCProgramToFile takes policy rules and compiles them into a tc-bpf
 // program and saves it into the provided file. Extra CFLAGS can be provided
-func CompileTCProgramToFile(allRules [][][]*proto.Rule, opts ...CompileTCOption) error {
+func CompileTCProgramToFile(allRules [][][]*proto.Rule, ipSetIDAlloc *idalloc.IDAllocator, opts ...CompileTCOption) error {
 	compileOpts := compileTCOpts{
 		srcFile: "/code/bpf/xdp/redir_tc.c",
 		outFile: "/tmp/redir_tc.o",
@@ -635,11 +648,14 @@ func CompileTCProgramToFile(allRules [][][]*proto.Rule, opts ...CompileTCOption)
 		o(&compileOpts)
 	}
 
+	hostIPSetID := ipSetIDAlloc.GetOrAlloc(compileOpts.hostIPSetID)
+
 	args := []string{
 		"-x",
 		"c",
 		"-D__KERNEL__",
 		"-D__ASM_SYSREG_H",
+		fmt.Sprintf("-DCALI_HOST_IPS_IP_SET_ID=%#x", hostIPSetID),
 	}
 
 	if compileOpts.bpftool {
@@ -695,7 +711,7 @@ func CompileTCProgramToFile(allRules [][][]*proto.Rule, opts ...CompileTCOption)
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		pg, err := bpf.NewProgramGenerator(compileOpts.srcFile)
+		pg, err := bpf.NewProgramGenerator(compileOpts.srcFile, ipSetIDAlloc)
 		if err != nil {
 			log.WithError(err).Panic("Failed to create code generator")
 		}

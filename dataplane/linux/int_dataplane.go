@@ -27,6 +27,8 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/projectcalico/felix/idalloc"
+
 	"k8s.io/client-go/kubernetes"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -452,12 +454,13 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	if config.BPFEnabled {
 		log.Info("BPF enabled, starting BPF endpoint manager and map manager.")
 		// Register map managers first since they create the maps that will be used by the endpoint manager.
-		dp.RegisterManager(newBPFIPSetManager())
+		ipSetIDAllocator := idalloc.New()
+		dp.RegisterManager(newBPFIPSetManager(ipSetIDAllocator))
 		dp.RegisterManager(newBPFConntrackManager(config.BPFConntrackTimeouts))
 
 		// Forwarding into a tunnel seems to fail silently, disable FIB lookup if tunnel is enabled for now.
 		fibLookupEnabled := !config.RulesConfig.IPIPEnabled && !config.RulesConfig.VXLANEnabled
-		dp.RegisterManager(newBPFEndpointManager(config.BPFLogLevel, fibLookupEnabled, config.BPFDataIfacePattern))
+		dp.RegisterManager(newBPFEndpointManager(config.BPFLogLevel, fibLookupEnabled, config.BPFDataIfacePattern, ipSetIDAllocator))
 
 		// Pre-create the NAT maps so that later operations can assume access.
 		frontendMap := nat.FrontendMap()

@@ -23,6 +23,8 @@ import (
 	"path"
 	"testing"
 
+	"github.com/projectcalico/felix/idalloc"
+
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
 	. "github.com/onsi/gomega"
@@ -49,6 +51,7 @@ func TestCompileTemplateRun(tt *testing.T) {
 	objFname := tempDir + "/redir_tc.o"
 
 	err = intdataplane.CompileTCProgramToFile(nil,
+		idalloc.New(),
 		intdataplane.CompileWithBpftoolLoader(),
 		intdataplane.CompileWithWorkingDir("../xdp"),
 		intdataplane.CompileWithSourceName("../xdp/redir_tc.c"),
@@ -60,6 +63,9 @@ func TestCompileTemplateRun(tt *testing.T) {
 	t.Expect(err).NotTo(HaveOccurred())
 
 	err = bpftoolProgLoadAll(objFname, bpfFsDir)
+	if err != nil {
+		tt.Log("Error:", string(err.(*exec.ExitError).Stderr))
+	}
 	t.Expect(err).NotTo(HaveOccurred())
 
 	dataInFname := tempDir + "/data_in"

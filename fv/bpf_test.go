@@ -152,13 +152,16 @@ func describeBPFTests(protocol string) bool {
 			log.Info("AfterEach done")
 		})
 
-		It("should deny all by default", func() {
+		It("should only allow traffic from the local host by default", func() {
 			// Same host, other workload.
 			cc.ExpectNone(w[0][0], w[0][1])
 			cc.ExpectNone(w[0][1], w[0][0])
-			// Other host.
+			// Workloads on other host.
 			cc.ExpectNone(w[0][0], w[1][0])
 			cc.ExpectNone(w[1][0], w[0][0])
+			// Hosts.
+			cc.ExpectSome(felixes[0], w[0][0])
+			cc.ExpectNone(felixes[1], w[0][0])
 			cc.CheckConnectivity()
 		})
 
@@ -245,11 +248,12 @@ func describeBPFTests(protocol string) bool {
 					cc.CheckConnectivity()
 				})
 
-				It("should not have connectivity from the hosts via a service to workload 0", func() {
+				It("should only have connectivity from from the local host via a service to workload 0", func() {
+					// Local host is always white-listed (for kubelet health checks).
 					ip := testSvc.Spec.ClusterIP
 					port := uint16(testSvc.Spec.Ports[0].Port)
 
-					cc.ExpectNone(felixes[0], workload.IP(ip), port)
+					cc.ExpectSome(felixes[0], workload.IP(ip), port)
 					cc.ExpectNone(felixes[1], workload.IP(ip), port)
 					cc.CheckConnectivity()
 				})

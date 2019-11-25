@@ -18,6 +18,8 @@ import (
 	"bytes"
 	"testing"
 
+	"github.com/projectcalico/felix/idalloc"
+
 	. "github.com/onsi/gomega"
 
 	"github.com/projectcalico/felix/proto"
@@ -33,14 +35,14 @@ RULE_MATCH_CIDRS(0, false, saddr, {0xff000000, 0xa000000});
 RULE_MATCH_CIDRS(0, true, saddr, {0xff000000, 0xc000000});
 RULE_MATCH_CIDRS(0, false, daddr, {0xff000000, 0xb000000});
 RULE_MATCH_CIDRS(0, true, daddr, {0xff000000, 0xd000000});
-RULE_MATCH_IP_SET(0, false, saddr, 0x684b8f3987d0f29a);
-RULE_MATCH_IP_SET(0, true, saddr, 0x9c682697bb48145e);
-RULE_MATCH_IP_SET(0, false, daddr, 0xfb195f795561b40e);
-RULE_MATCH_IP_SET(0, true, daddr, 0x87210273bf1e9ac7);
-RULE_MATCH_PORT_RANGES(0, false, saddr, sport, {0, 80, 81}, {0, 8080, 8081}, {0x1a4affe5d7e391b8, 0, 0});
-RULE_MATCH_PORT_RANGES(0, true, saddr, sport, {0, 5000, 5000}, {0xc68192c70d9692e5, 0, 0});
-RULE_MATCH_PORT_RANGES(0, false, daddr, dport, {0, 3000, 3001}, {0x246b16a8bb4b9ef8, 0, 0});
-RULE_MATCH_PORT_RANGES(0, true, daddr, dport, {0, 4000, 4000}, {0xc68192c70d9692e5, 0, 0});
+RULE_MATCH_IP_SET(0, false, saddr, 0xc9e0b8362d2ae7aa);
+RULE_MATCH_IP_SET(0, true, saddr, 0x29b3de884a8af6f9);
+RULE_MATCH_IP_SET(0, false, daddr, 0xf20c840819a42ca1);
+RULE_MATCH_IP_SET(0, true, daddr, 0xec1688a46fc26ccd);
+RULE_MATCH_PORT_RANGES(0, false, saddr, sport, {0, 80, 81}, {0, 8080, 8081}, {0x9c25c5cc8b9adf71, 0, 0});
+RULE_MATCH_PORT_RANGES(0, true, saddr, sport, {0, 5000, 5000}, {0xaf80e4b9093f7c4f, 0, 0});
+RULE_MATCH_PORT_RANGES(0, false, daddr, dport, {0, 3000, 3001}, {0xd1a42775a0e513c5, 0, 0});
+RULE_MATCH_PORT_RANGES(0, true, daddr, dport, {0, 4000, 4000}, {0xaf80e4b9093f7c4f, 0, 0});
 RULE_END(0, allow);
 // End of rule 0
 
@@ -58,7 +60,7 @@ func TestBPFProgramGeneration(t *testing.T) {
 	var buf bytes.Buffer
 
 	buf.Reset()
-	pg, err := NewProgramGenerator("xdp/redir_tc.c")
+	pg, err := NewProgramGenerator("xdp/redir_tc.c", idalloc.New())
 	Expect(err).NotTo(HaveOccurred())
 
 	err = pg.WriteCalicoRules(&buf, [][][]*proto.Rule{{{{

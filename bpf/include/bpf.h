@@ -137,6 +137,8 @@ enum calico_tc_flags {
 
 #define CALI_TC_FLAGS_FROM_WORKLOAD(flags) (!(flags & CALI_TC_HOST_EP) && !(flags & CALI_TC_INGRESS))
 
+#define CALI_TC_FLAGS_TO_WORKLOAD(flags) (!(flags & CALI_TC_HOST_EP) && (flags & CALI_TC_INGRESS))
+
 #define CALI_TC_FLAGS_L3(flags) ((flags & CALI_TC_HOST_EP) && !(flags & CALI_TC_INGRESS) && (flags & CALI_TC_TUNNEL))
 
 #define CALI_TC_FLAGS_IPIP_ENCAPPED(flags) ((flags & CALI_TC_INGRESS) && (flags & CALI_TC_TUNNEL))
