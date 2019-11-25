@@ -8,14 +8,13 @@ GO_BUILD_VER?=v0.27
 ###############################################################################
 MAKE_BRANCH?=$(GO_BUILD_VER)
 MAKE_REPO?=https://raw.githubusercontent.com/projectcalico/go-build/$(MAKE_BRANCH)
-WGET?=/usr/bin/wget
 
 Makefile.common: Makefile.common.$(MAKE_BRANCH)
 	cp "$<" "$@"
-Makefile.common.$(MAKE_BRANCH): $(WGET)
+Makefile.common.$(MAKE_BRANCH):
 	# Clean up any files downloaded from other branches so they don't accumulate.
 	rm -f Makefile.common.*
-	$(WGET) -nv $(MAKE_REPO)/Makefile.common -O "$@"
+	curl --fail $(MAKE_REPO)/Makefile.common -o "$@"
 
 # Build mounts for running in "local build" mode. This allows an easy build using local development code,
 # assuming that there is a local checkout of libcalico in the same directory as this repo.
