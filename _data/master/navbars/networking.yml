@@ -5,7 +5,7 @@ toc:
 - title: Networking
   path: /networking/
 - title: Determine best networking option
-  path: /networking/
+  path: /networking/determine-best-networking
 - title: Configure networking
   section:
   - title: Configure BGP peers
@@ -63,4 +63,4 @@ toc:
   - title: Kuryr
     path: /networking/openstack/kuryr
   - title: Calico's interpretation of Neutron API calls
-    path: /networking/openstack/neutron-api 
+    path: /networking/openstack/neutron-api
