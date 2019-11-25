@@ -84,7 +84,7 @@ static CALI_BPF_INLINE bool cali_ip_set_lookup(uint64_t ip_set_id, __be32 addr) 
 
 #define RULE_MATCH_IP_SET(id, negate, saddr_or_daddr, ip_set_id) do { \
 		CALI_DEBUG("  look up " #saddr_or_daddr " (%x) in IP set " #ip_set_id "\n", be32_to_host(saddr_or_daddr)); \
-		bool match = cali_ip_set_lookup(id, saddr_or_daddr); \
+		bool match = cali_ip_set_lookup((ip_set_id), (saddr_or_daddr)); \
 		RULE_MATCH(id, match, negate); \
 	} while (false)
 
