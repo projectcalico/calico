@@ -3,6 +3,7 @@ $(document).ready(function() {
   var codeToolbarClass = `code-snippet-toolbar`;
   var copyButtonClass = `${codeToolbarClass}__copy-button`;
   var downloadButtonClass = `${codeToolbarClass}__download-button`;
+  var codeToolbarVisibleClass = `${codeToolbarClass}--visible`;
 
   $('pre.highlight').each(function(i) {
     if (!$(this).parents().hasClass('no-select-button')) {
@@ -66,7 +67,7 @@ $(document).ready(function() {
       copyButton.setAttribute('type', 'btn');
       copyButton.setAttribute('class', copyButtonClass);
       copyButton.setAttribute('data-clipboard-target', '#' + currentCodeSectionId);
-      copyButton.innerHTML = '<i class="glyphicon glyphicon-copy" data-toggle="tooltip" data-placement="bottom" title="Copy"></i>';
+      copyButton.innerHTML = '<i class="glyphicon glyphicon-duplicate" data-toggle="tooltip" data-placement="bottom" title="Copy"></i>';
 
       var downloadButton = document.createElement('a');
       downloadButton.setAttribute('type', 'btn');
@@ -84,6 +85,8 @@ $(document).ready(function() {
       toolbarDiv.appendChild(downloadButton);
       toolbarDiv.appendChild(copyButton);
       this.insertBefore(toolbarDiv, this.firstChild);
+      this.onmouseover = e => toolbarDiv.classList.add(codeToolbarVisibleClass);
+      this.onmouseout = e => toolbarDiv.classList.remove(codeToolbarVisibleClass);
     }
   });
 
