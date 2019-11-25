@@ -85,8 +85,12 @@ $(document).ready(function() {
       toolbarDiv.appendChild(downloadButton);
       toolbarDiv.appendChild(copyButton);
       this.insertBefore(toolbarDiv, this.firstChild);
-      this.onmouseover = e => toolbarDiv.classList.add(codeToolbarVisibleClass);
-      this.onmouseout = e => toolbarDiv.classList.remove(codeToolbarVisibleClass);
+      this.onmouseover = function() {
+        toolbarDiv.classList.add(codeToolbarVisibleClass);
+      }
+      this.onmouseout = function() {
+        toolbarDiv.classList.remove(codeToolbarVisibleClass);
+      }
     }
   });
 
