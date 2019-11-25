@@ -1,103 +1,51 @@
-# Shortcut targets
-default: build
-
-## Build binary for current platform
-all: build
-
-## Run the tests for the current platform/architecture
-test: fv st
+PACKAGE_NAME?=github.com/projectcalico/node
+GO_BUILD_VER?=v0.27
 
 ###############################################################################
-# Both native and cross architecture builds are supported.
-# The target architecture is select by setting the ARCH variable.
-# When ARCH is undefined it is set to the detected host architecture.
-# When ARCH differs from the host architecture a crossbuild will be performed.
-ARCHES=$(patsubst Dockerfile.%,%,$(wildcard Dockerfile.*))
+# Download and include Makefile.common
+#   Additions to EXTRA_DOCKER_ARGS need to happen before the include since
+#   that variable is evaluated when we declare DOCKER_RUN and siblings.
+###############################################################################
+MAKE_BRANCH?=$(GO_BUILD_VER)
+MAKE_REPO?=https://raw.githubusercontent.com/projectcalico/go-build/$(MAKE_BRANCH)
+WGET?=/usr/bin/wget
 
-# BUILDARCH is the host architecture
-# ARCH is the target architecture
-# we need to keep track of them separately
-BUILDARCH ?= $(shell uname -m)
-BUILDOS ?= $(shell uname -s | tr A-Z a-z)
+Makefile.common: Makefile.common.$(MAKE_BRANCH)
+	cp "$<" "$@"
+Makefile.common.$(MAKE_BRANCH): $(WGET)
+	# Clean up any files downloaded from other branches so they don't accumulate.
+	rm -f Makefile.common.*
+	$(WGET) -nv $(MAKE_REPO)/Makefile.common -O "$@"
 
-# canonicalized names for host architecture
-ifeq ($(BUILDARCH),aarch64)
-	BUILDARCH=arm64
-endif
-ifeq ($(BUILDARCH),x86_64)
-	BUILDARCH=amd64
-endif
+# Build mounts for running in "local build" mode. This allows an easy build using local development code,
+# assuming that there is a local checkout of libcalico in the same directory as this repo.
+ifdef LOCAL_BUILD
+PHONY: set-up-local-build
+LOCAL_BUILD_DEP:=set-up-local-build
 
-# unless otherwise set, I am building for my own architecture, i.e. not cross-compiling
-ARCH ?= $(BUILDARCH)
+EXTRA_DOCKER_ARGS+=-v $(CURDIR)/../libcalico-go:/go/src/github.com/projectcalico/libcalico-go:rw \
+	-v $(CURDIR)/../felix:/go/src/github.com/projectcalico/felix:rw \
+	-v $(CURDIR)/../typha:/go/src/github.com/projectcalico/typha:rw \
+	-v $(CURDIR)/../confd:/go/src/github.com/projectcalico/confd:rw
 
-# canonicalized names for target architecture
-ifeq ($(ARCH),aarch64)
-	override ARCH=arm64
-endif
-ifeq ($(ARCH),x86_64)
-	override ARCH=amd64
-endif
-
-# we want to be able to run the same recipe on multiple targets keyed on the image name
-# to do that, we would use the entire image name, e.g. calico/node:abcdefg, as the stem, or '%', in the target
-# however, make does **not** allow the usage of invalid filename characters - like / and : - in a stem, and thus errors out
-# to get around that, we "escape" those characters by converting all : to --- and all / to ___ , so that we can use them
-# in the target, we then unescape them back
-escapefs = $(subst :,---,$(subst /,___,$(1)))
-unescapefs = $(subst ---,:,$(subst ___,/,$(1)))
-
-# these macros create a list of valid architectures for pushing manifests
-space :=
-space +=
-comma := ,
-prefix_linux = $(addprefix linux/,$(strip $1))
-join_platforms = $(subst $(space),$(comma),$(call prefix_linux,$(strip $1)))
-
-# Targets used when cross building.
-.PHONY: register
-# Enable binfmt adding support for miscellaneous binary formats.
-# This is only needed when running non-native binaries.
-register:
-ifneq ($(BUILDARCH),$(ARCH))
-	docker run --rm --privileged multiarch/qemu-user-static:register || true
+$(LOCAL_BUILD_DEP):
+	$(DOCKER_RUN) $(CALICO_BUILD) go mod edit -replace=github.com/projectcalico/libcalico-go=../libcalico-go \
+		-replace=github.com/projectcalico/felix=../felix \
+		-replace=github.com/projectcalico/typha=../typha \
+		-replace=github.com/kelseyhightower/confd=../confd
 endif
 
-# list of arches *not* to build when doing *-all
-#    until s390x works correctly
-EXCLUDEARCH ?= s390x
-VALIDARCHES = $(filter-out $(EXCLUDEARCH),$(ARCHES))
+include Makefile.common
 
 ###############################################################################
+
 BUILD_IMAGE?=calico/node
 PUSH_IMAGES?=$(BUILD_IMAGE) quay.io/calico/node
 RELEASE_IMAGES?=gcr.io/projectcalico-org/node eu.gcr.io/projectcalico-org/node asia.gcr.io/projectcalico-org/node us.gcr.io/projectcalico-org/node
 
-# If this is a release, also tag and push additional images.
-ifeq ($(RELEASE),true)
-PUSH_IMAGES+=$(RELEASE_IMAGES)
-endif
-
-# remove from the list to push to manifest any registries that do not support multi-arch
-EXCLUDE_MANIFEST_REGISTRIES ?= quay.io/
-PUSH_MANIFEST_IMAGES=$(PUSH_IMAGES:$(EXCLUDE_MANIFEST_REGISTRIES)%=)
-PUSH_NONMANIFEST_IMAGES=$(filter-out $(PUSH_MANIFEST_IMAGES),$(PUSH_IMAGES))
-
-GO_BUILD_VER?=v0.24
-CALICO_BUILD?=calico/go-build:$(GO_BUILD_VER)
-
-# location of docker credentials to push manifests
-DOCKER_CONFIG ?= $(HOME)/.docker/config.json
-
-# Version of this repository as reported by git.
-CALICO_GIT_VER := $(shell git describe --tags --dirty --always)
-ifeq ($(LOCAL_BUILD),true)
-	CALICO_GIT_VER = $(shell git describe --tags --dirty --always)-dev-build
-endif
-
 # Versions and location of dependencies used in the build.
-BIRD_VER?=v0.3.3-145-g049d13dc
-BIRD_IMAGE ?= calico/bird:$(BIRD_VER)-$(ARCH)
+BIRD_VERSION=v0.3.3-145-g049d13dc
+BIRD_IMAGE ?= calico/bird:$(BIRD_VERSION)-$(ARCH)
 
 # Versions and locations of dependencies used in tests.
 CALICOCTL_VER?=master
@@ -105,14 +53,12 @@ CNI_VER?=master
 TEST_CONTAINER_NAME_VER?=latest
 CTL_CONTAINER_NAME?=calico/ctl:$(CALICOCTL_VER)-$(ARCH)
 TEST_CONTAINER_NAME?=calico/test:$(TEST_CONTAINER_NAME_VER)-$(ARCH)
-ETCD_VERSION?=v3.3.7
 # If building on amd64 omit the arch in the container name.  Fixme!
 ETCD_IMAGE?=quay.io/coreos/etcd:$(ETCD_VERSION)
 ifneq ($(BUILDARCH),amd64)
 	ETCD_IMAGE=$(ETCD_IMAGE)-$(ARCH)
 endif
 
-K8S_VERSION?=v1.14.1
 HYPERKUBE_IMAGE?=gcr.io/google_containers/hyperkube-$(ARCH):$(K8S_VERSION)
 TEST_CONTAINER_FILES=$(shell find tests/ -type f ! -name '*.created')
 
@@ -129,80 +75,19 @@ K8ST_TO_RUN?=tests/
 ST_OPTIONS?=
 
 # Variables for building the local binaries that go into the image
-MAKE_SURE_BIN_EXIST := $(shell mkdir -p dist .go-pkg-cache $(NODE_CONTAINER_BIN_DIR))
+MAKE_SURE_BIN_EXIST := $(shell mkdir -p dist $(NODE_CONTAINER_BIN_DIR))
 NODE_CONTAINER_FILES=$(shell find ./filesystem -type f)
-LOCAL_USER_ID?=$(shell id -u $$USER)
 
 # Calculate a timestamp for any build artefacts.
 DATE:=$(shell date -u +'%FT%T%z')
 
-# Figure out version information.  To support builds from release tarballs, we default to
-# <unknown> if this isn't a git checkout.
-GIT_COMMIT:=$(shell git rev-parse HEAD || echo '<unknown>')
-GIT_DESCRIPTION:=$(shell git describe --tags --dirty --always || echo '<unknown>')
-ifeq ($(LOCAL_BUILD),true)
-	GIT_DESCRIPTION = $(shell git describe --tags --dirty --always || echo '<unknown>')-dev-build
-endif
-
 LDFLAGS=-ldflags "\
-	-X $(PACKAGE_NAME)/pkg/startup.VERSION=$(CALICO_GIT_VER) \
+	-X $(PACKAGE_NAME)/pkg/startup.VERSION=$(GIT_VERSION) \
 	-X $(PACKAGE_NAME)/buildinfo.GitVersion=$(GIT_DESCRIPTION) \
 	-X $(PACKAGE_NAME)/buildinfo.BuildDate=$(DATE) \
 	-X $(PACKAGE_NAME)/buildinfo.GitRevision=$(GIT_COMMIT)"
 
-PACKAGE_NAME?=github.com/projectcalico/node
-
 SRC_FILES=$(shell find ./pkg -name '*.go')
-
-# Volume-mount gopath into the build container to cache go module's packages. If the environment is using multiple
-# comma-separated directories for gopath, use the first one, as that is the default one used by go modules.
-ifneq ($(GOPATH),)
-	# If the environment is using multiple comma-separated directories for gopath, use the first one, as that
-	# is the default one used by go modules.
-	GOMOD_CACHE = $(shell echo $(GOPATH) | cut -d':' -f1)/pkg/mod
-else
-	# If gopath is empty, default to $(HOME)/go.
-	GOMOD_CACHE = $(HOME)/go/pkg/mod
-endif
-
-EXTRA_DOCKER_ARGS	+= -e GO111MODULE=on -v $(GOMOD_CACHE):/go/pkg/mod:rw
-
-# Build mounts for running in "local build" mode. This allows an easy build using local development code,
-# assuming that there is a local checkout of libcalico in the same directory as this repo.
-PHONY:local_build
-
-ifdef LOCAL_BUILD
-EXTRA_DOCKER_ARGS+=-v $(CURDIR)/../libcalico-go:/go/src/github.com/projectcalico/libcalico-go:rw \
-	-v $(CURDIR)/../felix:/go/src/github.com/projectcalico/felix:rw \
-	-v $(CURDIR)/../typha:/go/src/github.com/projectcalico/typha:rw \
-	-v $(CURDIR)/../confd:/go/src/github.com/projectcalico/confd:rw
-local_build:
-	$(DOCKER_RUN) $(CALICO_BUILD) go mod edit -replace=github.com/projectcalico/libcalico-go=../libcalico-go
-	$(DOCKER_RUN) $(CALICO_BUILD) go mod edit -replace=github.com/projectcalico/felix=../felix
-	$(DOCKER_RUN) $(CALICO_BUILD) go mod edit -replace=github.com/projectcalico/typha=../typha
-	$(DOCKER_RUN) $(CALICO_BUILD) go mod edit -replace=github.com/kelseyhightower/confd=../confd
-else
-local_build:
-	@echo "Building node"
-endif
-
-DOCKER_RUN := mkdir -p .go-pkg-cache $(GOMOD_CACHE) && \
-	docker run --rm \
-		--net=host \
-		$(EXTRA_DOCKER_ARGS) \
-		-e LOCAL_USER_ID=$(LOCAL_USER_ID) \
-		-e GOCACHE=/go-cache \
-		-e GOARCH=$(ARCH) \
-		-e GOPATH=/go \
-		-v $(CURDIR):/go/src/$(PACKAGE_NAME):rw \
-		-v $(CURDIR)/.go-pkg-cache:/go-cache:rw \
-		-w /go/src/$(PACKAGE_NAME)
-
-# If local build is set, then always build the binary since we might not
-# detect when another local repository has been modified.
-ifeq ($(LOCAL_BUILD),true)
-.PHONY: $(SRC_FILES)
-endif
 
 ## Clean enough that a new release build will be clean
 clean:
@@ -220,99 +105,24 @@ clean:
 ###############################################################################
 # Updating pins
 ###############################################################################
-PIN_BRANCH?=$(shell git rev-parse --abbrev-ref HEAD)
-
-define get_remote_version
-	$(shell git ls-remote http://$(1) $(2) 2>/dev/null | cut -f 1)
-endef
-
-# update_pin updates the given package's version to the latest available in the specified repo and branch.
-# $(1) should be the name of the package, $(2) and $(3) the repository and branch from which to update it.
-define update_pin
-	$(eval new_ver := $(call get_remote_version,$(2),$(3)))
-
-	$(DOCKER_RUN) -i $(CALICO_BUILD) sh -c '\
-		if [ ! -z "$(new_ver)" ]; then \
-			go get $(1)@$(new_ver); \
-			go mod download; \
-		fi'
-endef
-
-# update_replace_pin updates the given package's version to the latest available in the specified repo and branch.
-# This routine can only be used for packages being replaced in go.mod, such as private versions of open-source packages.
-# $(1) should be the name of the package, $(2) and $(3) the repository and branch from which to update it.
-define update_replace_pin
-	$(eval new_ver := $(call get_remote_version,$(2),$(3)))
-
-	$(DOCKER_RUN) -i $(CALICO_BUILD) sh -c '\
-		if [ ! -z "$(new_ver)" ]; then \
-			go mod edit -replace $(1)=$(2)@$(new_ver); \
-			go mod download; \
-		fi'
-endef
-
-FELIX_BRANCH?=$(PIN_BRANCH)
-FELIX_REPO?=github.com/projectcalico/felix
-CONFD_BRANCH?=$(PIN_BRANCH)
-CONFD_REPO?=github.com/projectcalico/confd
-LIBCALICO_BRANCH?=$(PIN_BRANCH)
-LIBCALICO_REPO?=github.com/projectcalico/libcalico-go
-
-update-felix-pin:
-	$(call update_pin,github.com/projectcalico/felix,$(FELIX_REPO),$(FELIX_BRANCH))
-
-update-confd-pin:
-	$(call update_replace_pin,github.com/kelseyhightower/confd,$(CONFD_REPO),$(CONFD_BRANCH))
-
-update-libcalico-pin:
-	$(call update_pin,github.com/projectcalico/libcalico-go,$(LIBCALICO_REPO),$(LIBCALICO_BRANCH))
-
-git-status:
-	git status --porcelain
-
-git-config:
-ifdef CONFIRM
-	git config --global user.name "Semaphore Automatic Update"
-	git config --global user.email "marvin@tigera.io"
-endif
-
-git-commit:
-	git diff --quiet HEAD || git commit -m "Semaphore Automatic Update" go.mod go.sum
-
-git-push:
-	git push
-
 update-pins: update-libcalico-pin update-felix-pin update-confd-pin
-
-commit-pin-updates: update-pins git-status ci git-config git-commit git-push
 
 ###############################################################################
 # Building the binary
 ###############################################################################
 build:  $(NODE_CONTAINER_BINARY)
 
-remote-deps:
+remote-deps: mod-download
 	mkdir -p filesystem/etc/calico/confd
 	$(DOCKER_RUN) $(CALICO_BUILD) sh -c ' \
-	go mod download; \
-	cp -r `go list -m -f "{{.Dir}}" github.com/kelseyhightower/confd`/etc/calico/confd/conf.d filesystem/etc/calico/confd/conf.d; \
-	cp -r `go list -m -f "{{.Dir}}" github.com/kelseyhightower/confd`/etc/calico/confd/config filesystem/etc/calico/confd/config; \
-	cp -r `go list -m -f "{{.Dir}}" github.com/kelseyhightower/confd`/etc/calico/confd/templates filesystem/etc/calico/confd/templates; \
-	cp `go list -m -f "{{.Dir}}" github.com/projectcalico/libcalico-go`/test/crds.yaml crds.yaml; \
-	chmod -R +w filesystem/etc/calico/confd/ crds.yaml'
+		cp -r `go list -m -f "{{.Dir}}" github.com/kelseyhightower/confd`/etc/calico/confd/conf.d filesystem/etc/calico/confd/conf.d; \
+		cp -r `go list -m -f "{{.Dir}}" github.com/kelseyhightower/confd`/etc/calico/confd/config filesystem/etc/calico/confd/config; \
+		cp -r `go list -m -f "{{.Dir}}" github.com/kelseyhightower/confd`/etc/calico/confd/templates filesystem/etc/calico/confd/templates; \
+		cp `go list -m -f "{{.Dir}}" github.com/projectcalico/libcalico-go`/test/crds.yaml crds.yaml; \
+		chmod -R +w filesystem/etc/calico/confd/ crds.yaml'
 
-$(NODE_CONTAINER_BINARY): local_build $(SRC_FILES)
-	mkdir -p .go-pkg-cache $(GOMOD_CACHE)
-	docker run --rm \
-		$(EXTRA_DOCKER_ARGS) \
-		-e GOARCH=$(ARCH) \
-		-e GOOS=linux \
-		-e LOCAL_USER_ID=$(LOCAL_USER_ID) \
-		-v $(CURDIR)/.go-pkg-cache:/go-cache/:rw \
-		-e GOCACHE=/go-cache \
-		-v $(CURDIR):/go/src/$(PACKAGE_NAME) \
-		-w /go/src/$(PACKAGE_NAME) \
-		$(CALICO_BUILD) go build -v -o $@ $(BUILD_FLAGS) $(LDFLAGS) ./cmd/calico-node/main.go
+$(NODE_CONTAINER_BINARY): $(LOCAL_BUILD_DEP) $(SRC_FILES)
+	$(DOCKER_RUN) $(CALICO_BUILD) go build -v -o $@ $(BUILD_FLAGS) $(LDFLAGS) ./cmd/calico-node/main.go
 
 ###############################################################################
 # Building the image
@@ -337,75 +147,8 @@ endif
 	docker run --rm -v $(CURDIR)/dist/bin:/go/bin:rw $(CALICO_BUILD) /bin/sh -c "\
 	  echo; echo calico-node-$(ARCH) -v;	 /go/bin/calico-node-$(ARCH) -v; \
 	"
-	docker build --pull -t $(BUILD_IMAGE):latest-$(ARCH) . --build-arg BIRD_IMAGE=$(BIRD_IMAGE) --build-arg QEMU_IMAGE=$(CALICO_BUILD) --build-arg GIT_VERSION=$(CALICO_GIT_VER) -f ./Dockerfile.$(ARCH)
+	docker build --pull -t $(BUILD_IMAGE):latest-$(ARCH) . --build-arg BIRD_IMAGE=$(BIRD_IMAGE) --build-arg QEMU_IMAGE=$(CALICO_BUILD) --build-arg GIT_VERSION=$(GIT_VERSION) -f ./Dockerfile.$(ARCH)
 	touch $@
-
-# ensure we have a real imagetag
-imagetag:
-ifndef IMAGETAG
-	$(error IMAGETAG is undefined - run using make <target> IMAGETAG=X.Y.Z)
-endif
-
-## push one arch
-push: imagetag $(addprefix sub-single-push-,$(call escapefs,$(PUSH_IMAGES)))
-
-sub-single-push-%:
-	docker push $(call unescapefs,$*:$(IMAGETAG)-$(ARCH))
-
-## push all supported arches
-push-all: imagetag $(addprefix sub-push-,$(VALIDARCHES))
-sub-push-%:
-	$(MAKE) push ARCH=$* IMAGETAG=$(IMAGETAG)
-
-## push multi-arch manifest where supported
-push-manifests: imagetag  $(addprefix sub-manifest-,$(call escapefs,$(PUSH_MANIFEST_IMAGES)))
-sub-manifest-%:
-	# Docker login to hub.docker.com required before running this target as we are using $(DOCKER_CONFIG) holds the docker login credentials
-	# path to credentials based on manifest-tool's requirements here https://github.com/estesp/manifest-tool#sample-usage
-	docker run -t --entrypoint /bin/sh -v $(DOCKER_CONFIG):/root/.docker/config.json $(CALICO_BUILD) -c "/usr/bin/manifest-tool push from-args --platforms $(call join_platforms,$(VALIDARCHES)) --template $(call unescapefs,$*:$(IMAGETAG))-ARCH --target $(call unescapefs,$*:$(IMAGETAG))"
-
-## push default amd64 arch where multi-arch manifest is not supported
-push-non-manifests: imagetag $(addprefix sub-non-manifest-,$(call escapefs,$(PUSH_NONMANIFEST_IMAGES)))
-sub-non-manifest-%:
-ifeq ($(ARCH),amd64)
-	docker push $(call unescapefs,$*:$(IMAGETAG))
-else
-	$(NOECHO) $(NOOP)
-endif
-
-## tag images of one arch for all supported registries
-tag-images: imagetag $(addprefix sub-single-tag-images-arch-,$(call escapefs,$(PUSH_IMAGES))) $(addprefix sub-single-tag-images-non-manifest-,$(call escapefs,$(PUSH_NONMANIFEST_IMAGES)))
-
-sub-single-tag-images-arch-%:
-	docker tag $(BUILD_IMAGE):latest-$(ARCH) $(call unescapefs,$*:$(IMAGETAG)-$(ARCH))
-
-# because some still do not support multi-arch manifest
-sub-single-tag-images-non-manifest-%:
-ifeq ($(ARCH),amd64)
-	docker tag $(BUILD_IMAGE):latest-$(ARCH) $(call unescapefs,$*:$(IMAGETAG))
-else
-	$(NOECHO) $(NOOP)
-endif
-
-## tag images of all archs
-tag-images-all: imagetag $(addprefix sub-tag-images-,$(VALIDARCHES))
-sub-tag-images-%:
-	$(MAKE) tag-images ARCH=$* IMAGETAG=$(IMAGETAG)
-
-###############################################################################
-# Static checks
-###############################################################################
-.PHONY: static-checks
-LINT_ARGS := --deadline 5m --max-issues-per-linter 0 --max-same-issues 0
-static-checks:
-	$(DOCKER_RUN) $(CALICO_BUILD) golangci-lint run $(LINT_ARGS)
-
-.PHONY: fix
-fix:
-	goimports -w $(SRC_FILES)
-
-foss-checks:
-	  $(DOCKER_RUN) -e FOSSA_API_KEY=$(FOSSA_API_KEY) $(CALICO_BUILD) /usr/local/bin/fossa
 
 ###############################################################################
 # FV Tests
@@ -473,6 +216,9 @@ run-k8s-apiserver: remote-deps stop-k8s-apiserver run-etcd
 # Stop Kubernetes apiserver
 stop-k8s-apiserver:
 	@-docker rm -f st-apiserver
+
+ut:
+	@echo "No UTs available"
 
 ###############################################################################
 # System tests
@@ -625,10 +371,6 @@ st: remote-deps dist/calicoctl busybox.tar calico-node.tar workload.tar run-etcd
 ###############################################################################
 # CI/CD
 ###############################################################################
-.PHONY: mod-download
-mod-download:
-	-$(DOCKER_RUN) $(CALICO_BUILD) go mod download
-
 .PHONY: ci
 ci: mod-download static-checks fv image-all st
 
@@ -646,7 +388,6 @@ endif
 ###############################################################################
 # Release
 ###############################################################################
-GIT_VERSION?=$(shell git describe --tags --dirty)
 PREVIOUS_RELEASE=$(shell git describe --tags --abbrev=0)
 
 ## Tags and builds a release from start to finish.
@@ -738,28 +479,11 @@ endif
 ###############################################################################
 # Utilities
 ###############################################################################
-.PHONY: help
-## Display this help text
-help: # Some kind of magic from https://gist.github.com/rcmachado/af3db315e31383502660
-	$(info Available targets)
-	@awk '/^[a-zA-Z\-\_0-9\/]+:/ {				      \
-		nb = sub( /^## /, "", helpMsg );				\
-		if(nb == 0) {						   \
-			helpMsg = $$0;					      \
-			nb = sub( /^[^:]*:.* ## /, "", helpMsg );		   \
-		}							       \
-		if (nb)							 \
-			printf "\033[1;31m%-" width "s\033[0m %s\n", $$1, helpMsg;  \
-	}								   \
-	{ helpMsg = $$0 }'						  \
-	width=20							    \
-	$(MAKEFILE_LIST)
-
 $(info "Build dependency versions")
-$(info $(shell printf "%-21s = %-10s\n" "BIRD_VER" $(BIRD_VER)))
+$(info $(shell printf "%-21s = %-10s\n" "BIRD_VERSION" $(BIRD_VERSION)))
 
 $(info "Test dependency versions")
 $(info $(shell printf "%-21s = %-10s\n" "CNI_VER" $(CNI_VER)))
 
 $(info "Calico git version")
-$(info $(shell printf "%-21s = %-10s\n" "CALICO_GIT_VER" $(CALICO_GIT_VER)))
+$(info $(shell printf "%-21s = %-10s\n" "GIT_VERSION" $(GIT_VERSION)))
