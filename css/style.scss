@@ -251,6 +251,12 @@ input.gsc-input, .gsc-input-box, .gsc-input-box-hover, .gsc-input-box-focus, .gs
     .toc-container {
       display: block;
     }
+
+    &.no-toc {
+      grid-template-columns:
+        [sidebar] minmax($sidebars-min-width, $sidebars-max-width)
+        [article] minmax(calc(#{$screen-md-min} - #{$sidebars-min-width } - #{$grid-column-gap}), 1fr);
+    }
   }
 }
 
