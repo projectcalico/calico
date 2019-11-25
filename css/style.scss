@@ -276,3 +276,7 @@ $sticky-top: $wpfront-notification-bar-spacer-height + $navbar-margin-bottom;
     }
   }
 }
+
+.breadcrumbs {
+  text-transform: uppercase;
+}
