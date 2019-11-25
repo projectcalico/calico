@@ -56,5 +56,3 @@ filter calico_kernel_programming {
 {{end}}{{/* End of 'exists $network_key' */}}
   accept;                                  {{- /* Destination is not in any ipPool, accept  */}}
 }
-{{else}}
-filter calico_kernel_programming { accept; }
