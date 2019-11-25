@@ -29,6 +29,10 @@
 #define CALI_HOST_IPS_IP_SET_ID 0
 #endif
 
+#ifndef CALI_DROP_WORKLOAD_TO_HOST
+#define CALI_DROP_WORKLOAD_TO_HOST false
+#endif
+
 enum calico_policy_result {
 	CALI_POL_NO_MATCH,
 	CALI_POL_ALLOW,
@@ -370,6 +374,13 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb, enum calico_tc_flags
 			goto deny;
 		case CALI_POL_ALLOW:
 			CALI_DEBUG("Allowed by normal policy: ACCEPT\n");
+		}
+
+		if (CALI_TC_FLAGS_FROM_WORKLOAD(flags) &&
+				CALI_DROP_WORKLOAD_TO_HOST &&
+				cali_ip_set_lookup(CALI_HOST_IPS_IP_SET_ID, ip_dst)) {
+			CALI_DEBUG("Workload to host traffic blocked by DefaultEndpointToHostAction: DROP\n");
+			goto deny;
 		}
 
 		struct ct_ctx ct_nat_ctx =  {

@@ -56,9 +56,16 @@ type bpfEndpointManager struct {
 	fibLookupEnabled bool
 	dataIfaceRegex   *regexp.Regexp
 	ipSetIDAlloc     *idalloc.IDAllocator
+	epToHostDrop     bool
 }
 
-func newBPFEndpointManager(bpfLogLevel string, fibLookupEnabled bool, dataIfaceRegex *regexp.Regexp, ipSetIDAlloc *idalloc.IDAllocator) *bpfEndpointManager {
+func newBPFEndpointManager(
+	bpfLogLevel string,
+	fibLookupEnabled bool,
+	epToHostDrop bool,
+	dataIfaceRegex *regexp.Regexp,
+	ipSetIDAlloc *idalloc.IDAllocator,
+) *bpfEndpointManager {
 	return &bpfEndpointManager{
 		wlEps:               map[proto.WorkloadEndpointID]*proto.WorkloadEndpoint{},
 		policies:            map[proto.PolicyID]*proto.Policy{},
@@ -72,6 +79,7 @@ func newBPFEndpointManager(bpfLogLevel string, fibLookupEnabled bool, dataIfaceR
 		fibLookupEnabled:    fibLookupEnabled,
 		dataIfaceRegex:      dataIfaceRegex,
 		ipSetIDAlloc:        ipSetIDAlloc,
+		epToHostDrop:        epToHostDrop,
 	}
 }
 
@@ -517,6 +525,7 @@ func (m *bpfEndpointManager) compileAndAttachProgram(allRules [][][]*proto.Rule,
 		CompileWithLogLevel(logLevel),
 		CompileWithLogPrefix(logPfx),
 		CompileWithHostIPSetID(SpecialIPSetIDHostIPs),
+		CompileWithEndpointToHostDrop(m.epToHostDrop),
 	)
 	if err != nil {
 		return err
@@ -579,6 +588,13 @@ type compileTCOpts struct {
 
 func (o *compileTCOpts) appendExtraArg(a string) {
 	o.extraArgs = append(o.extraArgs, a)
+}
+
+// CompileWithEndpointToHostDrop sets whether workload-to-host traffic is dropped.
+func CompileWithEndpointToHostDrop(drop bool) CompileTCOption {
+	return func(opts *compileTCOpts) {
+		opts.appendExtraArg(fmt.Sprintf("-DCALI_DROP_WORKLOAD_TO_HOST=%v", drop))
+	}
 }
 
 // CompileWithFIBEnabled sets whether FIB lookup is allowed
@@ -676,7 +692,7 @@ func CompileTCProgramToFile(allRules [][][]*proto.Rule, ipSetIDAlloc *idalloc.ID
 		"-emit-llvm",
 		"-c", "-", "-o", "-",
 	}...)
-
+	log.WithField("args", args).Debug("About to run clang")
 	clang := exec.Command("clang", args...)
 	clang.Dir = compileOpts.dir
 	clangStdin, err := clang.StdinPipe()

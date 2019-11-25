@@ -460,7 +460,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 
 		// Forwarding into a tunnel seems to fail silently, disable FIB lookup if tunnel is enabled for now.
 		fibLookupEnabled := !config.RulesConfig.IPIPEnabled && !config.RulesConfig.VXLANEnabled
-		dp.RegisterManager(newBPFEndpointManager(config.BPFLogLevel, fibLookupEnabled, config.BPFDataIfacePattern, ipSetIDAllocator))
+		dp.RegisterManager(newBPFEndpointManager(config.BPFLogLevel, fibLookupEnabled, config.RulesConfig.EndpointToHostAction == "DROP", config.BPFDataIfacePattern, ipSetIDAllocator))
 
 		// Pre-create the NAT maps so that later operations can assume access.
 		frontendMap := nat.FrontendMap()
@@ -748,30 +748,46 @@ func (d *InternalDataplane) setUpIptablesBPF() {
 	// TODO Any BPF SNAT we need to do
 
 	for _, t := range d.iptablesFilterTables {
-		rules := []iptables.Rule{
+		fwdRules := []iptables.Rule{
 			{
 				// TODO Make "from workload" mark configurable
 				Match:  iptables.Match().MarkMatchesWithMask(0xca100000, 0xfffe0000),
 				Action: iptables.AcceptAction{},
 			},
 		}
+		var inputRules []iptables.Rule
 		for _, prefix := range d.config.RulesConfig.WorkloadIfacePrefixes {
-			rules = append(rules,
+			fwdRules = append(fwdRules,
 				iptables.Rule{
 					Match:   iptables.Match().InInterface(prefix + "+"),
 					Action:  iptables.DropAction{},
 					Comment: "From workload without BPF ACCEPT mark",
 				})
+
+			if d.config.RulesConfig.EndpointToHostAction == "ACCEPT" {
+				// Only need to worry about ACCEPT here.  Drop gets compiled into the BPF program and
+				// RETURN would be a no-op since there's nothing to RETURN from.
+				inputRules = append(inputRules, iptables.Rule{
+					Match:  iptables.Match().InInterface(prefix+"+").MarkMatchesWithMask(0xca100000, 0xfffe0000),
+					Action: iptables.AcceptAction{},
+				})
+			}
+			// Catch any workload to host packets that haven't been through the BPF program.
+			inputRules = append(inputRules, iptables.Rule{
+				Match:  iptables.Match().InInterface(prefix+"+").NotMarkMatchesWithMask(0xca100000, 0xfffe0000),
+				Action: iptables.DropAction{},
+			})
 		}
 		for _, prefix := range d.config.RulesConfig.WorkloadIfacePrefixes {
-			rules = append(rules,
-				iptables.Rule{
-					Match:   iptables.Match().OutInterface(prefix + "+"),
-					Action:  iptables.AcceptAction{},
-					Comment: "To workload, BPF will handle.",
-				})
+			// Make sure iptables rules don't drop packets that we're about to process through BPF.
+			fwdRules = append(fwdRules, iptables.Rule{
+				Match:   iptables.Match().OutInterface(prefix + "+"),
+				Action:  iptables.AcceptAction{},
+				Comment: "To workload, BPF will handle.",
+			})
 		}
-		t.SetRuleInsertions("FORWARD", rules)
+		t.SetRuleInsertions("INPUT", inputRules)
+		t.SetRuleInsertions("FORWARD", fwdRules)
 	}
 	for _, t := range d.iptablesNATTables {
 		t.UpdateChains(d.ruleRenderer.StaticNATPostroutingChains(t.IPVersion))
