@@ -237,16 +237,15 @@ input.gsc-input, .gsc-input-box, .gsc-input-box-hover, .gsc-input-box-focus, .gs
   }
 
   @media (min-width: $screen-sm-min) {
-    grid-template-columns: [sidebar] 30% [article] auto;
+    grid-template-columns: [sidebar] 20% [article] auto;
   }
 
   @media (min-width: $screen-md-min) {
-    $sidebars-min-width: 200px;
-    $sidebars-max-width: 300px;
+    $sidebars-width: 16%;
     grid-template-columns:
-      [sidebar] minmax($sidebars-min-width, $sidebars-max-width)
-      [article] minmax(calc(#{$screen-md-min} - #{$sidebars-min-width * 2} - #{$grid-column-gap * 2}), 1fr)
-      [toc] minmax($sidebars-min-width, $sidebars-max-width);
+      [sidebar] $sidebars-width
+      [article] calc(100% - #{$sidebars-width * 2} - #{$grid-column-gap * 2})
+      [toc] $sidebars-width;
 
     .toc-container {
       display: block;
@@ -254,8 +253,8 @@ input.gsc-input, .gsc-input-box, .gsc-input-box-hover, .gsc-input-box-focus, .gs
 
     &.no-toc {
       grid-template-columns:
-        [sidebar] minmax($sidebars-min-width, $sidebars-max-width)
-        [article] minmax(calc(#{$screen-md-min} - #{$sidebars-min-width } - #{$grid-column-gap}), 1fr);
+        [sidebar] $sidebars-width
+        [article] calc(100% - #{$sidebars-width} - #{$grid-column-gap});
     }
   }
 }
