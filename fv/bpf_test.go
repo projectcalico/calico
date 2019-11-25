@@ -248,11 +248,12 @@ func describeBPFTests(protocol string) bool {
 					cc.CheckConnectivity()
 				})
 
-				It("should not have connectivity from the hosts via a service to workload 0", func() {
+				It("should only have connectivity from from the local host via a service to workload 0", func() {
+					// Local host is always white-listed (for kubelet health checks).
 					ip := testSvc.Spec.ClusterIP
 					port := uint16(testSvc.Spec.Ports[0].Port)
 
-					cc.ExpectNone(felixes[0], workload.IP(ip), port)
+					cc.ExpectSome(felixes[0], workload.IP(ip), port)
 					cc.ExpectNone(felixes[1], workload.IP(ip), port)
 					cc.CheckConnectivity()
 				})
