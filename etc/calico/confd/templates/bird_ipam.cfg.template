@@ -32,7 +32,7 @@ filter calico_kernel_programming {
   {{- end}}
 
 {{- end}}
-{{if exists $network_key}}{{$network := getv $network_key}}
+{{- if exists $network_key}}{{$network := getv $network_key}}
 {{range ls "/v1/ipam/v4/pool"}}{{$data := json (getv (printf "/v1/ipam/v4/pool/%s" .))}}
   if ( net ~ {{$data.cidr}} ) then {
 {{- if $data.vxlan_mode}}
@@ -53,6 +53,6 @@ filter calico_kernel_programming {
     accept;
   } {{- end}}
 {{end}}
-{{end}}{{/* End of 'exists $network_key' */}}
+{{- end}}{{/* End of 'exists $network_key' */}}
   accept;                                  {{- /* Destination is not in any ipPool, accept  */}}
 }
