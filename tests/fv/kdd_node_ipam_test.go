@@ -54,9 +54,6 @@ var _ = Describe("kube-controllers FV tests (KDD mode)", func() {
 		controllerManager *containers.Container
 	)
 
-	const kNodeName = "k8snodename"
-	const cNodeName = "caliconodename"
-
 	BeforeEach(func() {
 		// Run etcd.
 		etcd = testutils.RunEtcd()

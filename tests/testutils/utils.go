@@ -1,4 +1,4 @@
-// Copyright (c) 2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017,2019 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -129,8 +129,8 @@ func GetK8sClient(kubeconfig string) (*kubernetes.Clientset, error) {
 }
 
 func Stop(c *containers.Container) {
+	var args = []string{"stop", c.Name}
 	log.WithField("container", c.Name).Info("Stopping container")
-	args := append([]string{"stop", c.Name})
 	cmd := exec.Command("docker", args...)
 	err := cmd.Run()
 	Expect(err).NotTo(HaveOccurred())
@@ -140,8 +140,8 @@ func Stop(c *containers.Container) {
 }
 
 func Start(c *containers.Container) {
+	var args = []string{"start", c.Name}
 	log.WithField("container", c.Name).Info("Starting container")
-	args := append([]string{"start", c.Name})
 	cmd := exec.Command("docker", args...)
 	err := cmd.Run()
 	Expect(err).NotTo(HaveOccurred())

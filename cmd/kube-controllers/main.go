@@ -16,6 +16,7 @@ package main
 
 import (
 	"context"
+	"crypto/tls"
 	"flag"
 	"fmt"
 	"net/http"
@@ -165,7 +166,7 @@ func main() {
 
 			flannelMigrationController := flannelmigration.NewFlannelMigrationController(ctx, k8sClientset, calicoClient, flannelConfig)
 			controllerCtrl.controllerStates["FlannelMigration"] = &controllerState{
-				controller:  flannelMigrationController,
+				controller: flannelMigrationController,
 			}
 		default:
 			log.Fatalf("Invalid controller '%s' provided.", controllerType)
@@ -333,11 +334,14 @@ func newEtcdV3Client() (*clientv3.Client, error) {
 		CertFile: config.Spec.EtcdCertFile,
 		KeyFile:  config.Spec.EtcdKeyFile,
 	}
-	tls, _ := tlsInfo.ClientConfig()
+	tlsClient, _ := tlsInfo.ClientConfig()
+
+	// go 1.13 defaults to TLS 1.3, which we don't support just yet
+	tlsClient.MaxVersion = tls.VersionTLS13
 
 	cfg := clientv3.Config{
 		Endpoints:   etcdLocation,
-		TLS:         tls,
+		TLS:         tlsClient,
 		DialTimeout: 10 * time.Second,
 	}
 
