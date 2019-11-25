@@ -261,6 +261,9 @@ input.gsc-input, .gsc-input-box, .gsc-input-box-hover, .gsc-input-box-focus, .gs
 
 $wpfront-notification-bar-spacer-height: 55px;
 $sticky-top: $wpfront-notification-bar-spacer-height + $navbar-margin-bottom;
+$header-height: 75px;
+$search-height: 50px;
+$max-sidebar-height: calc(100vh - #{$wpfront-notification-bar-spacer-height + $header-height + $navbar-margin-bottom + $search-height + $navbar-margin-bottom});
 
 .sidebar {
   position: -webkit-sticky;
@@ -268,7 +271,7 @@ $sticky-top: $wpfront-notification-bar-spacer-height + $navbar-margin-bottom;
   top: $sticky-top;
 
   #sidebar-accordion {
-    max-height: calc(100vh - 250px);
+    max-height: $max-sidebar-height;
 
     @media (min-width: $screen-sm-min) {
       overflow-y: auto;
@@ -282,7 +285,7 @@ $sticky-top: $wpfront-notification-bar-spacer-height + $navbar-margin-bottom;
   top: $sticky-top;
 
   .toc {
-    max-height: calc(100vh - 250px);
+    max-height: $max-sidebar-height;
 
     @media (min-width: $screen-md-min) {
       overflow-y: auto;
