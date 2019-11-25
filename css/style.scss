@@ -288,3 +288,9 @@ $sticky-top: $wpfront-notification-bar-spacer-height + $navbar-margin-bottom;
 .breadcrumbs {
   text-transform: uppercase;
 }
+
+.edit-page-link {
+  color: #999;
+  float: right;
+  padding: 8px 10px;
+}

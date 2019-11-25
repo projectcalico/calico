@@ -213,18 +213,18 @@ The code is a little roundabout for a few reasons:
           </div>
           <div class="article-container">
             <div id="content-main">
-              <p class="pull-left visible-xs">
+              <p class="visible-xs clearfix">
                 <button type="button" class="btn btn-primary btn-xs" data-toggle="offcanvas">Toggle nav</button>
               </p>
               <!-- TOP DOCUMENTATION PAGE NAVBAR -->
-              <div style="text-align: left; padding: 18px 0 9px 0; overflow-x: hidden;">
-                <a data-proofer-ignore href="https://github.com/projectcalico/calico/tree/master/{{page.path}}" style="color: #999; text-decoration: none; float: right;" target="_blank">
-                  <i class="fa fa-github" aria-hidden="true"></i>
-                  Edit this page
-                </a>
-              </div>
+              {% capture edit_page %}
+                  <a data-proofer-ignore href="https://github.com/projectcalico/calico/tree/master/{{page.path}}" class="edit-page-link" target="_blank">
+                    <i class="fa fa-github" aria-hidden="true"></i>
+                    Edit this page
+                  </a>
+              {% endcapture %}
               <!-- END TOP DOCUMENTATION PAGE NAVBAR -->
-              {% include nav-breadcrumbs.html %}
+              {% include nav-breadcrumbs.html content=edit_page %}
               {% include version_warning.html %}
               {% if page.show_title -%}
               <h1>{{ page.title }}</h1>
