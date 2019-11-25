@@ -28,4 +28,10 @@ $(document).ready(function(){
   $('[data-toggle="offcanvas"]').click(function () {
     $('.row-offcanvas').toggleClass('active')
   });
+
+  $('#sidebar .navbar-title--not-clickable').each(function() {
+    this.onclick = function() {
+      return false;
+    }
+  });
 });
