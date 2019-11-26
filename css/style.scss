@@ -291,6 +291,10 @@ $sticky-top: $wpfront-notification-bar-spacer-height + $navbar-margin-bottom;
   }
 }
 
+.navbar-right {
+  margin-right: 0;
+}
+
 .edit-page-link {
   color: #999;
   float: right;
