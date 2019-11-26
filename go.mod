@@ -22,7 +22,7 @@ require (
 	k8s.io/api v0.0.0-20191005115622-2e41325d9e4b
 	k8s.io/apimachinery v0.0.0-20191006235458-f9f2f3f8ab02
 	k8s.io/apiserver v0.0.0-20191008120233-c29386a6051d
-	k8s.io/client-go v12.0.0+incompatible
+	k8s.io/client-go v0.0.0-20191008115822-1210218b4a26
 	k8s.io/klog v1.0.0
 )
 
