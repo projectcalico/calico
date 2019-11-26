@@ -1,5 +1,5 @@
 ---
-title: Configuring systems for use with Calico
+title: Configure systems for use with Calico
 canonical_url: 'https://docs.projectcalico.org/v3.9/networking/openstack/configuration'
 ---
 
