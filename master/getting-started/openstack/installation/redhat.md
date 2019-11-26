@@ -49,6 +49,15 @@ These steps are detailed in this section.
     EOF
     ```
 
+1.  Edit `/etc/neutron/neutron.conf`.  Add a `[calico]` section with
+    the following content, where `<ip>` is the IP address of the etcd
+    server.
+
+    ```
+    [calico]
+    etcd_host = <ip>
+    ```
+
 ## Control node install
 
 On each control node, perform the following steps:
@@ -67,7 +76,7 @@ On each control node, perform the following steps:
     > left around.
     {: .alert .alert-danger}
 
-1.  Edit the `/etc/neutron/neutron.conf` file. In the `[DEFAULT]` section, find
+1.  Edit `/etc/neutron/neutron.conf`. In the `[DEFAULT]` section, find
     the line beginning with `core_plugin`, and change it to read `core_plugin =
     calico`.  Also remove any existing setting for `service_plugins`.
 
@@ -145,7 +154,7 @@ On each compute node, perform the following steps:
     yum install -y openstack-neutron
     ```
 
-1.  Modify `/etc/neutron/neutron.conf`.  In the `[oslo_concurrency]` section,
+1.  Edit `/etc/neutron/neutron.conf`.  In the `[oslo_concurrency]` section,
     ensure that the `lock_path` variable is uncommented and set as follows.
 
     ```
@@ -156,14 +165,6 @@ On each compute node, perform the following steps:
     lock_path = $state_path/lock
     ```
     {: .no-select-button}
-
-    Add a `[calico]` section with the following content, where `<ip>` is the IP
-    address of the etcd server.
-
-    ```
-    [calico]
-    etcd_host = <ip>
-    ```
 
 1.  Stop and disable the Neutron DHCP agent, and install the
     {{site.prodname}} DHCP agent (which uses etcd, allowing it to scale to higher
@@ -269,3 +270,5 @@ On each compute node, perform the following steps:
     ```
     service calico-felix restart
     ```
+
+{% include {{page.version}}/openstack-etcd-auth.md %}
