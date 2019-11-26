@@ -4,6 +4,8 @@ order: 2
 toc:
 - title: Networking
   path: /networking/
+- title: Determine best networking option
+  path: /networking/determine-best-networking  
 - title: Connecting workloads across networks that you do not control
   path: /networking/vxlan-ipip
 - title: Migrate from one IP pool to another
