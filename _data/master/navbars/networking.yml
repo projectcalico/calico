@@ -4,40 +4,28 @@ order: 2
 toc:
 - title: Networking
   path: /networking/
-
 - title: Determine best networking option
-  path: /networking/determine-best-networking
-  
+  path: /networking/determine-best-networking  
 - title: Connecting workloads across networks that you do not control
   path: /networking/vxlan-ipip
-
 - title: Migrate from one IP pool to another
   path: /networking/migrate-pools
-
 - title: Route reflectors
   path: /networking/routereflector
-
 - title: Configuring BGP peers
   path: /networking/bgp
-
 - title: Enable IPv6
   path: /networking/ipv6
-
 - title: Enabling IPVS in Kubernetes
   path: /networking/enabling-ipvs
-
 - title: External connectivity
   path: /networking/external-connectivity
-
 - title: Configuring a node IP address and subnet
   path: /networking/node
-
 - title: Configure MTU to maximize network performance
   path: /networking/mtu
-
 - title: Assign IP addresses based on topology
   path: /networking/assign-ip-addresses-topology
-
 - title: Calico networking for OpenStack
   section:
   - title: Setting up a development machine
