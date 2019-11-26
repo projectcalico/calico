@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"os/exec"
 	"strconv"
 	"strings"
 	"time"
@@ -46,18 +47,34 @@ func init() {
 	felixLivenessEp = "http://localhost:" + felixPort + "/liveness"
 }
 
-func Run(bird, bird6, felixReady, felixLive bool, thresholdTime time.Duration) {
+func Run(bird, bird6, felixReady, felixLive, birdLive, bird6Live bool, thresholdTime time.Duration) {
+	livenessChecks := felixLive || birdLive  || bird6Live
+	readinessChecks := bird || felixReady || bird6
+
+	if !livenessChecks && !readinessChecks {
+		fmt.Printf("calico/node check error: must specify at least one of -bird-live, -bird6-live, -felix-live, -bird, -bird6, or -felix")
+		os.Exit(1)
+	}
+
 	if felixLive {
 		if err := checkFelixHealth(felixLivenessEp, "liveness"); err != nil {
 			fmt.Printf("calico/node is not ready: Felix is not live: %+v", err)
 			os.Exit(1)
 		}
-		os.Exit(0)
 	}
 
-	if !bird && !felixReady && !bird6 {
-		fmt.Printf("calico/node readiness check error: must specify at least one of -bird, -bird6, or -felix")
-		os.Exit(1)
+	if birdLive {
+		if err := checkServiceIsLive([]string{"confd", "bird"}); err != nil {
+			fmt.Printf("calico/node is not ready: bird/confd is not live: %+v", err)
+			os.Exit(1)
+		}
+	}
+
+	if bird6Live {
+		if err := checkServiceIsLive([]string{"confd", "bird6"}); err != nil {
+			fmt.Printf("calico/node is not ready: bird6/confd is not live: %+v", err)
+			os.Exit(1)
+		}
 	}
 
 	if felixReady {
@@ -80,6 +97,31 @@ func Run(bird, bird6, felixReady, felixLive bool, thresholdTime time.Duration) {
 			os.Exit(1)
 		}
 	}
+}
+
+func checkServiceIsLive(services []string) error {
+	for _, service := range services {
+		err := checkService(service)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func checkService(serviceName string) error {
+	out, err := exec.Command("sv", "status", fmt.Sprintf("/etc/service/enabled/%s", serviceName)).Output()
+	if err != nil {
+		return err
+	}
+
+	var cmdOutput = string(out)
+	if !strings.HasPrefix(cmdOutput, "run") {
+		return fmt.Errorf(fmt.Sprintf("Service %s is not running. Output << %s >>", serviceName, strings.Trim(cmdOutput, "\n")))
+	}
+
+	return nil
 }
 
 // checkBIRDReady checks if BIRD is ready by connecting to the BIRD
