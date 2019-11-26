@@ -5,14 +5,16 @@
     {% if page_path == current_page_path %}
         <div class="section-index">
                 {% for nested_item in item.section %}
+                    {% capture url %}{{ site.baseurl }}/{{ page.version }}{{ nested_item.path }}{% endcapture %}
                     <div class="section-index__item">
                         <h4>
-                            <a href="{{ site.baseurl }}/{{ page.version }}{{ nested_item.path }}">
+                            <a href="{{ url }}">
                                 {{ nested_item.title }}
                             </a>
                         </h4>
                         <p>
-                            {{ nested_item.description }}
+                            {% assign p = site.pages | where: 'url', url | first %}
+                            {{ p.description | default p.Description | default nested_item.description | default "no description" }}
                         </p>
                     </div>
                 {% endfor %}
