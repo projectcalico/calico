@@ -1,6 +1,6 @@
 ---
 title: Upgrading Calico on OpenStack
-canonical_url: 'https://docs.projectcalico.org/v3.9/maintenance/openstack-upgrade'
+canonical_url: 'https://docs.projectcalico.org/v3.9/maintenance/upgrade/openstack-upgrade'
 ---
 
 ## {{site.prodname}} package update
