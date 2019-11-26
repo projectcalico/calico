@@ -145,7 +145,11 @@ toc:
   - title: Data path
     path: /reference/architecture/data-path
   - title: Network design
-    path: /networking/design/l2-interconnect-fabric  
+    section: 
+      - title: Calico over Ethernet fabrics
+        path: /networking/design/l2-interconnect-fabric
+      - title: Calico over IP fabrics
+        path /networking/design/l3-interconnect-fabric
 - title: Frequently asked questions
   path: /reference/faq
 - title: Getting involved
