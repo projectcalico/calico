@@ -188,6 +188,8 @@ github.com/projectcalico/logrus v1.0.4-calico h1:bHJ2KLGTFzoWpRISe13CO7HVxxrKunD
 github.com/projectcalico/logrus v1.0.4-calico/go.mod h1:DfgrchabbtEO9wjOz5lVae+XRvjFKKWEA9GTMme6A8g=
 github.com/projectcalico/typha v0.7.3-0.20191122053612-73a67e6d6686 h1:AazeRF+wuL5+B6g6XPVr54tqwPbjz8sRe8JBObuxx4U=
 github.com/projectcalico/typha v0.7.3-0.20191122053612-73a67e6d6686/go.mod h1:cTHOUZDvE56ZpuXMAt2HjUYZGxbQhNSbo2PMXNxsHuQ=
+github.com/projectcalico/typha v0.7.3-0.20191125203850-3ac8f7c266a5 h1:11xWFBSZ17o7ikCDoB747wjZMSLvoryV9tV6DV2Qs/w=
+github.com/projectcalico/typha v0.7.3-0.20191125203850-3ac8f7c266a5/go.mod h1:cTHOUZDvE56ZpuXMAt2HjUYZGxbQhNSbo2PMXNxsHuQ=
 github.com/prometheus/client_golang v0.0.0-20171005112915-5cec1d0429b0/go.mod h1:7SWBe2y4D6OKWSNQJUaRYU/AaXPKyh/dDVn+NZz0KFw=
 github.com/prometheus/client_golang v0.9.1 h1:K47Rk0v/fkEfwfQet2KWhscE0cJzjgCCDBG2KHZoVno=
 github.com/prometheus/client_golang v0.9.1/go.mod h1:7SWBe2y4D6OKWSNQJUaRYU/AaXPKyh/dDVn+NZz0KFw=
