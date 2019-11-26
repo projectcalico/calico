@@ -102,7 +102,7 @@ If possible, we recommend running {{site.prodname}} without network overlay/enca
 
 However, selectively using overlays (IP in IP or VXLAN) can be useful when running on top of an underlying network that cannot easily be made aware of workload IPs. {{site.prodname}} can perform encapsulation on: all traffic, no traffic, or only on traffic that crosses a subnet boundary. 
 
-IP in IP or VXLAN encapsulation can also be used selectively between subnets -- this provides the performance benefits of unencapsulated traffic within subnets, for environments where the fabric contains multiple L2 networks and peering isn’t available. For example, if you are using {{site.prodname}} networking in AWS across multiple VPCs/subnets, {{site.prodname}} can selectively encapsulate only the traffic that is routed between the VPCs/subnets, and run without encapsulation within each VPC/subnet. 
+IP in IP or VXLAN encapsulation can also be used selectively between subnets -- this provides the performance benefits of unencapsulated traffic within subnets, for environments where the fabric contains multiple L2 networks and peering isn’t available. For example, if you are using {{site.prodname}} networking in AWS across multiple VPCs/subnets, {{site.prodname}} can selectively encapsulate only the traffic that is routed between the VPCs/subnets, and run without encapsulation within each VPC/subnet. For help, see [Overlay networking]({{site.baseurl}}/{{page.version}}/networking/vxlan-ipip).
 
 ### Above and beyond
 
