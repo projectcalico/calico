@@ -1,5 +1,6 @@
 ---
 title: Enforce network policy using Istio
+canonical_url: 'https://docs.projectcalico.org/v3.9/security/enforce-policy-istio'
 ---
 
 ### Big picture

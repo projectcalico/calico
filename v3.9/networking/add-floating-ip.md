@@ -1,5 +1,6 @@
 ---
 title: Add a floating IP to a pod
+canonical_url: 'https://docs.projectcalico.org/v3.9/add-floating-ip'
 ---
 
 ### Big picture

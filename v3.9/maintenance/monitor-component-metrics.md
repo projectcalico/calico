@@ -1,5 +1,6 @@
 ---
 title: Monitor Calico component metrics
+canonical_url: 'https://docs.projectcalico.org/v3.9/maintenance/monitor-component-metrics'
 ---
 
 ### Big picture

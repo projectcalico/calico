@@ -1,5 +1,6 @@
 ---
 title: Use a specific IP address with a pod
+canonical_url: 'https://docs.projectcalico.org/v3.9/use-specific-ip'
 ---
 
 ### Big picture

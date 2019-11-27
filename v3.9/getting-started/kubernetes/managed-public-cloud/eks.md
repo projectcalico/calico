@@ -1,5 +1,6 @@
 ---
 title: Amazon Elastic Kubernetes Service (EKS)
+canonical_url: 'https://docs.projectcalico.org/v3.9/getting-started/kubernetes/managed-public-cloud/eks'
 ---
 
 ### Big picture

@@ -1,5 +1,6 @@
 ---
 title: Use service accounts in policy rules
+canonical_url: 'https://docs.projectcalico.org/v3.9/security/service-accounts'
 ---
 
 ### Big picture

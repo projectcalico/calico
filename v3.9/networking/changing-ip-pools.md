@@ -1,5 +1,6 @@
 ---
 title: Changing IP pools
+canonical_url: 'https://docs.projectcalico.org/v3.9/networking/changing-ip-pools'
 ---
 
 ## About changing IP pools

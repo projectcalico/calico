@@ -1,5 +1,6 @@
 ---
 title: Protect hosts
+canonical_url: 'https://docs.projectcalico.org/v3.9/security/protect-hosts'
 ---
 
 ### Big picture

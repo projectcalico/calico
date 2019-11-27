@@ -1,5 +1,6 @@
 ---
 title: Interoperate with legacy firewalls using IP ranges
+canonical_url: 'https://docs.projectcalico.org/v3.9/legacy-firewalls'
 ---
 
 ### Big picture

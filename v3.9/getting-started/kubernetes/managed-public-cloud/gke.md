@@ -1,5 +1,6 @@
 ---
 title: Google Kubernetes Engine (GKE)
+canonical_url: 'https://docs.projectcalico.org/v3.9/getting-started/kubernetes/managed-public-cloud/gke'
 ---
 
 ### Big picture
