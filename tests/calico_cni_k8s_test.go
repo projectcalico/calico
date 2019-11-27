@@ -1867,7 +1867,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 			podIPv4 := contAddresses[0].IP
 			Expect(podIPv4.To4()).NotTo(BeNil())
 			podIPv6 := contAddresses[1].IP
-			Expect(podIPv6.To4()).To(BeNil())
+			Expect(podIPv6.To16()).NotTo(BeNil())
 
 			ids := names.WorkloadEndpointIdentifiers{
 				Node:         hostname,
