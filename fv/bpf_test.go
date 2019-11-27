@@ -52,9 +52,9 @@ import (
 )
 
 var _ = describeBPFTests(bpfTestOptions{protocol: "tcp", connTimeEnabled: true})
-var _ = describeBPFTests(bpfTestOptions{protocol: "tcp", connTimeEnabled: true})
+var _ = describeBPFTests(bpfTestOptions{protocol: "udp", connTimeEnabled: true})
 var _ = describeBPFTests(bpfTestOptions{protocol: "tcp"})
-var _ = describeBPFTests(bpfTestOptions{protocol: "tcp"})
+var _ = describeBPFTests(bpfTestOptions{protocol: "udp"})
 
 type bpfTestOptions struct {
 	connTimeEnabled bool
