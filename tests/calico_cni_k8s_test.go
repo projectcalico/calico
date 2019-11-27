@@ -1789,6 +1789,135 @@ var _ = Describe("Kubernetes CNI tests", func() {
 				Orchestrator:  api.OrchestratorKubernetes,
 			}))
 
+			// Check the pod's IP annotations.
+			checkPodIPAnnotations(clientset, testutils.K8S_TEST_NS, name, "20.0.0.111/32", "20.0.0.111/32")
+
+			// Delete the container.
+			_, err = testutils.DeleteContainer(netconfCalicoIPAM, netNS.Path(), name, testutils.K8S_TEST_NS)
+			Expect(err).ShouldNot(HaveOccurred())
+		})
+	})
+
+	Context("with dual stack IP allocations", func() {
+		var clientset *kubernetes.Clientset
+		var ipPool4 string = "20.0.0.0/24"
+		var ipPool6 string = "fd80:20::/96"
+
+		BeforeEach(func() {
+			// Set up clients.
+			config, err := clientcmd.DefaultClientConfig.ClientConfig()
+			Expect(err).NotTo(HaveOccurred())
+			clientset, err = kubernetes.NewForConfig(config)
+			Expect(err).NotTo(HaveOccurred())
+			testutils.MustCreateNewIPPool(calicoClient, ipPool4, false, false, true)
+			testutils.MustCreateNewIPPool(calicoClient, ipPool6, false, false, true)
+		})
+
+		AfterEach(func() {
+			testutils.MustDeleteIPPool(calicoClient, ipPool4)
+			testutils.MustDeleteIPPool(calicoClient, ipPool6)
+		})
+
+		It("should allocate IPv4 and IPv6 addresses", func() {
+			netconfCalicoIPAM := fmt.Sprintf(`
+				{
+				  "cniVersion": "%s",
+				  "name": "net4",
+				  "type": "calico",
+				  "etcd_endpoints": "http://%s:2379",
+				  "datastore_type": "%s",
+			          "nodename_file_optional": true,
+				  "ipam": {
+					   "type": "calico-ipam",
+					   "assign_ipv4": "true",
+					   "assign_ipv6": "true"
+				   },
+					"kubernetes": {
+					  "k8s_api_root": "http://127.0.0.1:8080"
+					 },
+					"policy": {"type": "k8s"},
+					"log_level":"info"
+				}`, cniVersion, os.Getenv("ETCD_IP"), os.Getenv("DATASTORE_TYPE"))
+
+			// Now create a K8s pod (without any IP annotations).
+			name := fmt.Sprintf("run%d", rand.Uint32())
+			pod, err := clientset.CoreV1().Pods(testutils.K8S_TEST_NS).Create(&v1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: name,
+				},
+				Spec: v1.PodSpec{
+					Containers: []v1.Container{{
+						Name:  name,
+						Image: "ignore",
+					}},
+					NodeName: hostname,
+				},
+			})
+			Expect(err).NotTo(HaveOccurred())
+			defer ensurePodDeleted(clientset, testutils.K8S_TEST_NS, name)
+
+			log.Infof("Created POD object: %v", pod)
+
+			containerID, _, contVeth, contAddresses, _, netNS, err := testutils.CreateContainer(netconfCalicoIPAM, name, testutils.K8S_TEST_NS, "")
+			Expect(err).NotTo(HaveOccurred())
+			mac := contVeth.Attrs().HardwareAddr
+
+			log.Infof("All container IPs: %v", contAddresses)
+			Expect(contAddresses).To(HaveLen(2))
+			podIPv4 := contAddresses[0].IP
+			Expect(podIPv4.To4()).NotTo(BeNil())
+			podIPv6 := contAddresses[1].IP
+			Expect(podIPv6.To16()).NotTo(BeNil())
+
+			ids := names.WorkloadEndpointIdentifiers{
+				Node:         hostname,
+				Orchestrator: api.OrchestratorKubernetes,
+				Endpoint:     "eth0",
+				Pod:          name,
+				ContainerID:  containerID,
+			}
+
+			wrkload, err := ids.CalculateWorkloadEndpointName(false)
+			Expect(err).NotTo(HaveOccurred())
+
+			interfaceName := k8sconversion.VethNameForWorkload(testutils.K8S_TEST_NS, name)
+
+			// Make sure WorkloadEndpoint is created and has the requested IP in the datastore.
+			endpoints, err := calicoClient.WorkloadEndpoints().List(ctx, options.ListOptions{})
+			Expect(err).ShouldNot(HaveOccurred())
+			Expect(endpoints.Items).Should(HaveLen(1))
+
+			if os.Getenv("DATASTORE_TYPE") == "kubernetes" {
+				// Unlike etcd datastore, WEP based on a kubernetes pod does not store values for mac/containerID.
+				// Put them back manually for later comparison.
+				endpoints.Items[0].Spec.ContainerID = containerID
+				endpoints.Items[0].Spec.MAC = mac.String()
+			}
+
+			Expect(endpoints.Items[0].Name).Should(Equal(wrkload))
+			Expect(endpoints.Items[0].Namespace).Should(Equal(testutils.K8S_TEST_NS))
+			Expect(endpoints.Items[0].Labels).Should(Equal(map[string]string{
+				"projectcalico.org/namespace":      "test",
+				"projectcalico.org/orchestrator":   api.OrchestratorKubernetes,
+				"projectcalico.org/serviceaccount": "default",
+			}))
+
+			Expect(endpoints.Items[0].Spec).Should(Equal(api.WorkloadEndpointSpec{
+				Pod:           name,
+				InterfaceName: interfaceName,
+				IPNetworks:    []string{podIPv4.String() + "/32", podIPv6.String() + "/128"},
+				MAC:           mac.String(),
+				Profiles:      []string{"kns.test", "ksa.test.default"},
+				Node:          hostname,
+				Endpoint:      "eth0",
+				Workload:      "",
+				ContainerID:   containerID,
+				Orchestrator:  api.OrchestratorKubernetes,
+			}))
+
+			// Check the pod's IP annotations.
+			checkPodIPAnnotations(clientset, testutils.K8S_TEST_NS, name, podIPv4.String()+"/32", podIPv4.String()+"/32,"+podIPv6.String()+"/128")
+
 			// Delete the container.
 			_, err = testutils.DeleteContainer(netconfCalicoIPAM, netNS.Path(), name, testutils.K8S_TEST_NS)
 			Expect(err).ShouldNot(HaveOccurred())
@@ -2726,3 +2855,12 @@ var _ = Describe("Kubernetes CNI tests", func() {
 		})
 	})
 })
+
+func checkPodIPAnnotations(clientset *kubernetes.Clientset, ns, name, expectedIP, expectedIPs string) {
+	if os.Getenv("DATASTORE_TYPE") == "kubernetes" {
+		pod, err := clientset.CoreV1().Pods(testutils.K8S_TEST_NS).Get(name, metav1.GetOptions{})
+		Expect(err).NotTo(HaveOccurred())
+		Expect(pod.Annotations["cni.projectcalico.org/podIP"]).To(Equal(expectedIP))
+		Expect(pod.Annotations["cni.projectcalico.org/podIPs"]).To(Equal(expectedIPs))
+	}
+}
