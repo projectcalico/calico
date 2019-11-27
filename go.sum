@@ -225,6 +225,8 @@ github.com/projectcalico/libcalico-go v1.7.2-0.20191122034129-d601846715fa h1:px
 github.com/projectcalico/libcalico-go v1.7.2-0.20191122034129-d601846715fa/go.mod h1:aQx6FWJE4BSf0q7oTTZz7tsDyhgC3tceex0LfHGlAJo=
 github.com/projectcalico/libcalico-go v1.7.2-0.20191125203827-63d12c5fbacd h1:RBJD2tv92vpI0pLz9g85hU9CTxwXrGJPPdiIOKYmQfU=
 github.com/projectcalico/libcalico-go v1.7.2-0.20191125203827-63d12c5fbacd/go.mod h1:aQx6FWJE4BSf0q7oTTZz7tsDyhgC3tceex0LfHGlAJo=
+github.com/projectcalico/libcalico-go v1.7.2-0.20191127020304-2a76912c2c96 h1:qOoOQpVJZy7dVfQ6OTPS0wGLhw6yT7lNjH6Zh2TMItY=
+github.com/projectcalico/libcalico-go v1.7.2-0.20191127020304-2a76912c2c96/go.mod h1:aQx6FWJE4BSf0q7oTTZz7tsDyhgC3tceex0LfHGlAJo=
 github.com/projectcalico/logrus v1.0.4-calico h1:bHJ2KLGTFzoWpRISe13CO7HVxxrKunDjyUz/wFiBY8c=
 github.com/projectcalico/logrus v1.0.4-calico/go.mod h1:DfgrchabbtEO9wjOz5lVae+XRvjFKKWEA9GTMme6A8g=
 github.com/projectcalico/pod2daemon v0.0.0-20190730210055-df57fc59e2e1 h1:JPzqAbV448lrNn83iqWiMM+Lxh0EyGlZC+ZYDZt+oGo=
@@ -233,6 +235,8 @@ github.com/projectcalico/typha v0.7.3-0.20191122053612-73a67e6d6686 h1:AazeRF+wu
 github.com/projectcalico/typha v0.7.3-0.20191122053612-73a67e6d6686/go.mod h1:cTHOUZDvE56ZpuXMAt2HjUYZGxbQhNSbo2PMXNxsHuQ=
 github.com/projectcalico/typha v0.7.3-0.20191126041125-6f06fe625114 h1:Pu+aRUcPgOTsDWYiONn8uvTmJR26O7/g+rKJwJ1N18s=
 github.com/projectcalico/typha v0.7.3-0.20191126041125-6f06fe625114/go.mod h1:/3q+WoMoD4Bm9oRItKO1SH8SABTKzLZ7aGsLGYBluAs=
+github.com/projectcalico/typha v0.7.3-0.20191127041708-db27c2068ff6 h1:0Gjz0DrKO212RhQwVmalFYa8/VSKc+q0cqvmxTfqWig=
+github.com/projectcalico/typha v0.7.3-0.20191127041708-db27c2068ff6/go.mod h1:YZ7fX7p81/Q0SasSQDi9ixdsT6/ZxsaCuyJIqIypYQI=
 github.com/prometheus/client_golang v0.0.0-20171005112915-5cec1d0429b0/go.mod h1:7SWBe2y4D6OKWSNQJUaRYU/AaXPKyh/dDVn+NZz0KFw=
 github.com/prometheus/client_golang v0.9.1 h1:K47Rk0v/fkEfwfQet2KWhscE0cJzjgCCDBG2KHZoVno=
 github.com/prometheus/client_golang v0.9.1/go.mod h1:7SWBe2y4D6OKWSNQJUaRYU/AaXPKyh/dDVn+NZz0KFw=
