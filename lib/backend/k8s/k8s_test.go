@@ -1618,6 +1618,7 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 
 		By("Removing its IP", func() {
 			pod.Status.PodIP = ""
+			pod.Status.PodIPs = nil
 			pod, err = c.ClientSet.CoreV1().Pods("default").UpdateStatus(pod)
 			Expect(err).NotTo(HaveOccurred())
 		})

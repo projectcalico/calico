@@ -272,6 +272,76 @@ var _ = Describe("Test Pod conversion", func() {
 		Expect(wep.Revision).To(Equal("1234"))
 	})
 
+	It("should parse a Pod with dual stack IPs to a WorkloadEndpoint", func() {
+		pod := kapiv1.Pod{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "podA",
+				Namespace: "default",
+				Annotations: map[string]string{
+					"arbitrary": "annotation",
+				},
+				Labels: map[string]string{
+					"labelA": "valueA",
+					"labelB": "valueB",
+				},
+				ResourceVersion: "1234",
+			},
+			Spec: kapiv1.PodSpec{
+				NodeName: "nodeA",
+				Containers: []kapiv1.Container{
+					{
+						Ports: []kapiv1.ContainerPort{
+							{
+								ContainerPort: 5678,
+							},
+							{
+								Name:          "no-proto",
+								ContainerPort: 1234,
+							},
+						},
+					},
+					{
+						Ports: []kapiv1.ContainerPort{
+							{
+								Name:          "tcp-proto",
+								Protocol:      kapiv1.ProtocolTCP,
+								ContainerPort: 1024,
+							},
+							{
+								Name:          "tcp-proto-with-host-port",
+								Protocol:      kapiv1.ProtocolTCP,
+								ContainerPort: 8080,
+								HostPort:      5678,
+							},
+							{
+								Name:          "udp-proto",
+								Protocol:      kapiv1.ProtocolUDP,
+								ContainerPort: 432,
+							},
+							{
+								Name:          "unkn-proto",
+								Protocol:      kapiv1.Protocol("unknown"),
+								ContainerPort: 567,
+							},
+						},
+					},
+				},
+			},
+			Status: kapiv1.PodStatus{
+				PodIP:  "192.168.0.1",
+				PodIPs: []kapiv1.PodIP{{IP: "192.168.0.1"}, {IP: "fd5f:8067::1"}},
+			},
+		}
+
+		wep, err := c.PodToWorkloadEndpoint(&pod)
+		Expect(err).NotTo(HaveOccurred())
+
+		// Check both IPs were converted.
+		Expect(len(wep.Value.(*apiv3.WorkloadEndpoint).Spec.IPNetworks)).To(Equal(2))
+		Expect(wep.Value.(*apiv3.WorkloadEndpoint).Spec.IPNetworks[0]).To(Equal("192.168.0.1/32"))
+		Expect(wep.Value.(*apiv3.WorkloadEndpoint).Spec.IPNetworks[1]).To(Equal("fd5f:8067::1/128"))
+	})
+
 	It("should look in the calico annotation for the IP", func() {
 		pod := kapiv1.Pod{
 			ObjectMeta: metav1.ObjectMeta{
@@ -297,6 +367,64 @@ var _ = Describe("Test Pod conversion", func() {
 		Expect(err).NotTo(HaveOccurred())
 		Expect(c.HasIPAddress(&pod)).To(BeTrue())
 		Expect(wep.Value.(*apiv3.WorkloadEndpoint).Spec.IPNetworks).To(ConsistOf("192.168.0.1/32"))
+	})
+
+	It("should look in the dual stack calico annotation for the IPs", func() {
+		pod := kapiv1.Pod{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "podA",
+				Namespace: "default",
+				Annotations: map[string]string{
+					"arbitrary":                    "annotation",
+					"cni.projectcalico.org/podIP":  "192.168.0.1",
+					"cni.projectcalico.org/podIPs": "192.168.0.1,fd5f:8067::1",
+				},
+				Labels: map[string]string{
+					"labelA": "valueA",
+					"labelB": "valueB",
+				},
+				ResourceVersion: "1234",
+			},
+			Spec: kapiv1.PodSpec{
+				NodeName:   "nodeA",
+				Containers: []kapiv1.Container{},
+			},
+		}
+
+		wep, err := c.PodToWorkloadEndpoint(&pod)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(c.HasIPAddress(&pod)).To(BeTrue())
+		Expect(wep.Value.(*apiv3.WorkloadEndpoint).Spec.IPNetworks).To(ConsistOf("192.168.0.1/32", "fd5f:8067::1/128"))
+	})
+
+	It("should handle IP annotations with /32 and /128", func() {
+		// In fact we create annotations with /32 and /128 suffixes, so check that we can
+		// also parse those.
+		pod := kapiv1.Pod{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "podA",
+				Namespace: "default",
+				Annotations: map[string]string{
+					"arbitrary":                    "annotation",
+					"cni.projectcalico.org/podIP":  "192.168.0.1/32",
+					"cni.projectcalico.org/podIPs": "192.168.0.1/32,fd5f:8067::1/128",
+				},
+				Labels: map[string]string{
+					"labelA": "valueA",
+					"labelB": "valueB",
+				},
+				ResourceVersion: "1234",
+			},
+			Spec: kapiv1.PodSpec{
+				NodeName:   "nodeA",
+				Containers: []kapiv1.Container{},
+			},
+		}
+
+		wep, err := c.PodToWorkloadEndpoint(&pod)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(c.HasIPAddress(&pod)).To(BeTrue())
+		Expect(wep.Value.(*apiv3.WorkloadEndpoint).Spec.IPNetworks).To(ConsistOf("192.168.0.1/32", "fd5f:8067::1/128"))
 	})
 
 	It("should look in the calico annotation for a floating IP", func() {
@@ -331,6 +459,42 @@ var _ = Describe("Test Pod conversion", func() {
 
 	})
 
+	It("should find the right address family target for dual stack floating IPs", func() {
+		pod := kapiv1.Pod{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "podA",
+				Namespace: "default",
+				Annotations: map[string]string{
+					"arbitrary":                         "annotation",
+					"cni.projectcalico.org/podIP":       "192.168.0.1",
+					"cni.projectcalico.org/podIPs":      "192.168.0.1,fd5f:8067::1",
+					"cni.projectcalico.org/floatingIPs": `["1.1.1.1","fd80:100:100::10"]`,
+				},
+				Labels: map[string]string{
+					"labelA": "valueA",
+					"labelB": "valueB",
+				},
+				ResourceVersion: "1234",
+			},
+			Spec: kapiv1.PodSpec{
+				NodeName:   "nodeA",
+				Containers: []kapiv1.Container{},
+			},
+		}
+
+		wep, err := c.PodToWorkloadEndpoint(&pod)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(c.HasIPAddress(&pod)).To(BeTrue())
+		Expect(wep.Value.(*apiv3.WorkloadEndpoint).Spec.IPNetworks).To(ConsistOf("192.168.0.1/32", "fd5f:8067::1/128"))
+
+		// Assert that the endpoint contains the appropriate DNAT
+		Expect(wep.Value.(*apiv3.WorkloadEndpoint).Spec.IPNATs).To(ConsistOf(
+			apiv3.IPNAT{InternalIP: "192.168.0.1", ExternalIP: "1.1.1.1"},
+			apiv3.IPNAT{InternalIP: "fd5f:8067::1", ExternalIP: "fd80:100:100::10"},
+		))
+
+	})
+
 	It("should return an error for a bad pod IP", func() {
 		pod := kapiv1.Pod{
 			ObjectMeta: metav1.ObjectMeta{
@@ -338,6 +502,26 @@ var _ = Describe("Test Pod conversion", func() {
 				Namespace: "default",
 				Annotations: map[string]string{
 					"cni.projectcalico.org/podIP": "foobar",
+				},
+				ResourceVersion: "1234",
+			},
+			Spec: kapiv1.PodSpec{
+				NodeName:   "nodeA",
+				Containers: []kapiv1.Container{},
+			},
+		}
+
+		_, err := c.PodToWorkloadEndpoint(&pod)
+		Expect(err).To(HaveOccurred())
+	})
+
+	It("should return an error for a bad podIPs annotation", func() {
+		pod := kapiv1.Pod{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "podA",
+				Namespace: "default",
+				Annotations: map[string]string{
+					"cni.projectcalico.org/podIPs": "foobar",
 				},
 				ResourceVersion: "1234",
 			},

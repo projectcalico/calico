@@ -173,27 +173,43 @@ func (c Converter) IsHostNetworked(pod *kapiv1.Pod) bool {
 
 func (c Converter) HasIPAddress(pod *kapiv1.Pod) bool {
 	return pod.Status.PodIP != "" || pod.Annotations[AnnotationPodIP] != ""
+	// Note: we don't need to check PodIPs and AnnotationPodIPs here, because those cannot be
+	// non-empty if the corresponding singular field is empty.
 }
 
-// GetPodIPs extracts the IP addresses from a Kubernetes Pod.  At present, only a single IP
-// is expected/supported.  GetPodIPs loads the IP either from the PodIP field, if present, or
-// the calico podIP annotation.
-func (c Converter) GetPodIPs(pod *kapiv1.Pod) ([]string, error) {
-	var podIP string
-	if podIP = pod.Status.PodIP; podIP != "" {
-		log.WithField("ip", podIP).Debug("PodIP field filled in.")
-	} else if podIP = pod.Annotations[AnnotationPodIP]; podIP != "" {
-		log.WithField("ip", podIP).Debug("PodIP missing, falling back on Calico annotation.")
+// getPodIPs extracts the IP addresses from a Kubernetes Pod.  We support a single IPv4 address
+// and/or a single IPv6.  getPodIPs loads the IPs either from the PodIPs and PodIP field, if
+// present, or the calico podIP annotation.
+func (c Converter) getPodIPs(pod *kapiv1.Pod) ([]*cnet.IPNet, error) {
+	var podIPs []string
+	if ips := pod.Status.PodIPs; len(ips) != 0 {
+		log.WithField("ips", ips).Debug("PodIPs field filled in")
+		for _, ip := range ips {
+			podIPs = append(podIPs, ip.IP)
+		}
+	} else if ip := pod.Status.PodIP; ip != "" {
+		log.WithField("ip", ip).Debug("PodIP field filled in")
+		podIPs = append(podIPs, ip)
+	} else if ips := pod.Annotations[AnnotationPodIPs]; ips != "" {
+		log.WithField("ips", ips).Debug("No PodStatus IPs, use Calico plural annotation")
+		podIPs = append(podIPs, strings.Split(ips, ",")...)
+	} else if ip := pod.Annotations[AnnotationPodIP]; ip != "" {
+		log.WithField("ip", ip).Debug("No PodStatus IPs, use Calico singular annotation")
+		podIPs = append(podIPs, ip)
 	} else {
-		log.WithField("ip", podIP).Debug("Pod has no IP.")
+		log.Debug("Pod has no IP")
 		return nil, nil
 	}
-	_, ipNet, err := cnet.ParseCIDROrIP(podIP)
-	if err != nil {
-		log.WithFields(log.Fields{"ip": podIP, "pod": pod.Name}).WithError(err).Error("Failed to parse pod IP")
-		return nil, err
+	var podIPNets []*cnet.IPNet
+	for _, ip := range podIPs {
+		_, ipNet, err := cnet.ParseCIDROrIP(ip)
+		if err != nil {
+			log.WithFields(log.Fields{"ip": ip, "pod": pod.Name}).WithError(err).Error("Failed to parse pod IP")
+			return nil, err
+		}
+		podIPNets = append(podIPNets, ipNet)
 	}
-	return []string{ipNet.String()}, nil
+	return podIPNets, nil
 }
 
 // PodToWorkloadEndpoint converts a Pod to a WorkloadEndpoint.  It assumes the calling code
@@ -224,7 +240,7 @@ func (c Converter) PodToWorkloadEndpoint(pod *kapiv1.Pod) (*model.KVPair, error)
 		return nil, err
 	}
 
-	ipNets, err := c.GetPodIPs(pod)
+	podIPNets, err := c.getPodIPs(pod)
 	if err != nil {
 		// IP address was present but malformed in some way, handle as an explicit failure.
 		return nil, err
@@ -236,7 +252,12 @@ func (c Converter) PodToWorkloadEndpoint(pod *kapiv1.Pod) (*model.KVPair, error)
 		// Pods with no IPs will get filtered out before they get to Felix in the watcher syncer cache layer.
 		// We can't pretend the workload endpoint is deleted _here_ because that would confuse users of the
 		// native v3 Watch() API.
-		ipNets = nil
+		podIPNets = nil
+	}
+
+	ipNets := []string{}
+	for _, ipNet := range podIPNets {
+		ipNets = append(ipNets, ipNet.String())
 	}
 
 	// Generate the interface name based on workload.  This must match
@@ -258,7 +279,7 @@ func (c Converter) PodToWorkloadEndpoint(pod *kapiv1.Pod) (*model.KVPair, error)
 
 	// Pull out floating IP annotation
 	var floatingIPs []apiv3.IPNAT
-	if annotation, ok := pod.Annotations["cni.projectcalico.org/floatingIPs"]; ok && len(ipNets) > 0 {
+	if annotation, ok := pod.Annotations["cni.projectcalico.org/floatingIPs"]; ok && len(podIPNets) > 0 {
 
 		// Parse Annotation data
 		var ips []string
@@ -267,23 +288,40 @@ func (c Converter) PodToWorkloadEndpoint(pod *kapiv1.Pod) (*model.KVPair, error)
 			return nil, fmt.Errorf("failed to parse '%s' as JSON: %s", annotation, err)
 		}
 
-		// Get target for NAT
-		podip, podnet, err := cnet.ParseCIDROrIP(ipNets[0])
-		if err != nil {
-			return nil, fmt.Errorf("Failed to parse pod IP: %s", err)
-		}
-
-		netmask, _ := podnet.Mask.Size()
-
-		if netmask != 32 && netmask != 128 {
-			return nil, fmt.Errorf("PodIP is not a valid IP: Mask size is %d, not 32 or 128", netmask)
+		// Get IPv4 and IPv6 targets for NAT
+		var podnetV4, podnetV6 *cnet.IPNet
+		for _, ipNet := range podIPNets {
+			if ipNet.IP.To4() != nil {
+				podnetV4 = ipNet
+				netmask, _ := podnetV4.Mask.Size()
+				if netmask != 32 {
+					return nil, fmt.Errorf("PodIP %v is not a valid IPv4: Mask size is %d, not 32", ipNet, netmask)
+				}
+			} else {
+				podnetV6 = ipNet
+				netmask, _ := podnetV6.Mask.Size()
+				if netmask != 128 {
+					return nil, fmt.Errorf("PodIP %v is not a valid IPv6: Mask size is %d, not 128", ipNet, netmask)
+				}
+			}
 		}
 
 		for _, ip := range ips {
-			floatingIPs = append(floatingIPs, apiv3.IPNAT{
-				InternalIP: podip.String(),
-				ExternalIP: ip,
-			})
+			if strings.Contains(ip, ":") {
+				if podnetV6 != nil {
+					floatingIPs = append(floatingIPs, apiv3.IPNAT{
+						InternalIP: podnetV6.IP.String(),
+						ExternalIP: ip,
+					})
+				}
+			} else {
+				if podnetV4 != nil {
+					floatingIPs = append(floatingIPs, apiv3.IPNAT{
+						InternalIP: podnetV4.IP.String(),
+						ExternalIP: ip,
+					})
+				}
+			}
 		}
 	}
 
