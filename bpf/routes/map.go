@@ -36,10 +36,10 @@ type Type uint32
 
 const (
 	TypeUnknown        Type = 0
-	TypeRemoteWorkload      = 1
-	TypeRemoteHost          = 2
-	TypeLocalHost           = 3
-	TypeLocalWorkload       = 4
+	TypeRemoteWorkload Type = 1
+	TypeRemoteHost     Type = 2
+	TypeLocalHost      Type = 3
+	TypeLocalWorkload  Type = 4
 )
 
 //

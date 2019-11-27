@@ -40,14 +40,14 @@ struct bpf_map_def_extended __attribute__((section("maps"))) cali_routes = {
 #endif
 };
 
-struct calico_route_value *calico_lookup_route(__be32 addr) {
+static CALI_BPF_INLINE struct calico_route_value *calico_lookup_route(__be32 addr) {
 	union calico_route_key_u k;
 	k.key.prefixlen = 32;
 	k.key.addr = addr;
 	return bpf_map_lookup_elem(&cali_routes, &k);
 }
 
-enum calico_route_type calico_lookup_route_type(__be32 addr) {
+static CALI_BPF_INLINE enum calico_route_type calico_lookup_route_type(__be32 addr) {
 	struct calico_route_value *rt_val = calico_lookup_route(addr);
 	if (!rt_val) {
 		return CALI_RT_UNKNOWN;

@@ -26,10 +26,6 @@
 #define CALI_FIB_LOOKUP_ENABLED true
 #endif
 
-#ifndef CALI_HOST_IPS_IP_SET_ID
-#define CALI_HOST_IPS_IP_SET_ID 0
-#endif
-
 #ifndef CALI_DROP_WORKLOAD_TO_HOST
 #define CALI_DROP_WORKLOAD_TO_HOST false
 #endif
