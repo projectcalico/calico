@@ -1790,7 +1790,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 			}))
 
 			// Check the pod's IP annotations.
-			checkPodIPAnnotations(clientset, testutils.K8S_TEST_NS, name, "20.0.0.111", "20.0.0.111")
+			checkPodIPAnnotations(clientset, testutils.K8S_TEST_NS, name, "20.0.0.111/32", "20.0.0.111/32")
 
 			// Delete the container.
 			_, err = testutils.DeleteContainer(netconfCalicoIPAM, netNS.Path(), name, testutils.K8S_TEST_NS)
@@ -1916,7 +1916,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 			}))
 
 			// Check the pod's IP annotations.
-			checkPodIPAnnotations(clientset, testutils.K8S_TEST_NS, name, podIPv4.String(), podIPv4.String()+","+podIPv6.String())
+			checkPodIPAnnotations(clientset, testutils.K8S_TEST_NS, name, podIPv4.String()+"/32", podIPv4.String()+"/32,"+podIPv6.String()+"/128")
 
 			// Delete the container.
 			_, err = testutils.DeleteContainer(netconfCalicoIPAM, netNS.Path(), name, testutils.K8S_TEST_NS)
