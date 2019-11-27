@@ -16,10 +16,11 @@ package nat
 
 import (
 	"bufio"
+	"encoding/json"
 	"os"
 	"os/exec"
 	"path"
-	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 
@@ -27,6 +28,13 @@ import (
 
 	"github.com/projectcalico/felix/bpf"
 )
+
+type cgroupProgs struct {
+	ID          int    `json:"id"`
+	AttachType  string `json:"attach_type"`
+	AttachFlags string `json:"attach_flags"`
+	Name        string `json:"name"`
+}
 
 func RemoveConnectTimeLoadBalancer(cgroupv2 string) error {
 	// In case we're in a container and the cgroup filesystem isn't mounted, we need to mount it in order
@@ -50,7 +58,7 @@ func RemoveConnectTimeLoadBalancer(cgroupv2 string) error {
 		}
 	}
 
-	cmd := exec.Command("bpftool", "cgroup", "show", cgroupPath)
+	cmd := exec.Command("bpftool", "-j", "-p", "cgroup", "show", cgroupPath)
 	log.WithField("args", cmd.Args).Info("Running bpftool to look up programs attached to cgroup")
 	out, err := cmd.Output()
 	if err != nil {
@@ -58,26 +66,26 @@ func RemoveConnectTimeLoadBalancer(cgroupv2 string) error {
 		return err
 	}
 
-	lines := strings.Split(string(out), "\n")
-	for _, line := range lines {
-		if strings.Contains(line, "cali_") {
-			log.WithField("line", line).Debug("Found one of our programs")
-			re := regexp.MustCompile(`^(\d+)\s+(\S+)`)
-			match := re.FindStringSubmatch(line)
-			if len(match) > 0 {
-				id := match[1]
-				attachType := match[2]
+	var progs []cgroupProgs
 
-				cmd = exec.Command("bpftool", "cgroup", "detach", cgroupPath, attachType, "id", id)
-				log.WithField("args", cmd.Args).Info("Running bpftool to detach program")
-				out, err = cmd.CombinedOutput()
-				if err != nil {
-					log.WithError(err).WithField("output", string(out)).Error(
-						"Failed to detach connect-time load balancing program.")
-					return err
-				}
+	err = json.Unmarshal(out, &progs)
+	if err != nil {
+		log.WithError(err).WithField("output", string(out)).Error("BPF program list not json.")
+		return err
+	}
 
-			}
+	for _, p := range progs {
+		if !strings.HasPrefix(p.Name, "cali_") {
+			continue
+		}
+
+		cmd = exec.Command("bpftool", "cgroup", "detach", cgroupPath, p.AttachType, "id", strconv.Itoa(p.ID))
+		log.WithField("args", cmd.Args).Info("Running bpftool to detach program")
+		out, err = cmd.CombinedOutput()
+		if err != nil {
+			log.WithError(err).WithField("output", string(out)).Error(
+				"Failed to detach connect-time load balancing program.")
+			return err
 		}
 	}
 
