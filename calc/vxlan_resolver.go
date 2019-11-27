@@ -60,7 +60,10 @@ import (
 // it as a delete followed by an add.
 type VXLANResolver struct {
 	hostname  string
-	callbacks PipelineCallbacks
+	callbacks interface {
+		vxlanCallbacks
+		routeCallbacks
+	}
 
 	// Store node metadata indexed by node name, and routes by the
 	// block that contributed them. The following comprises the full internal data model.
@@ -584,8 +587,14 @@ func (c *VXLANResolver) routeTypeForRoute(r vxlanRoute) (proto.RouteType, error)
 
 // withdrawRoute will send a *proto.RouteRemove for the given route.
 func (c *VXLANResolver) withdrawRoute(r vxlanRoute) {
+	routeType, err := c.routeTypeForRoute(r)
+	if err != nil {
+		// FIXME Check if routeTypeForRoute is valid on all paths...
+		logrus.WithField("route", r).Info("Can't send VXLAN route remove, route type not known")
+		return
+	}
 	logrus.WithField("route", r).Info("Sending VXLAN route remove")
-	c.callbacks.OnRouteRemove(r.dst.String())
+	c.callbacks.OnRouteRemove(routeType, r.dst.String())
 }
 
 func (c *VXLANResolver) sendVTEPUpdate(node string) bool {

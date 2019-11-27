@@ -31,7 +31,8 @@ import (
 )
 
 // L3RouteResolver is responsible for indexing IPAM blocks, IP pools and node information (either from the Node
-// resource, if available, or from HostIP) and emitting basic routes.
+// resource, if available, or from HostIP) and emitting basic routes containing the node's IP as next hop.
+// Such routes are useful directly for BPF load balancing.  However, they are incomplete for VXLAN.
 type L3RouteResolver struct {
 	hostname  string
 	callbacks routeCallbacks
@@ -52,6 +53,7 @@ func NewL3RouteResolver(hostname string, callbacks PipelineCallbacks, useNodeRes
 		nodeNameToIPAddr:       map[string]string{},
 		nodeNameToNode:         map[string]*apiv3.Node{},
 		blockToRoutes:          map[string]set.Set{},
+		allPools:               map[string]model.IPPool{},
 		useNodeResourceUpdates: useNodeResourceUpdates,
 	}
 }
@@ -316,11 +318,6 @@ func (c *L3RouteResolver) routeReady(r nodenameRoute) bool {
 	return true
 }
 
-// routeWithinPool checks if the provided route is within any known IP pool.
-func (c *L3RouteResolver) routeWithinPool(r nodenameRoute) bool {
-	return c.poolForRoute(r) != nil
-}
-
 func (c *L3RouteResolver) poolForRoute(r nodenameRoute) *model.IPPool {
 	for _, pool := range c.allPools {
 		if c.containsRoute(pool, r) {
@@ -390,7 +387,7 @@ func (c *L3RouteResolver) withdrawRouteIfActive(r nodenameRoute) {
 		logrus.WithField("route", r).Debug("Route wasn't ready, ignoring withdraw")
 	}
 	logrus.WithField("route", r).Info("Sending route remove")
-	c.callbacks.OnRouteRemove(r.dst.String())
+	c.callbacks.OnRouteRemove(proto.RouteType_NODEIP, r.dst.String())
 }
 
 // sendRouteIfActive will send a *proto.RouteUpdate for the given route.
@@ -400,7 +397,7 @@ func (c *L3RouteResolver) sendRouteIfActive(r nodenameRoute) {
 	}
 	logrus.WithField("route", r).Info("Sending route update")
 	c.callbacks.OnRouteUpdate(&proto.RouteUpdate{
-		Type: proto.RouteType_VXLAN,
+		Type: proto.RouteType_NODEIP, // FIXME we throw away the route type, will want that if we rework VXLAN resolver to use our routes.
 		Dst:  r.dst.String(),
 		Node: r.nodeName,
 		Gw:   c.nodeNameToIPAddr[r.nodeName],
@@ -440,7 +437,7 @@ func (c *L3RouteResolver) routesFromBlock(blockKey string, b *model.AllocationBl
 	return routes
 }
 
-// hostnameRoute is the VXLANResolver's internal representation of a route.
+// nodenameRoute is the VXLANResolver's internal representation of a route.
 type nodenameRoute struct {
 	nodeName string
 	dst      ip.CIDR
