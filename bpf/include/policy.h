@@ -1,8 +1,6 @@
 #ifndef __CALI_POLICY_H__
 #define __CALI_POLICY_H__
 
-#include "../xdp/bpf_maps.h"
-
 struct port_range {
        __u64 ip_set_id;
        __u16 min, max;
@@ -10,6 +8,41 @@ struct port_range {
 
 struct cidr {
        __be32 mask, addr;
+};
+
+// IP sets, all stored in one big map with a prefix to identify the set.
+
+struct ip4setkey {
+	__u32 mask;
+	__be64 set_id;
+	__be32 addr;
+	__u16 port;
+	__u8 protocol;
+	__u8 pad;
+} __attribute__((packed));
+
+union ip4_set_bpf_lpm_trie_key {
+	struct bpf_lpm_trie_key lpm;
+	struct ip4setkey ip;
+};
+
+struct bpf_map_def_extended __attribute__((section("maps"))) calico_ip_sets = {
+	.type           = BPF_MAP_TYPE_LPM_TRIE,
+	.key_size       = sizeof(union ip4_set_bpf_lpm_trie_key),
+	.value_size     = sizeof(uint32_t),
+	.max_entries    = 1024*1024,
+	.map_flags      = BPF_F_NO_PREALLOC,
+#ifndef __BPFTOOL_LOADER__
+	.pinning_strategy        = 2 /* global namespace */,
+#endif
+};
+
+struct bpf_map_def_extended __attribute__((section("maps"))) calico_local_ips = {
+    .type           = BPF_MAP_TYPE_HASH,
+    .key_size       = sizeof(uint32_t),
+    .value_size     = sizeof(uint32_t),
+    .map_flags          = BPF_F_NO_PREALLOC,
+    .max_entries       = 1024, // arbitrary
 };
 
 #define RULE_MATCH(id, test, negate) do { \

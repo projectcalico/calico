@@ -385,6 +385,7 @@ func (c *L3RouteResolver) poolTypeForPool(pool *model.IPPool) PoolType {
 func (c *L3RouteResolver) withdrawRouteIfActive(r nodenameRoute) {
 	if !c.routeReady(r) {
 		logrus.WithField("route", r).Debug("Route wasn't ready, ignoring withdraw")
+		return
 	}
 	logrus.WithField("route", r).Info("Sending route remove")
 	c.callbacks.OnRouteRemove(proto.RouteType_NODEIP, r.dst.String())
@@ -394,6 +395,7 @@ func (c *L3RouteResolver) withdrawRouteIfActive(r nodenameRoute) {
 func (c *L3RouteResolver) sendRouteIfActive(r nodenameRoute) {
 	if !c.routeReady(r) {
 		logrus.WithField("route", r).Debug("Route wasn't ready, ignoring send")
+		return
 	}
 	logrus.WithField("route", r).Info("Sending route update")
 	c.callbacks.OnRouteUpdate(&proto.RouteUpdate{

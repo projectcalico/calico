@@ -544,7 +544,7 @@ func (m *bpfEndpointManager) compileAndAttachProgram(allRules [][][]*proto.Rule,
 		}
 
 		log.WithError(err).WithFields(log.Fields{"program": buf.String()}).
-			Error("Failed BPF program")
+			Error("Failed to attach BPF program")
 		return err
 	}
 	return nil

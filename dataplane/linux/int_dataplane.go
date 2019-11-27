@@ -457,6 +457,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		// Register map managers first since they create the maps that will be used by the endpoint manager.
 		ipSetIDAllocator := idalloc.New()
 		dp.RegisterManager(newBPFIPSetManager(ipSetIDAllocator))
+		dp.RegisterManager(newBPFRouteManager())
 		dp.RegisterManager(newBPFConntrackManager(config.BPFConntrackTimeouts))
 
 		// Forwarding into a tunnel seems to fail silently, disable FIB lookup if tunnel is enabled for now.
