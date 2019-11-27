@@ -16,10 +16,10 @@ EOF
 ROOT_CALICO_REPOS_DIR="${ROOT_CALICO_REPOS_DIR:-/home/$USER/calico_all}"
 function check() {
 	if [[ ! -v ROOT_CALICO_REPOS_DIR ]] ;  then
-		echo "Need to specify ROOT_CALICO_REPOS_DIR = "
+	    echo "Need to specify ROOT_CALICO_REPOS_DIR = "
 	fi
 	if [[ ! -v BUILD_CALICO ]] ; then 
-		BUILD_CALICO="true"
+            BUILD_CALICO="true"
 	fi
 }
 
@@ -51,8 +51,8 @@ function load_images() {
 	# daemon running inside kind.
 	echo "Copying images into kind cluster !!!"
 	for i in "cni-plugin" "node" "pod2daemon" "kube-controllers"; do 
-		echo "...$i"
-		kind load docker-image cd/$i:latest-amd64 --name calico-test
+            echo "...$i"
+            kind load docker-image cd/$i:latest-amd64 --name calico-test
 	done
 }
 
@@ -62,8 +62,8 @@ function install_k8s() {
     fi	    
     kind create cluster --name calico-test --config calico-conf.yaml
     export KUBECONFIG="$(kind get kubeconfig-path --name=calico-test)"
-	for i in "cni-plugin" "node" "pod2daemon" "kube-controllers"; do 
-		echo "...$i"
+    for i in "cni-plugin" "node" "pod2daemon" "kube-controllers"; do 
+        echo "...$i"
     done
     chmod 755 ~/.kube/kind-config-kind
     export KUBECONFIG="$(kind get kubeconfig-path --name=calico-test)"
@@ -75,7 +75,6 @@ function install_k8s() {
 
 function install_calico() {
     kubectl get pods
-
     pushd $ROOT_CALICO_REPOS_DIR/calico/_output/dev-manifests
         kubectl apply -f ./calico.yaml 
         kubectl get pods -n kube-system
@@ -92,19 +91,19 @@ function install_calico() {
 check
 
 if [[ ! "${BUILD_CALICO}" == "false" ]] ; then
-	build
+    build
 fi
 if [[ ! -d ${ROOT_CALICO_REPOS_DIR}/calico/_output ]] ; then
-	echo "No build output directory ! Provide a build of calico before we finish installation."
-	exit 1
+    echo "No build output directory ! Provide a build of calico before we finish installation."
+    exit 1
 fi
 
 if [[ ! "${BUILD_CALICO}" == "false" ]] ; then
-	build
+    build
 fi
 if [[ ! -d ${ROOT_CALICO_REPOS_DIR}/calico/_output ]] ; then
-	echo "No build output directory ! Provide a build of calico before we finish installation"
-	exit 1
+    echo "No build output directory ! Provide a build of calico before we finish installation"
+    exit 1
 fi
 
 install_k8s
