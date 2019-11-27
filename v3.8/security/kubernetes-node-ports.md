@@ -1,5 +1,6 @@
 ---
 title: Apply policy to Kubernetes node ports
+canonical_url: 'https://docs.projectcalico.org/v3.8/security/kubernetes-node-ports'
 ---
 
 ### Big picture
