@@ -24,7 +24,7 @@ function check() {
 }
 
 if [[ -v ROOT_CALICO_REPOS_DIR ]] ;  then
-    echo "foudn input var for ROOT_CALICO_REPOS_DIR =  $ROOT_CALICO_REPOS_DIR"
+    echo "found input var for ROOT_CALICO_REPOS_DIR =  $ROOT_CALICO_REPOS_DIR"
 else
     ROOT_CALICO_REPOS_DIR ?="~/calico_all/"
 fi
