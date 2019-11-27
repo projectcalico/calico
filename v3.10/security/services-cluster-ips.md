@@ -1,6 +1,7 @@
 ---
 title: Apply policy to services exposed externally as cluster IPs
 redirect_from: latest/security/services-cluster-ips
+canonical_url: 'https://docs.projectcalico.org/v3.9/security/services-cluster-ips'
 ---
 
 ### Big picture

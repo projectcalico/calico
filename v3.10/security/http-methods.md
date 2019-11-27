@@ -1,6 +1,7 @@
 ---
 title: Use HTTP methods and paths in policy rules
 redirect_from: latest/security/http-methods
+canonical_url: 'https://docs.projectcalico.org/v3.9/security/http-methods'
 ---
 
 ### Big picture

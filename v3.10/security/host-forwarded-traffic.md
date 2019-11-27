@@ -1,6 +1,7 @@
 ---
 title: Apply policy to forwarded traffic
 redirect_from: latest/security/host-forwarded-traffic
+canonical_url: 'https://docs.projectcalico.org/v3.9/security/host-forwarded-traffic'
 ---
 
 ### Big picture

@@ -1,6 +1,7 @@
 ---
 title: Advertise Kubernetes service IP addresses
 redirect_from: latest/networking/advertise-service-ips
+canonical_url: 'https://docs.projectcalico.org/v3.9/networking/advertise-service-ips'
 ---
 
 ### Big picture

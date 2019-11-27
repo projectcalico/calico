@@ -2,6 +2,7 @@
 title: Use service accounts in policy
 redirect_from: latest/security/service-accounts
 description: Use Kubernetes service accounts in policies to validate cryptographic identities and/or manage RBAC controlled high-priority rules across teams.
+canonical_url: 'https://docs.projectcalico.org/v3.9/security/service-accounts'
 ---
 
 ### Big picture

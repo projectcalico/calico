@@ -1,6 +1,7 @@
 ---
 title: Enable default deny for Kubernetes pods
 redirect_from: latest/security/kubernetes-default-deny
+canonical_url: 'https://docs.projectcalico.org/v3.9/security/kubernetes-default-deny'
 ---
 
 ### Big picture

@@ -1,6 +1,7 @@
 ---
 title: Connecting workloads across networks that you do not control
 redirect_from: latest/networking/vxlan-ipip
+canonical_url: 'https://docs.projectcalico.org/v3.10/networking/vxlan-ipip'
 ---
 
 ### Big picture

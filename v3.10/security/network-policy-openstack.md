@@ -1,6 +1,7 @@
 ---
 title: Get started with Calico network policy for OpenStack
 redirect_from: latest/security/network-policy-openstack
+canonical_url: 'https://docs.projectcalico.org/v3.9/security/network-policy-openstack'
 ---
 
 ### Big picture

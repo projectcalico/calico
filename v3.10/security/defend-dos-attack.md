@@ -1,6 +1,7 @@
 ---
 title: Defend against DoS attacks
 redirect_from: latest/security/defend-dos-attack
+canonical_url: 'https://docs.projectcalico.org/v3.9/security/defend-dos-attack'
 ---
 
 ### Big picture 

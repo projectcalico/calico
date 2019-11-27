@@ -1,6 +1,7 @@
 ---
 title: IBM Cloud Kubernetes Service (IKS)
 redirect_from: latest/getting-started/kubernetes/managed-public-cloud/iks
+canonical_url: 'https://docs.projectcalico.org/v3.9/getting-started/kubernetes/managed-public-cloud/iks'
 ---
 
 ### Big picture

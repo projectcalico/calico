@@ -1,6 +1,7 @@
 ---
 title: Accelerating Istio network performance
 redirect_from: latest/networking/sidecar-acceleration
+canonical_url: 'https://docs.projectcalico.org/v3.9/networking/sidecar-acceleration'
 ---
 
 ### Big picture

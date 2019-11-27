@@ -1,6 +1,7 @@
 ---
 title: Adopt a zero trust network model for security
 redirect_from: latest/security/adopt-zero-trust
+canonical_url: 'https://docs.projectcalico.org/v3.9/security/adopt-zero-trust'
 ---
 
 ### Big picture 

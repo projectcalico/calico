@@ -1,10 +1,12 @@
 ---
 title: Microsoft Azure Kubernetes Service (AKS)
 redirect_from: latest/getting-started/kubernetes/managed-public-cloud/aks
+canonical_url: 'https://docs.projectcalico.org/v3.9/getting-started/kubernetes/managed-public-cloud/aks'
+
 ---
 
 ### Big picture
-
+index
 Enable Calico in AKS managed Kubernetes service.
 
 ### Value

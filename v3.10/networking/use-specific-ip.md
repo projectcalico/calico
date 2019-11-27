@@ -1,6 +1,7 @@
 ---
 title: Use a specific IP address with a pod
 redirect_from: latest/networking/use-specific-ip
+canonical_url: 'https://docs.projectcalico.org/v3.10/networking/use-specific-ip'
 ---
 
 ### Big picture

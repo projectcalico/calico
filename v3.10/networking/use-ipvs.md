@@ -1,5 +1,6 @@
 ---
 title: Use IPVS kube-proxy
+redirect_from: latest/networking/use-ipvs
 canonical_url: 'https://docs.projectcalico.org/v3.10/networking/use-ipvs'
 ---
 

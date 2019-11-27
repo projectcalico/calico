@@ -1,6 +1,7 @@
 ---
 title: Amazon Elastic Kubernetes Service (EKS)
 redirect_from: latest/getting-started/kubernetes/managed-public-cloud/eks
+canonical_url: 'https://docs.projectcalico.org/v3.9/getting-started/kubernetes/managed-public-cloud/eks'
 ---
 
 ### Big picture

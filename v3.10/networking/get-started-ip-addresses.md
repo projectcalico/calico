@@ -1,6 +1,7 @@
 ---
 title: Get started with IP address management
 redirect_from: latest/networking/get-started-ip-addresses
+canonical_url: 'https://docs.projectcalico.org/v3.9/networking/get-started-ip-addresses'
 ---
 
 ### Big picture

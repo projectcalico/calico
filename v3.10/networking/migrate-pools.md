@@ -1,6 +1,7 @@
 ---
 title: Migrate from one IP pool to another
 redirect_from: latest/networking/migrate-pools
+canonical_url: 'https://docs.projectcalico.org/v3.9/networking/migrate-pools'
 ---
 
 ### Big picture

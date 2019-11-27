@@ -1,6 +1,7 @@
 ---
 title: Migrating a cluster from flannel to Calico
 redirect_from: latest/getting-started/kubernetes/installation/migration-from-flannel
+canonical_url: 'https://docs.projectcalico.org/v3.9/getting-started/kubernetes/installation/flannel/migration-from-flannel'
 ---
 
 # About

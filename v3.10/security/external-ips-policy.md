@@ -1,6 +1,7 @@
 ---
 title: Use external IPs or networks in policy rules
 redirect_from: latest/security/external-ips-policy
+canonical_url: 'https://docs.projectcalico.org/v3.9/security/external-ips-policy'
 ---
 
 ### Big picture

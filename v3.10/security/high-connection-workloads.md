@@ -1,6 +1,7 @@
 ---
 title: Enable extreme high-connection workloads 
 redirect_from: latest/security/high-connection-workloads
+canonical_url: 'https://docs.projectcalico.org/v3.9/security/high-connection-workloads'
 ---
 
 ### Big picture

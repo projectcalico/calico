@@ -1,6 +1,7 @@
 ---
 title: Use ICMP/ping in policy rules
 redirect_from: latest/security/icmp-ping
+canonical_url: 'https://docs.projectcalico.org/v3.9/security/icmp-ping'
 ---
 
 ### Big picture

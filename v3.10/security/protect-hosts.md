@@ -1,6 +1,7 @@
 ---
 title: Protect hosts
 redirect_from: latest/security/protect-hosts
+canonical_url: 'https://docs.projectcalico.org/v3.9/security/protect-hosts'
 ---
 
 ### Big picture
