@@ -9,15 +9,15 @@ require (
 	github.com/coreos/go-iptables v0.3.0 // indirect
 	github.com/mcuadros/go-version v0.0.0-20190308113854-92cdf37c5b75
 	github.com/natefinch/atomic v0.0.0-20150920032501-a62ce929ffcc
-	github.com/onsi/ginkgo v1.6.0
-	github.com/onsi/gomega v1.4.2
-	github.com/projectcalico/libcalico-go v1.7.2-0.20191127020304-2a76912c2c96
+	github.com/onsi/ginkgo v1.10.1
+	github.com/onsi/gomega v1.7.0
+	github.com/projectcalico/libcalico-go v1.7.2-0.20191127160841-0216c08ec5bf
 	github.com/safchain/ethtool v0.0.0-20170622225139-7ff1ba29eca2 // indirect
 	github.com/satori/go.uuid v1.2.0
 	github.com/sirupsen/logrus v1.4.2
 	github.com/vishvananda/netlink v0.0.0-20170630184320-6e453822d85e
 	github.com/vishvananda/netns v0.0.0-20170219233438-54f0e4339ce7 // indirect
-	k8s.io/api v0.0.0-20190718183219-b59d8169aab5
-	k8s.io/apimachinery v0.0.0-20190612205821-1799e75a0719
+	k8s.io/api v0.0.0-20191121175643-4ed536977f46
+	k8s.io/apimachinery v0.0.0-20191121175448-79c2a76c473a
 	k8s.io/client-go v0.0.0-20190620085101-78d2af792bab
 )
