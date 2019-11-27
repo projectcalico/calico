@@ -1,5 +1,6 @@
 ---
 title: Get started with Kubernetes network policy
+canonical_url: 'https://docs.projectcalico.org/v3.8/security/kubernetes-network-policy'
 ---
 
 ### Big picture

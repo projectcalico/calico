@@ -1,5 +1,6 @@
 ---
 title: Get started with calico network policy
+canonical_url: 'https://docs.projectcalico.org/v3.8/security/calico-network-policy'
 ---
 
 ### Big Picture
