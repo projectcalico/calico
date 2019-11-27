@@ -19,6 +19,7 @@ import (
 	"os"
 	"os/exec"
 	"path"
+	"regexp"
 	"strings"
 	"sync"
 
@@ -26,6 +27,62 @@ import (
 
 	"github.com/projectcalico/felix/bpf"
 )
+
+func RemoveConnectTimeLoadBalancer(cgroupv2 string) error {
+	// In case we're in a container and the cgroup filesystem isn't mounted, we need to mount it in order
+	// to look for our programs.
+	cgroupRoot, err := bpf.MaybeMountCgroupV2()
+	if err != nil {
+		log.WithError(err).Error("Failed to mount cgroupv2, unable to clean up connect-time load balancing")
+		return err
+	}
+
+	cgroupPath := cgroupRoot
+	if cgroupv2 != "" {
+		cgroupPath = path.Clean(path.Join(cgroupRoot, cgroupv2))
+		if !strings.HasPrefix(cgroupPath, path.Clean(cgroupRoot)) {
+			log.Panic("Invalid cgroup path")
+		}
+		_, err := os.Stat(cgroupPath)
+		if os.IsNotExist(err) {
+			log.Info("Target cgroup didn't exist, nothing to clean up.")
+			return nil
+		}
+	}
+
+	cmd := exec.Command("bpftool", "cgroup", "show", cgroupPath)
+	log.WithField("args", cmd.Args).Info("Running bpftool to look up programs attached to cgroup")
+	out, err := cmd.Output()
+	if err != nil {
+		log.WithError(err).WithField("output", string(out)).Error("Failed to list BPF programs.")
+		return err
+	}
+
+	lines := strings.Split(string(out), "\n")
+	for _, line := range lines {
+		if strings.Contains(line, "cali_") {
+			log.WithField("line", line).Debug("Found one of our programs")
+			re := regexp.MustCompile(`^(\d+)\s+(\S+)`)
+			match := re.FindStringSubmatch(line)
+			if len(match) > 0 {
+				id := match[1]
+				attachType := match[2]
+
+				cmd = exec.Command("bpftool", "cgroup", "detach", cgroupPath, attachType, "id", id)
+				log.WithField("args", cmd.Args).Info("Running bpftool to detach program")
+				out, err = cmd.CombinedOutput()
+				if err != nil {
+					log.WithError(err).WithField("output", string(out)).Error(
+						"Failed to detach connect-time load balancing program.")
+					return err
+				}
+
+			}
+		}
+	}
+
+	return nil
+}
 
 func InstallConnectTimeLoadBalancer(frontendMap, backendMap bpf.Map, cgroupv2 string) error {
 	args := []string{

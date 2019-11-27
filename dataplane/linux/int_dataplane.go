@@ -153,6 +153,7 @@ type Config struct {
 	XDPAllowGeneric      bool
 	BPFConntrackTimeouts conntrack.Timeouts
 	BPFCgroupV2          string
+	BPFConnTimeLBEnabled bool
 
 	SidecarAccelerationEnabled bool
 
@@ -490,10 +491,18 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			log.Info("BPF enabled but no Kubernetes client available, unable to run kube-proxy module.")
 		}
 
-		// Activate the connect-time load balancer.
-		err = nat.InstallConnectTimeLoadBalancer(frontendMap, backendMap, config.BPFCgroupV2)
-		if err != nil {
-			log.WithError(err).Panic("Failed to attach connect-time load balancer.")
+		if config.BPFConnTimeLBEnabled {
+			// Activate the connect-time load balancer.
+			err = nat.InstallConnectTimeLoadBalancer(frontendMap, backendMap, config.BPFCgroupV2)
+			if err != nil {
+				log.WithError(err).Panic("Failed to attach connect-time load balancer.")
+			}
+		} else {
+			// Deactivate the connect-time load balancer.
+			err = nat.RemoveConnectTimeLoadBalancer(config.BPFCgroupV2)
+			if err != nil {
+				log.WithError(err).Panic("Failed to detach connect-time load balancer.")
+			}
 		}
 	}
 

@@ -6,7 +6,7 @@
 #include "../include/nat.h"
 
 __attribute__((section("calico_connect_v4_noop")))
-int connect_noop(struct bpf_sock_addr *ctx)
+int cali_noop_v4(struct bpf_sock_addr *ctx)
 {
 	enum calico_tc_flags flags = CALI_CGROUP;
 	CALI_INFO("Noop program executing\n");
@@ -14,7 +14,7 @@ int connect_noop(struct bpf_sock_addr *ctx)
 }
 
 __attribute__((section("calico_connect_v4")))
-int connect_balancer(struct bpf_sock_addr *ctx)
+int cali_ctlb_v4(struct bpf_sock_addr *ctx)
 {
 	enum calico_tc_flags flags = CALI_CGROUP;
 	int verdict = 1;
