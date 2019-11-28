@@ -15,8 +15,11 @@
 package proxy
 
 import (
+	"net"
+
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
+	"github.com/vishvananda/netlink"
 	"k8s.io/client-go/kubernetes"
 
 	"github.com/projectcalico/felix/bpf"
@@ -24,7 +27,12 @@ import (
 
 // StartKubeProxy start a new kube-proxy if there was no error
 func StartKubeProxy(k8sClientSet *kubernetes.Clientset, hostname string, frontendMap, backendMap bpf.Map, opts ...Option) error {
-	syncer, err := NewSyncer(nil, frontendMap, backendMap)
+	hostIPs, err := getHostIPs()
+	if err != nil {
+		return err
+	}
+
+	syncer, err := NewSyncer(hostIPs, frontendMap, backendMap)
 	if err != nil {
 		return errors.WithMessage(err, "new bpf syncer")
 	}
@@ -34,7 +42,36 @@ func StartKubeProxy(k8sClientSet *kubernetes.Clientset, hostname string, fronten
 		return errors.WithMessage(err, "new proxy")
 	}
 
-	log.Infof("kube-proxy started, hostname=%q", hostname)
+	log.Infof("kube-proxy started, hostname=%q hostIP=%+v", hostname, hostIPs)
 
 	return nil
+}
+
+func getHostIPs() ([]net.IP, error) {
+	nl, err := netlink.NewHandle()
+	if err != nil {
+		return nil, errors.Errorf("failed to create netlink handle: %s", err)
+	}
+
+	eth0, err := nl.LinkByName("eth0")
+	if err != nil {
+		return nil, errors.Errorf("failed to find eth0: %s", err)
+	}
+
+	addrs, err := netlink.AddrList(eth0, 0)
+	if err != nil {
+		return nil, errors.Errorf("failed to list eth0 addrs: %s", err)
+	}
+
+	var ret []net.IP
+
+	for _, a := range addrs {
+		if a.IPNet != nil {
+			if ipv4 := a.IP.To4(); ipv4 != nil {
+				ret = append(ret, ipv4)
+			}
+		}
+	}
+
+	return ret, nil
 }
