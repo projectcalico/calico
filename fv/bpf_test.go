@@ -65,6 +65,14 @@ type bpfTestOptions struct {
 	protocol        string
 }
 
+const expectedRouteDump = `10.65.0.1/32: local host
+10.65.0.2/32: local workload
+10.65.0.3/32: local workload
+10.65.1.0/26: remote workload, host IP FELIX_1
+FELIX_0/32: local host
+FELIX_1/32: remote host
+`
+
 func describeBPFTests(testOpts bpfTestOptions) bool {
 	desc := fmt.Sprintf("_BPF_ _BPF-SAFE_ BPF tests (%s, ct=%v)", testOpts.protocol, testOpts.connTimeEnabled)
 	return infrastructure.DatastoreDescribe(desc, []apiconfig.DatastoreType{apiconfig.Kubernetes}, func(getInfra infrastructure.InfraFactory) {
@@ -277,21 +285,22 @@ func describeBPFTests(testOpts bpfTestOptions) bool {
 				err := infra.AddDefaultDeny()
 				Expect(err).NotTo(HaveOccurred())
 			})
-			const expectedRouteDump = `   10.65.0.1/32: local host
-   10.65.0.2/32: local host
-   10.65.0.3/32: local host
-   10.65.1.0/26: remote workload, host IP 172.17.0.7
-   127.0.0.1/32: local host
-  172.17.0.6/32: local host
-  172.17.0.7/32: remote host
-`
+
 			It("should have correct routes", func() {
 				dumpRoutes := func() string {
 					out, err := felixes[0].ExecOutput("calico-bpf", "routes", "dump")
 					if err != nil {
 						return fmt.Sprint(err)
 					}
-					return out
+
+					lines := strings.Split(out, "\n")
+					for i := range lines {
+						lines[i] = strings.TrimLeft(lines[i], " ")
+						lines[i] = strings.ReplaceAll(lines[i], felixes[0].IP, "FELIX_0")
+						lines[i] = strings.ReplaceAll(lines[i], felixes[1].IP, "FELIX_1")
+					}
+
+					return strings.Join(lines, "\n")
 				}
 				Eventually(dumpRoutes).Should(Equal(expectedRouteDump))
 			})

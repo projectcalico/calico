@@ -210,13 +210,18 @@ func (m *bpfRouteManager) recalculateLocalHostIPs() {
 	newRoutes := map[routes.Key]routes.Value{}
 
 	for iface, ips := range m.localHostIPs {
-		log.WithField("iface", iface).Debug("Adding IPs from interface")
+		logCxt := log.WithField("iface", iface)
+		logCxt.Debug("Adding IPs from interface")
 		ips.Iter(func(item interface{}) error {
 			ipStr := item.(string)
 			cidr := ip.MustParseCIDROrIP(ipStr)
 			v4CIDR, ok := cidr.(ip.V4CIDR)
 			if !ok {
 				// FIXME IPv6
+				return nil
+			}
+			if !cidr.Addr().AsNetIP().IsGlobalUnicast() {
+				logCxt.WithField("addr", cidr).Debug("Address is not global unicast, ignore")
 				return nil
 			}
 			key := routes.NewKey(v4CIDR)
