@@ -23,6 +23,7 @@ import (
 	"os/exec"
 	"path"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/projectcalico/felix/idalloc"
@@ -223,7 +224,80 @@ func bpftoolProgRun(progName string, dataIn []byte) (bpfRunResult, error) {
 	return res, nil
 }
 
+var unittestH = `
+/*
+ * THIS FILE IS GENERATED
+ */
+ #ifndef __BPF_UNITTEST_H__
+ #define __BPF_UNITTEST_H__
+ #include "%s"
+ #endif
+`
+
 type bpfProgRunFn func(data []byte) (bpfRunResult, error)
+
+// runBpfUnitTest runs a small unit in isolation. It requires a small .c file
+// that wrapsthe unit and compiles into a calico_unittest section.
+func runBpfUnitTest(t *testing.T, source string, testFn func(bpfProgRunFn)) {
+	RegisterTestingT(t)
+
+	tempDir, err := ioutil.TempDir("", "calico-bpf-")
+	Expect(err).NotTo(HaveOccurred())
+
+	defer os.RemoveAll(tempDir)
+
+	unique := path.Base(tempDir)
+	bpfFsDir := "/sys/fs/bpf/" + unique
+
+	err = os.Mkdir(bpfFsDir, os.ModePerm)
+	Expect(err).NotTo(HaveOccurred())
+
+	defer os.RemoveAll(bpfFsDir)
+
+	objFname := tempDir + "/" + strings.TrimSuffix(source, path.Ext(source))
+
+	wdir := "../xdp"
+	unittestFName := wdir + "/unittest.h"
+
+	err = ioutil.WriteFile(unittestFName,
+		[]byte(fmt.Sprintf(unittestH, source)), 0644)
+	Expect(err).NotTo(HaveOccurred())
+
+	defer os.Remove(unittestFName)
+
+	curwd, err := os.Getwd()
+	Expect(err).NotTo(HaveOccurred())
+
+	err = intdataplane.CompileTCProgramToFile(nil,
+		idalloc.New(),
+		intdataplane.CompileWithBpftoolLoader(),
+		intdataplane.CompileWithWorkingDir(wdir),
+		intdataplane.CompileWithSourceName(wdir+"/redir_tc.c"),
+		intdataplane.CompileWithOutputName(objFname),
+		intdataplane.CompileWithFIBEnabled(true),
+		intdataplane.CompileWithLogLevel("DEBUG"),
+		intdataplane.CompileWithLogPrefix("UNITTEST"),
+		intdataplane.CompileWithDefine("CALI_UNITTEST"),
+		intdataplane.CompileWithVxlanPort(testVxlanPort),
+		intdataplane.CompileWithIncludePath(curwd+"/progs"),
+		intdataplane.CompileWithHostIP(hostIP),
+	)
+	Expect(err).NotTo(HaveOccurred())
+
+	err = bpftoolProgLoadAll(objFname, bpfFsDir)
+	Expect(err).NotTo(HaveOccurred())
+
+	t.Run(source, func(_ *testing.T) {
+		testFn(func(dataIn []byte) (bpfRunResult, error) {
+			res, err := bpftoolProgRun(bpfFsDir+"/calico_unittest", dataIn)
+			log.Debugf("dataIn  = %+v", dataIn)
+			if err == nil {
+				log.Debugf("dataOut = %+v", res.dataOut)
+			}
+			return res, err
+		})
+	})
+}
 
 // layersMatchFields matches all Exported fields and ignore the ones explicitly
 // listed. It always ignores BaseLayer as that is not set by the tests.

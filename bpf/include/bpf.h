@@ -64,8 +64,12 @@ MAKEFUNC(int, redirect_map, void *map, __u32 key, __u64 flags)
 MAKEFUNC(void, tail_call, void *ctx, void *map, uint32_t index)
 MAKEFUNC(void, skb_store_bytes, void *ctx, __u32 offset, const void *from, __u32 len, __u64 flags)
 MAKEFUNC(int, l4_csum_replace, void *ctx, __u32 offset, __u64 from, __u64 to, __u64 flags)
-MAKEFUNC(void, l3_csum_replace, void *ctx, __u32 offset, __u64 from, __u64 to, __u64 flags)
+MAKEFUNC(int, l3_csum_replace, void *ctx, __u32 offset, __u64 from, __u64 to, __u64 flags)
 MAKEFUNC(int, fib_lookup, void *ctx, struct bpf_fib_lookup *params, int plen, __u32 flags)
+MAKEFUNC(int, skb_change_head, void *ctx, __u32 len, __u64 flags)
+MAKEFUNC(int, skb_change_tail, void *ctx, __u32 len, __u64 flags)
+MAKEFUNC(int, skb_adjust_room, void *ctx, __s32 len, __u32 mode, __u64 flags)
+MAKEFUNC(int, csum_diff, __be32 *from, __u32 from_size, __be32 *to, __u32 to_size, __wsum seed)
 
 #define printk(fmt, ...) do { char fmt2[] = fmt; bpf_trace_printk(fmt2, sizeof(fmt2) , ## __VA_ARGS__); } while (0)
 
@@ -156,6 +160,7 @@ enum calico_skb_mark {
 #define skb_has_data_after(skb, ptr, size) (!skb_shorter(skb, skb_offset(skb, ptr) + \
 					     sizeof(*ptr) + (size)))
 #define skb_tail_len(skb, ptr) ((skb)->data_end - (long)ptr)
+#define skb_ptr(skb, off) ((void *)((long)(skb)->data + (off)))
 
 #define IPV4_UDP_SIZE		(sizeof(struct iphdr) + sizeof(struct udphdr))
 #define ETH_IPV4_UDP_SIZE	(sizeof(struct ethhdr) + IPV4_UDP_SIZE)
