@@ -132,9 +132,6 @@ enum calico_tc_flags {
 	CALI_CGROUP     = 1<<3,
 };
 
-#define CALI_TC_FLAGS_TO_HOST(flags) (((flags & CALI_TC_HOST_EP) && (flags & CALI_TC_INGRESS)) || \
-		(!(flags & CALI_TC_HOST_EP) && !(flags & CALI_TC_INGRESS)))
-
 #define CALI_TC_FLAGS_HOST_ENDPOINT(flags) (flags & CALI_TC_HOST_EP)
 
 #define CALI_TC_FLAGS_FROM_HOST_ENDPOINT(flags) ((flags & CALI_TC_HOST_EP) && (flags & CALI_TC_INGRESS))
@@ -142,6 +139,12 @@ enum calico_tc_flags {
 #define CALI_TC_FLAGS_FROM_WORKLOAD(flags) (!(flags & CALI_TC_HOST_EP) && !(flags & CALI_TC_INGRESS))
 
 #define CALI_TC_FLAGS_TO_WORKLOAD(flags) (!(flags & CALI_TC_HOST_EP) && (flags & CALI_TC_INGRESS))
+
+#define CALI_TC_FLAGS_TO_HOST(flags) \
+	(CALI_TC_FLAGS_FROM_HOST_ENDPOINT(flags) || CALI_TC_FLAGS_FROM_WORKLOAD(flags))
+
+#define CALI_TC_FLAGS_TO_HOST_ENDPOINT(flags) \
+	((flags & CALI_TC_HOST_EP) && !(flags & CALI_TC_INGRESS))
 
 #define CALI_TC_FLAGS_L3(flags) ((flags & CALI_TC_HOST_EP) && !(flags & CALI_TC_INGRESS) && (flags & CALI_TC_TUNNEL))
 
@@ -151,6 +154,7 @@ enum calico_skb_mark {
 	// TODO allocate marks from the mark pool.
 	CALI_SKB_MARK_SEEN = 0xca110000,
 	CALI_SKB_MARK_BYPASS = 0xca100000,
+	CALI_SKB_MARK_BYPASS_FWD_EXTERNAL = 0xca120000,
 	CALI_SKB_MARK_SEEN_MASK = 0xffff0000,
 	CALI_SKB_MARK_NO_TRACK      = 1<<1,
 };

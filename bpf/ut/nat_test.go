@@ -247,3 +247,226 @@ func TestNATPodPodXNode(t *testing.T) {
 
 	// Response leaving to original source
 }
+
+func TestNATNodePort(t *testing.T) {
+	eth := &layers.Ethernet{
+		SrcMAC:       []byte{0, 0, 0, 0, 0, 1},
+		DstMAC:       []byte{0, 0, 0, 0, 0, 2},
+		EthernetType: layers.EthernetTypeIPv4,
+	}
+
+	payload := []byte("ABCDEABCDEXXXXXXXXXXXX")
+
+	ipv4 := &layers.IPv4{
+		IHL:      5,
+		Length:   uint16(5*4 + 8 + len(payload)),
+		SrcIP:    net.IPv4(1, 1, 1, 1),
+		DstIP:    net.IPv4(2, 2, 2, 2),
+		Protocol: layers.IPProtocolUDP,
+	}
+
+	udp := &layers.UDP{
+		SrcPort: 1234,
+		DstPort: 5678,
+		Length:  8 + uint16(len(payload)),
+	}
+
+	_ = udp.SetNetworkLayerForChecksum(ipv4)
+
+	pkt := gopacket.NewSerializeBuffer()
+	err := gopacket.SerializeLayers(pkt, gopacket.SerializeOptions{ComputeChecksums: true},
+		eth, ipv4, udp, gopacket.Payload(payload))
+	Expect(err).NotTo(HaveOccurred())
+
+	natMap := nat.FrontendMap()
+	err = natMap.EnsureExists()
+	Expect(err).NotTo(HaveOccurred())
+
+	natBEMap := nat.BackendMap()
+	err = natBEMap.EnsureExists()
+	Expect(err).NotTo(HaveOccurred())
+
+	err = natMap.Update(
+		nat.NewNATKey(ipv4.DstIP, uint16(udp.DstPort), uint8(ipv4.Protocol)).AsBytes(),
+		nat.NewNATValue(0, 1).AsBytes(),
+	)
+	Expect(err).NotTo(HaveOccurred())
+
+	natIP := net.IPv4(8, 8, 8, 8)
+	natPort := uint16(666)
+
+	err = natBEMap.Update(
+		nat.NewNATBackendKey(0, 0).AsBytes(),
+		nat.NewNATBackendValue(natIP, natPort).AsBytes(),
+	)
+	Expect(err).NotTo(HaveOccurred())
+
+	ctMap := conntrack.Map()
+	err = ctMap.EnsureExists()
+	Expect(err).NotTo(HaveOccurred())
+	resetCTMap(ctMap) // ensure it is clean
+
+	var encapedPkt []byte
+
+	hostIP = node1ip
+
+	// Arriving at node 1
+	runBpfTest(t, "calico_from_host_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
+		res, err := bpfrun(pkt.Bytes())
+		Expect(err).NotTo(HaveOccurred())
+		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
+
+		pktR := gopacket.NewPacket(res.dataOut, layers.LayerTypeEthernet, gopacket.Default)
+		fmt.Printf("pktR = %+v\n", pktR)
+
+		ipv4L := pktR.Layer(layers.LayerTypeIPv4)
+		Expect(ipv4L).NotTo(BeNil())
+		ipv4R := ipv4L.(*layers.IPv4)
+		Expect(ipv4R.SrcIP.String()).To(Equal(hostIP.String()))
+		Expect(ipv4R.DstIP.String()).To(Equal(natIP.String()))
+
+		checkVxlanEncap(pktR, false, ipv4, udp, payload)
+
+		encapedPkt = res.dataOut
+	})
+
+	dumpCTMap(ctMap)
+
+	// Leaving node 1
+	runBpfTest(t, "calico_to_host_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
+		res, err := bpfrun(encapedPkt)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
+
+		pktR := gopacket.NewPacket(res.dataOut, layers.LayerTypeEthernet, gopacket.Default)
+		fmt.Printf("pktR = %+v\n", pktR)
+
+		Expect(res.dataOut).To(Equal(encapedPkt))
+	})
+
+	dumpCTMap(ctMap)
+	fromHostCT := saveCTMap(ctMap)
+	resetCTMap(ctMap)
+
+	var recvPkt []byte
+
+	hostIP = node2ip
+
+	// Arriving at node 2
+	runBpfTest(t, "calico_from_host_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
+		res, err := bpfrun(encapedPkt)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
+
+		pktR := gopacket.NewPacket(res.dataOut, layers.LayerTypeEthernet, gopacket.Default)
+		fmt.Printf("pktR = %+v\n", pktR)
+
+		Expect(res.dataOut).To(Equal(encapedPkt))
+	})
+
+	// Arriving at workload at node 2
+	runBpfTest(t, "calico_to_workload_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
+		res, err := bpfrun(encapedPkt)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
+
+		pktR := gopacket.NewPacket(res.dataOut, layers.LayerTypeEthernet, gopacket.Default)
+		fmt.Printf("pktR = %+v\n", pktR)
+
+		ipv4L := pktR.Layer(layers.LayerTypeIPv4)
+		ipv4R := ipv4L.(*layers.IPv4)
+		Expect(ipv4R.SrcIP.String()).To(Equal(ipv4.SrcIP.String()))
+		Expect(ipv4R.DstIP.String()).To(Equal(natIP.String()))
+
+		udpL := pktR.Layer(layers.LayerTypeUDP)
+		Expect(udpL).NotTo(BeNil())
+		udpR := udpL.(*layers.UDP)
+		Expect(udpR.SrcPort).To(Equal(layers.UDPPort(udp.SrcPort)))
+		Expect(udpR.DstPort).To(Equal(layers.UDPPort(natPort)))
+
+		recvPkt = res.dataOut
+	})
+
+	dumpCTMap(ctMap)
+
+	// Response leaving workload at node 2
+	runBpfTest(t, "calico_from_workload_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
+		resp := udpResposeRaw(recvPkt)
+		res, err := bpfrun(resp)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
+		pktR := gopacket.NewPacket(res.dataOut, layers.LayerTypeEthernet, gopacket.Default)
+		fmt.Printf("pktR = %+v\n", pktR)
+
+		ipv4L := pktR.Layer(layers.LayerTypeIPv4)
+		Expect(ipv4L).NotTo(BeNil())
+		ipv4R := ipv4L.(*layers.IPv4)
+		Expect(ipv4R.SrcIP.String()).To(Equal(natIP.String()))
+		Expect(ipv4R.DstIP.String()).To(Equal(node1ip.String()))
+
+		checkVxlan(pktR)
+
+		encapedPkt = res.dataOut
+	})
+
+	// Response leaving node 2
+	runBpfTest(t, "calico_to_host_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
+		res, err := bpfrun(encapedPkt)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
+
+		pktR := gopacket.NewPacket(res.dataOut, layers.LayerTypeEthernet, gopacket.Default)
+		fmt.Printf("pktR = %+v\n", pktR)
+
+		Expect(res.dataOut).To(Equal(encapedPkt))
+	})
+
+	dumpCTMap(ctMap)
+	resetCTMap(ctMap)
+	restoreCTMap(ctMap, fromHostCT)
+	dumpCTMap(ctMap)
+
+	hostIP = node1ip
+
+	// Response arriving at node 1
+	runBpfTest(t, "calico_from_host_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
+		res, err := bpfrun(encapedPkt)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
+
+		pktR := gopacket.NewPacket(res.dataOut, layers.LayerTypeEthernet, gopacket.Default)
+		fmt.Printf("pktR = %+v\n", pktR)
+
+		ipv4L := pktR.Layer(layers.LayerTypeIPv4)
+		Expect(ipv4L).NotTo(BeNil())
+		ipv4R := ipv4L.(*layers.IPv4)
+		Expect(ipv4R.DstIP.String()).To(Equal(ipv4.SrcIP.String()))
+		Expect(ipv4R.SrcIP.String()).To(Equal(ipv4.DstIP.String()))
+
+		udpL := pktR.Layer(layers.LayerTypeUDP)
+		Expect(udpL).NotTo(BeNil())
+		udpR := udpL.(*layers.UDP)
+		Expect(udpR.SrcPort).To(Equal(udp.DstPort))
+		Expect(udpR.DstPort).To(Equal(udp.SrcPort))
+
+		payloadL := pktR.ApplicationLayer()
+		Expect(payloadL).NotTo(BeNil())
+		Expect(payload).To(Equal(payloadL.Payload()))
+
+		recvPkt = res.dataOut
+	})
+
+	dumpCTMap(ctMap)
+
+	// Response leaving to original source
+	runBpfTest(t, "calico_to_host_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
+		res, err := bpfrun(recvPkt)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
+
+		pktR := gopacket.NewPacket(res.dataOut, layers.LayerTypeEthernet, gopacket.Default)
+		fmt.Printf("pktR = %+v\n", pktR)
+	})
+
+	dumpCTMap(ctMap)
+}

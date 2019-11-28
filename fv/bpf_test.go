@@ -65,13 +65,21 @@ type bpfTestOptions struct {
 	protocol        string
 }
 
-const expectedRouteDump = `10.65.0.1/32: local host
+const expectedRouteDump = `10.65.0.2/32: local workload
+10.65.0.3/32: local workload
+FELIX_0/32: local host
+FELIX_1/32: remote host
+`
+
+/* XXX use when IPIP enabled
+const expectedRouteDumpIPIP = `10.65.0.1/32: local host
 10.65.0.2/32: local workload
 10.65.0.3/32: local workload
 10.65.1.0/26: remote workload, host IP FELIX_1
 FELIX_0/32: local host
 FELIX_1/32: remote host
 `
+*/
 
 func describeBPFTests(testOpts bpfTestOptions) bool {
 	desc := fmt.Sprintf("_BPF_ _BPF-SAFE_ BPF tests (%s, ct=%v)", testOpts.protocol, testOpts.connTimeEnabled)
@@ -99,6 +107,9 @@ func describeBPFTests(testOpts bpfTestOptions) bool {
 
 			options = infrastructure.DefaultTopologyOptions()
 			options.FelixLogSeverity = "debug"
+			// XXX fix the policies below if enabling IPIP
+			options.IPIPEnabled = false
+			options.IPIPRoutesEnabled = false
 			options.ExtraEnvVars["FELIX_BPFConnectTimeLoadBalancingEnabled"] = fmt.Sprint(testOpts.connTimeEnabled)
 		})
 
@@ -368,7 +379,7 @@ func describeBPFTests(testOpts bpfTestOptions) bool {
 					testSvcName := "test-service"
 
 					BeforeEach(func() {
-						testSvc = k8sService(testSvcName, "10.101.0.10", w[0][0], 80, 8055, testOpts.protocol)
+						testSvc = k8sService(testSvcName, "10.101.0.10", w[0][0], 80, 8055, 0, testOpts.protocol)
 						testSvcNamespace = testSvc.ObjectMeta.Namespace
 						_, err := k8sClient.CoreV1().Services(testSvcNamespace).Create(testSvc)
 						Expect(err).NotTo(HaveOccurred())
@@ -418,8 +429,9 @@ func describeBPFTests(testOpts bpfTestOptions) bool {
 											Nets: []string{
 												felixes[0].IP + "/32",
 												felixes[1].IP + "/32",
-												felixes[0].ExpectedIPIPTunnelAddr + "/32",
-												felixes[1].ExpectedIPIPTunnelAddr + "/32",
+												// XXX uncoment if enambling IPIP
+												// felixes[0].ExpectedIPIPTunnelAddr + "/32",
+												// felixes[1].ExpectedIPIPTunnelAddr + "/32",
 											},
 										},
 									},
@@ -493,7 +505,7 @@ func describeBPFTests(testOpts bpfTestOptions) bool {
 						BeforeEach(func() {
 							_, natBackBeforeUpdate = dumpNATmaps(felixes)
 
-							testSvcUpdated = k8sService(testSvcName, "10.101.0.10", w[0][0], 88, 8055, testOpts.protocol)
+							testSvcUpdated = k8sService(testSvcName, "10.101.0.10", w[0][0], 88, 8055, 0, testOpts.protocol)
 
 							svc, err := k8sClient.CoreV1().
 								Services(testSvcNamespace).
@@ -573,6 +585,80 @@ func describeBPFTests(testOpts bpfTestOptions) bool {
 						})
 					})
 				})
+
+				Context("with test-service being a nodeport @ 30333", func() {
+					var (
+						testSvc          *v1.Service
+						testSvcNamespace string
+					)
+
+					testSvcName := "test-service"
+
+					BeforeEach(func() {
+						k8sClient := infra.(*infrastructure.K8sDatastoreInfra).K8sClient
+						testSvc = k8sService(testSvcName, "10.101.0.10", w[0][0], 80, 8055, 30333, testOpts.protocol)
+						testSvcNamespace = testSvc.ObjectMeta.Namespace
+						_, err := k8sClient.CoreV1().Services(testSvcNamespace).Create(testSvc)
+						Expect(err).NotTo(HaveOccurred())
+						Eventually(k8sGetEpsForServiceFunc(k8sClient, testSvc), "10s").Should(HaveLen(1),
+							"Service endpoints didn't get created? Is controller-manager happy?")
+					})
+
+					It("should have connectivity from all workloads via a service to workload 0", func() {
+						ip := testSvc.Spec.ClusterIP
+						port := uint16(testSvc.Spec.Ports[0].Port)
+
+						cc.ExpectSome(w[0][1], workload.IP(ip), port)
+						cc.ExpectSome(w[1][0], workload.IP(ip), port)
+						cc.ExpectSome(w[1][1], workload.IP(ip), port)
+						cc.CheckConnectivity()
+
+					})
+
+					Describe("after updating the policy to allow traffic from externalClient", func() {
+						BeforeEach(func() {
+							pol.Spec.Ingress = []api.Rule{
+								{
+									Action: "Allow",
+									Source: api.EntityRule{
+										Nets: []string{
+											externalClient.IP + "/32",
+										},
+									},
+								},
+							}
+							pol = updatePolicy(pol)
+						})
+
+						It("should have connectivity from external to w[0] via node1->node0 fwd", func() {
+							if testOpts.connTimeEnabled {
+								Skip("FIXME externalClient also does conntime balancing")
+							}
+
+							log.WithFields(log.Fields{
+								"externalClientIP": externalClient.IP,
+								"nodePortIP":       felixes[1].IP,
+							}).Infof("external->nodeport connection")
+
+							cc.ExpectSome(externalClient, workload.IP(felixes[1].IP), 30333)
+							cc.CheckConnectivity()
+						})
+
+						It("should have connectivity from external to w[0] via node0", func() {
+							if testOpts.connTimeEnabled {
+								Skip("FIXME externalClient also does conntime balancing")
+							}
+
+							log.WithFields(log.Fields{
+								"externalClientIP": externalClient.IP,
+								"nodePortIP":       felixes[1].IP,
+							}).Infof("external->nodeport connection")
+
+							cc.ExpectSome(externalClient, workload.IP(felixes[0].IP), 30333)
+							cc.CheckConnectivity()
+						})
+					})
+				})
 			})
 		})
 	})
@@ -631,17 +717,24 @@ func dumpEPMap(felix *infrastructure.Felix) nat.BackendMapMem {
 	return bpfeps
 }
 
-func k8sService(name, clusterIP string, w *workload.Workload, port, tgtPort int, protocol string) *v1.Service {
+func k8sService(name, clusterIP string, w *workload.Workload, port,
+	tgtPort int, nodePort int32, protocol string) *v1.Service {
 	k8sProto := v1.ProtocolTCP
 	if protocol == "udp" {
 		k8sProto = v1.ProtocolUDP
 	}
+
+	svcType := v1.ServiceTypeClusterIP
+	if nodePort != 0 {
+		svcType = v1.ServiceTypeNodePort
+	}
+
 	return &v1.Service{
 		TypeMeta:   typeMetaV1("Service"),
 		ObjectMeta: objectMetaV1(name),
 		Spec: v1.ServiceSpec{
 			ClusterIP: clusterIP,
-			Type:      v1.ServiceTypeClusterIP,
+			Type:      svcType,
 			Selector: map[string]string{
 				"name": w.Name,
 			},
@@ -649,6 +742,7 @@ func k8sService(name, clusterIP string, w *workload.Workload, port, tgtPort int,
 				{
 					Protocol:   k8sProto,
 					Port:       int32(port),
+					NodePort:   nodePort,
 					Name:       fmt.Sprintf("port-%d", tgtPort),
 					TargetPort: intstr.FromInt(tgtPort),
 				},

@@ -25,6 +25,8 @@ enum calico_reason {
 	CALI_REASON_BYPASS = 0xbb,
 	CALI_REASON_CT_NAT = 0xc1,
 	CALI_REASON_CSUM_FAIL= 0xcf,
+	CALI_REASON_ENCAP_FAIL = 0xef,
+	CALI_REASON_DECAP_FAIL = 0xdf,
 };
 
 #endif /* __CALI_BPF_MAPS_H__ */

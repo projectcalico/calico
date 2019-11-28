@@ -17,6 +17,15 @@
 #define CALI_VXLAN_PORT 4789 /* IANA VXLAN port */
 #endif
 
+#define dnat_should_encap(flags) \
+	(CALI_TC_FLAGS_FROM_HOST_ENDPOINT(flags))
+
+#define dnat_return_should_encap(flags) \
+	(CALI_TC_FLAGS_FROM_WORKLOAD(flags))
+
+#define dnat_should_decap(flags) \
+	(CALI_TC_FLAGS_TO_WORKLOAD(flags) || CALI_TC_FLAGS_FROM_HOST_ENDPOINT(flags))
+
 // Map: NAT level one.  Dest IP and port -> ID and num backends.
 
 struct calico_nat_v4_key {
@@ -166,7 +175,7 @@ static CALI_BPF_INLINE int vxlan_v4_encap(struct __sk_buff *skb,
 	ip->tot_len = host_to_be16(be16_to_host(ip->tot_len) + new_hdrsz);
 	ip->ihl = 5; /* in case there were options in ip_inner */
 	ip->check = 0;
-	ip->protocol = 17; /* UDP */
+	ip->protocol = IPPROTO_UDP;
 
 	udp->source = udp->dest = host_to_be16(CALI_VXLAN_PORT);
 	udp->len = host_to_be16(skb_tail_len(skb, udp));
@@ -221,6 +230,13 @@ out:
 #endif
 
 	return ret;
+}
+
+static CALI_BPF_INLINE int is_vxlan_tunnel(struct iphdr *ip)
+{
+		struct udphdr *udp = (struct udphdr *)(ip +1);
+
+		return ip->protocol == IPPROTO_UDP && udp->dest == host_to_be16(CALI_VXLAN_PORT);
 }
 
 #endif /* __CALI_NAT_H__ */

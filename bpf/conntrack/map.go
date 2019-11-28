@@ -121,6 +121,7 @@ const (
 	TypeNormal uint8 = iota
 	TypeNATForward
 	TypeNATReverse
+	TypeNormalTun
 )
 
 func (e Entry) ReverseNATKey() Key {
@@ -205,7 +206,7 @@ func (e Entry) String() string {
 	switch e.Type() {
 	case TypeNATForward:
 		ret += fmt.Sprintf("REVKey : %s", e.ReverseNATKey().String())
-	case TypeNormal, TypeNATReverse:
+	case TypeNormal, TypeNATReverse, TypeNormalTun:
 		ret += fmt.Sprintf("Data: %+v", e.Data())
 	default:
 		ret += "TYPE INVALID"

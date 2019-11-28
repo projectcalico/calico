@@ -176,10 +176,17 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb, enum calico_tc_flags
 	int rc = TC_ACT_UNSPEC;
 	size_t csum_offset, ip_csum_offset;
 	int res = 0;
-
+	__be32 nat_tun_src = 0;
+	uint32_t fib_flags = 0;
 
 	if (!CALI_TC_FLAGS_TO_HOST(flags) && skb->mark == CALI_SKB_MARK_BYPASS) {
 		CALI_DEBUG("Packet pre-approved by another hook, allow.\n");
+		reason = CALI_REASON_BYPASS;
+		goto allow_bypass;
+	}
+
+	if (CALI_TC_FLAGS_TO_HOST_ENDPOINT(flags) && skb->mark == CALI_SKB_MARK_BYPASS_FWD_EXTERNAL) {
+		CALI_DEBUG("Packet for external source, approved by return from NAT tunnel.\n");
 		reason = CALI_REASON_BYPASS;
 		goto allow_bypass;
 	}
@@ -222,11 +229,49 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb, enum calico_tc_flags
 		goto deny;
 	}
 
+	if (is_vxlan_tunnel(ip_header)) {
+		int decap;
+
+		if (CALI_TC_FLAGS_TO_HOST_ENDPOINT(flags)) {
+			/* XXX should perhaps be dependent on CALI_SKB_MARK_SEEN */
+			CALI_DEBUG("vxlan leaving host: ALLOW\n");
+			goto allow_bypass;
+		}
+
+		decap = dnat_should_decap(flags);
+		/* decap on host ep only if directly for the node
+		 *
+		 * XXX CALI_TC_FLAGS_TO_WORKLOAD
+		 * XXX we let it through for now to reach the endpoint, we will
+		 * XXX change it once we always target the node and decap will always
+		 * XXX happend on the node
+		 * XXX
+		 * XXX This is temp, we wont reease this and we still go through a policy
+		 */
+		decap = decap && (CALI_TC_FLAGS_TO_WORKLOAD(flags) || ip_header->daddr == CALI_HOST_IP);
+
+		if (decap) {
+			nat_tun_src = ip_header->saddr;
+			CALI_DEBUG("vxlan decap\n");
+			if (vxlan_v4_decap(skb)) {
+				reason = CALI_REASON_DECAP_FAIL;
+				goto deny;
+			}
+
+			if (!(ip_header = skb_iphdr(skb, flags))) {
+				reason = CALI_REASON_SHORT;
+				CALI_DEBUG("Too short after VXLAN decap\n");
+				goto deny;
+			}
+
+			CALI_DEBUG("vxlan decap origin %x\n", be32_to_host(nat_tun_src));
+		}
+	}
+
 	// Setting all of these up-front to keep the verifier happy.
 	struct tcphdr *tcp_header = (void*)(ip_header+1);
 	struct udphdr *udp_header = (void*)(ip_header+1);
 	struct icmphdr *icmp_header = (void*)(ip_header+1);
-
 
 	__u8 ip_proto = ip_header->protocol;
 
@@ -236,13 +281,13 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb, enum calico_tc_flags
 		.ifindex = skb->ingress_ifindex,
 	};
 
-	__u16 sport;
-	__u16 dport;
+	__u16 sport = 0;
+	__u16 dport = 0;
 
 	switch (ip_proto) {
 	case IPPROTO_TCP:
 		// Re-check buffer space for TCP (has larger headers than UDP).
-		if ((void*)(tcp_header+1) > (void *)(long)skb->data_end) {
+		if (!skb_has_data_after(skb, ip_header, sizeof(struct tcphdr))) {
 			CALI_DEBUG("Too short for TCP: DROP\n");
 			goto deny;
 		}
@@ -251,15 +296,12 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb, enum calico_tc_flags
 		CALI_DEBUG("TCP; ports: s=%d d=%d\n", sport, dport);
 		break;
 	case IPPROTO_UDP:
-		udp_header = (void*)(ip_header+1);
 		sport = be16_to_host(udp_header->source);
 		dport = be16_to_host(udp_header->dest);
 		CALI_DEBUG("UDP; ports: s=%d d=%d\n", sport, dport);
 		break;
 	case IPPROTO_ICMP:
 		icmp_header = (void*)(ip_header+1);
-		sport = 0;
-		dport = 0;
 		CALI_DEBUG("ICMP; ports: type=%d code=%d\n",
 				icmp_header->type, icmp_header->code);
 		break;
@@ -272,8 +314,6 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb, enum calico_tc_flags
 		}
 	default:
 		CALI_DEBUG("Unknown protocol (%d), unable to extract ports\n", (int)ip_proto);
-		sport = 0;
-		dport = 0;
 	}
 
 	__be32 ip_src = ip_header->saddr;
@@ -317,6 +357,7 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb, enum calico_tc_flags
 		.sport	= sport,
 		.dst	= ip_dst,
 		.dport	= dport,
+		.nat_tun_src = nat_tun_src,
 	};
 
 	if (ip_proto == IPPROTO_TCP) {
@@ -401,6 +442,7 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb, enum calico_tc_flags
 			.sport	= sport,
 			.dst	= post_nat_ip_dst,
 			.dport	= post_nat_dport,
+			.nat_tun_src = nat_tun_src,
 		};
 
 		if (ip_proto == IPPROTO_TCP) {
@@ -474,6 +516,24 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb, enum calico_tc_flags
 			goto deny;
 		}
 
+		if (dnat_should_encap(flags)) {
+			if (vxlan_v4_encap(skb, CALI_HOST_IP, true, flags)) {
+				reason = CALI_REASON_ENCAP_FAIL;
+				goto  deny;
+			}
+
+			fib_flags |= BPF_FIB_LOOKUP_OUTPUT;
+
+			ip_src = CALI_HOST_IP;
+			sport = dport = host_to_be16(CALI_VXLAN_PORT);
+			ip_proto = IPPROTO_UDP;
+		}
+
+		fib_params.sport = sport;
+		fib_params.dport = post_nat_dport;
+		fib_params.ipv4_src = ip_src;
+		fib_params.ipv4_dst = post_nat_ip_dst;
+
 		goto allow;
 
 	case CALI_CT_ESTABLISHED_SNAT:
@@ -511,12 +571,33 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb, enum calico_tc_flags
 		fib_params.ipv4_src = ct_result.nat_ip;
 		fib_params.ipv4_dst = ip_dst;
 
+		/* Packet is returning from the DNAT tunnel and has been approved by the
+		 * host policy. This packet is going to be forwarded to its original
+		 * destination. Skip checks on the CALI_TC_FLAGS_TO_HOST egress path
+		 */
+		if (nat_tun_src) {
+			seen_mark = CALI_SKB_MARK_BYPASS_FWD_EXTERNAL;
+		}
+
 		goto allow;
 
 	case CALI_CT_ESTABLISHED_BYPASS:
 		seen_mark = CALI_SKB_MARK_BYPASS;
 		// fall through
 	case CALI_CT_ESTABLISHED:
+		if (dnat_return_should_encap(flags)  && ct_result.tun_ret_ip) {
+			if (vxlan_v4_encap(skb, ct_result.tun_ret_ip, false, flags)) {
+				reason = CALI_REASON_ENCAP_FAIL;
+				goto  deny;
+			}
+
+			fib_flags |= BPF_FIB_LOOKUP_OUTPUT;
+
+			ip_dst = ct_result.tun_ret_ip;
+			sport = dport = host_to_be16(CALI_VXLAN_PORT);
+			ip_proto = IPPROTO_UDP;
+		}
+
 		fib_params.l4_protocol = ip_proto;
 		fib_params.sport = sport;
 		fib_params.dport = dport;
@@ -544,7 +625,7 @@ allow:
 	if (!CALI_TC_FLAGS_L3(flags) && CALI_FIB_LOOKUP_ENABLED && CALI_TC_FLAGS_TO_HOST(flags)) {
 		CALI_DEBUG("Traffic is towards the host namespace, doing Linux FIB lookup\n");
 		fib_params.l4_protocol = ip_proto;
-		rc = bpf_fib_lookup(skb, &fib_params, sizeof(fib_params), 0);
+		rc = bpf_fib_lookup(skb, &fib_params, sizeof(fib_params), fib_flags);
 		if (rc == 0) {
 			CALI_DEBUG("FIB lookup succeeded\n");
 			// Update the MACs.  NAT may have invalidated pointer into the packet so need to
