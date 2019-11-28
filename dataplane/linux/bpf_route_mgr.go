@@ -28,10 +28,22 @@ import (
 )
 
 type bpfRouteManager struct {
+	myNodename string
+
 	// Tracking for local host IPs.
-	addrsByIface      map[string]set.Set
+	localHostIPs      map[string]set.Set
 	localHostRoutes   map[routes.Key]routes.Value
 	localHostIPsDirty bool
+
+	// Tracking for remote host IPs.
+	remoteHostIPs      map[string]string
+	remoteHostRoutes   map[routes.Key]routes.Value
+	remoteHostIPsDirty bool
+
+	// Tracking for local workload IPs.
+	localWorkloads        map[proto.WorkloadEndpointID]*proto.WorkloadEndpoint
+	localWorkloadRoutes   map[routes.Key]routes.Value
+	localWorkloadIPsDirty bool
 
 	// desiredRoutes contains the complete, desired state of the dataplane map.
 	desiredRoutes map[routes.Key]routes.Value
@@ -41,10 +53,13 @@ type bpfRouteManager struct {
 	resyncScheduled bool
 }
 
-func newBPFRouteManager() *bpfRouteManager {
+func newBPFRouteManager(myNodename string) *bpfRouteManager {
 	return &bpfRouteManager{
+		myNodename:      myNodename,
 		desiredRoutes:   map[routes.Key]routes.Value{},
-		addrsByIface:    map[string]set.Set{},
+		localHostIPs:    map[string]set.Set{},
+		remoteHostIPs:   map[string]string{},
+		localWorkloads:  map[proto.WorkloadEndpointID]*proto.WorkloadEndpoint{},
 		routeMap:        routes.Map(),
 		dirtyRoutes:     set.New(),
 		resyncScheduled: true,
@@ -61,6 +76,16 @@ func (m *bpfRouteManager) OnUpdate(msg interface{}) {
 		m.onRouteUpdate(msg)
 	case *proto.RouteRemove:
 		m.onRouteRemove(msg)
+
+	case *proto.WorkloadEndpointUpdate:
+		m.onWorkloadEndpointUpdate(msg)
+	case *proto.WorkloadEndpointRemove:
+		m.onWorkloadEndpointRemove(msg)
+
+	case *proto.HostMetadataUpdate:
+		m.onHostMetadataUpdate(msg)
+	case *proto.HostMetadataRemove:
+		m.onHostMetadataRemove(msg)
 	}
 }
 
@@ -73,9 +98,19 @@ func (m *bpfRouteManager) CompleteDeferredWork() error {
 		log.WithError(err).Panic("Failed to create route map")
 	}
 
+	if m.localWorkloadIPsDirty {
+		m.recalculateWorkloadIPs()
+		m.localWorkloadIPsDirty = false
+	}
+
 	if m.localHostIPsDirty {
-		m.recalculateIPMap()
+		m.recalculateLocalHostIPs()
 		m.localHostIPsDirty = false
+	}
+
+	if m.remoteHostIPsDirty {
+		m.recalculateRemoteHostIPs()
+		m.remoteHostIPsDirty = false
 	}
 
 	debug := log.GetLevel() >= log.DebugLevel
@@ -160,21 +195,21 @@ func (m *bpfRouteManager) CompleteDeferredWork() error {
 
 func (m *bpfRouteManager) onIfaceAddrsUpdate(update *ifaceAddrsUpdate) {
 	if update.Addrs == nil {
-		delete(m.addrsByIface, update.Name)
+		delete(m.localHostIPs, update.Name)
 	} else {
 		ipsCopy := update.Addrs.Copy()
-		m.addrsByIface[update.Name] = ipsCopy
+		m.localHostIPs[update.Name] = ipsCopy
 	}
 	m.localHostIPsDirty = true
 }
 
-func (m *bpfRouteManager) recalculateIPMap() {
+func (m *bpfRouteManager) recalculateLocalHostIPs() {
 	// Host IP updates are assumed to be rare and small so we recalculate the whole lot on any change.
 	// onIPSetUpdate will do the delta calculation so we won't churn the data in any case.
-	oldLocalHostRoutes := m.localHostRoutes
-	newLocalHostRoutes := map[routes.Key]routes.Value{}
+	oldRoutes := m.localHostRoutes
+	newRoutes := map[routes.Key]routes.Value{}
 
-	for iface, ips := range m.addrsByIface {
+	for iface, ips := range m.localHostIPs {
 		log.WithField("iface", iface).Debug("Adding IPs from interface")
 		ips.Iter(func(item interface{}) error {
 			ipStr := item.(string)
@@ -186,20 +221,70 @@ func (m *bpfRouteManager) recalculateIPMap() {
 			}
 			key := routes.NewKey(v4CIDR)
 			value := routes.NewValue(routes.TypeLocalHost)
-			newLocalHostRoutes[key] = value
+			newRoutes[key] = value
 			return nil
 		})
 	}
 
-	for k, v := range oldLocalHostRoutes {
-		if newV, ok := newLocalHostRoutes[k]; ok && newV == v {
+	m.applyRoutesDelta(oldRoutes, newRoutes)
+	m.localHostRoutes = newRoutes
+}
+
+func (m *bpfRouteManager) recalculateWorkloadIPs() {
+	oldRoutes := m.localWorkloadRoutes
+	newRoutes := map[routes.Key]routes.Value{}
+
+	for wepID, wep := range m.localWorkloads {
+		log.WithField("wepID", wepID).Debug("Adding IPs from local workload")
+		for _, ipStr := range wep.Ipv4Nets { // FIXME IPv6
+			cidr := ip.MustParseCIDROrIP(ipStr)
+			v4CIDR, ok := cidr.(ip.V4CIDR)
+			if !ok {
+				// FIXME IPv6
+				continue
+			}
+			key := routes.NewKey(v4CIDR)
+			value := routes.NewValue(routes.TypeLocalWorkload)
+			newRoutes[key] = value
+		}
+	}
+
+	m.applyRoutesDelta(oldRoutes, newRoutes)
+	m.localWorkloadRoutes = newRoutes
+}
+
+func (m *bpfRouteManager) recalculateRemoteHostIPs() {
+	oldRoutes := m.remoteHostRoutes
+	newRoutes := map[routes.Key]routes.Value{}
+
+	for nodename, ipStr := range m.remoteHostIPs {
+		log.WithField("nodename", nodename).Debug("Adding IP from remote host")
+		cidr := ip.MustParseCIDROrIP(ipStr)
+		v4CIDR, ok := cidr.(ip.V4CIDR)
+		if !ok {
+			// FIXME IPv6
+			continue
+		}
+		key := routes.NewKey(v4CIDR)
+		value := routes.NewValue(routes.TypeRemoteHost)
+		newRoutes[key] = value
+	}
+
+	m.applyRoutesDelta(oldRoutes, newRoutes)
+	m.remoteHostRoutes = newRoutes
+}
+
+func (m *bpfRouteManager) applyRoutesDelta(oldRoutes map[routes.Key]routes.Value, newRoutes map[routes.Key]routes.Value) {
+	// FIXME assumes that workload and host routes will never overlap.
+	for k, v := range oldRoutes {
+		if newV, ok := newRoutes[k]; ok && newV == v {
 			continue
 		}
 		delete(m.desiredRoutes, k)
 		m.dirtyRoutes.Add(k)
 	}
-	for k, v := range newLocalHostRoutes {
-		if oldV, ok := oldLocalHostRoutes[k]; ok && oldV == v {
+	for k, v := range newRoutes {
+		if oldV, ok := oldRoutes[k]; ok && oldV == v {
 			continue
 		}
 		m.desiredRoutes[k] = v
@@ -208,7 +293,14 @@ func (m *bpfRouteManager) recalculateIPMap() {
 }
 
 func (m *bpfRouteManager) onRouteUpdate(update *proto.RouteUpdate) {
-	if update.Type != proto.RouteType_NODEIP {
+	if update.Type != proto.RouteType_WORKLOADS_NODE {
+		log.WithField("type", update.Type).Debug("Route type we're not interested in, ignoring")
+		return
+	}
+
+	if update.Node == m.myNodename {
+		// We learn about local endpoints from a different message.
+		log.Debug("Workload is on this host, ignoring route")
 		return
 	}
 
@@ -233,7 +325,8 @@ func (m *bpfRouteManager) onRouteUpdate(update *proto.RouteUpdate) {
 }
 
 func (m *bpfRouteManager) onRouteRemove(update *proto.RouteRemove) {
-	if update.Type != proto.RouteType_NODEIP {
+	if update.Type != proto.RouteType_WORKLOADS_NODE {
+		log.WithField("type", update.Type).Debug("Route type we're not interested in, ignoring")
 		return
 	}
 
@@ -244,7 +337,39 @@ func (m *bpfRouteManager) onRouteRemove(update *proto.RouteRemove) {
 		return
 	}
 	key := routes.NewKey(v4CIDR)
-	delete(m.desiredRoutes, key)
+	if _, ok := m.desiredRoutes[key]; ok {
+		delete(m.desiredRoutes, key)
+		m.dirtyRoutes.Add(key)
+	}
+}
 
-	m.dirtyRoutes.Add(key)
+func (m *bpfRouteManager) onWorkloadEndpointUpdate(update *proto.WorkloadEndpointUpdate) {
+	m.localWorkloads[*update.Id] = update.Endpoint
+	m.localWorkloadIPsDirty = true
+}
+
+func (m *bpfRouteManager) onWorkloadEndpointRemove(update *proto.WorkloadEndpointRemove) {
+	delete(m.localWorkloads, *update.Id)
+	m.localWorkloadIPsDirty = true
+}
+
+func (m *bpfRouteManager) onHostMetadataUpdate(update *proto.HostMetadataUpdate) {
+	if update.Hostname == m.myNodename {
+		log.Debug("Ignoring host metadata update for this host")
+		return
+	}
+	if update.Ipv4Addr == m.remoteHostIPs[update.Hostname] {
+		return
+	}
+	m.remoteHostIPs[update.Hostname] = update.Ipv4Addr
+	m.remoteHostIPsDirty = true
+}
+
+func (m *bpfRouteManager) onHostMetadataRemove(remove *proto.HostMetadataRemove) {
+	if remove.Hostname == m.myNodename {
+		log.Debug("Ignoring host metadata remove for this host")
+		return
+	}
+	delete(m.remoteHostIPs, remove.Hostname)
+	m.remoteHostIPsDirty = true
 }

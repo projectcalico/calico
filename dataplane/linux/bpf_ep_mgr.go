@@ -577,11 +577,11 @@ func AttachTCProgram(fname string, attachPoint TCAttachPoint) error {
 type CompileTCOption func(*compileTCOpts)
 
 type compileTCOpts struct {
-	extraArgs   []string
-	dir         string
-	srcFile     string
-	outFile     string
-	bpftool     bool
+	extraArgs []string
+	dir       string
+	srcFile   string
+	outFile   string
+	bpftool   bool
 }
 
 func (o *compileTCOpts) appendExtraArg(a string) {

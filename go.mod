@@ -47,8 +47,8 @@ require (
 	go.uber.org/multierr v1.1.0 // indirect
 	go.uber.org/zap v1.10.0 // indirect
 	golang.org/x/net v0.0.0-20190812203447-cdfb69ac37fc
-	golang.org/x/sys v0.0.0-20191127021746-63cb32ae39b2
-	golang.org/x/tools v0.0.0-20191127154143-99399511c176 // indirect
+	golang.org/x/sys v0.0.0-20191128015809-6d18c012aee9
+	golang.org/x/tools v0.0.0-20191127201027-ecd32218bd7f // indirect
 	google.golang.org/grpc v1.19.0
 	gopkg.in/ini.v1 v1.46.0 // indirect
 	k8s.io/api v0.0.0

@@ -32,6 +32,21 @@ const KeySize = 8
 
 type Key [KeySize]byte
 
+func (k Key) Addr() ip.Addr {
+	var addr ip.V4Addr // FIXME IPv6
+	copy(addr[:], k[4:8])
+	return addr
+}
+
+func (k Key) Dest() ip.CIDR {
+	addr := k.Addr()
+	return ip.CIDRFromAddrAndPrefix(addr, k.PrefixLen())
+}
+
+func (k Key) PrefixLen() int {
+	return int(binary.LittleEndian.Uint32(k[:4]))
+}
+
 type Type uint32
 
 const (
@@ -44,12 +59,22 @@ const (
 
 //
 // struct calico_route_value {
-// enum calico_route_type type;
+// __u32 type;
 // __u32 next_hop;
 // };
 const ValueSize = 8
 
 type Value [ValueSize]byte
+
+func (v Value) Type() Type {
+	return Type(binary.LittleEndian.Uint32(v[:4]))
+}
+
+func (v Value) NextHop() ip.Addr {
+	var addr ip.V4Addr // FIXME IPv6
+	copy(addr[:], v[4:8])
+	return addr
+}
 
 func NewKey(cidr ip.V4CIDR) Key {
 	var k Key

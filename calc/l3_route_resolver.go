@@ -388,7 +388,7 @@ func (c *L3RouteResolver) withdrawRouteIfActive(r nodenameRoute) {
 		return
 	}
 	logrus.WithField("route", r).Info("Sending route remove")
-	c.callbacks.OnRouteRemove(proto.RouteType_NODEIP, r.dst.String())
+	c.callbacks.OnRouteRemove(proto.RouteType_WORKLOADS_NODE, r.dst.String())
 }
 
 // sendRouteIfActive will send a *proto.RouteUpdate for the given route.
@@ -399,7 +399,7 @@ func (c *L3RouteResolver) sendRouteIfActive(r nodenameRoute) {
 	}
 	logrus.WithField("route", r).Info("Sending route update")
 	c.callbacks.OnRouteUpdate(&proto.RouteUpdate{
-		Type: proto.RouteType_NODEIP, // FIXME we throw away the route type, will want that if we rework VXLAN resolver to use our routes.
+		Type: proto.RouteType_WORKLOADS_NODE, // FIXME we throw away the route type, will want that if we rework VXLAN resolver to use our routes.
 		Dst:  r.dst.String(),
 		Node: r.nodeName,
 		Gw:   c.nodeNameToIPAddr[r.nodeName],

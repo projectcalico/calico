@@ -465,7 +465,7 @@ enum RouteType {
   NOENCAP = 1;
 
   // A simple route emitted for every workload IP telling the dataplane which node owns that IP.
-  NODEIP = 2;
+  WORKLOADS_NODE = 2;
 }
 
 message RouteUpdate {

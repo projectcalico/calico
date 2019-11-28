@@ -102,6 +102,7 @@ func describeBPFTests(testOpts bpfTestOptions) bool {
 					felix.Exec("iptables-save", "-c")
 					felix.Exec("ip", "r")
 					felix.Exec("calico-bpf", "ipsets", "dump")
+					felix.Exec("calico-bpf", "routes", "dump")
 					log.Infof("[%d]FrontendMap: %+v", i, currBpfsvcs[i])
 					log.Infof("[%d]NATBackend: %+v", i, currBpfeps[i])
 				}
@@ -276,6 +277,24 @@ func describeBPFTests(testOpts bpfTestOptions) bool {
 				err := infra.AddDefaultDeny()
 				Expect(err).NotTo(HaveOccurred())
 			})
+			const expectedRouteDump = `   10.65.0.1/32: local host
+   10.65.0.2/32: local host
+   10.65.0.3/32: local host
+   10.65.1.0/26: remote workload, host IP 172.17.0.7
+   127.0.0.1/32: local host
+  172.17.0.6/32: local host
+  172.17.0.7/32: remote host
+`
+			It("should have correct routes", func() {
+				dumpRoutes := func() string {
+					out, err := felixes[0].ExecOutput("calico-bpf", "routes", "dump")
+					if err != nil {
+						return fmt.Sprint(err)
+					}
+					return out
+				}
+				Eventually(dumpRoutes).Should(Equal(expectedRouteDump))
+			})
 
 			It("should only allow traffic from the local host by default", func() {
 				// Same host, other workload.
@@ -421,7 +440,7 @@ func describeBPFTests(testOpts bpfTestOptions) bool {
 						cc.ExpectSome(w[1][0], workload.IP(ip), port)
 						cc.CheckConnectivity()
 
-						By("Checking tiemstamps on conntrack entries are sane")
+						By("Checking timestamps on conntrack entries are sane")
 						// This test verifies that we correctly interpret conntrack entry timestamps by reading them back
 						// and checking that they're (a) in the past and (b) sensibly recent.
 						ctDump, err := felixes[0].ExecOutput("calico-bpf", "conntrack", "dump")
