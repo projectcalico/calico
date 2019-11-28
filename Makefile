@@ -488,7 +488,7 @@ unescapefs = $(subst ---,:,$(subst ___,/,$(1)))
 
 imagetag:
 ifndef IMAGETAG
-       $(error IMAGETAG is undefined - run using make <target> IMAGETAG=X.Y.Z)
+	$(error IMAGETAG is undefined - run using make <target> IMAGETAG=X.Y.Z)
 endif
 
 ## push one arch
@@ -514,9 +514,9 @@ sub-manifest-%:
 push-non-manifests: imagetag $(addprefix sub-non-manifest-,$(call escapefs,$(PUSH_NONMANIFEST_IMAGES)))
 sub-non-manifest-%:
 ifeq ($(ARCH),amd64)
-       docker push $(call unescapefs,$*:$(IMAGETAG))
+	docker push $(call unescapefs,$*:$(IMAGETAG))
 else
-       $(NOECHO) $(NOOP)
+	$(NOECHO) $(NOOP)
 endif
 
 ## tag images of one arch for all supported registries
@@ -528,9 +528,9 @@ sub-single-tag-images-arch-%:
 # because some still do not support multi-arch manifest
 sub-single-tag-images-non-manifest-%:
 ifeq ($(ARCH),amd64)
-       docker tag $(BUILD_IMAGE):latest-$(ARCH) $(call unescapefs,$*:$(IMAGETAG))
+	docker tag $(BUILD_IMAGE):latest-$(ARCH) $(call unescapefs,$*:$(IMAGETAG))
 else
-       $(NOECHO) $(NOOP)
+	$(NOECHO) $(NOOP)
 endif
 
 ## tag images of all archs
