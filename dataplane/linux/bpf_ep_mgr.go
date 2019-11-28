@@ -39,12 +39,17 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/set"
 )
 
+type epIface struct {
+	ifacemonitor.State
+	addrs []net.IP
+}
+
 type bpfEndpointManager struct {
 	// Caches.  Updated immediately for now.
 	wlEps    map[proto.WorkloadEndpointID]*proto.WorkloadEndpoint
 	policies map[proto.PolicyID]*proto.Policy
 	profiles map[proto.ProfileID]*proto.Profile
-	ifaces   map[string]ifacemonitor.State
+	ifaces   map[string]epIface
 
 	// Indexes
 	policiesToWorkloads map[proto.PolicyID]set.Set  /*proto.WorkloadEndpointID*/
@@ -71,7 +76,7 @@ func newBPFEndpointManager(
 		wlEps:               map[proto.WorkloadEndpointID]*proto.WorkloadEndpoint{},
 		policies:            map[proto.PolicyID]*proto.Policy{},
 		profiles:            map[proto.ProfileID]*proto.Profile{},
-		ifaces:              map[string]ifacemonitor.State{},
+		ifaces:              map[string]epIface{},
 		policiesToWorkloads: map[proto.PolicyID]set.Set{},
 		profilesToWorkloads: map[proto.ProfileID]set.Set{},
 		dirtyWorkloads:      set.New(),
@@ -91,6 +96,8 @@ func (m *bpfEndpointManager) OnUpdate(msg interface{}) {
 	// Interface updates.
 	case *ifaceUpdate:
 		m.onInterfaceUpdate(msg)
+	case *ifaceAddrsUpdate:
+		m.onInterfaceAddrsUpdate(msg)
 
 	// Updates from the datamodel:
 
@@ -116,9 +123,44 @@ func (m *bpfEndpointManager) onInterfaceUpdate(update *ifaceUpdate) {
 	if update.State == ifacemonitor.StateUnknown {
 		delete(m.ifaces, update.Name)
 	} else {
-		m.ifaces[update.Name] = update.State
+		iface := m.ifaces[update.Name]
+		iface.State = update.State
+		m.ifaces[update.Name] = iface
 	}
 	m.dirtyIfaces.Add(update.Name)
+}
+
+func (m *bpfEndpointManager) onInterfaceAddrsUpdate(update *ifaceAddrsUpdate) {
+	var addrs []net.IP
+
+	if update == nil || update.Addrs == nil {
+		return
+	}
+
+	update.Addrs.Iter(func(s interface{}) error {
+		str, ok := s.(string)
+		if !ok {
+			log.WithField("addr", s).Errorf("wrong type %T", s)
+			return nil
+		}
+		ip := net.ParseIP(str)
+		if ip == nil {
+			return nil
+		}
+		ip = ip.To4()
+		if ip == nil {
+			return nil
+		}
+		addrs = append(addrs, ip)
+		return nil
+	})
+
+	iface := m.ifaces[update.Name]
+	iface.addrs = addrs
+	m.ifaces[update.Name] = iface
+	m.dirtyIfaces.Add(update.Name)
+	log.WithField("iface", update.Name).WithField("addrs", addrs).WithField("State", iface.State).
+		Debugf("onInterfaceAddrsUpdate")
 }
 
 // onWorkloadEndpointUpdate adds/updates the workload in the cache along with the index from active policy to
@@ -300,7 +342,7 @@ func (m *bpfEndpointManager) applyProgramsToDirtyDataInterfaces() {
 				"Ignoring interface that doesn't match the host data interface regex")
 			return set.RemoveItem
 		}
-		if m.ifaces[iface] != ifacemonitor.StateUp {
+		if m.ifaces[iface].State != ifacemonitor.StateUp {
 			log.WithField("iface", iface).Debug("Ignoring interface that is down")
 			return set.RemoveItem
 		}
@@ -525,6 +567,13 @@ func (m *bpfEndpointManager) compileAndAttachProgram(allRules [][][]*proto.Rule,
 		CompileWithLogLevel(logLevel),
 		CompileWithLogPrefix(logPfx),
 		CompileWithEndpointToHostDrop(m.epToHostDrop),
+	}
+
+	iface := m.ifaces[attachPoint.Iface]
+	if len(iface.addrs) > 0 {
+		// XXX we currently support only a single IP on any iface and we pick
+		// whichever is the first if there are more
+		opts = append(opts, CompileWithHostIP(iface.addrs[0]))
 	}
 
 	err = CompileTCProgramToFile(allRules, m.ipSetIDAlloc, opts...)
