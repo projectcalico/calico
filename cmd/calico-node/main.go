@@ -25,7 +25,7 @@ import (
 
 	"github.com/projectcalico/node/pkg/allocateip"
 	"github.com/projectcalico/node/pkg/cni"
-	"github.com/projectcalico/node/pkg/readiness"
+	"github.com/projectcalico/node/pkg/health"
 	"github.com/projectcalico/node/pkg/startup"
 
 	"github.com/projectcalico/libcalico-go/lib/logutils"
@@ -41,6 +41,11 @@ var runFelix = flagSet.Bool("felix", false, "Run Felix")
 var runStartup = flagSet.Bool("startup", false, "Initialize a new node")
 var allocateTunnelAddrs = flagSet.Bool("allocate-tunnel-addrs", false, "Configure tunnel addresses for this node")
 var monitorToken = flagSet.Bool("monitor-token", false, "Watch for Kubernetes token changes, update CNI config")
+
+// Options for liveness checks.
+var felixLive = flagSet.Bool("felix-live", false, "Run felix liveness checks")
+var birdLive = flagSet.Bool("bird-live", false, "Run bird liveness checks")
+var bird6Live = flagSet.Bool("bird6-live", false, "Run bird6 liveness checks")
 
 // Options for readiness checks.
 var birdReady = flagSet.Bool("bird-ready", false, "Run BIRD readiness checks")
@@ -84,9 +89,9 @@ func main() {
 		}
 	}
 
-	// If any of the readienss options are provided, check readiness.
-	if *birdReady || *bird6Ready || *felixReady {
-		readiness.Run(*birdReady, *bird6Ready, *felixReady, *thresholdTime)
+	// Check for liveness / readiness flags. Will only run checks specified by flags.
+	if *felixLive || *birdReady || *bird6Ready || *felixReady || *birdLive || *bird6Live {
+		health.Run(*birdReady, *bird6Ready, *felixReady, *felixLive, *birdLive, *bird6Live, *thresholdTime)
 		os.Exit(0)
 	}
 
