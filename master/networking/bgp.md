@@ -1,5 +1,6 @@
 ---
 title: Configuring BGP peers
+description: Configure BGP peering for cloud and on-premises deployments with full mesh, node-specific peering, ToR and/or Calico route reflectors.
 canonical_url: 'https://docs.projectcalico.org/v3.9/networking/bgp'
 ---
 

@@ -13,7 +13,7 @@
   {% endif %}{% if include.orch == "OpenShift" %}
   - CentOS 7
   {% endif %}{% if include.orch == "OpenStack" %}
-  - Ubuntu 16.04
+  - Ubuntu 16.04 and 18.04
   - CentOS 7
   {% endif %}
 

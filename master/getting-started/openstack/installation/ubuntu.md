@@ -54,21 +54,22 @@ These steps are detailed in this section.
     apt-get update
     ```
 
-1.  Install the `etcd3gw` Python package, if it is not already installed on
-    your system.  `etcd3gw` is needed by {{site.prodname}}'s OpenStack driver
-    and DHCP agent, but is not yet packaged for Ubuntu, so you should install
-    it with `pip`.  First check in case it has already been pulled in by your
-    OpenStack installation.
-
-    ```
-    find /usr/lib/python2.7/ -name etcd3gw
-    ```
-
-    If you see no output there, install `etcd3gw` with pip.
+1.  Install the `etcd3-gateway` Python package.  A current copy of that code is
+    needed by {{site.prodname}}'s OpenStack driver and DHCP agent, so you
+    should install it with `pip`.
 
     ```
     apt-get install -y python-pip
-    pip install etcd3gw
+    pip install git+https://github.com/dims/etcd3-gateway.git@19abd85b710682b326702e2290a30d084fb0af71
+    ```
+
+1.  Edit `/etc/neutron/neutron.conf`.  Add a `[calico]` section with
+    the following content, where `<ip>` is the IP address of the etcd
+    server.
+
+    ```
+    [calico]
+    etcd_host = <ip>
     ```
 
 ## Control node install
@@ -93,7 +94,7 @@ On each control node, perform the following steps.
     bring in {{site.prodname}}-specific updates to the OpenStack packages and
     to `dnsmasq`.
 
-1.  Edit the `/etc/neutron/neutron.conf` file. In the `[DEFAULT]` section, find
+1.  Edit `/etc/neutron/neutron.conf`. In the `[DEFAULT]` section, find
     the line beginning with `core_plugin`, and change it to read `core_plugin =
     calico`.  Also remove any existing setting for `service_plugins`.
 
@@ -169,7 +170,7 @@ On each compute node, perform the following steps:
     bring in {{site.prodname}}-specific updates to the OpenStack packages and
     to `dnsmasq`.
 
-1.  Modify `/etc/neutron/neutron.conf`.  In the `[oslo_concurrency]` section,
+1.  Edit `/etc/neutron/neutron.conf`.  In the `[oslo_concurrency]` section,
     ensure that the `lock_path` variable is uncommented and set as follows.
 
     ```
@@ -180,14 +181,6 @@ On each compute node, perform the following steps:
     lock_path = $state_path/lock
     ```
     {: .no-select-button}
-
-    Add a `[calico]` section with the following content, where `<ip>` is the IP
-    address of the etcd server.
-
-    ```
-    [calico]
-    etcd_host = <ip>
-    ```
 
 1.  Install the {{site.prodname}} DHCP agent (which uses etcd, allowing
     it to scale to higher numbers of hosts) and disable the Neutron-provided
@@ -266,3 +259,5 @@ On each compute node, perform the following steps:
     ```
     service calico-felix restart
     ```
+
+{% include {{page.version}}/openstack-etcd-auth.md %}

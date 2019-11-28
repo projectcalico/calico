@@ -1,4 +1,4 @@
-# A canonical Development Environment for Calico
+# A canonical Development Environment for Calico.
 
 This directory takes as input every calico source dependency (See DEVELOPER_GUIDE.md for details on those), and assumes they
 are one level above the calico repository.
@@ -14,7 +14,36 @@ It then uses vagrant to
 - installs the new images that were made from your current branch
 - smoke tests that all calico containers are running.
 
-# How to use this recipe
+## How to use the Kind Recipe (Recommended)
+
+Options:
+
+	- BUILD_CALICO: if "false", wont compile all the source before deploying.
+	- ROOT_CALICO_REPOS_DIR: the place where all your source is stored.
+
+Example:
+
+```
+	ROOT_CALICO_REPOS_DIR=~/calico_all/ BUILD_CALICO=true ./kind-local-up.sh
+	echo "play with your cluster for a while"
+	kind delete cluster calico-test
+```
+
+
+
+The kind recipe uses kubernetes' kind to run locally build images and starts a kind cluster, you can run
+it easily, and it will *build* all of calico for you as well, by just running "ROOT_CALICO_REPOS_DIR=/calico_all kind-local-up.sh" .  Of course, that assumes you've cloned all of the calico repositories into /calico_all.  IF they are somewhere else, thats also fine.  Make sure you can run *docker* as the user who starts this script, and that you've installed *kind* as well as *kubectl*.  IF you don't have any of these tools, the Vagrant recipe might be easier for you to adopt, as it
+will bootstrap your entire machine for you.
+
+## How to use this recipe: Centos
+
+Example:
+
+```
+	vagrant up
+	echo "play with your cluster for a while..."
+	vagrant destroy --force
+```
 
 - You can use the `vagrant up` command to test that the changes you made to any calico repository wont break CI,
 or reproduce a failure in CI.

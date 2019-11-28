@@ -8,56 +8,94 @@ toc:
 - title: Adopt a zero trust network model for security
   path: /security/adopt-zero-trust   
 
-- title: Get started with Kubernetes network policy
-  path: /security/kubernetes-network-policy
+- title: Get started
+  section:
+  
+  - title: Calico policy
+    section:
+    
+    - title: Get started with Calico network policy
+      path: /security/calico-network-policy
+  
+    - title: Get started with Calico network policy for OpenStack
+      path: /security/network-policy-openstack 
+  
+  - title: Kubernetes policy
+    section: 
 
-- title: Get started with Calico network policy
-  path: /security/calico-network-policy
+    - title: Get started with Kubernetes network policy
+      path: /security/kubernetes-network-policy
 
-- title: Enforce network policy using Istio
-  path: /security/enforce-policy-istio
+    - title: Enable default deny for Kubernetes pods
+      path: /security/kubernetes-default-deny 
 
-- title: Enable default deny for Kubernetes pods
-  path: /security/kubernetes-default-deny  
+    - title: Kubernetes policy, demo
+      path: /security/tutorials/kubernetes-policy-demo/kubernetes-demo
 
-- title: Use namespace in policy rules
-  path: /security/namespace-policy
+    - title: Kubernetes policy, basic tutorial
+      path: /security/tutorials/kubernetes-policy-basic
 
-- title: Use service accounts in policy rules
-  path: /security/service-accounts  
+    - title: Kubernetes policy, advanced tutorial
+      path: /security/tutorials/kubernetes-policy-advanced
+           
+- title: Policy rules       
+  section:
 
-- title: Use HTTP methods and paths in policy rules
-  path: /security/http-methods 
+  - title: Use namespace in policy rules
+    path: /security/namespace-policy
 
-- title: Use ICMP/ping in policy rules
-  path: /security/icmp-ping
+  - title: Use service accounts in policy rules
+    path: /security/service-accounts  
 
-- title: Use external IPs or networks in policy rules
-  path: /security/external-ips-policy
+  - title: Use external IPs or networks in policy rules
+    path: /security/external-ips-policy
 
-- title: Protect hosts
-  path: /security/protect-hosts
+  - title: Use ICMP/ping in policy rules
+    path: /security/icmp-ping
+    
+- title: Policy for hosts
+  section:   
+ 
+  - title: Protect hosts
+    path: /security/protect-hosts
+    
+  - title: Protect host tutorial
+    path: /security/tutorials/protect-hosts
 
-- title: Apply policy to Kubernetes node ports
-  path: /security/kubernetes-node-ports
+  - title: Apply policy to host forwarded traffic
+    path: /security/host-forwarded-traffic
+    
+- title: Policy for services
+  section: 
+  - title: Apply policy to Kubernetes node ports
+    path: /security/kubernetes-node-ports
 
-- title: Apply policy to services exposed externally as cluster IPs
-  path: /security/services-cluster-ips   
+  - title: Apply policy to services exposed externally as cluster IPs
+    path: /security/services-cluster-ips 
 
-- title: Apply policy to host forwarded traffic
-  path: /security/host-forwarded-traffic
+- title: Policy for Istio 
+  section:
 
-- title: Enable extreme high-connection workloads
-  path: /security/high-connection-workloads
+  - title: Enforce network policy using Istio
+    path: /security/enforce-policy-istio
+ 
+  - title: Use HTTP methods and paths in policy rules
+    path: /security/http-methods 
 
-- title: Defend against DoS attacks
-  path: /security/defend-dos-attack
+  - title: Enforce network policy using Istio tutorial
+    path: /security/tutorials/app-layer-policy/enforce-policy-istio
 
-- title: Get started with Calico network policy for OpenStack
-  path: /security/network-policy-openstack
+- title: Policy for extreme traffic
+  section:
+  - title: Enable extreme high-connection workloads
+    path: /security/high-connection-workloads
+
+  - title: Defend against DoS attacks
+    path: /security/defend-dos-attack
 
 - title: Secure Calico component communications
   section:
+
   - title: Configure encryption and authentication
     path: /security/comms/crypto-auth
 
@@ -66,20 +104,3 @@ toc:
 
   - title: Secure Calico Prometheus endpoints
     path: /security/comms/secure-metrics
-
-- title: Tutorials
-  section:
-  - title: Enforce network policy using Istio tutorial
-    path: /security/tutorials/app-layer-policy/enforce-policy-istio
-
-  - title: Protect host tutorial
-    path: /security/tutorials/protect-hosts
-
-  - title: Kubernetes policy, demo
-    path: /security/tutorials/kubernetes-policy-demo/kubernetes-demo
-
-  - title: Kubernetes policy, basic tutorial
-    path: /security/tutorials/kubernetes-policy-basic
-
-  - title: Kubernetes policy, advanced tutorial
-    path:  /security/tutorials/kubernetes-policy-advanced

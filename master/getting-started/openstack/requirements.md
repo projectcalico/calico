@@ -9,15 +9,15 @@ canonical_url: 'https://docs.projectcalico.org/v3.9/getting-started/openstack/re
 
 We aim to develop and maintain the Neutron driver for {{site.prodname}}
 (networking-calico) so that its master code works with OpenStack master or any
-previous release (back to Icehouse), on any operating system, independently of
+previous release (back to Liberty), on any operating system, independently of
 the deployment mechanism that is used to install it.
 
 However, we recommend using OpenStack Newton or later, and our active support
 and testing of {{site.prodname}} {{page.version}} with OpenStack is limited to
 the following versions:
 
-- Pike
 - Queens
+- Rocky
 
 {% include {{page.version}}/reqs-kernel.md %}
 
