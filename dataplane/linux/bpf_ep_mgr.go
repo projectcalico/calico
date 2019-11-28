@@ -19,6 +19,7 @@ import (
 	"bytes"
 	"fmt"
 	"io/ioutil"
+	"net"
 	"os"
 	"os/exec"
 	"regexp"
@@ -516,8 +517,7 @@ func (m *bpfEndpointManager) compileAndAttachProgram(allRules [][][]*proto.Rule,
 
 	logPfx := os.Getenv("BPF_LOG_PFX") + attachPoint.Iface
 
-	err = CompileTCProgramToFile(allRules,
-		m.ipSetIDAlloc,
+	opts := []CompileTCOption{
 		CompileWithWorkingDir(srcDir),
 		CompileWithSourceName(srcFileName),
 		CompileWithOutputName(oFileName),
@@ -525,7 +525,9 @@ func (m *bpfEndpointManager) compileAndAttachProgram(allRules [][][]*proto.Rule,
 		CompileWithLogLevel(logLevel),
 		CompileWithLogPrefix(logPfx),
 		CompileWithEndpointToHostDrop(m.epToHostDrop),
-	)
+	}
+
+	err = CompileTCProgramToFile(allRules, m.ipSetIDAlloc, opts...)
 	if err != nil {
 		return err
 	}
@@ -595,6 +597,27 @@ func CompileWithEndpointToHostDrop(drop bool) CompileTCOption {
 	}
 }
 
+// CompileWithDefine makes a -Dname defined
+func CompileWithDefine(name string) CompileTCOption {
+	return func(opts *compileTCOpts) {
+		opts.appendExtraArg(fmt.Sprintf("-D%s", name))
+	}
+}
+
+// CompileWithDefineValue makes a -Dname=value defined
+func CompileWithDefineValue(name string, value string) CompileTCOption {
+	return func(opts *compileTCOpts) {
+		opts.appendExtraArg(fmt.Sprintf("-D%s=%s", name, value))
+	}
+}
+
+// CompileWithIncludePath adds an include path to search for includes
+func CompileWithIncludePath(p string) CompileTCOption {
+	return func(opts *compileTCOpts) {
+		opts.appendExtraArg(fmt.Sprintf("-I%s", p))
+	}
+}
+
 // CompileWithFIBEnabled sets whether FIB lookup is allowed
 func CompileWithFIBEnabled(enabled bool) CompileTCOption {
 	return func(opts *compileTCOpts) {
@@ -637,10 +660,27 @@ func CompileWithWorkingDir(dir string) CompileTCOption {
 	}
 }
 
+// CompileWithBpftoolLoader makes the result loadable by bpftool (in contrast to
+// iproute2 only)
 func CompileWithBpftoolLoader() CompileTCOption {
 	return func(opts *compileTCOpts) {
 		opts.bpftool = true
 	}
+}
+
+// CompileWithHostIP makes the host ip available for the bpf code
+func CompileWithHostIP(ip net.IP) CompileTCOption {
+	ipv4 := ip.To4()
+	if ipv4 == nil {
+		return CompileWithDefineValue("CALI_HOST_IP", "bad-host-ip")
+	}
+	return CompileWithDefineValue("CALI_HOST_IP",
+		fmt.Sprintf("0x%02x%02x%02x%02x", ipv4[3], ipv4[2], ipv4[1], ipv4[0]))
+}
+
+// CompileWithVxlanPort sets the VXLAN port to use to override the IANA default
+func CompileWithVxlanPort(port uint16) CompileTCOption {
+	return CompileWithDefineValue("CALI_VXLAN_PORT", fmt.Sprintf("%d", port))
 }
 
 // CompileTCProgramToFile takes policy rules and compiles them into a tc-bpf
@@ -670,6 +710,7 @@ func CompileTCProgramToFile(allRules [][][]*proto.Rule, ipSetIDAlloc *idalloc.ID
 	args = append(args, compileOpts.extraArgs...)
 
 	args = append(args, []string{
+		"-I" + compileOpts.dir,
 		"-Wno-unused-value",
 		"-Wno-pointer-sign",
 		"-Wno-compare-distinct-pointer-types",
@@ -696,6 +737,9 @@ func CompileTCProgramToFile(allRules [][][]*proto.Rule, ipSetIDAlloc *idalloc.ID
 	if err != nil {
 		return err
 	}
+
+	log.WithField("command", clang.String()).Infof("compiling bpf")
+
 	err = clang.Start()
 	if err != nil {
 		log.WithError(err).Panic("Failed to write C file.")

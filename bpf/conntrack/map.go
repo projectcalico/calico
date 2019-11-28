@@ -251,3 +251,25 @@ func entryFromBytes(v []byte) Entry {
 	copy(ctVal[:], v[:])
 	return ctVal
 }
+
+type MapMem map[Key]Entry
+
+// LoadMapMem loads ConntrackMap into memory
+func LoadMapMem(m bpf.Map) (MapMem, error) {
+	ret := make(MapMem)
+
+	err := m.Iter(func(k, v []byte) {
+		ks := len(Key{})
+		vs := len(Entry{})
+
+		var key Key
+		copy(key[:ks], k[:ks])
+
+		var val Entry
+		copy(val[:vs], v[:vs])
+
+		ret[key] = val
+	})
+
+	return ret, err
+}

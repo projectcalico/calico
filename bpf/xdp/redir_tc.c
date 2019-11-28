@@ -621,5 +621,14 @@ int tc_calico_to_tunnel_endpoint(struct __sk_buff *skb) {
 	return calico_tc(skb, CALI_TC_TUNNEL | CALI_TC_HOST_EP);
 }
 
+#ifdef CALI_UNITTEST
+#include "unittest.h"
+__attribute__((section("calico_unittest")))
+int unittest(struct __sk_buff *skb)
+{
+	return calico_unittest_entry(skb);
+}
+#endif
+
 
 char ____license[] __attribute__((section("license"), used)) = "GPL";
