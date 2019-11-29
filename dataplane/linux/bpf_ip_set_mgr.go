@@ -33,10 +33,6 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/set"
 )
 
-const (
-	SpecialIPSetIDHostIPs = "special:host-ips"
-)
-
 type bpfIPSetManager struct {
 	// Caches.  Updated immediately for now.
 	desiredKeysByIPSetID map[uint64]set.Set
@@ -44,15 +40,12 @@ type bpfIPSetManager struct {
 	keysToAddByIPSetID    map[uint64]set.Set
 	keysToRemoveByIPSetID map[uint64]set.Set
 
-	addrsByIface map[string]set.Set
-
 	ipSetIDAllocator *idalloc.IDAllocator
 
 	ipSetMap bpf.Map
 
 	dirtyIPSetIDs   set.Set
 	resyncScheduled bool
-	ipMapDirty      bool
 }
 
 // uint32 prefixLen HE  4
@@ -70,7 +63,6 @@ func newBPFIPSetManager(ipSetIDAllocator *idalloc.IDAllocator) *bpfIPSetManager 
 		desiredKeysByIPSetID:  map[uint64]set.Set{}, /* set entries are IPSetEntry */
 		keysToAddByIPSetID:    map[uint64]set.Set{}, /* set entries are IPSetEntry */
 		keysToRemoveByIPSetID: map[uint64]set.Set{}, /* set entries are IPSetEntry */
-		addrsByIface:          map[string]set.Set{}, /* set entries are strings IP addrs */
 		dirtyIPSetIDs:         set.New(),            /*set entries are uint64 IDs */
 		ipSetMap:              IPSetsMap(),
 		resyncScheduled:       true,
@@ -138,10 +130,6 @@ func (m *bpfIPSetManager) OnUpdate(msg interface{}) {
 		m.onIPSetUpdate(msg)
 	case *proto.IPSetRemove:
 		m.onIPSetRemove(msg)
-
-	// Updates to local IPs.  We use these to make an IP set of local IPs.
-	case *ifaceAddrsUpdate:
-		m.onIfaceAddrsUpdate(msg)
 	}
 }
 
@@ -262,11 +250,6 @@ func (m *bpfIPSetManager) CompleteDeferredWork() error {
 	err := m.ipSetMap.EnsureExists()
 	if err != nil {
 		log.WithError(err).Panic("Failed to create IP set map")
-	}
-
-	if m.ipMapDirty {
-		m.recalculateIPMap()
-		m.ipMapDirty = false
 	}
 
 	debug := log.GetLevel() >= log.DebugLevel
@@ -407,42 +390,4 @@ func (m *bpfIPSetManager) CompleteDeferredWork() error {
 	}
 
 	return nil
-}
-
-func (m *bpfIPSetManager) onIfaceAddrsUpdate(update *ifaceAddrsUpdate) {
-	if update.Addrs == nil {
-		delete(m.addrsByIface, update.Name)
-	} else {
-		ipsCopy := update.Addrs.Copy()
-		m.addrsByIface[update.Name] = ipsCopy
-	}
-	m.ipMapDirty = true
-}
-
-func (m *bpfIPSetManager) recalculateIPMap() {
-	// Host IP updates are assumed to be rare and small so we recalculate the whole lot on any change.
-	// onIPSetUpdate will do the delta calculation so we won't churn the data in any case.
-	desiredEntries := set.New()
-	var desiredEntries2 []string
-	for iface, ips := range m.addrsByIface {
-		log.WithField("iface", iface).Debug("Adding IPs from interface")
-		ips.Iter(func(item interface{}) error {
-			ipStr := item.(string)
-			if strings.Contains(ipStr, ":") {
-				// FIXME IPv6
-				log.WithField("ip", ipStr).Warn("Ignoring IPv6 address")
-				return nil
-			}
-			if !desiredEntries.Contains(ipStr) {
-				desiredEntries2 = append(desiredEntries2, ipStr)
-				desiredEntries.Add(ipStr)
-			}
-			return nil
-		})
-	}
-	m.onIPSetUpdate(&proto.IPSetUpdate{
-		Id:      SpecialIPSetIDHostIPs,
-		Members: desiredEntries2,
-		Type:    proto.IPSetUpdate_NET,
-	})
 }

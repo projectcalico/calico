@@ -19,14 +19,11 @@
 #include "../include/policy.h"
 #include "../include/conntrack.h"
 #include "../include/nat.h"
+#include "../include/routes.h"
 #include "bpf_maps.h"
 
 #ifndef CALI_FIB_LOOKUP_ENABLED
 #define CALI_FIB_LOOKUP_ENABLED true
-#endif
-
-#ifndef CALI_HOST_IPS_IP_SET_ID
-#define CALI_HOST_IPS_IP_SET_ID 0
 #endif
 
 #ifndef CALI_DROP_WORKLOAD_TO_HOST
@@ -356,7 +353,7 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb, enum calico_tc_flags
 			}
 			if (CALI_TC_FLAGS_TO_WORKLOAD(flags) &&
 					skb->mark != CALI_SKB_MARK_SEEN &&
-					cali_ip_set_lookup(CALI_HOST_IPS_IP_SET_ID, ip_src)) {
+					cali_rt_lookup_type(ip_src) == CALI_RT_LOCAL_HOST) {
 				// Host to workload traffic always allowed.  We discount traffic that was seen by
 				// another program since it must have come in via another interface.
 				CALI_DEBUG("Packet is from the host: ACCEPT\n");
@@ -378,7 +375,7 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb, enum calico_tc_flags
 
 		if (CALI_TC_FLAGS_FROM_WORKLOAD(flags) &&
 				CALI_DROP_WORKLOAD_TO_HOST &&
-				cali_ip_set_lookup(CALI_HOST_IPS_IP_SET_ID, ip_dst)) {
+				cali_rt_lookup_type(ip_dst) == CALI_RT_LOCAL_HOST) {
 			CALI_DEBUG("Workload to host traffic blocked by DefaultEndpointToHostAction: DROP\n");
 			goto deny;
 		}

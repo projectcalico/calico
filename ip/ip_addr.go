@@ -227,6 +227,16 @@ func CIDRFromIPNet(ipNet *net.IPNet) CIDR {
 	}
 }
 
+// CIDRFromAddrAndPrefix.
+func CIDRFromAddrAndPrefix(addr Addr, prefixLen int) CIDR {
+	netIP := addr.AsNetIP()
+	ipNet := net.IPNet{
+		IP:   netIP,
+		Mask: net.CIDRMask(prefixLen, len(netIP)*8),
+	}
+	return CIDRFromIPNet(&ipNet)
+}
+
 // CIDRFromNetIP converts the given IP into our CIDR representation as a /32 or /128.
 func CIDRFromNetIP(netIP net.IP) CIDR {
 	return FromNetIP(netIP).AsCIDR()

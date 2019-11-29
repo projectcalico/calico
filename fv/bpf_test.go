@@ -17,6 +17,7 @@
 package fv_test
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"os"
@@ -24,6 +25,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/projectcalico/libcalico-go/lib/ipam"
 
 	"github.com/projectcalico/felix/bpf/nat"
 
@@ -49,6 +52,7 @@ import (
 	"github.com/projectcalico/felix/fv/workload"
 	api "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	client "github.com/projectcalico/libcalico-go/lib/clientv3"
+	cnet "github.com/projectcalico/libcalico-go/lib/net"
 )
 
 var _ = describeBPFTests(bpfTestOptions{protocol: "tcp", connTimeEnabled: true})
@@ -60,6 +64,14 @@ type bpfTestOptions struct {
 	connTimeEnabled bool
 	protocol        string
 }
+
+const expectedRouteDump = `10.65.0.1/32: local host
+10.65.0.2/32: local workload
+10.65.0.3/32: local workload
+10.65.1.0/26: remote workload, host IP FELIX_1
+FELIX_0/32: local host
+FELIX_1/32: remote host
+`
 
 func describeBPFTests(testOpts bpfTestOptions) bool {
 	desc := fmt.Sprintf("_BPF_ _BPF-SAFE_ BPF tests (%s, ct=%v)", testOpts.protocol, testOpts.connTimeEnabled)
@@ -98,6 +110,7 @@ func describeBPFTests(testOpts bpfTestOptions) bool {
 					felix.Exec("iptables-save", "-c")
 					felix.Exec("ip", "r")
 					felix.Exec("calico-bpf", "ipsets", "dump")
+					felix.Exec("calico-bpf", "routes", "dump")
 					log.Infof("[%d]FrontendMap: %+v", i, currBpfsvcs[i])
 					log.Infof("[%d]NATBackend: %+v", i, currBpfeps[i])
 				}
@@ -155,7 +168,8 @@ func describeBPFTests(testOpts bpfTestOptions) bool {
 
 				// Start a couple of workloads so we can check workload-to-workload and workload-to-host.
 				for i := 0; i < 2; i++ {
-					w[i] = workload.Run(felixes[0], fmt.Sprintf("w%d", i), "default", fmt.Sprintf("10.65.0.%d", i+2), "8055", testOpts.protocol)
+					wIP := fmt.Sprintf("10.65.0.%d", i+2)
+					w[i] = workload.Run(felixes[0], fmt.Sprintf("w%d", i), "default", wIP, "8055", testOpts.protocol)
 					w[i].WorkloadEndpoint.Labels = map[string]string{"name": w[i].Name}
 					w[i].ConfigureInDatastore(infra)
 				}
@@ -229,12 +243,33 @@ func describeBPFTests(testOpts bpfTestOptions) bool {
 
 					// Two workloads on each host so we can check the same host and other host cases.
 					iiStr := strconv.Itoa(ii)
-					w[ii][0] = workload.Run(felix, "w"+iiStr+"0", "default", "10.65."+iiStr+".2", "8055", testOpts.protocol)
+					wIP := "10.65." + iiStr + ".2"
+					w[ii][0] = workload.Run(felix, "w"+iiStr+"0", "default", wIP, "8055", testOpts.protocol)
 					w[ii][0].WorkloadEndpoint.Labels = map[string]string{"name": w[ii][0].Name}
 					w[ii][0].ConfigureInDatastore(infra)
-					w[ii][1] = workload.Run(felix, "w"+iiStr+"1", "default", "10.65."+iiStr+".3", "8056", testOpts.protocol)
+					// Assign the workload's IP in IPAM, this will trigger calculation of routes.
+					err := calicoClient.IPAM().AssignIP(context.Background(), ipam.AssignIPArgs{
+						IP:       cnet.MustParseIP(wIP),
+						HandleID: &w[ii][0].Name,
+						Attrs: map[string]string{
+							ipam.AttributeNode: felixes[ii].Hostname,
+						},
+						Hostname: felixes[ii].Hostname,
+					})
+					Expect(err).NotTo(HaveOccurred())
+					wIP = "10.65." + iiStr + ".3"
+					w[ii][1] = workload.Run(felix, "w"+iiStr+"1", "default", wIP, "8056", testOpts.protocol)
 					w[ii][1].WorkloadEndpoint.Labels = map[string]string{"name": w[ii][1].Name}
 					w[ii][1].ConfigureInDatastore(infra)
+					// Assign the workload's IP in IPAM, this will trigger calculation of routes.
+					err = calicoClient.IPAM().AssignIP(context.Background(), ipam.AssignIPArgs{
+						IP:       cnet.MustParseIP(wIP),
+						HandleID: &w[ii][1].Name,
+						Attrs: map[string]string{
+							ipam.AttributeNode: felixes[ii].Hostname,
+						},
+						Hostname: felixes[ii].Hostname,
+					})
 				}
 
 				// We will use this container to model an external client trying to connect into
@@ -249,6 +284,25 @@ func describeBPFTests(testOpts bpfTestOptions) bool {
 
 				err := infra.AddDefaultDeny()
 				Expect(err).NotTo(HaveOccurred())
+			})
+
+			It("should have correct routes", func() {
+				dumpRoutes := func() string {
+					out, err := felixes[0].ExecOutput("calico-bpf", "routes", "dump")
+					if err != nil {
+						return fmt.Sprint(err)
+					}
+
+					lines := strings.Split(out, "\n")
+					for i := range lines {
+						lines[i] = strings.TrimLeft(lines[i], " ")
+						lines[i] = strings.ReplaceAll(lines[i], felixes[0].IP, "FELIX_0")
+						lines[i] = strings.ReplaceAll(lines[i], felixes[1].IP, "FELIX_1")
+					}
+
+					return strings.Join(lines, "\n")
+				}
+				Eventually(dumpRoutes).Should(Equal(expectedRouteDump))
 			})
 
 			It("should only allow traffic from the local host by default", func() {
@@ -395,7 +449,7 @@ func describeBPFTests(testOpts bpfTestOptions) bool {
 						cc.ExpectSome(w[1][0], workload.IP(ip), port)
 						cc.CheckConnectivity()
 
-						By("Checking tiemstamps on conntrack entries are sane")
+						By("Checking timestamps on conntrack entries are sane")
 						// This test verifies that we correctly interpret conntrack entry timestamps by reading them back
 						// and checking that they're (a) in the past and (b) sensibly recent.
 						ctDump, err := felixes[0].ExecOutput("calico-bpf", "conntrack", "dump")

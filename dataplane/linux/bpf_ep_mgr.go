@@ -524,7 +524,6 @@ func (m *bpfEndpointManager) compileAndAttachProgram(allRules [][][]*proto.Rule,
 		CompileWithFIBEnabled(m.fibLookupEnabled),
 		CompileWithLogLevel(logLevel),
 		CompileWithLogPrefix(logPfx),
-		CompileWithHostIPSetID(SpecialIPSetIDHostIPs),
 		CompileWithEndpointToHostDrop(m.epToHostDrop),
 	)
 	if err != nil {
@@ -544,7 +543,7 @@ func (m *bpfEndpointManager) compileAndAttachProgram(allRules [][][]*proto.Rule,
 		}
 
 		log.WithError(err).WithFields(log.Fields{"program": buf.String()}).
-			Error("Failed BPF program")
+			Error("Failed to attach BPF program")
 		return err
 	}
 	return nil
@@ -578,12 +577,11 @@ func AttachTCProgram(fname string, attachPoint TCAttachPoint) error {
 type CompileTCOption func(*compileTCOpts)
 
 type compileTCOpts struct {
-	extraArgs   []string
-	dir         string
-	srcFile     string
-	outFile     string
-	bpftool     bool
-	hostIPSetID string
+	extraArgs []string
+	dir       string
+	srcFile   string
+	outFile   string
+	bpftool   bool
 }
 
 func (o *compileTCOpts) appendExtraArg(a string) {
@@ -645,12 +643,6 @@ func CompileWithBpftoolLoader() CompileTCOption {
 	}
 }
 
-func CompileWithHostIPSetID(id string) CompileTCOption {
-	return func(opts *compileTCOpts) {
-		opts.hostIPSetID = id
-	}
-}
-
 // CompileTCProgramToFile takes policy rules and compiles them into a tc-bpf
 // program and saves it into the provided file. Extra CFLAGS can be provided
 func CompileTCProgramToFile(allRules [][][]*proto.Rule, ipSetIDAlloc *idalloc.IDAllocator, opts ...CompileTCOption) error {
@@ -664,14 +656,11 @@ func CompileTCProgramToFile(allRules [][][]*proto.Rule, ipSetIDAlloc *idalloc.ID
 		o(&compileOpts)
 	}
 
-	hostIPSetID := ipSetIDAlloc.GetOrAlloc(compileOpts.hostIPSetID)
-
 	args := []string{
 		"-x",
 		"c",
 		"-D__KERNEL__",
 		"-D__ASM_SYSREG_H",
-		fmt.Sprintf("-DCALI_HOST_IPS_IP_SET_ID=%#x", hostIPSetID),
 	}
 
 	if compileOpts.bpftool {

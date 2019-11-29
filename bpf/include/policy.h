@@ -1,8 +1,6 @@
 #ifndef __CALI_POLICY_H__
 #define __CALI_POLICY_H__
 
-#include "../xdp/bpf_maps.h"
-
 struct port_range {
        __u64 ip_set_id;
        __u16 min, max;
@@ -10,6 +8,33 @@ struct port_range {
 
 struct cidr {
        __be32 mask, addr;
+};
+
+// IP sets, all stored in one big map with a prefix to identify the set.
+
+struct ip4_set_key {
+	__u32 mask;
+	__be64 set_id;
+	__be32 addr;
+	__u16 port;
+	__u8 protocol;
+	__u8 pad;
+} __attribute__((packed));
+
+union ip4_set_lpm_key {
+	struct bpf_lpm_trie_key lpm;
+	struct ip4_set_key ip;
+};
+
+struct bpf_map_def_extended __attribute__((section("maps"))) calico_ip_sets = {
+	.type           = BPF_MAP_TYPE_LPM_TRIE,
+	.key_size       = sizeof(union ip4_set_lpm_key),
+	.value_size     = sizeof(uint32_t),
+	.max_entries    = 1024*1024,
+	.map_flags      = BPF_F_NO_PREALLOC,
+#ifndef __BPFTOOL_LOADER__
+	.pinning_strategy        = 2 /* global namespace */,
+#endif
 };
 
 #define RULE_MATCH(id, test, negate) do { \
@@ -41,8 +66,8 @@ struct cidr {
 				/* Named port match; actually maps through to an IP set */ \
 				CALI_DEBUG("  look up " #saddr_or_daddr ":port (%x:%d) in IP set %llx\n", \
 						        be32_to_host(saddr_or_daddr), (int)(sport_or_dport), port_ranges[i].ip_set_id); \
-				union ip4_set_bpf_lpm_trie_key k; \
-				k.ip.mask = sizeof(struct ip4setkey)*8 ; \
+				union ip4_set_lpm_key k; \
+				k.ip.mask = sizeof(struct ip4_set_key)*8 ; \
 				k.ip.set_id = host_to_be64(port_ranges[i].ip_set_id); \
 				k.ip.addr = saddr_or_daddr; \
 				k.ip.port = (sport_or_dport); \
@@ -72,8 +97,8 @@ struct cidr {
 	} while (false)
 
 static CALI_BPF_INLINE bool cali_ip_set_lookup(uint64_t ip_set_id, __be32 addr) {
-	union ip4_set_bpf_lpm_trie_key k;
-	k.ip.mask = sizeof(struct ip4setkey)*8;
+	union ip4_set_lpm_key k;
+	k.ip.mask = sizeof(struct ip4_set_key)*8;
 	k.ip.set_id = host_to_be64(ip_set_id);
 	k.ip.addr = addr;
 	k.ip.protocol = 0;
