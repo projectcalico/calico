@@ -17,6 +17,7 @@ package idalloc
 import (
 	"crypto/sha256"
 	"encoding/binary"
+	"errors"
 	"math"
 
 	log "github.com/sirupsen/logrus"
@@ -47,6 +48,14 @@ func (a *IDAllocator) TrialHash(id string, n uint64) uint64 {
 	copy(a.buf[8:], id)
 	hash := sha256.Sum256(a.buf)
 	return binary.LittleEndian.Uint64(hash[:8])
+}
+
+func (a *IDAllocator) GetNoAlloc(id string) uint64 {
+	if uid, ok := a.strToUint64[id]; ok {
+		log.WithFields(log.Fields{"id": id, "uint64": uid}).Debug("Found existing IP set ID mapping")
+		return uid
+	}
+	return 0
 }
 
 // GetOrAlloc returns the existing allocation for the given ID (if there is one), or allocates one if not.
@@ -85,6 +94,18 @@ func (a *IDAllocator) GetOrAlloc(id string) uint64 {
 	// Exhausting uint64 is quite unlikely.
 	log.Panic("Ran out of candidates.")
 	panic("Ran out of candidates.")
+}
+
+var ErrNotFound = errors.New("release of unknown ID")
+
+func (a *IDAllocator) ReleaseUintID(id uint64) error {
+	strID, ok := a.uint64ToStr[id]
+	if !ok {
+		return ErrNotFound
+	}
+	delete(a.uint64ToStr, id)
+	delete(a.strToUint64, strID)
+	return nil
 }
 
 // GetAndRelease releases the given IP set ID allocation and returns the old value, or 0 if the ID was not known.

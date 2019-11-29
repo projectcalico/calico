@@ -618,7 +618,7 @@ var _ = Context("_NET_SETS_ Network sets tests with initialized Felix and etcd d
 		})
 	}
 
-	Context("_BPF_SAFE_ IPv4: Network sets tests with initialized Felix and etcd datastore", func() {
+	Context("_BPF-SAFE_ IPv4: Network sets tests with initialized Felix and etcd datastore", func() {
 		netsetsConfigV4 := netsetsConfig{ipVersion: 4, zeroCIDR: "0.0.0.0/0"}
 		describeConnTests(netsetsConfigV4)
 	})
