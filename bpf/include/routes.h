@@ -11,7 +11,7 @@ struct calico_route_key {
 	__be32 addr; // NBO
 };
 
-union calico_route_key_u {
+union calico_route_lpm_key {
 	struct bpf_lpm_trie_key lpm;
 	struct calico_route_key key;
 };
@@ -31,7 +31,7 @@ struct calico_route_value {
 
 struct bpf_map_def_extended __attribute__((section("maps"))) cali_routes = {
 	.type           = BPF_MAP_TYPE_LPM_TRIE,
-	.key_size       = sizeof(union calico_route_key_u),
+	.key_size       = sizeof(union calico_route_lpm_key),
 	.value_size     = sizeof(struct calico_route_value),
 	.max_entries    = 1024*1024,
 	.map_flags      = BPF_F_NO_PREALLOC,
@@ -40,15 +40,15 @@ struct bpf_map_def_extended __attribute__((section("maps"))) cali_routes = {
 #endif
 };
 
-static CALI_BPF_INLINE struct calico_route_value *calico_lookup_route(__be32 addr) {
-	union calico_route_key_u k;
+static CALI_BPF_INLINE struct calico_route_value *cali_rt_lookup(__be32 addr) {
+	union calico_route_lpm_key k;
 	k.key.prefixlen = 32;
 	k.key.addr = addr;
 	return bpf_map_lookup_elem(&cali_routes, &k);
 }
 
-static CALI_BPF_INLINE enum calico_route_type calico_lookup_route_type(__be32 addr) {
-	struct calico_route_value *rt_val = calico_lookup_route(addr);
+static CALI_BPF_INLINE enum calico_route_type cali_rt_lookup_type(__be32 addr) {
+	struct calico_route_value *rt_val = cali_rt_lookup(addr);
 	if (!rt_val) {
 		return CALI_RT_UNKNOWN;
 	}

@@ -353,7 +353,7 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb, enum calico_tc_flags
 			}
 			if (CALI_TC_FLAGS_TO_WORKLOAD(flags) &&
 					skb->mark != CALI_SKB_MARK_SEEN &&
-					calico_lookup_route_type(ip_src) == CALI_RT_LOCAL_HOST) {
+					cali_rt_lookup_type(ip_src) == CALI_RT_LOCAL_HOST) {
 				// Host to workload traffic always allowed.  We discount traffic that was seen by
 				// another program since it must have come in via another interface.
 				CALI_DEBUG("Packet is from the host: ACCEPT\n");
@@ -375,7 +375,7 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb, enum calico_tc_flags
 
 		if (CALI_TC_FLAGS_FROM_WORKLOAD(flags) &&
 				CALI_DROP_WORKLOAD_TO_HOST &&
-				calico_lookup_route_type(ip_dst) == CALI_RT_LOCAL_HOST) {
+				cali_rt_lookup_type(ip_dst) == CALI_RT_LOCAL_HOST) {
 			CALI_DEBUG("Workload to host traffic blocked by DefaultEndpointToHostAction: DROP\n");
 			goto deny;
 		}
