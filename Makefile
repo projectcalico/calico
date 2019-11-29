@@ -486,6 +486,13 @@ endif
 escapefs = $(subst :,---,$(subst /,___,$(1)))
 unescapefs = $(subst ---,:,$(subst ___,/,$(1)))
 
+# these macros create a list of valid architectures for pushing manifests
+space :=
+space +=
+comma := ,
+prefix_linux = $(addprefix linux/,$(strip $1))
+join_platforms = $(subst $(space),$(comma),$(call prefix_linux,$(strip $1)))
+
 imagetag:
 ifndef IMAGETAG
 	$(error IMAGETAG is undefined - run using make <target> IMAGETAG=X.Y.Z)
