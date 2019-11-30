@@ -10,7 +10,7 @@ require (
 	github.com/onsi/gomega v1.7.0
 	github.com/projectcalico/confd v3.2.0+incompatible // indirect
 	github.com/projectcalico/libcalico-go v1.7.2-0.20191127160841-0216c08ec5bf
-	github.com/projectcalico/typha v0.7.3-0.20191127165836-ceec4eebe364
+	github.com/projectcalico/typha v0.7.3-0.20191129094908-d54e8b003c9f
 	github.com/sirupsen/logrus v1.4.2
 	github.com/ugorji/go v1.1.7 // indirect
 	k8s.io/api v0.0.0-20191121175643-4ed536977f46
