@@ -6,6 +6,7 @@
 #include <linux/ip.h>
 #include <linux/if_ether.h>
 #include <linux/udp.h>
+#include <linux/icmp.h>
 #include <linux/version.h>
 #import "bpf.h"
 
@@ -25,6 +26,10 @@
 
 #define dnat_should_decap(flags) \
 	(CALI_TC_FLAGS_TO_WORKLOAD(flags) || CALI_TC_FLAGS_FROM_HOST_ENDPOINT(flags))
+
+#ifndef CALI_MAX_MTU
+#define CALI_MAX_MTU	(1500 - 50)
+#endif
 
 // Map: NAT level one.  Dest IP and port -> ID and num backends.
 
@@ -234,9 +239,126 @@ out:
 
 static CALI_BPF_INLINE int is_vxlan_tunnel(struct iphdr *ip)
 {
-		struct udphdr *udp = (struct udphdr *)(ip +1);
+	struct udphdr *udp = (struct udphdr *)(ip +1);
 
-		return ip->protocol == IPPROTO_UDP && udp->dest == host_to_be16(CALI_VXLAN_PORT);
+	return ip->protocol == IPPROTO_UDP && udp->dest == host_to_be16(CALI_VXLAN_PORT);
+}
+
+static CALI_BPF_INLINE int icmp_v4_too_big(struct __sk_buff *skb)
+{
+	struct ethhdr *eth;
+	struct iphdr *ip, ip_orig;
+	struct icmphdr *icmp;
+	uint32_t len;
+	__wsum ip_csum, icmp_csum;
+	int ret;
+
+	eth = skb_start_ptr(skb);
+	ip = skb_ptr_after(skb, eth);
+
+	CALI_DEBUG_NO_FLAG("ip->ihl: %d\n", ip->ihl);
+	if (ip->ihl > 5) {
+		CALI_DEBUG_NO_FLAG("ICMP too big: IP options\n");
+		return -1;
+	}
+
+	ip_orig = *ip;
+
+	/* make room for the new IP + ICMP header */
+	len = sizeof(struct iphdr) + sizeof(struct icmphdr);
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5,2,0)
+	ret = bpf_skb_adjust_room(skb, len, BPF_ADJ_ROOM_MAC);
+#else
+	uint32_t ip_inner_off = sizeof(struct ethhdr) + len;
+	ret = bpf_skb_adjust_room(skb, len, BPF_ADJ_ROOM_NET, 0);
+#endif
+	if (ret) {
+		CALI_DEBUG_NO_FLAG("ICMP too big: failed to make room\n");
+		return -1;
+	}
+
+	/* ICMP reply carries the IP header + 8 bytes of data */
+	len += sizeof(struct ethhdr) + sizeof(struct iphdr) + 8;
+
+	if (skb_shorter(skb, len)) {
+		CALI_DEBUG_NO_FLAG("ICMP too big: too short after making room\n");
+		return -1;
+	}
+
+	/* N.B. getting the ip pointer here again makes verifier happy */
+	eth = skb_start_ptr(skb);
+	ip = skb_ptr_after(skb, eth);
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(5,2,0)
+	struct iphdr *ip_inner;
+
+	if (skb_shorter(skb, ip_inner_off + sizeof(struct iphdr))) {
+		CALI_DEBUG_NO_FLAG("ICMP too big: too short to move ip header\n");
+		return -1;
+	}
+
+	/* copy the ip orig header into the icmp data */
+	ip_inner = skb_ptr(skb, ip_inner_off);
+	*ip_inner = ip_orig;
+#endif
+
+	/* we do not touch ethhdr, we rely on linux to rewrite it after routing */
+	/* XXX we might want to swap MACs and bounce it back from the same device */
+
+	ip->version = 4;
+	ip->ihl = 5;
+	ip->tos = 0;
+	ip->ttl = 64; /* good defaul */
+	ip->protocol = IPPROTO_ICMP;
+	ip->check = 0;
+	ip->tot_len = host_to_be16(len - sizeof(struct ethhdr));
+
+#ifdef CALI_PARANOID
+	/* XXX verify that ip_orig.daddr is always the node's IP
+	 *
+	 * we only call this function because of NodePOrt encap
+	 */
+	if (ip_orig.daddr != CALI_HOST_IP) {
+		CALI_DEBUG_NO_FLAG("ICMP too big: ip_orig.daddr != CALI_HOST_IP 0x%x\n", ip_orig.daddr);
+	}
+#endif
+	ip->saddr = ip_orig.daddr;
+	ip->daddr = ip_orig.saddr;
+
+	icmp = skb_ptr_after(skb, ip);
+	icmp->type = ICMP_DEST_UNREACH;
+	icmp->code = ICMP_FRAG_NEEDED;
+	icmp->un.frag.mtu = host_to_be16(CALI_MAX_MTU);
+	icmp->checksum = 0;
+
+	ip_csum = bpf_csum_diff(0, 0, (void *)ip, sizeof(*ip), 0);
+	icmp_csum = bpf_csum_diff(0, 0, (void *)icmp, sizeof(*icmp) + sizeof(struct iphdr) + 8 , 0);
+
+	ret = bpf_l3_csum_replace(skb,
+			skb_offset(skb, ip) + offsetof(struct iphdr, check), 0, ip_csum, 0);
+	if (ret) {
+		CALI_DEBUG_NO_FLAG("ICMP too big: set ip csum failed\n");
+		return -1;
+	}
+
+	if (skb_shorter(skb, len)) {
+		CALI_DEBUG_NO_FLAG("ICMP too big: too short after ip csum fix\n");
+		return -1;
+	}
+
+	ret = bpf_l3_csum_replace(skb, sizeof(struct ethhdr) + sizeof(struct iphdr) +
+					offsetof(struct icmphdr, checksum), 0, icmp_csum, 0);
+	if (ret) {
+		CALI_DEBUG_NO_FLAG("ICMP too big: set icmp csum failed\n");
+		return -1;
+	}
+
+	/* trim the packet to the desired length */
+	if (bpf_skb_change_tail(skb, len,  0)) {
+		return -1;
+	}
+
+	return 0;
 }
 
 #endif /* __CALI_NAT_H__ */

@@ -754,6 +754,11 @@ func CompileWithVxlanPort(port uint16) CompileTCOption {
 	return CompileWithDefineValue("CALI_VXLAN_PORT", fmt.Sprintf("%d", port))
 }
 
+// CompileWithMaxMTU sets max MTU
+func CompileWithMaxMTU(mtu uint16) CompileTCOption {
+	return CompileWithDefineValue("CALI_MAX_MTU", fmt.Sprintf("%d", mtu))
+}
+
 // CompileTCProgramToFile takes policy rules and compiles them into a tc-bpf
 // program and saves it into the provided file. Extra CFLAGS can be provided
 func CompileTCProgramToFile(allRules [][][]*proto.Rule, ipSetIDAlloc *idalloc.IDAllocator, opts ...CompileTCOption) error {
