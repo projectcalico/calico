@@ -39,7 +39,7 @@ type ProgramGenerator struct {
 }
 
 type ipSetIDProvider interface {
-	GetOrAlloc(ipSetID string) uint64
+	GetNoAlloc(ipSetID string) uint64
 }
 
 func NewProgramGenerator(src string, ipSetIDProvider ipSetIDProvider) (*ProgramGenerator, error) {
@@ -220,14 +220,21 @@ func (r *ProgramGenerator) writePortsMatch(negate bool, addrField, portField str
 		r.printf(", {0, %d, %d}", portRange.First, portRange.Last)
 	}
 	for _, ipSetID := range namedPorts {
-		r.printf(", {%#x, 0, 0}", r.ipSetIDProvider.GetOrAlloc(ipSetID))
+		id := r.ipSetIDProvider.GetNoAlloc(ipSetID)
+		if id == 0 {
+			log.WithField("setID", ipSetID).Panic("Failed to look up IP set ID.")
+		}
+		r.printf(", {%#x, 0, 0}", id)
 	}
 	r.printf(");\n")
 }
 
 func (r *ProgramGenerator) writeIPSetMatch(negate bool, field string, ipSets []string) {
 	for _, ipSetID := range ipSets {
-		id := r.ipSetIDProvider.GetOrAlloc(ipSetID)
+		id := r.ipSetIDProvider.GetNoAlloc(ipSetID)
+		if id == 0 {
+			log.WithField("setID", ipSetID).Panic("Failed to look up IP set ID.")
+		}
 		r.printf("RULE_MATCH_IP_SET(%d, %t, %s, %#x);\n", r.ruleID, negate, field, id)
 	}
 }

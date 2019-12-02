@@ -18,10 +18,10 @@ import (
 	"fmt"
 	"sort"
 
+	"github.com/projectcalico/felix/bpf/ipsets"
+
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
-
-	intdataplane "github.com/projectcalico/felix/dataplane/linux"
 )
 
 func init() {
@@ -46,10 +46,10 @@ var ipsetsCmd = &cobra.Command{
 }
 
 func dumpIPSets() error {
-	ipsets := intdataplane.IPSetsMap()
+	ipsetMap := ipsets.Map()
 	membersBySet := map[uint64][]string{}
-	err := ipsets.Iter(func(k, v []byte) {
-		var entry intdataplane.IPSetEntry
+	err := ipsetMap.Iter(func(k, v []byte) {
+		var entry ipsets.IPSetEntry
 		copy(entry[:], k[:])
 		var member string
 		if entry.Protocol() == 0 {

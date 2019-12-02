@@ -15,15 +15,13 @@
 package intdataplane
 
 import (
-	"encoding/binary"
-	"net"
 	"strconv"
 	"strings"
 	"time"
 
-	"github.com/projectcalico/felix/idalloc"
+	"github.com/projectcalico/felix/bpf/ipsets"
 
-	"golang.org/x/sys/unix"
+	"github.com/projectcalico/felix/idalloc"
 
 	log "github.com/sirupsen/logrus"
 
@@ -34,89 +32,25 @@ import (
 )
 
 type bpfIPSetManager struct {
-	// Caches.  Updated immediately for now.
-	desiredKeysByIPSetID map[uint64]set.Set
-
-	keysToAddByIPSetID    map[uint64]set.Set
-	keysToRemoveByIPSetID map[uint64]set.Set
+	// ipSets contains an entry for each IP set containing the state of that IP set.
+	ipSets map[uint64]*bpfIPSet
 
 	ipSetIDAllocator *idalloc.IDAllocator
 
-	ipSetMap bpf.Map
+	bpfMap bpf.Map
 
 	dirtyIPSetIDs   set.Set
 	resyncScheduled bool
 }
 
-// uint32 prefixLen HE  4
-// uint64 set_id BE     +8 = 12
-// uint32 addr BE       +4 = 16
-// uint16 port HE       +2 = 18
-// uint8 proto          +1 = 19
-// uint8 pad            +1 = 20
-const ipSetEntrySize = 20
-
-type IPSetEntry [ipSetEntrySize]byte
-
 func newBPFIPSetManager(ipSetIDAllocator *idalloc.IDAllocator) *bpfIPSetManager {
 	return &bpfIPSetManager{
-		desiredKeysByIPSetID:  map[uint64]set.Set{}, /* set entries are IPSetEntry */
-		keysToAddByIPSetID:    map[uint64]set.Set{}, /* set entries are IPSetEntry */
-		keysToRemoveByIPSetID: map[uint64]set.Set{}, /* set entries are IPSetEntry */
-		dirtyIPSetIDs:         set.New(),            /*set entries are uint64 IDs */
-		ipSetMap:              IPSetsMap(),
-		resyncScheduled:       true,
-		ipSetIDAllocator:      ipSetIDAllocator,
+		ipSets:           map[uint64]*bpfIPSet{},
+		dirtyIPSetIDs:    set.New(), /*set entries are uint64 IDs */
+		bpfMap:           ipsets.Map(),
+		resyncScheduled:  true,
+		ipSetIDAllocator: ipSetIDAllocator,
 	}
-}
-
-func IPSetsMap() bpf.Map {
-	return bpf.NewPinnedMap(bpf.MapParameters{
-		Filename:   "/sys/fs/bpf/tc/globals/calico_ip_sets",
-		Type:       "lpm_trie",
-		KeySize:    ipSetEntrySize,
-		ValueSize:  4,
-		MaxEntries: 1024 * 1024,
-		Name:       "calico_ip_sets",
-		Flags:      unix.BPF_F_NO_PREALLOC,
-	})
-}
-
-func (e IPSetEntry) SetID() uint64 {
-	return binary.BigEndian.Uint64(e[4:12])
-}
-
-func (e IPSetEntry) Addr() net.IP {
-	return e[12:16]
-}
-
-func (e IPSetEntry) PrefixLen() uint32 {
-	return binary.LittleEndian.Uint32(e[:4])
-}
-
-func (e IPSetEntry) Protocol() uint8 {
-	return e[18]
-}
-
-func (e IPSetEntry) Port() uint16 {
-	return binary.LittleEndian.Uint16(e[16:18])
-}
-
-func makeBPFIPSetEntry(setID uint64, cidr ip.V4CIDR, port uint16, proto uint8) IPSetEntry {
-	var entry IPSetEntry
-	// TODO Detect endianness
-	if proto == 0 {
-		// Normal CIDR-based lookup.
-		binary.LittleEndian.PutUint32(entry[0:4], uint32(64 /* ID */ +cidr.Prefix()))
-	} else {
-		// Named port lookup, use full length of key.
-		binary.LittleEndian.PutUint32(entry[0:4], 64 /* ID */ +32 /* IP */ +16 /* Port */ +8 /* protocol */)
-	}
-	binary.BigEndian.PutUint64(entry[4:12], setID)
-	binary.BigEndian.PutUint32(entry[12:16], cidr.Addr().(ip.V4Addr).AsUint32())
-	binary.LittleEndian.PutUint16(entry[16:18], port)
-	entry[18] = proto
-	return entry
 }
 
 func (m *bpfIPSetManager) OnUpdate(msg interface{}) {
@@ -133,85 +67,104 @@ func (m *bpfIPSetManager) OnUpdate(msg interface{}) {
 	}
 }
 
-func (m *bpfIPSetManager) onIPSetUpdate(msg *proto.IPSetUpdate) {
-	id := m.ipSetIDAllocator.GetOrAlloc(msg.Id)
-	log.WithFields(log.Fields{"stringID": msg.Id, "uint64ID": id}).Info("IP set added")
-	oldMembers := m.desiredKeysByIPSetID[id]
-	if oldMembers == nil {
-		oldMembers = set.Empty()
-	}
-	newMembers := set.New()
-	m.desiredKeysByIPSetID[id] = newMembers
-	if m.keysToAddByIPSetID[id] == nil {
-		m.keysToAddByIPSetID[id] = set.New()
-	}
-	if m.keysToRemoveByIPSetID[id] == nil {
-		m.keysToRemoveByIPSetID[id] = set.New()
-	}
-	for _, member := range msg.Members {
-		entry := parseIPSetMember(id, member)
-		newMembers.Add(entry)
-		if !oldMembers.Contains(entry) {
-			m.keysToAddByIPSetID[id].Add(entry)
-		}
-		oldMembers.Discard(entry)
-		m.keysToRemoveByIPSetID[id].Discard(entry)
-	}
-	oldMembers.Iter(func(item interface{}) error {
-		entry := item.(IPSetEntry)
-		m.keysToRemoveByIPSetID[id].Add(entry)
+// getExistingIPSetString gets the IP set data given the string set ID; returns nil if the IP set wasn't present.
+// Never allocates an IP set ID from the allocator.
+func (m *bpfIPSetManager) getExistingIPSetString(setID string) *bpfIPSet {
+	id := m.ipSetIDAllocator.GetNoAlloc(setID)
+	if id == 0 {
 		return nil
-	})
-	m.dirtyIPSetIDs.Add(id)
+	}
+	return m.ipSets[id]
+}
+
+// getExistingIPSet gets the IP set data given the uint64 ID; returns nil if the IP set wasn't present.
+// Never allocates an IP set ID from the allocator.
+func (m *bpfIPSetManager) getExistingIPSet(setID uint64) *bpfIPSet {
+	return m.ipSets[setID]
+}
+
+// getOrCreateIPSet gets the IP set data given the string set ID; allocates a new uint64 ID and creates the tracking
+// struct if needed.  The returned struct will never have Deleted=true.
+//
+// Call deleteIPSetAndReleaseID to release the ID again and discard the tracking struct.
+func (m *bpfIPSetManager) getOrCreateIPSet(setID string) *bpfIPSet {
+	id := m.ipSetIDAllocator.GetOrAlloc(setID)
+	ipSet := m.ipSets[id]
+	if ipSet == nil {
+		ipSet = &bpfIPSet{
+			ID:             id,
+			OriginalID:     setID,
+			DesiredEntries: set.New(),
+			PendingAdds:    set.New(),
+			PendingRemoves: set.New(),
+		}
+		m.ipSets[id] = ipSet
+	} else {
+		// Possible that this IP set was queued for deletion but it just got recreated.
+		ipSet.Deleted = false
+	}
+	return ipSet
+}
+
+// deleteIPSetAndReleaseID deleted the IP set tracking struct from the map and releases the ID.
+func (m *bpfIPSetManager) deleteIPSetAndReleaseID(ipSet *bpfIPSet) {
+	delete(m.ipSets, ipSet.ID)
+	err := m.ipSetIDAllocator.ReleaseUintID(ipSet.ID)
+	if err != nil {
+		log.WithField("id", ipSet.ID).WithError(err).Panic("Failed to release IP set UID")
+	}
+}
+
+func (m *bpfIPSetManager) onIPSetUpdate(msg *proto.IPSetUpdate) {
+	ipSet := m.getOrCreateIPSet(msg.Id)
+	log.WithFields(log.Fields{"stringID": msg.Id, "uint64ID": ipSet.ID}).Info("IP set added")
+	ipSet.ReplaceMembers(msg.Members)
+	m.markIPSetDirty(ipSet)
 }
 
 func (m *bpfIPSetManager) onIPSetRemove(msg *proto.IPSetRemove) {
-	id := m.ipSetIDAllocator.GetAndRelease(msg.Id)
-	log.WithFields(log.Fields{"stringID": msg.Id, "uint64ID": id}).Info("IP set removed")
-	if id == 0 {
+	ipSet := m.getExistingIPSetString(msg.Id)
+	if ipSet == nil {
 		log.WithField("setID", msg.Id).Panic("Received deletion for unknown IP set")
+		return
 	}
-	oldMembers := m.desiredKeysByIPSetID[id]
-	if oldMembers == nil {
-		oldMembers = set.Empty()
+	if ipSet.Deleted {
+		log.WithField("setID", msg.Id).Panic("Received deletion for already-deleted IP set")
+		return
 	}
-	if m.keysToRemoveByIPSetID[id] == nil {
-		m.keysToRemoveByIPSetID[id] = set.New()
-	}
-	oldMembers.Iter(func(item interface{}) error {
-		entry := item.(IPSetEntry)
-		m.keysToRemoveByIPSetID[id].Add(entry)
-		return nil
-	})
-	delete(m.desiredKeysByIPSetID, id)
-	delete(m.keysToAddByIPSetID, id)
-	m.dirtyIPSetIDs.Add(id)
+	ipSet.RemoveAll()
+	ipSet.Deleted = true
+	m.markIPSetDirty(ipSet)
 }
 
 func (m *bpfIPSetManager) onIPSetDeltaUpdate(msg *proto.IPSetDeltaUpdate) {
-	id := m.ipSetIDAllocator.GetOrAlloc(msg.Id)
+	ipSet := m.getExistingIPSetString(msg.Id)
+	if ipSet == nil {
+		log.WithField("setID", msg.Id).Panic("Received delta for unknown IP set")
+		return
+	}
+	if ipSet.Deleted {
+		log.WithField("setID", msg.Id).Panic("Received delta for already-deleted IP set")
+		return
+	}
 	log.WithFields(log.Fields{
 		"stringID": msg.Id,
-		"uint64ID": id,
+		"uint64ID": ipSet.ID,
 		"added":    len(msg.AddedMembers),
 		"removed":  len(msg.RemovedMembers),
 	}).Info("IP delta update")
 	for _, member := range msg.RemovedMembers {
-		entry := parseIPSetMember(id, member)
-		m.desiredKeysByIPSetID[id].Discard(entry)
-		m.keysToAddByIPSetID[id].Discard(entry)
-		m.keysToRemoveByIPSetID[id].Add(entry)
+		entry := protoIPSetMemberToBPFEntry(ipSet.ID, member)
+		ipSet.RemoveMember(entry)
 	}
 	for _, member := range msg.AddedMembers {
-		entry := parseIPSetMember(id, member)
-		m.desiredKeysByIPSetID[id].Add(entry)
-		m.keysToAddByIPSetID[id].Add(entry)
-		m.keysToRemoveByIPSetID[id].Discard(entry)
+		entry := protoIPSetMemberToBPFEntry(ipSet.ID, member)
+		ipSet.AddMember(entry)
 	}
-	m.dirtyIPSetIDs.Add(id)
+	m.markIPSetDirty(ipSet)
 }
 
-func parseIPSetMember(id uint64, member string) IPSetEntry {
+func protoIPSetMemberToBPFEntry(id uint64, member string) ipsets.IPSetEntry {
 	var cidrStr string
 	var port uint16
 	var protocol uint8
@@ -237,17 +190,15 @@ func parseIPSetMember(id uint64, member string) IPSetEntry {
 		cidrStr = member
 	}
 	cidr := ip.MustParseCIDROrIP(cidrStr).(ip.V4CIDR)
-	entry := makeBPFIPSetEntry(id, cidr, port, protocol)
+	entry := ipsets.MakeBPFIPSetEntry(id, cidr, port, protocol)
 	return entry
 }
-
-var dummyValue = []byte{1, 0, 0, 0}
 
 func (m *bpfIPSetManager) CompleteDeferredWork() error {
 	var numAdds, numDels uint
 	startTime := time.Now()
 
-	err := m.ipSetMap.EnsureExists()
+	err := m.bpfMap.EnsureExists()
 	if err != nil {
 		log.WithError(err).Panic("Failed to create IP set map")
 	}
@@ -255,24 +206,20 @@ func (m *bpfIPSetManager) CompleteDeferredWork() error {
 	debug := log.GetLevel() >= log.DebugLevel
 	if m.resyncScheduled {
 		log.Info("Doing full resync of BPF IP sets map")
-		m.keysToAddByIPSetID = map[uint64]set.Set{}
-		m.keysToRemoveByIPSetID = map[uint64]set.Set{}
+		m.resyncScheduled = false
 
-		for setID, desiredEntries := range m.desiredKeysByIPSetID {
-			if debug {
-				log.WithField("setID", setID).Debug("Copying entries from desired->add")
-			}
-			m.keysToAddByIPSetID[setID] = set.New()
-			m.keysToRemoveByIPSetID[setID] = set.New()
-			desiredEntries.Iter(func(item interface{}) error {
-				m.keysToAddByIPSetID[setID].Add(item)
-				return nil
-			})
-			m.dirtyIPSetIDs.Add(setID)
+		m.dirtyIPSetIDs.Clear()
+
+		// Start by configuring every IP set to add all its entries to the dataplane.  Then, as we scan the dataplane,
+		// we'll make sure that each gets cleaned up.
+		for _, ipSet := range m.ipSets {
+			ipSet.PendingAdds = ipSet.DesiredEntries.Copy()
+			ipSet.PendingRemoves.Clear()
 		}
 
-		err := m.ipSetMap.Iter(func(k, v []byte) {
-			var entry IPSetEntry
+		var unknownEntries []ipsets.IPSetEntry
+		err := m.bpfMap.Iter(func(k, v []byte) {
+			var entry ipsets.IPSetEntry
 			copy(entry[:], k)
 			setID := entry.SetID()
 			if debug {
@@ -280,69 +227,56 @@ func (m *bpfIPSetManager) CompleteDeferredWork() error {
 					"addr":      entry.Addr(),
 					"prefixLen": entry.PrefixLen()}).Debug("Found entry in dataplane")
 			}
-			kta := m.keysToAddByIPSetID[setID]
-			if kta == nil {
-				kta = set.Empty()
-			}
-			if kta.Contains(entry) {
-				if debug {
-					log.Debug("Entry was expected")
-				}
-				kta.Discard(entry)
+			ipSet := m.ipSets[setID]
+			if ipSet == nil {
+				// Found en entry from an unknown IP set.  Mark it for deletion at the end.
+				unknownEntries = append(unknownEntries, entry)
 			} else {
-				if debug {
-					log.Debug("Entry wasn't expected, marking for deletion")
+				// Entry is from a known IP set.  Check if the entry is wanted.
+				if ipSet.DesiredEntries.Contains(entry) {
+					ipSet.PendingAdds.Discard(entry)
+				} else {
+					ipSet.PendingRemoves.Add(entry)
 				}
-				ktr := m.keysToRemoveByIPSetID[setID]
-				if ktr == nil {
-					ktr = set.New()
-					m.keysToRemoveByIPSetID[setID] = ktr
-				}
-				ktr.Add(entry)
-				m.dirtyIPSetIDs.Add(setID)
 			}
 		})
 		if err != nil {
-			log.WithError(err).Panic("Failed to scan BPF map.")
+			log.WithError(err).Error("Failed to iterate over BPF map; IP sets may be out of sync")
+			m.resyncScheduled = true
+			return err
 		}
 
-		m.dirtyIPSetIDs.Iter(func(item interface{}) error {
-			setID := item.(uint64)
+		for _, entry := range unknownEntries {
+			err := m.bpfMap.Delete(entry[:])
+			log.WithError(err).Error("Failed to remove unexpected IP set entry")
+			m.resyncScheduled = true
+		}
 
-			kta := m.keysToAddByIPSetID[setID]
-			if kta == nil {
-				kta = set.Empty()
+		for _, ipSet := range m.ipSets {
+			if ipSet.Dirty() {
+				m.markIPSetDirty(ipSet)
 			}
-			if kta.Len() > 0 {
-				return nil
-			}
-			ktr := m.keysToRemoveByIPSetID[setID]
-			if ktr == nil {
-				ktr = set.Empty()
-			}
-			if ktr.Len() > 0 {
-				return nil
-			}
-
-			log.WithField("setID", setID).Debug("IP set is now clean")
-			return set.RemoveItem
-		})
-
-		m.resyncScheduled = false
+		}
 	}
 
 	m.dirtyIPSetIDs.Iter(func(item interface{}) error {
-		leaveDirty := false
-
 		setID := item.(uint64)
-		m.keysToRemoveByIPSetID[setID].Iter(func(item interface{}) error {
-			entry := item.(IPSetEntry)
+		leaveDirty := false
+		ipSet := m.getExistingIPSet(setID)
+		if ipSet == nil {
+			log.WithField("id", setID).Warn("Couldn't find IP set that was marked as dirty.")
+			m.resyncScheduled = true
+			return set.RemoveItem
+		}
+
+		ipSet.PendingRemoves.Iter(func(item interface{}) error {
+			entry := item.(ipsets.IPSetEntry)
 			if debug {
 				log.WithFields(log.Fields{"setID": setID, "entry": entry}).Debug("Removing entry from IP set")
 			}
-			err := m.ipSetMap.Delete(entry[:])
+			err := m.bpfMap.Delete(entry[:])
 			if err != nil {
-				log.WithError(err).Error("Failed to remove IP set entry")
+				log.WithFields(log.Fields{"setID": setID, "entry": entry}).WithError(err).Error("Failed to remove IP set entry")
 				leaveDirty = true
 				return nil
 			}
@@ -350,30 +284,30 @@ func (m *bpfIPSetManager) CompleteDeferredWork() error {
 			return set.RemoveItem
 		})
 
-		if m.desiredKeysByIPSetID[setID] == nil {
-			delete(m.keysToAddByIPSetID, setID)
-			delete(m.keysToRemoveByIPSetID, setID)
-		} else {
-			m.keysToAddByIPSetID[setID].Iter(func(item interface{}) error {
-				entry := item.(IPSetEntry)
-				if debug {
-					log.WithFields(log.Fields{"setID": setID, "entry": entry}).Debug("Adding entry to IP set")
-				}
-				err := m.ipSetMap.Update(entry[:], dummyValue)
-				if err != nil {
-					log.WithError(err).Error("Failed to add IP set entry")
-					leaveDirty = true
-					return nil
-				}
-				numAdds++
-				return set.RemoveItem
-			})
-		}
+		ipSet.PendingAdds.Iter(func(item interface{}) error {
+			entry := item.(ipsets.IPSetEntry)
+			if debug {
+				log.WithFields(log.Fields{"setID": setID, "entry": entry}).Debug("Adding entry to IP set")
+			}
+			err := m.bpfMap.Update(entry[:], ipsets.DummyValue)
+			if err != nil {
+				log.WithFields(log.Fields{"setID": setID, "entry": entry}).WithError(err).Error("Failed to add IP set entry")
+				leaveDirty = true
+				return nil
+			}
+			numAdds++
+			return set.RemoveItem
+		})
 
 		if leaveDirty {
 			log.WithField("setID", setID).Debug("IP set still dirty, queueing resync")
 			m.resyncScheduled = true
 			return nil
+		}
+
+		if ipSet.Deleted {
+			// Clean and deleted, time to release the IP set ID.
+			m.deleteIPSetAndReleaseID(ipSet)
 		}
 
 		log.WithField("setID", setID).Debug("IP set is now clean")
@@ -390,4 +324,74 @@ func (m *bpfIPSetManager) CompleteDeferredWork() error {
 	}
 
 	return nil
+}
+
+func (m *bpfIPSetManager) markIPSetDirty(data *bpfIPSet) {
+	m.dirtyIPSetIDs.Add(data.ID)
+}
+
+type bpfIPSet struct {
+	OriginalID string
+	ID         uint64
+
+	// DesiredEntries contains all the entries that we _want_ to be in the set.
+	DesiredEntries set.Set /* of IPSetEntry */
+	// PendingAdds contains all the entries that we need to add to bring the dataplane into sync with DesiredEntries.
+	PendingAdds set.Set /* of IPSetEntry */
+	// PendingRemoves contains all the entries that we need to remove from the dataplane to bring the
+	// dataplane into sync with DesiredEntries.
+	PendingRemoves set.Set /* of IPSetEntry */
+
+	Deleted bool
+}
+
+func (m *bpfIPSet) ReplaceMembers(members []string) {
+	m.RemoveAll()
+	m.AddMembers(members)
+}
+
+func (m *bpfIPSet) RemoveAll() {
+	m.DesiredEntries.Iter(func(item interface{}) error {
+		entry := item.(ipsets.IPSetEntry)
+		m.RemoveMember(entry)
+		return nil
+	})
+}
+
+func (m *bpfIPSet) AddMembers(members []string) {
+	for _, member := range members {
+		entry := protoIPSetMemberToBPFEntry(m.ID, member)
+		m.AddMember(entry)
+	}
+}
+
+// AddMember adds a member to the set of desired entries. Idempotent, if the member is already present, makes no change.
+func (m *bpfIPSet) AddMember(entry ipsets.IPSetEntry) {
+	if m.DesiredEntries.Contains(entry) {
+		return
+	}
+	m.DesiredEntries.Add(entry)
+	if m.PendingRemoves.Contains(entry) {
+		m.PendingRemoves.Discard(entry)
+	} else {
+		m.PendingAdds.Add(entry)
+	}
+}
+
+// RemoveMember removes a member from the set of desired entries. Idempotent, if the member is no present, makes no
+// change.
+func (m *bpfIPSet) RemoveMember(entry ipsets.IPSetEntry) {
+	if !m.DesiredEntries.Contains(entry) {
+		return
+	}
+	m.DesiredEntries.Discard(entry)
+	if m.PendingAdds.Contains(entry) {
+		m.PendingAdds.Discard(entry)
+	} else {
+		m.PendingRemoves.Add(entry)
+	}
+}
+
+func (m *bpfIPSet) Dirty() bool {
+	return m.PendingRemoves.Len() > 0 || m.PendingAdds.Len() > 0 || m.Deleted
 }

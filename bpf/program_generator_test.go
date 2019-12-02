@@ -60,7 +60,12 @@ func TestBPFProgramGeneration(t *testing.T) {
 	var buf bytes.Buffer
 
 	buf.Reset()
-	pg, err := NewProgramGenerator("xdp/redir_tc.c", idalloc.New())
+	alloc := idalloc.New()
+	setID := func(id string) string {
+		alloc.GetOrAlloc(id)
+		return id
+	}
+	pg, err := NewProgramGenerator("xdp/redir_tc.c", alloc)
 	Expect(err).NotTo(HaveOccurred())
 
 	err = pg.WriteCalicoRules(&buf, [][][]*proto.Rule{{{{
@@ -69,23 +74,23 @@ func TestBPFProgramGeneration(t *testing.T) {
 		Protocol:                &proto.Protocol{NumberOrName: &proto.Protocol_Number{Number: 6}},
 		SrcNet:                  []string{"10.0.0.0/8"},
 		SrcPorts:                []*proto.PortRange{{First: 80, Last: 81}, {First: 8080, Last: 8081}},
-		SrcNamedPortIpSetIds:    []string{"n:abcdef1234567890"},
+		SrcNamedPortIpSetIds:    []string{setID("n:abcdef1234567890")},
 		DstNet:                  []string{"11.0.0.0/8"},
 		DstPorts:                []*proto.PortRange{{First: 3000, Last: 3001}},
-		DstNamedPortIpSetIds:    []string{"n:foo1234567890"},
+		DstNamedPortIpSetIds:    []string{setID("n:foo1234567890")},
 		Icmp:                    nil,
-		SrcIpSetIds:             []string{"s:sbcdef1234567890"},
-		DstIpSetIds:             []string{"s:dbcdef1234567890"},
+		SrcIpSetIds:             []string{setID("s:sbcdef1234567890")},
+		DstIpSetIds:             []string{setID("s:dbcdef1234567890")},
 		NotProtocol:             &proto.Protocol{NumberOrName: &proto.Protocol_Name{Name: "UDP"}},
 		NotSrcNet:               []string{"12.0.0.0/8"},
 		NotSrcPorts:             []*proto.PortRange{{First: 5000, Last: 5000}},
 		NotDstNet:               []string{"13.0.0.0/8"},
 		NotDstPorts:             []*proto.PortRange{{First: 4000, Last: 4000}},
 		NotIcmp:                 nil,
-		NotSrcIpSetIds:          []string{"s:abcdef1234567890"},
-		NotDstIpSetIds:          []string{"s:abcdef123456789l"},
-		NotSrcNamedPortIpSetIds: []string{"n:0bcdef1234567890"},
-		NotDstNamedPortIpSetIds: []string{"n:0bcdef1234567890"},
+		NotSrcIpSetIds:          []string{setID("s:abcdef1234567890")},
+		NotDstIpSetIds:          []string{setID("s:abcdef123456789l")},
+		NotSrcNamedPortIpSetIds: []string{setID("n:0bcdef1234567890")},
+		NotDstNamedPortIpSetIds: []string{setID("n:0bcdef1234567890")},
 	}}}})
 	Expect(err).NotTo(HaveOccurred())
 	t.Log("Output:", buf.String())
