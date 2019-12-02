@@ -1,8 +1,9 @@
 PACKAGE_NAME=github.com/projectcalico/libcalico-go
-GO_BUILD_VER=v0.27
+GO_BUILD_VER=v0.28
 
 # libcalico-go still relies on vendoring
-GOMOD_VENDOR=true
+GOMOD_VENDOR = true
+LOCAL_CHECKS = vendor goimports check-gen-files
 
 ###############################################################################
 # Download and include Makefile.common
@@ -81,7 +82,6 @@ $(BINDIR)/deepcopy-gen: vendor
 ###############################################################################
 # TODO: re-enable all linters
 LINT_ARGS += --disable gosimple,unused,structcheck,errcheck,deadcode,varcheck,ineffassign,staticcheck,govet
-LOCAL_CHECKS = goimports check-gen-files
 
 .PHONY: check-gen-files
 check-gen-files: $(GENERATED_FILES)
