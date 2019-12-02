@@ -4,4 +4,4 @@ dest = "/etc/calico/confd/config/bird6_aggr.cfg"
 keys = [
     "/calico/ipam/v2/host//NODENAME/ipv6/block",
 ]
-reload_cmd = "pkill -HUP bird || true"
+reload_cmd = "pkill -HUP bird6 || true"
