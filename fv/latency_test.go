@@ -50,7 +50,7 @@ func (c latencyConfig) workloadIP(workloadIdx int) string {
 	return fmt.Sprintf("fdc6:3dbc:e983:cbc%x::1", workloadIdx)
 }
 
-var _ = Context("Latency tests with initialized Felix and etcd datastore", func() {
+var _ = Context("_BPF-SAFE_ Latency tests with initialized Felix and etcd datastore", func() {
 
 	var (
 		etcd   *containers.Container
