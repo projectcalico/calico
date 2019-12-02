@@ -40,7 +40,7 @@ Example:
 	kind delete cluster
 ```
 
-This [kind](https://github.com/kubernetes-sigs/kind) recipe runs locally on a linux box, and builds images + starts a kind cluster, you can run it easily, and it will *build* all of calico for you as well, by just running "ROOT_CALICO_REPOS_DIR=/calico_all kind-local-up.sh" .
+This [kind](https://github.com/kubernetes-sigs/kind) recipe runs locally on a linux box, and builds images + starts a kind cluster.  It will *build* all of calico for you as well, by just running "ROOT_CALICO_REPOS_DIR=/calico_all kind-local-up.sh" .
 
 - Of course, that assumes you've cloned all of the calico repositories into /calico_all.  IF they are somewhere else, that's also fine.  
 - Make sure you can run *docker* as the user who starts this script.
