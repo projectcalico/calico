@@ -295,7 +295,9 @@ spec:
               command:
               - /bin/calico-node
               - -felix-live
+{{- if and (eq .Values.network "calico") (not .Values.flannel_migration) }}
               - -bird-live
+{{- end }}
             periodSeconds: 10
             initialDelaySeconds: 10
             failureThreshold: 6
