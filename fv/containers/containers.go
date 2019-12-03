@@ -361,14 +361,68 @@ func (c *Container) GetPIDs(processName string) []int {
 	return pids
 }
 
+type ProcInfo struct {
+	PID  int
+	PPID int
+}
+
+var psRegexp = regexp.MustCompile(`^\s*(\d+)\s+(\d+)\s+(\S+)$`)
+
+func (c *Container) GetProcInfo(processName string) []ProcInfo {
+	out, err := c.ExecOutput("ps", "wwxo", "pid,ppid,comm")
+	if err != nil {
+		log.WithError(err).WithField("out", out).Warn("ps failed, assuming no PIDs")
+		return nil
+	}
+	var pids []ProcInfo
+	for _, line := range strings.Split(out, "\n") {
+		log.WithField("line", line).Debug("Parsing ps line")
+		matches := psRegexp.FindStringSubmatch(line)
+		if len(matches) == 0 {
+			continue
+		}
+		name := matches[3]
+		if name != processName {
+			continue
+		}
+		pid, err := strconv.Atoi(matches[1])
+		if err != nil {
+			log.WithError(err).WithField("line", line).Panic("Failed to parse ps output")
+		}
+		ppid, err := strconv.Atoi(matches[2])
+		if err != nil {
+			log.WithError(err).WithField("line", line).Panic("Failed to parse ps output")
+		}
+		pids = append(pids, ProcInfo{PID: pid, PPID: ppid})
+
+	}
+	return pids
+}
+
 func (c *Container) GetSinglePID(processName string) int {
 	// Get the process's PID.  This retry loop ensures that we don't get tripped up if we see multiple
-	// PIDs, which can happen transiently when a process restarts/forks off a subprocess.
+	// PIDs, which can happen transiently when a process restarts.
 	start := time.Now()
 	for {
-		pids := c.GetPIDs(processName)
-		if len(pids) == 1 {
-			return pids[0]
+		// Get the PID and parent PID of all processes with the right name.
+		procs := c.GetProcInfo(processName)
+		log.WithField("procs", procs).Debug("Got ProcInfos")
+		// Collect all the pids so we can detect forked child processes by their PPID.
+		pids := set.New()
+		for _, p := range procs {
+			pids.Add(p.PID)
+		}
+		// Filter the procs, ignore any that are children of another proc in the set.
+		var filteredProcs []ProcInfo
+		for _, p := range procs {
+			if pids.Contains(p.PPID) {
+				continue
+			}
+			filteredProcs = append(filteredProcs, p)
+		}
+		if len(filteredProcs) == 1 {
+			// Success, there's one process.
+			return filteredProcs[0].PID
 		}
 		Expect(time.Since(start)).To(BeNumerically("<", time.Second),
 			"Timed out waiting for there to be a single PID")
