@@ -218,9 +218,9 @@ workloads to each other and the broader world.
 
 However, the underlying physical fabric obviously needs to be set up
 too. Here, {{site.prodname}} has discussed how both a layer 2 (see
-[here]({{site.baseurl}}/{{page.version}}/networking/design/l2-interconnect-fabric))
+[here]({{site.baseurl}}/{{page.version}}/reference/architecture/design/l2-interconnect-fabric))
 or a layer 3 (see
-[here]({{site.baseurl}}/{{page.version}}/networking/design/l3-interconnect-fabric))
+[here]({{site.baseurl}}/{{page.version}}/reference/architecture/design/l3-interconnect-fabric))
 fabric
 could be integrated with {{site.prodname}}. This is one of the great strengths of
 the {{site.prodname}} model: it allows the infrastructure to be decoupled from what
@@ -306,7 +306,7 @@ If this describes your infrastructure,
 [External connectivity]({{site.baseurl}}/{{page.version}}/networking/external-connectivity) explains in more detail
 what to do. Otherwise, if you have a layer 3 (IP) fabric, then there are
 detailed datacenter networking recommendations given
-in [{{site.prodname}} over IP fabrics]({{site.baseurl}}/{{page.version}}/networking/design/l3-interconnect-fabric).
+in [{{site.prodname}} over IP fabrics]({{site.baseurl}}/{{page.version}}/reference/architecture/design/l3-interconnect-fabric).
 We'd also encourage you to [get in touch](https://www.projectcalico.org/contact/)
 to discuss your environment.
 

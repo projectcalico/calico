@@ -90,7 +90,7 @@ each peering with the same route reflector (or set of route reflectors).
 This is the case where a BGPPeer's `spec.node` or `spec.nodeSelector` field is non-empty.
 
 At scale, different network topologies come in to play.  For example, in the [AS per Rack
-model]({{site.baseurl}}/{{page.version}}/networking/design/l3-interconnect-fabric#the-as-per-rack-model)
+model]({{site.baseurl}}/{{page.version}}/reference/architecture/design/l3-interconnect-fabric#the-as-per-rack-model)
 discussed in the reference material, each {{site.prodname}} node peers with a route reflector
 in the Top of Rack (ToR) switch.  In this case the BGP peerings are configured on a per-node
 basis, or for a set of nodes as identified by a given [label
@@ -251,9 +251,9 @@ specific to a {{site.prodname}} node.  We refer to these as node-specific peers.
 Configuring node-specific peers is necessary when the BGP topology is more
 complicated and requires different peerings on different nodes.  For example,
 the
-[AS per Rack model]({{site.baseurl}}/{{page.version}}/networking/design/l3-interconnect-fabric#the-as-per-rack-model)
+[AS per Rack model]({{site.baseurl}}/{{page.version}}/reference/architecture/design/l3-interconnect-fabric#the-as-per-rack-model)
 or
-[AS per Compute Server model]({{site.baseurl}}/{{page.version}}/networking/design/l3-interconnect-fabric#the-as-per-compute-server-model)
+[AS per Compute Server model]({{site.baseurl}}/{{page.version}}/reference/architecture/design/l3-interconnect-fabric#the-as-per-compute-server-model)
 described in the reference material.
 
 #### Example
