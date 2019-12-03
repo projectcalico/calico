@@ -149,11 +149,6 @@ kubectl patch ds -n kube-system calico-node --patch \
     '{"spec": {"template": {"spec": {"containers": [{"name": "calico-node", "env": [{"name": "IP", "value": "10.0.2.10/24"}, {"name": "IP6", "value": "fd80:24e2:f998:72d6::/120"}]}]}}}}'
 ```
 
-Where:
-
-- IP4 flag: --ip
-- IP6 flag: --ip6
-
 >**Note**: If the subnet is omitted, the defaults are: /32 (IPv4) and /128 (IPv6). We recommend that you include the subnet information for clarity when specifying IP addresses.
 {: .alert .alert-info}
 
