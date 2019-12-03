@@ -1222,13 +1222,13 @@ func init() {
 					Nets: []string{netv6_1},
 				},
 			}, false),
-		Entry("should reject rule with an IPv6 protocol and a IPVersion=4",
+		Entry("should reject rule with an IPv6 protocol and an IPVersion=4",
 			api.Rule{
 				Action:    "Allow",
 				Protocol:  protocolFromString("ICMPv6"),
 				IPVersion: &V4,
 			}, false),
-		Entry("should reject rule with an IPv4 protocol and a IPVersion=6",
+		Entry("should reject rule with an IPv4 protocol and an IPVersion=6",
 			api.Rule{
 				Action:    "Allow",
 				Protocol:  protocolFromString("ICMP"),

@@ -29,7 +29,7 @@ const (
 // +genclient
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
-// IPPool contains information about a IPPool resource.
+// IPPool contains information about an IPPool resource.
 type IPPool struct {
 	metav1.TypeMeta `json:",inline"`
 	// Standard object's metadata.

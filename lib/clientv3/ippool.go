@@ -46,7 +46,7 @@ type ipPools struct {
 	client client
 }
 
-// Create takes the representation of a IPPool and creates it.  Returns the stored
+// Create takes the representation of an IPPool and creates it.  Returns the stored
 // representation of the IPPool, and an error, if there is any.
 func (r ipPools) Create(ctx context.Context, res *apiv3.IPPool, opts options.SetOptions) (*apiv3.IPPool, error) {
 	if res != nil {
@@ -122,7 +122,7 @@ func (r ipPools) Create(ctx context.Context, res *apiv3.IPPool, opts options.Set
 
 }
 
-// Update takes the representation of a IPPool and updates it. Returns the stored
+// Update takes the representation of an IPPool and updates it. Returns the stored
 // representation of the IPPool, and an error, if there is any.
 func (r ipPools) Update(ctx context.Context, res *apiv3.IPPool, opts options.SetOptions) (*apiv3.IPPool, error) {
 	if res != nil {

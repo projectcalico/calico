@@ -333,7 +333,7 @@ var _ = testutils.E2eDatastoreDescribe("IPPool tests", testutils.DatastoreAll, f
 			Expect(outList.Items).To(HaveLen(0))
 			rev0 := outList.ResourceVersion
 
-			By("Configuring a IPPool name1/spec1 and storing the response")
+			By("Configuring an IPPool name1/spec1 and storing the response")
 			outRes1, err := c.IPPools().Create(
 				ctx,
 				&apiv3.IPPool{
@@ -345,7 +345,7 @@ var _ = testutils.E2eDatastoreDescribe("IPPool tests", testutils.DatastoreAll, f
 			Expect(err).NotTo(HaveOccurred())
 			rev1 := outRes1.ResourceVersion
 
-			By("Configuring a IPPool name2/spec2 and storing the response")
+			By("Configuring an IPPool name2/spec2 and storing the response")
 			outRes2, err := c.IPPools().Create(
 				ctx,
 				&apiv3.IPPool{

@@ -26,7 +26,7 @@ const (
 // +genclient
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
-// IPAMHandle contains information about a IPAMHandle resource.
+// IPAMHandle contains information about an IPAMHandle resource.
 type IPAMHandle struct {
 	metav1.TypeMeta `json:",inline"`
 	// Standard object's metadata.
@@ -35,7 +35,7 @@ type IPAMHandle struct {
 	Spec IPAMHandleSpec `json:"spec,omitempty"`
 }
 
-// IPAMHandleSpec contains the specification for a IPAMHandle resource.
+// IPAMHandleSpec contains the specification for an IPAMHandle resource.
 type IPAMHandleSpec struct {
 	HandleID string         `json:"handleID"`
 	Block    map[string]int `json:"block"`

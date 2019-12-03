@@ -118,7 +118,7 @@ func (i IPNet) String() string {
 	return ip.String()
 }
 
-// MustParseNetwork parses the string into a IPNet.  The IP address in the
+// MustParseNetwork parses the string into an IPNet.  The IP address in the
 // IPNet is masked.
 func MustParseNetwork(c string) IPNet {
 	_, cidr, err := ParseCIDR(c)
@@ -128,7 +128,7 @@ func MustParseNetwork(c string) IPNet {
 	return *cidr
 }
 
-// MustParseCIDR parses the string into a IPNet.  The IP address in the
+// MustParseCIDR parses the string into an IPNet.  The IP address in the
 // IPNet is not masked.
 func MustParseCIDR(c string) IPNet {
 	ip, cidr, err := ParseCIDR(c)

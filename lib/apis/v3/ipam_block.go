@@ -35,7 +35,7 @@ type IPAMBlock struct {
 	Spec IPAMBlockSpec `json:"spec,omitempty"`
 }
 
-// IPAMBlockSpec contains the specification for a IPAMBlock resource.
+// IPAMBlockSpec contains the specification for an IPAMBlock resource.
 type IPAMBlockSpec struct {
 	CIDR           string                `json:"cidr"`
 	Affinity       *string               `json:"affinity"`
