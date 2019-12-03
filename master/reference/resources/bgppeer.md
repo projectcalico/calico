@@ -8,7 +8,7 @@ which the node(s) in a {{site.prodname}} cluster will peer.
 Configuring BGP peers allows you to peer a {{site.prodname}} network
 with your datacenter fabric (e.g. ToR). For more
 information on cluster layouts, see {{site.prodname}}'s documentation on
-[{{site.prodname}} over IP fabrics]({{site.baseurl}}/{{page.version}}/networking/design/l3-interconnect-fabric).
+[{{site.prodname}} over IP fabrics]({{site.baseurl}}/{{page.version}}/reference/architecture/design/l3-interconnect-fabric).
 
 For `calicoctl` [commands]({{site.baseurl}}/{{page.version}}/reference/calicoctl/) that specify a resource type on the CLI, the following
 aliases are supported (all case insensitive): `bgppeer`, `bgppeers`, `bgpp`, `bgpps`, `bp`, `bps`.

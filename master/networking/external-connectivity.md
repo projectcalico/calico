@@ -74,7 +74,7 @@ switch sides of the sessions.
 If you have a small number of hosts, you can configure BGP sessions between your router and each {{site.prodname}}-enabled host. With many hosts, you may wish to use a
 route reflector or set up a Layer 3 topology.
 
-There's further advice on network topologies in [{{site.prodname}} over Ethernet fabrics]({{site.baseurl}}/{{page.version}}/networking/design/l2-interconnect-fabric).
+There's further advice on network topologies in [{{site.prodname}} over Ethernet fabrics]({{site.baseurl}}/{{page.version}}/reference/architecture/design/l2-interconnect-fabric).
 We'd also encourage you to [get in touch](https://www.projectcalico.org/contact/)
 to discuss your environment.
 
