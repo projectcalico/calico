@@ -1,5 +1,5 @@
 ---
-title: Setting up a development machine
+title: Set up a development machine
 Description: Configure Calico networking for OpenStack VMs. 
 canonical_url: 'https://docs.projectcalico.org/v3.9/networking/openstack/dev-machine-setup'
 ---
