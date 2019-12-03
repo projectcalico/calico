@@ -675,12 +675,20 @@ func (c *ConnectivityChecker) ExpectedConnectivity() []string {
 	return result
 }
 
+var defaultConnectivityTimeout = 10 * time.Second
+
+func init() {
+	if os.Getenv("FELIX_FV_ENABLE_BPF") == "true" {
+		defaultConnectivityTimeout = 20 * time.Second
+	}
+}
+
 func (c *ConnectivityChecker) CheckConnectivityOffset(offset int, optionalDescription ...interface{}) {
-	c.CheckConnectivityWithTimeoutOffset(offset+2, 10*time.Second, optionalDescription...)
+	c.CheckConnectivityWithTimeoutOffset(offset+2, defaultConnectivityTimeout, optionalDescription...)
 }
 
 func (c *ConnectivityChecker) CheckConnectivity(optionalDescription ...interface{}) {
-	c.CheckConnectivityWithTimeoutOffset(2, 10*time.Second, optionalDescription...)
+	c.CheckConnectivityWithTimeoutOffset(2, defaultConnectivityTimeout, optionalDescription...)
 }
 
 func (c *ConnectivityChecker) CheckConnectivityWithTimeout(timeout time.Duration, optionalDescription ...interface{}) {
