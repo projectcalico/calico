@@ -665,14 +665,16 @@ allow_bypass:
 
 	if (CALI_LOG_LEVEL >= CALI_LOG_LEVEL_INFO) {
 		uint64_t prog_end_time = bpf_ktime_get_ns();
-		CALI_INFO("Final result=ALLOW (%d). Program execution time: %lluns T: %lluns\n", rc, prog_end_time-prog_start_time, timer_end_time-timer_start_time);
+		CALI_INFO("Final result=ALLOW (%d). Program execution time: %lluns T: %lluns\n",
+				rc, prog_end_time-prog_start_time, timer_end_time-timer_start_time);
 	}
 	return rc;
 
 deny:
 	if (CALI_LOG_LEVEL >= CALI_LOG_LEVEL_INFO) {
 		uint64_t prog_end_time = bpf_ktime_get_ns();
-		CALI_INFO("Final result=DENY (%x). Program execution time: %lluns\n", reason, prog_end_time-prog_start_time);
+		CALI_INFO("Final result=DENY (%x). Program execution time: %lluns\n",
+				reason, prog_end_time-prog_start_time);
 	}
 	return TC_ACT_SHOT;
 }
