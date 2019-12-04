@@ -1,5 +1,6 @@
 ---
 title: Calico the hard way
+description: A tutorial (ala Kelsey Hightower) about Calico under the covers 
 canonical_url: 'https://docs.projectcalico.org/v3.9/getting-started/kubernetes/hardway/index'
 ---
 

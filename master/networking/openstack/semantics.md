@@ -1,5 +1,6 @@
 ---
 title: Detailed semantics
+description: Calico provides connectivity that is different from traditional Neutron API semantics.
 canonical_url: 'https://docs.projectcalico.org/v3.9/networking/openstack/semantics'
 ---
 

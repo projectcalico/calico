@@ -1,7 +1,5 @@
 ---
 title: Networking
+description: Determine the best networking option for your implementation, configure networking, and customize IP address management.
 canonical_url: 'https://docs.projectcalico.org/v3.9/networking/index'
 ---
-
-This section discusses how to configure {{site.prodname}} networking and CNI. Refer
-to the sidebar menu for specific topics.
