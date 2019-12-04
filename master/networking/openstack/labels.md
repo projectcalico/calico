@@ -1,5 +1,6 @@
 ---
 title: Endpoint labels and operator policy
+description: Describes the labels used by Calico for OpenStack VMs
 canonical_url: 'https://docs.projectcalico.org/v3.9/networking/openstack/labels'
 ---
 
