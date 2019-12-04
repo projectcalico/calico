@@ -1,5 +1,6 @@
 ---
 title: Configure encryption and authentication
+description: Learn how to enable TLS authentication and encryption for various Calico omponents
 canonical_url: 'https://docs.projectcalico.org/v3.9/security/comms/crypto-auth'
 ---
 
