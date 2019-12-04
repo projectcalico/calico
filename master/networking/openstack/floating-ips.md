@@ -1,5 +1,6 @@
 ---
 title: Floating IPs
+description: Describes the floating IP support in Calico for OpenStack 
 canonical_url: 'https://docs.projectcalico.org/v3.9/networking/openstack/floating-ips'
 ---
 
