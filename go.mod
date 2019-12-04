@@ -10,7 +10,7 @@ require (
 	github.com/projectcalico/libcalico-go v1.7.2-0.20191204181402-d100617bd4df
 	github.com/projectcalico/typha v0.7.3-0.20191204184435-8efd36dbad90
 	github.com/sirupsen/logrus v1.4.2
-	github.com/ugorji/go/codec v1.1.7 // indirect
+	github.com/ugorji/go v1.1.7 // indirect
 
 	// k8s.io/api v1.16.3 is at 16d7abae0d2a
 	k8s.io/api v0.0.0-20191114100352-16d7abae0d2a

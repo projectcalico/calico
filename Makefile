@@ -1,4 +1,4 @@
-PACKAGE_NAME=github.com/projectcalico/confd
+PACKAGE_NAME=github.com/kelseyhightower/confd
 GO_BUILD_VER=v0.27
 
 ###############################################################################
