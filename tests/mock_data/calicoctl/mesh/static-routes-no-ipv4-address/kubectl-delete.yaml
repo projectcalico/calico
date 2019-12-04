@@ -1,0 +1,29 @@
+# For deletion, we only need to delete the Services - k8s will handle deleting
+# the corresponding Endpoints.
+kind: Service
+apiVersion: v1
+metadata:
+  name: service-1
+spec:
+  type: LoadBalancer
+  externalTrafficPolicy: Local
+  clusterIP: 10.101.0.101
+  ports:
+  - port: 80
+    protocol: TCP
+    targetPort: 80
+
+---
+
+kind: Service
+apiVersion: v1
+metadata:
+  name: service-2
+spec:
+  type: LoadBalancer
+  externalTrafficPolicy: Local
+  clusterIP: 10.101.0.102
+  ports:
+  - port: 80
+    protocol: TCP
+    targetPort: 80
