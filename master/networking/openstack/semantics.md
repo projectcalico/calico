@@ -1,5 +1,6 @@
 ---
 title: Detailed semantics
+description: Describes connectivity that {{site.prodname}} provides, how and why this connectivity is different from traditional Neutron API semantics.
 canonical_url: 'https://docs.projectcalico.org/v3.9/networking/openstack/semantics'
 ---
 
