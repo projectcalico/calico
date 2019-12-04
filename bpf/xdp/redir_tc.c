@@ -516,7 +516,7 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb, enum calico_tc_flags
 			goto deny;
 		}
 
-		if (dnat_should_encap(flags)) {
+		if (dnat_should_encap(flags) && !cali_rt_is_local(post_nat_ip_dst)) {
 			if (vxlan_v4_encap(skb, CALI_HOST_IP, true, flags)) {
 				reason = CALI_REASON_ENCAP_FAIL;
 				goto  deny;

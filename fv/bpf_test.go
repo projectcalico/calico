@@ -122,6 +122,7 @@ func describeBPFTests(testOpts bpfTestOptions) bool {
 					felix.Exec("ip", "r")
 					felix.Exec("calico-bpf", "ipsets", "dump")
 					felix.Exec("calico-bpf", "routes", "dump")
+					felix.Exec("calico-bpf", "nat", "dump")
 					log.Infof("[%d]FrontendMap: %+v", i, currBpfsvcs[i])
 					log.Infof("[%d]NATBackend: %+v", i, currBpfeps[i])
 				}
