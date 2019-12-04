@@ -31,34 +31,9 @@ var node1ip = net.IPv4(10, 10, 0, 1)
 var node2ip = net.IPv4(10, 10, 0, 2)
 
 func TestNATPodPodXNode(t *testing.T) {
-	eth := &layers.Ethernet{
-		SrcMAC:       []byte{0, 0, 0, 0, 0, 1},
-		DstMAC:       []byte{0, 0, 0, 0, 0, 2},
-		EthernetType: layers.EthernetTypeIPv4,
-	}
-
-	payload := []byte("ABCDEABCDEXXXXXXXXXXXX")
-
-	ipv4 := &layers.IPv4{
-		IHL:      5,
-		Length:   uint16(5*4 + 8 + len(payload)),
-		SrcIP:    net.IPv4(1, 1, 1, 1),
-		DstIP:    net.IPv4(2, 2, 2, 2),
-		Protocol: layers.IPProtocolUDP,
-	}
-
-	udp := &layers.UDP{
-		SrcPort: 1234,
-		DstPort: 5678,
-		Length:  8 + uint16(len(payload)),
-	}
-
-	_ = udp.SetNetworkLayerForChecksum(ipv4)
-
-	pkt := gopacket.NewSerializeBuffer()
-	err := gopacket.SerializeLayers(pkt, gopacket.SerializeOptions{ComputeChecksums: true},
-		eth, ipv4, udp, gopacket.Payload(payload))
+	_, ipv4, l4, payload, pktBytes, err := testPacketUDPDefault()
 	Expect(err).NotTo(HaveOccurred())
+	udp := l4.(*layers.UDP)
 
 	natMap := nat.FrontendMap()
 	err = natMap.EnsureExists()
@@ -94,7 +69,7 @@ func TestNATPodPodXNode(t *testing.T) {
 
 	// Leaving workload
 	runBpfTest(t, "calico_from_workload_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
-		res, err := bpfrun(pkt.Bytes())
+		res, err := bpfrun(pktBytes)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
 
@@ -249,34 +224,9 @@ func TestNATPodPodXNode(t *testing.T) {
 }
 
 func TestNATNodePort(t *testing.T) {
-	eth := &layers.Ethernet{
-		SrcMAC:       []byte{0, 0, 0, 0, 0, 1},
-		DstMAC:       []byte{0, 0, 0, 0, 0, 2},
-		EthernetType: layers.EthernetTypeIPv4,
-	}
-
-	payload := []byte("ABCDEABCDEXXXXXXXXXXXX")
-
-	ipv4 := &layers.IPv4{
-		IHL:      5,
-		Length:   uint16(5*4 + 8 + len(payload)),
-		SrcIP:    net.IPv4(1, 1, 1, 1),
-		DstIP:    net.IPv4(2, 2, 2, 2),
-		Protocol: layers.IPProtocolUDP,
-	}
-
-	udp := &layers.UDP{
-		SrcPort: 1234,
-		DstPort: 5678,
-		Length:  8 + uint16(len(payload)),
-	}
-
-	_ = udp.SetNetworkLayerForChecksum(ipv4)
-
-	pkt := gopacket.NewSerializeBuffer()
-	err := gopacket.SerializeLayers(pkt, gopacket.SerializeOptions{ComputeChecksums: true},
-		eth, ipv4, udp, gopacket.Payload(payload))
+	_, ipv4, l4, payload, pktBytes, err := testPacketUDPDefault()
 	Expect(err).NotTo(HaveOccurred())
+	udp := l4.(*layers.UDP)
 
 	natMap := nat.FrontendMap()
 	err = natMap.EnsureExists()
@@ -312,7 +262,7 @@ func TestNATNodePort(t *testing.T) {
 
 	// Arriving at node 1
 	runBpfTest(t, "calico_from_host_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
-		res, err := bpfrun(pkt.Bytes())
+		res, err := bpfrun(pktBytes)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
 

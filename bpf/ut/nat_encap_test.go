@@ -16,7 +16,6 @@ package ut_test
 
 import (
 	"fmt"
-	"net"
 	"testing"
 
 	"github.com/google/gopacket"
@@ -25,36 +24,10 @@ import (
 )
 
 func TestNatEncap(t *testing.T) {
-	eth := &layers.Ethernet{
-		SrcMAC:       []byte{0, 0, 0, 0, 0, 1},
-		DstMAC:       []byte{0, 0, 0, 0, 0, 2},
-		EthernetType: layers.EthernetTypeIPv4,
-	}
 
-	payload := []byte("ABCDEABCDEXXXXXXXXXXXX")
-
-	ipv4 := &layers.IPv4{
-		IHL:      5,
-		Length:   uint16(5*4 + 8 + len(payload)),
-		SrcIP:    net.IPv4(1, 1, 1, 1),
-		DstIP:    net.IPv4(2, 2, 2, 2),
-		Protocol: layers.IPProtocolUDP,
-	}
-
-	udp := &layers.UDP{
-		SrcPort: 1234,
-		DstPort: 5678,
-		Length:  8 + uint16(len(payload)),
-	}
-
-	_ = udp.SetNetworkLayerForChecksum(ipv4)
-
-	pkt := gopacket.NewSerializeBuffer()
-	err := gopacket.SerializeLayers(pkt, gopacket.SerializeOptions{ComputeChecksums: true},
-		eth, ipv4, udp, gopacket.Payload(payload))
+	_, ipv4, l4, payload, pktBytes, err := testPacketUDPDefault()
 	Expect(err).NotTo(HaveOccurred())
-
-	pktBytes := pkt.Bytes()
+	udp := l4.(*layers.UDP)
 
 	var encapedPkt []byte
 

@@ -67,30 +67,10 @@ const (
 
 func TestCompileTemplateRun(t *testing.T) {
 	runBpfTest(t, "calico_to_workload_ep", nil, func(bpfrun bpfProgRunFn) {
-		payload := []byte("ABCDEABCDEXXXXXXXXXXXX")
-		pkt := gopacket.NewSerializeBuffer()
-		err := gopacket.SerializeLayers(pkt, gopacket.SerializeOptions{},
-			&layers.Ethernet{
-				// zeroed MACs, does not matter
-				SrcMAC:       []byte{0, 0, 0, 0, 0, 1},
-				DstMAC:       []byte{0, 0, 0, 0, 0, 2},
-				EthernetType: layers.EthernetTypeIPv4,
-			},
-			&layers.IPv4{
-				SrcIP:    net.IPv4(1, 1, 1, 1),
-				DstIP:    net.IPv4(2, 2, 2, 2),
-				Protocol: layers.IPProtocolUDP,
-			},
-			&layers.UDP{
-				SrcPort: 1234,
-				DstPort: 5678,
-				Length:  8 + uint16(len(payload)),
-			},
-			gopacket.Payload(payload),
-		)
+		_, _, _, _, pktBytes, err := testPacketUDPDefault()
 		Expect(err).NotTo(HaveOccurred())
 
-		res, err := bpfrun(pkt.Bytes())
+		res, err := bpfrun(pktBytes)
 		Expect(err).NotTo(HaveOccurred())
 
 		// Implicitly denied by normal policy: DROP
@@ -378,4 +358,100 @@ func restoreCTMap(ctMap bpf.Map, m conntrack.MapMem) {
 		err := ctMap.Update(k[:], v[:])
 		Expect(err).NotTo(HaveOccurred())
 	}
+}
+
+var ethDefault = &layers.Ethernet{
+	SrcMAC:       []byte{0, 0, 0, 0, 0, 1},
+	DstMAC:       []byte{0, 0, 0, 0, 0, 2},
+	EthernetType: layers.EthernetTypeIPv4,
+}
+
+var payloadDefault = []byte("ABCDEABCDEXXXXXXXXXXXX")
+
+var ipv4Default = &layers.IPv4{
+	Version:  4,
+	IHL:      5,
+	SrcIP:    net.IPv4(1, 1, 1, 1),
+	DstIP:    net.IPv4(2, 2, 2, 2),
+	Protocol: layers.IPProtocolUDP,
+}
+
+var udpDefault = &layers.UDP{
+	SrcPort: 1234,
+	DstPort: 5678,
+}
+
+func testPacket(ethAlt *layers.Ethernet, ipv4Alt *layers.IPv4, l4Alt gopacket.Layer, payloadAlt []byte) (
+	*layers.Ethernet, *layers.IPv4, gopacket.Layer, []byte, []byte, error) {
+
+	var (
+		eth     *layers.Ethernet
+		ipv4    *layers.IPv4
+		udp     *layers.UDP
+		tcp     *layers.TCP
+		icmp    *layers.ICMPv4
+		payload []byte
+	)
+
+	if ethAlt != nil {
+		eth = ethAlt
+	} else {
+		eth = ethDefault
+	}
+
+	if ipv4Alt != nil {
+		ipv4 = ipv4Alt
+	} else {
+		ipv4 = ipv4Default
+	}
+
+	if l4Alt != nil {
+		switch v := l4Alt.(type) {
+		case *layers.UDP:
+			udp = v
+		case *layers.TCP:
+			tcp = v
+		case *layers.ICMPv4:
+			icmp = v
+		default:
+			return nil, nil, nil, nil, nil, errors.Errorf("unrecognized l4 layer type %t", l4Alt)
+		}
+	} else {
+		udp = udpDefault
+	}
+
+	if payloadAlt != nil {
+		payload = payloadAlt
+	} else {
+		payload = payloadDefault
+	}
+
+	switch {
+	case udp != nil:
+		ipv4.Length = uint16(5*4 + 8 + len(payload))
+		udp.Length = uint16(8 + len(payload))
+		_ = udp.SetNetworkLayerForChecksum(ipv4)
+
+		pkt := gopacket.NewSerializeBuffer()
+		err := gopacket.SerializeLayers(pkt, gopacket.SerializeOptions{ComputeChecksums: true},
+			eth, ipv4, udp, gopacket.Payload(payload))
+
+		return eth, ipv4, udp, payload, pkt.Bytes(), err
+	case tcp != nil:
+		return nil, nil, nil, nil, nil, errors.Errorf("tcp not implemented yet")
+	case icmp != nil:
+		ipv4.Length = uint16(5*4 + 8 + len(payload))
+
+		pkt := gopacket.NewSerializeBuffer()
+		err := gopacket.SerializeLayers(pkt, gopacket.SerializeOptions{ComputeChecksums: true},
+			eth, ipv4, icmp, gopacket.Payload(payload))
+
+		return eth, ipv4, icmp, payload, pkt.Bytes(), err
+	}
+
+	panic("UNREACHABLE")
+}
+
+func testPacketUDPDefault() (*layers.Ethernet, *layers.IPv4, gopacket.Layer, []byte, []byte, error) {
+	return testPacket(nil, nil, nil, nil)
 }
