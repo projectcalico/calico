@@ -34,6 +34,8 @@ func log(format string, a ...interface{}) {
 }
 
 var _ = Describe("BPF Proxy", func() {
+	var syncStop chan struct{}
+
 	It("should fail without k8s client", func() {
 		_, err := proxy.New(nil, nil, "testnode")
 		Expect(err).To(HaveOccurred())
@@ -45,7 +47,8 @@ var _ = Describe("BPF Proxy", func() {
 	It("should create proxy with fake client and mock syncer and sync with empty store", func() {
 		k8s := fake.NewSimpleClientset()
 
-		dp := newMockSyncer()
+		syncStop = make(chan struct{})
+		dp := newMockSyncer(syncStop)
 
 		p, err := proxy.New(k8s, dp, "testnode", proxy.WithImmediateSync())
 		Expect(err).NotTo(HaveOccurred())
@@ -57,6 +60,7 @@ var _ = Describe("BPF Proxy", func() {
 			Expect(len(s.StaleUDPSvcs)).To(Equal(0))
 		})
 
+		close(syncStop)
 		p.Stop()
 	})
 
@@ -141,12 +145,15 @@ var _ = Describe("BPF Proxy", func() {
 	}
 
 	var p proxy.Proxy
+	var dp *mockSyncer
 	k8s := fake.NewSimpleClientset(testSvc, testSvcEps, secondSvc, secondSvcEps)
-
-	dp := newMockSyncer()
 
 	It("should create proxy with fake client and mock syncer", func() {
 		var err error
+
+		syncStop = make(chan struct{})
+		dp = newMockSyncer(syncStop)
+
 		p, err = proxy.New(k8s, dp, "testnode", proxy.WithImmediateSync())
 		Expect(err).NotTo(HaveOccurred())
 	})
@@ -408,27 +415,34 @@ var _ = Describe("BPF Proxy", func() {
 	})
 
 	It("should stop the proxy", func() {
+		close(syncStop)
 		p.Stop()
 	})
 })
 
 type mockSyncer struct {
-	out chan proxy.DPSyncerState
-	in  chan error
+	out  chan proxy.DPSyncerState
+	in   chan error
+	stop chan struct{}
 }
 
-func newMockSyncer() *mockSyncer {
+func newMockSyncer(stop chan struct{}) *mockSyncer {
 	return &mockSyncer{
-		out: make(chan proxy.DPSyncerState),
-		in:  make(chan error),
+		out:  make(chan proxy.DPSyncerState),
+		in:   make(chan error),
+		stop: stop,
 	}
 }
 
 func (s *mockSyncer) Apply(state proxy.DPSyncerState) error {
 	log("SvcMap = %+v\n", state.SvcMap)
 	log("EpsMap = %+v\n", state.EpsMap)
-	s.out <- state
-	return <-s.in
+	select {
+	case s.out <- state:
+		return <-s.in
+	case <-s.stop:
+		return nil
+	}
 }
 
 func (s *mockSyncer) checkState(f func(proxy.DPSyncerState)) {
