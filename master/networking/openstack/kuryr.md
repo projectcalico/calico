@@ -1,5 +1,6 @@
 ---
 title: Kuryr
+description: Describes how to use Kuryr with Calico networking
 canonical_url: 'https://docs.projectcalico.org/v3.9/networking/openstack/kuryr'
 ---
 
