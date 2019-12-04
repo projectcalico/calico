@@ -1,4 +1,4 @@
-PACKAGE_NAME=github.com/projectcalico/confd
+PACKAGE_NAME=github.com/kelseyhightower/confd
 GO_BUILD_VER=v0.27
 
 ###############################################################################
@@ -55,7 +55,7 @@ clean:
 ###############################################################################
 # Updating pins
 ###############################################################################
-update-pins: update-typha-pin
+update-pins: update-libcalico-pin update-typha-pin
 
 ###############################################################################
 # Building the binary
