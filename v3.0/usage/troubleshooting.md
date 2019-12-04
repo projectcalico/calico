@@ -1,6 +1,6 @@
 ---
 title: Troubleshooting
-canonical_url: 'https://docs.projectcalico.org/v3.5/usage/troubleshooting/index'
+canonical_url: 'https://docs.projectcalico.org/v3.5/usage/troubleshooting'
 ---
 
 * TOC
@@ -53,9 +53,9 @@ kubectl delete pod -n kube-system <name-of-calico-pod>
 kubectl uncordon mynode.internal.projectcalico.org
 ```
 
-To prevent this problem from occurring, we recommend always mounting the `/var/lib/calico` directory into the `{{site.nodecontainer}}`
-container when installing {{site.prodname}}. This allows all components to detect and use the same node name. See
-[node name determination](../../reference/node/configuration#node-name-determination) for more information.
+To prevent this problem from occurring, we recommend always explicitly specifiying the desired node name
+when launching {{site.prodname}}. It should be configured both in `{{site.nodecontainer}}` via the `NODENAME` environment variable,
+as well as in the CNI plugin using the `nodename` field in the CNI network configuration.
 
 ### Check BGP peer status
 

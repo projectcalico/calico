@@ -1,7 +1,6 @@
 bigheader: "Introduction"
-abstract: "Background information on Calico"
-path: /introduction
+path: /introduction/
 order: 0
-toc:
+section:
 - title: About Calico
-  path: /introduction/
+  path: /introduction/about

@@ -1,9 +1,10 @@
 ---
 title: Logging
-canonical_url: 'https://docs.projectcalico.org/v3.5/usage/troubleshooting/logging'
+canonical_url: 'https://docs.projectcalico.org/v3.5/usage/logging'
 ---
 
 ## The {{site.nodecontainer}} container
+
 The components in the `{{site.nodecontainer}}` container all log to the directories under
 `/var/log/calico` inside the container.  By default this is mapped to the
 `/var/log/calico` directory on the host but can be changed by specifying a

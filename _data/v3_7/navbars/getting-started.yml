@@ -67,6 +67,7 @@ section:
     path: /getting-started/openstack/installation/
     section:
     - title: Overview
+      description: /getting-started/openstack/installation/overview
       path: /getting-started/openstack/installation/overview
     - title: Ubuntu
       description: /getting-started/openstack/installation/ubuntu

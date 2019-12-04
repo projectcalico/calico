@@ -1,6 +1,6 @@
 ---
 title: Frequently Asked Questions
-canonical_url: 'https://docs.projectcalico.org/v3.5/usage/troubleshooting/faq'
+canonical_url: 'https://docs.projectcalico.org/v3.5/usage/faq'
 ---
 
 * TOC
@@ -265,7 +265,7 @@ in the main [this article]({{site.baseurl}}/{{page.version}}/reference/private-c
 We'd also encourage you to [get in touch](https://www.projectcalico.org/contact/)
 to discuss your environment.
 
-### How can I enable NAT for outgoing traffic from containers with private IP addresses?
+## How can I enable NAT for outgoing traffic from containers with private IP addresses?
 
 If you want to allow containers with private IP addresses to be able to access the
 internet then you can use your data center's existing outbound NAT capabilities
@@ -293,7 +293,7 @@ Remember: the security profile for the container will need to allow traffic to t
 internet as well.  Refer to the appropriate guide for your orchestration
 system for details on how to configure policy.
 
-### How can I enable NAT for incoming traffic to containers with private IP addresses?
+## How can I enable NAT for incoming traffic to containers with private IP addresses?
 
 As discussed, the recommended way to get traffic to containers that
 need to be accessed from the internet is to give them public IP addresses and
@@ -337,7 +337,7 @@ The commands will need to be run each time the host is restarted.
 Remember: the security profile for the container will need to allow traffic to the exposed port as well.
 Refer to the appropriate guide for your orchestration system for details on how to configure policy.
 
-### Can I run {{site.prodname}} in a public cloud environment?
+## Can I run {{site.prodname}} in a public cloud environment?
 
 Yes.  If you are running in a public cloud that doesn't allow either L3 peering or L2 connectivity between {{site.prodname}} hosts then you can enable `ipip` in your {{site.prodname}} IP pool:
 
@@ -371,6 +371,10 @@ spec:
   natOutgoing: true
 EOF
 ```
+
+## Can {{site.prodname}} coexist with my own iptables rules?
+
+Yes. By default, Felix will write its own rules at the top of the iptables chain. If you want your rules to have priority, then change the chainInsertMode setting in your [Felix Configuration]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/felixconfig) to `Append`.
 
 ### On AWS with IP in IP, why do I see no connectivity between workloads or only see connectivity if I ping in both directions?
 

@@ -177,8 +177,8 @@ section:
   path: /reference/architecture/
   section:
   - title: Introduction
-    description: /reference/architecture/intoduction
-    path: /reference/architecture/intoduction
+    description: /reference/architecture/introduction
+    path: /reference/architecture/introduction
   - title: Data Path
     description: /reference/architecture/data-path
     path: /reference/architecture/data-path

@@ -177,8 +177,8 @@ section:
   path: /reference/architecture/
   section:
   - title: Introduction
-    description: /reference/architecture/intriduction
-    path: /reference/architecture/intriduction
+    description: /reference/architecture/introduction
+    path: /reference/architecture/introduction
   - title: calico/node
     description: /reference/architecture/components
     path: /reference/architecture/components

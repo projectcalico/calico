@@ -63,8 +63,8 @@ section:
   description: /usage/troubleshooting
   path: /usage/troubleshooting
 - title: Logging
-  description: /usage/troubleshooting/logging
-  path: /usage/troubleshooting/logging
+  description: /usage/logging
+  path: /usage/logging
 - title: Frequently Asked Questions
-  description: /usage/troubleshooting/faq
-  path: /usage/troubleshooting/faq
+  description: /usage/faq
+  path: /usage/faq
