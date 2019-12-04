@@ -1,5 +1,6 @@
 ---
 title: Route reflectors
+description: Describes ways to configure BGP route reflectors
 canonical_url: 'https://docs.projectcalico.org/v3.9/networking/routereflector'
 ---
 
