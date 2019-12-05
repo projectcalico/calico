@@ -121,7 +121,7 @@ type GlobalNetworkPolicySpec struct {
 	ServiceAccountSelector string `json:"serviceAccountSelector,omitempty" validate:"selector"`
 
 	// NamespaceSelector is an optional field for an expression used to select a pod based on namespaces.
-	NamespaceSelector string `json:"namespaceSelector,omitempty" validate"selector"`
+	NamespaceSelector string `json:"namespaceSelector,omitempty" validate:"selector"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
