@@ -13,7 +13,6 @@ Depends:
  calico-felix (>= 1.4),
  networking-calico (= ${binary:Version}),
  neutron-dhcp-agent,
- iptables-persistent,
  ${misc:Depends},
  ${python:Depends},
  ${shlibs:Depends}
