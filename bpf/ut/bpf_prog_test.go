@@ -109,6 +109,7 @@ func runBpfTest(t *testing.T, section string, rules [][][]*proto.Rule, testFn fu
 		intdataplane.CompileWithLogPrefix(section),
 		intdataplane.CompileWithHostIP(hostIP),
 		intdataplane.CompileWithVxlanPort(testVxlanPort),
+		intdataplane.CompileWithMaxMTU(maxMTU),
 	)
 	Expect(err).NotTo(HaveOccurred())
 
@@ -373,6 +374,7 @@ var payloadDefault = []byte("ABCDEABCDEXXXXXXXXXXXX")
 var ipv4Default = &layers.IPv4{
 	Version:  4,
 	IHL:      5,
+	Flags:    layers.IPv4DontFragment,
 	SrcIP:    net.IPv4(1, 1, 1, 1),
 	DstIP:    net.IPv4(2, 2, 2, 2),
 	Protocol: layers.IPProtocolUDP,

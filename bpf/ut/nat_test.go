@@ -420,3 +420,51 @@ func TestNATNodePort(t *testing.T) {
 
 	dumpCTMap(ctMap)
 }
+
+func TestNATNodePortICMPTooBig(t *testing.T) {
+	_, ipv4, l4, _, pktBytes, err := testPacket(nil, nil, nil, make([]byte, maxMTU))
+	Expect(err).NotTo(HaveOccurred())
+	udp := l4.(*layers.UDP)
+
+	natMap := nat.FrontendMap()
+	err = natMap.EnsureExists()
+	Expect(err).NotTo(HaveOccurred())
+
+	natBEMap := nat.BackendMap()
+	err = natBEMap.EnsureExists()
+	Expect(err).NotTo(HaveOccurred())
+
+	err = natMap.Update(
+		nat.NewNATKey(ipv4.DstIP, uint16(udp.DstPort), uint8(ipv4.Protocol)).AsBytes(),
+		nat.NewNATValue(0, 1).AsBytes(),
+	)
+	Expect(err).NotTo(HaveOccurred())
+
+	natIP := net.IPv4(8, 8, 8, 8)
+	natPort := uint16(666)
+
+	err = natBEMap.Update(
+		nat.NewNATBackendKey(0, 0).AsBytes(),
+		nat.NewNATBackendValue(natIP, natPort).AsBytes(),
+	)
+	Expect(err).NotTo(HaveOccurred())
+
+	ctMap := conntrack.Map()
+	err = ctMap.EnsureExists()
+	Expect(err).NotTo(HaveOccurred())
+	resetCTMap(ctMap) // ensure it is clean
+
+	hostIP = node1ip
+
+	// Arriving at node but is rejected because of MTU, expect ICMP too big reply
+	runBpfTest(t, "calico_from_host_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
+		res, err := bpfrun(pktBytes)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
+
+		pktR := gopacket.NewPacket(res.dataOut, layers.LayerTypeEthernet, gopacket.Default)
+		fmt.Printf("pktR = %+v\n", pktR)
+
+		checkICMPTooBig(pktR, ipv4, udp, maxMTU)
+	})
+}

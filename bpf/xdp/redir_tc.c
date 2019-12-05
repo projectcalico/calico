@@ -180,6 +180,8 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb, enum calico_tc_flags
 	uint32_t fib_flags = 0;
 	bool encap_is_src = false;
 	__be32 encap_ip;
+	bool encap_needed = false;
+	bool ip_dnf;
 
 	if (!CALI_TC_FLAGS_TO_HOST(flags) && skb->mark == CALI_SKB_MARK_BYPASS) {
 		CALI_DEBUG("Packet pre-approved by another hook, allow.\n");
@@ -229,6 +231,11 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb, enum calico_tc_flags
 		reason = CALI_REASON_SHORT;
 		CALI_DEBUG("Too short\n");
 		goto deny;
+	}
+
+	/* remember IP_DF right here in case we need to encap to make verifier happy */
+	if (dnat_should_encap(flags) || dnat_return_should_encap(flags)) {
+		ip_dnf = ip_header->frag_off & host_to_be16(0x4000);
 	}
 
 	if (is_vxlan_tunnel(ip_header)) {
@@ -492,6 +499,11 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb, enum calico_tc_flags
 
 		CALI_DEBUG("CT: DNAT to %x:%d\n", be32_to_host(post_nat_ip_dst), post_nat_dport);
 
+		encap_needed = dnat_should_encap(flags) && !cali_rt_is_local(post_nat_ip_dst);
+		if (encap_needed && ip_dnf && vxlan_v4_encap_too_big(skb)) {
+			goto icmp_too_big;
+		}
+
 		ip_header->daddr = post_nat_ip_dst;
 		ip_csum_offset = skb_offset(skb, ip_header) +  offsetof(struct iphdr, check);
 
@@ -518,7 +530,7 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb, enum calico_tc_flags
 			goto deny;
 		}
 
-		if (dnat_should_encap(flags) && !cali_rt_is_local(post_nat_ip_dst)) {
+		if (encap_needed) {
 			ip_src = CALI_HOST_IP;
 			encap_is_src = true;
 			goto nat_encap;
@@ -581,6 +593,9 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb, enum calico_tc_flags
 		// fall through
 	case CALI_CT_ESTABLISHED:
 		if (dnat_return_should_encap(flags)  && ct_result.tun_ret_ip) {
+			if (encap_needed && ip_dnf && vxlan_v4_encap_too_big(skb)) {
+				goto icmp_too_big;
+			}
 			ip_dst = ct_result.tun_ret_ip;
 			goto nat_encap;
 		}
@@ -607,6 +622,30 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb, enum calico_tc_flags
 
 	CALI_INFO("We should never fall through here\n");
 	goto deny;
+
+icmp_too_big:
+	if (skb_shorter(skb, ETH_IPV4_UDP_SIZE) || icmp_v4_too_big(skb)) {
+		reason = CALI_REASON_ICMP_DF;
+		goto deny;
+	}
+
+	seen_mark = CALI_SKB_MARK_BYPASS_FWD_EXTERNAL;
+
+	/* XXX we might use skb->ifindex to redirect it straight back
+	 * to where it came from if it is guaranteed to be the path
+	 */
+	sport = dport = 0;
+	ip_proto = IPPROTO_ICMP;
+
+	fib_flags |= BPF_FIB_LOOKUP_OUTPUT;
+
+	fib_params.l4_protocol = ip_proto;
+	fib_params.sport = sport;
+	fib_params.dport = dport;
+	fib_params.ipv4_src = ip_dst;
+	fib_params.ipv4_dst = ip_src;
+
+	goto allow;
 
 nat_encap:
 	encap_ip = encap_is_src ? ip_src : ip_dst;

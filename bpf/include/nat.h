@@ -27,8 +27,10 @@
 #define dnat_should_decap(flags) \
 	(CALI_TC_FLAGS_TO_WORKLOAD(flags) || CALI_TC_FLAGS_FROM_HOST_ENDPOINT(flags))
 
+#define CALI_ENCAP_EXTRA_SIZE	50
+
 #ifndef CALI_MAX_MTU
-#define CALI_MAX_MTU	(1500 - 50)
+#define CALI_MAX_MTU	(1500 - CALI_ENCAP_EXTRA_SIZE)
 #endif
 
 // Map: NAT level one.  Dest IP and port -> ID and num backends.
@@ -243,6 +245,8 @@ static CALI_BPF_INLINE int is_vxlan_tunnel(struct iphdr *ip)
 
 	return ip->protocol == IPPROTO_UDP && udp->dest == host_to_be16(CALI_VXLAN_PORT);
 }
+
+#define vxlan_v4_encap_too_big(skb) ((skb)->len + CALI_ENCAP_EXTRA_SIZE > CALI_MAX_MTU)
 
 static CALI_BPF_INLINE int icmp_v4_too_big(struct __sk_buff *skb)
 {
