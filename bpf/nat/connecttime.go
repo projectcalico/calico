@@ -24,6 +24,8 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/pkg/errors"
+
 	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/felix/bpf"
@@ -37,25 +39,9 @@ type cgroupProgs struct {
 }
 
 func RemoveConnectTimeLoadBalancer(cgroupv2 string) error {
-	// In case we're in a container and the cgroup filesystem isn't mounted, we need to mount it in order
-	// to look for our programs.
-	cgroupRoot, err := bpf.MaybeMountCgroupV2()
+	cgroupPath, err := ensureCgroupPath(cgroupv2)
 	if err != nil {
-		log.WithError(err).Error("Failed to mount cgroupv2, unable to clean up connect-time load balancing")
-		return err
-	}
-
-	cgroupPath := cgroupRoot
-	if cgroupv2 != "" {
-		cgroupPath = path.Clean(path.Join(cgroupRoot, cgroupv2))
-		if !strings.HasPrefix(cgroupPath, path.Clean(cgroupRoot)) {
-			log.Panic("Invalid cgroup path")
-		}
-		_, err := os.Stat(cgroupPath)
-		if os.IsNotExist(err) {
-			log.Info("Target cgroup didn't exist, nothing to clean up.")
-			return nil
-		}
+		return errors.Wrap(err, "failed to set-up cgroupv2")
 	}
 
 	cmd := exec.Command("bpftool", "-j", "-p", "cgroup", "show", cgroupPath)
@@ -125,7 +111,7 @@ func InstallConnectTimeLoadBalancer(frontendMap, backendMap bpf.Map, cgroupv2 st
 	}
 	err = clang.Start()
 	if err != nil {
-		log.WithError(err).Panic("Failed to write C file.")
+		log.WithError(err).Panic("Failed to start clang.")
 		return err
 	}
 	var wg sync.WaitGroup
@@ -160,10 +146,9 @@ func InstallConnectTimeLoadBalancer(frontendMap, backendMap bpf.Map, cgroupv2 st
 		return err
 	}
 
-	cgroupRoot, err := bpf.MaybeMountCgroupV2()
+	cgroupPath, err := ensureCgroupPath(cgroupv2)
 	if err != nil {
-		log.WithError(err).Error("Failed to mount cgroupv2, unable to do connect-time load balancing")
-		return err
+		return errors.Wrap(err, "failed to set-up cgroupv2")
 	}
 
 	progPinDir := path.Join(bpfMount, "calico_connect4")
@@ -182,24 +167,34 @@ func InstallConnectTimeLoadBalancer(frontendMap, backendMap bpf.Map, cgroupv2 st
 		return err
 	}
 
-	cgroupPath := cgroupRoot
-	if cgroupv2 != "" {
-		cgroupPath = path.Clean(path.Join(cgroupRoot, cgroupv2))
-		if !strings.HasPrefix(cgroupPath, path.Clean(cgroupRoot)) {
-			log.Panic("Invalid cgroup path")
-		}
-		err = os.MkdirAll(cgroupPath, 0766)
-		if err != nil {
-			log.WithError(err).Panic("Failed to make cgroup")
-		}
-	}
 	cmd = exec.Command("bpftool", "cgroup", "attach", cgroupPath, "connect4", "pinned", path.Join(progPinDir, "calico_connect_v4"))
 	log.WithField("args", cmd.Args).Info("About to run bpftool")
 	out, err = cmd.CombinedOutput()
 	if err != nil {
 		log.WithError(err).WithField("output", string(out)).Error("Failed to attach connect-time load balancing program.")
-		return err
+		return errors.Wrap(err, "failed to attach connect-time load balancing program")
 	}
 
 	return nil
+}
+
+func ensureCgroupPath(cgroupv2 string) (string, error) {
+	cgroupRoot, err := bpf.MaybeMountCgroupV2()
+	if err != nil {
+		log.WithError(err).Error("Failed to mount cgroupv2, unable to do connect-time load balancing")
+		return "", err
+	}
+	cgroupPath := cgroupRoot
+	if cgroupv2 != "" {
+		cgroupPath = path.Clean(path.Join(cgroupRoot, cgroupv2))
+		if !strings.HasPrefix(cgroupPath, path.Clean(cgroupRoot)) {
+			log.Panic("Invalid cgroup path outside the root")
+		}
+		err = os.MkdirAll(cgroupPath, 0766)
+		if err != nil {
+			log.WithError(err).Error("Failed to make cgroup")
+			return "", errors.Wrap(err, "failed to create cgroup")
+		}
+	}
+	return cgroupPath, nil
 }
