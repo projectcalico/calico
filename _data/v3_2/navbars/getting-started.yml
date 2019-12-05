@@ -3,226 +3,156 @@ path: /getting-started/
 order: 1
 section:
 - title: Kubernetes
-  description: /getting-started/kubernetes/
   path: /getting-started/kubernetes/
   section:
   - title: Quickstart
-    description: /getting-started/kubernetes/quickstart
     path: /getting-started/kubernetes/quickstart
   - title: Requirements
-    description: /getting-started/kubernetes/requirements
     path: /getting-started/kubernetes/requirements
   - title: Installation
-    description: /getting-started/kubernetes/installation/
     path: /getting-started/kubernetes/installation/
     section:
     - title: Introduction
-      description: /getting-started/kubernetes/installation/introduction
       path: /getting-started/kubernetes/installation/introduction
     - title: Installing Calico for policy and networking (recommended)
-      description: /getting-started/kubernetes/installation/calico
       path: /getting-started/kubernetes/installation/calico
     - title: Installing Calico for policy and flannel for networking
-      description: /getting-started/kubernetes/installation/flannel
       path: /getting-started/kubernetes/installation/flannel
     - title: Installing Calico for policy (advanced)
-      description: /getting-started/kubernetes/installation/other
       path: /getting-started/kubernetes/installation/other
     - title: Enabling application layer policy (optional)
-      description: /getting-started/kubernetes/installation/app-layer-policy
       path: /getting-started/kubernetes/installation/app-layer-policy
     - title: Customizing the manifests (advanced)
-      description: /getting-started/kubernetes/installation/config-options
       path: /getting-started/kubernetes/installation/config-options
     - title: Integration guide (advanced)
-      description: /getting-started/kubernetes/installation/integration
       path: /getting-started/kubernetes/installation/integration
   - title: Tutorials
-    description: /getting-started/kubernetes/tutorials/
     path: /getting-started/kubernetes/tutorials/
     section:
     - title: Simple Policy Demo
-      description: /getting-started/kubernetes/tutorials/simple-policy
       path: /getting-started/kubernetes/tutorials/simple-policy
     - title: Stars Policy Demo
-      description: /getting-started/kubernetes/tutorials/stars-policy/
       path: /getting-started/kubernetes/tutorials/stars-policy/
     - title: Advanced network policy
-      description: /getting-started/kubernetes/tutorials/advanced-policy
       path: /getting-started/kubernetes/tutorials/advanced-policy
     - title: Application layer policy
-      description: /getting-started/kubernetes/tutorials/app-layer-policy/
       path: /getting-started/kubernetes/tutorials/app-layer-policy/
   - title: Troubleshooting / FAQ
-    description: /getting-started/kubernetes/troubleshooting
     path: /getting-started/kubernetes/troubleshooting
   - title: Upgrade
-    description: /getting-started/kubernetes/upgrade/
     path: /getting-started/kubernetes/upgrade/
     section:
     - title: Overview
-      description: /getting-started/kubernetes/upgrade/overview
       path: /getting-started/kubernetes/upgrade/overview
     - title: Install and configure calico-upgrade
-      description: /getting-started/kubernetes/upgrade/setup
       path: /getting-started/kubernetes/upgrade/setup
     - title: Test the migration
-      description: /getting-started/kubernetes/upgrade/test
       path: /getting-started/kubernetes/upgrade/test
     - title: Migrate your data
-      description: /getting-started/kubernetes/upgrade/migrate
       path: /getting-started/kubernetes/upgrade/migrate
     - title: Upgrade Calico
-      description: /getting-started/kubernetes/upgrade/upgrade
       path: /getting-started/kubernetes/upgrade/upgrade
     - title: Converting your calicoctl manifests
-      description: /getting-started/kubernetes/upgrade/convert
       path: /getting-started/kubernetes/upgrade/convert
     - title: Deleting old data
-      description: /getting-started/kubernetes/upgrade/delete
       path: /getting-started/kubernetes/upgrade/delete
     - title: Downgrading Calico
-      description: /getting-started/kubernetes/upgrade/downgrade
       path: /getting-started/kubernetes/upgrade/downgrade
 
 - title: OpenShift
-  description: /getting-started/openshift/
   path: /getting-started/openshift/
   section:
   - title: Requirements
-    description: /getting-started/openshift/requirements
     path: /getting-started/openshift/requirements
   - title: Installation
-    description: /getting-started/openshift/installation
     path: /getting-started/openshift/installation
   - title: Connecting to a dedicated etcd cluster (optional)
-    description: /getting-started/openshift/dedicated-etcd
     path: /getting-started/openshift/dedicated-etcd
 
 - title: OpenStack
-  description: /getting-started/openstack/
   path: /getting-started/openstack/
   section:
   - title: Overview
-    description: /getting-started/openstack/overview
     path: /getting-started/openstack/overview
   - title: Requirements
-    description: /getting-started/openstack/requirements
     path: /getting-started/openstack/requirements
   - title: Installation
-    description: /getting-started/openstack/installation/
     path: /getting-started/openstack/installation/
     section:
     - title: Overview
-      description: /getting-started/openstack/installation/overview
       path: /getting-started/openstack/installation/overview
     - title: Ubuntu
-      description: /getting-started/openstack/installation/ubuntu
       path: /getting-started/openstack/installation/ubuntu
     - title: Red Hat Enterprise Linux
-      description: /getting-started/openstack/installation/redhat
       path: /getting-started/openstack/installation/redhat
     - title: DevStack
-      description: /getting-started/openstack/installation/devstack
       path: /getting-started/openstack/installation/devstack
   - title: Tutorials
-    description: /getting-started/openstack/tutorials
     path: /getting-started/openstack/tutorials
   - title: Troubleshooting
-    description: /getting-started/openstack/verification
     path: /getting-started/openstack/verification
   - title: IP Addressing and Connectivity
-    description: /getting-started/openstack/connectivity
     path: /getting-started/openstack/connectivity
   - title: Use of the Neutron API
-    description: /getting-started/openstack/neutron-api
     path: /getting-started/openstack/neutron-api
   - title: Upgrade
-    description: /getting-started/openstack/upgrade/
     path: /getting-started/openstack/upgrade/
     section:
     - title: Overview
-      description: /getting-started/openstack/upgrade/overview
       path: /getting-started/openstack/upgrade/overview
     - title: Install and configure calico-upgrade
-      description: /getting-started/openstack/upgrade/setup
       path: /getting-started/openstack/upgrade/setup
     - title: Test the migration
-      description: /getting-started/openstack/upgrade/test
       path: /getting-started/openstack/upgrade/test
     - title: Migrate your data
-      description: /getting-started/openstack/upgrade/migrate
       path: /getting-started/openstack/upgrade/migrate
     - title: Upgrade Calico
-      description: /getting-started/openstack/upgrade/upgrade
       path: /getting-started/openstack/upgrade/upgrade
     - title: Deleting old data
-      description: /getting-started/openstack/upgrade/delete
       path: /getting-started/openstack/upgrade/delete
     - title: Converting your calicoctl manifests
-      description: /getting-started/openstack/upgrade/convert
       path: /getting-started/openstack/upgrade/convert
     - title: Downgrading Calico
-      description: /getting-started/openstack/upgrade/downgrade
       path: /getting-started/openstack/upgrade/downgrade
 
 - title: Host Protection
-  description: /getting-started/bare-metal/
   path: /getting-started/bare-metal/
   section:
   - title: Overview
-    description: /getting-started/bare-metal/overview
     path: /getting-started/bare-metal/overview
   - title: Requirements
-    description: /getting-started/bare-metal/requirements
     path: /getting-started/bare-metal/requirements
   - title: Installation
-    description: /getting-started/bare-metal/installation/
     path: /getting-started/bare-metal/installation/
     section:
     - title: Overview
-      description: /getting-started/bare-metal/installation/overview
       path: /getting-started/bare-metal/installation/overview
     - title: Binary install with package manager
-      description: /getting-started/bare-metal/installation/binary-mgr
       path: /getting-started/bare-metal/installation/binary-mgr
     - title: Binary install without package manager
-      description: /getting-started/bare-metal/installation/binary
       path: /getting-started/bare-metal/installation/binary
     - title: Container install
-      description: /getting-started/bare-metal/installation/container
       path: /getting-started/bare-metal/installation/container
   - title: Setting policy
-    description: /getting-started/bare-metal/policy/
     path: /getting-started/bare-metal/policy/
     section:
     - title: Basic connectivity
-      description: /getting-started/bare-metal/policy/basic
       path: /getting-started/bare-metal/policy/basic
     - title: Creating policy objects
-      description: /getting-started/bare-metal/policy/objects
       path: /getting-started/bare-metal/policy/objects
     - title: Selector-based policies
-      description: /getting-started/bare-metal/policy/selector
       path: /getting-started/bare-metal/policy/selector
     - title: Failsafe rules
-      description: /getting-started/bare-metal/policy/failsafe
       path: /getting-started/bare-metal/policy/failsafe
     - title: Untracked policy
-      description: /getting-started/bare-metal/policy/donottrack
       path: /getting-started/bare-metal/policy/donottrack
     - title: Pre-DNAT policy
-      description: /getting-started/bare-metal/policy/pre-dnat
       path: /getting-started/bare-metal/policy/pre-dnat
     - title: Apply on forwarded traffic
-      description: /getting-started/bare-metal/policy/forwarded
       path: /getting-started/bare-metal/policy/forwarded
     - title: Summary
-      description: /getting-started/bare-metal/policy/summary
       path: /getting-started/bare-metal/policy/summary
     - title: Tutorial
-      description: /getting-started/bare-metal/policy/tutorial
       path: /getting-started/bare-metal/policy/tutorial
     - title: conntrack
-      description: /getting-started/bare-metal/policy/conntrack
       path: /getting-started/bare-metal/policy/conntrack

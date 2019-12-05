@@ -3,186 +3,129 @@ path: /getting-started/
 order: 1
 section:
 - title: Kubernetes
-  description: /getting-started/kubernetes/
   path: /getting-started/kubernetes/
   section:
   - title: Quickstart
-    description: /getting-started/kubernetes/quickstart
     path: /getting-started/kubernetes/quickstart
   - title: System requirements
-    description: /getting-started/kubernetes/requirements
     path: /getting-started/kubernetes/requirements
   - title: Managed public cloud
-    description: /getting-started/kubernetes/managed-public-cloud/
     path: /getting-started/kubernetes/managed-public-cloud/
     section:
     - title: Amazon Elastic Kubernetes Service (EKS)
-      description: /getting-started/kubernetes/managed-public-cloud/eks
       path: /getting-started/kubernetes/managed-public-cloud/eks
     - title: Google Kubernetes Engine (GKE)
-      description: /getting-started/kubernetes/managed-public-cloud/gke
       path: /getting-started/kubernetes/managed-public-cloud/gke
     - title: IBM Cloud Kubernetes Service (IKS)
-      description: /getting-started/kubernetes/managed-public-cloud/iks
       path: /getting-started/kubernetes/managed-public-cloud/iks
     - title: Microsoft Azure Kubernetes Service (AKS)
-      description: /getting-started/kubernetes/managed-public-cloud/aks
       path: /getting-started/kubernetes/managed-public-cloud/aks
   - title: Installation
-    description: /getting-started/kubernetes/installation/
     path: /getting-started/kubernetes/installation/
     section:
     - title: Introduction
-      description: /getting-started/kubernetes/installation/introduction
       path: /getting-started/kubernetes/installation/introduction
     - title: Installing Calico for policy and networking (recommended)
-      description: /getting-started/kubernetes/installation/calico
       path: /getting-started/kubernetes/installation/calico
     - title: Installing Calico for policy and flannel for networking
-      description: /getting-started/kubernetes/installation/flannel
       path: /getting-started/kubernetes/installation/flannel
     - title: Migrating a cluster from flannel to Calico
-      description: /getting-started/kubernetes/installation/migration-from-flannel
       path: /getting-started/kubernetes/installation/migration-from-flannel
     - title: Installing Calico for policy (advanced)
       path: /getting-started/kubernetes/installation/other
     - title: Enabling application layer policy (optional)
-      description: /getting-started/kubernetes/installation/app-layer-policy
       path: /getting-started/kubernetes/installation/app-layer-policy
     - title: Customizing the manifests
-      description: /getting-started/kubernetes/installation/config-options
       path: /getting-started/kubernetes/installation/config-options
     - title: Integration guide (advanced)
-      description: /getting-started/kubernetes/installation/integration
       path: /getting-started/kubernetes/installation/integration
   - title: Calico the hard way
-    description: /getting-started/kubernetes/hardway/
     path: /getting-started/kubernetes/hardway/
     section:
     - title: Introduction
-      description: /getting-started/kubernetes/hardway/introduction
       path: /getting-started/kubernetes/hardway/introduction
     - title: Standing up Kubernetes
-      description: /getting-started/kubernetes/hardway/standing-up-kubernetes
       path: /getting-started/kubernetes/hardway/standing-up-kubernetes
     - title: The Calico datastore
-      description: /getting-started/kubernetes/hardway/the-calico-datastore
       path: /getting-started/kubernetes/hardway/the-calico-datastore
     - title: Configure IP pools
-      description: /getting-started/kubernetes/hardway/configure-ip-pools
       path: /getting-started/kubernetes/hardway/configure-ip-pools
     - title: Install CNI plugin
-      description: /getting-started/kubernetes/hardway/install-cni-plugin
       path: /getting-started/kubernetes/hardway/install-cni-plugin
     - title: Install Typha
-      description: /getting-started/kubernetes/hardway/install-typha
       path: /getting-started/kubernetes/hardway/install-typha
     - title: Install calico/node
-      description: /getting-started/kubernetes/hardway/install-node
       path: /getting-started/kubernetes/hardway/install-node
     - title: Configure BGP peering
-      description: /getting-started/kubernetes/hardway/configure-bgp-peering
       path: /getting-started/kubernetes/hardway/configure-bgp-peering
     - title: Test networking
-      description: /getting-started/kubernetes/hardway/test-networking
       path: /getting-started/kubernetes/hardway/test-networking
     - title: Test network policy
-      description: /getting-started/kubernetes/hardway/test-network-policy
       path: /getting-started/kubernetes/hardway/test-network-policy
     - title: End user RBAC
-      description: /getting-started/kubernetes/hardway/end-user-rbac
       path: /getting-started/kubernetes/hardway/end-user-rbac
     - title: Istio integration
-      description: /getting-started/kubernetes/hardway/istio-integration
       path: /getting-started/kubernetes/hardway/istio-integration
 - title: OpenShift
-  description: /getting-started/openshift/
   path: /getting-started/openshift/
   section:
   - title: System requirements
-    description: /getting-started/openshift/requirements
     path: /getting-started/openshift/requirements
   - title: Installation
-    description: /getting-started/openshift/installation
     path: /getting-started/openshift/installation
   - title: Connecting to a dedicated etcd cluster (optional)
-    description: /getting-started/openshift/dedicated-etcd
     path: /getting-started/openshift/dedicated-etcd
 - title: OpenStack
-  description: /getting-started/openstack/
   path: /getting-started/openstack/
   section:
   - title: Overview
-    description: /getting-started/openstack/overview
     path: /getting-started/openstack/overview
   - title: System requirements
-    description: /getting-started/openstack/requirements
     path: /getting-started/openstack/requirements
   - title: Installation
-    description: /getting-started/openstack/installation/
     path: /getting-started/openstack/installation/
     section:
     - title: Overview
-      description: /getting-started/openstack/installation/overview
       path: /getting-started/openstack/installation/overview
     - title: Ubuntu
-      description: /getting-started/openstack/installation/ubuntu
       path: /getting-started/openstack/installation/ubuntu
     - title: Red Hat Enterprise Linux
-      description: /getting-started/openstack/installation/redhat
       path: /getting-started/openstack/installation/redhat
     - title: DevStack
-      description: /getting-started/openstack/installation/devstack
       path: /getting-started/openstack/installation/devstack
     - title: Verifying your deployment
-      description: /getting-started/openstack/verification
       path: /getting-started/openstack/verification
 - title: Bare metal hosts
-  description: /getting-started/bare-metal/
   path: /getting-started/bare-metal/
   section:
   - title: Overview
-    description: /getting-started/bare-metal/overview
     path: /getting-started/bare-metal/overview
   - title: System requirements
-    description: /getting-started/bare-metal/requirements
     path: /getting-started/bare-metal/requirements
   - title: Installation
-    description: /getting-started/bare-metal/installation/
     path: /getting-started/bare-metal/installation/
     section:
     - title: Overview
-      description: /getting-started/bare-metal/installation/overview
       path: /getting-started/bare-metal/installation/overview
     - title: Container install
-      description: /getting-started/bare-metal/installation/container
       path: /getting-started/bare-metal/installation/container
     - title: Binary install with package manager
-      description: /getting-started/bare-metal/installation/binary-mgr
       path: /getting-started/bare-metal/installation/binary-mgr
     - title: Binary install without package manager
-      description: /getting-started/bare-metal/installation/binary
       path: /getting-started/bare-metal/installation/binary
 - title: Running calico/node with an init system
-  description: /getting-started/as-service
   path: /getting-started/as-service
 - title: calicoctl
-  description: /getting-started/calicoctl/
   path: /getting-started/calicoctl/
   section:
   - title: Installing calicoctl
-    description: /getting-started/calicoctl/install
     path: /getting-started/calicoctl/install
   - title: Configuring calicoctl
-    description: /getting-started/calicoctl/configure/
     path: /getting-started/calicoctl/configure/
     section:
     - title: Overview
-      description: /getting-started/calicoctl/configure/overview
       path: /getting-started/calicoctl/configure/overview
     - title: Configuring calicoctl to connect to an etcd datastore
-      description: /getting-started/calicoctl/configure/etcd
       path: /getting-started/calicoctl/configure/etcd
     - title: Configuring calicoctl to connect to the Kubernetes API datastore
-      description: /getting-started/calicoctl/configure/kdd
       path: /getting-started/calicoctl/configure/kdd

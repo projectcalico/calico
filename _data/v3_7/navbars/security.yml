@@ -3,73 +3,50 @@ path: /security/
 order: 3
 section:
 - title: Kubernetes network policy
-  description: /security/kubernetes-network-policy
   path: /security/kubernetes-network-policy
 - title: Calico network policy
-  description: /security/calico-network-policy
   path: /security/calico-network-policy
 - title: Simple policy tutorial
-  description: /security/simple-policy
   path: /security/simple-policy
 - title: Stars policy tutorial
-  description: /security/stars-policy/
   path: /security/stars-policy/
 - title: Controlling ingress and egress traffic with network policy
-  description: /security/advanced-policy
   path: /security/advanced-policy
 - title: Application layer tutorial
-  description: /security/app-layer-policy/
   path: /security/app-layer-policy/
 - title: Host endpoints
-  description: /security/host-endpoints/
   path: /security/host-endpoints/
   section:
   - title: Overview
-    description: /security/host-endpoints/overview
     path: /security/host-endpoints/overview
   - title: Creating policy for basic connectivity
-    description: /security/host-endpoints/connectivity
     path: /security/host-endpoints/connectivity
   - title: Creating host endpoint objects
-    description: /security/host-endpoints/objects
     path: /security/host-endpoints/objects
   - title: Selector-based policies
-    description: /security/host-endpoints/selector
     path: /security/host-endpoints/selector
   - title: Failsafe rules
-    description: /security/host-endpoints/failsafe
     path: /security/host-endpoints/failsafe
   - title: Untracked policy
-    description: /security/host-endpoints/donottrack
     path: /security/host-endpoints/donottrack
   - title: Pre-DNAT policy
-    description: /security/host-endpoints/pre-dnat
     path: /security/host-endpoints/pre-dnat
   - title: Apply on forwarded traffic
-    description: /security/host-endpoints/forwarded
     path: /security/host-endpoints/forwarded
   - title: Summary
-    description: /security/host-endpoints/summary
     path: /security/host-endpoints/summary
   - title: Tutorial
-    description: /security/host-endpoints/tutorial
     path: /security/host-endpoints/tutorial
   - title: Connection tracking
-    description: /security/host-endpoints/conntrack
     path: /security/host-endpoints/conntrack
 - title: Securing Calico component communications
-  description: /security/comms/
   path: /security/comms/
   section:
   - title: Configuring encryption and authentication
-    description: /security/comms/crypto-auth
     path: /security/comms/crypto-auth
   - title: Scheduling to well-known nodes
-    description: /security/comms/reduce-nodes
     path: /security/comms/reduce-nodes
   - title: Securing Calico's Prometheus endpoints
-    description: /security/comms/secure-metrics
     path: /security/comms/secure-metrics
 - title: Defend against DoS attacks
-  description: /security/defend-dos-attack
   path: /security/defend-dos-attack

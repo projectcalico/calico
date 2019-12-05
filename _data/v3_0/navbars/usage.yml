@@ -3,68 +3,47 @@ path: /usage/
 order: 2
 section:
 - title: calicoctl
-  description: /usage/calicoctl/
   path: /usage/calicoctl/
   section:
   - title: Installing calicoctl
-    description: /usage/calicoctl/install
     path: /usage/calicoctl/install
   - title: Configuring calicoctl
-    description: /usage/calicoctl/configure/
     path: /usage/calicoctl/configure/
     section:
     - title: Overview
-      description: /usage/calicoctl/configure/overview
       path: /usage/calicoctl/configure/overview
     - title: etcd datastore options
-      description: /usage/calicoctl/configure/etcd
       path: /usage/calicoctl/configure/etcd
     - title: Kubernetes API datastore options
-      description: /usage/calicoctl/configure/kdd
       path: /usage/calicoctl/configure/kdd
 - title: Running Calico with an init system
-  description: /usage/configuration/as-service
   path: /usage/configuration/as-service
 - title: Configuring BGP Peers
-  description: /usage/configuration/bgp
   path: /usage/configuration/bgp
 - title: Route Reflector
-  description: /usage/routereflector/
   path: /usage/routereflector/
   section:
   - title: Configuring BIRD
-    description: /usage/routereflector/bird-rr-config
     path: /usage/routereflector/bird-rr-config
   - title: The calico/routereflector container
-    description: /usage/routereflector/calico-routereflector
     path: /usage/routereflector/calico-routereflector
 - title: IPv6
-  description: /usage/ipv6
   path: /usage/ipv6
 - title: External Connectivity
-  description: /usage/external-connectivity
   path: /usage/external-connectivity
 - title: Configuring IP-in-IP
-  description: /usage/configuration/ip-in-ip
   path: /usage/configuration/ip-in-ip
 - title: Configuring a Node IP Address and Subnet
-  description: /usage/configuration/node
   path: /usage/configuration/node
 - title: Configuring MTU
-  description: /usage/configuration/mtu
   path: /usage/configuration/mtu
 - title: Decommissioning a Node
-  description: /usage/decommissioning-a-node
   path: /usage/decommissioning-a-node
 - title: Configuring Conntrack
-  description: /usage/configuration/conntrack
   path: /usage/configuration/conntrack
 - title: Troubleshooting
-  description: /usage/troubleshooting
   path: /usage/troubleshooting
 - title: Logging
-  description: /usage/logging
   path: /usage/logging
 - title: Frequently Asked Questions
-  description: /usage/faq
   path: /usage/faq

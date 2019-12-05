@@ -3,24 +3,17 @@ path: /maintenance/
 order: 4
 section:
 - title: Upgrading
-  description: /maintenance/upgrade/
   path: /maintenance/upgrade/
   section:
   - title: Kubernetes
-    description: /maintenance/upgrade/kubernetes-upgrade
     path: /maintenance/upgrade/kubernetes-upgrade
   - title: OpenStack
-    description: /maintenance/upgrade/openstack-upgrade
     path: /maintenance/upgrade/openstack-upgrade
 - title: Decommissioning a node
-  description: /maintenance/decommissioning-a-node
   path: /maintenance/decommissioning-a-node
 - title: Monitor Calico component metrics
-  description: /maintenance/monitor-component-metrics
   path: /maintenance/monitor-component-metrics
 - title: Component logs
-  description: /maintenance/component-logs
   path: /maintenance/component-logs
 - title: Troubleshooting
-  description: /maintenance/troubleshooting
   path: /maintenance/troubleshooting

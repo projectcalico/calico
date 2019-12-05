@@ -3,268 +3,188 @@ path: /getting-started/
 order: 1
 section:
 - title: Getting Started with Calico
-  description: /getting-started/integrations
   path: /getting-started/integrations
 - title: Kubernetes
-  description: /getting-started/kubernetes/
   path: /getting-started/kubernetes/
   section:
   - title: Quickstart
-    description: /getting-started/kubernetes/quickstart
     path: /getting-started/kubernetes/quickstart
   - title: Installation
-    description: /getting-started/kubernetes/installation/
     path: /getting-started/kubernetes/installation/
     section:
     - title: Introduction
-      description: /getting-started/kubernetes/installation/introduction
       path: /getting-started/kubernetes/installation/introduction
     - title: Hosted (via kubectl)
-      description: /getting-started/kubernetes/installation/hosted/
       path: /getting-started/kubernetes/installation/hosted/
       section:
       - title: Introduction
-        description: /getting-started/kubernetes/installation/hosted/introduction
         path: /getting-started/kubernetes/installation/hosted/introduction
       - title: Standard Hosted Install
-        description: /getting-started/kubernetes/installation/hosted/hosted
         path: /getting-started/kubernetes/installation/hosted/hosted
       - title: Kubeadm Hosted Install
-        description: /getting-started/kubernetes/installation/hosted/kubeadm
         path: /getting-started/kubernetes/installation/hosted/kubeadm
       - title: Kubernetes Datastore Hosted Install
-        description: /getting-started/kubernetes/installation/hosted/kubernetes-datastore
         path: /getting-started/kubernetes/installation/hosted/kubernetes-datastore
       - title: Canal/flannel Hosted Install
-        description: /getting-started/kubernetes/installation/hosted/canal
         path: /getting-started/kubernetes/installation/hosted/canal
     - title: Integration Guide
-      description: /getting-started/kubernetes/installation/integration
       path: /getting-started/kubernetes/installation/integration
     - title: AWS
-      description: /getting-started/kubernetes/installation/aws
       path: /getting-started/kubernetes/installation/aws
     - title: GCE
-      description: /getting-started/kubernetes/installation/gce
       path: /getting-started/kubernetes/installation/gce
     - title: Azure
-      description: /getting-started/kubernetes/installation/azure
       path: /getting-started/kubernetes/installation/azure
     - title: 'Vagrant/VirtualBox: CoreOS'
-      description: /getting-started/kubernetes/installation/vagrant
       path: /getting-started/kubernetes/installation/vagrant
   - title: Tutorials
-    description: /getting-started/kubernetes/tutorials/
     path: /getting-started/kubernetes/tutorials/
     section:
     - title: Using calicoctl
-      description: /getting-started/kubernetes/tutorials/using-calicoctl
       path: /getting-started/kubernetes/tutorials/using-calicoctl
     - title: Simple Policy Demo
-      description: /getting-started/kubernetes/tutorials/simple-policy
       path: /getting-started/kubernetes/tutorials/simple-policy
     - title: Stars Policy Demo
-      description: /getting-started/kubernetes/tutorials/stars-policy
       path: /getting-started/kubernetes/tutorials/stars-policy
     - title: Advanced network policy
-      description: /getting-started/kubernetes/tutorials/advanced-policy
       path: /getting-started/kubernetes/tutorials/advanced-policy
   - title: Troubleshooting / FAQ
-    description: /getting-started/kubernetes/troubleshooting
     path: /getting-started/kubernetes/troubleshooting
   - title: Upgrade
-    description: /getting-started/kubernetes/upgrade
     path: /getting-started/kubernetes/upgrade
 
 - title: OpenShift
-  description: /getting-started/openshift/
   path: /getting-started/openshift/
   section:
     - title: Installation
-      description: /getting-started/openshift/installation
       path: /getting-started/openshift/installation
 
 - title: Mesos
-  description: /getting-started/mesos/
   path: /getting-started/mesos/
   section:
   - title: Overview
-    description: /getting-started/mesos/overview
     path: /getting-started/mesos/overview
   - title: Installation
-    description: /getting-started/mesos/installation/
     path: /getting-started/mesos/installation/
     section:
     - title: Requirements
-      description: /getting-started/mesos/installation/prerequisites
       path: /getting-started/mesos/installation/prerequisites
     - title: Integration Guide
-      description: /getting-started/mesos/installation/integration
       path: /getting-started/mesos/installation/integration
     - title: DC/OS
-      description: /getting-started/mesos/installation/dc-os/
       path: /getting-started/mesos/installation/dc-os/
       section:
       - title: Overview
-        description: /getting-started/mesos/installation/dc-os/overview
         path: /getting-started/mesos/installation/dc-os/overview
       - title: Universe Package Install
-        description: /getting-started/mesos/installation/dc-os/framework
         path: /getting-started/mesos/installation/dc-os/framework
       - title: Customize Universe Package Install
-        description: /getting-started/mesos/installation/dc-os/custom
         path: /getting-started/mesos/installation/dc-os/custom
     - title: 'Vagrant/VirtualBox: CentOS'
-      description: /getting-started/mesos/installation/vagrant-centos
       path: /getting-started/mesos/installation/vagrant-centos
   - title: Tutorials
-    description: /getting-started/mesos/tutorials/
     path: /getting-started/mesos/tutorials/
     section:
     - title: Launching Tasks
-      description: /getting-started/mesos/tutorials/launching-tasks
       path: /getting-started/mesos/tutorials/launching-tasks
     - title: Connecting to Tasks
-      description: /getting-started/mesos/tutorials/connecting-tasks
       path: /getting-started/mesos/tutorials/connecting-tasks
     - title: Configuring Policy
-      description: /getting-started/mesos/tutorials/policy/
       path: /getting-started/mesos/tutorials/policy/
       section:
       - title: Universal Containerizer
-        description: /getting-started/mesos/tutorials/policy/universal-containerizer
         path: /getting-started/mesos/tutorials/policy/universal-containerizer
       - title: Docker Containerizer
-        description: /getting-started/mesos/tutorials/policy/docker-containerizer
         path: /getting-started/mesos/tutorials/policy/docker-containerizer
 
 - title: Docker
-  description: /getting-started/docker/
   path: /getting-started/docker/
   section:
   - title: Overview
-    description: /getting-started/docker/overview
     path: /getting-started/docker/overview
   - title: Installation
-    description: /getting-started/docker/installation/
     path: /getting-started/docker/installation/
     section:
     - title: Requirements
-      description: /getting-started/docker/installation/requirements
       path: /getting-started/docker/installation/requirements
     - title: Manual
-      description: /getting-started/docker/installation/manual
       path: /getting-started/docker/installation/manual
     - title: 'Vagrant/VirtualBox: CoreOS'
-      description: /getting-started/docker/installation/vagrant-coreos
       path: /getting-started/docker/installation/vagrant-coreos
     - title: 'Vagrant/VirtualBox: Ubuntu'
-      description: /getting-started/docker/installation/vagrant-ubuntu
       path: /getting-started/docker/installation/vagrant-ubuntu
   - title: Tutorials
-    description: /getting-started/docker/tutorials/
     path: /getting-started/docker/tutorials/
     section:
     - title: Security using Calico Profiles
-      description: /getting-started/docker/tutorials/security-using-calico-profiles
       path: /getting-started/docker/tutorials/security-using-calico-profiles
     - title: Security using Calico Profiles and Policy
-      description: /getting-started/docker/tutorials/security-using-calico-profiles-and-policy
       path: /getting-started/docker/tutorials/security-using-calico-profiles-and-policy
     - title: Security using Docker Labels and Calico Policy
-      description: /getting-started/docker/tutorials/security-using-docker-labels-and-calico-policy
       path: /getting-started/docker/tutorials/security-using-docker-labels-and-calico-policy
     - title: IPAM
-      description: /getting-started/docker/tutorials/ipam
       path: /getting-started/docker/tutorials/ipam
 
 - title: OpenStack
-  description: /getting-started/openstack/
   path: /getting-started/openstack/
   section:
   - title: Overview
-    description: /getting-started/openstack/overview
     path: /getting-started/openstack/overview
   - title: Installation
-    description: /getting-started/openstack/installation/
     path: /getting-started/openstack/installation/
     section:
     - title: Overview
-      description: /getting-started/openstack/installation/overview
       path: /getting-started/openstack/installation/overview
     - title: Ubuntu
-      description: /getting-started/openstack/installation/ubuntu
       path: /getting-started/openstack/installation/ubuntu
     - title: Red Hat Enterprise Linux
-      description: /getting-started/openstack/installation/redhat
       path: /getting-started/openstack/installation/redhat
     - title: Juju Charms
-      description: /getting-started/openstack/installation/juju
       path: /getting-started/openstack/installation/juju
     - title: Fuel
-      description: /getting-started/openstack/installation/fuel
       path: /getting-started/openstack/installation/fuel
     - title: DevStack
-      description: /getting-started/openstack/installation/devstack
       path: /getting-started/openstack/installation/devstack
     - title: Chef
-      description: /getting-started/openstack/installation/chef
       path: /getting-started/openstack/installation/chef
   - title: Upgrade
-    description: /getting-started/openstack/upgrade
     path: /getting-started/openstack/upgrade
   - title: Tutorials
-    description: /getting-started/openstack/tutorials
     path: /getting-started/openstack/tutorials
   - title: Troubleshooting
-    description: /getting-started/openstack/verification
     path: /getting-started/openstack/verification
   - title: IP Addressing and Connectivity
-    description: /getting-started/openstack/connectivity
     path: /getting-started/openstack/connectivity
   - title: Use of the Neutron API
-    description: /getting-started/openstack/neutron-api
     path: /getting-started/openstack/neutron-api
 
 - title: rkt
-  description: /getting-started/rkt/
   path: /getting-started/rkt/
   section:
   - title: Overview
-    description: /getting-started/rkt/overview
     path: /getting-started/rkt/overview
   - title: Installation
-    description: /getting-started/rkt/installation/
     path: /getting-started/rkt/installation/
     section:
     - title: 'Manual Installation'
-      description: /getting-started/rkt/installation/manual
       path: /getting-started/rkt/installation/manual
     - title: 'Vagrant/VirtualBox: CoreOS'
-      description: /getting-started/rkt/installation/vagrant-coreos
       path: /getting-started/rkt/installation/vagrant-coreos
   - title: Tutorials
-    description: /getting-started/rkt/tutorials/
     path: /getting-started/rkt/tutorials/
     section:
     - title: Basic Network Isolation
-      description: /getting-started/rkt/tutorials/basic
       path: /getting-started/rkt/tutorials/basic
   - title: Troubleshooting
-    description: /getting-started/rkt/troubleshooting
     path: /getting-started/rkt/troubleshooting
 
 - title: Host Protection
-  description: /getting-started/bare-metal/
   path: /getting-started/bare-metal/
   section:
   - title: Overview
-    description: /getting-started/bare-metal/overview
     path: /getting-started/bare-metal/overview
   - title: Installation
-    description: /getting-started/bare-metal/installation/
     path: /getting-started/bare-metal/installation/
     section:
     - title: Installing Felix as a static binary
-      description: /getting-started/bare-metal/installation/bare-metal-install
       path: /getting-started/bare-metal/installation/bare-metal-install

@@ -3,212 +3,145 @@ path: /reference/
 order: 5
 section:
 - title: calicoctl
-  description: /reference/calicoctl/
   path: /reference/calicoctl/
   section:
   - title: Overview
-    description: /reference/calicoctl/overview
     path: /reference/calicoctl/overview
   - title: create
-    description: /reference/calicoctl/create
     path: /reference/calicoctl/create
   - title: replace
-    description: /reference/calicoctl/replace
     path: /reference/calicoctl/replace
   - title: apply
-    description: /reference/calicoctl/apply
     path: /reference/calicoctl/apply
   - title: delete
-    description: /reference/calicoctl/delete
     path: /reference/calicoctl/delete
   - title: get
-    description: /reference/calicoctl/get
     path: /reference/calicoctl/get
   - title: label
-    description: /reference/calicoctl/label
     path: /reference/calicoctl/label
   - title: convert
-    description: /reference/calicoctl/convert
     path: /reference/calicoctl/convert
   - title: ipam
-    description: /reference/calicoctl/ipam/
     path: /reference/calicoctl/ipam/
     section:
     - title: Overview
-      description: /reference/calicoctl/ipam/overview
       path: /reference/calicoctl/ipam/overview
     - title: release
-      description: /reference/calicoctl/ipam/release
       path: /reference/calicoctl/ipam/release
     - title: show
-      description: /reference/calicoctl/ipam/show
       path: /reference/calicoctl/ipam/show
   - title: node
-    description: /reference/calicoctl/node/
     path: /reference/calicoctl/node/
     section:
     - title: Overview
-      description: /reference/calicoctl/node/overview
       path: /reference/calicoctl/node/overview
     - title: run
-      description: /reference/calicoctl/node/run
       path: /reference/calicoctl/node/run
     - title: status
-      description: /reference/calicoctl/node/status
       path: /reference/calicoctl/node/status
     - title: diags
-      description: /reference/calicoctl/node/diags
       path: /reference/calicoctl/node/diags
     - title: checksystem
-      description: /reference/calicoctl/node/checksystem
       path: /reference/calicoctl/node/checksystem
   - title: version
-    description: /reference/calicoctl/version
     path: /reference/calicoctl/version
 - title: Resource definitions
-  description: /reference/resources/
   path: /reference/resources/
   section:
     - title: Overview
-      description: /reference/resources/overview
       path: /reference/resources/overview
     - title: BGP configuration
-      description: /reference/resources/bgpconfig
       path: /reference/resources/bgpconfig
     - title: BGP peer
-      description: /reference/resources/bgppeer
       path: /reference/resources/bgppeer
     - title: Felix configuration
-      description: /reference/resources/felixconfig
       path: /reference/resources/felixconfig
     - title: Global network policy
-      description: /reference/resources/globalnetworkpolicy
       path: /reference/resources/globalnetworkpolicy
     - title: Global network set
-      description: /reference/resources/globalnetworkset
       path: /reference/resources/globalnetworkset
     - title: Host endpoint
-      description: /reference/resources/hostendpoint
       path: /reference/resources/hostendpoint
     - title: IP pool
-      description: /reference/resources/ippool
       path: /reference/resources/ippool
     - title: Network policy
-      description: /reference/resources/networkpolicy
       path: /reference/resources/networkpolicy
     - title: Network set
-      description: /reference/resources/networkset
       path: /reference/resources/networkset
     - title: Node
-      description: /reference/resources/node
       path: /reference/resources/node
     - title: Profile
-      description: /reference/resources/profile
       path: /reference/resources/profile
     - title: Workload endpoint
-      description: /reference/resources/workloadendpoint
       path: /reference/resources/workloadendpoint
 - title: Configuring etcd RBAC
-  description: /reference/etcd-rbac/
   path: /reference/etcd-rbac/
   section:
   - title: Overview
-    description: /reference/etcd-rbac/overview
     path: /reference/etcd-rbac/overview
   - title: Generating certificates
-    description: /reference/etcd-rbac/certificate-generation
     path: /reference/etcd-rbac/certificate-generation
   - title: Creating users and roles
-    description: /reference/etcd-rbac/users-and-roles
     path: /reference/etcd-rbac/users-and-roles
   - title: Segmenting etcd on Kubernetes (basic)
-    description: /reference/etcd-rbac/kubernetes
     path: /reference/etcd-rbac/kubernetes
   - title: Segmenting etcd on Kubernetes (advanced)
-    description: /reference/etcd-rbac/kubernetes-advanced
     path: /reference/etcd-rbac/kubernetes-advanced
   - title: Calico key and path prefixes
-    description: /reference/etcd-rbac/calico-etcdv3-paths
     path: /reference/etcd-rbac/calico-etcdv3-paths
 - title: calico/node
-  description: /reference/node/configuration
   path: /reference/node/configuration
 - title: Felix
-  description: /reference/felix/
   path: /reference/felix/
   section:
   - title: Configuration
-    description: /reference/felix/configuration
     path: /reference/felix/configuration
   - title: Prometheus statistics
-    description: /reference/felix/prometheus
     path: /reference/felix/prometheus
 - title: Typha
-  description: /reference/typha/configuration
   path: /reference/typha/configuration
 - title: Dikastes
-  description: /reference/dikastes/configuration
   path: /reference/dikastes/configuration
 - title: Calico CNI plugins
-  description: /reference/cni-plugin/configuration
   path: /reference/cni-plugin/configuration
 - title: Calico Kubernetes controllers
-  description: /reference/kube-controllers/configuration
   path: /reference/kube-controllers/configuration
 - title: Configuration on public clouds
   path: /reference/public-cloud/
-  description: /reference/public-cloud/
   section:
   - title: Amazon Web Services
-    description: /reference/public-cloud/aws
     path: /reference/public-cloud/aws
   - title: Azure
-    description: /reference/public-cloud/azure
     path: /reference/public-cloud/azure
   - title: Google Compute Engine
-    description: /reference/public-cloud/gce
     path: /reference/public-cloud/gce
   - title: IBM Cloud
-    description: /reference/public-cloud/ibm
     path: /reference/public-cloud/ibm
 - title: Architecture
-  description: /reference/architecture/
   path: /reference/architecture/
   section:
   - title: Introduction
-    description: /reference/architecture/introduction
     path: /reference/architecture/introduction
   - title: Data path
-    description: /reference/architecture/data-path
     path: /reference/architecture/data-path
 - title: Frequently asked questions
-  description: /reference/faq
   path: /reference/faq
 - title: Getting involved
-  description: /reference/involved
   path: /reference/involved
 - title: Attributions
   path: /reference/legal/
-  description: /reference/legal/
   section:
   - title: Application layer policy attributions
-    description: /reference/legal/alp
     path: /reference/legal/alp
   - title: calicoctl attributions
-    description: /reference/legal/calicoctl
     path: /reference/legal/calicoctl
   - title: CNI plugin attributions
-    description: /reference/legal/cni
     path: /reference/legal/cni
   - title: confd attributions
-    description: /reference/legal/confd
     path: /reference/legal/confd
   - title: Felix attributions
-    description: /reference/legal/felix
     path: /reference/legal/felix
   - title: calico/node attributions
-    description: /reference/legal/node
     path: /reference/legal/node
   - title: Typha attributions
-    description: /reference/legal/typha
     path: /reference/legal/typha

@@ -4,8 +4,6 @@ path: /introduction/
 order: 0
 section:
 - title: About Calico
-  description: /introduction/about
   path: /introduction/about
 - title: Sample deployments
-  description: /introduction/deployments
   path: /introduction/deployments

@@ -3,94 +3,64 @@ path: /networking/
 order: 2
 section:
 - title: Connecting workloads across networks that you do not control
-  description: /networking/vxlan-ipip
   path: /networking/vxlan-ipip
 - title: Changing IP pools
-  description: /networking/changing-ip-pools
   path: /networking/changing-ip-pools
 - title: Route reflectors
-  description: /networking/routereflector
   path: /networking/routereflector
 - title: Configuring BGP peers
-  description: /networking/bgp
   path: /networking/bgp
 - title: Enabling IPv6 support
-  description: /networking/ipv6
   path: /networking/ipv6
 - title: Enabling IPVS in Kubernetes
-  description: /networking/enabling-ipvs
   path: /networking/enabling-ipvs
 - title: External connectivity
-  description: /networking/external-connectivity
   path: /networking/external-connectivity
 - title: Configuring a node IP address and subnet
-  description: /networking/node
   path: /networking/node
 - title: Configure MTU to maximize network performance
-  description: /networking/mtu
   path: /networking/mtu
 - title: Advertising Kubernetes services
-  description: /networking/service-advertisement
   path: /networking/service-advertisement
 - title: Assigning IP addresses based on topology
-  description: /networking/assigning-ip-addresses-topology
   path: /networking/assigning-ip-addresses-topology
 - title: Calico networking for OpenStack
-  description: /networking/openstack/
   path: /networking/openstack/
   section:
   - title: Setting up a development machine
-    description: /networking/openstack/dev-machine-setup
     path: /networking/openstack/dev-machine-setup
   - title: IP addressing and connectivity
-    description: /networking/openstack/connectivity
     path: /networking/openstack/connectivity
   - title: Endpoint labels and operator policy
-    description: /networking/openstack/labels
     path: /networking/openstack/labels
   - title: Configuring systems for use with Calico
-    description: /networking/openstack/configuration
     path: /networking/openstack/configuration
   - title: Detailed semantics
-    description: /networking/openstack/semantics
     path: /networking/openstack/semantics
   - title: Floating IPs
-    description: /networking/openstack/floating-ips
     path: /networking/openstack/floating-ips
   - title: Service IPs
-    description: /networking/openstack/service-ips
     path: /networking/openstack/service-ips
   - title: Host routes
-    description: /networking/openstack/host-routes
     path: /networking/openstack/host-routes
   - title: Multiple regions
-    description: /networking/openstack/multiple-regions
     path: /networking/openstack/multiple-regions
   - title: Kuryr
-    description: /networking/openstack/kuryr
     path: /networking/openstack/kuryr
   - title: Calico's interpretation of Neutron API calls
-    description: /networking/openstack/neutron-api
     path: /networking/openstack/neutron-api
 - title: Network design
-  description: /networking/design/
   path: /networking/design/
   section:
     - title: Calico over Ethernet fabrics
-      description: /networking/design/l2-interconnect-fabric
       path: /networking/design/l2-interconnect-fabric
     - title: Calico over IP fabrics
-      description: /networking/design/l3-interconnect-fabric
       path: /networking/design/l3-interconnect-fabric
 - title: Accelerating Istio network performance
-  description: /networking/sidecar-acceleration
   path: /networking/sidecar-acceleration
 - title: Interoperate with legacy firewalls using IP ranges
-  description: /networking/legacy-firewalls
   path: /networking/legacy-firewalls
 - title: Use specific IP address for a pod
-  description: /networking/use-specific-ip
   path: /networking/use-specific-ip
 - title: Add a floating IP to a pod
-  description: /networking/add-floating-ip
   path: /networking/add-floating-ip
