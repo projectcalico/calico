@@ -60,7 +60,7 @@ You must have installed and configured `calicoctl`.
 - [Configure a node to act as a route reflector](#configure-a-node-to-act-as-a-route-reflector)
 - [View BGP peering status for a node](#view-bgp-peering-status-for-a-node)
 - [Change the global AS number](#change-the-global-as-number)
-- [Change AS number for particular node's](#change-as-number-for-particular-node\'s)
+- [Change AS number for particular node](#change-as-number-for-particular-node)
 
 #### Disable the default BGP node-to-node mesh
 
@@ -150,7 +150,7 @@ It will return a table listing all of the neighbors and their current status. Su
 #### Change the global AS number
 TBD
 
-#### Change AS number for particular node's
+#### Change AS number for particular node
 
 You can configure an AS for a particular node by modifying the node object using calicoctl. For example, the following command changes the node named node-1 to belong to AS 64514.
 
