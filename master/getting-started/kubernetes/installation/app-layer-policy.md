@@ -35,10 +35,10 @@ calicoctl apply -f felix-config.yaml
 
 Application layer policy [requires Istio](../requirements#application-layer-policy-requirements).
 
-Install Istio according to the [Istio project documentation](https://archive.istio.io/v1.2/docs/setup/kubernetes/), making sure to enable mutual TLS authentication. For example:
+Install Istio according to the [Istio project documentation](https://archive.istio.io/v1.3/docs/setup/install/), making sure to enable mutual TLS authentication. For example:
 
 ```bash
-curl -L https://git.io/getLatestIstio | ISTIO_VERSION=1.2.9 sh -
+curl -L https://git.io/getLatestIstio | ISTIO_VERSION=1.3.5 sh -
 cd $(ls -d istio-*)
 kubectl apply -f install/kubernetes/helm/istio-init/files/
 kubectl apply -f install/kubernetes/istio-demo-auth.yaml
@@ -54,21 +54,21 @@ The sidecar injector automatically modifies pods as they are created to work
 with Istio. This step modifies the injector configuration to add Dikastes, a
 {{site.prodname}} component, as sidecar containers.
 
-1. Follow the [Automatic sidecar injection instructions](https://archive.istio.io/v1.2/docs/setup/kubernetes/additional-setup/sidecar-injection/#automatic-sidecar-injection)
+1. Follow the [Automatic sidecar injection instructions](https://archive.istio.io/v1.3/docs/setup/additional-setup/sidecar-injection/#automatic-sidecar-injection)
    to install the sidecar injector and enable it in your chosen namespace(s).
 
 1. Apply the following ConfigMap to enable injection of Dikastes alongside Envoy.
 
    ```bash
-   kubectl apply -f {{site.url}}/{{page.version}}/manifests/alp/istio-inject-configmap-1.2.9.yaml
+   kubectl apply -f {{site.url}}/{{page.version}}/manifests/alp/istio-inject-configmap-1.3.5.yaml
    ```
 
 	 > **Note**: You can also
-   > [view the manifest in your browser]({{site.url}}/{{page.version}}/manifests/alp/istio-inject-configmap-1.2.9.yaml){:target="_blank"}.
+   > [view the manifest in your browser]({{site.url}}/{{page.version}}/manifests/alp/istio-inject-configmap-1.3.5.yaml){:target="_blank"}.
    {: .alert .alert-info}
 
-If you have installed a different version of Istio, substitute `1.2.9` in the above URL for your Istio version. We have
-pre-defined `ConfigMaps` for Istio versions 1.0.6, 1.0.7, 1.1.0 through 1.1.17, and 1.2.0 through 1.2.9. To customize the standard sidecar injector `ConfigMap` or
+If you have installed a different version of Istio, substitute `1.3.5` in the above URL for your Istio version. We have
+pre-defined `ConfigMaps` for Istio versions 1.0.6, 1.0.7, 1.1.0 through 1.1.17, 1.2.0 through 1.2.9, and 1.3.0 through 1.3.5. To customize the standard sidecar injector `ConfigMap` or
 understand the changes we have made, see
 [Customizing the manifests](config-options).
 
