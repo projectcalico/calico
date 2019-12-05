@@ -59,8 +59,8 @@ You must have installed and configured `calicoctl`.
 - [Configure a per-node BGP peer](#configure-a-per-node-bgp-peer)
 - [Configure a node to act as a route reflector](#configure-a-node-to-act-as-a-route-reflector)
 - [View BGP peering status for a node](#view-bgp-peering-status-for-a-node)
-- [Change the global AS number](#change-the-global-as-number)
-- [Change AS number for particular node](#change-as-number-for-particular-node)
+- [Change the default global AS number](#change-the-default-global-as-number)
+- [Change AS number for a particular node](#change-as-number-for-a-particular-node)
 
 #### Disable the default BGP node-to-node mesh
 
@@ -147,12 +147,18 @@ It will return a table listing all of the neighbors and their current status. Su
 >**Note**: This command communicates with the local {{site.prodname}} agent and thus must be executed on the node whose status you are attempting to view.
 {: .alert .alert-info}
 
-#### Change the global AS number
-TBD
+#### Change the default global AS number
 
-#### Change AS number for particular node
+By default, all Calico nodes use the 64512 autonomous system, unless a per-node AS has been specified for the node. This global default can be changed for all nodes by modifying the default BGP configuration resource. The following example command sets the global default AS number to be 64513.
 
-You can configure an AS for a particular node by modifying the node object using calicoctl. For example, the following command changes the node named node-1 to belong to AS 64514.
+calicoctl patch bgpconfiguration default -p '{"spec": {"asNumber": “64513”}}'
+
+>**Note**: If the default BGP configuration resource does not exist, you will need to create it first. See BGP configuration for more information.
+{: .alert .alert-info}
+
+#### Change AS number for a particular node
+
+You can configure an AS for a particular node by modifying the node object using calicoctl. For example, the following command changes the node named **node-1** to belong to **AS 64514**.
 
 ```
 calicoctl patch node node-1 -p '{"spec": {"bgp": {“asNumber”: “64513”}}}'
