@@ -46,7 +46,7 @@ In on-premises deployments, you control the physical infrastructure, and can con
 
 Depending on your topology, you may also consider using BGP route reflectors within each rack. However, this is typically only needed if the number of nodes in each L2 domain is large (> 100).
 
-For a deeper look at common on-premises deployment models, see [Calico over IP Fabrics]({{site.baseurl}}/{{page.version}}reference/architecture/design/l2-interconnect-fabric).
+For a deeper look at common on-premises deployment models, see [Calico over IP Fabrics]({{site.baseurl}}/{{page.version}}/reference/architecture/design/l2-interconnect-fabric).
 
 ### Before you begin...
 
