@@ -298,6 +298,10 @@ execute_tests_oneshot() {
         run_individual_test_oneshot 'explicit_peering/selectors'
         run_individual_test_oneshot 'explicit_peering/route_reflector'
         run_individual_test_oneshot 'mesh/static-routes'
+	export CALICO_ROUTER_ID=10.10.10.10
+	run_individual_test_oneshot 'mesh/static-routes-no-ipv4-address'
+	export -n CALICO_ROUTER_ID
+	unset CALICO_ROUTER_ID
     done
 }
 
