@@ -32,12 +32,15 @@ metadata:
   labels:
     app: yaobank
 ---
-apiVersion: extensions/v1beta1
+apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: database
 spec:
   replicas: 1
+  selector:
+    matchLabels:
+      app: database
   template:
     metadata:
       labels:
@@ -79,12 +82,15 @@ metadata:
     app: yaobank
     database: reader
 ---
-apiVersion: extensions/v1beta1
+apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: summary
 spec:
   replicas: 1
+  selector:
+    matchLabels:
+      app: summary
   template:
     metadata:
       labels:
@@ -120,12 +126,15 @@ metadata:
     app: yaobank
     summary: reader
 ---
-apiVersion: extensions/v1beta1
+apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: customer
 spec:
   replicas: 1
+  selector:
+    matchLabels:
+      app: customer
   template:
     metadata:
       labels:
