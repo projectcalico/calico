@@ -155,7 +155,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 	}
 
 	ctx := context.Background()
-	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, 90*time.Second)
 	defer cancel()
 
 	r := &current.Result{}
@@ -301,7 +301,7 @@ func cmdDel(args *skel.CmdArgs) error {
 
 	logger.Info("Releasing address using handleID")
 	ctx := context.Background()
-	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, 90*time.Second)
 	defer cancel()
 
 	if err := calicoClient.IPAM().ReleaseByHandle(ctx, handleID); err != nil {
