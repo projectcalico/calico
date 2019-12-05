@@ -147,6 +147,9 @@ It will return a table listing all of the neighbors and their current status. Su
 >**Note**: This command communicates with the local {{site.prodname}} agent and thus must be executed on the node whose status you are attempting to view.
 {: .alert .alert-info}
 
+#### Change the global AS number
+TBD
+
 #### Change AS number for particular node's
 
 You can configure an AS for a particular node by modifying the node object using calicoctl. For example, the following command changes the node named node-1 to belong to AS 64514.
