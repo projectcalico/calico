@@ -46,7 +46,7 @@ In on-premises deployments, you control the physical infrastructure, and can con
 
 Depending on your topology, you may also consider using BGP route reflectors within each rack. However, this is typically only needed if the number of nodes in each L2 domain is large (> 100).
 
-For a deeper look at common on-premises deployment models, see [Calico over IP Fabrics]({{site.baseurl}}/{{page.version}}/networking/design/l3-interconnect-fabric).
+For a deeper look at common on-premises deployment models, see [Calico over IP Fabrics]({{site.baseurl}}/{{page.version}}reference/architecture/design/l2-interconnect-fabric).
 
 ### Before you begin...
 
@@ -119,7 +119,7 @@ calicoctl patch node my-node -p '{"spec": {“bgp”: {"routeReflectorClusterID"
 It is likely that you will want to label this node to indicate that it is a route reflector, allowing it to be easily selected by a BGPPeer resource. You can do this with kubectl. For example:
 
 ```
-  kubectl label node my-node route-reflector=true
+kubectl label node my-node route-reflector=true
 ```
 Now it is easy to configure route reflector nodes to peer with each other and other non-route-reflector nodes using label selectors. As an example:
 
@@ -140,7 +140,7 @@ You can use calicoctl to view the current status of a particular node’s BGP co
 Run the following command on the node you with to inspect to view the current state:
 
 ```
-  sudo calicoctl node status
+sudo calicoctl node status
 ```
 It will return a table listing all of the neighbors and their current status. Successful peerings will be listed as Established.
 
