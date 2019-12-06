@@ -44,7 +44,7 @@ You can also run {{site.prodname}} on public cloud without BGP or route reflecto
 
 In **on-premises deployments**, you control the physical infrastructure, so you can configure {{site.prodname}} to peer directly with it. Typically, this involves disabling {{site.prodname}}’s default full-mesh behavior, and instead peer {{site.prodname}} with your L3 ToR router. There are many ways to build an on-premises BGP network. How you configure your autonomous systems is up to you - {{site.prodname}} works well with both iBGP and eBGP configurations. 
 
-Depending on your topology, you may also consider using BGP route reflectors within each rack. However, this is typically only needed if the number of nodes in each L2 domain is large (> 100).
+Depending on your topology, you may also consider using BGP route reflectors within each rack. However, this is typically needed only if the number of nodes in each L2 domain is large (> 100).
 
 For a deeper look at common on-premises deployment models, see [Calico over IP Fabrics]({{site.baseurl}}/{{page.version}}/reference/architecture/design/l2-interconnect-fabric).
 
