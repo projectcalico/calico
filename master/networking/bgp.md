@@ -160,10 +160,10 @@ calicoctl patch bgpconfiguration default -p '{"spec": {"asNumber": “64513”}}
 
 #### Change AS number for a particular node
 
-You can configure an AS for a particular node by modifying the node object using `calicoctl`. For example, the following command changes the node named **node-1** to belong to **AS 64513**.
+You can configure an AS for a particular node by modifying the node object using `calicoctl`. For example, the following command changes the node named **node-1** to belong to **AS 64514**.
 
 ```
-calicoctl patch node node-1 -p '{"spec": {"bgp": {“asNumber”: “64513”}}}'
+calicoctl patch node node-1 -p '{"spec": {"bgp": {“asNumber”: “64514”}}}'
 ```
 ### Above and beyond
 
