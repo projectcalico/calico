@@ -94,7 +94,7 @@ spec:
 
 Per-node BGP peers apply to one or more nodes in the cluster. You can choose which nodes by specifying the node’s name exactly, or using a label selector.
 
-The following example creates a BGPPeer that configures every {{site.prodname}} node with the label, **rack: rack-1** to peer with **192.20.30.40** in **AS 64567**.
+The following example creates a BGPPeer that configures every {{site.prodname}} node with the label, **rack: rack-1** to peer with **192.20.30.40** in AS **64567**.
 
 ```
 apiVersion: projectcalico.org/v3
@@ -135,7 +135,7 @@ spec:
 
 #### View BGP peering status for a node
 
-You can use `calicoctl` to view the current status of a particular node’s BGP connections. This is a useful way to confirm configuration is behaving as desired.
+You can use `calicoctl` to view the current status of a particular node’s BGP connections. This is useful for confirming that your configuration is behaving as desired.
 
 Run the following command on the node you want to view the current state:
 
