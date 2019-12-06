@@ -1,0 +1,33 @@
+== NETWORKING intermediates
+
+Networking
+Description: Calico's flexible networking options reduce the barriers to adopting a CaaS platform solution. Determine the best networking option for your implementation.
+
+Configure networking
+Description: Configure your Calico networking with encapsulation or no encapsulation - either way, we've got you covered. 
+
+Customize IP address management
+Description: Learn the additional IP allocation flexibility and efficiency of Calico IPAM, how to interoperate with legacy firewalls using IP address ranges, and how to advertise Kubernetes service IPs, and more.
+
+== SECURITY intermediates
+
+Security
+Description: Calico Network Policy and Global Network Policy are key to securing workloads and hosts and adopting a zero trust security model. 
+
+Get started
+Description: Understand the similarities and differences between Calico network policy and Kubernetes network policy.
+
+Policy rules
+Description: Learn to control traffic to/from endpoints using namespaces, service accounts, external IPs or networks, and ICMP ping in Calico network policy rules.
+
+Policy for hosts
+Description: Use the same Calico network policy configuration for workloads to restrict traffic between hosts and the outside world. 
+
+Policy for Kubernetes services
+Description: Apply policy to Kubernetes node ports, and to services exposed externally as cluster IPs.
+
+Policy for Istio
+Description: Create standard Calico network policies with application layer specific attributes for Istio service mesh.
+
+Policy for extreme traffic
+Description: Apply Calico network policy early in the Linux packet processing pipeline to avoid DoS attacks, and selectively bypass Linux conntrack for extremely large number of connections.
