@@ -26,7 +26,7 @@ This how-to guide uses the following {{site.prodname}} features:
 
 #### BGP
 
-**BGP** is a standard protocol for exchanging routing information between two routers in a network. Each router running BGP has one or more BGP peers - other routers which they are communicating with over BGP. You can configure {{site.prodname}} nodes to peer with each other, with route reflectors, and with top-of-rack (ToR) routers.
+**BGP** is a standard protocol for exchanging routing information between two routers in a network. Each router running BGP has one or more **BGP peers** - other routers which they are communicating with over BGP. You can configure {{site.prodname}} nodes to peer with each other, with route reflectors, and with top-of-rack (ToR) routers.
 
 #### Common BGP topologies
 
@@ -34,15 +34,15 @@ There are many ways to configure a BGP network depending on your environment. He
 
 #### Topologies for public cloud
 
-{{site.prodname}}’s default behavior is to create a full-mesh of internal BGP (iBGP) connections where each node peers with each other node. This design works great for small and medium-size deployments (< 100 nodes) in public cloud, but can hit performance bottlenecks at around 100 nodes.
+{{site.prodname}}’s default behavior is to create a **full-mesh** of internal BGP (iBGP) connections where each node peers with each other. This design works great for small and medium-size deployments (< 100 nodes) in public cloud, but you can hit performance bottlenecks at around 100 nodes.
 
-To build large clusters in public cloud, BGP route reflectors can be used to reduce the number of BGP peerings used on each node. In this model, some nodes act as route reflectors and are configured to establish a full mesh amongst themselves. Other nodes are then configured to peer with a subset of those route reflectors.
+To build large clusters in public cloud, **BGP route reflectors** can be used to reduce the number of BGP peerings used on each node. In this model, some nodes act as route reflectors and are configured to establish a full mesh amongst themselves. Other nodes are then configured to peer with a subset of those route reflectors.
 
-You can also run {{site.prodname}} on public cloud without BGP or route reflectors using {{site.prodname}}’s VXLAN cross subnet capabilities. For more information, see [Configure overlay networking]({{site.baseurl}}/{{page.version}}/networking/vxlan-ipip).
+You can also run {{site.prodname}} on public cloud without BGP or route reflectors using {{site.prodname}}’s **VXLAN cross subnet capabilities**. For more information, see [Configure overlay networking]({{site.baseurl}}/{{page.version}}/networking/vxlan-ipip).
 
 #### Topologies for on-premises deployments
 
-In on-premises deployments, you control the physical infrastructure, and can configure {{site.prodname}} to peer directly with it. Typically, this involves disabling {{site.prodname}}’s default full-mesh behavior and instead telling {{site.prodname}} to peer with your L3 ToR router. There are many ways to build an on-premises BGP network. How you configure your autonomous systems is up to you - {{site.prodname}} works well with both iBGP and eBGP configurations. 
+In **on-premises deployments**, you control the physical infrastructure so you can configure {{site.prodname}} to peer directly with it. Typically, this involves disabling {{site.prodname}}’s default full-mesh behavior, and instead peer {{site.prodname}} with your L3 ToR router. There are many ways to build an on-premises BGP network. How you configure your autonomous systems is up to you - {{site.prodname}} works well with both iBGP and eBGP configurations. 
 
 Depending on your topology, you may also consider using BGP route reflectors within each rack. However, this is typically only needed if the number of nodes in each L2 domain is large (> 100).
 
@@ -94,7 +94,7 @@ spec:
 
 Per-node BGP peers apply to one or more nodes in the cluster. You can choose which nodes either by specifying the node’s name exactly, or using a label selector.
 
-The following example creates a BGP peer that configures every {{site.prodname}} node with the label rack: rack-1 to peer with 192.20.30.40 in AS 64567
+The following example creates a BGP peer that configures every {{site.prodname}} node with the label **rack: rack-1** to peer with **192.20.30.40** in **AS 64567**.
 
 ```
 apiVersion: projectcalico.org/v3
@@ -116,12 +116,12 @@ To configure a node to be a route reflector with cluster ID 244.0.0.1, you can r
 calicoctl patch node my-node -p '{"spec": {“bgp”: {"routeReflectorClusterID": “244.0.0.1”}}}'
 ```
 
-It is likely that you will want to label this node to indicate that it is a route reflector, allowing it to be easily selected by a BGPPeer resource. You can do this with kubectl. For example:
+Typically, you will want to label this node to indicate that it is a route reflector, allowing it to be easily selected by a BGPPeer resource. You can do this with kubectl. For example:
 
 ```
 kubectl label node my-node route-reflector=true
 ```
-Now it is easy to configure route reflector nodes to peer with each other and other non-route-reflector nodes using label selectors. As an example:
+Now it is easy to configure route reflector nodes to peer with each other and other non-route-reflector nodes using label selectors. For example:
 
 ```
 kind: BGPPeer
@@ -142,16 +142,18 @@ Run the following command on the node you with to inspect to view the current st
 ```
 sudo calicoctl node status
 ```
-It will return a table listing all of the neighbors and their current status. Successful peerings will be listed as Established.
+It returns a table listing all of the neighbors and their current status. Successful peerings are listed as Established.
 
->**Note**: This command communicates with the local {{site.prodname}} agent and thus must be executed on the node whose status you are attempting to view.
+>**Note**: This command communicates with the local {{site.prodname}} agent so must be executed on the node whose status you are attempting to view.
 {: .alert .alert-info}
 
 #### Change the default global AS number
 
-By default, all Calico nodes use the 64512 autonomous system, unless a per-node AS has been specified for the node. This global default can be changed for all nodes by modifying the default BGP configuration resource. The following example command sets the global default AS number to be 64513.
+By default, all Calico nodes use the 64512 autonomous system, unless a per-node AS has been specified for the node. This global default can be changed for all nodes by modifying the default BGPConfiguration resource. The following example command sets the global default AS number to **64513**.
 
+```
 calicoctl patch bgpconfiguration default -p '{"spec": {"asNumber": “64513”}}'
+```
 
 >**Note**: If the default BGP configuration resource does not exist, you will need to create it first. See BGP configuration for more information.
 {: .alert .alert-info}
