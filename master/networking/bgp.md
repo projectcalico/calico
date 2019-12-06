@@ -72,7 +72,7 @@ Run the following command to disable the BGP full-mesh:
 calicoctl patch bgpconfiguration default -p '{"spec": {"nodeToNodeMeshEnabled": “false”}}'
 ```
 
->**Note**: If the default BGP configuration resource does not exist, you will need to create it first. See [BGP configuration]({{site.baseurl}}/{{page.version}}/reference/resources/bgpconfig) for more information.
+>**Note**: If the default BGP configuration resource does not exist, you need to create it first. See [BGP configuration]({{site.baseurl}}/{{page.version}}/reference/resources/bgpconfig) for more information.
 {: .alert .alert-info}
 
 #### Configure a global BGP peer
@@ -92,9 +92,9 @@ spec:
 ```
 #### Configure a per-node BGP peer
 
-Per-node BGP peers apply to one or more nodes in the cluster. You can choose which nodes either by specifying the node’s name exactly, or using a label selector.
+Per-node BGP peers apply to one or more nodes in the cluster. You can choose which nodes by specifying the node’s name exactly, or using a label selector.
 
-The following example creates a BGP peer that configures every {{site.prodname}} node with the label **rack: rack-1** to peer with **192.20.30.40** in **AS 64567**.
+The following example creates a BGPPeer that configures every {{site.prodname}} node with the label, **rack: rack-1** to peer with **192.20.30.40** in **AS 64567**.
 
 ```
 apiVersion: projectcalico.org/v3
@@ -108,7 +108,7 @@ spec:
 ```
 #### Configure a node to act as a route reflector
 
-{{site.prodname}} nodes can be configured to act as route reflectors. To do this, you must provide each node you want to act as a route reflector with a cluster ID - typically an unused IPv4 address.
+{{site.prodname}} nodes can be configured to act as route reflectors. To do this, each node that you want to act as a route reflector must have a cluster ID - typically an unused IPv4 address.
 
 To configure a node to be a route reflector with cluster ID 244.0.0.1, run the following command.
 
@@ -135,27 +135,27 @@ spec:
 
 #### View BGP peering status for a node
 
-You can use calicoctl to view the current status of a particular node’s BGP connections. This is a useful way to confirm configuration is behaving as desired.
+You can use `calicoctl` to view the current status of a particular node’s BGP connections. This is a useful way to confirm configuration is behaving as desired.
 
-Run the following command on the node you with to inspect to view the current state:
+Run the following command on the node you want to view the current state:
 
 ```
 sudo calicoctl node status
 ```
-It returns a table listing all of the neighbors and their current status. Successful peerings are listed as Established.
+A table that lists all of the neighbors and their current status is displayed. Successful peerings are listed as, **Established**.
 
->**Note**: This command communicates with the local {{site.prodname}} agent so must be executed on the node whose status you are attempting to view.
+>**Note**: This command communicates with the local {{site.prodname}} agent, so you must execute it on the node whose status you are attempting to view.
 {: .alert .alert-info}
 
 #### Change the default global AS number
 
-By default, all Calico nodes use the 64512 autonomous system, unless a per-node AS has been specified for the node. This global default can be changed for all nodes by modifying the default BGPConfiguration resource. The following example command sets the global default AS number to **64513**.
+By default, all Calico nodes use the 64512 autonomous system, unless a per-node AS has been specified for the node. You can change the global default for all nodes by modifying the default **BGPConfiguration** resource. The following example command sets the global default AS number to **64513**.
 
 ```
 calicoctl patch bgpconfiguration default -p '{"spec": {"asNumber": “64513”}}'
 ```
 
->**Note**: If the default BGP configuration resource does not exist, you will need to create it first. See BGP configuration for more information.
+>**Note**: If the default BGP configuration resource does not exist, you need to create it first. See BGP configuration for more information.
 {: .alert .alert-info}
 
 #### Change AS number for a particular node
