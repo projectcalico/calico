@@ -79,7 +79,7 @@ calicoctl patch bgpconfiguration default -p '{"spec": {"nodeToNodeMeshEnabled": 
 
 Global BGP peers apply to all nodes in your cluster. This is useful if your network topology includes BGP speakers that will be peered with every {{site.prodname}} node in your deployment.
 
-The following example creates a global BGP peer that configures every {{site.prodname}} node to peer with 192.20.30.40 in AS 64567.
+The following example creates a global BGP peer that configures every {{site.prodname}} node to peer with **192.20.30.40** in AS **64567**.
 
 ```
 apiVersion: projectcalico.org/v3
