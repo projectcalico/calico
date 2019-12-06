@@ -110,7 +110,7 @@ spec:
 
 {{site.prodname}} nodes can be configured to act as route reflectors. To do this, you must provide each node you want to act as a route reflector with a cluster ID - typically an unused IPv4 address.
 
-To configure a node to be a route reflector with cluster ID 244.0.0.1, you can run the following command.
+To configure a node to be a route reflector with cluster ID 244.0.0.1, run the following command.
 
 ```
 calicoctl patch node my-node -p '{"spec": {“bgp”: {"routeReflectorClusterID": “244.0.0.1”}}}'
