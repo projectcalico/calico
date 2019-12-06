@@ -229,7 +229,7 @@ On each compute node, perform the following steps:
 
     You will also need to [configure your route reflector to allow
     connections from the compute node as a route reflector
-    client](../../../networking/routereflector).
+    client](../../../networking/bgp).
 
     If you *are* configuring a full BGP mesh you need to handle the BGP
     configuration appropriately on each compute host. The scripts above can be
