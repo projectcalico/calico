@@ -50,7 +50,7 @@ For a deeper look at common on-premises deployment models, see [Calico over IP F
 
 ### Before you begin...
 
-`calicoctl` must be installed and configured.
+[calicoctl]({{site.baseurl}}/{{page.version}}/getting-started/calicoctl/install) must be installed and configured.
 
 ### How to
 
@@ -160,7 +160,7 @@ calicoctl patch bgpconfiguration default -p '{"spec": {"asNumber": “64513”}}
 
 #### Change AS number for a particular node
 
-You can configure an AS for a particular node by modifying the node object using `calicoctl`. For example, the following command changes the node named **node-1** to belong to **AS 64514**.
+You can configure an AS for a particular node by modifying the node object using `calicoctl`. For example, the following command changes the node named **node-1** to belong to **AS 64513**.
 
 ```
 calicoctl patch node node-1 -p '{"spec": {"bgp": {“asNumber”: “64513”}}}'
