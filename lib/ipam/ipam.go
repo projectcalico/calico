@@ -1407,6 +1407,9 @@ func (c ipamClient) SetIPAMConfig(ctx context.Context, cfg IPAMConfig) error {
 	}
 
 	allObjs, err := c.client.List(ctx, model.BlockListOptions{}, "")
+	if err != nil {
+		return err
+	}
 	if len(allObjs.KVPairs) != 0 {
 		return errors.New("Cannot change IPAM config while allocations exist")
 	}
