@@ -475,7 +475,8 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		// metadata name is set whereas TC doesn't set that field.
 		ipSetIDAllocator := idalloc.New()
 		dp.RegisterManager(newBPFIPSetManager(ipSetIDAllocator, bpfMapContext))
-		dp.RegisterManager(newBPFRouteManager(config.Hostname, bpfMapContext))
+		bpfRTMgr := newBPFRouteManager(config.Hostname, bpfMapContext)
+		dp.RegisterManager(bpfRTMgr)
 		dp.RegisterManager(newBPFConntrackManager(config.BPFConntrackTimeouts, bpfMapContext))
 
 		// Forwarding into a tunnel seems to fail silently, disable FIB lookup if tunnel is enabled for now.
@@ -508,6 +509,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 				config.Hostname,
 				frontendMap,
 				backendMap,
+				bpfRTMgr.hostIPUpdates(),
 				bpfproxy.WithImmediateSync(),
 			)
 			if err != nil {

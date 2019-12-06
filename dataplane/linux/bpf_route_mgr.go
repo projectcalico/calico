@@ -15,6 +15,7 @@
 package intdataplane
 
 import (
+	"net"
 	"time"
 
 	"github.com/projectcalico/felix/bpf/routes"
@@ -51,6 +52,8 @@ type bpfRouteManager struct {
 
 	dirtyRoutes     set.Set
 	resyncScheduled bool
+
+	hostIPsUpdateC chan []net.IP
 }
 
 func newBPFRouteManager(myNodename string, mc *bpf.MapContext) *bpfRouteManager {
@@ -63,6 +66,7 @@ func newBPFRouteManager(myNodename string, mc *bpf.MapContext) *bpfRouteManager 
 		routeMap:        routes.Map(mc),
 		dirtyRoutes:     set.New(),
 		resyncScheduled: true,
+		hostIPsUpdateC:  make(chan []net.IP, 1),
 	}
 }
 
@@ -209,6 +213,8 @@ func (m *bpfRouteManager) recalculateLocalHostIPs() {
 	oldRoutes := m.localHostRoutes
 	newRoutes := map[routes.Key]routes.Value{}
 
+	netIPs := []net.IP{}
+
 	for iface, ips := range m.localHostIPs {
 		logCxt := log.WithField("iface", iface)
 		logCxt.Debug("Adding IPs from interface")
@@ -220,19 +226,39 @@ func (m *bpfRouteManager) recalculateLocalHostIPs() {
 				// FIXME IPv6
 				return nil
 			}
-			if !cidr.Addr().AsNetIP().IsGlobalUnicast() {
+
+			netIP := cidr.Addr().AsNetIP()
+
+			if !netIP.IsGlobalUnicast() {
 				logCxt.WithField("addr", cidr).Debug("Address is not global unicast, ignore")
 				return nil
 			}
 			key := routes.NewKey(v4CIDR)
 			value := routes.NewValue(routes.TypeLocalHost)
 			newRoutes[key] = value
+
+			netIPs = append(netIPs, netIP)
+
 			return nil
 		})
 	}
 
 	m.applyRoutesDelta(oldRoutes, newRoutes)
 	m.localHostRoutes = newRoutes
+
+	select {
+	case m.hostIPsUpdateC <- netIPs:
+		// nothing
+	default:
+		// in case we would block, drop the no stale update and replace it
+		// with a new one. Do it non-blocking way in case it was just consumed.
+		select {
+		case <-m.hostIPsUpdateC:
+		default:
+		}
+		m.hostIPsUpdateC <- netIPs
+	}
+	log.Debugf("localHostIPs update %+v", netIPs)
 }
 
 func (m *bpfRouteManager) recalculateWorkloadIPs() {
@@ -377,4 +403,8 @@ func (m *bpfRouteManager) onHostMetadataRemove(remove *proto.HostMetadataRemove)
 	}
 	delete(m.remoteHostIPs, remove.Hostname)
 	m.remoteHostIPsDirty = true
+}
+
+func (m *bpfRouteManager) hostIPUpdates() <-chan []net.IP {
+	return m.hostIPsUpdateC
 }
