@@ -50,7 +50,7 @@ For a deeper look at common on-premises deployment models, see [Calico over IP F
 
 ### Before you begin...
 
-You must have installed and configured `calicoctl`.
+`calicoctl` must be installed and configured.
 
 ### How to
 
