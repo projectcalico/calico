@@ -75,6 +75,11 @@ var _ = Describe("BPF kube-proxy", func() {
 	back := newMockNATBackendMap()
 	_ = proxy.StartKubeProxy(k8s, "test-node", front, back, ipUpdates, proxy.WithImmediateSync())
 
+	AfterEach(func() {
+		// makes the proxy to stop and exit
+		close(ipUpdates)
+	})
+
 	It("should update nodeports after host ip changes", func() {
 		By("checking nodeport has the initial IP", func() {
 			Eventually(func() bool {
