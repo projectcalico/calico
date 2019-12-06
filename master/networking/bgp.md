@@ -155,7 +155,7 @@ By default, all Calico nodes use the 64512 autonomous system, unless a per-node 
 calicoctl patch bgpconfiguration default -p '{"spec": {"asNumber": “64513”}}'
 ```
 
->**Note**: If the default BGP configuration resource does not exist, you need to create it first. See BGP configuration for more information.
+>**Note**: If the default BGP configuration resource does not exist, you need to create it first. See [BGP configuration]({{site.baseurl}}/{{page.version}}/reference/resources/bgpconfig) for more information.
 {: .alert .alert-info}
 
 #### Change AS number for a particular node
