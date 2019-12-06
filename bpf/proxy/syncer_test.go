@@ -64,369 +64,377 @@ var _ = Describe("BPF Syncer", func() {
 		},
 	}
 
-	JustAfterEach(func() {
-		log("svcs = %+v\n", svcs)
-		log("eps = %+v\n", eps)
-	})
+	makestep := func(step func()) func() {
+		return func() {
+			defer func() {
+				log("svcs = %+v\n", svcs)
+				log("eps = %+v\n", eps)
+			}()
 
-	It("should be possible to insert a service with endpoint", func() {
-		err := s.Apply(state)
-		Expect(err).NotTo(HaveOccurred())
-
-		Expect(svcs).To(HaveLen(1))
-		val, ok := svcs[nat.NewNATKey(net.IPv4(10, 0, 0, 1), 1234, proxy.ProtoV1ToIntPanic(v1.ProtocolTCP))]
-		Expect(ok).To(BeTrue())
-		Expect(val.Count()).To(Equal(uint32(1)))
-
-		Expect(eps).To(HaveLen(1))
-		bval, ok := eps[nat.NewNATBackendKey(val.ID(), 0)]
-		Expect(ok).To(BeTrue())
-		Expect(bval).To(Equal(nat.NewNATBackendValue(net.IPv4(10, 1, 0, 1), 5555)))
-	})
-
-	svcKey2 := k8sp.ServicePortName{
-		NamespacedName: types.NamespacedName{
-			Namespace: "default",
-			Name:      "second-service",
-		},
+			step()
+		}
 	}
 
-	It("should be possible to insert another service with multiple endpoints", func() {
-		state.SvcMap[svcKey2] = &k8sp.BaseServiceInfo{
-			ClusterIP: net.IPv4(10, 0, 0, 2),
-			Port:      2222,
-			Protocol:  v1.ProtocolTCP,
-		}
-		state.EpsMap[svcKey2] = []k8sp.Endpoint{
-			&k8sp.BaseEndpointInfo{Endpoint: "10.2.0.1:1111"},
-			&k8sp.BaseEndpointInfo{Endpoint: "10.2.0.1:2222"},
-		}
-
-		err := s.Apply(state)
-		Expect(err).NotTo(HaveOccurred())
-
-		Expect(svcs).To(HaveLen(2))
-		val, ok := svcs[nat.NewNATKey(net.IPv4(10, 0, 0, 1), 1234, proxy.ProtoV1ToIntPanic(v1.ProtocolTCP))]
-		Expect(ok).To(BeTrue())
-		Expect(val.Count()).To(Equal(uint32(1)))
-		val, ok = svcs[nat.NewNATKey(net.IPv4(10, 0, 0, 2), 2222, proxy.ProtoV1ToIntPanic(v1.ProtocolTCP))]
-		Expect(ok).To(BeTrue())
-		Expect(val.Count()).To(Equal(uint32(2)))
-
-		Expect(eps).To(HaveLen(3))
-		Expect(eps).To(HaveKey(nat.NewNATBackendKey(val.ID(), 0)))
-		Expect(eps).To(HaveKey(nat.NewNATBackendKey(val.ID(), 1)))
-		Expect(eps).To(ContainElement(nat.NewNATBackendValue(net.IPv4(10, 2, 0, 1), 1111)))
-		Expect(eps).To(ContainElement(nat.NewNATBackendValue(net.IPv4(10, 2, 0, 1), 2222)))
-	})
-
-	It("should be possible to delete the test-service", func() {
-		delete(state.SvcMap, svcKey)
-		delete(state.EpsMap, svcKey)
-
-		err := s.Apply(state)
-		Expect(err).NotTo(HaveOccurred())
-
-		Expect(svcs).To(HaveLen(1))
-		val, ok := svcs[nat.NewNATKey(net.IPv4(10, 0, 0, 2), 2222, proxy.ProtoV1ToIntPanic(v1.ProtocolTCP))]
-		Expect(ok).To(BeTrue())
-		Expect(val.Count()).To(Equal(uint32(2)))
-
-		Expect(eps).To(HaveLen(2))
-		Expect(eps).To(HaveKey(nat.NewNATBackendKey(val.ID(), 0)))
-		Expect(eps).To(HaveKey(nat.NewNATBackendKey(val.ID(), 1)))
-		Expect(eps).To(ContainElement(nat.NewNATBackendValue(net.IPv4(10, 2, 0, 1), 1111)))
-		Expect(eps).To(ContainElement(nat.NewNATBackendValue(net.IPv4(10, 2, 0, 1), 2222)))
-	})
-
-	It("should be possible to delete one second-service backend", func() {
-		state.EpsMap[svcKey2] = []k8sp.Endpoint{
-			&k8sp.BaseEndpointInfo{Endpoint: "10.2.0.1:2222"},
-		}
-
-		err := s.Apply(state)
-		Expect(err).NotTo(HaveOccurred())
-
-		Expect(svcs).To(HaveLen(1))
-		val, ok := svcs[nat.NewNATKey(net.IPv4(10, 0, 0, 2), 2222, proxy.ProtoV1ToIntPanic(v1.ProtocolTCP))]
-		Expect(ok).To(BeTrue())
-		Expect(val.Count()).To(Equal(uint32(1)))
-
-		Expect(eps).To(HaveLen(1))
-		Expect(eps).To(HaveKey(nat.NewNATBackendKey(val.ID(), 0)))
-		Expect(eps).To(ContainElement(nat.NewNATBackendValue(net.IPv4(10, 2, 0, 1), 2222)))
-	})
-
-	It("should should not programm eps without a service - non reachables", func() {
-		nosvcKey := k8sp.ServicePortName{
-			NamespacedName: types.NamespacedName{
-				Namespace: "default",
-				Name:      "noservice",
-			},
-		}
-
-		state.EpsMap[nosvcKey] = []k8sp.Endpoint{
-			&k8sp.BaseEndpointInfo{Endpoint: "10.2.0.1:6666"},
-		}
-
-		err := s.Apply(state)
-		Expect(err).NotTo(HaveOccurred())
-
-		Expect(svcs).To(HaveLen(1))
-		val, ok := svcs[nat.NewNATKey(net.IPv4(10, 0, 0, 2), 2222, proxy.ProtoV1ToIntPanic(v1.ProtocolTCP))]
-		Expect(ok).To(BeTrue())
-		Expect(val.Count()).To(Equal(uint32(1)))
-
-		Expect(eps).To(HaveLen(1))
-		Expect(eps).To(HaveKey(nat.NewNATBackendKey(val.ID(), 0)))
-		Expect(eps).To(ContainElement(nat.NewNATBackendValue(net.IPv4(10, 2, 0, 1), 2222)))
-
-		delete(state.EpsMap, nosvcKey)
-	})
-
-	It("should add ExternalIP for existing service", func() {
-		state.SvcMap[svcKey2] = &k8sp.BaseServiceInfo{
-			ClusterIP:   net.IPv4(10, 0, 0, 2),
-			Port:        2222,
-			Protocol:    v1.ProtocolTCP,
-			ExternalIPs: []string{"35.0.0.2"},
-		}
-
-		err := s.Apply(state)
-		Expect(err).NotTo(HaveOccurred())
-
-		Expect(svcs).To(HaveLen(2))
-
-		val1, ok := svcs[nat.NewNATKey(net.IPv4(10, 0, 0, 2), 2222, proxy.ProtoV1ToIntPanic(v1.ProtocolTCP))]
-		Expect(ok).To(BeTrue())
-		Expect(val1.Count()).To(Equal(uint32(1)))
-
-		val2, ok := svcs[nat.NewNATKey(net.IPv4(35, 0, 0, 2), 2222, proxy.ProtoV1ToIntPanic(v1.ProtocolTCP))]
-		Expect(ok).To(BeTrue())
-		Expect(val1).To(Equal(val2))
-
-		Expect(eps).To(HaveLen(1))
-		Expect(eps).To(HaveKey(nat.NewNATBackendKey(val1.ID(), 0)))
-		Expect(eps).To(ContainElement(nat.NewNATBackendValue(net.IPv4(10, 2, 0, 1), 2222)))
-	})
-
-	It("should remove ExternalIP for existing service", func() {
-		state.SvcMap[svcKey2] = &k8sp.BaseServiceInfo{
-			ClusterIP: net.IPv4(10, 0, 0, 2),
-			Port:      2222,
-			Protocol:  v1.ProtocolTCP,
-		}
-
-		err := s.Apply(state)
-		Expect(err).NotTo(HaveOccurred())
-
-		Expect(svcs).To(HaveLen(1))
-
-		val, ok := svcs[nat.NewNATKey(net.IPv4(10, 0, 0, 2), 2222, proxy.ProtoV1ToIntPanic(v1.ProtocolTCP))]
-		Expect(ok).To(BeTrue())
-		Expect(val.Count()).To(Equal(uint32(1)))
-
-		Expect(eps).To(HaveLen(1))
-		Expect(eps).To(HaveKey(nat.NewNATBackendKey(val.ID(), 0)))
-		Expect(eps).To(ContainElement(nat.NewNATBackendValue(net.IPv4(10, 2, 0, 1), 2222)))
-	})
-
-	var checkAfterResync func()
-
-	It("should turn existing service into a NodePort", func() {
-		state.SvcMap[svcKey2] = &k8sp.BaseServiceInfo{
-			ClusterIP: net.IPv4(10, 0, 0, 2),
-			Port:      2222,
-			NodePort:  2222,
-			Protocol:  v1.ProtocolTCP,
-		}
-
-		checkAfterResync = func() {
+	It("should make the right test transitions", func() {
+		By("inserting a service with endpoint", makestep(func() {
 			err := s.Apply(state)
 			Expect(err).NotTo(HaveOccurred())
 
-			Expect(svcs).To(HaveLen(3))
+			Expect(svcs).To(HaveLen(1))
+			val, ok := svcs[nat.NewNATKey(net.IPv4(10, 0, 0, 1), 1234, proxy.ProtoV1ToIntPanic(v1.ProtocolTCP))]
+			Expect(ok).To(BeTrue())
+			Expect(val.Count()).To(Equal(uint32(1)))
+
+			Expect(eps).To(HaveLen(1))
+			bval, ok := eps[nat.NewNATBackendKey(val.ID(), 0)]
+			Expect(ok).To(BeTrue())
+			Expect(bval).To(Equal(nat.NewNATBackendValue(net.IPv4(10, 1, 0, 1), 5555)))
+		}))
+
+		svcKey2 := k8sp.ServicePortName{
+			NamespacedName: types.NamespacedName{
+				Namespace: "default",
+				Name:      "second-service",
+			},
+		}
+
+		By("inserting another service with multiple endpoints", makestep(func() {
+			state.SvcMap[svcKey2] = &k8sp.BaseServiceInfo{
+				ClusterIP: net.IPv4(10, 0, 0, 2),
+				Port:      2222,
+				Protocol:  v1.ProtocolTCP,
+			}
+			state.EpsMap[svcKey2] = []k8sp.Endpoint{
+				&k8sp.BaseEndpointInfo{Endpoint: "10.2.0.1:1111"},
+				&k8sp.BaseEndpointInfo{Endpoint: "10.2.0.1:2222"},
+			}
+
+			err := s.Apply(state)
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(svcs).To(HaveLen(2))
+			val, ok := svcs[nat.NewNATKey(net.IPv4(10, 0, 0, 1), 1234, proxy.ProtoV1ToIntPanic(v1.ProtocolTCP))]
+			Expect(ok).To(BeTrue())
+			Expect(val.Count()).To(Equal(uint32(1)))
+			val, ok = svcs[nat.NewNATKey(net.IPv4(10, 0, 0, 2), 2222, proxy.ProtoV1ToIntPanic(v1.ProtocolTCP))]
+			Expect(ok).To(BeTrue())
+			Expect(val.Count()).To(Equal(uint32(2)))
+
+			Expect(eps).To(HaveLen(3))
+			Expect(eps).To(HaveKey(nat.NewNATBackendKey(val.ID(), 0)))
+			Expect(eps).To(HaveKey(nat.NewNATBackendKey(val.ID(), 1)))
+			Expect(eps).To(ContainElement(nat.NewNATBackendValue(net.IPv4(10, 2, 0, 1), 1111)))
+			Expect(eps).To(ContainElement(nat.NewNATBackendValue(net.IPv4(10, 2, 0, 1), 2222)))
+		}))
+
+		By("deletng the test-service", makestep(func() {
+			delete(state.SvcMap, svcKey)
+			delete(state.EpsMap, svcKey)
+
+			err := s.Apply(state)
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(svcs).To(HaveLen(1))
+			val, ok := svcs[nat.NewNATKey(net.IPv4(10, 0, 0, 2), 2222, proxy.ProtoV1ToIntPanic(v1.ProtocolTCP))]
+			Expect(ok).To(BeTrue())
+			Expect(val.Count()).To(Equal(uint32(2)))
+
+			Expect(eps).To(HaveLen(2))
+			Expect(eps).To(HaveKey(nat.NewNATBackendKey(val.ID(), 0)))
+			Expect(eps).To(HaveKey(nat.NewNATBackendKey(val.ID(), 1)))
+			Expect(eps).To(ContainElement(nat.NewNATBackendValue(net.IPv4(10, 2, 0, 1), 1111)))
+			Expect(eps).To(ContainElement(nat.NewNATBackendValue(net.IPv4(10, 2, 0, 1), 2222)))
+		}))
+
+		By("deleting one second-service backend", makestep(func() {
+			state.EpsMap[svcKey2] = []k8sp.Endpoint{
+				&k8sp.BaseEndpointInfo{Endpoint: "10.2.0.1:2222"},
+			}
+
+			err := s.Apply(state)
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(svcs).To(HaveLen(1))
+			val, ok := svcs[nat.NewNATKey(net.IPv4(10, 0, 0, 2), 2222, proxy.ProtoV1ToIntPanic(v1.ProtocolTCP))]
+			Expect(ok).To(BeTrue())
+			Expect(val.Count()).To(Equal(uint32(1)))
+
+			Expect(eps).To(HaveLen(1))
+			Expect(eps).To(HaveKey(nat.NewNATBackendKey(val.ID(), 0)))
+			Expect(eps).To(ContainElement(nat.NewNATBackendValue(net.IPv4(10, 2, 0, 1), 2222)))
+		}))
+
+		By("not programming eps without a service - non reachables", makestep(func() {
+			nosvcKey := k8sp.ServicePortName{
+				NamespacedName: types.NamespacedName{
+					Namespace: "default",
+					Name:      "noservice",
+				},
+			}
+
+			state.EpsMap[nosvcKey] = []k8sp.Endpoint{
+				&k8sp.BaseEndpointInfo{Endpoint: "10.2.0.1:6666"},
+			}
+
+			err := s.Apply(state)
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(svcs).To(HaveLen(1))
+			val, ok := svcs[nat.NewNATKey(net.IPv4(10, 0, 0, 2), 2222, proxy.ProtoV1ToIntPanic(v1.ProtocolTCP))]
+			Expect(ok).To(BeTrue())
+			Expect(val.Count()).To(Equal(uint32(1)))
+
+			Expect(eps).To(HaveLen(1))
+			Expect(eps).To(HaveKey(nat.NewNATBackendKey(val.ID(), 0)))
+			Expect(eps).To(ContainElement(nat.NewNATBackendValue(net.IPv4(10, 2, 0, 1), 2222)))
+
+			delete(state.EpsMap, nosvcKey)
+		}))
+
+		By("adding ExternalIP for existing service", makestep(func() {
+			state.SvcMap[svcKey2] = &k8sp.BaseServiceInfo{
+				ClusterIP:   net.IPv4(10, 0, 0, 2),
+				Port:        2222,
+				Protocol:    v1.ProtocolTCP,
+				ExternalIPs: []string{"35.0.0.2"},
+			}
+
+			err := s.Apply(state)
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(svcs).To(HaveLen(2))
 
 			val1, ok := svcs[nat.NewNATKey(net.IPv4(10, 0, 0, 2), 2222, proxy.ProtoV1ToIntPanic(v1.ProtocolTCP))]
 			Expect(ok).To(BeTrue())
 			Expect(val1.Count()).To(Equal(uint32(1)))
 
-			val2, ok := svcs[nat.NewNATKey(net.IPv4(192, 168, 0, 1), 2222, proxy.ProtoV1ToIntPanic(v1.ProtocolTCP))]
+			val2, ok := svcs[nat.NewNATKey(net.IPv4(35, 0, 0, 2), 2222, proxy.ProtoV1ToIntPanic(v1.ProtocolTCP))]
 			Expect(ok).To(BeTrue())
 			Expect(val1).To(Equal(val2))
-
-			val3, ok := svcs[nat.NewNATKey(net.IPv4(10, 123, 0, 1), 2222, proxy.ProtoV1ToIntPanic(v1.ProtocolTCP))]
-			Expect(ok).To(BeTrue())
-			Expect(val1).To(Equal(val3))
 
 			Expect(eps).To(HaveLen(1))
 			Expect(eps).To(HaveKey(nat.NewNATBackendKey(val1.ID(), 0)))
 			Expect(eps).To(ContainElement(nat.NewNATBackendValue(net.IPv4(10, 2, 0, 1), 2222)))
-		}
+		}))
 
-		checkAfterResync()
-	})
-
-	It("should resync after creating a new syncer with the same result", func() {
-		s, _ = proxy.NewSyncer(nodeIPs, svcs, eps)
-		checkAfterResync()
-	})
-
-	It("should resync after creating a new syncer and delete stale entries", func() {
-		svcs[nat.NewNATKey(net.IPv4(5, 5, 5, 5), 1111, 6)] = nat.NewNATValue(0xdeadbeef, 2)
-		eps[nat.NewNATBackendKey(0xdeadbeef, 0)] = nat.NewNATBackendValue(net.IPv4(6, 6, 6, 6), 666)
-		eps[nat.NewNATBackendKey(0xdeadbeef, 1)] = nat.NewNATBackendValue(net.IPv4(7, 7, 7, 7), 777)
-		s, _ = proxy.NewSyncer(nodeIPs, svcs, eps)
-		checkAfterResync()
-	})
-
-	svcKey3 := k8sp.ServicePortName{
-		NamespacedName: types.NamespacedName{
-			Namespace: "default",
-			Name:      "third-service",
-		},
-	}
-
-	It("should be possible to insert another service after resync", func() {
-		state.SvcMap[svcKey3] = &k8sp.BaseServiceInfo{
-			ClusterIP: net.IPv4(10, 0, 0, 3),
-			Port:      3333,
-			NodePort:  3232,
-			Protocol:  v1.ProtocolUDP,
-		}
-		state.EpsMap[svcKey3] = []k8sp.Endpoint{
-			&k8sp.BaseEndpointInfo{Endpoint: "10.3.0.1:3434"},
-		}
-
-		err := s.Apply(state)
-		Expect(err).NotTo(HaveOccurred())
-
-		Expect(svcs).To(HaveLen(6))
-		Expect(eps).To(HaveLen(2))
-
-		val1, ok := svcs[nat.NewNATKey(net.IPv4(10, 0, 0, 2), 2222, proxy.ProtoV1ToIntPanic(v1.ProtocolTCP))]
-		Expect(ok).To(BeTrue())
-		Expect(val1.Count()).To(Equal(uint32(1)))
-
-		val2, ok := svcs[nat.NewNATKey(net.IPv4(10, 0, 0, 3), 3333, proxy.ProtoV1ToIntPanic(v1.ProtocolUDP))]
-		Expect(ok).To(BeTrue())
-		Expect(val2.ID()).To(Equal(val1.ID()+1), "wrongly recycled svc ID?")
-
-		val3, ok := svcs[nat.NewNATKey(net.IPv4(192, 168, 0, 1), 3232, proxy.ProtoV1ToIntPanic(v1.ProtocolUDP))]
-		Expect(ok).To(BeTrue())
-		Expect(val3).To(Equal(val2))
-
-		val4, ok := svcs[nat.NewNATKey(net.IPv4(10, 123, 0, 1), 3232, proxy.ProtoV1ToIntPanic(v1.ProtocolUDP))]
-		Expect(ok).To(BeTrue())
-		Expect(val4).To(Equal(val2))
-	})
-
-	It("should be possible to update a port of a service", func() {
-		state.SvcMap[svcKey3] = &k8sp.BaseServiceInfo{
-			ClusterIP: net.IPv4(10, 0, 0, 3),
-			Port:      3355,
-			NodePort:  3232,
-			Protocol:  v1.ProtocolUDP,
-		}
-		state.EpsMap[svcKey3] = []k8sp.Endpoint{
-			&k8sp.BaseEndpointInfo{Endpoint: "10.3.0.1:3434"},
-		}
-
-		err := s.Apply(state)
-		Expect(err).NotTo(HaveOccurred())
-
-		Expect(svcs).To(HaveLen(6))
-		Expect(eps).To(HaveLen(2))
-
-		Expect(svcs).NotTo(HaveKey(
-			nat.NewNATKey(net.IPv4(10, 0, 0, 3), 3333, proxy.ProtoV1ToIntPanic(v1.ProtocolUDP))))
-
-		val2, ok := svcs[nat.NewNATKey(net.IPv4(10, 0, 0, 3), 3355, proxy.ProtoV1ToIntPanic(v1.ProtocolUDP))]
-		Expect(ok).To(BeTrue())
-
-		val3, ok := svcs[nat.NewNATKey(net.IPv4(192, 168, 0, 1), 3232, proxy.ProtoV1ToIntPanic(v1.ProtocolUDP))]
-		Expect(ok).To(BeTrue())
-		Expect(val3).To(Equal(val2))
-
-		val4, ok := svcs[nat.NewNATKey(net.IPv4(10, 123, 0, 1), 3232, proxy.ProtoV1ToIntPanic(v1.ProtocolUDP))]
-		Expect(ok).To(BeTrue())
-		Expect(val4).To(Equal(val2))
-	})
-
-	It("should be possible to update a NodePort of a service", func() {
-		state.SvcMap[svcKey3] = &k8sp.BaseServiceInfo{
-			ClusterIP: net.IPv4(10, 0, 0, 3),
-			Port:      3355,
-			NodePort:  1212,
-			Protocol:  v1.ProtocolUDP,
-		}
-		state.EpsMap[svcKey3] = []k8sp.Endpoint{
-			&k8sp.BaseEndpointInfo{Endpoint: "10.3.0.1:3434"},
-		}
-
-		err := s.Apply(state)
-		Expect(err).NotTo(HaveOccurred())
-
-		Expect(svcs).To(HaveLen(6))
-		Expect(eps).To(HaveLen(2))
-
-		Expect(svcs).NotTo(HaveKey(
-			nat.NewNATKey(net.IPv4(10, 0, 0, 3), 3333, proxy.ProtoV1ToIntPanic(v1.ProtocolUDP))))
-
-		val2, ok := svcs[nat.NewNATKey(net.IPv4(10, 0, 0, 3), 3355, proxy.ProtoV1ToIntPanic(v1.ProtocolUDP))]
-		Expect(ok).To(BeTrue())
-
-		val3, ok := svcs[nat.NewNATKey(net.IPv4(192, 168, 0, 1), 1212, proxy.ProtoV1ToIntPanic(v1.ProtocolUDP))]
-		Expect(ok).To(BeTrue())
-		Expect(val3).To(Equal(val2))
-
-		val4, ok := svcs[nat.NewNATKey(net.IPv4(10, 123, 0, 1), 1212, proxy.ProtoV1ToIntPanic(v1.ProtocolUDP))]
-		Expect(ok).To(BeTrue())
-		Expect(val4).To(Equal(val2))
-	})
-
-	It("should delete backends if there are none for a service BPF-147", func() {
-		val, ok := svcs[nat.NewNATKey(net.IPv4(10, 0, 0, 2), 2222, proxy.ProtoV1ToIntPanic(v1.ProtocolTCP))]
-		Expect(ok).To(BeTrue())
-		count := val.Count()
-		for i := uint32(0); i < count; i++ {
-			Expect(eps).To(HaveKey(nat.NewNATBackendKey(val.ID(), i)))
-		}
-
-		// This testcase assumes there are at least as many backends in the
-		// EpsMap for other services left than the original number of services
-		// for the one being updated.`
-		delete(state.EpsMap, svcKey2)
-		Expect(int(count)).To(BeNumerically(">=", func() int {
-			cnt := 0
-			for _, v := range state.EpsMap {
-				cnt += len(v)
+		By("removing ExternalIP for existing service", makestep(func() {
+			state.SvcMap[svcKey2] = &k8sp.BaseServiceInfo{
+				ClusterIP: net.IPv4(10, 0, 0, 2),
+				Port:      2222,
+				Protocol:  v1.ProtocolTCP,
 			}
-			return cnt
-		}()))
 
-		log("state.SvcMap = %+v\n", state.SvcMap)
-		log("state.EpsMap = %+v\n", state.EpsMap)
-		err := s.Apply(state)
-		Expect(err).NotTo(HaveOccurred())
+			err := s.Apply(state)
+			Expect(err).NotTo(HaveOccurred())
 
-		val, ok = svcs[nat.NewNATKey(net.IPv4(10, 0, 0, 2), 2222, proxy.ProtoV1ToIntPanic(v1.ProtocolTCP))]
-		Expect(ok).To(BeTrue())
-		Expect(val.Count()).To(Equal(uint32(0)))
-		for i := uint32(0); i < count; i++ {
-			Expect(eps).NotTo(HaveKey(nat.NewNATBackendKey(val.ID(), i)))
+			Expect(svcs).To(HaveLen(1))
+
+			val, ok := svcs[nat.NewNATKey(net.IPv4(10, 0, 0, 2), 2222, proxy.ProtoV1ToIntPanic(v1.ProtocolTCP))]
+			Expect(ok).To(BeTrue())
+			Expect(val.Count()).To(Equal(uint32(1)))
+
+			Expect(eps).To(HaveLen(1))
+			Expect(eps).To(HaveKey(nat.NewNATBackendKey(val.ID(), 0)))
+			Expect(eps).To(ContainElement(nat.NewNATBackendValue(net.IPv4(10, 2, 0, 1), 2222)))
+		}))
+
+		var checkAfterResync func()
+
+		By("turning existing service into a NodePort", makestep(func() {
+			state.SvcMap[svcKey2] = &k8sp.BaseServiceInfo{
+				ClusterIP: net.IPv4(10, 0, 0, 2),
+				Port:      2222,
+				NodePort:  2222,
+				Protocol:  v1.ProtocolTCP,
+			}
+
+			checkAfterResync = func() {
+				err := s.Apply(state)
+				Expect(err).NotTo(HaveOccurred())
+
+				Expect(svcs).To(HaveLen(3))
+
+				val1, ok := svcs[nat.NewNATKey(net.IPv4(10, 0, 0, 2), 2222, proxy.ProtoV1ToIntPanic(v1.ProtocolTCP))]
+				Expect(ok).To(BeTrue())
+				Expect(val1.Count()).To(Equal(uint32(1)))
+
+				val2, ok := svcs[nat.NewNATKey(net.IPv4(192, 168, 0, 1), 2222, proxy.ProtoV1ToIntPanic(v1.ProtocolTCP))]
+				Expect(ok).To(BeTrue())
+				Expect(val1).To(Equal(val2))
+
+				val3, ok := svcs[nat.NewNATKey(net.IPv4(10, 123, 0, 1), 2222, proxy.ProtoV1ToIntPanic(v1.ProtocolTCP))]
+				Expect(ok).To(BeTrue())
+				Expect(val1).To(Equal(val3))
+
+				Expect(eps).To(HaveLen(1))
+				Expect(eps).To(HaveKey(nat.NewNATBackendKey(val1.ID(), 0)))
+				Expect(eps).To(ContainElement(nat.NewNATBackendValue(net.IPv4(10, 2, 0, 1), 2222)))
+			}
+
+			checkAfterResync()
+		}))
+
+		By("resyncing after creating a new syncer with the same result", makestep(func() {
+			s, _ = proxy.NewSyncer(nodeIPs, svcs, eps)
+			checkAfterResync()
+		}))
+
+		By("resyncing after creating a new syncer and delete stale entries", makestep(func() {
+			svcs[nat.NewNATKey(net.IPv4(5, 5, 5, 5), 1111, 6)] = nat.NewNATValue(0xdeadbeef, 2)
+			eps[nat.NewNATBackendKey(0xdeadbeef, 0)] = nat.NewNATBackendValue(net.IPv4(6, 6, 6, 6), 666)
+			eps[nat.NewNATBackendKey(0xdeadbeef, 1)] = nat.NewNATBackendValue(net.IPv4(7, 7, 7, 7), 777)
+			s, _ = proxy.NewSyncer(nodeIPs, svcs, eps)
+			checkAfterResync()
+		}))
+
+		svcKey3 := k8sp.ServicePortName{
+			NamespacedName: types.NamespacedName{
+				Namespace: "default",
+				Name:      "third-service",
+			},
 		}
-	})
 
-	It("should delete the services", func() {
-		delete(state.SvcMap, svcKey2)
-		delete(state.SvcMap, svcKey3)
+		By("inserting another service after resync", makestep(func() {
+			state.SvcMap[svcKey3] = &k8sp.BaseServiceInfo{
+				ClusterIP: net.IPv4(10, 0, 0, 3),
+				Port:      3333,
+				NodePort:  3232,
+				Protocol:  v1.ProtocolUDP,
+			}
+			state.EpsMap[svcKey3] = []k8sp.Endpoint{
+				&k8sp.BaseEndpointInfo{Endpoint: "10.3.0.1:3434"},
+			}
 
-		err := s.Apply(state)
-		Expect(err).NotTo(HaveOccurred())
+			err := s.Apply(state)
+			Expect(err).NotTo(HaveOccurred())
 
-		Expect(svcs).To(HaveLen(0))
-		Expect(eps).To(HaveLen(0))
+			Expect(svcs).To(HaveLen(6))
+			Expect(eps).To(HaveLen(2))
+
+			val1, ok := svcs[nat.NewNATKey(net.IPv4(10, 0, 0, 2), 2222, proxy.ProtoV1ToIntPanic(v1.ProtocolTCP))]
+			Expect(ok).To(BeTrue())
+			Expect(val1.Count()).To(Equal(uint32(1)))
+
+			val2, ok := svcs[nat.NewNATKey(net.IPv4(10, 0, 0, 3), 3333, proxy.ProtoV1ToIntPanic(v1.ProtocolUDP))]
+			Expect(ok).To(BeTrue())
+			Expect(val2.ID()).To(Equal(val1.ID()+1), "wrongly recycled svc ID?")
+
+			val3, ok := svcs[nat.NewNATKey(net.IPv4(192, 168, 0, 1), 3232, proxy.ProtoV1ToIntPanic(v1.ProtocolUDP))]
+			Expect(ok).To(BeTrue())
+			Expect(val3).To(Equal(val2))
+
+			val4, ok := svcs[nat.NewNATKey(net.IPv4(10, 123, 0, 1), 3232, proxy.ProtoV1ToIntPanic(v1.ProtocolUDP))]
+			Expect(ok).To(BeTrue())
+			Expect(val4).To(Equal(val2))
+		}))
+
+		By("updating a port of a service", makestep(func() {
+			state.SvcMap[svcKey3] = &k8sp.BaseServiceInfo{
+				ClusterIP: net.IPv4(10, 0, 0, 3),
+				Port:      3355,
+				NodePort:  3232,
+				Protocol:  v1.ProtocolUDP,
+			}
+			state.EpsMap[svcKey3] = []k8sp.Endpoint{
+				&k8sp.BaseEndpointInfo{Endpoint: "10.3.0.1:3434"},
+			}
+
+			err := s.Apply(state)
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(svcs).To(HaveLen(6))
+			Expect(eps).To(HaveLen(2))
+
+			Expect(svcs).NotTo(HaveKey(
+				nat.NewNATKey(net.IPv4(10, 0, 0, 3), 3333, proxy.ProtoV1ToIntPanic(v1.ProtocolUDP))))
+
+			val2, ok := svcs[nat.NewNATKey(net.IPv4(10, 0, 0, 3), 3355, proxy.ProtoV1ToIntPanic(v1.ProtocolUDP))]
+			Expect(ok).To(BeTrue())
+
+			val3, ok := svcs[nat.NewNATKey(net.IPv4(192, 168, 0, 1), 3232, proxy.ProtoV1ToIntPanic(v1.ProtocolUDP))]
+			Expect(ok).To(BeTrue())
+			Expect(val3).To(Equal(val2))
+
+			val4, ok := svcs[nat.NewNATKey(net.IPv4(10, 123, 0, 1), 3232, proxy.ProtoV1ToIntPanic(v1.ProtocolUDP))]
+			Expect(ok).To(BeTrue())
+			Expect(val4).To(Equal(val2))
+		}))
+
+		By("updating a NodePort of a service", makestep(func() {
+			state.SvcMap[svcKey3] = &k8sp.BaseServiceInfo{
+				ClusterIP: net.IPv4(10, 0, 0, 3),
+				Port:      3355,
+				NodePort:  1212,
+				Protocol:  v1.ProtocolUDP,
+			}
+			state.EpsMap[svcKey3] = []k8sp.Endpoint{
+				&k8sp.BaseEndpointInfo{Endpoint: "10.3.0.1:3434"},
+			}
+
+			err := s.Apply(state)
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(svcs).To(HaveLen(6))
+			Expect(eps).To(HaveLen(2))
+
+			Expect(svcs).NotTo(HaveKey(
+				nat.NewNATKey(net.IPv4(10, 0, 0, 3), 3333, proxy.ProtoV1ToIntPanic(v1.ProtocolUDP))))
+
+			val2, ok := svcs[nat.NewNATKey(net.IPv4(10, 0, 0, 3), 3355, proxy.ProtoV1ToIntPanic(v1.ProtocolUDP))]
+			Expect(ok).To(BeTrue())
+
+			val3, ok := svcs[nat.NewNATKey(net.IPv4(192, 168, 0, 1), 1212, proxy.ProtoV1ToIntPanic(v1.ProtocolUDP))]
+			Expect(ok).To(BeTrue())
+			Expect(val3).To(Equal(val2))
+
+			val4, ok := svcs[nat.NewNATKey(net.IPv4(10, 123, 0, 1), 1212, proxy.ProtoV1ToIntPanic(v1.ProtocolUDP))]
+			Expect(ok).To(BeTrue())
+			Expect(val4).To(Equal(val2))
+		}))
+
+		By("deleting backends if there are none for a service BPF-147", makestep(func() {
+			val, ok := svcs[nat.NewNATKey(net.IPv4(10, 0, 0, 2), 2222, proxy.ProtoV1ToIntPanic(v1.ProtocolTCP))]
+			Expect(ok).To(BeTrue())
+			count := val.Count()
+			for i := uint32(0); i < count; i++ {
+				Expect(eps).To(HaveKey(nat.NewNATBackendKey(val.ID(), i)))
+			}
+
+			// This testcase assumes there are at least as many backends in the
+			// EpsMap for other services left than the original number of services
+			// for the one being updated.`
+			delete(state.EpsMap, svcKey2)
+			Expect(int(count)).To(BeNumerically(">=", func() int {
+				cnt := 0
+				for _, v := range state.EpsMap {
+					cnt += len(v)
+				}
+				return cnt
+			}()))
+
+			log("state.SvcMap = %+v\n", state.SvcMap)
+			log("state.EpsMap = %+v\n", state.EpsMap)
+			err := s.Apply(state)
+			Expect(err).NotTo(HaveOccurred())
+
+			val, ok = svcs[nat.NewNATKey(net.IPv4(10, 0, 0, 2), 2222, proxy.ProtoV1ToIntPanic(v1.ProtocolTCP))]
+			Expect(ok).To(BeTrue())
+			Expect(val.Count()).To(Equal(uint32(0)))
+			for i := uint32(0); i < count; i++ {
+				Expect(eps).NotTo(HaveKey(nat.NewNATBackendKey(val.ID(), i)))
+			}
+		}))
+
+		By("deleting the services", makestep(func() {
+			delete(state.SvcMap, svcKey2)
+			delete(state.SvcMap, svcKey3)
+
+			err := s.Apply(state)
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(svcs).To(HaveLen(0))
+			Expect(eps).To(HaveLen(0))
+		}))
 	})
 })
 
