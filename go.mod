@@ -11,7 +11,7 @@ require (
 	github.com/natefinch/atomic v0.0.0-20150920032501-a62ce929ffcc
 	github.com/onsi/ginkgo v1.10.1
 	github.com/onsi/gomega v1.7.0
-	github.com/projectcalico/libcalico-go v1.7.2-0.20191205083902-1b3f8f6b6b3e
+	github.com/projectcalico/libcalico-go v1.7.2-0.20191206174442-1af6a37dd57b
 	github.com/safchain/ethtool v0.0.0-20170622225139-7ff1ba29eca2 // indirect
 	github.com/satori/go.uuid v1.2.0
 	github.com/sirupsen/logrus v1.4.2
