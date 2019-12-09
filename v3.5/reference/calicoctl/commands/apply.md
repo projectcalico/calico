@@ -89,7 +89,7 @@ Description:
 
    Results indicate that 8 resources were successfully applied
 
-   ```bash
+   ```
    Successfully applied 8 resource(s)
    ```
    {: .no-select-button}
@@ -102,7 +102,7 @@ Description:
 
    Results indicate success.
 
-   ```bash
+   ```
    Successfully applied 2 'policy' resource(s)
    ```
    {: .no-select-button}

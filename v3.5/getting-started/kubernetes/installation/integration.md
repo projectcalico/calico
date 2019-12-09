@@ -182,19 +182,19 @@ To install the controllers:
 - Modify `<ETCD_ENDPOINTS>` to point to your etcd cluster.
 - Install it using `kubectl`.
 
-```shell
+```bash
 kubectl create -f calico-kube-controllers.yaml
 ```
 
 After a few moments, issue the following command.
 
-```shell
+```bash
 kubectl get pods --namespace=kube-system
 ```
 
 You should see the controllers enter the `Running` state.
 
-```bash
+```
 NAME                                     READY     STATUS    RESTARTS   AGE
 calico-kube-controllers                  1/1       Running   0          1m
 ```
@@ -217,24 +217,24 @@ Apply the manifest appropriate to your cluster configuration.
 
 - **Kubernetes API datastore with {{site.prodname}} networking**:
 
-   ```
+   ```bash
    kubectl apply -f {{site.url}}/{{page.version}}/manifests/rbac-kdd-calico.yaml
    ```
 
 - **Kubernetes API datastore with flannel networking**:
 
-   ```
+   ```bash
    kubectl apply -f {{site.url}}/{{page.version}}/manifests/rbac-kdd-flannel.yaml
    ```
 
 - **etcd datastore with {{site.prodname}} networking**:
 
-   ```
+   ```bash
    kubectl apply -f {{site.url}}/{{page.version}}/manifests/rbac-etcd-calico.yaml
    ```
 
 - **etcd datastore with flannel networking**:
 
-   ```
+   ```bash
    kubectl apply -f {{site.url}}/{{page.version}}/manifests/rbac-etcd-flannel.yaml
    ```

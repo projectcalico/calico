@@ -22,7 +22,7 @@ environment file and starts the `{{site.nodecontainer}}` image as a service.
 
 `calico.env` - the `EnvironmentFile`:
 
-```shell
+```bash
 ETCD_ENDPOINTS=http://localhost:2379
 ETCD_CA_CERT_FILE=""
 ETCD_CERT_FILE=""
@@ -72,7 +72,7 @@ ETCD_ENDPOINTS to point at the correct etcd cluster endpoints.
 
 `{{site.noderunning}}.service` - the systemd service:
 
-```shell
+```
 [Unit]
 Description={{site.noderunning}}
 After=docker.service
@@ -130,7 +130,7 @@ Each {{site.prodname}}-rkt enabled node requires the `{{site.nodecontainer}}` co
 The `{{site.nodecontainer}}` container can be run directly through rkt and needs to be run as
 as a fly stage-1 container.
 
-```shell
+```bash
 sudo rkt run --stage1-path=/usr/share/rkt/stage1-fly.aci \
   --set-env=ETCD_ENDPOINTS=http://<ETCD_IP>:<ETCD_PORT> \
   --set-env=IP=autodetect \
@@ -151,13 +151,13 @@ sudo rkt run --stage1-path=/usr/share/rkt/stage1-fly.aci \
 
 Check that it's running.
 
-```shell
+```bash
 sudo rkt list
 ```
 
 An example response follows.
 
-```bash
+```
 UUID      APP	IMAGE NAME                  STATE   CREATED         STARTED         NETWORKS
 b52bba11  node  {{page.registry}}{{site.imageNames["node"]}}:{{site.data.versions[page.version].first.title}}  running 10 seconds ago  10 seconds ago
 ```

@@ -21,7 +21,7 @@ arbitrary name required for endpoint identification.
 When running this command, replace the placeholders in angle brackets with
 appropriate values for your deployment.
 
-```
+```bash
 calicoctl create -f - <<EOF
 - apiVersion: projectcalico.org/v3
   kind: HostEndpoint
@@ -67,7 +67,7 @@ key/value pairs that can be used in selector expressions.
 Or, if you knew that the IP address should be 10.0.0.1, but not the name
 of the interface:
 
-```
+```bash
 calicoctl create -f - <<EOF
 - apiVersion: projectcalico.org/v3
   kind: HostEndpoint

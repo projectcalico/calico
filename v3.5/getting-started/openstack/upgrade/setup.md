@@ -15,7 +15,7 @@ target etcdv3 cluster. The host must be AMD64 and running one of the following:
 ## Before you begin
 
 Set the version flag.  On the control node:
-```
+```bash
 etcdctl set /calico/v1/config/CalicoVersion v2.6.5-7
 ```
 

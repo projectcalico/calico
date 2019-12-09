@@ -28,7 +28,7 @@ and VMs within the IP Pool.
 The following `calicoctl` command will create or modify an IPv4 pool with
 CIDR 192.168.0.0/16 to use IP-in-IP with mode `Always`:
 
-```
+```bash
 calicoctl apply -f - << EOF
 apiVersion: projectcalico.org/v3
 kind: IPPool
@@ -60,7 +60,7 @@ The following `calicoctl` command will create or modify an IPv4 pool with
 CIDR 192.168.0.0/16 to use IP-in-IP with mode `CrossSubnet`:
 
 
-```
+```bash
 calicoctl apply -f - << EOF
 apiVersion: projectcalico.org/v3
 kind: IPPool
@@ -100,7 +100,7 @@ IPIP mode is enabled.
 
 You can verify which of your nodes is correctly configured using calicoctl.
 
-```
+```bash
 calicoctl get nodes --output=wide
 ```
 

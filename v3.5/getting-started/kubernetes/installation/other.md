@@ -39,7 +39,7 @@ complete the following steps.
    - Modify the replica count in the`Deployment` named `calico-typha`
      to the desired number of replicas.
 
-     ```
+     ```yaml
      apiVersion: apps/v1beta1
      kind: Deployment
      metadata:
