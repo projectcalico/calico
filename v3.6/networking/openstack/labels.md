@@ -42,7 +42,7 @@ recommended for [multiple region deployments](multiple-regions)) the namespace w
 
 > **Note**: To allow {{site.prodname}} to provide the project name and parent ID labels,
 > you must give Neutron the 'admin' role within your cluster:
-> ```
+> ```bash
 > openstack role add --project service --user neutron admin
 > ```
 > or some equivalent privilege that allows the Neutron server to do admin-level queries of
@@ -89,7 +89,7 @@ that is derived from OpenStack security groups.  For example, to prevent any pos
 communication between the "superman" and "lexluthor" projects, you could configure the
 following.
 
-```yaml
+```bash
 calicoctl apply -f - <<EOF
 apiVersion: projectcalico.org/v3
 kind: GlobalNetworkPolicy

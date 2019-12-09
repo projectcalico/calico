@@ -220,14 +220,14 @@ working directory.
 Open the `install/kubernetes/istio-demo-auth.yaml` file in an
 editor, and locate the `istio-sidecar-injector` ConfigMap.  In the existing `istio-proxy` container, add a new `volumeMount`.
 
-```
+```yaml
         - mountPath: /var/run/dikastes
           name: dikastes-sock
 ```
 
 Add a new container to the template.
 
-```
+```yaml
       - name: dikastes
         image: {{page.registry}}{{site.imageNames["dikastes"]}}:{{site.data.versions[page.version].first.components["calico/dikastes"].version}}
         args: ["/dikastes", "server", "-l", "/var/run/dikastes/dikastes.sock", "-d", "/var/run/felix/nodeagent/socket", "--debug"]
@@ -240,7 +240,7 @@ Add a new container to the template.
 
 Add two new volumes.
 
-```
+```yaml
       - name: dikastes-sock
         emptyDir:
           medium: Memory

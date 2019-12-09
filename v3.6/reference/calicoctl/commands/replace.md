@@ -97,7 +97,7 @@ Description:
    ```
    Results indicate the policy does not exist.
 
-   ```bash
+   ```
    Failed to replace any 'policy' resources: resource does not exist: Policy(name=dbPolicy)
    ```
    {: .no-select-button}

@@ -49,13 +49,13 @@ procedure varies by datastore type.
 1. Use the following command to initiate a rolling update, after replacing
    `<manifest-file-name>` with the file name of your {{page.version}} manifest.
 
-   ```
+   ```bash
    kubectl apply -f <manifest-file-name>
    ```
 
 1. Watch the status of the upgrade as follows.
 
-   ```
+   ```bash
    watch kubectl get pods -n kube-system
    ```
 
@@ -108,13 +108,13 @@ procedure varies by datastore type.
 1. Use the following command to initiate a rolling update, after replacing
    `<manifest-file-name>` with the file name of your {{page.version}} manifest.
 
-   ```
+   ```bash
    kubectl apply -f <manifest-file-name>
    ```
 
 1. Watch the status of the upgrade as follows.
 
-   ```
+   ```bash
    watch kubectl get pods -n kube-system
    ```
 

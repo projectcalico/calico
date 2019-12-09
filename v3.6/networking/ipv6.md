@@ -95,7 +95,7 @@ steps below.
    to the desired pool, it should match the `--cluster-cidr` passed to the
    kube-controller-manager and to kube-proxy.
 
-   ```
+   ```yaml
    - name: CALICO_IPV6POOL_CIDR
      value: "fd20::0/112"
    - name: IP6
