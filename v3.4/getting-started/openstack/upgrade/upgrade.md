@@ -20,12 +20,12 @@ This part of the upgrade procedure varies slightly according to which operating 
 
 1. On all nodes, change the location of the {{site.prodname}} packages to point to the 3.x repo:
 
-   ```
+   ```bash
    sudo sed -i 's/calico-2.6/calico-3.1/g' /etc/yum.repos.d/calico.repo
    ```
 
 1. On all compute nodes, update packages:
-   ```
+   ```bash
    sudo yum update
    ```
    We recommend upgrading the whole distribution as shown here. In case you prefer to upgrade particular packages only, those needed for a {{site.prodname}} compute node are the following.
@@ -41,7 +41,7 @@ This part of the upgrade procedure varies slightly according to which operating 
 <br><br>
 
 1. Use the following command on the compute nodes to confirm that Felix has upgraded to v3.1.x.
-   ```
+   ```bash
    calico-felix --version
    ```
    It should return `v3.1.x`.
@@ -55,7 +55,7 @@ This part of the upgrade procedure varies slightly according to which operating 
    in `/etcd/calico/felix.cfg` at this point.
 
 1. On all control nodes, update packages:
-   ```
+   ```bash
    sudo yum update
    ```
    We recommend upgrading the whole distribution as shown here. In case you prefer to upgrade particular packages only, those needed for a {{site.prodname}} control node are the following.
@@ -66,12 +66,12 @@ This part of the upgrade procedure varies slightly according to which operating 
 <br><br>
 
 1. On all control nodes, restart `neutron-server`:
-   ```
+   ```bash
    sudo systemctl restart neutron-server
    ```
 
 1. If you ran `calico-upgrade` earlier to migrate non-openstack data, on the control node run:
-   ```
+   ```bash
    calico-upgrade complete
    ```
 
@@ -86,7 +86,7 @@ This part of the upgrade procedure varies slightly according to which operating 
 ## Upgrading an OpenStack cluster based on Ubuntu
 1. On all nodes, change the location of the {{site.prodname}} packages to point to the 3.x repo:
 
-   ```
+   ```bash
    sudo bash -c 'cat > /etc/apt/sources.list.d/project-calico-calico-3_1-trusty.list' << EOF
    deb http://ppa.launchpad.net/project-calico/calico-3.1/ubuntu trusty main
    # deb-src http://ppa.launchpad.net/project-calico/calico-3.1/ubuntu trusty main
@@ -94,7 +94,7 @@ This part of the upgrade procedure varies slightly according to which operating 
    ```
 
 1. On all compute nodes, update packages:
-   ```
+   ```bash
    sudo apt-get update
    sudo apt-get install calico-compute calico-felix calico-common \
                         python-etcd networking-calico calico-dhcp-agent
@@ -102,7 +102,7 @@ This part of the upgrade procedure varies slightly according to which operating 
    ```
 
 1. Use the following command on the compute nodes to confirm that Felix has upgraded to v3.1.x.
-   ```
+   ```bash
    calico-felix --version
    ```
 
@@ -117,18 +117,18 @@ This part of the upgrade procedure varies slightly according to which operating 
    in `/etcd/calico/felix.cfg` at this point.
 
 1. On all control nodes, update packages:
-   ```
+   ```bash
    sudo apt-get update
    sudo apt-get install calico-control calico-common python-etcd networking-calico
    ```
 
 1. On all control nodes, restart `neutron-server`:
-   ```
+   ```bash
    sudo service neutron-server restart
    ```
 
 1. If you ran `calico-upgrade` earlier to migrate non-openstack data, on the control node run:
-   ```
+   ```bash
    calico-upgrade complete
    ```
 

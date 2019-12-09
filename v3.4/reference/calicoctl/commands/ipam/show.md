@@ -40,7 +40,7 @@ Description:
 
    The following results indicate that the IP is not assigned to an endpoint.
 
-   ```bash
+   ```
    Results
    IP 192.168.1.2 is not currently assigned
    ```
@@ -54,7 +54,7 @@ Description:
 
    Results show that a basic Docker container has the assigned IP.
 
-   ```bash
+   ```
    No attributes defined for 192.168.1.1
    ```
    {: .no-select-button}

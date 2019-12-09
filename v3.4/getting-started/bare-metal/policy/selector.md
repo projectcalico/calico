@@ -10,7 +10,7 @@ endpoints that match particular label selectors.
 
 For example, you could add a second policy for webserver access:
 
-```
+```bash
 cat << EOF | dist/calicoctl create -f -
 - apiVersion: projectcalico.org/v3
   kind: GlobalNetworkPolicy

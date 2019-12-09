@@ -23,7 +23,7 @@ a user has already set up.
 
 **Sample Inventory File:**
 
-```
+```inventory
 [OSEv3:children]
 masters
 nodes

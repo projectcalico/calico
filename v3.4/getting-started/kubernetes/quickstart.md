@@ -43,7 +43,7 @@ To deploy a cluster suitable for production, refer to [Installation](/{{page.ver
 
 1. Initialize the master using the following command.
 
-   ```
+   ```bash
    sudo kubeadm init --pod-network-cidr=192.168.0.0/16
    ```
 
@@ -54,7 +54,7 @@ To deploy a cluster suitable for production, refer to [Installation](/{{page.ver
 1. Execute the following commands to configure kubectl (also returned by
    `kubeadm init`).
 
-   ```
+   ```bash
    mkdir -p $HOME/.kube
    sudo cp -i /etc/kubernetes/admin.conf $HOME/.kube/config
    sudo chown $(id -u):$(id -g) $HOME/.kube/config
@@ -62,7 +62,7 @@ To deploy a cluster suitable for production, refer to [Installation](/{{page.ver
 
 1. Install an etcd instance with the following command.
 
-   ```
+   ```bash
    kubectl apply -f \
    {{site.url}}/{{page.version}}/getting-started/kubernetes/installation/hosted/etcd.yaml
    ```
@@ -81,7 +81,7 @@ To deploy a cluster suitable for production, refer to [Installation](/{{page.ver
 
 1. Install {{site.prodname}} with the following command.
 
-   ```
+   ```bash
    kubectl apply -f \
    {{site.url}}/{{page.version}}/getting-started/kubernetes/installation/hosted/calico.yaml
    ```
@@ -108,7 +108,7 @@ To deploy a cluster suitable for production, refer to [Installation](/{{page.ver
 
 1. Confirm that all of the pods are running with the following command.
 
-   ```
+   ```bash
    watch kubectl get pods --all-namespaces
    ```
 
@@ -134,7 +134,7 @@ To deploy a cluster suitable for production, refer to [Installation](/{{page.ver
 1. Remove the taints on the master so that you can schedule pods
    on it.
 
-   ```
+   ```bash
    kubectl taint nodes --all node-role.kubernetes.io/master-
    ```
 
@@ -148,7 +148,7 @@ To deploy a cluster suitable for production, refer to [Installation](/{{page.ver
 1. Confirm that you now have a node in your cluster with the
    following command.
 
-   ```
+   ```bash
    kubectl get nodes -o wide
    ```
 

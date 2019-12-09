@@ -11,7 +11,7 @@ You can quickly and easily deploy such a cluster by following one of the [instal
 
 This guide will deploy pods in a Kubernetes namespace.  Let's create the `Namespace` object for this guide.
 
-```
+```bash
 kubectl create ns policy-demo
 ```
 
@@ -21,7 +21,7 @@ We'll use Kubernetes `Deployment` objects to easily create pods in the namespace
 
 1. Create some nginx pods in the `policy-demo` namespace.
 
-   ```shell
+   ```bash
    kubectl run --namespace=policy-demo nginx --replicas=2 --image=nginx
    ```
 
@@ -39,7 +39,7 @@ We'll use Kubernetes `Deployment` objects to easily create pods in the namespace
 
    This should open up a shell session inside the `access` pod, as shown below.
 
-   ```bash
+   ```
    Waiting for pod policy-demo/access-472357175-y0m47 to be running, status is Pending, pod ready: false
 
    If you don't see a command prompt, try pressing enter.
@@ -64,7 +64,7 @@ Let's turn on isolation in our `policy-demo` namespace.  {{site.prodname}} will 
 
 Running the following command creates a NetworkPolicy which implements a default deny behavior for all pods in the `policy-demo` namespace.
 
-```
+```bash
 kubectl create -f - <<EOF
 kind: NetworkPolicy
 apiVersion: networking.k8s.io/v1
@@ -81,13 +81,13 @@ EOF
 
 This will prevent all access to the nginx service.  We can see the effect by trying to access the service again.
 
-```
+```bash
 kubectl run --namespace=policy-demo access --rm -ti --image busybox /bin/sh
 ```
 
 This should open up a shell session inside the `access` pod, as shown below.
 
-```bash
+```
 Waiting for pod policy-demo/access-472357175-y0m47 to be running, status is Pending, pod ready: false
 
 If you don't see a command prompt, try pressing enter.
@@ -104,7 +104,7 @@ wget -q --timeout=5 nginx -O -
 
 The request should time out after 5 seconds.
 
-```bash
+```
 wget: download timed out
 / #
 ```
@@ -119,7 +119,7 @@ from anywhere else.
 
 Create a network policy `access-nginx` with the following contents:
 
-```
+```bash
 kubectl create -f - <<EOF
 kind: NetworkPolicy
 apiVersion: networking.k8s.io/v1
@@ -146,13 +146,13 @@ EOF
 
 We should now be able to access the service from the `access` pod.
 
-```
+```bash
 kubectl run --namespace=policy-demo access --rm -ti --image busybox /bin/sh
 ```
 
 This should open up a shell session inside the `access` pod, as shown below.
 
-```bash
+```
 Waiting for pod policy-demo/access-472357175-y0m47 to be running, status is Pending, pod ready: false
 
 If you don't see a command prompt, try pressing enter.
@@ -176,7 +176,7 @@ kubectl run --namespace=policy-demo cant-access --rm -ti --image busybox /bin/sh
 
 This should open up a shell session inside the `cant-access` pod, as shown below.
 
-```bash
+```
 Waiting for pod policy-demo/cant-access-472357175-y0m47 to be running, status is Pending, pod ready: false
 
 If you don't see a command prompt, try pressing enter.
@@ -201,7 +201,7 @@ wget: download timed out
 
 You can clean up the demo by deleting the demo namespace.
 
-```shell
+```bash
 kubectl delete ns policy-demo
 ```
 
