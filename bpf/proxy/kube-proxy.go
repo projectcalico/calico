@@ -164,7 +164,7 @@ func (kp *KubeProxy) OnHostIPsUpdate(IPs []net.IP) {
 	case kp.hostIPUpdates <- IPs:
 		// nothing
 	default:
-		// in case we would block, drop the no stale update and replace it
+		// in case we would block, drop the now stale update and replace it
 		// with a new one. Do it non-blocking way in case it was just consumed.
 		select {
 		case <-kp.hostIPUpdates:
