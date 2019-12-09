@@ -189,6 +189,7 @@ func StartDataplaneDriver(configParams *config.Config,
 			BPFLogLevel:                     configParams.BPFLogLevel,
 			BPFDataIfacePattern:             configParams.BPFDataIfacePattern,
 			BPFCgroupV2:                     configParams.BPFCgroupV2,
+			BPFMapRepin:                     configParams.BPFMapRepinEnabled,
 			XDPEnabled:                      configParams.XDPEnabled,
 			XDPAllowGeneric:                 configParams.GenericXDPEnabled,
 			BPFConntrackTimeouts:            conntrack.DefaultTimeouts(), // FIXME make timeouts configurable

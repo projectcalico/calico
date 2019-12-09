@@ -19,6 +19,8 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/projectcalico/felix/bpf"
+
 	"github.com/docopt/docopt-go"
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
@@ -70,12 +72,13 @@ var natDelCmd = &cobra.Command{
 }
 
 func dump(cmd *cobra.Command) error {
-	natMap, err := nat.LoadFrontendMap(nat.FrontendMap())
+	mc := &bpf.MapContext{}
+	natMap, err := nat.LoadFrontendMap(nat.FrontendMap(mc))
 	if err != nil {
 		return err
 	}
 
-	back, err := nat.LoadBackendMap(nat.BackendMap())
+	back, err := nat.LoadBackendMap(nat.BackendMap(mc))
 	if err != nil {
 		return err
 	}
@@ -191,7 +194,7 @@ func (cmd *natFrontend) ArgsSet(c *cobra.Command, args []string) error {
 }
 
 func (cmd *natFrontend) RunSet(c *cobra.Command, _ []string) {
-	natMap := nat.FrontendMap()
+	natMap := nat.FrontendMap(&bpf.MapContext{})
 	if err := natMap.EnsureExists(); err != nil {
 		log.WithError(err).Error("Failed to access NATMap")
 	}
@@ -237,7 +240,7 @@ func (cmd *natFrontend) ArgsDel(c *cobra.Command, args []string) error {
 }
 
 func (cmd *natFrontend) RunDel(c *cobra.Command, _ []string) {
-	natMap := nat.FrontendMap()
+	natMap := nat.FrontendMap(&bpf.MapContext{})
 	if err := natMap.EnsureExists(); err != nil {
 		log.WithError(err).Error("Failed to access NATMap")
 	}
@@ -322,7 +325,8 @@ func (cmd *natBackend) ArgsSet(c *cobra.Command, args []string) error {
 }
 
 func (cmd *natBackend) RunSet(c *cobra.Command, _ []string) {
-	m := nat.BackendMap()
+	mc := &bpf.MapContext{}
+	m := nat.BackendMap(mc)
 	if err := m.EnsureExists(); err != nil {
 		log.WithError(err).Error("Failed to access NATMap")
 	}
@@ -368,7 +372,8 @@ func (cmd *natBackend) ArgsDel(c *cobra.Command, args []string) error {
 }
 
 func (cmd *natBackend) RunDel(c *cobra.Command, _ []string) {
-	m := nat.BackendMap()
+	mc := &bpf.MapContext{}
+	m := nat.BackendMap(mc)
 	if err := m.EnsureExists(); err != nil {
 		log.WithError(err).Error("Failed to access NATMap")
 	}

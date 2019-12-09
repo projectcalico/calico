@@ -34,8 +34,8 @@ const ipSetEntrySize = 20
 
 type IPSetEntry [ipSetEntrySize]byte
 
-func Map() bpf.Map {
-	return bpf.NewPinnedMap(bpf.MapParameters{
+func Map(mc *bpf.MapContext) bpf.Map {
+	return mc.NewPinnedMap(bpf.MapParameters{
 		Filename:   "/sys/fs/bpf/tc/globals/cali_v4_ip_sets",
 		Type:       "lpm_trie",
 		KeySize:    ipSetEntrySize,

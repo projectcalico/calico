@@ -108,6 +108,6 @@ var MapParameters = bpf.MapParameters{
 	Flags:      unix.BPF_F_NO_PREALLOC,
 }
 
-func Map() bpf.Map {
-	return bpf.NewPinnedMap(MapParameters)
+func Map(mc *bpf.MapContext) bpf.Map {
+	return mc.NewPinnedMap(MapParameters)
 }

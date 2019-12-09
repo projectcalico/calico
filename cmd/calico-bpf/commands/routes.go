@@ -18,6 +18,8 @@ import (
 	"fmt"
 	"sort"
 
+	"github.com/projectcalico/felix/bpf"
+
 	"github.com/projectcalico/felix/bpf/routes"
 	"github.com/projectcalico/felix/ip"
 
@@ -47,7 +49,8 @@ var routesCmd = &cobra.Command{
 }
 
 func dumpRoutes() error {
-	routesMap := routes.Map()
+	mc := &bpf.MapContext{}
+	routesMap := routes.Map(mc)
 
 	var dests []ip.CIDR
 	valueByDest := map[ip.CIDR]routes.Value{}

@@ -18,6 +18,8 @@ import (
 	"fmt"
 	"sort"
 
+	"github.com/projectcalico/felix/bpf"
+
 	"github.com/projectcalico/felix/bpf/ipsets"
 
 	log "github.com/sirupsen/logrus"
@@ -46,7 +48,7 @@ var ipsetsCmd = &cobra.Command{
 }
 
 func dumpIPSets() error {
-	ipsetMap := ipsets.Map()
+	ipsetMap := ipsets.Map(&bpf.MapContext{})
 	membersBySet := map[uint64][]string{}
 	err := ipsetMap.Iter(func(k, v []byte) {
 		var entry ipsets.IPSetEntry

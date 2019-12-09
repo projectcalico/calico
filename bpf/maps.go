@@ -48,17 +48,23 @@ type MapParameters struct {
 	Flags      int
 }
 
-func NewPinnedMap(params MapParameters) Map {
+type MapContext struct {
+	RepinningEnabled bool
+}
+
+func (c *MapContext) NewPinnedMap(params MapParameters) Map {
 	if len(params.Name) >= unix.BPF_OBJ_NAME_LEN {
 		logrus.WithField("name", params.Name).Panic("Bug: BPF map name too long")
 	}
 	m := &PinnedMap{
+		context:       c,
 		MapParameters: params,
 	}
 	return m
 }
 
 type PinnedMap struct {
+	context *MapContext
 	MapParameters
 
 	fdLoaded bool
@@ -185,6 +191,20 @@ func (b *PinnedMap) EnsureExists() error {
 		return err
 	}
 	_, err = os.Stat(b.Filename)
+
+	if err != nil {
+		if !os.IsNotExist(err) {
+			return err
+		}
+		if b.context.RepinningEnabled {
+			logrus.WithField("name", b.Name).Info("Looking for map by name (to repin it)")
+			err = RepinMap(b.Name, b.Filename)
+			if err != nil && !os.IsNotExist(err) {
+				return err
+			}
+		}
+	}
+
 	if err == nil {
 		b.fd, err = GetPinnedMapFD(b.Filename)
 		if err == nil {
@@ -193,9 +213,7 @@ func (b *PinnedMap) EnsureExists() error {
 		}
 		return err
 	}
-	if !os.IsNotExist(err) {
-		return err
-	}
+
 	cmd := exec.Command("bpftool", "map", "create", b.Filename,
 		"type", b.Type,
 		"key", fmt.Sprint(b.KeySize),
@@ -215,4 +233,34 @@ func (b *PinnedMap) EnsureExists() error {
 		logrus.WithField("fd", b.fd).WithField("name", b.Filename).Info("Loaded map file descriptor.")
 	}
 	return err
+}
+
+type bpftoolMapMeta struct {
+	ID   int    `json:"id"`
+	Name string `json:"name"`
+}
+
+func RepinMap(name string, filename string) error {
+	cmd := exec.Command("bpftool", "map", "list", "-j")
+	out, err := cmd.Output()
+	if err != nil {
+		return errors.Wrap(err, "bpftool map list failed")
+	}
+	logrus.WithField("maps", string(out)).Debug("Got map metadata.")
+
+	var maps []bpftoolMapMeta
+	err = json.Unmarshal(out, &maps)
+	if err != nil {
+		return errors.Wrap(err, "bpftool returned bad JSON")
+	}
+
+	for _, m := range maps {
+		if m.Name == name {
+			// Found the map, try to repin it.
+			cmd := exec.Command("bpftool", "map", "pin", "id", fmt.Sprint(m.ID), filename)
+			return errors.Wrap(cmd.Run(), "bpftool failed to repin map")
+		}
+	}
+
+	return os.ErrNotExist
 }

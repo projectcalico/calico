@@ -176,8 +176,8 @@ var FrontendMapParameters = bpf.MapParameters{
 	Flags:      unix.BPF_F_NO_PREALLOC,
 }
 
-func FrontendMap() bpf.Map {
-	return bpf.NewPinnedMap(FrontendMapParameters)
+func FrontendMap(mc *bpf.MapContext) bpf.Map {
+	return mc.NewPinnedMap(FrontendMapParameters)
 }
 
 var BackendMapParameters = bpf.MapParameters{
@@ -190,8 +190,8 @@ var BackendMapParameters = bpf.MapParameters{
 	Flags:      unix.BPF_F_NO_PREALLOC,
 }
 
-func BackendMap() bpf.Map {
-	return bpf.NewPinnedMap(BackendMapParameters)
+func BackendMap(mc *bpf.MapContext) bpf.Map {
+	return mc.NewPinnedMap(BackendMapParameters)
 }
 
 // NATMapMem represents FrontendMap loaded into memory
