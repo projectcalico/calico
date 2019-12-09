@@ -180,19 +180,20 @@ func StartDataplaneDriver(configParams *config.Config,
 				}
 				logutils.DumpHeapMemoryProfile(configParams.DebugMemoryProfilePath)
 			},
-			HealthAggregator:                healthAggregator,
-			DebugSimulateDataplaneHangAfter: configParams.DebugSimulateDataplaneHangAfter,
-			ExternalNodesCidrs:              configParams.ExternalNodesCIDRList,
-			SidecarAccelerationEnabled:      configParams.SidecarAccelerationEnabled,
-			BPFEnabled:                      configParams.BPFEnabled,
-			BPFConnTimeLBEnabled:            configParams.BPFConnectTimeLoadBalancingEnabled,
-			BPFLogLevel:                     configParams.BPFLogLevel,
-			BPFDataIfacePattern:             configParams.BPFDataIfacePattern,
-			BPFCgroupV2:                     configParams.BPFCgroupV2,
-			BPFMapRepin:                     configParams.BPFMapRepinEnabled,
-			XDPEnabled:                      configParams.XDPEnabled,
-			XDPAllowGeneric:                 configParams.GenericXDPEnabled,
-			BPFConntrackTimeouts:            conntrack.DefaultTimeouts(), // FIXME make timeouts configurable
+			HealthAggregator:                   healthAggregator,
+			DebugSimulateDataplaneHangAfter:    configParams.DebugSimulateDataplaneHangAfter,
+			ExternalNodesCidrs:                 configParams.ExternalNodesCIDRList,
+			SidecarAccelerationEnabled:         configParams.SidecarAccelerationEnabled,
+			BPFEnabled:                         configParams.BPFEnabled,
+			BPFConnTimeLBEnabled:               configParams.BPFConnectTimeLoadBalancingEnabled,
+			BPFKubeProxyIptablesCleanupEnabled: configParams.BPFKubeProxyIptablesCleanupEnabled,
+			BPFLogLevel:                        configParams.BPFLogLevel,
+			BPFDataIfacePattern:                configParams.BPFDataIfacePattern,
+			BPFCgroupV2:                        configParams.BPFCgroupV2,
+			BPFMapRepin:                        configParams.BPFMapRepinEnabled,
+			XDPEnabled:                         configParams.XDPEnabled,
+			XDPAllowGeneric:                    configParams.GenericXDPEnabled,
+			BPFConntrackTimeouts:               conntrack.DefaultTimeouts(), // FIXME make timeouts configurable
 
 			KubeClientSet: k8sClientSet,
 		}
