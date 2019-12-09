@@ -33,7 +33,7 @@ datastore type and number of nodes.
 1. If your cluster has RBAC enabled, issue the following command to
    configure the roles and bindings that {{site.prodname}} requires.
 
-   ```
+   ```bash
    kubectl apply -f \
    {{site.url}}/{{page.version}}/getting-started/kubernetes/installation/rbac.yaml
    ```
@@ -77,7 +77,7 @@ datastore type and number of nodes.
 1. If your cluster has RBAC enabled, issue the following command to
    configure the roles and bindings that {{site.prodname}} requires.
 
-   ```
+   ```bash
    kubectl apply -f \
    {{site.url}}/{{page.version}}/getting-started/kubernetes/installation/hosted/rbac-kdd.yaml
    ```
@@ -110,7 +110,7 @@ datastore type and number of nodes.
 1. If your cluster has RBAC enabled, issue the following command to
    configure the roles and bindings that {{site.prodname}} requires.
 
-   ```
+   ```bash
    kubectl apply -f \
    {{site.url}}/{{page.version}}/getting-started/kubernetes/installation/hosted/rbac-kdd.yaml
    ```
@@ -132,7 +132,7 @@ datastore type and number of nodes.
 1. Modify the replica count in the`Deployment` named `calico-typha`
    to the desired number of replicas.
 
-   ```
+   ```yaml
    apiVersion: apps/v1beta1
    kind: Deployment
    metadata:

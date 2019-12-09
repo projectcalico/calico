@@ -58,7 +58,7 @@ installed.
 
 Run the following command to start the Route Reflector container image.
 
-```
+```bash
 docker run --privileged --net=host -d                              \
            -e IP=<IPv4_RR>                                         \
            [-e IP6=<IPv6_RR>]                                      \
@@ -91,7 +91,7 @@ with your etcd instance.
 When starting the Route Reflector container image, you need to mount the
 certificate files and environment variable filepaths for each file:
 
-```
+```bash
 docker run --privileged --net=host -d                              \
            -e IP=<IPv4_RR>                                         \
            [-e IP6=<IPv6_RR>]                                      \
@@ -124,7 +124,7 @@ container.
 
 Run the following command to start the Route Reflector container image.
 
-```
+```bash
 docker run --privileged --net=host -d                              \
            -e DATASTORE_TYPE=kubernetes                            \
            -e KUBECONFIG=/kubeconfig                               \
@@ -161,15 +161,15 @@ global configuration.
 
 From any {{site.prodname}} Docker node, run the following:
 
-```
+```bash
 # Get the current bgpconfig settings
-$ calicoctl get bgpconfig -o yaml > bgp.yaml
+calicoctl get bgpconfig -o yaml > bgp.yaml
 
 # Set nodeToNodeMeshEnabled to false
-$ vim bgp.yaml
+vim bgp.yaml
 
 # Replace the current bgpconfig settings
-$ calicoctl replace -f bgp.yaml
+calicoctl replace -f bgp.yaml
 ```
 
 ### Determine the AS number for your network
@@ -191,9 +191,9 @@ global configuration.
 Use `calicoctl` to configure each route reflector as a global peer (i.e. it
 peers with every node in the deployment):
 
-```
+```bash
 calicoctl bgp peer add <IP_RR> as <AS_NUM>
-$ calicoctl create -f - << EOF
+calicoctl create -f - << EOF
 apiVersion: projectcalico.org/v3
 kind: BGPPeer
 metadata:
@@ -228,8 +228,8 @@ example, you may have:
 To configure a Route Reflector as a peer of a specific node, run the following
 *from the node*:
 
-```
-$ cat << EOF | calicoctl create -f -
+```bash
+cat << EOF | calicoctl create -f -
 apiVersion: projectcalico.org/v3
 kind: BGPPeer
 metadata:

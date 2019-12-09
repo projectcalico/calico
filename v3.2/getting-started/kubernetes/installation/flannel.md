@@ -32,7 +32,7 @@ section that matches your type.
 1. If your cluster has RBAC enabled, issue the following command to
    configure the roles and bindings that {{site.prodname}} requires.
 
-   ```
+   ```bash
    kubectl apply -f \
    {{site.url}}/{{page.version}}/getting-started/kubernetes/installation/hosted/canal/rbac.yaml
    ```
@@ -61,7 +61,7 @@ etcd, complete the following steps.
 1. If your cluster has RBAC enabled, issue the following command to
    configure the roles and bindings that {{site.prodname}} requires.
 
-   ```
+   ```bash
    kubectl apply -f \
    {{site.url}}/{{page.version}}/getting-started/kubernetes/installation/hosted/canal/rbac-etcd.yaml
    ```

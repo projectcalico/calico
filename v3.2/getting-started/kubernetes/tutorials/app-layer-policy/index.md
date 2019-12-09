@@ -87,7 +87,7 @@ You will use the `istio-ingressgateway` service to access the YAO Bank applicati
 
    whose output should be similar to
 
-   ```bash
+   ```
    NAME                   TYPE           CLUSTER-IP       EXTERNAL-IP     PORT(S)                                      AGE
    istio-ingressgateway   LoadBalancer   172.21.109.129   130.211.10.121  80:31380/TCP,443:31390/TCP,31400:31400/TCP   17h
    ```

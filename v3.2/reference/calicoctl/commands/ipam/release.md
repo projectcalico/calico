@@ -35,8 +35,8 @@ Description:
 
 ### Examples
 
-```
-$ calicoctl ipam release --ip=192.168.1.2
+```bash
+calicoctl ipam release --ip=192.168.1.2
 ```
 
 ### General options
