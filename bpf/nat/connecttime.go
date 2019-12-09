@@ -157,8 +157,8 @@ func InstallConnectTimeLoadBalancer(frontendMap, backendMap bpf.Map, cgroupv2 st
 
 	cmd := exec.Command("bpftool", "prog", "loadall", "/tmp/calico_connect4.o", progPinDir,
 		"type", "cgroup/connect4",
-		"map", "name", "cali_nat_v4", "pinned", frontendMap.Path(),
-		"map", "name", "cali_natbe_v4", "pinned", backendMap.Path(),
+		"map", "name", "cali_v4_nat_fe", "pinned", frontendMap.Path(),
+		"map", "name", "cali_v4_nat_be", "pinned", backendMap.Path(),
 	)
 	log.WithField("args", cmd.Args).Info("About to run bpftool")
 	out, err = cmd.CombinedOutput()

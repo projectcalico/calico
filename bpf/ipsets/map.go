@@ -36,12 +36,12 @@ type IPSetEntry [ipSetEntrySize]byte
 
 func Map() bpf.Map {
 	return bpf.NewPinnedMap(bpf.MapParameters{
-		Filename:   "/sys/fs/bpf/tc/globals/calico_ip_sets",
+		Filename:   "/sys/fs/bpf/tc/globals/cali_v4_ip_sets",
 		Type:       "lpm_trie",
 		KeySize:    ipSetEntrySize,
 		ValueSize:  4,
 		MaxEntries: 1024 * 1024,
-		Name:       "calico_ip_sets",
+		Name:       "cali_v4_ip_sets",
 		Flags:      unix.BPF_F_NO_PREALLOC,
 	})
 }

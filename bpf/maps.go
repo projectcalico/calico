@@ -21,6 +21,8 @@ import (
 	"os/exec"
 	"strconv"
 
+	"golang.org/x/sys/unix"
+
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 )
@@ -47,6 +49,9 @@ type MapParameters struct {
 }
 
 func NewPinnedMap(params MapParameters) Map {
+	if len(params.Name) >= unix.BPF_OBJ_NAME_LEN {
+		logrus.WithField("name", params.Name).Panic("Bug: BPF map name too long")
+	}
 	m := &PinnedMap{
 		MapParameters: params,
 	}
