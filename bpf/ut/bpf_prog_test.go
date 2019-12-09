@@ -49,7 +49,7 @@ func init() {
 
 var (
 	hostIP            = net.IPv4(10, 10, 0, 1)
-	maxMTU            = uint16(700)
+	natTunnelMTU      = uint16(700)
 	testVxlanPort     = uint16(5665)
 	rulesDefaultAllow = [][][]*proto.Rule{{{{Action: "Allow"}}}}
 )
@@ -109,7 +109,7 @@ func runBpfTest(t *testing.T, section string, rules [][][]*proto.Rule, testFn fu
 		intdataplane.CompileWithLogPrefix(section),
 		intdataplane.CompileWithHostIP(hostIP),
 		intdataplane.CompileWithVxlanPort(testVxlanPort),
-		intdataplane.CompileWithMaxMTU(maxMTU),
+		intdataplane.CompileWithNATTunnelMTU(natTunnelMTU),
 	)
 	Expect(err).NotTo(HaveOccurred())
 
@@ -263,7 +263,7 @@ func runBpfUnitTest(t *testing.T, source string, testFn func(bpfProgRunFn)) {
 		intdataplane.CompileWithVxlanPort(testVxlanPort),
 		intdataplane.CompileWithIncludePath(curwd+"/progs"),
 		intdataplane.CompileWithHostIP(hostIP),
-		intdataplane.CompileWithMaxMTU(maxMTU),
+		intdataplane.CompileWithNATTunnelMTU(natTunnelMTU),
 	)
 	Expect(err).NotTo(HaveOccurred())
 

@@ -422,7 +422,7 @@ func TestNATNodePort(t *testing.T) {
 }
 
 func TestNATNodePortICMPTooBig(t *testing.T) {
-	_, ipv4, l4, _, pktBytes, err := testPacket(nil, nil, nil, make([]byte, maxMTU))
+	_, ipv4, l4, _, pktBytes, err := testPacket(nil, nil, nil, make([]byte, natTunnelMTU))
 	Expect(err).NotTo(HaveOccurred())
 	udp := l4.(*layers.UDP)
 
@@ -465,6 +465,6 @@ func TestNATNodePortICMPTooBig(t *testing.T) {
 		pktR := gopacket.NewPacket(res.dataOut, layers.LayerTypeEthernet, gopacket.Default)
 		fmt.Printf("pktR = %+v\n", pktR)
 
-		checkICMPTooBig(pktR, ipv4, udp, maxMTU)
+		checkICMPTooBig(pktR, ipv4, udp, natTunnelMTU)
 	})
 }

@@ -42,7 +42,7 @@ func TestICMPTooBig(t *testing.T) {
 		pktR := gopacket.NewPacket(res.dataOut, layers.LayerTypeEthernet, gopacket.Default)
 		fmt.Printf("pktR = %+v\n", pktR)
 
-		checkICMPTooBig(pktR, ipv4, udp, maxMTU)
+		checkICMPTooBig(pktR, ipv4, udp, natTunnelMTU)
 	})
 }
 

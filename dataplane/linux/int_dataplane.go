@@ -462,7 +462,14 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 
 		// Forwarding into a tunnel seems to fail silently, disable FIB lookup if tunnel is enabled for now.
 		fibLookupEnabled := !config.RulesConfig.IPIPEnabled && !config.RulesConfig.VXLANEnabled
-		dp.RegisterManager(newBPFEndpointManager(config.BPFLogLevel, fibLookupEnabled, config.RulesConfig.EndpointToHostAction == "DROP", config.BPFDataIfacePattern, ipSetIDAllocator))
+		dp.RegisterManager(newBPFEndpointManager(
+			config.BPFLogLevel,
+			fibLookupEnabled,
+			config.RulesConfig.EndpointToHostAction == "DROP",
+			config.BPFDataIfacePattern,
+			ipSetIDAllocator,
+			config.VXLANMTU,
+		))
 
 		// Pre-create the NAT maps so that later operations can assume access.
 		frontendMap := nat.FrontendMap()

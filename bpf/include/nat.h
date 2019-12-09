@@ -29,8 +29,8 @@
 
 #define CALI_ENCAP_EXTRA_SIZE	50
 
-#ifndef CALI_MAX_MTU
-#define CALI_MAX_MTU	(1500 - CALI_ENCAP_EXTRA_SIZE)
+#ifndef CALI_NAT_TUNNEL_MTU
+#define CALI_NAT_TUNNEL_MTU	(1500 - CALI_ENCAP_EXTRA_SIZE)
 #endif
 
 // Map: NAT level one.  Dest IP and port -> ID and num backends.
@@ -246,7 +246,7 @@ static CALI_BPF_INLINE int is_vxlan_tunnel(struct iphdr *ip)
 	return ip->protocol == IPPROTO_UDP && udp->dest == host_to_be16(CALI_VXLAN_PORT);
 }
 
-#define vxlan_v4_encap_too_big(skb) ((skb)->len + CALI_ENCAP_EXTRA_SIZE > CALI_MAX_MTU)
+#define vxlan_v4_encap_too_big(skb) ((skb)->len + CALI_ENCAP_EXTRA_SIZE > CALI_NAT_TUNNEL_MTU)
 
 static CALI_BPF_INLINE int icmp_v4_too_big(struct __sk_buff *skb)
 {
@@ -332,7 +332,7 @@ static CALI_BPF_INLINE int icmp_v4_too_big(struct __sk_buff *skb)
 	icmp = skb_ptr_after(skb, ip);
 	icmp->type = ICMP_DEST_UNREACH;
 	icmp->code = ICMP_FRAG_NEEDED;
-	icmp->un.frag.mtu = host_to_be16(CALI_MAX_MTU);
+	icmp->un.frag.mtu = host_to_be16(CALI_NAT_TUNNEL_MTU);
 	icmp->checksum = 0;
 
 	ip_csum = bpf_csum_diff(0, 0, (void *)ip, sizeof(*ip), 0);
