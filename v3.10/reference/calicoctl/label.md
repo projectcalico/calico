@@ -94,7 +94,7 @@ Description:
 
    Results indicate that label was successfully applied.
 
-   ```bash
+   ```
    Successfully set label cluster on nodes node1
    ```
    {: .no-select-button}
@@ -106,7 +106,7 @@ Description:
 
    Results indicate that label was successfully overwritten.
 
-   ```bash
+   ```
    Successfully updated label cluster on nodes node1
    ```
    {: .no-select-button}
@@ -118,7 +118,7 @@ Description:
 
    Results indicate that the label was successfully removed.
 
-   ```bash
+   ```
    Successfully removed label cluster from nodes node1.
    ```
    {: .no-select-button}

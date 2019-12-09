@@ -47,7 +47,7 @@ Using the OpenStack API, it is difficult to apply policy to cross-region network
 
 In the following example, we create a **GlobalNetworkPolicy** that is applied before any OpenStack security group policy. It prevents all ingress communication between the OpenStack **superman** and **lexluthor** projects. We use the predefined {{site.prodname}} VM endpoint label, **openstack-project-name**, to identify projects.
 
-```
+```yaml
 apiVersion: projectcalico.org/v3
 kind: GlobalNetworkPolicy
 metadata:
@@ -81,7 +81,7 @@ spec:
 
 In the following example, we use the predefined VM endpoint label, **openstack-security_group_ID**. Traffic is allowed to VMs with the label, **openstack-a773…** on port 80, from VMs in any region with the label, **openstack-85cc…**.
 
-```
+```yaml
 apiVersion: projectcalico.org/v3
 kind: GlobalNetworkPolicy
 metadata:

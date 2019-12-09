@@ -14,7 +14,7 @@ will need access to all {{site.prodname}} custom resources, as well as some asso
 
 Create the role
 
-```
+```bash
 kubectl apply -f - <<EOF
 kind: ClusterRole
 apiVersion: rbac.authorization.k8s.io/v1beta1
@@ -66,7 +66,7 @@ To test out the network admin role, we'll create a user named Nik grant them the
 
 On the Kubernetes master node, create the key and certificate signing request. Note that we include `/O=network-admins` in the subject. This places Nik in the `network-admins` group.
 
-```
+```bash
 openssl req -newkey rsa:4096 \
            -keyout nik.key \
            -nodes \
@@ -76,7 +76,7 @@ openssl req -newkey rsa:4096 \
 
 We will sign this certificate using the main Kubernetes CA.
 
-```
+```bash
 sudo openssl x509 -req -in nik.csr \
                   -CA /etc/kubernetes/pki/ca.crt \
                   -CAkey /etc/kubernetes/pki/ca.key \
@@ -88,7 +88,7 @@ sudo chown ubuntu:ubuntu nik.crt
 
 Next, we create a kubeconfig file for Nik.
 
-```
+```bash
 APISERVER=$(kubectl config view -o jsonpath='{.clusters[0].cluster.server}')
 kubectl config set-cluster kubernetes \
     --certificate-authority=/etc/kubernetes/pki/ca.crt \
@@ -112,13 +112,13 @@ kubectl config use-context default --kubeconfig=nik.kubeconfig
 
 Bind the role to the group `network-admins`.
 
-```
+```bash
 kubectl create clusterrolebinding network-admins --clusterrole=network-admin --group=network-admins
 ```
 
 Test Nik's access by creating a global network set
 
-```
+```bash
 KUBECONFIG=./nik.kubeconfig calicoctl apply -f - <<EOF
 apiVersion: projectcalico.org/v3
 kind: GlobalNetworkSet
@@ -133,7 +133,7 @@ EOF
 
 Verify the global network set exists
 
-```
+```bash
 KUBECONFIG=./nik.kubeconfig calicoctl get globalnetworkset -o wide
 ```
 
@@ -147,7 +147,7 @@ niks-set   110.120.130.0/24,210.220.230.0/24
 
 Delete the global network set
 
-```
+```bash
 KUBECONFIG=./nik.kubeconfig calicoctl delete globalnetworkset niks-set
 ```
 
@@ -158,7 +158,7 @@ network policy for their service, but don't need to view or modify any global co
 
 Define the role
 
-```
+```bash
 kubectl apply -f - <<EOF
 kind: ClusterRole
 apiVersion: rbac.authorization.k8s.io/v1beta1
@@ -181,7 +181,7 @@ To test out the service owner role, we'll create a user named Sam and grant them
 
 On the Kubernetes master node, create the key and certificate signing request.
 
-```
+```bash
 openssl req -newkey rsa:4096 \
            -keyout sam.key \
            -nodes \
@@ -191,7 +191,7 @@ openssl req -newkey rsa:4096 \
 
 We will sign this certificate using the main Kubernetes CA.
 
-```
+```bash
 sudo openssl x509 -req -in sam.csr \
                   -CA /etc/kubernetes/pki/ca.crt \
                   -CAkey /etc/kubernetes/pki/ca.key \
@@ -203,7 +203,7 @@ sudo chown ubuntu:ubuntu sam.crt
 
 Next, we create a kubeconfig file for Sam.
 
-```
+```bash
 APISERVER=$(kubectl config view -o jsonpath='{.clusters[0].cluster.server}')
 kubectl config set-cluster kubernetes \
     --certificate-authority=/etc/kubernetes/pki/ca.crt \
@@ -227,19 +227,19 @@ kubectl config use-context default --kubeconfig=sam.kubeconfig
 
 We will limit Sam's access to a single namespace.  Create the namespace
 
-```
+```bash
 kubectl create namespace sam
 ```
 
 Bind the role to Sam in the namespace
 
-```
+```bash
 kubectl create rolebinding -n sam network-service-owner-sam --clusterrole=network-service-owner --user=sam
 ```
 
 Sam cannot create global network set resources (like Nik can as network admin)
 
-```
+```bash
 KUBECONFIG=./sam.kubeconfig calicoctl get globalnetworkset -o wide
 ```
 
@@ -252,7 +252,7 @@ connection is unauthorized: globalnetworksets.crd.projectcalico.org is forbidden
 
 However, Sam can create resources in their own namespace
 
-```
+```bash
 KUBECONFIG=./sam.kubeconfig calicoctl apply -f - <<EOF
 apiVersion: projectcalico.org/v3
 kind: NetworkSet
@@ -268,7 +268,7 @@ EOF
 
 Verify the resource exists
 
-```
+```bash
 KUBECONFIG=./sam.kubeconfig calicoctl get networksets -n sam
 ```
 
@@ -282,7 +282,7 @@ sam         sams-set
 
 Delete the NetworkSet
 
-```
+```bash
 KUBECONFIG=./sam.kubeconfig calicoctl delete networkset sams-set -n sam
 ```
 

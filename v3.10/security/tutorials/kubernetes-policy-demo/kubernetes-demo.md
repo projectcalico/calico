@@ -15,7 +15,7 @@ one of our [getting started guides]({{site.baseurl}}/{{page.version}}/getting-st
 
 ### 1) Create the frontend, backend, client, and management-ui apps.
 
-```shell
+```bash
 kubectl create -f {{site.url}}/{{page.version}}/security/tutorials/kubernetes-policy-demo/manifests/00-namespace.yaml
 kubectl create -f {{site.url}}/{{page.version}}/security/tutorials/kubernetes-policy-demo/manifests/01-management-ui.yaml
 kubectl create -f {{site.url}}/{{page.version}}/security/tutorials/kubernetes-policy-demo/manifests/02-backend.yaml
@@ -25,7 +25,7 @@ kubectl create -f {{site.url}}/{{page.version}}/security/tutorials/kubernetes-po
 
 Wait for all the pods to enter `Running` state.
 
-```shell
+```bash
 kubectl get pods --all-namespaces --watch
 ```
 > Note that it may take several minutes to download the necessary Docker images for this demo.
@@ -46,7 +46,7 @@ represented by a single node in the graph.
 
 Running following commands will prevent all access to the frontend, backend, and client Services.
 
-```shell
+```bash
 kubectl create -n stars -f {{site.url}}/{{page.version}}/security/tutorials/kubernetes-policy-demo/policies/default-deny.yaml
 kubectl create -n client -f {{site.url}}/{{page.version}}/security/tutorials/kubernetes-policy-demo/policies/default-deny.yaml
 ```
@@ -60,7 +60,7 @@ Now that we've enabled isolation, the UI can no longer access the pods, and so t
 
 Apply the following YAMLs to allow access from the management UI.
 
-```shell
+```bash
 kubectl create -f {{site.url}}/{{page.version}}/security/tutorials/kubernetes-policy-demo/policies/allow-ui.yaml
 kubectl create -f {{site.url}}/{{page.version}}/security/tutorials/kubernetes-policy-demo/policies/allow-ui-client.yaml
 ```
@@ -69,7 +69,7 @@ After a few seconds, refresh the UI - it should now show the Services, but they 
 
 ### 4) Create the backend-policy.yaml file to allow traffic from the frontend to the backend
 
-```shell
+```bash
 kubectl create -f {{site.url}}/{{page.version}}/security/tutorials/kubernetes-policy-demo/policies/backend-policy.yaml
 ```
 
@@ -81,7 +81,7 @@ Refresh the UI.  You should see the following:
 
 ### 5) Expose the frontend service to the client namespace
 
-```shell
+```bash
 kubectl create -f {{site.url}}/{{page.version}}/security/tutorials/kubernetes-policy-demo/policies/frontend-policy.yaml
 ```
 
@@ -94,6 +94,6 @@ To use {{site.prodname}} to enforce egress policy on Kubernetes pods, see [the a
 
 You can clean up the demo by deleting the demo Namespaces:
 
-```shell
+```bash
 kubectl delete ns client stars management-ui
 ```

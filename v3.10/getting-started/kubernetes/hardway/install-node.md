@@ -15,7 +15,7 @@ In this lab we configure and install `calico/node` as a daemon set.
 ## Provision Certificates
 
 Create the key `calico/node` will use to authenticate with Typha and the certificate signing request (CSR)
-```
+```bash
 openssl req -newkey rsa:4096 \
            -keyout calico-node.key \
            -nodes \
@@ -27,7 +27,7 @@ The certificate presents the Common Name (CN) as `calico-node`, which is what we
 in the last lab.
 
 Sign the Felix certificate with the CA we created earlier
-```
+```bash
 openssl x509 -req -in calico-node.csr \
                   -CA typhaca.crt \
                   -CAkey typhaca.key \
@@ -38,7 +38,7 @@ openssl x509 -req -in calico-node.csr \
 
 Store the key and certificate in a Secret that `calico/node` will access
 
-```
+```bash
 kubectl create secret generic -n kube-system calico-node-certs --from-file=calico-node.key --from-file=calico-node.crt
 ```
 
@@ -46,13 +46,13 @@ kubectl create secret generic -n kube-system calico-node-certs --from-file=calic
 
 Create the ServiceAccount that `calico/node` will run as
 
-```
+```bash
 kubectl create serviceaccount -n kube-system calico-node
 ```
 
 Provision a cluster role with permissions to read and modify {{site.prodname}} datastore objects
 
-```
+```bash
 kubectl apply -f - <<EOF
 kind: ClusterRole
 apiVersion: rbac.authorization.k8s.io/v1
@@ -130,7 +130,7 @@ EOF
 
 Bind the cluster role to the `calico-node` ServiceAccount
 
-```
+```bash
 kubectl create clusterrolebinding calico-node --clusterrole=calico-node --serviceaccount=kube-system:calico-node
 ```
 
@@ -140,7 +140,7 @@ kubectl create clusterrolebinding calico-node --clusterrole=calico-node --servic
 
 Create the daemon set
 
-```
+```bash
 kubectl apply -f - <<EOF
 kind: DaemonSet
 apiVersion: apps/v1
@@ -312,7 +312,7 @@ EOF
 
 Verify that `calico/node` is running on each node in your cluster, and goes to `Running` within a few minutes.
 
-```
+```bash
 kubectl get pod -l k8s-app=calico-node -n kube-system
 ```
 

@@ -25,7 +25,7 @@ Also ensure that you have an explicitly defined host in the `[etcd]` group.
 
 **Sample Inventory File:**
 
-```
+```conf
 [OSEv3:children]
 masters
 nodes

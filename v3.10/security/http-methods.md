@@ -36,7 +36,7 @@ Calico network policy supports restricting traffic based on HTTP methods and pat
 
 In the following example, the trading app is allowed ingress traffic only for HTTP GET requests that match the exact path **/projects/calico**, or that begins with the prefix, **/users**.
 
-```
+```yaml
 apiVersion: projectcalico.org/v3
 kind: GlobalNetworkPolicy
 metadata:

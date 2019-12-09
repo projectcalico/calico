@@ -68,7 +68,7 @@ A valid resource name can have alphanumeric characters with optional `.`, `_`, o
 
 A file may contain multiple resource documents specified in a YAML list format. For example, the following is the contents of a file containing two `HostEndpoint` resources:
 
-```
+```yaml
 - apiVersion: projectcalico.org/v3
   kind: HostEndpoint
   metadata:

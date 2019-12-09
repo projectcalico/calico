@@ -143,7 +143,7 @@ sudo calicoctl node run
 
 An example response follows.
 
-```bash
+```
 Running command to load modules: modprobe -a xt_set ip6_tables
 Enabling IPv4 forwarding
 Enabling IPv6 forwarding

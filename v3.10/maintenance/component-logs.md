@@ -25,14 +25,14 @@ and to filter logs.
 See the [documentation](http://smarden.org/runit/svlogd.8.html) for further details.
 
 e.g. to configure bird to only log 4 files of 10KB each, create a file called `config` in the `/var/log/calico/bird` directory containing
-```shell
+```
 #/var/log/calico/bird/config
 s10000
 n4
 ```
 
 e.g. to configure bird to drop logs with the suffix `Netlink: File exists`, create a file called `config` in the `/var/log/calico/bird` directory containing
-```shell
+```
 -*Netlink: File exists
 ```
 

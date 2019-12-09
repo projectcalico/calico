@@ -47,7 +47,7 @@ To allow workloads with a private IP address access to the internet, you can use
 
 In the following example, we create a {{site.prodname}} IPPool with natOutgoing enabled. Outbound NAT is performed locally on the node where each workload in the pool is hosted.
 
-```
+```yaml
 apiVersion: projectcalico.org/v3
 kind: IPPool
 metadata:
@@ -61,7 +61,7 @@ spec:
 
 You can create additional IPPools that are not used for IP address management that prevent NAT to certain CIDR blocks. This is useful if you want nodes to NAT traffic to the internet, but not to IPs in certain internal ranges.  For example, if you did not want to NAT traffic from pods to 10.0.0.0/8, you could create the following pool.  You must ensure that the network between the cluster and 10.0.0.0/8 can route pod IPs.
 
-```
+```yaml
 apiVersion: projectcalico.org/v3
 kind: IPPool
 metadata:

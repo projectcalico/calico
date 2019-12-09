@@ -15,7 +15,7 @@ at `/etc/calico/calicoctl.cfg`. You can override this using the `--config` optio
 commands that require datastore access. The file can be in either YAML or JSON format.
 It must be valid and readable by `calicoctl`. A YAML example follows.
 
-   ```
+   ```yaml
    apiVersion: projectcalico.org/v3
    kind: CalicoAPIConfig
    metadata:

@@ -30,7 +30,7 @@ This how-to guide uses the following {{site.prodname}} features:
 
 To verify, ssh to one of your Kubernetes nodes and view the CNI configuration.  
 
-```
+```bash
 cat /etc/cni/net.d/10-calico.conflist
 
 ```
@@ -104,7 +104,7 @@ spec:
 
 Let’s verify the new IP pool.
 
-```
+```bash
 calicoctl get ippool -o wide
 
 ```
@@ -118,7 +118,7 @@ new-pool              10.0.0.0/16      true   Always     false
 
 List the existing IP pool definition.
 
-```
+```bash
 calicoctl get ippool -o yaml > pool.yaml
 
 ```
@@ -164,14 +164,14 @@ Apply the changes.
 
 Remember, disabling a pool only affects new IP allocations; networking for existing pods is not affected.
 
-```
+```bash
 calicoctl apply -f pool.yaml
 
 ```
 
 Verify the changes.
 
-```
+```bash
 calicoctl get ippool -o wide
 
 ```
@@ -186,7 +186,7 @@ new-pool              10.0.0.0/16      true   Always     false
 
 Next, we delete all of the existing pods from the old IP pool. (In our example, **coredns** is our only pod; for multiple pods you would trigger a deletion for all pods in the cluster.)
 
-```
+```bash
 kubectl delete pod -n kube-system coredns-6f4fd4bdf-8q7zp
 
 ```
@@ -195,28 +195,28 @@ kubectl delete pod -n kube-system coredns-6f4fd4bdf-8q7zp
 
 1. Create a test namespace and nginx pod. 
  
-   ```
+   ```bash
    kubectl create ns ippool-test
 
    ```
 
 1. Create an nginx pod. 
   
-   ```
+   ```bash
    kubectl -n ippool-test create deployment nginx --image nginx
 
    ```
 
 1. Verify that the new pod gets an IP address from the new range.
     
-   ```
+   ```bash
    kubectl -n ippool-test get pods -l app=nginx -o wide
 
    ```
 
 1. Clean up the ippool-test namespace.  
  
-   ```
+   ```bash
    kubectl delete ns ippool-test
 
    ```
@@ -225,7 +225,7 @@ kubectl delete pod -n kube-system coredns-6f4fd4bdf-8q7zp
 
 Now that you've verified that pods are getting IPs from the new range, you can safely delete the old pool.
 
-```
+```bash
 calicoctl delete pool default-ipv4-ippool
 
 ```

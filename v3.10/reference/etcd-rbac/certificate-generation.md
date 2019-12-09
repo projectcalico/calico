@@ -71,7 +71,7 @@ Replace the &lt;etcd_username&gt; placeholder with the username of the etcd user
 that has roles allowing access to the paths/prefix keys required by the
 associated component.
 
-```
+```json
 {
   "CN": "<etcd_username>",
   "hosts": [
@@ -98,7 +98,7 @@ the `req:` target in the Makefile. For each configuration added, make sure the
 configuration file name and cert/key file prefix are updated appropriately by
 substituting an appropriate name for &lt;component&gt;.
 
-```
+```bash
     $(CFSSL) gencert \
       -ca certs/ca.pem \
       -ca-key certs/ca-key.pem \

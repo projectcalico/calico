@@ -82,7 +82,7 @@ For example:
 
     It should return the routing table.
 
-    ```bash
+    ```
     default via 10.240.0.1 dev eth0
     10.65.0.13 dev tap9a7e0868-da  scope link
     10.65.0.14 via 192.168.8.4 dev l2tpeth8-3  proto bird
@@ -102,7 +102,7 @@ For example:
 
     It should return something like the following.
 
-    ```bash
+    ```
     [...]
     Chain felix-FIP-DNAT (2 references)
      pkts bytes target     prot opt in     out     source               destination

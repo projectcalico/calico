@@ -55,7 +55,7 @@ If **ICMPv6** messages are not used in your deployment, it is still good practic
 
 In any "deny-all" {{site.prodname}} network policy, be sure to specify a lower order (**order:200**) than regular policies that might allow traffic.
 
-```
+```yaml
 apiVersion: projectcalico.org/v3
 kind: GlobalNetworkPolicy
 metadata:
@@ -86,7 +86,7 @@ All other traffic may be allowed by other policies. If traffic is not explicitly
 
 The policy applies only to **ingress** traffic. (Egress traffic is not affected, and default deny is not enforced for egress.)
 
-```
+```yaml
 apiVersion: projectcalico.org/v3
 kind: GlobalNetworkPolicy
 metadata:
@@ -114,7 +114,7 @@ spec:
 
 In this example, only Kubernetes pods that match the selector **projectcalico.org/orchestrator == 'kubernetes'** are allowed to receive ICMPv4 **code: 1 # host unreachable** messages.
 
-```
+```yaml
 apiVersion: projectcalico.org/v3
 kind: GlobalNetworkPolicy
 metadata:

@@ -169,7 +169,7 @@ After you have the set of expected flows for each service, you are ready to writ
 
 Returning to the example flow graph in the previous section, let’s write the policy for the post service. For the purpose of this example, assume all the services in the application run in a Kubernetes Namespace called microblog.  We see from the flow graph that the post service is accessed by the api and search services.
 
-```
+```yaml
 apiVersion: projectcalico.org/v3
 kind: NetworkPolicy
 metadata:
@@ -254,7 +254,7 @@ However, some development teams don’t explicitly know who needs access to thei
 
 In the following example, we have changed the **serviceAccount** clause. Instead of a name, we use a label selector. The **selector: svc-post = access** label grants access to the post service. 
 
-```
+```yaml
 apiVersion: projectcalico.org/v3
 kind: NetworkPolicy
 metadata:

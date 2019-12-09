@@ -28,7 +28,7 @@ This how-to guide uses the following {{site.prodname}} features:
 
 In the following example, ingress traffic is allowed to endpoints in the **namespace: production** with label **color: red**, and only from a pod in the same namespace with **color: blue**, on **port 6379**.
 
-```
+```yaml
 apiVersion: projectcalico.org/v3
 kind: NetworkPolicy
 metadata:
@@ -47,7 +47,7 @@ spec:
 ```
 To allow ingress traffic from endpoints in other namespaces, use a **namespaceSelector** in the policy rule. A namespaceSelector matches one or more namespaces based on the labels that are applied on the namespace. In the following example, ingress traffic is also allowed from endpoints with **color: blue** in namespaces with **shape: circle**.
 
-```
+```yaml
 apiVersion: projectcalico.org/v3
 kind: NetworkPolicy
 metadata:
@@ -72,7 +72,7 @@ Network policies can be applied to endpoints using selectors that match labels o
 
 In the following example, users in the development environment can communicate only with pods that have a namespace labeled, `environment == "development"`.
 
-```
+```yaml
 apiVersion: projectcalico.org/v3
 kind: GlobalNetworkPolicy
 metadata:

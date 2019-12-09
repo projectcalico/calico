@@ -88,7 +88,7 @@ Description:
 
    Results indicate that 8 resources were successfully created.
 
-   ```bash
+   ```
    Successfully created 8 resource(s)
    ```
    {: .no-select-button}
@@ -102,7 +102,7 @@ Description:
    Results indicate failure because the first resource (in this case a Profile)
    already exists.
 
-   ```bash
+   ```
    Failed to create any resources: resource already exists: Profile(name=profile1)
    ```
    {: .no-select-button}

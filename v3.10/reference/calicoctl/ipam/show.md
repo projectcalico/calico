@@ -41,7 +41,7 @@ Description:
 
    The following result indicates that the IP is not assigned to an endpoint.
 
-   ```bash
+   ```
    IP 192.168.1.2 is not currently assigned
    ```
    {: .no-select-button}
@@ -54,7 +54,7 @@ Description:
 
    For a Kubernetes pod IP, attributes indicate the pod name and namespace:
 
-   ```bash
+   ```
    IP 10.244.118.70 is in use
    Attributes:
      pod: nano-66d4c99f8b-jm5s9
@@ -71,7 +71,7 @@ Description:
 
    The table shows usage for each IP Pool:
 
-   ```bash
+   ```
    +----------+-------------------+------------+------------+-------------------+
    | GROUPING |       CIDR        | IPS TOTAL  | IPS IN USE |     IPS FREE      |
    +----------+-------------------+------------+------------+-------------------+
@@ -88,7 +88,7 @@ Description:
 
    As well as the total usage per IP Pool, the table shows usage for block that has been allocated from those pools:
 
-   ```bash
+   ```
    +----------+-------------------------------------------+------------+------------+-------------------+
    | GROUPING |                   CIDR                    | IPS TOTAL  | IPS IN USE |     IPS FREE      |
    +----------+-------------------------------------------+------------+------------+-------------------+

@@ -82,7 +82,7 @@ In this step, you create a **GlobalNetworkPolicy** that selects all **host endpo
 
 Add rules to allow the external traffic for each clusterIP. The following example allows connections to two cluster IPs. Make sure you add **applyOnForward** and **preDNAT** rules.
 
-```
+```yaml
 apiVersion: projectcalico.org/v3
 kind: GlobalNetworkPolicy
 metadata:
@@ -116,7 +116,7 @@ spec:
 
 Without this rule, normal pod-to-pod traffic is blocked because the policy applies to forwarded traffic.
 
-```
+```yaml
 apiVersion: projectcalico.org/v3
 kind: GlobalNetworkPolicy
 metadata:
@@ -139,7 +139,7 @@ spec:
 
 Or, you can add rules that whitelist specific host traffic including Kubernetes and {{site.prodname}}. Without this rule, normal host traffic is blocked.
 
-```
+```yaml
 apiVersion: projectcalico.org/v3
 kind: GlobalNetworkPolicy
 metadata:
@@ -166,7 +166,7 @@ spec:
 
 In this step, you create a **GlobalNetworkPolicy** that selects the **same set of pods as your Kubernetes Service**. Add rules that allow host endpoints to access the service ports.
 
-```
+```yaml
 apiVersion: projectcalico.org/v3
 kind: GlobalNetworkPolicy
 metadata:

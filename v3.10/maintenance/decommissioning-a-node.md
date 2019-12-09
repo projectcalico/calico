@@ -57,7 +57,7 @@ See the example below for how to remove a node with the calicoctl command.
 > **Caution** See [Removing a Node resource](#removing-a-node-resource) above.
 {: .alert .alert-danger}
 
-```
+```bash
 calicoctl delete node <nodeName>
 ```
 
@@ -70,7 +70,7 @@ Below is an example of how to create a file of Nodes and delete them.
 1. Create a file with the [Node resources][Node resource reference] that need
    to be removed.  For example:
 
-   ```
+   ```yaml
    - apiVersion: projectcalico.org/v3
      kind: Node
      metadata:
@@ -86,7 +86,7 @@ Below is an example of how to create a file of Nodes and delete them.
    > **Caution** See [Removing a Node resource](#removing-a-node-resource) above.
    {: .alert .alert-danger}
 
-   ```
+   ```bash
    calicoctl delete -f nodes_to_delete.yaml
    ```
 

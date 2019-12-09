@@ -100,7 +100,7 @@ I choose the following label scheme:
 
 I create the GlobalNetworkPolicy that allows SSH traffic (default deny is implicit in this case).
 
-```
+```yaml
 apiVersion: projectcalico.org/v3
 kind: GlobalNetworkPolicy
 metadata:
@@ -129,7 +129,7 @@ calicoctl create -f allow-ssh-maintenance.yaml
 
 Finally, create the host endpoint for the interface that connects to the maintenance network.
 
-```
+```yaml
 apiVersion: projectcalico.org/v3
 kind: HostEndpoint
 metadata:

@@ -49,27 +49,27 @@ as a result of switching a node's hostname between its FQDN and its short DNS na
 To correct this, you must perform the following steps (with examples shown using Kubernetes):
 
 1. Prevent new workloads from being scheduled on the bad node.
-```
+```bash
 kubectl cordon mynode.internal.projectcalico.org
 ```
 1. Drain all workloads from the node.
-```
+```bash
 kubectl drain mynode.internal.projectcalico.org --ignore-daemonsets
 ```
 1. On the bad node, set the hostname to the desired value.
-```
+```bash
 sudo hostnamectl set-hostname <desired-hostname>
 ```
 1. Delete the bad node configuration from {{site.prodname}}.
-```
+```bash
 calicoctl delete node <name-of-bad-node>
 ```
 1. Restart {{site.nodecontainer}} on the bad node to pick up the changes.
-```
+```bash
 kubectl delete pod -n kube-system <name-of-calico-pod>
 ```
 1. Reenable scheduling of worklods on the node.
-```
+```bash
 kubectl uncordon mynode.internal.projectcalico.org
 ```
 
@@ -118,7 +118,7 @@ This can interfere with the {{site.prodname}} agent's ability to route correctly
 Create the following configuration file at `/etc/NetworkManager/conf.d/calico.conf` to prevent
 NetworkManager from interfering with the interfaces:
 
-```
+```conf
 [keyfile]
 unmanaged-devices=interface-name:cali*;interface-name:tunl*
 ```
@@ -127,13 +127,13 @@ unmanaged-devices=interface-name:cali*;interface-name:tunl*
 
 If you use `sudo` for commands like `calicoctl node run`, remember that your environment variables are not transferred to the `sudo` environment.  You must run `sudo` with the `-E` flag to include your environment variables:
 
-```shell
+```bash
 sudo -E calicoctl node run
 ```
 
 or you can set environment variables for `sudo` commands like this:
 
-```shell
+```bash
 sudo ETCD_ENDPOINTS=http://172.25.0.1:2379 calicoctl node run
 ```
 

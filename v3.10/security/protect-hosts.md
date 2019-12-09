@@ -94,7 +94,7 @@ In the following example, we use a **GlobalNetworkPolicy** that applies to all w
 
 **Ingress traffic** is also allowed for ICMP, and on TCP port 10250 (default kubelet port). **Egress** traffic is allowed to etcd on a particular IP, and UDP on port 53 and 67 for DNS and DHCP.
 
-```
+```yaml
 apiVersion: projectcalico.org/v3
 kind: GlobalNetworkPolicy
 metadata:
@@ -137,7 +137,7 @@ In the following example, we create a HostEndpoint for the host named **my-host*
 
 When the HostEndpoint is created, traffic to or from the interface is dropped unless policy is in place.
 
-```
+```yaml
 apiVersion: projectcalico.org/v3
 kind: HostEndpoint
 metadata:
@@ -161,12 +161,12 @@ To change this parameter for all hosts, edit the **FelixConfiguration** object n
 
 1. Get a copy of the object to edit.
 
-   ```
+   ```bash
    calicoctl get felixconfiguration default --export -o yaml > default-felix-config.yaml
    ```
 1. Open the file in a text editor and add the parameter, **defaultEndpointToHostAction**. For example:
 
-   ```
+   ```yaml
    apiVersion: projectcalico.org/v3
    kind: FelixConfiguration
    metadata:
@@ -179,7 +179,7 @@ To change this parameter for all hosts, edit the **FelixConfiguration** object n
    ```
 
 1. Update the FelixConfiguration on the cluster.
-   ```
+   ```bash
    calicoctl apply -f default-felix-config.yaml
    ```
 

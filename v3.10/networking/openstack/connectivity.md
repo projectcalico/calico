@@ -117,12 +117,12 @@ configuration is the same).
 
 From the controller, issue the following Neutron CLI command.
 
-```
+```bash
 neutron net-list
 ```
 It returns a list of the networks.
 
-```bash  
+```
 +--------------------------------------+----------+----------------------------------------------------------+
 | id                                   | name     | subnets                                                  |
 +--------------------------------------+----------+----------------------------------------------------------+
@@ -142,7 +142,7 @@ neutron net-show external
 
 It should return something like the following.
 
-```bash
+```
 +---------------------------+--------------------------------------+
 | Field                     | Value                                |
 +---------------------------+--------------------------------------+
@@ -169,7 +169,7 @@ neutron net-show internal
 ```
 It should return something like the following.
 
-```bash
+```
 +---------------------------+--------------------------------------+
 | Field                     | Value                                |
 +---------------------------+--------------------------------------+
@@ -197,7 +197,7 @@ neutron subnet-show external4
 
 It should return something like the following.
 
-```bash
+```
 +------------------+----------------------------------------------------+
 | Field            | Value                                              |
 +------------------+----------------------------------------------------+
@@ -224,7 +224,7 @@ neutron subnet-show external6
 
 It should return something like the following.
 
-```bash
+```
 +------------------+-----------------------------------------------------------------------------+
 | Field            | Value                                                                       |
 +------------------+-----------------------------------------------------------------------------+

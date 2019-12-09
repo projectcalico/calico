@@ -15,7 +15,7 @@ We will use mutually authenticated TLS to ensure that `calico/node` and Typha co
 certificate authority (CA) and use it to sign a certificate for Typha.
 
 Create the CA certificate and key
-```
+```bash
 openssl req -x509 -newkey rsa:4096 \
                   -keyout typhaca.key \
                   -nodes \
@@ -25,12 +25,12 @@ openssl req -x509 -newkey rsa:4096 \
 ```
 
 Store the CA certificate in a ConfigMap that Typha & `calico/node` will access.
-```
+```bash
 kubectl create configmap -n kube-system calico-typha-ca --from-file=typhaca.crt
 ```
 
 Create the Typha key and certificate signing request (CSR)
-```
+```bash
 openssl req -newkey rsa:4096 \
            -keyout typha.key \
            -nodes \
@@ -41,7 +41,7 @@ openssl req -newkey rsa:4096 \
 The certificate presents the Common Name (CN) as `calico-typha`. `calico/node` will be configured to verify this name.
 
 Sign the Typha certificate with the CA
-```
+```bash
 openssl x509 -req -in typha.csr \
                   -CA typhaca.crt \
                   -CAkey typhaca.key \
@@ -52,7 +52,7 @@ openssl x509 -req -in typha.csr \
 
 Store the Typha key and certificate in a secret that Typha will access
 
-```
+```bash
 kubectl create secret generic -n kube-system calico-typha-certs --from-file=typha.key --from-file=typha.crt
 ```
 
@@ -60,13 +60,13 @@ kubectl create secret generic -n kube-system calico-typha-certs --from-file=typh
 
 Create a ServiceAccount that will be used to run Typha.
 
-```
+```bash
 kubectl create serviceaccount -n kube-system calico-typha
 ```
 
 Define a cluster role for Typha with permission to watch {{site.prodname}} datastore objects.
 
-```
+```bash
 kubectl apply -f - <<EOF
 kind: ClusterRole
 apiVersion: rbac.authorization.k8s.io/v1beta1
@@ -125,7 +125,7 @@ EOF
 
 Bind the cluster role to the `calico-typha` ServiceAccount.
 
-```
+```bash
 kubectl create clusterrolebinding calico-typha --clusterrole=calico-typha --serviceaccount=kube-system:calico-typha
 ```
 
@@ -135,7 +135,7 @@ Since Typha is required by `calico/node`, and `calico/node` establishes the pod 
 a chicken-and-egg problem.  We run 3 replicas of Typha so that even during a rolling update, a single failure does not
 make Typha unavailable.
 
-```
+```bash
 kubectl apply -f - <<EOF
 apiVersion: apps/v1
 kind: Deployment
@@ -236,7 +236,7 @@ next lab.
 
 Verify Typha is up an running with three instances
 
-```
+```bash
 kubectl get pods -l k8s-app=calico-typha -n kube-system
 ```
 
@@ -254,7 +254,7 @@ calico-typha-66498ddfbd-scckd   1/1     Running   0          62s
 
 `calico/node` uses a Kubernetes Service to get load-balanced access to Typha.
 
-```
+```bash
 kubectl apply -f - <<EOF
 apiVersion: v1
 kind: Service
@@ -276,7 +276,7 @@ EOF
 
 Validate that Typha is using TLS.
 
-```
+```bash
 TYPHA_CLUSTERIP=$(kubectl get svc -n kube-system calico-typha -o jsonpath='{.spec.clusterIP}')
 curl https://$TYPHA_CLUSTERIP:5473 -v --cacert typhaca.crt
 ```
