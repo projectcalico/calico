@@ -35,7 +35,7 @@ When running this command, replace the placeholders in angle brackets with
 appropriate values for your deployment.
 <!-- -->
 
-```
+```bash
 cat << EOF | calicoctl create -f -
 - apiVersion: projectcalico.org/v3
   kind: GlobalNetworkPolicy

@@ -38,7 +38,7 @@ Description:
 
 ### Examples
 
-```
+```bash
 sudo calicoctl node diags
 ```
 

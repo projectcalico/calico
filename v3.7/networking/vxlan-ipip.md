@@ -54,7 +54,7 @@ IP in IP encapsulation can be performed selectively, and only for traffic crossi
 
 To enable this feature, set `ipipMode` to `CrossSubnet`.
 
-```
+```yaml
 apiVersion: projectcalico.org/v3
 kind: IPPool
 metadata:
@@ -69,7 +69,7 @@ spec:
 
 With `ipipMode` set to `Always`, Calico routes traffic using IP in IP for all traffic originating from a Calico enabled-host, to all Calico networked containers and VMs within the IP pool.
 
-```
+```yaml
 apiVersion: projectcalico.org/v3
 kind: IPPool
 metadata:
@@ -84,7 +84,7 @@ spec:
 
 With `vxlanMode` set to `Always`, Calico routes traffic using VXLAN for all traffic originating from a Calico enabled host, to all Calico networked containers and VMs within the IP pool.
 
-```
+```yaml
 apiVersion: projectcalico.org/v3
 kind: IPPool
 metadata:

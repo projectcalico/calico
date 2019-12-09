@@ -27,7 +27,7 @@ Description:
 
 ### Examples:
 
-```
+```bash
 calicoctl checksystem
 ```
 

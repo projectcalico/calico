@@ -148,7 +148,7 @@ The headings displayed for each resource type is fixed.  However, wee `wide` opt
 columns, and `custom-columns` for selecting which columns to display.
 
 Example:
-```
+```bash
 calicoctl get hostEndpoint
 ```
 
@@ -167,7 +167,7 @@ Similar to the `ps` format, the `wide` option displays output in ps-style table 
 The headings displayed for each resource type is fixed.  See `custom-columns` for selecting which columns to display.
 
 Example:
-```
+```bash
 calicoctl get hostEndpoint --output=wide
 ```
 
@@ -186,7 +186,7 @@ to specify and ordered, comma-separated list of columns to display in the output
 resource type is documented in the [Resources]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/) guide.
 
 Example:
-```
+```bash
 calicoctl get hostEndpoint --output=custom-columns=NAME,IPS
 ```
 
@@ -249,7 +249,7 @@ within that list.
 
 Example:
 {% raw %}
-```
+```bash
 bin/calicoctl get hostEndpoint --output=go-template="{{range .}}{{range .Items}}{{.ObjectMeta.Name}},{{end}}{{end}}"
 endpoint1,eth0,
 ```

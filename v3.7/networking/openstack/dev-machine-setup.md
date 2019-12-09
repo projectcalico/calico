@@ -32,7 +32,7 @@ neutron net-list
 
 This should return something like the following.
 
-```bash
+```
 +--------------------------------------+----------+----------------------------------------------------------+
 | id                                   | name     | subnets                                                  |
 +--------------------------------------+----------+----------------------------------------------------------+
@@ -48,7 +48,7 @@ In the example above, the `external` network has the UUID
 `8d5dec25-a6aa-4e18-8706-a51637a428c2`. Thus, the machine can be created
 with the following `nova boot` command.
 
-```
+```bash
 nova boot --flavor m1.medium                                  \
           --image debian-wheezy-amd64                         \
           --security-groups default                           \
