@@ -17,8 +17,8 @@ Review [Host Requirements]({{site.baseurl}}/{{page.version}}/getting-started/bar
 
 ### How to...
 
--[Install Calico network policy using a package manager](#install-calico-network-policy-using-a-package-manager])
--[Install Calico network policy, no package manager](#install-calico-network-policy-no-package-manager)
+- [Install Calico network policy using a package manager](#install-calico-network-policy-using-a-package-manager])
+- [Install Calico network policy, no package manager](#install-calico-network-policy-no-package-manager)
 
 #### Install Calico network policy using a package manager
 
