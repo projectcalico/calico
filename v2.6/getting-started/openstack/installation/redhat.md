@@ -64,7 +64,7 @@ You may have already added this to install OpenStack.
 
 Configure the {{site.prodname}} repository:
 
-```
+```bash
     cat > /etc/yum.repos.d/calico.repo <<EOF
     [calico]
     name=Calico Repository
@@ -90,7 +90,7 @@ through the process.
 1.  Install and configure etcd.
     -   Download, unpack, and install the binary:
 
-        ```
+        ```bash
         curl -L  https://github.com/coreos/etcd/releases/download/v2.0.11/etcd-v2.0.11-linux-amd64.tar.gz -o etcd-v2.0.11-linux-amd64.tar.gz
         tar xvf etcd-v2.0.11-linux-amd64.tar.gz
         cd etcd-v2.0.11-linux-amd64
@@ -104,7 +104,7 @@ through the process.
 
     -   Create an etcd user:
 
-        ```
+        ```bash
         adduser -s /sbin/nologin -d /var/lib/etcd/ etcd
         chmod 700 /var/lib/etcd/
         ```
@@ -112,7 +112,7 @@ through the process.
     -   Add the following line to the bottom of `/etc/fstab`. This will
         mount a ramdisk for etcd at startup:
 
-        ```
+        ```bash
         tmpfs /var/lib/etcd tmpfs nodev,nosuid,noexec,nodiratime,size=512M 0 0
         ```
 
@@ -147,7 +147,7 @@ through the process.
 
         Place the following in `/usr/local/bin/start-etcd`:
 
-        ```
+        ```bash
         #!/bin/sh
         export ETCD_INITIAL_CLUSTER_TOKEN=`uuidgen`
         exec /usr/local/bin/etcd
@@ -159,7 +159,7 @@ through the process.
         You then need to add the following file to
         `/usr/lib/systemd/system/etcd.service`:
 
-        ```
+        ```service
         [Unit]
         Description=Etcd
         After=syslog.target network.target
@@ -177,7 +177,7 @@ through the process.
 
 2.  Launch etcd and set it to restart after a reboot:
 
-    ```
+    ```bash
     systemctl start etcd
     systemctl enable etcd
     ```
@@ -191,7 +191,7 @@ isn't running the etcd database itself (both control and compute nodes).
 
     -   Download, unpack, and install the binary:
 
-        ```
+        ```bash
         curl -L  https://github.com/coreos/etcd/releases/download/v2.0.11/etcd-v2.0.11-linux-amd64.tar.gz -o etcd-v2.0.11-linux-amd64.tar.gz
         tar xvf etcd-v2.0.11-linux-amd64.tar.gz
         cd etcd-v2.0.11-linux-amd64
@@ -205,7 +205,7 @@ isn't running the etcd database itself (both control and compute nodes).
 
     -   Create an etcd user:
 
-        ```
+        ```bash
         adduser -s /sbin/nologin -d /var/lib/etcd/ etcd
         chmod 700 /var/lib/etcd/
         ```
@@ -224,7 +224,7 @@ isn't running the etcd database itself (both control and compute nodes).
 
         You then need to add the following file to `/usr/lib/systemd/system/etcd.service`
 
-        ```
+        ```service
         [Unit]
         Description=Etcd
         After=syslog.target network.target
@@ -242,7 +242,7 @@ isn't running the etcd database itself (both control and compute nodes).
 
 2.  Launch etcd and set it to restart after a reboot:
 
-    ```
+    ```bash
     systemctl start etcd
     systemctl enable etcd
     ```
@@ -271,13 +271,13 @@ On each control node, perform the following steps:
 
 4.  Install the `calico-control` package:
 
-    ```
+    ```bash
     yum install calico-control
     ```
 
 5.  Restart the neutron server process:
 
-    ```
+    ```bash
     service neutron-server restart
     ```
 
@@ -290,20 +290,20 @@ On each compute node, perform the following steps:
     page](https://web.archive.org/web/20160226213437/http://wiki.libvirt.org/page/Guest_won't_start_-_warning:_could_not_open_/dev/net/tun_('generic_ethernet'_interface))
     explains why these changes are required):
 
-    ```
+    ```bash
     setenforce permissive
     ```
 
     Edit `/etc/selinux/config` and change the `SELINUX=` line to the
     following:
 
-    ```
+    ```conf
     SELINUX=permissive
     ```
 
     In `/etc/libvirt/qemu.conf`, add or edit the following four options:
 
-    ```
+    ```conf
     clear_emulator_capabilities = 0
     user = "root"
     group = "root"
@@ -324,14 +324,14 @@ On each compute node, perform the following steps:
 
     Then restart libvirt to pick up the changes:
 
-    ```
+    ```bash
     service libvirtd restart
     ```
 
 2.  Open `/etc/nova/nova.conf` and remove the line from the `[DEFAULT]`
     section that reads:
 
-    ```
+    ```conf
     linuxnet_interface_driver = nova.network.linux_net.LinuxOVSInterfaceDriver
     ```
 
@@ -342,26 +342,26 @@ On each compute node, perform the following steps:
 
     Restart nova compute.
 
-    ```
+    ```bash
     service openstack-nova-compute restart
     ```
 
     If this node is also a controller, additionally restart nova-api.
 
-    ```
+    ```bash
     service openstack-nova-api restart
     ```
 
 3.  If they're running, stop the Open vSwitch services.
 
-    ```
+    ```bash
     service neutron-openvswitch-agent stop
     service openvswitch stop
     ```
 
     Then, prevent the services running if you reboot.
 
-    ```
+    ```bash
     chkconfig openvswitch off
     chkconfig neutron-openvswitch-agent off
     ```
@@ -369,27 +369,27 @@ On each compute node, perform the following steps:
     Then, on your control node, run the following command to find the
     agents that you just stopped.
 
-    ```
+    ```bash
     neutron agent-list
     ```
 
     For each agent, delete them with the following command on your
     control node, replacing `<agent-id>` with the ID of the agent.
 
-    ```
+    ```bash
     neutron agent-delete <agent-id>
     ```
 
 5.  Install Neutron infrastructure code on the compute host.
 
-    ```
+    ```bash
     yum install openstack-neutron
     ```
 
 6.  Modify `/etc/neutron/neutron.conf`.  In the `[oslo_concurrency]` section,
     ensure that the `lock_path` variable is uncommented and set as follows.
 
-    ```
+    ```conf
     # Directory to use for lock files. For security, the specified directory should
     # only be writable by the user running the processes that need locking.
     # Defaults to environment variable OSLO_LOCK_PATH. If external locks are used,
@@ -401,7 +401,7 @@ On each compute node, perform the following steps:
     {{site.prodname}} DHCP agent (which uses etcd, allowing it to scale to higher
     numbers of hosts).
 
-    ```
+    ```bash
     service neutron-dhcp-agent stop
     chkconfig neutron-dhcp-agent off
     yum install calico-dhcp-agent
@@ -411,7 +411,7 @@ On each compute node, perform the following steps:
     routing agent or the Linux bridging agent. These conflict
     with {{site.prodname}}.
 
-    ```
+    ```bash
     service neutron-l3-agent stop
     chkconfig neutron-l3-agent off
     ... repeat for bridging agent and any others ...
@@ -421,7 +421,7 @@ On each compute node, perform the following steps:
     Metadata API. This step is not required on combined compute and
     controller nodes.
 
-    ```
+    ```bash
     yum install openstack-nova-api
     service openstack-nova-metadata-api restart
     chkconfig openstack-nova-metadata-api on
@@ -429,13 +429,13 @@ On each compute node, perform the following steps:
 
 9.  Install the BIRD BGP client.
 
-    ```
+    ```bash
     yum install -y bird bird6
     ```
 
 10. Install the `calico-compute` package.
 
-    ```
+    ```bash
     yum install calico-compute
     ```
 
@@ -448,13 +448,13 @@ On each compute node, perform the following steps:
 
     For IPv4 connectivity between compute hosts:
 
-    ```
+    ```bash
     calico-gen-bird-conf.sh <compute_node_ip> <route_reflector_ip> <bgp_as_number>
     ```
 
     And/or for IPv6 connectivity between compute hosts:
 
-    ```
+    ```bash
     calico-gen-bird6-conf.sh <compute_node_ipv4> <compute_node_ipv6> <route_reflector_ipv6> <bgp_as_number>
     ```
 
@@ -482,7 +482,7 @@ On each compute node, perform the following steps:
     Ensure BIRD (and/or BIRD 6 for IPv6) is running and starts on
     reboot.
 
-    ```
+    ```bash
     service bird restart
     service bird6 restart
     chkconfig bird on
@@ -495,6 +495,6 @@ On each compute node, perform the following steps:
 
 13. Restart the Felix service.
 
-    ```
+    ```bash
     systemctl restart calico-felix
     ```

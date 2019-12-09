@@ -63,8 +63,8 @@ to enable IPIP and set the mode to "cross-subnet".
 The following `calicoctl` command will create or modify an IPv4 pool with
 CIDR 192.168.0.0/16 using IPIP mode `cross-subnet`. Adjust the pool CIDR for your deployment.
 
-```
-$ calicoctl apply -f - << EOF
+```bash
+calicoctl apply -f - << EOF
 apiVersion: v1
 kind: ipPool
 metadata:
@@ -89,8 +89,8 @@ The following `calicoctl` command will create or modify an IPv4 pool with
 CIDR 192.168.0.0/16 using IPIP mode `cross-subnet` and enables outgoing NAT.
 Adjust the pool CIDR for your deployment.
 
-```
-$ calicoctl apply -f - << EOF
+```bash
+calicoctl apply -f - << EOF
 apiVersion: v1
 kind: ipPool
 metadata:

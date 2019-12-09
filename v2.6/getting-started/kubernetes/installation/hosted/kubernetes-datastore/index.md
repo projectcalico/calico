@@ -69,7 +69,7 @@ Apply the following manifest to create these necessary RBAC roles and bindings.
 > manifests only.
 {: .alert .alert-info}
 
-```
+```bash
 kubectl apply -f {{site.url}}/{{page.version}}/getting-started/kubernetes/installation/hosted/rbac-kdd.yaml
 ```
 
@@ -87,7 +87,7 @@ This will install Calico and will initially create a full node-to-node mesh.
 > v1.7.0 or higher.
 {: .alert .alert-info}
 
-```
+```bash
 kubectl apply -f {{site.url}}/{{page.version}}/getting-started/kubernetes/installation/hosted/kubernetes-datastore/calico-networking/1.7/calico.yaml
 ```
 
@@ -99,7 +99,7 @@ kubectl apply -f {{site.url}}/{{page.version}}/getting-started/kubernetes/instal
 The above manifests are compatible with kubeadm clusters initialized with a
 pod-network-cidr matching the default pool of `192.168.0.0/16`, as follows:
 
-```
+```bash
 kubeadm init --pod-network-cidr=192.168.0.0/16
 ```
 
@@ -122,7 +122,7 @@ To install Calico in policy-only mode, run one of the following commands based o
 > Kubernetes `v1.7.0` or higher.
 {: .alert .alert-info}
 
-```
+```bash
 kubectl apply -f {{site.url}}/{{page.version}}/getting-started/kubernetes/installation/hosted/kubernetes-datastore/policy-only/1.7/calico.yaml
 ```
 
@@ -151,7 +151,7 @@ The following environment variable configuration options are supported by the va
 
 An example using `calicoctl`:
 
-```shell
+```bash
 $ export DATASTORE_TYPE=kubernetes
 $ export KUBECONFIG=~/.kube/config
 $ calicoctl get workloadendpoints

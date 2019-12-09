@@ -24,7 +24,7 @@ datastore access.
 
 The config file is a yaml or json document in the following format:
 
-```
+```yaml
 apiVersion: v1
 kind: calicoApiConfig
 metadata:
@@ -87,16 +87,16 @@ spec:
 
 #### Example using environment variables
 
-```shell
-$ export DATASTORE_TYPE=kubernetes
-$ export KUBECONFIG=~/.kube/config
-$ calicoctl get workloadendpoints
+```bash
+export DATASTORE_TYPE=kubernetes
+export KUBECONFIG=~/.kube/config
+calicoctl get workloadendpoints
 ```
 
 And using `CALICO_` prefixed names:
 
-```shell
-$ export CALICO_DATASTORE_TYPE=kubernetes
-$ export CALICO_KUBECONFIG=~/.kube/config
-$ calicoctl get workloadendpoints
+```bash
+export CALICO_DATASTORE_TYPE=kubernetes
+export CALICO_KUBECONFIG=~/.kube/config
+calicoctl get workloadendpoints
 ```

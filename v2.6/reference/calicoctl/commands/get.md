@@ -186,8 +186,8 @@ resource type are documented in the [Resources]({{site.baseurl}}/{{page.version}
 The output from either of these formats may be used as input for all of the resource management commands.
 
 Example
-```
-$ calicoctl get hostEndpoint --output=yaml
+```bash
+calicoctl get hostEndpoint --output=yaml
 - apiVersion: v1
   kind: hostEndpoint
   metadata:
@@ -224,7 +224,7 @@ within that list.
 
 Example
 {% raw %}
-```
+```bash
 $ bin/calicoctl get hostEndpoint --output=go-template="{{range .}}{{range .Items}}{{.Metadata.Name}},{{end}}{{end}}"
 endpoint1,eth0,
 ```

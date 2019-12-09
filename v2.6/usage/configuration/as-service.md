@@ -16,7 +16,7 @@ environment file and starts the Calico node image as a service.
 
 `calico.env` - the EnvironmentFile:
 
-```shell
+```bash
 ETCD_ENDPOINTS=http://localhost:2379
 ETCD_CA_FILE=""
 ETCD_CERT_FILE=""
@@ -68,7 +68,7 @@ ETCD_ENDPOINTS to point at the correct etcd cluster endpoints.
 
 `calico-node.service` - the Systemd service:
 
-```shell
+```service
 [Unit]
 Description=calico-node
 After=docker.service

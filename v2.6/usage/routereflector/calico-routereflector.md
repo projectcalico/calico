@@ -58,7 +58,7 @@ installed.
 
 Run the following command to start the Route Reflector container image.
 
-```
+```bash
 docker run --privileged --net=host -d                              \
            -e IP=<IPv4_RR>                                         \
            [-e IP6=<IPv6_RR>]                                      \
@@ -111,7 +111,7 @@ In all cases, the data is a JSON blob in the form:
 
 To add this entry into etcd, you could use the following commands:
 
-```
+```bash
 # IPv4 entries
 curl -L http://<ETCD_IP:PORT>/v2/keys/calico/bgp/v1/rr_v4/<IPv4_RR> -XPUT -d value="{\"ip\":\"<IPv4_RR>\",\"cluster_id\":\"<CLUSTER_ID>\"}"
 
@@ -128,7 +128,7 @@ example, for a Route Reflector with the values:
 
 the following command would be used to configure the Route Reflector.
 
-```
+```bash
 curl -L http://192.0.2.10:2379/v2/keys/calico/bgp/v1/rr_v4/192.0.2.50 -XPUT -d value="{\"ip\":\"192.0.2.50\",\"cluster_id\":\"1.0.0.1\"}"
 ```
 
@@ -146,7 +146,7 @@ with your etcd instance.
 When starting the Route Reflector container image, you need to mount the
 certificate files and environment variable filepaths for each file:
 
-```
+```bash
 docker run --privileged --net=host -d                              \
            -e IP=<IPv4_RR>                                         \
            [-e IP6=<IPv6_RR>]                                      \
@@ -166,7 +166,7 @@ to choose different `<MOUNT_DIR>` locations if this is the case).
 You will also need to pass the certificate and key files as parameters
 in the curl statement when adding entries:
 
-```
+```bash
 # IPv4 entries
 curl --cacert <path_to_ca_cert> --cert <path_to_cert> --key <path_to_key> -L https://<ETCD_IP:PORT>:2379/v2/keys/calico/bgp/v1/rr_v4/<IPv4_RR> -XPUT -d value="{\"ip\":\"<IPv4_RR>\",\"cluster_id\":\"<CLUSTER_ID>\"}"
 # IPv6 entries
@@ -189,7 +189,7 @@ container.
 
 Run the following command to start the Route Reflector container image.
 
-```
+```bash
 docker run --privileged --net=host -d                              \
            -e DATASTORE_TYPE=kubernetes                            \
            -e KUBECONFIG=/kubeconfig                               \
@@ -248,9 +248,9 @@ global configuration.
 Use `calicoctl` to configure each route reflector as a global peer (i.e. it
 peers with every node in the deployment):
 
-```
+```bash
 calicoctl bgp peer add <IP_RR> as <AS_NUM>
-$ calicoctl create -f - << EOF
+calicoctl create -f - << EOF
 apiVersion: v1
 kind: bgpPeer
 metadata:
@@ -285,8 +285,8 @@ example, you may have:
 To configure a Route Reflector as a peer of a specific node, run the following
 *from the node*:
 
-```
-$ cat << EOF | calicoctl create -f -
+```bash
+cat << EOF | calicoctl create -f -
 apiVersion: v1
 kind: bgpPeer
 metadata:

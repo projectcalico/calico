@@ -200,7 +200,7 @@ specific IP address, or to use one of the other detection methods.
 
 e.g.
 
-```
+```bash
 # First-found auto detection method explicitly specified
 sudo calicoctl node run --ip autodetect --ip-autodetection-method first-found
 ```
@@ -213,7 +213,7 @@ names may be used.
 
 e.g.
 
-```
+```bash
 # IP detection using a can-reach IP address
 sudo calicoctl node run --ip autodetect --ip-autodetection-method can-reach=8.8.8.8
 
@@ -231,7 +231,7 @@ dependent.
 
 e.g.
 
-```
+```bash
 # IP detection on interface eth0
 sudo calicoctl node run --ip autodetect --ip-autodetection-method interface=eth0
 

@@ -53,7 +53,7 @@ extracted from the Docker containers.
 
 On any host in your Calico / Docker network, run the following command:
 
-```
+```bash
 docker network create --driver calico --ipam-driver calico-ipam net1
 ```
 
@@ -69,7 +69,7 @@ either `frontend` or `database`.
 
 Create the workloads as docker containers with appropriate labels.
 
-```
+```bash
 docker run --label org.projectcalico.label.role=frontend --net net1 --name frontend-A -tid busybox
 docker run --label org.projectcalico.label.role=database --net net1 --name database-A -tid busybox
 ```
@@ -88,7 +88,7 @@ endpoints the policy is applied to based on the applied labels.
 
 We can use `calicoctl create` to create two new policies for this:
 
-```
+```bash
 cat << EOF | calicoctl create -f -
 - apiVersion: v1
   kind: policy
@@ -174,7 +174,7 @@ For your database containers that also need to be able to access the backup
 endpoints, launch them assigning both the `role = database` and `backup = true`
 labels.
 
-```
+```bash
 docker run --label org.projectcalico.label.role=database --label org.projectcalico.label.backup=true --net net1 --name database-B -tid busybox
 ```
 

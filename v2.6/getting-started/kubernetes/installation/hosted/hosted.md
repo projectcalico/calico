@@ -9,7 +9,7 @@ The following steps install Calico as a Kubernetes add-on using your own etcd cl
 
 If deploying Calico on an RBAC enabled cluster, you should first apply the `ClusterRole` and `ClusterRoleBinding` specs:
 
-```
+```bash
 kubectl apply -f {{site.url}}/{{page.version}}/getting-started/kubernetes/installation/rbac.yaml
 ```
 
@@ -22,7 +22,7 @@ To install Calico:
 
 Then simply apply the manifest:
 
-```shell
+```bash
 kubectl apply -f calico.yaml
 ```
 

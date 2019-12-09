@@ -96,11 +96,11 @@ Description:
 ```
 # Delete a set of resources (of mixed type) using the data in resources.yaml.
 # Results indicate that 8 resources were successfully deleted.
-$ calicoctl delete -f ./resources.yaml
+calicoctl delete -f ./resources.yaml
 Successfully deleted 8 resource(s)
 
 # Delete a policy resource by name.  The policy is called "policy1".
-$ bin/calicoctl delete policy policy1
+bin/calicoctl delete policy policy1
 Successfully deleted 1 'policy' resource(s)
 ```
 

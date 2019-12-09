@@ -19,7 +19,7 @@ instructions accordingly.
 Your installation should have installed and started the Calico service on each node.  You
 can check that it's running using `sudo rkt list`.
 
-```shell
+```
 $ sudo rkt list
 UUID      APP	IMAGE NAME                  STATE   CREATED         STARTED         NETWORKS
 b52bba11  node  quay.io/calico/node:{{site.data.versions[page.version].first.title}}  running 10 seconds ago  10 seconds ago
@@ -45,7 +45,7 @@ on other networks.
 
 This worked example creates two rkt networks. Run these commands on both `calico-01` and `calico-02`
 
-```shell
+```bash
 cat >/etc/rkt/net.d/10-calico-network1.conf <<EOF
 {
     "name": "network1",
@@ -85,13 +85,13 @@ Calico IPAM uses to assign a specific IP address.  We use a fixed IP address to
 simplify the steps in this tutorial, however if the suffix is omitted, Calico IPAM will
 automatically select an IP address to use from it's configured IP Pools.
 
-```shell
+```bash
 sudo rkt run --net=network1:IP=192.168.0.0 docker://busybox --exec httpd -- -f -h / &
 ```
 
 Use `rkt list` to see the IP.
 
-```shell
+```
 $ sudo rkt list
 UUID      APP      IMAGE NAME                                   STATE   CREATED         STARTED         NETWORKS
 6876aae5  busybox  registry-1.docker.io/library/busybox:latest  running 11 seconds ago  11 seconds ago  network1:ip4=192.168.0.0, default-restricted:ip4=172.16.28.2
@@ -112,13 +112,13 @@ either host, as long as they are created in the same network.
 
 e.g. On `calico-02` use wget to access the container running on `calico-01`
 
-```shell
+```
 sudo rkt run --net=network1 docker://busybox --exec=/bin/wget -- -T 3 192.168.0.0/etc/passwd 2>/dev/null
 ```
 
 Expected output:
 
-```shell
+```
 [  576.042144] busybox[5]: Connecting to 192.168.0.0 (192.168.0.0:80)
 [  576.046836] busybox[5]: passwd               100% |*******************************|   334   0:00:00 ETA
 ```
@@ -135,13 +135,13 @@ from any server in your cluster.
 Repeat the above command but try to access the container on `calico-01` from network2.
 Because we've not allowed access between these networks, the command will fail.
 
-```shell
+```bash
 sudo rkt run --net=network2 docker://busybox --exec=/bin/wget -- -T 3 192.168.0.0/etc/passwd 2>/dev/null
 ```
 
 Expected output:
 
-```shell
+```
 [  621.119210] busybox[5]: Connecting to 192.168.0.0 (192.168.0.0:80)
 [  624.120081] busybox[5]: wget: download timed out
 ```
@@ -151,7 +151,7 @@ Expected output:
 You can use the `calicoctl get profiles` command line tool to verify that the Calico CNI
 plugin created two profiles, `network1` and `network2`:
 
-```shell
+```
 $ calicoctl get profiles
 NAME
 network1
@@ -162,7 +162,7 @@ network2
 
 If you want to start again from the beginning, then run the following commands on both hosts to ensure that all the rkt containers are removed.
 
-```shell
+```bash
 # Stop the network1/network2 containers
 sudo rkt stop --force <Container_UUID>
 

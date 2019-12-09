@@ -23,7 +23,7 @@ This guide requires a host machine with:
 
 ## 3. Startup
 
-```shell
+```bash
 vagrant up
 ```
 

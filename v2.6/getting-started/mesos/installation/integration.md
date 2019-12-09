@@ -13,14 +13,14 @@ Calico runs as a Docker container on each host. The `calicoctl` command line too
 
 1. Download the calicoctl binary:
 
-   ```
+   ```bash
    sudo wget -O /usr/local/bin/calicoctl {{site.data.versions[page.version].first.components.calicoctl.download_url}}
    sudo chmod +x /usr/local/bin/calicoctl
    ```
 
 3. Launch `calico/node`:
 
-   ```
+   ```bash
    sudo ETCD_ENDPOINTS=http://$ETCD_IP:$ETCD_PORT calicoctl node run --node-image=quay.io/calico/node:{{site.data.versions[page.version].first.title}}
    ```
 
@@ -39,7 +39,7 @@ Calico runs as a Docker container on each host. The `calicoctl` command line too
    Furthermore, check that the `calico/node` container is functioning properly
    with the following command:
 
-   ```
+   ```bash
    sudo calicoctl node status
    ```
 
@@ -47,7 +47,7 @@ Calico runs as a Docker container on each host. The `calicoctl` command line too
    [`$NETWORK_CNI_PLUGINS_DIR` you configured for Mesos](prerequisites).
    You may skip this step if you do not plan on using the Unified Containerizer.
 
-   ```shell
+   ```bash
    curl -L -o $NETWORK_CNI_PLUGINS_DIR/calico \
        {{site.data.versions[page.version].first.components["calico/cni"].download_calico_url}}
    curl -L -o $NETWORK_CNI_PLUGINS_DIR/calico-ipam \
@@ -59,7 +59,7 @@ Calico runs as a Docker container on each host. The `calicoctl` command line too
 5. Create a Calico CNI configuration in the [`$NETWORK_CNI_CONF_DIR` you configured for Mesos](prerequisites), replacing `http://master.mesos:2379` with
    etcd's address:
 
-   ```shell
+   ```bash
    cat > $NETWORK_CNI_CONF_DIR/calico.conf <<EOF
    {
       "name": "calico",

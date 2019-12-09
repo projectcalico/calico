@@ -43,15 +43,15 @@ found at <http://docs.openstack.org>.
 
 Configure APT to use the Calico PPA:
 
-```shell
-    $ sudo add-apt-repository ppa:project-calico/{{ ppa_repo_name }}
+```bash
+    sudo add-apt-repository ppa:project-calico/{{ ppa_repo_name }}
 ```
 
 With Kilo, Calico also needs patched versions of Nova and Neutron that are
 provided by our 'kilo' PPA.  So if you are using Kilo:
 
-```shell
-    $ sudo add-apt-repository ppa:project-calico/kilo
+```bash
+    sudo add-apt-repository ppa:project-calico/kilo
 ```
 
 and also edit `/etc/apt/preferences` to add the following lines, whose effect
@@ -70,14 +70,14 @@ You will also need to add the official [BIRD](http://bird.network.cz/)
 PPA. This PPA contains fixes to BIRD that are not yet available in Ubuntu. To
 add the PPA, run:
 
-```shell
-    $ sudo add-apt-repository ppa:cz.nic-labs/bird
+```bash
+    sudo add-apt-repository ppa:cz.nic-labs/bird
 ```
 
 Once that's done, update your package manager on each machine:
 
-```shell
-    $ sudo apt-get update
+```bash
+    sudo apt-get update
 ```
 
 ## Etcd Install
@@ -92,32 +92,32 @@ through the process.
 
 1.  Install the `etcd` packages:
 
-    ```shell
-        $ sudo apt-get install etcd python-etcd
+    ```bash
+        sudo apt-get install etcd python-etcd
     ```
 
 2.  Stop the etcd service: :
 
-    ```shell
-        $ sudo service etcd stop
+    ```bash
+        sudo service etcd stop
     ```
 
 3.  Delete any existing etcd database: :
 
-    ```shell
-        $ sudo rm -rf /var/lib/etcd/*
+    ```bash
+        sudo rm -rf /var/lib/etcd/*
     ```
 
 4.  Mount a RAM disk at /var/lib/etcd: :
 
-    ```shell
-        $ sudo mount -t tmpfs -o size=512m tmpfs /var/lib/etcd
+    ```bash
+        sudo mount -t tmpfs -o size=512m tmpfs /var/lib/etcd
     ```
 
 5.  Add the following to the bottom of `/etc/fstab` so that the RAM disk
     gets reinstated at boot time:
 
-    ```shell
+    ```bash
         tmpfs /var/lib/etcd tmpfs nodev,nosuid,noexec,nodiratime,size=512M 0 0
     ```
 
@@ -126,7 +126,7 @@ through the process.
         substituting for `<controller_fqdn>` and
         `<controller_ip>` appropriately.
 
-        ```shell
+        ```bash
             exec /usr/bin/etcd --name="<controller_fqdn>"  \
                                --advertise-client-urls="http://<controller_ip>:2379,http://<controller_ip>:4001"  \
                                --listen-client-urls="http://0.0.0.0:2379,http://0.0.0.0:4001"  \
@@ -139,8 +139,8 @@ through the process.
 
 7.  Start the etcd service: :
 
-    ```shell
-        $ sudo service etcd start
+    ```bash
+        sudo service etcd start
     ```
 
 ## Etcd Proxy Install
@@ -150,35 +150,35 @@ isn't running the etcd database itself (both control and compute nodes).
 
 1.  Install the `etcd` and `python-etcd` packages:
 
-    ```shell
-        $ sudo apt-get install etcd python-etcd
+    ```bash
+        sudo apt-get install etcd python-etcd
     ```
 
 2.  Stop the etcd service: :
 
-    ```shell
-        $ sudo service etcd stop
+    ```bash
+        sudo service etcd stop
     ```
 
 3.  Delete any existing etcd database: :
 
-    ```shell
-        $ sudo rm -rf /var/lib/etcd/*
+    ```bash
+        sudo rm -rf /var/lib/etcd/*
     ```
 
 4.  Edit `/etc/init/etcd.conf`:
     -   Find the line which begins `exec /usr/bin/etcd` and edit it,
         substituting for `<etcd_fqdn>` and `<etcd_ip>` appropriately:
 
-        ```shell
+        ```bash
             exec /usr/bin/etcd --proxy on                                             \
                                --initial-cluster "<etcd_fqdn>=http://<etcd_ip>:2380"  \
         ```
 
 5.  Start the etcd service:
 
-    ```shell
-        $ sudo service etcd start
+    ```bash
+        sudo service etcd start
     ```
 
 ## Control Node Install
@@ -192,8 +192,8 @@ perform the following steps:
 
 2.  Install the `calico-control` package:
 
-    ```shell
-        $ sudo apt-get install calico-control
+    ```bash
+        sudo apt-get install calico-control
     ```
 
 3.  Edit the `/etc/neutron/neutron.conf` file. In the `[DEFAULT]`
@@ -212,8 +212,8 @@ perform the following steps:
 
 5.  Restart the Neutron server process:
 
-    ```shell
-        $ sudo service neutron-server restart
+    ```bash
+        sudo service neutron-server restart
     ```
 
 ## Compute Node Install
@@ -234,7 +234,7 @@ perform the following steps:
     In `/etc/libvirt/qemu.conf`, add or edit the following four options
     (in particular note the `/dev/net/tun` in `cgroup_device_acl`):
 
-    ```shell
+    ```bash
         clear_emulator_capabilities = 0
         user = "root"
         group = "root"
@@ -248,14 +248,14 @@ perform the following steps:
 
     Then restart libvirt to pick up the changes:
 
-    ```shell
-        $ sudo service libvirt-bin restart
+    ```bash
+        sudo service libvirt-bin restart
     ```
 
 2.  Open `/etc/nova/nova.conf` and remove the line from the `[DEFAULT]`
     section that reads:
 
-    ```shell
+    ```bash
         linuxnet_interface_driver = nova.network.linux_net.LinuxOVSInterfaceDriver
     ```
 
@@ -265,43 +265,43 @@ perform the following steps:
 
     Restart nova compute.
 
-    ```shell
-        $ sudo service nova-compute restart
+    ```bash
+        sudo service nova-compute restart
     ```
 
 3.  If they're running, stop the Open vSwitch services:
 
-    ```shell
-        $ sudo service openvswitch-switch stop
-        $ sudo service neutron-plugin-openvswitch-agent stop
+    ```bash
+        sudo service openvswitch-switch stop
+        sudo service neutron-plugin-openvswitch-agent stop
     ```
 
     Then, prevent the services running if you reboot:
 
-    ```shell
-        $ sudo sh -c "echo 'manual' > /etc/init/openvswitch-switch.override"
-        $ sudo sh -c "echo 'manual' > /etc/init/openvswitch-force-reload-kmod.override"
-        $ sudo sh -c "echo 'manual' > /etc/init/neutron-plugin-openvswitch-agent.override"
+    ```bash
+        sudo sh -c "echo 'manual' > /etc/init/openvswitch-switch.override"
+        sudo sh -c "echo 'manual' > /etc/init/openvswitch-force-reload-kmod.override"
+        sudo sh -c "echo 'manual' > /etc/init/neutron-plugin-openvswitch-agent.override"
     ```
 
     Then, on your control node, run the following command to find the
     agents that you just stopped:
 
-    ```shell
+    ```bash
         neutron agent-list
     ```
 
     For each agent, delete them with the following command on your
     control node, replacing `<agent-id>` with the ID of the agent:
 
-    ```shell
+    ```bash
         neutron agent-delete <agent-id>
     ```
 
 4.  Install some extra packages:
 
-    ```shell
-        $ sudo apt-get install neutron-common neutron-dhcp-agent nova-api-metadata
+    ```bash
+        sudo apt-get install neutron-common neutron-dhcp-agent nova-api-metadata
     ```
 
 5.  Run `apt-get upgrade` and `apt-get dist-upgrade`. These commands
@@ -327,30 +327,30 @@ perform the following steps:
 6.  If you're using OpenStack Kilo, open `/etc/neutron/dhcp_agent.ini` in your
     preferred text editor, and set the following in the `[DEFAULT]` section:
 
-    ```shell
+    ```bash
         interface_driver = neutron.agent.linux.interface.RoutedInterfaceDriver
     ```
 
     and then restart the DHCP agent:
 
-    ```shell
-        $ sudo service neutron-dhcp-agent restart
+    ```bash
+        sudo service neutron-dhcp-agent restart
     ```
 
     For OpenStack Liberty and later, install the Calico DHCP agent
     (which uses etcd, allowing it to scale to higher numbers of hosts)
     and disable the Neutron-provided one:
 
-    ```shell
-        $ sudo service neutron-dhcp-agent stop
-        $ echo manual | sudo tee /etc/init/neutron-dhcp-agent.override
-        $ sudo apt-get install calico-dhcp-agent
+    ```bash
+        sudo service neutron-dhcp-agent stop
+        echo manual | sudo tee /etc/init/neutron-dhcp-agent.override
+        sudo apt-get install calico-dhcp-agent
     ```
 
 7.  Install the `calico-compute` package:
 
-    ```shell
-        $ sudo apt-get install calico-compute
+    ```bash
+        sudo apt-get install calico-compute
     ```
 
     This step may prompt you to save your IPTables rules to make them
@@ -365,14 +365,14 @@ perform the following steps:
 
     For IPv4 connectivity between compute hosts:
 
-    ```shell
-        $ sudo calico-gen-bird-conf.sh <compute_node_ip> <route_reflector_ip> <bgp_as_number>
+    ```bash
+        sudo calico-gen-bird-conf.sh <compute_node_ip> <route_reflector_ip> <bgp_as_number>
     ```
 
     And/or for IPv6 connectivity between compute hosts:
 
-    ```shell
-        $ sudo calico-gen-bird6-conf.sh <compute_node_ipv4> <compute_node_ipv6> <route_reflector_ipv6> <bgp_as_number>
+    ```bash
+        sudo calico-gen-bird6-conf.sh <compute_node_ipv4> <compute_node_ipv6> <route_reflector_ipv6> <bgp_as_number>
     ```
 
     Note that you'll also need to configure your route reflector to
@@ -397,7 +397,7 @@ perform the following steps:
     -   Edit the upstart jobs /etc/init/bird.conf and bird6.conf ()if
         you're using IPv6), and add the following script to it.
 
-        ```shell
+        ```
             pre-stop script
             PID=`status bird | egrep -oi '([0-9]+)$' | head -n1`
             kill -9 $PID

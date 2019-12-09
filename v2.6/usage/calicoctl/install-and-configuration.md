@@ -22,7 +22,7 @@ The calicoctl tool can be downloaded from the
 [release page of the calicoctl repository]({{site.data.versions[page.version].first.components.calicoctl.url}}),
 set executable, and then it is ready to run.
 
-```
+```bash
 curl -O -L {{site.data.versions[page.version].first.components.calicoctl.download_url}}
 chmod +x calicoctl
 ```
@@ -40,13 +40,13 @@ all which depend on how your datastore is configured.
 
 Here is a simple etcdv2 example.
 
-```
+```bash
 ETCD_ENDPOINTS=http://etcd:2379 calicoctl get nodes
 ```
 
 Here is a simple Kubernetes datastore example.
 
-```
+```bash
 DATASTORE_TYPE=kubernetes KUBECONFIG=~/.kube/config calicoctl get nodes
 ```
 
@@ -58,7 +58,7 @@ For the possible options and configuration guidance see
 Here is a simple command to check that the installation and configuration is
 correct.
 
-```
+```bash
 calicoctl get nodes
 ```
 

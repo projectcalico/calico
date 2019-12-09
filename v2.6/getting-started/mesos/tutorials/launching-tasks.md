@@ -31,7 +31,7 @@ The task's stdout output should show a Calico IP from the default Calico pool of
 
 To launch a Docker Containerizer task, first create a Docker Network to launch it on:
 
-```
+```bash
 docker network create --driver=calico --ipam-driver=calico-ipam calico-nginx
 ```
 

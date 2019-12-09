@@ -15,7 +15,7 @@ For simplicity, you can quickly get started by running a single instance of etcd
 using Docker. Run the following command on a Master, ensure you've correctly set
 or replaced `$ETCD_IP` and `$ETCD_PORT`:
 
-```shell
+```bash
 docker run --detach \
 	--net=host \
 	--name etcd quay.io/coreos/etcd:v3.1.10 \
@@ -25,7 +25,7 @@ docker run --detach \
 
 Check that etcd is up and running:
 
-```shell
+```
 $ curl http://$ETCD_IP:$ETCD_PORT/version
 {"etcdserver":"2.2.5","etcdcluster":"2.2.0"}
 ```
@@ -40,7 +40,7 @@ Though Docker's configured cluster-store does not have to be the same as
 Calico's, for simplicity, users can configure Docker to use the same datastore
 as Calico by setting the following flag when starting the docker daemon:
 
-```shell
+```bash
 --cluster-store=etcd://$ETCD_IP:$ETCD_PORT
 ```
 
@@ -69,9 +69,9 @@ the Docker Containerizer is also enabled on each Agent.
 If you are using the default `mesos-init-wrapper` from the official Mesos package,
 you can enable the Docker Containerizer with the following command:
 
-```shell
-$ sh -c 'echo docker > /etc/mesos-slave/containerizers'
-$ systemctl restart mesos-slave.service
+```bash
+sh -c 'echo docker > /etc/mesos-slave/containerizers'
+systemctl restart mesos-slave.service
 ```
 
 #### 4. CNI Isolator Enabled for Mesos Agents

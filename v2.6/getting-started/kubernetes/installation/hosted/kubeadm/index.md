@@ -23,7 +23,7 @@ To install Calico and a single node etcd, run one of the following commands depe
 
 For kubeadm stable with Kubernetes version >= v1.6.0:
 
-```
+```bash
 kubectl apply -f {{site.url}}/{{page.version}}/getting-started/kubernetes/installation/hosted/kubeadm/1.6/calico.yaml
 ```
 
@@ -31,7 +31,7 @@ kubectl apply -f {{site.url}}/{{page.version}}/getting-started/kubernetes/instal
 
 For kubeadm 1.5 with Kubernetes version v1.5.x:
 
-```
+```bash
 kubectl apply -f {{site.url}}/{{page.version}}/getting-started/kubernetes/installation/hosted/kubeadm/1.5/calico.yaml
 ```
 
@@ -55,7 +55,7 @@ automatically on the master when using kubeadm.
 To check if the required label is applied, run the following command and
 inspect the output for the correct label:
 
-```shell
+```bash
 $ kubectl get node <master_name> -o yaml
 ```
 

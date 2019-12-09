@@ -23,7 +23,7 @@ the need for etcd-proxy:
    For demo purposes, we'll run one single instance of etcd on our first master
    (available at http://m1.dcos:2379):
 
-   ```shell
+   ```bash
    docker run -d --net=host --name=etcd quay.io/coreos/etcd:v3.1.10 \
    --advertise-client-urls "http://m1.dcos:2379" \
    --listen-client-urls "http://m1.dcos:2379,http://127.0.0.1:2379" \
@@ -57,13 +57,13 @@ can perform the docker cluster-store configuration manually.
 
 2. Restart docker:
 
-   ```
+   ```bash
    systemctl restart docker
    ```
 
    Ensure it has picked up the changes:
 
-   ```
+   ```bash
    docker info | grep -i "cluster store"
    ```
 
@@ -86,14 +86,14 @@ on each agent:
 
 1. Download Calico's CNI plugin binaries:
 
-   ```shell
+   ```bash
    curl -L -o /opt/mesosphere/active/cni/calico  {{site.data.versions[page.version].first.components["calico/cni"].download_calico_url}}
    curl -L -o /opt/mesosphere/active/cni/calico-ipam {{site.data.versions[page.version].first.components["calico/cni"].download_calico_ipam_url}}
    ```
 
 2. Create a standard Calico CNI network configuration:
 
-   ```shell
+   ```bash
    cat <<EOF > /opt/mesosphere/etc/dcos/network/cni/calico.conf
    {
        "name": "calico",

@@ -56,7 +56,7 @@ The following resources are supported:
 
 A file may contain multiple resource documents specified in a YAML list format. For example, the following is the contents of a file containing two `hostEndpoint` resources:
 
-```
+```yaml
 - apiVersion: v1
   kind: hostEndpoint
   metadata:

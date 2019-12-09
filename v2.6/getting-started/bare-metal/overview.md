@@ -150,7 +150,7 @@ the Calico/BGP integration, the specification of a node resource just requires
 the name of the node;  for most deployments this will be the same as the
 hostname.
 
-```
+```bash
 cat << EOF | calicoctl create -f -
 - apiVersion: v1
   kind: node
@@ -195,7 +195,7 @@ When running this command, replace the placeholders in angle brackets with
 appropriate values for your deployment.
 <!-- -->
 
-```
+```bash
 cat << EOF | calicoctl create -f -
 - apiVersion: v1
   kind: policy
@@ -266,7 +266,7 @@ arbitrary name required for endpoint identification.
 When running this command, replace the placeholders in angle brackets with
 appropriate values for your deployment.
 
-```
+```bash
 cat << EOF | calicoctl create -f -
 - apiVersion: v1
   kind: hostEndpoint
@@ -312,7 +312,7 @@ key/value pairs that can be used in selector expressions.
 Or, if you knew that the IP address should be 10.0.0.1, but not the name
 of the interface:
 
-```
+```bash
 cat << EOF | calicoctl create -f -
 - apiVersion: v1
   kind: hostEndpoint
@@ -361,7 +361,7 @@ endpoints that match particular label selectors.
 
 +For example, you could add a second policy for webserver access:
 
-```
+```bash
 cat << EOF | dist/calicoctl create -f -
 - apiVersion: v1
   kind: policy
@@ -598,7 +598,7 @@ policy, because:
 Here is the pre-DNAT policy that we need to disallow incoming external traffic
 in general:
 
-```
+```bash
 calicoctl apply -f - <<EOF
 - apiVersion: v1
   kind: policy
@@ -647,7 +647,7 @@ interface.  Otherwise, when we define host endpoints for those interfaces, no
 egress traffic will be allowed (except for traffic that is allowed by
 the [failsafe rules](#failsafe-rules)).
 
-```
+```bash
 calicoctl apply -f - <<EOF
 - apiVersion: v1
   kind: policy
@@ -683,7 +683,7 @@ node.  The policies above all have a selector that makes them applicable to any
 endpoint with a `host-endpoint` label, so we should include that label in our
 definitions.  For example, for `eth0` on `node1`:
 
-```
+```bash
 calicoctl apply -f - <<EOF
 - apiVersion: v1
   kind: hostEndpoint
@@ -709,7 +709,7 @@ but not from outside.
 To open a pinhole for that NodePort, for external access, you can configure a
 pre-DNAT policy like this:
 
-```
+```bash
 calicoctl apply -f - <<EOF
 - apiVersion: v1
   kind: policy

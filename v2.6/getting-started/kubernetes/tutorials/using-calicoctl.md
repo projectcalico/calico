@@ -13,7 +13,7 @@ There are two ways to run `calicoctl` in Kubernetes:
 You can install calicoctl by [downloading the appropriate release]({{site.baseurl}}/{{page.version}}/releases) to any
 machine with access to your etcd cluster by setting `ETCD_ENDPOINTS`. For example:
 
-```
+```bash
 ETCD_ENDPOINTS=http://etcd:2379 calicoctl get profile
 ```
 
@@ -39,13 +39,13 @@ commands. This pod will need to be configured for the Kubernetes environment it 
 
 For the **etcd backend** (e.g. kubeadm):
 
-```
+```bash
 kubectl apply -f {{site.url}}/{{page.version}}/getting-started/kubernetes/installation/hosted/calicoctl.yaml
 ```
 
 For **Kubernetes Datastore Backend**:
 
-```
+```bash
 kubectl apply -f {{site.url}}/{{page.version}}/getting-started/kubernetes/installation/hosted/kubernetes-datastore/calicoctl.yaml
 ```
 

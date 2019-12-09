@@ -48,7 +48,7 @@ configuration will be placed in a particular location.
 Ensure the following directories are created by running the following commands on
 each node:
 
-```
+```bash
 mkdir -p /var/run/calico
 mkdir -p /var/log/calico
 mkdir -p /opt/bin
@@ -62,7 +62,7 @@ Each Calico-rkt enabled node requires the `calico/node` container to be running.
 The calico/node container can be run directly through rkt and needs to be run as
 as fly stage-1 container.
 
-```shell
+```bash
 sudo rkt run --stage1-path=/usr/share/rkt/stage1-fly.aci \
   --set-env=ETCD_ENDPOINTS=http://<ETCD_IP>:<ETCD_PORT> \
   --set-env=IP=autodetect \
@@ -85,7 +85,7 @@ sudo rkt run --stage1-path=/usr/share/rkt/stage1-fly.aci \
 
 You can check that it's running using `sudo rkt list`.
 
-```shell
+```
 $ sudo rkt list
 UUID      APP	IMAGE NAME                  STATE   CREATED         STARTED         NETWORKS
 b52bba11  node  quay.io/calico/node:{{site.data.versions[page.version].first.title}}  running 10 seconds ago  10 seconds ago
@@ -94,7 +94,7 @@ b52bba11  node  quay.io/calico/node:{{site.data.versions[page.version].first.tit
 ## Installing calicoctl
    Download the calicoctl binary:
 
-   ```
+   ```bash
    sudo wget -O /usr/local/bin/calicoctl {{site.data.versions[page.version].first.components.calicoctl.download_url}}
    sudo chmod +x calicoctl
    ```
@@ -105,13 +105,13 @@ The [`calicoctl` documentation]({{site.baseurl}}/{{page.version}}/reference/cali
 
 Alternatively to downloading the `calicoctl` binary it can be run as a container.
 
-```
+```bash
 sudo rkt run quay.io/calico/ctl --exec /calicoctl -- version
 ```
 
 To also specify the ETCD_ENDPOINTS use:
 
-```
+```bash
 sudo rkt run --set-env=ETCD_ENDPOINTS="http://etcd1:2379" quay.io/calico/ctl --exec /calicoctl -- version
 ```
 
@@ -155,7 +155,7 @@ to be discoverable on that node.  Mutliple networks may be created using unique 
 
 For example, run the following to create a network called "mynet"
 
-```shell
+```bash
 cat >/etc/rkt/net.d/10-calico-mynet.conf <<EOF
 {
     "name": "mynet",

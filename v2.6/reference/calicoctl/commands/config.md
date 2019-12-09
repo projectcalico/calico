@@ -83,18 +83,18 @@ The table below details the valid config options.
 
 ### Examples
 
-```
+```bash
 # Turn off the full BGP node-to-node mesh
-$calicoctl config set nodeToNodeMesh off
+calicoctl config set nodeToNodeMesh off
 
 # Set global log level to warning
-$calicoctl config set logLevel warning
+calicoctl config set logLevel warning
 
 # Set log level to info for node "node1"
-$calicoctl config set logLevel info --node=node1
+calicoctl config set logLevel info --node=node1
 
 # Display the current setting for the nodeToNodeMesh
-$calicoctl config get nodeToNodeMesh
+calicoctl config get nodeToNodeMesh
 off
 ```
 

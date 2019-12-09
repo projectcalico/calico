@@ -11,7 +11,7 @@ You can quickly and easily deploy such a cluster by following one of the [instal
 
 This guide will deploy pods in a Kubernetes Namespaces.  Let's create the `Namespace` object for this guide.
 
-```
+```bash
 kubectl create ns policy-demo
 ```
 
@@ -21,7 +21,7 @@ We'll use Kubernetes `Deployment` objects to easily create pods in the `Namespac
 
 1) Create some nginx pods in the `policy-demo` Namespace, and expose them through a Service.
 
-```shell
+```bash
 # Run the Pods.
 kubectl run --namespace=policy-demo nginx --replicas=2 --image=nginx
 
@@ -49,7 +49,7 @@ Let's turn on isolation in our policy-demo Namespace.  Calico will then prevent 
 
 Running the following command creates a NetworkPolicy which implements a default deny behavior for all pods in the `policy-demo` Namespace.
 
-```
+```bash
 kubectl create -f - <<EOF
 kind: NetworkPolicy
 apiVersion: extensions/v1beta1
@@ -87,7 +87,7 @@ from anywhere else.
 
 Create a network policy `access-nginx` with the following contents:
 
-```
+```bash
 kubectl create -f - <<EOF
 kind: NetworkPolicy
 apiVersion: extensions/v1beta1
@@ -140,7 +140,7 @@ wget: download timed out
 
 You can clean up the demo by deleting the demo Namespace:
 
-```shell
+```bash
 kubectl delete ns policy-demo
 ```
 

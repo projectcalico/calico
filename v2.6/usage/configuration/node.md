@@ -62,7 +62,7 @@ recommended to include the subnet information if you specify the IP addresses us
 this approach.
 
 For example (if using calicoctl node run):
-```
+```bash
 calicoctl node run --ip=10.0.2.10/24
 ```
 
@@ -83,7 +83,7 @@ For IPv6, use the equivalent `--ip6` and `--ip6-autodetection-method` options,
 and `IP6` and `IP6_AUTODETECTION_METHOD` environment variables.
 
 For example (if using calicoctl node run):
-```
+```bash
 calicoctl node run --ip=autodetect --ip-autodetection-method=can-reach=8.8.8.8
 ```
 
@@ -94,9 +94,9 @@ The IP addresses may also be set by updating the node resource.
 You can use `calicoctl` to query the current configuration and then apply updates.
 For example:
 
-```
+```bash
 # Start by querying the current node configuration
-$ calicoctl get node node2 -o yaml
+calicoctl get node node2 -o yaml
 - apiVersion: v1
   kind: node
   metadata:
@@ -108,7 +108,7 @@ $ calicoctl get node node2 -o yaml
 
 # Now reconfigure the node with updated ipv4Address to include the correct
 # subnet.
-$ calicoctl apply -f - << EOF
+calicoctl apply -f - << EOF
 - apiVersion: v1
   kind: node
   metadata:

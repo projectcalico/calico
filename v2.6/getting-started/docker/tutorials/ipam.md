@@ -15,7 +15,7 @@ Calico IP pool.
 
 #### 1. Create a Calico IP pool
 
-```
+```bash
 cat << EOF | calicoctl create -f -
 - apiVersion: v1
   kind: ipPool
@@ -26,7 +26,7 @@ EOF
 
 #### 2. Create a Docker network using the IP pool
 
-```
+```bash
 docker network create --driver calico --ipam-driver calico-ipam --subnet=192.0.2.0/24 my_net
 ```
 
@@ -34,12 +34,12 @@ docker network create --driver calico --ipam-driver calico-ipam --subnet=192.0.2
 
 #### 3. Create a container using a specific IP address from the pool
 
-```
+```bash
 docker run --net my_net --name my_workload --ip 192.0.2.100 -tid busybox
 ```
 
 #### 4. Verify that the IP address was assigned to the container
 
-```
+```bash
 docker inspect -f {%raw%}'{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}'{%endraw%} my_workload
 ```

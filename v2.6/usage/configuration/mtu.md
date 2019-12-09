@@ -100,7 +100,7 @@ Passing in the environment variable `FELIX_IPINIPMTU` when running the
 To set the IP-in-IP MTU value for all calico nodes in your cluster, use the
 following command to set the global config value.
 
-```
+```bash
 calicoctl config set --raw=felix IpInIpMtu 1480
 ```
 

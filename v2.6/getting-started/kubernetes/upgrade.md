@@ -49,7 +49,7 @@ it can be upgraded via the standard [deployment mechanism](http://kubernetes.io/
 To upgrade the controllers, simply apply changes to the deployment specification and Kubernetes will
 do the rest.
 
-```
+```bash
 kubectl apply -f new-controllers.yaml
 ```
 
@@ -69,7 +69,7 @@ To upgrade the DaemonSet:
 
 Modify the DaemonSet manifest and run:
 
-```
+```bash
 kubectl apply -f calico-node.yaml
 ```
 
@@ -83,20 +83,20 @@ Perform the following steps on each node one at a time.
 
 First make the node unschedulable:
 
-```
+```bash
 kubectl cordon node-01
 ```
 
 Delete the calico-node pod running on the cordoned node and wait for the
 DaemonSet controller to deploy a replacement.
 
-```
+```bash
 kubectl delete pod -n kube-system calico-node-ajzy6e3t
 ```
 
 Once the new calico-node Pod has started, make the node schedulable again.
 
-```
+```bash
 kubectl uncordon node-01
 ```
 

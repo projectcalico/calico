@@ -56,7 +56,7 @@ Each node must also be recorded in the Calico datastore.
 The calico/node container can be run directly through docker, or it can be
 done using the `calicoctl` utility.
 
-```
+```bash
 # Download and install `calicoctl`
 wget {{site.data.versions[page.version].first.components.calicoctl.download_url}}
 sudo chmod +x calicoctl
@@ -72,7 +72,7 @@ for more information.
 
 If you're using systemd as your init system then the following service file can be used.
 
-```bash
+```service
 [Unit]
 Description=calico node
 After=docker.service
@@ -184,13 +184,13 @@ To install the controllers:
 - Modify `<ETCD_ENDPOINTS>` to point to your etcd cluster.
 - Install it using `kubectl`.
 
-```shell
-$ kubectl create -f calico-kube-controllers.yaml
+```bash
+kubectl create -f calico-kube-controllers.yaml
 ```
 
 After a few moments, you should see the controllers enter `Running` state:
 
-```shell
+```
 $ kubectl get pods --namespace=kube-system
 NAME                                     READY     STATUS    RESTARTS   AGE
 calico-kube-controllers                  1/1       Running   0          1m
@@ -211,7 +211,7 @@ please see the [upstream Kubernetes documentation](https://kubernetes.io/docs/ad
 The following yaml file defines the necessary API permissions required by Calico
 when using the etcd datastore.
 
-```
+```bash
 kubectl apply -f {{site.url}}/{{page.version}}/getting-started/kubernetes/installation/rbac.yaml
 ```
 

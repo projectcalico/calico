@@ -59,7 +59,7 @@ of the two network profiles to provide the required isolation.
 
 On any host in your Calico / Docker network, run the following commands:
 
-```
+```bash
 docker network create --driver calico --ipam-driver calico-ipam database
 docker network create --driver calico --ipam-driver calico-ipam frontend
 ```
@@ -81,7 +81,7 @@ or `database`.
 
 Use `calicoctl apply` to create or update the profiles:
 
-```
+```bash
 cat << EOF | calicoctl apply -f -
 - apiVersion: v1
   kind: profile
@@ -166,7 +166,7 @@ labels applied by the profile.
 
 On any host in your Calico / Docker network, run the following commands:
 
-```
+```bash
 docker network create --driver calico --ipam-driver calico-ipam database
 docker network create --driver calico --ipam-driver calico-ipam frontend
 ```
@@ -185,7 +185,7 @@ previous, we do not define any policy rules within the profile.
 
 Use `calicoctl apply` to create or update the profiles:
 
-```
+```bash
 cat << EOF | calicoctl apply -f -
 - apiVersion: v1
   kind: profile
@@ -217,7 +217,7 @@ profiles.
 
 We can use `calicoctl create` to create two new policies for this:
 
-```
+```bash
 cat << EOF | calicoctl create -f -
 - apiVersion: v1
   kind: policy

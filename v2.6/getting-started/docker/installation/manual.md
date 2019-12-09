@@ -14,7 +14,7 @@ Calico runs as a Docker container on each host. The `calicoctl` command line too
 
 1. Download the calicoctl binary:
 
-   ```
+   ```bash
    sudo wget -O /usr/local/bin/calicoctl {{site.data.versions[page.version].first.components.calicoctl.download_url}}
    sudo chmod +x /usr/local/bin/calicoctl
    ```
@@ -22,7 +22,7 @@ Calico runs as a Docker container on each host. The `calicoctl` command line too
 2. Configure access to your etcd cluster, [calicoctl - etcd datastore]({{site.baseurl}}/{{page.version}}/reference/calicoctl/setup/etcdv2).
 3. Launch `calico/node`:
 
-   ```
+   ```bash
    sudo calicoctl node run --node-image=quay.io/calico/node:{{site.data.versions[page.version].first.title}}
    ```
 
@@ -37,7 +37,7 @@ CONTAINER ID        IMAGE                        COMMAND             CREATED    
 Furthermore, check that the `calico/node` container is functioning properly
 with the following command:
 
-```
+```bash
 sudo calicoctl node status
 ```
 

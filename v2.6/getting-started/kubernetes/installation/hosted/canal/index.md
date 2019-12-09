@@ -41,7 +41,7 @@ need to create the following RBAC roles to allow API access by Canal.
 
 Apply the following manifest to create these necessary RBAC roles and bindings.
 
-```
+```bash
 kubectl apply -f {{site.url}}/{{page.version}}/getting-started/kubernetes/installation/hosted/canal/rbac.yaml
 ```
 > **Note**: You can also [view the YAML in your browser.](rbac.yaml){:target="_blank"}.
@@ -53,7 +53,7 @@ The recommended Canal installation uses the Kubernetes API as the datastore,
 the manifest below installs Calico and flannel configured to use the
 Kubernetes API.
 
-```
+```bash
 kubectl apply -f {{site.url}}/{{page.version}}/getting-started/kubernetes/installation/hosted/canal/canal.yaml
 ```
 > **Note**: You can also [view the YAML in your browser.](canal.yaml){:target="_blank"}.

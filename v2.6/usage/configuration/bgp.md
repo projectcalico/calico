@@ -170,8 +170,8 @@ disabled.
 To add a global BGP peer at IP address 192.20.30.40 with AS number 64567 run
 the following command on any node:
 
-```
-$ cat << EOF | calicoctl create -f -
+```bash
+cat << EOF | calicoctl create -f -
 apiVersion: v1
 kind: bgpPeer
 metadata:
@@ -215,8 +215,8 @@ described in the reference material.
 To add a BGP peer at IP address aa:bb::ff with AS number 64514,
 peering with Calico node "node1", run the following command on any node:
 
-```
-$ cat << EOF | calicoctl create -f -
+```bash
+cat << EOF | calicoctl create -f -
 apiVersion: v1
 kind: bgpPeer
 metadata:

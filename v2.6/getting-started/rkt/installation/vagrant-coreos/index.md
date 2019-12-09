@@ -76,7 +76,7 @@ Verify that `calicoctl` (the Calico CLI) is installed by running
 
 Start the Calico service on *both* hosts
 
-```shell
+```bash
 sudo rkt run --stage1-path=/usr/share/rkt/stage1-fly.aci \
   --set-env=ETCD_ENDPOINTS=http://172.18.18.101:2379 \
   --set-env=IP=autodetect \
@@ -96,7 +96,7 @@ This will create a calico/node rkt container.
 
 You can check that it's running using `sudo rkt list`.
 
-```shell
+```
 $ sudo rkt list
 UUID      APP	IMAGE NAME                  STATE   CREATED         STARTED         NETWORKS
 b52bba11  node  quay.io/calico/node:{{site.data.versions[page.version].first.title}}  running 10 seconds ago  10 seconds ago
