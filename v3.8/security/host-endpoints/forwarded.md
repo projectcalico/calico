@@ -47,7 +47,7 @@ pass ingress policy on the first host endpoint and egress policy on the second h
 > traffic, you can create an empty policy with `applyOnForward` set to `true`
 > that applies to all traffic on all host endpoints.
 {: .alert .alert-info}
-```
+```bash
 calicoctl apply -f - <<EOF
 - apiVersion: projectcalico.org/v3
   kind: GlobalNetworkPolicy

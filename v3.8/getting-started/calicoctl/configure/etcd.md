@@ -82,13 +82,13 @@ spec:
 
 #### Example using environment variables
 
-```
+```bash
 ETCD_ENDPOINTS=http://myhost1:2379 calicoctl get bgppeers
 ```
 
 #### Example using etcd DNS discovery
 
-```
+```bash
 ETCD_DISCOVERY_SRV=example.com calicoctl get nodes
 ```
 
@@ -96,13 +96,13 @@ ETCD_DISCOVERY_SRV=example.com calicoctl get nodes
 
 Create a single node etcd cluster listening on IPv6 localhost `[::1]`.
 
-```
+```bash
 etcd --listen-client-urls=http://[::1]:2379 --advertise-client-urls=http://[::1]:2379
 ```
 
 Use the etcd IPv6 cluster:
 
-```
+```bash
 ETCD_ENDPOINTS=http://[::1]:2379 calicoctl get bgppeers
 ```
 
@@ -110,19 +110,19 @@ ETCD_ENDPOINTS=http://[::1]:2379 calicoctl get bgppeers
 
 Create a single node etcd cluster listening on IPv4 and IPv6 localhost `[::1]`.
 
-```
+```bash
 etcd --listen-client-urls=http://[::1]:2379,http://127.0.0.1:2379 --advertise-client-urls=http://[::1]:2379
 ```
 
 Use the IPv6 endpoint:
 
-```
+```bash
 ETCD_ENDPOINTS=http://[::1]:2379 calicoctl get bgppeers
 ```
 
 Use the IPv4 endpoint:
 
-```
+```bash
 ETCD_ENDPOINTS=http://127.0.0.1:2379 calicoctl get bgppeers
 ```
 
@@ -141,7 +141,7 @@ Therefore, configuring `{{site.nodecontainer}}` for etcd is easily accomplished 
 Here is a simple command to check that the installation and configuration is
 correct.
 
-```
+```bash
 calicoctl get nodes
 ```
 

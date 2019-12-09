@@ -69,19 +69,19 @@ This example shows how to limit access to the {{site.nodecontainer}} Prometheus 
 
    Then, use `calicoctl` to apply this policy.
 
-   ```shell
+   ```bash
    calicoctl apply -f default-host-policy.yaml
    ```
 
 1. List the nodes on which {{site.prodname}} is running with the following command.
 
-   ```shell
+   ```bash
    calicoctl get nodes
    ```
 
    In this case, we have two nodes in the cluster.
 
-   ```shell
+   ```
    NAME
    kubeadm-master
    kubeadm-node-0
@@ -127,7 +127,7 @@ This example shows how to limit access to the {{site.nodecontainer}} Prometheus 
 
    Then, use `calicoctl` to apply the host endpoints with the following command.
 
-   ```shell
+   ```bash
    calicoctl apply -f host-endpoints.yaml
    ```
 
@@ -170,7 +170,7 @@ This example shows how to limit access to the {{site.nodecontainer}} Prometheus 
 
    Then, use `calicoctl` to apply this policy.
 
-   ```shell
+   ```bash
    calicoctl apply -f calico-prometheus-policy.yaml
    ```
 
@@ -182,7 +182,7 @@ This example shows how to limit access to the {{site.nodecontainer}} Prometheus 
 
    For example, to allow access to a Kubernetes pod you can run the following command.
 
-   ```shell
+   ```bash
    kubectl label pod my-prometheus-pod calico-prometheus-access=true
    ```
 
@@ -244,7 +244,7 @@ other network endpoints unknown to {{site.prodname}}.
 
 Then, use `calicoctl` to apply this policy.
 
-```shell
+```bash
 calicoctl apply -f typha-prometheus-policy.yaml
 ```
 
@@ -262,13 +262,13 @@ The basic process is as follows:
 
 1. List the nodes on which {{site.prodname}} is running with the following command.
 
-   ```shell
+   ```bash
    calicoctl get nodes
    ```
 
    In this case, we have two nodes in the cluster.
 
-   ```shell
+   ```
    NAME
    kubeadm-master
    kubeadm-node-0
@@ -315,7 +315,7 @@ The basic process is as follows:
    Then, use `calicoctl` to apply the host endpoints with the following command. This will prevent all
    traffic to and from the host endpoints.
 
-   ```shell
+   ```bash
    calicoctl apply -f host-endpoints.yaml
    ```
 
@@ -360,7 +360,7 @@ The basic process is as follows:
 
    Then, use `calicoctl` to apply this policy.
 
-   ```shell
+   ```bash
    calicoctl apply -f calico-prometheus-policy.yaml
    ```
 
@@ -372,7 +372,7 @@ The basic process is as follows:
 
    For example, to allow access to a Kubernetes pod you can run the following command.
 
-   ```shell
+   ```bash
    kubectl label pod my-prometheus-pod calico-prometheus-access=true
    ```
 
@@ -428,6 +428,6 @@ all {{site.prodname}} workload endpoints, host endpoints, and global network set
 
 Then, use `calicoctl` to apply this policy.
 
-```shell
+```bash
 calicoctl apply -f typha-prometheus-policy.yaml
 ```

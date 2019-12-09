@@ -36,7 +36,7 @@ The following steps walk through the above required steps, assuming no prior con
 
 First, you create the HostEndtpoints corresponding to the network interfaces where you want to enforce DoS mitigation rules. In the following example, the HostEndpoint secures the interface named **eth0** with IP **10.0.0.1** on node **jasper**.
 
-```
+```yaml
 apiVersion: projectcalico.org/v3
 kind: HostEndpoint
 metadata:
@@ -53,7 +53,7 @@ spec:
 
 Next, you create a Calico **GlobalNetworkset**, adding the CIDRs that you want to blacklist. In the following example, the global network set blacklists the CIDR ranges **1.2.3.4/32** and **5.6.0.0/16**:
 
-```
+```yaml
 apiVersion: projectcalico.org/v3
 kind: GlobalNetworkSet
 metadata:
@@ -70,7 +70,7 @@ spec:
 
 Finally, create a Calico GlobalNetworkPolicy adding the GlobalNetworkSet label (**dos-blacklist** in the previous step) as a selector to deny ingress traffic. To more quickly enforce the denial of forwarded traffic to the host at the packet level, use the **doNotTrack** and **applyOnForward** options.
 
-```
+```yaml
 apiVersion: projectcalico.org/v3
 kind: GlobalNetworkPolicy
 metadata:

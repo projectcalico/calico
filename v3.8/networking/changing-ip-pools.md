@@ -83,7 +83,7 @@ Let's get started.
 
 1. Add a new IP pool:
 
-   ```
+   ```bash
    calicoctl create -f -<<EOF
    apiVersion: projectcalico.org/v3
    kind: IPPool
@@ -113,7 +113,7 @@ Let's get started.
 
    `pool.yaml` should look like this:
 
-   ```
+   ```yaml
    apiVersion: projectcalico.org/v3
    items:
    - apiVersion: projectcalico.org/v3
@@ -139,7 +139,7 @@ Let's get started.
 
    Edit the file, adding `disabled: true` to the `default-ipv4-ippool` IP pool:
 
-   ```
+   ```yaml
    apiVersion: projectcalico.org/v3
    kind: IPPool
    metadata:
@@ -167,7 +167,7 @@ Let's get started.
 3. Recreate all existing workloads using IPs from the disabled pool.
    In this example, kube-dns is the only workload networked by {{ site.prodname }}:
 
-   ```
+   ```bash
    kubectl delete pod -n kube-system kube-dns-6f4fd4bdf-8q7zp
    ```
 
@@ -181,7 +181,7 @@ Let's get started.
 
 4. Delete the old IP pool:
 
-   ```
+   ```bash
    calicoctl delete pool default-ipv4-ippool
    ```
 
