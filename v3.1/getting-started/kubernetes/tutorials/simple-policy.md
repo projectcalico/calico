@@ -11,7 +11,7 @@ You can quickly and easily deploy such a cluster by following one of the [instal
 
 This guide will deploy pods in a Kubernetes Namespaces.  Let's create the `Namespace` object for this guide.
 
-```
+```bash
 kubectl create ns policy-demo
 ```
 
@@ -21,7 +21,7 @@ We'll use Kubernetes `Deployment` objects to easily create pods in the `Namespac
 
 1) Create some nginx pods in the `policy-demo` Namespace, and expose them through a Service.
 
-```shell
+```bash
 # Run the Pods.
 kubectl run --namespace=policy-demo nginx --replicas=2 --image=nginx
 
@@ -33,7 +33,7 @@ kubectl expose --namespace=policy-demo deployment nginx --port=80
 
 ```
 # Run a Pod and try to access the `nginx` Service.
-$ kubectl run --namespace=policy-demo access --rm -ti --image busybox /bin/sh
+kubectl run --namespace=policy-demo access --rm -ti --image busybox /bin/sh
 Waiting for pod policy-demo/access-472357175-y0m47 to be running, status is Pending, pod ready: false
 
 If you don't see a command prompt, try pressing enter.
@@ -49,7 +49,7 @@ Let's turn on isolation in our policy-demo Namespace.  Calico will then prevent 
 
 Running the following command creates a NetworkPolicy which implements a default deny behavior for all pods in the `policy-demo` Namespace.
 
-```
+```bash
 kubectl create -f - <<EOF
 kind: NetworkPolicy
 apiVersion: networking.k8s.io/v1
@@ -68,7 +68,7 @@ This will prevent all access to the nginx Service.  We can see the effect by try
 
 ```
 # Run a Pod and try to access the `nginx` Service.
-$ kubectl run --namespace=policy-demo access --rm -ti --image busybox /bin/sh
+kubectl run --namespace=policy-demo access --rm -ti --image busybox /bin/sh
 Waiting for pod policy-demo/access-472357175-y0m47 to be running, status is Pending, pod ready: false
 
 If you don't see a command prompt, try pressing enter.
@@ -87,7 +87,7 @@ from anywhere else.
 
 Create a network policy `access-nginx` with the following contents:
 
-```
+```bash
 kubectl create -f - <<EOF
 kind: NetworkPolicy
 apiVersion: networking.k8s.io/v1
@@ -116,7 +116,7 @@ We should now be able to access the Service from the `access` Pod.
 
 ```
 # Run a Pod and try to access the `nginx` Service.
-$ kubectl run --namespace=policy-demo access --rm -ti --image busybox /bin/sh
+kubectl run --namespace=policy-demo access --rm -ti --image busybox /bin/sh
 Waiting for pod policy-demo/access-472357175-y0m47 to be running, status is Pending, pod ready: false
 
 If you don't see a command prompt, try pressing enter.
@@ -128,7 +128,7 @@ However, we still cannot access the Service from a Pod without the label `run: a
 
 ```
 # Run a Pod and try to access the `nginx` Service.
-$ kubectl run --namespace=policy-demo cant-access --rm -ti --image busybox /bin/sh
+kubectl run --namespace=policy-demo cant-access --rm -ti --image busybox /bin/sh
 Waiting for pod policy-demo/cant-access-472357175-y0m47 to be running, status is Pending, pod ready: false
 
 If you don't see a command prompt, try pressing enter.
@@ -140,7 +140,7 @@ wget: download timed out
 
 You can clean up the demo by deleting the demo Namespace:
 
-```shell
+```bash
 kubectl delete ns policy-demo
 ```
 

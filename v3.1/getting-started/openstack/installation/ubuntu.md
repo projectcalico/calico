@@ -33,14 +33,14 @@ These steps are detailed in this section.
 
 1.  Configure APT to use the {{site.prodname}} PPA:
 
-    ```
+    ```bash
     add-apt-repository ppa:project-calico/{{ ppa_repo_name }}
     ```
 
 1.  Add the official [BIRD](http://bird.network.cz/) PPA. This PPA contains
     fixes to BIRD that are not yet available in Ubuntu. To add the PPA, run:
 
-    ```
+    ```bash
     add-apt-repository ppa:cz.nic-labs/bird
     ```
 
@@ -52,7 +52,7 @@ These steps are detailed in this section.
 
 1. Update your package manager on each machine:
 
-    ```
+    ```bash
     apt-get update
     ```
 
@@ -62,13 +62,13 @@ These steps are detailed in this section.
     it with `pip`.  First check in case it has already been pulled in by your
     OpenStack installation.
 
-    ```
+    ```bash
     find /usr/lib/python2.7/ -name etcd3gw
     ```
 
     If you see no output there, install `etcd3gw` with pip.
 
-    ```
+    ```bash
     apt-get install -y python-pip
     pip install etcd3gw
     ```
@@ -120,13 +120,13 @@ perform the following steps.
 
 1.  Install the `calico-control` package:
 
-    ```
+    ```bash
     apt-get install -y calico-control
     ```
 
 1.  Restart the Neutron server process:
 
-    ```
+    ```bash
     service neutron-server restart
     ```
 
@@ -137,7 +137,7 @@ On each compute node, perform the following steps:
 1.  Open `/etc/nova/nova.conf` and remove the line from the `[DEFAULT]`
     section that reads:
 
-    ```
+    ```conf
     linuxnet_interface_driver = nova.network.linux_net.LinuxOVSInterfaceDriver
     ```
 
@@ -147,20 +147,20 @@ On each compute node, perform the following steps:
 
     Restart nova compute.
 
-    ```
+    ```bash
     service nova-compute restart
     ```
 
 1.  If they're running, stop the Open vSwitch services:
 
-    ```
+    ```bash
     service openvswitch-switch stop
     service neutron-plugin-openvswitch-agent stop
     ```
 
     Then, prevent the services running if you reboot:
 
-    ```
+    ```bash
     sh -c "echo 'manual' > /etc/init/openvswitch-switch.override"
     sh -c "echo 'manual' > /etc/init/openvswitch-force-reload-kmod.override"
     sh -c "echo 'manual' > /etc/init/neutron-plugin-openvswitch-agent.override"
@@ -169,20 +169,20 @@ On each compute node, perform the following steps:
     Then, on your control node, run the following command to find the
     agents that you just stopped:
 
-    ```
+    ```bash
     neutron agent-list
     ```
 
     For each agent, delete them with the following command on your
     control node, replacing `<agent-id>` with the ID of the agent:
 
-    ```
+    ```bash
     neutron agent-delete <agent-id>
     ```
 
 1.  Install some extra packages:
 
-    ```
+    ```bash
     apt-get install -y neutron-common neutron-dhcp-agent nova-api-metadata
     ```
 
@@ -193,7 +193,7 @@ On each compute node, perform the following steps:
 1.  Modify `/etc/neutron/neutron.conf`.  In the `[oslo_concurrency]` section,
     ensure that the `lock_path` variable is uncommented and set as follows.
 
-    ```
+    ```conf
     # Directory to use for lock files. For security, the specified directory should
     # only be writable by the user running the processes that need locking.
     # Defaults to environment variable OSLO_LOCK_PATH. If external locks are used,
@@ -204,7 +204,7 @@ On each compute node, perform the following steps:
     Add a `[calico]` section with the following content, where `<ip>` is the IP
     address of the etcd server.
 
-    ```
+    ```conf
     [calico]
     etcd_host = <ip>
     ```
@@ -213,7 +213,7 @@ On each compute node, perform the following steps:
     it to scale to higher numbers of hosts) and disable the Neutron-provided
     one:
 
-    ```
+    ```bash
     service neutron-dhcp-agent stop
     echo manual | tee /etc/init/neutron-dhcp-agent.override
     apt-get install -y calico-dhcp-agent
@@ -221,7 +221,7 @@ On each compute node, perform the following steps:
 
 1.  Install the `calico-compute` package:
 
-    ```
+    ```bash
     apt-get install -y calico-compute
     ```
 
@@ -236,13 +236,13 @@ On each compute node, perform the following steps:
 
     For IPv4 connectivity between compute hosts:
 
-    ```
+    ```bash
     calico-gen-bird-conf.sh <compute_node_ip> <route_reflector_ip> <bgp_as_number>
     ```
 
     And/or for IPv6 connectivity between compute hosts:
 
-    ```
+    ```bash
     calico-gen-bird6-conf.sh <compute_node_ipv4> <compute_node_ipv6> <route_reflector_ipv6> <bgp_as_number>
     ```
 
@@ -278,7 +278,7 @@ On each compute node, perform the following steps:
 1.  Create `/etc/calico/felix.cfg` with the following content, where `<ip>` is the IP
     address of the etcd server.
 
-    ```
+    ```conf
     [global]
     DatastoreType = etcdv3
     EtcdAddr = <ip>:2379
@@ -286,6 +286,6 @@ On each compute node, perform the following steps:
 
 1.  Restart the Felix service.
 
-    ```
+    ```bash
     service calico-felix restart
     ```

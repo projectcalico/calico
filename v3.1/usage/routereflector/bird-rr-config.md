@@ -212,21 +212,21 @@ route reflector as a global peer.
 
 To disable the node-to-node mesh:
 
-```
+```bash
 # Get the current bgpconfig settings
-$ calicoctl get bgpconfig -o yaml > bgp.yaml
+calicoctl get bgpconfig -o yaml > bgp.yaml
 
 # Set nodeToNodeMeshEnabled to false
-$ vim bgp.yaml
+vim bgp.yaml
 
 # Replace the current bgpconfig settings
-$ calicoctl replace -f bgp.yaml
+calicoctl replace -f bgp.yaml
 ```
 
 To create a global peer for the route reflector:
 
-```
-$ cat << EOF | calicoctl create -f -
+```bash
+cat << EOF | calicoctl create -f -
 apiVersion: projectcalico.org/v3
 kind: BGPPeer
 metadata:

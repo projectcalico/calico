@@ -36,26 +36,26 @@ The remainder of the procedure is the reverse of the upgrade procedure:
 
 1. On all nodes, change the location of the {{site.prodname}} packages to point to the 2.6.x repo:
 
-   ```
+   ```bash
    sudo sed -i 's/calico-3.1/calico-2.6/g' /etc/yum.repos.d/calico.repo 
    ```
 
 1. Downgrade the Control software:
    1. On all control nodes, wipe repo data and downgrade packages:
-      ```
+      ```bash
       sudo yum clean all
       sudo yum downgrade calico-common calico-control networking-calico
       ```
       
    1. On all control nodes, restart `neutron-server`:
-      ```
+      ```bash
       sudo systemctl restart neutron-server
       ```
 
 1. Downgrade the compute software
    
    1. On all compute nodes, remove the following line from `/etc/calico/felix.cfg`:
-      ```
+      ```conf
       DatastoreType = etcdv3
       ```
       If you changed the EtcdEndpoints address (e.g. because you installed a new etcdv3 cluster 
@@ -63,13 +63,13 @@ The remainder of the procedure is the reverse of the upgrade procedure:
       in `/etcd/calico/felix.cfg` at this point.
       
    1. On all compute nodes, update packages:
-      ```
+      ```bash
       sudo yum clean all
       sudo yum downgrade calico-common calico-compute calico-dhcp-agent calico-felix dnsmasq networking-calico
       ```
       
    1. Use the following command on the compute nodes to confirm that Felix has downgraded to v2.6.x.
-      ```
+      ```bash
       calico-felix --version
       ```
    
@@ -84,19 +84,19 @@ The remainder of the procedure is the reverse of the upgrade procedure:
 
 1. On all nodes, change the location of the {{site.prodname}} packages to point to the 2.6.x repo:
 
-   ```
+   ```bash
    sudo rm /etc/apt/sources.list.d/project-calico-calico-3_1-trusty.list 
    ```
    
 1. Downgrade the Control software:
    1. On all control nodes:
    Check the correct versions of downgraded packages with: 
-      ```
+      ```bash
       apt-cache madison calico-control calico-common python-etcd networking-calico | grep calico-2.6
       ```
       Then use the available versions listed by the above command to create a downgrade command something like this:
 
-      ```    
+      ```bash
       sudo apt-get install --reinstall \
         calico-control=1:1.1.2 \
         calico-common=2.6.5~trusty \
@@ -105,14 +105,14 @@ The remainder of the procedure is the reverse of the upgrade procedure:
       ```
       
    1. On all control nodes, restart `neutron-server`:
-      ```
+      ```bash
       sudo service neutron-server restart
       ```
 
 1. Downgrade the compute software
    
    1. On all compute nodes, remove the following line from `/etc/calico/felix.cfg`:
-      ```
+      ```conf
       DatastoreType = etcdv3
       ```
       If you changed the EtcdEndpoints address (e.g. because you installed a new etcdv3 cluster 
@@ -121,12 +121,12 @@ The remainder of the procedure is the reverse of the upgrade procedure:
    
    1. On all compute nodes:
    Check the correct versions of downgraded packages with: 
-      ```
+      ```bash
       sudo apt-get update
       apt-cache madison calico-compute calico-felix calico-common python-etcd networking-calico calico-dhcp-agent | grep calico-2.6
       ```
       Then use the available versions listed by the above command to create a downgrade command something like this:
-      ```
+      ```bash
       sudo apt-get install --reinstall \
         calico-compute=1:1.4.3~trusty \
         calico-felix=2.6.5~trusty \
@@ -137,7 +137,7 @@ The remainder of the procedure is the reverse of the upgrade procedure:
       ```
       
    1. Use the following command on the compute nodes to confirm that Felix has upgraded to v2.6.x.
-      ```
+      ```bash
       calico-felix --version
       ```
    

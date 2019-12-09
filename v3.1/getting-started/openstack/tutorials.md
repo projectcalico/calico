@@ -34,7 +34,7 @@ attached to the `external` network. To add themselves to this network,
 the user needs to find out the UUID for it:
 
 ```
-$ neutron net-list
+neutron net-list
 +--------------------------------------+----------+----------------------------------------------------------+
 | id                                   | name     | subnets                                                  |
 +--------------------------------------+----------+----------------------------------------------------------+
@@ -49,8 +49,8 @@ As the user can see, the `external` network has the UUID
 `8d5dec25-a6aa-4e18-8706-a51637a428c2`. Thus, they create the machine
 with the following nova boot command:
 
-```
-$ nova boot --flavor m1.medium                                  \
+```bash
+nova boot --flavor m1.medium                                  \
             --image debian-wheezy-amd64                         \
             --security-groups default                           \
             --nic "netid=8d5dec25-a6aa-4e18-8706-a51637a428c2"  \
@@ -81,8 +81,8 @@ developer's personal machine has the IPv4 address 191.64.52.12, and
 that's the only machine they'd like to be able to access their machine.
 For that reason, they add the four security group rules:
 
-```
-$ neutron security-group-rule-create --protocol tcp                      \
+```bash
+neutron security-group-rule-create --protocol tcp                      \
                                      --port-range-min 22                 \
                                      --port-range-max 22                 \
                                      --direction ingress                 \
@@ -90,7 +90,7 @@ $ neutron security-group-rule-create --protocol tcp                      \
                                      --ethertype IPv4                    \
                                      default
 
-$ neutron security-group-rule-create --protocol tcp                      \
+neutron security-group-rule-create --protocol tcp                      \
                                      --port-range-min 5800               \
                                      --port-range-max 5801               \
                                      --direction ingress                 \
@@ -98,7 +98,7 @@ $ neutron security-group-rule-create --protocol tcp                      \
                                      --ethertype IPv4                    \
                                      default
 
-$ neutron security-group-rule-create --protocol tcp                      \
+neutron security-group-rule-create --protocol tcp                      \
                                      --port-range-min 5900               \
                                      --port-range-max 5901               \
                                      --direction ingress                 \

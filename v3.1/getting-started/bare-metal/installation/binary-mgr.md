@@ -54,7 +54,7 @@ the {{site.prodname}}/BGP integration, the specification of a node resource just
 requires the name of the node; for most deployments this will be the same as the
 hostname.
 
-```
+```bash
 calicoctl create -f - <<EOF
 - apiVersion: projectcalico.org/v3
   kind: Node
