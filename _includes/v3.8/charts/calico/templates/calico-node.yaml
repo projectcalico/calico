@@ -286,6 +286,23 @@ spec:
           resources:
             requests:
               cpu: 250m
+{{- if eq .Values.network "calico" }}
+          livenessProbe:
+            exec:
+              command:
+                - /bin/calico-node
+                - -felix-live
+                - -bird-live
+            periodSeconds: 10
+            initialDelaySeconds: 10
+            failureThreshold: 6
+          readinessProbe:
+            exec:
+              command:
+              - /bin/calico-node
+              - -bird-ready
+              - -felix-ready
+{{- else if eq .Values.network "flannel" }}
           livenessProbe:
             httpGet:
               path: /liveness
@@ -295,18 +312,20 @@ spec:
             initialDelaySeconds: 10
             failureThreshold: 6
           readinessProbe:
-{{- if eq .Values.network "calico" }}
-            exec:
-              command:
-              - /bin/calico-node
-              - -bird-ready
-              - -felix-ready
-{{- else if eq .Values.network "flannel" }}
             httpGet:
               path: /readiness
               port: 9099
               host: localhost
 {{- else }}
+          livenessProbe:
+            exec:
+              command:
+                - /bin/calico-node
+                - -felix-live
+            periodSeconds: 10
+            initialDelaySeconds: 10
+            failureThreshold: 6
+          readinessProbe:
             exec:
               command:
               - /bin/calico-node

@@ -1,5 +1,6 @@
 ---
 title: Multiple regions
+description: Install a multi-region OpenStack deployment with Calico.
 canonical_url: 'https://docs.projectcalico.org/v3.9/networking/openstack/multiple-regions'
 ---
 

@@ -1,5 +1,6 @@
 ---
 title: Install Calico on Kubernetes
+description: Options for installing Calico on Kubernetes
 canonical_url: 'https://docs.projectcalico.org/v3.9/getting-started/kubernetes/installation/index'
 ---
 

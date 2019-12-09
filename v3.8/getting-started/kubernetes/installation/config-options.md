@@ -69,10 +69,16 @@ be undone):
 - Optionally, (to save some resources if you're running a VXLAN-only cluster) completely disable Calico's BGP-based
   networking:
   - Replace `calico_backend: "bird"` with `calico_backend: "vxlan"`.  This disables BIRD.
-  - Comment out the line `- -bird-ready` from the calico/node readiness check (otherwise disabling BIRD will cause the
-    readiness check to fail on every node):
+  - Comment out the line `- -bird-ready`/`- -bird-live` from the calico/node readiness/liveness check (otherwise disabling BIRD will cause the
+    readiness/liveness check to fail on every node):
 
 ```yaml
+          livenessProbe:
+            exec:
+              command:
+              - /bin/calico-node
+              # - -bird-live
+              - -felix-live
           readinessProbe:
             exec:
               command:

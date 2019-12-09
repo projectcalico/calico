@@ -1,5 +1,6 @@
 ---
 title: Calico architecture
+description: Understand the Calico components and the basics of BGP networking
 canonical_url: 'https://docs.projectcalico.org/v3.9/reference/architecture/index'
 ---
 
@@ -25,7 +26,6 @@ the {{site.prodname}} network.
     route reflector for higher scale.
 
 The following sections break down each component in more detail.
-
 
 ## Felix
 
@@ -70,7 +70,6 @@ In particular, it reports errors and problems with configuring its host.
 This data is written into etcd, to make it visible to other components
 and operators of the network.
 
-
 ## Orchestrator plugin
 
 Unlike Felix there is no single 'orchestrator plugin': instead, there
@@ -105,8 +104,6 @@ If necessary, the orchestrator plugin will provide feedback from the
 {{site.prodname}} network into the orchestrator. Examples include: providing
 information about Felix liveness; marking certain endpoints as failed if
 network setup failed.
-
-
 
 ## etcd
 
@@ -163,8 +160,6 @@ to respond to those changes in a timely manner. This allows the act of
 committing the state to the database to cause that state to be programmed
 into the network.
 
-
-
 ## BGP client (BIRD)
 
 {{site.prodname}} deploys a BGP client on every node that also hosts a [Felix](#felix). The role of the BGP client is to read routing state that [Felix](#felix) programs into the kernel and
@@ -178,7 +173,6 @@ When [Felix](#felix) inserts routes into the Linux kernel FIB,
 the BGP client will pick them up and distribute them to the other nodes
 in the deployment. This ensures that traffic is efficiently routed
 around the deployment.
-
 
 ## BGP route reflector (BIRD)
 
