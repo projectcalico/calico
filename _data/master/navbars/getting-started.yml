@@ -37,39 +37,42 @@ toc:
     - title: Integration guide (advanced)
       path: /getting-started/kubernetes/installation/integration
   - title: Manual installation
-    path: //getting-started/kubernetes/installation/manual-install    
+    section:
+    - title: Manually install Calico
+      path: /getting-started/kubernetes/installation/manual-install
+      - title: Calico the hard way tutorial
+      section:
+      - title: Introduction
+        path: /getting-started/kubernetes/hardway/
+      - title: Stand up Kubernetes
+        path: /getting-started/kubernetes/hardway/standing-up-kubernetes
+      - title: The Calico datastore
+        path: /getting-started/kubernetes/hardway/the-calico-datastore
+      - title: Configure IP pools
+        path: /getting-started/kubernetes/hardway/configure-ip-pools
+      - title: Install CNI plugin
+        path: /getting-started/kubernetes/hardway/install-cni-plugin
+      - title: Install Typha
+        path: /getting-started/kubernetes/hardway/install-typha
+      - title: Install calico/node
+        path: /getting-started/kubernetes/hardway/install-node
+      - title: Configure BGP peering
+        path: /getting-started/kubernetes/hardway/configure-bgp-peering
+      - title: Test networking
+        path: /getting-started/kubernetes/hardway/test-networking
+      - title: Test network policy
+        path: /getting-started/kubernetes/hardway/test-network-policy
+      - title: End user RBAC
+        path: /getting-started/kubernetes/hardway/end-user-rbac
+      - title: Istio integration
+        path: /getting-started/kubernetes/hardway/istio-integration  
   - title: Flannel
     section:
     - title: Install Calico for policy and flannel for networking
       path: /getting-started/kubernetes/installation/flannel
     - title: Migrate a cluster from flannel to Calico
       path: /getting-started/kubernetes/installation/migration-from-flannel     
-  - title: Calico the hard way
-    section:
-    - title: Introduction
-      path: /getting-started/kubernetes/hardway/
-    - title: Stand up Kubernetes
-      path: /getting-started/kubernetes/hardway/standing-up-kubernetes
-    - title: The Calico datastore
-      path: /getting-started/kubernetes/hardway/the-calico-datastore
-    - title: Configure IP pools
-      path: /getting-started/kubernetes/hardway/configure-ip-pools
-    - title: Install CNI plugin
-      path: /getting-started/kubernetes/hardway/install-cni-plugin
-    - title: Install Typha
-      path: /getting-started/kubernetes/hardway/install-typha
-    - title: Install calico/node
-      path: /getting-started/kubernetes/hardway/install-node
-    - title: Configure BGP peering
-      path: /getting-started/kubernetes/hardway/configure-bgp-peering
-    - title: Test networking
-      path: /getting-started/kubernetes/hardway/test-networking
-    - title: Test network policy
-      path: /getting-started/kubernetes/hardway/test-network-policy
-    - title: End user RBAC
-      path: /getting-started/kubernetes/hardway/end-user-rbac
-    - title: Istio integration
-      path: /getting-started/kubernetes/hardway/istio-integration
+  
 - title: OpenShift
   section:
   - title: System requirements
