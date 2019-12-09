@@ -181,7 +181,6 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb, enum calico_tc_flags
 	bool encap_is_src = false;
 	__be32 encap_ip;
 	bool encap_needed = false;
-	bool ip_dnf;
 
 	if (!CALI_TC_FLAGS_TO_HOST(flags) && skb->mark == CALI_SKB_MARK_BYPASS) {
 		CALI_DEBUG("Packet pre-approved by another hook, allow.\n");
@@ -231,11 +230,6 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb, enum calico_tc_flags
 		reason = CALI_REASON_SHORT;
 		CALI_DEBUG("Too short\n");
 		goto deny;
-	}
-
-	/* remember IP_DF right here in case we need to encap to make verifier happy */
-	if (dnat_should_encap(flags) || dnat_return_should_encap(flags)) {
-		ip_dnf = ip_header->frag_off & host_to_be16(0x4000);
 	}
 
 	if (is_vxlan_tunnel(ip_header)) {
@@ -500,7 +494,7 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb, enum calico_tc_flags
 		CALI_DEBUG("CT: DNAT to %x:%d\n", be32_to_host(post_nat_ip_dst), post_nat_dport);
 
 		encap_needed = dnat_should_encap(flags) && !cali_rt_is_local(post_nat_ip_dst);
-		if (encap_needed && ip_dnf && vxlan_v4_encap_too_big(skb)) {
+		if (encap_needed && ip_is_dnf(ip_header) && vxlan_v4_encap_too_big(skb)) {
 			goto icmp_too_big;
 		}
 
@@ -593,7 +587,7 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb, enum calico_tc_flags
 		// fall through
 	case CALI_CT_ESTABLISHED:
 		if (dnat_return_should_encap(flags)  && ct_result.tun_ret_ip) {
-			if (encap_needed && ip_dnf && vxlan_v4_encap_too_big(skb)) {
+			if (encap_needed && ip_is_dnf(ip_header) && vxlan_v4_encap_too_big(skb)) {
 				goto icmp_too_big;
 			}
 			ip_dst = ct_result.tun_ret_ip;

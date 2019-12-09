@@ -171,4 +171,6 @@ enum calico_skb_mark {
 #define IPV4_UDP_SIZE		(sizeof(struct iphdr) + sizeof(struct udphdr))
 #define ETH_IPV4_UDP_SIZE	(sizeof(struct ethhdr) + IPV4_UDP_SIZE)
 
+#define ip_is_dnf(ip) ((ip)->frag_off & host_to_be16(0x4000))
+
 #endif /* __CALI_BPF_H__ */
