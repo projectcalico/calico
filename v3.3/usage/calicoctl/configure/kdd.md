@@ -28,7 +28,7 @@ canonical_url: 'https://docs.projectcalico.org/v3.5/usage/calicoctl/configure/kd
 
 #### Kubernetes command line
 
-```
+```bash
 DATASTORE_TYPE=kubernetes KUBECONFIG=~/.kube/config calicoctl get nodes
 ```
 
@@ -65,7 +65,7 @@ $ calicoctl get workloadendpoints
 Here is a simple command to check that the installation and configuration is
 correct.
 
-```
+```bash
 calicoctl get nodes
 ```
 

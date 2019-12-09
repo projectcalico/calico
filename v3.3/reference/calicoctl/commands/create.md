@@ -77,16 +77,16 @@ Description:
 
 ### Examples
 
-```
+```bash
 # Create a set of resources (of mixed type) using the data in resources.yaml.
 # Results indicate that 8 resources were successfully created.
-$ calicoctl create -f ./resources.yaml
+calicoctl create -f ./resources.yaml
 Successfully created 8 resource(s)
 
 # Create the same set of resources reading from stdin.
 # Results indicate failure because the first resource (in this case a Profile) 
 # already exists.
-$ cat resources.yaml | calicoctl apply -f -
+cat resources.yaml | calicoctl apply -f -
 Failed to create any resources: resource already exists: Profile(name=profile1)
 ```
 

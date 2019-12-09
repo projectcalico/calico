@@ -35,7 +35,7 @@ following conditions.
 1. Check that the data exists in the Kubernetes API datastore. Issue the
    following.
 
-   ```
+   ```bash
    kubectl get crd
    ```
 
@@ -48,7 +48,7 @@ following conditions.
 
 1. Issue the following commands to delete the {{site.prodname}} data.
 
-   ```
+   ```bash
    kubectl delete crd bgpconfigurations.crd.projectcalico.org
    kubectl delete crd felixconfigurations.crd.projectcalico.org
    kubectl delete crd clusterinformations.crd.projectcalico.org
@@ -60,7 +60,7 @@ following conditions.
 1. Issue the following command to confirm that the {{site.prodname}} data was deleted.
    Verify the output does not contain the `crd`s deleted above.
 
-   ```
+   ```bash
    kubectl get crd
    ```
 

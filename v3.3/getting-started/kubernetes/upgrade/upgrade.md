@@ -22,7 +22,7 @@ and your datastore type.
 1. If your configuration uses RBAC, use the following command to create the roles 
    and role bindings for {{site.prodname}}'s components:
 
-   ```
+   ```bash
    kubectl apply -f \
    {{site.url}}/{{page.version}}/getting-started/kubernetes/installation/hosted/rbac-kdd.yaml
    ```
@@ -60,13 +60,13 @@ and your datastore type.
 1. Use the following command to initiate a rolling update, after replacing 
    `<manifest-file-name>` with the file name of your {{page.version}} manifest.
 
-   ```
+   ```bash
    kubectl apply -f <manifest-file-name>
    ```
    
 1. Watch the status of the upgrade as follows.
 
-   ```
+   ```bash
    watch kubectl get pods -n kube-system
    ```
    
@@ -101,7 +101,7 @@ and your datastore type.
 1. If your configuration uses RBAC, use the following command to create the roles 
    and role bindings for {{site.prodname}}'s components:
 
-   ```
+   ```bash
    kubectl apply -f \
    {{site.url}}/{{page.version}}/getting-started/kubernetes/installation/rbac.yaml
    ```
@@ -133,13 +133,13 @@ and your datastore type.
 1. Use the following command to initiate a rolling update, after replacing 
    `<manifest-file-name>` with the file name of your {{page.version}} manifest.
 
-   ```
+   ```bash
    kubectl apply -f <manifest-file-name>
    ```
    
 1. Watch the status of the upgrade as follows.
 
-   ```
+   ```bash
    watch kubectl get pods -n kube-system
    ```
    

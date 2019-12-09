@@ -144,7 +144,7 @@ the following steps.
 1. Issue the following command to determine if you have a `default` BGP configuration
    resource.
 
-    ```
+    ```bash
     calicoctl get bgpconfig default
     ```
 
@@ -153,7 +153,7 @@ the following steps.
    `nodeToNodeMeshEnabled` and `asNumber` lines and values as desired.
    Refer to [BGP Configuration Resource]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/bgpconfig) for details about these settings.
 
-    ```
+    ```bash
     cat << EOF | calicoctl create -f -
     apiVersion: projectcalico.org/v3
     kind: BGPConfiguration
@@ -170,7 +170,7 @@ the following steps.
 1. If the resource _does_ exist, use the following command to retrieve it and save it
    to a file.
 
-    ```
+    ```bash
     calicoctl get bgpconfig default --export -o yaml > bgp.yaml
     ```
 
@@ -178,13 +178,13 @@ the following steps.
    the `nodeToNodeMeshEnabled` or `asNumber` as desired, and save the file.
    Refer to [BGP Configuration Resource]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/bgpconfig) for details about these settings.
 
-    ```
+    ```bash
     vim bgp.yaml
     ```
 
 1. Replace the existing BGP configuration settings.
 
-    ```
+    ```bash
     calicoctl replace -f bgp.yaml
     ```
 
@@ -208,7 +208,7 @@ disabled.
 To add a global BGP peer at IP address 192.20.30.40 with AS number 64567 run
 the following command on any node:
 
-```
+```bash
 cat << EOF | calicoctl create -f -
 apiVersion: projectcalico.org/v3
 kind: BGPPeer
@@ -222,7 +222,7 @@ EOF
 
 To view the current list of BGP peers run the following command.
 
-```
+```bash
 calicoctl get bgpPeer
 ```
 
@@ -235,7 +235,7 @@ bgppeer-global-3040   192.20.30.40   (global)  64567
 
 To remove the global BGP peer that you just created run the following command.
 
-```
+```bash
 calicoctl delete bgppeer bgppeer-global-3040
 ```
 
@@ -259,7 +259,7 @@ described in the reference material.
 To add a BGP peer at IP address aa:bb::ff with AS number 64514,
 peering with {{site.prodname}} node "node1", run the following command on any node:
 
-```
+```bash
 cat << EOF | calicoctl create -f -
 apiVersion: projectcalico.org/v3
 kind: BGPPeer
@@ -274,7 +274,7 @@ EOF
 
 To view the BGP peer resource that you just created, issue the following command.
 
-```
+```bash
 calicoctl get bgpPeer bgppeer-node-aabbff
 ```
 
@@ -287,7 +287,7 @@ bgppeer-node-aabbff  aa:bb::ff   node1   64514
 
 To remove the BGP peer run the following command.
 
-```
+```bash
 calicoctl delete bgppeer bgppeer-node-aabbff
 ```
 
@@ -309,7 +309,7 @@ incorrect connectivity between your workloads.
 To check the status of the peerings on {{site.prodname}} node `"node1"`, SSH into
 `"node1"` and run the following command.
 
-```
+```bash
 sudo calicoctl node status
 ```
 It should return something like the following.
@@ -378,7 +378,7 @@ much smaller number of BGP connections.
     resource]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/bgppeer) to tell
     the other {{site.prodname}} nodes to peer with the route reflector nodes:
 
-    ```
+    ```bash
     calicoctl apply -f - <<EOF
     kind: BGPPeer
     apiVersion: projectcalico.org/v3
@@ -394,7 +394,7 @@ much smaller number of BGP connections.
     resource]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/bgppeer) to tell
     the route reflector nodes to peer with each other:
 
-    ```
+    ```bash
     calicoctl apply -f - <<EOF
     kind: BGPPeer
     apiVersion: projectcalico.org/v3

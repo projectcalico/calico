@@ -86,7 +86,7 @@ documents *mandates* the use of VLANs.
 
 1. Retrieve current IP Pool config
 
-   ```shell
+   ```bash
    $ calicoctl get ipPool -o yaml > pool.yaml
    ```
 
@@ -96,7 +96,7 @@ documents *mandates* the use of VLANs.
    [IP Pools]({{site.baseurl}}/{{page.version}}/reference/calicoctl/resources/ippool)
    for other settings that can be edited.)
 
-   ```shell
+   ```bash
    - apiVersion: projectcalico.org/v3
      kind: IPPool
      metadata:
@@ -109,7 +109,7 @@ documents *mandates* the use of VLANs.
 
 3. Load the modified file.
 
-   ```shell
+   ```bash
    $ calicoctl replace -f pool.yaml
    ```
 
@@ -275,7 +275,7 @@ Alternatively you can use {{site.prodname}}'s built in outbound NAT capability b
 {{site.prodname}} IP pool. In this case {{site.prodname}} will perform outbound NAT locally on the compute
 node on which each container is hosted.
 
-```
+```bash
 cat << EOF | calicoctl apply -f -
 apiVersion: projectcalico.org/v3
 kind: IPPool
@@ -304,7 +304,7 @@ In cases where this is not possible then you can configure incoming NAT
 you can configure incoming NAT with port mapping on the host on which the container
 is running on.
 
-```
+```bash
 # First create a new chain called "expose-ports" to hold the NAT rules
 # and jump to that chain from the OUTPUT and PREROUTING chains.
 # The OUTPUT chain is hit by traffic originating on the host itself;
@@ -324,7 +324,7 @@ of 192.168.7.4, and you have NGINX running on port 8080 inside the container.
 If you want to expose this service on port 80 and your host has IP 192.0.2.1,
 then you could run the following commands:
 
-```
+```bash
 iptables -t nat -N expose-ports
 iptables -t nat -A OUTPUT -j expose-ports
 iptables -t nat -A PREROUTING -j expose-ports
@@ -341,7 +341,7 @@ Refer to the appropriate guide for your orchestration system for details on how 
 
 Yes.  If you are running in a public cloud that doesn't allow either L3 peering or L2 connectivity between {{site.prodname}} hosts then you can enable `ipip` in your {{site.prodname}} IP pool:
 
-```shell
+```bash
 cat << EOF | calicoctl apply -f -
 apiVersion: projectcalico.org/v3
 kind: IPPool
@@ -358,7 +358,7 @@ EOF
 
 In AWS, you disable `Source/Dest. Check` instead of using IP in IP as long as all your instances are in the same subnet of your VPC.  This will provide the best performance.  You can disable this with the CLI, or right click the instance in the EC2 console, and `Change Source/Dest. Check` from the `Networking` submenu.
 
-```shell
+```bash
 aws ec2 modify-instance-attribute --instance-id <INSTANCE_ID> --source-dest-check "{\"Value\": false}"
 
 cat << EOF | calicoctl apply -f -

@@ -24,14 +24,14 @@ and to filter logs.
 See the [documentation](http://smarden.org/runit/svlogd.8.html) for further details.
 
 e.g. to configure bird to only log 4 files of 10KB each, create a file called `config` in the `/var/log/calico/bird` directory containing
-```shell
+```
 #/var/log/calico/bird/config
 s10000
 n4
 ```
 
 e.g. to configure bird to drop logs with the suffix `Netlink: File exists`, create a file called `config` in the `/var/log/calico/bird` directory containing
-```shell
+```
 -*Netlink: File exists
 ```
 
@@ -51,17 +51,17 @@ of the `{{site.nodecontainer}}` logging directory.
 See [BGP Configuration Resource](/{{page.version}}/reference/calicoctl/resources/bgpconfig) 
 for details on how to modify the logging level. For example:
 
-```
+```bash
 # Get the current bgpconfig settings
-$ calicoctl get bgpconfig -o yaml > bgp.yaml
+calicoctl get bgpconfig -o yaml > bgp.yaml
 
 # Modify logSeverityScreen to desired value
 #   Global change: set name to "default"
 #   Node-specific change: set name to the node name, e.g. "node-1"
-$ vim bgp.yaml
+vim bgp.yaml
 
 # Replace the current bgpconfig settings
-$ calicoctl replace -f bgp.yaml
+calicoctl replace -f bgp.yaml
 ```
 
 ### Felix
@@ -71,17 +71,17 @@ endpoints.  Felix is responsible for the programming of iptables rules on the
 host.  The logs are output in the `felix` sub-directory of the `{{site.nodecontainer}}`
 logging directory.
 
-```
+```bash
 # Get the current felixconfig settings
-$ calicoctl get felixconfig -o yaml > felix.yaml
+calicoctl get felixconfig -o yaml > felix.yaml
 
 # Modify logSeverityScreen to none, debug, info, etc.
 #   Global change: set name to "default"
 #   Node-specific change: set name to the node name, e.g. "{{site.prodname}}-Node-1"
-$ vim felix.yaml
+vim felix.yaml
 
 # Replace the current felixconfig settings
-$ calicoctl replace -f felix.yaml
+calicoctl replace -f felix.yaml
 ```
 
 ### confd

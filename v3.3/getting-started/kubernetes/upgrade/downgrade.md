@@ -40,7 +40,7 @@ follow the steps here to downgrade.
 
 1. Use the following command to re-enable the previous {{site.prodname}} components.
 
-   ```
+   ```bash
    calico-upgrade abort
    ```
    
@@ -50,7 +50,7 @@ follow the steps here to downgrade.
 
 1. Use the following commands to initiate a downgrade of the {{site.prodname}} components.
 
-   ```
+   ```bash
    kubectl rollout undo ds/calico-node -n kube-system
    kubectl rollout undo deployment/calico-kube-controllers -n kube-system
    ```
@@ -58,7 +58,7 @@ follow the steps here to downgrade.
 1. Watch the status of the downgrade as follows. When it reports complete and
    successful, {{site.prodname}} is downgraded to the previous version.
 
-   ```
+   ```bash
    kubectl rollout status deployment/calico-kube-controllers -n kube-system
    kubectl rollout status ds/calico-node -n kube-system
    ```
@@ -67,13 +67,13 @@ follow the steps here to downgrade.
 
 1. Use the following commands to initiate a downgrade of the {{site.prodname}} components.
 
-   ```
+   ```bash
    kubectl rollout undo ds/calico-node -n kube-system
    ```
 
 1. Watch the status of the downgrade as follows. When it reports complete and
    a successful, {{site.prodname}} is downgraded to the previous version.
 
-   ```
+   ```bash
    kubectl rollout status ds/calico-node -n kube-system
    ```
