@@ -16,6 +16,7 @@ package intdataplane
 
 import (
 	"net"
+	"sync"
 	"time"
 
 	"github.com/projectcalico/felix/bpf/routes"
@@ -53,7 +54,8 @@ type bpfRouteManager struct {
 	dirtyRoutes     set.Set
 	resyncScheduled bool
 
-	hostIPsUpdateC chan []net.IP
+	hostIPsUpdateCB    func([]net.IP)
+	hostIPsUpdateCBLck sync.RWMutex
 }
 
 func newBPFRouteManager(myNodename string, mc *bpf.MapContext) *bpfRouteManager {
@@ -66,7 +68,6 @@ func newBPFRouteManager(myNodename string, mc *bpf.MapContext) *bpfRouteManager 
 		routeMap:        routes.Map(mc),
 		dirtyRoutes:     set.New(),
 		resyncScheduled: true,
-		hostIPsUpdateC:  make(chan []net.IP, 1),
 	}
 }
 
@@ -246,19 +247,17 @@ func (m *bpfRouteManager) recalculateLocalHostIPs() {
 	m.applyRoutesDelta(oldRoutes, newRoutes)
 	m.localHostRoutes = newRoutes
 
-	select {
-	case m.hostIPsUpdateC <- netIPs:
-		// nothing
-	default:
-		// in case we would block, drop the no stale update and replace it
-		// with a new one. Do it non-blocking way in case it was just consumed.
-		select {
-		case <-m.hostIPsUpdateC:
-		default:
-		}
-		m.hostIPsUpdateC <- netIPs
+	m.onHostIPsChange(netIPs)
+
+}
+
+func (m *bpfRouteManager) onHostIPsChange(newIPs []net.IP) {
+	m.hostIPsUpdateCBLck.RLock()
+	defer m.hostIPsUpdateCBLck.RUnlock()
+	if m.hostIPsUpdateCB != nil {
+		m.hostIPsUpdateCB(newIPs)
 	}
-	log.Debugf("localHostIPs update %+v", netIPs)
+	log.Debugf("localHostIPs update %+v", newIPs)
 }
 
 func (m *bpfRouteManager) recalculateWorkloadIPs() {
@@ -405,6 +404,9 @@ func (m *bpfRouteManager) onHostMetadataRemove(remove *proto.HostMetadataRemove)
 	m.remoteHostIPsDirty = true
 }
 
-func (m *bpfRouteManager) hostIPUpdates() <-chan []net.IP {
-	return m.hostIPsUpdateC
+func (m *bpfRouteManager) setHostIPUpdatesCallBack(cb func([]net.IP)) {
+	m.hostIPsUpdateCBLck.Lock()
+	defer m.hostIPsUpdateCBLck.Unlock()
+
+	m.hostIPsUpdateCB = cb
 }

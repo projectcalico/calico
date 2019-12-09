@@ -68,20 +68,18 @@ var _ = Describe("BPF kube-proxy", func() {
 	k8s := fake.NewSimpleClientset(testSvc, testSvcEps)
 
 	initIP := net.IPv4(1, 1, 1, 1)
-	ipUpdates := make(chan []net.IP, 1)
-	ipUpdates <- []net.IP{initIP}
 
 	front := newMockNATMap()
 	back := newMockNATBackendMap()
-	_ = proxy.StartKubeProxy(k8s, "test-node", front, back, ipUpdates, proxy.WithImmediateSync())
+	p, _ := proxy.StartKubeProxy(k8s, "test-node", front, back, proxy.WithImmediateSync())
 
 	AfterEach(func() {
-		// makes the proxy to stop and exit
-		close(ipUpdates)
+		p.Stop()
 	})
 
 	It("should update nodeports after host ip changes", func() {
 		By("checking nodeport has the initial IP", func() {
+			p.OnHostIPsUpdate([]net.IP{initIP})
 			Eventually(func() bool {
 				front.Lock()
 				defer front.Unlock()
@@ -97,7 +95,7 @@ var _ = Describe("BPF kube-proxy", func() {
 
 		By("checking nodeport has the updated IP and not the initial IP", func() {
 			updatedIP := net.IPv4(2, 2, 2, 2)
-			ipUpdates <- []net.IP{updatedIP}
+			p.OnHostIPsUpdate([]net.IP{updatedIP})
 
 			Eventually(func() bool {
 				front.Lock()
@@ -118,7 +116,7 @@ var _ = Describe("BPF kube-proxy", func() {
 		By("checking nodeport has 2 updated IPs", func() {
 			ip1 := net.IPv4(3, 3, 3, 3)
 			ip2 := net.IPv4(4, 4, 4, 4)
-			ipUpdates <- []net.IP{ip1, ip2}
+			p.OnHostIPsUpdate([]net.IP{ip1, ip2})
 
 			Eventually(func() bool {
 				front.Lock()

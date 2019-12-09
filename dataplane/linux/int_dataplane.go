@@ -504,17 +504,17 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 
 		if config.KubeClientSet != nil {
 			// We have a Kubernetes connection, start watching services and populating the NAT maps.
-			err := bpfproxy.StartKubeProxy(
+			kp, err := bpfproxy.StartKubeProxy(
 				config.KubeClientSet,
 				config.Hostname,
 				frontendMap,
 				backendMap,
-				bpfRTMgr.hostIPUpdates(),
 				bpfproxy.WithImmediateSync(),
 			)
 			if err != nil {
 				log.WithError(err).Panic("Failed to start kube-proxy.")
 			}
+			bpfRTMgr.setHostIPUpdatesCallBack(kp.OnHostIPsUpdate)
 		} else {
 			log.Info("BPF enabled but no Kubernetes client available, unable to run kube-proxy module.")
 		}

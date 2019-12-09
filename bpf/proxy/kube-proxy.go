@@ -15,65 +15,112 @@
 package proxy
 
 import (
+	"net"
+	"sync"
+
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
 	"k8s.io/client-go/kubernetes"
-	"net"
 
 	"github.com/projectcalico/felix/bpf"
 )
 
+// KubeProxy is a wrapper of Proxy that deals with higher level issue like
+// configuration, restarting etc.
+type KubeProxy struct {
+	proxy Proxy
+
+	hostIPUpdates chan []net.IP
+	stopOnce      sync.Once
+	lock          sync.Mutex
+	exiting       chan struct{}
+	wg            sync.WaitGroup
+
+	k8s         kubernetes.Interface
+	hostname    string
+	frontendMap bpf.Map
+	backendMap  bpf.Map
+	opts        []Option
+}
+
 // StartKubeProxy start a new kube-proxy if there was no error
 func StartKubeProxy(k8s kubernetes.Interface, hostname string,
-	frontendMap, backendMap bpf.Map, hostIPUpdates <-chan []net.IP,
-	opts ...Option) error {
+	frontendMap, backendMap bpf.Map, opts ...Option) (*KubeProxy, error) {
+
+	kp := &KubeProxy{
+		k8s:         k8s,
+		hostname:    hostname,
+		frontendMap: frontendMap,
+		backendMap:  backendMap,
+		opts:        opts,
+
+		hostIPUpdates: make(chan []net.IP, 1),
+		exiting:       make(chan struct{}),
+	}
+
 	go func() {
-		err := startKubeProxy(k8s, hostname, frontendMap, backendMap, hostIPUpdates, opts...)
+		err := kp.start()
 		if err != nil {
 			log.Panic("kube-proxy failed to start")
 		}
 	}()
 
+	return kp, nil
+}
+
+// Stop stops KubeProxy and waits for it to exit
+func (kp *KubeProxy) Stop() {
+	kp.stopOnce.Do(func() {
+		kp.lock.Lock()
+		defer kp.lock.Unlock()
+
+		close(kp.exiting)
+		close(kp.hostIPUpdates)
+		kp.proxy.Stop()
+		kp.wg.Wait()
+	})
+}
+
+func (kp *KubeProxy) run(hostIPs []net.IP) error {
+
+	kp.lock.Lock()
+	defer kp.lock.Unlock()
+
+	syncer, err := NewSyncer(hostIPs, kp.frontendMap, kp.backendMap)
+	if err != nil {
+		return errors.WithMessage(err, "new bpf syncer")
+	}
+
+	proxy, err := New(kp.k8s, syncer, kp.hostname, kp.opts...)
+	if err != nil {
+		return errors.WithMessage(err, "new proxy")
+	}
+
+	log.Infof("kube-proxy started, hostname=%q hostIPs=%+v", kp.hostname, hostIPs)
+
+	kp.proxy = proxy
+
 	return nil
 }
 
-func runKubeProxy(k8s kubernetes.Interface, hostname string,
-	frontendMap, backendMap bpf.Map, hostIPs []net.IP,
-	opts ...Option) (Proxy, error) {
-
-	syncer, err := NewSyncer(hostIPs, frontendMap, backendMap)
-	if err != nil {
-		return nil, errors.WithMessage(err, "new bpf syncer")
-	}
-
-	proxy, err := New(k8s, syncer, hostname, opts...)
-	if err != nil {
-		return nil, errors.WithMessage(err, "new proxy")
-	}
-
-	log.Infof("kube-proxy started, hostname=%q hostIPs=%+v", hostname, hostIPs)
-
-	return proxy, nil
-}
-
-func startKubeProxy(k8s kubernetes.Interface, hostname string,
-	frontendMap, backendMap bpf.Map, hostIPUpdates <-chan []net.IP,
-	opts ...Option) error {
+func (kp *KubeProxy) start() error {
 
 	// wait for the initial update
-	hostIPs := <-hostIPUpdates
+	hostIPs := <-kp.hostIPUpdates
 
-	p, err := runKubeProxy(k8s, hostname, frontendMap, backendMap, hostIPs, opts...)
+	err := kp.run(hostIPs)
 	if err != nil {
 		return err
 	}
 
+	kp.wg.Add(1)
 	go func() {
+		defer kp.wg.Done()
 		for {
-			hostIPs, ok := <-hostIPUpdates
+			hostIPs, ok := <-kp.hostIPUpdates
 			if !ok {
 				defer log.Error("kube-proxy stopped since hostIPUpdates closed")
-				p.Stop()
+				kp.proxy.Stop()
 				return
 			}
 
@@ -82,19 +129,22 @@ func startKubeProxy(k8s kubernetes.Interface, hostname string,
 			go func() {
 				defer close(stopped)
 				defer log.Info("kube-proxy stopped to restart with updated host IPs")
-				p.Stop()
+				kp.proxy.Stop()
 			}()
 
 		waitforstop:
 			for {
 				select {
-				case hostIPs, ok = <-hostIPUpdates:
+				case hostIPs, ok = <-kp.hostIPUpdates:
 					if !ok {
 						log.Error("kube-proxy: hostIPUpdates closed")
 						return
 					}
+				case <-kp.exiting:
+					log.Info("kube-proxy: exiting")
+					return
 				case <-stopped:
-					p, err = runKubeProxy(k8s, hostname, frontendMap, backendMap, hostIPs, opts...)
+					err = kp.run(hostIPs)
 					if err != nil {
 						log.Panic("kube-proxy failed to start after host IPs update")
 					}
@@ -105,4 +155,22 @@ func startKubeProxy(k8s kubernetes.Interface, hostname string,
 	}()
 
 	return nil
+}
+
+// OnHostIPsUpdate should be used by an external user to update the proxy's list
+// of host IPs
+func (kp *KubeProxy) OnHostIPsUpdate(IPs []net.IP) {
+	select {
+	case kp.hostIPUpdates <- IPs:
+		// nothing
+	default:
+		// in case we would block, drop the no stale update and replace it
+		// with a new one. Do it non-blocking way in case it was just consumed.
+		select {
+		case <-kp.hostIPUpdates:
+		default:
+		}
+		kp.hostIPUpdates <- IPs
+	}
+	log.Debugf("kube-proxy OnHostIPsUpdate: %+v", IPs)
 }
