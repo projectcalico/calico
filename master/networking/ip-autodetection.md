@@ -151,36 +151,11 @@ You can also configure the IP address and subnet on a Node resource.
 >**Tip**: When configuring the IP address on a Node resource, you may want to disable IP address options or environment variables on the node. IP options on the container take precedence, and will overwrite the values you configure on the node resource.
 {: .alert .alert-info}
 
-Use **calicoctl** to query the current node configuration. For example:
+Use `calicoctl patch` to update the current node configuration. For example:
 
 ```
-calicoctl get node node2 -o yaml
-```
-
-**Sample output**
-
-```
-apiVersion: projectcalico.org/v3
-kind: Node
-metadata:
-  name: node2
-spec:
-  bgp:
-    ipv4Address: 10.0.2.10/32
-    ipv6Address: fd80:24e2:f998:72d6::/128
-```
-
-Next, reconfigure the node with a different ipv4Address and subnet. For example:
-
-```
-apiVersion: projectcalico.org/v3
-kind: Node
-metadata:
-  name: node2
-spec:
-  bgp:
-    ipv4Address: 10.0.2.10/24
-    ipv6Address: fd80:24e2:f998:72d6::/120
+calicoctl patch node kind-control-plane \
+  --patch='{"spec":{"bgp": {"ipv4Address": "10.0.2.10/24", "ipv6Address": "fd80:24e2:f998:72d6::/120"}}}'
 ```
 
 ### Above and beyond
@@ -188,3 +163,5 @@ spec:
 - For details on auto detection methods, see the [node configuration]({{site.baseurl}}/{{page.version}}/reference/node/configuration#ip-autodetection-methods) reference.
 - For calicoctl environment variables, see [Configuring {{site.nodecontainer}}]({{site.baseurl}}/{{page.version}}/reference/node/configuration)
 - [Node resource]({{site.baseurl}}/{{page.version}}/reference/resources/node)
+- [Reference documentation for calicoctl patch]({{site.baseurl}}/{{page.version}}/reference/calicoctl/patch)
+
