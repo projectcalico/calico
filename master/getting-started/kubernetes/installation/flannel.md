@@ -16,9 +16,9 @@ follow the steps in [Using kubeadm to create a cluster](http://kubernetes.io/doc
 The procedure differs according to your datastore type. Refer to the
 section that matches your type.
 
-- [Kubernetes API datastore](#installing-with-the-kubernetes-api-datastore-recommended) (recommended)
+- [Kubernetes API datastore](#install-with-the-kubernetes-api-datastore-recommended) (recommended)
 
-- [etcd datastore](#installing-with-the-etcd-datastore)
+- [etcd datastore](#install-with-the-etcd-datastore)
 
 ### Install with the Kubernetes API datastore (recommended)
 
@@ -45,7 +45,7 @@ section that matches your type.
    ```
 
 1. If you wish to enforce application layer policies and secure workload-to-workload
-   communications with mutual TLS authentication, continue to [Enabling application layer policy](app-layer-policy) (optional).
+   communications with mutual TLS authentication, continue to [Enable application layer policy]({{site.prodname}}/getting-started/kubernetes/installation/app-layer-policyapp-layer-policy) (optional).
 
 ### Install with the etcd datastore
 
@@ -73,4 +73,4 @@ etcd, complete the following steps.
    ```
 
 1. If you wish to enforce application layer policies and secure workload-to-workload
-   communications with mutual TLS authentication, continue to [Enabling application layer policy](app-layer-policy) (optional).
+   communications with mutual TLS authentication, continue to [Enabling application layer policy]({{site.prodname}}/getting-started/kubernetes/installation/app-layer-policyapp-layer-policy) (optional).
