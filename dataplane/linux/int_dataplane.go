@@ -146,15 +146,16 @@ type Config struct {
 
 	ExternalNodesCidrs []string
 
-	BPFEnabled           bool
-	BPFLogLevel          string
-	BPFDataIfacePattern  *regexp.Regexp
-	XDPEnabled           bool
-	XDPAllowGeneric      bool
-	BPFConntrackTimeouts conntrack.Timeouts
-	BPFCgroupV2          string
-	BPFConnTimeLBEnabled bool
-	BPFMapRepin          bool
+	BPFEnabled                         bool
+	BPFKubeProxyIptablesCleanupEnabled bool
+	BPFLogLevel                        string
+	BPFDataIfacePattern                *regexp.Regexp
+	XDPEnabled                         bool
+	XDPAllowGeneric                    bool
+	BPFConntrackTimeouts               conntrack.Timeouts
+	BPFCgroupV2                        string
+	BPFConnTimeLBEnabled               bool
+	BPFMapRepin                        bool
 
 	SidecarAccelerationEnabled bool
 
@@ -290,7 +291,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		LookPathOverride:      config.LookPathOverride,
 	}
 
-	if config.BPFEnabled {
+	if config.BPFEnabled && config.BPFKubeProxyIptablesCleanupEnabled {
 		// If BPF-mode is enabled, clean up kube-proxy's rules too.
 		log.Info("BPF enabled, configuring iptables layer to clean up kube-proxy's rules.")
 		iptablesOptions.ExtraCleanupRegexPattern = rules.KubeProxyInsertRuleRegex
