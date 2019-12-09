@@ -1,5 +1,5 @@
 ---
-title: Running calico/node with an init system
+title: Run calico/node with an init system
 canonical_url: 'https://docs.projectcalico.org/v3.9/getting-started/as-service'
 ---
 

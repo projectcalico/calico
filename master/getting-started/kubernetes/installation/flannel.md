@@ -1,17 +1,17 @@
 ---
-title: Installing Calico for policy and flannel for networking
+title: Install Calico for policy and flannel for networking
 canonical_url: 'https://docs.projectcalico.org/v3.9/getting-started/kubernetes/installation/flannel'
 ---
 
-## Before you begin
+## Before you begin..
 
 Ensure that you have a Kubernetes cluster that meets the
 {{site.prodname}} [system requirements](../requirements). If you don't,
 follow the steps in [Using kubeadm to create a cluster](http://kubernetes.io/docs/getting-started-guides/kubeadm/).
 
-## Installing {{site.prodname}} for policy and flannel for networking
+## Install {{site.prodname}} for policy and flannel for networking
 
-### Selecting a datastore type
+### Select a datastore type
 
 The procedure differs according to your datastore type. Refer to the
 section that matches your type.
@@ -20,7 +20,7 @@ section that matches your type.
 
 - [etcd datastore](#installing-with-the-etcd-datastore)
 
-### Installing with the Kubernetes API datastore (recommended)
+### Install with the Kubernetes API datastore (recommended)
 
 1. Ensure that the Kubernetes controller manager has the following flags
    set: <br>
@@ -47,7 +47,7 @@ section that matches your type.
 1. If you wish to enforce application layer policies and secure workload-to-workload
    communications with mutual TLS authentication, continue to [Enabling application layer policy](app-layer-policy) (optional).
 
-### Installing with the etcd datastore
+### Install with the etcd datastore
 
 We strongly recommend using the Kubernetes API datastore, but if you prefer to use
 etcd, complete the following steps.

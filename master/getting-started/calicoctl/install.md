@@ -1,5 +1,5 @@
 ---
-title: Installing calicoctl
+title: Install calicoctl
 canonical_url: 'https://docs.projectcalico.org/v3.9/getting-started/calicoctl/install'
 ---
 

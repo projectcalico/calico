@@ -1,5 +1,5 @@
 ---
-title: Standing up Kubernetes
+title: Stand up Kubernetes
 canonical_url: 'https://docs.projectcalico.org/v3.9/getting-started/kubernetes/hardway/standing-up-kubernetes'
 ---
 

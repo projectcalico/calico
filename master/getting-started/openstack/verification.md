@@ -1,5 +1,5 @@
 ---
-title: Verifying your deployment
+title: Verify your deployment
 canonical_url: 'https://docs.projectcalico.org/v3.9/getting-started/openstack/verification'
 ---
 

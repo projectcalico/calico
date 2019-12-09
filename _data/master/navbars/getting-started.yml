@@ -2,7 +2,7 @@ bigheader: "Getting started"
 path: /getting-started
 order: 1
 toc:
-- title: Getting started
+- title: Get started
   path: /getting-started/
 - title: Kubernetes
   section:
@@ -20,31 +20,35 @@ toc:
       path: /getting-started/kubernetes/managed-public-cloud/iks
     - title: Microsoft Azure Kubernetes Service (AKS)
       path: /getting-started/kubernetes/managed-public-cloud/aks
+  - title: Self-managed public cloud
+    path: //getting-started/kubernetes/self-managed-cloud    
   - title: Installation
     section:
     - title: Introduction
       path: /getting-started/kubernetes/installation/
-    - title: Installing Calico for policy and networking (recommended)
+    - title: Install Calico for policy and networking (recommended)
       path: /getting-started/kubernetes/installation/calico
-    - title: Installing Calico for policy (advanced)
+    - title: Install Calico for policy (advanced)
       path: /getting-started/kubernetes/installation/other
-    - title: Enabling application layer policy (optional)
+    - title: Enable application layer policy (optional)
       path: /getting-started/kubernetes/installation/app-layer-policy
-    - title: Customizing the manifests
+    - title: Customize the manifests
       path: /getting-started/kubernetes/installation/config-options
     - title: Integration guide (advanced)
       path: /getting-started/kubernetes/installation/integration
+  - title: Manual installation
+    path: //getting-started/kubernetes/installation/manual-install    
   - title: Flannel
     section:
-    - title: Installing Calico for policy and flannel for networking
+    - title: Install Calico for policy and flannel for networking
       path: /getting-started/kubernetes/installation/flannel
-    - title: Migrating a cluster from flannel to Calico
+    - title: Migrate a cluster from flannel to Calico
       path: /getting-started/kubernetes/installation/migration-from-flannel     
   - title: Calico the hard way
     section:
     - title: Introduction
       path: /getting-started/kubernetes/hardway/
-    - title: Standing up Kubernetes
+    - title: Stand up Kubernetes
       path: /getting-started/kubernetes/hardway/standing-up-kubernetes
     - title: The Calico datastore
       path: /getting-started/kubernetes/hardway/the-calico-datastore
@@ -72,7 +76,7 @@ toc:
     path: /getting-started/openshift/requirements
   - title: Installation
     path: /getting-started/openshift/installation
-  - title: Connecting to a dedicated etcd cluster (optional)
+  - title: Connect to a dedicated etcd cluster (optional)
     path: /getting-started/openshift/dedicated-etcd
 - title: OpenStack
   section:
@@ -90,33 +94,33 @@ toc:
       path: /getting-started/openstack/installation/redhat
     - title: DevStack
       path: /getting-started/openstack/installation/devstack
-    - title: Verifying your deployment
+    - title: Verify your deployment
       path: /getting-started/openstack/verification
-- title: Bare metal hosts
+
+- title: Protect hosts
   section:
   - title: System requirements
     path: /getting-started/bare-metal/requirements
   - title: Installation
     section:
     - title: Overview
-      path: /getting-started/bare-metal/installation/
-    - title: Container install
-      path: /getting-started/bare-metal/installation/container
-    - title: Binary install with package manager
-      path: /getting-started/bare-metal/installation/binary-mgr
-    - title: Binary install without package manager
-      path: /getting-started/bare-metal/installation/binary
-- title: Running calico/node with an init system
+      path: /getting-started/bare-metal/installation/overview
+    - title: Install Calico networking and policy on hosts
+      path: /getting-started/bare-metal/installation/host-both
+    - title: Install only Calico network policy on hosts
+      path: /getting-started/bare-metal/installation/host-only-policy
+   
+- title: Run calico/node with an init system
   path: /getting-started/as-service
 - title: calicoctl
   section:
-  - title: Installing calicoctl
+  - title: Install calicoctl
     path: /getting-started/calicoctl/install
-  - title: Configuring calicoctl
+  - title: Configure calicoctl
     section:
     - title: Overview
       path: /getting-started/calicoctl/configure/
-    - title: Configuring calicoctl to connect to an etcd datastore
+    - title: Configure calicoctl to connect to an etcd datastore
       path: /getting-started/calicoctl/configure/etcd
-    - title: Configuring calicoctl to connect to the Kubernetes API datastore
+    - title: Configure calicoctl to connect to the Kubernetes API datastore
       path: /getting-started/calicoctl/configure/kdd

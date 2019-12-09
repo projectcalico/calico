@@ -1,5 +1,5 @@
 ---
-title: Installing Calico for policy and networking (recommended)
+title: Install Calico for policy and networking (recommended)
 canonical_url: 'https://docs.projectcalico.org/v3.9/getting-started/kubernetes/installation/calico'
 ---
 

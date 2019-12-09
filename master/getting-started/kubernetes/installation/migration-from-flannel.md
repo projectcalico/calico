@@ -1,5 +1,5 @@
 ---
-title: Migrating a cluster from flannel to Calico
+title: Migrate a cluster from flannel to Calico
 ---
 
 # About

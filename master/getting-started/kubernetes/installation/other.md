@@ -1,5 +1,5 @@
 ---
-title: Installing Calico for policy (advanced)
+title: Install Calico for policy (advanced)
 canonical_url: 'https://docs.projectcalico.org/v3.9/getting-started/kubernetes/installation/other'
 ---
 
