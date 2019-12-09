@@ -81,20 +81,18 @@ Because you can configure IP address and subnet using either environment variabl
 
 #### Change the auto detection method
 
-As noted previously, the default auto detection method is **first valid interface found** (first-found). To use a different auto detection method, use the following `kubectl patch` command, specifying the method:
+As noted previously, the default auto detection method is **first valid interface found** (first-found). To use a different auto detection method, use the following `kubectl set env` command, specifying the method:
 
 - **IPv4**
 
   ```
-  kubectl patch ds -n kube-system calico-node --patch \
-      '{"spec": {"template": {"spec": {"containers": [{"name": "calico-node", "env": [{"name": "IP_AUTODETECTION_METHOD", "value": "<autodetection-method>"}]}]}}}}'
+  kubectl set env daemonset/calico-node -n kube-system IP_AUTODETECTION_METHOD=<autodetection-method>
   ```
 
 - **IPv6**
 
   ```
-  kubectl patch ds -n kube-system calico-node --patch \
-      '{"spec": {"template": {"spec": {"containers": [{"name": "calico-node", "env": [{"name": "IP6_AUTODETECTION_METHOD", "value": "<autodetection-method>"}]}]}}}}'
+  kubectl set env daemonset/calico-node -n kube-system IP6_AUTODETECTION_METHOD=<autodetection-method>
   ```
 
 Where auto-detection methods are based on:
@@ -104,11 +102,7 @@ Where auto-detection methods are based on:
   A reachable destination (IP address or domain). For example:
 
   ```
-  kubectl patch ds -n kube-system calico-node --patch \
-      '{"spec": {"template": {"spec": {"containers": [{"name": "calico-node", "env": [{"name": "IP_AUTODETECTION_METHOD", "value": "can-reach=8.8.8.8"}]}]}}}}'
-
-  kubectl patch ds -n kube-system calico-node --patch \
-      '{"spec": {"template": {"spec": {"containers": [{"name": "calico-node", "env": [{"name": "IP_AUTODETECTION_METHOD", "value": "can-reach=www.google.com"}]}]}}}}'
+  kubectl set env daemonset/calico-node -n kube-system IP_AUTODETECTION_METHOD=can-reach=www.google.com
   ```
 
 - **Including matching interfaces**
@@ -116,8 +110,7 @@ Where auto-detection methods are based on:
   A regular expression in golang syntax that includes interfaces that match. For example:
 
   ```
-  kubectl patch ds -n kube-system calico-node --patch \
-      '{"spec": {"template": {"spec": {"containers": [{"name": "calico-node", "env": [{"name": "IP_AUTODETECTION_METHOD", "value": "interface=eth.*"}]}]}}}}'
+  kubectl set env daemonset/calico-node -n kube-system IP_AUTODETECTION_METHOD=interface=eth.*
   ```
 
 - **Excluding matching interfaces**
@@ -125,8 +118,7 @@ Where auto-detection methods are based on:
   A regular expression in golang syntax that excludes interfaces that match. For example:
 
   ```
-  kubectl patch ds -n kube-system calico-node --patch \
-      '{"spec": {"template": {"spec": {"containers": [{"name": "calico-node", "env": [{"name": "IP_AUTODETECTION_METHOD", "value": "skip-interface=eth.*"}]}]}}}}'
+  kubectl set env daemonset/calico-node -n kube-system IP_AUTODETECTION_METHOD=skip-interface=eth.*
   ```
 
 #### Manually configure IP address and subnet for a node
@@ -142,11 +134,10 @@ You can configure specific IP address and subnet for a node using environment va
 
 ##### Configure IP and subnet using environment variables
 
-To configure IP and subnet values using environment variables, use a `kubectl patch` command. For example:
+To configure IP and subnet values using environment variables, use a `kubectl set env` command. For example:
 
 ```
-kubectl patch ds -n kube-system calico-node --patch \
-    '{"spec": {"template": {"spec": {"containers": [{"name": "calico-node", "env": [{"name": "IP", "value": "10.0.2.10/24"}, {"name": "IP6", "value": "fd80:24e2:f998:72d6::/120"}]}]}}}}'
+kubectl set env daemonset/calico-node -n kube-system IP=10.0.2.10/24 IP6=fd80:24e2:f998:72d6::/120
 ```
 
 >**Note**: If the subnet is omitted, the defaults are: /32 (IPv4) and /128 (IPv6). We recommend that you include the subnet information for clarity when specifying IP addresses.
