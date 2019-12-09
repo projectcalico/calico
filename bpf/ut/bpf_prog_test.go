@@ -79,6 +79,17 @@ func TestCompileTemplateRun(t *testing.T) {
 	})
 }
 
+var defaultCompileOpts = []intdataplane.CompileTCOption{
+	intdataplane.CompileWithBpftoolLoader(),
+	intdataplane.CompileWithWorkingDir("../xdp"),
+	intdataplane.CompileWithSourceName("../xdp/redir_tc.c"),
+	intdataplane.CompileWithFIBEnabled(true),
+	intdataplane.CompileWithLogLevel("DEBUG"),
+	intdataplane.CompileWithHostIP(hostIP),
+	intdataplane.CompileWithVxlanPort(testVxlanPort),
+	intdataplane.CompileWithNATTunnelMTU(natTunnelMTU),
+}
+
 // runBpfTest runs a specific section of the entire bpf program in isolation
 func runBpfTest(t *testing.T, section string, rules [][][]*proto.Rule, testFn func(bpfProgRunFn)) {
 	RegisterTestingT(t)
@@ -98,19 +109,12 @@ func runBpfTest(t *testing.T, section string, rules [][][]*proto.Rule, testFn fu
 
 	objFname := tempDir + "/redir_tc.o"
 
-	err = intdataplane.CompileTCProgramToFile(rules,
-		idalloc.New(),
-		intdataplane.CompileWithBpftoolLoader(),
-		intdataplane.CompileWithWorkingDir("../xdp"),
-		intdataplane.CompileWithSourceName("../xdp/redir_tc.c"),
+	opts := append(defaultCompileOpts,
 		intdataplane.CompileWithOutputName(objFname),
-		intdataplane.CompileWithFIBEnabled(true),
-		intdataplane.CompileWithLogLevel("DEBUG"),
 		intdataplane.CompileWithLogPrefix(section),
-		intdataplane.CompileWithHostIP(hostIP),
-		intdataplane.CompileWithVxlanPort(testVxlanPort),
-		intdataplane.CompileWithNATTunnelMTU(natTunnelMTU),
 	)
+
+	err = intdataplane.CompileTCProgramToFile(rules, idalloc.New(), opts...)
 	Expect(err).NotTo(HaveOccurred())
 
 	err = bpftoolProgLoadAll(objFname, bpfFsDir)
@@ -250,21 +254,16 @@ func runBpfUnitTest(t *testing.T, source string, testFn func(bpfProgRunFn)) {
 	curwd, err := os.Getwd()
 	Expect(err).NotTo(HaveOccurred())
 
-	err = intdataplane.CompileTCProgramToFile(nil,
-		idalloc.New(),
-		intdataplane.CompileWithBpftoolLoader(),
+	opts := append(defaultCompileOpts,
+		intdataplane.CompileWithOutputName(objFname),
 		intdataplane.CompileWithWorkingDir(wdir),
 		intdataplane.CompileWithSourceName(wdir+"/redir_tc.c"),
-		intdataplane.CompileWithOutputName(objFname),
-		intdataplane.CompileWithFIBEnabled(true),
-		intdataplane.CompileWithLogLevel("DEBUG"),
+		intdataplane.CompileWithIncludePath(curwd+"/progs"),
 		intdataplane.CompileWithLogPrefix("UNITTEST"),
 		intdataplane.CompileWithDefine("CALI_UNITTEST"),
-		intdataplane.CompileWithVxlanPort(testVxlanPort),
-		intdataplane.CompileWithIncludePath(curwd+"/progs"),
-		intdataplane.CompileWithHostIP(hostIP),
-		intdataplane.CompileWithNATTunnelMTU(natTunnelMTU),
 	)
+
+	err = intdataplane.CompileTCProgramToFile(nil, idalloc.New(), opts...)
 	Expect(err).NotTo(HaveOccurred())
 
 	err = bpftoolProgLoadAll(objFname, bpfFsDir)
