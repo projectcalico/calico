@@ -29,7 +29,7 @@ Description:
 ### Examples
 
 Check the status of a {{site.prodname}} instance.
-```
+```bash
 sudo calicoctl node status
 ```
 Some sample results follow,.

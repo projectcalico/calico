@@ -46,7 +46,7 @@ Although you can use any of the following policies to create default deny policy
 
 In the following example, we enable a default deny **GlobalNetworkPolicy** for all workloads and hosts.
 
-```
+```yaml
 apiVersion: projectcalico.org/v3
 kind: GlobalNetworkPolicy
 metadata:
@@ -62,7 +62,7 @@ spec:
 
 In the following example, we enable a default deny **NetworkPolicy** for all workloads in the namespace, **engineering**.
 
-```
+```yaml
 apiVersion: projectcalico.org/v3
 kind: NetworkPolicy
 metadata:
@@ -79,7 +79,7 @@ spec:
 
 In the following example, we enable a default deny **Kubernetes network policy** for all pods in the namespace, **engineering**.
 
-```
+```yaml
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:

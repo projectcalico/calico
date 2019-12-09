@@ -25,13 +25,13 @@ At the end, you will have a fully-functional Calico cluster using VXLAN networki
 
 1. First, install Calico.
 
-   ```
+   ```bash
    kubectl apply -f {{site.url}}/{{page.version}}/manifests/flannel-migration/calico.yaml
    ```
 
    Then, install the migration controller to initiate the migration.
 
-   ```
+   ```bash
    kubectl apply -f {{site.url}}/{{page.version}}/manifests/flannel-migration/migration-job.yaml
    ```
 
@@ -39,7 +39,7 @@ At the end, you will have a fully-functional Calico cluster using VXLAN networki
 
 1. To monitor the migration, run the following command.
 
-   ```
+   ```bash
    kubectl get jobs -n kube-system flannel-migration
    ```
 
@@ -53,7 +53,7 @@ At the end, you will have a fully-functional Calico cluster using VXLAN networki
 
 1. After completion, delete the migration controller with the following command.
 
-   ```
+   ```bash
    kubectl delete -f {{site.url}}/{{page.version}}/manifests/flannel-migration/migration-job.yaml
    ```
 # Configuration options
@@ -81,7 +81,7 @@ which can be set as environment variables within the pod.
 
 The migration controller should run to completion. You can run the following command to view the controller's current status.
 
-```
+```bash
 kubectl get pods -n kube-system -l k8s-app=flannel-migration-controller
 ```
 
@@ -89,7 +89,7 @@ kubectl get pods -n kube-system -l k8s-app=flannel-migration-controller
 
 View migration logs using the following command.
 
-```
+```bash
 kubectl logs -n kube-system -l k8s-app=flannel-migration-controller
 ```
 
@@ -102,14 +102,14 @@ Migration from Calico to flannel is not supported. If you experience a problem d
 
 1. Remove the migration controller and Calico.
 
-   ```
+   ```bash
    kubectl delete -f {{site.url}}/{{page.version}}/manifests/flannel-migration/migration-job.yaml
    kubectl delete -f {{site.url}}/{{page.version}}/manifests/flannel-migration/calico.yaml
    ```
 
 1. Determine the nodes which have been migrated to Calico.
 
-   ```
+   ```bash
    kubectl get nodes -l projectcalico.org/node-network-during-migration=calico
    ```
 
@@ -117,13 +117,13 @@ Then, for each node found above, run the following commands to delete Calico.
 
 1. Cordon and drain the node.
 
-   ```
+   ```bash
    kubectl drain <node name>
    ```
 
 1. Log in to the node and remove the CNI configuration.
 
-   ```
+   ```bash
    rm /etc/cni/net.d/10-calico.conflist
    ```
 
@@ -131,13 +131,13 @@ Then, for each node found above, run the following commands to delete Calico.
 
 1. Enable flannel on the node.
 
-   ```
+   ```bash
    kubectl label node <node name> projectcalico.org/node-network-during-migration=flannel --overwrite
    ```
 
 1. Uncordon the node.
 
-   ```
+   ```bash
    kubectl uncordon <node name>
    ```
 
@@ -145,12 +145,12 @@ Once the above steps have been completed on each node, perform the following ste
 
 1. Remove the `nodeSelector` from the flannel daemonset.
 
-   ```
+   ```bash
    kubectl patch ds/kube-flannel-ds-amd64 -n kube-system -p '{"spec": {"template": {"spec": {"nodeSelector": null}}}}'
    ```
 
 1. Remove the migration label from all nodes.
 
-   ```
+   ```bash
    kubectl label node --all projectcalico.org/node-network-during-migration-
    ```

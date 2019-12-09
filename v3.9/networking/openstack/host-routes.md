@@ -61,7 +61,7 @@ For example, suppose an instance has eth0 attached to a subnet with gateway
 10.65.0.1, eth1 attached to a subnet with gateway 11.8.0.1, and a default route
 via eth0.  Then a host route like
 
-```bash
+```
 11.11.0.0/16,11.8.0.1
 ```
 {: .no-select-button}
@@ -69,7 +69,7 @@ via eth0.  Then a host route like
 can be configured for the subnet, to say that data to 11.11.0.0/16 should go
 out through eth1.  The instance's routing table will then be:
 
-```bash
+```
 default via 10.65.0.1 dev eth0
 10.65.0.0/24 dev eth0
 11.8.0.0/24 dev eth1

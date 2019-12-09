@@ -397,7 +397,7 @@ Example:
 1. Create (or update) an IP pool that only allocates IPs for nodes where it
    contains a label `rack=0`.
 
-   ```
+   ```bash
    calicoctl create -f -<<EOF
    apiVersion: projectcalico.org/v3
    kind: IPPool
@@ -413,7 +413,7 @@ Example:
 
 2. Label a node with `rack=0`.
 
-   ```
+   ```bash
    kubectl label nodes kube-node-0 rack=0
    ```
 

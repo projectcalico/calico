@@ -49,7 +49,7 @@ Before creating a **doNotTrack** network policy, read this [blog](https://www.ti
 
 In the following example, a memcached server pod with **hostNetwork: true** was scheduled on the node memcached-node-1. We create a HostEndpoint for the node. Next, we create a GlobalNetwork Policy with symmetrical rules for ingress and egress with doNotTrack and applyOnForward set to true.
 
-```
+```yaml
 apiVersion: projectcalico.org/v3
 kind: HostEndpoint
 metadata:

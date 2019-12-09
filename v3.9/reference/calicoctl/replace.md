@@ -86,7 +86,7 @@ Description:
 
    Results indicate that 8 resources were successfully replaced.
 
-   ```bash
+   ```
    Successfully replaced 8 resource(s)
    ```
    {: .no-select-button}
@@ -98,7 +98,7 @@ Description:
    ```
    Results indicate the policy does not exist.
 
-   ```bash
+   ```
    Failed to replace any 'policy' resources: resource does not exist: Policy(name=dbPolicy)
    ```
    {: .no-select-button}

@@ -36,7 +36,7 @@ These steps are detailed in this section.
 
 1.  Configure the {{site.prodname}} repository:
 
-    ```
+    ```bash
     cat > /etc/yum.repos.d/calico.repo <<EOF
     [calico]
     name=Calico Repository
@@ -73,13 +73,13 @@ On each control node, perform the following steps:
 
 1.  Install the `calico-control` package:
 
-    ```
+    ```bash
     yum install -y calico-control
     ```
 
 1.  Restart the neutron server process:
 
-    ```
+    ```bash
     service neutron-server restart
     ```
 
@@ -101,26 +101,26 @@ On each compute node, perform the following steps:
 
     Restart nova compute.
 
-    ```
+    ```bash
     service openstack-nova-compute restart
     ```
 
     If this node is also a controller, additionally restart nova-api.
 
-    ```
+    ```bash
     service openstack-nova-api restart
     ```
 
 1.  If they're running, stop the Open vSwitch services.
 
-    ```
+    ```bash
     service neutron-openvswitch-agent stop
     service openvswitch stop
     ```
 
     Then, prevent the services running if you reboot.
 
-    ```
+    ```bash
     chkconfig openvswitch off
     chkconfig neutron-openvswitch-agent off
     ```
@@ -128,20 +128,20 @@ On each compute node, perform the following steps:
     Then, on your control node, run the following command to find the
     agents that you just stopped.
 
-    ```
+    ```bash
     neutron agent-list
     ```
 
     For each agent, delete them with the following command on your
     control node, replacing `<agent-id>` with the ID of the agent.
 
-    ```
+    ```bash
     neutron agent-delete <agent-id>
     ```
 
 1.  Install Neutron infrastructure code on the compute host.
 
-    ```
+    ```bash
     yum install -y openstack-neutron
     ```
 
@@ -169,7 +169,7 @@ On each compute node, perform the following steps:
     {{site.prodname}} DHCP agent (which uses etcd, allowing it to scale to higher
     numbers of hosts).
 
-    ```
+    ```bash
     service neutron-dhcp-agent stop
     chkconfig neutron-dhcp-agent off
     yum install -y calico-dhcp-agent
@@ -179,7 +179,7 @@ On each compute node, perform the following steps:
     routing agent or the Linux bridging agent. These conflict
     with {{site.prodname}}.
 
-    ```
+    ```bash
     service neutron-l3-agent stop
     chkconfig neutron-l3-agent off
     ```
@@ -190,7 +190,7 @@ On each compute node, perform the following steps:
     Metadata API. This step is not required on combined compute and
     controller nodes.
 
-    ```
+    ```bash
     yum install -y openstack-nova-api
     service openstack-nova-metadata-api restart
     chkconfig openstack-nova-metadata-api on
@@ -198,13 +198,13 @@ On each compute node, perform the following steps:
 
 1.  Install the BIRD BGP client.
 
-    ```
+    ```bash
     yum install -y bird bird6
     ```
 
 1.  Install the `calico-compute` package.
 
-    ```
+    ```bash
     yum install -y calico-compute
     ```
 
@@ -248,7 +248,7 @@ On each compute node, perform the following steps:
     Ensure that BIRD (and/or BIRD 6 for IPv6) is running and starts on
     reboot.
 
-    ```
+    ```bash
     service bird restart
     service bird6 restart
     chkconfig bird on
@@ -266,6 +266,6 @@ On each compute node, perform the following steps:
 
 1.  Restart the Felix service.
 
-    ```
+    ```bash
     service calico-felix restart
     ```

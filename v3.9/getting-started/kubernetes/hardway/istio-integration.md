@@ -14,7 +14,7 @@ running in each pod.  It mounts a shared volume into which Felix inserts a Unix 
 
 On each node in the cluster, execute the following commands to install the FlexVolume driver binary.
 
-```
+```bash
 sudo mkdir -p /usr/libexec/kubernetes/kubelet-plugins/volume/exec/nodeagent~uds
 sudo docker run --rm \
   -v /usr/libexec/kubernetes/kubelet-plugins/volume/exec/nodeagent~uds:/host/driver \
