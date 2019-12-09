@@ -1,7 +1,5 @@
 ---
 title: Reference
+description: APIs, CLI, architecture and design, and FAQ
 canonical_url: 'https://docs.projectcalico.org/v3.9/reference/index'
 ---
-
-This section contains reference information about {{site.prodname}} resources,
-components, and third party attributions.

@@ -1,5 +1,6 @@
 ---
 title: Host routes
+description: Options for host routing with Calico
 canonical_url: 'https://docs.projectcalico.org/v3.9/networking/openstack/host-routes'
 ---
 

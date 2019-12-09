@@ -1,5 +1,6 @@
 ---
 title: Service IPs
+description: Use a floating or fixed IP for a Calico-networked VM
 canonical_url: 'https://docs.projectcalico.org/v3.9/networking/openstack/service-ips'
 ---
 

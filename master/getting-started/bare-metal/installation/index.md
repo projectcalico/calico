@@ -1,5 +1,6 @@
 ---
 title: Installing Calico on host endpoints
+description: Choose a method to install Calico on hosts
 canonical_url: 'https://docs.projectcalico.org/v3.9/getting-started/bare-metal/installation/index'
 ---
 
