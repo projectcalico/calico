@@ -39,14 +39,14 @@ the host. Instead, continue directly to the
    
 1. Initialize the master using the following command.
 
-   ```
+   ```bash
    sudo kubeadm init --pod-network-cidr=192.168.0.0/16
    ```
    
 1. Execute the following commands to configure kubectl (also returned by
    `kubeadm init`).
 
-   ```
+   ```bash
    mkdir -p $HOME/.kube
    sudo cp -i /etc/kubernetes/admin.conf $HOME/.kube/config
    sudo chown $(id -u):$(id -g) $HOME/.kube/config
@@ -54,7 +54,7 @@ the host. Instead, continue directly to the
    
 1. Install {{site.prodname}} and a single node etcd with the following command.
 
-   ```
+   ```bash
    kubectl apply -f \
    {{site.url}}/{{page.version}}/getting-started/kubernetes/installation/hosted/kubeadm/1.7/calico.yaml
    ```
@@ -81,7 +81,7 @@ the host. Instead, continue directly to the
    
 1. Confirm that all of the pods are running with the following command.
 
-   ```
+   ```bash
    watch kubectl get pods --all-namespaces
    ```
    
@@ -105,7 +105,7 @@ the host. Instead, continue directly to the
 1. Remove the taints on the master so that you can schedule pods
    on it.
    
-   ```
+   ```bash
    kubectl taint nodes --all node-role.kubernetes.io/master-
    ```
 
@@ -118,7 +118,7 @@ the host. Instead, continue directly to the
 1. Confirm that you now have a node in your cluster with the 
    following command.
    
-   ```
+   ```bash
    kubectl get nodes -o wide
    ```
    

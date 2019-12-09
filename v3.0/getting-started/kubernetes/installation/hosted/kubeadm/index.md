@@ -37,7 +37,7 @@ running as a Kubernetes pod:
 
 2. Apply the single-node etcd manifest:
 
-   ```shell
+   ```bash
    kubectl apply -f {{site.url}}/{{page.version}}/getting-started/kubernetes/installation/hosted/kubeadm/1.7/calico.yaml
    ```
 

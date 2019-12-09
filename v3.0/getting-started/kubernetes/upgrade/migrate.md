@@ -25,7 +25,7 @@ canonical_url: 'https://docs.projectcalico.org/v3.5/getting-started/kubernetes/u
    | <code>&#8209;&#8209;apiconfigv3</code> | By default, `calico-upgrade` looks for the etcdv3 configuration file at `/etc/calico/apiconfigv3.cfg`. If you have a configuration file in a different location or if it has a different name, include the `--apiconfigv3` flag and specify the name and location of the file. If you are using environment variables, you don't need this flag.
    
    **Example**
-   ```
+   ```bash
    calico-upgrade start --apiconfigv1 etcdv2.yaml --apiconfigv3 etcdv3.yaml
    ```
 

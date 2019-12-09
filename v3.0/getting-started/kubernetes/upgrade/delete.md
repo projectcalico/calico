@@ -39,19 +39,19 @@ This procedure requires etcdctl v3. The etcdctl tool is installed along with etc
 
 1. Issue the following command to retrieve a list of all of the Calico keys.
    
-   ```
+   ```bash
    etcdctl --endpoint=<etcdv2-hostname:port> ls /calico --recursive
    ```
    
 1. Issue the following command to delete the {{site.prodname}} keys.
    
-   ```
+   ```bash
    etcdctl --endpoint=<etcdv2-hostname:port> rm /calico/ --recursive 
    ```
    
 1. Issue the following command to confirm that the {{site.prodname}} keys were deleted.
    
-   ```
+   ```bash
    etcdctl --endpoint=<etcdv2-hostname:port> ls /calico --recursive
    ```
    
@@ -82,13 +82,13 @@ This procedure requires etcdctl v3. The etcdctl tool is installed along with etc
    
 1. Issue the following command to retrieve a list of all of the Calico keys.
    
-   ```
+   ```bash
    ETCDCTL_API=3 etcdctl --endpoints=<etcdv3-hostname:port> get /calico/ --prefix --keys-only
    ```
    
 1. Issue the following command to delete the {{site.prodname}} keys.
    
-   ```
+   ```bash
    ETCDCTL_API=3 etcdctl --endpoints=<etcdv3-hostname:port> del /calico/ --prefix 
    ```
    
@@ -96,7 +96,7 @@ This procedure requires etcdctl v3. The etcdctl tool is installed along with etc
    
 1. Issue the following command to confirm that the {{site.prodname}} keys were deleted.
    
-   ```
+   ```bash
    ETCDCTL_API=3 etcdctl --endpoints=<etcdv3-hostname:port> get /calico/ --prefix --keys-only
    ```
    
@@ -123,7 +123,7 @@ to try again.
 1. Check that the data exists in the Kubernetes API datastore. Issue the
    following.
 
-   ```
+   ```bash
    kubectl get crd
    ```
 
@@ -136,7 +136,7 @@ to try again.
 
 1. Issue the following commands to delete the {{site.prodname}} data.
 
-   ```
+   ```bash
    kubectl delete crd bgpconfigurations.crd.projectcalico.org
    kubectl delete crd felixconfigurations.crd.projectcalico.org
    kubectl delete crd clusterinformations.crd.projectcalico.org
@@ -148,7 +148,7 @@ to try again.
 1. Issue the following command to confirm that the {{site.prodname}} data was deleted.
    Verify the output does not contain the `crd`s deleted above.
 
-   ```
+   ```bash
    kubectl get crd
    ```
 

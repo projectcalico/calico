@@ -25,7 +25,7 @@ target etcdv3 cluster. The host must be AMD64 and running one of the following:
 
 1. Set the file to be executable.
 
-   ```
+   ```bash
    chmod +x calico-upgrade
    ```
    
@@ -52,7 +52,7 @@ You can use either configuration files or environment variables to configure
 1. **Configuration file**: The file can be in either YAML or JSON format. It 
    must be valid and readable by `calico-upgrade`. A YAML example follows.
 
-   ```
+   ```yaml
    apiVersion: v1
    kind: calicoApiConfig
    metadata:
@@ -95,7 +95,7 @@ You can use either configuration files or environment variables to configure
 1. **Configuration file**: The file can be in either YAML or JSON format. It 
    must be valid and readable by `calico-upgrade`. A YAML example follows.
 
-   ```
+   ```yaml
    apiVersion: projectcalico.org/v3
    kind: CalicoAPIConfig
    metadata:

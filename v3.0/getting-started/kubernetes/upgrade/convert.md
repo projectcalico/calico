@@ -11,7 +11,7 @@ canonical_url: 'https://docs.projectcalico.org/v3.5/getting-started/kubernetes/u
  You can convert your v1 yaml or json manifests v3 yaml or json manifests.
  
  **Example**
- ```
+ ```bash
  calicoctl convert -f path/to/v1-multi-resource.yaml -o yaml
  - apiVersion: projectcalico.org/v3
    kind: BGPPeer
@@ -34,7 +34,7 @@ canonical_url: 'https://docs.projectcalico.org/v3.5/getting-started/kubernetes/u
  ```
  
  Original v1 resource file:
- ```
+ ```bash
  cat v1-multi-resource.yaml
  - apiVersion: v1
    kind: bgpPeer

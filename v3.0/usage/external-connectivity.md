@@ -17,12 +17,12 @@ to destinations outside the cluster.
 The easiest way to get outbound connectivity is to turn on NAT Outgoing on all
 Calico pools you want to be able to access the internet.
 
-```shell
+```bash
 calicoctl get ipPool
 ```
 
 # For each pool that needs connectivity:
-```
+```bash
 cat << EOF | calicoctl apply -f -
 - apiVersion: projectcalico.org/v3
   kind: IPPool

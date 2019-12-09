@@ -83,11 +83,11 @@ Description:
 ```
 # Apply a set of resources (of mixed type) using the data in resources.yaml.
 # Results indicate that 8 resources were successfully applied
-$ calicoctl apply -f ./resources.yaml
+calicoctl apply -f ./resources.yaml
 Successfully applied 8 resource(s)
 
 # Apply two policy resources based on the JSON passed into stdin.
-$ cat policy.json | calicoctl apply -f -
+cat policy.json | calicoctl apply -f -
 Successfully applied 2 'policy' resource(s)
 ```
 

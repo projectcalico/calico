@@ -24,7 +24,7 @@ and your datastore type.
 1. If your configuration uses RBAC, use the following command to create the roles 
    and role bindings for {{site.prodname}}'s components:
 
-   ```
+   ```bash
    kubectl apply -f {{site.url}}/{{page.version}}/getting-started/kubernetes/installation/hosted/rbac-kdd.yaml
    ```
    > **Note**: You can also 
@@ -37,13 +37,13 @@ and your datastore type.
 1. Use the following command to initiate a rolling update, after replacing 
    `<v3-manifest>` with the name of the manifest file obtained in the previous step.
 
-   ```
+   ```bash
    kubectl apply -f <v3-manifest>
    ```
    
 1. Watch the status of the upgrade as follows.
 
-   ```
+   ```bash
    watch kubectl get pods -n kube-system
    ```
    
@@ -57,7 +57,7 @@ and your datastore type.
 
 1. Use the following command to confirm that {{site.noderunning}} has upgraded to v3.0.x.
 
-   ```
+   ```bash
    kubectl exec -n kube-system calico-node-hvvg8 versions
    ```
    
@@ -80,13 +80,13 @@ and your datastore type.
 1. Use the following command to initiate a rolling update, after replacing 
    `<v3-manifest>` with the name of the manifest file obtained in the previous step.
 
-   ```
+   ```bash
    kubectl apply -f <v3-manifest>
    ```
    
 1. Watch the status of the upgrade as follows.
 
-   ```
+   ```bash
    watch kubectl get pods -n kube-system
    ```
    
@@ -108,7 +108,7 @@ and your datastore type.
    
 1. Use the following command to confirm that {{site.noderunning}} has upgraded to v3.0.x.
 
-   ```
+   ```bash
    kubectl exec -n kube-system calico-node-hvvg8 versions
    ```
    

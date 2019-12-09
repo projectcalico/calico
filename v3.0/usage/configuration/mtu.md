@@ -83,15 +83,15 @@ calico/node container will set the MTU for Felix to use.
 To set the IP-in-IP MTU value for all calico nodes in your cluster, use the
 following command to set the global config value.
 
-```
+```bash
 # Get the current Felix settings
-$ calicoctl get felixconfig -o yaml > felix.yaml
+calicoctl get felixconfig -o yaml > felix.yaml
 
 # Modify ipipMTU to the intended integer value
-$ vim felix.yaml
+vim felix.yaml
 
 # Replace the current felixconfig settings
-$ calicoctl replace -f felix.yaml
+calicoctl replace -f felix.yaml
 ```
 
 > **Note**: Setting the `ipipMTU` config option will result in an immediate

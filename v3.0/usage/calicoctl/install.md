@@ -29,7 +29,7 @@ you want to install the binary.
 
 1. Set the file to be executable.
 
-   ```
+   ```bash
    chmod +x calicoctl
    ```
 

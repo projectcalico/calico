@@ -5,7 +5,7 @@ canonical_url: 'https://docs.projectcalico.org/v3.0/getting-started/kubernetes/i
 
 Calico can be installed on a Kubernetes cluster with a single command.
 
-```
+```bash
 kubectl apply -f calico.yaml
 ```
 

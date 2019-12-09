@@ -151,7 +151,7 @@ the {{site.prodname}}/BGP integration, the specification of a node resource just
 the name of the node;  for most deployments this will be the same as the
 hostname.
 
-```
+```bash
 cat << EOF | calicoctl create -f -
 - apiVersion: projectcalico.org/v3
   kind: Node
@@ -197,7 +197,7 @@ When running this command, replace the placeholders in angle brackets with
 appropriate values for your deployment.
 <!-- -->
 
-```
+```bash
 cat << EOF | calicoctl create -f -
 - apiVersion: projectcalico.org/v3
   kind: GlobalNetworkPolicy
@@ -268,7 +268,7 @@ arbitrary name required for endpoint identification.
 When running this command, replace the placeholders in angle brackets with
 appropriate values for your deployment.
 
-```
+```bash
 cat << EOF | calicoctl create -f -
 - apiVersion: projectcalico.org/v3
   kind: HostEndpoint
@@ -314,7 +314,7 @@ key/value pairs that can be used in selector expressions.
 Or, if you knew that the IP address should be 10.0.0.1, but not the name
 of the interface:
 
-```
+```bash
 cat << EOF | calicoctl create -f -
 - apiVersion: projectcalico.org/v3
   kind: HostEndpoint
@@ -363,7 +363,7 @@ endpoints that match particular label selectors.
 
 For example, you could add a second policy for webserver access:
 
-```
+```bash
 cat << EOF | dist/calicoctl create -f -
 - apiVersion: projectcalico.org/v3
   kind: GlobalNetworkPolicy
@@ -539,7 +539,7 @@ pass ingress policy on the first host endpoint and egress policy on the second h
 > traffic, you can create an empty policy with `applyOnForward` set to `true`
 > that applies to all traffic on all host endpoints.
 {: .alert .alert-info}
-```
+```bash
 calicoctl apply -f - <<EOF
 - apiVersion: projectcalico.org/v3
   kind: GlobalNetworkPolicy
@@ -684,7 +684,7 @@ policy, because:
 Here is the pre-DNAT policy that we need to disallow incoming external traffic
 in general:
 
-```
+```bash
 calicoctl apply -f - <<EOF
 - apiVersion: projectcalico.org/v3
   kind: GlobalNetworkPolicy
@@ -736,7 +736,7 @@ egress traffic will be allowed from local processes (except for traffic that is
 allowed by the [failsafe rules](#failsafe-rules)). Because there is no default-deny
 rule for forwarded traffic, forwarded traffic will be allowed for host endpoints.
 
-```
+```bash
 calicoctl apply -f - <<EOF
 - apiVersion: projectcalico.org/v3
   kind: GlobalNetworkPolicy
@@ -771,7 +771,7 @@ node.  The policies above all have a selector that makes them applicable to any
 endpoint with a `host-endpoint` label, so we should include that label in our
 definitions.  For example, for `eth0` on `node1`:
 
-```
+```bash
 calicoctl apply -f - <<EOF
 - apiVersion: projectcalico.org/v3
   kind: HostEndpoint
@@ -797,7 +797,7 @@ but not from outside.
 To open a pinhole for that NodePort, for external access, you can configure a
 pre-DNAT policy like this:
 
-```
+```bash
 calicoctl apply -f - <<EOF
 - apiVersion: projectcalico.org/v3
   kind: GlobalNetworkPolicy

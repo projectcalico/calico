@@ -47,7 +47,7 @@ Ensure you have a cluster which meets the above requirements.  There may be addi
 
 Install {{site.prodname}}'s RBAC manifest, which creates roles and role bindings for {{site.prodname}}'s components:
 
-```
+```bash
 kubectl apply -f {{site.url}}/{{page.version}}/getting-started/kubernetes/installation/hosted/rbac-kdd.yaml
 ```
    > **Note**: You can also
@@ -139,7 +139,7 @@ To enable Typha in either the {{site.prodname}} networking manifest or the polic
 
 2. Modify the replica count in the `calico-typha` Deployment section to the desired number of replicas:
 
-   ```
+   ```yaml
    apiVersion: apps/v1beta1
    kind: Deployment
    metadata:

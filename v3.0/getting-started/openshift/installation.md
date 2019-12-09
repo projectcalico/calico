@@ -21,7 +21,7 @@ Also ensure that you have an explicitly defined host in the `[etcd]` group.
 
 **Sample Inventory File:**
 
-```
+```conf
 [OSEv3:children]
 masters
 nodes
@@ -65,7 +65,7 @@ a user has already set up.
 
 **Sample Inventory File:**
 
-```
+```inventory
 [OSEv3:children]
 masters
 nodes

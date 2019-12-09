@@ -14,7 +14,7 @@ one of our [getting started guides]({{site.baseurl}}/{{page.version}}/getting-st
 
 ### 1) Create the frontend, backend, client, and management-ui apps.
 
-```shell
+```bash
 kubectl create -f {{site.url}}/{{page.version}}/getting-started/kubernetes/tutorials/stars-policy/manifests/00-namespace.yaml
 kubectl create -f {{site.url}}/{{page.version}}/getting-started/kubernetes/tutorials/stars-policy/manifests/01-management-ui.yaml
 kubectl create -f {{site.url}}/{{page.version}}/getting-started/kubernetes/tutorials/stars-policy/manifests/02-backend.yaml
@@ -24,7 +24,7 @@ kubectl create -f {{site.url}}/{{page.version}}/getting-started/kubernetes/tutor
 
 Wait for all the pods to enter `Running` state.
 
-```shell
+```bash
 kubectl get pods --all-namespaces --watch
 ```
 > Note that it may take several minutes to download the necessary Docker images for this demo.
@@ -45,7 +45,7 @@ represented by a single node in the graph.
 
 Running following commands will prevent all access to the frontend, backend, and client Services.
 
-```shell
+```bash
 kubectl create -n stars -f {{site.url}}/{{page.version}}/getting-started/kubernetes/tutorials/stars-policy/policies/default-deny.yaml
 kubectl create -n client -f {{site.url}}/{{page.version}}/getting-started/kubernetes/tutorials/stars-policy/policies/default-deny.yaml
 ```
@@ -57,7 +57,7 @@ Now that we've enabled isolation, the UI can no longer access the pods, and so t
 
 ### 3) Allow the UI to access the Services using NetworkPolicy objects
 
-```shell
+```bash
 # Allow access from the management UI.
 kubectl create -f {{site.url}}/{{page.version}}/getting-started/kubernetes/tutorials/stars-policy/policies/allow-ui.yaml
 kubectl create -f {{site.url}}/{{page.version}}/getting-started/kubernetes/tutorials/stars-policy/policies/allow-ui-client.yaml
@@ -67,7 +67,7 @@ After a few seconds, refresh the UI - it should now show the Services, but they 
 
 ### 4) Create the "backend-policy.yaml" file to allow traffic from the frontend to the backend.
 
-```shell
+```bash
 kubectl create -f {{site.url}}/{{page.version}}/getting-started/kubernetes/tutorials/stars-policy/policies/backend-policy.yaml
 ```
 
@@ -79,7 +79,7 @@ Refresh the UI.  You should see the following:
 
 ### 5) Expose the frontend service to the `client` namespace.
 
-```shell
+```bash
 kubectl create -f {{site.url}}/{{page.version}}/getting-started/kubernetes/tutorials/stars-policy/policies/frontend-policy.yaml
 ```
 
@@ -92,6 +92,6 @@ To use Calico to enforce egress policy on Kubernetes pods, see [the advanced pol
 
 You can clean up the demo by deleting the demo Namespaces:
 
-```shell
+```bash
 kubectl delete ns client stars management-ui
 ```
