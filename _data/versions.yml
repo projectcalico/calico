@@ -6,7 +6,7 @@ v3.10:
      calicoctl:
       version: v3.10.2
      calico/node:
-      version: v3.10.1
+      version: v3.10.2
      calico/cni:
       version: v3.10.2
      calico/kube-controllers:
