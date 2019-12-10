@@ -29,7 +29,7 @@ struct calico_route_value {
 	__u32 next_hop;
 };
 
-struct bpf_map_def_extended __attribute__((section("maps"))) cali_routes = {
+struct bpf_map_def_extended __attribute__((section("maps"))) cali_v4_routes = {
 	.type           = BPF_MAP_TYPE_LPM_TRIE,
 	.key_size       = sizeof(union calico_route_lpm_key),
 	.value_size     = sizeof(struct calico_route_value),
@@ -44,7 +44,7 @@ static CALI_BPF_INLINE struct calico_route_value *cali_rt_lookup(__be32 addr) {
 	union calico_route_lpm_key k;
 	k.key.prefixlen = 32;
 	k.key.addr = addr;
-	return bpf_map_lookup_elem(&cali_routes, &k);
+	return bpf_map_lookup_elem(&cali_v4_routes, &k);
 }
 
 static CALI_BPF_INLINE enum calico_route_type cali_rt_lookup_type(__be32 addr) {

@@ -99,12 +99,12 @@ func NewValue(valueType Type) Value {
 }
 
 var MapParameters = bpf.MapParameters{
-	Filename:   "/sys/fs/bpf/tc/globals/cali_routes",
+	Filename:   "/sys/fs/bpf/tc/globals/cali_v4_routes",
 	Type:       "lpm_trie",
 	KeySize:    KeySize,
 	ValueSize:  ValueSize,
 	MaxEntries: 1024 * 1024,
-	Name:       "cali_routes",
+	Name:       "cali_v4_routes",
 	Flags:      unix.BPF_F_NO_PREALLOC,
 }
 

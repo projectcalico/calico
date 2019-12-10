@@ -167,12 +167,12 @@ func (k BackendValue) AsBytes() []byte {
 }
 
 var FrontendMapParameters = bpf.MapParameters{
-	Filename:   "/sys/fs/bpf/tc/globals/cali_nat_v4",
+	Filename:   "/sys/fs/bpf/tc/globals/cali_v4_nat_fe",
 	Type:       "hash",
 	KeySize:    frontendKeySize,
 	ValueSize:  frontendValueSize,
 	MaxEntries: 511000,
-	Name:       "cali_nat_v4",
+	Name:       "cali_v4_nat_fe",
 	Flags:      unix.BPF_F_NO_PREALLOC,
 }
 
@@ -181,12 +181,12 @@ func FrontendMap() bpf.Map {
 }
 
 var BackendMapParameters = bpf.MapParameters{
-	Filename:   "/sys/fs/bpf/tc/globals/cali_natbe_v4",
+	Filename:   "/sys/fs/bpf/tc/globals/cali_v4_nat_be",
 	Type:       "hash",
 	KeySize:    backendKeySize,
 	ValueSize:  backendValueSize,
 	MaxEntries: 510000,
-	Name:       "cali_natbe_v4",
+	Name:       "cali_v4_nat_be",
 	Flags:      unix.BPF_F_NO_PREALLOC,
 }
 

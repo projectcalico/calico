@@ -216,12 +216,12 @@ func (e Entry) String() string {
 }
 
 var MapParams = bpf.MapParameters{
-	Filename:   "/sys/fs/bpf/tc/globals/calico_ct_map_v4",
+	Filename:   "/sys/fs/bpf/tc/globals/cali_v4_ct",
 	Type:       "hash",
 	KeySize:    conntrackKeySize,
 	ValueSize:  conntrackValueSize,
 	MaxEntries: 512000,
-	Name:       "calico_ct_map_v4",
+	Name:       "cali_v4_ct",
 	Flags:      unix.BPF_F_NO_PREALLOC,
 }
 
