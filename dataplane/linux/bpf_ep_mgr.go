@@ -609,6 +609,8 @@ func (m *bpfEndpointManager) compileAndAttachProgram(allRules [][][]*proto.Rule,
 
 	err = AttachTCProgram(oFileName, attachPoint)
 	if err != nil {
+		log.WithError(err).Error("Failed to attach BPF program")
+
 		var buf bytes.Buffer
 		pg, err := bpf.NewProgramGenerator(srcFileName, m.ipSetIDAlloc)
 		if err != nil {
@@ -619,8 +621,7 @@ func (m *bpfEndpointManager) compileAndAttachProgram(allRules [][][]*proto.Rule,
 			log.WithError(err).Panic("Failed to write C file to buffer.")
 		}
 
-		log.WithError(err).WithFields(log.Fields{"program": buf.String()}).
-			Error("Failed to attach BPF program")
+		log.WithField("program", buf.String()).Error("Dump of program")
 		return err
 	}
 	return nil
