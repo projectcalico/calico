@@ -16,6 +16,7 @@ package proxy_test
 
 import (
 	"fmt"
+	"time"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -158,7 +159,7 @@ var _ = Describe("BPF Proxy", func() {
 				syncStop = make(chan struct{})
 				dp = newMockSyncer(syncStop)
 
-				p, err = proxy.New(k8s, dp, "testnode", proxy.WithImmediateSync())
+				p, err = proxy.New(k8s, dp, "testnode", proxy.WithMinSyncPeriod(200*time.Millisecond))
 				Expect(err).NotTo(HaveOccurred())
 			})
 		})
