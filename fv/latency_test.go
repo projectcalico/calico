@@ -265,7 +265,7 @@ func generateIPv6s(n int) (result []string) {
 }
 
 func getTotalBPFIPSetMembers(felix *infrastructure.Felix) int {
-	out, err := felix.ExecOutput("bpftool", "map", "dump", "pinned", "/sys/fs/bpf/tc/globals/calico_ip_sets")
+	out, err := felix.ExecOutput("bpftool", "map", "dump", "pinned", "/sys/fs/bpf/tc/globals/cali_v4_ip_sets")
 	if err != nil {
 		log.WithError(err).WithField("output", out).Warn("Failed to run bpftool")
 		return -1

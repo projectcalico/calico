@@ -43,11 +43,11 @@ type bpfIPSetManager struct {
 	resyncScheduled bool
 }
 
-func newBPFIPSetManager(ipSetIDAllocator *idalloc.IDAllocator) *bpfIPSetManager {
+func newBPFIPSetManager(ipSetIDAllocator *idalloc.IDAllocator, mc *bpf.MapContext) *bpfIPSetManager {
 	return &bpfIPSetManager{
 		ipSets:           map[uint64]*bpfIPSet{},
 		dirtyIPSetIDs:    set.New(), /*set entries are uint64 IDs */
-		bpfMap:           ipsets.Map(),
+		bpfMap:           ipsets.Map(mc),
 		resyncScheduled:  true,
 		ipSetIDAllocator: ipSetIDAllocator,
 	}

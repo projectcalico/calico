@@ -19,6 +19,8 @@ import (
 	"net"
 	"testing"
 
+	"github.com/projectcalico/felix/bpf"
+
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
 	. "github.com/onsi/gomega"
@@ -35,11 +37,12 @@ func TestNATPodPodXNode(t *testing.T) {
 	Expect(err).NotTo(HaveOccurred())
 	udp := l4.(*layers.UDP)
 
-	natMap := nat.FrontendMap()
+	mc := &bpf.MapContext{}
+	natMap := nat.FrontendMap(mc)
 	err = natMap.EnsureExists()
 	Expect(err).NotTo(HaveOccurred())
 
-	natBEMap := nat.BackendMap()
+	natBEMap := nat.BackendMap(mc)
 	err = natBEMap.EnsureExists()
 	Expect(err).NotTo(HaveOccurred())
 
@@ -58,7 +61,7 @@ func TestNATPodPodXNode(t *testing.T) {
 	)
 	Expect(err).NotTo(HaveOccurred())
 
-	ctMap := conntrack.Map()
+	ctMap := conntrack.Map(mc)
 	err = ctMap.EnsureExists()
 	Expect(err).NotTo(HaveOccurred())
 	resetCTMap(ctMap) // ensure it is clean
@@ -227,12 +230,12 @@ func TestNATNodePort(t *testing.T) {
 	_, ipv4, l4, payload, pktBytes, err := testPacketUDPDefault()
 	Expect(err).NotTo(HaveOccurred())
 	udp := l4.(*layers.UDP)
-
-	natMap := nat.FrontendMap()
+	mc := &bpf.MapContext{}
+	natMap := nat.FrontendMap(mc)
 	err = natMap.EnsureExists()
 	Expect(err).NotTo(HaveOccurred())
 
-	natBEMap := nat.BackendMap()
+	natBEMap := nat.BackendMap(mc)
 	err = natBEMap.EnsureExists()
 	Expect(err).NotTo(HaveOccurred())
 
@@ -251,7 +254,7 @@ func TestNATNodePort(t *testing.T) {
 	)
 	Expect(err).NotTo(HaveOccurred())
 
-	ctMap := conntrack.Map()
+	ctMap := conntrack.Map(mc)
 	err = ctMap.EnsureExists()
 	Expect(err).NotTo(HaveOccurred())
 	resetCTMap(ctMap) // ensure it is clean

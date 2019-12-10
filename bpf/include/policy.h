@@ -26,7 +26,7 @@ union ip4_set_lpm_key {
 	struct ip4_set_key ip;
 };
 
-struct bpf_map_def_extended __attribute__((section("maps"))) calico_ip_sets = {
+struct bpf_map_def_extended __attribute__((section("maps"))) cali_v4_ip_sets = {
 	.type           = BPF_MAP_TYPE_LPM_TRIE,
 	.key_size       = sizeof(union ip4_set_lpm_key),
 	.value_size     = sizeof(uint32_t),
@@ -73,7 +73,7 @@ struct bpf_map_def_extended __attribute__((section("maps"))) calico_ip_sets = {
 				k.ip.port = (sport_or_dport); \
 				k.ip.protocol = ip_proto; \
 				k.ip.pad = 0; \
-				if (bpf_map_lookup_elem(&calico_ip_sets, &k)) { \
+				if (bpf_map_lookup_elem(&cali_v4_ip_sets, &k)) { \
 					match=true; \
 					break; \
 				} \
@@ -104,7 +104,7 @@ static CALI_BPF_INLINE bool cali_ip_set_lookup(uint64_t ip_set_id, __be32 addr) 
 	k.ip.protocol = 0;
 	k.ip.port = 0;
 	k.ip.pad = 0;
-	return bpf_map_lookup_elem(&calico_ip_sets, &k) != NULL;
+	return bpf_map_lookup_elem(&cali_v4_ip_sets, &k) != NULL;
 }
 
 #define RULE_MATCH_IP_SET(id, negate, saddr_or_daddr, ip_set_id) do { \

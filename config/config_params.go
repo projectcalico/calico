@@ -108,6 +108,7 @@ type Config struct {
 	BPFDataIfacePattern                *regexp.Regexp `config:"regexp;^(en.*|eth.*|tunl0$);local"`
 	BPFCgroupV2                        string         `config:"string;;local"`
 	BPFConnectTimeLoadBalancingEnabled bool           `config:"bool;true;local"`
+	BPFMapRepinEnabled                 bool           `config:"bool;true;local"`
 
 	DatastoreType string `config:"oneof(kubernetes,etcdv3);etcdv3;non-zero,die-on-fail,local"`
 

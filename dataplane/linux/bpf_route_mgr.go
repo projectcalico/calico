@@ -53,14 +53,14 @@ type bpfRouteManager struct {
 	resyncScheduled bool
 }
 
-func newBPFRouteManager(myNodename string) *bpfRouteManager {
+func newBPFRouteManager(myNodename string, mc *bpf.MapContext) *bpfRouteManager {
 	return &bpfRouteManager{
 		myNodename:      myNodename,
 		desiredRoutes:   map[routes.Key]routes.Value{},
 		localHostIPs:    map[string]set.Set{},
 		remoteHostIPs:   map[string]string{},
 		localWorkloads:  map[proto.WorkloadEndpointID]*proto.WorkloadEndpoint{},
-		routeMap:        routes.Map(),
+		routeMap:        routes.Map(mc),
 		dirtyRoutes:     set.New(),
 		resyncScheduled: true,
 	}

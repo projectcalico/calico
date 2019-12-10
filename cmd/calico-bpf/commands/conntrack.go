@@ -19,6 +19,8 @@ import (
 	"net"
 	"strings"
 
+	"github.com/projectcalico/felix/bpf"
+
 	"github.com/projectcalico/felix/bpf/conntrack"
 
 	"github.com/docopt/docopt-go"
@@ -72,7 +74,8 @@ func (cmd *conntrackDumpCmd) Args(c *cobra.Command, args []string) error {
 }
 
 func (cmd *conntrackDumpCmd) Run(c *cobra.Command, _ []string) {
-	ctMap := conntrack.Map()
+	mc := &bpf.MapContext{}
+	ctMap := conntrack.Map(mc)
 	err := ctMap.Iter(func(k, v []byte) {
 		var ctKey conntrack.Key
 		if len(k) != len(ctKey) {
@@ -153,7 +156,8 @@ func (cmd *conntrackRemoveCmd) Args(c *cobra.Command, args []string) error {
 }
 
 func (cmd *conntrackRemoveCmd) Run(c *cobra.Command, _ []string) {
-	ctMap := conntrack.Map()
+	mc := &bpf.MapContext{}
+	ctMap := conntrack.Map(mc)
 	var keysToRemove []conntrack.Key
 	err := ctMap.Iter(func(k, v []byte) {
 		var ctKey conntrack.Key

@@ -152,15 +152,16 @@ func bpftool(args ...string) ([]byte, error) {
 }
 
 func bpftoolProgLoadAll(fname, bpfFsDir string) error {
-	natMap := nat.FrontendMap()
+	mc := &bpf.MapContext{}
+	natMap := nat.FrontendMap(mc)
 	err := natMap.EnsureExists()
 	Expect(err).NotTo(HaveOccurred())
 
-	natBEMap := nat.BackendMap()
+	natBEMap := nat.BackendMap(mc)
 	err = natBEMap.EnsureExists()
 	Expect(err).NotTo(HaveOccurred())
 
-	ctMap := conntrack.Map()
+	ctMap := conntrack.Map(mc)
 	err = ctMap.EnsureExists()
 	Expect(err).NotTo(HaveOccurred())
 

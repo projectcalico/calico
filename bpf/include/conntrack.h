@@ -77,7 +77,7 @@ struct ct_ctx {
 	__be32 nat_tun_src;
 };
 
-struct bpf_map_def_extended __attribute__((section("maps"))) calico_ct_map_v4 = {
+struct bpf_map_def_extended __attribute__((section("maps"))) cali_v4_ct = {
 	.type = BPF_MAP_TYPE_HASH,
 	.key_size = sizeof(struct calico_ct_key),
 	.value_size = sizeof(struct calico_ct_value),
@@ -137,7 +137,7 @@ static CALI_BPF_INLINE int calico_ct_v4_create_tracking(struct ct_ctx *ctx,
 			};
 		}
 		dump_ct_key(k, flags);
-		struct calico_ct_value *ct_value = bpf_map_lookup_elem(&calico_ct_map_v4, k);
+		struct calico_ct_value *ct_value = bpf_map_lookup_elem(&cali_v4_ct, k);
 		if (!ct_value) {
 			CALI_VERB("CT Packet marked as from workload but got a conntrack miss!\n");
 			goto create;
@@ -221,7 +221,7 @@ static CALI_BPF_INLINE int calico_ct_v4_create_tracking(struct ct_ctx *ctx,
 		dst_to_src->whitelisted = 1;
 		CALI_DEBUG("CT-ALL Whitelisted dest side\n");
 	}
-	int err = bpf_map_update_elem(&calico_ct_map_v4, k, &ct_value, 0);
+	int err = bpf_map_update_elem(&cali_v4_ct, k, &ct_value, 0);
 	CALI_VERB("CT-ALL Create result: %d.\n", err);
 	return err;
 }
@@ -263,7 +263,7 @@ static CALI_BPF_INLINE int calico_ct_v4_create_nat_fwd(struct ct_ctx *ctx,
 
 	dump_ct_key(&k, flags);
 	ct_value.nat_rev_key = *rk;
-	int err = bpf_map_update_elem(&calico_ct_map_v4, &k, &ct_value, 0);
+	int err = bpf_map_update_elem(&cali_v4_ct, &k, &ct_value, 0);
 	CALI_VERB("CT-%d Create result: %d.\n", ip_proto, err);
 	return err;
 }
@@ -339,7 +339,7 @@ static CALI_BPF_INLINE void calico_ct_v4_tcp_delete(
 
 	dump_ct_key(&k, flags);
 
-	int rc = bpf_map_delete_elem(&calico_ct_map_v4, &k);
+	int rc = bpf_map_delete_elem(&cali_v4_ct, &k);
 	CALI_DEBUG("CT-TCP delete result: %d\n", rc);
 }
 
@@ -449,7 +449,7 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_lookup(struct ct_ctx
 	}
 	dump_ct_key(&k, flags);
 
-	struct calico_ct_value *v = bpf_map_lookup_elem(&calico_ct_map_v4, &k);
+	struct calico_ct_value *v = bpf_map_lookup_elem(&cali_v4_ct, &k);
 	if (!v) {
 		CALI_CT_DEBUG("Miss.\n");
 		goto out_lookup_fail;
@@ -466,7 +466,7 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_lookup(struct ct_ctx
 		// This is a forward NAT entry; since we do the bookkeeping on the
 		// reverse entry, we need to do a second lookup.
 		CALI_CT_DEBUG("Hit! NAT FWD entry, doing secondary lookup.\n");
-		tracking_v = bpf_map_lookup_elem(&calico_ct_map_v4, &v->nat_rev_key);
+		tracking_v = bpf_map_lookup_elem(&cali_v4_ct, &v->nat_rev_key);
 		if (!tracking_v) {
 			CALI_CT_DEBUG("Miss when looking for secondary entry.\n");
 			goto out_lookup_fail;
