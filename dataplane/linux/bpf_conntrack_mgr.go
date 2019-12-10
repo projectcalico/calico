@@ -31,8 +31,8 @@ type conntrackManager struct {
 	scanner *conntrack.LivenessScanner
 }
 
-func newBPFConntrackManager(timeouts conntrack.Timeouts) *conntrackManager {
-	ctMap := conntrack.Map()
+func newBPFConntrackManager(timeouts conntrack.Timeouts, mc *bpf.MapContext) *conntrackManager {
+	ctMap := conntrack.Map(mc)
 	return &conntrackManager{
 		ctMap:   ctMap,
 		scanner: conntrack.NewLivenessScanner(timeouts, ctMap),

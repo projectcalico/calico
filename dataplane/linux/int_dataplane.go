@@ -154,6 +154,7 @@ type Config struct {
 	BPFConntrackTimeouts conntrack.Timeouts
 	BPFCgroupV2          string
 	BPFConnTimeLBEnabled bool
+	BPFMapRepin          bool
 
 	SidecarAccelerationEnabled bool
 
@@ -454,11 +455,16 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 
 	if config.BPFEnabled {
 		log.Info("BPF enabled, starting BPF endpoint manager and map manager.")
+		bpfMapContext := &bpf.MapContext{
+			RepinningEnabled: config.BPFMapRepin,
+		}
 		// Register map managers first since they create the maps that will be used by the endpoint manager.
+		// Important that we create the maps before we load a BPF program with TC since we make sure the map
+		// metadata name is set whereas TC doesn't set that field.
 		ipSetIDAllocator := idalloc.New()
-		dp.RegisterManager(newBPFIPSetManager(ipSetIDAllocator))
-		dp.RegisterManager(newBPFRouteManager(config.Hostname))
-		dp.RegisterManager(newBPFConntrackManager(config.BPFConntrackTimeouts))
+		dp.RegisterManager(newBPFIPSetManager(ipSetIDAllocator, bpfMapContext))
+		dp.RegisterManager(newBPFRouteManager(config.Hostname, bpfMapContext))
+		dp.RegisterManager(newBPFConntrackManager(config.BPFConntrackTimeouts, bpfMapContext))
 
 		// Forwarding into a tunnel seems to fail silently, disable FIB lookup if tunnel is enabled for now.
 		fibLookupEnabled := !config.RulesConfig.IPIPEnabled && !config.RulesConfig.VXLANEnabled
@@ -470,12 +476,12 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			ipSetIDAllocator))
 
 		// Pre-create the NAT maps so that later operations can assume access.
-		frontendMap := nat.FrontendMap()
+		frontendMap := nat.FrontendMap(bpfMapContext)
 		err := frontendMap.EnsureExists()
 		if err != nil {
 			log.WithError(err).Panic("Failed to create NAT frontend BPF map.")
 		}
-		backendMap := nat.BackendMap()
+		backendMap := nat.BackendMap(bpfMapContext)
 		err = backendMap.EnsureExists()
 		if err != nil {
 			log.WithError(err).Panic("Failed to create NAT backend BPF map.")

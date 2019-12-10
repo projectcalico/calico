@@ -18,6 +18,7 @@ package fv_test
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net"
 	"os"
@@ -25,6 +26,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/pkg/errors"
 
 	"github.com/projectcalico/libcalico-go/lib/ipam"
 
@@ -212,6 +215,35 @@ func describeBPFTests(testOpts bpfTestOptions) bool {
 				})
 			})
 
+			getMapIDByPath := func(felix *infrastructure.Felix, filename string) (int, error) {
+				out, err := felix.ExecOutput("bpftool", "map", "show", "pinned", filename, "-j")
+				if err != nil {
+					return 0, err
+				}
+				var mapMeta struct {
+					ID    int    `json:"id"`
+					Error string `json:"error"`
+				}
+				err = json.Unmarshal([]byte(out), &mapMeta)
+				if err != nil {
+					return 0, err
+				}
+				if mapMeta.Error != "" {
+					return 0, errors.New(mapMeta.Error)
+				}
+				return mapMeta.ID, nil
+			}
+
+			mustGetMapIDByPath := func(felix *infrastructure.Felix, filename string) int {
+				var mapID int
+				Eventually(func() error {
+					var err error
+					mapID, err = getMapIDByPath(felix, filename)
+					return err
+				}, "5s").ShouldNot(HaveOccurred())
+				return mapID
+			}
+
 			Describe("with DefaultEndpointToHostAction=ACCEPT", func() {
 				BeforeEach(func() {
 					options.ExtraEnvVars["FELIX_DefaultEndpointToHostAction"] = "ACCEPT"
@@ -224,6 +256,44 @@ func describeBPFTests(testOpts bpfTestOptions) bool {
 					cc.CheckConnectivity()
 				})
 			})
+
+			if testOpts.protocol != "udp" { // No need to run these tests per-protocol.
+				Describe("with map repinning enabled", func() {
+					BeforeEach(func() {
+						options.ExtraEnvVars["FELIX_BPFMapRepinEnabled"] = "true"
+					})
+
+					It("should repin maps", func() {
+						// Wait for the first felix to create its maps.
+						mapID := mustGetMapIDByPath(felixes[0], "/sys/fs/bpf/tc/globals/cali_v4_ct")
+
+						// Now, start a completely independent felix, which will get its own bpffs.  It should re-pin the
+						// maps, picking up the ones from the first felix.
+						extraFelix, _ := infrastructure.StartSingleNodeTopology(options, infra)
+						defer extraFelix.Stop()
+
+						secondMapID := mustGetMapIDByPath(extraFelix, "/sys/fs/bpf/tc/globals/cali_v4_ct")
+						Expect(mapID).NotTo(BeNumerically("==", 0))
+						Expect(mapID).To(BeNumerically("==", secondMapID))
+					})
+				})
+
+				Describe("with map repinning disabled", func() {
+					It("should repin maps", func() {
+						// Wait for the first felix to create its maps.
+						mapID := mustGetMapIDByPath(felixes[0], "/sys/fs/bpf/tc/globals/cali_v4_ct")
+
+						// Now, start a completely independent felix, which will get its own bpffs.  It should make its own
+						// maps.
+						extraFelix, _ := infrastructure.StartSingleNodeTopology(options, infra)
+						defer extraFelix.Stop()
+
+						secondMapID := mustGetMapIDByPath(extraFelix, "/sys/fs/bpf/tc/globals/cali_v4_ct")
+						Expect(mapID).NotTo(BeNumerically("==", 0))
+						Expect(mapID).NotTo(BeNumerically("==", secondMapID))
+					})
+				})
+			}
 		})
 
 		Describe("with a two node cluster", func() {
@@ -695,7 +765,7 @@ func dumpNATMaps(felix *infrastructure.Felix) (nat.MapMem, nat.BackendMapMem) {
 }
 
 func dumpNATMap(felix *infrastructure.Felix) nat.MapMem {
-	bm := nat.FrontendMap()
+	bm := nat.FrontendMap(&bpf.MapContext{})
 	cmd, err := bpf.DumpMapCmd(bm)
 	Expect(err).NotTo(HaveOccurred())
 	bpfsvcs := make(nat.MapMem)
@@ -707,7 +777,7 @@ func dumpNATMap(felix *infrastructure.Felix) nat.MapMem {
 }
 
 func dumpEPMap(felix *infrastructure.Felix) nat.BackendMapMem {
-	bb := nat.BackendMap()
+	bb := nat.BackendMap(&bpf.MapContext{})
 	cmd, err := bpf.DumpMapCmd(bb)
 	Expect(err).NotTo(HaveOccurred())
 	bpfeps := make(nat.BackendMapMem)
