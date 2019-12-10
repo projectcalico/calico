@@ -5,3 +5,5 @@ show_toc: false
 redirect_from: latest/security/comms/index
 canonical_url: 'https://docs.projectcalico.org/v3.9/security/comms/index'
 ---
+{% capture content %}{% include index.html %}{% endcapture %}
+{{ content | replace: "    ", "" }}

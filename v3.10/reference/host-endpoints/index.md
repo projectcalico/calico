@@ -5,3 +5,5 @@ show_toc: false
 redirect_from: latest/reference/host-endpoints/index
 canonical_url: 'https://docs.projectcalico.org/v3.9/reference/host-endpoints/index'
 ---
+{% capture content %}{% include index.html %}{% endcapture %}
+{{ content | replace: "    ", "" }}
