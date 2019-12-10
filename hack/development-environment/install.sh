@@ -14,7 +14,18 @@ function setup() {
 
 # build all images for deploying from src
 function build {
-	cd /calico_all/calico ;
+	cd /calico_all/calico
+
+	# check if required repositories to build calico images exist
+	RESULT="pass"
+    for c in "felix" "typha" "kube-controllers" "calicoctl" "cni-plugin" "app-policy" "pod2daemon" "node" "libcalico-go" "confd"; do
+        if [ ! -d "../"$c ]; then echo "Missing repository $c" >/dev/stderr && RESULT="fail"; fi
+    done
+
+    if [[ "$RESULT" == "fail" ]]; then
+        exit 1
+    fi
+
 	sudo setenforce 0
 	sudo systemctl restart docker
 	make dev-image REGISTRY=cd LOCAL_BUILD=true
