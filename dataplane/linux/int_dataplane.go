@@ -485,7 +485,9 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			fibLookupEnabled,
 			config.RulesConfig.EndpointToHostAction == "DROP",
 			config.BPFDataIfacePattern,
-			ipSetIDAllocator))
+			ipSetIDAllocator,
+			config.VXLANMTU,
+		))
 
 		// Pre-create the NAT maps so that later operations can assume access.
 		frontendMap := nat.FrontendMap(bpfMapContext)

@@ -63,6 +63,7 @@ type bpfEndpointManager struct {
 	dataIfaceRegex   *regexp.Regexp
 	ipSetIDAlloc     *idalloc.IDAllocator
 	epToHostDrop     bool
+	natTunnelMTU     int
 }
 
 func newBPFEndpointManager(
@@ -71,6 +72,7 @@ func newBPFEndpointManager(
 	epToHostDrop bool,
 	dataIfaceRegex *regexp.Regexp,
 	ipSetIDAlloc *idalloc.IDAllocator,
+	natTunnelMTU int,
 ) *bpfEndpointManager {
 	return &bpfEndpointManager{
 		wlEps:               map[proto.WorkloadEndpointID]*proto.WorkloadEndpoint{},
@@ -86,6 +88,7 @@ func newBPFEndpointManager(
 		dataIfaceRegex:      dataIfaceRegex,
 		ipSetIDAlloc:        ipSetIDAlloc,
 		epToHostDrop:        epToHostDrop,
+		natTunnelMTU:        natTunnelMTU,
 	}
 }
 
@@ -589,6 +592,7 @@ func (m *bpfEndpointManager) compileAndAttachProgram(allRules [][][]*proto.Rule,
 		CompileWithLogLevel(logLevel),
 		CompileWithLogPrefix(logPfx),
 		CompileWithEndpointToHostDrop(m.epToHostDrop),
+		CompileWithNATTunnelMTU(uint16(m.natTunnelMTU)),
 	}
 
 	iface := m.ifaces[attachPoint.Iface]
@@ -752,6 +756,11 @@ func CompileWithHostIP(ip net.IP) CompileTCOption {
 // CompileWithVxlanPort sets the VXLAN port to use to override the IANA default
 func CompileWithVxlanPort(port uint16) CompileTCOption {
 	return CompileWithDefineValue("CALI_VXLAN_PORT", fmt.Sprintf("%d", port))
+}
+
+// CompileWithNATTunnelMTU sets the MTU for NAT tunnel
+func CompileWithNATTunnelMTU(mtu uint16) CompileTCOption {
+	return CompileWithDefineValue("CALI_NAT_TUNNEL_MTU", fmt.Sprintf("%d", mtu))
 }
 
 // CompileTCProgramToFile takes policy rules and compiles them into a tc-bpf

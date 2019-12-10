@@ -178,6 +178,9 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb, enum calico_tc_flags
 	int res = 0;
 	__be32 nat_tun_src = 0;
 	uint32_t fib_flags = 0;
+	bool encap_is_src = false;
+	__be32 encap_ip;
+	bool encap_needed = false;
 
 	if (!CALI_TC_FLAGS_TO_HOST(flags) && skb->mark == CALI_SKB_MARK_BYPASS) {
 		CALI_DEBUG("Packet pre-approved by another hook, allow.\n");
@@ -490,6 +493,11 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb, enum calico_tc_flags
 
 		CALI_DEBUG("CT: DNAT to %x:%d\n", be32_to_host(post_nat_ip_dst), post_nat_dport);
 
+		encap_needed = dnat_should_encap(flags) && !cali_rt_is_local(post_nat_ip_dst);
+		if (encap_needed && ip_is_dnf(ip_header) && vxlan_v4_encap_too_big(skb)) {
+			goto icmp_too_big;
+		}
+
 		ip_header->daddr = post_nat_ip_dst;
 		ip_csum_offset = skb_offset(skb, ip_header) +  offsetof(struct iphdr, check);
 
@@ -516,17 +524,10 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb, enum calico_tc_flags
 			goto deny;
 		}
 
-		if (dnat_should_encap(flags) && !cali_rt_is_local(post_nat_ip_dst)) {
-			if (vxlan_v4_encap(skb, CALI_HOST_IP, true, flags)) {
-				reason = CALI_REASON_ENCAP_FAIL;
-				goto  deny;
-			}
-
-			fib_flags |= BPF_FIB_LOOKUP_OUTPUT;
-
+		if (encap_needed) {
 			ip_src = CALI_HOST_IP;
-			sport = dport = host_to_be16(CALI_VXLAN_PORT);
-			ip_proto = IPPROTO_UDP;
+			encap_is_src = true;
+			goto nat_encap;
 		}
 
 		fib_params.sport = sport;
@@ -586,16 +587,11 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb, enum calico_tc_flags
 		// fall through
 	case CALI_CT_ESTABLISHED:
 		if (dnat_return_should_encap(flags)  && ct_result.tun_ret_ip) {
-			if (vxlan_v4_encap(skb, ct_result.tun_ret_ip, false, flags)) {
-				reason = CALI_REASON_ENCAP_FAIL;
-				goto  deny;
+			if (encap_needed && ip_is_dnf(ip_header) && vxlan_v4_encap_too_big(skb)) {
+				goto icmp_too_big;
 			}
-
-			fib_flags |= BPF_FIB_LOOKUP_OUTPUT;
-
 			ip_dst = ct_result.tun_ret_ip;
-			sport = dport = host_to_be16(CALI_VXLAN_PORT);
-			ip_proto = IPPROTO_UDP;
+			goto nat_encap;
 		}
 
 		fib_params.l4_protocol = ip_proto;
@@ -614,13 +610,56 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb, enum calico_tc_flags
 			CALI_DEBUG("Traffic is towards host namespace but not conntracked, "
 				"falling through to iptables\n");
 			return TC_ACT_UNSPEC;
-		} else {
-			goto deny;
 		}
+		goto deny;
 	}
 
-allow:
+	CALI_INFO("We should never fall through here\n");
+	goto deny;
 
+icmp_too_big:
+	if (skb_shorter(skb, ETH_IPV4_UDP_SIZE) || icmp_v4_too_big(skb)) {
+		reason = CALI_REASON_ICMP_DF;
+		goto deny;
+	}
+
+	seen_mark = CALI_SKB_MARK_BYPASS_FWD_EXTERNAL;
+
+	/* XXX we might use skb->ifindex to redirect it straight back
+	 * to where it came from if it is guaranteed to be the path
+	 */
+	sport = dport = 0;
+	ip_proto = IPPROTO_ICMP;
+
+	fib_flags |= BPF_FIB_LOOKUP_OUTPUT;
+
+	fib_params.l4_protocol = ip_proto;
+	fib_params.sport = sport;
+	fib_params.dport = dport;
+	fib_params.ipv4_src = ip_dst;
+	fib_params.ipv4_dst = ip_src;
+
+	goto allow;
+
+nat_encap:
+	encap_ip = encap_is_src ? ip_src : ip_dst;
+	if (vxlan_v4_encap(skb, encap_ip, encap_is_src, flags)) {
+		reason = CALI_REASON_ENCAP_FAIL;
+		goto  deny;
+	}
+
+	sport = dport = host_to_be16(CALI_VXLAN_PORT);
+	ip_proto = IPPROTO_UDP;
+
+	fib_flags |= BPF_FIB_LOOKUP_OUTPUT;
+
+	fib_params.l4_protocol = ip_proto;
+	fib_params.sport = sport;
+	fib_params.dport = dport;
+	fib_params.ipv4_src = ip_src;
+	fib_params.ipv4_dst = ip_dst;
+
+allow:
 	// Try a short-circuit FIB lookup.
 	if (!CALI_TC_FLAGS_L3(flags) && CALI_FIB_LOOKUP_ENABLED && CALI_TC_FLAGS_TO_HOST(flags)) {
 		CALI_DEBUG("Traffic is towards the host namespace, doing Linux FIB lookup\n");
@@ -665,14 +704,16 @@ allow_bypass:
 
 	if (CALI_LOG_LEVEL >= CALI_LOG_LEVEL_INFO) {
 		uint64_t prog_end_time = bpf_ktime_get_ns();
-		CALI_INFO("Final result=ALLOW (%d). Program execution time: %lluns T: %lluns\n", rc, prog_end_time-prog_start_time, timer_end_time-timer_start_time);
+		CALI_INFO("Final result=ALLOW (%d). Program execution time: %lluns T: %lluns\n",
+				rc, prog_end_time-prog_start_time, timer_end_time-timer_start_time);
 	}
 	return rc;
 
 deny:
 	if (CALI_LOG_LEVEL >= CALI_LOG_LEVEL_INFO) {
 		uint64_t prog_end_time = bpf_ktime_get_ns();
-		CALI_INFO("Final result=DENY (%x). Program execution time: %lluns\n", reason, prog_end_time-prog_start_time);
+		CALI_INFO("Final result=DENY (%x). Program execution time: %lluns\n",
+				reason, prog_end_time-prog_start_time);
 	}
 	return TC_ACT_SHOT;
 }
