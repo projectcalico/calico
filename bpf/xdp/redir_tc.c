@@ -92,7 +92,7 @@ static CALI_BPF_INLINE enum calico_policy_result execute_policy_pre_dnat(struct 
 }
 
 static CALI_BPF_INLINE enum calico_policy_result execute_policy_do_not_track(struct __sk_buff *skb, __u8 ip_proto, __u32 saddr, __u32 daddr, __u16 sport, __u16 dport, enum calico_tc_flags flags) {
-	if (!(flags & CALI_TC_HOST_EP) || !(flags & CALI_TC_INGRESS)) {
+	if (!CALI_TC_FLAGS_HOST_ENDPOINT(flags) || CALI_TC_FLAGS_EGRESS(flags)) {
 		return CALI_POL_NO_MATCH;
 	}
 	if ((skb->mark & CALI_SKB_MARK_SEEN_MASK) == CALI_SKB_MARK_SEEN) {
@@ -206,7 +206,7 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb, enum calico_tc_flags
 		CALI_DEBUG("ARP: allowing packet\n");
 		goto allow_skip_fib;
 	case ETH_P_IPV6:
-		if (!(flags & CALI_TC_HOST_EP)) {
+		if (!CALI_TC_FLAGS_HOST_ENDPOINT(flags)) {
 			CALI_DEBUG("IPv6 from workload: drop\n");
 			return TC_ACT_SHOT;
 		} else {
@@ -215,7 +215,7 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb, enum calico_tc_flags
 			return TC_ACT_UNSPEC;
 		}
 	default:
-		if (!(flags & CALI_TC_HOST_EP)) {
+		if (!CALI_TC_FLAGS_HOST_ENDPOINT(flags)) {
 			CALI_DEBUG("Unknown ethertype (%x), drop\n", be16_to_host(skb->protocol));
 			goto deny;
 		} else {
@@ -310,7 +310,7 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb, enum calico_tc_flags
 		break;
 	case 4:
 		// IPIP
-		if (flags & CALI_TC_HOST_EP) {
+		if (CALI_TC_FLAGS_HOST_ENDPOINT(flags)) {
 			// TODO IPIP whitelist.
 			CALI_DEBUG("IPIP: allow\n");
 			goto allow_skip_fib;
@@ -344,7 +344,7 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb, enum calico_tc_flags
 	case IPPROTO_ICMP:
 		break;
 	default:
-		if (flags & CALI_TC_HOST_EP) {
+		if (CALI_TC_FLAGS_HOST_ENDPOINT(flags)) {
 			// FIXME: allow unknown protocols through on host endpoints.
 			goto allow;
 		}

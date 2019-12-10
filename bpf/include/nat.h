@@ -84,8 +84,7 @@ struct bpf_map_def_extended __attribute__((section("maps"))) cali_v4_nat_be = {
 
 static CALI_BPF_INLINE struct calico_nat_dest* calico_v4_nat_lookup(__u8 ip_proto, __be32 ip_dst, __u16 dport,
 	enum calico_tc_flags flags) {
-	if (((flags & CALI_TC_HOST_EP) && !(flags & CALI_TC_INGRESS)) ||
-		(!(flags & CALI_TC_HOST_EP) && (flags & CALI_TC_INGRESS))) {
+	if (!CALI_TC_FLAGS_TO_HOST(flags)) {
 		// Skip NAT lookup for traffic leaving the host namespace.
 		return NULL;
 	}

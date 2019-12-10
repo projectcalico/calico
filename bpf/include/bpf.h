@@ -132,6 +132,8 @@ enum calico_tc_flags {
 	CALI_CGROUP     = 1<<3,
 };
 
+#define CALI_TC_FLAGS_INGRESS(flags) (flags & CALI_TC_INGRESS)
+#define CALI_TC_FLAGS_EGRESS(flags) (!(flags & CALI_TC_INGRESS))
 #define CALI_TC_FLAGS_HOST_ENDPOINT(flags) (flags & CALI_TC_HOST_EP)
 
 #define CALI_TC_FLAGS_FROM_HOST_ENDPOINT(flags) ((flags & CALI_TC_HOST_EP) && (flags & CALI_TC_INGRESS))
