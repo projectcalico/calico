@@ -2249,6 +2249,16 @@ var _ = testutils.E2eDatastoreDescribe("Test Watch support", testutils.Datastore
 			defer watch.Stop()
 			ExpectAddedEvent(watch.ResultChan())
 		})
+		It("supports resuming watch from previous revision", func() {
+			watch, err := c.Watch(ctx, model.ResourceListOptions{Kind: apiv3.KindNetworkPolicy}, "")
+			Expect(err).NotTo(HaveOccurred())
+			event := ExpectAddedEvent(watch.ResultChan())
+			watch.Stop()
+
+			watch, err = c.Watch(ctx, model.ResourceListOptions{Kind: apiv3.KindNetworkPolicy}, event.New.Revision)
+			Expect(err).NotTo(HaveOccurred())
+			watch.Stop()
+		})
 	})
 
 	Describe("watching NetworkPolicies (calico)", func() {
