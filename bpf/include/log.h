@@ -21,11 +21,11 @@
 #define CALI_DEBUG_NO_FLAG(fmt, ...) CALI_LOG_IF(CALI_LOG_LEVEL_DEBUG, fmt, ## __VA_ARGS__)
 
 #define CALI_INFO(fmt, ...) \
-	CALI_LOG_IF_FLAG(CALI_LOG_LEVEL_INFO, flags, fmt, ## __VA_ARGS__)
+	CALI_LOG_IF_FLAG(CALI_LOG_LEVEL_INFO, CALI_COMPILE_FLAGS, fmt, ## __VA_ARGS__)
 #define CALI_DEBUG(fmt, ...) \
-	CALI_LOG_IF_FLAG(CALI_LOG_LEVEL_DEBUG, flags, fmt, ## __VA_ARGS__)
+	CALI_LOG_IF_FLAG(CALI_LOG_LEVEL_DEBUG, CALI_COMPILE_FLAGS, fmt, ## __VA_ARGS__)
 #define CALI_VERB(fmt, ...) \
-	CALI_LOG_IF_FLAG(CALI_LOG_LEVEL_VERB, flags, fmt, ## __VA_ARGS__)
+	CALI_LOG_IF_FLAG(CALI_LOG_LEVEL_VERB, CALI_COMPILE_FLAGS, fmt, ## __VA_ARGS__)
 
 #define CALI_LOG_IF(level, fmt, ...) do { \
 	if (CALI_LOG_LEVEL >= (level))    \

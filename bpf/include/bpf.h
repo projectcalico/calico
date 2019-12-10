@@ -132,25 +132,27 @@ enum calico_tc_flags {
 	CALI_CGROUP     = 1<<3,
 };
 
-#define CALI_TC_FLAGS_INGRESS(flags) (flags & CALI_TC_INGRESS)
-#define CALI_TC_FLAGS_EGRESS(flags) (!(flags & CALI_TC_INGRESS))
-#define CALI_TC_FLAGS_HOST_ENDPOINT(flags) (flags & CALI_TC_HOST_EP)
+#ifndef CALI_COMPILE_FLAGS
+#define CALI_COMPILE_FLAGS 0
+#endif
 
-#define CALI_TC_FLAGS_FROM_HOST_ENDPOINT(flags) ((flags & CALI_TC_HOST_EP) && (flags & CALI_TC_INGRESS))
+#define CALI_F_INGRESS ((CALI_COMPILE_FLAGS) & CALI_TC_INGRESS)
+#define CALI_F_EGRESS  (!CALI_F_INGRESS)
 
-#define CALI_TC_FLAGS_FROM_WORKLOAD(flags) (!(flags & CALI_TC_HOST_EP) && !(flags & CALI_TC_INGRESS))
+#define CALI_F_HEP     ((CALI_COMPILE_FLAGS) & CALI_TC_HOST_EP)
+#define CALI_F_WEP     (!CALI_F_HEP)
+#define CALI_F_TUNNEL  ((CALI_COMPILE_FLAGS) & CALI_TC_TUNNEL)
 
-#define CALI_TC_FLAGS_TO_WORKLOAD(flags) (!(flags & CALI_TC_HOST_EP) && (flags & CALI_TC_INGRESS))
+#define CALI_F_FROM_HEP (CALI_F_HEP && CALI_F_INGRESS)
+#define CALI_F_TO_HEP   (CALI_F_HEP && !CALI_F_INGRESS)
 
-#define CALI_TC_FLAGS_TO_HOST(flags) \
-	(CALI_TC_FLAGS_FROM_HOST_ENDPOINT(flags) || CALI_TC_FLAGS_FROM_WORKLOAD(flags))
+#define CALI_F_FROM_WEP (CALI_F_WEP && CALI_F_EGRESS)
+#define CALI_F_TO_WEP   (CALI_F_WEP && CALI_F_INGRESS)
 
-#define CALI_TC_FLAGS_TO_HOST_ENDPOINT(flags) \
-	((flags & CALI_TC_HOST_EP) && !(flags & CALI_TC_INGRESS))
-
-#define CALI_TC_FLAGS_L3(flags) ((flags & CALI_TC_HOST_EP) && !(flags & CALI_TC_INGRESS) && (flags & CALI_TC_TUNNEL))
-
-#define CALI_TC_FLAGS_IPIP_ENCAPPED(flags) ((flags & CALI_TC_INGRESS) && (flags & CALI_TC_TUNNEL))
+#define CALI_F_TO_HOST       (CALI_F_FROM_HEP || CALI_F_FROM_WEP)
+#define CALI_F_FROM_HOST     (!CALI_F_TO_HOST)
+#define CALI_F_L3            (CALI_F_TO_HEP && CALI_F_TUNNEL)
+#define CALI_F_IPIP_ENCAPPED (CALI_F_INGRESS && CALI_F_TUNNEL)
 
 enum calico_skb_mark {
 	// TODO allocate marks from the mark pool.

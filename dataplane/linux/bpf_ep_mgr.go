@@ -496,13 +496,25 @@ func (m *bpfEndpointManager) compileAndAttachDataIfaceProgram(ifaceName string, 
 }
 
 type TCAttachPoint struct {
-	Section string
-	Hook    string
-	Iface   string
+	Section      string
+	Hook         string
+	Iface        string
+	CompileFlags int
 }
+
+const (
+	CompileFlagHostEp  = 1
+	CompileFlagIngress = 2
+	CompileFlagTunnel  = 4
+	CompileFlagCgroup  = 8
+)
 
 func calculateTCAttachPoint(endpointType, policyDirection, ifaceName string) TCAttachPoint {
 	var ap TCAttachPoint
+
+	if policyDirection == "ingress" {
+		ap.CompileFlags |= CompileFlagIngress
+	}
 
 	if endpointType == "workload" {
 		// Policy direction is relative to the workload so, from the host namespace it's flipped.
@@ -513,7 +525,12 @@ func calculateTCAttachPoint(endpointType, policyDirection, ifaceName string) TCA
 		}
 	} else {
 		// Host endpoints have the natural relationship between policy direction and hook.
+		ap.CompileFlags |= CompileFlagHostEp
 		ap.Hook = policyDirection
+	}
+
+	if endpointType == "tunnel" {
+		ap.CompileFlags |= CompileFlagTunnel
 	}
 
 	var fromOrTo string
@@ -527,6 +544,29 @@ func calculateTCAttachPoint(endpointType, policyDirection, ifaceName string) TCA
 	ap.Iface = ifaceName
 
 	return ap
+}
+
+// BPFSectionToFlags is used by the UTs to magic the correct flags given a section name.
+func BPFSectionToFlags(section string) int {
+	var flags = 0
+
+	from := strings.Contains(section, "from")
+
+	if strings.Contains(section, "host") || strings.Contains(section, "tunnel") {
+		flags |= CompileFlagHostEp
+		if from {
+			flags |= CompileFlagIngress
+		}
+		if strings.Contains(section, "tunnel") {
+			flags |= CompileFlagTunnel
+		}
+	} else {
+		if !from {
+			flags |= CompileFlagIngress
+		}
+	}
+
+	return flags
 }
 
 func (m *bpfEndpointManager) extractRules(tiers2 []*proto.TierInfo, profileNames []string, direction string) [][][]*proto.Rule {
@@ -593,6 +633,8 @@ func (m *bpfEndpointManager) compileAndAttachProgram(allRules [][][]*proto.Rule,
 		CompileWithLogPrefix(logPfx),
 		CompileWithEndpointToHostDrop(m.epToHostDrop),
 		CompileWithNATTunnelMTU(uint16(m.natTunnelMTU)),
+		CompileWithEntrypointName(attachPoint.Section),
+		CompileWithFlags(attachPoint.CompileFlags),
 	}
 
 	iface := m.ifaces[attachPoint.Iface]
@@ -687,6 +729,11 @@ func CompileWithDefineValue(name string, value string) CompileTCOption {
 	}
 }
 
+// CompileWithEntrypointName controls the name of the BPF section entrypoint.
+func CompileWithEntrypointName(name string) CompileTCOption {
+	return CompileWithDefineValue("CALI_ENTRYPOINT_NAME", name)
+}
+
 // CompileWithIncludePath adds an include path to search for includes
 func CompileWithIncludePath(p string) CompileTCOption {
 	return func(opts *compileTCOpts) {
@@ -762,6 +809,11 @@ func CompileWithVxlanPort(port uint16) CompileTCOption {
 // CompileWithNATTunnelMTU sets the MTU for NAT tunnel
 func CompileWithNATTunnelMTU(mtu uint16) CompileTCOption {
 	return CompileWithDefineValue("CALI_NAT_TUNNEL_MTU", fmt.Sprintf("%d", mtu))
+}
+
+// CompileWithFlags sets the CALI_COMPILE_FLAGS value.
+func CompileWithFlags(flags int) CompileTCOption {
+	return CompileWithDefineValue("CALI_COMPILE_FLAGS", fmt.Sprint(flags))
 }
 
 // CompileTCProgramToFile takes policy rules and compiles them into a tc-bpf

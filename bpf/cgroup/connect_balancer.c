@@ -8,7 +8,6 @@
 __attribute__((section("calico_connect_v4_noop")))
 int cali_noop_v4(struct bpf_sock_addr *ctx)
 {
-	enum calico_tc_flags flags = CALI_CGROUP;
 	CALI_INFO("Noop program executing\n");
 	return 1;
 }
@@ -16,7 +15,6 @@ int cali_noop_v4(struct bpf_sock_addr *ctx)
 __attribute__((section("calico_connect_v4")))
 int cali_ctlb_v4(struct bpf_sock_addr *ctx)
 {
-	enum calico_tc_flags flags = CALI_CGROUP;
 	int verdict = 1;
 
 	/* do not process anything non-TCP or non-UDP, but do not block it, will be
@@ -43,7 +41,7 @@ int cali_ctlb_v4(struct bpf_sock_addr *ctx)
 	}
 
 	uint16_t dport = (uint16_t)(be32_to_host(ctx->user_port)>>16);
-	struct calico_nat_dest *nat_dest = calico_v4_nat_lookup(ip_proto, ctx->user_ip4, dport, flags);
+	struct calico_nat_dest *nat_dest = calico_v4_nat_lookup(ip_proto, ctx->user_ip4, dport);
 	if (!nat_dest) {
 		goto out;
 	}

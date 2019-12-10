@@ -18,14 +18,9 @@
 #define CALI_VXLAN_PORT 4789 /* IANA VXLAN port */
 #endif
 
-#define dnat_should_encap(flags) \
-	(CALI_TC_FLAGS_FROM_HOST_ENDPOINT(flags))
-
-#define dnat_return_should_encap(flags) \
-	(CALI_TC_FLAGS_FROM_WORKLOAD(flags))
-
-#define dnat_should_decap(flags) \
-	(CALI_TC_FLAGS_TO_WORKLOAD(flags) || CALI_TC_FLAGS_FROM_HOST_ENDPOINT(flags))
+#define dnat_should_encap (CALI_F_FROM_HEP)
+#define dnat_return_should_encap (CALI_F_FROM_WEP)
+#define dnat_should_decap (CALI_F_TO_WEP || CALI_F_FROM_HEP)
 
 #define CALI_ENCAP_EXTRA_SIZE	50
 
@@ -82,9 +77,8 @@ struct bpf_map_def_extended __attribute__((section("maps"))) cali_v4_nat_be = {
 #endif
 };
 
-static CALI_BPF_INLINE struct calico_nat_dest* calico_v4_nat_lookup(__u8 ip_proto, __be32 ip_dst, __u16 dport,
-	enum calico_tc_flags flags) {
-	if (!CALI_TC_FLAGS_TO_HOST(flags)) {
+static CALI_BPF_INLINE struct calico_nat_dest* calico_v4_nat_lookup(__u8 ip_proto, __be32 ip_dst, __u16 dport) {
+	if (!CALI_F_TO_HOST) {
 		// Skip NAT lookup for traffic leaving the host namespace.
 		return NULL;
 	}
@@ -126,8 +120,7 @@ struct vxlanhdr {
 
 static CALI_BPF_INLINE int vxlan_v4_encap(struct __sk_buff *skb,
 					  __be32 ipaddr,
-					  bool is_src,
-					  enum calico_tc_flags flags)
+					  bool is_src)
 {
 	int ret;
 	uint32_t new_hdrsz;

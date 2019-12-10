@@ -86,6 +86,7 @@ func InstallConnectTimeLoadBalancer(frontendMap, backendMap bpf.Map, cgroupv2 st
 		"-D__ASM_SYSREG_H",
 		"-D__BPFTOOL_LOADER__",
 		"-DCALI_LOG_LEVEL=CALI_LOG_LEVEL_DEBUG",
+		"-DCALI_COMPILE_FLAGS=8", // CALI_CGROUP
 		"-DCALI_LOG_PFX=CGROUP",
 		"-Wno-unused-value",
 		"-Wno-pointer-sign",
