@@ -235,7 +235,6 @@ The code is a little roundabout for a few reasons:
               <div class="visible-xs visible-sm">
                 {% include toc.html html=content class=".toc" item_class=".toc__nested" %}
               </div>
-              {% include section_index.html section_index=navbars %}
               {{ content }}
 
               <!-- BOTTOM DOCUMENTATION PAGE NAVBAR -->
@@ -247,11 +246,13 @@ The code is a little roundabout for a few reasons:
               <!-- END BOTTOM DOCUMENTATION PAGE NAVBAR -->
             </div>
           </div>
-          <div class="toc-container">
-            <div class="sticky-toc">
-              {% include toc.html html=content class=".toc" item_class=".toc__nested" %}
+          {% if page.show_read_time -%}
+            <div class="toc-container">
+              <div class="sticky-toc">
+                {% include toc.html html=content class=".toc" item_class=".toc__nested" %}
+              </div>
             </div>
-          </div>
+          {% endif -%}
         </div>
       </div>
     </section>

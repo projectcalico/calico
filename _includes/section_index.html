@@ -14,7 +14,7 @@
                         </h4>
                         <p>
                             {% assign p = site.pages | where: 'url', url | first %}
-                            {{ p.description | default p.Description | default nested_item.description | default "no description" }}
+                            {{ p.description | default p.Description | default nested_item.description | default "" }}
                         </p>
                     </div>
                 {% endfor %}
