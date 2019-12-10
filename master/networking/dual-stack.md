@@ -12,7 +12,7 @@ both IPv4 and IPv6.
 
 Communication over IPv6 is increasingly desirable, and the natural approach for cluster pods is to
 be IPv6-native themselves, as well as still supporting IPv4.  Native support for both IPv4 and IPv6
-is known as "dual stack", and Kubernetes supports this as of version 1.16.
+is known as "dual stack", and Kubernetes has alpha-level support for this in versions 1.16 and 1.17.
 
 ### Features
 
