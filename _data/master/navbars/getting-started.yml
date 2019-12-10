@@ -40,7 +40,7 @@ toc:
     section:
     - title: Manually install Calico
       path: /getting-started/kubernetes/installation/manual-install
-      - title: Calico the hard way tutorial
+    - title: Calico the hard way tutorial
       section:
       - title: Introduction
         path: /getting-started/kubernetes/hardway/
