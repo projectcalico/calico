@@ -39,24 +39,7 @@ Using {{site.prodname}}, you can secure network interfaces of the host; these in
 
 #### Host requirements
 
-- AMD64 processor
-- Linux kernel 3.10 or later 
-  The following distributions have the required kernel dependencies, and are known to work well with {{site.prodname}} and host protection.
-  - RedHat Linux 7
-  - CentOS 7
-  - CoreOS Container Linux stable
-  - Ubuntu 16.04
-  - Debian 8
-   **Note**: If you are using a different Linux version or distribution, the required kernel dependencies are:
-   - `nf_conntrack_netlink subsystem`
-   - `ip_tables (IPv4)`
-   - `ip6_tables`
-   - `ip_set`
-   - `xt_set` 
-   - `ipt_set`
-   - `ipt_rpfilter`
-   - `ipt_REJECT`
-   - `ipip (if using Calico networking)`
+Review [host requirements]({{site.baseurl}}/{{page.version}}/getting-started/bare-metal/requirements)
 
 #### Datastore requirements
 
