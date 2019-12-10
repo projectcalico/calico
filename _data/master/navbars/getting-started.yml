@@ -40,6 +40,8 @@ toc:
     section:
     - title: Manually install Calico
       path: /getting-started/kubernetes/installation/manual-install
+  - title: Self-managed on-premises
+    section: 
     - title: Calico the hard way tutorial
       section:
       - title: Introduction
