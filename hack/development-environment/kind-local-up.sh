@@ -76,11 +76,12 @@ function install_k8s() {
 function install_calico() {
     kubectl get pods
     pushd $ROOT_CALICO_REPOS_DIR/calico/_output/dev-manifests
-        kubectl apply -f ./calico.yaml 
+        kubectl apply -f ./calico.yaml
         kubectl get pods -n kube-system
     popd
-    sleep 5 ; kubectl -n kube-system set env daemonset/calico-node FELIX_IGNORELOOSERPF=true
-    sleep 5 ; kubectl -n kube-system get pods | grep calico-node
+	kubectl -n kube-system set env daemonset/calico-node FELIX_IGNORELOOSERPF=true
+	kubectl -n kube-system set env daemonset/calico-node FELIX_XDPENABLED=false
+	sleep 5 ; kubectl -n kube-system get pods | grep calico-node
     echo "will wait for calico to start running now... "
     while true ; do
         kubectl -n kube-system get pods
