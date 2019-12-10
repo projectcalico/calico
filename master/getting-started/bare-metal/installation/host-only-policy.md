@@ -9,7 +9,7 @@ Install only {{site.prodname}} network policy on a host to enforce security rule
 
 ### Value
 
-If your host does not use {{site.prodname}}networking, are not managing pods, and does not need to be aware of pods on other {{site.prodname}} hosts, you can install just {{site.prodname}} network policy. 
+If your host does not use {{site.prodname}} networking, are not managing pods, and does not need to be aware of pods on other {{site.prodname}} hosts, you can install just {{site.prodname}} network policy. 
 
 ### Before you begin...
 
