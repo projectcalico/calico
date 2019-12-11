@@ -259,7 +259,7 @@ stop-etcd:
 # CI
 ###############################################################################
 .PHONY: ci
-ci: clean mod-download build-all static-checks test image-all
+ci: mod-download build-all static-checks test image-all
 
 ###############################################################################
 # CD
