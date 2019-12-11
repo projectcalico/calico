@@ -116,15 +116,17 @@ func run(c *infrastructure.Felix, name, profile, ip, ports, protocol string) (w 
 
 	// Start the workload.
 	log.WithField("workload", w).Info("About to run workload")
-	var udpArg string
+	var protoArg string
 	if protocol == "udp" {
-		udpArg = "--udp"
+		protoArg = "--udp"
+	} else if protocol == "sctp" {
+		protoArg = "--sctp"
 	}
 	w.runCmd = utils.Command("docker", "exec", w.C.Name,
 		"sh", "-c",
 		fmt.Sprintf("echo $$ > /tmp/%v; exec /test-workload %v '%v' '%v' '%v'",
 			w.Name,
-			udpArg,
+			protoArg,
 			w.InterfaceName,
 			w.IP,
 			w.Ports))
@@ -473,11 +475,12 @@ func (p *Port) CanConnectTo(ip, port, protocol string) bool {
 	// Ensure that the host has the 'test-connection' binary.
 	p.C.EnsureBinary("test-connection")
 
-	if protocol == "udp" {
+	if protocol == "udp" || protocol == "sctp" {
 		// If this is a retry then we may have stale conntrack entries and we don't want those
-		// to influence the connectivity check.  Only an issue for UDP due to the lack of a
-		// sequence number.
-		_ = p.C.ExecMayFail("conntrack", "-D", "-p", "udp", "-s", p.Workload.IP, "-d", ip)
+		// to influence the connectivity check.  UDP lacks a sequence number, so conntrack operates
+		// on a simple timer. In the case of SCTP, conntrack appears to match packets even when
+		// the conntrack entry is in the CLOSED state.
+		_ = p.C.ExecMayFail("conntrack", "-D", "-p", protocol, "-s", p.Workload.IP, "-d", ip)
 	}
 
 	// Run 'test-connection' to the target.

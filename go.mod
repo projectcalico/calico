@@ -15,6 +15,7 @@ require (
 	github.com/gxed/eventfd v0.0.0-20160916113412-80a92cca79a8 // indirect
 	github.com/hashicorp/go-version v1.2.0
 	github.com/ipfs/go-log v0.0.0-20180611222144-5dc2060baaf8 // indirect
+	github.com/ishidawataru/sctp v0.0.0-20190922091402-408ec287e38c
 	github.com/kardianos/osext v0.0.0-20190222173326-2bc1f35cddc0
 	github.com/kelseyhightower/envconfig v0.0.0-20180517194557-dd1402a4d99d
 	github.com/libp2p/go-reuseport v0.0.0-20180924121034-dd0c37d7767b
@@ -55,3 +56,5 @@ require (
 )
 
 replace github.com/sirupsen/logrus => github.com/projectcalico/logrus v1.0.4-calico
+
+replace github.com/ishidawataru/sctp => github.com/projectcalico/sctp v0.0.0-20191213163756-51fb0a816876

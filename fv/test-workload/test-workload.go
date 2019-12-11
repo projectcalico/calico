@@ -20,11 +20,13 @@ import (
 	"net"
 	"os"
 	"os/exec"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/containernetworking/cni/pkg/ns"
 	"github.com/docopt/docopt-go"
+	"github.com/ishidawataru/sctp"
 	log "github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
 
@@ -36,7 +38,7 @@ const usage = `test-workload, test workload for Felix FV testing.
 If <interface-name> is "", the workload will start in the current namespace.
 
 Usage:
-  test-workload [--udp] [--namespace-path=<path>] [--sidecar-iptables] [--up-lo] <interface-name> <ip-address> <ports>
+  test-workload [--udp] [--sctp] [--namespace-path=<path>] [--sidecar-iptables] [--up-lo] <interface-name> <ip-address> <ports>
 `
 
 func main() {
@@ -51,6 +53,7 @@ func main() {
 	ipAddress := arguments["<ip-address>"].(string)
 	portsStr := arguments["<ports>"].(string)
 	udp := arguments["--udp"].(bool)
+	useSctp := arguments["--sctp"].(bool)
 	nsPath := ""
 	if arg, ok := arguments["--namespace-path"]; ok && arg != nil {
 		nsPath = arg.(string)
@@ -302,6 +305,7 @@ func main() {
 			}
 			logCxt := log.WithFields(log.Fields{
 				"udp":    udp,
+				"sctp":   useSctp,
 				"myAddr": myAddr,
 			})
 			if udp {
@@ -320,6 +324,26 @@ func main() {
 						panicIfError(err)
 						_, err = p.WriteTo(buffer[:n], addr)
 						logCxt.WithError(err).WithField("remoteAddr", addr).Info("Responded")
+					}
+				}()
+			} else if useSctp {
+				portInt, err := strconv.Atoi(port)
+				panicIfError(err)
+				netIP, err := net.ResolveIPAddr("ip", ipAddress)
+				panicIfError(err)
+				sAddrs := &sctp.SCTPAddr{
+					IPAddrs: []net.IPAddr{*netIP},
+					Port:    portInt,
+				}
+				logCxt.Info("About to listen for SCTP connections")
+				l, err := sctp.ListenSCTP("sctp", sAddrs)
+				logCxt.Info("Listening for SCTP connections")
+				go func() {
+					defer l.Close()
+					for {
+						conn, err := l.Accept()
+						panicIfError(err)
+						go handleRequest(conn)
 					}
 				}()
 			} else {
