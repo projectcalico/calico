@@ -19,6 +19,21 @@ func TestParseSpiffeIdOk(t *testing.T) {
 	Expect(peer.Name).To(Equal("bacon"))
 	Expect(peer.Namespace).To(Equal("sandwich"))
 	Expect(err).To(BeNil())
+
+	req := &authz.CheckRequest{Attributes: &authz.AttributeContext{
+		Source: &authz.AttributeContext_Peer{
+			Principal: "",
+		},
+		Destination: &authz.AttributeContext_Peer{
+			Principal: "",
+		},
+	}}
+	uut, err := NewRequestCache(policystore.NewPolicyStore(), req)
+	Expect(err).To(Succeed())
+	Expect(uut.SourcePeer().Name).To(Equal(""))
+	Expect(uut.SourcePeer().Namespace).To(Equal(""))
+	Expect(uut.DestinationPeer().Name).To(Equal(""))
+	Expect(uut.DestinationPeer().Namespace).To(Equal(""))
 }
 
 // Unsuccessful parse should return an error.

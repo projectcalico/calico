@@ -154,6 +154,11 @@ func (r *requestCache) GetIPSet(ipset string) policystore.IPSet {
 
 // parseSpiffeId parses an Istio SPIFFE ID and extracts the service account name and namespace.
 func parseSpiffeID(id string) (peer peer, err error) {
+	if id == "" {
+		log.Debug("empty spiffe/plain text request.")
+		// Assume this is plain text.
+		return peer, nil
+	}
 	// Init the regexp the first time this is called, and store it in the package namespace.
 	spiffeIdRegExpOnce.Do(func() {
 		spiffeIdRegExp, _ = regexp.Compile(SPIFFE_ID_PATTERN)
