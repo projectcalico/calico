@@ -516,7 +516,7 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_lookup(struct ct_ctx
 		// leaving via a host endpoint, actually reverse the NAT.
 		snat = !CALI_F_TO_HOST;
 		/* Packet is returning from a NAT tunnel */
-		snat |= (dnat_should_decap && ctx->nat_tun_src);
+		snat |= (dnat_should_decap() && ctx->nat_tun_src);
 		snat = snat && dst_to_src->opener;
 
 		if (snat) {
