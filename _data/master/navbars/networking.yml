@@ -24,7 +24,7 @@ toc:
   section:
    - title: Get started with IP address management
      path: /networking/get-started-ip-addresses
-   - title: Configure IP auto detection
+   - title: Configure IP autodetection
      path: /networking/ip-autodetection
    - title: Enable IPv6
      path: /networking/ipv6  
