@@ -513,11 +513,6 @@ func (in *FelixConfigurationSpec) DeepCopyInto(out *FelixConfigurationSpec) {
 		*out = new(bool)
 		**out = **in
 	}
-	if in.IgnoreLooseRPF != nil {
-		in, out := &in.IgnoreLooseRPF, &out.IgnoreLooseRPF
-		*out = new(bool)
-		**out = **in
-	}
 	if in.RouteRefreshInterval != nil {
 		in, out := &in.RouteRefreshInterval, &out.RouteRefreshInterval
 		*out = new(v1.Duration)
