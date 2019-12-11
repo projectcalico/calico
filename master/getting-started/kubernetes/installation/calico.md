@@ -84,7 +84,7 @@ datastore type and number of nodes.
 1. Apply the manifest.
 
    ```bash
-   kubectl apply -f calico-typha.yaml
+   kubectl apply -f calico.yaml
    ```
 
 1. If you wish to enforce application layer policies and secure workload-to-workload
@@ -109,7 +109,7 @@ datastore type and number of nodes.
 1. Apply the manifest using the following command.
 
    ```bash
-   kubectl apply -f calico-etcd.yaml
+   kubectl apply -f calico.yaml
    ```
 
 1. If you wish to enforce application layer policies and secure workload-to-workload
