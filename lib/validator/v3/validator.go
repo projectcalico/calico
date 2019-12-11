@@ -811,7 +811,7 @@ func validateICMPFields(structLevel validator.StructLevel) {
 func validateRule(structLevel validator.StructLevel) {
 	rule := structLevel.Current().Interface().(api.Rule)
 
-	// If the protocol does not support ports check that the port values have not
+	// If the protocol is neither tcp (6) nor udp (17) check that the port values have not
 	// been specified.
 	if rule.Protocol == nil || !rule.Protocol.SupportsPorts() {
 		if len(rule.Source.Ports) > 0 {
@@ -929,12 +929,12 @@ func validateBGPPeerSpec(structLevel validator.StructLevel) {
 func validateEndpointPort(structLevel validator.StructLevel) {
 	port := structLevel.Current().Interface().(api.EndpointPort)
 
-	if !port.Protocol.SupportsPorts() {
+	if port.Protocol.String() != "TCP" && port.Protocol.String() != "UDP" {
 		structLevel.ReportError(
 			reflect.ValueOf(port.Protocol),
 			"EndpointPort.Protocol",
 			"",
-			reason("EndpointPort protocol does not support ports."),
+			reason("EndpointPort protocol must be 'TCP' or 'UDP'."),
 			"",
 		)
 	}
@@ -943,12 +943,12 @@ func validateEndpointPort(structLevel validator.StructLevel) {
 func validateProtoPort(structLevel validator.StructLevel) {
 	m := structLevel.Current().Interface().(api.ProtoPort)
 
-	if m.Protocol != "TCP" && m.Protocol != "UDP" && m.Protocol != "SCTP" {
+	if m.Protocol != "TCP" && m.Protocol != "UDP" {
 		structLevel.ReportError(
 			reflect.ValueOf(m.Protocol),
 			"ProtoPort.Protocol",
 			"",
-			reason("protocol must be 'TCP' or 'UDP' or 'SCTP'."),
+			reason("protocol must be 'TCP' or 'UDP'."),
 			"",
 		)
 	}
