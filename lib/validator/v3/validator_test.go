@@ -56,7 +56,6 @@ func init() {
 
 	protoTCP := numorstring.ProtocolFromString("TCP")
 	protoUDP := numorstring.ProtocolFromString("UDP")
-	protoSCTP := numorstring.ProtocolFromString("SCTP")
 	protoNumeric := numorstring.ProtocolFromInt(123)
 
 	as61234, _ := numorstring.ASNumberFromString("61234")
@@ -124,11 +123,6 @@ func init() {
 		Entry("should accept EndpointPort with udp protocol", api.EndpointPort{
 			Name:     "a-valid-port",
 			Protocol: protoUDP,
-			Port:     1234,
-		}, true),
-		Entry("should accept EndpointPort with sctp protocol", api.EndpointPort{
-			Name:     "a-valid-port",
-			Protocol: protoSCTP,
 			Port:     1234,
 		}, true),
 		Entry("should reject EndpointPort with empty name", api.EndpointPort{
@@ -397,7 +391,6 @@ func init() {
 		// (API) ProtoPort.
 		Entry("should accept ProtoPort.Protocol: UDP", api.ProtoPort{Protocol: "UDP", Port: 0}, true),
 		Entry("should accept ProtoPort.Protocol: TCP", api.ProtoPort{Protocol: "TCP", Port: 20}, true),
-		Entry("should accept ProtoPort.Protocol: SCTP", api.ProtoPort{Protocol: "SCTP", Port: 20}, true),
 		Entry("should reject random ProtoPort.Protocol", api.ProtoPort{Protocol: "jolly-UDP", Port: 0}, false),
 
 		// (API) Selectors.  Selectors themselves are thoroughly UT'd so only need to test simple
@@ -1056,14 +1049,14 @@ func init() {
 					NotPorts: []numorstring.Port{numorstring.SinglePort(1)},
 				},
 			}, false),
-		Entry("should allow Rule with dest ports and protocol type sctp",
+		Entry("should reject Rule with dest ports and protocol type tcp",
 			api.Rule{
 				Action:   "Allow",
 				Protocol: protocolFromString("SCTP"),
 				Destination: api.EntityRule{
 					Ports: []numorstring.Port{numorstring.SinglePort(1)},
 				},
-			}, true),
+			}, false),
 		Entry("should reject Rule with dest !ports and protocol type udp",
 			api.Rule{
 				Action:    "Allow",
