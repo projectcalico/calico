@@ -13,8 +13,7 @@
                             </a>
                         </h4>
                         <p>
-                            {% assign p = site.pages | where: 'url', url | first %}
-                            {{ p.description | default p.Description | default nested_item.description | default "" }}
+                            {{ nested_item.description | default: nested_item.Description | default: "" }}
                         </p>
                     </div>
                 {% endfor %}
