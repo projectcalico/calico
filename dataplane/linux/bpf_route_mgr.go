@@ -15,6 +15,8 @@
 package intdataplane
 
 import (
+	"net"
+	"sync"
 	"time"
 
 	"github.com/projectcalico/felix/bpf/routes"
@@ -51,6 +53,9 @@ type bpfRouteManager struct {
 
 	dirtyRoutes     set.Set
 	resyncScheduled bool
+
+	hostIPsUpdateCB    func([]net.IP)
+	hostIPsUpdateCBLck sync.RWMutex
 }
 
 func newBPFRouteManager(myNodename string, mc *bpf.MapContext) *bpfRouteManager {
@@ -209,6 +214,8 @@ func (m *bpfRouteManager) recalculateLocalHostIPs() {
 	oldRoutes := m.localHostRoutes
 	newRoutes := map[routes.Key]routes.Value{}
 
+	netIPs := []net.IP{}
+
 	for iface, ips := range m.localHostIPs {
 		logCxt := log.WithField("iface", iface)
 		logCxt.Debug("Adding IPs from interface")
@@ -220,19 +227,37 @@ func (m *bpfRouteManager) recalculateLocalHostIPs() {
 				// FIXME IPv6
 				return nil
 			}
-			if !cidr.Addr().AsNetIP().IsGlobalUnicast() {
+
+			netIP := cidr.Addr().AsNetIP()
+
+			if !netIP.IsGlobalUnicast() {
 				logCxt.WithField("addr", cidr).Debug("Address is not global unicast, ignore")
 				return nil
 			}
 			key := routes.NewKey(v4CIDR)
 			value := routes.NewValue(routes.TypeLocalHost)
 			newRoutes[key] = value
+
+			netIPs = append(netIPs, netIP)
+
 			return nil
 		})
 	}
 
 	m.applyRoutesDelta(oldRoutes, newRoutes)
 	m.localHostRoutes = newRoutes
+
+	m.onHostIPsChange(netIPs)
+
+}
+
+func (m *bpfRouteManager) onHostIPsChange(newIPs []net.IP) {
+	m.hostIPsUpdateCBLck.RLock()
+	defer m.hostIPsUpdateCBLck.RUnlock()
+	if m.hostIPsUpdateCB != nil {
+		m.hostIPsUpdateCB(newIPs)
+	}
+	log.Debugf("localHostIPs update %+v", newIPs)
 }
 
 func (m *bpfRouteManager) recalculateWorkloadIPs() {
@@ -377,4 +402,11 @@ func (m *bpfRouteManager) onHostMetadataRemove(remove *proto.HostMetadataRemove)
 	}
 	delete(m.remoteHostIPs, remove.Hostname)
 	m.remoteHostIPsDirty = true
+}
+
+func (m *bpfRouteManager) setHostIPUpdatesCallBack(cb func([]net.IP)) {
+	m.hostIPsUpdateCBLck.Lock()
+	defer m.hostIPsUpdateCBLck.Unlock()
+
+	m.hostIPsUpdateCB = cb
 }

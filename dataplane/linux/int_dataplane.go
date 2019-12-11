@@ -475,7 +475,8 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		// metadata name is set whereas TC doesn't set that field.
 		ipSetIDAllocator := idalloc.New()
 		dp.RegisterManager(newBPFIPSetManager(ipSetIDAllocator, bpfMapContext))
-		dp.RegisterManager(newBPFRouteManager(config.Hostname, bpfMapContext))
+		bpfRTMgr := newBPFRouteManager(config.Hostname, bpfMapContext)
+		dp.RegisterManager(bpfRTMgr)
 		dp.RegisterManager(newBPFConntrackManager(config.BPFConntrackTimeouts, bpfMapContext))
 
 		// Forwarding into a tunnel seems to fail silently, disable FIB lookup if tunnel is enabled for now.
@@ -503,7 +504,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 
 		if config.KubeClientSet != nil {
 			// We have a Kubernetes connection, start watching services and populating the NAT maps.
-			err := bpfproxy.StartKubeProxy(
+			kp, err := bpfproxy.StartKubeProxy(
 				config.KubeClientSet,
 				config.Hostname,
 				frontendMap,
@@ -513,6 +514,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			if err != nil {
 				log.WithError(err).Panic("Failed to start kube-proxy.")
 			}
+			bpfRTMgr.setHostIPUpdatesCallBack(kp.OnHostIPsUpdate)
 		} else {
 			log.Info("BPF enabled but no Kubernetes client available, unable to run kube-proxy module.")
 		}
