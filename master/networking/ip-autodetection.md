@@ -1,14 +1,14 @@
 ---
-title: Configure IP auto detection
+title: Configure IP autodetection
 ---
 
 ### Big picture
 
-Configure IP auto detection for {{site.prodname}} nodes to ensure the correct IP address is used for routing.
+Configure IP autodetection for {{site.prodname}} nodes to ensure the correct IP address is used for routing.
 
 ### Value
 
-When you install {{site.prodname}} on a node, an IP address and subnet is automatically detected. {{site.prodname}} provides several ways to configure IP/subnet auto detection, and supports configuring specific IPs for:
+When you install {{site.prodname}} on a node, an IP address and subnet is automatically detected. {{site.prodname}} provides several ways to configure IP/subnet autodetection, and supports configuring specific IPs for:
 
 - Hosts with multiple external interfaces
 - Host interfaces with multiple IP addresses
@@ -23,9 +23,9 @@ This how-to guide uses the following {{site.prodname}} features:
 
 ### Concepts
 
-#### Auto detecting node IP address and subnet
+#### Autodetecting node IP address and subnet
 
-For internode routing, each {{site.prodname}} node must be configured with an IPv4 address and/or an IPv6 address. When you install {{site.prodname}} on a node, a node resource is automatically created using routing information that is detected from the host. For some deployments, you may want to update auto detection to ensure nodes get the correct IP address.
+For internode routing, each {{site.prodname}} node must be configured with an IPv4 address and/or an IPv6 address. When you install {{site.prodname}} on a node, a node resource is automatically created using routing information that is detected from the host. For some deployments, you may want to update autodetection to ensure nodes get the correct IP address.
 
 **Sample default node resource after installation**
 
@@ -42,7 +42,7 @@ spec:
     ipv4IPIPTunnelAddr: 192.168.0.1
 ```
 
-#### Auto detection methods
+#### Autodetection methods
 
 By default, {{site.prodname}} uses the **first-found** method; the first valid IP address on the first interface (excluding local interfaces such as the docker bridge). However, you can change the default method to any of the following:
 
@@ -50,7 +50,7 @@ By default, {{site.prodname}} uses the **first-found** method; the first valid I
 - Regex to include matching interfaces (**interface**)
 - Regex to exclude matching interfaces (**skip-interface**)
 
-For details on auto detection methods, see [node configuration]({{site.baseurl}}/{{page.version}}/reference/node/configuration#ip-autodetection-methods) reference.
+For details on autodetection methods, see [node configuration]({{site.baseurl}}/{{page.version}}/reference/node/configuration#ip-autodetection-methods) reference.
 
 #### Manually configure IP address and subnet
 
@@ -71,17 +71,17 @@ Because you can configure IP address and subnet using either environment variabl
 | IP/IP6                              | Explicitly set                                        | The specified values are used, and the Node resource is updated. |
 |                                     | Set to autodetect                                     | The requested method is used (first-found, can-reach, interface, skip-interface), and the Node resource is updated. |
 |                                     | Not set, but Node resource has IP/IP6 values          | Node resource value is used.                                 |
-| IP                                  | Not set, and there is no IP value in Node resource    | Auto detects an IPv4 address and subnet, and updates Node resource. |
+| IP                                  | Not set, and there is no IP value in Node resource    | Autodetects an IPv4 address and subnet, and updates Node resource. |
 | IP6                                 | Not set, and there is a notIP6 value in Node resource | No IP6 routing is performed on the node.                     |
 
 ### How to
 
-- [Change the auto detection method](#change-the-auto-detection-method)
+- [Change the autodetection method](#change-the-autodetection-method)
 - [Manually configure IP address and subnet for a node](#manually-configure-ip-address-and-subnet-for-a-node)
 
-#### Change the auto detection method
+#### Change the autodetection method
 
-As noted previously, the default auto detection method is **first valid interface found** (first-found). To use a different auto detection method, use the following `kubectl set env` command, specifying the method:
+As noted previously, the default autodetection method is **first valid interface found** (first-found). To use a different autodetection method, use the following `kubectl set env` command, specifying the method:
 
 - **IPv4**
 
@@ -95,7 +95,7 @@ As noted previously, the default auto detection method is **first valid interfac
   kubectl set env daemonset/calico-node -n kube-system IP6_AUTODETECTION_METHOD=<autodetection-method>
   ```
 
-Where auto-detection methods are based on:
+Where autodetection methods are based on:
 
 - **IP or domain name**
 
@@ -160,8 +160,7 @@ calicoctl patch node kind-control-plane \
 
 ### Above and beyond
 
-- For details on auto detection methods, see the [node configuration]({{site.baseurl}}/{{page.version}}/reference/node/configuration#ip-autodetection-methods) reference.
+- For details on autodetection methods, see the [node configuration]({{site.baseurl}}/{{page.version}}/reference/node/configuration#ip-autodetection-methods) reference.
 - For calicoctl environment variables, see [Configuring {{site.nodecontainer}}]({{site.baseurl}}/{{page.version}}/reference/node/configuration)
 - [Node resource]({{site.baseurl}}/{{page.version}}/reference/resources/node)
 - [Reference documentation for calicoctl patch]({{site.baseurl}}/{{page.version}}/reference/calicoctl/patch)
-
