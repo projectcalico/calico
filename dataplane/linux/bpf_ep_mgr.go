@@ -371,9 +371,9 @@ func (m *bpfEndpointManager) applyProgramsToDirtyDataInterfaces() {
 		go func() {
 			defer wg.Done()
 			m.ensureQdisc(iface)
-			err := m.compileAndAttachDataIfaceProgram(iface, "ingress")
+			err := m.compileAndAttachDataIfaceProgram(iface, PolDirnIngress)
 			if err == nil {
-				err = m.compileAndAttachDataIfaceProgram(iface, "egress")
+				err = m.compileAndAttachDataIfaceProgram(iface, PolDirnEgress)
 			}
 			if err == nil {
 				// This is required to allow NodePort forwarding with
@@ -446,11 +446,11 @@ func (m *bpfEndpointManager) applyPolicy(wlID proto.WorkloadEndpointID) error {
 	wg.Add(2)
 	go func() {
 		defer wg.Done()
-		ingressErr = m.compileAndAttachWorkloadProgram(wep, "ingress")
+		ingressErr = m.compileAndAttachWorkloadProgram(wep, PolDirnIngress)
 	}()
 	go func() {
 		defer wg.Done()
-		egressErr = m.compileAndAttachWorkloadProgram(wep, "egress")
+		egressErr = m.compileAndAttachWorkloadProgram(wep, PolDirnEgress)
 	}()
 	wg.Wait()
 
@@ -479,63 +479,133 @@ func (m *bpfEndpointManager) ensureQdisc(ifaceName string) {
 	EnsureQdisc(ifaceName)
 }
 
-func (m *bpfEndpointManager) compileAndAttachWorkloadProgram(endpoint *proto.WorkloadEndpoint, polDirection string) error {
+func (m *bpfEndpointManager) compileAndAttachWorkloadProgram(endpoint *proto.WorkloadEndpoint, polDirection PolDirection) error {
 	rules := m.extractRules(endpoint.Tiers, endpoint.ProfileIds, polDirection)
-	ap := calculateTCAttachPoint("workload", polDirection, endpoint.Name)
+	ap := calculateTCAttachPoint(EpTypeWorkload, polDirection, endpoint.Name)
 	return m.compileAndAttachProgram(rules, ap)
 }
 
-func (m *bpfEndpointManager) compileAndAttachDataIfaceProgram(ifaceName string, polDirection string) error {
+func (m *bpfEndpointManager) compileAndAttachDataIfaceProgram(ifaceName string, polDirection PolDirection) error {
 	rules := [][][]*proto.Rule{{{{Action: "Allow"}}}}
-	epType := "host"
+	epType := EpTypeHost
 	if ifaceName == "tunl0" {
-		epType = "tunnel"
+		epType = EpTypeTunnel
 	}
 	ap := calculateTCAttachPoint(epType, polDirection, ifaceName)
 	return m.compileAndAttachProgram(rules, ap)
 }
 
+// PolDirection is the Calico datamodel direction of policy.  On a host endpoint, ingress is towards the host.
+// On a workload endpoint, ingress is towards the workload.
+type PolDirection string
+
+const (
+	PolDirnIngress PolDirection = "ingress"
+	PolDirnEgress  PolDirection = "egress"
+)
+
+// TCHook is the hook to which a BPF program should be attached.  This is relative to the host namespace
+// so workload PolDirnIngress policy is attached to the TCHookEgress.
+type TCHook string
+
+const (
+	TCHookIngress TCHook = "ingress"
+	TCHookEgress  TCHook = "egress"
+)
+
 type TCAttachPoint struct {
-	Section string
-	Hook    string
-	Iface   string
+	Section      string
+	Hook         TCHook
+	Iface        string
+	CompileFlags int
 }
 
-func calculateTCAttachPoint(endpointType, policyDirection, ifaceName string) TCAttachPoint {
+const (
+	CompileFlagHostEp  = 1
+	CompileFlagIngress = 2
+	CompileFlagTunnel  = 4
+	CompileFlagCgroup  = 8
+)
+
+type ToOrFromEp string
+
+const (
+	FromEp ToOrFromEp = "from"
+	ToEp   ToOrFromEp = "to"
+)
+
+type EndpointType string
+
+const (
+	EpTypeWorkload EndpointType = "workload"
+	EpTypeHost     EndpointType = "host"
+	EpTypeTunnel   EndpointType = "tunnel"
+)
+
+func calculateTCAttachPoint(endpointType EndpointType, policyDirection PolDirection, ifaceName string) TCAttachPoint {
 	var ap TCAttachPoint
 
-	if endpointType == "workload" {
+	if endpointType == EpTypeWorkload {
 		// Policy direction is relative to the workload so, from the host namespace it's flipped.
-		if policyDirection == "ingress" {
-			ap.Hook = "egress"
+		if policyDirection == PolDirnIngress {
+			ap.Hook = TCHookEgress
 		} else {
-			ap.Hook = "ingress"
+			ap.Hook = TCHookIngress
 		}
 	} else {
 		// Host endpoints have the natural relationship between policy direction and hook.
-		ap.Hook = policyDirection
+		if policyDirection == PolDirnIngress {
+			ap.Hook = TCHookIngress
+		} else {
+			ap.Hook = TCHookEgress
+		}
 	}
 
-	var fromOrTo string
-	if ap.Hook == "ingress" {
-		fromOrTo = "from"
+	var toOrFrom ToOrFromEp
+	if ap.Hook == TCHookIngress {
+		toOrFrom = FromEp
 	} else {
-		fromOrTo = "to"
+		toOrFrom = ToEp
 	}
 
-	ap.Section = fmt.Sprintf("calico_%s_%s_ep", fromOrTo, endpointType)
+	ap.Section = BPFSectionName(endpointType, toOrFrom)
+	ap.CompileFlags = BPFSectionToFlags(ap.Section)
 	ap.Iface = ifaceName
 
 	return ap
 }
 
-func (m *bpfEndpointManager) extractRules(tiers2 []*proto.TierInfo, profileNames []string, direction string) [][][]*proto.Rule {
+func BPFSectionName(endpointType EndpointType, fromOrTo ToOrFromEp) string {
+	return fmt.Sprintf("calico_%s_%s_ep", fromOrTo, endpointType)
+}
+
+var bpfSectionToFlags = map[string]int{}
+
+func init() {
+	bpfSectionToFlags[BPFSectionName(EpTypeWorkload, FromEp)] = 0
+	bpfSectionToFlags[BPFSectionName(EpTypeWorkload, ToEp)] = CompileFlagIngress
+	bpfSectionToFlags[BPFSectionName(EpTypeHost, FromEp)] = CompileFlagHostEp | CompileFlagIngress
+	bpfSectionToFlags[BPFSectionName(EpTypeHost, ToEp)] = CompileFlagHostEp
+	bpfSectionToFlags[BPFSectionName(EpTypeTunnel, FromEp)] = CompileFlagHostEp | CompileFlagIngress | CompileFlagTunnel
+	bpfSectionToFlags[BPFSectionName(EpTypeTunnel, ToEp)] = CompileFlagHostEp | CompileFlagTunnel
+}
+
+// BPFSectionToFlags is used by the UTs to magic the correct flags given a section name.
+func BPFSectionToFlags(section string) int {
+	flags, ok := bpfSectionToFlags[section]
+	if !ok {
+		log.WithField("section", section).Panic("Bug: unknown BPF section name")
+	}
+	return flags
+}
+
+func (m *bpfEndpointManager) extractRules(tiers2 []*proto.TierInfo, profileNames []string, direction PolDirection) [][][]*proto.Rule {
 	var allRules [][][]*proto.Rule
 	for _, tier := range tiers2 {
 		var pols [][]*proto.Rule
 
 		directionalPols := tier.IngressPolicies
-		if direction == "egress" {
+		if direction == PolDirnEgress {
 			directionalPols = tier.EgressPolicies
 		}
 
@@ -545,7 +615,7 @@ func (m *bpfEndpointManager) extractRules(tiers2 []*proto.TierInfo, profileNames
 
 		for _, polName := range directionalPols {
 			pol := m.policies[proto.PolicyID{Tier: tier.Name, Name: polName}]
-			if direction == "ingress" {
+			if direction == PolDirnIngress {
 				pols = append(pols, pol.InboundRules)
 			} else {
 				pols = append(pols, pol.OutboundRules)
@@ -556,7 +626,7 @@ func (m *bpfEndpointManager) extractRules(tiers2 []*proto.TierInfo, profileNames
 	var profs [][]*proto.Rule
 	for _, profName := range profileNames {
 		prof := m.profiles[proto.ProfileID{Name: profName}]
-		if direction == "ingress" {
+		if direction == PolDirnIngress {
 			profs = append(profs, prof.InboundRules)
 		} else {
 			profs = append(profs, prof.OutboundRules)
@@ -593,6 +663,8 @@ func (m *bpfEndpointManager) compileAndAttachProgram(allRules [][][]*proto.Rule,
 		CompileWithLogPrefix(logPfx),
 		CompileWithEndpointToHostDrop(m.epToHostDrop),
 		CompileWithNATTunnelMTU(uint16(m.natTunnelMTU)),
+		CompileWithEntrypointName(attachPoint.Section),
+		CompileWithFlags(attachPoint.CompileFlags),
 	}
 
 	iface := m.ifaces[attachPoint.Iface]
@@ -609,6 +681,8 @@ func (m *bpfEndpointManager) compileAndAttachProgram(allRules [][][]*proto.Rule,
 
 	err = AttachTCProgram(oFileName, attachPoint)
 	if err != nil {
+		log.WithError(err).Error("Failed to attach BPF program")
+
 		var buf bytes.Buffer
 		pg, err := bpf.NewProgramGenerator(srcFileName, m.ipSetIDAlloc)
 		if err != nil {
@@ -619,8 +693,7 @@ func (m *bpfEndpointManager) compileAndAttachProgram(allRules [][][]*proto.Rule,
 			log.WithError(err).Panic("Failed to write C file to buffer.")
 		}
 
-		log.WithError(err).WithFields(log.Fields{"program": buf.String()}).
-			Error("Failed to attach BPF program")
+		log.WithField("program", buf.String()).Error("Dump of program")
 		return err
 	}
 	return nil
@@ -631,7 +704,7 @@ func AttachTCProgram(fname string, attachPoint TCAttachPoint) error {
 	// Hook is relative to the host rather than the endpoint so we need to flip it.
 	tc := exec.Command("tc",
 		"filter", "add", "dev", attachPoint.Iface,
-		attachPoint.Hook,
+		string(attachPoint.Hook),
 		"bpf", "da", "obj", fname,
 		"sec", attachPoint.Section)
 
@@ -684,6 +757,11 @@ func CompileWithDefineValue(name string, value string) CompileTCOption {
 	return func(opts *compileTCOpts) {
 		opts.appendExtraArg(fmt.Sprintf("-D%s=%s", name, value))
 	}
+}
+
+// CompileWithEntrypointName controls the name of the BPF section entrypoint.
+func CompileWithEntrypointName(name string) CompileTCOption {
+	return CompileWithDefineValue("CALI_ENTRYPOINT_NAME", name)
 }
 
 // CompileWithIncludePath adds an include path to search for includes
@@ -761,6 +839,11 @@ func CompileWithVxlanPort(port uint16) CompileTCOption {
 // CompileWithNATTunnelMTU sets the MTU for NAT tunnel
 func CompileWithNATTunnelMTU(mtu uint16) CompileTCOption {
 	return CompileWithDefineValue("CALI_NAT_TUNNEL_MTU", fmt.Sprintf("%d", mtu))
+}
+
+// CompileWithFlags sets the CALI_COMPILE_FLAGS value.
+func CompileWithFlags(flags int) CompileTCOption {
+	return CompileWithDefineValue("CALI_COMPILE_FLAGS", fmt.Sprint(flags))
 }
 
 // CompileTCProgramToFile takes policy rules and compiles them into a tc-bpf

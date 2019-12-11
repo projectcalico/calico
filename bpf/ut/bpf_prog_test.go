@@ -112,6 +112,8 @@ func runBpfTest(t *testing.T, section string, rules [][][]*proto.Rule, testFn fu
 	opts := append(defaultCompileOpts,
 		intdataplane.CompileWithOutputName(objFname),
 		intdataplane.CompileWithLogPrefix(section),
+		intdataplane.CompileWithEntrypointName(section),
+		intdataplane.CompileWithFlags(intdataplane.BPFSectionToFlags(section)),
 	)
 
 	err = intdataplane.CompileTCProgramToFile(rules, idalloc.New(), opts...)

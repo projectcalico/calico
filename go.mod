@@ -14,6 +14,7 @@ require (
 	github.com/gogo/protobuf v1.2.2-0.20190723190241-65acae22fc9d
 	github.com/golang/protobuf v1.3.1
 	github.com/google/gopacket v1.1.17
+	github.com/google/netstack v0.0.0-20191123085552-55fcc16cd0eb
 	github.com/grpc-ecosystem/go-grpc-middleware v1.0.0 // indirect
 	github.com/gxed/GoEndian v0.0.0-20160916112711-0f5c6873267e // indirect
 	github.com/gxed/eventfd v0.0.0-20160916113412-80a92cca79a8 // indirect
@@ -48,8 +49,8 @@ require (
 	go.uber.org/zap v1.10.0 // indirect
 	golang.org/x/crypto v0.0.0-20191206172530-e9b2fee46413 // indirect
 	golang.org/x/net v0.0.0-20190812203447-cdfb69ac37fc
-	golang.org/x/sys v0.0.0-20191206220618-eeba5f6aabab
-	golang.org/x/tools v0.0.0-20191206204035-259af5ff87bd // indirect
+	golang.org/x/sys v0.0.0-20191210023423-ac6580df4449
+	golang.org/x/tools v0.0.0-20191210221141-98df12377212 // indirect
 	google.golang.org/grpc v1.19.0
 	gopkg.in/ini.v1 v1.46.0 // indirect
 	k8s.io/api v0.0.0
