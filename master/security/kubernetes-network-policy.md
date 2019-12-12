@@ -182,4 +182,4 @@ spec:
 ### Above and beyond
 
 - [Kubernetes Network Policy API documentation](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.13/#networkpolicy-v1-networking-k8s-io)
-- [Compliance and threat detection with Calico Enterprise]({{site.baseurl}}/{{page.version}}/security/calicoenterprise/ce-network-visibility)
+- [Compliance and threat detection with Calico Enterprise]({{site.baseurl}}/{{page.version}}/security/calico-enterprise/network-visibility)

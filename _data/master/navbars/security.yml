@@ -107,4 +107,4 @@ toc:
 - title: Calico Enterprise
   section:
   - title: Network visibility
-    path: /security/calicoenterprise/ce-network-visibility
+    path: /security/calico-enterprise/network-visibility
