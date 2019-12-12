@@ -74,5 +74,5 @@ toc:
     path: /security/comms/secure-metrics
 - title: Calico Enterprise
   section: 
-  - title: Network visibility with Calico Enterprise
+  - title: Network visibility
     path: /security/calicoenterprise/ce-network-visibility    
