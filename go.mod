@@ -10,8 +10,8 @@ require (
 	github.com/onsi/ginkgo v1.10.1
 	github.com/onsi/gomega v1.7.0
 	github.com/patrickmn/go-cache v0.0.0-20180815053127-5633e0862627
-	github.com/projectcalico/felix v0.0.0-20191207061420-86a641043efd
-	github.com/projectcalico/libcalico-go v1.7.2-0.20191210235440-2d2a4ff81c85
+	github.com/projectcalico/felix v0.0.0-20191212005038-d913365d0d9e
+	github.com/projectcalico/libcalico-go v1.7.2-0.20191211192103-ee42d4b5eaf9
 	github.com/prometheus/client_golang v0.9.4 // indirect
 	github.com/satori/go.uuid v1.2.0
 	github.com/sirupsen/logrus v1.4.2

@@ -257,6 +257,8 @@ github.com/projectcalico/felix v0.0.0-20191206061427-1eb6f53d1f62 h1:NAzX25QKbcW
 github.com/projectcalico/felix v0.0.0-20191206061427-1eb6f53d1f62/go.mod h1:eehbK/pHHwAwGEsZP6/nyVSx8k/YZWGiBw/2aG6eOro=
 github.com/projectcalico/felix v0.0.0-20191207061420-86a641043efd h1:w/Jr4F9e3NkgLWv30VzN2DCiJlT2TpDvCb0RjVJQH+0=
 github.com/projectcalico/felix v0.0.0-20191207061420-86a641043efd/go.mod h1:GcRNwQeSEwiIOLr2VgerJLOcd1g0c2ADjwfRowx5Cms=
+github.com/projectcalico/felix v0.0.0-20191212005038-d913365d0d9e h1:wyRk+1RzbeDIDXAAwNC4ms+8MnRT4h6O2MBwmeYzCJY=
+github.com/projectcalico/felix v0.0.0-20191212005038-d913365d0d9e/go.mod h1:GcRNwQeSEwiIOLr2VgerJLOcd1g0c2ADjwfRowx5Cms=
 github.com/projectcalico/go-json v0.0.0-20161128004156-6219dc7339ba h1:aaF2byUCZhzszHsfPEr2M3qcU4ibtD/yk/il2R7T1PU=
 github.com/projectcalico/go-json v0.0.0-20161128004156-6219dc7339ba/go.mod h1:q8EdCgBdMQzgiX/uk4GXLWLk+gIHd1a7mWUAamJKDb4=
 github.com/projectcalico/go-yaml-wrapper v0.0.0-20191112210931-090425220c54 h1:Jt2Pic9dxgJisekm8q2WV9FaWxUJhhRfwHSP640drww=
@@ -269,6 +271,8 @@ github.com/projectcalico/libcalico-go v1.7.2-0.20191206174442-1af6a37dd57b h1:jz
 github.com/projectcalico/libcalico-go v1.7.2-0.20191206174442-1af6a37dd57b/go.mod h1:5Upl9epOoyHRS1D4O9nckdFUtB0munzl4T1yoW52S14=
 github.com/projectcalico/libcalico-go v1.7.2-0.20191210235440-2d2a4ff81c85 h1:oIKzWLS0lr1dpy/pAa/ggPCLWrWuxJ7HHP2k7EBeNAA=
 github.com/projectcalico/libcalico-go v1.7.2-0.20191210235440-2d2a4ff81c85/go.mod h1:5Upl9epOoyHRS1D4O9nckdFUtB0munzl4T1yoW52S14=
+github.com/projectcalico/libcalico-go v1.7.2-0.20191211192103-ee42d4b5eaf9 h1:YP/yibag+uL77PV0d7D6pFNe6MLQLZN6qqx8UwymBao=
+github.com/projectcalico/libcalico-go v1.7.2-0.20191211192103-ee42d4b5eaf9/go.mod h1:5Upl9epOoyHRS1D4O9nckdFUtB0munzl4T1yoW52S14=
 github.com/projectcalico/logrus v1.0.4-calico h1:bHJ2KLGTFzoWpRISe13CO7HVxxrKunDjyUz/wFiBY8c=
 github.com/projectcalico/logrus v1.0.4-calico/go.mod h1:DfgrchabbtEO9wjOz5lVae+XRvjFKKWEA9GTMme6A8g=
 github.com/projectcalico/pod2daemon v0.0.0-20190730210055-df57fc59e2e1/go.mod h1:TgmA+ArLHObRADfET11mFF1aTK5i++4ZhqIuE4IV+IU=
