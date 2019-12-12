@@ -306,6 +306,8 @@ You may wish to review every security policy change request (aka pull request in
 
 ### Above and beyond
 
+To meet regulatory compliance requirements, and identify and alert on unexpected behavior, see [Network visibility with Calico Enterprise]({{site.baseurl}}/{{page.version}}/security/ce-network-visibility).
+
 - [Protect hosts]({{site.baseurl}}/{{page.version}}/security/protect-hosts)
 - [Global network policy]({{site.baseurl}}/{{page.version}}/reference/resources/globalnetworkpolicy)
 - [Network policy]({{site.baseurl}}/{{page.version}}/reference/resources/networkpolicy)
