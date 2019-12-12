@@ -31,7 +31,7 @@ Calico Enterprise provides a visual abstraction of flow logs with an interactive
 
 ![visualizer]({{site.baseurl}}/images/visualizer.png)
 
-#### Identify anomalies
+### Identify anomalies
 
 If you had an infected workload, would you know or be able to pinpoint which one?
 
