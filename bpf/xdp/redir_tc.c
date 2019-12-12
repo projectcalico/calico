@@ -500,7 +500,20 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb) {
 
 		CALI_DEBUG("CT: DNAT to %x:%d\n", be32_to_host(post_nat_ip_dst), post_nat_dport);
 
-		encap_needed = dnat_should_encap() && !cali_rt_is_local(post_nat_ip_dst);
+		struct calico_route *rt;
+
+		encap_needed = dnat_should_encap();
+		if (encap_needed) {
+			rt = cali_rt_lookup(post_nat_ip_dst);
+			if (!rt) {
+				reason = CALI_REASON_RT_UNKNOWN;
+				goto deny;
+			}
+			CALI_DEBUG("rt found for 0x%x\n", post_nat_ip_dst);
+
+			encap_needed = !cali_rt_is_local(rt);
+		}
+
 		if (encap_needed && ip_is_dnf(ip_header) && vxlan_v4_encap_too_big(skb)) {
 			goto icmp_too_big;
 		}

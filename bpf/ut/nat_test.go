@@ -27,6 +27,8 @@ import (
 
 	"github.com/projectcalico/felix/bpf/conntrack"
 	"github.com/projectcalico/felix/bpf/nat"
+	"github.com/projectcalico/felix/bpf/routes"
+	"github.com/projectcalico/felix/ip"
 )
 
 var node1ip = net.IPv4(10, 10, 0, 1)
@@ -252,6 +254,12 @@ func TestNATNodePort(t *testing.T) {
 	)
 	Expect(err).NotTo(HaveOccurred())
 
+	node2IP := net.IPv4(3, 3, 3, 3)
+	node2wCIDR := net.IPNet{
+		IP:   natIP,
+		Mask: net.IPv4Mask(255, 255, 255, 0),
+	}
+
 	ctMap := conntrack.Map(mc)
 	err = ctMap.EnsureExists()
 	Expect(err).NotTo(HaveOccurred())
@@ -260,6 +268,23 @@ func TestNATNodePort(t *testing.T) {
 	var encapedPkt []byte
 
 	hostIP = node1ip
+
+	// Arriving at node 1 - non-routable -> denied
+	runBpfTest(t, "calico_from_host_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
+		res, err := bpfrun(pktBytes)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(res.Retval).To(Equal(resTC_ACT_SHOT))
+	})
+
+	// Setup routing
+	rtMap := routes.Map(mc)
+	err = rtMap.EnsureExists()
+	Expect(err).NotTo(HaveOccurred())
+	err = rtMap.Update(
+		routes.NewKey(ip.CIDRFromIPNet(&node2wCIDR).(ip.V4CIDR)).AsBytes(),
+		routes.NewValueWithNextHop(routes.TypeRemoteWorkload, ip.FromNetIP(node2IP).(ip.V4Addr)).AsBytes(),
+	)
+	Expect(err).NotTo(HaveOccurred())
 
 	// Arriving at node 1
 	runBpfTest(t, "calico_from_host_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
@@ -427,11 +452,12 @@ func TestNATNodePortICMPTooBig(t *testing.T) {
 	Expect(err).NotTo(HaveOccurred())
 	udp := l4.(*layers.UDP)
 
-	natMap := nat.FrontendMap()
+	mc := &bpf.MapContext{}
+	natMap := nat.FrontendMap(mc)
 	err = natMap.EnsureExists()
 	Expect(err).NotTo(HaveOccurred())
 
-	natBEMap := nat.BackendMap()
+	natBEMap := nat.BackendMap(mc)
 	err = natBEMap.EnsureExists()
 	Expect(err).NotTo(HaveOccurred())
 
@@ -450,7 +476,22 @@ func TestNATNodePortICMPTooBig(t *testing.T) {
 	)
 	Expect(err).NotTo(HaveOccurred())
 
-	ctMap := conntrack.Map()
+	node2IP := net.IPv4(3, 3, 3, 3)
+	node2wCIDR := net.IPNet{
+		IP:   natIP,
+		Mask: net.IPv4Mask(255, 255, 255, 0),
+	}
+
+	rtMap := routes.Map(mc)
+	err = rtMap.EnsureExists()
+	Expect(err).NotTo(HaveOccurred())
+	err = rtMap.Update(
+		routes.NewKey(ip.CIDRFromIPNet(&node2wCIDR).(ip.V4CIDR)).AsBytes(),
+		routes.NewValueWithNextHop(routes.TypeRemoteWorkload, ip.FromNetIP(node2IP).(ip.V4Addr)).AsBytes(),
+	)
+	Expect(err).NotTo(HaveOccurred())
+
+	ctMap := conntrack.Map(mc)
 	err = ctMap.EnsureExists()
 	Expect(err).NotTo(HaveOccurred())
 	resetCTMap(ctMap) // ensure it is clean

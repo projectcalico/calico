@@ -47,6 +47,10 @@ func (k Key) PrefixLen() int {
 	return int(binary.LittleEndian.Uint32(k[:4]))
 }
 
+func (k Key) AsBytes() []byte {
+	return k[:]
+}
+
 type Type uint32
 
 const (
@@ -74,6 +78,10 @@ func (v Value) NextHop() ip.Addr {
 	var addr ip.V4Addr // FIXME IPv6
 	copy(addr[:], v[4:8])
 	return addr
+}
+
+func (v Value) AsBytes() []byte {
+	return v[:]
 }
 
 func NewKey(cidr ip.V4CIDR) Key {

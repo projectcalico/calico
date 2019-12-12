@@ -39,6 +39,7 @@ import (
 	"github.com/projectcalico/felix/bpf"
 	"github.com/projectcalico/felix/bpf/conntrack"
 	"github.com/projectcalico/felix/bpf/nat"
+	"github.com/projectcalico/felix/bpf/routes"
 	intdataplane "github.com/projectcalico/felix/dataplane/linux"
 	"github.com/projectcalico/felix/proto"
 )
@@ -169,10 +170,15 @@ func bpftoolProgLoadAll(fname, bpfFsDir string) error {
 	err = ctMap.EnsureExists()
 	Expect(err).NotTo(HaveOccurred())
 
+	rtMap := routes.Map(mc)
+	err = rtMap.EnsureExists()
+	Expect(err).NotTo(HaveOccurred())
+
 	_, err = bpftool("prog", "loadall", fname, bpfFsDir, "type", "classifier",
 		"map", "name", natMap.(*bpf.PinnedMap).Name, "pinned", natMap.(*bpf.PinnedMap).Filename,
 		"map", "name", natBEMap.(*bpf.PinnedMap).Name, "pinned", natBEMap.(*bpf.PinnedMap).Filename,
 		"map", "name", ctMap.(*bpf.PinnedMap).Name, "pinned", ctMap.(*bpf.PinnedMap).Filename,
+		"map", "name", rtMap.(*bpf.PinnedMap).Name, "pinned", rtMap.(*bpf.PinnedMap).Filename,
 	)
 	return err
 }
