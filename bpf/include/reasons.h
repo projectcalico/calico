@@ -1,17 +1,5 @@
-#ifndef __CALI_BPF_MAPS_H__
-#define __CALI_BPF_MAPS_H__
-
-#include <assert.h>
-#include <stdint.h>
-#include <stdbool.h>
-#include <linux/bpf.h>
-#include "../include/bpf.h"
-#include "../include/conntrack.h"
-
-struct protoport {
-	__u16 proto;
-	__u16 port;
-};
+#ifndef __CALI_REASONS_H__
+#define __CALI_REASONS_H__
 
 enum calico_reason {
 	CALI_REASON_UNKNOWN = 0x00,
@@ -30,4 +18,4 @@ enum calico_reason {
 	CALI_REASON_ICMP_DF = 0x1c,
 };
 
-#endif /* __CALI_BPF_MAPS_H__ */
+#endif /* __CALI_REASONS_H__ */

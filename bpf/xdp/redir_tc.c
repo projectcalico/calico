@@ -20,7 +20,7 @@
 #include "../include/conntrack.h"
 #include "../include/nat.h"
 #include "../include/routes.h"
-#include "bpf_maps.h"
+#include "../include/reasons.h"
 
 #ifndef CALI_FIB_LOOKUP_ENABLED
 #define CALI_FIB_LOOKUP_ENABLED true
