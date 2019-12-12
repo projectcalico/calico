@@ -26,6 +26,7 @@ const (
 
 	ProtocolUDPV1 = "udp"
 	ProtocolTCPV1 = "tcp"
+	ProtocolSCTPV1 = "sctp"
 )
 
 var (
@@ -126,7 +127,7 @@ func (p Protocol) SupportsPorts() bool {
 		return num == 6 || num == 17 || num == 132
 	} else {
 		switch p.StrVal {
-		case ProtocolTCP, ProtocolUDP, ProtocolTCPV1, ProtocolUDPV1, ProtocolSCTP:
+		case ProtocolTCP, ProtocolUDP, ProtocolTCPV1, ProtocolUDPV1, ProtocolSCTP, ProtocolSCTPV1:
 			return true
 		}
 		return false
