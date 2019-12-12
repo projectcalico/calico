@@ -263,7 +263,7 @@ static CALI_BPF_INLINE int icmp_v4_too_big(struct __sk_buff *skb)
 	/* make room for the new IP + ICMP header */
 	len = sizeof(struct iphdr) + sizeof(struct icmphdr);
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(5,2,0)
-	ret = bpf_skb_adjust_room(skb, len, BPF_ADJ_ROOM_MAC);
+	ret = bpf_skb_adjust_room(skb, len, BPF_ADJ_ROOM_MAC, 0);
 #else
 	uint32_t ip_inner_off = sizeof(struct ethhdr) + len;
 	ret = bpf_skb_adjust_room(skb, len, BPF_ADJ_ROOM_NET, 0);
