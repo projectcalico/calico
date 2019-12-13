@@ -38,7 +38,7 @@ const usage = `test-workload, test workload for Felix FV testing.
 If <interface-name> is "", the workload will start in the current namespace.
 
 Usage:
-  test-workload [--udp] [--sctp] [--namespace-path=<path>] [--sidecar-iptables] [--up-lo] <interface-name> <ip-address> <ports>
+  test-workload [--udp | --sctp] [--namespace-path=<path>] [--sidecar-iptables] [--up-lo] <interface-name> <ip-address> <ports>
 `
 
 func main() {
@@ -295,7 +295,7 @@ func main() {
 			}
 		}
 
-		// Listen on each port for either TCP or UDP.
+		// Listen on each port.
 		for _, port := range ports {
 			var myAddr string
 			if strings.Contains(ipAddress, ":") {

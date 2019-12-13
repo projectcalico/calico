@@ -129,11 +129,15 @@ func tryConnect(ipAddress, port, sourcePort, protocol, loopFile string) error {
 	uid := uuid.NewV4().String()
 	testMessage := "hello," + uid
 
-	// The reuse library implements a version of net.Dialer that can reuse UDP/TCP ports, which we
-	// need in order to make connection retries work. Since we specify the source port
-	// rather than use an ephemeral port, if the SO_REUSEADDR and SO_REUSEPORT options
-	// are not set, when we make another call to this program, the original port is in post-close
-	// wait state and bind fails.
+	// Since we specify the source port rather than use an ephemeral port, if
+	// the SO_REUSEADDR and SO_REUSEPORT options are not set, when we make
+	// another call to this program, the original port is in post-close wait
+	// state and bind fails.
+	//
+	// The reuse library implements a version of net.Dialer that can reuse
+	// UDP/TCP ports in this way. (For SCTP we don't use the Dialer and
+	// directly set the socket options since the reuse library doesn't support
+	// SCTP.)
 	var d reuse.Dialer
 	var localAddr string
 	var remoteAddr string
