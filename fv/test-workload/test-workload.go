@@ -337,6 +337,7 @@ func main() {
 				}
 				logCxt.Info("About to listen for SCTP connections")
 				l, err := sctp.ListenSCTP("sctp", sAddrs)
+				panicIfError(err)
 				logCxt.Info("Listening for SCTP connections")
 				go func() {
 					defer l.Close()
