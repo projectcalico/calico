@@ -45,12 +45,13 @@ type watcherCache struct {
 	errors               int
 	resourceType         ResourceType
 	currentWatchRevision string
+	errorThreshold       int
 }
 
 var (
-	ListRetryInterval = 1000 * time.Millisecond
-	WatchPollInterval = 5000 * time.Millisecond
-	ErrorThreshold    = 15
+	ListRetryInterval     = 1000 * time.Millisecond
+	WatchPollInterval     = 5000 * time.Millisecond
+	DefaultErrorThreshold = 15
 )
 
 // cacheEntry is an entry in our cache.  It groups the a key with the last known
@@ -65,11 +66,12 @@ type cacheEntry struct {
 // Create a new watcherCache.
 func newWatcherCache(client api.Client, resourceType ResourceType, results chan<- interface{}) *watcherCache {
 	return &watcherCache{
-		logger:       logrus.WithField("ListRoot", model.ListOptionsToDefaultPathRoot(resourceType.ListInterface)),
-		client:       client,
-		resourceType: resourceType,
-		results:      results,
-		resources:    make(map[string]cacheEntry, 0),
+		logger:         logrus.WithField("ListRoot", model.ListOptionsToDefaultPathRoot(resourceType.ListInterface)),
+		client:         client,
+		resourceType:   resourceType,
+		results:        results,
+		resources:      make(map[string]cacheEntry, 0),
+		errorThreshold: DefaultErrorThreshold,
 	}
 }
 
@@ -134,7 +136,7 @@ mainLoop:
 					wc.onError()
 				}
 
-				if wc.errors > ErrorThreshold {
+				if wc.errors > wc.errorThreshold {
 					// Trigger a full resync if we're past the error threshold.
 					wc.currentWatchRevision = ""
 					wc.resyncAndCreateWatcher(ctx)
@@ -428,8 +430,8 @@ func (wc *watcherCache) markAsValid(resourceKey string) {
 // exceeds the error threshold.  See finishResync() for how the watcherCache goes back to in-sync.
 func (wc *watcherCache) onError() {
 	wc.errors++
-	if wc.hasSynced && wc.errors > ErrorThreshold {
-		wc.logger.WithFields(logrus.Fields{"errors": wc.errors, "threshold": ErrorThreshold}).Debugf("Exceeded error threshold")
+	if wc.hasSynced && wc.errors > wc.errorThreshold {
+		wc.logger.WithFields(logrus.Fields{"errors": wc.errors, "threshold": wc.errorThreshold}).Debugf("Exceeded error threshold")
 		wc.hasSynced = false
 		wc.results <- api.WaitForDatastore
 	}

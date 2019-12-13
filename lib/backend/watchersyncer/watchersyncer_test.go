@@ -119,11 +119,8 @@ var _ = Describe("Test the backend datastore multi-watch syncer", func() {
 	It("should return WaitForDatastore on multiple consecutive watch errors", func() {
 		By("Sending errors to trigger a WaitForDatastore status update")
 
-		defaultThreshold := watchersyncer.ErrorThreshold
-		watchersyncer.ErrorThreshold = 6
-		defer func() {
-			watchersyncer.ErrorThreshold = defaultThreshold
-		}()
+		defer setErrorThreshold(watchersyncer.DefaultErrorThreshold)
+		setErrorThreshold(6)
 
 		rs := newWatcherSyncerTester([]watchersyncer.ResourceType{r1})
 		rs.ExpectStatusUpdate(api.WaitForDatastore)
@@ -133,7 +130,7 @@ var _ = Describe("Test the backend datastore multi-watch syncer", func() {
 
 		rs.clientWatchResponse(r1, genError)
 		rs.ExpectStatusUnchanged()
-		for i := 0; i < watchersyncer.ErrorThreshold-1; i++ {
+		for i := 0; i < watchersyncer.DefaultErrorThreshold-1; i++ {
 			rs.clientListResponse(r1, genError)
 			rs.ExpectStatusUnchanged()
 		}
@@ -154,7 +151,7 @@ var _ = Describe("Test the backend datastore multi-watch syncer", func() {
 		rs.clientWatchResponse(r1, nil)
 
 		// Watch is set but is now returning a generic WatchErrors
-		for i := 0; i < watchersyncer.ErrorThreshold; i++ {
+		for i := 0; i < watchersyncer.DefaultErrorThreshold; i++ {
 			rs.sendEvent(r1, genWatchError)
 			rs.ExpectStatusUnchanged()
 		}
@@ -164,6 +161,9 @@ var _ = Describe("Test the backend datastore multi-watch syncer", func() {
 	})
 
 	It("should handle reconnection if watchers fail to be created", func() {
+		defer setErrorThreshold(watchersyncer.DefaultErrorThreshold)
+		setErrorThreshold(3)
+
 		rs := newWatcherSyncerTester([]watchersyncer.ResourceType{r1, r2, r3})
 		rs.ExpectStatusUpdate(api.WaitForDatastore)
 
@@ -172,12 +172,6 @@ var _ = Describe("Test the backend datastore multi-watch syncer", func() {
 		// large to make the measurements more accurate.
 		defer setWatchIntervals(watchersyncer.ListRetryInterval, watchersyncer.WatchPollInterval)
 		setWatchIntervals(500*time.Millisecond, 2000*time.Millisecond)
-
-		defaultThreshold := watchersyncer.ErrorThreshold
-		watchersyncer.ErrorThreshold = 3
-		defer func() {
-			watchersyncer.ErrorThreshold = defaultThreshold
-		}()
 
 		// All of the events should have been consumed within a time frame dictated by the
 		// list retry and poll timers.
@@ -208,7 +202,7 @@ var _ = Describe("Test the backend datastore multi-watch syncer", func() {
 		rs.ExpectStatusUpdate(api.ResyncInProgress)
 		rs.clientWatchResponse(r1, genError)
 
-		for i := 0; i < watchersyncer.ErrorThreshold; i++ {
+		for i := 0; i < watchersyncer.DefaultErrorThreshold; i++ {
 			rs.clientListResponse(r1, genError)
 		}
 
@@ -272,11 +266,9 @@ var _ = Describe("Test the backend datastore multi-watch syncer", func() {
 	})
 
 	It("Should handle reconnection and syncing when the watcher sends a watch terminated error", func() {
-		defaultThreshold := watchersyncer.ErrorThreshold
-		watchersyncer.ErrorThreshold = 0
-		defer func() {
-			watchersyncer.ErrorThreshold = defaultThreshold
-		}()
+
+		defer setErrorThreshold(watchersyncer.DefaultErrorThreshold)
+		setErrorThreshold(0)
 
 		rs := newWatcherSyncerTester([]watchersyncer.ResourceType{r1, r2, r3})
 		rs.ExpectStatusUpdate(api.WaitForDatastore)
@@ -305,11 +297,8 @@ var _ = Describe("Test the backend datastore multi-watch syncer", func() {
 	})
 
 	It("Should not return WaitForDatastore on multiple watch errors due to ClosedByRemote exceeding error threshold", func() {
-		defaultThreshold := watchersyncer.ErrorThreshold
-		watchersyncer.ErrorThreshold = 0
-		defer func() {
-			watchersyncer.ErrorThreshold = defaultThreshold
-		}()
+		defer setErrorThreshold(watchersyncer.DefaultErrorThreshold)
+		setErrorThreshold(0)
 
 		rs := newWatcherSyncerTester([]watchersyncer.ResourceType{r1})
 		rs.ExpectStatusUpdate(api.WaitForDatastore)
@@ -817,6 +806,10 @@ var (
 func setWatchIntervals(listRetryInterval, watchPollInterval time.Duration) {
 	watchersyncer.ListRetryInterval = listRetryInterval
 	watchersyncer.WatchPollInterval = watchPollInterval
+}
+
+func setErrorThreshold(t int) {
+	watchersyncer.DefaultErrorThreshold = t
 }
 
 // Fake converter used to cover error and update handling paths.
