@@ -1,4 +1,5 @@
 ---
+![zero-trust-app]({{site.baseurl}}/images/calico-enterprise-logo-s.png)
 title: Adopt a zero trust network model for security
 description: Best practices to adopt a zero trust network model to secure workloads and hosts. Learn 5 key requirements to control network access for cloud-native strategy.
 ---
@@ -309,4 +310,4 @@ You may wish to review every security policy change request (aka pull request in
 - [Protect hosts]({{site.baseurl}}/{{page.version}}/security/protect-hosts)
 - [Global network policy]({{site.baseurl}}/{{page.version}}/reference/resources/globalnetworkpolicy)
 - [Network policy]({{site.baseurl}}/{{page.version}}/reference/resources/networkpolicy)
-- [Compliance and threat detection with Calico Enterprise]({{site.baseurl}}/{{page.version}}/security/calico-enterprise/network-visibility)
+- ![zero-trust-app]({{site.baseurl}}/images/blue-shield.png)[Compliance and threat detection with Calico Enterprise]({{site.baseurl}}/{{page.version}}/security/calico-enterprise/network-visibility)
