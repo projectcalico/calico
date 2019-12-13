@@ -74,7 +74,7 @@ var (
 	poolUnstictCIDR       = "IP pool CIDR is not strictly masked"
 	overlapsV4LinkLocal   = "IP pool range overlaps with IPv4 Link Local range 169.254.0.0/16"
 	overlapsV6LinkLocal   = "IP pool range overlaps with IPv6 Link Local range fe80::/10"
-	protocolPortsMsg      = "rules that specify ports must set protocol to TCP or UDP"
+	protocolPortsMsg      = "rules that specify ports must set protocol to TCP or UDP or SCTP"
 	protocolIcmpMsg       = "rules that specify ICMP fields must set protocol to ICMP"
 	protocolAndHTTPMsg    = "rules that specify HTTP fields must set protocol to TCP or empty"
 
@@ -811,7 +811,7 @@ func validateICMPFields(structLevel validator.StructLevel) {
 func validateRule(structLevel validator.StructLevel) {
 	rule := structLevel.Current().Interface().(api.Rule)
 
-	// If the protocol is neither tcp (6) nor udp (17) check that the port values have not
+	// If the protocol does not support ports check that the port values have not
 	// been specified.
 	if rule.Protocol == nil || !rule.Protocol.SupportsPorts() {
 		if len(rule.Source.Ports) > 0 {
@@ -929,12 +929,12 @@ func validateBGPPeerSpec(structLevel validator.StructLevel) {
 func validateEndpointPort(structLevel validator.StructLevel) {
 	port := structLevel.Current().Interface().(api.EndpointPort)
 
-	if port.Protocol.String() != "TCP" && port.Protocol.String() != "UDP" {
+	if !port.Protocol.SupportsPorts() {
 		structLevel.ReportError(
 			reflect.ValueOf(port.Protocol),
 			"EndpointPort.Protocol",
 			"",
-			reason("EndpointPort protocol must be 'TCP' or 'UDP'."),
+			reason("EndpointPort protocol does not support ports."),
 			"",
 		)
 	}
@@ -943,12 +943,12 @@ func validateEndpointPort(structLevel validator.StructLevel) {
 func validateProtoPort(structLevel validator.StructLevel) {
 	m := structLevel.Current().Interface().(api.ProtoPort)
 
-	if m.Protocol != "TCP" && m.Protocol != "UDP" {
+	if m.Protocol != "TCP" && m.Protocol != "UDP" && m.Protocol != "SCTP" {
 		structLevel.ReportError(
 			reflect.ValueOf(m.Protocol),
 			"ProtoPort.Protocol",
 			"",
-			reason("protocol must be 'TCP' or 'UDP'."),
+			reason("protocol must be 'TCP' or 'UDP' or 'SCTP'."),
 			"",
 		)
 	}
