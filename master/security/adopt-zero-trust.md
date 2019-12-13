@@ -309,3 +309,4 @@ You may wish to review every security policy change request (aka pull request in
 - [Protect hosts]({{site.baseurl}}/{{page.version}}/security/protect-hosts)
 - [Global network policy]({{site.baseurl}}/{{page.version}}/reference/resources/globalnetworkpolicy)
 - [Network policy]({{site.baseurl}}/{{page.version}}/reference/resources/networkpolicy)
+- [Compliance and threat detection with Calico Enterprise]({{site.baseurl}}/{{page.version}}/security/calico-enterprise/network-visibility)

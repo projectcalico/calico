@@ -104,3 +104,7 @@ toc:
 
   - title: Secure Calico Prometheus endpoints
     path: /security/comms/secure-metrics
+- title: Calico Enterprise
+  section:
+  - title: Network visibility
+    path: /security/calico-enterprise/network-visibility
