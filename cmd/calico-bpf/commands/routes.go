@@ -72,23 +72,8 @@ func dumpRoutes() error {
 	sortCIDRs(dests)
 
 	for _, dest := range dests {
-		var detail string
 		v := valueByDest[dest]
-		switch v.Type() {
-		case routes.TypeRemoteWorkload:
-			detail = fmt.Sprintf("remote workload, host IP %v", v.NextHop())
-		case routes.TypeRemoteHost:
-			detail = "remote host"
-		case routes.TypeLocalHost:
-			detail = "local host"
-		case routes.TypeLocalWorkload:
-			detail = "local workload"
-		case routes.TypeUnknown:
-			fallthrough
-		default:
-			detail = fmt.Sprintf("unknown %v", v)
-		}
-		fmt.Printf("%15v: %s\n", dest, detail)
+		fmt.Printf("%15v: %s\n", dest, v)
 	}
 
 	return nil
