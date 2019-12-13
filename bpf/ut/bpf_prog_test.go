@@ -373,6 +373,14 @@ func restoreCTMap(ctMap bpf.Map, m conntrack.MapMem) {
 	}
 }
 
+func dumpRTMap(rtMap bpf.Map) {
+	rt, err := routes.LoadMap(rtMap)
+	Expect(err).NotTo(HaveOccurred())
+	for k, v := range rt {
+		fmt.Printf("%15s: %s\n", k.Dest(), v)
+	}
+}
+
 var ethDefault = &layers.Ethernet{
 	SrcMAC:       []byte{0, 0, 0, 0, 0, 1},
 	DstMAC:       []byte{0, 0, 0, 0, 0, 2},

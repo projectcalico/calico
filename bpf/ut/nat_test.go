@@ -286,6 +286,8 @@ func TestNATNodePort(t *testing.T) {
 	)
 	Expect(err).NotTo(HaveOccurred())
 
+	dumpRTMap(rtMap)
+
 	// Arriving at node 1
 	runBpfTest(t, "calico_from_host_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
 		res, err := bpfrun(pktBytes)
