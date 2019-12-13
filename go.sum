@@ -259,6 +259,8 @@ github.com/projectcalico/logrus v1.0.4-calico h1:bHJ2KLGTFzoWpRISe13CO7HVxxrKunD
 github.com/projectcalico/logrus v1.0.4-calico/go.mod h1:DfgrchabbtEO9wjOz5lVae+XRvjFKKWEA9GTMme6A8g=
 github.com/projectcalico/pod2daemon v0.0.0-20190730210055-df57fc59e2e1 h1:JPzqAbV448lrNn83iqWiMM+Lxh0EyGlZC+ZYDZt+oGo=
 github.com/projectcalico/pod2daemon v0.0.0-20190730210055-df57fc59e2e1/go.mod h1:TgmA+ArLHObRADfET11mFF1aTK5i++4ZhqIuE4IV+IU=
+github.com/projectcalico/sctp v0.0.0-20191213163756-51fb0a816876 h1:LuYo+5yBf1vWhxXauYWgRXamEWY4zciwxiGawrFrMbs=
+github.com/projectcalico/sctp v0.0.0-20191213163756-51fb0a816876/go.mod h1:co9pwDoBCm1kGxawmb4sPq0cSIOOWNPT4KnHotMP1Zg=
 github.com/projectcalico/typha v0.7.3-0.20191204184435-8efd36dbad90 h1:2g+V/sYsuh1M4W6hVVR9fw0nPyoXuKMEyAGDXLAHzLk=
 github.com/projectcalico/typha v0.7.3-0.20191204184435-8efd36dbad90/go.mod h1:+7pruopMI1kPhTEqAub9e8bD3hsMbOQNyi9vcXbKr2U=
 github.com/projectcalico/typha v0.7.3-0.20191206040654-85823e39d075 h1:Ry2bPSHnKET9Z3D6mXbu3JPjxTa3nRxFvdi8Md/zjgg=
