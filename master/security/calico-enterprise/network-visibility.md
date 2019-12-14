@@ -2,6 +2,7 @@
 title: Network visibility
 description: Calico Enterprise provides deep network visibility into all ingress, egress and pod-to-pod network traffic.
 ---
+![zero-trust-app]({{site.baseurl}}/images/calico-enterprise-logo-s.png)
 
 Calico Enterprise provides visibility into all ingress, egress, and pod-to-pod network traffic so you can easily:
 
