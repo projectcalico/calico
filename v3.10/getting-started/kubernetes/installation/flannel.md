@@ -4,6 +4,10 @@ redirect_from: latest/getting-started/kubernetes/installation/flannel
 canonical_url: 'https://docs.projectcalico.org/v3.9/getting-started/kubernetes/installation/flannel'
 ---
 
+> **Tip**: Calico has historically been a popular choice to provide networking policy on top of flannel VXLAN networking.
+> However, with the introduction of native VXLAN networking support in Calico v3.7, you can achieve the same thing without needing to use flannel. For more information on choosing the networking option that is right for you, see the [Determine the best network option]({{site.url}}/{{page.version}}/networking/determine-best-networking) guide.
+{: .alert .alert-warning}
+
 ## Before you begin
 
 Ensure that you have a Kubernetes cluster that meets the
