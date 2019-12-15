@@ -734,6 +734,8 @@ func stringToProtocol(protocol string) (labelindex.IPSetPortProtocol, error) {
 		return labelindex.ProtocolTCP, nil
 	case "udp":
 		return labelindex.ProtocolUDP, nil
+	case "sctp":
+		return labelindex.ProtocolSCTP, nil
 	}
 	return labelindex.ProtocolNone, fmt.Errorf("unknown protocol %q", protocol)
 }

@@ -134,7 +134,7 @@ func (t IPSetType) CanonicaliseMember(member string) ipSetMember {
 			// This should be prevented by validation.
 			log.WithField("member", member).Panic("Failed to parse IP part of IP,port member")
 		}
-		// parts[1] should contain "(tcp|udp):<port number>"
+		// parts[1] should contain "(tcp|udp|sctp):<port number>"
 		parts = strings.Split(parts[1], ":")
 		var proto labelindex.IPSetPortProtocol
 		switch strings.ToLower(parts[0]) {
@@ -142,6 +142,8 @@ func (t IPSetType) CanonicaliseMember(member string) ipSetMember {
 			proto = labelindex.ProtocolUDP
 		case "tcp":
 			proto = labelindex.ProtocolTCP
+		case "sctp":
+			proto = labelindex.ProtocolSCTP
 		default:
 			log.WithField("member", member).Panic("Unknown protocol")
 		}

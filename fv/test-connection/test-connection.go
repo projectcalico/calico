@@ -20,13 +20,17 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/containernetworking/cni/pkg/ns"
 	docopt "github.com/docopt/docopt-go"
+	"github.com/ishidawataru/sctp"
 	reuse "github.com/libp2p/go-reuseport"
 	log "github.com/sirupsen/logrus"
+	"golang.org/x/sys/unix"
 
 	uuid "github.com/satori/go.uuid"
 
@@ -125,8 +129,15 @@ func tryConnect(ipAddress, port, sourcePort, protocol, loopFile string) error {
 	uid := uuid.NewV4().String()
 	testMessage := "hello," + uid
 
-	// The reuse library implements a version of net.Dialer that can reuse UDP/TCP ports, which we
-	// need in order to make connection retries work.
+	// Since we specify the source port rather than use an ephemeral port, if
+	// the SO_REUSEADDR and SO_REUSEPORT options are not set, when we make
+	// another call to this program, the original port is in post-close wait
+	// state and bind fails.
+	//
+	// The reuse library implements a version of net.Dialer that can reuse
+	// UDP/TCP ports in this way. (For SCTP we don't use the Dialer and
+	// directly set the socket options since the reuse library doesn't support
+	// SCTP.)
 	var d reuse.Dialer
 	var localAddr string
 	var remoteAddr string
@@ -163,6 +174,58 @@ func tryConnect(ipAddress, port, sourcePort, protocol, loopFile string) error {
 			log.WithField("reply", reply).Info("Got reply")
 			if reply != testMessage {
 				panic(errors.New("Unexpected reply: " + reply))
+			}
+			if !ls.Next() {
+				break
+			}
+		}
+	} else if protocol == "sctp" {
+		lip, err := net.ResolveIPAddr("ip", "::")
+		if err != nil {
+			return err
+		}
+		lport, err := strconv.Atoi(sourcePort)
+		if err != nil {
+			return err
+		}
+		laddr := &sctp.SCTPAddr{IPAddrs: []net.IPAddr{*lip}, Port: lport}
+		rip, err := net.ResolveIPAddr("ip", ipAddress)
+		if err != nil {
+			return err
+		}
+		rport, err := strconv.Atoi(port)
+		if err != nil {
+			return err
+		}
+		raddr := &sctp.SCTPAddr{IPAddrs: []net.IPAddr{*rip}, Port: rport}
+		// the reuse.Dialer does not support SCTP, so set the needed reuse socket options
+		// and dial directly using the sctp library. (We use a forked copy of the library
+		// that allows setting the socket options in this way.)
+		conn, err := sctp.DialSCTPExt(
+			"sctp",
+			laddr,
+			raddr,
+			sctp.InitMsg{NumOstreams: sctp.SCTP_MAX_STREAM},
+			sctp.SocketOption{Level: syscall.SOL_SOCKET, Option: unix.SO_REUSEADDR, Value: 1},
+			sctp.SocketOption{Level: syscall.SOL_SOCKET, Option: unix.SO_REUSEPORT, Value: 1},
+		)
+		if err != nil {
+			panic(err)
+		}
+		defer conn.Close()
+		log.Infof("SCTP connection established")
+
+		for {
+			fmt.Fprintf(conn, testMessage+"\n")
+			log.WithField("message", testMessage).Info("Sent message over sctp")
+			reply, err := bufio.NewReader(conn).ReadString('\n')
+			if err != nil {
+				return err
+			}
+			reply = strings.TrimSpace(reply)
+			log.WithField("reply", reply).Info("Got reply")
+			if reply != testMessage {
+				return errors.New("Unexpected reply: " + reply)
 			}
 			if !ls.Next() {
 				break

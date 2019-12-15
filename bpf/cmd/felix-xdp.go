@@ -64,11 +64,13 @@ func dump() {
 	}
 	for _, entry := range pp {
 		proto := "<unknown>"
-		if entry.Proto == labelindex.ProtocolTCP {
+		switch entry.Proto {
+		case labelindex.ProtocolTCP:
 			proto = "TCP"
-		}
-		if entry.Proto == labelindex.ProtocolUDP {
+		case labelindex.ProtocolUDP:
 			proto = "UDP"
+		case labelindex.ProtocolSCTP:
+			proto = "SCTP"
 		}
 		fmt.Printf("  %s: %d\n", proto, entry.Port)
 	}
