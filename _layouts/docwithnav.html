@@ -202,6 +202,10 @@ The code is a little roundabout for a few reasons:
               <a data-proofer-ignore href="https://github.com/projectcalico/calico/tree/master/{{page.path}}" style="color: #999; text-decoration: none; float: right;" target="_blank"><i class="fa fa-github" aria-hidden="true"></i> Edit this page</a></div>
               <!-- END TOP DOCUMENTATION PAGE NAVBAR -->
               {% include version_warning.html %}
+              {% if page.calico_enterprise -%}
+              alt="Calico Enterprise"
+              <img src="/images/calico-enterprise-logo-128px.png" alt="Calico Enterprise">
+              {% endif -%}
               {% if page.show_title -%}
               <h1>{{ page.title }}</h1>
               {% endif -%}
