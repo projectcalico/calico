@@ -7,7 +7,7 @@ description: Use policy rules in network policy and global network policy as mat
 
 Use policy rules as match criteria to allow or deny {{site.prodname}} network policy and global network policy. 
 
-If you've read [Get started with Calico policy]({{site.baseurl}}/{{page.version}}/security/calico-network-policy) and [Kubernetes policy]({{site.baseurl}}/{{page.version}}/kubernetes-network-policy), you already know how to use label selectors to apply policy rules. If you need more help, the Policy rules section provides more examples of specific rules. 
+If you've read [Get started with Calico policy]({{site.baseurl}}/{{page.version}}/security/calico-network-policy) and [Kubernetes policy]({{site.baseurl}}/{{page.version}}/security/kubernetes-network-policy), you already know how to use label selectors to apply policy rules. If you need more help, the Policy rules section provides more examples of specific rules. 
 
 For the complete list of policy rules, see: 
 
