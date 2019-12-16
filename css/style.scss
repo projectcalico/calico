@@ -153,3 +153,41 @@ input.gsc-input, .gsc-input-box, .gsc-input-box-hover, .gsc-input-box-focus, .gs
         }
     }
 }
+
+#enterprise-header .request-demo-button {
+  border: none;
+  color: white;
+  background-color: #ff9e16;  
+  padding: 15px 32px;
+  text-align: center;
+  text-decoration: none;
+  display: inline-block;
+  margin: 4px 40px;
+  cursor: pointer;  
+  font-size: 18px;
+  font-family: 'Poppins',Helvetica,Arial,Lucida,sans-serif !important;
+  font-weight: 700 !important;
+}
+
+#enterprise-header .calico-enterprise-img {
+  display: inline-block !important;
+}
+
+#enterprise-footer {
+    margin: 20px 0px;
+}
+
+#enterprise-footer .learn-more-button {
+  border: none;
+  color: white;
+  background-color: #ff9e16;
+  padding: 15px 32px;
+  text-align: center;
+  text-decoration: none;
+  display: inline-block;
+  margin: 4px 4px;
+  cursor: pointer;
+  font-size: 18px;
+  font-family: 'Poppins',Helvetica,Arial,Lucida,sans-serif !important;
+  font-weight: 700 !important;
+}

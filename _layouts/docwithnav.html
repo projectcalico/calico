@@ -202,10 +202,16 @@ The code is a little roundabout for a few reasons:
               <a data-proofer-ignore href="https://github.com/projectcalico/calico/tree/master/{{page.path}}" style="color: #999; text-decoration: none; float: right;" target="_blank"><i class="fa fa-github" aria-hidden="true"></i> Edit this page</a></div>
               <!-- END TOP DOCUMENTATION PAGE NAVBAR -->
               {% include version_warning.html %}
+              {% if page.calico_enterprise -%}
+              {% include enterprise_header.html %}   
+              {% endif -%}
               {% if page.show_title -%}
               <h1>{{ page.title }}</h1>
               {% endif -%}
               {{ content }}
+              {% if page.calico_enterprise -%}
+              {% include enterprise_footer.html %}   
+              {% endif -%}
 
               <!-- BOTTOM DOCUMENTATION PAGE NAVBAR -->
               <div style="margin-top: 60px; margin-bottom: 40px; padding-top: 20px; border-top: 1px solid #999; text-align: left; color: #999;">
