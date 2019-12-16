@@ -50,7 +50,7 @@ datastore type and number of nodes.
 1. Download the {{site.prodname}} networking manifest for the Kubernetes API datastore.
 
    ```bash
-   curl {{site.url}}/{{page.version}}/manifests/calico-typha.yaml -o calico.yaml
+   curl {{site.url}}/{{page.version}}/manifests/calico-typha.yaml -o calico-typha.yaml
    ```
 
 {% include {{page.version}}/pod-cidr-sed.md yaml="calico-typha" %}
