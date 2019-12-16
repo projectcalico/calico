@@ -11,7 +11,7 @@ both IPv4 and IPv6.
 ### Value
 
 Communication over IPv6 is increasingly desirable, and the natural approach for cluster pods is to
-be IPv6-native themselves, as well as still supporting IPv4.  Native support for both IPv4 and IPv6
+be IPv6-native themselves, while still supporting IPv4.  Native support for both IPv4 and IPv6
 is known as "dual stack", and Kubernetes has alpha-level support for this in versions 1.16 and 1.17.
 
 ### Features
@@ -22,18 +22,16 @@ This how-to guide uses the following {{site.prodname}} features:
 
 ### Before you begin...
 
-You must first set up a cluster following the Kubernetes
+1.  Set up a cluster following the Kubernetes
 [prerequisites](https://kubernetes.io/docs/concepts/services-networking/dual-stack/#prerequisites)
 and [enablement
 steps](https://kubernetes.io/docs/concepts/services-networking/dual-stack/#enable-ipv4-ipv6-dual-stack)
-for dual stack, except that:
+for dual stack, except ignore mention of the Kubenet network plugin, because here we will use
+{{site.prodname}} instead.
 
--  you can ignore mention of the Kubenet network plugin, because here we will use {{site.prodname}}
-   instead.
-
-Then follow our [installation
+1.  Follow our [installation
 guide]({{site.baseurl}}/{{page.version}}/getting-started/kubernetes/installation/calico) to identify
-and download the right {{site.prodname}} manifest for the size of cluster you want to set up, and
+and download the right {{site.prodname}} manifest for the cluster, and
 for your preferred datastore type, but do not apply that manifest yet.
 
 ### How to
