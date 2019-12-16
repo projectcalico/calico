@@ -203,15 +203,15 @@ The code is a little roundabout for a few reasons:
               <!-- END TOP DOCUMENTATION PAGE NAVBAR -->
               {% include version_warning.html %}
               {% if page.calico_enterprise -%}
-              <div>
-                <img class="calico-enterprise-img" src="/images/calico-enterprise-logo-128px.png" alt="Calico Enterprise">
-                <a href="https://tigera.io/demo" class="request-demo-button">Request Demo</a>
-              </div>              
+              {% include enterprise_header.html %}   
               {% endif -%}
               {% if page.show_title -%}
               <h1>{{ page.title }}</h1>
               {% endif -%}
               {{ content }}
+              {% if page.calico_enterprise -%}
+              {% include enterprise_footer.html %}   
+              {% endif -%}
 
               <!-- BOTTOM DOCUMENTATION PAGE NAVBAR -->
               <div style="margin-top: 60px; margin-bottom: 40px; padding-top: 20px; border-top: 1px solid #999; text-align: left; color: #999;">
