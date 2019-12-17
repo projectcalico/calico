@@ -268,4 +268,4 @@ Spec:
 - For additional Calico network policy features, see [Calico network policy]({{site.baseurl}}/{{page.version}}/reference/resources/networkpolicy) and [Calico global network policy]({{site.baseurl}}/{{page.version}}/reference/resources/globalnetworkpolicy)
 - For an alternative to using IP addresses or CIDRs in policy, see [Network sets]({{site.baseurl}}/{{page.version}}/reference/resources/networkset) 
 - For details on the calicoctl command line tool, see [calicoctl user reference]({{site.baseurl}}/{{page.version}}/reference/calicoctl/) 
-- [Compliance and threat detection with Calico Enterprise]({{site.baseurl}}/{{page.version}}/security/calico-enterprise/network-visibility)
+- {% include enterprise_icon.html %}[Compliance and threat detection with Calico Enterprise]({{site.baseurl}}/{{page.version}}/security/calico-enterprise/network-visibility)
