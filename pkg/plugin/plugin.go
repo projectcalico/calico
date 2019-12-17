@@ -19,8 +19,10 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io/ioutil"
 	"os"
 	"runtime"
+	"time"
 
 	"github.com/containernetworking/cni/pkg/skel"
 	cnitypes "github.com/containernetworking/cni/pkg/types"
@@ -36,13 +38,65 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/options"
 	"github.com/sirupsen/logrus"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/tools/clientcmd"
 )
+
+const testConnectionTimeout = 2 * time.Second
 
 func init() {
 	// This ensures that main runs only on main thread (thread group leader).
 	// since namespace ops (unshare, setns) are done for a single thread, we
 	// must ensure that the goroutine does not jump from OS thread to thread
 	runtime.LockOSThread()
+}
+
+func testConnection() error {
+	// Unmarshal the network config
+	conf := types.NetConf{}
+	data, err := ioutil.ReadAll(os.Stdin)
+	if err != nil {
+		return errors.New("failed to read from stdin")
+	}
+	if err := json.Unmarshal(data, &conf); err != nil {
+		return fmt.Errorf("failed to load netconf: %v", err)
+	}
+
+	// Create a new client.
+	calicoClient, err := utils.CreateClient(conf)
+	if err != nil {
+		return err
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), testConnectionTimeout)
+	defer cancel()
+	ci, err := calicoClient.ClusterInformation().Get(ctx, "default", options.GetOptions{})
+	if err != nil {
+		return fmt.Errorf("error getting ClusterInformation: %v", err)
+	}
+	if !*ci.Spec.DatastoreReady {
+		logrus.Info("Upgrade may be in progress, ready flag is not set")
+		return fmt.Errorf("Calico is currently not ready to process requests")
+	}
+
+	// If we have a kubeconfig, test connection to the APIServer
+	if conf.Kubernetes.Kubeconfig != "" {
+		k8sconfig, err := clientcmd.BuildConfigFromFlags("", conf.Kubernetes.Kubeconfig)
+		if err != nil {
+			return fmt.Errorf("error building K8s client config: %s", err)
+		}
+
+		// Set a short timeout so we fail fast.
+		k8sconfig.Timeout = testConnectionTimeout
+		k8sClient, err := kubernetes.NewForConfig(k8sconfig)
+		if err != nil {
+			return fmt.Errorf("error creating K8s client: %s", err)
+		}
+		_, err = k8sClient.ServerVersion()
+		if err != nil {
+			return fmt.Errorf("unable to connect to K8s server: %s", err)
+		}
+	}
+	return nil
 }
 
 func cmdAdd(args *skel.CmdArgs) error {
@@ -477,11 +531,19 @@ func Main(version string) {
 	// Install a hook that adds file/line no information.
 	logrus.AddHook(&logutils.ContextHook{})
 
-	// Display the version on "-v", otherwise just delegate to the skel code.
 	// Use a new flag set so as not to conflict with existing libraries which use "flag"
 	flagSet := flag.NewFlagSet("Calico", flag.ExitOnError)
 
+	// Display the version on "-v"
 	versionFlag := flagSet.Bool("v", false, "Display version")
+
+	// Test datastore connection on "-t" this is used to gate installation of the
+	// CNI config file, which triggers some orchestrators (K8s included) to start
+	// scheduling pods.  By waiting until we get a successful datastore connection
+	// test, we can avoid some startup races where host networking to the datastore
+	// takes a little while to start up.
+	testConnectionFlag := flagSet.Bool("t", false, "Test datastore connection")
+
 	err := flagSet.Parse(os.Args[1:])
 	if err != nil {
 		fmt.Println(err)
@@ -490,6 +552,14 @@ func Main(version string) {
 	if *versionFlag {
 		fmt.Println(version)
 		os.Exit(0)
+	}
+	if *testConnectionFlag {
+		err = testConnection()
+		if err == nil {
+			os.Exit(0)
+		}
+		logrus.WithError(err).Error("data store connection failed")
+		os.Exit(1)
 	}
 
 	if err := utils.AddIgnoreUnknownArgs(); err != nil {
