@@ -33,7 +33,8 @@ import (
 const minKernelVersion = "2.6.24"
 
 // Required kernel modules to run Calico
-var requiredModules = []string{"xt_set", "ip6_tables"}
+var requiredModules = []string{"ip_set", "ip_tables", "ip6_tables", "ipt_REJECT", "ipt_rpfilter", "ipt_set", "nf_conntrack_netlink",
+	"xt_addrtype", "xt_conntrack", "xt_icmp", "xt_icmp6", "xt_ipvs", "xt_mark", "xt_multiport", "xt_rpfilter", "xt_set", "xt_u32"}
 
 // Checksystem checks host system for compatible versions
 func Checksystem(args []string) error {
