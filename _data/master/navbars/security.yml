@@ -5,59 +5,59 @@ toc:
 - title: Security
   path: /security/
 - title: Adopt a zero trust network model for security
-  path: /security/adopt-zero-trust   
+  path: /security/adopt-zero-trust
 - title: Get started
-  section:  
+  section:
   - title: Calico policy
-    section:    
+    section:
     - title: Get started with Calico network policy
-      path: /security/calico-network-policy  
+      path: /security/calico-network-policy
     - title: Get started with Calico network policy for OpenStack
-      path: /security/network-policy-openstack     
+      path: /security/network-policy-openstack
   - title: Kubernetes policy
-    section: 
+    section:
     - title: Get started with Kubernetes network policy
       path: /security/kubernetes-network-policy
     - title: Enable default deny for Kubernetes pods
-      path: /security/kubernetes-default-deny 
+      path: /security/kubernetes-default-deny
     - title: Kubernetes policy, demo
       path: /security/tutorials/kubernetes-policy-demo/kubernetes-demo
     - title: Kubernetes policy, basic tutorial
       path: /security/tutorials/kubernetes-policy-basic
     - title: Kubernetes policy, advanced tutorial
-      path: /security/tutorials/kubernetes-policy-advanced          
-- title: Policy rules       
+      path: /security/tutorials/kubernetes-policy-advanced
+- title: Policy rules
   section:
   - title: Overview
-    path: /security/policy-rules-overview  
+    path: /security/policy-rules-overview
   - title: Use namespace in policy rules
     path: /security/namespace-policy
   - title: Use service accounts in policy rules
-    path: /security/service-accounts  
+    path: /security/service-accounts
   - title: Use external IPs or networks in policy rules
     path: /security/external-ips-policy
   - title: Use ICMP/ping in policy rules
-    path: /security/icmp-ping    
+    path: /security/icmp-ping
 - title: Policy for hosts
-  section:    
+  section:
   - title: Protect hosts
-    path: /security/protect-hosts    
+    path: /security/protect-hosts
   - title: Protect host tutorial
     path: /security/tutorials/protect-hosts
   - title: Apply policy to host forwarded traffic
-    path: /security/host-forwarded-traffic    
+    path: /security/host-forwarded-traffic
 - title: Policy for services
-  section: 
+  section:
   - title: Apply policy to Kubernetes node ports
     path: /security/kubernetes-node-ports
   - title: Apply policy to services exposed externally as cluster IPs
-    path: /security/services-cluster-ips 
-- title: Policy for Istio 
+    path: /security/services-cluster-ips
+- title: Policy for Istio
   section:
   - title: Enforce network policy using Istio
-    path: /security/enforce-policy-istio 
+    path: /security/enforce-policy-istio
   - title: Use HTTP methods and paths in policy rules
-    path: /security/http-methods 
+    path: /security/http-methods
   - title: Enforce network policy using Istio tutorial
     path: /security/tutorials/app-layer-policy/enforce-policy-istio
 - title: Policy for extreme traffic
