@@ -13,7 +13,7 @@ toc:
     - title: Get started with Calico network policy
       path: /security/calico-network-policy  
     - title: Get started with Calico network policy for OpenStack
-      path: /security/network-policy-openstack   
+      path: /security/network-policy-openstack     
   - title: Kubernetes policy
     section: 
     - title: Get started with Kubernetes network policy
@@ -28,6 +28,8 @@ toc:
       path: /security/tutorials/kubernetes-policy-advanced          
 - title: Policy rules       
   section:
+  - title: Overview
+    path: /security/policy-rules-overview  
   - title: Use namespace in policy rules
     path: /security/namespace-policy
   - title: Use service accounts in policy rules
