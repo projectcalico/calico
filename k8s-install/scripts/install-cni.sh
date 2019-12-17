@@ -191,6 +191,7 @@ sed -i s/__SERVICEACCOUNT_TOKEN__/"${SERVICEACCOUNT_TOKEN:-}"/g $TMP_CONF
 # Before actually putting the config file in place, block on successful connection
 # to the datastore. Once config is in place, Kubelet will start scheduling pods
 # and these will fail if we can't reach the data store for some reason.
+SKIP_DATASTORE_CONNECTION_CHECK=${SKIP_DATASTORE_CONNECTION_CHECK:-""}
 if [-z "${SKIP_DATASTORE_CONNECTION_CHECK}"]; then
   until /opt/cni/bin/calico -t < $TMP_CONF
   do
