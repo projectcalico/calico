@@ -261,6 +261,8 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	dp.ifaceMonitor.Callback = dp.onIfaceStateChange
 	dp.ifaceMonitor.AddrCallback = dp.onIfaceAddrsChange
 
+	backendMode := iptables.DetectBackend(config.LookPathOverride, iptables.NewRealCmd, config.IptablesBackend)
+
 	// Most iptables tables need the same options.
 	iptablesOptions := iptables.TableOptions{
 		HistoricChainPrefixes: rules.AllHistoricChainNamePrefixes,
@@ -269,7 +271,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		PostWriteInterval:     config.IptablesPostWriteCheckInterval,
 		LockTimeout:           config.IptablesLockTimeout,
 		LockProbeInterval:     config.IptablesLockProbeInterval,
-		BackendMode:           config.IptablesBackend,
+		BackendMode:           backendMode,
 		LookPathOverride:      config.LookPathOverride,
 	}
 

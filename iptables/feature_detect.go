@@ -15,7 +15,9 @@
 package iptables
 
 import (
+	"bytes"
 	"io"
+	"os/exec"
 	"regexp"
 	"sync"
 
@@ -66,7 +68,7 @@ type FeatureDetector struct {
 func NewFeatureDetector() *FeatureDetector {
 	return &FeatureDetector{
 		GetKernelVersionReader: versionparse.GetKernelVersionReader,
-		NewCmd:                 newRealCmd,
+		NewCmd:                 NewRealCmd,
 	}
 }
 
@@ -148,4 +150,90 @@ func (d *FeatureDetector) getKernelVersion() *version.Version {
 		return v3Dot10Dot0
 	}
 	return kernVersion
+}
+
+func countRulesInIptableOutput(in []byte) int {
+	count := 0
+	for _, x := range bytes.Split(in, []byte("\n")) {
+		if len(x) >= 1 && x[0] == '-' {
+			count++
+		}
+	}
+	return count
+}
+
+// GetIptablesBackend attempts to detect the iptables backend being used where Felix is running.
+// This code is duplicating the detection method found at
+// https://github.com/kubernetes/kubernetes/blob/623b6978866b5d3790d17ff13601ef9e7e4f4bf0/build/debian-iptables/iptables-wrapper#L28
+// If there is a specifiedBackend then it is used but if it does not match the detected
+// backend then a warning is logged.
+func DetectBackend(lookPath func(file string) (string, error), newCmd cmdFactory, specifiedBackend string) string {
+	ip6LgcySave := findBestBinary(lookPath, 6, "legacy", "save")
+	ip4LgcySave := findBestBinary(lookPath, 4, "legacy", "save")
+	ip6l, _ := newCmd(ip6LgcySave).Output()
+	ip4l, _ := newCmd(ip4LgcySave).Output()
+	log.WithField("ip6l", string(ip6l)).Debug("Ip6tables legacy save out")
+	log.WithField("ip4l", string(ip4l)).Debug("Iptables legacy save out")
+	legacyLines := countRulesInIptableOutput(ip6l) + countRulesInIptableOutput(ip4l)
+	var detectedBackend string
+	if legacyLines >= 10 {
+		detectedBackend = "legacy"
+	} else {
+		ip6NftSave := findBestBinary(lookPath, 6, "nft", "save")
+		ip4NftSave := findBestBinary(lookPath, 4, "nft", "save")
+		ip6n, _ := newCmd(ip6NftSave).Output()
+		log.WithField("ip6n", string(ip6n)).Debug("Ip6tables save out")
+		ip4n, _ := newCmd(ip4NftSave).Output()
+		log.WithField("ip4n", string(ip4n)).Debug("Iptables save out")
+		nftLines := countRulesInIptableOutput(ip6n) + countRulesInIptableOutput(ip4n)
+		if legacyLines >= nftLines {
+			detectedBackend = "legacy"
+		} else {
+			detectedBackend = "nft"
+		}
+	}
+	log.WithField("detectedBackend", detectedBackend).Debug("Detected Iptables backend")
+
+	if specifiedBackend != "auto" {
+		if specifiedBackend != detectedBackend {
+			log.WithFields(log.Fields{"detectedBackend": detectedBackend, "specifiedBackend": specifiedBackend}).Warn("Iptables backend specified does not match the detected backend, using specified backend")
+		}
+		return specifiedBackend
+	}
+	return detectedBackend
+}
+
+// findBestBinary tries to find an iptables binary for the specific variant (legacy/nftables mode) and returns the name
+// of the binary.  Falls back on iptables-restore/iptables-save if the specific variant isn't available.
+// Panics if no binary can be found.
+func findBestBinary(lookPath func(file string) (string, error), ipVersion uint8, backendMode, saveOrRestore string) string {
+	if lookPath == nil {
+		lookPath = exec.LookPath
+	}
+	verInfix := ""
+	if ipVersion == 6 {
+		verInfix = "6"
+	}
+	candidates := []string{
+		"ip" + verInfix + "tables-" + backendMode + "-" + saveOrRestore,
+		"ip" + verInfix + "tables-" + saveOrRestore,
+	}
+
+	logCxt := log.WithFields(log.Fields{
+		"ipVersion":     ipVersion,
+		"backendMode":   backendMode,
+		"saveOrRestore": saveOrRestore,
+		"candidates":    candidates,
+	})
+
+	for _, candidate := range candidates {
+		_, err := lookPath(candidate)
+		if err == nil {
+			logCxt.WithField("command", candidate).Info("Looked up iptables command")
+			return candidate
+		}
+	}
+
+	logCxt.Panic("Failed to find iptables command")
+	return ""
 }
