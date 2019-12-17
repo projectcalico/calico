@@ -150,9 +150,9 @@ func Run() {
 		// If running under kubernetes with secrets to call k8s API
 		if config, err := rest.InClusterConfig(); err == nil {
 			log.Info("Setting NetworkUnavailable to False")
-			err = setNodeNetworkUnavailableFalse(config, nodeName)
+			err = setNodeNetworkUnavailableFalse(*config, nodeName)
 			if err != nil {
-				log.WithError(err).Errorf("Unable to set NetworkUnavailable to False")
+				log.WithError(err).Error("Unable to set NetworkUnavailable to False")
 			}
 		}
 	}
@@ -1093,9 +1093,15 @@ func ensureKDDMigrated(cfg *apiconfig.CalicoAPIConfig, cv3 client.Interface) err
 
 // Set Kubernetes NodeNetworkUnavailable to false when starting
 // https://kubernetes.io/docs/concepts/architecture/nodes/#condition
-func setNodeNetworkUnavailableFalse(config *rest.Config, nodeName string) error {
+func setNodeNetworkUnavailableFalse(config rest.Config, nodeName string) error {
+	// default timeout is 30 seconds, which isn't appropriate for this kind of
+	// startup action because network services, like kube-proxy might not be
+	// running and we don't want to block the full 30 seconds if they are just
+	// a few seconds behind.
+	config.Timeout = 2 * time.Second
+
 	// creates the k8s clientset
-	clientset, err := kubernetes.NewForConfig(config)
+	clientset, err := kubernetes.NewForConfig(&config)
 	if err != nil {
 		return err
 	}
@@ -1113,8 +1119,19 @@ func setNodeNetworkUnavailableFalse(config *rest.Config, nodeName string) error 
 		return err
 	}
 	patch := []byte(fmt.Sprintf(`{"status":{"conditions":%s}}`, raw))
-	_, err = clientset.CoreV1().Nodes().PatchStatus(nodeName, patch)
-	return err
+	to := time.After(30 * time.Second)
+	for {
+		select {
+		case <-to:
+			err = fmt.Errorf("timed out patching node, last error was: %s", err.Error())
+			return err
+		default:
+			_, err = clientset.CoreV1().Nodes().PatchStatus(nodeName, patch)
+			if err != nil {
+				log.WithError(err).Warnf("Failed to set NetworkUnavailable to False; will retry")
+			}
+		}
+	}
 }
 
 // terminate prints a terminate message and exists with status 1.
