@@ -1129,6 +1129,9 @@ func setNodeNetworkUnavailableFalse(config rest.Config, nodeName string) error {
 			_, err = clientset.CoreV1().Nodes().PatchStatus(nodeName, patch)
 			if err != nil {
 				log.WithError(err).Warnf("Failed to set NetworkUnavailable to False; will retry")
+			} else {
+				// Success!
+				return nil
 			}
 		}
 	}
