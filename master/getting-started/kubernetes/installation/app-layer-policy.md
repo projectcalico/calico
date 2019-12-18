@@ -18,7 +18,7 @@ Enabling {{site.prodname}} application layer policy lets you enforce application
 
 Although Istio policy is ideal for operational goals, security inside and outside the cluster requires {{site.prodname}} network policy. {{site.prodname}} supports a special integration for Istio, called **application layer policy**. This policy lets you restrict ingress traffic inside and outside pods, and mitigate common threats to Istio-enabled apps.
 
-For a tutorial on how application layer policy provides second-factor authentication for the mythical Yao Bank, see [Enforce network policy using Istio]({{site.url}}/{{page.version}}security/tutorials/app-layer-policy/enforce-policy-istio).
+For a tutorial on how application layer policy provides second-factor authentication for the mythical Yao Bank, see [Enforce network policy using Istio]({{site.url}}/{{page.version}}/security/tutorials/app-layer-policy/enforce-policy-istio).
 
 ### Before you begin...
 
@@ -106,6 +106,6 @@ If the namespace already has pods in it, you must recreate them for this to take
 
 ### Above and beyond
 
-- [Enforce network policy using Istio tutorial]({{site.url}}/{{page.version}}security/tutorials/app-layer-policy/enforce-policy-istio)
+- [Enforce network policy using Istio tutorial]({{site.url}}/{{page.version}}/security/tutorials/app-layer-policy/enforce-policy-istio)
 - [Enforce network policy using Istio]({{site.url}}/{{page.version}}/security/enforce-policy-istio)
 - [Use http methods and paths in policy rules]({{site.url}}/{{page.version}}/security/http-methods)
