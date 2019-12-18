@@ -74,25 +74,7 @@ kubectl patch configmap -n istio-system istio-sidecar-injector --patch "$(cat is
 ```
 [View sample manifest](https://docs.projectcalico.org/master/manifests/alp/istio-inject-configmap-1.3.5.yaml)
 
-If you have installed a different version of Istio, substitute 1.4.2 in the above URL for your Istio version. We have predefined `ConfigMaps` for Istio versions 1.1.0 through 1.1.17, 1.2.0 through 1.2.9, 1.3.0 through 1.3.5, and 1.4.0 through 1.4.2. To customize the standard sidecar injector `ConfigMap` or understand the changes we have made, see [Customizing the manifests]({{site.url}}/{{page.version}}/getting-started/kubernetes/installation/config-options).
-{: .alert .alert-info}
-
-1. Follow the [Automatic sidecar injection instructions](https://istio.io/docs/setup/additional-setup/sidecar-injection/#automatic-sidecar-injection)
-   to install the sidecar injector and enable it in your chosen namespace(s).
-
-1. Patch the `istio-sidecar-injector` ConfigMap to enable injection of Dikastes alongside Envoy.
-
-   ```bash
-   curl {{site.url}}/{{page.version}}/manifests/alp/istio-inject-configmap-1.4.2.yaml -o istio-inject-configmap.yaml
-   kubectl patch configmap -n istio-system istio-sidecar-injector --patch "$(cat istio-inject-configmap.yaml)"
-   ```
-
-[View sample manifest]({{site.url}}/{{page.version}}/manifests/alp/istio-inject-configmap-1.4.2.yaml)
-  
-If you have installed a different version of Istio, substitute `1.4.2` in the above URL for your Istio version. We have
-pre-defined `ConfigMaps` for Istio versions 1.1.0 through 1.1.17, 1.2.0 through 1.2.9, 1.3.0 through 1.3.5, and 1.4.0 through 1.4.2. To customize the standard sidecar injector `ConfigMap` or
-understand the changes we have made, see
-[Customizing the manifests](config-options).
+If you installed a different version of Istio, substitute 1.4.2 in the above URL for your Istio version. We have predefined `ConfigMaps` for Istio versions 1.1.0 through 1.1.17, 1.2.0 through 1.2.9, 1.3.0 through 1.3.5, and 1.4.0 through 1.4.2. To customize the standard sidecar injector `ConfigMap` or understand the changes we have made, see [Customizing the manifests]({{site.url}}/{{page.version}}/getting-started/kubernetes/installation/config-options).
 
 #### Add Calico authorization services to the mesh
 
@@ -106,7 +88,7 @@ kubectl apply -f https://docs.projectcalico.org/master/manifests/alp/istio-app-l
 
 #### Add namespace labels
 
-You can control enforcement of application layer policy on a per-namespace basis. However, this only works on pods that are started with the Envoy and {{site.prodname}} Dikastes sidecars (as noted in the step, Update Istio sidecar injector). Pods that do not have the {{site.prodname}} sidecars enforce only standard {{site.prodname}} network policy.
+You can control enforcement of application layer policy on a per-namespace basis. However, this only works on pods that are started with the Envoy and {{site.prodname}} Dikastes sidecars (as noted in the step, Update Istio sidecar injector). Pods that do not have the {{site.prodname}} sidecars, enforce only standard {{site.prodname}} network policy.
 
 To enable Istio and application layer policy in a namespace, add the label `istio-injection=enabled`.
 
