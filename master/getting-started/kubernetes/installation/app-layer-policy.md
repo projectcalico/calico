@@ -61,7 +61,7 @@ cd $(ls -d istio-*)
 
 #### Update Istio sidecar injector
 
-The sidecar injector automatically modifies pods as they are created to work with Istio. This step modifies the injector configuration to add Dikastes (a Calico component), as sidecar containers.
+The sidecar injector automatically modifies pods as they are created to work with Istio. This step modifies the injector configuration to add Dikastes (a {{site.prodname}} component), as sidecar containers.
 
 1. Follow the [Automatic sidecar injection instructions](https://archive.istio.io/v1.3/docs/setup/additional-setup/sidecar-injection/#automatic-sidecar-injection) to install the sidecar injector and enable it in your chosen namespace(s).
 1. Patch the istio-sidecar-injector `ConfigMap` to enable injection of Dikastes alongside Envoy.
