@@ -49,8 +49,8 @@ require (
 	go.uber.org/zap v1.10.0 // indirect
 	golang.org/x/crypto v0.0.0-20191206172530-e9b2fee46413 // indirect
 	golang.org/x/net v0.0.0-20190812203447-cdfb69ac37fc
-	golang.org/x/sys v0.0.0-20191210023423-ac6580df4449
-	golang.org/x/tools v0.0.0-20191210221141-98df12377212 // indirect
+	golang.org/x/sys v0.0.0-20191218084908-4a24b4065292
+	golang.org/x/tools v0.0.0-20191218040434-6f9e13bbec44 // indirect
 	google.golang.org/grpc v1.19.0
 	gopkg.in/ini.v1 v1.46.0 // indirect
 	k8s.io/api v0.0.0

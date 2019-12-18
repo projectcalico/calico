@@ -458,7 +458,7 @@ func (config *Config) DatastoreConfig() apiconfig.CalicoAPIConfig {
 		cfg.Spec.EtcdCACertFile = config.EtcdCaFile
 	}
 
-	if !config.IpInIpEnabled && !config.VXLANEnabled {
+	if !(config.IpInIpEnabled || config.VXLANEnabled || config.BPFEnabled) {
 		// Polling k8s for node updates is expensive (because we get many superfluous
 		// updates) so disable if we don't need it.
 		log.Info("Encap disabled, disabling node poll (if KDD is in use).")
