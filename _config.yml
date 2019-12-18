@@ -196,3 +196,9 @@ defaults:
     values:
       version: v3.10
       registry:
+  -
+    scope:
+      path: v3.11
+    values:
+      version: v3.11
+      registry:

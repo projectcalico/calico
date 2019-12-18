@@ -55,7 +55,7 @@ calicoctl apply -f felix-config.yaml
 1. Verify [application layer policy requirements]({{site.url}}/{{page.version}}/getting-started/kubernetes/requirements#application-layer-policy-requirements).
 1. Install Istio using the [Istio project documentation](https://archive.istio.io/v1.3/docs/setup/install/) making sure to enable mutual TLS authentication. For example:
 
-```
+```bash
 curl -L https://git.io/getLatestIstio | ISTIO_VERSION=1.4.2 sh -
 cd $(ls -d istio-*)
 ./bin/istioctl manifest apply --set values.global.mtls.enabled=true --set values.global.controlPlaneSecurityEnabled=true
@@ -78,6 +78,25 @@ kubectl patch configmap -n istio-system istio-sidecar-injector --patch "$(cat is
 
 >**Note**: If you have installed a different version of Istio, substitute 1.4.2 in the above URL for your Istio version. We have pre-defined ConfigMaps for Istio versions 1.1.0 through 1.1.17, 1.2.0 through 1.2.9, 1.3.0 through 1.3.5, and 1.4.0 through 1.4.2. To customize the standard sidecar injector ConfigMap or understand the changes we have made, see [Customizing the manifests]({{site.url}}/{{page.version}}/getting-started/kubernetes/installation/config-options).
 {: .alert .alert-info}
+
+1. Follow the [Automatic sidecar injection instructions](https://istio.io/docs/setup/additional-setup/sidecar-injection/#automatic-sidecar-injection)
+   to install the sidecar injector and enable it in your chosen namespace(s).
+
+1. Patch the `istio-sidecar-injector` ConfigMap to enable injection of Dikastes alongside Envoy.
+
+   ```bash
+   curl {{site.url}}/{{page.version}}/manifests/alp/istio-inject-configmap-1.4.2.yaml -o istio-inject-configmap.yaml
+   kubectl patch configmap -n istio-system istio-sidecar-injector --patch "$(cat istio-inject-configmap.yaml)"
+   ```
+
+	 > **Note**: You can also
+   > [view the manifest in your browser]({{site.url}}/{{page.version}}/manifests/alp/istio-inject-configmap-1.4.2.yaml){:target="_blank"}.
+   {: .alert .alert-info}
+
+If you have installed a different version of Istio, substitute `1.4.2` in the above URL for your Istio version. We have
+pre-defined `ConfigMaps` for Istio versions 1.1.0 through 1.1.17, 1.2.0 through 1.2.9, 1.3.0 through 1.3.5, and 1.4.0 through 1.4.2. To customize the standard sidecar injector `ConfigMap` or
+understand the changes we have made, see
+[Customizing the manifests](config-options).
 
 #### Add Calico authorization services to the mesh
 
