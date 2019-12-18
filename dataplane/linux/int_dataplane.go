@@ -1049,6 +1049,17 @@ func (d *InternalDataplane) configureKernel() {
 	if err != nil {
 		log.Warnf("failed to set rp_filter to '1': %v\n", err)
 	}
+
+	// Attempt to modprobe nf_conntrack_proto_sctp.  In some kernels this is a
+	// module that needs to be loaded, otherwise all SCTP packets are marked
+	// INVALID by conntrack and dropped by Calico's rules.  However, some kernels
+	// (confirmed in Ubuntu 19.10's build of 5.3.0-24-generic) include this
+	// conntrack without it being a kernel module, and so modprobe will fail.
+	// Log result at INFO level for troubleshooting, but otherwise ignore any
+	// failed modprobe calls.
+	mp := newModProbe(moduleConntrackSCTP, newRealCmd)
+	out, err := mp.Exec()
+	log.WithError(err).WithField("output", out).Infof("attempted to modprobe %s", moduleConntrackSCTP)
 }
 
 func readRPFilter() (value int64, err error) {
