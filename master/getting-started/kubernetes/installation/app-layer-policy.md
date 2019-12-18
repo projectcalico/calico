@@ -10,7 +10,7 @@ Enable {{site.prodname}} application layer network policy in Istio service mesh.
 
 ### Value
 
-Enabling {{site.prodname}} application layer policy lets you enforce application layer attributes like HTTP methods or paths, and cryptographically secure identities. 
+{{site.prodname}} application layer policy lets you enforce application layer attributes like HTTP methods or paths, and cryptographically secure identities for Istio-enabled apps. 
 
 ### Concepts
 
