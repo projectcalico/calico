@@ -59,7 +59,7 @@ cd $(ls -d istio-*)
 kubectl apply -f install/kubernetes/helm/istio-init/files/
 kubectl apply -f install/kubernetes/istio-demo-auth.yaml
 ```
->**Note**: If the error “unable to recognize” occurs after applying `install/kubernetes/istio-demo-auth.yaml`, it is likely a race condition between creating an Istio CRD and a resource of that type. Rerun the `kubectl apply`.
+>**Note**: If the error “unable to recognize” occurs after applying `install/kubernetes/istio-demo-auth.yaml`, it is likely a race condition between creating an Istio CRD and a resource of that type. Rerun `kubectl apply`.
 {: .alert .alert-info}
 
 #### Update Istio sidecar injector
