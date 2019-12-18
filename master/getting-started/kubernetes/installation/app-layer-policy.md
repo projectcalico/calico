@@ -37,7 +37,7 @@ For a tutorial on how application layer policy provides second-factor authentica
 
 #### Enable application layer policy
 
-To enable the application layer policy, you must enable the Policy Sync API on Felix cluster-wide.
+To enable the application layer policy, you must enable the **Policy Sync API** on Felix cluster-wide.
 
 In the default **FelixConfiguration**, set the field, `policySyncPathPrefix` to `/var/run/nodeagent`. The following example uses `sed` to modify the existing default config before reapplying it.
 
@@ -108,4 +108,4 @@ If the namespace already has pods in it, you must recreate them for this to take
 
 - [Enforce network policy using Istio tutorial]({{site.url}}/{{page.version}}/security/tutorials/app-layer-policy/enforce-policy-istio)
 - [Enforce network policy using Istio]({{site.url}}/{{page.version}}/security/enforce-policy-istio)
-- [Use http methods and paths in policy rules]({{site.url}}/{{page.version}}/security/http-methods)
+- [Use HTTP methods and paths in policy rules]({{site.url}}/{{page.version}}/security/http-methods)
