@@ -26,8 +26,8 @@ For a tutorial on how application layer policy provides second-factor authentica
 
 - [Calico is installed]({{site.url}}/{{page.version}}/getting-started/)
 - [calicoctl is installed and configured]({{site.url}}/{{page.version}}/getting-started/calicoctl/install)
-- Kubernetes 1.15 or older (Istio 1.1.7 does not support Kubernetes 1.16+)
-  See this [issue](https://github.com/projectcalico/calico/issues/2943) for details and workaround.  
+- Kubernetes 1.15 or older (Istio 1.1.7 does not support Kubernetes 1.16+) . 
+See this [issue](https://github.com/projectcalico/calico/issues/2943) for details and workaround.  
 
 ### How to
 
@@ -60,8 +60,6 @@ curl -L https://git.io/getLatestIstio | ISTIO_VERSION=1.4.2 sh -
 cd $(ls -d istio-*)
 ./bin/istioctl manifest apply --set values.global.mtls.enabled=true --set values.global.controlPlaneSecurityEnabled=true
 ```
->**Note**: If the error “unable to recognize” occurs after applying `install/kubernetes/istio-demo-auth.yaml`, it is likely a race condition between creating an Istio CRD and a resource of that type. Rerun `kubectl apply`.
-{: .alert .alert-info}
 
 #### Update Istio sidecar injector
 
@@ -76,7 +74,7 @@ kubectl patch configmap -n istio-system istio-sidecar-injector --patch "$(cat is
 ```
 [View sample manifest](https://docs.projectcalico.org/master/manifests/alp/istio-inject-configmap-1.3.5.yaml)
 
->**Note**: If you have installed a different version of Istio, substitute 1.4.2 in the above URL for your Istio version. We have pre-defined ConfigMaps for Istio versions 1.1.0 through 1.1.17, 1.2.0 through 1.2.9, 1.3.0 through 1.3.5, and 1.4.0 through 1.4.2. To customize the standard sidecar injector ConfigMap or understand the changes we have made, see [Customizing the manifests]({{site.url}}/{{page.version}}/getting-started/kubernetes/installation/config-options).
+If you have installed a different version of Istio, substitute 1.4.2 in the above URL for your Istio version. We have predefined `ConfigMaps` for Istio versions 1.1.0 through 1.1.17, 1.2.0 through 1.2.9, 1.3.0 through 1.3.5, and 1.4.0 through 1.4.2. To customize the standard sidecar injector `ConfigMap` or understand the changes we have made, see [Customizing the manifests]({{site.url}}/{{page.version}}/getting-started/kubernetes/installation/config-options).
 {: .alert .alert-info}
 
 1. Follow the [Automatic sidecar injection instructions](https://istio.io/docs/setup/additional-setup/sidecar-injection/#automatic-sidecar-injection)
@@ -89,10 +87,8 @@ kubectl patch configmap -n istio-system istio-sidecar-injector --patch "$(cat is
    kubectl patch configmap -n istio-system istio-sidecar-injector --patch "$(cat istio-inject-configmap.yaml)"
    ```
 
-	 > **Note**: You can also
-   > [view the manifest in your browser]({{site.url}}/{{page.version}}/manifests/alp/istio-inject-configmap-1.4.2.yaml){:target="_blank"}.
-   {: .alert .alert-info}
-
+[View sample manifest]({{site.url}}/{{page.version}}/manifests/alp/istio-inject-configmap-1.4.2.yaml)
+  
 If you have installed a different version of Istio, substitute `1.4.2` in the above URL for your Istio version. We have
 pre-defined `ConfigMaps` for Istio versions 1.1.0 through 1.1.17, 1.2.0 through 1.2.9, 1.3.0 through 1.3.5, and 1.4.0 through 1.4.2. To customize the standard sidecar injector `ConfigMap` or
 understand the changes we have made, see
@@ -107,7 +103,6 @@ kubectl apply -f https://docs.projectcalico.org/master/manifests/alp/istio-app-l
 ```
 
 [View sample manifest](https://docs.projectcalico.org/master/manifests/alp/istio-app-layer-policy.yaml)
-
 
 #### Add namespace labels
 
