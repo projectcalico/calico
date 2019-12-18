@@ -188,6 +188,17 @@ echo "CNI config: $(cat ${TMP_CONF})"
 
 sed -i s/__SERVICEACCOUNT_TOKEN__/"${SERVICEACCOUNT_TOKEN:-}"/g $TMP_CONF
 
+# Before actually putting the config file in place, block on successful connection
+# to the datastore. Once config is in place, Kubelet will start scheduling pods
+# and these will fail if we can't reach the data store for some reason.
+SKIP_DATASTORE_CONNECTION_CHECK=${SKIP_DATASTORE_CONNECTION_CHECK:-""}
+if [-z "${SKIP_DATASTORE_CONNECTION_CHECK}"]; then
+  until /opt/cni/bin/calico -t < $TMP_CONF
+  do
+    echo "Failed to reach datastore"; sleep 1;
+  done
+fi
+
 # Delete old CNI config files for upgrades.
 if [ "${CNI_CONF_NAME}" != "${CNI_OLD_CONF_NAME}" ]; then
     rm -f "/host/etc/cni/net.d/${CNI_OLD_CONF_NAME}"
