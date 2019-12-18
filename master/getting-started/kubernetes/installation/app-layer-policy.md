@@ -79,7 +79,7 @@ kubectl apply -f https://docs.projectcalico.org/master/manifests/alp/istio-injec
 
 #### Add Calico authorization services to the mesh
 
-Apply the following manifest to configure Istio to query Calico for application layer policy authorization decisions.
+Apply the following manifest to configure Istio to query {{site.prodname}} for application layer policy authorization decisions.
 
 ```
 kubectl apply -f https://docs.projectcalico.org/master/manifests/alp/istio-app-layer-policy.yaml
@@ -90,7 +90,7 @@ kubectl apply -f https://docs.projectcalico.org/master/manifests/alp/istio-app-l
 
 #### Add namespace labels
 
-You can control enforcement of application layer policy on a per-namespace basis. However, this only works on pods that are started with the Envoy and Calico Dikastes sidecars (as noted in the step, Update Istio sidecar injector). Pods that do not have the Calico sidecars enforce only standard Calico network policy.
+You can control enforcement of application layer policy on a per-namespace basis. However, this only works on pods that are started with the Envoy and {{site.prodname}} Dikastes sidecars (as noted in the step, Update Istio sidecar injector). Pods that do not have the {{site.prodname}} sidecars enforce only standard {{site.prodname}} network policy.
 
 To enable Istio and application layer policy in a namespace, add the label `istio-injection=enabled`.
 
