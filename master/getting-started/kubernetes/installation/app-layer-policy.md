@@ -41,13 +41,11 @@ See this [issue](https://github.com/projectcalico/calico/issues/2943) for detail
 
 To enable the application layer policy, you must enable the **Policy Sync API** on Felix cluster-wide.
 
-In the default **FelixConfiguration**, set the field, `policySyncPathPrefix` to `/var/run/nodeagent`. The following example uses `sed` to modify the existing default config before reapplying it.
+In the default **FelixConfiguration**, set the field, `policySyncPathPrefix` to `/var/run/nodeagent`:
 
-```
-calicoctl get felixconfiguration default --export -o yaml | \
-sed -e '/  policySyncPathPrefix:/d' \
-    -e '$ a\  policySyncPathPrefix: /var/run/nodeagent' > felix-config.yaml
-calicoctl apply -f felix-config.yaml
+```bash
+calicoctl patch FelixConfiguration default --patch \
+   '{"spec": {"policySyncPathPrefix": "/var/run/nodeagent"}}'
 ```
 
 #### Install Istio
