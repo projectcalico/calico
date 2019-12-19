@@ -142,10 +142,14 @@ class DnsmasqRouted(dhcp.Dnsmasq):
             cmd.append('--server=%s' % server)
 
         try:
-            if self.dns_domain:
-                cmd.append('--domain=%s' % self.dns_domain)
+            if self.conf.dns_domain:
+                cmd.append('--domain=%s' % self.conf.dns_domain)
         except AttributeError:
-            pass
+            try:
+                if self.dns_domain:
+                    cmd.append('--domain=%s' % self.dns_domain)
+            except AttributeError:
+                pass
 
         if self.conf.dhcp_broadcast_reply:
             cmd.append('--dhcp-broadcast')
