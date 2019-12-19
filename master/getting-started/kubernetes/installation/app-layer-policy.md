@@ -70,7 +70,7 @@ The sidecar injector automatically modifies pods as they are created to work wit
 curl https://docs.projectcalico.org/master/manifests/alp/istio-inject-configmap-1.4.2.yaml -o istio-inject-configmap.yaml
 kubectl patch configmap -n istio-system istio-sidecar-injector --patch "$(cat istio-inject-configmap.yaml)"
 ```
-[View sample manifest](https://docs.projectcalico.org/master/manifests/alp/istio-inject-configmap-1.3.5.yaml){:target="_blank"}
+[View sample manifest]({{site.url}}/{{page.version}}/manifests/alp/istio-inject-configmap-1.3.5.yaml){:target="_blank"}
 
 If you installed a different version of Istio, substitute 1.4.2 in the above URL for your Istio version. We have predefined `ConfigMaps` for Istio versions 1.1.0 through 1.1.17, 1.2.0 through 1.2.9, 1.3.0 through 1.3.5, and 1.4.0 through 1.4.2. To customize the standard sidecar injector `ConfigMap` or understand the changes we have made, see [Customizing the manifests]({{site.url}}/{{page.version}}/getting-started/kubernetes/installation/config-options).
 
@@ -82,7 +82,7 @@ Apply the following manifest to configure Istio to query {{site.prodname}} for a
 kubectl apply -f https://docs.projectcalico.org/master/manifests/alp/istio-app-layer-policy.yaml
 ```
 
-[View sample manifest](https://docs.projectcalico.org/master/manifests/alp/istio-app-layer-policy.yaml){:target="_blank"}
+[View sample manifest]({{site.url}}/{{page.version}}/manifests/alp/istio-app-layer-policy.yaml){:target="_blank"}
 
 #### Add namespace labels
 
