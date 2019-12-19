@@ -67,7 +67,7 @@ The sidecar injector automatically modifies pods as they are created to work wit
 1. Patch the istio-sidecar-injector `ConfigMap` to enable injection of Dikastes alongside Envoy.
 
 ```
-curl https://docs.projectcalico.org/master/manifests/alp/istio-inject-configmap-1.4.2.yaml -o istio-inject-configmap.yaml
+curl {{site.url}}/{{page.version}}/manifests/alp/istio-inject-configmap-1.4.2.yaml -o istio-inject-configmap.yaml
 kubectl patch configmap -n istio-system istio-sidecar-injector --patch "$(cat istio-inject-configmap.yaml)"
 ```
 [View sample manifest]({{site.url}}/{{page.version}}/manifests/alp/istio-inject-configmap-1.3.5.yaml){:target="_blank"}
@@ -79,7 +79,7 @@ If you installed a different version of Istio, substitute 1.4.2 in the above URL
 Apply the following manifest to configure Istio to query {{site.prodname}} for application layer policy authorization decisions.
 
 ```
-kubectl apply -f https://docs.projectcalico.org/master/manifests/alp/istio-app-layer-policy.yaml
+kubectl apply -f {{site.url}}/{page.version}}/manifests/alp/istio-app-layer-policy.yaml
 ```
 
 [View sample manifest]({{site.url}}/{{page.version}}/manifests/alp/istio-app-layer-policy.yaml){:target="_blank"}
