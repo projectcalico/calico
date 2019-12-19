@@ -181,6 +181,13 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb) {
 	__be32 encap_ip;
 	bool encap_needed = false;
 
+#ifdef CALI_SET_SKB_MARK
+	/* workaround for test since bpftool run cannot set it in context, wont
+	 * be necessary if fixed in kernel
+	 */
+	skb->mark = CALI_SET_SKB_MARK;
+#endif
+
 	if (!CALI_F_TO_HOST && skb->mark == CALI_SKB_MARK_BYPASS) {
 		CALI_DEBUG("Packet pre-approved by another hook, allow.\n");
 		reason = CALI_REASON_BYPASS;

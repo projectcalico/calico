@@ -52,6 +52,7 @@ var (
 	natTunnelMTU      = uint16(700)
 	testVxlanPort     = uint16(5665)
 	rulesDefaultAllow = [][][]*proto.Rule{{{{Action: "Allow"}}}}
+	skbMark           uint32
 )
 
 const (
@@ -114,6 +115,7 @@ func runBpfTest(t *testing.T, section string, rules [][][]*proto.Rule, testFn fu
 		intdataplane.CompileWithLogPrefix(section),
 		intdataplane.CompileWithEntrypointName(section),
 		intdataplane.CompileWithFlags(intdataplane.BPFSectionToFlags(section)),
+		intdataplane.CompileWithDefineValue("CALI_SET_SKB_MARK", fmt.Sprintf("0x%x", skbMark)),
 	)
 
 	err = intdataplane.CompileTCProgramToFile(rules, idalloc.New(), opts...)

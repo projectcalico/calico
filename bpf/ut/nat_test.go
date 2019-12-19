@@ -99,7 +99,8 @@ func TestNATPodPodXNode(t *testing.T) {
 	})
 
 	// Leaving node 1
-	/* XXX would be marked as seen, we do not handle that yet
+	skbMark = 0xca110000 // CALI_SKB_MARK_SEEN
+
 	runBpfTest(t, "calico_to_host_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
 		res, err := bpfrun(natedPkt)
 		Expect(err).NotTo(HaveOccurred())
@@ -110,7 +111,6 @@ func TestNATPodPodXNode(t *testing.T) {
 
 		Expect(res.dataOut).To(Equal(natedPkt))
 	})
-	*/
 
 	dumpCTMap(ctMap)
 	fromHostCT := saveCTMap(ctMap)
@@ -182,7 +182,6 @@ func TestNATPodPodXNode(t *testing.T) {
 	hostIP = node1ip
 
 	// Response arriving at node 1
-	/* XXX here is probably no conn trach policy ALLOW
 	runBpfTest(t, "calico_from_host_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
 		res, err := bpfrun(respPkt)
 		Expect(err).NotTo(HaveOccurred())
@@ -193,7 +192,6 @@ func TestNATPodPodXNode(t *testing.T) {
 
 		Expect(res.dataOut).To(Equal(respPkt))
 	})
-	*/
 
 	// Response arriving at workload at node 1
 	runBpfTest(t, "calico_to_workload_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
