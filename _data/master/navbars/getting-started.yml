@@ -28,7 +28,7 @@ toc:
       path: /getting-started/kubernetes/installation/calico
     - title: Installing Calico for policy (advanced)
       path: /getting-started/kubernetes/installation/other
-    - title: Enabling application layer policy (optional)
+    - title: Enabling application layer policy for Istio
       path: /getting-started/kubernetes/installation/app-layer-policy
     - title: Customizing the manifests
       path: /getting-started/kubernetes/installation/config-options
