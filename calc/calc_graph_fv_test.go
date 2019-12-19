@@ -409,6 +409,7 @@ var _ = Describe("Async calculation graph state sequencing tests:", func() {
 					conf := config.New()
 					conf.FelixHostname = localHostname
 					conf.VXLANEnabled = true
+					conf.BPFEnabled = true
 					outputChan := make(chan interface{})
 					asyncGraph := NewAsyncCalcGraph(conf, []chan<- interface{}{outputChan}, nil)
 					// And a validation filter, with a channel between it
@@ -535,6 +536,7 @@ func doStateSequenceTest(expandedTest StateList, flushStrategy flushStrategy) {
 		conf := config.New()
 		conf.FelixHostname = localHostname
 		conf.VXLANEnabled = true
+		conf.BPFEnabled = true
 		mockDataplane = mock.NewMockDataplane()
 		eventBuf = NewEventSequencer(mockDataplane)
 		eventBuf.Callback = mockDataplane.OnEvent

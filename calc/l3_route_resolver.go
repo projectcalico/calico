@@ -47,6 +47,7 @@ type L3RouteResolver struct {
 }
 
 func NewL3RouteResolver(hostname string, callbacks PipelineCallbacks, useNodeResourceUpdates bool) *L3RouteResolver {
+	logrus.Info("Creating L3 route resolver")
 	return &L3RouteResolver{
 		hostname:               hostname,
 		callbacks:              callbacks,
@@ -60,8 +61,10 @@ func NewL3RouteResolver(hostname string, callbacks PipelineCallbacks, useNodeRes
 
 func (c *L3RouteResolver) RegisterWith(allUpdDispatcher *dispatcher.Dispatcher) {
 	if c.useNodeResourceUpdates {
+		logrus.Info("Registering L3 route resolver (node resources on)")
 		allUpdDispatcher.Register(model.ResourceKey{}, c.OnResourceUpdate)
 	} else {
+		logrus.Info("Registering L3 route resolver (node resources off)")
 		allUpdDispatcher.Register(model.HostIPKey{}, c.OnHostIPUpdate)
 	}
 
@@ -81,6 +84,7 @@ func (c *L3RouteResolver) OnBlockUpdate(update api.Update) (_ bool) {
 		// for duplicates here. Look at the routes contributed by this block and determine if we
 		// need to send any updates.
 		newRoutes := c.routesFromBlock(key, update.Value.(*model.AllocationBlock))
+		logrus.WithField("numRoutes", len(newRoutes)).Debug("IPAM block update")
 		cachedRoutes, ok := c.blockToRoutes[key]
 		if !ok {
 			cachedRoutes = set.New()
@@ -103,6 +107,7 @@ func (c *L3RouteResolver) OnBlockUpdate(update api.Update) (_ bool) {
 			// Current route is not in new set - we need to withdraw the route, and also
 			// remove it from internal state.
 			deletes.Add(r)
+			logrus.WithField("route", r).Debug("Found stale route")
 			return set.RemoveItem
 		})
 
@@ -114,6 +119,7 @@ func (c *L3RouteResolver) OnBlockUpdate(update api.Update) (_ bool) {
 				continue
 			}
 
+			logrus.WithField("route", r).Debug("Found new route")
 			cachedRoutes.Add(r)
 			adds.Add(r)
 		}
@@ -131,6 +137,7 @@ func (c *L3RouteResolver) OnBlockUpdate(update api.Update) (_ bool) {
 		})
 	} else {
 		// Block has been deleted. Clean up routes that were contributed by this block.
+		logrus.WithField("update", update).Debug("IPAM block deleted")
 		routes := c.blockToRoutes[key]
 		if routes != nil {
 			routes.Iter(func(item interface{}) error {
@@ -263,8 +270,12 @@ func (c *L3RouteResolver) visitAllRoutes(v func(route nodenameRoute)) {
 func (c *L3RouteResolver) OnPoolUpdate(update api.Update) (_ bool) {
 	k := update.Key.(model.IPPoolKey)
 	poolKey := k.String()
-	oldPool := c.allPools[poolKey]
-	oldPoolType := c.poolTypeForPool(&oldPool)
+	oldPool, oldPoolExists := c.allPools[poolKey]
+	oldPoolType := PoolTypeUnknown
+	if oldPoolExists {
+		// Need explicit oldPoolExists check so that we don't pass a zero-struct to poolTypeForPool.
+		oldPoolType = c.poolTypeForPool(&oldPool)
+	}
 	var newPool *model.IPPool
 	if update.Value != nil {
 		newPool = update.Value.(*model.IPPool)
@@ -414,7 +425,7 @@ func (c *L3RouteResolver) routesFromBlock(blockKey string, b *model.AllocationBl
 	for _, alloc := range b.NonAffineAllocations() {
 		if alloc.Host == "" {
 			logrus.WithField("IP", alloc.Addr).Warn(
-				"Unable to create VXLAN route for IP; the node it belongs to was not recorded")
+				"Unable to create route for IP; the node it belongs to was not recorded in IPAM")
 			continue
 		}
 		r := nodenameRoute{
@@ -426,9 +437,9 @@ func (c *L3RouteResolver) routesFromBlock(blockKey string, b *model.AllocationBl
 
 	host := b.Host()
 	if host == c.hostname {
-		logrus.Debug("Skipping VXLAN routes for local node")
+		logrus.Debug("Skipping routes for local node")
 	} else if host != "" {
-		logrus.WithField("host", host).Debug("Block has a host, including host route")
+		logrus.WithField("host", host).Debug("Block has a host, including block-via-host route")
 		r := nodenameRoute{
 			dst:      ip.CIDRFromCalicoNet(b.CIDR),
 			nodeName: host,
@@ -439,7 +450,7 @@ func (c *L3RouteResolver) routesFromBlock(blockKey string, b *model.AllocationBl
 	return routes
 }
 
-// nodenameRoute is the VXLANResolver's internal representation of a route.
+// nodenameRoute is the L3RouteResolver's internal representation of a route.
 type nodenameRoute struct {
 	nodeName string
 	dst      ip.CIDR

@@ -23,6 +23,7 @@ import (
 	"net"
 	"os"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -70,9 +71,9 @@ type bpfTestOptions struct {
 
 const expectedRouteDump = `10.65.0.2/32: local workload
 10.65.0.3/32: local workload
+10.65.1.0/26: remote workload, host IP FELIX_1
 FELIX_0/32: local host
-FELIX_1/32: remote host
-`
+FELIX_1/32: remote host`
 
 /* XXX use when IPIP enabled
 const expectedRouteDumpIPIP = `10.65.0.1/32: local host
@@ -376,13 +377,18 @@ func describeBPFTests(testOpts bpfTestOptions) bool {
 					}
 
 					lines := strings.Split(out, "\n")
-					for i := range lines {
-						lines[i] = strings.TrimLeft(lines[i], " ")
-						lines[i] = strings.ReplaceAll(lines[i], felixes[0].IP, "FELIX_0")
-						lines[i] = strings.ReplaceAll(lines[i], felixes[1].IP, "FELIX_1")
+					var filteredLines []string
+					for _ , l := range lines {
+						l = strings.TrimLeft(l, " ")
+						if len(l) == 0 {
+							continue
+						}
+						l = strings.ReplaceAll(l, felixes[0].IP, "FELIX_0")
+						l = strings.ReplaceAll(l, felixes[1].IP, "FELIX_1")
+						filteredLines = append(filteredLines, l)
 					}
-
-					return strings.Join(lines, "\n")
+					sort.Strings(filteredLines)
+					return strings.Join(filteredLines, "\n")
 				}
 				Eventually(dumpRoutes).Should(Equal(expectedRouteDump))
 			})

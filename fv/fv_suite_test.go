@@ -19,6 +19,8 @@ package fv_test
 import (
 	"testing"
 
+	"github.com/onsi/gomega/format"
+
 	. "github.com/onsi/ginkgo"
 	"github.com/onsi/ginkgo/reporters"
 	. "github.com/onsi/gomega"
@@ -31,6 +33,9 @@ import (
 
 func init() {
 	testutils.HookLogrusForGinkgo()
+
+	// Avoid truncating diffs when Equals assertions fail.
+	format.TruncatedDiff = false
 }
 
 func TestFv(t *testing.T) {
