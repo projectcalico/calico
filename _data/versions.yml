@@ -1,3 +1,27 @@
+v3.11:
+- title: v3.11.0
+  components:
+     typha:
+      version: v3.11.0
+     calicoctl:
+      version: v3.11.0
+     calico/node:
+      version: v3.11.0
+     calico/cni:
+      version: v3.11.0
+     calico/kube-controllers:
+      version: v3.11.0
+     networking-calico:
+      version: 3.11.0.0
+     flannel:
+      version: v0.11.0
+     calico/dikastes:
+      version: v3.11.0
+     flexvol:
+      version: v3.11.0
+     calico/flannel-migration-controller:
+      version: v3.11.0
+
 v3.10:
 - title: v3.10.2
   components:
@@ -3234,29 +3258,3 @@ master:
       version: master
      flexvol:
       version: master
-
-v3.11:
-# Pre-release placeholder for Calico v3.11. Delete this when v3.11 goes live.
-- title: release-v3.11
-  note: ""
-  components:
-     typha:
-      version: release-v3.11
-     calicoctl:
-      version: release-v3.11
-     calico/node:
-      version: release-v3.11
-     calico/cni:
-      version: release-v3.11
-     calico/kube-controllers:
-      version: release-v3.11
-     networking-calico:
-      version: release-v3.11
-     flannel:
-      version: v0.11.0
-     calico/dikastes:
-      version: release-v3.11
-     flexvol:
-      version: release-v3.11
-     calico/flannel-migration-controller:
-      version: release-v3.11

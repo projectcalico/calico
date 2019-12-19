@@ -6,6 +6,7 @@ by GitHub for the core repositories within the projectcalico/ organization. It i
 | Name   | GitHub |
 |--------|--------|
 | Abhishek Jaisingh                        | @abhishekjiitr |
+| Adam Szecówka                            | @aszecowka |
 | Alban Crequy                             | @alban |
 | Albert Vaca                              | @albertvaka |
 | Alex Altair                              | @alexaltair |
@@ -25,7 +26,7 @@ by GitHub for the core repositories within the projectcalico/ organization. It i
 | Ashley                                   | @CallMeFoxie |
 | Avi Deitcher                             | @deitch |
 | Ben Allen                                | @bensallen |
-| Benjamin                                 | @ben-st |
+| Benjamin                                 | @Doubleyouteeeff |
 | Bingshen Wang                            | @BSWANG |
 | Bo Liu                                   | @liubog2008 |
 | Brad Beam                                | @bradbeam |
@@ -40,6 +41,7 @@ by GitHub for the core repositories within the projectcalico/ organization. It i
 | Christophe van de Kerchove               | @zopanix |
 | Christopher LIJLENSTOLPE                 | @liljenstolpe |
 | Chu Xiangyang                            | @xychu |
+| Ciprian Hacman                           | @hakman |
 | Cody McCain                              | @McCodeman |
 | Cory Benfield                            | @Lukasa |
 | Dalton Hubble                            | @dghubble |
@@ -150,8 +152,9 @@ by GitHub for the core repositories within the projectcalico/ organization. It i
 | Rustam Zagirov                           | @stamm |
 | Ryan Zhang                               | @ry4nz |
 | Saeid                                    | @sudomakeinstall2 |
+| Satoru Takeuchi                          | @satoru-takeuchi |
 | Saurabh Mohan                            | @saumoh |
-| Seth                                     | @sethmccombs |
+| Seth McCombs                             | @sethmccombs |
 | Shatru                                   | @shatrugna |
 | Shaun Crampton                           | @fasaxc |
 | Song Jiang                               | @song-jiang |
@@ -173,13 +176,16 @@ by GitHub for the core repositories within the projectcalico/ organization. It i
 | Wei Kin Huang                            | @weikinhuang |
 | Wietse Muizelaar                         | @wmuizelaar |
 | Wouter Schoot                            | @wschoot |
+| Xiang Dai                                | @daixiang0 |
 | xieyanker                                | @xieyanker |
+| Xin He                                   | @KevinTHU |
 | YAMAMOTO Takashi                         | @yamt |
 | Yecheng Fu                               | @cofyc |
 | Yumo Yang                                | @elementyang |
 | Zhaole Yang                              | @ijumps |
 | Àbéjídé Àyodélé                          | @bjhaid |
 | ---                                      | @alexvarsh |
+| ---                                      | @ben-st |
 | ---                                      | @bmckercher123 |
 | ---                                      | @Brook-Roberts |
 | ---                                      | @Calpicow |
@@ -191,6 +197,7 @@ by GitHub for the core repositories within the projectcalico/ organization. It i
 | ---                                      | @frnkdny |
 | ---                                      | @gauravsinhatigera |
 | ---                                      | @kirandivekar |
+| ---                                      | @LittleBoy18 |
 | ---                                      | @marvin-tigera |
 | ---                                      | @maxkudosh |
 | ---                                      | @mikev |
@@ -199,4 +206,6 @@ by GitHub for the core repositories within the projectcalico/ organization. It i
 | ---                                      | @roshanirathi |
 | ---                                      | @rymarchikbot |
 | ---                                      | @saumohos |
+| ---                                      | @sedefsavas |
 | ---                                      | @tathagatachowdhury |
+| ---                                      | @wwgfhf |
