@@ -10,7 +10,7 @@ Enable {{site.prodname}} application layer network policy in Istio service mesh.
 
 ### Value
 
-{{site.prodname}} application layer policy lets you enforce application layer attributes like HTTP methods or paths, and cryptographically secure identities for Istio-enabled apps. 
+{{site.prodname}} application layer policy lets you enforce application layer attributes like HTTP methods or paths, and cryptographically secure identities for Istio-enabled apps.
 
 ### Concepts
 
@@ -26,8 +26,8 @@ For a tutorial on how application layer policy provides second-factor authentica
 
 - [Calico is installed]({{site.url}}/{{page.version}}/getting-started/)
 - [calicoctl is installed and configured]({{site.url}}/{{page.version}}/getting-started/calicoctl/install)
-- Kubernetes 1.15 or older (Istio 1.1.7 does not support Kubernetes 1.16+) . 
-See this [issue](https://github.com/projectcalico/calico/issues/2943) for details and workaround.  
+- Kubernetes 1.15 or older (Istio 1.1.7 does not support Kubernetes 1.16+).
+See this [issue](https://github.com/projectcalico/calico/issues/2943) for details and workaround.
 
 ### How to
 
