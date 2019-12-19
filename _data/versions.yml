@@ -19,6 +19,8 @@ v3.11:
       version: v3.11.0
      flexvol:
       version: v3.11.0
+     calico/flannel-migration-controller:
+      version: v3.11.0
 
 v3.10:
 - title: v3.10.2
