@@ -59,14 +59,27 @@ import (
 	cnet "github.com/projectcalico/libcalico-go/lib/net"
 )
 
-var _ = describeBPFTests(bpfTestOptions{protocol: "tcp", connTimeEnabled: true})
-var _ = describeBPFTests(bpfTestOptions{protocol: "udp", connTimeEnabled: true})
-var _ = describeBPFTests(bpfTestOptions{protocol: "tcp"})
-var _ = describeBPFTests(bpfTestOptions{protocol: "udp"})
+var testProtocols = []string{"udp", "tcp"}
+var testTunnels = []string{"none", "ipip"}
+
+func init() {
+	for _, connTimeEnabled := range []bool{true, false} {
+		for _, protocol := range testProtocols {
+			for _, tunnel := range testTunnels {
+				describeBPFTests(bpfTestOptions{
+					connTimeEnabled: connTimeEnabled,
+					protocol:        protocol,
+					tunnel:          tunnel,
+				})
+			}
+		}
+	}
+}
 
 type bpfTestOptions struct {
 	connTimeEnabled bool
 	protocol        string
+	tunnel          string
 }
 
 const expectedRouteDump = `10.65.0.2/32: local workload
@@ -75,18 +88,16 @@ const expectedRouteDump = `10.65.0.2/32: local workload
 FELIX_0/32: local host
 FELIX_1/32: remote host`
 
-/* XXX use when IPIP enabled
 const expectedRouteDumpIPIP = `10.65.0.1/32: local host
 10.65.0.2/32: local workload
 10.65.0.3/32: local workload
 10.65.1.0/26: remote workload, host IP FELIX_1
 FELIX_0/32: local host
-FELIX_1/32: remote host
-`
-*/
+FELIX_1/32: remote host`
 
 func describeBPFTests(testOpts bpfTestOptions) bool {
-	desc := fmt.Sprintf("_BPF_ _BPF-SAFE_ BPF tests (%s, ct=%v)", testOpts.protocol, testOpts.connTimeEnabled)
+	desc := fmt.Sprintf("_BPF_ _BPF-SAFE_ BPF tests (%s, ct=%v, tunnel=%s)",
+		testOpts.protocol, testOpts.connTimeEnabled, testOpts.tunnel)
 	return infrastructure.DatastoreDescribe(desc, []apiconfig.DatastoreType{apiconfig.Kubernetes}, func(getInfra infrastructure.InfraFactory) {
 
 		var (
@@ -98,6 +109,7 @@ func describeBPFTests(testOpts bpfTestOptions) bool {
 			bpfLog         *containers.Container
 			options        infrastructure.TopologyOptions
 			numericProto   uint8
+			expectedRoutes string
 		)
 
 		switch testOpts.protocol {
@@ -121,9 +133,18 @@ func describeBPFTests(testOpts bpfTestOptions) bool {
 
 			options = infrastructure.DefaultTopologyOptions()
 			options.FelixLogSeverity = "debug"
-			// XXX fix the policies below if enabling IPIP
-			options.IPIPEnabled = false
-			options.IPIPRoutesEnabled = false
+			switch testOpts.tunnel {
+			case "none":
+				options.IPIPEnabled = false
+				options.IPIPRoutesEnabled = false
+				expectedRoutes = expectedRouteDump
+			case "ipip":
+				options.IPIPEnabled = true
+				options.IPIPRoutesEnabled = true
+				expectedRoutes = expectedRouteDumpIPIP
+			default:
+				Fail("bad tunnel option")
+			}
 			options.ExtraEnvVars["FELIX_BPFConnectTimeLoadBalancingEnabled"] = fmt.Sprint(testOpts.connTimeEnabled)
 		})
 
@@ -137,6 +158,7 @@ func describeBPFTests(testOpts bpfTestOptions) bool {
 					felix.Exec("calico-bpf", "ipsets", "dump")
 					felix.Exec("calico-bpf", "routes", "dump")
 					felix.Exec("calico-bpf", "nat", "dump")
+					felix.Exec("calico-bpf", "conntrack", "dump")
 					log.Infof("[%d]FrontendMap: %+v", i, currBpfsvcs[i])
 					log.Infof("[%d]NATBackend: %+v", i, currBpfeps[i])
 				}
@@ -400,7 +422,7 @@ func describeBPFTests(testOpts bpfTestOptions) bool {
 					sort.Strings(filteredLines)
 					return strings.Join(filteredLines, "\n")
 				}
-				Eventually(dumpRoutes).Should(Equal(expectedRouteDump))
+				Eventually(dumpRoutes).Should(Equal(expectedRoutes))
 			})
 
 			It("should only allow traffic from the local host by default", func() {
@@ -516,12 +538,16 @@ func describeBPFTests(testOpts bpfTestOptions) bool {
 											Nets: []string{
 												felixes[0].IP + "/32",
 												felixes[1].IP + "/32",
-												// XXX uncoment if enambling IPIP
-												// felixes[0].ExpectedIPIPTunnelAddr + "/32",
-												// felixes[1].ExpectedIPIPTunnelAddr + "/32",
 											},
 										},
 									},
+								}
+								switch testOpts.tunnel {
+								case "ipip":
+									pol.Spec.Ingress[0].Source.Nets = append(pol.Spec.Ingress[0].Source.Nets,
+										felixes[0].ExpectedIPIPTunnelAddr+"/32",
+										felixes[1].ExpectedIPIPTunnelAddr+"/32",
+									)
 								}
 								pol = updatePolicy(pol)
 							})

@@ -87,7 +87,6 @@ var defaultCompileOpts = []intdataplane.CompileTCOption{
 	intdataplane.CompileWithSourceName("../xdp/redir_tc.c"),
 	intdataplane.CompileWithFIBEnabled(true),
 	intdataplane.CompileWithLogLevel("DEBUG"),
-	intdataplane.CompileWithHostIP(hostIP),
 	intdataplane.CompileWithVxlanPort(testVxlanPort),
 	intdataplane.CompileWithNATTunnelMTU(natTunnelMTU),
 }
@@ -116,6 +115,7 @@ func runBpfTest(t *testing.T, section string, rules [][][]*proto.Rule, testFn fu
 		intdataplane.CompileWithLogPrefix(section),
 		intdataplane.CompileWithEntrypointName(section),
 		intdataplane.CompileWithFlags(intdataplane.BPFSectionToFlags(section)),
+		intdataplane.CompileWithHostIP(hostIP), // to pick up new ip
 		intdataplane.CompileWithDefineValue("CALI_SET_SKB_MARK", fmt.Sprintf("0x%x", skbMark)),
 	)
 
@@ -272,6 +272,7 @@ func runBpfUnitTest(t *testing.T, source string, testFn func(bpfProgRunFn)) {
 		intdataplane.CompileWithIncludePath(curwd+"/progs"),
 		intdataplane.CompileWithLogPrefix("UNITTEST"),
 		intdataplane.CompileWithDefine("CALI_UNITTEST"),
+		intdataplane.CompileWithHostIP(hostIP),
 	)
 
 	err = intdataplane.CompileTCProgramToFile(nil, idalloc.New(), opts...)

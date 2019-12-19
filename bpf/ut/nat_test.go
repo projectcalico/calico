@@ -254,7 +254,6 @@ func TestNATNodePort(t *testing.T) {
 	)
 	Expect(err).NotTo(HaveOccurred())
 
-	node2IP := net.IPv4(3, 3, 3, 3)
 	node2wCIDR := net.IPNet{
 		IP:   natIP,
 		Mask: net.IPv4Mask(255, 255, 255, 0),
@@ -282,7 +281,7 @@ func TestNATNodePort(t *testing.T) {
 	Expect(err).NotTo(HaveOccurred())
 	err = rtMap.Update(
 		routes.NewKey(ip.CIDRFromIPNet(&node2wCIDR).(ip.V4CIDR)).AsBytes(),
-		routes.NewValueWithNextHop(routes.TypeRemoteWorkload, ip.FromNetIP(node2IP).(ip.V4Addr)).AsBytes(),
+		routes.NewValueWithNextHop(routes.TypeRemoteWorkload, ip.FromNetIP(node2ip).(ip.V4Addr)).AsBytes(),
 	)
 	Expect(err).NotTo(HaveOccurred())
 
@@ -301,7 +300,7 @@ func TestNATNodePort(t *testing.T) {
 		Expect(ipv4L).NotTo(BeNil())
 		ipv4R := ipv4L.(*layers.IPv4)
 		Expect(ipv4R.SrcIP.String()).To(Equal(hostIP.String()))
-		Expect(ipv4R.DstIP.String()).To(Equal(natIP.String()))
+		Expect(ipv4R.DstIP.String()).To(Equal(node2ip.String()))
 
 		checkVxlanEncap(pktR, false, ipv4, udp, payload)
 
@@ -339,18 +338,6 @@ func TestNATNodePort(t *testing.T) {
 		pktR := gopacket.NewPacket(res.dataOut, layers.LayerTypeEthernet, gopacket.Default)
 		fmt.Printf("pktR = %+v\n", pktR)
 
-		Expect(res.dataOut).To(Equal(encapedPkt))
-	})
-
-	// Arriving at workload at node 2
-	runBpfTest(t, "calico_to_workload_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
-		res, err := bpfrun(encapedPkt)
-		Expect(err).NotTo(HaveOccurred())
-		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
-
-		pktR := gopacket.NewPacket(res.dataOut, layers.LayerTypeEthernet, gopacket.Default)
-		fmt.Printf("pktR = %+v\n", pktR)
-
 		ipv4L := pktR.Layer(layers.LayerTypeIPv4)
 		ipv4R := ipv4L.(*layers.IPv4)
 		Expect(ipv4R.SrcIP.String()).To(Equal(ipv4.SrcIP.String()))
@@ -367,12 +354,31 @@ func TestNATNodePort(t *testing.T) {
 
 	dumpCTMap(ctMap)
 
-	// Response leaving workload at node 2
-	runBpfTest(t, "calico_from_workload_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
-		resp := udpResposeRaw(recvPkt)
-		res, err := bpfrun(resp)
+	hostIP = net.IPv4(0, 0, 0, 0) // workloads do not have it set
+
+	skbMark = 0xca110000 // CALI_SKB_MARK_SEEN
+
+	// Arriving at workload at node 2
+	runBpfTest(t, "calico_to_workload_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
+		res, err := bpfrun(recvPkt)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
+
+		pktR := gopacket.NewPacket(res.dataOut, layers.LayerTypeEthernet, gopacket.Default)
+		fmt.Printf("pktR = %+v\n", pktR)
+
+		Expect(res.dataOut).To(Equal(recvPkt))
+	})
+
+	skbMark = 0
+
+	// Response leaving workload at node 2
+	runBpfTest(t, "calico_from_workload_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
+		respPkt := udpResposeRaw(recvPkt)
+		res, err := bpfrun(respPkt)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
+
 		pktR := gopacket.NewPacket(res.dataOut, layers.LayerTypeEthernet, gopacket.Default)
 		fmt.Printf("pktR = %+v\n", pktR)
 
@@ -387,6 +393,12 @@ func TestNATNodePort(t *testing.T) {
 		encapedPkt = res.dataOut
 	})
 
+	dumpCTMap(ctMap)
+
+	skbMark = 0xca140000 // CALI_SKB_MARK_BYPASS_NAT_RET_ENCAPED
+
+	hostIP = node2ip
+
 	// Response leaving node 2
 	runBpfTest(t, "calico_to_host_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
 		res, err := bpfrun(encapedPkt)
@@ -396,7 +408,12 @@ func TestNATNodePort(t *testing.T) {
 		pktR := gopacket.NewPacket(res.dataOut, layers.LayerTypeEthernet, gopacket.Default)
 		fmt.Printf("pktR = %+v\n", pktR)
 
-		Expect(res.dataOut).To(Equal(encapedPkt))
+		ipv4L := pktR.Layer(layers.LayerTypeIPv4)
+		Expect(ipv4L).NotTo(BeNil())
+		ipv4R := ipv4L.(*layers.IPv4)
+		// check that the IP is fixed up
+		Expect(ipv4R.SrcIP.String()).To(Equal(node2ip.String()))
+		Expect(ipv4R.DstIP.String()).To(Equal(node1ip.String()))
 	})
 
 	dumpCTMap(ctMap)

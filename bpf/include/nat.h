@@ -20,7 +20,7 @@
 
 #define dnat_should_encap() (CALI_F_FROM_HEP)
 #define dnat_return_should_encap() (CALI_F_FROM_WEP)
-#define dnat_should_decap() (CALI_F_TO_WEP || CALI_F_FROM_HEP)
+#define dnat_should_decap() (CALI_F_FROM_HEP)
 
 #define CALI_ENCAP_EXTRA_SIZE	50
 
@@ -118,9 +118,7 @@ struct vxlanhdr {
 	__be32 vni;
 };
 
-static CALI_BPF_INLINE int vxlan_v4_encap(struct __sk_buff *skb,
-					  __be32 ipaddr,
-					  bool is_src)
+static CALI_BPF_INLINE int vxlan_v4_encap(struct __sk_buff *skb,  __be32 ip_src, __be32 ip_dst)
 {
 	int ret;
 	uint32_t new_hdrsz;
@@ -170,7 +168,8 @@ static CALI_BPF_INLINE int vxlan_v4_encap(struct __sk_buff *skb,
 #else
 	*ip_inner = *ip;
 #endif
-	*(is_src ? &ip->saddr : &ip->daddr) = ipaddr;
+	ip->saddr = ip_src;
+	ip->daddr = ip_dst;
 	ip->tot_len = host_to_be16(be16_to_host(ip->tot_len) + new_hdrsz);
 	ip->ihl = 5; /* in case there were options in ip_inner */
 	ip->check = 0;

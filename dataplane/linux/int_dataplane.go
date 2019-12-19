@@ -796,6 +796,16 @@ func (d *InternalDataplane) setUpIptablesBPF() {
 		for _, prefix := range d.config.RulesConfig.WorkloadIfacePrefixes {
 			fwdRules = append(fwdRules,
 				iptables.Rule{
+					Match:   iptables.Match().MarkMatchesWithMask(0xca140000, 0xfffe0000),
+					Action:  iptables.AcceptAction{},
+					Comment: "From workload accept return to NAT tunnel",
+				},
+				iptables.Rule{
+					Match:   iptables.Match().MarkMatchesWithMask(0xca120000, 0xfffe0000),
+					Action:  iptables.AcceptAction{},
+					Comment: "Accept return from NAT tunnel for SNAT",
+				},
+				iptables.Rule{
 					Match:   iptables.Match().InInterface(prefix + "+"),
 					Action:  iptables.DropAction{},
 					Comment: "From workload without BPF ACCEPT mark",
