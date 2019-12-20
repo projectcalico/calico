@@ -35,7 +35,7 @@ type CmdIface interface {
 
 type cmdFactory func(name string, arg ...string) CmdIface
 
-func newRealCmd(name string, arg ...string) CmdIface {
+func NewRealCmd(name string, arg ...string) CmdIface {
 	cmd := exec.Command(name, arg...)
 	return (*cmdAdapter)(cmd)
 }

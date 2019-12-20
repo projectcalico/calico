@@ -15,8 +15,12 @@
 package iptables_test
 
 import (
+	"errors"
+	"fmt"
+	"io"
 	"testing"
 
+	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
 	. "github.com/projectcalico/felix/iptables"
@@ -126,4 +130,181 @@ func TestFeatureDetection(t *testing.T) {
 			Expect(featureDetector.GetFeatures()).To(Equal(&tst.features))
 		})
 	}
+}
+
+func TestIptablesBackendDetection(t *testing.T) {
+	RegisterTestingT(t)
+
+	type test struct {
+		name            string
+		spec            string
+		cmdF            ipOutputFactory
+		expectedBackend string
+	}
+	for _, tst := range []test{
+		{
+			"No output from cmds",
+			"auto",
+			ipOutputFactory{0, 0, 0, 0},
+			"legacy",
+		},
+		{
+			"Output from legacy cmds",
+			"auto",
+			ipOutputFactory{10, 10, 0, 0},
+			"legacy",
+		},
+		{
+			"Output from nft cmds",
+			"auto",
+			ipOutputFactory{0, 0, 10, 10},
+			"nft",
+		},
+		{
+			"Detected and Specified backend of nft match",
+			"nft",
+			ipOutputFactory{0, 0, 10, 10},
+			"nft",
+		},
+		{
+			"Detected and Specified backend of legacy match",
+			"legacy",
+			ipOutputFactory{10, 10, 0, 0},
+			"legacy",
+		},
+		{
+			"Backend detected as nft does not match Specified legacy",
+			"legacy",
+			ipOutputFactory{0, 0, 10, 10},
+			"legacy",
+		},
+		{
+			"Backend detected as legacy does not match Specified nft",
+			"nft",
+			ipOutputFactory{10, 10, 0, 0},
+			"nft",
+		},
+		{
+			"Errors from commands still causes legacy detection",
+			"auto",
+			ipOutputFactory{
+				Ip6legacy: -1,
+				Ip4legacy: -1,
+				Ip6Nft:    -1,
+				Ip4Nft:    -1,
+			},
+			"legacy",
+		},
+		{
+			"Only ipv4 output from legacy cmds",
+			"auto",
+			ipOutputFactory{
+				Ip6legacy: -1,
+				Ip4legacy: 15,
+				Ip6Nft:    10,
+				Ip4Nft:    10,
+			},
+			"legacy",
+		},
+		{
+			"Only ipv6 output from legacy cmds",
+			"auto",
+			ipOutputFactory{
+				Ip6legacy: 15,
+				Ip4legacy: -1,
+				Ip6Nft:    10,
+				Ip4Nft:    10,
+			},
+			"legacy",
+		},
+		{
+			"Only ipv6 output from nft cmds still detects nft",
+			"auto",
+			ipOutputFactory{
+				Ip6legacy: 4,
+				Ip4legacy: 4,
+				Ip6Nft:    15,
+				Ip4Nft:    -1,
+			},
+			"nft",
+		},
+	} {
+		tst := tst
+		t.Run("DetectingBackend, testing "+tst.name, func(t *testing.T) {
+			RegisterTestingT(t)
+			Expect(DetectBackend(lookPathAll, tst.cmdF.NewCmd, tst.spec)).To(Equal(tst.expectedBackend))
+		})
+	}
+}
+
+type ipOutputFactory struct {
+	Ip6legacy int
+	Ip4legacy int
+	Ip6Nft    int
+	Ip4Nft    int
+}
+
+func (f *ipOutputFactory) NewCmd(name string, arg ...string) CmdIface {
+	switch name {
+	case "iptables-legacy-save":
+		return &ipOutputCmd{out: f.Ip4legacy}
+	case "ip6tables-legacy-save":
+		return &ipOutputCmd{out: f.Ip6legacy}
+	case "iptables-nft-save":
+		return &ipOutputCmd{out: f.Ip4Nft}
+	case "ip6tables-nft-save":
+		return &ipOutputCmd{out: f.Ip6Nft}
+	}
+	return nil
+}
+
+type ipOutputCmd struct {
+	out int
+}
+
+func (d *ipOutputCmd) String() string {
+	return ""
+}
+
+func (d *ipOutputCmd) SetStdin(r io.Reader) {
+	Fail("Not implemented")
+}
+
+func (d *ipOutputCmd) SetStdout(w io.Writer) {
+	Fail("Not implemented")
+}
+
+func (d *ipOutputCmd) SetStderr(w io.Writer) {
+	Fail("Not implemented")
+}
+
+func (d *ipOutputCmd) Start() error {
+	return errors.New("Not implemented")
+}
+
+func (d *ipOutputCmd) Wait() error {
+	return errors.New("Not implemented")
+}
+
+func (d *ipOutputCmd) Kill() error {
+	return errors.New("Not implemented")
+}
+
+func (d *ipOutputCmd) Output() ([]byte, error) {
+	if d.out < 0 {
+		return nil, errors.New("iptables command failed")
+	}
+	out := []byte{}
+	for i := 0; i < d.out; i++ {
+		out = append(out, []byte(fmt.Sprintf("-Output line %d\n", i))...)
+	}
+	return out, nil
+}
+
+func (d *ipOutputCmd) StdoutPipe() (io.ReadCloser, error) {
+	return nil, errors.New("Not implemented")
+}
+
+func (d *ipOutputCmd) Run() error {
+	return errors.New("Not implemented")
 }

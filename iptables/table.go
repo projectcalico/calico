@@ -340,7 +340,7 @@ func NewTable(
 	}
 
 	// Allow override of exec.Command() and time.Sleep() for test purposes.
-	newCmd := newRealCmd
+	newCmd := NewRealCmd
 	if options.NewCmdOverride != nil {
 		newCmd = options.NewCmdOverride
 	}
@@ -412,42 +412,10 @@ func NewTable(
 		table.nftablesMode = true
 	}
 
-	table.iptablesRestoreCmd = table.findBestBinary(ipVersion, iptablesVariant, "restore")
-	table.iptablesSaveCmd = table.findBestBinary(ipVersion, iptablesVariant, "save")
+	table.iptablesRestoreCmd = findBestBinary(table.lookPath, ipVersion, iptablesVariant, "restore")
+	table.iptablesSaveCmd = findBestBinary(table.lookPath, ipVersion, iptablesVariant, "save")
 
 	return table
-}
-
-// findBestBinary tries to find an iptables binary for the specific variant (legacy/nftables mode) and returns the name
-// of the binary.  Falls back on iptables-restore/iptables-save if the specific variant isn't available.
-// Panics if no binary can be found.
-func (t *Table) findBestBinary(ipVersion uint8, backendMode, saveOrRestore string) string {
-	verInfix := ""
-	if ipVersion == 6 {
-		verInfix = "6"
-	}
-	candidates := []string{
-		"ip" + verInfix + "tables-" + backendMode + "-" + saveOrRestore,
-		"ip" + verInfix + "tables-" + saveOrRestore,
-	}
-
-	logCxt := log.WithFields(log.Fields{
-		"ipVersion":     ipVersion,
-		"backendMode":   backendMode,
-		"saveOrRestore": saveOrRestore,
-		"candidates":    candidates,
-	})
-
-	for _, candidate := range candidates {
-		_, err := t.lookPath(candidate)
-		if err == nil {
-			logCxt.WithField("command", candidate).Info("Looked up iptables command")
-			return candidate
-		}
-	}
-
-	logCxt.Panic("Failed to find iptables command")
-	return ""
 }
 
 func (t *Table) SetRuleInsertions(chainName string, rules []Rule) {

@@ -74,7 +74,7 @@ var _ = Describe("Hash extraction tests", func() {
 			return nil, errors.New("not implemented")
 		}
 		fd.NewCmd = func(name string, arg ...string) CmdIface {
-			return newRealCmd("echo", "iptables v1.4.7")
+			return NewRealCmd("echo", "iptables v1.4.7")
 		}
 		table = NewTable(
 			"filter",
