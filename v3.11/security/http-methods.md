@@ -1,5 +1,6 @@
 ---
 title: Use HTTP methods and paths in policy rules
+redirect_from: latest/security/http-methods
 description: Create a Calico network policy for Istio-enabled apps to restrict ingress traffic matching HTTP methods or paths.
 ---
 

@@ -1,6 +1,5 @@
 ---
 title: Get started with IP address management
-redirect_from: latest/networking/get-started-ip-addresses
 ---
 
 ### Big picture

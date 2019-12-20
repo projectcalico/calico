@@ -1,5 +1,6 @@
 ---
 title: Get started with IP address management
+redirect_from: latest/networking/get-started-ip-addresses
 Description: Learn all about IPAM, how to configure Calico to use Calico IPAM or host-local IPAM, and when you would want to use one versus the other.
 ---
 

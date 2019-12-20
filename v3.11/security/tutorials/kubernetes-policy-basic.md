@@ -1,5 +1,6 @@
 ---
 title: Kubernetes policy, basic tutorial
+redirect_from: latest/security/tutorials/kubernetes-policy-basic
 description: Learn how to use basic Kubernetes network policy to securely restrict traffic to/from pods. 
 canonical_url: 'https://docs.projectcalico.org/v3.9/security/tutorials/kubernetes-policy-basic'
 ---

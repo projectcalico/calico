@@ -1,5 +1,6 @@
 ---
 title: Node
+redirect_from: latest/reference/resources/node
 canonical_url: 'https://docs.projectcalico.org/v3.9/reference/resources/node'
 ---
 

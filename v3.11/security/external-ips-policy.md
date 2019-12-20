@@ -1,5 +1,6 @@
 ---
 title: Use external IPs or networks in policy rules
+redirect_from: latest/security/external-ips-policy
 description: Limit egress and ingress traffic using IP address either directly within Calico network policy or managed as Calico network sets.
 ---
 

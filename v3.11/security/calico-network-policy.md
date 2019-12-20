@@ -1,5 +1,6 @@
 ---
 title: Get started with Calico network policy
+redirect_from: latest/security/calico-network-policy
 description: Create your first Calico network policies. Shows the rich features using sample policies that extend native Kubernetes network policy.
 ---
 

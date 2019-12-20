@@ -1,5 +1,6 @@
 ---
 title: Calico over IP fabrics
+redirect_from: latest/reference/architecture/design/l3-interconnect-fabric
 canonical_url: 'https://docs.projectcalico.org/master/reference/architecture/design/l3-interconnect-fabric'
 ---
 

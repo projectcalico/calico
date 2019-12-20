@@ -1,5 +1,6 @@
 ---
 title: Enable extreme high-connection workloads
+redirect_from: latest/security/high-connection-workloads
 description: Create a Calico network policy rule to bypass Linux conntrack for traffic to workloads that experience extremely large number of connections. 
 ---
 

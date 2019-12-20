@@ -1,5 +1,6 @@
 ---
 title: Enable IPVS in Kubernetes
+redirect_from: latest/networking/enabling-ipvs
 description: Use IPVS kube-proxy for load balancing traffic across pods
 canonical_url: 'https://docs.projectcalico.org/v3.9/networking/enabling-ipvs'
 ---
