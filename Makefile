@@ -69,11 +69,9 @@ update-pins: update-libcalico-pin
 .PHONY: build-all
 ## Build the binaries for all architectures and platforms
 build-all: $(addprefix bin/calicoctl-linux-,$(VALIDARCHES)) bin/calicoctl-windows-amd64.exe bin/calicoctl-darwin-amd64
-
 .PHONY: build
 ## Build the binary for the current architecture and platform
 build: bin/calicoctl-$(BUILDOS)-$(ARCH)
-
 # The supported different binary names. For each, ensure that an OS and ARCH is set
 bin/calicoctl-%-amd64: ARCH=amd64
 bin/calicoctl-%-arm64: ARCH=arm64
@@ -82,15 +80,18 @@ bin/calicoctl-%-s390x: ARCH=s390x
 bin/calicoctl-darwin-amd64: BUILDOS=darwin
 bin/calicoctl-windows-amd64: BUILDOS=windows
 bin/calicoctl-linux-%: BUILDOS=linux
-
+# We reinvoke make here to re-evaluate BUILDOS and ARCH so the correct values
+# for multi-platform builds are used. When make is initially invoked, BUILDOS
+# and ARCH are defined with default values (Linux and amd64).
 bin/calicoctl-%: $(LOCAL_BUILD_DEP) $(SRC_FILES)
+	$(MAKE) build-calicoctl BUILDOS=$(BUILDOS) ARCH=$(ARCH)
+build-calicoctl:
 	mkdir -p bin
 	$(DOCKER_RUN) \
 	  -e CALICOCTL_GIT_REVISION=$(CALICOCTL_GIT_REVISION) \
 	  -v $(CURDIR)/bin:/go/src/$(PACKAGE_NAME)/bin \
 	  $(CALICO_BUILD) \
 	  go build -v -o bin/calicoctl-$(BUILDOS)-$(ARCH) $(LDFLAGS) "./calicoctl/calicoctl.go"
-
 # Overrides for the binaries that need different output names
 bin/calicoctl: bin/calicoctl-linux-amd64
 	cp $< $@
