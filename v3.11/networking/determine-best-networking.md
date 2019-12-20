@@ -1,5 +1,6 @@
 ---
 title: Determine best networking option
+redirect_from: latest/networking/determine-best-networking
 Description: Calico provides several networking implementations based on IP routing without the need for encapsulation. But encapsulation is supported when you need it.
 ---
 

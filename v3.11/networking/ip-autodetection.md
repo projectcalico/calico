@@ -1,5 +1,6 @@
 ---
 title: Configure IP autodetection
+redirect_from: latest/networking/ip-autodetection
 ---
 
 ### Big picture

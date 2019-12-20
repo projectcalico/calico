@@ -1,5 +1,6 @@
 ---
 title: Calico's interpretation of Neutron API calls
+redirect_from: latest/networking/openstack/neutron-api
 description: Effects of the Neutron API calls on the network
 canonical_url: 'https://docs.projectcalico.org/v3.9/networking/openstack/neutron-api'
 ---

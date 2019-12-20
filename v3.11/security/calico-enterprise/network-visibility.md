@@ -1,5 +1,6 @@
 ---
 title: Network visibility
+redirect_from: latest/security/calico-enterprise/network-visibility
 description: Calico Enterprise provides deep network visibility into all ingress, egress and pod-to-pod network traffic.
 calico_enterprise: true
 ---

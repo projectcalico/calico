@@ -1,5 +1,6 @@
 ---
 title: Calico architecture
+redirect_from: latest/reference/architecture/index
 description: Understand the Calico components and the basics of BGP networking
 canonical_url: 'https://docs.projectcalico.org/v3.9/reference/architecture/index'
 ---

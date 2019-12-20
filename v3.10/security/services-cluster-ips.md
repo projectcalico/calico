@@ -1,6 +1,5 @@
 ---
 title: Apply policy to services exposed externally as cluster IPs
-redirect_from: latest/security/services-cluster-ips
 ---
 
 ### Big picture

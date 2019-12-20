@@ -1,5 +1,6 @@
 ---
 title: Schedule to well-known nodes
+redirect_from: latest/security/comms/reduce-nodes
 description: Learn how to configure the Calico Typha TCP port.
 canonical_url: 'https://docs.projectcalico.org/v3.9/security/comms/reduce-nodes'
 ---

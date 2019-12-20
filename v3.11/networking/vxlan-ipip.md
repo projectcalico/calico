@@ -1,5 +1,6 @@
 ---
 title: Connect workloads across networks that you do not control
+redirect_from: latest/networking/vxlan-ipip
 Description: Configure Calico to use IP in IP or VXLAN overlay networking so the underlying network doesn’t need to understand pod addresses.
 ---
 
