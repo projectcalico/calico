@@ -97,7 +97,17 @@ func describeBPFTests(testOpts bpfTestOptions) bool {
 			externalClient *containers.Container
 			bpfLog         *containers.Container
 			options        infrastructure.TopologyOptions
+			numericProto   uint8
 		)
+
+		switch testOpts.protocol {
+		case "tcp":
+			numericProto = 6
+		case "udp":
+			numericProto = 17
+		default:
+			Fail("bad protocol option")
+		}
 
 		BeforeEach(func() {
 			if os.Getenv("FELIX_FV_ENABLE_BPF") != "true" {
@@ -378,7 +388,7 @@ func describeBPFTests(testOpts bpfTestOptions) bool {
 
 					lines := strings.Split(out, "\n")
 					var filteredLines []string
-					for _ , l := range lines {
+					for _, l := range lines {
 						l = strings.TrimLeft(l, " ")
 						if len(l) == 0 {
 							continue
@@ -577,10 +587,11 @@ func describeBPFTests(testOpts bpfTestOptions) bool {
 						var (
 							testSvcUpdated      *v1.Service
 							natBackBeforeUpdate []nat.BackendMapMem
+							natBeforeUpdate     []nat.MapMem
 						)
 
 						BeforeEach(func() {
-							_, natBackBeforeUpdate = dumpNATmaps(felixes)
+							natBeforeUpdate, natBackBeforeUpdate = dumpNATmaps(felixes)
 
 							testSvcUpdated = k8sService(testSvcName, "10.101.0.10", w[0][0], 88, 8055, 0, testOpts.protocol)
 
@@ -616,28 +627,42 @@ func describeBPFTests(testOpts bpfTestOptions) bool {
 							cc.CheckConnectivity()
 
 							natmaps, natbacks := dumpNATmaps(felixes)
+							ipv4 := net.ParseIP(ip)
+							portNew := uint16(testSvcUpdated.Spec.Ports[0].Port)
+							portOld := uint16(testSvc.Spec.Ports[0].Port)
+							natK := nat.NewNATKey(ipv4, portNew, numericProto)
+							oldK := nat.NewNATKey(ipv4, portOld, numericProto)
+
 							for i := range felixes {
-								Expect(equalNATBackendMapVals(natbacks[i], natBackBeforeUpdate[i])).To(BeTrue())
-								ipv4 := net.ParseIP(ip)
-								portNew := uint16(testSvcUpdated.Spec.Ports[0].Port)
-								numericProto := uint8(6)
-								if testOpts.protocol == "udp" {
-									numericProto = 17
-								}
-								Expect(natmaps[i]).To(HaveKey(nat.NewNATKey(ipv4, portNew, numericProto)))
-								portOld := uint16(testSvc.Spec.Ports[0].Port)
+
+								Expect(natmaps[i]).To(HaveKey(natK))
 								Expect(natmaps[i]).NotTo(HaveKey(nat.NewNATKey(ipv4, portOld, numericProto)))
+
+								Expect(natBeforeUpdate[i]).To(HaveKey(oldK))
+								oldV := natBeforeUpdate[i][oldK]
+
+								natV := natmaps[i][natK]
+								bckCnt := natV.Count()
+								bckID := natV.ID()
+
+								for ord := uint32(0); ord < bckCnt; ord++ {
+									bckK := nat.NewNATBackendKey(bckID, ord)
+									oldBckK := nat.NewNATBackendKey(oldV.ID(), ord)
+									Expect(natbacks[i]).To(HaveKey(bckK))
+									Expect(natBackBeforeUpdate[i]).To(HaveKey(oldBckK))
+									Expect(natBackBeforeUpdate[i][oldBckK]).To(Equal(natbacks[i][bckK]))
+								}
+
 							}
 						})
 
 						Context("with test-service removed", func() {
 							var (
 								prevBpfsvcs []nat.MapMem
-								prevBpfeps  []nat.BackendMapMem
 							)
 
 							BeforeEach(func() {
-								prevBpfsvcs, prevBpfeps = dumpNATmaps(felixes)
+								prevBpfsvcs, _ = dumpNATmaps(felixes)
 								err := k8sClient.CoreV1().
 									Services(testSvcNamespace).
 									Delete(testSvcName, &metav1.DeleteOptions{})
@@ -655,8 +680,30 @@ func describeBPFTests(testOpts bpfTestOptions) bool {
 								cc.CheckConnectivity()
 
 								for i, f := range felixes {
-									Eventually(func() nat.MapMem { return dumpNATMap(f) }).Should(HaveLen(len(prevBpfsvcs[i]) - 1))
-									Eventually(func() nat.BackendMapMem { return dumpEPMap(f) }).Should(HaveLen(len(prevBpfeps[i]) - 1))
+									natK := nat.NewNATKey(net.ParseIP(ip), port, numericProto)
+									Expect(prevBpfsvcs[i]).To(HaveKey(natK))
+									natV := prevBpfsvcs[i][natK]
+									bckCnt := natV.Count()
+									bckID := natV.ID()
+
+									Eventually(func() bool {
+										svcs := dumpNATMap(f)
+										eps := dumpEPMap(f)
+
+										if _, ok := svcs[natK]; ok {
+											return false
+										}
+
+										for ord := uint32(0); ord < bckCnt; ord++ {
+											bckK := nat.NewNATBackendKey(bckID, ord)
+											if _, ok := eps[bckK]; ok {
+												return false
+											}
+										}
+
+										return true
+									}).
+										Should(BeTrue())
 								}
 							})
 						})
@@ -841,37 +888,4 @@ func k8sGetEpsForServiceFunc(k8s kubernetes.Interface, svc *v1.Service) func() [
 	return func() []v1.EndpointSubset {
 		return k8sGetEpsForService(k8s, svc)
 	}
-}
-
-func equalNATBackendMapVals(m1, m2 nat.BackendMapMem) bool {
-	if len(m1) != len(m2) {
-		return false
-	}
-
-	mm1 := make(map[nat.BackendValue]int)
-	mm2 := make(map[nat.BackendValue]int)
-
-	for _, v := range m1 {
-		c := mm1[v]
-		mm1[v] = c + 1
-	}
-
-	for _, v := range m2 {
-		c := mm2[v]
-		mm2[v] = c + 1
-	}
-
-	if len(mm1) != len(mm2) {
-		return false
-	}
-
-	for k1, v1 := range mm1 {
-		if v2, ok := mm2[k1]; !ok {
-			return false
-		} else if v1 != v2 {
-			return false
-		}
-	}
-
-	return true
 }
