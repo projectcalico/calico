@@ -495,11 +495,11 @@ func (m *mockNATMap) Update(k, v []byte) error {
 	return nil
 }
 
-func (m mockNATMap) Get(k []byte) ([]byte, error) {
+func (m *mockNATMap) Get(k []byte) ([]byte, error) {
 	panic("not implemented")
 }
 
-func (m mockNATMap) Delete(k []byte) error {
+func (m *mockNATMap) Delete(k []byte) error {
 	m.Lock()
 	defer m.Unlock()
 
