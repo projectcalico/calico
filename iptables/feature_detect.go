@@ -19,6 +19,7 @@ import (
 	"io"
 	"os/exec"
 	"regexp"
+	"strings"
 	"sync"
 
 	version "github.com/hashicorp/go-version"
@@ -194,6 +195,7 @@ func DetectBackend(lookPath func(file string) (string, error), newCmd cmdFactory
 	}
 	log.WithField("detectedBackend", detectedBackend).Debug("Detected Iptables backend")
 
+	specifiedBackend = strings.ToLower(specifiedBackend)
 	if specifiedBackend != "auto" {
 		if specifiedBackend != detectedBackend {
 			log.WithFields(log.Fields{"detectedBackend": detectedBackend, "specifiedBackend": specifiedBackend}).Warn("Iptables backend specified does not match the detected backend, using specified backend")

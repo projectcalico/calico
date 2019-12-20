@@ -18,6 +18,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"strings"
 	"testing"
 
 	. "github.com/onsi/ginkgo"
@@ -233,6 +234,8 @@ func TestIptablesBackendDetection(t *testing.T) {
 		t.Run("DetectingBackend, testing "+tst.name, func(t *testing.T) {
 			RegisterTestingT(t)
 			Expect(DetectBackend(lookPathAll, tst.cmdF.NewCmd, tst.spec)).To(Equal(tst.expectedBackend))
+
+			Expect(DetectBackend(lookPathAll, tst.cmdF.NewCmd, strings.ToUpper(tst.spec))).To(Equal(tst.expectedBackend), "Capitalization affected output")
 		})
 	}
 }
