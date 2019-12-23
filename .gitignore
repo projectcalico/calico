@@ -18,3 +18,4 @@ install_cni.test
 *.coverprofile
 report/*.xml
 crds.yaml
+Makefile.common*
