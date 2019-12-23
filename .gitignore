@@ -20,3 +20,4 @@ report/*.xml
 .empty
 crds.yaml
 filesystem/etc/calico/confd/*
+Makefile.common*
