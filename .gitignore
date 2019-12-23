@@ -11,3 +11,4 @@ junit.xml
 checkouts
 /report/*.xml
 /release
+Makefile.common*
