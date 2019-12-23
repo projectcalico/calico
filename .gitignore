@@ -6,3 +6,4 @@ vendor
 tests/logs/
 /report/*
 etc/calico/confd/config
+Makefile.common*
