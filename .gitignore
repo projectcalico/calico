@@ -17,3 +17,4 @@ dist/kube-controllers
 st-kubeconfig.yaml
 *.coverprofile
 /report/*.xml
+Makefile.common*
