@@ -28,3 +28,4 @@ vendor
 
 # Test reports
 report/
+Makefile.common*
