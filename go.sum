@@ -302,6 +302,7 @@ github.com/projectcalico/go-yaml v0.0.0-20161201183616-955bc3e451ef h1:Di9BaA9ap
 github.com/projectcalico/go-yaml v0.0.0-20161201183616-955bc3e451ef/go.mod h1:1Ra2BftSa7Go38Gbq1q0bfmBFSSgUv+Cdc3SY8IL/C0=
 github.com/projectcalico/go-yaml-wrapper v0.0.0-20161127220527-598e54215bee h1:yVWsNSlAuYoJ0CznHsYRPiFgsotoj07k00k5rQvGlHM=
 github.com/projectcalico/go-yaml-wrapper v0.0.0-20161127220527-598e54215bee/go.mod h1:UgC0aTQ2KMDxlX3lU/stndk7DMUBJqzN40yFiILHgxc=
+github.com/projectcalico/go-yaml-wrapper v0.0.0-20191112210931-090425220c54/go.mod h1:UgC0aTQ2KMDxlX3lU/stndk7DMUBJqzN40yFiILHgxc=
 github.com/projectcalico/libcalico-go v0.0.0-20190909234443-18c0a7f471bb h1:inm8l2vtmUBQVEJLQApb4rqkIJWvIaB7WIWN8yMwsbI=
 github.com/projectcalico/libcalico-go v0.0.0-20190909234443-18c0a7f471bb/go.mod h1:UhwqglrBKH97bgKjpmQM76rT8FZPbGsNuMIQ+tCao6I=
 github.com/projectcalico/libcalico-go v0.0.0-20190918012520-5129d8f8aff0 h1:Jc8xL5gLN6QnsdGkIH0PhM2czIm927JNmuZJ3qJorf4=
@@ -310,6 +311,8 @@ github.com/projectcalico/libcalico-go v0.0.0-20191007235924-bda281e2d6ef h1:634s
 github.com/projectcalico/libcalico-go v0.0.0-20191007235924-bda281e2d6ef/go.mod h1:6YRvNVwNccC+rrFybYbirTKQQ81EjtcRIcdGOkmH7Os=
 github.com/projectcalico/libcalico-go v0.0.0-20191104213953-1891db7ae73b h1:NDmezWE2hQYM5LAETF5iiZdwq5LVW55OJ1CArvIVQAg=
 github.com/projectcalico/libcalico-go v0.0.0-20191104213953-1891db7ae73b/go.mod h1:6YRvNVwNccC+rrFybYbirTKQQ81EjtcRIcdGOkmH7Os=
+github.com/projectcalico/libcalico-go v1.7.2-0.20191223230708-3d65d3751012 h1:NShiUXlaERHoAeEfk5BO8IDvqu45nR6lTzEOMIjtM9A=
+github.com/projectcalico/libcalico-go v1.7.2-0.20191223230708-3d65d3751012/go.mod h1:ACBjU9oofP/iHpqypNS2aIa3K2WeJiew8jUSB1Iozx4=
 github.com/projectcalico/pod2daemon v0.0.0-20190730210055-df57fc59e2e1/go.mod h1:TgmA+ArLHObRADfET11mFF1aTK5i++4ZhqIuE4IV+IU=
 github.com/projectcalico/typha v0.0.0-20190910002346-0371b3148d28/go.mod h1:2zXpAwkxcW4heHuNX6i248Ibo0gaHqzQ23Oah8oDyf0=
 github.com/prometheus/client_golang v0.0.0-20171005112915-5cec1d0429b0/go.mod h1:7SWBe2y4D6OKWSNQJUaRYU/AaXPKyh/dDVn+NZz0KFw=
@@ -501,7 +504,9 @@ golang.org/x/tools v0.0.0-20190312170243-e65039ee4138/go.mod h1:LCzVGOaR6xXOjkQ3
 golang.org/x/tools v0.0.0-20190328211700-ab21143f2384/go.mod h1:LCzVGOaR6xXOjkQ3onu1FJEFr0SW1gC7cKk1uF8kGRs=
 golang.org/x/tools v0.0.0-20190524140312-2c0ae7006135/go.mod h1:RgjU9mgBXZiqYHBnxXauZ1Gv1EHHAz9KjViQ78xBX0Q=
 golang.org/x/tools v0.0.0-20190614205625-5aca471b1d59/go.mod h1:/rFqwRUd4F7ZHNgwSSTFct+R/Kf4OFW1sUzUTQQTgfc=
+golang.org/x/tools v0.0.0-20190628153133-6cdbf07be9d0 h1:Dh6fw+p6FyRl5x/FvNswO1ji0lIGzm3KP8Y9VkS9PTE=
 golang.org/x/tools v0.0.0-20190628153133-6cdbf07be9d0/go.mod h1:/rFqwRUd4F7ZHNgwSSTFct+R/Kf4OFW1sUzUTQQTgfc=
+gonum.org/v1/gonum v0.0.0-20190331200053-3d26580ed485 h1:OB/uP/Puiu5vS5QMRPrXCDWUPb+kt8f1KW8oQzFejQw=
 gonum.org/v1/gonum v0.0.0-20190331200053-3d26580ed485/go.mod h1:2ltnJ7xHfj0zHS40VVPYEAAMTa3ZGguvHGBSJeRWqE0=
 gonum.org/v1/netlib v0.0.0-20190313105609-8cb42192e0e0/go.mod h1:wa6Ws7BG/ESfp6dHfk7C6KdzKA7wR7u/rKwOGE66zvw=
 gonum.org/v1/netlib v0.0.0-20190331212654-76723241ea4e/go.mod h1:kS+toOQn6AQKjmKJ7gzohV1XkqsFehRA2FbsbkopSuQ=
@@ -563,6 +568,7 @@ gopkg.in/yaml.v2 v2.2.2 h1:ZCJp+EgiOT7lHqUV2J862kp8Qj64Jo6az82+3Td9dZw=
 gopkg.in/yaml.v2 v2.2.2/go.mod h1:hI93XBmqTisBFMUTm0b8Fm+jr3Dg1NNxqwp+5A1VGuI=
 gopkg.in/yaml.v2 v2.2.4 h1:/eiJrUcujPVeJ3xlSWaiNi3uSVmDGBK1pDHUHAnao1I=
 gopkg.in/yaml.v2 v2.2.4/go.mod h1:hI93XBmqTisBFMUTm0b8Fm+jr3Dg1NNxqwp+5A1VGuI=
+gopkg.in/yaml.v2 v2.2.5/go.mod h1:hI93XBmqTisBFMUTm0b8Fm+jr3Dg1NNxqwp+5A1VGuI=
 gotest.tools v2.2.0+incompatible/go.mod h1:DsYFclhRJ6vuDpmuTbkuFWG+y2sxOXAzmJt81HFBacw=
 honnef.co/go/tools v0.0.0-20190102054323-c2f93a96b099/go.mod h1:rf3lG4BRIbNafJWhAfAdb/ePZxsR/4RtNHQocxwk9r4=
 honnef.co/go/tools v0.0.0-20190106161140-3f1c8253044a/go.mod h1:rf3lG4BRIbNafJWhAfAdb/ePZxsR/4RtNHQocxwk9r4=
@@ -588,6 +594,7 @@ k8s.io/apiserver v0.0.0-20190423173055-cc449ec47086 h1:99FNAAwDkYjwvmnIKONWMg+Kv
 k8s.io/apiserver v0.0.0-20190423173055-cc449ec47086/go.mod h1:/Mg2XN7896K85BGQnhJFr0sZuGGx7XldPWitNOVv/Gc=
 k8s.io/apiserver v0.0.0-20191010200905-b803d9d0d3eb h1:gKTnWW35ryU7Xufrhgxnd2kHdYWk+ftcjb4ZrtEHUMU=
 k8s.io/apiserver v0.0.0-20191010200905-b803d9d0d3eb/go.mod h1:hKF5h4Jc/KljqhGZVk2+jFiOUQgIg7+w61FeMV84ht0=
+k8s.io/client-go v0.0.0-20190620085101-78d2af792bab/go.mod h1:E95RaSlHr79aHaX0aGSwcPNfygDiPKOVXdmivCIZT0k=
 k8s.io/client-go v0.0.0-20191003000419-f68efa97b39e/go.mod h1:UBFA5lo8nEOepaxS9koNccX/38rYMI3pa1EA1gaFZNg=
 k8s.io/client-go v0.0.0-20191009235830-e318746e79ea/go.mod h1:HOfNoGSBsyr/Qq0+N4lHymVHWb0c0maW9A/0VMUKacI=
 k8s.io/client-go v0.0.0-20191010200049-172b42569cca/go.mod h1:MgiJwA3vA7iWol68PAbcbkmehvC+G79S1Zwr7IZTVyE=
@@ -596,11 +603,13 @@ k8s.io/client-go v11.0.1-0.20190409021438-1a26190bd76a+incompatible h1:U5Bt+dab9
 k8s.io/client-go v11.0.1-0.20190409021438-1a26190bd76a+incompatible/go.mod h1:7vJpHMYJwNQCWgzmNV+VYUl1zCObLyodBc8nIyt8L5s=
 k8s.io/client-go v12.0.0+incompatible h1:YlJxncpeVUC98/WMZKC3JZGk/OXQWCZjAB4Xr3B17RY=
 k8s.io/client-go v12.0.0+incompatible/go.mod h1:E95RaSlHr79aHaX0aGSwcPNfygDiPKOVXdmivCIZT0k=
+k8s.io/code-generator v0.0.0-20190814140513-6483f25b1faf h1:AZ9sy4PRHjg4WW8XLJcygC8G2E97KZG8qkN27omL69U=
 k8s.io/code-generator v0.0.0-20190814140513-6483f25b1faf/go.mod h1:PT1SOMszr9TJAi4EL8ncHI85SEdLvzWWYlfJ7ICZeYU=
 k8s.io/component-base v0.0.0-20190418213057-380654ddefc0/go.mod h1:t3l+mQYxvfsiaTg+cT4MxOjO7MEMbT+CUhF601VYD70=
 k8s.io/component-base v0.0.0-20191010035941-20c2ac7c8c1b h1:LRf32+ZMNCoIeoZmW/we/4rSKcRcZDjQOjha34swja8=
 k8s.io/component-base v0.0.0-20191010035941-20c2ac7c8c1b/go.mod h1:+3nUtZ+7B+VJcEJ/Mo+ZXd1y8909WPbEu3Ycz0ACgD4=
 k8s.io/gengo v0.0.0-20190128074634-0689ccc1d7d6/go.mod h1:ezvh/TsK7cY6rbqRK0oQQ8IAqLxYwwyPxAX1Pzy0ii0=
+k8s.io/gengo v0.0.0-20190813173942-955ffa8fcfc9 h1:/gJp8cw8+k4AxBNGZ5u5eRoCOzH3WVpY02K654HNiyU=
 k8s.io/gengo v0.0.0-20190813173942-955ffa8fcfc9/go.mod h1:ezvh/TsK7cY6rbqRK0oQQ8IAqLxYwwyPxAX1Pzy0ii0=
 k8s.io/klog v0.0.0-20181102134211-b9b56d5dfc92/go.mod h1:Gq+BEi5rUBO/HRz0bTSXDUcqjScdoY3a9IHpCEIOOfk=
 k8s.io/klog v0.3.0 h1:0VPpR+sizsiivjIfIAQH/rl8tan6jvWkS7lU+0di3lE=
