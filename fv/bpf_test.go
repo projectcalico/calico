@@ -736,7 +736,9 @@ func describeBPFTests(testOpts bpfTestOptions) bool {
 					})
 				})
 
-				Context("with test-service being a nodeport @ 30333", func() {
+				npPort := uint16(30333)
+
+				Context("with test-service being a nodeport @ "+strconv.Itoa(int(npPort)), func() {
 					var (
 						testSvc          *v1.Service
 						testSvcNamespace string
@@ -746,7 +748,8 @@ func describeBPFTests(testOpts bpfTestOptions) bool {
 
 					BeforeEach(func() {
 						k8sClient := infra.(*infrastructure.K8sDatastoreInfra).K8sClient
-						testSvc = k8sService(testSvcName, "10.101.0.10", w[0][0], 80, 8055, 30333, testOpts.protocol)
+						testSvc = k8sService(testSvcName, "10.101.0.10",
+							w[0][0], 80, 8055, int32(npPort), testOpts.protocol)
 						testSvcNamespace = testSvc.ObjectMeta.Namespace
 						_, err := k8sClient.CoreV1().Services(testSvcNamespace).Create(testSvc)
 						Expect(err).NotTo(HaveOccurred())
@@ -761,6 +764,16 @@ func describeBPFTests(testOpts bpfTestOptions) bool {
 						cc.ExpectSome(w[0][1], workload.IP(ip), port)
 						cc.ExpectSome(w[1][0], workload.IP(ip), port)
 						cc.ExpectSome(w[1][1], workload.IP(ip), port)
+						cc.CheckConnectivity()
+
+					})
+
+					It("should have connectivity from all workloads via a nodeport to workload 0", func() {
+						ip := felixes[1].IP
+
+						cc.ExpectSome(w[0][1], workload.IP(ip), npPort)
+						cc.ExpectSome(w[1][0], workload.IP(ip), npPort)
+						cc.ExpectSome(w[1][1], workload.IP(ip), npPort)
 						cc.CheckConnectivity()
 
 					})
@@ -790,7 +803,7 @@ func describeBPFTests(testOpts bpfTestOptions) bool {
 								"nodePortIP":       felixes[1].IP,
 							}).Infof("external->nodeport connection")
 
-							cc.ExpectSome(externalClient, workload.IP(felixes[1].IP), 30333)
+							cc.ExpectSome(externalClient, workload.IP(felixes[1].IP), npPort)
 							cc.CheckConnectivity()
 						})
 
@@ -804,7 +817,7 @@ func describeBPFTests(testOpts bpfTestOptions) bool {
 								"nodePortIP":       felixes[1].IP,
 							}).Infof("external->nodeport connection")
 
-							cc.ExpectSome(externalClient, workload.IP(felixes[0].IP), 30333)
+							cc.ExpectSome(externalClient, workload.IP(felixes[0].IP), npPort)
 							cc.CheckConnectivity()
 						})
 					})

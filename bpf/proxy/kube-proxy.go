@@ -86,7 +86,11 @@ func (kp *KubeProxy) run(hostIPs []net.IP) error {
 	kp.lock.Lock()
 	defer kp.lock.Unlock()
 
-	syncer, err := NewSyncer(hostIPs, kp.frontendMap, kp.backendMap)
+	withLocalNP := make([]net.IP, len(hostIPs), len(hostIPs)+1)
+	copy(withLocalNP, hostIPs)
+	withLocalNP = append(withLocalNP, net.IPv4(255, 255, 255, 255))
+
+	syncer, err := NewSyncer(withLocalNP, kp.frontendMap, kp.backendMap)
 	if err != nil {
 		return errors.WithMessage(err, "new bpf syncer")
 	}

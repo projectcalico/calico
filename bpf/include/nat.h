@@ -8,7 +8,9 @@
 #include <linux/udp.h>
 #include <linux/icmp.h>
 #include <linux/version.h>
-#import "bpf.h"
+
+#include "bpf.h"
+#include "routes.h"
 
 #ifndef CALI_HOST_IP
 #define CALI_HOST_IP 0x0
@@ -77,7 +79,10 @@ struct bpf_map_def_extended __attribute__((section("maps"))) cali_v4_nat_be = {
 #endif
 };
 
-static CALI_BPF_INLINE struct calico_nat_dest* calico_v4_nat_lookup(__u8 ip_proto, __be32 ip_dst, __u16 dport) {
+static CALI_BPF_INLINE struct calico_nat_dest* calico_v4_nat_lookup(__u8 ip_proto, __be32 ip_dst, __u16 dport)
+{
+	struct calico_nat_v4_value *nat_lv1_val;
+
 	if (!CALI_F_TO_HOST) {
 		// Skip NAT lookup for traffic leaving the host namespace.
 		return NULL;
@@ -89,13 +94,33 @@ static CALI_BPF_INLINE struct calico_nat_dest* calico_v4_nat_lookup(__u8 ip_prot
 		.protocol = ip_proto,
 	};
 
-	struct calico_nat_v4_value *nat_lv1_val = bpf_map_lookup_elem(&cali_v4_nat_fe, &nat_key);
+	nat_lv1_val = bpf_map_lookup_elem(&cali_v4_nat_fe, &nat_key);
 	CALI_DEBUG("NAT: 1st level lookup addr=%x port=%d protocol=%d.\n",
 		(int)be32_to_host(nat_key.addr), (int)dport,
 		(int)(nat_key.protocol));
 	if (!nat_lv1_val) {
+		struct calico_route *rt;
+
 		CALI_DEBUG("NAT: Miss.\n");
-		return NULL;
+
+		rt = cali_rt_lookup(ip_dst);
+		if (!rt) {
+			CALI_DEBUG("NAT: route miss\n");
+			return NULL;
+		}
+
+		if (!cali_rt_is_host(rt)) {
+			CALI_DEBUG("NAT: route dest not a host\n");
+			return NULL;
+		}
+
+		nat_key.addr = 0xffffffff;
+		nat_lv1_val = bpf_map_lookup_elem(&cali_v4_nat_fe, &nat_key);
+		if (!nat_lv1_val) {
+			CALI_DEBUG("NAT: nodeport miss\n");
+			return NULL;
+		}
+		CALI_DEBUG("NAT: nodeport hit\n");
 	}
 
 	struct calico_nat_secondary_v4_key nat_lv2_key = {

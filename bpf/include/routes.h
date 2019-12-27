@@ -59,10 +59,8 @@ static CALI_BPF_INLINE enum calico_route_type cali_rt_lookup_type(__be32 addr)
 	return rt->type;
 }
 
-static CALI_BPF_INLINE bool cali_rt_is_local(struct calico_route *rt)
-{
-	return (rt->type == CALI_RT_LOCAL_HOST) || (rt->type == CALI_RT_LOCAL_WORKLOAD);
-}
+#define  cali_rt_is_local(rt) ((rt)->type == CALI_RT_LOCAL_HOST || (rt)->type == CALI_RT_LOCAL_WORKLOAD)
+#define  cali_rt_is_host(rt) ((rt)->type == CALI_RT_LOCAL_HOST || (rt)->type == CALI_RT_REMOTE_HOST)
 
 
 #endif /* __CALI_ROUTES_H__ */
