@@ -155,7 +155,7 @@ imports:
 - name: github.com/patrickmn/go-cache
   version: 5633e0862627c011927fa39556acae8b1f1df58a
 - name: github.com/projectcalico/felix
-  version: f57a408321fdb535ea6e98cfef9181d25491aefa
+  version: 250b965ba042e4b92ee557fb4b3be84c6762d55e
   subpackages:
   - calc
   - config
@@ -177,12 +177,10 @@ imports:
   version: 6219dc7339ba20ee4c57df0a8baac62317d19cb1
   subpackages:
   - json
-- name: github.com/projectcalico/go-yaml
-  version: 955bc3e451ef0c9df8b9113bf2e341139cdafab2
 - name: github.com/projectcalico/go-yaml-wrapper
-  version: 598e54215bee41a19677faa4f0c32acd2a87eb56
+  version: 090425220c545f6d179db17af395f5aac30b6926
 - name: github.com/projectcalico/libcalico-go
-  version: 896f59d614d5c47df94d47a78b1c01a909077bd7
+  version: 5a23a805e6a0bb3636949497179ea06ec6e948a6
   subpackages:
   - lib/apiconfig
   - lib/apis/v1
@@ -344,7 +342,7 @@ imports:
 - name: gopkg.in/tomb.v1
   version: dd632973f1e7218eb1089048e0798ec9ae7dceb8
 - name: gopkg.in/yaml.v2
-  version: 51d6538a90f86fe93ac480b35f37b2be17fef232
+  version: f90ceb4f409096b60e2e9076b38b304b8246e5fa
 - name: k8s.io/api
   version: 7cf5895f2711098d7d9527db0a4a49fb0dff7de2
   subpackages:
