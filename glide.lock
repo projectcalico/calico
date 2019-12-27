@@ -42,7 +42,7 @@ imports:
   - matchers/support/goraph/util
   - types
 - name: github.com/projectcalico/libcalico-go
-  version: ac36d966132f2019eb4afc4d3823ed2a98564d2f
+  version: 5a23a805e6a0bb3636949497179ea06ec6e948a6
   subpackages:
   - lib/apis/v3
   - lib/client
@@ -113,4 +113,4 @@ imports:
   - pkg/util/validation
 testImports:
 - name: gopkg.in/yaml.v2
-  version: 51d6538a90f86fe93ac480b35f37b2be17fef232
+  version: f90ceb4f409096b60e2e9076b38b304b8246e5fa
