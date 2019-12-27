@@ -309,6 +309,7 @@ func TestNATNodePort(t *testing.T) {
 
 	dumpCTMap(ctMap)
 
+	skbMark = 0xca240000
 	// Leaving node 1
 	runBpfTest(t, "calico_to_host_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
 		res, err := bpfrun(encapedPkt)
@@ -328,6 +329,7 @@ func TestNATNodePort(t *testing.T) {
 	var recvPkt []byte
 
 	hostIP = node2ip
+	skbMark = 0
 
 	// Arriving at node 2
 	runBpfTest(t, "calico_from_host_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {

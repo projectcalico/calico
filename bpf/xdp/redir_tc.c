@@ -200,6 +200,10 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb) {
 			CALI_DEBUG("Packet for external source, approved by return from NAT tunnel.\n");
 			reason = CALI_REASON_BYPASS;
 			goto allow_bypass;
+		case CALI_SKB_MARK_BYPASS_NAT_FWD_ENCAPED:
+			CALI_DEBUG("Encaped, approved by entering NAT tunnel\n");
+			reason = CALI_REASON_BYPASS;
+			goto allow_bypass;
 		case CALI_SKB_MARK_BYPASS_NAT_RET_ENCAPED:
 			CALI_DEBUG("Encaped, approved by return to NAT tunnel.\n");
 			reason = CALI_REASON_BYPASS;
@@ -266,12 +270,6 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb) {
 	ip_header = skb_iphdr(skb);
 
 	if (is_vxlan_tunnel(ip_header)) {
-		if (CALI_F_TO_HEP) {
-			/* XXX should perhaps be dependent on CALI_SKB_MARK_SEEN */
-			CALI_DEBUG("vxlan leaving host: ALLOW\n");
-			goto allow_bypass;
-		}
-
 		/* decap on host ep only if directly for the node */
 		if (dnat_should_decap() && ip_header->daddr == CALI_HOST_IP) { 
 			nat_tun_src = ip_header->saddr;
@@ -563,6 +561,7 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb) {
 		if (encap_needed) {
 			ip_src = CALI_HOST_IP;
 			ip_dst = rt->type == CALI_RT_REMOTE_WORKLOAD ? rt->next_hop : post_nat_ip_dst;
+			seen_mark = CALI_SKB_MARK_BYPASS_NAT_FWD_ENCAPED;
 			goto nat_encap;
 		}
 
