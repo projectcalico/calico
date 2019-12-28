@@ -18,7 +18,7 @@ metadata:
   namespace: kube-system
 spec:
   nodeSelector:
-    beta.kubernetes.io/os: linux
+    kubernetes.io/os: linux
   hostNetwork: true
   serviceAccountName: calicoctl
   containers:
