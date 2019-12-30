@@ -6,3 +6,4 @@ bin
 *.created-*
 report/
 release-notes-*
+Makefile.common*
