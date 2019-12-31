@@ -1,5 +1,5 @@
 PACKAGE_NAME=github.com/projectcalico/cni-plugin
-GO_BUILD_VER=v0.28
+GO_BUILD_VER=v0.31
 
 ###############################################################################
 # Download and include Makefile.common
