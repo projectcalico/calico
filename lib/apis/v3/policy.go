@@ -60,6 +60,9 @@ type Rule struct {
 
 	// HTTP contains match criteria that apply to HTTP requests.
 	HTTP *HTTPMatch `json:"http,omitempty" validate:"omitempty"`
+
+	// Metadata contains additional information for this rule
+	Metadata *RuleMetadata `json:"metadata,omitempty" validate:"omitempty"`
 }
 
 // HTTPPath specifies an HTTP path to match. It may be either of the form:
@@ -182,3 +185,8 @@ const (
 	Log          = "Log"
 	Pass         = "Pass"
 )
+
+type RuleMetadata struct {
+	// Annotations is a set of key value pairs that give extra information about the rule
+	Annotations map[string]string `json:"annotations,omitempty"`
+}
