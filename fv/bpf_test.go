@@ -85,15 +85,19 @@ type bpfTestOptions struct {
 const expectedRouteDump = `10.65.0.2/32: local workload
 10.65.0.3/32: local workload
 10.65.1.0/26: remote workload, host IP FELIX_1
+10.65.2.0/26: remote workload, host IP FELIX_2
 FELIX_0/32: local host
-FELIX_1/32: remote host`
+FELIX_1/32: remote host
+FELIX_2/32: remote host`
 
 const expectedRouteDumpIPIP = `10.65.0.1/32: local host
 10.65.0.2/32: local workload
 10.65.0.3/32: local workload
 10.65.1.0/26: remote workload, host IP FELIX_1
+10.65.2.0/26: remote workload, host IP FELIX_2
 FELIX_0/32: local host
-FELIX_1/32: remote host`
+FELIX_1/32: remote host
+FELIX_2/32: remote host`
 
 func describeBPFTests(testOpts bpfTestOptions) bool {
 	desc := fmt.Sprintf("_BPF_ _BPF-SAFE_ BPF tests (%s, ct=%v, tunnel=%s)",
@@ -329,14 +333,16 @@ func describeBPFTests(testOpts bpfTestOptions) bool {
 			}
 		})
 
-		Describe("with a two node cluster", func() {
+		const numNodes = 3
+
+		Describe(fmt.Sprintf("with a %d node cluster", numNodes), func() {
 			var (
-				w     [2][2]*workload.Workload // 1st workload on each host
-				hostW [2]*workload.Workload
+				w     [numNodes][2]*workload.Workload // 1st workload on each host
+				hostW [numNodes]*workload.Workload
 			)
 
 			BeforeEach(func() {
-				felixes, calicoClient = infrastructure.StartNNodeTopology(2, options, infra)
+				felixes, calicoClient = infrastructure.StartNNodeTopology(numNodes, options, infra)
 
 				// Start a host networked workload on each host for connectivity checks.
 				for ii, felix := range felixes {
@@ -417,6 +423,7 @@ func describeBPFTests(testOpts bpfTestOptions) bool {
 						}
 						l = strings.ReplaceAll(l, felixes[0].IP, "FELIX_0")
 						l = strings.ReplaceAll(l, felixes[1].IP, "FELIX_1")
+						l = strings.ReplaceAll(l, felixes[2].IP, "FELIX_2")
 						filteredLines = append(filteredLines, l)
 					}
 					sort.Strings(filteredLines)
@@ -774,6 +781,14 @@ func describeBPFTests(testOpts bpfTestOptions) bool {
 						cc.ExpectSome(w[0][1], workload.IP(ip), npPort)
 						cc.ExpectSome(w[1][0], workload.IP(ip), npPort)
 						cc.ExpectSome(w[1][1], workload.IP(ip), npPort)
+						cc.CheckConnectivity()
+
+					})
+
+					It("should have connectivity from a workload via a nodeport on another node to workload 0", func() {
+						ip := felixes[1].IP
+
+						cc.ExpectSome(w[2][1], workload.IP(ip), npPort)
 						cc.CheckConnectivity()
 
 					})
