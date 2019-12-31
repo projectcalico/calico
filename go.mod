@@ -11,7 +11,7 @@ require (
 	github.com/mailru/easyjson v0.0.0-20190626092158-b2ccc519800e // indirect
 	github.com/onsi/ginkgo v1.10.1
 	github.com/onsi/gomega v1.7.0
-	github.com/projectcalico/felix v0.0.0-20191223190730-05fc078ccb9e // indirect
+	github.com/projectcalico/felix v0.0.0-20191231175915-5ccf52a034de // indirect
 	github.com/projectcalico/libcalico-go v1.7.2-0.20191214003639-2449a6f3ad4f
 	github.com/projectcalico/typha v0.7.2 // indirect
 	github.com/prometheus/client_model v0.0.0-20190129233127-fd36f4220a90 // indirect
@@ -33,6 +33,6 @@ require (
 )
 
 replace (
-	github.com/kelseyhightower/confd => github.com/projectcalico/confd v0.0.0-20191223184729-a869af66441a
+	github.com/kelseyhightower/confd => github.com/projectcalico/confd v0.0.0-20191231180505-5b1c063de920
 	github.com/sirupsen/logrus => github.com/projectcalico/logrus v1.0.4-calico
 )
