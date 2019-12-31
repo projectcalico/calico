@@ -42,6 +42,8 @@ struct calico_nat_v4_key {
 struct calico_nat_v4_value {
 	uint32_t id;
 	uint32_t count;
+	uint32_t local;
+	uint32_t padding;
 };
 
 struct bpf_map_def_extended __attribute__((section("maps"))) cali_v4_nat_fe = {
@@ -132,6 +134,11 @@ static CALI_BPF_INLINE struct calico_nat_dest* calico_v4_nat_lookup(__u8 ip_prot
 			return NULL;
 		}
 		CALI_DEBUG("NAT: nodeport hit\n");
+	}
+
+	if (nat_lv1_val->count == 0) {
+		CALI_DEBUG("NAT: no local backend\n");
+		return NULL;
 	}
 
 	struct calico_nat_secondary_v4_key nat_lv2_key = {

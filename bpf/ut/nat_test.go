@@ -50,7 +50,7 @@ func TestNATPodPodXNode(t *testing.T) {
 
 	err = natMap.Update(
 		nat.NewNATKey(ipv4.DstIP, uint16(udp.DstPort), uint8(ipv4.Protocol)).AsBytes(),
-		nat.NewNATValue(0, 1).AsBytes(),
+		nat.NewNATValue(0, 1, 0).AsBytes(),
 	)
 	Expect(err).NotTo(HaveOccurred())
 
@@ -247,7 +247,7 @@ func TestNATNodePort(t *testing.T) {
 
 	err = natMap.Update(
 		nat.NewNATKey(ipv4.DstIP, uint16(udp.DstPort), uint8(ipv4.Protocol)).AsBytes(),
-		nat.NewNATValue(0, 1).AsBytes(),
+		nat.NewNATValue(0, 1, 0).AsBytes(),
 	)
 	Expect(err).NotTo(HaveOccurred())
 
@@ -490,7 +490,7 @@ func TestNATNodePortICMPTooBig(t *testing.T) {
 
 	err = natMap.Update(
 		nat.NewNATKey(ipv4.DstIP, uint16(udp.DstPort), uint8(ipv4.Protocol)).AsBytes(),
-		nat.NewNATValue(0, 1).AsBytes(),
+		nat.NewNATValue(0, 1, 0).AsBytes(),
 	)
 	Expect(err).NotTo(HaveOccurred())
 

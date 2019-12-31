@@ -281,7 +281,7 @@ var _ = Describe("BPF Syncer", func() {
 		}))
 
 		By("resyncing after creating a new syncer and delete stale entries", makestep(func() {
-			svcs.m[nat.NewNATKey(net.IPv4(5, 5, 5, 5), 1111, 6)] = nat.NewNATValue(0xdeadbeef, 2)
+			svcs.m[nat.NewNATKey(net.IPv4(5, 5, 5, 5), 1111, 6)] = nat.NewNATValue(0xdeadbeef, 2, 2)
 			eps.m[nat.NewNATBackendKey(0xdeadbeef, 0)] = nat.NewNATBackendValue(net.IPv4(6, 6, 6, 6), 666)
 			eps.m[nat.NewNATBackendKey(0xdeadbeef, 1)] = nat.NewNATBackendValue(net.IPv4(7, 7, 7, 7), 777)
 			s, _ = proxy.NewSyncer(nodeIPs, svcs, eps)
@@ -436,6 +436,103 @@ var _ = Describe("BPF Syncer", func() {
 			Expect(svcs.m).To(HaveLen(0))
 			Expect(eps.m).To(HaveLen(0))
 		}))
+
+		By("inserting only non-local ep for a NodePort", makestep(func() {
+			state.SvcMap[svcKey2] = &k8sp.BaseServiceInfo{
+				ClusterIP:              net.IPv4(10, 0, 0, 2),
+				Port:                   2222,
+				NodePort:               2222,
+				Protocol:               v1.ProtocolTCP,
+				OnlyNodeLocalEndpoints: true,
+			}
+
+			state.EpsMap[svcKey2] = []k8sp.Endpoint{
+				&k8sp.BaseEndpointInfo{Endpoint: "10.2.0.1:2222"},
+			}
+
+			err := s.Apply(state)
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(svcs.m).To(HaveLen(3))
+
+			val1, ok := svcs.m[nat.NewNATKey(net.IPv4(10, 0, 0, 2), 2222, proxy.ProtoV1ToIntPanic(v1.ProtocolTCP))]
+			Expect(ok).To(BeTrue())
+			Expect(val1.Count()).To(Equal(uint32(1)))
+
+			val2, ok := svcs.m[nat.NewNATKey(net.IPv4(192, 168, 0, 1), 2222, proxy.ProtoV1ToIntPanic(v1.ProtocolTCP))]
+			Expect(ok).To(BeTrue())
+			Expect(val2.ID()).To(Equal(val1.ID()))
+			Expect(val2.Count()).To(Equal(uint32(0)))
+
+			val3, ok := svcs.m[nat.NewNATKey(net.IPv4(10, 123, 0, 1), 2222, proxy.ProtoV1ToIntPanic(v1.ProtocolTCP))]
+			Expect(ok).To(BeTrue())
+			Expect(val2).To(Equal(val3))
+
+			Expect(eps.m).To(HaveLen(1))
+			Expect(eps.m).To(HaveKey(nat.NewNATBackendKey(val1.ID(), 0)))
+			Expect(eps.m).To(ContainElement(nat.NewNATBackendValue(net.IPv4(10, 2, 0, 1), 2222)))
+		}))
+
+		By("inserting a local ep for a NodePort", makestep(func() {
+			state.SvcMap[svcKey2] = &k8sp.BaseServiceInfo{
+				ClusterIP:              net.IPv4(10, 0, 0, 2),
+				Port:                   2222,
+				NodePort:               2222,
+				Protocol:               v1.ProtocolTCP,
+				OnlyNodeLocalEndpoints: true,
+			}
+
+			state.EpsMap[svcKey2] = []k8sp.Endpoint{
+				&k8sp.BaseEndpointInfo{Endpoint: "10.2.0.1:2222"},
+				&k8sp.BaseEndpointInfo{Endpoint: "10.3.0.1:2222", IsLocal: true},
+				&k8sp.BaseEndpointInfo{Endpoint: "10.4.0.1:2222"},
+				&k8sp.BaseEndpointInfo{Endpoint: "10.5.0.1:2222", IsLocal: true},
+			}
+
+			err := s.Apply(state)
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(svcs.m).To(HaveLen(3))
+
+			val1, ok := svcs.m[nat.NewNATKey(net.IPv4(10, 0, 0, 2), 2222, proxy.ProtoV1ToIntPanic(v1.ProtocolTCP))]
+			Expect(ok).To(BeTrue())
+			Expect(val1.Count()).To(Equal(uint32(4)))
+			Expect(val1.LocalCount()).To(Equal(uint32(2)))
+
+			val2, ok := svcs.m[nat.NewNATKey(net.IPv4(192, 168, 0, 1), 2222, proxy.ProtoV1ToIntPanic(v1.ProtocolTCP))]
+			Expect(ok).To(BeTrue())
+			Expect(val2.ID()).To(Equal(val1.ID()))
+			Expect(val2.Count()).To(Equal(uint32(2)))
+
+			val3, ok := svcs.m[nat.NewNATKey(net.IPv4(10, 123, 0, 1), 2222, proxy.ProtoV1ToIntPanic(v1.ProtocolTCP))]
+			Expect(ok).To(BeTrue())
+			Expect(val2).To(Equal(val3))
+
+			Expect(eps.m).To(HaveLen(4))
+
+			Expect(eps.m).To(HaveKey(nat.NewNATBackendKey(val1.ID(), 0)))
+			Expect(eps.m).To(HaveKey(nat.NewNATBackendKey(val1.ID(), 1)))
+			Expect(eps.m).To(HaveKey(nat.NewNATBackendKey(val1.ID(), 2)))
+			Expect(eps.m).To(HaveKey(nat.NewNATBackendKey(val1.ID(), 3)))
+
+			Expect(eps.m[nat.NewNATBackendKey(val1.ID(), 0)]).To(Or(
+				Equal(nat.NewNATBackendValue(net.IPv4(10, 3, 0, 1), 2222)),
+				Equal(nat.NewNATBackendValue(net.IPv4(10, 5, 0, 1), 2222))))
+			Expect(eps.m[nat.NewNATBackendKey(val1.ID(), 1)]).To(Or(
+				Equal(nat.NewNATBackendValue(net.IPv4(10, 3, 0, 1), 2222)),
+				Equal(nat.NewNATBackendValue(net.IPv4(10, 5, 0, 1), 2222))))
+			Expect(eps.m[nat.NewNATBackendKey(val1.ID(), 0)]).
+				NotTo(Equal(eps.m[nat.NewNATBackendKey(val1.ID(), 1)]))
+
+			Expect(eps.m[nat.NewNATBackendKey(val1.ID(), 2)]).To(Or(
+				Equal(nat.NewNATBackendValue(net.IPv4(10, 2, 0, 1), 2222)),
+				Equal(nat.NewNATBackendValue(net.IPv4(10, 4, 0, 1), 2222))))
+			Expect(eps.m[nat.NewNATBackendKey(val1.ID(), 3)]).To(Or(
+				Equal(nat.NewNATBackendValue(net.IPv4(10, 2, 0, 1), 2222)),
+				Equal(nat.NewNATBackendValue(net.IPv4(10, 4, 0, 1), 2222))))
+			Expect(eps.m[nat.NewNATBackendKey(val1.ID(), 2)]).
+				NotTo(Equal(eps.m[nat.NewNATBackendKey(val1.ID(), 3)]))
+		}))
 	})
 })
 
@@ -547,8 +644,8 @@ func (m *mockNATBackendMap) Iter(iter bpf.MapIter) error {
 	m.Lock()
 	defer m.Unlock()
 
-	ks := len(nat.FrontendKey{})
-	vs := len(nat.FrontendValue{})
+	ks := len(nat.BackendKey{})
+	vs := len(nat.BackendValue{})
 	for k, v := range m.m {
 		iter(k[:ks], v[:vs])
 	}

@@ -1,4 +1,4 @@
-// Copyright (c) 2019 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -95,7 +95,7 @@ func dumpNice(printf printfFn, natMap nat.MapMem, back nat.BackendMapMem) {
 		id := nv.ID()
 		printf("%s port %d proto %d id %d count %d\n", nk.Addr(), nk.Port(), nk.Proto(), id, count)
 		for i := uint32(0); i < count; i++ {
-			bk := nat.NewNATBackendKey(id, i)
+			bk := nat.NewNATBackendKey(id, uint32(i))
 			bv, ok := back[bk]
 			printf("\t%d:%d\t ", id, i)
 			if !ok {
@@ -184,7 +184,7 @@ func (cmd *natFrontend) ArgsSet(c *cobra.Command, args []string) error {
 	}
 	cmd.id = uint32(id)
 
-	count, err := strconv.ParseUint(cmd.Count, 0, 32)
+	count, err := strconv.ParseUint(cmd.Count, 0, 16)
 	if err != nil {
 		return errors.Errorf("count: %q is not 32-bit uint", cmd.Count)
 	}
@@ -199,7 +199,7 @@ func (cmd *natFrontend) RunSet(c *cobra.Command, _ []string) {
 		log.WithError(err).Error("Failed to access NATMap")
 	}
 	k := nat.NewNATKey(cmd.ip, cmd.port, cmd.proto)
-	v := nat.NewNATValue(cmd.id, cmd.count)
+	v := nat.NewNATValue(cmd.id, cmd.count, 0)
 	if err := natMap.Update(k.AsBytes(), v.AsBytes()); err != nil {
 		log.WithError(err).
 			WithFields(log.Fields{

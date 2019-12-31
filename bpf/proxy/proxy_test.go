@@ -430,6 +430,94 @@ var _ = Describe("BPF Proxy", func() {
 			})
 		})
 	})
+
+	Describe("ExternalPolicy=local", func() {
+		var p proxy.Proxy
+		var dp *mockSyncer
+
+		testNodeName := "testnode"
+		testNodeNameOther := "someothernode"
+
+		nodeport := &v1.Service{
+			TypeMeta:   typeMetaV1("Service"),
+			ObjectMeta: objectMeataV1("nodeport"),
+			Spec: v1.ServiceSpec{
+				ClusterIP: "10.1.0.1",
+				Type:      v1.ServiceTypeNodePort,
+				Selector: map[string]string{
+					"app": "test",
+				},
+				Ports: []v1.ServicePort{
+					{
+						Protocol: v1.ProtocolTCP,
+						Port:     1234,
+						NodePort: 32678,
+					},
+				},
+				ExternalTrafficPolicy: "local",
+			},
+		}
+
+		nodeportEps := &v1.Endpoints{
+			TypeMeta:   typeMetaV1("Endpoints"),
+			ObjectMeta: objectMeataV1("nodeport"),
+			Subsets: []v1.EndpointSubset{
+				{
+					Addresses: []v1.EndpointAddress{
+						{
+							IP:       "10.1.2.1",
+							NodeName: &testNodeName,
+						},
+						{
+							IP:       "10.1.2.2",
+							NodeName: &testNodeNameOther,
+						},
+						{
+							IP:       "10.1.2.3",
+							NodeName: nil,
+						},
+					},
+					Ports: []v1.EndpointPort{
+						{
+							Port: 1234,
+						},
+					},
+				},
+			},
+		}
+
+		k8s := fake.NewSimpleClientset(nodeport, nodeportEps)
+
+		BeforeEach(func() {
+			By("creating proxy with fake client and mock syncer", func() {
+				var err error
+
+				syncStop = make(chan struct{})
+				dp = newMockSyncer(syncStop)
+
+				p, err = proxy.New(k8s, dp, testNodeName, proxy.WithMinSyncPeriod(200*time.Millisecond))
+				Expect(err).NotTo(HaveOccurred())
+			})
+		})
+
+		AfterEach(func() {
+			By("stopping the proxy", func() {
+				close(syncStop)
+				p.Stop()
+			})
+		})
+
+		It("should set local correctly", func() {
+			dp.checkState(func(s proxy.DPSyncerState) {
+				Expect(s.SvcMap).To(HaveLen(1))
+				for k := range s.SvcMap {
+					for _, ep := range s.EpsMap[k] {
+						Expect(ep.GetIsLocal()).To(Equal(ep.String() == "10.1.2.1:1234"))
+					}
+				}
+			})
+		})
+	})
 })
 
 type mockSyncer struct {

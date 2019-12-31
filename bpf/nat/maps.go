@@ -1,4 +1,4 @@
-// Copyright (c) 2019 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -37,8 +37,10 @@ const frontendKeySize = 8
 // struct calico_nat_v4_value {
 //    uint32_t id;
 //    uint32_t count;
+//    uint32_t local;
+//    uint32_t padding;
 // };
-const frontendValueSize = 8
+const frontendValueSize = 16
 
 // struct calico_nat_secondary_v4_key {
 //   uint32_t id;
@@ -89,10 +91,11 @@ func (k FrontendKey) String() string {
 
 type FrontendValue [frontendValueSize]byte
 
-func NewNATValue(id, count uint32) FrontendValue {
+func NewNATValue(id uint32, count, local uint32) FrontendValue {
 	var v FrontendValue
 	binary.LittleEndian.PutUint32(v[:4], id)
 	binary.LittleEndian.PutUint32(v[4:8], count)
+	binary.LittleEndian.PutUint32(v[8:12], local)
 	return v
 }
 
@@ -104,8 +107,12 @@ func (v FrontendValue) Count() uint32 {
 	return binary.LittleEndian.Uint32(v[4:8])
 }
 
+func (v FrontendValue) LocalCount() uint32 {
+	return binary.LittleEndian.Uint32(v[8:12])
+}
+
 func (v FrontendValue) String() string {
-	return fmt.Sprintf("NATValue{ID:%d,Count:%d}", v.ID(), v.Count())
+	return fmt.Sprintf("NATValue{ID:%d,Count:%d,LocalCount:%d}", v.ID(), v.Count(), v.LocalCount())
 }
 
 func (v FrontendValue) AsBytes() []byte {
