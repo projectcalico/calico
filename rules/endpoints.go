@@ -279,7 +279,7 @@ func (r *DefaultRuleRenderer) endpointIptablesChain(
 		rules = append(rules, Rule{
 			Match:   Match(),
 			Action:  DropAction{},
-			Comment: "Endpoint admin disabled",
+			Comment: []string{"Endpoint admin disabled"},
 		})
 		return &Chain{
 			Name:  chainName,
@@ -313,12 +313,12 @@ func (r *DefaultRuleRenderer) endpointIptablesChain(
 			Match: Match().ProtocolNum(ProtoUDP).
 				DestPorts(uint16(r.Config.VXLANPort)),
 			Action:  DropAction{},
-			Comment: "Drop VXLAN encapped packets originating in pods",
+			Comment: []string{"Drop VXLAN encapped packets originating in pods"},
 		})
 		rules = append(rules, Rule{
 			Match:   Match().ProtocolNum(ProtoIPIP),
 			Action:  DropAction{},
-			Comment: "Drop IPinIP encapped packets originating in pods",
+			Comment: []string{"Drop IPinIP encapped packets originating in pods"},
 		})
 	}
 
@@ -326,7 +326,7 @@ func (r *DefaultRuleRenderer) endpointIptablesChain(
 		// Clear the "pass" mark.  If a policy sets that mark, we'll skip the rest of the policies and
 		// continue processing the profiles, if there are any.
 		rules = append(rules, Rule{
-			Comment: "Start of policies",
+			Comment: []string{"Start of policies"},
 			Action: ClearMarkAction{
 				Mark: r.IptablesMarkPass,
 			},
@@ -358,7 +358,7 @@ func (r *DefaultRuleRenderer) endpointIptablesChain(
 			rules = append(rules, Rule{
 				Match:   Match().MarkSingleBitSet(r.IptablesMarkAccept),
 				Action:  ReturnAction{},
-				Comment: "Return if policy accepted",
+				Comment: []string{"Return if policy accepted"},
 			})
 		}
 
@@ -371,7 +371,7 @@ func (r *DefaultRuleRenderer) endpointIptablesChain(
 			rules = append(rules, Rule{
 				Match:   Match().MarkClear(r.IptablesMarkPass),
 				Action:  DropAction{},
-				Comment: "Drop if no policies passed packet",
+				Comment: []string{"Drop if no policies passed packet"},
 			})
 		}
 
@@ -380,11 +380,11 @@ func (r *DefaultRuleRenderer) endpointIptablesChain(
 		// applyOnForward that apply to this endpoint (and in this direction).
 		rules = append(rules, Rule{
 			Action:  SetMarkAction{Mark: r.IptablesMarkAccept},
-			Comment: "Allow forwarded traffic by default",
+			Comment: []string{"Allow forwarded traffic by default"},
 		})
 		rules = append(rules, Rule{
 			Action:  ReturnAction{},
-			Comment: "Return for accepted forward traffic",
+			Comment: []string{"Return for accepted forward traffic"},
 		})
 	}
 
@@ -399,7 +399,7 @@ func (r *DefaultRuleRenderer) endpointIptablesChain(
 				Rule{
 					Match:   Match().MarkSingleBitSet(r.IptablesMarkAccept),
 					Action:  ReturnAction{},
-					Comment: "Return if profile accepted",
+					Comment: []string{"Return if profile accepted"},
 				})
 		}
 
@@ -411,7 +411,7 @@ func (r *DefaultRuleRenderer) endpointIptablesChain(
 		rules = append(rules, Rule{
 			Match:   Match(),
 			Action:  DropAction{},
-			Comment: "Drop if no profiles matched",
+			Comment: []string{"Drop if no profiles matched"},
 		})
 	}
 

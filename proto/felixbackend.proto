@@ -271,6 +271,8 @@ message Rule {
   // Pass through of the v3 datamodel HTTP match criteria.
   HTTPMatch http_match = 122;
 
+  RuleMetadata metadata = 123;
+
   // Changed to config option.
   reserved 200;
   reserved "log_prefix";
@@ -293,6 +295,10 @@ message HTTPMatch {
     }
   }
   repeated PathMatch paths = 2;
+}
+
+message RuleMetadata {
+  map<string, string> annotations = 1;
 }
 
 message IcmpTypeAndCode {

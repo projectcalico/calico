@@ -90,6 +90,8 @@ var fullyLoadedParsedRule = ParsedRule{
 		{Exact: "/foo"},
 		{Prefix: "/bar"},
 	}},
+
+	Metadata: &model.RuleMetadata{Annotations: map[string]string{"key": "value"}},
 }
 
 var fullyLoadedProtoRule = proto.Rule{
@@ -155,6 +157,8 @@ var fullyLoadedProtoRule = proto.Rule{
 		Paths: []*proto.HTTPMatch_PathMatch{{PathMatch: &proto.HTTPMatch_PathMatch_Exact{Exact: "/foo"}},
 			{PathMatch: &proto.HTTPMatch_PathMatch_Prefix{Prefix: "/bar"}},
 		}},
+
+	Metadata: &proto.RuleMetadata{Annotations: map[string]string{"key": "value"}},
 }
 
 var _ = DescribeTable("ParsedRulesToProtoRules",
