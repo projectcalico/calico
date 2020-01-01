@@ -33,6 +33,6 @@ require (
 )
 
 replace (
-	github.com/kelseyhightower/confd => github.com/projectcalico/confd v0.0.0-20191231180505-5b1c063de920
+	github.com/kelseyhightower/confd => github.com/projectcalico/confd v0.0.0-20200101080735-5d0283b1e793
 	github.com/sirupsen/logrus => github.com/projectcalico/logrus v1.0.4-calico
 )

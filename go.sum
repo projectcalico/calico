@@ -251,6 +251,8 @@ github.com/pmezard/go-difflib v1.0.0/go.mod h1:iKH77koFhYxTK1pcRnkKkqfTogsbg7gZN
 github.com/pquerna/ffjson v0.0.0-20190813045741-dac163c6c0a9/go.mod h1:YARuvh7BUWHNhzDq2OM5tzR2RiCcN2D7sapiKyCel/M=
 github.com/projectcalico/confd v0.0.0-20191223184729-a869af66441a h1:iGNJu75MTQ/9bJksH4sBO9B9DfY4VRypKeVu01r5R+U=
 github.com/projectcalico/confd v0.0.0-20191223184729-a869af66441a/go.mod h1:vHlYFBxNG/BpAZAryzYPrqB54h3kyYXnKMLBtvQBQ+8=
+github.com/projectcalico/confd v0.0.0-20191231180505-5b1c063de920 h1:aWU1SsvABiUUJ/WyN2ODwapBOpejVHAidb8TeYQbLeE=
+github.com/projectcalico/confd v0.0.0-20191231180505-5b1c063de920/go.mod h1:vHlYFBxNG/BpAZAryzYPrqB54h3kyYXnKMLBtvQBQ+8=
 github.com/projectcalico/confd v1.0.1-0.20191205095203-7d9ff97583c8 h1:urptQIlg8+mxAjmDP6SHXEtAiQEdQKKAtOEM/wW7cpM=
 github.com/projectcalico/confd v1.0.1-0.20191205095203-7d9ff97583c8/go.mod h1:vGatme1Xz1T6ao/UjEehq53zz9zYf5tnhNfhlbbP5x0=
 github.com/projectcalico/felix v0.0.0-20191204192922-cada32c195cc h1:tDU3fTWbkqdhOXk8aq55RFrH3qjh3AbQU54fS6MnHZk=
