@@ -22,17 +22,14 @@ import (
 	"os"
 	"strconv"
 	"strings"
-	"syscall"
 	"time"
 
 	"github.com/containernetworking/cni/pkg/ns"
-	docopt "github.com/docopt/docopt-go"
+	"github.com/docopt/docopt-go"
 	"github.com/ishidawataru/sctp"
 	reuse "github.com/libp2p/go-reuseport"
-	log "github.com/sirupsen/logrus"
-	"golang.org/x/sys/unix"
-
 	uuid "github.com/satori/go.uuid"
+	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/felix/fv/utils"
 )
@@ -129,16 +126,6 @@ func tryConnect(ipAddress, port, sourcePort, protocol, loopFile string) error {
 	uid := uuid.NewV4().String()
 	testMessage := "hello," + uid
 
-	// Since we specify the source port rather than use an ephemeral port, if
-	// the SO_REUSEADDR and SO_REUSEPORT options are not set, when we make
-	// another call to this program, the original port is in post-close wait
-	// state and bind fails.
-	//
-	// The reuse library implements a version of net.Dialer that can reuse
-	// UDP/TCP ports in this way. (For SCTP we don't use the Dialer and
-	// directly set the socket options since the reuse library doesn't support
-	// SCTP.)
-	var d reuse.Dialer
 	var localAddr string
 	var remoteAddr string
 	if strings.Contains(ipAddress, ":") {
@@ -151,12 +138,12 @@ func tryConnect(ipAddress, port, sourcePort, protocol, loopFile string) error {
 	ls := newLoopState(loopFile)
 	log.Infof("Connecting from %v to %v over %s", localAddr, remoteAddr, protocol)
 	if protocol == "udp" {
-		d.D.LocalAddr, _ = net.ResolveUDPAddr("udp", localAddr)
-		log.WithFields(log.Fields{
-			"addr":     localAddr,
-			"resolved": d.D.LocalAddr,
-		}).Infof("Resolved udp addr")
-		conn, err := d.Dial("udp", remoteAddr)
+		// Since we specify the source port rather than use an ephemeral port, if
+		// the SO_REUSEADDR and SO_REUSEPORT options are not set, when we make
+		// another call to this program, the original port is in post-close wait
+		// state and bind fails.  The reuse library implements a Dial() that sets
+		// these options.
+		conn, err := reuse.Dial("udp", localAddr, remoteAddr)
 		log.Infof(`UDP "connection" established`)
 		if err != nil {
 			panic(err)
@@ -198,17 +185,14 @@ func tryConnect(ipAddress, port, sourcePort, protocol, loopFile string) error {
 			return err
 		}
 		raddr := &sctp.SCTPAddr{IPAddrs: []net.IPAddr{*rip}, Port: rport}
-		// the reuse.Dialer does not support SCTP, so set the needed reuse socket options
-		// and dial directly using the sctp library. (We use a forked copy of the library
-		// that allows setting the socket options in this way.)
-		conn, err := sctp.DialSCTPExt(
-			"sctp",
-			laddr,
-			raddr,
-			sctp.InitMsg{NumOstreams: sctp.SCTP_MAX_STREAM},
-			sctp.SocketOption{Level: syscall.SOL_SOCKET, Option: unix.SO_REUSEADDR, Value: 1},
-			sctp.SocketOption{Level: syscall.SOL_SOCKET, Option: unix.SO_REUSEPORT, Value: 1},
-		)
+		// Since we specify the source port rather than use an ephemeral port, if
+		// the SO_REUSEADDR and SO_REUSEPORT options are not set, when we make
+		// another call to this program, the original port is in post-close wait
+		// state and bind fails. The reuse.Dial() does not support SCTP, but the
+		// SCTP library has a SocketConfig that accepts a Control function
+		// (provided by reuse) that sets these options.
+		sCfg := sctp.SocketConfig{Control: reuse.Control}
+		conn, err := sCfg.Dial("sctp", laddr, raddr)
 		if err != nil {
 			panic(err)
 		}
@@ -232,15 +216,15 @@ func tryConnect(ipAddress, port, sourcePort, protocol, loopFile string) error {
 			}
 		}
 	} else {
-		d.D.LocalAddr, err = net.ResolveTCPAddr("tcp", localAddr)
 		if err != nil {
 			return err
 		}
-		log.WithFields(log.Fields{
-			"addr":     localAddr,
-			"resolved": d.D.LocalAddr,
-		}).Infof("Resolved tcp addr")
-		conn, err := d.Dial("tcp", remoteAddr)
+		// Since we specify the source port rather than use an ephemeral port, if
+		// the SO_REUSEADDR and SO_REUSEPORT options are not set, when we make
+		// another call to this program, the original port is in post-close wait
+		// state and bind fails.  The reuse library implements a Dial() that sets
+		// these options.
+		conn, err := reuse.Dial("tcp", localAddr, remoteAddr)
 		if err != nil {
 			return err
 		}

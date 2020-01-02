@@ -158,6 +158,8 @@ github.com/ipfs/go-log v0.0.0-20180611222144-5dc2060baaf8 h1:qIhWHcss7jC9N0n30nt
 github.com/ipfs/go-log v0.0.0-20180611222144-5dc2060baaf8/go.mod h1:AKYS9u+ECLT8t30brTaoVwu3f1FpGx6C0352oI1zQ0Q=
 github.com/ishidawataru/sctp v0.0.0-20190922091402-408ec287e38c h1:PwVcPU2rqkJIG0Lz/UGbGcbfi/HhEbOIId+w4xkbGHQ=
 github.com/ishidawataru/sctp v0.0.0-20190922091402-408ec287e38c/go.mod h1:co9pwDoBCm1kGxawmb4sPq0cSIOOWNPT4KnHotMP1Zg=
+github.com/ishidawataru/sctp v0.0.0-20191218070446-00ab2ac2db07 h1:rw3IAne6CDuVFlZbPOkA7bhxlqawFh7RJJ+CejfMaxE=
+github.com/ishidawataru/sctp v0.0.0-20191218070446-00ab2ac2db07/go.mod h1:co9pwDoBCm1kGxawmb4sPq0cSIOOWNPT4KnHotMP1Zg=
 github.com/joho/godotenv v1.3.0 h1:Zjp+RcGpHhGlrMbJzXTrZZPrWj+1vfm90La1wgB6Bhc=
 github.com/joho/godotenv v1.3.0/go.mod h1:7hK45KPybAkOC6peb+G5yklZfMxEjkZhHbwpqxOKXbg=
 github.com/jonboulle/clockwork v0.1.0 h1:VKV+ZcuP6l3yW9doeqz6ziZGgcynBVQO+obU0+0hcPo=
@@ -191,6 +193,8 @@ github.com/leodido/go-urn v0.0.0-20181204092800-a67a23e1c1af h1:EhEGUQX36JFkvSWz
 github.com/leodido/go-urn v0.0.0-20181204092800-a67a23e1c1af/go.mod h1:+cyI34gQWZcE1eQU7NVgKkkzdXDQHr1dBMtdAPozLkw=
 github.com/libp2p/go-reuseport v0.0.0-20180924121034-dd0c37d7767b h1:aMR7gRGtIrahvQNtYrdXKaLYv/RT20mnwWtT3qwhgaE=
 github.com/libp2p/go-reuseport v0.0.0-20180924121034-dd0c37d7767b/go.mod h1:UeLFiw50cCfyDHBpU0sXBR8ul1MO/m51mXpRO/SYjCE=
+github.com/libp2p/go-reuseport v0.0.1 h1:7PhkfH73VXfPJYKQ6JwS5I/eVcoyYi9IMNGc6FWpFLw=
+github.com/libp2p/go-reuseport v0.0.1/go.mod h1:jn6RmB1ufnQwl0Q1f+YxAj8isJgDCQzaaxIFYDhcYEA=
 github.com/libp2p/go-sockaddr v0.0.0-20190411201116-52957a0228cc h1:W3yN/EbItWRhQlK18dUTzr2AKxMQlkKpCUg3xl6MpA8=
 github.com/libp2p/go-sockaddr v0.0.0-20190411201116-52957a0228cc/go.mod h1:EBeYKMYs5LFgoaBSN2nA2jPQVmnA4gv7WkY64CBqYqQ=
 github.com/magiconair/properties v1.8.0/go.mod h1:PppfXfuXeibc/6YijjN8zIbojt8czPbwD3XqdrwzmxQ=

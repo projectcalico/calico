@@ -15,17 +15,16 @@ require (
 	github.com/gxed/eventfd v0.0.0-20160916113412-80a92cca79a8 // indirect
 	github.com/hashicorp/go-version v1.2.0
 	github.com/ipfs/go-log v0.0.0-20180611222144-5dc2060baaf8 // indirect
-	github.com/ishidawataru/sctp v0.0.0-20190922091402-408ec287e38c
+	github.com/ishidawataru/sctp v0.0.0-20191218070446-00ab2ac2db07
 	github.com/kardianos/osext v0.0.0-20190222173326-2bc1f35cddc0
 	github.com/kelseyhightower/envconfig v0.0.0-20180517194557-dd1402a4d99d
-	github.com/libp2p/go-reuseport v0.0.0-20180924121034-dd0c37d7767b
+	github.com/libp2p/go-reuseport v0.0.1
 	github.com/libp2p/go-sockaddr v0.0.0-20190411201116-52957a0228cc // indirect
 	github.com/mattn/go-colorable v0.0.0-20190708054220-c52ace132bf4 // indirect
 	github.com/mipearson/rfw v0.0.0-20170619235010-6f0a6f3266ba
 	github.com/onsi/ginkgo v1.10.1
 	github.com/onsi/gomega v1.7.0
 	github.com/opentracing/opentracing-go v0.0.0-20190704175813-135aa78c6f95 // indirect
-	github.com/pkg/errors v0.8.1 // indirect
 	github.com/projectcalico/libcalico-go v1.7.2-0.20191214003639-2449a6f3ad4f
 	github.com/projectcalico/pod2daemon v0.0.0-20190730210055-df57fc59e2e1
 	github.com/projectcalico/typha v0.0.0-20191214040624-782d297f33cb
@@ -56,5 +55,3 @@ require (
 )
 
 replace github.com/sirupsen/logrus => github.com/projectcalico/logrus v1.0.4-calico
-
-replace github.com/ishidawataru/sctp => github.com/projectcalico/sctp v0.0.0-20191213163756-51fb0a816876
