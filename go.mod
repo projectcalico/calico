@@ -18,7 +18,7 @@ require (
 	github.com/mipearson/rfw v0.0.0-20170619235010-6f0a6f3266ba
 	github.com/onsi/ginkgo v1.10.1
 	github.com/onsi/gomega v1.7.0
-	github.com/projectcalico/libcalico-go v1.7.2-0.20191223190708-a8685eb0c236
+	github.com/projectcalico/libcalico-go v1.7.2-0.20200102185429-756777256bb8
 	github.com/projectcalico/pod2daemon v0.0.0-20191223184832-a0e1c4693271
 	github.com/projectcalico/typha v0.7.3-0.20200102040858-c4a0227be6b1
 	github.com/prometheus/client_golang v0.9.1
