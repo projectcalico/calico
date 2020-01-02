@@ -1,4 +1,5 @@
 package: github.com/projectcalico/cni-plugin
+version: e67bb289cccfcad352b92c5234a1610b105846e0
 import:
 - package: github.com/sirupsen/logrus
   version: v1.0.4
@@ -24,7 +25,7 @@ import:
   subpackages:
   - gexec
 - package: github.com/projectcalico/libcalico-go
-  version: ac36d966132f2019eb4afc4d3823ed2a98564d2f
+  version: 5a23a805e6a0bb3636949497179ea06ec6e948a6
   subpackages:
   - lib/apiconfig
   - lib/apis/v3
@@ -58,3 +59,12 @@ import:
 - package: golang.org/x/net
   version: 4dfa2610cdf3b287375bbba5b8f2a14d3b01d8de
 - package: github.com/natefinch/atomic
+# Newer versions of client_golang use github.com/cespare/xxhash/v2. However
+# glide does not support v2 modules.
+- package: github.com/prometheus/client_golang
+  version: 1.1.0
+# This version of client_golang needs this older version of prometheus/procfs
+- package: github.com/prometheus/procfs
+  version: 0.0.8
+- package: gopkg.in/yaml.v2
+  version: v2.2.5
