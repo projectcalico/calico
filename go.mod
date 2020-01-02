@@ -3,7 +3,6 @@ module github.com/projectcalico/kube-controllers
 go 1.13
 
 require (
-	github.com/Workiva/go-datastructures v1.0.50 // indirect
 	github.com/apparentlymart/go-cidr v1.0.1
 	github.com/coreos/etcd v3.3.18+incompatible
 	github.com/grpc-ecosystem/go-grpc-middleware v1.1.0 // indirect
