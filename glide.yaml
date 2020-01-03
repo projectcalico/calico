@@ -15,7 +15,7 @@ import:
   - json
 - package: github.com/projectcalico/go-yaml-wrapper
 - package: github.com/projectcalico/libcalico-go
-  version: ac36d966132f2019eb4afc4d3823ed2a98564d2f
+  version: 5a23a805e6a0bb3636949497179ea06ec6e948a6
   subpackages:
   - lib/apiconfig
   - lib/apis/v1
@@ -36,13 +36,80 @@ import:
   - process
 - package: github.com/sirupsen/logrus
 - package: github.com/termie/go-shutil
-- package: k8s.io/apimachinery
+- package: k8s.io/api
+  version: 7cf5895f2711098d7d9527db0a4a49fb0dff7de2
   subpackages:
+  - admissionregistration/v1alpha1
+  - admissionregistration/v1beta1
+  - apps/v1
+  - apps/v1beta1
+  - apps/v1beta2
+  - authentication/v1
+  - authentication/v1beta1
+  - authorization/v1
+  - authorization/v1beta1
+  - autoscaling/v1
+  - autoscaling/v2beta1
+  - batch/v1
+  - batch/v1beta1
+  - batch/v2alpha1
+  - certificates/v1beta1
+  - core/v1
+  - events/v1beta1
+  - extensions/v1beta1
+  - networking/v1
+  - policy/v1beta1
+  - rbac/v1
+  - rbac/v1alpha1
+  - rbac/v1beta1
+  - scheduling/v1alpha1
+  - scheduling/v1beta1
+  - settings/v1alpha1
+  - storage/v1
+  - storage/v1alpha1
+  - storage/v1beta1
+- package: k8s.io/apimachinery
+  version: 1799e75a07195de9460b8ef7300883499f12127b
+  subpackages:
+  - pkg/api/errors
   - pkg/api/meta
+  - pkg/api/resource
+  - pkg/apis/meta/internalversion
   - pkg/apis/meta/v1
   - pkg/apis/meta/v1/unstructured
+  - pkg/apis/meta/v1beta1
+  - pkg/conversion
+  - pkg/conversion/queryparams
+  - pkg/fields
+  - pkg/labels
   - pkg/runtime
   - pkg/runtime/schema
+  - pkg/runtime/serializer
+  - pkg/runtime/serializer/json
+  - pkg/runtime/serializer/protobuf
+  - pkg/runtime/serializer/recognizer
+  - pkg/runtime/serializer/streaming
+  - pkg/runtime/serializer/versioning
+  - pkg/selection
+  - pkg/types
+  - pkg/util/cache
+  - pkg/util/clock
+  - pkg/util/diff
+  - pkg/util/errors
+  - pkg/util/framer
+  - pkg/util/intstr
+  - pkg/util/json
+  - pkg/util/net
+  - pkg/util/runtime
+  - pkg/util/sets
+  - pkg/util/uuid
+  - pkg/util/validation
+  - pkg/util/validation/field
+  - pkg/util/wait
+  - pkg/util/yaml
+  - pkg/version
+  - pkg/watch
+  - third_party/forked/golang/reflect
 # Later versions don't seem to work with glide.
 - package: github.com/influxdata/influxdb
   version: dd481f35df2c3b50c42087e2f8e3890e0f889711
@@ -56,8 +123,15 @@ import:
 # unix package.
 - package: golang.org/x/sys
   version: c2f5717e611cf8e89a852a41081355194d80c943
-testImport:
-- package: github.com/onsi/ginkgo
+- package: github.com/google/go-cmp
   subpackages:
-  - extensions/table
-- package: github.com/onsi/gomega
+  - cmp
+  - cmp/internal/diff
+  - cmp/internal/flags
+  - cmp/internal/function
+  - cmp/internal/value
+- package: github.com/google/uuid
+- package: k8s.io/klog
+- package: gopkg.in/yaml.v2
+  version: v2.2.5
+- package: sigs.k8s.io/yaml
