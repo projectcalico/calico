@@ -5,11 +5,10 @@ go 1.12
 require (
 	github.com/coreos/etcd v3.3.13+incompatible // indirect
 	github.com/kelseyhightower/confd v0.0.0-00010101000000-000000000000
-	github.com/mattn/go-isatty v0.0.8 // indirect
 	github.com/onsi/ginkgo v1.8.0
 	github.com/onsi/gomega v1.5.0
-	github.com/projectcalico/felix v0.0.0-20191011172024-206b455fe1dc
-	github.com/projectcalico/libcalico-go v0.0.0-20191104213953-1891db7ae73b
+	github.com/projectcalico/felix v0.0.0-20200103181800-6474231ca9d5
+	github.com/projectcalico/libcalico-go v1.7.2-0.20191223230708-3d65d3751012
 	github.com/sirupsen/logrus v1.4.2
 	github.com/vishvananda/netns v0.0.0-20180720170159-13995c7128cc // indirect
 	gopkg.in/fsnotify/fsnotify.v1 v1.4.7
@@ -20,4 +19,4 @@ require (
 
 replace github.com/sirupsen/logrus => github.com/projectcalico/logrus v0.0.0-20180627202928-fc9bbf2f57995271c5cd6911ede7a2ebc5ea7c6f
 
-replace github.com/kelseyhightower/confd => github.com/projectcalico/confd v0.0.0-20191011161408-8562e48676d2
+replace github.com/kelseyhightower/confd => github.com/projectcalico/confd v1.0.1-0.20200103010707-42b94537d756
