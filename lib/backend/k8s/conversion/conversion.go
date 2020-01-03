@@ -89,6 +89,10 @@ func (c Converter) NamespaceToProfile(ns *kapiv1.Namespace) (*model.KVPair, erro
 		labels[NamespaceLabelPrefix+k] = v
 	}
 
+	// Add a label for the namespace's name. This allows exact namespace matching
+	// based on name within the namespaceSelector.
+	labels[NamespaceLabelPrefix+NameLabel] = ns.Name
+
 	// Create the profile object.
 	name := NamespaceProfileNamePrefix + ns.Name
 	profile := apiv3.NewProfile()
@@ -100,13 +104,6 @@ func (c Converter) NamespaceToProfile(ns *kapiv1.Namespace) (*model.KVPair, erro
 	profile.Spec = apiv3.ProfileSpec{
 		Ingress: []apiv3.Rule{{Action: apiv3.Allow}},
 		Egress:  []apiv3.Rule{{Action: apiv3.Allow}},
-	}
-
-	// Only set labels to apply when there are actually labels. This makes the
-	// result of this function consistent with the struct as loaded directly
-	// from etcd, which uses nil for the empty map.
-	if len(labels) != 0 {
-		profile.Spec.LabelsToApply = labels
 	}
 
 	// Embed the profile in a KVPair.
@@ -778,21 +775,16 @@ func (c Converter) ServiceAccountToProfile(sa *kapiv1.ServiceAccount) (*model.KV
 		labels[ServiceAccountLabelPrefix+k] = v
 	}
 
+	// Add a label for the serviceaccount's name. This allows exact namespace matching
+	// based on name within the serviceAccountSelector.
+	labels[ServiceAccountLabelPrefix+NameLabel] = sa.Name
+
 	name := serviceAccountNameToProfileName(sa.Name, sa.Namespace)
 	profile := apiv3.NewProfile()
 	profile.ObjectMeta = metav1.ObjectMeta{
 		Name:              name,
 		CreationTimestamp: sa.CreationTimestamp,
 		UID:               sa.UID,
-	}
-
-	// Only set labels to apply when there are actually labels. This makes the
-	// result of this function consistent with the struct as loaded directly
-	// from etcd, which uses nil for the empty map.
-	if len(labels) != 0 {
-		profile.Spec.LabelsToApply = labels
-	} else {
-		profile.Spec.LabelsToApply = nil
 	}
 
 	// Embed the profile in a KVPair.
