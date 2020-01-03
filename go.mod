@@ -1,6 +1,6 @@
 module github.com/kelseyhightower/confd
 
-go 1.13
+go 1.12
 
 require (
 	github.com/BurntSushi/toml v0.3.1
@@ -8,7 +8,7 @@ require (
 	github.com/onsi/ginkgo v1.10.1
 	github.com/onsi/gomega v1.7.0
 	github.com/projectcalico/libcalico-go v0.0.0-20200102185429-756777256bb8
-	github.com/projectcalico/typha v0.0.0-20200103040922-f6658a8ac960
+	github.com/projectcalico/typha v0.0.0-20200103121022-1b4f9e7f0eaf
 	github.com/sirupsen/logrus v1.4.2
 	github.com/ugorji/go v1.1.7 // indirect
 
