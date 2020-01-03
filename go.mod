@@ -5,22 +5,24 @@ go 1.13
 require (
 	github.com/apparentlymart/go-cidr v1.0.1
 	github.com/coreos/etcd v3.3.18+incompatible
-	github.com/grpc-ecosystem/go-grpc-middleware v1.1.0 // indirect
+	github.com/gxed/GoEndian v0.0.0-20160916112711-0f5c6873267e // indirect
+	github.com/gxed/eventfd v0.0.0-20160916113412-80a92cca79a8 // indirect
+	github.com/ipfs/go-log v0.0.0-20180611222144-5dc2060baaf8 // indirect
 	github.com/joho/godotenv v1.3.0
 	github.com/kelseyhightower/envconfig v0.0.0-20180517194557-dd1402a4d99d
-	github.com/mailru/easyjson v0.0.0-20190626092158-b2ccc519800e // indirect
+	github.com/libp2p/go-sockaddr v0.0.0-20190411201116-52957a0228cc // indirect
+	github.com/mattn/go-colorable v0.0.0-20190708054220-c52ace132bf4 // indirect
 	github.com/onsi/ginkgo v1.10.1
 	github.com/onsi/gomega v1.7.0
 	github.com/patrickmn/go-cache v0.0.0-20180815053127-5633e0862627
-	github.com/projectcalico/felix v0.0.0-20191231175915-5ccf52a034de // indirect
-	github.com/projectcalico/libcalico-go v1.7.2-0.20191214003639-2449a6f3ad4f
-	github.com/projectcalico/typha v0.7.2 // indirect
+	github.com/projectcalico/felix v0.0.0-20200102201915-2c00f649eb69 // indirect
+	github.com/projectcalico/libcalico-go v1.7.2-0.20200102185429-756777256bb8
 	github.com/prometheus/client_golang v0.9.4 // indirect
 	github.com/satori/go.uuid v1.2.0
 	github.com/sirupsen/logrus v1.4.2
 	github.com/spf13/pflag v1.0.5
-	go.uber.org/zap v1.13.0 // indirect
-	gopkg.in/go-playground/validator.v9 v9.28.0 // indirect
+	github.com/ugorji/go v1.1.7 // indirect
+	github.com/whyrusleeping/go-logging v0.0.0-20170515211332-0457bb6b88fc // indirect
 
 	// k8s.io/api v1.16.3 is at 16d7abae0d2a
 	k8s.io/api v0.0.0-20191114100352-16d7abae0d2a
