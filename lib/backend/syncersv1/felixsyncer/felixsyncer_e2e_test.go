@@ -90,63 +90,50 @@ var _ = testutils.E2eDatastoreDescribe("Felix syncer tests", testutils.Datastore
 			// Kubernetes will have a profile for each of the namespaces that is configured.
 			// We expect:  default, kube-system, kube-public, namespace-1, namespace-2
 			if config.Spec.DatastoreType == apiconfig.Kubernetes {
-				//add one for the node resource
-				expectedCacheSize += 7
-				syncTester.ExpectData(model.KVPair{
-					Key: model.ProfileRulesKey{ProfileKey: model.ProfileKey{Name: "kns.default"}},
-					Value: &model.ProfileRules{
-						InboundRules:  []model.Rule{{Action: "allow"}},
-						OutboundRules: []model.Rule{{Action: "allow"}},
-					},
-				})
-				syncTester.ExpectData(model.KVPair{
-					Key: model.ProfileRulesKey{ProfileKey: model.ProfileKey{Name: "kns.kube-public"}},
-					Value: &model.ProfileRules{
-						InboundRules:  []model.Rule{{Action: "allow"}},
-						OutboundRules: []model.Rule{{Action: "allow"}},
-					},
-				})
-				syncTester.ExpectData(model.KVPair{
-					Key: model.ProfileRulesKey{ProfileKey: model.ProfileKey{Name: "kns.kube-system"}},
-					Value: &model.ProfileRules{
-						InboundRules:  []model.Rule{{Action: "allow"}},
-						OutboundRules: []model.Rule{{Action: "allow"}},
-					},
-				})
-				syncTester.ExpectData(model.KVPair{
-					Key: model.ProfileRulesKey{ProfileKey: model.ProfileKey{Name: "kns.namespace-1"}},
-					Value: &model.ProfileRules{
-						InboundRules:  []model.Rule{{Action: "allow"}},
-						OutboundRules: []model.Rule{{Action: "allow"}},
-					},
-				})
-				syncTester.ExpectData(model.KVPair{
-					Key: model.ProfileRulesKey{ProfileKey: model.ProfileKey{Name: "kns.namespace-2"}},
-					Value: &model.ProfileRules{
-						InboundRules:  []model.Rule{{Action: "allow"}},
-						OutboundRules: []model.Rule{{Action: "allow"}},
-					},
-				})
-				syncTester.ExpectData(model.KVPair{
-					Key: model.ProfileRulesKey{ProfileKey: model.ProfileKey{Name: "kns.kube-node-lease"}},
-					Value: &model.ProfileRules{
-						InboundRules:  []model.Rule{{Action: "allow"}},
-						OutboundRules: []model.Rule{{Action: "allow"}},
-					},
-				})
-				expectedCacheSize += func(syncTester *testutils.SyncerTester, namespaces []string) int {
-					for _, n := range namespaces {
-						syncTester.ExpectData(model.KVPair{
-							Key: model.ProfileRulesKey{ProfileKey: model.ProfileKey{Name: "ksa." + n + ".default"}},
-							Value: &model.ProfileRules{
-								InboundRules:  nil,
-								OutboundRules: nil,
-							},
-						})
-					}
-					return len(namespaces)
-				}(syncTester, []string{"default", "kube-public", "kube-system", "namespace-1", "namespace-2", "kube-node-lease"})
-				syncTester.ExpectCacheSize(expectedCacheSize)
+				// Add one for the node resource.
+				expectedCacheSize += 1
+
+				// Add resources for the namespaces we expect in the cluster.
+				for _, ns := range []string{"default", "kube-public", "kube-system", "namespace-1", "namespace-2", "kube-node-lease"} {
+					// Expect profile rules for each namespace providing default allow behavior.
+					syncTester.ExpectData(model.KVPair{
+						Key: model.ProfileRulesKey{ProfileKey: model.ProfileKey{Name: "kns." + ns}},
+						Value: &model.ProfileRules{
+							InboundRules:  []model.Rule{{Action: "allow"}},
+							OutboundRules: []model.Rule{{Action: "allow"}},
+						},
+					})
+
+					// Expect profile labels for each namespace as well. The labels should include the name
+					// of the namespace.
+					syncTester.ExpectData(model.KVPair{
+						Key: model.ProfileLabelsKey{ProfileKey: model.ProfileKey{Name: "kns." + ns}},
+						Value: map[string]string{
+							"pcns.projectcalico.org/name": ns,
+						},
+					})
+
+					// Expect profile rules for the default serviceaccount in each namespace.
+					syncTester.ExpectData(model.KVPair{
+						Key: model.ProfileRulesKey{ProfileKey: model.ProfileKey{Name: "ksa." + ns + ".default"}},
+						Value: &model.ProfileRules{
+							InboundRules:  nil,
+							OutboundRules: nil,
+						},
+					})
+
+					// Expect profile labels for each default serviceaccount as well. The labels should include the name
+					// of the service account.
+					syncTester.ExpectData(model.KVPair{
+						Key: model.ProfileLabelsKey{ProfileKey: model.ProfileKey{Name: "ksa." + ns + ".default"}},
+						Value: map[string]string{
+							"pcsa.projectcalico.org/name": "default",
+						},
+					})
+
+					// Increase expected cache size based on per-namespace resources.
+					expectedCacheSize += 4
+				}
 			}
 			syncTester.ExpectCacheSize(expectedCacheSize)
 

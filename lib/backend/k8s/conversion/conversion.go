@@ -787,9 +787,7 @@ func (c Converter) ServiceAccountToProfile(sa *kapiv1.ServiceAccount) (*model.KV
 		CreationTimestamp: sa.CreationTimestamp,
 		UID:               sa.UID,
 	}
-	profile.Spec = apiv3.ProfileSpec{
-		LabelsToApply: labels,
-	}
+	profile.Spec.LabelsToApply = labels
 
 	// Embed the profile in a KVPair.
 	kvp := model.KVPair{
