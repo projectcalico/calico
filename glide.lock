@@ -115,7 +115,7 @@ imports:
 - name: github.com/kardianos/osext
   version: 2bc1f35cddc0cc527b4bc3dce8578fc2a6c11384
 - name: github.com/kelseyhightower/confd
-  version: 0c53cc8c429b6b2d2ccbf49dec6b8205556ba9eb
+  version: e1becd05c40793c4b455a0f12037312933e2a6dc
   repo: https://github.com/projectcalico/confd.git
   subpackages:
   - pkg/backends
@@ -177,7 +177,7 @@ imports:
   - matchers/support/goraph/util
   - types
 - name: github.com/projectcalico/felix
-  version: f57a408321fdb535ea6e98cfef9181d25491aefa
+  version: 250b965ba042e4b92ee557fb4b3be84c6762d55e
   subpackages:
   - bpf
   - buildinfo
@@ -217,7 +217,7 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: 896f59d614d5c47df94d47a78b1c01a909077bd7
+  version: 5a23a805e6a0bb3636949497179ea06ec6e948a6
   subpackages:
   - lib/apiconfig
   - lib/apis/v1
@@ -268,7 +268,7 @@ imports:
   subpackages:
   - binder
 - name: github.com/projectcalico/typha
-  version: 2fa03f68cfcca2c4f686dc4c2ee55792405ad4de
+  version: 9d74e18ebe1acaa94d8fd8b297c4164e0a4ee1b1
   subpackages:
   - pkg/config
   - pkg/logutils
@@ -416,7 +416,7 @@ imports:
 - name: gopkg.in/tomb.v1
   version: dd632973f1e7218eb1089048e0798ec9ae7dceb8
 - name: gopkg.in/yaml.v2
-  version: 5420a8b6744d3b0345ab293f6fcba19c978f1183
+  version: f90ceb4f409096b60e2e9076b38b304b8246e5fa
 - name: k8s.io/api
   version: 7cf5895f2711098d7d9527db0a4a49fb0dff7de2
   subpackages:
