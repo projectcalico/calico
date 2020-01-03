@@ -123,7 +123,7 @@ spec:
                 fieldRef:
                   fieldPath: spec.nodeName
 {{- end }}
-{{- if eq .Values.network "calico" }}
+{{- if or (eq .Values.network "calico") (eq .Values.network "flannel") }}
             # CNI MTU Config variable
             - name: CNI_MTU
               valueFrom:
