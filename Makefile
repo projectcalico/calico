@@ -40,6 +40,9 @@ NODE_VER := $(shell cat $(VERSIONS_FILE) | $(YAML_CMD) read - '"$(RELEASE_STREAM
 CTL_VER := $(shell cat $(VERSIONS_FILE) | $(YAML_CMD) read - '"$(RELEASE_STREAM)".[0].components.calicoctl.version')
 CNI_VER := $(shell cat $(VERSIONS_FILE) | $(YAML_CMD) read - '"$(RELEASE_STREAM)".[0].components.calico/cni.version')
 KUBE_CONTROLLERS_VER := $(shell cat $(VERSIONS_FILE) | $(YAML_CMD) read - '"$(RELEASE_STREAM)".[0].components.calico/kube-controllers.version')
+POD2DAEMON_VER := $(shell cat $(VERSIONS_FILE) | $(YAML_CMD) read - '"$(RELEASE_STREAM)".[0].components.flexvol.version')
+DIKASTES_VER := $(shell cat $(VERSIONS_FILE) | $(YAML_CMD) read - '"$(RELEASE_STREAM)".[0].components.calico/dikastes.version')
+FLANNEL_MIGRATION_VER := $(shell cat $(VERSIONS_FILE) | $(YAML_CMD) read - '"$(RELEASE_STREAM)".[0].components.calico/flannel-migration-controller.version')
 TYPHA_VER := $(shell cat $(VERSIONS_FILE) | $(YAML_CMD) read - '"$(RELEASE_STREAM)".[0].components.typha.version')
 
 ##############################################################################
@@ -199,7 +202,7 @@ htmlproofer: _site
 
 kubeval: _site
 	# Run kubeval to check master manifests are valid Kubernetes resources.
-	-docker run -v $$PWD:/calico --entrypoint /bin/sh garethr/kubeval:0.7.3 -c 'ok=true; for f in `find /calico/_site/master -name "*.yaml" |grep -v "\(config\|allow-istio-pilot\|30-policy\istio-app-layer-policy\|-cf\).yaml"`; do echo Running kubeval on $$f; /kubeval $$f || ok=false; done; $$ok' 1>stderr.out 2>&1
+	-docker run -v $$PWD:/calico --entrypoint /bin/sh garethr/kubeval:0.7.3 -c 'ok=true; for f in `find /calico/_site/master -name "*.yaml" |grep -v "\(config\|allow-istio-pilot\|30-policy\|istio-app-layer-policy\|istio-inject-configmap.*\|-cf\).yaml"`; do echo Running kubeval on $$f; /kubeval $$f || ok=false; done; $$ok' 1>stderr.out 2>&1
 
 	# Filter out error loading schema for non-standard resources.
 	# Filter out error reading empty secrets (which we use for e.g. etcd secrets and seem to work).
@@ -364,7 +367,9 @@ release-archive: release-prereqs $(RELEASE_DIR).tgz
 $(RELEASE_DIR).tgz: $(RELEASE_DIR) $(RELEASE_DIR_K8S_MANIFESTS) $(RELEASE_DIR_IMAGES) $(RELEASE_DIR_BIN) $(RELEASE_DIR)/README
 	tar -czvf $(RELEASE_DIR).tgz -C $(OUTPUT_DIR) $(RELEASE_DIR_NAME)
 
-$(RELEASE_DIR_IMAGES): $(RELEASE_DIR_IMAGES)/calico-node.tar $(RELEASE_DIR_IMAGES)/calico-typha.tar $(RELEASE_DIR_IMAGES)/calico-cni.tar $(RELEASE_DIR_IMAGES)/calico-kube-controllers.tar
+$(RELEASE_DIR_IMAGES): $(RELEASE_DIR_IMAGES)/calico-node.tar $(RELEASE_DIR_IMAGES)/calico-typha.tar $(RELEASE_DIR_IMAGES)/calico-cni.tar $(RELEASE_DIR_IMAGES)/calico-kube-controllers.tar $(RELEASE_DIR_IMAGES)/calico-pod2daemon-flexvol.tar $(RELEASE_DIR_IMAGES)/calico-dikastes.tar $(RELEASE_DIR_IMAGES)/calico-flannel-migration-controller.tar
+
+
 $(RELEASE_DIR_BIN): $(RELEASE_DIR_BIN)/calicoctl $(RELEASE_DIR_BIN)/calicoctl-windows-amd64.exe $(RELEASE_DIR_BIN)/calicoctl-darwin-amd64
 
 $(RELEASE_DIR)/README:
@@ -376,6 +381,9 @@ $(RELEASE_DIR)/README:
 	@echo "* The calico/typha docker image  (version $(TYPHA_VER))" >> $@
 	@echo "* The calico/cni docker image  (version $(CNI_VERS))" >> $@
 	@echo "* The calico/kube-controllers docker image (version $(KUBE_CONTROLLERS_VER))" >> $@
+	@echo "* The calico/dikastes docker image (version $(DIKASTES_VER))" >> $@
+	@echo "* The calico/pod2daemon-flexvol docker image (version $(POD2DAEMON_VER))" >> $@
+	@echo "* The calico/flannel-migration-controller docker image (version $(FLANNEL_MIGRATION_VER))" >> $@
 	@echo "" >> $@
 	@echo "Binaries (for amd64) (under 'bin')" >> $@
 	@echo "* The calicoctl binary (for Linux) (version $(CTL_VER))" >> $@
@@ -419,6 +427,21 @@ $(RELEASE_DIR_IMAGES)/calico-kube-controllers.tar:
 	docker pull calico/kube-controllers:$(KUBE_CONTROLLERS_VER)
 	docker save --output $@ calico/kube-controllers:$(KUBE_CONTROLLERS_VER)
 
+$(RELEASE_DIR_IMAGES)/calico-pod2daemon-flexvol.tar:
+	mkdir -p $(RELEASE_DIR_IMAGES)
+	docker pull calico/pod2daemon-flexvol:$(POD2DAEMON_VER)
+	docker save --output $@ calico/pod2daemon-flexvol:$(POD2DAEMON_VER)
+
+$(RELEASE_DIR_IMAGES)/calico-dikastes.tar:
+	mkdir -p $(RELEASE_DIR_IMAGES)
+	docker pull calico/dikastes:$(DIKASTES_VER)
+	docker save --output $@ calico/dikastes:$(DIKASTES_VER)
+
+$(RELEASE_DIR_IMAGES)/calico-flannel-migration-controller.tar:
+	mkdir -p $(RELEASE_DIR_IMAGES)
+	docker pull calico/flannel-migration-controller:$(FLANNEL_MIGRATION_VER)
+	docker save --output $@ calico/flannel-migration-controller:$(FLANNEL_MIGRATION_VER)
+
 $(RELEASE_DIR_BIN)/%:
 	mkdir -p $(RELEASE_DIR_BIN)
 	wget https://github.com/projectcalico/calicoctl/releases/download/$(CTL_VER)/$(@F) -O $@
@@ -431,7 +454,7 @@ HELM_RELEASE=helm-v2.11.0-linux-amd64.tar.gz
 bin/helm:
 	mkdir -p bin
 	$(eval TMP := $(shell mktemp -d))
-	wget https://storage.googleapis.com/kubernetes-helm/$(HELM_RELEASE) -O $(TMP)/$(HELM_RELEASE)
+	wget -q https://storage.googleapis.com/kubernetes-helm/$(HELM_RELEASE) -O $(TMP)/$(HELM_RELEASE)
 	tar -zxvf $(TMP)/$(HELM_RELEASE) -C $(TMP)
 	mv $(TMP)/linux-amd64/helm bin/helm
 

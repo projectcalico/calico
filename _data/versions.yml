@@ -1,3 +1,50 @@
+v3.11:
+- title: v3.11.1
+  components:
+     typha:
+      version: v3.11.1
+     calicoctl:
+      version: v3.11.1
+     calico/node:
+      version: v3.11.1
+     calico/cni:
+      version: v3.11.1
+     calico/kube-controllers:
+      version: v3.11.1
+     networking-calico:
+      version: 3.11.1
+     flannel:
+      version: v0.11.0
+     calico/dikastes:
+      version: v3.11.1
+     flexvol:
+      version: v3.11.1
+     calico/flannel-migration-controller:
+      version: v3.11.1
+
+- title: v3.11.0
+  components:
+     typha:
+      version: v3.11.0
+     calicoctl:
+      version: v3.11.0
+     calico/node:
+      version: v3.11.0
+     calico/cni:
+      version: v3.11.0
+     calico/kube-controllers:
+      version: v3.11.0
+     networking-calico:
+      version: 3.11.0.0
+     flannel:
+      version: v0.11.0
+     calico/dikastes:
+      version: v3.11.0
+     flexvol:
+      version: v3.11.0
+     calico/flannel-migration-controller:
+      version: v3.11.0
+
 v3.10:
 - title: v3.10.2
   components:
@@ -18,6 +65,8 @@ v3.10:
      calico/dikastes:
       version: v3.10.2
      flexvol:
+      version: v3.10.2
+     calico/flannel-migration-controller:
       version: v3.10.2
 
 - title: v3.10.1
@@ -82,6 +131,8 @@ v3.9:
      calico/dikastes:
       version: v3.9.4
      flexvol:
+      version: v3.9.4
+     calico/flannel-migration-controller:
       version: v3.9.4
 
 - title: v3.9.3
@@ -187,6 +238,8 @@ v3.8:
      calico/dikastes:
       version: v3.8.5
      flexvol:
+      version: v3.8.5
+     calico/flannel-migration-controller:
       version: v3.8.5
 
 - title: v3.8.4
@@ -3228,4 +3281,3 @@ master:
       version: master
      flexvol:
       version: master
-

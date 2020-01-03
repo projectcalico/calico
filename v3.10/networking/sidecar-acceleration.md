@@ -1,6 +1,5 @@
 ---
 title: Accelerating Istio network performance
-redirect_from: latest/networking/sidecar-acceleration
 ---
 
 ### Big picture

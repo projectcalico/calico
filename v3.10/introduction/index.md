@@ -1,6 +1,5 @@
 ---
 title: About Calico
-redirect_from: latest/introduction/index
 show_title: false
 canonical_url: 'https://docs.projectcalico.org/v3.9/introduction/index'
 custom_css: css/intro.css

@@ -2,17 +2,6 @@
 layout: null
 ---
 
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: istio-sidecar-injector
-  namespace: istio-system
-  labels:
-    app: istio
-    chart: istio
-    heritage: Tiller
-    release: istio
-    istio: sidecar-injector
 data:
   config: |-
     policy: enabled

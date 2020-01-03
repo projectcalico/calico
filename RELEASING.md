@@ -182,6 +182,9 @@ at the same time that release branches are cut, often well before the release is
        version: vX.Y
    ```
 
+1. Update `_plugins/vX.Y/values.rb` (where `vX.Y` is the new version) so that
+   the function `gen_values_master` is named `gen_values_vX_Y`.
+
 1. If appropriate, update the list of tested versions for different platforms in the appropriate documents.
 
    - Kubernetes `vX.Y/getting-started/kubernetes/requirements.md`

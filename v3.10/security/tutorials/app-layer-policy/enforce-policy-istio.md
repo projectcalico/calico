@@ -1,6 +1,5 @@
 ---
 title: Enforce network policy using Istio tutorial
-redirect_from: latest/security/tutorials/app-layer-policy/enforce-policy-istio
 canonical_url: 'https://docs.projectcalico.org/v3.9/security/tutorials/app-layer-policy/enforce-policy-istio'
 ---
 
