@@ -52,7 +52,7 @@ func TestNATPodPodXNode(t *testing.T) {
 
 	err = natMap.Update(
 		nat.NewNATKey(ipv4.DstIP, uint16(udp.DstPort), uint8(ipv4.Protocol)).AsBytes(),
-		nat.NewNATValue(0, 1, 0).AsBytes(),
+		nat.NewNATValue(0, 1, 0, 0).AsBytes(),
 	)
 	Expect(err).NotTo(HaveOccurred())
 
@@ -234,6 +234,9 @@ func TestNATPodPodXNode(t *testing.T) {
 	dumpCTMap(ctMap)
 
 	// Response leaving to original source
+
+	// clean up
+	resetCTMap(ctMap)
 }
 
 func TestNATNodePort(t *testing.T) {
@@ -253,7 +256,7 @@ func TestNATNodePort(t *testing.T) {
 
 	err = natMap.Update(
 		nat.NewNATKey(ipv4.DstIP, uint16(udp.DstPort), uint8(ipv4.Protocol)).AsBytes(),
-		nat.NewNATValue(0, 1, 0).AsBytes(),
+		nat.NewNATValue(0, 1, 0, 0).AsBytes(),
 	)
 	Expect(err).NotTo(HaveOccurred())
 
@@ -478,6 +481,8 @@ func TestNATNodePort(t *testing.T) {
 	})
 
 	dumpCTMap(ctMap)
+	// clean up
+	resetCTMap(ctMap)
 }
 
 func TestNATNodePortICMPTooBig(t *testing.T) {
@@ -498,7 +503,7 @@ func TestNATNodePortICMPTooBig(t *testing.T) {
 
 	err = natMap.Update(
 		nat.NewNATKey(ipv4.DstIP, uint16(udp.DstPort), uint8(ipv4.Protocol)).AsBytes(),
-		nat.NewNATValue(0, 1, 0).AsBytes(),
+		nat.NewNATValue(0, 1, 0, 0).AsBytes(),
 	)
 	Expect(err).NotTo(HaveOccurred())
 
@@ -544,4 +549,163 @@ func TestNATNodePortICMPTooBig(t *testing.T) {
 
 		checkICMPTooBig(pktR, ipv4, udp, natTunnelMTU)
 	})
+
+	// clean up
+	resetCTMap(ctMap)
+}
+
+func TestNATAffinity(t *testing.T) {
+	_, ipv4, l4, _, pktBytes, err := testPacketUDPDefault()
+	Expect(err).NotTo(HaveOccurred())
+	udp := l4.(*layers.UDP)
+
+	mc := &bpf.MapContext{}
+	natMap := nat.FrontendMap(mc)
+	err = natMap.EnsureExists()
+	Expect(err).NotTo(HaveOccurred())
+
+	natBEMap := nat.BackendMap(mc)
+	err = natBEMap.EnsureExists()
+	Expect(err).NotTo(HaveOccurred())
+
+	natAffMap := nat.AffinityMap(mc)
+	err = natAffMap.EnsureExists()
+	Expect(err).NotTo(HaveOccurred())
+
+	ctMap := conntrack.Map(mc)
+	err = ctMap.EnsureExists()
+	Expect(err).NotTo(HaveOccurred())
+
+	err = natMap.Update(
+		nat.NewNATKey(ipv4.DstIP, uint16(udp.DstPort), uint8(ipv4.Protocol)).AsBytes(),
+		nat.NewNATValue(0, 1, 0, 0).AsBytes(),
+	)
+	Expect(err).NotTo(HaveOccurred())
+
+	natIP := net.IPv4(8, 8, 8, 8)
+	natPort := uint16(666)
+
+	err = natBEMap.Update(
+		nat.NewNATBackendKey(0, 0).AsBytes(),
+		nat.NewNATBackendValue(natIP, natPort).AsBytes(),
+	)
+	Expect(err).NotTo(HaveOccurred())
+
+	// Check the no affinity entry exists if no affinity is set
+	runBpfTest(t, "calico_from_workload_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
+		res, err := bpfrun(pktBytes)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
+
+		pktR := gopacket.NewPacket(res.dataOut, layers.LayerTypeEthernet, gopacket.Default)
+		fmt.Printf("pktR = %+v\n", pktR)
+
+		aff, err := nat.LoadAffinityMap(natAffMap)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(aff).To(HaveLen(0))
+	})
+
+	// After we set affinity, new entry is acreated in affinity table
+	natKey := nat.NewNATKey(ipv4.DstIP, uint16(udp.DstPort), uint8(ipv4.Protocol))
+	err = natMap.Update(
+		natKey.AsBytes(),
+		nat.NewNATValue(0, 1, 0, 1 /* second */).AsBytes(),
+	)
+	Expect(err).NotTo(HaveOccurred())
+
+	dumpNATMap(natMap)
+	resetCTMap(ctMap)
+
+	var affEntry nat.AffinityValue
+	affKey := nat.NewAffinityKey(ipv4.SrcIP, natKey)
+
+	runBpfTest(t, "calico_from_workload_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
+		res, err := bpfrun(pktBytes)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
+
+		pktR := gopacket.NewPacket(res.dataOut, layers.LayerTypeEthernet, gopacket.Default)
+		fmt.Printf("pktR = %+v\n", pktR)
+
+		aff, err := nat.LoadAffinityMap(natAffMap)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(aff).To(HaveLen(1))
+		Expect(aff).To(HaveKey(affKey))
+		affEntry = aff[affKey]
+		Expect(affEntry.Backend()).To(Equal(nat.NewNATBackendValue(natIP, natPort)))
+	})
+	resetCTMap(ctMap)
+
+	// check that the selection is the same with a new entry to pick and the
+	// entry is not overwritten (ts does not change)
+	natIP2 := net.IPv4(7, 7, 7, 7)
+	natPort2 := uint16(777)
+
+	err = natMap.Update(
+		nat.NewNATKey(ipv4.DstIP, uint16(udp.DstPort), uint8(ipv4.Protocol)).AsBytes(),
+		nat.NewNATValue(0, 2, 0, 1 /* second */).AsBytes(),
+	)
+	Expect(err).NotTo(HaveOccurred())
+
+	err = natBEMap.Update(
+		nat.NewNATBackendKey(0, 1).AsBytes(),
+		nat.NewNATBackendValue(natIP2, natPort2).AsBytes(),
+	)
+	Expect(err).NotTo(HaveOccurred())
+
+	runBpfTest(t, "calico_from_workload_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
+		res, err := bpfrun(pktBytes)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
+
+		pktR := gopacket.NewPacket(res.dataOut, layers.LayerTypeEthernet, gopacket.Default)
+		fmt.Printf("pktR = %+v\n", pktR)
+
+		aff, err := nat.LoadAffinityMap(natAffMap)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(aff).To(HaveLen(1))
+		Expect(aff).To(HaveKey(affKey))
+		Expect(aff[affKey]).To(Equal(affEntry))
+	})
+	resetCTMap(ctMap)
+
+	// delete the currently selected backend, expire the affinity check and make
+	// sure that a new selection in made
+	err = natMap.Update(
+		nat.NewNATKey(ipv4.DstIP, uint16(udp.DstPort), uint8(ipv4.Protocol)).AsBytes(),
+		nat.NewNATValue(0, 1, 0, 1 /* second */).AsBytes(),
+	)
+	Expect(err).NotTo(HaveOccurred())
+
+	err = natBEMap.Update(
+		nat.NewNATBackendKey(0, 0).AsBytes(),
+		nat.NewNATBackendValue(natIP2, natPort2).AsBytes(),
+	)
+	Expect(err).NotTo(HaveOccurred())
+
+	err = natBEMap.Delete(nat.NewNATBackendKey(0, 1).AsBytes())
+	Expect(err).NotTo(HaveOccurred())
+
+	err = natAffMap.Update(
+		affKey.AsBytes(),
+		nat.NewAffinityValue(0, nat.NewNATBackendValue(natIP, natPort)).AsBytes(),
+	)
+	Expect(err).NotTo(HaveOccurred())
+
+	runBpfTest(t, "calico_from_workload_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
+		res, err := bpfrun(pktBytes)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
+
+		pktR := gopacket.NewPacket(res.dataOut, layers.LayerTypeEthernet, gopacket.Default)
+		fmt.Printf("pktR = %+v\n", pktR)
+
+		aff, err := nat.LoadAffinityMap(natAffMap)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(aff).To(HaveLen(1))
+		Expect(aff).To(HaveKey(affKey))
+		affEntry = aff[affKey]
+		Expect(affEntry.Backend()).To(Equal(nat.NewNATBackendValue(natIP2, natPort2)))
+	})
+	resetCTMap(ctMap)
 }

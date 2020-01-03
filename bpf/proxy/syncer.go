@@ -266,7 +266,7 @@ func (s *Syncer) cleanupDerived(id uint32) error {
 				return err
 			}
 
-			log.Debugf("bpf map deleting derived %s:%s", key, nat.NewNATValue(id, 0, 0))
+			log.Debugf("bpf map deleting derived %s:%s", key, nat.NewNATValue(id, 0, 0, 0))
 			if err := s.bpfSvcs.Delete(key[:]); err != nil {
 				return errors.Errorf("bpfSvcs.Delete: %s", err)
 			}
@@ -657,7 +657,13 @@ func (s *Syncer) writeSvc(svc k8sp.ServicePort, svcID uint32, count, local int) 
 		return err
 	}
 
-	val := nat.NewNATValue(svcID, uint32(count), uint32(local))
+	affinityTimeo := uint32(0)
+	sinfo := svc.(*k8sp.BaseServiceInfo)
+	if sinfo.SessionAffinityType == v1.ServiceAffinityClientIP {
+		affinityTimeo = uint32(sinfo.StickyMaxAgeSeconds)
+	}
+
+	val := nat.NewNATValue(svcID, uint32(count), uint32(local), affinityTimeo)
 
 	log.Debugf("bpf map writing %s:%s", key, val)
 	if err := s.bpfSvcs.Update(key[:], val[:]); err != nil {
@@ -679,7 +685,7 @@ func (s *Syncer) deleteSvc(svc k8sp.ServicePort, svcID uint32, count int) error 
 		return err
 	}
 
-	log.Debugf("bpf map deleting %s:%s", key, nat.NewNATValue(svcID, uint32(count), 0))
+	log.Debugf("bpf map deleting %s:%s", key, nat.NewNATValue(svcID, uint32(count), 0, 0))
 	if err := s.bpfSvcs.Delete(key[:]); err != nil {
 		return errors.Errorf("bpfSvcs.Delete: %s", err)
 	}

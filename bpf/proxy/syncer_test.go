@@ -88,6 +88,7 @@ var _ = Describe("BPF Syncer", func() {
 			val, ok := svcs.m[nat.NewNATKey(net.IPv4(10, 0, 0, 1), 1234, proxy.ProtoV1ToIntPanic(v1.ProtocolTCP))]
 			Expect(ok).To(BeTrue())
 			Expect(val.Count()).To(Equal(uint32(1)))
+			Expect(val.AffinityTimeout()).To(Equal(uint32(0)))
 
 			Expect(eps.m).To(HaveLen(1))
 			bval, ok := eps.m[nat.NewNATBackendKey(val.ID(), 0)]
@@ -284,7 +285,7 @@ var _ = Describe("BPF Syncer", func() {
 		}))
 
 		By("resyncing after creating a new syncer and delete stale entries", makestep(func() {
-			svcs.m[nat.NewNATKey(net.IPv4(5, 5, 5, 5), 1111, 6)] = nat.NewNATValue(0xdeadbeef, 2, 2)
+			svcs.m[nat.NewNATKey(net.IPv4(5, 5, 5, 5), 1111, 6)] = nat.NewNATValue(0xdeadbeef, 2, 2, 0)
 			eps.m[nat.NewNATBackendKey(0xdeadbeef, 0)] = nat.NewNATBackendValue(net.IPv4(6, 6, 6, 6), 666)
 			eps.m[nat.NewNATBackendKey(0xdeadbeef, 1)] = nat.NewNATBackendValue(net.IPv4(7, 7, 7, 7), 777)
 			s, _ = proxy.NewSyncer(nodeIPs, svcs, eps, rt)
@@ -673,6 +674,30 @@ var _ = Describe("BPF Syncer", func() {
 				Equal(nat.NewNATBackendValue(net.IPv4(10, 4, 0, 1), 2222))))
 			Expect(eps.m[nat.NewNATBackendKey(val1.ID(), 2)]).
 				NotTo(Equal(eps.m[nat.NewNATBackendKey(val1.ID(), 3)]))
+		}))
+
+		By("inserting service with affinity v1.ServiceAffinityClientIP", makestep(func() {
+			state.SvcMap[svcKey2] = &k8sp.BaseServiceInfo{
+				ClusterIP:           net.IPv4(10, 0, 0, 2),
+				Port:                2222,
+				Protocol:            v1.ProtocolTCP,
+				SessionAffinityType: v1.ServiceAffinityClientIP,
+				StickyMaxAgeSeconds: 12345,
+			}
+
+			state.EpsMap[svcKey2] = []k8sp.Endpoint{
+				&k8sp.BaseEndpointInfo{Endpoint: "10.2.0.1:2222"},
+			}
+
+			err := s.Apply(state)
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(svcs.m).To(HaveLen(1))
+			Expect(eps.m).To(HaveLen(1))
+
+			val, ok := svcs.m[nat.NewNATKey(net.IPv4(10, 0, 0, 2), 2222, proxy.ProtoV1ToIntPanic(v1.ProtocolTCP))]
+			Expect(ok).To(BeTrue())
+			Expect(val.AffinityTimeout()).To(Equal(uint32(12345)))
 		}))
 	})
 })

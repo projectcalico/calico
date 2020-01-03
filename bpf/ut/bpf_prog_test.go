@@ -201,8 +201,9 @@ func bpftool(args ...string) ([]byte, error) {
 }
 
 var (
-	mapInitOnce                                                             sync.Once
-	natMap, natBEMap, ctMap, rtMap, ipsMap, stateMap, testStateMap, jumpMap bpf.Map
+	mapInitOnce sync.Once
+
+	natMap, natBEMap, ctMap, rtMap, ipsMap, stateMap, testStateMap, jumpMap, affinityMap bpf.Map
 )
 
 func initMapsOnce() {
@@ -240,6 +241,10 @@ func initMapsOnce() {
 		jumpMap = jump.MapForTest(mc)
 		err = jumpMap.EnsureExists()
 		Expect(err).NotTo(HaveOccurred())
+
+		affinityMap = nat.AffinityMap(mc)
+		err = affinityMap.EnsureExists()
+		Expect(err).NotTo(HaveOccurred())
 	})
 }
 
@@ -253,6 +258,7 @@ func bpftoolProgLoadAll(fname, bpfFsDir string) error {
 		"map", "name", rtMap.GetName(), "pinned", rtMap.Path(),
 		"map", "name", jumpMap.GetName(), "pinned", jumpMap.Path(),
 		"map", "name", stateMap.GetName(), "pinned", stateMap.Path(),
+		"map", "name", affinityMap.GetName(), "pinned", affinityMap.Path(),
 	)
 	if err != nil {
 		return err
@@ -438,6 +444,14 @@ func udpResposeRaw(in []byte) []byte {
 	Expect(err).NotTo(HaveOccurred())
 
 	return out.Bytes()
+}
+
+func dumpNATMap(natMap bpf.Map) {
+	nt, err := nat.LoadFrontendMap(natMap)
+	Expect(err).NotTo(HaveOccurred())
+	for k, v := range nt {
+		fmt.Printf("%s : %s\n", k, v)
+	}
 }
 
 func dumpCTMap(ctMap bpf.Map) {

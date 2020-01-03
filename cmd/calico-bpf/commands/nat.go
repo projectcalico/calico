@@ -199,7 +199,7 @@ func (cmd *natFrontend) RunSet(c *cobra.Command, _ []string) {
 		log.WithError(err).Error("Failed to access NATMap")
 	}
 	k := nat.NewNATKey(cmd.ip, cmd.port, cmd.proto)
-	v := nat.NewNATValue(cmd.id, cmd.count, 0)
+	v := nat.NewNATValue(cmd.id, cmd.count, 0, 0)
 	if err := natMap.Update(k.AsBytes(), v.AsBytes()); err != nil {
 		log.WithError(err).
 			WithFields(log.Fields{

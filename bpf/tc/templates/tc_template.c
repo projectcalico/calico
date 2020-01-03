@@ -448,7 +448,7 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb) {
 	 * XXX
 	 */
 	// Do a NAT table lookup.
-	nat_dest = calico_v4_nat_lookup(state.ip_proto, state.ip_dst, state.dport);
+	nat_dest = calico_v4_nat_lookup(state.ip_src, state.ip_dst, state.ip_proto, state.dport);
 	if (nat_dest != NULL) {
 		// If the packet passes policy, we'll NAT it below, for now, just
 		// update the dest IP/port for the policy lookup.
@@ -463,7 +463,8 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb) {
 		// No match in pre-DNAT policy, apply normal policy.
 		// TODO apply-on-forward policy
 		if (false) {
-			state.pol_rc = execute_policy_aof(skb, state.ip_proto, state.ip_src, state.post_nat_ip_dst,  state.sport,  state.post_nat_dport);
+			state.pol_rc = execute_policy_aof(skb, state.ip_proto, state.ip_src,
+					state.post_nat_ip_dst,  state.sport,  state.post_nat_dport);
 		}
 		if (CALI_F_TO_WEP &&
 				skb->mark != CALI_SKB_MARK_SEEN &&

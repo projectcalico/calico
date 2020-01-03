@@ -513,6 +513,11 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		if err != nil {
 			log.WithError(err).Panic("Failed to create NAT backend BPF map.")
 		}
+		backendAffinityMap := nat.AffinityMap(bpfMapContext)
+		err = backendAffinityMap.EnsureExists()
+		if err != nil {
+			log.WithError(err).Panic("Failed to create NAT backend affinity BPF map.")
+		}
 
 		routeMap := routes.Map(bpfMapContext)
 		err = routeMap.EnsureExists()

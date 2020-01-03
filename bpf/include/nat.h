@@ -1,3 +1,5 @@
+// Copyright (c) 2020 Tigera, Inc. All rights reserved.
+
 #ifndef __CALI_NAT_H__
 #define __CALI_NAT_H__
 
@@ -52,7 +54,7 @@ struct calico_nat_v4_value {
 	uint32_t id;
 	uint32_t count;
 	uint32_t local;
-	uint32_t padding;
+	uint32_t affinity_timeo;
 };
 
 struct bpf_map_def_extended __attribute__((section("maps"))) cali_v4_nat_fe = {
@@ -90,7 +92,29 @@ struct bpf_map_def_extended __attribute__((section("maps"))) cali_v4_nat_be = {
 #endif
 };
 
-static CALI_BPF_INLINE struct calico_nat_dest* calico_v4_nat_lookup(__u8 ip_proto, __be32 ip_dst, __u16 dport)
+struct calico_nat_v4_affinity_key {
+	struct calico_nat_v4_key nat_key;
+	uint32_t client_ip;
+	uint32_t padding;
+};
+
+struct calico_nat_v4_affinity_val {
+	struct calico_nat_dest nat_dest;
+	uint64_t ts;
+};
+
+struct bpf_map_def_extended __attribute__((section("maps"))) cali_v4_nat_aff = {
+	.type = BPF_MAP_TYPE_LRU_HASH,
+	.key_size = sizeof(struct calico_nat_v4_affinity_key),
+	.value_size = sizeof(struct calico_nat_v4_affinity_val),
+	.max_entries = 510000, // arbitrary
+#ifndef __BPFTOOL_LOADER__
+	.pinning_strategy = 2 /* global namespace */,
+#endif
+};
+
+static CALI_BPF_INLINE struct calico_nat_dest* calico_v4_nat_lookup(__be32 ip_src, __be32 ip_dst,
+								    __u8 ip_proto, __u16 dport)
 {
 	struct calico_nat_v4_value *nat_lv1_val;
 
@@ -158,13 +182,47 @@ static CALI_BPF_INLINE struct calico_nat_dest* calico_v4_nat_lookup(__u8 ip_prot
 
 	CALI_DEBUG("NAT: 1st level hit; id=%d ordinal=%d\n", nat_lv2_key.id, nat_lv2_key.ordinal);
 
-	if ((nat_lv2_val = bpf_map_lookup_elem(&cali_v4_nat_be, &nat_lv2_key))) {
-		CALI_DEBUG("NAT: backend selected %x:%d\n", be32_to_host(nat_lv2_val->addr), nat_lv2_val->port);
-	} else {
+	if (!(nat_lv2_val = bpf_map_lookup_elem(&cali_v4_nat_be, &nat_lv2_key))) {
 		CALI_DEBUG("NAT: backend miss\n");
+		return NULL;
 	}
 
-	return nat_lv2_val;
+	CALI_DEBUG("NAT: backend selected %x:%d\n", be32_to_host(nat_lv2_val->addr), nat_lv2_val->port);
+
+	if (nat_lv1_val->affinity_timeo == 0) {
+		return nat_lv2_val;
+	}
+
+	CALI_DEBUG("NAT: backend affinity %d seconds\n", nat_lv1_val->affinity_timeo);
+
+	struct calico_nat_v4_affinity_key affkey = {
+		.nat_key =  nat_key,
+		.client_ip = ip_src,
+	};
+	struct calico_nat_v4_affinity_val *affval;
+	uint64_t now = bpf_ktime_get_ns();
+
+	affval = bpf_map_lookup_elem(&cali_v4_nat_aff, &affkey);
+	if (affval == NULL || now - affval->ts > nat_lv1_val->affinity_timeo * 1000000000) {
+		int err;
+		struct calico_nat_v4_affinity_val val = {
+			.ts = now,
+			.nat_dest = *nat_lv2_val,
+		};
+
+		CALI_DEBUG("NAT: updating affinity for client %x\n", ip_src);
+		if ((err = bpf_map_update_elem(&cali_v4_nat_aff, &affkey, &val, BPF_ANY))) {
+			CALI_INFO("NAT: failed to update affinity table: %d\n", err);
+			/* we do carry on, we have a good nat_lv2_val */
+		}
+
+		return nat_lv2_val;
+	}
+
+	CALI_DEBUG("NAT: using affinity backend %x:%d\n",
+			be32_to_host(affval->nat_dest.addr), affval->nat_dest.port);
+
+	return &affval->nat_dest;
 }
 
 struct vxlanhdr {
