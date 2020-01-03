@@ -18,8 +18,11 @@ import:
 # a dependency manifest). The genproto library (another indirect and unpinned
 # dependency) also depends on this version of protobuf.
 # This commit hash is v1.1.0 (but the hash is used because k8s also pulls in this version)
+# Pin to this version to get around issues with gRPC deps, as seen in:
+# https://github.com/improbable-eng/grpc-web/pull/395
 - package: github.com/golang/protobuf
-  version: b4deda0973fb4c70b50d226b1af49f3da59f5265
+  version: 1.3.0
+  #version: b4deda0973fb4c70b50d226b1af49f3da59f5265
   subpackages:
   - proto
 # Need to pin to an older version as our code uses some deprecated functionality.
@@ -45,6 +48,7 @@ import:
 - package: github.com/spf13/cobra
   version: ~0.0.3
 - package: github.com/projectcalico/libcalico-go
+  version: 5a23a805e6a0bb3636949497179ea06ec6e948a6
   subpackages:
   - lib/apiconfig
   - lib/apis/v3
@@ -69,7 +73,7 @@ import:
   - lib/set
   - lib/validator/v1
 - package: github.com/projectcalico/typha
-  version: 9e1d78883c8afd0f089a52cb493ea691de60b4ae
+  version: 9d74e18ebe1acaa94d8fd8b297c4164e0a4ee1b1
   subpackages:
   - pkg/syncclient
   - pkg/tlsutils
@@ -111,16 +115,20 @@ import:
   subpackages:
   - credentials
   - peer
+# Pin to version required for client-go v12.0.0
 - package: k8s.io/api
+  version: 7cf5895f2711
   subpackages:
   - core/v1
   - networking/v1
+# Pin to the version required for client-go.
 - package: k8s.io/apimachinery
+  version: 1799e75a0719
   subpackages:
   - pkg/api/errors
   - pkg/apis/meta/v1
 - package: k8s.io/client-go
-  version: 7d04d0e2a0a1a4d4a1cd6baa432a2301492e4e65
+  version: v12.0.0
   subpackages:
   - kubernetes
   - rest
@@ -139,3 +147,5 @@ import:
   version: ~2.0.3
   subpackages:
   - v2/packr2
+- package: gopkg.in/yaml.v2
+  version: f90ceb4f409096b60e2e9076b38b304b8246e5fa
