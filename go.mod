@@ -18,7 +18,6 @@ require (
 	github.com/pquerna/ffjson v0.0.0-20190813045741-dac163c6c0a9 // indirect
 	github.com/projectcalico/felix v0.0.0-20200103153655-9469e77e0fa5 // indirect
 	github.com/projectcalico/libcalico-go v0.0.0-20200102185429-756777256bb8
-	github.com/projectcalico/typha v0.7.2 // indirect
 	github.com/prometheus/client_model v0.0.0-20190129233127-fd36f4220a90 // indirect
 	github.com/prometheus/common v0.0.0-20190416093430-c873fb1f9420 // indirect
 	github.com/sirupsen/logrus v1.4.2
