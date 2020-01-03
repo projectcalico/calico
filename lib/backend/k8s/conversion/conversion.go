@@ -102,8 +102,9 @@ func (c Converter) NamespaceToProfile(ns *kapiv1.Namespace) (*model.KVPair, erro
 		UID:               ns.UID,
 	}
 	profile.Spec = apiv3.ProfileSpec{
-		Ingress: []apiv3.Rule{{Action: apiv3.Allow}},
-		Egress:  []apiv3.Rule{{Action: apiv3.Allow}},
+		Ingress:       []apiv3.Rule{{Action: apiv3.Allow}},
+		Egress:        []apiv3.Rule{{Action: apiv3.Allow}},
+		LabelsToApply: labels,
 	}
 
 	// Embed the profile in a KVPair.
@@ -785,6 +786,9 @@ func (c Converter) ServiceAccountToProfile(sa *kapiv1.ServiceAccount) (*model.KV
 		Name:              name,
 		CreationTimestamp: sa.CreationTimestamp,
 		UID:               sa.UID,
+	}
+	profile.Spec = apiv3.ProfileSpec{
+		LabelsToApply: labels,
 	}
 
 	// Embed the profile in a KVPair.
