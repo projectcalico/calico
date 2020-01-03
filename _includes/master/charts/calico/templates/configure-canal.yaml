@@ -14,7 +14,7 @@ spec:
       name: configure-canal
     spec:
       nodeSelector:
-        beta.kubernetes.io/os: linux
+        kubernetes.io/os: linux
       hostNetwork: true
       restartPolicy: OnFailure
       containers:

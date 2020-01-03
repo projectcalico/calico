@@ -28,7 +28,7 @@ spec:
         scheduler.alpha.kubernetes.io/critical-pod: ''
     spec:
       nodeSelector:
-        beta.kubernetes.io/os: linux
+        kubernetes.io/os: linux
 {{- if .Values.flannel_migration}}
         # Only run Calico on nodes that have been migrated.
         projectcalico.org/node-network-during-migration: calico
