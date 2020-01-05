@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2019 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2020 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -788,28 +788,13 @@ func (d *InternalDataplane) setUpIptablesBPF() {
 		fwdRules := []iptables.Rule{
 			{
 				// TODO Make "from workload" mark configurable
-				Match:  iptables.Match().MarkMatchesWithMask(0xca100000, 0xfffe0000),
+				Match:  iptables.Match().MarkMatchesWithMask(0xca100000, 0xfff00000),
 				Action: iptables.AcceptAction{},
 			},
 		}
 		var inputRules []iptables.Rule
 		for _, prefix := range d.config.RulesConfig.WorkloadIfacePrefixes {
 			fwdRules = append(fwdRules,
-				iptables.Rule{
-					Match:   iptables.Match().MarkMatchesWithMask(0xca240000, 0xfffe0000),
-					Action:  iptables.AcceptAction{},
-					Comment: "Accept entering NAT tunnel",
-				},
-				iptables.Rule{
-					Match:   iptables.Match().MarkMatchesWithMask(0xca140000, 0xfffe0000),
-					Action:  iptables.AcceptAction{},
-					Comment: "From workload accept return to NAT tunnel",
-				},
-				iptables.Rule{
-					Match:   iptables.Match().MarkMatchesWithMask(0xca120000, 0xfffe0000),
-					Action:  iptables.AcceptAction{},
-					Comment: "Accept return from NAT tunnel for SNAT",
-				},
 				iptables.Rule{
 					Match:   iptables.Match().InInterface(prefix + "+"),
 					Action:  iptables.DropAction{},
@@ -826,7 +811,7 @@ func (d *InternalDataplane) setUpIptablesBPF() {
 			}
 			// Catch any workload to host packets that haven't been through the BPF program.
 			inputRules = append(inputRules, iptables.Rule{
-				Match:  iptables.Match().InInterface(prefix+"+").NotMarkMatchesWithMask(0xca100000, 0xfffe0000),
+				Match:  iptables.Match().InInterface(prefix+"+").NotMarkMatchesWithMask(0xca100000, 0xfff00000),
 				Action: iptables.DropAction{},
 			})
 		}

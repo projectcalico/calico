@@ -1,4 +1,4 @@
-// Copyright (c) 2019 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020 Tigera, Inc. All rights reserved.
 
 #include <asm/types.h>
 #include <linux/bpf.h>
@@ -196,12 +196,8 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb) {
 
 	if (CALI_F_TO_HEP) {
 		switch (skb->mark) {
-		case CALI_SKB_MARK_BYPASS_FWD_EXTERNAL:
-			CALI_DEBUG("Packet for external source, approved by return from NAT tunnel.\n");
-			reason = CALI_REASON_BYPASS;
-			goto allow_bypass;
-		case CALI_SKB_MARK_BYPASS_NAT_FWD_ENCAPED:
-			CALI_DEBUG("Encaped, approved by entering NAT tunnel\n");
+		case CALI_SKB_MARK_BYPASS_FWD:
+			CALI_DEBUG("Packet approved for forward.\n");
 			reason = CALI_REASON_BYPASS;
 			goto allow_bypass;
 		case CALI_SKB_MARK_BYPASS_NAT_RET_ENCAPED:
@@ -561,7 +557,7 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb) {
 		if (encap_needed) {
 			ip_src = CALI_HOST_IP;
 			ip_dst = rt->type == CALI_RT_REMOTE_WORKLOAD ? rt->next_hop : post_nat_ip_dst;
-			seen_mark = CALI_SKB_MARK_BYPASS_NAT_FWD_ENCAPED;
+			seen_mark = CALI_SKB_MARK_BYPASS_FWD;
 			goto nat_encap;
 		}
 
@@ -612,7 +608,7 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb) {
 		 * destination. Skip checks on the CALI_TC_FLAGS_TO_HOST egress path
 		 */
 		if (nat_tun_src) {
-			seen_mark = CALI_SKB_MARK_BYPASS_FWD_EXTERNAL;
+			seen_mark = CALI_SKB_MARK_BYPASS_FWD;
 		}
 
 		goto allow;
@@ -659,7 +655,7 @@ icmp_too_big:
 		goto deny;
 	}
 
-	seen_mark = CALI_SKB_MARK_BYPASS_FWD_EXTERNAL;
+	seen_mark = CALI_SKB_MARK_BYPASS_FWD;
 
 	/* XXX we might use skb->ifindex to redirect it straight back
 	 * to where it came from if it is guaranteed to be the path
