@@ -154,6 +154,8 @@ enum calico_tc_flags {
 #define CALI_F_L3            (CALI_F_TO_HEP && CALI_F_TUNNEL)
 #define CALI_F_IPIP_ENCAPPED (CALI_F_INGRESS && CALI_F_TUNNEL)
 
+#define CALI_F_CGROUP	(((CALI_COMPILE_FLAGS) & CALI_CGROUP) != 0)
+
 enum calico_skb_mark {
 	// TODO allocate marks from the mark pool.
 	CALI_SKB_MARK_SEEN = 0xca100000,

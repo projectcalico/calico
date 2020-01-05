@@ -98,11 +98,22 @@ static CALI_BPF_INLINE struct calico_nat_dest* calico_v4_nat_lookup(__u8 ip_prot
 	CALI_DEBUG("NAT: 1st level lookup addr=%x port=%d protocol=%d.\n",
 		(int)be32_to_host(nat_key.addr), (int)dport,
 		(int)(nat_key.protocol));
+
 	if (!nat_lv1_val) {
 		struct calico_route *rt;
 
 		CALI_DEBUG("NAT: Miss.\n");
+		/* If the traffic originates at the node (workload or host)
+		 * check whether the destination is a remote nodeport to do a
+		 * straight NAT and avoid a possible extra hop.
+		 */
+		if (!(CALI_F_FROM_WEP || CALI_F_TO_HEP || CALI_F_CGROUP) || ip_dst == 0xffffffff) {
+			return NULL;
+		}
 
+		/* XXX replace the following with a nodeport cidrs lookup once
+		 * XXX we have it.
+		 */
 		rt = cali_rt_lookup(ip_dst);
 		if (!rt) {
 			CALI_DEBUG("NAT: route miss\n");
