@@ -288,7 +288,8 @@ func Migrate(ctxt context.Context, c client.Interface, nodename string) error {
 		if err != nil {
 			return fmt.Errorf("failed to read file %s: %s", fname, err)
 		}
-		containerID := string(b)
+		// The containerID is the first line in the file.
+		containerID := strings.TrimSpace(strings.Split(string(b), "\n")[0])
 
 		// Get the pod resource associated with the IP.
 		pod, ok := podIPMap[f.Name()]
