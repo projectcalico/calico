@@ -14,6 +14,9 @@ COPY --from=base /sbin/tini /sbin/tini
 ADD bin/calico-typha-amd64 /code/calico-typha
 ADD typha.cfg /etc/calico/typha.cfg
 
+# Add nsswitch.conf so that we correctly resolve localhost based on /etc/hosts.
+ADD nsswitch.conf /etc/nsswitch.conf
+
 WORKDIR /code
 ENV PATH="$PATH:/code"
 
