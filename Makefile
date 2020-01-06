@@ -487,8 +487,8 @@ $(BUILD_IMAGE)-$(ARCH): bin/calico-felix-$(ARCH) \
 	cp bpf/include/nat.h docker-image/bpf/include/nat.h
 	cp bpf/include/policy.h docker-image/bpf/include/policy.h
 	cp bpf/include/routes.h docker-image/bpf/include/routes.h
+	cp bpf/include/reasons.h docker-image/bpf/include/reasons.h
 	cp bpf/xdp/redir_tc.c docker-image/bpf/xdp/redir_tc.c
-	cp bpf/xdp/bpf_maps.h docker-image/bpf/xdp/bpf_maps.h
 	cp bpf/cgroup/connect_balancer.c docker-image/bpf/cgroup/connect_balancer.c
 	if [ "$(SEMAPHORE)" != "true" -o "$$(docker images -q $(BUILD_IMAGE):latest-$(ARCH) 2> /dev/null)" = "" ] ; then \
  	  docker build --pull -t $(BUILD_IMAGE):latest-$(ARCH) --build-arg QEMU_IMAGE=$(CALICO_BUILD) --file ./docker-image/Dockerfile.$(ARCH) docker-image; \

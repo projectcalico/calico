@@ -39,6 +39,7 @@ import (
 	"github.com/projectcalico/felix/bpf"
 	"github.com/projectcalico/felix/bpf/conntrack"
 	"github.com/projectcalico/felix/bpf/nat"
+	"github.com/projectcalico/felix/bpf/routes"
 	intdataplane "github.com/projectcalico/felix/dataplane/linux"
 	"github.com/projectcalico/felix/proto"
 )
@@ -52,6 +53,7 @@ var (
 	natTunnelMTU      = uint16(700)
 	testVxlanPort     = uint16(5665)
 	rulesDefaultAllow = [][][]*proto.Rule{{{{Action: "Allow"}}}}
+	skbMark           uint32
 )
 
 const (
@@ -85,7 +87,6 @@ var defaultCompileOpts = []intdataplane.CompileTCOption{
 	intdataplane.CompileWithSourceName("../xdp/redir_tc.c"),
 	intdataplane.CompileWithFIBEnabled(true),
 	intdataplane.CompileWithLogLevel("DEBUG"),
-	intdataplane.CompileWithHostIP(hostIP),
 	intdataplane.CompileWithVxlanPort(testVxlanPort),
 	intdataplane.CompileWithNATTunnelMTU(natTunnelMTU),
 }
@@ -114,6 +115,8 @@ func runBpfTest(t *testing.T, section string, rules [][][]*proto.Rule, testFn fu
 		intdataplane.CompileWithLogPrefix(section),
 		intdataplane.CompileWithEntrypointName(section),
 		intdataplane.CompileWithFlags(intdataplane.BPFSectionToFlags(section)),
+		intdataplane.CompileWithHostIP(hostIP), // to pick up new ip
+		intdataplane.CompileWithDefineValue("CALI_SET_SKB_MARK", fmt.Sprintf("0x%x", skbMark)),
 	)
 
 	err = intdataplane.CompileTCProgramToFile(rules, idalloc.New(), opts...)
@@ -167,10 +170,15 @@ func bpftoolProgLoadAll(fname, bpfFsDir string) error {
 	err = ctMap.EnsureExists()
 	Expect(err).NotTo(HaveOccurred())
 
+	rtMap := routes.Map(mc)
+	err = rtMap.EnsureExists()
+	Expect(err).NotTo(HaveOccurred())
+
 	_, err = bpftool("prog", "loadall", fname, bpfFsDir, "type", "classifier",
 		"map", "name", natMap.(*bpf.PinnedMap).Name, "pinned", natMap.(*bpf.PinnedMap).Filename,
 		"map", "name", natBEMap.(*bpf.PinnedMap).Name, "pinned", natBEMap.(*bpf.PinnedMap).Filename,
 		"map", "name", ctMap.(*bpf.PinnedMap).Name, "pinned", ctMap.(*bpf.PinnedMap).Filename,
+		"map", "name", rtMap.(*bpf.PinnedMap).Name, "pinned", rtMap.(*bpf.PinnedMap).Filename,
 	)
 	return err
 }
@@ -264,6 +272,7 @@ func runBpfUnitTest(t *testing.T, source string, testFn func(bpfProgRunFn)) {
 		intdataplane.CompileWithIncludePath(curwd+"/progs"),
 		intdataplane.CompileWithLogPrefix("UNITTEST"),
 		intdataplane.CompileWithDefine("CALI_UNITTEST"),
+		intdataplane.CompileWithHostIP(hostIP),
 	)
 
 	err = intdataplane.CompileTCProgramToFile(nil, idalloc.New(), opts...)
@@ -362,6 +371,14 @@ func restoreCTMap(ctMap bpf.Map, m conntrack.MapMem) {
 	for k, v := range m {
 		err := ctMap.Update(k[:], v[:])
 		Expect(err).NotTo(HaveOccurred())
+	}
+}
+
+func dumpRTMap(rtMap bpf.Map) {
+	rt, err := routes.LoadMap(rtMap)
+	Expect(err).NotTo(HaveOccurred())
+	for k, v := range rt {
+		fmt.Printf("%15s: %s\n", k.Dest(), v)
 	}
 }
 

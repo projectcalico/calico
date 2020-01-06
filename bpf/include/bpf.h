@@ -1,4 +1,4 @@
-// Copyright (c) 2019 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -156,9 +156,10 @@ enum calico_tc_flags {
 
 enum calico_skb_mark {
 	// TODO allocate marks from the mark pool.
-	CALI_SKB_MARK_SEEN = 0xca110000,
-	CALI_SKB_MARK_BYPASS = 0xca100000,
-	CALI_SKB_MARK_BYPASS_FWD_EXTERNAL = 0xca120000,
+	CALI_SKB_MARK_SEEN = 0xca100000,
+	CALI_SKB_MARK_BYPASS = 0xca110000,
+	CALI_SKB_MARK_BYPASS_FWD = CALI_SKB_MARK_BYPASS | 0x20000,
+	CALI_SKB_MARK_BYPASS_NAT_RET_ENCAPED = CALI_SKB_MARK_BYPASS | 0x40000,
 	CALI_SKB_MARK_SEEN_MASK = 0xffff0000,
 	CALI_SKB_MARK_NO_TRACK      = 1<<1,
 };

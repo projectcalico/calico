@@ -16,6 +16,7 @@ package routes
 
 import (
 	"encoding/binary"
+	"fmt"
 
 	"golang.org/x/sys/unix"
 
@@ -47,6 +48,10 @@ func (k Key) PrefixLen() int {
 	return int(binary.LittleEndian.Uint32(k[:4]))
 }
 
+func (k Key) AsBytes() []byte {
+	return k[:]
+}
+
 type Type uint32
 
 const (
@@ -74,6 +79,27 @@ func (v Value) NextHop() ip.Addr {
 	var addr ip.V4Addr // FIXME IPv6
 	copy(addr[:], v[4:8])
 	return addr
+}
+
+func (v Value) AsBytes() []byte {
+	return v[:]
+}
+
+func (v Value) String() string {
+	switch v.Type() {
+	case TypeRemoteWorkload:
+		return fmt.Sprintf("remote workload, host IP %v", v.NextHop())
+	case TypeRemoteHost:
+		return "remote host"
+	case TypeLocalHost:
+		return "local host"
+	case TypeLocalWorkload:
+		return "local workload"
+	case TypeUnknown:
+		fallthrough
+	default:
+		return fmt.Sprintf("unknown type %d", v.Type())
+	}
 }
 
 func NewKey(cidr ip.V4CIDR) Key {
@@ -110,4 +136,22 @@ var MapParameters = bpf.MapParameters{
 
 func Map(mc *bpf.MapContext) bpf.Map {
 	return mc.NewPinnedMap(MapParameters)
+}
+
+type MapMem map[Key]Value
+
+// LoadMap loads a routes.Map into memory
+func LoadMap(rtm bpf.Map) (MapMem, error) {
+	m := make(MapMem)
+
+	err := rtm.Iter(func(k, v []byte) {
+		var key Key
+		var value Value
+		copy(key[:], k)
+		copy(value[:], v)
+
+		m[key] = value
+	})
+
+	return m, err
 }

@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2019 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2020 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -788,7 +788,7 @@ func (d *InternalDataplane) setUpIptablesBPF() {
 		fwdRules := []iptables.Rule{
 			{
 				// TODO Make "from workload" mark configurable
-				Match:  iptables.Match().MarkMatchesWithMask(0xca100000, 0xfffe0000),
+				Match:  iptables.Match().MarkMatchesWithMask(0xca100000, 0xfff00000),
 				Action: iptables.AcceptAction{},
 			},
 		}
@@ -811,7 +811,7 @@ func (d *InternalDataplane) setUpIptablesBPF() {
 			}
 			// Catch any workload to host packets that haven't been through the BPF program.
 			inputRules = append(inputRules, iptables.Rule{
-				Match:  iptables.Match().InInterface(prefix+"+").NotMarkMatchesWithMask(0xca100000, 0xfffe0000),
+				Match:  iptables.Match().InInterface(prefix+"+").NotMarkMatchesWithMask(0xca100000, 0xfff00000),
 				Action: iptables.DropAction{},
 			})
 		}

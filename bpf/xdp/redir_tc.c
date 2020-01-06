@@ -1,4 +1,4 @@
-// Copyright (c) 2019 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020 Tigera, Inc. All rights reserved.
 
 #include <asm/types.h>
 #include <linux/bpf.h>
@@ -20,7 +20,7 @@
 #include "../include/conntrack.h"
 #include "../include/nat.h"
 #include "../include/routes.h"
-#include "bpf_maps.h"
+#include "../include/reasons.h"
 
 #ifndef CALI_FIB_LOOKUP_ENABLED
 #define CALI_FIB_LOOKUP_ENABLED true
@@ -177,9 +177,16 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb) {
 	int res = 0;
 	__be32 nat_tun_src = 0;
 	uint32_t fib_flags = 0;
-	bool encap_is_src = false;
-	__be32 encap_ip;
 	bool encap_needed = false;
+	struct iphdr *ip_header;
+	__be32 ip_src, ip_dst;
+
+#ifdef CALI_SET_SKB_MARK
+	/* workaround for test since bpftool run cannot set it in context, wont
+	 * be necessary if fixed in kernel
+	 */
+	skb->mark = CALI_SET_SKB_MARK;
+#endif
 
 	if (!CALI_F_TO_HOST && skb->mark == CALI_SKB_MARK_BYPASS) {
 		CALI_DEBUG("Packet pre-approved by another hook, allow.\n");
@@ -187,10 +194,37 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb) {
 		goto allow_bypass;
 	}
 
-	if (CALI_F_TO_HEP && skb->mark == CALI_SKB_MARK_BYPASS_FWD_EXTERNAL) {
-		CALI_DEBUG("Packet for external source, approved by return from NAT tunnel.\n");
-		reason = CALI_REASON_BYPASS;
-		goto allow_bypass;
+	if (CALI_F_TO_HEP) {
+		switch (skb->mark) {
+		case CALI_SKB_MARK_BYPASS_FWD:
+			CALI_DEBUG("Packet approved for forward.\n");
+			reason = CALI_REASON_BYPASS;
+			goto allow_bypass;
+		case CALI_SKB_MARK_BYPASS_NAT_RET_ENCAPED:
+			CALI_DEBUG("Encaped, approved by return to NAT tunnel.\n");
+			reason = CALI_REASON_BYPASS;
+
+			/* we need to fix up the right src host IP */
+			if (skb_too_short(skb)) {
+				reason = CALI_REASON_SHORT;
+				CALI_DEBUG("Too short\n");
+				goto deny;
+			}
+
+			ip_header = skb_iphdr(skb);
+			ip_src = ip_header->saddr;
+			/* XXX do a proper CT lookup to find this */
+			ip_header->saddr = CALI_HOST_IP;
+			ip_csum_offset = skb_offset(skb, ip_header) +  offsetof(struct iphdr, check);
+
+			res = bpf_l3_csum_replace(skb, ip_csum_offset, ip_src, CALI_HOST_IP, 4);
+			if (res) {
+				reason = CALI_REASON_CSUM_FAIL;
+				goto deny;
+			}
+
+			goto allow_bypass;
+		}
 	}
 
 	uint32_t seen_mark = CALI_SKB_MARK_SEEN;
@@ -223,8 +257,6 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb) {
 		}
 	}
 
-	struct iphdr *ip_header = NULL;
-
 	if (skb_too_short(skb)) {
 		reason = CALI_REASON_SHORT;
 		CALI_DEBUG("Too short\n");
@@ -234,27 +266,8 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb) {
 	ip_header = skb_iphdr(skb);
 
 	if (is_vxlan_tunnel(ip_header)) {
-		int decap;
-
-		if (CALI_F_TO_HEP) {
-			/* XXX should perhaps be dependent on CALI_SKB_MARK_SEEN */
-			CALI_DEBUG("vxlan leaving host: ALLOW\n");
-			goto allow_bypass;
-		}
-
-		decap = dnat_should_decap();
-		/* decap on host ep only if directly for the node
-		 *
-		 * XXX CALI_TC_FLAGS_TO_WORKLOAD
-		 * XXX we let it through for now to reach the endpoint, we will
-		 * XXX change it once we always target the node and decap will always
-		 * XXX happend on the node
-		 * XXX
-		 * XXX This is temp, we wont reease this and we still go through a policy
-		 */
-		decap = decap && (CALI_F_TO_WEP || ip_header->daddr == CALI_HOST_IP);
-
-		if (decap) {
+		/* decap on host ep only if directly for the node */
+		if (dnat_should_decap() && ip_header->daddr == CALI_HOST_IP) { 
 			nat_tun_src = ip_header->saddr;
 			CALI_DEBUG("vxlan decap\n");
 			if (vxlan_v4_decap(skb)) {
@@ -321,8 +334,8 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb) {
 		CALI_DEBUG("Unknown protocol (%d), unable to extract ports\n", (int)ip_proto);
 	}
 
-	__be32 ip_src = ip_header->saddr;
-	__be32 ip_dst = ip_header->daddr;
+	ip_src = ip_header->saddr;
+	ip_dst = ip_header->daddr;
 	enum calico_policy_result pol_rc = CALI_POL_NO_MATCH;
 	if (CALI_F_HEP) {
 		// For host endpoints only, execute doNotTrack policy.
@@ -389,6 +402,10 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb) {
 			} // Other RCs handled below.
 		}
 
+		/* XXX
+		 * perhaps no NAT lookup for CALI_F_TO_WEP
+		 * XXX
+		 */
 		// Do a NAT table lookup.
 		struct calico_nat_dest *nat_dest = calico_v4_nat_lookup(ip_proto, ip_dst, dport);
 		__be32 post_nat_ip_dst;
@@ -493,7 +510,20 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb) {
 
 		CALI_DEBUG("CT: DNAT to %x:%d\n", be32_to_host(post_nat_ip_dst), post_nat_dport);
 
-		encap_needed = dnat_should_encap() && !cali_rt_is_local(post_nat_ip_dst);
+		struct calico_route *rt;
+
+		encap_needed = dnat_should_encap();
+		if (encap_needed) {
+			rt = cali_rt_lookup(post_nat_ip_dst);
+			if (!rt) {
+				reason = CALI_REASON_RT_UNKNOWN;
+				goto deny;
+			}
+			CALI_DEBUG("rt found for 0x%x\n", post_nat_ip_dst);
+
+			encap_needed = !cali_rt_is_local(rt);
+		}
+
 		if (encap_needed && ip_is_dnf(ip_header) && vxlan_v4_encap_too_big(skb)) {
 			goto icmp_too_big;
 		}
@@ -526,7 +556,8 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb) {
 
 		if (encap_needed) {
 			ip_src = CALI_HOST_IP;
-			encap_is_src = true;
+			ip_dst = rt->type == CALI_RT_REMOTE_WORKLOAD ? rt->next_hop : post_nat_ip_dst;
+			seen_mark = CALI_SKB_MARK_BYPASS_FWD;
 			goto nat_encap;
 		}
 
@@ -577,7 +608,7 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb) {
 		 * destination. Skip checks on the CALI_TC_FLAGS_TO_HOST egress path
 		 */
 		if (nat_tun_src) {
-			seen_mark = CALI_SKB_MARK_BYPASS_FWD_EXTERNAL;
+			seen_mark = CALI_SKB_MARK_BYPASS_FWD;
 		}
 
 		goto allow;
@@ -591,6 +622,7 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb) {
 				goto icmp_too_big;
 			}
 			ip_dst = ct_result.tun_ret_ip;
+			seen_mark = CALI_SKB_MARK_BYPASS_NAT_RET_ENCAPED;
 			goto nat_encap;
 		}
 
@@ -623,7 +655,7 @@ icmp_too_big:
 		goto deny;
 	}
 
-	seen_mark = CALI_SKB_MARK_BYPASS_FWD_EXTERNAL;
+	seen_mark = CALI_SKB_MARK_BYPASS_FWD;
 
 	/* XXX we might use skb->ifindex to redirect it straight back
 	 * to where it came from if it is guaranteed to be the path
@@ -642,8 +674,7 @@ icmp_too_big:
 	goto allow;
 
 nat_encap:
-	encap_ip = encap_is_src ? ip_src : ip_dst;
-	if (vxlan_v4_encap(skb, encap_ip, encap_is_src)) {
+	if (vxlan_v4_encap(skb, ip_src, ip_dst)) {
 		reason = CALI_REASON_ENCAP_FAIL;
 		goto  deny;
 	}
@@ -651,7 +682,9 @@ nat_encap:
 	sport = dport = host_to_be16(CALI_VXLAN_PORT);
 	ip_proto = IPPROTO_UDP;
 
-	fib_flags |= BPF_FIB_LOOKUP_OUTPUT;
+	if (CALI_F_INGRESS) {
+		fib_flags |= BPF_FIB_LOOKUP_OUTPUT;
+	}
 
 	fib_params.l4_protocol = ip_proto;
 	fib_params.sport = sport;
