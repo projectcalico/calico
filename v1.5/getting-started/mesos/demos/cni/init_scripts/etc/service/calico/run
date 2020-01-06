@@ -1,8 +1,0 @@
-#!/bin/sh
-IP=`ip addr | grep 'global eth0' | awk '{print $2}' | cut -f1  -d'/'`
-ETCD_IP=`getent hosts etcd | awk '{ print $2 }'`
-while ! docker ps; do sleep 1; done
-docker load -i /images/calico-node-*.tar
-export ETCD_AUTHORITY=$ETCD_IP:2379
-exec 2>&1
-exec calicoctl node --ip=$IP --detach=false
