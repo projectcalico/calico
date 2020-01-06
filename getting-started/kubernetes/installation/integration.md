@@ -201,7 +201,7 @@ calico-kube-controllers                  1/1       Running   0          1m
 {: .no-select-button}
 
 For more information on how to configure the controllers,
-see the [configuration guide]({{site.baseur}}/{{page.version}}/reference/kube-controllers/configuration).
+see the [configuration guide]({{ site.baseurl }}/reference/kube-controllers/configuration).
 
 ## Role-based access control (RBAC)
 

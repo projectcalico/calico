@@ -58,4 +58,4 @@ As previously discussed, there is nothing you need to do in {{site.prodname}} to
 
 #### Change {{site.prodname}} default nodeport range
 
-In the FelixConfiguration resource, change the configuration parameter for the default node port range (`KubeNodePortRange`,) in {{site.prodname}} to match your new default range in Kubernetes. For help, see [FelixConfiguration](https://docs.projectcalico.org/master/reference/felix/configuration).
+In the FelixConfiguration resource, change the configuration parameter for the default node port range (`KubeNodePortRange`,) in {{site.prodname}} to match your new default range in Kubernetes. For help, see [FelixConfiguration]({{ site.baseurl }}/reference/felix/configuration).

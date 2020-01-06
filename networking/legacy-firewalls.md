@@ -51,7 +51,7 @@ Look for the entry:
 
 If it is present, you are using the {{site.prodname}} IPAM. If the IPAM is not {{site.prodname}}, or the 10-calico.conflist file does not exist, you cannot use these features in your cluster.
 
-Also, cluster administrators must have [configured IP pools](https://docs.projectcalico.org/master/reference/resources/ippool) to define the valid IP ranges to use for allocating pod IP addresses.
+Also, cluster administrators must have [configured IP pools]({{ site.baseurl }}/reference/resources/ippool) to define the valid IP ranges to use for allocating pod IP addresses.
 
 ### How to
 
