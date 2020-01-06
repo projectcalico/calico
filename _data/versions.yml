@@ -139,6 +139,29 @@ v3.10:
       version: v3.10.0
 
 v3.9:
+- title: v3.9.5
+  components:
+     typha:
+      version: v3.9.5
+     calicoctl:
+      version: v3.9.5
+     calico/node:
+      version: v3.9.5
+     calico/cni:
+      version: v3.9.5
+     calico/kube-controllers:
+      version: v3.9.5
+     networking-calico:
+      version: 3.9.5
+     flannel:
+      version: v0.11.0
+     calico/dikastes:
+      version: v3.9.5
+     flexvol:
+      version: v3.9.5
+     calico/flannel-migration-controller:
+      version: v3.9.5
+
 - title: v3.9.4
   components:
      typha:
