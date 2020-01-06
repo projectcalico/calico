@@ -1,0 +1,9 @@
+# this yaml file is used during building of the archive site.
+# It is the source of truth for two different consumers:
+# - the 'archive index' page which must show a link to each release
+# - the netlify build machinery which must build each site.
+# The format is a list with each field corresponding to a 'release-vX.Y' branch.
+# To support 'branch-per-directory', an entry named 'legacy' can be specified which is a dictionary describing
+# all releases using the old model.
+# Order matters - place latest releases first
+- legacy: [v3.10, v3.9, v3.8, v3.7, v3.6, v3.5, v3.4, v3.3, v3.2, v3.1, v3.0, v2.6, v2.5, v2.4, v2.3, v2.2, v2.1, v2.0, v1.6, v1.5]
