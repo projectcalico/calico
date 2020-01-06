@@ -4,11 +4,14 @@ go 1.12
 
 require (
 	github.com/coreos/etcd v3.3.13+incompatible // indirect
+	github.com/gophercloud/gophercloud v0.4.0 // indirect
+	github.com/imdario/mergo v0.3.8 // indirect
 	github.com/kelseyhightower/confd v0.0.0-00010101000000-000000000000
 	github.com/onsi/ginkgo v1.8.0
 	github.com/onsi/gomega v1.5.0
-	github.com/projectcalico/felix v0.0.0-20200103181800-6474231ca9d5
+	github.com/projectcalico/felix v0.0.0-20200106213856-d7c6d615fb7b
 	github.com/projectcalico/libcalico-go v1.7.2-0.20191223230708-3d65d3751012
+	github.com/projectcalico/typha v0.7.3-0.20200103001756-52c554096ce9 // indirect
 	github.com/sirupsen/logrus v1.4.2
 	github.com/vishvananda/netns v0.0.0-20180720170159-13995c7128cc // indirect
 	gopkg.in/fsnotify/fsnotify.v1 v1.4.7
