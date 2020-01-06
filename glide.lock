@@ -177,7 +177,7 @@ imports:
   - matchers/support/goraph/util
   - types
 - name: github.com/projectcalico/felix
-  version: 250b965ba042e4b92ee557fb4b3be84c6762d55e
+  version: e29c6c79de28311ef8b37f97dc51d69b9e413cb2
   subpackages:
   - bpf
   - buildinfo
