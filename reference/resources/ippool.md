@@ -6,7 +6,7 @@ canonical_url: 'https://docs.projectcalico.org/v3.9/reference/resources/ippool'
 An IP pool resource (`IPPool`) represents a collection of IP addresses from which {{site.prodname}} expects
 endpoint IPs to be assigned.
 
-For `calicoctl` [commands]({{site.baseurl}}/{{page.version}}/reference/calicoctl/) that specify a resource type on the CLI, the following
+For `calicoctl` [commands]({{ site.baseurl }}/reference/calicoctl/) that specify a resource type on the CLI, the following
 aliases are supported (all case insensitive): `ippool`, `ippools`, `ipp`, `ipps`, `pool`, `pools`.
 
 ### Sample YAML
@@ -58,7 +58,7 @@ subnet. The subnet of each node is configured on the node resource (which may be
 determined when running the `{{site.nodecontainer}}` service).
 
 For details on configuring IP-in-IP on your deployment, please refer to
-[Configuring IP-in-IP]({{site.baseurl}}/{{page.version}}/networking/vxlan-ipip).
+[Configuring IP-in-IP]({{ site.baseurl }}/networking/vxlan-ipip).
 
 
 > **Note**: Setting `natOutgoing` is recommended on any IP Pool with `ipip` enabled.
@@ -94,7 +94,7 @@ Reducing the block size from the default (e.g., using `28` for IPv4 to give 16 a
 {% include {{page.version}}/selectors.md %}
 
 For details on configuring IP pool node selectors, please read the
-[Assign IP addresses based on topology guide.]({{site.baseurl}}/{{page.version}}/networking/assign-ip-addresses-topology).
+[Assign IP addresses based on topology guide.]({{ site.baseurl }}/networking/assign-ip-addresses-topology).
 
 > **Note**: The pool's `disabled` field takes higher precedence than
 > `nodeSelector`. This means that {{site.prodname}} IPAM will not allocate any

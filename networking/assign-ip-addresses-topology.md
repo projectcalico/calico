@@ -185,4 +185,4 @@ default-ipv4-ippool   192.168.0.0/16   true   Always     false      all()
 
 ### Above and beyond
 
-[Calico IPAM]({{site.baseurl}}/{{page.version}}/reference/cni-plugin/configuration)
+[Calico IPAM]({{ site.baseurl }}/reference/cni-plugin/configuration)

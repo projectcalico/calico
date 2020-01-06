@@ -51,4 +51,4 @@
      asNumber: 6555
  ```
  
- See [calicoctl convert]({{site.baseurl}}/{{page.version}}/reference/calicoctl/commands/convert) for detailed usage of the `convert` command.
+ See [calicoctl convert]({{ site.baseurl }}/reference/calicoctl/commands/convert) for detailed usage of the `convert` command.

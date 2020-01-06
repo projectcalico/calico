@@ -57,7 +57,7 @@ sudo chmod +x calicoctl
 sudo ETCD_ENDPOINTS=http://<ETCD_IP>:<ETCD_PORT> ./calicoctl node run --node-image={{page.registry}}{{page.imageNames["calico/node"]}}:{{site.data.versions[page.version].first.title}}
 ```
 
-See the [`calicoctl node run` documentation]({{site.baseurl}}/{{page.version}}/reference/calicoctl/node/)
+See the [`calicoctl node run` documentation]({{ site.baseurl }}/reference/calicoctl/node/)
 for more information.
 
 ### Example systemd unit file ({{site.noderunning}}.service)
@@ -154,7 +154,7 @@ EOF
 Replace `<ETCD_IP>:<ETCD_PORT>` with your etcd configuration.
 Replace `</PATH/TO/KUBECONFIG>` with your kubeconfig file. See [Kubernetes kubeconfig](http://kubernetes.io/docs/user-guide/kubeconfig-file/) for more information about kubeconfig.
 
-For more information on configuring the {{site.prodname}} CNI plugins, see the [configuration guide]({{site.baseurl}}/{{page.version}}/reference/cni-plugin/configuration)
+For more information on configuring the {{site.prodname}} CNI plugins, see the [configuration guide]({{ site.baseurl }}/reference/cni-plugin/configuration)
 
 ### Install standard CNI loopback plugin
 
@@ -218,23 +218,23 @@ Apply the manifest appropriate to your cluster configuration.
 - **Kubernetes API datastore with {{site.prodname}} networking**:
 
    ```
-   kubectl apply -f {{site.url}}/{{page.version}}/manifests/rbac/rbac-kdd-calico.yaml
+   kubectl apply -f {{ site.url }}/manifests/rbac/rbac-kdd-calico.yaml
    ```
 
 - **Kubernetes API datastore with flannel networking**:
 
    ```
-   kubectl apply -f {{site.url}}/{{page.version}}/manifests/rbac/rbac-kdd-flannel.yaml
+   kubectl apply -f {{ site.url }}/manifests/rbac/rbac-kdd-flannel.yaml
    ```
 
 - **etcd datastore with {{site.prodname}} networking**:
 
    ```
-   kubectl apply -f {{site.url}}/{{page.version}}/manifests/rbac/rbac-etcd-calico.yaml
+   kubectl apply -f {{ site.url }}/manifests/rbac/rbac-etcd-calico.yaml
    ```
 
 - **etcd datastore with flannel networking**:
 
    ```
-   kubectl apply -f {{site.url}}/{{page.version}}/manifests/rbac/rbac-etcd-flannel.yaml
+   kubectl apply -f {{ site.url }}/manifests/rbac/rbac-etcd-flannel.yaml
    ```

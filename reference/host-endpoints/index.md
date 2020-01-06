@@ -23,7 +23,7 @@ underlying network fabric.
 prefix.  Unless you happen to have host interfaces whose name matches the
 default for that prefix (`cali`), you won't need to change it.  In case you do,
 see the `InterfacePrefix` configuration value at [Configuring
-Felix]({{site.baseurl}}/{{page.version}}/reference/felix/configuration).
+Felix]({{ site.baseurl }}/reference/felix/configuration).
 Interfaces that start with a value listed in `InterfacePrefix` are assumed to
 be workload interfaces.  Others are treated as host interfaces.
 
@@ -44,7 +44,7 @@ You can apply host endpoint policies to three types of traffic:
 same host.
 
 Set the `applyOnForward` flag to `true` to apply a policy to forwarded traffic.
-See [GlobalNetworkPolicy spec]({{site.baseurl}}/{{page.version}}/reference/resources/globalnetworkpolicy#spec).
+See [GlobalNetworkPolicy spec]({{ site.baseurl }}/reference/resources/globalnetworkpolicy#spec).
 
 > **Note**: Both traffic forwarded between host endpoints and traffic forwarded
 > between a host endpoint and a workload endpoint on the same host is regarded as

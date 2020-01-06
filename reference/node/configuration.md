@@ -17,7 +17,7 @@ The `{{site.nodecontainer}}` container is primarily configured through environme
 | IP_AUTODETECTION_METHOD | The method to use to autodetect the IPv4 address for this host. This is only used when the IPv4 address is being autodetected. See [IP Autodetection methods](#ip-autodetection-methods) for details of the valid methods. [Default: `first-found`] | string |
 | IP6_AUTODETECTION_METHOD | The method to use to autodetect the IPv6 address for this host. This is only used when the IPv6 address is being autodetected. See [IP Autodetection methods](#ip-autodetection-methods) for details of the valid methods. [Default: `first-found`] | string |
 | DISABLE_NODE_IP_CHECK | Skips checks for duplicate Node IPs. This can reduce the load on the cluster when a large number of Nodes are restarting. [Default: `false`] | boolean |
-| AS | The AS number for this node. When specified, the value is saved in the node resource configuration for this host, overriding any previously configured value. When omitted, if an AS number has been previously configured in the node resource, that AS number is used for the peering.  When omitted, if an AS number has not yet been configured in the node resource, the node will use the global value (see [example modifying Global BGP settings](/{{page.version}}/networking/bgp) for details.) | int |
+| AS | The AS number for this node. When specified, the value is saved in the node resource configuration for this host, overriding any previously configured value. When omitted, if an AS number has been previously configured in the node resource, that AS number is used for the peering.  When omitted, if an AS number has not yet been configured in the node resource, the node will use the global value (see [example modifying Global BGP settings](/networking/bgp) for details.) | int |
 | CALICO_DISABLE_FILE_LOGGING | Disables logging to file. [Default: "false"] | string |
 | CALICO_ROUTER_ID | Sets the `router id` to use for BGP if no IPv4 address is set on the node. For an IPv6-only system, this may be set to `hash`. It then uses the hash of the nodename to create a 4 byte router id. See note below. [Default: ``] | string |
 | DATASTORE_TYPE | Type of datastore. [Default: `etcdv3`] | kubernetes, etcdv3 |
@@ -46,7 +46,7 @@ The `{{site.nodecontainer}}` container is primarily configured through environme
 | K8S_CERT_FILE | Location of a client certificate for accessing the Kubernetes API.          | string |
 | K8S_KEY_FILE | Location of a client key for accessing the Kubernetes API.                   | string |
 | K8S_CA_FILE | Location of a CA for accessing the Kubernetes API.                            | string |
-| CALICO_ADVERTISE_CLUSTER_IPS | Deprecated. Use [BGPConfiguration](/{{page.version}}/reference/resources/bgpconfig) resource instead. Note: if this variable is defined, then any serviceClusterIPs defined in BGPConfiguration are ignored. [Default: ""] | IPv4 CIDR |
+| CALICO_ADVERTISE_CLUSTER_IPS | Deprecated. Use [BGPConfiguration](/reference/resources/bgpconfig) resource instead. Note: if this variable is defined, then any serviceClusterIPs defined in BGPConfiguration are ignored. [Default: ""] | IPv4 CIDR |
 | USE_POD_CIDR | Use the Kubernetes `Node.Spec.PodCIDR` field. This field is required when using the Kubernetes API datastore with host-local IPAM. [Default: false] | boolean |
 | CALICO_MANAGE_CNI | Tells Calico to update the kubeconfig file at /host/etc/cni/net.d/calico-kubeconfig on credentials change. [Default: false] | boolean |
 
@@ -89,7 +89,7 @@ The IP (for IPv4) and IP6 (for IPv6) environment variables are used to set,
 force autodetection, or disable auto detection of the address for the
 appropriate IP version for the node. When the environment variable is set,
 the address is saved in the
-[node resource configuration]({{site.baseurl}}/{{page.version}}/reference/resources/node)
+[node resource configuration]({{ site.baseurl }}/reference/resources/node)
 for this host, overriding any previously configured value.
 
 #### IP setting special case values
@@ -212,7 +212,7 @@ Substitute `[flag]` with one or more of the following.
 
 The BIRD readiness endpoint ensures that the BGP mesh is healthy by verifying that all BGP peers are established and
 no graceful restart is in progress. If the BIRD readiness check is failing due to unreachable peers that are no longer
-in the cluster, see [decomissioning a node]({{site.baseurl}}/{{page.version}}/maintenance/decommissioning-a-node).
+in the cluster, see [decomissioning a node]({{ site.baseurl }}/maintenance/decommissioning-a-node).
 
 
 ### Setting `CALICO_ROUTER_ID` for IPv6 only system

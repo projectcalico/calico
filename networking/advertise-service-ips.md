@@ -49,7 +49,7 @@ If your {{site.prodname}} deployment is configured to peer with BGP routers outs
 
 ### Before you begin...
 
-- [Configure BGP peering]({{site.baseurl}}/{{page.version}}/networking/bgp) between {{site.prodname}} and your network infrastructure
+- [Configure BGP peering]({{ site.baseurl }}/networking/bgp) between {{site.prodname}} and your network infrastructure
 - For ECMP load balancing to services, the upstream routers must be configured to use BGP multipath.
 - You need at least one external node outside the cluster that acts as a router, route reflector, or ToR that is peered with calico nodes inside the cluster.
 - Services must be configured with the correct service type (“Cluster” or “Local”) for your implementation. For `externalTrafficPolicy: Local`, the service must be type `LoadBalancer` or `Nodeport`.
@@ -97,7 +97,7 @@ If your {{site.prodname}} deployment is configured to peer with BGP routers outs
    EOF
    ```
 
-   For help see, [BGP configuration resource]({{site.baseurl}}/{{page.version}}/reference/resources/bgpconfig).
+   For help see, [BGP configuration resource]({{ site.baseurl }}/reference/resources/bgpconfig).
 
 > **Note**: In earlier versions of {{site.prodname}}, service cluster IP advertisement was configured via the environment variable CALICO_ADVERTISE_CLUSTER_IPS.
 > That environment variable takes precedence over any serviceClusterIPs configured in the default BGPConfiguration. We recommend replacing the
@@ -140,7 +140,7 @@ If your {{site.prodname}} deployment is configured to peer with BGP routers outs
    EOF
    ```
 
-   For help see, [BGP configuration resource]({{site.baseurl}}/{{page.version}}/reference/resources/bgpconfig).
+   For help see, [BGP configuration resource]({{ site.baseurl }}/reference/resources/bgpconfig).
 
 ### Tutorial
 
@@ -150,5 +150,5 @@ For a tutorial on how service advertisement works with {{site.prodname}}, see th
 
 Other topics on creating network policy for Kubernetes services:
 
-- [Apply policy to services exposed externally as cluster IPs]({{site.baseurl}}/{{page.version}}/security/services-cluster-ips)
-- [Apply policy to Kubernetes node ports]({{site.baseurl}}/{{page.version}}/security/kubernetes-node-ports)
+- [Apply policy to services exposed externally as cluster IPs]({{ site.baseurl }}/security/services-cluster-ips)
+- [Apply policy to Kubernetes node ports]({{ site.baseurl }}/security/kubernetes-node-ports)

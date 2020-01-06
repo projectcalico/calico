@@ -17,7 +17,7 @@ interfaces.
 
 Each host endpoint may include a set of labels and list of profiles that {{site.prodname}}
 will use to apply
-[policy]({{site.baseurl}}/{{page.version}}/reference/resources/networkpolicy)
+[policy]({{ site.baseurl }}/reference/resources/networkpolicy)
 to the interface.
 
 **Default behavior of external traffic to/from host**
@@ -25,11 +25,11 @@ to the interface.
 If a host endpoint is added and network policy is not in place, the {{ site.prodname }} default is to deny traffic to/from that endpoint (except for traffic allowed by failsafe rules). For host endpoints, {{ site.prodname }} blocks traffic only to/from interfaces that it’s been explicitly told about in network policy. Traffic to/from other interfaces is ignored.
 
 > **Note**: Currently, for host endpoints with `interfaceName: *`, only [pre-DNAT
-> policy]({{site.baseurl}}/{{page.version}}/reference/host-endpoints/pre-dnat) is
+> policy]({{ site.baseurl }}/reference/host-endpoints/pre-dnat) is
 > implemented.
 {: .alert .alert-info}
 
-For `calicoctl` [commands]({{site.baseurl}}/{{page.version}}/reference/calicoctl/) that specify a resource type on the CLI, the following
+For `calicoctl` [commands]({{ site.baseurl }}/reference/calicoctl/) that specify a resource type on the CLI, the following
 aliases are supported (all case insensitive): `hostendpoint`, `hostendpoints`, `hep`, `heps`.
 
 > **Important**: When rendering security rules on other hosts, {{site.prodname}} uses the

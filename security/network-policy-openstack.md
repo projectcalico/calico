@@ -26,7 +26,7 @@ Using the OpenStack API, it is difficult to apply policy to cross-region network
 
 #### Labels: more flexibility, greater security
 
-{{site.prodname}} provides predefined [VM endpoint labels]({{site.baseurl}}/{{page.version}}/networking/openstack/labels) (projects, security groups, and namespaces) for OpenStack deployments. You can use these labels in selector fields in {{site.prodname}} network policy to identify the VMs for allow/deny policy.
+{{site.prodname}} provides predefined [VM endpoint labels]({{ site.baseurl }}/networking/openstack/labels) (projects, security groups, and namespaces) for OpenStack deployments. You can use these labels in selector fields in {{site.prodname}} network policy to identify the VMs for allow/deny policy.
 
 #### Policy ordering and enforcement
 
@@ -34,8 +34,8 @@ Using the OpenStack API, it is difficult to apply policy to cross-region network
 
 ### Before you begin...
 
-- [Set up {{site.prodname}} for OpenStack]({{site.baseurl}}/{{page.version}}/networking/openstack/dev-machine-setup)
-- If you are using a multi-region VM deployment, [follow these extra steps]({{site.baseurl}}/{{page.version}}/networking/openstack/multiple-regions)
+- [Set up {{site.prodname}} for OpenStack]({{ site.baseurl }}/networking/openstack/dev-machine-setup)
+- If you are using a multi-region VM deployment, [follow these extra steps]({{ site.baseurl }}/networking/openstack/multiple-regions)
 
 ### How to
 
@@ -101,5 +101,5 @@ spec:
 
 ### Above and beyond
 
-- For additional {{site.prodname}} network policy features, see [{{site.prodname}} network policy]({{site.baseurl}}/{{page.version}}/reference/resources/networkpolicy) and [Calico global network policy]({{site.baseurl}}/{{page.version}}/reference/resources/globalnetworkpolicy)
-- For details on the OpenStack integration with {{site.prodname}}, see [{{site.prodname}} for OpenStack]({{site.baseurl}}/{{page.version}}/networking/openstack/dev-machine-setup)
+- For additional {{site.prodname}} network policy features, see [{{site.prodname}} network policy]({{ site.baseurl }}/reference/resources/networkpolicy) and [Calico global network policy]({{ site.baseurl }}/reference/resources/globalnetworkpolicy)
+- For details on the OpenStack integration with {{site.prodname}}, see [{{site.prodname}} for OpenStack]({{ site.baseurl }}/networking/openstack/dev-machine-setup)

@@ -70,7 +70,7 @@ metadata:
 
 #### kubectl vs calicoctl
 
-Calico network policies and Calico global network policies are applied using calicoctl. Syntax is similar to Kubernetes, but there a few differences. For help, see [calicoctl user reference]({{site.baseurl}}/{{page.version}}/reference/calicoctl/).
+Calico network policies and Calico global network policies are applied using calicoctl. Syntax is similar to Kubernetes, but there a few differences. For help, see [calicoctl user reference]({{ site.baseurl }}/reference/calicoctl/).
 
 #### Ingress and egress
 
@@ -265,7 +265,7 @@ Spec:
 
 ### Above and beyond
 
-- For additional Calico network policy features, see [Calico network policy]({{site.baseurl}}/{{page.version}}/reference/resources/networkpolicy) and [Calico global network policy]({{site.baseurl}}/{{page.version}}/reference/resources/globalnetworkpolicy)
-- For an alternative to using IP addresses or CIDRs in policy, see [Network sets]({{site.baseurl}}/{{page.version}}/reference/resources/networkset) 
-- For details on the calicoctl command line tool, see [calicoctl user reference]({{site.baseurl}}/{{page.version}}/reference/calicoctl/) 
-- {% include enterprise_icon.html %}[Compliance and threat detection with Calico Enterprise]({{site.baseurl}}/{{page.version}}/security/calico-enterprise/network-visibility)
+- For additional Calico network policy features, see [Calico network policy]({{ site.baseurl }}/reference/resources/networkpolicy) and [Calico global network policy]({{ site.baseurl }}/reference/resources/globalnetworkpolicy)
+- For an alternative to using IP addresses or CIDRs in policy, see [Network sets]({{ site.baseurl }}/reference/resources/networkset) 
+- For details on the calicoctl command line tool, see [calicoctl user reference]({{ site.baseurl }}/reference/calicoctl/) 
+- {% include enterprise_icon.html %}[Compliance and threat detection with Calico Enterprise]({{ site.baseurl }}/security/calico-enterprise/network-visibility)

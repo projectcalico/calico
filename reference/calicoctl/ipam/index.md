@@ -6,7 +6,7 @@ canonical_url: 'https://docs.projectcalico.org/v3.9/reference/calicoctl/ipam/ind
 
 This section describes the `calicoctl ipam` commands.
 
-Read the [calicoctl Overview]({{site.baseurl}}/{{page.version}}/reference/calicoctl/) for a full list of calicoctl commands.
+Read the [calicoctl Overview]({{ site.baseurl }}/reference/calicoctl/) for a full list of calicoctl commands.
 
 ## Displaying the help text for 'calicoctl ipam' commands
 
@@ -36,5 +36,5 @@ Description:
 Details on the `calicoctl ipam` commands are described in the documents linked below
 organized by sub command.
 
--  [calicoctl ipam release]({{site.baseurl}}/{{page.version}}/reference/calicoctl/ipam/release)
--  [calicoctl ipam show]({{site.baseurl}}/{{page.version}}/reference/calicoctl/ipam/show)
+-  [calicoctl ipam release]({{ site.baseurl }}/reference/calicoctl/ipam/release)
+-  [calicoctl ipam show]({{ site.baseurl }}/reference/calicoctl/ipam/show)

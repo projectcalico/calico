@@ -58,7 +58,7 @@ For example add the following arguments to the kubelet-wrapper service:
 ```
 
 Without the above volume mounts, the kubelet will not call the {{site.prodname}} CNI binaries, and so
-{{site.prodname}} [workload endpoints]({{site.baseurl}}/{{page.version}}/reference/resources/workloadendpoint) will
+{{site.prodname}} [workload endpoints]({{ site.baseurl }}/reference/resources/workloadendpoint) will
 not be created, and {{site.prodname}} policy will not be enforced.
 
 ## How do I view {{site.prodname}} CNI logs?
@@ -67,14 +67,14 @@ The {{site.prodname}} CNI plugin emits logs to stderr, which are then logged out
 depend on how your kubelet is configured.  For deployments using `systemd`, you can do this via `journalctl`.
 
 The log level can be configured via the CNI network configuration file, by changing the value of the
-key `log_level`.  See [Configuring the {{site.prodname}} CNI plugins]({{site.baseurl}}/{{page.version}}/reference/cni-plugin/configuration) for more information.
+key `log_level`.  See [Configuring the {{site.prodname}} CNI plugins]({{ site.baseurl }}/reference/cni-plugin/configuration) for more information.
 
 ## How do I configure the pod IP range?
 
-When using {{site.prodname}} IPAM, IP addresses are assigned from [IP Pools]({{site.baseurl}}/{{page.version}}/reference/resources/ippool).
+When using {{site.prodname}} IPAM, IP addresses are assigned from [IP Pools]({{ site.baseurl }}/reference/resources/ippool).
 
-By default, all enabled IP pools are used. However, you can specify which IP pools to use for IP address management in the [CNI network config]({{site.baseurl}}/{{page.version}}/reference/cni-plugin/configuration#ipam),
-or on a per-pod basis using [Kubernetes annotations]({{site.baseurl}}/{{page.version}}/reference/cni-plugin/configuration#using-kubernetes-annotations).
+By default, all enabled IP pools are used. However, you can specify which IP pools to use for IP address management in the [CNI network config]({{ site.baseurl }}/reference/cni-plugin/configuration#ipam),
+or on a per-pod basis using [Kubernetes annotations]({{ site.baseurl }}/reference/cni-plugin/configuration#using-kubernetes-annotations).
 
 ## How do I assign a specific IP address to a pod?
 
@@ -84,7 +84,7 @@ However, if you do need to assign a particular address to a pod, {{site.prodname
 - You can request an IP that is available in {{site.prodname}} IPAM using the `cni.projectcalico.org/ipAddrs` annotation.
 - You can request an IP using the `cni.projectcalico.org/ipAddrsNoIpam` annotation. Note that this annotation bypasses the configured IPAM plugin, and thus in most cases it is recommended to use the above annotation.
 
-See the [Requesting a specific IP address]({{site.baseurl}}/{{page.version}}/reference/cni-plugin/configuration#requesting-a-specific-ip-address) section in the CNI plugin reference documentation for more details.
+See the [Requesting a specific IP address]({{ site.baseurl }}/reference/cni-plugin/configuration#requesting-a-specific-ip-address) section in the CNI plugin reference documentation for more details.
 
 ## Why can't I see the 169.254.1.1 address mentioned above on my host?
 
@@ -139,7 +139,7 @@ documents *mandates* the use of VLANs.
 2. Modify IP pool config.
 
    Modify the pool's spec to enable IP-in-IP and NAT outgoing. (See
-   [IP pools]({{site.baseurl}}/{{page.version}}/reference/resources/ippool)
+   [IP pools]({{ site.baseurl }}/reference/resources/ippool)
    for other settings that can be edited.)
 
    ```shell
@@ -218,9 +218,9 @@ workloads to each other and the broader world.
 
 However, the underlying physical fabric obviously needs to be set up
 too. Here, {{site.prodname}} has discussed how both a layer 2 (see
-[here]({{site.baseurl}}/{{page.version}}/reference/architecture/design/l2-interconnect-fabric))
+[here]({{ site.baseurl }}/reference/architecture/design/l2-interconnect-fabric))
 or a layer 3 (see
-[here]({{site.baseurl}}/{{page.version}}/reference/architecture/design/l3-interconnect-fabric))
+[here]({{ site.baseurl }}/reference/architecture/design/l3-interconnect-fabric))
 fabric
 could be integrated with {{site.prodname}}. This is one of the great strengths of
 the {{site.prodname}} model: it allows the infrastructure to be decoupled from what
@@ -266,7 +266,7 @@ again, and again the reachability doesn’t have to change.
 
 ## How does {{site.prodname}} interact with the Neutron API?
 
-[{{site.prodname}}'s interpretation of Neutron API calls]({{site.baseurl}}/{{page.version}}/networking/openstack/neutron-api)
+[{{site.prodname}}'s interpretation of Neutron API calls]({{ site.baseurl }}/networking/openstack/neutron-api)
 goes into extensive detail about how various Neutron API calls translate into
 {{site.prodname}} actions.
 
@@ -279,7 +279,7 @@ If a host's containers are connected to the `docker0` bridge interface, {{site.p
 would be unable to enforce security rules between workloads on the same host;
 all containers on the bridge would be able to communicate with one other.
 
-You can securely configure port mapping by following [External connectivity]({{site.baseurl}}/{{page.version}}/networking/external-connectivity).
+You can securely configure port mapping by following [External connectivity]({{ site.baseurl }}/networking/external-connectivity).
 
 ## Can {{site.prodname}} containers use any IP address within a pool, even subnet network/broadcast addresses?
 
@@ -303,10 +303,10 @@ center.  Access to that network is via a router, which also is the default
 router for all the container hosts.
 
 If this describes your infrastructure,
-[External connectivity]({{site.baseurl}}/{{page.version}}/networking/external-connectivity) explains in more detail
+[External connectivity]({{ site.baseurl }}/networking/external-connectivity) explains in more detail
 what to do. Otherwise, if you have a layer 3 (IP) fabric, then there are
 detailed datacenter networking recommendations given
-in [{{site.prodname}} over IP fabrics]({{site.baseurl}}/{{page.version}}/reference/architecture/design/l3-interconnect-fabric).
+in [{{site.prodname}} over IP fabrics]({{ site.baseurl }}/reference/architecture/design/l3-interconnect-fabric).
 We'd also encourage you to [get in touch](https://www.projectcalico.org/contact/)
 to discuss your environment.
 

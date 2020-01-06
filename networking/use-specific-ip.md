@@ -65,4 +65,4 @@ Note that currently only a single IP address is supported per-pod using this ann
 
 ### Above and beyond
 
-For help configuring Calico CNI and Calico IPAM, see [Configuring the Calico CNI Plugins]({{site.baseurl}}/{{page.version}}/reference/cni-plugin/configuration).
+For help configuring Calico CNI and Calico IPAM, see [Configuring the Calico CNI Plugins]({{ site.baseurl }}/reference/cni-plugin/configuration).

@@ -134,5 +134,5 @@ spec:
 
 For more on the ICMP match criteria, see:
 
-- [Global network policy]({{site.baseurl}}/{{page.version}}/reference/resources/globalnetworkpolicy)
-- [Network policy]({{site.baseurl}}/{{page.version}}/reference/resources/networkpolicy)
+- [Global network policy]({{ site.baseurl }}/reference/resources/globalnetworkpolicy)
+- [Network policy]({{ site.baseurl }}/reference/resources/networkpolicy)

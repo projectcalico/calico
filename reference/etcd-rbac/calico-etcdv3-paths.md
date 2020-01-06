@@ -59,7 +59,7 @@ component needs access to in etcd to function successfully.
 > operation requires root privileges on the etcd cluster. You should
 > [configure auto-compaction](https://etcd.io/docs/v3.3.12/op-guide/maintenance/)
 > on your etcd cluster and
-> [disable `calico/kube-controllers` periodic compaction](/{{page.version}}/reference/kube-controllers/configuration).
+> [disable `calico/kube-controllers` periodic compaction](/reference/kube-controllers/configuration).
 {: .alert .alert-info}
 
 

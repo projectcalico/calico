@@ -12,7 +12,7 @@ When you install {{site.prodname}} on a node, an IP address and subnet is automa
 
 - Hosts with multiple external interfaces
 - Host interfaces with multiple IP addresses
-- [Changes to cross subnet packet encapsulation]({{site.baseurl}}/{{page.version}}/networking/vxlan-ipip)
+- [Changes to cross subnet packet encapsulation]({{ site.baseurl }}/networking/vxlan-ipip)
 - Changes to host IP address
 
 ### Features
@@ -50,7 +50,7 @@ By default, {{site.prodname}} uses the **first-found** method; the first valid I
 - Regex to include matching interfaces (**interface**)
 - Regex to exclude matching interfaces (**skip-interface**)
 
-For details on autodetection methods, see [node configuration]({{site.baseurl}}/{{page.version}}/reference/node/configuration#ip-autodetection-methods) reference.
+For details on autodetection methods, see [node configuration]({{ site.baseurl }}/reference/node/configuration#ip-autodetection-methods) reference.
 
 #### Manually configure IP address and subnet
 
@@ -130,7 +130,7 @@ In the following scenarios, you may want to configure a specific IP and subnet:
 - Changes to cross subnet packet encapsulation
 - Changes to host IP address
 
-You can configure specific IP address and subnet for a node using environment variables or by updating the [Node resource]({{site.baseurl}}/{{page.version}}/reference/resources/node).
+You can configure specific IP address and subnet for a node using environment variables or by updating the [Node resource]({{ site.baseurl }}/reference/resources/node).
 
 ##### Configure IP and subnet using environment variables
 
@@ -160,7 +160,7 @@ calicoctl patch node kind-control-plane \
 
 ### Above and beyond
 
-- For details on autodetection methods, see the [node configuration]({{site.baseurl}}/{{page.version}}/reference/node/configuration#ip-autodetection-methods) reference.
-- For calicoctl environment variables, see [Configuring {{site.nodecontainer}}]({{site.baseurl}}/{{page.version}}/reference/node/configuration)
-- [Node resource]({{site.baseurl}}/{{page.version}}/reference/resources/node)
-- [Reference documentation for calicoctl patch]({{site.baseurl}}/{{page.version}}/reference/calicoctl/patch)
+- For details on autodetection methods, see the [node configuration]({{ site.baseurl }}/reference/node/configuration#ip-autodetection-methods) reference.
+- For calicoctl environment variables, see [Configuring {{site.nodecontainer}}]({{ site.baseurl }}/reference/node/configuration)
+- [Node resource]({{ site.baseurl }}/reference/resources/node)
+- [Reference documentation for calicoctl patch]({{ site.baseurl }}/reference/calicoctl/patch)

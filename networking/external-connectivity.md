@@ -67,7 +67,7 @@ container hosts.
 
 ![hosts-on-layer-2-network]({{site.baseurl}}/images/hosts-on-layer-2-network.png)
 
-See the [BGP peering document]({{site.baseurl}}/{{page.version}}/networking/bgp)
+See the [BGP peering document]({{ site.baseurl }}/networking/bgp)
 for information on how to set up the `{{site.nodecontainer}}` sides of the sessions.
 Consult the documentation for your BGP capable switch/router to set up the
 switch sides of the sessions.
@@ -75,7 +75,7 @@ switch sides of the sessions.
 If you have a small number of hosts, you can configure BGP sessions between your router and each {{site.prodname}}-enabled host. With many hosts, you may wish to use a
 route reflector or set up a Layer 3 topology.
 
-There's further advice on network topologies in [{{site.prodname}} over Ethernet fabrics]({{site.baseurl}}/{{page.version}}/reference/architecture/design/l2-interconnect-fabric).
+There's further advice on network topologies in [{{site.prodname}} over Ethernet fabrics]({{ site.baseurl }}/reference/architecture/design/l2-interconnect-fabric).
 We'd also encourage you to [get in touch](https://www.projectcalico.org/contact/)
 to discuss your environment.
 
@@ -84,4 +84,4 @@ to discuss your environment.
 {{site.prodname}} supports a number of orchestrator specific options for inbound
 connectivity, such as Kubernetes service IPs, or OpenStack floating IPs.
 
-Consult the [documentation for your orchestrator]({{site.baseurl}}/{{page.version}}/getting-started/) for more information.
+Consult the [documentation for your orchestrator]({{ site.baseurl }}/getting-started/) for more information.

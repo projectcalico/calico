@@ -31,14 +31,14 @@ For completeness, the advantages of the etcd driver are
 When using the Kubernetes API datastore driver, most {{site.prodname}} resources are stored as
 [Kubernetes custom resources](https://kubernetes.io/docs/concepts/extend-kubernetes/api-extension/custom-resources/).
 
-A few {{site.prodname}} resources are not stored as custom resources and instead are backed by corresponding native Kubernetes resources. For example, [workload endpoints](/{{page.version}}/reference/resources/workloadendpoint) are Kubernetes pods.
+A few {{site.prodname}} resources are not stored as custom resources and instead are backed by corresponding native Kubernetes resources. For example, [workload endpoints](/reference/resources/workloadendpoint) are Kubernetes pods.
 
 In order to use Kubernetes as the {{site.prodname}} datastore, we need to define the custom resources {{site.prodname}} uses.
 
 Download and examine the list of {{site.prodname}} custom resource definitions, and open it in a file editor.
 
 ```
-wget {{site.url}}/{{page.version}}/manifests/crds.yaml
+wget {{ site.url }}/manifests/crds.yaml
 ```
 
 Create the custom resource definitions in Kubernetes.

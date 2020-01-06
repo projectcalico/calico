@@ -27,7 +27,7 @@ Calico network policy supports restricting traffic based on HTTP methods and pat
 
 ### Before you begin...
 
-[Enable application layer policy]({{site.baseurl}}/{{page.version}}/getting-started/kubernetes/installation/app-layer-policy)
+[Enable application layer policy]({{ site.baseurl }}/getting-started/kubernetes/installation/app-layer-policy)
 
 ### How to
 

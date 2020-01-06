@@ -45,18 +45,18 @@ spec:
 
 The following resources are supported:
 
-- [BGPConfiguration]({{site.baseurl}}/{{page.version}}/reference/resources/bgpconfig)
-- [BGPPeer]({{site.baseurl}}/{{page.version}}/reference/resources/bgppeer)
-- [FelixConfiguration]({{site.baseurl}}/{{page.version}}/reference/resources/felixconfig)
-- [GlobalNetworkPolicy]({{site.baseurl}}/{{page.version}}/reference/resources/globalnetworkpolicy)
-- [GlobalNetworkSet]({{site.baseurl}}/{{page.version}}/reference/resources/globalnetworkset)
-- [HostEndpoint]({{site.baseurl}}/{{page.version}}/reference/resources/hostendpoint)
-- [IPPool]({{site.baseurl}}/{{page.version}}/reference/resources/ippool)
-- [NetworkPolicy]({{site.baseurl}}/{{page.version}}/reference/resources/networkpolicy)
-- [NetworkSet]({{site.baseurl}}/{{page.version}}/reference/resources/networkset)
-- [Node]({{site.baseurl}}/{{page.version}}/reference/resources/node)
-- [Profile]({{site.baseurl}}/{{page.version}}/reference/resources/profile)
-- [WorkloadEndpoint]({{site.baseurl}}/{{page.version}}/reference/resources/workloadendpoint)
+- [BGPConfiguration]({{ site.baseurl }}/reference/resources/bgpconfig)
+- [BGPPeer]({{ site.baseurl }}/reference/resources/bgppeer)
+- [FelixConfiguration]({{ site.baseurl }}/reference/resources/felixconfig)
+- [GlobalNetworkPolicy]({{ site.baseurl }}/reference/resources/globalnetworkpolicy)
+- [GlobalNetworkSet]({{ site.baseurl }}/reference/resources/globalnetworkset)
+- [HostEndpoint]({{ site.baseurl }}/reference/resources/hostendpoint)
+- [IPPool]({{ site.baseurl }}/reference/resources/ippool)
+- [NetworkPolicy]({{ site.baseurl }}/reference/resources/networkpolicy)
+- [NetworkSet]({{ site.baseurl }}/reference/resources/networkset)
+- [Node]({{ site.baseurl }}/reference/resources/node)
+- [Profile]({{ site.baseurl }}/reference/resources/profile)
+- [WorkloadEndpoint]({{ site.baseurl }}/reference/resources/workloadendpoint)
 
 ### Resource name requirements
 

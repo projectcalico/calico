@@ -10,11 +10,11 @@ This tutorial sets up a microservices application, then demonstrates how to use 
 
 1. Build a Kubernetes cluster.
 2. Install Calico on Kubernetes:
-  - If Calico is not installed on Kubernetes, see [Calico on Kubernetes]({{site.baseurl}}/{{page.version}}/getting-started/kubernetes).  
-  - If Calico is already installed on Kubernetes, verify that [Calico networking]({{site.baseurl}}/{{page.version}}/getting-started/kubernetes/installation/calico) (or a non-Calico CNI) and Calico network policy are installed. 
-3. Install the [calicoctl command line tool]({{site.baseurl}}/{{page.version}}/getting-started/calicoctl/install).   
+  - If Calico is not installed on Kubernetes, see [Calico on Kubernetes]({{ site.baseurl }}/getting-started/kubernetes).  
+  - If Calico is already installed on Kubernetes, verify that [Calico networking]({{ site.baseurl }}/getting-started/kubernetes/installation/calico) (or a non-Calico CNI) and Calico network policy are installed. 
+3. Install the [calicoctl command line tool]({{ site.baseurl }}/getting-started/calicoctl/install).   
   **Note**: Ensure calicoctl is configured to connect with your datastore.  
-4. Enable [application layer policy and install Istio]({{site.baseurl}}/{{page.version}}/getting-started/kubernetes/installation/app-layer-policy).  
+4. Enable [application layer policy and install Istio]({{ site.baseurl }}/getting-started/kubernetes/installation/app-layer-policy).  
   **Note**: Ensure that you annotate the default namespace for the Istio sidecar injection (`istio-injection=enabled`).    
   `kubectl label namespace default istio-injection=enabled`
 
@@ -24,7 +24,7 @@ We will use a simple microservice application to demonstrate {{site.prodname}} a
 
 ```bash
 kubectl apply -f \
-{{site.url}}/{{page.version}}/security/tutorials/app-layer-policy/manifests/10-yaobank.yaml
+{{ site.url }}/security/tutorials/app-layer-policy/manifests/10-yaobank.yaml
 ```
 
 > **Note**: You can also
@@ -160,7 +160,7 @@ return to the customer pod later).
 
 ```bash
 kubectl apply -f \
-{{site.url}}/{{page.version}}/security/tutorials/app-layer-policy/manifests/20-attack-pod.yaml
+{{ site.url }}/security/tutorials/app-layer-policy/manifests/20-attack-pod.yaml
 ```
 
 Take a look at the [`20-attack-pod.yaml` manifest in your browser](manifests/20-attack-pod.yaml).
@@ -184,7 +184,7 @@ Return to your web browser and refresh to confirm the new balance.
 
 We can mitigate both of the above deficiencies with a {{site.prodname}} policy.
 
-    wget {{site.url}}/{{page.version}}/security/tutorials/app-layer-policy/manifests/30-policy.yaml
+    wget {{ site.url }}/security/tutorials/app-layer-policy/manifests/30-policy.yaml
     calicoctl create -f 30-policy.yaml
 
 > **Note**: You can also

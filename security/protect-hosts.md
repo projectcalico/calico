@@ -57,7 +57,7 @@ No. {{site.prodname}} allows connections the host makes to the workloads running
 
 ### Before you begin...
 
-If you are already running {{site.prodname}} for Kubernetes, you are good to go. If you want to install {{site.prodname}} on a bare-metal machine for host protection only, see [Bare metal hosts]({{site.baseurl}}/{{page.version}}/getting-started/bare-metal/installation/binary-mgr).
+If you are already running {{site.prodname}} for Kubernetes, you are good to go. If you want to install {{site.prodname}} on a bare-metal machine for host protection only, see [Bare metal hosts]({{ site.baseurl }}/getting-started/bare-metal/installation/binary-mgr).
 
 ### How to
 
@@ -69,7 +69,7 @@ If you are already running {{site.prodname}} for Kubernetes, you are good to go.
 
 To avoid inadvertently cutting all host connectivity because of non-existent or misconfigured network policy, {{site.prodname}} uses failsafe rules that open specific ports on all host endpoints.
 
-Review the following table to determine if the defaults work for your implementation. If not, change the default ports using the parameters, **FailsafeInboundHostPorts** and **FailsafeOutboundHostPorts** in [Configuring Felix]({{site.baseurl}}/{{page.version}}/reference/felix/configuration#environment-variables).
+Review the following table to determine if the defaults work for your implementation. If not, change the default ports using the parameters, **FailsafeInboundHostPorts** and **FailsafeOutboundHostPorts** in [Configuring Felix]({{ site.baseurl }}/reference/felix/configuration#environment-variables).
 
 | Port   | Protocol | Direction           |              Purpose                           |
 |--------|----------|---------------------|------------------------------------------------|
@@ -184,7 +184,7 @@ To change this parameter for all hosts, edit the **FelixConfiguration** object n
 
 ### Above and beyond
 
-- [Apply policy to Kubernetes node ports]({{site.baseurl}}/{{page.version}}/security/kubernetes-node-ports)
-- [Defend against DoS attacks]({{site.baseurl}}/{{page.version}}/security/defend-dos-attack)
-- [Global network policy]({{site.baseurl}}/{{page.version}}/reference/resources/globalnetworkpolicy)
-- [Host endpoint]({{site.baseurl}}/{{page.version}}/reference/resources/hostendpoint)
+- [Apply policy to Kubernetes node ports]({{ site.baseurl }}/security/kubernetes-node-ports)
+- [Defend against DoS attacks]({{ site.baseurl }}/security/defend-dos-attack)
+- [Global network policy]({{ site.baseurl }}/reference/resources/globalnetworkpolicy)
+- [Host endpoint]({{ site.baseurl }}/reference/resources/hostendpoint)

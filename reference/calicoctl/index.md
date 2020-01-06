@@ -8,12 +8,12 @@ The command line tool, `calicoctl`, makes it easy to manage {{site.prodname}}
 network and security policy, as well as other {{site.prodname}} configurations.
 
 The full list of resources that can be managed, including a description of each,
-is described in the [Resource definitions]({{site.baseurl}}/{{page.version}}/reference/resources/)
+is described in the [Resource definitions]({{ site.baseurl }}/reference/resources/)
 section.
 
 > **Note**: This section provides full reference information for `calicoctl`. To learn
 > how to install and configure `calicoctl`, refer to
-> [Installing calicoctl]({{site.baseurl}}/{{page.version}}/getting-started/calicoctl/install).
+> [Installing calicoctl]({{ site.baseurl }}/getting-started/calicoctl/install).
 {: .alert .alert-info}
 
 The calicoctl command line interface provides a number of resource management
@@ -64,17 +64,17 @@ Description:
 Details on the `calicoctl` commands are described in the documents linked below
 organized by top level command.
 
--  [calicoctl create]({{site.baseurl}}/{{page.version}}/reference/calicoctl/create)
--  [calicoctl replace]({{site.baseurl}}/{{page.version}}/reference/calicoctl/replace)
--  [calicoctl apply]({{site.baseurl}}/{{page.version}}/reference/calicoctl/apply)
--  [calicoctl patch]({{site.baseurl}}/{{page.version}}/reference/calicoctl/patch)
--  [calicoctl delete]({{site.baseurl}}/{{page.version}}/reference/calicoctl/delete)
--  [calicoctl get]({{site.baseurl}}/{{page.version}}/reference/calicoctl/get)
--  [calicoctl label]({{site.baseurl}}/{{page.version}}/reference/calicoctl/label)
--  [calicoctl convert]({{site.baseurl}}/{{page.version}}/reference/calicoctl/convert)
--  [calicoctl ipam]({{site.baseurl}}/{{page.version}}/reference/calicoctl/ipam)
--  [calicoctl node]({{site.baseurl}}/{{page.version}}/reference/calicoctl/node)
--  [calicoctl version]({{site.baseurl}}/{{page.version}}/reference/calicoctl/version)
+-  [calicoctl create]({{ site.baseurl }}/reference/calicoctl/create)
+-  [calicoctl replace]({{ site.baseurl }}/reference/calicoctl/replace)
+-  [calicoctl apply]({{ site.baseurl }}/reference/calicoctl/apply)
+-  [calicoctl patch]({{ site.baseurl }}/reference/calicoctl/patch)
+-  [calicoctl delete]({{ site.baseurl }}/reference/calicoctl/delete)
+-  [calicoctl get]({{ site.baseurl }}/reference/calicoctl/get)
+-  [calicoctl label]({{ site.baseurl }}/reference/calicoctl/label)
+-  [calicoctl convert]({{ site.baseurl }}/reference/calicoctl/convert)
+-  [calicoctl ipam]({{ site.baseurl }}/reference/calicoctl/ipam)
+-  [calicoctl node]({{ site.baseurl }}/reference/calicoctl/node)
+-  [calicoctl version]({{ site.baseurl }}/reference/calicoctl/version)
 
 ## Modifying low-level component configurations
 
@@ -83,4 +83,4 @@ In order to update low-level Felix or BGP settings (`FelixConfiguration` and `BG
 1. Modify the saved resource file.
 1. Update the resource using `apply` or `replace` command: `calicoctl replace -f config.yaml`.
 
-See [Configuring Felix]({{site.baseurl}}/{{page.version}}/reference/felix/configuration) for more details.
+See [Configuring Felix]({{ site.baseurl }}/reference/felix/configuration) for more details.

@@ -18,7 +18,7 @@ is known as "dual stack", and Kubernetes has alpha-level support for this in ver
 
 This how-to guide uses the following {{site.prodname}} features:
 
-- [**CNI plugin configuration**]({{site.baseurl}}/{{page.version}}/reference/cni-plugin/configuration#ipam) with `assign_ipv6: true`
+- [**CNI plugin configuration**]({{ site.baseurl }}/reference/cni-plugin/configuration#ipam) with `assign_ipv6: true`
 
 ### Before you begin...
 
@@ -30,7 +30,7 @@ for dual stack, except ignore mention of the Kubenet network plugin, because her
 {{site.prodname}} instead.
 
 1.  Follow our [installation
-guide]({{site.baseurl}}/{{page.version}}/getting-started/kubernetes/installation/calico) to identify
+guide]({{ site.baseurl }}/getting-started/kubernetes/installation/calico) to identify
 and download the right {{site.prodname}} manifest for the cluster, and
 for your preferred datastore type, but do not apply that manifest yet.
 

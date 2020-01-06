@@ -5,7 +5,7 @@ canonical_url: 'https://docs.projectcalico.org/v3.9/reference/calicoctl/node/run
 
 This sections describes the `calicoctl node run` command.
 
-Read the [calicoctl Overview]({{site.baseurl}}/{{page.version}}/reference/calicoctl)
+Read the [calicoctl Overview]({{ site.baseurl }}/reference/calicoctl)
 for a full list of calicoctl commands.
 
 ## Displaying the help text for 'calicoctl node run' command
@@ -188,7 +188,7 @@ To set the autodetection method for IPv6, use the `--ip6-autodetection-method` o
 > **Note**: If you are starting the `{{site.nodecontainer}}` container directly (and not using the
 > `calicoctl run` helper command), the options are passed in environment
 > variables. These are described in
-> [Configuring `{{site.nodecontainer}}`]({{site.baseurl}}/{{page.version}}/reference/node/configuration).
+> [Configuring `{{site.nodecontainer}}`]({{ site.baseurl }}/reference/node/configuration).
 {: .alert .alert-info}
 
 **first-found**
@@ -363,7 +363,7 @@ terminating `,` character does not need to be specified for those cases.
 
 ## See also
 
--  [Installing calicoctl]({{site.baseurl}}/{{page.version}}/getting-started/calicoctl/install)
--  [Resources]({{site.baseurl}}/{{page.version}}/reference/resources/) for details on all valid resources, including file format
+-  [Installing calicoctl]({{ site.baseurl }}/getting-started/calicoctl/install)
+-  [Resources]({{ site.baseurl }}/reference/resources/) for details on all valid resources, including file format
    and schema
--  [Policy]({{site.baseurl}}/{{page.version}}/reference/resources/networkpolicy) for details on the {{site.prodname}} selector-based policy model
+-  [Policy]({{ site.baseurl }}/reference/resources/networkpolicy) for details on the {{site.prodname}} selector-based policy model

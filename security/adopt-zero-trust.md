@@ -106,11 +106,11 @@ After your Zero Trust Network is established, you will need to maintain it.
 
 #### Install {{site.prodname}}
 
-Follow the [install instructions]({{site.baseurl}}/{{page.version}}/getting-started/kubernetes/installation/) to get {{site.prodname}} software running in your cluster.
+Follow the [install instructions]({{ site.baseurl }}/getting-started/kubernetes/installation/) to get {{site.prodname}} software running in your cluster.
 
 #### Install Istio and enable {{site.prodname}} integration
 
-Follow the instructions to [Enable Application Layer Policy]({{site.baseurl}}/{{page.version}}/getting-started/kubernetes/installation/app-layer-policy).
+Follow the instructions to [Enable Application Layer Policy]({{ site.baseurl }}/getting-started/kubernetes/installation/app-layer-policy).
 
 The instructions include a “demo” install of Istio for quickly testing out functionality. For a production installation to support a Zero Trust Network, you should instead follow the official Istio install instructions. Be sure to enable mutually authenticated TLS (mTLS) in your install options by setting **global.mtls.enabled to true**.
 
@@ -126,7 +126,7 @@ After you decide on the set of identities you require, create the Kubernetes Ser
 
 #### Write initial whitelist policies for each service
 
-The final step to establishing your Zero Trust Network is to write the policies for each service in your network. The [Application Layer Policy Tutorial]({{site.baseurl}}/{{page.version}}/security/tutorials/app-layer-policy/enforce-policy-istio) gives an overview of setting up policies that allow traffic based on Service Account identity.
+The final step to establishing your Zero Trust Network is to write the policies for each service in your network. The [Application Layer Policy Tutorial]({{ site.baseurl }}/security/tutorials/app-layer-policy/enforce-policy-istio) gives an overview of setting up policies that allow traffic based on Service Account identity.
 
 For each service you will:
 
@@ -306,7 +306,7 @@ You may wish to review every security policy change request (aka pull request in
 
 ### Above and beyond
 
-- [Protect hosts]({{site.baseurl}}/{{page.version}}/security/protect-hosts)
-- [Global network policy]({{site.baseurl}}/{{page.version}}/reference/resources/globalnetworkpolicy)
-- [Network policy]({{site.baseurl}}/{{page.version}}/reference/resources/networkpolicy)
-- {% include enterprise_icon.html %}[Compliance and threat detection with Calico Enterprise]({{site.baseurl}}/{{page.version}}/security/calico-enterprise/network-visibility)
+- [Protect hosts]({{ site.baseurl }}/security/protect-hosts)
+- [Global network policy]({{ site.baseurl }}/reference/resources/globalnetworkpolicy)
+- [Network policy]({{ site.baseurl }}/reference/resources/networkpolicy)
+- {% include enterprise_icon.html %}[Compliance and threat detection with Calico Enterprise]({{ site.baseurl }}/security/calico-enterprise/network-visibility)

@@ -89,5 +89,5 @@ spec:
 
 ### Above and beyond
 
-- For more network policies, see [Network policy]({{site.baseurl}}/{{page.version}}/reference/resources/networkpolicy)
-- To apply policy to all namespaces, see [Global network policy]({{site.baseurl}}/{{page.version}}/reference/resources/globalnetworkpolicy)
+- For more network policies, see [Network policy]({{ site.baseurl }}/reference/resources/networkpolicy)
+- To apply policy to all namespaces, see [Global network policy]({{ site.baseurl }}/reference/resources/globalnetworkpolicy)

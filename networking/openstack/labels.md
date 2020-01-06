@@ -69,9 +69,9 @@ recommended for [multiple region deployments](multiple-regions)) the namespace w
 ## Configuring operator policy
 
 Configuring operator policy requires the `calicoctl` executable, so you should
-[install]({{site.baseurl}}/{{page.version}}/getting-started/calicoctl/install) and
+[install]({{ site.baseurl }}/getting-started/calicoctl/install) and
 [configure
-calicoctl]({{site.baseurl}}/{{page.version}}/getting-started/calicoctl/configure) if you
+calicoctl]({{ site.baseurl }}/getting-started/calicoctl/configure) if you
 haven't done so already.
 
 -  Calico for OpenStack deployments use an etcd datastore, so you should follow the
@@ -79,8 +79,8 @@ haven't done so already.
 
 -  The settings you need for etcd endpoints, and TLS credentials if your deployment uses
    those, should match what you have in your
-   [`neutron.conf`]({{site.baseurl}}/{{page.version}}/networking/openstack/configuration)
-   and [Felix]({{site.baseurl}}/{{page.version}}/reference/felix/configuration)
+   [`neutron.conf`]({{ site.baseurl }}/networking/openstack/configuration)
+   and [Felix]({{ site.baseurl }}/reference/felix/configuration)
    configurations.
 
 ## Example

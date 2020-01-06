@@ -32,7 +32,7 @@ For example, if you are using AWS, you may be able to use jumbo frames up to 900
 
 ### Before you begin...
 
-For help using IP in IP and/or VXLAN overlays, see [Configure overlay networking]({{site.baseurl}}/{{page.version}}/networking/vxlan-ipip).
+For help using IP in IP and/or VXLAN overlays, see [Configure overlay networking]({{ site.baseurl }}/networking/vxlan-ipip).
 
 ### How to
 

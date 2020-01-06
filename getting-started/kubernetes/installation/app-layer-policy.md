@@ -18,14 +18,14 @@ Enable {{site.prodname}} application layer network policy in Istio service mesh.
 
 Although Istio policy is ideal for operational goals, security inside and outside the cluster requires {{site.prodname}} network policy. {{site.prodname}} supports a special integration for Istio, called **application layer policy**. This policy lets you restrict ingress traffic inside and outside pods, and mitigate common threats to Istio-enabled apps.
 
-For a tutorial on how application layer policy provides second-factor authentication for the mythical Yao Bank, see [Enforce network policy using Istio]({{site.url}}/{{page.version}}/security/tutorials/app-layer-policy/enforce-policy-istio).
+For a tutorial on how application layer policy provides second-factor authentication for the mythical Yao Bank, see [Enforce network policy using Istio]({{ site.url }}/security/tutorials/app-layer-policy/enforce-policy-istio).
 
 ### Before you begin...
 
 **Required**
 
-- [Calico is installed]({{site.url}}/{{page.version}}/getting-started/)
-- [calicoctl is installed and configured]({{site.url}}/{{page.version}}/getting-started/calicoctl/install)
+- [Calico is installed]({{ site.url }}/getting-started/)
+- [calicoctl is installed and configured]({{ site.url }}/getting-started/calicoctl/install)
 - Kubernetes 1.15 or older (Istio 1.1.7 does not support Kubernetes 1.16+).
 See this [issue](https://github.com/projectcalico/calico/issues/2943) for details and workaround.
 
@@ -50,7 +50,7 @@ calicoctl patch FelixConfiguration default --patch \
 
 #### Install Istio
 
-1. Verify [application layer policy requirements]({{site.url}}/{{page.version}}/getting-started/kubernetes/requirements#application-layer-policy-requirements).
+1. Verify [application layer policy requirements]({{ site.url }}/getting-started/kubernetes/requirements#application-layer-policy-requirements).
 1. Install Istio using the [Istio project documentation](https://archive.istio.io/v1.3/docs/setup/install/) making sure to enable mutual TLS authentication. For example:
 
 ```bash
@@ -67,12 +67,12 @@ The sidecar injector automatically modifies pods as they are created to work wit
 1. Patch the istio-sidecar-injector `ConfigMap` to enable injection of Dikastes alongside Envoy.
 
 ```
-curl {{site.url}}/{{page.version}}/manifests/alp/istio-inject-configmap-1.4.2.yaml -o istio-inject-configmap.yaml
+curl {{ site.url }}/manifests/alp/istio-inject-configmap-1.4.2.yaml -o istio-inject-configmap.yaml
 kubectl patch configmap -n istio-system istio-sidecar-injector --patch "$(cat istio-inject-configmap.yaml)"
 ```
-[View sample manifest]({{site.url}}/{{page.version}}/manifests/alp/istio-inject-configmap-1.3.5.yaml){:target="_blank"}
+[View sample manifest]({{ site.url }}/manifests/alp/istio-inject-configmap-1.3.5.yaml){:target="_blank"}
 
-If you installed a different version of Istio, substitute 1.4.2 in the above URL for your Istio version. We have predefined `ConfigMaps` for Istio versions 1.1.0 through 1.1.17, 1.2.0 through 1.2.9, 1.3.0 through 1.3.5, and 1.4.0 through 1.4.2. To customize the standard sidecar injector `ConfigMap` or understand the changes we have made, see [Customizing the manifests]({{site.url}}/{{page.version}}/getting-started/kubernetes/installation/config-options).
+If you installed a different version of Istio, substitute 1.4.2 in the above URL for your Istio version. We have predefined `ConfigMaps` for Istio versions 1.1.0 through 1.1.17, 1.2.0 through 1.2.9, 1.3.0 through 1.3.5, and 1.4.0 through 1.4.2. To customize the standard sidecar injector `ConfigMap` or understand the changes we have made, see [Customizing the manifests]({{ site.url }}/getting-started/kubernetes/installation/config-options).
 
 #### Add Calico authorization services to the mesh
 
@@ -82,7 +82,7 @@ Apply the following manifest to configure Istio to query {{site.prodname}} for a
 kubectl apply -f {{site.url}}/{page.version}}/manifests/alp/istio-app-layer-policy.yaml
 ```
 
-[View sample manifest]({{site.url}}/{{page.version}}/manifests/alp/istio-app-layer-policy.yaml){:target="_blank"}
+[View sample manifest]({{ site.url }}/manifests/alp/istio-app-layer-policy.yaml){:target="_blank"}
 
 #### Add namespace labels
 
@@ -96,11 +96,11 @@ kubectl label namespace <your namespace name> istio-injection=enabled
 
 If the namespace already has pods in it, you must recreate them for this to take effect.
 
->**Note**: Envoy must be able to communicate with the `istio-pilot.istio-system service`. If you apply any egress policies to your pods, you *must* enable access. For example, you could [apply a network policy]({{site.url}}/{{page.version}}/getting-started/kubernetes/installation/manifests/app-layer-policy/allow-istio-pilot.yaml).
+>**Note**: Envoy must be able to communicate with the `istio-pilot.istio-system service`. If you apply any egress policies to your pods, you *must* enable access. For example, you could [apply a network policy]({{ site.url }}/getting-started/kubernetes/installation/manifests/app-layer-policy/allow-istio-pilot.yaml).
 {: .alert .alert-info}
 
 ### Above and beyond
 
-- [Enforce network policy using Istio tutorial]({{site.url}}/{{page.version}}/security/tutorials/app-layer-policy/enforce-policy-istio)
-- [Enforce network policy using Istio]({{site.url}}/{{page.version}}/security/enforce-policy-istio)
-- [Use HTTP methods and paths in policy rules]({{site.url}}/{{page.version}}/security/http-methods)
+- [Enforce network policy using Istio tutorial]({{ site.url }}/security/tutorials/app-layer-policy/enforce-policy-istio)
+- [Enforce network policy using Istio]({{ site.url }}/security/enforce-policy-istio)
+- [Use HTTP methods and paths in policy rules]({{ site.url }}/security/http-methods)

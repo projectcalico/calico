@@ -5,7 +5,7 @@ canonical_url: 'https://docs.projectcalico.org/v3.9/reference/calicoctl/node/sta
 
 This sections describes the `calicoctl node status` command.
 
-Read the [calicoctl Overview]({{site.baseurl}}/{{page.version}}/reference/calicoctl)
+Read the [calicoctl Overview]({{ site.baseurl }}/reference/calicoctl)
 for a full list of calicoctl commands.
 
 ## Displaying the help text for 'calicoctl node status' command

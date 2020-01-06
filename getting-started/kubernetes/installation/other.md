@@ -24,7 +24,7 @@ complete the following steps.
 1. Download the {{site.prodname}} policy-only manifest for the Kubernetes API datastore.
 
    ```bash
-   curl {{site.url}}/{{page.version}}/manifests/calico-policy-only.yaml -O
+   curl {{ site.url }}/manifests/calico-policy-only.yaml -O
    ```
 
 {% include {{page.version}}/pod-cidr-sed.md yaml="calico" %}

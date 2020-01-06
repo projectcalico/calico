@@ -40,7 +40,7 @@ The full list of parameters which can be set is as follows.
 | `HealthEnabled`                   | `FELIX_HEALTHENABLED`                   | When enabled, exposes felix health information via an http endpoint. | boolean |
 | `HealthHost`                      | `FELIX_HEALTHHOST`                      | The address on which Felix will respond to health requests. [Default: `localhost`] | string |
 | `IpInIpEnabled`                   | `FELIX_IPINIPENABLED`                   | Whether Felix should configure an IPinIP interface on the host. Set automatically to `true` by `{{site.nodecontainer}}` or `calicoctl` when you create an IPIP-enabled pool. [Default: `false`] | boolean |
-| `IpInIpMtu`                       | `FELIX_IPINIPMTU`                       | The MTU to set on the IPIP tunnel device. See [Configuring MTU]({{site.baseurl}}/{{page.version}}/networking/mtu) [Default: `1440`] | int |
+| `IpInIpMtu`                       | `FELIX_IPINIPMTU`                       | The MTU to set on the IPIP tunnel device. See [Configuring MTU]({{ site.baseurl }}/networking/mtu) [Default: `1440`] | int |
 | `IPv4VXLANTunnelAddr`             |                                         | IPv4 address of the VXLAN tunnel. This is system configured and should not be updated manually. | string |
 | `LogFilePath`                     | `FELIX_LOGFILEPATH`                     | The full path to the Felix log. Set to `none` to disable file logging. [Default: `/var/log/calico/felix.log`] | string |
 | `LogSeverityFile`                 | `FELIX_LOGSEVERITYFILE`                 | The log severity above which logs are sent to the log file. [Default: `Info`] | `Debug`, `Info`, `Warning`, `Error`, `Fatal` |
@@ -55,12 +55,12 @@ The full list of parameters which can be set is as follows.
 | `RemoveExternalRoutes`            | `FELIX_REMOVEEXTERNALROUTES`            | Whether or not to remove device routes that have not been programmed by Felix. Disabling this will allow external applications to also add device routes. [Default: `true`] | bool |
 | `ReportingIntervalSecs`           | `FELIX_REPORTINGINTERVALSECS`           | Interval at which Felix reports its status into the datastore or `0` to disable. Must be non-zero in OpenStack deployments. [Default: `30`] | int |
 | `ReportingTTLSecs`                | `FELIX_REPORTINGTTLSECS`                | Time-to-live setting for process-wide status reports. [Default: `90`] | int |
-| `SidecarAccelerationEnabled`      | `FELIX_SIDECARACCELERATIONENABLED`      | Enable experimental acceleration between application and proxy sidecar when using [application layer policy]({{site.baseurl}}/{{page.version}}/getting-started/kubernetes/installation/app-layer-policy). [Default: `false`] | boolean |
+| `SidecarAccelerationEnabled`      | `FELIX_SIDECARACCELERATIONENABLED`      | Enable experimental acceleration between application and proxy sidecar when using [application layer policy]({{ site.baseurl }}/getting-started/kubernetes/installation/app-layer-policy). [Default: `false`] | boolean |
 | `UsageReportingEnabled`           | `FELIX_USAGEREPORTINGENABLED`           | Reports anonymous {{site.prodname}} version number and cluster size to projectcalico.org. Logs warnings returned by the usage server. For example, if a significant security vulnerability has been discovered in the version of {{site.prodname}} being used. [Default: `true`] | boolean |
 | `UsageReportingInitialDelaySecs`  | `FELIX_USAGEREPORTINGINITIALDELAYSECS`  | Minimum delay before first usage report, in seconds. [Default: `300`] | int |
 | `UsageReportingIntervalSecs`      | `FELIX_USAGEREPORTINGINTERVALSECS`      | Interval at which to make usage reports, in seconds. [Default: `86400`] | int |
 | `VXLANEnabled`                    | `FELIX_VXLANENABLED`                    | Automatically set when needed, you shouldn't need to change this setting: whether Felix should create the VXLAN tunnel device for VXLAN networking. [Default: `false`] | boolean |
-| `VXLANMTU`                        | `FELIX_VXLANMTU`                        | The MTU to set on the VXLAN tunnel device. See [Configuring MTU]({{site.baseurl}}/{{page.version}}/networking/mtu) [Default: `1410`] | int |
+| `VXLANMTU`                        | `FELIX_VXLANMTU`                        | The MTU to set on the VXLAN tunnel device. See [Configuring MTU]({{ site.baseurl }}/networking/mtu) [Default: `1410`] | int |
 | `VXLANPort`                       | `FELIX_VXLANPORT`                       | The UDP port to use for VXLAN. [Default: `4789`] | int |
 | `VXLANTunnelMACAddr`              |                                         | MAC address of the VXLAN tunnel. This is system configured and should not be updated manually. | string |
 | `VXLANVNI`                        | `FELIX_VXLANVNI`                        | The virtual network ID to use for VXLAN. [Default: `4096`] | int |
@@ -130,7 +130,7 @@ The Kubernetes API datastore driver reads its configuration from Kubernetes-prov
 | ------------------------|------------------------ | ------------ | ------ |
 | `MetadataAddr`          | `FELIX_METADATAADDR`    | The IP address or domain name of the server that can answer VM queries for cloud-init metadata. In OpenStack, this corresponds to the machine running nova-api (or in Ubuntu, nova-api-metadata). A value of `none`  (case insensitive) means that Felix should not set up any NAT rule for the metadata path. [Default: `127.0.0.1`]  | `<IPv4-address>`, `<hostname>`, `none` |
 | `MetadataPort`          | `FELIX_METADATAPORT`    | The port of the metadata server. This, combined with global.MetadataAddr (if not 'None'), is used to set up a NAT rule, from 169.254.169.254:80 to MetadataAddr:MetadataPort. In most cases this should not need to be changed [Default: `8775`].  | int |
-| `OpenstackRegion`       | `FELIX_OPENSTACKREGION` | In a [multi-region deployment]({{site.baseurl}}/{{page.version}}/networking/openstack/multiple-regions), the name of the region that this Felix is in. [Default: none].  | string\* |
+| `OpenstackRegion`       | `FELIX_OPENSTACKREGION` | In a [multi-region deployment]({{ site.baseurl }}/networking/openstack/multiple-regions), the name of the region that this Felix is in. [Default: none].  | string\* |
 
 \* If non-empty, the value specified for `OpenstackRegion` must be a
 string of lower case alphanumeric characters or '-', starting and

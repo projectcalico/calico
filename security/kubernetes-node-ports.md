@@ -68,7 +68,7 @@ spec:
 
 #### Allow local host egress traffic   
 
-We also need a global network policy to allow egress traffic through each node's external interface. Otherwise, when we define host endpoints for those interfaces, no egress traffic will be allowed from local processes (except for traffic that is allowed by the [Failsafe rules]({{site.baseurl}}/{{page.version}}/reference/host-endpoints/failsafe).
+We also need a global network policy to allow egress traffic through each node's external interface. Otherwise, when we define host endpoints for those interfaces, no egress traffic will be allowed from local processes (except for traffic that is allowed by the [Failsafe rules]({{ site.baseurl }}/reference/host-endpoints/failsafe).
 
 ```
 apiVersion: projectcalico.org/v3
@@ -84,7 +84,7 @@ spec:
 
 #### Create host endpoints with appropriate network policy
 
-In this example, we assume that you have already defined Calico host endpoints with network policy that is appropriate for the cluster. (For example, you wouldn’t want a host endpoint with a “default deny all traffic to/from this host” network policy because that is counter to the goal of allowing/denying specific traffic.) For help, see [host endpoints]({{site.baseurl}}/{{page.version}}/reference/resources/hostendpoint).
+In this example, we assume that you have already defined Calico host endpoints with network policy that is appropriate for the cluster. (For example, you wouldn’t want a host endpoint with a “default deny all traffic to/from this host” network policy because that is counter to the goal of allowing/denying specific traffic.) For help, see [host endpoints]({{ site.baseurl }}/reference/resources/hostendpoint).
 
 All of our previously-defined global network policies have a selector that makes them applicable to any endpoint with a **kubernetes-host label**; so we will include that label in our definitions. For example, for **eth0** on **node1**.
 
@@ -133,5 +133,5 @@ Then, use **nodeport-external-ingress: true** as the selector of the **allow-nod
 
 ### Above and beyond
 
-- [Global network policy]({{site.baseurl}}/{{page.version}}/reference/resources/globalnetworkpolicy) 
-- [Host endpoints]({{site.baseurl}}/{{page.version}}/reference/resources/hostendpoint)
+- [Global network policy]({{ site.baseurl }}/reference/resources/globalnetworkpolicy) 
+- [Host endpoints]({{ site.baseurl }}/reference/resources/hostendpoint)

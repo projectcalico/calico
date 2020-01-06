@@ -59,13 +59,13 @@ The host-local IPAM plugin is primarily used by other methods of routing pod tra
 
 #### Install Calico with calico-ipam
 
-Follow one of the [getting started guides]({{site.baseurl}}/{{page.version}}/getting-started/) to install Calico.
+Follow one of the [getting started guides]({{ site.baseurl }}/getting-started/) to install Calico.
 
 #### Install Calico with host-local IPAM
 
-Follow one of the [getting started guides]({{site.baseurl}}/{{page.version}}/getting-started/) to install Calico with flannel networking, or on GKE.
+Follow one of the [getting started guides]({{ site.baseurl }}/getting-started/) to install Calico with flannel networking, or on GKE.
 
-Or, see the [reference documentation on host-local IPAM]({{site.baseurl}}/{{page.version}}/reference/cni-plugin/configuration#using-host-local-ipam).
+Or, see the [reference documentation on host-local IPAM]({{ site.baseurl }}/reference/cni-plugin/configuration#using-host-local-ipam).
 
 ### Tutorial
 
@@ -73,13 +73,13 @@ For a blog/tutorial on IP pools, see [Calico IPAM: Explained and Enhanced](https
 
 ### Above and beyond
 
-- [IP Pool]({{site.baseurl}}/{{page.version}}/reference/resources/ippool)
+- [IP Pool]({{ site.baseurl }}/reference/resources/ippool)
 
 There are several other ways to leverage Calico IPAM including:
 
-- [Assign addresses based on topology]({{site.baseurl}}/{{page.version}}/networking/assign-ip-addresses-topology)
-- [Use a specific address for a pod]({{site.baseurl}}/{{page.version}}/networking/use-specific-ip)
-- [Migrate from one IP pool to another]({{site.baseurl}}/{{page.version}}/networking/migrate-pools)
-- [Interoperate with legacy firewalls using IP ranges]({{site.baseurl}}/{{page.version}}/networking/legacy-firewalls)
-- [View IP address utilization]({{site.baseurl}}/{{page.version}}/reference/calicoctl/ipam/show)
-- [Change IP address block size]({{site.baseurl}}/{{page.version}}/reference/resources/ippool)
+- [Assign addresses based on topology]({{ site.baseurl }}/networking/assign-ip-addresses-topology)
+- [Use a specific address for a pod]({{ site.baseurl }}/networking/use-specific-ip)
+- [Migrate from one IP pool to another]({{ site.baseurl }}/networking/migrate-pools)
+- [Interoperate with legacy firewalls using IP ranges]({{ site.baseurl }}/networking/legacy-firewalls)
+- [View IP address utilization]({{ site.baseurl }}/reference/calicoctl/ipam/show)
+- [Change IP address block size]({{ site.baseurl }}/reference/resources/ippool)

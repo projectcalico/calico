@@ -25,13 +25,13 @@ At the end, you will have a fully-functional Calico cluster using VXLAN networki
 1. First, install Calico.
 
    ```
-   kubectl apply -f {{site.url}}/{{page.version}}/manifests/flannel-migration/calico.yaml
+   kubectl apply -f {{ site.url }}/manifests/flannel-migration/calico.yaml
    ```
 
    Then, install the migration controller to initiate the migration.
 
    ```
-   kubectl apply -f {{site.url}}/{{page.version}}/manifests/flannel-migration/migration-job.yaml
+   kubectl apply -f {{ site.url }}/manifests/flannel-migration/migration-job.yaml
    ```
 
    Once applied, you will see nodes begin to update one at a time.
@@ -53,7 +53,7 @@ At the end, you will have a fully-functional Calico cluster using VXLAN networki
 1. After completion, delete the migration controller with the following command.
 
    ```
-   kubectl delete -f {{site.url}}/{{page.version}}/manifests/flannel-migration/migration-job.yaml
+   kubectl delete -f {{ site.url }}/manifests/flannel-migration/migration-job.yaml
    ```
 # Configuration options
 
@@ -102,8 +102,8 @@ Migration from Calico to flannel is not supported. If you experience a problem d
 1. Remove the migration controller and Calico.
 
    ```
-   kubectl delete -f {{site.url}}/{{page.version}}/manifests/flannel-migration/migration-job.yaml
-   kubectl delete -f {{site.url}}/{{page.version}}/manifests/flannel-migration/calico.yaml
+   kubectl delete -f {{ site.url }}/manifests/flannel-migration/migration-job.yaml
+   kubectl delete -f {{ site.url }}/manifests/flannel-migration/calico.yaml
    ```
 
 1. Determine the nodes which have been migrated to Calico.

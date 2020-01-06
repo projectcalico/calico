@@ -6,7 +6,7 @@ canonical_url: 'https://docs.projectcalico.org/v3.9/reference/calicoctl/node/ind
 
 This section describes the `calicoctl node` commands.
 
-Read the [calicoctl Overview]({{site.baseurl}}/{{page.version}}/reference/calicoctl/)
+Read the [calicoctl Overview]({{ site.baseurl }}/reference/calicoctl/)
 for a full list of calicoctl commands.
 
 Note that if you run `calicoctl` in a container, `calicoctl node ...` commands will
@@ -42,7 +42,7 @@ Description:
 Details on the `calicoctl node` commands are described in the documents linked below
 organized by sub command.
 
--  [calicoctl node run]({{site.baseurl}}/{{page.version}}/reference/calicoctl/node/run)
--  [calicoctl node status]({{site.baseurl}}/{{page.version}}/reference/calicoctl/node/status)
--  [calicoctl node diags]({{site.baseurl}}/{{page.version}}/reference/calicoctl/node/diags)
--  [calicoctl node checksystem]({{site.baseurl}}/{{page.version}}/reference/calicoctl/node/checksystem)
+-  [calicoctl node run]({{ site.baseurl }}/reference/calicoctl/node/run)
+-  [calicoctl node status]({{ site.baseurl }}/reference/calicoctl/node/status)
+-  [calicoctl node diags]({{ site.baseurl }}/reference/calicoctl/node/diags)
+-  [calicoctl node checksystem]({{ site.baseurl }}/reference/calicoctl/node/checksystem)

@@ -77,4 +77,4 @@ The annotation must be present at the time the pod is created. Adding it to an e
 
 ### Above and beyond
 
-For help configuring {{site.prodname}} IPAM, see [Configuring the {{site.prodname}} CNI Plugins]({{site.baseurl}}/{{page.version}}/reference/cni-plugin/configuration). 
+For help configuring {{site.prodname}} IPAM, see [Configuring the {{site.prodname}} CNI Plugins]({{ site.baseurl }}/reference/cni-plugin/configuration). 

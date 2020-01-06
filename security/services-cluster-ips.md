@@ -11,7 +11,7 @@ Control access to services exposed through clusterIPs that are advertised outsid
 
 {{site.prodname}} network policy uses standard Kubernetes Services that allow you to expose services within clusters to external clients in the following ways:
 
-- [Apply policy to Kubernetes nodeports]({{site.baseurl}}/{{page.version}}/security/kubernetes-node-ports)
+- [Apply policy to Kubernetes nodeports]({{ site.baseurl }}/security/kubernetes-node-ports)
 - Using cluster IPs over BGP (described in this article)
 
 ### Features
@@ -48,7 +48,7 @@ Cluster IPs were originally designed for use within the Kubernetes cluster. {{si
 
 ### Before you begin...
 
-[Configure Calico to advertise cluster IPs over BGP]({{site.baseurl}}/{{page.version}}/networking/advertise-service-ips).
+[Configure Calico to advertise cluster IPs over BGP]({{ site.baseurl }}/networking/advertise-service-ips).
 
 ### How to
 
@@ -199,6 +199,6 @@ In the previous example policies, the label **k8s-role: node** is used to identi
 
 ### Above and beyond
 
-- [Enable service IP advertisement]({{site.baseurl}}/{{page.version}}/networking/advertise-service-ips)
-- [Defend against DoS attacks]({{site.baseurl}}/{{page.version}}/security/defend-dos-attack)
-- [Global network policy]({{site.baseurl}}/{{page.version}}/reference/resources/globalnetworkpolicy)
+- [Enable service IP advertisement]({{ site.baseurl }}/networking/advertise-service-ips)
+- [Defend against DoS attacks]({{ site.baseurl }}/security/defend-dos-attack)
+- [Global network policy]({{ site.baseurl }}/reference/resources/globalnetworkpolicy)

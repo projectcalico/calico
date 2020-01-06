@@ -26,7 +26,7 @@ For all networking options, you can allow your workloads to access the internet 
 
 #### BGP peering with out-of-cluster NAT
 
-When {{site.prodname}} is [BGP peered with your physical network infrastructure]({{site.baseurl}}/{{page.version}}/networking/bgp), you can use the infrastructure to NAT traffic from pods to the internet.  In this case, you should disable the {{site.prodname}} NAT outgoing option.
+When {{site.prodname}} is [BGP peered with your physical network infrastructure]({{ site.baseurl }}/networking/bgp), you can use the infrastructure to NAT traffic from pods to the internet.  In this case, you should disable the {{site.prodname}} NAT outgoing option.
 
 #### Expose pods directly on the internet
 

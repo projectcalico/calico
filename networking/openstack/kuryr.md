@@ -36,4 +36,4 @@ the containers.
 
 The {{site.prodname}} project also provides networking for containers more directly,
 without Neutron and Kuryr as intermediaries.  Please see [Getting
-Started]({{site.baseurl}}/{{page.version}}/getting-started) for details.
+Started]({{ site.baseurl }}/getting-started) for details.

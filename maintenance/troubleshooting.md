@@ -145,7 +145,7 @@ In most cases, this "unready" status error in Kubernetes means that a particular
 
 This error can also occur if inactive Node resources are configured for node-to-node mesh. To fix this, [decommission the stale nodes](../maintenance/decommissioning-a-node).
 
-This error can also occur when BGP connections to non-mesh peers go down. If this is a common occurrence in your BGP topology, you can disable BIRD readiness checks. See [node readiness]({{site.baseurl}}/{{page.version}}/reference/node/configuration#node-readiness)
+This error can also occur when BGP connections to non-mesh peers go down. If this is a common occurrence in your BGP topology, you can disable BIRD readiness checks. See [node readiness]({{ site.baseurl }}/reference/node/configuration#node-readiness)
 for more information.
 
 

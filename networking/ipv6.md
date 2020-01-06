@@ -90,7 +90,7 @@ steps below.
 1. If the ipam section in the `cni_network_config` in the `calico.yaml` file
    has `"type": "calico-ipam"` then it should be modified to
    [disable IPv4 assignments and enable IPv6
-   assigments](/{{page.version}}/reference/cni-plugin/configuration#ipam).
+   assigments](/reference/cni-plugin/configuration#ipam).
 1. Add the following environment variables to the calico-node Daemonset in
    the `calico.yaml` file. Be sure to set the value for `CALICO_IPV6POOL_CIDR`
    to the desired pool, it should match the `--cluster-cidr` passed to the
@@ -122,7 +122,7 @@ you must configure another method to calculate the BGP router ID. There are two 
 ### Modifying your DNS for IPv6
 
 It will probably be necessary to modify your DNS pod for IPv6. If you are using
-[kube-dns](/{{page.version}}/getting-started/kubernetes/installation/manifests/kubedns.yaml),
+[kube-dns](/getting-started/kubernetes/installation/manifests/kubedns.yaml),
 then the following changes will ensure IPv6 operation.
 
 - Update the image versions to at least `1.14.8`.

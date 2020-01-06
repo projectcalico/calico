@@ -12,7 +12,7 @@ address.  For example:
 -  Your host has multiple external interfaces.
 -  Your host may have multiple IP addresses assigned to each interface.
 -  You want to change the subnet configuration of each Node to use {{site.prodname}}'s
-   [CrossSubnet IPIP]({{site.baseurl}}/{{page.version}}/networking/vxlan-ipip) feature.
+   [CrossSubnet IPIP]({{ site.baseurl }}/networking/vxlan-ipip) feature.
 -  You have changed the IP of your host.
 
 This guide explains the various methods for configuring a Node's IP and subnet.
@@ -76,8 +76,8 @@ directly.
 
 In addition, the `--ip-autodetection-method` argument or the `IP_AUTODETECTION_METHOD`
 environment variable can be used to specify the method used to auto detect the host address
-and subnet.  See [Configuring {{site.nodecontainer}}]({{site.baseurl}}/{{page.version}}/reference/node/configuration)
-and [calicoctl command reference]({{site.baseurl}}/{{page.version}}/reference/calicoctl/node/run)
+and subnet.  See [Configuring {{site.nodecontainer}}]({{ site.baseurl }}/reference/node/configuration)
+and [calicoctl command reference]({{ site.baseurl }}/reference/calicoctl/node/run)
 for details.
 
 For IPv6, use the equivalent `--ip6` and `--ip6-autodetection-method` options,

@@ -38,33 +38,33 @@ The sections that follow discuss the configurable parameters in greater depth.
 
 ### Configuring the pod IP range
 
-{{site.prodname}} IPAM assigns IP addresses from [IP pools]({{site.baseurl}}/{{page.version}}/reference/resources/ippool).
+{{site.prodname}} IPAM assigns IP addresses from [IP pools]({{ site.baseurl }}/reference/resources/ippool).
 
 To change the default IP range used for pods, modify the `CALICO_IPV4POOL_CIDR`
 section of the `calico.yaml` manifest.  For more information, see
-[Configuring {{site.nodecontainer}}]({{site.baseurl}}/{{page.version}}/reference/node/configuration).
+[Configuring {{site.nodecontainer}}]({{ site.baseurl }}/reference/node/configuration).
 
 ### Configuring IP-in-IP
 
 By default, the manifests enable IP-in-IP encapsulation across subnets. Many users may
 want to disable IP-in-IP encapsulation, such as under the following circumstances.
 
-- Their cluster is [running in a properly configured AWS VPC]({{site.baseurl}}/{{page.version}}/reference/public-cloud/aws).
+- Their cluster is [running in a properly configured AWS VPC]({{ site.baseurl }}/reference/public-cloud/aws).
 - All their Kubernetes nodes are connected to the same layer 2 network.
 - They intend to use BGP peering to make their underlying infrastructure aware of
   pod IP addresses.
 
 To disable IP-in-IP encapsulation, modify the `CALICO_IPV4POOL_IPIP` section of the
-manifest.  For more information, see [Configuring {{site.nodecontainer}}]({{site.baseurl}}/{{page.version}}/reference/node/configuration).
+manifest.  For more information, see [Configuring {{site.nodecontainer}}]({{ site.baseurl }}/reference/node/configuration).
 
 ### Switching from IP-in-IP to VXLAN
 
 By default, the Calico manifests enable IP-in-IP encapsulation.  If you are on a network that blocks IP-in-IP, such
-as Azure, you may wish to switch to [Calico's VXLAN encapsulation mode]({{site.baseurl}}/{{page.version}}/networking/vxlan-ipip).
+as Azure, you may wish to switch to [Calico's VXLAN encapsulation mode]({{ site.baseurl }}/networking/vxlan-ipip).
 To do this at install time (so that Calico creates the default IP pool with VXLAN and no IP-in-IP configuration has to
 be undone):
 
-- Start with one of the [Calico for policy and networking]({{site.baseurl}}/{{page.version}}/getting-started/kubernetes/installation/calico) manifests.
+- Start with one of the [Calico for policy and networking]({{ site.baseurl }}/getting-started/kubernetes/installation/calico) manifests.
 - Replace environment variable name `CALICO_IPV4POOL_IPIP` with`CALICO_IPV4POOL_VXLAN`.  Leave the value of the new variable as "Always".
 - Optionally, (to save some resources if you're running a VXLAN-only cluster) completely disable Calico's BGP-based
   networking:
@@ -88,11 +88,11 @@ be undone):
 ```
 
 For more information on {{site.nodecontainer}}'s configuration variables, including additional VXLAN settings, see
- [Configuring {{site.nodecontainer}}]({{site.baseurl}}/{{page.version}}/reference/node/configuration).
+ [Configuring {{site.nodecontainer}}]({{ site.baseurl }}/reference/node/configuration).
 
 > **Note**: The `CALICO_IPV4POOL_VXLAN` environment variable only takes effect when the first {{site.nodecontainer}} to start
 > creates the default IP pool.  It has no effect after the pool has already been created.  To switch to VXLAN mode
-> after installation time, use calicoctl to modify the [IPPool]({{site.baseurl}}/{{page.version}}/reference/resources/ippool) resource.
+> after installation time, use calicoctl to modify the [IPPool]({{ site.baseurl }}/reference/resources/ippool) resource.
 {: .alert .alert-info}
 
 ### Configuring etcd
@@ -116,12 +116,12 @@ To use these manifests with a TLS-enabled etcd cluster you must do the following
 
    **{{site.prodname}} for policy and networking**
    ```bash
-   curl {{site.url}}/{{page.version}}/manifests/calico-etcd.yaml -O
+   curl {{ site.url }}/manifests/calico-etcd.yaml -O
    ```
 
    **{{site.prodname}} for policy and flannel for networking**
    ```bash
-   curl {{site.url}}/{{page.version}}/manifests/canal.yaml -O
+   curl {{ site.url }}/manifests/canal.yaml -O
    ```
 
 1. Within the `ConfigMap` section, uncomment the `etcd_ca`, `etcd_key`, and `etcd_cert`
@@ -256,5 +256,5 @@ Felix.  Once created, a Unix domain socket is an in-memory communications
 channel. The volumes are not used for any kind of stateful storage on disk.
 
 Refer to the
-[Calico ConfigMap manifest](/{{page.version}}/manifests/alp/istio-inject-configmap-1.4.2.yaml){:target="_blank"} for an
+[Calico ConfigMap manifest](/manifests/alp/istio-inject-configmap-1.4.2.yaml){:target="_blank"} for an
 example with the above changes.

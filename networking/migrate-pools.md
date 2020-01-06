@@ -231,4 +231,4 @@ calicoctl delete pool default-ipv4-ippool
 
 ### Above and beyond
 
-- [IP pools reference]({{ site.baseurl }}/{{ page.version }}/reference/resources/ippool)
+- [IP pools reference]({{ site.baseurl }}/reference/resources/ippool)

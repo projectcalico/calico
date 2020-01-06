@@ -23,17 +23,17 @@ procedure varies by datastore type.
 
    **{{site.prodname}} for policy and networking**
    ```bash
-   curl {{site.url}}/{{page.version}}/manifests/calico.yaml -O
+   curl {{ site.url }}/manifests/calico.yaml -O
    ```
 
    **{{site.prodname}} for policy and flannel for networking**
    ```bash
-   curl {{site.url}}/{{page.version}}/manifests/canal.yaml -O
+   curl {{ site.url }}/manifests/canal.yaml -O
    ```
 
    **{{site.prodname}} for policy (advanced)**
    ```bash
-   curl {{site.url}}/{{page.version}}/manifests/calico-policy-only.yaml -O
+   curl {{ site.url }}/manifests/calico-policy-only.yaml -O
    ```
 
    > **Note**: If you manually modified the manifest, you must manually apply the
@@ -73,7 +73,7 @@ procedure varies by datastore type.
 
    It should return a `Cluster Version` of `{{page.version}}.x`.
 
-1. If you have [enabled Application Layer Policy](/{{page.version}}/getting-started/kubernetes/installation/app-layer-policy),
+1. If you have [enabled Application Layer Policy](/getting-started/kubernetes/installation/app-layer-policy),
    follow [the instructions below](#upgrading-if-you-have-application-layer-policy-enabled) to complete your upgrade. Skip this if you are not using Istio with {{site.prodname}}.
 
 1. Congratulations! You have upgraded to {{site.prodname}} {{page.version}}.
@@ -85,12 +85,12 @@ procedure varies by datastore type.
 
    **{{site.prodname}} for policy and networking**
    ```bash
-   curl {{site.url}}/{{page.version}}/manifests/calico-etcd.yaml -O
+   curl {{ site.url }}/manifests/calico-etcd.yaml -O
    ```
 
    **{{site.prodname}} for policy and flannel for networking**
    ```bash
-   curl {{site.url}}/{{page.version}}/manifests/canal-etcd.yaml -O
+   curl {{ site.url }}/manifests/canal-etcd.yaml -O
    ```
 
    > **Note**: You must must manually apply the changes you made to the manifest
@@ -136,7 +136,7 @@ procedure varies by datastore type.
 
    It should return a `Cluster Version` of `{{page.version}}`.
 
-1. If you have [enabled Application Layer Policy](/{{page.version}}/getting-started/kubernetes/installation/app-layer-policy),
+1. If you have [enabled Application Layer Policy](/getting-started/kubernetes/installation/app-layer-policy),
    follow [the instructions below](#upgrading-if-you-have-application-layer-policy-enabled) to complete your upgrade. Skip this if you are not using Istio with {{site.prodname}}.
 
 1. Congratulations! You have upgraded to {{site.prodname}} {{page.version}}.
@@ -147,14 +147,14 @@ Dikastes is versioned the same as the rest of {{site.prodname}}, but an upgraded
 so that you will not lose data plane connectivity during the upgrade.  Once `calico-node` is upgraded, you can begin redeploying your service pods
 with the updated version of Dikastes.
 
-If you have [enabled Application Layer Policy](/{{page.version}}/getting-started/kubernetes/installation/app-layer-policy),
+If you have [enabled Application Layer Policy](/getting-started/kubernetes/installation/app-layer-policy),
 take the following steps to upgrade the Dikastes sidecars running in your application pods. Skip these steps if you are not using Istio with {{site.prodname}}.
 
 1. Update the Istio sidecar injector template to use the new version of Dikastes. Replace `<your Istio version>` below with
    the full version string of your Istio install, for example `1.4.2`.
 
    ```bash
-   kubectl apply -f {{site.url}}/{{page.version}}/manifests/alp/istio-inject-configmap-<your Istio version>.yaml
+   kubectl apply -f {{ site.url }}/manifests/alp/istio-inject-configmap-<your Istio version>.yaml
    ```
 
 1. Once the new template is in place, newly created pods use the upgraded version of Dikastes. Perform a rolling update of each of your service deployments

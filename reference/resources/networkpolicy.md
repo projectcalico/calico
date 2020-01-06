@@ -7,15 +7,15 @@ A network policy resource (`NetworkPolicy`) represents an ordered set of rules w
 to a collection of endpoints that match a [label selector](#selector).
 
 `NetworkPolicy` is a namespaced resource. `NetworkPolicy` in a specific namespace
-only applies to [workload endpoint resources]({{site.baseurl}}/{{page.version}}/reference/resources/workloadendpoint)
+only applies to [workload endpoint resources]({{ site.baseurl }}/reference/resources/workloadendpoint)
 in that namespace. Two resources are in the same namespace if the `namespace`
 value is set the same on both.
-See [global network policy resource]({{site.baseurl}}/{{page.version}}/reference/resources/globalnetworkpolicy) for non-namespaced network policy.
+See [global network policy resource]({{ site.baseurl }}/reference/resources/globalnetworkpolicy) for non-namespaced network policy.
 
 `NetworkPolicy` resources can be used to define network connectivity rules between groups of {{site.prodname}} endpoints and host endpoints, and
-take precedence over [profile resources]({{site.baseurl}}/{{page.version}}/reference/resources/profile) if any are defined.
+take precedence over [profile resources]({{ site.baseurl }}/reference/resources/profile) if any are defined.
 
-For `calicoctl` [commands]({{site.baseurl}}/{{page.version}}/reference/calicoctl/) that specify a resource type on the CLI, the following
+For `calicoctl` [commands]({{ site.baseurl }}/reference/calicoctl/) that specify a resource type on the CLI, the following
 aliases are supported (all case insensitive): `networkpolicy`, `networkpolicies`, `policy`, `np`, `policies`, `pol`, `pols`.
 
 ### Sample YAML
@@ -104,7 +104,7 @@ spec:
 ### Application layer policy
 
 Application layer policy is an optional feature of {{site.prodname}} and
-[must be enabled]({{site.baseurl}}/{{page.version}}/getting-started/kubernetes/installation/app-layer-policy)
+[must be enabled]({{ site.baseurl }}/getting-started/kubernetes/installation/app-layer-policy)
 in order to use the following match criteria.
 
 > **NOTE**: Application layer policy match criteria are supported with the following restrictions.

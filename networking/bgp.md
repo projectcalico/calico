@@ -38,7 +38,7 @@ There are many ways to configure a BGP network depending on your environment. He
 
 To build large clusters in public cloud, **BGP route reflectors** can be used to reduce the number of BGP peerings used on each node. In this model, some nodes act as route reflectors and are configured to establish a full mesh amongst themselves. Other nodes are then configured to peer with a subset of those route reflectors.
 
-You can also run {{site.prodname}} on public cloud without BGP or route reflectors using {{site.prodname}}’s **VXLAN cross subnet capabilities**. For more information, see [Configure overlay networking]({{site.baseurl}}/{{page.version}}/networking/vxlan-ipip).
+You can also run {{site.prodname}} on public cloud without BGP or route reflectors using {{site.prodname}}’s **VXLAN cross subnet capabilities**. For more information, see [Configure overlay networking]({{ site.baseurl }}/networking/vxlan-ipip).
 
 #### Topologies for on-premises deployments
 
@@ -46,11 +46,11 @@ In **on-premises deployments**, you control the physical infrastructure, so you 
 
 Depending on your topology, you may also consider using BGP route reflectors within each rack. However, this is typically needed only if the number of nodes in each L2 domain is large (> 100).
 
-For a deeper look at common on-premises deployment models, see [Calico over IP Fabrics]({{site.baseurl}}/{{page.version}}/reference/architecture/design/l2-interconnect-fabric).
+For a deeper look at common on-premises deployment models, see [Calico over IP Fabrics]({{ site.baseurl }}/reference/architecture/design/l2-interconnect-fabric).
 
 ### Before you begin...
 
-[calicoctl]({{site.baseurl}}/{{page.version}}/getting-started/calicoctl/install) must be installed and configured.
+[calicoctl]({{ site.baseurl }}/getting-started/calicoctl/install) must be installed and configured.
 
 ### How to
 
@@ -72,7 +72,7 @@ Run the following command to disable the BGP full-mesh:
 calicoctl patch bgpconfiguration default -p '{"spec": {"nodeToNodeMeshEnabled": “false”}}'
 ```
 
->**Note**: If the default BGP configuration resource does not exist, you need to create it first. See [BGP configuration]({{site.baseurl}}/{{page.version}}/reference/resources/bgpconfig) for more information.
+>**Note**: If the default BGP configuration resource does not exist, you need to create it first. See [BGP configuration]({{ site.baseurl }}/reference/resources/bgpconfig) for more information.
 {: .alert .alert-info}
 
 #### Configure a global BGP peer
@@ -155,7 +155,7 @@ By default, all Calico nodes use the 64512 autonomous system, unless a per-node 
 calicoctl patch bgpconfiguration default -p '{"spec": {"asNumber": “64513”}}'
 ```
 
->**Note**: If the default BGP configuration resource does not exist, you need to create it first. See [BGP configuration]({{site.baseurl}}/{{page.version}}/reference/resources/bgpconfig) for more information.
+>**Note**: If the default BGP configuration resource does not exist, you need to create it first. See [BGP configuration]({{ site.baseurl }}/reference/resources/bgpconfig) for more information.
 {: .alert .alert-info}
 
 #### Change AS number for a particular node
@@ -167,6 +167,6 @@ calicoctl patch node node-1 -p '{"spec": {"bgp": {“asNumber”: “64514”}}}
 ```
 ### Above and beyond
 
-- [Node resource]({{site.baseurl}}/{{page.version}}/reference/resources/node)
-- [BGP configuration resource]({{site.baseurl}}/{{page.version}}/reference/resources/bgpconfig)
-- [BGP peer resource]({{site.baseurl}}/{{page.version}}/reference/resources/bgppeer)
+- [Node resource]({{ site.baseurl }}/reference/resources/node)
+- [BGP configuration resource]({{ site.baseurl }}/reference/resources/bgpconfig)
+- [BGP peer resource]({{ site.baseurl }}/reference/resources/bgppeer)

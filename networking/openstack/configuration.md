@@ -78,7 +78,7 @@ node belongs to.
 
 When specified, the value of `openstack_region` must be a string of lower case alphanumeric
 characters or '-', starting and ending with an alphanumeric character, and must match the value of
-[`OpenstackRegion`]({{site.baseurl}}/{{page.version}}/reference/felix/configuration#openstack-specific-configuration)
+[`OpenstackRegion`]({{ site.baseurl }}/reference/felix/configuration#openstack-specific-configuration)
 configured for the Felixes in the same region.
 
 ### ML2 (.../ml2_conf.ini)

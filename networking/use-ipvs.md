@@ -39,7 +39,7 @@ Kube-proxy IPVS mode supports NodePort services and cluster IPs. {{site.prodname
 
 #### iptables: when to change mark bits
 
-To police traffic in IPVS mode, {{site.prodname}} uses additional iptables mark bits to store an ID for each local {{site.prodname}} endpoint. If you are planning to run more than 1,022 pods per host with IPVS enabled, you may need to adjust the mark bit size using the `IptablesMarkMask` parameter in {{site.prodname}} [FelixConfiguration]({{site.baseurl}}/{{page.version}}/reference/felix/configuration#ipvs-bits).
+To police traffic in IPVS mode, {{site.prodname}} uses additional iptables mark bits to store an ID for each local {{site.prodname}} endpoint. If you are planning to run more than 1,022 pods per host with IPVS enabled, you may need to adjust the mark bit size using the `IptablesMarkMask` parameter in {{site.prodname}} [FelixConfiguration]({{ site.baseurl }}/reference/felix/configuration#ipvs-bits).
 
 #### {{site.prodname}} auto detects ipvs mode
 

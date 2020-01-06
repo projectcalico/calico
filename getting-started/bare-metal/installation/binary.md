@@ -93,7 +93,7 @@ Or, for upstart:
 Optionally, you can create a file at `/etc/calico/felix.cfg` to
 configure Felix. The configuration file as well as other options for
 configuring Felix (including environment variables) are described in
-[this]({{site.baseurl}}/{{page.version}}/reference/felix/configuration) document.
+[this]({{ site.baseurl }}/reference/felix/configuration) document.
 
 If etcd is not running on the local machine, it's essential to configure
 the `EtcdAddr` or `EtcdEndpoints` setting to tell Felix how to reach

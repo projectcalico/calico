@@ -23,7 +23,7 @@ use {{site.prodname}} across multiple different VPC subnets or [peered VPCs](htt
 in addition to disabling src/dst checks as described above you must also enable IPIP encapsulation and outgoing NAT
 on your {{site.prodname}} IP pools.
 
-See the [IP pool configuration reference]({{site.baseurl}}/{{page.version}}/reference/resources/ippool)
+See the [IP pool configuration reference]({{ site.baseurl }}/reference/resources/ippool)
 for information on how to configure {{site.prodname}} IP pools.
 
 By default, {{site.prodname}}'s IPIP encapsulation applies to all container-to-container traffic.  However,
@@ -35,7 +35,7 @@ to enable IPIP and set the mode to "CrossSubnet".
 
 > **Note**: This feature was introduced in {{site.prodname}} v2.1, if your deployment was created with
 > an older version of {{site.prodname}}, or if you if you are unsure whether your deployment
-> is configured correctly, follow the [Configuring IP-in-IP guide]({{site.baseurl}}/{{page.version}}/networking/vxlan-ipip)
+> is configured correctly, follow the [Configuring IP-in-IP guide]({{ site.baseurl }}/networking/vxlan-ipip)
 > which discusses this in more detail.
 >
 {: .alert .alert-info}
@@ -58,7 +58,7 @@ EOF
 ## Enabling workload-to-WAN traffic
 
 To allow {{site.prodname}} networked containers to reach resources outside of AWS,
-you must configure outgoing NAT on your [{{site.prodname}} IP pool]({{site.baseurl}}/{{page.version}}/reference/resources/ippool).
+you must configure outgoing NAT on your [{{site.prodname}} IP pool]({{ site.baseurl }}/reference/resources/ippool).
 
 AWS will perform outbound NAT on any traffic which has the source address of an EC2 virtual
 machine instance.  By enabling outgoing NAT on your {{site.prodname}} IP pool, {{site.prodname}} will
