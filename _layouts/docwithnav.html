@@ -20,7 +20,7 @@ The code is a little roundabout for a few reasons:
 {% endcomment %}
 
 {% assign current_page = page.path | replace_first: page.version,"" | split: "/" %}
-{% assign current_page = current_page[1] | prepend: "/" %}
+{% assign current_page = current_page[0] | prepend: "/" %}
 
 {% capture version %}{{ page.version | replace: ".","_" }}{% endcapture %}
 
@@ -139,7 +139,7 @@ The code is a little roundabout for a few reasons:
               <ul class="nav navbar-nav navbar-right">
                 {% for navbar in navbars %}
                   <li {% if this_pages_navbar == navbar %} class="active"{% endif %}>
-                    <a href="{{site.baseurl}}/{{page.version}}{{navbar.path}}">{{ navbar.bigheader }}</a>
+                    <a href="{{site.baseurl}}{{navbar.path}}">{{ navbar.bigheader }}</a>
                   </li>
                 {% endfor %}
               </ul>
@@ -151,7 +151,7 @@ The code is a little roundabout for a few reasons:
             <ul class="nav navbar-nav">
               {% for navbar in navbars %}
                 <li{% if this_pages_navbar == navbar %} class="active"{% endif %}>
-                  <a href="{{site.baseurl}}/{{page.version}}{{navbar.path}}"><span>{{ navbar.bigheader }}</span></a>
+                  <a href="{{site.baseurl}}{{navbar.path}}"><span>{{ navbar.bigheader }}</span></a>
                 </li>
               {% endfor %}
             </ul>
