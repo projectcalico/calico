@@ -179,7 +179,7 @@ FV_SLOW_SPEC_THRESH=90
 # <unknown> if this isn't a git checkout.
 GIT_COMMIT:=$(shell git rev-parse HEAD || echo '<unknown>')
 BUILD_ID:=$(shell git rev-parse HEAD || uuidgen | sed 's/-//g')
-GIT_DESCRIPTION:=$(shell git describe --tags --dirty --always || echo '<unknown>')
+GIT_DESCRIPTION=$(shell git describe --tags --dirty --always || echo '<unknown>')
 ifeq ($(LOCAL_BUILD),true)
 	GIT_DESCRIPTION = $(shell git describe --tags --dirty --always || echo '<unknown>')-dev-build
 endif
@@ -194,7 +194,7 @@ DATE:=$(shell date -u +'%FT%T%z')
 #
 # We use -B to insert a build ID note into the executable, without which, the
 # RPM build tools complain.
-LDFLAGS:=-ldflags "\
+LDFLAGS=-ldflags "\
         -X $(PACKAGE_NAME)/buildinfo.GitVersion=$(GIT_DESCRIPTION) \
         -X $(PACKAGE_NAME)/buildinfo.BuildDate=$(DATE) \
         -X $(PACKAGE_NAME)/buildinfo.GitRevision=$(GIT_COMMIT) \
