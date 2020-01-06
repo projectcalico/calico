@@ -1,7 +1,7 @@
 ---
 title: Kubernetes policy, advanced tutorial
 description: Learn how to create more advanced Kubernetes network policies (namespace, allow and deny all ingress and egress). 
-canonical_url: 'https://docs.projectcalico.org/v3.9/security/tutorials/kubernetes-policy-advanced'
+canonical_url: '/security/tutorials/kubernetes-policy-advanced'
 ---
 
 The Kubernetes `NetworkPolicy` API allows users to express ingress and egress policies (starting with Kubernetes 1.8.0) to Kubernetes pods

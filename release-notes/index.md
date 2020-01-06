@@ -1,7 +1,7 @@
 ---
 title: Release notes
 description: What's new, and why features provide value for upgrading.
-canonical_url: 'https://docs.projectcalico.org/v3.9/release-notes/index'
+canonical_url: '/release-notes/index'
 ---
 
 The following table shows component versioning for {{site.prodname}}  **{{ page.version }}**.

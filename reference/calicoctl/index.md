@@ -1,7 +1,7 @@
 ---
 title: calicoctl user reference
 description: The command line interface tool (CLI) to manage Calico network and security policy.
-canonical_url: 'https://docs.projectcalico.org/v3.9/reference/calicoctl/index'
+canonical_url: '/reference/calicoctl/index'
 ---
 
 The command line tool, `calicoctl`, makes it easy to manage {{site.prodname}}

@@ -1,7 +1,7 @@
 ---
 title: IP addressing and connectivity
 description: Set up OpenStack networking for Calico
-canonical_url: 'https://docs.projectcalico.org/v3.9/networking/openstack/connectivity'
+canonical_url: '/networking/openstack/connectivity'
 ---
 
 An OpenStack deployment is of limited use if its VMs cannot reach and be

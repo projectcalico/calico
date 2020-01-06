@@ -1,7 +1,7 @@
 ---
 title: Enforce network policy using Istio tutorial
 description: Learn how Calico integrates with Istio to provide fine-grained access control using Calico network policies enforced within both the service mesh and network layer.
-canonical_url: 'https://docs.projectcalico.org/v3.9/security/tutorials/app-layer-policy/enforce-policy-istio'
+canonical_url: '/security/tutorials/app-layer-policy/enforce-policy-istio'
 ---
 
 This tutorial sets up a microservices application, then demonstrates how to use {{site.prodname}} application layer policy to mitigate some common threats.

@@ -1,6 +1,6 @@
 ---
 title: calicoctl label
-canonical_url: 'https://docs.projectcalico.org/v3.9/reference/calicoctl/label'
+canonical_url: '/reference/calicoctl/label'
 ---
 
 This section describes the `calicoctl label` command.

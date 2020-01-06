@@ -1,7 +1,7 @@
 ---
 title: calicoctl ipam
 description: Commands for calicoctl IP address management (IPAM).
-canonical_url: 'https://docs.projectcalico.org/v3.9/reference/calicoctl/ipam/index'
+canonical_url: '/reference/calicoctl/ipam/index'
 ---
 
 This section describes the `calicoctl ipam` commands.

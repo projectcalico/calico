@@ -1,6 +1,6 @@
 ---
 title: The Calico datastore
-canonical_url: 'https://docs.projectcalico.org/v3.9/getting-started/kubernetes/hardway/the-calico-datastore'
+canonical_url: '/getting-started/kubernetes/hardway/the-calico-datastore'
 ---
 
 {{site.prodname}} stores the data about the operational and configuration state of your cluster in a central datastore. If the datastore is unavailable

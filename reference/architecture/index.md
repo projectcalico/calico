@@ -1,7 +1,7 @@
 ---
 title: Calico architecture
 description: Understand the Calico components and the basics of BGP networking
-canonical_url: 'https://docs.projectcalico.org/v3.9/reference/architecture/index'
+canonical_url: '/reference/architecture/index'
 ---
 
 This document discusses the various pieces of {{site.prodname}}'s architecture,

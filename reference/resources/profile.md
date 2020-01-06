@@ -1,6 +1,6 @@
 ---
 title: Profile
-canonical_url: 'https://docs.projectcalico.org/v3.9/reference/resources/profile'
+canonical_url: '/reference/resources/profile'
 ---
 
 Profiles provide a way to group multiple endpoints so that they inherit a shared set of labels. For historic reasons, Profiles can also include

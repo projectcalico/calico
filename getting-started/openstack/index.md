@@ -1,7 +1,7 @@
 ---
 title: Calico for OpenStack
 description: Overview of the Calico components for integrating with OpenStack
-canonical_url: 'https://docs.projectcalico.org/v3.9/getting-started/openstack/index'
+canonical_url: '/getting-started/openstack/index'
 ---
 
 {{site.prodname}}'s integration with OpenStack consists of the following pieces.

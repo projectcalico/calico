@@ -1,7 +1,7 @@
 ---
 title: Secure Calico Prometheus endpoints
 description: Describes how to limit access to Calico metric endpoints
-canonical_url: 'https://docs.projectcalico.org/v3.9/security/comms/secure-metrics'
+canonical_url: '/security/comms/secure-metrics'
 ---
 
 ## About securing access to {{site.prodname}}'s metrics endpoints

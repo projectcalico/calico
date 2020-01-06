@@ -1,7 +1,7 @@
 ---
 title: Configuring a node IP address and subnet
 description: Describes how to configure IP autodetection
-canonical_url: 'https://docs.projectcalico.org/v3.9/networking/node'
+canonical_url: '/networking/node'
 ---
 
 By default, {{site.prodname}} automatically detects each node's IP address and subnet.  In most cases,
