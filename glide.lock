@@ -155,7 +155,7 @@ imports:
 - name: github.com/patrickmn/go-cache
   version: 5633e0862627c011927fa39556acae8b1f1df58a
 - name: github.com/projectcalico/felix
-  version: 250b965ba042e4b92ee557fb4b3be84c6762d55e
+  version: e29c6c79de28311ef8b37f97dc51d69b9e413cb2
   subpackages:
   - calc
   - config
