@@ -1,8 +1,0 @@
-[Unit]
-Description=mesos-dns
-
-[Service]
-ExecStart=/usr/bin/mesos-dns -config=/etc/sysconfig/mesos-dns
-
-[Install]
-WantedBy=multi-user.target

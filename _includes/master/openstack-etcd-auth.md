@@ -12,6 +12,6 @@ OpenStack, and the detailed access permissions that each component needs:
 
 | Component      | Configuration                                                                                                  | Access |
 |----------------|----------------------------------------------------------------------------------------------------------------|--------|
-| Felix          | `CALICO_ETCD_USERNAME` and `CALICO_ETCD_PASSWORD` variables in Felix's environment on each compute node.       | [See here]({{site.baseurl}}/{{page.version}}/reference/etcd-rbac/calico-etcdv3-paths#felix-as-a-stand-alone-process) |
-| Neutron driver | `etcd_username` and `etcd_password` in `[calico]` section of `/etc/neutron/neutron.conf` on each control node. | [See here]({{site.baseurl}}/{{page.version}}/reference/etcd-rbac/calico-etcdv3-paths#openstack-calico-driver-for-neutron) |
-| DHCP agent     | `etcd_username` and `etcd_password` in `[calico]` section of `/etc/neutron/neutron.conf` on each compute node. | [See here]({{site.baseurl}}/{{page.version}}/reference/etcd-rbac/calico-etcdv3-paths#openstack-calico-dhcp-agent) |
+| Felix          | `CALICO_ETCD_USERNAME` and `CALICO_ETCD_PASSWORD` variables in Felix's environment on each compute node.       | [See here]({{ site.baseurl }}/reference/etcd-rbac/calico-etcdv3-paths#felix-as-a-stand-alone-process) |
+| Neutron driver | `etcd_username` and `etcd_password` in `[calico]` section of `/etc/neutron/neutron.conf` on each control node. | [See here]({{ site.baseurl }}/reference/etcd-rbac/calico-etcdv3-paths#openstack-calico-driver-for-neutron) |
+| DHCP agent     | `etcd_username` and `etcd_password` in `[calico]` section of `/etc/neutron/neutron.conf` on each compute node. | [See here]({{ site.baseurl }}/reference/etcd-rbac/calico-etcdv3-paths#openstack-calico-dhcp-agent) |

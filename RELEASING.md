@@ -128,7 +128,7 @@ Before attempting to create a Calico release you must do the following.
 Your next steps depend on the type of release:
 
 - [Creating a new major/minor release](#major-minor)
-  1. [Creating a docs directory prior to release](#docs-dir)
+  1. [Creating a candidate release branch](#candidate-branch)
   1. [Building and publishing a new major/minor release](#build)
   1. [Promoting a new major/minor release](#promoting)
 - [Creating a patch release](#patch)
@@ -136,34 +136,22 @@ Your next steps depend on the type of release:
 
 ## <a name="major-minor"></a> Creating a new major / minor release
 
-### <a name="docs-dir"></a> Creating a docs directory prior to release
+### <a name="candidate-branch"></a> Creating a candidate release branch
 
-This section describes how to create a docs directory for a new major or minor release. This is typically done
-at the same time that release branches are cut, often well before the release is built and published.
+This section describes how to create a candidate release for a new major or minor release. This is typically done
+at the same time that subcomponent release branches are cut, often well before the actual release is built and published.
 
 1. Create a new branch off of the latest master.
 
    ```
-   git checkout -b <NEW_PERSONAL_BRANCH>
+   git checkout -b release-vX.Y
    ```
 
-1. Create the release-versioned directories for the documentation, copying from master directories.
-
-   ```
-   python2 ./release-scripts/do_release.py
-   ```
-
-1. Add a new "dummy" version to the bottom of `_data/versions.yml`. Add a comment indicating this is to be removed
-   when the real release is cut.
-
-   This ensures the release is not listed as the "Latest release" in the documentation. Populate the
-   section with tags indicating the corresponding minor release branch.
+1. Update versioning information in `_data/versions.yml`.
 
    For example:
 
    ```
-    v2.1
-      # Pre-release placeholder for Calico v2.1. Delete this when v2.1.0 goes live.
       - title: v2.1.0-pre-release
         note: ""
         components:
@@ -172,41 +160,43 @@ at the same time that release branches are cut, often well before the release is
         ... etc ...
    ```
 
-1. Add a section in `_config.yml` so that `page.version` will be set correctly in the new subdirectory:
+1. Update the `version` in the `defaults` in `_config.yml` so that `page.version` will be set correctly:
 
    ```
    -
      scope:
-       path: vX.Y
+       path: .
      values:
        version: vX.Y
    ```
 
-1. Update `_plugins/vX.Y/values.rb` (where `vX.Y` is the new version) so that
-   the function `gen_values_master` is named `gen_values_vX_Y`.
-
 1. If appropriate, update the list of tested versions for different platforms in the appropriate documents.
 
-   - Kubernetes `vX.Y/getting-started/kubernetes/requirements.md`
-   - OpenShift `vX.Y/getting-started/openshift/requirements.md`
-   - OpenStack `vX.Y/getting-started/openstack/requirements.md`
-   - Host protection `vX.Y/getting-started/bare-metal/requirements.md`
+   - Kubernetes `getting-started/kubernetes/requirements.md`
+   - OpenShift `getting-started/openshift/requirements.md`
+   - OpenStack `getting-started/openstack/requirements.md`
+   - Host protection `getting-started/bare-metal/requirements.md`
 
-1. Commit your changes and submit a PR for review. For example:
-
-   ```
-   git commit -a -m "Create docs directory for vX.Y"
-   ```
-
-### <a name="build"></a> Building and publishing a new major/minor release
-
-This section describes how to create a new major or minor release. It assumes that the docs directory has already been created in master
-as described in the section above.
-
-1. Create a new branch off of the latest master.
+1. Commit your changes and push the branch. For example:
 
    ```
-   git checkout -b <NEW_PERSONAL_BRANCH>
+   git commit -a -m "Update docs for vX.Y"
+   git push origin release-vX.Y
+   ```
+
+1. TODO: activate candidate.docs.projectcalico.org netlify site.
+
+### Promoting to be the latest release in the docs
+
+This section describes how to create a new major or minor release. It assumes that the release branch has already been created
+as described in the section above. 
+
+- Move current release to the archives
+
+1. Checkout the previously created release branch.
+
+   ```
+   git checkout release-vX.Y
    ```
 
 1. Add the new version to the correct release section in `_data/versions.yml`.
@@ -222,11 +212,8 @@ as described in the section above.
    Then, add the newly created release note file to git.
 
    ```
-   git add _data/<VERSION>/release-notes/<VERSION>-release-notes.md
+   git add _data/release-notes/<VERSION>-release-notes.md
    ```
-
-1. (Optional) Review `_config_dev.yml` and edit it to exclude any previous releases that are no longer actively developed. This
-   ensures developer builds remain fast by excluding directories which are not in active development.
 
 1. Commit your changes. For example:
 
@@ -234,58 +221,38 @@ as described in the section above.
    git commit -m "Updates for release vX.Y.Z"
    ```
 
-1. Push your branch and open a pull request. Get it reviewed and wait for it to pass CI.
+1. Push your branch and open a pull request to the upstream release-vX.Y branch. Get it reviewed and wait for it to pass CI.
 
 1. Run the following on your local branch in order to build the release
    at the newly created commit.
 
    ```
-   make RELEASE_STREAM=vX.Y release
+   make release
    ```
 
    Then, publish the tag and release to github.
 
    ```
-   make RELEASE_STREAM=vX.Y release-publish
+   make release-publish
    ```
 
-1. Merge the PR. This will cause the live docs site to be updated (after a few minutes).
+1. Merge the PR. This will cause candidate.docs.projectcalico.org to be updated (after a few minutes). Validate that everything looks correct before proceeding to the next step.
 
-If the release is not a release candidate but in fact a stable release, then you must also
-follow the steps in the next section for promoting a release candidate to a final release.
+1. TODO: update latest netlify site to point to the new release-vX.Y branch.
 
-## <a name="promoting"></a> Promoting to a final release
+1. TODO: disable candidate.docs.projectcalico.org.
 
-The following steps outline how to promote a major / minor release candidate to the latest
-release in the documentation. These steps should be performed after completing the steps above
-for [building and publishing a new minor / major release](#build).
+## Adding the previous release to archive.docs.projectcalico.org
 
-Perform the following steps on a local branch off of the latest master.
-
-### Promoting to be the latest release in the docs
-
-1. Add a new `<li>` entry to the `<span class="dropdown">` in `_layouts/docwithnav.html` file.
-
-1. Modify the redirect in `/index.html` to point to your new release.
-
-1. Move the section for the release in `_data/versions.yml` to the top of the file so that it will be
-   the 'Latest Release', and **remove any release candidates or dummy releases** from the section.
-
-1. Run `make add_redirects_for_latest VERSION=vX.Y` to update the redirects.
-
-1. Commit your current changes.
-
-### Updating canonical redirects
-
-1. Pull the latest master and check out a _new_ branch.
-
-1. Run this command to update canonical URLs:
+1. Checkout latest master.
 
    ```
-   make update_canonical_urls
+   git checkout master
    ```
 
-1. Submit a PR with the canonical link changes, make sure it passes CI, and get it reviewed and merged.
+1. Add the previous release to the top of `_data/archive.yml`
+
+1. Commit your changes and open a PR against upstream master.
 
 ## <a name="patch"></a> Performing a "patch" release
 
@@ -298,7 +265,7 @@ Perform the following steps on a local branch off of the latest master.
    Then, add the newly created release note file to git.
 
    ```
-   git add _data/<VERSION>/release-notes/<VERSION>-release-notes.md
+   git add _data/release-notes/<VERSION>-release-notes.md
    ```
 
 1. Commit your changes. For example:
@@ -313,13 +280,13 @@ Perform the following steps on a local branch off of the latest master.
    at the newly created commit.
 
    ```
-   make RELEASE_STREAM=vX.Y release
+   make release
    ```
 
    Then, publish the tag and release.
 
    ```
-   make RELEASE_STREAM=vX.Y release-publish
+   make release-publish
    ```
 1. Merge the PR. This will cause the live docs site to be updated (after a few minutes).
 

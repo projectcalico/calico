@@ -1,4 +1,0 @@
----
-layout: null
----
-{% include {{page.version}}/manifests/calico-node.yaml datastore="kdd" typha="true" app_layer_policy="true" variant_name="Calico" %}

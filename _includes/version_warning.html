@@ -12,7 +12,7 @@
     {% if canonical_version == site.data.versions.first[0] %}
       You're not viewing the <a href="{{site.baseurl}}/{{canonical_path}}">latest copy of this page</a>.
     {% else %}
-      You're not viewing the <a href="{{site.baseurl}}/latest">latest {{site.prodname}} documentation</a>.
+      You're not viewing the <a data-proofer-ignore href="/latest">latest {{site.prodname}} documentation</a>.
     {% endif %}
   </div>
 {% endif %}
