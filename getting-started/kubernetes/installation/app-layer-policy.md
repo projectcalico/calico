@@ -51,13 +51,17 @@ calicoctl patch FelixConfiguration default --patch \
 #### Install Istio
 
 1. Verify [application layer policy requirements]({{ site.url }}/getting-started/kubernetes/requirements#application-layer-policy-requirements).
-1. Install Istio using the [Istio project documentation](https://archive.istio.io/v1.3/docs/setup/install/) making sure to enable mutual TLS authentication. For example:
+1. Install Istio using the [Istio project documentation](https://istio.io/docs/setup/install/). Istio can be installed in both strict mode or permissive mode. For example to install Istio in strict mode:
 
 ```bash
 curl -L https://git.io/getLatestIstio | ISTIO_VERSION=1.4.2 sh -
 cd $(ls -d istio-*)
 ./bin/istioctl manifest apply --set values.global.mtls.enabled=true --set values.global.controlPlaneSecurityEnabled=true
 ```
+
+Strict mode is suggested when creating a new cluster. Adopting mTLS into an existing deployment is challenging because you need to make sure both client and server are provisioned with certificates at the same time. As a result, Istio provides a mode to take a deployment not using mTLS and gradually enable it without causing outages for clients. Istio permissive mode allows a service to accept both plaintext traffic and mutual TLS traffic at the same time.
+
+Application layer policies work with both Istio in strict or permissive mode. When dealing with mTLS traffic, {{site.prodname}} will cryptographically verify identity while making an authorization decision. When {{site.prodname}} receives plain-text instead, it will fall back on using IP addresses to verify identity.
 
 #### Update Istio sidecar injector
 
