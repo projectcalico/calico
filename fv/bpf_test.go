@@ -1,6 +1,6 @@
 // +build fvtests
 
-// Copyright (c) 2019 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -337,7 +337,7 @@ func describeBPFTests(testOpts bpfTestOptions) bool {
 
 		Describe(fmt.Sprintf("with a %d node cluster", numNodes), func() {
 			var (
-				w     [numNodes][2]*workload.Workload // 1st workload on each host
+				w     [numNodes][2]*workload.Workload
 				hostW [numNodes]*workload.Workload
 			)
 
@@ -514,6 +514,14 @@ func describeBPFTests(testOpts bpfTestOptions) bool {
 					})
 
 					if testOpts.connTimeEnabled {
+						It("workload should have connectivity to self via a service", func() {
+							ip := testSvc.Spec.ClusterIP
+							port := uint16(testSvc.Spec.Ports[0].Port)
+
+							cc.ExpectSome(w[0][0], workload.IP(ip), port)
+							cc.CheckConnectivity()
+						})
+
 						It("should only have connectivity from from the local host via a service to workload 0", func() {
 							// Local host is always white-listed (for kubelet health checks).
 							ip := testSvc.Spec.ClusterIP
@@ -791,6 +799,21 @@ func describeBPFTests(testOpts bpfTestOptions) bool {
 						cc.ExpectSome(w[2][1], workload.IP(ip), npPort)
 						cc.CheckConnectivity()
 
+					})
+
+					It("workload should have connectivity to self via local/remote node", func() {
+						if !testOpts.connTimeEnabled {
+							Skip("FIXME pod cannot connect to self without connect time lb")
+						}
+						cc.ExpectSome(w[0][0], workload.IP(felixes[1].IP), npPort)
+						cc.ExpectSome(w[0][0], workload.IP(felixes[0].IP), npPort)
+						cc.CheckConnectivity()
+					})
+
+					It("should not have connectivity from external to w[0] via local/remote node", func() {
+						cc.ExpectNone(externalClient, workload.IP(felixes[1].IP), npPort)
+						cc.ExpectNone(externalClient, workload.IP(felixes[0].IP), npPort)
+						cc.CheckConnectivity()
 					})
 
 					Describe("after updating the policy to allow traffic from externalClient", func() {

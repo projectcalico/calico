@@ -1,4 +1,4 @@
-// Copyright (c) 2019 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -78,7 +78,7 @@ func RemoveConnectTimeLoadBalancer(cgroupv2 string) error {
 	return nil
 }
 
-func InstallConnectTimeLoadBalancer(frontendMap, backendMap bpf.Map, cgroupv2 string) error {
+func InstallConnectTimeLoadBalancer(frontendMap, backendMap, rtMap bpf.Map, cgroupv2 string) error {
 	args := []string{
 		"-x",
 		"c",
@@ -158,8 +158,9 @@ func InstallConnectTimeLoadBalancer(frontendMap, backendMap bpf.Map, cgroupv2 st
 
 	cmd := exec.Command("bpftool", "prog", "loadall", "/tmp/calico_connect4.o", progPinDir,
 		"type", "cgroup/connect4",
-		"map", "name", "cali_v4_nat_fe", "pinned", frontendMap.Path(),
-		"map", "name", "cali_v4_nat_be", "pinned", backendMap.Path(),
+		"map", "name", frontendMap.GetName(), "pinned", frontendMap.Path(),
+		"map", "name", backendMap.GetName(), "pinned", backendMap.Path(),
+		"map", "name", rtMap.GetName(), "pinned", rtMap.Path(),
 	)
 	log.WithField("args", cmd.Args).Info("About to run bpftool")
 	out, err = cmd.CombinedOutput()

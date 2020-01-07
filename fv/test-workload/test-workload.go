@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2019 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2020 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -154,6 +154,11 @@ func main() {
 			err = utils.RunCommand("ip", "link", "set", "eth0", "up")
 			if err != nil {
 				return
+			}
+
+			err = utils.RunCommand("ip", "link", "set", "dev", "lo", "up")
+			if err != nil {
+				log.WithError(err).Info("Failed to set dev lo up")
 			}
 
 			if strings.Contains(ipAddress, ":") {

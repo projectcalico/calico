@@ -1,4 +1,4 @@
-// Copyright (c) 2019 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -454,6 +454,10 @@ func (m *mockNATMap) EnsureExists() error {
 	return nil
 }
 
+func (m *mockNATMap) GetName() string {
+	return "nat"
+}
+
 func (m *mockNATMap) Path() string {
 	return "/sys/fs/bpf/tc/nat"
 }
@@ -529,6 +533,10 @@ func newMockNATBackendMap() *mockNATBackendMap {
 
 func (m *mockNATBackendMap) EnsureExists() error {
 	return nil
+}
+
+func (m *mockNATBackendMap) GetName() string {
+	return "natbe"
 }
 
 func (m *mockNATBackendMap) Path() string {

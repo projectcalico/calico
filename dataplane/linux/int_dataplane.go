@@ -39,6 +39,7 @@ import (
 	"github.com/projectcalico/felix/bpf/conntrack"
 	"github.com/projectcalico/felix/bpf/nat"
 	bpfproxy "github.com/projectcalico/felix/bpf/proxy"
+	"github.com/projectcalico/felix/bpf/routes"
 	"github.com/projectcalico/felix/ifacemonitor"
 	"github.com/projectcalico/felix/ipsets"
 	"github.com/projectcalico/felix/iptables"
@@ -502,6 +503,12 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			log.WithError(err).Panic("Failed to create NAT backend BPF map.")
 		}
 
+		routeMap := routes.Map(bpfMapContext)
+		err = routeMap.EnsureExists()
+		if err != nil {
+			log.WithError(err).Panic("Failed to create routes BPF map.")
+		}
+
 		if config.KubeClientSet != nil {
 			// We have a Kubernetes connection, start watching services and populating the NAT maps.
 			kp, err := bpfproxy.StartKubeProxy(
@@ -521,7 +528,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 
 		if config.BPFConnTimeLBEnabled {
 			// Activate the connect-time load balancer.
-			err = nat.InstallConnectTimeLoadBalancer(frontendMap, backendMap, config.BPFCgroupV2)
+			err = nat.InstallConnectTimeLoadBalancer(frontendMap, backendMap, routeMap, config.BPFCgroupV2)
 			if err != nil {
 				log.WithError(err).Panic("BPFConnTimeLBEnabled but failed to attach connect-time load balancer, bailing out.")
 			}
