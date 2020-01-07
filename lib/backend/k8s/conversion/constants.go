@@ -28,4 +28,8 @@ const (
 	AnnotationPodIP = "cni.projectcalico.org/podIP"
 	// AnnotationPodIPs is similar for the plural PodIPs field.
 	AnnotationPodIPs = "cni.projectcalico.org/podIPs"
+
+	// NameLabel is a label that can be used to match a serviceaccount or namespace
+	// name exactly.
+	NameLabel = "projectcalico.org/name"
 )
