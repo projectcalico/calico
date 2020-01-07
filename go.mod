@@ -4,6 +4,7 @@ go 1.12
 
 require (
 	github.com/coreos/etcd v3.3.15+incompatible
+	github.com/dgrijalva/jwt-go v3.2.0+incompatible // indirect
 	github.com/joho/godotenv v1.3.0
 	github.com/kelseyhightower/envconfig v0.0.0-20180517194557-dd1402a4d99d
 	github.com/onsi/ginkgo v1.10.1
