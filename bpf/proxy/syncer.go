@@ -89,12 +89,37 @@ type Syncer struct {
 	origEps  nat.BackendMapMem
 }
 
+func uniqueIPs(ips []net.IP) []net.IP {
+	m := make(map[string]net.IP)
+	unique := true
+
+	for _, ip := range ips {
+		s := ip.String()
+		if _, ok := m[s]; ok {
+			unique = false
+		} else {
+			m[s] = ip
+		}
+	}
+
+	if unique {
+		return ips
+	}
+
+	ret := make([]net.IP, 0, len(m))
+	for _, ip := range m {
+		ret = append(ret, ip)
+	}
+
+	return ret
+}
+
 // NewSyncer returns a new Syncer that uses the 2 provided maps
 func NewSyncer(nodePortIPs []net.IP, svcsmap, epsmap bpf.Map) (*Syncer, error) {
 	s := &Syncer{
 		bpfSvcs:     svcsmap,
 		bpfEps:      epsmap,
-		nodePortIPs: nodePortIPs,
+		nodePortIPs: uniqueIPs(nodePortIPs),
 		prevSvcMap:  make(map[svcKey]svcInfo),
 		prevEpsMap:  make(k8sp.EndpointsMap),
 	}

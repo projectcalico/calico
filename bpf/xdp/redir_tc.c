@@ -450,7 +450,7 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb) {
 
 		if (CALI_F_FROM_WEP &&
 				CALI_DROP_WORKLOAD_TO_HOST &&
-				cali_rt_lookup_type(ip_dst) == CALI_RT_LOCAL_HOST) {
+				cali_rt_lookup_type(post_nat_ip_dst) == CALI_RT_LOCAL_HOST) {
 			CALI_DEBUG("Workload to host traffic blocked by DefaultEndpointToHostAction: DROP\n");
 			goto deny;
 		}

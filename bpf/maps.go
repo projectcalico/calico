@@ -1,4 +1,4 @@
-// Copyright (c) 2019 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -30,6 +30,7 @@ import (
 type MapIter func(k, v []byte)
 
 type Map interface {
+	GetName() string
 	EnsureExists() error
 	Iter(MapIter) error
 	Update(k, v []byte) error
@@ -69,6 +70,10 @@ type PinnedMap struct {
 
 	fdLoaded bool
 	fd       MapFD
+}
+
+func (b *PinnedMap) GetName() string {
+	return b.Name
 }
 
 func (b *PinnedMap) Path() string {

@@ -1,4 +1,4 @@
-// Copyright (c) 2019 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -175,10 +175,10 @@ func bpftoolProgLoadAll(fname, bpfFsDir string) error {
 	Expect(err).NotTo(HaveOccurred())
 
 	_, err = bpftool("prog", "loadall", fname, bpfFsDir, "type", "classifier",
-		"map", "name", natMap.(*bpf.PinnedMap).Name, "pinned", natMap.(*bpf.PinnedMap).Filename,
-		"map", "name", natBEMap.(*bpf.PinnedMap).Name, "pinned", natBEMap.(*bpf.PinnedMap).Filename,
-		"map", "name", ctMap.(*bpf.PinnedMap).Name, "pinned", ctMap.(*bpf.PinnedMap).Filename,
-		"map", "name", rtMap.(*bpf.PinnedMap).Name, "pinned", rtMap.(*bpf.PinnedMap).Filename,
+		"map", "name", natMap.GetName(), "pinned", natMap.Path(),
+		"map", "name", natBEMap.GetName(), "pinned", natBEMap.Path(),
+		"map", "name", ctMap.GetName(), "pinned", ctMap.Path(),
+		"map", "name", rtMap.GetName(), "pinned", rtMap.Path(),
 	)
 	return err
 }

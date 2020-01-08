@@ -1,6 +1,6 @@
 // +build fvtests
 
-// Copyright (c) 2019 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -85,15 +85,19 @@ type bpfTestOptions struct {
 const expectedRouteDump = `10.65.0.2/32: local workload
 10.65.0.3/32: local workload
 10.65.1.0/26: remote workload, host IP FELIX_1
+10.65.2.0/26: remote workload, host IP FELIX_2
 FELIX_0/32: local host
-FELIX_1/32: remote host`
+FELIX_1/32: remote host
+FELIX_2/32: remote host`
 
 const expectedRouteDumpIPIP = `10.65.0.1/32: local host
 10.65.0.2/32: local workload
 10.65.0.3/32: local workload
 10.65.1.0/26: remote workload, host IP FELIX_1
+10.65.2.0/26: remote workload, host IP FELIX_2
 FELIX_0/32: local host
-FELIX_1/32: remote host`
+FELIX_1/32: remote host
+FELIX_2/32: remote host`
 
 func describeBPFTests(testOpts bpfTestOptions) bool {
 	desc := fmt.Sprintf("_BPF_ _BPF-SAFE_ BPF tests (%s, ct=%v, tunnel=%s)",
@@ -329,14 +333,16 @@ func describeBPFTests(testOpts bpfTestOptions) bool {
 			}
 		})
 
-		Describe("with a two node cluster", func() {
+		const numNodes = 3
+
+		Describe(fmt.Sprintf("with a %d node cluster", numNodes), func() {
 			var (
-				w     [2][2]*workload.Workload // 1st workload on each host
-				hostW [2]*workload.Workload
+				w     [numNodes][2]*workload.Workload
+				hostW [numNodes]*workload.Workload
 			)
 
 			BeforeEach(func() {
-				felixes, calicoClient = infrastructure.StartNNodeTopology(2, options, infra)
+				felixes, calicoClient = infrastructure.StartNNodeTopology(numNodes, options, infra)
 
 				// Start a host networked workload on each host for connectivity checks.
 				for ii, felix := range felixes {
@@ -417,6 +423,7 @@ func describeBPFTests(testOpts bpfTestOptions) bool {
 						}
 						l = strings.ReplaceAll(l, felixes[0].IP, "FELIX_0")
 						l = strings.ReplaceAll(l, felixes[1].IP, "FELIX_1")
+						l = strings.ReplaceAll(l, felixes[2].IP, "FELIX_2")
 						filteredLines = append(filteredLines, l)
 					}
 					sort.Strings(filteredLines)
@@ -507,6 +514,14 @@ func describeBPFTests(testOpts bpfTestOptions) bool {
 					})
 
 					if testOpts.connTimeEnabled {
+						It("workload should have connectivity to self via a service", func() {
+							ip := testSvc.Spec.ClusterIP
+							port := uint16(testSvc.Spec.Ports[0].Port)
+
+							cc.ExpectSome(w[0][0], workload.IP(ip), port)
+							cc.CheckConnectivity()
+						})
+
 						It("should only have connectivity from from the local host via a service to workload 0", func() {
 							// Local host is always white-listed (for kubelet health checks).
 							ip := testSvc.Spec.ClusterIP
@@ -736,7 +751,9 @@ func describeBPFTests(testOpts bpfTestOptions) bool {
 					})
 				})
 
-				Context("with test-service being a nodeport @ 30333", func() {
+				npPort := uint16(30333)
+
+				Context("with test-service being a nodeport @ "+strconv.Itoa(int(npPort)), func() {
 					var (
 						testSvc          *v1.Service
 						testSvcNamespace string
@@ -746,7 +763,8 @@ func describeBPFTests(testOpts bpfTestOptions) bool {
 
 					BeforeEach(func() {
 						k8sClient := infra.(*infrastructure.K8sDatastoreInfra).K8sClient
-						testSvc = k8sService(testSvcName, "10.101.0.10", w[0][0], 80, 8055, 30333, testOpts.protocol)
+						testSvc = k8sService(testSvcName, "10.101.0.10",
+							w[0][0], 80, 8055, int32(npPort), testOpts.protocol)
 						testSvcNamespace = testSvc.ObjectMeta.Namespace
 						_, err := k8sClient.CoreV1().Services(testSvcNamespace).Create(testSvc)
 						Expect(err).NotTo(HaveOccurred())
@@ -763,6 +781,39 @@ func describeBPFTests(testOpts bpfTestOptions) bool {
 						cc.ExpectSome(w[1][1], workload.IP(ip), port)
 						cc.CheckConnectivity()
 
+					})
+
+					It("should have connectivity from all workloads via a nodeport to workload 0", func() {
+						ip := felixes[1].IP
+
+						cc.ExpectSome(w[0][1], workload.IP(ip), npPort)
+						cc.ExpectSome(w[1][0], workload.IP(ip), npPort)
+						cc.ExpectSome(w[1][1], workload.IP(ip), npPort)
+						cc.CheckConnectivity()
+
+					})
+
+					It("should have connectivity from a workload via a nodeport on another node to workload 0", func() {
+						ip := felixes[1].IP
+
+						cc.ExpectSome(w[2][1], workload.IP(ip), npPort)
+						cc.CheckConnectivity()
+
+					})
+
+					It("workload should have connectivity to self via local/remote node", func() {
+						if !testOpts.connTimeEnabled {
+							Skip("FIXME pod cannot connect to self without connect time lb")
+						}
+						cc.ExpectSome(w[0][0], workload.IP(felixes[1].IP), npPort)
+						cc.ExpectSome(w[0][0], workload.IP(felixes[0].IP), npPort)
+						cc.CheckConnectivity()
+					})
+
+					It("should not have connectivity from external to w[0] via local/remote node", func() {
+						cc.ExpectNone(externalClient, workload.IP(felixes[1].IP), npPort)
+						cc.ExpectNone(externalClient, workload.IP(felixes[0].IP), npPort)
+						cc.CheckConnectivity()
 					})
 
 					Describe("after updating the policy to allow traffic from externalClient", func() {
@@ -790,7 +841,7 @@ func describeBPFTests(testOpts bpfTestOptions) bool {
 								"nodePortIP":       felixes[1].IP,
 							}).Infof("external->nodeport connection")
 
-							cc.ExpectSome(externalClient, workload.IP(felixes[1].IP), 30333)
+							cc.ExpectSome(externalClient, workload.IP(felixes[1].IP), npPort)
 							cc.CheckConnectivity()
 						})
 
@@ -804,7 +855,7 @@ func describeBPFTests(testOpts bpfTestOptions) bool {
 								"nodePortIP":       felixes[1].IP,
 							}).Infof("external->nodeport connection")
 
-							cc.ExpectSome(externalClient, workload.IP(felixes[0].IP), 30333)
+							cc.ExpectSome(externalClient, workload.IP(felixes[0].IP), npPort)
 							cc.CheckConnectivity()
 						})
 					})
