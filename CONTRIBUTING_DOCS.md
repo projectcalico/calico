@@ -185,7 +185,7 @@ To link to a page not named `index.md`, omit the closing slash. To link to a pag
 To create clickable links to other doc site content, use links prefixed with: `{{ site.baseurl }}`. For example:
 
 ```
-[Get started]({{ site.baseurl }}/{{ page.version }}/getting-started/)
+[Get started]({{ site.baseurl }}/getting-started/)
 ```
 
 Will render as:
@@ -194,16 +194,14 @@ Will render as:
 <a href="/v3.8/getting-started/">Getting started</a>
 ```
 
-The `site.baseurl` prefix is not strictly required, but allows greater portability if our docs move in the future.
+**`absolute_url`**
 
-**`site.url`**
+The `absolute_url` filter must be used whenever you are not creating a clickable `<a href='...'>` element, but instead are showing the user a URL to copy locally. A common example is downloading manifests or showing a user how to `kubectl apply -f https://...` them.
 
-The `site.url` prefix must be used whenever you are not creating a clickable `<a href='...'>` element, but instead are showing the user a URL to copy locally. A common example is downloading manifests or showing a user how to `kubectl apply -f https://...` them.
-
-For absolute links, use `{{ site.url }}`. For example:
+For absolute links, use `{{ "/path" | absolute_url }}`. For example:
 
 ```
-kubectl apply -f `{{ site.url }}/{{ page.version }}/manifests/calicoctl.yaml`
+kubectl apply -f `{{ "/manifests/calicoctl.yaml" | absolute_url }}`
 ```
 
 Will render as:
@@ -211,12 +209,6 @@ Will render as:
 ```
 kubectl apply -f `https://docs.tigera.io/v3.8/manifests/calicoctl.yaml`
 ```
-
-**page.version**
-
-Most links should include the prefix `{{ page.version }}`, as seen in the above examples. This allows the content to port across multiple versions without link breakage.
-
-`page.version` is automatically inherited from `_config.yml` for the current page's directory.
 
 ### Case sensitivity
 

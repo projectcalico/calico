@@ -64,11 +64,11 @@ To deploy a cluster suitable for production, refer to [Installation](installatio
 1. Install {{site.prodname}} with the following command.
 
    ```
-   kubectl apply -f {{ site.url }}/manifests/calico.yaml
+   kubectl apply -f {{ "/manifests/calico.yaml" | absolute_url }}
    ```
 
    > **Note**: You can also
-   > [view the YAML in a new tab]({{ site.url }}/manifests/calico.yaml){:target="_blank"}.
+   > [view the YAML in a new tab]({{ "/manifests/calico.yaml" | absolute_url }}){:target="_blank"}.
    {: .alert .alert-info}
 
    You should see the following output.
