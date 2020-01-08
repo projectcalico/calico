@@ -33,7 +33,7 @@ datastore type and number of nodes.
    curl {{ "/manifests/calico.yaml" | absolute_url }} -O
    ```
 
-{% include {{page.version}}/pod-cidr-sed.md yaml="calico" %}
+{% include content/pod-cidr-sed.md yaml="calico" %}
 
 1. Apply the manifest using the following command.
 
@@ -52,7 +52,7 @@ datastore type and number of nodes.
    curl {{ "/manifests/calico-typha.yaml" | absolute_url }} -o calico.yaml
    ```
 
-{% include {{page.version}}/pod-cidr-sed.md yaml="calico-typha" %}
+{% include content/pod-cidr-sed.md yaml="calico-typha" %}
 
 1. Modify the replica count in the`Deployment` named `calico-typha`
    to the desired number of replicas.
@@ -98,7 +98,7 @@ datastore type and number of nodes.
    curl {{ "/manifests/calico-etcd.yaml -o calico.yaml" | absolute_url }}
    ```
 
-{% include {{page.version}}/pod-cidr-sed.md yaml="calico-etcd" %}
+{% include content/pod-cidr-sed.md yaml="calico-etcd" %}
 
 1. In the `ConfigMap` named `calico-config`, set the value of
    `etcd_endpoints` to the IP address and port of your etcd server.

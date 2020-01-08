@@ -3,7 +3,7 @@ title: System requirements
 canonical_url: '/getting-started/openstack/requirements'
 ---
 
-{% include {{page.version}}/reqs-sys.md orch="OpenStack" %}
+{% include content/reqs-sys.md orch="OpenStack" %}
 
 ## OpenStack requirements
 
@@ -19,7 +19,7 @@ the following versions:
 - Queens
 - Rocky
 
-{% include {{page.version}}/reqs-kernel.md %}
+{% include content/reqs-kernel.md %}
 
 ## Nova patch needed with Mitaka and earlier
 

@@ -22,10 +22,10 @@ corresponds to your desired deployment.
 
 ## Installing calicoctl as a binary on a single host
 
-{% include {{page.version}}/ctl-binary-install.md %}
+{% include content/ctl-binary-install.md %}
 
 **Next step**:
 
 [Configure `calicoctl` to connect to your datastore](configure).
 
-{% include {{page.version}}/ctl-container-install.md %}
+{% include content/ctl-container-install.md %}

@@ -36,7 +36,7 @@ section that matches your type.
    curl {{ "/manifests/canal.yaml" | absolute_url }} -O
    ```
 
-{% include {{page.version}}/pod-cidr-sed.md yaml="canal" %}
+{% include content/pod-cidr-sed.md yaml="canal" %}
 
 1. Issue the following command to install {{site.prodname}}.
 
@@ -58,7 +58,7 @@ etcd, complete the following steps.
    curl {{ "/manifests/canal-etcd.yaml" | absolute_url }} -O
    ```
 
-{% include {{page.version}}/pod-cidr-sed.md yaml="canal-etcd" %}
+{% include content/pod-cidr-sed.md yaml="canal-etcd" %}
 
 1. In the `ConfigMap` named `calico-config`, set the value of
    `etcd_endpoints` to the IP address and port of your etcd server.

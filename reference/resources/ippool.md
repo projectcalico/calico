@@ -91,7 +91,7 @@ Reducing the block size from the default (e.g., using `28` for IPv4 to give 16 a
 
 #### Node Selector
 
-{% include {{page.version}}/selectors.md %}
+{% include content/selectors.md %}
 
 For details on configuring IP pool node selectors, please read the
 [Assign IP addresses based on topology guide.]({{ site.baseurl }}/networking/assign-ip-addresses-topology).

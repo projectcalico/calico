@@ -18,4 +18,4 @@ ETCD_ENDPOINTS=http://<ETCD_IP>:<ETCD_PORT> ./calicoctl node run --node-image={{
 
 ## Create a start-up script
 Felix should be started at boot time by your init system and the init system must be configured to restart Felix if it stops. Felix relies on that behavior for certain configuration changes.
-{% include {{page.version}}/docker-container-service.md %}
+{% include content/docker-container-service.md %}

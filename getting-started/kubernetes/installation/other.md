@@ -27,7 +27,7 @@ complete the following steps.
    curl {{ "/manifests/calico-policy-only.yaml" | absolute_url }} -O
    ```
 
-{% include {{page.version}}/pod-cidr-sed.md yaml="calico" %}
+{% include content/pod-cidr-sed.md yaml="calico" %}
 
 1. If your cluster contains more than 50 nodes:
 
