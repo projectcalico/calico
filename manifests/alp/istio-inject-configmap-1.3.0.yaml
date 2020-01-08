@@ -329,8 +329,8 @@ data:
           {{ toYaml $value | indent 4 }}
           {{ end }}
           {{- end }}
-{% endraw %}{% include {{page.version}}/non-helm-manifests/istio-proxy-volume-mounts %}
-{% include {{page.version}}/non-helm-manifests/dikastes-container %}
+{% endraw %}{% include non-helm-manifests/istio-proxy-volume-mounts %}
+{% include non-helm-manifests/dikastes-container %}
 {%- raw %}
       volumes:
       {{- if (isset .ObjectMeta.Annotations `sidecar.istio.io/bootstrapOverride`) }}
@@ -379,7 +379,7 @@ data:
           optional: true
           secretName: lightstep.cacert
       {{- end }}
-{% endraw %}{% include {{page.version}}/non-helm-manifests/istio-volumes %}
+{% endraw %}{% include non-helm-manifests/istio-volumes %}
 {%- raw %}
       {{- if .Values.global.podDNSSearchNamespaces }}
       dnsConfig:

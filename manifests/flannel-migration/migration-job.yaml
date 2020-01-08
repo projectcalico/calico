@@ -1,4 +1,4 @@
 ---
 layout: null
 ---
-{% include {{page.version}}/non-helm-manifests/flannel-migration/migration-job.yaml %}
+{% include non-helm-manifests/flannel-migration/migration-job.yaml %}
