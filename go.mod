@@ -11,7 +11,7 @@ require (
 	github.com/mattn/go-colorable v0.0.0-20190708054220-c52ace132bf4 // indirect
 	github.com/onsi/ginkgo v1.10.1
 	github.com/onsi/gomega v1.7.0
-	github.com/projectcalico/felix v0.0.0-20200107000029-a211354e730f
+	github.com/projectcalico/felix v0.0.0-20200107081518-188ced9b3366
 	github.com/projectcalico/libcalico-go v0.0.0-20200107000057-b5581766b59c
 	github.com/sirupsen/logrus v1.4.2
 	github.com/vishvananda/netns v0.0.0-20180720170159-13995c7128cc // indirect
