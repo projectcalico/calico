@@ -17,6 +17,7 @@ package proxy_test
 import (
 	"net"
 	"sync"
+	"time"
 
 	"github.com/projectcalico/felix/bpf/nat"
 
@@ -42,11 +43,12 @@ func init() {
 var _ = Describe("BPF Syncer", func() {
 	svcs := newMockNATMap()
 	eps := newMockNATBackendMap()
+	aff := newMockAffinityMap()
 
 	nodeIPs := []net.IP{net.IPv4(192, 168, 0, 1), net.IPv4(10, 123, 0, 1)}
 	rt := proxy.NewRTCache()
 
-	s, _ := proxy.NewSyncer(nodeIPs, svcs, eps, rt)
+	s, _ := proxy.NewSyncer(nodeIPs, svcs, eps, aff, rt)
 
 	svcKey := k8sp.ServicePortName{
 		NamespacedName: types.NamespacedName{
@@ -88,7 +90,7 @@ var _ = Describe("BPF Syncer", func() {
 			val, ok := svcs.m[nat.NewNATKey(net.IPv4(10, 0, 0, 1), 1234, proxy.ProtoV1ToIntPanic(v1.ProtocolTCP))]
 			Expect(ok).To(BeTrue())
 			Expect(val.Count()).To(Equal(uint32(1)))
-			Expect(val.AffinityTimeout()).To(Equal(uint32(0)))
+			Expect(val.AffinityTimeout()).To(Equal(time.Duration(0)))
 
 			Expect(eps.m).To(HaveLen(1))
 			bval, ok := eps.m[nat.NewNATBackendKey(val.ID(), 0)]
@@ -280,7 +282,7 @@ var _ = Describe("BPF Syncer", func() {
 		}))
 
 		By("resyncing after creating a new syncer with the same result", makestep(func() {
-			s, _ = proxy.NewSyncer(nodeIPs, svcs, eps, rt)
+			s, _ = proxy.NewSyncer(nodeIPs, svcs, eps, aff, rt)
 			checkAfterResync()
 		}))
 
@@ -288,7 +290,7 @@ var _ = Describe("BPF Syncer", func() {
 			svcs.m[nat.NewNATKey(net.IPv4(5, 5, 5, 5), 1111, 6)] = nat.NewNATValue(0xdeadbeef, 2, 2, 0)
 			eps.m[nat.NewNATBackendKey(0xdeadbeef, 0)] = nat.NewNATBackendValue(net.IPv4(6, 6, 6, 6), 666)
 			eps.m[nat.NewNATBackendKey(0xdeadbeef, 1)] = nat.NewNATBackendValue(net.IPv4(7, 7, 7, 7), 777)
-			s, _ = proxy.NewSyncer(nodeIPs, svcs, eps, rt)
+			s, _ = proxy.NewSyncer(nodeIPs, svcs, eps, aff, rt)
 			checkAfterResync()
 		}))
 
@@ -443,7 +445,7 @@ var _ = Describe("BPF Syncer", func() {
 
 		By("inserting only non-local eps for a NodePort - no route", makestep(func() {
 			// use the meta node IP for nodeports as well
-			s, _ = proxy.NewSyncer(append(nodeIPs, net.IPv4(255, 255, 255, 255)), svcs, eps, rt)
+			s, _ = proxy.NewSyncer(append(nodeIPs, net.IPv4(255, 255, 255, 255)), svcs, eps, aff, rt)
 			state.SvcMap[svcKey2] = &k8sp.BaseServiceInfo{
 				ClusterIP:              net.IPv4(10, 0, 0, 2),
 				Port:                   2222,
@@ -526,7 +528,7 @@ var _ = Describe("BPF Syncer", func() {
 
 		By("inserting only non-local eps for a NodePort - multiple nodes & pods/node", makestep(func() {
 			// use the meta node IP for nodeports as well
-			s, _ = proxy.NewSyncer(append(nodeIPs, net.IPv4(255, 255, 255, 255)), svcs, eps, rt)
+			s, _ = proxy.NewSyncer(append(nodeIPs, net.IPv4(255, 255, 255, 255)), svcs, eps, aff, rt)
 			state.SvcMap[svcKey2] = &k8sp.BaseServiceInfo{
 				ClusterIP:              net.IPv4(10, 0, 0, 2),
 				Port:                   2222,
@@ -605,7 +607,7 @@ var _ = Describe("BPF Syncer", func() {
 
 		By("restarting Syncer to check if NodePortRemotes are picked up correctly", makestep(func() {
 			// use the meta node IP for nodeports as well
-			s, _ = proxy.NewSyncer(append(nodeIPs, net.IPv4(255, 255, 255, 255)), svcs, eps, rt)
+			s, _ = proxy.NewSyncer(append(nodeIPs, net.IPv4(255, 255, 255, 255)), svcs, eps, aff, rt)
 			err := s.Apply(state)
 			Expect(err).NotTo(HaveOccurred())
 
@@ -682,7 +684,7 @@ var _ = Describe("BPF Syncer", func() {
 				Port:                2222,
 				Protocol:            v1.ProtocolTCP,
 				SessionAffinityType: v1.ServiceAffinityClientIP,
-				StickyMaxAgeSeconds: 12345,
+				StickyMaxAgeSeconds: 5,
 			}
 
 			state.EpsMap[svcKey2] = []k8sp.Endpoint{
@@ -697,7 +699,111 @@ var _ = Describe("BPF Syncer", func() {
 
 			val, ok := svcs.m[nat.NewNATKey(net.IPv4(10, 0, 0, 2), 2222, proxy.ProtoV1ToIntPanic(v1.ProtocolTCP))]
 			Expect(ok).To(BeTrue())
-			Expect(val.AffinityTimeout()).To(Equal(uint32(12345)))
+			Expect(val.AffinityTimeout()).To(Equal(5 * time.Second))
+		}))
+
+		By("inserting another ep for service with affinity v1.ServiceAffinityClientIP", makestep(func() {
+			state.EpsMap[svcKey2] = []k8sp.Endpoint{
+				&k8sp.BaseEndpointInfo{Endpoint: "10.2.0.1:2222"},
+				&k8sp.BaseEndpointInfo{Endpoint: "10.3.0.1:3333"},
+			}
+
+			// add active affinity entry
+			err := aff.Update(
+				nat.NewAffinityKey(
+					net.IPv4(5, 5, 5, 5),
+					nat.NewNATKey(net.IPv4(10, 0, 0, 2), 2222, proxy.ProtoV1ToIntPanic(v1.ProtocolTCP)),
+				).AsBytes(),
+				nat.NewAffinityValue(
+					uint64(proxy.Monotime()),
+					nat.NewNATBackendValue(net.IPv4(10, 2, 0, 1), 2222),
+				).AsBytes(),
+			)
+			Expect(err).NotTo(HaveOccurred())
+
+			// add expired affinity entry
+			err = aff.Update(
+				nat.NewAffinityKey(
+					net.IPv4(5, 5, 4, 4),
+					nat.NewNATKey(net.IPv4(10, 0, 0, 2), 2222, proxy.ProtoV1ToIntPanic(v1.ProtocolTCP)),
+				).AsBytes(),
+				nat.NewAffinityValue(
+					uint64(proxy.Monotime()-10*time.Second),
+					nat.NewNATBackendValue(net.IPv4(10, 2, 0, 1), 2222),
+				).AsBytes(),
+			)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(aff.m).To(HaveLen(2))
+
+			err = s.Apply(state)
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(svcs.m).To(HaveLen(1))
+			Expect(eps.m).To(HaveLen(2))
+			Expect(aff.m).To(HaveLen(1))
+		}))
+
+		By("deleting an ep for service with affinity v1.ServiceAffinityClientIP", makestep(func() {
+			state.EpsMap[svcKey2] = []k8sp.Endpoint{
+				&k8sp.BaseEndpointInfo{Endpoint: "10.3.0.1:3333"},
+			}
+
+			err := aff.Update(
+				nat.NewAffinityKey(
+					net.IPv4(6, 6, 6, 6),
+					nat.NewNATKey(net.IPv4(10, 0, 0, 2), 2222, proxy.ProtoV1ToIntPanic(v1.ProtocolTCP)),
+				).AsBytes(),
+				nat.NewAffinityValue(
+					uint64(proxy.Monotime()),
+					nat.NewNATBackendValue(net.IPv4(10, 3, 0, 1), 3333),
+				).AsBytes(),
+			)
+			Expect(err).NotTo(HaveOccurred())
+
+			err = aff.Update(
+				nat.NewAffinityKey(
+					net.IPv4(7, 7, 7, 7),
+					nat.NewNATKey(net.IPv4(10, 0, 0, 2), 2222, proxy.ProtoV1ToIntPanic(v1.ProtocolTCP)),
+				).AsBytes(),
+				nat.NewAffinityValue(
+					uint64(proxy.Monotime()),
+					nat.NewNATBackendValue(net.IPv4(10, 3, 0, 1), 3333),
+				).AsBytes(),
+			)
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(aff.m).To(HaveLen(3))
+
+			err = s.Apply(state)
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(svcs.m).To(HaveLen(1))
+			Expect(eps.m).To(HaveLen(1))
+			Expect(aff.m).To(HaveLen(2))
+		}))
+
+		By("by removing all services and cleaning affinity table", makestep(func() {
+			delete(state.SvcMap, svcKey2)
+			delete(state.EpsMap, svcKey2)
+
+			err := aff.Update(
+				nat.NewAffinityKey(
+					net.IPv4(5, 5, 5, 5),
+					nat.NewNATKey(net.IPv4(10, 1, 0, 1), 123, 6),
+				).AsBytes(),
+				nat.NewAffinityValue(
+					uint64(proxy.Monotime()),
+					nat.NewNATBackendValue(net.IPv4(111, 1, 1, 1), 111),
+				).AsBytes(),
+			)
+			Expect(err).NotTo(HaveOccurred())
+
+			err = s.Apply(state)
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(svcs.m).To(HaveLen(0))
+			Expect(eps.m).To(HaveLen(0))
+			Expect(aff.m).To(HaveLen(0))
 		}))
 	})
 })
@@ -752,7 +858,7 @@ func (m *mockNATMap) Update(k, v []byte) error {
 	}
 	vs := len(nat.FrontendValue{})
 	if len(v) != vs {
-		return errors.Errorf("expected value size %d got %d", vs, len(k))
+		return errors.Errorf("expected value size %d got %d", vs, len(v))
 	}
 
 	var key nat.FrontendKey
@@ -837,7 +943,7 @@ func (m *mockNATBackendMap) Update(k, v []byte) error {
 	}
 	vs := len(nat.BackendValue{})
 	if len(v) != vs {
-		return errors.Errorf("expected value size %d got %d", vs, len(k))
+		return errors.Errorf("expected value size %d got %d", vs, len(v))
 	}
 
 	var key nat.BackendKey
@@ -870,4 +976,89 @@ func (m *mockNATBackendMap) Delete(k []byte) error {
 	delete(m.m, key)
 
 	return nil
+}
+
+type mockAffinityMap struct {
+	sync.Mutex
+	m map[nat.AffinityKey]nat.AffinityValue
+}
+
+func newMockAffinityMap() *mockAffinityMap {
+	return &mockAffinityMap{
+		m: make(map[nat.AffinityKey]nat.AffinityValue),
+	}
+}
+
+func (m *mockAffinityMap) EnsureExists() error {
+	return nil
+}
+
+func (m *mockAffinityMap) GetName() string {
+	return "aff"
+}
+
+func (m *mockAffinityMap) Path() string {
+	return "/sys/fs/bpf/tc/aff"
+}
+
+func (m *mockAffinityMap) Iter(iter bpf.MapIter) error {
+	m.Lock()
+	defer m.Unlock()
+
+	ks := len(nat.AffinityKey{})
+	vs := len(nat.AffinityValue{})
+	for k, v := range m.m {
+		iter(k[:ks], v[:vs])
+	}
+
+	return nil
+}
+
+func (m *mockAffinityMap) Update(k, v []byte) error {
+	m.Lock()
+	defer m.Unlock()
+
+	ks := len(nat.AffinityKey{})
+	if len(k) != ks {
+		return errors.Errorf("expected key size %d got %d", ks, len(k))
+	}
+	vs := len(nat.AffinityValue{})
+	if len(v) != vs {
+		return errors.Errorf("expected value size %d got %d", vs, len(v))
+	}
+
+	var key nat.AffinityKey
+	copy(key[:ks], k[:ks])
+
+	var val nat.AffinityValue
+	copy(val[:vs], v[:vs])
+
+	m.m[key] = val
+
+	return nil
+}
+
+func (m *mockAffinityMap) Get(k []byte) ([]byte, error) {
+	panic("not implemented")
+}
+
+func (m *mockAffinityMap) Delete(k []byte) error {
+	m.Lock()
+	defer m.Unlock()
+
+	ks := len(nat.AffinityKey{})
+	if len(k) != ks {
+		return errors.Errorf("expected key size %d got %d", ks, len(k))
+	}
+
+	var key nat.AffinityKey
+	copy(key[:ks], k[:ks])
+
+	delete(m.m, key)
+
+	return nil
+}
+
+func (m *mockAffinityMap) MapFD() bpf.MapFD {
+	panic("implement me")
 }

@@ -21,16 +21,16 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-
-	"github.com/projectcalico/felix/bpf/nat"
+	"time"
+	_ "unsafe" // required to use //go:linkname
 
 	"github.com/pkg/errors"
-
 	log "github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
 	k8sp "k8s.io/kubernetes/pkg/proxy"
 
 	"github.com/projectcalico/felix/bpf"
+	"github.com/projectcalico/felix/bpf/nat"
 	"github.com/projectcalico/felix/bpf/routes"
 	"github.com/projectcalico/felix/ip"
 )
@@ -45,6 +45,16 @@ func init() {
 }
 
 var podNPIP = net.IPv4(255, 255, 255, 255)
+
+//go:noescape
+//go:linkname nanotime runtime.nanotime
+func nanotime() int64
+
+// Monotime returns CLOCK_MONOTONIC time which is compatible with the
+// bpf_ktime_get_ns() which is the only source of timestamps in bpf.
+func Monotime() time.Duration {
+	return time.Duration(nanotime())
+}
 
 type svcInfo struct {
 	id         uint32
@@ -99,11 +109,17 @@ func isSvcKeyDerived(skey svcKey) bool {
 	return hasSvcKeyExtra(skey, svcTypeExternalIP) || hasSvcKeyExtra(skey, svcTypeNodePort)
 }
 
+type stickyFrontend struct {
+	id    uint32
+	timeo time.Duration
+}
+
 // Syncer is an implementation of DPSyncer interface. It is not thread safe and
 // should be called only once at a time
 type Syncer struct {
 	bpfSvcs bpf.Map
 	bpfEps  bpf.Map
+	bpfAff  bpf.Map
 
 	nextSvcID uint32
 
@@ -133,6 +149,10 @@ type Syncer struct {
 
 	stop     chan struct{}
 	stopOnce sync.Once
+
+	stickySvcs       map[nat.FrontendKey]stickyFrontend
+	stickyEps        map[uint32]map[nat.BackendValue]struct{}
+	stickySvcDeleted bool
 }
 
 func uniqueIPs(ips []net.IP) []net.IP {
@@ -161,10 +181,11 @@ func uniqueIPs(ips []net.IP) []net.IP {
 }
 
 // NewSyncer returns a new Syncer that uses the 2 provided maps
-func NewSyncer(nodePortIPs []net.IP, svcsmap, epsmap bpf.Map, rt Routes) (*Syncer, error) {
+func NewSyncer(nodePortIPs []net.IP, svcsmap, epsmap, affmap bpf.Map, rt Routes) (*Syncer, error) {
 	s := &Syncer{
 		bpfSvcs:     svcsmap,
 		bpfEps:      epsmap,
+		bpfAff:      affmap,
 		rt:          rt,
 		nodePortIPs: uniqueIPs(nodePortIPs),
 		prevSvcMap:  make(map[svcKey]svcInfo),
@@ -513,6 +534,11 @@ func (s *Syncer) apply(state DPSyncerState) error {
 			return err
 		}
 
+		svc := sinfo.svc.(*k8sp.BaseServiceInfo)
+		if svc.SessionAffinityType == v1.ServiceAffinityClientIP {
+			s.stickySvcDeleted = true
+		}
+
 		log.Infof("removed stale service %q", skey)
 	}
 
@@ -543,10 +569,29 @@ func (s *Syncer) Apply(state DPSyncerState) error {
 		s.prevEpsMap = s.newEpsMap
 	}
 
+	// preallocate maps the track sticky service for cleanup
+	s.stickySvcs = make(map[nat.FrontendKey]stickyFrontend)
+	s.stickyEps = make(map[uint32]map[nat.BackendValue]struct{})
+	s.stickySvcDeleted = false
+
+	defer func() {
+		// not needed anymore
+		s.stickySvcs = nil
+		s.stickyEps = nil
+	}()
+
 	s.mapsLck.Lock()
 	defer s.mapsLck.Unlock()
 
-	return s.apply(state)
+	if err := s.apply(state); err != nil {
+		// dont bother to cleanup affinity since we do not know in what state we
+		// are anyway. Will get resolved once we get in a good state
+		return err
+	}
+
+	// We wrote all updates, noone will create new records in affinity table
+	// that we would clean up now, so do it!
+	return s.cleanupSticky()
 }
 
 func (s *Syncer) updateExistingSvc(sname k8sp.ServicePortName, sinfo k8sp.ServicePort, id uint32,
@@ -572,6 +617,12 @@ func (s *Syncer) newSvc(sname k8sp.ServicePortName, sinfo k8sp.ServicePort, id u
 
 	cnt := 0
 	local := 0
+
+	if si := sinfo.(*k8sp.BaseServiceInfo); si.SessionAffinityType == v1.ServiceAffinityClientIP {
+		// since we write the backend before we write the frontend, we need to
+		// preallocate the map for it
+		s.stickyEps[id] = make(map[nat.BackendValue]struct{})
+	}
 
 	for _, ep := range eps {
 		if !ep.GetIsLocal() {
@@ -622,6 +673,11 @@ func (s *Syncer) writeSvcBackend(svcID uint32, idx uint32, ep k8sp.Endpoint) err
 	if err := s.bpfEps.Update(key[:], val[:]); err != nil {
 		return errors.Errorf("bpfEps.Update: %s", err)
 	}
+
+	if s.stickyEps[svcID] != nil {
+		s.stickyEps[svcID][val] = struct{}{}
+	}
+
 	return nil
 }
 
@@ -668,6 +724,14 @@ func (s *Syncer) writeSvc(svc k8sp.ServicePort, svcID uint32, count, local int) 
 	log.Debugf("bpf map writing %s:%s", key, val)
 	if err := s.bpfSvcs.Update(key[:], val[:]); err != nil {
 		return errors.Errorf("bpfSvcs.Update: %s", err)
+	}
+
+	// we must have written the backends by now so the map exists
+	if s.stickyEps[svcID] != nil {
+		s.stickySvcs[key] = stickyFrontend{
+			id:    svcID,
+			timeo: time.Duration(affinityTimeo) * time.Second,
+		}
 	}
 
 	return nil
@@ -847,4 +911,67 @@ func (s *Syncer) Stop() {
 		close(s.stop)
 		s.expFixupWg.Wait()
 	})
+}
+
+func (s *Syncer) cleanupSticky() error {
+
+	// no sticky service was updated, there cannot be any stale affinity entries
+	// to clean up
+	if len(s.stickySvcs) == 0 && !s.stickySvcDeleted {
+		return nil
+	}
+
+	var (
+		key nat.AffinityKey
+		val nat.AffinityValue
+	)
+
+	dels := make([]nat.AffinityKey, 0, 64)
+	ks := len(nat.AffinityKey{})
+	vs := len(nat.AffinityValue{})
+
+	now := Monotime()
+
+	err := s.bpfAff.Iter(func(k, v []byte) {
+
+		copy(key[:], k[:ks])
+		copy(val[:], v[:vs])
+
+		fend, ok := s.stickySvcs[key.FrontendKey()]
+		if !ok {
+			log.Debugf("cleaning affinity %v:%v - no such a service", key, val)
+			dels = append(dels, key)
+			return
+		}
+
+		if _, ok := s.stickyEps[fend.id][val.Backend()]; !ok {
+			log.Debugf("cleaning affinity %v:%v - no such a backend", key, val)
+			dels = append(dels, key)
+			return
+		}
+
+		if now-val.Timestamp() > fend.timeo {
+			log.Debugf("cleaning affinity %v:%v - expired", key, val)
+			dels = append(dels, key)
+			return
+		}
+		log.Debugf("cleaning affinity %v:%v - keeping", key, val)
+	})
+
+	if err != nil {
+		return errors.Errorf("NAT affinity map iterator failed: %s", err)
+	}
+
+	errs := 0
+
+	for _, k := range dels {
+		if err := s.bpfAff.Delete(k.AsBytes()); err != nil {
+			log.WithField("key", k).Errorf("Failed to delete stale NAT affinity record")
+		}
+	}
+
+	if errs > 0 {
+		return errors.Errorf("encountered  %d errors writing NAT affinity map", errs)
+	}
+	return nil
 }

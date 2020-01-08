@@ -532,6 +532,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 				config.Hostname,
 				frontendMap,
 				backendMap,
+				backendAffinityMap,
 				bpfproxy.WithImmediateSync(),
 			)
 			if err != nil {
