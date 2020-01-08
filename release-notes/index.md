@@ -17,7 +17,7 @@ Use the version selector at the top-right of this page to view a different relea
 {% if release.note %}
 {{ release.note }}
 {% else %}
-{% include {{page.version}}/release-notes/{{release.title}}-release-notes.md %}
+{% include release-notes/{{release.title}}-release-notes.md %}
 {% endif %}
 
 | Component              | Version |
