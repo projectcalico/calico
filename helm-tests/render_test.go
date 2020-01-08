@@ -46,7 +46,7 @@ type EtcdSettings struct {
 	Endpoints string `yaml:"endpoints"`
 }
 
-var chartPaths = *flag.String("chart-path", "../_includes/master/charts/calico", "comma separated list of paths to the charts")
+var chartPaths = *flag.String("chart-path", "../_includes/charts/calico", "comma separated list of paths to the charts")
 
 // TODO: Add call to kubeval to verify helm resources are valid
 func render(values HelmValues) (map[string]runtime.Object, error) {
