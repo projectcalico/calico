@@ -24,7 +24,7 @@ We will use a simple microservice application to demonstrate {{site.prodname}} a
 
 ```bash
 kubectl apply -f \
-{{ site.url }}/security/tutorials/app-layer-policy/manifests/10-yaobank.yaml
+{{ "/security/tutorials/app-layer-policy/manifests/10-yaobank.yaml" | absolute_url }}
 ```
 
 > **Note**: You can also
@@ -160,7 +160,7 @@ return to the customer pod later).
 
 ```bash
 kubectl apply -f \
-{{ site.url }}/security/tutorials/app-layer-policy/manifests/20-attack-pod.yaml
+{{ "/security/tutorials/app-layer-policy/manifests/20-attack-pod.yaml" | absolute_url }}
 ```
 
 Take a look at the [`20-attack-pod.yaml` manifest in your browser](manifests/20-attack-pod.yaml).
@@ -184,7 +184,7 @@ Return to your web browser and refresh to confirm the new balance.
 
 We can mitigate both of the above deficiencies with a {{site.prodname}} policy.
 
-    wget {{ site.url }}/security/tutorials/app-layer-policy/manifests/30-policy.yaml
+    wget {{ "/security/tutorials/app-layer-policy/manifests/30-policy.yaml" | absolute_url }}
     calicoctl create -f 30-policy.yaml
 
 > **Note**: You can also

@@ -23,17 +23,17 @@ procedure varies by datastore type.
 
    **{{site.prodname}} for policy and networking**
    ```bash
-   curl {{ site.url }}/manifests/calico.yaml -O
+   curl {{ "/manifests/calico.yaml" | absolute_url }} -O
    ```
 
    **{{site.prodname}} for policy and flannel for networking**
    ```bash
-   curl {{ site.url }}/manifests/canal.yaml -O
+   curl {{ "/manifests/canal.yaml" | absolute_url }} -O
    ```
 
    **{{site.prodname}} for policy (advanced)**
    ```bash
-   curl {{ site.url }}/manifests/calico-policy-only.yaml -O
+   curl {{ "/manifests/calico-policy-only.yaml" | absolute_url }} -O
    ```
 
    > **Note**: If you manually modified the manifest, you must manually apply the
@@ -85,12 +85,12 @@ procedure varies by datastore type.
 
    **{{site.prodname}} for policy and networking**
    ```bash
-   curl {{ site.url }}/manifests/calico-etcd.yaml -O
+   curl {{ "/manifests/calico-etcd.yaml" | absolute_url }} -O
    ```
 
    **{{site.prodname}} for policy and flannel for networking**
    ```bash
-   curl {{ site.url }}/manifests/canal-etcd.yaml -O
+   curl {{ "/manifests/canal-etcd.yaml" | absolute_url }} -O
    ```
 
    > **Note**: You must must manually apply the changes you made to the manifest
@@ -154,7 +154,7 @@ take the following steps to upgrade the Dikastes sidecars running in your applic
    the full version string of your Istio install, for example `1.4.2`.
 
    ```bash
-   kubectl apply -f {{ site.url }}/manifests/alp/istio-inject-configmap-<your Istio version>.yaml
+   kubectl apply -f {{ "/manifests/alp/istio-inject-configmap-<your Istio version>.yaml" | absolute_url }}
    ```
 
 1. Once the new template is in place, newly created pods use the upgraded version of Dikastes. Perform a rolling update of each of your service deployments

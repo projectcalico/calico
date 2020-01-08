@@ -16,11 +16,11 @@ one of our [getting started guides]({{ site.baseurl }}/getting-started/).
 ### 1) Create the frontend, backend, client, and management-ui apps.
 
 ```shell
-kubectl create -f {{ site.url }}/security/tutorials/kubernetes-policy-demo/manifests/00-namespace.yaml
-kubectl create -f {{ site.url }}/security/tutorials/kubernetes-policy-demo/manifests/01-management-ui.yaml
-kubectl create -f {{ site.url }}/security/tutorials/kubernetes-policy-demo/manifests/02-backend.yaml
-kubectl create -f {{ site.url }}/security/tutorials/kubernetes-policy-demo/manifests/03-frontend.yaml
-kubectl create -f {{ site.url }}/security/tutorials/kubernetes-policy-demo/manifests/04-client.yaml
+kubectl create -f {{ "/security/tutorials/kubernetes-policy-demo/manifests/00-namespace.yaml" | absolute_url }}
+kubectl create -f {{ "/security/tutorials/kubernetes-policy-demo/manifests/01-management-ui.yaml" | absolute_url }}
+kubectl create -f {{ "/security/tutorials/kubernetes-policy-demo/manifests/02-backend.yaml" | absolute_url }}
+kubectl create -f {{ "/security/tutorials/kubernetes-policy-demo/manifests/03-frontend.yaml" | absolute_url }}
+kubectl create -f {{ "/security/tutorials/kubernetes-policy-demo/manifests/04-client.yaml" | absolute_url }}
 ```
 
 Wait for all the pods to enter `Running` state.
@@ -47,8 +47,8 @@ represented by a single node in the graph.
 Running following commands will prevent all access to the frontend, backend, and client Services.
 
 ```shell
-kubectl create -n stars -f {{ site.url }}/security/tutorials/kubernetes-policy-demo/policies/default-deny.yaml
-kubectl create -n client -f {{ site.url }}/security/tutorials/kubernetes-policy-demo/policies/default-deny.yaml
+kubectl create -n stars -f {{ "/security/tutorials/kubernetes-policy-demo/policies/default-deny.yaml" | absolute_url }}
+kubectl create -n client -f {{ "/security/tutorials/kubernetes-policy-demo/policies/default-deny.yaml" | absolute_url }}
 ```
 
 #### Confirm isolation
@@ -61,8 +61,8 @@ Now that we've enabled isolation, the UI can no longer access the pods, and so t
 Apply the following YAMLs to allow access from the management UI.
 
 ```shell
-kubectl create -f {{ site.url }}/security/tutorials/kubernetes-policy-demo/policies/allow-ui.yaml
-kubectl create -f {{ site.url }}/security/tutorials/kubernetes-policy-demo/policies/allow-ui-client.yaml
+kubectl create -f {{ "/security/tutorials/kubernetes-policy-demo/policies/allow-ui.yaml" | absolute_url }}
+kubectl create -f {{ "/security/tutorials/kubernetes-policy-demo/policies/allow-ui-client.yaml" | absolute_url }}
 ```
 
 After a few seconds, refresh the UI - it should now show the Services, but they should not be able to access each other any more.
@@ -70,7 +70,7 @@ After a few seconds, refresh the UI - it should now show the Services, but they 
 ### 4) Create the backend-policy.yaml file to allow traffic from the frontend to the backend
 
 ```shell
-kubectl create -f {{ site.url }}/security/tutorials/kubernetes-policy-demo/policies/backend-policy.yaml
+kubectl create -f {{ "/security/tutorials/kubernetes-policy-demo/policies/backend-policy.yaml" | absolute_url }}
 ```
 
 Refresh the UI.  You should see the following:
@@ -82,7 +82,7 @@ Refresh the UI.  You should see the following:
 ### 5) Expose the frontend service to the client namespace
 
 ```shell
-kubectl create -f {{ site.url }}/security/tutorials/kubernetes-policy-demo/policies/frontend-policy.yaml
+kubectl create -f {{ "/security/tutorials/kubernetes-policy-demo/policies/frontend-policy.yaml" | absolute_url }}
 ```
 
 The client can now access the frontend, but not the backend.  Neither the frontend nor the backend

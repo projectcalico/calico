@@ -38,7 +38,7 @@ In order to use Kubernetes as the {{site.prodname}} datastore, we need to define
 Download and examine the list of {{site.prodname}} custom resource definitions, and open it in a file editor.
 
 ```
-wget {{ site.url }}/manifests/crds.yaml
+wget {{ "/manifests/crds.yaml" | absolute_url }}
 ```
 
 Create the custom resource definitions in Kubernetes.

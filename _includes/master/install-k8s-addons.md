@@ -10,7 +10,7 @@ The {{site.prodname}} self-hosted installation consists of three objects in the 
 Install the {{site.prodname}} manifest:
 
 ```shell
-kubectl apply -f {{ site.url }}/getting-started/kubernetes/installation/hosted/calico.yaml
+kubectl apply -f {{ "/getting-started/kubernetes/installation/hosted/calico.yaml" | absolute_url }}
 ```
 
 Issue the following command.
@@ -36,5 +36,5 @@ calico-kube-controller-so4gl    1/1       Running   0          1m
 To install KubeDNS, use the provided manifest.  This enables Kubernetes Service discovery.
 
 ```shell
-kubectl apply -f {{ site.url }}/getting-started/kubernetes/installation/manifests/kubedns.yaml
+kubectl apply -f {{ "/getting-started/kubernetes/installation/manifests/kubedns.yaml" | absolute_url }}
 ```
