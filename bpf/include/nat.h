@@ -137,7 +137,7 @@ static CALI_BPF_INLINE struct calico_nat_dest* calico_v4_nat_lookup(__u8 ip_prot
 	}
 
 	if (nat_lv1_val->count == 0) {
-		CALI_DEBUG("NAT: no local backend\n");
+		CALI_DEBUG("NAT: no backend\n");
 		return NULL;
 	}
 
@@ -145,14 +145,16 @@ static CALI_BPF_INLINE struct calico_nat_dest* calico_v4_nat_lookup(__u8 ip_prot
 		.id = nat_lv1_val->id,
 		.ordinal = bpf_get_prandom_u32() % nat_lv1_val->count,
 	};
+	struct calico_nat_dest *nat_lv2_val;
+
 	CALI_DEBUG("NAT: 1st level hit; id=%d ordinal=%d\n", nat_lv2_key.id, nat_lv2_key.ordinal);
-	struct calico_nat_dest *nat_lv2_val = bpf_map_lookup_elem(&cali_v4_nat_be,
-		&nat_lv2_key);
-	if (nat_lv2_val) {
+
+	if ((nat_lv2_val = bpf_map_lookup_elem(&cali_v4_nat_be, &nat_lv2_key))) {
 		CALI_DEBUG("NAT: backend selected %x:%d\n", be32_to_host(nat_lv2_val->addr), nat_lv2_val->port);
 	} else {
 		CALI_DEBUG("NAT: backend miss\n");
 	}
+
 	return nat_lv2_val;
 }
 
