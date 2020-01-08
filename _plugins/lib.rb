@@ -17,15 +17,3 @@ def parse_versions(versions_yml, version)
   components = versions_yml[version][0]["components"].clone
   return components.each { |key,val| components[key] = val["version"] }
 end
-
-
-def gen_values(version, vs, imageNames, imageRegistry)
-  # Use the gen_values function for this version
-  begin
-    require_relative "#{version}/values"
-  rescue LoadError
-    raise "tried to load base values for #{version} but _plugins/#{version}/values.rb does not exist"
-  end
-  gen_func_name = "gen_values_#{version.tr(".", "_")}"
-  return send(gen_func_name, vs, imageNames, imageRegistry)
-end
