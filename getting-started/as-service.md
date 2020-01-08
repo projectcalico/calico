@@ -9,7 +9,7 @@ systemd, inside either of the following container types:
 - [rkt](#running-caliconode-in-a-rkt-container)
 
 ## Running {{site.nodecontainer}} in a Docker container
-{% include {{page.version}}/docker-container-service.md %}
+{% include content/docker-container-service.md %}
 
 ## Running {{site.nodecontainer}} in a rkt container
-{% include {{page.version}}/rkt-container-service.md %}
+{% include content/rkt-container-service.md %}

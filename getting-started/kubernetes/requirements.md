@@ -3,7 +3,7 @@ title: System requirements
 canonical_url: '/getting-started/kubernetes/requirements'
 ---
 
-{% include {{page.version}}/reqs-sys.md orch="Kubernetes" %}
+{% include content/reqs-sys.md orch="Kubernetes" %}
 
 ## Kubernetes requirements
 
@@ -52,4 +52,4 @@ IP ranges in your network, including:
 
 Note that Kubernetes version 1.16+ requires Istio version 1.2 or greater.
 
-{% include {{page.version}}/reqs-kernel.md %}
+{% include content/reqs-kernel.md %}

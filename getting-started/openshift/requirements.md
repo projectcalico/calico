@@ -3,7 +3,7 @@ title: System requirements
 canonical_url: '/getting-started/openshift/requirements'
 ---
 
-{% include {{page.version}}/reqs-sys.md orch="OpenShift" %}
+{% include content/reqs-sys.md orch="OpenShift" %}
 
 ## OpenShift requirements
 
@@ -17,4 +17,4 @@ Refer to the OpenShift documentation for additional requirements.
 - [OpenShift Origin](https://docs.openshift.org/latest/install/prerequisites.html)
 - [OpenShift Container Platform](https://docs.openshift.com/container-platform/latest/install/prerequisites.html)
 
-{% include {{page.version}}/reqs-kernel.md %}
+{% include content/reqs-kernel.md %}

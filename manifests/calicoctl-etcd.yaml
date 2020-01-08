@@ -1,4 +1,4 @@
 ---
 layout: null
 ---
-{% include {{page.version}}/non-helm-manifests/calicoctl-etcd.yaml %}
+{% include non-helm-manifests/calicoctl-etcd.yaml %}

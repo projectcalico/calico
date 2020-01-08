@@ -93,11 +93,11 @@ spec:
 
 #### IPNAT
 
-{% include {{page.version}}/ipnat.md %}
+{% include content/ipnat.md %}
 
 #### EndpointPort
 
-{% include {{page.version}}/endpointport.md %}
+{% include content/endpointport.md %}
 
 ### Supported operations
 

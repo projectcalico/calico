@@ -32,7 +32,7 @@ Description:
 
 Use `calicoctl version` to obtain the following data.
 
-{% include {{page.version}}/calicoctl-version.md %}
+{% include content/calicoctl-version.md %}
 
 \* To obtain these values, you must configure `calicoctl`
    [to connect to your datastore](/getting-started/calicoctl/configure/).

@@ -181,8 +181,8 @@ data:
           [[ toYaml $value | indent 4 ]]
           [[ end ]]
           [[- end ]]
-{% include {{page.version}}/non-helm-manifests/istio-proxy-volume-mounts %}
-{% include {{page.version}}/non-helm-manifests/dikastes-container %}
+{% include non-helm-manifests/istio-proxy-volume-mounts %}
+{% include non-helm-manifests/dikastes-container %}
       volumes:
       [[- if (isset .ObjectMeta.Annotations `sidecar.istio.io/bootstrapOverride`) ]]
       - name: custom-bootstrap-volume
@@ -206,4 +206,4 @@ data:
         [[ toYaml $value | indent 2 ]]
         [[ end ]]
         [[ end ]]
-{% include {{page.version}}/non-helm-manifests/istio-volumes %}
+{% include non-helm-manifests/istio-volumes %}
