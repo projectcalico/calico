@@ -55,8 +55,6 @@ To enable dual stack IP address allocation, edit the manifest as follows:
    | ------------- | ----- |
    | `IP6`         | `autodetect` |
    | `CALICO_IPV6POOL_CIDR` | the same as the IPv6 range you configured as the cluster CIDR to kube-controller-manager and kube-proxy |
-   | `CALICO_IPV6POOL_IPIP` | `Never` |
-   | `CALICO_IPV6POOL_NAT_OUTGOING` | `false` |
    | `FELIX_IPV6SUPPORT` | `true` |
 
 Now apply the edited manifest with `kubectl apply -f`.
