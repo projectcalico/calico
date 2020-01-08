@@ -1,9 +1,7 @@
 bigheader: "Maintenance"
-path: /maintenance
+path: /maintenance/
 order: 4
-toc:
-- title: Maintenance
-  path: /maintenance/
+section:
 - title: Upgrading
   section:
   - title: Kubernetes

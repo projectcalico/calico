@@ -95,6 +95,8 @@
         var content = $(searchContentSelector).children();
         $(searchInputSelector).popover({
             html: true,
+            placement: 'bottom',
+            viewport: { selector: ".container-fluid", padding: 10 },
             content: function () {
                 return content;
             }

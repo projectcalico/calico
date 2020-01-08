@@ -1,9 +1,7 @@
 bigheader: "Reference"
-path: /reference
+path: /reference/
 order: 5
-toc:
-- title: Reference
-  path: /reference/
+section:
 - title: calicoctl
   section:
   - title: Overview

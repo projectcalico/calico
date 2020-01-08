@@ -1,9 +1,7 @@
 bigheader: "Networking"
-path: /networking
+path: /networking/
 order: 2
-toc:
-- title: Networking
-  path: /networking/
+section:
 - title: Determine best networking option
   path: /networking/determine-best-networking
 - title: Configure networking

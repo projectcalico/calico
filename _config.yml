@@ -48,6 +48,11 @@ exclude:
   - hack
   - vendor
 
+breadcrumbs:
+  root:
+    hide: false  # show breadcrumbs on root/home page
+    image: false # Show image or title text
+
 defaults:
   -
     scope:
@@ -55,6 +60,8 @@ defaults:
     values:
       layout: docwithnav
       show_title: true
+      show_read_time: true
+      show_toc: true
       version: master
       sitemap: true
       registry:

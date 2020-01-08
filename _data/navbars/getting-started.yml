@@ -1,9 +1,7 @@
 bigheader: "Getting started"
-path: /getting-started
+path: /getting-started/
 order: 1
-toc:
-- title: Getting started
-  path: /getting-started/
+section:
 - title: Kubernetes
   section:
   - title: Quickstart

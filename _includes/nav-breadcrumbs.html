@@ -1,0 +1,28 @@
+<nav class="breadcrumbs bootstrap hidden-sm-down">
+  {{ include.content }}
+  <ol class="breadcrumb list-unstyled" vocab="http://schema.org/" typeof="BreadcrumbList">
+    {% assign position = 0 %}
+    {% assign breadcrumbsSize = breadcrumbs.size %}
+    {% assign normalizedBreadcrumbs = breadcrumbs | slice: 1, breadcrumbsSize %}
+    {% for crumbitem in normalizedBreadcrumbs %}
+      {% assign position = position  | plus: 1 %}
+      {% assign upcasedTitle = crumbitem.title | upcase %}
+
+      {% if forloop.first and site.breadcrumbs.root.image %}
+        <!-- Here can be added custom image instead of first root.
+        Image flag in config should be set to true. -->
+        {% continue %}
+      {% endif %}
+
+      {% if forloop.last %}
+        <li class="breadcrumb-item" property="itemListElement" typeof="ListItem"><span property="name">{{ upcasedTitle }}</span><meta property="position" content="{{ position }}" /></li>
+        {% continue %}
+      {% endif %}
+
+      <li class="breadcrumb-item" property="itemListElement" typeof="ListItem">
+          <a property="item" typeof="WebPage" href="{{ crumbitem.url | prepend: site.baseurl }}"><span property="name">{{ upcasedTitle }}</span><meta property="position" content="{{ position }}" /></a>
+      </li>
+    {% endfor %}
+
+  </ol>
+</nav>

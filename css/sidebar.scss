@@ -1,6 +1,6 @@
 #sidebar {
   a {
-    color: black;
+    color: #004078;
     text-decoration: none;
   }
 
@@ -35,13 +35,7 @@
 
   // Highlight the one <a> element that represents the currently viewed page
   div.current-page {
-    background-color: #f7f7f7;
-    border-left: 3px solid #f69432;
-    padding: 0px 10px 0px 2px;
-    margin-left: -5px;
-    font-weight: 700;
-
-    >a {
+    a {
         color: #f69432;
     }
 
@@ -55,10 +49,11 @@
     // padding-left: 15px;
     padding-top: 5px;
     padding-bottom: 5px;
+    padding-right: 5px;
     position: relative;
   }
 
   .section {
-    padding-left: 20px;
+    padding-left: 15px;
   }
 }
