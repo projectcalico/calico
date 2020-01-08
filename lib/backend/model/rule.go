@@ -80,11 +80,17 @@ type Rule struct {
 	HTTPMatch *HTTPMatch `json:"http,omitempty" validate:"omitempty"`
 
 	LogPrefix string `json:"log_prefix,omitempty" validate:"omitempty"`
+
+	Metadata *RuleMetadata `json:"metadata,omitempty" validate:"omitempty"`
 }
 
 type HTTPMatch struct {
 	Methods []string         `json:"methods,omitempty" validate:"omitempty"`
 	Paths   []apiv3.HTTPPath `json:"paths,omitempty" validate:"omitempty"`
+}
+
+type RuleMetadata struct {
+	Annotations map[string]string `json:"annotations,omitempty"`
 }
 
 func combineNets(n *net.IPNet, nets []*net.IPNet) []*net.IPNet {

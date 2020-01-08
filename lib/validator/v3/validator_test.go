@@ -1268,6 +1268,16 @@ func init() {
 				Action: "Allow",
 				HTTP:   &api.HTTPMatch{Methods: []string{"GET"}},
 			}, true),
+		Entry("should accept Rule with valid annotations",
+			api.Rule{
+				Action: "Allow",
+				Metadata: &api.RuleMetadata{Annotations:map[string]string{"foo": "bar"}},
+			}, true),
+		Entry("should reject Rule with invalid annotations",
+			api.Rule{
+				Action: "Allow",
+				Metadata: &api.RuleMetadata{Annotations:map[string]string{"...": "bar"}},
+			}, false),
 
 		// (API) BGPPeerSpec
 		Entry("should accept valid BGPPeerSpec", api.BGPPeerSpec{PeerIP: ipv4_1}, true),

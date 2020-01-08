@@ -189,6 +189,14 @@ func RuleAPIV2ToBackend(ar apiv3.Rule, ns string) model.Rule {
 	if ar.HTTP != nil {
 		r.HTTPMatch = &model.HTTPMatch{Methods: ar.HTTP.Methods, Paths: ar.HTTP.Paths}
 	}
+	if ar.Metadata != nil {
+		if ar.Metadata.Annotations != nil {
+			r.Metadata = &model.RuleMetadata{Annotations: make(map[string]string)}
+			for k, v := range ar.Metadata.Annotations {
+				r.Metadata.Annotations[k] = v
+			}
+		}
+	}
 	return r
 }
 
