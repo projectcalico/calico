@@ -27,9 +27,9 @@ For details of {{site.prodname}} network design and architecture, see a lightboa
 
 #### About BGP
 
-{{site.prodname}} supports using the Border Gateway Protocol (BGP) for sharing routing information into the network. {{site.prodname}} supports cloud deployments with full node-to-node mesh (with and without route reflectors), and on-premises deployments with **BGP peering** directly to Top of Rack (ToR) routers; allowing traffic to be routed directly to your workloads without needing NAT or encapsulation.
+{{site.prodname}} optionally supports using the Border Gateway Protocol (BGP) for sharing routing information into the network. {{site.prodname}} supports cloud deployments with full node-to-node mesh (with and without route reflectors), and on-premises deployments with **BGP peering** directly to Top of Rack (ToR) routers; allowing traffic to be routed directly to your workloads without needing NAT or encapsulation.
 
-{{site.prodname}} can also use VXLAN encapsulation for workload traffic in cloud deployments without the need for BGP.
+{{site.prodname}} can also use selective VXLAN encapsulation for workload traffic in cloud deployments without the need for BGP.
 
 #### Other Kubernetes networking options
 
@@ -58,9 +58,9 @@ The table below shows common networking options when using {{site.prodname}}.
 | **Networking Option**                                        | **Suitable Environments**                    | **Dataplane Performance and Visibility**                 | **Setup Complexity** | **Notes**                                                    |
 | ------------------------------------------------------------ | -------------------------------------------- | -------------------------------------------------------- | -------------------- | ------------------------------------------------------------ |
 | {{site.prodname}}, [Unencapsulated, peered with physical infrastructure](#unencapsulated-peered-with-physical-infrastructure) | On-prem                                      | Best                                                     | Moderate             | Allows pods to be directly accessed from outside the cluster |
-| {{site.prodname}}, [Unencapsulated, not peered with physical infrastructure](#unencapsulated-not-peered-with-physical-infrastructure) | On-prem L2 networks, AWS                     | Best                                                     | Low                  | IP in IP or VXLAN can be added for cross-subnet traffic      |
+| {{site.prodname}}, [Unencapsulated, not peered with physical infrastructure](#unencapsulated-not-peered-with-physical-infrastructure) | On-prem L2 networks, AWS, Azure      | Best                                                     | Low                  | IP in IP or VXLAN can be added for cross-subnet traffic      |
 | {{site.prodname}}, [Encapsulated, IPIP](#ip-in-ip-or-vxlan-encapsulation)   | On-prem, most public clouds other than Azure | Good to excellent depending on NIC hardware capabilities | Low                  |                                                              |
-| {{site.prodname}}, [Encapsulated, VXLAN](#ip-in-ip-or-vxlan-encapsulation)  | On-prem, most public clouds                  | Good to excellent depending on NIC hardware capabilities | Low                  |                                                              |
+| {{site.prodname}}, [Encapsulated, VXLAN](#ip-in-ip-or-vxlan-encapsulation)  | On-prem, any public cloud                    | Good to excellent depending on NIC hardware capabilities | Low                  |                                                              |
 | AWS VPC CNI                                                  | Amazon EKS                                   | Excellent                                                | Low                  | Does not support full {{site.prodname}} IPAM feature set, limited to AWS. |
 | Azure CNI                                                    | Microsoft AKS                                | Excellent                                                | Low                  | Does not support full {{site.prodname}} IPAM feature set, limited to Azure. |
 | Google cloud                                                 | Google GKE                                   | Excellent                                                | Low                  | Does not support full {{site.prodname}} IPAM feature set, limited to GCP. |
