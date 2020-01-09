@@ -218,9 +218,11 @@ The code is a little roundabout for a few reasons:
               {% if page.show_read_time -%}
                 {% include read_time.html %}
               {% endif -%}
+              <!-- TODO [turk]: uncomment once JS supports a different identifier besides ID so that we don't have two elements with the same ID
               <div class="visible-xs visible-sm">
                 {% include toc.html html=content class=".toc" item_class=".toc__nested" %}
               </div>
+               -->
               {{ content }}
               {% if page.calico_enterprise -%}
               {% include enterprise_footer.html %}   
