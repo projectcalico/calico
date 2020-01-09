@@ -12,7 +12,7 @@ require (
 	github.com/onsi/ginkgo v1.10.1
 	github.com/onsi/gomega v1.7.0
 	github.com/projectcalico/felix v0.0.0-20200107081518-188ced9b3366
-	github.com/projectcalico/libcalico-go v0.0.0-20200107000057-b5581766b59c
+	github.com/projectcalico/libcalico-go v0.0.0-20200108185403-403996d814c2
 	github.com/sirupsen/logrus v1.4.2
 	github.com/vishvananda/netns v0.0.0-20180720170159-13995c7128cc // indirect
 	github.com/whyrusleeping/go-logging v0.0.0-20170515211332-0457bb6b88fc // indirect
@@ -29,6 +29,6 @@ require (
 )
 
 replace (
-	github.com/kelseyhightower/confd => github.com/projectcalico/confd v0.0.0-20200107080848-af0ccd4bfdb1
+	github.com/kelseyhightower/confd => github.com/projectcalico/confd v0.0.0-20200109080855-cc00ad9d7185
 	github.com/sirupsen/logrus => github.com/projectcalico/logrus v1.0.4-calico
 )
