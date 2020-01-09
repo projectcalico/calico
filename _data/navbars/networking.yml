@@ -8,10 +8,10 @@ toc:
   path: /networking/determine-best-networking
 - title: Configure networking
   section:
+  - title: Configure overlay networkin
+    path: /networking/vxlan-ipip
   - title: Configure BGP peering
     path: /networking/bgp
-  - title: Connect workloads across networks that you do not control
-    path: /networking/vxlan-ipip
   - title: Configure MTU to maximize network performance
     path: /networking/mtu
   - title: Configure workload access outside cluster
