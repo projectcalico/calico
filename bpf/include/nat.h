@@ -210,7 +210,7 @@ static CALI_BPF_INLINE struct calico_nat_dest* calico_v4_nat_lookup(__be32 ip_sr
 			.nat_dest = *nat_lv2_val,
 		};
 
-		CALI_DEBUG("NAT: updating affinity for client %x\n", ip_src);
+		CALI_DEBUG("NAT: updating affinity for client %x\n", be32_to_host(ip_src));
 		if ((err = bpf_map_update_elem(&cali_v4_nat_aff, &affkey, &val, BPF_ANY))) {
 			CALI_INFO("NAT: failed to update affinity table: %d\n", err);
 			/* we do carry on, we have a good nat_lv2_val */
