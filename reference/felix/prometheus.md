@@ -55,7 +55,7 @@ existing metrics.
 Prometheus metrics are self-documenting, with metrics turned on, `curl` can be used to list the
 metrics along with their help text and type information.
 
-```
+```bash
 curl -s http://localhost:9091/metrics | head
 ```
 

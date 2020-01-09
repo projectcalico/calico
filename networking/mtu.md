@@ -73,7 +73,7 @@ When you set the MTU, it applies to new workloads. To apply MTU changes to exist
 
 Edit the `calico-config` ConfigMap to set values in FelixConfiguration. For example:
 
-```
+```bash
 kubectl patch configmap/{{site.prodname}}-config -n kube-system --type merge \
   -p '{"data":{"veth_mtu": "1440"}}'
 ```
@@ -84,7 +84,7 @@ If you are using IP in IP and/or VXLAN for {{site.prodname}} overlay networking,
 
 Edit `calico-config ConfigMap` to set the MTU tunnel values in FelixConfiguration. For example: 
 
-```
+```conf
 # Configure the MTU to use
 veth_mtu: "1440" 
 ```

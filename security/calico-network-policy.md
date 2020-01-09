@@ -51,7 +51,7 @@ Calico network policies apply to **endpoints**. In Kubernetes, each pod is a Cal
 
 **Calico network policy** is a namespaced resource that applies to pods/containers/VMs in that namespace. 
 
-```
+```yaml
 apiVersion: projectcalico.org/v3
 kind: NetworkPolicy
 metadata:
@@ -61,7 +61,7 @@ metadata:
 
 **Calico global network policy** is a non-namespaced resource and can be applied to any kind of endpoint (pods, VMs, host interfaces) independent of namespace. 
 
-```
+```yaml
 apiVersion: projectcalico.org/v3
 kind: GlobalNetworkPolicy
 metadata:
@@ -111,7 +111,7 @@ For compatibility with Kubernetes, **Calico network policy** follows the same be
 
 In the following example, ingress traffic to endpoints in the **namespace: production** with label **color: red** is allowed, only if it comes from a pod in the same namespace with **color: blue**, on port **6379**.
 
-```
+```yaml
 apiVersion: projectcalico.org/v3
 kind: NetworkPolicy
 metadata:
@@ -131,7 +131,7 @@ spec:
 
 To allow ingress traffic from endpoints in other namespaces, use a **namespaceSelector** in the policy rule. A namespaceSelector matches namespaces based on the labels that are applied in the namespace. In the following example, ingress traffic is also allowed from endpoints in namespaces that match **shape == circle**.
 
-```
+```yaml
 apiVersion: projectcalico.org/v3
 kind: NetworkPolicy
 metadata:
@@ -156,7 +156,7 @@ The following Calico network policy is similar to the previous example, but uses
 
 In the following example, incoming TCP traffic to any pods with label **color: red** is denied if it comes from a pod with **color: blue**. 
 
-```
+```yaml
 apiVersion: projectcalico.org/v3
 kind: GlobalNetworkPolicy
 metadata:
@@ -172,7 +172,7 @@ spec:
 
 As with **kind: NetworkPolicy**, you can allow or deny ingress traffic from endpoints in specific namespaces using a namespaceSelector in the policy rule:
 
-```
+```yaml
 apiVersion: projectcalico.org/v3
 kind: GlobalNetworkPolicy
 metadata:
@@ -193,7 +193,7 @@ Instead of using a selector to define which traffic is allowed to/from the endpo
 
 In the following example, outgoing traffic is allowed from pods with the label **color: red** if it goes to an IP address in the **1.2.3.4/24** CIDR block. 
 
-```
+```yaml
 apiVersion: projectcalico.org/v3
 kind: NetworkPolicy
 metadata:
@@ -217,7 +217,7 @@ To control the order/sequence of applying network policies, you can use the **or
 
 In the following example, the policy **allow-cluster-internal-ingress** (order: 10) will be applied before the **policy drop-other-ingress** (order: 20). 
 
-```
+```yaml
 apiVersion: projectcalico.org/v3
 kind: GlobalNetworkPolicy
 metadata:
@@ -227,7 +227,7 @@ spec:
   ...deny policy rules here...
 ```
   
-``` 
+```yaml
 apiVersion: projectcalico.org/v3
 kind: GlobalNetworkPolicy
 metadata:
@@ -241,7 +241,7 @@ spec:
 
 In the following example, incoming TCP traffic to an application is denied, and each connection attempt is logged to syslog.
 
-```
+```yaml
 apiVersion: projectcalico.org/v3
 kind: NetworkPolicy
 Metadata:

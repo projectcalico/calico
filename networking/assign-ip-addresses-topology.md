@@ -39,7 +39,7 @@ Nodes only assign workload addresses from IP pools which select them. To avoid h
 
 In the following example, we create an IP pool that only allocates IP addresses for nodes with the label, **zone=west**.
 
-```
+```yaml
 apiVersion: projectcalico.org/v3
 kind: IPPool
 metadata:
@@ -53,7 +53,7 @@ spec:
 
 Then, we label a node with zone=west. For example:
 
-```
+```bash
 kubectl label nodes kube-node-0 zone=west
 ```
 
@@ -95,7 +95,7 @@ default-ipv4-ippool   192.168.0.0/16   true   Always     false      all()
    Since the `default-ipv4-ippool` IP pool resource already exists and accounts
    for the entire `/16` block, we will have to delete this first:
 
-   ```
+   ```bash
    calicoctl delete ippools default-ipv4-ippool
    ```
 
@@ -104,7 +104,7 @@ default-ipv4-ippool   192.168.0.0/16   true   Always     false      all()
    To assign IP pools to specific nodes, these nodes must be labelled
    using [kubectl label](https://kubernetes.io/docs/tasks/configure-pod-container/assign-pods-nodes/#add-a-label-to-a-node).
 
-   ```
+   ```bash
    kubectl label nodes kube-node-0 rack=0
    kubectl label nodes kube-node-1 rack=0
    kubectl label nodes kube-node-2 rack=1
@@ -113,7 +113,7 @@ default-ipv4-ippool   192.168.0.0/16   true   Always     false      all()
 
 3. Create an IP pool for each rack.
 
-   ```
+   ```bash
    calicoctl create -f -<<EOF
    apiVersion: projectcalico.org/v3
    kind: IPPool
@@ -127,7 +127,7 @@ default-ipv4-ippool   192.168.0.0/16   true   Always     false      all()
    EOF
    ```
 
-   ```
+   ```bash
    calicoctl create -f -<<EOF
    apiVersion: projectcalico.org/v3
    kind: IPPool
@@ -155,7 +155,7 @@ default-ipv4-ippool   192.168.0.0/16   true   Always     false      all()
    We will create an nginx deployment with five replicas to get a workload
    running on each node.
 
-   ```
+   ```bash
    kubectl run nginx --image nginx --replicas 5
    ```
 

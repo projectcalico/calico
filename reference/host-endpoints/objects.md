@@ -22,7 +22,7 @@ arbitrary name required for endpoint identification.
 When running this command, replace the placeholders in angle brackets with
 appropriate values for your deployment.
 
-```
+```bash
 calicoctl create -f - <<EOF
 - apiVersion: projectcalico.org/v3
   kind: HostEndpoint
@@ -68,7 +68,7 @@ key/value pairs that can be used in selector expressions.
 Or, if you knew that the IP address should be 10.0.0.1, but not the name
 of the interface:
 
-```
+```bash
 calicoctl create -f - <<EOF
 - apiVersion: projectcalico.org/v3
   kind: HostEndpoint
@@ -107,7 +107,7 @@ grep "Validation failed" /var/log/calico/felix.log
 
 An example error follows.
 
-```bash
+```
 2016-05-31 12:16:21,651 [WARNING][8657/3] calico.felix.fetcd 1017:
     Validation failed for host endpoint HostEndpointId<eth0>, treating as
     missing: 'name' or 'expected_ipvX_addrs' must be present.;

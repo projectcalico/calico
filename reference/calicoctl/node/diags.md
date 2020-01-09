@@ -39,13 +39,13 @@ Description:
 
 ### Examples
 
-```
+```bash
 sudo calicoctl node diags
 ```
 
 An example response follows.
 
-```bash
+```
 Collecting diagnostics
 Using temp dir: /tmp/calico676127473
 Dumping netstat

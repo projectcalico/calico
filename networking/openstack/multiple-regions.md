@@ -49,7 +49,7 @@ except for these points:
 
 1.  In `/etc/calico/felix.cfg` on each compute host, add
 
-    ```
+    ```conf
     [global]
     OpenstackRegion = <region>
     ```
@@ -58,7 +58,7 @@ except for these points:
 
 1.  In `/etc/neutron/neutron.conf` on each controller and compute node, add
 
-    ```
+    ```conf
     [calico]
     openstack_region = <region>
     ```
@@ -77,7 +77,7 @@ except for these points:
 
 ### Configuring Openstack
 You should now create networks in your Openstack regions as normal. e.g.
-```
+```bash
  neutron net-create --shared calico
  neutron subnet-create --gateway 10.65.0.1 --enable-dhcp --ip-version 4 --name calico-v4 calico 10.65.0.0/24
 ```
@@ -108,7 +108,7 @@ cluster](labels#configuring-operator-policy).  Once that is in place,
 you could achieve the desired connectivity by using calicoctl to
 configure this {{site.prodname}} policy:
 
-```yaml
+```bash
 calicoctl apply -f - <<EOF
 apiVersion: projectcalico.org/v3
 kind: GlobalNetworkPolicy

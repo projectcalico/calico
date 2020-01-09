@@ -90,7 +90,7 @@ that is derived from OpenStack security groups.  For example, to prevent any pos
 communication between the "superman" and "lexluthor" projects, you could configure the
 following.
 
-```yaml
+```bash
 calicoctl apply -f - <<EOF
 apiVersion: projectcalico.org/v3
 kind: GlobalNetworkPolicy

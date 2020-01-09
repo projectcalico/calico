@@ -38,7 +38,7 @@ policy, because:
 Here is the pre-DNAT policy that we need to disallow incoming external traffic
 in general:
 
-```
+```bash
 calicoctl apply -f - <<EOF
 - apiVersion: projectcalico.org/v3
   kind: GlobalNetworkPolicy
@@ -125,7 +125,7 @@ node.  The policies above all have a selector that makes them applicable to any
 endpoint with a `host-endpoint` label, so we should include that label in our
 definitions.  For example, for `eth0` on `node1`:
 
-```
+```bash
 calicoctl apply -f - <<EOF
 - apiVersion: projectcalico.org/v3
   kind: HostEndpoint
@@ -152,7 +152,7 @@ but not from outside.
 To open a pinhole for that NodePort, for external access, you can configure a
 pre-DNAT policy like this:
 
-```
+```bash
 calicoctl apply -f - <<EOF
 - apiVersion: projectcalico.org/v3
   kind: GlobalNetworkPolicy
@@ -174,7 +174,7 @@ EOF
 
 If you wanted to make that NodePort accessible only through particular nodes, you could achieve that by giving those nodes a particular `host-endpoint` label:
 
-```
+```yaml
 host-endpoint: <special-value>
 ```
 

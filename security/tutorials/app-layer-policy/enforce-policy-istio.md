@@ -37,7 +37,7 @@ Verify that the application pods have been created and are ready.
 
 When the demo application has come up, you will see three pods.
 
-```bash
+```
 NAME                        READY     STATUS    RESTARTS   AGE
 customer-2809159614-qqfnx   3/3       Running   0          21h
 database-1601951801-m4w70   3/3       Running   0          21h
@@ -51,7 +51,7 @@ View the Kubernetes ServiceAccounts created by the manifest.
 
 You should see a Kubernetes ServiceAccount for each microservice in the application (in addition to the `default` account).
 
-```bash
+```
 NAME       SECRETS   AGE
 customer   1         21h
 database   1         21h
@@ -66,7 +66,7 @@ Examine the Kubernetes Secrets.
 
 You should see output similar to the following.
 
-```bash
+```
 NAME                   TYPE                                  DATA      AGE
 customer-token-mgb8w   kubernetes.io/service-account-token   3         21h
 database-token-nb5xp   kubernetes.io/service-account-token   3         21h

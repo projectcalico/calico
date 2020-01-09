@@ -49,7 +49,7 @@ In this example, we use the **selector: has(kubernetes-host)** -- so the policy 
 
 Finally, when you specify a preDNAT field, you must also add the **applyOnForward: true** field.
 
-```
+```yaml
 apiVersion: projectcalico.org/v3
 kind: GlobalNetworkPolicy
 metadata:
@@ -88,7 +88,7 @@ In this example, we assume that you have already defined Calico host endpoints w
 
 All of our previously-defined global network policies have a selector that makes them applicable to any endpoint with a **kubernetes-host label**; so we will include that label in our definitions. For example, for **eth0** on **node1**.
 
-```
+```yaml
 apiVersion: projectcalico.org/v3
 kind: HostEndpoint
 metadata:
@@ -104,7 +104,7 @@ spec:
 
 Now we can allow external access to the node ports by creating a global network policy with the preDNAT field. In this example, **ingress traffic is allowed** for any host endpoint with **port: 31852**.
 
-```
+```yaml
 apiVersion: projectcalico.org/v3
 kind: GlobalNetworkPolicy
 metadata:
@@ -124,7 +124,7 @@ spec:
 
 To make the NodePort accessible only through particular nodes, give the nodes a particular label. For example:
 
-```
+```yaml
 nodeport-external-ingress: true
 ```
 

@@ -150,12 +150,12 @@ The headings displayed for each resource type is fixed.  However, wee `wide` opt
 columns, and `custom-columns` for selecting which columns to display.
 
 Example:
-```
+```bash
 calicoctl get hostEndpoint
 ```
 
 Response:
-```bash
+```
 NAME          NODE       
 endpoint1     host1
 myhost-eth0   myhost
@@ -169,12 +169,12 @@ Similar to the `ps` format, the `wide` option displays output in ps-style table 
 The headings displayed for each resource type is fixed.  See `custom-columns` for selecting which columns to display.
 
 Example:
-```
+```bash
 calicoctl get hostEndpoint --output=wide
 ```
 
 Response:
-```bash
+```
 NAME           NODE     INTERFACE   IPS                PROFILES
 endpoint1      host1                1.2.3.4,0:bb::aa   prof1,prof2
 myhost-eth0    myhost                                  profile1
@@ -251,7 +251,7 @@ within that list.
 
 Example:
 {% raw %}
-```
+```bash
 bin/calicoctl get hostEndpoint --output=go-template="{{range .}}{{range .Items}}{{.ObjectMeta.Name}},{{end}}{{end}}"
 endpoint1,eth0,
 ```
