@@ -35,10 +35,6 @@ This how-to guide uses the following {{site.prodname}} features:
 - If using Kubernetes as the datastore, custom resource definitions for the {{site.prodname}} data resources
 - If installing more than 50 nodes, `calico-typha` for scaling deployments
 
-#### Best practice: customize manifests prior to install
-
-We recommend customizing [Calico manifests]({{site.url}}/reference/customize-manifests) before installing {{site.prodname}} on nodes; this avoids downstream manual updates to other {{site.prodname}} resources:
-
 ### Before you begin...
 
 - Ensure that your Kubernetes cluster meets [Requirements]({site.url}}/getting-started/kubernetes/requirements)
@@ -52,15 +48,23 @@ The following steps install a {{site.prodname}} implementation with:
 - {{site.prodname}} daemons and services running in the cluster
 - {{site.prodname}} BGP networking infrastructure with full-mesh node-to-node peering, no encapsulation
 
+- [Customize manifests[()]
+- [Determine datastore]()
+- [Install Calico on nodes]()
+
+#### Customize manifests 
+
+We recommend customizing [Calico manifests]({{site.url}}/reference/customize-manifests) before installing {{site.prodname}} on nodes; this avoids downstream manual updates to other {{site.prodname}} resources.
+
 #### Determine your datastore 
 
 {{site.prodname}} supports both **Kubernetes API datastore (kdd)** and **etcd** datastores. The **Kubernetes API datastore** is preferred for on-premises deployments, but supports only Kubernetes workloads; **etcd** datastore is best for hybrid deployments. 
 
-#### Install {{site.prodname}} on nodes
+#### Install Calico on nodes
 
-Choose one of the install links below, based on your datastore and number of nodes. 
+Choose a link below to install {{site.prodname}}, based on your datastore and number of nodes. 
 
->**Note**: If you choose, **Kubernetes API datastore - more than 50 nodes**, the {{site.prodname}} [Typha daemon](https://github.com/projectcalico/typha) is used for scaling. (Because etcd v3 already handles many clients, using Typha for etcd is redundant and not recommended.)
+>**Note**: The **Kubernetes API datastore - more than 50 nodes** option provides scaling using {{site.prodname}} [Typha daemon](https://github.com/projectcalico/typha).. (Typha is not included for etcd because etcd v3 already handles many clients so Typha is not recommended and is redundant.)
 {: .alert .alert-info}
 
 - [Install Calico with Kubernetes API datastore--50 nodes or less](#install-calico-with-kubernetes-api-datastore-50-nodes-or-less)
@@ -72,7 +76,7 @@ Choose one of the install links below, based on your datastore and number of nod
 1. Download the {{site.prodname}} networking manifest for the Kubernetes API datastore.
 
    ```
-   curl {{ "/manifests/calico.yaml" | absolute_url }} -O
+   curl https://docs.projectcalico.org/absolute_url/manifests/calico.yaml -O
    ```
 1. If you are using pod CIDR 192.168.0.0/16, skip this step. Otherwise, use the following commands to set the POD_CIDR environment variable containing your pod CIDR, and replace `192.168.0.0/16` in the manifest with your pod CIDR.
 
