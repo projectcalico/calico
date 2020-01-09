@@ -54,6 +54,8 @@ toc:
     path: /security/services-cluster-ips
 - title: Policy for Istio
   section:
+  - title: Enable application layer policy for Istio
+    path: /security/app-layer-policy
   - title: Enforce network policy using Istio
     path: /security/enforce-policy-istio
   - title: Use HTTP methods and paths in policy rules

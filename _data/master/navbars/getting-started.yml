@@ -8,8 +8,10 @@ toc:
   section:
   - title: Quickstart
     path: /getting-started/kubernetes/
-  - title: System requirements
+  - title: Requirements
     path: /getting-started/kubernetes/requirements
+  - title: Self-managed on-premises
+    path: /getting-started/kubernetes/self-managed-onprem
   - title: Managed public cloud
     section:
     - title: Amazon Elastic Kubernetes Service (EKS)
@@ -28,8 +30,6 @@ toc:
       path: /getting-started/kubernetes/installation/calico
     - title: Installing Calico for policy (advanced)
       path: /getting-started/kubernetes/installation/other
-    - title: Enabling application layer policy for Istio
-      path: /getting-started/kubernetes/installation/app-layer-policy
     - title: Customizing the manifests
       path: /getting-started/kubernetes/installation/config-options
     - title: Integration guide (advanced)
