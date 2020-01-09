@@ -35,15 +35,15 @@ HP_IGNORE_LOCAL_DIRS="/v1.5/,/v1.6/,/v2.0/,/v2.1/,/v2.2/,/v2.3/,/v2.4/,/v2.5/,/v
 RELEASE_STREAM?=
 
 # Use := so that these V_ variables are computed only once per make run.
-CALICO_VER := $(shell cat $(VERSIONS_FILE) | $(YAML_CMD) read - '"$(RELEASE_STREAM)".[0].title')
-NODE_VER := $(shell cat $(VERSIONS_FILE) | $(YAML_CMD) read - '"$(RELEASE_STREAM)".[0].components.calico/node.version')
-CTL_VER := $(shell cat $(VERSIONS_FILE) | $(YAML_CMD) read - '"$(RELEASE_STREAM)".[0].components.calicoctl.version')
-CNI_VER := $(shell cat $(VERSIONS_FILE) | $(YAML_CMD) read - '"$(RELEASE_STREAM)".[0].components.calico/cni.version')
-KUBE_CONTROLLERS_VER := $(shell cat $(VERSIONS_FILE) | $(YAML_CMD) read - '"$(RELEASE_STREAM)".[0].components.calico/kube-controllers.version')
-POD2DAEMON_VER := $(shell cat $(VERSIONS_FILE) | $(YAML_CMD) read - '"$(RELEASE_STREAM)".[0].components.flexvol.version')
-DIKASTES_VER := $(shell cat $(VERSIONS_FILE) | $(YAML_CMD) read - '"$(RELEASE_STREAM)".[0].components.calico/dikastes.version')
-FLANNEL_MIGRATION_VER := $(shell cat $(VERSIONS_FILE) | $(YAML_CMD) read - '"$(RELEASE_STREAM)".[0].components.calico/flannel-migration-controller.version')
-TYPHA_VER := $(shell cat $(VERSIONS_FILE) | $(YAML_CMD) read - '"$(RELEASE_STREAM)".[0].components.typha.version')
+CALICO_VER := $(shell cat $(VERSIONS_FILE) | $(YAML_CMD) read - '[0].title')
+NODE_VER := $(shell cat $(VERSIONS_FILE) | $(YAML_CMD) read - '[0].components.calico/node.version')
+CTL_VER := $(shell cat $(VERSIONS_FILE) | $(YAML_CMD) read - '[0].components.calicoctl.version')
+CNI_VER := $(shell cat $(VERSIONS_FILE) | $(YAML_CMD) read - '[0].components.calico/cni.version')
+KUBE_CONTROLLERS_VER := $(shell cat $(VERSIONS_FILE) | $(YAML_CMD) read - '[0].components.calico/kube-controllers.version')
+POD2DAEMON_VER := $(shell cat $(VERSIONS_FILE) | $(YAML_CMD) read - '[0].components.flexvol.version')
+DIKASTES_VER := $(shell cat $(VERSIONS_FILE) | $(YAML_CMD) read - '[0].components.calico/dikastes.version')
+FLANNEL_MIGRATION_VER := $(shell cat $(VERSIONS_FILE) | $(YAML_CMD) read - '[0].components.calico/flannel-migration-controller.version')
+TYPHA_VER := $(shell cat $(VERSIONS_FILE) | $(YAML_CMD) read - '[0].components.typha.version')
 
 ##############################################################################
 
@@ -168,7 +168,6 @@ dev-versions-yaml:
 	export APP_POLICY_VER=`cd ../app-policy && $(TAG_COMMAND)`-amd64; \
 	export POD2DAEMON_VER=`cd ../pod2daemon && $(TAG_COMMAND)`-amd64; \
 	/bin/echo -e \
-"master:\\n"\
 "- title: \"dev-build\"\\n"\
 "  note: \"Developer build\"\\n"\
 "  components:\\n"\
@@ -460,14 +459,10 @@ bin/helm:
 
 .PHONY: values.yaml
 values.yaml:
-ifndef RELEASE_STREAM
-	# Default the version to master if not set
-	$(eval RELEASE_STREAM = master)
-endif
 	docker run --rm \
 	  -v $$PWD:/calico \
 	  -w /calico \
-          ruby:2.5 ruby ./hack/gen_values_yml.rb $(RELEASE_STREAM) > _includes/charts/calico/values.yaml
+          ruby:2.5 ruby ./hack/gen_values_yml.rb > _includes/charts/calico/values.yaml
 
 ## Create the vendor directory
 vendor: glide.yaml

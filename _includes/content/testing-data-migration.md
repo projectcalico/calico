@@ -27,7 +27,7 @@ calico-upgrade dry-run --output-dir=temp --apiconfigv1 etcdv2.yaml --apiconfigv3
 - Otherwise, check the generated reports, resolve any issues that are causing
    errors, and run `calico-upgrade dry-run` again.
    
-   - **Validation errors**: {{site.prodname}} {{site.data.versions[page.version].first.title}}
+   - **Validation errors**: {{site.prodname}} {{site.data.versions.first.title}}
      features stricter validation than previous versions. For example, it checks that names
      don't exceed the maximum length and that they don't conflict with each other. If you run 
      into an error of this kind, you can change the name as needed and restart the test.

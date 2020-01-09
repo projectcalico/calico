@@ -3,12 +3,10 @@ require "yaml"
 require_relative "../_plugins/lib"
 require_relative "../_plugins/values"
 
-usage = "ruby hack/gen_values_yaml.rb <version> [arguments...]
+usage = "ruby hack/gen_values_yaml.rb [arguments...]
 
 It's recommended to run this from the root of the Calico repository,
 as the default paths assume as much.
-
-<version> should be the major.minor version (e.g. v3.6) or master.
 
 --config    Path to the jekyll config. [default: _config.yml]
 --versions  Path to the versions.yml. [default: _data/versions.yml]
@@ -29,12 +27,6 @@ OptionParser.new do |parser|
     end
 end.parse!
 
-@version = ARGV.pop
-if !@version
-    print usage
-    exit
-end
-
 @path_to_config ||= "_config.yml"
 @path_to_versions ||= "_data/versions.yml"
 @image_registry ||= "quay.io/"
@@ -46,6 +38,6 @@ config = YAML::load_file(@path_to_config)
 imageNames = config["imageNames"]
 
 versions_yml = YAML::load_file(@path_to_versions)
-versions = parse_versions(versions_yml, @version)
+versions = parse_versions(versions_yml)
 
 print gen_values(versions, imageNames, @image_registry)
