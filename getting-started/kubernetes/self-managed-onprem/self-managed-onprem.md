@@ -46,11 +46,15 @@ This how-to guide uses the following {{site.prodname}} features:
 The following steps install a {{site.prodname}} implementation with:
 
 - {{site.prodname}} daemons and services running in the cluster
-- {{site.prodname}} BGP networking infrastructure with full-mesh node-to-node peering, no encapsulation
+- {{site.prodname}} networking
+  BGP networking infrastructure with full-mesh node-to-node peering, no encapsulation
+- {{site.prodname}} network and global network policy engine for workloads, hosts, and Istio service applications
 
-- [Customize manifests[()]
-- [Determine datastore]()
-- [Install Calico on nodes]()
+**Start installation**
+
+- [Customize manifests](#customize-manifests)
+- [Determine datastore](#determine-datastore)
+- [Install Calico](#install-calico-on-nodes)
 
 #### Customize manifests 
 
@@ -60,97 +64,85 @@ We recommend customizing [Calico manifests]({{site.url}}/reference/customize-man
 
 {{site.prodname}} supports both **Kubernetes API datastore (kdd)** and **etcd** datastores. The **Kubernetes API datastore** is preferred for on-premises deployments, but supports only Kubernetes workloads; **etcd** datastore is best for hybrid deployments. 
 
-#### Install Calico on nodes
+#### Install Calico
 
 Choose a link below to install {{site.prodname}}, based on your datastore and number of nodes. 
 
->**Note**: The **Kubernetes API datastore - more than 50 nodes** option provides scaling using {{site.prodname}} [Typha daemon](https://github.com/projectcalico/typha).. (Typha is not included for etcd because etcd v3 already handles many clients so Typha is not recommended and is redundant.)
+>**Note**: The **Kubernetes API datastore - more than 50 nodes** option provides scaling using {{site.prodname}} [Typha daemon](https://github.com/projectcalico/typha).. (Typha is not included for etcd because etcd v3 already handles many clients so Typha is redundant and not recommended.)
 {: .alert .alert-info}
 
 - [Install Calico with Kubernetes API datastore--50 nodes or less](#install-calico-with-kubernetes-api-datastore-50-nodes-or-less)
 - [Install Calico with Kubernetes API datastore--more than 50 nodes](#install-calico-with-Kubernetes-api-datastore-more-than-50-nodes)
 - [Install Calico with etcd datastore](#install-calico-with-etcd-datastore)
 
-#### Install Calico with Kubernetes API datastore--50 nodes or less
+##### Install Calico with Kubernetes API datastore--50 nodes or fewer
 
 1. Download the {{site.prodname}} networking manifest for the Kubernetes API datastore.
 
+   ```bash
+   curl {{ "/manifests/calico.yaml" | absolute_url }} -O
    ```
-   curl https://docs.projectcalico.org/absolute_url/manifests/calico.yaml -O
-   ```
-1. If you are using pod CIDR 192.168.0.0/16, skip this step. Otherwise, use the following commands to set the POD_CIDR environment variable containing your pod CIDR, and replace `192.168.0.0/16` in the manifest with your pod CIDR.
+{% include content/pod-cidr-sed.md yaml="calico-typha" %}
 
-   ```
-   POD_CIDR="<your-pod-cidr>" \
-   sed -i -e "s?192.168.0.0/16?$POD_CIDR?g" calico.yaml
-   ```
-1. Customize the manifest if desired. 
+1. Customize the manifest as necessary. 
 1. Apply the manifest using the following command.
 
-   ```
+   ```bash
    kubectl apply -f calico.yaml
- 
    ```
+{% include content/pod-cidr-sed.md yaml="calico-typha" %}
 
-#### Install Calico with Kubernetes API datastore--more than 50 nodes
+##### Install Calico with Kubernetes API datastore--more than 50 nodes
 
 1. Download the {{site.prodname}} networking manifest for the Kubernetes API datastore.
 
-   ```
-   curl {{ "/manifests/calico.yaml" | absolute_url }} -O 
-   ```
-1. If you are using pod CIDR 10.244.0.0/16, skip this step. Otherwise, set the POD_CIDR environment variable with your pod CIDR, and replace `10.244.0.0/16` in the manifest with your pod CIDR.
-
-   ```
-   POD_CIDR="<your-pod-cidr>" \
-   sed -i -e "s?10.244.0.0/16?$POD_CIDR?g" calico-typha.yaml
+   ```bash
+   curl {{ "/manifests/calico-typha.yaml" | absolute_url }} -o calico.yaml
    ```
 1. Modify the replica count in the Deployment named, `calico-typha` to the desired number of replicas.
-   We recommend at least one replica for every 200 nodes, and no more than 20 replicas. In production, we recommend a minimum of three replicas to reduce the impact of rolling upgrades and failures. The number of replicas should always be less than the number of nodes, otherwise rolling upgrades will stall. In addition, Typha only helps with scale if there are fewer Typha instances than there are nodes.
 
-> **Warning**: If you set `typha_service_name` without increasing the default replica count (0), Felix will try to connect to Typha and not find Typha instances, and will fail to start.
-{: .alert .alert-danger}
-
-   ```
+  ```
    apiVersion: apps/v1beta1
-             kind: Deployment
-             metadata:
-               name: calico-typha
+   kind: Deployment
+   metadata:
+     name: calico-typha
      ...
    spec:
      ...
      replicas: <number of replicas>
    ```
+   {: .no-select-button}
+
+   We recommend at least one replica for every 200 nodes, and no more than 20 replicas. In production, we recommend a minimum of three replicas to reduce the impact of rolling upgrades and failures. The number of replicas should always be less than the number of nodes, otherwise rolling upgrades will stall. In addition, Typha only helps with scale if there are fewer Typha instances than there are nodes.
+
+   > **Warning**: If you set `typha_service_name` without increasing the default replica count (0), Felix will try to connect to Typha and not find Typha instances, and will fail to start.
+   {: .alert .alert-danger}
 
 1. Customize the manifest if desired.
 
 1. Apply the manifest.
 
+   ```bash
+   kubectl apply -f calico.yaml
    ```
-   kubectl apply -f calico-typha.yaml
-   ```
-#### Install Calico with etcd datastore
+##### Install Calico with etcd datastore
 
 1. Download the {{site.prodname}} networking manifest for etcd.
 
+   ```bash
+   curl {{ "/manifests/calico-etcd.yaml -o calico.yaml" | absolute_url }}
    ```
-   curl {{ "/manifests/calico.yaml" | absolute_url }} -O
-   ```
-1. If you are using pod CIDR 10.244.0.0/16, skip this step. Otherwise, set the POD_CIDR environment variable with your pod CIDR, and replace `10.244.0.0/16` in the manifest with your pod CIDR.
+ {% include content/pod-cidr-sed.md yaml="calico-etcd" %}
+   
+1. In the `ConfigMap named`, `calico-config`, set the value of etcd_endpoints to the IP address and port of your etcd server.
 
-   ```
-   POD_CIDR="<your-pod-cidr>" \
-   sed -i -e "s?10.244.0.0/16?$POD_CIDR?g" calico-etcd.yaml
-   ```
-1. In the ConfigMap named, `calico-config`, set the value of etcd_endpoints to the IP address and port of your etcd server.
-
-> **Tip**: You can specify more than one using commas as delimiters.
-{: .alert .alert-info}
+   > **Tip**: You can specify more than one using commas as delimiters.
+   {: .alert .alert-info}
 
 1. Customize the manifest if desired.
 1. Apply the manifest using the following command.
 
-   ```
+   ```bash
    kubectl apply -f calico.yaml
    ```
 
