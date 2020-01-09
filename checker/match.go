@@ -134,8 +134,13 @@ func matchServiceAccounts(saMatch *proto.ServiceAccountMatch, p peer) bool {
 		log.Debug("nil ServiceAccountMatch.  Return true.")
 		return true
 	}
-	return matchName(saMatch.GetNames(), p.Name) &&
-		matchLabels(saMatch.GetSelector(), p.Labels)
+	// In case of plain text, Dikastes falls back on IP addresses. In such a case
+	// service account is empty as there is no such information in the authorization header.
+	// In case of plain text so Dikastes only matches if the IP addresses are part of
+	// IP sets of a policy rule. So empty service account is considered a match in such a case.
+	return p.Name == "" ||
+		(matchName(saMatch.GetNames(), p.Name) &&
+			matchLabels(saMatch.GetSelector(), p.Labels))
 }
 
 func matchName(names []string, name string) bool {
@@ -175,7 +180,13 @@ func matchNamespace(nsMatch *namespaceMatch, ns namespace) bool {
 		"labels":    ns.Labels,
 		"rule":      nsMatch},
 	).Debug("Matching namespace.")
-	return matchName(nsMatch.Names, ns.Name) && matchLabels(nsMatch.Selector, ns.Labels)
+	// In case of plain text, Dikastes falls back on IP addresses. In such a case
+	// namespace is empty as there is no such information in the authorization header.
+	// In case of plain text so Dikastes only matches if the IP addresses are part of
+	// IP sets of a policy rule. So empty namespace is considered a match in such a case.
+	return ns.Name == "" ||
+		(matchName(nsMatch.Names, ns.Name) &&
+			matchLabels(nsMatch.Selector, ns.Labels))
 }
 
 func matchHTTP(rule *proto.HTTPMatch, req *authz.AttributeContext_HttpRequest) bool {
