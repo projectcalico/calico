@@ -35,6 +35,10 @@ This how-to guide uses the following {{site.prodname}} features:
 - If using Kubernetes as the datastore, custom resource definitions for the {{site.prodname}} data resources
 - If installing more than 50 nodes, `calico-typha` for scaling deployments
 
+#### Best practice: customize manifests before installation
+
+We recommend customizing [Calico manifests]({{site.url}}/reference/customize-manifests) before installing {{site.prodname}} on nodes; this avoids downstream manual updates to other {{site.prodname}} resources.
+
 ### Before you begin...
 
 - Ensure that your Kubernetes cluster meets [Requirements]({site.url}}/getting-started/kubernetes/requirements)
@@ -43,22 +47,8 @@ This how-to guide uses the following {{site.prodname}} features:
 
 ### How to 
 
-The following steps install a {{site.prodname}} implementation with:
-
-- {{site.prodname}} daemons and services running in the cluster
-- {{site.prodname}} networking
-  BGP networking infrastructure with full-mesh node-to-node peering, no encapsulation
-- {{site.prodname}} network and global network policy engine for workloads, hosts, and Istio service applications
-
-**Start installation**
-
-- [Customize manifests](#customize-manifests)
 - [Determine datastore](#determine-datastore)
 - [Install Calico](#install-calico-on-nodes)
-
-#### Customize manifests 
-
-We recommend customizing [Calico manifests]({{site.url}}/reference/customize-manifests) before installing {{site.prodname}} on nodes; this avoids downstream manual updates to other {{site.prodname}} resources.
 
 #### Determine your datastore 
 
@@ -66,7 +56,7 @@ We recommend customizing [Calico manifests]({{site.url}}/reference/customize-man
 
 #### Install Calico
 
-Choose a link below to install {{site.prodname}}, based on your datastore and number of nodes. 
+Select a link below to install {{site.prodname}}, based on your datastore and number of nodes. 
 
 >**Note**: The **Kubernetes API datastore - more than 50 nodes** option provides scaling using {{site.prodname}} [Typha daemon](https://github.com/projectcalico/typha).. (Typha is not included for etcd because etcd v3 already handles many clients so Typha is redundant and not recommended.)
 {: .alert .alert-info}
@@ -77,7 +67,7 @@ Choose a link below to install {{site.prodname}}, based on your datastore and nu
 
 ##### Install Calico with Kubernetes API datastore--50 nodes or fewer
 
-1. Download the {{site.prodname}} networking manifest for the Kubernetes API datastore.
+1. Download the {{site.prodname}} Calico manifest (ConfigMap) for the Kubernetes API datastore.
 
    ```bash
    curl {{ "/manifests/calico.yaml" | absolute_url }} -O
@@ -94,7 +84,7 @@ Choose a link below to install {{site.prodname}}, based on your datastore and nu
 
 ##### Install Calico with Kubernetes API datastore--more than 50 nodes
 
-1. Download the {{site.prodname}} networking manifest for the Kubernetes API datastore.
+1. Download the {{site.prodname}} Calico manifest (ConfigMap) for the Kubernetes API datastore.
 
    ```bash
    curl {{ "/manifests/calico-typha.yaml" | absolute_url }} -o calico.yaml
@@ -127,7 +117,7 @@ Choose a link below to install {{site.prodname}}, based on your datastore and nu
    ```
 ##### Install Calico with etcd datastore
 
-1. Download the {{site.prodname}} networking manifest for etcd.
+1. Download the {{site.prodname}} Calico manifest (ConfigMap) for etcd.
 
    ```bash
    curl {{ "/manifests/calico-etcd.yaml -o calico.yaml" | absolute_url }}
