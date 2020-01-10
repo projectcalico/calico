@@ -1,5 +1,6 @@
 ---
 title: Self-managed on-premises
+description: Install Calico networking and network policy for on-premises deployments
 ---
 
 ### Big picture
@@ -23,26 +24,12 @@ This how-to guide uses the following {{site.prodname}} features:
 
 #### {{site.prodname}} manifests
 
-{{site.prodname}} provides manifests for easy customization. Each manifest contains the necessary resources for installing {{site.prodname}} on each node in your Kubernetes cluster. {{site.prodname}} installs the following Kubernetes resources:
-
-- A `calico-node` pod on each host using a DaemonSet that:
-  - Installs {{site.prodname}} CNI binaries and network config on each host using an init container
-  - Runs the calico/node container
-- `calico-etcd-secrets` secret, which optionally allows for providing etcd TLS assets
-- `calico-config ConfigMap`, which contains parameters for configuring the install
-- `calico-kube-controllers` deployment
-- RBAC configuration for {{site.prodname}} services to access the Kubernetes API server
-- If using Kubernetes as the datastore, custom resource definitions for the {{site.prodname}} data resources
-- If installing more than 50 nodes, `calico-typha` for scaling deployments
-
-#### Best practice: customize manifests before installation
-
-We recommend customizing [Calico manifests]({{site.url}}/reference/customize-manifests) before installing {{site.prodname}} on nodes; this avoids downstream manual updates to other {{site.prodname}} resources.
+{{site.prodname}} provides manifests for easy customization. Each manifest contains the necessary resources for installing {{site.prodname}} on each node in your Kubernetes cluster. We recommend customizing [Calico manifests]({{site.url}}/reference/customize-manifests) before installing {{site.prodname}} on nodes; this avoids downstream manual updates to other {{site.prodname}} resources.
 
 ### Before you begin...
 
 - Ensure that your Kubernetes cluster meets [Requirements]({site.url}}/getting-started/kubernetes/requirements)
-  If you do not have a cluster,  see  [Using kubeadmin to create a cluster]({{site.url}}/getting-started-guides/kubeadm/)
+  If you do not have a cluster, see [Using kubeadmin to create a cluster]({{site.url}}/getting-started-guides/kubeadm/)
 - If you are using CoreOS, [make this required change to manifests]({{site.url}}/reference/faq#are-the-calico-manifests-compatible-with-coreos)
 
 ### How to 
@@ -52,13 +39,13 @@ We recommend customizing [Calico manifests]({{site.url}}/reference/customize-man
 
 #### Determine your datastore 
 
-{{site.prodname}} supports both **Kubernetes API datastore (kdd)** and **etcd** datastores. The **Kubernetes API datastore** is preferred for on-premises deployments, but supports only Kubernetes workloads; **etcd** datastore is best for hybrid deployments. 
+{{site.prodname}} supports both **Kubernetes API datastore (kdd)** and **etcd** datastores. The **Kubernetes API datastore** is preferred for on-premises deployments, and supports only Kubernetes workloads; **etcd** datastore is best for hybrid deployments. 
 
 #### Install Calico
 
 Select a link below to install {{site.prodname}}, based on your datastore and number of nodes. 
 
->**Note**: The **Kubernetes API datastore - more than 50 nodes** option provides scaling using {{site.prodname}} [Typha daemon](https://github.com/projectcalico/typha).. (Typha is not included for etcd because etcd v3 already handles many clients so Typha is redundant and not recommended.)
+>**Note**: The **Kubernetes API datastore - more than 50 nodes** option provides scaling using {{site.prodname}} [Typha daemon](https://github.com/projectcalico/typha). Typha is not included for etcd because etcd v3 already handles many clients so using Typha is redundant and not recommended.
 {: .alert .alert-info}
 
 - [Install Calico with Kubernetes API datastore--50 nodes or less](#install-calico-with-kubernetes-api-datastore-50-nodes-or-less)
@@ -67,12 +54,12 @@ Select a link below to install {{site.prodname}}, based on your datastore and nu
 
 ##### Install Calico with Kubernetes API datastore--50 nodes or fewer
 
-1. Download the {{site.prodname}} Calico manifest (ConfigMap) for the Kubernetes API datastore.
+1. Download the {{site.prodname}} Calico manifest (calico-config.yaml) for the Kubernetes API datastore.
 
    ```bash
    curl {{ "/manifests/calico.yaml" | absolute_url }} -O
    ```
-{% include content/pod-cidr-sed.md yaml="calico-typha" %}
+{% include content/pod-cidr-sed.md yaml="calico" %}
 
 1. Customize the manifest as necessary. 
 1. Apply the manifest using the following command.
@@ -80,7 +67,6 @@ Select a link below to install {{site.prodname}}, based on your datastore and nu
    ```bash
    kubectl apply -f calico.yaml
    ```
-{% include content/pod-cidr-sed.md yaml="calico-typha" %}
 
 ##### Install Calico with Kubernetes API datastore--more than 50 nodes
 
@@ -89,6 +75,8 @@ Select a link below to install {{site.prodname}}, based on your datastore and nu
    ```bash
    curl {{ "/manifests/calico-typha.yaml" | absolute_url }} -o calico.yaml
    ```
+{% include content/pod-cidr-sed.md yaml="calico-typha" %}
+
 1. Modify the replica count in the Deployment named, `calico-typha` to the desired number of replicas.
 
   ```
@@ -144,12 +132,12 @@ Select a link below to install {{site.prodname}}, based on your datastore and nu
 
 **Networking**
 
-- If you are using the default BGP networking with full-mesh node-to-node peering with no encapsulation, go to [Configure BGP peering] to get traffic flowing between pods.
-- If you are unsure about networking options, or want to implement encapsulation (overlay networking), see [Determine best networking option]().
+- If you are using the default BGP networking with full-mesh node-to-node peering with no encapsulation, go to [Configure BGP peering]({{site.url}}/networking/bgp) to get traffic flowing between pods.
+- If you are unsure about networking options, or want to implement encapsulation (overlay networking), see [Determine best networking option]({{site.url}}/networking/determine-best-networking).
 
 **Security**
 
 - [Secure Calico component communications]({{site.url}}/security/comms/crypto-auth)
-- [Install Calico on hosts]({{site.url}}/getting-started/bare-metal/installation/)
-  We highly recommend installing {{site.prodname}} on hosts to secure communications. But you may want to secure your pods with [Calico network policy]({{site.url}}/security/calico-network-policy) first, then come back and install {{site.prodname}} on hosts.
+- [Secure hosts by installing Calico on hosts]({{site.url}}/getting-started/bare-metal/installation/)
+- [Secure pods with Calico network policy]({{site.url}}/security/calico-network-policy)
 - If you are using {{site.prodname}} with Istio service mesh, get started here: [Enable application layer policy for Istio service mesh]({{site.url}}/security/enable-app-layer-policy)
