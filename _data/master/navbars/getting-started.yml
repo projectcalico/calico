@@ -11,7 +11,11 @@ toc:
   - title: Requirements
     path: /getting-started/kubernetes/requirements
   - title: Self-managed on-premises
-    path: /getting-started/kubernetes/self-managed-onprem
+    section: 
+    - title: Install Calico for self-managed on-premises deployments
+      path: /getting-started/kubernetes/self-managed-onprem
+    - title: Calico manifests
+      path: /getting-started/kubernetes/installation/config-options
   - title: Managed public cloud
     section:
     - title: Amazon Elastic Kubernetes Service (EKS)
@@ -22,18 +26,6 @@ toc:
       path: /getting-started/kubernetes/managed-public-cloud/iks
     - title: Microsoft Azure Kubernetes Service (AKS)
       path: /getting-started/kubernetes/managed-public-cloud/aks
-  - title: Installation
-    section:
-    - title: Introduction
-      path: /getting-started/kubernetes/installation/
-    - title: Installing Calico for policy and networking (recommended)
-      path: /getting-started/kubernetes/installation/calico
-    - title: Installing Calico for policy (advanced)
-      path: /getting-started/kubernetes/installation/other
-    - title: Customizing the manifests
-      path: /getting-started/kubernetes/installation/config-options
-    - title: Integration guide (advanced)
-      path: /getting-started/kubernetes/installation/integration
   - title: Flannel
     section:
     - title: Installing Calico for policy and flannel for networking
