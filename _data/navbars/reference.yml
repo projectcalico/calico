@@ -5,7 +5,7 @@ section:
 - title: calicoctl
   section:
   - title: Overview
-    path: /reference/calicoctl/
+    path: /reference/calicoctl/overview
   - title: create
     path: /reference/calicoctl/create
   - title: replace
@@ -25,7 +25,7 @@ section:
   - title: ipam
     section:
     - title: Overview
-      path: /reference/calicoctl/ipam/
+      path: /reference/calicoctl/ipam/overview
     - title: release
       path: /reference/calicoctl/ipam/release
     - title: show
@@ -33,7 +33,7 @@ section:
   - title: node
     section:
     - title: Overview
-      path: /reference/calicoctl/node/
+      path: /reference/calicoctl/node/overview
     - title: run
       path: /reference/calicoctl/node/run
     - title: status
@@ -47,7 +47,7 @@ section:
 - title: Resource definitions
   section:
     - title: Overview
-      path: /reference/resources/
+      path: /reference/resources/overview
     - title: BGP configuration
       path: /reference/resources/bgpconfig
     - title: BGP peer
@@ -75,7 +75,7 @@ section:
 - title: Configuring etcd RBAC
   section:
   - title: Overview
-    path: /reference/etcd-rbac/
+    path: /reference/etcd-rbac/overview
   - title: Generating certificates
     path: /reference/etcd-rbac/certificate-generation
   - title: Creating users and roles
@@ -97,7 +97,7 @@ section:
 - title: Typha
   section:
   - title: Overview
-    path: /reference/typha/
+    path: /reference/typha/overview
   - title: Configuration
     path: /reference/typha/configuration
 - title: Dikastes
@@ -119,7 +119,7 @@ section:
 - title: Host endpoints
   section:
     - title: Overview
-      path: /reference/host-endpoints/
+      path: /reference/host-endpoints/overview
     - title: Creating policy for basic connectivity
       path: /reference/host-endpoints/connectivity
     - title: Creating host endpoint objects
@@ -139,7 +139,7 @@ section:
 - title: Architecture
   section:
   - title: Introduction
-    path: /reference/architecture/
+    path: /reference/architecture/overview
   - title: Data path
     path: /reference/architecture/data-path
   - title: Network design
