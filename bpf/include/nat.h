@@ -116,18 +116,21 @@ struct bpf_map_def_extended __attribute__((section("maps"))) cali_v4_nat_aff = {
 static CALI_BPF_INLINE struct calico_nat_dest* calico_v4_nat_lookup(__be32 ip_src, __be32 ip_dst,
 								    __u8 ip_proto, __u16 dport)
 {
-	struct calico_nat_v4_value *nat_lv1_val;
-
-	if (!CALI_F_TO_HOST) {
-		// Skip NAT lookup for traffic leaving the host namespace.
-		return NULL;
-	}
-
 	struct calico_nat_v4_key nat_key = {
 		.addr = ip_dst,
 		.port = dport,
 		.protocol = ip_proto,
 	};
+	struct calico_nat_v4_value *nat_lv1_val;
+	struct calico_nat_secondary_v4_key nat_lv2_key;
+	struct calico_nat_dest *nat_lv2_val;
+	struct calico_nat_v4_affinity_key affkey = {};
+	uint64_t now = 0;
+
+	if (!CALI_F_TO_HOST) {
+		// Skip NAT lookup for traffic leaving the host namespace.
+		return NULL;
+	}
 
 	nat_lv1_val = bpf_map_lookup_elem(&cali_v4_nat_fe, &nat_key);
 	CALI_DEBUG("NAT: 1st level lookup addr=%x port=%d protocol=%d.\n",
@@ -174,11 +177,32 @@ static CALI_BPF_INLINE struct calico_nat_dest* calico_v4_nat_lookup(__be32 ip_sr
 		return NULL;
 	}
 
-	struct calico_nat_secondary_v4_key nat_lv2_key = {
-		.id = nat_lv1_val->id,
-		.ordinal = bpf_get_prandom_u32() % nat_lv1_val->count,
-	};
-	struct calico_nat_dest *nat_lv2_val;
+	CALI_DEBUG("NAT: 1st level hit; id=%d\n", nat_lv1_val->id);
+
+	if (nat_lv1_val->affinity_timeo == 0) {
+		goto skip_affinity;
+	}
+
+	affkey.nat_key =  nat_key;
+	affkey.client_ip = ip_src;
+
+	CALI_DEBUG("NAT: backend affinity %d seconds\n", nat_lv1_val->affinity_timeo);
+
+	struct calico_nat_v4_affinity_val *affval;
+
+	now = bpf_ktime_get_ns();
+	affval = bpf_map_lookup_elem(&cali_v4_nat_aff, &affkey);
+	if (affval && now - affval->ts <= nat_lv1_val->affinity_timeo * 1000000000ULL) {
+		CALI_DEBUG("NAT: using affinity backend %x:%d\n",
+				be32_to_host(affval->nat_dest.addr), affval->nat_dest.port);
+
+		return &affval->nat_dest;
+	}
+	CALI_DEBUG("NAT: affinity invalid, new lookup for %x\n", be32_to_host(ip_dst));
+
+skip_affinity:
+	nat_lv2_key.id = nat_lv1_val->id;
+	nat_lv2_key.ordinal = bpf_get_prandom_u32() % nat_lv1_val->count;
 
 	CALI_DEBUG("NAT: 1st level hit; id=%d ordinal=%d\n", nat_lv2_key.id, nat_lv2_key.ordinal);
 
@@ -189,21 +213,7 @@ static CALI_BPF_INLINE struct calico_nat_dest* calico_v4_nat_lookup(__be32 ip_sr
 
 	CALI_DEBUG("NAT: backend selected %x:%d\n", be32_to_host(nat_lv2_val->addr), nat_lv2_val->port);
 
-	if (nat_lv1_val->affinity_timeo == 0) {
-		return nat_lv2_val;
-	}
-
-	CALI_DEBUG("NAT: backend affinity %d seconds\n", nat_lv1_val->affinity_timeo);
-
-	struct calico_nat_v4_affinity_key affkey = {
-		.nat_key =  nat_key,
-		.client_ip = ip_src,
-	};
-	struct calico_nat_v4_affinity_val *affval;
-	uint64_t now = bpf_ktime_get_ns();
-
-	affval = bpf_map_lookup_elem(&cali_v4_nat_aff, &affkey);
-	if (affval == NULL || now - affval->ts > nat_lv1_val->affinity_timeo * 1000000000) {
+	if (nat_lv1_val->affinity_timeo != 0) {
 		int err;
 		struct calico_nat_v4_affinity_val val = {
 			.ts = now,
@@ -215,14 +225,9 @@ static CALI_BPF_INLINE struct calico_nat_dest* calico_v4_nat_lookup(__be32 ip_sr
 			CALI_INFO("NAT: failed to update affinity table: %d\n", err);
 			/* we do carry on, we have a good nat_lv2_val */
 		}
-
-		return nat_lv2_val;
 	}
 
-	CALI_DEBUG("NAT: using affinity backend %x:%d\n",
-			be32_to_host(affval->nat_dest.addr), affval->nat_dest.port);
-
-	return &affval->nat_dest;
+	return nat_lv2_val;
 }
 
 struct vxlanhdr {

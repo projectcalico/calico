@@ -47,7 +47,7 @@ int cali_ctlb_v4(struct bpf_sock_addr *ctx)
 
 	/* We do not know what the source address is yet, we only know that it
 	 * is the localhost, so we might just use 0.0.0.0. That would not
-	 * conflict with traffix from elsewhere.
+	 * conflict with traffic from elsewhere.
 	 *
 	 * XXX it means that all workloads that use the cgroup hook have the
 	 * XXX same affinity, which (a) is sub-optimal and (b) leaks info between
