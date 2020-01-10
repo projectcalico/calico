@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2019 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2020 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -827,19 +827,14 @@ func (r *DefaultRuleRenderer) StaticRawPreroutingChain(ipVersion uint8) *Chain {
 		})
 	}
 
-	if ipVersion == 6 {
-		// Apply strict RPF check to packets from workload interfaces.  This prevents
-		// workloads from spoofing their IPs.  Note: non-privileged containers can't
-		// usually spoof but privileged containers and VMs can.
-		//
-		// We only do this for IPv6 because the IPv4 RPF check is handled via a sysctl.
-		// In addition, the IPv4 check is complicated by the fact that we have special
-		// case handling for DHCP to the host, which would require an exclusion.
-		rules = append(rules, Rule{
-			Match:  Match().MarkSingleBitSet(markFromWorkload).RPFCheckFailed(),
-			Action: DropAction{},
-		})
-	}
+	// Apply strict RPF check to packets from workload interfaces.  This prevents
+	// workloads from spoofing their IPs.  Note: non-privileged containers can't
+	// usually spoof but privileged containers and VMs can.
+	//
+	rules = append(rules, Rule{
+		Match:  Match().MarkSingleBitSet(markFromWorkload).RPFCheckFailed(),
+		Action: DropAction{},
+	})
 
 	rules = append(rules,
 		// Send non-workload traffic to the untracked policy chains.

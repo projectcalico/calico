@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2019 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2020 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"os/exec"
 	"strconv"
 	"strings"
 	"time"
@@ -37,10 +38,11 @@ import (
 const usage = `test-connection: test connection to some target, for Felix FV testing.
 
 Usage:
-  test-connection <namespace-path> <ip-address> <port> [--source-port=<source>] [--protocol=<protocol>] [--loop-with-file=<file>]
+  test-connection <namespace-path> <ip-address> <port> [--source-ip=<source_ip>] [--source-port=<source>] [--protocol=<protocol>] [--loop-with-file=<file>]
 
 Options:
-  --source-port=<source>  Source port to use for the connection [default: 0].
+  --source-ip=<source_ip>  Source IP to use for the connection [default: 0.0.0.0].
+  --source-port=<source_port>  Source port to use for the connection [default: 0].
   --protocol=<protocol>   Protocol to test [default: tcp].
   --loop-with-file=<file>  Whether to send messages repeatedly, file is used for synchronization
 
@@ -62,6 +64,9 @@ If connection is unsuccessful, test-connection panics and so exits with a failur
 // If the other process creates the file again, it will tell this
 // program to close the connection, remove the file and quit.
 
+const defaultIPv4SourceIP = "0.0.0.0"
+const defaultIPv6SourceIP = "::"
+
 func main() {
 	log.SetLevel(log.DebugLevel)
 
@@ -75,7 +80,16 @@ func main() {
 	ipAddress := arguments["<ip-address>"].(string)
 	port := arguments["<port>"].(string)
 	sourcePort := arguments["--source-port"].(string)
-	log.Infof("Test connection from %v:%v to IP %v port %v", namespacePath, sourcePort, ipAddress, port)
+	sourceIpAddress := arguments["--source-ip"].(string)
+
+	// Set default for source IP. If we're using IPv6 as indicated by ipAddress
+	// and no --source-ip option was provided, set the source IP to the default
+	// IPv6 address.
+	if strings.Contains(ipAddress, ":") && sourceIpAddress == defaultIPv4SourceIP {
+		sourceIpAddress = defaultIPv6SourceIP
+	}
+
+	log.Infof("Test connection from namespace %v IP %v port%v to IP %v port %v", namespacePath, sourceIpAddress, sourcePort, ipAddress, port)
 	protocol := arguments["--protocol"].(string)
 	loopFile := ""
 	if arg, ok := arguments["--loop-with-file"]; ok && arg != nil {
@@ -94,8 +108,12 @@ func main() {
 	}
 
 	if namespacePath == "-" {
+		// Add the source IP (if set) to eth0.
+		err = maybeAddAddr(sourceIpAddress)
 		// Test connection from wherever we are already running.
-		err = tryConnect(ipAddress, port, sourcePort, protocol, loopFile)
+		if err == nil {
+			err = tryConnect(ipAddress, port, sourceIpAddress, sourcePort, protocol, loopFile)
+		}
 	} else {
 		// Get the specified network namespace (representing a workload).
 		var namespace ns.NetNS
@@ -107,7 +125,12 @@ func main() {
 
 		// Now, in that namespace, try connecting to the target.
 		err = namespace.Do(func(_ ns.NetNS) error {
-			return tryConnect(ipAddress, port, sourcePort, protocol, loopFile)
+			// Add an interface for the source IP if any.
+			e := maybeAddAddr(sourceIpAddress)
+			if e != nil {
+				return e
+			}
+			return tryConnect(ipAddress, port, sourceIpAddress, sourcePort, protocol, loopFile)
 		})
 	}
 
@@ -116,7 +139,30 @@ func main() {
 	}
 }
 
-func tryConnect(ipAddress, port, sourcePort, protocol, loopFile string) error {
+func maybeAddAddr(sourceIP string) error {
+	if sourceIP != defaultIPv4SourceIP && sourceIP != defaultIPv6SourceIP {
+		if !strings.Contains(sourceIP, ":") {
+			sourceIP += "/32"
+		} else {
+			sourceIP += "/128"
+		}
+
+		// Check if the IP is already set on eth0.
+		out, err := exec.Command("ip", "a", "show", "dev", "eth0").Output()
+		if err != nil {
+			return err
+		}
+		if strings.Contains(string(out), sourceIP) {
+			log.Infof("IP addr %s already exists on eth0, skip adding IP", sourceIP)
+			return nil
+		}
+		cmd := exec.Command("ip", "addr", "add", sourceIP, "dev", "eth0")
+		return cmd.Run()
+	}
+	return nil
+}
+
+func tryConnect(remoteIpAddr, remotePort, sourceIpAddr, sourcePort, protocol, loopFile string) error {
 
 	err := utils.RunCommand("ip", "r")
 	if err != nil {
@@ -128,12 +174,12 @@ func tryConnect(ipAddress, port, sourcePort, protocol, loopFile string) error {
 
 	var localAddr string
 	var remoteAddr string
-	if strings.Contains(ipAddress, ":") {
-		localAddr = "[::]:" + sourcePort
-		remoteAddr = "[" + ipAddress + "]:" + port
+	if strings.Contains(remoteIpAddr, ":") {
+		localAddr = "[" + sourceIpAddr + "]:" + sourcePort
+		remoteAddr = "[" + remoteIpAddr + "]:" + remotePort
 	} else {
-		localAddr = "0.0.0.0:" + sourcePort
-		remoteAddr = ipAddress + ":" + port
+		localAddr = sourceIpAddr + ":" + sourcePort
+		remoteAddr = remoteIpAddr + ":" + remotePort
 	}
 	ls := newLoopState(loopFile)
 	log.Infof("Connecting from %v to %v over %s", localAddr, remoteAddr, protocol)
@@ -176,11 +222,11 @@ func tryConnect(ipAddress, port, sourcePort, protocol, loopFile string) error {
 			return err
 		}
 		laddr := &sctp.SCTPAddr{IPAddrs: []net.IPAddr{*lip}, Port: lport}
-		rip, err := net.ResolveIPAddr("ip", ipAddress)
+		rip, err := net.ResolveIPAddr("ip", remoteIpAddr)
 		if err != nil {
 			return err
 		}
-		rport, err := strconv.Atoi(port)
+		rport, err := strconv.Atoi(remotePort)
 		if err != nil {
 			return err
 		}

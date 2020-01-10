@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2019 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2020 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -471,25 +471,46 @@ func startPermanentConnection(w *Workload, ip string, port, sourcePort int) (*Pe
 	}, nil
 }
 
+type SpoofedWorkload struct {
+	*Workload
+	SpoofedSourceIP string
+}
+
+func (s *SpoofedWorkload) CanConnectTo(ip, port, protocol string) bool {
+	return canConnectTo(s.Workload, ip, port, s.SpoofedSourceIP, "", protocol)
+}
+
 func (p *Port) CanConnectTo(ip, port, protocol string) bool {
+	srcPort := strconv.Itoa(int(p.Port))
+	return canConnectTo(p.Workload, ip, port, "", srcPort, protocol)
+}
+
+func canConnectTo(w *Workload, ip, port, srcIp, srcPort, protocol string) bool {
 	// Ensure that the host has the 'test-connection' binary.
-	p.C.EnsureBinary("test-connection")
+	w.C.EnsureBinary("test-connection")
 
 	if protocol == "udp" || protocol == "sctp" {
 		// If this is a retry then we may have stale conntrack entries and we don't want those
 		// to influence the connectivity check.  UDP lacks a sequence number, so conntrack operates
 		// on a simple timer. In the case of SCTP, conntrack appears to match packets even when
 		// the conntrack entry is in the CLOSED state.
-		_ = p.C.ExecMayFail("conntrack", "-D", "-p", protocol, "-s", p.Workload.IP, "-d", ip)
+		_ = w.C.ExecMayFail("conntrack", "-D", "-p", protocol, "-s", w.IP, "-d", ip)
 	}
+
+	logMsg := "Connection test"
 
 	// Run 'test-connection' to the target.
 	args := []string{
-		"exec", p.C.Name, "/test-connection", p.namespacePath, ip, port, "--protocol=" + protocol,
+		"exec", w.C.Name, "/test-connection", w.namespacePath, ip, port, "--protocol=" + protocol,
 	}
-	if p.Port != 0 {
+	if srcIp != "" {
+		args = append(args, fmt.Sprintf("--source-ip=%s", srcIp))
+		logMsg += " (spoofed)"
+	}
+	if srcPort != "" {
 		// If we are using a particular source port, fill it in.
-		args = append(args, fmt.Sprintf("--source-port=%d", p.Port))
+		args = append(args, fmt.Sprintf("--source-port=%s", srcPort))
+		logMsg += " (with source port)"
 	}
 	connectionCmd := utils.Command("docker", args...)
 	outPipe, err := connectionCmd.StdoutPipe()
@@ -507,7 +528,7 @@ func (p *Port) CanConnectTo(ip, port, protocol string) bool {
 
 	log.WithFields(log.Fields{
 		"stdout": string(wOut),
-		"stderr": string(wErr)}).WithError(err).Info("Connection test")
+		"stderr": string(wErr)}).WithError(err).Info(logMsg)
 
 	return err == nil
 }

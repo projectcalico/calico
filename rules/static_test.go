@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2019 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2020 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -364,6 +364,8 @@ var _ = Describe("Static", func() {
 						{Action: ClearMarkAction{Mark: 0xf0}},
 						{Match: Match().InInterface("cali+"),
 							Action: SetMarkAction{Mark: 0x40}},
+						{Match: Match().MarkSingleBitSet(0x40).RPFCheckFailed(),
+							Action: DropAction{}},
 						{Match: Match().MarkClear(0x40),
 							Action: JumpAction{Target: ChainDispatchFromHostEndpoint}},
 						{Match: Match().MarkSingleBitSet(0x10),
