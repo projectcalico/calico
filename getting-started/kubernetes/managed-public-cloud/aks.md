@@ -15,6 +15,9 @@ AKS has built-in support for Calico, providing a robust implementation of the fu
 To enable Calico network policy enforcement, follow these step-by-step instructions: 
 [Create an AKS cluster and enable network policy](https://docs.microsoft.com/en-us/azure/aks/use-network-policies).
 
+> **Note**: The Calico network policy feature can only be enabled when the cluster is created. You can't enable Calico network policy on an existing AKS cluster.
+{: .alert .alert-info}
+
 ### Above and beyond
 
 - [Install calicoctl command line tool]({{ site.url }}/getting-started/calicoctl/install)
