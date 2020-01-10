@@ -350,11 +350,8 @@ var _ = Describe("kube-controllers FV tests", func() {
 			Expect(err).ShouldNot(HaveOccurred())
 
 			nodeConfigName := fmt.Sprintf("node.%s", cNodeName)
-			pTrue := true
 			felixConf := api.FelixConfiguration{
-				Spec: api.FelixConfigurationSpec{
-					IgnoreLooseRPF: &pTrue,
-				},
+				Spec: api.FelixConfigurationSpec{},
 				ObjectMeta: metav1.ObjectMeta{
 					Name: nodeConfigName,
 				},
