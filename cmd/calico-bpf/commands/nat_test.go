@@ -24,9 +24,9 @@ import (
 
 func TestNATDump(t *testing.T) {
 	nat := nat2.MapMem{
-		nat2.NewNATKey(net.IPv4(1, 1, 1, 1), 80, 6):   nat2.NewNATValue(35, 2),
-		nat2.NewNATKey(net.IPv4(2, 1, 1, 1), 553, 17): nat2.NewNATValue(107, 1),
-		nat2.NewNATKey(net.IPv4(3, 1, 1, 1), 553, 17): nat2.NewNATValue(108, 1),
+		nat2.NewNATKey(net.IPv4(1, 1, 1, 1), 80, 6):   nat2.NewNATValue(35, 2, 0),
+		nat2.NewNATKey(net.IPv4(2, 1, 1, 1), 553, 17): nat2.NewNATValue(107, 1, 0),
+		nat2.NewNATKey(net.IPv4(3, 1, 1, 1), 553, 17): nat2.NewNATValue(108, 1, 0),
 	}
 
 	back := nat2.BackendMapMem{
