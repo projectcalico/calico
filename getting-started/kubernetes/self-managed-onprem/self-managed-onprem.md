@@ -24,7 +24,7 @@ This how-to guide uses the following {{site.prodname}} features:
 
 #### {{site.prodname}} manifests
 
-{{site.prodname}} provides manifests for easy customization. Each manifest contains the necessary resources for installing {{site.prodname}} on each node in your Kubernetes cluster. We recommend customizing [Calico manifests]({{site.url}}/reference/customize-manifests) before installing {{site.prodname}} on nodes; this avoids downstream manual updates to other {{site.prodname}} resources.
+{{site.prodname}} provides manifests for easy customization. Each manifest contains the necessary resources for installing {{site.prodname}} on each node in your Kubernetes cluster. We recommend [Customizing Calico manifests]({{site.url}}/reference/customize-manifests) before installing {{site.prodname}} on nodes; this avoids downstream manual updates to other {{site.prodname}} resources.
 
 ### Before you begin...
 
@@ -41,7 +41,7 @@ This how-to guide uses the following {{site.prodname}} features:
 
 {{site.prodname}} supports both **Kubernetes API datastore (kdd)** and **etcd** datastores. The **Kubernetes API datastore** is preferred for on-premises deployments, and supports only Kubernetes workloads; **etcd** datastore is best for hybrid deployments. 
 
-#### Install Calico
+#### Install Calico on nodes
 
 Select a link below to install {{site.prodname}}, based on your datastore and number of nodes. 
 

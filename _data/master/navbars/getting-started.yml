@@ -11,11 +11,7 @@ toc:
   - title: Requirements
     path: /getting-started/kubernetes/requirements
   - title: Self-managed on-premises
-    section: 
-    - title: Install Calico for self-managed on-premises deployments
-      path: /getting-started/kubernetes/self-managed-onprem
-    - title: Calico manifests
-      path: /getting-started/kubernetes/installation/config-options
+    path: /getting-started/kubernetes/self-managed-onprem
   - title: Managed public cloud
     section:
     - title: Amazon Elastic Kubernetes Service (EKS)

@@ -150,6 +150,8 @@ toc:
         path: /reference/architecture/design/l2-interconnect-fabric
       - title: Calico over IP fabrics
         path: /reference/architecture/design/l3-interconnect-fabric
+- title: Customize Calico manifests
+  path: /getting-started/kubernetes/installation/config-options
 - title: Frequently asked questions
   path: /reference/faq
 - title: Getting involved
