@@ -3,12 +3,14 @@ path: /getting-started/
 order: 1
 section:
 - title: Kubernetes
+  path: /getting-started/kubernetes/
   section:
   - title: Quickstart
     path: /getting-started/kubernetes/quickstart
   - title: System requirements
     path: /getting-started/kubernetes/requirements
   - title: Managed public cloud
+    path: /getting-started/kubernetes/managed-public-cloud/
     section:
     - title: Amazon Elastic Kubernetes Service (EKS)
       path: /getting-started/kubernetes/managed-public-cloud/eks
@@ -19,6 +21,7 @@ section:
     - title: Microsoft Azure Kubernetes Service (AKS)
       path: /getting-started/kubernetes/managed-public-cloud/aks
   - title: Installation
+    path: /getting-started/kubernetes/installation/
     section:
     - title: Introduction
       path: /getting-started/kubernetes/installation/overview
@@ -33,12 +36,14 @@ section:
     - title: Integration guide (advanced)
       path: /getting-started/kubernetes/installation/integration
   - title: Flannel
+    path: /getting-started/kubernetes/flannel/
     section:
     - title: Installing Calico for policy and flannel for networking
       path: /getting-started/kubernetes/installation/flannel
     - title: Migrating a cluster from flannel to Calico
       path: /getting-started/kubernetes/installation/migration-from-flannel     
   - title: Calico the hard way
+    path: /getting-started/kubernetes/hardway/
     section:
     - title: Introduction
       path: /getting-started/kubernetes/hardway/overview
@@ -65,6 +70,7 @@ section:
     - title: Istio integration
       path: /getting-started/kubernetes/hardway/istio-integration
 - title: OpenShift
+  path: /getting-started/openshift/
   section:
   - title: System requirements
     path: /getting-started/openshift/requirements
@@ -73,12 +79,14 @@ section:
   - title: Connecting to a dedicated etcd cluster (optional)
     path: /getting-started/openshift/dedicated-etcd
 - title: OpenStack
+  path: /getting-started/openstack/
   section:
   - title: Overview
     path: /getting-started/openstack/overview
   - title: System requirements
     path: /getting-started/openstack/requirements
   - title: Installation
+    path: /getting-started/openstack/installation/
     section:
     - title: Overview
       path: /getting-started/openstack/installation/overview
@@ -91,10 +99,12 @@ section:
     - title: Verifying your deployment
       path: /getting-started/openstack/verification
 - title: Bare metal hosts
+  path: /getting-started/bare-metal/
   section:
   - title: System requirements
     path: /getting-started/bare-metal/requirements
   - title: Installation
+    path: /getting-started/bare-metal/installation/
     section:
     - title: Overview
       path: /getting-started/bare-metal/installation/overview
@@ -107,10 +117,12 @@ section:
 - title: Running calico/node with an init system
   path: /getting-started/as-service
 - title: calicoctl
+  path: /getting-started/calicoctl/
   section:
   - title: Installing calicoctl
     path: /getting-started/calicoctl/install
   - title: Configuring calicoctl
+    path: /getting-started/calicoctl/configure/
     section:
     - title: Overview
       path: /getting-started/calicoctl/configure/overview

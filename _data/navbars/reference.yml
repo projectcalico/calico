@@ -3,6 +3,7 @@ path: /reference/
 order: 5
 section:
 - title: calicoctl
+  path: /reference/calicoctl/
   section:
   - title: Overview
     path: /reference/calicoctl/overview
@@ -23,6 +24,7 @@ section:
   - title: convert
     path: /reference/calicoctl/convert
   - title: ipam
+    path: /reference/calicoctl/ipam/
     section:
     - title: Overview
       path: /reference/calicoctl/ipam/overview
@@ -31,6 +33,7 @@ section:
     - title: show
       path: /reference/calicoctl/ipam/show
   - title: node
+    path: /reference/calicoctl/node/
     section:
     - title: Overview
       path: /reference/calicoctl/node/overview
@@ -45,6 +48,7 @@ section:
   - title: version
     path: /reference/calicoctl/version
 - title: Resource definitions
+  path: /reference/resources/
   section:
     - title: Overview
       path: /reference/resources/overview
@@ -73,6 +77,7 @@ section:
     - title: Workload endpoint
       path: /reference/resources/workloadendpoint
 - title: Configuring etcd RBAC
+  path: /reference/etcd-rbac/
   section:
   - title: Overview
     path: /reference/etcd-rbac/overview
@@ -89,12 +94,14 @@ section:
 - title: calico/node
   path: /reference/node/configuration
 - title: Felix
+  path: /reference/felix/
   section:
   - title: Configuration
     path: /reference/felix/configuration
   - title: Prometheus statistics
     path: /reference/felix/prometheus
 - title: Typha
+  path: /reference/typha/
   section:
   - title: Overview
     path: /reference/typha/overview
@@ -107,6 +114,7 @@ section:
 - title: Calico Kubernetes controllers
   path: /reference/kube-controllers/configuration
 - title: Configuration on public clouds
+  path: /reference/public-cloud/
   section:
   - title: Amazon Web Services
     path: /reference/public-cloud/aws
@@ -117,6 +125,7 @@ section:
   - title: IBM Cloud
     path: /reference/public-cloud/ibm
 - title: Host endpoints
+  path: /reference/host-endpoints/
   section:
     - title: Overview
       path: /reference/host-endpoints/overview
@@ -137,12 +146,14 @@ section:
     - title: Connection tracking
       path: /reference/host-endpoints/conntrack
 - title: Architecture
+  path: /reference/architecture/
   section:
   - title: Introduction
     path: /reference/architecture/overview
   - title: Data path
     path: /reference/architecture/data-path
   - title: Network design
+    path: /reference/architecture/design/
     section: 
       - title: Calico over Ethernet fabrics
         path: /reference/architecture/design/l2-interconnect-fabric
@@ -153,6 +164,7 @@ section:
 - title: Getting involved
   path: /reference/involved
 - title: Attributions
+  path: /reference/legal/
   section:
   - title: Application layer policy attributions
     path: /reference/legal/alp

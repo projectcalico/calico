@@ -5,6 +5,7 @@ section:
 - title: Determine best networking option
   path: /networking/determine-best-networking
 - title: Configure networking
+  path: /networking/configuring
   section:
   - title: Configure BGP peering
     path: /networking/bgp
@@ -19,6 +20,7 @@ section:
   - title: Accelerate Istio network performance
     path: /networking/sidecar-acceleration
 - title: Customize IP address management
+  path: /networking/ipam
   section:
    - title: Get started with IP address management
      path: /networking/get-started-ip-addresses
@@ -41,6 +43,7 @@ section:
    - title: Interoperate with legacy firewalls using IP ranges
      path: /networking/legacy-firewalls
 - title: Calico networking for OpenStack
+  path: /networking/openstack/
   section:
   - title: Set up a development machine
     path:  /networking/openstack/dev-machine-setup

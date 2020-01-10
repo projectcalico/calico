@@ -3,6 +3,7 @@ path: /maintenance/
 order: 4
 section:
 - title: Upgrading
+  path: /maintenance/upgrading
   section:
   - title: Kubernetes
     path: /maintenance/kubernetes-upgrade
