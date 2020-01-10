@@ -22,7 +22,6 @@ import (
 	"strings"
 	"sync"
 	"time"
-	_ "unsafe" // required to use //go:linkname
 
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
@@ -45,16 +44,6 @@ func init() {
 }
 
 var podNPIP = net.IPv4(255, 255, 255, 255)
-
-//go:noescape
-//go:linkname nanotime runtime.nanotime
-func nanotime() int64
-
-// Monotime returns CLOCK_MONOTONIC time which is compatible with the
-// bpf_ktime_get_ns() which is the only source of timestamps in bpf.
-func Monotime() time.Duration {
-	return time.Duration(nanotime())
-}
 
 type svcInfo struct {
 	id         uint32
@@ -930,7 +919,7 @@ func (s *Syncer) cleanupSticky() error {
 	ks := len(nat.AffinityKey{})
 	vs := len(nat.AffinityValue{})
 
-	now := Monotime()
+	now := time.Duration(bpf.KTimeNanos())
 
 	err := s.bpfAff.Iter(func(k, v []byte) {
 

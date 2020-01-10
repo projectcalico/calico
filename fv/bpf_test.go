@@ -28,34 +28,27 @@ import (
 	"strings"
 	"time"
 
-	"github.com/pkg/errors"
-
-	"github.com/projectcalico/libcalico-go/lib/ipam"
-
-	"github.com/projectcalico/felix/bpf/nat"
-
-	"github.com/projectcalico/felix/bpf/conntrack"
-
 	"github.com/davecgh/go-spew/spew"
+	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/client-go/kubernetes"
-
-	"github.com/projectcalico/libcalico-go/lib/apiconfig"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-
 	"github.com/projectcalico/felix/bpf"
+	"github.com/projectcalico/felix/bpf/nat"
 	"github.com/projectcalico/felix/fv/containers"
 	"github.com/projectcalico/felix/fv/infrastructure"
 	"github.com/projectcalico/felix/fv/utils"
 	"github.com/projectcalico/felix/fv/workload"
+	"github.com/projectcalico/libcalico-go/lib/apiconfig"
 	api "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	client "github.com/projectcalico/libcalico-go/lib/clientv3"
+	"github.com/projectcalico/libcalico-go/lib/ipam"
 	cnet "github.com/projectcalico/libcalico-go/lib/net"
 )
 
@@ -641,7 +634,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						for _, match := range matches {
 							lastSeenNanos, err := strconv.ParseInt(match[1], 10, 64)
 							Expect(err).NotTo(HaveOccurred())
-							nowNanos := conntrack.KTimeNanos()
+							nowNanos := bpf.KTimeNanos()
 							age := time.Duration(nowNanos - lastSeenNanos)
 							Expect(age).To(BeNumerically(">", 0))
 							Expect(age).To(BeNumerically("<", 60*time.Second))

@@ -715,7 +715,7 @@ var _ = Describe("BPF Syncer", func() {
 					nat.NewNATKey(net.IPv4(10, 0, 0, 2), 2222, proxy.ProtoV1ToIntPanic(v1.ProtocolTCP)),
 				).AsBytes(),
 				nat.NewAffinityValue(
-					uint64(proxy.Monotime()),
+					uint64(bpf.KTimeNanos()),
 					nat.NewNATBackendValue(net.IPv4(10, 2, 0, 1), 2222),
 				).AsBytes(),
 			)
@@ -728,7 +728,7 @@ var _ = Describe("BPF Syncer", func() {
 					nat.NewNATKey(net.IPv4(10, 0, 0, 2), 2222, proxy.ProtoV1ToIntPanic(v1.ProtocolTCP)),
 				).AsBytes(),
 				nat.NewAffinityValue(
-					uint64(proxy.Monotime()-10*time.Second),
+					uint64(bpf.KTimeNanos())-uint64(10*time.Second),
 					nat.NewNATBackendValue(net.IPv4(10, 2, 0, 1), 2222),
 				).AsBytes(),
 			)
@@ -754,7 +754,7 @@ var _ = Describe("BPF Syncer", func() {
 					nat.NewNATKey(net.IPv4(10, 0, 0, 2), 2222, proxy.ProtoV1ToIntPanic(v1.ProtocolTCP)),
 				).AsBytes(),
 				nat.NewAffinityValue(
-					uint64(proxy.Monotime()),
+					uint64(bpf.KTimeNanos()),
 					nat.NewNATBackendValue(net.IPv4(10, 3, 0, 1), 3333),
 				).AsBytes(),
 			)
@@ -766,7 +766,7 @@ var _ = Describe("BPF Syncer", func() {
 					nat.NewNATKey(net.IPv4(10, 0, 0, 2), 2222, proxy.ProtoV1ToIntPanic(v1.ProtocolTCP)),
 				).AsBytes(),
 				nat.NewAffinityValue(
-					uint64(proxy.Monotime()),
+					uint64(bpf.KTimeNanos()),
 					nat.NewNATBackendValue(net.IPv4(10, 3, 0, 1), 3333),
 				).AsBytes(),
 			)
@@ -792,7 +792,7 @@ var _ = Describe("BPF Syncer", func() {
 					nat.NewNATKey(net.IPv4(10, 1, 0, 1), 123, 6),
 				).AsBytes(),
 				nat.NewAffinityValue(
-					uint64(proxy.Monotime()),
+					uint64(bpf.KTimeNanos()),
 					nat.NewNATBackendValue(net.IPv4(111, 1, 1, 1), 111),
 				).AsBytes(),
 			)
