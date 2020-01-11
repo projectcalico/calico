@@ -46,8 +46,7 @@ type FelixConfigurationSpec struct {
 	UseInternalDataplaneDriver *bool  `json:"useInternalDataplaneDriver,omitempty"`
 	DataplaneDriver            string `json:"dataplaneDriver,omitempty"`
 
-	IPv6Support    *bool `json:"ipv6Support,omitempty" confignamev1:"Ipv6Support"`
-	IgnoreLooseRPF *bool `json:"ignoreLooseRPF,omitempty"`
+	IPv6Support *bool `json:"ipv6Support,omitempty" confignamev1:"Ipv6Support"`
 
 	// RouterefreshInterval is the period at which Felix re-checks the routes
 	// in the dataplane to ensure that no other process has accidentally broken Calico’s rules.

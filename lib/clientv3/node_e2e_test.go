@@ -290,11 +290,8 @@ var _ = testutils.E2eDatastoreDescribe("Node tests (etcdv3)", testutils.Datastor
 			Expect(err).ShouldNot(HaveOccurred())
 
 			nodeConfigName := fmt.Sprintf("node.%s", name1)
-			pTrue := true
 			felixConf := apiv3.FelixConfiguration{
-				Spec: apiv3.FelixConfigurationSpec{
-					IgnoreLooseRPF: &pTrue,
-				},
+				Spec: apiv3.FelixConfigurationSpec{},
 				ObjectMeta: metav1.ObjectMeta{
 					Name: nodeConfigName,
 				},
