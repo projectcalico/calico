@@ -284,51 +284,36 @@ st-checks:
 	# running on the host.
 	iptables-save | grep -q 'calico-st-allow-etcd' || iptables $(IPT_ALLOW_ETCD)
 
-## Get the kubeadm-dind-cluster script
-K8ST_VERSION?=v1.12
-DIND_SCR?=dind-cluster-$(K8ST_VERSION).sh
-
 .PHONY: k8s-test
 ## Run the k8s tests
 k8s-test:
-	$(MAKE) k8s-stop
-	$(MAKE) k8s-start
-	$(MAKE) k8s-run-test
-	#$(MAKE) k8s-stop
+	$(MAKE) kind-k8st-setup
+	$(MAKE) kind-k8st-run-test
+	$(MAKE) kind-k8st-cleanup
 
-.PHONY: k8s-start
-## Start k8s cluster
-k8s-start: $(NODE_CONTAINER_CREATED) tests/k8st/$(DIND_SCR)
-	CNI_PLUGIN=calico \
-	CALICO_VERSION=master \
-	CALICO_NODE_IMAGE=$(BUILD_IMAGE):latest-$(ARCH) \
-	POD_NETWORK_CIDR=192.168.0.0/16 \
-	SKIP_SNAPSHOT=y \
-	tests/k8st/$(DIND_SCR) up
+.PHONY: kind-k8st-setup
+kind-k8st-setup: calico-node.tar
+	curl -LO https://storage.googleapis.com/kubernetes-release/release/v1.17.0/bin/linux/amd64/kubectl
+	chmod +x ./kubectl
+	tests/k8st/create_kind_cluster.sh
 
-.PHONY: k8s-stop
-## Stop k8s cluster
-k8s-stop: tests/k8st/$(DIND_SCR)
-	tests/k8st/$(DIND_SCR) down
-	tests/k8st/$(DIND_SCR) clean
-
-.PHONY: k8s-run-test
-## Run k8st in an existing k8s cluster
-k8s-run-test: calico_test.created
-## Only execute remove-go-build-image if flag is set
-ifeq ($(REMOVE_GOBUILD_IMG),true)
-	$(MAKE) remove-go-build-image
-endif
-	docker run \
+.PHONY: kind-k8st-run-test
+kind-k8st-run-test: calico_test.created
+	docker run -t --rm \
 	    -v $(CURDIR):/code \
 	    -v /var/run/docker.sock:/var/run/docker.sock \
-	    -v /home/$(USER)/.kube/config:/root/.kube/config \
-	    -v /home/$(USER)/.kubeadm-dind-cluster:/root/.kubeadm-dind-cluster \
+	    -v ${HOME}/.kube/kind-config-kind:/root/.kube/config \
+	    -v $(CURDIR)/kubectl:/root/bin/kubectl \
 	    --privileged \
 	    --net host \
-	$(TEST_CONTAINER_NAME) \
-	    sh -c 'cp /root/.kubeadm-dind-cluster/kubectl /bin/kubectl && ls -ltr /bin/kubectl && which kubectl && cd /code/tests/k8st && \
-		   nosetests $(K8ST_TO_RUN) -v --with-xunit --xunit-file="/code/report/k8s-tests.xml" --with-timer'
+	${TEST_CONTAINER_NAME} \
+	    sh -c 'echo "container started.." && cp /root/bin/kubectl /bin/kubectl && echo "kubectl copied." && \
+	     cd /code/tests/k8st &&  nosetests $(K8ST_TO_RUN) -s --nocapture --nologcapture -v --with-xunit --xunit-file="/code/report/k8s-tests.xml" --with-timer'
+
+.PHONY: kind-k8st-cleanup
+kind-k8st-cleanup:
+	tests/k8st/delete_kind_cluster.sh
+	rm -f ./kubectl
 
 # Needed for Semaphore CI (where disk space is a real issue during k8s-test)
 .PHONY: remove-go-build-image

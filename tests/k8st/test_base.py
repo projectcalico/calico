@@ -114,12 +114,13 @@ class TestBase(TestCase):
         """
         # Run a deployment with <replicas> copies of <image>, with the
         # pods labelled with "app": <name>.
-        deployment = client.ExtensionsV1beta1Deployment(
-            api_version="extensions/v1beta1",
+        deployment = client.V1Deployment(
+            api_version="apps/v1",
             kind="Deployment",
             metadata=client.V1ObjectMeta(name=name),
-            spec=client.ExtensionsV1beta1DeploymentSpec(
+            spec=client.V1DeploymentSpec(
                 replicas=replicas,
+                selector={'matchLabels': {'app': name}},
                 template=client.V1PodTemplateSpec(
                     metadata=client.V1ObjectMeta(labels={"app": name}),
                     spec=client.V1PodSpec(containers=[
@@ -127,7 +128,7 @@ class TestBase(TestCase):
                                            image=image,
                                            ports=[client.V1ContainerPort(container_port=port)]),
                     ]))))
-        api_response = client.ExtensionsV1beta1Api().create_namespaced_deployment(
+        api_response = client.AppsV1Api().create_namespaced_deployment(
             body=deployment,
             namespace=ns)
         logger.debug("Deployment created. status='%s'" % str(api_response.status))

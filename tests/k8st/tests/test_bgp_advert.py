@@ -14,45 +14,17 @@
 import logging
 import subprocess
 import json
+import sys
 
 from tests.k8st.test_base import TestBase
 from tests.k8st.utils.utils import start_external_node_with_bgp, \
-        retry_until_success, run, curl, DiagsCollector, calicoctl, kubectl
+        retry_until_success, run, curl, DiagsCollector, calicoctl, kubectl, node_info
 
 _log = logging.getLogger(__name__)
 
 attempts = 10
 
 bird_conf = """
-router id 10.192.0.5;
-
-# Configure synchronization between routing tables and kernel.
-protocol kernel {
-  learn;             # Learn all alien routes from the kernel
-  persist;           # Don't remove routes on bird shutdown
-  scan time 2;       # Scan kernel routing table every 2 seconds
-  import all;
-  export all;
-  graceful restart;  # Turn on graceful restart to reduce potential flaps in
-                     # routes when reloading BIRD configuration.  With a full
-                     # automatic mesh, there is no way to prevent BGP from
-                     # flapping since multiple nodes update their BGP
-                     # configuration at the same time, GR is not guaranteed to
-                     # work correctly in this scenario.
-  merge paths on;
-}
-
-# Watch interface up/down events.
-protocol device {
-  debug { states };
-  scan time 2;    # Scan interfaces every 2 seconds
-}
-
-protocol direct {
-  debug { states };
-  interface -"cali*", "*"; # Exclude cali* but include everything else.
-}
-
 # Template for all BGP clients
 template bgp bgp_template {
   debug { states };
@@ -63,7 +35,7 @@ template bgp bgp_template {
   import all;        # Import all routes, since we don't know what the upstream
                      # topology is and therefore have to trust the ToR/RR.
   export all;
-  source address 10.192.0.5;  # The local address we use for the TCP connection
+  source address ip@local;  # The local address we use for the TCP connection
   add paths on;
   graceful restart;  # See comment in kernel section about graceful restart.
   connect delay time 2;
@@ -72,22 +44,27 @@ template bgp bgp_template {
 }
 
 # ------------- Node-to-node mesh -------------
-# For peer /host/kube-master/ip_addr_v4
-protocol bgp Mesh_10_192_0_2 from bgp_template {
-  neighbor 10.192.0.2 as 64512;
+# For peer /host/master/ip_addr_v4
+protocol bgp Mesh_with_master_node from bgp_template {
+  neighbor %s as 64512;
   passive on; # Mesh is unidirectional, peer will connect to us.
 }
 
-
-# For peer /host/kube-node-1/ip_addr_v4
-protocol bgp Mesh_10_192_0_3 from bgp_template {
-  neighbor 10.192.0.3 as 64512;
+# For peer /host/node-1/ip_addr_v4
+protocol bgp Mesh_with_node_1 from bgp_template {
+  neighbor %s as 64512;
   passive on; # Mesh is unidirectional, peer will connect to us.
 }
 
-# For peer /host/kube-node-2/ip_addr_v4
-protocol bgp Mesh_10_192_0_4 from bgp_template {
-  neighbor 10.192.0.4 as 64512;
+# For peer /host/node-2/ip_addr_v4
+protocol bgp Mesh_with_node_2 from bgp_template {
+  neighbor %s as 64512;
+  passive on; # Mesh is unidirectional, peer will connect to us.
+}
+
+# For peer /host/node-3/ip_addr_v4
+protocol bgp Mesh_with_node_3 from bgp_template {
+  neighbor %s as 64512;
   passive on; # Mesh is unidirectional, peer will connect to us.
 }
 """
@@ -95,35 +72,6 @@ protocol bgp Mesh_10_192_0_4 from bgp_template {
 # BIRD config for an external node to peer with
 # the in-cluster route reflector on kube-node-2.
 bird_conf_rr = """
-router id 10.192.0.5;
-
-# Configure synchronization between routing tables and kernel.
-protocol kernel {
-  learn;             # Learn all alien routes from the kernel
-  persist;           # Don't remove routes on bird shutdown
-  scan time 2;       # Scan kernel routing table every 2 seconds
-  import all;
-  export all;
-  graceful restart;  # Turn on graceful restart to reduce potential flaps in
-                     # routes when reloading BIRD configuration.  With a full
-                     # automatic mesh, there is no way to prevent BGP from
-                     # flapping since multiple nodes update their BGP
-                     # configuration at the same time, GR is not guaranteed to
-                     # work correctly in this scenario.
-  merge paths on;
-}
-
-# Watch interface up/down events.
-protocol device {
-  debug { states };
-  scan time 2;    # Scan interfaces every 2 seconds
-}
-
-protocol direct {
-  debug { states };
-  interface -"cali*", "*"; # Exclude cali* but include everything else.
-}
-
 # Template for all BGP clients
 template bgp bgp_template {
   debug { states };
@@ -134,7 +82,7 @@ template bgp bgp_template {
   import all;        # Import all routes, since we don't know what the upstream
                      # topology is and therefore have to trust the ToR/RR.
   export all;
-  source address 10.192.0.5;  # The local address we use for the TCP connection
+  source address ip@local;  # The local address we use for the TCP connection
   add paths on;
   graceful restart;  # See comment in kernel section about graceful restart.
   connect delay time 2;
@@ -142,9 +90,9 @@ template bgp bgp_template {
   error wait time 5,30;
 }
 
-# For peer /host/kube-node-2/ip_addr_v4
-protocol bgp Mesh_10_192_0_4 from bgp_template {
-  neighbor 10.192.0.4 as 64512;
+# For peer /host/node-2/ip_addr_v4
+protocol bgp Mesh_with_node_2 from bgp_template {
+  neighbor %s as 64512;
   passive on; # Mesh is unidirectional, peer will connect to us.
 }
 """
@@ -158,7 +106,8 @@ class TestBGPAdvert(TestBase):
         self.ns = "bgp-test"
         self.create_namespace(self.ns)
 
-        start_external_node_with_bgp("kube-node-extra", bird_conf)
+        self.nodes, self.ips = node_info()
+        self.external_node_ip = start_external_node_with_bgp("kube-node-extra", bird_conf % (self.ips[0], self.ips[1], self.ips[2], self.ips[3]))
 
         # Enable debug logging
         self.update_ds_env("calico-node",
@@ -173,10 +122,10 @@ kind: BGPPeer
 metadata:
   name: node-extra.peer
 spec:
-  peerIP: 10.192.0.5
+  peerIP: %s
   asNumber: 64512
 EOF
-""")
+""" % self.external_node_ip)
 
     def setUpRR(self):
         super(TestBGPAdvert, self).setUp()
@@ -185,7 +134,8 @@ EOF
         self.ns = "bgp-test"
         self.create_namespace(self.ns)
 
-        start_external_node_with_bgp("kube-node-extra", bird_conf_rr)
+        self.nodes, self.ips = node_info()
+        self.external_node_ip = start_external_node_with_bgp("kube-node-extra", bird_conf_rr % self.ips[2])
 
         # Enable debug logging
         self.update_ds_env("calico-node",
@@ -194,18 +144,17 @@ EOF
                            "debug")
 
         # Establish BGPPeer from cluster nodes to node-extra using calicoctl
-        # External peer has IP 10.192.0.5
         calicoctl("""apply -f - << EOF
 apiVersion: projectcalico.org/v3
 kind: BGPPeer
 metadata:
   name: node-extra.peer
 spec:
-  node: kube-node-2
-  peerIP: 10.192.0.5
+  node: %s
+  peerIP: %s
   asNumber: 64512
 EOF
-""")
+""" % (self.nodes[2], self.external_node_ip))
 
     def tearDown(self):
         super(TestBGPAdvert, self).tearDown()
@@ -232,7 +181,7 @@ EOF
 """)
 
         # Remove node-2's route-reflector config.
-        json_str = calicoctl("get node kube-node-2 -o json")
+        json_str = calicoctl("get node %s -o json" % self.nodes[2])
         node_dict = json.loads(json_str)
         node_dict['metadata']['labels'].pop('i-am-a-route-reflector', '')
         node_dict['spec']['bgp'].pop('routeReflectorClusterID', '')
@@ -245,10 +194,11 @@ EOF
         return kubectl("get svc %s -n %s -o json | jq -r .spec.clusterIP" %
                        (svc, ns)).strip()
 
-    def assert_ecmp_routes(self, dst, via=["10.192.0.3", "10.192.0.4"]):
+    def assert_ecmp_routes(self, dst, via):
         matchStr = dst + " proto bird "
-        for ip in via:
-            matchStr += "\n\tnexthop via %s  dev eth0 weight 1" % ip
+        # sort ips and construct match string for ECMP routes.
+        for ip in sorted(via):
+            matchStr += "\n\tnexthop via %s dev eth0 weight 1 " % ip
         retry_until_success(lambda: self.assertIn(matchStr, self.get_routes()))
 
     def get_svc_host_ip(self, svc, ns):
@@ -292,7 +242,7 @@ spec:
         - containerPort: 80
       nodeSelector:
         beta.kubernetes.io/os: linux
-        kubernetes.io/hostname: kube-node-1
+        kubernetes.io/hostname: %s
 ---
 apiVersion: v1
 kind: Service
@@ -314,14 +264,14 @@ spec:
   type: NodePort
   externalTrafficPolicy: Local
 EOF
-""")
+""" % self.nodes[1])
 
         calicoctl("get nodes -o yaml")
         calicoctl("get bgppeers -o yaml")
         calicoctl("get bgpconfigs -o yaml")
 
         # Update the node-2 to behave as a route-reflector
-        json_str = calicoctl("get node kube-node-2 -o json")
+        json_str = calicoctl("get node %s -o json" % self.nodes[2])
         node_dict = json.loads(json_str)
         node_dict['metadata']['labels']['i-am-a-route-reflector'] = 'true'
         node_dict['spec']['bgp']['routeReflectorClusterID'] = '224.0.0.1'
@@ -352,11 +302,11 @@ apiVersion: projectcalico.org/v3
 kind: BGPPeer
 metadata: {name: kube-node-1}
 spec:
-  node: kube-node-1
-  peerIP: 10.192.0.4
+  node: %s
+  peerIP: %s
   asNumber: 64512
 EOF
-""")
+""" % (self.nodes[1], self.ips[2]))
         svc_json = kubectl("get svc nginx-rr -n bgp-test -o json")
         svc_dict = json.loads(svc_json)
         cluster_ip = svc_dict['spec']['clusterIP']
@@ -426,12 +376,12 @@ spec:
   - Ingress
   ingress:
   - from:
-    - ipBlock: { cidr: 10.192.0.5/32 }
+    - ipBlock: { cidr: %s/32 }
     ports:
     - protocol: TCP
       port: 80
 EOF
-""")
+""" % self.external_node_ip)
 
             # Connectivity to nginx-local should always succeed.
             for i in range(attempts):
@@ -443,7 +393,7 @@ EOF
             # Try to curl 10 times.
             try:
               for i in range(attempts):
-                curl("kube-node-extra", cluster_svc_ip)
+                curl(cluster_svc_ip)
               self.fail("external node should not be able to consistently access the cluster svc")
             except subprocess.CalledProcessError:
               pass
@@ -451,7 +401,7 @@ EOF
             # Scale the local_svc to 4 replicas
             self.scale_deployment(local_svc, self.ns, 4)
             self.wait_for_deployment(local_svc, self.ns)
-            self.assert_ecmp_routes(local_svc_ip)
+            self.assert_ecmp_routes(local_svc_ip, [self.ips[1], self.ips[2], self.ips[3]])
             for i in range(attempts):
               retry_until_success(curl, function_args=[local_svc_ip])
 
@@ -480,9 +430,6 @@ spec:
   - cidr: 200.255.0.0/24
 EOF
 """)
-
-            # Assert that a route to the service IP range is present.
-            retry_until_success(lambda: self.assertIn("10.192.0.0/24", self.get_routes()))
 
             # Create both a Local and a Cluster type NodePort service with a single replica.
             local_svc = "nginx-local"
@@ -517,12 +464,12 @@ spec:
   - Ingress
   ingress:
   - from:
-    - ipBlock: { cidr: 10.192.0.5/32 }
+    - ipBlock: { cidr: %s/32 }
     ports:
     - protocol: TCP
       port: 80
 EOF
-""")
+""" % self.external_node_ip)
 
             # Get host IPs for the nginx pods.
             local_svc_host_ip = self.get_svc_host_ip(local_svc, self.ns)
@@ -547,7 +494,7 @@ EOF
             self.wait_for_deployment(local_svc, self.ns)
 
             # Verify that we have ECMP routes for the external IP of the local service.
-            retry_until_success(lambda: self.assert_ecmp_routes(local_svc_external_ip))
+            retry_until_success(lambda: self.assert_ecmp_routes(local_svc_external_ip, [self.ips[1], self.ips[2], self.ips[3]]))
 
             # Delete both services, assert only cluster CIDR route is advertised.
             self.delete_and_confirm(local_svc, "svc", self.ns)
