@@ -219,6 +219,8 @@ github.com/projectcalico/libcalico-go v0.0.0-20200107000057-b5581766b59c h1:Qyy5
 github.com/projectcalico/libcalico-go v0.0.0-20200107000057-b5581766b59c/go.mod h1:yd3FK67e+YeaYtKw5ImPw+YFyFF/G0ZCzbbwNAwwZh8=
 github.com/projectcalico/libcalico-go v0.0.0-20200108185403-403996d814c2 h1:DON19MsdHqK1S5gRsEDBeMMcvTPPih7qFM2NQ8Fmzrs=
 github.com/projectcalico/libcalico-go v0.0.0-20200108185403-403996d814c2/go.mod h1:yd3FK67e+YeaYtKw5ImPw+YFyFF/G0ZCzbbwNAwwZh8=
+github.com/projectcalico/libcalico-go v0.0.0-20200111004125-f4cc1f8914f8 h1:aEJz4lXaqx7VtJfuafiIiKSA+pnGfGpL4O27NwBiveQ=
+github.com/projectcalico/libcalico-go v0.0.0-20200111004125-f4cc1f8914f8/go.mod h1:yd3FK67e+YeaYtKw5ImPw+YFyFF/G0ZCzbbwNAwwZh8=
 github.com/projectcalico/libcalico-go v1.7.2-0.20191204181402-d100617bd4df h1:FEaBaXf2qoBnJga4VBGf0H8/yB6pumeJlDWWiuF7lfw=
 github.com/projectcalico/libcalico-go v1.7.2-0.20191204181402-d100617bd4df/go.mod h1:5Upl9epOoyHRS1D4O9nckdFUtB0munzl4T1yoW52S14=
 github.com/projectcalico/libcalico-go v1.7.2-0.20191205083902-1b3f8f6b6b3e h1:MQK7JngfPX48UnYUFD0HeN/7ELnmo7SY4PcGM5yVrfY=
