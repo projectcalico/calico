@@ -16,6 +16,7 @@ package rules
 
 import (
 	"errors"
+	"fmt"
 	"strings"
 
 	log "github.com/sirupsen/logrus"
@@ -261,6 +262,13 @@ func (r *DefaultRuleRenderer) ProtoRuleToIptablesRules(pRule *proto.Rule, ipVers
 			Match:  match,
 			Action: action,
 		})
+	}
+
+	// Render rule annotations as comments on each rule.
+	for i := range rs {
+		for k, v := range pRule.GetMetadata().GetAnnotations() {
+			rs[i].Comment = append(rs[i].Comment, fmt.Sprintf("%s=%s", k, v))
+		}
 	}
 
 	return rs

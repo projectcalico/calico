@@ -305,6 +305,8 @@ type ParsedRule struct {
 	// These fields allow us to pass through the HTTP match criteria from the V3 datamodel. The iptables dataplane
 	// does not implement the match, but other dataplanes such as Dikastes do.
 	HTTPMatch *model.HTTPMatch
+
+	Metadata *model.RuleMetadata
 }
 
 func ruleToParsedRule(rule *model.Rule) (parsedRule *ParsedRule, allIPSets []*IPSetData) {
@@ -413,6 +415,9 @@ func ruleToParsedRule(rule *model.Rule) (parsedRule *ParsedRule, allIPSets []*IP
 		OriginalDstServiceAccountNames:    rule.OriginalDstServiceAccountNames,
 		OriginalDstServiceAccountSelector: rule.OriginalDstServiceAccountSelector,
 		HTTPMatch:                         rule.HTTPMatch,
+
+		// Pass through metadata (used by iptables backend)
+		Metadata: rule.Metadata,
 	}
 
 	allIPSets = append(allIPSets, srcNamedPortIPSets...)

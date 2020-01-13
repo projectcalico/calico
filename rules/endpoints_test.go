@@ -78,12 +78,12 @@ var _ = Describe("Endpoints", func() {
 			Match: Match().ProtocolNum(ProtoUDP).
 				DestPorts(uint16(VXLANPort)),
 			Action:  DropAction{},
-			Comment: "Drop VXLAN encapped packets originating in pods",
+			Comment: []string{"Drop VXLAN encapped packets originating in pods"},
 		}
 		dropIPIPRule := Rule{
 			Match:   Match().ProtocolNum(ProtoIPIP),
 			Action:  DropAction{},
-			Comment: "Drop IPinIP encapped packets originating in pods",
+			Comment: []string{"Drop IPinIP encapped packets originating in pods"},
 		}
 
 		Context("with normal config", func() {
@@ -111,7 +111,7 @@ var _ = Describe("Endpoints", func() {
 
 							{Action: ClearMarkAction{Mark: 0x8}},
 							{Action: DropAction{},
-								Comment: "Drop if no profiles matched"},
+								Comment: []string{"Drop if no profiles matched"}},
 						},
 					},
 					{
@@ -127,7 +127,7 @@ var _ = Describe("Endpoints", func() {
 							dropVXLANRule,
 							dropIPIPRule,
 							{Action: DropAction{},
-								Comment: "Drop if no profiles matched"},
+								Comment: []string{"Drop if no profiles matched"}},
 						},
 					},
 					{
@@ -151,14 +151,14 @@ var _ = Describe("Endpoints", func() {
 						Name: "cali-tw-cali1234",
 						Rules: []Rule{
 							{Action: DropAction{},
-								Comment: "Endpoint admin disabled"},
+								Comment: []string{"Endpoint admin disabled"}},
 						},
 					},
 					{
 						Name: "cali-fw-cali1234",
 						Rules: []Rule{
 							{Action: DropAction{},
-								Comment: "Endpoint admin disabled"},
+								Comment: []string{"Endpoint admin disabled"}},
 						},
 					},
 					{
@@ -190,33 +190,33 @@ var _ = Describe("Endpoints", func() {
 
 							{Action: ClearMarkAction{Mark: 0x8}},
 
-							{Comment: "Start of policies",
+							{Comment: []string{"Start of policies"},
 								Action: ClearMarkAction{Mark: 0x10}},
 							{Match: Match().MarkClear(0x10),
 								Action: JumpAction{Target: "cali-pi-ai"}},
 							{Match: Match().MarkSingleBitSet(0x8),
 								Action:  ReturnAction{},
-								Comment: "Return if policy accepted"},
+								Comment: []string{"Return if policy accepted"}},
 							{Match: Match().MarkClear(0x10),
 								Action: JumpAction{Target: "cali-pi-bi"}},
 							{Match: Match().MarkSingleBitSet(0x8),
 								Action:  ReturnAction{},
-								Comment: "Return if policy accepted"},
+								Comment: []string{"Return if policy accepted"}},
 							{Match: Match().MarkClear(0x10),
 								Action:  DropAction{},
-								Comment: "Drop if no policies passed packet"},
+								Comment: []string{"Drop if no policies passed packet"}},
 
 							{Action: JumpAction{Target: "cali-pri-prof1"}},
 							{Match: Match().MarkSingleBitSet(0x8),
 								Action:  ReturnAction{},
-								Comment: "Return if profile accepted"},
+								Comment: []string{"Return if profile accepted"}},
 							{Action: JumpAction{Target: "cali-pri-prof2"}},
 							{Match: Match().MarkSingleBitSet(0x8),
 								Action:  ReturnAction{},
-								Comment: "Return if profile accepted"},
+								Comment: []string{"Return if profile accepted"}},
 
 							{Action: DropAction{},
-								Comment: "Drop if no profiles matched"},
+								Comment: []string{"Drop if no profiles matched"}},
 						},
 					},
 					{
@@ -232,33 +232,33 @@ var _ = Describe("Endpoints", func() {
 							dropVXLANRule,
 							dropIPIPRule,
 
-							{Comment: "Start of policies",
+							{Comment: []string{"Start of policies"},
 								Action: ClearMarkAction{Mark: 0x10}},
 							{Match: Match().MarkClear(0x10),
 								Action: JumpAction{Target: "cali-po-ae"}},
 							{Match: Match().MarkSingleBitSet(0x8),
 								Action:  ReturnAction{},
-								Comment: "Return if policy accepted"},
+								Comment: []string{"Return if policy accepted"}},
 							{Match: Match().MarkClear(0x10),
 								Action: JumpAction{Target: "cali-po-be"}},
 							{Match: Match().MarkSingleBitSet(0x8),
 								Action:  ReturnAction{},
-								Comment: "Return if policy accepted"},
+								Comment: []string{"Return if policy accepted"}},
 							{Match: Match().MarkClear(0x10),
 								Action:  DropAction{},
-								Comment: "Drop if no policies passed packet"},
+								Comment: []string{"Drop if no policies passed packet"}},
 
 							{Action: JumpAction{Target: "cali-pro-prof1"}},
 							{Match: Match().MarkSingleBitSet(0x8),
 								Action:  ReturnAction{},
-								Comment: "Return if profile accepted"},
+								Comment: []string{"Return if profile accepted"}},
 							{Action: JumpAction{Target: "cali-pro-prof2"}},
 							{Match: Match().MarkSingleBitSet(0x8),
 								Action:  ReturnAction{},
-								Comment: "Return if profile accepted"},
+								Comment: []string{"Return if profile accepted"}},
 
 							{Action: DropAction{},
-								Comment: "Drop if no profiles matched"},
+								Comment: []string{"Drop if no profiles matched"}},
 						},
 					},
 					{
@@ -290,33 +290,33 @@ var _ = Describe("Endpoints", func() {
 
 							{Action: ClearMarkAction{Mark: 0x8}},
 
-							{Comment: "Start of policies",
+							{Comment: []string{"Start of policies"},
 								Action: ClearMarkAction{Mark: 0x10}},
 							{Match: Match().MarkClear(0x10),
 								Action: JumpAction{Target: "cali-po-ae"}},
 							{Match: Match().MarkSingleBitSet(0x8),
 								Action:  ReturnAction{},
-								Comment: "Return if policy accepted"},
+								Comment: []string{"Return if policy accepted"}},
 							{Match: Match().MarkClear(0x10),
 								Action: JumpAction{Target: "cali-po-be"}},
 							{Match: Match().MarkSingleBitSet(0x8),
 								Action:  ReturnAction{},
-								Comment: "Return if policy accepted"},
+								Comment: []string{"Return if policy accepted"}},
 							{Match: Match().MarkClear(0x10),
 								Action:  DropAction{},
-								Comment: "Drop if no policies passed packet"},
+								Comment: []string{"Drop if no policies passed packet"}},
 
 							{Action: JumpAction{Target: "cali-pro-prof1"}},
 							{Match: Match().MarkSingleBitSet(0x8),
 								Action:  ReturnAction{},
-								Comment: "Return if profile accepted"},
+								Comment: []string{"Return if profile accepted"}},
 							{Action: JumpAction{Target: "cali-pro-prof2"}},
 							{Match: Match().MarkSingleBitSet(0x8),
 								Action:  ReturnAction{},
-								Comment: "Return if profile accepted"},
+								Comment: []string{"Return if profile accepted"}},
 
 							{Action: DropAction{},
-								Comment: "Drop if no profiles matched"},
+								Comment: []string{"Drop if no profiles matched"}},
 						},
 					},
 					{
@@ -333,33 +333,33 @@ var _ = Describe("Endpoints", func() {
 
 							{Action: ClearMarkAction{Mark: 0x8}},
 
-							{Comment: "Start of policies",
+							{Comment: []string{"Start of policies"},
 								Action: ClearMarkAction{Mark: 0x10}},
 							{Match: Match().MarkClear(0x10),
 								Action: JumpAction{Target: "cali-pi-ai"}},
 							{Match: Match().MarkSingleBitSet(0x8),
 								Action:  ReturnAction{},
-								Comment: "Return if policy accepted"},
+								Comment: []string{"Return if policy accepted"}},
 							{Match: Match().MarkClear(0x10),
 								Action: JumpAction{Target: "cali-pi-bi"}},
 							{Match: Match().MarkSingleBitSet(0x8),
 								Action:  ReturnAction{},
-								Comment: "Return if policy accepted"},
+								Comment: []string{"Return if policy accepted"}},
 							{Match: Match().MarkClear(0x10),
 								Action:  DropAction{},
-								Comment: "Drop if no policies passed packet"},
+								Comment: []string{"Drop if no policies passed packet"}},
 
 							{Action: JumpAction{Target: "cali-pri-prof1"}},
 							{Match: Match().MarkSingleBitSet(0x8),
 								Action:  ReturnAction{},
-								Comment: "Return if profile accepted"},
+								Comment: []string{"Return if profile accepted"}},
 							{Action: JumpAction{Target: "cali-pri-prof2"}},
 							{Match: Match().MarkSingleBitSet(0x8),
 								Action:  ReturnAction{},
-								Comment: "Return if profile accepted"},
+								Comment: []string{"Return if profile accepted"}},
 
 							{Action: DropAction{},
-								Comment: "Drop if no profiles matched"},
+								Comment: []string{"Drop if no profiles matched"}},
 						},
 					},
 					{
@@ -373,21 +373,21 @@ var _ = Describe("Endpoints", func() {
 
 							{Action: ClearMarkAction{Mark: 0x8}},
 
-							{Comment: "Start of policies",
+							{Comment: []string{"Start of policies"},
 								Action: ClearMarkAction{Mark: 0x10}},
 							{Match: Match().MarkClear(0x10),
 								Action: JumpAction{Target: "cali-po-afe"}},
 							{Match: Match().MarkSingleBitSet(0x8),
 								Action:  ReturnAction{},
-								Comment: "Return if policy accepted"},
+								Comment: []string{"Return if policy accepted"}},
 							{Match: Match().MarkClear(0x10),
 								Action: JumpAction{Target: "cali-po-bfe"}},
 							{Match: Match().MarkSingleBitSet(0x8),
 								Action:  ReturnAction{},
-								Comment: "Return if policy accepted"},
+								Comment: []string{"Return if policy accepted"}},
 							{Match: Match().MarkClear(0x10),
 								Action:  DropAction{},
-								Comment: "Drop if no policies passed packet"},
+								Comment: []string{"Drop if no policies passed packet"}},
 						},
 					},
 					{
@@ -401,21 +401,21 @@ var _ = Describe("Endpoints", func() {
 
 							{Action: ClearMarkAction{Mark: 0x8}},
 
-							{Comment: "Start of policies",
+							{Comment: []string{"Start of policies"},
 								Action: ClearMarkAction{Mark: 0x10}},
 							{Match: Match().MarkClear(0x10),
 								Action: JumpAction{Target: "cali-pi-afi"}},
 							{Match: Match().MarkSingleBitSet(0x8),
 								Action:  ReturnAction{},
-								Comment: "Return if policy accepted"},
+								Comment: []string{"Return if policy accepted"}},
 							{Match: Match().MarkClear(0x10),
 								Action: JumpAction{Target: "cali-pi-bfi"}},
 							{Match: Match().MarkSingleBitSet(0x8),
 								Action:  ReturnAction{},
-								Comment: "Return if policy accepted"},
+								Comment: []string{"Return if policy accepted"}},
 							{Match: Match().MarkClear(0x10),
 								Action:  DropAction{},
-								Comment: "Drop if no policies passed packet"},
+								Comment: []string{"Drop if no policies passed packet"}},
 						},
 					},
 					{
@@ -437,7 +437,7 @@ var _ = Describe("Endpoints", func() {
 
 							{Action: ClearMarkAction{Mark: 0x8}},
 
-							{Comment: "Start of policies",
+							{Comment: []string{"Start of policies"},
 								Action: ClearMarkAction{Mark: 0x10}},
 							{Match: Match().MarkClear(0x10),
 								Action: JumpAction{Target: "cali-po-c"}},
@@ -446,7 +446,7 @@ var _ = Describe("Endpoints", func() {
 								Action: NoTrackAction{}},
 							{Match: Match().MarkSingleBitSet(0x8),
 								Action:  ReturnAction{},
-								Comment: "Return if policy accepted"},
+								Comment: []string{"Return if policy accepted"}},
 
 							// No drop actions or profiles in raw table.
 						},
@@ -459,7 +459,7 @@ var _ = Describe("Endpoints", func() {
 
 							{Action: ClearMarkAction{Mark: 0x8}},
 
-							{Comment: "Start of policies",
+							{Comment: []string{"Start of policies"},
 								Action: ClearMarkAction{Mark: 0x10}},
 							{Match: Match().MarkClear(0x10),
 								Action: JumpAction{Target: "cali-pi-c"}},
@@ -468,7 +468,7 @@ var _ = Describe("Endpoints", func() {
 								Action: NoTrackAction{}},
 							{Match: Match().MarkSingleBitSet(0x8),
 								Action:  ReturnAction{},
-								Comment: "Return if policy accepted"},
+								Comment: []string{"Return if policy accepted"}},
 
 							// No drop actions or profiles in raw table.
 						},
@@ -497,13 +497,13 @@ var _ = Describe("Endpoints", func() {
 
 							{Action: ClearMarkAction{Mark: 0x8}},
 
-							{Comment: "Start of policies",
+							{Comment: []string{"Start of policies"},
 								Action: ClearMarkAction{Mark: 0x10}},
 							{Match: Match().MarkClear(0x10),
 								Action: JumpAction{Target: "cali-pi-c"}},
 							{Match: Match().MarkSingleBitSet(0x8),
 								Action:  ReturnAction{},
-								Comment: "Return if policy accepted"},
+								Comment: []string{"Return if policy accepted"}},
 
 							// No drop actions or profiles in raw table.
 						},
@@ -540,7 +540,7 @@ var _ = Describe("Endpoints", func() {
 							{Action: ClearMarkAction{Mark: 0x8}},
 
 							{Action: DropAction{},
-								Comment: "Drop if no profiles matched"},
+								Comment: []string{"Drop if no profiles matched"}},
 						},
 					},
 					{
@@ -557,7 +557,7 @@ var _ = Describe("Endpoints", func() {
 							dropIPIPRule,
 
 							{Action: DropAction{},
-								Comment: "Drop if no profiles matched"},
+								Comment: []string{"Drop if no profiles matched"}},
 						},
 					},
 					{
@@ -586,13 +586,13 @@ var _ = Describe("Endpoints", func() {
 
 							{Action: ClearMarkAction{Mark: 0x8}},
 
-							{Comment: "Start of policies",
+							{Comment: []string{"Start of policies"},
 								Action: ClearMarkAction{Mark: 0x10}},
 							{Match: Match().MarkClear(0x10),
 								Action: JumpAction{Target: "cali-pi-c"}},
 							{Match: Match().MarkSingleBitSet(0x8),
 								Action:  ReturnAction{},
-								Comment: "Return if policy accepted"},
+								Comment: []string{"Return if policy accepted"}},
 
 							// No drop actions or profiles in raw table.
 						},
