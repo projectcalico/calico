@@ -82,7 +82,7 @@ sudo apt-get -y install git
 # the master branch of networking-calico (if not already present).
 test -e networking-calico || \
     git clone https://github.com/projectcalico/networking-calico
-cd networking-calico
+pushd networking-calico
 
 # If TEST_GERRIT_CHANGE has been specified, merge that change from Gerrit.
 if [ -n "$TEST_GERRIT_CHANGE" ]; then
@@ -98,7 +98,8 @@ fi
 
 # Remember the current directory.
 ncdir=`pwd`
-cd ..
+ncref=`git rev-parse --abbrev-ref HEAD`
+popd
 
 # Enable IPv4 and IPv6 forwarding.
 sudo sysctl -w net.ipv4.ip_forward=1
@@ -125,7 +126,7 @@ RABBIT_PASSWORD=6366743536a8216bde26
 SERVICE_PASSWORD=91eb72bcafb4ddf246ab
 SERVICE_TOKEN=c5680feca5e2c9c8f820
 
-enable_plugin networking-calico $ncdir
+enable_plugin networking-calico $ncdir $ncref
 disable_service tempest
 
 # Devstack by default creates an initial Neutron network topology for VMs to

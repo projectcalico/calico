@@ -16,4 +16,5 @@ blocks:
         - name: 'FV (DevStack + Tempest)'
           commands:
             - checkout
+            - ln -s . networking-calico
             - ./devstack/bootstrap.sh
