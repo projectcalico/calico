@@ -128,6 +128,7 @@ SERVICE_TOKEN=c5680feca5e2c9c8f820
 
 enable_plugin networking-calico $ncdir $ncref
 disable_service tempest
+disable_service horizon
 
 # Devstack by default creates an initial Neutron network topology for VMs to
 # attach to: a private tenant network, an external public network, and a
