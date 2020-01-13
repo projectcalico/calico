@@ -30,6 +30,8 @@ import (
 	"github.com/projectcalico/felix/bpf"
 )
 
+var podNPIP = net.IPv4(255, 255, 255, 255)
+
 type svcInfo struct {
 	id         uint32
 	count      int
@@ -328,7 +330,8 @@ func (s *Syncer) apply(state DPSyncerState) error {
 
 	// insert or update existing services
 	for sname, sinfo := range state.SvcMap {
-		if err := s.applyClusterIP(getSvcKey(sname, ""), sinfo, state.EpsMap); err != nil {
+		skey := getSvcKey(sname, "")
+		if err := s.applyClusterIP(skey, sinfo, state.EpsMap); err != nil {
 			return err
 		}
 
@@ -352,6 +355,12 @@ func (s *Syncer) apply(state DPSyncerState) error {
 				npInfo := *(sinfo.(*k8sp.BaseServiceInfo))
 				npInfo.ClusterIP = npip
 				npInfo.Port = nport
+				if npip.Equal(podNPIP) && npInfo.OnlyNodeLocalEndpoints && s.newSvcMap[skey].localCount == 0 {
+					// BPF-217 do not program the meta entry fot nodeport if ext
+					// policy is local and there is no local pod on this node. Do
+					// the full nodeport with resolution on the remote node.
+					continue
+				}
 				err := s.applyDerived(sname, svcTypeNodePort, &npInfo, state.EpsMap)
 				if err != nil {
 					log.Errorf("failed to apply NodePort %s for service %s : %s", npip, sname, err)

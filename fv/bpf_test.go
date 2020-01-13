@@ -811,6 +811,25 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						Expect(err).NotTo(HaveOccurred())
 						Eventually(k8sGetEpsForServiceFunc(k8sClient, testSvc), "10s").Should(HaveLen(1),
 							"Service endpoints didn't get created? Is controller-manager happy?")
+
+						// if tunnel is used accesing the node port will have
+						// src ip of the original node
+						if localOnly && testOpts.tunnel == "ipip" {
+							pol2 := api.NewGlobalNetworkPolicy()
+							pol2.Namespace = "fv"
+							pol2.Name = "policy-np-ipip"
+							pol2.Spec.Ingress = []api.Rule{
+								{
+									Action: "Allow",
+									Source: api.EntityRule{
+										Nets: []string{
+											felixes[1].IP + "/32",
+										},
+									},
+								},
+							}
+							pol2 = createPolicy(pol2)
+						}
 					})
 
 					It("should have connectivity from all workloads via a service to workload 0", func() {

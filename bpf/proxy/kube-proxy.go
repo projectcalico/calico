@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2019 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2020 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -88,7 +88,7 @@ func (kp *KubeProxy) run(hostIPs []net.IP) error {
 
 	withLocalNP := make([]net.IP, len(hostIPs), len(hostIPs)+1)
 	copy(withLocalNP, hostIPs)
-	withLocalNP = append(withLocalNP, net.IPv4(255, 255, 255, 255))
+	withLocalNP = append(withLocalNP, podNPIP)
 
 	syncer, err := NewSyncer(withLocalNP, kp.frontendMap, kp.backendMap)
 	if err != nil {

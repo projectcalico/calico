@@ -438,6 +438,8 @@ var _ = Describe("BPF Syncer", func() {
 		}))
 
 		By("inserting only non-local ep for a NodePort", makestep(func() {
+			// use the meta node IP for nodeports as well
+			s, _ = proxy.NewSyncer(append(nodeIPs, net.IPv4(255, 255, 255, 255)), svcs, eps)
 			state.SvcMap[svcKey2] = &k8sp.BaseServiceInfo{
 				ClusterIP:              net.IPv4(10, 0, 0, 2),
 				Port:                   2222,
@@ -492,7 +494,7 @@ var _ = Describe("BPF Syncer", func() {
 			err := s.Apply(state)
 			Expect(err).NotTo(HaveOccurred())
 
-			Expect(svcs.m).To(HaveLen(3))
+			Expect(svcs.m).To(HaveLen(4))
 
 			val1, ok := svcs.m[nat.NewNATKey(net.IPv4(10, 0, 0, 2), 2222, proxy.ProtoV1ToIntPanic(v1.ProtocolTCP))]
 			Expect(ok).To(BeTrue())
@@ -507,6 +509,10 @@ var _ = Describe("BPF Syncer", func() {
 			val3, ok := svcs.m[nat.NewNATKey(net.IPv4(10, 123, 0, 1), 2222, proxy.ProtoV1ToIntPanic(v1.ProtocolTCP))]
 			Expect(ok).To(BeTrue())
 			Expect(val2).To(Equal(val3))
+
+			val4, ok := svcs.m[nat.NewNATKey(net.IPv4(255, 255, 255, 255), 2222, proxy.ProtoV1ToIntPanic(v1.ProtocolTCP))]
+			Expect(ok).To(BeTrue())
+			Expect(val2).To(Equal(val4))
 
 			Expect(eps.m).To(HaveLen(4))
 
