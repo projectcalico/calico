@@ -103,8 +103,6 @@ var _ = Describe("FelixConfig vs ConfigParams parity", func() {
 		}
 	})
 	It("Config should contain all FelixConfigurationSpec fields", func() {
-		// TODO(lmm): Remove the following line once IgnoreLooseRPF has been removed from libcalico-go.
-		delete(fcFields, "IgnoreLooseRPF")
 		for n := range fcFields {
 			mappedName := fcFieldNameToCP[n]
 			if mappedName != "" {
