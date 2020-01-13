@@ -16,8 +16,6 @@ Designed to be used together, **{{site.prodname}} networking** and **network pol
 This how-to guide uses the following {{site.prodname}} features:
 
 - **calico/node**
-- **Network policy engine**
-- **Networking infrastructure**
 - **Typha**
 
 ### Concepts
