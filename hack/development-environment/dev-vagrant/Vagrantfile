@@ -19,10 +19,10 @@ Vagrant.configure("2") do |config|
         vb.name = "node#{i}"
       end
       if (node.vm.hostname == "node1")
-        node.vm.provision "shell", path: "install.sh", args: [i, ip, "master"]
+        node.vm.provision "shell", path: "vagrant-install.sh", args: [i, ip, "master"]
       else
 	# Note that be default, with 1 instance, you only have a master.
-        node.vm.provision "shell", path: "install.sh", args: [i, ip, "worker"]
+        node.vm.provision "shell", path: "vagrant-install.sh", args: [i, ip, "worker"]
       end
     end
   end
