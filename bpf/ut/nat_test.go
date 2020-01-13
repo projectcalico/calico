@@ -35,6 +35,8 @@ var node1ip = net.IPv4(10, 10, 0, 1)
 var node2ip = net.IPv4(10, 10, 0, 2)
 
 func TestNATPodPodXNode(t *testing.T) {
+	RegisterTestingT(t)
+
 	_, ipv4, l4, payload, pktBytes, err := testPacketUDPDefault()
 	Expect(err).NotTo(HaveOccurred())
 	udp := l4.(*layers.UDP)
@@ -233,6 +235,8 @@ func TestNATPodPodXNode(t *testing.T) {
 }
 
 func TestNATNodePort(t *testing.T) {
+	RegisterTestingT(t)
+
 	_, ipv4, l4, payload, pktBytes, err := testPacketUDPDefault()
 	Expect(err).NotTo(HaveOccurred())
 	udp := l4.(*layers.UDP)
@@ -475,6 +479,8 @@ func TestNATNodePort(t *testing.T) {
 }
 
 func TestNATNodePortICMPTooBig(t *testing.T) {
+	RegisterTestingT(t)
+
 	_, ipv4, l4, _, pktBytes, err := testPacket(nil, nil, nil, make([]byte, natTunnelMTU))
 	Expect(err).NotTo(HaveOccurred())
 	udp := l4.(*layers.UDP)
@@ -529,7 +535,7 @@ func TestNATNodePortICMPTooBig(t *testing.T) {
 	runBpfTest(t, "calico_from_host_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
 		res, err := bpfrun(pktBytes)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
+		Expect(res.RetvalStr()).To(Equal("TC_ACT_UNSPEC"), "expected program to return TC_ACT_UNSPEC")
 
 		pktR := gopacket.NewPacket(res.dataOut, layers.LayerTypeEthernet, gopacket.Default)
 		fmt.Printf("pktR = %+v\n", pktR)

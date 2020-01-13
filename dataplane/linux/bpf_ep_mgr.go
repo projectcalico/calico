@@ -19,9 +19,11 @@ import (
 	"bytes"
 	"fmt"
 	"io/ioutil"
+	"math/rand"
 	"net"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"sync"
@@ -169,6 +171,7 @@ func (m *bpfEndpointManager) onInterfaceAddrsUpdate(update *ifaceAddrsUpdate) {
 // onWorkloadEndpointUpdate adds/updates the workload in the cache along with the index from active policy to
 // workloads using that policy.
 func (m *bpfEndpointManager) onWorkloadEndpointUpdate(msg *proto.WorkloadEndpointUpdate) {
+	log.WithField("wep", msg.Endpoint).Debug("Workload endpoint update")
 	wlID := *msg.Id
 	oldWL := m.wlEps[wlID]
 	wl := msg.Endpoint
@@ -243,6 +246,7 @@ func (m *bpfEndpointManager) onWorkloadEndpointUpdate(msg *proto.WorkloadEndpoin
 // onWorkloadEndpointRemove removes the workload from the cache and the index, which maps from policy to workload.
 func (m *bpfEndpointManager) onWorkloadEnpdointRemove(msg *proto.WorkloadEndpointRemove) {
 	wlID := *msg.Id
+	log.WithField("id", wlID).Debug("Workload endpoint removed")
 	wl := m.wlEps[wlID]
 	for _, t := range wl.Tiers {
 		for _, pol := range t.IngressPolicies {
@@ -273,6 +277,7 @@ func (m *bpfEndpointManager) onWorkloadEnpdointRemove(msg *proto.WorkloadEndpoin
 // onPolicyUpdate stores the policy in the cache and marks any endpoints using it dirty.
 func (m *bpfEndpointManager) onPolicyUpdate(msg *proto.ActivePolicyUpdate) {
 	polID := *msg.Id
+	log.WithField("id", polID).Debug("Policy update")
 	m.policies[polID] = msg.Policy
 	m.markPolicyUsersDirty(polID)
 }
@@ -281,6 +286,7 @@ func (m *bpfEndpointManager) onPolicyUpdate(msg *proto.ActivePolicyUpdate) {
 // The latter should be a no-op due to the ordering guarantees of the calc graph.
 func (m *bpfEndpointManager) onPolicyRemove(msg *proto.ActivePolicyRemove) {
 	polID := *msg.Id
+	log.WithField("id", polID).Debug("Policy removed")
 	m.markPolicyUsersDirty(polID)
 	delete(m.policies, polID)
 	delete(m.policiesToWorkloads, polID)
@@ -289,6 +295,7 @@ func (m *bpfEndpointManager) onPolicyRemove(msg *proto.ActivePolicyRemove) {
 // onProfileUpdate stores the profile in the cache and marks any endpoints that use it as dirty.
 func (m *bpfEndpointManager) onProfileUpdate(msg *proto.ActiveProfileUpdate) {
 	profID := *msg.Id
+	log.WithField("id", profID).Debug("Profile update")
 	m.profiles[profID] = msg.Profile
 	m.markProfileUsersDirty(profID)
 }
@@ -297,6 +304,7 @@ func (m *bpfEndpointManager) onProfileUpdate(msg *proto.ActiveProfileUpdate) {
 // The latter should be a no-op due to the ordering guarantees of the calc graph.
 func (m *bpfEndpointManager) onProfileRemove(msg *proto.ActiveProfileRemove) {
 	profID := *msg.Id
+	log.WithField("id", profID).Debug("Profile removed")
 	m.markProfileUsersDirty(profID)
 	delete(m.profiles, profID)
 	delete(m.profilesToWorkloads, profID)
@@ -637,6 +645,8 @@ func (m *bpfEndpointManager) extractRules(tiers2 []*proto.TierInfo, profileNames
 }
 
 func (m *bpfEndpointManager) compileAndAttachProgram(allRules [][][]*proto.Rule, attachPoint TCAttachPoint) error {
+	logCxt := log.WithField("attachPoint", attachPoint)
+
 	tempDir, err := ioutil.TempDir("", "calico-compile")
 	if err != nil {
 		log.WithError(err).Panic("Failed to make temporary directory")
@@ -644,6 +654,7 @@ func (m *bpfEndpointManager) compileAndAttachProgram(allRules [][][]*proto.Rule,
 	defer func() {
 		_ = os.RemoveAll(tempDir)
 	}()
+	logCxt.WithField("tempDir", tempDir).Debug("Compiling program in temporary dir")
 	srcDir := "/code/bpf/xdp"
 	srcFileName := srcDir + "/redir_tc.c"
 	oFileName := tempDir + "/redir_tc.o"
@@ -681,27 +692,75 @@ func (m *bpfEndpointManager) compileAndAttachProgram(allRules [][][]*proto.Rule,
 
 	err = AttachTCProgram(oFileName, attachPoint)
 	if err != nil {
-		log.WithError(err).Error("Failed to attach BPF program")
+		logCxt.WithError(err).Error("Failed to attach BPF program")
 
 		var buf bytes.Buffer
 		pg, err := bpf.NewProgramGenerator(srcFileName, m.ipSetIDAlloc)
 		if err != nil {
-			log.WithError(err).Panic("Failed to write get code generator.")
+			logCxt.WithError(err).Panic("Failed to write get code generator.")
 		}
 		err = pg.WriteProgram(&buf, allRules)
 		if err != nil {
-			log.WithError(err).Panic("Failed to write C file to buffer.")
+			logCxt.WithError(err).Panic("Failed to write C file to buffer.")
 		}
 
-		log.WithField("program", buf.String()).Error("Dump of program")
+		logCxt.WithField("program", buf.String()).Error("Dump of program")
 		return err
 	}
 	return nil
 }
 
-// AttachTCProgram attaches a BPF program froma file to the TC attach point
+var tcLock sync.Mutex
+
+// AttachTCProgram attaches a BPF program from a file to the TC attach point
 func AttachTCProgram(fname string, attachPoint TCAttachPoint) error {
-	// Hook is relative to the host rather than the endpoint so we need to flip it.
+	// When tc is pinning maps, it is vulnerable to lost updates. Serialise tc calls.
+	tcLock.Lock()
+	defer tcLock.Unlock()
+
+	// Work around tc map name collision: when we load two identical BPF programs onto different interfaces, tc
+	// pins object-local maps to a namespace based on the hash of the BPF program, which is the same for both
+	// interfaces.  Since we want one map per interface instead, we search for such maps and rename them before we
+	// release the tc lock.
+	//
+	// For our purposes, it should work to simply delete the map.  However, when we tried that, the contents of the
+	// map get deleted even though it is in use by a BPF program.
+	defer func() {
+		// Find the maps we care about by walking the BPF filesystem.
+		err := filepath.Walk("/sys/fs/bpf/tc", func(path string, info os.FileInfo, err error) error {
+			if err != nil {
+				log.WithError(err).Panic("Failed to walk BPF filesystem")
+				return err
+			}
+			if info.Name() == "cali_jump" {
+				log.WithField("path", path).Debug("Queueing deletion of map")
+				out, err := exec.Command("bpftool", "map", "show", "pinned", path).Output()
+				if err != nil {
+					log.WithError(err).Panic("Failed to show map")
+				}
+				log.WithField("dump", string(out)).Info("Map show before deletion")
+				id := string(bytes.Split(out, []byte(":"))[0])
+
+				// TODO: make a path based on the name of the interface and the hook so we can look it up later.
+				out, err = exec.Command("bpftool", "map", "pin", "id", id, path+fmt.Sprint(rand.Uint32())).Output()
+				if err != nil {
+					log.WithError(err).Panic("Failed to repin map")
+				}
+				log.WithField("dump", string(out)).Info("Map pin before deletion")
+
+				err = os.Remove(path)
+				if err != nil {
+					log.WithError(err).Panic("Failed to remove old map pin")
+				}
+			}
+			return nil
+		})
+		if err != nil {
+			log.WithError(err).Panic("Failed to walk BPF filesystem")
+		}
+		log.Debug("Finished moving map pins that we don't need.")
+	}()
+
 	tc := exec.Command("tc",
 		"filter", "add", "dev", attachPoint.Iface,
 		string(attachPoint.Hook),

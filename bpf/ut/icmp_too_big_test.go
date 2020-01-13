@@ -27,6 +27,7 @@ import (
 )
 
 func TestICMPTooBig(t *testing.T) {
+	RegisterTestingT(t)
 
 	_, ipv4, l4, _, pktBytes, err := testPacketUDPDefault()
 	Expect(err).NotTo(HaveOccurred())
@@ -47,6 +48,7 @@ func TestICMPTooBig(t *testing.T) {
 }
 
 func TestICMPTooBigIPOptions(t *testing.T) {
+	RegisterTestingT(t)
 	ipv4 := &layers.IPv4{
 		Version:  4,
 		IHL:      6,

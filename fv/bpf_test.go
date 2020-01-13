@@ -1,6 +1,6 @@
 // +build fvtests
 
-// Copyright (c) 2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2019-2020 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -59,27 +59,57 @@ import (
 	cnet "github.com/projectcalico/libcalico-go/lib/net"
 )
 
-var testProtocols = []string{"udp", "tcp"}
-var testTunnels = []string{"none", "ipip"}
+// We run with and without connection-time load balancing for a couple of reasons:
+// - We can only test the non-connection time NAT logic (and node ports) with it disabled.
+// - Since the connection time program applies to the whole host, the different felix nodes actually share the
+//   connection-time program.  This is a bit of a broken test but it's better than nothing since all felix nodes
+//   should be programming the same NAT mappings.
+var _ = describeBPFTests(withProto("tcp"), withConnTimeLoadBalancingEnabled())
+var _ = describeBPFTests(withProto("udp"), withConnTimeLoadBalancingEnabled())
+var _ = describeBPFTests(withProto("tcp"))
+var _ = describeBPFTests(withProto("udp"))
+var _ = describeBPFTests(withTunnel("ipip"), withProto("tcp"), withConnTimeLoadBalancingEnabled())
+var _ = describeBPFTests(withTunnel("ipip"), withProto("udp"), withConnTimeLoadBalancingEnabled())
+var _ = describeBPFTests(withTunnel("ipip"), withProto("tcp"))
+var _ = describeBPFTests(withTunnel("ipip"), withProto("udp"))
 
-func init() {
-	for _, connTimeEnabled := range []bool{true, false} {
-		for _, protocol := range testProtocols {
-			for _, tunnel := range testTunnels {
-				describeBPFTests(bpfTestOptions{
-					connTimeEnabled: connTimeEnabled,
-					protocol:        protocol,
-					tunnel:          tunnel,
-				})
-			}
-		}
-	}
-}
+// Run a stripe of tests with BPF logging disabled since the compiler tends to optimise the code differently
+// with debug disabled and that can lead to verifier issues.
+var _ = describeBPFTests(withProto("tcp"),
+	withConnTimeLoadBalancingEnabled(),
+	withBPFLogLevel("info"))
 
 type bpfTestOptions struct {
 	connTimeEnabled bool
 	protocol        string
+	bpfLogLevel     string
 	tunnel          string
+}
+
+type bpfTestOpt func(opts *bpfTestOptions)
+
+func withProto(proto string) bpfTestOpt {
+	return func(opts *bpfTestOptions) {
+		opts.protocol = proto
+	}
+}
+
+func withConnTimeLoadBalancingEnabled() bpfTestOpt {
+	return func(opts *bpfTestOptions) {
+		opts.connTimeEnabled = true
+	}
+}
+
+func withBPFLogLevel(level string) bpfTestOpt {
+	return func(opts *bpfTestOptions) {
+		opts.bpfLogLevel = level
+	}
+}
+
+func withTunnel(tunnel string) bpfTestOpt {
+	return func(opts *bpfTestOptions) {
+		opts.tunnel = tunnel
+	}
 }
 
 const expectedRouteDump = `10.65.0.2/32: local workload
@@ -99,9 +129,16 @@ FELIX_0/32: local host
 FELIX_1/32: remote host
 FELIX_2/32: remote host`
 
-func describeBPFTests(testOpts bpfTestOptions) bool {
-	desc := fmt.Sprintf("_BPF_ _BPF-SAFE_ BPF tests (%s, ct=%v, tunnel=%s)",
-		testOpts.protocol, testOpts.connTimeEnabled, testOpts.tunnel)
+func describeBPFTests(opts ...bpfTestOpt) bool {
+	testOpts := bpfTestOptions{
+		bpfLogLevel: "debug",
+		tunnel:      "none",
+	}
+	for _, o := range opts {
+		o(&testOpts)
+	}
+	desc := fmt.Sprintf("_BPF_ _BPF-SAFE_ BPF tests (%s, ct=%v, log=%s, tunnel=%s)",
+		testOpts.protocol, testOpts.connTimeEnabled, testOpts.bpfLogLevel, testOpts.tunnel)
 	return infrastructure.DatastoreDescribe(desc, []apiconfig.DatastoreType{apiconfig.Kubernetes}, func(getInfra infrastructure.InfraFactory) {
 
 		var (
@@ -150,6 +187,7 @@ func describeBPFTests(testOpts bpfTestOptions) bool {
 				Fail("bad tunnel option")
 			}
 			options.ExtraEnvVars["FELIX_BPFConnectTimeLoadBalancingEnabled"] = fmt.Sprint(testOpts.connTimeEnabled)
+			options.ExtraEnvVars["FELIX_BPFLogLevel"] = fmt.Sprint(testOpts.bpfLogLevel)
 		})
 
 		JustAfterEach(func() {

@@ -9,7 +9,7 @@ CFLAGS +=  \
 	   -Werror \
 	   -fno-stack-protector \
 	   -O2 \
-	   -emit-llvm
+	   -emit-llvm 
 
 CC := clang
 LD := llc
@@ -22,7 +22,7 @@ OBJS := redir_tc.o filter.o
 all: $(OBJS)
 
 %.ll: %.c %.d
-	$(CC) $(CFLAGS)	-c $< -o $@
+	$(CC) $(CFLAGS) -c $< -o $@
 
 %.o: %.ll
 	$(LD) -march=bpf -filetype=obj -o $@ $<

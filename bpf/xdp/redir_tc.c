@@ -20,6 +20,7 @@
 #include "../include/conntrack.h"
 #include "../include/nat.h"
 #include "../include/routes.h"
+#include "../include/jump.h"
 #include "../include/reasons.h"
 
 #ifndef CALI_FIB_LOOKUP_ENABLED
@@ -29,12 +30,6 @@
 #ifndef CALI_DROP_WORKLOAD_TO_HOST
 #define CALI_DROP_WORKLOAD_TO_HOST false
 #endif
-
-enum calico_policy_result {
-	CALI_POL_NO_MATCH,
-	CALI_POL_ALLOW,
-	CALI_POL_DENY,
-};
 
 #ifdef CALI_DEBUG_ALLOW_ALL
 
@@ -48,6 +43,20 @@ enum calico_policy_result {
 #define execute_policy_do_not_track(...)	CALI_POL_NO_MATCH
 
 #else
+
+static CALI_BPF_INLINE enum calico_policy_result execute_policy_aof(struct __sk_buff *skb,__u8 ip_proto, __u32 saddr, __u32 daddr, __u16 sport, __u16 dport) {
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wunused-label"
+
+	// __AOF_POLICY__
+
+	return CALI_POL_NO_MATCH;
+	deny:
+	return CALI_POL_DENY;
+	allow:
+	return CALI_POL_ALLOW;
+#pragma clang diagnostic pop
+}
 
 static CALI_BPF_INLINE enum calico_policy_result execute_policy_norm(struct __sk_buff *skb,__u8 ip_proto, __u32 saddr, __u32 daddr, __u16 sport, __u16 dport) {
 #pragma clang diagnostic push
@@ -63,19 +72,27 @@ static CALI_BPF_INLINE enum calico_policy_result execute_policy_norm(struct __sk
 #pragma clang diagnostic pop
 }
 
-static CALI_BPF_INLINE enum calico_policy_result execute_policy_aof(struct __sk_buff *skb,__u8 ip_proto, __u32 saddr, __u32 daddr, __u16 sport, __u16 dport) {
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wunused-label"
+__attribute__((section("1/0")))
+int calico_tc_norm_pol_tail(struct __sk_buff *skb) {
+	CALI_DEBUG("Entering normal policy tail call\n");
 
-	// __AOF_POLICY__
+	__u32 key = 0;
+	struct cali_tc_state *state = bpf_map_lookup_elem(&cali_v4_state, &key);
+	if (!state) {
+	        CALI_DEBUG("State map lookup failed: DROP\n");
+	        goto deny;
+	}
 
-	return CALI_POL_NO_MATCH;
-	deny:
-	return CALI_POL_DENY;
-	allow:
-	return CALI_POL_ALLOW;
-#pragma clang diagnostic pop
+	enum calico_policy_result pol_rc = execute_policy_norm(skb, state->ip_proto, state->ip_src, state->ip_dst, state->sport, state->dport);
+	state->pol_rc = pol_rc;
+
+	bpf_tail_call(skb, &cali_jump, 1);
+	CALI_DEBUG("Tail call to post-policy program failed: DROP\n");
+
+deny:
+	return TC_ACT_SHOT;
 }
+
 
 static CALI_BPF_INLINE enum calico_policy_result execute_policy_pre_dnat(struct __sk_buff *skb, __u8 ip_proto, __u32 saddr, __u32 daddr, __u16 sport, __u16 dport) {
 #pragma clang diagnostic push
@@ -114,6 +131,12 @@ static CALI_BPF_INLINE enum calico_policy_result execute_policy_do_not_track(str
 
 #endif /* CALI_DEBUG_ALLOW_ALL */
 
+static CALI_BPF_INLINE int calico_tc_phase_2(
+	struct __sk_buff *skb,
+	struct iphdr *ip_header,
+	struct cali_tc_state *state,
+	struct calico_nat_dest *nat_dest
+);
 
 static CALI_BPF_INLINE bool skb_too_short(struct __sk_buff *skb)
 {
@@ -165,21 +188,43 @@ static CALI_BPF_INLINE int skb_nat_l4_csum_ipv4(struct __sk_buff *skb, size_t of
 	return ret;
 }
 
+static CALI_BPF_INLINE int calico_try_fib(struct __sk_buff *skb, struct cali_tc_state *state, struct bpf_fib_lookup *fib_params, uint32_t fib_flags) {
+	CALI_DEBUG("Traffic is towards the host namespace, doing Linux FIB lookup\n");
+	fib_params->l4_protocol = state->ip_proto;
+	int rc = bpf_fib_lookup(skb, fib_params, sizeof(fib_params), fib_flags);
+	if (rc == 0) {
+		CALI_DEBUG("FIB lookup succeeded\n");
+		// Update the MACs.  NAT may have invalidated pointer into the packet so need to
+		// revalidate.
+		if ((void *)(long)skb->data + sizeof(struct ethhdr) > (void *)(long)skb->data_end) {
+			CALI_DEBUG("BUG: packet got shorter?\n");
+			return TC_ACT_SHOT;
+		}
+		struct ethhdr *eth_hdr = (void *)(long)skb->data;
+		__builtin_memcpy(&eth_hdr->h_source, &fib_params->smac, sizeof(eth_hdr->h_source));
+		__builtin_memcpy(&eth_hdr->h_dest, &fib_params->dmac, sizeof(eth_hdr->h_dest));
+
+		// Redirect the packet.
+		CALI_DEBUG("Got Linux FIB hit, redirecting to iface %d.\n", fib_params->ifindex);
+		return bpf_redirect(fib_params->ifindex, 0);
+	} else if (rc < 0) {
+		CALI_DEBUG("FIB lookup failed (bad input): %d.\n", rc);
+	} else {
+		CALI_DEBUG("FIB lookup failed (FIB problem): %d.\n", rc);
+	}
+	return TC_ACT_UNSPEC;
+}
+
 static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb) {
 	enum calico_reason reason = CALI_REASON_UNKNOWN;
-	uint64_t prog_start_time;
+	struct cali_tc_state state = {};
 	if (CALI_LOG_LEVEL >= CALI_LOG_LEVEL_INFO) {
-		prog_start_time = bpf_ktime_get_ns();
+		state.prog_start_time = bpf_ktime_get_ns();
 	}
-	uint64_t timer_start_time = 0 , timer_end_time = 0;
+	state.nat_tun_src = 0;
+
 	int rc = TC_ACT_UNSPEC;
-	size_t csum_offset, ip_csum_offset;
-	int res = 0;
-	__be32 nat_tun_src = 0;
 	uint32_t fib_flags = 0;
-	bool encap_needed = false;
-	struct iphdr *ip_header;
-	__be32 ip_src, ip_dst;
 
 #ifdef CALI_SET_SKB_MARK
 	/* workaround for test since bpftool run cannot set it in context, wont
@@ -194,6 +239,7 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb) {
 		goto allow_bypass;
 	}
 
+	struct iphdr *ip_header;
 	if (CALI_F_TO_HEP) {
 		switch (skb->mark) {
 		case CALI_SKB_MARK_BYPASS_FWD:
@@ -212,12 +258,12 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb) {
 			}
 
 			ip_header = skb_iphdr(skb);
-			ip_src = ip_header->saddr;
+			__be32 ip_src = ip_header->saddr;
 			/* XXX do a proper CT lookup to find this */
 			ip_header->saddr = CALI_HOST_IP;
-			ip_csum_offset = skb_offset(skb, ip_header) +  offsetof(struct iphdr, check);
+			int ip_csum_offset = skb_offset(skb, ip_header) +  offsetof(struct iphdr, check);
 
-			res = bpf_l3_csum_replace(skb, ip_csum_offset, ip_src, CALI_HOST_IP, 4);
+			int res = bpf_l3_csum_replace(skb, ip_csum_offset, ip_src, CALI_HOST_IP, 4);
 			if (res) {
 				reason = CALI_REASON_CSUM_FAIL;
 				goto deny;
@@ -226,8 +272,6 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb) {
 			goto allow_bypass;
 		}
 	}
-
-	uint32_t seen_mark = CALI_SKB_MARK_SEEN;
 
 	// Parse the packet.
 
@@ -267,8 +311,8 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb) {
 
 	if (is_vxlan_tunnel(ip_header)) {
 		/* decap on host ep only if directly for the node */
-		if (dnat_should_decap() && ip_header->daddr == CALI_HOST_IP) { 
-			nat_tun_src = ip_header->saddr;
+		if (dnat_should_decap() && ip_header->daddr == CALI_HOST_IP) {
+			state.nat_tun_src = ip_header->saddr;
 			CALI_DEBUG("vxlan decap\n");
 			if (vxlan_v4_decap(skb)) {
 				reason = CALI_REASON_DECAP_FAIL;
@@ -282,7 +326,7 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb) {
 			}
 			ip_header = skb_iphdr(skb);
 
-			CALI_DEBUG("vxlan decap origin %x\n", be32_to_host(nat_tun_src));
+			CALI_DEBUG("vxlan decap origin %x\n", be32_to_host(state.nat_tun_src));
 		}
 	}
 
@@ -291,7 +335,7 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb) {
 	struct udphdr *udp_header = (void*)(ip_header+1);
 	struct icmphdr *icmp_header = (void*)(ip_header+1);
 
-	__u8 ip_proto = ip_header->protocol;
+	state.ip_proto = ip_header->protocol;
 
 	struct bpf_fib_lookup fib_params = {
 		.family = 2, /* AF_INET */
@@ -299,24 +343,21 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb) {
 		.ifindex = skb->ingress_ifindex,
 	};
 
-	__u16 sport = 0;
-	__u16 dport = 0;
-
-	switch (ip_proto) {
+	switch (state.ip_proto) {
 	case IPPROTO_TCP:
 		// Re-check buffer space for TCP (has larger headers than UDP).
 		if (!skb_has_data_after(skb, ip_header, sizeof(struct tcphdr))) {
 			CALI_DEBUG("Too short for TCP: DROP\n");
 			goto deny;
 		}
-		sport = be16_to_host(tcp_header->source);
-		dport = be16_to_host(tcp_header->dest);
-		CALI_DEBUG("TCP; ports: s=%d d=%d\n", sport, dport);
+		state.sport = be16_to_host(tcp_header->source);
+		state.dport = be16_to_host(tcp_header->dest);
+		CALI_DEBUG("TCP; ports: s=%d d=%d\n", state.sport, state.dport);
 		break;
 	case IPPROTO_UDP:
-		sport = be16_to_host(udp_header->source);
-		dport = be16_to_host(udp_header->dest);
-		CALI_DEBUG("UDP; ports: s=%d d=%d\n", sport, dport);
+		state.sport = be16_to_host(udp_header->source);
+		state.dport = be16_to_host(udp_header->dest);
+		CALI_DEBUG("UDP; ports: s=%d d=%d\n", state.sport, state.dport);
 		break;
 	case IPPROTO_ICMP:
 		icmp_header = (void*)(ip_header+1);
@@ -331,17 +372,17 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb) {
 			goto allow_skip_fib;
 		}
 	default:
-		CALI_DEBUG("Unknown protocol (%d), unable to extract ports\n", (int)ip_proto);
+		CALI_DEBUG("Unknown protocol (%d), unable to extract ports\n", (int)state.ip_proto);
 	}
 
-	ip_src = ip_header->saddr;
-	ip_dst = ip_header->daddr;
-	enum calico_policy_result pol_rc = CALI_POL_NO_MATCH;
+	state.ip_src = ip_header->saddr;
+	state.ip_dst = ip_header->daddr;
+	state.pol_rc = CALI_POL_NO_MATCH;
 	if (CALI_F_HEP) {
 		// For host endpoints only, execute doNotTrack policy.
-		pol_rc = execute_policy_do_not_track(
-			skb, ip_proto, ip_src, ip_dst, sport, dport);
-		switch (pol_rc) {
+		state.pol_rc = execute_policy_do_not_track(
+			skb, state.ip_proto, state.ip_src, state.ip_dst, state.sport, state.dport);
+		switch (state.pol_rc) {
 		case CALI_POL_DENY:
 			CALI_DEBUG("Denied by do-not-track policy: DROP\n");
 			goto deny;
@@ -353,7 +394,7 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb) {
 		}
 	}
 
-	switch (ip_proto) {
+	switch (state.ip_proto) {
 	case IPPROTO_TCP:
 	case IPPROTO_UDP:
 	case IPPROTO_ICMP:
@@ -369,15 +410,15 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb) {
 
 	// Now, do conntrack lookup.
 	struct ct_ctx ct_lookup_ctx = {
-		.proto	= ip_proto,
-		.src	= ip_src,
-		.sport	= sport,
-		.dst	= ip_dst,
-		.dport	= dport,
-		.nat_tun_src = nat_tun_src,
+		.proto	= state.ip_proto,
+		.src	= state.ip_src,
+		.sport	= state.sport,
+		.dst	= state.ip_dst,
+		.dport	= state.dport,
+		.nat_tun_src = state.nat_tun_src,
 	};
 
-	if (ip_proto == IPPROTO_TCP) {
+	if (state.ip_proto == IPPROTO_TCP) {
 		if (!skb_has_data_after(skb, ip_header, sizeof(struct tcphdr))) {
 			CALI_DEBUG("Too short for TCP: DROP\n");
 			goto deny;
@@ -386,17 +427,17 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb) {
 		ct_lookup_ctx.tcp = tcp_header;
 	}
 
-	struct calico_ct_result ct_result;
-	ct_result = calico_ct_v4_lookup(&ct_lookup_ctx);
+	state.ct_result = calico_ct_v4_lookup(&ct_lookup_ctx);
 
-	switch (ct_result.rc){
-	case CALI_CT_NEW:
-		// New connection, apply policy.
-
+	state.post_nat_ip_dst = 0;
+	state.post_nat_dport = 0;
+	struct calico_nat_dest *nat_dest = NULL;
+	if (state.ct_result.rc == CALI_CT_NEW) {
+		// New connection, apply NAT and policy.
 		if (CALI_F_HEP) {
 			// Execute pre-DNAT policy.
-			pol_rc = execute_policy_pre_dnat(skb, ip_proto, ip_src, ip_dst,  sport,  dport);
-			if (pol_rc == CALI_POL_DENY) {
+			state.pol_rc = execute_policy_pre_dnat(skb, state.ip_proto, state.ip_src, state.ip_dst,  state.sport,  state.dport);
+			if (state.pol_rc == CALI_POL_DENY) {
 				CALI_DEBUG("Denied by do-not-track policy: DROP\n");
 				goto deny;
 			} // Other RCs handled below.
@@ -407,37 +448,159 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb) {
 		 * XXX
 		 */
 		// Do a NAT table lookup.
-		struct calico_nat_dest *nat_dest = calico_v4_nat_lookup(ip_proto, ip_dst, dport);
-		__be32 post_nat_ip_dst;
-		__u16 post_nat_dport;
+		nat_dest = calico_v4_nat_lookup(state.ip_proto, state.ip_dst, state.dport);
 		if (nat_dest != NULL) {
 			// If the packet passes policy, we'll NAT it below, for now, just
 			// update the dest IP/port for the policy lookup.
-			post_nat_ip_dst = nat_dest->addr;
-			post_nat_dport = nat_dest->port;
+			state.post_nat_ip_dst = nat_dest->addr;
+			state.post_nat_dport = nat_dest->port;
 		} else {
-			post_nat_ip_dst = ip_dst;
-			post_nat_dport = dport;
+			state.post_nat_ip_dst = state.ip_dst;
+			state.post_nat_dport = state.dport;
 		}
 
-		if (pol_rc == CALI_POL_NO_MATCH) {
+		if (state.pol_rc == CALI_POL_NO_MATCH) {
 			// No match in pre-DNAT policy, apply normal policy.
 			// TODO apply-on-forward policy
 			if (false) {
-				pol_rc = execute_policy_aof(skb, ip_proto, ip_src, post_nat_ip_dst,  sport,  post_nat_dport);
+				state.pol_rc = execute_policy_aof(skb, state.ip_proto, state.ip_src, state.post_nat_ip_dst,  state.sport,  state.post_nat_dport);
 			}
 			if (CALI_F_TO_WEP &&
 					skb->mark != CALI_SKB_MARK_SEEN &&
-					cali_rt_lookup_type(ip_src) == CALI_RT_LOCAL_HOST) {
+					cali_rt_lookup_type(state.ip_src) == CALI_RT_LOCAL_HOST) {
 				// Host to workload traffic always allowed.  We discount traffic that was seen by
 				// another program since it must have come in via another interface.
 				CALI_DEBUG("Packet is from the host: ACCEPT\n");
-				pol_rc = CALI_POL_ALLOW;
+				state.pol_rc = CALI_POL_ALLOW;
 			} else {
-				pol_rc = execute_policy_norm(skb, ip_proto, ip_src, post_nat_ip_dst,  sport,  post_nat_dport);
+				int key = 0;
+				struct cali_tc_state *map_state = bpf_map_lookup_elem(&cali_v4_state, &key);
+				if (!map_state) {
+					// Shouldn't be possible; the map is pre-allocated.
+					CALI_INFO("State map lookup failed: DROP\n");
+					goto deny;
+				}
+
+				state.pol_rc = CALI_POL_NO_MATCH;
+				if (nat_dest) {
+					state.nat_dest.addr = nat_dest->addr;
+					state.nat_dest.port = nat_dest->port;
+				} else {
+					state.nat_dest.addr = 0;
+					state.nat_dest.port = 0;
+				}
+
+				*map_state = state;
+
+				bpf_tail_call(skb, &cali_jump, 0);
+				CALI_DEBUG("Tail call to policy program failed: DROP\n");
+				return TC_ACT_SHOT;
 			}
 		}
-		switch (pol_rc) {
+	}
+	return calico_tc_phase_2(skb, ip_header, &state, nat_dest);
+
+allow:
+	// Try a short-circuit FIB lookup.
+	if (!CALI_F_L3 && CALI_FIB_LOOKUP_ENABLED && CALI_F_TO_HOST) {
+		rc = calico_try_fib(skb, &state, &fib_params, fib_flags);
+		if (rc == TC_ACT_SHOT) {
+			goto deny;
+		}
+	}
+
+allow_skip_fib:
+allow_bypass:
+	if (CALI_F_TO_HOST) {
+		// Packet is towards host namespace, mark it so that downstream programs know that they're
+		// not the first to see the packet.
+		CALI_DEBUG("Traffic is towards host namespace, marking with %x.\n", CALI_SKB_MARK_SEEN);
+		// FIXME: this ignores the mask that we should be using.  However, if we mask off the bits,
+		// then clang spots that it can do a 16-bit store instead of a 32-bit load/modify/store,
+		// which trips up the validator.
+		skb->mark = CALI_SKB_MARK_SEEN;
+	}
+
+	if (CALI_LOG_LEVEL >= CALI_LOG_LEVEL_INFO) {
+		uint64_t prog_end_time = bpf_ktime_get_ns();
+		CALI_INFO("Final result=ALLOW (%d). Program execution time: %lluns\n",
+				rc, prog_end_time-state.prog_start_time);
+	}
+	return rc;
+
+deny:
+	if (CALI_LOG_LEVEL >= CALI_LOG_LEVEL_INFO) {
+		uint64_t prog_end_time = bpf_ktime_get_ns();
+		CALI_INFO("Final result=DENY (%x). Program execution time: %lluns\n",
+				reason, prog_end_time-state.prog_start_time);
+	}
+	return TC_ACT_SHOT;
+}
+
+__attribute__((section("1/1")))
+int calico_tc_phase_2_entrypoint(struct __sk_buff *skb) {
+	struct iphdr *ip_header = NULL;
+	if (skb_too_short(skb)) {
+		CALI_DEBUG("Too short\n");
+		goto deny;
+	}
+	ip_header = skb_iphdr(skb);
+
+	__u32 key = 0;
+	struct cali_tc_state *state = bpf_map_lookup_elem(&cali_v4_state, &key);
+	if (!state) {
+		CALI_DEBUG("State map lookup failed: DROP\n");
+		goto deny;
+	}
+
+	struct calico_nat_dest *nat_dest = NULL;
+	struct calico_nat_dest nat_dest_2 = {
+		.addr=state->nat_dest.addr,
+		.port=state->nat_dest.port,
+	};
+	if (state->nat_dest.addr != 0) {
+		nat_dest = &nat_dest_2;
+	}
+
+	return calico_tc_phase_2(
+		skb,
+		ip_header,
+		state,
+		nat_dest
+	);
+
+deny:
+	return TC_ACT_SHOT;
+}
+
+static CALI_BPF_INLINE int calico_tc_phase_2(
+	struct __sk_buff *skb,
+	struct iphdr *ip_header,
+	struct cali_tc_state *state,
+	struct calico_nat_dest *nat_dest
+) {
+	enum calico_reason reason = CALI_REASON_UNKNOWN;
+	int rc = TC_ACT_UNSPEC;
+
+	uint32_t seen_mark = CALI_SKB_MARK_SEEN;
+
+	struct tcphdr *tcp_header = (void*)(ip_header+1);
+	struct udphdr *udp_header = (void*)(ip_header+1);
+
+	size_t csum_offset, ip_csum_offset;
+	int res = 0;
+	bool encap_needed = false;
+	uint32_t fib_flags = 0;
+
+	struct bpf_fib_lookup fib_params = {
+		.family = 2, /* AF_INET */
+		.tot_len = be16_to_host(ip_header->tot_len),
+		.ifindex = skb->ingress_ifindex,
+	};
+
+	switch (state->ct_result.rc){
+	case CALI_CT_NEW:
+		switch (state->pol_rc) {
 		case CALI_POL_NO_MATCH:
 			CALI_DEBUG("Implicitly denied by normal policy: DROP\n");
 			goto deny;
@@ -450,22 +613,22 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb) {
 
 		if (CALI_F_FROM_WEP &&
 				CALI_DROP_WORKLOAD_TO_HOST &&
-				cali_rt_lookup_type(post_nat_ip_dst) == CALI_RT_LOCAL_HOST) {
+				cali_rt_lookup_type(state->post_nat_ip_dst) == CALI_RT_LOCAL_HOST) {
 			CALI_DEBUG("Workload to host traffic blocked by DefaultEndpointToHostAction: DROP\n");
 			goto deny;
 		}
 
 		struct ct_ctx ct_nat_ctx =  {
 			.skb	= skb,
-			.proto	= ip_proto,
-			.src	= ip_src,
-			.sport	= sport,
-			.dst	= post_nat_ip_dst,
-			.dport	= post_nat_dport,
-			.nat_tun_src = nat_tun_src,
+			.proto	= state->ip_proto,
+			.src	= state->ip_src,
+			.sport	= state->sport,
+			.dst	= state->post_nat_ip_dst,
+			.dport	= state->post_nat_dport,
+			.nat_tun_src = state->nat_tun_src,
 		};
 
-		if (ip_proto == IPPROTO_TCP) {
+		if (state->ip_proto == IPPROTO_TCP) {
 			if (!skb_has_data_after(skb, ip_header, sizeof(struct tcphdr))) {
 				CALI_DEBUG("Too short for TCP: DROP\n");
 				goto deny;
@@ -476,18 +639,18 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb) {
 
 		if (nat_dest != NULL) {
 			// Packet is to be NATted, need to record a NAT rev entry.
-			ct_nat_ctx.orig_dst = ip_dst;
-			ct_nat_ctx.orig_dport = dport;
+			ct_nat_ctx.orig_dst = state->ip_dst;
+			ct_nat_ctx.orig_dport = state->dport;
 		}
 
 		// If we get here, we've passed policy.
 
 		conntrack_create(&ct_nat_ctx, nat_dest != NULL);
 
-		fib_params.sport = sport;
-		fib_params.dport = post_nat_dport;
-		fib_params.ipv4_src = ip_src;
-		fib_params.ipv4_dst = post_nat_ip_dst;
+		fib_params.sport = state->sport;
+		fib_params.dport = state->post_nat_dport;
+		fib_params.ipv4_src = state->ip_src;
+		fib_params.ipv4_dst = state->post_nat_ip_dst;
 
 		if (nat_dest == NULL) {
 			goto allow;
@@ -497,29 +660,29 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb) {
 
 	case CALI_CT_ESTABLISHED_DNAT:
 		/* align with CALI_CT_NEW */
-		if (ct_result.rc == CALI_CT_ESTABLISHED_DNAT) {
-			post_nat_ip_dst = ct_result.nat_ip;
-			post_nat_dport = ct_result.nat_port;
+		if (state->ct_result.rc == CALI_CT_ESTABLISHED_DNAT) {
+			state->post_nat_ip_dst = state->ct_result.nat_ip;
+			state->post_nat_dport = state->ct_result.nat_port;
 
-			fib_params.l4_protocol = ip_proto;
-			fib_params.sport = sport;
-			fib_params.dport = post_nat_dport;
-			fib_params.ipv4_src = ip_src;
-			fib_params.ipv4_dst = post_nat_ip_dst;
+			fib_params.l4_protocol = state->ip_proto;
+			fib_params.sport = state->sport;
+			fib_params.dport = state->post_nat_dport;
+			fib_params.ipv4_src = state->ip_src;
+			fib_params.ipv4_dst = state->post_nat_ip_dst;
 		}
 
-		CALI_DEBUG("CT: DNAT to %x:%d\n", be32_to_host(post_nat_ip_dst), post_nat_dport);
+		CALI_DEBUG("CT: DNAT to %x:%d\n", be32_to_host(state->post_nat_ip_dst), state->post_nat_dport);
 
 		struct calico_route *rt;
 
 		encap_needed = dnat_should_encap();
 		if (encap_needed) {
-			rt = cali_rt_lookup(post_nat_ip_dst);
+			rt = cali_rt_lookup(state->post_nat_ip_dst);
 			if (!rt) {
 				reason = CALI_REASON_RT_UNKNOWN;
 				goto deny;
 			}
-			CALI_DEBUG("rt found for 0x%x\n", post_nat_ip_dst);
+			CALI_DEBUG("rt found for 0x%x\n", state->post_nat_ip_dst);
 
 			encap_needed = !cali_rt_is_local(rt);
 		}
@@ -528,26 +691,26 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb) {
 			goto icmp_too_big;
 		}
 
-		ip_header->daddr = post_nat_ip_dst;
+		ip_header->daddr = state->post_nat_ip_dst;
 		ip_csum_offset = skb_offset(skb, ip_header) +  offsetof(struct iphdr, check);
 
-		switch (ip_proto) {
+		switch (state->ip_proto) {
 		case IPPROTO_TCP:
-			tcp_header->dest = host_to_be16(post_nat_dport);
+			tcp_header->dest = host_to_be16(state->post_nat_dport);
 			csum_offset = skb_offset(skb, tcp_header) + offsetof(struct tcphdr, check);
 			break;
 		case IPPROTO_UDP:
-			udp_header->dest = host_to_be16(post_nat_dport);
+			udp_header->dest = host_to_be16(state->post_nat_dport);
 			csum_offset = skb_offset(skb, udp_header) + offsetof(struct udphdr, check);
 			break;
 		}
 
 		if (csum_offset) {
-			res = skb_nat_l4_csum_ipv4(skb, csum_offset, ip_src, ct_result.nat_ip,
-					host_to_be16(sport), host_to_be16(ct_result.nat_port));
+			res = skb_nat_l4_csum_ipv4(skb, csum_offset, state->ip_src, state->ct_result.nat_ip,
+					host_to_be16(state->sport), host_to_be16(state->ct_result.nat_port));
 		}
 
-		res |= bpf_l3_csum_replace(skb, ip_csum_offset, ip_dst, post_nat_ip_dst, 4);
+		res |= bpf_l3_csum_replace(skb, ip_csum_offset, state->ip_dst, state->post_nat_ip_dst, 4);
 
 		if (res) {
 			reason = CALI_REASON_CSUM_FAIL;
@@ -555,59 +718,59 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb) {
 		}
 
 		if (encap_needed) {
-			ip_src = CALI_HOST_IP;
-			ip_dst = rt->type == CALI_RT_REMOTE_WORKLOAD ? rt->next_hop : post_nat_ip_dst;
+			state->ip_src = CALI_HOST_IP;
+			state->ip_dst = rt->type == CALI_RT_REMOTE_WORKLOAD ? rt->next_hop : state->post_nat_ip_dst;
 			seen_mark = CALI_SKB_MARK_BYPASS_FWD;
 			goto nat_encap;
 		}
 
-		fib_params.sport = sport;
-		fib_params.dport = post_nat_dport;
-		fib_params.ipv4_src = ip_src;
-		fib_params.ipv4_dst = post_nat_ip_dst;
+		fib_params.sport = state->sport;
+		fib_params.dport = state->post_nat_dport;
+		fib_params.ipv4_src = state->ip_src;
+		fib_params.ipv4_dst = state->post_nat_ip_dst;
 
 		goto allow;
 
 	case CALI_CT_ESTABLISHED_SNAT:
-		CALI_DEBUG("CT: SNAT to %x:%d\n", be32_to_host(ct_result.nat_ip), ct_result.nat_port);
+		CALI_DEBUG("CT: SNAT to %x:%d\n", be32_to_host(state->ct_result.nat_ip), state->ct_result.nat_port);
 
 		// Actually do the NAT.
-		ip_header->saddr = ct_result.nat_ip;
+		ip_header->saddr = state->ct_result.nat_ip;
 		ip_csum_offset = skb_offset(skb, ip_header) +  offsetof(struct iphdr, check);
 
-		switch (ip_proto) {
+		switch (state->ip_proto) {
 		case IPPROTO_TCP:
-			tcp_header->source = host_to_be16(ct_result.nat_port);
+			tcp_header->source = host_to_be16(state->ct_result.nat_port);
 			csum_offset = skb_offset(skb, tcp_header) + offsetof(struct tcphdr, check);
 			break;
 		case IPPROTO_UDP:
-			udp_header->source = host_to_be16(ct_result.nat_port);
+			udp_header->source = host_to_be16(state->ct_result.nat_port);
 			csum_offset = skb_offset(skb, udp_header) + offsetof(struct udphdr, check);
 			break;
 		}
 
 		if (csum_offset) {
-			res = skb_nat_l4_csum_ipv4(skb, csum_offset, ip_src, ct_result.nat_ip,
-					host_to_be16(sport), host_to_be16(ct_result.nat_port));
+			res = skb_nat_l4_csum_ipv4(skb, csum_offset, state->ip_src, state->ct_result.nat_ip,
+					host_to_be16(state->sport), host_to_be16(state->ct_result.nat_port));
 		}
 
-		res |= bpf_l3_csum_replace(skb, ip_csum_offset, ip_src, ct_result.nat_ip, 4);
+		res |= bpf_l3_csum_replace(skb, ip_csum_offset, state->ip_src, state->ct_result.nat_ip, 4);
 
 		if (res) {
 			reason = CALI_REASON_CSUM_FAIL;
 			goto deny;
 		}
 
-		fib_params.sport = ct_result.nat_port;
-		fib_params.dport = dport;
-		fib_params.ipv4_src = ct_result.nat_ip;
-		fib_params.ipv4_dst = ip_dst;
+		fib_params.sport = state->ct_result.nat_port;
+		fib_params.dport = state->dport;
+		fib_params.ipv4_src = state->ct_result.nat_ip;
+		fib_params.ipv4_dst = state->ip_dst;
 
 		/* Packet is returning from the DNAT tunnel and has been approved by the
 		 * host policy. This packet is going to be forwarded to its original
 		 * destination. Skip checks on the CALI_TC_FLAGS_TO_HOST egress path
 		 */
-		if (nat_tun_src) {
+		if (state->nat_tun_src) {
 			seen_mark = CALI_SKB_MARK_BYPASS_FWD;
 		}
 
@@ -617,20 +780,20 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb) {
 		seen_mark = CALI_SKB_MARK_BYPASS;
 		// fall through
 	case CALI_CT_ESTABLISHED:
-		if (dnat_return_should_encap() && ct_result.tun_ret_ip) {
+		if (dnat_return_should_encap() && state->ct_result.tun_ret_ip) {
 			if (encap_needed && ip_is_dnf(ip_header) && vxlan_v4_encap_too_big(skb)) {
 				goto icmp_too_big;
 			}
-			ip_dst = ct_result.tun_ret_ip;
+			state->ip_dst = state->ct_result.tun_ret_ip;
 			seen_mark = CALI_SKB_MARK_BYPASS_NAT_RET_ENCAPED;
 			goto nat_encap;
 		}
 
-		fib_params.l4_protocol = ip_proto;
-		fib_params.sport = sport;
-		fib_params.dport = dport;
-		fib_params.ipv4_src = ip_src;
-		fib_params.ipv4_dst = ip_dst;
+		fib_params.l4_protocol = state->ip_proto;
+		fib_params.sport = state->sport;
+		fib_params.dport = state->dport;
+		fib_params.ipv4_src = state->ip_src;
+		fib_params.ipv4_dst = state->ip_dst;
 
 		goto allow;
 	default:
@@ -660,71 +823,47 @@ icmp_too_big:
 	/* XXX we might use skb->ifindex to redirect it straight back
 	 * to where it came from if it is guaranteed to be the path
 	 */
-	sport = dport = 0;
-	ip_proto = IPPROTO_ICMP;
+	state->sport = state->dport = 0;
+	state->ip_proto = IPPROTO_ICMP;
 
 	fib_flags |= BPF_FIB_LOOKUP_OUTPUT;
 
-	fib_params.l4_protocol = ip_proto;
-	fib_params.sport = sport;
-	fib_params.dport = dport;
-	fib_params.ipv4_src = ip_dst;
-	fib_params.ipv4_dst = ip_src;
+	fib_params.l4_protocol = state->ip_proto;
+	fib_params.sport = state->sport;
+	fib_params.dport = state->dport;
+	fib_params.ipv4_src = state->ip_dst;
+	fib_params.ipv4_dst = state->ip_src;
 
 	goto allow;
 
 nat_encap:
-	if (vxlan_v4_encap(skb, ip_src, ip_dst)) {
+	if (vxlan_v4_encap(skb, state->ip_src, state->ip_dst)) {
 		reason = CALI_REASON_ENCAP_FAIL;
 		goto  deny;
 	}
 
-	sport = dport = host_to_be16(CALI_VXLAN_PORT);
-	ip_proto = IPPROTO_UDP;
+	state->sport = state->dport = host_to_be16(CALI_VXLAN_PORT);
+	state->ip_proto = IPPROTO_UDP;
 
 	if (CALI_F_INGRESS) {
 		fib_flags |= BPF_FIB_LOOKUP_OUTPUT;
 	}
 
-	fib_params.l4_protocol = ip_proto;
-	fib_params.sport = sport;
-	fib_params.dport = dport;
-	fib_params.ipv4_src = ip_src;
-	fib_params.ipv4_dst = ip_dst;
+	fib_params.l4_protocol = state->ip_proto;
+	fib_params.sport = state->sport;
+	fib_params.dport = state->dport;
+	fib_params.ipv4_src = state->ip_src;
+	fib_params.ipv4_dst = state->ip_dst;
 
 allow:
 	// Try a short-circuit FIB lookup.
 	if (!CALI_F_L3 && CALI_FIB_LOOKUP_ENABLED && CALI_F_TO_HOST) {
-		CALI_DEBUG("Traffic is towards the host namespace, doing Linux FIB lookup\n");
-		fib_params.l4_protocol = ip_proto;
-		rc = bpf_fib_lookup(skb, &fib_params, sizeof(fib_params), fib_flags);
-		if (rc == 0) {
-			CALI_DEBUG("FIB lookup succeeded\n");
-			// Update the MACs.  NAT may have invalidated pointer into the packet so need to
-			// revalidate.
-			if ((void *)(long)skb->data + sizeof(struct ethhdr) > (void *)(long)skb->data_end) {
-				CALI_DEBUG("BUG: packet got shorter?\n");
-				reason = CALI_REASON_SHORT;
-				goto deny;
-			}
-			struct ethhdr *eth_hdr = (void *)(long)skb->data;
-			__builtin_memcpy(&eth_hdr->h_source, &fib_params.smac, sizeof(eth_hdr->h_source));
-			__builtin_memcpy(&eth_hdr->h_dest, &fib_params.dmac, sizeof(eth_hdr->h_dest));
-
-			// Redirect the packet.
-			CALI_DEBUG("Got Linux FIB hit, redirecting to iface %d.\n", fib_params.ifindex);
-			rc = bpf_redirect(fib_params.ifindex, 0);
-		} else if (rc < 0) {
-			CALI_DEBUG("FIB lookup failed (bad input): %d.\n", rc);
-			rc = TC_ACT_UNSPEC;
-		} else {
-			CALI_DEBUG("FIB lookup failed (FIB problem): %d.\n", rc);
-			rc = TC_ACT_UNSPEC;
+		rc = calico_try_fib(skb, state, &fib_params, fib_flags);
+		if (rc == TC_ACT_SHOT) {
+			goto deny;
 		}
 	}
 
-allow_skip_fib:
-allow_bypass:
 	if (CALI_F_TO_HOST) {
 		// Packet is towards host namespace, mark it so that downstream programs know that they're
 		// not the first to see the packet.
@@ -737,8 +876,8 @@ allow_bypass:
 
 	if (CALI_LOG_LEVEL >= CALI_LOG_LEVEL_INFO) {
 		uint64_t prog_end_time = bpf_ktime_get_ns();
-		CALI_INFO("Final result=ALLOW (%d). Program execution time: %lluns T: %lluns\n",
-				rc, prog_end_time-prog_start_time, timer_end_time-timer_start_time);
+		CALI_INFO("Final result=ALLOW (%d). Program execution time: %lluns\n",
+				rc, prog_end_time-state->prog_start_time);
 	}
 	return rc;
 
@@ -746,7 +885,7 @@ deny:
 	if (CALI_LOG_LEVEL >= CALI_LOG_LEVEL_INFO) {
 		uint64_t prog_end_time = bpf_ktime_get_ns();
 		CALI_INFO("Final result=DENY (%x). Program execution time: %lluns\n",
-				reason, prog_end_time-prog_start_time);
+				reason, prog_end_time-state->prog_start_time);
 	}
 	return TC_ACT_SHOT;
 }

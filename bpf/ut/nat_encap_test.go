@@ -24,6 +24,7 @@ import (
 )
 
 func TestNatEncap(t *testing.T) {
+	RegisterTestingT(t)
 
 	_, ipv4, l4, payload, pktBytes, err := testPacketUDPDefault()
 	Expect(err).NotTo(HaveOccurred())

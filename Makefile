@@ -486,6 +486,7 @@ $(BUILD_IMAGE)-$(ARCH): bin/calico-felix-$(ARCH) \
 	mkdir -p docker-image/bpf/cgroup
 	cp bpf/include/bpf.h docker-image/bpf/include/bpf.h
 	cp bpf/include/conntrack.h docker-image/bpf/include/conntrack.h
+	cp bpf/include/jump.h docker-image/bpf/include/jump.h
 	cp bpf/include/log.h docker-image/bpf/include/log.h
 	cp bpf/include/nat.h docker-image/bpf/include/nat.h
 	cp bpf/include/policy.h docker-image/bpf/include/policy.h

@@ -1,4 +1,4 @@
-// Copyright (c) 2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2019-2020 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -57,16 +57,28 @@ var (
 )
 
 const (
-	//	resTC_ACT_OK int = iota
-	//	resTC_ACT_RECLASSIFY
-	resTC_ACT_SHOT int = 2
-	//	resTC_ACT_PIPE
-	//	resTC_ACT_STOLEN
-	//	resTC_ACT_QUEUED
-	//	resTC_ACT_REPEAT
-	//	resTC_ACT_REDIRECT
+	resTC_ACT_OK int = iota
+	resTC_ACT_RECLASSIFY
+	resTC_ACT_SHOT
+	resTC_ACT_PIPE
+	resTC_ACT_STOLEN
+	resTC_ACT_QUEUED
+	resTC_ACT_REPEAT
+	resTC_ACT_REDIRECT
 	resTC_ACT_UNSPEC = (1 << 32) - 1
 )
+
+var retvalToStr = map[int]string{
+	resTC_ACT_OK:         "TC_ACT_OK",
+	resTC_ACT_RECLASSIFY: "TC_ACT_RECLASSIFY",
+	resTC_ACT_SHOT:       "TC_ACT_SHOT",
+	resTC_ACT_PIPE:       "TC_ACT_PIPE",
+	resTC_ACT_STOLEN:     "TC_ACT_STOLEN",
+	resTC_ACT_QUEUED:     "TC_ACT_QUEUED",
+	resTC_ACT_REPEAT:     "TC_ACT_REPEAT",
+	resTC_ACT_REDIRECT:   "TC_ACT_REDIRECT",
+	resTC_ACT_UNSPEC:     "TC_ACT_UNSPEC",
+}
 
 func TestCompileTemplateRun(t *testing.T) {
 	runBpfTest(t, "calico_to_workload_ep", nil, func(bpfrun bpfProgRunFn) {
@@ -174,19 +186,52 @@ func bpftoolProgLoadAll(fname, bpfFsDir string) error {
 	err = rtMap.EnsureExists()
 	Expect(err).NotTo(HaveOccurred())
 
+	// We need to populate the jump table map as tc would do.  It has to be populated with file descriptors for the
+	// BPF programs so our standard map machinery isn't much use.  For now, just use bpftool.
+	jumpMapPath := path.Join(bpfFsDir, "cali_jump")
+	_, err = bpftool("map", "create", jumpMapPath, "type", "prog_array", "key", "4", "value", "4", "entries", "8", "name", "cali_jump")
+	if err != nil {
+		return err
+	}
+
 	_, err = bpftool("prog", "loadall", fname, bpfFsDir, "type", "classifier",
 		"map", "name", natMap.GetName(), "pinned", natMap.Path(),
 		"map", "name", natBEMap.GetName(), "pinned", natBEMap.Path(),
 		"map", "name", ctMap.GetName(), "pinned", ctMap.Path(),
 		"map", "name", rtMap.GetName(), "pinned", rtMap.Path(),
+		"map", "name", "cali_jump", "pinned", jumpMapPath,
 	)
-	return err
+	if err != nil {
+		return err
+	}
+
+	// tc loads the program at section "1/0" into the map with id=1 (which is the jump map) and key=0.
+	// bpftool pins section "1/0" into the file system as "1_0"; to populate the map, we just need to insert the
+	// pinned program at the right key.
+	_, err = bpftool("map", "update", "pinned", jumpMapPath, "key", "0", "0", "0", "0", "value", "pinned", path.Join(bpfFsDir, "1_0"))
+	if err != nil {
+		return err
+	}
+	_, err = bpftool("map", "update", "pinned", jumpMapPath, "key", "1", "0", "0", "0", "value", "pinned", path.Join(bpfFsDir, "1_1"))
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 type bpfRunResult struct {
 	Retval   int
 	Duration int
 	dataOut  []byte
+}
+
+func (r bpfRunResult) RetvalStr() string {
+	s := retvalToStr[r.Retval]
+	if s == "" {
+		return fmt.Sprint(r.Retval)
+	}
+	return s
 }
 
 func bpftoolProgRun(progName string, dataIn []byte) (bpfRunResult, error) {
