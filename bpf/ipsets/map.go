@@ -1,4 +1,4 @@
-// Copyright (c) 2019 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,6 +17,10 @@ package ipsets
 import (
 	"encoding/binary"
 	"net"
+	"strconv"
+	"strings"
+
+	"github.com/sirupsen/logrus"
 
 	"golang.org/x/sys/unix"
 
@@ -24,21 +28,23 @@ import (
 	"github.com/projectcalico/felix/ip"
 )
 
+// WARNING: must be kept in sync with the definitions in bpf/polprog/pol_prog_builder.go.
+// WARNING: must be kept in sync with the definitions in bpf/include/policy.h.
 // uint32 prefixLen HE  4
 // uint64 set_id BE     +8 = 12
 // uint32 addr BE       +4 = 16
 // uint16 port HE       +2 = 18
 // uint8 proto          +1 = 19
 // uint8 pad            +1 = 20
-const ipSetEntrySize = 20
+const IPSetEntrySize = 20
 
-type IPSetEntry [ipSetEntrySize]byte
+type IPSetEntry [IPSetEntrySize]byte
 
 func Map(mc *bpf.MapContext) bpf.Map {
 	return mc.NewPinnedMap(bpf.MapParameters{
 		Filename:   "/sys/fs/bpf/tc/globals/cali_v4_ip_sets",
 		Type:       "lpm_trie",
-		KeySize:    ipSetEntrySize,
+		KeySize:    IPSetEntrySize,
 		ValueSize:  4,
 		MaxEntries: 1024 * 1024,
 		Name:       "cali_v4_ip_sets",
@@ -84,3 +90,33 @@ func MakeBPFIPSetEntry(setID uint64, cidr ip.V4CIDR, port uint16, proto uint8) I
 }
 
 var DummyValue = []byte{1, 0, 0, 0}
+
+func ProtoIPSetMemberToBPFEntry(id uint64, member string) IPSetEntry {
+	var cidrStr string
+	var port uint16
+	var protocol uint8
+	if strings.Contains(member, ",") {
+		// Named port
+		parts := strings.Split(member, ",")
+		cidrStr = parts[0]
+		parts = strings.Split(parts[1], ":")
+		switch parts[0] {
+		case "tcp":
+			protocol = 6
+		case "udp":
+			protocol = 17
+		default:
+			logrus.WithField("member", member).Panic("Unknown protocol in named port member")
+		}
+		port64, err := strconv.ParseUint(parts[1], 10, 16)
+		if err != nil {
+			logrus.WithField("member", member).WithError(err).Panic("Failed to parse port")
+		}
+		port = uint16(port64)
+	} else {
+		cidrStr = member
+	}
+	cidr := ip.MustParseCIDROrIP(cidrStr).(ip.V4CIDR)
+	entry := MakeBPFIPSetEntry(id, cidr, port, protocol)
+	return entry
+}

@@ -1,4 +1,4 @@
-// Copyright (c) 2019 Tigera, Inc. All rights reserved.
+// Copyright (c) 2019-2020 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,8 +15,6 @@
 package intdataplane
 
 import (
-	"strconv"
-	"strings"
 	"time"
 
 	"github.com/projectcalico/felix/bpf/ipsets"
@@ -26,7 +24,6 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/felix/bpf"
-	"github.com/projectcalico/felix/ip"
 	"github.com/projectcalico/felix/proto"
 	"github.com/projectcalico/libcalico-go/lib/set"
 )
@@ -154,44 +151,14 @@ func (m *bpfIPSetManager) onIPSetDeltaUpdate(msg *proto.IPSetDeltaUpdate) {
 		"removed":  len(msg.RemovedMembers),
 	}).Info("IP delta update")
 	for _, member := range msg.RemovedMembers {
-		entry := protoIPSetMemberToBPFEntry(ipSet.ID, member)
+		entry := ipsets.ProtoIPSetMemberToBPFEntry(ipSet.ID, member)
 		ipSet.RemoveMember(entry)
 	}
 	for _, member := range msg.AddedMembers {
-		entry := protoIPSetMemberToBPFEntry(ipSet.ID, member)
+		entry := ipsets.ProtoIPSetMemberToBPFEntry(ipSet.ID, member)
 		ipSet.AddMember(entry)
 	}
 	m.markIPSetDirty(ipSet)
-}
-
-func protoIPSetMemberToBPFEntry(id uint64, member string) ipsets.IPSetEntry {
-	var cidrStr string
-	var port uint16
-	var protocol uint8
-	if strings.Contains(member, ",") {
-		// Named port
-		parts := strings.Split(member, ",")
-		cidrStr = parts[0]
-		parts = strings.Split(parts[1], ":")
-		switch parts[0] {
-		case "tcp":
-			protocol = 6
-		case "udp":
-			protocol = 17
-		default:
-			log.WithField("member", member).Panic("Unknown protocol in named port member")
-		}
-		port64, err := strconv.ParseUint(parts[1], 10, 16)
-		if err != nil {
-			log.WithField("member", member).WithError(err).Panic("Failed to parse port")
-		}
-		port = uint16(port64)
-	} else {
-		cidrStr = member
-	}
-	cidr := ip.MustParseCIDROrIP(cidrStr).(ip.V4CIDR)
-	entry := ipsets.MakeBPFIPSetEntry(id, cidr, port, protocol)
-	return entry
 }
 
 func (m *bpfIPSetManager) CompleteDeferredWork() error {
@@ -360,7 +327,7 @@ func (m *bpfIPSet) RemoveAll() {
 
 func (m *bpfIPSet) AddMembers(members []string) {
 	for _, member := range members {
-		entry := protoIPSetMemberToBPFEntry(m.ID, member)
+		entry := ipsets.ProtoIPSetMemberToBPFEntry(m.ID, member)
 		m.AddMember(entry)
 	}
 }

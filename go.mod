@@ -1,6 +1,6 @@
 module github.com/projectcalico/felix
 
-go 1.12
+go 1.13
 
 require (
 	github.com/containernetworking/plugins v0.8.2
@@ -47,10 +47,10 @@ require (
 	go.uber.org/atomic v1.4.0 // indirect
 	go.uber.org/multierr v1.1.0 // indirect
 	go.uber.org/zap v1.10.0 // indirect
-	golang.org/x/crypto v0.0.0-20191227163750-53104e6ec876 // indirect
+	golang.org/x/crypto v0.0.0-20200109152110-61a87790db17 // indirect
 	golang.org/x/net v0.0.0-20190812203447-cdfb69ac37fc
-	golang.org/x/sys v0.0.0-20200107162124-548cf772de50
-	golang.org/x/tools v0.0.0-20200107184032-11e9d9cc0042 // indirect
+	golang.org/x/sys v0.0.0-20200113162924-86b910548bc1
+	golang.org/x/tools v0.0.0-20200113154838-30cae5f2fb06 // indirect
 	google.golang.org/grpc v1.19.0
 	gopkg.in/ini.v1 v1.46.0 // indirect
 	k8s.io/api v0.0.0

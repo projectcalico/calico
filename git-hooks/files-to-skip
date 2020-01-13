@@ -1,3 +1,4 @@
 bpf/bpf-packr.go
 bpf/packrd/packed-packr.go
+bpf/asm/opcode_string.go
 proto/felixbackend.pb.go

@@ -541,6 +541,10 @@ type mockNATMap struct {
 	m map[nat.FrontendKey]nat.FrontendValue
 }
 
+func (m *mockNATMap) MapFD() bpf.MapFD {
+	panic("implement me")
+}
+
 func newMockNATMap() *mockNATMap {
 	return &mockNATMap{
 		m: make(map[nat.FrontendKey]nat.FrontendValue),
@@ -620,6 +624,10 @@ func (m *mockNATMap) Delete(k []byte) error {
 type mockNATBackendMap struct {
 	sync.Mutex
 	m map[nat.BackendKey]nat.BackendValue
+}
+
+func (m *mockNATBackendMap) MapFD() bpf.MapFD {
+	panic("implement me")
 }
 
 func newMockNATBackendMap() *mockNATBackendMap {
