@@ -1,4 +1,4 @@
-// Copyright (c) 2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2019-2020 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -31,12 +31,17 @@ type MapIter func(k, v []byte)
 
 type Map interface {
 	GetName() string
+	// EnsureExists opens the map, creating and pinning it if needed.
 	EnsureExists() error
+	// MapFD gets the file descriptor of the map, only valid after calling EnsureExists().
+	MapFD() MapFD
+	// Path returns the path that the map is (to be) pinned to.
+	Path() string
+
 	Iter(MapIter) error
 	Update(k, v []byte) error
 	Get(k []byte) ([]byte, error)
 	Delete(k []byte) error
-	Path() string
 }
 
 type MapParameters struct {
@@ -74,6 +79,13 @@ type PinnedMap struct {
 
 func (b *PinnedMap) GetName() string {
 	return b.Name
+}
+
+func (b *PinnedMap) MapFD() MapFD {
+	if !b.fdLoaded {
+		logrus.Panic("MapFD() called without first calling EnsureExists()")
+	}
+	return b.fd
 }
 
 func (b *PinnedMap) Path() string {
@@ -165,6 +177,7 @@ func appendBytes(strings []string, bytes []byte) []string {
 }
 
 func (b *PinnedMap) Delete(k []byte) error {
+	logrus.WithField("key", k).Debug("Deleting map entry")
 	args := make([]string, 0, 10+len(k))
 	args = append(args, "map", "delete",
 		"pinned", b.Filename,
@@ -195,12 +208,13 @@ func (b *PinnedMap) EnsureExists() error {
 		logrus.WithError(err).Error("Failed create dir")
 		return err
 	}
-	_, err = os.Stat(b.Filename)
 
+	_, err = os.Stat(b.Filename)
 	if err != nil {
 		if !os.IsNotExist(err) {
 			return err
 		}
+		logrus.Debug("Map file didn't exist")
 		if b.context.RepinningEnabled {
 			logrus.WithField("name", b.Name).Info("Looking for map by name (to repin it)")
 			err = RepinMap(b.Name, b.Filename)
@@ -211,6 +225,7 @@ func (b *PinnedMap) EnsureExists() error {
 	}
 
 	if err == nil {
+		logrus.Debug("Map file already exists, trying to open it")
 		b.fd, err = GetPinnedMapFD(b.Filename)
 		if err == nil {
 			b.fdLoaded = true
@@ -219,6 +234,7 @@ func (b *PinnedMap) EnsureExists() error {
 		return err
 	}
 
+	logrus.Debug("Map didn't exist, creating it")
 	cmd := exec.Command("bpftool", "map", "create", b.Filename,
 		"type", b.Type,
 		"key", fmt.Sprint(b.KeySize),

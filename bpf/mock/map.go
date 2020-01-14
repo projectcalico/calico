@@ -28,6 +28,10 @@ type Map struct {
 	Contents map[string]string
 }
 
+func (m Map) MapFD() bpf.MapFD {
+	panic("implement me")
+}
+
 func (m Map) EnsureExists() error {
 	m.logCxt.Info("EnsureExists called")
 	return nil
