@@ -48,8 +48,9 @@ func main() {
 	}
 	generateMakefileInc, _ := opts.Bool("gen-makefile-inc")
 
-	srcDir := "./bpf/tc"
-	srcFileName := "./bpf/tc/templates/tc_template.c"
+	srcDir := "./bpf/tc/templates"
+	incDir := "../../include/"
+	srcFileName := path.Join(srcDir, "tc_template.c")
 	err = os.RemoveAll("bin/bpf")
 	if err != nil && !os.IsNotExist(err) {
 		log.WithError(err).Panic("Failed to clean up old directory")
@@ -87,6 +88,7 @@ func main() {
 						opts := []tc.CompileOption{
 							tc.CompileWithWorkingDir(srcDir),
 							tc.CompileWithSourceName(srcFileName),
+							tc.CompileWithIncludePath(incDir),
 							tc.CompileWithOutputName(oFileName),
 							tc.CompileWithFIBEnabled(fibEnabled),
 							tc.CompileWithLogLevel(logLevel),

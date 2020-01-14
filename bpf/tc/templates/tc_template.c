@@ -14,14 +14,14 @@
 #include <stdint.h>
 #include <stddef.h>
 
-#include "../include/bpf.h"
-#include "../include/log.h"
-#include "../include/policy.h"
-#include "../include/conntrack.h"
-#include "../include/nat.h"
-#include "../include/routes.h"
-#include "../include/jump.h"
-#include "../include/reasons.h"
+#include "bpf.h"
+#include "log.h"
+#include "policy.h"
+#include "conntrack.h"
+#include "nat.h"
+#include "routes.h"
+#include "jump.h"
+#include "reasons.h"
 
 #ifndef CALI_FIB_LOOKUP_ENABLED
 #define CALI_FIB_LOOKUP_ENABLED true

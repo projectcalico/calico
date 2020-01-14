@@ -527,6 +527,9 @@ func (m *bpfEndpointManager) attachWorkloadProgram(endpoint *proto.WorkloadEndpo
 		return errors.Wrap(err, "failed to generate policy bytecode")
 	}
 	progFD, err := bpf.LoadBPFProgramFromInsns(insns, "Apache-2.0")
+	if err != nil {
+		return errors.Wrap(err, "failed to load BPF policy program")
+	}
 	k := make([]byte, 4)
 	v := make([]byte, 4)
 	binary.LittleEndian.PutUint32(v, uint32(progFD))
@@ -552,7 +555,9 @@ func FindJumpMap(ap AttachPoint) (bpf.MapFD, error) {
 				progIDStr := m[1]
 				bpftool := exec.Command("bpftool", "prog", "show", "id", progIDStr, "--json")
 				output, err := bpftool.Output()
-
+				if err != nil {
+					return 0, errors.Wrap(err, "failed to get map metadata")
+				}
 				var prog struct {
 					MapIDs []int `json:"map_ids"`
 				}

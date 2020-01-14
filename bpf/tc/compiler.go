@@ -204,7 +204,7 @@ func CompileWithFlags(flags int) CompileOption {
 // program and saves it into the provided file. Extra CFLAGS can be provided
 func CompileProgramToFile(allRules [][][]*proto.Rule, ipSetIDAlloc *idalloc.IDAllocator, opts ...CompileOption) error {
 	compileOpts := compileOpts{
-		srcFile: "/code/bpf/tc/redir_tc.c",
+		srcFile: "/code/bpf/tc/templates/tc_template.c",
 		outFile: "/tmp/tc.o",
 		dir:     "/code/bpf/tc",
 	}

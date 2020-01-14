@@ -96,8 +96,9 @@ func TestCompileTemplateRun(t *testing.T) {
 
 var defaultCompileOpts = []tc.CompileOption{
 	tc.CompileWithBpftoolLoader(),
-	tc.CompileWithWorkingDir("../xdp"),
-	tc.CompileWithSourceName("../xdp/redir_tc.c"),
+	tc.CompileWithWorkingDir("../tc/templates"),
+	tc.CompileWithSourceName("../tc/templates/tc_template.c"), // Relative to our dir
+	tc.CompileWithIncludePath("../../include"),                // Relative to working dir
 	tc.CompileWithFIBEnabled(true),
 	tc.CompileWithLogLevel("DEBUG"),
 	tc.CompileWithVxlanPort(testVxlanPort),
@@ -121,13 +122,12 @@ func runBpfTest(t *testing.T, section string, rules [][][]*proto.Rule, testFn fu
 
 	defer os.RemoveAll(bpfFsDir)
 
-	objFname := tempDir + "/redir_tc.o"
-
+	objFname := tempDir + "/tc.o"
 	opts := append(defaultCompileOpts,
 		tc.CompileWithOutputName(objFname),
 		tc.CompileWithLogPrefix(section),
 		tc.CompileWithEntrypointName(section),
-		tc.CompileWithFlags(tc.SectionToFlags(section)),
+		tc.CompileWithFlags(tc.SectionToFlags[section]),
 		tc.CompileWithHostIP(hostIP), // to pick up new ip
 		tc.CompileWithDefineValue("CALI_SET_SKB_MARK", fmt.Sprintf("0x%x", skbMark)),
 	)
@@ -299,7 +299,7 @@ func runBpfUnitTest(t *testing.T, source string, testFn func(bpfProgRunFn)) {
 
 	objFname := tempDir + "/" + strings.TrimSuffix(source, path.Ext(source))
 
-	wdir := "../xdp"
+	wdir := "../tc/templates"
 	unittestFName := wdir + "/unittest.h"
 
 	err = ioutil.WriteFile(unittestFName,
@@ -314,8 +314,9 @@ func runBpfUnitTest(t *testing.T, source string, testFn func(bpfProgRunFn)) {
 	opts := append(defaultCompileOpts,
 		tc.CompileWithOutputName(objFname),
 		tc.CompileWithWorkingDir(wdir),
-		tc.CompileWithSourceName(wdir+"/redir_tc.c"),
+		tc.CompileWithSourceName(wdir+"/tc_template.c"),
 		tc.CompileWithIncludePath(curwd+"/progs"),
+		tc.CompileWithIncludePath("../include"),
 		tc.CompileWithLogPrefix("UNITTEST"),
 		tc.CompileWithDefine("CALI_UNITTEST"),
 		tc.CompileWithHostIP(hostIP),
