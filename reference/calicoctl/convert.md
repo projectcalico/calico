@@ -5,13 +5,13 @@ canonical_url: '/reference/calicoctl/convert'
 
 This sections describes the `calicoctl convert` command.
 
-Read the [calicoctl command line interface user reference]({{ site.baseurl }}/reference/calicoctl/)
+Read the [calicoctl command line interface user reference]({{ site.baseurl }}/reference/calicoctl/overview)
 for a full list of calicoctl commands.
 
 > **Note**: The available actions for a specific resource type may be
 > limited based on the datastore used for {{site.prodname}} (etcdv3 / Kubernetes API).
 > Please refer to the
-> [Resources section]({{ site.baseurl }}/reference/resources/)
+> [Resources section]({{ site.baseurl }}/reference/resources/overview)
 > for details about each resource type.
 {: .alert .alert-info}
 
@@ -81,6 +81,6 @@ Description:
 ## See also
 
 -  [Installing calicoctl]({{ site.baseurl }}/getting-started/calicoctl/install)
--  [Resources]({{ site.baseurl }}/reference/resources/) for details on all valid resources, including file format
+-  [Resources]({{ site.baseurl }}/reference/resources/overview) for details on all valid resources, including file format
    and schema
 -  [calicoctl get]({{ site.baseurl }}/reference/calicoctl/get) for details on `calicoctl get` command to get the resources.

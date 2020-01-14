@@ -6,7 +6,7 @@ canonical_url: '/reference/calicoctl/node/index'
 
 This section describes the `calicoctl node` commands.
 
-Read the [calicoctl Overview]({{ site.baseurl }}/reference/calicoctl/)
+Read the [calicoctl Overview]({{ site.baseurl }}/reference/calicoctl/overview)
 for a full list of calicoctl commands.
 
 Note that if you run `calicoctl` in a container, `calicoctl node ...` commands will

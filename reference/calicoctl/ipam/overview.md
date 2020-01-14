@@ -6,7 +6,7 @@ canonical_url: '/reference/calicoctl/ipam/index'
 
 This section describes the `calicoctl ipam` commands.
 
-Read the [calicoctl Overview]({{ site.baseurl }}/reference/calicoctl/) for a full list of calicoctl commands.
+Read the [calicoctl Overview]({{ site.baseurl }}/reference/calicoctl/overview) for a full list of calicoctl commands.
 
 ## Displaying the help text for 'calicoctl ipam' commands
 

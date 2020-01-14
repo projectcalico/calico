@@ -40,7 +40,7 @@ regions.
 To install a multi-region OpenStack deployment with Calico, proceed
 region-by-region and follow [the normal procedure for adding Calico to an
 OpenStack
-region]({{ site.baseurl }}/getting-started/openstack/installation),
+region]({{ site.baseurl }}/getting-started/openstack/installation/overview),
 except for these points:
 
 1.  Only install a single etcd database (instead of one per region) and

@@ -8,7 +8,7 @@ The command line tool, `calicoctl`, makes it easy to manage {{site.prodname}}
 network and security policy, as well as other {{site.prodname}} configurations.
 
 The full list of resources that can be managed, including a description of each,
-is described in the [Resource definitions]({{ site.baseurl }}/reference/resources/)
+is described in the [Resource definitions]({{ site.baseurl }}/reference/resources/overview)
 section.
 
 > **Note**: This section provides full reference information for `calicoctl`. To learn
@@ -72,7 +72,7 @@ organized by top level command.
 -  [calicoctl get]({{ site.baseurl }}/reference/calicoctl/get)
 -  [calicoctl label]({{ site.baseurl }}/reference/calicoctl/label)
 -  [calicoctl convert]({{ site.baseurl }}/reference/calicoctl/convert)
--  [calicoctl ipam]({{ site.baseurl }}/reference/calicoctl/ipam)
+-  [calicoctl ipam]({{ site.baseurl }}/reference/calicoctl/ipam/overview)
 -  [calicoctl node]({{ site.baseurl }}/reference/calicoctl/node)
 -  [calicoctl version]({{ site.baseurl }}/reference/calicoctl/version)
 
