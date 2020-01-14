@@ -4,7 +4,7 @@ dest = "/etc/calico/confd/config/bird6_ipam.cfg"
 prefix = "/calico"
 keys = [
     "/v1/ipam/v6/pool",
-    "/staticroutes",
-    "/rejectcidrs",
+    "/staticroutesv6",
+    "/rejectcidrsv6",
 ]
 reload_cmd = "pkill -HUP bird6 || true"

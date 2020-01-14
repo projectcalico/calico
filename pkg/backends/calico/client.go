@@ -1024,6 +1024,8 @@ func (c *client) updateLogLevel() {
 
 var routeKeyPrefix = "/calico/staticroutes/"
 var rejectKeyPrefix = "/calico/rejectcidrs/"
+var routeKeyPrefixV6 = "/calico/staticroutesv6/"
+var rejectKeyPrefixV6 = "/calico/rejectcidrsv6/"
 
 // AddRejectCIDRs rejects routes from being programmed into the data plane if
 // they are within the given CIDRs.
@@ -1033,7 +1035,12 @@ func (c *client) AddRejectCIDRs(cidrs []string) {
 
 	c.incrementCacheRevision()
 	for _, cidr := range cidrs {
-		k := rejectKeyPrefix + strings.Replace(cidr, "/", "-", 1)
+		var k string
+		if strings.Contains(cidr, ":") {
+			k = rejectKeyPrefixV6 + strings.Replace(cidr, "/", "-", 1)
+		} else {
+			k = rejectKeyPrefix + strings.Replace(cidr, "/", "-", 1)
+		}
 		c.cache[k] = cidr
 		c.keyUpdated(k)
 	}
@@ -1047,7 +1054,12 @@ func (c *client) DeleteRejectCIDRs(cidrs []string) {
 
 	c.incrementCacheRevision()
 	for _, cidr := range cidrs {
-		k := rejectKeyPrefix + strings.Replace(cidr, "/", "-", 1)
+		var k string
+		if strings.Contains(cidr, ":") {
+			k = rejectKeyPrefixV6 + strings.Replace(cidr, "/", "-", 1)
+		} else {
+			k = rejectKeyPrefix + strings.Replace(cidr, "/", "-", 1)
+		}
 		delete(c.cache, k)
 		c.keyUpdated(k)
 	}
@@ -1061,7 +1073,12 @@ func (c *client) AddStaticRoutes(cidrs []string) {
 
 	c.incrementCacheRevision()
 	for _, cidr := range cidrs {
-		k := routeKeyPrefix + strings.Replace(cidr, "/", "-", 1)
+		var k string
+		if strings.Contains(cidr, ":") {
+			k = routeKeyPrefixV6 + strings.Replace(cidr, "/", "-", 1)
+		} else {
+			k = routeKeyPrefix + strings.Replace(cidr, "/", "-", 1)
+		}
 		c.cache[k] = cidr
 		c.keyUpdated(k)
 	}
@@ -1076,7 +1093,12 @@ func (c *client) DeleteStaticRoutes(cidrs []string) {
 
 	c.incrementCacheRevision()
 	for _, cidr := range cidrs {
-		k := routeKeyPrefix + strings.Replace(cidr, "/", "-", 1)
+		var k string
+		if strings.Contains(cidr, ":") {
+			k = routeKeyPrefixV6 + strings.Replace(cidr, "/", "-", 1)
+		} else {
+			k = routeKeyPrefix + strings.Replace(cidr, "/", "-", 1)
+		}
 		delete(c.cache, k)
 		c.keyUpdated(k)
 	}
