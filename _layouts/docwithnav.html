@@ -207,7 +207,9 @@ The code is a little roundabout for a few reasons:
                   </a>
               {% endcapture %}
               <!-- END TOP DOCUMENTATION PAGE NAVBAR -->
+              <!-- TODO [turk]: uncomment once breadcrumbs work as navbar based, not URL based.
               {% include nav-breadcrumbs.html content=edit_page %}
+               -->
               {% include version_warning.html %}
               {% if page.calico_enterprise -%}
               {% include enterprise_header.html %}   
