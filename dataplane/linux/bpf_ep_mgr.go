@@ -16,6 +16,8 @@ package intdataplane
 
 import (
 	"bytes"
+	"encoding/binary"
+	"encoding/json"
 	"fmt"
 	"math/rand"
 	"net"
@@ -24,8 +26,15 @@ import (
 	"path"
 	"path/filepath"
 	"regexp"
+	"strings"
 	"sync"
 	"time"
+
+	"github.com/pkg/errors"
+	"golang.org/x/sys/unix"
+
+	"github.com/projectcalico/felix/bpf"
+	"github.com/projectcalico/felix/bpf/polprog"
 
 	"github.com/projectcalico/felix/bpf/tc"
 
@@ -64,6 +73,9 @@ type bpfEndpointManager struct {
 	ipSetIDAlloc     *idalloc.IDAllocator
 	epToHostDrop     bool
 	natTunnelMTU     int
+
+	ipSetMap bpf.Map
+	stateMap bpf.Map
 }
 
 func newBPFEndpointManager(
@@ -73,6 +85,8 @@ func newBPFEndpointManager(
 	dataIfaceRegex *regexp.Regexp,
 	ipSetIDAlloc *idalloc.IDAllocator,
 	natTunnelMTU int,
+	ipSetMap bpf.Map,
+	stateMap bpf.Map,
 ) *bpfEndpointManager {
 	return &bpfEndpointManager{
 		wlEps:               map[proto.WorkloadEndpointID]*proto.WorkloadEndpoint{},
@@ -89,6 +103,8 @@ func newBPFEndpointManager(
 		ipSetIDAlloc:        ipSetIDAlloc,
 		epToHostDrop:        epToHostDrop,
 		natTunnelMTU:        natTunnelMTU,
+		ipSetMap:            ipSetMap,
+		stateMap:            stateMap,
 	}
 }
 
@@ -377,9 +393,9 @@ func (m *bpfEndpointManager) applyProgramsToDirtyDataInterfaces() {
 		go func() {
 			defer wg.Done()
 			m.ensureQdisc(iface)
-			err := m.compileAndAttachDataIfaceProgram(iface, PolDirnIngress)
+			err := m.attachDataIfaceProgram(iface, PolDirnIngress)
 			if err == nil {
-				err = m.compileAndAttachDataIfaceProgram(iface, PolDirnEgress)
+				err = m.attachDataIfaceProgram(iface, PolDirnEgress)
 			}
 			if err == nil {
 				// This is required to allow NodePort forwarding with
@@ -452,11 +468,11 @@ func (m *bpfEndpointManager) applyPolicy(wlID proto.WorkloadEndpointID) error {
 	wg.Add(2)
 	go func() {
 		defer wg.Done()
-		ingressErr = m.compileAndAttachWorkloadProgram(wep, PolDirnIngress)
+		ingressErr = m.attachWorkloadProgram(wep, PolDirnIngress)
 	}()
 	go func() {
 		defer wg.Done()
-		egressErr = m.compileAndAttachWorkloadProgram(wep, PolDirnEgress)
+		egressErr = m.attachWorkloadProgram(wep, PolDirnEgress)
 	}()
 	wg.Wait()
 
@@ -485,14 +501,92 @@ func (m *bpfEndpointManager) ensureQdisc(ifaceName string) {
 	EnsureQdisc(ifaceName)
 }
 
-func (m *bpfEndpointManager) compileAndAttachWorkloadProgram(endpoint *proto.WorkloadEndpoint, polDirection PolDirection) error {
-	rules := m.extractRules(endpoint.Tiers, endpoint.ProfileIds, polDirection)
-	_ = rules // FIXME generate and install rules
+func (m *bpfEndpointManager) attachWorkloadProgram(endpoint *proto.WorkloadEndpoint, polDirection PolDirection) error {
 	ap := m.calculateTCAttachPoint(tc.EpTypeWorkload, polDirection, endpoint.Name)
-	return AttachTCProgram(ap)
+	err := AttachTCProgram(ap)
+	if err != nil {
+		return err
+	}
+
+	rules := m.extractRules(endpoint.Tiers, endpoint.ProfileIds, polDirection)
+
+	jumpMapFD, err := FindJumpMap(ap)
+	if err != nil {
+		return errors.Wrap(err, "failed to look up jump map")
+	}
+	defer func() {
+		err := jumpMapFD.Close()
+		if err != nil {
+			log.WithError(err).Panic("Failed to close jump map FD")
+		}
+	}()
+
+	pg := polprog.NewBuilder(m.ipSetIDAlloc, m.ipSetMap.MapFD(), m.stateMap.MapFD(), jumpMapFD)
+	insns, err := pg.Instructions(rules)
+	if err != nil {
+		return errors.Wrap(err, "failed to generate policy bytecode")
+	}
+	progFD, err := bpf.LoadBPFProgramFromInsns(insns, "Apache-2.0")
+	k := make([]byte, 4)
+	v := make([]byte, 4)
+	binary.LittleEndian.PutUint32(v, uint32(progFD))
+	err = bpf.UpdateMapEntry(jumpMapFD, k, v)
+	if err != nil {
+		return errors.Wrap(err, "failed to update jump map")
+	}
+	return nil
 }
 
-func (m *bpfEndpointManager) compileAndAttachDataIfaceProgram(ifaceName string, polDirection PolDirection) error {
+func FindJumpMap(ap AttachPoint) (bpf.MapFD, error) {
+	tcCmd := exec.Command("tc", "filter", "show", "dev", ap.Iface, string(ap.Hook))
+	out, err := tcCmd.Output()
+	if err != nil {
+		return 0, errors.Wrap(err, "failed to find TC filter for interface "+ap.Iface)
+	}
+	for _, line := range bytes.Split(out, []byte("\n")) {
+		line := string(line)
+		if strings.Contains(line, ap.Section) {
+			re := regexp.MustCompile(`id (\d+)`)
+			m := re.FindStringSubmatch(line)
+			if len(m) > 0 {
+				progIDStr := m[1]
+				bpftool := exec.Command("bpftool", "prog", "show", "id", progIDStr, "--json")
+				output, err := bpftool.Output()
+
+				var prog struct {
+					MapIDs []int `json:"map_ids"`
+				}
+				err = json.Unmarshal(output, &prog)
+				if err != nil {
+					return 0, errors.Wrap(err, "failed to parse bpftool output")
+				}
+
+				for _, mapID := range prog.MapIDs {
+					mapFD, err := bpf.GetMapFDByID(mapID)
+					if err != nil {
+						return 0, errors.Wrap(err, "failed to get map FD from ID")
+					}
+					mapInfo, err := bpf.GetMapInfo(mapFD)
+					if err != nil {
+						err = mapFD.Close()
+						if err != nil {
+							log.WithError(err).Panic("Failed to close FD.")
+						}
+						return 0, errors.Wrap(err, "failed to get map info")
+					}
+					if mapInfo.Type == unix.BPF_MAP_TYPE_PROG_ARRAY {
+						return mapFD, nil
+					}
+				}
+			}
+
+			return 0, errors.New("failed to find map")
+		}
+	}
+	return 0, errors.New("failed to find TC program")
+}
+
+func (m *bpfEndpointManager) attachDataIfaceProgram(ifaceName string, polDirection PolDirection) error {
 	epType := tc.EpTypeHost
 	if ifaceName == "tunl0" {
 		epType = tc.EpTypeTunnel

@@ -81,11 +81,11 @@ var (
 	_                            = stateOffIPDst
 	stateOffPostNATIPDst   int16 = 8
 	stateOffPolResult      int16 = 16
-	stateOffSrcPort        int16 = 24
-	stateOffDstPort        int16 = 26
+	stateOffSrcPort        int16 = 20
+	stateOffDstPort        int16 = 22
 	_                            = stateOffDstPort
-	stateOffPostNATDstPort int16 = 28
-	stateOffIPProto        int16 = 30
+	stateOffPostNATDstPort int16 = 24
+	stateOffIPProto        int16 = 26
 
 	// Compile-time check that IPSetEntrySize hasn't changed; if it changes, the code will need to change.
 	_ = [1]struct{}{{}}[20-ipsets.IPSetEntrySize]

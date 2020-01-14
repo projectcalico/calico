@@ -45,6 +45,13 @@ import (
 //    attr->file_flags = flags;
 // }
 //
+// // bpf_attr_setup_obj_get_id sets up the bpf_attr union for use with BPF_XXX_GET_FD_BY_ID.
+// // A C function makes this easier because unions aren't easy to access from Go.
+// void bpf_attr_setup_obj_get_id(union bpf_attr *attr, __u32 id, __u32 flags) {
+//    attr->map_id = id;
+//    attr->open_flags = flags;
+// }
+//
 // // bpf_attr_setup_obj_pin sets up the bpf_attr union for use with BPF_OBJ_PIN.
 // // A C function makes this easier because unions aren't easy to access from Go.
 // void bpf_attr_setup_obj_pin(union bpf_attr *attr, char *path, __u32 fd, __u32 flags) {
@@ -124,8 +131,8 @@ func (f ProgFD) Close() error {
 	return unix.Close(int(f))
 }
 
-func GetPinnedMapFD(filename string) (MapFD, error) {
-	log.Debugf("GetPinnedMapFD(%v)", filename)
+func GetMapFDByPin(filename string) (MapFD, error) {
+	log.Debugf("GetMapFDByPin(%v)", filename)
 	bpfAttr := C.bpf_attr_alloc()
 	defer C.free(unsafe.Pointer(bpfAttr))
 
@@ -134,6 +141,20 @@ func GetPinnedMapFD(filename string) (MapFD, error) {
 
 	C.bpf_attr_setup_obj_get(bpfAttr, cFilename, 0)
 	fd, _, errno := unix.Syscall(unix.SYS_BPF, unix.BPF_OBJ_GET, uintptr(unsafe.Pointer(bpfAttr)), C.sizeof_union_bpf_attr)
+	if errno != 0 {
+		return 0, errno
+	}
+
+	return MapFD(fd), nil
+}
+
+func GetMapFDByID(mapID int) (MapFD, error) {
+	log.Debugf("GetMapFDByID(%v)", mapID)
+	bpfAttr := C.bpf_attr_alloc()
+	defer C.free(unsafe.Pointer(bpfAttr))
+
+	C.bpf_attr_setup_obj_get_id(bpfAttr, C.uint(mapID), 0)
+	fd, _, errno := unix.Syscall(unix.SYS_BPF, unix.BPF_MAP_GET_FD_BY_ID, uintptr(unsafe.Pointer(bpfAttr)), C.sizeof_union_bpf_attr)
 	if errno != 0 {
 		return 0, errno
 	}
@@ -310,6 +331,7 @@ func checkMapIfDebug(mapFD MapFD, keySize, valueSize int) error {
 }
 
 type MapInfo struct {
+	Type      int
 	KeySize   int
 	ValueSize int
 }
@@ -327,6 +349,7 @@ func GetMapInfo(fd MapFD) (*MapInfo, error) {
 		return nil, errno
 	}
 	return &MapInfo{
+		Type:      int(bpfMapInfo._type),
 		KeySize:   int(bpfMapInfo.key_size),
 		ValueSize: int(bpfMapInfo.value_size),
 	}, nil

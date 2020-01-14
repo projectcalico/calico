@@ -2,6 +2,7 @@
 #define __CALI_BPF_JUMP_H__
 
 #include "../include/conntrack.h"
+#include "../include/policy.h"
 
 // struct cali_tc_state holds state that is passed between the BPF programs.
 // WARNING: must be kept in sync with the definitions in bpf/polprog/pol_prog_builder.go.
@@ -10,7 +11,7 @@ struct cali_tc_state {
 	__be32 ip_dst;
 	__be32 post_nat_ip_dst;
 	__be32 nat_tun_src;
-	enum calico_policy_result pol_rc;
+	__s32 pol_rc;
 	__u16 sport;
 	__u16 dport;
 	__u16 post_nat_dport;
