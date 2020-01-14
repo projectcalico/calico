@@ -18,6 +18,7 @@ import (
 	"net"
 	"os"
 	"reflect"
+	"strings"
 	"sync"
 	"time"
 
@@ -433,11 +434,15 @@ func (rg *routeGenerator) advertiseThisService(svc *v1.Service, ep *v1.Endpoints
 		return false
 	}
 
+	isIPv6 := func(ip string) bool { return strings.Contains(ip, ":") }
+
+	svcIsIPv6 := isIPv6(svc.Spec.ClusterIP)
+
 	// Otherwise, advertise if node contains at least one endpoint for svc
 	for _, subset := range ep.Subsets {
 		// not interested in subset.NotReadyAddresses
 		for _, address := range subset.Addresses {
-			if address.NodeName != nil && *address.NodeName == rg.nodeName {
+			if address.NodeName != nil && *address.NodeName == rg.nodeName && isIPv6(address.IP) == svcIsIPv6 {
 				logc.Debugf("Advertising local service")
 				return true
 			}

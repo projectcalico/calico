@@ -233,6 +233,43 @@ var _ = Describe("RouteGenerator", func() {
 			Expect(rg.client.cache["/calico/staticroutes/127.0.0.1-32"]).To(Equal(""))
 			Expect(rg.client.cache["/calico/staticroutes/172.217.3.5-32"]).To(Equal(""))
 			Expect(rg.client.cache).To(Equal(map[string]string{}))
+
+			// Add the endpoint back with an IPv6 address.  The service's cluster IP
+			// should remain non-advertised.
+			ep.Subsets = []v1.EndpointSubset{{
+				Addresses: []v1.EndpointAddress{{
+					IP:       "fd5f:1234::3",
+					NodeName: &rg.nodeName,
+				}},
+			}}
+			err = rg.epIndexer.Add(ep)
+			Expect(err).NotTo(HaveOccurred())
+			rg.onEPAdd(ep)
+			Expect(rg.client.cacheRevision).To(Equal(initRevision + 4))
+			Expect(rg.svcRouteMap["foo/bar"]).To(BeEmpty())
+			Expect(rg.routeAdvertisementCount["127.0.0.1/32"]).To(Equal(0))
+			Expect(rg.routeAdvertisementCount["172.217.3.5/32"]).To(Equal(0))
+			Expect(rg.client.cache["/calico/staticroutes/127.0.0.1-32"]).To(Equal(""))
+			Expect(rg.client.cache["/calico/staticroutes/172.217.3.5-32"]).To(Equal(""))
+			Expect(rg.client.cache).To(Equal(map[string]string{}))
+
+			// Add the endpoint again with an IPv4 address.  The service's cluster IP
+			// should now be advertised.
+			ep.Subsets = []v1.EndpointSubset{{
+				Addresses: []v1.EndpointAddress{{
+					IP:       "10.96.0.45",
+					NodeName: &rg.nodeName,
+				}},
+			}}
+			err = rg.epIndexer.Add(ep)
+			Expect(err).NotTo(HaveOccurred())
+			rg.onEPAdd(ep)
+			Expect(rg.client.cacheRevision).To(Equal(initRevision + 6))
+			Expect(rg.svcRouteMap["foo/bar"]).To(Equal(expectedSvcRouteMap))
+			Expect(rg.routeAdvertisementCount["127.0.0.1/32"]).To(Equal(1))
+			Expect(rg.routeAdvertisementCount["172.217.3.5/32"]).To(Equal(1))
+			Expect(rg.client.cache["/calico/staticroutes/127.0.0.1-32"]).To(Equal("127.0.0.1/32"))
+			Expect(rg.client.cache["/calico/staticroutes/172.217.3.5-32"]).To(Equal("172.217.3.5/32"))
 		})
 
 		Context("onSvc[Add|Delete]", func() {
