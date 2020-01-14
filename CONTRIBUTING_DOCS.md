@@ -178,7 +178,7 @@ To link to a page not named `index.md`, omit the closing slash. To link to a pag
 | `/getting-started/kubernetes/troubleshooting` | `/getting-started/kubernetes/troubleshooting.md`  |
 
 
-### `site.url`, `site.baseurl`, and the `page.version` variable
+### `site.url`, `site.baseurl`, and `absolute_url`
 
 **`site.baseurl`**
 
@@ -208,6 +208,20 @@ Will render as:
 
 ```
 kubectl apply -f `https://docs.tigera.io/v3.8/manifests/calicoctl.yaml`
+```
+
+**`site.url`**
+
+This renders as the top-level site authority string, without any version prefixes.  Use this when you are showing the user a URL to copy, but want to specify the path portion verbatim, without Jekyll adding any page version information.  For example, if you need to link to a hard-coded version of a page:
+
+```
+kubectl apply -f `{{site.url}}/v3.4/manifests/calicoctl.yaml`
+```
+
+Will render as:
+
+```
+kubectl apply -f `https://docs.tigera.io/v3.4/manifests/calicoctl.yaml`
 ```
 
 ### Case sensitivity

@@ -67,7 +67,7 @@ Ensure that your hosts and firewalls allow the necessary traffic based on your c
 {%- if include.orch == "OpenStack" %}
 
 \* _If your compute hosts connect directly and don't use IP-in-IP, you don't need to allow IP-in-IP traffic._
-{% endif -%}
+{%- endif %}
 
 ## Privileges
 
