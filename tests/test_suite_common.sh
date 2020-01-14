@@ -440,8 +440,8 @@ compare_templates() {
     output=$2
     record=$3
     rc=0
-    for f in `ls /tests/compiled_templates/${DATASTORE_TYPE}/${testdir}`; do
-        expected=/tests/compiled_templates/${DATASTORE_TYPE}/${testdir}/${f}
+    for f in `ls /tests/compiled_templates/${testdir}`; do
+        expected=/tests/compiled_templates/${testdir}/${f}
         actual=/etc/calico/confd/config/${f}
         if ! diff --ignore-blank-lines -q ${expected} ${actual} 1>/dev/null 2>&1; then
             if ! $record; then
