@@ -5,7 +5,7 @@ canonical_url: '/getting-started/bare-metal/installation/container'
 
 ## Running under Docker
 If you want to run `{{site.nodecontainer}}` under Docker, you can use `calicoctl node run` command. It automatically pre-initializes the etcd database (which the other installation methods do not). See the
-[`calicoctl node run`]({{ site.url }}/reference/calicoctl/node/run)
+[`calicoctl node run`]({{ site.baseurl }}/reference/calicoctl/node/run)
 guide for details. This container packages up the core {{site.prodname}} components to provide both {{site.prodname}}
 networking and network policy.
 

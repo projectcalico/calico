@@ -11,7 +11,10 @@
 - `ipt_rpfilter`
 - `ipt_set`
 - `nf_conntrack_netlink` subsystem
+- `nf_conntrack_proto_sctp`
+- `sctp`
 - `xt_addrtype`
+- `xt_comment`
 - `xt_conntrack`
 - `xt_icmp` (for IPv4)
 - `xt_icmp6` (for IPv6)
@@ -19,6 +22,7 @@
 - `xt_mark`
 - `xt_multiport`
 - `xt_rpfilter`
+- `xt_sctp`
 - `xt_set`
 - `xt_u32`
 - `ipip` (if using {{site.prodname}} networking)

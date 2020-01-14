@@ -20,7 +20,7 @@ To enable Calico network policy enforcement, follow these step-by-step instructi
 
 ### Above and beyond
 
-- [Install calicoctl command line tool]({{ site.url }}/getting-started/calicoctl/install)
-- [Get started with Kubernetes network policy]({{ site.url }}/security/kubernetes-network-policy)
-- [Get started with Calico network policy]({{ site.url }}/security/calico-network-policy)
-- [Enable default deny for Kubernetes pods]({{ site.url }}/security/kubernetes-default-deny)
+- [Install calicoctl command line tool]({{ site.baseurl }}/getting-started/calicoctl/install)
+- [Get started with Kubernetes network policy]({{ site.baseurl }}/security/kubernetes-network-policy)
+- [Get started with Calico network policy]({{ site.baseurl }}/security/calico-network-policy)
+- [Enable default deny for Kubernetes pods]({{ site.baseurl }}/security/kubernetes-default-deny)
