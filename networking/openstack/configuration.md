@@ -92,8 +92,7 @@ settings to configure the ML2 plugin.
 | type_drivers         | local, flat | Allow 'local' and 'flat' networks |
 | tenant_network_types | local, flat | Allow 'local' and 'flat' networks |
 
-DHCP agent (.../dhcp_agent.ini)
---------------------------------
+### DHCP agent (.../dhcp_agent.ini)
 
 With OpenStack releases earlier than Liberty, in
 `/etc/neutron/dhcp_agent.ini` you need the following setting to

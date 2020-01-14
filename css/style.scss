@@ -4,6 +4,9 @@
 @import "../_sass/bootstrap/bootstrap";
 
 @import "../css/sidebar";
+@import "../css/section_index";
+@import "../css/search";
+@import "../css/plugins/offcanvas";
 
 // By default bootstrap doesn't apply many styles to table elements
 // unless they have class .table and .table-bordered
@@ -29,11 +32,18 @@ blockquote {
 
 // Set height to prevent weird bug where sidebar is clipped at bottom.
 html {
-  height: 100%;
+  overflow-y: scroll;
+  position: relative;
+  min-height: 100%;
 }
+
 body {
-  height: 100%;
   -webkit-overflow-scrolling: touch;
+  overflow-x: visible;
+
+  @media (max-width: $screen-xs-max) {
+    overflow-x: hidden;
+  }
 }
 
 h2,h3,h4,h5,h6 {
@@ -53,15 +63,44 @@ div.highlight {
   position: relative;
 }
 
-// copy btn style
-.btn-copy-code {
-  color: #FF7E00;
-  border: 0;
-  font-size: 16px;
-  position: absolute;
-  right: 10px;
-  &:hover {
-    cursor: pointer;
+.code-snippet {
+  max-height: 410px;
+  overflow: auto;
+  overflow-x: hidden;
+
+  &__toolbar {
+    vertical-align: top;
+    float: right;
+  }
+
+  &-toolbar {
+    opacity: 0;
+    transition: opacity 0.1s ease-in-out;
+
+    &__copy-button,
+    &__download-button {
+      margin-left: 10px;
+      font-size: 16px;
+      color: #FF7E00;
+  
+      &:hover {
+        cursor: pointer;
+      }
+    }
+
+    &--visible {
+      opacity: 1;
+      transition: opacity 0.1s ease-in-out;
+    }
+  }
+
+  &__command-prefix {
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    -khtml-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    user-select: none;
   }
 }
 
@@ -78,6 +117,30 @@ div.highlight {
     box-sizing: content-box;
 }
 
+.toc {
+  color: #004078;
+  list-style-type: none;
+  padding-left: 0;
+
+  &__nested {
+    list-style-type: none;
+  }
+
+  ul {
+    padding-left: 15px;
+  }
+
+  a:hover,
+  a:focus {
+    color: #f69432;
+  }
+}
+
+.current {
+  color: #f79518;
+}
+
+
 input.gsc-input, .gsc-input-box, .gsc-input-box-hover, .gsc-input-box-focus, .gsc-search-button {
     box-sizing: content-box;
     line-height: normal;
@@ -90,16 +153,6 @@ input.gsc-input, .gsc-input-box, .gsc-input-box-hover, .gsc-input-box-focus, .gs
     @media (min-width: $screen-xs-max) {
         padding: 0 0;
     }
-}
-
-// BREADCRUMBS
-.breadcrumb {
-	display: inline-block;
-	background: none;
-	border: none;
-	margin: 0;
-	padding: 0;
-	text-transform: capitalize;
 }
 
 // Submenu Navigation for Desktop
@@ -190,4 +243,100 @@ input.gsc-input, .gsc-input-box, .gsc-input-box-hover, .gsc-input-box-focus, .gs
   font-size: 18px;
   font-family: 'Poppins',Helvetica,Arial,Lucida,sans-serif !important;
   font-weight: 700 !important;
+}
+
+.read-time {
+  padding-bottom: 10px;
+  color: #666;
+
+  &__icon {
+    top: 2px;
+  }
+}
+
+.main-content {
+  $grid-column-gap: 20px;
+  display: grid;
+  grid-template-columns: [article] 100%;
+  grid-column-gap: $grid-column-gap;
+
+  .toc-container {
+    display: none;
+  }
+
+  .sidebar-container {
+    z-index: 1;
+  }
+
+  @media (max-width: $screen-xs-max) {
+    .sidebar-container {
+      padding-right: $grid-column-gap;
+    }
+  }
+
+  @media (min-width: $screen-sm-min) {
+    grid-template-columns: [sidebar] 20% [article] auto;
+  }
+
+  @media (min-width: $screen-md-min) {
+    $sidebars-width: 16%;
+    grid-template-columns:
+      [sidebar] $sidebars-width
+      [article] calc(100% - #{$sidebars-width * 2} - #{$grid-column-gap * 2})
+      [toc] $sidebars-width;
+
+    .toc-container {
+      display: block;
+    }
+
+    &.no-toc {
+      grid-template-columns:
+        [sidebar] $sidebars-width
+        [article] calc(100% - #{$sidebars-width} - #{$grid-column-gap});
+    }
+  }
+}
+
+$wpfront-notification-bar-spacer-height: 55px;
+$sticky-top: $wpfront-notification-bar-spacer-height + $navbar-margin-bottom;
+$header-height: 75px;
+$search-height: 50px;
+$max-sidebar-height: calc(100vh - #{$wpfront-notification-bar-spacer-height + $header-height + $navbar-margin-bottom + $search-height + $navbar-margin-bottom});
+
+.sidebar {
+  position: -webkit-sticky;
+  position: sticky;
+  top: $sticky-top;
+
+  #sidebar-accordion {
+    max-height: $max-sidebar-height;
+
+    @media (min-width: $screen-sm-min) {
+      overflow-y: auto;
+    }
+  }
+}
+
+.sticky-toc {
+  position: -webkit-sticky;
+  position: sticky;
+  top: $sticky-top;
+
+  .toc {
+    max-height: $max-sidebar-height;
+
+    @media (min-width: $screen-md-min) {
+      overflow-y: auto;
+    }
+  }
+}
+
+.navbar-right {
+  margin-right: 0;
+}
+
+.edit-page-link {
+  color: #999;
+  float: right;
+  padding: 8px 10px;
 }

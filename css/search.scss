@@ -1,14 +1,25 @@
+@import "../css/variables";
+
 .search-container {
     display: none;
+}
+
+.search-input-container .ais-search-box {
+    max-width: unset;
 }
 
 .search-input-container input:focus {
     outline: none;
 }
 
-.popover {
-    max-width: unset;
-    width: 600px;
+.search {
+    .popover {
+        min-width: 300px;
+
+        @media (min-width: $screen-sm-min) {
+            min-width: 600px;
+        }
+    }
 }
 
 .columns-layout {

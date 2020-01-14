@@ -5,7 +5,7 @@ canonical_url: '/reference/calicoctl/node/checksystem'
 
 This section describes the `calicoctl node checksystem` command.
 
-Read the [calicoctl Overview]({{ site.baseurl }}/reference/calicoctl)
+Read the [calicoctl Overview]({{ site.baseurl }}/reference/calicoctl/overview)
 for a full list of calicoctl commands.
 
 ## Displaying the help text for 'calicoctl checksystem' command

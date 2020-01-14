@@ -5,7 +5,7 @@ canonical_url: '/reference/calicoctl/node/run'
 
 This sections describes the `calicoctl node run` command.
 
-Read the [calicoctl Overview]({{ site.baseurl }}/reference/calicoctl)
+Read the [calicoctl Overview]({{ site.baseurl }}/reference/calicoctl/overview)
 for a full list of calicoctl commands.
 
 ## Displaying the help text for 'calicoctl node run' command
@@ -364,6 +364,6 @@ terminating `,` character does not need to be specified for those cases.
 ## See also
 
 -  [Installing calicoctl]({{ site.baseurl }}/getting-started/calicoctl/install)
--  [Resources]({{ site.baseurl }}/reference/resources/) for details on all valid resources, including file format
+-  [Resources]({{ site.baseurl }}/reference/resources/overview) for details on all valid resources, including file format
    and schema
 -  [Policy]({{ site.baseurl }}/reference/resources/networkpolicy) for details on the {{site.prodname}} selector-based policy model

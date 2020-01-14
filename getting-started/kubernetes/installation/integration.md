@@ -57,7 +57,7 @@ sudo chmod +x calicoctl
 sudo ETCD_ENDPOINTS=http://<ETCD_IP>:<ETCD_PORT> ./calicoctl node run --node-image={{page.registry}}{{page.imageNames["calico/node"]}}:{{site.data.versions.first.title}}
 ```
 
-See the [`calicoctl node run` documentation]({{ site.baseurl }}/reference/calicoctl/node/)
+See the [`calicoctl node run` documentation]({{ site.baseurl }}/reference/calicoctl/node/overview)
 for more information.
 
 ### Example systemd unit file ({{site.noderunning}}.service)

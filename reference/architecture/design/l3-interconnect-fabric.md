@@ -37,7 +37,7 @@ fabrics.
 ### Basic {{site.prodname}} architecture overview
 
 A description of the {{site.prodname}} architecture can be found in our
-[architectural overview]({{ site.baseurl }}/reference/architecture).
+[architectural overview]({{ site.baseurl }}/reference/architecture/overview).
 However, a brief discussion of the routing and data paths is useful for
 the discussion.
 

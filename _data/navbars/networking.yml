@@ -1,12 +1,11 @@
 bigheader: "Networking"
-path: /networking
+path: /networking/
 order: 2
-toc:
-- title: Networking
-  path: /networking/
+section:
 - title: Determine best networking option
   path: /networking/determine-best-networking
 - title: Configure networking
+  path: /networking/configuring
   section:
   - title: Configure BGP peering
     path: /networking/bgp
@@ -21,6 +20,7 @@ toc:
   - title: Accelerate Istio network performance
     path: /networking/sidecar-acceleration
 - title: Customize IP address management
+  path: /networking/ipam
   section:
    - title: Get started with IP address management
      path: /networking/get-started-ip-addresses
@@ -43,6 +43,7 @@ toc:
    - title: Interoperate with legacy firewalls using IP ranges
      path: /networking/legacy-firewalls
 - title: Calico networking for OpenStack
+  path: /networking/openstack/
   section:
   - title: Set up a development machine
     path:  /networking/openstack/dev-machine-setup
