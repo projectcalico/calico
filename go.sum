@@ -286,6 +286,7 @@ github.com/projectcalico/felix v0.0.0-20200107081518-188ced9b3366 h1:BcmmsQ0+uIh
 github.com/projectcalico/felix v0.0.0-20200107081518-188ced9b3366/go.mod h1:Hg9uKYH8AOVj7rEBGYqHxFGVN3hiB2fOHO33DwcBqvk=
 github.com/projectcalico/felix v0.0.0-20200110210357-9eabe46c304f h1:GAwfGgpjthZZnq7tGO+FsnCnT5QWemfUmVVlKyectsw=
 github.com/projectcalico/felix v0.0.0-20200110210357-9eabe46c304f/go.mod h1:Hg9uKYH8AOVj7rEBGYqHxFGVN3hiB2fOHO33DwcBqvk=
+github.com/projectcalico/felix v0.0.0-20200113180022-ac85ca1a39e1/go.mod h1:rn6Mp47ljZaGKyE9soCFiCz1EuwtRkn8mY8SOUMIQSQ=
 github.com/projectcalico/felix v3.8.5+incompatible h1:3pIWByco82Zs6Xr3WQ2VoT10bPVXPROVuUAtjcdOwUo=
 github.com/projectcalico/felix v3.8.6+incompatible h1:pZPAd/adDebsXOsWvVlVrGbtohIAbEtoj74+aVEDGnA=
 github.com/projectcalico/go-json v0.0.0-20161128004156-6219dc7339ba h1:aaF2byUCZhzszHsfPEr2M3qcU4ibtD/yk/il2R7T1PU=
@@ -308,6 +309,7 @@ github.com/projectcalico/libcalico-go v1.7.2-0.20191205083902-1b3f8f6b6b3e h1:MQ
 github.com/projectcalico/libcalico-go v1.7.2-0.20191205083902-1b3f8f6b6b3e/go.mod h1:5Upl9epOoyHRS1D4O9nckdFUtB0munzl4T1yoW52S14=
 github.com/projectcalico/libcalico-go v1.7.2-0.20191214003639-2449a6f3ad4f h1:N1vtiA7i9GbCnWa1B67QGZ5jPPJllPd9g1odqUqGdbk=
 github.com/projectcalico/libcalico-go v1.7.2-0.20191214003639-2449a6f3ad4f/go.mod h1:5Upl9epOoyHRS1D4O9nckdFUtB0munzl4T1yoW52S14=
+github.com/projectcalico/libcalico-go v1.7.2-0.20200111004125-f4cc1f8914f8/go.mod h1:yd3FK67e+YeaYtKw5ImPw+YFyFF/G0ZCzbbwNAwwZh8=
 github.com/projectcalico/logrus v1.0.4-calico h1:bHJ2KLGTFzoWpRISe13CO7HVxxrKunDjyUz/wFiBY8c=
 github.com/projectcalico/logrus v1.0.4-calico/go.mod h1:DfgrchabbtEO9wjOz5lVae+XRvjFKKWEA9GTMme6A8g=
 github.com/projectcalico/pod2daemon v0.0.0-20190730210055-df57fc59e2e1 h1:JPzqAbV448lrNn83iqWiMM+Lxh0EyGlZC+ZYDZt+oGo=
@@ -319,6 +321,7 @@ github.com/projectcalico/typha v0.0.0-20200103121022-1b4f9e7f0eaf h1:wmh8hARGJoq
 github.com/projectcalico/typha v0.0.0-20200103121022-1b4f9e7f0eaf/go.mod h1:6qA8iKCdyfbZj0A7aK8gF7vk1Rl0iKpIP1bzYYFScSM=
 github.com/projectcalico/typha v0.0.0-20200107040903-4a2d8ec28638 h1:aI+vj3n15MbiFqVaslNKtkgb4AOozZhfrwsWK3t0re4=
 github.com/projectcalico/typha v0.0.0-20200107040903-4a2d8ec28638/go.mod h1:nnXKdFROxisg2tLlfqECXmvuY0ZGuKm+iwSNXty3QXU=
+github.com/projectcalico/typha v0.0.0-20200108194520-4b85e80f2715/go.mod h1:yXlJIhuVgI7T0bkDf8+HetoEt7is5Aua8BqxQxvYM1U=
 github.com/projectcalico/typha v0.0.0-20200108212925-f84ab3d4c079 h1:GXFCrUZMGTZPdMHYEKodX1inGv30xZs/v81PbWyeBF8=
 github.com/projectcalico/typha v0.0.0-20200108212925-f84ab3d4c079/go.mod h1:yXlJIhuVgI7T0bkDf8+HetoEt7is5Aua8BqxQxvYM1U=
 github.com/projectcalico/typha v0.0.0-20200111041037-44a9af09e6bf h1:ns7O6nLlAhRim8FVKAnJiMF91FRupTQ54MO625UGmF8=
