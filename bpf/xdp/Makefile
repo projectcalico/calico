@@ -9,12 +9,12 @@ CFLAGS +=  \
 	   -Werror \
 	   -fno-stack-protector \
 	   -O2 \
-	   -emit-llvm 
+	   -emit-llvm
 
 CC := clang
 LD := llc
 
-OBJS := redir_tc.o filter.o
+OBJS := filter.o
 
 # cancel the build-in rule
 %.o: %.c

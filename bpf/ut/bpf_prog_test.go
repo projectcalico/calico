@@ -26,6 +26,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/projectcalico/felix/bpf/tc"
+
 	"github.com/projectcalico/felix/idalloc"
 
 	"github.com/google/gopacket"
@@ -40,7 +42,6 @@ import (
 	"github.com/projectcalico/felix/bpf/conntrack"
 	"github.com/projectcalico/felix/bpf/nat"
 	"github.com/projectcalico/felix/bpf/routes"
-	intdataplane "github.com/projectcalico/felix/dataplane/linux"
 	"github.com/projectcalico/felix/proto"
 )
 
@@ -93,14 +94,14 @@ func TestCompileTemplateRun(t *testing.T) {
 	})
 }
 
-var defaultCompileOpts = []intdataplane.CompileTCOption{
-	intdataplane.CompileWithBpftoolLoader(),
-	intdataplane.CompileWithWorkingDir("../xdp"),
-	intdataplane.CompileWithSourceName("../xdp/redir_tc.c"),
-	intdataplane.CompileWithFIBEnabled(true),
-	intdataplane.CompileWithLogLevel("DEBUG"),
-	intdataplane.CompileWithVxlanPort(testVxlanPort),
-	intdataplane.CompileWithNATTunnelMTU(natTunnelMTU),
+var defaultCompileOpts = []tc.CompileOption{
+	tc.CompileWithBpftoolLoader(),
+	tc.CompileWithWorkingDir("../xdp"),
+	tc.CompileWithSourceName("../xdp/redir_tc.c"),
+	tc.CompileWithFIBEnabled(true),
+	tc.CompileWithLogLevel("DEBUG"),
+	tc.CompileWithVxlanPort(testVxlanPort),
+	tc.CompileWithNATTunnelMTU(natTunnelMTU),
 }
 
 // runBpfTest runs a specific section of the entire bpf program in isolation
@@ -123,15 +124,15 @@ func runBpfTest(t *testing.T, section string, rules [][][]*proto.Rule, testFn fu
 	objFname := tempDir + "/redir_tc.o"
 
 	opts := append(defaultCompileOpts,
-		intdataplane.CompileWithOutputName(objFname),
-		intdataplane.CompileWithLogPrefix(section),
-		intdataplane.CompileWithEntrypointName(section),
-		intdataplane.CompileWithFlags(intdataplane.BPFSectionToFlags(section)),
-		intdataplane.CompileWithHostIP(hostIP), // to pick up new ip
-		intdataplane.CompileWithDefineValue("CALI_SET_SKB_MARK", fmt.Sprintf("0x%x", skbMark)),
+		tc.CompileWithOutputName(objFname),
+		tc.CompileWithLogPrefix(section),
+		tc.CompileWithEntrypointName(section),
+		tc.CompileWithFlags(tc.SectionToFlags(section)),
+		tc.CompileWithHostIP(hostIP), // to pick up new ip
+		tc.CompileWithDefineValue("CALI_SET_SKB_MARK", fmt.Sprintf("0x%x", skbMark)),
 	)
 
-	err = intdataplane.CompileTCProgramToFile(rules, idalloc.New(), opts...)
+	err = tc.CompileProgramToFile(rules, idalloc.New(), opts...)
 	Expect(err).NotTo(HaveOccurred())
 
 	err = bpftoolProgLoadAll(objFname, bpfFsDir)
@@ -311,16 +312,16 @@ func runBpfUnitTest(t *testing.T, source string, testFn func(bpfProgRunFn)) {
 	Expect(err).NotTo(HaveOccurred())
 
 	opts := append(defaultCompileOpts,
-		intdataplane.CompileWithOutputName(objFname),
-		intdataplane.CompileWithWorkingDir(wdir),
-		intdataplane.CompileWithSourceName(wdir+"/redir_tc.c"),
-		intdataplane.CompileWithIncludePath(curwd+"/progs"),
-		intdataplane.CompileWithLogPrefix("UNITTEST"),
-		intdataplane.CompileWithDefine("CALI_UNITTEST"),
-		intdataplane.CompileWithHostIP(hostIP),
+		tc.CompileWithOutputName(objFname),
+		tc.CompileWithWorkingDir(wdir),
+		tc.CompileWithSourceName(wdir+"/redir_tc.c"),
+		tc.CompileWithIncludePath(curwd+"/progs"),
+		tc.CompileWithLogPrefix("UNITTEST"),
+		tc.CompileWithDefine("CALI_UNITTEST"),
+		tc.CompileWithHostIP(hostIP),
 	)
 
-	err = intdataplane.CompileTCProgramToFile(nil, idalloc.New(), opts...)
+	err = tc.CompileProgramToFile(nil, idalloc.New(), opts...)
 	Expect(err).NotTo(HaveOccurred())
 
 	err = bpftoolProgLoadAll(objFname, bpfFsDir)

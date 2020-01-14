@@ -35,7 +35,7 @@ require (
 	github.com/projectcalico/pod2daemon v0.0.0-20190730210055-df57fc59e2e1
 	github.com/projectcalico/typha v0.7.3-0.20191113041616-fda30a87ce29
 	github.com/prometheus/client_golang v0.9.2
-	github.com/rogpeppe/go-internal v1.5.1 // indirect
+	github.com/rogpeppe/go-internal v1.5.2 // indirect
 	github.com/satori/go.uuid v1.2.0
 	github.com/sirupsen/logrus v1.4.2
 	github.com/smartystreets/goconvey v0.0.0-20190731233626-505e41936337 // indirect
@@ -49,8 +49,8 @@ require (
 	go.uber.org/zap v1.10.0 // indirect
 	golang.org/x/crypto v0.0.0-20200109152110-61a87790db17 // indirect
 	golang.org/x/net v0.0.0-20190812203447-cdfb69ac37fc
-	golang.org/x/sys v0.0.0-20200107162124-548cf772de50
-	golang.org/x/tools v0.0.0-20200113040837-eac381796e91 // indirect
+	golang.org/x/sys v0.0.0-20200113162924-86b910548bc1
+	golang.org/x/tools v0.0.0-20200114052453-d31a08c2edf2 // indirect
 	google.golang.org/grpc v1.19.0
 	gopkg.in/ini.v1 v1.46.0 // indirect
 	k8s.io/api v0.0.0

@@ -1,4 +1,4 @@
-// Copyright (c) 2019 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,25 +15,23 @@
 package intdataplane
 
 import (
-	"bufio"
 	"bytes"
 	"fmt"
-	"io/ioutil"
 	"math/rand"
 	"net"
 	"os"
 	"os/exec"
+	"path"
 	"path/filepath"
 	"regexp"
-	"strings"
 	"sync"
 	"time"
+
+	"github.com/projectcalico/felix/bpf/tc"
 
 	"github.com/projectcalico/felix/idalloc"
 
 	"github.com/projectcalico/felix/ifacemonitor"
-
-	"github.com/projectcalico/felix/bpf"
 
 	log "github.com/sirupsen/logrus"
 
@@ -489,18 +487,18 @@ func (m *bpfEndpointManager) ensureQdisc(ifaceName string) {
 
 func (m *bpfEndpointManager) compileAndAttachWorkloadProgram(endpoint *proto.WorkloadEndpoint, polDirection PolDirection) error {
 	rules := m.extractRules(endpoint.Tiers, endpoint.ProfileIds, polDirection)
-	ap := calculateTCAttachPoint(EpTypeWorkload, polDirection, endpoint.Name)
-	return m.compileAndAttachProgram(rules, ap)
+	_ = rules // FIXME generate and install rules
+	ap := m.calculateTCAttachPoint(tc.EpTypeWorkload, polDirection, endpoint.Name)
+	return AttachTCProgram(ap)
 }
 
 func (m *bpfEndpointManager) compileAndAttachDataIfaceProgram(ifaceName string, polDirection PolDirection) error {
-	rules := [][][]*proto.Rule{{{{Action: "Allow"}}}}
-	epType := EpTypeHost
+	epType := tc.EpTypeHost
 	if ifaceName == "tunl0" {
-		epType = EpTypeTunnel
+		epType = tc.EpTypeTunnel
 	}
-	ap := calculateTCAttachPoint(epType, polDirection, ifaceName)
-	return m.compileAndAttachProgram(rules, ap)
+	ap := m.calculateTCAttachPoint(epType, polDirection, ifaceName)
+	return AttachTCProgram(ap)
 }
 
 // PolDirection is the Calico datamodel direction of policy.  On a host endpoint, ingress is towards the host.
@@ -512,99 +510,37 @@ const (
 	PolDirnEgress  PolDirection = "egress"
 )
 
-// TCHook is the hook to which a BPF program should be attached.  This is relative to the host namespace
-// so workload PolDirnIngress policy is attached to the TCHookEgress.
-type TCHook string
+func (m *bpfEndpointManager) calculateTCAttachPoint(endpointType tc.EndpointType, policyDirection PolDirection, ifaceName string) AttachPoint {
+	var ap AttachPoint
 
-const (
-	TCHookIngress TCHook = "ingress"
-	TCHookEgress  TCHook = "egress"
-)
-
-type TCAttachPoint struct {
-	Section      string
-	Hook         TCHook
-	Iface        string
-	CompileFlags int
-}
-
-const (
-	CompileFlagHostEp  = 1
-	CompileFlagIngress = 2
-	CompileFlagTunnel  = 4
-	CompileFlagCgroup  = 8
-)
-
-type ToOrFromEp string
-
-const (
-	FromEp ToOrFromEp = "from"
-	ToEp   ToOrFromEp = "to"
-)
-
-type EndpointType string
-
-const (
-	EpTypeWorkload EndpointType = "workload"
-	EpTypeHost     EndpointType = "host"
-	EpTypeTunnel   EndpointType = "tunnel"
-)
-
-func calculateTCAttachPoint(endpointType EndpointType, policyDirection PolDirection, ifaceName string) TCAttachPoint {
-	var ap TCAttachPoint
-
-	if endpointType == EpTypeWorkload {
+	if endpointType == tc.EpTypeWorkload {
 		// Policy direction is relative to the workload so, from the host namespace it's flipped.
 		if policyDirection == PolDirnIngress {
-			ap.Hook = TCHookEgress
+			ap.Hook = tc.HookEgress
 		} else {
-			ap.Hook = TCHookIngress
+			ap.Hook = tc.HookIngress
 		}
 	} else {
 		// Host endpoints have the natural relationship between policy direction and hook.
 		if policyDirection == PolDirnIngress {
-			ap.Hook = TCHookIngress
+			ap.Hook = tc.HookIngress
 		} else {
-			ap.Hook = TCHookEgress
+			ap.Hook = tc.HookEgress
 		}
 	}
 
-	var toOrFrom ToOrFromEp
-	if ap.Hook == TCHookIngress {
-		toOrFrom = FromEp
+	var toOrFrom tc.ToOrFromEp
+	if ap.Hook == tc.HookIngress {
+		toOrFrom = tc.FromEp
 	} else {
-		toOrFrom = ToEp
+		toOrFrom = tc.ToEp
 	}
 
-	ap.Section = BPFSectionName(endpointType, toOrFrom)
-	ap.CompileFlags = BPFSectionToFlags(ap.Section)
+	ap.Section = tc.SectionName(endpointType, toOrFrom)
 	ap.Iface = ifaceName
+	ap.Filename = tc.ProgFilename(endpointType, toOrFrom, m.epToHostDrop, m.fibLookupEnabled, m.bpfLogLevel)
 
 	return ap
-}
-
-func BPFSectionName(endpointType EndpointType, fromOrTo ToOrFromEp) string {
-	return fmt.Sprintf("calico_%s_%s_ep", fromOrTo, endpointType)
-}
-
-var bpfSectionToFlags = map[string]int{}
-
-func init() {
-	bpfSectionToFlags[BPFSectionName(EpTypeWorkload, FromEp)] = 0
-	bpfSectionToFlags[BPFSectionName(EpTypeWorkload, ToEp)] = CompileFlagIngress
-	bpfSectionToFlags[BPFSectionName(EpTypeHost, FromEp)] = CompileFlagHostEp | CompileFlagIngress
-	bpfSectionToFlags[BPFSectionName(EpTypeHost, ToEp)] = CompileFlagHostEp
-	bpfSectionToFlags[BPFSectionName(EpTypeTunnel, FromEp)] = CompileFlagHostEp | CompileFlagIngress | CompileFlagTunnel
-	bpfSectionToFlags[BPFSectionName(EpTypeTunnel, ToEp)] = CompileFlagHostEp | CompileFlagTunnel
-}
-
-// BPFSectionToFlags is used by the UTs to magic the correct flags given a section name.
-func BPFSectionToFlags(section string) int {
-	flags, ok := bpfSectionToFlags[section]
-	if !ok {
-		log.WithField("section", section).Panic("Bug: unknown BPF section name")
-	}
-	return flags
 }
 
 func (m *bpfEndpointManager) extractRules(tiers2 []*proto.TierInfo, profileNames []string, direction PolDirection) [][][]*proto.Rule {
@@ -644,76 +580,17 @@ func (m *bpfEndpointManager) extractRules(tiers2 []*proto.TierInfo, profileNames
 	return allRules
 }
 
-func (m *bpfEndpointManager) compileAndAttachProgram(allRules [][][]*proto.Rule, attachPoint TCAttachPoint) error {
-	logCxt := log.WithField("attachPoint", attachPoint)
-
-	tempDir, err := ioutil.TempDir("", "calico-compile")
-	if err != nil {
-		log.WithError(err).Panic("Failed to make temporary directory")
-	}
-	defer func() {
-		_ = os.RemoveAll(tempDir)
-	}()
-	logCxt.WithField("tempDir", tempDir).Debug("Compiling program in temporary dir")
-	srcDir := "/code/bpf/xdp"
-	srcFileName := srcDir + "/redir_tc.c"
-	oFileName := tempDir + "/redir_tc.o"
-	logLevel := strings.ToUpper(m.bpfLogLevel)
-	if logLevel == "" {
-		logLevel = "OFF"
-	}
-
-	logPfx := os.Getenv("BPF_LOG_PFX") + attachPoint.Iface
-
-	opts := []CompileTCOption{
-		CompileWithWorkingDir(srcDir),
-		CompileWithSourceName(srcFileName),
-		CompileWithOutputName(oFileName),
-		CompileWithFIBEnabled(m.fibLookupEnabled),
-		CompileWithLogLevel(logLevel),
-		CompileWithLogPrefix(logPfx),
-		CompileWithEndpointToHostDrop(m.epToHostDrop),
-		CompileWithNATTunnelMTU(uint16(m.natTunnelMTU)),
-		CompileWithEntrypointName(attachPoint.Section),
-		CompileWithFlags(attachPoint.CompileFlags),
-	}
-
-	iface := m.ifaces[attachPoint.Iface]
-	if len(iface.addrs) > 0 {
-		// XXX we currently support only a single IP on any iface and we pick
-		// whichever is the first if there are more
-		opts = append(opts, CompileWithHostIP(iface.addrs[0]))
-	}
-
-	err = CompileTCProgramToFile(allRules, m.ipSetIDAlloc, opts...)
-	if err != nil {
-		return err
-	}
-
-	err = AttachTCProgram(oFileName, attachPoint)
-	if err != nil {
-		logCxt.WithError(err).Error("Failed to attach BPF program")
-
-		var buf bytes.Buffer
-		pg, err := bpf.NewProgramGenerator(srcFileName, m.ipSetIDAlloc)
-		if err != nil {
-			logCxt.WithError(err).Panic("Failed to write get code generator.")
-		}
-		err = pg.WriteProgram(&buf, allRules)
-		if err != nil {
-			logCxt.WithError(err).Panic("Failed to write C file to buffer.")
-		}
-
-		logCxt.WithField("program", buf.String()).Error("Dump of program")
-		return err
-	}
-	return nil
+type AttachPoint struct {
+	Section  string
+	Hook     tc.Hook
+	Iface    string
+	Filename string
 }
 
 var tcLock sync.Mutex
 
 // AttachTCProgram attaches a BPF program from a file to the TC attach point
-func AttachTCProgram(fname string, attachPoint TCAttachPoint) error {
+func AttachTCProgram(attachPoint AttachPoint) error {
 	// When tc is pinning maps, it is vulnerable to lost updates. Serialise tc calls.
 	tcLock.Lock()
 	defer tcLock.Unlock()
@@ -725,49 +602,16 @@ func AttachTCProgram(fname string, attachPoint TCAttachPoint) error {
 	//
 	// For our purposes, it should work to simply delete the map.  However, when we tried that, the contents of the
 	// map get deleted even though it is in use by a BPF program.
-	defer func() {
-		// Find the maps we care about by walking the BPF filesystem.
-		err := filepath.Walk("/sys/fs/bpf/tc", func(path string, info os.FileInfo, err error) error {
-			if err != nil {
-				log.WithError(err).Panic("Failed to walk BPF filesystem")
-				return err
-			}
-			if info.Name() == "cali_jump" {
-				log.WithField("path", path).Debug("Queueing deletion of map")
-				out, err := exec.Command("bpftool", "map", "show", "pinned", path).Output()
-				if err != nil {
-					log.WithError(err).Panic("Failed to show map")
-				}
-				log.WithField("dump", string(out)).Info("Map show before deletion")
-				id := string(bytes.Split(out, []byte(":"))[0])
+	defer repinJumpMaps()
 
-				// TODO: make a path based on the name of the interface and the hook so we can look it up later.
-				out, err = exec.Command("bpftool", "map", "pin", "id", id, path+fmt.Sprint(rand.Uint32())).Output()
-				if err != nil {
-					log.WithError(err).Panic("Failed to repin map")
-				}
-				log.WithField("dump", string(out)).Info("Map pin before deletion")
-
-				err = os.Remove(path)
-				if err != nil {
-					log.WithError(err).Panic("Failed to remove old map pin")
-				}
-			}
-			return nil
-		})
-		if err != nil {
-			log.WithError(err).Panic("Failed to walk BPF filesystem")
-		}
-		log.Debug("Finished moving map pins that we don't need.")
-	}()
-
-	tc := exec.Command("tc",
+	filename := path.Join("/code/bpf/bin", attachPoint.Filename)
+	tcCmd := exec.Command("tc",
 		"filter", "add", "dev", attachPoint.Iface,
 		string(attachPoint.Hook),
-		"bpf", "da", "obj", fname,
+		"bpf", "da", "obj", filename,
 		"sec", attachPoint.Section)
 
-	out, err := tc.CombinedOutput()
+	out, err := tcCmd.CombinedOutput()
 	if err != nil {
 		if bytes.Contains(out, []byte("Cannot find device")) {
 			// Avoid a big, spammy log when the issue is that the interface isn't present.
@@ -776,238 +620,60 @@ func AttachTCProgram(fname string, attachPoint TCAttachPoint) error {
 			return nil
 		}
 		log.WithError(err).WithFields(log.Fields{"out": string(out)}).
-			WithField("command", tc).Error("Failed to attach BPF program")
+			WithField("command", tcCmd).Error("Failed to attach BPF program")
 	}
 
 	return err
 }
 
-// CompileTCOption specifies additional compile options for TC programs
-type CompileTCOption func(*compileTCOpts)
+func repinJumpMaps() {
+	func() {
+		// Find the maps we care about by walking the BPF filesystem.
+		err := filepath.Walk("/sys/fs/bpf/tc", func(path string, info os.FileInfo, err error) error {
+			if err != nil {
+				log.WithError(err).Panic("Failed to walk BPF filesystem")
+				return err
+			}
+			if info.Name() == "cali_jump" {
+				log.WithField("path", path).Debug("Queueing deletion of map")
 
-type compileTCOpts struct {
-	extraArgs []string
-	dir       string
-	srcFile   string
-	outFile   string
-	bpftool   bool
-}
+				out, err := exec.Command("bpftool", "map", "dump", "pinned", path).Output()
+				if err != nil {
+					log.WithError(err).Panic("Failed to dump map")
+				}
+				log.WithField("dump", string(out)).Info("Map dump before deletion")
 
-func (o *compileTCOpts) appendExtraArg(a string) {
-	o.extraArgs = append(o.extraArgs, a)
-}
+				out, err = exec.Command("bpftool", "map", "show", "pinned", path).Output()
+				if err != nil {
+					log.WithError(err).Panic("Failed to show map")
+				}
+				log.WithField("dump", string(out)).Info("Map show before deletion")
+				id := string(bytes.Split(out, []byte(":"))[0])
 
-// CompileWithEndpointToHostDrop sets whether workload-to-host traffic is dropped.
-func CompileWithEndpointToHostDrop(drop bool) CompileTCOption {
-	return func(opts *compileTCOpts) {
-		opts.appendExtraArg(fmt.Sprintf("-DCALI_DROP_WORKLOAD_TO_HOST=%v", drop))
-	}
-}
+				// TODO: make a path based on the name of the interface and the hook so we can look it up later.
+				newPath := path + fmt.Sprint(rand.Uint32())
+				out, err = exec.Command("bpftool", "map", "pin", "id", id, newPath).Output()
+				if err != nil {
+					log.WithError(err).Panic("Failed to repin map")
+				}
+				log.WithField("dump", string(out)).Debug("Repin output")
 
-// CompileWithDefine makes a -Dname defined
-func CompileWithDefine(name string) CompileTCOption {
-	return func(opts *compileTCOpts) {
-		opts.appendExtraArg(fmt.Sprintf("-D%s", name))
-	}
-}
+				err = os.Remove(path)
+				if err != nil {
+					log.WithError(err).Panic("Failed to remove old map pin")
+				}
 
-// CompileWithDefineValue makes a -Dname=value defined
-func CompileWithDefineValue(name string, value string) CompileTCOption {
-	return func(opts *compileTCOpts) {
-		opts.appendExtraArg(fmt.Sprintf("-D%s=%s", name, value))
-	}
-}
-
-// CompileWithEntrypointName controls the name of the BPF section entrypoint.
-func CompileWithEntrypointName(name string) CompileTCOption {
-	return CompileWithDefineValue("CALI_ENTRYPOINT_NAME", name)
-}
-
-// CompileWithIncludePath adds an include path to search for includes
-func CompileWithIncludePath(p string) CompileTCOption {
-	return func(opts *compileTCOpts) {
-		opts.appendExtraArg(fmt.Sprintf("-I%s", p))
-	}
-}
-
-// CompileWithFIBEnabled sets whether FIB lookup is allowed
-func CompileWithFIBEnabled(enabled bool) CompileTCOption {
-	return func(opts *compileTCOpts) {
-		opts.appendExtraArg(fmt.Sprintf("-DCALI_FIB_LOOKUP_ENABLED=%v", enabled))
-	}
-}
-
-// CompileWithLogLevel sets the log level of the resulting program
-func CompileWithLogLevel(level string) CompileTCOption {
-	return func(opts *compileTCOpts) {
-		opts.appendExtraArg(fmt.Sprintf("-DCALI_LOG_LEVEL=CALI_LOG_LEVEL_%s", level))
-	}
-}
-
-// CompileWithLogPrefix sets a specific log prefix for the resulting program
-func CompileWithLogPrefix(prefix string) CompileTCOption {
-	return func(opts *compileTCOpts) {
-		opts.appendExtraArg(fmt.Sprintf("-DCALI_LOG_PFX=%v", prefix))
-	}
-}
-
-// CompileWithSourceName sets the source file name
-func CompileWithSourceName(f string) CompileTCOption {
-	return func(opts *compileTCOpts) {
-		opts.srcFile = f
-	}
-}
-
-// CompileWithOutputName sets the output name
-func CompileWithOutputName(f string) CompileTCOption {
-	return func(opts *compileTCOpts) {
-		opts.outFile = f
-	}
-}
-
-// CompileWithWorkingDir sets the working directory
-func CompileWithWorkingDir(dir string) CompileTCOption {
-	return func(opts *compileTCOpts) {
-		opts.dir = dir
-	}
-}
-
-// CompileWithBpftoolLoader makes the result loadable by bpftool (in contrast to
-// iproute2 only)
-func CompileWithBpftoolLoader() CompileTCOption {
-	return func(opts *compileTCOpts) {
-		opts.bpftool = true
-	}
-}
-
-// CompileWithHostIP makes the host ip available for the bpf code
-func CompileWithHostIP(ip net.IP) CompileTCOption {
-	ipv4 := ip.To4()
-	if ipv4 == nil {
-		return CompileWithDefineValue("CALI_HOST_IP", "bad-host-ip")
-	}
-	return CompileWithDefineValue("CALI_HOST_IP",
-		fmt.Sprintf("0x%02x%02x%02x%02x", ipv4[3], ipv4[2], ipv4[1], ipv4[0]))
-}
-
-// CompileWithVxlanPort sets the VXLAN port to use to override the IANA default
-func CompileWithVxlanPort(port uint16) CompileTCOption {
-	return CompileWithDefineValue("CALI_VXLAN_PORT", fmt.Sprintf("%d", port))
-}
-
-// CompileWithNATTunnelMTU sets the MTU for NAT tunnel
-func CompileWithNATTunnelMTU(mtu uint16) CompileTCOption {
-	return CompileWithDefineValue("CALI_NAT_TUNNEL_MTU", fmt.Sprintf("%d", mtu))
-}
-
-// CompileWithFlags sets the CALI_COMPILE_FLAGS value.
-func CompileWithFlags(flags int) CompileTCOption {
-	return CompileWithDefineValue("CALI_COMPILE_FLAGS", fmt.Sprint(flags))
-}
-
-// CompileTCProgramToFile takes policy rules and compiles them into a tc-bpf
-// program and saves it into the provided file. Extra CFLAGS can be provided
-func CompileTCProgramToFile(allRules [][][]*proto.Rule, ipSetIDAlloc *idalloc.IDAllocator, opts ...CompileTCOption) error {
-	compileOpts := compileTCOpts{
-		srcFile: "/code/bpf/xdp/redir_tc.c",
-		outFile: "/tmp/redir_tc.o",
-		dir:     "/code/bpf/xdp",
-	}
-
-	for _, o := range opts {
-		o(&compileOpts)
-	}
-
-	args := []string{
-		"-x",
-		"c",
-		"-D__KERNEL__",
-		"-D__ASM_SYSREG_H",
-	}
-
-	if compileOpts.bpftool {
-		args = append(args, "-D__BPFTOOL_LOADER__")
-	}
-
-	args = append(args, compileOpts.extraArgs...)
-
-	args = append(args, []string{
-		"-I" + compileOpts.dir,
-		"-Wno-unused-value",
-		"-Wno-pointer-sign",
-		"-Wno-compare-distinct-pointer-types",
-		"-Wunused",
-		"-Wall",
-		"-Werror",
-		"-fno-stack-protector",
-		"-O2",
-		"-emit-llvm",
-		"-c", "-", "-o", "-",
-	}...)
-	log.WithField("args", args).Debug("About to run clang")
-	clang := exec.Command("clang", args...)
-	clang.Dir = compileOpts.dir
-	clangStdin, err := clang.StdinPipe()
-	if err != nil {
-		return err
-	}
-	clangStdout, err := clang.StdoutPipe()
-	if err != nil {
-		return err
-	}
-	clangStderr, err := clang.StderrPipe()
-	if err != nil {
-		return err
-	}
-
-	log.WithField("command", clang.String()).Infof("compiling bpf")
-
-	err = clang.Start()
-	if err != nil {
-		log.WithError(err).Panic("Failed to write C file.")
-		return err
-	}
-	var wg sync.WaitGroup
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		scanner := bufio.NewScanner(clangStderr)
-		for scanner.Scan() {
-			log.Warnf("clang stderr: %s", scanner.Text())
-		}
+				out, err = exec.Command("bpftool", "map", "dump", "pinned", newPath).Output()
+				if err != nil {
+					log.WithError(err).Panic("Failed to show map")
+				}
+				log.WithField("dump", string(out)).Info("Map show after repin")
+			}
+			return nil
+		})
 		if err != nil {
-			log.WithError(err).Error("Error while reading clang stderr")
+			log.WithError(err).Panic("Failed to walk BPF filesystem")
 		}
+		log.Debug("Finished moving map pins that we don't need.")
 	}()
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		pg, err := bpf.NewProgramGenerator(compileOpts.srcFile, ipSetIDAlloc)
-		if err != nil {
-			log.WithError(err).Panic("Failed to create code generator")
-		}
-		err = pg.WriteProgram(clangStdin, allRules)
-		if err != nil {
-			log.WithError(err).Panic("Failed to write C file.")
-		}
-		err = clangStdin.Close()
-		if err != nil {
-			log.WithError(err).Panic("Failed to write C file to clang stdin (Close() failed).")
-		}
-	}()
-	llc := exec.Command("llc", "-march=bpf", "-filetype=obj", "-o", compileOpts.outFile)
-	llc.Stdin = clangStdout
-	out, err := llc.CombinedOutput()
-	if err != nil {
-		log.WithError(err).WithField("out", string(out)).Error("Failed to compile C program (llc step)")
-		return err
-	}
-	err = clang.Wait()
-	if err != nil {
-		log.WithError(err).Error("Clang failed.")
-		return err
-	}
-	wg.Wait()
-
-	return nil
 }
