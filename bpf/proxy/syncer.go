@@ -211,8 +211,7 @@ func (s *Syncer) startupSync(state DPSyncerState) error {
 	return nil
 }
 
-func (s *Syncer) applyClusterIP(skey svcKey, sinfo k8sp.ServicePort,
-	epsMap k8sp.EndpointsMap) error {
+func (s *Syncer) applySvc(skey svcKey, sinfo k8sp.ServicePort, eps []k8sp.Endpoint) error {
 	var (
 		err   error
 		id    uint32
@@ -224,7 +223,7 @@ func (s *Syncer) applyClusterIP(skey svcKey, sinfo k8sp.ServicePort,
 	if exists {
 		if old.svc == sinfo {
 			id = old.id
-			count, local, err = s.updateExistingSvc(skey.sname, sinfo, id, old.count, epsMap)
+			count, local, err = s.updateExistingSvc(skey.sname, sinfo, id, old.count, eps)
 		} else {
 			if err := s.deleteSvc(old.svc, old.id, old.count); err != nil {
 				return err
@@ -253,7 +252,7 @@ func (s *Syncer) applyClusterIP(skey svcKey, sinfo k8sp.ServicePort,
 	}
 	if !exists {
 		id = s.newSvcID()
-		count, local, err = s.newSvc(skey.sname, sinfo, id, epsMap)
+		count, local, err = s.newSvc(skey.sname, sinfo, id, eps)
 	}
 	if err != nil {
 		return err
@@ -274,10 +273,10 @@ func (s *Syncer) applyClusterIP(skey svcKey, sinfo k8sp.ServicePort,
 const (
 	svcTypeExternalIP int = iota
 	svcTypeNodePort
+	svcTypeNodePortRemote
 )
 
-func (s *Syncer) applyDerived(sname k8sp.ServicePortName, t int, sinfo k8sp.ServicePort,
-	epsMap k8sp.EndpointsMap) error {
+func (s *Syncer) applyDerived(sname k8sp.ServicePortName, t int, sinfo k8sp.ServicePort) error {
 
 	svc, ok := s.newSvcMap[getSvcKey(sname, "")]
 	if !ok {
@@ -331,7 +330,7 @@ func (s *Syncer) apply(state DPSyncerState) error {
 	// insert or update existing services
 	for sname, sinfo := range state.SvcMap {
 		skey := getSvcKey(sname, "")
-		if err := s.applyClusterIP(skey, sinfo, state.EpsMap); err != nil {
+		if err := s.applySvc(skey, sinfo, state.EpsMap[skey.sname]); err != nil {
 			return err
 		}
 
@@ -343,7 +342,7 @@ func (s *Syncer) apply(state DPSyncerState) error {
 				log.Errorf("failed to parse ExternalIP %s for service %s", extIP, sname)
 				continue
 			}
-			err := s.applyDerived(sname, svcTypeExternalIP, &extInfo, state.EpsMap)
+			err := s.applyDerived(sname, svcTypeExternalIP, &extInfo)
 			if err != nil {
 				log.Errorf("failed to apply ExternalIP %s for service %s : %s", extIP, sname, err)
 				continue
@@ -361,7 +360,7 @@ func (s *Syncer) apply(state DPSyncerState) error {
 					// the full nodeport with resolution on the remote node.
 					continue
 				}
-				err := s.applyDerived(sname, svcTypeNodePort, &npInfo, state.EpsMap)
+				err := s.applyDerived(sname, svcTypeNodePort, &npInfo)
 				if err != nil {
 					log.Errorf("failed to apply NodePort %s for service %s : %s", npip, sname, err)
 					continue
@@ -416,11 +415,11 @@ func (s *Syncer) Apply(state DPSyncerState) error {
 }
 
 func (s *Syncer) updateExistingSvc(sname k8sp.ServicePortName, sinfo k8sp.ServicePort, id uint32,
-	oldCount int, eps k8sp.EndpointsMap) (int, int, error) {
+	oldCount int, eps []k8sp.Endpoint) (int, int, error) {
 
 	// No need to delete any old entries if we do reduce the number of backends
 	// as all the key:value are going to be rewritten/updated
-	if oldCount > len(eps[sname]) {
+	if oldCount > len(eps) {
 		for i := 0; i < oldCount; i++ {
 			if err := s.deleteSvcBackend(id, uint32(i)); err != nil {
 				return 0, 0, err
@@ -432,14 +431,14 @@ func (s *Syncer) updateExistingSvc(sname k8sp.ServicePortName, sinfo k8sp.Servic
 }
 
 func (s *Syncer) newSvc(sname k8sp.ServicePortName, sinfo k8sp.ServicePort, id uint32,
-	eps k8sp.EndpointsMap) (int, int, error) {
+	eps []k8sp.Endpoint) (int, int, error) {
 
-	cpEps := make([]k8sp.Endpoint, 0, len(eps[sname]))
+	cpEps := make([]k8sp.Endpoint, 0, len(eps))
 
 	cnt := 0
 	local := 0
 
-	for _, ep := range eps[sname] {
+	for _, ep := range eps {
 		if !ep.GetIsLocal() {
 			continue
 		}
@@ -452,7 +451,7 @@ func (s *Syncer) newSvc(sname k8sp.ServicePortName, sinfo k8sp.ServicePort, id u
 		local++
 	}
 
-	for _, ep := range eps[sname] {
+	for _, ep := range eps {
 		if ep.GetIsLocal() {
 			continue
 		}
