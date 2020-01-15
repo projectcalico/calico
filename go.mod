@@ -50,7 +50,7 @@ require (
 	golang.org/x/crypto v0.0.0-20200115085410-6d4e4cb37c7d // indirect
 	golang.org/x/net v0.0.0-20190812203447-cdfb69ac37fc
 	golang.org/x/sys v0.0.0-20200113162924-86b910548bc1
-	golang.org/x/tools v0.0.0-20200115044656-831fdb1e1868 // indirect
+	golang.org/x/tools v0.0.0-20200115165105-de0b1760071a // indirect
 	google.golang.org/grpc v1.19.0
 	gopkg.in/ini.v1 v1.46.0 // indirect
 	k8s.io/api v0.0.0

@@ -1037,6 +1037,4 @@ func cleanIPSetMap() {
 		err = ipsMap.Delete(k)
 		Expect(err).NotTo(HaveOccurred(), "failed to clean out map before test")
 	}
-
-	return
 }

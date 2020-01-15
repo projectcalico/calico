@@ -486,8 +486,8 @@ $(BUILD_IMAGE)-$(ARCH): bin/calico-felix-$(ARCH) \
                         $(BPF_PROGS) \
                         docker-image/calico-felix-wrapper \
                         docker-image/felix.cfg \
-                        docker-image/Dockerfile*
-	$(MAKE) register
+                        docker-image/Dockerfile* \
+                        register
 	# Reconstruct the bin and bpf directories because we don't want to accidentally add
 	# leftover files (say from a build on another branch) into the docker image.
 	rm -rf docker-image/bin
