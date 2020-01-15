@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2019 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -23,15 +23,13 @@ import (
 	"strings"
 	"time"
 
-	"github.com/projectcalico/felix/fv/cgroup"
-
 	"github.com/containernetworking/plugins/pkg/ns"
 	docopt "github.com/docopt/docopt-go"
 	reuse "github.com/libp2p/go-reuseport"
+	uuid "github.com/satori/go.uuid"
 	log "github.com/sirupsen/logrus"
 
-	uuid "github.com/satori/go.uuid"
-
+	"github.com/projectcalico/felix/fv/cgroup"
 	"github.com/projectcalico/felix/fv/utils"
 )
 

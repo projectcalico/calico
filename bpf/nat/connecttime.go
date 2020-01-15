@@ -25,13 +25,11 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/projectcalico/felix/bpf/tc"
-
 	"github.com/pkg/errors"
-
 	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/felix/bpf"
+	"github.com/projectcalico/felix/bpf/tc"
 )
 
 type cgroupProgs struct {

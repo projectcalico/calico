@@ -464,7 +464,7 @@ image-all: $(addprefix sub-image-,$(VALIDARCHES))
 sub-image-%:
 	$(MAKE) image ARCH=$*
 
-bin/compile-bpf: $(SRC_FILES)
+bin/compile-bpf: go.mod $(shell find bpf/nat bpf/tc config logutils proto -type f -name '*.go' -print | grep -v '_test\.go' )
 	$(DOCKER_RUN) $(CALICO_BUILD_CGO) go build -o $@ ./cmd/compile-bpf
 
 bin/bpf-progs.inc: bin/compile-bpf
@@ -758,19 +758,19 @@ bin/calico-bpf: $(SRC_FILES) $(LOCAL_BUILD_DEP)
 	$(DOCKER_RUN) $(CALICO_BUILD_CGO) \
 	    sh -c 'go build -v -i -o $@ -v $(BUILD_FLAGS) $(LDFLAGS) "$(PACKAGE_NAME)/cmd/calico-bpf"'
 
-bin/iptables-locker: $(SRC_FILES) $(LOCAL_BUILD_DEP)
+bin/iptables-locker: $(LOCAL_BUILD_DEP) go.mod $(shell find iptables -type f -name '*.go' -print)
 	@echo Building iptables-locker...
 	mkdir -p bin
 	$(DOCKER_RUN) $(CALICO_BUILD) \
 	    sh -c 'go build -v -i -o $@ -v $(BUILD_FLAGS) $(LDFLAGS) "$(PACKAGE_NAME)/fv/iptables-locker"'
 
-bin/test-workload: $(SRC_FILES) $(LOCAL_BUILD_DEP)
+bin/test-workload: $(LOCAL_BUILD_DEP) go.mod fv/cgroup/cgroup.go fv/utils/utils.go
 	@echo Building test-workload...
 	mkdir -p bin
 	$(DOCKER_RUN) $(CALICO_BUILD) \
 	    sh -c 'go build -v -i -o $@ -v $(BUILD_FLAGS) $(LDFLAGS) "$(PACKAGE_NAME)/fv/test-workload"'
 
-bin/test-connection: $(SRC_FILES) $(LOCAL_BUILD_DEP)
+bin/test-connection: $(LOCAL_BUILD_DEP) go.mod fv/cgroup/cgroup.go fv/utils/utils.go
 	@echo Building test-connection...
 	mkdir -p bin
 	$(DOCKER_RUN) $(CALICO_BUILD) \
