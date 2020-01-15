@@ -16,4 +16,17 @@
 # THIS FILE IS MANAGED BY THE GLOBAL REQUIREMENTS REPO - DO NOT EDIT
 from setuptools import setup, find_packages
 
-setup(packages=find_packages())
+setup(
+    packages=find_packages(),
+    entry_points={
+        'console_scripts': [
+            'calico-dhcp-agent = networking_calico.agent.dhcp_agent:main',
+        ],
+        'neutron.ml2.mechanism_drivers': [
+            'calico = networking_calico.plugins.ml2.drivers.calico.mech_calico:CalicoMechanismDriver',
+        ],
+        'neutron.core_plugins': [
+            'calico = networking_calico.plugins.calico.plugin:CalicoPlugin',
+        ],
+    },
+)
