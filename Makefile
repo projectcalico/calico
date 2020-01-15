@@ -303,12 +303,12 @@ kind-k8st-run-test: calico_test.created
 	    -v $(CURDIR):/code \
 	    -v /var/run/docker.sock:/var/run/docker.sock \
 	    -v ${HOME}/.kube/kind-config-kind:/root/.kube/config \
-	    -v $(CURDIR)/kubectl:/root/bin/kubectl \
+	    -v $(CURDIR)/kubectl:/bin/kubectl \
 	    --privileged \
 	    --net host \
 	${TEST_CONTAINER_NAME} \
-	    sh -c 'echo "container started.." && cp /root/bin/kubectl /bin/kubectl && echo "kubectl copied." && \
-	     cd /code/tests/k8st &&  nosetests $(K8ST_TO_RUN) -s --nocapture --nologcapture -v --with-xunit --xunit-file="/code/report/k8s-tests.xml" --with-timer'
+	    sh -c 'echo "container started.." && \
+	     cd /code/tests/k8st && nosetests $(K8ST_TO_RUN) -v --with-xunit --xunit-file="/code/report/k8s-tests.xml" --with-timer'
 
 .PHONY: kind-k8st-cleanup
 kind-k8st-cleanup:

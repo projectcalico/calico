@@ -45,10 +45,6 @@ EOF
               value: "autodetect"
             - name: CALICO_IPV6POOL_CIDR
               value: "fd00:10:244::/64"
-            - name: CALICO_IPV6POOL_IPIP
-              value: "Never"
-            - name: CALICO_IPV6POOL_NAT_OUTGOING
-              value: "false"
 EOF
   # update FELIX_IPV6SUPPORT=true
   sed -i '/FELIX_IPV6SUPPORT/!b;n;c\              value: "true"' "${yaml}"
@@ -57,11 +53,13 @@ EOF
 echo "kubernetes dualstack requires ipvs mode kube-proxy for the moment."
 MODULES=("ip_vs" "ip_vs_rr" "ip_vs_wrr" "ip_vs_sh" "nf_conntrack_ipv4")
 for m in "${MODULES[@]}"; do
-  checkModule $m
-  if [[ $? -eq 1 ]]; then
-    echo "Could not find kernel module $m. install it..."
-    sudo modprobe $m
-  fi
+  checkModule $m || {
+      echo "Could not find kernel module $m. install it..."
+      # Modules could be built into kernel and not exist as a kernel module anymore. 
+      # For instance, kernel 5.0.0 ubuntu has nf_conntrack_ipv4 built in.
+      # So try to install modules required and continue if it failed..  
+      sudo modprobe $m || true
+  }
 done
 echo
 
@@ -70,7 +68,6 @@ echo "Download kind executable with dual stack support"
 # with official release once dual stack is fully supported by upstream.
 curl -L https://github.com/song-jiang/kind/releases/download/dualstack-1.17.0/kind -o ${KIND}
 chmod +x ${KIND}
-exit 0
 
 echo "Create kind cluster"
 ${KIND} create cluster --image songtjiang/kindnode-dualstack:1.17.0 --config - <<EOF
@@ -146,3 +143,16 @@ echo
 
 ${kubectl} get po --all-namespaces -o wide
 ${kubectl} get svc
+
+# Run ipv4 ipv6 connection test
+function test_connection() {
+  local svc="webserver-ipv$1"
+  output=$(kubectl exec client -- wget $svc -T 1 -O -)
+  echo $output
+  if [[ $output != *test-webserver* ]]; then
+    echo "connection to $svc service failed"
+    exit 1
+  fi
+}
+test_connection 4
+test_connection 6
