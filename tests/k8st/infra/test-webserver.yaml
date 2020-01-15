@@ -1,0 +1,70 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: webserver
+spec:
+  selector:
+    matchLabels:
+      app: webserver
+  replicas: 2
+  template:
+    metadata:
+      labels:
+        app: webserver
+    spec:
+      containers:
+      - name: webserver
+        image: gcr.io/kubernetes-e2e-test-images/test-webserver:1.0 
+        ports:
+        - containerPort: 80
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: webserver-ipv6
+  labels:
+    run: webserver-ipv6
+spec:
+  ipFamily: IPv6
+  ports:
+  - port: 80
+    protocol: TCP
+  selector:
+    app: webserver
+  type: NodePort
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: webserver-ipv4
+  labels:
+    run: webserver-ipv4
+spec:
+  ipFamily: IPv4
+  ports:
+  - port: 80
+    protocol: TCP
+  selector:
+    app: webserver
+  type: NodePort
+
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  labels:
+    pod-name: client
+  name: client
+spec:
+  containers:
+  - args:
+    - /bin/sh
+    - -c
+    - sleep 360000
+    image: busybox
+    imagePullPolicy: Always
+    name: client
+  nodeSelector:
+    beta.kubernetes.io/os: linux

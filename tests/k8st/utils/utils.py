@@ -39,7 +39,8 @@ class DiagsCollector(object):
         for resource in ["node", "bgpconfig", "bgppeer", "gnp", "felixconfig"]:
             _log.info("")
             calicoctl("get " + resource + " -o yaml")
-        for node in ["kube-master", "kube-node-1", "kube-node-2"]:
+        nodes, _ = node_info()
+        for node in nodes:
             _log.info("")
             run("docker exec " + node + " ip r")
         kubectl("logs -n kube-system -l k8s-app=calico-node")
@@ -52,12 +53,11 @@ def start_external_node_with_bgp(name, config):
     # Check how much disk space we have.
     run("df -h")
 
-    # Setup external node: use privileged mode for setting routes
+    # Setup external node: use privileged mode for setting routes.
     run("docker run -d "
         "--privileged "
         "--name %s "
-        "--network kubeadm-dind-net "
-        "mirantis/kubeadm-dind-cluster:v1.10" % name)
+        "neiljerram/birdy" % name)
 
     # Check how much space there is inside the container.  We may need
     # to retry this, as it may take a while for the image to download
@@ -70,16 +70,27 @@ def start_external_node_with_bgp(name, config):
             _log.exception("Container not ready yet")
             time.sleep(20)
 
-    # Install bird on extra node
-    run("docker exec %s apt-get update --fix-missing" % name)
-    run("docker exec %s apt-get install -y bird" % name)
-    run("docker exec %s mkdir /run/bird" % name)
+    output = run("docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' %s" % name)
+    birdy_ip = output.strip()
+    config = config.replace("ip@local", birdy_ip)
+
+    # Add "merge paths on" to the BIRD config.
+    run("docker exec %s sed -i '/protocol kernel {/a merge paths on;' /etc/bird.conf" % name)
+
+    # Install desired peer config.
     with open('bird.conf', 'w') as birdconfig:
         birdconfig.write(config)
-    run("docker cp bird.conf %s:/etc/bird/bird.conf" % name)
+    run("docker cp bird.conf %s:/etc/bird/peers.conf" % name)
     run("rm bird.conf")
-    run("docker exec %s service bird restart" % name)
+    run("docker exec %s birdcl configure" % name)
 
+    # Install curl and iproute2.
+    run("docker exec %s apk add --no-cache curl iproute2" % name)
+
+    # Set ECMP hash algrithm to L4 for a proper load balancing between nodes.
+    run("docker exec %s sysctl -w net.ipv4.fib_multipath_hash_policy=1" % name)
+
+    return birdy_ip
 
 def retry_until_success(fun,
                         retries=10,
@@ -186,3 +197,19 @@ EOF
 def generate_unique_id(length, prefix=""):
     random_string = ''.join(random.choice(string.ascii_lowercase + string.digits) for _ in range(length))
     return "%s-%s" % (prefix, random_string)
+
+def node_info():
+    nodes = []
+    ips = []
+
+    master_node = kubectl("get node --selector='node-role.kubernetes.io/master' -o jsonpath='{.items[0].metadata.name}'")
+    nodes.append(master_node)
+    master_ip = kubectl("get node --selector='node-role.kubernetes.io/master' -o jsonpath='{.items[0].status.addresses[0].address}'")
+    ips.append(master_ip)
+
+    for i in range(3):
+        node = kubectl("get node --selector='!node-role.kubernetes.io/master' -o jsonpath='{.items[%d].metadata.name}'" % i)
+        nodes.append(node)
+        node_ip = kubectl("get node --selector='!node-role.kubernetes.io/master' -o jsonpath='{.items[%d].status.addresses[0].address}'" % i)
+        ips.append(node_ip)
+    return nodes, ips
