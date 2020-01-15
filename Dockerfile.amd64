@@ -13,7 +13,7 @@
 # limitations under the License.
 ARG ARCH=x86_64
 ARG GIT_VERSION=unknown
-ARG IPTABLES_VER=1.8.2-9
+ARG IPTABLES_VER=1.8.2-16
 ARG RUNIT_VER=2.1.2
 ARG BIRD_IMAGE=calico/bird:latest
 
@@ -29,10 +29,10 @@ FROM centos:8 as centos
 ARG ARCH
 ARG IPTABLES_VER
 ARG RUNIT_VER
-ARG CENTOS_MIRROR_BASE_URL=http://vault.centos.org/8.0.1905
+ARG CENTOS_MIRROR_BASE_URL=http://vault.centos.org/8.1.1911
 ARG LIBNFTNL_VER=1.1.1-4
 ARG LIBNFTNL_SOURCERPM_URL=${CENTOS_MIRROR_BASE_URL}/BaseOS/Source/SPackages/libnftnl-${LIBNFTNL_VER}.el8.src.rpm
-ARG IPTABLES_SOURCERPM_URL=${CENTOS_MIRROR_BASE_URL}/BaseOS/Source/SPackages/iptables-${IPTABLES_VER}.el8_0.1.src.rpm
+ARG IPTABLES_SOURCERPM_URL=${CENTOS_MIRROR_BASE_URL}/BaseOS/Source/SPackages/iptables-${IPTABLES_VER}.el8.src.rpm
 
 # Install build dependencies and security updates.
 RUN dnf install -y 'dnf-command(config-manager)' && \
@@ -142,8 +142,8 @@ RUN rm /etc/yum.repos.d/ubi.repo && \
     microdnf clean all && \
     # Install iptables via rpms. The libs must be force installed because the iptables source RPM has the release
     # version '9.el8_0.1' while the existing iptables-libs (pulled in by the iputils package) has version '9.el8.1'.
-    rpm --force -i /tmp/rpms/iptables-libs-${IPTABLES_VER}.el8.1.${ARCH}.rpm && \
-    rpm -i /tmp/rpms/iptables-${IPTABLES_VER}.el8.1.${ARCH}.rpm && \
+    rpm --force -i /tmp/rpms/iptables-libs-${IPTABLES_VER}.el8.${ARCH}.rpm && \
+    rpm -i /tmp/rpms/iptables-${IPTABLES_VER}.el8.${ARCH}.rpm && \
     # Set alternatives
     alternatives --install /usr/sbin/iptables iptables /usr/sbin/iptables-legacy 1 && \
     alternatives --install /usr/sbin/ip6tables ip6tables /usr/sbin/ip6tables-legacy 1
