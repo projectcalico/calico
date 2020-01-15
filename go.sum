@@ -286,6 +286,7 @@ github.com/projectcalico/felix v0.0.0-20200107081518-188ced9b3366 h1:BcmmsQ0+uIh
 github.com/projectcalico/felix v0.0.0-20200107081518-188ced9b3366/go.mod h1:Hg9uKYH8AOVj7rEBGYqHxFGVN3hiB2fOHO33DwcBqvk=
 github.com/projectcalico/felix v0.0.0-20200110210357-9eabe46c304f h1:GAwfGgpjthZZnq7tGO+FsnCnT5QWemfUmVVlKyectsw=
 github.com/projectcalico/felix v0.0.0-20200110210357-9eabe46c304f/go.mod h1:Hg9uKYH8AOVj7rEBGYqHxFGVN3hiB2fOHO33DwcBqvk=
+github.com/projectcalico/felix v0.0.0-20200113180022-ac85ca1a39e1 h1:p6Ez0ohO8rabOmKQbEwwaJ67R+MkAHTEuxB4QV608Vs=
 github.com/projectcalico/felix v0.0.0-20200113180022-ac85ca1a39e1/go.mod h1:rn6Mp47ljZaGKyE9soCFiCz1EuwtRkn8mY8SOUMIQSQ=
 github.com/projectcalico/felix v3.8.5+incompatible h1:3pIWByco82Zs6Xr3WQ2VoT10bPVXPROVuUAtjcdOwUo=
 github.com/projectcalico/felix v3.8.6+incompatible h1:pZPAd/adDebsXOsWvVlVrGbtohIAbEtoj74+aVEDGnA=
@@ -309,6 +310,7 @@ github.com/projectcalico/libcalico-go v1.7.2-0.20191205083902-1b3f8f6b6b3e h1:MQ
 github.com/projectcalico/libcalico-go v1.7.2-0.20191205083902-1b3f8f6b6b3e/go.mod h1:5Upl9epOoyHRS1D4O9nckdFUtB0munzl4T1yoW52S14=
 github.com/projectcalico/libcalico-go v1.7.2-0.20191214003639-2449a6f3ad4f h1:N1vtiA7i9GbCnWa1B67QGZ5jPPJllPd9g1odqUqGdbk=
 github.com/projectcalico/libcalico-go v1.7.2-0.20191214003639-2449a6f3ad4f/go.mod h1:5Upl9epOoyHRS1D4O9nckdFUtB0munzl4T1yoW52S14=
+github.com/projectcalico/libcalico-go v1.7.2-0.20200111004125-f4cc1f8914f8 h1:OEMdwZ8oZFvdjlkqhauW+GQ/zWoZ3HFhcTVwG7u5aio=
 github.com/projectcalico/libcalico-go v1.7.2-0.20200111004125-f4cc1f8914f8/go.mod h1:yd3FK67e+YeaYtKw5ImPw+YFyFF/G0ZCzbbwNAwwZh8=
 github.com/projectcalico/logrus v1.0.4-calico h1:bHJ2KLGTFzoWpRISe13CO7HVxxrKunDjyUz/wFiBY8c=
 github.com/projectcalico/logrus v1.0.4-calico/go.mod h1:DfgrchabbtEO9wjOz5lVae+XRvjFKKWEA9GTMme6A8g=
