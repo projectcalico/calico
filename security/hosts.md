@@ -1,6 +1,6 @@
 ---
 title: Policy for hosts
-description: Use the same Calico network policy configuration for workloads to restrict traffic between hosts and the outside world. 
+description: Use the same Calico network policy for workloads to restrict traffic between hosts and the outside world. 
 show_read_time: false
 show_toc: false
 ---
