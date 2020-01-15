@@ -42,7 +42,7 @@ class DiagsCollector(object):
         for resource in ["node", "bgpconfig", "bgppeer", "gnp", "felixconfig"]:
             _log.info("")
             calicoctl("get " + resource + " -o yaml")
-        nodes, _ = node_info()
+        nodes, _, _ = node_info()
         for node in nodes:
             _log.info("")
             run("docker exec " + node + " ip r")
@@ -52,7 +52,7 @@ class DiagsCollector(object):
         _log.info("===================================================")
 
 
-def start_external_node_with_bgp(name, config):
+def start_external_node_with_bgp(name, bird_peer_config=None, bird6_peer_config=None):
     # Check how much disk space we have.
     run("df -h")
 
@@ -70,25 +70,38 @@ def start_external_node_with_bgp(name, config):
             _log.exception("Container not ready yet")
             time.sleep(20)
 
-    output = run("docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' %s" % name)
-    birdy_ip = output.strip()
-    config = config.replace("ip@local", birdy_ip)
-
-    # Add "merge paths on" to the BIRD config.
-    run("docker exec %s sed -i '/protocol kernel {/a merge paths on;' /etc/bird.conf" % name)
-
-    # Install desired peer config.
-    with open('bird.conf', 'w') as birdconfig:
-        birdconfig.write(config)
-    run("docker cp bird.conf %s:/etc/bird/peers.conf" % name)
-    run("rm bird.conf")
-    run("docker exec %s birdcl configure" % name)
-
     # Install curl and iproute2.
     run("docker exec %s apk add --no-cache curl iproute2" % name)
 
     # Set ECMP hash algrithm to L4 for a proper load balancing between nodes.
     run("docker exec %s sysctl -w net.ipv4.fib_multipath_hash_policy=1" % name)
+
+    # Add "merge paths on" to the BIRD config.
+    run("docker exec %s sed -i '/protocol kernel {/a merge paths on;' /etc/bird.conf" % name)
+    run("docker exec %s sed -i '/protocol kernel {/a merge paths on;' /etc/bird6.conf" % name)
+
+    if bird_peer_config:
+        # Install desired peer config.
+        output = run("docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' %s" % name)
+        birdy_ip = output.strip()
+        with open('peers.conf', 'w') as peerconfig:
+            peerconfig.write(bird_peer_config.replace("ip@local", birdy_ip))
+        run("docker cp peers.conf %s:/etc/bird/peers.conf" % name)
+        run("rm peers.conf")
+        run("docker exec %s birdcl configure" % name)
+
+    elif bird6_peer_config:
+        # Install desired peer config.
+        birdy_ip = "2001:20::20"
+        run("docker exec %s sysctl -w net.ipv6.conf.all.disable_ipv6=0" % name)
+        run("docker exec %s sysctl -w net.ipv6.conf.all.forwarding=1" % name)
+        run("docker exec %s sysctl -w net.ipv6.fib_multipath_hash_policy=1" % name)
+        run("docker exec %s ip -6 a a %s/64 dev eth0" % (name, birdy_ip))
+        with open('peers.conf', 'w') as peerconfig:
+            peerconfig.write(bird6_peer_config.replace("ip@local", birdy_ip))
+        run("docker cp peers.conf %s:/etc/bird6/peers.conf" % name)
+        run("rm peers.conf")
+        run("docker exec %s birdcl6 configure" % name)
 
     return birdy_ip
 
@@ -173,6 +186,10 @@ def run(command, logerr=True, allow_fail=False):
 
 
 def curl(hostname, container="kube-node-extra"):
+    if ':' in hostname:
+        # It's an IPv6 address.
+        hostname = '[' + hostname + ']'
+
     cmd = "docker exec %s curl --connect-timeout 2 -m 3 %s" % (container,
                                                                hostname)
     return run(cmd)
@@ -198,18 +215,28 @@ def generate_unique_id(length, prefix=""):
     random_string = ''.join(random.choice(string.ascii_lowercase + string.digits) for _ in range(length))
     return "%s-%s" % (prefix, random_string)
 
+ipv6_map = {
+    "kind-control-plane": "2001:20::8",
+    "kind-worker": "2001:20::1",
+    "kind-worker2": "2001:20::2",
+    "kind-worker3": "2001:20::3",
+}
+
 def node_info():
     nodes = []
     ips = []
+    ip6s = []
 
     master_node = kubectl("get node --selector='node-role.kubernetes.io/master' -o jsonpath='{.items[0].metadata.name}'")
     nodes.append(master_node)
+    ip6s.append(ipv6_map[master_node])
     master_ip = kubectl("get node --selector='node-role.kubernetes.io/master' -o jsonpath='{.items[0].status.addresses[0].address}'")
     ips.append(master_ip)
 
     for i in range(3):
         node = kubectl("get node --selector='!node-role.kubernetes.io/master' -o jsonpath='{.items[%d].metadata.name}'" % i)
         nodes.append(node)
+        ip6s.append(ipv6_map[node])
         node_ip = kubectl("get node --selector='!node-role.kubernetes.io/master' -o jsonpath='{.items[%d].status.addresses[0].address}'" % i)
         ips.append(node_ip)
-    return nodes, ips
+    return nodes, ips, ip6s

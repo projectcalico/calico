@@ -16,7 +16,7 @@ import subprocess
 import json
 import sys
 
-from tests.k8st.test_base import TestBase
+from tests.k8st.test_base import TestBaseV6
 from tests.k8st.utils.utils import start_external_node_with_bgp, \
         retry_until_success, run, curl, DiagsCollector, calicoctl, kubectl, node_info
 
@@ -92,19 +92,19 @@ protocol bgp Mesh_with_node_2 from bgp_template {
 }
 """
 
-class TestBGPAdvert(TestBase):
+class TestBGPAdvertV6(TestBaseV6):
 
     def setUp(self):
-        super(TestBGPAdvert, self).setUp()
+        super(TestBGPAdvertV6, self).setUp()
 
         # Create bgp test namespace
         self.ns = "bgp-test"
         self.create_namespace(self.ns)
 
-        self.nodes, self.ips, _ = node_info()
+        self.nodes, self.ip4s, self.ips = node_info()
         self.external_node_ip = start_external_node_with_bgp(
             "kube-node-extra",
-            bird_peer_config=bird_conf % (self.ips[0], self.ips[1], self.ips[2], self.ips[3])
+            bird6_peer_config=bird_conf % (self.ips[0], self.ips[1], self.ips[2], self.ips[3])
         )
 
         # Enable debug logging
@@ -126,16 +126,16 @@ EOF
 """ % self.external_node_ip)
 
     def setUpRR(self):
-        super(TestBGPAdvert, self).setUp()
+        super(TestBGPAdvertV6, self).setUp()
 
         # Create bgp test namespace
         self.ns = "bgp-test"
         self.create_namespace(self.ns)
 
-        self.nodes, self.ips, _ = node_info()
+        self.nodes, _, self.ips = node_info()
         self.external_node_ip = start_external_node_with_bgp(
             "kube-node-extra",
-            bird_peer_config=bird_conf_rr % self.ips[2]
+            bird6_peer_config=bird_conf_rr % self.ips[2]
         )
 
         # Enable debug logging
@@ -158,7 +158,7 @@ EOF
 """ % (self.nodes[2], self.external_node_ip))
 
     def tearDown(self):
-        super(TestBGPAdvert, self).tearDown()
+        super(TestBGPAdvertV6, self).tearDown()
         self.delete_and_confirm(self.ns, "ns")
         try:
             # Delete the extra node.
@@ -196,15 +196,19 @@ EOF
                        (svc, ns)).strip()
 
     def assert_ecmp_routes(self, dst, via):
-        matchStr = dst + " proto bird "
+        matchStr = dst + " proto bird metric 1024 "
         # sort ips and construct match string for ECMP routes.
         for ip in sorted(via):
             matchStr += "\n\tnexthop via %s dev eth0 weight 1 " % ip
         retry_until_success(lambda: self.assertIn(matchStr, self.get_routes()))
 
-    def get_svc_host_ip(self, svc, ns):
-        return kubectl("get po -l app=%s -n %s -o json | jq -r .items[0].status.hostIP" %
+    def get_svc_host_ipv6(self, svc, ns):
+        ipv4 = kubectl("get po -l app=%s -n %s -o json | jq -r .items[0].status.hostIP" %
                        (svc, ns)).strip()
+        for i in range(len(self.ip4s)):
+            if ipv4 == self.ip4s[i]:
+                return self.ips[i]
+        assert False
 
     def add_svc_external_ips(self, svc, ns, ips):
         ipsStr = ','.join('"{0}"'.format(ip) for ip in ips)
@@ -254,8 +258,9 @@ metadata:
     app: nginx
     run: nginx-rr
 spec:
+  ipFamily: IPv6
   externalIPs:
-  - 175.200.1.1
+  - fd5f:1234:175:200::1
   ports:
   - port: 80
     targetPort: 80
@@ -292,9 +297,9 @@ spec:
   nodeToNodeMeshEnabled: false
   asNumber: 64512
   serviceClusterIPs:
-  - cidr: 10.96.0.0/12
+  - cidr: fd00:10:96::/112
   serviceExternalIPs:
-  - cidr: 175.200.0.0/16
+  - cidr: fd5f:1234:175:200::/112
 EOF
 """)
 
@@ -317,10 +322,10 @@ EOF
 
     def test_cluster_ip_advertisement(self):
         """
-        Runs the tests for service cluster IP advertisement
+        Runs the tests for service cluster IPv6 advertisement
         - Create both a Local and a Cluster type NodePort service with a single replica.
           - assert only local and cluster CIDR routes are advertised.
-          - assert /32 routes are used, source IP is preserved.
+          - assert /128 routes are used, source IP is preserved.
         - Scale the Local NP service so it is running on multiple nodes, assert ECMP routing, source IP is preserved.
         - Delete both services, assert only cluster CIDR route is advertised.
         """
@@ -333,18 +338,18 @@ metadata:
   name: default
 spec:
   serviceClusterIPs:
-  - cidr: 10.96.0.0/12
+  - cidr: fd00:10:96::/112
 EOF
 """)
 
             # Assert that a route to the service IP range is present.
-            retry_until_success(lambda: self.assertIn("10.96.0.0/12", self.get_routes()))
+            retry_until_success(lambda: self.assertIn("fd00:10:96::/112", self.get_routes()))
 
             # Create both a Local and a Cluster type NodePort service with a single replica.
             local_svc = "nginx-local"
             cluster_svc = "nginx-cluster"
-            self.deploy("nginx:1.7.9", local_svc, self.ns, 80)
-            self.deploy("nginx:1.7.9", cluster_svc, self.ns, 80, traffic_policy="Cluster")
+            self.deploy("gcr.io/kubernetes-e2e-test-images/test-webserver:1.0", local_svc, self.ns, 80, ipv6=True)
+            self.deploy("gcr.io/kubernetes-e2e-test-images/test-webserver:1.0", cluster_svc, self.ns, 80, traffic_policy="Cluster", ipv6=True)
             self.wait_until_exists(local_svc, "svc", self.ns)
             self.wait_until_exists(cluster_svc, "svc", self.ns)
 
@@ -377,7 +382,7 @@ spec:
   - Ingress
   ingress:
   - from:
-    - ipBlock: { cidr: %s/32 }
+    - ipBlock: { cidr: %s/128 }
     ports:
     - protocol: TCP
       port: 80
@@ -415,7 +420,7 @@ EOF
 
     def test_external_ip_advertisement(self):
         """
-        Runs the tests for service external IP advertisement
+        Runs the tests for service external IPv6 advertisement
         """
         with DiagsCollector():
 
@@ -427,16 +432,16 @@ metadata:
   name: default
 spec:
   serviceExternalIPs:
-  - cidr: 175.200.0.0/16
-  - cidr: 200.255.0.0/24
+  - cidr: fd5f:1234:175:200::/112
+  - cidr: fd5f:1234:200:255::/120
 EOF
 """)
 
             # Create both a Local and a Cluster type NodePort service with a single replica.
             local_svc = "nginx-local"
             cluster_svc = "nginx-cluster"
-            self.deploy("nginx:1.7.9", local_svc, self.ns, 80)
-            self.deploy("nginx:1.7.9", cluster_svc, self.ns, 80, traffic_policy="Cluster")
+            self.deploy("gcr.io/kubernetes-e2e-test-images/test-webserver:1.0", local_svc, self.ns, 80, ipv6=True)
+            self.deploy("gcr.io/kubernetes-e2e-test-images/test-webserver:1.0", cluster_svc, self.ns, 80, traffic_policy="Cluster", ipv6=True)
             self.wait_until_exists(local_svc, "svc", self.ns)
             self.wait_until_exists(cluster_svc, "svc", self.ns)
 
@@ -473,12 +478,12 @@ EOF
 """ % self.external_node_ip)
 
             # Get host IPs for the nginx pods.
-            local_svc_host_ip = self.get_svc_host_ip(local_svc, self.ns)
-            cluster_svc_host_ip = self.get_svc_host_ip(cluster_svc, self.ns)
+            local_svc_host_ip = self.get_svc_host_ipv6(local_svc, self.ns)
+            cluster_svc_host_ip = self.get_svc_host_ipv6(cluster_svc, self.ns)
 
             # Select an IP from each external IP CIDR.
-            local_svc_external_ip = "175.200.1.1"
-            cluster_svc_external_ip = "200.255.255.1"
+            local_svc_external_ip = "fd5f:1234:175:200::1"
+            cluster_svc_external_ip = "fd5f:1234:200:255::1"
 
             # Add external IPs to the two services.
             self.add_svc_external_ips(local_svc, self.ns, [local_svc_external_ip])
@@ -506,7 +511,7 @@ EOF
 
     def test_many_services(self):
         """
-        Creates a lot of services quickly
+        Creates a lot of IPv6 services quickly
         """
         with DiagsCollector():
 
@@ -517,16 +522,16 @@ metadata:
   name: default
 spec:
   serviceClusterIPs:
-  - cidr: 10.96.0.0/12
+  - cidr: fd00:10:96::/112
 EOF
 """)
 
             # Assert that a route to the service IP range is present.
-            retry_until_success(lambda: self.assertIn("10.96.0.0/12", self.get_routes()))
+            retry_until_success(lambda: self.assertIn("fd00:10:96::/112", self.get_routes()))
 
             # Create a local service and deployment.
             local_svc = "nginx-local"
-            self.deploy("nginx:1.7.9", local_svc, self.ns, 80)
+            self.deploy("gcr.io/kubernetes-e2e-test-images/test-webserver:1.0", local_svc, self.ns, 80, ipv6=True)
             self.wait_for_deployment(local_svc, self.ns)
 
             # Get clusterIPs.
@@ -537,7 +542,7 @@ EOF
             num_svc = 300
             for i in range(num_svc):
                 name = "nginx-svc-%s" % i
-                self.create_service(name, local_svc, self.ns, 80)
+                self.create_service(name, local_svc, self.ns, 80, ipv6=True)
 
             # Get all of their IPs.
             for i in range(num_svc):

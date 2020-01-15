@@ -47,12 +47,12 @@ class TestSpoof(TestBase):
         # relatively long time (7 seconds?) in this test setup for
         # Calico routing and policy to be set up correctly for a newly
         # created pod.
-        nodes, _ = node_info()
+        nodes, _, _ = node_info()
         kubectl("run --generator=run-pod/v1 "
                 "access "
                 "-n %s "
                 "--image busybox "
-                "--overrides='{\"spec\": {\"nodeName\":\"%s\"}}' " 
+                "--overrides='{\"spec\": {\"nodeName\":\"%s\"}}' "
                 "--command /bin/sh -- -c \"nc -l -u -p 5000 &> /root/snoop.txt\"" % (self.ns_name, nodes[1]))
         kubectl("run --generator=run-pod/v1 "
                 "scapy "
