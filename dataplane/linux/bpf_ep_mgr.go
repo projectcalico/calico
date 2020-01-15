@@ -19,6 +19,7 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"math/rand"
 	"net"
 	"os"
@@ -503,7 +504,7 @@ func (m *bpfEndpointManager) ensureQdisc(ifaceName string) {
 
 func (m *bpfEndpointManager) attachWorkloadProgram(endpoint *proto.WorkloadEndpoint, polDirection PolDirection) error {
 	ap := m.calculateTCAttachPoint(tc.EpTypeWorkload, polDirection, endpoint.Name)
-	err := AttachTCProgram(ap)
+	err := AttachTCProgram(ap, nil)
 	if err != nil {
 		return err
 	}
@@ -597,7 +598,12 @@ func (m *bpfEndpointManager) attachDataIfaceProgram(ifaceName string, polDirecti
 		epType = tc.EpTypeTunnel
 	}
 	ap := m.calculateTCAttachPoint(epType, polDirection, ifaceName)
-	return AttachTCProgram(ap)
+	iface := m.ifaces[ifaceName]
+	var addr net.IP
+	if len(iface.addrs) > 0 {
+		addr = iface.addrs[0]
+	}
+	return AttachTCProgram(ap, addr)
 }
 
 // PolDirection is the Calico datamodel direction of policy.  On a host endpoint, ingress is towards the host.
@@ -689,7 +695,7 @@ type AttachPoint struct {
 var tcLock sync.Mutex
 
 // AttachTCProgram attaches a BPF program from a file to the TC attach point
-func AttachTCProgram(attachPoint AttachPoint) error {
+func AttachTCProgram(attachPoint AttachPoint, hostIP net.IP) error {
 	// When tc is pinning maps, it is vulnerable to lost updates. Serialise tc calls.
 	tcLock.Lock()
 	defer tcLock.Unlock()
@@ -703,11 +709,33 @@ func AttachTCProgram(attachPoint AttachPoint) error {
 	// map get deleted even though it is in use by a BPF program.
 	defer repinJumpMaps()
 
-	filename := path.Join("/code/bpf/bin", attachPoint.Filename)
+	tempDir := os.TempDir()
+	defer func() {
+		_ = os.RemoveAll(tempDir)
+	}()
+
+	preCompiledBinary := path.Join("/code/bpf/bin", attachPoint.Filename)
+	tempBinary := tempDir + attachPoint.Filename
+
+	exeData, err := ioutil.ReadFile(preCompiledBinary)
+	if err != nil {
+		return errors.Wrap(err, "failed to read pre-compiled BPF binary")
+	}
+
+	hostIP = hostIP.To4()
+	if len(hostIP) == 4 {
+		log.WithField("ip", hostIP).Debug("Patching in host IP")
+		exeData = bytes.ReplaceAll(exeData, []byte{0x01, 0x02, 0x03, 0x04}, hostIP)
+	}
+	err = ioutil.WriteFile(tempBinary, exeData, 0600)
+	if err != nil {
+		return errors.Wrap(err, "failed to write patched BPF binary")
+	}
+
 	tcCmd := exec.Command("tc",
 		"filter", "add", "dev", attachPoint.Iface,
 		string(attachPoint.Hook),
-		"bpf", "da", "obj", filename,
+		"bpf", "da", "obj", tempBinary,
 		"sec", attachPoint.Section)
 
 	out, err := tcCmd.CombinedOutput()

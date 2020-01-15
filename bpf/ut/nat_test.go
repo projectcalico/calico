@@ -202,6 +202,8 @@ func TestNATPodPodXNode(t *testing.T) {
 		Expect(res.dataOut).To(Equal(respPkt))
 	})
 
+	dumpCTMap(ctMap)
+
 	// Response arriving at workload at node 1
 	skbMark = 0xca100000 // CALI_SKB_MARK_SEEN
 	runBpfTest(t, "calico_to_workload_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {

@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,6 +15,7 @@
 package ut_test
 
 import (
+	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -24,7 +25,14 @@ import (
 	"path"
 	"reflect"
 	"strings"
+	"sync"
 	"testing"
+
+	"github.com/projectcalico/felix/bpf/ipsets"
+	"github.com/projectcalico/felix/bpf/jump"
+	"github.com/projectcalico/felix/bpf/polprog"
+	"github.com/projectcalico/felix/bpf/state"
+	"github.com/projectcalico/felix/logutils"
 
 	"github.com/projectcalico/felix/bpf/tc"
 
@@ -46,6 +54,7 @@ import (
 )
 
 func init() {
+	logutils.ConfigureEarlyLogging()
 	log.SetLevel(log.DebugLevel)
 }
 
@@ -109,6 +118,8 @@ var defaultCompileOpts = []tc.CompileOption{
 func runBpfTest(t *testing.T, section string, rules [][][]*proto.Rule, testFn func(bpfProgRunFn)) {
 	RegisterTestingT(t)
 
+	initMapsOnce()
+
 	tempDir, err := ioutil.TempDir("", "calico-bpf-")
 	Expect(err).NotTo(HaveOccurred())
 
@@ -127,7 +138,7 @@ func runBpfTest(t *testing.T, section string, rules [][][]*proto.Rule, testFn fu
 		tc.CompileWithOutputName(objFname),
 		tc.CompileWithLogPrefix(section),
 		tc.CompileWithEntrypointName(section),
-		tc.CompileWithFlags(tc.SectionToFlags[section]),
+		tc.CompileWithFlags(tc.SectionToFlags(section)),
 		tc.CompileWithHostIP(hostIP), // to pick up new ip
 		tc.CompileWithDefineValue("CALI_SET_SKB_MARK", fmt.Sprintf("0x%x", skbMark)),
 	)
@@ -135,10 +146,22 @@ func runBpfTest(t *testing.T, section string, rules [][][]*proto.Rule, testFn fu
 	err = tc.CompileProgramToFile(rules, idalloc.New(), opts...)
 	Expect(err).NotTo(HaveOccurred())
 
+	// This loads the prologue and epilogue programs, but we still need to load the policy program.
 	err = bpftoolProgLoadAll(objFname, bpfFsDir)
 	if err != nil {
 		t.Log("Error:", string(err.(*exec.ExitError).Stderr))
 	}
+	Expect(err).NotTo(HaveOccurred())
+
+	alloc := &forceAllocator{alloc: idalloc.New()}
+	pg := polprog.NewBuilder(alloc, ipsMap.MapFD(), stateMap.MapFD(), jumpMap.MapFD())
+	insns, err := pg.Instructions(rules)
+	Expect(err).NotTo(HaveOccurred())
+	polProgFD, err := bpf.LoadBPFProgramFromInsns(insns, "Apache-2.0")
+	Expect(err).NotTo(HaveOccurred())
+	progFDBytes := make([]byte, 4)
+	binary.LittleEndian.PutUint32(progFDBytes, uint32(polProgFD))
+	err = jumpMap.Update([]byte{0, 0, 0, 0}, progFDBytes)
 	Expect(err).NotTo(HaveOccurred())
 
 	t.Run(section, func(_ *testing.T) {
@@ -151,6 +174,14 @@ func runBpfTest(t *testing.T, section string, rules [][][]*proto.Rule, testFn fu
 			return res, err
 		})
 	})
+}
+
+type forceAllocator struct {
+	alloc *idalloc.IDAllocator
+}
+
+func (a *forceAllocator) GetNoAlloc(id string) uint64 {
+	return a.alloc.GetOrAlloc(id)
 }
 
 func bpftool(args ...string) ([]byte, error) {
@@ -169,53 +200,71 @@ func bpftool(args ...string) ([]byte, error) {
 	return out, err
 }
 
+var (
+	mapInitOnce                                                             sync.Once
+	natMap, natBEMap, ctMap, rtMap, ipsMap, stateMap, testStateMap, jumpMap bpf.Map
+)
+
+func initMapsOnce() {
+	mapInitOnce.Do(func() {
+		mc := &bpf.MapContext{}
+
+		natMap = nat.FrontendMap(mc)
+		err := natMap.EnsureExists()
+		Expect(err).NotTo(HaveOccurred())
+
+		natBEMap = nat.BackendMap(mc)
+		err = natBEMap.EnsureExists()
+		Expect(err).NotTo(HaveOccurred())
+
+		ctMap = conntrack.Map(mc)
+		err = ctMap.EnsureExists()
+		Expect(err).NotTo(HaveOccurred())
+
+		rtMap = routes.Map(mc)
+		err = rtMap.EnsureExists()
+		Expect(err).NotTo(HaveOccurred())
+
+		ipsMap = ipsets.Map(mc)
+		err = ipsMap.EnsureExists()
+		Expect(err).NotTo(HaveOccurred())
+
+		stateMap = state.Map(mc)
+		err = stateMap.EnsureExists()
+		Expect(err).NotTo(HaveOccurred())
+
+		testStateMap = state.MapForTest(mc)
+		err = testStateMap.EnsureExists()
+		Expect(err).NotTo(HaveOccurred())
+
+		jumpMap = jump.MapForTest(mc)
+		err = jumpMap.EnsureExists()
+		Expect(err).NotTo(HaveOccurred())
+	})
+}
+
 func bpftoolProgLoadAll(fname, bpfFsDir string) error {
-	mc := &bpf.MapContext{}
-	natMap := nat.FrontendMap(mc)
-	err := natMap.EnsureExists()
-	Expect(err).NotTo(HaveOccurred())
+	initMapsOnce()
 
-	natBEMap := nat.BackendMap(mc)
-	err = natBEMap.EnsureExists()
-	Expect(err).NotTo(HaveOccurred())
-
-	ctMap := conntrack.Map(mc)
-	err = ctMap.EnsureExists()
-	Expect(err).NotTo(HaveOccurred())
-
-	rtMap := routes.Map(mc)
-	err = rtMap.EnsureExists()
-	Expect(err).NotTo(HaveOccurred())
-
-	// We need to populate the jump table map as tc would do.  It has to be populated with file descriptors for the
-	// BPF programs so our standard map machinery isn't much use.  For now, just use bpftool.
-	jumpMapPath := path.Join(bpfFsDir, "cali_jump")
-	_, err = bpftool("map", "create", jumpMapPath, "type", "prog_array", "key", "4", "value", "4", "entries", "8", "name", "cali_jump")
-	if err != nil {
-		return err
-	}
-
-	_, err = bpftool("prog", "loadall", fname, bpfFsDir, "type", "classifier",
+	_, err := bpftool("prog", "loadall", fname, bpfFsDir, "type", "classifier",
 		"map", "name", natMap.GetName(), "pinned", natMap.Path(),
 		"map", "name", natBEMap.GetName(), "pinned", natBEMap.Path(),
 		"map", "name", ctMap.GetName(), "pinned", ctMap.Path(),
 		"map", "name", rtMap.GetName(), "pinned", rtMap.Path(),
-		"map", "name", "cali_jump", "pinned", jumpMapPath,
+		"map", "name", jumpMap.GetName(), "pinned", jumpMap.Path(),
+		"map", "name", stateMap.GetName(), "pinned", stateMap.Path(),
 	)
 	if err != nil {
 		return err
 	}
 
-	// tc loads the program at section "1/0" into the map with id=1 (which is the jump map) and key=0.
-	// bpftool pins section "1/0" into the file system as "1_0"; to populate the map, we just need to insert the
-	// pinned program at the right key.
-	_, err = bpftool("map", "update", "pinned", jumpMapPath, "key", "0", "0", "0", "0", "value", "pinned", path.Join(bpfFsDir, "1_0"))
+	_, err = bpftool("map", "update", "pinned", jumpMap.Path(), "key", "0", "0", "0", "0", "value", "pinned", path.Join(bpfFsDir, "1_0"))
 	if err != nil {
-		return err
+		return errors.Wrap(err, "failed to update jump map (epilogue program)")
 	}
-	_, err = bpftool("map", "update", "pinned", jumpMapPath, "key", "1", "0", "0", "0", "value", "pinned", path.Join(bpfFsDir, "1_1"))
+	_, err = bpftool("map", "update", "pinned", jumpMap.Path(), "key", "1", "0", "0", "0", "value", "pinned", path.Join(bpfFsDir, "1_1"))
 	if err != nil {
-		return err
+		return errors.Wrap(err, "failed to update jump map (epilogue program)")
 	}
 
 	return nil
@@ -394,9 +443,11 @@ func udpResposeRaw(in []byte) []byte {
 func dumpCTMap(ctMap bpf.Map) {
 	ct, err := conntrack.LoadMapMem(ctMap)
 	Expect(err).NotTo(HaveOccurred())
+	fmt.Printf("Conntrack dump:\n")
 	for k, v := range ct {
-		fmt.Printf("%s : %s\n", k, v)
+		fmt.Printf("- %s : %s\n", k, v)
 	}
+	fmt.Printf("\n")
 }
 
 func resetCTMap(ctMap bpf.Map) {

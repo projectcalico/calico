@@ -77,7 +77,7 @@ func main() {
 						toOrFrom := toOrFrom
 						secName := tc.SectionName(epType, toOrFrom)
 						logPfx := ""
-						flags := tc.SectionToFlags[secName]
+						flags := tc.SectionToFlags(secName)
 
 						oFileName := path.Join("bin/bpf/", tc.ProgFilename(epType, toOrFrom, epToHostDrop, fibEnabled, logLevel))
 						if generateMakefileInc {

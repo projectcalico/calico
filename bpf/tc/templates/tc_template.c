@@ -539,6 +539,7 @@ deny:
 
 __attribute__((section("1/1")))
 int calico_tc_phase_2_entrypoint(struct __sk_buff *skb) {
+	CALI_DEBUG("Entering calico_tc_phase_2_entrypoint\n");
 	struct iphdr *ip_header = NULL;
 	if (skb_too_short(skb)) {
 		CALI_DEBUG("Too short\n");
@@ -579,6 +580,12 @@ static CALI_BPF_INLINE int calico_tc_phase_2(
 	struct cali_tc_state *state,
 	struct calico_nat_dest *nat_dest
 ) {
+	CALI_DEBUG("Entering calico_tc_phase_2\n");
+	CALI_DEBUG("src=%x dst=%x\n", state->ip_src, state->ip_dst);
+	CALI_DEBUG("post_nat=%x:%d\n", state->post_nat_ip_dst, state->post_nat_dport);
+	CALI_DEBUG("nat_tun=%x\n", state->nat_tun_src);
+	CALI_DEBUG("pol_rc=%d\n", state->pol_rc);
+	CALI_DEBUG("sport=%d\n", state->sport);
 	enum calico_reason reason = CALI_REASON_UNKNOWN;
 	int rc = TC_ACT_UNSPEC;
 

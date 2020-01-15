@@ -66,15 +66,23 @@ func SectionName(endpointType EndpointType, fromOrTo ToOrFromEp) string {
 	return fmt.Sprintf("calico_%s_%s_ep", fromOrTo, endpointType)
 }
 
-var SectionToFlags = map[string]int{}
+var sectionToFlags = map[string]int{}
 
 func init() {
-	SectionToFlags[SectionName(EpTypeWorkload, FromEp)] = 0
-	SectionToFlags[SectionName(EpTypeWorkload, ToEp)] = CompileFlagIngress
-	SectionToFlags[SectionName(EpTypeHost, FromEp)] = CompileFlagHostEp | CompileFlagIngress
-	SectionToFlags[SectionName(EpTypeHost, ToEp)] = CompileFlagHostEp
-	SectionToFlags[SectionName(EpTypeTunnel, FromEp)] = CompileFlagHostEp | CompileFlagIngress | CompileFlagTunnel
-	SectionToFlags[SectionName(EpTypeTunnel, ToEp)] = CompileFlagHostEp | CompileFlagTunnel
+	sectionToFlags[SectionName(EpTypeWorkload, FromEp)] = 0
+	sectionToFlags[SectionName(EpTypeWorkload, ToEp)] = CompileFlagIngress
+	sectionToFlags[SectionName(EpTypeHost, FromEp)] = CompileFlagHostEp | CompileFlagIngress
+	sectionToFlags[SectionName(EpTypeHost, ToEp)] = CompileFlagHostEp
+	sectionToFlags[SectionName(EpTypeTunnel, FromEp)] = CompileFlagHostEp | CompileFlagIngress | CompileFlagTunnel
+	sectionToFlags[SectionName(EpTypeTunnel, ToEp)] = CompileFlagHostEp | CompileFlagTunnel
+}
+
+func SectionToFlags(section string) int {
+	flags, ok := sectionToFlags[section]
+	if !ok {
+		logrus.WithField("section", section).Panic("Unknown BPF section")
+	}
+	return flags
 }
 
 // CompileTCOption specifies additional compile options for TC programs
