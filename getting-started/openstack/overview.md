@@ -1,6 +1,6 @@
 ---
 title: Calico for OpenStack
-description: Overview of the Calico components for integrating with OpenStack.
+description: Review the Calico components used in an OpenStack deployment.
 canonical_url: '/getting-started/openstack/index'
 ---
 

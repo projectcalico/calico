@@ -1,5 +1,5 @@
 ---
-title: The Calico data path: IP routing and iptables
+title: 'The Calico data path: IP routing and iptables'
 description: Learn how packets flow between workloads in a datacenter, or between a workload and the internet.
 canonical_url: '/reference/architecture/data-path'
 ---

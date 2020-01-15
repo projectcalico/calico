@@ -1,6 +1,6 @@
 ---
 title: Calico the hard way
-description: A deep dive tutorial on how to Calico install the hard way. 
+description: A tutorial for installing Calico the hard way. 
 canonical_url: '/getting-started/kubernetes/hardway/index'
 ---
 
