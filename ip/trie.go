@@ -1,4 +1,4 @@
-// Copyright (c) 2019 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -94,6 +94,40 @@ func (t *V4Trie) Get(cidr V4CIDR) interface{} {
 
 func (t *V4Trie) LookupPath(buffer []V4TrieEntry, cidr V4CIDR) []V4TrieEntry {
 	return t.root.lookupPath(buffer, cidr)
+}
+
+// LPM does a longest prefix match on the trie
+func (t *V4Trie) LPM(cidr V4CIDR) (V4CIDR, interface{}) {
+	n := t.root
+	var match *V4Node
+
+	for {
+		if n == nil {
+			break
+		}
+
+		if !n.cidr.ContainsV4(cidr.addr) {
+			break
+		}
+
+		if n.data != nil {
+			match = n
+		}
+
+		if cidr == n.cidr {
+			break
+		}
+
+		// If we get here, then this node is a parent of the CIDR we're looking for.
+		// Figure out which child to recurse on.
+		childIdx := cidr.addr.NthBit(uint(n.cidr.prefix + 1))
+		n = n.children[childIdx]
+	}
+
+	if match == nil || match.data == nil {
+		return V4CIDR{}, nil
+	}
+	return match.cidr, match.data
 }
 
 func (n *V4Node) lookupPath(buffer []V4TrieEntry, cidr V4CIDR) []V4TrieEntry {
