@@ -1,13 +1,13 @@
 [centos-8-base-os]
 name = CentOS - BaseOS
-baseurl = http://mirror.centos.org/centos/8.0.1905/BaseOS/x86_64/os
+baseurl = http://mirror.centos.org/centos/8.1.1911/BaseOS/x86_64/os
 enabled = 1
 gpgkey = https://www.centos.org/keys/RPM-GPG-KEY-CentOS-Official
 gpgcheck = 1
 
 [centos-8-appstream]
 name = CentOS - AppStream
-baseurl = http://mirror.centos.org/centos/8.0.1905/AppStream/x86_64/os
+baseurl = http://mirror.centos.org/centos/8.1.1911/AppStream/x86_64/os
 enabled = 1
 gpgkey = https://www.centos.org/keys/RPM-GPG-KEY-CentOS-Official
 gpgcheck = 1
