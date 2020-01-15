@@ -1,6 +1,6 @@
 ---
 title: calicoctl
-description: The CLI for Calico. 
+description: Install and configure the Calico CLI for managing resources. 
 show_read_time: false
 show_toc: false
 canonical_url: '/getting-started/calicoctl/index'

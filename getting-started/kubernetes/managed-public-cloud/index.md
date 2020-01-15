@@ -1,6 +1,6 @@
 ---
 title: Managed public cloud
-description: Calico is embedded in all of the major Kubernetes managed cloud providers. 
+description: Follow the steps to enable Calico in your managed public cloud provider.
 show_read_time: false
 show_toc: false
 canonical_url: '/getting-started/kubernetes/managed-public-cloud/index'
