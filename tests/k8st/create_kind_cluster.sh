@@ -55,16 +55,16 @@ MODULES=("ip_vs" "ip_vs_rr" "ip_vs_wrr" "ip_vs_sh" "nf_conntrack_ipv4")
 for m in "${MODULES[@]}"; do
   checkModule $m || {
       echo "Could not find kernel module $m. install it..."
-      # Modules could be built into kernel and not exist as a kernel module anymore. 
+      # Modules could be built into kernel and not exist as a kernel module anymore.
       # For instance, kernel 5.0.0 ubuntu has nf_conntrack_ipv4 built in.
-      # So try to install modules required and continue if it failed..  
+      # So try to install modules required and continue if it failed..
       sudo modprobe $m || true
   }
 done
 echo
 
 echo "Download kind executable with dual stack support"
-# We need to replace kind executable and node image 
+# We need to replace kind executable and node image
 # with official release once dual stack is fully supported by upstream.
 curl -L https://github.com/song-jiang/kind/releases/download/dualstack-1.17.0/kind -o ${KIND}
 chmod +x ${KIND}
@@ -130,15 +130,18 @@ done
 echo "Calico is running."
 echo
 
-# Create and monitor a test webserver service for dual stack. 
+# Create and monitor a test webserver service for dual stack.
 echo "Create test-webserver deployment..."
-kubectl apply -f tests/k8st/infra/test-webserver.yaml
+${kubectl} apply -f tests/k8st/infra/test-webserver.yaml
 
-echo "Wait webserver pods to be ready..."
+echo "Wait for client and webserver pods to be ready..."
+while ! time ${kubectl} wait pod -l pod-name=client --for=condition=Ready --timeout=300s; do
+    sleep 5
+done
 while ! time ${kubectl} wait pod -l app=webserver --for=condition=Ready --timeout=300s; do
     sleep 5
 done
-echo "webserver pods are running."
+echo "client and webserver pods are running."
 echo
 
 ${kubectl} get po --all-namespaces -o wide
@@ -147,7 +150,7 @@ ${kubectl} get svc
 # Run ipv4 ipv6 connection test
 function test_connection() {
   local svc="webserver-ipv$1"
-  output=$(kubectl exec client -- wget $svc -T 1 -O -)
+  output=$(${kubectl} exec client -- wget $svc -T 1 -O -)
   echo $output
   if [[ $output != *test-webserver* ]]; then
     echo "connection to $svc service failed"
