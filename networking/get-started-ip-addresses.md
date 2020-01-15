@@ -1,6 +1,6 @@
 ---
 title: Get started with IP address management
-Description: Configure Calico to use Calico IPAM or host-local IPAM, and when to use one or the other.
+description: Configure Calico to use Calico IPAM or host-local IPAM, and when to use one or the other.
 ---
 
 ### Big picture

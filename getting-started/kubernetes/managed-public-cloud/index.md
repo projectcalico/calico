@@ -6,5 +6,7 @@ show_toc: false
 canonical_url: '/getting-started/kubernetes/managed-public-cloud/index'
 ---
 
+{{ page.description }}
+
 {% capture content %}{% include index.html %}{% endcapture %}
 {{ content | replace: "    ", "" }}

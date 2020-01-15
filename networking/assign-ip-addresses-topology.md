@@ -1,6 +1,6 @@
 ---
 title: Assign IP addresses based on topology
-Description: Configure Calico to use specific IP pools for different topologies including zone, rack, or region. 
+description: Configure Calico to use specific IP pools for different topologies including zone, rack, or region. 
 canonical_url: '/networking/assign-ip-addresses-topology'
 ---
 

@@ -1,5 +1,5 @@
 ---
-description: A deep dive tutorial to learn what happens under the covers during a Calico install. 
+description: A deep dive tutorial about installing Calico the hard way.
 show_read_time: false
 show_toc: false
 ---
