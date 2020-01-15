@@ -1,5 +1,6 @@
 ---
 title: Microsoft Azure Kubernetes Service (AKS)
+description: Enable Calico network policy in AKS.
 ---
 
 ### Big picture

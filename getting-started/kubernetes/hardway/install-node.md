@@ -1,5 +1,6 @@
 ---
 title: Install calico/node
+description: Configure and install calico/node as a daemon set.
 canonical_url: '/getting-started/kubernetes/hardway/install-node'
 ---
 

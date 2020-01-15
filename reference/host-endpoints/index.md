@@ -1,4 +1,5 @@
 ---
+description: Protect host endpoints with Calico network policy.
 show_read_time: false
 show_toc: false
 ---

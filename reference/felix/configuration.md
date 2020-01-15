@@ -1,5 +1,6 @@
 ---
 title: Configuring Felix
+description: Configure Felix, the daemon that runs on every machine the provide endpoints.
 canonical_url: '/reference/felix/configuration'
 ---
 

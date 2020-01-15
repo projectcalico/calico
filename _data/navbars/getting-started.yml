@@ -33,8 +33,6 @@ section:
       path: /getting-started/kubernetes/installation/app-layer-policy
     - title: Customizing the manifests
       path: /getting-started/kubernetes/installation/config-options
-    - title: Integration guide (advanced)
-      path: /getting-started/kubernetes/installation/integration
   - title: Flannel
     path: /getting-started/kubernetes/flannel/
     section:

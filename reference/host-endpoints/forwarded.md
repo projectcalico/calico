@@ -1,5 +1,6 @@
 ---
 title: Apply on forwarded traffic
+description: Learn the subtleties using the applyOnForward option in host endpoint policies.
 canonical_url: '/reference/host-endpoints/forwarded'
 ---
 

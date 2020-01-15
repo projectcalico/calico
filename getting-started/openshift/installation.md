@@ -1,5 +1,6 @@
 ---
 title: Installation
+description: Set variables during OpenShift standard install for Calico.
 canonical_url: '/getting-started/openshift/installation'
 ---
 

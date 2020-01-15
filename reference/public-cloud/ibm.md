@@ -1,5 +1,6 @@
 ---
 title: IBM Cloud
+description: Calico integration with IBM Cloud.
 canonical_url: '/reference/public-cloud/ibm'
 ---
 

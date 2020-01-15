@@ -1,6 +1,6 @@
 ---
 title: Calico on OpenStack
-description: Choose a method for installing Calico for OpenStack
+description: Choose a method for installing Calico for OpenStack.
 canonical_url: '/getting-started/openstack/installation/index'
 ---
 

@@ -1,5 +1,6 @@
 ---
 title: Selector-based policies
+description: Apply ordered policies to endpoints that match specific label selectors.
 canonical_url: '/reference/host-endpoints/selector'
 ---
 

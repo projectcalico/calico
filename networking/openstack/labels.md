@@ -1,6 +1,6 @@
 ---
 title: Endpoint labels and operator policy
-description: Use Calico labels to define policy for OpenStack VMs
+description: Use Calico labels to define policy for OpenStack VMs.
 canonical_url: '/networking/openstack/labels'
 ---
 

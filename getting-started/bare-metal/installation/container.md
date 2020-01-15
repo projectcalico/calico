@@ -1,5 +1,6 @@
 ---
 title: Container install
+desription: Install Calico on hosts if you are using Docker.
 canonical_url: '/getting-started/bare-metal/installation/container'
 ---
 

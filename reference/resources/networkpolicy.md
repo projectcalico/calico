@@ -1,5 +1,6 @@
 ---
 title: Network policy
+description: API for this Calico resource.
 canonical_url: '/reference/resources/networkpolicy'
 ---
 

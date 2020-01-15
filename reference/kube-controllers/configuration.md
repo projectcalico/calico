@@ -1,5 +1,6 @@
 ---
 title: Configuring the Calico Kubernetes controllers
+description: Calico Kubernetes controllers monitor the Kubernetes API and perform actions based on cluster state.
 ---
 
 The {{site.prodname}} Kubernetes controllers are deployed in a Kubernetes cluster. The different controllers monitor the Kubernetes API

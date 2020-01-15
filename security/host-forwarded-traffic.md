@@ -1,6 +1,6 @@
 ---
 title: Apply policy to forwarded traffic
-description: Learn how to apply Calico network policy to traffic being forward by hosts acting as routers or NAT gateways.
+description: Apply Calico network policy to traffic being forward by hosts acting as routers or NAT gateways.
 ---
 
 ### Big picture

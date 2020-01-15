@@ -1,5 +1,6 @@
 ---
 title: The Calico datastore
+description: The central datastore for your clusters' operational and configuration state.
 canonical_url: '/getting-started/kubernetes/hardway/the-calico-datastore'
 ---
 

@@ -1,5 +1,6 @@
 ---
-title: Using Calico to Secure Host Interfaces
+title: Useing Calico to secure host interfaces
+description: Learn why securing host interfaces with Calico is important.
 canonical_url: '/getting-started/bare-metal/bare-metal'
 ---
 

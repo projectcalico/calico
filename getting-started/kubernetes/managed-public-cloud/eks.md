@@ -1,5 +1,6 @@
 ---
 title: Amazon Elastic Kubernetes Service (EKS)
+description: Enable Calico network policy in EKS.
 ---
 
 ### Big picture

@@ -1,5 +1,6 @@
 ---
 title: calicoctl node run
+description: Command and options for running a Calico node.
 canonical_url: '/reference/calicoctl/node/run'
 ---
 

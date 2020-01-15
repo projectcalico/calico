@@ -1,5 +1,6 @@
 ---
 title: calicoctl node checksystem
+description: Command to check compatibility of host to run a Calico node instance.
 canonical_url: '/reference/calicoctl/node/checksystem'
 ---
 

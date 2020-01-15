@@ -1,5 +1,6 @@
 ---
 title: Enable dual stack
+description: Configure Kubernetes pods to get both IPv and IPv6 addresses.
 canonical_url: '/networking/dual-stack'
 ---
 

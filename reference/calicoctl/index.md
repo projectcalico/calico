@@ -1,5 +1,6 @@
 ---
 show_read_time: false
+description: Command line interface (CLI) for Calico.
 show_toc: false
 ---
 

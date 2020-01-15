@@ -1,5 +1,6 @@
 ---
 title: Configure IP pools
+description: Quick review of defining IP pools (IP address ranges) in clusters.
 canonical_url: '/getting-started/kubernetes/hardway/configure-ip-pools'
 ---
 

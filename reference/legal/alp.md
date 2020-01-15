@@ -1,5 +1,6 @@
 ---
 title: Application layer policy attributions
+description: Dependencies and licenses.
 canonical_url: '/reference/legal/alp'
 ---
 

@@ -1,5 +1,6 @@
 ---
 title: Connection tracking
+description: Workaround for Linux conntrack if Calico policy is not working as it should.
 canonical_url: '/reference/host-endpoints/conntrack'
 ---
 

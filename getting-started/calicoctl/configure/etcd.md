@@ -1,5 +1,6 @@
 ---
 title: Configuring calicoctl to connect to an etcd datastore
+description: Examples of configuration files with etcd configuration options.
 canonical_url: '/getting-started/calicoctl/configure/etcd'
 ---
 

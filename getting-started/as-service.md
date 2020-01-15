@@ -1,5 +1,6 @@
 ---
 title: Running calico/node with an init system
+description: Install Calico on a host in Docker or other container type. 
 canonical_url: '/getting-started/as-service'
 ---
 

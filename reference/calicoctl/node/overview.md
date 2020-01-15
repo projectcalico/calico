@@ -1,6 +1,6 @@
 ---
 title: calicoctl node
-description: Commands for calicoctl node 
+description: Commands for calicoctl node. 
 canonical_url: '/reference/calicoctl/node/index'
 ---
 

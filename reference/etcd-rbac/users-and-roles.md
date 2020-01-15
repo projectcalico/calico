@@ -1,5 +1,6 @@
 ---
 title: Creating users and roles
+description: Provide role-based access control to etcd datastore.
 canonical_url: '/reference/etcd-rbac/users-and-roles'
 ---
 

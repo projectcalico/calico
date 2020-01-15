@@ -1,5 +1,6 @@
 ---
 title: Pre-DNAT policy
+description: Apply rules in a host endpoint policy before any DNAT.
 canonical_url: '/reference/host-endpoints/pre-dnat'
 ---
 

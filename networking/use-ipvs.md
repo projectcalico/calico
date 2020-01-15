@@ -1,6 +1,6 @@
 ---
 title: Use IPVS kube-proxy
-description: Use IPVS kube-proxy for performance improvements 
+description: Use IPVS kube-proxy for performance improvements. 
 canonical_url: '/networking/use-ipvs'
 ---
 

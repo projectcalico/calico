@@ -1,5 +1,6 @@
 ---
 title: Node
+description: API for this Calico resource.
 canonical_url: '/reference/resources/node'
 ---
 

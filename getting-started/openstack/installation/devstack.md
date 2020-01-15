@@ -1,5 +1,6 @@
 ---
 title: DevStack
+description: Quickstart to show connectivity between DevStack and Calico.
 canonical_url: '/getting-started/openstack/installation/devstack'
 ---
 

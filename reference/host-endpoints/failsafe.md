@@ -1,5 +1,6 @@
 ---
 title: Failsafe rules
+description: Avoid cutting off connectivity to hosts because of incorrect network policies. 
 canonical_url: '/reference/host-endpoints/failsafe'
 ---
 

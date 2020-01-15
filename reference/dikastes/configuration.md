@@ -1,5 +1,6 @@
 ---
 title: Configuring Dikastes
+description: Details on configuring Dikastes used in application layer policy. 
 canonical_url: '/reference/dikastes/configuration'
 ---
 

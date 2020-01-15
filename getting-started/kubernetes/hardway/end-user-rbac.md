@@ -1,5 +1,6 @@
 ---
 title: End user RBAC
+description: Quick review of common roles and access controls for running clusters in production. 
 canonical_url: '/getting-started/kubernetes/hardway/end-user-rbac'
 ---
 

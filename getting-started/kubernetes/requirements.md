@@ -1,5 +1,6 @@
 ---
 title: System requirements
+description: Review requirements before installing Calico on nodes to ensure success. 
 canonical_url: '/getting-started/kubernetes/requirements'
 ---
 

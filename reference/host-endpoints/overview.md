@@ -1,6 +1,6 @@
 ---
 title: Host endpoints
-description: Secure the network interfaces of hosts 
+description: Secure host network interfaces. 
 canonical_url: '/reference/host-endpoints/index'
 ---
 

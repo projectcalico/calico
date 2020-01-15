@@ -1,5 +1,6 @@
 ---
 title: Workload endpoint
+description: API for this Calico resource.
 canonical_url: '/reference/resources/workloadendpoint'
 ---
 

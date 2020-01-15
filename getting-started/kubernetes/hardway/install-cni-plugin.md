@@ -1,5 +1,6 @@
 ---
 title: Install CNI plugin
+description: Steps to install the Calico Container Network Interface (CNI)
 canonical_url: '/getting-started/kubernetes/hardway/install-cni-plugin'
 ---
 

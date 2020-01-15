@@ -1,5 +1,6 @@
 ---
 title: Installing Calico for policy (advanced)
+description: Install Calico with only network policy enabled.
 canonical_url: '/getting-started/kubernetes/installation/other'
 ---
 

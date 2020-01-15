@@ -1,5 +1,6 @@
 ---
 title: Azure
+description: Support for Calico in Azure.
 canonical_url: '/reference/public-cloud/azure'
 ---
 

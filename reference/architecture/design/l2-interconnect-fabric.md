@@ -1,5 +1,6 @@
 ---
 title: Calico over Ethernet fabrics
+description: Understand the interconnect fabric options in a Calico network. 
 canonical_url: '/reference/architecture/design/l2-interconnect-fabric'
 ---
 

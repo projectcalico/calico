@@ -1,5 +1,6 @@
 ---
 title: Amazon Web Services
+description: Advantages of using Calico in AWS.
 canonical_url: '/reference/public-cloud/aws'
 ---
 

@@ -1,4 +1,5 @@
 ---
+description: Configure the calicoctl CLI.
 show_read_time: false
 show_toc: false
 ---

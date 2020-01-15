@@ -1,5 +1,6 @@
 ---
 title: Configure BGP peering
+description: Quick review of BGP peering options. 
 canonical_url: '/getting-started/kubernetes/hardway/configure-bgp-peering'
 ---
 

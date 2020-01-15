@@ -1,5 +1,6 @@
 ---
 title: System requirements
+description: Review requirements for installing Calico on OpenStack nodes.
 canonical_url: '/getting-started/openstack/requirements'
 ---
 

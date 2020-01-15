@@ -1,6 +1,6 @@
 ---
 title: IP addressing and connectivity
-description: Set up OpenStack networking for Calico
+description: Set up OpenStack networking for Calico.
 canonical_url: '/networking/openstack/connectivity'
 ---
 

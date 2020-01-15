@@ -1,6 +1,6 @@
 ---
 title: Secure Calico Prometheus endpoints
-description: Describes how to limit access to Calico metric endpoints
+description: Limit access to Calico metric endpoints using network policy.
 canonical_url: '/security/comms/secure-metrics'
 ---
 

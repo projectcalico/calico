@@ -1,5 +1,6 @@
 ---
 title: Creating policy for basic connectivity
+description: Customize the Calico failsafe policy to protect host endpoints.
 canonical_url: '/reference/host-endpoints/connectivity'
 ---
 

@@ -1,5 +1,6 @@
 ---
 title: calicoctl label
+description: Command to change labels for workload endpoints or nodes. 
 canonical_url: '/reference/calicoctl/label'
 ---
 

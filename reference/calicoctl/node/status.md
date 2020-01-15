@@ -1,5 +1,6 @@
 ---
 title: calicoctl node status
+description: Command to check status of a Calico node instance.
 canonical_url: '/reference/calicoctl/node/status'
 ---
 

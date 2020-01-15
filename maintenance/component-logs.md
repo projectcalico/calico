@@ -1,5 +1,6 @@
 ---
 title: Component logs
+description: Where to find logs on Calico components. 
 canonical_url: '/maintenance/component-logs'
 ---
 

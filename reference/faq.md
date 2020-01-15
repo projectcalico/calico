@@ -1,5 +1,6 @@
 ---
 title: Frequently asked questions
+description: Common questions that users ask about Calico.
 canonical_url: '/reference/faq'
 ---
 
