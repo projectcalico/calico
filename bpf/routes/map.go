@@ -1,4 +1,4 @@
-// Copyright (c) 2019 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,7 +17,9 @@ package routes
 import (
 	"encoding/binary"
 	"fmt"
+	"sync"
 
+	"github.com/pkg/errors"
 	"golang.org/x/sys/unix"
 
 	"github.com/projectcalico/felix/bpf"
@@ -154,4 +156,41 @@ func LoadMap(rtm bpf.Map) (MapMem, error) {
 	})
 
 	return m, err
+}
+
+type LPMv4 struct {
+	sync.RWMutex
+	t *ip.V4Trie
+}
+
+func NewLPMv4() *LPMv4 {
+	return &LPMv4{
+		t: new(ip.V4Trie),
+	}
+}
+
+func (lpm *LPMv4) Update(k Key, v Value) error {
+	if cidrv4, ok := k.Dest().(ip.V4CIDR); ok {
+		lpm.t.Update(cidrv4, v)
+		return nil
+	}
+
+	return errors.Errorf("k.Dest() %+v type %T is not ip.V4CIDR", k.Dest(), k.Dest())
+}
+
+func (lpm *LPMv4) Delete(k Key) error {
+	if cidrv4, ok := k.Dest().(ip.V4CIDR); ok {
+		lpm.t.Delete(cidrv4)
+		return nil
+	}
+
+	return errors.Errorf("k.Dest() %+v type %T is not ip.V4CIDR", k.Dest(), k.Dest())
+}
+
+func (lpm *LPMv4) Lookup(addr ip.V4Addr) (Value, bool) {
+	_, v := lpm.t.LPM(addr.AsCIDR().(ip.V4CIDR))
+	if v == nil {
+		return Value{}, false
+	}
+	return v.(Value), true
 }

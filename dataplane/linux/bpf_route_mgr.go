@@ -1,4 +1,4 @@
-// Copyright (c) 2019 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -54,8 +54,10 @@ type bpfRouteManager struct {
 	dirtyRoutes     set.Set
 	resyncScheduled bool
 
-	hostIPsUpdateCB    func([]net.IP)
-	hostIPsUpdateCBLck sync.RWMutex
+	cbLck           sync.RWMutex
+	hostIPsUpdateCB func([]net.IP)
+	routesUpdateCB  func(routes.Key, routes.Value)
+	routesDeleteCB  func(routes.Key)
 }
 
 func newBPFRouteManager(myNodename string, mc *bpf.MapContext) *bpfRouteManager {
@@ -252,8 +254,8 @@ func (m *bpfRouteManager) recalculateLocalHostIPs() {
 }
 
 func (m *bpfRouteManager) onHostIPsChange(newIPs []net.IP) {
-	m.hostIPsUpdateCBLck.RLock()
-	defer m.hostIPsUpdateCBLck.RUnlock()
+	m.cbLck.RLock()
+	defer m.cbLck.RUnlock()
 	if m.hostIPsUpdateCB != nil {
 		m.hostIPsUpdateCB(newIPs)
 	}
@@ -312,6 +314,7 @@ func (m *bpfRouteManager) applyRoutesDelta(oldRoutes map[routes.Key]routes.Value
 		}
 		delete(m.desiredRoutes, k)
 		m.dirtyRoutes.Add(k)
+		m.onRouteDeleteCB(k)
 	}
 	for k, v := range newRoutes {
 		if oldV, ok := oldRoutes[k]; ok && oldV == v {
@@ -319,6 +322,7 @@ func (m *bpfRouteManager) applyRoutesDelta(oldRoutes map[routes.Key]routes.Value
 		}
 		m.desiredRoutes[k] = v
 		m.dirtyRoutes.Add(k)
+		m.onRouteUpdateCB(k, v)
 	}
 }
 
@@ -352,6 +356,7 @@ func (m *bpfRouteManager) onRouteUpdate(update *proto.RouteUpdate) {
 
 	m.desiredRoutes[key] = value
 	m.dirtyRoutes.Add(key)
+	m.onRouteUpdateCB(key, value)
 }
 
 func (m *bpfRouteManager) onRouteRemove(update *proto.RouteRemove) {
@@ -370,6 +375,7 @@ func (m *bpfRouteManager) onRouteRemove(update *proto.RouteRemove) {
 	if _, ok := m.desiredRoutes[key]; ok {
 		delete(m.desiredRoutes, key)
 		m.dirtyRoutes.Add(key)
+		m.onRouteDeleteCB(key)
 	}
 }
 
@@ -405,8 +411,32 @@ func (m *bpfRouteManager) onHostMetadataRemove(remove *proto.HostMetadataRemove)
 }
 
 func (m *bpfRouteManager) setHostIPUpdatesCallBack(cb func([]net.IP)) {
-	m.hostIPsUpdateCBLck.Lock()
-	defer m.hostIPsUpdateCBLck.Unlock()
+	m.cbLck.Lock()
+	defer m.cbLck.Unlock()
 
 	m.hostIPsUpdateCB = cb
+}
+
+func (m *bpfRouteManager) setRoutesCallBacks(update func(routes.Key, routes.Value), del func(routes.Key)) {
+	m.cbLck.Lock()
+	defer m.cbLck.Unlock()
+
+	m.routesUpdateCB = update
+	m.routesDeleteCB = del
+}
+
+func (m *bpfRouteManager) onRouteUpdateCB(k routes.Key, v routes.Value) {
+	m.cbLck.RLock()
+	defer m.cbLck.RUnlock()
+	if m.routesUpdateCB != nil {
+		m.routesUpdateCB(k, v)
+	}
+}
+
+func (m *bpfRouteManager) onRouteDeleteCB(k routes.Key) {
+	m.cbLck.RLock()
+	defer m.cbLck.RUnlock()
+	if m.routesDeleteCB != nil {
+		m.routesDeleteCB(k)
+	}
 }

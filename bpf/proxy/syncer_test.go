@@ -30,6 +30,8 @@ import (
 
 	"github.com/projectcalico/felix/bpf"
 	proxy "github.com/projectcalico/felix/bpf/proxy"
+	"github.com/projectcalico/felix/bpf/routes"
+	"github.com/projectcalico/felix/ip"
 )
 
 func init() {
@@ -42,8 +44,9 @@ var _ = Describe("BPF Syncer", func() {
 	eps := newMockNATBackendMap()
 
 	nodeIPs := []net.IP{net.IPv4(192, 168, 0, 1), net.IPv4(10, 123, 0, 1)}
+	rt := proxy.NewRTCache()
 
-	s, _ := proxy.NewSyncer(nodeIPs, svcs, eps)
+	s, _ := proxy.NewSyncer(nodeIPs, svcs, eps, rt)
 
 	svcKey := k8sp.ServicePortName{
 		NamespacedName: types.NamespacedName{
@@ -276,7 +279,7 @@ var _ = Describe("BPF Syncer", func() {
 		}))
 
 		By("resyncing after creating a new syncer with the same result", makestep(func() {
-			s, _ = proxy.NewSyncer(nodeIPs, svcs, eps)
+			s, _ = proxy.NewSyncer(nodeIPs, svcs, eps, rt)
 			checkAfterResync()
 		}))
 
@@ -284,7 +287,7 @@ var _ = Describe("BPF Syncer", func() {
 			svcs.m[nat.NewNATKey(net.IPv4(5, 5, 5, 5), 1111, 6)] = nat.NewNATValue(0xdeadbeef, 2, 2)
 			eps.m[nat.NewNATBackendKey(0xdeadbeef, 0)] = nat.NewNATBackendValue(net.IPv4(6, 6, 6, 6), 666)
 			eps.m[nat.NewNATBackendKey(0xdeadbeef, 1)] = nat.NewNATBackendValue(net.IPv4(7, 7, 7, 7), 777)
-			s, _ = proxy.NewSyncer(nodeIPs, svcs, eps)
+			s, _ = proxy.NewSyncer(nodeIPs, svcs, eps, rt)
 			checkAfterResync()
 		}))
 
@@ -437,49 +440,150 @@ var _ = Describe("BPF Syncer", func() {
 			Expect(eps.m).To(HaveLen(0))
 		}))
 
-		By("inserting only non-local ep for a NodePort", makestep(func() {
+		By("inserting only non-local ep for a NodePort - no route", makestep(func() {
 			// use the meta node IP for nodeports as well
-			s, _ = proxy.NewSyncer(append(nodeIPs, net.IPv4(255, 255, 255, 255)), svcs, eps)
+			s, _ = proxy.NewSyncer(append(nodeIPs, net.IPv4(255, 255, 255, 255)), svcs, eps, rt)
 			state.SvcMap[svcKey2] = &k8sp.BaseServiceInfo{
 				ClusterIP:              net.IPv4(10, 0, 0, 2),
 				Port:                   2222,
-				NodePort:               2222,
+				NodePort:               4444,
 				Protocol:               v1.ProtocolTCP,
 				OnlyNodeLocalEndpoints: true,
 			}
 
 			state.EpsMap[svcKey2] = []k8sp.Endpoint{
-				&k8sp.BaseEndpointInfo{Endpoint: "10.2.0.1:2222"},
+				&k8sp.BaseEndpointInfo{Endpoint: "10.2.1.1:2222"},
 			}
 
 			err := s.Apply(state)
 			Expect(err).NotTo(HaveOccurred())
 
 			Expect(svcs.m).To(HaveLen(3))
-
-			val1, ok := svcs.m[nat.NewNATKey(net.IPv4(10, 0, 0, 2), 2222, proxy.ProtoV1ToIntPanic(v1.ProtocolTCP))]
-			Expect(ok).To(BeTrue())
-			Expect(val1.Count()).To(Equal(uint32(1)))
-
-			val2, ok := svcs.m[nat.NewNATKey(net.IPv4(192, 168, 0, 1), 2222, proxy.ProtoV1ToIntPanic(v1.ProtocolTCP))]
-			Expect(ok).To(BeTrue())
-			Expect(val2.ID()).To(Equal(val1.ID()))
-			Expect(val2.Count()).To(Equal(uint32(0)))
-
-			val3, ok := svcs.m[nat.NewNATKey(net.IPv4(10, 123, 0, 1), 2222, proxy.ProtoV1ToIntPanic(v1.ProtocolTCP))]
-			Expect(ok).To(BeTrue())
-			Expect(val2).To(Equal(val3))
-
 			Expect(eps.m).To(HaveLen(1))
-			Expect(eps.m).To(HaveKey(nat.NewNATBackendKey(val1.ID(), 0)))
-			Expect(eps.m).To(ContainElement(nat.NewNATBackendValue(net.IPv4(10, 2, 0, 1), 2222)))
+		}))
+
+		By("inserting only non-local ep for a NodePort - with route", makestep(func() {
+			// use the meta node IP for nodeports as well
+			s, _ = proxy.NewSyncer(append(nodeIPs, net.IPv4(255, 255, 255, 255)), svcs, eps, rt)
+			state.SvcMap[svcKey2] = &k8sp.BaseServiceInfo{
+				ClusterIP:              net.IPv4(10, 0, 0, 2),
+				Port:                   2222,
+				NodePort:               4444,
+				Protocol:               v1.ProtocolTCP,
+				OnlyNodeLocalEndpoints: true,
+			}
+
+			state.EpsMap[svcKey2] = []k8sp.Endpoint{
+				&k8sp.BaseEndpointInfo{Endpoint: "10.2.1.1:2222"},
+			}
+
+			_ = rt.Update(
+				routes.NewKey(ip.CIDRFromAddrAndPrefix(ip.FromString("10.2.1.0"), 24).(ip.V4CIDR)),
+				routes.NewValueWithNextHop(
+					routes.TypeRemoteWorkload,
+					ip.FromString("10.123.0.111").(ip.V4Addr)),
+			)
+
+			err := s.Apply(state)
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(svcs.m).To(HaveLen(4))
+			Expect(eps.m).To(HaveLen(2))
+		}))
+
+		By("inserting only non-local eps for a NodePort - multiple nodes & pods/node", makestep(func() {
+			// use the meta node IP for nodeports as well
+			s, _ = proxy.NewSyncer(append(nodeIPs, net.IPv4(255, 255, 255, 255)), svcs, eps, rt)
+			state.SvcMap[svcKey2] = &k8sp.BaseServiceInfo{
+				ClusterIP:              net.IPv4(10, 0, 0, 2),
+				Port:                   2222,
+				NodePort:               4444,
+				Protocol:               v1.ProtocolTCP,
+				OnlyNodeLocalEndpoints: true,
+			}
+
+			state.EpsMap[svcKey2] = []k8sp.Endpoint{
+				&k8sp.BaseEndpointInfo{Endpoint: "10.2.1.1:2222"},
+				&k8sp.BaseEndpointInfo{Endpoint: "10.2.2.1:2222"},
+				&k8sp.BaseEndpointInfo{Endpoint: "10.2.2.2:2222"},
+				&k8sp.BaseEndpointInfo{Endpoint: "10.2.3.1:2222"},
+			}
+
+			_ = rt.Update(
+				routes.NewKey(ip.CIDRFromAddrAndPrefix(ip.FromString("10.2.2.0"), 24).(ip.V4CIDR)),
+				routes.NewValueWithNextHop(
+					routes.TypeRemoteWorkload,
+					ip.FromString("10.123.0.112").(ip.V4Addr)),
+			)
+			_ = rt.Update(
+				routes.NewKey(ip.CIDRFromAddrAndPrefix(ip.FromString("10.2.3.0"), 24).(ip.V4CIDR)),
+				routes.NewValueWithNextHop(
+					routes.TypeRemoteWorkload,
+					ip.FromString("10.123.0.113").(ip.V4Addr)),
+			)
+
+			err := s.Apply(state)
+			Expect(err).NotTo(HaveOccurred())
+
+			checkAfterResync = func() {
+				Expect(svcs.m).To(HaveLen(6))
+
+				val1, ok := svcs.m[nat.NewNATKey(net.IPv4(10, 0, 0, 2), 2222, proxy.ProtoV1ToIntPanic(v1.ProtocolTCP))]
+				Expect(ok).To(BeTrue())
+				Expect(val1.Count()).To(Equal(uint32(4)))
+
+				val2, ok := svcs.m[nat.NewNATKey(net.IPv4(192, 168, 0, 1), 4444, proxy.ProtoV1ToIntPanic(v1.ProtocolTCP))]
+				Expect(ok).To(BeTrue())
+				Expect(val2.ID()).To(Equal(val1.ID()))
+				Expect(val2.Count()).To(Equal(uint32(0)))
+
+				val3, ok := svcs.m[nat.NewNATKey(net.IPv4(10, 123, 0, 1), 4444, proxy.ProtoV1ToIntPanic(v1.ProtocolTCP))]
+				Expect(ok).To(BeTrue())
+				Expect(val2).To(Equal(val3))
+
+				Expect(eps.m).To(HaveLen(8))
+
+				all := make([]nat.BackendValue, 0, 4)
+				for i := uint32(0); i < val1.Count(); i++ {
+					bk := nat.NewNATBackendKey(val1.ID(), i)
+					Expect(eps.m).To(HaveKey(bk))
+					all = append(all, eps.m[bk])
+				}
+
+				Expect(all).To(ContainElement(nat.NewNATBackendValue(net.IPv4(10, 2, 1, 1), 2222)))
+				Expect(all).To(ContainElement(nat.NewNATBackendValue(net.IPv4(10, 2, 2, 1), 2222)))
+				Expect(all).To(ContainElement(nat.NewNATBackendValue(net.IPv4(10, 2, 2, 2), 2222)))
+				Expect(all).To(ContainElement(nat.NewNATBackendValue(net.IPv4(10, 2, 3, 1), 2222)))
+
+				checkRemote := func(a net.IP, count uint32) {
+					k := nat.NewNATKey(a, 4444, proxy.ProtoV1ToIntPanic(v1.ProtocolTCP))
+					Expect(svcs.m).To(HaveKey(k))
+					v := svcs.m[k]
+					Expect(v.Count()).To(Equal(count))
+				}
+
+				checkRemote(net.IPv4(10, 123, 0, 111), 1)
+				checkRemote(net.IPv4(10, 123, 0, 112), 2)
+				checkRemote(net.IPv4(10, 123, 0, 113), 1)
+			}
+
+			checkAfterResync()
+		}))
+
+		By("restarting Syncer to check if NodePortRemotes are picked up correctly", makestep(func() {
+			// use the meta node IP for nodeports as well
+			s, _ = proxy.NewSyncer(append(nodeIPs, net.IPv4(255, 255, 255, 255)), svcs, eps, rt)
+			err := s.Apply(state)
+			Expect(err).NotTo(HaveOccurred())
+
+			checkAfterResync()
 		}))
 
 		By("inserting a local ep for a NodePort", makestep(func() {
 			state.SvcMap[svcKey2] = &k8sp.BaseServiceInfo{
 				ClusterIP:              net.IPv4(10, 0, 0, 2),
 				Port:                   2222,
-				NodePort:               2222,
+				NodePort:               4444,
 				Protocol:               v1.ProtocolTCP,
 				OnlyNodeLocalEndpoints: true,
 			}
@@ -501,16 +605,16 @@ var _ = Describe("BPF Syncer", func() {
 			Expect(val1.Count()).To(Equal(uint32(4)))
 			Expect(val1.LocalCount()).To(Equal(uint32(2)))
 
-			val2, ok := svcs.m[nat.NewNATKey(net.IPv4(192, 168, 0, 1), 2222, proxy.ProtoV1ToIntPanic(v1.ProtocolTCP))]
+			val2, ok := svcs.m[nat.NewNATKey(net.IPv4(192, 168, 0, 1), 4444, proxy.ProtoV1ToIntPanic(v1.ProtocolTCP))]
 			Expect(ok).To(BeTrue())
 			Expect(val2.ID()).To(Equal(val1.ID()))
 			Expect(val2.Count()).To(Equal(uint32(2)))
 
-			val3, ok := svcs.m[nat.NewNATKey(net.IPv4(10, 123, 0, 1), 2222, proxy.ProtoV1ToIntPanic(v1.ProtocolTCP))]
+			val3, ok := svcs.m[nat.NewNATKey(net.IPv4(10, 123, 0, 1), 4444, proxy.ProtoV1ToIntPanic(v1.ProtocolTCP))]
 			Expect(ok).To(BeTrue())
 			Expect(val2).To(Equal(val3))
 
-			val4, ok := svcs.m[nat.NewNATKey(net.IPv4(255, 255, 255, 255), 2222, proxy.ProtoV1ToIntPanic(v1.ProtocolTCP))]
+			val4, ok := svcs.m[nat.NewNATKey(net.IPv4(255, 255, 255, 255), 4444, proxy.ProtoV1ToIntPanic(v1.ProtocolTCP))]
 			Expect(ok).To(BeTrue())
 			Expect(val2).To(Equal(val4))
 
