@@ -1,0 +1,147 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: tigera-operator
+rules:
+  - apiGroups:
+      - ""
+    resources:
+      - namespaces
+      - pods
+      - podtemplates
+      - services
+      - endpoints
+      - events
+      - configmaps
+      - secrets
+      - serviceaccounts
+    verbs:
+      - '*'
+  - apiGroups:
+      - ""
+    resources:
+      - nodes
+    verbs:
+      - 'list'
+      # We need this for Typha autoscaling
+      - 'watch'
+  - apiGroups:
+      - rbac.authorization.k8s.io
+    resources:
+      - clusterroles
+      - clusterrolebindings
+      - rolebindings
+      - roles
+    verbs:
+      - '*'
+  - apiGroups:
+      - apps
+    resources:
+      - deployments
+      - daemonsets
+      - statefulsets
+    verbs:
+      - '*'
+  - apiGroups:
+      - apiextensions.k8s.io
+    resources:
+      - customresourcedefinitions
+    verbs:
+      - '*'
+  - apiGroups:
+      - apps
+    resourceNames:
+      - tigera-operator
+    resources:
+      - deployments/finalizers
+    verbs:
+      - update
+  - apiGroups:
+      - operator.tigera.io
+    resources:
+      - '*'
+    verbs:
+      - '*'
+  - apiGroups:
+      - scheduling.k8s.io
+    resources:
+      - priorityclasses
+    verbs:
+      - '*'
+  - apiGroups:
+      - monitoring.coreos.com
+    resources:
+      - servicemonitors
+    verbs:
+      - get
+      - create
+  - apiGroups:
+    - policy
+    resources:
+    - poddisruptionbudgets
+    verbs:
+    - '*'
+{{- if eq .Values.kubernetesProvider "openshift" }}
+  # When running in OpenShift, we need to update networking config.
+  - apiGroups:
+      - config.openshift.io
+    resources:
+      - networks/status
+    verbs:
+      - 'update'
+      - '*'
+  - apiGroups:
+      - config.openshift.io
+    resources:
+      - networks
+      - infrastructures
+    verbs:
+      - 'get'
+      - '*'
+  # On OpenShift, we need to modify SCCs.
+  - apiGroups:
+      - security.openshift.io
+    resources:
+      - securitycontextconstraints
+    verbs:
+      - '*'
+{{- end }}
+    # Permissions below this point are required for TSEE only.
+  - apiGroups:
+      - apiregistration.k8s.io
+    resources:
+      - apiservices
+    verbs:
+      - '*'
+  - apiGroups:
+      - "batch"
+    resources:
+      - jobs
+      - cronjobs
+    verbs:
+      - '*'
+  - apiGroups:
+      - projectcalico.org
+    resources:
+      - globalreporttypes
+      - licensekeys
+    verbs:
+      - '*'
+  - apiGroups:
+      - elasticsearch.k8s.elastic.co
+    resources:
+      - elasticsearches
+    verbs:
+      - '*'
+  - apiGroups:
+      - storage.k8s.io
+    resources:
+      - storageclasses
+    verbs:
+      - '*'
+  - apiGroups:
+      - kibana.k8s.elastic.co
+    resources:
+      - kibanas
+    verbs:
+      - '*'

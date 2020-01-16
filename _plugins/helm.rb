@@ -18,6 +18,11 @@ module Jekyll
     def initialize(tag_name, extra_args, liquid_options)
       super
 
+      @chart = "calico"
+      if extra_args.start_with?("tigera-operator")
+        @chart = "tigera-operator"
+        extra_args.slice! "tigera-operator"
+      end
       @extra_args = extra_args
     end
     def render(context)
@@ -35,7 +40,7 @@ module Jekyll
 
       vs = parse_versions(versions)
 
-      versionsYml = gen_values(vs, imageNames, imageRegistry)
+      versionsYml = gen_values(vs, imageNames, imageRegistry, @chart)
 
       tv = Tempfile.new("temp_versions.yml")
       tv.write(versionsYml)
@@ -43,7 +48,7 @@ module Jekyll
 
       # Execute helm.
       # Set the default etcd endpoint placeholder for rendering in the docs.
-      cmd = """helm template _includes/charts/calico \
+      cmd = """helm template _includes/charts/#{@chart} \
         -f #{tv.path} \
         -f #{t.path} \
         --set etcd.endpoints='http://<ETCD_IP>:<ETCD_PORT>'"""

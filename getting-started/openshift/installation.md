@@ -1,52 +1,101 @@
 ---
-title: Installation
+title: Installing
 description: Set variables during OpenShift standard install for Calico.
 canonical_url: '/getting-started/openshift/installation'
 ---
 
-Installation of {{site.prodname}} in OpenShift is integrated in openshift-ansible.
-The information below explains the variables which must be set during
-the standard [Advanced Installation](https://docs.openshift.org/latest/install_config/install/advanced_install.html#configuring-cluster-variables).
+### Big picture
 
-## Before you begin
+Install an OpenShift v4 cluster with {{site.prodname}}.
 
-Ensure that your cluster meets the {{site.prodname}} [system requirements](requirements).
+### Value
 
-## Installation
+Augments the applicable steps in the [OpenShift documentation](https://cloud.redhat.com/openshift/install)
+to install {{site.prodname}}.
 
-To install {{site.prodname}} in OpenShift, set the following `OSEv3:vars` in your
-inventory file:
+### How to
 
-  - `os_sdn_network_plugin_name=cni`
-  - `openshift_use_calico=true`
-  - `openshift_use_openshift_sdn=false`
+#### Before you begin
 
-Also ensure that you have an explicitly defined host in the `[etcd]` group.
+- Ensure that your environment meets the {{site.prodname}} [system requirements]({{site.baseurl}}/getting-started/openshift/requirements).
 
-**Sample Inventory File:**
+- **If installing on AWS**, ensure that you have [configured an AWS account](https://docs.openshift.com/container-platform/4.2/installing/installing_aws/installing-aws-account.html) appropriate for OpenShift v4,
+  and have [set up your AWS credentials](https://docs.aws.amazon.com/sdk-for-java/v1/developer-guide/setup-credentials.html).
+  Note that the OpenShift installer supports a subset of [AWS regions](https://docs.openshift.com/container-platform/4.2/installing/installing_aws/installing-aws-account.html#installation-aws-regions_installing-aws-account).
+
+- Ensure that you have a [RedHat account](https://cloud.redhat.com/). A RedHat account is required to obtain the pull secret necessary to provision an OpenShift cluster.
+
+- Ensure that you have installed the OpenShift installer **v4.2 or later** and OpenShift command line interface from [cloud.redhat.com](https://cloud.redhat.com/openshift/install/aws/installer-provisioned).
+
+- Ensure that you have [generated a local SSH private key](https://docs.openshift.com/container-platform/4.1/installing/installing_aws/installing-aws-default.html#ssh-agent-using_installing-aws-default) and have added it to your ssh-agent
+
+#### Create a configuration file for the OpenShift installer
+
+First, create a staging directory for the installation. This directory will contain the configuration file, along with cluster state files, that OpenShift installer will create:
 
 ```
-[OSEv3:children]
-masters
-nodes
-etcd
-
-[OSEv3:vars]
-os_sdn_network_plugin_name=cni
-openshift_use_calico=true
-openshift_use_openshift_sdn=false
-
-[masters]
-master1
-
-[nodes]
-node1
-
-[etcd]
-etcd1
+mkdir openshift-tigera-install && cd openshift-tigera-install
 ```
 
-You are now ready to execute the ansible provision which will install {{site.prodname}}. Note that by default,
-{{site.prodname}} will connect to the same etcd that OpenShift uses, and in order to do so, will distribute etcd's
-certs to each node. If you would prefer Calico not connect to the same etcd as OpenShift, you may modify the install
-such that Calico connects to an etcd you have already set up by following the [dedicated etcd install guide](dedicated-etcd).
+Now run OpenShift installer to create a default configuration file:
+
+```
+openshift-install create install-config
+```
+
+> **Note**: Refer to the OpenShift installer documentation found on [https://cloud.redhat.com/openshift/install](https://cloud.redhat.com/openshift/install) for more information
+> about the installer and any configuration changes required for your platform.
+{: .alert .alert-info}
+
+Once the installer has finished, your staging directory will contain the configuration file `install-config.yaml`.
+
+#### Update the configuration file to use {{site.prodname}}
+
+Override the OpenShift networking to use Calico and update the AWS instance types to meet the [system requirements]({{site.baseurl}}/getting-started/openshift/requirements):
+
+```bash
+sed -i 's/OpenShiftSDN/Calico/' install-config.yaml
+```
+
+#### Generate the install manifests
+
+Now generate the Kubernetes manifests using your configuration file:
+
+```bash
+openshift-install create manifests
+```
+
+Download the {{site.prodname}} manifests for OpenShift and add them to the generated manifests directory:
+
+```bash
+curl {{ "/manifests/ocp/crds/01-crd-installation.yaml" | absolute_url }} -o manifests/01-crd-installation.yaml" | absolute_url }}
+curl {{ "/manifests/ocp/crds/01-crd-tigerastatus.yaml -o manifests/01-crd-tigerastatus.yaml" | absolute_url }}
+curl {{ "/manifests/ocp/tigera-operator/00-namespace-tigera-operator.yaml" | absolute_url }} -o manifests/00-namespace-tigera-operator.yaml
+curl {{ "/manifests/ocp/tigera-operator/02-rolebinding-tigera-operator.yaml" | absolute_url }} -o manifests/02-rolebinding-tigera-operator.yaml
+curl {{ "/manifests/ocp/tigera-operator/02-role-tigera-operator.yaml" | absolute_url }} -o manifests/02-role-tigera-operator.yaml
+curl {{ "/manifests/ocp/tigera-operator/02-serviceaccount-tigera-operator.yaml" | absolute_url }} -o manifests/02-serviceaccount-tigera-operator.yaml
+curl {{ "/manifests/ocp/tigera-operator/02-tigera-operator.yaml" | absolute_url }} -o manifests/02-tigera-operator.yaml
+curl {{ "/manifests/ocp/01-cr-installation.yaml" | absolute_url }} -o manifests/01-cr-installation.yaml
+```
+
+#### Create the cluster
+
+Start the cluster creation with the following command and wait for it to complete.
+
+```bash
+openshift-install create cluster
+```
+
+Once the above command is complete, you can verify {{site.prodname}} is installed by verifying the components are available with the following command.
+
+```
+oc get tigerastatus
+```
+
+> **Note**: To get more information, add `-o yaml` to the above command.
+
+### Above and beyond
+
+- [Get started with Kubernetes network policy]({{site.baseurl}}/security/kubernetes-network-policy)
+- [Get started with Calico network policy]({{site.baseurl}}/security/calico-network-policy)
+- [Enable default deny for Kubernetes pods]({{site.baseurl}}/security/kubernetes-default-deny)

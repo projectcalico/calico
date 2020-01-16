@@ -458,11 +458,12 @@ bin/helm:
 	mv $(TMP)/linux-amd64/helm bin/helm
 
 .PHONY: values.yaml
-values.yaml:
+values.yaml: values.yaml/calico values.yaml/tigera-operator
+values.yaml/%:
 	docker run --rm \
 	  -v $$PWD:/calico \
 	  -w /calico \
-          ruby:2.5 ruby ./hack/gen_values_yml.rb > _includes/charts/calico/values.yaml
+	  ruby:2.5 ruby ./hack/gen_values_yml.rb --chart $(@F) > _includes/charts/$(@F)/values.yaml
 
 ## Create the vendor directory
 vendor: glide.yaml

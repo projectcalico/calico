@@ -11,7 +11,7 @@
   - Ubuntu 16.04
   - Debian 8
   {% endif %}{% if include.orch == "OpenShift" %}
-  - CentOS 7
+  - RedHat Container OS
   {% endif %}{% if include.orch == "OpenStack" %}
   - Ubuntu 16.04 and 18.04
   - CentOS 7
@@ -30,12 +30,14 @@
 ## Key/value store
 
 {{site.prodname}} {{page.version}} requires a key/value store accessible by all
-{{site.prodname}} components. {% if include.orch == "Kubernetes" %} On Kubernetes,
-you can configure {{site.prodname}} to access an etcdv3 cluster directly or to
-use the Kubernetes API datastore.{% endif %}{% if include.orch == "OpenShift" %} On
-OpenShift, {{site.prodname}} can share an etcdv3 cluster with OpenShift, or
-you can set up an etcdv3 cluster dedicated to {{site.prodname}}.{% endif %}
-{% if include.orch == "OpenStack" %}For production you will likely want multiple
+{{site.prodname}} components.
+{%- if include.orch == "OpenShift" %}
+With OpenShift, the Kubernetes API datastore is used for the key/value store.{% endif -%}
+{%- if include.orch == "Kubernetes" %}
+On Kubernetes, you can configure {{site.prodname}} to access an etcdv3 cluster directly or to
+use the Kubernetes API datastore.{% endif -%}
+{%- if include.orch == "OpenStack" %}
+For production you will likely want multiple
 nodes for greater performance and reliability.  If you don't already have an
 etcdv3 cluster to connect to, please refer to [the upstream etcd
 docs](https://coreos.com/etcd/) for detailed advice and setup.{% endif %}{% if include.orch == "host protection" %}The key/value store must be etcdv3.{% endif %}
@@ -48,7 +50,11 @@ Ensure that your hosts and firewalls allow the necessary traffic based on your c
 |--------------------------------------------------------------|----------------------|-----------------|---------------|
 | {{site.prodname}} networking (BGP)                           | All                  | Bidirectional   | TCP 179 |
 | {{site.prodname}} networking with IP-in-IP enabled (default) | All                  | Bidirectional   | IP-in-IP, often represented by its protocol number `4` |
-{%- if include.orch == "Kubernetes" %}
+{%- if include.orch == "OpenShift" %}
+| {{site.prodname}} networking with VXLAN enabled              | All                  | Bidirectional   | UDP 4789 |
+| Typha access                                                 | Typha agent hosts    | Incoming        | TCP 5473 (default) |
+| All                                                         | kube-apiserver host  | Incoming        | Often TCP 443 or 8443\* |
+{%- else if include.orch == "Kubernetes" %}
 | {{site.prodname}} networking with VXLAN enabled              | All                  | Bidirectional   | UDP 4789 |
 | {{site.prodname}} networking with Typha enabled              | Typha agent hosts    | Incoming        | TCP 5473 (default) |
 | flannel networking (VXLAN)                                   | All                  | Bidirectional   | UDP 4789 |
@@ -56,9 +62,6 @@ Ensure that your hosts and firewalls allow the necessary traffic based on your c
 | etcd datastore                                               | etcd hosts           | Incoming        | [Officially](http://www.iana.org/assignments/service-names-port-numbers/service-names-port-numbers.txt) TCP 2379 but can vary |
 {%- else %}
 | All                                                          | etcd hosts           | Incoming        | [Officially](http://www.iana.org/assignments/service-names-port-numbers/service-names-port-numbers.txt) TCP 2379 but can vary |
-{%- endif %}
-{%- if include.orch == "OpenShift" %}
-| All                                                          | kube-apiserver host  | Incoming        | Often TCP 443 or 8443\* |
 {%- endif %}
 {%- if include.orch == "Kubernetes" or include.orch == "OpenShift" %}
 
