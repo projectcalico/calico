@@ -1,5 +1,9 @@
 PACKAGE_NAME?=github.com/projectcalico/typha
-GO_BUILD_VER=v0.28
+GO_BUILD_VER=v0.34
+
+# This needs to be evaluated before the common makefile is included.
+# This var contains some default values that the common makefile may append to.
+PUSH_IMAGES?=$(BUILD_IMAGE) quay.io/calico/typha
 
 ###############################################################################
 # Download and include Makefile.common
@@ -33,8 +37,6 @@ include Makefile.common
 ###############################################################################
 
 BUILD_IMAGE=calico/typha
-
-PUSH_IMAGES?=$(BUILD_IMAGE) quay.io/calico/typha
 RELEASE_IMAGES?=gcr.io/projectcalico-org/typha eu.gcr.io/projectcalico-org/typha asia.gcr.io/projectcalico-org/typha us.gcr.io/projectcalico-org/typha
 
 # Linker flags for building Typha.
