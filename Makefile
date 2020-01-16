@@ -504,6 +504,7 @@ release-test: release-test-image
 	-v $(PWD):/docs \
 	-e RELEASE_STREAM=$(RELEASE_STREAM) \
 	$(DOCS_TEST_CONTAINER) sh -c \
-	"nosetests . -e "$(EXCLUDE_REGEX)" -v --with-xunit \
+	"nosetests . -e "$(EXCLUDE_REGEX)" \
+	-s -v --with-xunit \
 	--xunit-file='/docs/nosetests.xml' \
 	--with-timer $(EXTRA_NOSE_ARGS)"

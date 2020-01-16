@@ -1,6 +1,5 @@
 import json
 import os
-
 import requests
 import subprocess
 import yaml
@@ -50,9 +49,11 @@ def test_gcr_release_tag_present():
                 cmd = 'docker manifest inspect gcr.io/projectcalico-org/%s:%s | jq -r "."' % (gcr_name, RELEASE_VERSION)
 
                 req = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE)
-                # Check that returncode is 0 - if not, image likely doesn't exist!
-                assert req.returncode == 0
-                metadata = json.loads(req.stdout.read())
+                try:
+                    metadata = json.loads(req.stdout.read())
+                except ValueError:
+                    print("[ERROR] Didn't get json back from docker manifest inspect.  Does image exist?")
+                    assert False
                 found_archs = []
                 for platform in metadata['manifests']:
                     found_archs.append(platform['platform']['architecture'])
