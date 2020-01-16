@@ -776,35 +776,36 @@ func describeBPFTests(testOpts bpfTestOptions) bool {
 					})
 
 					It("should have connectivity from all workloads via a service to workload 0", func() {
-						ip := testSvc.Spec.ClusterIP
+						clusterIP := testSvc.Spec.ClusterIP
 						port := uint16(testSvc.Spec.Ports[0].Port)
 
-						cc.ExpectSome(w[0][1], workload.IP(ip), port)
-						cc.ExpectSome(w[1][0], workload.IP(ip), port)
-						cc.ExpectSome(w[1][1], workload.IP(ip), port)
+						cc.ExpectSome(w[0][1], workload.IP(clusterIP), port)
+						cc.ExpectSome(w[1][0], workload.IP(clusterIP), port)
+						cc.ExpectSome(w[1][1], workload.IP(clusterIP), port)
 						cc.CheckConnectivity()
 
 					})
 
-					if !localOnly {
-						It("should have connectivity from all workloads via a nodeport to workload 0", func() {
-							ip := felixes[1].IP
-
-							cc.ExpectSome(w[0][1], workload.IP(ip), npPort)
-							cc.ExpectSome(w[1][0], workload.IP(ip), npPort)
-							cc.ExpectSome(w[1][1], workload.IP(ip), npPort)
+					if localOnly {
+						It("should not have connectivity from all workloads via a nodeport to non-local workload 0", func() {
+							node0IP := felixes[0].IP
+							node1IP := felixes[1].IP
+							// Via remote nodeport, should fail.
+							cc.ExpectNone(w[0][1], workload.IP(node1IP), npPort)
+							cc.ExpectNone(w[1][0], workload.IP(node1IP), npPort)
+							cc.ExpectNone(w[1][1], workload.IP(node1IP), npPort)
+							// Include a check that goes via the local nodeport to make sure the dataplane has converged.
+							cc.ExpectSome(w[0][1], workload.IP(node0IP), npPort)
 							cc.CheckConnectivity()
-
 						})
 					} else {
-						It("should not have connectivity from all workloads via a nodeport to non-local workload 0", func() {
-							ip := felixes[1].IP
+						It("should have connectivity from all workloads via a nodeport to workload 0", func() {
+							node1IP := felixes[1].IP
 
-							cc.ExpectNone(w[0][1], workload.IP(ip), npPort)
-							cc.ExpectNone(w[1][0], workload.IP(ip), npPort)
-							cc.ExpectNone(w[1][1], workload.IP(ip), npPort)
+							cc.ExpectSome(w[0][1], workload.IP(node1IP), npPort)
+							cc.ExpectSome(w[1][0], workload.IP(node1IP), npPort)
+							cc.ExpectSome(w[1][1], workload.IP(node1IP), npPort)
 							cc.CheckConnectivity()
-
 						})
 					}
 
@@ -830,6 +831,8 @@ func describeBPFTests(testOpts bpfTestOptions) bool {
 					It("should not have connectivity from external to w[0] via local/remote node", func() {
 						cc.ExpectNone(externalClient, workload.IP(felixes[1].IP), npPort)
 						cc.ExpectNone(externalClient, workload.IP(felixes[0].IP), npPort)
+						// Include a check that goes via the local nodeport to make sure the dataplane has converged.
+						cc.ExpectSome(w[0][1], workload.IP(felixes[0].IP), npPort)
 						cc.CheckConnectivity()
 					})
 
@@ -848,22 +851,24 @@ func describeBPFTests(testOpts bpfTestOptions) bool {
 							pol = updatePolicy(pol)
 						})
 
-						if !localOnly {
-							It("should have connectivity from external to w[0] via node1->node0 fwd", func() {
-								if testOpts.connTimeEnabled {
-									Skip("FIXME externalClient also does conntime balancing")
-								}
-
-								cc.ExpectSome(externalClient, workload.IP(felixes[1].IP), npPort)
-								cc.CheckConnectivity()
-							})
-						} else {
+						if localOnly {
 							It("should not have connectivity from external to w[0] via node1->node0 fwd", func() {
 								if testOpts.connTimeEnabled {
 									Skip("FIXME externalClient also does conntime balancing")
 								}
 
 								cc.ExpectNone(externalClient, workload.IP(felixes[1].IP), npPort)
+								// Include a check that goes via the local nodeport to make sure the dataplane has converged.
+								cc.ExpectSome(w[0][1], workload.IP(felixes[0].IP), npPort)
+								cc.CheckConnectivity()
+							})
+						} else {
+							It("should have connectivity from external to w[0] via node1->node0 fwd", func() {
+								if testOpts.connTimeEnabled {
+									Skip("FIXME externalClient also does conntime balancing")
+								}
+
+								cc.ExpectSome(externalClient, workload.IP(felixes[1].IP), npPort)
 								cc.CheckConnectivity()
 							})
 						}
