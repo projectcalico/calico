@@ -1,5 +1,9 @@
 PACKAGE_NAME=github.com/projectcalico/cni-plugin
-GO_BUILD_VER=v0.31
+GO_BUILD_VER=v0.34
+
+# This needs to be evaluated before the common makefile is included.
+# This var contains some default values that the common makefile may append to.
+PUSH_IMAGES?=$(BUILD_IMAGE) quay.io/calico/cni
 
 ###############################################################################
 # Download and include Makefile.common
@@ -44,7 +48,6 @@ CNI_SPEC_VERSION?=0.3.1
 BUILD_IMAGE?=calico/cni
 DEPLOY_CONTAINER_MARKER=cni_deploy_container-$(ARCH).created
 
-PUSH_IMAGES?=$(BUILD_IMAGE) quay.io/calico/cni
 RELEASE_IMAGES?=gcr.io/projectcalico-org/cni eu.gcr.io/projectcalico-org/cni asia.gcr.io/projectcalico-org/cni us.gcr.io/projectcalico-org/cni
 
 ETCD_CONTAINER ?= quay.io/coreos/etcd:$(ETCD_VERSION)-$(BUILDARCH)
