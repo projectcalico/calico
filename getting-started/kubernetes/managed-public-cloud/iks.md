@@ -1,5 +1,6 @@
 ---
 title: IBM Cloud Kubernetes Service (IKS)
+description: Use IKS with built-in support for Calico networking and network policy.
 ---
 
 ### Big picture

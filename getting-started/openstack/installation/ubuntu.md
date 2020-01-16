@@ -1,5 +1,6 @@
 ---
 title: Ubuntu
+description: Install Calico on OpenStack, Ubuntu nodes.
 canonical_url: '/getting-started/openstack/installation/ubuntu'
 ---
 

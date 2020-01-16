@@ -1,5 +1,6 @@
 ---
 title: IP pool
+description: API for this Calico resource.
 canonical_url: '/reference/resources/ippool'
 ---
 

@@ -1,5 +1,6 @@
 ---
 title: BGP configuration
+description: API for this Calico resource.
 canonical_url: '/reference/resources/bgpconfig'
 ---
 

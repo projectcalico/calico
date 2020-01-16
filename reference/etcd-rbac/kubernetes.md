@@ -1,5 +1,6 @@
 ---
 title: Segmenting etcd on Kubernetes (basic)
+description: Limit user access to Kubernetes and Calico components.
 canonical_url: '/reference/etcd-rbac/kubernetes'
 ---
 

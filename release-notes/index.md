@@ -6,7 +6,8 @@ canonical_url: '/release-notes/index'
 
 The following table shows component versioning for {{site.prodname}}  **{{ page.version }}**.
 
-Use the version selector at the top-right of this page to view a different release.
+
+To select a different version, click **Releases** in the top-right navigation bar.
 
 {% for release in site.data.versions %}
 ## {{ release.title }}

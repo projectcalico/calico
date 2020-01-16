@@ -1,5 +1,6 @@
 ---
 title: calicoctl delete
+description: Command to delete a policy.
 canonical_url: '/reference/calicoctl/delete'
 ---
 

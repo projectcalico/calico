@@ -1,6 +1,6 @@
 ---
 title: Policy for extreme traffic
-description: Calico network policy early in the Linux packet processing pipeline to avoid DoS attacks, and selectively bypass Linux conntrack for extremely large number of connections.
+description: Use Calico network policy early in the Linux packet processing pipeline to handle extreme traffic scenarios.
 show_read_time: false
 show_toc: false
 ---

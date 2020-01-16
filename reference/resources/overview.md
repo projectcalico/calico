@@ -1,6 +1,6 @@
 ---
 title: Resource definitions
-description: Calico resources (APIs) that you can manage using calicoctl
+description: Calico resources (APIs) that you can manage using calicoctl.
 canonical_url: '/reference/resources/index'
 ---
 

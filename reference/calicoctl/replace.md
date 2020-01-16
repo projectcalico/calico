@@ -1,5 +1,6 @@
 ---
 title: calicoctl replace
+description: Command to replace an existing policy with a different one.
 canonical_url: '/reference/calicoctl/replace'
 ---
 

@@ -1,5 +1,6 @@
 ---
 title: Monitor Calico component metrics
+description: Use open source Prometheus for monitoring and alerting on Calico components.
 ---
 
 ### Big picture

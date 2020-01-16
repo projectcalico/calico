@@ -1,5 +1,6 @@
 ---
 title: Upgrading Calico on Kubernetes
+description: Upgrade to a newer version of Calico for Kubernetes.
 canonical_url: '/maintenance/kubernetes-upgrade'
 ---
 

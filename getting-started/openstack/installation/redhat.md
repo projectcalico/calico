@@ -1,5 +1,6 @@
 ---
 title: Red Hat Enterprise Linux
+description: Install Calico on OpenStack, Red Hat Enterprise Linux nodes.
 canonical_url: '/getting-started/openstack/installation/redhat'
 ---
 

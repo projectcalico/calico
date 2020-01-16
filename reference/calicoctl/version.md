@@ -1,5 +1,6 @@
 ---
 title: calicoctl version
+description: Command to display the calicoctl CLI version. 
 canonical_url: '/reference/calicoctl/version'
 ---
 

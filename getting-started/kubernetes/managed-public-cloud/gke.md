@@ -1,5 +1,6 @@
 ---
 title: Google Kubernetes Engine (GKE)
+description: Enable Calico network policy in GKE.
 ---
 
 ### Big picture

@@ -1,6 +1,6 @@
 ---
 title: Quickstart for Calico on Kubernetes
-description: Install a single-host Kubernetes cluster with Calico
+description: Install Calico on a single-host Kubernetes cluster
 canonical_url: '/getting-started/kubernetes/index'
 ---
 

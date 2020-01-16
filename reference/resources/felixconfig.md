@@ -1,5 +1,6 @@
 ---
 title: Felix configuration
+description: API for this Calico resource.
 canonical_url: '/reference/resources/felixconfig'
 ---
 

@@ -1,4 +1,5 @@
 ---
+description: Install Calico for OpenStack.
 show_read_time: false
 show_toc: false
 ---

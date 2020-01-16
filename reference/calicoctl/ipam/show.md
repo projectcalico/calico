@@ -1,5 +1,6 @@
 ---
 title: calicoctl ipam
+description: Command to see if IP address is being used.
 canonical_url: '/reference/calicoctl/ipam/show'
 ---
 

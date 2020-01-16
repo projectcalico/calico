@@ -1,5 +1,6 @@
 ---
 title: Summary
+description: How different host endpoint rules affect packet flows. 
 canonical_url: '/reference/host-endpoints/summary'
 ---
 

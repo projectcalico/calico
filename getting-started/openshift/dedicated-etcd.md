@@ -1,5 +1,6 @@
 ---
 title: Connecting to a dedicated etcd cluster (optional)
+description: Calico provides an OpenShift-ansible integration for connecting to a custom etcd cluster.
 canonical_url: '/getting-started/openshift/dedicated-etcd'
 ---
 

@@ -1,5 +1,6 @@
 ---
 title: Binary install without package manager
+description: Install Calico binary on host without a package manager.
 canonical_url: '/getting-started/bare-metal/installation/binary'
 ---
 

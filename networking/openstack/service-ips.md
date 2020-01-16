@@ -1,6 +1,6 @@
 ---
 title: Service IPs
-description: Use a floating or fixed IP for a Calico-networked VM
+description: Use a floating or fixed IP for a Calico-networked VM.
 canonical_url: '/networking/openstack/service-ips'
 ---
 

@@ -1,6 +1,6 @@
 ---
 title: Installing Calico on Kubernetes
-description: Options for installing Calico on Kubernetes
+description: Options for installing Calico on Kubernetes.
 canonical_url: '/getting-started/kubernetes/installation/index'
 ---
 

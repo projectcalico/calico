@@ -1,5 +1,6 @@
 ---
 title: Creating host endpoint objects
+description: To protect a host interface, start by creating a host endpoint object in etcd. 
 canonical_url: '/reference/host-endpoints/objects'
 ---
 

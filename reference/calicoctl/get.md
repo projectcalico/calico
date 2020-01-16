@@ -1,5 +1,6 @@
 ---
 title: calicoctl get
+description: Command to list policies in the default output format.
 canonical_url: '/reference/calicoctl/get'
 ---
 

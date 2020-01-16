@@ -1,5 +1,6 @@
 ---
 title: Calico key and path prefixes
+description: Prefixes to configure Calico components to access the etcd datastore. 
 canonical_url: '/reference/etcd-rbac/calico-etcdv3-paths'
 ---
 

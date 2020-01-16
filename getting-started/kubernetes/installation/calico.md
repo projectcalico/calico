@@ -1,5 +1,6 @@
 ---
 title: Installing Calico for policy and networking (recommended)
+description: Install both Calico networking and network policy to take advantage of all Calico open source product features.
 canonical_url: '/getting-started/kubernetes/installation/calico'
 ---
 

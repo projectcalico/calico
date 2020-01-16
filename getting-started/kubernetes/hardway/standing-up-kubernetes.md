@@ -1,5 +1,6 @@
 ---
 title: Standing up Kubernetes
+description: Get a Kubernetes cluster up and running.
 canonical_url: '/getting-started/kubernetes/hardway/standing-up-kubernetes'
 ---
 

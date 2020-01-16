@@ -1,5 +1,6 @@
 ---
 title: Istio integration
+description: Enforce Calico network policy for Istio service mesh applications.
 canonical_url: '/getting-started/kubernetes/hardway/istio-integration'
 ---
 

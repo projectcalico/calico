@@ -1,5 +1,6 @@
 ---
 title: Configuring the Calico CNI plugins
+description: Details for configuring the Calico CNI plugins.  
 canonical_url: '/reference/cni-plugin/configuration'
 ---
 

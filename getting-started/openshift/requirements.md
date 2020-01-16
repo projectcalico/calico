@@ -1,5 +1,6 @@
 ---
 title: System requirements
+description: Review the requirements for using OpenShift with Calico.
 canonical_url: '/getting-started/openshift/requirements'
 ---
 

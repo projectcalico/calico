@@ -1,5 +1,6 @@
 ---
 title: Calico Enterprise
+description: Learn about value-added features in our commercial product, Calico Enterprise. 
 show_read_time: false
 show_toc: false
 ---

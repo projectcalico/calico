@@ -1,6 +1,6 @@
 ---
 title: Set up a development machine
-Description: Configure Calico networking for OpenStack VMs. 
+description: Configure Calico networking for OpenStack VMs. 
 canonical_url: '/networking/openstack/dev-machine-setup'
 ---
 

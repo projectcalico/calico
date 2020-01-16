@@ -1,5 +1,6 @@
 ---
 title: Install Typha
+description: Learn about Typha for scaling deployment.
 canonical_url: '/getting-started/kubernetes/hardway/install-typha'
 ---
 

@@ -1,6 +1,6 @@
 ---
 title: Use a specific IP address with a pod
-Description: Specify the IP address for a pod instead of allowing Calico to choose automatically.
+description: Specify the IP address for a pod instead of allowing Calico to automatically choose one.
 ---
 
 ### Big picture

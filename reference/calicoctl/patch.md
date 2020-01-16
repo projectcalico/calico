@@ -1,5 +1,6 @@
 ---
 title: calicoctl patch
+description: Command to update a node with a patch. 
 canonical_url: '/reference/calicoctl/patch'
 ---
 

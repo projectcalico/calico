@@ -1,6 +1,6 @@
 ---
 title: Migrate from one IP pool to another
-Description: Migrate pods from one IP pool to another on a running cluster without network disruption.
+description: Migrate pods from one IP pool to another on a running cluster without network disruption.
 ---
 
 ### Big picture

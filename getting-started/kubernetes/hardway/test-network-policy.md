@@ -1,5 +1,6 @@
 ---
 title: Test network policy
+description: Verify that network policy works correctly.
 canonical_url: '/getting-started/kubernetes/hardway/test-network-policy'
 ---
 

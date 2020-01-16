@@ -1,5 +1,6 @@
 ---
 title: Configuring calico/node
+description: Customize calico/node using environment variables.
 canonical_url: '/reference/node/configuration'
 ---
 

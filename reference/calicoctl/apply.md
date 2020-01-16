@@ -1,5 +1,6 @@
 ---
 title: calicoctl apply
+description: Command to apply a policy. 
 canonical_url: '/reference/calicoctl/apply'
 ---
 

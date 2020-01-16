@@ -1,5 +1,6 @@
 ---
 title: Configuring Typha
+description: Configure Typha for scaling Kubernetes API datastore (kdd).
 canonical_url: '/reference/typha/configuration'
 ---
 

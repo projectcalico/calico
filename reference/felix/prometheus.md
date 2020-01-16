@@ -1,5 +1,6 @@
 ---
 title: Prometheus statistics
+description: Review metrics for the Felix component if you are using Prometheus. 
 canonical_url: '/reference/felix/prometheus'
 ---
 

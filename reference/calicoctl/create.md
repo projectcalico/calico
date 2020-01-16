@@ -1,5 +1,6 @@
 ---
 title: calicoctl create
+description: Command to create a policy. 
 canonical_url: '/reference/calicoctl/create'
 ---
 

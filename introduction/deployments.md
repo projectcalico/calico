@@ -1,5 +1,6 @@
 ---
 title: Sample deployments
+description: Where and how Calico is being used.
 canonical_url: '/introduction/deployments'
 ---
 

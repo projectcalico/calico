@@ -1,5 +1,6 @@
 ---
 title: Getting involved
+description: Contribute to Calico open source project.
 canonical_url: '/reference/involved'
 ---
 

@@ -1,6 +1,6 @@
 ---
 title: Enable IPVS in Kubernetes
-description: Use IPVS kube-proxy for load balancing traffic across pods
+description: Use IPVS kube-proxy for load balancing traffic across pods.
 canonical_url: '/networking/enabling-ipvs'
 ---
 

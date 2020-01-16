@@ -1,5 +1,6 @@
 ---
 title: Upgrading Calico on OpenStack
+description: Upgrade to a newer version of Calico for OpenStack.
 canonical_url: '/maintenance/openstack-upgrade'
 ---
 

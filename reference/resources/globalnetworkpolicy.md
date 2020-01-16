@@ -1,5 +1,6 @@
 ---
 title: Global network policy
+description: API for this Calico resource.
 canonical_url: '/reference/resources/globalnetworkpolicy'
 ---
 

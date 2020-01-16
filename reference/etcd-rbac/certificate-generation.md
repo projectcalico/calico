@@ -1,5 +1,6 @@
 ---
 title: Generating certificates
+description: Generate Certificates of Authority (CA) to authenticate users with etcd datastore.
 canonical_url: '/reference/etcd-rbac/certificate-generation'
 ---
 

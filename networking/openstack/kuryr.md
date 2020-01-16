@@ -1,6 +1,6 @@
 ---
 title: Kuryr
-description: Use Kuryr with Calico networking
+description: Use Kuryr with Calico networking.
 canonical_url: '/networking/openstack/kuryr'
 ---
 

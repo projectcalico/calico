@@ -1,5 +1,6 @@
 ---
 title: Host endpoint
+description: API for this Calico resource.
 canonical_url: '/reference/resources/hostendpoint'
 ---
 

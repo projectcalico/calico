@@ -1,5 +1,6 @@
 ---
 title: calicoctl node diags
+description: Command to get diagnostics from a Calico node.
 canonical_url: '/reference/calicoctl/node/diags'
 ---
 

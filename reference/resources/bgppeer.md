@@ -1,5 +1,6 @@
 ---
 title: BGP peer
+description: API for this Calico resource.
 canonical_url: '/reference/resources/bgppeer'
 ---
 

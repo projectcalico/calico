@@ -1,5 +1,6 @@
 ---
 title: Test networking
+description: Test that networking works correctly.
 canonical_url: '/getting-started/kubernetes/hardway/test-networking'
 ---
 

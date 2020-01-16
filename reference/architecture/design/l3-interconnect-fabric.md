@@ -1,5 +1,6 @@
 ---
 title: Calico over IP fabrics
+description: Understand considerations for implementing interconnect fabrics with Calico.
 canonical_url: '/reference/architecture/design/l3-interconnect-fabric'
 ---
 

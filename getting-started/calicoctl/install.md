@@ -1,5 +1,6 @@
 ---
 title: Installing calicoctl
+description: Install the CLI for Calico.
 canonical_url: '/getting-started/calicoctl/install'
 ---
 

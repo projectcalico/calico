@@ -1,5 +1,6 @@
 ---
 title: Profile
+description: API for this Calico resource.
 canonical_url: '/reference/resources/profile'
 ---
 
