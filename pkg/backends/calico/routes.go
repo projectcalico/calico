@@ -18,6 +18,7 @@ import (
 	"net"
 	"os"
 	"reflect"
+	"strings"
 	"sync"
 	"time"
 
@@ -320,7 +321,7 @@ func (rg *routeGenerator) getAllRoutesForService(svc *v1.Service) []string {
 		}
 	}
 
-	return addSuffix(routes, "/32")
+	return addFullIPLength(routes)
 }
 
 // getAdvertisedRoutes returns the routes that are currently advertised and
@@ -391,11 +392,15 @@ func (rg *routeGenerator) isAllowedExternalIP(externalIP string) bool {
 
 }
 
-// addSuffix returns a new slice, with the suffix appended onto every item.
-func addSuffix(items []string, suffix string) []string {
+// addFullIPLength returns a new slice, with the full IP length appended onto every item.
+func addFullIPLength(items []string) []string {
 	res := make([]string, 0)
 	for _, item := range items {
-		res = append(res, item+suffix)
+		if strings.Contains(item, ":") {
+			res = append(res, item+"/128")
+		} else {
+			res = append(res, item+"/32")
+		}
 	}
 	return res
 }
@@ -433,11 +438,15 @@ func (rg *routeGenerator) advertiseThisService(svc *v1.Service, ep *v1.Endpoints
 		return false
 	}
 
+	isIPv6 := func(ip string) bool { return strings.Contains(ip, ":") }
+
+	svcIsIPv6 := isIPv6(svc.Spec.ClusterIP)
+
 	// Otherwise, advertise if node contains at least one endpoint for svc
 	for _, subset := range ep.Subsets {
 		// not interested in subset.NotReadyAddresses
 		for _, address := range subset.Addresses {
-			if address.NodeName != nil && *address.NodeName == rg.nodeName {
+			if address.NodeName != nil && *address.NodeName == rg.nodeName && isIPv6(address.IP) == svcIsIPv6 {
 				logc.Debugf("Advertising local service")
 				return true
 			}

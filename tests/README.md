@@ -1,7 +1,7 @@
 # confd BIRD template testing
 
-These tests are aimed at testing the Calico BIRD templates against the 
-etcd and KDD backends.  They setup an etcd server and a Kubernetes API 
+These tests are aimed at testing the Calico BIRD templates against the
+etcd and KDD backends.  They setup an etcd server and a Kubernetes API
 server to populate with data from the `tests/mock_data` directory.
 
 To run these tests simply execute `make test` from the confd root directory.
@@ -13,7 +13,7 @@ templates, and will also log the output of confd into `tests/logs`.
 
 ## Mock Data
 
-The mock data, and compiled templates, were generated in a cluster setup 
+The mock data, and compiled templates, were generated in a cluster setup
 with three nodes:
 
 - kube-master (10.192.0.2/16)
@@ -28,7 +28,7 @@ The mock data is split into 3 input formats:
    and is used to configure allocation blocks that cannot be configured through calicoctl.
 -  kdd contains kubectl manifests used to configure the k8s nodes.  This is done just before
    the tests and is required because kdd nodes canot be configured through calicoctl.
--  calicocl contains most of the test data in calicoctl manifests.  The same data is shared
+-  calicoctl contains most of the test data in calicoctl manifests.  The same data is shared
    by both the etcdv3 and kdd tests.
 
 ## Compiled Templates

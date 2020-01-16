@@ -4,14 +4,6 @@ kind: Service
 apiVersion: v1
 metadata:
   name: service-1
-spec:
-  type: LoadBalancer
-  externalTrafficPolicy: Local
-  clusterIP: 10.101.0.101
-  ports:
-  - port: 80
-    protocol: TCP
-    targetPort: 80
 
 ---
 
@@ -19,11 +11,17 @@ kind: Service
 apiVersion: v1
 metadata:
   name: service-2
-spec:
-  type: LoadBalancer
-  externalTrafficPolicy: Local
-  clusterIP: 10.101.0.102
-  ports:
-  - port: 80
-    protocol: TCP
-    targetPort: 80
+
+---
+
+kind: Service
+apiVersion: v1
+metadata:
+  name: service-v6-1
+
+---
+
+kind: Service
+apiVersion: v1
+metadata:
+  name: service-v6-2

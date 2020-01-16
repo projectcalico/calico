@@ -4,30 +4,43 @@ metadata:
   name: kube-master-192-168-221-192-26
   namespace: ""
 spec:
-  state: "confirmed"
   node: kube-master
   cidr: 192.168.221.192/26
-
 ---
-
 apiVersion: crd.projectcalico.org/v1
 kind: BlockAffinity
 metadata:
-  name: kube-node-1-192.168.1.0-24
+  name: kube-master-192-168-221-0-26
   namespace: ""
 spec:
-  state: "confirmed"
-  node: kube-node-1
-  cidr: 192.168.1.0/24
-
+  state: "pending"
+  node: kube-master
+  cidr: 192.168.221.0/26
 ---
-
 apiVersion: crd.projectcalico.org/v1
 kind: BlockAffinity
 metadata:
-  name: kube-node-2
+  name: kube-master-192-168-221-64-26
   namespace: ""
 spec:
   state: "confirmed"
-  node: kube-node-2
-  cidr: 192.168.2.0/24
+  node: kube-master
+  cidr: 192.168.221.64/26
+---
+apiVersion: crd.projectcalico.org/v1
+kind: BlockAffinity
+metadata:
+  name: kube-master-10-0-0-0-30
+  namespace: ""
+spec:
+  node: kube-master
+  cidr: 10.0.0.0/30
+---
+apiVersion: crd.projectcalico.org/v1
+kind: BlockAffinity
+metadata:
+  name: kube-master-10-1-0-0-24
+  namespace: ""
+spec:
+  node: kube-master
+  cidr: 10.1.0.0/24

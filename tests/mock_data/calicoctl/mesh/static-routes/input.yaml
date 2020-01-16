@@ -5,6 +5,7 @@ metadata:
 spec:
   serviceClusterIPs:
   - cidr: 10.101.0.0/16
+  - cidr: fd00:96::/112
 
 ---
 
@@ -15,6 +16,7 @@ metadata:
 spec:
   bgp:
     ipv4Address: 10.192.0.2/16
+    ipv6Address: fdf5:10::2/112
 
 ---
 
@@ -25,6 +27,7 @@ metadata:
 spec:
   bgp:
     ipv4Address: 10.192.0.3/16
+    ipv6Address: fdf5:10::3/112
 
 ---
 
@@ -35,6 +38,7 @@ metadata:
 spec:
   bgp:
     ipv4Address: 10.192.0.4/16
+    ipv6Address: fdf5:10::4/112
 
 ---
 
