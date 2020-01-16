@@ -709,7 +709,10 @@ func AttachTCProgram(attachPoint AttachPoint, hostIP net.IP) error {
 	// map get deleted even though it is in use by a BPF program.
 	defer repinJumpMaps()
 
-	tempDir := os.TempDir()
+	tempDir, err := ioutil.TempDir("", "calico-tc")
+	if err != nil {
+		return errors.Wrap(err, "failed to create temporary directory")
+	}
 	defer func() {
 		_ = os.RemoveAll(tempDir)
 	}()

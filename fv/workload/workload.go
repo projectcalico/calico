@@ -71,10 +71,10 @@ func (w *Workload) Stop() {
 		log.WithField("workload", w).Info("Stop")
 		outputBytes, err := utils.Command("docker", "exec", w.C.Name,
 			"cat", fmt.Sprintf("/tmp/%v", w.Name)).CombinedOutput()
-		Expect(err).NotTo(HaveOccurred())
+		Expect(err).NotTo(HaveOccurred(), "failed to run docker exec command to get workload pid")
 		pid := strings.TrimSpace(string(outputBytes))
 		err = utils.Command("docker", "exec", w.C.Name, "kill", pid).Run()
-		Expect(err).NotTo(HaveOccurred())
+		Expect(err).NotTo(HaveOccurred(), "failed to kill workload")
 		_, err = w.runCmd.Process.Wait()
 		if err != nil {
 			log.WithField("workload", w).Error("failed to wait for process")
@@ -156,7 +156,7 @@ func run(c *infrastructure.Felix, name, profile, ip, ports, protocol string) (w 
 				log.WithError(err).Info("End of workload stderr")
 				return
 			}
-			log.Infof("Workload %s stderr: %s", name, strings.TrimSpace(string(line)))
+			log.Infof("Workload %s stderr: %s", n, strings.TrimSpace(string(line)))
 		}
 	}()
 
