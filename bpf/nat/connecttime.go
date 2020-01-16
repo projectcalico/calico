@@ -137,7 +137,7 @@ func CompileConnectTimeLoadBalancer(logLevel string, outFile string) error {
 		"-D__BPFTOOL_LOADER__",
 		"-DCALI_LOG_LEVEL=CALI_LOG_LEVEL_" + strings.ToUpper(logLevel),
 		fmt.Sprintf("-DCALI_COMPILE_FLAGS=%d", tc.CompileFlagCgroup),
-		"-DCALI_LOG_PFX=CGROUP",
+		"-DCALI_LOG_PFX=CALI",
 		"-Wno-unused-value",
 		"-Wno-pointer-sign",
 		"-Wno-compare-distinct-pointer-types",

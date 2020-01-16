@@ -718,7 +718,7 @@ func AttachTCProgram(attachPoint AttachPoint, hostIP net.IP) error {
 	}()
 
 	preCompiledBinary := path.Join("/code/bpf/bin", attachPoint.Filename)
-	tempBinary := tempDir + attachPoint.Filename
+	tempBinary := path.Join(tempDir, attachPoint.Filename)
 
 	exeData, err := ioutil.ReadFile(preCompiledBinary)
 	if err != nil {
@@ -728,8 +728,20 @@ func AttachTCProgram(attachPoint AttachPoint, hostIP net.IP) error {
 	hostIP = hostIP.To4()
 	if len(hostIP) == 4 {
 		log.WithField("ip", hostIP).Debug("Patching in host IP")
-		exeData = bytes.ReplaceAll(exeData, []byte{0x01, 0x02, 0x03, 0x04}, hostIP)
+		replacement := make([]byte, 6)
+		copy(replacement[2:], hostIP)
+		exeData = bytes.ReplaceAll(exeData, []byte("\x00\x00HOST"), replacement)
 	}
+
+	// Patch in the log prefix; since this gets loaded as immediate values by the compiler, we know it'll be
+	// preceded by a 2-byte 0 offset so we include that in the match.
+	iface := []byte(attachPoint.Iface  + "--------") // Pad on the right to make sure its long enough.
+	logBytes := make([]byte, 6)
+	copy(logBytes[2:], iface)
+	exeData = bytes.ReplaceAll(exeData, []byte("\x00\x00CALI"), logBytes)
+	copy(logBytes[2:], iface[4:8])
+	exeData = bytes.ReplaceAll(exeData, []byte("\x00\x00COLO"), logBytes)
+
 	err = ioutil.WriteFile(tempBinary, exeData, 0600)
 	if err != nil {
 		return errors.Wrap(err, "failed to write patched BPF binary")

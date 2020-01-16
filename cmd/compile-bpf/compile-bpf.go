@@ -76,7 +76,6 @@ func main() {
 					for _, toOrFrom := range []tc.ToOrFromEp{tc.FromEp, tc.ToEp} {
 						toOrFrom := toOrFrom
 						secName := tc.SectionName(epType, toOrFrom)
-						logPfx := ""
 						flags := tc.SectionToFlags(secName)
 
 						oFileName := path.Join("bin/bpf/", tc.ProgFilename(epType, toOrFrom, epToHostDrop, fibEnabled, logLevel))
@@ -92,13 +91,13 @@ func main() {
 							tc.CompileWithOutputName(oFileName),
 							tc.CompileWithFIBEnabled(fibEnabled),
 							tc.CompileWithLogLevel(logLevel),
-							tc.CompileWithLogPrefix(logPfx),
 							tc.CompileWithEndpointToHostDrop(epToHostDrop),
 							// FIXME CompileWithNATTunnelMTU(uint16(m.natTunnelMTU)),
 							tc.CompileWithEntrypointName(secName),
 							tc.CompileWithFlags(flags),
-							// FIXME CompileWithHostIP
-							tc.CompileWithHostIP(net.IP{1, 2, 3, 4}),
+							// Special values that we patch when loading the binary.
+							tc.CompileWithLogPrefix("CALICOLO"),
+							tc.CompileWithHostIP(net.IP("HOST")),
 						}
 
 						wg.Add(1)
