@@ -288,6 +288,7 @@ github.com/projectcalico/felix v0.0.0-20200110210357-9eabe46c304f h1:GAwfGgpjthZ
 github.com/projectcalico/felix v0.0.0-20200110210357-9eabe46c304f/go.mod h1:Hg9uKYH8AOVj7rEBGYqHxFGVN3hiB2fOHO33DwcBqvk=
 github.com/projectcalico/felix v0.0.0-20200113180022-ac85ca1a39e1 h1:p6Ez0ohO8rabOmKQbEwwaJ67R+MkAHTEuxB4QV608Vs=
 github.com/projectcalico/felix v0.0.0-20200113180022-ac85ca1a39e1/go.mod h1:rn6Mp47ljZaGKyE9soCFiCz1EuwtRkn8mY8SOUMIQSQ=
+github.com/projectcalico/felix v0.0.0-20200116081457-49ac9a8e4de7/go.mod h1:44pDaQY+kat81J5fzdCZgYfwjCZhK11qnCSpSYVvvPM=
 github.com/projectcalico/felix v3.8.5+incompatible h1:3pIWByco82Zs6Xr3WQ2VoT10bPVXPROVuUAtjcdOwUo=
 github.com/projectcalico/felix v3.8.6+incompatible h1:pZPAd/adDebsXOsWvVlVrGbtohIAbEtoj74+aVEDGnA=
 github.com/projectcalico/go-json v0.0.0-20161128004156-6219dc7339ba h1:aaF2byUCZhzszHsfPEr2M3qcU4ibtD/yk/il2R7T1PU=
