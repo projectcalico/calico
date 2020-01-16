@@ -321,7 +321,7 @@ func (rg *routeGenerator) getAllRoutesForService(svc *v1.Service) []string {
 		}
 	}
 
-	return addSuffix(routes, "/32")
+	return addFullIPLength(routes)
 }
 
 // getAdvertisedRoutes returns the routes that are currently advertised and
@@ -392,11 +392,15 @@ func (rg *routeGenerator) isAllowedExternalIP(externalIP string) bool {
 
 }
 
-// addSuffix returns a new slice, with the suffix appended onto every item.
-func addSuffix(items []string, suffix string) []string {
+// addFullIPLength returns a new slice, with the full IP length appended onto every item.
+func addFullIPLength(items []string) []string {
 	res := make([]string, 0)
 	for _, item := range items {
-		res = append(res, item+suffix)
+		if strings.Contains(item, ":") {
+			res = append(res, item+"/128")
+		} else {
+			res = append(res, item+"/32")
+		}
 	}
 	return res
 }
