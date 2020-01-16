@@ -20,7 +20,7 @@ filter calico_export_to_bgp_peers {
 }
 
 filter calico_kernel_programming {
-{{- $reject_key := "/rejectcidrs"}}
+{{- $reject_key := "/rejectcidrsv6"}}
 {{- if ls $reject_key}}
 
   # Don't program static routes into kernel.
