@@ -104,7 +104,7 @@ type Config struct {
 
 	// FIXME: add these to libcalico-go and remove "local"
 	BPFEnabled                         bool           `config:"bool;false;local"`
-	BPFLogLevel                        string         `config:"oneof(off,info,debug);off;local"`
+	BPFLogLevel                        string         `config:"oneof(off,info,debug);off;non-zero,local"`
 	BPFDataIfacePattern                *regexp.Regexp `config:"regexp;^(en.*|eth.*|tunl0$);local"`
 	BPFCgroupV2                        string         `config:"string;;local"`
 	BPFConnectTimeLoadBalancingEnabled bool           `config:"bool;true;local"`

@@ -121,10 +121,11 @@ func InstallConnectTimeLoadBalancer(frontendMap, backendMap, rtMap bpf.Map, cgro
 }
 
 func ProgFileName(logLevel string) string {
+	logLevel = strings.ToLower(logLevel)
 	if logLevel == "off" {
-		logLevel = "nologs"
+		logLevel = "no_log"
 	}
-	return fmt.Sprintf("connect_time_%s.o", strings.ToLower(logLevel))
+	return fmt.Sprintf("connect_time_%s.o", logLevel)
 }
 
 func CompileConnectTimeLoadBalancer(logLevel string, outFile string) error {

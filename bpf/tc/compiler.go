@@ -324,8 +324,9 @@ func ProgFilename(epType EndpointType, toOrFrom ToOrFromEp, epToHostDrop bool, f
 	if fibEnabled {
 		fibPart = "fib_"
 	}
+	logLevel = strings.ToLower(logLevel)
 	if logLevel == "off" {
-		logLevel = "nologs"
+		logLevel = "no_log"
 	}
 	var epTypeShort string
 	switch epType {
@@ -335,10 +336,6 @@ func ProgFilename(epType EndpointType, toOrFrom ToOrFromEp, epToHostDrop bool, f
 		epTypeShort = "hep"
 	case EpTypeTunnel:
 		epTypeShort = "tnl"
-	}
-	logLevel = strings.ToLower(logLevel)
-	if logLevel == "off" {
-		logLevel = "no_log"
 	}
 	oFileName := fmt.Sprintf("%v_%v_%s%s%v.o", toOrFrom, epTypeShort, hostDropPart, fibPart, logLevel)
 	return oFileName
