@@ -102,7 +102,7 @@ To deploy a cluster suitable for production, refer to [Installation](installatio
 1. Confirm that all of the pods are running with the following command.
 
    ```
-   watch kubectl get pods --all-namespaces
+   kubectl get pods --all-namespaces --watch
    ```
 
    Wait until each pod has the `STATUS` of `Running`.
