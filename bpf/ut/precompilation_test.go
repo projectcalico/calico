@@ -67,7 +67,6 @@ func TestPrecompiledBinariesAreLoadable(t *testing.T) {
 						prog := tc.ProgFilename(epType, toOrFrom, epToHostDrop, fibEnabled, logLevel)
 
 						t.Run(prog, func(t *testing.T) {
-
 							RegisterTestingT(t)
 							logCxt.Debugf("Testing %v in %v", secName, prog)
 

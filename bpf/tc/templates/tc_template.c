@@ -150,29 +150,25 @@ static CALI_BPF_INLINE bool skb_too_short(struct __sk_buff *skb)
 	// TODO Deal with IP header with options.
 }
 
-static CALI_BPF_INLINE struct iphdr *skb_iphdr(struct __sk_buff *skb)
+static CALI_BPF_INLINE long skb_iphdr_offset(struct __sk_buff *skb)
 {
-	struct ethhdr *eth;
-	struct iphdr *ip = NULL;
-
 	if (CALI_F_IPIP_ENCAPPED) {
 		// Ingress on an IPIP tunnel: skb is [ether|outer IP|inner IP|payload]
-		struct iphdr *ipip;
-		eth = (void *)(long)skb->data;
-		ipip = (void *)(eth + 1);
-		ip = ipip + 1;
-		CALI_DEBUG("IPIP; inner s=%x d=%x\n", be32_to_host(ip->saddr), be32_to_host(ip->daddr));
+		return sizeof(struct ethhdr) + sizeof(struct iphdr);
 	} else if (CALI_F_L3) {
 		// Egress on an IPIP tunnel: skb is [inner IP|payload]
-		ip = (void *)(long)skb->data;
-		CALI_DEBUG("IP; (L3) s=%x d=%x\n", be32_to_host(ip->saddr), be32_to_host(ip->daddr));
+		return 0;
 	} else {
 		// Normal L2 interface: skb is [ether|IP|payload]
-		eth = (void *)(long)skb->data;
-		ip = (void *)(eth + 1);
-		CALI_DEBUG("IP; s=%x d=%x\n", be32_to_host(ip->saddr), be32_to_host(ip->daddr));
+		return sizeof(struct ethhdr);
 	}
-	// TODO Deal with IP header with options.
+}
+
+static CALI_BPF_INLINE struct iphdr *skb_iphdr(struct __sk_buff *skb)
+{
+	long offset = skb_iphdr_offset(skb);
+	struct iphdr *ip = (void *)((long)(skb->data) + offset);
+	CALI_DEBUG("IP@%d; s=%x d=%x\n", offset, be32_to_host(ip->saddr), be32_to_host(ip->daddr));
 	return ip;
 }
 
@@ -261,7 +257,7 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb) {
 			__be32 ip_src = ip_header->saddr;
 			/* XXX do a proper CT lookup to find this */
 			ip_header->saddr = CALI_HOST_IP;
-			int ip_csum_offset = skb_offset(skb, ip_header) +  offsetof(struct iphdr, check);
+			int ip_csum_offset = skb_iphdr_offset(skb) + offsetof(struct iphdr, check);
 
 			int res = bpf_l3_csum_replace(skb, ip_csum_offset, ip_src, CALI_HOST_IP, 4);
 			if (res) {
