@@ -19,13 +19,8 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
-	"math/rand"
 	"net"
-	"os"
 	"os/exec"
-	"path"
-	"path/filepath"
 	"regexp"
 	"strings"
 	"sync"
@@ -489,22 +484,13 @@ func (m *bpfEndpointManager) applyPolicy(wlID proto.WorkloadEndpointID) error {
 	return nil
 }
 
-// EnsureQdisc makes sure that qdisc is attached to the given interface
-func EnsureQdisc(ifaceName string) {
-	// FIXME Avoid flapping the tc program and qdisc
-	cmd := exec.Command("tc", "qdisc", "del", "dev", ifaceName, "clsact")
-	_ = cmd.Run()
-	cmd = exec.Command("tc", "qdisc", "add", "dev", ifaceName, "clsact")
-	_ = cmd.Run()
-}
-
 func (m *bpfEndpointManager) ensureQdisc(ifaceName string) {
-	EnsureQdisc(ifaceName)
+	tc.EnsureQdisc(ifaceName)
 }
 
 func (m *bpfEndpointManager) attachWorkloadProgram(endpoint *proto.WorkloadEndpoint, polDirection PolDirection) error {
 	ap := m.calculateTCAttachPoint(tc.EpTypeWorkload, polDirection, endpoint.Name)
-	err := AttachTCProgram(ap, nil)
+	err := tc.AttachTCProgram(ap, nil)
 	if err != nil {
 		return err
 	}
@@ -541,7 +527,7 @@ func (m *bpfEndpointManager) attachWorkloadProgram(endpoint *proto.WorkloadEndpo
 	return nil
 }
 
-func FindJumpMap(ap AttachPoint) (bpf.MapFD, error) {
+func FindJumpMap(ap tc.AttachPoint) (bpf.MapFD, error) {
 	tcCmd := exec.Command("tc", "filter", "show", "dev", ap.Iface, string(ap.Hook))
 	out, err := tcCmd.Output()
 	if err != nil {
@@ -603,7 +589,7 @@ func (m *bpfEndpointManager) attachDataIfaceProgram(ifaceName string, polDirecti
 	if len(iface.addrs) > 0 {
 		addr = iface.addrs[0]
 	}
-	return AttachTCProgram(ap, addr)
+	return tc.AttachTCProgram(ap, addr)
 }
 
 // PolDirection is the Calico datamodel direction of policy.  On a host endpoint, ingress is towards the host.
@@ -615,8 +601,8 @@ const (
 	PolDirnEgress  PolDirection = "egress"
 )
 
-func (m *bpfEndpointManager) calculateTCAttachPoint(endpointType tc.EndpointType, policyDirection PolDirection, ifaceName string) AttachPoint {
-	var ap AttachPoint
+func (m *bpfEndpointManager) calculateTCAttachPoint(endpointType tc.EndpointType, policyDirection PolDirection, ifaceName string) tc.AttachPoint {
+	var ap tc.AttachPoint
 
 	if endpointType == tc.EpTypeWorkload {
 		// Policy direction is relative to the workload so, from the host namespace it's flipped.
@@ -683,139 +669,4 @@ func (m *bpfEndpointManager) extractRules(tiers2 []*proto.TierInfo, profileNames
 	}
 	allRules = append(allRules, profs)
 	return allRules
-}
-
-type AttachPoint struct {
-	Section  string
-	Hook     tc.Hook
-	Iface    string
-	Filename string
-}
-
-var tcLock sync.Mutex
-
-// AttachTCProgram attaches a BPF program from a file to the TC attach point
-func AttachTCProgram(attachPoint AttachPoint, hostIP net.IP) error {
-	// When tc is pinning maps, it is vulnerable to lost updates. Serialise tc calls.
-	tcLock.Lock()
-	defer tcLock.Unlock()
-
-	// Work around tc map name collision: when we load two identical BPF programs onto different interfaces, tc
-	// pins object-local maps to a namespace based on the hash of the BPF program, which is the same for both
-	// interfaces.  Since we want one map per interface instead, we search for such maps and rename them before we
-	// release the tc lock.
-	//
-	// For our purposes, it should work to simply delete the map.  However, when we tried that, the contents of the
-	// map get deleted even though it is in use by a BPF program.
-	defer repinJumpMaps()
-
-	tempDir, err := ioutil.TempDir("", "calico-tc")
-	if err != nil {
-		return errors.Wrap(err, "failed to create temporary directory")
-	}
-	defer func() {
-		_ = os.RemoveAll(tempDir)
-	}()
-
-	preCompiledBinary := path.Join("/code/bpf/bin", attachPoint.Filename)
-	tempBinary := path.Join(tempDir, attachPoint.Filename)
-
-	exeData, err := ioutil.ReadFile(preCompiledBinary)
-	if err != nil {
-		return errors.Wrap(err, "failed to read pre-compiled BPF binary")
-	}
-
-	hostIP = hostIP.To4()
-	if len(hostIP) == 4 {
-		log.WithField("ip", hostIP).Debug("Patching in host IP")
-		replacement := make([]byte, 6)
-		copy(replacement[2:], hostIP)
-		exeData = bytes.ReplaceAll(exeData, []byte("\x00\x00HOST"), replacement)
-	}
-
-	// Patch in the log prefix; since this gets loaded as immediate values by the compiler, we know it'll be
-	// preceded by a 2-byte 0 offset so we include that in the match.
-	iface := []byte(attachPoint.Iface  + "--------") // Pad on the right to make sure its long enough.
-	logBytes := make([]byte, 6)
-	copy(logBytes[2:], iface)
-	exeData = bytes.ReplaceAll(exeData, []byte("\x00\x00CALI"), logBytes)
-	copy(logBytes[2:], iface[4:8])
-	exeData = bytes.ReplaceAll(exeData, []byte("\x00\x00COLO"), logBytes)
-
-	err = ioutil.WriteFile(tempBinary, exeData, 0600)
-	if err != nil {
-		return errors.Wrap(err, "failed to write patched BPF binary")
-	}
-
-	tcCmd := exec.Command("tc",
-		"filter", "add", "dev", attachPoint.Iface,
-		string(attachPoint.Hook),
-		"bpf", "da", "obj", tempBinary,
-		"sec", attachPoint.Section)
-
-	out, err := tcCmd.CombinedOutput()
-	if err != nil {
-		if bytes.Contains(out, []byte("Cannot find device")) {
-			// Avoid a big, spammy log when the issue is that the interface isn't present.
-			log.WithField("iface", attachPoint.Iface).Warn(
-				"Failed to attach BPF program; interface not found.  Will retry if it show up.")
-			return nil
-		}
-		log.WithError(err).WithFields(log.Fields{"out": string(out)}).
-			WithField("command", tcCmd).Error("Failed to attach BPF program")
-	}
-
-	return err
-}
-
-func repinJumpMaps() {
-	func() {
-		// Find the maps we care about by walking the BPF filesystem.
-		err := filepath.Walk("/sys/fs/bpf/tc", func(path string, info os.FileInfo, err error) error {
-			if err != nil {
-				log.WithError(err).Panic("Failed to walk BPF filesystem")
-				return err
-			}
-			if info.Name() == "cali_jump" {
-				log.WithField("path", path).Debug("Queueing deletion of map")
-
-				out, err := exec.Command("bpftool", "map", "dump", "pinned", path).Output()
-				if err != nil {
-					log.WithError(err).Panic("Failed to dump map")
-				}
-				log.WithField("dump", string(out)).Info("Map dump before deletion")
-
-				out, err = exec.Command("bpftool", "map", "show", "pinned", path).Output()
-				if err != nil {
-					log.WithError(err).Panic("Failed to show map")
-				}
-				log.WithField("dump", string(out)).Info("Map show before deletion")
-				id := string(bytes.Split(out, []byte(":"))[0])
-
-				// TODO: make a path based on the name of the interface and the hook so we can look it up later.
-				newPath := path + fmt.Sprint(rand.Uint32())
-				out, err = exec.Command("bpftool", "map", "pin", "id", id, newPath).Output()
-				if err != nil {
-					log.WithError(err).Panic("Failed to repin map")
-				}
-				log.WithField("dump", string(out)).Debug("Repin output")
-
-				err = os.Remove(path)
-				if err != nil {
-					log.WithError(err).Panic("Failed to remove old map pin")
-				}
-
-				out, err = exec.Command("bpftool", "map", "dump", "pinned", newPath).Output()
-				if err != nil {
-					log.WithError(err).Panic("Failed to show map")
-				}
-				log.WithField("dump", string(out)).Info("Map show after repin")
-			}
-			return nil
-		})
-		if err != nil {
-			log.WithError(err).Panic("Failed to walk BPF filesystem")
-		}
-		log.Debug("Finished moving map pins that we don't need.")
-	}()
 }

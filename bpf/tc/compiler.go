@@ -316,6 +316,17 @@ func CompileProgramToFile(allRules [][][]*proto.Rule, ipSetIDAlloc *idalloc.IDAl
 }
 
 func ProgFilename(epType EndpointType, toOrFrom ToOrFromEp, epToHostDrop bool, fibEnabled bool, logLevel string) string {
+	if epToHostDrop && (epType != EpTypeWorkload || toOrFrom == ToEp) {
+		// epToHostDrop only makes sense in the from-workload program.
+		logrus.Debug("Ignoring epToHostDrop, doesn't apply to this target")
+		epToHostDrop = false
+	}
+	if fibEnabled && (toOrFrom != FromEp) {
+		// FIB lookup only makes sense for traffic towards the host.
+		logrus.Debug("Ignoring fibEnabled, doesn't apply to this target")
+		fibEnabled = false
+	}
+
 	var hostDropPart string
 	if epType == EpTypeWorkload && epToHostDrop {
 		hostDropPart = "host_drop_"

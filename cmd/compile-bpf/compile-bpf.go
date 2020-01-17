@@ -64,17 +64,29 @@ func main() {
 	for _, logLevel := range []string{"OFF", "INFO", "DEBUG"} {
 		logLevel := logLevel
 		// Compile the TC endpoint programs.
+		logCxt := log.WithField("logLevel", logLevel)
 		for _, epToHostDrop := range []bool{false, true} {
 			epToHostDrop := epToHostDrop
+			logCxt = logCxt.WithField("epToHostDrop", epToHostDrop)
 			for _, fibEnabled := range []bool{false, true} {
 				fibEnabled := fibEnabled
+				logCxt = logCxt.WithField("fibEnabled", fibEnabled)
 				for _, epType := range []tc.EndpointType{tc.EpTypeWorkload, tc.EpTypeHost, tc.EpTypeTunnel} {
 					epType := epType
+					logCxt = logCxt.WithField("epType", epType)
 					if epToHostDrop && epType != tc.EpTypeWorkload {
+						log.Debug("Skipping combination since epToHostDrop only affect workloads")
 						continue
 					}
 					for _, toOrFrom := range []tc.ToOrFromEp{tc.FromEp, tc.ToEp} {
 						toOrFrom := toOrFrom
+
+						logCxt = logCxt.WithField("toOrFrom", toOrFrom)
+						if toOrFrom == tc.ToEp && (fibEnabled || epToHostDrop) {
+							log.Debug("Skipping combination since fibEnabled/epToHostDrop only affect from targets")
+							continue
+						}
+
 						secName := tc.SectionName(epType, toOrFrom)
 						flags := tc.SectionToFlags(secName)
 
