@@ -8,6 +8,7 @@ _site
 .vagrant
 .jekyll-metadata
 .releasedata
+nosetests.xml
 Gemfile.lock
 _output/
 bin
