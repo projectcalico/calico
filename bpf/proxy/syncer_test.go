@@ -440,7 +440,7 @@ var _ = Describe("BPF Syncer", func() {
 			Expect(eps.m).To(HaveLen(0))
 		}))
 
-		By("inserting only non-local ep for a NodePort - no route", makestep(func() {
+		By("inserting only non-local eps for a NodePort - no route", makestep(func() {
 			// use the meta node IP for nodeports as well
 			s, _ = proxy.NewSyncer(append(nodeIPs, net.IPv4(255, 255, 255, 255)), svcs, eps, rt)
 			state.SvcMap[svcKey2] = &k8sp.BaseServiceInfo{
@@ -453,30 +453,21 @@ var _ = Describe("BPF Syncer", func() {
 
 			state.EpsMap[svcKey2] = []k8sp.Endpoint{
 				&k8sp.BaseEndpointInfo{Endpoint: "10.2.1.1:2222"},
+				&k8sp.BaseEndpointInfo{Endpoint: "10.2.3.1:2222"},
 			}
 
 			err := s.Apply(state)
 			Expect(err).NotTo(HaveOccurred())
 
 			Expect(svcs.m).To(HaveLen(3))
-			Expect(eps.m).To(HaveLen(1))
+			Expect(eps.m).To(HaveLen(2))
+			k := nat.NewNATKey(net.IPv4(10, 123, 0, 111), 4444, proxy.ProtoV1ToIntPanic(v1.ProtocolTCP))
+			Expect(svcs.m).NotTo(HaveKey(k))
+			k = nat.NewNATKey(net.IPv4(10, 123, 0, 113), 4444, proxy.ProtoV1ToIntPanic(v1.ProtocolTCP))
+			Expect(svcs.m).NotTo(HaveKey(k))
 		}))
 
-		By("inserting only non-local ep for a NodePort - with route", makestep(func() {
-			// use the meta node IP for nodeports as well
-			s, _ = proxy.NewSyncer(append(nodeIPs, net.IPv4(255, 255, 255, 255)), svcs, eps, rt)
-			state.SvcMap[svcKey2] = &k8sp.BaseServiceInfo{
-				ClusterIP:              net.IPv4(10, 0, 0, 2),
-				Port:                   2222,
-				NodePort:               4444,
-				Protocol:               v1.ProtocolTCP,
-				OnlyNodeLocalEndpoints: true,
-			}
-
-			state.EpsMap[svcKey2] = []k8sp.Endpoint{
-				&k8sp.BaseEndpointInfo{Endpoint: "10.2.1.1:2222"},
-			}
-
+		By("adding a route should fix one missing expanded NP", makestep(func() {
 			_ = rt.Update(
 				routes.NewKey(ip.CIDRFromAddrAndPrefix(ip.FromString("10.2.1.0"), 24).(ip.V4CIDR)),
 				routes.NewValueWithNextHop(
@@ -484,11 +475,52 @@ var _ = Describe("BPF Syncer", func() {
 					ip.FromString("10.123.0.111").(ip.V4Addr)),
 			)
 
-			err := s.Apply(state)
-			Expect(err).NotTo(HaveOccurred())
+			Eventually(func() int {
+				svcs.Lock()
+				defer svcs.Unlock()
+				return len(svcs.m)
+			}).Should(Equal(4))
+			k := nat.NewNATKey(net.IPv4(10, 123, 0, 111), 4444, proxy.ProtoV1ToIntPanic(v1.ProtocolTCP))
+			Expect(svcs.m).To(HaveKey(k))
+			Expect(eps.m).To(HaveLen(3))
+		}))
 
+		By("adding an unrelated route does not change anyhing", makestep(func() {
+			_ = rt.Update(
+				routes.NewKey(ip.CIDRFromAddrAndPrefix(ip.FromString("10.2.55.0"), 24).(ip.V4CIDR)),
+				routes.NewValueWithNextHop(
+					routes.TypeRemoteWorkload,
+					ip.FromString("10.123.0.111").(ip.V4Addr)),
+			)
+
+			// XXX we do not have quite a good sync with the fixer in Syncer, we
+			// XXX just do it speculatively and to introduce some fuzzynes. If this
+			// XXX or the next test fails, something is wrong and should be fixed
+			svcs.Lock()
+			defer svcs.Unlock()
 			Expect(svcs.m).To(HaveLen(4))
-			Expect(eps.m).To(HaveLen(2))
+			k := nat.NewNATKey(net.IPv4(10, 123, 0, 111), 4444, proxy.ProtoV1ToIntPanic(v1.ProtocolTCP))
+			Expect(svcs.m).To(HaveKey(k))
+		}))
+
+		By("adding route should fix another missing expanded NP", makestep(func() {
+			_ = rt.Update(
+				routes.NewKey(ip.CIDRFromAddrAndPrefix(ip.FromString("10.2.3.0"), 24).(ip.V4CIDR)),
+				routes.NewValueWithNextHop(
+					routes.TypeRemoteWorkload,
+					ip.FromString("10.123.0.113").(ip.V4Addr)),
+			)
+
+			Eventually(func() int {
+				svcs.Lock()
+				defer svcs.Unlock()
+				return len(svcs.m)
+			}).Should(Equal(5))
+			k := nat.NewNATKey(net.IPv4(10, 123, 0, 111), 4444, proxy.ProtoV1ToIntPanic(v1.ProtocolTCP))
+			Expect(svcs.m).To(HaveKey(k))
+			k = nat.NewNATKey(net.IPv4(10, 123, 0, 113), 4444, proxy.ProtoV1ToIntPanic(v1.ProtocolTCP))
+			Expect(svcs.m).To(HaveKey(k))
+			Expect(eps.m).To(HaveLen(4))
 		}))
 
 		By("inserting only non-local eps for a NodePort - multiple nodes & pods/node", makestep(func() {
@@ -598,7 +630,7 @@ var _ = Describe("BPF Syncer", func() {
 			err := s.Apply(state)
 			Expect(err).NotTo(HaveOccurred())
 
-			Expect(svcs.m).To(HaveLen(4))
+			Expect(svcs.m).To(HaveLen(3))
 
 			val1, ok := svcs.m[nat.NewNATKey(net.IPv4(10, 0, 0, 2), 2222, proxy.ProtoV1ToIntPanic(v1.ProtocolTCP))]
 			Expect(ok).To(BeTrue())
@@ -614,9 +646,8 @@ var _ = Describe("BPF Syncer", func() {
 			Expect(ok).To(BeTrue())
 			Expect(val2).To(Equal(val3))
 
-			val4, ok := svcs.m[nat.NewNATKey(net.IPv4(255, 255, 255, 255), 4444, proxy.ProtoV1ToIntPanic(v1.ProtocolTCP))]
-			Expect(ok).To(BeTrue())
-			Expect(val2).To(Equal(val4))
+			Expect(svcs.m).NotTo(
+				HaveKey(nat.NewNATKey(net.IPv4(255, 255, 255, 255), 4444, proxy.ProtoV1ToIntPanic(v1.ProtocolTCP))))
 
 			Expect(eps.m).To(HaveLen(4))
 

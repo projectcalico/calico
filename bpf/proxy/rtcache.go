@@ -27,6 +27,7 @@ import (
 // Routes is an interface to query routes
 type Routes interface {
 	Lookup(context.Context, ip.Addr) (routes.Value, bool)
+	WaitAfter(ctx context.Context, fn func() bool)
 }
 
 // RTCache is a lookup data structure that allow inserting and deleting routes
@@ -115,4 +116,30 @@ func (rt *RTCache) Lookup(ctx context.Context, addr ip.Addr) (routes.Value, bool
 	default:
 		return routes.Value{}, false
 	}
+}
+
+// WaitAfter executes a function and if it returns false, it blocks until
+// another update or until the provided context is canceled. The function can do
+// only lookups as the state of the cache is read-locked
+func (rt *RTCache) WaitAfter(ctx context.Context, fn func() bool) {
+	ctx, cancel := context.WithCancel(ctx)
+
+	exit := false
+
+	go func() {
+		// Wait until the ctx is either canceled from outside or by fn completing
+		<-ctx.Done()
+		// Take the lock to sync with fn deciding to Wait
+		rt.v4.Lock()
+		exit = true
+		rt.v4.Unlock()
+		rt.cond4.Broadcast()
+	}()
+
+	rt.v4.RLock()
+	if !fn() && !exit {
+		rt.cond4.Wait()
+	}
+	rt.v4.RUnlock()
+	cancel()
 }

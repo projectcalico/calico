@@ -58,6 +58,7 @@ type DPSyncerState struct {
 // observed changes to the dataplane
 type DPSyncer interface {
 	Apply(state DPSyncerState) error
+	Stop()
 }
 
 type proxy struct {
@@ -177,6 +178,7 @@ func New(k8s kubernetes.Interface, dp DPSyncer, hostname string, opts ...Option)
 
 func (p *proxy) Stop() {
 	p.stopOnce.Do(func() {
+		p.dpSyncer.Stop()
 		close(p.stopCh)
 		p.stopWg.Wait()
 	})
