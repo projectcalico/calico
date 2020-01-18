@@ -245,6 +245,7 @@ github.com/projectcalico/libcalico-go v0.0.0-20200107000057-b5581766b59c h1:Qyy5
 github.com/projectcalico/libcalico-go v0.0.0-20200107000057-b5581766b59c/go.mod h1:yd3FK67e+YeaYtKw5ImPw+YFyFF/G0ZCzbbwNAwwZh8=
 github.com/projectcalico/libcalico-go v0.0.0-20200108185403-403996d814c2 h1:DON19MsdHqK1S5gRsEDBeMMcvTPPih7qFM2NQ8Fmzrs=
 github.com/projectcalico/libcalico-go v0.0.0-20200108185403-403996d814c2/go.mod h1:yd3FK67e+YeaYtKw5ImPw+YFyFF/G0ZCzbbwNAwwZh8=
+github.com/projectcalico/libcalico-go v0.0.0-20200111004125-f4cc1f8914f8 h1:aEJz4lXaqx7VtJfuafiIiKSA+pnGfGpL4O27NwBiveQ=
 github.com/projectcalico/libcalico-go v0.0.0-20200111004125-f4cc1f8914f8/go.mod h1:yd3FK67e+YeaYtKw5ImPw+YFyFF/G0ZCzbbwNAwwZh8=
 github.com/projectcalico/libcalico-go v1.7.2-0.20191223190708-a8685eb0c236 h1:WMih5vgSeniDIJEK8OqLBzeHL9SxsjCB19n5wvqwyI4=
 github.com/projectcalico/libcalico-go v1.7.2-0.20191223190708-a8685eb0c236/go.mod h1:NNmyn1a8HfuxFmi0yh2uVPcPeIuWreNlpLpxPqGuBp0=
@@ -264,6 +265,8 @@ github.com/projectcalico/typha v0.0.0-20200108194520-4b85e80f2715 h1:XHG3NZYJAUs
 github.com/projectcalico/typha v0.0.0-20200108194520-4b85e80f2715/go.mod h1:yXlJIhuVgI7T0bkDf8+HetoEt7is5Aua8BqxQxvYM1U=
 github.com/projectcalico/typha v0.0.0-20200111041037-44a9af09e6bf h1:ns7O6nLlAhRim8FVKAnJiMF91FRupTQ54MO625UGmF8=
 github.com/projectcalico/typha v0.0.0-20200111041037-44a9af09e6bf/go.mod h1:+17iQ6LhzGJMXOnK2xIh67rDEjmwNId97Hnbsb5jIDU=
+github.com/projectcalico/typha v0.0.0-20200118064346-db9625b360f6 h1:zAEYBmsLrs5L7iF+5m0l999G1U37ofKBM/tFRjPS9Uo=
+github.com/projectcalico/typha v0.0.0-20200118064346-db9625b360f6/go.mod h1:+17iQ6LhzGJMXOnK2xIh67rDEjmwNId97Hnbsb5jIDU=
 github.com/projectcalico/typha v0.7.3-0.20200102040858-c4a0227be6b1 h1:WW7O4wkeJ9rrudmJeCLdESbGXfKbRx4FcuU5cBBZf9Q=
 github.com/projectcalico/typha v0.7.3-0.20200102040858-c4a0227be6b1/go.mod h1:yi/DIhNxU8A/BVNeSX5vrMguphaxT8gTeMNqGXaDhp4=
 github.com/projectcalico/typha v3.8.5+incompatible h1:Kb5J6B2KWQj/zm8M4zH/gL4lO3sKpE/aIwGpZpCfWmI=
