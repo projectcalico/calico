@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2017,2020 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -139,7 +139,7 @@ type Config struct {
 	ConnectionRebalancingMode  string        `config:"oneof(none,kubernetes);none"`
 	ConnectionDropIntervalSecs time.Duration `config:"seconds;1"`
 	MaxConnectionsUpperLimit   int           `config:"int(1,);10000"`
-	MaxConnectionsLowerLimit   int           `config:"int(1,);100"`
+	MaxConnectionsLowerLimit   int           `config:"int(1,);200"`
 	K8sServicePollIntervalSecs time.Duration `config:"seconds;30"`
 	K8sNamespace               string        `config:"string;kube-system"`
 	K8sServiceName             string        `config:"string;calico-typha"`

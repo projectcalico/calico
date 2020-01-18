@@ -1,4 +1,4 @@
-// Copyright (c) 2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017,2020 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -41,7 +41,7 @@ var _ = DescribeTable("CalculateMaxConnLimit tests",
 	},
 	Entry("Single Typha", 1, 10, 101, "lone typha"),
 	Entry("Lower limit", 10, 10, 11, "configured lower limit"),
-	Entry("Fraction", 10, 500, 67, "fraction+20%"),
+	Entry("Fraction", 10, 500, 101, "configured upper limit"),
 	Entry("Upper limit", 2, 500, 101, "configured upper limit"),
 )
 
@@ -80,34 +80,34 @@ var _ = Describe("Poll loop tests", func() {
 	It("should emit on first tick", func() {
 		tickerC <- time.Now()
 		cancelFn()
-		Eventually(server.MaxConns).Should(Equal([]int{31}))
+		Eventually(server.MaxConns).Should(Equal([]int{62}))
 	})
 	It("should squash dupes", func() {
 		tickerC <- time.Now()
 		tickerC <- time.Now()
 		tickerC <- time.Now()
-		Eventually(server.MaxConns).Should(Equal([]int{31}))
+		Eventually(server.MaxConns).Should(Equal([]int{62}))
 	})
 	It("should responds to changes", func() {
 		tickerC <- time.Now()
-		Eventually(server.MaxConns).Should(Equal([]int{31}))
+		Eventually(server.MaxConns).Should(Equal([]int{62}))
 		k8sAPI.numNodes = 200
 		tickerC <- time.Now()
-		Eventually(server.MaxConns).Should(Equal([]int{31, 61}))
+		Eventually(server.MaxConns).Should(Equal([]int{62, 101}))
 	})
 	It("should increase limit to maximum on GetNumTyphas error", func() {
 		tickerC <- time.Now()
-		Eventually(server.MaxConns).Should(Equal([]int{31}))
+		Eventually(server.MaxConns).Should(Equal([]int{62}))
 		k8sAPI.numTyphasErr = errors.New("bad typha!")
 		tickerC <- time.Now()
-		Eventually(server.MaxConns).Should(Equal([]int{31, 101}))
+		Eventually(server.MaxConns).Should(Equal([]int{62, 101}))
 	})
 	It("should increase limit to maximum on GetNumNodes error", func() {
 		tickerC <- time.Now()
-		Eventually(server.MaxConns).Should(Equal([]int{31}))
+		Eventually(server.MaxConns).Should(Equal([]int{62}))
 		k8sAPI.numNodesErr = errors.New("bad nodes!")
 		tickerC <- time.Now()
-		Eventually(server.MaxConns).Should(Equal([]int{31, 101}))
+		Eventually(server.MaxConns).Should(Equal([]int{62, 101}))
 	})
 })
 
