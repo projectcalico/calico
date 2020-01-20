@@ -464,7 +464,7 @@ image-all: $(addprefix sub-image-,$(VALIDARCHES))
 sub-image-%:
 	$(MAKE) image ARCH=$*
 
-bin/compile-bpf: go.mod $(shell find cmd/compile-bpf bpf/nat bpf/tc config logutils proto -type f -name '*.go' -print | grep -v '_test\.go' )
+bin/compile-bpf: $(GENERATED_FILES) go.mod $(shell find cmd/compile-bpf bpf/nat bpf/tc config logutils proto -type f -name '*.go' -print | grep -v '_test\.go' )
 	$(DOCKER_RUN) $(CALICO_BUILD_CGO) go build -o $@ ./cmd/compile-bpf
 
 bin/bpf-progs.inc: bin/compile-bpf
