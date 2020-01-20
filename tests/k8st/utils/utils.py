@@ -95,7 +95,15 @@ def start_external_node_with_bgp(name, bird_peer_config=None, bird6_peer_config=
         birdy_ip = "2001:20::20"
         run("docker exec %s sysctl -w net.ipv6.conf.all.disable_ipv6=0" % name)
         run("docker exec %s sysctl -w net.ipv6.conf.all.forwarding=1" % name)
-        run("docker exec %s sysctl -w net.ipv6.fib_multipath_hash_policy=1" % name)
+
+        # Try to set net.ipv6.fib_multipath_hash_policy to get IPv6
+        # ECMP load balancing by 5-tuple, but allow it to fail as
+        # older kernels (e.g. Semaphore v2) don't have that setting.
+        # It doesn't actually matter as we aren't currently testing
+        # IPv6 ECMP behaviour in detail.
+        run("docker exec %s sysctl -w net.ipv6.fib_multipath_hash_policy=1" % name,
+            allow_fail=True)
+
         run("docker exec %s ip -6 a a %s/64 dev eth0" % (name, birdy_ip))
         with open('peers.conf', 'w') as peerconfig:
             peerconfig.write(bird6_peer_config.replace("ip@local", birdy_ip))
