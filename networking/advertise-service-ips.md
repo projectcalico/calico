@@ -63,7 +63,7 @@ If your {{site.prodname}} deployment is configured to peer with BGP routers outs
 
 1. Determine the service cluster IP range.  (Or ranges, if your cluster is [dual stack]({{ site.baseurl }}/networking/dual-stack).)
 
-   Default: 10.0.0.0/24. The range(s) for your cluster can be inferred from the `--service-cluster-ip-range` option passed to the Kubernetes API server. For help, see the [Kubernetes API server reference guide](https://kubernetes.io/docs/reference/command-line-tools-reference/kube-apiserver/).
+   The range(s) for your cluster can be inferred from the `--service-cluster-ip-range` option passed to the Kubernetes API server. For help, see the [Kubernetes API server reference guide](https://kubernetes.io/docs/reference/command-line-tools-reference/kube-apiserver/).
 
 1. Check to see if you have a default BGPConfiguration.
 
@@ -74,7 +74,7 @@ If your {{site.prodname}} deployment is configured to peer with BGP routers outs
 1. Based on above results, update or create a BGPConfiguration.
 
    **Update default BGPConfiguration**
-   Patch the BGPConfiguration using the following command, using your own service cluster IP CIDR:
+   Patch the BGPConfiguration using the following command, using your own service cluster IP CIDR in place of "10.0.0.0/24":
 
    ```
    calicoctl patch BGPConfig default --patch \
