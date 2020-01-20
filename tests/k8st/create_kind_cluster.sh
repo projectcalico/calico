@@ -151,7 +151,7 @@ ${kubectl} get svc
 # Run ipv4 ipv6 connection test
 function test_connection() {
   local svc="webserver-ipv$1"
-  output=$(${kubectl} exec client -- wget $svc -T 1 -O -)
+  output=$(${kubectl} exec client -- wget $svc -T 5 -O -)
   echo $output
   if [[ $output != *test-webserver* ]]; then
     echo "connection to $svc service failed"
