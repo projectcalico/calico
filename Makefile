@@ -46,7 +46,7 @@ BUILD_IMAGE?=calico/node
 RELEASE_IMAGES?=gcr.io/projectcalico-org/node eu.gcr.io/projectcalico-org/node asia.gcr.io/projectcalico-org/node us.gcr.io/projectcalico-org/node
 
 # Versions and location of dependencies used in the build.
-BIRD_VERSION=v0.3.3-147-g1c33c691
+BIRD_VERSION=v0.3.3-151-g767b5389
 BIRD_IMAGE ?= calico/bird:$(BIRD_VERSION)-$(ARCH)
 
 # Versions and locations of dependencies used in tests.
@@ -307,6 +307,7 @@ kind-k8st-run-test: calico_test.created
 	    -v /var/run/docker.sock:/var/run/docker.sock \
 	    -v ${HOME}/.kube/kind-config-kind:/root/.kube/config \
 	    -v $(CURDIR)/kubectl:/bin/kubectl \
+	    -e ROUTER_IMAGE=$(BIRD_IMAGE) \
 	    --privileged \
 	    --net host \
 	${TEST_CONTAINER_NAME} \
