@@ -50,9 +50,11 @@ func (e ErrAttachFailed) Error() string {
 	return fmt.Sprintf("tc failed with exit code %d; stderr=%v", e.ExitCode, e.Stderr)
 }
 
-// AttachTCProgram attaches a BPF program from a file to the TC attach point
-func AttachTCProgram(attachPoint AttachPoint, hostIP net.IP) error {
-	// When tc is pinning maps, it is vulnerable to lost updates. Serialise tc calls.
+// AttachProgram attaches a BPF program from a file to the TC attach point
+func AttachProgram(attachPoint AttachPoint, hostIP net.IP) error {
+	// FIXME we use this lock so that two copies of tc running in parallel don't re-use the same jump map.
+	// This can happen if tc incorrectly decides the two programs are identical (when if fact they differ by attach
+	// point).
 	tcLock.Lock()
 	defer tcLock.Unlock()
 

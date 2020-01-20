@@ -75,7 +75,7 @@ func TestPrecompiledBinariesAreLoadable(t *testing.T) {
 
 							tc.EnsureQdisc(vethName)
 							ap := tc.AttachPoint{Section: secName, Hook: tc.HookIngress, Iface: vethName, Filename: prog}
-							err := tc.AttachTCProgram(ap, net.ParseIP("10.0.0.1"))
+							err := tc.AttachProgram(ap, net.ParseIP("10.0.0.1"))
 							Expect(err).NotTo(HaveOccurred())
 						})
 					}
