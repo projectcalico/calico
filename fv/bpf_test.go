@@ -858,8 +858,8 @@ func describeBPFTests(testOpts bpfTestOptions) bool {
 								}
 
 								cc.ExpectNone(externalClient, workload.IP(felixes[1].IP), npPort)
-								// Include a check that goes via the local nodeport to make sure the dataplane has converged.
-								cc.ExpectSome(w[0][1], workload.IP(felixes[0].IP), npPort)
+								// Include a check that goes via the nodeport with a local backing pod to make sure the dataplane has converged.
+								cc.ExpectSome(externalClient, workload.IP(felixes[0].IP), npPort)
 								cc.CheckConnectivity()
 							})
 						} else {
