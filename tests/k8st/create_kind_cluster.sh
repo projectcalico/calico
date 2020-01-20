@@ -128,6 +128,7 @@ while ! time ${kubectl} wait pod -l k8s-app=calico-node --for=condition=Ready -n
     sleep 5
 done
 time ${kubectl} wait pod -l k8s-app=calico-kube-controllers --for=condition=Ready -n kube-system --timeout=300s
+time ${kubectl} wait pod -l k8s-app=kube-dns --for=condition=Ready -n kube-system --timeout=300s
 echo "Calico is running."
 echo
 
