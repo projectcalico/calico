@@ -1,4 +1,4 @@
-# Copyright (c) 2018 Tigera, Inc. All rights reserved.
+# Copyright (c) 2020 Tigera, Inc. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -101,10 +101,11 @@ class TestBGPAdvertV6(TestBaseV6):
         self.ns = "bgp-test"
         self.create_namespace(self.ns)
 
-        self.nodes, self.ip4s, self.ips = node_info()
+        self.nodes, self.ipv4s, self.ipv6s = node_info()
         self.external_node_ip = start_external_node_with_bgp(
             "kube-node-extra",
-            bird6_peer_config=bird_conf % (self.ips[0], self.ips[1], self.ips[2], self.ips[3])
+            bird6_peer_config=bird_conf % (self.ipv6s[0], self.ipv6s[1],
+                                           self.ipv6s[2], self.ipv6s[3])
         )
 
         # Enable debug logging
@@ -132,10 +133,10 @@ EOF
         self.ns = "bgp-test"
         self.create_namespace(self.ns)
 
-        self.nodes, _, self.ips = node_info()
+        self.nodes, _, self.ipv6s = node_info()
         self.external_node_ip = start_external_node_with_bgp(
             "kube-node-extra",
-            bird6_peer_config=bird_conf_rr % self.ips[2]
+            bird6_peer_config=bird_conf_rr % self.ipv6s[2]
         )
 
         # Enable debug logging
@@ -205,9 +206,9 @@ EOF
     def get_svc_host_ipv6(self, svc, ns):
         ipv4 = kubectl("get po -l app=%s -n %s -o json | jq -r .items[0].status.hostIP" %
                        (svc, ns)).strip()
-        for i in range(len(self.ip4s)):
-            if ipv4 == self.ip4s[i]:
-                return self.ips[i]
+        for i in range(len(self.ipv4s)):
+            if ipv4 == self.ipv4s[i]:
+                return self.ipv6s[i]
         assert False
 
     def add_svc_external_ips(self, svc, ns, ips):
@@ -312,7 +313,7 @@ spec:
   peerIP: %s
   asNumber: 64512
 EOF
-""" % (self.nodes[1], self.ips[2]))
+""" % (self.nodes[1], self.ipv6s[2]))
         svc_json = kubectl("get svc nginx-rr -n bgp-test -o json")
         svc_dict = json.loads(svc_json)
         cluster_ip = svc_dict['spec']['clusterIP']
@@ -402,7 +403,7 @@ EOF
             # Scale the local_svc to 4 replicas
             self.scale_deployment(local_svc, self.ns, 4)
             self.wait_for_deployment(local_svc, self.ns)
-            self.assert_ecmp_routes(local_svc_ip, [self.ips[1], self.ips[2], self.ips[3]])
+            self.assert_ecmp_routes(local_svc_ip, [self.ipv6s[1], self.ipv6s[2], self.ipv6s[3]])
             for i in range(attempts):
               retry_until_success(curl, function_args=[local_svc_ip])
 
@@ -495,7 +496,7 @@ EOF
             self.wait_for_deployment(local_svc, self.ns)
 
             # Verify that we have ECMP routes for the external IP of the local service.
-            retry_until_success(lambda: self.assert_ecmp_routes(local_svc_external_ip, [self.ips[1], self.ips[2], self.ips[3]]))
+            retry_until_success(lambda: self.assert_ecmp_routes(local_svc_external_ip, [self.ipv6s[1], self.ipv6s[2], self.ipv6s[3]]))
 
             # Delete both services, assert only cluster CIDR route is advertised.
             self.delete_and_confirm(local_svc, "svc", self.ns)

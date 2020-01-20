@@ -223,12 +223,19 @@ def generate_unique_id(length, prefix=""):
     random_string = ''.join(random.choice(string.ascii_lowercase + string.digits) for _ in range(length))
     return "%s-%s" % (prefix, random_string)
 
+
+# We have to define and use this static map, from each node name to
+# its IPv6 address, because Kubernetes does not yet allow for an IPv6
+# address field in its host resource.  The mappings here must match
+# the code in tests/k8st/create_kind_cluster.sh that assigns an IPv6
+# address to each node.
 ipv6_map = {
     "kind-control-plane": "2001:20::8",
     "kind-worker": "2001:20::1",
     "kind-worker2": "2001:20::2",
     "kind-worker3": "2001:20::3",
 }
+
 
 def node_info():
     nodes = []
