@@ -393,16 +393,11 @@ EOF
             for i in range(attempts):
               retry_until_success(curl, function_args=[local_svc_ip])
 
-            # Connectivity to nginx-cluster will rarely succeed because it is load-balanced across all nodes.
-            # When the traffic hits a node that doesn't host one of the service's pod, it will be re-routed
-            #  to another node and SNAT will cause the policy to drop the traffic.
-            # Try to curl 10 times.
-            try:
-              for i in range(attempts):
-                curl(cluster_svc_ip)
-              self.fail("external node should not be able to consistently access the cluster svc")
-            except subprocess.CalledProcessError:
-              pass
+            # NOTE: Unlike in the IPv6 case (in test_bgp_advert.py) we cannot successfully test that
+            # connectivity to nginx-cluster is load-balanced across all nodes (and hence, with the
+            # above policy in place, will sometimes fail and sometimes succeed), because our current
+            # observation is that Linux's IPv6 ECMP route choice does _not_ depend on source port,
+            # even though it is documented as such when fib_multipath_hash_policy == 1.
 
             # Scale the local_svc to 4 replicas
             self.scale_deployment(local_svc, self.ns, 4)
