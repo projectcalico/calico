@@ -55,7 +55,7 @@ func (s *mockEndpointsSource) GetRawHostEndpoints() map[proto.HostEndpointID]*pr
 }
 
 func stateToBPFDataplane(state map[string]map[string]uint32, family bpf.IPFamily) bpf.BPFDataplane {
-	lib := bpf.NewMockBPFLib()
+	lib := bpf.NewMockBPFLib("../../bpf/bin")
 	_, err := lib.NewFailsafeMap()
 	Expect(err).NotTo(HaveOccurred())
 	for iface, cidrMap := range state {
@@ -435,7 +435,7 @@ var _ = Describe("XDP state", func() {
 
 			DescribeTable("",
 				func(s testStruct) {
-					state := NewXDPStateWithBPFLibrary(bpf.NewMockBPFLib(), true)
+					state := NewXDPStateWithBPFLibrary(bpf.NewMockBPFLib("../../bpf/bin"), true)
 					ipState := state.ipV4State
 					cs := ipState.currentState
 					expectedNcs := newXDPSystemState()
@@ -449,7 +449,7 @@ var _ = Describe("XDP state", func() {
 						protoEndpoint := &proto.HostEndpoint{
 							Name: "default." + epID,
 							UntrackedTiers: []*proto.TierInfo{
-								&proto.TierInfo{
+								{
 									Name:            "default",
 									IngressPolicies: policyIDs,
 								},
@@ -499,7 +499,7 @@ var _ = Describe("XDP state", func() {
 					// nothing in current state
 					// no eligible policies
 					endpoints: map[string][]string{
-						"ep": []string{"policy"},
+						"ep": {"policy"},
 					},
 					events: []testCBEvent{
 						updatePolicy("policy", denyRule("ipset")),
@@ -508,27 +508,27 @@ var _ = Describe("XDP state", func() {
 					actions: &bpfActions{
 						createMap: set.From("iface"),
 						addToMap: map[string]map[string]uint32{
-							"iface": map[string]uint32{"ipset": 1},
+							"iface": {"ipset": 1},
 						},
 						installXDP: set.From("iface"),
 					},
 					newCurrentState: map[string]testIfaceData{
-						"iface": testIfaceData{
+						"iface": {
 							epID: "ep",
 							policiesToSets: map[string][]string{
-								"policy": []string{"ipset"},
+								"policy": {"ipset"},
 							},
 						},
 					},
 					newEligiblePolicies: map[string][][]string{
-						"policy": [][]string{[]string{"ipset"}},
+						"policy": {{"ipset"}},
 					},
 				}),
 				Entry("nothing gets installed on an interface if policy is not optimizable", testStruct{
 					// nothing in current state
 					// no eligible policies
 					endpoints: map[string][]string{
-						"ep": []string{"policy"},
+						"ep": {"policy"},
 					},
 					events: []testCBEvent{
 						updatePolicy("policy", allowRule("ipset")),
@@ -536,7 +536,7 @@ var _ = Describe("XDP state", func() {
 					},
 					// no actions
 					newCurrentState: map[string]testIfaceData{
-						"iface": testIfaceData{
+						"iface": {
 							epID: "ep",
 							// no policies
 						},
@@ -545,18 +545,18 @@ var _ = Describe("XDP state", func() {
 				}),
 				Entry("XDP stuff gets dropped from interface when policy becomes invalid", testStruct{
 					currentState: map[string]testIfaceData{
-						"iface": testIfaceData{
+						"iface": {
 							epID: "ep",
 							policiesToSets: map[string][]string{
-								"policy": []string{"ipset"},
+								"policy": {"ipset"},
 							},
 						},
 					},
 					eligiblePolicies: map[string][][]string{
-						"policy": [][]string{[]string{"ipset"}},
+						"policy": {{"ipset"}},
 					},
 					endpoints: map[string][]string{
-						"ep": []string{"policy"},
+						"ep": {"policy"},
 					},
 					events: []testCBEvent{
 						updatePolicy("policy", denyRule()),
@@ -566,7 +566,7 @@ var _ = Describe("XDP state", func() {
 						uninstallXDP: set.From("iface"),
 					},
 					newCurrentState: map[string]testIfaceData{
-						"iface": testIfaceData{
+						"iface": {
 							epID: "ep",
 							// no policies
 						},
@@ -575,18 +575,18 @@ var _ = Describe("XDP state", func() {
 				}),
 				Entry("XDP stuff gets dropped from interface when last policy is dropped", testStruct{
 					currentState: map[string]testIfaceData{
-						"iface": testIfaceData{
+						"iface": {
 							epID: "ep",
 							policiesToSets: map[string][]string{
-								"policy": []string{"ipset"},
+								"policy": {"ipset"},
 							},
 						},
 					},
 					eligiblePolicies: map[string][][]string{
-						"policy": [][]string{[]string{"ipset"}},
+						"policy": {{"ipset"}},
 					},
 					endpoints: map[string][]string{
-						"ep": []string{},
+						"ep": {},
 					},
 					events: []testCBEvent{
 						updateHostEndpoint("ep"),
@@ -597,7 +597,7 @@ var _ = Describe("XDP state", func() {
 						uninstallXDP: set.From("iface"),
 					},
 					newCurrentState: map[string]testIfaceData{
-						"iface": testIfaceData{
+						"iface": {
 							epID: "ep",
 							// no policies
 						},
@@ -606,18 +606,18 @@ var _ = Describe("XDP state", func() {
 				}),
 				Entry("XDP stuff gets dropped from interface when active interface disappears", testStruct{
 					currentState: map[string]testIfaceData{
-						"iface": testIfaceData{
+						"iface": {
 							epID: "ep",
 							policiesToSets: map[string][]string{
-								"policy": []string{"ipset"},
+								"policy": {"ipset"},
 							},
 						},
 					},
 					eligiblePolicies: map[string][][]string{
-						"policy": [][]string{[]string{"ipset"}},
+						"policy": {{"ipset"}},
 					},
 					endpoints: map[string][]string{
-						"ep": []string{},
+						"ep": {},
 					},
 					events: []testCBEvent{
 						removeInterface("iface"),
@@ -628,19 +628,19 @@ var _ = Describe("XDP state", func() {
 					},
 					// nothing in current state
 					newEligiblePolicies: map[string][][]string{
-						"policy": [][]string{[]string{"ipset"}},
+						"policy": {{"ipset"}},
 					},
 				}),
 				Entry("XDP program gets installed on an interface when policy becomes optimizable again", testStruct{
 					currentState: map[string]testIfaceData{
-						"iface": testIfaceData{
+						"iface": {
 							epID: "ep",
 							// no policies
 						},
 					},
 					// no eligible policies
 					endpoints: map[string][]string{
-						"ep": []string{"policy"},
+						"ep": {"policy"},
 					},
 					events: []testCBEvent{
 						updatePolicy("policy", denyRule("ipset")),
@@ -648,33 +648,33 @@ var _ = Describe("XDP state", func() {
 					actions: &bpfActions{
 						createMap: set.From("iface"),
 						addToMap: map[string]map[string]uint32{
-							"iface": map[string]uint32{"ipset": 1},
+							"iface": {"ipset": 1},
 						},
 						installXDP: set.From("iface"),
 					},
 					newCurrentState: map[string]testIfaceData{
-						"iface": testIfaceData{
+						"iface": {
 							epID: "ep",
 							policiesToSets: map[string][]string{
-								"policy": []string{"ipset"},
+								"policy": {"ipset"},
 							},
 						},
 					},
 					newEligiblePolicies: map[string][][]string{
-						"policy": [][]string{[]string{"ipset"}},
+						"policy": {{"ipset"}},
 					},
 				}),
 				Entry("XDP program gets installed on an interface when it changes to use host endpoint with optimizable policy", testStruct{
 					currentState: map[string]testIfaceData{
-						"iface": testIfaceData{
+						"iface": {
 							epID: "ep",
 							// no policies
 						},
 					},
 					// no eligible policies
 					endpoints: map[string][]string{
-						"ep":  []string{"policy"},
-						"ep2": []string{"policy2"},
+						"ep":  {"policy"},
+						"ep2": {"policy2"},
 					},
 					events: []testCBEvent{
 						updatePolicy("policy2", denyRule("ipset2")),
@@ -683,37 +683,37 @@ var _ = Describe("XDP state", func() {
 					actions: &bpfActions{
 						createMap: set.From("iface"),
 						addToMap: map[string]map[string]uint32{
-							"iface": map[string]uint32{"ipset2": 1},
+							"iface": {"ipset2": 1},
 						},
 						installXDP: set.From("iface"),
 					},
 					newCurrentState: map[string]testIfaceData{
-						"iface": testIfaceData{
+						"iface": {
 							epID: "ep2",
 							policiesToSets: map[string][]string{
-								"policy2": []string{"ipset2"},
+								"policy2": {"ipset2"},
 							},
 						},
 					},
 					newEligiblePolicies: map[string][][]string{
-						"policy2": [][]string{[]string{"ipset2"}},
+						"policy2": {{"ipset2"}},
 					},
 				}),
 				Entry("XDP program gets uninstalled on an interface when it changes to use host endpoint with unoptimizable policy", testStruct{
 					currentState: map[string]testIfaceData{
-						"iface": testIfaceData{
+						"iface": {
 							epID: "ep2",
 							policiesToSets: map[string][]string{
-								"policy2": []string{"ipset2"},
+								"policy2": {"ipset2"},
 							},
 						},
 					},
 					eligiblePolicies: map[string][][]string{
-						"policy2": [][]string{[]string{"ipset2"}},
+						"policy2": {{"ipset2"}},
 					},
 					endpoints: map[string][]string{
-						"ep":  []string{"policy"},
-						"ep2": []string{"policy2"},
+						"ep":  {"policy"},
+						"ep2": {"policy2"},
 					},
 					events: []testCBEvent{
 						updatePolicy("policy2", denyRule("ipset2")),
@@ -724,159 +724,159 @@ var _ = Describe("XDP state", func() {
 						uninstallXDP: set.From("iface"),
 					},
 					newCurrentState: map[string]testIfaceData{
-						"iface": testIfaceData{
+						"iface": {
 							epID: "ep",
 							// no policies
 						},
 					},
 					newEligiblePolicies: map[string][][]string{
-						"policy2": [][]string{[]string{"ipset2"}},
+						"policy2": {{"ipset2"}},
 					},
 				}),
 				Entry("contents of the BPF map changes if the interface changes the host endpoint", testStruct{
 					currentState: map[string]testIfaceData{
-						"iface": testIfaceData{
+						"iface": {
 							epID: "ep",
 							policiesToSets: map[string][]string{
-								"policy": []string{"ipset"},
+								"policy": {"ipset"},
 							},
 						},
 					},
 					eligiblePolicies: map[string][][]string{
-						"policy":  [][]string{[]string{"ipset"}},
-						"policy2": [][]string{[]string{"ipset2"}},
+						"policy":  {{"ipset"}},
+						"policy2": {{"ipset2"}},
 					},
 					endpoints: map[string][]string{
-						"ep":  []string{"policy"},
-						"ep2": []string{"policy2"},
+						"ep":  {"policy"},
+						"ep2": {"policy2"},
 					},
 					events: []testCBEvent{
 						updateInterface("iface", "ep2"),
 					},
 					actions: &bpfActions{
 						addToMap: map[string]map[string]uint32{
-							"iface": map[string]uint32{"ipset2": 1},
+							"iface": {"ipset2": 1},
 						},
 						removeFromMap: map[string]map[string]uint32{
-							"iface": map[string]uint32{"ipset": 1},
+							"iface": {"ipset": 1},
 						},
 					},
 					newCurrentState: map[string]testIfaceData{
-						"iface": testIfaceData{
+						"iface": {
 							epID: "ep2",
 							policiesToSets: map[string][]string{
-								"policy2": []string{"ipset2"},
+								"policy2": {"ipset2"},
 							},
 						},
 					},
 					newEligiblePolicies: map[string][][]string{
-						"policy":  [][]string{[]string{"ipset"}},
-						"policy2": [][]string{[]string{"ipset2"}},
+						"policy":  {{"ipset"}},
+						"policy2": {{"ipset2"}},
 					},
 				}),
 				Entry("contents of the BPF map changes if the host endpoint of the interface changes", testStruct{
 					currentState: map[string]testIfaceData{
-						"iface": testIfaceData{
+						"iface": {
 							epID: "ep",
 							policiesToSets: map[string][]string{
-								"policy": []string{"ipset"},
+								"policy": {"ipset"},
 							},
 						},
 					},
 					eligiblePolicies: map[string][][]string{
-						"policy":  [][]string{[]string{"ipset"}},
-						"policy2": [][]string{[]string{"ipset2"}},
+						"policy":  {{"ipset"}},
+						"policy2": {{"ipset2"}},
 					},
 					endpoints: map[string][]string{
-						"ep": []string{"policy2"},
+						"ep": {"policy2"},
 					},
 					events: []testCBEvent{
 						updateHostEndpoint("ep"),
 					},
 					actions: &bpfActions{
 						addToMap: map[string]map[string]uint32{
-							"iface": map[string]uint32{"ipset2": 1},
+							"iface": {"ipset2": 1},
 						},
 						removeFromMap: map[string]map[string]uint32{
-							"iface": map[string]uint32{"ipset": 1},
+							"iface": {"ipset": 1},
 						},
 					},
 					newCurrentState: map[string]testIfaceData{
-						"iface": testIfaceData{
+						"iface": {
 							epID: "ep",
 							policiesToSets: map[string][]string{
-								"policy2": []string{"ipset2"},
+								"policy2": {"ipset2"},
 							},
 						},
 					},
 					newEligiblePolicies: map[string][][]string{
-						"policy":  [][]string{[]string{"ipset"}},
-						"policy2": [][]string{[]string{"ipset2"}},
+						"policy":  {{"ipset"}},
+						"policy2": {{"ipset2"}},
 					},
 				}),
 				Entry("contents of the BPF map changes if the policy changes, but is still optimizable", testStruct{
 					currentState: map[string]testIfaceData{
-						"iface": testIfaceData{
+						"iface": {
 							epID: "ep",
 							policiesToSets: map[string][]string{
-								"policy": []string{"ipset"},
+								"policy": {"ipset"},
 							},
 						},
 					},
 					eligiblePolicies: map[string][][]string{
-						"policy": [][]string{[]string{"ipset"}},
+						"policy": {{"ipset"}},
 					},
 					endpoints: map[string][]string{
-						"ep": []string{"policy"},
+						"ep": {"policy"},
 					},
 					events: []testCBEvent{
 						updatePolicy("policy", denyRule("ipset2")),
 					},
 					actions: &bpfActions{
 						addToMap: map[string]map[string]uint32{
-							"iface": map[string]uint32{"ipset2": 1},
+							"iface": {"ipset2": 1},
 						},
 						removeFromMap: map[string]map[string]uint32{
-							"iface": map[string]uint32{"ipset": 1},
+							"iface": {"ipset": 1},
 						},
 					},
 					newCurrentState: map[string]testIfaceData{
-						"iface": testIfaceData{
+						"iface": {
 							epID: "ep",
 							policiesToSets: map[string][]string{
-								"policy": []string{"ipset2"},
+								"policy": {"ipset2"},
 							},
 						},
 					},
 					newEligiblePolicies: map[string][][]string{
-						"policy": [][]string{[]string{"ipset2"}},
+						"policy": {{"ipset2"}},
 					},
 				}),
 				Entry("interface is processed once (host endpoint update on processed interface is ignored)", testStruct{
 					currentState: map[string]testIfaceData{
-						"iface": testIfaceData{
+						"iface": {
 							epID: "ep",
 							policiesToSets: map[string][]string{
-								"policy": []string{"ipset"},
+								"policy": {"ipset"},
 							},
 						},
 						// this is to have ep2 in the current state,
 						// so update of the host endpoint ep2 is
 						// not ignored in callbacks
-						"iface2": testIfaceData{
+						"iface2": {
 							epID: "ep2",
 							policiesToSets: map[string][]string{
-								"policy2": []string{"ipset2"},
+								"policy2": {"ipset2"},
 							},
 						},
 					},
 					eligiblePolicies: map[string][][]string{
-						"policy":  [][]string{[]string{"ipset"}},
-						"policy2": [][]string{[]string{"ipset2"}},
+						"policy":  {{"ipset"}},
+						"policy2": {{"ipset2"}},
 					},
 					endpoints: map[string][]string{
-						"ep":  []string{"policy"},
-						"ep2": []string{"policy2"},
+						"ep":  {"policy"},
+						"ep2": {"policy2"},
 					},
 					events: []testCBEvent{
 						updateInterface("iface", "ep2"),
@@ -885,45 +885,45 @@ var _ = Describe("XDP state", func() {
 					actions: &bpfActions{
 						addToMap: map[string]map[string]uint32{
 							// were the interface processed twice, ref count would be 2
-							"iface": map[string]uint32{"ipset2": 1},
+							"iface": {"ipset2": 1},
 						},
 						removeFromMap: map[string]map[string]uint32{
-							"iface": map[string]uint32{"ipset": 1},
+							"iface": {"ipset": 1},
 						},
 					},
 					newCurrentState: map[string]testIfaceData{
-						"iface": testIfaceData{
+						"iface": {
 							epID: "ep2",
 							policiesToSets: map[string][]string{
-								"policy2": []string{"ipset2"},
+								"policy2": {"ipset2"},
 							},
 						},
-						"iface2": testIfaceData{
+						"iface2": {
 							epID: "ep2",
 							policiesToSets: map[string][]string{
-								"policy2": []string{"ipset2"},
+								"policy2": {"ipset2"},
 							},
 						},
 					},
 					newEligiblePolicies: map[string][][]string{
-						"policy":  [][]string{[]string{"ipset"}},
-						"policy2": [][]string{[]string{"ipset2"}},
+						"policy":  {{"ipset"}},
+						"policy2": {{"ipset2"}},
 					},
 				}),
 				Entry("interface is processed once (policy update on processed interface is ignored)", testStruct{
 					currentState: map[string]testIfaceData{
-						"iface": testIfaceData{
+						"iface": {
 							epID: "ep",
 							policiesToSets: map[string][]string{
-								"policy": []string{"ipset"},
+								"policy": {"ipset"},
 							},
 						},
 					},
 					eligiblePolicies: map[string][][]string{
-						"policy": [][]string{[]string{"ipset"}},
+						"policy": {{"ipset"}},
 					},
 					endpoints: map[string][]string{
-						"ep": []string{"policy2"},
+						"ep": {"policy2"},
 					},
 					events: []testCBEvent{
 						updatePolicy("policy2", denyRule("ipset2")),
@@ -932,327 +932,327 @@ var _ = Describe("XDP state", func() {
 					actions: &bpfActions{
 						addToMap: map[string]map[string]uint32{
 							// were the interface processed twice, ref count would be 2
-							"iface": map[string]uint32{"ipset2": 1},
+							"iface": {"ipset2": 1},
 						},
 						removeFromMap: map[string]map[string]uint32{
-							"iface": map[string]uint32{"ipset": 1},
+							"iface": {"ipset": 1},
 						},
 					},
 					newCurrentState: map[string]testIfaceData{
-						"iface": testIfaceData{
+						"iface": {
 							epID: "ep",
 							policiesToSets: map[string][]string{
-								"policy2": []string{"ipset2"},
+								"policy2": {"ipset2"},
 							},
 						},
 					},
 					newEligiblePolicies: map[string][][]string{
-						"policy":  [][]string{[]string{"ipset"}},
-						"policy2": [][]string{[]string{"ipset2"}},
+						"policy":  {{"ipset"}},
+						"policy2": {{"ipset2"}},
 					},
 				}),
 				Entry("unrelated interfaces are unchanged on host endpoint update", testStruct{
 					currentState: map[string]testIfaceData{
-						"iface": testIfaceData{
+						"iface": {
 							epID: "ep",
 							policiesToSets: map[string][]string{
-								"policy": []string{"ipset"},
+								"policy": {"ipset"},
 							},
 						},
-						"iface2": testIfaceData{
+						"iface2": {
 							epID: "ep2",
 							policiesToSets: map[string][]string{
-								"policy2": []string{"ipset2"},
+								"policy2": {"ipset2"},
 							},
 						},
 					},
 					eligiblePolicies: map[string][][]string{
-						"policy":  [][]string{[]string{"ipset"}},
-						"policy2": [][]string{[]string{"ipset2"}},
-						"policy3": [][]string{[]string{"ipset3"}},
+						"policy":  {{"ipset"}},
+						"policy2": {{"ipset2"}},
+						"policy3": {{"ipset3"}},
 					},
 					endpoints: map[string][]string{
-						"ep":  []string{"policy3"},
-						"ep2": []string{"policy2"},
+						"ep":  {"policy3"},
+						"ep2": {"policy2"},
 					},
 					events: []testCBEvent{
 						updateHostEndpoint("ep"),
 					},
 					actions: &bpfActions{
 						addToMap: map[string]map[string]uint32{
-							"iface": map[string]uint32{"ipset3": 1},
+							"iface": {"ipset3": 1},
 						},
 						removeFromMap: map[string]map[string]uint32{
-							"iface": map[string]uint32{"ipset": 1},
+							"iface": {"ipset": 1},
 						},
 					},
 					newCurrentState: map[string]testIfaceData{
-						"iface": testIfaceData{
+						"iface": {
 							epID: "ep",
 							policiesToSets: map[string][]string{
-								"policy3": []string{"ipset3"},
+								"policy3": {"ipset3"},
 							},
 						},
-						"iface2": testIfaceData{
+						"iface2": {
 							epID: "ep2",
 							policiesToSets: map[string][]string{
-								"policy2": []string{"ipset2"},
+								"policy2": {"ipset2"},
 							},
 						},
 					},
 					newEligiblePolicies: map[string][][]string{
-						"policy":  [][]string{[]string{"ipset"}},
-						"policy2": [][]string{[]string{"ipset2"}},
-						"policy3": [][]string{[]string{"ipset3"}},
+						"policy":  {{"ipset"}},
+						"policy2": {{"ipset2"}},
+						"policy3": {{"ipset3"}},
 					},
 				}),
 				Entry("all related interfaces are processed on host endpoint update", testStruct{
 					currentState: map[string]testIfaceData{
-						"iface": testIfaceData{
+						"iface": {
 							epID: "ep",
 							policiesToSets: map[string][]string{
-								"policy": []string{"ipset"},
+								"policy": {"ipset"},
 							},
 						},
-						"iface2": testIfaceData{
+						"iface2": {
 							epID: "ep2",
 							policiesToSets: map[string][]string{
-								"policy2": []string{"ipset2"},
+								"policy2": {"ipset2"},
 							},
 						},
-						"iface3": testIfaceData{
+						"iface3": {
 							epID: "ep",
 							policiesToSets: map[string][]string{
-								"policy": []string{"ipset"},
+								"policy": {"ipset"},
 							},
 						},
 					},
 					eligiblePolicies: map[string][][]string{
-						"policy":  [][]string{[]string{"ipset"}},
-						"policy2": [][]string{[]string{"ipset2"}},
-						"policy3": [][]string{[]string{"ipset3"}},
+						"policy":  {{"ipset"}},
+						"policy2": {{"ipset2"}},
+						"policy3": {{"ipset3"}},
 					},
 					endpoints: map[string][]string{
-						"ep":  []string{"policy3"},
-						"ep2": []string{"policy2"},
+						"ep":  {"policy3"},
+						"ep2": {"policy2"},
 					},
 					events: []testCBEvent{
 						updateHostEndpoint("ep"),
 					},
 					actions: &bpfActions{
 						addToMap: map[string]map[string]uint32{
-							"iface":  map[string]uint32{"ipset3": 1},
-							"iface3": map[string]uint32{"ipset3": 1},
+							"iface":  {"ipset3": 1},
+							"iface3": {"ipset3": 1},
 						},
 						removeFromMap: map[string]map[string]uint32{
-							"iface":  map[string]uint32{"ipset": 1},
-							"iface3": map[string]uint32{"ipset": 1},
+							"iface":  {"ipset": 1},
+							"iface3": {"ipset": 1},
 						},
 					},
 					newCurrentState: map[string]testIfaceData{
-						"iface": testIfaceData{
+						"iface": {
 							epID: "ep",
 							policiesToSets: map[string][]string{
-								"policy3": []string{"ipset3"},
+								"policy3": {"ipset3"},
 							},
 						},
-						"iface2": testIfaceData{
+						"iface2": {
 							epID: "ep2",
 							policiesToSets: map[string][]string{
-								"policy2": []string{"ipset2"},
+								"policy2": {"ipset2"},
 							},
 						},
-						"iface3": testIfaceData{
+						"iface3": {
 							epID: "ep",
 							policiesToSets: map[string][]string{
-								"policy3": []string{"ipset3"},
+								"policy3": {"ipset3"},
 							},
 						},
 					},
 					newEligiblePolicies: map[string][][]string{
-						"policy":  [][]string{[]string{"ipset"}},
-						"policy2": [][]string{[]string{"ipset2"}},
-						"policy3": [][]string{[]string{"ipset3"}},
+						"policy":  {{"ipset"}},
+						"policy2": {{"ipset2"}},
+						"policy3": {{"ipset3"}},
 					},
 				}),
 				Entry("nothing changes in the BPF stuff if nothing actually changes in the policy", testStruct{
 					currentState: map[string]testIfaceData{
-						"iface": testIfaceData{
+						"iface": {
 							epID: "ep",
 							policiesToSets: map[string][]string{
-								"policy": []string{"ipset"},
+								"policy": {"ipset"},
 							},
 						},
 					},
 					eligiblePolicies: map[string][][]string{
-						"policy": [][]string{[]string{"ipset"}},
+						"policy": {{"ipset"}},
 					},
 					endpoints: map[string][]string{
-						"ep": []string{"policy"},
+						"ep": {"policy"},
 					},
 					events: []testCBEvent{
 						updatePolicy("policy", denyRule("ipset")),
 					},
 					// no actions
 					newCurrentState: map[string]testIfaceData{
-						"iface": testIfaceData{
+						"iface": {
 							epID: "ep",
 							policiesToSets: map[string][]string{
-								"policy": []string{"ipset"},
+								"policy": {"ipset"},
 							},
 						},
 					},
 					newEligiblePolicies: map[string][][]string{
-						"policy": [][]string{[]string{"ipset"}},
+						"policy": {{"ipset"}},
 					},
 				}),
 				Entry("nothing changes in the BPF stuff if nothing actually changes in the host endpoint", testStruct{
 					currentState: map[string]testIfaceData{
-						"iface": testIfaceData{
+						"iface": {
 							epID: "ep",
 							policiesToSets: map[string][]string{
-								"policy": []string{"ipset"},
+								"policy": {"ipset"},
 							},
 						},
 					},
 					eligiblePolicies: map[string][][]string{
-						"policy": [][]string{[]string{"ipset"}},
+						"policy": {{"ipset"}},
 					},
 					endpoints: map[string][]string{
-						"ep": []string{"policy"},
+						"ep": {"policy"},
 					},
 					events: []testCBEvent{
 						updateHostEndpoint("ep"),
 					},
 					// no actions
 					newCurrentState: map[string]testIfaceData{
-						"iface": testIfaceData{
+						"iface": {
 							epID: "ep",
 							policiesToSets: map[string][]string{
-								"policy": []string{"ipset"},
+								"policy": {"ipset"},
 							},
 						},
 					},
 					newEligiblePolicies: map[string][][]string{
-						"policy": [][]string{[]string{"ipset"}},
+						"policy": {{"ipset"}},
 					},
 				}),
 				Entry("nothing changes in the BPF stuff if nothing actually changes in the network interface", testStruct{
 					currentState: map[string]testIfaceData{
-						"iface": testIfaceData{
+						"iface": {
 							epID: "ep",
 							policiesToSets: map[string][]string{
-								"policy": []string{"ipset"},
+								"policy": {"ipset"},
 							},
 						},
 					},
 					eligiblePolicies: map[string][][]string{
-						"policy": [][]string{[]string{"ipset"}},
+						"policy": {{"ipset"}},
 					},
 					endpoints: map[string][]string{
-						"ep": []string{"policy"},
+						"ep": {"policy"},
 					},
 					events: []testCBEvent{
 						updateInterface("iface", "ep"),
 					},
 					// no actions
 					newCurrentState: map[string]testIfaceData{
-						"iface": testIfaceData{
+						"iface": {
 							epID: "ep",
 							policiesToSets: map[string][]string{
-								"policy": []string{"ipset"},
+								"policy": {"ipset"},
 							},
 						},
 					},
 					newEligiblePolicies: map[string][][]string{
-						"policy": [][]string{[]string{"ipset"}},
+						"policy": {{"ipset"}},
 					},
 				}),
 				Entry("nothing changes in the BPF stuff we get unrelated policy change", testStruct{
 					currentState: map[string]testIfaceData{
-						"iface": testIfaceData{
+						"iface": {
 							epID: "ep",
 							policiesToSets: map[string][]string{
-								"policy": []string{"ipset"},
+								"policy": {"ipset"},
 							},
 						},
 					},
 					eligiblePolicies: map[string][][]string{
-						"policy": [][]string{[]string{"ipset"}},
+						"policy": {{"ipset"}},
 					},
 					endpoints: map[string][]string{
-						"ep": []string{"policy"},
+						"ep": {"policy"},
 					},
 					events: []testCBEvent{
 						updatePolicy("policy2", allowRule("ipset2")),
 					},
 					// no actions
 					newCurrentState: map[string]testIfaceData{
-						"iface": testIfaceData{
+						"iface": {
 							epID: "ep",
 							policiesToSets: map[string][]string{
-								"policy": []string{"ipset"},
+								"policy": {"ipset"},
 							},
 						},
 					},
 					newEligiblePolicies: map[string][][]string{
-						"policy": [][]string{[]string{"ipset"}},
+						"policy": {{"ipset"}},
 					},
 				}),
 				Entry("nothing changes in the BPF stuff we get unrelated host endpoint", testStruct{
 					currentState: map[string]testIfaceData{
-						"iface": testIfaceData{
+						"iface": {
 							epID: "ep",
 							policiesToSets: map[string][]string{
-								"policy": []string{"ipset"},
+								"policy": {"ipset"},
 							},
 						},
 					},
 					eligiblePolicies: map[string][][]string{
-						"policy": [][]string{[]string{"ipset"}},
+						"policy": {{"ipset"}},
 					},
 					endpoints: map[string][]string{
-						"ep":  []string{"policy"},
-						"ep2": []string{"policy2"},
+						"ep":  {"policy"},
+						"ep2": {"policy2"},
 					},
 					events: []testCBEvent{
 						updateHostEndpoint("ep2"),
 					},
 					// no actions
 					newCurrentState: map[string]testIfaceData{
-						"iface": testIfaceData{
+						"iface": {
 							epID: "ep",
 							policiesToSets: map[string][]string{
-								"policy": []string{"ipset"},
+								"policy": {"ipset"},
 							},
 						},
 					},
 					newEligiblePolicies: map[string][][]string{
-						"policy": [][]string{[]string{"ipset"}},
+						"policy": {{"ipset"}},
 					},
 				}),
 				Entry("nothing changes in the BPF stuff we get ipset member changes", testStruct{
 					currentState: map[string]testIfaceData{
-						"iface": testIfaceData{
+						"iface": {
 							epID: "ep",
 							policiesToSets: map[string][]string{
-								"policy": []string{"ipset"},
+								"policy": {"ipset"},
 							},
 						},
-						"iface2": testIfaceData{
+						"iface2": {
 							epID: "ep2",
 							policiesToSets: map[string][]string{
-								"policy2": []string{"ipset2"},
+								"policy2": {"ipset2"},
 							},
 						},
 					},
 					eligiblePolicies: map[string][][]string{
-						"policy":  [][]string{[]string{"ipset"}},
-						"policy2": [][]string{[]string{"ipset2"}},
+						"policy":  {{"ipset"}},
+						"policy2": {{"ipset2"}},
 					},
 					endpoints: map[string][]string{
-						"ep":  []string{"policy"},
-						"ep2": []string{"policy2"},
+						"ep":  {"policy"},
+						"ep2": {"policy2"},
 					},
 					events: []testCBEvent{
 						addMembersIPSet("ipset", "member1"),
@@ -1267,45 +1267,45 @@ var _ = Describe("XDP state", func() {
 					},
 					// no actions
 					newCurrentState: map[string]testIfaceData{
-						"iface": testIfaceData{
+						"iface": {
 							epID: "ep",
 							policiesToSets: map[string][]string{
-								"policy": []string{"ipset"},
+								"policy": {"ipset"},
 							},
 						},
-						"iface2": testIfaceData{
+						"iface2": {
 							epID: "ep2",
 							policiesToSets: map[string][]string{
-								"policy2": []string{"ipset2"},
+								"policy2": {"ipset2"},
 							},
 						},
 					},
 					newEligiblePolicies: map[string][][]string{
-						"policy":  [][]string{[]string{"ipset"}},
-						"policy2": [][]string{[]string{"ipset2"}},
+						"policy":  {{"ipset"}},
+						"policy2": {{"ipset2"}},
 					},
 				}),
 				Entry("host endpoint update and deletion are handled properly", testStruct{
 					currentState: map[string]testIfaceData{
-						"iface": testIfaceData{
+						"iface": {
 							epID: "ep",
 							policiesToSets: map[string][]string{
-								"policy": []string{"ipset"},
+								"policy": {"ipset"},
 							},
 						},
-						"iface2": testIfaceData{
+						"iface2": {
 							epID: "ep2",
 							policiesToSets: map[string][]string{
-								"policy2": []string{"ipset2"},
+								"policy2": {"ipset2"},
 							},
 						},
 					},
 					eligiblePolicies: map[string][][]string{
-						"policy":  [][]string{[]string{"ipset"}},
-						"policy2": [][]string{[]string{"ipset2"}},
+						"policy":  {{"ipset"}},
+						"policy2": {{"ipset2"}},
 					},
 					endpoints: map[string][]string{
-						"ep": []string{"policy"},
+						"ep": {"policy"},
 					},
 					events: []testCBEvent{
 						removeHostEndpoint("ep"),
@@ -1316,53 +1316,53 @@ var _ = Describe("XDP state", func() {
 					},
 					actions: &bpfActions{
 						addToMap: map[string]map[string]uint32{
-							"iface2": map[string]uint32{"ipset": 1},
+							"iface2": {"ipset": 1},
 						},
 						removeFromMap: map[string]map[string]uint32{
-							"iface2": map[string]uint32{"ipset2": 1},
+							"iface2": {"ipset2": 1},
 						},
 					},
 					newCurrentState: map[string]testIfaceData{
-						"iface": testIfaceData{
+						"iface": {
 							epID: "ep",
 							policiesToSets: map[string][]string{
-								"policy": []string{"ipset"},
+								"policy": {"ipset"},
 							},
 						},
-						"iface2": testIfaceData{
+						"iface2": {
 							epID: "ep",
 							policiesToSets: map[string][]string{
-								"policy": []string{"ipset"},
+								"policy": {"ipset"},
 							},
 						},
 					},
 					newEligiblePolicies: map[string][][]string{
-						"policy":  [][]string{[]string{"ipset"}},
-						"policy2": [][]string{[]string{"ipset2"}},
+						"policy":  {{"ipset"}},
+						"policy2": {{"ipset2"}},
 					},
 				}),
 				Entry("policy update and deletion are handled properly", testStruct{
 					currentState: map[string]testIfaceData{
-						"iface": testIfaceData{
+						"iface": {
 							epID: "ep",
 							policiesToSets: map[string][]string{
-								"policy": []string{"ipset"},
+								"policy": {"ipset"},
 							},
 						},
-						"iface2": testIfaceData{
+						"iface2": {
 							epID: "ep2",
 							policiesToSets: map[string][]string{
-								"policy2": []string{"ipset2"},
+								"policy2": {"ipset2"},
 							},
 						},
 					},
 					eligiblePolicies: map[string][][]string{
-						"policy":  [][]string{[]string{"ipset"}},
-						"policy2": [][]string{[]string{"ipset2"}},
+						"policy":  {{"ipset"}},
+						"policy2": {{"ipset2"}},
 					},
 					endpoints: map[string][]string{
-						"ep":  []string{"policy"},
-						"ep2": []string{"policy"},
+						"ep":  {"policy"},
+						"ep2": {"policy"},
 					},
 					events: []testCBEvent{
 						removePolicy("policy"),
@@ -1373,30 +1373,30 @@ var _ = Describe("XDP state", func() {
 					},
 					actions: &bpfActions{
 						addToMap: map[string]map[string]uint32{
-							"iface":  map[string]uint32{"ipset3": 1},
-							"iface2": map[string]uint32{"ipset3": 1},
+							"iface":  {"ipset3": 1},
+							"iface2": {"ipset3": 1},
 						},
 						removeFromMap: map[string]map[string]uint32{
-							"iface":  map[string]uint32{"ipset": 1},
-							"iface2": map[string]uint32{"ipset2": 1},
+							"iface":  {"ipset": 1},
+							"iface2": {"ipset2": 1},
 						},
 					},
 					newCurrentState: map[string]testIfaceData{
-						"iface": testIfaceData{
+						"iface": {
 							epID: "ep",
 							policiesToSets: map[string][]string{
-								"policy": []string{"ipset3"},
+								"policy": {"ipset3"},
 							},
 						},
-						"iface2": testIfaceData{
+						"iface2": {
 							epID: "ep2",
 							policiesToSets: map[string][]string{
-								"policy": []string{"ipset3"},
+								"policy": {"ipset3"},
 							},
 						},
 					},
 					newEligiblePolicies: map[string][][]string{
-						"policy": [][]string{[]string{"ipset3"}},
+						"policy": {{"ipset3"}},
 					},
 				}),
 				// TODO: That's not really possible - we support only one policy in host endpoint
@@ -1667,7 +1667,7 @@ var _ = Describe("XDP state", func() {
 					id++
 					return id
 				}
-				lib := bpf.NewMockBPFLib()
+				lib := bpf.NewMockBPFLib("../../bpf/bin")
 				failsafeID := getNextID()
 				lib.FailsafeMap = bpf.NewMockFailsafeMap(failsafeID)
 				expectedProgramBytes := []byte{42}
@@ -1773,15 +1773,15 @@ var _ = Describe("XDP state", func() {
 				}),
 				Entry("something in BPF, no need for BPF, remove BPF stuff", testStruct{
 					bpfState: map[string]bpfIfaceData{
-						"ifMap": bpfIfaceData{
+						"ifMap": {
 							// no xdp
 							mapExists: true,
 						},
-						"ifProg": bpfIfaceData{
+						"ifProg": {
 							hasXDP: true,
 							// no map
 						},
-						"ifProgMap": bpfIfaceData{
+						"ifProgMap": {
 							hasXDP:    true,
 							mapExists: true,
 						},
@@ -1795,37 +1795,37 @@ var _ = Describe("XDP state", func() {
 				}),
 				Entry("no XDP, but should have it", testStruct{
 					bpfState: map[string]bpfIfaceData{
-						"ifNoMap": bpfIfaceData{
+						"ifNoMap": {
 							// no xdp
 							// no map
 						},
-						"ifBogusMap": bpfIfaceData{
+						"ifBogusMap": {
 							// no xdp
 							mapExists: true,
 							mapBogus:  true,
 						},
-						"ifOkMap": bpfIfaceData{
+						"ifOkMap": {
 							// no xdp
 							mapExists: true,
 						},
 					},
 					newCurrentState: map[string]testIfaceData{
-						"ifNoMap": testIfaceData{
+						"ifNoMap": {
 							epID: "ep",
 							policiesToSets: map[string][]string{
-								"policy": []string{"ipset"},
+								"policy": {"ipset"},
 							},
 						},
-						"ifBogusMap": testIfaceData{
+						"ifBogusMap": {
 							epID: "ep",
 							policiesToSets: map[string][]string{
-								"policy": []string{"ipset"},
+								"policy": {"ipset"},
 							},
 						},
-						"ifOkMap": testIfaceData{
+						"ifOkMap": {
 							epID: "ep",
 							policiesToSets: map[string][]string{
-								"policy": []string{"ipset"},
+								"policy": {"ipset"},
 							},
 						},
 					},
@@ -1835,10 +1835,10 @@ var _ = Describe("XDP state", func() {
 						CreateMap:  set.From("ifNoMap", "ifBogusMap"),
 						RemoveMap:  set.From("ifBogusMap"),
 						AddToMap: map[string]map[string]uint32{
-							"ifNoMap": map[string]uint32{
+							"ifNoMap": {
 								"ipset": 1,
 							},
-							"ifBogusMap": map[string]uint32{
+							"ifBogusMap": {
 								"ipset": 1,
 							},
 							// no ifOkMap here, because it is synced memberwise,
@@ -1848,48 +1848,48 @@ var _ = Describe("XDP state", func() {
 				}),
 				Entry("has XDP, but with some map problems", testStruct{
 					bpfState: map[string]bpfIfaceData{
-						"ifNoMap": bpfIfaceData{
+						"ifNoMap": {
 							hasXDP: true,
 							// no map
 						},
-						"ifBogusMap": bpfIfaceData{
+						"ifBogusMap": {
 							hasXDP:    true,
 							mapExists: true,
 							mapBogus:  true,
 						},
-						"ifMismatchedMap": bpfIfaceData{
+						"ifMismatchedMap": {
 							hasXDP:      true,
 							mapExists:   true,
 							mapMismatch: true,
 						},
-						"ifOkMap": bpfIfaceData{
+						"ifOkMap": {
 							hasXDP:    true,
 							mapExists: true,
 						},
 					},
 					newCurrentState: map[string]testIfaceData{
-						"ifNoMap": testIfaceData{
+						"ifNoMap": {
 							epID: "ep",
 							policiesToSets: map[string][]string{
-								"policy": []string{"ipset"},
+								"policy": {"ipset"},
 							},
 						},
-						"ifBogusMap": testIfaceData{
+						"ifBogusMap": {
 							epID: "ep",
 							policiesToSets: map[string][]string{
-								"policy": []string{"ipset"},
+								"policy": {"ipset"},
 							},
 						},
-						"ifMismatchedMap": testIfaceData{
+						"ifMismatchedMap": {
 							epID: "ep",
 							policiesToSets: map[string][]string{
-								"policy": []string{"ipset"},
+								"policy": {"ipset"},
 							},
 						},
-						"ifOkMap": testIfaceData{
+						"ifOkMap": {
 							epID: "ep",
 							policiesToSets: map[string][]string{
-								"policy": []string{"ipset"},
+								"policy": {"ipset"},
 							},
 						},
 					},
@@ -1900,10 +1900,10 @@ var _ = Describe("XDP state", func() {
 						CreateMap:    set.From("ifNoMap", "ifBogusMap"),
 						RemoveMap:    set.From("ifBogusMap"),
 						AddToMap: map[string]map[string]uint32{
-							"ifNoMap": map[string]uint32{
+							"ifNoMap": {
 								"ipset": 1,
 							},
-							"ifBogusMap": map[string]uint32{
+							"ifBogusMap": {
 								"ipset": 1,
 							},
 							// no ifOkMap and ifMismatchedMap here, because they are synced memberwise,
@@ -1913,52 +1913,52 @@ var _ = Describe("XDP state", func() {
 				}),
 				Entry("has bogus XDP and some map problems", testStruct{
 					bpfState: map[string]bpfIfaceData{
-						"ifNoMap": bpfIfaceData{
+						"ifNoMap": {
 							hasXDP:      true,
 							hasBogusXDP: true,
 							// no map
 						},
-						"ifBogusMap": bpfIfaceData{
+						"ifBogusMap": {
 							hasXDP:      true,
 							hasBogusXDP: true,
 							mapExists:   true,
 							mapBogus:    true,
 						},
-						"ifMismatchedMap": bpfIfaceData{
+						"ifMismatchedMap": {
 							hasXDP:      true,
 							hasBogusXDP: true,
 							mapExists:   true,
 							mapMismatch: true,
 						},
-						"ifOkMap": bpfIfaceData{
+						"ifOkMap": {
 							hasXDP:      true,
 							hasBogusXDP: true,
 							mapExists:   true,
 						},
 					},
 					newCurrentState: map[string]testIfaceData{
-						"ifNoMap": testIfaceData{
+						"ifNoMap": {
 							epID: "ep",
 							policiesToSets: map[string][]string{
-								"policy": []string{"ipset"},
+								"policy": {"ipset"},
 							},
 						},
-						"ifBogusMap": testIfaceData{
+						"ifBogusMap": {
 							epID: "ep",
 							policiesToSets: map[string][]string{
-								"policy": []string{"ipset"},
+								"policy": {"ipset"},
 							},
 						},
-						"ifMismatchedMap": testIfaceData{
+						"ifMismatchedMap": {
 							epID: "ep",
 							policiesToSets: map[string][]string{
-								"policy": []string{"ipset"},
+								"policy": {"ipset"},
 							},
 						},
-						"ifOkMap": testIfaceData{
+						"ifOkMap": {
 							epID: "ep",
 							policiesToSets: map[string][]string{
-								"policy": []string{"ipset"},
+								"policy": {"ipset"},
 							},
 						},
 					},
@@ -1969,10 +1969,10 @@ var _ = Describe("XDP state", func() {
 						CreateMap:    set.From("ifNoMap", "ifBogusMap"),
 						RemoveMap:    set.From("ifBogusMap"),
 						AddToMap: map[string]map[string]uint32{
-							"ifNoMap": map[string]uint32{
+							"ifNoMap": {
 								"ipset": 1,
 							},
-							"ifBogusMap": map[string]uint32{
+							"ifBogusMap": {
 								"ipset": 1,
 							},
 							// no ifOkMap and ifMismatchedMap here, because they are synced memberwise,
@@ -1982,52 +1982,52 @@ var _ = Describe("XDP state", func() {
 				}),
 				Entry("has invalid XDP mode and some map problems", testStruct{
 					bpfState: map[string]bpfIfaceData{
-						"ifNoMap": bpfIfaceData{
+						"ifNoMap": {
 							hasXDP:     true,
 							hasBadMode: true,
 							// no map
 						},
-						"ifBogusMap": bpfIfaceData{
+						"ifBogusMap": {
 							hasXDP:     true,
 							hasBadMode: true,
 							mapExists:  true,
 							mapBogus:   true,
 						},
-						"ifMismatchedMap": bpfIfaceData{
+						"ifMismatchedMap": {
 							hasXDP:      true,
 							hasBadMode:  true,
 							mapExists:   true,
 							mapMismatch: true,
 						},
-						"ifOkMap": bpfIfaceData{
+						"ifOkMap": {
 							hasXDP:     true,
 							hasBadMode: true,
 							mapExists:  true,
 						},
 					},
 					newCurrentState: map[string]testIfaceData{
-						"ifNoMap": testIfaceData{
+						"ifNoMap": {
 							epID: "ep",
 							policiesToSets: map[string][]string{
-								"policy": []string{"ipset"},
+								"policy": {"ipset"},
 							},
 						},
-						"ifBogusMap": testIfaceData{
+						"ifBogusMap": {
 							epID: "ep",
 							policiesToSets: map[string][]string{
-								"policy": []string{"ipset"},
+								"policy": {"ipset"},
 							},
 						},
-						"ifMismatchedMap": testIfaceData{
+						"ifMismatchedMap": {
 							epID: "ep",
 							policiesToSets: map[string][]string{
-								"policy": []string{"ipset"},
+								"policy": {"ipset"},
 							},
 						},
-						"ifOkMap": testIfaceData{
+						"ifOkMap": {
 							epID: "ep",
 							policiesToSets: map[string][]string{
-								"policy": []string{"ipset"},
+								"policy": {"ipset"},
 							},
 						},
 					},
@@ -2038,10 +2038,10 @@ var _ = Describe("XDP state", func() {
 						CreateMap:    set.From("ifNoMap", "ifBogusMap"),
 						RemoveMap:    set.From("ifBogusMap"),
 						AddToMap: map[string]map[string]uint32{
-							"ifNoMap": map[string]uint32{
+							"ifNoMap": {
 								"ipset": 1,
 							},
-							"ifBogusMap": map[string]uint32{
+							"ifBogusMap": {
 								"ipset": 1,
 							},
 							// no ifOkMap and ifMismatchedMap here, because they are synced memberwise,
@@ -2051,11 +2051,11 @@ var _ = Describe("XDP state", func() {
 				}),
 				Entry("has some member problems", testStruct{
 					bpfState: map[string]bpfIfaceData{
-						"ifNoMap": bpfIfaceData{
+						"ifNoMap": {
 							// no xdp
 							// no map
 						},
-						"ifOkMap": bpfIfaceData{
+						"ifOkMap": {
 							hasXDP:    true,
 							mapExists: true,
 							mapContents: map[bpf.IPv4Mask]uint32{
@@ -2064,7 +2064,7 @@ var _ = Describe("XDP state", func() {
 								bpf.IPv4Mask{Ip: [4]byte{3, 4, 5, 6}, Mask: 32}: 1,
 							},
 						},
-						"ifBadMap1": bpfIfaceData{
+						"ifBadMap1": {
 							hasXDP:    true,
 							mapExists: true,
 							mapContents: map[bpf.IPv4Mask]uint32{
@@ -2072,7 +2072,7 @@ var _ = Describe("XDP state", func() {
 								bpf.IPv4Mask{Ip: [4]byte{1, 2, 3, 4}, Mask: 16}:     1,
 							},
 						},
-						"ifBadMap2": bpfIfaceData{
+						"ifBadMap2": {
 							hasXDP:    true,
 							mapExists: true,
 							mapContents: map[bpf.IPv4Mask]uint32{
@@ -2083,34 +2083,34 @@ var _ = Describe("XDP state", func() {
 						},
 					},
 					newCurrentState: map[string]testIfaceData{
-						"ifNoMap": testIfaceData{
+						"ifNoMap": {
 							epID: "ep",
 							policiesToSets: map[string][]string{
-								"policy": []string{"ipset"},
+								"policy": {"ipset"},
 							},
 						},
-						"ifOkMap": testIfaceData{
+						"ifOkMap": {
 							epID: "ep",
 							policiesToSets: map[string][]string{
-								"policy": []string{"ipset"},
+								"policy": {"ipset"},
 							},
 						},
-						"ifBadMap1": testIfaceData{
+						"ifBadMap1": {
 							epID: "ep",
 							policiesToSets: map[string][]string{
-								"policy": []string{"ipset"},
+								"policy": {"ipset"},
 							},
 						},
-						"ifBadMap2": testIfaceData{
+						"ifBadMap2": {
 							epID: "ep",
 							policiesToSets: map[string][]string{
-								"policy": []string{"ipset"},
+								"policy": {"ipset"},
 							},
 						},
 					},
 					ipsetsSrc: &mockIPSetsSource{
 						ipsetsMap: map[string]mockIPSetValue{
-							"ipset": mockIPSetValue{
+							"ipset": {
 								ipsetType: ipsets.IPSetTypeHashIP,
 								members:   set.From("1.2.3.4", "2.3.4.5", "3.4.5.6"),
 							},
@@ -2120,23 +2120,23 @@ var _ = Describe("XDP state", func() {
 						InstallXDP: set.From("ifNoMap"),
 						CreateMap:  set.From("ifNoMap"),
 						AddToMap: map[string]map[string]uint32{
-							"ifNoMap": map[string]uint32{
+							"ifNoMap": {
 								"ipset": 1,
 							},
 						},
 						MembersToAdd: map[string]map[string]uint32{
-							"ifBadMap1": map[string]uint32{
+							"ifBadMap1": {
 								"1.2.3.4/32": 1,
 								"2.3.4.5/32": 1,
 								"3.4.5.6/32": 1,
 							},
 						},
 						MembersToDrop: map[string]map[string]uint32{
-							"ifBadMap1": map[string]uint32{
+							"ifBadMap1": {
 								"42.42.42.42/32": 3,
 								"1.2.3.4/16":     1,
 							},
-							"ifBadMap2": map[string]uint32{
+							"ifBadMap2": {
 								"1.2.3.4/32": 2,
 								"2.3.4.5/32": 5,
 							},
@@ -2202,13 +2202,13 @@ var _ = Describe("XDP state", func() {
 				},
 				Entry("change irrelevant ipset", testStruct{
 					ipsets: map[string][]string{
-						"ipset": []string{"1.2.3.4/32"},
+						"ipset": {"1.2.3.4/32"},
 					},
 					newCurrentState: map[string]testIfaceData{
-						"iface": testIfaceData{
+						"iface": {
 							epID: "ep",
 							policiesToSets: map[string][]string{
-								"policy": []string{"ipset"},
+								"policy": {"ipset"},
 							},
 						},
 					},
@@ -2219,20 +2219,20 @@ var _ = Describe("XDP state", func() {
 						removeIPSet("ipset5"),
 					},
 					expectedBPFState: map[string]map[string]uint32{
-						"iface": map[string]uint32{
+						"iface": {
 							"1.2.3.4/32": 1,
 						},
 					},
 				}),
 				Entry("add a member to ipset", testStruct{
 					ipsets: map[string][]string{
-						"ipset": []string{"1.2.3.4/32"},
+						"ipset": {"1.2.3.4/32"},
 					},
 					newCurrentState: map[string]testIfaceData{
-						"iface": testIfaceData{
+						"iface": {
 							epID: "ep",
 							policiesToSets: map[string][]string{
-								"policy": []string{"ipset"},
+								"policy": {"ipset"},
 							},
 						},
 					},
@@ -2240,7 +2240,7 @@ var _ = Describe("XDP state", func() {
 						addMembersIPSet("ipset", "2.3.4.5/32"),
 					},
 					expectedBPFState: map[string]map[string]uint32{
-						"iface": map[string]uint32{
+						"iface": {
 							"1.2.3.4/32": 1,
 							"2.3.4.5/32": 1,
 						},
@@ -2248,13 +2248,13 @@ var _ = Describe("XDP state", func() {
 				}),
 				Entry("remove a member from ipset", testStruct{
 					ipsets: map[string][]string{
-						"ipset": []string{"1.2.3.4/32", "2.3.4.5/32"},
+						"ipset": {"1.2.3.4/32", "2.3.4.5/32"},
 					},
 					newCurrentState: map[string]testIfaceData{
-						"iface": testIfaceData{
+						"iface": {
 							epID: "ep",
 							policiesToSets: map[string][]string{
-								"policy": []string{"ipset"},
+								"policy": {"ipset"},
 							},
 						},
 					},
@@ -2262,20 +2262,20 @@ var _ = Describe("XDP state", func() {
 						removeMembersIPSet("ipset", "2.3.4.5/32"),
 					},
 					expectedBPFState: map[string]map[string]uint32{
-						"iface": map[string]uint32{
+						"iface": {
 							"1.2.3.4/32": 1,
 						},
 					},
 				}),
 				Entry("replace contents of the ipset", testStruct{
 					ipsets: map[string][]string{
-						"ipset": []string{"1.2.3.4/32", "2.3.4.5/32"},
+						"ipset": {"1.2.3.4/32", "2.3.4.5/32"},
 					},
 					newCurrentState: map[string]testIfaceData{
-						"iface": testIfaceData{
+						"iface": {
 							epID: "ep",
 							policiesToSets: map[string][]string{
-								"policy": []string{"ipset"},
+								"policy": {"ipset"},
 							},
 						},
 					},
@@ -2283,7 +2283,7 @@ var _ = Describe("XDP state", func() {
 						replaceIPSet("ipset", "4.3.2.1/32", "5.4.3.2/32"),
 					},
 					expectedBPFState: map[string]map[string]uint32{
-						"iface": map[string]uint32{
+						"iface": {
 							"4.3.2.1/32": 1,
 							"5.4.3.2/32": 1,
 						},
@@ -2291,13 +2291,13 @@ var _ = Describe("XDP state", func() {
 				}),
 				Entry("replace overlapping contents of the ipset", testStruct{
 					ipsets: map[string][]string{
-						"ipset": []string{"1.2.3.4/32", "2.3.4.5/32", "6.6.6.6/32"},
+						"ipset": {"1.2.3.4/32", "2.3.4.5/32", "6.6.6.6/32"},
 					},
 					newCurrentState: map[string]testIfaceData{
-						"iface": testIfaceData{
+						"iface": {
 							epID: "ep",
 							policiesToSets: map[string][]string{
-								"policy": []string{"ipset"},
+								"policy": {"ipset"},
 							},
 						},
 					},
@@ -2305,7 +2305,7 @@ var _ = Describe("XDP state", func() {
 						replaceIPSet("ipset", "4.3.2.1/32", "5.4.3.2/32", "6.6.6.6/32"),
 					},
 					expectedBPFState: map[string]map[string]uint32{
-						"iface": map[string]uint32{
+						"iface": {
 							"4.3.2.1/32": 1,
 							"5.4.3.2/32": 1,
 							"6.6.6.6/32": 1,
@@ -2314,13 +2314,13 @@ var _ = Describe("XDP state", func() {
 				}),
 				Entry("replace contents of the ipset with further modifications", testStruct{
 					ipsets: map[string][]string{
-						"ipset": []string{"1.2.3.4/32", "2.3.4.5/32"},
+						"ipset": {"1.2.3.4/32", "2.3.4.5/32"},
 					},
 					newCurrentState: map[string]testIfaceData{
-						"iface": testIfaceData{
+						"iface": {
 							epID: "ep",
 							policiesToSets: map[string][]string{
-								"policy": []string{"ipset"},
+								"policy": {"ipset"},
 							},
 						},
 					},
@@ -2330,7 +2330,7 @@ var _ = Describe("XDP state", func() {
 						removeMembersIPSet("ipset", "4.3.2.1/32"),
 					},
 					expectedBPFState: map[string]map[string]uint32{
-						"iface": map[string]uint32{
+						"iface": {
 							"6.5.4.3/32": 1,
 							"5.4.3.2/32": 1,
 						},
@@ -2340,13 +2340,13 @@ var _ = Describe("XDP state", func() {
 				// normally nothing refers to the ipset any more
 				Entry("remove contents of the ipset", testStruct{
 					ipsets: map[string][]string{
-						"ipset": []string{"1.2.3.4/32", "2.3.4.5/32"},
+						"ipset": {"1.2.3.4/32", "2.3.4.5/32"},
 					},
 					newCurrentState: map[string]testIfaceData{
-						"iface": testIfaceData{
+						"iface": {
 							epID: "ep",
 							policiesToSets: map[string][]string{
-								"policy": []string{"ipset"},
+								"policy": {"ipset"},
 							},
 						},
 					},
@@ -2354,18 +2354,18 @@ var _ = Describe("XDP state", func() {
 						removeIPSet("ipset"),
 					},
 					expectedBPFState: map[string]map[string]uint32{
-						"iface": map[string]uint32{},
+						"iface": {},
 					},
 				}),
 				Entry("modify contents of the ipset, then replace it", testStruct{
 					ipsets: map[string][]string{
-						"ipset": []string{"1.2.3.4/32", "2.3.4.5/32", "3.4.5.6/32"},
+						"ipset": {"1.2.3.4/32", "2.3.4.5/32", "3.4.5.6/32"},
 					},
 					newCurrentState: map[string]testIfaceData{
-						"iface": testIfaceData{
+						"iface": {
 							epID: "ep",
 							policiesToSets: map[string][]string{
-								"policy": []string{"ipset"},
+								"policy": {"ipset"},
 							},
 						},
 					},
@@ -2375,7 +2375,7 @@ var _ = Describe("XDP state", func() {
 						replaceIPSet("ipset", "4.3.2.1/32", "5.4.3.2/32"),
 					},
 					expectedBPFState: map[string]map[string]uint32{
-						"iface": map[string]uint32{
+						"iface": {
 							"4.3.2.1/32": 1,
 							"5.4.3.2/32": 1,
 						},
@@ -2386,20 +2386,20 @@ var _ = Describe("XDP state", func() {
 
 		It("should clean the cache properly", func() {
 			testState := map[string]testIfaceData{
-				"iface": testIfaceData{
+				"iface": {
 					epID: "ep",
 					policiesToSets: map[string][]string{
-						"policy": []string{"ipset"},
+						"policy": {"ipset"},
 					},
 				},
-				"iface2": testIfaceData{
+				"iface2": {
 					epID: "ep2",
 					policiesToSets: map[string][]string{
-						"policy2": []string{"ipset2"},
+						"policy2": {"ipset2"},
 					},
 				},
 			}
-			state := NewXDPStateWithBPFLibrary(bpf.NewMockBPFLib(), true)
+			state := NewXDPStateWithBPFLibrary(bpf.NewMockBPFLib("../../bpf/bin"), true)
 			ipState := state.ipV4State
 			testStateToRealState(testState, nil, ipState.currentState)
 			cache := ipState.ipsetIDsToMembers
@@ -2454,7 +2454,7 @@ var _ = Describe("XDP state", func() {
 
 			DescribeTable("",
 				func(s testStruct) {
-					state := NewXDPStateWithBPFLibrary(bpf.NewMockBPFLib(), false)
+					state := NewXDPStateWithBPFLibrary(bpf.NewMockBPFLib("../../bpf/bin"), false)
 					state.ipV4State.bpfActions.InstallXDP.AddAll(s.install)
 					state.ipV4State.bpfActions.UninstallXDP.AddAll(s.uninstall)
 					state.ipV4State.bpfActions.CreateMap.AddAll(s.create)
@@ -2482,11 +2482,11 @@ var _ = Describe("XDP state", func() {
 					initialState: map[string]map[string]uint32{},
 					ipsetsSrc: &mockIPSetsSource{
 						ipsetsMap: map[string]mockIPSetValue{
-							"id0001": mockIPSetValue{
+							"id0001": {
 								ipsetType: ipsets.IPSetTypeHashIP,
 								members:   set.From("10.0.0.1", "10.0.0.2"),
 							},
-							"id0004": mockIPSetValue{
+							"id0004": {
 								ipsetType: ipsets.IPSetTypeHashNet,
 								members:   set.From("10.1.0.0/16", "10.1.1.0/24"),
 							},
@@ -2498,42 +2498,42 @@ var _ = Describe("XDP state", func() {
 					create:            []string{"eth0", "eth1"},
 					remove:            nil,
 					addToMap: map[string]map[string]uint32{
-						"eth0": map[string]uint32{
+						"eth0": {
 							"id0004": 3,
 						},
 					},
 					removeFromMap: nil,
 					membersToAdd: map[string]map[string]uint32{
-						"eth0": map[string]uint32{
+						"eth0": {
 							"10.0.0.10/32": 2,
 							"10.2.0.0/16":  1,
 						},
-						"eth1": map[string]uint32{
+						"eth1": {
 							"10.0.0.3/32": 1,
 						},
 					},
 					membersToDrop: nil,
 					expectedState: map[string]map[string]uint32{
-						"eth0": map[string]uint32{
+						"eth0": {
 							"10.0.0.10/32": 2,
 							"10.2.0.0/16":  1,
 							"10.1.0.0/16":  3,
 							"10.1.1.0/24":  3,
 						},
-						"eth1": map[string]uint32{
+						"eth1": {
 							"10.0.0.3/32": 1,
 						},
 					},
 				}),
 				Entry("drop things with previous final state", testStruct{
 					initialState: map[string]map[string]uint32{
-						"eth0": map[string]uint32{
+						"eth0": {
 							"10.0.0.10/32": 2,
 							"10.2.0.0/16":  1,
 							"10.1.0.0/16":  3,
 							"10.1.1.0/24":  3,
 						},
-						"eth1": map[string]uint32{
+						"eth1": {
 							"10.0.0.3/32": 1,
 						},
 					},
@@ -2553,18 +2553,18 @@ var _ = Describe("XDP state", func() {
 					remove:    []string{"eth1"},
 					addToMap:  nil,
 					removeFromMap: map[string]map[string]uint32{
-						"eth0": map[string]uint32{
+						"eth0": {
 							"id0004": 1,
 						},
 					},
 					membersToAdd: nil,
 					membersToDrop: map[string]map[string]uint32{
-						"eth0": map[string]uint32{
+						"eth0": {
 							"10.2.0.0/16": 1,
 						},
 					},
 					expectedState: map[string]map[string]uint32{
-						"eth0": map[string]uint32{
+						"eth0": {
 							"10.0.0.10/32": 2,
 							"10.1.0.0/16":  2,
 							"10.1.1.0/24":  2,
@@ -2573,12 +2573,12 @@ var _ = Describe("XDP state", func() {
 				}),
 				Entry("adds and drops", testStruct{
 					initialState: map[string]map[string]uint32{
-						"eth0": map[string]uint32{
+						"eth0": {
 							"10.0.0.1/32": 3,
 							"10.0.0.2/32": 2,
 							"10.0.0.3/32": 4,
 						},
-						"eth1": map[string]uint32{
+						"eth1": {
 							"10.0.1.1/32": 1,
 							"10.0.1.2/32": 3,
 							"10.0.1.0/24": 1,
@@ -2586,11 +2586,11 @@ var _ = Describe("XDP state", func() {
 					},
 					ipsetsSrc: &mockIPSetsSource{
 						ipsetsMap: map[string]mockIPSetValue{
-							"id0006": mockIPSetValue{
+							"id0006": {
 								ipsetType: ipsets.IPSetTypeHashIP,
 								members:   set.From("1.1.1.1", "2.2.2.2"),
 							},
-							"id0007": mockIPSetValue{
+							"id0007": {
 								ipsetType: ipsets.IPSetTypeHashNet,
 								members:   set.From("8.1.2.0/24", "10.1.1.0/24"),
 							},
@@ -2609,40 +2609,40 @@ var _ = Describe("XDP state", func() {
 					create:    []string{"wlan0"},
 					remove:    []string{"eth0"},
 					addToMap: map[string]map[string]uint32{
-						"eth1": map[string]uint32{
+						"eth1": {
 							"id0006": 3,
 						},
-						"wlan0": map[string]uint32{
+						"wlan0": {
 							"id0006": 1,
 							"id0007": 1,
 						},
 					},
 					removeFromMap: map[string]map[string]uint32{
-						"eth1": map[string]uint32{
+						"eth1": {
 							"id0009": 1,
 						},
 					},
 					membersToAdd: map[string]map[string]uint32{
-						"eth1": map[string]uint32{
+						"eth1": {
 							"9.9.0.0/16": 2,
 						},
-						"wlan0": map[string]uint32{
+						"wlan0": {
 							"1.1.1.1/32": 1,
 						},
 					},
 					membersToDrop: map[string]map[string]uint32{
-						"eth1": map[string]uint32{
+						"eth1": {
 							"10.0.1.2/32": 3,
 						},
 					},
 					expectedState: map[string]map[string]uint32{
-						"eth1": map[string]uint32{
+						"eth1": {
 							"1.1.1.1/32":  3,
 							"2.2.2.2/32":  3,
 							"10.0.1.1/32": 1,
 							"9.9.0.0/16":  2,
 						},
-						"wlan0": map[string]uint32{
+						"wlan0": {
 							"1.1.1.1/32":  2,
 							"2.2.2.2/32":  1,
 							"8.1.2.0/24":  1,
@@ -2654,10 +2654,10 @@ var _ = Describe("XDP state", func() {
 					initialState: map[string]map[string]uint32{
 						// the _xdpgeneric suffix won't be
 						// a part of the iface name
-						"eth0_xdpgeneric": map[string]uint32{
+						"eth0_xdpgeneric": {
 							"10.0.0.10/32": 1,
 						},
-						"eth1_xdpgeneric": map[string]uint32{
+						"eth1_xdpgeneric": {
 							"10.0.0.10/32": 1,
 						},
 					},
@@ -2677,7 +2677,7 @@ var _ = Describe("XDP state", func() {
 					membersToAdd:  nil,
 					membersToDrop: nil,
 					expectedState: map[string]map[string]uint32{
-						"eth0": map[string]uint32{
+						"eth0": {
 							"10.0.0.10/32": 1,
 						},
 					},
@@ -2699,7 +2699,7 @@ var _ = Describe("XDP state", func() {
 
 			DescribeTable("",
 				func(s testStruct) {
-					state := NewXDPStateWithBPFLibrary(bpf.NewMockBPFLib(), true)
+					state := NewXDPStateWithBPFLibrary(bpf.NewMockBPFLib("../../bpf/bin"), true)
 					state.ipV4State.newCurrentState = newXDPSystemState()
 					ipsetsSrc := &nilIPSetsSource{}
 					resyncState, err := state.ipV4State.newXDPResyncState(state.common.bpfLib, ipsetsSrc, state.common.programTag, state.common.xdpModes)
@@ -2736,12 +2736,12 @@ var _ = Describe("XDP state", func() {
 					create:    []string{"enps0"},
 					remove:    []string{"enps1"},
 					withProgs: map[string]progInfo{
-						"wlan0": progInfo{},
-						"wlan1": progInfo{},
+						"wlan0": {},
+						"wlan1": {},
 					},
 					withMaps: map[string]mapInfo{
-						"wlan0": mapInfo{},
-						"wlan1": mapInfo{},
+						"wlan0": {},
+						"wlan1": {},
 					},
 					newState: map[string]bool{
 						"eth15": true,

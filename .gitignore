@@ -15,8 +15,6 @@
 
 # Build directories.
 /bin/
-/bpf/xdp/generated/
-/bpf/sockmap/generated/
 /docker-image/bin/
 /build/
 /dist/
@@ -60,7 +58,6 @@ htmlcov/
 /.built-bpf-clang-builder-*
 
 # for the bpf programs
-*.o
 *.ll
 *.d
 

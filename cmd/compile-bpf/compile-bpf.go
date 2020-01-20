@@ -50,11 +50,11 @@ func main() {
 	srcDir := "./bpf/tc/templates"
 	incDir := "../../include/"
 	srcFileName := path.Join(srcDir, "tc_template.c")
-	err = os.RemoveAll("bin/bpf")
+	err = os.RemoveAll("bpf/bin")
 	if err != nil && !os.IsNotExist(err) {
 		log.WithError(err).Panic("Failed to clean up old directory")
 	}
-	err = os.MkdirAll("bin/bpf", 0755)
+	err = os.MkdirAll("bpf/bin", 0755)
 	if err != nil {
 		log.WithError(err).Panic("Failed to make directory")
 	}
@@ -89,7 +89,7 @@ func main() {
 						secName := tc.SectionName(epType, toOrFrom)
 						flags := tc.SectionToFlags(secName)
 
-						oFileName := path.Join("bin/bpf/", tc.ProgFilename(epType, toOrFrom, epToHostDrop, fibEnabled, logLevel))
+						oFileName := path.Join("bpf/bin/", tc.ProgFilename(epType, toOrFrom, epToHostDrop, fibEnabled, logLevel))
 						if generateMakefileInc {
 							fmt.Println("BPF_PROGS +=", oFileName)
 							continue
@@ -128,10 +128,9 @@ func main() {
 		}
 
 		// Compile the connect-time load balancer.
-		oFileName := path.Join("bin/bpf/", nat.ProgFileName(logLevel))
+		oFileName := path.Join("bpf/bin/", nat.ProgFileName(logLevel))
 		if generateMakefileInc {
 			fmt.Println("BPF_PROGS +=", oFileName)
-			continue
 		} else {
 			wg.Add(1)
 			go func() {
