@@ -92,10 +92,10 @@ protocol bgp Mesh_with_node_2 from bgp_template {
 }
 """
 
-class TestBGPAdvertV6(TestBaseV6):
+class _TestBGPAdvertV6(TestBaseV6):
 
     def setUp(self):
-        super(TestBGPAdvertV6, self).setUp()
+        super(_TestBGPAdvertV6, self).setUp()
 
         # Create bgp test namespace
         self.ns = "bgp-test"
@@ -104,8 +104,7 @@ class TestBGPAdvertV6(TestBaseV6):
         self.nodes, self.ipv4s, self.ipv6s = node_info()
         self.external_node_ip = start_external_node_with_bgp(
             "kube-node-extra",
-            bird6_peer_config=bird_conf % (self.ipv6s[0], self.ipv6s[1],
-                                           self.ipv6s[2], self.ipv6s[3])
+            bird6_peer_config=self.get_bird_conf(),
         )
 
         # Enable debug logging
@@ -119,47 +118,12 @@ class TestBGPAdvertV6(TestBaseV6):
 apiVersion: projectcalico.org/v3
 kind: BGPPeer
 metadata:
-  name: node-extra.peer
-spec:
-  peerIP: %s
-  asNumber: 64512
+  name: node-extra.peer%s
 EOF
-""" % self.external_node_ip)
-
-    def setUpRR(self):
-        super(TestBGPAdvertV6, self).setUp()
-
-        # Create bgp test namespace
-        self.ns = "bgp-test"
-        self.create_namespace(self.ns)
-
-        self.nodes, _, self.ipv6s = node_info()
-        self.external_node_ip = start_external_node_with_bgp(
-            "kube-node-extra",
-            bird6_peer_config=bird_conf_rr % self.ipv6s[2]
-        )
-
-        # Enable debug logging
-        self.update_ds_env("calico-node",
-                           "kube-system",
-                           "BGP_LOGSEVERITYSCREEN",
-                           "debug")
-
-        # Establish BGPPeer from cluster nodes to node-extra using calicoctl
-        calicoctl("""apply -f - << EOF
-apiVersion: projectcalico.org/v3
-kind: BGPPeer
-metadata:
-  name: node-extra.peer
-spec:
-  node: %s
-  peerIP: %s
-  asNumber: 64512
-EOF
-""" % (self.nodes[2], self.external_node_ip))
+""" % self.get_extra_peer_spec())
 
     def tearDown(self):
-        super(TestBGPAdvertV6, self).tearDown()
+        super(_TestBGPAdvertV6, self).tearDown()
         self.delete_and_confirm(self.ns, "ns")
         try:
             # Delete the extra node.
@@ -169,7 +133,7 @@ EOF
 
         # Delete BGPPeers.
         calicoctl("delete bgppeer node-extra.peer", allow_fail=True)
-        calicoctl("delete bgppeer kube-node-1", allow_fail=True)
+        calicoctl("delete bgppeer peer-with-rr", allow_fail=True)
 
         # Restore node-to-node mesh.
         calicoctl("""apply -f - << EOF
@@ -216,110 +180,32 @@ EOF
         patchStr = "{\"spec\": {\"externalIPs\": [%s]}}" % (ipsStr)
         return kubectl("patch svc %s -n %s --patch '%s'" % (svc, ns, patchStr)).strip()
 
-    def test_rr(self):
-        self.tearDown()
-        self.setUpRR()
 
-        # Create ExternalTrafficPolicy Local service with one endpoint on node-1
-        kubectl("""apply -f - << EOF
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: nginx-rr
-  namespace: bgp-test
-  labels:
-    app: nginx
+class TestBGPAdvertV6(_TestBGPAdvertV6):
+
+    # In the tests of this class we have a full BGP mesh between the
+    # cluster nodes (kube-control-plane, kube-node-1 and kube-node-2)
+    # and the external node (kube-node-extra):
+    #
+    # - The full mesh between the cluster nodes is configured by
+    #   nodeToNodeMeshEnabled: true.
+    #
+    # - The peerings from each cluster node to the external node are
+    #   configured by self.get_extra_peer_spec().
+    #
+    # - The peerings from the external node to each cluster node are
+    #   configured by self.get_bird_conf().
+
+    def get_bird_conf(self):
+        return bird_conf % (self.ipv6s[0], self.ipv6s[1],
+                            self.ipv6s[2], self.ipv6s[3])
+
+    def get_extra_peer_spec(self):
+        return """
 spec:
-  replicas: 1
-  selector:
-    matchLabels:
-      app: nginx
-      run: nginx-rr
-  template:
-    metadata:
-      labels:
-        app: nginx
-        run: nginx-rr
-    spec:
-      containers:
-      - name: nginx-rr
-        image: nginx:1.7.9
-        ports:
-        - containerPort: 80
-      nodeSelector:
-        beta.kubernetes.io/os: linux
-        kubernetes.io/hostname: %s
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: nginx-rr
-  namespace: bgp-test
-  labels:
-    app: nginx
-    run: nginx-rr
-spec:
-  ipFamily: IPv6
-  externalIPs:
-  - fd5f:1234:175:200::1
-  ports:
-  - port: 80
-    targetPort: 80
-  selector:
-    app: nginx
-    run: nginx-rr
-  type: NodePort
-  externalTrafficPolicy: Local
-EOF
-""" % self.nodes[1])
-
-        calicoctl("get nodes -o yaml")
-        calicoctl("get bgppeers -o yaml")
-        calicoctl("get bgpconfigs -o yaml")
-
-        # Update the node-2 to behave as a route-reflector
-        json_str = calicoctl("get node %s -o json" % self.nodes[2])
-        node_dict = json.loads(json_str)
-        node_dict['metadata']['labels']['i-am-a-route-reflector'] = 'true'
-        node_dict['spec']['bgp']['routeReflectorClusterID'] = '224.0.0.1'
-        calicoctl("""apply -f - << EOF
-%s
-EOF
-""" % json.dumps(node_dict))
-
-        # Disable node-to-node mesh and add cluster and external IPs CIDRs to advertise.
-        # Configure bgp peering between node-1 and RR and also between external node and RR.
-        calicoctl("""apply -f - << EOF
-apiVersion: projectcalico.org/v3
-kind: BGPConfiguration
-metadata:
-  name: default
-spec:
-  nodeToNodeMeshEnabled: false
-  asNumber: 64512
-  serviceClusterIPs:
-  - cidr: fd00:10:96::/112
-  serviceExternalIPs:
-  - cidr: fd5f:1234:175:200::/112
-EOF
-""")
-
-        calicoctl("""apply -f - << EOF
-apiVersion: projectcalico.org/v3
-kind: BGPPeer
-metadata: {name: kube-node-1}
-spec:
-  node: %s
   peerIP: %s
   asNumber: 64512
-EOF
-""" % (self.nodes[1], self.ipv6s[2]))
-        svc_json = kubectl("get svc nginx-rr -n bgp-test -o json")
-        svc_dict = json.loads(svc_json)
-        cluster_ip = svc_dict['spec']['clusterIP']
-        external_ip = svc_dict['spec']['externalIPs'][0]
-        retry_until_success(lambda: self.assertIn(cluster_ip, self.get_routes()))
-        retry_until_success(lambda: self.assertIn(external_ip, self.get_routes()))
+""" % self.external_node_ip
 
     def test_cluster_ip_advertisement(self):
         """
@@ -548,9 +434,11 @@ EOF
             # Assert they are all advertised to the other node. This should happen
             # quickly enough that by the time we have queried all services from
             # the k8s API, they should be programmed on the remote node.
-            routes = self.get_routes()
-            for cip in cluster_ips:
-                self.assertIn(cip, routes)
+            def check_routes_advertised():
+                routes = self.get_routes()
+                for cip in cluster_ips:
+                    self.assertIn(cip, routes)
+            retry_until_success(check_routes_advertised, retries=3, wait_time=5)
 
             # Scale to 0 replicas, assert all routes are removed.
             self.scale_deployment(local_svc, self.ns, 0)
@@ -560,3 +448,134 @@ EOF
                 for cip in cluster_ips:
                     self.assertNotIn(cip, routes)
             retry_until_success(check_routes_gone, retries=10, wait_time=5)
+
+
+class TestBGPAdvertV6RR(_TestBGPAdvertV6):
+
+    # In the tests of this class, kube-node-2 acts as an RR, and all
+    # the other nodes peer with it.  Here are the peerings that we
+    # need for that:
+    #
+    #                                      RR
+    # kube-master     kube-node-1     kube-node-2    kube-node-extra
+    #  2001:20::8      2001:20::1      2001:20::2      2001:20::20
+    #        |                |         | |    |         |
+    #        |                +---------+ |    +---------+
+    #        +----------------------------+   Peering -> is configured
+    #           These peerings are            by get_extra_peer_spec().
+    #           configured by BGPPeer         Peering <- is configured
+    #           peer-with-rr                  in get_bird_conf().
+
+    def get_bird_conf(self):
+        return bird_conf_rr % self.ipv6s[2]
+
+    def get_extra_peer_spec(self):
+        return """
+spec:
+  node: %s
+  peerIP: %s
+  asNumber: 64512
+""" % (self.nodes[2], self.external_node_ip)
+
+    def test_rr(self):
+        # Create ExternalTrafficPolicy Local service with one endpoint on node-1
+        kubectl("""apply -f - << EOF
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nginx-rr
+  namespace: bgp-test
+  labels:
+    app: nginx
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: nginx
+      run: nginx-rr
+  template:
+    metadata:
+      labels:
+        app: nginx
+        run: nginx-rr
+    spec:
+      containers:
+      - name: nginx-rr
+        image: nginx:1.7.9
+        ports:
+        - containerPort: 80
+      nodeSelector:
+        beta.kubernetes.io/os: linux
+        kubernetes.io/hostname: %s
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: nginx-rr
+  namespace: bgp-test
+  labels:
+    app: nginx
+    run: nginx-rr
+spec:
+  ipFamily: IPv6
+  externalIPs:
+  - fd5f:1234:175:200::1
+  ports:
+  - port: 80
+    targetPort: 80
+  selector:
+    app: nginx
+    run: nginx-rr
+  type: NodePort
+  externalTrafficPolicy: Local
+EOF
+""" % self.nodes[1])
+
+        calicoctl("get nodes -o yaml")
+        calicoctl("get bgppeers -o yaml")
+        calicoctl("get bgpconfigs -o yaml")
+
+        # Update the node-2 to behave as a route-reflector
+        json_str = calicoctl("get node %s -o json" % self.nodes[2])
+        node_dict = json.loads(json_str)
+        node_dict['metadata']['labels']['i-am-a-route-reflector'] = 'true'
+        node_dict['spec']['bgp']['routeReflectorClusterID'] = '224.0.0.1'
+        calicoctl("""apply -f - << EOF
+%s
+EOF
+""" % json.dumps(node_dict))
+
+        # Disable node-to-node mesh, add cluster and external IP CIDRs to
+        # advertise, and configure BGP peering between the cluster nodes and the
+        # RR.  (The BGP peering from the external node to the RR is included in
+        # get_bird_conf() above.)
+        calicoctl("""apply -f - << EOF
+apiVersion: projectcalico.org/v3
+kind: BGPConfiguration
+metadata:
+  name: default
+spec:
+  nodeToNodeMeshEnabled: false
+  asNumber: 64512
+  serviceClusterIPs:
+  - cidr: fd00:10:96::/112
+  serviceExternalIPs:
+  - cidr: fd5f:1234:175:200::/112
+EOF
+""")
+
+        calicoctl("""apply -f - << EOF
+apiVersion: projectcalico.org/v3
+kind: BGPPeer
+metadata: {name: peer-with-rr}
+spec:
+  peerIP: %s
+  asNumber: 64512
+EOF
+""" % self.ipv6s[2])
+        svc_json = kubectl("get svc nginx-rr -n bgp-test -o json")
+        svc_dict = json.loads(svc_json)
+        cluster_ip = svc_dict['spec']['clusterIP']
+        external_ip = svc_dict['spec']['externalIPs'][0]
+        retry_until_success(lambda: self.assertIn(cluster_ip, self.get_routes()))
+        retry_until_success(lambda: self.assertIn(external_ip, self.get_routes()))
