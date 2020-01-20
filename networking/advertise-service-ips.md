@@ -35,8 +35,8 @@ If your deployment is configured to peer with BGP routers outside the cluster, t
 
 | **Service type**  | **Cluster IP advertisement**                                 | **Traffic is...**                                            | Source IP address is... |
 | ----------------- | ------------------------------------------------------------ | ------------------------------------------------------------ | ----------------------- |
-| Cluster (default) | All nodes in the cluster statically advertise a route to the CIDR. | Load balanced across nodes in the cluster using ECMP, then forwarded to appropriate pod in the service using SNAT. May incur second hop to another node, but good overall load balancing. | Obscured by SNAT        |
-| Local             | Only nodes running a pod backing the service advertise routes to the CIDR, and to specific /32 routes. | Load balanced across nodes with endpoints for the service.  Avoids second hop for LoadBalancer and NodePort type services, traffic may be unevenly load balanced. (Other traffic is load balanced across nodes in the cluster.) | Preserved               |
+| Cluster (default) | All nodes in the cluster statically advertise a route to the service CIDR. | Load balanced across nodes in the cluster using ECMP, then forwarded to appropriate pod in the service using SNAT. May incur second hop to another node, but good overall load balancing. | Obscured by SNAT        |
+| Local             | The nodes with a pod backing the service advertise a specific route (/32 or /128) to the service's IP. | Load balanced across nodes with endpoints for the service.  Avoids second hop for LoadBalancer and NodePort type services, traffic may be unevenly load balanced. (Other traffic is load balanced across nodes in the cluster.) | Preserved               |
 
 If your {{site.prodname}} deployment is configured to peer with BGP routers outside the cluster, those routers - plus any further upstream places that those routers propagate to - will be able to send traffic to a Kubernetes service cluster IP, and that traffic is routed to one of the available endpoints for that service.
 
@@ -52,7 +52,7 @@ If your {{site.prodname}} deployment is configured to peer with BGP routers outs
 - [Configure BGP peering]({{ site.baseurl }}/networking/bgp) between {{site.prodname}} and your network infrastructure
 - For ECMP load balancing to services, the upstream routers must be configured to use BGP multipath.
 - You need at least one external node outside the cluster that acts as a router, route reflector, or ToR that is peered with calico nodes inside the cluster.
-- Services must be configured with the correct service type (“Cluster” or “Local”) for your implementation. For `externalTrafficPolicy: Local`, the service must be type `LoadBalancer` or `Nodeport`.
+- Services must be configured with the correct service type (“Cluster” or “Local”) for your implementation. For `externalTrafficPolicy: Local`, the service must be type `LoadBalancer` or `NodePort`.
 
 ### How to
 
@@ -61,9 +61,9 @@ If your {{site.prodname}} deployment is configured to peer with BGP routers outs
 
 #### Advertise service cluster IP addresses
 
-1. Determine the service cluster IP range.
+1. Determine the service cluster IP range.  (Or ranges, if your cluster is [dual stack]({{ site.baseurl }}/networking/dual-stack).)
 
-   Default: 10.0.0.0/24. To view existing range, pass the option `--service-cluster-ip-range` to the Kubernetes API server. For help, see the [Kubernetes API server reference guide](https://kubernetes.io/docs/reference/command-line-tools-reference/kube-apiserver/).
+   The range(s) for your cluster can be inferred from the `--service-cluster-ip-range` option passed to the Kubernetes API server. For help, see the [Kubernetes API server reference guide](https://kubernetes.io/docs/reference/command-line-tools-reference/kube-apiserver/).
 
 1. Check to see if you have a default BGPConfiguration.
 
@@ -74,7 +74,7 @@ If your {{site.prodname}} deployment is configured to peer with BGP routers outs
 1. Based on above results, update or create a BGPConfiguration.
 
    **Update default BGPConfiguration**
-   Patch the BGPConfiguration using the following command, using your own service cluster IP CIDR:
+   Patch the BGPConfiguration using the following command, using your own service cluster IP CIDR in place of "10.0.0.0/24":
 
    ```
    calicoctl patch BGPConfig default --patch \
@@ -82,7 +82,7 @@ If your {{site.prodname}} deployment is configured to peer with BGP routers outs
    ```
 
    **Create default BGPConfiguration**
-   Use the following sample command to create a default BGPConfiguration. Add your CIDR blocks for each cluster IP to be advertised in the `serviceClusterIPs` field.
+   Use the following sample command to create a default BGPConfiguration. Add your CIDR blocks, covering the cluster IPs to be advertised, in the `serviceClusterIPs` field, for example:
 
    ```
    calicoctl create -f - <<EOF
@@ -92,14 +92,14 @@ If your {{site.prodname}} deployment is configured to peer with BGP routers outs
      name: default
    spec:
      serviceClusterIPs:
-     - cidr: x.x.x.x/16
-     - cidr: y.y.y.y/32
+     - cidr: 10.96.0.0/16
+     - cidr: fd00:1234::/112
    EOF
    ```
 
    For help see, [BGP configuration resource]({{ site.baseurl }}/reference/resources/bgpconfig).
 
-> **Note**: In earlier versions of {{site.prodname}}, service cluster IP advertisement was configured via the environment variable CALICO_ADVERTISE_CLUSTER_IPS.
+> **Note**: In earlier versions of {{site.prodname}}, and for IPv4 only, service cluster IP advertisement was configured via the environment variable CALICO_ADVERTISE_CLUSTER_IPS.
 > That environment variable takes precedence over any serviceClusterIPs configured in the default BGPConfiguration. We recommend replacing the
 > deprecated CALICO_ADVERTISE_CLUSTER_IPS with BGPConfiguration.
 {: .alert .alert-info}
