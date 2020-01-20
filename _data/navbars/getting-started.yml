@@ -9,6 +9,8 @@ section:
     path: /getting-started/kubernetes/quickstart
   - title: System requirements
     path: /getting-started/kubernetes/requirements
+  - title: Self-managed on-premises
+    path: /getting-started/kubernetes/self-managed-onprem  
   - title: Managed public cloud
     path: /getting-started/kubernetes/managed-public-cloud/
     section:
