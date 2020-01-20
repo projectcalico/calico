@@ -107,7 +107,7 @@ class TestBase(TestCase):
     def create_namespace(self, ns_name):
         self.cluster.create_namespace(client.V1Namespace(metadata=client.V1ObjectMeta(name=ns_name)))
 
-    def deploy(self, image, name, ns, port, replicas=1, svc_type="NodePort", traffic_policy="Local", cluster_ip=None):
+    def deploy(self, image, name, ns, port, replicas=1, svc_type="NodePort", traffic_policy="Local", cluster_ip=None, ipv6=False):
         """
         Creates a deployment and corresponding service with the given
         parameters.
@@ -135,7 +135,7 @@ class TestBase(TestCase):
 
         # Create a service called <name> whose endpoints are the pods
         # with "app": <name>; i.e. those just created above.
-        self.create_service(name, name, ns, port, svc_type, traffic_policy)
+        self.create_service(name, name, ns, port, svc_type, traffic_policy, ipv6=ipv6)
 
     def wait_for_deployment(self, name, ns):
         """
@@ -145,7 +145,7 @@ class TestBase(TestCase):
         kubectl("-n %s rollout status deployment/%s" % (ns, name))
         kubectl("get pods -n %s -o wide" % ns)
 
-    def create_service(self, name, app, ns, port, svc_type="NodePort", traffic_policy="Local", cluster_ip=None):
+    def create_service(self, name, app, ns, port, svc_type="NodePort", traffic_policy="Local", cluster_ip=None, ipv6=False):
         service = client.V1Service(
             metadata=client.V1ObjectMeta(
                 name=name,
@@ -160,6 +160,9 @@ class TestBase(TestCase):
         )
         if cluster_ip:
           service.spec["clusterIP"] = cluster_ip
+        if ipv6:
+          service.spec["ipFamily"] = "IPv6"
+
         api_response = self.cluster.create_namespaced_service(
             body=service,
             namespace=ns,
@@ -232,3 +235,9 @@ class TestBase(TestCase):
     def scale_deployment(self, deployment, ns, replicas):
         return kubectl("scale deployment %s -n %s --replicas %s" %
                        (deployment, ns, replicas)).strip()
+
+
+class TestBaseV6(TestBase):
+
+    def get_routes(self):
+        return run("docker exec kube-node-extra ip -6 r")
