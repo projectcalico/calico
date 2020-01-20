@@ -16,7 +16,6 @@ package main
 
 import (
 	"fmt"
-	"net"
 	"os"
 	"path"
 	"sync"
@@ -109,7 +108,6 @@ func main() {
 							tc.CompileWithFlags(flags),
 							// Special values that we patch when loading the binary.
 							tc.CompileWithLogPrefix("CALICOLO"),
-							tc.CompileWithHostIP(net.IP("HOST")),
 						}
 
 						wg.Add(1)

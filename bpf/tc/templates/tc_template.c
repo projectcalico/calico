@@ -256,10 +256,10 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb) {
 			ip_header = skb_iphdr(skb);
 			__be32 ip_src = ip_header->saddr;
 			/* XXX do a proper CT lookup to find this */
-			ip_header->saddr = CALI_HOST_IP;
+			ip_header->saddr = cali_host_ip();
 			int ip_csum_offset = skb_iphdr_offset(skb) + offsetof(struct iphdr, check);
 
-			int res = bpf_l3_csum_replace(skb, ip_csum_offset, ip_src, CALI_HOST_IP, 4);
+			int res = bpf_l3_csum_replace(skb, ip_csum_offset, ip_src, cali_host_ip(), 4);
 			if (res) {
 				reason = CALI_REASON_CSUM_FAIL;
 				goto deny;
@@ -307,7 +307,8 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb) {
 
 	if (is_vxlan_tunnel(ip_header)) {
 		/* decap on host ep only if directly for the node */
-		if (dnat_should_decap() && ip_header->daddr == CALI_HOST_IP) {
+		CALI_DEBUG("VXLAN tunnel packet to %x (host IP=%x)\n", ip_header->daddr, cali_host_ip());
+		if (dnat_should_decap() && ip_header->daddr == cali_host_ip()) {
 			state.nat_tun_src = ip_header->saddr;
 			CALI_DEBUG("vxlan decap\n");
 			if (vxlan_v4_decap(skb)) {
@@ -582,8 +583,8 @@ static CALI_BPF_INLINE int calico_tc_skb_accepted(
 	struct calico_nat_dest *nat_dest
 ) {
 	CALI_DEBUG("Entering calico_tc_skb_accepted\n");
-	CALI_DEBUG("src=%x dst=%x\n", state->ip_src, state->ip_dst);
-	CALI_DEBUG("post_nat=%x:%d\n", state->post_nat_ip_dst, state->post_nat_dport);
+	CALI_DEBUG("src=%x dst=%x\n", be32_to_host(state->ip_src), be32_to_host(state->ip_dst));
+	CALI_DEBUG("post_nat=%x:%d\n", be32_to_host(state->post_nat_ip_dst), state->post_nat_dport);
 	CALI_DEBUG("nat_tun=%x\n", state->nat_tun_src);
 	CALI_DEBUG("pol_rc=%d\n", state->pol_rc);
 	CALI_DEBUG("sport=%d\n", state->sport);
@@ -690,7 +691,7 @@ static CALI_BPF_INLINE int calico_tc_skb_accepted(
 				reason = CALI_REASON_RT_UNKNOWN;
 				goto deny;
 			}
-			CALI_DEBUG("rt found for 0x%x\n", state->post_nat_ip_dst);
+			CALI_DEBUG("rt found for 0x%x\n", be32_to_host(state->post_nat_ip_dst));
 
 			encap_needed = !cali_rt_is_local(rt);
 		}
@@ -726,7 +727,7 @@ static CALI_BPF_INLINE int calico_tc_skb_accepted(
 		}
 
 		if (encap_needed) {
-			state->ip_src = CALI_HOST_IP;
+			state->ip_src = cali_host_ip();
 			state->ip_dst = rt->type == CALI_RT_REMOTE_WORKLOAD ? rt->next_hop : state->post_nat_ip_dst;
 			seen_mark = CALI_SKB_MARK_BYPASS_FWD;
 			goto nat_encap;
