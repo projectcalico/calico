@@ -14,7 +14,7 @@ CFLAGS +=  \
 CC := clang
 LD := llc
 
-OBJS := redir_tc.o filter.o
+OBJS := filter.o
 
 # cancel the build-in rule
 %.o: %.c
@@ -22,7 +22,7 @@ OBJS := redir_tc.o filter.o
 all: $(OBJS)
 
 %.ll: %.c %.d
-	$(CC) $(CFLAGS)	-c $< -o $@
+	$(CC) $(CFLAGS) -c $< -o $@
 
 %.o: %.ll
 	$(LD) -march=bpf -filetype=obj -o $@ $<

@@ -20,6 +20,7 @@ import (
 	"os"
 	"os/exec"
 	"strconv"
+	"strings"
 
 	"golang.org/x/sys/unix"
 
@@ -65,6 +66,7 @@ func (c *MapContext) NewPinnedMap(params MapParameters) Map {
 	m := &PinnedMap{
 		context:       c,
 		MapParameters: params,
+		perCPU:        strings.Contains(params.Type, "percpu"),
 	}
 	return m
 }
@@ -75,6 +77,7 @@ type PinnedMap struct {
 
 	fdLoaded bool
 	fd       MapFD
+	perCPU   bool
 }
 
 func (b *PinnedMap) GetName() string {
@@ -162,10 +165,18 @@ func (b *PinnedMap) Iter(f MapIter) error {
 }
 
 func (b *PinnedMap) Update(k, v []byte) error {
+	if b.perCPU {
+		// Per-CPU maps need a buffer of value-size * num-CPUs.
+		logrus.Panic("Per-CPU operations not implemented")
+	}
 	return UpdateMapEntry(b.fd, k, v)
 }
 
 func (b *PinnedMap) Get(k []byte) ([]byte, error) {
+	if b.perCPU {
+		// Per-CPU maps need a buffer of value-size * num-CPUs.
+		logrus.Panic("Per-CPU operations not implemented")
+	}
 	return GetMapEntry(b.fd, k, b.ValueSize)
 }
 
@@ -226,7 +237,7 @@ func (b *PinnedMap) EnsureExists() error {
 
 	if err == nil {
 		logrus.Debug("Map file already exists, trying to open it")
-		b.fd, err = GetPinnedMapFD(b.Filename)
+		b.fd, err = GetMapFDByPin(b.Filename)
 		if err == nil {
 			b.fdLoaded = true
 			logrus.WithField("fd", b.fd).WithField("name", b.Filename).Info("Loaded map file descriptor.")
@@ -248,7 +259,7 @@ func (b *PinnedMap) EnsureExists() error {
 		logrus.WithField("out", string(out)).Error("Failed to run bpftool")
 		return err
 	}
-	b.fd, err = GetPinnedMapFD(b.Filename)
+	b.fd, err = GetMapFDByPin(b.Filename)
 	if err == nil {
 		b.fdLoaded = true
 		logrus.WithField("fd", b.fd).WithField("name", b.Filename).Info("Loaded map file descriptor.")

@@ -17,6 +17,7 @@ package nat
 import (
 	"bufio"
 	"encoding/json"
+	"fmt"
 	"os"
 	"os/exec"
 	"path"
@@ -25,10 +26,10 @@ import (
 	"sync"
 
 	"github.com/pkg/errors"
-
 	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/felix/bpf"
+	"github.com/projectcalico/felix/bpf/tc"
 )
 
 type cgroupProgs struct {
@@ -78,16 +79,65 @@ func RemoveConnectTimeLoadBalancer(cgroupv2 string) error {
 	return nil
 }
 
-func InstallConnectTimeLoadBalancer(frontendMap, backendMap, rtMap bpf.Map, cgroupv2 string) error {
+func InstallConnectTimeLoadBalancer(frontendMap, backendMap, rtMap bpf.Map, cgroupv2 string, logLevel string) error {
+	bpfMount, err := bpf.MaybeMountBPFfs()
+	if err != nil {
+		log.WithError(err).Error("Failed to mount bpffs, unable to do connect-time load balancing")
+		return err
+	}
+
+	cgroupPath, err := ensureCgroupPath(cgroupv2)
+	if err != nil {
+		return errors.Wrap(err, "failed to set-up cgroupv2")
+	}
+
+	progPinDir := path.Join(bpfMount, "calico_connect4")
+
+	_ = os.RemoveAll(progPinDir)
+
+	filename := path.Join("/code/bpf/bin", ProgFileName(logLevel))
+	cmd := exec.Command("bpftool", "prog", "loadall", filename, progPinDir,
+		"type", "cgroup/connect4",
+		"map", "name", frontendMap.GetName(), "pinned", frontendMap.Path(),
+		"map", "name", backendMap.GetName(), "pinned", backendMap.Path(),
+		"map", "name", rtMap.GetName(), "pinned", rtMap.Path(),
+	)
+	log.WithField("args", cmd.Args).Info("About to run bpftool")
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		log.WithError(err).WithField("output", string(out)).Error("Failed to load connect-time load balancing program.")
+		return err
+	}
+
+	cmd = exec.Command("bpftool", "cgroup", "attach", cgroupPath, "connect4", "pinned", path.Join(progPinDir, "calico_connect_v4"))
+	log.WithField("args", cmd.Args).Info("About to run bpftool")
+	out, err = cmd.CombinedOutput()
+	if err != nil {
+		log.WithError(err).WithField("output", string(out)).Error("Failed to attach connect-time load balancing program.")
+		return errors.Wrap(err, "failed to attach connect-time load balancing program")
+	}
+
+	return nil
+}
+
+func ProgFileName(logLevel string) string {
+	logLevel = strings.ToLower(logLevel)
+	if logLevel == "off" {
+		logLevel = "no_log"
+	}
+	return fmt.Sprintf("connect_time_%s.o", logLevel)
+}
+
+func CompileConnectTimeLoadBalancer(logLevel string, outFile string) error {
 	args := []string{
 		"-x",
 		"c",
 		"-D__KERNEL__",
 		"-D__ASM_SYSREG_H",
 		"-D__BPFTOOL_LOADER__",
-		"-DCALI_LOG_LEVEL=CALI_LOG_LEVEL_DEBUG",
-		"-DCALI_COMPILE_FLAGS=8", // CALI_CGROUP
-		"-DCALI_LOG_PFX=CGROUP",
+		"-DCALI_LOG_LEVEL=CALI_LOG_LEVEL_" + strings.ToUpper(logLevel),
+		fmt.Sprintf("-DCALI_COMPILE_FLAGS=%d", tc.CompileFlagCgroup),
+		"-DCALI_LOG_PFX=CALI",
 		"-Wno-unused-value",
 		"-Wno-pointer-sign",
 		"-Wno-compare-distinct-pointer-types",
@@ -97,7 +147,7 @@ func InstallConnectTimeLoadBalancer(frontendMap, backendMap, rtMap bpf.Map, cgro
 		"-fno-stack-protector",
 		"-O2",
 		"-emit-llvm",
-		"-c", "/code/bpf/cgroup/connect_balancer.c",
+		"-c", "bpf/cgroup/connect_balancer.c",
 		"-o", "-",
 	}
 
@@ -127,7 +177,7 @@ func InstallConnectTimeLoadBalancer(frontendMap, backendMap, rtMap bpf.Map, cgro
 			log.WithError(err).Error("Error while reading clang stderr")
 		}
 	}()
-	llc := exec.Command("llc", "-march=bpf", "-filetype=obj", "-o", "/tmp/calico_connect4.o")
+	llc := exec.Command("llc", "-march=bpf", "-filetype=obj", "-o", outFile)
 	llc.Stdin = clangStdout
 	out, err := llc.CombinedOutput()
 	if err != nil {
@@ -140,42 +190,6 @@ func InstallConnectTimeLoadBalancer(frontendMap, backendMap, rtMap bpf.Map, cgro
 		return err
 	}
 	wg.Wait()
-
-	bpfMount, err := bpf.MaybeMountBPFfs()
-	if err != nil {
-		log.WithError(err).Error("Failed to mount bpffs, unable to do connect-time load balancing")
-		return err
-	}
-
-	cgroupPath, err := ensureCgroupPath(cgroupv2)
-	if err != nil {
-		return errors.Wrap(err, "failed to set-up cgroupv2")
-	}
-
-	progPinDir := path.Join(bpfMount, "calico_connect4")
-
-	_ = os.RemoveAll(progPinDir)
-
-	cmd := exec.Command("bpftool", "prog", "loadall", "/tmp/calico_connect4.o", progPinDir,
-		"type", "cgroup/connect4",
-		"map", "name", frontendMap.GetName(), "pinned", frontendMap.Path(),
-		"map", "name", backendMap.GetName(), "pinned", backendMap.Path(),
-		"map", "name", rtMap.GetName(), "pinned", rtMap.Path(),
-	)
-	log.WithField("args", cmd.Args).Info("About to run bpftool")
-	out, err = cmd.CombinedOutput()
-	if err != nil {
-		log.WithError(err).WithField("output", string(out)).Error("Failed to load connect-time load balancing program.")
-		return err
-	}
-
-	cmd = exec.Command("bpftool", "cgroup", "attach", cgroupPath, "connect4", "pinned", path.Join(progPinDir, "calico_connect_v4"))
-	log.WithField("args", cmd.Args).Info("About to run bpftool")
-	out, err = cmd.CombinedOutput()
-	if err != nil {
-		log.WithError(err).WithField("output", string(out)).Error("Failed to attach connect-time load balancing program.")
-		return errors.Wrap(err, "failed to attach connect-time load balancing program")
-	}
 
 	return nil
 }

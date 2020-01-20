@@ -81,11 +81,11 @@ var (
 	_                            = stateOffIPDst
 	stateOffPostNATIPDst   int16 = 8
 	stateOffPolResult      int16 = 16
-	stateOffSrcPort        int16 = 24
-	stateOffDstPort        int16 = 26
+	stateOffSrcPort        int16 = 20
+	stateOffDstPort        int16 = 22
 	_                            = stateOffDstPort
-	stateOffPostNATDstPort int16 = 28
-	stateOffIPProto        int16 = 30
+	stateOffPostNATDstPort int16 = 24
+	stateOffIPProto        int16 = 26
 
 	// Compile-time check that IPSetEntrySize hasn't changed; if it changes, the code will need to change.
 	_ = [1]struct{}{{}}[20-ipsets.IPSetEntrySize]
@@ -157,7 +157,7 @@ func (p *Builder) writeProgramFooter() {
 		p.b.LabelNextInsn("allow")
 		// Store the policy result in the state for the next program to see.
 		p.b.MovImm32(R1, 1)
-		p.b.Store64(R9, R1, stateOffPolResult)
+		p.b.Store32(R9, R1, stateOffPolResult)
 		// Execute the tail call.
 		p.b.Mov64(R1, R6)                      // First arg is the context.
 		p.b.LoadMapFD(R2, uint32(p.jumpMapFD)) // Second arg is the map.
@@ -166,7 +166,7 @@ func (p *Builder) writeProgramFooter() {
 
 		// Fall through if tail call fails.
 		p.b.MovImm32(R1, PolRCEpilogueTailCallFailed)
-		p.b.Store64(R9, R1, stateOffPolResult)
+		p.b.Store32(R9, R1, stateOffPolResult)
 		p.b.MovImm64(R0, 2 /* TC_ACT_SHOT */)
 		p.b.Exit()
 	}

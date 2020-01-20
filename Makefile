@@ -464,16 +464,30 @@ image-all: $(addprefix sub-image-,$(VALIDARCHES))
 sub-image-%:
 	$(MAKE) image ARCH=$*
 
+bin/compile-bpf: go.mod $(shell find cmd/compile-bpf bpf/nat bpf/tc config logutils proto -type f -name '*.go' -print | grep -v '_test\.go' )
+	$(DOCKER_RUN) $(CALICO_BUILD_CGO) go build -o $@ ./cmd/compile-bpf
+
+bin/bpf-progs.inc: bin/compile-bpf
+	bin/compile-bpf gen-makefile-inc > $@.tmp
+	mv $@.tmp $@
+
+# bpf-progs.inc sets up the BPF_PROGS variable.  The target above will cause it to be auto-updated after switching
+# branch.
+include bin/bpf-progs.inc
+
+$(BPF_PROGS) build-bpf: $(BPF_C_FILES) $(BPF_INC_FILES) bin/compile-bpf
+	rm -rf bin/bpf
+	$(DOCKER_RUN) $(CALICO_BUILD_CGO) bin/compile-bpf
+
 image: $(BUILD_IMAGE)
 $(BUILD_IMAGE): $(BUILD_IMAGE)-$(ARCH)
 $(BUILD_IMAGE)-$(ARCH): bin/calico-felix-$(ARCH) \
                         bin/calico-bpf \
-                        $(BPF_INC_FILES) \
-                        $(BPF_C_FILES) \
+                        $(BPF_PROGS) \
                         docker-image/calico-felix-wrapper \
                         docker-image/felix.cfg \
-                        docker-image/Dockerfile*
-	$(MAKE) register
+                        docker-image/Dockerfile* \
+                        register
 	# Reconstruct the bin and bpf directories because we don't want to accidentally add
 	# leftover files (say from a build on another branch) into the docker image.
 	rm -rf docker-image/bin
@@ -481,18 +495,9 @@ $(BUILD_IMAGE)-$(ARCH): bin/calico-felix-$(ARCH) \
 	cp bin/calico-felix-$(ARCH) docker-image/bin/
 	cp bin/calico-bpf docker-image/bin/
 	rm -rf docker-image/bpf
-	mkdir -p docker-image/bpf/include
-	mkdir -p docker-image/bpf/xdp
-	mkdir -p docker-image/bpf/cgroup
-	cp bpf/include/bpf.h docker-image/bpf/include/bpf.h
-	cp bpf/include/conntrack.h docker-image/bpf/include/conntrack.h
-	cp bpf/include/log.h docker-image/bpf/include/log.h
-	cp bpf/include/nat.h docker-image/bpf/include/nat.h
-	cp bpf/include/policy.h docker-image/bpf/include/policy.h
-	cp bpf/include/routes.h docker-image/bpf/include/routes.h
-	cp bpf/include/reasons.h docker-image/bpf/include/reasons.h
-	cp bpf/xdp/redir_tc.c docker-image/bpf/xdp/redir_tc.c
-	cp bpf/cgroup/connect_balancer.c docker-image/bpf/cgroup/connect_balancer.c
+	mkdir -p docker-image/bpf/bin
+	# Copy only the files we're explicitly expecting (in case we have left overs after switching branch).
+	cp $(BPF_PROGS) docker-image/bpf/bin
 	if [ "$(SEMAPHORE)" != "true" -o "$$(docker images -q $(BUILD_IMAGE):latest-$(ARCH) 2> /dev/null)" = "" ] ; then \
  	  docker build --pull -t $(BUILD_IMAGE):latest-$(ARCH) --build-arg QEMU_IMAGE=$(CALICO_BUILD) --file ./docker-image/Dockerfile.$(ARCH) docker-image; \
 	fi
@@ -753,19 +758,19 @@ bin/calico-bpf: $(SRC_FILES) $(LOCAL_BUILD_DEP)
 	$(DOCKER_RUN) $(CALICO_BUILD_CGO) \
 	    sh -c 'go build -v -i -o $@ -v $(BUILD_FLAGS) $(LDFLAGS) "$(PACKAGE_NAME)/cmd/calico-bpf"'
 
-bin/iptables-locker: $(SRC_FILES) $(LOCAL_BUILD_DEP)
+bin/iptables-locker: $(LOCAL_BUILD_DEP) go.mod $(shell find iptables -type f -name '*.go' -print)
 	@echo Building iptables-locker...
 	mkdir -p bin
 	$(DOCKER_RUN) $(CALICO_BUILD) \
 	    sh -c 'go build -v -i -o $@ -v $(BUILD_FLAGS) $(LDFLAGS) "$(PACKAGE_NAME)/fv/iptables-locker"'
 
-bin/test-workload: $(SRC_FILES) $(LOCAL_BUILD_DEP)
+bin/test-workload: $(LOCAL_BUILD_DEP) go.mod fv/cgroup/cgroup.go fv/utils/utils.go
 	@echo Building test-workload...
 	mkdir -p bin
 	$(DOCKER_RUN) $(CALICO_BUILD) \
 	    sh -c 'go build -v -i -o $@ -v $(BUILD_FLAGS) $(LDFLAGS) "$(PACKAGE_NAME)/fv/test-workload"'
 
-bin/test-connection: $(SRC_FILES) $(LOCAL_BUILD_DEP)
+bin/test-connection: $(LOCAL_BUILD_DEP) go.mod fv/cgroup/cgroup.go fv/utils/utils.go
 	@echo Building test-connection...
 	mkdir -p bin
 	$(DOCKER_RUN) $(CALICO_BUILD) \

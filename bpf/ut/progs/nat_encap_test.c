@@ -17,5 +17,5 @@
 
 static CALI_BPF_INLINE int calico_unittest_entry (struct __sk_buff *skb)
 {
-	return vxlan_v4_encap(skb, CALI_HOST_IP, 0x02020202);
+	return vxlan_v4_encap(skb, cali_host_ip(), 0x02020202);
 }

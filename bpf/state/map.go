@@ -42,19 +42,19 @@ type State struct {
 	DstAddr             uint32
 	PostNATDstAddr      uint32
 	NATTunSrcAddr       uint32
-	PolicyRC            int64
+	PolicyRC            int32
 	SrcPort             uint16
 	DstPort             uint16
 	PostNATDstPort      uint16
 	IPProto             uint8
 	Pad                 uint8
-	ConntrackResultType uint64
+	ConntrackResultType uint32
 	ConntrackData       uint64
 	NATData             uint64
 	ProgStartTime       uint64
 }
 
-const expectedSize = 64
+const expectedSize = 56
 
 func (s *State) AsBytes() []byte {
 	size := unsafe.Sizeof(State{})
@@ -72,6 +72,17 @@ func StateFromBytes(bytes []byte) State {
 	bPtr := (*[expectedSize]byte)(unsafe.Pointer(&s))
 	copy(bPtr[:], bytes)
 	return s
+}
+
+func Map(mc *bpf.MapContext) bpf.Map {
+	return mc.NewPinnedMap(bpf.MapParameters{
+		Filename:   "/sys/fs/bpf/tc/globals/cali_v4_state",
+		Type:       "percpu_array",
+		KeySize:    4,
+		ValueSize:  expectedSize,
+		MaxEntries: 1,
+		Name:       "cali_v4_state",
+	})
 }
 
 func MapForTest(mc *bpf.MapContext) bpf.Map {

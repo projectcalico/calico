@@ -1,6 +1,12 @@
 #ifndef __CALI_POLICY_H__
 #define __CALI_POLICY_H__
 
+enum calico_policy_result {
+	CALI_POL_NO_MATCH,
+	CALI_POL_ALLOW,
+	CALI_POL_DENY,
+};
+
 struct port_range {
        __u64 ip_set_id;
        __u16 min, max;
@@ -12,6 +18,8 @@ struct cidr {
 
 // IP sets, all stored in one big map with a prefix to identify the set.
 
+// WARNING: must be kept in sync with the definitions in bpf/polprog/pol_prog_builder.go.
+// WARNING: must be kept in sync with the definitions in bpf/ipsets/map.go.
 struct ip4_set_key {
 	__u32 mask;
 	__be64 set_id;

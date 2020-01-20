@@ -12,10 +12,6 @@
 #include "bpf.h"
 #include "routes.h"
 
-#ifndef CALI_HOST_IP
-#define CALI_HOST_IP 0x0
-#endif
-
 #ifndef CALI_VXLAN_PORT
 #define CALI_VXLAN_PORT 4789 /* IANA VXLAN port */
 #endif
@@ -29,6 +25,19 @@
 #ifndef CALI_NAT_TUNNEL_MTU
 #define CALI_NAT_TUNNEL_MTU	(1500 - CALI_ENCAP_EXTRA_SIZE)
 #endif
+
+static CALI_BPF_INLINE __be32 cali_host_ip() {
+#ifdef CALI_HOST_IP
+	return CALI_HOST_IP;
+#endif
+
+	__u32 host_ip;
+	// At program install time, we patch in the IP of the host.  Use inline assembler to make sure that the
+	// code we want to patch is recognisable.
+	// 0x54534f48 = ASCII(HOST).
+	asm("%0 = 0x54534f48;" : "=r"(host_ip) /* output */ : /* no inputs */ : /* no clobber */);
+	return host_ip;
+}
 
 // Map: NAT level one.  Dest IP and port -> ID and num backends.
 
@@ -358,8 +367,8 @@ static CALI_BPF_INLINE int icmp_v4_too_big(struct __sk_buff *skb)
 	 *
 	 * we only call this function because of NodePOrt encap
 	 */
-	if (ip_orig.daddr != CALI_HOST_IP) {
-		CALI_DEBUG_NO_FLAG("ICMP too big: ip_orig.daddr != CALI_HOST_IP 0x%x\n", ip_orig.daddr);
+	if (ip_orig.daddr != cali_host_ip()) {
+		CALI_DEBUG_NO_FLAG("ICMP too big: ip_orig.daddr != cali_host_ip() 0x%x\n", ip_orig.daddr);
 	}
 #endif
 	ip->saddr = ip_orig.daddr;

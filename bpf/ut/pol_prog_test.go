@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package ut
+package ut_test
 
 import (
 	"encoding/binary"
@@ -28,7 +28,6 @@ import (
 	"github.com/projectcalico/felix/bpf"
 	"github.com/projectcalico/felix/bpf/asm"
 	"github.com/projectcalico/felix/bpf/ipsets"
-	"github.com/projectcalico/felix/bpf/jump"
 	"github.com/projectcalico/felix/bpf/polprog"
 	"github.com/projectcalico/felix/bpf/state"
 	"github.com/projectcalico/felix/idalloc"
@@ -98,7 +97,7 @@ func TestLoadKitchenSinkPolicy(t *testing.T) {
 		return id
 	}
 
-	ipsMap, stateMap, jumpMap := getMaps()
+	cleanIPSetMap()
 
 	pg := polprog.NewBuilder(alloc, ipsMap.MapFD(), stateMap.MapFD(), jumpMap.MapFD())
 	insns, err := pg.Instructions([][][]*proto.Rule{{{{
@@ -913,18 +912,20 @@ func TestIPUintFromString(t *testing.T) {
 func (p *polProgramTest) Run(t *testing.T) {
 	RegisterTestingT(t)
 
+	initMapsOnce()
+
 	// The prog builder refuses to allocate IDs as a precaution, give it an allocator that forces allocations.
 	realAlloc := idalloc.New()
 	forceAlloc := &forceAllocator{alloc: realAlloc}
 
 	// MAke sure the maps are available.
-	ipsMap, stateMap, jumpMap := getMaps()
+	cleanIPSetMap()
 	// FIXME should clean up the maps at the end of each test but recreating the maps seems to be racy
 
 	p.setUpIPSets(realAlloc, ipsMap)
 
 	// Build the program.
-	pg := polprog.NewBuilder(forceAlloc, ipsMap.MapFD(), stateMap.MapFD(), jumpMap.MapFD())
+	pg := polprog.NewBuilder(forceAlloc, ipsMap.MapFD(), testStateMap.MapFD(), jumpMap.MapFD())
 	insns, err := pg.Instructions(p.Policy)
 	Expect(err).NotTo(HaveOccurred(), "failed to assemble program")
 
@@ -950,14 +951,14 @@ func (p *polProgramTest) Run(t *testing.T) {
 		pkt := pkt
 		t.Run(fmt.Sprintf("should allow %v", pkt), func(t *testing.T) {
 			RegisterTestingT(t)
-			p.runProgram(pkt.ToState(), stateMap, polProgFD, RCEpilogueReached, polprog.PolRCAllow)
+			p.runProgram(pkt.ToState(), testStateMap, polProgFD, RCEpilogueReached, polprog.PolRCAllow)
 		})
 	}
 	for _, pkt := range p.DroppedPackets {
 		pkt := pkt
 		t.Run(fmt.Sprintf("should drop %v", pkt), func(t *testing.T) {
 			RegisterTestingT(t)
-			p.runProgram(pkt.ToState(), stateMap, polProgFD, RCDrop, polprog.PolRCNoMatch)
+			p.runProgram(pkt.ToState(), testStateMap, polProgFD, RCDrop, polprog.PolRCNoMatch)
 		})
 	}
 }
@@ -985,13 +986,13 @@ func (p *polProgramTest) installEpilogueProgram(jumpMap bpf.Map) bpf.ProgFD {
 	return epiFD
 }
 
-func (p *polProgramTest) runProgram(s state.State, stateMap bpf.Map, progFD bpf.ProgFD, expProgRC int, expPolRC int) {
+func (p *polProgramTest) runProgram(stateIn state.State, stateMap bpf.Map, progFD bpf.ProgFD, expProgRC int, expPolRC int) {
 	// The policy program takes its input from the state map (rather than looking at the
 	// packet).  Set up the state map.
 	stateMapKey := []byte{0, 0, 0, 0} // State map has a single key
-	stateBytesIn := s.AsBytes()
+	stateBytesIn := stateIn.AsBytes()
 	log.WithField("stateBytes", stateBytesIn).Debug("State bytes in")
-	log.Debugf("State in %#v", s)
+	log.Debugf("State in %#v", stateIn)
 	err := stateMap.Update(stateMapKey, stateBytesIn)
 	Expect(err).NotTo(HaveOccurred(), "failed to update state map")
 
@@ -1003,10 +1004,14 @@ func (p *polProgramTest) runProgram(s state.State, stateMap bpf.Map, progFD bpf.
 	stateBytesOut, err := stateMap.Get(stateMapKey)
 	Expect(err).NotTo(HaveOccurred())
 	log.WithField("stateBytes", stateBytesOut).Debug("State bytes out")
-	s = state.StateFromBytes(stateBytesOut)
-	log.Debugf("State out %#v", s)
-	Expect(s.PolicyRC).To(BeNumerically("==", expPolRC), "policy RC was incorrect")
+	stateOut := state.StateFromBytes(stateBytesOut)
+	log.Debugf("State out %#v", stateOut)
+	Expect(stateOut.PolicyRC).To(BeNumerically("==", expPolRC), "policy RC was incorrect")
 	Expect(result.RC).To(BeNumerically("==", expProgRC), "program RC was incorrect")
+	// Check no other fields got clobbered.
+	expectedStateOut := stateIn
+	expectedStateOut.PolicyRC = int32(expPolRC)
+	Expect(stateOut).To(Equal(expectedStateOut), "policy program modified unexpected parts of the state")
 }
 
 func (p *polProgramTest) setUpIPSets(alloc *idalloc.IDAllocator, ipsMap bpf.Map) {
@@ -1020,19 +1025,7 @@ func (p *polProgramTest) setUpIPSets(alloc *idalloc.IDAllocator, ipsMap bpf.Map)
 	}
 }
 
-func getMaps() (ipsMap, stateMap, jumpMap bpf.Map) {
-	mc := &bpf.MapContext{}
-
-	ipsMap = ipsets.Map(mc)
-	stateMap = state.MapForTest(mc)
-	jumpMap = jump.MapForTest(mc)
-
-	for _, m := range []bpf.Map{ipsMap, stateMap, jumpMap} {
-		err := m.EnsureExists()
-		Expect(err).NotTo(HaveOccurred())
-		Expect(m.MapFD()).NotTo(BeZero())
-	}
-
+func cleanIPSetMap() {
 	// Clean out any existing IP sets.  (The other maps have a fixed number of keys that
 	// we set as needed.)
 	var keys [][]byte
@@ -1044,14 +1037,4 @@ func getMaps() (ipsMap, stateMap, jumpMap bpf.Map) {
 		err = ipsMap.Delete(k)
 		Expect(err).NotTo(HaveOccurred(), "failed to clean out map before test")
 	}
-
-	return
-}
-
-type forceAllocator struct {
-	alloc *idalloc.IDAllocator
-}
-
-func (a *forceAllocator) GetNoAlloc(id string) uint64 {
-	return a.alloc.GetOrAlloc(id)
 }

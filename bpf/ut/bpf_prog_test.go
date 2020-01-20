@@ -15,6 +15,7 @@
 package ut_test
 
 import (
+	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -24,7 +25,16 @@ import (
 	"path"
 	"reflect"
 	"strings"
+	"sync"
 	"testing"
+
+	"github.com/projectcalico/felix/bpf/ipsets"
+	"github.com/projectcalico/felix/bpf/jump"
+	"github.com/projectcalico/felix/bpf/polprog"
+	"github.com/projectcalico/felix/bpf/state"
+	"github.com/projectcalico/felix/logutils"
+
+	"github.com/projectcalico/felix/bpf/tc"
 
 	"github.com/projectcalico/felix/idalloc"
 
@@ -40,11 +50,11 @@ import (
 	"github.com/projectcalico/felix/bpf/conntrack"
 	"github.com/projectcalico/felix/bpf/nat"
 	"github.com/projectcalico/felix/bpf/routes"
-	intdataplane "github.com/projectcalico/felix/dataplane/linux"
 	"github.com/projectcalico/felix/proto"
 )
 
 func init() {
+	logutils.ConfigureEarlyLogging()
 	log.SetLevel(log.DebugLevel)
 }
 
@@ -57,16 +67,28 @@ var (
 )
 
 const (
-	//	resTC_ACT_OK int = iota
-	//	resTC_ACT_RECLASSIFY
-	resTC_ACT_SHOT int = 2
-	//	resTC_ACT_PIPE
-	//	resTC_ACT_STOLEN
-	//	resTC_ACT_QUEUED
-	//	resTC_ACT_REPEAT
-	//	resTC_ACT_REDIRECT
+	resTC_ACT_OK int = iota
+	resTC_ACT_RECLASSIFY
+	resTC_ACT_SHOT
+	resTC_ACT_PIPE
+	resTC_ACT_STOLEN
+	resTC_ACT_QUEUED
+	resTC_ACT_REPEAT
+	resTC_ACT_REDIRECT
 	resTC_ACT_UNSPEC = (1 << 32) - 1
 )
+
+var retvalToStr = map[int]string{
+	resTC_ACT_OK:         "TC_ACT_OK",
+	resTC_ACT_RECLASSIFY: "TC_ACT_RECLASSIFY",
+	resTC_ACT_SHOT:       "TC_ACT_SHOT",
+	resTC_ACT_PIPE:       "TC_ACT_PIPE",
+	resTC_ACT_STOLEN:     "TC_ACT_STOLEN",
+	resTC_ACT_QUEUED:     "TC_ACT_QUEUED",
+	resTC_ACT_REPEAT:     "TC_ACT_REPEAT",
+	resTC_ACT_REDIRECT:   "TC_ACT_REDIRECT",
+	resTC_ACT_UNSPEC:     "TC_ACT_UNSPEC",
+}
 
 func TestCompileTemplateRun(t *testing.T) {
 	runBpfTest(t, "calico_to_workload_ep", nil, func(bpfrun bpfProgRunFn) {
@@ -81,19 +103,22 @@ func TestCompileTemplateRun(t *testing.T) {
 	})
 }
 
-var defaultCompileOpts = []intdataplane.CompileTCOption{
-	intdataplane.CompileWithBpftoolLoader(),
-	intdataplane.CompileWithWorkingDir("../xdp"),
-	intdataplane.CompileWithSourceName("../xdp/redir_tc.c"),
-	intdataplane.CompileWithFIBEnabled(true),
-	intdataplane.CompileWithLogLevel("DEBUG"),
-	intdataplane.CompileWithVxlanPort(testVxlanPort),
-	intdataplane.CompileWithNATTunnelMTU(natTunnelMTU),
+var defaultCompileOpts = []tc.CompileOption{
+	tc.CompileWithBpftoolLoader(),
+	tc.CompileWithWorkingDir("../tc/templates"),
+	tc.CompileWithSourceName("../tc/templates/tc_template.c"), // Relative to our dir
+	tc.CompileWithIncludePath("../../include"),                // Relative to working dir
+	tc.CompileWithFIBEnabled(true),
+	tc.CompileWithLogLevel("DEBUG"),
+	tc.CompileWithVxlanPort(testVxlanPort),
+	tc.CompileWithNATTunnelMTU(natTunnelMTU),
 }
 
 // runBpfTest runs a specific section of the entire bpf program in isolation
 func runBpfTest(t *testing.T, section string, rules [][][]*proto.Rule, testFn func(bpfProgRunFn)) {
 	RegisterTestingT(t)
+
+	initMapsOnce()
 
 	tempDir, err := ioutil.TempDir("", "calico-bpf-")
 	Expect(err).NotTo(HaveOccurred())
@@ -108,24 +133,35 @@ func runBpfTest(t *testing.T, section string, rules [][][]*proto.Rule, testFn fu
 
 	defer os.RemoveAll(bpfFsDir)
 
-	objFname := tempDir + "/redir_tc.o"
-
+	objFname := tempDir + "/tc.o"
 	opts := append(defaultCompileOpts,
-		intdataplane.CompileWithOutputName(objFname),
-		intdataplane.CompileWithLogPrefix(section),
-		intdataplane.CompileWithEntrypointName(section),
-		intdataplane.CompileWithFlags(intdataplane.BPFSectionToFlags(section)),
-		intdataplane.CompileWithHostIP(hostIP), // to pick up new ip
-		intdataplane.CompileWithDefineValue("CALI_SET_SKB_MARK", fmt.Sprintf("0x%x", skbMark)),
+		tc.CompileWithOutputName(objFname),
+		tc.CompileWithLogPrefix(section),
+		tc.CompileWithEntrypointName(section),
+		tc.CompileWithFlags(tc.SectionToFlags(section)),
+		tc.CompileWithHostIP(hostIP), // to pick up new ip
+		tc.CompileWithDefineValue("CALI_SET_SKB_MARK", fmt.Sprintf("0x%x", skbMark)),
 	)
 
-	err = intdataplane.CompileTCProgramToFile(rules, idalloc.New(), opts...)
+	err = tc.CompileProgramToFile(rules, idalloc.New(), opts...)
 	Expect(err).NotTo(HaveOccurred())
 
+	// This loads the prologue and epilogue programs, but we still need to load the policy program.
 	err = bpftoolProgLoadAll(objFname, bpfFsDir)
 	if err != nil {
 		t.Log("Error:", string(err.(*exec.ExitError).Stderr))
 	}
+	Expect(err).NotTo(HaveOccurred())
+
+	alloc := &forceAllocator{alloc: idalloc.New()}
+	pg := polprog.NewBuilder(alloc, ipsMap.MapFD(), stateMap.MapFD(), jumpMap.MapFD())
+	insns, err := pg.Instructions(rules)
+	Expect(err).NotTo(HaveOccurred())
+	polProgFD, err := bpf.LoadBPFProgramFromInsns(insns, "Apache-2.0")
+	Expect(err).NotTo(HaveOccurred())
+	progFDBytes := make([]byte, 4)
+	binary.LittleEndian.PutUint32(progFDBytes, uint32(polProgFD))
+	err = jumpMap.Update([]byte{0, 0, 0, 0}, progFDBytes)
 	Expect(err).NotTo(HaveOccurred())
 
 	t.Run(section, func(_ *testing.T) {
@@ -138,6 +174,14 @@ func runBpfTest(t *testing.T, section string, rules [][][]*proto.Rule, testFn fu
 			return res, err
 		})
 	})
+}
+
+type forceAllocator struct {
+	alloc *idalloc.IDAllocator
+}
+
+func (a *forceAllocator) GetNoAlloc(id string) uint64 {
+	return a.alloc.GetOrAlloc(id)
 }
 
 func bpftool(args ...string) ([]byte, error) {
@@ -156,37 +200,88 @@ func bpftool(args ...string) ([]byte, error) {
 	return out, err
 }
 
+var (
+	mapInitOnce                                                             sync.Once
+	natMap, natBEMap, ctMap, rtMap, ipsMap, stateMap, testStateMap, jumpMap bpf.Map
+)
+
+func initMapsOnce() {
+	mapInitOnce.Do(func() {
+		mc := &bpf.MapContext{}
+
+		natMap = nat.FrontendMap(mc)
+		err := natMap.EnsureExists()
+		Expect(err).NotTo(HaveOccurred())
+
+		natBEMap = nat.BackendMap(mc)
+		err = natBEMap.EnsureExists()
+		Expect(err).NotTo(HaveOccurred())
+
+		ctMap = conntrack.Map(mc)
+		err = ctMap.EnsureExists()
+		Expect(err).NotTo(HaveOccurred())
+
+		rtMap = routes.Map(mc)
+		err = rtMap.EnsureExists()
+		Expect(err).NotTo(HaveOccurred())
+
+		ipsMap = ipsets.Map(mc)
+		err = ipsMap.EnsureExists()
+		Expect(err).NotTo(HaveOccurred())
+
+		stateMap = state.Map(mc)
+		err = stateMap.EnsureExists()
+		Expect(err).NotTo(HaveOccurred())
+
+		testStateMap = state.MapForTest(mc)
+		err = testStateMap.EnsureExists()
+		Expect(err).NotTo(HaveOccurred())
+
+		jumpMap = jump.MapForTest(mc)
+		err = jumpMap.EnsureExists()
+		Expect(err).NotTo(HaveOccurred())
+	})
+}
+
 func bpftoolProgLoadAll(fname, bpfFsDir string) error {
-	mc := &bpf.MapContext{}
-	natMap := nat.FrontendMap(mc)
-	err := natMap.EnsureExists()
-	Expect(err).NotTo(HaveOccurred())
+	initMapsOnce()
 
-	natBEMap := nat.BackendMap(mc)
-	err = natBEMap.EnsureExists()
-	Expect(err).NotTo(HaveOccurred())
-
-	ctMap := conntrack.Map(mc)
-	err = ctMap.EnsureExists()
-	Expect(err).NotTo(HaveOccurred())
-
-	rtMap := routes.Map(mc)
-	err = rtMap.EnsureExists()
-	Expect(err).NotTo(HaveOccurred())
-
-	_, err = bpftool("prog", "loadall", fname, bpfFsDir, "type", "classifier",
+	_, err := bpftool("prog", "loadall", fname, bpfFsDir, "type", "classifier",
 		"map", "name", natMap.GetName(), "pinned", natMap.Path(),
 		"map", "name", natBEMap.GetName(), "pinned", natBEMap.Path(),
 		"map", "name", ctMap.GetName(), "pinned", ctMap.Path(),
 		"map", "name", rtMap.GetName(), "pinned", rtMap.Path(),
+		"map", "name", jumpMap.GetName(), "pinned", jumpMap.Path(),
+		"map", "name", stateMap.GetName(), "pinned", stateMap.Path(),
 	)
-	return err
+	if err != nil {
+		return err
+	}
+
+	_, err = bpftool("map", "update", "pinned", jumpMap.Path(), "key", "0", "0", "0", "0", "value", "pinned", path.Join(bpfFsDir, "1_0"))
+	if err != nil {
+		return errors.Wrap(err, "failed to update jump map (epilogue program)")
+	}
+	_, err = bpftool("map", "update", "pinned", jumpMap.Path(), "key", "1", "0", "0", "0", "value", "pinned", path.Join(bpfFsDir, "1_1"))
+	if err != nil {
+		return errors.Wrap(err, "failed to update jump map (epilogue program)")
+	}
+
+	return nil
 }
 
 type bpfRunResult struct {
 	Retval   int
 	Duration int
 	dataOut  []byte
+}
+
+func (r bpfRunResult) RetvalStr() string {
+	s := retvalToStr[r.Retval]
+	if s == "" {
+		return fmt.Sprint(r.Retval)
+	}
+	return s
 }
 
 func bpftoolProgRun(progName string, dataIn []byte) (bpfRunResult, error) {
@@ -253,7 +348,7 @@ func runBpfUnitTest(t *testing.T, source string, testFn func(bpfProgRunFn)) {
 
 	objFname := tempDir + "/" + strings.TrimSuffix(source, path.Ext(source))
 
-	wdir := "../xdp"
+	wdir := "../tc/templates"
 	unittestFName := wdir + "/unittest.h"
 
 	err = ioutil.WriteFile(unittestFName,
@@ -266,16 +361,17 @@ func runBpfUnitTest(t *testing.T, source string, testFn func(bpfProgRunFn)) {
 	Expect(err).NotTo(HaveOccurred())
 
 	opts := append(defaultCompileOpts,
-		intdataplane.CompileWithOutputName(objFname),
-		intdataplane.CompileWithWorkingDir(wdir),
-		intdataplane.CompileWithSourceName(wdir+"/redir_tc.c"),
-		intdataplane.CompileWithIncludePath(curwd+"/progs"),
-		intdataplane.CompileWithLogPrefix("UNITTEST"),
-		intdataplane.CompileWithDefine("CALI_UNITTEST"),
-		intdataplane.CompileWithHostIP(hostIP),
+		tc.CompileWithOutputName(objFname),
+		tc.CompileWithWorkingDir(wdir),
+		tc.CompileWithSourceName(wdir+"/tc_template.c"),
+		tc.CompileWithIncludePath(curwd+"/progs"),
+		tc.CompileWithIncludePath("../include"),
+		tc.CompileWithLogPrefix("UNITTEST"),
+		tc.CompileWithDefine("CALI_UNITTEST"),
+		tc.CompileWithHostIP(hostIP),
 	)
 
-	err = intdataplane.CompileTCProgramToFile(nil, idalloc.New(), opts...)
+	err = tc.CompileProgramToFile(nil, idalloc.New(), opts...)
 	Expect(err).NotTo(HaveOccurred())
 
 	err = bpftoolProgLoadAll(objFname, bpfFsDir)
@@ -347,9 +443,11 @@ func udpResposeRaw(in []byte) []byte {
 func dumpCTMap(ctMap bpf.Map) {
 	ct, err := conntrack.LoadMapMem(ctMap)
 	Expect(err).NotTo(HaveOccurred())
+	fmt.Printf("Conntrack dump:\n")
 	for k, v := range ct {
-		fmt.Printf("%s : %s\n", k, v)
+		fmt.Printf("- %s : %s\n", k, v)
 	}
+	fmt.Printf("\n")
 }
 
 func resetCTMap(ctMap bpf.Map) {

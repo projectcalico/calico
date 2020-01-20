@@ -10,6 +10,10 @@
 #define CALI_LOG_LEVEL CALI_LOG_LEVEL_OFF
 #endif
 
+#ifndef CALI_LOG_PFX
+#define CALI_LOG_PFX CALI
+#endif
+
 #define CALI_USE_LINUX_FIB true
 
 #define CALI_LOG(__fmt, ...) do { \

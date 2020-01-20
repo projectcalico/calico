@@ -27,6 +27,8 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/projectcalico/felix/bpf/state"
+
 	"github.com/projectcalico/felix/idalloc"
 
 	"k8s.io/client-go/kubernetes"
@@ -37,6 +39,7 @@ import (
 
 	"github.com/projectcalico/felix/bpf"
 	"github.com/projectcalico/felix/bpf/conntrack"
+	bpfipsets "github.com/projectcalico/felix/bpf/ipsets"
 	"github.com/projectcalico/felix/bpf/nat"
 	bpfproxy "github.com/projectcalico/felix/bpf/proxy"
 	"github.com/projectcalico/felix/bpf/routes"
@@ -475,13 +478,19 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		// Important that we create the maps before we load a BPF program with TC since we make sure the map
 		// metadata name is set whereas TC doesn't set that field.
 		ipSetIDAllocator := idalloc.New()
-		dp.RegisterManager(newBPFIPSetManager(ipSetIDAllocator, bpfMapContext))
+		ipSetsMap := bpfipsets.Map(bpfMapContext)
+		dp.RegisterManager(newBPFIPSetManager(ipSetIDAllocator, ipSetsMap))
 		bpfRTMgr := newBPFRouteManager(config.Hostname, bpfMapContext)
 		dp.RegisterManager(bpfRTMgr)
 		dp.RegisterManager(newBPFConntrackManager(config.BPFConntrackTimeouts, bpfMapContext))
 
 		// Forwarding into a tunnel seems to fail silently, disable FIB lookup if tunnel is enabled for now.
 		fibLookupEnabled := !config.RulesConfig.IPIPEnabled && !config.RulesConfig.VXLANEnabled
+		stateMap := state.Map(bpfMapContext)
+		err := stateMap.EnsureExists()
+		if err != nil {
+			log.WithError(err).Panic("Failed to create state BPF map.")
+		}
 		dp.RegisterManager(newBPFEndpointManager(
 			config.BPFLogLevel,
 			fibLookupEnabled,
@@ -489,11 +498,13 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			config.BPFDataIfacePattern,
 			ipSetIDAllocator,
 			config.VXLANMTU,
+			ipSetsMap,
+			stateMap,
 		))
 
 		// Pre-create the NAT maps so that later operations can assume access.
 		frontendMap := nat.FrontendMap(bpfMapContext)
-		err := frontendMap.EnsureExists()
+		err = frontendMap.EnsureExists()
 		if err != nil {
 			log.WithError(err).Panic("Failed to create NAT frontend BPF map.")
 		}
@@ -528,7 +539,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 
 		if config.BPFConnTimeLBEnabled {
 			// Activate the connect-time load balancer.
-			err = nat.InstallConnectTimeLoadBalancer(frontendMap, backendMap, routeMap, config.BPFCgroupV2)
+			err = nat.InstallConnectTimeLoadBalancer(frontendMap, backendMap, routeMap, config.BPFCgroupV2, config.BPFLogLevel)
 			if err != nil {
 				log.WithError(err).Panic("BPFConnTimeLBEnabled but failed to attach connect-time load balancer, bailing out.")
 			}

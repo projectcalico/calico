@@ -385,7 +385,7 @@ func describeNamedPortTests(testSourcePorts bool, protocol string) {
 		// Non-negated named port match.  The rule will allow traffic to the named port.
 
 		// No numeric ports in the rule, the IP set match will be rendered in the main rule.
-		Entry("(positive) ingress, no-numeric", false, applyAtW0, 0, false),
+		Entry("(positive) ingress, no-numeric _CANARY_", false, applyAtW0, 0, false),
 		Entry("(positive) egress, no-numeric", false, applyAtOthers, 0, false),
 		// Adding a numeric port changes the way we render iptables rules to use blocks.
 		Entry("(positive) ingress, 1 numeric", false, applyAtW0, 1, false),

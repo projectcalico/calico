@@ -295,7 +295,7 @@ enum calico_ct_result_type {
 };
 
 struct calico_ct_result {
-	enum calico_ct_result_type rc;
+	__s32 rc;
 
 	union {
 		// For CALI_CT_ESTABLISHED_SNAT and CALI_CT_ESTABLISHED_DNAT.
