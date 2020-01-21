@@ -772,7 +772,7 @@ bin/test-connection: $(LOCAL_BUILD_DEP) go.mod fv/cgroup/cgroup.go fv/utils/util
 mod-download:
 	-$(DOCKER_RUN) $(CALICO_BUILD) go mod download
 
-ci: mod-download image-all ut static-checks
+ci: mod-download image-all ut
 ifeq (,$(filter fv, $(EXCEPT)))
 	@$(MAKE) fv
 endif
