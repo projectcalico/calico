@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2019 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2020 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -23,6 +23,7 @@ import (
 	"k8s.io/client-go/kubernetes"
 
 	"github.com/projectcalico/felix/bpf"
+	"github.com/projectcalico/felix/bpf/routes"
 )
 
 // KubeProxy is a wrapper of Proxy that deals with higher level issue like
@@ -40,6 +41,7 @@ type KubeProxy struct {
 	hostname    string
 	frontendMap bpf.Map
 	backendMap  bpf.Map
+	rt          *RTCache
 	opts        []Option
 }
 
@@ -48,12 +50,12 @@ func StartKubeProxy(k8s kubernetes.Interface, hostname string,
 	frontendMap, backendMap bpf.Map, opts ...Option) (*KubeProxy, error) {
 
 	kp := &KubeProxy{
-		k8s:         k8s,
-		hostname:    hostname,
-		frontendMap: frontendMap,
-		backendMap:  backendMap,
-		opts:        opts,
-
+		k8s:           k8s,
+		hostname:      hostname,
+		frontendMap:   frontendMap,
+		backendMap:    backendMap,
+		opts:          opts,
+		rt:            NewRTCache(),
 		hostIPUpdates: make(chan []net.IP, 1),
 		exiting:       make(chan struct{}),
 	}
@@ -88,9 +90,9 @@ func (kp *KubeProxy) run(hostIPs []net.IP) error {
 
 	withLocalNP := make([]net.IP, len(hostIPs), len(hostIPs)+1)
 	copy(withLocalNP, hostIPs)
-	withLocalNP = append(withLocalNP, net.IPv4(255, 255, 255, 255))
+	withLocalNP = append(withLocalNP, podNPIP)
 
-	syncer, err := NewSyncer(withLocalNP, kp.frontendMap, kp.backendMap)
+	syncer, err := NewSyncer(withLocalNP, kp.frontendMap, kp.backendMap, kp.rt)
 	if err != nil {
 		return errors.WithMessage(err, "new bpf syncer")
 	}
@@ -177,4 +179,19 @@ func (kp *KubeProxy) OnHostIPsUpdate(IPs []net.IP) {
 		kp.hostIPUpdates <- IPs
 	}
 	log.Debugf("kube-proxy OnHostIPsUpdate: %+v", IPs)
+}
+
+// OnRouteUpdate should be used to update the internal state of routing tables
+func (kp *KubeProxy) OnRouteUpdate(k routes.Key, v routes.Value) {
+	if err := kp.rt.Update(k, v); err != nil {
+		log.WithField("error", err).Error("kube-proxy: OnRouteUpdate")
+	} else {
+		log.WithFields(log.Fields{"key": k, "value": v}).Debug("kube-proxy: OnRouteUpdate")
+	}
+}
+
+// OnRouteDelete should be used to update the internal state of routing tables
+func (kp *KubeProxy) OnRouteDelete(k routes.Key) {
+	_ = kp.rt.Delete(k)
+	log.WithField("key", k).Debug("kube-proxy: OnRouteDelete")
 }

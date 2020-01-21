@@ -15,9 +15,12 @@
 package proxy
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"strconv"
+	"strings"
+	"sync"
 
 	"github.com/projectcalico/felix/bpf/nat"
 
@@ -28,7 +31,20 @@ import (
 	k8sp "k8s.io/kubernetes/pkg/proxy"
 
 	"github.com/projectcalico/felix/bpf"
+	"github.com/projectcalico/felix/bpf/routes"
+	"github.com/projectcalico/felix/ip"
 )
+
+var noWaitCtx context.Context
+
+func init() {
+	// expired context, easier than to implement an empty one
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	noWaitCtx = ctx
+}
+
+var podNPIP = net.IPv4(255, 255, 255, 255)
 
 type svcInfo struct {
 	id         uint32
@@ -57,12 +73,30 @@ func getSvcKey(sname k8sp.ServicePortName, extra string) svcKey {
 	}
 }
 
-func getNodePortExtra(ip string) string {
-	return "NodePort:" + ip
+type svcType int
+
+const (
+	svcTypeExternalIP svcType = iota
+	svcTypeNodePort
+	svcTypeNodePortRemote
+)
+
+var svcType2String = map[svcType]string{
+	svcTypeNodePort:       "NodePort",
+	svcTypeExternalIP:     "ExternalIP",
+	svcTypeNodePortRemote: "NodePortRemote",
 }
 
-func getExternalIPExtra(ip string) string {
-	return "ExternalIP:" + ip
+func getSvcKeyExtra(t svcType, ip string) string {
+	return svcType2String[t] + ":" + ip
+}
+
+func hasSvcKeyExtra(skey svcKey, t svcType) bool {
+	return strings.HasPrefix(skey.extra, svcType2String[t]+":")
+}
+
+func isSvcKeyDerived(skey svcKey) bool {
+	return hasSvcKeyExtra(skey, svcTypeExternalIP) || hasSvcKeyExtra(skey, svcTypeNodePort)
 }
 
 // Syncer is an implementation of DPSyncer interface. It is not thread safe and
@@ -74,6 +108,7 @@ type Syncer struct {
 	nextSvcID uint32
 
 	nodePortIPs []net.IP
+	rt          Routes
 
 	// new maps are valid during the Apply()'s runtime to provide easy access
 	// to updating them. They become prev at the end of it to be compared
@@ -83,11 +118,21 @@ type Syncer struct {
 	prevSvcMap map[svcKey]svcInfo
 	prevEpsMap k8sp.EndpointsMap
 
+	// We never have more than one thread accessing the [prev|new][Svc|Eps]Map,
+	// this is to just make sure and to make the --race checker happy
+	mapsLck sync.Mutex
+
 	// synced is true after reconciling the first Apply
 	synced bool
 	// origs are deallocated after the first Apply reconciles
 	origSvcs nat.MapMem
 	origEps  nat.BackendMapMem
+
+	expFixupWg   sync.WaitGroup
+	expFixupStop chan struct{}
+
+	stop     chan struct{}
+	stopOnce sync.Once
 }
 
 func uniqueIPs(ips []net.IP) []net.IP {
@@ -116,13 +161,15 @@ func uniqueIPs(ips []net.IP) []net.IP {
 }
 
 // NewSyncer returns a new Syncer that uses the 2 provided maps
-func NewSyncer(nodePortIPs []net.IP, svcsmap, epsmap bpf.Map) (*Syncer, error) {
+func NewSyncer(nodePortIPs []net.IP, svcsmap, epsmap bpf.Map, rt Routes) (*Syncer, error) {
 	s := &Syncer{
 		bpfSvcs:     svcsmap,
 		bpfEps:      epsmap,
+		rt:          rt,
 		nodePortIPs: uniqueIPs(nodePortIPs),
 		prevSvcMap:  make(map[svcKey]svcInfo),
 		prevEpsMap:  make(k8sp.EndpointsMap),
+		stop:        make(chan struct{}),
 	}
 
 	if err := s.loadOrigs(); err != nil {
@@ -160,9 +207,10 @@ func (s *Syncer) startupSync(state DPSyncerState) error {
 		id := svcv.ID()
 		count := int(svcv.Count())
 		s.prevSvcMap[*svckey] = svcInfo{
-			id:    id,
-			count: count,
-			svc:   state.SvcMap[svckey.sname],
+			id:         id,
+			count:      count,
+			localCount: int(svcv.LocalCount()),
+			svc:        state.SvcMap[svckey.sname],
 		}
 
 		delete(s.origSvcs, svck)
@@ -209,8 +257,28 @@ func (s *Syncer) startupSync(state DPSyncerState) error {
 	return nil
 }
 
-func (s *Syncer) applyClusterIP(skey svcKey, sinfo k8sp.ServicePort,
-	epsMap k8sp.EndpointsMap) error {
+func (s *Syncer) cleanupDerived(id uint32) error {
+	// also delete all derived
+	for _, si := range s.prevSvcMap {
+		if si.id == id {
+			key, err := getSvcNATKey(si.svc)
+			if err != nil {
+				return err
+			}
+
+			log.Debugf("bpf map deleting derived %s:%s", key, nat.NewNATValue(id, 0, 0))
+			if err := s.bpfSvcs.Delete(key[:]); err != nil {
+				return errors.Errorf("bpfSvcs.Delete: %s", err)
+			}
+		}
+	}
+
+	return nil
+}
+
+func (s *Syncer) applySvc(skey svcKey, sinfo k8sp.ServicePort, eps []k8sp.Endpoint,
+	cleanupDerived func(uint32) error) error {
+
 	var (
 		err   error
 		id    uint32
@@ -222,27 +290,16 @@ func (s *Syncer) applyClusterIP(skey svcKey, sinfo k8sp.ServicePort,
 	if exists {
 		if old.svc == sinfo {
 			id = old.id
-			count, local, err = s.updateExistingSvc(skey.sname, sinfo, id, old.count, epsMap)
+			count, local, err = s.updateExistingSvc(skey.sname, sinfo, id, old.count, eps)
 		} else {
 			if err := s.deleteSvc(old.svc, old.id, old.count); err != nil {
 				return err
 			}
 
 			delete(s.prevSvcMap, skey)
-
-			// also delete all derived
-			for _, si := range s.prevSvcMap {
-				if si.id == old.id {
-					key, err := getSvcNATKey(si.svc)
-					if err != nil {
-						return err
-					}
-
-					log.Debugf("bpf map deleting derived %s:%s", key,
-						nat.NewNATValue(old.id, uint32(count), uint32(count)))
-					if err := s.bpfSvcs.Delete(key[:]); err != nil {
-						return errors.Errorf("bpfSvcs.Delete: %s", err)
-					}
+			if cleanupDerived != nil {
+				if err := cleanupDerived(old.id); err != nil {
+					return errors.WithMessage(err, "cleanupDerived")
 				}
 			}
 
@@ -251,7 +308,7 @@ func (s *Syncer) applyClusterIP(skey svcKey, sinfo k8sp.ServicePort,
 	}
 	if !exists {
 		id = s.newSvcID()
-		count, local, err = s.newSvc(skey.sname, sinfo, id, epsMap)
+		count, local, err = s.newSvc(skey.sname, sinfo, id, eps)
 	}
 	if err != nil {
 		return err
@@ -269,13 +326,76 @@ func (s *Syncer) applyClusterIP(skey svcKey, sinfo k8sp.ServicePort,
 	return nil
 }
 
-const (
-	svcTypeExternalIP int = iota
-	svcTypeNodePort
-)
+func (s *Syncer) getRoute(addr ip.V4Addr) (routes.Value, error) {
+	v, ok := s.rt.Lookup(noWaitCtx, addr)
+	if !ok {
+		return routes.Value{}, errors.Errorf("no route for %s", addr)
+	}
 
-func (s *Syncer) applyDerived(sname k8sp.ServicePortName, t int, sinfo k8sp.ServicePort,
-	epsMap k8sp.EndpointsMap) error {
+	return v, nil
+}
+
+func (s *Syncer) applyExpandedNP(sname k8sp.ServicePortName, sinfo k8sp.ServicePort,
+	eps []k8sp.Endpoint, node ip.V4Addr, nport int) error {
+	skey := getSvcKey(sname, getSvcKeyExtra(svcTypeNodePortRemote, node.String()))
+	si := *(sinfo.(*k8sp.BaseServiceInfo))
+	si.ClusterIP = node.AsNetIP()
+	si.Port = nport
+
+	if err := s.applySvc(skey, &si, eps, nil); err != nil {
+		return errors.Errorf("apply NodePortRemote for %s node %s", sname, node)
+	}
+
+	return nil
+}
+
+type expandMiss struct {
+	sname k8sp.ServicePortName
+	sinfo k8sp.ServicePort
+	eps   []k8sp.Endpoint
+	nport int
+}
+
+func (s *Syncer) expandNodePorts(sname k8sp.ServicePortName, sinfo k8sp.ServicePort,
+	eps []k8sp.Endpoint, nport int) *expandMiss {
+
+	m := make(map[ip.V4Addr][]k8sp.Endpoint)
+
+	var miss *expandMiss
+
+	for _, ep := range eps {
+		ipv4 := ip.FromString(ep.IP()).(ip.V4Addr)
+
+		rt, err := s.getRoute(ipv4)
+		if err != nil {
+			log.WithField("error", err).Error("Missing route")
+			if miss == nil {
+				miss = &expandMiss{
+					sname: sname,
+					sinfo: sinfo,
+					nport: nport,
+				}
+			}
+			miss.eps = append(miss.eps, ep)
+			continue
+		}
+
+		nodeIP := rt.NextHop().(ip.V4Addr)
+		log.Debugf("found rt %s for dest %s", nodeIP, ipv4)
+
+		m[nodeIP] = append(m[nodeIP], ep)
+	}
+
+	for node, neps := range m {
+		if err := s.applyExpandedNP(sname, sinfo, neps, node, nport); err != nil {
+			log.WithField("error", err).Errorf("Failed to expand NodePort")
+		}
+	}
+
+	return miss
+}
+
+func (s *Syncer) applyDerived(sname k8sp.ServicePortName, t svcType, sinfo k8sp.ServicePort) error {
 
 	svc, ok := s.newSvcMap[getSvcKey(sname, "")]
 	if !ok {
@@ -287,11 +407,9 @@ func (s *Syncer) applyDerived(sname k8sp.ServicePortName, t int, sinfo k8sp.Serv
 	count := svc.count
 	local := svc.localCount
 
+	skey = getSvcKey(sname, getSvcKeyExtra(t, sinfo.ClusterIPString()))
 	switch t {
-	case svcTypeExternalIP:
-		skey = getSvcKey(sname, getExternalIPExtra(sinfo.ClusterIPString()))
 	case svcTypeNodePort:
-		skey = getSvcKey(sname, getNodePortExtra(sinfo.ClusterIPString()))
 		if sinfo.(*k8sp.BaseServiceInfo).OnlyNodeLocalEndpoints {
 			count = local // use only local eps
 		}
@@ -326,9 +444,13 @@ func (s *Syncer) apply(state DPSyncerState) error {
 	s.newSvcMap = make(map[svcKey]svcInfo)
 	s.newEpsMap = make(k8sp.EndpointsMap)
 
+	var expNPMisses []*expandMiss
+
 	// insert or update existing services
 	for sname, sinfo := range state.SvcMap {
-		if err := s.applyClusterIP(getSvcKey(sname, ""), sinfo, state.EpsMap); err != nil {
+		skey := getSvcKey(sname, "")
+		eps := state.EpsMap[sname]
+		if err := s.applySvc(skey, sinfo, eps, s.cleanupDerived); err != nil {
 			return err
 		}
 
@@ -340,7 +462,7 @@ func (s *Syncer) apply(state DPSyncerState) error {
 				log.Errorf("failed to parse ExternalIP %s for service %s", extIP, sname)
 				continue
 			}
-			err := s.applyDerived(sname, svcTypeExternalIP, &extInfo, state.EpsMap)
+			err := s.applyDerived(sname, svcTypeExternalIP, &extInfo)
 			if err != nil {
 				log.Errorf("failed to apply ExternalIP %s for service %s : %s", extIP, sname, err)
 				continue
@@ -348,14 +470,25 @@ func (s *Syncer) apply(state DPSyncerState) error {
 		}
 
 		if nport := sinfo.GetNodePort(); nport != 0 {
+			bi := sinfo.(*k8sp.BaseServiceInfo)
 			for _, npip := range s.nodePortIPs {
-				npInfo := *(sinfo.(*k8sp.BaseServiceInfo))
+				npInfo := *bi
 				npInfo.ClusterIP = npip
 				npInfo.Port = nport
-				err := s.applyDerived(sname, svcTypeNodePort, &npInfo, state.EpsMap)
+				if npip.Equal(podNPIP) && bi.OnlyNodeLocalEndpoints {
+					// do not program the meta entry, program each node
+					// separately
+					continue
+				}
+				err := s.applyDerived(sname, svcTypeNodePort, &npInfo)
 				if err != nil {
 					log.Errorf("failed to apply NodePort %s for service %s : %s", npip, sname, err)
 					continue
+				}
+			}
+			if bi.OnlyNodeLocalEndpoints {
+				if miss := s.expandNodePorts(sname, sinfo, eps, nport); miss != nil {
+					expNPMisses = append(expNPMisses, miss)
 				}
 			}
 		}
@@ -369,7 +502,7 @@ func (s *Syncer) apply(state DPSyncerState) error {
 		}
 
 		count := sinfo.count
-		if skey.extra != "" {
+		if isSvcKeyDerived(skey) {
 			// do not delete backends if only deleting a service derived from a
 			// ClusterIP, that is ExternalIP or NodePort
 			count = 0
@@ -383,10 +516,10 @@ func (s *Syncer) apply(state DPSyncerState) error {
 		log.Infof("removed stale service %q", skey)
 	}
 
-	s.prevSvcMap = s.newSvcMap
-	s.prevEpsMap = s.newEpsMap
-
 	log.Debugf("new state written")
+
+	s.runExpandNPFixup(expNPMisses)
+
 	return nil
 }
 
@@ -402,16 +535,26 @@ func (s *Syncer) Apply(state DPSyncerState) error {
 		s.origSvcs = nil
 		s.origEps = nil
 		log.Infof("Startup sync complete")
+	} else {
+		// if we were not synced yet, the fixer cannot run yet
+		s.stopExpandNPFixup()
+
+		s.prevSvcMap = s.newSvcMap
+		s.prevEpsMap = s.newEpsMap
 	}
+
+	s.mapsLck.Lock()
+	defer s.mapsLck.Unlock()
+
 	return s.apply(state)
 }
 
 func (s *Syncer) updateExistingSvc(sname k8sp.ServicePortName, sinfo k8sp.ServicePort, id uint32,
-	oldCount int, eps k8sp.EndpointsMap) (int, int, error) {
+	oldCount int, eps []k8sp.Endpoint) (int, int, error) {
 
 	// No need to delete any old entries if we do reduce the number of backends
 	// as all the key:value are going to be rewritten/updated
-	if oldCount > len(eps[sname]) {
+	if oldCount > len(eps) {
 		for i := 0; i < oldCount; i++ {
 			if err := s.deleteSvcBackend(id, uint32(i)); err != nil {
 				return 0, 0, err
@@ -423,14 +566,14 @@ func (s *Syncer) updateExistingSvc(sname k8sp.ServicePortName, sinfo k8sp.Servic
 }
 
 func (s *Syncer) newSvc(sname k8sp.ServicePortName, sinfo k8sp.ServicePort, id uint32,
-	eps k8sp.EndpointsMap) (int, int, error) {
+	eps []k8sp.Endpoint) (int, int, error) {
 
-	cpEps := make([]k8sp.Endpoint, 0, len(eps[sname]))
+	cpEps := make([]k8sp.Endpoint, 0, len(eps))
 
 	cnt := 0
 	local := 0
 
-	for _, ep := range eps[sname] {
+	for _, ep := range eps {
 		if !ep.GetIsLocal() {
 			continue
 		}
@@ -443,7 +586,7 @@ func (s *Syncer) newSvc(sname k8sp.ServicePortName, sinfo k8sp.ServicePort, id u
 		local++
 	}
 
-	for _, ep := range eps[sname] {
+	for _, ep := range eps {
 		if ep.GetIsLocal() {
 			continue
 		}
@@ -586,7 +729,7 @@ func (s *Syncer) matchBpfSvc(bsvc nat.FrontendKey, svcs k8sp.ServiceMap) *svcKey
 					if bsvc.Addr().String() == nip.String() {
 						skey := &svcKey{
 							sname: svc,
-							extra: getNodePortExtra(nip.String()),
+							extra: getSvcKeyExtra(svcTypeNodePort, nip.String()),
 						}
 						log.Debugf("resolved %s as %s", bsvc, skey)
 						return skey
@@ -605,16 +748,18 @@ func (s *Syncer) matchBpfSvc(bsvc nat.FrontendKey, svcs k8sp.ServiceMap) *svcKey
 		}
 
 		if bsvc.Addr().String() == info.ClusterIPString() {
-			return &svcKey{
+			skey := &svcKey{
 				sname: svc,
 			}
+			log.Debugf("resolved %s as %s", bsvc, skey)
+			return skey
 		}
 
 		for _, eip := range info.ExternalIPStrings() {
 			if bsvc.Addr().String() == eip {
 				skey := &svcKey{
 					sname: svc,
-					extra: getExternalIPExtra(eip),
+					extra: getSvcKeyExtra(svcTypeExternalIP, eip),
 				}
 				log.Debugf("resolved %s as %s", bsvc, skey)
 				return skey
@@ -628,4 +773,72 @@ func (s *Syncer) matchBpfSvc(bsvc nat.FrontendKey, svcs k8sp.ServiceMap) *svcKey
 	}
 
 	return nil
+}
+
+func (s *Syncer) runExpandNPFixup(misses []*expandMiss) {
+	s.expFixupStop = make(chan struct{})
+	if len(misses) == 0 {
+		return
+	}
+	s.expFixupWg.Add(1)
+
+	// start the fixer routine and exit
+	go func() {
+		log.Debug("fixer started")
+		defer s.expFixupWg.Done()
+		defer log.Debug("fixer exited")
+		s.mapsLck.Lock()
+		defer s.mapsLck.Unlock()
+
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+
+		// monitor if we should stop and if so, cancel any work
+		go func() {
+			select {
+			case <-s.stop:
+				cancel()
+			case <-s.expFixupStop:
+				cancel()
+			case <-ctx.Done():
+				//do nothing, we exited, work is done, just quit
+			}
+		}()
+
+		for {
+			log.Debugf("%d misses unresolved", len(misses))
+
+			// We do one pass rightaway since we cannot know whether there
+			// was an update or not before we got here
+			s.rt.WaitAfter(ctx, func() bool {
+				var again []*expandMiss
+				for _, m := range misses {
+					if miss := s.expandNodePorts(m.sname, m.sinfo, m.eps, m.nport); miss != nil {
+						again = append(again, miss)
+					}
+				}
+
+				misses = again
+
+				return len(misses) == 0 // block or not block
+			})
+
+			if len(misses) == 0 || ctx.Err() != nil {
+				return
+			}
+		}
+	}()
+}
+
+func (s *Syncer) stopExpandNPFixup() {
+	close(s.expFixupStop)
+	s.expFixupWg.Wait()
+}
+
+// Stop sto pthe syncer
+func (s *Syncer) Stop() {
+	s.stopOnce.Do(func() {
+		close(s.stop)
+		s.expFixupWg.Wait()
+	})
 }

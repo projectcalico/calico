@@ -534,6 +534,8 @@ func newMockSyncer(stop chan struct{}) *mockSyncer {
 	}
 }
 
+func (s *mockSyncer) Stop() {}
+
 func (s *mockSyncer) Apply(state proxy.DPSyncerState) error {
 	log("SvcMap = %+v\n", state.SvcMap)
 	log("EpsMap = %+v\n", state.EpsMap)

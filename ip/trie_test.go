@@ -1,4 +1,4 @@
-// Copyright (c) 2019 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -89,6 +89,19 @@ var _ = Describe("V4Trie tests", func() {
 		return s
 	}
 
+	lpm := func(cidr string, expectedCidr string) interface{} {
+		cidrIn := ip.MustParseCIDROrIP(cidr).(ip.V4CIDR)
+		cidrOut, data := trie.LPM(cidrIn)
+
+		if data != nil {
+			Expect(cidrOut.ContainsV4(cidrIn.Addr().(ip.V4Addr))).To(BeTrue())
+			cidrExp := ip.MustParseCIDROrIP(expectedCidr).(ip.V4CIDR)
+			Expect(cidrExp).To(Equal(cidrOut))
+		}
+
+		return data
+	}
+
 	It("should allow inserting a single CIDR", func() {
 		update("10.0.0.0/8")
 		Expect(contents()).To(ConsistOf("10.0.0.0/8"))
@@ -142,6 +155,67 @@ var _ = Describe("V4Trie tests", func() {
 	It("should fail to lookup when child is missing", func() {
 		update("10.0.0.0/8")
 		Expect(lookup("11.0.0.0/8")).To(BeEmpty())
+	})
+
+	Context("LPM", func() {
+		Context("single node", func() {
+			BeforeEach(func() {
+				update("10.2.1.0/24")
+			})
+
+			It("should find 10.2.1.1", func() {
+				Expect(lpm("10.2.1.1/32", "10.2.1.0/24")).NotTo(BeNil())
+			})
+
+			It("should not find 10.2.3.1", func() {
+				Expect(lpm("10.2.3.1/32", "")).To(BeNil())
+			})
+		})
+
+		Context("without value in root", func() {
+			BeforeEach(func() {
+				update("1.1.1.1/8")
+				update("1.1.5.1/24")
+				update("1.1.1.1/16")
+				update("1.1.1.1/32")
+				update("2.1.1.1/8")
+				update("2.1.1.1/16")
+			})
+
+			It("should find precise", func() {
+				Expect(lpm("1.1.1.1/32", "1.1.1.1/32")).NotTo(BeNil())
+			})
+
+			It("should find prefix for precise", func() {
+				Expect(lpm("1.1.1.5/32", "1.1.1.1/16")).NotTo(BeNil())
+			})
+
+			It("should find internal node", func() {
+				Expect(lpm("1.1.0.0/16", "1.1.0.0/16")).NotTo(BeNil())
+			})
+
+			It("should find internal prefix", func() {
+				Expect(lpm("1.1.2.0/24", "1.1.0.0/16")).NotTo(BeNil())
+			})
+
+			It("should find root prefix", func() {
+				Expect(lpm("3.0.0.0/7", "2.1.1.1/8")).NotTo(BeNil())
+			})
+
+			It("should not find prefix", func() {
+				Expect(lpm("4.0.0.0/7", "")).To(BeNil())
+			})
+		})
+
+		Context("LPM with root", func() {
+			BeforeEach(func() {
+				update("0.0.0.0/0")
+			})
+
+			It("should find root", func() {
+				Expect(lpm("4.0.0.0/7", "0.0.0.0/0")).NotTo(BeNil())
+			})
+		})
 	})
 
 	pEntry := func(cidrs ...string) TableEntry {

@@ -533,6 +533,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 				log.WithError(err).Panic("Failed to start kube-proxy.")
 			}
 			bpfRTMgr.setHostIPUpdatesCallBack(kp.OnHostIPsUpdate)
+			bpfRTMgr.setRoutesCallBacks(kp.OnRouteUpdate, kp.OnRouteDelete)
 		} else {
 			log.Info("BPF enabled but no Kubernetes client available, unable to run kube-proxy module.")
 		}
