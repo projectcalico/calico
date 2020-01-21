@@ -22,12 +22,12 @@ This how-to guide uses the following {{site.prodname}} features:
 
 #### {{site.prodname}} manifests
 
-{{site.prodname}} provides manifests for easy customization. Each manifest contains the necessary resources for installing {{site.prodname}} on each node in your Kubernetes cluster. We recommend [Customizing Calico manifests]({{site.url}}/reference/customize-manifests) before installing {{site.prodname}} on nodes; this avoids downstream manual updates to other {{site.prodname}} resources.
+{{site.prodname}} provides manifests for easy customization. Each manifest contains the necessary resources for installing {{site.prodname}} on each node in your Kubernetes cluster. We recommend [Customizing Calico manifests]({{site.url}}/rgetting-started-kubernetes/installation/manifests/customize-manifests) before installing {{site.prodname}} on nodes; this avoids downstream manual updates to other {{site.prodname}} resources.
 
 ### Before you begin...
 
 - Ensure that your Kubernetes cluster meets [requirements]({site.url}}/getting-started/kubernetes/requirements).
-  If you do not have a cluster, see [Using kubeadmin to create a cluster]({{site.url}}/getting-started-guides/kubeadm/).
+  If you do not have a cluster, see [Using kubeadmin to create a cluster](http://kubernetes.io/docs/getting-started-guides/kubeadm/).
 - If you are using CoreOS, [make this required change to manifests]({{site.url}}/reference/faq#are-the-calico-manifests-compatible-with-coreos).
 
 ### How to 
@@ -46,11 +46,11 @@ Based on your datastore and number of nodes, select a link below to install {{si
 >**Note**: The option, **Kubernetes API datastore - more than 50 nodes** provides scaling using {{site.prodname}} [Typha daemon](https://github.com/projectcalico/typha). Typha is not included for etcd because etcd v3 already handles many clients so using Typha is redundant and not recommended.
 {: .alert .alert-info}
 
-- [Install Calico with Kubernetes API datastore--50 nodes or less](#install-calico-with-kubernetes-api-datastore-50-nodes-or-less)
-- [Install Calico with Kubernetes API datastore--more than 50 nodes](#install-calico-with-Kubernetes-api-datastore-more-than-50-nodes)
+- [Install Calico with Kubernetes API datastore, 50 nodes or less](#install-calico-with-kubernetes-api-datastore-50-nodes-or-less)
+- [Install Calico with Kubernetes API datastore, more than 50 nodes](#install-calico-with-Kubernetes-api-datastore-more-than-50-nodes)
 - [Install Calico with etcd datastore](#install-calico-with-etcd-datastore)
 
-##### Install Calico with Kubernetes API datastore--50 nodes or less
+##### Install Calico with Kubernetes API datastore, 50 nodes or less
 
 1. Download the {{site.prodname}} Calico manifest (calico-config.yaml) for the Kubernetes API datastore.
 
@@ -66,7 +66,7 @@ Based on your datastore and number of nodes, select a link below to install {{si
    kubectl apply -f calico.yaml
    ```
 
-##### Install Calico with Kubernetes API datastore--more than 50 nodes
+##### Install Calico with Kubernetes API datastore, more than 50 nodes
 
 1. Download the {{site.prodname}} Calico manifest (ConfigMap) for the Kubernetes API datastore.
 
@@ -139,4 +139,4 @@ Based on your datastore and number of nodes, select a link below to install {{si
 - [Secure Calico component communications]({{site.url}}/security/comms/crypto-auth)
 - [Secure hosts by installing Calico on hosts]({{site.url}}/getting-started/bare-metal/installation/)
 - [Secure pods with Calico network policy]({{site.url}}/security/calico-network-policy)
-- If you are using {{site.prodname}} with Istio service mesh, get started here: [Enable application layer policy for Istio service mesh]({{site.url}}/security/enable-app-layer-policy)
+- If you are using {{site.prodname}} with Istio service mesh, get started here: [Enable application layer policy for Istio service mesh]({{site.url}}/security/installation/app-layer-policy)
