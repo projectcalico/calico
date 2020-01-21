@@ -41,7 +41,9 @@
 
 #else
 
-static CALI_BPF_INLINE enum calico_policy_result execute_policy_norm(struct __sk_buff *skb,__u8 ip_proto, __u32 saddr, __u32 daddr, __u16 sport, __u16 dport) {
+static CALI_BPF_INLINE enum calico_policy_result execute_policy_norm(struct __sk_buff *skb,
+				__u8 ip_proto, __u32 saddr, __u32 daddr, __u16 sport, __u16 dport)
+{
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wunused-label"
 
@@ -68,8 +70,8 @@ int calico_tc_norm_pol_tail(struct __sk_buff *skb) {
 	        goto deny;
 	}
 
-	enum calico_policy_result pol_rc = execute_policy_norm(skb, state->ip_proto, state->ip_src, state->ip_dst, state->sport, state->dport);
-	state->pol_rc = pol_rc;
+	state->pol_rc = execute_policy_norm(skb, state->ip_proto, state->ip_src,
+					    state->ip_dst, state->sport, state->dport);
 
 	bpf_tail_call(skb, &cali_jump, 1);
 	CALI_DEBUG("Tail call to post-policy program failed: DROP\n");
@@ -131,7 +133,9 @@ static CALI_BPF_INLINE int skb_nat_l4_csum_ipv4(struct __sk_buff *skb, size_t of
 	return ret;
 }
 
-static CALI_BPF_INLINE int calico_try_fib(struct __sk_buff *skb, struct cali_tc_state *state, struct bpf_fib_lookup *fib_params, uint32_t fib_flags) {
+static CALI_BPF_INLINE int calico_try_fib(struct __sk_buff *skb, struct cali_tc_state *state,
+					  struct bpf_fib_lookup *fib_params, uint32_t fib_flags)
+{
 	CALI_DEBUG("Traffic is towards the host namespace, doing Linux FIB lookup\n");
 	fib_params->l4_protocol = state->ip_proto;
 	int rc = bpf_fib_lookup(skb, fib_params, sizeof(fib_params), fib_flags);
@@ -239,7 +243,8 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb) {
 			CALI_DEBUG("Unknown ethertype (%x), drop\n", be16_to_host(skb->protocol));
 			goto deny;
 		} else {
-			CALI_DEBUG("Unknown ethertype on host interface (%x), allow\n", be16_to_host(skb->protocol));
+			CALI_DEBUG("Unknown ethertype on host interface (%x), allow\n",
+								be16_to_host(skb->protocol));
 			return TC_ACT_UNSPEC;
 		}
 	}
