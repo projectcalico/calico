@@ -1,3 +1,6 @@
+Component = Struct.new(:image, :version, :registry) do
+end
+
 # Takes versions_yml which is structured as follows:
 #
 #   ["components"=>
@@ -10,5 +13,12 @@
 #   "typha"=>"v3.6.0"}
 def parse_versions(versions_yml)
   components = versions_yml[0]["components"].clone
-  return components.each { |key,val| components[key] = val["version"] }
+  versionsYml = components.each { |key,val| components[key] = val["version"] }
+
+  unless versions_yml[0]["tigera-operator"].nil?
+          operator = versions_yml[0]["tigera-operator"]
+          versionsYml["tigera-operator"] = Component.new(operator["image"], operator["version"], operator["registry"])
+  end
+
+  return versionsYml
 end

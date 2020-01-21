@@ -74,8 +74,6 @@ section:
     path: /getting-started/openshift/requirements
   - title: Installation
     path: /getting-started/openshift/installation
-  - title: Connecting to a dedicated etcd cluster (optional)
-    path: /getting-started/openshift/dedicated-etcd
 - title: OpenStack
   path: /getting-started/openstack/
   section:

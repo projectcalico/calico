@@ -1,0 +1,187 @@
+apiVersion: apiextensions.k8s.io/v1beta1
+kind: CustomResourceDefinition
+metadata:
+  name: installations.operator.tigera.io
+spec:
+  group: operator.tigera.io
+  names:
+    kind: Installation
+    listKind: InstallationList
+    plural: installations
+    singular: installation
+  scope: Cluster
+  subresources:
+    status: {}
+  validation:
+    openAPIV3Schema:
+      properties:
+        apiVersion:
+          description: 'APIVersion defines the versioned schema of this representation
+            of an object. Servers should convert recognized schemas to the latest
+            internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/api-conventions.md#resources'
+          type: string
+        kind:
+          description: 'Kind is a string value representing the REST resource this
+            object represents. Servers may infer this from the endpoint the client
+            submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/api-conventions.md#types-kinds'
+          type: string
+        metadata:
+          type: object
+        spec:
+          description: Specification of the desired state for the Calico or Tigera
+            Secure EE installation.
+          properties:
+            calicoNetwork:
+              description: CalicoNetwork specifies configuration options for Calico
+                provided pod networking.
+              properties:
+                ipPools:
+                  description: IPPools contains a list of IP pools to use for allocating
+                    pod IP addresses. At most one IP pool may be specified. If omitted,
+                    a single pool will be configured when needed.
+                  items:
+                    properties:
+                      cidr:
+                        description: CIDR contains the address range for the IP Pool
+                          in classless inter-domain routing format.
+                        type: string
+                      encapsulation:
+                        description: 'Encapsulation specifies the encapsulation type
+                          that will be used with the IP Pool. Default: IPIP'
+                        enum:
+                        - IPIPCrossSubnet
+                        - IPIP
+                        - VXLAN
+                        - VXLANCrossSubnet
+                        - None
+                        type: string
+                      natOutgoing:
+                        description: 'NATOutgoing specifies if NAT will be enabled
+                          or disabled for outgoing traffic. Default: Enabled'
+                        enum:
+                        - Enabled
+                        - Disabled
+                        type: string
+                      nodeSelector:
+                        description: 'NodeSelector specifies the node selector that
+                          will be set for the IP Pool. Default: ''all()'''
+                        type: string
+                    required:
+                    - cidr
+                    type: object
+                  type: array
+                mtu:
+                  description: 'MTU specifies the maximum transmission unit to use
+                    for pods on the Calico network. Default: 1410'
+                  format: int32
+                  type: integer
+                nodeAddressAutodetectionV4:
+                  description: NodeAddressAutodetectionV4 specifies an approach to
+                    automatically detect node IPv4 addresses. If not specified, will
+                    use default auto-detection settings to acquire an IPv4 address
+                    for each node.
+                  properties:
+                    canReach:
+                      description: CanReach enables IP auto-detection based on which
+                        source address on the node is used to reach the specified
+                        IP or domain.
+                      type: string
+                    firstFound:
+                      description: FirstFound uses default interface matching parameters
+                        to select an interface, performing best-effort filtering based
+                        on well-known interface names.
+                      type: boolean
+                    interface:
+                      description: Interface enables IP auto-detection based on interfaces
+                        that match the given regex.
+                      type: string
+                    skipInterface:
+                      description: SkipInterface enables IP auto-detection based on
+                        interfaces that do not match the given regex.
+                      type: string
+                  type: object
+                nodeAddressAutodetectionV6:
+                  description: NodeAddressAutodetectionV6 specifies an approach to
+                    automatically detect node IPv4 addresses. If not specified, IPv6
+                    addresses will not be auto-detected.
+                  properties:
+                    canReach:
+                      description: CanReach enables IP auto-detection based on which
+                        source address on the node is used to reach the specified
+                        IP or domain.
+                      type: string
+                    firstFound:
+                      description: FirstFound uses default interface matching parameters
+                        to select an interface, performing best-effort filtering based
+                        on well-known interface names.
+                      type: boolean
+                    interface:
+                      description: Interface enables IP auto-detection based on interfaces
+                        that match the given regex.
+                      type: string
+                    skipInterface:
+                      description: SkipInterface enables IP auto-detection based on
+                        interfaces that do not match the given regex.
+                      type: string
+                  type: object
+              type: object
+            clusterManagementType:
+              description: 'How the cluster is managed. Valid values for this field
+                are: Standalone, Management, Managed. Standalone clusters are fully
+                self-contained installations of Calico Enterprise. Management clusters
+                provide a single view to manage any number of Managed clusters, which
+                are a lighter weight installation. Default: Standalone'
+              enum:
+              - Standalone
+              - Management
+              - Managed
+              type: string
+            imagePullSecrets:
+              description: ImagePullSecrets is an array of references to container
+                registry pull secrets to use. These are applied to all images to be
+                pulled.
+              items:
+                type: object
+              type: array
+            kubernetesProvider:
+              description: KubernetesProvider specifies a particular provider of the
+                Kubernetes platform. This is often auto-detected. If specified, this
+                enables provider-specific configuration and must match the auto-detected
+                value (if any).
+              enum:
+              - EKS
+              - GKE
+              - AKS
+              - OpenShift
+              - DockerEnterprise
+              type: string
+            registry:
+              description: Registry is the default Docker registry used for component
+                Docker images. If specified, all Calico and Tigera Secure images will
+                be pulled from this registry.
+              type: string
+            variant:
+              description: 'Variant is the product to install - one of Calico or TigeraSecureEnterprise
+                Default: Calico'
+              enum:
+              - Calico
+              - TigeraSecureEnterprise
+              type: string
+          type: object
+        status:
+          description: Most recently observed state for the Calico or Tigera Secure
+            EE installation.
+          properties:
+            variant:
+              description: Variant is the most recently observed installed variant
+                - one of Calico or TigeraSecureEnterprise
+              enum:
+              - Calico
+              - TigeraSecureEnterprise
+              type: string
+          type: object
+  version: v1
+  versions:
+  - name: v1
+    served: true
+    storage: true

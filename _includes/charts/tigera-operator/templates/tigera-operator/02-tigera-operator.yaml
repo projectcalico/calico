@@ -1,0 +1,44 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tigera-operator
+  namespace: tigera-operator
+  labels:
+    k8s-app: tigera-operator
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      name: tigera-operator
+  template:
+    metadata:
+      labels:
+        name: tigera-operator
+        k8s-app: tigera-operator
+    spec:
+      tolerations:
+        - effect: NoExecute
+          operator: Exists
+        - effect: NoSchedule
+          operator: Exists
+      serviceAccountName: tigera-operator
+      hostNetwork: true
+      # This must be set when hostNetwork is true or else the cluster services won't resolve
+      dnsPolicy: ClusterFirstWithHostNet
+      containers:
+        - name: tigera-operator
+          image: {{ template "tigera-operator.image" .Values.tigeraOperator}}
+          imagePullPolicy: IfNotPresent
+          command:
+            - operator
+          env:
+            - name: WATCH_NAMESPACE
+              value: ""
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: OPERATOR_NAME
+              value: "tigera-operator"
+            - name: TIGERA_OPERATOR_INIT_IMAGE_VERSION
+              value: {{.Values.tigeraOperator.version}}

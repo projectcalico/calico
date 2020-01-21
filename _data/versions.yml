@@ -1,5 +1,9 @@
 - title: master
   note: ""
+  tigera-operator:
+   image: tigera/operator
+   registry: quay.io
+   version: release-v1.1
   components:
      typha:
       version: master

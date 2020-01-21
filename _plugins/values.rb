@@ -1,4 +1,13 @@
-def gen_values(versions, imageNames, imageRegistry)
+def gen_values(versions, imageNames, imageRegistry, chart)
+  if chart == "tigera-operator"  
+    versionsYml = <<~EOF
+    # Configuration for the tigera operator
+    tigeraOperator:
+      image: #{versions.fetch("tigera-operator").image}
+      version: #{versions.fetch("tigera-operator").version}
+      registry: #{versions.fetch("tigera-operator").registry}
+    EOF
+  else
     versionsYml = <<~EOF
     datastore: kubernetes
     # Config for etcd
@@ -67,5 +76,7 @@ def gen_values(versions, imageNames, imageRegistry)
     flexvol:
       image: #{imageRegistry}#{imageNames.fetch("flexvol")}
       tag: #{versions.fetch("flexvol")}
+
     EOF
+  end
 end

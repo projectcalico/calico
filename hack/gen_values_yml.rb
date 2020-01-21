@@ -25,6 +25,10 @@ OptionParser.new do |parser|
     parser.on("-r", "--registry=REGISTRY") do |registry|
         @image_registry = registry
     end
+
+    parser.on("-C", "--chart=CHART") do |chart|
+        @chart = chart
+    end
 end.parse!
 
 @path_to_config ||= "_config.yml"
@@ -40,4 +44,4 @@ imageNames = config["imageNames"]
 versions_yml = YAML::load_file(@path_to_versions)
 versions = parse_versions(versions_yml)
 
-print gen_values(versions, imageNames, @image_registry)
+print gen_values(versions, imageNames, @image_registry, @chart)
