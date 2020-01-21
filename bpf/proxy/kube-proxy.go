@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -41,21 +41,24 @@ type KubeProxy struct {
 	hostname    string
 	frontendMap bpf.Map
 	backendMap  bpf.Map
+	affinityMap bpf.Map
 	rt          *RTCache
 	opts        []Option
 }
 
 // StartKubeProxy start a new kube-proxy if there was no error
 func StartKubeProxy(k8s kubernetes.Interface, hostname string,
-	frontendMap, backendMap bpf.Map, opts ...Option) (*KubeProxy, error) {
+	frontendMap, backendMap, affinityMap bpf.Map, opts ...Option) (*KubeProxy, error) {
 
 	kp := &KubeProxy{
-		k8s:           k8s,
-		hostname:      hostname,
-		frontendMap:   frontendMap,
-		backendMap:    backendMap,
-		opts:          opts,
-		rt:            NewRTCache(),
+		k8s:         k8s,
+		hostname:    hostname,
+		frontendMap: frontendMap,
+		backendMap:  backendMap,
+		affinityMap: affinityMap,
+		opts:        opts,
+		rt:          NewRTCache(),
+
 		hostIPUpdates: make(chan []net.IP, 1),
 		exiting:       make(chan struct{}),
 	}
@@ -92,7 +95,7 @@ func (kp *KubeProxy) run(hostIPs []net.IP) error {
 	copy(withLocalNP, hostIPs)
 	withLocalNP = append(withLocalNP, podNPIP)
 
-	syncer, err := NewSyncer(withLocalNP, kp.frontendMap, kp.backendMap, kp.rt)
+	syncer, err := NewSyncer(withLocalNP, kp.frontendMap, kp.backendMap, kp.affinityMap, kp.rt)
 	if err != nil {
 		return errors.WithMessage(err, "new bpf syncer")
 	}

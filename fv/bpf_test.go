@@ -28,34 +28,27 @@ import (
 	"strings"
 	"time"
 
-	"github.com/pkg/errors"
-
-	"github.com/projectcalico/libcalico-go/lib/ipam"
-
-	"github.com/projectcalico/felix/bpf/nat"
-
-	"github.com/projectcalico/felix/bpf/conntrack"
-
 	"github.com/davecgh/go-spew/spew"
+	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/client-go/kubernetes"
-
-	"github.com/projectcalico/libcalico-go/lib/apiconfig"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-
 	"github.com/projectcalico/felix/bpf"
+	"github.com/projectcalico/felix/bpf/nat"
 	"github.com/projectcalico/felix/fv/containers"
 	"github.com/projectcalico/felix/fv/infrastructure"
 	"github.com/projectcalico/felix/fv/utils"
 	"github.com/projectcalico/felix/fv/workload"
+	"github.com/projectcalico/libcalico-go/lib/apiconfig"
 	api "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	client "github.com/projectcalico/libcalico-go/lib/clientv3"
+	"github.com/projectcalico/libcalico-go/lib/ipam"
 	cnet "github.com/projectcalico/libcalico-go/lib/net"
 )
 
@@ -404,7 +397,10 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 					iiStr := strconv.Itoa(ii)
 					wIP := "10.65." + iiStr + ".2"
 					w[ii][0] = workload.Run(felix, "w"+iiStr+"0", "default", wIP, "8055", testOpts.protocol)
-					w[ii][0].WorkloadEndpoint.Labels = map[string]string{"name": w[ii][0].Name}
+					w[ii][0].WorkloadEndpoint.Labels = map[string]string{
+						"name": w[ii][0].Name,
+						"port": "8055",
+					}
 					w[ii][0].ConfigureInDatastore(infra)
 					// Assign the workload's IP in IPAM, this will trigger calculation of routes.
 					err := calicoClient.IPAM().AssignIP(context.Background(), ipam.AssignIPArgs{
@@ -638,7 +634,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						for _, match := range matches {
 							lastSeenNanos, err := strconv.ParseInt(match[1], 10, 64)
 							Expect(err).NotTo(HaveOccurred())
-							nowNanos := conntrack.KTimeNanos()
+							nowNanos := bpf.KTimeNanos()
 							age := time.Duration(nowNanos - lastSeenNanos)
 							Expect(age).To(BeNumerically(">", 0))
 							Expect(age).To(BeNumerically("<", 60*time.Second))
@@ -786,6 +782,44 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 								}
 							})
 						})
+					})
+				})
+
+				Context("with test-service configured 10.101.0.10:80 -> w[*][0].IP:8055 and affinity", func() {
+					var (
+						testSvc          *v1.Service
+						testSvcNamespace string
+					)
+
+					testSvcName := "test-service"
+
+					BeforeEach(func() {
+						testSvc = k8sService(testSvcName, "10.101.0.10", w[0][0], 80, 8055, 0, testOpts.protocol)
+						testSvcNamespace = testSvc.ObjectMeta.Namespace
+						// select all pods with port 8055
+						testSvc.Spec.Selector = map[string]string{"port": "8055"}
+						testSvc.Spec.SessionAffinity = "ClientIP"
+						_, err := k8sClient.CoreV1().Services(testSvcNamespace).Create(testSvc)
+						Expect(err).NotTo(HaveOccurred())
+						Eventually(k8sGetEpsForServiceFunc(k8sClient, testSvc), "10s").Should(HaveLen(1),
+							"Service endpoints didn't get created? Is controller-manager happy?")
+					})
+
+					It("should have connectivity from a workload to a service with multiple backends", func() {
+						ip := testSvc.Spec.ClusterIP
+						port := uint16(testSvc.Spec.Ports[0].Port)
+
+						cc.ExpectSome(w[1][1], workload.IP(ip), port)
+						cc.ExpectSome(w[1][1], workload.IP(ip), port)
+						cc.ExpectSome(w[1][1], workload.IP(ip), port)
+						cc.CheckConnectivity()
+
+						if !testOpts.connTimeEnabled {
+							// FIXME we can only do the test with regular NAT as
+							// cgroup shares one random affinity map
+							aff := dumpAffMap(felixes[1])
+							Expect(aff).To(HaveLen(1))
+						}
 					})
 				})
 
@@ -972,28 +1006,34 @@ func dumpNATMaps(felix *infrastructure.Felix) (nat.MapMem, nat.BackendMapMem) {
 	return dumpNATMap(felix), dumpEPMap(felix)
 }
 
-func dumpNATMap(felix *infrastructure.Felix) nat.MapMem {
-	bm := nat.FrontendMap(&bpf.MapContext{})
-	cmd, err := bpf.DumpMapCmd(bm)
+func dumpBPFMap(felix *infrastructure.Felix, m bpf.Map, iter bpf.MapIter) {
+	cmd, err := bpf.DumpMapCmd(m)
 	Expect(err).NotTo(HaveOccurred())
-	bpfsvcs := make(nat.MapMem)
 	out, err := felix.ExecOutput(cmd...)
 	Expect(err).NotTo(HaveOccurred())
-	err = bpf.IterMapCmdOutput([]byte(out), nat.MapMemIter(bpfsvcs))
+	err = bpf.IterMapCmdOutput([]byte(out), iter)
 	Expect(err).NotTo(HaveOccurred())
-	return bpfsvcs
+}
+
+func dumpNATMap(felix *infrastructure.Felix) nat.MapMem {
+	bm := nat.FrontendMap(&bpf.MapContext{})
+	m := make(nat.MapMem)
+	dumpBPFMap(felix, bm, nat.MapMemIter(m))
+	return m
 }
 
 func dumpEPMap(felix *infrastructure.Felix) nat.BackendMapMem {
-	bb := nat.BackendMap(&bpf.MapContext{})
-	cmd, err := bpf.DumpMapCmd(bb)
-	Expect(err).NotTo(HaveOccurred())
-	bpfeps := make(nat.BackendMapMem)
-	out, err := felix.ExecOutput(cmd...)
-	Expect(err).NotTo(HaveOccurred())
-	err = bpf.IterMapCmdOutput([]byte(out), nat.BackendMapMemIter(bpfeps))
-	Expect(err).NotTo(HaveOccurred())
-	return bpfeps
+	bm := nat.BackendMap(&bpf.MapContext{})
+	m := make(nat.BackendMapMem)
+	dumpBPFMap(felix, bm, nat.BackendMapMemIter(m))
+	return m
+}
+
+func dumpAffMap(felix *infrastructure.Felix) nat.AffinityMapMem {
+	bm := nat.AffinityMap(&bpf.MapContext{})
+	m := make(nat.AffinityMapMem)
+	dumpBPFMap(felix, bm, nat.AffinityMapMemIter(m))
+	return m
 }
 
 func k8sService(name, clusterIP string, w *workload.Workload, port,
