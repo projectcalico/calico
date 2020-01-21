@@ -295,6 +295,11 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		LookPathOverride:      config.LookPathOverride,
 	}
 
+	if config.BPFEnabled && !bpf.SyscallSupport() {
+		log.Error("BPFEnabled is set but BPF mode is not supported on this platform.  Continuing with BPF disabled.")
+		config.BPFEnabled = false
+	}
+
 	if config.BPFEnabled && config.BPFKubeProxyIptablesCleanupEnabled {
 		// If BPF-mode is enabled, clean up kube-proxy's rules too.
 		log.Info("BPF enabled, configuring iptables layer to clean up kube-proxy's rules.")

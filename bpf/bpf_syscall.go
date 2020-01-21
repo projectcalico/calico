@@ -119,16 +119,8 @@ import (
 // }
 import "C"
 
-type MapFD uint32
-
-func (f MapFD) Close() error {
-	return unix.Close(int(f))
-}
-
-type ProgFD uint32
-
-func (f ProgFD) Close() error {
-	return unix.Close(int(f))
+func SyscallSupport() bool {
+	return true
 }
 
 func GetMapFDByPin(filename string) (MapFD, error) {
@@ -206,12 +198,6 @@ func increaseLockedMemoryQuota() {
 			log.WithError(err).Error("Failed to increase RLIMIT_MEMLOCK, loading BPF programs may fail")
 		}
 	})
-}
-
-type ProgResult struct {
-	RC       int32
-	Duration time.Duration
-	DataOut  []byte
 }
 
 func RunBPFProgram(fd ProgFD, dataIn []byte, repeat int) (pr ProgResult, err error) {
@@ -330,12 +316,6 @@ func checkMapIfDebug(mapFD MapFD, keySize, valueSize int) error {
 	return nil
 }
 
-type MapInfo struct {
-	Type      int
-	KeySize   int
-	ValueSize int
-}
-
 func GetMapInfo(fd MapFD) (*MapInfo, error) {
 	bpfAttr := C.bpf_attr_alloc()
 	defer C.free(unsafe.Pointer(bpfAttr))
@@ -353,10 +333,6 @@ func GetMapInfo(fd MapFD) (*MapInfo, error) {
 		KeySize:   int(bpfMapInfo.key_size),
 		ValueSize: int(bpfMapInfo.value_size),
 	}, nil
-}
-
-func IsNotExists(err error) bool {
-	return err == unix.ENOENT
 }
 
 func DeleteMapEntry(mapFD MapFD, k []byte, valueSize int) error {
