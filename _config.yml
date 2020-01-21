@@ -53,6 +53,9 @@ breadcrumbs:
     hide: false  # show breadcrumbs on root/home page
     image: false # Show image or title text
 
+# Set to 'true' to show warning that points users to latest version of each page.
+is_latest: false
+
 defaults:
   -
     scope:
