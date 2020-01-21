@@ -64,3 +64,8 @@ build_master
 
 echo "[INFO] building archives"
 build_archives
+
+if [ ! -z "$CANDIDATE_RELEASE" ]; then
+    echo "[INFO] building candidate release"
+    build release-$CANDIDATE_RELEASE /$CANDIDATE_RELEASE
+fi
