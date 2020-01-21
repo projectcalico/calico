@@ -10,7 +10,10 @@ section:
   - title: System requirements
     path: /getting-started/kubernetes/requirements
   - title: Self-managed on-premises
-    path: /getting-started/kubernetes/self-managed-onprem  
+    path: /getting-started/kubernetes/self-managed-onprem
+    section:
+    - title: Customize manifests
+      path: /getting-started/kubernetes/installation/manifests
   - title: Managed public cloud
     path: /getting-started/kubernetes/managed-public-cloud/
     section:
