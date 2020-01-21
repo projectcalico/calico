@@ -34,15 +34,6 @@ import (
 	"github.com/projectcalico/felix/ip"
 )
 
-var noWaitCtx context.Context
-
-func init() {
-	// expired context, easier than to implement an empty one
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
-	noWaitCtx = ctx
-}
-
 var podNPIP = net.IPv4(255, 255, 255, 255)
 
 type svcInfo struct {
@@ -337,7 +328,7 @@ func (s *Syncer) applySvc(skey svcKey, sinfo k8sp.ServicePort, eps []k8sp.Endpoi
 }
 
 func (s *Syncer) getRoute(addr ip.V4Addr) (routes.Value, error) {
-	v, ok := s.rt.Lookup(noWaitCtx, addr)
+	v, ok := s.rt.Lookup(addr)
 	if !ok {
 		return routes.Value{}, errors.Errorf("no route for %s", addr)
 	}

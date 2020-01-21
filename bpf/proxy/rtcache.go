@@ -26,7 +26,7 @@ import (
 
 // Routes is an interface to query routes
 type Routes interface {
-	Lookup(context.Context, ip.Addr) (routes.Value, bool)
+	Lookup(ip.Addr) (routes.Value, bool)
 	WaitAfter(ctx context.Context, fn func() bool)
 }
 
@@ -85,34 +85,19 @@ func (rt *RTCache) Delete(k routes.Key) error {
 }
 
 // LookupV4 is the same as Lookup for V4 only
-func (rt *RTCache) LookupV4(ctx context.Context, addr ip.V4Addr) (routes.Value, bool) {
+func (rt *RTCache) LookupV4(addr ip.V4Addr) (routes.Value, bool) {
 	rt.v4.RLock()
 	defer rt.v4.RUnlock()
 
-	if v, ok := rt.v4.Lookup(addr); ok || ctx.Err() != nil {
-		return v, ok
-	}
-
-	go func() {
-		<-ctx.Done()
-		rt.cond4.Broadcast()
-	}()
-
-	for {
-		rt.cond4.Wait()
-		if v, ok := rt.v4.Lookup(addr); ok || ctx.Err() != nil {
-			return v, ok
-		}
-	}
+	v, ok := rt.v4.Lookup(addr)
+	return v, ok
 }
 
-// Lookup looks LPM match for an address and returns the associated data. If
-// there is a cache miss, the operation waits for the route to appear until the
-// context is done.
-func (rt *RTCache) Lookup(ctx context.Context, addr ip.Addr) (routes.Value, bool) {
+// Lookup looks LPM match for an address and returns the associated data.
+func (rt *RTCache) Lookup(addr ip.Addr) (routes.Value, bool) {
 	switch a := addr.(type) {
 	case ip.V4Addr:
-		return rt.LookupV4(ctx, a)
+		return rt.LookupV4(a)
 	default:
 		return routes.Value{}, false
 	}
