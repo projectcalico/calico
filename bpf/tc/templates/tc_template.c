@@ -286,12 +286,6 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb) {
 
 	state.ip_proto = ip_header->protocol;
 
-	struct bpf_fib_lookup fib_params = {
-		.family = 2, /* AF_INET */
-		.tot_len = be16_to_host(ip_header->tot_len),
-		.ifindex = skb->ingress_ifindex,
-	};
-
 	switch (state.ip_proto) {
 	case IPPROTO_TCP:
 		// Re-check buffer space for TCP (has larger headers than UDP).
@@ -449,6 +443,18 @@ skip_policy:
 allow:
 	// Try a short-circuit FIB lookup.
 	if (!CALI_F_L3 && CALI_FIB_LOOKUP_ENABLED && CALI_F_TO_HOST) {
+		struct bpf_fib_lookup fib_params = {
+			.family = 2, /* AF_INET */
+			.tot_len = be16_to_host(ip_header->tot_len),
+			.ifindex = skb->ingress_ifindex,
+
+			.l4_protocol = state.ip_proto,
+			.sport = state.sport,
+			.dport = state.dport,
+			.ipv4_src = state.ip_src,
+			.ipv4_dst = state.ip_dst,
+		};
+
 		rc = calico_try_fib(skb, &state, &fib_params, fib_flags);
 		if (rc == TC_ACT_SHOT) {
 			goto deny;
@@ -545,12 +551,6 @@ static CALI_BPF_INLINE int calico_tc_skb_accepted(
 	bool encap_needed = false;
 	uint32_t fib_flags = 0;
 
-	struct bpf_fib_lookup fib_params = {
-		.family = 2, /* AF_INET */
-		.tot_len = be16_to_host(ip_header->tot_len),
-		.ifindex = skb->ingress_ifindex,
-	};
-
 	switch (state->ct_result.rc){
 	case CALI_CT_NEW:
 		switch (state->pol_rc) {
@@ -600,11 +600,6 @@ static CALI_BPF_INLINE int calico_tc_skb_accepted(
 
 		conntrack_create(&ct_nat_ctx, nat_dest != NULL);
 
-		fib_params.sport = state->sport;
-		fib_params.dport = state->post_nat_dport;
-		fib_params.ipv4_src = state->ip_src;
-		fib_params.ipv4_dst = state->post_nat_ip_dst;
-
 		if (nat_dest == NULL) {
 			goto allow;
 		}
@@ -616,12 +611,6 @@ static CALI_BPF_INLINE int calico_tc_skb_accepted(
 		if (state->ct_result.rc == CALI_CT_ESTABLISHED_DNAT) {
 			state->post_nat_ip_dst = state->ct_result.nat_ip;
 			state->post_nat_dport = state->ct_result.nat_port;
-
-			fib_params.l4_protocol = state->ip_proto;
-			fib_params.sport = state->sport;
-			fib_params.dport = state->post_nat_dport;
-			fib_params.ipv4_src = state->ip_src;
-			fib_params.ipv4_dst = state->post_nat_ip_dst;
 		}
 
 		CALI_DEBUG("CT: DNAT to %x:%d\n", be32_to_host(state->post_nat_ip_dst), state->post_nat_dport);
@@ -677,10 +666,8 @@ static CALI_BPF_INLINE int calico_tc_skb_accepted(
 			goto nat_encap;
 		}
 
-		fib_params.sport = state->sport;
-		fib_params.dport = state->post_nat_dport;
-		fib_params.ipv4_src = state->ip_src;
-		fib_params.ipv4_dst = state->post_nat_ip_dst;
+		state->dport = state->post_nat_dport;
+		state->ip_dst = state->post_nat_ip_dst;
 
 		goto allow;
 
@@ -714,10 +701,8 @@ static CALI_BPF_INLINE int calico_tc_skb_accepted(
 			goto deny;
 		}
 
-		fib_params.sport = state->ct_result.nat_port;
-		fib_params.dport = state->dport;
-		fib_params.ipv4_src = state->ct_result.nat_ip;
-		fib_params.ipv4_dst = state->ip_dst;
+		state->sport = state->ct_result.nat_port;
+		state->ip_src = state->ct_result.nat_ip;
 
 		/* Packet is returning from the DNAT tunnel and has been approved by the
 		 * host policy. This packet is going to be forwarded to its original
@@ -741,12 +726,6 @@ static CALI_BPF_INLINE int calico_tc_skb_accepted(
 			seen_mark = CALI_SKB_MARK_BYPASS_NAT_RET_ENCAPED;
 			goto nat_encap;
 		}
-
-		fib_params.l4_protocol = state->ip_proto;
-		fib_params.sport = state->sport;
-		fib_params.dport = state->dport;
-		fib_params.ipv4_src = state->ip_src;
-		fib_params.ipv4_dst = state->ip_dst;
 
 		goto allow;
 	default:
@@ -781,12 +760,6 @@ icmp_too_big:
 
 	fib_flags |= BPF_FIB_LOOKUP_OUTPUT;
 
-	fib_params.l4_protocol = state->ip_proto;
-	fib_params.sport = state->sport;
-	fib_params.dport = state->dport;
-	fib_params.ipv4_src = state->ip_dst;
-	fib_params.ipv4_dst = state->ip_src;
-
 	goto allow;
 
 nat_encap:
@@ -802,15 +775,27 @@ nat_encap:
 		fib_flags |= BPF_FIB_LOOKUP_OUTPUT;
 	}
 
-	fib_params.l4_protocol = state->ip_proto;
-	fib_params.sport = state->sport;
-	fib_params.dport = state->dport;
-	fib_params.ipv4_src = state->ip_src;
-	fib_params.ipv4_dst = state->ip_dst;
-
 allow:
 	// Try a short-circuit FIB lookup.
 	if (!CALI_F_L3 && CALI_FIB_LOOKUP_ENABLED && CALI_F_TO_HOST) {
+		if (skb_too_short(skb)) {
+			reason = CALI_REASON_SHORT;
+			CALI_DEBUG("Too short\n");
+			goto deny;
+		}
+		ip_header = skb_iphdr(skb);
+		struct bpf_fib_lookup fib_params = {
+			.family = 2, /* AF_INET */
+			.tot_len = be16_to_host(ip_header->tot_len),
+			.ifindex = skb->ingress_ifindex,
+
+			.l4_protocol = state->ip_proto,
+			.sport = state->sport,
+			.dport = state->dport,
+			.ipv4_src = state->ip_src,
+			.ipv4_dst = state->ip_dst,
+		};
+
 		rc = calico_try_fib(skb, state, &fib_params, fib_flags);
 		if (rc == TC_ACT_SHOT) {
 			goto deny;
