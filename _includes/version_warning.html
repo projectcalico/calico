@@ -1,18 +1,4 @@
-{% capture canonical_path %}
-{{- page.canonical_url | remove: "https://docs.projectcalico.org/" -}}
-{% endcapture %}
-
-{% capture canonical_version %}
-{{- canonical_path | split: "/" | first -}}
-{% endcapture %}
-
-{% if page.version != site.data.versions.first[0] %}
-  <div class="alert alert-warning" role="alert">
-    <strong>Warning:</strong>
-    {% if canonical_version == site.data.versions.first[0] %}
-      You're not viewing the <a href="{{site.baseurl}}/{{canonical_path}}">latest copy of this page</a>.
-    {% else %}
-      You're not viewing the <a data-proofer-ignore href="/latest">latest {{site.prodname}} documentation</a>.
-    {% endif %}
-  </div>
-{% endif %}
+<div class="alert alert-warning" role="alert">
+  <strong>Warning:</strong>
+    You're not viewing the <a href="{{ page.url }}">latest copy of this page</a>.
+</div>

@@ -210,7 +210,10 @@ The code is a little roundabout for a few reasons:
               <!-- TODO [turk]: uncomment once breadcrumbs work as navbar based, not URL based.
               {% include nav-breadcrumbs.html content=edit_page %}
                -->
+              {% if site.is_latest %}
               {% include version_warning.html %}
+              {% endif %}
+
               {% if page.calico_enterprise -%}
               {% include enterprise_header.html %}   
               {% endif -%}
