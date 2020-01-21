@@ -26,6 +26,7 @@ import (
 	"os/exec"
 	"path"
 	"path/filepath"
+	"strings"
 	"sync"
 
 	"github.com/pkg/errors"
@@ -113,9 +114,9 @@ func AttachProgram(attachPoint AttachPoint, hostIP net.IP) error {
 
 	out, err := tcCmd.Output()
 	if err != nil {
-		if bytes.Contains(out, []byte("Cannot find device")) {
+		if strings.Contains(err.Error(), "Cannot find device") {
 			// Avoid a big, spammy log when the issue is that the interface isn't present.
-			logrus.WithField("iface", attachPoint.Iface).Warn(
+			logrus.WithField("iface", attachPoint.Iface).Info(
 				"Failed to attach BPF program; interface not found.  Will retry if it show up.")
 			return nil
 		}
