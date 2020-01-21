@@ -46,6 +46,9 @@ exclude:
   - hack
   - vendor
 
+# Set to 'true' to show warning that points users to latest version of each page.
+is_latest: false
+
 defaults:
   -
     scope:
