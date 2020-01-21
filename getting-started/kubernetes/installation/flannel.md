@@ -6,6 +6,10 @@ canonical_url: '/getting-started/kubernetes/installation/flannel'
 
 ## Before you begin
 
+> **Note**: Calico includes native VXLAN capabilities without the need for flannel. If you're planning on using flannel for VXLAN, we recommend instead installing Calico using IP-in-IP or VXLAN mode. See how to [determine the best networking option](/networking/determine-best-networking) for your cluster.
+> If you're already using flannel for networking, you can [migrate your existing clusters to Calico networking](/getting-started/kubernetes/installation/migration-from-flannel).
+{: .alert .alert-info}
+
 Ensure that you have a Kubernetes cluster that meets the
 {{site.prodname}} [system requirements](../requirements). If you don't,
 follow the steps in [Using kubeadm to create a cluster](http://kubernetes.io/docs/getting-started-guides/kubeadm/).
