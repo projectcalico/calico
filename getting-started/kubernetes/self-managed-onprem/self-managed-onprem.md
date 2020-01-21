@@ -26,9 +26,9 @@ This how-to guide uses the following {{site.prodname}} features:
 
 ### Before you begin...
 
-- Ensure that your Kubernetes cluster meets [Requirements]({site.url}}/getting-started/kubernetes/requirements)
-  If you do not have a cluster, see [Using kubeadmin to create a cluster]({{site.url}}/getting-started-guides/kubeadm/)
-- If you are using CoreOS, [make this required change to manifests]({{site.url}}/reference/faq#are-the-calico-manifests-compatible-with-coreos)
+- Ensure that your Kubernetes cluster meets [requirements]({site.url}}/getting-started/kubernetes/requirements).
+  If you do not have a cluster, see [Using kubeadmin to create a cluster]({{site.url}}/getting-started-guides/kubeadm/).
+- If you are using CoreOS, [make this required change to manifests]({{site.url}}/reference/faq#are-the-calico-manifests-compatible-with-coreos).
 
 ### How to 
 
