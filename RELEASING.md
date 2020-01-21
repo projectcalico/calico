@@ -184,7 +184,28 @@ at the same time that subcomponent release branches are cut, often well before t
    git push origin release-vX.Y
    ```
 
-1. TODO: activate candidate.docs.projectcalico.org netlify site.
+### Publishing the candidate release branch
+
+1. Create a new branch off of the latest master.
+
+   ```
+   git checkout -b release-candidate-vX.Y
+   ```
+
+1. In [netlify.toml](netlify.toml), set the `CANDIDATE_RELEASE` environment variable:
+
+   ```toml
+   [build.environment]
+     CANDIDATE_RELEASE = "vX.Y"
+   ```
+
+1. Commit your changes. For example:
+
+   ```
+   git commit -m "build vX.Y candidate"
+   ```
+
+1. Push your branch and open a pull request to the upstream master branch. Get it reviewed and wait for it to pass CI.
 
 ### Promoting to be the latest release in the docs
 
@@ -238,9 +259,21 @@ as described in the section above.
 
 1. Merge the PR. This will cause candidate.docs.projectcalico.org to be updated (after a few minutes). Validate that everything looks correct before proceeding to the next step.
 
-1. TODO: update latest netlify site to point to the new release-vX.Y branch.
+1. Checkout the master branch
 
-1. TODO: disable candidate.docs.projectcalico.org.
+1. In [netlify.toml](netlify.toml):
+
+   1. Set the `RELEASE_CANDIDATE` environment variable back to an empty string.
+
+   1. Update the `CURRENT_RELEASE` environment variable.
+
+1. Commit your changes. For example:
+
+   ```
+   git commit -m "Promote vX.Y.Z to latest"
+   ```
+
+1. Push your branch and open a pull request to the upstream master branch. Get it reviewed and wait for it to pass CI.
 
 ## Adding the previous release to archive.docs.projectcalico.org
 
