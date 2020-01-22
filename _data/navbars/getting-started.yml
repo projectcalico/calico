@@ -10,7 +10,7 @@ section:
   - title: System requirements
     path: /getting-started/kubernetes/requirements
   - title: Self-managed on-premises
-    path: /getting-started/kubernetes/self-managed-onprem
+    path: /getting-started/kubernetes/self-managed-onprem/
     section:
     - title: Install Calico for on-premises deployments
       path: /getting-started/kubernetes/self-managed-onprem/onpremises  
