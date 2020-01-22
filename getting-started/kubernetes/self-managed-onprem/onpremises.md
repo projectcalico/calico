@@ -57,8 +57,7 @@ Based on your datastore and number of nodes, select a link below to install {{si
    ```bash
    curl {{ "/manifests/calico.yaml" | absolute_url }} -O
    ```
-   {% include content/pod-cidr-sed.md yaml="calico" %}
-
+1. {% include content/pod-cidr-sed.md yaml="calico" %}
 1. Customize the manifest as necessary. 
 1. Apply the manifest using the following command.
 
@@ -73,9 +72,9 @@ Based on your datastore and number of nodes, select a link below to install {{si
    ```bash
    curl {{ "/manifests/calico-typha.yaml" | absolute_url }} -o calico.yaml
    ```
-   {% include content/pod-cidr-sed.md yaml="calico-typha" %}
-
+1. {% include content/pod-cidr-sed.md yaml="calico-typha" %}
 1. Modify the replica count in the Deployment named, `calico-typha` to the desired number of replicas.
+
     ```
     apiVersion: apps/v1beta1
     kind: Deployment
@@ -91,8 +90,9 @@ Based on your datastore and number of nodes, select a link below to install {{si
      >**Note**: We recommend at least one replica for every 200 nodes, and no more than 20 replicas. In production, we   recommend a minimum of three replicas to reduce the impact of rolling upgrades and failures. The number of replicas should always be less than the number of nodes, otherwise rolling upgrades will stall. In addition, Typha only helps with scale if there are fewer Typha instances than there are nodes. 
 {: .alert .alert-note}
 
-   >**Warning**: If you set `typha_service_name` without increasing the default replica count (0), Felix not start.
+     >**Warning**: If you set `typha_service_name` without increasing the default replica count (0), Felix not start.
 {: .alert .alert-danger}
+
 1. Customize the manifest if desired.
 1. Apply the manifest.
 
@@ -107,8 +107,7 @@ Based on your datastore and number of nodes, select a link below to install {{si
    ```bash
    curl {{ "/manifests/calico-etcd.yaml -o calico.yaml" | absolute_url }}
    ```
-   {% include content/pod-cidr-sed.md yaml="calico-etcd" %}
-   
+1. {% include content/pod-cidr-sed.md yaml="calico-etcd" %}
 1. In the `ConfigMap` named, `calico-config`, set the value of etcd_endpoints to the IP address and port of your etcd server.
     > **Tip**: You can specify more than one using commas as delimiters.
    {: .alert .alert-info}
