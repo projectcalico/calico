@@ -22,13 +22,13 @@ This how-to guide uses the following {{site.prodname}} features:
 
 #### {{site.prodname}} manifests
 
-{{site.prodname}} provides manifests for easy customization. Each manifest contains the necessary resources for installing {{site.prodname}} on each node in your Kubernetes cluster. We recommend [Customizing Calico manifests]({{site.url}}/getting-started/kubernetes/installation/config-options) before installing {{site.prodname}} on nodes; this avoids downstream manual updates to other {{site.prodname}} resources.
+{{site.prodname}} provides manifests for easy customization. Each manifest contains the necessary resources for installing {{site.prodname}} on each node in your Kubernetes cluster. We recommend [Customizing Calico manifests]({{site.baseurl}}/getting-started/kubernetes/installation/config-options) before installing {{site.prodname}} on nodes; this avoids downstream manual updates to other {{site.prodname}} resources.
 
 ### Before you begin...
 
-- Ensure that your Kubernetes cluster meets [requirements]({{site.url}}/getting-started/kubernetes/requirements).
+- Ensure that your Kubernetes cluster meets [requirements]({{site.baseurl}}/getting-started/kubernetes/requirements).
   If you do not have a cluster, see [Using kubeadmin to create a cluster](http://kubernetes.io/docs/getting-started-guides/kubeadm/).
-- If you are using CoreOS, [make this required change to manifests]({{site.url}}/reference/faq#are-the-calico-manifests-compatible-with-coreos).
+- If you are using CoreOS, [make this required change to manifests]({{site.baseurl}}/reference/faq#are-the-calico-manifests-compatible-with-coreos).
 
 ### How to 
 
@@ -127,16 +127,16 @@ Based on your datastore and number of nodes, select a link below to install {{si
 
 **Tools**
 
-- [Install and configure calicoctl]({{site.url}}/getting-started/calicoctl/install)
+- [Install and configure calicoctl]({{site.baseurl}}/getting-started/calicoctl/install)
 
 **Networking**
 
-- If you are using the default BGP networking with full-mesh node-to-node peering with no encapsulation, go to [Configure BGP peering]({{site.url}}/networking/bgp) to get traffic flowing between pods.
-- If you are unsure about networking options, or want to implement encapsulation (overlay networking), see [Determine best networking option]({{site.url}}/networking/determine-best-networking).
+- If you are using the default BGP networking with full-mesh node-to-node peering with no encapsulation, go to [Configure BGP peering]({{site.baseurl}}/networking/bgp) to get traffic flowing between pods.
+- If you are unsure about networking options, or want to implement encapsulation (overlay networking), see [Determine best networking option]({{site.baseurl}}/networking/determine-best-networking).
 
 **Security**
 
-- [Secure Calico component communications]({{site.url}}/security/comms/crypto-auth)
-- [Secure hosts by installing Calico on hosts]({{site.url}}/getting-started/bare-metal/installation/)
-- [Secure pods with Calico network policy]({{site.url}}/security/calico-network-policy)
-- If you are using {{site.prodname}} with Istio service mesh, get started here: [Enable application layer policy for Istio service mesh]({{site.url}}/getting-started/kubernetes/installation/app-layer-policy)
+- [Secure Calico component communications]({{site.baseurl}}/security/comms/crypto-auth)
+- [Secure hosts by installing Calico on hosts]({{site.baseurl}}/getting-started/bare-metal/installation/)
+- [Secure pods with Calico network policy]({{site.baseurl}}/security/calico-network-policy)
+- If you are using {{site.prodname}} with Istio service mesh, get started here: [Enable application layer policy for Istio service mesh]({{site.baseurl}}/getting-started/kubernetes/installation/app-layer-policy)
