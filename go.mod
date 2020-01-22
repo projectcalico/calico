@@ -15,9 +15,8 @@ require (
 	github.com/onsi/ginkgo v1.10.1
 	github.com/onsi/gomega v1.7.0
 	github.com/patrickmn/go-cache v0.0.0-20180815053127-5633e0862627
-	github.com/projectcalico/felix v0.0.0-20200103153655-9469e77e0fa5
-	github.com/projectcalico/libcalico-go v1.7.2-0.20200102185429-756777256bb8
-	github.com/projectcalico/typha v0.7.3-0.20200102040858-c4a0227be6b1 // indirect
+	github.com/projectcalico/felix v0.0.0-20200118081511-a95a11667d0b
+	github.com/projectcalico/libcalico-go v0.0.0-20200111004125-f4cc1f8914f8
 	github.com/prometheus/client_golang v0.9.4 // indirect
 	github.com/satori/go.uuid v1.2.0
 	github.com/sirupsen/logrus v1.4.2
