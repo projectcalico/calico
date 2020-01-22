@@ -1,4 +1,4 @@
-// Copyright (c) 2019 Tigera, Inc. All rights reserved.
+// Copyright (c) 2019-2020 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -21,6 +21,7 @@ import (
 	"io/ioutil"
 	"net"
 	"os"
+	"path"
 	"strconv"
 
 	log "github.com/sirupsen/logrus"
@@ -93,6 +94,7 @@ type SkMsgInfo struct {
 }
 
 type MockBPFLib struct {
+	binDir              string
 	XDPProgs            map[string]XDPInfo      // iface -> []maps
 	CIDRMaps            map[CIDRMapsKey]CIDRMap // iface -> map[ip]refCount
 	SockopsProg         *SockopsInfo
@@ -103,8 +105,9 @@ type MockBPFLib struct {
 	CgroupV2Dir         string
 }
 
-func NewMockBPFLib() *MockBPFLib {
+func NewMockBPFLib(binDir string) *MockBPFLib {
 	return &MockBPFLib{
+		binDir:      binDir,
 		XDPProgs:    make(map[string]XDPInfo),
 		CIDRMaps:    make(map[CIDRMapsKey]CIDRMap),
 		CgroupV2Dir: "/sys/fs/cgroup/unified",
@@ -249,17 +252,7 @@ func (b *MockBPFLib) GetXDPObjTag(objPath string) (tag string, err error) {
 }
 
 func (b *MockBPFLib) GetXDPObjTagAuto() (string, error) {
-	return b.GetXDPObjTagWithBytes(xdpAsset)
-}
-
-func (b *MockBPFLib) GetXDPObjTagWithBytes(objBytes []byte) (string, error) {
-	f, err := writeBPFBytes(objBytes)
-	if err != nil {
-		return "", err
-	}
-	defer f.Close()
-
-	return b.GetXDPObjTag(f.f.Name())
+	return b.GetXDPObjTag(xdpFilename)
 }
 
 func (b *MockBPFLib) GetXDPTag(ifName string) (string, error) {
@@ -322,17 +315,7 @@ func (b *MockBPFLib) LoadXDP(objPath, ifName string, mode XDPMode) error {
 }
 
 func (b *MockBPFLib) LoadXDPAuto(ifName string, mode XDPMode) error {
-	return b.LoadXDPWithBytes(xdpAsset, ifName, mode)
-}
-
-func (b *MockBPFLib) LoadXDPWithBytes(objBytes []byte, ifName string, mode XDPMode) error {
-	f, err := writeBPFBytes(objBytes)
-	if err != nil {
-		return err
-	}
-	defer f.Close()
-
-	return b.LoadXDP(f.f.Name(), ifName, mode)
+	return b.LoadXDP(xdpFilename, ifName, mode)
 }
 
 func (b *MockBPFLib) LookupCIDRMap(ifName string, family IPFamily, ip net.IP, mask int) (uint32, error) {
@@ -490,6 +473,8 @@ func (b *MockBPFLib) UpdateFailsafeMap(proto uint8, port uint16) error {
 }
 
 func (b *MockBPFLib) loadXDPRaw(objPath, ifName string, mode XDPMode, mapArgs []string) error {
+	objPath = path.Join(b.binDir, objPath)
+
 	f, err := os.Open(objPath)
 	if err != nil {
 		return err
@@ -623,18 +608,8 @@ func (b *MockBPFLib) loadBPF(objPath, progPath, progType string, mapArgs []strin
 	return nil
 }
 
-func (b *MockBPFLib) LoadSockopsWithBytes(objBytes []byte) error {
-	f, err := writeBPFBytes(objBytes)
-	if err != nil {
-		return err
-	}
-	defer f.Close()
-
-	return b.LoadSockops(f.f.Name())
-}
-
 func (b *MockBPFLib) LoadSockopsAuto() error {
-	return b.LoadSockopsWithBytes(sockopsAsset)
+	return b.LoadSockops(sockopsFilename)
 }
 
 func (b *MockBPFLib) RemoveSockops() error {
@@ -652,18 +627,8 @@ func (b *MockBPFLib) LoadSkMsg(objPath string) error {
 	return nil
 }
 
-func (b *MockBPFLib) LoadSkMsgWithBytes(objBytes []byte) error {
-	f, err := writeBPFBytes(objBytes)
-	if err != nil {
-		return err
-	}
-	defer f.Close()
-
-	return b.LoadSkMsg(f.f.Name())
-}
-
 func (b *MockBPFLib) LoadSkMsgAuto() error {
-	return b.LoadSkMsgWithBytes(skmsgAsset)
+	return b.LoadSkMsg(redirFilename)
 }
 
 func (b *MockBPFLib) RemoveSkMsg() error {
