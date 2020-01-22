@@ -44,7 +44,7 @@ for package_type in "$@"; do
 	    for series in trusty xenial bionic; do
 		{
 		    cat <<EOF
-${PKG_NAME} (${DEB_EPOCH}${debver}~$series) $series; urgency=low
+${PKG_NAME} (${DEB_EPOCH}${debver}-$series) $series; urgency=low
 
 EOF
 		    if ${release}; then
