@@ -17,4 +17,4 @@ blocks:
           commands:
             - checkout
             - ln -s . networking-calico
-            - DEVSTACK_BRANCH=stable/rocky ./devstack/bootstrap.sh
+            - DEVSTACK_BRANCH=stable/rocky DEVSTACK_REPO=https://github.com/neiljerram/devstack.git ./devstack/bootstrap.sh

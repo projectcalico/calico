@@ -107,7 +107,7 @@ sudo sysctl -w net.ipv6.conf.all.forwarding=1
 
 # Clone the DevStack repository (if not already present).
 test -e devstack || \
-    git clone https://opendev.org/openstack/devstack
+    git clone ${DEVSTACK_REPO:-https://opendev.org/openstack/devstack}
 cd devstack
 
 # If DEVSTACK_BRANCH has been specified, check out that branch.  (Otherwise we
