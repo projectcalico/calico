@@ -1,5 +1,5 @@
 ---
-title: Self-managed on-premises
+title: Install Calico networking and network policy for on-premises deployment
 description: Install Calico networking and network policy for on-premises deployments.
 ---
 
