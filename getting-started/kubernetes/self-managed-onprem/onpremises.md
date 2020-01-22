@@ -75,23 +75,30 @@ Based on your datastore and number of nodes, select a link below to install {{si
 {% include content/pod-cidr-sed.md yaml="calico-typha" %}
 1. Modify the replica count in the Deployment named, `calico-typha` to the desired number of replicas.
 
-    ```
-    apiVersion: apps/v1beta1
-    kind: Deployment
-    metadata:
-      name: calico-typha
-      ...
-    spec:
-      ...
-      replicas: <number of replicas>
-    ```
-    {: .no-select-button}
+   ```
+   apiVersion: apps/v1beta1
+   kind: Deployment
+   metadata:
+     name: calico-typha
+     ...
+   spec:
+     ...
+     replicas: <number of replicas>
+   ```
+   {: .no-select-button}
 
->**Note**: We recommend at least one replica for every 200 nodes, and no more than 20 replicas. In production, we   recommend a minimum of three replicas to reduce the impact of rolling upgrades and failures. The number of replicas should always be less than the number of nodes, otherwise rolling upgrades will stall. In addition, Typha only helps with scale if there are fewer Typha instances than there are nodes. 
-{: .alert .alert-note}
->**Warning**: If you set `typha_service_name` without increasing the default replica count (0), Felix not start.
-{: .alert .alert-danger}
+   >**Note**: We recommend at least one replica for every 200 nodes, 
+   > and no more than 20 replicas. In production, we   recommend a 
+   > minimum of three replicas to reduce the impact of rolling 
+   > upgrades and failures. The number of replicas should always 
+   > be less than the number of nodes, otherwise rolling upgrades 
+   > will stall. In addition, Typha only helps with scale if there are fewer Typha instances than there are nodes. 
+   {: .alert .alert-note}
 
+   >**Warning**: If you set `typha_service_name` without increasing the default 
+   > replica count (0), Felix not start.
+   {: .alert .alert-danger}
+   
 1. Customize the manifest if desired.
 1. Apply the manifest.
 
