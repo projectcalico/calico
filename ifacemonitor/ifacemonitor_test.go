@@ -1,5 +1,5 @@
-// Copyright (c) 2017-2018 Tigera, Inc. All rights reserved.
-
+// Copyright (c) 2020 Tigera, Inc. All rights reserved.
+//
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -272,7 +272,7 @@ func (nl *netlinkTest) AddrList(link netlink.Link, family int) ([]netlink.Addr, 
 	return addrs, nil
 }
 
-func (dp *mockDataplane) linkStateCallback(ifaceName string, ifaceState ifacemonitor.State) {
+func (dp *mockDataplane) linkStateCallback(ifaceName string, ifaceState ifacemonitor.State, idx int) {
 	log.WithFields(log.Fields{"name": ifaceName, "state": ifaceState}).Info("CALLBACK LINK")
 	dp.linkC <- linkUpdate{
 		name:  ifaceName,
@@ -370,7 +370,7 @@ var _ = Describe("ifacemonitor", func() {
 			linkC: make(chan linkUpdate, 1),
 			addrC: make(chan addrState, 2),
 		}
-		im.Callback = dp.linkStateCallback
+		im.StateCallback = dp.linkStateCallback
 		im.AddrCallback = dp.addrStateCallback
 
 		// Start the monitor running, and wait until it has subscribed to our test netlink

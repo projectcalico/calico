@@ -19,6 +19,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/projectcalico/felix/ifacemonitor"
+
 	"github.com/projectcalico/felix/bpf/routes"
 	"github.com/projectcalico/felix/proto"
 
@@ -43,9 +45,10 @@ type bpfRouteManager struct {
 	remoteHostIPsDirty bool
 
 	// Tracking for local workload IPs.
-	localWorkloads        map[proto.WorkloadEndpointID]*proto.WorkloadEndpoint
-	localWorkloadRoutes   map[routes.Key]routes.Value
-	localWorkloadIPsDirty bool
+	localIfaceToIfIndex map[string]int
+	localWorkloads      map[proto.WorkloadEndpointID]*proto.WorkloadEndpoint
+	localWorkloadRoutes map[routes.Key]routes.Value
+	localWorkloadsDirty bool
 
 	// desiredRoutes contains the complete, desired state of the dataplane map.
 	desiredRoutes map[routes.Key]routes.Value
@@ -62,20 +65,23 @@ type bpfRouteManager struct {
 
 func newBPFRouteManager(myNodename string, mc *bpf.MapContext) *bpfRouteManager {
 	return &bpfRouteManager{
-		myNodename:      myNodename,
-		desiredRoutes:   map[routes.Key]routes.Value{},
-		localHostIPs:    map[string]set.Set{},
-		remoteHostIPs:   map[string]string{},
-		localWorkloads:  map[proto.WorkloadEndpointID]*proto.WorkloadEndpoint{},
-		routeMap:        routes.Map(mc),
-		dirtyRoutes:     set.New(),
-		resyncScheduled: true,
+		myNodename:          myNodename,
+		desiredRoutes:       map[routes.Key]routes.Value{},
+		localIfaceToIfIndex: map[string]int{},
+		localHostIPs:        map[string]set.Set{},
+		remoteHostIPs:       map[string]string{},
+		localWorkloads:      map[proto.WorkloadEndpointID]*proto.WorkloadEndpoint{},
+		routeMap:            routes.Map(mc),
+		dirtyRoutes:         set.New(),
+		resyncScheduled:     true,
 	}
 }
 
 func (m *bpfRouteManager) OnUpdate(msg interface{}) {
 	switch msg := msg.(type) {
 	// Updates to local IPs.  We use these to include host IPs in the map.
+	case *ifaceUpdate:
+		m.onIfaceUpdate(msg)
 	case *ifaceAddrsUpdate:
 		m.onIfaceAddrsUpdate(msg)
 
@@ -105,9 +111,9 @@ func (m *bpfRouteManager) CompleteDeferredWork() error {
 		log.WithError(err).Panic("Failed to create route map")
 	}
 
-	if m.localWorkloadIPsDirty {
-		m.recalculateWorkloadIPs()
-		m.localWorkloadIPsDirty = false
+	if m.localWorkloadsDirty {
+		m.recalculateWorkloads()
+		m.localWorkloadsDirty = false
 	}
 
 	if m.localHostIPsDirty {
@@ -200,6 +206,23 @@ func (m *bpfRouteManager) CompleteDeferredWork() error {
 	return nil
 }
 
+func (m *bpfRouteManager) onIfaceUpdate(msg *ifaceUpdate) {
+	// We're interested in the mapping from interface name to interface index.
+	if msg.State == ifacemonitor.StateUp {
+		oldIdx, ok := m.localIfaceToIfIndex[msg.Name]
+		if !ok || oldIdx != msg.Index {
+			m.localIfaceToIfIndex[msg.Name] = msg.Index
+			m.localWorkloadsDirty = true
+		}
+	} else {
+		_, ok := m.localIfaceToIfIndex[msg.Name]
+		if ok {
+			delete(m.localIfaceToIfIndex, msg.Name)
+			m.localWorkloadsDirty = true
+		}
+	}
+}
+
 func (m *bpfRouteManager) onIfaceAddrsUpdate(update *ifaceAddrsUpdate) {
 	if update.Addrs == nil {
 		delete(m.localHostIPs, update.Name)
@@ -262,7 +285,7 @@ func (m *bpfRouteManager) onHostIPsChange(newIPs []net.IP) {
 	log.Debugf("localHostIPs update %+v", newIPs)
 }
 
-func (m *bpfRouteManager) recalculateWorkloadIPs() {
+func (m *bpfRouteManager) recalculateWorkloads() {
 	oldRoutes := m.localWorkloadRoutes
 	newRoutes := map[routes.Key]routes.Value{}
 
@@ -276,7 +299,7 @@ func (m *bpfRouteManager) recalculateWorkloadIPs() {
 				continue
 			}
 			key := routes.NewKey(v4CIDR)
-			value := routes.NewValue(routes.TypeLocalWorkload)
+			value := routes.NewLocalWorkloadValue(m.localIfaceToIfIndex[wep.Name])
 			newRoutes[key] = value
 		}
 	}
@@ -381,12 +404,12 @@ func (m *bpfRouteManager) onRouteRemove(update *proto.RouteRemove) {
 
 func (m *bpfRouteManager) onWorkloadEndpointUpdate(update *proto.WorkloadEndpointUpdate) {
 	m.localWorkloads[*update.Id] = update.Endpoint
-	m.localWorkloadIPsDirty = true
+	m.localWorkloadsDirty = true
 }
 
 func (m *bpfRouteManager) onWorkloadEndpointRemove(update *proto.WorkloadEndpointRemove) {
 	delete(m.localWorkloads, *update.Id)
-	m.localWorkloadIPsDirty = true
+	m.localWorkloadsDirty = true
 }
 
 func (m *bpfRouteManager) onHostMetadataUpdate(update *proto.HostMetadataUpdate) {
