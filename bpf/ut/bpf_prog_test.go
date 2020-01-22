@@ -28,6 +28,8 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/projectcalico/felix/ip"
+
 	"github.com/projectcalico/felix/bpf/ipsets"
 	"github.com/projectcalico/felix/bpf/jump"
 	"github.com/projectcalico/felix/bpf/polprog"
@@ -118,8 +120,6 @@ var defaultCompileOpts = []tc.CompileOption{
 func runBpfTest(t *testing.T, section string, rules [][][]*proto.Rule, testFn func(bpfProgRunFn)) {
 	RegisterTestingT(t)
 
-	initMapsOnce()
-
 	tempDir, err := ioutil.TempDir("", "calico-bpf-")
 	Expect(err).NotTo(HaveOccurred())
 
@@ -204,6 +204,7 @@ var (
 	mapInitOnce sync.Once
 
 	natMap, natBEMap, ctMap, rtMap, ipsMap, stateMap, testStateMap, jumpMap, affinityMap bpf.Map
+	allMaps                                                                              []bpf.Map
 )
 
 func initMapsOnce() {
@@ -211,46 +212,46 @@ func initMapsOnce() {
 		mc := &bpf.MapContext{}
 
 		natMap = nat.FrontendMap(mc)
-		err := natMap.EnsureExists()
-		Expect(err).NotTo(HaveOccurred())
-
 		natBEMap = nat.BackendMap(mc)
-		err = natBEMap.EnsureExists()
-		Expect(err).NotTo(HaveOccurred())
-
 		ctMap = conntrack.Map(mc)
-		err = ctMap.EnsureExists()
-		Expect(err).NotTo(HaveOccurred())
-
 		rtMap = routes.Map(mc)
-		err = rtMap.EnsureExists()
-		Expect(err).NotTo(HaveOccurred())
-
 		ipsMap = ipsets.Map(mc)
-		err = ipsMap.EnsureExists()
-		Expect(err).NotTo(HaveOccurred())
-
 		stateMap = state.Map(mc)
-		err = stateMap.EnsureExists()
-		Expect(err).NotTo(HaveOccurred())
-
 		testStateMap = state.MapForTest(mc)
-		err = testStateMap.EnsureExists()
-		Expect(err).NotTo(HaveOccurred())
-
 		jumpMap = jump.MapForTest(mc)
-		err = jumpMap.EnsureExists()
-		Expect(err).NotTo(HaveOccurred())
-
 		affinityMap = nat.AffinityMap(mc)
-		err = affinityMap.EnsureExists()
-		Expect(err).NotTo(HaveOccurred())
+
+		allMaps = []bpf.Map{natMap, natBEMap, ctMap, rtMap, ipsMap, stateMap, testStateMap, jumpMap, affinityMap}
+		for _, m := range allMaps {
+			err := m.EnsureExists()
+			if err != nil {
+				log.WithError(err).Panic("Failed to initialise maps")
+			}
+		}
 	})
 }
 
-func bpftoolProgLoadAll(fname, bpfFsDir string) error {
-	initMapsOnce()
+func cleanUpMaps() {
+	log.Info("Cleaning up all maps")
+	for _, m := range allMaps {
+		if m == stateMap || m == testStateMap || m == jumpMap {
+			continue // Can't clean up array maps
+		}
+		var allKeys [][]byte
+		err := m.Iter(func(k, v []byte) {
+			allKeys = append(allKeys, k)
+		})
+		if err != nil {
+			log.WithError(err).Panic("Failed to walk map")
+		}
+		for _, k := range allKeys {
+			_ = m.Delete(k)
+		}
+	}
+	log.Info("Cleaned up all maps")
+}
 
+func bpftoolProgLoadAll(fname, bpfFsDir string) error {
 	_, err := bpftool("prog", "loadall", fname, bpfFsDir, "type", "classifier",
 		"map", "name", natMap.GetName(), "pinned", natMap.Path(),
 		"map", "name", natBEMap.GetName(), "pinned", natBEMap.Path(),
@@ -502,12 +503,16 @@ var ethDefault = &layers.Ethernet{
 
 var payloadDefault = []byte("ABCDEABCDEXXXXXXXXXXXX")
 
+var srcIP = net.IPv4(1, 1, 1, 1)
+var dstIP = net.IPv4(2, 2, 2, 2)
+var srcV4CIDR = ip.CIDRFromNetIP(srcIP).(ip.V4CIDR)
+
 var ipv4Default = &layers.IPv4{
 	Version:  4,
 	IHL:      5,
 	Flags:    layers.IPv4DontFragment,
-	SrcIP:    net.IPv4(1, 1, 1, 1),
-	DstIP:    net.IPv4(2, 2, 2, 2),
+	SrcIP:    srcIP,
+	DstIP:    dstIP,
 	Protocol: layers.IPProtocolUDP,
 }
 
