@@ -108,7 +108,7 @@ var _ = Describe("Namespace conversion tests", func() {
 
 		labels := p.(api.Profile).Spec.LabelsToApply
 		By("returning a Calico profile with no labels to apply", func() {
-			Expect(len(labels)).To(Equal(0))
+			Expect(len(labels)).To(Equal(1))
 		})
 	})
 
