@@ -22,13 +22,13 @@ This how-to guide uses the following {{site.prodname}} features:
 
 #### {{site.prodname}} manifests
 
-{{site.prodname}} provides manifests for easy customization. Each manifest contains the necessary resources for installing {{site.prodname}} on each node in your Kubernetes cluster. We recommend [Customizing Calico manifests]({{site.url}}/getting-started/kubernetes/installation/manifests/config-options) before installing {{site.prodname}} on nodes; this avoids downstream manual updates to other {{site.prodname}} resources.
+{{site.prodname}} provides manifests for easy customization. Each manifest contains the necessary resources for installing {{site.prodname}} on each node in your Kubernetes cluster. We recommend [Customizing Calico manifests]({{site.url}}/getting-started/kubernetes/installation/config-options) before installing {{site.prodname}} on nodes; this avoids downstream manual updates to other {{site.prodname}} resources.
 
 ### Before you begin...
 
 - Ensure that your Kubernetes cluster meets [requirements]({{site.url}}/getting-started/kubernetes/requirements).
   If you do not have a cluster, see [Using kubeadmin to create a cluster](http://kubernetes.io/docs/getting-started-guides/kubeadm/).
-- If you are using CoreOS, [make this required change to manifests]({{site.url}}/reference/faq/#are-the-calico-manifests-compatible-with-coreos).
+- If you are using CoreOS, [make this required change to manifests]({{site.url}}/reference/faq#are-the-calico-manifests-compatible-with-coreos).
 
 ### How to 
 
