@@ -20,6 +20,11 @@ section:
       path: /getting-started/kubernetes/managed-public-cloud/iks
     - title: Microsoft Azure Kubernetes Service (AKS)
       path: /getting-started/kubernetes/managed-public-cloud/aks
+  - title: Self-managed public cloud
+    path: /getting-started/kubernetes/self-managed-public-cloud/
+    section:
+    - title: Self-managed Kubernetes in AWS
+      path: /getting-started/kubernetes/self-managed-public-cloud/AWS  
   - title: Installation
     path: /getting-started/kubernetes/installation/
     section:
