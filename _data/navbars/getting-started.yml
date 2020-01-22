@@ -13,7 +13,7 @@ section:
     path: /getting-started/kubernetes/self-managed-onprem
     section:
     - title: Customize manifests
-      path: /getting-started/kubernetes/installation/manifests
+      path: /getting-started/kubernetes/installation/config-options
   - title: Managed public cloud
     path: /getting-started/kubernetes/managed-public-cloud/
     section:
