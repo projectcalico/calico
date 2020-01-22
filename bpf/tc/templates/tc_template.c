@@ -82,11 +82,23 @@ deny:
 
 struct fwd {
 	int res;
-	uint32_t fib_flags;
 	uint32_t mark;
 	enum calico_reason reason;
+#if FIB_ENABLED
+	uint32_t fib_flags;
 	bool fib;
+#endif
 };
+
+#if FIB_ENABLED
+#define fwd_fib(fwd)			((fwd)->fib)
+#define fwd_fib_set(fwd, v)		((fwd)->fib = v)
+#define fwd_fib_set_flags(fwd, flags)	((fwd)->fib_flags = flags)
+#else
+#define fwd_fib(fwd)	false
+#define fwd_fib_set(fwd, v)
+#define fwd_fib_set_flags(fwd, flags)
+#endif
 
 static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct __sk_buff *skb,
 							 struct iphdr *ip_header,
@@ -150,8 +162,9 @@ static CALI_BPF_INLINE int forward_or_drop(struct __sk_buff *skb,
 		goto deny;
 	}
 
+#if FIB_ENABLED
 	// Try a short-circuit FIB lookup.
-	if (!CALI_F_L3 && CALI_FIB_LOOKUP_ENABLED && CALI_F_TO_HOST && fwd->fib) {
+	if (fwd_fib(fwd)) {
 		/* XXX we might include the tot_len in the fwd, set it once when
 		 * we get the ip_header the first time and only adjust the value
 		 * when we modify the packet - to avoid geting the header here
@@ -203,6 +216,7 @@ static CALI_BPF_INLINE int forward_or_drop(struct __sk_buff *skb,
 			rc = TC_ACT_UNSPEC;
 		}
 	}
+#endif /* FIB_ENABLED */
 
 	if (CALI_F_TO_HOST) {
 		// Packet is towards host namespace, mark it so that downstream programs know that they're
@@ -237,9 +251,10 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 	struct cali_tc_state state = {};
 	struct fwd fwd = {
 		.res = TC_ACT_UNSPEC,
-		.fib = true,
 		.reason = CALI_REASON_UNKNOWN,
 	};
+
+	fwd_fib_set(&fwd, true);
 
 	if (CALI_LOG_LEVEL >= CALI_LOG_LEVEL_INFO) {
 		state.prog_start_time = bpf_ktime_get_ns();
@@ -301,7 +316,7 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 		break;
 	case ETH_P_ARP:
 		CALI_DEBUG("ARP: allowing packet\n");
-		fwd.fib = false;
+		fwd_fib_set(&fwd, false);
 		goto allow;
 	case ETH_P_IPV6:
 		if (CALI_F_WEP) {
@@ -386,7 +401,7 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 		if (CALI_F_HEP) {
 			// TODO IPIP whitelist.
 			CALI_DEBUG("IPIP: allow\n");
-			fwd.fib = false;
+			fwd_fib_set(&fwd, false);
 			goto allow;
 		}
 	default:
@@ -810,10 +825,10 @@ allow:
 	{
 		struct fwd fwd = {
 			.res = rc,
-			.fib = fib,
-			.fib_flags = fib_flags,
 			.mark = seen_mark,
 		};
+		fwd_fib_set(&fwd, fib);
+		fwd_fib_set_flags(&fwd, fib_flags);
 		return fwd;
 	}
 
