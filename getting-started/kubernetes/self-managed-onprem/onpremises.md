@@ -87,13 +87,13 @@ Based on your datastore and number of nodes, select a link below to install {{si
    ```
    {: .no-select-button}
 
-   >**Note**: We recommend at least one replica for every 200 nodes, 
-   > and no more than 20 replicas. In production, we   recommend a 
-   > minimum of three replicas to reduce the impact of rolling 
-   > upgrades and failures. The number of replicas should always 
-   > be less than the number of nodes, otherwise rolling upgrades 
-   > will stall. In addition, Typha only helps with scale if there are fewer Typha instances than there are nodes. 
-   {: .alert .alert-note}
+  >**Note**: We recommend at least one replica for every 200 nodes, 
+  > and no more than 20 replicas. In production, we   recommend a 
+  > minimum of three replicas to reduce the impact of rolling 
+  > upgrades and failures. The number of replicas should always 
+  > be less than the number of nodes, otherwise rolling upgrades 
+  > will stall. In addition, Typha only helps with scale if there are fewer Typha instances than there are nodes. 
+  {: .alert .alert-note}
 
    >**Warning**: If you set `typha_service_name` without increasing the default 
    > replica count (0), Felix not start.
