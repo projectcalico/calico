@@ -22,7 +22,7 @@ This how-to guide uses the following {{site.prodname}} features:
 
 #### {{site.prodname}} manifests
 
-{{site.prodname}} provides manifests for easy customization. Each manifest contains the necessary resources for installing {{site.prodname}} on each node in your Kubernetes cluster. We recommend [Customizing Calico manifests]({{site.baseurl}}/getting-started/kubernetes/installation/config-options) before installing {{site.prodname}} on nodes; this avoids downstream manual updates to other {{site.prodname}} resources.
+{{site.prodname}} provides manifests for easy customization. Each manifest contains the necessary resources for installing {{site.prodname}} on each node in your Kubernetes cluster. We recommend [Customizing Calico manifests ({{site.baseurl}}/getting-started/kubernetes/installation/config-options) before installing {{site.prodname}} on nodes; this avoids downstream manual updates to other {{site.prodname}} resources.
 
 ### Before you begin...
 
@@ -52,7 +52,7 @@ Based on your datastore and number of nodes, select a link below to install {{si
 
 ##### Install Calico with Kubernetes API datastore, 50 nodes or less
 
-1. Download the {{site.prodname}} manifest (calico-config.yaml) for the Kubernetes API datastore.
+1. Download the {{site.prodname}} networking manifest for the Kubernetes API datastore.
 
    ```bash
    curl {{ "/manifests/calico.yaml" | absolute_url }} -O
@@ -67,13 +67,13 @@ Based on your datastore and number of nodes, select a link below to install {{si
 
 ##### Install Calico with Kubernetes API datastore, more than 50 nodes
 
-1. Download the {{site.prodname}} manifest (ConfigMap) for the Kubernetes API datastore.
+1. Download the {{site.prodname}} networking manifest for the Kubernetes API datastore.
 
    ```bash
    curl {{ "/manifests/calico-typha.yaml" | absolute_url }} -o calico.yaml
    ```
-{% include content/pod-cidr-sed.md yaml="calico-typha" %}
-1. Modify the replica count in the Deployment named, `calico-typha` to the desired number of replicas.
+{% include content/pod-cidr-sed.md yaml="calico" %}
+1. Modify the replica count to the desired number in the `Deployment` named, `calico-typha`.
 
    ```
    apiVersion: apps/v1beta1
@@ -107,13 +107,13 @@ Based on your datastore and number of nodes, select a link below to install {{si
    
 ##### Install Calico with etcd datastore
 
-1. Download the {{site.prodname}} manifest (ConfigMap) for etcd.
+1. Download the {{site.prodname}} networking manifest for etcd.
 
    ```bash
    curl {{ "/manifests/calico-etcd.yaml" | absolute_url }} -o calico.yaml
    ```
-{% include content/pod-cidr-sed.md yaml="calico-etcd" %}
-1. In the `ConfigMap` named, `calico-config`, set the value of etcd_endpoints to the IP address and port of your etcd server.
+{% include content/pod-cidr-sed.md yaml="calico" %}
+1. In the `ConfigMap` named, `calico-config`, set the value of `etcd_endpoints` to the IP address and port of your etcd server.
     > **Tip**: You can specify more than one using commas as delimiters.
    {: .alert .alert-info}
 1. Customize the manifest if desired.
