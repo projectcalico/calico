@@ -158,7 +158,7 @@ worker-1     NotReady   <none>   3m7s    v1.17.2
 worker-2     NotReady   <none>   5s      v1.17.2
 ```
 
-##### Install Calico
+##### Install {{site.prodname}}
 
 On the controller, install {{site.prodname}} from the manifest:
 
@@ -186,7 +186,7 @@ networking:
 ```
 Then install Calico for network policy only after the cluster is up and ready.
 
-#### Kubespray
+##### Kubespray
 
 [Kubespray](https://kubespray.io/) is a tool for provisioning and managing Kubernetes clusters with support for multiple clouds including Amazon Web Services. {{site.prodname}} is the default networking provider, providing both networking and network policy. You can explicitly set the `kube_network_plugin` variable to `calico`, or not (given it is the default). See the [Kubespray docs](https://kubespray.io/#/?id=network-plugins) for more details.
 
