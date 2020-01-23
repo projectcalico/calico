@@ -2,6 +2,8 @@ bigheader: "Reference"
 path: /reference/
 order: 5
 section:
+- title: Installation
+  path: /reference/installation/api
 - title: calicoctl
   path: /reference/calicoctl/
   section:
