@@ -327,15 +327,6 @@ func (s *Syncer) applySvc(skey svcKey, sinfo k8sp.ServicePort, eps []k8sp.Endpoi
 	return nil
 }
 
-func (s *Syncer) getRoute(addr ip.V4Addr) (routes.Value, error) {
-	v, ok := s.rt.Lookup(addr)
-	if !ok {
-		return routes.Value{}, errors.Errorf("no route for %s", addr)
-	}
-
-	return v, nil
-}
-
 func (s *Syncer) applyExpandedNP(sname k8sp.ServicePortName, sinfo k8sp.ServicePort,
 	eps []k8sp.Endpoint, node ip.V4Addr, nport int) error {
 	skey := getSvcKey(sname, getSvcKeyExtra(svcTypeNodePortRemote, node.String()))
@@ -358,7 +349,7 @@ type expandMiss struct {
 }
 
 func (s *Syncer) expandNodePorts(sname k8sp.ServicePortName, sinfo k8sp.ServicePort,
-	eps []k8sp.Endpoint, nport int) *expandMiss {
+	eps []k8sp.Endpoint, nport int, rtLookup func(addr ip.Addr) (routes.Value, bool)) *expandMiss {
 
 	m := make(map[ip.V4Addr][]k8sp.Endpoint)
 
@@ -367,9 +358,9 @@ func (s *Syncer) expandNodePorts(sname k8sp.ServicePortName, sinfo k8sp.ServiceP
 	for _, ep := range eps {
 		ipv4 := ip.FromString(ep.IP()).(ip.V4Addr)
 
-		rt, err := s.getRoute(ipv4)
-		if err != nil {
-			log.WithField("error", err).Error("Missing route")
+		rt, ok := rtLookup(ipv4)
+		if !ok {
+			log.Errorf("No route for %s", ipv4)
 			if miss == nil {
 				miss = &expandMiss{
 					sname: sname,
@@ -488,7 +479,7 @@ func (s *Syncer) apply(state DPSyncerState) error {
 				}
 			}
 			if bi.OnlyNodeLocalEndpoints {
-				if miss := s.expandNodePorts(sname, sinfo, eps, nport); miss != nil {
+				if miss := s.expandNodePorts(sname, sinfo, eps, nport, s.rt.Lookup); miss != nil {
 					expNPMisses = append(expNPMisses, miss)
 				}
 			}
@@ -860,10 +851,10 @@ func (s *Syncer) runExpandNPFixup(misses []*expandMiss) {
 
 			// We do one pass rightaway since we cannot know whether there
 			// was an update or not before we got here
-			s.rt.WaitAfter(ctx, func() bool {
+			s.rt.WaitAfter(ctx, func(lookup func(addr ip.Addr) (routes.Value, bool)) bool {
 				var again []*expandMiss
 				for _, m := range misses {
-					if miss := s.expandNodePorts(m.sname, m.sinfo, m.eps, m.nport); miss != nil {
+					if miss := s.expandNodePorts(m.sname, m.sinfo, m.eps, m.nport, lookup); miss != nil {
 						again = append(again, miss)
 					}
 				}

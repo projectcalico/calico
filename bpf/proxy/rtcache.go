@@ -27,7 +27,7 @@ import (
 // Routes is an interface to query routes
 type Routes interface {
 	Lookup(ip.Addr) (routes.Value, bool)
-	WaitAfter(ctx context.Context, fn func() bool)
+	WaitAfter(ctx context.Context, fn func(lookup func(addr ip.Addr) (routes.Value, bool)) bool)
 }
 
 // RTCache is a lookup data structure that allow inserting and deleting routes
@@ -103,10 +103,22 @@ func (rt *RTCache) Lookup(addr ip.Addr) (routes.Value, bool) {
 	}
 }
 
+func (rt *RTCache) lookupUnlocked(addr ip.Addr) (routes.Value, bool) {
+	switch a := addr.(type) {
+	case ip.V4Addr:
+		return rt.v4.Lookup(a)
+	default:
+		return routes.Value{}, false
+	}
+}
+
 // WaitAfter executes a function and if it returns false, it blocks until
 // another update or until the provided context is canceled. The function can do
-// only lookups as the state of the cache is read-locked
-func (rt *RTCache) WaitAfter(ctx context.Context, fn func() bool) {
+// only lookups as the state of the cache is read-locked. It must use the
+// provided lookup function.
+func (rt *RTCache) WaitAfter(ctx context.Context,
+	fn func(lookup func(addr ip.Addr) (routes.Value, bool)) bool) {
+
 	ctx, cancel := context.WithCancel(ctx)
 
 	exit := false
@@ -122,7 +134,7 @@ func (rt *RTCache) WaitAfter(ctx context.Context, fn func() bool) {
 	}()
 
 	rt.v4.RLock()
-	if !fn() && !exit {
+	if !fn(rt.lookupUnlocked) && !exit {
 		rt.cond4.Wait()
 	}
 	rt.v4.RUnlock()
