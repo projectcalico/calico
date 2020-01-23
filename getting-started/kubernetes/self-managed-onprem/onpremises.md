@@ -52,7 +52,7 @@ Based on your datastore and number of nodes, select a link below to install {{si
 
 ##### Install Calico with Kubernetes API datastore, 50 nodes or less
 
-1. Download the {{site.prodname}} Calico manifest (calico-config.yaml) for the Kubernetes API datastore.
+1. Download the {{site.prodname}} manifest (calico-config.yaml) for the Kubernetes API datastore.
 
    ```bash
    curl {{ "/manifests/calico.yaml" | absolute_url }} -O
@@ -67,7 +67,7 @@ Based on your datastore and number of nodes, select a link below to install {{si
 
 ##### Install Calico with Kubernetes API datastore, more than 50 nodes
 
-1. Download the {{site.prodname}} Calico manifest (ConfigMap) for the Kubernetes API datastore.
+1. Download the {{site.prodname}} manifest (ConfigMap) for the Kubernetes API datastore.
 
    ```bash
    curl {{ "/manifests/calico-typha.yaml" | absolute_url }} -o calico.yaml
@@ -107,7 +107,7 @@ Based on your datastore and number of nodes, select a link below to install {{si
    
 ##### Install Calico with etcd datastore
 
-1. Download the {{site.prodname}} Calico manifest (ConfigMap) for etcd.
+1. Download the {{site.prodname}} manifest (ConfigMap) for etcd.
 
    ```bash
    curl {{ "/manifests/calico-etcd.yaml -o calico.yaml" | absolute_url }}
