@@ -38,25 +38,8 @@
  * we can compile it with allow all
  */
 #define execute_policy_norm(...)			CALI_POL_ALLOW
-#define execute_policy_aof(...) 			CALI_POL_NO_MATCH
-#define execute_policy_pre_dnat(...)		CALI_POL_NO_MATCH
-#define execute_policy_do_not_track(...)	CALI_POL_NO_MATCH
 
 #else
-
-static CALI_BPF_INLINE enum calico_policy_result execute_policy_aof(struct __sk_buff *skb,__u8 ip_proto, __u32 saddr, __u32 daddr, __u16 sport, __u16 dport) {
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wunused-label"
-
-	// __AOF_POLICY__
-
-	return CALI_POL_NO_MATCH;
-	deny:
-	return CALI_POL_DENY;
-	allow:
-	return CALI_POL_ALLOW;
-#pragma clang diagnostic pop
-}
 
 static CALI_BPF_INLINE enum calico_policy_result execute_policy_norm(struct __sk_buff *skb,__u8 ip_proto, __u32 saddr, __u32 daddr, __u16 sport, __u16 dport) {
 #pragma clang diagnostic push
@@ -71,6 +54,8 @@ static CALI_BPF_INLINE enum calico_policy_result execute_policy_norm(struct __sk
 	return CALI_POL_ALLOW;
 #pragma clang diagnostic pop
 }
+
+#endif /* CALI_DEBUG_ALLOW_ALL */
 
 __attribute__((section("1/0")))
 int calico_tc_norm_pol_tail(struct __sk_buff *skb) {
@@ -92,44 +77,6 @@ int calico_tc_norm_pol_tail(struct __sk_buff *skb) {
 deny:
 	return TC_ACT_SHOT;
 }
-
-
-static CALI_BPF_INLINE enum calico_policy_result execute_policy_pre_dnat(struct __sk_buff *skb, __u8 ip_proto, __u32 saddr, __u32 daddr, __u16 sport, __u16 dport) {
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wunused-label"
-
-	// __PRE_DNAT_POLICY__
-
-	return CALI_POL_NO_MATCH;
-	deny:
-	return CALI_POL_DENY;
-	allow:
-	return CALI_POL_ALLOW;
-#pragma clang diagnostic pop
-}
-
-static CALI_BPF_INLINE enum calico_policy_result execute_policy_do_not_track(struct __sk_buff *skb, __u8 ip_proto, __u32 saddr, __u32 daddr, __u16 sport, __u16 dport) {
-	if (!CALI_F_HEP || CALI_F_EGRESS) {
-		return CALI_POL_NO_MATCH;
-	}
-	if ((skb->mark & CALI_SKB_MARK_SEEN_MASK) == CALI_SKB_MARK_SEEN) {
-		return CALI_POL_NO_MATCH;
-	}
-
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wunused-label"
-
-	// __DO_NOT_TRACK_POLICY__
-
-	return CALI_POL_NO_MATCH;
-	deny:
-	return CALI_POL_DENY;
-	allow:
-	return CALI_POL_ALLOW;
-#pragma clang diagnostic pop
-}
-
-#endif /* CALI_DEBUG_ALLOW_ALL */
 
 static CALI_BPF_INLINE int calico_tc_skb_accepted(
 	struct __sk_buff *skb,
@@ -375,21 +322,6 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb) {
 	state.ip_src = ip_header->saddr;
 	state.ip_dst = ip_header->daddr;
 	state.pol_rc = CALI_POL_NO_MATCH;
-	if (CALI_F_HEP) {
-		// For host endpoints only, execute doNotTrack policy.
-		state.pol_rc = execute_policy_do_not_track(
-			skb, state.ip_proto, state.ip_src, state.ip_dst, state.sport, state.dport);
-		switch (state.pol_rc) {
-		case CALI_POL_DENY:
-			CALI_DEBUG("Denied by do-not-track policy: DROP\n");
-			goto deny;
-		case CALI_POL_ALLOW:
-			CALI_DEBUG("Allowed by do-not-track policy: ACCEPT\n");
-			goto allow;
-		default:
-			break;
-		}
-	}
 
 	switch (state.ip_proto) {
 	case IPPROTO_TCP:
@@ -433,20 +365,6 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb) {
 		goto skip_policy;
 	}
 
-	// New connection, apply NAT and policy.
-	if (CALI_F_HEP) {
-		// Execute pre-DNAT policy.
-		state.pol_rc = execute_policy_pre_dnat(skb, state.ip_proto, state.ip_src, state.ip_dst,  state.sport,  state.dport);
-		if (state.pol_rc == CALI_POL_DENY) {
-			CALI_DEBUG("Denied by do-not-track policy: DROP\n");
-			goto deny;
-		} // Other RCs handled below.
-	}
-
-	/* XXX
-	 * perhaps no NAT lookup for CALI_F_TO_WEP
-	 * XXX
-	 */
 	// Do a NAT table lookup.
 	nat_dest = calico_v4_nat_lookup(state.ip_src, state.ip_dst, state.ip_proto, state.dport);
 	if (nat_dest != NULL) {
@@ -459,46 +377,48 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb) {
 		state.post_nat_dport = state.dport;
 	}
 
-	if (state.pol_rc == CALI_POL_NO_MATCH) {
-		// No match in pre-DNAT policy, apply normal policy.
-		// TODO apply-on-forward policy
-		if (false) {
-			state.pol_rc = execute_policy_aof(skb, state.ip_proto, state.ip_src,
-					state.post_nat_ip_dst,  state.sport,  state.post_nat_dport);
-		}
-		if (CALI_F_TO_WEP &&
-				skb->mark != CALI_SKB_MARK_SEEN &&
-				cali_rt_lookup_type(state.ip_src) == CALI_RT_LOCAL_HOST) {
-			// Host to workload traffic always allowed.  We discount traffic that was seen by
-			// another program since it must have come in via another interface.
-			CALI_DEBUG("Packet is from the host: ACCEPT\n");
-			state.pol_rc = CALI_POL_ALLOW;
-			goto skip_policy;
-		}
-
-		int key = 0;
-		struct cali_tc_state *map_state = bpf_map_lookup_elem(&cali_v4_state, &key);
-		if (!map_state) {
-			// Shouldn't be possible; the map is pre-allocated.
-			CALI_INFO("State map lookup failed: DROP\n");
-			goto deny;
-		}
-
-		state.pol_rc = CALI_POL_NO_MATCH;
-		if (nat_dest) {
-			state.nat_dest.addr = nat_dest->addr;
-			state.nat_dest.port = nat_dest->port;
-		} else {
-			state.nat_dest.addr = 0;
-			state.nat_dest.port = 0;
-		}
-
-		*map_state = state;
-
-		bpf_tail_call(skb, &cali_jump, 0);
-		CALI_DEBUG("Tail call to policy program failed: DROP\n");
-		return TC_ACT_SHOT;
+	// Apply normal policy.
+	if (CALI_F_TO_WEP &&
+			skb->mark != CALI_SKB_MARK_SEEN &&
+			cali_rt_lookup_type(state.ip_src) == CALI_RT_LOCAL_HOST) {
+		// Host to workload traffic always allowed.  We discount traffic that was seen by
+		// another program since it must have come in via another interface.
+		CALI_DEBUG("Packet is from the host: ACCEPT\n");
+		state.pol_rc = CALI_POL_ALLOW;
+		goto skip_policy;
 	}
+
+	int key = 0;
+	struct cali_tc_state *map_state = bpf_map_lookup_elem(&cali_v4_state, &key);
+	if (!map_state) {
+		// Shouldn't be possible; the map is pre-allocated.
+		CALI_INFO("State map lookup failed: DROP\n");
+		goto deny;
+	}
+
+	state.pol_rc = CALI_POL_NO_MATCH;
+	if (nat_dest) {
+		state.nat_dest.addr = nat_dest->addr;
+		state.nat_dest.port = nat_dest->port;
+	} else {
+		state.nat_dest.addr = 0;
+		state.nat_dest.port = 0;
+	}
+
+	*map_state = state;
+
+	if (CALI_F_HEP) {
+		// We don't support host-endpoint policy yet, skip straight to the epilogue program.
+		// FIXME we really want to just call calico_tc_skb_accepted() here but that runs out of stack space.
+		map_state->pol_rc = CALI_POL_ALLOW;
+		bpf_tail_call(skb, &cali_jump, 1);
+		CALI_DEBUG("Tail call to epilogue program failed: ALLOW\n");
+		return TC_ACT_UNSPEC;
+	}
+
+	bpf_tail_call(skb, &cali_jump, 0);
+	CALI_DEBUG("Tail call to policy program failed: DROP\n");
+	return TC_ACT_SHOT;
 
 skip_policy:
 	return calico_tc_skb_accepted(skb, ip_header, &state, nat_dest);
