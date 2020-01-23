@@ -93,6 +93,10 @@ Based on your datastore and number of nodes, select a link below to install {{si
     always be less than the number of nodes, otherwise rolling upgrades will stall. 
     In addition, Typha only helps with scale if there are fewer Typha instances than 
     there are nodes. 
+  
+    >**Warning**: If you set `typha_service_name` and set the Typha deployment replica 
+    >count to 0, Felix will not start.
+    {: .alert .alert-info}
 
 1. Customize the manifest if desired.
 1. Apply the manifest.
