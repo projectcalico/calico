@@ -1,6 +1,6 @@
 ---
 title: Self-managed Kubernetes in Google Compute Engine (GCE)
-description: Use Calico with a self-managed Kubernetes clsuter in Google Compute Engine (GCE)
+description: Use Calico with a self-managed Kubernetes cluster in Google Compute Engine (GCE)
 ---
 
 ### Big picture
@@ -9,11 +9,11 @@ Use {{site.prodname}} with a self-managed Kubernetes cluster in Google Compute E
 
 ### Value
 
-Managing your own Kubernetes cluster (as opposed to using a managed-Kubernetes service like GKE) gives you the most flexibility in configuring Kubernetes and {{site.prodname}}. {{site.prodname}} combines flexible networking capabilities with run-anywhere network policy enforcement to provide a solution with native Linux kernel performance and true cloud-native scalability.
+Managing your own Kubernetes cluster (as opposed to using a managed-Kubernetes service like GKE) gives you the most flexibility in configuring {{site.prodname}} and Kubernetes. {{site.prodname}} **networking** and **network security** solution covers containers, virtual machines, and native host-based workloads across a broad range of platforms including Kubernetes, OpenShift, Docker EE, OpenStack, and bare metal services. {{site.prodname}} combines flexible networking capabilities with "run-anywhere" security enforcement to provide a solution with native Linux kernel performance and true cloud-native scalability.
 
 ### Concepts
 
-kubeadm is a cluster management tool that is used to install Kubernetes.
+**kubeadm** is a cluster management tool that is used to install Kubernetes.
 
 ### Before you begin...
 
@@ -21,18 +21,18 @@ kubeadm is a cluster management tool that is used to install Kubernetes.
 
 ### How to
 
-There are many ways to install and manage Kubernetes in AWS. Using kubeadm is a good default choice for most people, as it gives you access to all of {{site.prodname}}’s [flexible and powerful networking features]({{site.baseurl}}/networking). However, there are other options below that may work better for your environment.
+There are many ways to install and manage Kubernetes in AWS. Using kubeadm is a good default choice for most people, as it gives you access to all of {{site.prodname}}’s [flexible and powerful networking features]({{site.baseurl}}/networking). However, there are other options that may work better for your environment.
 
 - [kubeadm for Calico networking and network policy](#kuberadm-for-calico-networking-and-network-policy)
 - [Other tools and options](#other-tools-and-options)
 
 #### kubeadm for Calico networking and network policy
 
-##### Create Cloud Resources
+##### Create cloud resources
 
-You will need at least one VM to serve as a control plane node and one or more worker nodes. (It is possible to have control plane nodes also act as workers. This is not recommended in most cases and not covered by this guide.)  See [requirements]() for specific OS requirements for these VMs.
+You will need at least one VM to serve as a control plane node and one or more worker nodes. (It is possible to have control plane nodes also act as workers. This is not recommended in most cases and not covered by this guide.)  See [requirements]({{site.baseurl}}/getting-started/kubernetes/requirements) for specific OS requirements for these VMs.
 
-The following worked example creates a single control node and three workers on a dedicated virtual private network (VPC). Adjust the example as needed for your requirements. Consider a dedicated infrastructure management tool like [Terraform]() for managing cloud resources. (This example is adapted from [Kubernetes the Hard Way](https://github.com/kelseyhightower/kubernetes-the-hard-way/blob/master/docs/03-compute-resources.md).)
+The following worked example creates a single control node and three workers on a dedicated virtual private network (VPC). Adjust the example as needed for your requirements. Consider a dedicated infrastructure management tool like [Terraform](https://docs.google.com/document/d/1-Vm8tdxc9GJ4JVXwVrHqQv96jU1eeadQeZyCDdU2bV4/edit#heading=h.876rtqebbyno)for managing cloud resources. (This example is adapted from [Kubernetes the Hard Way](https://github.com/kelseyhightower/kubernetes-the-hard-way/blob/master/docs/03-compute-resources.md).)
 
 **Create the VPC**
 
@@ -65,7 +65,7 @@ gcloud compute firewall-rules create example-k8s-allow-external \
   --source-ranges 0.0.0.0/0
 ```
 
-Create the controller VM
+Create the controller VM:
 
 ```
 gcloud compute instances create controller \
@@ -101,7 +101,7 @@ for i in 0 1 2; do
 done
 ```
 
-Install Docker on the controller VM and each worker VM.  On each VM run
+Install Docker on the controller VM and each worker VM.  On each VM run:
 
 ```
 sudo apt update
@@ -110,9 +110,9 @@ sudo systemctl enable docker.service
 sudo apt install -y apt-transport-https curl
 ```
 
-##### Install Kubernetes & Create the cluster
+##### Install Kubernetes and create the cluster
 
-Install kubeadm, kubelet and kubectl on each node (see kubeadm docs for more details).
+Install `kubeadm`,` kubelet`, and `kubectl` on each node (see kubeadm docs for more details).
 
 ```
 curl -s https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo apt-key add -
@@ -123,13 +123,14 @@ sudo apt-get update
 sudo apt-get install -y kubelet kubeadm kubectl
 sudo apt-mark hold kubelet kubeadm kubectl
 ```
-Create the controller node of a new cluster. On the controller VM, execute
+
+Create the controller node of a new cluster. On the controller VM, execute:
 
 ```
 sudo kubeadm init --pod-network-cidr 192.168.0.0/16
 ```
 
-To set up kubectl for the ubuntu user, run
+To set up kubectl for the ubuntu user, run:
 
 ```
 mkdir -p $HOME/.kube
@@ -147,7 +148,7 @@ On the controller, verify that all nodes have joined
 ```
 kubectl get nodes
 ```
-which should output something similar to.
+which should output something similar to:
 
 ```
 NAME         STATUS     ROLES    AGE     VERSION
@@ -159,13 +160,13 @@ worker-2     NotReady   <none>   5s      v1.17.2
 
 ##### Install Calico
 
-On the controller, install Calico from the manifest:
+On the controller, install {{site.prodname}} from the manifest:
 
 ```
 curl https://docs.projectcalico.org/master/manifests/calico.yaml -O
 ```
 
-If you wish to customize the Calico install, customize the downloaded calico.yaml manifest.  Then apply the manifest to install Calico.
+If you wish to customize the {{site.prodname}} install, customize the downloaded calico.yaml manifest.  Then apply the manifest to install {{site.prodname}}.
 
 ```
 kubectl apply -f calico.yaml
@@ -177,7 +178,7 @@ kubectl apply -f calico.yaml
 
 An alternative to using {{site.prodname}} for both networking and network policy, is to use the Amazon’s VPC CNI plugin for networking and {{site.prodname}} for network policy. The advantage of this approach is that pods are assigned IP addresses associated with Elastic Network Interfaces on worker nodes. The IPs come from the VPC network pool and therefore do not require NAT to access resources outside the Kubernetes cluster.
 
-Set your kops cluster configuration to
+Set your kops cluster configuration to:
 
 ```
 networking:
@@ -187,7 +188,7 @@ Then [install Calico for policy]({{site.baseurl}}/getting-started/kubernetes/ins
 
 #### Kubespray
 
-[Kubespray](https://kubespray.io/) is a tool for provisioning and managing Kubernetes clusters with support for multiple clouds including Amazon Web Services. {{site.prodname}} is the default networking provider, or you can set the `kube_network_plugin` variable to `calico`. See the [Kubespray docs](https://kubespray.io/#/?id=network-plugins) for more details.
+[Kubespray](https://kubespray.io/) is a tool for provisioning and managing Kubernetes clusters with support for multiple clouds including Amazon Web Services. {{site.prodname}} is the default networking provider, providing both networking and network policy. You can explicitly set the `kube_network_plugin` variable to `calico`, or not (given it is the default). See the [Kubespray docs](https://kubespray.io/#/?id=network-plugins) for more details.
 
 ### Above and beyond
 

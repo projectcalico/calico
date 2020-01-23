@@ -28,7 +28,7 @@ section:
     - title: Self-managed Kubernetes in GCE
       path: /getting-started/kubernetes/self-managed-public-cloud/gce
     - title: Self-managed Kubernetes in Azure
-      path: /getting-started/kubernetes/self-managed-public-cloud/      
+      path: /getting-started/kubernetes/self-managed-public-cloud/azu      
   - title: Installation
     path: /getting-started/kubernetes/installation/
     section:

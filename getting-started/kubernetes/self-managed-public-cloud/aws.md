@@ -9,7 +9,7 @@ Use {{site.prodname}} with a self-managed Kubernetes cluster in Amazon Web Servi
 
 ### Value
 
-Managing your own Kubernetes cluster (as opposed to using a managed-Kubernetes service like EKS), gives you the most flexibility in configuring Kubernetes and {{site.prodname}}.
+Managing your own Kubernetes cluster (as opposed to using a managed-Kubernetes service like EKS), gives you the most flexibility in configuring {{site.prodname}} and Kubernetes. {{site.prodname}} **networking** and **network security** solution covers containers, virtual machines, and native host-based workloads across a broad range of platforms including Kubernetes, OpenShift, Docker EE, OpenStack, and bare metal services. {{site.prodname}} combines flexible networking capabilities with "run-anywhere" security enforcement to provide a solution with native Linux kernel performance and true cloud-native scalability.
 
 ### Concepts
 
@@ -22,14 +22,14 @@ Kubernetes Operations (kops) is a cluster management tool that handles provision
 
 ### How to
 
-There are many ways to install and manage Kubernetes in AWS. Using Kubernetes Operations (kops) is a good default choice for most people, as it gives you access to all of {{site.prodname}}’s [flexible and powerful networking features]({{site.baseurl}}/networking). However, there are other options below that may work better for your environment.
+There are many ways to install and manage Kubernetes in AWS. Using Kubernetes Operations (kops) is a good default choice for most people, as it gives you access to all of {{site.prodname}}’s [flexible and powerful networking features]({{site.baseurl}}/networking). However, there are other options that may work better for your environment.
 
 - [Kubernetes Operations for Calico networking and network policy](#kubernetes-operations-for-calico-networking-and-network-policy)
 - [Other options and tools](#other-options-and-tools)
 
 #### Kubernetes Operation for Calico networking and network policy
 
-To use kops to create a cluster with {{site.prodname}} for networking and network policy:
+To use kops to create a cluster with {{site.prodname}} networking and network policy:
 
 1. [Install kops](https://kops.sigs.k8s.io/install/) on your workstation.
 1. [Set up your environment for AWS](https://kops.sigs.k8s.io/getting_started/aws/).
@@ -55,7 +55,7 @@ To use kops to create a cluster with {{site.prodname}} for networking and networ
 
 ##### Amazon VPI CNI plugin
 
-As an alternative to {{site.prodname}} for both networking and network policy, you can use Amazon’s VPC CNI plugin for networking and {{site.prodname}} for network policy. The advantage of this approach is that pods are assigned IP addresses associated with Elastic Network Interfaces on worker nodes. The IPs come from the VPC network pool and therefore do not require NAT to access resources outside the Kubernetes cluster.
+As an alternative to {{site.prodname}} for both networking and network policy, you can use Amazon’s VPC CNI plugin for networking, and {{site.prodname}} for network policy. The advantage of this approach is that pods are assigned IP addresses associated with Elastic Network Interfaces on worker nodes. The IPs come from the VPC network pool and therefore do not require NAT to access resources outside the Kubernetes cluster.
 
 Set your kops cluster configuration to
 
@@ -67,9 +67,9 @@ Then [install Calico for policy]({{site.baseurl}}/getting-started/kubernetes/ins
 
 ##### Kubespray
 
-[Kubespray](https://kubespray.io/) is a tool for provisioning and managing Kubernetes clusters with support for multiple clouds including Amazon Web Services. {{site.prodname}} is the default networking provider, or you can set the `kube_network_plugin` variable to `calico`. See the [Kubespray docs](https://kubespray.io/#/?id=network-plugins) for more details.
+[Kubespray](https://kubespray.io/) is a tool for provisioning and managing Kubernetes clusters with support for multiple clouds including Amazon Web Services. {{site.prodname}} is the default networking provider, providing both networking and network policy. You can explicitly set the `kube_network_plugin` variable to `calico`, or not (given it is the default). See the [Kubespray docs](https://kubespray.io/#/?id=network-plugins) for more details.
 
 ### Above and beyond
 
 - [Install and configure calicoctl]({{site.baseurl}}/getting-started/calicoctl/install)
-- [Try out Calico network policy]({{site.baseurls}}/security/calico-network-policy)
+- [Try out Calico network policy]({{site.baseurl}}/security/calico-network-policy)
