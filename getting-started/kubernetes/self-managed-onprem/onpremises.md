@@ -114,7 +114,7 @@ Based on your datastore and number of nodes, select a link below to install {{si
    ```
 {% include content/pod-cidr-sed.md yaml="calico" %}
 1. In the `ConfigMap` named, `calico-config`, set the value of `etcd_endpoints` to the IP address and port of your etcd server.
-    > **Tip**: You can specify more than one using commas as delimiters.
+    > **Tip**: You can specify more than one `etcd_endpoint` using commas as delimiters.
    {: .alert .alert-info}
 1. Customize the manifest if desired.
 1. Apply the manifest using the following command.
