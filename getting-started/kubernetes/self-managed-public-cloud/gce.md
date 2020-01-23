@@ -192,4 +192,4 @@ Then [install Calico for policy]({{site.baseurl}}/getting-started/kubernetes/ins
 ### Above and beyond
 
 - [Install and configure calicoctl]({{site.baseurl}}/getting-started/calicoctl/install)
-- [Try out Calico network policy]({{site.baseurls}}/security/calico-network-policy)
+- [Try out Calico network policy]({{site.baseurl}}/security/calico-network-policy)
