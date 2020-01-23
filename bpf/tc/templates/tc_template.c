@@ -377,7 +377,6 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb) {
 		state.post_nat_dport = state.dport;
 	}
 
-	// Apply normal policy.
 	if (CALI_F_TO_WEP &&
 			skb->mark != CALI_SKB_MARK_SEEN &&
 			cali_rt_lookup_type(state.ip_src) == CALI_RT_LOCAL_HOST) {
@@ -388,6 +387,25 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb) {
 		goto skip_policy;
 	}
 
+	if (CALI_F_FROM_WEP) {
+		// Packet is from a workload, check its source IP since it's our responsibility to police that.
+		CALI_DEBUG("Workload RPF check src=%x skb iface=%d.\n", be32_to_host(state.ip_src), skb->ifindex);
+		struct calico_route *r = cali_rt_lookup(state.ip_src);
+		if (!r) {
+			CALI_INFO("Workload RPF fail: missing route.\n");
+			goto deny;
+		}
+		if (r->type != CALI_RT_LOCAL_WORKLOAD) {
+			CALI_INFO("Workload RPF fail: not a local workload.\n");
+			goto deny;
+		}
+		if (r->if_index != skb->ifindex) {
+			CALI_INFO("Workload RPF fail skb iface (%d) != route iface (%d)\n", skb->ifindex, r->if_index);
+			goto deny;
+		}
+	}
+
+	// Set up an entry in the state map and then jump to the normal policy program.
 	int key = 0;
 	struct cali_tc_state *map_state = bpf_map_lookup_elem(&cali_v4_state, &key);
 	if (!map_state) {

@@ -74,6 +74,16 @@ func TestNATPodPodXNode(t *testing.T) {
 
 	hostIP = node1ip
 
+	// Insert a reverse route for the source workload.
+	rtKey := routes.NewKey(srcV4CIDR).AsBytes()
+	rtVal := routes.NewLocalWorkloadValue(1).AsBytes()
+	err = rtMap.Update(rtKey, rtVal)
+	defer func() {
+		err := rtMap.Delete(rtKey)
+		Expect(err).NotTo(HaveOccurred())
+	}()
+	Expect(err).NotTo(HaveOccurred())
+
 	// Leaving workload
 	runBpfTest(t, "calico_from_workload_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
 		res, err := bpfrun(pktBytes)
@@ -555,6 +565,8 @@ func TestNATNodePortICMPTooBig(t *testing.T) {
 }
 
 func TestNATAffinity(t *testing.T) {
+	RegisterTestingT(t)
+
 	_, ipv4, l4, _, pktBytes, err := testPacketUDPDefault()
 	Expect(err).NotTo(HaveOccurred())
 	udp := l4.(*layers.UDP)
@@ -589,6 +601,16 @@ func TestNATAffinity(t *testing.T) {
 		nat.NewNATBackendKey(0, 0).AsBytes(),
 		nat.NewNATBackendValue(natIP, natPort).AsBytes(),
 	)
+	Expect(err).NotTo(HaveOccurred())
+
+	// Insert a reverse route for the source workload.
+	rtKey := routes.NewKey(srcV4CIDR).AsBytes()
+	rtVal := routes.NewLocalWorkloadValue(1).AsBytes()
+	err = rtMap.Update(rtKey, rtVal)
+	defer func() {
+		err := rtMap.Delete(rtKey)
+		Expect(err).NotTo(HaveOccurred())
+	}()
 	Expect(err).NotTo(HaveOccurred())
 
 	// Check the no affinity entry exists if no affinity is set

@@ -28,7 +28,12 @@ enum calico_route_type {
 
 struct calico_route {
 	__u32 type; /* enum calico_route_type */
-	__u32 next_hop;
+	union {
+		// IP encap next hop for remote workload routes.
+		__u32 next_hop;
+		// Interface index for local workload routes.
+		__u32 if_index;
+	};
 };
 
 struct bpf_map_def_extended __attribute__((section("maps"))) cali_v4_routes = {

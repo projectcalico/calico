@@ -912,8 +912,6 @@ func TestIPUintFromString(t *testing.T) {
 func (p *polProgramTest) Run(t *testing.T) {
 	RegisterTestingT(t)
 
-	initMapsOnce()
-
 	// The prog builder refuses to allocate IDs as a precaution, give it an allocator that forces allocations.
 	realAlloc := idalloc.New()
 	forceAlloc := &forceAllocator{alloc: realAlloc}

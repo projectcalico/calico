@@ -66,8 +66,11 @@ const (
 
 //
 // struct calico_route_value {
-// __u32 type;
-// __u32 next_hop;
+//   __u32 type;
+//   union {
+//     __u32 next_hop;
+//     __u32 ifIndex;
+//   };
 // };
 const ValueSize = 8
 
@@ -123,6 +126,13 @@ func NewValueWithNextHop(valueType Type, nextHop ip.V4Addr) Value {
 func NewValue(valueType Type) Value {
 	var v Value
 	binary.LittleEndian.PutUint32(v[:4], uint32(valueType))
+	return v
+}
+
+func NewLocalWorkloadValue(ifIndex int) Value {
+	var v Value
+	binary.LittleEndian.PutUint32(v[:4], uint32(TypeLocalWorkload))
+	binary.LittleEndian.PutUint32(v[4:8], uint32(ifIndex))
 	return v
 }
 

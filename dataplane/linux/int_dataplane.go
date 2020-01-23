@@ -280,7 +280,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		applyThrottle:     throttle.New(10),
 	}
 	dp.applyThrottle.Refill() // Allow the first apply() immediately.
-	dp.ifaceMonitor.Callback = dp.onIfaceStateChange
+	dp.ifaceMonitor.StateCallback = dp.onIfaceStateChange
 	dp.ifaceMonitor.AddrCallback = dp.onIfaceAddrsChange
 
 	// Most iptables tables need the same options.
@@ -728,20 +728,23 @@ func (d *InternalDataplane) Start() {
 }
 
 // onIfaceStateChange is our interface monitor callback.  It gets called from the monitor's thread.
-func (d *InternalDataplane) onIfaceStateChange(ifaceName string, state ifacemonitor.State) {
+func (d *InternalDataplane) onIfaceStateChange(ifaceName string, state ifacemonitor.State, ifIndex int) {
 	log.WithFields(log.Fields{
 		"ifaceName": ifaceName,
+		"ifIndex":   ifIndex,
 		"state":     state,
 	}).Info("Linux interface state changed.")
 	d.ifaceUpdates <- &ifaceUpdate{
 		Name:  ifaceName,
 		State: state,
+		Index: ifIndex,
 	}
 }
 
 type ifaceUpdate struct {
 	Name  string
 	State ifacemonitor.State
+	Index int
 }
 
 // Check if current felix ipvs config is correct when felix gets an kube-ipvs0 interface update.
