@@ -110,7 +110,7 @@ Based on your datastore and number of nodes, select a link below to install {{si
 1. Download the {{site.prodname}} manifest (ConfigMap) for etcd.
 
    ```bash
-   curl {{ "/manifests/calico-etcd.yaml -o calico.yaml" | absolute_url }}
+   curl {{ "/manifests/calico-etcd.yaml" | absolute_url }} -o calico.yaml
    ```
 {% include content/pod-cidr-sed.md yaml="calico-etcd" %}
 1. In the `ConfigMap` named, `calico-config`, set the value of etcd_endpoints to the IP address and port of your etcd server.
