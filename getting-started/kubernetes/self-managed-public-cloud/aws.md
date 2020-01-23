@@ -47,7 +47,6 @@ To use kops to create a cluster with {{site.prodname}} networking and network po
    ```
    networking:
      calico: {}
-
    ```
    You can further customize the {{site.prodname}} install with [options listed in the kops documentation](https://kops.sigs.k8s.io/networking/#calico-example-for-cni-and-network-policy). 
 
