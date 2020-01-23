@@ -11,8 +11,8 @@ require (
 	github.com/mattn/go-colorable v0.0.0-20190708054220-c52ace132bf4 // indirect
 	github.com/onsi/ginkgo v1.10.1
 	github.com/onsi/gomega v1.7.0
-	github.com/projectcalico/felix v0.0.0-20200118081511-a95a11667d0b
-	github.com/projectcalico/libcalico-go v0.0.0-20200111004125-f4cc1f8914f8
+	github.com/projectcalico/felix v0.0.0-20200121214536-d51cbfa8c774
+	github.com/projectcalico/libcalico-go v0.0.0-20200121214551-31188cbacff0
 	github.com/sirupsen/logrus v1.4.2
 	github.com/vishvananda/netns v0.0.0-20180720170159-13995c7128cc // indirect
 	github.com/whyrusleeping/go-logging v0.0.0-20170515211332-0457bb6b88fc // indirect
@@ -29,6 +29,6 @@ require (
 )
 
 replace (
-	github.com/kelseyhightower/confd => github.com/projectcalico/confd v0.0.0-20200118080752-bb84a5701ee9
+	github.com/kelseyhightower/confd => github.com/projectcalico/confd v0.0.0-20200122122632-4805fd0774f4
 	github.com/sirupsen/logrus => github.com/projectcalico/logrus v1.0.4-calico
 )
