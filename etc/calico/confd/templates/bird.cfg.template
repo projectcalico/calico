@@ -85,10 +85,6 @@ template bgp bgp_template {
 # ------------- Node-to-node mesh -------------
 {{- $node_cid_key := printf "/host/%s/rr_cluster_id" (getenv "NODENAME")}}
 {{- $node_cluster_id := getv $node_cid_key}}
-{{- if ne "" ($node_cluster_id)}}
-# This node is configured as a route reflector with cluster ID {{$node_cluster_id}};
-# ignore node-to-node mesh setting.
-{{- else}}
 {{if (json (getv "/global/node_mesh")).enabled}}
 {{range $host := lsdir "/host"}}
 {{$onode_as_key := printf "/host/%s/as_num" .}}
@@ -111,7 +107,6 @@ template bgp bgp_template {
 {{else}}
 # Node-to-node mesh disabled
 {{end}}
-{{- end}}
 
 
 # ------------- Global peers -------------
