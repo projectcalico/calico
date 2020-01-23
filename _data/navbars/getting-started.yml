@@ -9,6 +9,13 @@ section:
     path: /getting-started/kubernetes/quickstart
   - title: System requirements
     path: /getting-started/kubernetes/requirements
+  - title: Self-managed on-premises
+    path: /getting-started/kubernetes/self-managed-onprem/
+    section:
+    - title: Install Calico for on-premises deployments
+      path: /getting-started/kubernetes/self-managed-onprem/onpremises  
+    - title: Customize manifests
+      path: /getting-started/kubernetes/installation/config-options
   - title: Managed public cloud
     path: /getting-started/kubernetes/managed-public-cloud/
     section:
@@ -29,19 +36,6 @@ section:
       path: /getting-started/kubernetes/self-managed-public-cloud/gce
     - title: Self-managed Kubernetes in Azure
       path: /getting-started/kubernetes/self-managed-public-cloud/azu      
-  - title: Installation
-    path: /getting-started/kubernetes/installation/
-    section:
-    - title: Introduction
-      path: /getting-started/kubernetes/installation/overview
-    - title: Installing Calico for policy and networking (recommended)
-      path: /getting-started/kubernetes/installation/calico
-    - title: Installing Calico for policy (advanced)
-      path: /getting-started/kubernetes/installation/other
-    - title: Enabling application layer policy for Istio
-      path: /getting-started/kubernetes/installation/app-layer-policy
-    - title: Customizing the manifests
-      path: /getting-started/kubernetes/installation/config-options
   - title: Flannel
     path: /getting-started/kubernetes/flannel/
     section:

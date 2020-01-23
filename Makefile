@@ -74,7 +74,7 @@ _site build: bin/helm
 
 ## Clean enough that a new release build will be clean
 clean:
-	rm -rf _output _site .jekyll-metadata pinned_versions.yaml
+	rm -rf _output _site .jekyll-metadata pinned_versions.yaml _includes/charts/*/values.yaml
 
 ########################################################################################################################
 # Builds locally checked out code using local versions of libcalico, felix, and confd.
@@ -458,12 +458,12 @@ bin/helm:
 	mv $(TMP)/linux-amd64/helm bin/helm
 
 .PHONY: values.yaml
-values.yaml: values.yaml/calico values.yaml/tigera-operator
-values.yaml/%:
+values.yaml: _includes/charts/calico/values.yaml _includes/charts/tigera-operator/values.yaml
+_includes/charts/%/values.yaml:
 	docker run --rm \
 	  -v $$PWD:/calico \
 	  -w /calico \
-	  ruby:2.5 ruby ./hack/gen_values_yml.rb --chart $(@F) > _includes/charts/$(@F)/values.yaml
+	  ruby:2.5 ruby ./hack/gen_values_yml.rb --chart $* > $@
 
 ## Create the vendor directory
 vendor: glide.yaml
