@@ -9,7 +9,7 @@ Use {{site.prodname}} with a self-managed Kubernetes cluster in Amazon Web Servi
 
 ### Value
 
-Managing your own Kubernetes cluster (as opposed to using a managed-Kubernetes service like EKS), gives you the most flexibility in configuring {{site.prodname}} and Kubernetes. {{site.prodname}} **networking** and **network security** solution covers containers, virtual machines, and native host-based workloads across a broad range of platforms including Kubernetes, OpenShift, Docker EE, OpenStack, and bare metal services. {{site.prodname}} combines flexible networking capabilities with "run-anywhere" security enforcement to provide a solution with native Linux kernel performance and true cloud-native scalability.
+Managing your own Kubernetes cluster (as opposed to using a managed-Kubernetes service like EKS), gives you the most flexibility in configuring {{site.prodname}} and Kubernetes. {{site.prodname}} provides both **networking** and **network security** for containers, virtual machines, and native host-based workloads across a broad range of platforms including Kubernetes, OpenShift, Docker EE, OpenStack, and bare metal services. {{site.prodname}} combines flexible networking capabilities with "run-anywhere" security enforcement to provide a solution with native Linux kernel performance and true cloud-native scalability.
 
 ### Concepts
 
@@ -63,7 +63,7 @@ Set your kops cluster configuration to
 networking:
   amazonvpc: {}
 ```
-Then [install Calico for policy]({{site.baseurl}}/getting-started/kubernetes/installation/other) after the cluster is up and ready.
+Then install Calico for network policy only after the cluster is up and ready.
 
 ##### Kubespray
 
