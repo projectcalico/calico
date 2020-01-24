@@ -340,3 +340,7 @@ $max-sidebar-height: calc(100vh - #{$wpfront-notification-bar-spacer-height + $h
   float: right;
   padding: 8px 10px;
 }
+
+.breadcrumb-item {
+  font-size: 14px;
+}
