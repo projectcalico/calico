@@ -25,6 +25,17 @@ simply a way to store additional information for use by operators or application
 |-------------|-------------------------------------|-------------------------|---------|
 | annotations | Arbitrary non-identifying metadata. | map of string to string |         |
 
+Example:
+
+```yaml
+metadata:
+  annotations:
+    app: database
+    owner: devops
+```
+
+{: .no-select-button}
+
 Annotations follow the
 [same rules as Kubernetes for valid syntax and character set](https://kubernetes.io/docs/concepts/overview/working-with-objects/annotations/#syntax-and-character-set).
 
