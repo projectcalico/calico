@@ -14,15 +14,18 @@
 static CALI_BPF_INLINE int icmp_v4_reply(struct __sk_buff *skb,
 					 uint8_t type, uint8_t code, __be32 un)
 {
-	struct ethhdr *eth;
 	struct iphdr *ip, ip_orig;
 	struct icmphdr *icmp;
 	uint32_t len;
 	__wsum ip_csum, icmp_csum;
 	int ret;
 
-	eth = skb_start_ptr(skb);
-	ip = skb_ptr_after(skb, eth);
+	if (skb_too_short(skb)) {
+		CALI_DEBUG_NO_FLAG("ICMP v4 reply: too short after making room\n");
+		return -1;
+	}
+
+	ip = skb_iphdr(skb);
 
 	CALI_DEBUG_NO_FLAG("ip->ihl: %d\n", ip->ihl);
 	if (ip->ihl > 5) {
@@ -54,8 +57,7 @@ static CALI_BPF_INLINE int icmp_v4_reply(struct __sk_buff *skb,
 	}
 
 	/* N.B. getting the ip pointer here again makes verifier happy */
-	eth = skb_start_ptr(skb);
-	ip = skb_ptr_after(skb, eth);
+	ip = skb_iphdr(skb);
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(5,2,0)
 	struct iphdr *ip_inner;
@@ -135,8 +137,8 @@ static CALI_BPF_INLINE int icmp_v4_too_big(struct __sk_buff *skb)
 {
 	struct {
 		__be16  unused;
-                __be16  mtu;
-        } frag = {
+		__be16  mtu;
+	} frag = {
 		.mtu = host_to_be16(CALI_NAT_TUNNEL_MTU),
 	};
 

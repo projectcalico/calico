@@ -316,6 +316,10 @@ static CALI_BPF_INLINE int vxlan_v4_encap(struct __sk_buff *skb,  __be32 ip_src,
 #else
 	*ip_inner = *ip;
 #endif
+
+	/* decrement TTL for the inner IP header. TTL must be > 1 to get here */
+	ip_dec_ttl(ip_inner);
+
 	ip->saddr = ip_src;
 	ip->daddr = ip_dst;
 	ip->tot_len = host_to_be16(be16_to_host(ip->tot_len) + new_hdrsz);

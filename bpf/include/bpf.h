@@ -17,6 +17,7 @@
 
 #include <linux/bpf.h>
 #include <bpf/libbpf.h>    // for bpftool dyn loader struct 'bpf_map_def'
+#include <linux/ip.h>
 
 #define CALI_BPF_INLINE inline __attribute__((always_inline))
 
@@ -180,5 +181,17 @@ enum calico_skb_mark {
 };
 
 #define ip_is_dnf(ip) ((ip)->frag_off & host_to_be16(0x4000))
+#define ip_frag_no(ip) ((ip)->frag_off & host_to_be16(0x1fff))
+
+static CALI_BPF_INLINE void ip_dec_ttl(struct iphdr *ip)
+{
+	ip->ttl--;
+	/* since we change only a single byte, as per RFC-1141 we an adjust it
+	 * inline without helpers.
+	 */
+	uint32_t sum = ip->check;
+	sum += host_to_be16(0x0100);
+	ip->check = (__be16) (sum + (sum >> 16));
+}
 
 #endif /* __CALI_BPF_H__ */

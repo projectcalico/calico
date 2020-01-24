@@ -176,6 +176,11 @@ static CALI_BPF_INLINE int forward_or_drop(struct __sk_buff *skb,
 			// Redirect the packet.
 			CALI_DEBUG("Got Linux FIB hit, redirecting to iface %d.\n", fib_params.ifindex);
 			rc = bpf_redirect(fib_params.ifindex, 0);
+
+			/* now we know we will bypass IP stack and ip->ttl > 1, decrement it! */
+			if (rc == TC_ACT_REDIRECT) {
+				ip_dec_ttl(ip_header);
+			}
 		} else if (rc < 0) {
 			CALI_DEBUG("FIB lookup failed (bad input): %d.\n", rc);
 			rc = TC_ACT_UNSPEC;
@@ -314,16 +319,16 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 
 	ip_header = skb_iphdr(skb);
 
-	/* First thing to check to the host is the TTL is still alive and we
+	/* First thing to check "to the host" is if TTL is still alive and if we
 	 * should process the packet at all.
 	 */
-	if (CALI_F_TO_HOST && ip_header->ttl <= 1) {
+	if (CALI_F_TO_HOST && !CALI_F_TUNNEL && ip_header->ttl <= 1) {
 		/* we silently drop the packet if things go wrong */
 
 		/* XXX we should check if it is broadcast or multicast and not respond */
 
 		/* do not respond to IP fragments except the first */
-		if (ip_header->frag_off & host_to_be16(0x1fff)) {
+		if (ip_frag_no(ip_header)) {
 			goto deny;
 		}
 
