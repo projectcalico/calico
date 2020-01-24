@@ -16,6 +16,7 @@
 
 #include "bpf.h"
 #include "log.h"
+#include "skb.h"
 #include "policy.h"
 #include "conntrack.h"
 #include "nat.h"
@@ -105,40 +106,6 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct __sk_buff *skb,
 							 struct iphdr *ip_header,
 							 struct cali_tc_state *state,
 							 struct calico_nat_dest *nat_dest);
-
-static CALI_BPF_INLINE bool skb_too_short(struct __sk_buff *skb)
-{
-	if (CALI_F_IPIP_ENCAPPED) {
-		return skb_shorter(skb, ETH_IPV4_UDP_SIZE + sizeof(struct iphdr));
-	} else if (CALI_F_L3) {
-		return skb_shorter(skb, IPV4_UDP_SIZE);
-	} else {
-		return skb_shorter(skb, ETH_IPV4_UDP_SIZE);
-	}
-	// TODO Deal with IP header with options.
-}
-
-static CALI_BPF_INLINE long skb_iphdr_offset(struct __sk_buff *skb)
-{
-	if (CALI_F_IPIP_ENCAPPED) {
-		// Ingress on an IPIP tunnel: skb is [ether|outer IP|inner IP|payload]
-		return sizeof(struct ethhdr) + sizeof(struct iphdr);
-	} else if (CALI_F_L3) {
-		// Egress on an IPIP tunnel: skb is [inner IP|payload]
-		return 0;
-	} else {
-		// Normal L2 interface: skb is [ether|IP|payload]
-		return sizeof(struct ethhdr);
-	}
-}
-
-static CALI_BPF_INLINE struct iphdr *skb_iphdr(struct __sk_buff *skb)
-{
-	long offset = skb_iphdr_offset(skb);
-	struct iphdr *ip = skb_ptr(skb, offset);
-	CALI_DEBUG("IP@%d; s=%x d=%x\n", offset, be32_to_host(ip->saddr), be32_to_host(ip->daddr));
-	return ip;
-}
 
 static CALI_BPF_INLINE int skb_nat_l4_csum_ipv4(struct __sk_buff *skb, size_t off,
 						__be32 ip_from, __be32 ip_to,
@@ -346,6 +313,29 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 	}
 
 	ip_header = skb_iphdr(skb);
+
+	/* First thing to check to the host is the TTL is still alive and we
+	 * should process the packet at all.
+	 */
+	if (CALI_F_TO_HOST && ip_header->ttl <= 1) {
+		/* we silently drop the packet if things go wrong */
+
+		/* XXX we should check if it is broadcast or multicast and not respond */
+
+		/* do not respond to IP fragments except the first */
+		if (ip_header->frag_off & host_to_be16(0x1fff)) {
+			goto deny;
+		}
+
+		if (icmp_v4_ttl_exceeded(skb)) {
+			goto deny;
+		}
+
+		/* we need to allow the reponse for the IP stack to route it back.
+		 * XXX we might want to send it back the same iface
+		 */
+		goto allow;
+	}
 
 	if (is_vxlan_tunnel(ip_header)) {
 		/* decap on host ep only if directly for the node */

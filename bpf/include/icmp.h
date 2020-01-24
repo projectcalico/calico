@@ -9,6 +9,7 @@
 #include <linux/version.h>
 
 #include "bpf.h"
+#include "skb.h"
 
 static CALI_BPF_INLINE int icmp_v4_reply(struct __sk_buff *skb,
 					 uint8_t type, uint8_t code, __be32 un)
@@ -140,6 +141,11 @@ static CALI_BPF_INLINE int icmp_v4_too_big(struct __sk_buff *skb)
 	};
 
 	return icmp_v4_reply(skb, ICMP_DEST_UNREACH, ICMP_FRAG_NEEDED, *(__be32 *)&frag);
+}
+
+static CALI_BPF_INLINE int icmp_v4_ttl_exceeded(struct __sk_buff *skb)
+{
+	return icmp_v4_reply(skb, ICMP_TIME_EXCEEDED, ICMP_EXC_TTL, 0);
 }
 
 #endif /* __CALI_ICMP_H__ */

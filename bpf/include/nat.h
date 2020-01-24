@@ -11,6 +11,7 @@
 #include <linux/version.h>
 
 #include "bpf.h"
+#include "skb.h"
 #include "routes.h"
 
 #ifndef CALI_VXLAN_PORT
