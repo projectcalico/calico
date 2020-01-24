@@ -18,9 +18,9 @@
 #define CALI_VXLAN_PORT 4789 /* IANA VXLAN port */
 #endif
 
-#define dnat_should_encap() (CALI_F_FROM_HEP)
-#define dnat_return_should_encap() (CALI_F_FROM_WEP)
-#define dnat_should_decap() (CALI_F_FROM_HEP)
+#define dnat_should_encap() (CALI_F_FROM_HEP && !CALI_F_TUNNEL)
+#define dnat_return_should_encap() (CALI_F_FROM_WEP && !CALI_F_TUNNEL)
+#define dnat_should_decap() (CALI_F_FROM_HEP && !CALI_F_TUNNEL)
 
 #define CALI_ENCAP_EXTRA_SIZE	50
 
