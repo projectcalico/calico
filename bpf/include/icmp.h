@@ -89,7 +89,9 @@ static CALI_BPF_INLINE int icmp_v4_reply(struct __sk_buff *skb,
 		CALI_DEBUG_NO_FLAG("ICMP v4 reply: ip_orig.daddr != cali_host_ip() 0x%x\n", ip_orig.daddr);
 	}
 #endif
-	ip->saddr = ip_orig.daddr;
+
+	/* use the host IP of the program that handles the packet */
+	ip->saddr = cali_host_ip();
 	ip->daddr = ip_orig.saddr;
 
 	icmp = skb_ptr_after(skb, ip);
