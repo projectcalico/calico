@@ -22,6 +22,7 @@
 #include "routes.h"
 #include "jump.h"
 #include "reasons.h"
+#include "icmp.h"
 
 #ifndef CALI_FIB_LOOKUP_ENABLED
 #define CALI_FIB_LOOKUP_ENABLED true
