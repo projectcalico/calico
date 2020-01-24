@@ -535,7 +535,7 @@ static CALI_BPF_INLINE int calico_tc_skb_accepted(
 	struct tcphdr *tcp_header = (void*)(ip_header+1);
 	struct udphdr *udp_header = (void*)(ip_header+1);
 
-	size_t csum_offset, ip_csum_offset;
+	size_t csum_offset = 0, ip_csum_offset;
 	int res = 0;
 	bool encap_needed = false;
 	uint32_t fib_flags = 0;
