@@ -37,7 +37,7 @@ These steps are detailed in this section.
 
 1.  Configure the {{site.prodname}} repository:
 
-    ```
+    ```bash
     cat > /etc/yum.repos.d/calico.repo <<EOF
     [calico]
     name=Calico Repository
@@ -100,7 +100,7 @@ On each compute node, perform the following steps:
 1.  Open `/etc/nova/nova.conf` and remove the line from the `[DEFAULT]`
     section that reads:
 
-    ```
+    ```conf
     linuxnet_interface_driver = nova.network.linux_net.LinuxOVSInterfaceDriver
     ```
 
@@ -111,26 +111,26 @@ On each compute node, perform the following steps:
 
     Restart nova compute.
 
-    ```
+    ```bash
     service openstack-nova-compute restart
     ```
 
     If this node is also a controller, additionally restart nova-api.
 
-    ```
+    ```bash
     service openstack-nova-api restart
     ```
 
 1.  If they're running, stop the Open vSwitch services.
 
-    ```
+    ```bash
     service neutron-openvswitch-agent stop
     service openvswitch stop
     ```
 
     Then, prevent the services running if you reboot.
 
-    ```
+    ```bash
     chkconfig openvswitch off
     chkconfig neutron-openvswitch-agent off
     ```
@@ -181,7 +181,7 @@ On each compute node, perform the following steps:
     routing agent or the Linux bridging agent. These conflict
     with {{site.prodname}}.
 
-    ```
+    ```bash
     service neutron-l3-agent stop
     chkconfig neutron-l3-agent off
     ```
@@ -192,7 +192,7 @@ On each compute node, perform the following steps:
     Metadata API. This step is not required on combined compute and
     controller nodes.
 
-    ```
+    ```bash
     yum install -y openstack-nova-api
     service openstack-nova-metadata-api restart
     chkconfig openstack-nova-metadata-api on
@@ -200,13 +200,13 @@ On each compute node, perform the following steps:
 
 1.  Install the BIRD BGP client.
 
-    ```
+    ```bash
     yum install -y bird bird6
     ```
 
 1.  Install the `calico-compute` package.
 
-    ```
+    ```bash
     yum install -y calico-compute
     ```
 
@@ -218,13 +218,13 @@ On each compute node, perform the following steps:
 
     For IPv4 connectivity between compute hosts:
 
-    ```
+    ```bash
     calico-gen-bird-conf.sh <compute_node_ip> <route_reflector_ip> <bgp_as_number>
     ```
 
     And/or for IPv6 connectivity between compute hosts:
 
-    ```
+    ```bash
     calico-gen-bird6-conf.sh <compute_node_ipv4> <compute_node_ipv6> <route_reflector_ipv6> <bgp_as_number>
     ```
 
@@ -250,7 +250,7 @@ On each compute node, perform the following steps:
     Ensure that BIRD (and/or BIRD 6 for IPv6) is running and starts on
     reboot.
 
-    ```
+    ```bash
     service bird restart
     service bird6 restart
     chkconfig bird on
@@ -260,7 +260,7 @@ On each compute node, perform the following steps:
 1.  Create `/etc/calico/felix.cfg` with the following content, where `<ip>` is the IP
     address of the etcd server.
 
-    ```
+    ```conf
     [global]
     DatastoreType = etcdv3
     EtcdAddr = <ip>:2379

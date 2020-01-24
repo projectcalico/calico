@@ -58,7 +58,7 @@ Network policies apply to pods within a specific **namespace**. Policies can inc
 
 In the following example, incoming traffic to pods with label **color=blue** are allowed only if they come from a pod with **color=red**, on port **80**.
 
-```
+```yaml
 kind: NetworkPolicy
 apiVersion: networking.k8s.io/v1
 metadata:
@@ -86,7 +86,7 @@ To allow traffic from pods in a different namespace, use a namespace selector in
 
 In the following example, incoming traffic is allowed only if they come from a pod with label **color=red**, in a namespace with label **shape=square**, on port **80**.
 
-```
+```yaml
 kind: NetworkPolicy
 apiVersion: networking.k8s.io/v1
 metadata:
@@ -116,7 +116,7 @@ Create egress network policies to allow outbound traffic from pods.
 
 The following policy allows pod outbound traffic to other pods in the same namespace that match the pod selector. In the following example, outbound traffic is allowed only if they go to a pod with label **color=red**, on port **80**.
 
-```
+```yaml
 kind: NetworkPolicy
 apiVersion: networking.k8s.io/v1
 metadata:
@@ -141,7 +141,7 @@ Egress policies can also be used to allow traffic to specific IP addresses and C
 
 The following policy allows egress traffic to pods in CIDR, **172.18.0.0/24**.
 
-```
+```yaml
 kind: NetworkPolicy
 apiVersion: networking.k8s.io/v1
 metadata:
@@ -165,7 +165,7 @@ To ensure that all pods in the namespace are secure, a best practice is to creat
 
 The following network policy implements a default **deny-all** ingress and egress policy, which prevents all traffic to/from pods in the **policy-demo** namespace. Note that the policy applies to all pods in the policy-demo namespace, but does not explicitly allow any traffic. All pods are selected, but because the default changes when pods are selected by a network policy, the result is: **deny all ingress and egress traffic**. (Unless the traffic is allowed by another network policy).
 
-```
+```yaml
 kind: NetworkPolicy
 apiVersion: networking.k8s.io/v1
 metadata:

@@ -56,7 +56,7 @@ To interact directly with the {{site.prodname}} datastore, use the `calicoctl` c
 
 1. Download the `calicoctl` binary to a Linux host with access to Kubernetes.
 
-   ```
+   ```bash
    wget https://github.com/projectcalico/calicoctl/releases/download/v3.8.0/calicoctl
    chmod +x calicoctl
    sudo mv calicoctl /usr/local/bin/
@@ -64,7 +64,7 @@ To interact directly with the {{site.prodname}} datastore, use the `calicoctl` c
 
 1. Configure `calicoctl` to access Kubernetes.
 
-   ```
+   ```bash
    export KUBECONFIG=/path/to/your/kubeconfig
    export DATASTORE_TYPE=kubernetes
    ```
@@ -76,7 +76,7 @@ To interact directly with the {{site.prodname}} datastore, use the `calicoctl` c
 
 Verify `calicoctl` can reach your datastore by running
 
-```
+```bash
 calicoctl get nodes
 ```
 
@@ -95,7 +95,7 @@ Nodes are backed by the Kubernetes node object, so you should see names that mat
 
 Try to get an object backed by a custom resource
 
-```
+```bash
 calicoctl get ippools
 ```
 

@@ -25,7 +25,7 @@ kubectl create -f {{ "/security/tutorials/kubernetes-policy-demo/manifests/04-cl
 
 Wait for all the pods to enter `Running` state.
 
-```shell
+```bash
 kubectl get pods --all-namespaces --watch
 ```
 > Note that it may take several minutes to download the necessary Docker images for this demo.
@@ -94,6 +94,6 @@ To use {{site.prodname}} to enforce egress policy on Kubernetes pods, see [the a
 
 You can clean up the demo by deleting the demo Namespaces:
 
-```shell
+```bash
 kubectl delete ns client stars management-ui
 ```

@@ -32,14 +32,14 @@ These steps are detailed in this section.
 
 1.  Configure APT to use the {{site.prodname}} PPA:
 
-    ```
+    ```bash
     add-apt-repository ppa:project-calico/{{ ppa_repo_name }}
     ```
 
 1.  Add the official [BIRD](http://bird.network.cz/) PPA. This PPA contains
     fixes to BIRD that are not yet available in Ubuntu. To add the PPA, run:
 
-    ```
+    ```bash
     add-apt-repository ppa:cz.nic-labs/bird
     ```
 
@@ -51,7 +51,7 @@ These steps are detailed in this section.
 
 1. Update your package manager on each machine:
 
-    ```
+    ```bash
     apt-get update
     ```
 
@@ -118,7 +118,7 @@ On each compute node, perform the following steps:
 1.  Open `/etc/nova/nova.conf` and remove the line from the `[DEFAULT]`
     section that reads:
 
-    ```
+    ```bash
     linuxnet_interface_driver = nova.network.linux_net.LinuxOVSInterfaceDriver
     ```
 
@@ -128,20 +128,20 @@ On each compute node, perform the following steps:
 
     Restart nova compute.
 
-    ```
+    ```bash
     service nova-compute restart
     ```
 
 1.  If they're running, stop the Open vSwitch services:
 
-    ```
+    ```bash
     service openvswitch-switch stop
     service neutron-plugin-openvswitch-agent stop
     ```
 
     Then, prevent the services running if you reboot:
 
-    ```
+    ```bash
     sh -c "echo 'manual' > /etc/init/openvswitch-switch.override"
     sh -c "echo 'manual' > /etc/init/openvswitch-force-reload-kmod.override"
     sh -c "echo 'manual' > /etc/init/neutron-plugin-openvswitch-agent.override"
@@ -150,20 +150,20 @@ On each compute node, perform the following steps:
     Then, on your control node, run the following command to find the
     agents that you just stopped:
 
-    ```
+    ```bash
     neutron agent-list
     ```
 
     For each agent, delete them with the following command on your
     control node, replacing `<agent-id>` with the ID of the agent:
 
-    ```
+    ```bash
     neutron agent-delete <agent-id>
     ```
 
 1.  Install some extra packages:
 
-    ```
+    ```bash
     apt-get install -y neutron-common neutron-dhcp-agent nova-api-metadata
     ```
 
@@ -195,7 +195,7 @@ On each compute node, perform the following steps:
 
 1.  Install the `calico-compute` package:
 
-    ```
+    ```bash
     apt-get install -y calico-compute
     ```
 
@@ -210,13 +210,13 @@ On each compute node, perform the following steps:
 
     For IPv4 connectivity between compute hosts:
 
-    ```
+    ```bash
     calico-gen-bird-conf.sh <compute_node_ip> <route_reflector_ip> <bgp_as_number>
     ```
 
     And/or for IPv6 connectivity between compute hosts:
 
-    ```
+    ```bash
     calico-gen-bird6-conf.sh <compute_node_ipv4> <compute_node_ipv6> <route_reflector_ipv6> <bgp_as_number>
     ```
 
@@ -239,7 +239,7 @@ On each compute node, perform the following steps:
     -   Edit the upstart jobs /etc/init/bird.conf and bird6.conf (if
         you're using IPv6), and add the following script to it.
 
-        ```
+        ```bash
         pre-stop script
         PID=`status bird | egrep -oi '([0-9]+)$' | head -n1`
         kill -9 $PID
@@ -249,7 +249,7 @@ On each compute node, perform the following steps:
 1.  Create `/etc/calico/felix.cfg` with the following content, where `<ip>` is the IP
     address of the etcd server.
 
-    ```
+    ```conf
     [global]
     DatastoreType = etcdv3
     EtcdAddr = <ip>:2379

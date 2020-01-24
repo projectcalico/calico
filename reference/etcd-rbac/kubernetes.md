@@ -63,7 +63,7 @@ The pieces that would need updating are:
 
 - The `calico-config` ConfigMap lines with `etcd_ca`, `etcd_cert`, and
   `etcd_key` should be updated as follows
-  ```
+  ```yaml
   etcd_ca: "/calico-secrets/etcd-ca"
   etcd_cert: "/calico-secrets/etcd-cert"
   etcd_key: "/calico-secrets/etcd-key"

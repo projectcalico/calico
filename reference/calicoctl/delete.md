@@ -100,7 +100,7 @@ Description:
 
    Results indicate that 8 resources were successfully deleted.
 
-   ```bash
+   ```
    Successfully deleted 8 resource(s)
    ```
    {: .no-select-button}
@@ -113,7 +113,7 @@ Description:
 
    Results indicate success.
 
-   ```bash
+   ```
    Successfully deleted 1 'policy' resource(s)
    ```
    {: .no-select-button}

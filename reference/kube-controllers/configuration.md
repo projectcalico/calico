@@ -86,7 +86,7 @@ To enable the node controller when using `etcdv3`, perform the following two ste
 
 1. Add "node" to the list of enabled controllers in the environment for kube-controllers. For example: `ENABLED_CONTROLLERS=workloadendpoint,profile,policy,node`
 1. Configure {{site.nodecontainer}} with a Kubernetes node reference by adding the following snippet to the environment section of the {{site.noderunning}} daemon set.
-   ```
+   ```yaml
    - name: CALICO_K8S_NODE_REF
      valueFrom:
        fieldRef:

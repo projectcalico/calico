@@ -10,13 +10,13 @@ In this lab we will test the {{site.prodname}} cluster to demonstrate networking
 
 Create three busybox instances
 
-```
+```bash
 kubectl run pingtest --image=busybox --replicas=3 -- sleep infinity
 ```
 
 Check their IP addresses
 
-```
+```bash
 kubectl get pod -l run=pingtest -o wide
 ```
 
@@ -32,13 +32,13 @@ pingtest-b4b6f8cf-rn9nm   1/1     Running   0          3m28s   192.168.60.64    
 
 Note the IP addresses of the second two pods, then exec into the first one. For example
 
-```
+```bash
 kubectl exec -ti pingtest-b4b6f8cf-b5z78 sh
 ```
 
 From inside the pod, ping the other two pod IP addresses. For example
 
-```
+```bash
 ping 192.168.45.193 -c 4
 ```
 
@@ -61,7 +61,7 @@ round-trip min/avg/max = 0.442/0.865/1.847 ms
 
 From one of the nodes, verify that routes exist to each of the `pingtest` pods' IP addresses. For example
 
-```
+```bash
 ip route get 192.168.38.128
 ```
 
@@ -80,7 +80,7 @@ pod is scheduled on, as expected.
 
 Recall that we created two IP pools, but left one disabled.
 
-```
+```bash
 calicoctl get ippools -o wide
 ```
 
@@ -95,7 +95,7 @@ pool2   192.168.192.0/19   true   Never      Never       true       all()
 
 Enable the second pool.
 
-```
+```bash
 calicoctl apply -f - <<EOF
 apiVersion: projectcalico.org/v3
 kind: IPPool
@@ -112,7 +112,7 @@ EOF
 
 Create a pod, explicitly requesting an address from `pool2`
 
-```
+```bash
 kubectl apply -f - <<EOF
 apiVersion: v1
 kind: Pod
@@ -133,7 +133,7 @@ EOF
 
 Verify it has an IP address from `pool2`
 
-```
+```bash
 kubectl get pod pingtest-pool2 -o wide
 ```
 
@@ -146,7 +146,7 @@ pingtest-pool2   1/1     Running   0          75s   192.168.219.0   ip-172-31-45
 
 From one of the original pingtest pods, ping the IP address.
 
-```
+```bash
 ping 192.168.219.0 -c 4
 ```
 
@@ -166,7 +166,7 @@ round-trip min/avg/max = 0.459/0.495/0.524 ms
 
 ## Clean up
 
-```
+```bash
 kubectl delete deployment pingtest
 kubectl delete pod pingtest-pool2
 ```

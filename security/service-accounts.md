@@ -55,7 +55,7 @@ Configure unique Kubernetes service accounts for your applications.
 
 In the following example, ingress traffic is allowed from any workload whose service account matches the names **api-service** or **user-auth-service**.
 
-```
+```yaml
 apiVersion: projectcalico.org/v3
 kind: NetworkPolicy
 metadata:
@@ -76,7 +76,7 @@ spec:
 
 In the following example, ingress traffic is allowed from any workload whose service account matches the label selector, **app == web-frontend**.
 
-```
+```yaml
 apiVersion: projectcalico.org/v3
 kind: NetworkPolicy
 metadata:
@@ -97,7 +97,7 @@ Network policies can be applied to endpoints using selectors that match labels o
 
 In the following example, pods with an intern service account can communicate only with pods with service accounts labeled, `role: intern`.
 
-```
+```yaml
 apiVersion: projectcalico.org/v3
 kind: NetworkPolicy
 metadata:

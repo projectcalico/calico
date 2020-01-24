@@ -37,7 +37,7 @@ Description:
 
 ### Examples
 
-```
+```bash
 calicoctl ipam release --ip=192.168.1.2
 ```
 

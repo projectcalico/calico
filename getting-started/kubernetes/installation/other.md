@@ -35,7 +35,7 @@ complete the following steps.
    By default the replica count in the `Deployment` named `calico-typha` is set to 1. 
    You may want to consider changing this for large clusters or production environments.
    
-   ```
+   ```yaml
    apiVersion: apps/v1
    kind: Deployment
    metadata:

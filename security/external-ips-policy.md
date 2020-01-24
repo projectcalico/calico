@@ -41,7 +41,7 @@ A **global network set** resource is similar, but can be selected only by {{site
 
 In the following example, a {{site.prodname}} NetworkPolicy allows egress traffic from pods with the label **color: red**, if it goes to an IP address in the 192.0.2.0/24 CIDR block.
 
-```
+```yaml
 apiVersion: projectcalico.org/v3
 kind: NetworkPolicy
 metadata:
@@ -65,7 +65,7 @@ In this example, we use a {{site.prodname}} **GlobalNetworkSet** and reference i
 
 In the following example, a {{site.prodname}} **GlobalNetworkSet** blacklists the CIDR ranges 192.0.2.55/32 and 203.0.113.0/24:
 
-```
+```yaml
 apiVersion: projectcalico.org/v3
 kind: GlobalNetworkSet
 metadata:
@@ -80,7 +80,7 @@ spec:
 
 Next, we create two {{site.prodname}} **GlobalNetworkPolicy** objects. The first is a high “order” policy that allows traffic as a default for things that don’t match our second policy, which is low “order” and uses the **GlobalNetworkSet** label as a selector to deny ingress traffic (IP-blacklist in the previous step). In the label selector, we also include the term **!has(projectcalico.org/namespace)**, which prevents this policy from matching pods or NetworkSets that also have this label. To more quickly enforce the denial of forwarded traffic to the host at the packet level, use the **doNotTrack** and **applyOnForward** options.
 
-```
+```yaml
 apiVersion: projectcalico.org/v3
 kind: GlobalNetworkPolicy
 metadata:

@@ -19,7 +19,7 @@ directly with each other.
 
 On one of the nodes in your cluster where you have `calicoctl` installed, check the status.
 
-```
+```bash
 sudo calicoctl node status
 ```
 
@@ -63,13 +63,13 @@ Choose three nodes and perform the following for each of them.
 
 Save the node YAML.
 
-```
+```bash
 calicoctl get node <node name> -o yaml --export > node.yaml
 ```
 
 Edit the YAML to add
 
-```
+```yaml
 metadata:
   labels:
     calico-route-reflector: ""
@@ -80,7 +80,7 @@ spec:
 
 Reapply the YAML
 
-```
+```bash
 calicoctl apply -f node.yaml
 ```
 
@@ -88,7 +88,7 @@ calicoctl apply -f node.yaml
 
 Configure all non-reflector nodes to peer with all route reflectors
 
-```
+```bash
 calicoctl apply -f - <<EOF
 kind: BGPPeer
 apiVersion: projectcalico.org/v3
@@ -102,7 +102,7 @@ EOF
 
 Configure all route reflectors to peer with each other
 
-```
+```bash
 calicoctl apply -f - <<EOF
 kind: BGPPeer
 apiVersion: projectcalico.org/v3
@@ -116,8 +116,8 @@ EOF
 
 Disable the node-to-node mesh
 
-```
-calicoctl create -f - << EOF
+```bash
+calicoctl create -f - <<EOF
  apiVersion: projectcalico.org/v3
  kind: BGPConfiguration
  metadata:
@@ -130,7 +130,7 @@ EOF
 
 On a non-reflector node, you should now see only three peerings.
 
-```
+```bash
 sudo calicoctl node status
 ```
 
