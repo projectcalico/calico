@@ -5,11 +5,11 @@ description: Install Calico networking and network policy for on-premises deploy
 
 ### Big picture
 
-Install the {{site.prodname}} open source product that includes both networking and network policy for self-managed on-premises deployments.
+Install {{site.prodname}} to provide both networking and network policy for self-managed on-premises deployments.
 
 ### Value
 
-Designed to be used together, **{{site.prodname}} networking** and **network policy** are a powerful choice for a CaaS implementation. If you have the networking infrastructure and resources to manage Kubernetes on-premises, installing the full {{site.prodname}} product provides the most customization and control.
+**{{site.prodname}} networking** and **network policy** are a powerful choice for a CaaS implementation. If you have the networking infrastructure and resources to manage Kubernetes on-premises, installing the full {{site.prodname}} product provides the most customization and control.
 
 ### Features
 
@@ -22,7 +22,7 @@ This how-to guide uses the following {{site.prodname}} features:
 
 #### {{site.prodname}} manifests
 
-{{site.prodname}} provides manifests for easy customization. Each manifest contains the necessary resources for installing {{site.prodname}} on each node in your Kubernetes cluster. We recommend [Customizing Calico manifests ({{site.baseurl}}/getting-started/kubernetes/installation/config-options) before installing {{site.prodname}} on nodes; this avoids downstream manual updates to other {{site.prodname}} resources.
+{{site.prodname}} provides manifests for easy customization. Each manifest contains the necessary resources for installing {{site.prodname}} on each node in your Kubernetes cluster. You may want to [customize the {{site.prodname}} manifests]({{site.baseurl}}/getting-started/kubernetes/installation/config-options) before installing {{site.prodname}} on nodes.
 
 ### Before you begin...
 
@@ -30,20 +30,20 @@ This how-to guide uses the following {{site.prodname}} features:
   If you do not have a cluster, see [Using kubeadmin to create a cluster](http://kubernetes.io/docs/getting-started-guides/kubeadm/).
 - If you are using CoreOS, [make this required change to manifests]({{site.baseurl}}/reference/faq#are-the-calico-manifests-compatible-with-coreos).
 
-### How to 
+### How to
 
 - [Determine your datastore](#determine-your-datastore)
 - [Install Calico on nodes](#install-calico-on-nodes)
 
-#### Determine your datastore 
+#### Determine your datastore
 
-{{site.prodname}} supports both **Kubernetes API datastore (kdd)** and **etcd** datastores. The **Kubernetes API datastore** is preferred for on-premises deployments, and supports only Kubernetes workloads; **etcd** is the best datastore for hybrid deployments. 
+{{site.prodname}} supports both **Kubernetes API datastore (kdd)** and **etcd** datastores. The **Kubernetes API datastore** is recommended for on-premises deployments, and supports only Kubernetes workloads; **etcd** is the best datastore for hybrid deployments.
 
 #### Install Calico on nodes
 
-Based on your datastore and number of nodes, select a link below to install {{site.prodname}}. 
+Based on your datastore and number of nodes, select a link below to install {{site.prodname}}.
 
->**Note**: The option, **Kubernetes API datastore, more than 50 nodes** provides scaling using {{site.prodname}} [Typha daemon](https://github.com/projectcalico/typha). Typha is not included for etcd because etcd v3 already handles many clients so using Typha is redundant and not recommended.
+>**Note**: The option, **Kubernetes API datastore, more than 50 nodes** provides scaling using {{site.prodname}} [Typha daemon](https://github.com/projectcalico/typha). Typha is not included for etcd because etcd already handles many clients so using Typha is redundant and not recommended.
 {: .alert .alert-info}
 
 - [Install Calico with Kubernetes API datastore, 50 nodes or less](#install-calico-with-kubernetes-api-datastore-50-nodes-or-less)
@@ -58,7 +58,7 @@ Based on your datastore and number of nodes, select a link below to install {{si
    curl {{ "/manifests/calico.yaml" | absolute_url }} -O
    ```
 {% include content/pod-cidr-sed.md yaml="calico" %}
-1. Customize the manifest as necessary. 
+1. Customize the manifest as necessary.
 1. Apply the manifest using the following command.
 
    ```bash
@@ -87,14 +87,14 @@ Based on your datastore and number of nodes, select a link below to install {{si
     ```
     {: .no-select-button}
 
-    We recommend at least one replica for every 200 nodes, and no more than 
-    20 replicas. In production, we recommend a minimum of three replicas to reduce 
-    the impact of rolling upgrades and failures. The number of replicas should 
-    always be less than the number of nodes, otherwise rolling upgrades will stall. 
-    In addition, Typha only helps with scale if there are fewer Typha instances than 
-    there are nodes. 
-  
-    >**Warning**: If you set `typha_service_name` and set the Typha deployment replica 
+    We recommend at least one replica for every 200 nodes, and no more than
+    20 replicas. In production, we recommend a minimum of three replicas to reduce
+    the impact of rolling upgrades and failures. The number of replicas should
+    always be less than the number of nodes, otherwise rolling upgrades will stall.
+    In addition, Typha only helps with scale if there are fewer Typha instances than
+    there are nodes.
+
+    >**Warning**: If you set `typha_service_name` and set the Typha deployment replica
     >count to 0, Felix will not start.
     {: .alert .alert-info}
 
@@ -104,7 +104,7 @@ Based on your datastore and number of nodes, select a link below to install {{si
    ```bash
    kubectl apply -f calico.yaml
    ```
-   
+
 ##### Install Calico with etcd datastore
 
 1. Download the {{site.prodname}} networking manifest for etcd.
