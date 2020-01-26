@@ -272,6 +272,7 @@ github.com/projectcalico/confd v0.0.0-20200118080752-bb84a5701ee9 h1:y5M+eM0apx1
 github.com/projectcalico/confd v0.0.0-20200118080752-bb84a5701ee9/go.mod h1:YjFiJz98UPlIifKrdmSDIvU4vvNE1Dj46QpmwA8Hfj8=
 github.com/projectcalico/confd v0.0.0-20200122122632-4805fd0774f4 h1:ee5oiirwUBed7HzR0X4Wo9z+JB7zGUJDmy8puVAnv8g=
 github.com/projectcalico/confd v0.0.0-20200122122632-4805fd0774f4/go.mod h1:zcXQu34Sb+twcRUFHOlzGkIvExA/lNSIhaRs8OmVkdY=
+github.com/projectcalico/confd v0.0.0-20200124165649-76d9bdcffb31 h1:lZPYsIsKWXJxi9P+wkOe5VYswHf7JRbZ1xn0TEDQ63I=
 github.com/projectcalico/confd v0.0.0-20200124165649-76d9bdcffb31/go.mod h1:zcXQu34Sb+twcRUFHOlzGkIvExA/lNSIhaRs8OmVkdY=
 github.com/projectcalico/confd v1.0.1-0.20191205095203-7d9ff97583c8 h1:urptQIlg8+mxAjmDP6SHXEtAiQEdQKKAtOEM/wW7cpM=
 github.com/projectcalico/confd v1.0.1-0.20191205095203-7d9ff97583c8/go.mod h1:vGatme1Xz1T6ao/UjEehq53zz9zYf5tnhNfhlbbP5x0=
