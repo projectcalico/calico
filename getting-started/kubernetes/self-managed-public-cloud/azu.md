@@ -24,10 +24,10 @@ Managing your own Kubernetes cluster (as opposed to using a managed-Kubernetes s
 
 There are many ways to install and manage Kubernetes in Azure. This guide shows how to deploy a cluster with **Azure’s CNI plugin for networking** and **{{site.prodname}} for network policy enforcement**, using **aks-engine**. The advantage of this approach is that pods are assigned IP addresses associated with Azure Network Interfaces on worker nodes. The IPs come from the VNET network pool and therefore do not require NAT to access resources outside the Kubernetes cluster. However, there are other options that may work better for your environment.
 
-- [aks-engine for Azure networking and calico network policy](#kubernetes-operations-for-calico-networking-and-network-policy)
+- [aks-engine for Azure networking and calico network policy](#aks-engine-for-azure-networking-and-calico-network-policy)
 - [Other options and tools](#other-options-and-tools)
 
-#### aks-engine for Azure networking and {{site.prodname}} network policy
+#### aks-engine for Azure networking and Calico network policy
 
 [Install aks-engine](https://github.com/Azure/aks-engine/blob/master/docs/tutorials/quickstart.md#install-aks-engine) on your workstation.
 
