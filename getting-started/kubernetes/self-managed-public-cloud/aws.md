@@ -25,7 +25,7 @@ Kubernetes Operations (kops) is a cluster management tool that handles provision
 There are many ways to install and manage Kubernetes in AWS. Using Kubernetes Operations (kops) is a good default choice for most people, as it gives you access to all of {{site.prodname}}’s [flexible and powerful networking features]({{site.baseurl}}/networking). However, there are other options that may work better for your environment.
 
 - [Kubernetes Operations for Calico networking and network policy](#kubernetes-operations-for-calico-networking-and-network-policy)
-- [Other options and tools](#other-options-and-tools)(#other-option-and-tools)
+- [Other options and tools](#other-options-and-tools)
 
 #### Kubernetes Operation for Calico networking and network policy
 
