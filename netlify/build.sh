@@ -64,13 +64,17 @@ build_master
 
 echo "[INFO] building archives"
 build_archives
+mv _site/sitemap.xml _site/release-legacy-sitemap.xml
 
 if [ ! -z "$CURRENT_RELEASE" ]; then
     echo "[INFO] building current release"
     EXTRA_CONFIG=$(pwd)/netlify/_config_latest.yml build release-$CURRENT_RELEASE
+    mv _site/sitemap.xml _site/latest-sitemap.xml
 fi
 
 if [ ! -z "$CANDIDATE_RELEASE" ]; then
     echo "[INFO] building candidate release"
     build release-$CANDIDATE_RELEASE /$CANDIDATE_RELEASE
 fi
+
+mv _netlify/sitemap-index.xml _site/sitemap.xml
