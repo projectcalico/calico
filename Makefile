@@ -139,7 +139,7 @@ PUSH_NONMANIFEST_IMAGES=$(filter-out $(PUSH_MANIFEST_IMAGES),$(PUSH_IMAGES))
 DOCKER_CONFIG ?= $(HOME)/.docker/config.json
 
 GO_BUILD_VER?=v0.25
-CGO_BUILD_VER?=v0.25-deb-cgo-3
+CGO_BUILD_VER?=v0.25-deb-cgo-4
 # For building, we use the go-build image for the *host* architecture, even if the target is different
 # the one for the host should contain all the necessary cross-compilation tools
 # we do not need to use the arch since go-build:v0.15 now is multi-arch manifest
@@ -938,14 +938,19 @@ bin/bpf_debug.test: $(GENERATED_FILES)
 	$(DOCKER_RUN) $(CALICO_BUILD_CGO) go test $(BUILD_FLAGS) ./bpf/ut -c -gcflags="-N -l" -o $@
 
 .PHONY: bpf-ut
-bpf-ut: bin/bpf_ut.test bin/bpf.test image
+bpf-ut: bin/bpf_ut.test bin/bpf.test $(ALL_BPF_PROGS)
 	$(DOCKER_RUN) \
-		--privileged calico/felix:latest sh -c ' \
+		--privileged \
+		-e RUN_AS_ROOT=true \
+		$(CALICO_BUILD_CGO) sh -c ' \
 		mount bpffs /sys/fs/bpf -t bpf && \
 		cd /go/src/$(PACKAGE_NAME)/bpf/ && \
 		BPF_FORCE_REAL_LIB=true ../bin/bpf.test -test.v -test.run "$(FOCUS)"'
 	$(DOCKER_RUN) \
-		--privileged calico/felix:latest sh -c ' \
+		--privileged \
+		-e RUN_AS_ROOT=true \
+		-v `pwd`:/code \
+		$(CALICO_BUILD_CGO) sh -c ' \
 		mount bpffs /sys/fs/bpf -t bpf && \
 		cd /go/src/$(PACKAGE_NAME)/bpf/ut && \
 		../../bin/bpf_ut.test -test.v -test.run "$(FOCUS)"'
