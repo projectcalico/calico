@@ -16,11 +16,15 @@ package ut_test
 
 import (
 	"fmt"
+	"net"
 	"testing"
 
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
 	. "github.com/onsi/gomega"
+
+	"github.com/projectcalico/felix/bpf/nat"
+	"github.com/projectcalico/felix/bpf/routes"
 )
 
 func TestICMPttlExceeded(t *testing.T) {
@@ -50,7 +54,24 @@ func TestICMPttlExceededFromHEP(t *testing.T) {
 	iphdr := *ipv4Default
 	iphdr.TTL = 1
 
-	_, ipv4, _, _, pktBytes, err := testPacket(nil, &iphdr, nil, nil)
+	_, ipv4, l4, _, pktBytes, err := testPacket(nil, &iphdr, nil, nil)
+	Expect(err).NotTo(HaveOccurred())
+
+	udp := l4.(*layers.UDP)
+
+	err = natMap.Update(
+		nat.NewNATKey(ipv4.DstIP, uint16(udp.DstPort), uint8(ipv4.Protocol)).AsBytes(),
+		nat.NewNATValue(0, 1, 0, 0).AsBytes(),
+	)
+	Expect(err).NotTo(HaveOccurred())
+
+	natIP := net.IPv4(8, 8, 8, 8)
+	natPort := uint16(666)
+
+	err = natBEMap.Update(
+		nat.NewNATBackendKey(0, 0).AsBytes(),
+		nat.NewNATBackendValue(natIP, natPort).AsBytes(),
+	)
 	Expect(err).NotTo(HaveOccurred())
 
 	runBpfTest(t, "calico_from_host_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
@@ -65,6 +86,16 @@ func TestICMPttlExceededFromHEP(t *testing.T) {
 	})
 
 	runBpfTest(t, "calico_from_workload_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
+		// Insert a reverse route for the source workload.
+		rtKey := routes.NewKey(srcV4CIDR).AsBytes()
+		rtVal := routes.NewLocalWorkloadValue(1).AsBytes()
+		err = rtMap.Update(rtKey, rtVal)
+		defer func() {
+			err := rtMap.Delete(rtKey)
+			Expect(err).NotTo(HaveOccurred())
+		}()
+		Expect(err).NotTo(HaveOccurred())
+
 		res, err := bpfrun(pktBytes)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(res.RetvalStr()).To(Equal("TC_ACT_UNSPEC"), "expected program to return TC_ACT_UNSPEC")

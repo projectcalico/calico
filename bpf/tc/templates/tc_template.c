@@ -163,6 +163,17 @@ static CALI_BPF_INLINE int forward_or_drop(struct __sk_buff *skb,
 		rc = bpf_fib_lookup(skb, &fib_params, sizeof(fib_params), fwd->fib_flags);
 		if (rc == 0) {
 			CALI_DEBUG("FIB lookup succeeded\n");
+
+			/* Since we are going to short circuit the IP stack on
+			 * forward, check if TTL is still alive. If not, let the
+			 * IP stack handle it. It was approved by policy, so it
+			 * is safe.
+			 */
+			if ip_ttl_exceeded(ip_header) {
+				rc = TC_ACT_UNSPEC;
+				goto cancel_fib;
+			}
+
 			// Update the MACs.  NAT may have invalidated pointer into the packet so need to
 			// revalidate.
 			if ((void *)(long)skb->data + sizeof(struct ethhdr) > (void *)(long)skb->data_end) {
@@ -189,6 +200,8 @@ static CALI_BPF_INLINE int forward_or_drop(struct __sk_buff *skb,
 			rc = TC_ACT_UNSPEC;
 		}
 	}
+
+cancel_fib:
 #endif /* FIB_ENABLED */
 
 	if (CALI_F_TO_HOST) {
@@ -318,29 +331,6 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 	}
 
 	ip_header = skb_iphdr(skb);
-
-	/* First thing to check "to the host" is if TTL is still alive and if we
-	 * should process the packet at all.
-	 */
-	if (CALI_F_TO_HOST && !CALI_F_TUNNEL && ip_header->ttl <= 1) {
-		/* we silently drop the packet if things go wrong */
-
-		/* XXX we should check if it is broadcast or multicast and not respond */
-
-		/* do not respond to IP fragments except the first */
-		if (ip_frag_no(ip_header)) {
-			goto deny;
-		}
-
-		if (icmp_v4_ttl_exceeded(skb)) {
-			goto deny;
-		}
-
-		/* we need to allow the reponse for the IP stack to route it back.
-		 * XXX we might want to send it back the same iface
-		 */
-		goto allow;
-	}
 
 	if (is_vxlan_tunnel(ip_header)) {
 		/* decap on host ep only if directly for the node */
@@ -592,6 +582,23 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct __sk_buff *skb,
 	bool encap_needed = false;
 	uint32_t fib_flags = 0;
 
+	/* XXX we cannot pass the related ICMP after NATing back yet, so we need
+	 * to act here, we know we are forwarding.
+	 */
+	CALI_DEBUG("ip->ttl %d\n", ip_header->ttl);
+	if (ip_ttl_exceeded(ip_header)) {
+		switch (state->ct_result.rc){
+		case CALI_CT_NEW:
+			if (nat_dest) {
+				goto icmp_ttl_exceeded;
+			}
+			break;
+		case CALI_CT_ESTABLISHED_DNAT:
+		case CALI_CT_ESTABLISHED_SNAT:
+			goto icmp_ttl_exceeded;
+		}
+	}
+
 	switch (state->ct_result.rc){
 	case CALI_CT_NEW:
 		switch (state->pol_rc) {
@@ -785,6 +792,32 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct __sk_buff *skb,
 
 	CALI_INFO("We should never fall through here\n");
 	goto deny;
+
+icmp_ttl_exceeded:
+	if (skb_too_short(skb)) {
+		reason = CALI_REASON_SHORT;
+		CALI_DEBUG("Too short\n");
+		goto deny;
+	}
+
+	ip_header = skb_iphdr(skb);
+	/* we silently drop the packet if things go wrong */
+
+	/* XXX we should check if it is broadcast or multicast and not respond */
+
+	/* do not respond to IP fragments except the first */
+	if (ip_frag_no(ip_header)) {
+		goto deny;
+	}
+
+	if (icmp_v4_ttl_exceeded(skb)) {
+		goto deny;
+	}
+
+	/* we need to allow the reponse for the IP stack to route it back.
+	 * XXX we might want to send it back the same iface
+	 */
+	goto allow;
 
 icmp_too_big:
 	if (skb_shorter(skb, ETH_IPV4_UDP_SIZE) || icmp_v4_too_big(skb)) {

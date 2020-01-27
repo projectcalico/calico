@@ -194,4 +194,6 @@ static CALI_BPF_INLINE void ip_dec_ttl(struct iphdr *ip)
 	ip->check = (__be16) (sum + (sum >> 16));
 }
 
+#define ip_ttl_exceeded(ip) (CALI_F_TO_HOST && !CALI_F_TUNNEL && (ip)->ttl <= 1)
+
 #endif /* __CALI_BPF_H__ */
