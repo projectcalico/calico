@@ -32,7 +32,7 @@ There are many ways to install and manage Kubernetes in AWS. Using kubeadm is a 
 
 You will need at least one VM to serve as a control plane node and one or more worker nodes. (It is possible to have control plane nodes also act as workers. This is not recommended in most cases and not covered by this guide.)  See [requirements]({{site.baseurl}}/getting-started/kubernetes/requirements) for specific OS requirements for these VMs.
 
-The following worked example creates a single control node and three workers on a dedicated virtual private network (VPC). Adjust the example as needed for your requirements. Consider a dedicated infrastructure management tool like [Terraform](https://docs.google.com/document/d/1-Vm8tdxc9GJ4JVXwVrHqQv96jU1eeadQeZyCDdU2bV4/edit#heading=h.876rtqebbyno)for managing cloud resources. (This example is adapted from [Kubernetes the Hard Way](https://github.com/kelseyhightower/kubernetes-the-hard-way/blob/master/docs/03-compute-resources.md).)
+The following worked example creates a single control node and three workers on a dedicated virtual private network (VPC). Adjust the example as needed for your requirements. Consider a dedicated infrastructure management tool like [Terraform](https://docs.google.com/document/d/1-Vm8tdxc9GJ4JVXwVrHqQv96jU1eeadQeZyCDdU2bV4/edit#heading=h.876rtqebbyno) for managing cloud resources. (This example is adapted from [Kubernetes the Hard Way](https://github.com/kelseyhightower/kubernetes-the-hard-way/blob/master/docs/03-compute-resources.md).)
 
 **Create the VPC**
 
@@ -112,7 +112,7 @@ sudo apt install -y apt-transport-https curl
 
 ##### Install Kubernetes and create the cluster
 
-Install `kubeadm`,` kubelet`, and `kubectl` on each node (see kubeadm docs for more details).
+Install `kubeadm`,` kubelet`, and `kubectl` on each node (see [kubeadm docs](https://kubernetes.io/docs/setup/production-environment/tools/kubeadm/install-kubeadm/#installing-kubeadm-kubelet-and-kubectl) for more details).
 
 ```
 curl -s https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo apt-key add -
@@ -184,7 +184,7 @@ Set your kops cluster configuration to:
 networking:
   amazonvpc: {}
 ```
-Then install Calico for network policy only after the cluster is up and ready.
+Then install {{site.prodname}} for network policy only after the cluster is up and ready.
 
 ##### Kubespray
 
@@ -193,4 +193,4 @@ Then install Calico for network policy only after the cluster is up and ready.
 ### Above and beyond
 
 - [Install and configure calicoctl]({{site.baseurl}}/getting-started/calicoctl/install)
-- [Try out Calico network policy]({{site.baseurl}}/security/calico-network-policy)
+- [Try out {{site.prodname}} network policy]({{site.baseurl}}/security/calico-network-policy)
