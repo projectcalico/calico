@@ -1,6 +1,6 @@
 ---
 title: Self-managed Kubernetes in Amazon Web Services (AWS)
-description: Use Calico with a self-managed Kubernetes clsuter in Amazon Web Services.
+description: Use Calico with a self-managed Kubernetes cluster in Amazon Web Services.
 ---
 
 ### Big picture
