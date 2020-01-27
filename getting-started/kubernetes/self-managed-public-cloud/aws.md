@@ -27,7 +27,7 @@ There are many ways to install and manage Kubernetes in AWS. Using Kubernetes Op
 - [Kubernetes Operations for Calico networking and network policy](#kubernetes-operations-for-calico-networking-and-network-policy)
 - [Other options and tools](#other-options-and-tools)
 
-#### Kubernetes Operation for Calico networking and network policy
+#### Kubernetes Operations for Calico networking and network policy
 
 To use kops to create a cluster with {{site.prodname}} networking and network policy:
 
