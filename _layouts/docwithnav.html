@@ -51,6 +51,9 @@ The code is a little roundabout for a few reasons:
     {% endif %}
     <link href="https://www.projectcalico.org/wp-content/themes/dante/css/font-awesome.min.css" rel="stylesheet">
     <link href="https://www.projectcalico.org/wp-content/plugins/wpfront-notification-bar/css/wpfront-notification-bar.css?ver=1.7.1" rel="stylesheet" type="text/css" media="all">
+    <!-- Notification Bar -->
+    <link href="https://www.projectcalico.org/wp-content/plugins/wpfront-notification-bar/css/wpfront-notification-bar.css?ver=1.7.1" rel="stylesheet" type="text/css" media="all">
+    <!-- End Notification Bar -->
     <link rel="stylesheet" href="{{site.baseurl}}/css/instantsearch/instantsearch.min.css"/>
     <link rel="stylesheet" href="{{site.baseurl}}/css/style.css"/>
     <script src="{{site.baseurl}}/js/jquery-2.2.0.min.js"></script>
@@ -81,6 +84,23 @@ The code is a little roundabout for a few reasons:
     {% seo %}
   </head>
   <body>
+    <!-- Notification Bar -->
+    <div id="wpfront-notification-bar-spacer" style="display: block; top: 0px; height: 66px;">
+      <div id="wpfront-notification-bar-open-button" class="top wpfront-bottom-shadow" style="top: 0px; position: fixed; display: none;"></div>
+        <div id="wpfront-notification-bar" class="wpfront-fixed " style="top: 0px; height: 66px; position: fixed; visibility: visible; background-color: #004078;">
+            <table border="0" cellspacing="0" cellpadding="0" style="height: 100%;">
+                <tbody style="height: 100%;">
+                    <tr style="height: 100%;">
+                        <td>
+                            <div class="wpfront-message" style="font-size: 14px; font-family: Helvetica, Arial, Helvetica, Tahoma, sans-serif; font-weight: 100;">Looking for Calico training or design workshops? Learn how Calico Essentials can accelerate your project.</div>
+                            <div><a class="wpfront-button" href="https://www.tigera.io/tigera-products/calico-essentials/?utm_source=projectcalico.com&utm_medium=website&utm_campaign=calico-essentials&utm_content=calico-essentials-banner" target="_blank" style="background: #ff6f22; color: #fff; display: inline-block; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2); white-space: nowrap; font-size: 13px; font-weight: bold; text-align: center; text-decoration: none; text-shadow: 0 1px 1px rgba(0, 0, 0, 0.3); cursor: pointer; padding: 4px 12px; margin-left: 5px; border-radius: 2px; -webkit-border-radius: 2px; -moz-border-radius: 2px; line-height: normal;">Learn More</a></div>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+    <!-- End Notification Bar -->
     <!-- Google Tag Manager (noscript) -->
     <noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-5FQ2QV4" height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
     <!-- End Google Tag Manager (noscript) -->
