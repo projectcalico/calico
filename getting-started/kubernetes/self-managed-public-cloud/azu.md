@@ -22,9 +22,9 @@ Managing your own Kubernetes cluster (as opposed to using a managed-Kubernetes s
 
 ### How to
 
-There are many ways to install and manage Kubernetes in Azure. This guide shows how to deploy a cluster with **Azure’s CNI plugin for networking** and **{{site.prodname}} for network policy enforcement**, using aks-engine. The advantage of this approach is that pods are assigned IP addresses associated with Azure Network Interfaces on worker nodes. The IPs come from the VNET network pool and therefore do not require NAT to access resources outside the Kubernetes cluster. However, there are other options that may work better for your environment.
+There are many ways to install and manage Kubernetes in Azure. This guide shows how to deploy a cluster with **Azure’s CNI plugin for networking** and **{{site.prodname}} for network policy enforcement**, using **aks-engine**. The advantage of this approach is that pods are assigned IP addresses associated with Azure Network Interfaces on worker nodes. The IPs come from the VNET network pool and therefore do not require NAT to access resources outside the Kubernetes cluster. However, there are other options that may work better for your environment.
 
-- [aks-engine for Azure networking and {{site.prodname}} network policy](#kubernetes-operations-for-calico-networking-and-network-policy)
+- [aks-engine for Azure networking and calico network policy](#kubernetes-operations-for-calico-networking-and-network-policy)
 - [Other options and tools](#other-options-and-tools)
 
 #### aks-engine for Azure networking and {{site.prodname}} network policy
@@ -34,10 +34,10 @@ There are many ways to install and manage Kubernetes in Azure. This guide shows 
 Before deploying, customize your cluster definition to use {{site.prodname}} for network policy.  Add or modify the `kubernetesConfig` section to include the following (see the [aks-engine documentation](https://github.com/Azure/aks-engine/blob/master/docs/topics/clusterdefinitions.md#kubernetesconfig) for other Kubernetes configuration settings).
 
 ```
-     "kubernetesConfig": {
-        "networkPlugin": "azure",
-        "networkPolicy": "calico"
-      }
+"kubernetesConfig": {
+   "networkPlugin": "azure",
+   "networkPolicy": "calico"
+ }
 ```
  
 Or, start with this [example cluster definition](https://github.com/Azure/aks-engine/blob/master/examples/networkpolicy/kubernetes-calico-azure.json) with these value already set, and customize to meet your needs. 
