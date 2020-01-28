@@ -37,7 +37,7 @@ var node2ip = net.IPv4(10, 10, 0, 2)
 func TestNATPodPodXNode(t *testing.T) {
 	RegisterTestingT(t)
 
-	_, ipv4, l4, payload, pktBytes, err := testPacketUDPDefault()
+	eth, ipv4, l4, payload, pktBytes, err := testPacketUDPDefault()
 	Expect(err).NotTo(HaveOccurred())
 	udp := l4.(*layers.UDP)
 
@@ -93,21 +93,18 @@ func TestNATPodPodXNode(t *testing.T) {
 		pktR := gopacket.NewPacket(res.dataOut, layers.LayerTypeEthernet, gopacket.Default)
 		fmt.Printf("pktR = %+v\n", pktR)
 
-		ipv4L := pktR.Layer(layers.LayerTypeIPv4)
-		Expect(ipv4L).NotTo(BeNil())
-		ipv4R := ipv4L.(*layers.IPv4)
-		Expect(ipv4R).To(layersMatchFields(ipv4, "DstIP", "Checksum"))
-		Expect(ipv4R.DstIP.String()).To(Equal(natIP.String()))
+		ipv4Nat := *ipv4
+		ipv4Nat.DstIP = natIP
 
-		udpL := pktR.Layer(layers.LayerTypeUDP)
-		Expect(udpL).NotTo(BeNil())
-		udpR := udpL.(*layers.UDP)
-		Expect(udpR.SrcPort).To(Equal(udp.SrcPort))
-		Expect(udpR.DstPort).To(Equal(layers.UDPPort(natPort)))
+		udpNat := *udp
+		udpNat.DstPort = layers.UDPPort(natPort)
 
-		payloadL := pktR.ApplicationLayer()
-		Expect(payloadL).NotTo(BeNil())
-		Expect(payload).To(Equal(payloadL.Payload()))
+		// created the expected packet after NAT, with recalculated csums
+		_, _, _, _, resPktBytes, err := testPacket(eth, &ipv4Nat, &udpNat, payload)
+		Expect(err).NotTo(HaveOccurred())
+
+		// expect them to be the same
+		Expect(res.dataOut).To(Equal(resPktBytes))
 
 		natedPkt = res.dataOut
 	})

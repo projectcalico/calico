@@ -123,10 +123,14 @@ static CALI_BPF_INLINE int skb_nat_l4_csum_ipv4(struct __sk_buff *skb, size_t of
 						__be32 ip_from, __be32 ip_to,
 						__u16 port_from, __u16 port_to)
 {
-	int ret;
+	int ret = 0;
 
-	ret = bpf_l4_csum_replace(skb, off, ip_from, ip_to, BPF_F_PSEUDO_HDR | 4);
-	ret |= bpf_l4_csum_replace(skb, off, port_from, port_to, 2);
+	if (ip_from != ip_to) {
+		ret = bpf_l4_csum_replace(skb, off, ip_from, ip_to, BPF_F_PSEUDO_HDR | 4);
+	}
+	if (port_from != port_to) {
+		ret |= bpf_l4_csum_replace(skb, off, port_from, port_to, 2);
+	}
 
 	return ret;
 }
@@ -654,8 +658,8 @@ static CALI_BPF_INLINE int calico_tc_skb_accepted(
 		}
 
 		if (csum_offset) {
-			res = skb_nat_l4_csum_ipv4(skb, csum_offset, state->ip_src, state->ct_result.nat_ip,
-					host_to_be16(state->sport), host_to_be16(state->ct_result.nat_port));
+			res = skb_nat_l4_csum_ipv4(skb, csum_offset, state->ip_dst, state->post_nat_ip_dst,
+					host_to_be16(state->dport), host_to_be16(state->post_nat_dport));
 		}
 
 		res |= bpf_l3_csum_replace(skb, ip_csum_offset, state->ip_dst, state->post_nat_ip_dst, 4);
