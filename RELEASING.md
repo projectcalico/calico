@@ -191,8 +191,6 @@ at the same time that subcomponent release branches are cut, often well before t
 This section describes how to create a new major or minor release. It assumes that the release branch has already been created
 as described in the section above. 
 
-- Move current release to the archives
-
 1. Checkout the previously created release branch.
 
    ```
