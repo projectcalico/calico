@@ -1,6 +1,5 @@
 ---
 title: Kubernetes policy, demo
-redirect_from: latest/security/tutorials/kubernetes-policy-demo/kubernetes-demo
 description: See how applying Kubernetes policy allows and denies connections in this visual demo. 
 canonical_url: 'https://docs.projectcalico.org/v3.9/security/tutorials/kubernetes-policy-demo/kubernetes-demo'
 ---

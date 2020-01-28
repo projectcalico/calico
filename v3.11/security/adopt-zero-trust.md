@@ -1,6 +1,5 @@
 ---
 title: Adopt a zero trust network model for security
-redirect_from: latest/security/adopt-zero-trust
 description: Best practices to adopt a zero trust network model to secure workloads and hosts. Learn 5 key requirements to control network access for cloud-native strategy.
 ---
 

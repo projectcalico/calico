@@ -1,6 +1,5 @@
 ---
 title: calicoctl node status
-redirect_from: latest/reference/calicoctl/node/status
 canonical_url: 'https://docs.projectcalico.org/v3.9/reference/calicoctl/node/status'
 ---
 

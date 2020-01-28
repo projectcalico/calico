@@ -1,6 +1,5 @@
 ---
 title: Use a specific IP address with a pod
-redirect_from: latest/networking/use-specific-ip
 Description: Specify the IP address for a pod instead of allowing Calico to choose automatically.
 ---
 

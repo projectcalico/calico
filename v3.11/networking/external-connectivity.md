@@ -1,6 +1,5 @@
 ---
 title: External connectivity
-redirect_from: latest/networking/external-connectivity
 description: Connect Calico endpoints and hosts outside the cluster.
 canonical_url: 'https://docs.projectcalico.org/v3.9/networking/external-connectivity'
 ---

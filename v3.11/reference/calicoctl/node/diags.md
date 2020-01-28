@@ -1,6 +1,5 @@
 ---
 title: calicoctl node diags
-redirect_from: latest/reference/calicoctl/node/diags
 canonical_url: 'https://docs.projectcalico.org/v3.9/reference/calicoctl/node/diags'
 ---
 

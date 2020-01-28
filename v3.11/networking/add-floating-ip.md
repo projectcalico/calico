@@ -1,6 +1,5 @@
 ---
 title: Add a floating IP to a pod
-redirect_from: latest/networking/add-floating-ip
 Description: Configure one or more floating IPs to use as additional IP addresses for reaching a Kubernetes pod.
 ---
 

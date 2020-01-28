@@ -1,6 +1,5 @@
 ---
 title: Setting up etcd certificates for RBAC
-redirect_from: latest/reference/etcd-rbac/index
 description: Protect your etcd datastore by restricting operation permissions.
 canonical_url: 'https://docs.projectcalico.org/v3.9/reference/etcd-rbac/index'
 ---

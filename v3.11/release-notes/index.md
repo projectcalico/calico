@@ -1,6 +1,5 @@
 ---
 title: Release notes
-redirect_from: latest/release-notes/index
 description: What's new, and why features provide value for upgrading.
 canonical_url: 'https://docs.projectcalico.org/v3.9/release-notes/index'
 ---
