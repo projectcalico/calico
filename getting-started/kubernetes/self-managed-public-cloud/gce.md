@@ -174,21 +174,13 @@ kubectl apply -f calico.yaml
 
 #### Other tools and options
 
-##### Amazon VPI CNI plugin
+##### Terraform
 
-An alternative to using {{site.prodname}} for both networking and network policy, is to use the Amazon’s VPC CNI plugin for networking and {{site.prodname}} for network policy. The advantage of this approach is that pods are assigned IP addresses associated with Elastic Network Interfaces on worker nodes. The IPs come from the VPC network pool and therefore do not require NAT to access resources outside the Kubernetes cluster.
-
-Set your kops cluster configuration to:
-
-```
-networking:
-  amazonvpc: {}
-```
-Then install {{site.prodname}} for network policy only after the cluster is up and ready.
+You may have noticed that the bulk of the above instructions are about provisioning the Google Cloud resources for the cluster and installing Kubernetes. Terraform is a tool for automating infrastructure provisioning using declarative configurations.  You can also go as far as automating the install of Docker, kubeadm, and Kubernetes using Terraform “provisioners.” See the Terraform documentation for more details.
 
 ##### Kubespray
 
-[Kubespray](https://kubespray.io/) is a tool for provisioning and managing Kubernetes clusters with support for multiple clouds including Amazon Web Services. {{site.prodname}} is the default networking provider, providing both networking and network policy. You can explicitly set the `kube_network_plugin` variable to `calico`, or not (given it is the default). See the [Kubespray docs](https://kubespray.io/#/?id=network-plugins) for more details.
+[Kubespray](https://kubespray.io/) is a tool for provisioning and managing Kubernetes clusters with support for multiple clouds including Google Compute Engine.  Calico is the default networking provider, or you can set the `kube_network_plugin` variable to `calico`. See the Kubespray docs for more details. See the [Kubespray docs](https://kubespray.io/#/?id=network-plugins) for more details.
 
 ### Above and beyond
 
