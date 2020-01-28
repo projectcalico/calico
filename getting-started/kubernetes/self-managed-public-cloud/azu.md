@@ -22,9 +22,9 @@ Managing your own Kubernetes cluster (as opposed to using a managed-Kubernetes s
 
 ### How to
 
-There are many ways to install and manage Kubernetes in Azure. This guide shows how to deploy a cluster with **Azure’s CNI plugin for networking** and **{{site.prodname}} for network policy enforcement**, using **aks-engine**. The advantage of this approach is that pods are assigned IP addresses associated with Azure Network Interfaces on worker nodes. The IPs come from the VNET network pool and therefore do not require NAT to access resources outside the Kubernetes cluster. However, there are other options that may work better for your environment.
+There are many ways to install and manage Kubernetes in Azure. This guide shows how to use **aks-engine** to deploy a cluster with **Azure’s CNI plugin for networking** and **{{site.prodname}} for network policy enforcement**. The advantage of this approach is that pods are assigned IP addresses associated with Azure Network Interfaces on worker nodes. The IPs come from the VNET network pool and therefore do not require NAT to access resources outside the Kubernetes cluster. However, there are other options that may work better for your environment.
 
-- [aks-engine for Azure networking and calico network policy](#aks-engine-for-azure-networking-and-calico-network-policy)
+- [aks-engine for Azure networking and Calico network policy](#aks-engine-for-azure-networking-and-calico-network-policy)
 - [Other options and tools](#other-options-and-tools)
 
 #### aks-engine for Azure networking and Calico network policy
@@ -42,7 +42,7 @@ Before deploying, customize your cluster definition to use {{site.prodname}} for
  
 Or, start with this [example cluster definition](https://github.com/Azure/aks-engine/blob/master/examples/networkpolicy/kubernetes-calico-azure.json) with these value already set, and customize to meet your needs. 
 
-Then, [follow the ask-engine documentation to deploy your cluster](https://github.com/Azure/aks-engine/blob/master/docs/tutorials/deploy.md), passing your cluster definition to `ask-engine deploy` via the `-m` flag. 
+Then, [follow the ask-engine documentation to deploy your cluster](https://github.com/Azure/aks-engine/blob/master/docs/tutorials/deploy.md), passing your cluster definition to `aks-engine deploy` via the `-m` flag. 
 
 #### Other options and tools
 
@@ -50,7 +50,7 @@ Then, [follow the ask-engine documentation to deploy your cluster](https://githu
 
 You can also deploy {{site.prodname}} for both networking and policy enforcement. In this mode, {{site.prodname}} uses a VXLAN-based overlay network that masks the IP addresses of the pods from the underlying Azure VNET. This can be useful in large deployments or when running multiple clusters and IP address space is a big concern.
 
-Unfortunately, aks-engine does not support this mode, so you will have to use a different tool chain to install and manage the cluster. Some options:
+Unfortunately, aks-engine does not support this mode, so you must use a different tool chain to install and manage the cluster. Some options:
 
 - Use [Terraform](https://docs.google.com/document/d/1CsOj3smZQHrmu0jbY7hg1ShXfcTswYm0Qj4BrFdw5qs/edit#heading=h.876rtqebbyno) to provision the Azure networks and VMs, then [kubeadm](https://docs.google.com/document/d/1CsOj3smZQHrmu0jbY7hg1ShXfcTswYm0Qj4BrFdw5qs/edit#heading=h.imdkqm7uo7st) to install the Kubernetes cluster.
 - Use [Kubespray](https://docs.google.com/document/d/1CsOj3smZQHrmu0jbY7hg1ShXfcTswYm0Qj4BrFdw5qs/edit#heading=h.1v8hzmk8q1x5)
@@ -61,11 +61,11 @@ Terraform is a tool for automating infrastructure provisioning using declarative
 
 ##### kubeadm
 
-[kubeadm](https://kubernetes.io/docs/setup/production-environment/tools/kubeadm/) is a command line tool for bootstrapping a Kubernetes cluster on top of already-provisioned compute resources, like VMs in a cloud or bare metal hosts. Unlike aks-engine which handles provisioning cloud resources, installing Kubernetes, and installing Calico, kubeadm only handles the second step of installing Kubernetes. You should proceed to install Calico after completing kubeadm install. 
+[kubeadm](https://kubernetes.io/docs/setup/production-environment/tools/kubeadm/) is a command line tool for bootstrapping a Kubernetes cluster on top of already-provisioned compute resources, like VMs in a cloud or bare metal hosts. Unlike aks-engine which handles provisioning cloud resources, installing Kubernetes, and installing {{site.prodname}}, kubeadm only handles the second step of installing Kubernetes. You should proceed to install {{site.prodname}} after completing kubeadm install. 
 
 ##### Kubespray
 
-Kubespray is a tool for provisioning and managing Kubernetes clusters with support for multiple clouds including Azure.  Calico is the default networking provider, or you can set the `kube_network_plugin` variable to `calico`. See the [Kubespray docs](https://kubespray.io/#/?id=network-plugins) for more details.
+Kubespray is a tool for provisioning and managing Kubernetes clusters with support for multiple clouds including Azure.  {{site.prodname}} is the default networking provider, or you can set the `kube_network_plugin` variable to `calico`. See the [Kubespray docs](https://kubespray.io/#/?id=network-plugins) for more details.
 
 ### Above and beyond
 
