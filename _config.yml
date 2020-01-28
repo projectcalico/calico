@@ -5,7 +5,8 @@
 permalink:     /:title.html
 
 plugins:
-  - jekyll-redirect-from
+  # disable the jekyll redirect plugin so we instead rely on netlify http redirects
+  # - jekyll-redirect-from
   - jekyll-seo-tag
   - jekyll-sitemap
 
