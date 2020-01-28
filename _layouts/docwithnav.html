@@ -209,7 +209,7 @@ The code is a little roundabout for a few reasons:
               <!-- END TOP DOCUMENTATION PAGE NAVBAR -->
               {% include nav-breadcrumbs.html content=edit_page %}
 
-              {% if site.is_latest %}
+              {% unless site.is_latest %}
               {% include version_warning.html %}
               {% endif %}
 
