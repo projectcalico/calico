@@ -1,6 +1,5 @@
 ---
 title: Migrate from one IP pool to another
-redirect_from: latest/networking/migrate-pools
 Description: Migrate pods from one IP pool to another on a running cluster without network disruption.
 ---
 

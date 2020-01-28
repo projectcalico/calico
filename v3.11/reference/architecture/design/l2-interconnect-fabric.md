@@ -1,6 +1,5 @@
 ---
 title: Calico over Ethernet fabrics
-redirect_from: latest/reference/architecture/design/l2-interconnect-fabric
 canonical_url: 'https://docs.projectcalico.org/master/reference/architecture/design/l2-interconnect-fabric'
 ---
 

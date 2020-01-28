@@ -1,6 +1,5 @@
 ---
 title: Host endpoints
-redirect_from: latest/reference/host-endpoints/index
 description: Secure the network interfaces of hosts 
 canonical_url: 'https://docs.projectcalico.org/v3.9/reference/host-endpoints/index'
 ---

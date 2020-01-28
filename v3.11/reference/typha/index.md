@@ -1,6 +1,5 @@
 ---
 title: Typha overview
-redirect_from: latest/reference/typha/index
 description: Use the Calico Typha daemon to increase scale and reduce impact on the datastore
 canonical_url: 'https://docs.projectcalico.org/v3.9/reference/typha/index'
 ---

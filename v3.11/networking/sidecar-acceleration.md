@@ -1,6 +1,5 @@
 ---
 title: Accelerate Istio network performance
-redirect_from: latest/networking/sidecar-acceleration
 Description: Use Calico to accelerate network performance of routing network traffic using Istio Envoy sidecar using eBPF.
 ---
 

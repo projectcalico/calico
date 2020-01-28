@@ -1,6 +1,5 @@
 ---
 title: Apply policy to forwarded traffic
-redirect_from: latest/security/host-forwarded-traffic
 description: Learn how to apply Calico network policy to traffic being forward by hosts acting as routers or NAT gateways.
 ---
 

@@ -1,6 +1,5 @@
 ---
 title: Advertise Kubernetes service IP addresses
-redirect_from: latest/networking/advertise-service-ips
 Description: Configure Calico to advertise Kubernetes service cluster IPs and external IPs outside the cluster using BGP.
 ---
 

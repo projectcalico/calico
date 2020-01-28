@@ -1,6 +1,5 @@
 ---
 title: Enable dual stack
-redirect_from: latest/networking/dual-stack
 canonical_url: 'https://docs.projectcalico.org/master/networking/dual-stack'
 ---
 

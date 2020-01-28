@@ -1,6 +1,5 @@
 ---
 title: Google Kubernetes Engine (GKE)
-redirect_from: latest/getting-started/kubernetes/managed-public-cloud/gke
 ---
 
 ### Big picture

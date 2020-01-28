@@ -1,6 +1,5 @@
 ---
 title: IP addressing and connectivity
-redirect_from: latest/networking/openstack/connectivity
 description: Set up OpenStack networking for Calico
 canonical_url: 'https://docs.projectcalico.org/v3.9/networking/openstack/connectivity'
 ---

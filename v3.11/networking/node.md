@@ -1,6 +1,5 @@
 ---
 title: Configuring a node IP address and subnet
-redirect_from: latest/networking/node
 description: Describes how to configure IP autodetection
 canonical_url: 'https://docs.projectcalico.org/v3.9/networking/node'
 ---
