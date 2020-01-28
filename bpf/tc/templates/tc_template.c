@@ -121,15 +121,16 @@ static CALI_BPF_INLINE struct iphdr *skb_iphdr(struct __sk_buff *skb)
 
 static CALI_BPF_INLINE int skb_nat_l4_csum_ipv4(struct __sk_buff *skb, size_t off,
 						__be32 ip_from, __be32 ip_to,
-						__u16 port_from, __u16 port_to)
+						__u16 port_from, __u16 port_to,
+						uint64_t flags)
 {
 	int ret = 0;
 
 	if (ip_from != ip_to) {
-		ret = bpf_l4_csum_replace(skb, off, ip_from, ip_to, BPF_F_PSEUDO_HDR | 4);
+		ret = bpf_l4_csum_replace(skb, off, ip_from, ip_to, flags | BPF_F_PSEUDO_HDR | 4);
 	}
 	if (port_from != port_to) {
-		ret |= bpf_l4_csum_replace(skb, off, port_from, port_to, 2);
+		ret |= bpf_l4_csum_replace(skb, off, port_from, port_to, flags | 2);
 	}
 
 	return ret;
@@ -659,7 +660,8 @@ static CALI_BPF_INLINE int calico_tc_skb_accepted(
 
 		if (csum_offset) {
 			res = skb_nat_l4_csum_ipv4(skb, csum_offset, state->ip_dst, state->post_nat_ip_dst,
-					host_to_be16(state->dport), host_to_be16(state->post_nat_dport));
+					host_to_be16(state->dport), host_to_be16(state->post_nat_dport),
+					state->ip_proto == IPPROTO_UDP ? BPF_F_MARK_MANGLED_0 : 0);
 		}
 
 		res |= bpf_l3_csum_replace(skb, ip_csum_offset, state->ip_dst, state->post_nat_ip_dst, 4);
@@ -703,7 +705,8 @@ static CALI_BPF_INLINE int calico_tc_skb_accepted(
 
 		if (csum_offset) {
 			res = skb_nat_l4_csum_ipv4(skb, csum_offset, state->ip_src, state->ct_result.nat_ip,
-					host_to_be16(state->sport), host_to_be16(state->ct_result.nat_port));
+					host_to_be16(state->sport), host_to_be16(state->ct_result.nat_port),
+					state->ip_proto == IPPROTO_UDP ? BPF_F_MARK_MANGLED_0 : 0);
 		}
 
 		res |= bpf_l3_csum_replace(skb, ip_csum_offset, state->ip_src, state->ct_result.nat_ip, 4);
