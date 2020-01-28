@@ -171,7 +171,7 @@ The code is a little roundabout for a few reasons:
                         aria-controls="{{ navbar_id }}"
                       >
                         <h4 class="panel-title">
-                            <a href="{{site.baseurl}}/{{navbar.path}}" class="{% if navbar.section %}navbar-title--not-clickable{% endif %}">
+                            <a href="{{site.baseurl}}{{navbar.path}}" class="{% if navbar.section %}navbar-title--not-clickable{% endif %}">
                               <span>{{ navbar.title }}</span>
                             </a>
                         </h4>
