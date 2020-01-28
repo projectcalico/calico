@@ -52,8 +52,8 @@ You can also deploy {{site.prodname}} for both networking and policy enforcement
 
 Unfortunately, aks-engine does not support this mode, so you must use a different tool chain to install and manage the cluster. Some options:
 
-- Use [Terraform](https://www.terraform.io/) to provision the Azure networks and VMs, then [kubeadm](https://docs.google.com/document/d/1CsOj3smZQHrmu0jbY7hg1ShXfcTswYm0Qj4BrFdw5qs/edit#heading=h.imdkqm7uo7st) to install the Kubernetes cluster.
-- Use [Kubespray](https://docs.google.com/document/d/1CsOj3smZQHrmu0jbY7hg1ShXfcTswYm0Qj4BrFdw5qs/edit#heading=h.1v8hzmk8q1x5)
+- Use [Terraform](https://www.terraform.io/) to provision the Azure networks and VMs, then [kubeadm](https://kubernetes.io/docs/setup/production-environment/tools/kubeadm/) to install the Kubernetes cluster.
+- Use [Kubespray](https://kubespray.io/)
 
 #### Terraform
 
@@ -65,7 +65,7 @@ Terraform is a tool for automating infrastructure provisioning using declarative
 
 ##### Kubespray
 
-Kubespray is a tool for provisioning and managing Kubernetes clusters with support for multiple clouds including Azure.  {{site.prodname}} is the default networking provider, or you can set the `kube_network_plugin` variable to `calico`. See the [Kubespray docs](https://kubespray.io/#/?id=network-plugins) for more details.
+[Kubespray](https://kubespray.io/) is a tool for provisioning and managing Kubernetes clusters with support for multiple clouds including Azure.  {{site.prodname}} is the default networking provider, or you can set the `kube_network_plugin` variable to `calico`. See the [Kubespray docs](https://kubespray.io/#/?id=network-plugins) for more details.
 
 ### Above and beyond
 
