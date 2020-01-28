@@ -16,6 +16,6 @@ Calico Enterprise extends Calico’s policy model so that domain names (DNS) can
 
 Domain name based policies enable fine-grained controls that are enforced at the source Pod rather than a firewall rule or equivalent.
 
-DNS endpoints can be defined as an exact address (for example, google.com) or can include wildcards (for example, `*.google.com`). DNS endpoints can also be used within [Global Network Sets]({{site.baseurl}}/reference/resources/globalnetworkset).
+DNS endpoints can be defined as an exact address (e.g. google.com) or can include wildcards (e.g. `*.google.com`). DNS endpoints can also be used within [Global Network Sets]({{site.baseurl}}/reference/resources/globalnetworkset).
 
 ![dns-policy-rules]({{site.baseurl}}/images/dns-policy-rules.png)
