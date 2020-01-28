@@ -75,4 +75,4 @@ if [ ! -z "$CANDIDATE_RELEASE" ]; then
     build release-$CANDIDATE_RELEASE /$CANDIDATE_RELEASE
 fi
 
-mv _netlify/sitemap-index.xml _site/sitemap.xml
+mv netlify/sitemap-index.xml _site/sitemap.xml
