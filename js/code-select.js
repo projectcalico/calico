@@ -84,7 +84,7 @@ $(document).ready(function() {
       toolbarDiv.setAttribute('class', `${codeSnippetClass}__toolbar ${codeToolbarClass}`);
       toolbarDiv.appendChild(downloadButton);
       toolbarDiv.appendChild(copyButton);
-      this.insertBefore(toolbarDiv, this.firstChild);
+      this.appendChild(toolbarDiv);
       this.onmouseover = function() {
         toolbarDiv.classList.add(codeToolbarVisibleClass);
       }
