@@ -65,6 +65,9 @@ build_master
 echo "[INFO] building archives"
 build_archives
 
+echo "[INFO] building current release"
+build release-$CURRENT_RELEASE
+
 if [ ! -z "$CANDIDATE_RELEASE" ]; then
     echo "[INFO] building candidate release"
     build release-$CANDIDATE_RELEASE /$CANDIDATE_RELEASE
