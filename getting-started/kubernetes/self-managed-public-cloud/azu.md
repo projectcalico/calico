@@ -52,8 +52,8 @@ You can also deploy {{site.prodname}} for both networking and policy enforcement
 
 Unfortunately, aks-engine does not support this mode, so you must use a different tool chain to install and manage the cluster. Some options:
 
-- Use [Terraform](https://www.terraform.io/) to provision the Azure networks and VMs, then [kubeadm](https://kubernetes.io/docs/setup/production-environment/tools/kubeadm/) to install the Kubernetes cluster.
-- Use [Kubespray](https://kubespray.io/)
+- Use [Terraform](#terraform) to provision the Azure networks and VMs, then [kubeadm](#kubeadm) to install the Kubernetes cluster.
+- Use [Kubespray](#kubespray)
 
 #### Terraform
 
