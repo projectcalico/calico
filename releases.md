@@ -9,7 +9,7 @@ layout: docwithnav
 {%- for version in site.data.archives -%}
 {%- if version.first -%}
     {%- for v in version["legacy"] %}
-- [{{ v }}]({{ site.url }}/{{ v }})
+- [{{ v }}](/{{ v }}){: data-proofer-ignore=""}
     {%- endfor -%}
 {% else %}
 - [{{ version }}]({{ site.url }}/{{ version }})
