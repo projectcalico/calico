@@ -9,7 +9,7 @@ Use {{site.prodname}} with a self-managed Kubernetes cluster in Microsoft Azure.
 
 ### Value
 
-Managing your own Kubernetes cluster (as opposed to using a managed-Kubernetes service like AKS), gives you the most flexibility in configuring {{site.prodname}} and Kubernetes. {{site.prodname}} provides both **networking** and **network security** for containers, virtual machines, and native host-based workloads across a broad range of platforms including Kubernetes, OpenShift, Docker EE, OpenStack, and bare metal services. {{site.prodname}} combines flexible networking capabilities with "run-anywhere" security enforcement to provide a solution with native Linux kernel performance and true cloud-native scalability.
+Managing your own Kubernetes cluster (as opposed to using a managed-Kubernetes service like AKS), gives you the most flexibility in configuring {{site.prodname}} and Kubernetes. {{site.prodname}} combines flexible networking capabilities with "run-anywhere" security enforcement to provide a solution with native Linux kernel performance and true cloud-native scalability.
 
 ### Concepts
 
@@ -52,7 +52,7 @@ You can also deploy {{site.prodname}} for both networking and policy enforcement
 
 Unfortunately, aks-engine does not support this mode, so you must use a different tool chain to install and manage the cluster. Some options:
 
-- Use [Terraform](https://docs.google.com/document/d/1CsOj3smZQHrmu0jbY7hg1ShXfcTswYm0Qj4BrFdw5qs/edit#heading=h.876rtqebbyno) to provision the Azure networks and VMs, then [kubeadm](https://docs.google.com/document/d/1CsOj3smZQHrmu0jbY7hg1ShXfcTswYm0Qj4BrFdw5qs/edit#heading=h.imdkqm7uo7st) to install the Kubernetes cluster.
+- Use [Terraform](https://www.terraform.io/) to provision the Azure networks and VMs, then [kubeadm](https://docs.google.com/document/d/1CsOj3smZQHrmu0jbY7hg1ShXfcTswYm0Qj4BrFdw5qs/edit#heading=h.imdkqm7uo7st) to install the Kubernetes cluster.
 - Use [Kubespray](https://docs.google.com/document/d/1CsOj3smZQHrmu0jbY7hg1ShXfcTswYm0Qj4BrFdw5qs/edit#heading=h.1v8hzmk8q1x5)
 
 #### Terraform
