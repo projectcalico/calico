@@ -1,8 +1,8 @@
 $(document).ready(function() {
   var codeSnippetClass = 'code-snippet';
   var codeToolbarClass = `code-snippet-toolbar`;
-  var copyButtonClass = `${codeToolbarClass}__copy-button`;
-  var downloadButtonClass = `${codeToolbarClass}__download-button`;
+  var copyButtonClass = `${codeToolbarClass}__copy-button ${codeToolbarClass}__button`;
+  var downloadButtonClass = `${codeToolbarClass}__download-button ${codeToolbarClass}__button`;
   var codeToolbarVisibleClass = `${codeToolbarClass}--visible`;
 
   $('pre.highlight').each(function(i) {
