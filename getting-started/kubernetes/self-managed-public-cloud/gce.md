@@ -9,7 +9,7 @@ Use {{site.prodname}} with a self-managed Kubernetes cluster in Google Compute E
 
 ### Value
 
-Managing your own Kubernetes cluster (as opposed to using a managed-Kubernetes service like GKE) gives you the most flexibility in configuring {{site.prodname}} and Kubernetes. {{site.prodname}} provides both **networking** and **network security** for containers, virtual machines, and native host-based workloads across a broad range of platforms including Kubernetes, OpenShift, Docker EE, OpenStack, and bare metal services. {{site.prodname}} combines flexible networking capabilities with "run-anywhere" security enforcement to provide a solution with native Linux kernel performance and true cloud-native scalability.
+Managing your own Kubernetes cluster (as opposed to using a managed-Kubernetes service like GKE) gives you the most flexibility in configuring {{site.prodname}} and Kubernetes. {{site.prodname}} combines flexible networking capabilities with "run-anywhere" security enforcement to provide a solution with native Linux kernel performance and true cloud-native scalability.
 
 ### Concepts
 
@@ -32,7 +32,7 @@ There are many ways to install and manage Kubernetes in GCE. Using kubeadm is a 
 
 You will need at least one VM to serve as a control plane node and one or more worker nodes. (It is possible to have control plane nodes also act as workers. This is not recommended in most cases and not covered by this guide.)  See [requirements]({{site.baseurl}}/getting-started/kubernetes/requirements) for specific OS requirements for these VMs.
 
-The following worked example creates a single control node and three workers on a dedicated virtual private network (VPC). Adjust the example as needed for your requirements. Consider a dedicated infrastructure management tool like [Terraform](https://docs.google.com/document/d/1-Vm8tdxc9GJ4JVXwVrHqQv96jU1eeadQeZyCDdU2bV4/edit#heading=h.876rtqebbyno) for managing cloud resources. (This example is adapted from [Kubernetes the Hard Way](https://github.com/kelseyhightower/kubernetes-the-hard-way/blob/master/docs/03-compute-resources.md).)
+The following worked example creates a single control node and three workers on a dedicated virtual private network (VPC). Adjust the example as needed for your requirements. Consider a dedicated infrastructure management tool like [Terraform](https://www.terraform.io/) for managing cloud resources. (This example is adapted from [Kubernetes the Hard Way](https://github.com/kelseyhightower/kubernetes-the-hard-way/blob/master/docs/03-compute-resources.md).)
 
 **Create the VPC**
 
