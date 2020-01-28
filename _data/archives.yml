@@ -6,4 +6,4 @@
 # To support 'branch-per-directory', an entry named 'legacy' can be specified which is a dictionary describing
 # all releases using the old model.
 # Order matters - place latest releases first
-- legacy: [v3.10, v3.9, v3.8, v3.7, v3.6, v3.5, v3.4, v3.3, v3.2, v3.1, v3.0, v2.6, v2.5, v2.4, v2.3, v2.2, v2.1, v2.0, v1.6, v1.5]
+- legacy: [v3.11, v3.10, v3.9, v3.8, v3.7, v3.6, v3.5, v3.4, v3.3, v3.2, v3.1, v3.0, v2.6, v2.5, v2.4, v2.3, v2.2, v2.1, v2.0, v1.6, v1.5]
