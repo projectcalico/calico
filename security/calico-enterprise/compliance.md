@@ -7,8 +7,8 @@ calico_enterprise: true
 Calico policies can be used to implement security controls required by your security team. Some security controls are simple, such as separating development and test workloads or segmenting a cluster into security zones (DMZ, Trusted, etc.) or could be more complex like implementing HIPAA or PCI-DSS controls.
 
 For most security teams, setting up and enforcing Calico Policy is not sufficient to meet their needs.
-Security teams need additional controls to ensure their policies have precedence and are evaluated first before other policies
-They need to see proof that the controls are in place, being enforced, and working as expected (logs, evidence reports, audit history)
+Security teams need additional controls to ensure their policies have precedence and are evaluated first before other policies.
+They need to see proof that the controls are in place, being enforced, and working as expected (logs, evidence reports, audit history).
 
 Calico Enterprise adds several features that satisfy the security team’s requirements.
 
@@ -28,7 +28,7 @@ Calico Enterprise adds several features that satisfy the security team’s requi
 
 ### Audit logs
 
-- Marry audit log with flow logs to demonstrate adherence
+- Marry audit logs with flow logs to demonstrate adherence
 - Includes change history
 
 ### Configuration auditing
