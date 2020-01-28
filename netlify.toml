@@ -26,9 +26,3 @@
   for = "/*.bash"
   [headers.values]
     content-type = "text/x-shellscript"
-
-[[redirects]]
-  from = "/latest/*"
-  to = "/:splat"
-  status = 301
-  force = true
