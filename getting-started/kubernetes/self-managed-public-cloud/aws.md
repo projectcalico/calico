@@ -5,7 +5,7 @@ description: Use Calico with a self-managed Kubernetes cluster in Amazon Web Ser
 
 ### Big picture
 
-Use {{site.prodname}} with a self-managed Kubernetes cluster in Amazon Web Services. 
+Use {{site.prodname}} with a self-managed Kubernetes cluster in Amazon Web Services (AWS). 
 
 ### Value
 
