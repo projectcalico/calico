@@ -263,7 +263,7 @@ as described in the section above.
 
 1. In [netlify.toml](netlify.toml):
 
-   1. Set the `RELEASE_CANDIDATE` environment variable back to an empty string.
+   1. Set the `CANDIDATE_RELEASE` environment variable back to an empty string.
 
    1. Update the `CURRENT_RELEASE` environment variable.
 
@@ -298,7 +298,7 @@ as described in the section above.
    Then, add the newly created release note file to git.
 
    ```
-   git add _data/release-notes/<VERSION>-release-notes.md
+   git add _includes/release-notes/<VERSION>-release-notes.md
    ```
 
 1. Commit your changes. For example:
@@ -313,13 +313,13 @@ as described in the section above.
    at the newly created commit.
 
    ```
-   make release
+   make release RELEASE_STREAM=vX.Y 
    ```
 
    Then, publish the tag and release.
 
    ```
-   make release-publish
+   make release-publish RELEASE_STREAM=vX.Y
    ```
 1. Merge the PR. This will cause the live docs site to be updated (after a few minutes).
 
