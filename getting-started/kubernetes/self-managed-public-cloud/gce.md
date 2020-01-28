@@ -176,7 +176,7 @@ kubectl apply -f calico.yaml
 
 ##### Terraform
 
-You may have noticed that the bulk of the above instructions are about provisioning the Google Cloud resources for the cluster and installing Kubernetes. Terraform is a tool for automating infrastructure provisioning using declarative configurations.  You can also go as far as automating the install of Docker, kubeadm, and Kubernetes using Terraform “provisioners.” See the Terraform documentation for more details.
+You may have noticed that the bulk of the above instructions are about provisioning the Google Cloud resources for the cluster and installing Kubernetes. Terraform is a tool for automating infrastructure provisioning using declarative configurations.  You can also go as far as automating the install of Docker, kubeadm, and Kubernetes using Terraform “provisioners.” See the [Terraform documentation](https://www.terraform.io/docs/index.html) for more details.
 
 ##### Kubespray
 
