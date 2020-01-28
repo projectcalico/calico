@@ -34,7 +34,7 @@ To use kops to create a cluster with {{site.prodname}} networking and network po
 1. [Install kops](https://kops.sigs.k8s.io/install/) on your workstation.
 1. [Set up your environment for AWS](https://kops.sigs.k8s.io/getting_started/aws/).
 1. Configure kops to use {{site.prodname}} for networking.  
-   The easiest way to do this is to pass `--networking calico` to kops when creating the cluster. For example
+   The easiest way to do this is to pass `--networking calico` to kops when creating the cluster. For example:
 
    ```
    kops create cluster \
@@ -56,13 +56,13 @@ To use kops to create a cluster with {{site.prodname}} networking and network po
 
 As an alternative to {{site.prodname}} for both networking and network policy, you can use Amazon’s VPC CNI plugin for networking, and {{site.prodname}} for network policy. The advantage of this approach is that pods are assigned IP addresses associated with Elastic Network Interfaces on worker nodes. The IPs come from the VPC network pool and therefore do not require NAT to access resources outside the Kubernetes cluster.
 
-Set your kops cluster configuration to
+Set your kops cluster configuration to:
 
 ```
 networking:
   amazonvpc: {}
 ```
-Then install Calico for network policy only after the cluster is up and ready.
+Then install {{site.prodname}} for network policy only after the cluster is up and ready.
 
 ##### Kubespray
 
@@ -71,4 +71,4 @@ Then install Calico for network policy only after the cluster is up and ready.
 ### Above and beyond
 
 - [Install and configure calicoctl]({{site.baseurl}}/getting-started/calicoctl/install)
-- [Try out Calico network policy]({{site.baseurl}}/security/calico-network-policy)
+- [Try out {{site.prodname}} network policy]({{site.baseurl}}/security/calico-network-policy)
