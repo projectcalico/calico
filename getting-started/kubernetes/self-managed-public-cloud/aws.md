@@ -9,7 +9,7 @@ Use {{site.prodname}} with a self-managed Kubernetes cluster in Amazon Web Servi
 
 ### Value
 
-Managing your own Kubernetes cluster (as opposed to using a managed-Kubernetes service like EKS), gives you the most flexibility in configuring {{site.prodname}} and Kubernetes. {{site.prodname}} provides both **networking** and **network security** for containers, virtual machines, and native host-based workloads across a broad range of platforms including Kubernetes, OpenShift, Docker EE, OpenStack, and bare metal services. {{site.prodname}} combines flexible networking capabilities with "run-anywhere" security enforcement to provide a solution with native Linux kernel performance and true cloud-native scalability.
+Managing your own Kubernetes cluster (as opposed to using a managed-Kubernetes service like EKS), gives you the most flexibility in configuring {{site.prodname}} and Kubernetes. {{site.prodname}} combines flexible networking capabilities with "run-anywhere" security enforcement to provide a solution with native Linux kernel performance and true cloud-native scalability.
 
 ### Concepts
 
@@ -33,12 +33,11 @@ To use kops to create a cluster with {{site.prodname}} networking and network po
 
 1. [Install kops](https://kops.sigs.k8s.io/install/) on your workstation.
 1. [Set up your environment for AWS](https://kops.sigs.k8s.io/getting_started/aws/).
-   
-   Be sure to [set up an S3 state store](https://kops.sigs.k8s.io/getting_started/aws/#cluster-state-storage) and export its name:
+  1. Be sure to [set up an S3 state store](https://kops.sigs.k8s.io/getting_started/aws/#cluster-state-storage) and export its name:
   
-   ```
-   export KOPS_STATE_STORE=s3://name-of-your-state-store-bucket
-   ```
+     ```
+     export KOPS_STATE_STORE=s3://name-of-your-state-store-bucket
+     ```
 1. Configure kops to use {{site.prodname}} for networking.  
    The easiest way to do this is to pass `--networking calico` to kops when creating the cluster. For example:
 
@@ -72,7 +71,7 @@ Then install {{site.prodname}} for network policy only after the cluster is up a
 
 ##### Kubespray
 
-[Kubespray](https://kubespray.io/) is a tool for provisioning and managing Kubernetes clusters with support for multiple clouds including Amazon Web Services. {{site.prodname}} is the default networking provider, providing both networking and network policy. You can explicitly set the `kube_network_plugin` variable to `calico`, or not (given it is the default). See the [Kubespray docs](https://kubespray.io/#/?id=network-plugins) for more details.
+[Kubespray](https://kubespray.io/) is a tool for provisioning and managing Kubernetes clusters with support for multiple clouds including Amazon Web Services. {{site.prodname}} is the default networking provider, or you can set the `kube_network_plugin` variable to `calico`. See the [Kubespray docs](https://kubespray.io/#/?id=network-plugins) for more details.
 
 ### Above and beyond
 
