@@ -33,11 +33,12 @@ To use kops to create a cluster with {{site.prodname}} networking and network po
 
 1. [Install kops](https://kops.sigs.k8s.io/install/) on your workstation.
 1. [Set up your environment for AWS](https://kops.sigs.k8s.io/getting_started/aws/).
-  1. Be sure to [set up an S3 state store](https://kops.sigs.k8s.io/getting_started/aws/#cluster-state-storage) and export its name:
+   
+   Be sure to [set up an S3 state store](https://kops.sigs.k8s.io/getting_started/aws/#cluster-state-storage) and export its name:
   
-     ```
-     export KOPS_STATE_STORE=s3://name-of-your-state-store-bucket
-     ```
+   ```
+   export KOPS_STATE_STORE=s3://name-of-your-state-store-bucket
+   ```
 1. Configure kops to use {{site.prodname}} for networking.  
    The easiest way to do this is to pass `--networking calico` to kops when creating the cluster. For example:
 
