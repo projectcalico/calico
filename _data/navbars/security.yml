@@ -88,5 +88,3 @@ section:
     path: /security/calico-enterprise/network-visibility
   - title: Advanced egress access controls with Calico Enterprise
     path: /security/calico-enterprise/egress-access-control
-  - title: Advanced compliance controls with Calico Enterprise
-    path: /security/calico-enterprise/compliance
