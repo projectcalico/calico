@@ -298,7 +298,7 @@ as described in the section above.
    Then, add the newly created release note file to git.
 
    ```
-   git add release-notes/<VERSION>-release-notes.md
+   git add _includes/release-notes/<VERSION>-release-notes.md
    ```
 
 1. Commit your changes. For example:
