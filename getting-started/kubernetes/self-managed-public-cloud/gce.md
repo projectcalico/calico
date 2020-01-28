@@ -1,6 +1,6 @@
 ---
 title: Self-managed Kubernetes in Google Compute Engine (GCE)
-description: Use Calico with a self-managed Kubernetes cluster in Google Compute Engine (GCE)
+description: Use Calico with a self-managed Kubernetes cluster in Google Compute Engine (GCE).
 ---
 
 ### Big picture
