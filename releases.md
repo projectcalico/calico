@@ -4,15 +4,15 @@ description: Home
 layout: docwithnav
 ---
 {% if site.archive %}
-- [latest](/)
+- [{{site.data.versions.first.title}} (latest)](/)
 - [nightly](/master)
 {%- for version in site.data.archives -%}
 {%- if version.first -%}
     {%- for v in version["legacy"] %}
-- [{{ v }}](/{{ v }})
+- [{{ v }}]({{ site.url }}/{{ v }})
     {%- endfor -%}
 {% else %}
-- [{{ version }}](/{{ version }})
+- [{{ version }}]({{ site.url }}/{{ version }})
 {% endif -%}
 {%- endfor -%}
 {% endif %}
