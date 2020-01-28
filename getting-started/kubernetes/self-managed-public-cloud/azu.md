@@ -50,7 +50,22 @@ Then, [follow the ask-engine documentation to deploy your cluster](https://githu
 
 You can also deploy {{site.prodname}} for both networking and policy enforcement. In this mode, {{site.prodname}} uses a VXLAN-based overlay network that masks the IP addresses of the pods from the underlying Azure VNET. This can be useful in large deployments or when running multiple clusters and IP address space is a big concern.
 
-Unfortunately, aks-engine does not support this mode, so you will have to use a different tool chain to install and manage the cluster. One option is to use Terraform to provision the Azure networks and VMs, then kubeadm to install the Kubernetes cluster.
+Unfortunately, aks-engine does not support this mode, so you will have to use a different tool chain to install and manage the cluster. Some options:
+
+- Use [Terraform](https://docs.google.com/document/d/1CsOj3smZQHrmu0jbY7hg1ShXfcTswYm0Qj4BrFdw5qs/edit#heading=h.876rtqebbyno) to provision the Azure networks and VMs, then [kubeadm](https://docs.google.com/document/d/1CsOj3smZQHrmu0jbY7hg1ShXfcTswYm0Qj4BrFdw5qs/edit#heading=h.imdkqm7uo7st) to install the Kubernetes cluster.
+- Use [Kubespray](https://docs.google.com/document/d/1CsOj3smZQHrmu0jbY7hg1ShXfcTswYm0Qj4BrFdw5qs/edit#heading=h.1v8hzmk8q1x5)
+
+#### Terraform
+
+Terraform is a tool for automating infrastructure provisioning using declarative configurations.  You can also go as far as automating the install of Docker, kubeadm, and Kubernetes using Terraform “provisioners.” See the [Terraform documentation](https://www.terraform.io/docs/index.html) for more details.
+
+##### kubeadm
+
+[kubeadm](https://kubernetes.io/docs/setup/production-environment/tools/kubeadm/) is a command line tool for bootstrapping a Kubernetes cluster on top of already-provisioned compute resources, like VMs in a cloud or bare metal hosts. Unlike aks-engine which handles provisioning cloud resources, installing Kubernetes, and installing Calico, kubeadm only handles the second step of installing Kubernetes. You should proceed to install Calico after completing kubeadm install. 
+
+##### Kubespray
+
+Kubespray is a tool for provisioning and managing Kubernetes clusters with support for multiple clouds including Azure.  Calico is the default networking provider, or you can set the `kube_network_plugin` variable to `calico`. See the [Kubespray docs](https://kubespray.io/#/?id=network-plugins) for more details.
 
 ### Above and beyond
 
