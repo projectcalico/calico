@@ -46,8 +46,7 @@ function build() {
 
 # master builds skip the git clone and build the site in the current tree
 function build_master() {
-    echo "archive: true" >_config_jekyll.yml
-    jekyll build --config $JEKYLL_CONFIG,$(pwd)/_config_jekyll.yml --baseurl /master --destination _site/master
+    jekyll build --config $JEKYLL_CONFIG --baseurl /master --destination _site/master
 }
 
 function build_archives() {
