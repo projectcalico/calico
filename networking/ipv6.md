@@ -21,9 +21,10 @@ Refer to the section that corresponds to your orchestrator for details.
 
 ### Limitations
 
-- Currently Kubernetes supports only one IP stack version at a time. This
+- Kubernetes 1.15 and earlier only support one IP stack version at a time. This
   means that if you configure Kubernetes for IPv6 then {{site.prodname}}
-  should be configured to assign only IPv6 addresses.
+  should be configured to assign only IPv6 addresses. Starting with 1.16, it is
+  possible to configure a dual-stack environment.
 - The steps and setup here have not been tested against an existing IPv4
   cluster and are intended only for new clusters.
 
