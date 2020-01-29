@@ -78,3 +78,4 @@ if [ ! -z "$CANDIDATE_RELEASE" ]; then
 fi
 
 mv netlify/sitemap-index.xml _site/sitemap.xml
+mv netlify/_redirects _site/_redirects
