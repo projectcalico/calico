@@ -95,7 +95,31 @@ $(document).ready(function() {
     }
   });
 
-  var clipboard = new ClipboardJS(`.${copyButtonClass}`);
+  var clipboard = new ClipboardJS(`.${copyButtonClass}`,
+    {
+      text: trigger => {
+        const codeSnippetId = trigger.getAttribute('data-clipboard-target').replace('#', '');
+
+        const codeSnippet = document.getElementById(codeSnippetId);
+
+        const normalizedText = codeSnippet.innerText
+          .split('\n')
+          .map(str => {
+            const normalizedString = str.trim();
+
+            if (normalizedString.startsWith('$')) {
+              return normalizedString.slice(1, normalizedString.length).trim();
+            }
+
+            return normalizedString;
+          })
+          .join('\n');
+
+        return normalizedText;
+      },
+    },
+  );
+
   clipboard.on('success', function(e) {
     e.clearSelection();
   });
