@@ -214,6 +214,22 @@ func TestNATPodPodXNode(t *testing.T) {
 	// Response arriving at workload at node 1
 	skbMark = 0xca100000 // CALI_SKB_MARK_SEEN
 	runBpfTest(t, "calico_to_workload_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
+		pktExp := gopacket.NewPacket(respPkt, layers.LayerTypeEthernet, gopacket.Default)
+		ipv4L := pktExp.Layer(layers.LayerTypeIPv4)
+		Expect(ipv4L).NotTo(BeNil())
+		ipv4R := ipv4L.(*layers.IPv4)
+		udpL := pktExp.Layer(layers.LayerTypeUDP)
+		Expect(udpL).NotTo(BeNil())
+		udpR := udpL.(*layers.UDP)
+
+		ipv4R.SrcIP = ipv4.DstIP
+		udpR.SrcPort = udp.DstPort
+		_ = udpR.SetNetworkLayerForChecksum(ipv4R)
+
+		pktExpSer := gopacket.NewSerializeBuffer()
+		err := gopacket.SerializePacket(pktExpSer, gopacket.SerializeOptions{ComputeChecksums: true}, pktExp)
+		Expect(err).NotTo(HaveOccurred())
+
 		res, err := bpfrun(respPkt)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
@@ -221,21 +237,7 @@ func TestNATPodPodXNode(t *testing.T) {
 		pktR := gopacket.NewPacket(res.dataOut, layers.LayerTypeEthernet, gopacket.Default)
 		fmt.Printf("pktR = %+v\n", pktR)
 
-		ipv4L := pktR.Layer(layers.LayerTypeIPv4)
-		Expect(ipv4L).NotTo(BeNil())
-		ipv4R := ipv4L.(*layers.IPv4)
-		Expect(ipv4R.DstIP.String()).To(Equal(ipv4.SrcIP.String()))
-		Expect(ipv4R.SrcIP.String()).To(Equal(ipv4.DstIP.String()))
-
-		udpL := pktR.Layer(layers.LayerTypeUDP)
-		Expect(udpL).NotTo(BeNil())
-		udpR := udpL.(*layers.UDP)
-		Expect(udpR.SrcPort).To(Equal(udp.DstPort))
-		Expect(udpR.DstPort).To(Equal(udp.SrcPort))
-
-		payloadL := pktR.ApplicationLayer()
-		Expect(payloadL).NotTo(BeNil())
-		Expect(payload).To(Equal(payloadL.Payload()))
+		Expect(res.dataOut).To(Equal(pktExpSer.Bytes()))
 	})
 
 	dumpCTMap(ctMap)
