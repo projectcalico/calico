@@ -15,18 +15,18 @@
 package main
 
 import (
-	"bufio"
-	"errors"
+	"encoding/json"
 	"fmt"
 	"net"
 	"os"
 	"strings"
 	"time"
 
+	"github.com/projectcalico/felix/fv/conncheck"
+
 	"github.com/containernetworking/plugins/pkg/ns"
 	docopt "github.com/docopt/docopt-go"
 	reuse "github.com/libp2p/go-reuseport"
-	uuid "github.com/satori/go.uuid"
 	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/felix/fv/cgroup"
@@ -91,7 +91,7 @@ func main() {
 		// global timeout instead.
 		go func() {
 			time.Sleep(2 * time.Second)
-			panic("Timed out")
+			log.Fatal("Timed out")
 		}()
 	}
 
@@ -125,9 +125,6 @@ func tryConnect(ipAddress, port, sourcePort, protocol, loopFile string) error {
 		return err
 	}
 
-	uid := uuid.NewV4().String()
-	testMessage := "hello," + uid
-
 	// The reuse library implements a version of net.Dialer that can reuse UDP/TCP ports, which we
 	// need in order to make connection retries work.
 	var d reuse.Dialer
@@ -155,18 +152,33 @@ func tryConnect(ipAddress, port, sourcePort, protocol, loopFile string) error {
 		}
 		defer conn.Close()
 
+		decoder := json.NewDecoder(conn)
+
 		for {
-			fmt.Fprintf(conn, testMessage+"\n")
-			log.WithField("message", testMessage).Info("Sent message over udp")
-			reply, err := bufio.NewReader(conn).ReadString('\n')
+			req := conncheck.NewRequest()
+			data, err := json.Marshal(req)
 			if err != nil {
-				panic(err)
+				log.WithError(err).Fatal("Failed to marshal data")
 			}
-			reply = strings.TrimSpace(reply)
-			log.WithField("reply", reply).Info("Got reply")
-			if reply != testMessage {
-				panic(errors.New("Unexpected reply: " + reply))
+			_, err = conn.Write(data)
+			if err != nil {
+				log.WithError(err).Fatal("Failed to send data")
 			}
+			log.WithField("message", req).Info("Sent message over UDP")
+			var resp conncheck.Response
+			err = decoder.Decode(&resp)
+			if err != nil {
+				log.WithError(err).Fatal("Failed to read response")
+			}
+			log.WithField("reply", resp).Info("Got reply")
+			if !resp.Request.Equal(req) {
+				log.WithField("reply", resp).Fatal("Unexpected response")
+			}
+			j, err := json.Marshal(resp)
+			if err != nil {
+				log.WithError(err).Fatal("Failed to re-marshal response")
+			}
+			fmt.Println("RESPONSE=", string(j))
 			if !ls.Next() {
 				break
 			}
@@ -187,18 +199,30 @@ func tryConnect(ipAddress, port, sourcePort, protocol, loopFile string) error {
 		defer conn.Close()
 		log.Infof("TCP connection established")
 
+		decoder := json.NewDecoder(conn)
+		encoder := json.NewEncoder(conn)
+
 		for {
-			fmt.Fprintf(conn, testMessage+"\n")
-			log.WithField("message", testMessage).Info("Sent message over tcp")
-			reply, err := bufio.NewReader(conn).ReadString('\n')
+			req := conncheck.NewRequest()
+			err := encoder.Encode(req)
 			if err != nil {
-				return err
+				log.WithError(err).Fatal("Failed to send data")
 			}
-			reply = strings.TrimSpace(reply)
-			log.WithField("reply", reply).Info("Got reply")
-			if reply != testMessage {
-				return errors.New("Unexpected reply: " + reply)
+			log.WithField("message", req).Info("Sent message over TCP")
+			var resp conncheck.Response
+			err = decoder.Decode(&resp)
+			if err != nil {
+				log.WithError(err).Fatal("Failed to read response")
 			}
+			log.WithField("reply", resp).Info("Got reply")
+			if !resp.Request.Equal(req) {
+				log.WithField("reply", resp).Fatal("Unexpected response")
+			}
+			j, err := json.Marshal(resp)
+			if err != nil {
+				log.WithError(err).Fatal("Failed to re-marshal response")
+			}
+			fmt.Println("RESPONSE=", string(j))
 			if !ls.Next() {
 				break
 			}

@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2019 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,6 +16,7 @@ package containers
 
 import (
 	"bufio"
+	"encoding/json"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -27,6 +28,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/projectcalico/felix/fv/conncheck"
+
 	. "github.com/onsi/gomega"
 	log "github.com/sirupsen/logrus"
 
@@ -35,11 +38,12 @@ import (
 )
 
 type Container struct {
-	Name     string
-	IP       string
-	IPPrefix string
-	Hostname string
-	runCmd   *exec.Cmd
+	Name           string
+	IP             string
+	ExtraSourceIPs []string
+	IPPrefix       string
+	Hostname       string
+	runCmd         *exec.Cmd
 
 	mutex         sync.Mutex
 	binaries      set.Set
@@ -541,7 +545,13 @@ func (c *Container) SourceName() string {
 	return c.Name
 }
 
-func (c *Container) CanConnectTo(ip, port, protocol string) bool {
+func (c *Container) SourceIPs() []string {
+	ips := []string{c.IP}
+	ips = append(ips, c.ExtraSourceIPs...)
+	return ips
+}
+
+func (c *Container) CanConnectTo(ip, port, protocol string) *conncheck.Response {
 
 	// Ensure that the container has the 'test-connection' binary.
 	c.EnsureBinary("test-connection")
@@ -556,15 +566,44 @@ func (c *Container) CanConnectTo(ip, port, protocol string) bool {
 	err = connectionCmd.Start()
 	Expect(err).NotTo(HaveOccurred())
 
-	wOut, err := ioutil.ReadAll(outPipe)
-	Expect(err).NotTo(HaveOccurred())
-	wErr, err := ioutil.ReadAll(errPipe)
-	Expect(err).NotTo(HaveOccurred())
+	var wg sync.WaitGroup
+	wg.Add(2)
+	var wOut, wErr []byte
+	var outErr, errErr error
+
+	go func() {
+		defer wg.Done()
+		wOut, outErr = ioutil.ReadAll(outPipe)
+	}()
+
+	go func() {
+		defer wg.Done()
+		wErr, errErr = ioutil.ReadAll(errPipe)
+	}()
+
+	wg.Wait()
+	Expect(outErr).NotTo(HaveOccurred())
+	Expect(errErr).NotTo(HaveOccurred())
+
 	err = connectionCmd.Wait()
 
 	log.WithFields(log.Fields{
 		"stdout": string(wOut),
 		"stderr": string(wErr)}).WithError(err).Info("Connection test")
 
-	return err == nil
+	if err != nil {
+		return nil
+	}
+
+	r := regexp.MustCompile(`RESPONSE=(.*)\n`)
+	m := r.FindSubmatch(wOut)
+	if len(m) > 0 {
+		var resp conncheck.Response
+		err := json.Unmarshal(m[1], &resp)
+		if err != nil {
+			log.WithError(err).WithField("output", string(wOut)).Panic("Failed to parse connection check response")
+		}
+		return &resp
+	}
+	return nil
 }
