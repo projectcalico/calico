@@ -1,7 +1,8 @@
 $(document).ready(function() {
   var codeSnippetClass = 'code-snippet';
   var codeToolbarClass = `code-snippet-toolbar`;
-  var copyButtonClass = `${codeToolbarClass}__copy-button ${codeToolbarClass}__button`;
+  var toolBarButtonClass = `${codeToolbarClass}__button`;
+  var copyButtonClass = `${codeToolbarClass}__copy-button`;
   var downloadButtonClass = `${codeToolbarClass}__download-button ${codeToolbarClass}__button`;
   var codeToolbarVisibleClass = `${codeToolbarClass}--visible`;
 
@@ -65,13 +66,13 @@ $(document).ready(function() {
 
       var copyButton = document.createElement('a');
       copyButton.setAttribute('type', 'btn');
-      copyButton.setAttribute('class', copyButtonClass);
+      copyButton.setAttribute('class', `${copyButtonClass} ${toolBarButtonClass}`);
       copyButton.setAttribute('data-clipboard-target', '#' + currentCodeSectionId);
       copyButton.innerHTML = '<i class="glyphicon glyphicon-duplicate" data-toggle="tooltip" data-placement="bottom" title="Copy"></i>';
 
       var downloadButton = document.createElement('a');
       downloadButton.setAttribute('type', 'btn');
-      downloadButton.setAttribute('class', downloadButtonClass);
+      downloadButton.setAttribute('class', `${downloadButtonClass} ${toolBarButtonClass}`);
       downloadButton.innerHTML = '<i class="glyphicon glyphicon-download-alt" data-toggle="tooltip" data-placement="bottom" title="Download"></i>';
       downloadButton.onclick = function() {
         var fileExtension = language || "txt";
