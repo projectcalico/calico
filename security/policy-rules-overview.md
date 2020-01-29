@@ -13,3 +13,4 @@ For the complete list of policy rules, see:
 
 - [Global network policy]({{ site.baseurl }}/reference/resources/globalnetworkpolicy)
 - [Network policy]({{ site.baseurl }}/reference/resources/networkpolicy)
+- {% include enterprise_icon.html %}[Advanced egress access controls with Calico Enterprise]({{ site.baseurl }}/security/calico-enterprise/egress-access-controls)
