@@ -1,4 +1,4 @@
-// Copyright (c) 2019 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -60,8 +60,8 @@ var (
 	tcpBothFinTimeout     = tcpEntry(now-(3*time.Hour), now-(31*time.Second), conntrack.Leg{SynSeen: true, AckSeen: true, FinSeen: true}, conntrack.Leg{SynSeen: true, AckSeen: true, FinSeen: true})
 )
 
-func tcpEntry(created time.Duration, lastSeen time.Duration, legA conntrack.Leg, legB conntrack.Leg) conntrack.Entry {
-	var e conntrack.Entry
+func tcpEntry(created time.Duration, lastSeen time.Duration, legA conntrack.Leg, legB conntrack.Leg) conntrack.Value {
+	var e conntrack.Value
 	binary.LittleEndian.PutUint64(e[:8], uint64(created))
 	binary.LittleEndian.PutUint64(e[8:16], uint64(lastSeen))
 	binary.LittleEndian.PutUint32(e[28:32], legA.Flags())
@@ -83,7 +83,7 @@ var _ = Describe("BPF Conntrack LivenessCalculator", func() {
 
 	DescribeTable(
 		"expiry tests",
-		func(key conntrack.Key, entry conntrack.Entry, expExpired bool) {
+		func(key conntrack.Key, entry conntrack.Value, expExpired bool) {
 			By("calculating expiry of normal entry")
 			reason, expired := lc.EntryExpired(int64(now), key.Proto(), entry)
 			Expect(expired).To(Equal(expExpired), fmt.Sprintf("EntryExpired returned unexpected value with reason: %s", reason))
@@ -92,7 +92,7 @@ var _ = Describe("BPF Conntrack LivenessCalculator", func() {
 			}
 
 			By("calculating expiry with legs reversed")
-			var eReversed conntrack.Entry
+			var eReversed conntrack.Value
 			copy(eReversed[:], entry[:])
 			copy(eReversed[24:32], entry[32:40])
 			copy(eReversed[32:40], entry[24:32])

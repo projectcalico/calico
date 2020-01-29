@@ -295,8 +295,8 @@ static CALI_BPF_INLINE int vxlan_v4_encap(struct __sk_buff *skb,  __be32 ip_src,
 
 	ret = -1;
 
-	if skb_shorter(skb, sizeof(struct ethhdr) + new_hdrsz +
-			    sizeof(struct ethhdr) + sizeof(struct iphdr)) {
+	if (skb_shorter(skb, sizeof(struct ethhdr) + new_hdrsz +
+			    sizeof(struct ethhdr) + sizeof(struct iphdr))) {
 		CALI_DEBUG("VXLAN encap: too short after room adjust\n");
 		goto out;
 	}
@@ -359,8 +359,8 @@ static CALI_BPF_INLINE int vxlan_v4_decap(struct __sk_buff *skb)
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(5,2,0)
 	ret = bpf_skb_adjust_room(skb, -extra_hdrsz, BPF_ADJ_ROOM_MAC, 0);
 #else
-	if skb_shorter(skb, sizeof(struct ethhdr) + extra_hdrsz +
-			    sizeof(struct ethhdr) + sizeof(struct iphdr)) {
+	if (skb_shorter(skb, sizeof(struct ethhdr) + extra_hdrsz +
+			    sizeof(struct ethhdr) + sizeof(struct iphdr))) {
 		CALI_DEBUG_NO_FLAG("VXLAN decap: too short\n");
 		goto out;
 	}

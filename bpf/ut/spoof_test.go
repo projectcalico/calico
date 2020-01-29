@@ -26,9 +26,9 @@ import (
 
 var (
 	rtKeySrc        = routes.NewKey(srcV4CIDR).AsBytes()
-	rtValGood       = routes.NewLocalWorkloadValue(1).AsBytes()
-	rtValWrongIface = routes.NewLocalWorkloadValue(2).AsBytes()
-	rtValWrongType  = routes.NewValueWithNextHop(routes.TypeRemoteWorkload, ip.V4Addr{1, 0, 0, 0}).AsBytes()
+	rtValGood       = routes.NewValueWithIfIndex(routes.FlagsLocalWorkload, 1).AsBytes()
+	rtValWrongIface = routes.NewValueWithIfIndex(routes.FlagsLocalWorkload, 2).AsBytes()
+	rtValWrongType  = routes.NewValueWithNextHop(routes.FlagsRemoteWorkload, ip.V4Addr{1, 0, 0, 0}).AsBytes()
 )
 
 func TestWorkloadSpoof(t *testing.T) {

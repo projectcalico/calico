@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2019 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -30,6 +30,8 @@ import (
 	"sync"
 	"syscall"
 	"time"
+
+	"github.com/projectcalico/felix/bpf"
 
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
@@ -331,6 +333,11 @@ configRetry:
 
 	// Start up the dataplane driver.  This may be the internal go-based driver or an external
 	// one.
+	if configParams.BPFEnabled && !bpf.SyscallSupport() {
+		log.Error("BPFEnabled is set but BPF mode is not supported on this platform.  Continuing with BPF disabled.")
+		configParams.BPFEnabled = false
+	}
+
 	var dpDriver dp.DataplaneDriver
 	var dpDriverCmd *exec.Cmd
 

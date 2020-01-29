@@ -20,10 +20,11 @@ union calico_route_lpm_key {
 
 enum calico_route_type {
 	CALI_RT_UNKNOWN = 0,
-	CALI_RT_REMOTE_WORKLOAD = 1,
-	CALI_RT_REMOTE_HOST = 2,
-	CALI_RT_LOCAL_HOST = 3,
-	CALI_RT_LOCAL_WORKLOAD = 4,
+	CALI_RT_IN_POOL = 1,
+	CALI_RT_NAT_OUT = 2,
+	CALI_RT_WORKLOAD = 4,
+	CALI_RT_LOCAL = 8,
+	CALI_RT_HOST = 16,
 };
 
 struct calico_route {
@@ -64,8 +65,11 @@ static CALI_BPF_INLINE enum calico_route_type cali_rt_lookup_type(__be32 addr)
 	return rt->type;
 }
 
-#define  cali_rt_is_local(rt) ((rt)->type == CALI_RT_LOCAL_HOST || (rt)->type == CALI_RT_LOCAL_WORKLOAD)
-#define  cali_rt_is_host(rt) ((rt)->type == CALI_RT_LOCAL_HOST || (rt)->type == CALI_RT_REMOTE_HOST)
+#define  cali_rt_is_local(rt) ((rt)->type & CALI_RT_LOCAL)
+#define  cali_rt_is_host(rt) ((rt)->type & CALI_RT_HOST)
 
+#define  cali_rt_type_is_local_host(t) (((t) & (CALI_RT_LOCAL | CALI_RT_HOST)) == (CALI_RT_LOCAL | CALI_RT_HOST))
+#define  cali_rt_type_is_local_workload(t) (((t) & CALI_RT_LOCAL) && ((t) & CALI_RT_WORKLOAD))
+#define  cali_rt_type_is_remote_workload(t) (!((t) & CALI_RT_LOCAL) && ((t) & CALI_RT_WORKLOAD))
 
 #endif /* __CALI_ROUTES_H__ */

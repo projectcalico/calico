@@ -1,4 +1,4 @@
-// Copyright (c) 2019 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -78,12 +78,13 @@ func MakeKey(proto uint8, ipA net.IP, portA uint16, ipB net.IP, portB uint16) Ke
 //  __u64 created;
 //  __u64 last_seen; // 8
 //  __u8 type;     // 16
+//  __u8 flags;     // 17
 //
 //  // Important to use explicit padding, otherwise the compiler can decide
 //  // not to zero the padding bytes, which upsets the verifier.  Worse than
 //  // that, debug logging often prevents such optimisation resulting in
 //  // failures when debug logging is compiled out only :-).
-//  __u8 pad0[7];
+//  __u8 pad0[6];
 //  union {
 //    // CALI_CT_TYPE_NORMAL and CALI_CT_TYPE_NAT_REV.
 //    struct {
@@ -103,18 +104,22 @@ func MakeKey(proto uint8, ipA net.IP, portA uint16, ipB net.IP, portB uint16) Ke
 //    };
 //  };
 // };
-type Entry [conntrackValueSize]byte
+type Value [conntrackValueSize]byte
 
-func (e Entry) Created() int64 {
+func (e Value) Created() int64 {
 	return int64(binary.LittleEndian.Uint64(e[:8]))
 }
 
-func (e Entry) LastSeen() int64 {
+func (e Value) LastSeen() int64 {
 	return int64(binary.LittleEndian.Uint64(e[8:16]))
 }
 
-func (e Entry) Type() uint8 {
-	return uint8(e[16])
+func (e Value) Type() uint8 {
+	return e[16]
+}
+
+func (e Value) Flags() uint8 {
+	return e[17]
 }
 
 const (
@@ -122,9 +127,11 @@ const (
 	TypeNATForward
 	TypeNATReverse
 	TypeNormalTun
+
+	FlagNATOut uint8 = 0x10
 )
 
-func (e Entry) ReverseNATKey() Key {
+func (e Value) ReverseNATKey() Key {
 	var ret Key
 
 	l := len(Key{})
@@ -190,7 +197,7 @@ type EntryData struct {
 	OrigPort uint16
 }
 
-func (e Entry) Data() EntryData {
+func (e Value) Data() EntryData {
 	ip := e[40:44]
 	return EntryData{
 		A2B:      readConntrackLeg(e[24:32]),
@@ -200,7 +207,7 @@ func (e Entry) Data() EntryData {
 	}
 }
 
-func (e Entry) String() string {
+func (e Value) String() string {
 	ret := fmt.Sprintf("Entry{Type:%d, Created:%d, LastSeen:%d, ", e.Type(), e.Created(), e.LastSeen())
 
 	switch e.Type() {
@@ -210,6 +217,10 @@ func (e Entry) String() string {
 		ret += fmt.Sprintf("Data: %+v", e.Data())
 	default:
 		ret += "TYPE INVALID"
+	}
+
+	if e.Flags()&FlagNATOut > 0 {
+		ret += " nat-out"
 	}
 
 	return ret + "}"
@@ -244,8 +255,8 @@ func keyFromBytes(k []byte) Key {
 	return ctKey
 }
 
-func entryFromBytes(v []byte) Entry {
-	var ctVal Entry
+func entryFromBytes(v []byte) Value {
+	var ctVal Value
 	if len(v) != len(ctVal) {
 		log.Panic("Value has unexpected length")
 	}
@@ -253,7 +264,7 @@ func entryFromBytes(v []byte) Entry {
 	return ctVal
 }
 
-type MapMem map[Key]Entry
+type MapMem map[Key]Value
 
 // LoadMapMem loads ConntrackMap into memory
 func LoadMapMem(m bpf.Map) (MapMem, error) {
@@ -261,12 +272,12 @@ func LoadMapMem(m bpf.Map) (MapMem, error) {
 
 	err := m.Iter(func(k, v []byte) {
 		ks := len(Key{})
-		vs := len(Entry{})
+		vs := len(Value{})
 
 		var key Key
 		copy(key[:ks], k[:ks])
 
-		var val Entry
+		var val Value
 		copy(val[:vs], v[:vs])
 
 		ret[key] = val

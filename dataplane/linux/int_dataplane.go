@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -293,11 +293,6 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		LockProbeInterval:     config.IptablesLockProbeInterval,
 		BackendMode:           config.IptablesBackend,
 		LookPathOverride:      config.LookPathOverride,
-	}
-
-	if config.BPFEnabled && !bpf.SyscallSupport() {
-		log.Error("BPFEnabled is set but BPF mode is not supported on this platform.  Continuing with BPF disabled.")
-		config.BPFEnabled = false
 	}
 
 	if config.BPFEnabled && config.BPFKubeProxyIptablesCleanupEnabled {

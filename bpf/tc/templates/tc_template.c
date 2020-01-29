@@ -61,6 +61,8 @@ static CALI_BPF_INLINE enum calico_policy_result execute_policy_norm(struct __sk
 
 #endif /* CALI_DEBUG_ALLOW_ALL */
 
+#define FIB_ENABLED (!CALI_F_L3 && CALI_FIB_LOOKUP_ENABLED && CALI_F_TO_HOST)
+
 __attribute__((section("1/0")))
 int calico_tc_norm_pol_tail(struct __sk_buff *skb) {
 	CALI_DEBUG("Entering normal policy tail call\n");
@@ -164,6 +166,15 @@ static CALI_BPF_INLINE int forward_or_drop(struct __sk_buff *skb,
 		fib_params.ipv4_src = state->ip_src;
 		fib_params.ipv4_dst = state->ip_dst;
 
+		CALI_DEBUG("FIB family=%d\n", fib_params.family);
+		CALI_DEBUG("FIB tot_len=%d\n", fib_params.tot_len);
+		CALI_DEBUG("FIB ifindex=%d\n", fib_params.ifindex);
+		CALI_DEBUG("FIB l4_protocol=%d\n", fib_params.l4_protocol);
+		CALI_DEBUG("FIB sport=%d\n", fib_params.sport);
+		CALI_DEBUG("FIB dport=%d\n", fib_params.dport);
+		CALI_DEBUG("FIB ipv4_src=%x\n", fib_params.ipv4_src);
+		CALI_DEBUG("FIB ipv4_dst=%x\n", fib_params.ipv4_dst);
+
 		CALI_DEBUG("Traffic is towards the host namespace, doing Linux FIB lookup\n");
 		rc = bpf_fib_lookup(skb, &fib_params, sizeof(fib_params), fwd->fib_flags);
 		if (rc == 0) {
@@ -192,12 +203,10 @@ static CALI_BPF_INLINE int forward_or_drop(struct __sk_buff *skb,
 			// Redirect the packet.
 			CALI_DEBUG("Got Linux FIB hit, redirecting to iface %d.\n", fib_params.ifindex);
 			rc = bpf_redirect(fib_params.ifindex, 0);
-
-			/* now we know we will bypass IP stack and ip->ttl > 1, decrement it! */
+	/* now we know we will bypass IP stack and ip->ttl > 1, decrement it! */
 			if (rc == TC_ACT_REDIRECT) {
 				ip_dec_ttl(ip_header);
-			}
-		} else if (rc < 0) {
+			}	} else if (rc < 0) {
 			CALI_DEBUG("FIB lookup failed (bad input): %d.\n", rc);
 			rc = TC_ACT_UNSPEC;
 		} else {
@@ -437,6 +446,9 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 	}
 
 	state.ct_result = calico_ct_v4_lookup(&ct_lookup_ctx);
+	if (state.ct_result.flags & CALI_CT_FLAG_NAT_OUT) {
+		state.nat_outgoing = true;
+	}
 
 	state.post_nat_ip_dst = 0;
 	state.post_nat_dport = 0;
@@ -459,7 +471,7 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 
 	if (CALI_F_TO_WEP &&
 			skb->mark != CALI_SKB_MARK_SEEN &&
-			cali_rt_lookup_type(state.ip_src) == CALI_RT_LOCAL_HOST) {
+			cali_rt_type_is_local_host(cali_rt_lookup_type(state.ip_src))) {
 		// Host to workload traffic always allowed.  We discount traffic that was seen by
 		// another program since it must have come in via another interface.
 		CALI_DEBUG("Packet is from the host: ACCEPT\n");
@@ -475,13 +487,21 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 			CALI_INFO("Workload RPF fail: missing route.\n");
 			goto deny;
 		}
-		if (r->type != CALI_RT_LOCAL_WORKLOAD) {
+		if (!cali_rt_type_is_local_workload(r->type)) {
 			CALI_INFO("Workload RPF fail: not a local workload.\n");
 			goto deny;
 		}
 		if (r->if_index != skb->ifindex) {
 			CALI_INFO("Workload RPF fail skb iface (%d) != route iface (%d)\n", skb->ifindex, r->if_index);
 			goto deny;
+		}
+
+		// Check whether the workload needs outgoing NAT to this address.
+		if (r->type & CALI_RT_NAT_OUT) {
+			if (!(cali_rt_lookup_type(state.post_nat_ip_dst) & CALI_RT_IN_POOL)) {
+				CALI_DEBUG("Source is in NAT-outgoing pool but dest is not, need to SNAT.\n");
+				state.nat_outgoing = true;
+			}
 		}
 	}
 
@@ -573,11 +593,20 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct __sk_buff *skb,
 	CALI_DEBUG("nat_tun=%x\n", state->nat_tun_src);
 	CALI_DEBUG("pol_rc=%d\n", state->pol_rc);
 	CALI_DEBUG("sport=%d\n", state->sport);
+	CALI_DEBUG("nat_out=%d\n", state->nat_outgoing);
 	enum calico_reason reason = CALI_REASON_UNKNOWN;
 	int rc = TC_ACT_UNSPEC;
-	bool fib = true;
+	bool fib;
 
-	uint32_t seen_mark = CALI_SKB_MARK_SEEN;
+	uint32_t seen_mark;
+	if (CALI_F_FROM_WEP && state->nat_outgoing) {
+		fib = false;
+		seen_mark = CALI_SKB_MARK_NAT_OUT;
+	} else {
+		fib = true;
+		seen_mark = CALI_SKB_MARK_SEEN;
+	}
+
 
 	struct tcphdr *tcp_header = (void*)(ip_header+1);
 	struct udphdr *udp_header = (void*)(ip_header+1);
@@ -619,7 +648,7 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct __sk_buff *skb,
 
 		if (CALI_F_FROM_WEP &&
 				CALI_DROP_WORKLOAD_TO_HOST &&
-				cali_rt_lookup_type(state->post_nat_ip_dst) == CALI_RT_LOCAL_HOST) {
+				cali_rt_type_is_local_host(cali_rt_lookup_type(state->post_nat_ip_dst))) {
 			CALI_DEBUG("Workload to host traffic blocked by DefaultEndpointToHostAction: DROP\n");
 			goto deny;
 		}
@@ -632,6 +661,7 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct __sk_buff *skb,
 			.dst	= state->post_nat_ip_dst,
 			.dport	= state->post_nat_dport,
 			.nat_tun_src = state->nat_tun_src,
+			.nat_outgoing = !!(state->nat_outgoing),
 		};
 
 		if (state->ip_proto == IPPROTO_TCP) {
@@ -715,7 +745,7 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct __sk_buff *skb,
 
 		if (encap_needed) {
 			state->ip_src = cali_host_ip();
-			state->ip_dst = rt->type == CALI_RT_REMOTE_WORKLOAD ? rt->next_hop : state->post_nat_ip_dst;
+			state->ip_dst = cali_rt_type_is_remote_workload(rt->type) ? rt->next_hop : state->post_nat_ip_dst;
 			seen_mark = CALI_SKB_MARK_BYPASS_FWD;
 			goto nat_encap;
 		}

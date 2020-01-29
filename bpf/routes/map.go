@@ -17,6 +17,7 @@ package routes
 import (
 	"encoding/binary"
 	"fmt"
+	"strings"
 	"sync"
 
 	"github.com/pkg/errors"
@@ -54,19 +55,27 @@ func (k Key) AsBytes() []byte {
 	return k[:]
 }
 
-type Type uint32
+type Flags uint32
 
 const (
-	TypeUnknown        Type = 0
-	TypeRemoteWorkload Type = 1
-	TypeRemoteHost     Type = 2
-	TypeLocalHost      Type = 3
-	TypeLocalWorkload  Type = 4
+	FlagInIPAMPool  Flags = 1
+	FlagNATOutgoing Flags = 2
+	FlagWorkload    Flags = 4
+	FlagLocal       Flags = 8
+	FlagHost        Flags = 16
+
+	FlagsUnknown        Flags = 0
+	FlagsRemoteWorkload       = FlagWorkload
+	FlagsRemoteHost           = FlagHost
+	FlagsLocalHost            = FlagLocal | FlagHost
+	FlagsLocalWorkload        = FlagLocal | FlagWorkload
+
+	_ = FlagsUnknown
 )
 
 //
 // struct calico_route_value {
-//   __u32 type;
+//   __u32 flags;
 //   union {
 //     __u32 next_hop;
 //     __u32 ifIndex;
@@ -76,8 +85,8 @@ const ValueSize = 8
 
 type Value [ValueSize]byte
 
-func (v Value) Type() Type {
-	return Type(binary.LittleEndian.Uint32(v[:4]))
+func (v Value) Type() Flags {
+	return Flags(binary.LittleEndian.Uint32(v[:4]))
 }
 
 func (v Value) NextHop() ip.Addr {
@@ -86,25 +95,52 @@ func (v Value) NextHop() ip.Addr {
 	return addr
 }
 
+func (v Value) IfaceIndex() uint32 {
+	return binary.LittleEndian.Uint32(v[4:8])
+}
+
 func (v Value) AsBytes() []byte {
 	return v[:]
 }
 
 func (v Value) String() string {
-	switch v.Type() {
-	case TypeRemoteWorkload:
-		return fmt.Sprintf("remote workload, host IP %v", v.NextHop())
-	case TypeRemoteHost:
-		return "remote host"
-	case TypeLocalHost:
-		return "local host"
-	case TypeLocalWorkload:
-		return "local workload"
-	case TypeUnknown:
-		fallthrough
-	default:
-		return fmt.Sprintf("unknown type %d", v.Type())
+	var parts []string
+
+	typeFlags := v.Type()
+
+	if typeFlags&FlagLocal != 0 {
+		parts = append(parts, "local")
+	} else {
+		parts = append(parts, "remote")
 	}
+
+	if typeFlags&FlagHost != 0 {
+		parts = append(parts, "host")
+	} else if typeFlags&FlagWorkload != 0 {
+		parts = append(parts, "workload")
+	}
+
+	if typeFlags&FlagInIPAMPool != 0 {
+		parts = append(parts, "in-pool")
+	}
+
+	if typeFlags&FlagNATOutgoing != 0 {
+		parts = append(parts, "nat-out")
+	}
+
+	if typeFlags&FlagLocal != 0 && typeFlags&FlagWorkload != 0 {
+		parts = append(parts, "idx", fmt.Sprint(v.IfaceIndex()))
+	}
+
+	if typeFlags&FlagLocal == 0 && typeFlags&FlagWorkload != 0 {
+		parts = append(parts, "nh", fmt.Sprint(v.NextHop()))
+	}
+
+	if len(parts) == 0 {
+		return fmt.Sprintf("unknown type (%d)", typeFlags)
+	}
+
+	return strings.Join(parts, " ")
 }
 
 func NewKey(cidr ip.V4CIDR) Key {
@@ -116,22 +152,22 @@ func NewKey(cidr ip.V4CIDR) Key {
 	return k
 }
 
-func NewValueWithNextHop(valueType Type, nextHop ip.V4Addr) Value {
+func NewValue(flags Flags) Value {
 	var v Value
-	binary.LittleEndian.PutUint32(v[:4], uint32(valueType))
+	binary.LittleEndian.PutUint32(v[:4], uint32(flags))
+	return v
+}
+
+func NewValueWithNextHop(flags Flags, nextHop ip.V4Addr) Value {
+	var v Value
+	binary.LittleEndian.PutUint32(v[:4], uint32(flags))
 	copy(v[4:8], nextHop.AsNetIP().To4())
 	return v
 }
 
-func NewValue(valueType Type) Value {
+func NewValueWithIfIndex(flags Flags, ifIndex int) Value {
 	var v Value
-	binary.LittleEndian.PutUint32(v[:4], uint32(valueType))
-	return v
-}
-
-func NewLocalWorkloadValue(ifIndex int) Value {
-	var v Value
-	binary.LittleEndian.PutUint32(v[:4], uint32(TypeLocalWorkload))
+	binary.LittleEndian.PutUint32(v[:4], uint32(flags))
 	binary.LittleEndian.PutUint32(v[4:8], uint32(ifIndex))
 	return v
 }

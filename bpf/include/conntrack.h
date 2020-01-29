@@ -3,7 +3,7 @@
 
 #include <linux/in.h>
 #include "../include/nat.h"
-#import "bpf.h"
+#include "bpf.h"
 
 // Connection tracking.
 
@@ -14,10 +14,12 @@ struct calico_ct_key {
 };
 
 enum CALI_CT_TYPE {
-	CALI_CT_TYPE_NORMAL = 0,  // Non-NATted entry.
-	CALI_CT_TYPE_NAT_FWD = 1, // Forward entry for a DNATted flow, keyed on orig src/dst. Points to the reverse entry.
-	CALI_CT_TYPE_NAT_REV = 2, // "Reverse" entry for a NATted flow, contains NAT + tracking information.
-	CALI_CT_TYPE_NORMAL_TUN = 3, // NORMAL + reverse for tunneled encap on the return path
+	CALI_CT_TYPE_NORMAL     = 0x00,  // Non-NATted entry.
+	CALI_CT_TYPE_NAT_FWD    = 0x01, // Forward entry for a DNATted flow, keyed on orig src/dst. Points to the reverse entry.
+	CALI_CT_TYPE_NAT_REV    = 0x02, // "Reverse" entry for a NATted flow, contains NAT + tracking information.
+	CALI_CT_TYPE_NORMAL_TUN = 0x03, // NORMAL + reverse for tunneled encap on the return path
+
+	CALI_CT_FLAG_NAT_OUT    = 0x10,
 };
 
 struct calico_ct_leg {
@@ -37,12 +39,13 @@ struct calico_ct_value {
 	__u64 created;
 	__u64 last_seen; // 8
 	__u8 type;		 // 16
+	__u8 flags;
 
 	// Important to use explicit padding, otherwise the compiler can decide
 	// not to zero the padding bytes, which upsets the verifier.  Worse than
 	// that, debug logging often prevents such optimisation resulting in
 	// failures when debug logging is compiled out only :-).
-	__u8 pad0[7];
+	__u8 pad0[6];
 	union {
 		// CALI_CT_TYPE_NORMAL and CALI_CT_TYPE_NAT_REV.
 		struct {
@@ -74,6 +77,7 @@ struct ct_ctx {
 	__u16 orig_dport;
 	struct tcphdr *tcp;
 	__be32 nat_tun_src;
+	bool nat_outgoing;
 };
 
 struct bpf_map_def_extended __attribute__((section("maps"))) cali_v4_ct = {
@@ -169,6 +173,9 @@ static CALI_BPF_INLINE int calico_ct_v4_create_tracking(struct ct_ctx *ctx,
 	ct_value.created=now;
 	ct_value.last_seen=now;
 	ct_value.type = type;
+	if (ctx->nat_outgoing) {
+		ct_value.flags |= CALI_CT_FLAG_NAT_OUT;
+	}
 
 	if (ctx->nat_tun_src) {
 		ct_value.orig_ip = ctx->nat_tun_src;
@@ -295,7 +302,8 @@ enum calico_ct_result_type {
 };
 
 struct calico_ct_result {
-	__s32 rc;
+	__s16 rc;
+	__u16 flags;
 
 	union {
 		// For CALI_CT_ESTABLISHED_SNAT and CALI_CT_ESTABLISHED_DNAT.
@@ -451,6 +459,8 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_lookup(struct ct_ctx
 	__u64 now = bpf_ktime_get_ns();
 	v->last_seen = now;
 
+	result.flags = v->flags;
+
 	struct calico_ct_leg *src_to_dst, *dst_to_src;
 
 	struct calico_ct_value *tracking_v;
@@ -528,7 +538,6 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_lookup(struct ct_ctx
 			CALI_CT_DEBUG("Hit! NAT REV entry but not connection opener: ESTABLISHED.\n");
 			result.rc =	CALI_CT_ESTABLISHED;
 		}
-
 		break;
 
 	case CALI_CT_TYPE_NORMAL_TUN:

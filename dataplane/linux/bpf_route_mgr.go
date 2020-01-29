@@ -34,6 +34,9 @@ import (
 type bpfRouteManager struct {
 	myNodename string
 
+	ipPools      map[string]bpfIPAMPool
+	ipPoolsDirty bool
+
 	// Tracking for local host IPs.
 	localHostIPs      map[string]set.Set
 	localHostRoutes   map[routes.Key]routes.Value
@@ -66,6 +69,7 @@ type bpfRouteManager struct {
 func newBPFRouteManager(myNodename string, mc *bpf.MapContext) *bpfRouteManager {
 	return &bpfRouteManager{
 		myNodename:          myNodename,
+		ipPools:             map[string]bpfIPAMPool{},
 		desiredRoutes:       map[routes.Key]routes.Value{},
 		localIfaceToIfIndex: map[string]int{},
 		localHostIPs:        map[string]set.Set{},
@@ -85,16 +89,25 @@ func (m *bpfRouteManager) OnUpdate(msg interface{}) {
 	case *ifaceAddrsUpdate:
 		m.onIfaceAddrsUpdate(msg)
 
+	case *proto.IPAMPoolUpdate:
+		m.onIPAMPoolUpdate(msg)
+	case *proto.IPAMPoolRemove:
+		m.onIPAMPoolRemove(msg)
+
+	// Updates for remote IPAM blocks and remote workloads with borrowed IPs.  These tell us
+	// which host owns each IP block/IP.
 	case *proto.RouteUpdate:
 		m.onRouteUpdate(msg)
 	case *proto.RouteRemove:
 		m.onRouteRemove(msg)
 
+	// Updates for local workload endpoints only.  We use these to create local workload routes.
 	case *proto.WorkloadEndpointUpdate:
 		m.onWorkloadEndpointUpdate(msg)
 	case *proto.WorkloadEndpointRemove:
 		m.onWorkloadEndpointRemove(msg)
 
+	// Updates for all Calico hosts giving us the host's node IP.
 	case *proto.HostMetadataUpdate:
 		m.onHostMetadataUpdate(msg)
 	case *proto.HostMetadataRemove:
@@ -109,6 +122,15 @@ func (m *bpfRouteManager) CompleteDeferredWork() error {
 	err := m.routeMap.EnsureExists()
 	if err != nil {
 		log.WithError(err).Panic("Failed to create route map")
+	}
+
+	if m.ipPoolsDirty {
+		// TODO handle IPAM routes
+		// TODO insert routes for the IPAM pools themselves.
+		m.localWorkloadsDirty = true
+		m.localHostIPsDirty = true
+		m.remoteHostIPsDirty = true
+		m.ipPoolsDirty = false
 	}
 
 	if m.localWorkloadsDirty {
@@ -260,7 +282,7 @@ func (m *bpfRouteManager) recalculateLocalHostIPs() {
 				return nil
 			}
 			key := routes.NewKey(v4CIDR)
-			value := routes.NewValue(routes.TypeLocalHost)
+			value := routes.NewValue(routes.FlagsLocalHost | m.flagsForCIDR(v4CIDR))
 			newRoutes[key] = value
 
 			netIPs = append(netIPs, netIP)
@@ -274,6 +296,43 @@ func (m *bpfRouteManager) recalculateLocalHostIPs() {
 
 	m.onHostIPsChange(netIPs)
 
+}
+
+type bpfIPAMPool struct {
+	CIDR       ip.CIDR
+	Masquerade bool
+}
+
+func (m *bpfRouteManager) onIPAMPoolUpdate(msg *proto.IPAMPoolUpdate) {
+	// TODO IPAM pools and IPAM blocks can share the same CIDR
+	pool := msg.GetPool()
+	cidr, err := ip.ParseCIDROrIP(pool.Cidr)
+	if err != nil {
+		log.WithError(err).Panic("Failed to parse IPAM pool CIDR")
+	}
+	newPool := bpfIPAMPool{CIDR: cidr, Masquerade: pool.Masquerade}
+	oldPool, ok := m.ipPools[msg.Id]
+	if !ok || oldPool != newPool {
+		m.ipPools[msg.Id] = newPool
+		m.ipPoolsDirty = true
+	}
+}
+
+func (m *bpfRouteManager) onIPAMPoolRemove(msg *proto.IPAMPoolRemove) {
+	_, ok := m.ipPools[msg.Id]
+	if ok {
+		delete(m.ipPools, msg.Id)
+		m.ipPoolsDirty = true
+	}
+}
+
+func (m *bpfRouteManager) getContainingIPPool(cidr ip.V4CIDR) *bpfIPAMPool {
+	for _, p := range m.ipPools {
+		if poolCIDR, ok := p.CIDR.(ip.V4CIDR); ok && poolCIDR.ContainsV4(cidr.Addr().(ip.V4Addr)) {
+			return &p
+		}
+	}
+	return nil
 }
 
 func (m *bpfRouteManager) onHostIPsChange(newIPs []net.IP) {
@@ -299,13 +358,26 @@ func (m *bpfRouteManager) recalculateWorkloads() {
 				continue
 			}
 			key := routes.NewKey(v4CIDR)
-			value := routes.NewLocalWorkloadValue(m.localIfaceToIfIndex[wep.Name])
+			flags := routes.FlagsLocalWorkload
+			flags |= m.flagsForCIDR(v4CIDR)
+			value := routes.NewValueWithIfIndex(flags, m.localIfaceToIfIndex[wep.Name])
 			newRoutes[key] = value
 		}
 	}
 
 	m.applyRoutesDelta(oldRoutes, newRoutes)
 	m.localWorkloadRoutes = newRoutes
+}
+
+func (m *bpfRouteManager) flagsForCIDR(v4CIDR ip.V4CIDR) (flags routes.Flags) {
+	pool := m.getContainingIPPool(v4CIDR)
+	if pool != nil {
+		flags |= routes.FlagInIPAMPool
+		if pool.Masquerade {
+			flags |= routes.FlagNATOutgoing
+		}
+	}
+	return
 }
 
 func (m *bpfRouteManager) recalculateRemoteHostIPs() {
@@ -321,7 +393,7 @@ func (m *bpfRouteManager) recalculateRemoteHostIPs() {
 			continue
 		}
 		key := routes.NewKey(v4CIDR)
-		value := routes.NewValue(routes.TypeRemoteHost)
+		value := routes.NewValue(routes.FlagsRemoteHost | m.flagsForCIDR(v4CIDR))
 		newRoutes[key] = value
 	}
 
@@ -375,7 +447,15 @@ func (m *bpfRouteManager) onRouteUpdate(update *proto.RouteUpdate) {
 		// FIXME IPv6
 		return
 	}
-	value := routes.NewValueWithNextHop(routes.TypeRemoteWorkload, v4NextHop.Addr().(ip.V4Addr))
+
+	// TODO: if we used flagsForCIDR() here, we'd have an order-dependency with IP pools.
+	// That would require us to recalculate these routes when the IP pools change.  Since we're not using
+	// the nat-outgoing bit for remote routes and we know that remote routes should be in an IP pool, just set
+	// FlagInIPAMPool for all of these routes.  If we do get that wrong and we've got an orphaned IP block, it
+	// won't do any harm since we know it's still on a Calico host, which is what we really care about for
+	// routing purposes.
+	flags := routes.FlagsRemoteWorkload | routes.FlagInIPAMPool
+	value := routes.NewValueWithNextHop(flags, v4NextHop.Addr().(ip.V4Addr))
 
 	m.desiredRoutes[key] = value
 	m.dirtyRoutes.Add(key)
