@@ -1,6 +1,4 @@
-// +build fvtests
-
-// Copyright (c) 2019-2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -13,6 +11,8 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+
+// +build fvtests
 
 package fv_test
 
@@ -27,6 +27,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	options2 "github.com/projectcalico/libcalico-go/lib/options"
 
 	"github.com/davecgh/go-spew/spew"
 	"github.com/pkg/errors"
@@ -105,19 +107,19 @@ func withTunnel(tunnel string) bpfTestOpt {
 	}
 }
 
-const expectedRouteDump = `10.65.0.2/32: local workload
-10.65.0.3/32: local workload
-10.65.1.0/26: remote workload, host IP FELIX_1
-10.65.2.0/26: remote workload, host IP FELIX_2
+const expectedRouteDump = `10.65.0.2/32: local workload in-pool nat-out idx -
+10.65.0.3/32: local workload in-pool nat-out idx -
+10.65.1.0/26: remote workload in-pool nh FELIX_1
+10.65.2.0/26: remote workload in-pool nh FELIX_2
 FELIX_0/32: local host
 FELIX_1/32: remote host
 FELIX_2/32: remote host`
 
-const expectedRouteDumpIPIP = `10.65.0.1/32: local host
-10.65.0.2/32: local workload
-10.65.0.3/32: local workload
-10.65.1.0/26: remote workload, host IP FELIX_1
-10.65.2.0/26: remote workload, host IP FELIX_2
+const expectedRouteDumpIPIP = `10.65.0.1/32: local host in-pool nat-out
+10.65.0.2/32: local workload in-pool nat-out idx -
+10.65.0.3/32: local workload in-pool nat-out idx -
+10.65.1.0/26: remote workload in-pool nh FELIX_1
+10.65.2.0/26: remote workload in-pool nh FELIX_2
 FELIX_0/32: local host
 FELIX_1/32: remote host
 FELIX_2/32: remote host`
@@ -162,7 +164,9 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 			bpfLog = containers.Run("bpf-log", containers.RunOpts{AutoRemove: true}, "--privileged", "calico/bpftool:v5.3-amd64", "/bpftool", "prog", "tracelog")
 			infra = getInfra()
 
-			cc = &workload.ConnectivityChecker{}
+			cc = &workload.ConnectivityChecker{
+				CheckSNAT: true,
+			}
 			cc.Protocol = testOpts.protocol
 
 			options = infrastructure.DefaultTopologyOptions()
@@ -384,7 +388,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 					// - port 22, which is an inbound failsafe port.
 					// This allows us to test the interaction between do-not-track policy and failsafe
 					// ports.
-					const portsToOpen = "8055,2379,22"
+					const portsToOpen = "8055"
 					hostW[ii] = workload.Run(
 						felixes[ii],
 						fmt.Sprintf("host%d", ii),
@@ -450,6 +454,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 
 					lines := strings.Split(out, "\n")
 					var filteredLines []string
+					idxRE := regexp.MustCompile(`idx \d+`)
 					for _, l := range lines {
 						l = strings.TrimLeft(l, " ")
 						if len(l) == 0 {
@@ -458,6 +463,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						l = strings.ReplaceAll(l, felixes[0].IP, "FELIX_0")
 						l = strings.ReplaceAll(l, felixes[1].IP, "FELIX_1")
 						l = strings.ReplaceAll(l, felixes[2].IP, "FELIX_2")
+						l = idxRE.ReplaceAllLiteralString(l, "idx -")
 						filteredLines = append(filteredLines, l)
 					}
 					sort.Strings(filteredLines)
@@ -511,6 +517,32 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 
 					k8sClient = infra.(*infrastructure.K8sDatastoreInfra).K8sClient
 					_ = k8sClient
+				})
+
+				It("should handle NAT outgoing", func() {
+					By("SNATting outgoing traffic with the flag set")
+					cc.ExpectSNAT(w[0][0], felixes[0].IP, hostW[1])
+					cc.CheckConnectivity()
+
+					if testOpts.tunnel == "none" {
+						By("Leaving traffic alone with the flag clear")
+						pool, err := calicoClient.IPPools().Get(context.TODO(), "test-pool", options2.GetOptions{})
+						Expect(err).NotTo(HaveOccurred())
+						pool.Spec.NATOutgoing = false
+						pool, err = calicoClient.IPPools().Update(context.TODO(), pool, options2.SetOptions{})
+						Expect(err).NotTo(HaveOccurred())
+						cc.ResetExpectations()
+						cc.ExpectSNAT(w[0][0], w[0][0].IP, hostW[1])
+						cc.CheckConnectivity()
+
+						By("SNATting again with the flag set")
+						pool.Spec.NATOutgoing = true
+						pool, err = calicoClient.IPPools().Update(context.TODO(), pool, options2.SetOptions{})
+						Expect(err).NotTo(HaveOccurred())
+						cc.ResetExpectations()
+						cc.ExpectSNAT(w[0][0], felixes[0].IP, hostW[1])
+						cc.CheckConnectivity()
+					}
 				})
 
 				It("connectivity from all workloads via workload 0's main IP", func() {
