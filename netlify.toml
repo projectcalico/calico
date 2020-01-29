@@ -31,4 +31,3 @@
   from = "/latest/*"
   to = "/:splat"
   status = 301
-  force = true
