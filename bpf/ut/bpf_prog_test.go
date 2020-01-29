@@ -510,6 +510,7 @@ var srcV4CIDR = ip.CIDRFromNetIP(srcIP).(ip.V4CIDR)
 var ipv4Default = &layers.IPv4{
 	Version:  4,
 	IHL:      5,
+	TTL:      64,
 	Flags:    layers.IPv4DontFragment,
 	SrcIP:    srcIP,
 	DstIP:    dstIP,

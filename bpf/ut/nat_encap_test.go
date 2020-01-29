@@ -1,4 +1,4 @@
-// Copyright (c) 2019 Tigera, Inc. All rights reserved.
+// Copyright (c) 2019-2020 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -56,6 +56,13 @@ func TestNatEncap(t *testing.T) {
 		Expect(err).NotTo(HaveOccurred())
 		Expect(res.Retval).To(Equal(0))
 
+		// adjust the now decremented TTL
+		res.dataOut[14+8]++
+		// and zero ip csums in both as they must differ now
+		res.dataOut[14+8+1+1] = 0
+		res.dataOut[14+8+1+2] = 0
+		pktBytes[14+8+1+1] = 0
+		pktBytes[14+8+1+2] = 0
 		Expect(res.dataOut).To(Equal(pktBytes))
 	})
 }
@@ -109,10 +116,12 @@ func checkInnerIP(ip gopacket.Packet, NATed bool, ipv4 *layers.IPv4,
 	ipv4L := ip.Layer(layers.LayerTypeIPv4)
 	Expect(ipv4L).NotTo(BeNil())
 	if NATed {
-		Expect(ipv4L).To(layersMatchFields(ipv4, "Checksum"))
+		Expect(ipv4L).To(layersMatchFields(ipv4, "Checksum", "TTL"))
 	} else {
-		Expect(ipv4L).To(layersMatchFields(ipv4, "DstIP", "Checksum"))
+		Expect(ipv4L).To(layersMatchFields(ipv4, "DstIP", "Checksum", "TTL"))
 	}
+
+	Expect(ipv4L.(*layers.IPv4).TTL).To(Equal(ipv4.TTL - 1))
 
 	transportL := ip.Layer(transport.LayerType())
 	Expect(transportL).NotTo(BeNil())

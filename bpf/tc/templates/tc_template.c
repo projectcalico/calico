@@ -16,12 +16,14 @@
 
 #include "bpf.h"
 #include "log.h"
+#include "skb.h"
 #include "policy.h"
 #include "conntrack.h"
 #include "nat.h"
 #include "routes.h"
 #include "jump.h"
 #include "reasons.h"
+#include "icmp.h"
 
 #ifndef CALI_FIB_LOOKUP_ENABLED
 #define CALI_FIB_LOOKUP_ENABLED true
@@ -41,7 +43,9 @@
 
 #else
 
-static CALI_BPF_INLINE enum calico_policy_result execute_policy_norm(struct __sk_buff *skb,__u8 ip_proto, __u32 saddr, __u32 daddr, __u16 sport, __u16 dport) {
+static CALI_BPF_INLINE enum calico_policy_result execute_policy_norm(struct __sk_buff *skb,
+				__u8 ip_proto, __u32 saddr, __u32 daddr, __u16 sport, __u16 dport)
+{
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wunused-label"
 
@@ -68,8 +72,8 @@ int calico_tc_norm_pol_tail(struct __sk_buff *skb) {
 	        goto deny;
 	}
 
-	enum calico_policy_result pol_rc = execute_policy_norm(skb, state->ip_proto, state->ip_src, state->ip_dst, state->sport, state->dport);
-	state->pol_rc = pol_rc;
+	state->pol_rc = execute_policy_norm(skb, state->ip_proto, state->ip_src,
+					    state->ip_dst, state->sport, state->dport);
 
 	bpf_tail_call(skb, &cali_jump, 1);
 	CALI_DEBUG("Tail call to post-policy program failed: DROP\n");
@@ -78,46 +82,30 @@ deny:
 	return TC_ACT_SHOT;
 }
 
-static CALI_BPF_INLINE int calico_tc_skb_accepted(
-	struct __sk_buff *skb,
-	struct iphdr *ip_header,
-	struct cali_tc_state *state,
-	struct calico_nat_dest *nat_dest
-);
+struct fwd {
+	int res;
+	uint32_t mark;
+	enum calico_reason reason;
+#if FIB_ENABLED
+	uint32_t fib_flags;
+	bool fib;
+#endif
+};
 
-static CALI_BPF_INLINE bool skb_too_short(struct __sk_buff *skb)
-{
-	if (CALI_F_IPIP_ENCAPPED) {
-		return skb_shorter(skb, ETH_IPV4_UDP_SIZE + sizeof(struct iphdr));
-	} else if (CALI_F_L3) {
-		return skb_shorter(skb, IPV4_UDP_SIZE);
-	} else {
-		return skb_shorter(skb, ETH_IPV4_UDP_SIZE);
-	}
-	// TODO Deal with IP header with options.
-}
+#if FIB_ENABLED
+#define fwd_fib(fwd)			((fwd)->fib)
+#define fwd_fib_set(fwd, v)		((fwd)->fib = v)
+#define fwd_fib_set_flags(fwd, flags)	((fwd)->fib_flags = flags)
+#else
+#define fwd_fib(fwd)	false
+#define fwd_fib_set(fwd, v)
+#define fwd_fib_set_flags(fwd, flags)
+#endif
 
-static CALI_BPF_INLINE long skb_iphdr_offset(struct __sk_buff *skb)
-{
-	if (CALI_F_IPIP_ENCAPPED) {
-		// Ingress on an IPIP tunnel: skb is [ether|outer IP|inner IP|payload]
-		return sizeof(struct ethhdr) + sizeof(struct iphdr);
-	} else if (CALI_F_L3) {
-		// Egress on an IPIP tunnel: skb is [inner IP|payload]
-		return 0;
-	} else {
-		// Normal L2 interface: skb is [ether|IP|payload]
-		return sizeof(struct ethhdr);
-	}
-}
-
-static CALI_BPF_INLINE struct iphdr *skb_iphdr(struct __sk_buff *skb)
-{
-	long offset = skb_iphdr_offset(skb);
-	struct iphdr *ip = skb_ptr(skb, offset);
-	CALI_DEBUG("IP@%d; s=%x d=%x\n", offset, be32_to_host(ip->saddr), be32_to_host(ip->daddr));
-	return ip;
-}
+static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct __sk_buff *skb,
+							 struct iphdr *ip_header,
+							 struct cali_tc_state *state,
+							 struct calico_nat_dest *nat_dest);
 
 static CALI_BPF_INLINE int skb_nat_l4_csum_ipv4(struct __sk_buff *skb, size_t off,
 						__be32 ip_from, __be32 ip_to,
@@ -136,43 +124,133 @@ static CALI_BPF_INLINE int skb_nat_l4_csum_ipv4(struct __sk_buff *skb, size_t of
 	return ret;
 }
 
-static CALI_BPF_INLINE int calico_try_fib(struct __sk_buff *skb, struct cali_tc_state *state, struct bpf_fib_lookup *fib_params, uint32_t fib_flags) {
-	CALI_DEBUG("Traffic is towards the host namespace, doing Linux FIB lookup\n");
-	fib_params->l4_protocol = state->ip_proto;
-	int rc = bpf_fib_lookup(skb, fib_params, sizeof(fib_params), fib_flags);
-	if (rc == 0) {
-		CALI_DEBUG("FIB lookup succeeded\n");
-		// Update the MACs.  NAT may have invalidated pointer into the packet so need to
-		// revalidate.
-		if ((void *)(long)skb->data + sizeof(struct ethhdr) > (void *)(long)skb->data_end) {
-			CALI_DEBUG("BUG: packet got shorter?\n");
-			return TC_ACT_SHOT;
-		}
-		struct ethhdr *eth_hdr = (void *)(long)skb->data;
-		__builtin_memcpy(&eth_hdr->h_source, &fib_params->smac, sizeof(eth_hdr->h_source));
-		__builtin_memcpy(&eth_hdr->h_dest, &fib_params->dmac, sizeof(eth_hdr->h_dest));
+static CALI_BPF_INLINE int forward_or_drop(struct __sk_buff *skb,
+					   struct cali_tc_state *state,
+					   struct fwd *fwd)
+{
+	int rc = fwd->res;
+	enum calico_reason reason = fwd->reason;
 
-		// Redirect the packet.
-		CALI_DEBUG("Got Linux FIB hit, redirecting to iface %d.\n", fib_params->ifindex);
-		return bpf_redirect(fib_params->ifindex, 0);
-	} else if (rc < 0) {
-		CALI_DEBUG("FIB lookup failed (bad input): %d.\n", rc);
-	} else {
-		CALI_DEBUG("FIB lookup failed (FIB problem): %d.\n", rc);
+	if (rc == TC_ACT_SHOT) {
+		goto deny;
 	}
-	return TC_ACT_UNSPEC;
+
+#if FIB_ENABLED
+	// Try a short-circuit FIB lookup.
+	if (fwd_fib(fwd)) {
+		/* XXX we might include the tot_len in the fwd, set it once when
+		 * we get the ip_header the first time and only adjust the value
+		 * when we modify the packet - to avoid geting the header here
+		 * again - it is simpler though.
+		 */
+		if (skb_too_short(skb)) {
+			reason = CALI_REASON_SHORT;
+			CALI_DEBUG("Too short\n");
+			goto deny;
+		}
+		struct iphdr *ip_header = skb_iphdr(skb);
+		struct bpf_fib_lookup fib_params = {
+			.family = 2, /* AF_INET */
+			.tot_len = be16_to_host(ip_header->tot_len),
+			.ifindex = skb->ingress_ifindex,
+			.l4_protocol = state->ip_proto,
+			.sport = state->sport,
+			.dport = state->dport,
+		};
+
+		/* set the ipv4 here, otherwise the ipv4/6 unions do not get
+		 * zeroed properly
+		 */
+		fib_params.ipv4_src = state->ip_src;
+		fib_params.ipv4_dst = state->ip_dst;
+
+		CALI_DEBUG("Traffic is towards the host namespace, doing Linux FIB lookup\n");
+		rc = bpf_fib_lookup(skb, &fib_params, sizeof(fib_params), fwd->fib_flags);
+		if (rc == 0) {
+			CALI_DEBUG("FIB lookup succeeded\n");
+
+			/* Since we are going to short circuit the IP stack on
+			 * forward, check if TTL is still alive. If not, let the
+			 * IP stack handle it. It was approved by policy, so it
+			 * is safe.
+			 */
+			if ip_ttl_exceeded(ip_header) {
+				rc = TC_ACT_UNSPEC;
+				goto cancel_fib;
+			}
+
+			// Update the MACs.  NAT may have invalidated pointer into the packet so need to
+			// revalidate.
+			if ((void *)(long)skb->data + sizeof(struct ethhdr) > (void *)(long)skb->data_end) {
+				reason = CALI_REASON_SHORT;
+				goto deny;
+			}
+			struct ethhdr *eth_hdr = (void *)(long)skb->data;
+			__builtin_memcpy(&eth_hdr->h_source, fib_params.smac, sizeof(eth_hdr->h_source));
+			__builtin_memcpy(&eth_hdr->h_dest, fib_params.dmac, sizeof(eth_hdr->h_dest));
+
+			// Redirect the packet.
+			CALI_DEBUG("Got Linux FIB hit, redirecting to iface %d.\n", fib_params.ifindex);
+			rc = bpf_redirect(fib_params.ifindex, 0);
+
+			/* now we know we will bypass IP stack and ip->ttl > 1, decrement it! */
+			if (rc == TC_ACT_REDIRECT) {
+				ip_dec_ttl(ip_header);
+			}
+		} else if (rc < 0) {
+			CALI_DEBUG("FIB lookup failed (bad input): %d.\n", rc);
+			rc = TC_ACT_UNSPEC;
+		} else {
+			CALI_DEBUG("FIB lookup failed (FIB problem): %d.\n", rc);
+			rc = TC_ACT_UNSPEC;
+		}
+	}
+
+cancel_fib:
+#endif /* FIB_ENABLED */
+
+	if (CALI_F_TO_HOST) {
+		// Packet is towards host namespace, mark it so that downstream programs know that they're
+		// not the first to see the packet.
+		CALI_DEBUG("Traffic is towards host namespace, marking with %x.\n", fwd->mark);
+		// FIXME: this ignores the mask that we should be using.  However, if we mask off the bits,
+		// then clang spots that it can do a 16-bit store instead of a 32-bit load/modify/store,
+		// which trips up the validator.
+		skb->mark = fwd->mark;
+	}
+
+	if (CALI_LOG_LEVEL >= CALI_LOG_LEVEL_INFO) {
+		uint64_t prog_end_time = bpf_ktime_get_ns();
+		CALI_INFO("Final result=ALLOW (%d). Program execution time: %lluns\n",
+				rc, prog_end_time-state->prog_start_time);
+	}
+
+	return rc;
+
+deny:
+	if (CALI_LOG_LEVEL >= CALI_LOG_LEVEL_INFO) {
+		uint64_t prog_end_time = bpf_ktime_get_ns();
+		CALI_INFO("Final result=DENY (%x). Program execution time: %lluns\n",
+				reason, prog_end_time-state->prog_start_time);
+	}
+
+	return TC_ACT_SHOT;
 }
 
-static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb) {
-	enum calico_reason reason = CALI_REASON_UNKNOWN;
+static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
+{
 	struct cali_tc_state state = {};
+	struct fwd fwd = {
+		.res = TC_ACT_UNSPEC,
+		.reason = CALI_REASON_UNKNOWN,
+	};
+
+	fwd_fib_set(&fwd, true);
+
 	if (CALI_LOG_LEVEL >= CALI_LOG_LEVEL_INFO) {
 		state.prog_start_time = bpf_ktime_get_ns();
 	}
 	state.nat_tun_src = 0;
-
-	int rc = TC_ACT_UNSPEC;
-	uint32_t fib_flags = 0;
 
 #ifdef CALI_SET_SKB_MARK
 	/* workaround for test since bpftool run cannot set it in context, wont
@@ -183,8 +261,8 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb) {
 
 	if (!CALI_F_TO_HOST && skb->mark == CALI_SKB_MARK_BYPASS) {
 		CALI_DEBUG("Packet pre-approved by another hook, allow.\n");
-		reason = CALI_REASON_BYPASS;
-		goto allow_bypass;
+		fwd.reason = CALI_REASON_BYPASS;
+		goto allow;
 	}
 
 	struct iphdr *ip_header;
@@ -192,15 +270,15 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb) {
 		switch (skb->mark) {
 		case CALI_SKB_MARK_BYPASS_FWD:
 			CALI_DEBUG("Packet approved for forward.\n");
-			reason = CALI_REASON_BYPASS;
-			goto allow_bypass;
+			fwd.reason = CALI_REASON_BYPASS;
+			goto allow;
 		case CALI_SKB_MARK_BYPASS_NAT_RET_ENCAPED:
 			CALI_DEBUG("Encaped, approved by return to NAT tunnel.\n");
-			reason = CALI_REASON_BYPASS;
+			fwd.reason = CALI_REASON_BYPASS;
 
 			/* we need to fix up the right src host IP */
 			if (skb_too_short(skb)) {
-				reason = CALI_REASON_SHORT;
+				fwd.reason = CALI_REASON_SHORT;
 				CALI_DEBUG("Too short\n");
 				goto deny;
 			}
@@ -213,11 +291,11 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb) {
 
 			int res = bpf_l3_csum_replace(skb, ip_csum_offset, ip_src, cali_host_ip(), 4);
 			if (res) {
-				reason = CALI_REASON_CSUM_FAIL;
+				fwd.reason = CALI_REASON_CSUM_FAIL;
 				goto deny;
 			}
 
-			goto allow_bypass;
+			goto allow;
 		}
 	}
 
@@ -229,7 +307,8 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb) {
 		break;
 	case ETH_P_ARP:
 		CALI_DEBUG("ARP: allowing packet\n");
-		goto allow_skip_fib;
+		fwd_fib_set(&fwd, false);
+		goto allow;
 	case ETH_P_IPV6:
 		if (CALI_F_WEP) {
 			CALI_DEBUG("IPv6 from workload: drop\n");
@@ -244,13 +323,14 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb) {
 			CALI_DEBUG("Unknown ethertype (%x), drop\n", be16_to_host(skb->protocol));
 			goto deny;
 		} else {
-			CALI_DEBUG("Unknown ethertype on host interface (%x), allow\n", be16_to_host(skb->protocol));
+			CALI_DEBUG("Unknown ethertype on host interface (%x), allow\n",
+								be16_to_host(skb->protocol));
 			return TC_ACT_UNSPEC;
 		}
 	}
 
 	if (skb_too_short(skb)) {
-		reason = CALI_REASON_SHORT;
+		fwd.reason = CALI_REASON_SHORT;
 		CALI_DEBUG("Too short\n");
 		goto deny;
 	}
@@ -264,12 +344,12 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb) {
 			state.nat_tun_src = ip_header->saddr;
 			CALI_DEBUG("vxlan decap\n");
 			if (vxlan_v4_decap(skb)) {
-				reason = CALI_REASON_DECAP_FAIL;
+				fwd.reason = CALI_REASON_DECAP_FAIL;
 				goto deny;
 			}
 
 			if (skb_too_short(skb)) {
-				reason = CALI_REASON_SHORT;
+				fwd.reason = CALI_REASON_SHORT;
 				CALI_DEBUG("Too short after VXLAN decap\n");
 				goto deny;
 			}
@@ -285,12 +365,6 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb) {
 	struct icmphdr *icmp_header = (void*)(ip_header+1);
 
 	state.ip_proto = ip_header->protocol;
-
-	struct bpf_fib_lookup fib_params = {
-		.family = 2, /* AF_INET */
-		.tot_len = be16_to_host(ip_header->tot_len),
-		.ifindex = skb->ingress_ifindex,
-	};
 
 	switch (state.ip_proto) {
 	case IPPROTO_TCP:
@@ -318,7 +392,8 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb) {
 		if (CALI_F_HEP) {
 			// TODO IPIP whitelist.
 			CALI_DEBUG("IPIP: allow\n");
-			goto allow_skip_fib;
+			fwd_fib_set(&fwd, false);
+			goto allow;
 		}
 	default:
 		CALI_DEBUG("Unknown protocol (%d), unable to extract ports\n", (int)state.ip_proto);
@@ -444,43 +519,14 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb) {
 	return TC_ACT_SHOT;
 
 skip_policy:
-	return calico_tc_skb_accepted(skb, ip_header, &state, nat_dest);
+	fwd = calico_tc_skb_accepted(skb, ip_header, &state, nat_dest);
 
 allow:
-	// Try a short-circuit FIB lookup.
-	if (!CALI_F_L3 && CALI_FIB_LOOKUP_ENABLED && CALI_F_TO_HOST) {
-		rc = calico_try_fib(skb, &state, &fib_params, fib_flags);
-		if (rc == TC_ACT_SHOT) {
-			goto deny;
-		}
-	}
-
-allow_skip_fib:
-allow_bypass:
-	if (CALI_F_TO_HOST) {
-		// Packet is towards host namespace, mark it so that downstream programs know that they're
-		// not the first to see the packet.
-		CALI_DEBUG("Traffic is towards host namespace, marking with %x.\n", CALI_SKB_MARK_SEEN);
-		// FIXME: this ignores the mask that we should be using.  However, if we mask off the bits,
-		// then clang spots that it can do a 16-bit store instead of a 32-bit load/modify/store,
-		// which trips up the validator.
-		skb->mark = CALI_SKB_MARK_SEEN;
-	}
-
-	if (CALI_LOG_LEVEL >= CALI_LOG_LEVEL_INFO) {
-		uint64_t prog_end_time = bpf_ktime_get_ns();
-		CALI_INFO("Final result=ALLOW (%d). Program execution time: %lluns\n",
-				rc, prog_end_time-state.prog_start_time);
-	}
-	return rc;
-
+finalize:
+	return forward_or_drop(skb, &state, &fwd);
 deny:
-	if (CALI_LOG_LEVEL >= CALI_LOG_LEVEL_INFO) {
-		uint64_t prog_end_time = bpf_ktime_get_ns();
-		CALI_INFO("Final result=DENY (%x). Program execution time: %lluns\n",
-				reason, prog_end_time-state.prog_start_time);
-	}
-	return TC_ACT_SHOT;
+	fwd.res = TC_ACT_SHOT;
+	goto finalize;
 }
 
 __attribute__((section("1/1")))
@@ -509,23 +555,18 @@ int calico_tc_skb_accepted_entrypoint(struct __sk_buff *skb) {
 		nat_dest = &nat_dest_2;
 	}
 
-	return calico_tc_skb_accepted(
-		skb,
-		ip_header,
-		state,
-		nat_dest
-	);
+	struct fwd fwd = calico_tc_skb_accepted(skb, ip_header, state, nat_dest);
+	return forward_or_drop(skb, state, &fwd);
 
 deny:
 	return TC_ACT_SHOT;
 }
 
-static CALI_BPF_INLINE int calico_tc_skb_accepted(
-	struct __sk_buff *skb,
-	struct iphdr *ip_header,
-	struct cali_tc_state *state,
-	struct calico_nat_dest *nat_dest
-) {
+static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct __sk_buff *skb,
+							 struct iphdr *ip_header,
+							 struct cali_tc_state *state,
+							 struct calico_nat_dest *nat_dest)
+{
 	CALI_DEBUG("Entering calico_tc_skb_accepted\n");
 	CALI_DEBUG("src=%x dst=%x\n", be32_to_host(state->ip_src), be32_to_host(state->ip_dst));
 	CALI_DEBUG("post_nat=%x:%d\n", be32_to_host(state->post_nat_ip_dst), state->post_nat_dport);
@@ -534,6 +575,7 @@ static CALI_BPF_INLINE int calico_tc_skb_accepted(
 	CALI_DEBUG("sport=%d\n", state->sport);
 	enum calico_reason reason = CALI_REASON_UNKNOWN;
 	int rc = TC_ACT_UNSPEC;
+	bool fib = true;
 
 	uint32_t seen_mark = CALI_SKB_MARK_SEEN;
 
@@ -545,11 +587,22 @@ static CALI_BPF_INLINE int calico_tc_skb_accepted(
 	bool encap_needed = false;
 	uint32_t fib_flags = 0;
 
-	struct bpf_fib_lookup fib_params = {
-		.family = 2, /* AF_INET */
-		.tot_len = be16_to_host(ip_header->tot_len),
-		.ifindex = skb->ingress_ifindex,
-	};
+	/* XXX we cannot pass the related ICMP after NATing back yet, so we need
+	 * to act here, we know we are forwarding.
+	 */
+	CALI_DEBUG("ip->ttl %d\n", ip_header->ttl);
+	if (ip_ttl_exceeded(ip_header)) {
+		switch (state->ct_result.rc){
+		case CALI_CT_NEW:
+			if (nat_dest) {
+				goto icmp_ttl_exceeded;
+			}
+			break;
+		case CALI_CT_ESTABLISHED_DNAT:
+		case CALI_CT_ESTABLISHED_SNAT:
+			goto icmp_ttl_exceeded;
+		}
+	}
 
 	switch (state->ct_result.rc){
 	case CALI_CT_NEW:
@@ -600,11 +653,6 @@ static CALI_BPF_INLINE int calico_tc_skb_accepted(
 
 		conntrack_create(&ct_nat_ctx, nat_dest != NULL);
 
-		fib_params.sport = state->sport;
-		fib_params.dport = state->post_nat_dport;
-		fib_params.ipv4_src = state->ip_src;
-		fib_params.ipv4_dst = state->post_nat_ip_dst;
-
 		if (nat_dest == NULL) {
 			goto allow;
 		}
@@ -616,12 +664,6 @@ static CALI_BPF_INLINE int calico_tc_skb_accepted(
 		if (state->ct_result.rc == CALI_CT_ESTABLISHED_DNAT) {
 			state->post_nat_ip_dst = state->ct_result.nat_ip;
 			state->post_nat_dport = state->ct_result.nat_port;
-
-			fib_params.l4_protocol = state->ip_proto;
-			fib_params.sport = state->sport;
-			fib_params.dport = state->post_nat_dport;
-			fib_params.ipv4_src = state->ip_src;
-			fib_params.ipv4_dst = state->post_nat_ip_dst;
 		}
 
 		CALI_DEBUG("CT: DNAT to %x:%d\n", be32_to_host(state->post_nat_ip_dst), state->post_nat_dport);
@@ -678,10 +720,8 @@ static CALI_BPF_INLINE int calico_tc_skb_accepted(
 			goto nat_encap;
 		}
 
-		fib_params.sport = state->sport;
-		fib_params.dport = state->post_nat_dport;
-		fib_params.ipv4_src = state->ip_src;
-		fib_params.ipv4_dst = state->post_nat_ip_dst;
+		state->dport = state->post_nat_dport;
+		state->ip_dst = state->post_nat_ip_dst;
 
 		goto allow;
 
@@ -716,10 +756,8 @@ static CALI_BPF_INLINE int calico_tc_skb_accepted(
 			goto deny;
 		}
 
-		fib_params.sport = state->ct_result.nat_port;
-		fib_params.dport = state->dport;
-		fib_params.ipv4_src = state->ct_result.nat_ip;
-		fib_params.ipv4_dst = state->ip_dst;
+		state->sport = state->ct_result.nat_port;
+		state->ip_src = state->ct_result.nat_ip;
 
 		/* Packet is returning from the DNAT tunnel and has been approved by the
 		 * host policy. This packet is going to be forwarded to its original
@@ -744,12 +782,6 @@ static CALI_BPF_INLINE int calico_tc_skb_accepted(
 			goto nat_encap;
 		}
 
-		fib_params.l4_protocol = state->ip_proto;
-		fib_params.sport = state->sport;
-		fib_params.dport = state->dport;
-		fib_params.ipv4_src = state->ip_src;
-		fib_params.ipv4_dst = state->ip_dst;
-
 		goto allow;
 	default:
 		if (CALI_F_FROM_HEP) {
@@ -759,13 +791,40 @@ static CALI_BPF_INLINE int calico_tc_skb_accepted(
 			// FIXME: Properly handle host endpoint conntrack failures
 			CALI_DEBUG("Traffic is towards host namespace but not conntracked, "
 				"falling through to iptables\n");
-			return TC_ACT_UNSPEC;
+			fib = false;
+			goto allow;
 		}
 		goto deny;
 	}
 
 	CALI_INFO("We should never fall through here\n");
 	goto deny;
+
+icmp_ttl_exceeded:
+	if (skb_too_short(skb)) {
+		reason = CALI_REASON_SHORT;
+		CALI_DEBUG("Too short\n");
+		goto deny;
+	}
+
+	ip_header = skb_iphdr(skb);
+	/* we silently drop the packet if things go wrong */
+
+	/* XXX we should check if it is broadcast or multicast and not respond */
+
+	/* do not respond to IP fragments except the first */
+	if (ip_frag_no(ip_header)) {
+		goto deny;
+	}
+
+	if (icmp_v4_ttl_exceeded(skb)) {
+		goto deny;
+	}
+
+	/* we need to allow the reponse for the IP stack to route it back.
+	 * XXX we might want to send it back the same iface
+	 */
+	goto allow;
 
 icmp_too_big:
 	if (skb_shorter(skb, ETH_IPV4_UDP_SIZE) || icmp_v4_too_big(skb)) {
@@ -783,12 +842,6 @@ icmp_too_big:
 
 	fib_flags |= BPF_FIB_LOOKUP_OUTPUT;
 
-	fib_params.l4_protocol = state->ip_proto;
-	fib_params.sport = state->sport;
-	fib_params.dport = state->dport;
-	fib_params.ipv4_src = state->ip_dst;
-	fib_params.ipv4_dst = state->ip_src;
-
 	goto allow;
 
 nat_encap:
@@ -804,45 +857,24 @@ nat_encap:
 		fib_flags |= BPF_FIB_LOOKUP_OUTPUT;
 	}
 
-	fib_params.l4_protocol = state->ip_proto;
-	fib_params.sport = state->sport;
-	fib_params.dport = state->dport;
-	fib_params.ipv4_src = state->ip_src;
-	fib_params.ipv4_dst = state->ip_dst;
-
 allow:
-	// Try a short-circuit FIB lookup.
-	if (!CALI_F_L3 && CALI_FIB_LOOKUP_ENABLED && CALI_F_TO_HOST) {
-		rc = calico_try_fib(skb, state, &fib_params, fib_flags);
-		if (rc == TC_ACT_SHOT) {
-			goto deny;
-		}
+	{
+		struct fwd fwd = {
+			.res = rc,
+			.mark = seen_mark,
+		};
+		fwd_fib_set(&fwd, fib);
+		fwd_fib_set_flags(&fwd, fib_flags);
+		return fwd;
 	}
-
-	if (CALI_F_TO_HOST) {
-		// Packet is towards host namespace, mark it so that downstream programs know that they're
-		// not the first to see the packet.
-		CALI_DEBUG("Traffic is towards host namespace, marking with %x.\n", seen_mark);
-		// FIXME: this ignores the mask that we should be using.  However, if we mask off the bits,
-		// then clang spots that it can do a 16-bit store instead of a 32-bit load/modify/store,
-		// which trips up the validator.
-		skb->mark = seen_mark;
-	}
-
-	if (CALI_LOG_LEVEL >= CALI_LOG_LEVEL_INFO) {
-		uint64_t prog_end_time = bpf_ktime_get_ns();
-		CALI_INFO("Final result=ALLOW (%d). Program execution time: %lluns\n",
-				rc, prog_end_time-state->prog_start_time);
-	}
-	return rc;
 
 deny:
-	if (CALI_LOG_LEVEL >= CALI_LOG_LEVEL_INFO) {
-		uint64_t prog_end_time = bpf_ktime_get_ns();
-		CALI_INFO("Final result=DENY (%x). Program execution time: %lluns\n",
-				reason, prog_end_time-state->prog_start_time);
+	{
+		struct fwd fwd = {
+			.res = TC_ACT_SHOT,
+		};
+		return fwd;
 	}
-	return TC_ACT_SHOT;
 }
 
 #ifndef CALI_ENTRYPOINT_NAME

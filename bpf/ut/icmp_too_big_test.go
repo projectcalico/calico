@@ -1,4 +1,4 @@
-// Copyright (c) 2019 Tigera, Inc. All rights reserved.
+// Copyright (c) 2019-2020 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -74,7 +74,7 @@ func checkICMPTooBig(pktR gopacket.Packet, ipv4 *layers.IPv4, udp *layers.UDP, e
 	ipv4R := ipv4L.(*layers.IPv4)
 
 	Expect(ipv4R.Protocol).To(Equal(layers.IPProtocolICMPv4))
-	Expect(ipv4R.SrcIP).To(Equal(ipv4.DstIP))
+	Expect(ipv4R.SrcIP.String()).To(Equal(hostIP.String()))
 	Expect(ipv4R.DstIP).To(Equal(ipv4.SrcIP))
 
 	icmpL := pktR.Layer(layers.LayerTypeICMPv4)
