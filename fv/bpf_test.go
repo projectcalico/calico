@@ -28,9 +28,9 @@ import (
 	"strings"
 	"time"
 
-	options2 "github.com/projectcalico/libcalico-go/lib/options"
-
 	"github.com/davecgh/go-spew/spew"
+	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/gomega"
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
@@ -38,20 +38,20 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/client-go/kubernetes"
 
-	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/gomega"
-
-	"github.com/projectcalico/felix/bpf"
-	"github.com/projectcalico/felix/bpf/nat"
-	"github.com/projectcalico/felix/fv/containers"
-	"github.com/projectcalico/felix/fv/infrastructure"
-	"github.com/projectcalico/felix/fv/utils"
-	"github.com/projectcalico/felix/fv/workload"
 	"github.com/projectcalico/libcalico-go/lib/apiconfig"
 	api "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	client "github.com/projectcalico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/libcalico-go/lib/ipam"
 	cnet "github.com/projectcalico/libcalico-go/lib/net"
+	options2 "github.com/projectcalico/libcalico-go/lib/options"
+
+	"github.com/projectcalico/felix/bpf"
+	"github.com/projectcalico/felix/bpf/nat"
+	. "github.com/projectcalico/felix/fv/connectivity"
+	"github.com/projectcalico/felix/fv/containers"
+	"github.com/projectcalico/felix/fv/infrastructure"
+	"github.com/projectcalico/felix/fv/utils"
+	"github.com/projectcalico/felix/fv/workload"
 )
 
 // We run with and without connection-time load balancing for a couple of reasons:
@@ -140,7 +140,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 			infra          infrastructure.DatastoreInfra
 			felixes        []*infrastructure.Felix
 			calicoClient   client.Interface
-			cc             *workload.ConnectivityChecker
+			cc             *Checker
 			externalClient *containers.Container
 			bpfLog         *containers.Container
 			options        infrastructure.TopologyOptions
@@ -164,7 +164,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 			bpfLog = containers.Run("bpf-log", containers.RunOpts{AutoRemove: true}, "--privileged", "calico/bpftool:v5.3-amd64", "/bpftool", "prog", "tracelog")
 			infra = getInfra()
 
-			cc = &workload.ConnectivityChecker{
+			cc = &Checker{
 				CheckSNAT: true,
 			}
 			cc.Protocol = testOpts.protocol
@@ -573,9 +573,9 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						ip := testSvc.Spec.ClusterIP
 						port := uint16(testSvc.Spec.Ports[0].Port)
 
-						cc.ExpectSome(w[0][1], workload.IP(ip), port)
-						cc.ExpectSome(w[1][0], workload.IP(ip), port)
-						cc.ExpectSome(w[1][1], workload.IP(ip), port)
+						cc.ExpectSome(w[0][1], TargetIP(ip), port)
+						cc.ExpectSome(w[1][0], TargetIP(ip), port)
+						cc.ExpectSome(w[1][1], TargetIP(ip), port)
 						cc.CheckConnectivity()
 					})
 
@@ -584,7 +584,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 							ip := testSvc.Spec.ClusterIP
 							port := uint16(testSvc.Spec.Ports[0].Port)
 
-							cc.ExpectSome(w[0][0], workload.IP(ip), port)
+							cc.ExpectSome(w[0][0], TargetIP(ip), port)
 							cc.CheckConnectivity()
 						})
 
@@ -593,8 +593,8 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 							ip := testSvc.Spec.ClusterIP
 							port := uint16(testSvc.Spec.Ports[0].Port)
 
-							cc.ExpectSome(felixes[0], workload.IP(ip), port)
-							cc.ExpectNone(felixes[1], workload.IP(ip), port)
+							cc.ExpectSome(felixes[0], TargetIP(ip), port)
+							cc.ExpectNone(felixes[1], TargetIP(ip), port)
 							cc.CheckConnectivity()
 						})
 					} else {
@@ -603,8 +603,8 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 							ip := testSvc.Spec.ClusterIP
 							port := uint16(testSvc.Spec.Ports[0].Port)
 
-							cc.ExpectNone(felixes[0], workload.IP(ip), port)
-							cc.ExpectNone(felixes[1], workload.IP(ip), port)
+							cc.ExpectNone(felixes[0], TargetIP(ip), port)
+							cc.ExpectNone(felixes[1], TargetIP(ip), port)
 							cc.CheckConnectivity()
 						})
 					}
@@ -637,10 +637,10 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 								ip := testSvc.Spec.ClusterIP
 								port := uint16(testSvc.Spec.Ports[0].Port)
 
-								cc.ExpectSome(felixes[0], workload.IP(ip), port)
-								cc.ExpectSome(felixes[1], workload.IP(ip), port)
-								cc.ExpectNone(w[0][1], workload.IP(ip), port)
-								cc.ExpectNone(w[1][0], workload.IP(ip), port)
+								cc.ExpectSome(felixes[0], TargetIP(ip), port)
+								cc.ExpectSome(felixes[1], TargetIP(ip), port)
+								cc.ExpectNone(w[0][1], TargetIP(ip), port)
+								cc.ExpectNone(w[1][0], TargetIP(ip), port)
 								cc.CheckConnectivity()
 							})
 						})
@@ -651,8 +651,8 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						ip := testSvc.Spec.ClusterIP
 						port := uint16(testSvc.Spec.Ports[0].Port)
 
-						cc.ExpectSome(w[0][1], workload.IP(ip), port)
-						cc.ExpectSome(w[1][0], workload.IP(ip), port)
+						cc.ExpectSome(w[0][1], TargetIP(ip), port)
+						cc.ExpectSome(w[1][0], TargetIP(ip), port)
 						cc.CheckConnectivity()
 
 						By("Checking timestamps on conntrack entries are sane")
@@ -718,9 +718,9 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 							ip := testSvcUpdated.Spec.ClusterIP
 							port := uint16(testSvcUpdated.Spec.Ports[0].Port)
 
-							cc.ExpectSome(w[0][1], workload.IP(ip), port)
-							cc.ExpectSome(w[1][0], workload.IP(ip), port)
-							cc.ExpectSome(w[1][1], workload.IP(ip), port)
+							cc.ExpectSome(w[0][1], TargetIP(ip), port)
+							cc.ExpectSome(w[1][0], TargetIP(ip), port)
+							cc.ExpectSome(w[1][1], TargetIP(ip), port)
 							cc.CheckConnectivity()
 						})
 
@@ -728,9 +728,9 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 							ip := testSvc.Spec.ClusterIP
 							port := uint16(testSvc.Spec.Ports[0].Port)
 
-							cc.ExpectNone(w[0][1], workload.IP(ip), port)
-							cc.ExpectNone(w[1][0], workload.IP(ip), port)
-							cc.ExpectNone(w[1][1], workload.IP(ip), port)
+							cc.ExpectNone(w[0][1], TargetIP(ip), port)
+							cc.ExpectNone(w[1][0], TargetIP(ip), port)
+							cc.ExpectNone(w[1][1], TargetIP(ip), port)
 							cc.CheckConnectivity()
 
 							natmaps, natbacks := dumpNATmaps(felixes)
@@ -781,9 +781,9 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 								ip := testSvcUpdated.Spec.ClusterIP
 								port := uint16(testSvcUpdated.Spec.Ports[0].Port)
 
-								cc.ExpectNone(w[0][1], workload.IP(ip), port)
-								cc.ExpectNone(w[1][0], workload.IP(ip), port)
-								cc.ExpectNone(w[1][1], workload.IP(ip), port)
+								cc.ExpectNone(w[0][1], TargetIP(ip), port)
+								cc.ExpectNone(w[1][0], TargetIP(ip), port)
+								cc.ExpectNone(w[1][1], TargetIP(ip), port)
 								cc.CheckConnectivity()
 
 								for i, f := range felixes {
@@ -841,9 +841,9 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						ip := testSvc.Spec.ClusterIP
 						port := uint16(testSvc.Spec.Ports[0].Port)
 
-						cc.ExpectSome(w[1][1], workload.IP(ip), port)
-						cc.ExpectSome(w[1][1], workload.IP(ip), port)
-						cc.ExpectSome(w[1][1], workload.IP(ip), port)
+						cc.ExpectSome(w[1][1], TargetIP(ip), port)
+						cc.ExpectSome(w[1][1], TargetIP(ip), port)
+						cc.ExpectSome(w[1][1], TargetIP(ip), port)
 						cc.CheckConnectivity()
 
 						if !testOpts.connTimeEnabled {
@@ -883,9 +883,9 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						clusterIP := testSvc.Spec.ClusterIP
 						port := uint16(testSvc.Spec.Ports[0].Port)
 
-						cc.ExpectSome(w[0][1], workload.IP(clusterIP), port)
-						cc.ExpectSome(w[1][0], workload.IP(clusterIP), port)
-						cc.ExpectSome(w[1][1], workload.IP(clusterIP), port)
+						cc.ExpectSome(w[0][1], TargetIP(clusterIP), port)
+						cc.ExpectSome(w[1][0], TargetIP(clusterIP), port)
+						cc.ExpectSome(w[1][1], TargetIP(clusterIP), port)
 						cc.CheckConnectivity()
 
 					})
@@ -895,20 +895,20 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 							node0IP := felixes[0].IP
 							node1IP := felixes[1].IP
 							// Via remote nodeport, should fail.
-							cc.ExpectNone(w[0][1], workload.IP(node1IP), npPort)
-							cc.ExpectNone(w[1][0], workload.IP(node1IP), npPort)
-							cc.ExpectNone(w[1][1], workload.IP(node1IP), npPort)
+							cc.ExpectNone(w[0][1], TargetIP(node1IP), npPort)
+							cc.ExpectNone(w[1][0], TargetIP(node1IP), npPort)
+							cc.ExpectNone(w[1][1], TargetIP(node1IP), npPort)
 							// Include a check that goes via the local nodeport to make sure the dataplane has converged.
-							cc.ExpectSome(w[0][1], workload.IP(node0IP), npPort)
+							cc.ExpectSome(w[0][1], TargetIP(node0IP), npPort)
 							cc.CheckConnectivity()
 						})
 					} else {
 						It("should have connectivity from all workloads via a nodeport to workload 0", func() {
 							node1IP := felixes[1].IP
 
-							cc.ExpectSome(w[0][1], workload.IP(node1IP), npPort)
-							cc.ExpectSome(w[1][0], workload.IP(node1IP), npPort)
-							cc.ExpectSome(w[1][1], workload.IP(node1IP), npPort)
+							cc.ExpectSome(w[0][1], TargetIP(node1IP), npPort)
+							cc.ExpectSome(w[1][0], TargetIP(node1IP), npPort)
+							cc.ExpectSome(w[1][1], TargetIP(node1IP), npPort)
 							cc.CheckConnectivity()
 						})
 					}
@@ -917,7 +917,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						It("should have connectivity from a workload via a nodeport on another node to workload 0", func() {
 							ip := felixes[1].IP
 
-							cc.ExpectSome(w[2][1], workload.IP(ip), npPort)
+							cc.ExpectSome(w[2][1], TargetIP(ip), npPort)
 							cc.CheckConnectivity()
 
 						})
@@ -927,16 +927,16 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						if !testOpts.connTimeEnabled {
 							Skip("FIXME pod cannot connect to self without connect time lb")
 						}
-						cc.ExpectSome(w[0][0], workload.IP(felixes[1].IP), npPort)
-						cc.ExpectSome(w[0][0], workload.IP(felixes[0].IP), npPort)
+						cc.ExpectSome(w[0][0], TargetIP(felixes[1].IP), npPort)
+						cc.ExpectSome(w[0][0], TargetIP(felixes[0].IP), npPort)
 						cc.CheckConnectivity()
 					})
 
 					It("should not have connectivity from external to w[0] via local/remote node", func() {
-						cc.ExpectNone(externalClient, workload.IP(felixes[1].IP), npPort)
-						cc.ExpectNone(externalClient, workload.IP(felixes[0].IP), npPort)
+						cc.ExpectNone(externalClient, TargetIP(felixes[1].IP), npPort)
+						cc.ExpectNone(externalClient, TargetIP(felixes[0].IP), npPort)
 						// Include a check that goes via the local nodeport to make sure the dataplane has converged.
-						cc.ExpectSome(w[0][1], workload.IP(felixes[0].IP), npPort)
+						cc.ExpectSome(w[0][1], TargetIP(felixes[0].IP), npPort)
 						cc.CheckConnectivity()
 					})
 
@@ -961,9 +961,9 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 									Skip("FIXME externalClient also does conntime balancing")
 								}
 
-								cc.ExpectNone(externalClient, workload.IP(felixes[1].IP), npPort)
+								cc.ExpectNone(externalClient, TargetIP(felixes[1].IP), npPort)
 								// Include a check that goes via the nodeport with a local backing pod to make sure the dataplane has converged.
-								cc.ExpectSome(externalClient, workload.IP(felixes[0].IP), npPort)
+								cc.ExpectSome(externalClient, TargetIP(felixes[0].IP), npPort)
 								cc.CheckConnectivity()
 							})
 						} else {
@@ -972,7 +972,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 									Skip("FIXME externalClient also does conntime balancing")
 								}
 
-								cc.ExpectSome(externalClient, workload.IP(felixes[1].IP), npPort)
+								cc.ExpectSome(externalClient, TargetIP(felixes[1].IP), npPort)
 								cc.CheckConnectivity()
 							})
 						}
@@ -987,7 +987,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 								"nodePortIP":       felixes[1].IP,
 							}).Infof("external->nodeport connection")
 
-							cc.ExpectSome(externalClient, workload.IP(felixes[0].IP), npPort)
+							cc.ExpectSome(externalClient, TargetIP(felixes[0].IP), npPort)
 							cc.CheckConnectivity()
 						})
 					})

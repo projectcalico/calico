@@ -1,6 +1,4 @@
-// +build fvtests
-
-// Copyright (c) 2017-2019 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,10 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// +build fvtests
+
 package fv_test
 
 import (
 	"strconv"
+
+	"github.com/projectcalico/felix/fv/connectivity"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -37,7 +39,7 @@ var _ = Context("_INGRESS-EGRESS_ _BPF-SAFE_ with initialized Felix, etcd datast
 		felix  *infrastructure.Felix
 		client client.Interface
 		w      [3]*workload.Workload
-		cc     *workload.ConnectivityChecker
+		cc     *connectivity.Checker
 	)
 
 	BeforeEach(func() {
@@ -63,7 +65,7 @@ var _ = Context("_INGRESS-EGRESS_ _BPF-SAFE_ with initialized Felix, etcd datast
 			w[ii].Configure(client)
 		}
 
-		cc = &workload.ConnectivityChecker{}
+		cc = &connectivity.Checker{}
 	})
 
 	AfterEach(func() {
@@ -234,7 +236,7 @@ var _ = Context("with Typha and Felix-Typha TLS", func() {
 		felix  *infrastructure.Felix
 		client client.Interface
 		w      [3]*workload.Workload
-		cc     *workload.ConnectivityChecker
+		cc     *connectivity.Checker
 	)
 
 	BeforeEach(func() {
@@ -263,7 +265,7 @@ var _ = Context("with Typha and Felix-Typha TLS", func() {
 			w[ii].Configure(client)
 		}
 
-		cc = &workload.ConnectivityChecker{}
+		cc = &connectivity.Checker{}
 	})
 
 	AfterEach(func() {

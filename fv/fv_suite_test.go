@@ -1,6 +1,4 @@
-// +build fvtests
-
-// Copyright (c) 2017-2018 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,10 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// +build fvtests
+
 package fv_test
 
 import (
 	"testing"
+
+	"github.com/projectcalico/felix/fv/connectivity"
 
 	"github.com/onsi/gomega/format"
 
@@ -26,8 +28,6 @@ import (
 	. "github.com/onsi/gomega"
 
 	"github.com/projectcalico/felix/fv/infrastructure"
-	"github.com/projectcalico/felix/fv/workload"
-
 	"github.com/projectcalico/libcalico-go/lib/testutils"
 )
 
@@ -45,12 +45,12 @@ func TestFv(t *testing.T) {
 }
 
 var _ = AfterEach(func() {
-	defer workload.UnactivatedConnectivityCheckers.Clear()
+	defer connectivity.UnactivatedCheckers.Clear()
 	if CurrentGinkgoTestDescription().Failed {
 		// If the test has already failed, ignore any connectivity checker leak.
 		return
 	}
-	Expect(workload.UnactivatedConnectivityCheckers.Len()).To(BeZero(),
+	Expect(connectivity.UnactivatedCheckers.Len()).To(BeZero(),
 		"Test bug: ConnectivityChecker was created but not activated.")
 })
 

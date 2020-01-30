@@ -1,6 +1,4 @@
-// +build fvtests
-
-// Copyright (c) 2017-2019 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// +build fvtests
+
 package fv_test
 
 import (
@@ -22,6 +22,8 @@ import (
 	"regexp"
 	"strconv"
 	"time"
+
+	"github.com/projectcalico/felix/fv/connectivity"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -96,7 +98,7 @@ var _ = Context("_BPF-SAFE_ Latency tests with initialized Felix and etcd datast
 	describeLatencyTests := func(c latencyConfig) {
 		var (
 			w   [2]*workload.Workload
-			cc  *workload.ConnectivityChecker
+			cc  *connectivity.Checker
 			pol *api.GlobalNetworkPolicy
 		)
 
@@ -133,7 +135,7 @@ var _ = Context("_BPF-SAFE_ Latency tests with initialized Felix and etcd datast
 				w[ii].Configure(client)
 			}
 
-			cc = &workload.ConnectivityChecker{
+			cc = &connectivity.Checker{
 				Protocol: "tcp",
 			}
 

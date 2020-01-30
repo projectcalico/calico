@@ -22,7 +22,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/projectcalico/felix/fv/conncheck"
+	"github.com/projectcalico/felix/fv/connectivity"
 
 	"github.com/containernetworking/plugins/pkg/ns"
 	docopt "github.com/docopt/docopt-go"
@@ -155,7 +155,7 @@ func tryConnect(ipAddress, port, sourcePort, protocol, loopFile string) error {
 		decoder := json.NewDecoder(conn)
 
 		for {
-			req := conncheck.NewRequest()
+			req := connectivity.NewRequest()
 			data, err := json.Marshal(req)
 			if err != nil {
 				log.WithError(err).Fatal("Failed to marshal data")
@@ -165,7 +165,7 @@ func tryConnect(ipAddress, port, sourcePort, protocol, loopFile string) error {
 				log.WithError(err).Fatal("Failed to send data")
 			}
 			log.WithField("message", req).Info("Sent message over UDP")
-			var resp conncheck.Response
+			var resp connectivity.Response
 			err = decoder.Decode(&resp)
 			if err != nil {
 				log.WithError(err).Fatal("Failed to read response")
@@ -203,13 +203,13 @@ func tryConnect(ipAddress, port, sourcePort, protocol, loopFile string) error {
 		encoder := json.NewEncoder(conn)
 
 		for {
-			req := conncheck.NewRequest()
+			req := connectivity.NewRequest()
 			err := encoder.Encode(req)
 			if err != nil {
 				log.WithError(err).Fatal("Failed to send data")
 			}
 			log.WithField("message", req).Info("Sent message over TCP")
-			var resp conncheck.Response
+			var resp connectivity.Response
 			err = decoder.Decode(&resp)
 			if err != nil {
 				log.WithError(err).Fatal("Failed to read response")
