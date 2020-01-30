@@ -88,7 +88,7 @@ func TestICMPttlExceededFromHEP(t *testing.T) {
 	runBpfTest(t, "calico_from_workload_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
 		// Insert a reverse route for the source workload.
 		rtKey := routes.NewKey(srcV4CIDR).AsBytes()
-		rtVal := routes.NewLocalWorkloadValue(1).AsBytes()
+		rtVal := routes.NewValueWithIfIndex(routes.FlagsLocalWorkload, 1).AsBytes()
 		err = rtMap.Update(rtKey, rtVal)
 		defer func() {
 			err := rtMap.Delete(rtKey)

@@ -83,7 +83,7 @@ func (cmd *conntrackDumpCmd) Run(c *cobra.Command, _ []string) {
 		}
 		copy(ctKey[:], k[:])
 
-		var ctVal conntrack.Entry
+		var ctVal conntrack.Value
 		if len(v) != len(ctVal) {
 			log.Panic("Value has unexpected length")
 		}

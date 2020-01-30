@@ -76,7 +76,7 @@ func TestNATPodPodXNode(t *testing.T) {
 
 	// Insert a reverse route for the source workload.
 	rtKey := routes.NewKey(srcV4CIDR).AsBytes()
-	rtVal := routes.NewLocalWorkloadValue(1).AsBytes()
+	rtVal := routes.NewValueWithIfIndex(routes.FlagsLocalWorkload, 1).AsBytes()
 	err = rtMap.Update(rtKey, rtVal)
 	defer func() {
 		err := rtMap.Delete(rtKey)
@@ -305,7 +305,7 @@ func TestNATNodePort(t *testing.T) {
 	Expect(err).NotTo(HaveOccurred())
 	err = rtMap.Update(
 		routes.NewKey(ip.CIDRFromIPNet(&node2wCIDR).(ip.V4CIDR)).AsBytes(),
-		routes.NewValueWithNextHop(routes.TypeRemoteWorkload, ip.FromNetIP(node2ip).(ip.V4Addr)).AsBytes(),
+		routes.NewValueWithNextHop(routes.FlagsRemoteWorkload, ip.FromNetIP(node2ip).(ip.V4Addr)).AsBytes(),
 	)
 	Expect(err).NotTo(HaveOccurred())
 
@@ -536,7 +536,7 @@ func TestNATNodePortICMPTooBig(t *testing.T) {
 	Expect(err).NotTo(HaveOccurred())
 	err = rtMap.Update(
 		routes.NewKey(ip.CIDRFromIPNet(&node2wCIDR).(ip.V4CIDR)).AsBytes(),
-		routes.NewValueWithNextHop(routes.TypeRemoteWorkload, ip.FromNetIP(node2IP).(ip.V4Addr)).AsBytes(),
+		routes.NewValueWithNextHop(routes.FlagsRemoteWorkload, ip.FromNetIP(node2IP).(ip.V4Addr)).AsBytes(),
 	)
 	Expect(err).NotTo(HaveOccurred())
 
@@ -604,7 +604,7 @@ func TestNATAffinity(t *testing.T) {
 
 	// Insert a reverse route for the source workload.
 	rtKey := routes.NewKey(srcV4CIDR).AsBytes()
-	rtVal := routes.NewLocalWorkloadValue(1).AsBytes()
+	rtVal := routes.NewValueWithIfIndex(routes.FlagsLocalWorkload, 1).AsBytes()
 	err = rtMap.Update(rtKey, rtVal)
 	defer func() {
 		err := rtMap.Delete(rtKey)

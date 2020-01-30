@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -131,7 +131,7 @@ func (l *LivenessScanner) Scan() {
 	}
 }
 
-func (l *LivenessScanner) EntryExpired(nowNanos int64, proto uint8, entry Entry) (reason string, expired bool) {
+func (l *LivenessScanner) EntryExpired(nowNanos int64, proto uint8, entry Value) (reason string, expired bool) {
 	sinceCreation := time.Duration(nowNanos - entry.Created())
 	if sinceCreation < l.timeouts.CreationGracePeriod {
 		log.Debug("Conntrack entry in creation grace period. Ignoring.")

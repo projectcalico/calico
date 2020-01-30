@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2019 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,17 +16,19 @@ package workload
 
 import (
 	"bufio"
+	"encoding/json"
 	"fmt"
 	"io"
 	"io/ioutil"
 	"os"
 	"os/exec"
-	"reflect"
 	"regexp"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/projectcalico/felix/fv/conncheck"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -235,7 +237,11 @@ func (w *Workload) SourceName() string {
 	return w.Name
 }
 
-func (w *Workload) CanConnectTo(ip, port, protocol string) bool {
+func (w *Workload) SourceIPs() []string {
+	return []string{w.IP}
+}
+
+func (w *Workload) CanConnectTo(ip, port, protocol string) *conncheck.Response {
 	anyPort := Port{
 		Workload: w,
 	}
@@ -259,6 +265,10 @@ func (w *Port) SourceName() string {
 		return w.Name
 	}
 	return fmt.Sprintf("%s:%d", w.Name, w.Port)
+}
+
+func (w *Port) SourceIPs() []string {
+	return []string{w.IP}
 }
 
 func (w *Workload) NamespaceID() string {
@@ -470,7 +480,7 @@ func startPermanentConnection(w *Workload, ip string, port, sourcePort int) (*Pe
 	}, nil
 }
 
-func (p *Port) CanConnectTo(ip, port, protocol string) bool {
+func (p *Port) CanConnectTo(ip, port, protocol string) *conncheck.Response {
 	// Ensure that the host has the 'test-connection' binary.
 	p.C.EnsureBinary("test-connection")
 
@@ -511,7 +521,21 @@ func (p *Port) CanConnectTo(ip, port, protocol string) bool {
 		"stdout": string(wOut),
 		"stderr": string(wErr)}).WithError(err).Info("Connection test")
 
-	return err == nil
+	if err != nil {
+		return nil
+	}
+
+	r := regexp.MustCompile(`RESPONSE=(.*)\n`)
+	m := r.FindSubmatch(wOut)
+	if len(m) > 0 {
+		var resp conncheck.Response
+		err := json.Unmarshal(m[1], &resp)
+		if err != nil {
+			log.WithError(err).WithField("output", string(wOut)).Panic("Failed to parse connection check response")
+		}
+		return &resp
+	}
+	return nil
 }
 
 // ToMatcher implements the connectionTarget interface, allowing this port to be used as
@@ -574,12 +598,13 @@ type connectivityMatcher struct {
 }
 
 type connectionSource interface {
-	CanConnectTo(ip, port, protocol string) bool
+	CanConnectTo(ip, port, protocol string) *conncheck.Response
 	SourceName() string
+	SourceIPs() []string
 }
 
 func (m *connectivityMatcher) Match(actual interface{}) (success bool, err error) {
-	success = actual.(connectionSource).CanConnectTo(m.ip, m.port, m.protocol)
+	success = actual.(connectionSource).CanConnectTo(m.ip, m.port, m.protocol) != nil
 	return
 }
 
@@ -596,9 +621,31 @@ func (m *connectivityMatcher) NegatedFailureMessage(actual interface{}) (message
 }
 
 type expectation struct {
-	from     connectionSource     // Workload or Container
-	to       *connectivityMatcher // Workload or IP, + port
-	expected bool
+	from      connectionSource     // Workload or Container
+	to        *connectivityMatcher // Workload or IP, + port
+	expected  bool
+	expSrcIPs []string
+}
+
+func (e expectation) Matches(response *conncheck.Response, checkSNAT bool) bool {
+	if e.expected {
+		if response == nil {
+			return false
+		}
+		if checkSNAT {
+			for _, src := range e.expSrcIPs {
+				if src == response.SourceIP() {
+					return true
+				}
+			}
+			return false
+		}
+	} else {
+		if response != nil {
+			return false
+		}
+	}
+	return true
 }
 
 var UnactivatedConnectivityCheckers = set.New()
@@ -609,7 +656,7 @@ var UnactivatedConnectivityCheckers = set.New()
 //     var cc = &workload.ConnectivityChecker{}
 //     cc.ExpectNone(w[2], w[0], 1234)
 //     cc.ExpectSome(w[1], w[0], 5678)
-//     Eventually(cc.ActualConnectivity, "10s", "100ms").Should(Equal(cc.ExpectedConnectivity()))
+//     Eventually(cc.ActualConnectivity, "10s", "100ms").Should(Equal(cc.ExpectedConnectivityPretty()))
 //
 // Note that the ActualConnectivity method is passed to Eventually as a function pointer to allow
 // Ginkgo to re-evaluate the result as needed.
@@ -617,6 +664,7 @@ type ConnectivityChecker struct {
 	ReverseDirection bool
 	Protocol         string // "tcp" or "udp"
 	expectations     []expectation
+	CheckSNAT        bool
 }
 
 func (c *ConnectivityChecker) ExpectSome(from connectionSource, to connectionTarget, explicitPort ...uint16) {
@@ -624,7 +672,16 @@ func (c *ConnectivityChecker) ExpectSome(from connectionSource, to connectionTar
 	if c.ReverseDirection {
 		from, to = to.(connectionSource), from.(connectionTarget)
 	}
-	c.expectations = append(c.expectations, expectation{from, to.ToMatcher(explicitPort...), true})
+	c.expectations = append(c.expectations, expectation{from, to.ToMatcher(explicitPort...), true, from.SourceIPs()})
+}
+
+func (c *ConnectivityChecker) ExpectSNAT(from connectionSource, srcIP string, to connectionTarget, explicitPort ...uint16) {
+	UnactivatedConnectivityCheckers.Add(c)
+	c.CheckSNAT = true
+	if c.ReverseDirection {
+		from, to = to.(connectionSource), from.(connectionTarget)
+	}
+	c.expectations = append(c.expectations, expectation{from, to.ToMatcher(explicitPort...), true, []string{srcIP}})
 }
 
 func (c *ConnectivityChecker) ExpectNone(from connectionSource, to connectionTarget, explicitPort ...uint16) {
@@ -632,21 +689,22 @@ func (c *ConnectivityChecker) ExpectNone(from connectionSource, to connectionTar
 	if c.ReverseDirection {
 		from, to = to.(connectionSource), from.(connectionTarget)
 	}
-	c.expectations = append(c.expectations, expectation{from, to.ToMatcher(explicitPort...), false})
+	c.expectations = append(c.expectations, expectation{from, to.ToMatcher(explicitPort...), false, nil})
 }
 
 func (c *ConnectivityChecker) ResetExpectations() {
 	c.expectations = nil
+	c.CheckSNAT = false
 }
 
-// ActualConnectivity calculates the current connectivity for all the expected paths.  One string is
-// returned for each expectation, in the order they were recorded.  The strings are intended to be
-// human readable, and they are in the same order and format as those returned by
-// ExpectedConnectivity().
-func (c *ConnectivityChecker) ActualConnectivity() []string {
+// ActualConnectivity calculates the current connectivity for all the expected paths.  It returns a
+// slice containing one response for each attempted check (or nil if the check failed) along with
+// a same-length slice containing a pretty-printed description of the check and its result.
+func (c *ConnectivityChecker) ActualConnectivity() ([]*conncheck.Response, []string) {
 	UnactivatedConnectivityCheckers.Discard(c)
 	var wg sync.WaitGroup
-	result := make([]string, len(c.expectations))
+	responses := make([]*conncheck.Response, len(c.expectations))
+	pretty := make([]string, len(c.expectations))
 	for i, exp := range c.expectations {
 		wg.Add(1)
 		go func(i int, exp expectation) {
@@ -656,32 +714,33 @@ func (c *ConnectivityChecker) ActualConnectivity() []string {
 			if c.Protocol != "" {
 				p = c.Protocol
 			}
-			hasConnectivity := exp.from.CanConnectTo(exp.to.ip, exp.to.port, p)
-			result[i] = fmt.Sprintf("%s -> %s = %v", exp.from.SourceName(), exp.to.targetName, hasConnectivity)
+			responses[i] = exp.from.CanConnectTo(exp.to.ip, exp.to.port, p)
+			pretty[i] = fmt.Sprintf("%s -> %s = %v", exp.from.SourceName(), exp.to.targetName, responses[i] != nil)
+			if c.CheckSNAT && responses[i] != nil {
+				srcIP := strings.Split(responses[i].SourceAddr, ":")[0]
+				pretty[i] += " (from " + srcIP + ")"
+			}
 		}(i, exp)
 	}
 	wg.Wait()
-	log.Debug("Connectivity", result)
-	return result
+	log.Debug("Connectivity", responses)
+	return responses, pretty
 }
 
-// ExpectedConnectivity returns one string per recorded expection in order, encoding the expected
-// connectivity in the same format used by ActualConnectivity().
-func (c *ConnectivityChecker) ExpectedConnectivity() []string {
+// ExpectedConnectivityPretty returns one string per recorded expectation in order, encoding the expected
+// connectivity in similar format used by ActualConnectivity().
+func (c *ConnectivityChecker) ExpectedConnectivityPretty() []string {
 	result := make([]string, len(c.expectations))
 	for i, exp := range c.expectations {
 		result[i] = fmt.Sprintf("%s -> %s = %v", exp.from.SourceName(), exp.to.targetName, exp.expected)
+		if c.CheckSNAT && exp.expected {
+			result[i] += " (from " + strings.Join(exp.expSrcIPs, "|") + ")"
+		}
 	}
 	return result
 }
 
 var defaultConnectivityTimeout = 10 * time.Second
-
-func init() {
-	if os.Getenv("FELIX_FV_ENABLE_BPF") == "true" {
-		defaultConnectivityTimeout = 20 * time.Second
-	}
-}
 
 func (c *ConnectivityChecker) CheckConnectivityOffset(offset int, optionalDescription ...interface{}) {
 	c.CheckConnectivityWithTimeoutOffset(offset+2, defaultConnectivityTimeout, optionalDescription...)
@@ -702,33 +761,38 @@ func (c *ConnectivityChecker) CheckConnectivityWithTimeout(timeout time.Duration
 }
 
 func (c *ConnectivityChecker) CheckConnectivityWithTimeoutOffset(callerSkip int, timeout time.Duration, optionalDescription ...interface{}) {
-	expConnectivity := c.ExpectedConnectivity()
+	var expConnectivity []string
 	start := time.Now()
 
 	// Track the number of attempts. If the first connectivity check fails, we want to
 	// do at least one retry before we time out.  That covers the case where the first
 	// connectivity check takes longer than the timeout.
 	completedAttempts := 0
-	var actualConn []string
+	var actualConn []*conncheck.Response
+	var actualConnPretty []string
 	for time.Since(start) < timeout || completedAttempts < 2 {
-		actualConn = c.ActualConnectivity()
-		if reflect.DeepEqual(actualConn, expConnectivity) {
+		actualConn, actualConnPretty = c.ActualConnectivity()
+		failed := false
+		expConnectivity = c.ExpectedConnectivityPretty()
+		for i := range c.expectations {
+			exp := c.expectations[i]
+			act := actualConn[i]
+			if !exp.Matches(act, c.CheckSNAT) {
+				failed = true
+				actualConnPretty[i] += " <---- WRONG"
+				expConnectivity[i] += " <---- EXPECTED"
+			}
+		}
+		if !failed {
+			// Success!
 			return
 		}
 		completedAttempts++
 	}
 
-	// Build a concise description of the incorrect connectivity.
-	for i := range actualConn {
-		if actualConn[i] != expConnectivity[i] {
-			actualConn[i] += " <---- WRONG"
-			expConnectivity[i] += " <----"
-		}
-	}
-
 	message := fmt.Sprintf(
 		"Connectivity was incorrect:\n\nExpected\n    %s\nto match\n    %s",
-		strings.Join(actualConn, "\n    "),
+		strings.Join(actualConnPretty, "\n    "),
 		strings.Join(expConnectivity, "\n    "),
 	)
 	Fail(message, callerSkip)

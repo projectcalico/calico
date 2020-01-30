@@ -16,10 +16,14 @@ struct cali_tc_state {
 	__u16 dport;
 	__u16 post_nat_dport;
 	__u8 ip_proto;
-	__u8 pad;
+	__u8 flags;
 	struct calico_ct_result ct_result;
 	struct calico_nat_dest nat_dest;
 	__u64 prog_start_time;
+};
+
+enum cali_state_flags {
+	CALI_ST_NAT_OUTGOING = 1,
 };
 
 struct bpf_map_def_extended __attribute__((section("maps"))) cali_v4_state = {

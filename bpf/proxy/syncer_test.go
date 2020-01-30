@@ -474,7 +474,7 @@ var _ = Describe("BPF Syncer", func() {
 			_ = rt.Update(
 				routes.NewKey(ip.CIDRFromAddrAndPrefix(ip.FromString("10.2.1.0"), 24).(ip.V4CIDR)),
 				routes.NewValueWithNextHop(
-					routes.TypeRemoteWorkload,
+					routes.FlagsRemoteWorkload,
 					ip.FromString("10.123.0.111").(ip.V4Addr)),
 			)
 
@@ -492,7 +492,7 @@ var _ = Describe("BPF Syncer", func() {
 			_ = rt.Update(
 				routes.NewKey(ip.CIDRFromAddrAndPrefix(ip.FromString("10.2.55.0"), 24).(ip.V4CIDR)),
 				routes.NewValueWithNextHop(
-					routes.TypeRemoteWorkload,
+					routes.FlagsRemoteWorkload,
 					ip.FromString("10.123.0.111").(ip.V4Addr)),
 			)
 
@@ -510,7 +510,7 @@ var _ = Describe("BPF Syncer", func() {
 			_ = rt.Update(
 				routes.NewKey(ip.CIDRFromAddrAndPrefix(ip.FromString("10.2.3.0"), 24).(ip.V4CIDR)),
 				routes.NewValueWithNextHop(
-					routes.TypeRemoteWorkload,
+					routes.FlagsRemoteWorkload,
 					ip.FromString("10.123.0.113").(ip.V4Addr)),
 			)
 
@@ -547,13 +547,13 @@ var _ = Describe("BPF Syncer", func() {
 			_ = rt.Update(
 				routes.NewKey(ip.CIDRFromAddrAndPrefix(ip.FromString("10.2.2.0"), 24).(ip.V4CIDR)),
 				routes.NewValueWithNextHop(
-					routes.TypeRemoteWorkload,
+					routes.FlagsRemoteWorkload,
 					ip.FromString("10.123.0.112").(ip.V4Addr)),
 			)
 			_ = rt.Update(
 				routes.NewKey(ip.CIDRFromAddrAndPrefix(ip.FromString("10.2.3.0"), 24).(ip.V4CIDR)),
 				routes.NewValueWithNextHop(
-					routes.TypeRemoteWorkload,
+					routes.FlagsRemoteWorkload,
 					ip.FromString("10.123.0.113").(ip.V4Addr)),
 			)
 
