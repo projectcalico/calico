@@ -330,11 +330,11 @@ func (s *Syncer) applySvc(skey svcKey, sinfo k8sp.ServicePort, eps []k8sp.Endpoi
 func (s *Syncer) applyExpandedNP(sname k8sp.ServicePortName, sinfo k8sp.ServicePort,
 	eps []k8sp.Endpoint, node ip.V4Addr, nport int) error {
 	skey := getSvcKey(sname, getSvcKeyExtra(svcTypeNodePortRemote, node.String()))
-	si := *(sinfo.(*k8sp.BaseServiceInfo))
-	si.ClusterIP = node.AsNetIP()
-	si.Port = nport
+	si := serviceInfoFromK8sServicePort(sinfo)
+	si.clusterIP = node.AsNetIP()
+	si.port = nport
 
-	if err := s.applySvc(skey, &si, eps, nil); err != nil {
+	if err := s.applySvc(skey, si, eps, nil); err != nil {
 		return errors.Errorf("apply NodePortRemote for %s node %s", sname, node)
 	}
 
@@ -399,10 +399,10 @@ func (s *Syncer) applyDerived(sname k8sp.ServicePortName, t svcType, sinfo k8sp.
 	count := svc.count
 	local := svc.localCount
 
-	skey = getSvcKey(sname, getSvcKeyExtra(t, sinfo.ClusterIPString()))
+	skey = getSvcKey(sname, getSvcKeyExtra(t, sinfo.ClusterIP().String()))
 	switch t {
 	case svcTypeNodePort:
-		if sinfo.(*k8sp.BaseServiceInfo).OnlyNodeLocalEndpoints {
+		if sinfo.OnlyNodeLocalEndpoints() {
 			count = local // use only local eps
 		}
 	}
@@ -448,37 +448,32 @@ func (s *Syncer) apply(state DPSyncerState) error {
 
 		// N.B. we assume that k8s provide us with no duplicities
 		for _, extIP := range sinfo.ExternalIPStrings() {
-			extInfo := *(sinfo.(*k8sp.BaseServiceInfo))
-			extInfo.ClusterIP = net.ParseIP(extIP)
-			if extInfo.ClusterIP == nil {
-				log.Errorf("failed to parse ExternalIP %s for service %s", extIP, sname)
-				continue
-			}
-			err := s.applyDerived(sname, svcTypeExternalIP, &extInfo)
+			extInfo := serviceInfoFromK8sServicePort(sinfo)
+			extInfo.clusterIP = net.ParseIP(extIP)
+			err := s.applyDerived(sname, svcTypeExternalIP, extInfo)
 			if err != nil {
 				log.Errorf("failed to apply ExternalIP %s for service %s : %s", extIP, sname, err)
 				continue
 			}
 		}
 
-		if nport := sinfo.GetNodePort(); nport != 0 {
-			bi := sinfo.(*k8sp.BaseServiceInfo)
+		if nport := sinfo.NodePort(); nport != 0 {
 			for _, npip := range s.nodePortIPs {
-				npInfo := *bi
-				npInfo.ClusterIP = npip
-				npInfo.Port = nport
-				if npip.Equal(podNPIP) && bi.OnlyNodeLocalEndpoints {
+				npInfo := serviceInfoFromK8sServicePort(sinfo)
+				npInfo.clusterIP = npip
+				npInfo.port = nport
+				if npip.Equal(podNPIP) && sinfo.OnlyNodeLocalEndpoints() {
 					// do not program the meta entry, program each node
 					// separately
 					continue
 				}
-				err := s.applyDerived(sname, svcTypeNodePort, &npInfo)
+				err := s.applyDerived(sname, svcTypeNodePort, npInfo)
 				if err != nil {
 					log.Errorf("failed to apply NodePort %s for service %s : %s", npip, sname, err)
 					continue
 				}
 			}
-			if bi.OnlyNodeLocalEndpoints {
+			if sinfo.OnlyNodeLocalEndpoints() {
 				if miss := s.expandNodePorts(sname, sinfo, eps, nport, s.rt.Lookup); miss != nil {
 					expNPMisses = append(expNPMisses, miss)
 				}
@@ -505,8 +500,7 @@ func (s *Syncer) apply(state DPSyncerState) error {
 			return err
 		}
 
-		svc := sinfo.svc.(*k8sp.BaseServiceInfo)
-		if svc.SessionAffinityType == v1.ServiceAffinityClientIP {
+		if sinfo.svc.SessionAffinityType() == v1.ServiceAffinityClientIP {
 			s.stickySvcDeleted = true
 		}
 
@@ -589,7 +583,7 @@ func (s *Syncer) newSvc(sname k8sp.ServicePortName, sinfo k8sp.ServicePort, id u
 	cnt := 0
 	local := 0
 
-	if si := sinfo.(*k8sp.BaseServiceInfo); si.SessionAffinityType == v1.ServiceAffinityClientIP {
+	if sinfo.SessionAffinityType() == v1.ServiceAffinityClientIP {
 		// since we write the backend before we write the frontend, we need to
 		// preallocate the map for it
 		s.stickyEps[id] = make(map[nat.BackendValue]struct{})
@@ -662,13 +656,9 @@ func (s *Syncer) deleteSvcBackend(svcID uint32, idx uint32) error {
 }
 
 func getSvcNATKey(svc k8sp.ServicePort) (nat.FrontendKey, error) {
-	ip := net.ParseIP(svc.ClusterIPString())
-	if ip == nil {
-		return nat.FrontendKey{}, errors.Errorf("failed to parse ClusterIP %q", svc.ClusterIPString())
-	}
-	// XXX will fail if we change the type, 1.16 provides ServicePort.Port()
-	port := svc.(*k8sp.BaseServiceInfo).Port
-	proto, err := protoV1ToInt(svc.GetProtocol())
+	ip := svc.ClusterIP()
+	port := svc.Port()
+	proto, err := protoV1ToInt(svc.Protocol())
 	if err != nil {
 		return nat.FrontendKey{}, err
 	}
@@ -685,9 +675,8 @@ func (s *Syncer) writeSvc(svc k8sp.ServicePort, svcID uint32, count, local int) 
 	}
 
 	affinityTimeo := uint32(0)
-	sinfo := svc.(*k8sp.BaseServiceInfo)
-	if sinfo.SessionAffinityType == v1.ServiceAffinityClientIP {
-		affinityTimeo = uint32(sinfo.StickyMaxAgeSeconds)
+	if svc.SessionAffinityType() == v1.ServiceAffinityClientIP {
+		affinityTimeo = uint32(svc.StickyMaxAgeSeconds())
 	}
 
 	val := nat.NewNATValue(svcID, uint32(count), uint32(local), affinityTimeo)
@@ -760,12 +749,12 @@ func (s *Syncer) newSvcID() uint32 {
 
 func (s *Syncer) matchBpfSvc(bsvc nat.FrontendKey, svcs k8sp.ServiceMap) *svcKey {
 	for svc, info := range svcs {
-		if bsvc.Proto() != ProtoV1ToIntPanic(info.GetProtocol()) {
+		if bsvc.Proto() != ProtoV1ToIntPanic(info.Protocol()) {
 			continue
 		}
 
 		matchNP := func() *svcKey {
-			if bsvc.Port() == uint16(info.GetNodePort()) {
+			if bsvc.Port() == uint16(info.NodePort()) {
 				for _, nip := range s.nodePortIPs {
 					if bsvc.Addr().String() == nip.String() {
 						skey := &svcKey{
@@ -781,14 +770,14 @@ func (s *Syncer) matchBpfSvc(bsvc nat.FrontendKey, svcs k8sp.ServiceMap) *svcKey
 			return nil
 		}
 
-		if bsvc.Port() != uint16(info.(*k8sp.BaseServiceInfo).Port) {
+		if bsvc.Port() != uint16(info.Port()) {
 			if sk := matchNP(); sk != nil {
 				return sk
 			}
 			continue
 		}
 
-		if bsvc.Addr().String() == info.ClusterIPString() {
+		if bsvc.Addr().String() == info.ClusterIP().String() {
 			skey := &svcKey{
 				sname: svc,
 			}
@@ -945,4 +934,143 @@ func (s *Syncer) cleanupSticky() error {
 		return errors.Errorf("encountered  %d errors writing NAT affinity map", errs)
 	}
 	return nil
+}
+
+func serviceInfoFromK8sServicePort(sport k8sp.ServicePort) *serviceInfo {
+	sinfo := new(serviceInfo)
+
+	// create a shallow copy
+	sinfo.clusterIP = sport.ClusterIP()
+	sinfo.port = sport.Port()
+	sinfo.protocol = sport.Protocol()
+	sinfo.nodePort = sport.NodePort()
+	sinfo.sessionAffinityType = sport.SessionAffinityType()
+	sinfo.stickyMaxAgeSeconds = sport.StickyMaxAgeSeconds()
+	sinfo.externalIPs = sport.ExternalIPStrings()
+	sinfo.loadBalancerSourceRanges = sport.LoadBalancerSourceRanges()
+	sinfo.healthCheckNodePort = sport.HealthCheckNodePort()
+	sinfo.onlyNodeLocalEndpoints = sport.OnlyNodeLocalEndpoints()
+
+	return sinfo
+}
+
+type serviceInfo struct {
+	clusterIP                net.IP
+	port                     int
+	protocol                 v1.Protocol
+	nodePort                 int
+	sessionAffinityType      v1.ServiceAffinity
+	stickyMaxAgeSeconds      int
+	externalIPs              []string
+	loadBalancerSourceRanges []string
+	healthCheckNodePort      int
+	onlyNodeLocalEndpoints   bool
+}
+
+// String is part of ServicePort interface.
+func (info *serviceInfo) String() string {
+	return fmt.Sprintf("%s:%d/%s", info.clusterIP, info.port, info.protocol)
+}
+
+// ClusterIP is part of ServicePort interface.
+func (info *serviceInfo) ClusterIP() net.IP {
+	return info.clusterIP
+}
+
+// Port is part of ServicePort interface.
+func (info *serviceInfo) Port() int {
+	return info.port
+}
+
+// SessionAffinityType is part of the ServicePort interface.
+func (info *serviceInfo) SessionAffinityType() v1.ServiceAffinity {
+	return info.sessionAffinityType
+}
+
+// StickyMaxAgeSeconds is part of the ServicePort interface
+func (info *serviceInfo) StickyMaxAgeSeconds() int {
+	return info.stickyMaxAgeSeconds
+}
+
+// Protocol is part of ServicePort interface.
+func (info *serviceInfo) Protocol() v1.Protocol {
+	return info.protocol
+}
+
+// LoadBalancerSourceRanges is part of ServicePort interface
+func (info *serviceInfo) LoadBalancerSourceRanges() []string {
+	return info.loadBalancerSourceRanges
+}
+
+// HealthCheckNodePort is part of ServicePort interface.
+func (info *serviceInfo) HealthCheckNodePort() int {
+	return info.healthCheckNodePort
+}
+
+// NodePort is part of the ServicePort interface.
+func (info *serviceInfo) NodePort() int {
+	return info.nodePort
+}
+
+// ExternalIPStrings is part of ServicePort interface.
+func (info *serviceInfo) ExternalIPStrings() []string {
+	return info.externalIPs
+}
+
+// LoadBalancerIPStrings is part of ServicePort interface.
+func (info *serviceInfo) LoadBalancerIPStrings() []string {
+	panic("NOT IMPLEMENTED")
+}
+
+// OnlyNodeLocalEndpoints is part of ServicePort interface.
+func (info *serviceInfo) OnlyNodeLocalEndpoints() bool {
+	return info.onlyNodeLocalEndpoints
+}
+
+// K8sServicePortOption defines options for NewK8sServicePort
+type K8sServicePortOption func(interface{})
+
+// NewK8sServicePort creates a new k8s ServicePort
+func NewK8sServicePort(clusterIP net.IP, port int, proto v1.Protocol,
+	opts ...K8sServicePortOption) k8sp.ServicePort {
+
+	x := &serviceInfo{
+		clusterIP: clusterIP,
+		port:      port,
+		protocol:  proto,
+	}
+
+	for _, o := range opts {
+		o(x)
+	}
+	return x
+}
+
+// K8sSvcWithExternalIPs sets ExternalIPs
+func K8sSvcWithExternalIPs(ips []string) K8sServicePortOption {
+	return func(s interface{}) {
+		s.(*serviceInfo).externalIPs = ips
+	}
+}
+
+// K8sSvcWithNodePort sets the nodeport
+func K8sSvcWithNodePort(np int) K8sServicePortOption {
+	return func(s interface{}) {
+		s.(*serviceInfo).nodePort = np
+	}
+}
+
+// K8sSvcWithLocalOnly sets OnlyNodeLocalEndpoints=true
+func K8sSvcWithLocalOnly() K8sServicePortOption {
+	return func(s interface{}) {
+		s.(*serviceInfo).onlyNodeLocalEndpoints = true
+	}
+}
+
+// K8sSvcWithStickyClientIP sets ServiceAffinityClientIP to seconds
+func K8sSvcWithStickyClientIP(seconds int) K8sServicePortOption {
+	return func(s interface{}) {
+		s.(*serviceInfo).stickyMaxAgeSeconds = seconds
+		s.(*serviceInfo).sessionAffinityType = v1.ServiceAffinityClientIP
+	}
 }

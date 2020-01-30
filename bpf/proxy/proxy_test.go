@@ -423,9 +423,9 @@ var _ = Describe("BPF Proxy", func() {
 						},
 					}
 
-					Expect(s.SvcMap[npKey].(*k8sp.BaseServiceInfo).Port).
+					Expect(s.SvcMap[npKey].Port()).
 						To(Equal(int(nodeport.Spec.Ports[0].Port)))
-					Expect(s.SvcMap[npKey].GetNodePort()).To(Equal(int(nodeport.Spec.Ports[0].NodePort)))
+					Expect(s.SvcMap[npKey].NodePort()).To(Equal(int(nodeport.Spec.Ports[0].NodePort)))
 				})
 			})
 		})
