@@ -5,10 +5,10 @@ agent:
     type: e1-standard-2
     os_image: ubuntu1804
 blocks:
-  - name: Run k8s-tests
+  - name: 'Testing'
     task:
       jobs:
-      - name: Download code and run tests
+      - name: 'K8ST (make k8s-test)'
         commands:
           # Checkout the code and run the Kubernetes tests.
           - checkout
