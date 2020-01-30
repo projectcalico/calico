@@ -29,7 +29,7 @@ This how-to guide uses the following Calico features:
 
 ### How to
 
-After you complete the steps to [enable application layer policy]({{ site.baseurl }}/getting-started/kubernetes/installation/app-layer-policy), you are ready to create standard Calico network policies with application layer specific attributes.
+After you complete the steps to [enable application layer policy]({{ site.baseurl }}/security/app-layer-policy), you are ready to create standard Calico network policies with application layer specific attributes.
 
 ### Above and beyond
 
