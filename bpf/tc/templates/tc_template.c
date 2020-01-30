@@ -447,7 +447,7 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 
 	state.ct_result = calico_ct_v4_lookup(&ct_lookup_ctx);
 	if (state.ct_result.flags & CALI_CT_FLAG_NAT_OUT) {
-		state.nat_outgoing = true;
+		state.flags |= CALI_ST_NAT_OUTGOING;
 	}
 
 	state.post_nat_ip_dst = 0;
@@ -471,7 +471,7 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 
 	if (CALI_F_TO_WEP &&
 			skb->mark != CALI_SKB_MARK_SEEN &&
-			cali_rt_type_is_local_host(cali_rt_lookup_type(state.ip_src))) {
+			cali_rt_flags_local_host(cali_rt_lookup_flags(state.ip_src))) {
 		// Host to workload traffic always allowed.  We discount traffic that was seen by
 		// another program since it must have come in via another interface.
 		CALI_DEBUG("Packet is from the host: ACCEPT\n");
@@ -482,12 +482,12 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 	if (CALI_F_FROM_WEP) {
 		// Packet is from a workload, check its source IP since it's our responsibility to police that.
 		CALI_DEBUG("Workload RPF check src=%x skb iface=%d.\n", be32_to_host(state.ip_src), skb->ifindex);
-		struct calico_route *r = cali_rt_lookup(state.ip_src);
+		struct cali_rt *r = cali_rt_lookup(state.ip_src);
 		if (!r) {
 			CALI_INFO("Workload RPF fail: missing route.\n");
 			goto deny;
 		}
-		if (!cali_rt_type_is_local_workload(r->type)) {
+		if (!cali_rt_flags_local_workload(r->flags)) {
 			CALI_INFO("Workload RPF fail: not a local workload.\n");
 			goto deny;
 		}
@@ -497,10 +497,10 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 		}
 
 		// Check whether the workload needs outgoing NAT to this address.
-		if (r->type & CALI_RT_NAT_OUT) {
-			if (!(cali_rt_lookup_type(state.post_nat_ip_dst) & CALI_RT_IN_POOL)) {
+		if (r->flags & CALI_RT_NAT_OUT) {
+			if (!(cali_rt_lookup_flags(state.post_nat_ip_dst) & CALI_RT_IN_POOL)) {
 				CALI_DEBUG("Source is in NAT-outgoing pool but dest is not, need to SNAT.\n");
-				state.nat_outgoing = true;
+				state.flags |= CALI_ST_NAT_OUTGOING;
 			}
 		}
 	}
@@ -593,13 +593,13 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct __sk_buff *skb,
 	CALI_DEBUG("nat_tun=%x\n", state->nat_tun_src);
 	CALI_DEBUG("pol_rc=%d\n", state->pol_rc);
 	CALI_DEBUG("sport=%d\n", state->sport);
-	CALI_DEBUG("nat_out=%d\n", state->nat_outgoing);
+	CALI_DEBUG("flags=%x\n", state->flags);
 	enum calico_reason reason = CALI_REASON_UNKNOWN;
 	int rc = TC_ACT_UNSPEC;
 	bool fib;
 
 	uint32_t seen_mark;
-	if (CALI_F_FROM_WEP && state->nat_outgoing) {
+	if (CALI_F_FROM_WEP && (state->flags & CALI_ST_NAT_OUTGOING)) {
 		fib = false;
 		seen_mark = CALI_SKB_MARK_NAT_OUT;
 	} else {
@@ -648,7 +648,7 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct __sk_buff *skb,
 
 		if (CALI_F_FROM_WEP &&
 				CALI_DROP_WORKLOAD_TO_HOST &&
-				cali_rt_type_is_local_host(cali_rt_lookup_type(state->post_nat_ip_dst))) {
+				cali_rt_flags_local_host(cali_rt_lookup_flags(state->post_nat_ip_dst))) {
 			CALI_DEBUG("Workload to host traffic blocked by DefaultEndpointToHostAction: DROP\n");
 			goto deny;
 		}
@@ -661,7 +661,7 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct __sk_buff *skb,
 			.dst	= state->post_nat_ip_dst,
 			.dport	= state->post_nat_dport,
 			.nat_tun_src = state->nat_tun_src,
-			.nat_outgoing = !!(state->nat_outgoing),
+			.nat_outgoing = !!(state->flags & CALI_ST_NAT_OUTGOING),
 		};
 
 		if (state->ip_proto == IPPROTO_TCP) {
@@ -698,7 +698,7 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct __sk_buff *skb,
 
 		CALI_DEBUG("CT: DNAT to %x:%d\n", be32_to_host(state->post_nat_ip_dst), state->post_nat_dport);
 
-		struct calico_route *rt;
+		struct cali_rt *rt;
 
 		encap_needed = dnat_should_encap();
 		if (encap_needed) {
@@ -745,7 +745,7 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct __sk_buff *skb,
 
 		if (encap_needed) {
 			state->ip_src = cali_host_ip();
-			state->ip_dst = cali_rt_type_is_remote_workload(rt->type) ? rt->next_hop : state->post_nat_ip_dst;
+			state->ip_dst = cali_rt_flags_remote_workload(rt->flags) ? rt->next_hop : state->post_nat_ip_dst;
 			seen_mark = CALI_SKB_MARK_BYPASS_FWD;
 			goto nat_encap;
 		}

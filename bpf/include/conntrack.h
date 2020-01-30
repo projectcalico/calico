@@ -13,13 +13,13 @@ struct calico_ct_key {
 	uint16_t port_a, port_b; // HBO
 };
 
-enum CALI_CT_TYPE {
+enum cali_ct_type {
 	CALI_CT_TYPE_NORMAL     = 0x00,  // Non-NATted entry.
 	CALI_CT_TYPE_NAT_FWD    = 0x01, // Forward entry for a DNATted flow, keyed on orig src/dst. Points to the reverse entry.
 	CALI_CT_TYPE_NAT_REV    = 0x02, // "Reverse" entry for a NATted flow, contains NAT + tracking information.
 	CALI_CT_TYPE_NORMAL_TUN = 0x03, // NORMAL + reverse for tunneled encap on the return path
 
-	CALI_CT_FLAG_NAT_OUT    = 0x10,
+	CALI_CT_FLAG_NAT_OUT    = 0x01,
 };
 
 struct calico_ct_leg {
@@ -99,7 +99,7 @@ static CALI_BPF_INLINE void dump_ct_key(struct calico_ct_key *k)
 
 static CALI_BPF_INLINE int calico_ct_v4_create_tracking(struct ct_ctx *ctx,
 							struct calico_ct_key *k,
-							enum CALI_CT_TYPE type)
+							enum cali_ct_type type)
 {
 	__be32 ip_src = ctx->src;
 	__be32 ip_dst = ctx->dst;

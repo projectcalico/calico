@@ -28,7 +28,7 @@ import (
 )
 
 //
-// struct calico_route_key {
+// struct cali_rt_key {
 // __u32 mask;
 // __be32 addr; // NBO
 // };
@@ -58,11 +58,11 @@ func (k Key) AsBytes() []byte {
 type Flags uint32
 
 const (
-	FlagInIPAMPool  Flags = 1
-	FlagNATOutgoing Flags = 2
-	FlagWorkload    Flags = 4
-	FlagLocal       Flags = 8
-	FlagHost        Flags = 16
+	FlagInIPAMPool  Flags = 0x01
+	FlagNATOutgoing Flags = 0x02
+	FlagWorkload    Flags = 0x04
+	FlagLocal       Flags = 0x08
+	FlagHost        Flags = 0x10
 
 	FlagsUnknown        Flags = 0
 	FlagsRemoteWorkload       = FlagWorkload
@@ -74,7 +74,7 @@ const (
 )
 
 //
-// struct calico_route_value {
+// struct cali_rt_value {
 //   __u32 flags;
 //   union {
 //     __u32 next_hop;
@@ -85,7 +85,7 @@ const ValueSize = 8
 
 type Value [ValueSize]byte
 
-func (v Value) Type() Flags {
+func (v Value) Flags() Flags {
 	return Flags(binary.LittleEndian.Uint32(v[:4]))
 }
 
@@ -106,7 +106,7 @@ func (v Value) AsBytes() []byte {
 func (v Value) String() string {
 	var parts []string
 
-	typeFlags := v.Type()
+	typeFlags := v.Flags()
 
 	if typeFlags&FlagLocal != 0 {
 		parts = append(parts, "local")

@@ -152,7 +152,7 @@ static CALI_BPF_INLINE struct calico_nat_dest* calico_v4_nat_lookup(__be32 ip_sr
 		(int)(nat_key.protocol));
 
 	if (!nat_lv1_val) {
-		struct calico_route *rt;
+		struct cali_rt *rt;
 
 		CALI_DEBUG("NAT: Miss.\n");
 		/* If the traffic originates at the node (workload or host)

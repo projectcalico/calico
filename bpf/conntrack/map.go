@@ -128,7 +128,7 @@ const (
 	TypeNATReverse
 	TypeNormalTun
 
-	FlagNATOut uint8 = 0x10
+	FlagNATOut uint8 = 0x01
 )
 
 func (e Value) ReverseNATKey() Key {
