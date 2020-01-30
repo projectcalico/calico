@@ -61,7 +61,7 @@ REPOSITORY                            TAG                                     IM
 ...
 my-registry/cni-plugin                         v3.11.0-0.dev-3-g9755771-dirty-amd64    422e9c706bcd        2 hours ago         163MB
 ...
-```.
+```
 
 
 - Now, build the YAML manifests that are used to install calico:
