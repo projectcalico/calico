@@ -33,6 +33,15 @@ section:
       path: /getting-started/kubernetes/installation/app-layer-policy
     - title: Customizing the manifests
       path: /getting-started/kubernetes/installation/config-options
+  - title: Self-managed public cloud
+    path: /getting-started/kubernetes/self-managed-public-cloud/
+    section:
+    - title: Self-managed Kubernetes in AWS
+      path: /getting-started/kubernetes/self-managed-public-cloud/aws 
+    - title: Self-managed Kubernetes in GCE
+      path: /getting-started/kubernetes/self-managed-public-cloud/gce
+    - title: Self-managed Kubernetes in Azure
+      path: /getting-started/kubernetes/self-managed-public-cloud/azu      
   - title: Flannel
     path: /getting-started/kubernetes/flannel/
     section:
