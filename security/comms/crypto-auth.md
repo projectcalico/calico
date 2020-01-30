@@ -19,7 +19,7 @@ its connections as follows.
   - [`calicoctl`](../../getting-started/calicoctl/configure/etcd)
   - [CNI plugin](../../reference/cni-plugin/configuration#etcd-location) (Kubernetes and OpenShift only)
   - [Kubernetes controllers](../../reference/kube-controllers/configuration#configuring-datastore-access) (Kubernetes and OpenShift only)
-  - [Felix](../../reference/felix/configuration#etcd-datastore-configuration) (on [bare metal hosts](../../getting-started/bare-metal/installation/overview))
+  - [Felix](../../reference/felix/configuration#etcd-datastore-configuration)
   - [Typha](../../reference/typha/configuration#etcd-datastore-configuration) (often deployed in
     larger Kubernetes deployments)
   - [Neutron plugin or ML2 driver](../../networking/openstack/configuration#neutron-server-etcneutronneutronconf) (OpenStack only)

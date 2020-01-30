@@ -97,24 +97,22 @@ section:
       path: /getting-started/openstack/installation/devstack
     - title: Verifying your deployment
       path: /getting-started/openstack/verification
-- title: Bare metal hosts
-  path: /getting-started/bare-metal/
+- title: Non-cluster hosts
+  path: /getting-started/non-cluster/
   section:
+  - title: About non-cluster hosts
+    path: /getting-started/non-cluster/about
   - title: System requirements
-    path: /getting-started/bare-metal/requirements
+    path: /getting-started/non-cluster/requirements
   - title: Installation
-    path: /getting-started/bare-metal/installation/
+    path: /getting-started/non-cluster/installation/
     section:
-    - title: Overview
-      path: /getting-started/bare-metal/installation/overview
     - title: Container install
-      path: /getting-started/bare-metal/installation/container
+      path: /getting-started/non-cluster/installation/container
     - title: Binary install with package manager
-      path: /getting-started/bare-metal/installation/binary-mgr
+      path: /getting-started/non-cluster/installation/binary-mgr
     - title: Binary install without package manager
-      path: /getting-started/bare-metal/installation/binary
-- title: Running calico/node with an init system
-  path: /getting-started/as-service
+      path: /getting-started/non-cluster/installation/binary
 - title: calicoctl
   path: /getting-started/calicoctl/
   section:

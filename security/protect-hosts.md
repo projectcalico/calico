@@ -57,7 +57,7 @@ No. {{site.prodname}} allows connections the host makes to the workloads running
 
 ### Before you begin...
 
-If you are already running {{site.prodname}} for Kubernetes, you are good to go. If you want to install {{site.prodname}} on a bare-metal machine for host protection only, see [Bare metal hosts]({{ site.baseurl }}/getting-started/bare-metal/installation/binary-mgr).
+If you are already running {{site.prodname}} for Kubernetes, you are good to go. If you want to install {{site.prodname}} on a non-cluster machine for host protection only, see [Non-cluster hosts]({{ site.baseurl }}/getting-started/non-cluster/).
 
 ### How to
 

@@ -175,7 +175,7 @@ at the same time that subcomponent release branches are cut, often well before t
    - Kubernetes `getting-started/kubernetes/requirements.md`
    - OpenShift `getting-started/openshift/requirements.md`
    - OpenStack `getting-started/openstack/requirements.md`
-   - Host protection `getting-started/bare-metal/requirements.md`
+   - Non-cluster hosts `getting-started/non-cluster/requirements.md`
 
 1. Commit your changes and push the branch. For example:
 
