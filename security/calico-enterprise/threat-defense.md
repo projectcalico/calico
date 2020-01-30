@@ -10,7 +10,7 @@ For Kubernetes deployments, Calico Enterprise gives you advanced threat defense 
 
 Threat intelligence feeds are real-time streams of data that provide information on potential cyber threats and risks. Calico Enterprise integrates threat feeds into Calico policies that can alert or block ingress and egress to/from known bad actors based on data within the feed. Calico Enterprise comes packaged with a free, open-source threat feed, but you can also import data from any threat feed your security team uses.
 
-![threat-feed]({{site.baseurl}}/images/thread-feed.png)
+![threat-feed]({{site.baseurl}}/images/threat-feed.png)
 
 ### Anomaly detection
 
