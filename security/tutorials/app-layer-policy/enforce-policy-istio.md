@@ -15,7 +15,7 @@ This tutorial sets up a microservices application, then demonstrates how to use 
 3. Install the [calicoctl command line tool]({{ site.baseurl }}/getting-started/calicoctl/install).   
   **Note**: Ensure calicoctl is configured to connect with your datastore.  
 4. Enable [application layer policy and install Istio]({{ site.baseurl }}/getting-started/kubernetes/installation/app-layer-policy).  
-  **Note**: Ensure that you annotate the default namespace for the Istio sidecar injection (`istio-injection=enabled`).    
+  **Note**: Label the default namespace for the Istio sidecar injection (`istio-injection=enabled`).
   `kubectl label namespace default istio-injection=enabled`
 
 ### Install the demo application
