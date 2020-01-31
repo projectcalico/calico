@@ -74,6 +74,6 @@ Calico Enterprise periodically generates compliance reports that show you:
 - Policies and services associated with endpoints along with policy audit logs
 - Allowed ingress/egress traffic to/from namespaces and the internet
 
-![compliance-reports]({{site.baseurl}}/images/configuration-reports.png)
+![compliance-reports]({{site.baseurl}}/images/compliance-reports.png)
 
 A detailed spreadsheet can also be downloaded as a CSV file for every report.
