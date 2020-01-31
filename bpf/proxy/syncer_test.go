@@ -59,11 +59,11 @@ var _ = Describe("BPF Syncer", func() {
 
 	state := proxy.DPSyncerState{
 		SvcMap: k8sp.ServiceMap{
-			svcKey: &k8sp.BaseServiceInfo{
-				ClusterIP: net.IPv4(10, 0, 0, 1),
-				Port:      1234,
-				Protocol:  v1.ProtocolTCP,
-			},
+			svcKey: proxy.NewK8sServicePort(
+				net.IPv4(10, 0, 0, 1),
+				1234,
+				v1.ProtocolTCP,
+			),
 		},
 		EpsMap: k8sp.EndpointsMap{
 			svcKey: []k8sp.Endpoint{&k8sp.BaseEndpointInfo{Endpoint: "10.1.0.1:5555"}},
@@ -106,11 +106,11 @@ var _ = Describe("BPF Syncer", func() {
 		}
 
 		By("inserting another service with multiple endpoints", makestep(func() {
-			state.SvcMap[svcKey2] = &k8sp.BaseServiceInfo{
-				ClusterIP: net.IPv4(10, 0, 0, 2),
-				Port:      2222,
-				Protocol:  v1.ProtocolTCP,
-			}
+			state.SvcMap[svcKey2] = proxy.NewK8sServicePort(
+				net.IPv4(10, 0, 0, 2),
+				2222,
+				v1.ProtocolTCP,
+			)
 			state.EpsMap[svcKey2] = []k8sp.Endpoint{
 				&k8sp.BaseEndpointInfo{Endpoint: "10.2.0.1:1111"},
 				&k8sp.BaseEndpointInfo{Endpoint: "10.2.0.1:2222"},
@@ -199,12 +199,12 @@ var _ = Describe("BPF Syncer", func() {
 		}))
 
 		By("adding ExternalIP for existing service", makestep(func() {
-			state.SvcMap[svcKey2] = &k8sp.BaseServiceInfo{
-				ClusterIP:   net.IPv4(10, 0, 0, 2),
-				Port:        2222,
-				Protocol:    v1.ProtocolTCP,
-				ExternalIPs: []string{"35.0.0.2"},
-			}
+			state.SvcMap[svcKey2] = proxy.NewK8sServicePort(
+				net.IPv4(10, 0, 0, 2),
+				2222,
+				v1.ProtocolTCP,
+				proxy.K8sSvcWithExternalIPs([]string{"35.0.0.2"}),
+			)
 
 			err := s.Apply(state)
 			Expect(err).NotTo(HaveOccurred())
@@ -225,11 +225,11 @@ var _ = Describe("BPF Syncer", func() {
 		}))
 
 		By("removing ExternalIP for existing service", makestep(func() {
-			state.SvcMap[svcKey2] = &k8sp.BaseServiceInfo{
-				ClusterIP: net.IPv4(10, 0, 0, 2),
-				Port:      2222,
-				Protocol:  v1.ProtocolTCP,
-			}
+			state.SvcMap[svcKey2] = proxy.NewK8sServicePort(
+				net.IPv4(10, 0, 0, 2),
+				2222,
+				v1.ProtocolTCP,
+			)
 
 			err := s.Apply(state)
 			Expect(err).NotTo(HaveOccurred())
@@ -248,12 +248,12 @@ var _ = Describe("BPF Syncer", func() {
 		var checkAfterResync func()
 
 		By("turning existing service into a NodePort", makestep(func() {
-			state.SvcMap[svcKey2] = &k8sp.BaseServiceInfo{
-				ClusterIP: net.IPv4(10, 0, 0, 2),
-				Port:      2222,
-				NodePort:  2222,
-				Protocol:  v1.ProtocolTCP,
-			}
+			state.SvcMap[svcKey2] = proxy.NewK8sServicePort(
+				net.IPv4(10, 0, 0, 2),
+				2222,
+				v1.ProtocolTCP,
+				proxy.K8sSvcWithNodePort(2222),
+			)
 
 			checkAfterResync = func() {
 				err := s.Apply(state)
@@ -302,12 +302,12 @@ var _ = Describe("BPF Syncer", func() {
 		}
 
 		By("inserting another service after resync", makestep(func() {
-			state.SvcMap[svcKey3] = &k8sp.BaseServiceInfo{
-				ClusterIP: net.IPv4(10, 0, 0, 3),
-				Port:      3333,
-				NodePort:  3232,
-				Protocol:  v1.ProtocolUDP,
-			}
+			state.SvcMap[svcKey3] = proxy.NewK8sServicePort(
+				net.IPv4(10, 0, 0, 3),
+				3333,
+				v1.ProtocolUDP,
+				proxy.K8sSvcWithNodePort(3232),
+			)
 			state.EpsMap[svcKey3] = []k8sp.Endpoint{
 				&k8sp.BaseEndpointInfo{Endpoint: "10.3.0.1:3434"},
 			}
@@ -336,12 +336,12 @@ var _ = Describe("BPF Syncer", func() {
 		}))
 
 		By("updating a port of a service", makestep(func() {
-			state.SvcMap[svcKey3] = &k8sp.BaseServiceInfo{
-				ClusterIP: net.IPv4(10, 0, 0, 3),
-				Port:      3355,
-				NodePort:  3232,
-				Protocol:  v1.ProtocolUDP,
-			}
+			state.SvcMap[svcKey3] = proxy.NewK8sServicePort(
+				net.IPv4(10, 0, 0, 3),
+				3355,
+				v1.ProtocolUDP,
+				proxy.K8sSvcWithNodePort(3232),
+			)
 			state.EpsMap[svcKey3] = []k8sp.Endpoint{
 				&k8sp.BaseEndpointInfo{Endpoint: "10.3.0.1:3434"},
 			}
@@ -368,12 +368,12 @@ var _ = Describe("BPF Syncer", func() {
 		}))
 
 		By("updating a NodePort of a service", makestep(func() {
-			state.SvcMap[svcKey3] = &k8sp.BaseServiceInfo{
-				ClusterIP: net.IPv4(10, 0, 0, 3),
-				Port:      3355,
-				NodePort:  1212,
-				Protocol:  v1.ProtocolUDP,
-			}
+			state.SvcMap[svcKey3] = proxy.NewK8sServicePort(
+				net.IPv4(10, 0, 0, 3),
+				3355,
+				v1.ProtocolUDP,
+				proxy.K8sSvcWithNodePort(1212),
+			)
 			state.EpsMap[svcKey3] = []k8sp.Endpoint{
 				&k8sp.BaseEndpointInfo{Endpoint: "10.3.0.1:3434"},
 			}
@@ -446,13 +446,13 @@ var _ = Describe("BPF Syncer", func() {
 		By("inserting only non-local eps for a NodePort - no route", makestep(func() {
 			// use the meta node IP for nodeports as well
 			s, _ = proxy.NewSyncer(append(nodeIPs, net.IPv4(255, 255, 255, 255)), svcs, eps, aff, rt)
-			state.SvcMap[svcKey2] = &k8sp.BaseServiceInfo{
-				ClusterIP:              net.IPv4(10, 0, 0, 2),
-				Port:                   2222,
-				NodePort:               4444,
-				Protocol:               v1.ProtocolTCP,
-				OnlyNodeLocalEndpoints: true,
-			}
+			state.SvcMap[svcKey2] = proxy.NewK8sServicePort(
+				net.IPv4(10, 0, 0, 2),
+				2222,
+				v1.ProtocolTCP,
+				proxy.K8sSvcWithNodePort(4444),
+				proxy.K8sSvcWithLocalOnly(),
+			)
 
 			state.EpsMap[svcKey2] = []k8sp.Endpoint{
 				&k8sp.BaseEndpointInfo{Endpoint: "10.2.1.1:2222"},
@@ -529,13 +529,13 @@ var _ = Describe("BPF Syncer", func() {
 		By("inserting only non-local eps for a NodePort - multiple nodes & pods/node", makestep(func() {
 			// use the meta node IP for nodeports as well
 			s, _ = proxy.NewSyncer(append(nodeIPs, net.IPv4(255, 255, 255, 255)), svcs, eps, aff, rt)
-			state.SvcMap[svcKey2] = &k8sp.BaseServiceInfo{
-				ClusterIP:              net.IPv4(10, 0, 0, 2),
-				Port:                   2222,
-				NodePort:               4444,
-				Protocol:               v1.ProtocolTCP,
-				OnlyNodeLocalEndpoints: true,
-			}
+			state.SvcMap[svcKey2] = proxy.NewK8sServicePort(
+				net.IPv4(10, 0, 0, 2),
+				2222,
+				v1.ProtocolTCP,
+				proxy.K8sSvcWithNodePort(4444),
+				proxy.K8sSvcWithLocalOnly(),
+			)
 
 			state.EpsMap[svcKey2] = []k8sp.Endpoint{
 				&k8sp.BaseEndpointInfo{Endpoint: "10.2.1.1:2222"},
@@ -615,13 +615,13 @@ var _ = Describe("BPF Syncer", func() {
 		}))
 
 		By("inserting a local ep for a NodePort", makestep(func() {
-			state.SvcMap[svcKey2] = &k8sp.BaseServiceInfo{
-				ClusterIP:              net.IPv4(10, 0, 0, 2),
-				Port:                   2222,
-				NodePort:               4444,
-				Protocol:               v1.ProtocolTCP,
-				OnlyNodeLocalEndpoints: true,
-			}
+			state.SvcMap[svcKey2] = proxy.NewK8sServicePort(
+				net.IPv4(10, 0, 0, 2),
+				2222,
+				v1.ProtocolTCP,
+				proxy.K8sSvcWithNodePort(4444),
+				proxy.K8sSvcWithLocalOnly(),
+			)
 
 			state.EpsMap[svcKey2] = []k8sp.Endpoint{
 				&k8sp.BaseEndpointInfo{Endpoint: "10.2.0.1:2222"},
@@ -679,13 +679,12 @@ var _ = Describe("BPF Syncer", func() {
 		}))
 
 		By("inserting service with affinity v1.ServiceAffinityClientIP", makestep(func() {
-			state.SvcMap[svcKey2] = &k8sp.BaseServiceInfo{
-				ClusterIP:           net.IPv4(10, 0, 0, 2),
-				Port:                2222,
-				Protocol:            v1.ProtocolTCP,
-				SessionAffinityType: v1.ServiceAffinityClientIP,
-				StickyMaxAgeSeconds: 5,
-			}
+			state.SvcMap[svcKey2] = proxy.NewK8sServicePort(
+				net.IPv4(10, 0, 0, 2),
+				2222,
+				v1.ProtocolTCP,
+				proxy.K8sSvcWithStickyClientIP(5),
+			)
 
 			state.EpsMap[svcKey2] = []k8sp.Endpoint{
 				&k8sp.BaseEndpointInfo{Endpoint: "10.2.0.1:2222"},
