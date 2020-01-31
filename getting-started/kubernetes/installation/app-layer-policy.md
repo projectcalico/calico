@@ -1,6 +1,6 @@
 ---
-title: Enabling application layer policy for Istio
-description: Enforce application layer network policy for Istio using Calico network policy.
+title: Enable application layer policy for Istio
+description: Enable application layer policy for Istio service mesh applications.
 canonical_url: '/getting-started/kubernetes/installation/app-layer-policy'
 ---
 
