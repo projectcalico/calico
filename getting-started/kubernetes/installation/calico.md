@@ -50,7 +50,7 @@ datastore type and number of nodes.
 1. Download the {{site.prodname}} networking manifest for the Kubernetes API datastore.
 
    ```bash
-   curl {{ "/manifests/calico-typha.yaml" | absolute_url }} -o calico.yaml
+   curl {{ "/manifests/calico-typha.yaml" | absolute_url }}
    ```
 
 {% include content/pod-cidr-sed.md yaml="calico-typha" %}
@@ -85,7 +85,7 @@ datastore type and number of nodes.
 1. Apply the manifest.
 
    ```bash
-   kubectl apply -f calico.yaml
+   kubectl apply -f calico-typha.yaml
    ```
 
 1. If you wish to enforce application layer policies and secure workload-to-workload
@@ -96,7 +96,7 @@ datastore type and number of nodes.
 1. Download the {{site.prodname}} networking manifest for etcd.
 
    ```bash
-   curl {{ "/manifests/calico-etcd.yaml" | absolute_url }} -o calico.yaml
+   curl {{ "/manifests/calico-etcd.yaml" | absolute_url }}
    ```
 
 {% include content/pod-cidr-sed.md yaml="calico-etcd" %}
@@ -110,7 +110,7 @@ datastore type and number of nodes.
 1. Apply the manifest using the following command.
 
    ```bash
-   kubectl apply -f calico.yaml
+   kubectl apply -f calico-etcd.yaml
    ```
 
 1. If you wish to enforce application layer policies and secure workload-to-workload
