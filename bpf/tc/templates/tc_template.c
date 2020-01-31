@@ -156,8 +156,8 @@ static CALI_BPF_INLINE int forward_or_drop(struct __sk_buff *skb,
 			.tot_len = be16_to_host(ip_header->tot_len),
 			.ifindex = skb->ingress_ifindex,
 			.l4_protocol = state->ip_proto,
-			.sport = state->sport,
-			.dport = state->dport,
+			.sport = host_to_be16(state->sport),
+			.dport = host_to_be16(state->dport),
 		};
 
 		/* set the ipv4 here, otherwise the ipv4/6 unions do not get
@@ -170,10 +170,10 @@ static CALI_BPF_INLINE int forward_or_drop(struct __sk_buff *skb,
 		CALI_DEBUG("FIB tot_len=%d\n", fib_params.tot_len);
 		CALI_DEBUG("FIB ifindex=%d\n", fib_params.ifindex);
 		CALI_DEBUG("FIB l4_protocol=%d\n", fib_params.l4_protocol);
-		CALI_DEBUG("FIB sport=%d\n", fib_params.sport);
-		CALI_DEBUG("FIB dport=%d\n", fib_params.dport);
-		CALI_DEBUG("FIB ipv4_src=%x\n", fib_params.ipv4_src);
-		CALI_DEBUG("FIB ipv4_dst=%x\n", fib_params.ipv4_dst);
+		CALI_DEBUG("FIB sport=%d\n", be16_to_host(fib_params.sport));
+		CALI_DEBUG("FIB dport=%d\n", be16_to_host(fib_params.dport));
+		CALI_DEBUG("FIB ipv4_src=%x\n", be32_to_host(fib_params.ipv4_src));
+		CALI_DEBUG("FIB ipv4_dst=%x\n", be32_to_host(fib_params.ipv4_dst));
 
 		CALI_DEBUG("Traffic is towards the host namespace, doing Linux FIB lookup\n");
 		rc = bpf_fib_lookup(skb, &fib_params, sizeof(fib_params), fwd->fib_flags);
