@@ -22,16 +22,6 @@ The policy dashboard is a visual representation of your policies and policy tier
 
 ![tiered-policy-board]({{site.baseurl}}/images/tiered-policy-board.png)
 
-### Policy builder
-
-You can use the policy builder to construct or modify Kubernetes and Calico network policies without the need for editing YAML or JSON policy files. The interface understands current labels and abstracts the structure of configuration files to enable you, as well as other Kubernetes users, a fast and easy way to implement accurate, comprehensive, and bug-free policies.
-
-### Policy dashboard
-
-The policy dashboard is a visual representation of your policies and policy tiers that represents the current state of your security controls. The dashboard also enables a simpler understanding of how policies are implemented without diving into configuration files. You can drag and drop policies and tiers without having to manually write configuration files. The interface and APIs are also fully RBAC controlled.
-
-![policy-builder]({{site.baseurl}}/images/policy-builder.png)
-
 ### Flow visualizer
 
 Calico Enterprise monitors and logs all connectivity within your cluster into flow logs. Flow logs are required for security and compliance purposes, but are often used for basic debugging of connectivity issues and outages.
