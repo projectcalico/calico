@@ -96,7 +96,7 @@ datastore type and number of nodes.
 1. Download the {{site.prodname}} networking manifest for etcd.
 
    ```bash
-   curl {{ "/manifests/calico-etcd.yaml -o calico.yaml" | absolute_url }}
+   curl {{ "/manifests/calico-etcd.yaml" | absolute_url }} -o calico.yaml
    ```
 
 {% include content/pod-cidr-sed.md yaml="calico-etcd" %}
