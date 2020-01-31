@@ -86,3 +86,13 @@ section:
   section:
   - title: Network visibility
     path: /security/calico-enterprise/network-visibility
+  - title: Advanced egress access controls with Calico Enterprise
+    path: /security/calico-enterprise/egress-access-controls
+  - title: Advanced compliance controls with Calico Enterprise
+    path: /security/calico-enterprise/compliance
+  - title: Federation
+    path: /security/calico-enterprise/federation
+  - title: Threat defense
+    path: /security/calico-enterprise/threat-defense
+  - title: Calico Enterprise user console
+    path:  /security/calico-enterprise/user-console
