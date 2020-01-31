@@ -1,7 +1,7 @@
 ---
 title: Binary install without package manager
 description: Install Calico binary on non-cluster hosts without a package manager.
-canonical_url: '/getting-started/non-cluster/installation/binary'
+canonical_url: '/getting-started/bare-metal/installation/binary'
 ---
 
 ### Big picture

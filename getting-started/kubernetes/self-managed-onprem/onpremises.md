@@ -137,6 +137,6 @@ Based on your datastore and number of nodes, select a link below to install {{si
 **Security**
 
 - [Secure Calico component communications]({{site.baseurl}}/security/comms/crypto-auth)
-- [Secure hosts by installing Calico on hosts]({{site.baseurl}}/getting-started/non-cluster/about)
+- [Secure hosts by installing Calico on hosts]({{site.baseurl}}/getting-started/bare-metal/about)
 - [Secure pods with Calico network policy]({{site.baseurl}}/security/calico-network-policy)
 - If you are using {{site.prodname}} with Istio service mesh, get started here: [Enable application layer policy for Istio service mesh]({{site.baseurl}}/getting-started/kubernetes/installation/app-layer-policy)

@@ -1,7 +1,7 @@
 ---
 title: About non-cluster hosts
 description: Secure hosts not in a cluster by installing Calico with networking and/or networking policy enabled.
-canonical_url: '/getting-started/non-cluster/about'
+canonical_url: '/getting-started/bare-metal/about'
 ---
 
 ### Big picture
