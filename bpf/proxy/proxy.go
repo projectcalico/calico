@@ -132,7 +132,10 @@ func New(k8s kubernetes.Interface, dp DPSyncer, hostname string, opts ...Option)
 	isIPv6 := false
 	p.epsChanges = k8sp.NewEndpointChangeTracker(p.hostname,
 		nil, // change if you want to provide more ctx
-		&isIPv6, p.recorder)
+		&isIPv6,
+		p.recorder,
+		false, // endpointSlicesEnabled
+	)
 	p.svcChanges = k8sp.NewServiceChangeTracker(nil, &isIPv6, p.recorder)
 
 	noProxyName, err := labels.NewRequirement(apis.LabelServiceProxyName, selection.DoesNotExist, nil)
@@ -140,15 +143,13 @@ func New(k8s kubernetes.Interface, dp DPSyncer, hostname string, opts ...Option)
 		return nil, errors.Errorf("noProxyName selector: %s", err)
 	}
 
-	/* XXX not in 1.15 yet
 	noHeadlessEndpoints, err := labels.NewRequirement(v1.IsHeadlessService, selection.DoesNotExist, nil)
 	if err != nil {
 		return nil, errors.Errorf("noHeadlessEndpoints selector: %s", err)
 	}
-	*/
 
 	labelSelector := labels.NewSelector()
-	labelSelector = labelSelector.Add(*noProxyName /*, *noHeadlessEndpoints*/)
+	labelSelector = labelSelector.Add(*noProxyName, *noHeadlessEndpoints)
 
 	informerFactory := informers.NewSharedInformerFactoryWithOptions(k8s, p.syncPeriod,
 		informers.WithTweakListOptions(func(options *metav1.ListOptions) {
