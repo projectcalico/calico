@@ -256,16 +256,20 @@ image-all: $(addprefix sub-image-,$(VALIDARCHES))
 sub-image-%:
 	$(MAKE) image ARCH=$*
 
-bin/compile-bpf: $(GENERATED_FILES) go.mod $(shell find cmd/compile-bpf bpf/nat bpf/tc config logutils proto -type f -name '*.go' -print | grep -v '_test\.go' )
+bin/compile-bpf: $(GENERATED_FILES) Makefile.common go.mod $(shell find cmd/compile-bpf bpf/nat bpf/tc config logutils proto -type f -name '*.go' -print | grep -v '_test\.go' )
 	$(DOCKER_GO_BUILD) go build -o $@ ./cmd/compile-bpf
 
-bin/bpf-progs.inc: bin/compile-bpf
+bin/bpf-progs.inc: bin/compile-bpf Makefile.common
 	bin/compile-bpf gen-makefile-inc > $@.tmp
 	mv $@.tmp $@
 
 # bpf-progs.inc sets up the BPF_PROGS variable.  The target above will cause it to be auto-updated after switching
-# branch.
+# branch.  Building bin/bpf-progs.inc requires the common makefile to have been included; this ifneq test makes sure
+# it only gets built on the second pass of the makefile, after the common makefile has already been included.
+# Without it, make tries to build both makefiles before importing either, which fails.
+ifneq ($(DOCKER_GO_BUILD),)
 include bin/bpf-progs.inc
+endif
 
 # BPF programs built by the makefile.
 MAKEFILE_BPF_PROGS:=\
@@ -273,7 +277,7 @@ MAKEFILE_BPF_PROGS:=\
 	bpf/bin/redir.o \
 	bpf/bin/sockops.o
 
-ALL_BPF_PROGS:=$(BPF_PROGS) $(MAKEFILE_BPF_PROGS)
+ALL_BPF_PROGS=$(BPF_PROGS) $(MAKEFILE_BPF_PROGS)
 
 $(BPF_PROGS): $(BPF_C_FILES) $(BPF_INC_FILES) bin/compile-bpf
 	$(DOCKER_GO_BUILD) bin/compile-bpf

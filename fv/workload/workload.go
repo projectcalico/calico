@@ -487,7 +487,7 @@ type SpoofedWorkload struct {
 	SpoofedSourceIP string
 }
 
-func (s *SpoofedWorkload) CanConnectTo(ip, port, protocol string) bool {
+func (s *SpoofedWorkload) CanConnectTo(ip, port, protocol string) *conncheck.Response {
 	return canConnectTo(s.Workload, ip, port, s.SpoofedSourceIP, "", protocol)
 }
 
@@ -496,7 +496,7 @@ func (p *Port) CanConnectTo(ip, port, protocol string) *conncheck.Response {
 	return canConnectTo(p.Workload, ip, port, "", srcPort, protocol)
 }
 
-func canConnectTo(w *Workload, ip, port, srcIp, srcPort, protocol string) bool {
+func canConnectTo(w *Workload, ip, port, srcIp, srcPort, protocol string) *conncheck.Response {
 	// Ensure that the host has the 'test-connection' binary.
 	w.C.EnsureBinary("test-connection")
 
@@ -506,7 +506,7 @@ func canConnectTo(w *Workload, ip, port, srcIp, srcPort, protocol string) bool {
 		// on a simple timer. In the case of SCTP, conntrack appears to match packets even when
 		// the conntrack entry is in the CLOSED state.
 		if os.Getenv("FELIX_FV_ENABLE_BPF") == "true" {
-			p.C.Exec("calico-bpf", "conntrack", "remove", "udp", p.Workload.IP, ip)
+			w.C.Exec("calico-bpf", "conntrack", "remove", "udp", w.IP, ip)
 		} else {
 			_ = w.C.ExecMayFail("conntrack", "-D", "-p", protocol, "-s", w.IP, "-d", ip)
 		}

@@ -823,7 +823,7 @@ func (d *InternalDataplane) setUpIptablesBPF() {
 				iptables.Rule{
 					Match:   iptables.Match().InInterface(prefix + "+"),
 					Action:  iptables.DropAction{},
-					Comment: "From workload without BPF ACCEPT mark",
+					Comment: []string{"From workload without BPF ACCEPT mark"},
 				})
 
 			if d.config.RulesConfig.EndpointToHostAction == "ACCEPT" {
@@ -845,7 +845,7 @@ func (d *InternalDataplane) setUpIptablesBPF() {
 			fwdRules = append(fwdRules, iptables.Rule{
 				Match:   iptables.Match().OutInterface(prefix + "+"),
 				Action:  iptables.AcceptAction{},
-				Comment: "To workload, BPF will handle.",
+				Comment: []string{"To workload, BPF will handle."},
 			})
 		}
 		t.SetRuleInsertions("INPUT", inputRules)
