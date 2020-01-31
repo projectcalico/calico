@@ -1,12 +1,12 @@
 ---
 title: Advanced egress access controls with Calico Enterprise
-description: Calico Enterprise provides fine-grained access control between a pod and external services outside using DNS.
+description: Calico Enterprise provides fine-grained access control between a pod and external services using DNS.
 calico_enterprise: true
 ---
 
 ### Egress access control to external endpoints
 
-Fine-grained access control between a Pod and external service outside the cluster generally requires a firewall rule or equivalent between your Pod and the services you need to connect to. Since traditional firewall rules are defined using static IP addresses, the dynamic nature of Pod IP assignment creates challenges defining firewall rules. Kubernetes/Calico network policies are designed to abstract away from IP addresses in favor of label selectors, but still require external services outside of the cluster to be identified by IP address.
+Fine-grained access control between a pod and external service outside the cluster generally requires a firewall rule or equivalent between your pod and the services you need to connect to. Since traditional firewall rules are defined using static IP addresses, the dynamic nature of pod IP assignment creates challenges in defining firewall rules. Kubernetes/Calico network policies are designed to abstract away from IP addresses in favor of label selectors, but still require external services outside of the cluster to be identified by IP address.
 
 Calico Enterprise extends Calico’s policy model so that domain names (DNS) can be used to whitelist access from a pod or set of pods (via label selector) to external resources outside of your cluster. Common use cases for domain name based policy include:
 
