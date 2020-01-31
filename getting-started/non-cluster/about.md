@@ -6,7 +6,7 @@ canonical_url: '/getting-started/non-cluster/about'
 
 ### Big picture
 
-Secure hosts not in a cluster by installing Calico with networking and/or networking policy enabled.
+Secure hosts not in a cluster by installing {{site.prodname}} with networking and/or networking policy enabled.
 
 ### Value
 
@@ -19,7 +19,7 @@ Not all hosts in your environment run virtualized workloads (i.e. containers man
 
 We use the term workload to mean a pod or VM running as a guest on a computer with {{site.prodname}} installed. If your cluster is a Kubernetes or OpenShift cluster, workloads are pods, if your cluster is an OpenStack cluster, workloads are VMs. 
 
-We use the term host to mean a computer where {{site.prodname}} is installed. These include computers that are part of a cluster and “host” workloads, as well as computers that are not part of the cluster and run applications directly, which we call "non-cluster" hosts.  {{site.prodname}} does not handle the networking from host to host ({site.prodname} assumes this is set up), but it can be used to handle networking between hosts and workloads.  Calico can also provide network policy for hosts, regardless of whether or not the hosts run any workloads.  This guide focuses on non-cluster hosts.
+We use the term host to mean a computer where {{site.prodname}} is installed. These include computers that are part of a cluster and “host” workloads, as well as computers that are not part of the cluster and run applications directly, which we call "non-cluster" hosts.  {{site.prodname}} does not handle the networking from host to host ({{site.prodname}} assumes this is set up), but it can be used to handle networking between hosts and workloads.  {{site.prodname}} can also provide network policy for hosts, regardless of whether or not the hosts run any workloads.  This guide focuses on non-cluster hosts.
 
 #### {{site.prodname}} networking on non-cluster hosts
 
