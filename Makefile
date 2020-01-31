@@ -30,6 +30,11 @@
 PACKAGE_NAME?=github.com/projectcalico/felix
 GO_BUILD_VER?=v0.34-deb-cgo
 
+# We need to do static builds of test binaries (because we run them in scratch containers).
+# Use an old go-build for that.
+GO_BUILD_STATIC_VER=v0.34
+CALICO_BUILD_STATIC=calico/go-build:$(GO_BUILD_STATIC_VER)
+
 ###############################################################################
 # Download and include Makefile.common
 #   Additions to EXTRA_DOCKER_ARGS need to happen before the include since
@@ -550,19 +555,19 @@ bin/calico-bpf: $(SRC_FILES) $(LOCAL_BUILD_DEP)
 bin/iptables-locker: $(LOCAL_BUILD_DEP) go.mod $(shell find iptables -type f -name '*.go' -print)
 	@echo Building iptables-locker...
 	mkdir -p bin
-	$(DOCKER_RUN) $(CALICO_BUILD) \
+	$(DOCKER_RUN) $(CALICO_BUILD_STATIC) \
 	    sh -c 'go build -v -i -o $@ -v $(BUILD_FLAGS) $(LDFLAGS) "$(PACKAGE_NAME)/fv/iptables-locker"'
 
 bin/test-workload: $(LOCAL_BUILD_DEP) go.mod fv/cgroup/cgroup.go fv/utils/utils.go fv/conncheck/*.go fv/test-workload/*.go
 	@echo Building test-workload...
 	mkdir -p bin
-	$(DOCKER_RUN) $(CALICO_BUILD) \
+	$(DOCKER_RUN) $(CALICO_BUILD_STATIC) \
 	    sh -c 'go build -v -i -o $@ -v $(BUILD_FLAGS) $(LDFLAGS) "$(PACKAGE_NAME)/fv/test-workload"'
 
 bin/test-connection: $(LOCAL_BUILD_DEP) go.mod fv/cgroup/cgroup.go fv/utils/utils.go fv/conncheck/*.go fv/test-connection/*.go
 	@echo Building test-connection...
 	mkdir -p bin
-	$(DOCKER_RUN) $(CALICO_BUILD) \
+	$(DOCKER_RUN) $(CALICO_BUILD_STATIC) \
 	    sh -c 'go build -v -i -o $@ -v $(BUILD_FLAGS) $(LDFLAGS) "$(PACKAGE_NAME)/fv/test-connection"'
 
 st:
