@@ -92,7 +92,7 @@ var _ = Describe("Spoof tests", func() {
 		})
 	}
 
-	Context("IPv4", func() {
+	Context("_BPF-SAFE_ IPv4", func() {
 		BeforeEach(func() {
 			var err error
 			infra, err = infrastructure.GetEtcdDatastoreInfra()
