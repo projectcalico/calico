@@ -1,5 +1,5 @@
 ---
-title: Bare metal hosts
+title: Non-cluster hosts
 description: Install Calico on hosts to secure host communications.
 show_read_time: false
 show_toc: false
