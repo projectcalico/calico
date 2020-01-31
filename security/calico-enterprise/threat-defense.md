@@ -39,4 +39,4 @@ You can configure Calico Enterprise with custom alerts to cover many scenarios t
 - User RBAC changes
 - Known hijacking methods
 
-Calico Enterprise is backed by Tigera, who employ a team of threat researchers that regularly publish blogs and webinars about known attack vectors and publish Custom Alerts for Calico Enterprise to detect and alert on the latest intrusion and exfiltration techniques. Calico Enterprise also offers a web interface that your own threat researchers and security engineers can use to define their own rules and alerts.
+Calico Enterprise is backed by Tigera, who employ a team of threat researchers that regularly publish blogs and webinars about known attack vectors and publish custom alerts for Calico Enterprise to detect and alert on the latest intrusion and exfiltration techniques. Calico Enterprise also offers a web interface that your own threat researchers and security engineers can use to define their own rules and alerts.
