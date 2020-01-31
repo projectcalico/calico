@@ -40,7 +40,7 @@ Calico Enterprise flow logs contain important Kubernetes metadata including (but
 - Originating IP address for ingress connections
 - Which policies evaluated the connection and whether the policy allowed or denied the connection
 
-With Calico Enterprise flow logs, can you prove to security and auditors that your policies are in place and being enforced. 
+With Calico Enterprise flow logs, you can prove to security and auditors that your policies are in place and being enforced. 
 
 ![flow-logs]({{site.baseurl}}/images/flow-logs.png)
 
