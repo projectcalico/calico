@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2019 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2020 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -99,14 +99,14 @@ func (r *DefaultRuleRenderer) StaticFilterInputForwardCheckChain(ipVersion uint8
 					DestPortRanges(portSplit).
 					DestIPSet(hostIPSet),
 				Action:  GotoAction{Target: ChainDispatchSetEndPointMark},
-				Comment: "To kubernetes NodePort service",
+				Comment: []string{"To kubernetes NodePort service"},
 			},
 			Rule{
 				Match: Match().Protocol("udp").
 					DestPortRanges(portSplit).
 					DestIPSet(hostIPSet),
 				Action:  GotoAction{Target: ChainDispatchSetEndPointMark},
-				Comment: "To kubernetes NodePort service",
+				Comment: []string{"To kubernetes NodePort service"},
 			},
 		)
 	}
@@ -116,7 +116,7 @@ func (r *DefaultRuleRenderer) StaticFilterInputForwardCheckChain(ipVersion uint8
 		Rule{
 			Match:   Match().NotDestIPSet(hostIPSet),
 			Action:  JumpAction{Target: ChainDispatchSetEndPointMark},
-			Comment: "To kubernetes service",
+			Comment: []string{"To kubernetes service"},
 		},
 	)
 
@@ -191,7 +191,7 @@ func (r *DefaultRuleRenderer) StaticFilterOutputForwardEndpointMarkChain() *Chai
 		Rule{
 			Match:   Match().MarkSingleBitSet(r.IptablesMarkAccept),
 			Action:  r.filterAllowAction,
-			Comment: "Policy explicitly accepted packet.",
+			Comment: []string{"Policy explicitly accepted packet."},
 		},
 	)
 
@@ -214,12 +214,12 @@ func (r *DefaultRuleRenderer) filterInputChain(ipVersion uint8) *Chain {
 					SourceIPSet(r.IPSetConfigV4.NameForMainIPSet(IPSetIDAllHostNets)).
 					DestAddrType(AddrTypeLocal),
 				Action:  r.filterAllowAction,
-				Comment: "Allow IPIP packets from Calico hosts",
+				Comment: []string{"Allow IPIP packets from Calico hosts"},
 			},
 			Rule{
 				Match:   Match().ProtocolNum(ProtoIPIP),
 				Action:  DropAction{},
-				Comment: "Drop IPIP packets from non-Calico hosts",
+				Comment: []string{"Drop IPIP packets from non-Calico hosts"},
 			},
 		)
 	}
@@ -234,14 +234,14 @@ func (r *DefaultRuleRenderer) filterInputChain(ipVersion uint8) *Chain {
 					SourceIPSet(r.IPSetConfigV4.NameForMainIPSet(IPSetIDAllVXLANSourceNets)).
 					DestAddrType(AddrTypeLocal),
 				Action:  r.filterAllowAction,
-				Comment: "Allow VXLAN packets from whitelisted hosts",
+				Comment: []string{"Allow VXLAN packets from whitelisted hosts"},
 			},
 			Rule{
 				Match: Match().ProtocolNum(ProtoUDP).
 					DestPorts(uint16(r.Config.VXLANPort)).
 					DestAddrType(AddrTypeLocal),
 				Action:  DropAction{},
-				Comment: "Drop VXLAN packets from non-whitelisted hosts",
+				Comment: []string{"Drop VXLAN packets from non-whitelisted hosts"},
 			},
 		)
 	}
@@ -289,7 +289,7 @@ func (r *DefaultRuleRenderer) filterInputChain(ipVersion uint8) *Chain {
 		Rule{
 			Match:   Match().MarkSingleBitSet(r.IptablesMarkAccept),
 			Action:  r.filterAllowAction,
-			Comment: "Host endpoint policy accepted packet.",
+			Comment: []string{"Host endpoint policy accepted packet."},
 		},
 	)
 
@@ -384,7 +384,7 @@ func (r *DefaultRuleRenderer) filterWorkloadToHostChain(ipVersion uint8) *Chain 
 	for _, action := range r.inputAcceptActions {
 		rules = append(rules, Rule{
 			Action:  action,
-			Comment: "Configured DefaultEndpointToHostAction",
+			Comment: []string{"Configured DefaultEndpointToHostAction"},
 		})
 	}
 
@@ -516,7 +516,7 @@ func (r *DefaultRuleRenderer) StaticFilterForwardChains() []*Chain {
 		Rule{
 			Match:   Match().MarkSingleBitSet(r.IptablesMarkAccept),
 			Action:  r.filterAllowAction,
-			Comment: "Policy explicitly accepted packet.",
+			Comment: []string{"Policy explicitly accepted packet."},
 		},
 	)
 
@@ -594,7 +594,7 @@ func (r *DefaultRuleRenderer) filterOutputChain(ipVersion uint8) *Chain {
 					DestIPSet(r.IPSetConfigV4.NameForMainIPSet(IPSetIDAllHostNets)).
 					SrcAddrType(AddrTypeLocal, false),
 				Action:  r.filterAllowAction,
-				Comment: "Allow IPIP packets to other Calico hosts",
+				Comment: []string{"Allow IPIP packets to other Calico hosts"},
 			},
 		)
 	}
@@ -610,7 +610,7 @@ func (r *DefaultRuleRenderer) filterOutputChain(ipVersion uint8) *Chain {
 					SrcAddrType(AddrTypeLocal, false).
 					DestIPSet(r.IPSetConfigV4.NameForMainIPSet(IPSetIDAllVXLANSourceNets)),
 				Action:  r.filterAllowAction,
-				Comment: "Allow VXLAN packets to other whitelisted hosts",
+				Comment: []string{"Allow VXLAN packets to other whitelisted hosts"},
 			},
 		)
 	}
@@ -626,7 +626,7 @@ func (r *DefaultRuleRenderer) filterOutputChain(ipVersion uint8) *Chain {
 		Rule{
 			Match:   Match().MarkSingleBitSet(r.IptablesMarkAccept),
 			Action:  r.filterAllowAction,
-			Comment: "Host endpoint policy accepted packet.",
+			Comment: []string{"Host endpoint policy accepted packet."},
 		},
 	)
 
@@ -790,7 +790,7 @@ func (r *DefaultRuleRenderer) StaticManglePreroutingChain(ipVersion uint8) *Chai
 		Rule{
 			Match:   Match().MarkSingleBitSet(r.IptablesMarkAccept),
 			Action:  r.mangleAllowAction,
-			Comment: "Host endpoint policy accepted packet.",
+			Comment: []string{"Host endpoint policy accepted packet."},
 		},
 	)
 
@@ -827,19 +827,14 @@ func (r *DefaultRuleRenderer) StaticRawPreroutingChain(ipVersion uint8) *Chain {
 		})
 	}
 
-	if ipVersion == 6 {
-		// Apply strict RPF check to packets from workload interfaces.  This prevents
-		// workloads from spoofing their IPs.  Note: non-privileged containers can't
-		// usually spoof but privileged containers and VMs can.
-		//
-		// We only do this for IPv6 because the IPv4 RPF check is handled via a sysctl.
-		// In addition, the IPv4 check is complicated by the fact that we have special
-		// case handling for DHCP to the host, which would require an exclusion.
-		rules = append(rules, Rule{
-			Match:  Match().MarkSingleBitSet(markFromWorkload).RPFCheckFailed(),
-			Action: DropAction{},
-		})
-	}
+	// Apply strict RPF check to packets from workload interfaces.  This prevents
+	// workloads from spoofing their IPs.  Note: non-privileged containers can't
+	// usually spoof but privileged containers and VMs can.
+	//
+	rules = append(rules, Rule{
+		Match:  Match().MarkSingleBitSet(markFromWorkload).RPFCheckFailed(),
+		Action: DropAction{},
+	})
 
 	rules = append(rules,
 		// Send non-workload traffic to the untracked policy chains.
