@@ -119,7 +119,7 @@ for how `doNotTrack` and `preDNAT` and `applyOnForward` can be useful for host e
 ### Application layer policy
 
 Application layer policy is an optional feature of {{site.prodname}} and
-[must be enabled]({{site.baseurl}}/security/istio/app-layer-policy)
+[must be enabled]({{site.baseurl}}/security/app-layer-policy)
 in order to use the following match criteria.
 
 > **NOTE**: Application layer policy match criteria are supported with the following restrictions.
