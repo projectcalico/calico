@@ -12,10 +12,9 @@ While Azure does not support {{site.prodname}} networking, you can use
 - **Azure user-defined routes**: This option provides networking without overlays.
   Disable {{site.prodname}} networking by setting `CALICO_NETWORKING_BACKEND` to `none`
   in `{{site.nodecontainer}}`. (Also called "policy-only mode".) Refer to
-  [Configuring {{site.nodecontainer}}](../node/configuration) and [Azure user-defined routes](#azure-user-defined-routes) for more information. If you're on Kubernetes, refer to [Installing {{site.prodname}} for policy (advanced)](../../getting-started/kubernetes/installation/other) for
-  a sample manifest.
+  [Configuring {{site.nodecontainer}}](../node/configuration) and [Azure user-defined routes](#azure-user-defined-routes) for more information. If you're on Kubernetes, see [Self-managed-public-cloud)]({{site.baseurl}}/getting-started/kubernetes/self-managed-public-cloud).
 
-- **flannel** (Kubernetes only): Refer to [Installing {{site.prodname}} for policy and flannel for networking](../../getting-started/kubernetes/installation/flannel)
+- **flannel** (Kubernetes only): Refer to [Installing {{site.prodname}} for policy and flannel for networking](../../getting-started/kubernetes/flannel)
   for specific instructions and a manifest. This option does use overlays.
 
 - **Azure CNI IPAM plug-in**: Configure {{site.prodname}} to use the

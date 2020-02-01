@@ -30,8 +30,7 @@ steps](https://kubernetes.io/docs/concepts/services-networking/dual-stack/#enabl
 for dual stack, except ignore mention of the Kubenet network plugin, because here we will use
 {{site.prodname}} instead.
 
-1.  Follow our [installation
-guide]({{ site.baseurl }}/getting-started/kubernetes/installation/calico) to identify
+1.  Follow our [installation guide]({{site.baseurl}}/getting-started/kubernetes/self-managed-onprem/onpremises) to identify
 and download the right {{site.prodname}} manifest for the cluster, and
 for your preferred datastore type, but do not apply that manifest yet.
 

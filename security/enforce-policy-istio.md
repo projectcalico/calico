@@ -25,11 +25,11 @@ This how-to guide uses the following Calico features:
 
 ### Before you begin...
 
-[Install Calico and calicoctl]({{ site.baseurl }}/getting-started/kubernetes/installation/calico)
+[Install Calico and calicoctl]({{ site.baseurl }}/getting-started/kubernetes/)
 
 ### How to
 
-After you complete the steps to [enable application layer policy]({{ site.baseurl }}/getting-started/kubernetes/installation/app-layer-policy), you are ready to create standard Calico network policies with application layer specific attributes.
+After you complete the steps to [Enable application layer policy]({{site.baseurl}}/security/istio/app-layer-policy), you are ready to create standard Calico network policies with application layer specific attributes.
 
 ### Above and beyond
 

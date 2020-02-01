@@ -39,10 +39,10 @@ section:
   - title: Flannel
     path: /getting-started/kubernetes/flannel/
     section:
-    - title: Installing Calico for policy and flannel for networking
-      path: /getting-started/kubernetes/installation/flannel
-    - title: Migrating a cluster from flannel to Calico
-      path: /getting-started/kubernetes/installation/migration-from-flannel     
+    - title: Install Calico for policy and flannel for networking
+      path: /getting-started/kubernetes/flannel/flannel
+    - title: Migrate a cluster from flannel to Calico
+      path: /getting-started/kubernetes/flannel/migration-from-flannel     
   - title: Calico the hard way
     path: /getting-started/kubernetes/hardway/
     section:
