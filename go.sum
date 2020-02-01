@@ -245,6 +245,7 @@ github.com/projectcalico/confd v0.0.0-20200124165649-76d9bdcffb31 h1:lZPYsIsKWXJ
 github.com/projectcalico/confd v0.0.0-20200124165649-76d9bdcffb31/go.mod h1:zcXQu34Sb+twcRUFHOlzGkIvExA/lNSIhaRs8OmVkdY=
 github.com/projectcalico/felix v0.0.0-20200121214536-d51cbfa8c774 h1:bD8T+/hyIP6OhAN4FwmGdIo+IQinqzWc8n/ETRxflMg=
 github.com/projectcalico/felix v0.0.0-20200121214536-d51cbfa8c774/go.mod h1:dbngknjFNMKD5TJPXY49/4PqNYStuatg60g56qx9a88=
+github.com/projectcalico/felix v3.8.6+incompatible h1:ncKg7TUD3SEVJjVIj5whMzZAw+6eUQB39b7SBP7Y8Ro=
 github.com/projectcalico/go-json v0.0.0-20161128004156-6219dc7339ba h1:aaF2byUCZhzszHsfPEr2M3qcU4ibtD/yk/il2R7T1PU=
 github.com/projectcalico/go-json v0.0.0-20161128004156-6219dc7339ba/go.mod h1:q8EdCgBdMQzgiX/uk4GXLWLk+gIHd1a7mWUAamJKDb4=
 github.com/projectcalico/go-yaml-wrapper v0.0.0-20191112210931-090425220c54 h1:Jt2Pic9dxgJisekm8q2WV9FaWxUJhhRfwHSP640drww=
