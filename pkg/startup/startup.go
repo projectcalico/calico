@@ -1,4 +1,4 @@
-// Copyright (c) 2016 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016,2020 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -39,14 +39,15 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/selector"
 	"github.com/projectcalico/libcalico-go/lib/upgrade/migrator"
 	"github.com/projectcalico/libcalico-go/lib/upgrade/migrator/clients"
+	"github.com/projectcalico/node/pkg/calicoclient"
+	"github.com/projectcalico/node/pkg/startup/autodetection"
 	log "github.com/sirupsen/logrus"
 	kapiv1 "k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
-
-	"github.com/projectcalico/node/pkg/calicoclient"
-	"github.com/projectcalico/node/pkg/startup/autodetection"
 )
 
 const (
@@ -59,6 +60,9 @@ const (
 	AUTODETECTION_METHOD_CAN_REACH      = "can-reach="
 	AUTODETECTION_METHOD_INTERFACE      = "interface="
 	AUTODETECTION_METHOD_SKIP_INTERFACE = "skip-interface="
+
+	// KubeadmConfigConfigMap is defined in k8s.io/kubernetes, which we can't import due to versioning issues.
+	KubeadmConfigConfigMap = "kubeadm-config"
 )
 
 // Version string, set during build.
@@ -111,6 +115,8 @@ func Run() {
 	// updated IP data and use the full list of nodes for validation.
 	node := getNode(ctx, cli, nodeName)
 
+	var kubeadmConfig *v1.ConfigMap
+
 	// If Calico is running in policy only mode we don't need to write
 	// BGP related details to the Node.
 	if os.Getenv("CALICO_NETWORKING_BACKEND") != "none" {
@@ -149,14 +155,39 @@ func Run() {
 
 		// If running under kubernetes with secrets to call k8s API
 		if config, err := rest.InClusterConfig(); err == nil {
+			// default timeout is 30 seconds, which isn't appropriate for this kind of
+			// startup action because network services, like kube-proxy might not be
+			// running and we don't want to block the full 30 seconds if they are just
+			// a few seconds behind.
+			config.Timeout = 2 * time.Second
+
+			// Creates the k8s clientset.
+			clientset, err := kubernetes.NewForConfig(config)
+			if err != nil {
+				log.WithError(err).Error("Failed to create clientset")
+				return
+			}
+
 			log.Info("Setting NetworkUnavailable to False")
-			err = setNodeNetworkUnavailableFalse(*config, nodeName)
+			err = setNodeNetworkUnavailableFalse(*clientset, nodeName)
 			if err != nil {
 				log.WithError(err).Error("Unable to set NetworkUnavailable to False")
+			}
+
+			kubeadmConfig, err = clientset.CoreV1().ConfigMaps(metav1.NamespaceSystem).Get(KubeadmConfigConfigMap, metav1.GetOptions{})
+			if err != nil {
+				// Any error other than not finding kubeadm's config map should be serious enough
+				// that we ought to stop here and return.
+				if !errors.IsNotFound(err) {
+					log.WithError(err).Error("failed to query kubeadm's config map")
+					terminate()
+					return
+				}
 			}
 		}
 	}
 
+	// Populate a reference to the node based on orchestrator node identifiers.
 	configureNodeRef(node)
 
 	// Check expected filesystem
@@ -169,10 +200,10 @@ func Run() {
 	}
 
 	// Configure IP Pool configuration.
-	configureIPPools(ctx, cli)
+	configureIPPools(ctx, cli, kubeadmConfig)
 
 	// Set default configuration required for the cluster.
-	if err := ensureDefaultConfig(ctx, cfg, cli, node); err != nil {
+	if err := ensureDefaultConfig(ctx, cfg, cli, node, kubeadmConfig); err != nil {
 		log.WithError(err).Errorf("Unable to set global default configuration")
 		terminate()
 	}
@@ -703,9 +734,8 @@ func GenerateIPv6ULAPrefix() (string, error) {
 	return ipNet.String(), nil
 }
 
-// configureIPPools ensures that default IP pools are created (unless explicitly
-// requested otherwise).
-func configureIPPools(ctx context.Context, client client.Interface) {
+// configureIPPools ensures that default IP pools are created (unless explicitly requested otherwise).
+func configureIPPools(ctx context.Context, client client.Interface, kubeadmConfig *v1.ConfigMap) {
 	// Read in environment variables for use here and later.
 	ipv4Pool := os.Getenv("CALICO_IPV4POOL_CIDR")
 	ipv6Pool := os.Getenv("CALICO_IPV6POOL_CIDR")
@@ -718,6 +748,24 @@ func configureIPPools(ctx context.Context, client client.Interface) {
 
 		log.Info("Skipping IP pool configuration")
 		return
+	}
+
+	// If CIDRs weren't specified through the environment variables, check if they're present in kubeadm's
+	// config map.
+	if (len(ipv4Pool) == 0 || len(ipv6Pool) == 0) && kubeadmConfig != nil {
+		v4, v6, err := extractKubeadmCIDRs(kubeadmConfig)
+		if err == nil {
+			if len(ipv4Pool) == 0 {
+				ipv4Pool = v4
+				log.Infof("found v4=%s in the kubeadm config map", ipv4Pool)
+			}
+			if len(ipv6Pool) == 0 {
+				ipv6Pool = v6
+				log.Infof("found v6=%s in the kubeadm config map", ipv6Pool)
+			}
+		} else {
+			log.WithError(err).Warn("Failed to extract CIDRs from kubeadm config.")
+		}
 	}
 
 	ipv4IpipModeEnvVar := strings.ToLower(os.Getenv("CALICO_IPV4POOL_IPIP"))
@@ -956,10 +1004,19 @@ func checkConflictingNodes(ctx context.Context, client client.Interface, node *a
 
 // ensureDefaultConfig ensures all of the required default settings are
 // configured.
-func ensureDefaultConfig(ctx context.Context, cfg *apiconfig.CalicoAPIConfig, c client.Interface, node *api.Node) error {
+func ensureDefaultConfig(ctx context.Context, cfg *apiconfig.CalicoAPIConfig, c client.Interface, node *api.Node, kubeadmConfig *v1.ConfigMap) error {
 	// Ensure the ClusterInformation is populated.
 	// Get the ClusterType from ENV var. This is set from the manifest.
 	clusterType := os.Getenv("CLUSTER_TYPE")
+
+	if kubeadmConfig != nil {
+		if len(clusterType) == 0 {
+			clusterType = "kubeadm"
+		} else {
+			clusterType += ",kubeadm"
+		}
+	}
+
 	if err := c.EnsureInitialized(ctx, VERSION, clusterType); err != nil {
 		return nil
 	}
@@ -1093,19 +1150,7 @@ func ensureKDDMigrated(cfg *apiconfig.CalicoAPIConfig, cv3 client.Interface) err
 
 // Set Kubernetes NodeNetworkUnavailable to false when starting
 // https://kubernetes.io/docs/concepts/architecture/nodes/#condition
-func setNodeNetworkUnavailableFalse(config rest.Config, nodeName string) error {
-	// default timeout is 30 seconds, which isn't appropriate for this kind of
-	// startup action because network services, like kube-proxy might not be
-	// running and we don't want to block the full 30 seconds if they are just
-	// a few seconds behind.
-	config.Timeout = 2 * time.Second
-
-	// creates the k8s clientset
-	clientset, err := kubernetes.NewForConfig(&config)
-	if err != nil {
-		return err
-	}
-
+func setNodeNetworkUnavailableFalse(clientset kubernetes.Clientset, nodeName string) error {
 	condition := kapiv1.NodeCondition{
 		Type:               kapiv1.NodeNetworkUnavailable,
 		Status:             kapiv1.ConditionFalse,
@@ -1141,4 +1186,49 @@ func setNodeNetworkUnavailableFalse(config rest.Config, nodeName string) error {
 func terminate() {
 	log.Warn("Terminating")
 	exitFunction(1)
+}
+
+// extractKubeadmCIDRs looks through the config map and parses lines starting with 'podSubnet'.
+func extractKubeadmCIDRs(kubeadmConfig *v1.ConfigMap) (string, string, error) {
+	var v4, v6 string
+	var line []string
+	var err error
+
+	if kubeadmConfig == nil {
+		return "", "", fmt.Errorf("Invalid config map.")
+	}
+
+	// Look through the config map for lines starting with 'podSubnet', then assign the right variable
+	// according to the IP family of the matching string.
+	re := regexp.MustCompile(`podSubnet: (.*)`)
+
+	for _, l := range kubeadmConfig.Data {
+		if line = re.FindStringSubmatch(l); line != nil {
+			break
+		}
+	}
+
+	if len(line) != 0 {
+		// IPv4 and IPv6 CIDRs will be separated by a comma in a dual stack setup.
+		for _, cidr := range strings.Split(line[1], ",") {
+			addr, _, err := net.ParseCIDR(cidr)
+			if err != nil {
+				break
+			}
+			if addr.To4() == nil {
+				if len(v6) == 0 {
+					v6 = cidr
+				}
+			} else {
+				if len(v4) == 0 {
+					v4 = cidr
+				}
+			}
+			if len(v6) != 0 && len(v4) != 0 {
+				break
+			}
+		}
+	}
+
+	return v4, v6, err
 }

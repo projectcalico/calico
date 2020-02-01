@@ -99,6 +99,8 @@ const (
 	randomULAPool = "<random ULA pool>"
 )
 
+var kubeadmConfig *v1.ConfigMap = &v1.ConfigMap{Data: map[string]string{"ClusterConfiguration": "podSubnet: 192.168.0.0/16"}}
+
 var _ = Describe("FV tests against a real etcd", func() {
 	RegisterFailHandler(Fail)
 	ctx := context.Background()
@@ -146,7 +148,7 @@ var _ = Describe("FV tests against a real etcd", func() {
 			Expect(poolList.Items).To(BeEmpty())
 
 			// Run the UUT.
-			configureIPPools(ctx, c)
+			configureIPPools(ctx, c, kubeadmConfig)
 
 			// Get the IPPool list.
 			poolList, err = c.IPPools().List(ctx, options.ListOptions{})
@@ -349,7 +351,7 @@ var _ = Describe("FV tests against a real etcd", func() {
 			os.Setenv("NO_DEFAULT_POOLS", "true")
 
 			// Run the UUT.
-			configureIPPools(ctx, c)
+			configureIPPools(ctx, c, kubeadmConfig)
 
 			// Get the IPPool list.
 			poolList, err := c.IPPools().List(ctx, options.ListOptions{})
@@ -390,7 +392,7 @@ var _ = Describe("FV tests against a real etcd", func() {
 			}
 
 			// Run the UUT.
-			configureIPPools(ctx, c)
+			configureIPPools(ctx, c, kubeadmConfig)
 
 			Expect(my_ec).To(Equal(1))
 		},
@@ -497,7 +499,7 @@ var _ = Describe("FV tests against a real etcd", func() {
 			nodeName := determineNodeName()
 			node := getNode(ctx, c, nodeName)
 
-			err = ensureDefaultConfig(ctx, cfg, c, node)
+			err = ensureDefaultConfig(ctx, cfg, c, node, kubeadmConfig)
 			It("should be able to ensureDefaultConfig", func() {
 				Expect(err).NotTo(HaveOccurred())
 			})
@@ -508,7 +510,7 @@ var _ = Describe("FV tests against a real etcd", func() {
 			})
 
 			It("should be emtpy", func() {
-				Expect(clusterInfo.Spec.ClusterType).To(Equal(""))
+				Expect(clusterInfo.Spec.ClusterType).To(Equal("kubeadm"))
 			})
 
 		})
@@ -539,7 +541,7 @@ var _ = Describe("FV tests against a real etcd", func() {
 
 			os.Setenv("CLUSTER_TYPE", "theType")
 
-			err = ensureDefaultConfig(ctx, cfg, c, node)
+			err = ensureDefaultConfig(ctx, cfg, c, node, kubeadmConfig)
 			It("should be able to ensureDefaultConfig", func() {
 				Expect(err).NotTo(HaveOccurred())
 			})
@@ -550,7 +552,7 @@ var _ = Describe("FV tests against a real etcd", func() {
 			})
 
 			It("should have the set value", func() {
-				Expect(clusterInfo.Spec.ClusterType).To(Equal("theType"))
+				Expect(clusterInfo.Spec.ClusterType).To(Equal("theType,kubeadm"))
 			})
 		})
 		Context("With env var and Cluster Type prepopulated, Cluster Type should have both", func() {
@@ -586,7 +588,7 @@ var _ = Describe("FV tests against a real etcd", func() {
 			Expect(err).ToNot(HaveOccurred())
 			os.Setenv("CLUSTER_TYPE", "theType")
 
-			err = ensureDefaultConfig(ctx, cfg, c, node)
+			err = ensureDefaultConfig(ctx, cfg, c, node, kubeadmConfig)
 			It("should be able to ensureDefaultConfig", func() {
 				Expect(err).NotTo(HaveOccurred())
 			})
@@ -645,7 +647,7 @@ var _ = Describe("FV tests against a real etcd", func() {
 			Expect(err).ToNot(HaveOccurred())
 			os.Setenv("CLUSTER_TYPE", "theType")
 
-			err = ensureDefaultConfig(ctx, cfg, c, node)
+			err = ensureDefaultConfig(ctx, cfg, c, node, kubeadmConfig)
 			It("should be able to ensureDefaultConfig", func() {
 				Expect(err).NotTo(HaveOccurred())
 			})
@@ -706,7 +708,7 @@ var _ = Describe("FV tests against a real etcd", func() {
 			Expect(err).NotTo(HaveOccurred())
 			os.Setenv("CLUSTER_TYPE", "")
 
-			err = ensureDefaultConfig(ctx, cfg, c, node)
+			err = ensureDefaultConfig(ctx, cfg, c, node, kubeadmConfig)
 			It("should be able to ensureDefaultConfig", func() {
 				Expect(err).NotTo(HaveOccurred())
 			})
@@ -717,7 +719,7 @@ var _ = Describe("FV tests against a real etcd", func() {
 			})
 
 			It("should only have 'kdd' set", func() {
-				Expect(clusterInfo.Spec.ClusterType).Should(Equal("kdd"))
+				Expect(clusterInfo.Spec.ClusterType).Should(Equal("kubeadm,kdd"))
 			})
 		})
 
@@ -754,7 +756,7 @@ var _ = Describe("FV tests against a real etcd", func() {
 			Expect(err).ToNot(HaveOccurred())
 			os.Setenv("CLUSTER_TYPE", "type1,type1")
 
-			err = ensureDefaultConfig(ctx, cfg, c, node)
+			err = ensureDefaultConfig(ctx, cfg, c, node, kubeadmConfig)
 			It("should be able to ensureDefaultConfig", func() {
 				Expect(err).NotTo(HaveOccurred())
 			})
@@ -905,7 +907,7 @@ var _ = Describe("FV tests against K8s API server.", func() {
 			wg.Add(1)
 			go func(n api.Node) {
 				defer wg.Done()
-				err = ensureDefaultConfig(ctx, cfg, c, &n)
+				err = ensureDefaultConfig(ctx, cfg, c, &n, kubeadmConfig)
 				if err != nil {
 					errors = append(errors, err)
 				}
@@ -987,3 +989,66 @@ var _ = Describe("UT for GenerateIPv6ULAPrefix", func() {
 		Fail("random bits were all zeros")
 	})
 })
+
+var _ = DescribeTable("UT for extractKubeadmCIDRs",
+	func(cm *v1.ConfigMap, expectedIPv4 string, expectedIPv6 string, expectErr bool) {
+		v4, v6, err := extractKubeadmCIDRs(cm)
+		if expectErr {
+			Expect(err).To(HaveOccurred())
+		} else {
+			Expect(err).ToNot(HaveOccurred())
+		}
+		Expect(v4).To(Equal(expectedIPv4))
+		Expect(v6).To(Equal(expectedIPv6))
+	},
+	Entry("nil config map", nil, "", "", true),
+	Entry("empty config map", &v1.ConfigMap{}, "", "", false),
+	Entry("v4 only config map", &v1.ConfigMap{Data: map[string]string{"ClusterConfiguration": "podSubnet: 192.168.0.0/16"}}, "192.168.0.0/16", "", false),
+	Entry("dual v4 config map", &v1.ConfigMap{Data: map[string]string{"ClusterConfiguration": "podSubnet: 192.168.0.0/16,10.10.0.0/16"}}, "192.168.0.0/16", "", false),
+	Entry("v6 only config map", &v1.ConfigMap{Data: map[string]string{"ClusterConfiguration": "podSubnet: fdff:ffff:ffff:ffff:ffff::/80"}}, "", "fdff:ffff:ffff:ffff:ffff::/80", false),
+	Entry("dual v6 config map", &v1.ConfigMap{Data: map[string]string{"ClusterConfiguration": "podSubnet: fdff:ffff:ffff:ffff:ffff::/80,fdff:ffff:ffff:ffff:ffff::/80"}}, "", "fdff:ffff:ffff:ffff:ffff::/80", false),
+	Entry("dual-stack config map", &v1.ConfigMap{Data: map[string]string{"ClusterConfiguration": "podSubnet: 192.168.0.0/16,fdff:ffff:ffff:ffff:ffff::/80"}}, "192.168.0.0/16", "fdff:ffff:ffff:ffff:ffff::/80", false),
+
+	Entry("full config map", &v1.ConfigMap{Data: map[string]string{
+		`ClusterConfiguration`: `    apiServerCertSANs:
+    - 35.223.231.224
+    - 127.0.0.1
+    apiServerExtraArgs:
+      audit-log-path: /var/log/calico/audit/kube-audit.log
+      audit-policy-file: /etc/kubernetes/pki/audit-policy.yaml
+      authorization-mode: Node,RBAC
+      basic-auth-file: /etc/kubernetes/pki/basic_auth.csv
+    apiServerExtraVolumes:
+    - hostPath: /var/log/calico/audit/
+      mountPath: /var/log/calico/audit/
+      name: calico-audit
+      pathType: DirectoryOrCreate
+      writable: true
+    apiVersion: kubeadm.k8s.io/v1alpha3
+    auditPolicy:
+      logDir: /var/log/kubernetes/audit
+      logMaxAge: 2
+      path: ""
+    certificatesDir: /etc/kubernetes/pki
+    clusterName: kubernetes
+    controlPlaneEndpoint: ""
+    etcd:
+      local:
+        dataDir: /var/lib/etcd
+        image: ""
+    imageRepository: k8s.gcr.io
+    kind: ClusterConfiguration
+    kubernetesVersion: v1.12.7
+    networking:
+      dnsDomain: cluster.local
+      podSubnet: 192.168.0.0/16
+      serviceSubnet: 10.96.0.0/12
+    unifiedControlPlaneImage: ""
+  ClusterStatus: |
+    apiEndpoints:
+      rafael-cluster-1-kadm-ms:
+        advertiseAddress: 10.128.0.73
+        bindPort: 6443
+    apiVersion: kubeadm.k8s.io/v1alpha3
+    kind: ClusterStatus`}}, "192.168.0.0/16", "", false),
+)
