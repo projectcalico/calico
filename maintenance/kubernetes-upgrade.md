@@ -74,7 +74,7 @@ procedure varies by datastore type.
 
    It should return a `Cluster Version` of `{{page.version}}.x`.
 
-1. If you have [enable application layer policy]({{site.baseurl}}/security/istio/app-layer-policy),
+1. If you have [enable application layer policy]({{site.baseurl}}/security/app-layer-policy),
    follow [the instructions below](#upgrading-if-you-have-application-layer-policy-enabled) to complete your upgrade. Skip this if you are not using Istio with {{site.prodname}}.
 
 1. Congratulations! You have upgraded to {{site.prodname}} {{page.version}}.
