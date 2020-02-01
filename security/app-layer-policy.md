@@ -24,7 +24,7 @@ For a tutorial on how application layer policy provides second-factor authentica
 
 **Required**
 
-- [Calico is installed]({{site.baseurl}}/getting-started/kubernetes)
+- [Calico is installed]({{site.baseurl}}/getting-started/kubernetes/)
 - [calicoctl is installed and configured]({{site.baseurl}}/getting-started/calicoctl/install)
 - Kubernetes 1.15 or older (Istio 1.1.7 does not support Kubernetes 1.16+).
 See this [issue](https://github.com/projectcalico/calico/issues/2943) for details and workaround.

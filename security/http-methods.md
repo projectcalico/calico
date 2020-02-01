@@ -27,7 +27,7 @@ Calico network policy supports restricting traffic based on HTTP methods and pat
 
 ### Before you begin...
 
-[Enable application layer policy[Enable application layer policy]({{site.baseurl}}/security/istio/app-layer-policy)
+[Enable application layer policy[Enable application layer policy]({{site.baseurl}}/security/app-layer-policy)
 
 ### How to
 
