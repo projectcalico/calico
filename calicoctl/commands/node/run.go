@@ -39,6 +39,7 @@ const (
 	ETCD_KEY_NODE_FILE                  = "/etc/calico/certs/key.pem"
 	ETCD_CERT_NODE_FILE                 = "/etc/calico/certs/cert.crt"
 	ETCD_CA_CERT_NODE_FILE              = "/etc/calico/certs/ca_cert.crt"
+	FELIX_CONFIG_NODE_FILE              = "/etc/calico/felix.cfg"
 	AUTODETECTION_METHOD_FIRST          = "first-found"
 	AUTODETECTION_METHOD_CAN_REACH      = "can-reach="
 	AUTODETECTION_METHOD_INTERFACE      = "interface="
@@ -62,6 +63,7 @@ func Run(args []string) error {
                      [--node-image=<DOCKER_IMAGE_NAME>]
                      [--backend=(bird|gobgp|none)]
                      [--config=<CONFIG>]
+                     [--felix-config=<CONFIG>]
                      [--no-default-ippools]
                      [--dryrun]
                      [--init-system]
@@ -140,6 +142,9 @@ Options:
   -c --config=<CONFIG>     Path to the file containing connection
                            configuration in YAML or JSON format.
                            [default: ` + constants.DefaultConfigPath + `]
+     --felix-config=<CONFIG>
+                            Path to the file containing Felix
+                            configuration in YAML or JSON format.
 
 Description:
   This command is used to start a calico/node container instance which provides
@@ -167,6 +172,7 @@ Description:
 	name := argutils.ArgStringOrBlank(arguments, "--name")
 	nopools := argutils.ArgBoolOrFalse(arguments, "--no-default-ippools")
 	config := argutils.ArgStringOrBlank(arguments, "--config")
+	felixConfig := argutils.ArgStringOrBlank(arguments, "--felix-config")
 	initSystem := argutils.ArgBoolOrFalse(arguments, "--init-system")
 
 	// Validate parameters.
@@ -259,6 +265,11 @@ Description:
 		{hostPath: "/var/lib/calico", containerPath: "/var/lib/calico"},
 		{hostPath: "/lib/modules", containerPath: "/lib/modules"},
 		{hostPath: "/run", containerPath: "/run"},
+	}
+
+	// Attach Felix config if file path given
+	if felixConfig != "" {
+		vols = append(vols, vol{hostPath: felixConfig, containerPath: FELIX_CONFIG_NODE_FILE})
 	}
 
 	envs["ETCD_ENDPOINTS"] = etcdcfg.EtcdEndpoints
