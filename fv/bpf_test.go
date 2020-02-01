@@ -899,7 +899,6 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						cc.ExpectSome(w[1][0], workload.IP(clusterIP), port)
 						cc.ExpectSome(w[1][1], workload.IP(clusterIP), port)
 						cc.CheckConnectivity()
-
 					})
 
 					if localOnly {

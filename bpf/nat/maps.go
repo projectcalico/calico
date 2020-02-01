@@ -445,3 +445,30 @@ func AffinityMapMemIter(m AffinityMapMem) bpf.MapIter {
 		m[key] = val
 	}
 }
+
+// struct sendrecv4_key {
+// 	uint64_t cookie;
+// 	uint32_t ip;
+// 	uint32_t port;
+// };
+//
+// struct sendrecv4_val {
+// 	uint32_t ip;
+// 	uint32_t port;
+// };
+
+// SendRecvMSgdMapParameters define SendRecvMSgdMap
+var SendRecvMSgdMapParameters = bpf.MapParameters{
+	Filename:   "/sys/fs/bpf/tc/globals/cali_v4_srmsg",
+	Type:       "lru_hash",
+	KeySize:    16,
+	ValueSize:  8,
+	MaxEntries: 510000,
+	Name:       "cali_v4_srmsg",
+}
+
+// SendRecvMSgdMap tracks reverse translations for sendmsg/recvmsg of
+// unconnected UDP
+func SendRecvMSgdMap(mc *bpf.MapContext) bpf.Map {
+	return mc.NewPinnedMap(SendRecvMSgdMapParameters)
+}
