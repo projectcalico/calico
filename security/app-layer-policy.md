@@ -1,6 +1,6 @@
 ---
-title: Enabling application layer policy for Istio
-description: Enforce application layer network policy for Istio using Calico network policy.
+title: Enable application layer policy for Istio
+description: Enable application layer policy for Istio service mesh.
 canonical_url: '/getting-started/kubernetes/installation/app-layer-policy'
 ---
 
@@ -18,14 +18,14 @@ Enable {{site.prodname}} application layer network policy in Istio service mesh.
 
 Although Istio policy is ideal for operational goals, security inside and outside the cluster requires {{site.prodname}} network policy. {{site.prodname}} supports a special integration for Istio, called **application layer policy**. This policy lets you restrict ingress traffic inside and outside pods, and mitigate common threats to Istio-enabled apps.
 
-For a tutorial on how application layer policy provides second-factor authentication for the mythical Yao Bank, see [Enforce network policy using Istio]({{ site.url }}/security/tutorials/app-layer-policy/enforce-policy-istio).
+For a tutorial on how application layer policy provides second-factor authentication for the mythical Yao Bank, see [Enforce network policy using Istio]({{site.baseurl}}/security/tutorials/app-layer-policy/enforce-policy-istio).
 
 ### Before you begin...
 
 **Required**
 
-- [Calico is installed]({{ site.url }}/getting-started/)
-- [calicoctl is installed and configured]({{ site.url }}/getting-started/calicoctl/install)
+- [Calico is installed]({{site.baseurl}}/getting-started/kubernetes)
+- [calicoctl is installed and configured]({{site.baseurl}}/getting-started/calicoctl/install)
 - Kubernetes 1.15 or older (Istio 1.1.7 does not support Kubernetes 1.16+).
 See this [issue](https://github.com/projectcalico/calico/issues/2943) for details and workaround.
 
@@ -50,7 +50,7 @@ calicoctl patch FelixConfiguration default --patch \
 
 #### Install Istio
 
-1. Verify [application layer policy requirements]({{ site.url }}/getting-started/kubernetes/requirements#application-layer-policy-requirements).
+1. Verify [application layer policy requirements]({{site.baseurl}}/getting-started/kubernetes/requirements#application-layer-policy-requirements).
 1. Install Istio using the [Istio project documentation](https://istio.io/docs/setup/install/). Istio can be installed in both strict mode or permissive mode. For example to install Istio in strict mode:
 
 ```bash
@@ -76,7 +76,7 @@ kubectl patch configmap -n istio-system istio-sidecar-injector --patch "$(cat is
 ```
 [View sample manifest]({{ "/manifests/alp/istio-inject-configmap-1.3.5.yaml" | absolute_url }}){:target="_blank"}
 
-If you installed a different version of Istio, substitute 1.4.2 in the above URL for your Istio version. We have predefined `ConfigMaps` for Istio versions 1.1.0 through 1.1.17, 1.2.0 through 1.2.9, 1.3.0 through 1.3.5, and 1.4.0 through 1.4.2. To customize the standard sidecar injector `ConfigMap` or understand the changes we have made, see [Customizing the manifests]({{ site.url }}/getting-started/kubernetes/installation/config-options).
+If you installed a different version of Istio, substitute 1.4.2 in the above URL for your Istio version. We have predefined `ConfigMaps` for Istio versions 1.1.0 through 1.1.17, 1.2.0 through 1.2.9, 1.3.0 through 1.3.5, and 1.4.0 through 1.4.2. To customize the standard sidecar injector `ConfigMap` or understand the changes we have made, see [Customizing the manifests]({{site.baseurl}}/getting-started/kubernetes/installation/config-options).
 
 #### Add Calico authorization services to the mesh
 
@@ -105,6 +105,6 @@ If the namespace already has pods in it, you must recreate them for this to take
 
 ### Above and beyond
 
-- [Enforce network policy using Istio tutorial]({{ site.url }}/security/tutorials/app-layer-policy/enforce-policy-istio)
-- [Enforce network policy using Istio]({{ site.url }}/security/enforce-policy-istio)
-- [Use HTTP methods and paths in policy rules]({{ site.url }}/security/http-methods)
+- [Enforce network policy using Istio tutorial]({{site.baseurl}}}/security/tutorials/app-layer-policy/enforce-policy-istio)
+- [Enforce network policy using Istio]({{site.baseurl}}/security/enforce-policy-istio)
+- [Use HTTP methods and paths in policy rules]({{{site.baseurl}}/security/http-methods)
