@@ -1,13 +1,13 @@
 ---
-title: Installing Calico for policy and flannel for networking
+title: Install Calico for policy and flannel for networking
 description: If you use flannel for networking, you can install Calico network policy to secure cluster communications.
 canonical_url: '/getting-started/kubernetes/installation/flannel'
 ---
 
 ## Before you begin
 
-> **Note**: Calico includes native VXLAN capabilities without the need for flannel. If you're planning on using flannel for VXLAN, we recommend instead installing Calico using IP-in-IP or VXLAN mode. See how to [determine the best networking option](/networking/determine-best-networking) for your cluster.
-> If you're already using flannel for networking, you can [migrate your existing clusters to Calico networking](/getting-started/kubernetes/installation/migration-from-flannel).
+> **Note**: Calico includes native VXLAN capabilities without the need for flannel. If you're planning on using flannel for VXLAN, we recommend instead installing Calico using IP-in-IP or VXLAN mode. See how to [determine the best networking option]({{site.baseurl}}/networking/determine-best-networking) for your cluster.
+> If you're already using flannel for networking, you can [migrate your existing clusters to Calico networking]({{site.baseurl}}/getting-started/kubernetes/installation/migration-from-flannel).
 {: .alert .alert-info}
 
 Ensure that you have a Kubernetes cluster that meets the
@@ -50,7 +50,7 @@ section that matches your type.
    ```
 
 1. If you wish to enforce application layer policies and secure workload-to-workload
-   communications with mutual TLS authentication, continue to [Enabling application layer policy](app-layer-policy) (optional).
+   communications with mutual TLS authentication, continue to [Enable application layer policy]({{site.baseurl}}/security/istio/app-layer-policy) (optional).
 
 ### Installing with the etcd datastore
 
@@ -78,4 +78,4 @@ etcd, complete the following steps.
    ```
 
 1. If you wish to enforce application layer policies and secure workload-to-workload
-   communications with mutual TLS authentication, continue to [Enabling application layer policy](app-layer-policy) (optional).
+   communications with mutual TLS authentication, continue to [Enable application layer policy]({{site.baseurl}}/security/istio/app-layer-policy) (optional).
