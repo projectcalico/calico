@@ -61,6 +61,7 @@ import (
 //   should be programming the same NAT mappings.
 var _ = describeBPFTests(withProto("tcp"), withConnTimeLoadBalancingEnabled())
 var _ = describeBPFTests(withProto("udp"), withConnTimeLoadBalancingEnabled())
+var _ = describeBPFTests(withProto("udp"), withConnTimeLoadBalancingEnabled(), withUDPUnConnected())
 var _ = describeBPFTests(withProto("tcp"))
 var _ = describeBPFTests(withProto("udp"))
 var _ = describeBPFTests(withTunnel("ipip"), withProto("tcp"), withConnTimeLoadBalancingEnabled())
@@ -77,6 +78,7 @@ var _ = describeBPFTests(withProto("tcp"),
 type bpfTestOptions struct {
 	connTimeEnabled bool
 	protocol        string
+	udpUnConnected  bool
 	bpfLogLevel     string
 	tunnel          string
 }
@@ -104,6 +106,12 @@ func withBPFLogLevel(level string) bpfTestOpt {
 func withTunnel(tunnel string) bpfTestOpt {
 	return func(opts *bpfTestOptions) {
 		opts.tunnel = tunnel
+	}
+}
+
+func withUDPUnConnected() bpfTestOpt {
+	return func(opts *bpfTestOptions) {
+		opts.udpUnConnected = true
 	}
 }
 
@@ -161,13 +169,17 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 			if os.Getenv("FELIX_FV_ENABLE_BPF") != "true" {
 				Skip("Skipping BPF test in non-BPF run.")
 			}
-			bpfLog = containers.Run("bpf-log", containers.RunOpts{AutoRemove: true}, "--privileged", "calico/bpftool:v5.3-amd64", "/bpftool", "prog", "tracelog")
+			bpfLog = containers.Run("bpf-log", containers.RunOpts{AutoRemove: true}, "--privileged",
+				"calico/bpftool:v5.3-amd64", "/bpftool", "prog", "tracelog")
 			infra = getInfra()
 
 			cc = &workload.ConnectivityChecker{
 				CheckSNAT: true,
 			}
 			cc.Protocol = testOpts.protocol
+			if testOpts.protocol == "udp" && testOpts.udpUnConnected {
+				cc.Protocol += "-noconn"
+			}
 
 			options = infrastructure.DefaultTopologyOptions()
 			options.FelixLogSeverity = "debug"

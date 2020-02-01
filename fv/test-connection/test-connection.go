@@ -43,7 +43,7 @@ Usage:
 Options:
   --source-ip=<source_ip>  Source IP to use for the connection [default: 0.0.0.0].
   --source-port=<source_port>  Source port to use for the connection [default: 0].
-  --protocol=<protocol>   Protocol to test [default: tcp].
+  --protocol=<protocol>   Protocol to test tcp (default), udp (connected) udp-noconn (unconnected).
   --loop-with-file=<file>  Whether to send messages repeatedly, file is used for synchronization
 
 If connection is successful, test-connection exits successfully.
@@ -183,7 +183,9 @@ func tryConnect(remoteIpAddr, remotePort, sourceIpAddr, sourcePort, protocol, lo
 	}
 	ls := newLoopState(loopFile)
 	log.Infof("Connecting from %v to %v over %s", localAddr, remoteAddr, protocol)
-	if protocol == "udp" {
+
+	switch protocol {
+	case "udp":
 		// Since we specify the source port rather than use an ephemeral port, if
 		// the SO_REUSEADDR and SO_REUSEPORT options are not set, when we make
 		// another call to this program, the original port is in post-close wait
@@ -227,7 +229,58 @@ func tryConnect(remoteIpAddr, remotePort, sourceIpAddr, sourcePort, protocol, lo
 				break
 			}
 		}
-	} else if protocol == "sctp" {
+	case "udp-noconn":
+		conn, err := reuse.ListenPacket("udp", localAddr)
+		if err != nil {
+			log.WithError(err).Fatal("Failed to listen UDP")
+		}
+		remoteAddrResolved, err := net.ResolveUDPAddr("udp", remoteAddr)
+		if err != nil {
+			log.WithError(err).Fatal("Failed to resolve UDP")
+		}
+		log.WithFields(log.Fields{
+			"addr":               localAddr,
+			"remoteAddrResolved": remoteAddrResolved,
+		}).Infof("Resolved udp addr")
+		if err != nil {
+			panic(err)
+		}
+		defer conn.Close()
+
+		for {
+			req := conncheck.NewRequest()
+			data, err := json.Marshal(req)
+			if err != nil {
+				log.WithError(err).Fatal("Failed to marshal data")
+			}
+			_, err = conn.WriteTo(data, remoteAddrResolved)
+			if err != nil {
+				log.WithError(err).Fatal("Failed to send data")
+			}
+			log.WithField("message", req).Infof("Sent message over UDP to %v", remoteAddr)
+
+			bufIn := make([]byte, 8<<10)
+			n, from, err := conn.ReadFrom(bufIn)
+			if err != nil {
+				log.WithError(err).Fatal("Failed to read from")
+			}
+			log.Infof("Received %d bytes from %s", n, from)
+
+			var resp conncheck.Response
+			err = json.Unmarshal(bufIn[:n], &resp)
+			if err != nil {
+				log.WithError(err).Fatal("Failed to read response")
+			}
+			log.WithField("reply", resp).Info("Got reply")
+			if !resp.Request.Equal(req) {
+				log.WithField("reply", resp).Fatal("Unexpected response")
+			}
+			fmt.Println("RESPONSE=", string(bufIn[:n]))
+			if !ls.Next() {
+				break
+			}
+		}
+	case "sctp":
 		lip, err := net.ResolveIPAddr("ip", "::")
 		if err != nil {
 			return err
@@ -288,7 +341,9 @@ func tryConnect(remoteIpAddr, remotePort, sourceIpAddr, sourcePort, protocol, lo
 				break
 			}
 		}
-	} else {
+	default:
+		fallthrough
+	case "tcp":
 		if err != nil {
 			return err
 		}
