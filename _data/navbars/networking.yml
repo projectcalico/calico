@@ -67,3 +67,12 @@ section:
     path: /networking/openstack/kuryr
   - title: Calico's interpretation of Neutron API calls
     path: /networking/openstack/neutron-api
+- title: Calico Enterprise
+  path: /networking/calico-enterprise/
+  section: 
+  - title: Network visibility
+    path: /networking/calico-enterprise/network-visibility
+  - title: Federation
+    path: /networking/calico-enterprise/federation
+  - title: User console
+    path: /networking/calico-enterprise/user-console      
