@@ -26,9 +26,7 @@ This how-to guide uses the following {{site.prodname}} features:
 1.  Set up a cluster following the Kubernetes
 [prerequisites](https://kubernetes.io/docs/concepts/services-networking/dual-stack/#prerequisites)
 and [enablement
-steps](https://kubernetes.io/docs/concepts/services-networking/dual-stack/#enable-ipv4-ipv6-dual-stack)
-for dual stack, except ignore mention of the Kubenet network plugin, because here we will use
-{{site.prodname}} instead.
+steps](https://kubernetes.io/docs/concepts/services-networking/dual-stack/#enable-ipv4-ipv6-dual-stack).
 
 1.  Follow our [installation
 guide]({{ site.baseurl }}/getting-started/kubernetes/installation/calico) to identify
