@@ -291,10 +291,17 @@ release-verify: release-prereqs
 
 ifneq (,$(findstring $(RELEASE_STREAM),v3.5 v3.4 v3.3 v3.2 v3.1 v3.0 v2.6))
     # Found: this is an older release.
-    REL_NOTES_PATH:=releases
+    REL_NOTES_PATH:=$(RELEASE_STREAM)/releases
 else
     # Not found: this is a newer release.
-    REL_NOTES_PATH:=release-notes
+    REL_NOTES_PATH:=$(RELEASE_STREAM)/release-notes
+endif
+
+# Check if we're branched off master. We know this if we have a netlify config
+# override file for master. We need to know this to change the release
+# notes path for the release-publish target.
+ifneq ("$(wildcard ./netlify/_config_latest.yml)","")
+REL_NOTES_PATH:=release-notes
 endif
 
 ## Pushes a github release and release artifacts produced by `make release-build`.
@@ -306,7 +313,7 @@ release-publish: release-prereqs
 	# Requires ghr: https://github.com/tcnksm/ghr
 	# Requires GITHUB_TOKEN environment variable set.
 	ghr -u projectcalico -r calico \
-		-b 'Release notes can be found at https://docs.projectcalico.org/$(RELEASE_STREAM)/$(REL_NOTES_PATH)/' \
+		-b 'Release notes can be found at https://docs.projectcalico.org/$(REL_NOTES_PATH)/' \
 		-n $(CALICO_VER) \
 		$(CALICO_VER) $(RELEASE_DIR).tgz
 
