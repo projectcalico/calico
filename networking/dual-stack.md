@@ -28,8 +28,7 @@ This how-to guide uses the following {{site.prodname}} features:
 and [enablement
 steps](https://kubernetes.io/docs/concepts/services-networking/dual-stack/#enable-ipv4-ipv6-dual-stack).
 
-1.  Follow our [installation
-guide]({{ site.baseurl }}/getting-started/kubernetes/installation/calico) to identify
+1.  Follow our [installation guide]({{site.baseurl}}/getting-started/kubernetes/self-managed-onprem/onpremises) to identify
 and download the right {{site.prodname}} manifest for the cluster, and
 for your preferred datastore type, but do not apply that manifest yet.
 

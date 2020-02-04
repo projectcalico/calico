@@ -1,5 +1,5 @@
 ---
-title: Customizing the manifests
+title: Customize the manifests
 description: Customize manifests prior to installing Calico (recommended).
 canonical_url: '/getting-started/kubernetes/installation/config-options'
 ---
@@ -65,7 +65,7 @@ as Azure, you may wish to switch to [Calico's VXLAN encapsulation mode]({{ site.
 To do this at install time (so that Calico creates the default IP pool with VXLAN and no IP-in-IP configuration has to
 be undone):
 
-- Start with one of the [Calico for policy and networking]({{ site.baseurl }}/getting-started/kubernetes/installation/calico) manifests.
+- Start with one of the [Calico for policy and networking]({{ site.baseurl }}/getting-started/kubernetes/installation/config-options) manifests.
 - Replace environment variable name `CALICO_IPV4POOL_IPIP` with`CALICO_IPV4POOL_VXLAN`.  Leave the value of the new variable as "Always".
 - Optionally, (to save some resources if you're running a VXLAN-only cluster) completely disable Calico's BGP-based
   networking:
