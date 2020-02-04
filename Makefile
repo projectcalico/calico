@@ -126,6 +126,8 @@ clean:
 	find . -name "coverage.xml" -type f -delete
 	find . -name ".coverage" -type f -delete
 	find . -name "*.pyc" -type f -delete
+	$(MAKE) -C bpf-apache clean
+	$(MAKE) -C bpf-gpl clean
 
 ###############################################################################
 # Automated pin updates
@@ -159,87 +161,20 @@ protobuf proto/felixbackend.pb.go: proto/felixbackend.proto
 		      --gogofaster_out=plugins=grpc:. \
 		      felixbackend.proto
 
-BPF_INC_FILES := $(shell find bpf -name '*.h')
-BPF_C_FILES := $(shell find bpf -name '*.c')
-BPF_XDP_INC_FILES :=
+BPF_APACHE_C_FILES:=$(shell find bpf-apache -name '*.c')
+BPF_APACHE_H_FILES:=$(shell find bpf-apache -name '*.h')
+BPF_APACHE_O_FILES:=$(addprefix bpf-apache/bin/,$(notdir $(BPF_APACHE_C_FILES:.c=.o)))
 
-.PHONY: xdp
+BPF_GPL_C_FILES:=$(shell find bpf-gpl -name '*.c')
+BPF_GPL_H_FILES:=$(shell find bpf-gpl -name '*.h')
+BPF_GPL_O_FILES:=$(addprefix bpf-gpl/,$(shell bpf-gpl/list-objs))
 
-ifndef LOCAL
-xdp bpf/bin/xdp_filter.o:
-	$(DOCKER_GO_BUILD) \
-	              /bin/sh -c "make -C bpf/xdp all"
-	mv bpf/xdp/filter.o bpf/bin/xdp_filter.o
+.PHONY: xdp build-bpf
+$(BPF_APACHE_O_FILES) xdp: $(BPF_APACHE_C_FILES) $(BPF_APACHE_H_FILES) bpf-apache/Makefile
+	$(DOCKER_GO_BUILD) make -C bpf-apache
 
-xdp-clean:
-	$(DOCKER_GO_BUILD) \
-	              /bin/sh -c "make -C bpf/xdp clean"
-
-bpf-cgroup bpf/cgroup/connect_balance.o:
-	$(DOCKER_GO_BUILD) \
-	              /bin/sh -c "make -C bpf/cgroup all"
-
-bpf-cgroup-clean:
-	$(DOCKER_GO_BUILD) \
-	              /bin/sh -c "make -C bpf/cgroup clean"
-else
-xdp bpf/bin/xdp_filter.o:
-	$(MAKE) -C bpf/xdp
-	cp bpf/xdp/filter.o bpf/bin/xdp_filter.o
-
-xdp-clean:
-	$(MAKE) -C bpf/xdp clean
-endif
-
-BPF_SOCKMAP_INC_FILES := bpf/sockmap/sockops.h
-
-bpf/bin/sockops.o: bpf/sockmap/sockops.c $(BPF_INC_FILES) $(BPF_SOCKMAP_INC_FILES)
-	$(DOCKER_GO_BUILD) \
-		      /bin/sh -c \
-		      "clang \
-			      -D__KERNEL__ \
-			      -D__ASM_SYSREG_H \
-			      -Wno-unused-value \
-			      -Wno-pointer-sign \
-			      -Wno-compare-distinct-pointer-types \
-			      -Wunused \
-			      -Wall \
-			      -Werror \
-			      -fno-stack-protector \
-			      -O2 \
-			      -emit-llvm \
-			      -c /go/src/$(PACKAGE_NAME)/bpf/sockmap/sockops.c \
-			      -o /go/src/$(PACKAGE_NAME)/bpf/sockmap/sockops.ll && \
-		       llc \
-			       -march=bpf \
-			       -filetype=obj \
-			       -o /go/src/$(PACKAGE_NAME)/bpf/bin/sockops.o \
-			       /go/src/$(PACKAGE_NAME)/bpf/sockmap/sockops.ll && \
-		       rm -f /go/src/$(PACKAGE_NAME)/bpf/sockmap/sockops.ll"
-
-bpf/bin/redir.o: bpf/sockmap/redir.c $(BPF_INC_FILES) $(BPF_SOCKMAP_INC_FILES)
-	$(DOCKER_GO_BUILD) \
-		      /bin/sh -c \
-		      "clang \
-			      -D__KERNEL__ \
-			      -D__ASM_SYSREG_H \
-			      -Wno-unused-value \
-			      -Wno-pointer-sign \
-			      -Wno-compare-distinct-pointer-types \
-			      -Wunused \
-			      -Wall \
-			      -Werror \
-			      -fno-stack-protector \
-			      -O2 \
-			      -emit-llvm \
-			      -c /go/src/$(PACKAGE_NAME)/bpf/sockmap/redir.c \
-			      -o /go/src/$(PACKAGE_NAME)/bpf/sockmap/redir.ll && \
-		       llc \
-			       -march=bpf \
-			       -filetype=obj \
-			       -o /go/src/$(PACKAGE_NAME)/bpf/bin/redir.o \
-			       /go/src/$(PACKAGE_NAME)/bpf/sockmap/redir.ll && \
-		       rm -f /go/src/$(PACKAGE_NAME)/bpf/sockmap/redir.ll"
+$(BPF_GPL_O_FILES): $(BPF_GPL_C_FILES) $(BPF_GPL_H_FILES) bpf-gpl/Makefile
+	$(DOCKER_GO_BUILD) make -C bpf-gpl
 
 bpf/asm/opcode_string.go: bpf/asm/asm.go
 	$(DOCKER_GO_BUILD) go generate ./bpf/asm/
@@ -271,16 +206,7 @@ ifneq ($(DOCKER_GO_BUILD),)
 include bin/bpf-progs.inc
 endif
 
-# BPF programs built by the makefile.
-MAKEFILE_BPF_PROGS:=\
-	bpf/bin/xdp_filter.o \
-	bpf/bin/redir.o \
-	bpf/bin/sockops.o
-
-ALL_BPF_PROGS=$(BPF_PROGS) $(MAKEFILE_BPF_PROGS)
-
-$(BPF_PROGS): $(BPF_C_FILES) $(BPF_INC_FILES) bin/compile-bpf
-	$(DOCKER_GO_BUILD) bin/compile-bpf
+ALL_BPF_PROGS=$(BPF_GPL_O_FILES) $(BPF_APACHE_O_FILES)
 
 build-bpf: $(ALL_BPF_PROGS)
 

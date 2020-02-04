@@ -35,7 +35,7 @@ CFLAGS +=  \
 CC := clang
 LD := llc
 
-OBJS:=$(shell ./gen-objs)
+OBJS:=$(shell ./list-objs)
 C_FILES:=tc.c connect_balancer.c
 
 all: $(OBJS)
