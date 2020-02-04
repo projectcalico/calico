@@ -33,5 +33,5 @@ After you complete the steps to [enable application layer policy]({{site.baseurl
 
 ### Above and beyond
 
-- [Use service accounts in policy rules]({{ site.baseurl }}/security/service-accounts) 
-- [Use HTTP methods and paths in policy rules]({{ site.baseurl }}/security/http-methods)
+- [Use service accounts in policy rules]({{site.baseurl}}/security/service-accounts) 
+- [Use HTTP methods and paths in policy rules]({{site.baseurl}}/security/http-methods)
