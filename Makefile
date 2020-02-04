@@ -28,12 +28,7 @@
 #
 ###############################################################################
 PACKAGE_NAME?=github.com/projectcalico/felix
-GO_BUILD_VER?=v0.34-deb-cgo
-
-# We need to do static builds of test binaries (because we run them in scratch containers).
-# Use an old go-build for that.
-GO_BUILD_STATIC_VER=v0.34
-CALICO_BUILD_STATIC=calico/go-build:$(GO_BUILD_STATIC_VER)
+GO_BUILD_VER?=v0.35-deb-cgo
 
 ###############################################################################
 # Download and include Makefile.common
@@ -61,7 +56,7 @@ EXTRA_DOCKER_ARGS+=-v $(CURDIR)/../libcalico-go:/go/src/github.com/projectcalico
 	-v $(CURDIR)/../pod2daemon:/go/src/github.com/projectcalico/pod2daemon:rw
 
 $(LOCAL_BUILD_DEP):
-	$(DOCKER_RUN) $(CALICO_BUILD) go mod edit -replace=github.com/projectcalico/libcalico-go=../libcalico-go \
+	$(DOCKER_GO_BUILD) go mod edit -replace=github.com/projectcalico/libcalico-go=../libcalico-go \
 		-replace=github.com/projectcalico/typha=../typha \
 		-replace=github.com/projectcalico/pod2daemon=../pod2daemon
 endif
@@ -152,7 +147,7 @@ bin/calico-felix-$(ARCH): $(SRC_FILES) $(LOCAL_BUILD_DEP)
 	@echo Building felix for $(ARCH) on $(BUILDARCH)
 	mkdir -p bin
 	if [ "$(SEMAPHORE)" != "true" -o ! -e $@ ] ; then \
-	  $(DOCKER_GO_BUILD) \
+	  $(DOCKER_RUN) -e CGO_ENABLED=1 $(CALICO_BUILD) \
 	     sh -c 'go build -v -i -o $@ -v $(BUILD_FLAGS) $(LDFLAGS) "$(PACKAGE_NAME)/cmd/calico-felix"'; \
 	fi
 
@@ -390,10 +385,10 @@ sub-tag-images-%:
 ###############################################################################
 LOCAL_CHECKS = check-typha-pins
 
-LIBCALICO_FELIX?=$(shell $(DOCKER_RUN) $(CALICO_BUILD) go list -m -f "{{.Version}}" github.com/projectcalico/libcalico-go)
-TYPHA_GOMOD?=$(shell $(DOCKER_RUN) $(CALICO_BUILD) go list -m -f "{{.GoMod}}" github.com/projectcalico/typha)
+LIBCALICO_FELIX?=$(shell $(DOCKER_GO_BUILD) go list -m -f "{{.Version}}" github.com/projectcalico/libcalico-go)
+TYPHA_GOMOD?=$(shell $(DOCKER_GO_BUILD) go list -m -f "{{.GoMod}}" github.com/projectcalico/typha)
 ifneq ($(TYPHA_GOMOD),)
-	LIBCALICO_TYPHA?=$(shell $(DOCKER_RUN) $(CALICO_BUILD) grep libcalico-go $(TYPHA_GOMOD) | cut -d' ' -f2)
+	LIBCALICO_TYPHA?=$(shell $(DOCKER_GO_BUILD) grep libcalico-go $(TYPHA_GOMOD) | cut -d' ' -f2)
 endif
 
 .PHONY: check-typha-pins
@@ -430,7 +425,7 @@ fv/fv.test: $(SRC_FILES)
 REMOTE_DEPS=fv/infrastructure/crds.yaml
 
 fv/infrastructure/crds.yaml: go.mod go.sum
-	$(DOCKER_RUN) $(CALICO_BUILD) sh -c ' \
+	$(DOCKER_GO_BUILD) sh -c ' \
 	go list all; \
 	cp `go list -m -f "{{.Dir}}" github.com/projectcalico/libcalico-go`/test/crds.yaml fv/infrastructure/crds.yaml; \
 	chmod +w fv/infrastructure/crds.yaml'
@@ -511,7 +506,7 @@ k8sfv-test-existing-felix: $(REMOTE_DEPS) bin/k8sfv.test
 
 bin/k8sfv.test: $(K8SFV_GO_FILES)
 	@echo Building $@...
-	$(DOCKER_RUN) $(CALICO_BUILD) \
+	$(DOCKER_GO_BUILD) \
 	    sh -c 'go test -c $(BUILD_FLAGS) -o $@ ./k8sfv'
 
 .PHONY: run-prometheus run-grafana stop-prometheus stop-grafana
@@ -555,19 +550,19 @@ bin/calico-bpf: $(SRC_FILES) $(LOCAL_BUILD_DEP)
 bin/iptables-locker: $(LOCAL_BUILD_DEP) go.mod $(shell find iptables -type f -name '*.go' -print)
 	@echo Building iptables-locker...
 	mkdir -p bin
-	$(DOCKER_RUN) $(CALICO_BUILD_STATIC) \
+	$(DOCKER_GO_BUILD) \
 	    sh -c 'go build -v -i -o $@ -v $(BUILD_FLAGS) $(LDFLAGS) "$(PACKAGE_NAME)/fv/iptables-locker"'
 
 bin/test-workload: $(LOCAL_BUILD_DEP) go.mod fv/cgroup/cgroup.go fv/utils/utils.go fv/conncheck/*.go fv/test-workload/*.go
 	@echo Building test-workload...
 	mkdir -p bin
-	$(DOCKER_RUN) $(CALICO_BUILD_STATIC) \
+	$(DOCKER_GO_BUILD) \
 	    sh -c 'go build -v -i -o $@ -v $(BUILD_FLAGS) $(LDFLAGS) "$(PACKAGE_NAME)/fv/test-workload"'
 
 bin/test-connection: $(LOCAL_BUILD_DEP) go.mod fv/cgroup/cgroup.go fv/utils/utils.go fv/conncheck/*.go fv/test-connection/*.go
 	@echo Building test-connection...
 	mkdir -p bin
-	$(DOCKER_RUN) $(CALICO_BUILD_STATIC) \
+	$(DOCKER_GO_BUILD) \
 	    sh -c 'go build -v -i -o $@ -v $(BUILD_FLAGS) $(LDFLAGS) "$(PACKAGE_NAME)/fv/test-connection"'
 
 st:
@@ -773,23 +768,23 @@ cover-report: combined.coverprofile
 	@echo
 	@echo ======== All coverage =========
 	@echo
-	@$(DOCKER_RUN) $(CALICO_BUILD) sh -c 'go tool cover -func combined.coverprofile | \
+	@$(DOCKER_GO_BUILD) sh -c 'go tool cover -func combined.coverprofile | \
 				   sed 's=$(PACKAGE_NAME)/==' | \
 				   column -t'
 	@echo
 	@echo ======== Missing coverage only =========
 	@echo
-	@$(DOCKER_RUN) $(CALICO_BUILD) sh -c "go tool cover -func combined.coverprofile | \
+	@$(DOCKER_GO_BUILD) sh -c "go tool cover -func combined.coverprofile | \
 				   sed 's=$(PACKAGE_NAME)/==' | \
 				   column -t | \
 				   grep -v '100\.0%'"
 
 bin/calico-felix.transfer-url: bin/calico-felix
-	$(DOCKER_RUN) $(CALICO_BUILD) sh -c 'curl --upload-file bin/calico-felix https://transfer.sh/calico-felix > $@'
+	$(DOCKER_GO_BUILD) sh -c 'curl --upload-file bin/calico-felix https://transfer.sh/calico-felix > $@'
 
 .PHONY: patch-script
 patch-script: bin/calico-felix.transfer-url
-	$(DOCKER_RUN) $(CALICO_BUILD) bash -c 'utils/make-patch-script.sh $$(cat bin/calico-felix.transfer-url)'
+	$(DOCKER_GO_BUILD) bash -c 'utils/make-patch-script.sh $$(cat bin/calico-felix.transfer-url)'
 
 ## Generate a diagram of Felix's internal calculation graph.
 docs/calc.pdf: docs/calc.dot
