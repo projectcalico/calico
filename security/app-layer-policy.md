@@ -107,4 +107,4 @@ If the namespace already has pods in it, you must recreate them for this to take
 
 - [Enforce network policy using Istio tutorial]({{site.baseurl}}/security/tutorials/app-layer-policy/enforce-policy-istio)
 - [Enforce network policy using Istio]({{site.baseurl}}/security/enforce-policy-istio)
-- [Use HTTP methods and paths in policy rules]({{{site.baseurl}}/security/http-methods)
+- [Use HTTP methods and paths in policy rules]({{site.baseurl}}/security/http-methods)
