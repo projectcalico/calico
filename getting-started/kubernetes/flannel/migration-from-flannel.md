@@ -1,5 +1,5 @@
 ---
-title: Migrating a cluster from flannel to Calico
+title: Migrate a cluster from flannel to Calico
 description: Migrate an existing Kubernetes cluster with flannel networking to use Calico networking.
 ---
 
