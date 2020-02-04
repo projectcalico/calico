@@ -1,0 +1,31 @@
+#!/bin/bash
+
+# Generate the cross-product of all the compile options, excluding some cases that don't make sense.
+# Emit the filename for each option to stdout.
+#
+# WARNING: naming and set of cases must be kept in sync with tc.ProgFilename() in Felix's compiler.go.
+for log_level in debug info no_log; do
+  echo "bin/connect_time_$log_level.o"
+  for host_drop in "" "host_drop_"; do
+    if [ "${host_drop}" = "host_drop_" ]; then
+      # The workload-to-host drop setting only applies to the from-workload hook.
+      ep_types="wep"
+    else
+      ep_types="wep hep tnl"
+    fi
+    for fib in "" "fib_"; do
+      for ep_type in $ep_types; do
+        if [ "${host_drop}" = "host_drop_" ] || [ "${fib}" = "fib_" ]; then
+          # The workload-to-host drop setting only applies to the from-workload hook.
+          # The FIB only applies in the from-endpoint hooks.
+          directions="from"
+        else
+          directions="from to"
+        fi
+        for from_or_to in $directions; do
+          echo "bin/${from_or_to}_${ep_type}_${host_drop}${fib}${log_level}.o"
+        done
+      done
+    done
+  done
+done
