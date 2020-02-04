@@ -1,4 +1,4 @@
-This directory contains the source code and build system for the GPL-licensed BPF
+This directory contains the source code and build system for the Apache-licensed BPF
 programs that Calico uses to implement its BPF dataplane.
 
 The build requires
