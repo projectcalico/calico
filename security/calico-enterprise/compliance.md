@@ -1,5 +1,5 @@
 ---
-title: Advanced compliance controls with Calico Enterprise
+title: Advanced compliance controls
 description: Learn about Calico Enterprise features that help security teams provide evidence and proof of compliance. 
 calico_enterprise: true
 ---
