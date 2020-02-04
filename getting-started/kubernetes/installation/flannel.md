@@ -1,5 +1,5 @@
 ---
-title: Installing Calico for policy and flannel for networking
+title: Install Calico for policy and flannel for networking
 description: If you use flannel for networking, you can install Calico network policy to secure cluster communications.
 canonical_url: '/getting-started/kubernetes/installation/flannel'
 ---
