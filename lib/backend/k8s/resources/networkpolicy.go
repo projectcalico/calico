@@ -340,7 +340,12 @@ func (c *networkPolicyClient) Watch(ctx context.Context, list model.ListInterfac
 		if !ok {
 			return nil, errors.New("NetworkPolicy conversion with incorrect k8s resource type")
 		}
-		return c.K8sNetworkPolicyToCalico(np)
+
+		kvp, err := c.K8sNetworkPolicyToCalico(np)
+		if kvp != nil {
+			kvp.Revision = c.JoinNetworkPolicyRevisions("", kvp.Revision)
+		}
+		return kvp, err
 	}
 	k8sWatch := newK8sWatcherConverter(ctx, "NetworkPolicy (namespaced)", converter, k8sRawWatch)
 
