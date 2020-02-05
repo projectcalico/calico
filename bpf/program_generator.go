@@ -22,6 +22,7 @@ import (
 	"math"
 	"strings"
 
+	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/felix/ip"
@@ -43,20 +44,25 @@ type ipSetIDProvider interface {
 }
 
 func NewProgramGenerator(src string, ipSetIDProvider ipSetIDProvider) (*ProgramGenerator, error) {
-	template, err := ioutil.ReadFile(src)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read BPF program template from %s", src)
-	}
-	splits := bytes.Split(template, []byte("// __NORMAL_POLICY__\n"))
-	if len(splits) != 2 {
-		return nil, fmt.Errorf("Failed to split BPF program template %s", src)
+	var prefix, suffix []byte
+	if src != "" {
+		template, err := ioutil.ReadFile(src)
+		if err != nil {
+			return nil, errors.Wrap(err, fmt.Sprintf("failed to read BPF program template from %s", src))
+		}
+		splits := bytes.Split(template, []byte("// __NORMAL_POLICY__\n"))
+		if len(splits) != 2 {
+			return nil, errors.Wrap(err, fmt.Sprintf("failed to split BPF program template %s", src))
+		}
+		prefix = splits[0]
+		suffix = splits[1]
 	}
 
 	return &ProgramGenerator{
 		// On the critical path so it's worth skipping log entry creation if debug is not enabled.
 		debug:           log.GetLevel() >= log.DebugLevel,
-		progPrefix:      splits[0],
-		progSuffix:      splits[1],
+		progPrefix:      prefix,
+		progSuffix:      suffix,
 		ipSetIDProvider: ipSetIDProvider,
 	}, nil
 }

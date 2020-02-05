@@ -65,7 +65,7 @@ func TestBPFProgramGeneration(t *testing.T) {
 		alloc.GetOrAlloc(id)
 		return id
 	}
-	pg, err := NewProgramGenerator("tc/templates/tc_template.c", alloc)
+	pg, err := NewProgramGenerator("", alloc)
 	Expect(err).NotTo(HaveOccurred())
 
 	err = pg.WriteCalicoRules(&buf, [][][]*proto.Rule{{{{

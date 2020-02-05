@@ -78,11 +78,11 @@ func setup() {
 
 	if forceRealLib != "" || (root && xdp && hasBPFtool) {
 		log.Info("Running with real BPF lib")
-		bpfDP, _ = NewBPFLib("./bin/")
+		bpfDP, _ = NewBPFLib("../bpf-apache/bin/")
 		expectedTag = realTag
 	} else {
 		log.WithFields(log.Fields{"root": root, "xdp": xdp, "hasbpftool": hasBPFtool}).Info("Running with mock BPF lib")
-		bpfDP = NewMockBPFLib("./bin/")
+		bpfDP = NewMockBPFLib("../bpf-apache/bin/")
 		expectedTag = mockTag
 	}
 	wd, _ := os.Getwd()
@@ -354,7 +354,7 @@ func TestCIDRMapContent(t *testing.T) {
 	}
 }
 
-var objFile = "xdp_filter.o"
+var objFile = "filter.o"
 
 func TestXDP(t *testing.T) {
 	cmdVethPairArgs := []string{"-c", "ip link add test_A type veth peer name test_B || true"}

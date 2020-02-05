@@ -55,7 +55,7 @@ func (s *mockEndpointsSource) GetRawHostEndpoints() map[proto.HostEndpointID]*pr
 }
 
 func stateToBPFDataplane(state map[string]map[string]uint32, family bpf.IPFamily) bpf.BPFDataplane {
-	lib := bpf.NewMockBPFLib("../../bpf/bin")
+	lib := bpf.NewMockBPFLib("../../bpf-apache/bin")
 	_, err := lib.NewFailsafeMap()
 	Expect(err).NotTo(HaveOccurred())
 	for iface, cidrMap := range state {
@@ -436,7 +436,7 @@ var _ = Describe("XDP state", func() {
 
 			DescribeTable("",
 				func(s testStruct) {
-					state := NewXDPStateWithBPFLibrary(bpf.NewMockBPFLib("../../bpf/bin"), true)
+					state := NewXDPStateWithBPFLibrary(bpf.NewMockBPFLib("../../bpf-apache/bin"), true)
 					ipState := state.ipV4State
 					cs := ipState.currentState
 					expectedNcs := newXDPSystemState()
@@ -1668,7 +1668,7 @@ var _ = Describe("XDP state", func() {
 					id++
 					return id
 				}
-				lib := bpf.NewMockBPFLib("../../bpf/bin")
+				lib := bpf.NewMockBPFLib("../../bpf-apache/bin")
 				failsafeID := getNextID()
 				lib.FailsafeMap = bpf.NewMockFailsafeMap(failsafeID)
 				expectedProgramBytes := []byte{42}
@@ -2400,7 +2400,7 @@ var _ = Describe("XDP state", func() {
 					},
 				},
 			}
-			state := NewXDPStateWithBPFLibrary(bpf.NewMockBPFLib("../../bpf/bin"), true)
+			state := NewXDPStateWithBPFLibrary(bpf.NewMockBPFLib("../../bpf-apache/bin"), true)
 			ipState := state.ipV4State
 			testStateToRealState(testState, nil, ipState.currentState)
 			cache := ipState.ipsetIDsToMembers
@@ -2455,7 +2455,7 @@ var _ = Describe("XDP state", func() {
 
 			DescribeTable("",
 				func(s testStruct) {
-					state := NewXDPStateWithBPFLibrary(bpf.NewMockBPFLib("../../bpf/bin"), false)
+					state := NewXDPStateWithBPFLibrary(bpf.NewMockBPFLib("../../bpf-apache/bin"), false)
 					state.ipV4State.bpfActions.InstallXDP.AddAll(s.install)
 					state.ipV4State.bpfActions.UninstallXDP.AddAll(s.uninstall)
 					state.ipV4State.bpfActions.CreateMap.AddAll(s.create)
@@ -2700,7 +2700,7 @@ var _ = Describe("XDP state", func() {
 
 			DescribeTable("",
 				func(s testStruct) {
-					state := NewXDPStateWithBPFLibrary(bpf.NewMockBPFLib("../../bpf/bin"), true)
+					state := NewXDPStateWithBPFLibrary(bpf.NewMockBPFLib("../../bpf-apache/bin"), true)
 					state.ipV4State.newCurrentState = newXDPSystemState()
 					ipsetsSrc := &nilIPSetsSource{}
 					resyncState, err := state.ipV4State.newXDPResyncState(state.common.bpfLib, ipsetsSrc, state.common.programTag, state.common.xdpModes)
