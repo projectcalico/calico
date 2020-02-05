@@ -42,7 +42,7 @@ spec:
               value: "tigera-operator"
             - name: TIGERA_OPERATOR_INIT_IMAGE_VERSION
               value: {{.Values.tigeraOperator.version}}
-{{- if eq .Values.kubernetesProvider "openshift" }}
+{{- if eq .Values.installation.kubernetesProvider "openshift" }}
       initContainers:
         - name: create-initial-resources
           image: {{.Values.calicoctl.image}}:{{.Values.calicoctl.tag}}

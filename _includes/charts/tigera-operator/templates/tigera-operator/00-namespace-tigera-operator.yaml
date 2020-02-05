@@ -3,11 +3,11 @@ kind: Namespace
 metadata:
   name: tigera-operator
   annotations:
-{{- if eq .Values.kubernetesProvider "openshift" }}
+{{- if eq .Values.installation.kubernetesProvider "openshift" }}
     openshift.io/node-selector: ""
 {{- end }}
   labels:
     name: tigera-operator
-{{- if eq .Values.kubernetesProvider "openshift" }}
+{{- if eq .Values.installation.kubernetesProvider "openshift" }}
     openshift.io/run-level: "0"
 {{- end }}
