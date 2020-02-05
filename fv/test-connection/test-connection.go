@@ -230,7 +230,7 @@ func tryConnect(remoteIpAddr, remotePort, sourceIpAddr, sourcePort, protocol, lo
 			}
 		}
 	case "udp-noconn":
-		conn, err := reuse.ListenPacket("udp", localAddr)
+		conn, err := net.ListenPacket("udp", localAddr)
 		if err != nil {
 			log.WithError(err).Fatal("Failed to listen UDP")
 		}
@@ -239,7 +239,7 @@ func tryConnect(remoteIpAddr, remotePort, sourceIpAddr, sourcePort, protocol, lo
 			log.WithError(err).Fatal("Failed to resolve UDP")
 		}
 		log.WithFields(log.Fields{
-			"addr":               localAddr,
+			"addr":               conn.LocalAddr(),
 			"remoteAddrResolved": remoteAddrResolved,
 		}).Infof("Resolved udp addr")
 		if err != nil {
@@ -257,7 +257,7 @@ func tryConnect(remoteIpAddr, remotePort, sourceIpAddr, sourcePort, protocol, lo
 			if err != nil {
 				log.WithError(err).Fatal("Failed to send data")
 			}
-			log.WithField("message", req).Infof("Sent message over UDP to %v", remoteAddr)
+			log.WithField("message", req).Infof("Sent message over unconnected UDP to %v", remoteAddr)
 
 			bufIn := make([]byte, 8<<10)
 			n, from, err := conn.ReadFrom(bufIn)
@@ -265,6 +265,10 @@ func tryConnect(remoteIpAddr, remotePort, sourceIpAddr, sourcePort, protocol, lo
 				log.WithError(err).Fatal("Failed to read from")
 			}
 			log.Infof("Received %d bytes from %s", n, from)
+
+			if from.String() != remoteAddrResolved.String() {
+				log.Fatalf("From address %+v does not match remoteAddr %+v", from, remoteAddrResolved)
+			}
 
 			var resp conncheck.Response
 			err = json.Unmarshal(bufIn[:n], &resp)

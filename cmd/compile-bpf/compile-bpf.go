@@ -127,19 +127,34 @@ func main() {
 			}
 		}
 
-		// Compile the connect-time load balancer.
-		oFileName := path.Join("bpf/bin/", nat.ProgFileName(logLevel))
+		// Compile the connect-time load balancer V4
+		oFileName := path.Join("bpf/bin/", nat.ProgFileName(logLevel, 4))
 		if generateMakefileInc {
 			fmt.Println("BPF_PROGS +=", oFileName)
 		} else {
 			wg.Add(1)
-			go func() {
+			go func(oFileName string) {
 				defer wg.Done()
 				err := nat.CompileConnectTimeLoadBalancer(logLevel, oFileName)
 				if err != nil {
 					log.WithError(err).Panicf("Failed to compile %s", oFileName)
 				}
-			}()
+			}(oFileName)
+		}
+
+		// Compile the connect-time load balancer V6
+		oFileName = path.Join("bpf/bin/", nat.ProgFileName(logLevel, 6))
+		if generateMakefileInc {
+			fmt.Println("BPF_PROGS +=", oFileName)
+		} else {
+			wg.Add(1)
+			go func(oFileName string) {
+				defer wg.Done()
+				err := nat.CompileConnectTimeLoadBalancerV6(logLevel, oFileName)
+				if err != nil {
+					log.WithError(err).Panicf("Failed to compile %s", oFileName)
+				}
+			}(oFileName)
 		}
 	}
 

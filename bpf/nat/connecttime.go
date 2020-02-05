@@ -84,7 +84,13 @@ func installProgram(name, ipver, bpfMount, cgroupPath, logLevel string, maps ...
 	progPinDir := path.Join(bpfMount, "calico_connect4")
 	_ = os.RemoveAll(progPinDir)
 
-	filename := path.Join("/code/bpf/bin", ProgFileName(logLevel))
+	var filename string
+
+	if ipver == "6" {
+		filename = path.Join("/code/bpf/bin", ProgFileName(logLevel, 6))
+	} else {
+		filename = path.Join("/code/bpf/bin", ProgFileName(logLevel, 4))
+	}
 	args := []string{"prog", "loadall", filename, progPinDir, "type", "cgroup/" + name + ipver}
 	for _, m := range maps {
 		args = append(args, "map", "name", m.GetName(), "pinned", m.Path())
@@ -133,7 +139,7 @@ func InstallConnectTimeLoadBalancer(frontendMap, backendMap, rtMap bpf.Map, cgro
 		repin = pm.RepinningEnabled()
 	}
 
-	sendrecvMap := SendRecvMSgdMap(&bpf.MapContext{
+	sendrecvMap := SendRecvMsgMap(&bpf.MapContext{
 		RepinningEnabled: repin,
 	})
 
@@ -161,18 +167,37 @@ func InstallConnectTimeLoadBalancer(frontendMap, backendMap, rtMap bpf.Map, cgro
 		return err
 	}
 
+	err = installProgram("sendmsg", "6", bpfMount, cgroupPath, logLevel)
+	if err != nil {
+		return err
+	}
+
+	err = installProgram("recvmsg", "6", bpfMount, cgroupPath, logLevel, sendrecvMap)
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 
-func ProgFileName(logLevel string) string {
+func ProgFileName(logLevel string, ipver int) string {
 	logLevel = strings.ToLower(logLevel)
 	if logLevel == "off" {
 		logLevel = "no_log"
 	}
-	return fmt.Sprintf("connect_time_%s.o", logLevel)
+
+	switch ipver {
+	case 4:
+		return fmt.Sprintf("connect_time_%s.o", logLevel)
+	case 6:
+		return fmt.Sprintf("connect_time_%s_v6.o", logLevel)
+	}
+
+	log.WithField("ipver", ipver).Fatal("Invalid IP version")
+	return ""
 }
 
-func CompileConnectTimeLoadBalancer(logLevel string, outFile string) error {
+func compileConnectTimeLoadBalancer(logLevel, inFile, outFile string) error {
 	args := []string{
 		"-x",
 		"c",
@@ -191,7 +216,7 @@ func CompileConnectTimeLoadBalancer(logLevel string, outFile string) error {
 		"-fno-stack-protector",
 		"-O2",
 		"-emit-llvm",
-		"-c", "bpf/cgroup/connect_balancer.c",
+		"-c", inFile,
 		"-o", "-",
 	}
 
@@ -236,6 +261,14 @@ func CompileConnectTimeLoadBalancer(logLevel string, outFile string) error {
 	wg.Wait()
 
 	return nil
+}
+
+func CompileConnectTimeLoadBalancer(logLevel string, outFile string) error {
+	return compileConnectTimeLoadBalancer(logLevel, "bpf/cgroup/connect_balancer.c", outFile)
+}
+
+func CompileConnectTimeLoadBalancerV6(logLevel string, outFile string) error {
+	return compileConnectTimeLoadBalancer(logLevel, "bpf/cgroup/connect_balancer_v6.c", outFile)
 }
 
 func ensureCgroupPath(cgroupv2 string) (string, error) {

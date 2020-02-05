@@ -17,7 +17,7 @@ CFLAGS +=  \
 CC := clang
 LD := llc
 
-OBJS := connect_balancer.o
+OBJS := connect_balancer.o connect_balancer_v6.o
 
 # cancel the build-in rule
 %.o: %.c

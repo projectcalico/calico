@@ -64,6 +64,7 @@ var _ = describeBPFTests(withProto("udp"), withConnTimeLoadBalancingEnabled())
 var _ = describeBPFTests(withProto("udp"), withConnTimeLoadBalancingEnabled(), withUDPUnConnected())
 var _ = describeBPFTests(withProto("tcp"))
 var _ = describeBPFTests(withProto("udp"))
+var _ = describeBPFTests(withProto("udp"), withUDPUnConnected())
 var _ = describeBPFTests(withTunnel("ipip"), withProto("tcp"), withConnTimeLoadBalancingEnabled())
 var _ = describeBPFTests(withTunnel("ipip"), withProto("udp"), withConnTimeLoadBalancingEnabled())
 var _ = describeBPFTests(withTunnel("ipip"), withProto("tcp"))
@@ -140,8 +141,12 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 	for _, o := range opts {
 		o(&testOpts)
 	}
-	desc := fmt.Sprintf("_BPF_ _BPF-SAFE_ BPF tests (%s, ct=%v, log=%s, tunnel=%s)",
-		testOpts.protocol, testOpts.connTimeEnabled, testOpts.bpfLogLevel, testOpts.tunnel)
+	protoExt := ""
+	if testOpts.udpUnConnected {
+		protoExt = "-unconnected"
+	}
+	desc := fmt.Sprintf("_BPF_ _BPF-SAFE_ BPF tests (%s%s, ct=%v, log=%s, tunnel=%s)",
+		testOpts.protocol, protoExt, testOpts.connTimeEnabled, testOpts.bpfLogLevel, testOpts.tunnel)
 	return infrastructure.DatastoreDescribe(desc, []apiconfig.DatastoreType{apiconfig.Kubernetes}, func(getInfra infrastructure.InfraFactory) {
 
 		var (
@@ -212,6 +217,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 					felix.Exec("calico-bpf", "conntrack", "dump")
 					log.Infof("[%d]FrontendMap: %+v", i, currBpfsvcs[i])
 					log.Infof("[%d]NATBackend: %+v", i, currBpfeps[i])
+					log.Infof("[%d]SendRecvMap: %+v", i, dumpSendRecvMap(felix))
 				}
 			}
 		})
@@ -571,9 +577,10 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 					)
 
 					testSvcName := "test-service"
+					tgtPort := 8055
 
 					BeforeEach(func() {
-						testSvc = k8sService(testSvcName, "10.101.0.10", w[0][0], 80, 8055, 0, testOpts.protocol)
+						testSvc = k8sService(testSvcName, "10.101.0.10", w[0][0], 80, tgtPort, 0, testOpts.protocol)
 						testSvcNamespace = testSvc.ObjectMeta.Namespace
 						_, err := k8sClient.CoreV1().Services(testSvcNamespace).Create(testSvc)
 						Expect(err).NotTo(HaveOccurred())
@@ -1052,6 +1059,7 @@ func dumpNATMaps(felix *infrastructure.Felix) (nat.MapMem, nat.BackendMapMem) {
 func dumpBPFMap(felix *infrastructure.Felix, m bpf.Map, iter bpf.MapIter) {
 	cmd, err := bpf.DumpMapCmd(m)
 	Expect(err).NotTo(HaveOccurred())
+	log.WithField("cmd", cmd).Debug("dumpBPFMap")
 	out, err := felix.ExecOutput(cmd...)
 	Expect(err).NotTo(HaveOccurred())
 	err = bpf.IterMapCmdOutput([]byte(out), iter)
@@ -1076,6 +1084,13 @@ func dumpAffMap(felix *infrastructure.Felix) nat.AffinityMapMem {
 	bm := nat.AffinityMap(&bpf.MapContext{})
 	m := make(nat.AffinityMapMem)
 	dumpBPFMap(felix, bm, nat.AffinityMapMemIter(m))
+	return m
+}
+
+func dumpSendRecvMap(felix *infrastructure.Felix) nat.SendRecvMsgMapMem {
+	bm := nat.SendRecvMsgMap(&bpf.MapContext{})
+	m := make(nat.SendRecvMsgMapMem)
+	dumpBPFMap(felix, bm, nat.SendRecvMsgMapMemIter(m))
 	return m
 }
 
