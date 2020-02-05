@@ -38,7 +38,7 @@ function build() {
     git clone --depth=1 https://github.com/projectcalico/calico -b $1 $TEMP_DIR
 
     pushd $TEMP_DIR
-    jekyll build --config $JEKYLL_CONFIG --baseurl=$2 --destination _site/$2
+    jekyll build --config $JEKYLL_CONFIG,$EXTRA_CONFIG --baseurl=$2 --destination _site/$2
     popd
 
     rsync -r $TEMP_DIR/_site .
@@ -64,3 +64,18 @@ build_master
 
 echo "[INFO] building archives"
 build_archives
+mv _site/sitemap.xml _site/release-legacy-sitemap.xml
+
+if [ ! -z "$CURRENT_RELEASE" ]; then
+    echo "[INFO] building current release"
+    EXTRA_CONFIG=$(pwd)/netlify/_config_latest.yml build release-$CURRENT_RELEASE
+    mv _site/sitemap.xml _site/latest-sitemap.xml
+fi
+
+if [ ! -z "$CANDIDATE_RELEASE" ]; then
+    echo "[INFO] building candidate release"
+    build release-$CANDIDATE_RELEASE /$CANDIDATE_RELEASE
+fi
+
+mv netlify/sitemap-index.xml _site/sitemap.xml
+mv netlify/_redirects _site/_redirects

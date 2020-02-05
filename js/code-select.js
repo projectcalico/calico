@@ -1,8 +1,9 @@
 $(document).ready(function() {
   var codeSnippetClass = 'code-snippet';
   var codeToolbarClass = `code-snippet-toolbar`;
+  var toolBarButtonClass = `${codeToolbarClass}__button`;
   var copyButtonClass = `${codeToolbarClass}__copy-button`;
-  var downloadButtonClass = `${codeToolbarClass}__download-button`;
+  var downloadButtonClass = `${codeToolbarClass}__download-button ${codeToolbarClass}__button`;
   var codeToolbarVisibleClass = `${codeToolbarClass}--visible`;
 
   $('pre.highlight').each(function(i) {
@@ -65,13 +66,13 @@ $(document).ready(function() {
 
       var copyButton = document.createElement('a');
       copyButton.setAttribute('type', 'btn');
-      copyButton.setAttribute('class', copyButtonClass);
+      copyButton.setAttribute('class', `${copyButtonClass} ${toolBarButtonClass}`);
       copyButton.setAttribute('data-clipboard-target', '#' + currentCodeSectionId);
       copyButton.innerHTML = '<i class="glyphicon glyphicon-duplicate" data-toggle="tooltip" data-placement="bottom" title="Copy"></i>';
 
       var downloadButton = document.createElement('a');
       downloadButton.setAttribute('type', 'btn');
-      downloadButton.setAttribute('class', downloadButtonClass);
+      downloadButton.setAttribute('class', `${downloadButtonClass} ${toolBarButtonClass}`);
       downloadButton.innerHTML = '<i class="glyphicon glyphicon-download-alt" data-toggle="tooltip" data-placement="bottom" title="Download"></i>';
       downloadButton.onclick = function() {
         var fileExtension = language || "txt";
@@ -84,7 +85,7 @@ $(document).ready(function() {
       toolbarDiv.setAttribute('class', `${codeSnippetClass}__toolbar ${codeToolbarClass}`);
       toolbarDiv.appendChild(downloadButton);
       toolbarDiv.appendChild(copyButton);
-      this.insertBefore(toolbarDiv, this.firstChild);
+      this.appendChild(toolbarDiv);
       this.onmouseover = function() {
         toolbarDiv.classList.add(codeToolbarVisibleClass);
       }
@@ -94,7 +95,31 @@ $(document).ready(function() {
     }
   });
 
-  var clipboard = new ClipboardJS(`.${copyButtonClass}`);
+  var clipboard = new ClipboardJS(`.${copyButtonClass}`,
+    {
+      text: trigger => {
+        const codeSnippetId = trigger.getAttribute('data-clipboard-target').replace('#', '');
+
+        const codeSnippet = document.getElementById(codeSnippetId);
+
+        const normalizedText = codeSnippet.innerText
+          .split('\n')
+          .map(str => {
+            const normalizedString = str.trim();
+
+            if (normalizedString.startsWith('$')) {
+              return normalizedString.slice(1, normalizedString.length).trim();
+            }
+
+            return normalizedString;
+          })
+          .join('\n');
+
+        return normalizedText;
+      },
+    },
+  );
+
   clipboard.on('success', function(e) {
     e.clearSelection();
   });
