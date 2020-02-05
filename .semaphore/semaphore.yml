@@ -18,6 +18,7 @@ blocks:
             - checkout
             - ln -s . networking-calico
             - sudo apt-get install -y tox python-all-dev python3-all-dev
+            - export LIBVIRT_TYPE=qemu
             - TEMPEST=true DEVSTACK_BRANCH=stable/rocky DEVSTACK_REPO=https://github.com/neiljerram/devstack.git ./devstack/bootstrap.sh
             - source ./devstack/devstackgaterc
             - cd /opt/stack/tempest
