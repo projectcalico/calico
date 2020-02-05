@@ -21,4 +21,4 @@ blocks:
             - TEMPEST=true DEVSTACK_BRANCH=stable/rocky DEVSTACK_REPO=https://github.com/neiljerram/devstack.git ./devstack/bootstrap.sh
             - source ./devstack/devstackgaterc
             - cd /opt/stack/tempest
-            - sudo -H -u tempest tox -eall -- $DEVSTACK_GATE_TEMPEST_REGEX --concurrency=$TEMPEST_CONCURRENCY
+            - tox -eall -- $DEVSTACK_GATE_TEMPEST_REGEX --concurrency=$TEMPEST_CONCURRENCY
