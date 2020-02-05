@@ -23,3 +23,9 @@ blocks:
             - source ./devstack/devstackgaterc
             - cd /opt/stack/tempest
             - tox -eall -- $DEVSTACK_GATE_TEMPEST_REGEX --concurrency=$TEMPEST_CONCURRENCY
+      epilogue:
+        on_fail:
+          commands:
+            - mkdir logs
+            - sudo journalctl > logs/journalctl.txt
+            - artifact push job --expire-in 2w logs
