@@ -169,6 +169,10 @@ BPF_GPL_C_FILES:=$(shell find bpf-gpl -name '*.c')
 BPF_GPL_H_FILES:=$(shell find bpf-gpl -name '*.h')
 BPF_GPL_O_FILES:=$(addprefix bpf-gpl/,$(shell bpf-gpl/list-objs))
 
+ALL_BPF_PROGS=$(BPF_GPL_O_FILES) $(BPF_APACHE_O_FILES)
+
+build-bpf: $(ALL_BPF_PROGS)
+
 .PHONY: xdp build-bpf
 $(BPF_APACHE_O_FILES) xdp: $(BPF_APACHE_C_FILES) $(BPF_APACHE_H_FILES) bpf-apache/Makefile
 	$(DOCKER_GO_BUILD) make -C bpf-apache
@@ -190,25 +194,6 @@ bpf/asm/opcode_string.go: bpf/asm/asm.go
 image-all: $(addprefix sub-image-,$(VALIDARCHES))
 sub-image-%:
 	$(MAKE) image ARCH=$*
-
-bin/compile-bpf: $(GENERATED_FILES) Makefile.common go.mod $(shell find cmd/compile-bpf bpf/nat bpf/tc config logutils proto -type f -name '*.go' -print | grep -v '_test\.go' )
-	$(DOCKER_GO_BUILD) go build -o $@ ./cmd/compile-bpf
-
-bin/bpf-progs.inc: bin/compile-bpf Makefile.common
-	bin/compile-bpf gen-makefile-inc > $@.tmp
-	mv $@.tmp $@
-
-# bpf-progs.inc sets up the BPF_PROGS variable.  The target above will cause it to be auto-updated after switching
-# branch.  Building bin/bpf-progs.inc requires the common makefile to have been included; this ifneq test makes sure
-# it only gets built on the second pass of the makefile, after the common makefile has already been included.
-# Without it, make tries to build both makefiles before importing either, which fails.
-ifneq ($(DOCKER_GO_BUILD),)
-include bin/bpf-progs.inc
-endif
-
-ALL_BPF_PROGS=$(BPF_GPL_O_FILES) $(BPF_APACHE_O_FILES)
-
-build-bpf: $(ALL_BPF_PROGS)
 
 image: $(BUILD_IMAGE)
 $(BUILD_IMAGE): $(BUILD_IMAGE)-$(ARCH)
@@ -664,8 +649,8 @@ bin/bpf_ut.test: $(GENERATED_FILES) $(shell find bpf/ -name '*.go')
 bin/bpf_debug.test: $(GENERATED_FILES)
 	$(DOCKER_RUN) -e CGO_ENABLED=1 $(CALICO_BUILD) go test $(BUILD_FLAGS) ./bpf/ut -c -gcflags="-N -l" -o $@
 
-.PHONY: bpf-ut
-bpf-ut: bin/bpf_ut.test bin/bpf.test $(ALL_BPF_PROGS)
+.PHONY: ut-bpf
+ut-bpf: bin/bpf_ut.test bin/bpf.test $(ALL_BPF_PROGS)
 	$(DOCKER_RUN) \
 		--privileged \
 		-e RUN_AS_ROOT=true \
