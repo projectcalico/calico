@@ -17,4 +17,7 @@ blocks:
           commands:
             - checkout
             - ln -s . networking-calico
-            - DEVSTACK_BRANCH=stable/rocky DEVSTACK_REPO=https://github.com/neiljerram/devstack.git ./devstack/bootstrap.sh
+            - TEMPEST=true DEVSTACK_BRANCH=stable/rocky DEVSTACK_REPO=https://github.com/neiljerram/devstack.git ./devstack/bootstrap.sh
+            - source ./devstack/devstackgaterc
+            - cd /opt/stack/tempest
+            - sudo -H -u tempest tox -eall -- $DEVSTACK_GATE_TEMPEST_REGEX --concurrency=$TEMPEST_CONCURRENCY

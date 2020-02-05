@@ -63,6 +63,14 @@ set -ex
 #     running this script; for example:
 #
 #         export DEVSTACK_BRANCH=stable/liberty
+#
+# TEMPEST
+#
+#     By default this script is as minimal as possible, so it doesn't include
+#     Tempest or the initial network setup that Tempest expects.  If TEMPEST is
+#     set to 'true', Tempest will be installed and the required initial
+#     networks created, ready for a Tempest run after the stack setup has
+#     completed.
 # ------------------------------------------------------------------------------
 
 # Assume that we are starting from the home directory of a non-root
@@ -127,8 +135,16 @@ SERVICE_PASSWORD=91eb72bcafb4ddf246ab
 SERVICE_TOKEN=c5680feca5e2c9c8f820
 
 enable_plugin networking-calico $ncdir $ncref
-disable_service tempest
 disable_service horizon
+
+LOGFILE=stack.log
+LOG_COLOR=False
+
+EOF
+
+if ! ${TEMPEST:-false}; then
+    cat >> local.conf <<EOF
+disable_service tempest
 
 # Devstack by default creates an initial Neutron network topology for VMs to
 # attach to: a private tenant network, an external public network, and a
@@ -142,17 +158,18 @@ disable_service horizon
 # 'neutron subnet-create' invocations below.
 NEUTRON_CREATE_INITIAL_NETWORKS=False
 
-LOGFILE=stack.log
-LOG_COLOR=False
-
 EOF
+fi
 
 # Stack!
 ./stack.sh
 
-# If we're on the controller node, create a Calico network.
-if [ x${SERVICE_HOST:-$HOSTNAME} = x$HOSTNAME ]; then
-    . openrc admin admin
-    neutron net-create --shared --provider:network_type local calico
-    neutron subnet-create --gateway 10.65.0.1 --enable-dhcp --ip-version 4 --name calico-v4 calico 10.65.0.0/24
+# If we're on the controller node and not setting up for Tempest, create a
+# Calico network.
+if ! ${TEMPEST:-false}; then
+     if [ x${SERVICE_HOST:-$HOSTNAME} = x$HOSTNAME ]; then
+	 . openrc admin admin
+	 neutron net-create --shared --provider:network_type local calico
+	 neutron subnet-create --gateway 10.65.0.1 --enable-dhcp --ip-version 4 --name calico-v4 calico 10.65.0.0/24
+     fi
 fi
