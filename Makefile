@@ -653,16 +653,16 @@ ut-watch: $(SRC_FILES)
 
 .PHONY: bin/bpf.test
 bin/bpf.test: $(GENERATED_FILES) $(shell find bpf/ -name '*.go')
-	$(DOCKER_GO_BUILD) go test $(BUILD_FLAGS) ./bpf/ -c -o $@
+	$(DOCKER_RUN) -e CGO_ENABLED=1 $(CALICO_BUILD) go test $(BUILD_FLAGS) ./bpf/ -c -o $@
 
-.PHONY: bin/bpf.test
+.PHONY: bin/bpf_ut.test
 bin/bpf_ut.test: $(GENERATED_FILES) $(shell find bpf/ -name '*.go')
-	$(DOCKER_GO_BUILD) go test $(BUILD_FLAGS) ./bpf/ut -c -o $@
+	$(DOCKER_RUN) -e CGO_ENABLED=1 $(CALICO_BUILD) go test $(BUILD_FLAGS) ./bpf/ut -c -o $@
 
 # Build debug version of bpf.test for use with the delve debugger.
 .PHONY: bin/bpf_debug.test
 bin/bpf_debug.test: $(GENERATED_FILES)
-	$(DOCKER_GO_BUILD) go test $(BUILD_FLAGS) ./bpf/ut -c -gcflags="-N -l" -o $@
+	$(DOCKER_RUN) -e CGO_ENABLED=1 $(CALICO_BUILD) go test $(BUILD_FLAGS) ./bpf/ut -c -gcflags="-N -l" -o $@
 
 .PHONY: bpf-ut
 bpf-ut: bin/bpf_ut.test bin/bpf.test $(ALL_BPF_PROGS)
@@ -677,6 +677,7 @@ bpf-ut: bin/bpf_ut.test bin/bpf.test $(ALL_BPF_PROGS)
 		--privileged \
 		-e RUN_AS_ROOT=true \
 		-v `pwd`:/code \
+		-v `pwd`/bpf-gpl/bin:/code/bpf/bin \
 		$(CALICO_BUILD) sh -c ' \
 		mount bpffs /sys/fs/bpf -t bpf && \
 		cd /go/src/$(PACKAGE_NAME)/bpf/ut && \

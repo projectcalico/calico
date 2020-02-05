@@ -20,6 +20,7 @@ import (
 	"io"
 	"io/ioutil"
 	"math"
+	"os"
 	"strings"
 
 	"github.com/pkg/errors"
@@ -48,11 +49,12 @@ func NewProgramGenerator(src string, ipSetIDProvider ipSetIDProvider) (*ProgramG
 	if src != "" {
 		template, err := ioutil.ReadFile(src)
 		if err != nil {
-			return nil, errors.Wrap(err, fmt.Sprintf("failed to read BPF program template from %s", src))
+			return nil, errors.Wrapf(err, "failed to read BPF program template from %s", src)
 		}
-		splits := bytes.Split(template, []byte("// __NORMAL_POLICY__\n"))
+		splits := bytes.Split(template, []byte("	RULE_START(0);\n	RULE_END(0, deny);"))
 		if len(splits) != 2 {
-			return nil, errors.Wrap(err, fmt.Sprintf("failed to split BPF program template %s", src))
+			cwd, _ := os.Getwd()
+			return nil, fmt.Errorf("failed to split BPF program template %s (cwd = %s)", src, cwd)
 		}
 		prefix = splits[0]
 		suffix = splits[1]

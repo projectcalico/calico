@@ -107,8 +107,8 @@ func TestCompileTemplateRun(t *testing.T) {
 
 var defaultCompileOpts = []tc.CompileOption{
 	tc.CompileWithBpftoolLoader(),
-	tc.CompileWithWorkingDir("../tc/templates"),
-	tc.CompileWithSourceName("../tc/templates/tc_template.c"), // Relative to our dir
+	tc.CompileWithWorkingDir("../../bpf-gpl"),
+	tc.CompileWithSourceName("../../bpf-gpl/tc.c"), // Relative to our dir
 	tc.CompileWithIncludePath("../../include"),                // Relative to working dir
 	tc.CompileWithFIBEnabled(true),
 	tc.CompileWithLogLevel("DEBUG"),
@@ -355,7 +355,7 @@ func runBpfUnitTest(t *testing.T, source string, testFn func(bpfProgRunFn)) {
 
 	objFname := tempDir + "/" + strings.TrimSuffix(source, path.Ext(source))
 
-	wdir := "../tc/templates"
+	wdir := "../../bpf-gpl"
 	unittestFName := wdir + "/unittest.h"
 
 	err = ioutil.WriteFile(unittestFName,
@@ -370,7 +370,7 @@ func runBpfUnitTest(t *testing.T, source string, testFn func(bpfProgRunFn)) {
 	opts := append(defaultCompileOpts,
 		tc.CompileWithOutputName(objFname),
 		tc.CompileWithWorkingDir(wdir),
-		tc.CompileWithSourceName(wdir+"/tc_template.c"),
+		tc.CompileWithSourceName(wdir+"/tc.c"),
 		tc.CompileWithIncludePath(curwd+"/progs"),
 		tc.CompileWithIncludePath("../include"),
 		tc.CompileWithLogPrefix("UNITTEST"),

@@ -286,7 +286,7 @@ func CompileProgramToFile(allRules [][][]*proto.Rule, ipSetIDAlloc *idalloc.IDAl
 	go func() {
 		defer wg.Done()
 		pg, err := bpf.NewProgramGenerator(compileOpts.srcFile, ipSetIDAlloc)
-		if err != nil {
+		if err != nil || pg == nil {
 			logrus.WithError(err).Panic("Failed to create code generator")
 		}
 		err = pg.WriteProgram(clangStdin, allRules)
