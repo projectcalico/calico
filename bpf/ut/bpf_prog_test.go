@@ -109,7 +109,7 @@ var defaultCompileOpts = []tc.CompileOption{
 	tc.CompileWithBpftoolLoader(),
 	tc.CompileWithWorkingDir("../../bpf-gpl"),
 	tc.CompileWithSourceName("../../bpf-gpl/tc.c"), // Relative to our dir
-	tc.CompileWithIncludePath("../../include"),                // Relative to working dir
+	tc.CompileWithIncludePath("../../include"),     // Relative to working dir
 	tc.CompileWithFIBEnabled(true),
 	tc.CompileWithLogLevel("DEBUG"),
 	tc.CompileWithVxlanPort(testVxlanPort),
@@ -323,16 +323,6 @@ func bpftoolProgRun(progName string, dataIn []byte) (bpfRunResult, error) {
 	return res, nil
 }
 
-var unittestH = `
-/*
- * THIS FILE IS GENERATED
- */
- #ifndef __BPF_UNITTEST_H__
- #define __BPF_UNITTEST_H__
- #include "%s"
- #endif
-`
-
 type bpfProgRunFn func(data []byte) (bpfRunResult, error)
 
 // runBpfUnitTest runs a small unit in isolation. It requires a small .c file
@@ -342,7 +332,6 @@ func runBpfUnitTest(t *testing.T, source string, testFn func(bpfProgRunFn)) {
 
 	tempDir, err := ioutil.TempDir("", "calico-bpf-")
 	Expect(err).NotTo(HaveOccurred())
-
 	defer os.RemoveAll(tempDir)
 
 	unique := path.Base(tempDir)
@@ -350,36 +339,9 @@ func runBpfUnitTest(t *testing.T, source string, testFn func(bpfProgRunFn)) {
 
 	err = os.Mkdir(bpfFsDir, os.ModePerm)
 	Expect(err).NotTo(HaveOccurred())
-
 	defer os.RemoveAll(bpfFsDir)
 
-	objFname := tempDir + "/" + strings.TrimSuffix(source, path.Ext(source))
-
-	wdir := "../../bpf-gpl"
-	unittestFName := wdir + "/unittest.h"
-
-	err = ioutil.WriteFile(unittestFName,
-		[]byte(fmt.Sprintf(unittestH, source)), 0644)
-	Expect(err).NotTo(HaveOccurred())
-
-	defer os.Remove(unittestFName)
-
-	curwd, err := os.Getwd()
-	Expect(err).NotTo(HaveOccurred())
-
-	opts := append(defaultCompileOpts,
-		tc.CompileWithOutputName(objFname),
-		tc.CompileWithWorkingDir(wdir),
-		tc.CompileWithSourceName(wdir+"/tc.c"),
-		tc.CompileWithIncludePath(curwd+"/progs"),
-		tc.CompileWithIncludePath("../include"),
-		tc.CompileWithLogPrefix("UNITTEST"),
-		tc.CompileWithDefine("CALI_UNITTEST"),
-		tc.CompileWithHostIP(hostIP),
-	)
-
-	err = tc.CompileProgramToFile(nil, idalloc.New(), opts...)
-	Expect(err).NotTo(HaveOccurred())
+	objFname := "../../bpf-gpl/ut/" + strings.TrimSuffix(source, path.Ext(source)) + ".o"
 
 	err = bpftoolProgLoadAll(objFname, bpfFsDir)
 	Expect(err).NotTo(HaveOccurred())

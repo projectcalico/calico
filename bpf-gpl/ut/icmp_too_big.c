@@ -12,8 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "../../include/bpf.h"
-#include "../../include/nat.h"
+#include "ut.h"
+#include "bpf.h"
+#include "nat.h"
 
 static CALI_BPF_INLINE int calico_unittest_entry (struct __sk_buff *skb)
 {
@@ -23,3 +24,4 @@ static CALI_BPF_INLINE int calico_unittest_entry (struct __sk_buff *skb)
 
 	return icmp_v4_too_big(skb);
 }
+

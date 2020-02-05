@@ -35,13 +35,29 @@ CFLAGS +=  \
 CC := clang
 LD := llc
 
+UT_C_FILES:=$(shell find ut -name '*.c')
+UT_OBJS:=$(UT_C_FILES:.c=.o)
+
 OBJS:=$(shell ./list-objs)
 C_FILES:=tc.c connect_balancer.c
 
-all: $(OBJS)
+all: $(OBJS) $(UT_OBJS)
 
 connect_time%.ll: connect_balancer.c connect_balancer.d
 	$(CC) $(CFLAGS) `./calculate-flags $@` -c $< -o $@
+
+UT_CFLAGS=\
+	-D__BPFTOOL_LOADER__ \
+	-DCALI_LOG_LEVEL=CALI_LOG_LEVEL_DEBUG \
+	-DCALI_VXLAN_PORT=5665 \
+	-DCALI_NAT_TUNNEL_MTU=700 \
+	-DCALI_HOST_IP=0x01000a0a \
+	-DUNITTEST \
+	-DCALI_LOG_PFX=UNITTEST \
+	-I .
+
+ut/%.ll: ut/%.c ut/ut.h tc.c tc.d
+	$(CC) $(CFLAGS) $(UT_CFLAGS) -c $< -o $@
 
 from%.ll: tc.c tc.d
 	$(CC) $(CFLAGS) `./calculate-flags $@` -c $< -o $@
@@ -50,6 +66,9 @@ to%.ll: tc.c tc.d
 	$(CC) $(CFLAGS) `./calculate-flags $@` -c $< -o $@
 
 bin/%.o: %.ll | bin
+	$(LD) -march=bpf -filetype=obj -o $@ $<
+
+ut/%.o: ut/%.ll
 	$(LD) -march=bpf -filetype=obj -o $@ $<
 
 bin:
@@ -67,4 +86,4 @@ D_FILES=$(C_FILES:.c=.d)
 include $(D_FILES)
 
 clean:
-	rm -f *.o *.ll *.d bin/*
+	rm -f *.o *.ll *.d bin/* ut/*.o ut/*.d ut/*.ll

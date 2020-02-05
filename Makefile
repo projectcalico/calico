@@ -165,20 +165,26 @@ BPF_APACHE_C_FILES:=$(shell find bpf-apache -name '*.c')
 BPF_APACHE_H_FILES:=$(shell find bpf-apache -name '*.h')
 BPF_APACHE_O_FILES:=$(addprefix bpf-apache/bin/,$(notdir $(BPF_APACHE_C_FILES:.c=.o)))
 
-BPF_GPL_C_FILES:=$(shell find bpf-gpl -name '*.c')
-BPF_GPL_H_FILES:=$(shell find bpf-gpl -name '*.h')
+# We pre-build lots of different variants of the
+BPF_GPL_C_FILES:=$(shell find bpf-gpl -name '*.c' | grep -v /ut/)
+BPF_GPL_H_FILES:=$(shell find bpf-gpl -name '*.h' | grep -v /ut/)
 BPF_GPL_O_FILES:=$(addprefix bpf-gpl/,$(shell bpf-gpl/list-objs))
+
+# There's a one-to-one mapping from UT C files to objects.
+BPF_GPL_UT_C_FILES:=$(shell find bpf-gpl/ut -name '*.c')
+BPF_GPL_UT_H_FILES:=$(shell find bpf-gpl/ut -name '*.h')
+BPF_GPL_UT_O_FILES:=$(BPF_GPL_UT_C_FILES:.c=.o)
 
 ALL_BPF_PROGS=$(BPF_GPL_O_FILES) $(BPF_APACHE_O_FILES)
 
-build-bpf: $(ALL_BPF_PROGS)
+build-bpf: $(ALL_BPF_PROGS) $(BPF_GPL_UT_O_FILES)
 
 .PHONY: xdp build-bpf
 $(BPF_APACHE_O_FILES) xdp: $(BPF_APACHE_C_FILES) $(BPF_APACHE_H_FILES) bpf-apache/Makefile
-	$(DOCKER_GO_BUILD) make -C bpf-apache
+	$(DOCKER_GO_BUILD) make -C bpf-apache all
 
-$(BPF_GPL_O_FILES): $(BPF_GPL_C_FILES) $(BPF_GPL_H_FILES) bpf-gpl/Makefile
-	$(DOCKER_GO_BUILD) make -C bpf-gpl
+$(BPF_GPL_O_FILES) $(BPF_GPL_UT_O_FILES): $(BPF_GPL_C_FILES) $(BPF_GPL_H_FILES) $(BPF_GPL_UT_H_FILES)
+	$(DOCKER_GO_BUILD) make -C bpf-gpl all
 
 bpf/asm/opcode_string.go: bpf/asm/asm.go
 	$(DOCKER_GO_BUILD) go generate ./bpf/asm/
@@ -650,7 +656,7 @@ bin/bpf_debug.test: $(GENERATED_FILES)
 	$(DOCKER_RUN) -e CGO_ENABLED=1 $(CALICO_BUILD) go test $(BUILD_FLAGS) ./bpf/ut -c -gcflags="-N -l" -o $@
 
 .PHONY: ut-bpf
-ut-bpf: bin/bpf_ut.test bin/bpf.test $(ALL_BPF_PROGS)
+ut-bpf: bin/bpf_ut.test bin/bpf.test $(ALL_BPF_PROGS) $(BPF_GPL_UT_O_FILES)
 	$(DOCKER_RUN) \
 		--privileged \
 		-e RUN_AS_ROOT=true \

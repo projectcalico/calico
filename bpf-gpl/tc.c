@@ -949,14 +949,4 @@ int tc_calico_entry(struct __sk_buff *skb) {
 	return calico_tc(skb);
 }
 
-#ifdef CALI_UNITTEST
-#include "unittest.h"
-__attribute__((section("calico_unittest")))
-int unittest(struct __sk_buff *skb)
-{
-	return calico_unittest_entry(skb);
-}
-#endif
-
-
 char ____license[] __attribute__((section("license"), used)) = "GPL";
