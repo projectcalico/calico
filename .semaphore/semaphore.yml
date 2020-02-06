@@ -57,29 +57,6 @@ blocks:
       commands:
       - make fv FV_BATCHES_TO_RUN="${SEMAPHORE_JOB_INDEX}" FV_NUM_BATCHES=${SEMAPHORE_JOB_COUNT}
       parallelism: 5
-- name: Kubernetes FV Tests
-  dependencies: ["Build"]
-  task:
-    agent:
-      machine:
-        # k8sfv tests need more RAM.
-        type: e1-standard-2
-        os_image: ubuntu1804
-    prologue:
-      commands:
-      - checkout
-      - cache restore go-pkg-cache
-      - cache restore go-mod-cache
-      - 'cache restore bin-${SEMAPHORE_GIT_SHA}'
-      - 'cache restore felix-image-${SEMAPHORE_GIT_SHA}'
-      - docker load -i /tmp/calico-felix.tar
-      - rm /tmp/calico-felix.tar
-      - touch bin/*
-    jobs:
-    - name: Kubernetes FV tests
-      commands:
-      - make k8sfv-test JUST_A_MINUTE=true USE_TYPHA=true
-      - make k8sfv-test JUST_A_MINUTE=true USE_TYPHA=false
 - name: BPF UT/FV tests on new kernel
   dependencies: []
   task:
@@ -120,7 +97,7 @@ blocks:
     - name: Static checks
       commands:
       - make static-checks
-- name: Unit tests
+- name: Multi-arch builds, UT, k8sfv-tests
   dependencies: []
   task:
     prologue:
@@ -129,6 +106,6 @@ blocks:
       - cache restore go-pkg-cache
       - cache restore go-mod-cache
     jobs:
-    - name: UT
+    - name: CI excluding FV
       commands:
-      - make ut
+      - make ci EXCEPT=fv

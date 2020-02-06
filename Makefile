@@ -145,11 +145,19 @@ sub-build-%:
 bin/calico-felix: bin/calico-felix-$(ARCH)
 	ln -f bin/calico-felix-$(ARCH) bin/calico-felix
 
+ifeq ($(ARCH), amd64)
+CGO_ENABLED=1
+else
+CGO_ENABLED=0
+endif
+
+DOCKER_GO_BUILD_CGO=$(DOCKER_RUN) -e CGO_ENABLED=$(CGO_ENABLED) $(CALICO_BUILD)
+
 bin/calico-felix-$(ARCH): $(SRC_FILES) $(LOCAL_BUILD_DEP)
 	@echo Building felix for $(ARCH) on $(BUILDARCH)
 	mkdir -p bin
 	if [ "$(SEMAPHORE)" != "true" -o ! -e $@ ] ; then \
-	  $(DOCKER_RUN) -e CGO_ENABLED=1 $(CALICO_BUILD) \
+	  $(DOCKER_GO_BUILD_CGO) \
 	     sh -c 'go build -v -i -o $@ -v $(BUILD_FLAGS) $(LDFLAGS) "$(PACKAGE_NAME)/cmd/calico-felix"'; \
 	fi
 
@@ -644,16 +652,16 @@ ut-watch: $(SRC_FILES)
 
 .PHONY: bin/bpf.test
 bin/bpf.test: $(GENERATED_FILES) $(shell find bpf/ -name '*.go')
-	$(DOCKER_RUN) -e CGO_ENABLED=1 $(CALICO_BUILD) go test $(BUILD_FLAGS) ./bpf/ -c -o $@
+	$(DOCKER_GO_BUILD_CGO) go test $(BUILD_FLAGS) ./bpf/ -c -o $@
 
 .PHONY: bin/bpf_ut.test
 bin/bpf_ut.test: $(GENERATED_FILES) $(shell find bpf/ -name '*.go')
-	$(DOCKER_RUN) -e CGO_ENABLED=1 $(CALICO_BUILD) go test $(BUILD_FLAGS) ./bpf/ut -c -o $@
+	$(DOCKER_GO_BUILD_CGO) go test $(BUILD_FLAGS) ./bpf/ut -c -o $@
 
 # Build debug version of bpf.test for use with the delve debugger.
 .PHONY: bin/bpf_debug.test
 bin/bpf_debug.test: $(GENERATED_FILES)
-	$(DOCKER_RUN) -e CGO_ENABLED=1 $(CALICO_BUILD) go test $(BUILD_FLAGS) ./bpf/ut -c -gcflags="-N -l" -o $@
+	$(DOCKER_GO_BUILD_CGO) go test $(BUILD_FLAGS) ./bpf/ut -c -gcflags="-N -l" -o $@
 
 .PHONY: ut-bpf
 ut-bpf: bin/bpf_ut.test bin/bpf.test $(ALL_BPF_PROGS) $(BPF_GPL_UT_O_FILES)
