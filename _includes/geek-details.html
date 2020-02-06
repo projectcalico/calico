@@ -3,9 +3,9 @@
     {% for detail in details %}
         {% assign kv = detail | split: ',' %}
         <div class="geek-detail">
-            kv[0]
+            {{ kv[0] }}
             <div class="geek-detail-value">
-                kv[1]
+                {{ kv[1] }}
             </div>
         </div>    
     {% endfor %}
