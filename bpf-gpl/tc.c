@@ -835,7 +835,7 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct __sk_buff *skb,
 		// fall through
 	case CALI_CT_ESTABLISHED:
 		if (dnat_return_should_encap() && state->ct_result.tun_ret_ip) {
-			if (encap_needed && ip_is_dnf(ip_header) && vxlan_v4_encap_too_big(skb)) {
+			if (ip_is_dnf(ip_header) && vxlan_v4_encap_too_big(skb)) {
 				goto icmp_too_big;
 			}
 			state->ip_dst = state->ct_result.tun_ret_ip;
