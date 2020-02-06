@@ -280,7 +280,9 @@ func (c *networkPolicyClient) List(ctx context.Context, list model.ListInterface
 	// that can be decoded by the Watch.
 	npKvps.Revision = c.JoinNetworkPolicyRevisions(npKvps.Revision, networkPolicies.ResourceVersion)
 
-	log.WithField("KVPs", npKvps).Info("Returning NP KVPs")
+	log.WithFields(log.Fields{
+		"num_kvps": len(npKvps.KVPairs),
+		"revision": npKvps.Revision}).Debug("Returning NP KVPs")
 	return npKvps, nil
 }
 
