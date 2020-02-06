@@ -8,6 +8,9 @@
 @import "../css/search";
 @import "../css/plugins/offcanvas";
 
+$header-height: 75px;
+$sticky-top: $header-height + $navbar-margin-bottom;
+
 // By default bootstrap doesn't apply many styles to table elements
 // unless they have class .table and .table-bordered
 // These lines here extend the table so it automatically gets those
@@ -44,6 +47,7 @@ html {
 body {
   -webkit-overflow-scrolling: touch;
   overflow-x: visible;
+  padding-top: $sticky-top;
 
   @media (max-width: $screen-xs-max) {
     overflow-x: hidden;
@@ -307,11 +311,9 @@ input.gsc-input, .gsc-input-box, .gsc-input-box-hover, .gsc-input-box-focus, .gs
   }
 }
 
-$wpfront-notification-bar-spacer-height: 55px;
-$sticky-top: $wpfront-notification-bar-spacer-height + $navbar-margin-bottom;
-$header-height: 75px;
 $search-height: 50px;
-$max-sidebar-height: calc(100vh - #{$wpfront-notification-bar-spacer-height + $header-height + $navbar-margin-bottom + $search-height + $navbar-margin-bottom});
+$sticky-bottom: $search-height + $navbar-margin-bottom;
+$max-sidebar-height: calc(100vh - #{$sticky-top + $sticky-bottom});
 
 .sidebar {
   position: -webkit-sticky;
