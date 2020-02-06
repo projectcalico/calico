@@ -33,5 +33,6 @@ var _ = func() error {
 		b := packr.New("xdp", "./xdp/generated")
 		b.SetResolver("xdp.o", packr.Pointer{ForwardBox: gk, ForwardPath: "ad15098d1cedf7524395e290eb19dcab"})
 	}()
+
 	return nil
 }()
