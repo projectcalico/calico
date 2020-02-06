@@ -192,7 +192,7 @@ $(BPF_APACHE_O_FILES) xdp: $(BPF_APACHE_C_FILES) $(BPF_APACHE_H_FILES) bpf-apach
 	$(DOCKER_GO_BUILD) make -j 16 -C bpf-apache all
 
 $(BPF_GPL_O_FILES) $(BPF_GPL_UT_O_FILES): $(BPF_GPL_C_FILES) $(BPF_GPL_H_FILES) $(BPF_GPL_UT_H_FILES)
-	$(DOCKER_GO_BUILD) make -j 16 -C bpf-gpl all
+	$(DOCKER_GO_BUILD) make -j 16 -C bpf-gpl all ut-objs
 
 bpf/asm/opcode_string.go: bpf/asm/asm.go
 	$(DOCKER_GO_BUILD) go generate ./bpf/asm/

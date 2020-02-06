@@ -41,7 +41,8 @@ UT_OBJS:=$(UT_C_FILES:.c=.o) $(shell ./list-ut-objs)
 OBJS:=$(shell ./list-objs)
 C_FILES:=tc.c connect_balancer.c
 
-all: $(OBJS) $(UT_OBJS)
+all: $(OBJS)
+ut-objs: $(UT_OBJS)
 
 connect_time%.ll: connect_balancer.c connect_balancer.d
 	$(CC) $(CFLAGS) `./calculate-flags $@` -c $< -o $@
