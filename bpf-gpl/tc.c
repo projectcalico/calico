@@ -776,7 +776,7 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct __sk_buff *skb,
 
 		if (encap_needed) {
 			state->ip_src = cali_host_ip();
-			state->ip_dst = cali_rt_flags_remote_workload(rt->flags) ? rt->next_hop : state->post_nat_ip_dst;
+			state->ip_dst = cali_rt_is_workload(rt) ? rt->next_hop : state->post_nat_ip_dst;
 			seen_mark = CALI_SKB_MARK_BYPASS_FWD;
 			goto nat_encap;
 		}
