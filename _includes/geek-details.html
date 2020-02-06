@@ -1,0 +1,12 @@
+<div class="geek-details" style="display:inline-block; box-shadow:2px 2px 10px grey">
+    {% assign details = include.details | split: ',' %}
+    {% for detail in details %}
+        {% assign kv = detail | split: ',' %}
+        <div style="border-style:solid; border-width:1px; border-color:#ccc; width:80px; text-align: center; font-size:12px; float:left;">
+            kv[0]
+            <div style="border-style:solid; border-width:2px;  border-radius:5px; border-color:#999; margin:5px; background-color:#d9e6d2;">
+                kv[1]
+            </div>
+        </div>    
+    {% endfor %}
+</div>
