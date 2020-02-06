@@ -31,9 +31,6 @@ import (
 	"github.com/projectcalico/felix/ip"
 )
 
-var node1ip = net.IPv4(10, 10, 0, 1)
-var node2ip = net.IPv4(10, 10, 0, 2)
-
 func TestNATPodPodXNode(t *testing.T) {
 	RegisterTestingT(t)
 
@@ -333,7 +330,7 @@ func TestNATNodePort(t *testing.T) {
 
 	dumpCTMap(ctMap)
 
-	skbMark = 0xca11000 | 0x20000 // CALI_SKB_MARK_BYPASS_FWD
+	skbMark = 0xca100000 | 0x30000 // CALI_SKB_MARK_BYPASS_FWD
 	// Leaving node 1
 	runBpfTest(t, "calico_to_host_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
 		res, err := bpfrun(encapedPkt)
@@ -421,7 +418,7 @@ func TestNATNodePort(t *testing.T) {
 
 	dumpCTMap(ctMap)
 
-	skbMark = 0xca110000 | 0x40000 // CALI_SKB_MARK_BYPASS_NAT_RET_ENCAPED
+	skbMark = 0xca100000 | 0x50000 // CALI_SKB_MARK_BYPASS_NAT_RET_ENCAPED
 
 	hostIP = node2ip
 

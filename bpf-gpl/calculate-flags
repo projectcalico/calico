@@ -43,6 +43,20 @@ else
   args+=("-DCALI_FIB_LOOKUP_ENABLED=false")
 fi
 
+if [[ "${filename}" =~ .*skb([0-9a-fA-Fx]+).* ]]; then
+  args+=("-DCALI_SET_SKB_MARK=${BASH_REMATCH[1]}")
+fi
+
+if [[ "${filename}" =~ .*host([0-9a-fA-Fx]+).* ]]; then
+  args+=("-DCALI_HOST_IP=${BASH_REMATCH[1]}")
+fi
+
+if [[ "${filename}" =~ ut_.* ]]; then
+  args+=("-D__BPFTOOL_LOADER__")
+  args+=("-DCALI_VXLAN_PORT=5665")
+  args+=("-DCALI_NAT_TUNNEL_MTU=700")
+fi
+
 flags=0
 
 # WARNING: these constants must be kept in sync with bpf.h.

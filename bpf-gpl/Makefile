@@ -36,7 +36,7 @@ CC := clang
 LD := llc
 
 UT_C_FILES:=$(shell find ut -name '*.c')
-UT_OBJS:=$(UT_C_FILES:.c=.o)
+UT_OBJS:=$(UT_C_FILES:.c=.o) $(shell ./list-ut-objs)
 
 OBJS:=$(shell ./list-objs)
 C_FILES:=tc.c connect_balancer.c
@@ -56,20 +56,19 @@ UT_CFLAGS=\
 	-DCALI_LOG_PFX=UNITTEST \
 	-I .
 
+# Mini-UT programs that test one or two functions.  These are each in their own files.
 ut/%.ll: ut/%.c ut/ut.h tc.c tc.d
 	$(CC) $(CFLAGS) $(UT_CFLAGS) -c $< -o $@
 
-from%.ll: tc.c tc.d
+# Production and UT versions of the main binaries.
+%.ll: tc.c tc.d
 	$(CC) $(CFLAGS) `./calculate-flags $@` -c $< -o $@
 
-to%.ll: tc.c tc.d
-	$(CC) $(CFLAGS) `./calculate-flags $@` -c $< -o $@
-
+LINK=$(LD) -march=bpf -filetype=obj -o $@ $<
 bin/%.o: %.ll | bin
-	$(LD) -march=bpf -filetype=obj -o $@ $<
-
+	$(LINK)
 ut/%.o: ut/%.ll
-	$(LD) -march=bpf -filetype=obj -o $@ $<
+	$(LINK)
 
 bin:
 	mkdir -p bin
@@ -78,7 +77,7 @@ bin:
 
 %.d: %.c
 	@set -e; rm -f $@; \
-		$(CC) -M $(CFLAGS) $< > $@.$$$$; \
+		$(CC) -M $(CFLAGS) $< > $@.$$$$ || { rm -f $@.$$$$; false; } ; \
 		sed 's,\($*\)\.o[ :]*,\1.o $@ : ,g' < $@.$$$$ > $@; \
 		rm -f $@.$$$$
 
