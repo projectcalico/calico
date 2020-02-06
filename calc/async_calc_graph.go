@@ -83,6 +83,7 @@ type AsyncCalcGraph struct {
 	dirty            bool
 
 	debugHangC <-chan time.Time
+	lastReport time.Time
 }
 
 const (
@@ -149,6 +150,9 @@ func (acg *AsyncCalcGraph) loop() {
 					typeName := reflect.TypeOf(upd.Key).Name()
 					count := countUpdatesProcessed.WithLabelValues(typeName)
 					count.Inc()
+					if time.Since(acg.lastReport) > healthInterval {
+						acg.reportHealth()
+					}
 				}
 			case api.SyncStatus:
 				// Sync status changed, check if we're now in-sync.
@@ -188,6 +192,7 @@ func (acg *AsyncCalcGraph) loop() {
 }
 
 func (acg *AsyncCalcGraph) reportHealth() {
+	acg.lastReport = time.Now()
 	if acg.healthAggregator != nil {
 		acg.healthAggregator.Report(healthName, &health.HealthReport{
 			Live:  true,
