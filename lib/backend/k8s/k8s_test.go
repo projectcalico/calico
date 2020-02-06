@@ -244,15 +244,25 @@ func (c cb) ExpectDeleted(kvps []model.KVPair) {
 // ExpectAddedEvent checks for an api.WatchAdded coming down a specific chan
 // this is used in several tests below
 func ExpectAddedEvent(events <-chan api.WatchEvent) *api.WatchEvent {
+	return expectEventOfType(events, api.WatchAdded)
+}
+
+// ExpectModifiedEvent checks for an api.WatchModified coming down a specific chan
+func ExpectModifiedEvent(events <-chan api.WatchEvent) *api.WatchEvent {
+	return expectEventOfType(events, api.WatchModified)
+}
+
+func expectEventOfType(events <-chan api.WatchEvent, type_ api.WatchEventType) *api.WatchEvent {
 	var receivedEvent *api.WatchEvent
+poll:
 	for i := 0; i < 10; i++ {
 		select {
 		case e := <-events:
 			// Got an event. Check it's OK.
 			Expect(e.Error).NotTo(HaveOccurred())
-			Expect(e.Type).To(Equal(api.WatchAdded))
+			Expect(e.Type).To(Equal(type_))
 			receivedEvent = &e
-			break
+			break poll
 		default:
 			time.Sleep(50 * time.Millisecond)
 		}
@@ -379,6 +389,7 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 			err = c.ClientSet.CoreV1().Pods(p.Namespace).Delete(p.Name, &metav1.DeleteOptions{})
 			Expect(err).NotTo(HaveOccurred())
 		}
+		syncer.Stop()
 	})
 
 	It("should handle a Namespace with DefaultDeny (v1beta annotation for namespace isolation)", func() {
@@ -1481,6 +1492,7 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 			// Create a new syncer / callback pair so that it performs a snapshot.
 			cfg := apiconfig.KubeConfig{K8sAPIEndpoint: "http://localhost:8080"}
 			_, snapshotCallbacks, snapshotSyncer := CreateClientAndSyncer(cfg)
+			defer snapshotSyncer.Stop()
 			go snapshotCallbacks.ProcessUpdates()
 			snapshotSyncer.Start()
 
@@ -2111,7 +2123,7 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 		By("Not syncing Nodes when K8sDisableNodePoll is enabled", func() {
 			cfg := apiconfig.KubeConfig{K8sAPIEndpoint: "http://localhost:8080", K8sDisableNodePoll: true}
 			_, snapshotCallbacks, snapshotSyncer := CreateClientAndSyncer(cfg)
-
+			defer snapshotSyncer.Stop()
 			go snapshotCallbacks.ProcessUpdates()
 			snapshotSyncer.Start()
 
@@ -2126,7 +2138,7 @@ var _ = testutils.E2eDatastoreDescribe("Test Syncer API for Kubernetes backend",
 		By("Syncing HostConfig for a Node on Syncer start", func() {
 			cfg := apiconfig.KubeConfig{K8sAPIEndpoint: "http://localhost:8080", K8sDisableNodePoll: true}
 			_, snapshotCallbacks, snapshotSyncer := CreateClientAndSyncer(cfg)
-
+			defer snapshotSyncer.Stop()
 			go snapshotCallbacks.ProcessUpdates()
 			snapshotSyncer.Start()
 
@@ -2311,6 +2323,152 @@ var _ = testutils.E2eDatastoreDescribe("Test Watch support", testutils.Datastore
 			Expect(err).NotTo(HaveOccurred())
 			defer watch.Stop()
 			ExpectAddedEvent(watch.ResultChan())
+		})
+	})
+
+	Describe("watching / listing network polices (k8s and Calico)", func (){
+		createCalicoNetworkPolicy := func(name string) {
+			np := &model.KVPair{
+				Key: model.ResourceKey{
+					Name:      name,
+					Namespace: "default",
+					Kind:      apiv3.KindNetworkPolicy,
+				},
+				Value: &apiv3.NetworkPolicy{
+					TypeMeta: metav1.TypeMeta{
+						Kind:       apiv3.KindNetworkPolicy,
+						APIVersion: apiv3.GroupVersionCurrent,
+					},
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      name,
+						Namespace: "default",
+					},
+				},
+			}
+			_, err := c.Create(ctx, np)
+			Expect(err).NotTo(HaveOccurred())
+		}
+		createK8sNetworkPolicy := func(name string) {
+			np := networkingv1.NetworkPolicy{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: name,
+				},
+			}
+			_, err := c.ClientSet.NetworkingV1().NetworkPolicies("default").Create(&np)
+			Expect(err).NotTo(HaveOccurred())
+		}
+		deleteAllNetworkPolicies := func() {
+			var zero int64
+			err := c.ClientSet.NetworkingV1().NetworkPolicies("default").DeleteCollection(&metav1.DeleteOptions{GracePeriodSeconds: &zero}, metav1.ListOptions{})
+			Expect(err).NotTo(HaveOccurred())
+			err = c.Clean()
+			Expect(err).NotTo(HaveOccurred())
+		}
+		BeforeEach(func() {
+			createCalicoNetworkPolicy("test-net-policy-1")
+			createCalicoNetworkPolicy("test-net-policy-2")
+			createK8sNetworkPolicy("test-net-policy-3")
+			createK8sNetworkPolicy("test-net-policy-4")
+			log.Info("[Test] Done Setup ---")
+		})
+		AfterEach(func() {
+			log.Info("[Test] Beginning Cleanup ----")
+			deleteAllNetworkPolicies()
+		})
+		It("supports resuming watch from previous revision", func() {
+			l, err := c.List(ctx, model.ResourceListOptions{Kind: apiv3.KindNetworkPolicy}, "")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(l.KVPairs).To(HaveLen(4))
+
+			// Now, modify all the policies.  It's important to do this with
+			// multiple policies of each type, because we want to test that revision
+			// numbers come out in a sensible order. We're going to resume the watch
+			// from the "last" event to come out of the watch, and if it doesn't
+			// really represent the latest update, when we resume watching, we
+			// will get duplicate events. Worse, if the "last" event from a watch
+			// doesn't represent the latest state, this implies some earlier
+			// event from the watch did, and if we happened to have stopped the
+			// watch at that point we would have missed some data!
+
+			// modify the calico policies.
+			found := 0
+			var kvp1or2 *model.KVPair
+			for _, kvp := range l.KVPairs {
+				k := kvp.Key.(model.ResourceKey)
+				if k.Name == "test-net-policy-1" || k.Name == "test-net-policy-2" {
+					policy := kvp.Value.(*apiv3.NetworkPolicy)
+					policy.SetLabels(map[string]string{"test": "00"})
+					kvp1or2, err = c.Update(ctx, kvp)
+					Expect(err).ToNot(HaveOccurred())
+					found++
+				}
+			}
+			Expect(found).To(Equal(2))
+
+			// Modify the kubernetes policies
+			for _, name := range []string{"test-net-policy-3", "test-net-policy-4"} {
+				p, err := c.ClientSet.NetworkingV1().NetworkPolicies("default").Get(name, metav1.GetOptions{})
+				Expect(err).ToNot(HaveOccurred())
+				p.SetLabels(map[string]string{"test": "00"})
+				_, err = c.ClientSet.NetworkingV1().NetworkPolicies("default").Update(p)
+				Expect(err).ToNot(HaveOccurred())
+			}
+
+			log.WithField("revision", l.Revision).Info("[TEST] first watch")
+			watch, err := c.Watch(ctx, model.ResourceListOptions{Kind: apiv3.KindNetworkPolicy}, l.Revision)
+			Expect(err).NotTo(HaveOccurred())
+
+			// We should see 4 events
+			event := ExpectModifiedEvent(watch.ResultChan())
+			log.WithField("revision", event.New.Revision).Info("[TEST] first event")
+			event = ExpectModifiedEvent(watch.ResultChan())
+			log.WithField("revision", event.New.Revision).Info("[TEST] second event")
+			event = ExpectModifiedEvent(watch.ResultChan())
+			log.WithField("revision", event.New.Revision).Info("[TEST] third event")
+			event = ExpectModifiedEvent(watch.ResultChan())
+			log.WithField("revision", event.New.Revision).Info("[TEST] fourth event")
+
+			// There should be no more events
+			Expect(watch.ResultChan()).ToNot(Receive())
+
+			watch.Stop()
+
+			// Make a second change
+			kvp1or2.Value.(*apiv3.NetworkPolicy).SetLabels(map[string]string{"test":"01"})
+			_, err = c.Update(ctx, kvp1or2)
+			Expect(err).ToNot(HaveOccurred())
+
+			// Resume watching at the revision of the event we got
+			log.WithField("revision", event.New.Revision).Info("second watch")
+			watch, err = c.Watch(ctx, model.ResourceListOptions{Kind: apiv3.KindNetworkPolicy}, event.New.Revision)
+			Expect(err).NotTo(HaveOccurred())
+
+			// We should only get 1 update, because the event from the previous watch should have been "latest"
+			ExpectModifiedEvent(watch.ResultChan())
+
+			// There should be no more events
+			Expect(watch.ResultChan()).ToNot(Receive())
+
+			watch.Stop()
+		})
+
+		It("supports watching from part way through a list", func() {
+			l, err := c.List(ctx, model.ResourceListOptions{Kind:apiv3.KindNetworkPolicy}, "")
+			Expect(err).ToNot(HaveOccurred())
+			Expect(l.KVPairs).To(HaveLen(4))
+
+			// Watch from part way
+			for i := 0; i<4; i++ {
+				revision := l.KVPairs[i].Revision
+				log.WithFields(log.Fields{
+					"revision": revision,
+					"key": l.KVPairs[i].Key.String()}).Info("[Test] starting watch")
+				_, err := c.Watch(ctx, model.ResourceListOptions{Kind: apiv3.KindNetworkPolicy}, revision)
+				Expect(err).ToNot(HaveOccurred())
+				// Since the items in the list aren't guaranteed to be in any specific order, we
+				// can't assert anything useful about what you should get out of this watch, so we
+				// just confirm that there is no error.
+			}
 		})
 	})
 
