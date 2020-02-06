@@ -126,8 +126,8 @@ clean:
 	find . -name "coverage.xml" -type f -delete
 	find . -name ".coverage" -type f -delete
 	find . -name "*.pyc" -type f -delete
-	$(MAKE) -C bpf-apache clean
-	$(MAKE) -C bpf-gpl clean
+	$(DOCKER_GO_BUILD) make -C bpf-apache clean
+	$(DOCKER_GO_BUILD) make -C bpf-gpl clean
 
 ###############################################################################
 # Automated pin updates
