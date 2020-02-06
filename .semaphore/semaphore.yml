@@ -28,4 +28,4 @@ blocks:
           commands:
             - mkdir logs
             - sudo journalctl > logs/journalctl.txt
-            - artifact push job --expire-in 2w logs
+            - artifact push job --expire-in 1d logs
