@@ -523,7 +523,7 @@ func describeEmptyDataplaneTests(dataplaneMode string) {
 				}
 
 				table.SetRuleInsertions("FORWARD", []Rule{
-					{Action: DropAction{}, Comment: "new drop rule"},
+					{Action: DropAction{}, Comment: []string{"new drop rule"}},
 				})
 				table.Apply()
 			})
@@ -548,12 +548,12 @@ func describeEmptyDataplaneTests(dataplaneMode string) {
 		BeforeEach(func() {
 			table.UpdateChains([]*Chain{
 				{Name: "non-cali-chain", Rules: []Rule{
-					{Action: AcceptAction{}, Comment: "non-cali 1"},
-					{Action: DropAction{}, Comment: "non-cali 2"},
+					{Action: AcceptAction{}, Comment: []string{"non-cali 1"}},
+					{Action: DropAction{}, Comment: []string{"non-cali 2"}},
 				}},
 				{Name: "cali-foobar", Rules: []Rule{
-					{Action: AcceptAction{}, Comment: "cali 1"},
-					{Action: DropAction{}, Comment: "cali 2"},
+					{Action: AcceptAction{}, Comment: []string{"cali 1"}},
+					{Action: DropAction{}, Comment: []string{"cali 2"}},
 				}},
 			})
 			table.Apply()
@@ -585,7 +585,7 @@ func describeEmptyDataplaneTests(dataplaneMode string) {
 				}
 
 				table.SetRuleInsertions("non-cali-chain", []Rule{
-					{Action: DropAction{}, Comment: "new drop rule"},
+					{Action: DropAction{}, Comment: []string{"new drop rule"}},
 				})
 				table.Apply()
 			})
@@ -609,8 +609,8 @@ func describeEmptyDataplaneTests(dataplaneMode string) {
 	Describe("inserting into a non-Calico chain results in the expected writes", func() {
 		BeforeEach(func() {
 			table.SetRuleInsertions("FORWARD", []Rule{
-				{Action: DropAction{}, Comment: "a drop rule"},
-				{Action: AcceptAction{}, Comment: "an accept rule"},
+				{Action: DropAction{}, Comment: []string{"a drop rule"}},
+				{Action: AcceptAction{}, Comment: []string{"an accept rule"}},
 			})
 			table.Apply()
 		})
@@ -632,8 +632,8 @@ func describeEmptyDataplaneTests(dataplaneMode string) {
 		Describe("then inserting the same rules", func() {
 			BeforeEach(func() {
 				table.SetRuleInsertions("FORWARD", []Rule{
-					{Action: DropAction{}, Comment: "a drop rule"},
-					{Action: AcceptAction{}, Comment: "an accept rule"},
+					{Action: DropAction{}, Comment: []string{"a drop rule"}},
+					{Action: AcceptAction{}, Comment: []string{"an accept rule"}},
 				})
 				dataplane.ResetCmds()
 				table.Apply()
@@ -659,9 +659,9 @@ func describeEmptyDataplaneTests(dataplaneMode string) {
 		Describe("then inserting different rules", func() {
 			BeforeEach(func() {
 				table.SetRuleInsertions("FORWARD", []Rule{
-					{Action: DropAction{}, Comment: "a drop rule"},
-					{Action: AcceptAction{}, Comment: "an accept rule"},
-					{Action: DropAction{}, Comment: "a second drop rule"},
+					{Action: DropAction{}, Comment: []string{"a drop rule"}},
+					{Action: AcceptAction{}, Comment: []string{"an accept rule"}},
+					{Action: DropAction{}, Comment: []string{"a second drop rule"}},
 				})
 				dataplane.ResetCmds()
 				table.Apply()

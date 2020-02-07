@@ -203,10 +203,11 @@ static CALI_BPF_INLINE int forward_or_drop(struct __sk_buff *skb,
 			// Redirect the packet.
 			CALI_DEBUG("Got Linux FIB hit, redirecting to iface %d.\n", fib_params.ifindex);
 			rc = bpf_redirect(fib_params.ifindex, 0);
-	/* now we know we will bypass IP stack and ip->ttl > 1, decrement it! */
+			/* now we know we will bypass IP stack and ip->ttl > 1, decrement it! */
 			if (rc == TC_ACT_REDIRECT) {
 				ip_dec_ttl(ip_header);
-			}	} else if (rc < 0) {
+			}
+		} else if (rc < 0) {
 			CALI_DEBUG("FIB lookup failed (bad input): %d.\n", rc);
 			rc = TC_ACT_UNSPEC;
 		} else {

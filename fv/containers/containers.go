@@ -491,11 +491,13 @@ func (c *Container) WaitNotRunning(timeout time.Duration) {
 func (c *Container) EnsureBinary(name string) {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
-
+	logCtx := log.WithField("container", c.Name).WithField("binary", name)
+	logCtx.Info("Ensuring binary")
 	if !c.binaries.Contains(name) {
+		logCtx.Info("Binary not already present")
 		err := utils.Command("docker", "cp", "../bin/"+name, c.Name+":/"+name).Run()
 		if err != nil {
-			log.WithField("name", name).Error("Failed to run 'docker cp' command")
+			log.WithField("name", name).Panic("Failed to run 'docker cp' command")
 		}
 		c.binaries.Add(name)
 	}
@@ -552,8 +554,9 @@ func (c *Container) SourceIPs() []string {
 }
 
 func (c *Container) CanConnectTo(ip, port, protocol string) *connectivity.Response {
-
 	// Ensure that the container has the 'test-connection' binary.
+	logCxt := log.WithField("container", c.Name)
+	logCxt.Debugf("Entering Container.CanConnectTo(%v,%v,%v)", ip, port, protocol)
 	c.EnsureBinary("test-connection")
 
 	// Run 'test-connection' to the target.
@@ -587,7 +590,7 @@ func (c *Container) CanConnectTo(ip, port, protocol string) *connectivity.Respon
 
 	err = connectionCmd.Wait()
 
-	log.WithFields(log.Fields{
+	logCxt.WithFields(log.Fields{
 		"stdout": string(wOut),
 		"stderr": string(wErr)}).WithError(err).Info("Connection test")
 
@@ -601,7 +604,7 @@ func (c *Container) CanConnectTo(ip, port, protocol string) *connectivity.Respon
 		var resp connectivity.Response
 		err := json.Unmarshal(m[1], &resp)
 		if err != nil {
-			log.WithError(err).WithField("output", string(wOut)).Panic("Failed to parse connection check response")
+			logCxt.WithError(err).WithField("output", string(wOut)).Panic("Failed to parse connection check response")
 		}
 		return &resp
 	}

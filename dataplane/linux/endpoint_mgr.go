@@ -1035,16 +1035,9 @@ func (m *endpointManager) configureInterface(name string) error {
 	log.WithField("ifaceName", name).Info(
 		"Applying /proc/sys configuration to interface.")
 	if m.ipVersion == 4 {
-		// Enable strict reverse-path filtering.  This prevents a workload from spoofing its
-		// IP address.  Non-privileged containers have additional anti-spoofing protection
-		// but VM workloads, for example, can easily spoof their IP.
-		err := m.writeProcSys(fmt.Sprintf("/proc/sys/net/ipv4/conf/%s/rp_filter", name), "1")
-		if err != nil {
-			return err
-		}
 		// Enable routing to localhost.  This is required to allow for NAT to the local
 		// host.
-		err = m.writeProcSys(fmt.Sprintf("/proc/sys/net/ipv4/conf/%s/route_localnet", name), "1")
+		err := m.writeProcSys(fmt.Sprintf("/proc/sys/net/ipv4/conf/%s/route_localnet", name), "1")
 		if err != nil {
 			return err
 		}

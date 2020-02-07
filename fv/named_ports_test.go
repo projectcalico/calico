@@ -55,6 +55,13 @@ var _ = Context("_BPF-SAFE_ UDP: Source named ports: with initialized Felix, etc
 	describeNamedPortTests(true, "udp")
 })
 
+var _ = Context("SCTP: Destination named ports: with initialized Felix, etcd datastore, 3 workloads, allow-all profile", func() {
+	describeNamedPortTests(false, "sctp")
+})
+var _ = Context("SCTP: Source named ports: with initialized Felix, etcd datastore, 3 workloads, allow-all profile", func() {
+	describeNamedPortTests(true, "sctp")
+})
+
 // describeNamedPortTests describes tests for either source or destination named ports.
 // If testSourcePorts is true then the direction of all the connectivity tests is flipped.
 // The set-up and policy generation is parametrised:

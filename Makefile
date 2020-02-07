@@ -1,38 +1,25 @@
 # This Makefile builds Felix and releases it in various forms:
 #
 #				   Go install
-#				      Glide
 #					|
-#					|
-#					|
-#		 +-------+	      v
+#		 +-------+		v
 #		 | Felix |   +---------------------+
 #		 |  Go   |   | calico/go-build     |
 #		 |  code |   +---------------------+
-#		 +-------+	 /
+#		 +-------+	  /
 #			\	 /
-#			 \       /
-#			  \     /
-#			  go build
-#			      \
-#			       \
-#				\
-#				 :
-#				 v
+#			 \      /
+#			 go build
+#			     |
+#			     v
 #		       +------------------+
 #		       | bin/calico-felix |
 #		       +------------------+
-#				 /
-#				/
 #			       /
 #		      .-------'
-#		     /
 #		    /
 #		   /
-#		  /
 #	    docker build
-#		  |
-#		  |
 #		  |
 #		  v
 #	   +--------------+
@@ -40,115 +27,52 @@
 #	   +--------------+
 #
 ###############################################################################
+PACKAGE_NAME?=github.com/projectcalico/felix
+GO_BUILD_VER?=v0.34-deb-cgo
 
-# Disable built-in rules
-.SUFFIXES:
-
-# Shortcut targets
-default: build
-
-## Build binary for current platform
-all: build
-
-## Run the tests for the current platform/architecture
-test: ut fv
+# We need to do static builds of test binaries (because we run them in scratch containers).
+# Use an old go-build for that.
+GO_BUILD_STATIC_VER=v0.34
+CALICO_BUILD_STATIC=calico/go-build:$(GO_BUILD_STATIC_VER)
 
 ###############################################################################
-# Both native and cross architecture builds are supported.
-# The target architecture is select by setting the ARCH variable.
-# When ARCH is undefined it is set to the detected host architecture.
-# When ARCH differs from the host architecture a crossbuild will be performed.
-ARCHES=$(patsubst docker-image/Dockerfile.%,%,$(wildcard docker-image/Dockerfile.*))
+# Download and include Makefile.common
+#   Additions to EXTRA_DOCKER_ARGS need to happen before the include since
+#   that variable is evaluated when we declare DOCKER_RUN and siblings.
+###############################################################################
+MAKE_BRANCH?=$(GO_BUILD_VER)
+MAKE_REPO?=https://raw.githubusercontent.com/projectcalico/go-build/$(MAKE_BRANCH)
 
-# BUILDARCH is the host architecture
-# ARCH is the target architecture
-# we need to keep track of them separately
-BUILDARCH ?= $(shell uname -m)
-BUILDOS ?= $(shell uname -s | tr A-Z a-z)
+Makefile.common: Makefile.common.$(MAKE_BRANCH)
+	cp "$<" "$@"
+Makefile.common.$(MAKE_BRANCH):
+	# Clean up any files downloaded from other branches so they don't accumulate.
+	rm -f Makefile.common.*
+	curl --fail $(MAKE_REPO)/Makefile.common -o "$@"
 
-# canonicalized names for host architecture
-ifeq ($(BUILDARCH),aarch64)
-	BUILDARCH=arm64
-endif
-ifeq ($(BUILDARCH),x86_64)
-	BUILDARCH=amd64
-endif
+# Build mounts for running in "local build" mode. This allows an easy build using local development code,
+# assuming that there is a local checkout of libcalico in the same directory as this repo.
+ifdef LOCAL_BUILD
+PHONY: set-up-local-build
+LOCAL_BUILD_DEP:=set-up-local-build
 
-# unless otherwise set, I am building for my own architecture, i.e. not cross-compiling
-ARCH ?= $(BUILDARCH)
+EXTRA_DOCKER_ARGS+=-v $(CURDIR)/../libcalico-go:/go/src/github.com/projectcalico/libcalico-go:rw \
+	-v $(CURDIR)/../typha:/go/src/github.com/projectcalico/typha:rw \
+	-v $(CURDIR)/../pod2daemon:/go/src/github.com/projectcalico/pod2daemon:rw
 
-# canonicalized names for target architecture
-ifeq ($(ARCH),aarch64)
-	override ARCH=arm64
-endif
-ifeq ($(ARCH),x86_64)
-	override ARCH=amd64
-endif
-
-# we want to be able to run the same recipe on multiple targets keyed on the image name
-# to do that, we would use the entire image name, e.g. calico/node:abcdefg, as the stem, or '%', in the target
-# however, make does **not** allow the usage of invalid filename characters - like / and : - in a stem, and thus errors out
-# to get around that, we "escape" those characters by converting all : to --- and all / to ___ , so that we can use them
-# in the target, we then unescape them back
-escapefs = $(subst :,---,$(subst /,___,$(1)))
-unescapefs = $(subst ---,:,$(subst ___,/,$(1)))
-
-# these macros create a list of valid architectures for pushing manifests
-space :=
-space +=
-comma := ,
-prefix_linux = $(addprefix linux/,$(strip $1))
-join_platforms = $(subst $(space),$(comma),$(call prefix_linux,$(strip $1)))
-
-# Targets used when cross building.
-.PHONY: native register
-native:
-ifneq ($(BUILDARCH),$(ARCH))
-	@echo "Target $(MAKECMDGOALS)" is not supported when cross building! && false
+$(LOCAL_BUILD_DEP):
+	$(DOCKER_RUN) $(CALICO_BUILD) go mod edit -replace=github.com/projectcalico/libcalico-go=../libcalico-go \
+		-replace=github.com/projectcalico/typha=../typha \
+		-replace=github.com/projectcalico/pod2daemon=../pod2daemon
 endif
 
-# Enable binfmt adding support for miscellaneous binary formats.
-# This is only needed when running non-native binaries.
-register:
-ifneq ($(BUILDARCH),$(ARCH))
-	docker run --rm --privileged multiarch/qemu-user-static:register || true
-endif
-
-# list of arches *not* to build when doing *-all
-#    until s390x works correctly
-EXCLUDEARCH ?= s390x
-VALIDARCHES = $(filter-out $(EXCLUDEARCH),$(ARCHES))
+include Makefile.common
 
 ###############################################################################
+
 BUILD_IMAGE?=calico/felix
 PUSH_IMAGES?=$(BUILD_IMAGE) quay.io/calico/felix
 RELEASE_IMAGES?=
-PACKAGE_NAME?=github.com/projectcalico/felix
-
-# If this is a release, also tag and push additional images.
-ifeq ($(RELEASE),true)
-PUSH_IMAGES+=$(RELEASE_IMAGES)
-endif
-
-# remove from the list to push to manifest any registries that do not support multi-arch
-EXCLUDE_MANIFEST_REGISTRIES ?= quay.io/
-PUSH_MANIFEST_IMAGES=$(PUSH_IMAGES:$(EXCLUDE_MANIFEST_REGISTRIES)%=)
-PUSH_NONMANIFEST_IMAGES=$(filter-out $(PUSH_MANIFEST_IMAGES),$(PUSH_IMAGES))
-
-# location of docker credentials to push manifests
-DOCKER_CONFIG ?= $(HOME)/.docker/config.json
-
-GO_BUILD_VER?=v0.25
-CGO_BUILD_VER?=v0.25-deb-cgo-4
-# For building, we use the go-build image for the *host* architecture, even if the target is different
-# the one for the host should contain all the necessary cross-compilation tools
-# we do not need to use the arch since go-build:v0.15 now is multi-arch manifest
-CALICO_BUILD=calico/go-build:$(GO_BUILD_VER)
-CALICO_BUILD_CGO=calico/go-build:$(CGO_BUILD_VER)
-ETCD_VERSION?=v3.3.7
-K8S_VERSION?=v1.14.1
-PROTOC_VER?=v0.1
-PROTOC_CONTAINER ?=calico/protoc:$(PROTOC_VER)-$(BUILDARCH)
 
 FV_ETCDIMAGE?=quay.io/coreos/etcd:$(ETCD_VERSION)-$(BUILDARCH)
 FV_K8SIMAGE?=gcr.io/google_containers/hyperkube-$(BUILDARCH):$(K8S_VERSION)
@@ -170,18 +94,6 @@ FV_NUM_BATCHES?=3
 FV_BATCHES_TO_RUN?=$(shell seq $(FV_NUM_BATCHES))
 FV_SLOW_SPEC_THRESH=90
 
-# Figure out version information.  To support builds from release tarballs, we default to
-# <unknown> if this isn't a git checkout.
-GIT_COMMIT:=$(shell git rev-parse HEAD || echo '<unknown>')
-BUILD_ID:=$(shell git rev-parse HEAD || uuidgen | sed 's/-//g')
-GIT_DESCRIPTION:=$(shell git describe --tags --dirty --always || echo '<unknown>')
-ifeq ($(LOCAL_BUILD),true)
-	GIT_DESCRIPTION = $(shell git describe --tags --dirty --always || echo '<unknown>')-dev-build
-endif
-
-# Calculate a timestamp for any build artefacts.
-DATE:=$(shell date -u +'%FT%T%z')
-
 # Linker flags for building Felix.
 #
 # We use -X to insert the version information into the placeholder variables
@@ -189,7 +101,7 @@ DATE:=$(shell date -u +'%FT%T%z')
 #
 # We use -B to insert a build ID note into the executable, without which, the
 # RPM build tools complain.
-LDFLAGS:=-ldflags "\
+LDFLAGS=-ldflags "\
 	-X $(PACKAGE_NAME)/buildinfo.GitVersion=$(GIT_DESCRIPTION) \
 	-X $(PACKAGE_NAME)/buildinfo.BuildDate=$(DATE) \
 	-X $(PACKAGE_NAME)/buildinfo.GitRevision=$(GIT_COMMIT) \
@@ -197,67 +109,11 @@ LDFLAGS:=-ldflags "\
 
 # List of Go files that are generated by the build process.  Builds should
 # depend on these, clean removes them.
-GENERATED_FILES:=proto/felixbackend.pb.go bpf/asm/opcode_string.go
+GENERATED_FILES=proto/felixbackend.pb.go bpf/asm/opcode_string.go
 
 # All Felix go files.
 SRC_FILES:=$(shell find . $(foreach dir,$(NON_FELIX_DIRS),-path ./$(dir) -prune -o) -type f -name '*.go' -print) $(GENERATED_FILES)
-
-# If local build is set, then always build the binary since we might not
-# detect when another local repository has been modified.
-ifeq ($(LOCAL_BUILD),true)
-.PHONY: $(SRC_FILES)
-endif
-
-# Figure out the users UID/GID.  These are needed to run docker containers
-# as the current user and ensure that files built inside containers are
-# owned by the current user.
-LOCAL_USER_ID:=$(shell id -u)
-LOCAL_GROUP_ID:=$(shell id -g)
-
-# Allow the ssh auth sock to be mapped into the build container.
-ifdef SSH_AUTH_SOCK
-	EXTRA_DOCKER_ARGS += -v $(SSH_AUTH_SOCK):/ssh-agent --env SSH_AUTH_SOCK=/ssh-agent
-endif
-
-# Volume-mount gopath into the build container to cache go module's packages. If the environment is using multiple
-# comma-separated directories for gopath, use the first one, as that is the default one used by go modules.
-ifneq ($(GOPATH),)
-	# If the environment is using multiple comma-separated directories for gopath, use the first one, as that
-	# is the default one used by go modules.
-	GOMOD_CACHE = $(shell echo $(GOPATH) | cut -d':' -f1)/pkg/mod
-else
-	# If gopath is empty, default to $(HOME)/go.
-	GOMOD_CACHE = $(HOME)/go/pkg/mod
-endif
-
-EXTRA_DOCKER_ARGS	+= -e GO111MODULE=on -v $(GOMOD_CACHE):/go/pkg/mod:rw
-
-# Build mounts for running in "local build" mode. This allows an easy build using local development code,
-# assuming that there is a local checkout of libcalico, typha and pod2daemon in the same directory as this repo.
-ifdef LOCAL_BUILD
-PHONY: set-up-local-build
-LOCAL_BUILD_DEP:=set-up-local-build
-EXTRA_DOCKER_ARGS+=-v $(CURDIR)/../libcalico-go:/go/src/github.com/projectcalico/libcalico-go:rw
-EXTRA_DOCKER_ARGS+=-v $(CURDIR)/../typha:/go/src/github.com/projectcalico/typha:rw
-EXTRA_DOCKER_ARGS+=-v $(CURDIR)/../pod2daemon:/go/src/github.com/projectcalico/pod2daemon:rw
-set-up-local-build:
-	$(DOCKER_RUN) $(CALICO_BUILD) go mod edit -replace=github.com/projectcalico/libcalico-go=../libcalico-go
-	$(DOCKER_RUN) $(CALICO_BUILD) go mod edit -replace=github.com/projectcalico/typha=../typha
-	$(DOCKER_RUN) $(CALICO_BUILD) go mod edit -replace=github.com/projectcalico/pod2daemon=../pod2daemon
-endif
-
-DOCKER_RUN := mkdir -p .go-pkg-cache $(GOMOD_CACHE) && \
-	docker run --rm \
-		--net=host \
-		--init \
-		$(EXTRA_DOCKER_ARGS) \
-		-e LOCAL_USER_ID=$(LOCAL_USER_ID) \
-		-e GOCACHE=/go-cache \
-		-e GOARCH=$(ARCH) \
-		-e GOPATH=/go \
-		-v $(CURDIR):/go/src/$(PACKAGE_NAME):rw \
-		-v $(CURDIR)/.go-pkg-cache:/go-cache:rw \
-		-w /go/src/$(PACKAGE_NAME)
+EXTRA_DOCKER_ARGS+=--init -v $(CURDIR)/../pod2daemon:/go/src/github.com/projectcalico/pod2daemon:rw
 
 .PHONY: clean
 clean:
@@ -277,55 +133,9 @@ clean:
 	find . -name "*.pyc" -type f -delete
 
 ###############################################################################
-# Updating pins
+# Automated pin updates
 ###############################################################################
-PIN_BRANCH?=$(shell git rev-parse --abbrev-ref HEAD)
-
-define get_remote_version
-	$(shell git ls-remote http://$(1) $(2) 2>/dev/null | cut -f 1)
-endef
-
-# update_pin updates the given package's version to the latest available in the specified repo and branch.
-# $(1) should be the name of the package, $(2) and $(3) the repository and branch from which to update it.
-define update_pin
-	$(eval new_ver := $(call get_remote_version,$(2),$(3)))
-
-	$(DOCKER_RUN) $(CALICO_BUILD) sh -c '\
-		if [[ ! -z "$(new_ver)" ]]; then \
-			go get $(1)@$(new_ver); \
-			go mod download; \
-		fi'
-endef
-
-TYPHA_BRANCH?=$(PIN_BRANCH)
-TYPHA_REPO?=github.com/projectcalico/typha
-LIBCALICO_BRANCH?=$(PIN_BRANCH)
-LIBCALICO_REPO?=github.com/projectcalico/libcalico-go
-
-update-typha-pin:
-	$(call update_pin,github.com/projectcalico/typha,$(TYPHA_REPO),$(TYPHA_BRANCH))
-
-update-libcalico-pin:
-	$(call update_pin,github.com/projectcalico/libcalico-go,$(LIBCALICO_REPO),$(LIBCALICO_BRANCH))
-
-git-status:
-	git status --porcelain
-
-git-config:
-ifdef CONFIRM
-	git config --global user.name "Semaphore Automatic Update"
-	git config --global user.email "marvin@projectcalico.io"
-endif
-
-git-commit:
-	git diff --quiet HEAD || git commit -m "Semaphore Automatic Update" go.mod go.sum
-
-git-push:
-	git push
-
 update-pins: update-libcalico-pin update-typha-pin
-
-commit-pin-updates: update-pins git-status ci git-config git-commit git-push
 
 ###############################################################################
 # Building the binary
@@ -342,7 +152,7 @@ bin/calico-felix-$(ARCH): $(SRC_FILES) $(LOCAL_BUILD_DEP)
 	@echo Building felix for $(ARCH) on $(BUILDARCH)
 	mkdir -p bin
 	if [ "$(SEMAPHORE)" != "true" -o ! -e $@ ] ; then \
-	  $(DOCKER_RUN) $(CALICO_BUILD_CGO) \
+	  $(DOCKER_GO_BUILD) \
 	     sh -c 'go build -v -i -o $@ -v $(BUILD_FLAGS) $(LDFLAGS) "$(PACKAGE_NAME)/cmd/calico-felix"'; \
 	fi
 
@@ -362,20 +172,20 @@ BPF_XDP_INC_FILES :=
 
 ifndef LOCAL
 xdp bpf/bin/xdp_filter.o:
-	$(DOCKER_RUN) $(CALICO_BUILD_CGO) \
+	$(DOCKER_GO_BUILD) \
 	              /bin/sh -c "make -C bpf/xdp all"
 	mv bpf/xdp/filter.o bpf/bin/xdp_filter.o
 
 xdp-clean:
-	$(DOCKER_RUN) $(CALICO_BUILD_CGO) \
+	$(DOCKER_GO_BUILD) \
 	              /bin/sh -c "make -C bpf/xdp clean"
 
 bpf-cgroup bpf/cgroup/connect_balance.o:
-	$(DOCKER_RUN) $(CALICO_BUILD_CGO) \
+	$(DOCKER_GO_BUILD) \
 	              /bin/sh -c "make -C bpf/cgroup all"
 
 bpf-cgroup-clean:
-	$(DOCKER_RUN) $(CALICO_BUILD_CGO) \
+	$(DOCKER_GO_BUILD) \
 	              /bin/sh -c "make -C bpf/cgroup clean"
 else
 xdp bpf/bin/xdp_filter.o:
@@ -389,7 +199,7 @@ endif
 BPF_SOCKMAP_INC_FILES := bpf/sockmap/sockops.h
 
 bpf/bin/sockops.o: bpf/sockmap/sockops.c $(BPF_INC_FILES) $(BPF_SOCKMAP_INC_FILES)
-	$(DOCKER_RUN) $(CALICO_BUILD_CGO) \
+	$(DOCKER_GO_BUILD) \
 		      /bin/sh -c \
 		      "clang \
 			      -D__KERNEL__ \
@@ -413,7 +223,7 @@ bpf/bin/sockops.o: bpf/sockmap/sockops.c $(BPF_INC_FILES) $(BPF_SOCKMAP_INC_FILE
 		       rm -f /go/src/$(PACKAGE_NAME)/bpf/sockmap/sockops.ll"
 
 bpf/bin/redir.o: bpf/sockmap/redir.c $(BPF_INC_FILES) $(BPF_SOCKMAP_INC_FILES)
-	$(DOCKER_RUN) $(CALICO_BUILD_CGO) \
+	$(DOCKER_GO_BUILD) \
 		      /bin/sh -c \
 		      "clang \
 			      -D__KERNEL__ \
@@ -437,7 +247,7 @@ bpf/bin/redir.o: bpf/sockmap/redir.c $(BPF_INC_FILES) $(BPF_SOCKMAP_INC_FILES)
 		       rm -f /go/src/$(PACKAGE_NAME)/bpf/sockmap/redir.ll"
 
 bpf/asm/opcode_string.go: bpf/asm/asm.go
-	$(DOCKER_RUN) $(CALICO_BUILD_CGO) go generate ./bpf/asm/
+	$(DOCKER_GO_BUILD) go generate ./bpf/asm/
 
 ###############################################################################
 # Building the image
@@ -451,16 +261,20 @@ image-all: $(addprefix sub-image-,$(VALIDARCHES))
 sub-image-%:
 	$(MAKE) image ARCH=$*
 
-bin/compile-bpf: $(GENERATED_FILES) go.mod $(shell find cmd/compile-bpf bpf/nat bpf/tc config logutils proto -type f -name '*.go' -print | grep -v '_test\.go' )
-	$(DOCKER_RUN) $(CALICO_BUILD_CGO) go build -o $@ ./cmd/compile-bpf
+bin/compile-bpf: $(GENERATED_FILES) Makefile.common go.mod $(shell find cmd/compile-bpf bpf/nat bpf/tc config logutils proto -type f -name '*.go' -print | grep -v '_test\.go' )
+	$(DOCKER_GO_BUILD) go build -o $@ ./cmd/compile-bpf
 
-bin/bpf-progs.inc: bin/compile-bpf
+bin/bpf-progs.inc: bin/compile-bpf Makefile.common
 	bin/compile-bpf gen-makefile-inc > $@.tmp
 	mv $@.tmp $@
 
 # bpf-progs.inc sets up the BPF_PROGS variable.  The target above will cause it to be auto-updated after switching
-# branch.
+# branch.  Building bin/bpf-progs.inc requires the common makefile to have been included; this ifneq test makes sure
+# it only gets built on the second pass of the makefile, after the common makefile has already been included.
+# Without it, make tries to build both makefiles before importing either, which fails.
+ifneq ($(DOCKER_GO_BUILD),)
 include bin/bpf-progs.inc
+endif
 
 # BPF programs built by the makefile.
 MAKEFILE_BPF_PROGS:=\
@@ -468,10 +282,10 @@ MAKEFILE_BPF_PROGS:=\
 	bpf/bin/redir.o \
 	bpf/bin/sockops.o
 
-ALL_BPF_PROGS:=$(BPF_PROGS) $(MAKEFILE_BPF_PROGS)
+ALL_BPF_PROGS=$(BPF_PROGS) $(MAKEFILE_BPF_PROGS)
 
 $(BPF_PROGS): $(BPF_C_FILES) $(BPF_INC_FILES) bin/compile-bpf
-	$(DOCKER_RUN) $(CALICO_BUILD_CGO) bin/compile-bpf
+	$(DOCKER_GO_BUILD) bin/compile-bpf
 
 build-bpf: $(ALL_BPF_PROGS)
 
@@ -501,6 +315,24 @@ ifeq ($(ARCH),amd64)
 	docker tag $(BUILD_IMAGE):latest-$(ARCH) $(BUILD_IMAGE):latest
 endif
 
+###############################################################################
+# Image build/push
+###############################################################################
+# we want to be able to run the same recipe on multiple targets keyed on the image name
+# to do that, we would use the entire image name, e.g. calico/node:abcdefg, as the stem, or '%', in the target
+# however, make does **not** allow the usage of invalid filename characters - like / and : - in a stem, and thus errors out
+# to get around that, we "escape" those characters by converting all : to --- and all / to ___ , so that we can use them
+# in the target, we then unescape them back
+escapefs = $(subst :,---,$(subst /,___,$(1)))
+unescapefs = $(subst ---,:,$(subst ___,/,$(1)))
+
+# these macros create a list of valid architectures for pushing manifests
+space :=
+space +=
+comma := ,
+prefix_linux = $(addprefix linux/,$(strip $1))
+join_platforms = $(subst $(space),$(comma),$(call prefix_linux,$(strip $1)))
+
 imagetag:
 ifndef IMAGETAG
 	$(error IMAGETAG is undefined - run using make <target> IMAGETAG=X.Y.Z)
@@ -520,11 +352,12 @@ sub-push-%:
 ## push multi-arch manifest where supported
 push-manifests: imagetag  $(addprefix sub-manifest-,$(call escapefs,$(PUSH_MANIFEST_IMAGES)))
 sub-manifest-%:
-	# Docker login to hub.docker.com required before running this target as we are using $(DOCKER_CONFIG) holds the docker login credentials
-	# path to credentials based on manifest-tool's requirements here https://github.com/estesp/manifest-tool#sample-usage
+	# Docker login to hub.docker.com required before running this target as we are using
+	# $(DOCKER_CONFIG) holds the docker login credentials path to credentials based on
+	# manifest-tool's requirements here https://github.com/estesp/manifest-tool#sample-usage
 	docker run -t --entrypoint /bin/sh -v $(DOCKER_CONFIG):/root/.docker/config.json $(CALICO_BUILD) -c "/usr/bin/manifest-tool push from-args --platforms $(call join_platforms,$(VALIDARCHES)) --template $(call unescapefs,$*:$(IMAGETAG))-ARCH --target $(call unescapefs,$*:$(IMAGETAG))"
 
-## push default amd64 arch where multi-arch manifest is not supported
+ ## push default amd64 arch where multi-arch manifest is not supported
 push-non-manifests: imagetag $(addprefix sub-non-manifest-,$(call escapefs,$(PUSH_NONMANIFEST_IMAGES)))
 sub-non-manifest-%:
 ifeq ($(ARCH),amd64)
@@ -555,24 +388,7 @@ sub-tag-images-%:
 ###############################################################################
 # Static checks
 ###############################################################################
-.PHONY: static-checks
-static-checks:
-	$(MAKE) check-typha-pins golangci-lint
-
-LINT_ARGS := --deadline 5m --max-issues-per-linter 0 --max-same-issues 0 --skip-dirs=docker-image
-ifneq ($(CI),)
-	# govet uses too much memory for CI
-	LINT_ARGS += --disable govet
-endif
-
-.PHONY: golangci-lint
-golangci-lint: $(GENERATED_FILES)
-	$(DOCKER_RUN) -e GOGC=10 $(CALICO_BUILD_CGO) golangci-lint run $(LINT_ARGS)
-
-# Run go fmt on all our go files.
-.PHONY: go-fmt goimports fix
-fix go-fmt goimports:
-	$(DOCKER_RUN) $(CALICO_BUILD) sh -c 'find . -iname "*.go" ! -wholename "./vendor/*" | xargs goimports -w -local github.com/projectcalico/'
+LOCAL_CHECKS = check-typha-pins
 
 LIBCALICO_FELIX?=$(shell $(DOCKER_RUN) $(CALICO_BUILD) go list -m -f "{{.Version}}" github.com/projectcalico/libcalico-go)
 TYPHA_GOMOD?=$(shell $(DOCKER_RUN) $(CALICO_BUILD) go list -m -f "{{.GoMod}}" github.com/projectcalico/typha)
@@ -592,17 +408,6 @@ check-typha-pins:
 	     false; \
 	fi
 
-.PHONY: pre-commit
-pre-commit:
-	$(DOCKER_RUN) $(CALICO_BUILD) git-hooks/pre-commit-in-container
-
-.PHONY: install-git-hooks
-install-git-hooks:
-	./install-git-hooks
-
-foss-checks:
-	$(DOCKER_RUN) -e FOSSA_API_KEY=$(FOSSA_API_KEY) $(CALICO_BUILD) /usr/local/bin/fossa
-
 ###############################################################################
 # Unit Tests
 ###############################################################################
@@ -612,7 +417,7 @@ UT_PACKAGES_TO_SKIP?=fv,k8sfv,bpf/ut
 .PHONY: ut
 ut combined.coverprofile: $(SRC_FILES) $(ALL_BPF_PROGS)
 	@echo Running Go UTs.
-	$(DOCKER_RUN) $(CALICO_BUILD_CGO) ./utils/run-coverage -skipPackage $(UT_PACKAGES_TO_SKIP) $(GINKGO_ARGS)
+	$(DOCKER_GO_BUILD) ./utils/run-coverage -skipPackage $(UT_PACKAGES_TO_SKIP) $(GINKGO_ARGS)
 
 ###############################################################################
 # FV Tests
@@ -620,7 +425,7 @@ ut combined.coverprofile: $(SRC_FILES) $(ALL_BPF_PROGS)
 fv/fv.test: $(SRC_FILES)
 	# We pre-build the FV test binaries so that we can run them
 	# outside a container and allow them to interact with docker.
-	$(DOCKER_RUN) $(CALICO_BUILD_CGO) go test $(BUILD_FLAGS) ./$(shell dirname $@) -c --tags fvtests -o $@
+	$(DOCKER_GO_BUILD) go test $(BUILD_FLAGS) ./$(shell dirname $@) -c --tags fvtests -o $@
 
 REMOTE_DEPS=fv/infrastructure/crds.yaml
 
@@ -744,33 +549,34 @@ stop-grafana:
 bin/calico-bpf: $(SRC_FILES) $(LOCAL_BUILD_DEP)
 	@echo Building calico-bpf...
 	mkdir -p bin
-	$(DOCKER_RUN) $(CALICO_BUILD_CGO) \
+	$(DOCKER_GO_BUILD) \
 	    sh -c 'go build -v -i -o $@ -v $(BUILD_FLAGS) $(LDFLAGS) "$(PACKAGE_NAME)/cmd/calico-bpf"'
 
 bin/iptables-locker: $(LOCAL_BUILD_DEP) go.mod $(shell find iptables -type f -name '*.go' -print)
 	@echo Building iptables-locker...
 	mkdir -p bin
-	$(DOCKER_RUN) $(CALICO_BUILD) \
+	$(DOCKER_RUN) $(CALICO_BUILD_STATIC) \
 	    sh -c 'go build -v -i -o $@ -v $(BUILD_FLAGS) $(LDFLAGS) "$(PACKAGE_NAME)/fv/iptables-locker"'
 
 bin/test-workload: $(LOCAL_BUILD_DEP) go.mod fv/cgroup/cgroup.go fv/utils/utils.go fv/connectivity/*.go fv/test-workload/*.go
 	@echo Building test-workload...
 	mkdir -p bin
-	$(DOCKER_RUN) $(CALICO_BUILD) \
+	$(DOCKER_RUN) $(CALICO_BUILD_STATIC) \
 	    sh -c 'go build -v -i -o $@ -v $(BUILD_FLAGS) $(LDFLAGS) "$(PACKAGE_NAME)/fv/test-workload"'
 
 bin/test-connection: $(LOCAL_BUILD_DEP) go.mod fv/cgroup/cgroup.go fv/utils/utils.go fv/connectivity/*.go fv/test-connection/*.go
 	@echo Building test-connection...
 	mkdir -p bin
-	$(DOCKER_RUN) $(CALICO_BUILD) \
+	$(DOCKER_RUN) $(CALICO_BUILD_STATIC) \
 	    sh -c 'go build -v -i -o $@ -v $(BUILD_FLAGS) $(LDFLAGS) "$(PACKAGE_NAME)/fv/test-connection"'
+
+st:
+	@echo "No STs available"
 
 ###############################################################################
 # CI/CD
 ###############################################################################
-.PHONY: ci cd mod-download
-mod-download:
-	-$(DOCKER_RUN) $(CALICO_BUILD) go mod download
+.PHONY: ci cd
 
 ci: mod-download image-all ut
 ifeq (,$(filter fv, $(EXCEPT)))
@@ -896,7 +702,7 @@ release-publish-latest: release-prereqs
 	# Disabling for now since no-one is consuming the images.
 	# $(MAKE) push-all IMAGETAG=latest
 
-# release-prereqs checks that the environment is configured properly to create a release.
+## release-prereqs checks that the environment is configured properly to create a release.
 release-prereqs:
 ifndef VERSION
 	$(error VERSION is undefined - run using make release VERSION=vX.Y.Z)
@@ -917,32 +723,32 @@ endif
 .PHONY: ut-no-cover
 ut-no-cover: $(SRC_FILES)
 	@echo Running Go UTs without coverage.
-	$(DOCKER_RUN) $(CALICO_BUILD_CGO) ginkgo -r -skipPackage $(UT_PACKAGES_TO_SKIP) $(GINKGO_ARGS)
+	$(DOCKER_GO_BUILD) ginkgo -r -skipPackage $(UT_PACKAGES_TO_SKIP) $(GINKGO_ARGS)
 
 .PHONY: ut-watch
 ut-watch: $(SRC_FILES)
 	@echo Watching go UTs for changes...
-	$(DOCKER_RUN) $(CALICO_BUILD_CGO) ginkgo watch -r -skipPackage $(UT_PACKAGES_TO_SKIP) $(GINKGO_ARGS)
+	$(DOCKER_GO_BUILD) ginkgo watch -r -skipPackage $(UT_PACKAGES_TO_SKIP) $(GINKGO_ARGS)
 
 .PHONY: bin/bpf.test
 bin/bpf.test: $(GENERATED_FILES) $(shell find bpf/ -name '*.go')
-	$(DOCKER_RUN) $(CALICO_BUILD_CGO) go test $(BUILD_FLAGS) ./bpf/ -c -o $@
+	$(DOCKER_GO_BUILD) go test $(BUILD_FLAGS) ./bpf/ -c -o $@
 
 .PHONY: bin/bpf.test
 bin/bpf_ut.test: $(GENERATED_FILES) $(shell find bpf/ -name '*.go')
-	$(DOCKER_RUN) $(CALICO_BUILD_CGO) go test $(BUILD_FLAGS) ./bpf/ut -c -o $@
+	$(DOCKER_GO_BUILD) go test $(BUILD_FLAGS) ./bpf/ut -c -o $@
 
 # Build debug version of bpf.test for use with the delve debugger.
 .PHONY: bin/bpf_debug.test
 bin/bpf_debug.test: $(GENERATED_FILES)
-	$(DOCKER_RUN) $(CALICO_BUILD_CGO) go test $(BUILD_FLAGS) ./bpf/ut -c -gcflags="-N -l" -o $@
+	$(DOCKER_GO_BUILD) go test $(BUILD_FLAGS) ./bpf/ut -c -gcflags="-N -l" -o $@
 
 .PHONY: bpf-ut
 bpf-ut: bin/bpf_ut.test bin/bpf.test $(ALL_BPF_PROGS)
 	$(DOCKER_RUN) \
 		--privileged \
 		-e RUN_AS_ROOT=true \
-		$(CALICO_BUILD_CGO) sh -c ' \
+		$(CALICO_BUILD) sh -c ' \
 		mount bpffs /sys/fs/bpf -t bpf && \
 		cd /go/src/$(PACKAGE_NAME)/bpf/ && \
 		BPF_FORCE_REAL_LIB=true ../bin/bpf.test -test.v -test.run "$(FOCUS)"'
@@ -950,12 +756,12 @@ bpf-ut: bin/bpf_ut.test bin/bpf.test $(ALL_BPF_PROGS)
 		--privileged \
 		-e RUN_AS_ROOT=true \
 		-v `pwd`:/code \
-		$(CALICO_BUILD_CGO) sh -c ' \
+		$(CALICO_BUILD) sh -c ' \
 		mount bpffs /sys/fs/bpf -t bpf && \
 		cd /go/src/$(PACKAGE_NAME)/bpf/ut && \
 		../../bin/bpf_ut.test -test.v -test.run "$(FOCUS)"'
 
-# Launch a browser with Go coverage stats for the whole project.
+## Launch a browser with Go coverage stats for the whole project.
 .PHONY: cover-browser
 cover-browser: combined.coverprofile
 	go tool cover -html="combined.coverprofile"
@@ -985,67 +791,11 @@ bin/calico-felix.transfer-url: bin/calico-felix
 patch-script: bin/calico-felix.transfer-url
 	$(DOCKER_RUN) $(CALICO_BUILD) bash -c 'utils/make-patch-script.sh $$(cat bin/calico-felix.transfer-url)'
 
-# Generate a diagram of Felix's internal calculation graph.
+## Generate a diagram of Felix's internal calculation graph.
 docs/calc.pdf: docs/calc.dot
 	cd docs/ && dot -Tpdf calc.dot -o calc.pdf
 
-# Install or update the tools used by the build
+## Install or update the tools used by the build
 .PHONY: update-tools
 update-tools:
 	go get -u github.com/onsi/ginkgo/ginkgo
-
-help:
-	@echo "Felix Makefile"
-	@echo
-	@echo "Dependencies: docker 1.12+; go 1.7+"
-	@echo
-	@echo "Note: initial builds can be slow because they generate docker-based"
-	@echo "build environments."
-	@echo
-	@echo "For any target, set ARCH=<target> to build for a given target."
-	@echo "For example, to build for arm64:"
-	@echo
-	@echo "  make build ARCH=arm64"
-	@echo
-	@echo "To generate a docker image for arm64:"
-	@echo
-	@echo "  make image ARCH=arm64"
-	@echo
-	@echo "By default, builds for the architecture on which it is running. Cross-building is supported"
-	@echo "only on amd64, i.e. building for other architectures when running on amd64."
-	@echo "Supported target ARCH options:       $(ARCHES)"
-	@echo
-	@echo "Initial set-up:"
-	@echo
-	@echo "  make update-tools  Update/install the go build dependencies."
-	@echo
-	@echo "Builds:"
-	@echo
-	@echo "  make all		    Build all the binary packages."
-	@echo "  make deb		    Build debs in ./dist."
-	@echo "  make rpm		    Build rpms in ./dist."
-	@echo "  make build		  Build binary."
-	@echo "  make image		  Build docker image."
-	@echo "  make build-all	      Build binary for all supported architectures."
-	@echo "  make image-all	      Build docker images for all supported architectures."
-	@echo "  make push IMAGETAG=tag      Deploy docker image with the tag IMAGETAG for the given ARCH, e.g. $(BUILD_IMAGE)<IMAGETAG>-<ARCH>."
-	@echo "  make push-all IMAGETAG=tag  Deploy docker images with the tag IMAGETAG all supported architectures"
-	@echo
-	@echo "Tests:"
-	@echo
-	@echo "  make ut		Run UTs."
-	@echo "  make go-cover-browser  Display go code coverage in browser."
-	@echo
-	@echo "Maintenance:"
-	@echo
-	@echo "  make go-fmt	Format our go code."
-	@echo "  make clean	 Remove binary files."
-	@echo "-----------------------------------------"
-	@echo "ARCH (target):	  $(ARCH)"
-	@echo "BUILDARCH (host):       $(BUILDARCH)"
-	@echo "CALICO_BUILD:	   $(CALICO_BUILD)"
-	@echo "PROTOC_CONTAINER:       $(PROTOC_CONTAINER)"
-	@echo "FV_ETCDIMAGE:	   $(FV_ETCDIMAGE)"
-	@echo "FV_K8SIMAGE:	    $(FV_K8SIMAGE)"
-	@echo "FV_TYPHAIMAGE:	  $(FV_TYPHAIMAGE)"
-	@echo "-----------------------------------------"

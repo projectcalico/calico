@@ -160,6 +160,15 @@ func parsedRuleToProtoRule(in *ParsedRule) *proto.Rule {
 		}
 	}
 
+	if in.Metadata != nil {
+		if in.Metadata.Annotations != nil {
+			out.Metadata = &proto.RuleMetadata{Annotations: make(map[string]string)}
+			for k, v := range in.Metadata.Annotations {
+				out.Metadata.Annotations[k] = v
+			}
+		}
+	}
+
 	// Fill in the ICMP fields.  We can't follow the pattern and make a
 	// convertICMP() function because we can't name the return type of the
 	// function (it's private to the protobuf package).
