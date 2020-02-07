@@ -169,30 +169,26 @@ protobuf proto/felixbackend.pb.go: proto/felixbackend.proto
 		      --gogofaster_out=plugins=grpc:. \
 		      felixbackend.proto
 
-BPF_APACHE_C_FILES:=$(shell find bpf-apache -name '*.c')
-BPF_APACHE_H_FILES:=$(shell find bpf-apache -name '*.h')
-BPF_APACHE_O_FILES:=$(addprefix bpf-apache/bin/,$(notdir $(BPF_APACHE_C_FILES:.c=.o)))
-
-# We pre-build lots of different variants of the
-BPF_GPL_C_FILES:=$(shell find bpf-gpl -name '*.c' | grep -v /ut/)
-BPF_GPL_H_FILES:=$(shell find bpf-gpl -name '*.h' | grep -v /ut/)
+# We pre-build lots of different variants of the TC programs, defer to the script.
 BPF_GPL_O_FILES:=$(addprefix bpf-gpl/,$(shell bpf-gpl/list-objs))
 
-# There's a one-to-one mapping from UT C files to objects.
-BPF_GPL_UT_C_FILES:=$(shell find bpf-gpl/ut -name '*.c')
-BPF_GPL_UT_H_FILES:=$(shell find bpf-gpl/ut -name '*.h')
+# There's a one-to-one mapping from UT C files to objects and the same for the apache programs..
 BPF_GPL_UT_O_FILES:=$(BPF_GPL_UT_C_FILES:.c=.o) $(addprefix bpf-gpl/,$(shell bpf-gpl/list-ut-objs))
+BPF_APACHE_O_FILES:=$(addprefix bpf-apache/bin/,$(notdir $(BPF_APACHE_C_FILES:.c=.o)))
 
 ALL_BPF_PROGS=$(BPF_GPL_O_FILES) $(BPF_APACHE_O_FILES)
 
-build-bpf: $(ALL_BPF_PROGS) $(BPF_GPL_UT_O_FILES)
+# Mark the BPF programs phony so we'll always defer to their own makefile.  This is OK as long as
+# we're only depending on the BPF programs from other phony targets.  (Otherwise, we'd do
+# unnecessary rebuilds of anything that depends on the BPF prgrams.)
+.PHONY: build-bpf clean-bpf
+build-bpf:
+	$(DOCKER_GO_BUILD) sh -c "make -j -C bpf-apache all && \
+	                          make -j -C bpf-gpl all ut-objs"
 
-.PHONY: xdp build-bpf
-$(BPF_APACHE_O_FILES) xdp: $(BPF_APACHE_C_FILES) $(BPF_APACHE_H_FILES) bpf-apache/Makefile
-	$(DOCKER_GO_BUILD) make -j 16 -C bpf-apache all
-
-$(BPF_GPL_O_FILES) $(BPF_GPL_UT_O_FILES): $(BPF_GPL_C_FILES) $(BPF_GPL_H_FILES) $(BPF_GPL_UT_H_FILES)
-	$(DOCKER_GO_BUILD) make -j 16 -C bpf-gpl all ut-objs
+clean-bpf:
+	$(DOCKER_GO_BUILD) sh -c "make -j -C bpf-apache clean && \
+	                          make -j -C bpf-gpl clean"
 
 bpf/asm/opcode_string.go: bpf/asm/asm.go
 	$(DOCKER_GO_BUILD) go generate ./bpf/asm/
@@ -213,7 +209,7 @@ image: $(BUILD_IMAGE)
 $(BUILD_IMAGE): $(BUILD_IMAGE)-$(ARCH)
 $(BUILD_IMAGE)-$(ARCH): bin/calico-felix-$(ARCH) \
                         bin/calico-bpf \
-                        $(ALL_BPF_PROGS) \
+                        build-bpf \
                         docker-image/calico-felix-wrapper \
                         docker-image/felix.cfg \
                         docker-image/Dockerfile* \
@@ -335,7 +331,7 @@ check-typha-pins:
 UT_PACKAGES_TO_SKIP?=fv,k8sfv,bpf/ut
 
 .PHONY: ut
-ut combined.coverprofile: $(SRC_FILES) $(ALL_BPF_PROGS)
+ut combined.coverprofile: $(SRC_FILES) build-bpf
 	@echo Running Go UTs.
 	$(DOCKER_GO_BUILD) ./utils/run-coverage -skipPackage $(UT_PACKAGES_TO_SKIP) $(GINKGO_ARGS)
 
@@ -660,11 +656,11 @@ bin/bpf_ut.test: $(GENERATED_FILES) $(shell find bpf/ -name '*.go')
 
 # Build debug version of bpf.test for use with the delve debugger.
 .PHONY: bin/bpf_debug.test
-bin/bpf_debug.test: $(GENERATED_FILES)
+bin/bpf_debug.test: $(GENERATED_FILES) $(shell find bpf/ -name '*.go')
 	$(DOCKER_GO_BUILD_CGO) go test $(BUILD_FLAGS) ./bpf/ut -c -gcflags="-N -l" -o $@
 
 .PHONY: ut-bpf
-ut-bpf: bin/bpf_ut.test bin/bpf.test $(ALL_BPF_PROGS) $(BPF_GPL_UT_O_FILES)
+ut-bpf: bin/bpf_ut.test bin/bpf.test build-bpf
 	$(DOCKER_RUN) \
 		--privileged \
 		-e RUN_AS_ROOT=true \
