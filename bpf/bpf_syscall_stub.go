@@ -17,8 +17,6 @@
 package bpf
 
 import (
-	"sync"
-
 	"github.com/projectcalico/felix/bpf/asm"
 )
 
@@ -38,8 +36,6 @@ func LoadBPFProgramFromInsns(insns asm.Insns, license string) (ProgFD, error) {
 	panic("BPF syscall stub")
 }
 
-var memLockOnce sync.Once
-
 func RunBPFProgram(fd ProgFD, dataIn []byte, repeat int) (pr ProgResult, err error) {
 	panic("BPF syscall stub")
 }
@@ -53,10 +49,6 @@ func UpdateMapEntry(mapFD MapFD, k, v []byte) error {
 }
 
 func GetMapEntry(mapFD MapFD, k []byte, valueSize int) ([]byte, error) {
-	panic("BPF syscall stub")
-}
-
-func checkMapIfDebug(mapFD MapFD, keySize, valueSize int) error {
 	panic("BPF syscall stub")
 }
 

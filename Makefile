@@ -28,12 +28,7 @@
 #
 ###############################################################################
 PACKAGE_NAME?=github.com/projectcalico/felix
-GO_BUILD_VER?=v0.34-deb-cgo
-
-# We need to do static builds of test binaries (because we run them in scratch containers).
-# Use an old go-build for that.
-GO_BUILD_STATIC_VER=v0.34
-CALICO_BUILD_STATIC=calico/go-build:$(GO_BUILD_STATIC_VER)
+GO_BUILD_VER?=v0.35-deb-cgo
 
 ###############################################################################
 # Download and include Makefile.common
@@ -61,7 +56,7 @@ EXTRA_DOCKER_ARGS+=-v $(CURDIR)/../libcalico-go:/go/src/github.com/projectcalico
 	-v $(CURDIR)/../pod2daemon:/go/src/github.com/projectcalico/pod2daemon:rw
 
 $(LOCAL_BUILD_DEP):
-	$(DOCKER_RUN) $(CALICO_BUILD) go mod edit -replace=github.com/projectcalico/libcalico-go=../libcalico-go \
+	$(DOCKER_GO_BUILD) go mod edit -replace=github.com/projectcalico/libcalico-go=../libcalico-go \
 		-replace=github.com/projectcalico/typha=../typha \
 		-replace=github.com/projectcalico/pod2daemon=../pod2daemon
 endif
@@ -131,6 +126,8 @@ clean:
 	find . -name "coverage.xml" -type f -delete
 	find . -name ".coverage" -type f -delete
 	find . -name "*.pyc" -type f -delete
+	$(DOCKER_GO_BUILD) make -C bpf-apache clean
+	$(DOCKER_GO_BUILD) make -C bpf-gpl clean
 
 ###############################################################################
 # Automated pin updates
@@ -148,11 +145,19 @@ sub-build-%:
 bin/calico-felix: bin/calico-felix-$(ARCH)
 	ln -f bin/calico-felix-$(ARCH) bin/calico-felix
 
+ifeq ($(ARCH), amd64)
+CGO_ENABLED=1
+else
+CGO_ENABLED=0
+endif
+
+DOCKER_GO_BUILD_CGO=$(DOCKER_RUN) -e CGO_ENABLED=$(CGO_ENABLED) $(CALICO_BUILD)
+
 bin/calico-felix-$(ARCH): $(SRC_FILES) $(LOCAL_BUILD_DEP)
 	@echo Building felix for $(ARCH) on $(BUILDARCH)
 	mkdir -p bin
 	if [ "$(SEMAPHORE)" != "true" -o ! -e $@ ] ; then \
-	  $(DOCKER_GO_BUILD) \
+	  $(DOCKER_GO_BUILD_CGO) \
 	     sh -c 'go build -v -i -o $@ -v $(BUILD_FLAGS) $(LDFLAGS) "$(PACKAGE_NAME)/cmd/calico-felix"'; \
 	fi
 
@@ -164,87 +169,26 @@ protobuf proto/felixbackend.pb.go: proto/felixbackend.proto
 		      --gogofaster_out=plugins=grpc:. \
 		      felixbackend.proto
 
-BPF_INC_FILES := $(shell find bpf -name '*.h')
-BPF_C_FILES := $(shell find bpf -name '*.c')
-BPF_XDP_INC_FILES :=
+# We pre-build lots of different variants of the TC programs, defer to the script.
+BPF_GPL_O_FILES:=$(addprefix bpf-gpl/,$(shell bpf-gpl/list-objs))
 
-.PHONY: xdp
+# There's a one-to-one mapping from UT C files to objects and the same for the apache programs..
+BPF_GPL_UT_O_FILES:=$(BPF_GPL_UT_C_FILES:.c=.o) $(addprefix bpf-gpl/,$(shell bpf-gpl/list-ut-objs))
+BPF_APACHE_O_FILES:=$(addprefix bpf-apache/bin/,$(notdir $(BPF_APACHE_C_FILES:.c=.o)))
 
-ifndef LOCAL
-xdp bpf/bin/xdp_filter.o:
-	$(DOCKER_GO_BUILD) \
-	              /bin/sh -c "make -C bpf/xdp all"
-	mv bpf/xdp/filter.o bpf/bin/xdp_filter.o
+ALL_BPF_PROGS=$(BPF_GPL_O_FILES) $(BPF_APACHE_O_FILES)
 
-xdp-clean:
-	$(DOCKER_GO_BUILD) \
-	              /bin/sh -c "make -C bpf/xdp clean"
+# Mark the BPF programs phony so we'll always defer to their own makefile.  This is OK as long as
+# we're only depending on the BPF programs from other phony targets.  (Otherwise, we'd do
+# unnecessary rebuilds of anything that depends on the BPF prgrams.)
+.PHONY: build-bpf clean-bpf
+build-bpf:
+	$(DOCKER_GO_BUILD) sh -c "make -j -C bpf-apache all && \
+	                          make -j -C bpf-gpl all ut-objs"
 
-bpf-cgroup bpf/cgroup/connect_balance.o:
-	$(DOCKER_GO_BUILD) \
-	              /bin/sh -c "make -C bpf/cgroup all"
-
-bpf-cgroup-clean:
-	$(DOCKER_GO_BUILD) \
-	              /bin/sh -c "make -C bpf/cgroup clean"
-else
-xdp bpf/bin/xdp_filter.o:
-	$(MAKE) -C bpf/xdp
-	cp bpf/xdp/filter.o bpf/bin/xdp_filter.o
-
-xdp-clean:
-	$(MAKE) -C bpf/xdp clean
-endif
-
-BPF_SOCKMAP_INC_FILES := bpf/sockmap/sockops.h
-
-bpf/bin/sockops.o: bpf/sockmap/sockops.c $(BPF_INC_FILES) $(BPF_SOCKMAP_INC_FILES)
-	$(DOCKER_GO_BUILD) \
-		      /bin/sh -c \
-		      "clang \
-			      -D__KERNEL__ \
-			      -D__ASM_SYSREG_H \
-			      -Wno-unused-value \
-			      -Wno-pointer-sign \
-			      -Wno-compare-distinct-pointer-types \
-			      -Wunused \
-			      -Wall \
-			      -Werror \
-			      -fno-stack-protector \
-			      -O2 \
-			      -emit-llvm \
-			      -c /go/src/$(PACKAGE_NAME)/bpf/sockmap/sockops.c \
-			      -o /go/src/$(PACKAGE_NAME)/bpf/sockmap/sockops.ll && \
-		       llc \
-			       -march=bpf \
-			       -filetype=obj \
-			       -o /go/src/$(PACKAGE_NAME)/bpf/bin/sockops.o \
-			       /go/src/$(PACKAGE_NAME)/bpf/sockmap/sockops.ll && \
-		       rm -f /go/src/$(PACKAGE_NAME)/bpf/sockmap/sockops.ll"
-
-bpf/bin/redir.o: bpf/sockmap/redir.c $(BPF_INC_FILES) $(BPF_SOCKMAP_INC_FILES)
-	$(DOCKER_GO_BUILD) \
-		      /bin/sh -c \
-		      "clang \
-			      -D__KERNEL__ \
-			      -D__ASM_SYSREG_H \
-			      -Wno-unused-value \
-			      -Wno-pointer-sign \
-			      -Wno-compare-distinct-pointer-types \
-			      -Wunused \
-			      -Wall \
-			      -Werror \
-			      -fno-stack-protector \
-			      -O2 \
-			      -emit-llvm \
-			      -c /go/src/$(PACKAGE_NAME)/bpf/sockmap/redir.c \
-			      -o /go/src/$(PACKAGE_NAME)/bpf/sockmap/redir.ll && \
-		       llc \
-			       -march=bpf \
-			       -filetype=obj \
-			       -o /go/src/$(PACKAGE_NAME)/bpf/bin/redir.o \
-			       /go/src/$(PACKAGE_NAME)/bpf/sockmap/redir.ll && \
-		       rm -f /go/src/$(PACKAGE_NAME)/bpf/sockmap/redir.ll"
+clean-bpf:
+	$(DOCKER_GO_BUILD) sh -c "make -j -C bpf-apache clean && \
+	                          make -j -C bpf-gpl clean"
 
 bpf/asm/opcode_string.go: bpf/asm/asm.go
 	$(DOCKER_GO_BUILD) go generate ./bpf/asm/
@@ -261,39 +205,11 @@ image-all: $(addprefix sub-image-,$(VALIDARCHES))
 sub-image-%:
 	$(MAKE) image ARCH=$*
 
-bin/compile-bpf: $(GENERATED_FILES) Makefile.common go.mod $(shell find cmd/compile-bpf bpf/nat bpf/tc config logutils proto -type f -name '*.go' -print | grep -v '_test\.go' )
-	$(DOCKER_GO_BUILD) go build -o $@ ./cmd/compile-bpf
-
-bin/bpf-progs.inc: bin/compile-bpf Makefile.common
-	bin/compile-bpf gen-makefile-inc > $@.tmp
-	mv $@.tmp $@
-
-# bpf-progs.inc sets up the BPF_PROGS variable.  The target above will cause it to be auto-updated after switching
-# branch.  Building bin/bpf-progs.inc requires the common makefile to have been included; this ifneq test makes sure
-# it only gets built on the second pass of the makefile, after the common makefile has already been included.
-# Without it, make tries to build both makefiles before importing either, which fails.
-ifneq ($(DOCKER_GO_BUILD),)
-include bin/bpf-progs.inc
-endif
-
-# BPF programs built by the makefile.
-MAKEFILE_BPF_PROGS:=\
-	bpf/bin/xdp_filter.o \
-	bpf/bin/redir.o \
-	bpf/bin/sockops.o
-
-ALL_BPF_PROGS=$(BPF_PROGS) $(MAKEFILE_BPF_PROGS)
-
-$(BPF_PROGS): $(BPF_C_FILES) $(BPF_INC_FILES) bin/compile-bpf
-	$(DOCKER_GO_BUILD) bin/compile-bpf
-
-build-bpf: $(ALL_BPF_PROGS)
-
 image: $(BUILD_IMAGE)
 $(BUILD_IMAGE): $(BUILD_IMAGE)-$(ARCH)
 $(BUILD_IMAGE)-$(ARCH): bin/calico-felix-$(ARCH) \
                         bin/calico-bpf \
-                        $(ALL_BPF_PROGS) \
+                        build-bpf \
                         docker-image/calico-felix-wrapper \
                         docker-image/felix.cfg \
                         docker-image/Dockerfile* \
@@ -390,10 +306,10 @@ sub-tag-images-%:
 ###############################################################################
 LOCAL_CHECKS = check-typha-pins
 
-LIBCALICO_FELIX?=$(shell $(DOCKER_RUN) $(CALICO_BUILD) go list -m -f "{{.Version}}" github.com/projectcalico/libcalico-go)
-TYPHA_GOMOD?=$(shell $(DOCKER_RUN) $(CALICO_BUILD) go list -m -f "{{.GoMod}}" github.com/projectcalico/typha)
+LIBCALICO_FELIX?=$(shell $(DOCKER_GO_BUILD) go list -m -f "{{.Version}}" github.com/projectcalico/libcalico-go)
+TYPHA_GOMOD?=$(shell $(DOCKER_GO_BUILD) go list -m -f "{{.GoMod}}" github.com/projectcalico/typha)
 ifneq ($(TYPHA_GOMOD),)
-	LIBCALICO_TYPHA?=$(shell $(DOCKER_RUN) $(CALICO_BUILD) grep libcalico-go $(TYPHA_GOMOD) | cut -d' ' -f2)
+	LIBCALICO_TYPHA?=$(shell $(DOCKER_GO_BUILD) grep libcalico-go $(TYPHA_GOMOD) | cut -d' ' -f2)
 endif
 
 .PHONY: check-typha-pins
@@ -415,7 +331,7 @@ check-typha-pins:
 UT_PACKAGES_TO_SKIP?=fv,k8sfv,bpf/ut
 
 .PHONY: ut
-ut combined.coverprofile: $(SRC_FILES) $(ALL_BPF_PROGS)
+ut combined.coverprofile: $(SRC_FILES) build-bpf
 	@echo Running Go UTs.
 	$(DOCKER_GO_BUILD) ./utils/run-coverage -skipPackage $(UT_PACKAGES_TO_SKIP) $(GINKGO_ARGS)
 
@@ -430,7 +346,7 @@ fv/fv.test: $(SRC_FILES)
 REMOTE_DEPS=fv/infrastructure/crds.yaml
 
 fv/infrastructure/crds.yaml: go.mod go.sum
-	$(DOCKER_RUN) $(CALICO_BUILD) sh -c ' \
+	$(DOCKER_GO_BUILD) sh -c ' \
 	go list all; \
 	cp `go list -m -f "{{.Dir}}" github.com/projectcalico/libcalico-go`/test/crds.yaml fv/infrastructure/crds.yaml; \
 	chmod +w fv/infrastructure/crds.yaml'
@@ -511,7 +427,7 @@ k8sfv-test-existing-felix: $(REMOTE_DEPS) bin/k8sfv.test
 
 bin/k8sfv.test: $(K8SFV_GO_FILES)
 	@echo Building $@...
-	$(DOCKER_RUN) $(CALICO_BUILD) \
+	$(DOCKER_GO_BUILD) \
 	    sh -c 'go test -c $(BUILD_FLAGS) -o $@ ./k8sfv'
 
 .PHONY: run-prometheus run-grafana stop-prometheus stop-grafana
@@ -555,19 +471,19 @@ bin/calico-bpf: $(SRC_FILES) $(LOCAL_BUILD_DEP)
 bin/iptables-locker: $(LOCAL_BUILD_DEP) go.mod $(shell find iptables -type f -name '*.go' -print)
 	@echo Building iptables-locker...
 	mkdir -p bin
-	$(DOCKER_RUN) $(CALICO_BUILD_STATIC) \
+	$(DOCKER_GO_BUILD) \
 	    sh -c 'go build -v -i -o $@ -v $(BUILD_FLAGS) $(LDFLAGS) "$(PACKAGE_NAME)/fv/iptables-locker"'
 
 bin/test-workload: $(LOCAL_BUILD_DEP) go.mod fv/cgroup/cgroup.go fv/utils/utils.go fv/conncheck/*.go fv/test-workload/*.go
 	@echo Building test-workload...
 	mkdir -p bin
-	$(DOCKER_RUN) $(CALICO_BUILD_STATIC) \
+	$(DOCKER_GO_BUILD) \
 	    sh -c 'go build -v -i -o $@ -v $(BUILD_FLAGS) $(LDFLAGS) "$(PACKAGE_NAME)/fv/test-workload"'
 
 bin/test-connection: $(LOCAL_BUILD_DEP) go.mod fv/cgroup/cgroup.go fv/utils/utils.go fv/conncheck/*.go fv/test-connection/*.go
 	@echo Building test-connection...
 	mkdir -p bin
-	$(DOCKER_RUN) $(CALICO_BUILD_STATIC) \
+	$(DOCKER_GO_BUILD) \
 	    sh -c 'go build -v -i -o $@ -v $(BUILD_FLAGS) $(LDFLAGS) "$(PACKAGE_NAME)/fv/test-connection"'
 
 st:
@@ -732,19 +648,19 @@ ut-watch: $(SRC_FILES)
 
 .PHONY: bin/bpf.test
 bin/bpf.test: $(GENERATED_FILES) $(shell find bpf/ -name '*.go')
-	$(DOCKER_GO_BUILD) go test $(BUILD_FLAGS) ./bpf/ -c -o $@
+	$(DOCKER_GO_BUILD_CGO) go test $(BUILD_FLAGS) ./bpf/ -c -o $@
 
-.PHONY: bin/bpf.test
+.PHONY: bin/bpf_ut.test
 bin/bpf_ut.test: $(GENERATED_FILES) $(shell find bpf/ -name '*.go')
-	$(DOCKER_GO_BUILD) go test $(BUILD_FLAGS) ./bpf/ut -c -o $@
+	$(DOCKER_GO_BUILD_CGO) go test $(BUILD_FLAGS) ./bpf/ut -c -o $@
 
 # Build debug version of bpf.test for use with the delve debugger.
 .PHONY: bin/bpf_debug.test
-bin/bpf_debug.test: $(GENERATED_FILES)
-	$(DOCKER_GO_BUILD) go test $(BUILD_FLAGS) ./bpf/ut -c -gcflags="-N -l" -o $@
+bin/bpf_debug.test: $(GENERATED_FILES) $(shell find bpf/ -name '*.go')
+	$(DOCKER_GO_BUILD_CGO) go test $(BUILD_FLAGS) ./bpf/ut -c -gcflags="-N -l" -o $@
 
-.PHONY: bpf-ut
-bpf-ut: bin/bpf_ut.test bin/bpf.test $(ALL_BPF_PROGS)
+.PHONY: ut-bpf
+ut-bpf: bin/bpf_ut.test bin/bpf.test build-bpf
 	$(DOCKER_RUN) \
 		--privileged \
 		-e RUN_AS_ROOT=true \
@@ -756,6 +672,7 @@ bpf-ut: bin/bpf_ut.test bin/bpf.test $(ALL_BPF_PROGS)
 		--privileged \
 		-e RUN_AS_ROOT=true \
 		-v `pwd`:/code \
+		-v `pwd`/bpf-gpl/bin:/code/bpf/bin \
 		$(CALICO_BUILD) sh -c ' \
 		mount bpffs /sys/fs/bpf -t bpf && \
 		cd /go/src/$(PACKAGE_NAME)/bpf/ut && \
@@ -773,23 +690,23 @@ cover-report: combined.coverprofile
 	@echo
 	@echo ======== All coverage =========
 	@echo
-	@$(DOCKER_RUN) $(CALICO_BUILD) sh -c 'go tool cover -func combined.coverprofile | \
+	@$(DOCKER_GO_BUILD) sh -c 'go tool cover -func combined.coverprofile | \
 				   sed 's=$(PACKAGE_NAME)/==' | \
 				   column -t'
 	@echo
 	@echo ======== Missing coverage only =========
 	@echo
-	@$(DOCKER_RUN) $(CALICO_BUILD) sh -c "go tool cover -func combined.coverprofile | \
+	@$(DOCKER_GO_BUILD) sh -c "go tool cover -func combined.coverprofile | \
 				   sed 's=$(PACKAGE_NAME)/==' | \
 				   column -t | \
 				   grep -v '100\.0%'"
 
 bin/calico-felix.transfer-url: bin/calico-felix
-	$(DOCKER_RUN) $(CALICO_BUILD) sh -c 'curl --upload-file bin/calico-felix https://transfer.sh/calico-felix > $@'
+	$(DOCKER_GO_BUILD) sh -c 'curl --upload-file bin/calico-felix https://transfer.sh/calico-felix > $@'
 
 .PHONY: patch-script
 patch-script: bin/calico-felix.transfer-url
-	$(DOCKER_RUN) $(CALICO_BUILD) bash -c 'utils/make-patch-script.sh $$(cat bin/calico-felix.transfer-url)'
+	$(DOCKER_GO_BUILD) bash -c 'utils/make-patch-script.sh $$(cat bin/calico-felix.transfer-url)'
 
 ## Generate a diagram of Felix's internal calculation graph.
 docs/calc.pdf: docs/calc.dot
