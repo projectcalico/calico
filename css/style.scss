@@ -312,8 +312,8 @@ input.gsc-input, .gsc-input-box, .gsc-input-box-hover, .gsc-input-box-focus, .gs
 }
 
 $search-height: 50px;
-$sticky-bottom: $search-height + $navbar-margin-bottom;
-$max-sidebar-height: calc(100vh - #{$sticky-top + $sticky-bottom});
+$max-sidebar-height: calc(100vh - #{$sticky-top + $search-height + $navbar-margin-bottom});
+$max-toc-height: calc(100vh - #{$sticky-top + $navbar-margin-bottom});
 
 .sidebar {
   position: -webkit-sticky;
@@ -335,7 +335,7 @@ $max-sidebar-height: calc(100vh - #{$sticky-top + $sticky-bottom});
   top: $sticky-top;
 
   .toc {
-    max-height: $max-sidebar-height;
+    max-height: $max-toc-height;
 
     @media (min-width: $screen-md-min) {
       overflow-y: auto;
