@@ -130,12 +130,10 @@ struct bpf_map_def_extended {
 };
 
 // These constants must be kept in sync with the calculate-flags script.
-enum calico_tc_flags {
-	CALI_TC_HOST_EP = 1<<0,
-	CALI_TC_INGRESS = 1<<1,
-	CALI_TC_TUNNEL  = 1<<2,
-	CALI_CGROUP     = 1<<3,
-};
+#define CALI_TC_HOST_EP	(1<<0)
+#define CALI_TC_INGRESS	(1<<1)
+#define CALI_TC_TUNNEL	(1<<2)
+#define CALI_CGROUP	(1<<3)
 
 #ifndef CALI_COMPILE_FLAGS
 #define CALI_COMPILE_FLAGS 0
