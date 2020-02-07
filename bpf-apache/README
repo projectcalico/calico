@@ -1,0 +1,12 @@
+This directory contains the source code and build system for the Apache-licensed BPF
+programs that Calico uses to implement its BPF dataplane.
+
+The build requires
+
+- kernel headers
+- libbpf
+- clang 7+
+
+The calico/go-build container image provides a suitable environment:
+
+    docker run -e LOCAL_USER_ID=$UID --rm -v `pwd`:/bpf-apache -w /bpf-apache calico/go-build:v0.35-deb-cgo make clean all

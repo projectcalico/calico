@@ -36,8 +36,6 @@ import (
 	"github.com/projectcalico/felix/bpf/state"
 	"github.com/projectcalico/felix/logutils"
 
-	"github.com/projectcalico/felix/bpf/tc"
-
 	"github.com/projectcalico/felix/idalloc"
 
 	"github.com/google/gopacket"
@@ -60,12 +58,22 @@ func init() {
 	log.SetLevel(log.DebugLevel)
 }
 
+// Constants that are shared with the UT binaries that we build.
+const (
+	natTunnelMTU  = uint16(700)
+	testVxlanPort = uint16(5665)
+)
+
 var (
-	hostIP            = net.IPv4(10, 10, 0, 1)
-	natTunnelMTU      = uint16(700)
-	testVxlanPort     = uint16(5665)
 	rulesDefaultAllow = [][][]*proto.Rule{{{{Action: "Allow"}}}}
-	skbMark           uint32
+	node1ip           = net.IPv4(10, 10, 0, 1).To4()
+	node2ip           = net.IPv4(10, 10, 0, 2).To4()
+)
+
+// Globals that we use to configure the next test run.
+var (
+	hostIP  = node1ip
+	skbMark uint32
 )
 
 const (
@@ -105,24 +113,12 @@ func TestCompileTemplateRun(t *testing.T) {
 	})
 }
 
-var defaultCompileOpts = []tc.CompileOption{
-	tc.CompileWithBpftoolLoader(),
-	tc.CompileWithWorkingDir("../tc/templates"),
-	tc.CompileWithSourceName("../tc/templates/tc_template.c"), // Relative to our dir
-	tc.CompileWithIncludePath("../../include"),                // Relative to working dir
-	tc.CompileWithFIBEnabled(true),
-	tc.CompileWithLogLevel("DEBUG"),
-	tc.CompileWithVxlanPort(testVxlanPort),
-	tc.CompileWithNATTunnelMTU(natTunnelMTU),
-}
-
 // runBpfTest runs a specific section of the entire bpf program in isolation
 func runBpfTest(t *testing.T, section string, rules [][][]*proto.Rule, testFn func(bpfProgRunFn)) {
 	RegisterTestingT(t)
 
 	tempDir, err := ioutil.TempDir("", "calico-bpf-")
 	Expect(err).NotTo(HaveOccurred())
-
 	defer os.RemoveAll(tempDir)
 
 	unique := path.Base(tempDir)
@@ -130,24 +126,28 @@ func runBpfTest(t *testing.T, section string, rules [][][]*proto.Rule, testFn fu
 
 	err = os.Mkdir(bpfFsDir, os.ModePerm)
 	Expect(err).NotTo(HaveOccurred())
-
 	defer os.RemoveAll(bpfFsDir)
 
-	objFname := tempDir + "/tc.o"
-	opts := append(defaultCompileOpts,
-		tc.CompileWithOutputName(objFname),
-		tc.CompileWithLogPrefix(section),
-		tc.CompileWithEntrypointName(section),
-		tc.CompileWithFlags(tc.SectionToFlags(section)),
-		tc.CompileWithHostIP(hostIP), // to pick up new ip
-		tc.CompileWithDefineValue("CALI_SET_SKB_MARK", fmt.Sprintf("0x%x", skbMark)),
-	)
+	obj := "../../bpf-gpl/bin/ut_"
+	if strings.Contains(section, "from") {
+		obj += "from_"
+	} else {
+		obj += "to_"
+	}
 
-	err = tc.CompileProgramToFile(rules, idalloc.New(), opts...)
+	if strings.Contains(section, "host") {
+		obj += "hep_"
+	} else {
+		obj += "wep_"
+	}
+
+	log.WithField("hostIP", hostIP).Info("Host IP")
+	ipStr := fmt.Sprintf("0x%02x%02x%02x%02x", hostIP[3], hostIP[2], hostIP[1], hostIP[0])
+	obj += fmt.Sprintf("fib_debug_skb0x%x_host%s.o", skbMark, ipStr)
+
+	err = bpftoolProgLoadAll(obj, bpfFsDir)
 	Expect(err).NotTo(HaveOccurred())
 
-	// This loads the prologue and epilogue programs, but we still need to load the policy program.
-	err = bpftoolProgLoadAll(objFname, bpfFsDir)
 	if err != nil {
 		t.Log("Error:", string(err.(*exec.ExitError).Stderr))
 	}
@@ -252,6 +252,7 @@ func cleanUpMaps() {
 }
 
 func bpftoolProgLoadAll(fname, bpfFsDir string) error {
+	log.WithField("program", fname).Debug("Loading BPF program")
 	_, err := bpftool("prog", "loadall", fname, bpfFsDir, "type", "classifier",
 		"map", "name", natMap.GetName(), "pinned", natMap.Path(),
 		"map", "name", natBEMap.GetName(), "pinned", natBEMap.Path(),
@@ -323,16 +324,6 @@ func bpftoolProgRun(progName string, dataIn []byte) (bpfRunResult, error) {
 	return res, nil
 }
 
-var unittestH = `
-/*
- * THIS FILE IS GENERATED
- */
- #ifndef __BPF_UNITTEST_H__
- #define __BPF_UNITTEST_H__
- #include "%s"
- #endif
-`
-
 type bpfProgRunFn func(data []byte) (bpfRunResult, error)
 
 // runBpfUnitTest runs a small unit in isolation. It requires a small .c file
@@ -342,7 +333,6 @@ func runBpfUnitTest(t *testing.T, source string, testFn func(bpfProgRunFn)) {
 
 	tempDir, err := ioutil.TempDir("", "calico-bpf-")
 	Expect(err).NotTo(HaveOccurred())
-
 	defer os.RemoveAll(tempDir)
 
 	unique := path.Base(tempDir)
@@ -350,36 +340,9 @@ func runBpfUnitTest(t *testing.T, source string, testFn func(bpfProgRunFn)) {
 
 	err = os.Mkdir(bpfFsDir, os.ModePerm)
 	Expect(err).NotTo(HaveOccurred())
-
 	defer os.RemoveAll(bpfFsDir)
 
-	objFname := tempDir + "/" + strings.TrimSuffix(source, path.Ext(source))
-
-	wdir := "../tc/templates"
-	unittestFName := wdir + "/unittest.h"
-
-	err = ioutil.WriteFile(unittestFName,
-		[]byte(fmt.Sprintf(unittestH, source)), 0644)
-	Expect(err).NotTo(HaveOccurred())
-
-	defer os.Remove(unittestFName)
-
-	curwd, err := os.Getwd()
-	Expect(err).NotTo(HaveOccurred())
-
-	opts := append(defaultCompileOpts,
-		tc.CompileWithOutputName(objFname),
-		tc.CompileWithWorkingDir(wdir),
-		tc.CompileWithSourceName(wdir+"/tc_template.c"),
-		tc.CompileWithIncludePath(curwd+"/progs"),
-		tc.CompileWithIncludePath("../include"),
-		tc.CompileWithLogPrefix("UNITTEST"),
-		tc.CompileWithDefine("CALI_UNITTEST"),
-		tc.CompileWithHostIP(hostIP),
-	)
-
-	err = tc.CompileProgramToFile(nil, idalloc.New(), opts...)
-	Expect(err).NotTo(HaveOccurred())
+	objFname := "../../bpf-gpl/ut/" + strings.TrimSuffix(source, path.Ext(source)) + ".o"
 
 	err = bpftoolProgLoadAll(objFname, bpfFsDir)
 	Expect(err).NotTo(HaveOccurred())

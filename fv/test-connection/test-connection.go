@@ -31,7 +31,7 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/felix/fv/cgroup"
-	"github.com/projectcalico/felix/fv/conncheck"
+	"github.com/projectcalico/felix/fv/connectivity"
 	"github.com/projectcalico/felix/fv/utils"
 )
 
@@ -201,7 +201,7 @@ func tryConnect(remoteIpAddr, remotePort, sourceIpAddr, sourcePort, protocol, lo
 		decoder := json.NewDecoder(conn)
 
 		for {
-			req := conncheck.NewRequest()
+			req := connectivity.NewRequest()
 			data, err := json.Marshal(req)
 			if err != nil {
 				log.WithError(err).Fatal("Failed to marshal data")
@@ -211,7 +211,7 @@ func tryConnect(remoteIpAddr, remotePort, sourceIpAddr, sourcePort, protocol, lo
 				log.WithError(err).Fatal("Failed to send data")
 			}
 			log.WithField("message", req).Info("Sent message over UDP")
-			var resp conncheck.Response
+			var resp connectivity.Response
 			err = decoder.Decode(&resp)
 			if err != nil {
 				log.WithError(err).Fatal("Failed to read response")
@@ -321,13 +321,13 @@ func tryConnect(remoteIpAddr, remotePort, sourceIpAddr, sourcePort, protocol, lo
 		encoder := json.NewEncoder(conn)
 
 		for {
-			req := conncheck.NewRequest()
+			req := connectivity.NewRequest()
 			err := encoder.Encode(req)
 			if err != nil {
 				log.WithError(err).Fatal("Failed to send data")
 			}
 			log.WithField("message", req).Info("Sent message over SCTP")
-			var resp conncheck.Response
+			var resp connectivity.Response
 			err = decoder.Decode(&resp)
 			if err != nil {
 				log.WithError(err).Fatal("Failed to read response")
@@ -367,13 +367,13 @@ func tryConnect(remoteIpAddr, remotePort, sourceIpAddr, sourcePort, protocol, lo
 		encoder := json.NewEncoder(conn)
 
 		for {
-			req := conncheck.NewRequest()
+			req := connectivity.NewRequest()
 			err := encoder.Encode(req)
 			if err != nil {
 				log.WithError(err).Fatal("Failed to send data")
 			}
 			log.WithField("message", req).Info("Sent message over TCP")
-			var resp conncheck.Response
+			var resp connectivity.Response
 			err = decoder.Decode(&resp)
 			if err != nil {
 				log.WithError(err).Fatal("Failed to read response")

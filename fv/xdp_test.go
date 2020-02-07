@@ -1,4 +1,4 @@
-// Copyright (c) 2019 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,6 +17,8 @@ package fv
 import (
 	"fmt"
 	"time"
+
+	"github.com/projectcalico/felix/fv/connectivity"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -43,8 +45,8 @@ var _ = infrastructure.DatastoreDescribe("with initialized Felix", []apiconfig.D
 		felixes      []*infrastructure.Felix
 		hostW        [4]*workload.Workload
 		client       client.Interface
-		ccTCP        *workload.ConnectivityChecker
-		ccUDP        *workload.ConnectivityChecker
+		ccTCP        *connectivity.Checker
+		ccUDP        *connectivity.Checker
 		host0HexCIDR []string
 		host2HexCIDR []string
 	)
@@ -94,8 +96,8 @@ var _ = infrastructure.DatastoreDescribe("with initialized Felix", []apiconfig.D
 			Expect(err).NotTo(HaveOccurred())
 		}
 
-		ccTCP = &workload.ConnectivityChecker{Protocol: "tcp"}
-		ccUDP = &workload.ConnectivityChecker{Protocol: "udp"}
+		ccTCP = &connectivity.Checker{Protocol: "tcp"}
+		ccUDP = &connectivity.Checker{Protocol: "udp"}
 	})
 
 	AfterEach(func() {
@@ -123,7 +125,7 @@ var _ = infrastructure.DatastoreDescribe("with initialized Felix", []apiconfig.D
 		}
 	}
 
-	expectNoConnectivity := func(cc *workload.ConnectivityChecker) {
+	expectNoConnectivity := func(cc *connectivity.Checker) {
 		client, server := clientServerIndexes(cc.Protocol)
 		cc.ExpectNone(felixes[client], hostW[server].Port(8055))
 		cc.ExpectNone(felixes[server], hostW[client].Port(8055))
@@ -133,7 +135,7 @@ var _ = infrastructure.DatastoreDescribe("with initialized Felix", []apiconfig.D
 		cc.ResetExpectations()
 	}
 
-	expectAllAllowed := func(cc *workload.ConnectivityChecker) {
+	expectAllAllowed := func(cc *connectivity.Checker) {
 		client, server := clientServerIndexes(cc.Protocol)
 		cc.ExpectSome(felixes[client], hostW[server].Port(8055))
 		cc.ExpectSome(felixes[client], hostW[server].Port(8056))
@@ -141,7 +143,7 @@ var _ = infrastructure.DatastoreDescribe("with initialized Felix", []apiconfig.D
 		cc.ResetExpectations()
 	}
 
-	expectBlacklisted := func(cc *workload.ConnectivityChecker) {
+	expectBlacklisted := func(cc *connectivity.Checker) {
 		client, server := clientServerIndexes(cc.Protocol)
 		cc.ExpectNone(felixes[client], hostW[server].Port(8055))
 		cc.ExpectNone(felixes[client], hostW[server].Port(8056))
@@ -149,7 +151,7 @@ var _ = infrastructure.DatastoreDescribe("with initialized Felix", []apiconfig.D
 		cc.ResetExpectations()
 	}
 
-	expectTCPFailsafePortsOpen := func(cc *workload.ConnectivityChecker) {
+	expectTCPFailsafePortsOpen := func(cc *connectivity.Checker) {
 		client, server := clientServerIndexes(cc.Protocol)
 		cc.ExpectNone(felixes[client], hostW[server].Port(8055))
 		cc.ExpectNone(felixes[client], hostW[server].Port(8056))
@@ -158,7 +160,7 @@ var _ = infrastructure.DatastoreDescribe("with initialized Felix", []apiconfig.D
 		cc.ResetExpectations()
 	}
 
-	expectUDPFailsafePortsOpen := func(cc *workload.ConnectivityChecker) {
+	expectUDPFailsafePortsOpen := func(cc *connectivity.Checker) {
 		client, server := clientServerIndexes(cc.Protocol)
 		cc.ExpectNone(felixes[client], hostW[server].Port(8055))
 		cc.ExpectNone(felixes[client], hostW[server].Port(8056))
@@ -167,7 +169,7 @@ var _ = infrastructure.DatastoreDescribe("with initialized Felix", []apiconfig.D
 		cc.ResetExpectations()
 	}
 
-	expectTCPSourceFailsafePortBlacklisted := func(cc *workload.ConnectivityChecker) {
+	expectTCPSourceFailsafePortBlacklisted := func(cc *connectivity.Checker) {
 		client, server := clientServerIndexes(cc.Protocol)
 
 		fsPort := &workload.Port{

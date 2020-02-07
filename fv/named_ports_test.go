@@ -1,6 +1,4 @@
-// +build fvtests
-
-// Copyright (c) 2017-2019 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// +build fvtests
+
 package fv_test
 
 import (
@@ -21,6 +21,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"strconv"
+
+	"github.com/projectcalico/felix/fv/connectivity"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/ginkgo/extensions/table"
@@ -77,7 +79,7 @@ func describeNamedPortTests(testSourcePorts bool, protocol string) {
 		felix  *infrastructure.Felix
 		client client.Interface
 		w      [4]*workload.Workload
-		cc     *workload.ConnectivityChecker
+		cc     *connectivity.Checker
 	)
 
 	const (
@@ -150,7 +152,7 @@ func describeNamedPortTests(testSourcePorts bool, protocol string) {
 			w[ii].Configure(client)
 		}
 
-		cc = &workload.ConnectivityChecker{
+		cc = &connectivity.Checker{
 			ReverseDirection: testSourcePorts,
 			Protocol:         protocol,
 		}
@@ -725,7 +727,7 @@ var _ = Describe("TCP: named port with a simulated kubernetes nginx and client",
 		nginxClient       *workload.Workload
 		defaultDenyPolicy *api.NetworkPolicy
 		allowHTTPPolicy   *api.NetworkPolicy
-		cc                *workload.ConnectivityChecker
+		cc                *connectivity.Checker
 	)
 
 	BeforeEach(func() {
@@ -806,7 +808,7 @@ var _ = Describe("TCP: named port with a simulated kubernetes nginx and client",
 		allowHTTPPolicy.Spec.Selector = "name == 'nginx'"
 		allowHTTPPolicy.Spec.Types = []api.PolicyType{api.PolicyTypeIngress}
 
-		cc = &workload.ConnectivityChecker{}
+		cc = &connectivity.Checker{}
 	})
 
 	AfterEach(func() {
@@ -861,7 +863,7 @@ var _ = infrastructure.DatastoreDescribe("named port host endpoint",
 			felixes []*infrastructure.Felix
 			client  client.Interface
 			hostW   [2]*workload.Workload
-			cc      *workload.ConnectivityChecker
+			cc      *connectivity.Checker
 		)
 
 		tcp := numorstring.ProtocolFromString("TCP")
@@ -904,7 +906,7 @@ var _ = infrastructure.DatastoreDescribe("named port host endpoint",
 				Expect(err).NotTo(HaveOccurred())
 			}
 
-			cc = &workload.ConnectivityChecker{}
+			cc = &connectivity.Checker{}
 		})
 
 		AfterEach(func() {
@@ -1020,8 +1022,8 @@ var _ = Describe("tests with mixed TCP/UDP", func() {
 		targetUDPWorkload           *workload.Workload
 		clientWorkload              *workload.Workload
 		allowConfusedProtocolPolicy *api.NetworkPolicy
-		udpCC                       *workload.ConnectivityChecker
-		tcpCC                       *workload.ConnectivityChecker
+		udpCC                       *connectivity.Checker
+		tcpCC                       *connectivity.Checker
 	)
 
 	BeforeEach(func() {
@@ -1109,8 +1111,8 @@ var _ = Describe("tests with mixed TCP/UDP", func() {
 		allowConfusedProtocolPolicy.Spec.Selector = "name == 'nginx'"
 		allowConfusedProtocolPolicy.Spec.Types = []api.PolicyType{api.PolicyTypeIngress}
 
-		udpCC = &workload.ConnectivityChecker{Protocol: "udp"}
-		tcpCC = &workload.ConnectivityChecker{Protocol: "tcp"}
+		udpCC = &connectivity.Checker{Protocol: "udp"}
+		tcpCC = &connectivity.Checker{Protocol: "tcp"}
 	})
 
 	AfterEach(func() {

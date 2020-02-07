@@ -12,6 +12,12 @@ Note that the documentation in this repo is targeted at Calico contributors.
 This repository contains the source code for Project Calico's per-host
 daemon, Felix.
 
+## Licensing
+
+Felix itself, along with most of Calico, is licensed under the Apache v2.0 license.  The BPF programs
+in the bpf-gpl directory are licensed under the GPL v2.0 for compatibility with Linux kernel helper 
+functions. 
+
 ## How can I get support for contributing to Project Calico?
 
 The best place to ask a question or get help from the community is the

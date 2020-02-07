@@ -82,7 +82,7 @@ const (
 )
 
 var (
-	xdpFilename     = "xdp_filter.o"
+	xdpFilename     = "filter.o"
 	sockopsFilename = "sockops.o"
 	redirFilename   = "redir.o"
 

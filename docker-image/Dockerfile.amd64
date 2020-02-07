@@ -43,13 +43,7 @@ RUN apt-get update && apt-get install -y \
     procps \
     ca-certificates \
     # Felix FV tests require wget
-    wget \
-    # Tools for building BPF programs.
-    llvm \
-    clang \
-    libbpf-dev \
-    linux-headers-amd64 \
-    binutils
+    wget
 
 # Default to the xtables backend of iptables.
 RUN update-alternatives --set iptables /usr/sbin/iptables-legacy

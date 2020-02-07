@@ -28,23 +28,17 @@ import (
 	"sync"
 	"time"
 
-	"github.com/projectcalico/felix/fv/conncheck"
-
-	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	"github.com/onsi/gomega/types"
 	log "github.com/sirupsen/logrus"
 
-	"github.com/projectcalico/libcalico-go/lib/backend/k8s/conversion"
-	"github.com/projectcalico/libcalico-go/lib/options"
-
-	"github.com/projectcalico/libcalico-go/lib/set"
-
+	"github.com/projectcalico/felix/fv/connectivity"
 	"github.com/projectcalico/felix/fv/containers"
 	"github.com/projectcalico/felix/fv/infrastructure"
 	"github.com/projectcalico/felix/fv/utils"
 	api "github.com/projectcalico/libcalico-go/lib/apis/v3"
+	"github.com/projectcalico/libcalico-go/lib/backend/k8s/conversion"
 	client "github.com/projectcalico/libcalico-go/lib/clientv3"
+	"github.com/projectcalico/libcalico-go/lib/options"
 )
 
 type Workload struct {
@@ -243,7 +237,7 @@ func (w *Workload) SourceIPs() []string {
 	return []string{w.IP}
 }
 
-func (w *Workload) CanConnectTo(ip, port, protocol string) *conncheck.Response {
+func (w *Workload) CanConnectTo(ip, port, protocol string) *connectivity.Response {
 	anyPort := Port{
 		Workload: w,
 	}
@@ -255,22 +249,6 @@ func (w *Workload) Port(port uint16) *Port {
 		Workload: w,
 		Port:     port,
 	}
-}
-
-type Port struct {
-	*Workload
-	Port uint16
-}
-
-func (w *Port) SourceName() string {
-	if w.Port == 0 {
-		return w.Name
-	}
-	return fmt.Sprintf("%s:%d", w.Name, w.Port)
-}
-
-func (w *Port) SourceIPs() []string {
-	return []string{w.IP}
 }
 
 func (w *Workload) NamespaceID() string {
@@ -482,21 +460,56 @@ func startPermanentConnection(w *Workload, ip string, port, sourcePort int) (*Pe
 	}, nil
 }
 
+func (w *Workload) ToMatcher(explicitPort ...uint16) *connectivity.Matcher {
+	var port string
+	if len(explicitPort) == 1 {
+		port = fmt.Sprintf("%d", explicitPort[0])
+	} else if w.DefaultPort != "" {
+		port = w.DefaultPort
+	} else if !strings.Contains(w.Ports, ",") {
+		port = w.Ports
+	} else {
+		panic("Explicit port needed for workload with multiple ports")
+	}
+	return &connectivity.Matcher{
+		IP:         w.IP,
+		Port:       port,
+		TargetName: fmt.Sprintf("%s on port %s", w.Name, port),
+		Protocol:   "tcp",
+	}
+}
+
 type SpoofedWorkload struct {
 	*Workload
 	SpoofedSourceIP string
 }
 
-func (s *SpoofedWorkload) CanConnectTo(ip, port, protocol string) *conncheck.Response {
+func (s *SpoofedWorkload) CanConnectTo(ip, port, protocol string) *connectivity.Response {
 	return canConnectTo(s.Workload, ip, port, s.SpoofedSourceIP, "", protocol)
 }
 
-func (p *Port) CanConnectTo(ip, port, protocol string) *conncheck.Response {
+type Port struct {
+	*Workload
+	Port uint16
+}
+
+func (p *Port) SourceName() string {
+	if p.Port == 0 {
+		return p.Name
+	}
+	return fmt.Sprintf("%s:%d", p.Name, p.Port)
+}
+
+func (p *Port) SourceIPs() []string {
+	return []string{p.IP}
+}
+
+func (p *Port) CanConnectTo(ip, port, protocol string) *connectivity.Response {
 	srcPort := strconv.Itoa(int(p.Port))
 	return canConnectTo(p.Workload, ip, port, "", srcPort, protocol)
 }
 
-func canConnectTo(w *Workload, ip, port, srcIp, srcPort, protocol string) *conncheck.Response {
+func canConnectTo(w *Workload, ip, port, srcIp, srcPort, protocol string) *connectivity.Response {
 	// Ensure that the host has the 'test-connection' binary.
 	w.C.EnsureBinary("test-connection")
 
@@ -552,7 +565,7 @@ func canConnectTo(w *Workload, ip, port, srcIp, srcPort, protocol string) *connc
 	r := regexp.MustCompile(`RESPONSE=(.*)\n`)
 	m := r.FindSubmatch(wOut)
 	if len(m) > 0 {
-		var resp conncheck.Response
+		var resp connectivity.Response
 		err := json.Unmarshal(m[1], &resp)
 		if err != nil {
 			log.WithError(err).WithField("output", string(wOut)).Panic("Failed to parse connection check response")
@@ -564,260 +577,13 @@ func canConnectTo(w *Workload, ip, port, srcIp, srcPort, protocol string) *connc
 
 // ToMatcher implements the connectionTarget interface, allowing this port to be used as
 // target.
-func (p *Port) ToMatcher(explicitPort ...uint16) *connectivityMatcher {
+func (p *Port) ToMatcher(explicitPort ...uint16) *connectivity.Matcher {
 	if p.Port == 0 {
 		return p.Workload.ToMatcher(explicitPort...)
 	}
-	return &connectivityMatcher{
-		ip:         p.Workload.IP,
-		port:       fmt.Sprint(p.Port),
-		targetName: fmt.Sprintf("%s on port %d", p.Workload.Name, p.Port),
+	return &connectivity.Matcher{
+		IP:         p.Workload.IP,
+		Port:       fmt.Sprint(p.Port),
+		TargetName: fmt.Sprintf("%s on port %d", p.Workload.Name, p.Port),
 	}
-}
-
-type connectionTarget interface {
-	ToMatcher(explicitPort ...uint16) *connectivityMatcher
-}
-
-type IP string // Just so we can define methods on it...
-
-func (s IP) ToMatcher(explicitPort ...uint16) *connectivityMatcher {
-	if len(explicitPort) != 1 {
-		panic("Explicit port needed with IP as a connectivity target")
-	}
-	port := fmt.Sprintf("%d", explicitPort[0])
-	return &connectivityMatcher{
-		ip:         string(s),
-		port:       port,
-		targetName: string(s) + ":" + port,
-		protocol:   "tcp",
-	}
-}
-
-func (w *Workload) ToMatcher(explicitPort ...uint16) *connectivityMatcher {
-	var port string
-	if len(explicitPort) == 1 {
-		port = fmt.Sprintf("%d", explicitPort[0])
-	} else if w.DefaultPort != "" {
-		port = w.DefaultPort
-	} else if !strings.Contains(w.Ports, ",") {
-		port = w.Ports
-	} else {
-		panic("Explicit port needed for workload with multiple ports")
-	}
-	return &connectivityMatcher{
-		ip:         w.IP,
-		port:       port,
-		targetName: fmt.Sprintf("%s on port %s", w.Name, port),
-		protocol:   "tcp",
-	}
-}
-
-func HaveConnectivityTo(target connectionTarget, explicitPort ...uint16) types.GomegaMatcher {
-	return target.ToMatcher(explicitPort...)
-}
-
-type connectivityMatcher struct {
-	ip, port, targetName, protocol string
-}
-
-type connectionSource interface {
-	CanConnectTo(ip, port, protocol string) *conncheck.Response
-	SourceName() string
-	SourceIPs() []string
-}
-
-func (m *connectivityMatcher) Match(actual interface{}) (success bool, err error) {
-	success = actual.(connectionSource).CanConnectTo(m.ip, m.port, m.protocol) != nil
-	return
-}
-
-func (m *connectivityMatcher) FailureMessage(actual interface{}) (message string) {
-	src := actual.(connectionSource)
-	message = fmt.Sprintf("Expected %v\n\t%+v\nto have connectivity to %v\n\t%v:%v\nbut it does not", src.SourceName(), src, m.targetName, m.ip, m.port)
-	return
-}
-
-func (m *connectivityMatcher) NegatedFailureMessage(actual interface{}) (message string) {
-	src := actual.(connectionSource)
-	message = fmt.Sprintf("Expected %v\n\t%+v\nnot to have connectivity to %v\n\t%v:%v\nbut it does", src.SourceName(), src, m.targetName, m.ip, m.port)
-	return
-}
-
-type expectation struct {
-	from      connectionSource     // Workload or Container
-	to        *connectivityMatcher // Workload or IP, + port
-	expected  bool
-	expSrcIPs []string
-}
-
-func (e expectation) Matches(response *conncheck.Response, checkSNAT bool) bool {
-	if e.expected {
-		if response == nil {
-			return false
-		}
-		if checkSNAT {
-			for _, src := range e.expSrcIPs {
-				if src == response.SourceIP() {
-					return true
-				}
-			}
-			return false
-		}
-	} else {
-		if response != nil {
-			return false
-		}
-	}
-	return true
-}
-
-var UnactivatedConnectivityCheckers = set.New()
-
-// ConnectivityChecker records a set of connectivity expectations and supports calculating the
-// actual state of the connectivity between the given workloads.  It is expected to be used like so:
-//
-//     var cc = &workload.ConnectivityChecker{}
-//     cc.ExpectNone(w[2], w[0], 1234)
-//     cc.ExpectSome(w[1], w[0], 5678)
-//     Eventually(cc.ActualConnectivity, "10s", "100ms").Should(Equal(cc.ExpectedConnectivityPretty()))
-//
-// Note that the ActualConnectivity method is passed to Eventually as a function pointer to allow
-// Ginkgo to re-evaluate the result as needed.
-type ConnectivityChecker struct {
-	ReverseDirection bool
-	Protocol         string // "tcp" or "udp"
-	expectations     []expectation
-	CheckSNAT        bool
-}
-
-func (c *ConnectivityChecker) ExpectSome(from connectionSource, to connectionTarget, explicitPort ...uint16) {
-	UnactivatedConnectivityCheckers.Add(c)
-	if c.ReverseDirection {
-		from, to = to.(connectionSource), from.(connectionTarget)
-	}
-	c.expectations = append(c.expectations, expectation{from, to.ToMatcher(explicitPort...), true, from.SourceIPs()})
-}
-
-func (c *ConnectivityChecker) ExpectSNAT(from connectionSource, srcIP string, to connectionTarget, explicitPort ...uint16) {
-	UnactivatedConnectivityCheckers.Add(c)
-	c.CheckSNAT = true
-	if c.ReverseDirection {
-		from, to = to.(connectionSource), from.(connectionTarget)
-	}
-	c.expectations = append(c.expectations, expectation{from, to.ToMatcher(explicitPort...), true, []string{srcIP}})
-}
-
-func (c *ConnectivityChecker) ExpectNone(from connectionSource, to connectionTarget, explicitPort ...uint16) {
-	UnactivatedConnectivityCheckers.Add(c)
-	if c.ReverseDirection {
-		from, to = to.(connectionSource), from.(connectionTarget)
-	}
-	c.expectations = append(c.expectations, expectation{from, to.ToMatcher(explicitPort...), false, nil})
-}
-
-func (c *ConnectivityChecker) ResetExpectations() {
-	c.expectations = nil
-	c.CheckSNAT = false
-}
-
-// ActualConnectivity calculates the current connectivity for all the expected paths.  It returns a
-// slice containing one response for each attempted check (or nil if the check failed) along with
-// a same-length slice containing a pretty-printed description of the check and its result.
-func (c *ConnectivityChecker) ActualConnectivity() ([]*conncheck.Response, []string) {
-	UnactivatedConnectivityCheckers.Discard(c)
-	var wg sync.WaitGroup
-	responses := make([]*conncheck.Response, len(c.expectations))
-	pretty := make([]string, len(c.expectations))
-	for i, exp := range c.expectations {
-		wg.Add(1)
-		go func(i int, exp expectation) {
-			defer GinkgoRecover()
-			defer wg.Done()
-			p := "tcp"
-			if c.Protocol != "" {
-				p = c.Protocol
-			}
-			responses[i] = exp.from.CanConnectTo(exp.to.ip, exp.to.port, p)
-			pretty[i] = fmt.Sprintf("%s -> %s = %v", exp.from.SourceName(), exp.to.targetName, responses[i] != nil)
-			if c.CheckSNAT && responses[i] != nil {
-				srcIP := strings.Split(responses[i].SourceAddr, ":")[0]
-				pretty[i] += " (from " + srcIP + ")"
-			}
-		}(i, exp)
-	}
-	wg.Wait()
-	log.Debug("Connectivity", responses)
-	return responses, pretty
-}
-
-// ExpectedConnectivityPretty returns one string per recorded expectation in order, encoding the expected
-// connectivity in similar format used by ActualConnectivity().
-func (c *ConnectivityChecker) ExpectedConnectivityPretty() []string {
-	result := make([]string, len(c.expectations))
-	for i, exp := range c.expectations {
-		result[i] = fmt.Sprintf("%s -> %s = %v", exp.from.SourceName(), exp.to.targetName, exp.expected)
-		if c.CheckSNAT && exp.expected {
-			result[i] += " (from " + strings.Join(exp.expSrcIPs, "|") + ")"
-		}
-	}
-	return result
-}
-
-var defaultConnectivityTimeout = 10 * time.Second
-
-func (c *ConnectivityChecker) CheckConnectivityOffset(offset int, optionalDescription ...interface{}) {
-	c.CheckConnectivityWithTimeoutOffset(offset+2, defaultConnectivityTimeout, optionalDescription...)
-}
-
-func (c *ConnectivityChecker) CheckConnectivity(optionalDescription ...interface{}) {
-	c.CheckConnectivityWithTimeoutOffset(2, defaultConnectivityTimeout, optionalDescription...)
-}
-
-func (c *ConnectivityChecker) CheckConnectivityWithTimeout(timeout time.Duration, optionalDescription ...interface{}) {
-	Expect(timeout).To(BeNumerically(">", 100*time.Millisecond),
-		"Very low timeout, did you mean to multiply by time.<Unit>?")
-	if len(optionalDescription) > 0 {
-		Expect(optionalDescription[0]).NotTo(BeAssignableToTypeOf(time.Second),
-			"Unexpected time.Duration passed for description")
-	}
-	c.CheckConnectivityWithTimeoutOffset(2, timeout, optionalDescription...)
-}
-
-func (c *ConnectivityChecker) CheckConnectivityWithTimeoutOffset(callerSkip int, timeout time.Duration, optionalDescription ...interface{}) {
-	var expConnectivity []string
-	start := time.Now()
-
-	// Track the number of attempts. If the first connectivity check fails, we want to
-	// do at least one retry before we time out.  That covers the case where the first
-	// connectivity check takes longer than the timeout.
-	completedAttempts := 0
-	var actualConn []*conncheck.Response
-	var actualConnPretty []string
-	for time.Since(start) < timeout || completedAttempts < 2 {
-		actualConn, actualConnPretty = c.ActualConnectivity()
-		failed := false
-		expConnectivity = c.ExpectedConnectivityPretty()
-		for i := range c.expectations {
-			exp := c.expectations[i]
-			act := actualConn[i]
-			if !exp.Matches(act, c.CheckSNAT) {
-				failed = true
-				actualConnPretty[i] += " <---- WRONG"
-				expConnectivity[i] += " <---- EXPECTED"
-			}
-		}
-		if !failed {
-			// Success!
-			return
-		}
-		completedAttempts++
-	}
-
-	message := fmt.Sprintf(
-		"Connectivity was incorrect:\n\nExpected\n    %s\nto match\n    %s",
-		strings.Join(actualConnPretty, "\n    "),
-		strings.Join(expConnectivity, "\n    "),
-	)
-	Fail(message, callerSkip)
 }
