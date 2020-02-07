@@ -237,6 +237,8 @@ func (c *networkPolicyClient) List(ctx context.Context, list model.ListInterface
 	}
 
 	// List all Namespaced Calico Network Policies.
+	// For consistency, we should split the revision that was input into CRD and K8s revisions,
+	// but the CRD client will fail on any non-empty revision anyway, so don't bother.
 	npKvps, err := c.crdClient.List(ctx, l, revision)
 	if err != nil {
 		log.WithError(err).Info("Unable to list Calico CRD-backed Network Policy resources")
@@ -342,6 +344,7 @@ func (c *networkPolicyClient) Watch(ctx context.Context, list model.ListInterfac
 		if !ok {
 			return nil, errors.New("NetworkPolicy conversion with incorrect k8s resource type")
 		}
+
 		return c.K8sNetworkPolicyToCalico(np)
 	}
 	k8sWatch := newK8sWatcherConverter(ctx, "NetworkPolicy (namespaced)", converter, k8sRawWatch)
@@ -471,16 +474,16 @@ func (npw *networkPolicyWatcher) processNPEvents() {
 		// event needs to able to be passed back into a Watch client so that we can resume watching
 		// when a watch fails.  The watch client is expecting a slash separated list of resource
 		// versions in the format <CRD NP Revision>/<k8s NP Revision>.
-		var value interface{}
+		var kvp *model.KVPair
 		switch e.Type {
 		case api.WatchModified, api.WatchAdded:
-			value = e.New.Value
+			kvp = e.New
 		case api.WatchDeleted:
-			value = e.Old.Value
+			kvp = e.Old
 		}
 
-		if value != nil {
-			oma, ok := value.(metav1.ObjectMetaAccessor)
+		if kvp != nil && kvp.Value != nil {
+			oma, ok := kvp.Value.(metav1.ObjectMetaAccessor)
 			if !ok {
 				log.WithField("event", e).Error(
 					"Resource returned from watch does not implement the ObjectMetaAccessor interface")
@@ -496,7 +499,12 @@ func (npw *networkPolicyWatcher) processNPEvents() {
 			} else {
 				npw.k8sNPRev = oma.GetObjectMeta().GetResourceVersion()
 			}
-			oma.GetObjectMeta().SetResourceVersion(npw.JoinNetworkPolicyRevisions(npw.crdNPRev, npw.k8sNPRev))
+			revision := npw.JoinNetworkPolicyRevisions(npw.crdNPRev, npw.k8sNPRev)
+			log.WithField("revision", revision).Debug("updating NP revision")
+			// The revision is accessible both on the object itself, and on the KVP.  Update them both to match.
+			oma.GetObjectMeta().SetResourceVersion(revision)
+			kvp.Revision = revision
+
 		} else if e.Error == nil {
 			log.WithField("event", e).Warning("Event had nil error and value")
 		}

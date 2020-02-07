@@ -456,6 +456,7 @@ func (c Converter) K8sNetworkPolicyToCalico(np *networkingv1.NetworkPolicy) (*mo
 		Namespace:         np.Namespace,
 		CreationTimestamp: np.CreationTimestamp,
 		UID:               np.UID,
+		ResourceVersion:   np.ResourceVersion,
 	}
 	policy.Spec = apiv3.NetworkPolicySpec{
 		Order:    &order,
