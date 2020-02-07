@@ -1,1 +1,0 @@
-This is the geeky details of kdd datastore!

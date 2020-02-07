@@ -17,7 +17,7 @@ To enable Calico network policy enforcement, follow these step-by-step instructi
 [Enabling network policy enforcement](https://cloud.google.com/kubernetes-engine/docs/how-to/network-policy).
 
 The geeky details of what you've get:
-{% include geek-details.html details='Policy:Calico,IPAM:Host Local,CNI:Calico,Overlay:No,Routing:VPC Native,Datastore:KDD' %}
+{% include geek-details.html details='Policy:Calico,IPAM:Host Local,CNI:Calico,Overlay:No,Routing:VPC Native,Datastore:Kubernetes' %}
 
 ### Above and beyond
 
