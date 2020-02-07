@@ -1,7 +1,7 @@
 <div class="geek-details">
     {% assign details = include.details | split: ',' %}
     {% for detail in details %}
-        {% assign kv = detail | split: ',' %}
+        {% assign kv = detail | split: ':' %}
         <div class="geek-detail">
             {{ kv[0] }}
             <div class="geek-detail-value">
