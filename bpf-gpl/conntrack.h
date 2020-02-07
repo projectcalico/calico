@@ -34,7 +34,6 @@ enum cali_ct_type {
 	CALI_CT_TYPE_NORMAL     = 0x00,  // Non-NATted entry.
 	CALI_CT_TYPE_NAT_FWD    = 0x01, // Forward entry for a DNATted flow, keyed on orig src/dst. Points to the reverse entry.
 	CALI_CT_TYPE_NAT_REV    = 0x02, // "Reverse" entry for a NATted flow, contains NAT + tracking information.
-	CALI_CT_TYPE_NORMAL_TUN = 0x03, // NORMAL + reverse for tunneled encap on the return path
 
 	CALI_CT_FLAG_NAT_OUT    = 0x01,
 };
@@ -69,10 +68,12 @@ struct calico_ct_value {
 			struct calico_ct_leg a_to_b; // 24
 			struct calico_ct_leg b_to_a; // 32
 
-			// CALI_CT_TYPE_NAT_REV & CALI_CT_TYPE_NORMAL_TUN.
+			// CALI_CT_TYPE_NAT_REV
 			__u32 orig_ip;                     // 40
 			__u16 orig_port;                   // 44
 			__u8 pad1[2];                      // 46
+			__u32 tun_ip;                      // 48
+			__u32 pad3;                        // 52
 		};
 
 		// CALI_CT_TYPE_NAT_FWD; key for the CALI_CT_TYPE_NAT_REV entry.
@@ -194,14 +195,12 @@ static CALI_BPF_INLINE int calico_ct_v4_create_tracking(struct ct_ctx *ctx,
 		ct_value.flags |= CALI_CT_FLAG_NAT_OUT;
 	}
 
-	if (ctx->nat_tun_src) {
-		ct_value.orig_ip = ctx->nat_tun_src;
-		ct_value.orig_port = 0;
+	if (type == CALI_CT_TYPE_NAT_REV && ctx->nat_tun_src) {
+		ct_value.tun_ip = ctx->nat_tun_src;
 		CALI_DEBUG("CT-ALL nat tunneled from %x\n", be32_to_host(ctx->nat_tun_src));
-	} else {
-		ct_value.orig_ip = orig_dst;
-		ct_value.orig_port = orig_dport;
 	}
+	ct_value.orig_ip = orig_dst;
+	ct_value.orig_port = orig_dport;
 	struct calico_ct_leg *src_to_dst, *dst_to_src;
 	bool srcLTDest = (ip_src < ip_dst) || ((ip_src == ip_dst) && sport < dport);
 	if (srcLTDest) {
@@ -292,11 +291,7 @@ static CALI_BPF_INLINE int calico_ct_v4_create(struct ct_ctx *ctx)
 {
 	struct calico_ct_key k;
 
-	if (!ctx->nat_tun_src) {
-		return calico_ct_v4_create_tracking(ctx, &k, CALI_CT_TYPE_NORMAL);
-	} else {
-		return calico_ct_v4_create_tracking(ctx, &k, CALI_CT_TYPE_NORMAL_TUN);
-	}
+	return calico_ct_v4_create_tracking(ctx, &k, CALI_CT_TYPE_NORMAL);
 }
 
 static CALI_BPF_INLINE int calico_ct_v4_create_nat(struct ct_ctx *ctx)
@@ -321,18 +316,9 @@ enum calico_ct_result_type {
 struct calico_ct_result {
 	__s16 rc;
 	__u16 flags;
-
-	union {
-		// For CALI_CT_ESTABLISHED_SNAT and CALI_CT_ESTABLISHED_DNAT.
-		struct {
-			__be32 nat_ip;
-			__u32 nat_port;
-		};
-		/* For CALI_CT_ESTABLISHED & CALI_CT_ESTABLISHED_BYPASS,
-		 * non-zero when CALI_CT_TYPE_NORMAL_TUN was found
-		 */
-		__be32 tun_ret_ip;
-	};
+	__be32 nat_ip;
+	__u32 nat_port;
+	__be32 tun_ret_ip;
 };
 
 static CALI_BPF_INLINE void calico_ct_v4_tcp_delete(
@@ -505,6 +491,8 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_lookup(struct ct_ctx
 			result.nat_ip = v->nat_rev_key.addr_a;
 			result.nat_port = v->nat_rev_key.port_a;
 		}
+		result.tun_ret_ip = tracking_v->tun_ip;
+		CALI_CT_DEBUG("fwd tun_ip:%x\n", be32_to_host(tracking_v->tun_ip));
 
 		if (proto == IPPROTO_ICMP) {
 			result.rc =	CALI_CT_ESTABLISHED_DNAT;
@@ -542,8 +530,8 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_lookup(struct ct_ctx
 		// Packet is heading away from the host namespace; either entering a workload or
 		// leaving via a host endpoint, actually reverse the NAT.
 		snat = !CALI_F_TO_HOST;
-		/* Packet is returning from a NAT tunnel */
-		snat |= (dnat_should_decap() && ctx->nat_tun_src);
+		/* if returning packet into a tunnel */
+		snat |= (dnat_return_should_encap() && v->tun_ip);
 		snat = snat && dst_to_src->opener;
 
 		if (snat) {
@@ -555,12 +543,10 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_lookup(struct ct_ctx
 			CALI_CT_DEBUG("Hit! NAT REV entry but not connection opener: ESTABLISHED.\n");
 			result.rc =	CALI_CT_ESTABLISHED;
 		}
+		result.tun_ret_ip = v->tun_ip;
+		CALI_CT_DEBUG("tun_ip:%x\n", be32_to_host(v->tun_ip));
 		break;
 
-	case CALI_CT_TYPE_NORMAL_TUN:
-		CALI_CT_DEBUG("Hit! NORMAL_TUN entry.\n");
-		result.tun_ret_ip = v->orig_ip;
-		/* fall through */
 	case CALI_CT_TYPE_NORMAL:
 		if (v->type == CALI_CT_TYPE_NORMAL) {
 			CALI_CT_DEBUG("Hit! NORMAL entry.\n");
@@ -616,6 +602,10 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_lookup(struct ct_ctx
 			CALI_CT_DEBUG("Packet not allowed by ingress/egress whitelist flags (TH).\n");
 			result.rc = tcp_header ? CALI_CT_INVALID : CALI_CT_NEW;
 		}
+	} else if (CALI_F_FROM_HEP && ctx->nat_tun_src &&
+			result.rc == CALI_CT_ESTABLISHED_DNAT && src_to_dst->whitelisted &&
+			!result.tun_ret_ip) {
+		CALI_DEBUG("Packet returned from tunnel %d\n", be32_to_host(ctx->nat_tun_src));
 	} else {
 		// Dest of the packet is the workload, so check the dest whitelist.
 		if (dst_to_src->whitelisted) {

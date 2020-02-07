@@ -489,7 +489,9 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 	}
 
 	// Do a NAT table lookup.
-	nat_dest = calico_v4_nat_lookup(state.ip_src, state.ip_dst, state.ip_proto, state.dport);
+	nat_dest = calico_v4_nat_lookup2(state.ip_src, state.ip_dst,
+					 state.ip_proto, state.dport,
+					 state.nat_tun_src != 0);
 	if (nat_dest != NULL) {
 		// If the packet passes policy, we'll NAT it below, for now, just
 		// update the dest IP/port for the policy lookup.
@@ -723,6 +725,14 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct __sk_buff *skb,
 	case CALI_CT_ESTABLISHED_DNAT:
 		/* align with CALI_CT_NEW */
 		if (state->ct_result.rc == CALI_CT_ESTABLISHED_DNAT) {
+			if (CALI_F_FROM_HEP && state->nat_tun_src && !state->ct_result.tun_ret_ip) {
+				/* Packet is returning from a NAT tunnel,
+				 * already SNATed, just forward it.
+				 */
+				seen_mark = CALI_SKB_MARK_BYPASS_FWD;
+				CALI_DEBUG("returned from NAT tunnel\n");
+				goto allow;
+			}
 			state->post_nat_ip_dst = state->ct_result.nat_ip;
 			state->post_nat_dport = state->ct_result.nat_port;
 		}
@@ -743,8 +753,14 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct __sk_buff *skb,
 			encap_needed = !cali_rt_is_local(rt);
 		}
 
-		if (encap_needed && ip_is_dnf(ip_header) && vxlan_v4_encap_too_big(skb)) {
-			goto icmp_too_big;
+		if (encap_needed) {
+			if (ip_is_dnf(ip_header) && vxlan_v4_encap_too_big(skb)) {
+				goto icmp_too_big;
+			}
+			state->ip_src = cali_host_ip();
+			state->ip_dst = cali_rt_is_workload(rt) ? rt->next_hop : state->post_nat_ip_dst;
+			seen_mark = CALI_SKB_MARK_BYPASS_FWD;
+			goto nat_encap;
 		}
 
 		ip_header->daddr = state->post_nat_ip_dst;
@@ -774,13 +790,6 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct __sk_buff *skb,
 			goto deny;
 		}
 
-		if (encap_needed) {
-			state->ip_src = cali_host_ip();
-			state->ip_dst = cali_rt_is_workload(rt) ? rt->next_hop : state->post_nat_ip_dst;
-			seen_mark = CALI_SKB_MARK_BYPASS_FWD;
-			goto nat_encap;
-		}
-
 		state->dport = state->post_nat_dport;
 		state->ip_dst = state->post_nat_ip_dst;
 
@@ -788,6 +797,13 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct __sk_buff *skb,
 
 	case CALI_CT_ESTABLISHED_SNAT:
 		CALI_DEBUG("CT: SNAT to %x:%d\n", be32_to_host(state->ct_result.nat_ip), state->ct_result.nat_port);
+
+		if (dnat_return_should_encap() && state->ct_result.tun_ret_ip) {
+			/* XXX do this before NAT until we can track the icmp back */
+			if (ip_is_dnf(ip_header) && vxlan_v4_encap_too_big(skb)) {
+				goto icmp_too_big;
+			}
+		}
 
 		// Actually do the NAT.
 		ip_header->saddr = state->ct_result.nat_ip;
@@ -817,16 +833,14 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct __sk_buff *skb,
 			goto deny;
 		}
 
+		if (dnat_return_should_encap() && state->ct_result.tun_ret_ip) {
+			state->ip_dst = state->ct_result.tun_ret_ip;
+			seen_mark = CALI_SKB_MARK_BYPASS_NAT_RET_ENCAPED;
+			goto nat_encap;
+		}
+
 		state->sport = state->ct_result.nat_port;
 		state->ip_src = state->ct_result.nat_ip;
-
-		/* Packet is returning from the DNAT tunnel and has been approved by the
-		 * host policy. This packet is going to be forwarded to its original
-		 * destination. Skip checks on the CALI_TC_FLAGS_TO_HOST egress path
-		 */
-		if (state->nat_tun_src) {
-			seen_mark = CALI_SKB_MARK_BYPASS_FWD;
-		}
 
 		goto allow;
 
@@ -834,15 +848,6 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct __sk_buff *skb,
 		seen_mark = CALI_SKB_MARK_BYPASS;
 		// fall through
 	case CALI_CT_ESTABLISHED:
-		if (dnat_return_should_encap() && state->ct_result.tun_ret_ip) {
-			if (ip_is_dnf(ip_header) && vxlan_v4_encap_too_big(skb)) {
-				goto icmp_too_big;
-			}
-			state->ip_dst = state->ct_result.tun_ret_ip;
-			seen_mark = CALI_SKB_MARK_BYPASS_NAT_RET_ENCAPED;
-			goto nat_encap;
-		}
-
 		goto allow;
 	default:
 		if (CALI_F_FROM_HEP) {
