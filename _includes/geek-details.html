@@ -5,9 +5,9 @@
             {% assign kv = detail | split: ':' %}
             <div class="geek-detail">
                 {{ kv[0] }}
-                <button class="geek-detail-value" id="geekValue{{ kv[0] }}">
+                <div class="geek-detail-value" id="geekValue{{ kv[0] }}">
                     {{ kv[1] }}
-                </button>
+                </div>
             </div> 
             <div class="modal fade" id="geekModal{{ kv[0] }}"  role="dialog">
                 <div class="modal-dialog">
