@@ -61,8 +61,10 @@ import (
 //   should be programming the same NAT mappings.
 var _ = describeBPFTests(withProto("tcp"), withConnTimeLoadBalancingEnabled())
 var _ = describeBPFTests(withProto("udp"), withConnTimeLoadBalancingEnabled())
+var _ = describeBPFTests(withProto("udp"), withConnTimeLoadBalancingEnabled(), withUDPUnConnected())
 var _ = describeBPFTests(withProto("tcp"))
 var _ = describeBPFTests(withProto("udp"))
+var _ = describeBPFTests(withProto("udp"), withUDPUnConnected())
 var _ = describeBPFTests(withTunnel("ipip"), withProto("tcp"), withConnTimeLoadBalancingEnabled())
 var _ = describeBPFTests(withTunnel("ipip"), withProto("udp"), withConnTimeLoadBalancingEnabled())
 var _ = describeBPFTests(withTunnel("ipip"), withProto("tcp"))
@@ -77,6 +79,7 @@ var _ = describeBPFTests(withProto("tcp"),
 type bpfTestOptions struct {
 	connTimeEnabled bool
 	protocol        string
+	udpUnConnected  bool
 	bpfLogLevel     string
 	tunnel          string
 }
@@ -107,6 +110,12 @@ func withTunnel(tunnel string) bpfTestOpt {
 	}
 }
 
+func withUDPUnConnected() bpfTestOpt {
+	return func(opts *bpfTestOptions) {
+		opts.udpUnConnected = true
+	}
+}
+
 const expectedRouteDump = `10.65.0.2/32: local workload in-pool nat-out idx -
 10.65.0.3/32: local workload in-pool nat-out idx -
 10.65.1.0/26: remote workload in-pool nh FELIX_1
@@ -132,8 +141,12 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 	for _, o := range opts {
 		o(&testOpts)
 	}
-	desc := fmt.Sprintf("_BPF_ _BPF-SAFE_ BPF tests (%s, ct=%v, log=%s, tunnel=%s)",
-		testOpts.protocol, testOpts.connTimeEnabled, testOpts.bpfLogLevel, testOpts.tunnel)
+	protoExt := ""
+	if testOpts.udpUnConnected {
+		protoExt = "-unconnected"
+	}
+	desc := fmt.Sprintf("_BPF_ _BPF-SAFE_ BPF tests (%s%s, ct=%v, log=%s, tunnel=%s)",
+		testOpts.protocol, protoExt, testOpts.connTimeEnabled, testOpts.bpfLogLevel, testOpts.tunnel)
 	return infrastructure.DatastoreDescribe(desc, []apiconfig.DatastoreType{apiconfig.Kubernetes}, func(getInfra infrastructure.InfraFactory) {
 
 		var (
@@ -161,13 +174,17 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 			if os.Getenv("FELIX_FV_ENABLE_BPF") != "true" {
 				Skip("Skipping BPF test in non-BPF run.")
 			}
-			bpfLog = containers.Run("bpf-log", containers.RunOpts{AutoRemove: true}, "--privileged", "calico/bpftool:v5.3-amd64", "/bpftool", "prog", "tracelog")
+			bpfLog = containers.Run("bpf-log", containers.RunOpts{AutoRemove: true}, "--privileged",
+				"calico/bpftool:v5.3-amd64", "/bpftool", "prog", "tracelog")
 			infra = getInfra()
 
 			cc = &Checker{
 				CheckSNAT: true,
 			}
 			cc.Protocol = testOpts.protocol
+			if testOpts.protocol == "udp" && testOpts.udpUnConnected {
+				cc.Protocol += "-noconn"
+			}
 
 			options = infrastructure.DefaultTopologyOptions()
 			options.FelixLogSeverity = "debug"
@@ -200,6 +217,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 					felix.Exec("calico-bpf", "conntrack", "dump")
 					log.Infof("[%d]FrontendMap: %+v", i, currBpfsvcs[i])
 					log.Infof("[%d]NATBackend: %+v", i, currBpfeps[i])
+					log.Infof("[%d]SendRecvMap: %+v", i, dumpSendRecvMap(felix))
 				}
 			}
 		})
@@ -559,9 +577,10 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 					)
 
 					testSvcName := "test-service"
+					tgtPort := 8055
 
 					BeforeEach(func() {
-						testSvc = k8sService(testSvcName, "10.101.0.10", w[0][0], 80, 8055, 0, testOpts.protocol)
+						testSvc = k8sService(testSvcName, "10.101.0.10", w[0][0], 80, tgtPort, 0, testOpts.protocol)
 						testSvcNamespace = testSvc.ObjectMeta.Namespace
 						_, err := k8sClient.CoreV1().Services(testSvcNamespace).Create(testSvc)
 						Expect(err).NotTo(HaveOccurred())
@@ -887,7 +906,6 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						cc.ExpectSome(w[1][0], TargetIP(clusterIP), port)
 						cc.ExpectSome(w[1][1], TargetIP(clusterIP), port)
 						cc.CheckConnectivity()
-
 					})
 
 					if localOnly {
@@ -1041,6 +1059,7 @@ func dumpNATMaps(felix *infrastructure.Felix) (nat.MapMem, nat.BackendMapMem) {
 func dumpBPFMap(felix *infrastructure.Felix, m bpf.Map, iter bpf.MapIter) {
 	cmd, err := bpf.DumpMapCmd(m)
 	Expect(err).NotTo(HaveOccurred())
+	log.WithField("cmd", cmd).Debug("dumpBPFMap")
 	out, err := felix.ExecOutput(cmd...)
 	Expect(err).NotTo(HaveOccurred())
 	err = bpf.IterMapCmdOutput([]byte(out), iter)
@@ -1065,6 +1084,13 @@ func dumpAffMap(felix *infrastructure.Felix) nat.AffinityMapMem {
 	bm := nat.AffinityMap(&bpf.MapContext{})
 	m := make(nat.AffinityMapMem)
 	dumpBPFMap(felix, bm, nat.AffinityMapMemIter(m))
+	return m
+}
+
+func dumpSendRecvMap(felix *infrastructure.Felix) nat.SendRecvMsgMapMem {
+	bm := nat.SendRecvMsgMap(&bpf.MapContext{})
+	m := make(nat.SendRecvMsgMapMem)
+	dumpBPFMap(felix, bm, nat.SendRecvMsgMapMemIter(m))
 	return m
 }
 

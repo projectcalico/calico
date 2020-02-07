@@ -79,6 +79,49 @@ func RemoveConnectTimeLoadBalancer(cgroupv2 string) error {
 	return nil
 }
 
+func installProgram(name, ipver, bpfMount, cgroupPath, logLevel string, maps ...bpf.Map) error {
+
+	progPinDir := path.Join(bpfMount, "calico_connect4")
+	_ = os.RemoveAll(progPinDir)
+
+	var filename string
+
+	if ipver == "6" {
+		filename = path.Join("/code/bpf/bin", ProgFileName(logLevel, 6))
+	} else {
+		filename = path.Join("/code/bpf/bin", ProgFileName(logLevel, 4))
+	}
+	args := []string{"prog", "loadall", filename, progPinDir, "type", "cgroup/" + name + ipver}
+	for _, m := range maps {
+		args = append(args, "map", "name", m.GetName(), "pinned", m.Path())
+	}
+
+	cmd := exec.Command("bpftool", args...)
+	log.WithField("args", cmd.Args).Info("About to run bpftool")
+	progName := "calico_" + name + "_v" + ipver
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		err = errors.Wrapf(err, "failed to load program %s", progName)
+		goto out
+	}
+
+	cmd = exec.Command("bpftool", "cgroup", "attach", cgroupPath,
+		name+ipver, "pinned", path.Join(progPinDir, progName))
+	log.WithField("args", cmd.Args).Info("About to run bpftool")
+	out, err = cmd.CombinedOutput()
+	if err != nil {
+		err = errors.Wrapf(err, "failed to attach program %s", progName)
+		goto out
+	}
+
+out:
+	if err != nil {
+		log.WithError(err).WithField("output", string(out)).Error("Failed install cgroup program.")
+	}
+
+	return nil
+}
+
 func InstallConnectTimeLoadBalancer(frontendMap, backendMap, rtMap bpf.Map, cgroupv2 string, logLevel string) error {
 	bpfMount, err := bpf.MaybeMountBPFfs()
 	if err != nil {
@@ -91,44 +134,70 @@ func InstallConnectTimeLoadBalancer(frontendMap, backendMap, rtMap bpf.Map, cgro
 		return errors.Wrap(err, "failed to set-up cgroupv2")
 	}
 
-	progPinDir := path.Join(bpfMount, "calico_connect4")
+	repin := false
+	if pm, ok := frontendMap.(*bpf.PinnedMap); ok {
+		repin = pm.RepinningEnabled()
+	}
 
-	_ = os.RemoveAll(progPinDir)
+	sendrecvMap := SendRecvMsgMap(&bpf.MapContext{
+		RepinningEnabled: repin,
+	})
 
-	filename := path.Join("/code/bpf/bin", ProgFileName(logLevel))
-	cmd := exec.Command("bpftool", "prog", "loadall", filename, progPinDir,
-		"type", "cgroup/connect4",
-		"map", "name", frontendMap.GetName(), "pinned", frontendMap.Path(),
-		"map", "name", backendMap.GetName(), "pinned", backendMap.Path(),
-		"map", "name", rtMap.GetName(), "pinned", rtMap.Path(),
-	)
-	log.WithField("args", cmd.Args).Info("About to run bpftool")
-	out, err := cmd.CombinedOutput()
+	err = sendrecvMap.EnsureExists()
 	if err != nil {
-		log.WithError(err).WithField("output", string(out)).Error("Failed to load connect-time load balancing program.")
+		return errors.WithMessage(err, "failed to create sendrecv BPF Map")
+	}
+
+	maps := []bpf.Map{frontendMap, backendMap, rtMap}
+
+	err = installProgram("connect", "4", bpfMount, cgroupPath, logLevel, maps...)
+	if err != nil {
 		return err
 	}
 
-	cmd = exec.Command("bpftool", "cgroup", "attach", cgroupPath, "connect4", "pinned", path.Join(progPinDir, "calico_connect_v4"))
-	log.WithField("args", cmd.Args).Info("About to run bpftool")
-	out, err = cmd.CombinedOutput()
+	maps = append(maps, sendrecvMap)
+
+	err = installProgram("sendmsg", "4", bpfMount, cgroupPath, logLevel, maps...)
 	if err != nil {
-		log.WithError(err).WithField("output", string(out)).Error("Failed to attach connect-time load balancing program.")
-		return errors.Wrap(err, "failed to attach connect-time load balancing program")
+		return err
+	}
+
+	err = installProgram("recvmsg", "4", bpfMount, cgroupPath, logLevel, maps...)
+	if err != nil {
+		return err
+	}
+
+	err = installProgram("sendmsg", "6", bpfMount, cgroupPath, logLevel)
+	if err != nil {
+		return err
+	}
+
+	err = installProgram("recvmsg", "6", bpfMount, cgroupPath, logLevel, sendrecvMap)
+	if err != nil {
+		return err
 	}
 
 	return nil
 }
 
-func ProgFileName(logLevel string) string {
+func ProgFileName(logLevel string, ipver int) string {
 	logLevel = strings.ToLower(logLevel)
 	if logLevel == "off" {
 		logLevel = "no_log"
 	}
-	return fmt.Sprintf("connect_time_%s.o", logLevel)
+
+	switch ipver {
+	case 4:
+		return fmt.Sprintf("connect_time_%s.o", logLevel)
+	case 6:
+		return fmt.Sprintf("connect_time_%s_v6.o", logLevel)
+	}
+
+	log.WithField("ipver", ipver).Fatal("Invalid IP version")
+	return ""
 }
 
-func CompileConnectTimeLoadBalancer(logLevel string, outFile string) error {
+func compileConnectTimeLoadBalancer(logLevel, inFile, outFile string) error {
 	args := []string{
 		"-x",
 		"c",
@@ -147,7 +216,7 @@ func CompileConnectTimeLoadBalancer(logLevel string, outFile string) error {
 		"-fno-stack-protector",
 		"-O2",
 		"-emit-llvm",
-		"-c", "bpf/cgroup/connect_balancer.c",
+		"-c", inFile,
 		"-o", "-",
 	}
 
@@ -192,6 +261,14 @@ func CompileConnectTimeLoadBalancer(logLevel string, outFile string) error {
 	wg.Wait()
 
 	return nil
+}
+
+func CompileConnectTimeLoadBalancer(logLevel string, outFile string) error {
+	return compileConnectTimeLoadBalancer(logLevel, "bpf/cgroup/connect_balancer.c", outFile)
+}
+
+func CompileConnectTimeLoadBalancerV6(logLevel string, outFile string) error {
+	return compileConnectTimeLoadBalancer(logLevel, "bpf/cgroup/connect_balancer_v6.c", outFile)
 }
 
 func ensureCgroupPath(cgroupv2 string) (string, error) {

@@ -445,3 +445,107 @@ func AffinityMapMemIter(m AffinityMapMem) bpf.MapIter {
 		m[key] = val
 	}
 }
+
+// struct sendrecv4_key {
+// 	uint64_t cookie;
+// 	uint32_t ip;
+// 	uint32_t port;
+// };
+//
+// struct sendrecv4_val {
+// 	uint32_t ip;
+// 	uint32_t port;
+// };
+
+const sendRecvMsgKeySize = 16
+
+// SendRecvMsgKey is the key for SendRecvMsgMap
+type SendRecvMsgKey [sendRecvMsgKeySize]byte
+
+// Cookie returns the socket cookie part of the key that can be used to match
+// the socket.
+func (k SendRecvMsgKey) Cookie() uint64 {
+	return binary.LittleEndian.Uint64(k[0:8])
+}
+
+// IP returns the IP address part of the key
+func (k SendRecvMsgKey) IP() net.IP {
+	return k[8:12]
+}
+
+// Port returns port converted to 16-bit host endianess
+func (k SendRecvMsgKey) Port() uint16 {
+	port := binary.BigEndian.Uint32(k[12:16])
+	return uint16(port >> 16)
+}
+
+func (k SendRecvMsgKey) String() string {
+	return fmt.Sprintf("SendRecvMsgKey{Cookie: 0x%016x, IP: %+v, Port: %+v}", k.Cookie(), k.IP(), k.Port())
+}
+
+const sendRecvMsgValueSize = 8
+
+// SendRecvMsgValue is the value of SendRecvMsgMap
+type SendRecvMsgValue [sendRecvMsgValueSize]byte
+
+// IP returns the IP address part of the key
+func (v SendRecvMsgValue) IP() net.IP {
+	return v[0:4]
+}
+
+// Port returns port converted to 16-bit host endianess
+func (v SendRecvMsgValue) Port() uint16 {
+	port := binary.BigEndian.Uint32(v[4:8])
+	return uint16(port >> 16)
+}
+
+func (v SendRecvMsgValue) String() string {
+	return fmt.Sprintf("SendRecvMsgValue{IP: %+v, Port: %+v}", v.IP(), v.Port())
+}
+
+// SendRecvMsgMapParameters define SendRecvMsgMap
+var SendRecvMsgMapParameters = bpf.MapParameters{
+	Filename:   "/sys/fs/bpf/tc/globals/cali_v4_srmsg",
+	Type:       "lru_hash",
+	KeySize:    sendRecvMsgKeySize,
+	ValueSize:  sendRecvMsgValueSize,
+	MaxEntries: 510000,
+	Name:       "cali_v4_srmsg",
+}
+
+// SendRecvMsgMap tracks reverse translations for sendmsg/recvmsg of
+// unconnected UDP
+func SendRecvMsgMap(mc *bpf.MapContext) bpf.Map {
+	return mc.NewPinnedMap(SendRecvMsgMapParameters)
+}
+
+// SendRecvMsgMapMem represents affinity map in memory
+type SendRecvMsgMapMem map[SendRecvMsgKey]SendRecvMsgValue
+
+// LoadSendRecvMsgMap loads affinity map into memory
+func LoadSendRecvMsgMap(m bpf.Map) (SendRecvMsgMapMem, error) {
+	ret := make(SendRecvMsgMapMem)
+
+	err := m.Iter(SendRecvMsgMapMemIter(ret))
+	if err != nil {
+		ret = nil
+	}
+
+	return ret, err
+}
+
+// SendRecvMsgMapMemIter returns bpf.MapIter that loads the provided SendRecvMsgMapMem
+func SendRecvMsgMapMemIter(m SendRecvMsgMapMem) bpf.MapIter {
+	ks := len(SendRecvMsgKey{})
+	vs := len(SendRecvMsgValue{})
+
+	return func(k, v []byte) {
+		var key SendRecvMsgKey
+		copy(key[:ks], k[:ks])
+
+		var val SendRecvMsgValue
+		copy(val[:vs], v[:vs])
+
+		m[key] = val
+	}
+}

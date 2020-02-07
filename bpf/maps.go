@@ -102,6 +102,13 @@ func (b *PinnedMap) Close() error {
 	return err
 }
 
+func (b *PinnedMap) RepinningEnabled() bool {
+	if b.context == nil {
+		return false
+	}
+	return b.context.RepinningEnabled
+}
+
 // DumpMapCmd returns the command that can be used to dump a map or an error
 func DumpMapCmd(m Map) ([]string, error) {
 	if pm, ok := m.(*PinnedMap); ok {
