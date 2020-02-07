@@ -37,6 +37,10 @@ spec:
   - Egress
   ingress:
   - action: Allow
+    metadata:
+      annotations:
+        from: frontend
+        to: database
     protocol: TCP
     source:
       selector: role == 'frontend'
