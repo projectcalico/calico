@@ -25,7 +25,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/projectcalico/felix/fv/conncheck"
+	"github.com/projectcalico/felix/fv/connectivity"
 
 	"github.com/projectcalico/felix/fv/cgroup"
 
@@ -298,7 +298,7 @@ func main() {
 			encoder := json.NewEncoder(conn)
 
 			for {
-				var request conncheck.Request
+				var request connectivity.Request
 
 				err := decoder.Decode(&request)
 				if err != nil {
@@ -306,7 +306,7 @@ func main() {
 					return
 				}
 
-				response := conncheck.Response{
+				response := connectivity.Response{
 					Timestamp:  time.Now(),
 					SourceAddr: conn.RemoteAddr().String(),
 					ServerAddr: conn.LocalAddr().String(),
@@ -349,14 +349,14 @@ func main() {
 						n, addr, err := p.ReadFrom(buffer)
 						panicIfError(err)
 
-						var request conncheck.Request
+						var request connectivity.Request
 						err = json.Unmarshal(buffer[:n], &request)
 						if err != nil {
 							logCxt.WithError(err).WithField("remoteAddr", addr).Info("Failed to parse data")
 							continue
 						}
 
-						response := conncheck.Response{
+						response := connectivity.Response{
 							Timestamp:  time.Now(),
 							SourceAddr: addr.String(),
 							ServerAddr: p.LocalAddr().String(),

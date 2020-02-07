@@ -28,7 +28,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/projectcalico/felix/fv/conncheck"
+	"github.com/projectcalico/felix/fv/connectivity"
 
 	. "github.com/onsi/gomega"
 	log "github.com/sirupsen/logrus"
@@ -553,7 +553,7 @@ func (c *Container) SourceIPs() []string {
 	return ips
 }
 
-func (c *Container) CanConnectTo(ip, port, protocol string) *conncheck.Response {
+func (c *Container) CanConnectTo(ip, port, protocol string) *connectivity.Response {
 	// Ensure that the container has the 'test-connection' binary.
 	logCxt := log.WithField("container", c.Name)
 	logCxt.Debugf("Entering Container.CanConnectTo(%v,%v,%v)", ip, port, protocol)
@@ -601,7 +601,7 @@ func (c *Container) CanConnectTo(ip, port, protocol string) *conncheck.Response 
 	r := regexp.MustCompile(`RESPONSE=(.*)\n`)
 	m := r.FindSubmatch(wOut)
 	if len(m) > 0 {
-		var resp conncheck.Response
+		var resp connectivity.Response
 		err := json.Unmarshal(m[1], &resp)
 		if err != nil {
 			logCxt.WithError(err).WithField("output", string(wOut)).Panic("Failed to parse connection check response")

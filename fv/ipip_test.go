@@ -1,6 +1,4 @@
-// +build fvtests
-
-// Copyright (c) 2017-2019 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,11 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// +build fvtests
+
 package fv_test
 
 import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+
+	"github.com/projectcalico/felix/fv/connectivity"
 
 	"context"
 	"errors"
@@ -47,7 +49,7 @@ var _ = infrastructure.DatastoreDescribe("IPIP topology before adding host IPs t
 		client  client.Interface
 		w       [2]*workload.Workload
 		hostW   [2]*workload.Workload
-		cc      *workload.ConnectivityChecker
+		cc      *connectivity.Checker
 	)
 
 	BeforeEach(func() {
@@ -82,7 +84,7 @@ var _ = infrastructure.DatastoreDescribe("IPIP topology before adding host IPs t
 			hostW[ii] = workload.Run(felixes[ii], fmt.Sprintf("host%d", ii), "", felixes[ii].IP, "8055", "tcp")
 		}
 
-		cc = &workload.ConnectivityChecker{}
+		cc = &connectivity.Checker{}
 	})
 
 	AfterEach(func() {
