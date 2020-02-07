@@ -2463,11 +2463,12 @@ var _ = testutils.E2eDatastoreDescribe("Test Watch support", testutils.Datastore
 				log.WithFields(log.Fields{
 					"revision": revision,
 					"key": l.KVPairs[i].Key.String()}).Info("[Test] starting watch")
-				_, err := c.Watch(ctx, model.ResourceListOptions{Kind: apiv3.KindNetworkPolicy}, revision)
+				watch, err := c.Watch(ctx, model.ResourceListOptions{Kind: apiv3.KindNetworkPolicy}, revision)
 				Expect(err).ToNot(HaveOccurred())
 				// Since the items in the list aren't guaranteed to be in any specific order, we
 				// can't assert anything useful about what you should get out of this watch, so we
 				// just confirm that there is no error.
+				watch.Stop()
 			}
 		})
 	})
