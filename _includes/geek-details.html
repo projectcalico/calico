@@ -18,7 +18,7 @@
                 </div>
                 <div class="modal-body">
                   <p>Some text in the modal.</p>
-                  {% include geek-details/{{kv[0] | downcase}}-{{append: kv[1] | downcase}}.md %}
+                  {% include geek-details/{{kv[0] | downcase}}-{{kv[1] | downcase}}.md %}
                 </div>
                 <div class="modal-footer">
                   <button type="button" class="btn btn-default" data-dismiss="modal">Close</button>
