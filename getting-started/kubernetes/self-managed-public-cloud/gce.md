@@ -172,6 +172,9 @@ If you wish to customize the {{site.prodname}} install, customize the downloaded
 kubectl apply -f calico.yaml
 ```
 
+The geeky details of what you'll get:
+{% include geek-details.html details='Policy:Calico,IPAM:Calico,CNI:Calico,Overlay:IPIP,Routing:BGP,Datastore:kdd' %}   
+
 #### Other tools and options
 
 ##### Terraform
