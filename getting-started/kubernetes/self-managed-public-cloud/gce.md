@@ -173,7 +173,7 @@ kubectl apply -f calico.yaml
 ```
 
 The geeky details of what you'll get:
-{% include geek-details.html details='Policy:Calico,IPAM:Calico,CNI:Calico,Overlay:IPIP,Routing:BGP,Datastore:kdd' %}   
+{% include geek-details.html details='Policy:Calico,IPAM:Calico,CNI:Calico,Overlay:IPIP,Routing:BGP,Datastore:Kubernetes' %}   
 
 #### Other tools and options
 
