@@ -83,5 +83,5 @@ etcd, complete the following steps.
 1. If you wish to enforce application layer policies and secure workload-to-workload
    communications with mutual TLS authentication, continue to [Enable application layer policy]({{site.baseurl}}/security/app-layer-policy) (optional).
 
-{% include geek-details.html details='Policy:Calico,IPAM:Host-local,CNI:Calico,Overlay:VXLAN,Routing:Static,Datastore:etc' %}   
+{% include geek-details.html details='Policy:Calico,IPAM:Host-local,CNI:Calico,Overlay:VXLAN,Routing:Static,Datastore:etcd' %}   
 
