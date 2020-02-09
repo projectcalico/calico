@@ -1,3 +1,5 @@
+{% capture geek-details-number %}{% increment geek-details-number %}{% endcapture %}
+
 <div class="geek-details-wrapper">
     <div class="geek-details">
         {% assign details = include.details | split: ',' %}
@@ -5,11 +7,11 @@
             {% assign kv = detail | split: ':' %}
             <div class="geek-detail">
                 {{ kv[0] }}
-                <div class="geek-detail-value" id="geekValue{{ kv[0] }}">
+                <div class="geek-detail-value" id="geekValue{{geek-details-number}}{{ kv[0] }}">
                     {{ kv[1] }}
                 </div>
             </div> 
-            <div class="modal fade" id="geekModal{{ kv[0] }}"  role="dialog">
+            <div class="modal fade" id="geekModal{{geek-details-number}}{{ kv[0] }}"  role="dialog">
                 <div class="modal-dialog">
                     <div class="modal-content">
                         <div class="modal-header">
@@ -29,15 +31,15 @@
             </div>    
             <script>
                 $(document).ready(function(){
-                $("#geekValue{{ kv[0] }}").click(function(){
-                    $("#geekModal{{ kv[0] }}").modal();
+                $("#geekValue{{geek-details-number}}{{ kv[0] }}").click(function(){
+                    $("#geekModal{{geek-details-number}}{{ kv[0] }}").modal();
                 });
                 });
             </script>    
         {% endfor %}
     </div>
-    <div class="geek-details-info" id="geekDetailsInfo">?</div>
-    <div class="modal fade" id="geekModalInfo"  role="dialog">
+    <div class="geek-details-info" id="geekDetailsInfo{{geek-details-number}}">?</div>
+    <div class="modal fade" id="geekModalInfo{{geek-details-number}}"  role="dialog">
         <div class="modal-dialog">
             <div class="modal-content">
                 <div class="modal-header">
@@ -56,8 +58,8 @@
     </div>        
     <script>
         $(document).ready(function(){
-        $("#geekDetailsInfo").click(function(){
-            $("#geekModalInfo").modal();
+        $("#geekDetailsInfo{{geek-details-number}}").click(function(){
+            $("#geekModalInfo{{geek-details-number}}").modal();
         });
         });
     </script>    
