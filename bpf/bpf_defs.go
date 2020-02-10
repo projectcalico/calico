@@ -49,3 +49,5 @@ type MapInfo struct {
 	KeySize   int
 	ValueSize int
 }
+
+const ObjectDir = "/usr/lib/calico/bpf"

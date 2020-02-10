@@ -84,9 +84,9 @@ func installProgram(name, ipver, bpfMount, cgroupPath, logLevel string, maps ...
 	var filename string
 
 	if ipver == "6" {
-		filename = path.Join("/code/bpf/bin", ProgFileName(logLevel, 6))
+		filename = path.Join(bpf.ObjectDir, ProgFileName(logLevel, 6))
 	} else {
-		filename = path.Join("/code/bpf/bin", ProgFileName(logLevel, 4))
+		filename = path.Join(bpf.ObjectDir, ProgFileName(logLevel, 4))
 	}
 	args := []string{"prog", "loadall", filename, progPinDir, "type", "cgroup/" + name + ipver}
 	for _, m := range maps {

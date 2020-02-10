@@ -61,7 +61,7 @@ ADD calico-felix-wrapper /usr/bin
 ADD bin/calico-felix-amd64 /code/calico-felix
 ADD bin/calico-bpf /usr/bin/calico-bpf
 
-ADD bpf/ /code/bpf/
+ADD bpf/bin/* /usr/lib/calico/bpf/
 
 RUN ln -s /code/calico-felix /usr/bin
 COPY --from=bpftool /bpftool /usr/bin
