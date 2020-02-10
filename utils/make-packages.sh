@@ -69,7 +69,9 @@ EOF
 		    sed -i "s/^export PBR_VERSION=.*$/export PBR_VERSION=${FORCE_VERSION}/" debian/rules
 		fi
 
-		${DOCKER_RUN_RM} calico-build/${series} dpkg-buildpackage -I -S
+		excludes="${DPKG_EXCL:-'-I'}"
+
+		${DOCKER_RUN_RM} calico-build/${series} dpkg-buildpackage ${excludes} -S
 	    done
 
 	    cat <<EOF
@@ -131,6 +133,7 @@ EOF
 		imageid=$(docker images -q calico-build/centos${elversion}:latest)
 		[ -n "$imageid"  ] && ${DOCKER_RUN_RM} -e EL_VERSION=el${elversion} \
 		    -e FORCE_VERSION=${FORCE_VERSION} \
+		    -e RPM_TAR_ARGS="${RPM_TAR_ARGS}" \
 		    $imageid ../rpm/build-rpms
 	    done
 
