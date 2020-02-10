@@ -4,7 +4,8 @@ Name:           felix
 Summary:        Project Calico virtual networking for cloud data centers
 Version:        -- filled in by 'make rpm' when building packages --
 Release:        -- filled in by 'make rpm' when building packages --
-License:        Apache-2
+# All code is Apache 2.0 except files in bpf-gpl which are GPL-2.
+License:        ASL 2.0 and GPLv2
 URL:            http://projectcalico.org
 Source0:        felix-%{version}.tar.gz
 Source1:        calico-felix.logrotate
