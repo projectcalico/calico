@@ -717,7 +717,42 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 						)
 
 						BeforeEach(func() {
-							natBeforeUpdate, natBackBeforeUpdate = dumpNATmaps(felixes)
+							ip := testSvc.Spec.ClusterIP
+							portOld := uint16(testSvc.Spec.Ports[0].Port)
+							ipv4 := net.ParseIP(ip)
+							oldK := nat.NewNATKey(ipv4, portOld, numericProto)
+
+							// Wait for the NAT maps to converge...
+							log.Info("Waiting for NAT maps to converge...")
+							startTime := time.Now()
+							for {
+								if time.Since(startTime) > 5 * time.Second {
+									Fail("NAT maps failed to converge")
+								}
+								natBeforeUpdate, natBackBeforeUpdate = dumpNATmaps(felixes)
+								for i, m := range natBeforeUpdate {
+									if natV, ok := m[oldK]; !ok {
+										goto retry
+									} else {
+										bckCnt := natV.Count()
+										if bckCnt != 1 {
+											log.Debugf("Expected single backend, not %d; retrying...", bckCnt)
+											goto retry
+										}
+										bckID := natV.ID()
+										bckK := nat.NewNATBackendKey(bckID, 0)
+										if _, ok := natBackBeforeUpdate[i][bckK]; !ok {
+											log.Debugf("Backend not found %v; retrying...", bckK)
+											goto retry
+										}
+									}
+								}
+
+								break
+								retry:
+									time.Sleep(100*time.Millisecond)
+							}
+							log.Info("NAT maps converged.")
 
 							testSvcUpdated = k8sService(testSvcName, "10.101.0.10", w[0][0], 88, 8055, 0, testOpts.protocol)
 
@@ -754,13 +789,12 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 
 							natmaps, natbacks := dumpNATmaps(felixes)
 							ipv4 := net.ParseIP(ip)
-							portNew := uint16(testSvcUpdated.Spec.Ports[0].Port)
 							portOld := uint16(testSvc.Spec.Ports[0].Port)
-							natK := nat.NewNATKey(ipv4, portNew, numericProto)
 							oldK := nat.NewNATKey(ipv4, portOld, numericProto)
+							portNew := uint16(testSvcUpdated.Spec.Ports[0].Port)
+							natK := nat.NewNATKey(ipv4, portNew, numericProto)
 
 							for i := range felixes {
-
 								Expect(natmaps[i]).To(HaveKey(natK))
 								Expect(natmaps[i]).NotTo(HaveKey(nat.NewNATKey(ipv4, portOld, numericProto)))
 
@@ -771,6 +805,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 								bckCnt := natV.Count()
 								bckID := natV.ID()
 
+								log.WithField("backCnt", bckCnt).Debug("Backend count.")
 								for ord := uint32(0); ord < uint32(bckCnt); ord++ {
 									bckK := nat.NewNATBackendKey(bckID, ord)
 									oldBckK := nat.NewNATBackendKey(oldV.ID(), ord)
@@ -782,56 +817,55 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 							}
 						})
 
-						Context("with test-service removed", func() {
-							var (
-								prevBpfsvcs []nat.MapMem
-							)
-
-							BeforeEach(func() {
+						It("after removing service, should not have connectivity from workloads via a service to workload 0", func() {
+							ip := testSvcUpdated.Spec.ClusterIP
+							port := uint16(testSvcUpdated.Spec.Ports[0].Port)
+							natK := nat.NewNATKey(net.ParseIP(ip), port, numericProto)
+							var prevBpfsvcs []nat.MapMem
+							Eventually(func() bool {
 								prevBpfsvcs, _ = dumpNATmaps(felixes)
-								err := k8sClient.CoreV1().
-									Services(testSvcNamespace).
-									Delete(testSvcName, &metav1.DeleteOptions{})
-								Expect(err).NotTo(HaveOccurred())
-								Eventually(k8sGetEpsForServiceFunc(k8sClient, testSvc), "10s").Should(HaveLen(0))
-							})
+								for _, m := range prevBpfsvcs {
+									if _, ok := m[natK]; !ok {
+										return false
+									}
+								}
+								return true
+							}, "5s").Should(BeTrue(), "service NAT key didn't show up")
 
-							It("should not have connectivity from workloads via a service to workload 0", func() {
-								ip := testSvcUpdated.Spec.ClusterIP
-								port := uint16(testSvcUpdated.Spec.Ports[0].Port)
+							err := k8sClient.CoreV1().
+								Services(testSvcNamespace).
+								Delete(testSvcName, &metav1.DeleteOptions{})
+							Expect(err).NotTo(HaveOccurred())
+							Eventually(k8sGetEpsForServiceFunc(k8sClient, testSvc), "10s").Should(HaveLen(0))
 
-								cc.ExpectNone(w[0][1], TargetIP(ip), port)
-								cc.ExpectNone(w[1][0], TargetIP(ip), port)
-								cc.ExpectNone(w[1][1], TargetIP(ip), port)
-								cc.CheckConnectivity()
+							cc.ExpectNone(w[0][1], TargetIP(ip), port)
+							cc.ExpectNone(w[1][0], TargetIP(ip), port)
+							cc.ExpectNone(w[1][1], TargetIP(ip), port)
+							cc.CheckConnectivity()
 
-								for i, f := range felixes {
-									natK := nat.NewNATKey(net.ParseIP(ip), port, numericProto)
-									Expect(prevBpfsvcs[i]).To(HaveKey(natK))
-									natV := prevBpfsvcs[i][natK]
-									bckCnt := natV.Count()
-									bckID := natV.ID()
+							for i, f := range felixes {
+								natV := prevBpfsvcs[i][natK]
+								bckCnt := natV.Count()
+								bckID := natV.ID()
 
-									Eventually(func() bool {
-										svcs := dumpNATMap(f)
-										eps := dumpEPMap(f)
+								Eventually(func() bool {
+									svcs := dumpNATMap(f)
+									eps := dumpEPMap(f)
 
-										if _, ok := svcs[natK]; ok {
+									if _, ok := svcs[natK]; ok {
+										return false
+									}
+
+									for ord := uint32(0); ord < uint32(bckCnt); ord++ {
+										bckK := nat.NewNATBackendKey(bckID, ord)
+										if _, ok := eps[bckK]; ok {
 											return false
 										}
+									}
 
-										for ord := uint32(0); ord < uint32(bckCnt); ord++ {
-											bckK := nat.NewNATBackendKey(bckID, ord)
-											if _, ok := eps[bckK]; ok {
-												return false
-											}
-										}
-
-										return true
-									}).
-										Should(BeTrue())
-								}
-							})
+									return true
+								}, "5s").Should(BeTrue(), "service NAT key wasn't removed correctly")
+							}
 						})
 					})
 				})
