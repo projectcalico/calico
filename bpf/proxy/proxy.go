@@ -128,6 +128,12 @@ func New(k8s kubernetes.Interface, dp DPSyncer, hostname string, opts ...Option)
 		}
 	}
 
+	// We need to create the runner first as once we start getting updates, they
+	// will kick it
+	p.runner = async.NewBoundedFrequencyRunner("dp-sync-runner",
+		p.invokeDPSyncer, p.minDPSyncPeriod, time.Hour /* XXX might be infinite? */, 1)
+	p.startRoutine(func() { p.runner.Loop(p.stopCh) })
+
 	p.healthChecker = healthcheck.NewServer(p.hostname, p.recorder, nil, nil)
 	isIPv6 := false
 	p.epsChanges = k8sp.NewEndpointChangeTracker(p.hostname,
@@ -169,10 +175,6 @@ func New(k8s kubernetes.Interface, dp DPSyncer, hostname string, opts ...Option)
 	p.startRoutine(func() { epsConfig.Run(p.stopCh) })
 
 	p.startRoutine(func() { informerFactory.Start(p.stopCh) })
-
-	p.runner = async.NewBoundedFrequencyRunner("dp-sync-runner",
-		p.invokeDPSyncer, p.minDPSyncPeriod, time.Hour /* XXX might be infinite? */, 1)
-	p.startRoutine(func() { p.runner.Loop(p.stopCh) })
 
 	return p, nil
 }
