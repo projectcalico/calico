@@ -126,6 +126,7 @@ metadata:
   name: calico-node
 rules:
   # The CNI plugin needs to get pods, nodes, and namespaces.
+  # node startup needs to get configmaps.
   - apiGroups: [""]
     resources:
       - pods
@@ -495,5 +496,3 @@ metadata:
 
 ---
 # Source: calico/templates/kdd-crds.yaml
-
-
