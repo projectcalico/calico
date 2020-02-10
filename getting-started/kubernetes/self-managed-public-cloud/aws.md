@@ -54,7 +54,7 @@ To use kops to create a cluster with {{site.prodname}} networking and network po
      calico: {}
    ```
 
-The geeky details of what you'll get:
+The geeky details of what you get:
 {% include geek-details.html details='Policy:Calico,IPAM:Calico,CNI:Calico,Overlay:IPIP,Routing:BGP,Datastore:etcd' %}   
 
 You can further customize the {{site.prodname}} install with [options listed in the kops documentation](https://kops.sigs.k8s.io/networking/#calico-example-for-cni-and-network-policy). 
@@ -73,7 +73,7 @@ networking:
 ```
 Then install {{site.prodname}} for network policy only after the cluster is up and ready.
 
-The geeky details of what you'll get:
+The geeky details of what you get:
 {% include geek-details.html details='Policy:Calico,IPAM:AWS,CNI:AWS,Overlay:No,Routing:VPC Native,Datastore:Kubernetes' %}
 
 ##### Kubespray

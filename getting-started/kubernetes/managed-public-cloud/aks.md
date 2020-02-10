@@ -19,7 +19,7 @@ To enable Calico network policy enforcement, follow these step-by-step instructi
 > **Note**: The Calico network policy feature can only be enabled when the cluster is created. You can't enable Calico network policy on an existing AKS cluster.
 {: .alert .alert-info}
 
-The geeky details of what you'll get:
+The geeky details of what you get:
 {% include geek-details.html details='Policy:Calico,IPAM:Azure,CNI:Azure,Overlay:No,Routing:VPC Native,Datastore:Kubernetes' %}
 
 ### Above and beyond

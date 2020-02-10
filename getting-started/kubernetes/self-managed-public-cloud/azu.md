@@ -44,6 +44,9 @@ Or, start with this [example cluster definition](https://github.com/Azure/aks-en
 
 Then, [follow the ask-engine documentation to deploy your cluster](https://github.com/Azure/aks-engine/blob/master/docs/tutorials/deploy.md), passing your cluster definition to `aks-engine deploy` via the `-m` flag. 
 
+The geeky details of what you get:
+{% include geek-details.html details='Policy:Calico,IPAM:Azure,CNI:Azure,Overlay:No,Routing:VPC Native,Datastore:Kubernetes' %}  
+
 #### Other options and tools
 
 ##### {{site.prodname}} networking 
