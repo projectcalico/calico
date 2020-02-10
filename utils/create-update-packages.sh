@@ -213,7 +213,7 @@ function do_felix {
     pushd ${rootdir}
     rm -rf felix
     FELIX_REPO=${FELIX_REPO:-https://github.com/projectcalico/felix.git}
-    git clone $FELIX_REPO -b $FELIX_CHECKOUT
+    git clone $FELIX_REPO -b $FELIX_CHECKOUT felix
     cd felix
     # We build the Felix binary and include it in our source package
     # content, because it's infeasible to work out a set of Debian and
@@ -223,9 +223,15 @@ function do_felix {
     # Remove all the files that were added by that build, except for the
     # bin/calico-felix binary.
     rm -f bin/calico-felix-amd64
-    rm -rf vendor .go-pkg-cache
+    if grep -q build-bpf Makefile; then
+      make build-bpf
+      rm -f bpf-gpl/bin/test_*
+    fi
+    # Override dpkg's default file exclusions, otherwise our binaries won't get included (and some
+    # generated files will).
     PKG_NAME=felix \
 	    NAME=Felix \
+	    DPKG_EXCL="-I'bin/calico-felix-*' -I.git -I.gitignore -I'*.d' -I'*.ll' -I.go-pkg-cache -I.git -Ivendor -Ireport" \
 	    ../utils/make-packages.sh deb rpm
     popd
 }

@@ -69,7 +69,9 @@ EOF
 		    sed -i "s/^export PBR_VERSION=.*$/export PBR_VERSION=${FORCE_VERSION}/" debian/rules
 		fi
 
-		${DOCKER_RUN_RM} calico-build/${series} dpkg-buildpackage -I -S
+		excludes="${DPKG_EXCL:-'-I'}"
+
+		${DOCKER_RUN_RM} calico-build/${series} dpkg-buildpackage ${excludes} -S
 	    done
 
 	    cat <<EOF
