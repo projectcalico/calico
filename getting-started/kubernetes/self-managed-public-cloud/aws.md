@@ -74,7 +74,7 @@ networking:
 Then install {{site.prodname}} for network policy only after the cluster is up and ready.
 
 The geeky details of what you'll get:
-{% include geek-details.html details='Policy:Calico,IPAM:Azure,CNI:Azure,Overlay:No,Routing:VPC Native,Datastore:Kubernetes' %}
+{% include geek-details.html details='Policy:Calico,IPAM:AWS,CNI:AWS,Overlay:No,Routing:VPC Native,Datastore:Kubernetes' %}
 
 ##### Kubespray
 
