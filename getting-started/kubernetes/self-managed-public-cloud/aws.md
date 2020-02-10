@@ -53,11 +53,15 @@ To use kops to create a cluster with {{site.prodname}} networking and network po
    networking:
      calico: {}
    ```
-   You can further customize the {{site.prodname}} install with [options listed in the kops documentation](https://kops.sigs.k8s.io/networking/#calico-example-for-cni-and-network-policy). 
+
+The geeky details of what you get:
+{% include geek-details.html details='Policy:Calico,IPAM:Calico,CNI:Calico,Overlay:IPIP,Routing:BGP,Datastore:etcd' %}   
+
+You can further customize the {{site.prodname}} install with [options listed in the kops documentation](https://kops.sigs.k8s.io/networking/#calico-example-for-cni-and-network-policy). 
 
 #### Other options and tools
 
-##### Amazon VPI CNI plugin
+##### Amazon VPC CNI plugin
 
 As an alternative to {{site.prodname}} for both networking and network policy, you can use Amazon’s VPC CNI plugin for networking, and {{site.prodname}} for network policy. The advantage of this approach is that pods are assigned IP addresses associated with Elastic Network Interfaces on worker nodes. The IPs come from the VPC network pool and therefore do not require NAT to access resources outside the Kubernetes cluster.
 
@@ -68,6 +72,9 @@ networking:
   amazonvpc: {}
 ```
 Then install {{site.prodname}} for network policy only after the cluster is up and ready.
+
+The geeky details of what you get:
+{% include geek-details.html details='Policy:Calico,IPAM:AWS,CNI:AWS,Overlay:No,Routing:VPC Native,Datastore:Kubernetes' %}
 
 ##### Kubespray
 

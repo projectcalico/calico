@@ -16,6 +16,9 @@ EKS has built-in support for Calico, providing a robust implementation of the fu
 To enable Calico network policy enforcement, follow these step-by-step instructions:
 [Installing Calico on Amazon EKS](https://docs.aws.amazon.com/eks/latest/userguide/calico.html).
 
+The geeky details of what you get:
+{% include geek-details.html details='Policy:Calico,IPAM:AWS,CNI:AWS,Overlay:No,Routing:VPC Native,Datastore:Kubernetes' %}
+
 ### Above and beyond
 
 - [Everything you need to know about Kubernetes pod networking on AWS](https://www.projectcalico.org/everything-you-need-to-know-about-kubernetes-pod-networking-on-aws/)
