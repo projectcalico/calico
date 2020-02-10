@@ -231,6 +231,7 @@ function do_felix {
     # generated files will).
     PKG_NAME=felix \
 	    NAME=Felix \
+	    RPM_TAR_ARGS='--exclude=bin/calico-felix-* --exclude=.gitignore --exclude=*.d --exclude=*.ll --exclude=.go-pkg-cache --exclude=vendor --exclude=report' \
 	    DPKG_EXCL="-I'bin/calico-felix-*' -I.git -I.gitignore -I'*.d' -I'*.ll' -I.go-pkg-cache -I.git -Ivendor -Ireport" \
 	    ../utils/make-packages.sh deb rpm
     popd
