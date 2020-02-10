@@ -31,6 +31,8 @@ import (
 
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
+
+	"github.com/projectcalico/felix/bpf"
 )
 
 type AttachPoint struct {
@@ -76,7 +78,7 @@ func AttachProgram(attachPoint AttachPoint, hostIP net.IP) error {
 		_ = os.RemoveAll(tempDir)
 	}()
 
-	preCompiledBinary := path.Join("/code/bpf/bin", attachPoint.Filename)
+	preCompiledBinary := path.Join(bpf.ObjectDir, attachPoint.Filename)
 	tempBinary := path.Join(tempDir, attachPoint.Filename)
 
 	exeData, err := ioutil.ReadFile(preCompiledBinary)
