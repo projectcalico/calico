@@ -115,6 +115,8 @@ update-pins: update-libcalico-pin update-felix-pin update-confd-pin
 build:  $(NODE_CONTAINER_BINARY)
 
 remote-deps: mod-download
+	# Recreate the directory so that we are sure to clean up any old files.
+	rm -rf filesystem/etc/calico/confd
 	mkdir -p filesystem/etc/calico/confd
 	$(DOCKER_RUN) $(CALICO_BUILD) sh -c ' \
 		cp -r `go list -m -f "{{.Dir}}" github.com/kelseyhightower/confd`/etc/calico/confd/conf.d filesystem/etc/calico/confd/conf.d; \
