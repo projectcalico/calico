@@ -254,7 +254,7 @@ spec:
         # container programs network policy and routes on each
         # host.
         - name: calico-node
-          image: calico/node:master
+          image: calico/node:latest-amd64
           env:
             # The location of the Calico etcd cluster.
             - name: ETCD_ENDPOINTS
