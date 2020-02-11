@@ -1,4 +1,4 @@
-#!/bin/bash -e
+#!/bin/bash
 
 # test directory.
 TEST_DIR=./tests/k8st
