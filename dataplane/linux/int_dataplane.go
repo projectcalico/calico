@@ -155,6 +155,7 @@ type Config struct {
 	BPFCgroupV2                        string
 	BPFConnTimeLBEnabled               bool
 	BPFMapRepin                        bool
+	KubeProxyMinSyncPeriod             time.Duration
 
 	SidecarAccelerationEnabled bool
 
@@ -530,7 +531,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 				frontendMap,
 				backendMap,
 				backendAffinityMap,
-				bpfproxy.WithImmediateSync(),
+				bpfproxy.WithMinSyncPeriod(config.KubeProxyMinSyncPeriod),
 			)
 			if err != nil {
 				log.WithError(err).Panic("Failed to start kube-proxy.")
