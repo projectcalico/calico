@@ -16,7 +16,6 @@ GKE has built-in support for Calico, providing a robust implementation of the fu
 To enable Calico network policy enforcement, follow these step-by-step instructions:
 {% include open-new-window.html text='Enabling network policy enforcement' url='https://cloud.google.com/kubernetes-engine/docs/how-to/network-policy' %}.
 
-
 The geeky details of what you get:
 {% include geek-details.html details='Policy:Calico,IPAM:Host Local,CNI:Calico,Overlay:No,Routing:VPC Native,Datastore:Kubernetes' %}
 
