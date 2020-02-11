@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"github.com/projectcalico/felix/bpf/state"
+	"github.com/projectcalico/felix/bpf/tc"
 
 	"github.com/projectcalico/felix/idalloc"
 
@@ -455,6 +456,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	}
 
 	if !config.BPFEnabled {
+		// BPF mode disabled, create the iptables-only managers.
 		ipsetsManager := newIPSetsManager(ipSetsV4, config.MaxIPSetSize, callbacks)
 		dp.RegisterManager(ipsetsManager)
 		dp.ipsetsSourceV4 = ipsetsManager
@@ -465,6 +467,13 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			ipSetsV4,
 			config.MaxIPSetSize))
 		dp.RegisterManager(newPolicyManager(rawTableV4, mangleTableV4, filterTableV4, ruleRenderer, 4, callbacks))
+
+		// Clean up any leftover BPF state.
+		err := nat.RemoveConnectTimeLoadBalancer("")
+		if err != nil {
+			log.WithError(err).Info("Failed to remove BPF connect-time load balancer, ignoring.")
+		}
+		tc.CleanUpProgramsAndPins()
 	}
 
 	if config.BPFEnabled {
