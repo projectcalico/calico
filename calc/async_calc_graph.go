@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2018 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2020 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -21,10 +21,11 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	log "github.com/sirupsen/logrus"
 
-	"github.com/projectcalico/felix/config"
-	"github.com/projectcalico/felix/proto"
 	"github.com/projectcalico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/libcalico-go/lib/health"
+
+	"github.com/projectcalico/felix/config"
+	"github.com/projectcalico/felix/proto"
 )
 
 const (
@@ -83,7 +84,6 @@ type AsyncCalcGraph struct {
 	dirty            bool
 
 	debugHangC <-chan time.Time
-	lastReport time.Time
 }
 
 const (
@@ -142,17 +142,18 @@ func (acg *AsyncCalcGraph) loop() {
 			case []api.Update:
 				// Update; send it to the dispatcher.
 				log.Debug("Pulled []KVPair off channel")
-				updStartTime := time.Now()
-				acg.AllUpdDispatcher.OnUpdates(update)
-				summaryUpdateTime.Observe(time.Since(updStartTime).Seconds())
-				// Record stats for the number of messages processed.
-				for _, upd := range update {
+				for i, upd := range update {
+					// Send the updates individually so that we can report live in between
+					// each update.  (The dispatcher sends individual updates anyway so this makes
+					// no difference.)
+					updStartTime := time.Now()
+					acg.AllUpdDispatcher.OnUpdates(update[i : i+1])
+					summaryUpdateTime.Observe(time.Since(updStartTime).Seconds())
+					// Record stats for the number of messages processed.
 					typeName := reflect.TypeOf(upd.Key).Name()
 					count := countUpdatesProcessed.WithLabelValues(typeName)
 					count.Inc()
-					if time.Since(acg.lastReport) > healthInterval {
-						acg.reportHealth()
-					}
+					acg.reportHealth()
 				}
 			case api.SyncStatus:
 				// Sync status changed, check if we're now in-sync.
@@ -192,7 +193,6 @@ func (acg *AsyncCalcGraph) loop() {
 }
 
 func (acg *AsyncCalcGraph) reportHealth() {
-	acg.lastReport = time.Now()
 	if acg.healthAggregator != nil {
 		acg.healthAggregator.Report(healthName, &health.HealthReport{
 			Live:  true,
