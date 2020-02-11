@@ -18,6 +18,9 @@
 
             for (const id of ids) {
                 const heading = document.getElementById(id);
+                if (!heading) {
+                    continue;
+                }
                 const headingRect = heading.getBoundingClientRect();
                 const yPosition = headingRect.top;
 
@@ -41,7 +44,9 @@
             }
             globalLink = link;
 
-            link.className = 'current';
+            if(link) {
+                link.className = 'current';
+            }
         }
 
         handleScroll();
