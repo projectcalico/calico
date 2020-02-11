@@ -418,7 +418,7 @@ func TestNATNodePort(t *testing.T) {
 
 	dumpCTMap(ctMap)
 
-	skbMark = 0xca100000 | 0x50000 // CALI_SKB_MARK_BYPASS_NAT_RET_ENCAPED
+	skbMark = 0xca100000 | 0x50000 // CALI_SKB_MARK_BYPASS_FWD_SRC_FIXUP
 
 	hostIP = node2ip
 
