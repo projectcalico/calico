@@ -64,6 +64,7 @@ flags=0
 ((CALI_TC_INGRESS = 1 << 1))
 ((CALI_TC_TUNNEL = 1 << 2))
 ((CALI_CGROUP = 1 << 3))
+((CALI_TC_DSR = 1 << 4))
 
 if [[ "${filename}" =~ .*hep.* ]]; then
   # Host endpoint.
@@ -100,6 +101,10 @@ elif [[ "${filename}" =~ from.* ]]; then
     ((flags |= CALI_TC_INGRESS))
   fi
   from_or_to="from"
+fi
+
+if [[ "${filename}" =~ _dsr.* ]]; then
+  ((flags |= CALI_TC_DSR))
 fi
 
 args+=("-DCALI_COMPILE_FLAGS=${flags}")

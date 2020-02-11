@@ -155,6 +155,7 @@ type Config struct {
 	BPFCgroupV2                        string
 	BPFConnTimeLBEnabled               bool
 	BPFMapRepin                        bool
+	BPFNodePortDSREnabled              bool
 
 	SidecarAccelerationEnabled bool
 
@@ -495,6 +496,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			config.BPFDataIfacePattern,
 			ipSetIDAllocator,
 			config.VXLANMTU,
+			config.BPFNodePortDSREnabled,
 			ipSetsMap,
 			stateMap,
 		))

@@ -69,6 +69,10 @@ var _ = describeBPFTests(withTunnel("ipip"), withProto("tcp"), withConnTimeLoadB
 var _ = describeBPFTests(withTunnel("ipip"), withProto("udp"), withConnTimeLoadBalancingEnabled())
 var _ = describeBPFTests(withTunnel("ipip"), withProto("tcp"))
 var _ = describeBPFTests(withTunnel("ipip"), withProto("udp"))
+var _ = describeBPFTests(withProto("tcp"), withDSR())
+var _ = describeBPFTests(withProto("udp"), withDSR())
+var _ = describeBPFTests(withTunnel("ipip"), withProto("tcp"), withDSR())
+var _ = describeBPFTests(withTunnel("ipip"), withProto("udp"), withDSR())
 
 // Run a stripe of tests with BPF logging disabled since the compiler tends to optimise the code differently
 // with debug disabled and that can lead to verifier issues.
@@ -82,6 +86,7 @@ type bpfTestOptions struct {
 	udpUnConnected  bool
 	bpfLogLevel     string
 	tunnel          string
+	dsr             bool
 }
 
 type bpfTestOpt func(opts *bpfTestOptions)
@@ -116,6 +121,12 @@ func withUDPUnConnected() bpfTestOpt {
 	}
 }
 
+func withDSR() bpfTestOpt {
+	return func(opts *bpfTestOptions) {
+		opts.dsr = true
+	}
+}
+
 const expectedRouteDump = `10.65.0.2/32: local workload in-pool nat-out idx -
 10.65.0.3/32: local workload in-pool nat-out idx -
 10.65.1.0/26: remote workload in-pool nh FELIX_1
@@ -145,8 +156,10 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 	if testOpts.udpUnConnected {
 		protoExt = "-unconnected"
 	}
-	desc := fmt.Sprintf("_BPF_ _BPF-SAFE_ BPF tests (%s%s, ct=%v, log=%s, tunnel=%s)",
-		testOpts.protocol, protoExt, testOpts.connTimeEnabled, testOpts.bpfLogLevel, testOpts.tunnel)
+	desc := fmt.Sprintf("_BPF_ _BPF-SAFE_ BPF tests (%s%s, ct=%v, log=%s, tunnel=%s, dsr=%v)",
+		testOpts.protocol, protoExt, testOpts.connTimeEnabled,
+		testOpts.bpfLogLevel, testOpts.tunnel, testOpts.dsr,
+	)
 	return infrastructure.DatastoreDescribe(desc, []apiconfig.DatastoreType{apiconfig.Kubernetes}, func(getInfra infrastructure.InfraFactory) {
 
 		var (
@@ -202,6 +215,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 			}
 			options.ExtraEnvVars["FELIX_BPFConnectTimeLoadBalancingEnabled"] = fmt.Sprint(testOpts.connTimeEnabled)
 			options.ExtraEnvVars["FELIX_BPFLogLevel"] = fmt.Sprint(testOpts.bpfLogLevel)
+			options.ExtraEnvVars["FELIX_BPFNodePortDSREnabled"] = fmt.Sprint(testOpts.dsr)
 		})
 
 		JustAfterEach(func() {

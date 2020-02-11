@@ -110,6 +110,7 @@ type Config struct {
 	BPFConnectTimeLoadBalancingEnabled bool           `config:"bool;true;local"`
 	BPFKubeProxyIptablesCleanupEnabled bool           `config:"bool;true;local"`
 	BPFMapRepinEnabled                 bool           `config:"bool;true;local"`
+	BPFNodePortDSREnabled              bool           `config:"bool;true;local"`
 
 	DatastoreType string `config:"oneof(kubernetes,etcdv3);etcdv3;non-zero,die-on-fail,local"`
 

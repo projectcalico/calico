@@ -194,6 +194,7 @@ func StartDataplaneDriver(configParams *config.Config,
 			XDPEnabled:                         configParams.XDPEnabled,
 			XDPAllowGeneric:                    configParams.GenericXDPEnabled,
 			BPFConntrackTimeouts:               conntrack.DefaultTimeouts(), // FIXME make timeouts configurable
+			BPFNodePortDSREnabled:              configParams.BPFNodePortDSREnabled,
 
 			KubeClientSet: k8sClientSet,
 		}

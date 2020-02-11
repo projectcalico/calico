@@ -803,6 +803,11 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct __sk_buff *skb,
 			if (ip_is_dnf(ip_header) && vxlan_v4_encap_too_big(skb)) {
 				goto icmp_too_big;
 			}
+			if (CALI_F_DSR) {
+				/* SNAT will be done after routing, when leaving HEP */
+				CALI_DEBUG("DSR enabled, skipping SNAT + encap\n");
+				goto allow;
+			}
 		}
 
 		// Actually do the NAT.

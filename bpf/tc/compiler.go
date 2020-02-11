@@ -69,16 +69,16 @@ func init() {
 	sectionToFlags[SectionName(EpTypeTunnel, ToEp)] = CompileFlagHostEp | CompileFlagTunnel
 }
 
-func ProgFilename(epType EndpointType, toOrFrom ToOrFromEp, epToHostDrop bool, fibEnabled bool, logLevel string) string {
+func ProgFilename(epType EndpointType, toOrFrom ToOrFromEp, epToHostDrop, fib, dsr bool, logLevel string) string {
 	if epToHostDrop && (epType != EpTypeWorkload || toOrFrom == ToEp) {
 		// epToHostDrop only makes sense in the from-workload program.
 		logrus.Debug("Ignoring epToHostDrop, doesn't apply to this target")
 		epToHostDrop = false
 	}
-	if fibEnabled && (toOrFrom != FromEp) {
+	if fib && (toOrFrom != FromEp) {
 		// FIB lookup only makes sense for traffic towards the host.
-		logrus.Debug("Ignoring fibEnabled, doesn't apply to this target")
-		fibEnabled = false
+		logrus.Debug("Ignoring fib enabled, doesn't apply to this target")
+		fib = false
 	}
 
 	var hostDropPart string
@@ -86,8 +86,12 @@ func ProgFilename(epType EndpointType, toOrFrom ToOrFromEp, epToHostDrop bool, f
 		hostDropPart = "host_drop_"
 	}
 	fibPart := ""
-	if fibEnabled {
+	if fib {
 		fibPart = "fib_"
+	}
+	dsrPart := ""
+	if dsr && ((epType == EpTypeWorkload && toOrFrom == FromEp) || (epType == EpTypeHost && toOrFrom == ToEp)) {
+		dsrPart = "dsr_"
 	}
 	logLevel = strings.ToLower(logLevel)
 	if logLevel == "off" {
@@ -102,6 +106,7 @@ func ProgFilename(epType EndpointType, toOrFrom ToOrFromEp, epToHostDrop bool, f
 	case EpTypeTunnel:
 		epTypeShort = "tnl"
 	}
-	oFileName := fmt.Sprintf("%v_%v_%s%s%v.o", toOrFrom, epTypeShort, hostDropPart, fibPart, logLevel)
+	oFileName := fmt.Sprintf("%v_%v_%s%s%s%v.o",
+		toOrFrom, epTypeShort, hostDropPart, fibPart, dsrPart, logLevel)
 	return oFileName
 }
