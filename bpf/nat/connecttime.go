@@ -46,7 +46,8 @@ func RemoveConnectTimeLoadBalancer(cgroupv2 string) error {
 	log.WithField("args", cmd.Args).Info("Running bpftool to look up programs attached to cgroup")
 	out, err := cmd.Output()
 	if err != nil {
-		log.WithError(err).WithField("output", string(out)).Error("Failed to list BPF programs.")
+		log.WithError(err).WithField("output", string(out)).Info(
+			"Failed to list BPF programs.  Assuming not supported/nothing to clean up.")
 		return err
 	}
 
@@ -72,6 +73,8 @@ func RemoveConnectTimeLoadBalancer(cgroupv2 string) error {
 			return err
 		}
 	}
+
+	bpf.CleanUpCalicoPins("/sys/fs/bpf/calico_connect4")
 
 	return nil
 }
