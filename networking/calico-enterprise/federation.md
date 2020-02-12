@@ -1,5 +1,5 @@
 ---
-title: Federatation
+title: Federation
 description: Federated services provide service discovery of remote pods in another cluster. 
 calico_enterprise: true
 ---
