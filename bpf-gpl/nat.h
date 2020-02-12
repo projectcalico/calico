@@ -355,7 +355,7 @@ static CALI_BPF_INLINE int vxlan_v4_encap(struct __sk_buff *skb,  __be32 ip_src,
 	ip->protocol = IPPROTO_UDP;
 
 	udp->source = udp->dest = host_to_be16(CALI_VXLAN_PORT);
-	udp->len = host_to_be16(skb_tail_len(skb, udp));
+	udp->len = host_to_be16(be16_to_host(ip->tot_len) - sizeof(struct iphdr));
 
 	/* set the I flag to make the VNI valid, keep the VNI 0-ed */
 	*((uint8_t*)&vxlan->flags) = 1 << 3;
