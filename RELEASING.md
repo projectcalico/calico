@@ -1,5 +1,9 @@
 # Release process
 
+Note: the following instructions are now out of date.  New process
+will be documented here shortly, following networking-calico's move to
+the Project Calico GitHub.
+
 networking-calico is released by creating a signed tag and pushing
 that tag to the Gerrit remote.  This tags the current code and
 triggers a release to PyPI.
