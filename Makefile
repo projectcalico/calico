@@ -353,7 +353,7 @@ RELEASE_DIR_BIN?=$(RELEASE_DIR)/bin
 # Determine where the manifests live. For older versions we used
 # a different location, but we still need to package them up for patch
 # releases.
-DEFAULT_MANIFEST_SRC=./_site/$(RELEASE_STREAM)/manifests
+DEFAULT_MANIFEST_SRC=./_site/manifests
 OLD_VERSIONS := v3.0 v3.1 v3.2 v3.3 v3.4 v3.5 v3.6
 ifneq ($(filter $(RELEASE_STREAM),$(OLD_VERSIONS)),)
 DEFAULT_MANIFEST_SRC=./_site/$(RELEASE_STREAM)/getting-started/kubernetes/installation

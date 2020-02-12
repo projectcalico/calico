@@ -15,7 +15,7 @@
                     <div class="modal-content">
                         <div class="modal-header">
                         <button type="button" class="close" data-dismiss="modal">&times;</button>
-                        <h4 class="modal-title">{{ kv[1] }} {{ kv[0] }}</h4>
+                        <div class="modal-title">{{ kv[1] }} {{ kv[0] }}</div>
                         </div>
                         <div class="modal-body">
                         {% capture geek-details-file %}geek-details/{{kv[0] | downcase}}-{{kv[1] | downcase | replace: " ", "-"}}.md{% endcapture %}
@@ -43,7 +43,7 @@
             <div class="modal-content">
                 <div class="modal-header">
                 <button type="button" class="close" data-dismiss="modal">&times;</button>
-                <h4 class="modal-title">Calico Deployment Options</h4>
+                <div class="modal-title">Calico Deployment Options</div>
                 </div>
                 <div class="modal-body">
                 {% capture geek-details-md %}{% include geek-details/info.md %}{% endcapture %}
