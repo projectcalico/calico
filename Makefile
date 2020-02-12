@@ -174,6 +174,7 @@ BPF_GPL_O_FILES:=$(addprefix bpf-gpl/,$(shell bpf-gpl/list-objs))
 
 # There's a one-to-one mapping from UT C files to objects and the same for the apache programs..
 BPF_GPL_UT_O_FILES:=$(BPF_GPL_UT_C_FILES:.c=.o) $(addprefix bpf-gpl/,$(shell bpf-gpl/list-ut-objs))
+BPF_APACHE_C_FILES:=$(wildcard bpf-apache/*.c)
 BPF_APACHE_O_FILES:=$(addprefix bpf-apache/bin/,$(notdir $(BPF_APACHE_C_FILES:.c=.o)))
 
 ALL_BPF_PROGS=$(BPF_GPL_O_FILES) $(BPF_APACHE_O_FILES)
@@ -672,7 +673,7 @@ ut-bpf: bin/bpf_ut.test bin/bpf.test build-bpf
 		--privileged \
 		-e RUN_AS_ROOT=true \
 		-v `pwd`:/code \
-		-v `pwd`/bpf-gpl/bin:/code/bpf/bin \
+		-v `pwd`/bpf-gpl/bin:/usr/lib/calico/bpf \
 		$(CALICO_BUILD) sh -c ' \
 		mount bpffs /sys/fs/bpf -t bpf && \
 		cd /go/src/$(PACKAGE_NAME)/bpf/ut && \

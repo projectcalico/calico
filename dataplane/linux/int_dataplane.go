@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"github.com/projectcalico/felix/bpf/state"
+	"github.com/projectcalico/felix/bpf/tc"
 
 	"github.com/projectcalico/felix/idalloc"
 
@@ -156,6 +157,7 @@ type Config struct {
 	BPFConnTimeLBEnabled               bool
 	BPFMapRepin                        bool
 	BPFNodePortDSREnabled              bool
+	KubeProxyMinSyncPeriod             time.Duration
 
 	SidecarAccelerationEnabled bool
 
@@ -455,6 +457,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	}
 
 	if !config.BPFEnabled {
+		// BPF mode disabled, create the iptables-only managers.
 		ipsetsManager := newIPSetsManager(ipSetsV4, config.MaxIPSetSize, callbacks)
 		dp.RegisterManager(ipsetsManager)
 		dp.ipsetsSourceV4 = ipsetsManager
@@ -465,6 +468,13 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			ipSetsV4,
 			config.MaxIPSetSize))
 		dp.RegisterManager(newPolicyManager(rawTableV4, mangleTableV4, filterTableV4, ruleRenderer, 4, callbacks))
+
+		// Clean up any leftover BPF state.
+		err := nat.RemoveConnectTimeLoadBalancer("")
+		if err != nil {
+			log.WithError(err).Info("Failed to remove BPF connect-time load balancer, ignoring.")
+		}
+		tc.CleanUpProgramsAndPins()
 	}
 
 	if config.BPFEnabled {
@@ -532,7 +542,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 				frontendMap,
 				backendMap,
 				backendAffinityMap,
-				bpfproxy.WithImmediateSync(),
+				bpfproxy.WithMinSyncPeriod(config.KubeProxyMinSyncPeriod),
 			)
 			if err != nil {
 				log.WithError(err).Panic("Failed to start kube-proxy.")

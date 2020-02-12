@@ -38,7 +38,7 @@ OBJS:=$(addprefix bin/,$(C_FILES:.c=.o))
 all: $(OBJS)
 
 %.ll: %.c %.d
-	$(CC) $(CFLAGS) `./calculate-flags $@` -c $< -o $@
+	$(CC) $(CFLAGS) -c $< -o $@
 
 bin/%.o: %.ll | bin
 	$(LD) -march=bpf -filetype=obj -o $@ $<

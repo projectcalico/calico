@@ -1,5 +1,5 @@
-// Copyright (c) 2016-2019 Tigera, Inc. All rights reserved.
-
+// Copyright (c) 2020 Tigera, Inc. All rights reserved.
+//
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -111,6 +111,7 @@ type Config struct {
 	BPFKubeProxyIptablesCleanupEnabled bool           `config:"bool;true;local"`
 	BPFMapRepinEnabled                 bool           `config:"bool;true;local"`
 	BPFNodePortDSREnabled              bool           `config:"bool;true;local"`
+	KubeProxyMinSyncPeriod             time.Duration  `config:"seconds;1;local"`
 
 	DatastoreType string `config:"oneof(kubernetes,etcdv3);etcdv3;non-zero,die-on-fail,local"`
 

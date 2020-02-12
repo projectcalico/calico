@@ -46,7 +46,8 @@ func RemoveConnectTimeLoadBalancer(cgroupv2 string) error {
 	log.WithField("args", cmd.Args).Info("Running bpftool to look up programs attached to cgroup")
 	out, err := cmd.Output()
 	if err != nil {
-		log.WithError(err).WithField("output", string(out)).Error("Failed to list BPF programs.")
+		log.WithError(err).WithField("output", string(out)).Info(
+			"Failed to list BPF programs.  Assuming not supported/nothing to clean up.")
 		return err
 	}
 
@@ -73,6 +74,8 @@ func RemoveConnectTimeLoadBalancer(cgroupv2 string) error {
 		}
 	}
 
+	bpf.CleanUpCalicoPins("/sys/fs/bpf/calico_connect4")
+
 	return nil
 }
 
@@ -84,9 +87,9 @@ func installProgram(name, ipver, bpfMount, cgroupPath, logLevel string, maps ...
 	var filename string
 
 	if ipver == "6" {
-		filename = path.Join("/code/bpf/bin", ProgFileName(logLevel, 6))
+		filename = path.Join(bpf.ObjectDir, ProgFileName(logLevel, 6))
 	} else {
-		filename = path.Join("/code/bpf/bin", ProgFileName(logLevel, 4))
+		filename = path.Join(bpf.ObjectDir, ProgFileName(logLevel, 4))
 	}
 	args := []string{"prog", "loadall", filename, progPinDir, "type", "cgroup/" + name + ipver}
 	for _, m := range maps {
