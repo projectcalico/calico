@@ -206,22 +206,22 @@ func (p *Builder) setUpIPSetKey(ipsetID uint64, keyOffset, ipOffset, portOffset 
 }
 
 func (p *Builder) writeRules(rules [][][]*proto.Rule) {
-	for tierIdx, tier := range rules {
-		endOfTierLabel := fmt.Sprint("end_of_tier_", tierIdx)
+	for polOrProfIdx, polsOrProfs := range rules {
+		endOfTierLabel := fmt.Sprint("end_of_tier_", polOrProfIdx)
 
-		log.Debugf("Start of tier %d", tierIdx)
-		for polIdx, pol := range tier {
-			log.Debugf("Start of policy %d", polIdx)
+		log.Debugf("Start of policies or profiles %d", polOrProfIdx)
+		for polIdx, pol := range polsOrProfs {
+			log.Debugf("Start of policy/profile %d", polIdx)
 			for ruleIdx, rule := range pol {
 				log.Debugf("Start of rule %d", ruleIdx)
 				p.writeRule(rule, endOfTierLabel)
 				log.Debugf("End of rule %d", ruleIdx)
 			}
-			log.Debugf("End of policy %d", polIdx)
+			log.Debugf("End of policy/profile %d", polIdx)
 		}
 
-		// End of tier drop rule.
-		log.Debugf("End of tier drop")
+		// End of polsOrProfs drop rule.
+		log.Debugf("End of policies/profiles drop")
 		p.writeRule(&proto.Rule{Action: "deny"}, endOfTierLabel)
 
 		p.b.LabelNextInsn(endOfTierLabel)

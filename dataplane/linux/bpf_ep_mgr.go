@@ -495,7 +495,11 @@ func (m *bpfEndpointManager) attachWorkloadProgram(endpoint *proto.WorkloadEndpo
 		return err
 	}
 
-	rules := m.extractRules(endpoint.Tiers, endpoint.ProfileIds, polDirection)
+	var tier *proto.TierInfo
+	if len(endpoint.Tiers) != 0 {
+		tier = endpoint.Tiers[0]
+	}
+	rules := m.extractRules(tier, endpoint.ProfileIds, polDirection)
 
 	jumpMapFD, err := FindJumpMap(ap)
 	if err != nil {
@@ -634,9 +638,9 @@ func (m *bpfEndpointManager) calculateTCAttachPoint(endpointType tc.EndpointType
 	return ap
 }
 
-func (m *bpfEndpointManager) extractRules(tiers2 []*proto.TierInfo, profileNames []string, direction PolDirection) [][][]*proto.Rule {
+func (m *bpfEndpointManager) extractRules(tier *proto.TierInfo, profileNames []string, direction PolDirection) [][][]*proto.Rule {
 	var allRules [][][]*proto.Rule
-	for _, tier := range tiers2 {
+	if tier != nil {
 		var pols [][]*proto.Rule
 
 		directionalPols := tier.IngressPolicies
@@ -644,19 +648,17 @@ func (m *bpfEndpointManager) extractRules(tiers2 []*proto.TierInfo, profileNames
 			directionalPols = tier.EgressPolicies
 		}
 
-		if len(directionalPols) == 0 {
-			continue
-		}
-
-		for _, polName := range directionalPols {
-			pol := m.policies[proto.PolicyID{Tier: tier.Name, Name: polName}]
-			if direction == PolDirnIngress {
-				pols = append(pols, pol.InboundRules)
-			} else {
-				pols = append(pols, pol.OutboundRules)
+		if len(directionalPols) > 0 {
+			for _, polName := range directionalPols {
+				pol := m.policies[proto.PolicyID{Tier: tier.Name, Name: polName}]
+				if direction == PolDirnIngress {
+					pols = append(pols, pol.InboundRules)
+				} else {
+					pols = append(pols, pol.OutboundRules)
+				}
 			}
+			allRules = append(allRules, pols)
 		}
-		allRules = append(allRules, pols)
 	}
 	var profs [][]*proto.Rule
 	for _, profName := range profileNames {
