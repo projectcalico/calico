@@ -4,7 +4,8 @@ Name:           felix
 Summary:        Project Calico virtual networking for cloud data centers
 Version:        -- filled in by 'make rpm' when building packages --
 Release:        -- filled in by 'make rpm' when building packages --
-License:        Apache-2
+# All code is Apache 2.0 except files in bpf-gpl which are GPL-2.
+License:        ASL 2.0 and GPLv2
 URL:            http://projectcalico.org
 Source0:        felix-%{version}.tar.gz
 Source1:        calico-felix.logrotate
@@ -90,6 +91,10 @@ fi
 rm -rf $RPM_BUILD_ROOT
 install -d $RPM_BUILD_ROOT/usr/bin/
 install -m 755 bin/* $RPM_BUILD_ROOT/usr/bin/
+install -d $RPM_BUILD_ROOT/usr/lib/calico/bpf/
+install -m 644 bpf-gpl/bin/* $RPM_BUILD_ROOT/usr/lib/calico/bpf/
+install -m 644 bpf-apache/bin/* $RPM_BUILD_ROOT/usr/lib/calico/bpf/
+
 
 # Setup directories
 install -d -m 755 %{buildroot}%{_datadir}/calico
@@ -139,6 +144,7 @@ rm -rf $RPM_BUILD_ROOT
 %files -n calico-felix
 %defattr(-,root,root,-)
 /usr/bin/calico-felix
+/usr/lib/calico/bpf/*
 /etc/calico/felix.cfg.example
 %if 0%{?el7}
     %{_unitdir}/calico-felix.service

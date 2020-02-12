@@ -312,8 +312,8 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 			CALI_DEBUG("Packet approved for forward.\n");
 			fwd.reason = CALI_REASON_BYPASS;
 			goto allow;
-		case CALI_SKB_MARK_BYPASS_NAT_RET_ENCAPED:
-			CALI_DEBUG("Encaped, approved by return to NAT tunnel.\n");
+		case CALI_SKB_MARK_BYPASS_FWD_SRC_FIXUP:
+			CALI_DEBUG("Packet approved for forward - src ip fixup\n");
 			fwd.reason = CALI_REASON_BYPASS;
 
 			/* we need to fix up the right src host IP */
@@ -325,6 +325,12 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 
 			ip_header = skb_iphdr(skb);
 			__be32 ip_src = ip_header->saddr;
+
+			if (ip_src == cali_host_ip()) {
+				CALI_DEBUG("src ip fixup not needed %x\n", be32_to_host(ip_src));
+				goto allow;
+			}
+
 			/* XXX do a proper CT lookup to find this */
 			ip_header->saddr = cali_host_ip();
 			int ip_csum_offset = skb_iphdr_offset(skb) + offsetof(struct iphdr, check);
@@ -835,7 +841,7 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct __sk_buff *skb,
 
 		if (dnat_return_should_encap() && state->ct_result.tun_ret_ip) {
 			state->ip_dst = state->ct_result.tun_ret_ip;
-			seen_mark = CALI_SKB_MARK_BYPASS_NAT_RET_ENCAPED;
+			seen_mark = CALI_SKB_MARK_BYPASS_FWD_SRC_FIXUP;
 			goto nat_encap;
 		}
 

@@ -29,7 +29,7 @@ type sockmapState struct {
 }
 
 func NewSockmapState() (*sockmapState, error) {
-	lib, err := bpf.NewBPFLib("/code/bpf/bin/")
+	lib, err := bpf.NewBPFLib("/usr/lib/calico/bpf/")
 	if err != nil {
 		return nil, err
 	}

@@ -100,7 +100,7 @@ type xdpState struct {
 }
 
 func NewXDPState(allowGenericXDP bool) (*xdpState, error) {
-	lib, err := bpf.NewBPFLib("/code/bpf/bin/")
+	lib, err := bpf.NewBPFLib("/usr/lib/calico/bpf/")
 	if err != nil {
 		return nil, err
 	}
