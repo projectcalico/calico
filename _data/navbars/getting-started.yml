@@ -1,4 +1,4 @@
-title: "Getting started"
+title: "Get started"
 path: /getting-started/
 order: 1
 section:
@@ -48,7 +48,7 @@ section:
     section:
     - title: Introduction
       path: /getting-started/kubernetes/hardway/overview
-    - title: Standing up Kubernetes
+    - title: Stand up Kubernetes
       path: /getting-started/kubernetes/hardway/standing-up-kubernetes
     - title: The Calico datastore
       path: /getting-started/kubernetes/hardway/the-calico-datastore
@@ -95,7 +95,7 @@ section:
       path: /getting-started/openstack/installation/redhat
     - title: DevStack
       path: /getting-started/openstack/installation/devstack
-    - title: Verifying your deployment
+    - title: Verify your deployment
       path: /getting-started/openstack/verification
 - title: Non-cluster hosts
   path: /getting-started/bare-metal/
@@ -116,14 +116,14 @@ section:
 - title: calicoctl
   path: /getting-started/calicoctl/
   section:
-  - title: Installing calicoctl
+  - title: Install calicoctl
     path: /getting-started/calicoctl/install
-  - title: Configuring calicoctl
+  - title: Configure calicoctl
     path: /getting-started/calicoctl/configure/
     section:
     - title: Overview
       path: /getting-started/calicoctl/configure/overview
-    - title: Configuring calicoctl to connect to an etcd datastore
+    - title: Configure calicoctl to connect to an etcd datastore
       path: /getting-started/calicoctl/configure/etcd
-    - title: Configuring calicoctl to connect to the Kubernetes API datastore
+    - title: Configure calicoctl to connect to the Kubernetes API datastore
       path: /getting-started/calicoctl/configure/kdd
