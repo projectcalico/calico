@@ -1,5 +1,5 @@
 ---
-title: Verifying your deployment
+title: Verify your deployment
 description: Quick steps to test that your Calico-based OpenStack deployment is running correctly.
 canonical_url: '/getting-started/openstack/verification'
 ---
