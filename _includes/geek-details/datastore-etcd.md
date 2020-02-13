@@ -1,6 +1,6 @@
 Calico stores the operational and configuration state of your cluster in a central datastore. If the datastore is unavailable, your Calico network continues operating, but cannot be updated (no new pods can be networked, no policy changes can be applied, etc.).
 
-Calico has two datastore drivers you can choose from
+Calico has two datastore drivers you can choose from:
 - etcd - for direct connection to an etcd cluster
 - Kubernetes - for connection to a Kubernetes API server
 
