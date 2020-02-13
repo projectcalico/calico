@@ -1,4 +1,4 @@
-Calico stores the operational and configuration state of your cluster in a central datastore. If the datastore is unavailable your Calico network continues operating, but cannot be updated (no new pods can be networked, no policy changes can be applied, etc.).
+Calico stores the operational and configuration state of your cluster in a central datastore. If the datastore is unavailable, your Calico network continues operating, but cannot be updated (no new pods can be networked, no policy changes can be applied, etc.).
 
 Calico has two datastore drivers you can choose from
 - etcd - for direct connection to an etcd cluster
@@ -12,4 +12,4 @@ The advantages of using Kubernetes as the datastore are:
 For completeness, the advantages of using etcd as the datastore are:
 - Allows you to run Calico on non-Kubernetes platforms (e.g. OpenStack)
 - Allows separation of concerns between Kubernetes and Calico resources, for example allowing you to scale the datastores independently
-- Allows you to run a Calico cluster that contains more than just a single Kubernetes cluster, for example, bare metal servers with Calico host protection interworking with a Kubernetes cluster; or multiple Kubernetes clusters.
+- Allows you to run a Calico cluster that contains more than just a single Kubernetes cluster, for example, bare metal servers with Calico host protection interworking with a Kubernetes cluster or multiple Kubernetes clusters.
