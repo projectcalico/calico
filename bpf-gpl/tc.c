@@ -571,6 +571,7 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 		return TC_ACT_UNSPEC;
 	}
 
+	CALI_DEBUG("About to jump to policy program; lack of further logs means policy dropped the packet...\n");
 	bpf_tail_call(skb, &cali_jump, 0);
 	CALI_DEBUG("Tail call to policy program failed: DROP\n");
 	return TC_ACT_SHOT;
