@@ -20,7 +20,7 @@ import (
 	"time"
 
 	log "github.com/sirupsen/logrus"
-	"k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/fields"
 	uruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/client-go/kubernetes"
@@ -174,12 +174,21 @@ func (c *NodeController) acceptScheduleRequests(stopCh <-chan struct{}) {
 }
 
 func (c *NodeController) syncDelete() error {
-	// Call the appropriate cleanup logic based on whether we're using
-	// Kubernetes datastore or etecdv3.
-	if c.config.DatastoreType == "kubernetes" {
-		return c.syncDeleteKDD()
+	// First, try doing an IPAM sync. This will check IPAM state and clean up any blocks
+	// which don't belong based on nodes/pods in the k8s API. Don't return the error right away, since
+	// even if this IPAM sync fails we shouldn't block cleaning up the node object. If we do encounter an error,
+	// we'll return it after we're done.
+	err := c.syncIPAMCleanup()
+	if c.config.DatastoreType != "kubernetes" {
+		// If we're running in etcd mode, then we also need to delete the node resource.
+		// We don't need this for KDD mode, since the Calico Node resource is backed
+		// directly by the Kubernetes Node resource, so their lifecycle is identical.
+		errEtcd := c.syncDeleteEtcd()
+		if errEtcd != nil {
+			return errEtcd
+		}
 	}
-	return c.syncDeleteEtcd()
+	return err
 }
 
 // kick puts an item on the channel in non-blocking write. This means if there

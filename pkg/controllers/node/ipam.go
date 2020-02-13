@@ -30,15 +30,16 @@ import (
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// syncDeleteKDD cleans up any IPAM resources which should no longer exist based on nodes in the cluster.
+// syncIPAMCleanup cleans up any IPAM resources which should no longer exist based on nodes in the cluster.
 // It returns an error if it is determined that there are resources which should be cleaned up, but is unable to do so.
 // It does not return an error if it is successful, or if there is no action to take.
-func (c *NodeController) syncDeleteKDD() error {
+func (c *NodeController) syncIPAMCleanup() error {
 	// Get the backend client.
 	type accessor interface {
 		Backend() bapi.Client
 	}
 	bc := c.calicoClient.(accessor).Backend()
+	log.Info("Synchronizing IPAM data")
 
 	// Query all IPAM blocks in the cluster, ratelimiting calls.
 	time.Sleep(c.rl.When(RateLimitCalicoList))
@@ -130,7 +131,7 @@ func (c *NodeController) syncDeleteKDD() error {
 			// When they do, they will need to be released outside of this controller in order for
 			// the block to be cleaned up.
 			if (ns == "" || pod == "") && !ipip && !vxlan {
-				log.Info("IP allocation is from an unknown source. Will be unable to cleanup block until it is removed.")
+				logc.Info("IP allocation on node is from an unknown source. Will be unable to cleanup block until it is removed.")
 				continue
 			}
 
