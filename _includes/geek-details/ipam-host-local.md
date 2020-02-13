@@ -4,4 +4,4 @@ The Host-local IPAM plugin allocates a static range of IP addresses for each nod
 
 By default, the static range is a /24 (256 IP addresses).
 
-For most deployments, Host-local IPAM is a simple and adequate solution. However, using a static address range per node typically means less efficient use of the available IP address space. If you are running particularly large clusters, or have significant other enterprise address space demands, then it may be worth considering {{site.prodname}} IPAM as an alternative to provide more efficient address space management.
+For most deployments, Host-local IPAM is a simple and adequate solution. However, using a static address range per node typically means less efficient use of the available IP address space. If you are running particularly large clusters, or have  other significant enterprise address space demands, then it may be worth considering {{site.prodname}} IPAM as an alternative to provide more efficient address space management.
