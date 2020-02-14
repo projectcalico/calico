@@ -168,7 +168,7 @@ function do_net_cal {
     # Build networking-calico packages.
     pushd ${rootdir}
     rm -rf networking-calico
-    NETWORKING_CALICO_REPO=${NETWORKING_CALICO_REPO:-https://opendev.org/openstack/networking-calico.git}
+    NETWORKING_CALICO_REPO=${NETWORKING_CALICO_REPO:-https://github.com/projectcalico/networking-calico.git}
     git clone $NETWORKING_CALICO_REPO -b $NETWORKING_CALICO_CHECKOUT
     cd networking-calico
     if [ "`git tag -l $NETWORKING_CALICO_CHECKOUT --points-at HEAD`" = $NETWORKING_CALICO_CHECKOUT ]; then
