@@ -1,0 +1,10 @@
+{{ if .Values.installation.enabled }}
+{{ $installSpec := omit .Values.installation "enabled" }}
+apiVersion: operator.tigera.io/v1
+kind: Installation
+metadata:
+  name: default
+spec:
+{{ $installSpec | toYaml | indent 2 }}
+
+{{ end }}
