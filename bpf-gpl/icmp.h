@@ -169,7 +169,7 @@ static CALI_BPF_INLINE int icmp_v4_reply(struct __sk_buff *skb,
 		return -1;
 	}
 
-	CALI_DEBUG("ICMP v4 reply: change tail succeeded\n");
+	CALI_DEBUG("ICMP v4 reply creation succeeded\n");
 
 	return 0;
 }

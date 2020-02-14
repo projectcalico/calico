@@ -147,10 +147,15 @@ static CALI_BPF_INLINE int skb_nat_l4_csum_ipv4(struct __sk_buff *skb, size_t of
 	int ret = 0;
 
 	if (ip_from != ip_to) {
+		CALI_DEBUG("L4 checksum update (csum is at %d) IP from %x to %x\n", off, ip_from, ip_to);
 		ret = bpf_l4_csum_replace(skb, off, ip_from, ip_to, flags | BPF_F_PSEUDO_HDR | 4);
+		CALI_DEBUG("bpf_l4_csum_replace(IP): %d\n", ret);
 	}
 	if (port_from != port_to) {
-		ret |= bpf_l4_csum_replace(skb, off, port_from, port_to, flags | 2);
+		CALI_DEBUG("L4 checksum update (csum is at %d) port from %x to %x\n", off, port_from, port_to);
+		int rc = bpf_l4_csum_replace(skb, off, port_from, port_to, flags | 2);
+		CALI_DEBUG("bpf_l4_csum_replace(port): %d\n", rc);
+		ret |= rc;
 	}
 
 	return ret;
@@ -762,6 +767,7 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct __sk_buff *skb,
 
 		if (encap_needed) {
 			if (ip_is_dnf(ip_header) && vxlan_v4_encap_too_big(skb)) {
+				CALI_DEBUG("Request packet with DNF set is too big");
 				goto icmp_too_big;
 			}
 			state->ip_src = cali_host_ip();
@@ -808,6 +814,7 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct __sk_buff *skb,
 		if (dnat_return_should_encap() && state->ct_result.tun_ret_ip) {
 			/* XXX do this before NAT until we can track the icmp back */
 			if (ip_is_dnf(ip_header) && vxlan_v4_encap_too_big(skb)) {
+				CALI_DEBUG("Return packet with DNF set and packet is too big.");
 				goto icmp_too_big;
 			}
 			if (CALI_F_DSR) {
@@ -838,7 +845,11 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct __sk_buff *skb,
 					state->ip_proto == IPPROTO_UDP ? BPF_F_MARK_MANGLED_0 : 0);
 		}
 
-		res |= bpf_l3_csum_replace(skb, ip_csum_offset, state->ip_src, state->ct_result.nat_ip, 4);
+		CALI_DEBUG("L3 checksum update (csum is at %d) port from %x to %x\n",
+			ip_csum_offset, state->ip_src, state->ct_result.nat_ip);
+		int csum_rc = bpf_l3_csum_replace(skb, ip_csum_offset, state->ip_src, state->ct_result.nat_ip, 4);
+		CALI_DEBUG("bpf_l3_csum_replace(IP): %d\n", csum_rc);
+		res |= csum_rc;
 
 		if (res) {
 			reason = CALI_REASON_CSUM_FAIL;
@@ -905,7 +916,11 @@ icmp_ttl_exceeded:
 	goto allow;
 
 icmp_too_big:
-	if (skb_shorter(skb, ETH_IPV4_UDP_SIZE) || icmp_v4_too_big(skb)) {
+	if (skb_shorter(skb, ETH_IPV4_UDP_SIZE)) {
+		reason = CALI_REASON_SHORT;
+		goto deny;
+	}
+	if (icmp_v4_too_big(skb)) {
 		reason = CALI_REASON_ICMP_DF;
 		goto deny;
 	}
@@ -950,6 +965,7 @@ deny:
 	{
 		struct fwd fwd = {
 			.res = TC_ACT_SHOT,
+			.reason = reason,
 		};
 		return fwd;
 	}
