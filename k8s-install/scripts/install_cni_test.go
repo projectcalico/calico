@@ -41,6 +41,8 @@ func runCniContainer(extraArgs ...string) error {
 		"-e", "SLEEP=false",
 		"-e", "KUBERNETES_SERVICE_HOST=127.0.0.1",
 		"-e", "KUBERNETES_SERVICE_PORT=8080",
+		// These tests run without a datastore
+		"-e", "SKIP_DATASTORE_CONNECTION_CHECK=true",
 		"-v", cwd + "/test-templates:/template",
 		"-v", cwd + "/tmp/bin:/host/opt/cni/bin",
 		"-v", cwd + "/tmp/net.d:/host/etc/cni/net.d",
@@ -123,7 +125,7 @@ var _ = Describe("install-cni.sh tests", func() {
 
 	Describe("Run install-cni", func() {
 		Context("With default values", func() {
-			It("Should install bins and config", func() {
+			It("Should install bins and config", func(done Done) {
 				err := runCniContainer()
 				Expect(err).NotTo(HaveOccurred())
 
@@ -149,24 +151,27 @@ var _ = Describe("install-cni.sh tests", func() {
 				Expect(names).To(ContainElement("calico"))
 				Expect(names).To(ContainElement("calico-ipam"))
 				Expect(names).To(ContainElement("10-calico.conf"))
-			})
-			It("Should parse and output a templated config", func() {
+				close(done)
+			}, 60)
+			It("Should parse and output a templated config", func(done Done) {
 				err := runCniContainer()
 				Expect(err).NotTo(HaveOccurred())
 				expectFilesEqual("expected_10-calico.conf", "tmp/net.d/10-calico.conf")
-			})
+				close(done)
+			}, 60)
 		})
 
 		Context("With modified env vars", func() {
-			It("Should rename '10-calico.conf' to '10-calico.conflist'", func() {
+			It("Should rename '10-calico.conf' to '10-calico.conflist'", func(done Done) {
 				err := runCniContainer("-e", "CNI_CONF_NAME=10-calico.conflist")
 				Expect(err).NotTo(HaveOccurred())
 
 				expectFilesEqual("expected_10-calico.conf", "tmp/net.d/10-calico.conflist")
-			})
+				close(done)
+			}, 60)
 		})
 
-		It("should use CNI_NETWORK_CONFIG", func() {
+		It("should use CNI_NETWORK_CONFIG", func(done Done) {
 			err := runCniContainer(
 				"-e", "CNI_NETWORK_CONFIG=filecontents",
 				"-e", "SKIP_DATASTORE_CONNECTION_CHECK=true",
@@ -176,9 +181,10 @@ var _ = Describe("install-cni.sh tests", func() {
 			actual, err := ioutil.ReadFile("tmp/net.d/10-calico.conf")
 			Expect(err).NotTo(HaveOccurred())
 			Expect(string(actual)).To(Equal("filecontents\n"))
-		})
+			close(done)
+		}, 60)
 
-		It("should use CNI_NETWORK_CONFIG_FILE over CNI_NETWORK_CONFIG", func() {
+		It("should use CNI_NETWORK_CONFIG_FILE over CNI_NETWORK_CONFIG", func(done Done) {
 			err := runCniContainer(
 				"-e", "CNI_NETWORK_CONFIG='oops, I used the CNI_NETWORK_CONFIG'",
 				"-e", "CNI_NETWORK_CONFIG_FILE=/template/calico.conf.alternate",
@@ -187,7 +193,8 @@ var _ = Describe("install-cni.sh tests", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			expectFilesEqual("expected_10-calico.conf.alternate", "tmp/net.d/10-calico.conf")
-		})
+			close(done)
+		}, 60)
 
 		Context("copying /calico-secrets", func() {
 			err := os.MkdirAll("tmp/certs", 0755)
@@ -195,7 +202,7 @@ var _ = Describe("install-cni.sh tests", func() {
 				Fail("Failed to create directory tmp/bin")
 			}
 
-			It("Should not crash or copy when having a hidden file", func() {
+			It("Should not crash or copy when having a hidden file", func(done Done) {
 				err = ioutil.WriteFile("tmp/certs/.hidden", []byte("doesn't matter"), 0755)
 				Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to write hidden file: %v", err))
 
@@ -204,8 +211,9 @@ var _ = Describe("install-cni.sh tests", func() {
 				Expect(err).NotTo(HaveOccurred())
 				_, err = os.Open("tmp/net.d/calico-tls/.hidden")
 				Expect(err).To(HaveOccurred())
-			})
-			It("Should copy a non-hidden file", func() {
+				close(done)
+			}, 60)
+			It("Should copy a non-hidden file", func(done Done) {
 				err = ioutil.WriteFile("tmp/certs/nothidden", []byte("doesn't matter"), 0755)
 				Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to write hidden file: %v", err))
 
@@ -214,7 +222,8 @@ var _ = Describe("install-cni.sh tests", func() {
 				Expect(err).NotTo(HaveOccurred())
 				_, err = os.Open("tmp/net.d/calico-tls/nothidden")
 				Expect(err).NotTo(HaveOccurred())
-			})
+				close(done)
+			}, 60)
 		})
 	})
 })
