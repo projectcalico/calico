@@ -35,10 +35,6 @@ To release Calico, you need **the following permissions**:
     gcloud auth print-access-token | docker login -u oauth2accesstoken --password-stdin https://gcr.io
     ```
 
-- You must be [signed up as an OpenStack
-  developer](https://docs.openstack.org/infra/manual/developers.html#account-setup) and a member of the
-  [`networking-calico-release` group on Gerrit](https://review.opendev.org/#/admin/groups/1015,members).
-
 - You must be a member of the Project Calico team on Launchpad, and
   have uploaded a GPG identity to your account, for which you have the
   secret key.
@@ -93,7 +89,7 @@ Before attempting to create a Calico release you must do the following.
    - [calico/typha](https://github.com/projectcalico/typha/releases)
    - [calico/dikastes](https://github.com/projectcalico/app-policy/releases)
    - [calico/pod2daemon-flexvol](https://github.com/projectcalico/pod2daemon/releases)
-   - [networking-calico](https://github.com/openstack/networking-calico)
+   - [networking-calico](https://github.com/projectcalico/networking-calico/releases)
 
    The following components do not share a version with the Calico release, but are included in the documentation.
 
@@ -210,7 +206,7 @@ at the same time that subcomponent release branches are cut, often well before t
 ### Promoting to be the latest release in the docs
 
 This section describes how to create a new major or minor release. It assumes that the release branch has already been created
-as described in the section above. 
+as described in the section above.
 
 - Move current release to the archives
 
@@ -313,7 +309,7 @@ as described in the section above.
    at the newly created commit.
 
    ```
-   make release RELEASE_STREAM=vX.Y 
+   make release RELEASE_STREAM=vX.Y
    ```
 
    Then, publish the tag and release.
