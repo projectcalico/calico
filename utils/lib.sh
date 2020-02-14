@@ -18,6 +18,14 @@ function git_last_tag {
 # Autogenerate PEP 440 version based on current Git state.
 function git_auto_version {
 
+    # If VERSION is defined and there is a tag here (at HEAD) that
+    # matches VERSION, ensure that we use that tag even if there are
+    # other tags on the same commit.
+    if [ "${VERSION}" -a "`git tag -l $VERSION --points-at HEAD`" = $VERSION ]; then
+	echo ${VERSION}
+	return
+    fi
+
     # Get the last tag, and the number of commits since that tag.
     last_tag=`git_last_tag`
     commits_since=`git cherry -v ${last_tag} | wc -l`
