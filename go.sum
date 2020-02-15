@@ -247,6 +247,8 @@ github.com/projectcalico/libcalico-go v0.0.0-20200108185403-403996d814c2 h1:DON1
 github.com/projectcalico/libcalico-go v0.0.0-20200108185403-403996d814c2/go.mod h1:yd3FK67e+YeaYtKw5ImPw+YFyFF/G0ZCzbbwNAwwZh8=
 github.com/projectcalico/libcalico-go v0.0.0-20200111004125-f4cc1f8914f8 h1:aEJz4lXaqx7VtJfuafiIiKSA+pnGfGpL4O27NwBiveQ=
 github.com/projectcalico/libcalico-go v0.0.0-20200111004125-f4cc1f8914f8/go.mod h1:yd3FK67e+YeaYtKw5ImPw+YFyFF/G0ZCzbbwNAwwZh8=
+github.com/projectcalico/libcalico-go v0.0.0-20200212165426-dd72e0b33683 h1:wLFLgI/WEezkSrIwyy0910qxvy1ucNULfXFQYQX5dHM=
+github.com/projectcalico/libcalico-go v0.0.0-20200212165426-dd72e0b33683/go.mod h1:yd3FK67e+YeaYtKw5ImPw+YFyFF/G0ZCzbbwNAwwZh8=
 github.com/projectcalico/libcalico-go v1.7.2-0.20191223190708-a8685eb0c236 h1:WMih5vgSeniDIJEK8OqLBzeHL9SxsjCB19n5wvqwyI4=
 github.com/projectcalico/libcalico-go v1.7.2-0.20191223190708-a8685eb0c236/go.mod h1:NNmyn1a8HfuxFmi0yh2uVPcPeIuWreNlpLpxPqGuBp0=
 github.com/projectcalico/libcalico-go v1.7.2-0.20200102185429-756777256bb8 h1:2aDvX6GuzXf6UpCBLzs6Db55SP044wmpgolpU3WAtcg=
@@ -267,6 +269,8 @@ github.com/projectcalico/typha v0.0.0-20200111041037-44a9af09e6bf h1:ns7O6nLlAhR
 github.com/projectcalico/typha v0.0.0-20200111041037-44a9af09e6bf/go.mod h1:+17iQ6LhzGJMXOnK2xIh67rDEjmwNId97Hnbsb5jIDU=
 github.com/projectcalico/typha v0.0.0-20200118064346-db9625b360f6 h1:zAEYBmsLrs5L7iF+5m0l999G1U37ofKBM/tFRjPS9Uo=
 github.com/projectcalico/typha v0.0.0-20200118064346-db9625b360f6/go.mod h1:+17iQ6LhzGJMXOnK2xIh67rDEjmwNId97Hnbsb5jIDU=
+github.com/projectcalico/typha v0.0.0-20200213041052-b1fdcf41bcaa h1:DOA0GLdFNckvFUC+GcDFDXEB2pNHEKH8yNrQrutIQj4=
+github.com/projectcalico/typha v0.0.0-20200213041052-b1fdcf41bcaa/go.mod h1:3Dar7IRh+2nn6ayP9kPUdEG5Vv3DHVSool7amG2nQ/w=
 github.com/projectcalico/typha v0.7.3-0.20200102040858-c4a0227be6b1 h1:WW7O4wkeJ9rrudmJeCLdESbGXfKbRx4FcuU5cBBZf9Q=
 github.com/projectcalico/typha v0.7.3-0.20200102040858-c4a0227be6b1/go.mod h1:yi/DIhNxU8A/BVNeSX5vrMguphaxT8gTeMNqGXaDhp4=
 github.com/projectcalico/typha v3.8.5+incompatible h1:Kb5J6B2KWQj/zm8M4zH/gL4lO3sKpE/aIwGpZpCfWmI=
