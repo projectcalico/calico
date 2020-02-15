@@ -106,11 +106,6 @@ for component in components:
                 component_version=versions[0]['components'][component['lookup']]['version'],
                 binary=binary,
             ))
-    elif component['name'] == "networking-calico":
-        component['urls'] = ["https://opendev.org/openstack/networking-calico/src/tag/{component_version}".format(
-            component_version=versions[0]['components'][component['lookup']]['version']
-        )]
-
     elif component['name'] == "flannel":
         component['urls'] = [
             FLANNEL_TAG_URL_TEMPL.format(
@@ -138,7 +133,8 @@ for component in components:
     # dikastes: (as typha)
     #
     # networking-calico:
-    #     https://opendev.org/openstack/networking-calico/src/tag/3.6.0
+    #     https://github.com/projectcalico/networking-calico/archive/v3.6.2.zip
+    #     https://github.com/projectcalico/networking-calico/archive/v3.6.2.tar.gz
     #
     # cni:
     #     https://github.com/projectcalico/cni-plugin/releases/download/v3.6.2/calico-amd64

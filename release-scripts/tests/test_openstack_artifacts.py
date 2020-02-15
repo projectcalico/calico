@@ -21,14 +21,14 @@ def test_rpm_repo_avail():
 
 
 def test_networking_calico_version():
-    assert re.match('v', NETWORKING_VER) is None
+    assert re.match('v', NETWORKING_VER) is not None
 
 
 def test_deb_rpm_versions_match():
-    regex = re.compile('.*%s' % NETWORKING_VER[0:3])
-    assert regex.match(PPA_VER), "%s did not match %s" % (PPA_VER, NETWORKING_VER[0:3])
+    regex = re.compile('.*%s' % NETWORKING_VER[1:4])
+    assert regex.match(PPA_VER), "%s did not match %s" % (PPA_VER, NETWORKING_VER[1:4])
 
 
 def test_networking_calico_tag_avail():
-    req = requests.get("https://opendev.org/openstack/networking-calico/src/tag/%s" % NETWORKING_VER)
+    req = requests.get("https://github.com/projectcalico/networking-calico/releases/tag/%s" % NETWORKING_VER)
     assert req.status_code == 200
