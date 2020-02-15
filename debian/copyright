@@ -1,9 +1,9 @@
 Format: http://dep.debian.net/deps/dep5
 Upstream-Name: networking-calico
-Source: http://opendev.org/openstack/networking-calico/
+Source: https://github.com/projectcalico/networking-calico/
 
 Files: *
-Copyright: 2015 Metaswitch Networks
+Copyright: 2020 Tigera, Inc.
 License: Apache-2
  Licensed under the Apache License, Version 2.0 (the "License");
  you may not use this file except in compliance with the License.
