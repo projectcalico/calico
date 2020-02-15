@@ -81,7 +81,7 @@ sudo apt-get -y install git
 # Prepare networking-calico tree - the following lines will check out
 # the master branch of networking-calico (if not already present).
 test -e networking-calico || \
-    git clone https://git.openstack.org/openstack/networking-calico
+    git clone https://github.com/projectcalico/networking-calico
 cd networking-calico
 
 # If TEST_GERRIT_CHANGE has been specified, merge that change from Gerrit.
