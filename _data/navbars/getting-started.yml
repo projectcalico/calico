@@ -7,8 +7,6 @@ section:
   section:
   - title: Quickstart
     path: /getting-started/kubernetes/quickstart
-  - title: System requirements
-    path: /getting-started/kubernetes/requirements
   - title: Managed public cloud
     path: /getting-started/kubernetes/managed-public-cloud/
     section:
@@ -19,14 +17,7 @@ section:
     - title: IBM Cloud Kubernetes Service (IKS)
       path: /getting-started/kubernetes/managed-public-cloud/iks
     - title: Microsoft Azure Kubernetes Service (AKS)
-      path: /getting-started/kubernetes/managed-public-cloud/aks  
-  - title: Self-managed on-premises
-    path: /getting-started/kubernetes/self-managed-onprem/
-    section:
-    - title: Install Calico for on-premises deployments
-      path: /getting-started/kubernetes/self-managed-onprem/onpremises  
-    - title: Customize manifests
-      path: /getting-started/kubernetes/installation/config-options 
+      path: /getting-started/kubernetes/managed-public-cloud/aks
   - title: Self-managed public cloud
     path: /getting-started/kubernetes/self-managed-public-cloud/
     section:
@@ -35,7 +26,14 @@ section:
     - title: Self-managed Kubernetes in GCE
       path: /getting-started/kubernetes/self-managed-public-cloud/gce
     - title: Self-managed Kubernetes in Azure
-      path: /getting-started/kubernetes/self-managed-public-cloud/azu      
+      path: /getting-started/kubernetes/self-managed-public-cloud/azu        
+  - title: Self-managed on-premises
+    path: /getting-started/kubernetes/self-managed-onprem/
+    section:
+    - title: Install Calico for on-premises deployments
+      path: /getting-started/kubernetes/self-managed-onprem/onpremises  
+    - title: Customize manifests
+      path: /getting-started/kubernetes/installation/config-options    
   - title: Flannel
     path: /getting-started/kubernetes/flannel/
     section:
@@ -70,6 +68,8 @@ section:
       path: /getting-started/kubernetes/hardway/end-user-rbac
     - title: Istio integration
       path: /getting-started/kubernetes/hardway/istio-integration
+  - title: System requirements
+    path: /getting-started/kubernetes/requirements
 - title: OpenShift
   path: /getting-started/openshift/
   section:
