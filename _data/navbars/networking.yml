@@ -2,6 +2,8 @@ title: "Networking"
 path: /networking/
 order: 2
 section:
+- title: Can you configure Calico networking?
+  path: /networking/networking-intro
 - title: Determine best networking option
   path: /networking/determine-best-networking
 - title: Configure networking
