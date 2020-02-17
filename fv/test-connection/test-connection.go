@@ -229,6 +229,65 @@ func tryConnect(remoteIpAddr, remotePort, sourceIpAddr, sourcePort, protocol, lo
 				break
 			}
 		}
+	case "udp-recvmsg":
+		// Since we specify the source port rather than use an ephemeral port, if
+		// the SO_REUSEADDR and SO_REUSEPORT options are not set, when we make
+		// another call to this program, the original port is in post-close wait
+		// state and bind fails.  The reuse library implements a Dial() that sets
+		// these options.
+		connB, err := reuse.Dial("udp", localAddr, remoteAddr)
+		conn := connB.(*net.UDPConn)
+		log.Infof(`UDP "connection" established`)
+		if err != nil {
+			panic(err)
+		}
+		defer conn.Close()
+
+		remoteAddrResolved, err := net.ResolveUDPAddr("udp", remoteAddr)
+		if err != nil {
+			log.WithError(err).Fatal("Failed to resolve UDP")
+		}
+
+		for {
+			req := connectivity.NewRequest()
+			data, err := json.Marshal(req)
+			if err != nil {
+				log.WithError(err).Fatal("Failed to marshal data")
+			}
+			_, err = conn.Write(data)
+			if err != nil {
+				log.WithError(err).Fatal("Failed to send data")
+			}
+			log.WithField("message", req).Info("Sent message over UDP")
+			bufIn := make([]byte, 8<<10)
+			n, from, err := conn.ReadFrom(bufIn)
+			if err != nil {
+				log.WithError(err).Fatal("Failed to read from")
+			}
+			log.Infof("Received %d bytes from %s", n, from)
+
+			if from.String() != remoteAddrResolved.String() {
+				log.Fatalf("From address %+v does not match remoteAddr %+v", from, remoteAddrResolved)
+			}
+
+			var resp connectivity.Response
+			err = json.Unmarshal(bufIn[:n], &resp)
+			if err != nil {
+				log.WithError(err).Fatal("Failed to read response")
+			}
+			log.WithField("reply", resp).Info("Got reply")
+			if !resp.Request.Equal(req) {
+				log.WithField("reply", resp).Fatal("Unexpected response")
+			}
+			j, err := json.Marshal(resp)
+			if err != nil {
+				log.WithError(err).Fatal("Failed to re-marshal response")
+			}
+			fmt.Println("RESPONSE=", string(j))
+			if !ls.Next() {
+				break
+			}
+		}
 	case "udp-noconn":
 		conn, err := net.ListenPacket("udp", localAddr)
 		if err != nil {

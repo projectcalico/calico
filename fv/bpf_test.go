@@ -65,6 +65,7 @@ var _ = describeBPFTests(withProto("udp"), withConnTimeLoadBalancingEnabled(), w
 var _ = describeBPFTests(withProto("tcp"))
 var _ = describeBPFTests(withProto("udp"))
 var _ = describeBPFTests(withProto("udp"), withUDPUnConnected())
+var _ = describeBPFTests(withProto("udp"), withUDPConnectedRecvMsg(), withConnTimeLoadBalancingEnabled())
 var _ = describeBPFTests(withTunnel("ipip"), withProto("tcp"), withConnTimeLoadBalancingEnabled())
 var _ = describeBPFTests(withTunnel("ipip"), withProto("udp"), withConnTimeLoadBalancingEnabled())
 var _ = describeBPFTests(withTunnel("ipip"), withProto("tcp"))
@@ -82,6 +83,7 @@ type bpfTestOptions struct {
 	udpUnConnected  bool
 	bpfLogLevel     string
 	tunnel          string
+	udpConnRecvMsg  bool
 }
 
 type bpfTestOpt func(opts *bpfTestOptions)
@@ -116,6 +118,12 @@ func withUDPUnConnected() bpfTestOpt {
 	}
 }
 
+func withUDPConnectedRecvMsg() bpfTestOpt {
+	return func(opts *bpfTestOptions) {
+		opts.udpConnRecvMsg = true
+	}
+}
+
 const expectedRouteDump = `10.65.0.2/32: local workload in-pool nat-out idx -
 10.65.0.3/32: local workload in-pool nat-out idx -
 10.65.1.0/26: remote workload in-pool nh FELIX_1
@@ -144,6 +152,9 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 	protoExt := ""
 	if testOpts.udpUnConnected {
 		protoExt = "-unconnected"
+	}
+	if testOpts.udpConnRecvMsg {
+		protoExt = "-conn-recvmsg"
 	}
 	desc := fmt.Sprintf("_BPF_ _BPF-SAFE_ BPF tests (%s%s, ct=%v, log=%s, tunnel=%s)",
 		testOpts.protocol, protoExt, testOpts.connTimeEnabled, testOpts.bpfLogLevel, testOpts.tunnel)
@@ -184,6 +195,9 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 			cc.Protocol = testOpts.protocol
 			if testOpts.protocol == "udp" && testOpts.udpUnConnected {
 				cc.Protocol += "-noconn"
+			}
+			if testOpts.protocol == "udp" && testOpts.udpConnRecvMsg {
+				cc.Protocol += "-recvmsg"
 			}
 
 			options = infrastructure.DefaultTopologyOptions()
