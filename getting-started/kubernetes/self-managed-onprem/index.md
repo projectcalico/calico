@@ -1,6 +1,6 @@
 ---
 title: Self-managed on-premises
-description: Install Calico networking and network policy for on-premises deployments. 
+description: Managing Calico on-premises provides the most flexibility and customization, but requires more resources and infrastructure.  
 show_read_time: false
 show_toc: false
 ---
