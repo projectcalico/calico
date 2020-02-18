@@ -42,6 +42,9 @@ endif
 	# should work out how to continue doing that, but we have no supported
 	# install instructions that rely on such a package.
 
+clean:
+	git clean -fxd -e release-notes-$(VERSION)
+
 ## Verifies the release artifacts produces by `make release-build` are correct.
 release-verify: release-prereqs
 	# Currently no artifacts to verify here.

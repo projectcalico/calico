@@ -14,16 +14,23 @@
 # limitations under the License.
 
 # THIS FILE IS MANAGED BY THE GLOBAL REQUIREMENTS REPO - DO NOT EDIT
-import setuptools
+from setuptools import find_packages
+from setuptools import setup
 
-# In python < 2.7.4, a lazy loading of package `pbr` will break
-# setuptools if some other modules registered functions in `atexit`.
-# solution from: http://bugs.python.org/issue15881#msg170215
-try:
-    import multiprocessing  # noqa
-except ImportError:
-    pass
-
-setuptools.setup(
-    setup_requires=['pbr'],
-    pbr=True)
+setup(
+    name='networking-calico',
+    packages=find_packages(),
+    entry_points={
+        'console_scripts': [
+            'calico-dhcp-agent = networking_calico.agent.dhcp_agent:main',
+        ],
+        'neutron.ml2.mechanism_drivers': [
+            'calico = networking_calico.plugins.ml2.drivers.calico.' +
+            'mech_calico:CalicoMechanismDriver',
+        ],
+        'neutron.core_plugins': [
+            'calico = networking_calico.plugins.calico.plugin:CalicoPlugin',
+        ],
+    },
+    version="0.0.0",
+)
