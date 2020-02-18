@@ -1,16 +1,16 @@
 ---
-title: Configure workload access outside the cluster
-description: Enable and disable internet access for your workloads.
+title: Configure NAT to enable internet access for workloads
+description: Enable and disable internet access for workloads.
 canonical_url: '/networking/workloads-outside-cluster'
 ---
 
 ### Big picture
 
-With all {{site.prodname}} networking options, you can enable and disable internet access for your workloads.
+With all {{site.prodname}} networking options, you can enable and disable internet access for workloads.
 
 ### Value
 
-You control which {{site.prodname}} IP pools are subject to outbound NAT to enable public and private network connections and allow single IP address communication.
+You control which {{site.prodname}} IP pools are subject to outbound NAT to enable public and private network connections, and allow single IP address communication.
 
 ### Features
 
