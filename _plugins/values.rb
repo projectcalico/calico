@@ -1,6 +1,8 @@
 def gen_values(versions, imageNames, imageRegistry, chart)
   if chart == "tigera-operator"  
     versionsYml = <<~EOF
+    imagePullSecrets: {}
+
     installation:
       enabled: true
       kubernetesProvider: ""
