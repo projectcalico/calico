@@ -1,6 +1,7 @@
 ---
 title: Can you configure Calico networking?
 description: It depends. Calico networking is available for configuration, but only if you installed Calico for the following deployments. If not, the Networking section is not relevant to you. 
+---
 
 | I installed…                                                 | For...                   |
 | ------------------------------------------------------------ | ------------------------ |
