@@ -45,7 +45,7 @@ function require_version {
 	MINOR=${BASH_REMATCH[2]}
 	PATCH=${BASH_REMATCH[3]}
 	: ${REPO_NAME:=calico-${MAJOR}.${MINOR}}
-	: ${NETWORKING_CALICO_CHECKOUT:=${MAJOR}.${MINOR}.${PATCH}}
+	: ${NETWORKING_CALICO_CHECKOUT:=v${MAJOR}.${MINOR}.${PATCH}}
 	: ${FELIX_CHECKOUT:=v${MAJOR}.${MINOR}.${PATCH}}
     else
 	echo "ERROR: Unhandled VERSION \"${VERSION}\""
@@ -168,42 +168,12 @@ function do_net_cal {
     # Build networking-calico packages.
     pushd ${rootdir}
     rm -rf networking-calico
-    NETWORKING_CALICO_REPO=${NETWORKING_CALICO_REPO:-https://opendev.org/openstack/networking-calico.git}
+    NETWORKING_CALICO_REPO=${NETWORKING_CALICO_REPO:-https://github.com/projectcalico/networking-calico.git}
     git clone $NETWORKING_CALICO_REPO -b $NETWORKING_CALICO_CHECKOUT
     cd networking-calico
-    if [ "`git tag -l $NETWORKING_CALICO_CHECKOUT --points-at HEAD`" = $NETWORKING_CALICO_CHECKOUT ]; then
-	# NETWORKING_CALICO_CHECKOUT is a Git tag, so set to build
-	# packages with version equal to _that_ tag.
-	nc_ver_pbr=$NETWORKING_CALICO_CHECKOUT
-	nc_ver_deb=$NETWORKING_CALICO_CHECKOUT
-	nc_ver_rpm=$NETWORKING_CALICO_CHECKOUT
-    else
-	# NETWORKING_CALICO_CHECKOUT is not a Git tag - which usually
-	# means it is 'master', but it could also be an arbitrary
-	# commit that we are packaging for pre-release testing.  In
-	# this case use PBR to compute a nice version; this will be
-	# <tag>.dev<num>, where <tag> is the latest tag that is an
-	# ancestor of the current commit, and <num> is the number of
-	# commits since that tag.
-	nc_ver_pbr=`docker_run_rm -i calico-build/bionic python - <<'EOF'
-import pbr.version
-print pbr.version.VersionInfo('networking-calico').release_string()
-EOF`
-	nc_ver_deb=`docker_run_rm -i calico-build/bionic python - <<'EOF'
-import pbr.version
-print pbr.version.VersionInfo('networking-calico').semantic_version().debian_string()
-EOF`
-	nc_ver_rpm=`docker_run_rm -i calico-build/bionic python - <<'EOF'
-import pbr.version
-print pbr.version.VersionInfo('networking-calico').semantic_version().rpm_string()
-EOF`
-    fi
     PKG_NAME=networking-calico \
 	    NAME=networking-calico \
 	    DEB_EPOCH=1: \
-	    FORCE_VERSION=${nc_ver_pbr} \
-	    FORCE_VERSION_DEB=${nc_ver_deb} \
-	    FORCE_VERSION_RPM=${nc_ver_rpm} \
 	    ../utils/make-packages.sh deb rpm
     popd
 }

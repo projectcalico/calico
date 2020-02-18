@@ -28,6 +28,10 @@ case ${version} in
 	;;
 esac
 
+if [ ${PKG_NAME} = networking-calico ]; then
+    sed -i "s/version=\"0.0.0\"/version=\"${version}\"/" setup.py
+fi
+
 # Build the requested package types.
 for package_type in "$@"; do
 
@@ -49,7 +53,7 @@ ${PKG_NAME} (${DEB_EPOCH}${debver}-$series) $series; urgency=low
 EOF
 		    if ${release}; then
 			cat <<EOF
-  * ${NAME} ${version} (from Git commit ${sha}).
+  * ${NAME} v${version} (from Git commit ${sha}).
 EOF
 		    else
 			cat <<EOF
@@ -64,12 +68,7 @@ EOF
 EOF
 		} > debian/changelog
 
-		if [ ${PKG_NAME} = networking-calico ]; then
-		    # Update PBR_VERSION setting in debian/rules.
-		    sed -i "s/^export PBR_VERSION=.*$/export PBR_VERSION=${FORCE_VERSION}/" debian/rules
-		fi
-
-		excludes="${DPKG_EXCL:-'-I'}"
+		excludes="${DPKG_EXCL:--I}"
 
 		${DOCKER_RUN_RM} calico-build/${series} dpkg-buildpackage ${excludes} -S
 	    done
@@ -112,7 +111,7 @@ EOF
 EOF
 		    if ${release}; then
 			cat <<EOF
-  - ${NAME} ${version} (from Git commit ${sha}).
+  - ${NAME} v${version} (from Git commit ${sha}).
 EOF
 		    else
 			cat <<EOF

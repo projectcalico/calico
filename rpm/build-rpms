@@ -38,10 +38,6 @@ case ${pkg} in
 	    --exclude-vcs \
 	    ${RPM_TAR_ARGS} \
 	    -czf /tmp/rpmbuild/SOURCES/${dir}.tar.gz $dir
-	# For networking-calico, FORCE_VERSION is always set, and the
-	# PBR version should be the same as that.  (For other repos,
-	# PBR_VERSION is irrelevant.)
-	export PBR_VERSION=$FORCE_VERSION
 	;;
     etcd3gw)
 	t=`mktemp -d -t etcd3gw.XXXXXX`

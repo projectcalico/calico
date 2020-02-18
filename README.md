@@ -52,7 +52,7 @@ Supported, optional environment variables:
 
 -  `NETWORKING_CALICO_REPO`: override the Git repository to get
    networking-calico code from.  Default is
-   https://opendev.org/openstack/networking-calico.git.
+   https://github.com/projectcalico/networking-calico.git.
 
 -  `NETWORKING_CALICO_CHECKOUT`: override the point in the Git
    repository to check out (a Git commit ID, tag or branch name).
