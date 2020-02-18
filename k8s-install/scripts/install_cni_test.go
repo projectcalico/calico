@@ -1,3 +1,5 @@
+//  Copyright (c) 2020 Tigera, Inc. All rights reserved.
+
 package scripts_test
 
 import (
@@ -42,7 +44,6 @@ func runCniContainer(extraArgs ...string) error {
 		"-e", "KUBERNETES_SERVICE_HOST=127.0.0.1",
 		"-e", "KUBERNETES_SERVICE_PORT=8080",
 		// These tests run without a datastore
-		"-e", "SKIP_DATASTORE_CONNECTION_CHECK=true",
 		"-v", cwd + "/test-templates:/template",
 		"-v", cwd + "/tmp/bin:/host/opt/cni/bin",
 		"-v", cwd + "/tmp/net.d:/host/etc/cni/net.d",
@@ -174,7 +175,6 @@ var _ = Describe("install-cni.sh tests", func() {
 		It("should use CNI_NETWORK_CONFIG", func(done Done) {
 			err := runCniContainer(
 				"-e", "CNI_NETWORK_CONFIG=filecontents",
-				"-e", "SKIP_DATASTORE_CONNECTION_CHECK=true",
 			)
 			Expect(err).NotTo(HaveOccurred())
 
@@ -188,7 +188,6 @@ var _ = Describe("install-cni.sh tests", func() {
 			err := runCniContainer(
 				"-e", "CNI_NETWORK_CONFIG='oops, I used the CNI_NETWORK_CONFIG'",
 				"-e", "CNI_NETWORK_CONFIG_FILE=/template/calico.conf.alternate",
-				"-e", "SKIP_DATASTORE_CONNECTION_CHECK=true",
 			)
 			Expect(err).NotTo(HaveOccurred())
 
