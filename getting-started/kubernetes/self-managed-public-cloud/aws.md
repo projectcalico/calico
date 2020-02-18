@@ -82,5 +82,6 @@ The geeky details of what you get:
 
 ### Above and beyond
 
+- [Video: Everything you need to know about Kubernetes pod networking on AWS](https://www.projectcalico.org/everything-you-need-to-know-about-kubernetes-pod-networking-on-aws/)
 - [Install and configure calicoctl]({{site.baseurl}}/getting-started/calicoctl/install)
 - [Try out {{site.prodname}} network policy]({{site.baseurl}}/security/calico-network-policy)
