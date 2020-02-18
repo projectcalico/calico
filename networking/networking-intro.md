@@ -2,7 +2,7 @@
 title: Can you configure Calico networking?
 description: Check that the Calico networking feature is available to you. 
 ---
-Can you configure Calico networking? Probably, but there are exceptions. Calico networking is not available if you are using Calico in the following deployments. In these cases, the Networking section is not relevant to you. 
+Probably, but there are exceptions. Calico networking is not available if you are using Calico in the following deployments. In these cases, the Networking section is not relevant to you. 
 
 | I am using…                                                  |
 | ------------------------------------------------------------ |
