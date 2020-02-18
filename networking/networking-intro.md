@@ -6,7 +6,7 @@ It depends. Calico networking is available for configuration if you installed Ca
 
 Calico networking **is not available** for you to configure in the following deployments. Content in the Networking section is not relevant to you.
 
-- A managed cloud provider: EKS, GKE, AKS, or IKS
-  Although the Calico CNI is used in GKE and IKS, the cloud provider manages the networking; you enforce network policy using Calico network policy and Kubernetes network policy.  
+- A managed cloud provider: EKS, GKE, AKS, or IKS.   
+Although the Calico CNI is used in GKE and IKS, the cloud provider manages the networking; you enforce network policy using Calico network policy and Kubernetes network policy.  
 - Flannel
 - Istio service mesh
