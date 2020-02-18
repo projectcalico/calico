@@ -150,11 +150,13 @@ static CALI_BPF_INLINE int icmp_v4_reply(struct __sk_buff *skb,
 
 static CALI_BPF_INLINE int icmp_v4_too_big(struct __sk_buff *skb)
 {
+	CALI_DEBUG("Sending ICMP too big.\n");
 	struct {
 		__be16  unused;
 		__be16  mtu;
 	} frag = {
-		.mtu = host_to_be16(CALI_NAT_TUNNEL_MTU),
+		// ICMP MTU ignores the ethernet header.
+		.mtu = host_to_be16(CALI_NAT_TUNNEL_MTU - sizeof(struct ethhdr)),
 	};
 
 	return icmp_v4_reply(skb, ICMP_DEST_UNREACH, ICMP_FRAG_NEEDED, *(__be32 *)&frag);

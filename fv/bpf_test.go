@@ -726,7 +726,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 							log.Info("Waiting for NAT maps to converge...")
 							startTime := time.Now()
 							for {
-								if time.Since(startTime) > 5 * time.Second {
+								if time.Since(startTime) > 5*time.Second {
 									Fail("NAT maps failed to converge")
 								}
 								natBeforeUpdate, natBackBeforeUpdate = dumpNATmaps(felixes)
@@ -749,8 +749,8 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 								}
 
 								break
-								retry:
-									time.Sleep(100*time.Millisecond)
+							retry:
+								time.Sleep(100 * time.Millisecond)
 							}
 							log.Info("NAT maps converged.")
 

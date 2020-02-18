@@ -19,6 +19,7 @@
 #define __CALI_NAT_H__
 
 #include <stddef.h>
+#include <stdbool.h>
 #include <linux/in.h>
 #include <linux/ip.h>
 #include <linux/if_ether.h>
@@ -404,6 +405,12 @@ static CALI_BPF_INLINE int is_vxlan_tunnel(struct iphdr *ip)
 	return ip->protocol == IPPROTO_UDP && udp->dest == host_to_be16(CALI_VXLAN_PORT);
 }
 
-#define vxlan_v4_encap_too_big(skb) ((skb)->len + CALI_ENCAP_EXTRA_SIZE > CALI_NAT_TUNNEL_MTU)
+static CALI_BPF_INLINE bool vxlan_v4_encap_too_big(struct __sk_buff *skb) {
+	if (skb->len > CALI_NAT_TUNNEL_MTU) {
+		CALI_DEBUG("SKB too long (len=%d) vs limit=%d\n", skb->len, CALI_NAT_TUNNEL_MTU);
+		return true;
+	}
+	return false;
+}
 
 #endif /* __CALI_NAT_H__ */
