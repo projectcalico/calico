@@ -7,6 +7,6 @@ Can you configure Calico networking? Probably, but there are exceptions. Calico 
 | I am using…                                                  |
 | ------------------------------------------------------------ |
 | EKS or AKS as my **managed cloud provider**                  |
-| A **self-managed cloud provider** other than AWS, GCE, or Azure |
+| A **self-managed cloud provider** (other than AWS, GCE, or Azure) |
 | Flannel                                                      |
 | Istio service mesh                                           |
