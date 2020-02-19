@@ -449,7 +449,7 @@ $(RELEASE_DIR_BIN)/%:
 ###############################################################################
 # Utilities
 ###############################################################################
-HELM_RELEASE=helm-v2.11.0-linux-amd64.tar.gz
+HELM_RELEASE=helm-v2.16.3-linux-amd64.tar.gz
 bin/helm:
 	mkdir -p bin
 	$(eval TMP := $(shell mktemp -d))
