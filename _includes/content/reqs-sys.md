@@ -1,6 +1,6 @@
 ## Node requirements
 
-- AMD64 processor
+- x86-64
 
 - Linux kernel 3.10 or later with [required dependencies](#kernel-dependencies).
   The following distributions have the required kernel, its dependencies, and are
