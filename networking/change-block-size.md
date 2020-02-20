@@ -35,17 +35,15 @@ Kubernetes expects that all pods have IP addresses within the same cluster CIDR.
 
     ```bash
       cat /etc/cni/net.d/10-calico.conflist
-  ```
-
+     ```
   1. Look for the "type" entry:
-
     <pre>
        "ipam": {
              "type": "calico-ipam"
         }, 
     </pre>
 
-    If the type is “calico-ipam”, you are good to go. If the IPAM is set to something else, or the 10-calico.conflist file does not exist, you cannot use this feature in your cluster. 
+  If the type is “calico-ipam”, you are good to go. If the IPAM is set to something else, or the 10-calico.conflist file does not exist, you cannot use this feature in your cluster. 
 
 - Verify orchestrator support for changing the pod network CIDR
 
@@ -53,11 +51,11 @@ Kubernetes expects that all pods have IP addresses within the same cluster CIDR.
 
 **Recommended**
 
-  Understand the basics of [Calico IPAM]({{site.baseurl}}/get-started-ip-addresses)
+Understand the basics of [Calico IPAM]({{site.baseurl}}/networking/get-started-ip-addresses)
 
 ### How to
 
-> **Important!** Make sure that you do the steps in the order shown; this ensures that existing pod connectivity is not affected. Also, when pods are deleted, applications may be temporarily unavailable (depending on the type of application); plan accordingly. 
+>**Important!** Make sure that you do the steps in the order shown; this ensures that existing pod connectivity is not affected. Also, when pods are deleted, applications may be temporarily unavailable (depending on the type of application); plan accordingly. 
 {: .alert .alert-danger }
 
 #### Change IP pool block size
