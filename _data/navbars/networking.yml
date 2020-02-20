@@ -38,7 +38,7 @@ section:
      path: /networking/use-specific-ip
    - title: Assign IP addresses based on topology
      path: /networking/assign-ip-addresses-topology
-   - title: Migrate from one IP pool to another
+   - title: Manage IP pools
      path: /networking/migrate-pools
    - title: Interoperate with legacy firewalls using IP ranges
      path: /networking/legacy-firewalls
