@@ -60,8 +60,9 @@ func init() {
 
 // Constants that are shared with the UT binaries that we build.
 const (
-	natTunnelMTU  = uint16(700)
-	testVxlanPort = uint16(5665)
+	natTunnelMTU       = uint16(700)
+	ethernetHeaderSize = 14
+	testVxlanPort      = uint16(5665)
 )
 
 var (
