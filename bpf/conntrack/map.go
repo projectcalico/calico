@@ -31,7 +31,7 @@ import (
 //   uint16_t port_a, port_b; // HBO
 // };
 const conntrackKeySize = 16
-const conntrackValueSize = 48
+const conntrackValueSize = 56
 
 type Key [conntrackKeySize]byte
 
@@ -95,6 +95,8 @@ func MakeKey(proto uint8, ipA net.IP, portA uint16, ipB net.IP, portB uint16) Ke
 //      __u32 orig_dst;                    // 40
 //      __u16 orig_port;                   // 44
 //      __u8 pad1[2];                      // 46
+//      __u32 tun_ip;                      // 48
+//      __u32 pad3;                        // 52
 //    };
 //
 //    // CALI_CT_TYPE_NAT_FWD; key for the CALI_CT_TYPE_NAT_REV entry.
@@ -126,7 +128,6 @@ const (
 	TypeNormal uint8 = iota
 	TypeNATForward
 	TypeNATReverse
-	TypeNormalTun
 
 	FlagNATOut uint8 = 0x01
 )
@@ -195,15 +196,18 @@ type EntryData struct {
 	B2A      Leg
 	OrigDst  net.IP
 	OrigPort uint16
+	TunIP    net.IP
 }
 
 func (e Value) Data() EntryData {
 	ip := e[40:44]
+	tip := e[48:52]
 	return EntryData{
 		A2B:      readConntrackLeg(e[24:32]),
 		B2A:      readConntrackLeg(e[32:40]),
 		OrigDst:  net.IPv4(ip[0], ip[1], ip[2], ip[3]),
 		OrigPort: binary.LittleEndian.Uint16(e[44:46]),
+		TunIP:    net.IPv4(tip[0], tip[1], tip[2], tip[3]),
 	}
 }
 
@@ -213,7 +217,7 @@ func (e Value) String() string {
 	switch e.Type() {
 	case TypeNATForward:
 		ret += fmt.Sprintf("REVKey : %s", e.ReverseNATKey().String())
-	case TypeNormal, TypeNATReverse, TypeNormalTun:
+	case TypeNormal, TypeNATReverse:
 		ret += fmt.Sprintf("Data: %+v", e.Data())
 	default:
 		ret += "TYPE INVALID"

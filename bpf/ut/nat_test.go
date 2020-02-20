@@ -288,6 +288,7 @@ func TestNATNodePort(t *testing.T) {
 	var encapedPkt []byte
 
 	hostIP = node1ip
+	skbMark = 0
 
 	// Arriving at node 1 - non-routable -> denied
 	runBpfTest(t, "calico_from_host_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
@@ -305,7 +306,6 @@ func TestNATNodePort(t *testing.T) {
 		routes.NewValueWithNextHop(routes.FlagsRemoteWorkload, ip.FromNetIP(node2ip).(ip.V4Addr)).AsBytes(),
 	)
 	Expect(err).NotTo(HaveOccurred())
-
 	dumpRTMap(rtMap)
 
 	// Arriving at node 1
@@ -351,6 +351,21 @@ func TestNATNodePort(t *testing.T) {
 
 	hostIP = node2ip
 	skbMark = 0
+
+	// change the routing - it is a local workload now!
+	err = rtMap.Update(
+		routes.NewKey(ip.CIDRFromIPNet(&node2wCIDR).(ip.V4CIDR)).AsBytes(),
+		routes.NewValue(routes.FlagsLocalWorkload).AsBytes(),
+	)
+	Expect(err).NotTo(HaveOccurred())
+	dumpRTMap(rtMap)
+
+	// now we are at the node with local workload
+	err = natMap.Update(
+		nat.NewNATKey(ipv4.DstIP, uint16(udp.DstPort), uint8(ipv4.Protocol)).AsBytes(),
+		nat.NewNATValue(0 /* count */, 1 /* local */, 1, 0).AsBytes(),
+	)
+	Expect(err).NotTo(HaveOccurred())
 
 	// Arriving at node 2
 	runBpfTest(t, "calico_from_host_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
@@ -437,6 +452,10 @@ func TestNATNodePort(t *testing.T) {
 		// check that the IP is fixed up
 		Expect(ipv4R.SrcIP.String()).To(Equal(node2ip.String()))
 		Expect(ipv4R.DstIP.String()).To(Equal(node1ip.String()))
+
+		checkVxlan(pktR)
+
+		encapedPkt = res.dataOut
 	})
 
 	dumpCTMap(ctMap)
@@ -445,6 +464,14 @@ func TestNATNodePort(t *testing.T) {
 	dumpCTMap(ctMap)
 
 	hostIP = node1ip
+
+	// change to routing again to a remote workload
+	err = rtMap.Update(
+		routes.NewKey(ip.CIDRFromIPNet(&node2wCIDR).(ip.V4CIDR)).AsBytes(),
+		routes.NewValueWithNextHop(routes.FlagsRemoteWorkload, ip.FromNetIP(node2ip).(ip.V4Addr)).AsBytes(),
+	)
+	Expect(err).NotTo(HaveOccurred())
+	dumpRTMap(rtMap)
 
 	// Response arriving at node 1
 	runBpfTest(t, "calico_from_host_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
@@ -475,6 +502,8 @@ func TestNATNodePort(t *testing.T) {
 	})
 
 	dumpCTMap(ctMap)
+
+	skbMark = 0xca100000 | 0x30000 // CALI_SKB_MARK_BYPASS_FWD
 
 	// Response leaving to original source
 	runBpfTest(t, "calico_to_host_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {

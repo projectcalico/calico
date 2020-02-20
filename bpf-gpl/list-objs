@@ -21,6 +21,11 @@
 # Emit the filename for each option to stdout.
 #
 # WARNING: naming and set of cases must be kept in sync with tc.ProgFilename() in Felix's compiler.go.
+
+emit_filename() {
+  echo "bin/${from_or_to}_${ep_type}_${host_drop}${fib}${extra}${log_level}.o"
+}
+
 for log_level in debug info no_log; do
   echo "bin/connect_time_${log_level}_v4.o"
   echo "bin/connect_time_${log_level}_v6.o"
@@ -41,7 +46,15 @@ for log_level in debug info no_log; do
           directions="from to"
         fi
         for from_or_to in $directions; do
-          echo "bin/${from_or_to}_${ep_type}_${host_drop}${fib}${log_level}.o"
+          extra="dsr_"
+          if [ "${from_or_to}" = "to" ] && [ "${ep_type}" = "hep" ]; then
+            emit_filename
+          fi
+          if [ "${from_or_to}" = "from" ] && [ "${ep_type}" = "wep" ]; then
+            emit_filename
+          fi
+          extra=""
+          emit_filename
         done
       done
     done

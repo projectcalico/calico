@@ -70,6 +70,10 @@ var _ = describeBPFTests(withTunnel("ipip"), withProto("tcp"), withConnTimeLoadB
 var _ = describeBPFTests(withTunnel("ipip"), withProto("udp"), withConnTimeLoadBalancingEnabled())
 var _ = describeBPFTests(withTunnel("ipip"), withProto("tcp"))
 var _ = describeBPFTests(withTunnel("ipip"), withProto("udp"))
+var _ = describeBPFTests(withProto("tcp"), withDSR())
+var _ = describeBPFTests(withProto("udp"), withDSR())
+var _ = describeBPFTests(withTunnel("ipip"), withProto("tcp"), withDSR())
+var _ = describeBPFTests(withTunnel("ipip"), withProto("udp"), withDSR())
 
 // Run a stripe of tests with BPF logging disabled since the compiler tends to optimise the code differently
 // with debug disabled and that can lead to verifier issues.
@@ -83,6 +87,7 @@ type bpfTestOptions struct {
 	udpUnConnected  bool
 	bpfLogLevel     string
 	tunnel          string
+	dsr             bool
 	udpConnRecvMsg  bool
 }
 
@@ -118,6 +123,12 @@ func withUDPUnConnected() bpfTestOpt {
 	}
 }
 
+func withDSR() bpfTestOpt {
+	return func(opts *bpfTestOptions) {
+		opts.dsr = true
+	}
+}
+
 func withUDPConnectedRecvMsg() bpfTestOpt {
 	return func(opts *bpfTestOptions) {
 		opts.udpConnRecvMsg = true
@@ -149,6 +160,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 	for _, o := range opts {
 		o(&testOpts)
 	}
+
 	protoExt := ""
 	if testOpts.udpUnConnected {
 		protoExt = "-unconnected"
@@ -156,8 +168,12 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 	if testOpts.udpConnRecvMsg {
 		protoExt = "-conn-recvmsg"
 	}
-	desc := fmt.Sprintf("_BPF_ _BPF-SAFE_ BPF tests (%s%s, ct=%v, log=%s, tunnel=%s)",
-		testOpts.protocol, protoExt, testOpts.connTimeEnabled, testOpts.bpfLogLevel, testOpts.tunnel)
+
+	desc := fmt.Sprintf("_BPF_ _BPF-SAFE_ BPF tests (%s%s, ct=%v, log=%s, tunnel=%s, dsr=%v)",
+		testOpts.protocol, protoExt, testOpts.connTimeEnabled,
+		testOpts.bpfLogLevel, testOpts.tunnel, testOpts.dsr,
+	)
+
 	return infrastructure.DatastoreDescribe(desc, []apiconfig.DatastoreType{apiconfig.Kubernetes}, func(getInfra infrastructure.InfraFactory) {
 
 		var (
@@ -216,6 +232,9 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 			}
 			options.ExtraEnvVars["FELIX_BPFConnectTimeLoadBalancingEnabled"] = fmt.Sprint(testOpts.connTimeEnabled)
 			options.ExtraEnvVars["FELIX_BPFLogLevel"] = fmt.Sprint(testOpts.bpfLogLevel)
+			if testOpts.dsr {
+				options.ExtraEnvVars["FELIX_BPFExternalServiceMode"] = "dsr"
+			}
 		})
 
 		JustAfterEach(func() {
@@ -740,7 +759,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 							log.Info("Waiting for NAT maps to converge...")
 							startTime := time.Now()
 							for {
-								if time.Since(startTime) > 5 * time.Second {
+								if time.Since(startTime) > 5*time.Second {
 									Fail("NAT maps failed to converge")
 								}
 								natBeforeUpdate, natBackBeforeUpdate = dumpNATmaps(felixes)
@@ -763,8 +782,8 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 								}
 
 								break
-								retry:
-									time.Sleep(100*time.Millisecond)
+							retry:
+								time.Sleep(100 * time.Millisecond)
 							}
 							log.Info("NAT maps converged.")
 

@@ -50,11 +50,13 @@ type State struct {
 	Pad                 uint8
 	ConntrackResultType uint32
 	ConntrackData       uint64
+	ConntrackDataTun    uint32
+	Pad2                uint32
 	NATData             uint64
 	ProgStartTime       uint64
 }
 
-const expectedSize = 56
+const expectedSize = 64
 
 func (s *State) AsBytes() []byte {
 	size := unsafe.Sizeof(State{})

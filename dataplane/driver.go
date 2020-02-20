@@ -199,6 +199,10 @@ func StartDataplaneDriver(configParams *config.Config,
 			KubeClientSet: k8sClientSet,
 		}
 
+		if configParams.BPFExternalServiceMode == "dsr" {
+			dpConfig.BPFNodePortDSREnabled = true
+		}
+
 		intDP := intdataplane.NewIntDataplaneDriver(dpConfig)
 		intDP.Start()
 

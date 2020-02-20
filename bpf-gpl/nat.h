@@ -142,8 +142,11 @@ static CALI_BPF_INLINE uint32_t nat_aff_ip_hash(uint32_t a)
     return a;
 }
 
-static CALI_BPF_INLINE struct calico_nat_dest* calico_v4_nat_lookup(__be32 ip_src, __be32 ip_dst,
-								    __u8 ip_proto, __u16 dport)
+static CALI_BPF_INLINE struct calico_nat_dest* calico_v4_nat_lookup2(__be32 ip_src,
+								     __be32 ip_dst,
+								     __u8 ip_proto,
+								     __u16 dport,
+								     bool from_tun)
 {
 	struct calico_nat_v4_key nat_key = {
 		.addr = ip_dst,
@@ -174,7 +177,8 @@ static CALI_BPF_INLINE struct calico_nat_dest* calico_v4_nat_lookup(__be32 ip_sr
 		 * check whether the destination is a remote nodeport to do a
 		 * straight NAT and avoid a possible extra hop.
 		 */
-		if (!(CALI_F_FROM_WEP || CALI_F_TO_HEP || CALI_F_CGROUP) || ip_dst == 0xffffffff) {
+		if (!(CALI_F_FROM_WEP || CALI_F_TO_HEP || CALI_F_CGROUP ||
+					(CALI_F_FROM_HEP && from_tun)) || ip_dst == 0xffffffff) {
 			return NULL;
 		}
 
@@ -201,12 +205,14 @@ static CALI_BPF_INLINE struct calico_nat_dest* calico_v4_nat_lookup(__be32 ip_sr
 		CALI_DEBUG("NAT: nodeport hit\n");
 	}
 
-	if (nat_lv1_val->count == 0) {
+	uint32_t count = from_tun ? nat_lv1_val->local : nat_lv1_val->count;
+
+	CALI_DEBUG("NAT: 1st level hit; id=%d\n", nat_lv1_val->id);
+
+	if (count == 0) {
 		CALI_DEBUG("NAT: no backend\n");
 		return NULL;
 	}
-
-	CALI_DEBUG("NAT: 1st level hit; id=%d\n", nat_lv1_val->id);
 
 	if (nat_lv1_val->affinity_timeo == 0) {
 		goto skip_affinity;
@@ -248,7 +254,7 @@ skip_affinity:
 		 */
 		nat_lv2_key.ordinal = nat_aff_ip_hash(ip_src);
 	}
-	nat_lv2_key.ordinal %= nat_lv1_val->count;
+	nat_lv2_key.ordinal %= count;
 
 	CALI_DEBUG("NAT: 1st level hit; id=%d ordinal=%d\n", nat_lv2_key.id, nat_lv2_key.ordinal);
 
@@ -274,6 +280,12 @@ skip_affinity:
 	}
 
 	return nat_lv2_val;
+}
+
+static CALI_BPF_INLINE struct calico_nat_dest* calico_v4_nat_lookup(__be32 ip_src, __be32 ip_dst,
+								    __u8 ip_proto, __u16 dport)
+{
+	return calico_v4_nat_lookup2(ip_src, ip_dst, ip_proto, dport, false);
 }
 
 struct vxlanhdr {
@@ -343,7 +355,7 @@ static CALI_BPF_INLINE int vxlan_v4_encap(struct __sk_buff *skb,  __be32 ip_src,
 	ip->protocol = IPPROTO_UDP;
 
 	udp->source = udp->dest = host_to_be16(CALI_VXLAN_PORT);
-	udp->len = host_to_be16(skb_tail_len(skb, udp));
+	udp->len = host_to_be16(be16_to_host(ip->tot_len) - sizeof(struct iphdr));
 
 	/* set the I flag to make the VNI valid, keep the VNI 0-ed */
 	*((uint8_t*)&vxlan->flags) = 1 << 3;

@@ -69,6 +69,7 @@ type bpfEndpointManager struct {
 	ipSetIDAlloc     *idalloc.IDAllocator
 	epToHostDrop     bool
 	natTunnelMTU     int
+	dsrEnabled       bool
 
 	ipSetMap bpf.Map
 	stateMap bpf.Map
@@ -81,6 +82,7 @@ func newBPFEndpointManager(
 	dataIfaceRegex *regexp.Regexp,
 	ipSetIDAlloc *idalloc.IDAllocator,
 	natTunnelMTU int,
+	dsrEnabled bool,
 	ipSetMap bpf.Map,
 	stateMap bpf.Map,
 ) *bpfEndpointManager {
@@ -99,6 +101,7 @@ func newBPFEndpointManager(
 		ipSetIDAlloc:        ipSetIDAlloc,
 		epToHostDrop:        epToHostDrop,
 		natTunnelMTU:        natTunnelMTU,
+		dsrEnabled:          dsrEnabled,
 		ipSetMap:            ipSetMap,
 		stateMap:            stateMap,
 	}
@@ -629,7 +632,8 @@ func (m *bpfEndpointManager) calculateTCAttachPoint(endpointType tc.EndpointType
 
 	ap.Section = tc.SectionName(endpointType, toOrFrom)
 	ap.Iface = ifaceName
-	ap.Filename = tc.ProgFilename(endpointType, toOrFrom, m.epToHostDrop, m.fibLookupEnabled, m.bpfLogLevel)
+	ap.Filename = tc.ProgFilename(endpointType, toOrFrom, m.epToHostDrop, m.fibLookupEnabled,
+		m.dsrEnabled, m.bpfLogLevel)
 
 	return ap
 }
