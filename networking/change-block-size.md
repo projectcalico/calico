@@ -1,6 +1,6 @@
 ---
 title: Change IP pool block size
-description: Expand or shrink the IP pool block size to efficiently manage IP addresses. 
+description: Expand or shrink the IP pool block size to efficiently manage IP pool addresses. 
 ---
 
 ### Big picture
