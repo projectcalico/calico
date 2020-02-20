@@ -33,16 +33,14 @@ This how-to guide uses the following {{site.prodname}} features:
 
 **Required**
 
-- Verify that you are using {{site.prodname}} IPAM
-  
-  This guide is only relevant if you are using Calico IPAM.
+- Verify that you are using {{site.prodname}} IPAM. This guide is only relevant if you are using Calico IPAM.
 
-  1. ssh to one of your Kubernetes nodes and view the CNI configuration.  
+  ssh to one of your Kubernetes nodes and view the CNI configuration.  
 
     ```bash
       cat /etc/cni/net.d/10-calico.conflist
      ```
-  1. Look for the "type" entry:
+  Look for the "type" entry:
     <pre>
        "ipam": {
              "type": "calico-ipam"
