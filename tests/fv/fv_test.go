@@ -299,6 +299,7 @@ var _ = Describe("kube-controllers FV tests", func() {
 			_, err = calicoClient.IPPools().Create(context.Background(), &pool, options.SetOptions{})
 			Expect(err).NotTo(HaveOccurred())
 
+			// Claim affinity to a block.
 			affBlock := cnet.IPNet{
 				IPNet: net.IPNet{
 					IP:   net.IP{192, 168, 0, 0},
@@ -308,6 +309,10 @@ var _ = Describe("kube-controllers FV tests", func() {
 			_, _, err = calicoClient.IPAM().ClaimAffinity(context.Background(), affBlock, cNodeName)
 			Expect(err).NotTo(HaveOccurred())
 
+			// Allocate an address within the block, which will be assigned to a WEP.
+			// We don't specify metadata in the attrs fields (e.g., pod name, namespace, node), since those fields
+			// weren't added until Calico v3.6 so some allocations won't have them. For these allocations, we NEED
+			// the workload endpoint in order to garbage collect them.
 			handle := "myhandle"
 			wepIp := net.IP{192, 168, 0, 1}
 			swepIp := "192.168.0.1/32"
@@ -318,6 +323,7 @@ var _ = Describe("kube-controllers FV tests", func() {
 			})
 			Expect(err).NotTo(HaveOccurred())
 
+			// Create the WEP, using the address.
 			wep := api.WorkloadEndpoint{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "caliconodename-k8s-mypod-mywep",
@@ -338,6 +344,70 @@ var _ = Describe("kube-controllers FV tests", func() {
 			_, err = calicoClient.WorkloadEndpoints().Create(context.Background(), &wep, options.SetOptions{})
 			Expect(err).NotTo(HaveOccurred())
 
+			// Allocate another address within the block, which will NOT be assigned to a WEP. This make sure
+			// we handle cleanup of addresses which may have lost association with a running workload. This allocation
+			// includes metadata attributes introduced in Calico v3.6, which allows us to garbage collect it even though
+			// there is no corresponding workload endpoint.
+			handle2 := "myhandle2"
+			wepIp = net.IP{192, 168, 0, 2}
+			attrs := map[string]string{
+				ipam.AttributeNode:      cNodeName,
+				ipam.AttributePod:       "podname2",
+				ipam.AttributeNamespace: "podnamespace2",
+			}
+			err = calicoClient.IPAM().AssignIP(context.Background(), ipam.AssignIPArgs{
+				IP:       cnet.IP{IP: wepIp},
+				Hostname: cNodeName,
+				HandleID: &handle2,
+				Attrs:    attrs,
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			// Allocate another address within another block, and then release the affinity of that block from the node.
+			// This tests yet another possible scenario - that we clean up addresses in blocks that may no longer be tied to
+			// the node itself via an affinity (e.g., if the IP pool was deleted). Allocating the IP address claims the block
+			// so we need to explicitly release the affinity to get it into the right state.
+			handle3 := "myhandle3"
+			wepIp = net.IP{192, 168, 1, 1}
+			attrs = map[string]string{
+				ipam.AttributeNode:      cNodeName,
+				ipam.AttributePod:       "podname3",
+				ipam.AttributeNamespace: "podnamespace3",
+			}
+			err = calicoClient.IPAM().AssignIP(context.Background(), ipam.AssignIPArgs{
+				IP:       cnet.IP{IP: wepIp},
+				Hostname: cNodeName,
+				HandleID: &handle3,
+				Attrs:    attrs,
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			affBlock = cnet.IPNet{IPNet: net.IPNet{
+				IP:   net.IP{192, 168, 1, 0},
+				Mask: net.IPMask{255, 255, 255, 0},
+			}}
+			err = calicoClient.IPAM().ReleaseAffinity(context.Background(), affBlock, cNodeName, false)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Allocate an address in a block that is affine to another host, simulating a "borrowed" IP.
+			// We expect that this will also get cleaned up. (The block will also get cleaned up since "someothernode"
+			// doesn't actually exist, but that is dependent on releasing the IP first).
+			handle4 := "myhandle4"
+			wepIp = net.IP{192, 168, 2, 1}
+			attrs = map[string]string{
+				ipam.AttributeNode:      "someothernode",
+				ipam.AttributePod:       "podname4",
+				ipam.AttributeNamespace: "podnamespace4",
+			}
+			err = calicoClient.IPAM().AssignIP(context.Background(), ipam.AssignIPArgs{
+				IP:       cnet.IP{IP: wepIp},
+				Hostname: cNodeName,
+				HandleID: &handle4,
+				Attrs:    attrs,
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			// Create a per-node BGP peer.
 			bgppeer := api.BGPPeer{
 				Spec: api.BGPPeerSpec{
 					Node: cNodeName,
@@ -349,6 +419,7 @@ var _ = Describe("kube-controllers FV tests", func() {
 			_, err = calicoClient.BGPPeers().Create(context.Background(), &bgppeer, options.SetOptions{})
 			Expect(err).ShouldNot(HaveOccurred())
 
+			// Create a per-node FelixConfiguration.
 			nodeConfigName := fmt.Sprintf("node.%s", cNodeName)
 			felixConf := api.FelixConfiguration{
 				Spec: api.FelixConfigurationSpec{},
@@ -359,6 +430,7 @@ var _ = Describe("kube-controllers FV tests", func() {
 			_, err = calicoClient.FelixConfigurations().Create(context.Background(), &felixConf, options.SetOptions{})
 			Expect(err).ShouldNot(HaveOccurred())
 
+			// Create a per-node BGPConfiguration.
 			bgpConf := api.BGPConfiguration{
 				Spec: api.BGPConfigurationSpec{
 					LogSeverityScreen: "Error",
@@ -370,7 +442,7 @@ var _ = Describe("kube-controllers FV tests", func() {
 			_, err = calicoClient.BGPConfigurations().Create(context.Background(), &bgpConf, options.SetOptions{})
 			Expect(err).ShouldNot(HaveOccurred())
 
-			// Delete the node.
+			// Delete the node. This is expected to trigger removal of all the above resources.
 			err = k8sClient.CoreV1().Nodes().Delete(kNodeName, &metav1.DeleteOptions{})
 			Expect(err).NotTo(HaveOccurred())
 
@@ -389,6 +461,18 @@ var _ = Describe("kube-controllers FV tests", func() {
 			ips, _ := calicoClient.IPAM().IPsByHandle(context.Background(), handle)
 			Expect(ips).Should(BeNil())
 
+			// Check that the orphaned IP was released
+			ips, _ = calicoClient.IPAM().IPsByHandle(context.Background(), handle2)
+			Expect(ips).Should(BeNil())
+
+			// Check that the IP in the orphaned block was released.
+			ips, _ = calicoClient.IPAM().IPsByHandle(context.Background(), handle3)
+			Expect(ips).Should(BeNil())
+
+			// Check that the borrowed address was released.
+			ips, _ = calicoClient.IPAM().IPsByHandle(context.Background(), handle4)
+			Expect(ips).Should(BeNil())
+
 			// Check that the host affinity was released.
 			be := testutils.GetBackendClient(etcd.IP)
 			list, err := be.List(
@@ -401,6 +485,10 @@ var _ = Describe("kube-controllers FV tests", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(list.KVPairs).To(HaveLen(0))
 
+			// Check that the two blocks were deleted.
+			blocks, err := be.List(context.Background(), model.BlockListOptions{}, "")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(blocks.KVPairs).To(HaveLen(0))
 		})
 	})
 
