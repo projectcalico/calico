@@ -95,8 +95,8 @@ func MakeKey(proto uint8, ipA net.IP, portA uint16, ipB net.IP, portB uint16) Ke
 //      __u32 orig_dst;                    // 40
 //      __u16 orig_port;                   // 44
 //      __u8 pad1[2];                      // 46
-//		__u32 tun_ip;                      // 48
-//		__u32 pad3;                        // 52
+//      __u32 tun_ip;                      // 48
+//      __u32 pad3;                        // 52
 //    };
 //
 //    // CALI_CT_TYPE_NAT_FWD; key for the CALI_CT_TYPE_NAT_REV entry.
