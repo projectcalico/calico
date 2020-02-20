@@ -9,7 +9,7 @@ instructions explain how to set up a single or multiple node DevStack/{{site.pro
 system, and then how to see {{site.prodname}} connectivity in action.
 
 > **Note**: networking-calico includes a
-> [shell script](https://git.openstack.org/cgit/openstack/networking-calico/tree/devstack/bootstrap.sh)
+> [shell script](https://github.com/projectcalico/networking-calico/blob/master/devstack/bootstrap.sh)
 > that implements the following setup instructions. You are welcome to use it,
 > but we recommend that you read the following description first anyway, and
 > briefly review the script's code, so that you will understand what the
@@ -27,7 +27,7 @@ and compute functions running on the same node:
 
 2. Add to your DevStack local.conf file:
 
-       enable_plugin networking-calico https://git.openstack.org/openstack/networking-calico
+       enable_plugin networking-calico https://github.com/projectcalico/networking-calico
 
 3. Run `stack.sh`.
 
