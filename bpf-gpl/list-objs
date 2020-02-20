@@ -53,7 +53,7 @@ for log_level in debug info no_log; do
           if [ "${from_or_to}" = "from" ] && [ "${ep_type}" = "wep" ]; then
             emit_filename
           fi
-	  extra=""
+          extra=""
           emit_filename
         done
       done
