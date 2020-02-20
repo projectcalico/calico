@@ -58,7 +58,7 @@ Understand the basics of [Calico IPAM]({{site.baseurl}}/networking/get-started-i
 >**Important!** Make sure that you do the steps in the order shown; this ensures that existing pod connectivity is not affected. Also, when pods are deleted, applications may be temporarily unavailable (depending on the type of application); plan accordingly. 
 {: .alert .alert-danger }
 
-#### Change IP pool block size
+#### Change the IP pool block size
 
 By default, the {{site.prodname}} IPAM block size for an IP pool is /26. To expand from the default size /26, lower the `blockSize` (for example /8). To shrink the `blockSize` from the default /26, raise the number (for example, /28). 
 
@@ -79,7 +79,7 @@ The high-level steps to follow are:
 
 ### Tutorial
 
-In the following example, we create a Kubernetes cluster with default CIDR block size of /26, but want to shrink the size to /28.
+In the following example, we created a Kubernetes cluster with default CIDR block size of /26. We want to shrink the block size to /28 to use the pool more efficiently.
 
 #### Step 1: Add a new IP pool
 
@@ -180,12 +180,15 @@ new-pool              10.0.0.0/16      true   Always     false
 
 ### Step 3: Delete pods from the old IP pool
 
-Next, we delete all of the existing pods from the old IP pool. (In our example, coredns is our only pod; for multiple pods you would trigger a deletion for all pods in the cluster.)
+Next, we delete all of the existing pods from the old IP pool. (In our example, **coredns** is our only pod; for multiple pods you would trigger a deletion for all pods in the cluster.)
 
 ```
 kubectl delete pod -n kube-system coredns-6f4fd4bdf-8q7zp
 ```
-You can restart all pods with just one command. WARNING! This is disruptive and may take several minutes depending on the number of pods deployed.
+Restart all pods with just one command. 
+
+<**WARNING!** This is disruptive and may take several minutes depending on the number of pods deployed.
+{: .alert .alert-danger}
 
 ```
 kubectl delete pod -A --all
@@ -269,12 +272,14 @@ calicoctl apply -f pool.yaml
 
 #### Step 7: Delete pods from the temporary IP pool.
 
-Next, we delete all of the existing pods from the old IP pool. (In our example, coredns is our only pod; for multiple pods you would trigger a deletion for all pods in the cluster.)
+Next, we delete all of the existing pods from the old IP pool. (In our example, **coredns** is our only pod; for multiple pods you would trigger a deletion for all pods in the cluster.)
 
 ```
 kubectl delete pod -n kube-system coredns-6f4fd4bdf-8q7zp
 ```
-You can restart all pods with just one command. WARNING! This is disturbtive and may take several minutes depending on the number of pods deployed.
+Restart all pods with just one command. 
+<**WARNING!** This is disruptive and may take several minutes depending on the number of pods deployed.
+{: .alert .alert-danger}
 
 ```
 kubectl delete pod -A --all
@@ -287,7 +292,7 @@ calicoctl ipam show --show-blocks
 ```
 #### Step 8: Delete the temporary IP pool.
 
-Clean up the IP pools by deleting the temporary IP pool
+Clean up the IP pools by deleting the temporary IP pool.
 
 ```
 calicoctl delete pool new-pool
