@@ -148,14 +148,12 @@ func InstallConnectTimeLoadBalancer(frontendMap, backendMap, rtMap bpf.Map, cgro
 		return errors.WithMessage(err, "failed to create sendrecv BPF Map")
 	}
 
-	maps := []bpf.Map{frontendMap, backendMap, rtMap}
+	maps := []bpf.Map{frontendMap, backendMap, rtMap, sendrecvMap}
 
 	err = installProgram("connect", "4", bpfMount, cgroupPath, logLevel, maps...)
 	if err != nil {
 		return err
 	}
-
-	maps = append(maps, sendrecvMap)
 
 	err = installProgram("sendmsg", "4", bpfMount, cgroupPath, logLevel, maps...)
 	if err != nil {

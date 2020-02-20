@@ -31,10 +31,8 @@ int cali_noop_v4(struct bpf_sock_addr *ctx)
 	return 1;
 }
 
-static CALI_BPF_INLINE struct calico_nat_dest* nat_lookup(struct bpf_sock_addr *ctx, uint8_t proto)
+static CALI_BPF_INLINE void do_nat_common(struct bpf_sock_addr *ctx, uint8_t proto)
 {
-	uint16_t dport = (uint16_t)(be32_to_host(ctx->user_port)>>16);
-
 	/* We do not know what the source address is yet, we only know that it
 	 * is the localhost, so we might just use 0.0.0.0. That would not
 	 * conflict with traffic from elsewhere.
@@ -43,13 +41,48 @@ static CALI_BPF_INLINE struct calico_nat_dest* nat_lookup(struct bpf_sock_addr *
 	 * XXX same affinity, which (a) is sub-optimal and (b) leaks info between
 	 * XXX workloads.
 	 */
-	return calico_v4_nat_lookup(0, ctx->user_ip4, proto, dport);
+	uint16_t dport_he = (uint16_t)(be32_to_host(ctx->user_port)>>16);
+	struct calico_nat_dest *nat_dest;
+	nat_dest = calico_v4_nat_lookup(0, ctx->user_ip4, proto, dport_he);
+	if (!nat_dest) {
+		CALI_INFO("NAT miss.\n");
+		goto out;
+	}
+
+	uint32_t dport_be = host_to_ctx_port(nat_dest->port);
+
+	uint64_t cookie = bpf_get_socket_cookie(ctx);
+	CALI_DEBUG("Store: ip=%x port=%d(BE) cookie=%x\n", nat_dest->addr, dport_be, cookie);
+	struct sendrecv4_key key = {
+		.ip	= nat_dest->addr,
+		.port	= dport_be,
+		.cookie	= cookie,
+	};
+	struct sendrecv4_val val = {
+		.ip	= ctx->user_ip4,
+		.port	= ctx->user_port,
+		/* XXX we should also store the backend key to verify that it is
+		 * XXX still ok upon recvmsg.
+		 */
+	};
+
+	if (bpf_map_update_elem(&cali_v4_srmsg, &key, &val, 0)) {
+		/* if this happens things are really bad! report */
+		CALI_INFO("Failed to update map\n");
+		goto out;
+	}
+
+	ctx->user_ip4 = nat_dest->addr;
+	ctx->user_port = dport_be;
+
+out:
+	return;
 }
 
 __attribute__((section("calico_connect_v4")))
 int cali_ctlb_v4(struct bpf_sock_addr *ctx)
 {
-	int verdict = 1;
+	CALI_DEBUG("calico_connect_v4\n");
 
 	/* do not process anything non-TCP or non-UDP, but do not block it, will be
 	 * dealt with somewhere else.
@@ -74,18 +107,10 @@ int cali_ctlb_v4(struct bpf_sock_addr *ctx)
 		goto out;
 	}
 
-	struct calico_nat_dest *nat_dest;
-
-	nat_dest = nat_lookup(ctx, ip_proto);
-	if (!nat_dest) {
-		goto out;
-	}
-
-	ctx->user_ip4 = nat_dest->addr;
-	ctx->user_port = host_to_ctx_port(nat_dest->port);
+	do_nat_common(ctx, ip_proto);
 
 out:
-	return verdict;
+	return 1;
 }
 
 __attribute__((section("calico_sendmsg_v4")))
@@ -99,36 +124,7 @@ int cali_ctlb_sendmsg_v4(struct bpf_sock_addr *ctx)
 		goto out;
 	}
 
-	struct calico_nat_dest *nat_dest;
-
-	nat_dest = nat_lookup(ctx, IPPROTO_UDP);
-	if (!nat_dest) {
-		goto out;
-	}
-
-	uint32_t dport = host_to_ctx_port(nat_dest->port);
-
-	struct sendrecv4_key key = {
-		.ip	= nat_dest->addr,
-		.port	= dport,
-		.cookie	= bpf_get_socket_cookie(ctx),
-	};
-	struct sendrecv4_val val = {
-		.ip	= ctx->user_ip4,
-		.port	= ctx->user_port,
-		/* XXX we should also store the backend key to verify that it is
-		 * XXX still ok upon recvmsg.
-		 */
-	};
-
-	if (bpf_map_update_elem(&cali_v4_srmsg, &key, &val, 0)) {
-		/* if this happens things are really bad! report */
-		CALI_INFO("sendmsg4 failed to update map\n");
-		goto out;
-	}
-
-	ctx->user_ip4 = nat_dest->addr;
-	ctx->user_port = dport;
+	do_nat_common(ctx, IPPROTO_UDP);
 
 out:
 	return 1;
@@ -144,10 +140,12 @@ int cali_ctlb_recvmsg_v4(struct bpf_sock_addr *ctx)
 		goto out;
 	}
 
+	uint64_t cookie = bpf_get_socket_cookie(ctx);
+	CALI_DEBUG("Lookup: ip=%x port=%d(BE) cookie=%x",ctx->user_ip4, ctx->user_port, cookie);
 	struct sendrecv4_key key = {
 		.ip	= ctx->user_ip4,
 		.port	= ctx->user_port,
-		.cookie	= bpf_get_socket_cookie(ctx),
+		.cookie	= cookie,
 	};
 
 	struct sendrecv4_val *revnat = bpf_map_lookup_elem(&cali_v4_srmsg, &key);
