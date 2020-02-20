@@ -15,13 +15,17 @@ Expand or shrink the IP pool block size to efficiently manage IP pool addresses.
 
 This how-to guide uses the following {{site.prodname}} features:
 
-- **IPPool** resource 
+- **IPPool** resource with `blockSize` field
 
 ### Concepts
 
-#### Best practice: create IP pools within the same cluster CIDR
+#### Best practices
 
-Kubernetes expects that all pods have IP addresses within the same cluster CIDR. Although {{site.prodname}} technically supports using multiple disjoint IP pool CIDRs, we do not recommend it; pods allocated addresses outside of the Kubernetes cluster CIDR will lose network connectivity. 
+- **Create IP pools within the same cluster CIDR** 
+  Kubernetes expects that all pods have IP addresses within the same cluster CIDR. Although {{site.prodname}} technically supports using multiple disjoint IP pool CIDRs, we do not recommend it; pods allocated addresses outside of the Kubernetes cluster CIDR will lose network connectivity. 
+  
+- **Determine IP pool block size before installing {{site.prodname}}** 
+  Because the `blockSize` field cannot be edited directly after installation, you must use a three-step process to make the changes and avoid disruption to clusters. However, this article provides the steps should you need to change `blockSize` after installation.
 
 ### Before you begin...
 
