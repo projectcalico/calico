@@ -215,7 +215,9 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 			}
 			options.ExtraEnvVars["FELIX_BPFConnectTimeLoadBalancingEnabled"] = fmt.Sprint(testOpts.connTimeEnabled)
 			options.ExtraEnvVars["FELIX_BPFLogLevel"] = fmt.Sprint(testOpts.bpfLogLevel)
-			options.ExtraEnvVars["FELIX_BPFNodePortDSREnabled"] = fmt.Sprint(testOpts.dsr)
+			if testOpts.dsr {
+				options.ExtraEnvVars["FELIX_BPFExternalServiceMode"] = "dsr"
+			}
 		})
 
 		JustAfterEach(func() {

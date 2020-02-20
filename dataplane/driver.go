@@ -195,9 +195,12 @@ func StartDataplaneDriver(configParams *config.Config,
 			XDPEnabled:                         configParams.XDPEnabled,
 			XDPAllowGeneric:                    configParams.GenericXDPEnabled,
 			BPFConntrackTimeouts:               conntrack.DefaultTimeouts(), // FIXME make timeouts configurable
-			BPFNodePortDSREnabled:              configParams.BPFNodePortDSREnabled,
 
 			KubeClientSet: k8sClientSet,
+		}
+
+		if configParams.BPFExternalServiceMode == "dsr" {
+			dpConfig.BPFNodePortDSREnabled = true
 		}
 
 		intDP := intdataplane.NewIntDataplaneDriver(dpConfig)
