@@ -9,7 +9,7 @@ Change the IP pool block size to efficiently manage IP pool addresses.
 
 ### Value
 
-{{site.prodname}} provides a safe way to change the IP pool block size without disrupting pod connectivity in clusters. 
+Because the IP pool block size is configured during install and cannot be edited, you must follow the steps outlined in this article to minimize pod connectivity disruption. 
 
 ### Features
 
@@ -27,7 +27,7 @@ This how-to guide uses the following {{site.prodname}} features:
   
 - **Determine IP pool block size before installing {{site.prodname}}** 
 
-   Because the `blockSize` field cannot be edited directly after installation, you must use a three-step process to make the changes and avoid disruption to clusters. However, this article provides the steps should you need to change `blockSize` after installation.
+   Because the `blockSize` field cannot be edited directly after installation, you must use a three-step process after installation to change `blockSize` to mimimize disruptions to pod connectivity.
 
 ### Before you begin...
 
@@ -59,7 +59,7 @@ Understand the basics of [Calico IPAM]({{site.baseurl}}/networking/get-started-i
 
 ### How to
 
->**Important!** Make sure that you do the steps in the order shown; this ensures that existing pod connectivity is not affected. Also, when pods are deleted, applications may be temporarily unavailable (depending on the type of application); plan accordingly. 
+>**Important!** Make sure that you follow the steps in the order described to minimize pod connectivity disruption. Pods may lose connectivity when they are redeployed, and may lose external connectivity while in the temporary pool. Also, when pods are deleted, applications may be temporarily unavailable (depending on the type of application). Plan accordingly. 
 {: .alert .alert-danger }
 
 #### Change the IP pool block size
