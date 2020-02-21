@@ -282,7 +282,7 @@ kubectl delete pod -n kube-system coredns-6f4fd4bdf-8q7zp
 ```
 Restart all pods with just one command. 
 
-< **WARNING!** This is disruptive and may take several minutes depending on the number of pods deployed.
+<**WARNING!** This is disruptive and may take several minutes depending on the number of pods deployed.
 {: .alert .alert-danger}
 
 ```
