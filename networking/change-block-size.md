@@ -38,14 +38,14 @@ This how-to guide uses the following {{site.prodname}} features:
   ssh to one of your Kubernetes nodes and view the CNI configuration.  
 
     ```bash
-      cat /etc/cni/net.d/10-calico.conflist
+    cat /etc/cni/net.d/10-calico.conflist
      ```
   Look for the "type" entry:
-    <pre>
-       "ipam": {
-             "type": "calico-ipam"
-        }, 
-    </pre>
+  <pre>
+     "ipam": {
+           "type": "calico-ipam"
+      }, 
+  </pre>
 
   If the type is “calico-ipam”, you are good to go. If the IPAM is set to something else, or the 10-calico.conflist file does not exist, you cannot use this feature in your cluster. 
 
@@ -64,14 +64,14 @@ Understand the basics of [Calico IPAM]({{site.baseurl}}/networking/get-started-i
 
 #### Change the IP pool block size
 
-By default, the {{site.prodname}} IPAM block size for an IP pool is /26. To expand from the default size /26, lower the `blockSize` (for example /8). To shrink the `blockSize` from the default /26, raise the number (for example, /28). 
+By default, the {{site.prodname}} IPAM block size for an IP pool is /26. To expand from the default size /26, lower the `blockSize` (for example, /8). To shrink the `blockSize` from the default /26, raise the number (for example, /28). 
 
 The high-level steps to follow are:
 
 1. Add a new temporary IP pool.  
 **Note**: The new IP pool must not be within the same cluster CIDR.
 1. Disable the old IP pool.  
-**Note**: Disabling an IP pool only prevents new IP address allocations; it does not affect the networking of existing pods.
+**Note**: Disabling an IP pool prevents only new IP address allocations; it does not affect etworking of existing pods.
 1. Delete pods from the old IP pool.  
 This includes any new pods that may have been created with the old IP pool prior to disabling the pool. Verify that new pods get an address from the new IP pool.
 1. Delete the old IP pool.
@@ -162,7 +162,7 @@ spec:
   disabled: true
 </pre>
 
-Remember, disabling a pool only affects new IP allocations; networking for existing pods is not affected.
+Remember, disabling a pool affects only new IP allocations; networking for existing pods is not affected.
 
 Apply the changes.
 
@@ -181,16 +181,16 @@ default-ipv4-ippool   192.168.0.0/16   true   Always     true
 new-pool              10.0.0.0/16      true   Always     false
 </pre>
 
-### Step 3: Delete pods from the old IP pool
+#### Step 3: Delete pods from the old IP pool
 
-Next, we delete all of the existing pods from the old IP pool. (In our example, **coredns** is our only pod; for multiple pods you would trigger a deletion for all pods in the cluster.)
+Next, delete all of the existing pods from the old IP pool. (In our example, **coredns** is our only pod; for multiple pods you would trigger a deletion for all pods in the cluster.)
 
 ```
 kubectl delete pod -n kube-system coredns-6f4fd4bdf-8q7zp
 ```
 Restart all pods with just one command. 
 
-<**WARNING!** This is disruptive and may take several minutes depending on the number of pods deployed.
+> **WARNING!** This is disruptive and may take several minutes depending on the number of pods deployed.
 {: .alert .alert-danger}
 
 ```
@@ -275,19 +275,20 @@ calicoctl apply -f pool.yaml
 
 #### Step 7: Delete pods from the temporary IP pool
 
-Next, we delete all of the existing pods from the old IP pool. (In our example, **coredns** is our only pod; for multiple pods you would trigger a deletion for all pods in the cluster.)
+Next, delete all of the existing pods from the old IP pool. (In our example, **coredns** is our only pod; for multiple pods you would trigger a deletion for all pods in the cluster.)
 
 ```
 kubectl delete pod -n kube-system coredns-6f4fd4bdf-8q7zp
 ```
 Restart all pods with just one command. 
-<**WARNING!** This is disruptive and may take several minutes depending on the number of pods deployed.
+
+< **WARNING!** This is disruptive and may take several minutes depending on the number of pods deployed.
 {: .alert .alert-danger}
 
 ```
 kubectl delete pod -A --all
 ```
-You can validate your pods and block size are correct by running the following commands
+Validate your pods and block size are correct by running the following commands
 
 ```
 kubectl get pods --all-namespaces -o wide
