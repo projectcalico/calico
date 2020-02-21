@@ -5,11 +5,11 @@ description: Expand or shrink the IP pool block size to efficiently manage IP po
 
 ### Big picture
 
-Expand or shrink the IP pool block size to efficiently manage IP pool addresses. 
+Change the IP pool block size to efficiently manage IP pool addresses. 
 
 ### Value
 
-{{site.prodname}} provides a safe way to change the IP pool block size without disrupting clusters. 
+{{site.prodname}} provides a safe way to change the IP pool block size without disrupting pod connectivity in clusters. 
 
 ### Features
 
@@ -68,24 +68,23 @@ By default, the {{site.prodname}} IPAM block size for an IP pool is /26. To expa
 
 The high-level steps to follow are:
 
-1. Add a new temporary IP pool. 
-   **Note**: The new IP pool must not be within the same cluster CIDR.
-1. Disable the old IP pool.
-   **Note**: Disabling an IP pool only prevents new IP address allocations; it does not affect the networking of existing pods.
-1. Delete pods from the old IP pool.
-   This includes any new pods that may have been created with the old IP pool prior to disabling the pool.
-1. Verify that new pods get an address from the new IP pool.
+1. Add a new temporary IP pool.  
+**Note**: The new IP pool must not be within the same cluster CIDR.
+1. Disable the old IP pool.  
+**Note**: Disabling an IP pool only prevents new IP address allocations; it does not affect the networking of existing pods.
+1. Delete pods from the old IP pool.  
+This includes any new pods that may have been created with the old IP pool prior to disabling the pool. Verify that new pods get an address from the new IP pool.
 1. Delete the old IP pool.
 1. Create a new pool with custom CIDR block within the same cluster CIDR.
-1. Disable temporary IP pool.
+1. Disable the temporary IP pool.
 1. Delete pods from the temporary IP pool.
-1. Delete temporary IP pool
+1. Delete the temporary IP pool
 
 ### Tutorial
 
 In the following example, we created a Kubernetes cluster with default CIDR block size of /26. We want to shrink the block size to /28 to use the pool more efficiently.
 
-#### Step 1: Add a new IP pool
+#### Step 1: Add a new temporary IP pool
 
 We add a new IPPool with the CIDR range, 10.0.0.0/16.
 
@@ -198,7 +197,7 @@ Restart all pods with just one command.
 kubectl delete pod -A --all
 ```
 
-#### Step 4: Delete the old IP poo
+#### Step 4: Delete the old IP pool
 
 Now that you’ve verified that pods are getting IPs from the new range, you can safely delete the old pool.
 
@@ -206,7 +205,7 @@ Now that you’ve verified that pods are getting IPs from the new range, you can
 calicoctl delete pool default-ipv4-ippool
 ```
 
-#### Step 5: Create a new pool with custom cidr block
+#### Step 5: Create a new pool with custom CIDR block
 
 <pre>
 apiVersion: projectcalico.org/v3
@@ -226,7 +225,7 @@ Apply the changes.
 calicoctl apply -f pool.yaml
 ```
 
-#### Step 6: Disable temporary IP pool
+#### Step 6: Disable the temporary IP pool
 
 ```
 calicoctl get ippool -o yaml --export > pool.yaml
@@ -274,7 +273,7 @@ Apply the changes.
 calicoctl apply -f pool.yaml
 ```
 
-#### Step 7: Delete pods from the temporary IP pool.
+#### Step 7: Delete pods from the temporary IP pool
 
 Next, we delete all of the existing pods from the old IP pool. (In our example, **coredns** is our only pod; for multiple pods you would trigger a deletion for all pods in the cluster.)
 
@@ -294,7 +293,7 @@ You can validate your pods and block size are correct by running the following c
 kubectl get pods --all-namespaces -o wide
 calicoctl ipam show --show-blocks
 ```
-#### Step 8: Delete the temporary IP pool.
+#### Step 8: Delete the temporary IP pool
 
 Clean up the IP pools by deleting the temporary IP pool.
 
