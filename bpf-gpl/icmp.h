@@ -21,7 +21,6 @@
 #include <linux/if_ether.h>
 #include <linux/ip.h>
 #include <linux/icmp.h>
-#include <linux/version.h>
 
 #include "bpf.h"
 #include "skb.h"

@@ -18,6 +18,15 @@
 #ifndef __CALI_BPF_H__
 #define __CALI_BPF_H__
 
+#ifndef KERNEL_VERSION
+#include <linux/version.h>
+#endif
+
+// Due to some late-found issues with pre-5.2.0, requiring v5.2.0+ for now.
+#if LINUX_VERSION_CODE < KERNEL_VERSION(5,2,0)
+#error Attempt to build against too-old kernel headers.
+#endif
+
 #include <linux/bpf.h>
 #include <bpf/libbpf.h>    // for bpftool dyn loader struct 'bpf_map_def'
 #include <stddef.h>
