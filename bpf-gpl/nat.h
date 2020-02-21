@@ -40,8 +40,26 @@
 
 #define CALI_ENCAP_EXTRA_SIZE	50
 
+#ifndef CALI_MTU
+#define CALI_MTU 1460
+#endif
+
 #ifndef CALI_NAT_TUNNEL_MTU
-#define CALI_NAT_TUNNEL_MTU	(1500 - CALI_ENCAP_EXTRA_SIZE)
+#define CALI_NAT_TUNNEL_MTU	(CALI_MTU - CALI_ENCAP_EXTRA_SIZE) /* defaults to 1410 */
+#endif
+
+#ifndef CALI_NAT_TUNNEL_HEP_MTU
+#define CALI_NAT_TUNNEL_HEP_MTU	CALI_NAT_TUNNEL_MTU
+#endif
+
+#ifndef CALI_NAT_TUNNEL_WEP_MTU
+#define CALI_NAT_TUNNEL_WEP_MTU	(CALI_NAT_TUNNEL_MTU - 20) /* cali ifaces reserve 20 for ipip */
+#endif
+
+#if CALI_F_HEP
+#define TUNNEL_MTU	CALI_NAT_TUNNEL_HEP_MTU
+#elif CALI_F_WEP
+#define TUNNEL_MTU	CALI_NAT_TUNNEL_WEP_MTU
 #endif
 
 static CALI_BPF_INLINE __be32 cali_host_ip() {
@@ -418,8 +436,10 @@ static CALI_BPF_INLINE int is_vxlan_tunnel(struct iphdr *ip)
 }
 
 static CALI_BPF_INLINE bool vxlan_v4_encap_too_big(struct __sk_buff *skb) {
-	if (skb->len > CALI_NAT_TUNNEL_MTU) {
-		CALI_DEBUG("SKB too long (len=%d) vs limit=%d\n", skb->len, CALI_NAT_TUNNEL_MTU);
+	__u32 mtu = TUNNEL_MTU;
+
+	if (skb->len > mtu) {
+		CALI_DEBUG("SKB too long (len=%d) vs limit=%d\n", skb->len, mtu);
 		return true;
 	}
 	return false;
