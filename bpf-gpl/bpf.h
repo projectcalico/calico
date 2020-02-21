@@ -88,43 +88,11 @@ MAKEFUNC(uint64_t, get_socket_cookie, void *ctx)
 
 #define printk(fmt, ...) do { char fmt2[] = fmt; bpf_trace_printk(fmt2, sizeof(fmt2) , ## __VA_ARGS__); } while (0)
 
-/*
- * Data types, structs, and unions
- */
-
-struct ip4key {
-	__u32 mask;
-	__u32 addr;
-};
-
-union ip4_bpf_lpm_trie_key {
-	struct bpf_lpm_trie_key lpm;
-	struct ip4key ip;
-};
-
-// helper functions
-CALI_BPF_INLINE void ip4val_to_lpm(
-	union ip4_bpf_lpm_trie_key *ret, __u32 mask, __u32 addr) {
-	ret->lpm.prefixlen = mask;
-	ret->ip.addr = addr;
-}
-
 CALI_BPF_INLINE __u32 port_to_host(__u32 port) {
 	return be32_to_host(port) >> 16;
 }
 
-CALI_BPF_INLINE __u32 safe_extract_port(__u32 port) {
-	// The verifier doesn't seem to like reading something different than
-	// 32 bits for these fields:
-	//
-	// https://github.com/torvalds/linux/commit/303def35f64e37bcd5401d202889f5fbc0241179#diff-ecd5cf968e9720d49c4360acef3e8e32R5160
-	//
-	// Trick the optimizer to load the full 32 bits
-	// instead of only 16.
-	return (port >> 16) | (port & 0xffff);
-}
-
-// Extended map definition for compatibility with iproute2 loader.
+/* Extended map definition for compatibility with iproute2 loader. */
 struct bpf_map_def_extended {
 	__u32 type;
 	__u32 key_size;
@@ -139,7 +107,7 @@ struct bpf_map_def_extended {
 #endif
 };
 
-// These constants must be kept in sync with the calculate-flags script.
+/* These constants must be kept in sync with the calculate-flags script. */
 #define CALI_TC_HOST_EP	(1<<0)
 #define CALI_TC_INGRESS	(1<<1)
 #define CALI_TC_TUNNEL	(1<<2)

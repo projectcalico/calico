@@ -64,9 +64,9 @@ static CALI_BPF_INLINE enum calico_policy_result execute_policy_norm(struct __sk
 	RULE_END(0, allow);
 
 	return CALI_POL_NO_MATCH;
-	deny:
+deny:
 	return CALI_POL_DENY;
-	allow:
+allow:
 	return CALI_POL_ALLOW;
 #pragma clang diagnostic pop
 }
@@ -82,9 +82,9 @@ static CALI_BPF_INLINE enum calico_policy_result execute_policy_norm(struct __sk
 	RULE_END(0, deny);
 
 	return CALI_POL_NO_MATCH;
-	deny:
+deny:
 	return CALI_POL_DENY;
-	allow:
+allow:
 	return CALI_POL_ALLOW;
 #pragma clang diagnostic pop
 }
@@ -94,7 +94,8 @@ static CALI_BPF_INLINE enum calico_policy_result execute_policy_norm(struct __sk
 #define FIB_ENABLED (!CALI_F_L3 && CALI_FIB_LOOKUP_ENABLED && CALI_F_TO_HOST)
 
 __attribute__((section("1/0")))
-int calico_tc_norm_pol_tail(struct __sk_buff *skb) {
+int calico_tc_norm_pol_tail(struct __sk_buff *skb)
+{
 	CALI_DEBUG("Entering normal policy tail call\n");
 
 	__u32 key = 0;
@@ -255,12 +256,15 @@ cancel_fib:
 #endif /* FIB_ENABLED */
 
 	if (CALI_F_TO_HOST) {
-		// Packet is towards host namespace, mark it so that downstream programs know that they're
-		// not the first to see the packet.
+		/* Packet is towards host namespace, mark it so that downstream
+		 * programs know that they're not the first to see the packet.
+		 */
 		CALI_DEBUG("Traffic is towards host namespace, marking with %x.\n", fwd->mark);
-		// FIXME: this ignores the mask that we should be using.  However, if we mask off the bits,
-		// then clang spots that it can do a 16-bit store instead of a 32-bit load/modify/store,
-		// which trips up the validator.
+		/* FIXME: this ignores the mask that we should be using.
+		 * However, if we mask off the bits, then clang spots that it
+		 * can do a 16-bit store instead of a 32-bit load/modify/store,
+		 * which trips up the validator.
+		 */
 		skb->mark = fwd->mark;
 	}
 
@@ -289,6 +293,7 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 		.res = TC_ACT_UNSPEC,
 		.reason = CALI_REASON_UNKNOWN,
 	};
+	struct calico_nat_dest *nat_dest = NULL;
 
 	fwd_fib_set(&fwd, true);
 
@@ -468,7 +473,6 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 		goto deny;
 	}
 
-	// Now, do conntrack lookup.
 	struct ct_ctx ct_lookup_ctx = {
 		.proto	= state.ip_proto,
 		.src	= state.ip_src,
@@ -487,25 +491,24 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 		ct_lookup_ctx.tcp = tcp_header;
 	}
 
+	/* Do conntrack lookup before anything else */
 	state.ct_result = calico_ct_v4_lookup(&ct_lookup_ctx);
+
 	if (state.ct_result.flags & CALI_CT_FLAG_NAT_OUT) {
 		state.flags |= CALI_ST_NAT_OUTGOING;
 	}
 
-	state.post_nat_ip_dst = 0;
-	state.post_nat_dport = 0;
-	struct calico_nat_dest *nat_dest = NULL;
+	/* skip policy if we get conntrack hit */
 	if (state.ct_result.rc != CALI_CT_NEW) {
 		goto skip_policy;
 	}
 
-	// Do a NAT table lookup.
+	/* No conntrack entry, check if we should do NAT */
 	nat_dest = calico_v4_nat_lookup2(state.ip_src, state.ip_dst,
 					 state.ip_proto, state.dport,
 					 state.nat_tun_src != 0);
+
 	if (nat_dest != NULL) {
-		// If the packet passes policy, we'll NAT it below, for now, just
-		// update the dest IP/port for the policy lookup.
 		state.post_nat_ip_dst = nat_dest->addr;
 		state.post_nat_dport = nat_dest->port;
 	} else {
@@ -516,16 +519,18 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 	if (CALI_F_TO_WEP &&
 			skb->mark != CALI_SKB_MARK_SEEN &&
 			cali_rt_flags_local_host(cali_rt_lookup_flags(state.ip_src))) {
-		// Host to workload traffic always allowed.  We discount traffic that was seen by
-		// another program since it must have come in via another interface.
+		/* Host to workload traffic always allowed.  We discount traffic that was
+		 * seen by another program since it must have come in via another interface.
+		 */
 		CALI_DEBUG("Packet is from the host: ACCEPT\n");
 		state.pol_rc = CALI_POL_ALLOW;
 		goto skip_policy;
 	}
 
 	if (CALI_F_FROM_WEP) {
-		// Packet is from a workload, check its source IP since it's our responsibility to police that.
-		CALI_DEBUG("Workload RPF check src=%x skb iface=%d.\n", be32_to_host(state.ip_src), skb->ifindex);
+		/* Do RPF check since it's our responsibility to police that. */
+		CALI_DEBUG("Workload RPF check src=%x skb iface=%d.\n",
+				be32_to_host(state.ip_src), skb->ifindex);
 		struct cali_rt *r = cali_rt_lookup(state.ip_src);
 		if (!r) {
 			CALI_INFO("Workload RPF fail: missing route.\n");
@@ -536,14 +541,16 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 			goto deny;
 		}
 		if (r->if_index != skb->ifindex) {
-			CALI_INFO("Workload RPF fail skb iface (%d) != route iface (%d)\n", skb->ifindex, r->if_index);
+			CALI_INFO("Workload RPF fail skb iface (%d) != route iface (%d)\n",
+					skb->ifindex, r->if_index);
 			goto deny;
 		}
 
 		// Check whether the workload needs outgoing NAT to this address.
 		if (r->flags & CALI_RT_NAT_OUT) {
 			if (!(cali_rt_lookup_flags(state.post_nat_ip_dst) & CALI_RT_IN_POOL)) {
-				CALI_DEBUG("Source is in NAT-outgoing pool but dest is not, need to SNAT.\n");
+				CALI_DEBUG("Source is in NAT-outgoing pool "
+					   "but dest is not, need to SNAT.\n");
 				state.flags |= CALI_ST_NAT_OUTGOING;
 			}
 		}
@@ -570,15 +577,19 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 	*map_state = state;
 
 	if (CALI_F_HEP) {
-		// We don't support host-endpoint policy yet, skip straight to the epilogue program.
-		// FIXME we really want to just call calico_tc_skb_accepted() here but that runs out of stack space.
+		/* We don't support host-endpoint policy yet, skip straight to
+		 * the epilogue program.
+		 * FIXME we really want to just call calico_tc_skb_accepted()
+		 * here but that runs out of stack space.
+		 */
 		map_state->pol_rc = CALI_POL_ALLOW;
 		bpf_tail_call(skb, &cali_jump, 1);
 		CALI_DEBUG("Tail call to epilogue program failed: ALLOW\n");
 		return TC_ACT_UNSPEC;
 	}
 
-	CALI_DEBUG("About to jump to policy program; lack of further logs means policy dropped the packet...\n");
+	CALI_DEBUG("About to jump to policy program; lack of further "
+			"logs means policy dropped the packet...\n");
 	bpf_tail_call(skb, &cali_jump, 0);
 	CALI_DEBUG("Tail call to policy program failed: DROP\n");
 	return TC_ACT_SHOT;
@@ -595,7 +606,8 @@ deny:
 }
 
 __attribute__((section("1/1")))
-int calico_tc_skb_accepted_entrypoint(struct __sk_buff *skb) {
+int calico_tc_skb_accepted_entrypoint(struct __sk_buff *skb)
+{
 	CALI_DEBUG("Entering calico_tc_skb_accepted_entrypoint\n");
 	struct iphdr *ip_header = NULL;
 	if (skb_too_short(skb)) {
@@ -693,8 +705,10 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct __sk_buff *skb,
 
 		if (CALI_F_FROM_WEP &&
 				CALI_DROP_WORKLOAD_TO_HOST &&
-				cali_rt_flags_local_host(cali_rt_lookup_flags(state->post_nat_ip_dst))) {
-			CALI_DEBUG("Workload to host traffic blocked by DefaultEndpointToHostAction: DROP\n");
+				cali_rt_flags_local_host(
+					cali_rt_lookup_flags(state->post_nat_ip_dst))) {
+			CALI_DEBUG("Workload to host traffic blocked by "
+				   "DefaultEndpointToHostAction: DROP\n");
 			goto deny;
 		}
 
@@ -718,13 +732,12 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct __sk_buff *skb,
 			ct_nat_ctx.tcp = tcp_header;
 		}
 
+		// If we get here, we've passed policy.
+
 		if (nat_dest != NULL) {
-			// Packet is to be NATted, need to record a NAT rev entry.
 			ct_nat_ctx.orig_dst = state->ip_dst;
 			ct_nat_ctx.orig_dport = state->dport;
 		}
-
-		// If we get here, we've passed policy.
 
 		conntrack_create(&ct_nat_ctx, nat_dest != NULL);
 
@@ -749,7 +762,8 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct __sk_buff *skb,
 			state->post_nat_dport = state->ct_result.nat_port;
 		}
 
-		CALI_DEBUG("CT: DNAT to %x:%d\n", be32_to_host(state->post_nat_ip_dst), state->post_nat_dport);
+		CALI_DEBUG("CT: DNAT to %x:%d\n",
+				be32_to_host(state->post_nat_ip_dst), state->post_nat_dport);
 
 		struct cali_rt *rt;
 
@@ -791,8 +805,9 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct __sk_buff *skb,
 		}
 
 		if (csum_offset) {
-			res = skb_nat_l4_csum_ipv4(skb, csum_offset, state->ip_dst, state->post_nat_ip_dst,
-					host_to_be16(state->dport), host_to_be16(state->post_nat_dport),
+			res = skb_nat_l4_csum_ipv4(skb, csum_offset, state->ip_dst,
+					state->post_nat_ip_dst,	host_to_be16(state->dport),
+					host_to_be16(state->post_nat_dport),
 					state->ip_proto == IPPROTO_UDP ? BPF_F_MARK_MANGLED_0 : 0);
 		}
 
@@ -809,7 +824,8 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct __sk_buff *skb,
 		goto allow;
 
 	case CALI_CT_ESTABLISHED_SNAT:
-		CALI_DEBUG("CT: SNAT to %x:%d\n", be32_to_host(state->ct_result.nat_ip), state->ct_result.nat_port);
+		CALI_DEBUG("CT: SNAT to %x:%d\n",
+				be32_to_host(state->ct_result.nat_ip), state->ct_result.nat_port);
 
 		if (dnat_return_should_encap() && state->ct_result.tun_ret_ip) {
 			/* XXX do this before NAT until we can track the icmp back */
@@ -840,15 +856,18 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct __sk_buff *skb,
 		}
 
 		if (csum_offset) {
-			res = skb_nat_l4_csum_ipv4(skb, csum_offset, state->ip_src, state->ct_result.nat_ip,
-					host_to_be16(state->sport), host_to_be16(state->ct_result.nat_port),
+			res = skb_nat_l4_csum_ipv4(skb, csum_offset, state->ip_src,
+					state->ct_result.nat_ip, host_to_be16(state->sport),
+					host_to_be16(state->ct_result.nat_port),
 					state->ip_proto == IPPROTO_UDP ? BPF_F_MARK_MANGLED_0 : 0);
 		}
 
-		CALI_DEBUG("L3 checksum update (csum is at %d) port from %x to %x\n",
-			ip_csum_offset, state->ip_src, state->ct_result.nat_ip);
-		int csum_rc = bpf_l3_csum_replace(skb, ip_csum_offset, state->ip_src, state->ct_result.nat_ip, 4);
-		CALI_DEBUG("bpf_l3_csum_replace(IP): %d\n", csum_rc);
+		CALI_VERB("L3 checksum update (csum is at %d) port from %x to %x\n",
+				ip_csum_offset, state->ip_src, state->ct_result.nat_ip);
+
+		int csum_rc = bpf_l3_csum_replace(skb, ip_csum_offset,
+						  state->ip_src, state->ct_result.nat_ip, 4);
+		CALI_VERB("bpf_l3_csum_replace(IP): %d\n", csum_rc);
 		res |= csum_rc;
 
 		if (res) {
@@ -874,10 +893,13 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct __sk_buff *skb,
 		goto allow;
 	default:
 		if (CALI_F_FROM_HEP) {
-			// Since we're using the host endpoint program for TC-redirect acceleration for
-			// workloads (but we haven't fully implemented host endpoint support yet), we can
-			// get an incorrect conntrack invalid for host traffic.
-			// FIXME: Properly handle host endpoint conntrack failures
+			/* Since we're using the host endpoint program for TC-redirect
+			 * acceleration for workloads (but we haven't fully implemented
+			 * host endpoint support yet), we can get an incorrect conntrack
+			 * invalid for host traffic.
+			 *
+			 * FIXME: Properly handle host endpoint conntrack failures
+			 */
 			CALI_DEBUG("Traffic is towards host namespace but not conntracked, "
 				"falling through to iptables\n");
 			fib = false;
@@ -978,7 +1000,8 @@ deny:
 // Entrypoint with definable name.  It's useful to redefine the name for each entrypoint
 // because the name is exposed by bpftool et al.
 __attribute__((section(XSTR(CALI_ENTRYPOINT_NAME))))
-int tc_calico_entry(struct __sk_buff *skb) {
+int tc_calico_entry(struct __sk_buff *skb)
+{
 	return calico_tc(skb);
 }
 
