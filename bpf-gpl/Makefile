@@ -18,10 +18,19 @@
 # Disable implicit rules.
 .SUFFIXES:
 
+# We want to build against the up-to-date kernel headers from the linux-headers package.
+# However, if we just put them on the include path, we pull in transient dependencies
+# that can only really be built with the kernel build system.  For now, just force-include
+# exactly the files that we need and let the rest be pulled from the system's standard include
+# directories.
+LINUX_COMMON=$(wildcard /usr/src/linux-headers-*-common)
+LINUX_AMD64=$(wildcard /usr/src/linux-headers-*-amd64)
+
 CFLAGS +=  \
 	-x c \
 	-D__KERNEL__ \
 	-D__ASM_SYSREG_H \
+	-D__LINUX_BPF_H__ \
 	-Wno-unused-value \
 	-Wno-pointer-sign \
 	-Wno-compare-distinct-pointer-types \
@@ -30,7 +39,9 @@ CFLAGS +=  \
 	-Werror \
 	-fno-stack-protector \
 	-O2 \
-	-emit-llvm
+	-emit-llvm \
+	--include=$(LINUX_COMMON)/include/uapi/linux/bpf.h \
+	--include=$(LINUX_AMD64)/include/generated/uapi/linux/version.h
 
 CC := clang
 LD := llc
@@ -93,7 +104,7 @@ bin:
 .PRECIOUS: %.d
 
 %.d: %.c
-	@set -e; rm -f $@; \
+	set -e; rm -f $@; \
 		$(CC) -M $(CFLAGS) $< > $@.$$$$ || { rm -f $@.$$$$; false; } ; \
 		sed 's,\($*\)\.o[ :]*,\1.o $@ : ,g' < $@.$$$$ > $@; \
 		rm -f $@.$$$$
