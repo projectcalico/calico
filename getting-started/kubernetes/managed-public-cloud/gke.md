@@ -21,6 +21,7 @@ The geeky details of what you get:
 
 ### Above and beyond
 
+- [Video: Everything you need to know about Kubernetes networking on Google cloud](https://www.projectcalico.org/everything-you-need-to-know-about-kubernetes-networking-on-google-cloud/)
 - [Get started with Kubernetes network policy]({{ site.baseurl }}/security/kubernetes-network-policy)
 - [Get started with Calico network policy]({{ site.baseurl }}/security/calico-network-policy)
 - [Enable default deny for Kubernetes pods]({{ site.baseurl }}/security/kubernetes-default-deny)
