@@ -1,6 +1,6 @@
 ---
 title: Install Calico networking and network policy for on-premises deployments
-description: Install Calico networking and network policy for on-premises deployments. 
+description: Install Calico networking and network policy for on-premises deployments.
 ---
 
 ### Big picture
