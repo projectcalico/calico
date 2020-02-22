@@ -1,6 +1,6 @@
 ---
 title: Self-managed public cloud
-description: Manage your own Kubernetes clusters in a public cloud provider.
+description: Manage your own Kubernetes clusters in AWS, GCE, or Azure public clouds.
 show_read_time: false
 show_toc: false
 ---

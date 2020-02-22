@@ -1,6 +1,6 @@
 ---
 title: Migrate a cluster from flannel to Calico
-description: Migrate an existing Kubernetes cluster with flannel networking to use Calico networking.
+description: Upgrade from legacy flannel VXLAN to Calico VXLAN. 
 ---
 
 # About

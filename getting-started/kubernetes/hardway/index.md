@@ -1,5 +1,5 @@
 ---
-description: Up for the challenge? Calico the hard way takes you under the covers of a Calico installation.
+description: Up for the challenge? Calico the hard way takes you under the covers of an end-to-end Calico installation.
 show_read_time: false
 show_toc: false
 ---
