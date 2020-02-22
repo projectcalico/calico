@@ -319,6 +319,11 @@ input.gsc-input, .gsc-input-box, .gsc-input-box-hover, .gsc-input-box-focus, .gs
   background-color: #93c47d;
 }
 
+.glyphicon.glyphicon-new-window.open-new-window {
+  font-size: 14px;
+  padding-left: 4px;
+}
+
 .read-time {
   padding-bottom: 10px;
   color: #666;
@@ -401,6 +406,11 @@ $max-toc-height: calc(100vh - #{$sticky-top + $navbar-margin-bottom});
       overflow-y: auto;
     }
   }
+}
+
+#right-toc {
+  padding-left: .5em;
+  border-left: 1px solid #ddd;
 }
 
 .navbar-right {

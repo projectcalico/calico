@@ -18,6 +18,7 @@ rules:
     verbs:
       - watch
       - list
+      - get
   # Watch for changes to Kubernetes NetworkPolicies.
   - apiGroups: ["networking.k8s.io"]
     resources:
@@ -134,6 +135,14 @@ rules:
     verbs:
       # Needed for clearing NodeNetworkUnavailable flag.
       - patch
+{{- if eq .Values.network "calico" }}
+  # Pod CIDR auto-detection on kubeadm needs access to config maps.
+  - apiGroups: [""]
+    resources:
+      - configmaps
+    verbs:
+      - get
+{{- end }}
 {{- if eq .Values.datastore "kubernetes" }}
       # Calico stores some configuration information in node annotations.
       - update
@@ -237,15 +246,11 @@ rules:
       - daemonsets
     verbs:
       - get
-  # Pod CIDR auto-detection on kubeadm needs access to config maps.
-  - apiGroups: [""]
-    resources:
-      - configmaps
-    verbs:
-      - get
 {{- end }}
 {{- end }}
+
 ---
+
 {{- if eq .Values.network "flannel" }}
 # Flannel ClusterRole
 # Pulled from https://github.com/coreos/flannel/blob/master/Documentation/kube-flannel-rbac.yml
