@@ -232,15 +232,19 @@ func (e Value) String() string {
 	flagsStr := ""
 	flags := e.Flags()
 
-	if flags&FlagNATOut != 0 {
-		flagsStr += " nat-out"
+	if flags == 0 {
+		flagsStr = " <none>"
+	} else {
+		if flags&FlagNATOut != 0 {
+			flagsStr += " nat-out"
+		}
+
+		if flags&FlagNATRwdDsr != 0 {
+			flagsStr += " fwd-dsr"
+		}
 	}
 
-	if flags&FlagNATRwdDsr != 0 {
-		flagsStr += " fwd-dsr"
-	}
-
-	ret := fmt.Sprintf("Entry{Type:%d, Created:%d, LastSeen:%d, Flags:%s",
+	ret := fmt.Sprintf("Entry{Type:%d, Created:%d, LastSeen:%d, Flags:%s ",
 		e.Type(), e.Created(), e.LastSeen(), flagsStr)
 
 	switch e.Type() {
