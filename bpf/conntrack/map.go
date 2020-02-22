@@ -129,7 +129,8 @@ const (
 	TypeNATForward
 	TypeNATReverse
 
-	FlagNATOut uint8 = 0x01
+	FlagNATOut    uint8 = 0x01
+	FlagNATRwdDsr uint8 = 0x02
 )
 
 func (e Value) ReverseNATKey() Key {
@@ -211,6 +212,10 @@ func (data EntryData) FINsSeen() bool {
 	return data.A2B.FinSeen && data.B2A.FinSeen
 }
 
+func (data EntryData) FINsSeenDSR() bool {
+	return data.A2B.FinSeen || data.B2A.FinSeen
+}
+
 func (e Value) Data() EntryData {
 	ip := e[40:44]
 	tip := e[48:52]
@@ -224,7 +229,19 @@ func (e Value) Data() EntryData {
 }
 
 func (e Value) String() string {
-	ret := fmt.Sprintf("Entry{Type:%d, Created:%d, LastSeen:%d, ", e.Type(), e.Created(), e.LastSeen())
+	flagsStr := ""
+	flags := e.Flags()
+
+	if flags&FlagNATOut != 0 {
+		flagsStr += " nat-out"
+	}
+
+	if flags&FlagNATRwdDsr != 0 {
+		flagsStr += " fwd-dsr"
+	}
+
+	ret := fmt.Sprintf("Entry{Type:%d, Created:%d, LastSeen:%d, Flags:%s",
+		e.Type(), e.Created(), e.LastSeen(), flagsStr)
 
 	switch e.Type() {
 	case TypeNATForward:
@@ -235,11 +252,11 @@ func (e Value) String() string {
 		ret += "TYPE INVALID"
 	}
 
-	if e.Flags()&FlagNATOut > 0 {
-		ret += " nat-out"
-	}
-
 	return ret + "}"
+}
+
+func (e Value) IsForwardDSR() bool {
+	return e.Flags()&FlagNATRwdDsr != 0
 }
 
 var MapParams = bpf.MapParameters{

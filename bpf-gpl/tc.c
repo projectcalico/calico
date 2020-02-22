@@ -654,6 +654,7 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct __sk_buff *skb,
 	enum calico_reason reason = CALI_REASON_UNKNOWN;
 	int rc = TC_ACT_UNSPEC;
 	bool fib;
+	struct ct_ctx ct_nat_ctx = {};
 
 	uint32_t seen_mark;
 	if (CALI_F_FROM_WEP && (state->flags & CALI_ST_NAT_OUTGOING)) {
@@ -712,16 +713,16 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct __sk_buff *skb,
 			goto deny;
 		}
 
-		struct ct_ctx ct_nat_ctx =  {
-			.skb	= skb,
-			.proto	= state->ip_proto,
-			.src	= state->ip_src,
-			.sport	= state->sport,
-			.dst	= state->post_nat_ip_dst,
-			.dport	= state->post_nat_dport,
-			.nat_tun_src = state->nat_tun_src,
-			.nat_outgoing = !!(state->flags & CALI_ST_NAT_OUTGOING),
-		};
+		ct_nat_ctx.skb = skb;
+		ct_nat_ctx.proto = state->ip_proto;
+		ct_nat_ctx.src = state->ip_src;
+		ct_nat_ctx.sport = state->sport;
+		ct_nat_ctx.dst = state->post_nat_ip_dst;
+		ct_nat_ctx.dport = state->post_nat_dport;
+		ct_nat_ctx.nat_tun_src = state->nat_tun_src;
+		if (state->flags & CALI_ST_NAT_OUTGOING) {
+			ct_nat_ctx.flags |= CALI_CT_FLAG_NAT_OUT;
+		}
 
 		if (state->ip_proto == IPPROTO_TCP) {
 			if (!skb_has_data_after(skb, ip_header, sizeof(struct tcphdr))) {
@@ -734,17 +735,13 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct __sk_buff *skb,
 
 		// If we get here, we've passed policy.
 
-		if (nat_dest != NULL) {
-			ct_nat_ctx.orig_dst = state->ip_dst;
-			ct_nat_ctx.orig_dport = state->dport;
-		}
-
-		conntrack_create(&ct_nat_ctx, nat_dest != NULL);
-
 		if (nat_dest == NULL) {
+			conntrack_create(&ct_nat_ctx, false);
 			goto allow;
 		}
 
+		ct_nat_ctx.orig_dst = state->ip_dst;
+		ct_nat_ctx.orig_dport = state->dport;
 		/* fall through as DNAT is now established */
 
 	case CALI_CT_ESTABLISHED_DNAT:
@@ -777,6 +774,17 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct __sk_buff *skb,
 			CALI_DEBUG("rt found for 0x%x\n", be32_to_host(state->post_nat_ip_dst));
 
 			encap_needed = !cali_rt_is_local(rt);
+		}
+
+		/* We have not created the conntrack yet since we did not know
+		 * if we need encap or not. Must do before MTU check and before
+		 * we jump to do the encap.
+		 */
+		if (state->ct_result.rc == CALI_CT_NEW) {
+			if (CALI_F_DSR && encap_needed) {
+				ct_nat_ctx.flags |= CALI_CT_FLAG_DSR_FWD;
+			}
+			conntrack_create(&ct_nat_ctx, true);
 		}
 
 		if (encap_needed) {

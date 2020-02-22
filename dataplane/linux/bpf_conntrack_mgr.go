@@ -1,4 +1,4 @@
-// Copyright (c) 2019 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -31,11 +31,11 @@ type conntrackManager struct {
 	scanner *conntrack.LivenessScanner
 }
 
-func newBPFConntrackManager(timeouts conntrack.Timeouts, mc *bpf.MapContext) *conntrackManager {
+func newBPFConntrackManager(timeouts conntrack.Timeouts, dsr bool, mc *bpf.MapContext) *conntrackManager {
 	ctMap := conntrack.Map(mc)
 	return &conntrackManager{
 		ctMap:   ctMap,
-		scanner: conntrack.NewLivenessScanner(timeouts, ctMap),
+		scanner: conntrack.NewLivenessScanner(timeouts, dsr, ctMap),
 	}
 }
 

@@ -31,12 +31,17 @@ struct calico_ct_key {
 };
 
 enum cali_ct_type {
-	CALI_CT_TYPE_NORMAL     = 0x00,  // Non-NATted entry.
-	CALI_CT_TYPE_NAT_FWD    = 0x01, // Forward entry for a DNATted flow, keyed on orig src/dst. Points to the reverse entry.
-	CALI_CT_TYPE_NAT_REV    = 0x02, // "Reverse" entry for a NATted flow, contains NAT + tracking information.
+	CALI_CT_TYPE_NORMAL	= 0x00, /* Non-NATted entry. */
+	CALI_CT_TYPE_NAT_FWD	= 0x01, /* Forward entry for a DNATted flow, keyed on orig src/dst.
+					 * Points to the reverse entry.
+					 */
+	CALI_CT_TYPE_NAT_REV	= 0x02, /* "Reverse" entry for a NATted flow, contains NAT +
+					 * tracking information.
+					 */
 };
 
 #define CALI_CT_FLAG_NAT_OUT	0x01
+#define CALI_CT_FLAG_DSR_FWD	0x02 /* marks entry into the tunnel on the fwd node when dsr */
 
 struct calico_ct_leg {
 	__u32 seqno;
@@ -95,7 +100,7 @@ struct ct_ctx {
 	__u16 orig_dport;
 	struct tcphdr *tcp;
 	__be32 nat_tun_src;
-	bool nat_outgoing;
+	__u8 flags;
 };
 
 struct bpf_map_def_extended __attribute__((section("maps"))) cali_v4_ct = {
@@ -199,9 +204,7 @@ create:
 		.orig_port = orig_dport,
 	};
 
-	if (ctx->nat_outgoing) {
-		ct_value.flags |= CALI_CT_FLAG_NAT_OUT;
-	}
+	ct_value.flags = ctx->flags;
 
 	if (type == CALI_CT_TYPE_NAT_REV && ctx->nat_tun_src) {
 		ct_value.tun_ip = ctx->nat_tun_src;
