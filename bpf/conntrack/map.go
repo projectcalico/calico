@@ -199,6 +199,18 @@ type EntryData struct {
 	TunIP    net.IP
 }
 
+func (data EntryData) Established() bool {
+	return data.A2B.SynSeen && data.A2B.AckSeen && data.B2A.SynSeen && data.B2A.AckSeen
+}
+
+func (data EntryData) RSTSeen() bool {
+	return data.A2B.RstSeen || data.B2A.RstSeen
+}
+
+func (data EntryData) FINsSeen() bool {
+	return data.A2B.FinSeen && data.B2A.FinSeen
+}
+
 func (e Value) Data() EntryData {
 	ip := e[40:44]
 	tip := e[48:52]
