@@ -142,17 +142,16 @@ func (l *LivenessScanner) EntryExpired(nowNanos int64, proto uint8, entry Value)
 	switch proto {
 	case ProtoTCP:
 		data := entry.Data()
-		rstSeen := data.A2B.RstSeen || data.B2A.RstSeen
+		rstSeen := data.RSTSeen()
 		if rstSeen && age > l.timeouts.TCPResetSeen {
 			return "RST seen", true
 		}
-		finsSeen := data.A2B.FinSeen && data.B2A.FinSeen
+		finsSeen := data.FINsSeen()
 		if finsSeen && age > l.timeouts.TCPFinsSeen {
 			// Both legs have been finished, tear down.
 			return "FINs seen", true
 		}
-		established := data.A2B.SynSeen && data.A2B.AckSeen && data.B2A.SynSeen && data.B2A.AckSeen
-		if established {
+		if data.Established() {
 			if age > l.timeouts.TCPEstablished {
 				return "no traffic on established flow for too long", true
 			}

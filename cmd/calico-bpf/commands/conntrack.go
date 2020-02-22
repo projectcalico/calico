@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"net"
 	"strings"
+	"time"
 
 	"github.com/projectcalico/felix/bpf"
 
@@ -89,11 +90,40 @@ func (cmd *conntrackDumpCmd) Run(c *cobra.Command, _ []string) {
 		}
 		copy(ctVal[:], v[:])
 
-		fmt.Printf("%v -> %v\n", ctKey, ctVal)
+		fmt.Printf("%v -> %v", ctKey, ctVal)
+		dumpExtra(ctKey, ctVal)
+		fmt.Printf("\n")
 	})
 	if err != nil {
 		log.WithError(err).Fatal("Failed to iterate over conntrack entries")
 	}
+}
+
+func dumpExtra(k conntrack.Key, v conntrack.Value) {
+	now := bpf.KTimeNanos()
+
+	fmt.Printf(" Age: %s Active ago %s",
+		time.Duration(now-v.Created()), time.Duration(now-v.LastSeen()))
+
+	if k.Proto() != conntrack.ProtoTCP {
+		return
+	}
+
+	if v.Type() == conntrack.TypeNATForward {
+		return
+	}
+
+	if v.Data().FINsSeen() {
+		fmt.Printf(" CLOSED")
+		return
+	}
+
+	if v.Data().Established() {
+		fmt.Printf(" ESTABLISHED")
+		return
+	}
+
+	fmt.Printf(" SYN-SENT")
 }
 
 type conntrackRemoveCmd struct {
