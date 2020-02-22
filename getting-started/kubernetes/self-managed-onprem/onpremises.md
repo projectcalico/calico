@@ -1,6 +1,6 @@
 ---
 title: Install Calico networking and network policy for on-premises deployments
-description: Determine your datastore and use Calico manifest to customize the resources on each node in the cluster. 
+description: Install Calico networking and network policy for on-premises deployments. 
 ---
 
 ### Big picture
