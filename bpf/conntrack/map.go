@@ -64,7 +64,7 @@ func (k Key) String() string {
 		k.Proto(), k.AddrA(), k.PortA(), k.AddrB(), k.PortB())
 }
 
-func MakeKey(proto uint8, ipA net.IP, portA uint16, ipB net.IP, portB uint16) Key {
+func NewKey(proto uint8, ipA net.IP, portA uint16, ipB net.IP, portB uint16) Key {
 	var k Key
 	binary.LittleEndian.PutUint32(k[:4], uint32(proto))
 	copy(k[4:8], ipA)

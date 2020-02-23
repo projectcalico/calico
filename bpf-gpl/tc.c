@@ -781,7 +781,8 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct __sk_buff *skb,
 		 * we jump to do the encap.
 		 */
 		if (state->ct_result.rc == CALI_CT_NEW) {
-			if (CALI_F_DSR && encap_needed) {
+			if (CALI_F_DSR && CALI_F_FROM_HEP &&
+					encap_needed && state->nat_tun_src == 0) {
 				ct_nat_ctx.flags |= CALI_CT_FLAG_DSR_FWD;
 			}
 			conntrack_create(&ct_nat_ctx, true);

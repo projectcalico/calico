@@ -144,7 +144,15 @@ func runBpfTest(t *testing.T, section string, rules [][][]*proto.Rule, testFn fu
 
 	log.WithField("hostIP", hostIP).Info("Host IP")
 	ipStr := fmt.Sprintf("0x%02x%02x%02x%02x", hostIP[3], hostIP[2], hostIP[1], hostIP[0])
-	obj += fmt.Sprintf("fib_debug_skb0x%x_host%s.o", skbMark, ipStr)
+	obj += fmt.Sprintf("fib_debug_skb0x%x_host%s", skbMark, ipStr)
+
+	if strings.Contains(section, "_dsr") {
+		obj += "_dsr"
+		// XXX bit of a hack, we should change the section names to contain _dsr
+		section = strings.Trim(section, "_dsr")
+	}
+
+	obj += ".o"
 
 	err = bpftoolProgLoadAll(obj, bpfFsDir)
 	Expect(err).NotTo(HaveOccurred())
@@ -456,6 +464,15 @@ func dumpRTMap(rtMap bpf.Map) {
 	Expect(err).NotTo(HaveOccurred())
 	for k, v := range rt {
 		fmt.Printf("%15s: %s\n", k.Dest(), v)
+	}
+}
+
+func resetRTMap(ctMap bpf.Map) {
+	rt, err := routes.LoadMap(ctMap)
+	Expect(err).NotTo(HaveOccurred())
+	for k := range rt {
+		err := rtMap.Delete(k[:])
+		Expect(err).NotTo(HaveOccurred())
 	}
 }
 

@@ -65,8 +65,8 @@ func TestPrecompiledBinariesAreLoadable(t *testing.T) {
 
 						for _, dsr := range []bool{false, true} {
 							if dsr && !((epType == tc.EpTypeWorkload && toOrFrom == tc.FromEp) ||
-								(epType == tc.EpTypeHost && toOrFrom == tc.ToEp)) {
-								log.Debug("DST only affects from WEP and to HEP")
+								(epType == tc.EpTypeHost)) {
+								log.Debug("DST only affects from WEP and HEP")
 								continue
 							}
 							secName := tc.SectionName(epType, toOrFrom)

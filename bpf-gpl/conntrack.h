@@ -205,6 +205,7 @@ create:
 	};
 
 	ct_value.flags = ctx->flags;
+	CALI_DEBUG("CT-ALL tracking entry flags 0x%x\n", ct_value.flags);
 
 	if (type == CALI_CT_TYPE_NAT_REV && ctx->nat_tun_src) {
 		ct_value.tun_ip = ctx->nat_tun_src;

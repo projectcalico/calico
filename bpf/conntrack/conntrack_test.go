@@ -35,9 +35,9 @@ const now = 1000 * time.Hour
 var (
 	ip1     = net.ParseIP("10.0.0.1")
 	ip2     = net.ParseIP("10.0.0.2")
-	tcpKey  = conntrack.MakeKey(conntrack.ProtoTCP, ip1, 1234, ip2, 3456)
-	udpKey  = conntrack.MakeKey(conntrack.ProtoUDP, ip1, 1234, ip2, 3456)
-	icmpKey = conntrack.MakeKey(conntrack.ProtoICMP, ip1, 1234, ip2, 3456)
+	tcpKey  = conntrack.NewKey(conntrack.ProtoTCP, ip1, 1234, ip2, 3456)
+	udpKey  = conntrack.NewKey(conntrack.ProtoUDP, ip1, 1234, ip2, 3456)
+	icmpKey = conntrack.NewKey(conntrack.ProtoICMP, ip1, 1234, ip2, 3456)
 
 	timeouts = conntrack.DefaultTimeouts()
 

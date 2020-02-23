@@ -21,6 +21,12 @@
 # some known values.
 #
 # WARNING: should be kept in sync with the combinations used in tests, in particular bpf_prog_test.go.
+
+
+emit_filename() {
+  echo "bin/test_${from_or_to}_${ep_type}_fib_${log_level}_skb${skb}_host${host_ip}${dsr}.o"
+}
+
 log_level=debug
 ep_types="wep hep"
 for ep_type in $ep_types; do
@@ -28,7 +34,20 @@ for ep_type in $ep_types; do
   for from_or_to in $directions; do
     for skb in "0x0" "0xca100000" "0xca130000" "0xca150000"; do
       for host_ip in "0x00000000" "0x01000a0a" "0x02000a0a"; do
-        echo "bin/ut_${from_or_to}_${ep_type}_fib_${log_level}_skb${skb}_host${host_ip}.o"
+        for dsr in "" "_dsr"; do
+          if [ "${dsr}" = "_dsr" ]; then
+            if [ "${ep_type}" = "hep" ]; then
+              emit_filename
+              continue
+            fi
+            if [ "${from_or_to}" = "from" ] && [ "${ep_type}" = "wep" ]; then
+              emit_filename
+              continue
+            fi
+          else
+	    emit_filename
+          fi
+        done
       done
     done
   done
