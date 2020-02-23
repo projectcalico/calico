@@ -75,7 +75,7 @@ var _ = Describe("BPF Conntrack LivenessCalculator", func() {
 
 	BeforeEach(func() {
 		ctMap = mock.NewMockMap(conntrack.MapParams)
-		lc = conntrack.NewLivenessScanner(timeouts, ctMap)
+		lc = conntrack.NewLivenessScanner(timeouts, false, ctMap)
 		lc.NowNanos = func() int64 {
 			return int64(now)
 		}
