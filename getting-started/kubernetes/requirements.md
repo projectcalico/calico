@@ -4,7 +4,11 @@ description: Review requirements before installing Calico to ensure success.
 canonical_url: '/getting-started/kubernetes/requirements'
 ---
 
+## Kubernetes
 {% include content/reqs-sys.md orch="Kubernetes" %}
+
+## OpenShift
+{% include content/reqs-sys.md orch="OpenShift" %}
 
 ## Kubernetes requirements
 
@@ -45,6 +49,16 @@ IP ranges in your network, including:
 
 - The Kubernetes service cluster IP range
 - The range from which host IPs are allocated
+
+## OpenShift requirements
+
+{{site.prodname}} {{page.version}} supports:
+
+- OpenShift Container Platform 4.2+
+
+Refer to the OpenShift documentation for additional requirements.
+
+- [OpenShift Container Platform](https://docs.openshift.com/container-platform/4.2/welcome/index.html)
 
 ## Application layer policy requirements
 

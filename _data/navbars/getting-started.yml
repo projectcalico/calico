@@ -68,15 +68,10 @@ section:
       path: /getting-started/kubernetes/hardway/end-user-rbac
     - title: Istio integration
       path: /getting-started/kubernetes/hardway/istio-integration
+   - title: OpenShift
+    path: /getting-started/openshift/installation
   - title: System requirements
     path: /getting-started/kubernetes/requirements
-- title: OpenShift
-  path: /getting-started/openshift/
-  section:
-  - title: System requirements
-    path: /getting-started/openshift/requirements
-  - title: Installation
-    path: /getting-started/openshift/installation
 - title: OpenStack
   path: /getting-started/openstack/
   section:
