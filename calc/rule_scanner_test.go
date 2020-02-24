@@ -155,6 +155,10 @@ var _ = DescribeTable("RuleScanner rule conversion should generate correct Parse
 		{Prefix: "/bar"},
 	}}}),
 
+	Entry("Metadata",
+		model.Rule{Metadata: &model.RuleMetadata{Annotations: map[string]string{"key": "value"}}},
+		ParsedRule{Metadata: &model.RuleMetadata{Annotations: map[string]string{"key": "value"}}}),
+
 	// Tags/Selectors.
 	Entry("source tag", model.Rule{SrcTag: "tag1"}, ParsedRule{SrcIPSetIDs: []string{tag1ID}}),
 	Entry("dest tag", model.Rule{DstTag: "tag1"}, ParsedRule{DstIPSetIDs: []string{tag1ID}}),

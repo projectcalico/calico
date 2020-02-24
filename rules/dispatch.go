@@ -40,7 +40,7 @@ func (r *DefaultRuleRenderer) WorkloadDispatchChains(
 		Rule{
 			Match:   Match(),
 			Action:  DropAction{},
-			Comment: "Unknown interface",
+			Comment: []string{"Unknown interface"},
 		},
 	}
 	result := []*Chain{}
@@ -295,7 +295,7 @@ func (r *DefaultRuleRenderer) endpointMarkDispatchChains(
 		rootSetMarkRules = append(rootSetMarkRules, Rule{
 			Match:   Match().InInterface(ifaceMatch),
 			Action:  DropAction{},
-			Comment: "Unknown endpoint",
+			Comment: []string{"Unknown endpoint"},
 		})
 	}
 
@@ -305,7 +305,7 @@ func (r *DefaultRuleRenderer) endpointMarkDispatchChains(
 		Action: SetMaskedMarkAction{
 			Mark: r.IptablesMarkNonCaliEndpoint,
 			Mask: epMarkMapper.GetMask()},
-		Comment: "Non-Cali endpoint mark",
+		Comment: []string{"Non-Cali endpoint mark"},
 	})
 
 	// start rendering from mark rules for workload and host endpoints.
@@ -342,7 +342,7 @@ func (r *DefaultRuleRenderer) endpointMarkDispatchChains(
 	rootFromMarkRules = append(rootFromMarkRules, Rule{
 		Match:   Match(),
 		Action:  DropAction{},
-		Comment: "Unknown interface",
+		Comment: []string{"Unknown interface"},
 	})
 
 	// return set mark and from mark chains.

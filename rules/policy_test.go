@@ -1023,3 +1023,43 @@ var _ = DescribeTable("Port split tests",
 		{First: 215, Last: 216},
 	}}),
 )
+
+var _ = Describe("rule metadata tests", func() {
+	rule := &proto.Rule{
+		Metadata: &proto.RuleMetadata{Annotations: map[string]string{
+			"testkey00": "testvalue00",
+			"testkey01": "testvalue01",
+		}},
+		Protocol: &proto.Protocol{NumberOrName: &proto.Protocol_Name{Name: "tcp"}},
+	}
+	rrConfigNormal := Config{
+		IPIPEnabled:          true,
+		IPIPTunnelAddress:    nil,
+		IPSetConfigV4:        ipsets.NewIPVersionConfig(ipsets.IPFamilyV4, "cali", nil, nil),
+		IPSetConfigV6:        ipsets.NewIPVersionConfig(ipsets.IPFamilyV6, "cali", nil, nil),
+		IptablesMarkAccept:   0x80,
+		IptablesMarkPass:     0x100,
+		IptablesMarkScratch0: 0x200,
+		IptablesMarkScratch1: 0x400,
+		IptablesMarkEndpoint: 0xff000,
+		IptablesLogPrefix:    "calico-packet",
+	}
+
+	It("IPv4 should include annotations in comments", func() {
+		renderer := NewRenderer(rrConfigNormal)
+		rs := renderer.ProtoRuleToIptablesRules(rule, uint8(4))
+		for _, r := range rs {
+			Expect(r.Comment).To(ContainElement("testkey00=testvalue00"))
+			Expect(r.Comment).To(ContainElement("testkey01=testvalue01"))
+		}
+	})
+
+	It("IPv6 should include annotations in comments", func() {
+		renderer := NewRenderer(rrConfigNormal)
+		rs := renderer.ProtoRuleToIptablesRules(rule, uint8(6))
+		for _, r := range rs {
+			Expect(r.Comment).To(ContainElement("testkey00=testvalue00"))
+			Expect(r.Comment).To(ContainElement("testkey01=testvalue01"))
+		}
+	})
+})

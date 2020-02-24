@@ -119,15 +119,17 @@ func run(c *infrastructure.Felix, name, profile, ip, ports, protocol string) (w 
 
 	// Start the workload.
 	log.WithField("workload", w).Info("About to run workload")
-	var udpArg string
+	var protoArg string
 	if protocol == "udp" {
-		udpArg = "--udp"
+		protoArg = "--udp"
+	} else if protocol == "sctp" {
+		protoArg = "--sctp"
 	}
 	w.runCmd = utils.Command("docker", "exec", w.C.Name,
 		"sh", "-c",
 		fmt.Sprintf("echo $$ > /tmp/%v; exec /test-workload %v '%v' '%v' '%v'",
 			w.Name,
-			udpArg,
+			protoArg,
 			w.InterfaceName,
 			w.IP,
 			w.Ports))
@@ -480,28 +482,50 @@ func startPermanentConnection(w *Workload, ip string, port, sourcePort int) (*Pe
 	}, nil
 }
 
-func (p *Port) CanConnectTo(ip, port, protocol string) *conncheck.Response {
-	// Ensure that the host has the 'test-connection' binary.
-	p.C.EnsureBinary("test-connection")
+type SpoofedWorkload struct {
+	*Workload
+	SpoofedSourceIP string
+}
 
-	if protocol == "udp" {
+func (s *SpoofedWorkload) CanConnectTo(ip, port, protocol string) bool {
+	return canConnectTo(s.Workload, ip, port, s.SpoofedSourceIP, "", protocol)
+}
+
+func (p *Port) CanConnectTo(ip, port, protocol string) *conncheck.Response {
+	srcPort := strconv.Itoa(int(p.Port))
+	return canConnectTo(p.Workload, ip, port, "", srcPort, protocol)
+}
+
+func canConnectTo(w *Workload, ip, port, srcIp, srcPort, protocol string) bool {
+	// Ensure that the host has the 'test-connection' binary.
+	w.C.EnsureBinary("test-connection")
+
+	if protocol == "udp" || protocol == "sctp" {
 		// If this is a retry then we may have stale conntrack entries and we don't want those
-		// to influence the connectivity check.  Only an issue for UDP due to the lack of a
-		// sequence number.
+		// to influence the connectivity check.  UDP lacks a sequence number, so conntrack operates
+		// on a simple timer. In the case of SCTP, conntrack appears to match packets even when
+		// the conntrack entry is in the CLOSED state.
 		if os.Getenv("FELIX_FV_ENABLE_BPF") == "true" {
 			p.C.Exec("calico-bpf", "conntrack", "remove", "udp", p.Workload.IP, ip)
 		} else {
-			_ = p.C.ExecMayFail("conntrack", "-D", "-p", "udp", "-s", p.Workload.IP, "-d", ip)
+			_ = w.C.ExecMayFail("conntrack", "-D", "-p", protocol, "-s", w.IP, "-d", ip)
 		}
 	}
 
+	logMsg := "Connection test"
+
 	// Run 'test-connection' to the target.
 	args := []string{
-		"exec", p.C.Name, "/test-connection", p.namespacePath, ip, port, "--protocol=" + protocol,
+		"exec", w.C.Name, "/test-connection", w.namespacePath, ip, port, "--protocol=" + protocol,
 	}
-	if p.Port != 0 {
+	if srcIp != "" {
+		args = append(args, fmt.Sprintf("--source-ip=%s", srcIp))
+		logMsg += " (spoofed)"
+	}
+	if srcPort != "" {
 		// If we are using a particular source port, fill it in.
-		args = append(args, fmt.Sprintf("--source-port=%d", p.Port))
+		args = append(args, fmt.Sprintf("--source-port=%s", srcPort))
+		logMsg += " (with source port)"
 	}
 	connectionCmd := utils.Command("docker", args...)
 	outPipe, err := connectionCmd.StdoutPipe()
@@ -519,7 +543,7 @@ func (p *Port) CanConnectTo(ip, port, protocol string) *conncheck.Response {
 
 	log.WithFields(log.Fields{
 		"stdout": string(wOut),
-		"stderr": string(wErr)}).WithError(err).Info("Connection test")
+		"stderr": string(wErr)}).WithError(err).Info(logMsg)
 
 	if err != nil {
 		return nil
