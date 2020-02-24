@@ -47,7 +47,7 @@ for log_level in debug info no_log; do
         fi
         for from_or_to in $directions; do
           extra="dsr_"
-          if [ "${from_or_to}" = "to" ] && [ "${ep_type}" = "hep" ]; then
+          if [ "${ep_type}" = "hep" ]; then
             emit_filename
           fi
           if [ "${from_or_to}" = "from" ] && [ "${ep_type}" = "wep" ]; then

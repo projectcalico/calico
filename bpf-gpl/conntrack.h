@@ -31,12 +31,17 @@ struct calico_ct_key {
 };
 
 enum cali_ct_type {
-	CALI_CT_TYPE_NORMAL     = 0x00,  // Non-NATted entry.
-	CALI_CT_TYPE_NAT_FWD    = 0x01, // Forward entry for a DNATted flow, keyed on orig src/dst. Points to the reverse entry.
-	CALI_CT_TYPE_NAT_REV    = 0x02, // "Reverse" entry for a NATted flow, contains NAT + tracking information.
-
-	CALI_CT_FLAG_NAT_OUT    = 0x01,
+	CALI_CT_TYPE_NORMAL	= 0x00, /* Non-NATted entry. */
+	CALI_CT_TYPE_NAT_FWD	= 0x01, /* Forward entry for a DNATted flow, keyed on orig src/dst.
+					 * Points to the reverse entry.
+					 */
+	CALI_CT_TYPE_NAT_REV	= 0x02, /* "Reverse" entry for a NATted flow, contains NAT +
+					 * tracking information.
+					 */
 };
+
+#define CALI_CT_FLAG_NAT_OUT	0x01
+#define CALI_CT_FLAG_DSR_FWD	0x02 /* marks entry into the tunnel on the fwd node when dsr */
 
 struct calico_ct_leg {
 	__u32 seqno;
@@ -95,7 +100,7 @@ struct ct_ctx {
 	__u16 orig_dport;
 	struct tcphdr *tcp;
 	__be32 nat_tun_src;
-	bool nat_outgoing;
+	__u8 flags;
 };
 
 struct bpf_map_def_extended __attribute__((section("maps"))) cali_v4_ct = {
@@ -105,7 +110,7 @@ struct bpf_map_def_extended __attribute__((section("maps"))) cali_v4_ct = {
 	.map_flags = BPF_F_NO_PREALLOC,
 	.max_entries = 512000, // arbitrary
 #ifndef __BPFTOOL_LOADER__
-	.pinning_strategy = 2 /* global namespace */,
+	.pinning_strategy = 2, /* global namespace */
 #endif
 };
 
@@ -129,6 +134,7 @@ static CALI_BPF_INLINE int calico_ct_v4_create_tracking(struct ct_ctx *ctx,
 
 	__be32 seq = 0;
 	bool syn = false;
+	__u64 now;
 
 	if (ctx->tcp) {
 		seq = ctx->tcp->seq;
@@ -136,9 +142,10 @@ static CALI_BPF_INLINE int calico_ct_v4_create_tracking(struct ct_ctx *ctx,
 	}
 
 	if ((ctx->skb->mark & CALI_SKB_MARK_SEEN_MASK) == CALI_SKB_MARK_SEEN) {
-		// Packet already marked as being from another workload, which will
-		// have created a conntrack entry.  Look that one up instead of
-		// creating one.
+		/* Packet already marked as being from another workload, which will
+		 * have created a conntrack entry.  Look that one up instead of
+		 * creating one.
+		 */
 		CALI_DEBUG("CT-ALL Asked to create entry but packet is marked as "
 				"from another endpoint, doing lookup\n");
 		bool srcLTDest = (ip_src < ip_dst) || ((ip_src == ip_dst) && sport < dport);
@@ -185,26 +192,29 @@ static CALI_BPF_INLINE int calico_ct_v4_create_tracking(struct ct_ctx *ctx,
 		return 0;
 	}
 
-	__u64 now;
-	create:
+create:
 	now = bpf_ktime_get_ns();
 	CALI_DEBUG("CT-ALL Creating tracking entry type %d at %llu.\n", type, now);
-	struct calico_ct_value ct_value = {};
-	ct_value.created=now;
-	ct_value.last_seen=now;
-	ct_value.type = type;
-	if (ctx->nat_outgoing) {
-		ct_value.flags |= CALI_CT_FLAG_NAT_OUT;
-	}
+
+	struct calico_ct_value ct_value = {
+		.created=now,
+		.last_seen=now,
+		.type = type,
+		.orig_ip = orig_dst,
+		.orig_port = orig_dport,
+	};
+
+	ct_value.flags = ctx->flags;
+	CALI_DEBUG("CT-ALL tracking entry flags 0x%x\n", ct_value.flags);
 
 	if (type == CALI_CT_TYPE_NAT_REV && ctx->nat_tun_src) {
 		ct_value.tun_ip = ctx->nat_tun_src;
 		CALI_DEBUG("CT-ALL nat tunneled from %x\n", be32_to_host(ctx->nat_tun_src));
 	}
-	ct_value.orig_ip = orig_dst;
-	ct_value.orig_port = orig_dport;
+
 	struct calico_ct_leg *src_to_dst, *dst_to_src;
 	bool srcLTDest = (ip_src < ip_dst) || ((ip_src == ip_dst) && sport < dport);
+
 	if (srcLTDest) {
 		*k = (struct calico_ct_key) {
 			.protocol = ctx->proto,
@@ -391,7 +401,7 @@ static CALI_BPF_INLINE void ct_tcp_entry_update(struct tcphdr *tcp_header,
 					"doesn't match other side's SYN (%u).\n",
 					be32_to_host(tcp_header->ack_seq),
 					be32_to_host(dst_to_src->seqno));
-			// Have to let this through so source can reset?
+			/* XXX Have to let this through so source can reset? */
 		}
 	} else if (tcp_header->ack && !src_to_dst->ack_seen && src_to_dst->syn_seen) {
 		if (dst_to_src->syn_seen && seqno_add(dst_to_src->seqno, 1) == tcp_header->ack_seq) {
@@ -402,13 +412,13 @@ static CALI_BPF_INLINE void ct_tcp_entry_update(struct tcphdr *tcp_header,
 					"match other side's SYN (%u).\n",
 					be32_to_host(tcp_header->ack_seq),
 					be32_to_host(dst_to_src->seqno));
-			// Have to let this through so source can reset?
+			/* XXX Have to let this through so source can reset? */
 		}
 	} else {
-		// Normal packet, check that the handshake is complete.
+		/* Normal packet, check that the handshake is complete. */
 		if (!dst_to_src->ack_seen) {
 			CALI_CT_VERB("Non-flagged packet but other side has never ACKed.\n");
-			// Have to let this through so source can reset?
+			/* XXX Have to let this through so source can reset? */
 		} else {
 			CALI_CT_VERB("Non-flagged packet and other side has ACKed.\n");
 		}
@@ -516,12 +526,6 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_lookup(struct ct_ctx
 		}
 		break;
 	case CALI_CT_TYPE_NAT_REV:
-		// A reverse NAT entry; this means that the conntrack entry was keyed on the post-NAT
-		// IPs.  We _want_ to hit this entry at ingress to the source workload (i.e. reply packets
-		// that need to be SNATted back to the service IP before they reach the workload).  However,
-		// we also hit this for request packets that traverse more than one endpoint on the same
-		// host so we need to distinguish those cases.
-
 		if (srcLTDest) {
 			CALI_VERB("CT-ALL REV src_to_dst A->B\n");
 			src_to_dst = &v->a_to_b;
@@ -538,9 +542,18 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_lookup(struct ct_ctx
 			break;
 		}
 
+		/* A reverse NAT entry; this means that the conntrack entry was
+		 * keyed on the post-NAT IPs.  We _want_ to hit this entry where
+		 * we need to do SNAT, however, we also hit this for request
+		 * packets that traverse more than one endpoint on the same host
+		 * so we need to distinguish those cases.
+		 */
 		int snat;
-		// Packet is heading away from the host namespace; either entering a workload or
-		// leaving via a host endpoint, actually reverse the NAT.
+
+		/* Packet is heading away from the host namespace; either
+		 * entering a workload or leaving via a host endpoint, actually
+		 * reverse the NAT.
+		 */
 		snat = !CALI_F_TO_HOST;
 		/* if returning packet into a tunnel */
 		snat |= (dnat_return_should_encap() && v->tun_ip);
@@ -609,28 +622,31 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_lookup(struct ct_ctx
 				!result.tun_ret_ip;
 
 	if (CALI_F_TO_HOST && !ctx->nat_tun_src) {
-		// Source of the packet is the endpoint, so check the src whitelist.
+		/* Source of the packet is the endpoint, so check the src whitelist. */
 		if (src_to_dst->whitelisted) {
-			// Packet was whitelisted by the policy attached to this endpoint.
 			CALI_CT_VERB("Packet whitelisted by this workload's policy.\n");
 		} else {
-			// Only whitelisted by the other side (so far)?  Unlike TCP we have no way to distinguish
-			// packets that open a new connection so we have to return NEW here in order to invoke
-			// policy.
+			/* Only whitelisted by the other side (so far)?  Unlike
+			 * TCP we have no way to distinguish packets that open a
+			 * new connection so we have to return NEW here in order
+			 * to invoke policy.
+			 */
 			CALI_CT_DEBUG("Packet not allowed by ingress/egress whitelist flags (TH).\n");
 			result.rc = tcp_header ? CALI_CT_INVALID : CALI_CT_NEW;
 		}
 	} else if (ret_from_tun) {
 		CALI_DEBUG("Packet returned from tunnel %x\n", be32_to_host(ctx->nat_tun_src));
 	} else {
-		// Dest of the packet is the workload, so check the dest whitelist.
+		/* Dest of the packet is the workload, so check the dest whitelist. */
 		if (dst_to_src->whitelisted) {
 			// Packet was whitelisted by the policy attached to this endpoint.
 			CALI_CT_VERB("Packet whitelisted by this workload's policy.\n");
 		} else {
-			// Only whitelisted by the other side (so far)?  Unlike TCP we have no way to distinguish
-			// packets that open a new connection so we have to return NEW here in order to invoke
-			// policy.
+			/* Only whitelisted by the other side (so far)?  Unlike
+			 * TCP we have no way to distinguish packets that open a
+			 * new connection so we have to return NEW here in order
+			 * to invoke policy.
+			 */
 			CALI_CT_DEBUG("Packet not allowed by ingress/egress whitelist flags (FH).\n");
 			result.rc = tcp_header ? CALI_CT_INVALID : CALI_CT_NEW;
 		}
@@ -653,7 +669,7 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_lookup(struct ct_ctx
 	CALI_CT_DEBUG("result: %d.\n", result.rc);
 	return result;
 
-	out_lookup_fail:
+out_lookup_fail:
 	result.rc = CALI_CT_NEW;
 	CALI_CT_DEBUG("result: NEW.\n");
 	return result;

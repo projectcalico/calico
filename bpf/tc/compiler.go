@@ -90,7 +90,7 @@ func ProgFilename(epType EndpointType, toOrFrom ToOrFromEp, epToHostDrop, fib, d
 		fibPart = "fib_"
 	}
 	dsrPart := ""
-	if dsr && ((epType == EpTypeWorkload && toOrFrom == FromEp) || (epType == EpTypeHost && toOrFrom == ToEp)) {
+	if dsr && ((epType == EpTypeWorkload && toOrFrom == FromEp) || (epType == EpTypeHost)) {
 		dsrPart = "dsr_"
 	}
 	logLevel = strings.ToLower(logLevel)

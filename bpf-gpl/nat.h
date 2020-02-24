@@ -62,17 +62,20 @@
 #define TUNNEL_MTU	CALI_NAT_TUNNEL_WEP_MTU
 #endif
 
-static CALI_BPF_INLINE __be32 cali_host_ip() {
+static CALI_BPF_INLINE __be32 cali_host_ip()
+{
 #ifdef CALI_HOST_IP
 	return CALI_HOST_IP;
-#endif
-
+#else
 	__u32 host_ip;
-	// At program install time, we patch in the IP of the host.  Use inline assembler to make sure that the
-	// code we want to patch is recognisable.
-	// 0x54534f48 = ASCII(HOST).
+	/* At program install time, we patch in the IP of the host. Use inline
+	 * assembler to make sure that the code we want to patch is
+	 * recognisable.
+	* 0x54534f48 = ASCII(HOST).
+	*/
 	asm("%0 = 0x54534f48;" : "=r"(host_ip) /* output */ : /* no inputs */ : /* no clobber */);
 	return host_ip;
+#endif
 }
 
 // Map: NAT level one.  Dest IP and port -> ID and num backends.
@@ -435,7 +438,8 @@ static CALI_BPF_INLINE int is_vxlan_tunnel(struct iphdr *ip)
 	return ip->protocol == IPPROTO_UDP && udp->dest == host_to_be16(CALI_VXLAN_PORT);
 }
 
-static CALI_BPF_INLINE bool vxlan_v4_encap_too_big(struct __sk_buff *skb) {
+static CALI_BPF_INLINE bool vxlan_v4_encap_too_big(struct __sk_buff *skb)
+{
 	__u32 mtu = TUNNEL_MTU;
 
 	if (skb->len > mtu) {

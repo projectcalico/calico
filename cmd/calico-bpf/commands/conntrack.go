@@ -1,4 +1,4 @@
-// Copyright (c) 2019 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -113,12 +113,14 @@ func dumpExtra(k conntrack.Key, v conntrack.Value) {
 		return
 	}
 
-	if v.Data().FINsSeen() {
+	data := v.Data()
+
+	if (v.IsForwardDSR() && data.FINsSeenDSR()) || data.FINsSeen() {
 		fmt.Printf(" CLOSED")
 		return
 	}
 
-	if v.Data().Established() {
+	if data.Established() {
 		fmt.Printf(" ESTABLISHED")
 		return
 	}

@@ -50,13 +50,15 @@ func DefaultTimeouts() Timeouts {
 type LivenessScanner struct {
 	timeouts Timeouts
 	ctMap    bpf.Map
+	dsr      bool
 	NowNanos func() int64
 }
 
-func NewLivenessScanner(timeouts Timeouts, ctMap bpf.Map) *LivenessScanner {
+func NewLivenessScanner(timeouts Timeouts, dsr bool, ctMap bpf.Map) *LivenessScanner {
 	return &LivenessScanner{
 		timeouts: timeouts,
 		ctMap:    ctMap,
+		dsr:      dsr,
 		NowNanos: bpf.KTimeNanos,
 	}
 }
@@ -137,21 +139,21 @@ func (l *LivenessScanner) EntryExpired(nowNanos int64, proto uint8, entry Value)
 		log.Debug("Conntrack entry in creation grace period. Ignoring.")
 		return
 	}
-
 	age := time.Duration(nowNanos - entry.LastSeen())
 	switch proto {
 	case ProtoTCP:
+		dsr := entry.IsForwardDSR()
 		data := entry.Data()
 		rstSeen := data.RSTSeen()
 		if rstSeen && age > l.timeouts.TCPResetSeen {
 			return "RST seen", true
 		}
-		finsSeen := data.FINsSeen()
+		finsSeen := (dsr && data.FINsSeenDSR()) || data.FINsSeen()
 		if finsSeen && age > l.timeouts.TCPFinsSeen {
 			// Both legs have been finished, tear down.
 			return "FINs seen", true
 		}
-		if data.Established() {
+		if data.Established() || dsr {
 			if age > l.timeouts.TCPEstablished {
 				return "no traffic on established flow for too long", true
 			}
