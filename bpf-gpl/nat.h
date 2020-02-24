@@ -24,7 +24,6 @@
 #include <linux/ip.h>
 #include <linux/if_ether.h>
 #include <linux/udp.h>
-#include <linux/version.h>
 
 #include "bpf.h"
 #include "skb.h"
