@@ -10,7 +10,7 @@ Install an OpenShift v4 cluster with {{site.prodname}}.
 
 ### Value
 
-Augments the applicable steps in the [OpenShift documentation](https://cloud.redhat.com/openshift/install)
+Augments the applicable steps in the {% include open-new-window.html text='OpenShift documentation' url='https://cloud.redhat.com/openshift/install' %}
 to install {{site.prodname}}.
 
 ### How to
@@ -19,15 +19,15 @@ to install {{site.prodname}}.
 
 - Ensure that your environment meets the {{site.prodname}} [system requirements]({{site.baseurl}}/getting-started/openshift/requirements).
 
-- **If installing on AWS**, ensure that you have [configured an AWS account](https://docs.openshift.com/container-platform/4.2/installing/installing_aws/installing-aws-account.html) appropriate for OpenShift v4,
-  and have [set up your AWS credentials](https://docs.aws.amazon.com/sdk-for-java/v1/developer-guide/setup-credentials.html).
-  Note that the OpenShift installer supports a subset of [AWS regions](https://docs.openshift.com/container-platform/4.2/installing/installing_aws/installing-aws-account.html#installation-aws-regions_installing-aws-account).
+- **If installing on AWS**, ensure that you have {% include open-new-window.html text='configured an AWS account' url='https://docs.openshift.com/container-platform/4.2/installing/installing_aws/installing-aws-account.html' %} appropriate for OpenShift v4,
+  and have {% include open-new-window.html text='set up your AWS credentials' url='https://docs.aws.amazon.com/sdk-for-java/v1/developer-guide/setup-credentials.html' %}.
+  Note that the OpenShift installer supports a subset of {% include open-new-window.html text='AWS regions' url='https://docs.openshift.com/container-platform/4.2/installing/installing_aws/installing-aws-account.html#installation-aws-regions_installing-aws-account' %}.
 
-- Ensure that you have a [RedHat account](https://cloud.redhat.com/). A RedHat account is required to obtain the pull secret necessary to provision an OpenShift cluster.
+- Ensure that you have a {% include open-new-window.html text='RedHat account' url='https://cloud.redhat.com/' %}. A RedHat account is required to obtain the pull secret necessary to provision an OpenShift cluster.
 
-- Ensure that you have installed the OpenShift installer **v4.2 or later** and OpenShift command line interface from [cloud.redhat.com](https://cloud.redhat.com/openshift/install/aws/installer-provisioned).
+- Ensure that you have installed the OpenShift installer **v4.2 or later** and OpenShift command line interface from {% include open-new-window.html text='cloud.redhat.com' url='https://cloud.redhat.com/openshift/install/aws/installer-provisioned' %}.
 
-- Ensure that you have [generated a local SSH private key](https://docs.openshift.com/container-platform/4.1/installing/installing_aws/installing-aws-default.html#ssh-agent-using_installing-aws-default) and have added it to your ssh-agent
+- Ensure that you have {% include open-new-window.html text='generated a local SSH private key' url='https://docs.openshift.com/container-platform/4.1/installing/installing_aws/installing-aws-default.html#ssh-agent-using_installing-aws-default' %} and have added it to your ssh-agent
 
 #### Create a configuration file for the OpenShift installer
 
@@ -43,7 +43,7 @@ Now run OpenShift installer to create a default configuration file:
 openshift-install create install-config
 ```
 
-> **Note**: Refer to the OpenShift installer documentation found on [https://cloud.redhat.com/openshift/install](https://cloud.redhat.com/openshift/install) for more information
+> **Note**: Refer to the {% include open-new-window.html text='OpenShift installer documentation' url='https://cloud.redhat.com/openshift/install](https://cloud.redhat.com/openshift/install' %} for more information
 > about the installer and any configuration changes required for your platform.
 {: .alert .alert-info}
 

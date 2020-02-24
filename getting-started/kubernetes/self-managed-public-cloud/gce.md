@@ -17,7 +17,7 @@ Managing your own Kubernetes cluster (as opposed to using a managed-Kubernetes s
 
 ### Before you begin...
 
-[Install and configure the Google Cloud CLI tools](https://cloud.google.com/sdk/docs/quickstarts)
+{% include open-new-window.html text='Install and configure the Google Cloud CLI tools' url='https://cloud.google.com/sdk/docs/quickstarts' %}
 
 ### How to
 
@@ -32,7 +32,7 @@ There are many ways to install and manage Kubernetes in GCE. Using kubeadm is a 
 
 You will need at least one VM to serve as a control plane node and one or more worker nodes. (It is possible to have control plane nodes also act as workers. This is not recommended in most cases and not covered by this guide.)  See [requirements]({{site.baseurl}}/getting-started/kubernetes/requirements) for specific OS requirements for these VMs.
 
-The following worked example creates a single control node and three workers on a dedicated virtual private network (VPC). Adjust the example as needed for your requirements. Consider a dedicated infrastructure management tool like [Terraform](https://www.terraform.io/) for managing cloud resources. (This example is adapted from [Kubernetes the Hard Way](https://github.com/kelseyhightower/kubernetes-the-hard-way/blob/master/docs/03-compute-resources.md).)
+The following worked example creates a single control node and three workers on a dedicated virtual private network (VPC). Adjust the example as needed for your requirements. Consider a dedicated infrastructure management tool like {% include open-new-window.html text='Terraform' url='https://www.terraform.io/' %} for managing cloud resources. (This example is adapted from {% include open-new-window.html text='Kubernetes the Hard Way' url='https://github.com/kelseyhightower/kubernetes-the-hard-way/blob/master/docs/03-compute-resources.md' %}.)
 
 **Create the VPC**
 
@@ -112,7 +112,7 @@ sudo apt install -y apt-transport-https curl
 
 ##### Install Kubernetes and create the cluster
 
-Install `kubeadm`,` kubelet`, and `kubectl` on each node (see [kubeadm docs](https://kubernetes.io/docs/setup/production-environment/tools/kubeadm/install-kubeadm/#installing-kubeadm-kubelet-and-kubectl) for more details).
+Install `kubeadm`,` kubelet`, and `kubectl` on each node (see {% include open-new-window.html text='kubeadm docs' url='https://kubernetes.io/docs/setup/production-environment/tools/kubeadm/install-kubeadm/#installing-kubeadm-kubelet-and-kubectl' %} for more details).
 
 ```
 curl -s https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo apt-key add -
@@ -183,10 +183,10 @@ You may have noticed that the bulk of the above instructions are about provision
 
 ##### Kubespray
 
-[Kubespray](https://kubespray.io/) is a tool for provisioning and managing Kubernetes clusters with support for multiple clouds including Google Compute Engine.  Calico is the default networking provider, or you can set the `kube_network_plugin` variable to `calico`. See the Kubespray docs for more details. See the [Kubespray docs](https://kubespray.io/#/?id=network-plugins) for more details.
+{% include open-new-window.html text='Kubespray' url='https://kubespray.io/' %} is a tool for provisioning and managing Kubernetes clusters with support for multiple clouds including Google Compute Engine.  Calico is the default networking provider, or you can set the `kube_network_plugin` variable to `calico`. See the Kubespray docs for more details. See the {% include open-new-window.html text='Kubespray docs' url='https://kubespray.io/#/?id=network-plugins' %} for more details.
 
 ### Above and beyond
 
-- [Video: Everything you need to know about Kubernetes networking on Google cloud](https://www.projectcalico.org/everything-you-need-to-know-about-kubernetes-networking-on-google-cloud/)
+- {% include open-new-window.html text='[Video: Everything you need to know about Kubernetes networking on Google cloud' url='https://www.projectcalico.org/everything-you-need-to-know-about-kubernetes-networking-on-google-cloud/' %} 
 - [Install and configure calicoctl]({{site.baseurl}}/getting-started/calicoctl/install)
 - [Try out {{site.prodname}} network policy]({{site.baseurl}}/security/calico-network-policy)

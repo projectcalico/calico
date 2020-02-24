@@ -28,7 +28,7 @@ To deploy a cluster suitable for production, refer to [Installation](installatio
   If NetworkManager is present on the host, refer to
   [Configure NetworkManager](../../maintenance/troubleshooting#configure-networkmanager).
 
-- [Follow the Kubernetes instructions to install kubeadm](https://kubernetes.io/docs/setup/independent/install-kubeadm/){:target="_blank"}.
+- {% include open-new-window.html text='Follow the Kubernetes instructions to install kubeadm' url='https://kubernetes.io/docs/setup/independent/install-kubeadm/' %}
 
    > **Note**: After installing kubeadm, do not power down or restart
    the host. Instead, continue directly to the

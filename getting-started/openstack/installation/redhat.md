@@ -22,7 +22,7 @@ combined control and compute node, work through all three sections.
   Enterprise Linux (RHEL) hosts.
 - Make sure you have working DNS between the RHEL hosts (use `/etc/hosts` if you
   don't have DNS on your network).
-- [Install OpenStack with Neutron and ML2 networking](http://docs.openstack.org)
+- {% include open-new-window.html text='Install OpenStack with Neutron and ML2 networking' url='http://docs.openstack.org' %}
   on the RHEL hosts.
 
 ## Common steps
@@ -32,7 +32,7 @@ These steps are detailed in this section.
 
 {% include ppa_repo_name %}
 
-1.  [Add the EPEL repository](https://fedoraproject.org/wiki/EPEL). You may
+1.  {% include open-new-window.html text='Add the EPEL repository' url='https://fedoraproject.org/wiki/EPEL' %}. You may
     have already added this to install OpenStack.
 
 1.  Configure the {{site.prodname}} repository:

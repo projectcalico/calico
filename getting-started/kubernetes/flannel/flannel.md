@@ -12,7 +12,7 @@ canonical_url: '/getting-started/kubernetes/flannel'
 
 Ensure that you have a Kubernetes cluster that meets the
 {{site.prodname}} [system requirements](../requirements). If you don't,
-follow the steps in [Using kubeadm to create a cluster](http://kubernetes.io/docs/getting-started-guides/kubeadm/).
+follow the steps in {% include open-new-window.html text='Using kubeadm to create a cluster' url='http://kubernetes.io/docs/getting-started-guides/kubeadm/' %}.
 
 ## Installing {{site.prodname}} for policy and flannel for networking
 

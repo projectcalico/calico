@@ -29,8 +29,7 @@ For completeness, the advantages of the etcd driver are
 
 ## Custom Resources
 
-When using the Kubernetes API datastore driver, most {{site.prodname}} resources are stored as
-[Kubernetes custom resources](https://kubernetes.io/docs/concepts/extend-kubernetes/api-extension/custom-resources/).
+When using the Kubernetes API datastore driver, most {{site.prodname}} resources are stored as {% include open-new-window.html text='Kubernetes custom resources' url='https://kubernetes.io/docs/concepts/extend-kubernetes/api-extension/custom-resources/' %}.
 
 A few {{site.prodname}} resources are not stored as custom resources and instead are backed by corresponding native Kubernetes resources. For example, [workload endpoints](/reference/resources/workloadendpoint) are Kubernetes pods.
 
