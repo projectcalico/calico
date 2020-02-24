@@ -22,7 +22,8 @@
 #
 # WARNING: naming and set of cases must be kept in sync with tc.ProgFilename() in Felix's compiler.go.
 for log_level in debug info no_log; do
-  echo "bin/connect_time_$log_level.o"
+  echo "bin/connect_time_${log_level}_v4.o"
+  echo "bin/connect_time_${log_level}_v6.o"
   for host_drop in "" "host_drop_"; do
     if [ "${host_drop}" = "host_drop_" ]; then
       # The workload-to-host drop setting only applies to the from-workload hook.

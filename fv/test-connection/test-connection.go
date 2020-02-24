@@ -248,7 +248,7 @@ func tryConnect(remoteIpAddr, remotePort, sourceIpAddr, sourcePort, protocol, lo
 		defer conn.Close()
 
 		for {
-			req := conncheck.NewRequest()
+			req := connectivity.NewRequest()
 			data, err := json.Marshal(req)
 			if err != nil {
 				log.WithError(err).Fatal("Failed to marshal data")
@@ -270,7 +270,7 @@ func tryConnect(remoteIpAddr, remotePort, sourceIpAddr, sourcePort, protocol, lo
 				log.Fatalf("From address %+v does not match remoteAddr %+v", from, remoteAddrResolved)
 			}
 
-			var resp conncheck.Response
+			var resp connectivity.Response
 			err = json.Unmarshal(bufIn[:n], &resp)
 			if err != nil {
 				log.WithError(err).Fatal("Failed to read response")

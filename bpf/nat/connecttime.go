@@ -15,7 +15,6 @@
 package nat
 
 import (
-	"bufio"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -23,13 +22,11 @@ import (
 	"path"
 	"strconv"
 	"strings"
-	"sync"
 
 	"github.com/pkg/errors"
 	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/felix/bpf"
-	"github.com/projectcalico/felix/bpf/tc"
 )
 
 type cgroupProgs struct {
@@ -188,87 +185,13 @@ func ProgFileName(logLevel string, ipver int) string {
 
 	switch ipver {
 	case 4:
-		return fmt.Sprintf("connect_time_%s.o", logLevel)
+		return fmt.Sprintf("connect_time_%s_v4.o", logLevel)
 	case 6:
 		return fmt.Sprintf("connect_time_%s_v6.o", logLevel)
 	}
 
 	log.WithField("ipver", ipver).Fatal("Invalid IP version")
 	return ""
-}
-
-func compileConnectTimeLoadBalancer(logLevel, inFile, outFile string) error {
-	args := []string{
-		"-x",
-		"c",
-		"-D__KERNEL__",
-		"-D__ASM_SYSREG_H",
-		"-D__BPFTOOL_LOADER__",
-		"-DCALI_LOG_LEVEL=CALI_LOG_LEVEL_" + strings.ToUpper(logLevel),
-		fmt.Sprintf("-DCALI_COMPILE_FLAGS=%d", tc.CompileFlagCgroup),
-		"-DCALI_LOG_PFX=CALI",
-		"-Wno-unused-value",
-		"-Wno-pointer-sign",
-		"-Wno-compare-distinct-pointer-types",
-		"-Wunused",
-		"-Wall",
-		"-Werror",
-		"-fno-stack-protector",
-		"-O2",
-		"-emit-llvm",
-		"-c", inFile,
-		"-o", "-",
-	}
-
-	clang := exec.Command("clang", args...)
-	clangStdout, err := clang.StdoutPipe()
-	if err != nil {
-		return err
-	}
-	clangStderr, err := clang.StderrPipe()
-	if err != nil {
-		return err
-	}
-	err = clang.Start()
-	if err != nil {
-		log.WithError(err).Panic("Failed to start clang.")
-		return err
-	}
-	var wg sync.WaitGroup
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		scanner := bufio.NewScanner(clangStderr)
-		for scanner.Scan() {
-			log.Warnf("clang stderr: %s", scanner.Text())
-		}
-		if err != nil {
-			log.WithError(err).Error("Error while reading clang stderr")
-		}
-	}()
-	llc := exec.Command("llc", "-march=bpf", "-filetype=obj", "-o", outFile)
-	llc.Stdin = clangStdout
-	out, err := llc.CombinedOutput()
-	if err != nil {
-		log.WithError(err).WithField("out", string(out)).Error("Failed to compile C program (llc step)")
-		return err
-	}
-	err = clang.Wait()
-	if err != nil {
-		log.WithError(err).Error("Clang failed.")
-		return err
-	}
-	wg.Wait()
-
-	return nil
-}
-
-func CompileConnectTimeLoadBalancer(logLevel string, outFile string) error {
-	return compileConnectTimeLoadBalancer(logLevel, "bpf/cgroup/connect_balancer.c", outFile)
-}
-
-func CompileConnectTimeLoadBalancerV6(logLevel string, outFile string) error {
-	return compileConnectTimeLoadBalancer(logLevel, "bpf/cgroup/connect_balancer_v6.c", outFile)
 }
 
 func ensureCgroupPath(cgroupv2 string) (string, error) {

@@ -44,8 +44,11 @@ C_FILES:=tc.c connect_balancer.c
 all: $(OBJS)
 ut-objs: $(UT_OBJS)
 
-connect_time%.ll: connect_balancer.c connect_balancer.d
-	$(CC) $(CFLAGS) `./calculate-flags $@` -c $< -o $@
+COMPILE=$(CC) $(CFLAGS) `./calculate-flags $@` -c $< -o $@
+connect_time_%v4.ll: connect_balancer.c connect_balancer.d calculate-flags
+	$(COMPILE)
+connect_time_%v6.ll: connect_balancer_v6.c connect_balancer_v6.d calculate-flags
+	$(COMPILE)
 
 UT_CFLAGS=\
 	-D__BPFTOOL_LOADER__ \
@@ -62,11 +65,24 @@ ut/%.ll: ut/%.c ut/ut.h tc.c tc.d
 	$(CC) $(CFLAGS) $(UT_CFLAGS) -c $< -o $@
 
 # Production and UT versions of the main binaries.
-%.ll: tc.c tc.d
-	$(CC) $(CFLAGS) `./calculate-flags $@` -c $< -o $@
+# Combining the targets into one rule causes make to fail to rebuild the .ll files.  Not sure why.
+to%.ll: tc.c tc.d calculate-flags
+	$(COMPILE)
+from%.ll: tc.c tc.d calculate-flags
+	$(COMPILE)
+test%.ll: tc.c tc.d calculate-flags
+	$(COMPILE)
 
 LINK=$(LD) -march=bpf -filetype=obj -o $@ $<
-bin/%.o: %.ll | bin
+bin/to%.o: to%.ll | bin
+	$(LINK)
+bin/from%.o: from%.ll | bin
+	$(LINK)
+bin/test%.o: test%.ll | bin
+	$(LINK)
+bin/connect_time_%v4.o: connect_time_%v4.ll | bin
+	$(LINK)
+bin/connect_time_%v6.o: connect_time_%v6.ll | bin
 	$(LINK)
 ut/%.o: ut/%.ll
 	$(LINK)

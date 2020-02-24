@@ -128,7 +128,7 @@ func runBpfTest(t *testing.T, section string, rules [][][]*proto.Rule, testFn fu
 	Expect(err).NotTo(HaveOccurred())
 	defer os.RemoveAll(bpfFsDir)
 
-	obj := "../../bpf-gpl/bin/ut_"
+	obj := "../../bpf-gpl/bin/test_"
 	if strings.Contains(section, "from") {
 		obj += "from_"
 	} else {
