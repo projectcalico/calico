@@ -24,6 +24,7 @@ Usage:
                      [--node-image=<DOCKER_IMAGE_NAME>]
                      [--backend=(bird|none)]
                      [--config=<CONFIG>]
+                     [--felix-config=<CONFIG>]
                      [--no-default-ippools]
                      [--dryrun]
                      [--init-system]
@@ -117,6 +118,9 @@ Options:
   -c --config=<CONFIG>     Path to the file containing connection
                            configuration in YAML or JSON format.
                            [default: /etc/calico/calicoctl.cfg]
+     --felix-config=<CONFIG>
+                            Path to the file containing Felix
+                            configuration in YAML or JSON format.
 
 Description:
   This command is used to start a {{site.nodecontainer}} container instance which provides
