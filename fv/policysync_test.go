@@ -1,6 +1,6 @@
 // +build fvtests
 
-// Copyright (c) 2018 Tigera, Inc. All rights reserved.
+// Copyright (c) 2019 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -50,7 +50,7 @@ import (
 	client "github.com/projectcalico/libcalico-go/lib/clientv3"
 )
 
-var _ = Context("policy sync API tests", func() {
+var _ = Context("_POL-SYNC_ _BPF-SAFE_ policy sync API tests", func() {
 
 	var (
 		etcd              *containers.Container
@@ -304,16 +304,23 @@ var _ = Context("policy sync API tests", func() {
 								policy, err = calicoClient.GlobalNetworkPolicies().Create(ctx, policy, utils.NoOptions)
 								Expect(err).NotTo(HaveOccurred())
 
+								waitTime := "1s" // gomega default
+								if os.Getenv("FELIX_FV_ENABLE_BPF") == "true" {
+									// FIXME avoid blocking policysync while BPF dataplane does its thing.
+									// When BPF dataplane reprograms policy it can block >1s.
+									waitTime = "5s"
+								}
+
 								if wlIdx != 2 {
 									policyID := proto.PolicyID{Name: "default.policy-0", Tier: "default"}
-									Eventually(mockWlClient[wlIdx].ActivePolicies).Should(Equal(set.From(policyID)))
+									Eventually(mockWlClient[wlIdx].ActivePolicies, waitTime).Should(Equal(set.From(policyID)))
 								}
 
 								_, err = calicoClient.GlobalNetworkPolicies().Delete(ctx, "policy-0", options.DeleteOptions{})
 								Expect(err).NotTo(HaveOccurred())
 
 								if wlIdx != 2 {
-									Eventually(mockWlClient[wlIdx].ActivePolicies).Should(Equal(set.New()))
+									Eventually(mockWlClient[wlIdx].ActivePolicies, waitTime).Should(Equal(set.New()))
 								}
 							}
 						}

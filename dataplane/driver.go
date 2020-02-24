@@ -179,6 +179,7 @@ func StartDataplaneDriver(configParams *config.Config,
 			DebugSimulateDataplaneHangAfter: configParams.DebugSimulateDataplaneHangAfter,
 			ExternalNodesCidrs:              configParams.ExternalNodesCIDRList,
 			SidecarAccelerationEnabled:      configParams.SidecarAccelerationEnabled,
+			BPFEnabled:                      configParams.BPFEnabled,
 			XDPEnabled:                      configParams.XDPEnabled,
 			XDPAllowGeneric:                 configParams.GenericXDPEnabled,
 		}

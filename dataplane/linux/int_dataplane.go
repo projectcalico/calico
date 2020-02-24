@@ -138,6 +138,7 @@ type Config struct {
 
 	ExternalNodesCidrs []string
 
+	BPFEnabled      bool
 	XDPEnabled      bool
 	XDPAllowGeneric bool
 
@@ -364,7 +365,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 
 	callbacks := newCallbacks()
 	dp.callbacks = callbacks
-	if config.XDPEnabled {
+	if !config.BPFEnabled && config.XDPEnabled {
 		if err := bpf.SupportsXDP(); err != nil {
 			log.WithError(err).Warn("Can't enable XDP acceleration.")
 		} else {
@@ -380,7 +381,9 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 	} else {
 		log.Info("XDP acceleration disabled.")
 	}
-	if dp.xdpState == nil {
+
+	// TODO Integrate XDP and BPF infra.
+	if !config.BPFEnabled && dp.xdpState == nil {
 		xdpState, err := NewXDPState(config.XDPAllowGeneric)
 		if err == nil {
 			if err := xdpState.WipeXDP(); err != nil {
@@ -421,18 +424,28 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		// bpffs so there's nothing to clean up
 	}
 
-	ipsetsManager := newIPSetsManager(ipSetsV4, config.MaxIPSetSize, callbacks)
-	dp.RegisterManager(ipsetsManager)
-	dp.ipsetsSourceV4 = ipsetsManager
-	dp.RegisterManager(newHostIPManager(
-		config.RulesConfig.WorkloadIfacePrefixes,
-		rules.IPSetIDThisHostIPs,
-		ipSetsV4,
-		config.MaxIPSetSize))
-	dp.RegisterManager(newPolicyManager(rawTableV4, mangleTableV4, filterTableV4, ruleRenderer, 4, callbacks))
+	if !config.BPFEnabled {
+		ipsetsManager := newIPSetsManager(ipSetsV4, config.MaxIPSetSize, callbacks)
+		dp.RegisterManager(ipsetsManager)
+		dp.ipsetsSourceV4 = ipsetsManager
+		// TODO Connect host IP manager to BPF
+		dp.RegisterManager(newHostIPManager(
+			config.RulesConfig.WorkloadIfacePrefixes,
+			rules.IPSetIDThisHostIPs,
+			ipSetsV4,
+			config.MaxIPSetSize))
+		dp.RegisterManager(newPolicyManager(rawTableV4, mangleTableV4, filterTableV4, ruleRenderer, 4, callbacks))
+	}
+
+	if config.BPFEnabled {
+		log.Info("BPF enabled, starting BPF endpoint manager and map manager.")
+		dp.RegisterManager(newBPFEndpointManager())
+		dp.RegisterManager(newBPFMapManager())
+	}
 
 	routeTableV4 := routetable.New(config.RulesConfig.WorkloadIfacePrefixes, 4, false, config.NetlinkTimeout,
 		config.DeviceRouteSourceAddress, config.DeviceRouteProtocol, config.RemoveExternalRoutes)
+
 	epManager := newEndpointManager(
 		rawTableV4,
 		mangleTableV4,
@@ -444,6 +457,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		config.RulesConfig.KubeIPVSSupportEnabled,
 		config.RulesConfig.WorkloadIfacePrefixes,
 		dp.endpointStatusCombiner.OnEndpointStatusUpdate,
+		config.BPFEnabled,
 		callbacks)
 	dp.RegisterManager(epManager)
 	dp.endpointsSourceV4 = epManager
@@ -498,13 +512,15 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 
 		routeTableV6 := routetable.New(config.RulesConfig.WorkloadIfacePrefixes, 6, false, config.NetlinkTimeout, config.DeviceRouteSourceAddress, config.DeviceRouteProtocol, config.RemoveExternalRoutes)
 
-		dp.RegisterManager(newIPSetsManager(ipSetsV6, config.MaxIPSetSize, callbacks))
-		dp.RegisterManager(newHostIPManager(
-			config.RulesConfig.WorkloadIfacePrefixes,
-			rules.IPSetIDThisHostIPs,
-			ipSetsV6,
-			config.MaxIPSetSize))
-		dp.RegisterManager(newPolicyManager(rawTableV6, mangleTableV6, filterTableV6, ruleRenderer, 6, callbacks))
+		if !config.BPFEnabled {
+			dp.RegisterManager(newIPSetsManager(ipSetsV6, config.MaxIPSetSize, callbacks))
+			dp.RegisterManager(newHostIPManager(
+				config.RulesConfig.WorkloadIfacePrefixes,
+				rules.IPSetIDThisHostIPs,
+				ipSetsV6,
+				config.MaxIPSetSize))
+			dp.RegisterManager(newPolicyManager(rawTableV6, mangleTableV6, filterTableV6, ruleRenderer, 6, callbacks))
+		}
 		dp.RegisterManager(newEndpointManager(
 			rawTableV6,
 			mangleTableV6,
@@ -516,6 +532,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 			config.RulesConfig.KubeIPVSSupportEnabled,
 			config.RulesConfig.WorkloadIfacePrefixes,
 			dp.endpointStatusCombiner.OnEndpointStatusUpdate,
+			config.BPFEnabled,
 			callbacks))
 		dp.RegisterManager(newFloatingIPManager(natTableV6, ruleRenderer, 6))
 		dp.RegisterManager(newMasqManager(ipSetsV6, natTableV6, ruleRenderer, config.MaxIPSetSize, 6))
@@ -655,14 +672,42 @@ func (d *InternalDataplane) doStaticDataplaneConfig() {
 	// Check/configure global kernel parameters.
 	d.configureKernel()
 
-	// Ensure that the default value of rp_filter is set to "strict" for newly-created
-	// interfaces.  This is required to prevent a race between starting an interface and
-	// Felix being able to configure it.
-	err := writeProcSys("/proc/sys/net/ipv4/conf/default/rp_filter", "1")
-	if err != nil {
-		log.Warnf("failed to set rp_filter to '1': %v\n", err)
+	if d.config.BPFEnabled {
+		d.setUpIptablesBPF()
+	} else {
+		d.setUpIptablesNormal()
 	}
 
+	if d.config.RulesConfig.IPIPEnabled {
+		log.Info("IPIP enabled, starting thread to keep tunnel configuration in sync.")
+		go d.ipipManager.KeepIPIPDeviceInSync(
+			d.config.IPIPMTU,
+			d.config.RulesConfig.IPIPTunnelAddress,
+		)
+	} else {
+		log.Info("IPIP disabled. Not starting tunnel update thread.")
+	}
+}
+
+func (d *InternalDataplane) setUpIptablesBPF() {
+	// TODO have raw table mark for notrack
+	// TODO Any BPF SNAT we need to do
+
+	for _, t := range d.iptablesFilterTables {
+		t.SetRuleInsertions("FORWARD", []iptables.Rule{{
+			// TODO Make "from workload" mark configurable
+			Match:  iptables.Match().MarkMatchesWithMask(0xca110000, 0xffff0000),
+			Action: iptables.AcceptAction{},
+		}, {
+			// TODO Make interface name mark configurable
+			Match:  iptables.Match().OutInterface("cali+"),
+			Action: iptables.AcceptAction{},
+		},
+		})
+	}
+}
+
+func (d *InternalDataplane) setUpIptablesNormal() {
 	for _, t := range d.iptablesRawTables {
 		rawChains := d.ruleRenderer.StaticRawTableChains(t.IPVersion)
 		t.UpdateChains(rawChains)
@@ -673,7 +718,6 @@ func (d *InternalDataplane) doStaticDataplaneConfig() {
 			Action: iptables.JumpAction{Target: rules.ChainRawOutput},
 		}})
 	}
-
 	for _, t := range d.iptablesFilterTables {
 		filterChains := d.ruleRenderer.StaticFilterTableChains(t.IPVersion)
 		t.UpdateChains(filterChains)
@@ -687,17 +731,6 @@ func (d *InternalDataplane) doStaticDataplaneConfig() {
 			Action: iptables.JumpAction{Target: rules.ChainFilterOutput},
 		}})
 	}
-
-	if d.config.RulesConfig.IPIPEnabled {
-		log.Info("IPIP enabled, starting thread to keep tunnel configuration in sync.")
-		go d.ipipManager.KeepIPIPDeviceInSync(
-			d.config.IPIPMTU,
-			d.config.RulesConfig.IPIPTunnelAddress,
-		)
-	} else {
-		log.Info("IPIP disabled. Not starting tunnel update thread.")
-	}
-
 	for _, t := range d.iptablesNATTables {
 		t.UpdateChains(d.ruleRenderer.StaticNATTableChains(t.IPVersion))
 		t.SetRuleInsertions("PREROUTING", []iptables.Rule{{
@@ -710,14 +743,12 @@ func (d *InternalDataplane) doStaticDataplaneConfig() {
 			Action: iptables.JumpAction{Target: rules.ChainNATOutput},
 		}})
 	}
-
 	for _, t := range d.iptablesMangleTables {
 		t.UpdateChains(d.ruleRenderer.StaticMangleTableChains(t.IPVersion))
 		t.SetRuleInsertions("PREROUTING", []iptables.Rule{{
 			Action: iptables.JumpAction{Target: rules.ChainManglePrerouting},
 		}})
 	}
-
 	if d.xdpState != nil {
 		if err := d.setXDPFailsafePorts(); err != nil {
 			log.Warnf("failed to set XDP failsafe ports, disabling XDP: %v", err)

@@ -1,6 +1,6 @@
 // +build fvtests
 
-// Copyright (c) 2017-2018 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2019 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -33,7 +33,7 @@ import (
 // So that we can say 'HaveConnectivityTo' without the 'workload.' prefix...
 var HaveConnectivityTo = workload.HaveConnectivityTo
 
-var _ = Context("with initialized Felix, etcd datastore, 3 workloads", func() {
+var _ = Context("_INGRESS-EGRESS_ _BPF-SAFE_ with initialized Felix, etcd datastore, 3 workloads", func() {
 
 	var (
 		etcd   *containers.Container

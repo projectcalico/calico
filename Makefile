@@ -134,7 +134,7 @@ PUSH_NONMANIFEST_IMAGES=$(filter-out $(PUSH_MANIFEST_IMAGES),$(PUSH_IMAGES))
 # location of docker credentials to push manifests
 DOCKER_CONFIG ?= $(HOME)/.docker/config.json
 
-GO_BUILD_VER?=v0.23
+GO_BUILD_VER?=v0.25-deb-cgo
 # For building, we use the go-build image for the *host* architecture, even if the target is different
 # the one for the host should contain all the necessary cross-compilation tools
 # we do not need to use the arch since go-build:v0.15 now is multi-arch manifest
@@ -335,10 +335,7 @@ bin/calico-felix-$(ARCH): $(SRC_FILES) local_build
 	@echo Building felix for $(ARCH) on $(BUILDARCH)
 	mkdir -p bin
 	$(DOCKER_RUN) $(CALICO_BUILD) \
-	   sh -c 'go build -v -i -o $@ -v $(BUILD_FLAGS) $(LDFLAGS) "$(PACKAGE_NAME)/cmd/calico-felix" && \
-		( ldd $@ 2>&1 | grep -q -e "Not a valid dynamic program" \
-		-e "not a dynamic executable" || \
-		( echo "Error: $@ was not statically linked"; false ) )'
+	   sh -c 'go build -v -i -o $@ -v $(BUILD_FLAGS) $(LDFLAGS) "$(PACKAGE_NAME)/cmd/calico-felix"'
 
 # Generate the protobuf bindings for go. The proto/felixbackend.pb.go file is included in SRC_FILES
 protobuf proto/felixbackend.pb.go: proto/felixbackend.proto
@@ -348,7 +345,7 @@ protobuf proto/felixbackend.pb.go: proto/felixbackend.proto
 		      --gogofaster_out=plugins=grpc:. \
 		      felixbackend.proto
 
-BPF_INC_FILES := bpf/include/bpf.h
+BPF_INC_FILES := bpf/include/bpf.h bpf/xdp/*.h
 BPF_XDP_INC_FILES :=
 
 CLANG_BUILDER_STAMP := .built-bpf-clang-builder-$(BUILDARCH)
@@ -358,33 +355,31 @@ $(CLANG_BUILDER_STAMP): docker-build-images/bpf-clang-builder.Dockerfile.$(BUILD
 	docker build -t calico-build/bpf-clang -f docker-build-images/bpf-clang-builder.Dockerfile.$(BUILDARCH) docker-build-images
 	touch "$@"
 
-bpf/xdp/generated/xdp.o: bpf/xdp/filter.c $(BPF_INC_FILES) $(BPF_XDP_INC_FILES) $(CLANG_BUILDER_STAMP)
-	mkdir -p bpf/xdp/generated
+.PHONY: xdp bpf-builder
+
+bpf-builder: $(CLANG_BUILDER_STAMP)
+
+ifndef LOCAL
+xdp: bpf-builder
 	docker run --rm --user $(LOCAL_USER_ID):$(LOCAL_GROUP_ID) \
-		  -v $(CURDIR):/go/src/$(PACKAGE_NAME):rw \
-		      calico-build/bpf-clang \
-		      /bin/sh -c \
-		      "cd /go/src/$(PACKAGE_NAME) && \
-		       clang \
-			      -D__KERNEL__ \
-			      -D__ASM_SYSREG_H \
-			      -Wno-unused-value \
-			      -Wno-pointer-sign \
-			      -Wno-compare-distinct-pointer-types \
-			      -Wunused \
-			      -Wall \
-			      -Werror \
-			      -fno-stack-protector \
-			      -O2 \
-			      -emit-llvm \
-			      -c /go/src/$(PACKAGE_NAME)/bpf/xdp/filter.c \
-			      -o /go/src/$(PACKAGE_NAME)/bpf/xdp/generated/xdp.ll && \
-		       llc \
-			       -march=bpf \
-			       -filetype=obj \
-			       -o /go/src/$(PACKAGE_NAME)/bpf/xdp/generated/xdp.o \
-			       /go/src/$(PACKAGE_NAME)/bpf/xdp/generated/xdp.ll && \
-		       rm -f /go/src/$(PACKAGE_NAME)/bpf/xdp/generated/xdp.ll"
+	          -v $(CURDIR):/go/src/$(PACKAGE_NAME):rw \
+	              calico-build/bpf-clang \
+	              /bin/sh -c \
+	              "cd /go/src/$(PACKAGE_NAME) && make -C bpf/xdp all"
+
+xdp-clean:
+	docker run --rm --user $(LOCAL_USER_ID):$(LOCAL_GROUP_ID) \
+	          -v $(CURDIR):/go/src/$(PACKAGE_NAME):rw \
+	              calico-build/bpf-clang \
+	              /bin/sh -c \
+	              "cd /go/src/$(PACKAGE_NAME) && make -C bpf/xdp clean"
+else
+xdp:
+	$(MAKE) -C bpf/xdp
+
+xdp-clean:
+	$(MAKE) -C bpf/xdp clean
+endif
 
 BPF_SOCKMAP_INC_FILES := bpf/sockmap/sockops.h
 
@@ -473,6 +468,7 @@ $(BUILD_IMAGE)-$(ARCH): bin/calico-felix-$(ARCH) register
 	rm -rf docker-image/bin
 	mkdir -p docker-image/bin
 	cp bin/calico-felix-$(ARCH) docker-image/bin/
+	cp -r bpf docker-image/
 	docker build --pull -t $(BUILD_IMAGE):latest-$(ARCH) --build-arg QEMU_IMAGE=$(CALICO_BUILD) --file ./docker-image/Dockerfile.$(ARCH) docker-image
 ifeq ($(ARCH),amd64)
 	docker tag $(BUILD_IMAGE):latest-$(ARCH) $(BUILD_IMAGE):latest
@@ -635,6 +631,7 @@ fv fv/latency.log: remote-deps $(BUILD_IMAGE) bin/iptables-locker bin/test-workl
 	  PRIVATE_KEY=`pwd`/private.key \
 	  GINKGO_ARGS='$(GINKGO_ARGS)' \
 	  GINKGO_FOCUS="$(GINKGO_FOCUS)" \
+	  FELIX_FV_ENABLE_BPF="$(FELIX_FV_ENABLE_BPF)" \
 	  ./run-batches
 	@if [ -e fv/latency.log ]; then \
 	   echo; \
@@ -642,6 +639,9 @@ fv fv/latency.log: remote-deps $(BUILD_IMAGE) bin/iptables-locker bin/test-workl
 	   echo; \
 	   cat fv/latency.log; \
 	fi
+
+fv-bpf:
+	$(MAKE) fv FELIX_FV_ENABLE_BPF=true
 
 ###############################################################################
 # K8SFV Tests
@@ -683,10 +683,7 @@ k8sfv-test-existing-felix: remote-deps bin/k8sfv.test
 bin/k8sfv.test: $(K8SFV_GO_FILES)
 	@echo Building $@...
 	$(DOCKER_RUN) $(CALICO_BUILD) \
-	    sh -c 'go test -c $(BUILD_FLAGS) -o $@ ./k8sfv && \
-		( ldd $@ 2>&1 | grep -q -e "Not a valid dynamic program" \
-		-e "not a dynamic executable" || \
-		( echo "Error: $@ was not statically linked"; false ) )'
+	    sh -c 'go test -c $(BUILD_FLAGS) -o $@ ./k8sfv'
 
 .PHONY: run-prometheus run-grafana stop-prometheus stop-grafana
 run-prometheus: stop-prometheus $(K8SFV_PROMETHEUS_DATA_DIR)

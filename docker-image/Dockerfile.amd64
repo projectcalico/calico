@@ -53,7 +53,13 @@ RUN apt-get update && apt-get install -y \
     procps \
     ca-certificates \
     # Felix FV tests require wget
-    wget
+    wget \
+    # Tools for building BPF programs.
+    llvm \
+    clang \
+    libbpf-dev \
+    linux-headers-amd64 \
+    binutils
 
 ADD felix.cfg /etc/calico/felix.cfg
 ADD calico-felix-wrapper /usr/bin
@@ -61,6 +67,11 @@ ADD calico-felix-wrapper /usr/bin
 # Put our binary in /code rather than directly in /usr/bin.  This allows the downstream builds
 # to more easily extract the Felix build artefacts from the container.
 ADD bin/calico-felix-amd64 /code/calico-felix
+
+ADD bpf/include/bpf.h /code/bpf/include/bpf.h
+ADD bpf/xdp/redir_tc.c /code/bpf/xdp/redir_tc.c
+ADD bpf/xdp/bpf_maps.h /code/bpf/xdp/bpf_maps.h
+
 RUN ln -s /code/calico-felix /usr/bin
 COPY --from=bpftool /bpftool /usr/bin
 WORKDIR /code

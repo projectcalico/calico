@@ -58,5 +58,10 @@ htmlcov/
 /debian/changelog
 /.built-bpf-clang-builder-*
 
+# for the bpf programs
+*.o
+*.ll
+*.d
+
 # CRDs used in the FV tests, pulled from libcalico.
 fv/infrastructure/crds.yaml

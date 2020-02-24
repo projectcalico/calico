@@ -23,8 +23,9 @@ import (
 	"os"
 	"strconv"
 
-	"github.com/projectcalico/felix/labelindex"
 	log "github.com/sirupsen/logrus"
+
+	"github.com/projectcalico/felix/labelindex"
 )
 
 var id = 0

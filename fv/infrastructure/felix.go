@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2018 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2019 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,6 +16,7 @@ package infrastructure
 
 import (
 	"fmt"
+	"os"
 
 	log "github.com/sirupsen/logrus"
 
@@ -55,6 +56,10 @@ func RunFelix(infra DatastoreInfra, options TopologyOptions) *Felix {
 		"-e", "FELIX_IPV6SUPPORT="+ipv6Enabled,
 		"-v", "/lib/modules:/lib/modules",
 	)
+
+	if os.Getenv("FELIX_FV_ENABLE_BPF") == "true" {
+		args = append(args, "-e", "FELIX_BPFENABLED=true")
+	}
 
 	for k, v := range options.ExtraEnvVars {
 		args = append(args, "-e", fmt.Sprintf("%s=%s", k, v))

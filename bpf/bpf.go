@@ -41,6 +41,7 @@ import (
 	"golang.org/x/sys/unix"
 
 	"github.com/gobuffalo/packr/v2"
+
 	"github.com/projectcalico/felix/labelindex"
 	"github.com/projectcalico/felix/versionparse"
 )

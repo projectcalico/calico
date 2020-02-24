@@ -12,8 +12,9 @@ import (
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	"github.com/projectcalico/felix/proto"
 	"github.com/vishvananda/netlink"
+
+	"github.com/projectcalico/felix/proto"
 )
 
 type mockVXLANDataplane struct {
