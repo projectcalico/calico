@@ -55,12 +55,6 @@ MAKEFUNC(int, msg_redirect_hash,
 MAKEFUNC(int, sock_hash_update,
 	struct bpf_sock_ops*, struct bpf_map_def*, void*, __u64)
 MAKEFUNC(void*, map_lookup_elem, void*, const void*)
-MAKEFUNC(int, map_delete_elem, void*, const void*)
-MAKEFUNC(int, map_update_elem, void* map, const void *key, const void *value, __u64 flags)
-MAKEFUNC(__u64, ktime_get_ns, void)
-MAKEFUNC(void, trace_printk, const char *fmt, int fmt_size, ...)
-
-#define printk(fmt, ...) do { char fmt2[] = fmt; bpf_trace_printk(fmt2, sizeof(fmt2) , ## __VA_ARGS__); } while (0)
 
 /*
  * Data types, structs, and unions

@@ -86,8 +86,6 @@ MAKEFUNC(int, skb_adjust_room, void *ctx, __s32 len, __u32 mode, __u64 flags)
 MAKEFUNC(int, csum_diff, __be32 *from, __u32 from_size, __be32 *to, __u32 to_size, __wsum seed)
 MAKEFUNC(uint64_t, get_socket_cookie, void *ctx)
 
-#define printk(fmt, ...) do { char fmt2[] = fmt; bpf_trace_printk(fmt2, sizeof(fmt2) , ## __VA_ARGS__); } while (0)
-
 CALI_BPF_INLINE __u32 port_to_host(__u32 port) {
 	return be32_to_host(port) >> 16;
 }
