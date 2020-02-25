@@ -76,7 +76,7 @@ If you have a small number of hosts, you can configure BGP sessions between your
 route reflector or set up a Layer 3 topology.
 
 There's further advice on network topologies in [{{site.prodname}} over Ethernet fabrics]({{ site.baseurl }}/reference/architecture/design/l2-interconnect-fabric).
-We'd also encourage you to [get in touch](https://www.projectcalico.org/contact/)
+We'd also encourage you to {% include open-new-window.a text='get in touch' url='https://www.projectcalico.org/contact/' %}
 to discuss your environment.
 
 ### Orchestrator specific

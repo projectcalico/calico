@@ -23,7 +23,7 @@ Different network implementations are better suited to different environments. {
 - Programs the local node’s routing table
 - Distributes routes to other nodes and network devices
 
-For details of {{site.prodname}} network design and architecture, see a lightboard presentation on the {{site.prodname}} dataplane, components, and how traffic is routed, [Calico network architecture and fundamentals](https://www.tigera.io/video/tigera-calico-fundamentals).
+For details of {{site.prodname}} network design and architecture, see a lightboard presentation on the {{site.prodname}} dataplane, components, and how traffic is routed, {% include open-new-window.html text='Calico network architecture and fundamentals' url='https://www.tigera.io/video/tigera-calico-fundamentals' %}.
 
 #### About BGP
 
