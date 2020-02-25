@@ -831,7 +831,7 @@ func (s *Syncer) runExpandNPFixup(misses []*expandMiss) {
 			case <-s.expFixupStop:
 				cancel()
 			case <-ctx.Done():
-				//do nothing, we exited, work is done, just quit
+				// do nothing, we exited, work is done, just quit
 			}
 		}()
 
