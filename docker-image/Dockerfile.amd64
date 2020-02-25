@@ -16,27 +16,17 @@
 # NOTE: This Dockerfile should be kept in-sync with the one in calico/node.
 # This ensures that testing of Felix in this repository is done in the same
 # userspace environment as it will be deployed in calico/node.
-FROM calico/bpftool:v5.0-amd64 as bpftool
+FROM calico/bpftool:v5.3-amd64 as bpftool
 
-FROM debian:9.8-slim
+FROM debian:10-slim
 LABEL maintainer="Shaun Crampton <shaun@tigera.io>"
 
-# Set up a buster repo so that we can pull in backports of some packages.  Default to
-# the stable repo for other packages.  We need iptables 1.8.x for nftables compatibility.
-RUN echo 'APT::Default-Release "stable";' > /etc/apt/apt.conf.d/99defaultrelease
-RUN echo 'deb     http://ftp.debian.org/debian/    buster main contrib non-free' > /etc/apt/sources.list.d/buster.list
-RUN apt-get update && apt-get install -y -t buster \
-    ipset \
-    iptables \
-    iproute2
-
-# Default to the xtables backend of iptables.
-RUN update-alternatives --set iptables /usr/sbin/iptables-legacy
-RUN update-alternatives --set ip6tables /usr/sbin/ip6tables-legacy
 
 # Install remaining runtime deps required for felix from the global repository
 RUN apt-get update && apt-get install -y \
     ipset \
+    iptables \
+    iproute2 \
     iputils-arping \
     iputils-ping \
     iputils-tracepath \
@@ -55,19 +45,29 @@ RUN apt-get update && apt-get install -y \
     # Felix FV tests require wget
     wget
 
+# Default to the xtables backend of iptables.
+RUN update-alternatives --set iptables /usr/sbin/iptables-legacy
+RUN update-alternatives --set ip6tables /usr/sbin/ip6tables-legacy
+
+# Install tini, the init daemon we use.
+ENV TINI_VERSION v0.18.0
+ADD https://github.com/krallin/tini/releases/download/${TINI_VERSION}/tini-static-amd64 /sbin/tini
+
 ADD felix.cfg /etc/calico/felix.cfg
 ADD calico-felix-wrapper /usr/bin
 
 # Put our binary in /code rather than directly in /usr/bin.  This allows the downstream builds
 # to more easily extract the Felix build artefacts from the container.
 ADD bin/calico-felix-amd64 /code/calico-felix
+ADD bin/calico-bpf /usr/bin/calico-bpf
+
+ADD bpf/bin/* /usr/lib/calico/bpf/
+
 RUN ln -s /code/calico-felix /usr/bin
 COPY --from=bpftool /bpftool /usr/bin
 WORKDIR /code
 
 # Since our binary isn't designed to run as PID 1, run it via the tini init daemon.
-ENV TINI_VERSION v0.18.0
-ADD https://github.com/krallin/tini/releases/download/${TINI_VERSION}/tini-static-amd64 /sbin/tini
 RUN chmod +x /sbin/tini
 ENTRYPOINT ["/sbin/tini", "--"]
 

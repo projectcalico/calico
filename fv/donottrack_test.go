@@ -1,6 +1,4 @@
-// +build fvtests
-
-// Copyright (c) 2018 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,12 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// +build fvtests
+
 package fv_test
 
 import (
 	"context"
 	"fmt"
 	"time"
+
+	"github.com/projectcalico/felix/fv/connectivity"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -42,7 +44,7 @@ var _ = infrastructure.DatastoreDescribe("do-not-track policy tests; with 2 node
 		felixes        []*infrastructure.Felix
 		hostW          [2]*workload.Workload
 		client         client.Interface
-		cc             *workload.ConnectivityChecker
+		cc             *connectivity.Checker
 		dumpedDiags    bool
 		externalClient *containers.Container
 	)
@@ -54,7 +56,7 @@ var _ = infrastructure.DatastoreDescribe("do-not-track policy tests; with 2 node
 		dumpedDiags = false
 		options := infrastructure.DefaultTopologyOptions()
 		felixes, client = infrastructure.StartNNodeTopology(2, options, infra)
-		cc = &workload.ConnectivityChecker{}
+		cc = &connectivity.Checker{}
 
 		// Start a host networked workload on each host for connectivity checks.
 		for ii := range felixes {

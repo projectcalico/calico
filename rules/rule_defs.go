@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2019 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -106,6 +106,8 @@ const (
 	// rule).
 	HistoricInsertedNATRuleRegex = `-A POSTROUTING .* felix-masq-ipam-pools .*|` +
 		`-A POSTROUTING -o tunl0 -m addrtype ! --src-type LOCAL --limit-iface-out -m addrtype --src-type LOCAL -j MASQUERADE`
+
+	KubeProxyInsertRuleRegex = `-j KUBE-[a-zA-Z0-9-]*SERVICES|-j KUBE-FORWARD`
 )
 
 // Typedefs to prevent accidentally passing the wrong prefix to the Policy/ProfileChainName()
@@ -138,11 +140,25 @@ var (
 	// LegacyV4IPSetNames contains some extra IP set names that were used in older versions of
 	// Felix and don't fit our versioned pattern.
 	LegacyV4IPSetNames = []string{"felix-masq-ipam-pools", "felix-all-ipam-pools"}
+
+	// Rule previxes used by kube-proxy.  Note: we exclude the so-called utility chains KUBE-MARK-MASQ and co because
+	// they are jointly owned by kube-proxy and kubelet.
+	KubeProxyChainPrefixes = []string{
+		"KUBE-FORWARD",
+		"KUBE-SERVICES",
+		"KUBE-EXTERNAL-SERVICES",
+		"KUBE-NODEPORTS",
+		"KUBE-SVC-",
+		"KUBE-SEP-",
+		"KUBE-FW-",
+		"KUBE-XLB-",
+	}
 )
 
 type RuleRenderer interface {
 	StaticFilterTableChains(ipVersion uint8) []*iptables.Chain
 	StaticNATTableChains(ipVersion uint8) []*iptables.Chain
+	StaticNATPostroutingChains(ipVersion uint8) []*iptables.Chain
 	StaticRawTableChains(ipVersion uint8) []*iptables.Chain
 	StaticMangleTableChains(ipVersion uint8) []*iptables.Chain
 
@@ -259,6 +275,7 @@ type Config struct {
 	IptablesNATOutgoingInterfaceFilter string
 
 	NATOutgoingAddress net.IP
+	BPFEnabled         bool
 }
 
 func (c *Config) validate() {

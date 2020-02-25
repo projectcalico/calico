@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2018 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -67,7 +67,7 @@ type EventSequencer struct {
 	pendingServiceAccountDeletes set.Set
 	pendingNamespaceUpdates      map[proto.NamespaceID]*proto.NamespaceUpdate
 	pendingNamespaceDeletes      set.Set
-	pendingRouteUpdates          map[string]*proto.RouteUpdate
+	pendingRouteUpdates          map[routeID]*proto.RouteUpdate
 	pendingRouteDeletes          set.Set
 	pendingVTEPUpdates           map[string]*proto.VXLANTunnelEndpointUpdate
 	pendingVTEPDeletes           set.Set
@@ -120,7 +120,7 @@ func NewEventSequencer(conf configInterface) *EventSequencer {
 		pendingServiceAccountDeletes: set.New(),
 		pendingNamespaceUpdates:      map[proto.NamespaceID]*proto.NamespaceUpdate{},
 		pendingNamespaceDeletes:      set.New(),
-		pendingRouteUpdates:          map[string]*proto.RouteUpdate{},
+		pendingRouteUpdates:          map[routeID]*proto.RouteUpdate{},
 		pendingRouteDeletes:          set.New(),
 		pendingVTEPUpdates:           map[string]*proto.VXLANTunnelEndpointUpdate{},
 		pendingVTEPDeletes:           set.New(),
@@ -138,6 +138,11 @@ func NewEventSequencer(conf configInterface) *EventSequencer {
 		sentVTEPs:           set.New(),
 	}
 	return buf
+}
+
+type routeID struct {
+	routeType proto.RouteType
+	dst       string
 }
 
 func (buf *EventSequencer) OnIPSetAdded(setID string, ipSetType proto.IPSetUpdate_IPSetType) {
@@ -760,35 +765,42 @@ func (buf *EventSequencer) flushVTEPAdds() {
 }
 
 func (buf *EventSequencer) OnRouteUpdate(update *proto.RouteUpdate) {
-	dst := update.Dst
-	log.WithFields(log.Fields{"dst": dst}).Debug("Route update")
-	buf.pendingRouteDeletes.Discard(dst)
-	buf.pendingRouteUpdates[dst] = update
+	routeID := routeID{
+		routeType: update.Type,
+		dst:       update.Dst,
+	}
+	log.WithFields(log.Fields{"id": routeID}).Debug("Route update")
+	buf.pendingRouteDeletes.Discard(routeID)
+	buf.pendingRouteUpdates[routeID] = update
 }
 
-func (buf *EventSequencer) OnRouteRemove(dst string) {
-	log.WithFields(log.Fields{"dst": dst}).Debug("Route removed")
-	delete(buf.pendingRouteUpdates, dst)
-	if buf.sentRoutes.Contains(dst) {
-		buf.pendingRouteDeletes.Add(dst)
+func (buf *EventSequencer) OnRouteRemove(routeType proto.RouteType, dst string) {
+	routeID := routeID{
+		routeType: routeType,
+		dst:       dst,
+	}
+	log.WithFields(log.Fields{"id": routeID}).Debug("Route update")
+	delete(buf.pendingRouteUpdates, routeID)
+	if buf.sentRoutes.Contains(routeID) {
+		buf.pendingRouteDeletes.Add(routeID)
 	}
 }
 
 func (buf *EventSequencer) flushRouteAdds() {
-	for _, msg := range buf.pendingRouteUpdates {
+	for id, msg := range buf.pendingRouteUpdates {
 		buf.Callback(msg)
-		buf.sentRoutes.Add(msg.Dst)
+		buf.sentRoutes.Add(id)
 	}
-	buf.pendingRouteUpdates = make(map[string]*proto.RouteUpdate)
+	buf.pendingRouteUpdates = make(map[routeID]*proto.RouteUpdate)
 	log.Debug("Done flushing route adds")
 }
 
 func (buf *EventSequencer) flushRouteRemoves() {
 	buf.pendingRouteDeletes.Iter(func(item interface{}) error {
-		dst := item.(string)
-		msg := proto.RouteRemove{Dst: dst}
+		id := item.(routeID)
+		msg := proto.RouteRemove{Dst: id.dst, Type: id.routeType}
 		buf.Callback(&msg)
-		buf.sentRoutes.Discard(dst)
+		buf.sentRoutes.Discard(id)
 		return nil
 	})
 	buf.pendingRouteDeletes.Clear()

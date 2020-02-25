@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2018 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2019 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,6 +16,8 @@ package infrastructure
 
 import (
 	"fmt"
+	"os"
+	"path"
 
 	log "github.com/sirupsen/logrus"
 
@@ -42,25 +44,51 @@ func (f *Felix) GetFelixPIDs() []int {
 	return f.GetPIDs("calico-felix")
 }
 
-func RunFelix(infra DatastoreInfra, options TopologyOptions) *Felix {
+func RunFelix(infra DatastoreInfra, id int, options TopologyOptions) *Felix {
 	log.Info("Starting felix")
 	ipv6Enabled := fmt.Sprint(options.EnableIPv6)
 
 	args := infra.GetDockerArgs()
-	args = append(args,
-		"--privileged",
-		"-e", "FELIX_LOGSEVERITYSCREEN="+options.FelixLogSeverity,
-		"-e", "FELIX_PROMETHEUSMETRICSENABLED=true",
-		"-e", "FELIX_USAGEREPORTINGENABLED=false",
-		"-e", "FELIX_IPV6SUPPORT="+ipv6Enabled,
-		"-v", "/lib/modules:/lib/modules",
-	)
+	args = append(args, "--privileged")
+
+	// Add in the environment variables.
+	envVars := map[string]string{
+		"FELIX_LOGSEVERITYSCREEN":        options.FelixLogSeverity,
+		"FELIX_PROMETHEUSMETRICSENABLED": "true",
+		"FELIX_BPFLOGLEVEL":              "debug",
+		"FELIX_USAGEREPORTINGENABLED":    "false",
+		"FELIX_IPV6SUPPORT":              ipv6Enabled,
+	}
+
+	containerName := containers.UniqueName(fmt.Sprintf("felix-%d", id))
+	if os.Getenv("FELIX_FV_ENABLE_BPF") == "true" {
+		envVars["FELIX_BPFENABLED"] = "true"
+
+		// Disable map repinning by default since BPF map names are global and we don't want our simulated instances to
+		// share maps.
+		envVars["FELIX_DebugBPFMapRepinEnabled"] = "false"
+
+		// FIXME: isolate individual Felix instances in their own cgroups.  Unfortunately, this doesn't work on systems that are using cgroupv1
+		// see https://elixir.bootlin.com/linux/v5.3.11/source/include/linux/cgroup-defs.h#L788 for explanation.
+		// envVars["FELIX_DEBUGBPFCGROUPV2"] = containerName
+	}
 
 	for k, v := range options.ExtraEnvVars {
+		envVars[k] = v
+	}
+
+	for k, v := range envVars {
 		args = append(args, "-e", fmt.Sprintf("%s=%s", k, v))
 	}
 
+	// Add in the volumes.
+	volumes := map[string]string{
+		"/lib/modules": "/lib/modules",
+	}
 	for k, v := range options.ExtraVolumes {
+		volumes[k] = v
+	}
+	for k, v := range volumes {
 		args = append(args, "-v", fmt.Sprintf("%s:%s", k, v))
 	}
 
@@ -68,7 +96,7 @@ func RunFelix(infra DatastoreInfra, options TopologyOptions) *Felix {
 		utils.Config.FelixImage,
 	)
 
-	c := containers.Run("felix",
+	c := containers.RunWithFixedName(containerName,
 		containers.RunOpts{AutoRemove: true},
 		args...,
 	)
@@ -99,4 +127,10 @@ func RunFelix(infra DatastoreInfra, options TopologyOptions) *Felix {
 	return &Felix{
 		Container: c,
 	}
+}
+
+func (f *Felix) Stop() {
+	// FIXME need to detach programs.
+	_ = f.ExecMayFail("rmdir", path.Join("/run/calico/cgroup/", f.Name))
+	f.Container.Stop()
 }

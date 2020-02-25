@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -22,6 +22,32 @@ import (
 )
 
 func (r *DefaultRuleRenderer) MakeNatOutgoingRule(protocol string, action iptables.Action, ipVersion uint8) iptables.Rule {
+	if r.Config.BPFEnabled {
+		return r.makeNATOutgoingRuleBPF(ipVersion, protocol, action)
+	} else {
+		return r.makeNATOutgoingRuleIPTables(ipVersion, protocol, action)
+	}
+}
+
+func (r *DefaultRuleRenderer) makeNATOutgoingRuleBPF(version uint8, protocol string, action iptables.Action) iptables.Rule {
+	match := iptables.Match().MarkMatchesWithMask(0xca180000, 0xfff80000)
+
+	if protocol != "" {
+		match = match.Protocol(protocol)
+	}
+
+	if r.Config.IptablesNATOutgoingInterfaceFilter != "" {
+		match = match.OutInterface(r.Config.IptablesNATOutgoingInterfaceFilter)
+	}
+
+	rule := iptables.Rule{
+		Action: action,
+		Match:  match,
+	}
+	return rule
+}
+
+func (r *DefaultRuleRenderer) makeNATOutgoingRuleIPTables(ipVersion uint8, protocol string, action iptables.Action) iptables.Rule {
 	ipConf := r.ipSetConfig(ipVersion)
 	allIPsSetName := ipConf.NameForMainIPSet(IPSetIDNATOutgoingAllPools)
 	masqIPsSetName := ipConf.NameForMainIPSet(IPSetIDNATOutgoingMasqPools)

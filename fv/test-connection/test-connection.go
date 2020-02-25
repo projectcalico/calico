@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,8 +15,7 @@
 package main
 
 import (
-	"bufio"
-	"errors"
+	"encoding/json"
 	"fmt"
 	"net"
 	"os"
@@ -25,13 +24,14 @@ import (
 	"strings"
 	"time"
 
-	"github.com/containernetworking/cni/pkg/ns"
+	"github.com/containernetworking/plugins/pkg/ns"
 	"github.com/docopt/docopt-go"
 	"github.com/ishidawataru/sctp"
 	reuse "github.com/libp2p/go-reuseport"
-	uuid "github.com/satori/go.uuid"
 	log "github.com/sirupsen/logrus"
 
+	"github.com/projectcalico/felix/fv/cgroup"
+	"github.com/projectcalico/felix/fv/connectivity"
 	"github.com/projectcalico/felix/fv/utils"
 )
 
@@ -43,7 +43,7 @@ Usage:
 Options:
   --source-ip=<source_ip>  Source IP to use for the connection [default: 0.0.0.0].
   --source-port=<source_port>  Source port to use for the connection [default: 0].
-  --protocol=<protocol>   Protocol to test [default: tcp].
+  --protocol=<protocol>   Protocol to test tcp (default), udp (connected) udp-noconn (unconnected).
   --loop-with-file=<file>  Whether to send messages repeatedly, file is used for synchronization
 
 If connection is successful, test-connection exits successfully.
@@ -70,7 +70,10 @@ const defaultIPv6SourceIP = "::"
 func main() {
 	log.SetLevel(log.DebugLevel)
 
-	arguments, err := docopt.Parse(usage, nil, true, "v0.1", false)
+	// If we've been told to, move into this felix's cgroup.
+	cgroup.MaybeMoveToFelixCgroupv2()
+
+	arguments, err := docopt.ParseArgs(usage, nil, "v0.1")
 	if err != nil {
 		println(usage)
 		log.WithError(err).Fatal("Failed to parse usage")
@@ -103,7 +106,7 @@ func main() {
 		// global timeout instead.
 		go func() {
 			time.Sleep(2 * time.Second)
-			panic("Timed out")
+			log.Fatal("Timed out")
 		}()
 	}
 
@@ -169,9 +172,6 @@ func tryConnect(remoteIpAddr, remotePort, sourceIpAddr, sourcePort, protocol, lo
 		return err
 	}
 
-	uid := uuid.NewV4().String()
-	testMessage := "hello," + uid
-
 	var localAddr string
 	var remoteAddr string
 	if strings.Contains(remoteIpAddr, ":") {
@@ -183,7 +183,9 @@ func tryConnect(remoteIpAddr, remotePort, sourceIpAddr, sourcePort, protocol, lo
 	}
 	ls := newLoopState(loopFile)
 	log.Infof("Connecting from %v to %v over %s", localAddr, remoteAddr, protocol)
-	if protocol == "udp" {
+
+	switch protocol {
+	case "udp":
 		// Since we specify the source port rather than use an ephemeral port, if
 		// the SO_REUSEADDR and SO_REUSEPORT options are not set, when we make
 		// another call to this program, the original port is in post-close wait
@@ -196,23 +198,152 @@ func tryConnect(remoteIpAddr, remotePort, sourceIpAddr, sourcePort, protocol, lo
 		}
 		defer conn.Close()
 
+		decoder := json.NewDecoder(conn)
+
 		for {
-			fmt.Fprintf(conn, testMessage+"\n")
-			log.WithField("message", testMessage).Info("Sent message over udp")
-			reply, err := bufio.NewReader(conn).ReadString('\n')
+			req := connectivity.NewRequest()
+			data, err := json.Marshal(req)
 			if err != nil {
-				panic(err)
+				log.WithError(err).Fatal("Failed to marshal data")
 			}
-			reply = strings.TrimSpace(reply)
-			log.WithField("reply", reply).Info("Got reply")
-			if reply != testMessage {
-				panic(errors.New("Unexpected reply: " + reply))
+			_, err = conn.Write(data)
+			if err != nil {
+				log.WithError(err).Fatal("Failed to send data")
 			}
+			log.WithField("message", req).Info("Sent message over UDP")
+			var resp connectivity.Response
+			err = decoder.Decode(&resp)
+			if err != nil {
+				log.WithError(err).Fatal("Failed to read response")
+			}
+			log.WithField("reply", resp).Info("Got reply")
+			if !resp.Request.Equal(req) {
+				log.WithField("reply", resp).Fatal("Unexpected response")
+			}
+			j, err := json.Marshal(resp)
+			if err != nil {
+				log.WithError(err).Fatal("Failed to re-marshal response")
+			}
+			fmt.Println("RESPONSE=", string(j))
 			if !ls.Next() {
 				break
 			}
 		}
-	} else if protocol == "sctp" {
+	case "udp-recvmsg":
+		// Since we specify the source port rather than use an ephemeral port, if
+		// the SO_REUSEADDR and SO_REUSEPORT options are not set, when we make
+		// another call to this program, the original port is in post-close wait
+		// state and bind fails.  The reuse library implements a Dial() that sets
+		// these options.
+		connB, err := reuse.Dial("udp", localAddr, remoteAddr)
+		conn := connB.(*net.UDPConn)
+		log.Infof(`UDP "connection" established`)
+		if err != nil {
+			panic(err)
+		}
+		defer conn.Close()
+
+		remoteAddrResolved, err := net.ResolveUDPAddr("udp", remoteAddr)
+		if err != nil {
+			log.WithError(err).Fatal("Failed to resolve UDP")
+		}
+
+		for {
+			req := connectivity.NewRequest()
+			data, err := json.Marshal(req)
+			if err != nil {
+				log.WithError(err).Fatal("Failed to marshal data")
+			}
+			_, err = conn.Write(data)
+			if err != nil {
+				log.WithError(err).Fatal("Failed to send data")
+			}
+			log.WithField("message", req).Info("Sent message over UDP")
+			bufIn := make([]byte, 8<<10)
+			n, from, err := conn.ReadFrom(bufIn)
+			if err != nil {
+				log.WithError(err).Fatal("Failed to read from")
+			}
+			log.Infof("Received %d bytes from %s", n, from)
+
+			if from.String() != remoteAddrResolved.String() {
+				log.Fatalf("From address %+v does not match remoteAddr %+v", from, remoteAddrResolved)
+			}
+
+			var resp connectivity.Response
+			err = json.Unmarshal(bufIn[:n], &resp)
+			if err != nil {
+				log.WithError(err).Fatal("Failed to read response")
+			}
+			log.WithField("reply", resp).Info("Got reply")
+			if !resp.Request.Equal(req) {
+				log.WithField("reply", resp).Fatal("Unexpected response")
+			}
+			j, err := json.Marshal(resp)
+			if err != nil {
+				log.WithError(err).Fatal("Failed to re-marshal response")
+			}
+			fmt.Println("RESPONSE=", string(j))
+			if !ls.Next() {
+				break
+			}
+		}
+	case "udp-noconn":
+		conn, err := net.ListenPacket("udp", localAddr)
+		if err != nil {
+			log.WithError(err).Fatal("Failed to listen UDP")
+		}
+		remoteAddrResolved, err := net.ResolveUDPAddr("udp", remoteAddr)
+		if err != nil {
+			log.WithError(err).Fatal("Failed to resolve UDP")
+		}
+		log.WithFields(log.Fields{
+			"addr":               conn.LocalAddr(),
+			"remoteAddrResolved": remoteAddrResolved,
+		}).Infof("Resolved udp addr")
+		if err != nil {
+			panic(err)
+		}
+		defer conn.Close()
+
+		for {
+			req := connectivity.NewRequest()
+			data, err := json.Marshal(req)
+			if err != nil {
+				log.WithError(err).Fatal("Failed to marshal data")
+			}
+			_, err = conn.WriteTo(data, remoteAddrResolved)
+			if err != nil {
+				log.WithError(err).Fatal("Failed to send data")
+			}
+			log.WithField("message", req).Infof("Sent message over unconnected UDP to %v", remoteAddr)
+
+			bufIn := make([]byte, 8<<10)
+			n, from, err := conn.ReadFrom(bufIn)
+			if err != nil {
+				log.WithError(err).Fatal("Failed to read from")
+			}
+			log.Infof("Received %d bytes from %s", n, from)
+
+			if from.String() != remoteAddrResolved.String() {
+				log.Fatalf("From address %+v does not match remoteAddr %+v", from, remoteAddrResolved)
+			}
+
+			var resp connectivity.Response
+			err = json.Unmarshal(bufIn[:n], &resp)
+			if err != nil {
+				log.WithError(err).Fatal("Failed to read response")
+			}
+			log.WithField("reply", resp).Info("Got reply")
+			if !resp.Request.Equal(req) {
+				log.WithField("reply", resp).Fatal("Unexpected response")
+			}
+			fmt.Println("RESPONSE=", string(bufIn[:n]))
+			if !ls.Next() {
+				break
+			}
+		}
+	case "sctp":
 		lip, err := net.ResolveIPAddr("ip", "::")
 		if err != nil {
 			return err
@@ -245,23 +376,37 @@ func tryConnect(remoteIpAddr, remotePort, sourceIpAddr, sourcePort, protocol, lo
 		defer conn.Close()
 		log.Infof("SCTP connection established")
 
+		decoder := json.NewDecoder(conn)
+		encoder := json.NewEncoder(conn)
+
 		for {
-			fmt.Fprintf(conn, testMessage+"\n")
-			log.WithField("message", testMessage).Info("Sent message over sctp")
-			reply, err := bufio.NewReader(conn).ReadString('\n')
+			req := connectivity.NewRequest()
+			err := encoder.Encode(req)
 			if err != nil {
-				return err
+				log.WithError(err).Fatal("Failed to send data")
 			}
-			reply = strings.TrimSpace(reply)
-			log.WithField("reply", reply).Info("Got reply")
-			if reply != testMessage {
-				return errors.New("Unexpected reply: " + reply)
+			log.WithField("message", req).Info("Sent message over SCTP")
+			var resp connectivity.Response
+			err = decoder.Decode(&resp)
+			if err != nil {
+				log.WithError(err).Fatal("Failed to read response")
 			}
+			log.WithField("reply", resp).Info("Got reply")
+			if !resp.Request.Equal(req) {
+				log.WithField("reply", resp).Fatal("Unexpected response")
+			}
+			j, err := json.Marshal(resp)
+			if err != nil {
+				log.WithError(err).Fatal("Failed to re-marshal response")
+			}
+			fmt.Println("RESPONSE=", string(j))
 			if !ls.Next() {
 				break
 			}
 		}
-	} else {
+	default:
+		fallthrough
+	case "tcp":
 		if err != nil {
 			return err
 		}
@@ -277,18 +422,30 @@ func tryConnect(remoteIpAddr, remotePort, sourceIpAddr, sourcePort, protocol, lo
 		defer conn.Close()
 		log.Infof("TCP connection established")
 
+		decoder := json.NewDecoder(conn)
+		encoder := json.NewEncoder(conn)
+
 		for {
-			fmt.Fprintf(conn, testMessage+"\n")
-			log.WithField("message", testMessage).Info("Sent message over tcp")
-			reply, err := bufio.NewReader(conn).ReadString('\n')
+			req := connectivity.NewRequest()
+			err := encoder.Encode(req)
 			if err != nil {
-				return err
+				log.WithError(err).Fatal("Failed to send data")
 			}
-			reply = strings.TrimSpace(reply)
-			log.WithField("reply", reply).Info("Got reply")
-			if reply != testMessage {
-				return errors.New("Unexpected reply: " + reply)
+			log.WithField("message", req).Info("Sent message over TCP")
+			var resp connectivity.Response
+			err = decoder.Decode(&resp)
+			if err != nil {
+				log.WithError(err).Fatal("Failed to read response")
 			}
+			log.WithField("reply", resp).Info("Got reply")
+			if !resp.Request.Equal(req) {
+				log.WithField("reply", resp).Fatal("Unexpected response")
+			}
+			j, err := json.Marshal(resp)
+			if err != nil {
+				log.WithError(err).Fatal("Failed to re-marshal response")
+			}
+			fmt.Println("RESPONSE=", string(j))
 			if !ls.Next() {
 				break
 			}

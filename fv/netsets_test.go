@@ -1,6 +1,4 @@
-// +build fvtests
-
-// Copyright (c) 2017-2018 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// +build fvtests
+
 package fv_test
 
 import (
@@ -23,6 +23,8 @@ import (
 	"strconv"
 	"sync"
 	"time"
+
+	"github.com/projectcalico/felix/fv/connectivity"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -80,7 +82,7 @@ func (c netsetsConfig) workloadFullLengthCIDR(workloadIdx int) string {
 	return addr + "/128"
 }
 
-var _ = Context("Network sets tests with initialized Felix and etcd datastore", func() {
+var _ = Context("_NET_SETS_ Network sets tests with initialized Felix and etcd datastore", func() {
 
 	var (
 		etcd     *containers.Container
@@ -110,7 +112,7 @@ var _ = Context("Network sets tests with initialized Felix and etcd datastore", 
 	describeConnTests := func(c netsetsConfig) {
 		var (
 			w   [4]*workload.Workload
-			cc  *workload.ConnectivityChecker
+			cc  *connectivity.Checker
 			pol *api.GlobalNetworkPolicy
 		)
 
@@ -147,7 +149,7 @@ var _ = Context("Network sets tests with initialized Felix and etcd datastore", 
 				w[ii].Configure(client)
 			}
 
-			cc = &workload.ConnectivityChecker{
+			cc = &connectivity.Checker{
 				Protocol: "tcp",
 			}
 
@@ -618,7 +620,7 @@ var _ = Context("Network sets tests with initialized Felix and etcd datastore", 
 		})
 	}
 
-	Context("IPv4: Network sets tests with initialized Felix and etcd datastore", func() {
+	Context("_BPF-SAFE_ IPv4: Network sets tests with initialized Felix and etcd datastore", func() {
 		netsetsConfigV4 := netsetsConfig{ipVersion: 4, zeroCIDR: "0.0.0.0/0"}
 		describeConnTests(netsetsConfigV4)
 	})
@@ -628,7 +630,7 @@ var _ = Context("Network sets tests with initialized Felix and etcd datastore", 
 		describeConnTests(netsetsConfigV6)
 	})
 
-	Describe("churn tests", func() {
+	Describe("_BPF-SAFE_ churn tests", func() {
 		var (
 			policies    []*api.GlobalNetworkPolicy
 			networkSets []*api.GlobalNetworkSet

@@ -59,7 +59,7 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/options"
 )
 
-var _ = Describe("health tests", func() {
+var _ = Describe("_HEALTH_ _BPF-SAFE_ health tests", func() {
 
 	var k8sInfra *infrastructure.K8sDatastoreInfra
 

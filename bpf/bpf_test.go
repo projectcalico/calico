@@ -1,4 +1,4 @@
-// Copyright (c) 2019 Tigera, Inc. All rights reserved.
+// Copyright (c) 2019-2020 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -20,11 +20,12 @@ package bpf
 import (
 	"bytes"
 	"fmt"
-	"io/ioutil"
 	"net"
 	"os"
 	"os/exec"
 	"testing"
+
+	"github.com/projectcalico/felix/logutils"
 
 	log "github.com/sirupsen/logrus"
 
@@ -60,6 +61,9 @@ func cleanup(calicoDir string) error {
 }
 
 func setup() {
+	logutils.ConfigureEarlyLogging()
+	log.SetLevel(log.DebugLevel)
+
 	_ = cleanup("")
 
 	bpfCalicoSubdir = "calico_test"
@@ -70,13 +74,19 @@ func setup() {
 	_, err := exec.LookPath("bpftool")
 	hasBPFtool := err == nil
 
-	if root && xdp && hasBPFtool {
-		bpfDP, _ = NewBPFLib()
+	forceRealLib := os.Getenv("BPF_FORCE_REAL_LIB")
+
+	if forceRealLib != "" || (root && xdp && hasBPFtool) {
+		log.Info("Running with real BPF lib")
+		bpfDP, _ = NewBPFLib("../bpf-apache/bin/")
 		expectedTag = realTag
 	} else {
-		bpfDP = NewMockBPFLib()
+		log.WithFields(log.Fields{"root": root, "xdp": xdp, "hasbpftool": hasBPFtool}).Info("Running with mock BPF lib")
+		bpfDP = NewMockBPFLib("../bpf-apache/bin/")
 		expectedTag = mockTag
 	}
+	wd, _ := os.Getwd()
+	log.Info("Current directory: ", wd)
 }
 
 func TestMain(m *testing.M) {
@@ -344,18 +354,13 @@ func TestCIDRMapContent(t *testing.T) {
 	}
 }
 
-var objFile = "xdp/generated/xdp.o"
+var objFile = "filter.o"
 
 func TestXDP(t *testing.T) {
 	cmdVethPairArgs := []string{"-c", "ip link add test_A type veth peer name test_B || true"}
 	output, err := exec.Command("/bin/sh", cmdVethPairArgs...).CombinedOutput()
 	if err != nil {
 		t.Fatalf("cannot create veth pair: %v\n%s", err, output)
-	}
-
-	xdpBytes, err := ioutil.ReadFile(objFile)
-	if err != nil {
-		t.Fatalf("cannot read the object file: %v", err)
 	}
 
 	t.Log("Loading an XDP program to a veth iface should succeed")
@@ -406,15 +411,6 @@ func TestXDP(t *testing.T) {
 	}
 	if fileTag != expectedTag || fileTag != tag {
 		t.Fatalf("got wrong tag: tag=%q fileTag=%q expectedTag=%q", tag, fileTag, expectedTag)
-	}
-
-	t.Log("Getting the XDP tag of an ELF file from a byte slice should succeed and return the expected tag")
-	bytesTag, err := bpfDP.GetXDPObjTagWithBytes(xdpBytes)
-	if err != nil {
-		t.Fatalf("cannot get xdp tag from bytes: %v", err)
-	}
-	if bytesTag != expectedTag || bytesTag != tag {
-		t.Fatalf("got wrong tag: tag=%q bytesTag=%q expectedTag=%q", tag, bytesTag, expectedTag)
 	}
 
 	t.Log("Getting the XDP tag of a non-existent XDP object file should fail")
@@ -489,16 +485,6 @@ func TestLoadBadXDP(t *testing.T) {
 	if err == nil {
 		t.Fatalf("loading xdp should have failed")
 	}
-
-	err = bpfDP.LoadXDPWithBytes([]byte{}, "lo", XDPGeneric)
-	if err == nil {
-		t.Fatalf("loading xdp should have failed")
-	}
-
-	err = bpfDP.LoadXDPWithBytes([]byte{}, "COFFEE", XDPGeneric)
-	if err == nil {
-		t.Fatalf("loading xdp should have failed")
-	}
 }
 
 func TestRemoveBadXDP(t *testing.T) {
@@ -564,22 +550,7 @@ func TestLoadXDP(t *testing.T) {
 		t.Fatalf("cannot create map: %v", err)
 	}
 
-	content, err := ioutil.ReadFile(objFile)
-	if err != nil {
-		t.Fatalf("cannot read file %q: %v", objFile, err)
-	}
-	t.Log("Loading an XDP program from a byte slice to a veth iface should succeed")
-	err = bpfDP.LoadXDPWithBytes(content, "test_F", XDPGeneric)
-	if err != nil {
-		t.Fatalf("cannot load xdp: %v", err)
-	}
-
 	err = bpfDP.RemoveXDP("test_E", XDPGeneric)
-	if err != nil {
-		t.Fatalf("cannot remove xdp: %v", err)
-	}
-
-	err = bpfDP.RemoveXDP("test_F", XDPGeneric)
 	if err != nil {
 		t.Fatalf("cannot remove xdp: %v", err)
 	}

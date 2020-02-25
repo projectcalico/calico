@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2019 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -37,11 +37,12 @@ type netlinkStub interface {
 type State string
 
 const (
-	StateUp   = "up"
-	StateDown = "down"
+	StateUnknown = ""
+	StateUp      = "up"
+	StateDown    = "down"
 )
 
-type InterfaceStateCallback func(ifaceName string, ifaceState State)
+type InterfaceStateCallback func(ifaceName string, ifaceState State, ifIndex int)
 type AddrStateCallback func(ifaceName string, addrs set.Set)
 
 type Config struct {
@@ -51,13 +52,13 @@ type Config struct {
 type InterfaceMonitor struct {
 	Config
 
-	netlinkStub  netlinkStub
-	resyncC      <-chan time.Time
-	upIfaces     map[string]int // Map from interface name to index.
-	Callback     InterfaceStateCallback
-	AddrCallback AddrStateCallback
-	ifaceName    map[int]string
-	ifaceAddrs   map[int]set.Set
+	netlinkStub   netlinkStub
+	resyncC       <-chan time.Time
+	upIfaces      map[string]int // Map from interface name to index.
+	StateCallback InterfaceStateCallback
+	AddrCallback  AddrStateCallback
+	ifaceName     map[int]string
+	ifaceAddrs    map[int]set.Set
 }
 
 func New(config Config) *InterfaceMonitor {
@@ -265,16 +266,16 @@ func (m *InterfaceMonitor) storeAndNotifyLinkInner(ifaceExists bool, ifaceName s
 	// etc.
 	rawFlags := attrs.RawFlags
 	ifaceIsUp := ifaceExists && rawFlags&syscall.IFF_RUNNING != 0
-	_, ifaceWasUp := m.upIfaces[ifaceName]
+	oldIfIndex, ifaceWasUp := m.upIfaces[ifaceName]
 	logCxt := log.WithField("ifaceName", ifaceName)
 	if ifaceIsUp && !ifaceWasUp {
 		logCxt.Debug("Interface now up")
 		m.upIfaces[ifaceName] = ifIndex
-		m.Callback(ifaceName, StateUp)
+		m.StateCallback(ifaceName, StateUp, ifIndex)
 	} else if ifaceWasUp && !ifaceIsUp {
 		logCxt.Debug("Interface now down")
 		delete(m.upIfaces, ifaceName)
-		m.Callback(ifaceName, StateDown)
+		m.StateCallback(ifaceName, StateDown, oldIfIndex)
 	} else {
 		logCxt.WithField("ifaceIsUp", ifaceIsUp).Debug("Nothing to notify")
 	}
@@ -328,7 +329,7 @@ func (m *InterfaceMonitor) resync() error {
 			continue
 		}
 		log.WithField("ifaceName", name).Info("Spotted interface removal on resync.")
-		m.Callback(name, StateDown)
+		m.StateCallback(name, StateDown, ifIndex)
 		m.AddrCallback(name, nil)
 		delete(m.upIfaces, name)
 		delete(m.ifaceAddrs, ifIndex)

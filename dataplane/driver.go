@@ -1,6 +1,4 @@
-// +build !windows
-
-// Copyright (c) 2017-2019 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,12 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// +build !windows
+
 package dataplane
 
 import (
 	"math/bits"
 	"net"
 	"os/exec"
+
+	"github.com/projectcalico/felix/bpf/conntrack"
+
+	"k8s.io/client-go/kubernetes"
 
 	log "github.com/sirupsen/logrus"
 
@@ -38,7 +42,8 @@ import (
 
 func StartDataplaneDriver(configParams *config.Config,
 	healthAggregator *health.HealthAggregator,
-	configChangedRestartCallback func()) (DataplaneDriver, *exec.Cmd) {
+	configChangedRestartCallback func(),
+	k8sClientSet *kubernetes.Clientset) (DataplaneDriver, *exec.Cmd) {
 	if configParams.UseInternalDataplaneDriver {
 		log.Info("Using internal (linux) dataplane driver.")
 		// If kube ipvs interface is present, enable ipvs support.
@@ -140,6 +145,7 @@ func StartDataplaneDriver(configParams *config.Config,
 				NATPortRange:                       configParams.NATPortRange,
 				IptablesNATOutgoingInterfaceFilter: configParams.IptablesNATOutgoingInterfaceFilter,
 				NATOutgoingAddress:                 configParams.NATOutgoingAddress,
+				BPFEnabled:                         configParams.BPFEnabled,
 			},
 			IPIPMTU:                        configParams.IpInIpMtu,
 			VXLANMTU:                       configParams.VXLANMTU,
@@ -174,13 +180,29 @@ func StartDataplaneDriver(configParams *config.Config,
 				}
 				logutils.DumpHeapMemoryProfile(configParams.DebugMemoryProfilePath)
 			},
-			HealthAggregator:                healthAggregator,
-			DebugSimulateDataplaneHangAfter: configParams.DebugSimulateDataplaneHangAfter,
-			ExternalNodesCidrs:              configParams.ExternalNodesCIDRList,
-			SidecarAccelerationEnabled:      configParams.SidecarAccelerationEnabled,
-			XDPEnabled:                      configParams.XDPEnabled,
-			XDPAllowGeneric:                 configParams.GenericXDPEnabled,
+			HealthAggregator:                   healthAggregator,
+			DebugSimulateDataplaneHangAfter:    configParams.DebugSimulateDataplaneHangAfter,
+			ExternalNodesCidrs:                 configParams.ExternalNodesCIDRList,
+			SidecarAccelerationEnabled:         configParams.SidecarAccelerationEnabled,
+			BPFEnabled:                         configParams.BPFEnabled,
+			BPFConnTimeLBEnabled:               configParams.BPFConnectTimeLoadBalancingEnabled,
+			BPFKubeProxyIptablesCleanupEnabled: configParams.BPFKubeProxyIptablesCleanupEnabled,
+			BPFLogLevel:                        configParams.BPFLogLevel,
+			BPFDataIfacePattern:                configParams.BPFDataIfacePattern,
+			BPFCgroupV2:                        configParams.DebugBPFCgroupV2,
+			BPFMapRepin:                        configParams.DebugBPFMapRepinEnabled,
+			KubeProxyMinSyncPeriod:             configParams.BPFKubeProxyMinSyncPeriod,
+			XDPEnabled:                         configParams.XDPEnabled,
+			XDPAllowGeneric:                    configParams.GenericXDPEnabled,
+			BPFConntrackTimeouts:               conntrack.DefaultTimeouts(), // FIXME make timeouts configurable
+
+			KubeClientSet: k8sClientSet,
 		}
+
+		if configParams.BPFExternalServiceMode == "dsr" {
+			dpConfig.BPFNodePortDSREnabled = true
+		}
+
 		intDP := intdataplane.NewIntDataplaneDriver(dpConfig)
 		intDP.Start()
 

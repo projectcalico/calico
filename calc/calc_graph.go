@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2018 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2019 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -81,7 +81,7 @@ type passthruCallbacks interface {
 
 type routeCallbacks interface {
 	OnRouteUpdate(update *proto.RouteUpdate)
-	OnRouteRemove(dst string)
+	OnRouteRemove(routeType proto.RouteType, dst string)
 }
 
 type vxlanCallbacks interface {
@@ -296,6 +296,23 @@ func NewCalculationGraph(callbacks PipelineCallbacks, conf *config.Config) *Calc
 	//
 	hostIPPassthru := NewDataplanePassthru(callbacks)
 	hostIPPassthru.RegisterWith(allUpdDispatcher)
+
+	if conf.BPFEnabled {
+		// Calculate simple node-ownership routes.
+		//        ...
+		//     Dispatcher (all updates)
+		//         |
+		//         | host IPs, host config, IP pools, IPAM blocks
+		//         |
+		//       L3 resolver
+		//         |
+		//         | routes
+		//         |
+		//      <dataplane>
+		//
+		l3RR := NewL3RouteResolver(hostname, callbacks, conf.UseNodeResourceUpdates())
+		l3RR.RegisterWith(allUpdDispatcher)
+	}
 
 	// Calculate VXLAN routes.
 	//        ...

@@ -22,7 +22,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/containernetworking/cni/pkg/ns"
+	"github.com/containernetworking/plugins/pkg/ns"
+	"github.com/containernetworking/plugins/pkg/testutils"
 	log "github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
 	v1 "k8s.io/api/core/v1"
@@ -118,7 +119,7 @@ func createPod(clientset *kubernetes.Clientset, d deployment, nsName string, spe
 		log.WithField("interfaceName", interfaceName).Info("Prepare interface")
 
 		// Create a namespace.
-		podNamespace, err := ns.NewNS()
+		podNamespace, err := testutils.NewNS()
 		panicIfError(err)
 		log.WithField("podNamespace", podNamespace).Debug("Created namespace")
 

@@ -1,0 +1,111 @@
+version: v1.0
+name: Felix
+agent:
+  machine:
+    type: e1-standard-2
+    os_image: ubuntu1804
+
+auto_cancel:
+  running:
+    when: "branch != 'master'"
+  queued:
+    when: "branch != 'master'"
+
+promotions:
+- name: Cleanup
+  pipeline_file: cleanup.yml
+  auto_promote:
+    when: "result = 'stopped'"
+
+blocks:
+- name: Build
+  dependencies: []
+  task:
+    agent:
+      machine:
+        type: e1-standard-4
+        os_image: ubuntu1804
+    jobs:
+    - name: Build
+      commands:
+      - checkout
+      - cache restore go-pkg-cache
+      - cache restore go-mod-cache
+      - >-
+        make image fv/fv.test bin/test-workload bin/test-connection
+        bin/calico-felix
+      - 'cache store bin-${SEMAPHORE_GIT_SHA} bin'
+      - cache store go-pkg-cache .go-pkg-cache
+      - 'cache store go-mod-cache ${HOME}/go/pkg/mod/cache'
+      - docker save -o /tmp/calico-felix.tar calico/felix:latest-amd64
+      - 'cache store felix-image-${SEMAPHORE_GIT_SHA} /tmp/calico-felix.tar'
+- name: FV Tests
+  dependencies: ["Build"]
+  task:
+    prologue:
+      commands:
+      - checkout
+      - cache restore go-pkg-cache
+      - cache restore go-mod-cache
+      - 'cache restore bin-${SEMAPHORE_GIT_SHA}'
+      - 'cache restore felix-image-${SEMAPHORE_GIT_SHA}'
+      - docker load -i /tmp/calico-felix.tar
+      - rm /tmp/calico-felix.tar
+      - touch bin/*
+    jobs:
+    - name: FV Test matrix
+      commands:
+      - make fv FV_BATCHES_TO_RUN="${SEMAPHORE_JOB_INDEX}" FV_NUM_BATCHES=${SEMAPHORE_JOB_COUNT}
+      parallelism: 5
+- name: BPF UT/FV tests on new kernel
+  dependencies: []
+  task:
+    prologue:
+      commands:
+      - checkout
+      - export GOOGLE_APPLICATION_CREDENTIALS=$HOME/secrets/secret.google-service-account-key.json
+      - export SHORT_WORKFLOW_ID=$(echo ${SEMAPHORE_WORKFLOW_ID} | sha256sum | cut -c -8)
+      - export VM_NAME=sem-${SEMAPHORE_PROJECT_NAME}-${SHORT_WORKFLOW_ID}-${SEMAPHORE_JOB_INDEX:-ut}
+      - echo VM_NAME=${VM_NAME}
+      - ./.semaphore/create-test-vm ${VM_NAME}
+    jobs:
+    - name: FV / UT on remote
+      commands:
+      - if [ ${SEMAPHORE_JOB_INDEX} = "1" ]; then gcloud --quiet compute ssh --zone=europe-west3-c ubuntu@${VM_NAME} -- make --directory=$(basename $(pwd)) ut-bpf; fi
+      - gcloud --quiet compute ssh --zone=europe-west3-c ubuntu@${VM_NAME} -- -o ServerAliveInterval=10 make --directory=$(basename $(pwd)) fv-bpf GINKGO_FOCUS=BPF-SAFE FV_NUM_BATCHES=${SEMAPHORE_JOB_COUNT} FV_BATCHES_TO_RUN="${SEMAPHORE_JOB_INDEX}"
+      parallelism: 5
+    epilogue:
+      always:
+        commands:
+        - gcloud --quiet compute instances delete ${VM_NAME} --zone=europe-west3-c
+    secrets:
+    - name: google-service-account-for-gce
+- name: Static checks
+  dependencies: []
+  task:
+    agent:
+      machine:
+        # Linters use a lot of RAM so use a bigger machine type.
+        type: e1-standard-8
+        os_image: ubuntu1804
+    prologue:
+      commands:
+      - checkout
+      - cache restore go-pkg-cache
+      - cache restore go-mod-cache
+    jobs:
+    - name: Static checks
+      commands:
+      - make static-checks
+- name: Multi-arch builds, UT, k8sfv-tests
+  dependencies: []
+  task:
+    prologue:
+      commands:
+      - checkout
+      - cache restore go-pkg-cache
+      - cache restore go-mod-cache
+    jobs:
+    - name: CI excluding FV
+      commands:
+      - make ci EXCEPT=fv

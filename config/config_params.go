@@ -1,5 +1,5 @@
-// Copyright (c) 2016-2019 Tigera, Inc. All rights reserved.
-
+// Copyright (c) 2020 Tigera, Inc. All rights reserved.
+//
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
@@ -101,6 +101,22 @@ type Config struct {
 	// Configuration parameters.
 	UseInternalDataplaneDriver bool   `config:"bool;true"`
 	DataplaneDriver            string `config:"file(must-exist,executable);calico-iptables-plugin;non-zero,die-on-fail,skip-default-validation"`
+
+	BPFEnabled                         bool           `config:"bool;false"`
+	BPFLogLevel                        string         `config:"oneof(off,info,debug);off;non-zero"`
+	BPFDataIfacePattern                *regexp.Regexp `config:"regexp;^(en.*|eth.*|tunl0$)"`
+	BPFConnectTimeLoadBalancingEnabled bool           `config:"bool;true"`
+	BPFExternalServiceMode             string         `config:"oneof(tunnel,dsr);tunnel;non-zero"`
+	BPFKubeProxyIptablesCleanupEnabled bool           `config:"bool;true"`
+	BPFKubeProxyMinSyncPeriod          time.Duration  `config:"seconds;1"`
+
+	// DebugBPFCgroupV2 controls the cgroup v2 path that we apply the connect-time load balancer to.  Most distros
+	// are configured for cgroup v1, which prevents all but hte root cgroup v2 from working so this is only useful
+	// for development right now.
+	DebugBPFCgroupV2 string `config:"string;;local"`
+	// DebugBPFMapRepinEnabled can be used to prevent Felix from repinning its BPF maps at startup.  This is useful for
+	// testing with multiple Felix instances running on one host.
+	DebugBPFMapRepinEnabled bool `config:"bool;true;local"`
 
 	DatastoreType string `config:"oneof(kubernetes,etcdv3);etcdv3;non-zero,die-on-fail,local"`
 
@@ -448,7 +464,7 @@ func (config *Config) DatastoreConfig() apiconfig.CalicoAPIConfig {
 		cfg.Spec.EtcdCACertFile = config.EtcdCaFile
 	}
 
-	if !config.IpInIpEnabled && !config.VXLANEnabled {
+	if !(config.IpInIpEnabled || config.VXLANEnabled || config.BPFEnabled) {
 		// Polling k8s for node updates is expensive (because we get many superfluous
 		// updates) so disable if we don't need it.
 		log.Info("Encap disabled, disabling node poll (if KDD is in use).")
@@ -560,6 +576,8 @@ func loadParams() {
 				Delimiter:           ",",
 				Msg:                 "list contains invalid Linux interface name or regex pattern",
 			}
+		case "regexp":
+			param = &RegexpPatternParam{}
 		case "iface-param":
 			param = &RegexpParam{Regexp: IfaceParamRegexp,
 				Msg: "invalid Linux interface parameter"}

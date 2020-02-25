@@ -1,6 +1,4 @@
-// +build fvtests
-
-// Copyright (c) 2019 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// +build fvtests
+
 package fv_test
 
 import (
@@ -21,6 +21,8 @@ import (
 	"fmt"
 	"strings"
 	"time"
+
+	"github.com/projectcalico/felix/fv/connectivity"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -46,7 +48,7 @@ var _ = infrastructure.DatastoreDescribe("VXLAN topology before adding host IPs 
 				client  client.Interface
 				w       [3]*workload.Workload
 				hostW   [3]*workload.Workload
-				cc      *workload.ConnectivityChecker
+				cc      *connectivity.Checker
 			)
 
 			BeforeEach(func() {
@@ -95,7 +97,7 @@ var _ = infrastructure.DatastoreDescribe("VXLAN topology before adding host IPs 
 					hostW[ii] = workload.Run(felixes[ii], fmt.Sprintf("host%d", ii), "", felixes[ii].IP, "8055", "tcp")
 				}
 
-				cc = &workload.ConnectivityChecker{}
+				cc = &connectivity.Checker{}
 			})
 
 			AfterEach(func() {

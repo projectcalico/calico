@@ -314,6 +314,7 @@ func NewTable(
 			options.ExtraCleanupRegexPattern)
 	}
 	oldInsertPattern := strings.Join(oldInsertRegexpParts, "|")
+	log.WithField("pattern", oldInsertPattern).Info("Calculated old-insert detection regex.")
 	oldInsertRegexp := regexp.MustCompile(oldInsertPattern)
 
 	// Pre-populate the insert table with empty lists for each kernel chain.  Ensures that we
@@ -762,7 +763,7 @@ func (t *Table) readHashesAndRulesFrom(r io.ReadCloser) (hashes map[string][]str
 			chainHasCalicoRule.Add(chainName)
 		} else if t.oldInsertRegexp.Find(line) != nil {
 			logCxt.WithFields(log.Fields{
-				"rule":      line,
+				"rule":      string(line),
 				"chainName": chainName,
 			}).Info("Found inserted rule from previous Felix version, marking for cleanup.")
 			hash = "OLD INSERT RULE"

@@ -1,5 +1,3 @@
-// +build fvtests
-
 // Copyright (c) 2020 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -14,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// +build fvtests
+
 package fv_test
 
 import (
@@ -22,6 +22,7 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
+	"github.com/projectcalico/felix/fv/connectivity"
 	"github.com/projectcalico/felix/fv/infrastructure"
 	"github.com/projectcalico/felix/fv/workload"
 )
@@ -31,7 +32,7 @@ var _ = Describe("Spoof tests", func() {
 		infra   infrastructure.DatastoreInfra
 		felixes []*infrastructure.Felix
 		w       [3]*workload.Workload
-		cc      *workload.ConnectivityChecker
+		cc      *connectivity.Checker
 	)
 
 	teardownInfra := func() {
@@ -60,7 +61,7 @@ var _ = Describe("Spoof tests", func() {
 
 	spoofTests := func() {
 		It("should drop spoofed traffic", func() {
-			cc = &workload.ConnectivityChecker{}
+			cc = &connectivity.Checker{}
 			// Setup a spoofed workload. Make w[0] spoof w[2] by making it
 			// use w[2]'s IP to test connections.
 			spoofed := &workload.SpoofedWorkload{
@@ -79,7 +80,7 @@ var _ = Describe("Spoof tests", func() {
 		})
 
 		It("should allow workload's traffic if workload spoofs its own IP", func() {
-			cc = &workload.ConnectivityChecker{}
+			cc = &connectivity.Checker{}
 			// Setup a "spoofed" workload. Make w[0] spoof itself.
 			spoofed := &workload.SpoofedWorkload{
 				Workload:        w[0],
@@ -92,7 +93,7 @@ var _ = Describe("Spoof tests", func() {
 		})
 	}
 
-	Context("IPv4", func() {
+	Context("_BPF-SAFE_ IPv4", func() {
 		BeforeEach(func() {
 			var err error
 			infra, err = infrastructure.GetEtcdDatastoreInfra()

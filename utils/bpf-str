@@ -1,0 +1,56 @@
+#!/usr/bin/env python3
+
+import fileinput
+import re
+
+# Script to extract interesting information from BPF verifier logs.
+# For example, the following trace is setting up a character buffer before calling bpf_trace_printk,
+# the tool converts each hex constant into the equivalent characters.
+
+# 153: (18) r1 = 0xa7373696d206574
+# 155: (7b) *(u64 *)(r10 -80) = r1
+# 156: (18) r1 = 0x756f72203a54414e
+# 158: (05) goto pc+91
+# 250: (7b) *(u64 *)(r10 -88) = r1
+# 251: (18) r1 = 0x203a432d494c4143
+# ...
+# 259: (85) call bpf_trace_printk#6
+#
+# becomes:
+#
+# 154: (18) r1 = 0xa7373696d206574 # 'te miss\n'
+# 156: (7b) *(u64 *)(r10 -80) = r1
+# 157: (18) r1 = 0x756f72203a54414e # 'NAT: rou'
+# 159: (7b) *(u64 *)(r10 -88) = r1
+# 160: (18) r1 = 0x203a432d494c4143 # 'CALI-C: '
+# ...
+# 168: (85) call bpf_trace_printk#6
+#
+# So, the printk was "CALI-C: NAT: route miss\n"
+
+for line in fileinput.input():
+    m = re.search(r'(.* = .*)0x([0-9a-fA-F]+)', line)
+    if m:
+        hex_str = m.group(2)
+        x = int(hex_str, 16)
+    else:
+        m = re.search(r'(.* = (?:\(.*\))?)([0-9]+)', line)
+        if m:
+            dec_str = m.group(2)
+            x = int(dec_str)
+        else:
+            print(line.strip())
+            continue
+    prefix = " " * len(m.group(1))
+    s = "%x" % x
+    if (len(s) % 2) == 1:
+        s = "0" + s
+    out = ""
+    while s:
+        hex_pair = s[:2]
+        s = s[2:]
+        char_code = int(hex_pair, 16)
+        char = chr(char_code)
+        out = char + out
+    print(line.strip(), "#", repr(out))
+

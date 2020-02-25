@@ -26,16 +26,12 @@ import (
 	"strconv"
 	"strings"
 
-	v1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/util/validation"
-	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/rest"
-
 	"time"
+
+	"k8s.io/apimachinery/pkg/util/validation"
 
 	"github.com/kardianos/osext"
 	log "github.com/sirupsen/logrus"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	cnet "github.com/projectcalico/libcalico-go/lib/net"
 	"github.com/projectcalico/libcalico-go/lib/numorstring"
@@ -174,6 +170,22 @@ func (p *RegexpParam) Parse(raw string) (result interface{}, err error) {
 		result = raw
 	}
 	return
+}
+
+// RegexpPatternParam differs from RegexpParam (above) in that it validates
+// string values that are (themselves) regular expressions.
+type RegexpPatternParam struct {
+	Metadata
+}
+
+// Parse validates whether the given raw string contains a valid regexp pattern.
+func (p *RegexpPatternParam) Parse(raw string) (interface{}, error) {
+	var result *regexp.Regexp
+	result, compileErr := regexp.Compile(raw)
+	if compileErr != nil {
+		return nil, p.parseFailed(raw, "invalid regexp")
+	}
+	return result, nil
 }
 
 // RegexpPatternListParam differs from RegexpParam (above) in that it validates
@@ -469,21 +481,6 @@ func (c *CIDRListParam) Parse(raw string) (result interface{}, err error) {
 		resultSlice = append(resultSlice, net.String())
 	}
 	return resultSlice, nil
-}
-
-func GetKubernetesService(namespace, svcName string) (*v1.Service, error) {
-	k8sconf, err := rest.InClusterConfig()
-	if err != nil {
-		log.WithError(err).Error("Unable to create Kubernetes config.")
-		return nil, err
-	}
-	clientset, err := kubernetes.NewForConfig(k8sconf)
-	if err != nil {
-		log.WithError(err).Error("Unable to create Kubernetes client set.")
-		return nil, err
-	}
-	svcClient := clientset.CoreV1().Services(namespace)
-	return svcClient.Get(svcName, metav1.GetOptions{})
 }
 
 type RegionParam struct {

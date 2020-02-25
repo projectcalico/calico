@@ -1,4 +1,4 @@
-// Copyright (c) 2018-2019 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -22,6 +22,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"strings"
 	"sync"
 	"time"
 
@@ -88,6 +89,7 @@ var (
 )
 
 func TearDownK8sInfra(kds *K8sDatastoreInfra) {
+	log.Info("TearDownK8sInfra starting")
 	if kds.etcdContainer != nil {
 		kds.etcdContainer.Stop()
 	}
@@ -97,6 +99,7 @@ func TearDownK8sInfra(kds *K8sDatastoreInfra) {
 	if kds.k8sControllerManager != nil {
 		kds.k8sControllerManager.Stop()
 	}
+	log.Info("TearDownK8sInfra done")
 }
 
 func createK8sDatastoreInfra() DatastoreInfra {
@@ -153,6 +156,9 @@ func runK8sControllerManager(apiserverIp string) *containers.Container {
 }
 
 func setupK8sDatastoreInfra() (*K8sDatastoreInfra, error) {
+	log.Info("Starting Kubernetes infrastructure")
+
+	log.Info("Starting etcd")
 	kds := &K8sDatastoreInfra{}
 
 	// Start etcd, which will back the k8s API server.
@@ -160,6 +166,7 @@ func setupK8sDatastoreInfra() (*K8sDatastoreInfra, error) {
 	if kds.etcdContainer == nil {
 		return nil, errors.New("failed to create etcd container")
 	}
+	log.Info("Started etcd")
 
 	// Start the k8s API server.
 	//
@@ -171,6 +178,7 @@ func setupK8sDatastoreInfra() (*K8sDatastoreInfra, error) {
 	// authorization mode.  So we specify the "RBAC" authorization mode instead, and create a
 	// ClusterRoleBinding that gives the "system:anonymous" user unlimited power (aka the
 	// "cluster-admin" role).
+	log.Info("Starting API server")
 	kds.k8sApiContainer = runK8sApiserver(kds.etcdContainer.IP)
 
 	if kds.k8sApiContainer == nil {
@@ -236,6 +244,7 @@ func setupK8sDatastoreInfra() (*K8sDatastoreInfra, error) {
 	}
 	log.Info("List namespaces successfully.")
 
+	log.Info("Starting controller manager.")
 	kds.k8sControllerManager = runK8sControllerManager(kds.k8sApiContainer.IP)
 	if kds.k8sApiContainer == nil {
 		TearDownK8sInfra(kds)
@@ -398,10 +407,12 @@ func (kds *K8sDatastoreInfra) CleanUp() {
 	cleanupAllNetworkPolicies(kds.calicoClient)
 	cleanupAllHostEndpoints(kds.calicoClient)
 	cleanupAllFelixConfigurations(kds.calicoClient)
+	cleanupAllServices(kds.K8sClient)
 	kds.needsCleanup = false
 }
 
 func cleanupIPAM(calicoClient client.Interface) {
+	log.Info("Cleaning up IPAM")
 	c := calicoClient.(interface{ Backend() bapi.Client }).Backend()
 	for _, li := range []model.ListInterface{
 		model.BlockListOptions{},
@@ -449,6 +460,7 @@ func (kds *K8sDatastoreInfra) GetCalicoClient() client.Interface {
 
 func (kds *K8sDatastoreInfra) SetExpectedIPIPTunnelAddr(felix *Felix, idx int, needBGP bool) {
 	felix.ExpectedIPIPTunnelAddr = fmt.Sprintf("10.65.%d.1", idx)
+	felix.ExtraSourceIPs = append(felix.ExtraSourceIPs, felix.ExpectedIPIPTunnelAddr)
 }
 
 func (kds *K8sDatastoreInfra) SetExpectedVXLANTunnelAddr(felix *Felix, idx int, needBGP bool) {
@@ -500,7 +512,25 @@ func (kds *K8sDatastoreInfra) ensureNamespace(name string) {
 }
 
 func (kds *K8sDatastoreInfra) AddWorkload(wep *api.WorkloadEndpoint) (*api.WorkloadEndpoint, error) {
-	pod_in := &v1.Pod{
+	podIP := wep.Spec.IPNetworks[0]
+	if strings.Contains(podIP, "/") {
+		// Our WEP will have a /32 rather than an IP, strip it off.
+		podIP = strings.Split(podIP, "/")[0]
+	}
+	desiredStatus := v1.PodStatus{
+		Phase: v1.PodRunning,
+		Conditions: []v1.PodCondition{
+			{
+				Type:   v1.PodScheduled,
+				Status: v1.ConditionTrue,
+			},
+			{
+				Type:   v1.PodReady,
+				Status: v1.ConditionTrue,
+			}},
+		PodIP: podIP,
+	}
+	podIn := &v1.Pod{
 		ObjectMeta: metav1.ObjectMeta{Name: wep.Spec.Workload, Namespace: wep.Namespace},
 		Spec: v1.PodSpec{Containers: []v1.Container{{
 			Name:  wep.Spec.Endpoint,
@@ -508,32 +538,25 @@ func (kds *K8sDatastoreInfra) AddWorkload(wep *api.WorkloadEndpoint) (*api.Workl
 		}},
 			NodeName: wep.Spec.Node,
 		},
-		Status: v1.PodStatus{
-			Phase: v1.PodRunning,
-			Conditions: []v1.PodCondition{{
-				Type:   v1.PodScheduled,
-				Status: v1.ConditionTrue,
-			}},
-			PodIP: wep.Spec.IPNetworks[0],
-		},
+		Status: desiredStatus,
 	}
 	if wep.Labels != nil {
-		pod_in.ObjectMeta.Labels = wep.Labels
+		podIn.ObjectMeta.Labels = wep.Labels
 	}
-	log.WithField("pod_in", pod_in).Debug("Pod defined")
+	log.WithField("podIn", podIn).Debug("Creating Pod for workload")
 	kds.ensureNamespace(wep.Namespace)
-	pod_out, err := kds.K8sClient.CoreV1().Pods(wep.Namespace).Create(pod_in)
+	podOut, err := kds.K8sClient.CoreV1().Pods(wep.Namespace).Create(podIn)
 	if err != nil {
 		panic(err)
 	}
-	log.WithField("pod_out", pod_out).Debug("Created pod")
-	pod_in = pod_out
-	pod_in.Status.PodIP = wep.Spec.IPNetworks[0]
-	pod_out, err = kds.K8sClient.CoreV1().Pods(wep.Namespace).UpdateStatus(pod_in)
+	log.WithField("podOut", podOut).Debug("Created pod")
+	podIn = podOut
+	podIn.Status = desiredStatus
+	podOut, err = kds.K8sClient.CoreV1().Pods(wep.Namespace).UpdateStatus(podIn)
 	if err != nil {
 		panic(err)
 	}
-	log.WithField("pod_out", pod_out).Debug("Updated pod")
+	log.WithField("podOut", podOut).Debug("Updated pod status")
 
 	wepid := names.WorkloadEndpointIdentifiers{
 		Node:         wep.Spec.Node,
@@ -676,6 +699,7 @@ func cleanupAllNodes(clientset *kubernetes.Clientset) {
 	log.Info("Cleaned up all nodes")
 }
 func cleanupAllPods(clientset *kubernetes.Clientset) {
+	log.Info("Cleaning up Pods")
 	nsList, err := clientset.CoreV1().Namespaces().List(metav1.ListOptions{})
 	if err != nil {
 		panic(err)
@@ -712,6 +736,7 @@ func cleanupAllPods(clientset *kubernetes.Clientset) {
 }
 
 func cleanupAllPools(client client.Interface) {
+	log.Info("Cleaning up IPAM pools")
 	ctx := context.Background()
 	pools, err := client.IPPools().List(ctx, options.ListOptions{})
 	if err != nil {
@@ -724,6 +749,7 @@ func cleanupAllPools(client client.Interface) {
 			panic(err)
 		}
 	}
+	log.Info("Cleaned up IPAM")
 }
 
 func cleanupAllGlobalNetworkPolicies(client client.Interface) {
@@ -742,6 +768,7 @@ func cleanupAllGlobalNetworkPolicies(client client.Interface) {
 }
 
 func cleanupAllNetworkPolicies(client client.Interface) {
+	log.Info("Cleaning up network policies")
 	ctx := context.Background()
 	nps, err := client.NetworkPolicies().List(ctx, options.ListOptions{})
 	if err != nil {
@@ -754,9 +781,11 @@ func cleanupAllNetworkPolicies(client client.Interface) {
 			panic(err)
 		}
 	}
+	log.Info("Cleaned up network policies")
 }
 
 func cleanupAllHostEndpoints(client client.Interface) {
+	log.Info("Cleaning up host endpoints")
 	ctx := context.Background()
 	heps, err := client.HostEndpoints().List(ctx, options.ListOptions{})
 	if err != nil {
@@ -769,9 +798,11 @@ func cleanupAllHostEndpoints(client client.Interface) {
 			panic(err)
 		}
 	}
+	log.Info("Cleaned up host endpoints")
 }
 
 func cleanupAllFelixConfigurations(client client.Interface) {
+	log.Info("Cleaning up felix configurations")
 	ctx := context.Background()
 	fcs, err := client.FelixConfigurations().List(ctx, options.ListOptions{})
 	if err != nil {
@@ -784,4 +815,39 @@ func cleanupAllFelixConfigurations(client client.Interface) {
 			panic(err)
 		}
 	}
+	log.Info("Cleaned up felix configurations")
+}
+
+func cleanupAllServices(clientset *kubernetes.Clientset) {
+	log.Info("Cleaning up services")
+	coreV1 := clientset.CoreV1()
+	namespaceList, err := coreV1.Namespaces().List(metav1.ListOptions{})
+	if err != nil {
+		panic(err)
+	}
+	for _, ns := range namespaceList.Items {
+		serviceInterface := coreV1.Services(ns.Name)
+		services, err := serviceInterface.List(metav1.ListOptions{})
+		if err != nil {
+			panic(err)
+		}
+		for _, s := range services.Items {
+			err := serviceInterface.Delete(s.Name, &metav1.DeleteOptions{})
+			if err != nil {
+				panic(err)
+			}
+		}
+		endpointsInterface := coreV1.Endpoints(ns.Name)
+		endpoints, err := endpointsInterface.List(metav1.ListOptions{})
+		if err != nil {
+			panic(err)
+		}
+		for _, ep := range endpoints.Items {
+			err := endpointsInterface.Delete(ep.Name, &metav1.DeleteOptions{})
+			if err != nil {
+				panic(err)
+			}
+		}
+	}
+	log.Info("Cleaned up services")
 }

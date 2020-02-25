@@ -1,6 +1,4 @@
-// +build fvtests
-
-// Copyright (c) 2019-2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2020 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// +build fvtests
+
 package fv_test
 
 import (
@@ -22,6 +22,7 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
+	"github.com/projectcalico/felix/fv/connectivity"
 	"github.com/projectcalico/felix/fv/containers"
 	"github.com/projectcalico/felix/fv/infrastructure"
 	"github.com/projectcalico/felix/fv/utils"
@@ -157,7 +158,7 @@ var _ = Describe("Rule Metadata tests", func() {
 		// This test case verifies that "interesting" annotations like newlines and unicode don't break
 		// Felix's iptables handling code, which parses the output of iptables-save
 		It("should allow connectivity between workloads", func() {
-			cc := &workload.ConnectivityChecker{
+			cc := &connectivity.Checker{
 				ReverseDirection: false,
 				Protocol:         "tcp",
 			}
