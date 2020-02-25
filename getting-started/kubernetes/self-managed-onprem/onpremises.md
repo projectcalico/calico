@@ -27,7 +27,7 @@ This how-to guide uses the following {{site.prodname}} features:
 ### Before you begin...
 
 - Ensure that your Kubernetes cluster meets [requirements]({{site.baseurl}}/getting-started/kubernetes/requirements).
-  If you do not have a cluster, see {% include open-new-window.html text='Using kubeadmin to create a cluster' url='http://kubernetes.io/docs/getting-started-guides/kubeadm/' %}.
+  If you do not have a cluster, see {% include open-new-window.html text='Installing kubeadm' url='https://kubernetes.io/docs/setup/production-environment/tools/kubeadm/install-kubeadm/' %}.
 - If you are using CoreOS, [make this required change to manifests]({{site.baseurl}}/reference/faq#are-the-calico-manifests-compatible-with-coreos).
 
 ### How to
@@ -43,7 +43,7 @@ This how-to guide uses the following {{site.prodname}} features:
 
 Based on your datastore and number of nodes, select a link below to install {{site.prodname}}.
 
->**Note**: The option, **Kubernetes API datastore, more than 50 nodes** provides scaling using {{site.prodname}} {% include open-new-window.html text='Typha daemon' url='https://github.com/projectcalico/typha' %}. Typha is not included for etcd because etcd already handles many clients so using Typha is redundant and not recommended.
+>**Note**: The option, **Kubernetes API datastore, more than 50 nodes** provides scaling using [Typha daemon]({{site.baseurl}}/reference/typha/). Typha is not included for etcd because etcd already handles many clients so using Typha is redundant and not recommended.
 {: .alert .alert-info}
 
 - [Install Calico with Kubernetes API datastore, 50 nodes or less](#install-calico-with-kubernetes-api-datastore-50-nodes-or-less)
