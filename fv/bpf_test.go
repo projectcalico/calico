@@ -383,7 +383,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 			if testOpts.protocol != "udp" { // No need to run these tests per-protocol.
 				Describe("with map repinning enabled", func() {
 					BeforeEach(func() {
-						options.ExtraEnvVars["FELIX_BPFMapRepinEnabled"] = "true"
+						options.ExtraEnvVars["FELIX_DebugBPFMapRepinEnabled"] = "true"
 					})
 
 					It("should repin maps", func() {

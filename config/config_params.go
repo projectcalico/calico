@@ -102,16 +102,21 @@ type Config struct {
 	UseInternalDataplaneDriver bool   `config:"bool;true"`
 	DataplaneDriver            string `config:"file(must-exist,executable);calico-iptables-plugin;non-zero,die-on-fail,skip-default-validation"`
 
-	// FIXME: add these to libcalico-go and remove "local"
-	BPFEnabled                         bool           `config:"bool;false;local"`
-	BPFLogLevel                        string         `config:"oneof(off,info,debug);off;non-zero,local"`
-	BPFDataIfacePattern                *regexp.Regexp `config:"regexp;^(en.*|eth.*|tunl0$);local"`
-	BPFCgroupV2                        string         `config:"string;;local"`
-	BPFConnectTimeLoadBalancingEnabled bool           `config:"bool;true;local"`
-	BPFMapRepinEnabled                 bool           `config:"bool;true;local"`
-	BPFExternalServiceMode             string         `config:"oneof(tunnel,dsr);tunnel;non-zero,local"`
-	BPFKubeProxyIptablesCleanupEnabled bool           `config:"bool;true;local"`
-	BPFKubeProxyMinSyncPeriod          time.Duration  `config:"seconds;1;local"`
+	BPFEnabled                         bool           `config:"bool;false"`
+	BPFLogLevel                        string         `config:"oneof(off,info,debug);off;non-zero"`
+	BPFDataIfacePattern                *regexp.Regexp `config:"regexp;^(en.*|eth.*|tunl0$)"`
+	BPFConnectTimeLoadBalancingEnabled bool           `config:"bool;true"`
+	BPFExternalServiceMode             string         `config:"oneof(tunnel,dsr);tunnel;non-zero"`
+	BPFKubeProxyIptablesCleanupEnabled bool           `config:"bool;true"`
+	BPFKubeProxyMinSyncPeriod          time.Duration  `config:"seconds;1"`
+
+	// DebugBPFCgroupV2 controls the cgroup v2 path that we apply the connect-time load balancer to.  Most distros
+	// are configured for cgroup v1, which prevents all but hte root cgroup v2 from working so this is only useful
+	// for development right now.
+	DebugBPFCgroupV2 string `config:"string;;local"`
+	// DebugBPFMapRepinEnabled can be used to prevent Felix from repinning its BPF maps at startup.  This is useful for
+	// testing with multiple Felix instances running on one host.
+	DebugBPFMapRepinEnabled bool `config:"bool;true;local"`
 
 	DatastoreType string `config:"oneof(kubernetes,etcdv3);etcdv3;non-zero,die-on-fail,local"`
 
