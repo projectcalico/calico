@@ -269,12 +269,14 @@ type FelixConfigurationSpec struct {
 	// BPFEnabled, if enabled Felix will use the BPF dataplane. [Default: false]
 	BPFEnabled *bool `json:"bpfEnabled,omitempty" validate:"omitempty"`
 	// BPFLogLevel controls the log level of the BPF programs when in BPF dataplane mode.  One of "Off", "Info", or
-	// "Debug". [Default: Off].
+	// "Debug".  The logs are emitted to the BPF trace pipe, accessible with the command `tc exec bpf debug`.
+	// [Default: Off].
 	BPFLogLevel string `json:"bpfLogLevel" validate:"omitempty,bpfLogLevel"`
 	// BPFDataIfacePattern is a regular expression that controls which interfaces Felix should attach BPF programs to
-	// in order to catch traffic to/from the network.  This needs to match the interfaces that calico workload traffic
+	// in order to catch traffic to/from the network.  This needs to match the interfaces that Calico workload traffic
 	// flows over as well as any interfaces that handle incoming traffic to nodeports and services from outside the
-	// cluster.  It should not match the workload interfaces (usually named cali...).  [Default: ^(en.*|eth.*|tunl0$)]
+	// cluster.  It should not match the workload interfaces (usually named cali...).
+	// [Default: ^(en.*|eth.*|tunl0$)]
 	BPFDataIfacePattern string `json:"bpfDataIfacePattern,omitempty" validate:"omitempty,regexp"`
 	// BPFConnectTimeLoadBalancingEnabled when in BPF mode, controls whether Felix installs the connection-time load
 	// balancer.  The connect-time load balancer is required for the host to be able to reach Kubernetes services
@@ -287,12 +289,12 @@ type FelixConfigurationSpec struct {
 	// is sent directly from the remote node.  In "DSR" mode, the remote node appears to use the IP of the ingress
 	// node; this requires a permissive L2 network.  [Default: Tunnel]
 	BPFExternalServiceMode string `json:"bpfExternalServiceMode,omitempty" validate:"omitempty,bpfServiceMode"`
-	// BPFKubeProxyIptablesCleanupEnabled, if enabled in BPF mode, Felix will pro-actively clean up kube-proxy's
-	// iptables chains.  Should only be enabled if kube-proxy is not running.  [Default: true]
+	// BPFKubeProxyIptablesCleanupEnabled, if enabled in BPF mode, Felix will proactively clean up the upstream
+	// Kubernetes kube-proxy's iptables chains.  Should only be enabled if kube-proxy is not running.  [Default: true]
 	BPFKubeProxyIptablesCleanupEnabled *bool `json:"bpfKubeProxyIptablesCleanupEnabled,omitempty" validate:"omitempty"`
-	// BPFKubeProxyMinSyncPeriod, controls the minimum time between updates to the dataplane for Kubernetes services.
-	// Lower values give reduced set-up latency.  Higher values reduce Felix CPU usage by batching up more work.
-	// [Default: 1s]
+	// BPFKubeProxyMinSyncPeriod, in BPF mode, controls the minimum time between updates to the dataplane for Felix's
+	// embedded kube-proxy.  Lower values give reduced set-up latency.  Higher values reduce Felix CPU usage by
+	// batching up more work.  [Default: 1s]
 	BPFKubeProxyMinSyncPeriod *metav1.Duration `json:"bpfKubeProxyMinSyncPeriod,omitempty" validate:"omitempty" configv1timescale:"seconds"`
 }
 

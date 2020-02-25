@@ -605,7 +605,7 @@ func init() {
 		Entry("should accept a valid BPFExternalServiceMode value 'Tunnel'", api.FelixConfigurationSpec{BPFExternalServiceMode: "Tunnel"}, true),
 		Entry("should accept a valid BPFExternalServiceMode value 'DSR'", api.FelixConfigurationSpec{BPFExternalServiceMode: "DSR"}, true),
 
-		Entry("should reject an invalid BPFDataIfacePattern value 'eth.*'", api.FelixConfigurationSpec{BPFDataIfacePattern: "*"}, false),
+		Entry("should reject an invalid BPFDataIfacePattern value '*'", api.FelixConfigurationSpec{BPFDataIfacePattern: "*"}, false),
 		Entry("should accept a valid BPFDataIfacePattern value 'eth.*'", api.FelixConfigurationSpec{BPFDataIfacePattern: "eth.*"}, true),
 
 		// (API) Protocol
