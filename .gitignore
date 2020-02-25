@@ -20,4 +20,7 @@ report/*.xml
 .empty
 crds.yaml
 filesystem/etc/calico/confd/*
+filesystem/code/*
+filesystem/usr
 Makefile.common*
+bin

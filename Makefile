@@ -1,5 +1,5 @@
 PACKAGE_NAME?=github.com/projectcalico/node
-GO_BUILD_VER?=v0.34
+GO_BUILD_VER?=v0.36
 
 # This needs to be evaluated before the common makefile is included.
 # This var contains some default values that the common makefile may append to.
@@ -37,6 +37,8 @@ $(LOCAL_BUILD_DEP):
 		-replace=github.com/projectcalico/typha=../typha \
 		-replace=github.com/kelseyhightower/confd=../confd
 endif
+
+EXTRA_DOCKER_ARGS+=-e GOPRIVATE='github.com/tigera/*'
 
 include Makefile.common
 
@@ -118,15 +120,37 @@ remote-deps: mod-download
 	# Recreate the directory so that we are sure to clean up any old files.
 	rm -rf filesystem/etc/calico/confd
 	mkdir -p filesystem/etc/calico/confd
-	$(DOCKER_RUN) $(CALICO_BUILD) sh -c ' \
+	rm -rf bin/bpf
+	mkdir -p bin/bpf
+	rm -rf filesystem/usr/lib/calico/bpf/
+	mkdir -p filesystem/usr/lib/calico/bpf/
+	$(DOCKER_RUN) $(CALICO_BUILD) sh -ec ' \
+		$(GIT_CONFIG_SSH) \
 		cp -r `go list -m -f "{{.Dir}}" github.com/kelseyhightower/confd`/etc/calico/confd/conf.d filesystem/etc/calico/confd/conf.d; \
 		cp -r `go list -m -f "{{.Dir}}" github.com/kelseyhightower/confd`/etc/calico/confd/config filesystem/etc/calico/confd/config; \
 		cp -r `go list -m -f "{{.Dir}}" github.com/kelseyhightower/confd`/etc/calico/confd/templates filesystem/etc/calico/confd/templates; \
 		cp `go list -m -f "{{.Dir}}" github.com/projectcalico/libcalico-go`/test/crds.yaml crds.yaml; \
-		chmod -R +w filesystem/etc/calico/confd/ crds.yaml'
+		cp -r `go list -m -f "{{.Dir}}" github.com/projectcalico/felix`/bpf-gpl bin/bpf; \
+		cp -r `go list -m -f "{{.Dir}}" github.com/projectcalico/felix`/bpf-apache bin/bpf; \
+		chmod -R +w bin/bpf; \
+		chmod +x bin/bpf/bpf-gpl/list-* bin/bpf/bpf-gpl/calculate-*; \
+		make -j 16 -C ./bin/bpf/bpf-apache/ all; \
+		make -j 16 -C ./bin/bpf/bpf-gpl/ all; \
+		cp bin/bpf/bpf-gpl/bin/* filesystem/usr/lib/calico/bpf/; \
+		cp bin/bpf/bpf-apache/bin/* filesystem/usr/lib/calico/bpf/; \
+		chmod -R +w filesystem/etc/calico/confd/ crds.yaml filesystem/usr/lib/calico/bpf/'
 
-$(NODE_CONTAINER_BINARY): $(LOCAL_BUILD_DEP) $(SRC_FILES)
-	$(DOCKER_RUN) $(CALICO_BUILD) go build -v -o $@ $(BUILD_FLAGS) $(LDFLAGS) ./cmd/calico-node/main.go
+# We need CGO when compiling in Felix for BPF support.  However, the cross-compile doesn't support CGO yet.
+ifeq ($(ARCH), amd64)
+CGO_ENABLED=1
+else
+CGO_ENABLED=0
+endif
+
+DOCKER_GO_BUILD_CGO=$(DOCKER_RUN) -e CGO_ENABLED=$(CGO_ENABLED) $(CALICO_BUILD)
+
+$(NODE_CONTAINER_BINARY): $(LOCAL_BUILD_DEP) $(SRC_FILES) go.mod
+	$(DOCKER_GO_BUILD_CGO) sh -c '$(GIT_CONFIG_SSH) go build -v -o $@ $(BUILD_FLAGS) $(LDFLAGS) ./cmd/calico-node/main.go'
 
 ###############################################################################
 # Building the image
