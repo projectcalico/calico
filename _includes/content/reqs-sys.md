@@ -39,8 +39,8 @@ use the Kubernetes API datastore.{% endif -%}
 {%- if include.orch == "OpenStack" %}
 For production you will likely want multiple
 nodes for greater performance and reliability.  If you don't already have an
-etcdv3 cluster to connect to, please refer to [the upstream etcd
-docs](https://coreos.com/etcd/) for detailed advice and setup.{% endif %}{% if include.orch == "host protection" %}The key/value store must be etcdv3.{% endif %}
+etcdv3 cluster to connect to, please refer to {% include open-new-window.a text='the upstream etcd
+docs' url='https://coreos.com/etcd/' %} for detailed advice and setup.{% endif %}{% if include.orch == "host protection" %}The key/value store must be etcdv3.{% endif %}
 
 ## Network requirements
 
@@ -59,9 +59,9 @@ Ensure that your hosts and firewalls allow the necessary traffic based on your c
 | {{site.prodname}} networking with Typha enabled              | Typha agent hosts    | Incoming        | TCP 5473 (default) |
 | flannel networking (VXLAN)                                   | All                  | Bidirectional   | UDP 4789 |
 | All                                                          | kube-apiserver host  | Incoming        | Often TCP 443 or 6443\* |
-| etcd datastore                                               | etcd hosts           | Incoming        | [Officially](http://www.iana.org/assignments/service-names-port-numbers/service-names-port-numbers.txt) TCP 2379 but can vary |
+| etcd datastore                                               | etcd hosts           | Incoming        | {% include open-new-window.a text='Officially' url='http://www.iana.org/assignments/service-names-port-numbers/service-names-port-numbers.txt' %}  TCP 2379 but can vary |
 {%- else %}
-| All                                                          | etcd hosts           | Incoming        | [Officially](http://www.iana.org/assignments/service-names-port-numbers/service-names-port-numbers.txt) TCP 2379 but can vary |
+| All                                                          | etcd hosts           | Incoming        | {% include open-new-window.a text='Officially' url='http://www.iana.org/assignments/service-names-port-numbers/service-names-port-numbers.txt' %}  TCP 2379 but can vary |
 {%- endif %}
 {%- if include.orch == "Kubernetes" or include.orch == "OpenShift" %}
 
@@ -84,5 +84,5 @@ privileged container. This requires that the kubelet be allowed to run privilege
 containers. There are two ways this can be achieved.
 
 - Specify `--allow-privileged` on the kubelet (deprecated).
-- Use a [pod security policy](https://kubernetes.io/docs/concepts/policy/pod-security-policy/).
+- Use a {% include open-new-window.a text='pod security policy' url='https://kubernetes.io/docs/concepts/policy/pod-security-policy/' %}.
 {% endif -%}
