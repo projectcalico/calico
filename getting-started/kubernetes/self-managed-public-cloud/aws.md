@@ -18,7 +18,7 @@ Kubernetes Operations (kops) is a cluster management tool that handles provision
 ### Before you begin...
 
 - Install {% include open-new-window.html text='kubectl' url='https://kubernetes.io/docs/tasks/tools/install-kubectl/' %}
-- Install % include open-new-window.html text='AWS CLI tools' url='https://docs.aws.amazon.com/cli/latest/userguide/cli-chap-install.html' %}
+- Install {% include open-new-window.html text='AWS CLI tools' url='https://docs.aws.amazon.com/cli/latest/userguide/cli-chap-install.html' %}
 
 ### How to
 
