@@ -24,7 +24,7 @@ import (
 )
 
 func MaybeMoveToFelixCgroupv2() {
-	cgroup := os.Getenv("FELIX_BPFCGROUPV2")
+	cgroup := os.Getenv("FELIX_DEBUGBPFCGROUPV2")
 	if cgroup != "" {
 		log.WithField("cgroup", cgroup).Info("Moving to cgroup")
 		cgroupPath := path.Join("/run/calico/cgroup/", cgroup)

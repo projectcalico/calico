@@ -66,11 +66,11 @@ func RunFelix(infra DatastoreInfra, id int, options TopologyOptions) *Felix {
 
 		// Disable map repinning by default since BPF map names are global and we don't want our simulated instances to
 		// share maps.
-		envVars["FELIX_BPFMapRepinEnabled"] = "false"
+		envVars["FELIX_DebugBPFMapRepinEnabled"] = "false"
 
 		// FIXME: isolate individual Felix instances in their own cgroups.  Unfortunately, this doesn't work on systems that are using cgroupv1
 		// see https://elixir.bootlin.com/linux/v5.3.11/source/include/linux/cgroup-defs.h#L788 for explanation.
-		// envVars["FELIX_BPFCGROUPV2"] = containerName
+		// envVars["FELIX_DEBUGBPFCGROUPV2"] = containerName
 	}
 
 	for k, v := range options.ExtraEnvVars {
