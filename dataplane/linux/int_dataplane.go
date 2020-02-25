@@ -34,6 +34,9 @@ import (
 	log "github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
 
+	"github.com/projectcalico/libcalico-go/lib/health"
+	"github.com/projectcalico/libcalico-go/lib/set"
+
 	"github.com/projectcalico/felix/bpf"
 	"github.com/projectcalico/felix/bpf/conntrack"
 	bpfipsets "github.com/projectcalico/felix/bpf/ipsets"
@@ -49,8 +52,6 @@ import (
 	"github.com/projectcalico/felix/routetable"
 	"github.com/projectcalico/felix/rules"
 	"github.com/projectcalico/felix/throttle"
-	"github.com/projectcalico/libcalico-go/lib/health"
-	"github.com/projectcalico/libcalico-go/lib/set"
 )
 
 const (
@@ -293,6 +294,7 @@ func NewIntDataplaneDriver(config Config) *InternalDataplane {
 		LockProbeInterval:     config.IptablesLockProbeInterval,
 		BackendMode:           backendMode,
 		LookPathOverride:      config.LookPathOverride,
+		OnStillAlive:          dp.reportHealth,
 	}
 
 	if config.BPFEnabled && config.BPFKubeProxyIptablesCleanupEnabled {
@@ -1227,6 +1229,7 @@ func (d *InternalDataplane) apply() {
 			log.WithField("manager", mgr).WithError(err).Debug("couldn't complete deferred work for manager, will try again later")
 			d.dataplaneNeedsSync = true
 		}
+		d.reportHealth()
 	}
 
 	if d.xdpState != nil {
@@ -1258,6 +1261,7 @@ func (d *InternalDataplane) apply() {
 			}
 		}
 	}
+	d.reportHealth()
 
 	if d.forceRouteRefresh {
 		// Refresh timer popped.
@@ -1284,6 +1288,7 @@ func (d *InternalDataplane) apply() {
 		ipSetsWG.Add(1)
 		go func(ipSets *ipsets.IPSets) {
 			ipSets.ApplyUpdates()
+			d.reportHealth()
 			ipSetsWG.Done()
 		}(ipSets)
 	}
@@ -1299,6 +1304,7 @@ func (d *InternalDataplane) apply() {
 				log.Warn("Failed to synchronize routing table, will retry...")
 				d.dataplaneNeedsSync = true
 			}
+			d.reportHealth()
 			routesWG.Done()
 		}(r)
 	}
@@ -1320,6 +1326,7 @@ func (d *InternalDataplane) apply() {
 			if tableReschedAfter != 0 && (reschedDelay == 0 || tableReschedAfter < reschedDelay) {
 				reschedDelay = tableReschedAfter
 			}
+			d.reportHealth()
 			iptablesWG.Done()
 		}(t)
 	}
@@ -1330,6 +1337,7 @@ func (d *InternalDataplane) apply() {
 		ipSetsWG.Add(1)
 		go func(s *ipsets.IPSets) {
 			s.ApplyDeletions()
+			d.reportHealth()
 			ipSetsWG.Done()
 		}(ipSets)
 	}

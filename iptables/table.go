@@ -261,6 +261,8 @@ type Table struct {
 	timeNow   func() time.Time
 	// lookPath is a shim for exec.LookPath.
 	lookPath func(file string) (string, error)
+
+	onStillAlive func()
 }
 
 type TableOptions struct {
@@ -284,6 +286,8 @@ type TableOptions struct {
 	NowOverride func() time.Time
 	// LookPathOverride for tests, if non-nil, replacement for exec.LookPath()
 	LookPathOverride func(file string) (string, error)
+	// Thunk to call periodically when doing a long-running operation.
+	OnStillAlive func()
 }
 
 func NewTable(
@@ -403,6 +407,12 @@ func NewTable(
 		countNumLinesExecuted: countNumLinesExecuted.WithLabelValues(fmt.Sprintf("%d", ipVersion), name),
 	}
 	table.restoreInputBuffer.NumLinesWritten = table.countNumLinesExecuted
+
+	if options.OnStillAlive != nil {
+		table.onStillAlive = options.OnStillAlive
+	} else {
+		table.onStillAlive = func() {}
+	}
 
 	iptablesVariant := strings.ToLower(options.BackendMode)
 	if iptablesVariant == "" {
@@ -619,6 +629,7 @@ func (t *Table) getHashesAndRulesFromDataplane() (hashes map[string][]string, ru
 	// Retry a few times before we panic.  This deals with any transient errors and it prevents
 	// us from spamming a panic into the log when we're being gracefully shut down by a SIGTERM.
 	for {
+		t.onStillAlive()
 		hashes, rules, err := t.attemptToGetHashesAndRulesFromDataplane()
 		if err != nil {
 			countNumSaveErrors.Inc()
@@ -846,6 +857,7 @@ func (t *Table) Apply() (rescheduleAfter time.Duration) {
 			// sync.  Refresh it.  This may mark more chains as dirty.
 			t.loadDataplaneState()
 		}
+		t.onStillAlive()
 
 		if err := t.applyUpdates(); err != nil {
 			if retries > 0 {
