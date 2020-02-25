@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2019 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2020 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -67,6 +67,8 @@ var (
 	ipipModeRegex         = regexp.MustCompile("^(Always|CrossSubnet|Never)$")
 	vxlanModeRegex        = regexp.MustCompile("^(Always|CrossSubnet|Never)$")
 	logLevelRegex         = regexp.MustCompile("^(Debug|Info|Warning|Error|Fatal)$")
+	bpfLogLevelRegex      = regexp.MustCompile("^(Debug|Info|Off)$")
+	bpfServiceModeRegex   = regexp.MustCompile("^(Tunnel|DSR)$")
 	datastoreType         = regexp.MustCompile("^(etcdv3|kubernetes)$")
 	dropAcceptReturnRegex = regexp.MustCompile("^(Drop|Accept|Return)$")
 	acceptReturnRegex     = regexp.MustCompile("^(Accept|Return)$")
@@ -130,6 +132,8 @@ func init() {
 	registerFieldValidator("vxlanMode", validateVXLANMode)
 	registerFieldValidator("policyType", validatePolicyType)
 	registerFieldValidator("logLevel", validateLogLevel)
+	registerFieldValidator("bpfLogLevel", validateBPFLogLevel)
+	registerFieldValidator("bpfServiceMode", validateBPFServiceMode)
 	registerFieldValidator("dropAcceptReturn", validateFelixEtoHAction)
 	registerFieldValidator("acceptReturn", validateAcceptReturn)
 	registerFieldValidator("portName", validatePortName)
@@ -139,6 +143,7 @@ func init() {
 	registerFieldValidator("mac", validateMAC)
 	registerFieldValidator("iptablesBackend", validateIptablesBackend)
 	registerFieldValidator("prometheusHost", validatePrometheusHost)
+	registerFieldValidator("regexp", validateRegexp)
 
 	// Register network validators (i.e. validating a correctly masked CIDR).  Also
 	// accepts an IP address without a mask (assumes a full mask).
@@ -228,6 +233,13 @@ func validateDatastoreType(fl validator.FieldLevel) bool {
 	return datastoreType.MatchString(s)
 }
 
+func validateRegexp(fl validator.FieldLevel) bool {
+	s := fl.Field().String()
+	log.Debugf("Validate regexp: %s", s)
+	_, err := regexp.Compile(s)
+	return err == nil
+}
+
 func validateName(fl validator.FieldLevel) bool {
 	s := fl.Field().String()
 	log.Debugf("Validate name: %s", s)
@@ -300,6 +312,18 @@ func validateLogLevel(fl validator.FieldLevel) bool {
 	s := fl.Field().String()
 	log.Debugf("Validate Felix log level: %s", s)
 	return logLevelRegex.MatchString(s)
+}
+
+func validateBPFLogLevel(fl validator.FieldLevel) bool {
+	s := fl.Field().String()
+	log.Debugf("Validate Felix BPF log level: %s", s)
+	return bpfLogLevelRegex.MatchString(s)
+}
+
+func validateBPFServiceMode(fl validator.FieldLevel) bool {
+	s := fl.Field().String()
+	log.Debugf("Validate Felix BPF service mode: %s", s)
+	return bpfServiceModeRegex.MatchString(s)
 }
 
 func validateFelixEtoHAction(fl validator.FieldLevel) bool {
