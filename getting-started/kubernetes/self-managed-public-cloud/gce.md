@@ -187,6 +187,6 @@ You may have noticed that the bulk of the above instructions are about provision
 
 ### Above and beyond
 
-- {% include open-new-window.html text='[Video: Everything you need to know about Kubernetes networking on Google cloud' url='https://www.projectcalico.org/everything-you-need-to-know-about-kubernetes-networking-on-google-cloud/' %} 
+- {% include open-new-window.html text='Video: Everything you need to know about Kubernetes networking on Google cloud' url='https://www.projectcalico.org/everything-you-need-to-know-about-kubernetes-networking-on-google-cloud/' %} 
 - [Install and configure calicoctl]({{site.baseurl}}/getting-started/calicoctl/install)
 - [Try out {{site.prodname}} network policy]({{site.baseurl}}/security/calico-network-policy)
