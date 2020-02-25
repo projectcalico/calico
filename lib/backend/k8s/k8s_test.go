@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2019 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2020 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -2326,7 +2326,7 @@ var _ = testutils.E2eDatastoreDescribe("Test Watch support", testutils.Datastore
 		})
 	})
 
-	Describe("watching / listing network polices (k8s and Calico)", func (){
+	Describe("watching / listing network polices (k8s and Calico)", func() {
 		createCalicoNetworkPolicy := func(name string) {
 			np := &model.KVPair{
 				Key: model.ResourceKey{
@@ -2434,7 +2434,7 @@ var _ = testutils.E2eDatastoreDescribe("Test Watch support", testutils.Datastore
 			watch.Stop()
 
 			// Make a second change
-			kvp1or2.Value.(*apiv3.NetworkPolicy).SetLabels(map[string]string{"test":"01"})
+			kvp1or2.Value.(*apiv3.NetworkPolicy).SetLabels(map[string]string{"test": "01"})
 			_, err = c.Update(ctx, kvp1or2)
 			Expect(err).ToNot(HaveOccurred())
 
@@ -2453,16 +2453,16 @@ var _ = testutils.E2eDatastoreDescribe("Test Watch support", testutils.Datastore
 		})
 
 		It("supports watching from part way through a list", func() {
-			l, err := c.List(ctx, model.ResourceListOptions{Kind:apiv3.KindNetworkPolicy}, "")
+			l, err := c.List(ctx, model.ResourceListOptions{Kind: apiv3.KindNetworkPolicy}, "")
 			Expect(err).ToNot(HaveOccurred())
 			Expect(l.KVPairs).To(HaveLen(4))
 
 			// Watch from part way
-			for i := 0; i<4; i++ {
+			for i := 0; i < 4; i++ {
 				revision := l.KVPairs[i].Revision
 				log.WithFields(log.Fields{
 					"revision": revision,
-					"key": l.KVPairs[i].Key.String()}).Info("[Test] starting watch")
+					"key":      l.KVPairs[i].Key.String()}).Info("[Test] starting watch")
 				watch, err := c.Watch(ctx, model.ResourceListOptions{Kind: apiv3.KindNetworkPolicy}, revision)
 				Expect(err).ToNot(HaveOccurred())
 				// Since the items in the list aren't guaranteed to be in any specific order, we

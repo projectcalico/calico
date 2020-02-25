@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2019 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2020 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -595,6 +595,18 @@ func init() {
 		Entry("should accept a valid LogSeveritySys value 'Info'", api.FelixConfigurationSpec{LogSeveritySys: "Info"}, true),
 		Entry("should accept a valid IptablesNATOutgoingInterfaceFilter value 'cali-123'", api.FelixConfigurationSpec{IptablesNATOutgoingInterfaceFilter: "cali-123"}, true),
 		Entry("should reject an invalid IptablesNATOutgoingInterfaceFilter value 'cali@123'", api.FelixConfigurationSpec{IptablesNATOutgoingInterfaceFilter: "cali@123"}, false),
+
+		Entry("should reject an invalid BPFLogLevel value 'badVal'", api.FelixConfigurationSpec{BPFLogLevel: "badVal"}, false),
+		Entry("should accept a valid BPFLogLevel value 'Info'", api.FelixConfigurationSpec{BPFLogLevel: "Info"}, true),
+		Entry("should accept a valid BPFLogLevel value 'Debug'", api.FelixConfigurationSpec{BPFLogLevel: "Debug"}, true),
+		Entry("should accept a valid BPFLogLevel value 'Off'", api.FelixConfigurationSpec{BPFLogLevel: "Off"}, true),
+
+		Entry("should reject a valid BPFExternalServiceMode value 'Foo'", api.FelixConfigurationSpec{BPFExternalServiceMode: "Foo"}, false),
+		Entry("should accept a valid BPFExternalServiceMode value 'Tunnel'", api.FelixConfigurationSpec{BPFExternalServiceMode: "Tunnel"}, true),
+		Entry("should accept a valid BPFExternalServiceMode value 'DSR'", api.FelixConfigurationSpec{BPFExternalServiceMode: "DSR"}, true),
+
+		Entry("should reject an invalid BPFDataIfacePattern value '*'", api.FelixConfigurationSpec{BPFDataIfacePattern: "*"}, false),
+		Entry("should accept a valid BPFDataIfacePattern value 'eth.*'", api.FelixConfigurationSpec{BPFDataIfacePattern: "eth.*"}, true),
 
 		// (API) Protocol
 		Entry("should accept protocol TCP", protocolFromString("TCP"), true),
@@ -1270,13 +1282,13 @@ func init() {
 			}, true),
 		Entry("should accept Rule with valid annotations",
 			api.Rule{
-				Action: "Allow",
-				Metadata: &api.RuleMetadata{Annotations:map[string]string{"foo": "bar"}},
+				Action:   "Allow",
+				Metadata: &api.RuleMetadata{Annotations: map[string]string{"foo": "bar"}},
 			}, true),
 		Entry("should reject Rule with invalid annotations",
 			api.Rule{
-				Action: "Allow",
-				Metadata: &api.RuleMetadata{Annotations:map[string]string{"...": "bar"}},
+				Action:   "Allow",
+				Metadata: &api.RuleMetadata{Annotations: map[string]string{"...": "bar"}},
 			}, false),
 
 		// (API) BGPPeerSpec
