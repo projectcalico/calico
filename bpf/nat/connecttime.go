@@ -198,7 +198,6 @@ func ProgFileName(logLevel string, ipver int) string {
 func ensureCgroupPath(cgroupv2 string) (string, error) {
 	cgroupRoot, err := bpf.MaybeMountCgroupV2()
 	if err != nil {
-		log.WithError(err).Error("Failed to mount cgroupv2, unable to do connect-time load balancing")
 		return "", err
 	}
 	cgroupPath := cgroupRoot
