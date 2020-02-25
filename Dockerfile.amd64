@@ -18,7 +18,7 @@ ARG RUNIT_VER=2.1.2
 ARG BIRD_IMAGE=calico/bird:latest
 
 
-FROM calico/bpftool:v5.0-amd64 as bpftool
+FROM calico/bpftool:v5.3-amd64 as bpftool
 FROM ${BIRD_IMAGE} as bird
 
 # Use this build stage to build iptables rpm and runit binaries.
@@ -132,6 +132,7 @@ RUN rm /etc/yum.repos.d/ubi.repo && \
     # Also needed (provides utilities for browsing procfs like ps)
     procps \
     iproute \
+    iproute-tc \
     # Needed for conntrack
     libnetfilter_cthelper libnetfilter_cttimeout libnetfilter_queue \
     conntrack-tools \
