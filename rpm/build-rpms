@@ -41,10 +41,10 @@ case ${pkg} in
 	;;
     etcd3gw)
 	t=`mktemp -d -t etcd3gw.XXXXXX`
-	curl -L https://github.com/dims/etcd3-gateway/archive/19abd85b710682b326702e2290a30d084fb0af71.zip -o $t/${pkg}-${version}.zip
+	curl -L https://github.com/dims/etcd3-gateway/archive/5a3157a122368c2314c7a961f61722e47355f981.zip -o $t/${pkg}-${version}.zip
 	pushd $t
 	unzip ${pkg}-${version}.zip
-	mv etcd3-gateway-19abd85b710682b326702e2290a30d084fb0af71 ${pkg}-${version}
+	mv etcd3-gateway-5a3157a122368c2314c7a961f61722e47355f981 ${pkg}-${version}
 	tar zcf /tmp/rpmbuild/SOURCES/${pkg}-${version}.tar.gz ${pkg}-${version}
 	popd
 	export PBR_VERSION=${version}

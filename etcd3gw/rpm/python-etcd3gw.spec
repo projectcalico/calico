@@ -6,7 +6,7 @@
 %endif
 
 Name:           python-%{pypi_name}
-Version:        0.2.4.1.19abd85
+Version:        0.2.4.1.5a3157a
 Release:        1%{?dist}
 Summary:        A python client for etcd3 grpc-gateway
 
