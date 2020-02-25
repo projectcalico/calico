@@ -43,7 +43,7 @@ Now run OpenShift installer to create a default configuration file:
 openshift-install create install-config
 ```
 
-> **Note**: Refer to the {% include open-new-window.html text='OpenShift installer documentation' url='https://cloud.redhat.com/openshift/install](https://cloud.redhat.com/openshift/install' %} for more information
+> **Note**: Refer to the {% include open-new-window.html text='OpenShift installer documentation' url='https://cloud.redhat.com/openshift/install' %} for more information
 > about the installer and any configuration changes required for your platform.
 {: .alert .alert-info}
 
