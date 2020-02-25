@@ -267,7 +267,7 @@ type FelixConfigurationSpec struct {
 	GenericXDPEnabled *bool `json:"genericXDPEnabled,omitempty" confignamev1:"GenericXDPEnabled"`
 
 	// BPFEnabled, if enabled Felix will use the BPF dataplane. [Default: false]
-	BPFEnabled *bool `json:"bpfEnabled,omitempty" validate:"omitempty,"`
+	BPFEnabled *bool `json:"bpfEnabled,omitempty" validate:"omitempty"`
 	// BPFLogLevel controls the log level of the BPF programs when in BPF dataplane mode.  One of "Off", "Info", or
 	// "Debug". [Default: Off].
 	BPFLogLevel string `json:"bpfLogLevel" validate:"omitempty,bpfLogLevel"`
