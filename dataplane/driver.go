@@ -191,7 +191,7 @@ func StartDataplaneDriver(configParams *config.Config,
 			BPFDataIfacePattern:                configParams.BPFDataIfacePattern,
 			BPFCgroupV2:                        configParams.BPFCgroupV2,
 			BPFMapRepin:                        configParams.BPFMapRepinEnabled,
-			KubeProxyMinSyncPeriod:             configParams.KubeProxyMinSyncPeriod,
+			KubeProxyMinSyncPeriod:             configParams.BPFKubeProxyMinSyncPeriod,
 			XDPEnabled:                         configParams.XDPEnabled,
 			XDPAllowGeneric:                    configParams.GenericXDPEnabled,
 			BPFConntrackTimeouts:               conntrack.DefaultTimeouts(), // FIXME make timeouts configurable
