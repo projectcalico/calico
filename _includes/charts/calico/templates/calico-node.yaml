@@ -57,6 +57,16 @@ spec:
           image: {{.Values.cni.image}}:{{ .Values.cni.tag }}
           command: ["/opt/cni/bin/calico-ipam", "-upgrade"]
           env:
+            - name: KUBERNETES_SERVICE_HOST
+              valueFrom:
+                configMapKeyRef:
+                  name: calico-config
+                  key: kubernetes_service_host
+            - name: KUBERNETES_SERVICE_PORT
+              valueFrom:
+                configMapKeyRef:
+                  name: calico-config
+                  key: kubernetes_service_port
             - name: KUBERNETES_NODE_NAME
               valueFrom:
                 fieldRef:
@@ -80,6 +90,17 @@ spec:
           image: {{.Values.cni.image}}:{{ .Values.cni.tag }}
           command: ["/install-cni.sh"]
           env:
+            # (Optional) overrides for kubernetes API server host/port.
+            - name: KUBERNETES_SERVICE_HOST
+              valueFrom:
+                configMapKeyRef:
+                  name: calico-config
+                  key: kubernetes_service_host
+            - name: KUBERNETES_SERVICE_PORT
+              valueFrom:
+                configMapKeyRef:
+                  name: calico-config
+                  key: kubernetes_service_port
             # Name of the CNI config file to create.
             - name: CNI_CONF_NAME
               value: "10-{{include "variant_name" . | lower}}.conflist"
@@ -164,6 +185,17 @@ spec:
         - name: calico-node
           image: {{.Values.node.image}}:{{.Values.node.tag}}
           env:
+            # (Optional) overrides for kubernetes API server host/port.
+            - name: KUBERNETES_SERVICE_HOST
+              valueFrom:
+                configMapKeyRef:
+                  name: calico-config
+                  key: kubernetes_service_host
+            - name: KUBERNETES_SERVICE_PORT
+              valueFrom:
+                configMapKeyRef:
+                  name: calico-config
+                  key: kubernetes_service_port
 {{- if eq .Values.datastore "etcd" }}
             # The location of the etcd cluster.
             - name: ETCD_ENDPOINTS

@@ -5,6 +5,12 @@ metadata:
   name: {{include "variant_name" . | lower}}-config
   namespace: kube-system
 data:
+  # If specified, these values override the host and port that will be used to connect to
+  # the API server.  If these are not set, we use the in-cluster configuration provided
+  # by Kubernetes, which introduces a dependency on kube-proxy.
+  kubernetes_service_host: ""
+  kubernetes_service_port: ""
+
 {{- if eq .Values.datastore "etcd" }}
   # Configure this with the location of your etcd cluster.
   etcd_endpoints: "{{ required "must set etcd.endpoints if using etcd mode" .Values.etcd.endpoints }}"
