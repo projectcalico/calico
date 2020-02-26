@@ -1357,26 +1357,26 @@ func (c ipamClient) decrementHandle(ctx context.Context, handleID string, blockC
 func (c ipamClient) GetAssignmentAttributes(ctx context.Context, addr net.IP) (map[string]string, *string, error) {
 	pool, err := c.blockReaderWriter.getPoolForIP(addr, nil)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	if pool == nil {
 		log.Errorf("Error reading pool for %s", addr.String())
-		return nil, cerrors.ErrorResourceDoesNotExist{Identifier: addr.String(), Err: errors.New("No valid IPPool")}
+		return nil, nil, cerrors.ErrorResourceDoesNotExist{Identifier: addr.String(), Err: errors.New("No valid IPPool")}
 	}
 	blockCIDR := getBlockCIDRForAddress(addr, pool)
 	obj, err := c.blockReaderWriter.queryBlock(ctx, blockCIDR, "")
 	if err != nil {
 		log.Errorf("Error reading block %s: %v", blockCIDR, err)
-		return nil, err
+		return nil, nil, err
 	}
 	block := allocationBlock{obj.Value.(*model.AllocationBlock)}
 	attrs, err := block.attributesForIP(addr)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	handle, err := block.handleForIP(addr)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	return attrs, handle, nil
 }
