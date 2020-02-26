@@ -222,6 +222,8 @@ github.com/projectcalico/libcalico-go v0.0.0-20200207173044-64dcbc78622c h1:dhDy
 github.com/projectcalico/libcalico-go v0.0.0-20200207173044-64dcbc78622c/go.mod h1:yd3FK67e+YeaYtKw5ImPw+YFyFF/G0ZCzbbwNAwwZh8=
 github.com/projectcalico/libcalico-go v0.0.0-20200212165426-dd72e0b33683 h1:wLFLgI/WEezkSrIwyy0910qxvy1ucNULfXFQYQX5dHM=
 github.com/projectcalico/libcalico-go v0.0.0-20200212165426-dd72e0b33683/go.mod h1:yd3FK67e+YeaYtKw5ImPw+YFyFF/G0ZCzbbwNAwwZh8=
+github.com/projectcalico/libcalico-go v0.0.0-20200225165413-26809aa675f6 h1:vmJcsHMTATD3XffeoSWaT/wso6jSE8znbZ2id3BGIdM=
+github.com/projectcalico/libcalico-go v0.0.0-20200225165413-26809aa675f6/go.mod h1:yd3FK67e+YeaYtKw5ImPw+YFyFF/G0ZCzbbwNAwwZh8=
 github.com/projectcalico/libcalico-go v1.7.2-0.20191204181402-d100617bd4df h1:FEaBaXf2qoBnJga4VBGf0H8/yB6pumeJlDWWiuF7lfw=
 github.com/projectcalico/libcalico-go v1.7.2-0.20191204181402-d100617bd4df/go.mod h1:5Upl9epOoyHRS1D4O9nckdFUtB0munzl4T1yoW52S14=
 github.com/projectcalico/libcalico-go v1.7.2-0.20191210235440-2d2a4ff81c85/go.mod h1:5Upl9epOoyHRS1D4O9nckdFUtB0munzl4T1yoW52S14=
@@ -257,6 +259,8 @@ github.com/projectcalico/typha v0.0.0-20200208041101-1eff880946aa h1:YSqEXSUTYF2
 github.com/projectcalico/typha v0.0.0-20200208041101-1eff880946aa/go.mod h1:ET7TWZiYFxpAUIiwdsdVT1tdoG0quxl5Q4LHgEPRqCY=
 github.com/projectcalico/typha v0.0.0-20200213041052-b1fdcf41bcaa h1:DOA0GLdFNckvFUC+GcDFDXEB2pNHEKH8yNrQrutIQj4=
 github.com/projectcalico/typha v0.0.0-20200213041052-b1fdcf41bcaa/go.mod h1:3Dar7IRh+2nn6ayP9kPUdEG5Vv3DHVSool7amG2nQ/w=
+github.com/projectcalico/typha v0.0.0-20200226041018-196fa9ec68b7 h1:60onPpLb1SN04kT9iQ27ccwLgQ7bufSuccabWaHIfaY=
+github.com/projectcalico/typha v0.0.0-20200226041018-196fa9ec68b7/go.mod h1:8d59FP0tPiq8BABD5thm6E270kNAQ74Spprp27U8D/o=
 github.com/projectcalico/typha v0.7.2/go.mod h1:pu3HHmupPjQFDgYi+nF6sG8sRsCKU50Lku1pGBEFQAM=
 github.com/projectcalico/typha v0.7.3-0.20191204184435-8efd36dbad90 h1:2g+V/sYsuh1M4W6hVVR9fw0nPyoXuKMEyAGDXLAHzLk=
 github.com/projectcalico/typha v0.7.3-0.20191204184435-8efd36dbad90/go.mod h1:+7pruopMI1kPhTEqAub9e8bD3hsMbOQNyi9vcXbKr2U=
