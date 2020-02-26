@@ -46,7 +46,7 @@ If the type is “calico-ipam”, you are good to go. If the IPAM is set to some
 
 **Verify orchestrator support for changing the pod network CIDR**.
 
-Although Kubernetes supports changing the pod network CIDR, not all orchestrators do. For example, OpenShift does not support this feature as described in {% include open-new-window.a text='`osm_cluster_network_cidr configuration`' url='https://docs.openshift.org/latest/install_config/install/advanced_install.html#configuring-cluster-variables' %}. Check your orchestrator documentation to verify. 
+Although Kubernetes supports changing the pod network CIDR, not all orchestrators do. For example, OpenShift does not support this feature as described in {% include open-new-window.html text='`osm_cluster_network_cidr configuration`' url='https://docs.openshift.org/latest/install_config/install/advanced_install.html#configuring-cluster-variables' %}. Check your orchestrator documentation to verify. 
 
 ### How to
 
