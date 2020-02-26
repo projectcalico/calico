@@ -376,6 +376,22 @@ func (b allocationBlock) attributesForIP(ip cnet.IP) (map[string]string, error) 
 	return b.Attributes[*attrIndex].AttrSecondary, nil
 }
 
+func (b allocationBlock) handleForIP(ip cnet.IP) (*string, error) {
+	// Convert to an ordinal.
+	ordinal, err := b.IPToOrdinal(ip)
+	if err != nil {
+		return nil, err
+	}
+
+	// Check if allocated.
+	attrIndex := b.Allocations[ordinal]
+	if attrIndex == nil {
+		log.Debugf("IP %s is not currently assigned in block", ip)
+		return nil, cerrors.ErrorResourceDoesNotExist{Identifier: ip.String(), Err: errors.New("IP is unassigned")}
+	}
+	return b.Attributes[*attrIndex].AttrPrimary, nil
+}
+
 func (b *allocationBlock) findOrAddAttribute(handleID *string, attrs map[string]string) int {
 	logCtx := log.WithField("attrs", attrs)
 	if handleID != nil {
