@@ -129,12 +129,6 @@ rules:
       # Used to discover Typhas.
       - get
 {{- end }}
-  - apiGroups: [""]
-    resources:
-      - nodes/status
-    verbs:
-      # Needed for clearing NodeNetworkUnavailable flag.
-      - patch
 {{- if eq .Values.network "calico" }}
   # Pod CIDR auto-detection on kubeadm needs access to config maps.
   - apiGroups: [""]
@@ -143,6 +137,12 @@ rules:
     verbs:
       - get
 {{- end }}
+  - apiGroups: [""]
+    resources:
+      - nodes/status
+    verbs:
+      # Needed for clearing NodeNetworkUnavailable flag.
+      - patch
 {{- if eq .Values.datastore "kubernetes" }}
       # Calico stores some configuration information in node annotations.
       - update
