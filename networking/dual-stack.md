@@ -23,7 +23,7 @@ This how-to guide uses the following {{site.prodname}} features:
 
 ### Before you begin...
 
-1.  Set up a cluster following the Kubernetes {% include open-new-window.html text='prerequisites' url='https://kubernetes.io/docs/concepts/services-networking/dual-stack/#prerequisites' %} and {% include open-new-window.a text='enablement
+1.  Set up a cluster following the Kubernetes {% include open-new-window.html text='prerequisites' url='https://kubernetes.io/docs/concepts/services-networking/dual-stack/#prerequisites' %} and {% include open-new-window.html text='enablement
 steps' url='https://kubernetes.io/docs/concepts/services-networking/dual-stack/#enable-ipv4-ipv6-dual-stack' %}.
 
 1.  Follow our [installation guide]({{site.baseurl}}/getting-started/kubernetes/self-managed-onprem/onpremises) to identify
