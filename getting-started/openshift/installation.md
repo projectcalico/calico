@@ -1,6 +1,6 @@
 ---
 title: Install an OpenShift v4 cluster with Calico
-description: Set variables during OpenShift standard install for Calico.
+description: Install Calico on an OpenShift v4 cluster.
 canonical_url: '/getting-started/openshift/installation'
 ---
 
