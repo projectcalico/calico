@@ -18,7 +18,7 @@ require (
 	github.com/pquerna/ffjson v0.0.0-20190813045741-dac163c6c0a9 // indirect
 	github.com/projectcalico/go-json v0.0.0-20161128004156-6219dc7339ba
 	github.com/projectcalico/go-yaml-wrapper v0.0.0-20191112210931-090425220c54
-	github.com/projectcalico/libcalico-go v0.0.0-20200212165426-dd72e0b33683
+	github.com/projectcalico/libcalico-go v0.0.0-20200225165413-26809aa675f6
 	github.com/shirou/gopsutil v0.0.0-20190323131628-2cbc9195c892
 	github.com/sirupsen/logrus v1.4.2
 	github.com/spf13/cast v1.3.0 // indirect
