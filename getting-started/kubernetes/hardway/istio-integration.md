@@ -4,7 +4,7 @@ description: Enforce Calico network policy for Istio service mesh applications.
 canonical_url: '/getting-started/kubernetes/hardway/istio-integration'
 ---
 
-{{site.prodname}} policy integrates with [Istio](https://istio.io) to allow you to write policies that enforce against
+{{site.prodname}} policy integrates with {% include open-new-window.html text='Istio' url='https://istio.io' %} to allow you to write policies that enforce against
 application layer attributes like HTTP methods or paths as well as against cryptographically secure identities. In this
 lab we will enable this integration and test it out.
 
