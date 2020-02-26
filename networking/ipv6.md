@@ -156,7 +156,7 @@ connectivity requires certain configuration in the guest VM image:
    OpenStack has allocated for it.
 -  The VM must be configured to accept router advertisements.
 -  If the VM uses the widely deployed DHCP client from ISC, it must
-   have a fix or workaround for {% include open-new-window.a text='this known
+   have a fix or workaround for {% include open-new-window.html text='this known
    issue' url='https://kb.isc.org/article/AA-01141/31/How-to-workaround-IPv6-prefix-length-issues-with-ISC-DHCP-clients.html' %}.
 
 These requirements are not yet all met in common cloud images—but it
