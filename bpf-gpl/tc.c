@@ -675,6 +675,8 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct __sk_buff *skb,
 	struct tcphdr *tcp_header = (void*)(ip_header+1);
 	struct udphdr *udp_header = (void*)(ip_header+1);
 
+	__u8 ihl = ip_header->ihl * 4;
+
 	size_t csum_offset = 0, ip_csum_offset;
 	int res = 0;
 	bool encap_needed = false;
@@ -811,13 +813,15 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct __sk_buff *skb,
 		switch (state->ip_proto) {
 		case IPPROTO_TCP:
 			tcp_header->dest = host_to_be16(state->post_nat_dport);
-			csum_offset = skb_offset(skb, tcp_header) + offsetof(struct tcphdr, check);
+			csum_offset = skb_l4hdr_offset(skb, ihl) + offsetof(struct tcphdr, check);
 			break;
 		case IPPROTO_UDP:
 			udp_header->dest = host_to_be16(state->post_nat_dport);
-			csum_offset = skb_offset(skb, udp_header) + offsetof(struct udphdr, check);
+			csum_offset = skb_l4hdr_offset(skb, ihl) + offsetof(struct udphdr, check);
 			break;
 		}
+
+		CALI_VERB("L3 csum at %d L4 csum at %d\n", ip_csum_offset, csum_offset);
 
 		if (csum_offset) {
 			res = skb_nat_l4_csum_ipv4(skb, csum_offset, state->ip_dst,
@@ -849,7 +853,8 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct __sk_buff *skb,
 				goto allow;
 			}
 			/* XXX do this before NAT until we can track the icmp back */
-			if (ip_is_dnf(ip_header) && vxlan_v4_encap_too_big(skb)) {
+			if (state->ip_proto != IPPROTO_TCP &&
+					ip_is_dnf(ip_header) && vxlan_v4_encap_too_big(skb)) {
 				CALI_DEBUG("Return ICMP mtu is too big\n");
 				goto icmp_too_big;
 			}
@@ -862,13 +867,15 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct __sk_buff *skb,
 		switch (state->ip_proto) {
 		case IPPROTO_TCP:
 			tcp_header->source = host_to_be16(state->ct_result.nat_port);
-			csum_offset = skb_offset(skb, tcp_header) + offsetof(struct tcphdr, check);
+			csum_offset = skb_l4hdr_offset(skb, ihl) + offsetof(struct tcphdr, check);
 			break;
 		case IPPROTO_UDP:
 			udp_header->source = host_to_be16(state->ct_result.nat_port);
-			csum_offset = skb_offset(skb, udp_header) + offsetof(struct udphdr, check);
+			csum_offset = skb_l4hdr_offset(skb, ihl) + offsetof(struct udphdr, check);
 			break;
 		}
+
+		CALI_VERB("L3 csum at %d L4 csum at %d\n", ip_csum_offset, csum_offset);
 
 		if (csum_offset) {
 			res = skb_nat_l4_csum_ipv4(skb, csum_offset, state->ip_src,

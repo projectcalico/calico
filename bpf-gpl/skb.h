@@ -72,4 +72,9 @@ static CALI_BPF_INLINE struct iphdr *skb_iphdr(struct __sk_buff *skb)
 	return ip;
 }
 
+static CALI_BPF_INLINE long skb_l4hdr_offset(struct __sk_buff *skb, __u8 ihl)
+{
+	return skb_iphdr_offset(skb) + ihl;
+}
+
 #endif /* __SKB_H__ */
