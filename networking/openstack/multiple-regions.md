@@ -4,7 +4,7 @@ description: Install a multi-region OpenStack deployment with Calico.
 canonical_url: '/networking/openstack/multiple-regions'
 ---
 
-If you use a {% include open-new-window.a text='multiple region
+If you use a {% include open-new-window.html text='multiple region
 deployment' url='https://docs.openstack.org/kolla-ansible/rocky/user/multi-regions.html' %}
 of OpenStack, you can use {{site.prodname}} to facilitate defining security
 policy between VMs in different regions.
