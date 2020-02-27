@@ -157,7 +157,7 @@ equipped with {{site.prodname}}.
 
 ### Next steps
 
-- [Secure a simple application using the Kubernetes `NetworkPolicy` API](../../security/tutorials/kubernetes-policy-basic)**
+- [Secure a simple application using the Kubernetes `NetworkPolicy` API](../../security/tutorials/kubernetes-policy-basic)
 - [Control ingress and egress traffic using the Kubernetes `NetworkPolicy` API](../../security/tutorials/kubernetes-policy-advanced)
 - [Create a user interface that shows blocked and allowed connections in real time](../../security/tutorials/kubernetes-policy-demo/kubernetes-demo)
 - [Install and configure calicoctl](../calicoctl/install)
