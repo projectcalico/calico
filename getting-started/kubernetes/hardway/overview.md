@@ -11,7 +11,7 @@ This tutorial walks you through setting up {{site.prodname}} the hard way.
 
 {{site.prodname}} the hard way is optimized for learning about how {{site.prodname}} works and what the other guides do “under the hood.”
 
-The name “{{site.prodname}} the hard way” is inspired by [Kubernetes the hard way](https://github.com/kelseyhightower/kubernetes-the-hard-way) by Kelsey Hightower.
+The name “{{site.prodname}} the hard way” is inspired by {% include open-new-window.html text='Kubernetes the hard way' url='https://github.com/kelseyhightower/kubernetes-the-hard-way' %} by Kelsey Hightower.
 
 ## Target Audience
 

@@ -13,7 +13,7 @@ IKS has built-in support for Calico, providing a robust implementation of the fu
 
 ### How to
 
-Calico networking and network policy are automatically installed and configured in your [IBM Cloud Kubernetes Service](https://www.ibm.com/cloud/container-service/). Default policies are created to protect your Kubernetes cluster, with the option to create your own policies to protect specific services.
+Calico networking and network policy are automatically installed and configured in your {% include open-new-window.html text='IBM Cloud Kubernetes Service' url='https://www.ibm.com/cloud/container-service/' %}. Default policies are created to protect your Kubernetes cluster, with the option to create your own policies to protect specific services.
 
 The geeky details of what you get:
 {% include geek-details.html details='Policy:Calico,IPAM:Calico,CNI:Calico,Cross-subnet:IPIP,Routing:BGP,Datastore:Kubernetes' %}

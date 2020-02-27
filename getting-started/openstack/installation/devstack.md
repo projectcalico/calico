@@ -9,7 +9,7 @@ instructions explain how to set up a single or multiple node DevStack/{{site.pro
 system, and then how to see {{site.prodname}} connectivity in action.
 
 > **Note**: networking-calico includes a
-> [shell script](https://github.com/projectcalico/networking-calico/blob/master/devstack/bootstrap.sh)
+> {% include open-new-window.html text='shell script' url='https://github.com/projectcalico/networking-calico/blob/master/devstack/bootstrap.sh' %}
 > that implements the following setup instructions. You are welcome to use it,
 > but we recommend that you read the following description first anyway, and
 > briefly review the script's code, so that you will understand what the

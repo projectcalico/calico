@@ -26,7 +26,7 @@ the following versions:
 
 With OpenStack Mitaka and earlier, and if your libvirt is >= 1.3.3 and < 3.1,
 you will need to patch the Nova code post installation, on each compute host,
-as in [this change](https://review.openstack.org/#/c/411936/).  In case you
+as in {% include open-new-window.html text='this change' url='https://review.openstack.org/#/c/411936/' %}.  In case you
 need the same Nova code to work with all possible libvirt versions, you should
-then add [this further change](https://review.openstack.org/#/c/448203/).
+then add {% include open-new-window.html text='this further change' url='https://review.openstack.org/#/c/448203/' %}.
 OpenStack Newton and later already include these two changes.

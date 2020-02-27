@@ -34,8 +34,7 @@ canonical_url: '/getting-started/openstack/index'
 
 The Etcd, Felix and BIRD pieces are the same as in other {{site.prodname}} integrations,
 and so independent of OpenStack.  The {{site.prodname}} Neutron driver and DHCP agent are
-specific to OpenStack, and are provided by the
-[networking-calico](https://github.com/projectcalico/networking-calico/) project.
+specific to OpenStack, and are provided by the {% include open-new-window.html text='networking-calico' url='https://github.com/projectcalico/networking-calico/' %} project.
 
 From an OpenStack point of view, networking-calico is just one of many possible
 Neutron drivers that provide connectivity between instances (VMs) as specified
