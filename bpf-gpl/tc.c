@@ -173,6 +173,21 @@ static CALI_BPF_INLINE int forward_or_drop(struct __sk_buff *skb,
 		goto deny;
 	}
 
+	if (rc == CALI_RES_REDIR_IFINDEX) {
+		int redir_flags = 0;
+		if  (CALI_F_FROM_HOST) {
+			redir_flags = BPF_F_INGRESS;
+		}
+		rc = bpf_redirect(skb->ifindex, redir_flags);
+		if (rc == TC_ACT_REDIRECT) {
+			CALI_DEBUG("Redirect to the same interface (%d) succeeded\n", skb->ifindex);
+			goto skip_fib;
+		}
+
+		CALI_DEBUG("Redirect to the same interface (%d) failed\n", skb->ifindex);
+		goto deny;
+	}
+
 #if FIB_ENABLED
 	// Try a short-circuit FIB lookup.
 	if (fwd_fib(fwd)) {
@@ -260,6 +275,8 @@ static CALI_BPF_INLINE int forward_or_drop(struct __sk_buff *skb,
 
 cancel_fib:
 #endif /* FIB_ENABLED */
+
+skip_fib:
 
 	if (CALI_F_TO_HOST) {
 		/* Packet is towards host namespace, mark it so that downstream
@@ -982,6 +999,10 @@ icmp_too_big:
 	state->ip_proto = IPPROTO_ICMP;
 
 	fib_flags |= BPF_FIB_LOOKUP_OUTPUT;
+	if (CALI_F_FROM_WEP) {
+		/* we know it came from workload, just send it back the same way */
+		rc = CALI_RES_REDIR_IFINDEX;
+	}
 
 	goto allow;
 
