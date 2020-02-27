@@ -699,6 +699,16 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct __sk_buff *skb,
 		}
 	}
 
+	ip_csum_offset = skb_offset(skb, ip_header) +  offsetof(struct iphdr, check);
+	switch (state->ip_proto) {
+	case IPPROTO_TCP:
+		csum_offset = skb_l4hdr_offset(skb, ihl) + offsetof(struct tcphdr, check);
+		break;
+	case IPPROTO_UDP:
+		csum_offset = skb_l4hdr_offset(skb, ihl) + offsetof(struct udphdr, check);
+		break;
+	}
+
 	switch (state->ct_result.rc){
 	case CALI_CT_NEW:
 		switch (state->pol_rc) {
@@ -808,16 +818,13 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct __sk_buff *skb,
 		}
 
 		ip_header->daddr = state->post_nat_ip_dst;
-		ip_csum_offset = skb_offset(skb, ip_header) +  offsetof(struct iphdr, check);
 
 		switch (state->ip_proto) {
 		case IPPROTO_TCP:
 			tcp_header->dest = host_to_be16(state->post_nat_dport);
-			csum_offset = skb_l4hdr_offset(skb, ihl) + offsetof(struct tcphdr, check);
 			break;
 		case IPPROTO_UDP:
 			udp_header->dest = host_to_be16(state->post_nat_dport);
-			csum_offset = skb_l4hdr_offset(skb, ihl) + offsetof(struct udphdr, check);
 			break;
 		}
 
@@ -862,16 +869,13 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct __sk_buff *skb,
 
 		// Actually do the NAT.
 		ip_header->saddr = state->ct_result.nat_ip;
-		ip_csum_offset = skb_offset(skb, ip_header) +  offsetof(struct iphdr, check);
 
 		switch (state->ip_proto) {
 		case IPPROTO_TCP:
 			tcp_header->source = host_to_be16(state->ct_result.nat_port);
-			csum_offset = skb_l4hdr_offset(skb, ihl) + offsetof(struct tcphdr, check);
 			break;
 		case IPPROTO_UDP:
 			udp_header->source = host_to_be16(state->ct_result.nat_port);
-			csum_offset = skb_l4hdr_offset(skb, ihl) + offsetof(struct udphdr, check);
 			break;
 		}
 
