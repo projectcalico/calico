@@ -60,7 +60,7 @@ Annotate the pod with key `cni.projectcalico.org/ipv4pools` and/or `cni.projectc
 
 `cni.projectcalico.org/ipv4pools: "[\"pool-1\", \"pool-2\"]"`
 
-Note the use of the escaped \" for the inner double quotes around the pool names.
+Note the use of the escaped `\"` for the inner double quotes around the pool names.
 
 #### Restrict all pods within a namespace to use an IP address range
 
