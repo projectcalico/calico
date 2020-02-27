@@ -349,9 +349,9 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 
 			/* XXX do a proper CT lookup to find this */
 			ip_header->saddr = cali_host_ip();
-			int ip_csum_offset = skb_iphdr_offset(skb) + offsetof(struct iphdr, check);
+			int l3_csum_off = skb_iphdr_offset(skb) + offsetof(struct iphdr, check);
 
-			int res = bpf_l3_csum_replace(skb, ip_csum_offset, ip_src, cali_host_ip(), 4);
+			int res = bpf_l3_csum_replace(skb, l3_csum_off, ip_src, cali_host_ip(), 4);
 			if (res) {
 				fwd.reason = CALI_REASON_CSUM_FAIL;
 				goto deny;
@@ -677,7 +677,7 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct __sk_buff *skb,
 
 	__u8 ihl = ip_header->ihl * 4;
 
-	size_t csum_offset = 0, ip_csum_offset;
+	size_t l4_csum_off = 0, l3_csum_off;
 	int res = 0;
 	bool encap_needed = false;
 	uint32_t fib_flags = 0;
@@ -699,13 +699,13 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct __sk_buff *skb,
 		}
 	}
 
-	ip_csum_offset = skb_offset(skb, ip_header) +  offsetof(struct iphdr, check);
+	l3_csum_off = skb_iphdr_offset(skb) +  offsetof(struct iphdr, check);
 	switch (state->ip_proto) {
 	case IPPROTO_TCP:
-		csum_offset = skb_l4hdr_offset(skb, ihl) + offsetof(struct tcphdr, check);
+		l4_csum_off = skb_l4hdr_offset(skb, ihl) + offsetof(struct tcphdr, check);
 		break;
 	case IPPROTO_UDP:
-		csum_offset = skb_l4hdr_offset(skb, ihl) + offsetof(struct udphdr, check);
+		l4_csum_off = skb_l4hdr_offset(skb, ihl) + offsetof(struct udphdr, check);
 		break;
 	}
 
@@ -828,16 +828,16 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct __sk_buff *skb,
 			break;
 		}
 
-		CALI_VERB("L3 csum at %d L4 csum at %d\n", ip_csum_offset, csum_offset);
+		CALI_VERB("L3 csum at %d L4 csum at %d\n", l3_csum_off, l4_csum_off);
 
-		if (csum_offset) {
-			res = skb_nat_l4_csum_ipv4(skb, csum_offset, state->ip_dst,
+		if (l4_csum_off) {
+			res = skb_nat_l4_csum_ipv4(skb, l4_csum_off, state->ip_dst,
 					state->post_nat_ip_dst,	host_to_be16(state->dport),
 					host_to_be16(state->post_nat_dport),
 					state->ip_proto == IPPROTO_UDP ? BPF_F_MARK_MANGLED_0 : 0);
 		}
 
-		res |= bpf_l3_csum_replace(skb, ip_csum_offset, state->ip_dst, state->post_nat_ip_dst, 4);
+		res |= bpf_l3_csum_replace(skb, l3_csum_off, state->ip_dst, state->post_nat_ip_dst, 4);
 
 		if (res) {
 			reason = CALI_REASON_CSUM_FAIL;
@@ -879,19 +879,19 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct __sk_buff *skb,
 			break;
 		}
 
-		CALI_VERB("L3 csum at %d L4 csum at %d\n", ip_csum_offset, csum_offset);
+		CALI_VERB("L3 csum at %d L4 csum at %d\n", l3_csum_off, l4_csum_off);
 
-		if (csum_offset) {
-			res = skb_nat_l4_csum_ipv4(skb, csum_offset, state->ip_src,
+		if (l4_csum_off) {
+			res = skb_nat_l4_csum_ipv4(skb, l4_csum_off, state->ip_src,
 					state->ct_result.nat_ip, host_to_be16(state->sport),
 					host_to_be16(state->ct_result.nat_port),
 					state->ip_proto == IPPROTO_UDP ? BPF_F_MARK_MANGLED_0 : 0);
 		}
 
 		CALI_VERB("L3 checksum update (csum is at %d) port from %x to %x\n",
-				ip_csum_offset, state->ip_src, state->ct_result.nat_ip);
+				l3_csum_off, state->ip_src, state->ct_result.nat_ip);
 
-		int csum_rc = bpf_l3_csum_replace(skb, ip_csum_offset,
+		int csum_rc = bpf_l3_csum_replace(skb, l3_csum_off,
 						  state->ip_src, state->ct_result.nat_ip, 4);
 		CALI_VERB("bpf_l3_csum_replace(IP): %d\n", csum_rc);
 		res |= csum_rc;
