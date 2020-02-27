@@ -332,7 +332,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 				attrs, returnedHandle, err := ic.GetAssignmentAttributes(context.Background(), cnet.IP{sentinelIP})
 				Expect(err).NotTo(HaveOccurred())
 				Expect(attrs).To(Equal(ipAttr))
-				Expect(handle).NotTo(BeNil())
+				Expect(returnedHandle).NotTo(BeNil())
 				Expect(*returnedHandle).To(Equal(handle))
 			})
 
