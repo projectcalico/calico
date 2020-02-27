@@ -839,7 +839,7 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct __sk_buff *skb,
 		goto allow;
 
 	case CALI_CT_ESTABLISHED_SNAT:
-		CALI_DEBUG("CT: SNAT to %x:%d\n",
+		CALI_DEBUG("CT: SNAT from %x:%d\n",
 				be32_to_host(state->ct_result.nat_ip), state->ct_result.nat_port);
 
 		if (dnat_return_should_encap() && state->ct_result.tun_ret_ip) {
