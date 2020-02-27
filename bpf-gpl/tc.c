@@ -843,15 +843,15 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct __sk_buff *skb,
 				be32_to_host(state->ct_result.nat_ip), state->ct_result.nat_port);
 
 		if (dnat_return_should_encap() && state->ct_result.tun_ret_ip) {
-			/* XXX do this before NAT until we can track the icmp back */
-			if (ip_is_dnf(ip_header) && vxlan_v4_encap_too_big(skb)) {
-				CALI_DEBUG("Return ICMP mtu is too big\n");
-				goto icmp_too_big;
-			}
 			if (CALI_F_DSR) {
 				/* SNAT will be done after routing, when leaving HEP */
 				CALI_DEBUG("DSR enabled, skipping SNAT + encap\n");
 				goto allow;
+			}
+			/* XXX do this before NAT until we can track the icmp back */
+			if (ip_is_dnf(ip_header) && vxlan_v4_encap_too_big(skb)) {
+				CALI_DEBUG("Return ICMP mtu is too big\n");
+				goto icmp_too_big;
 			}
 		}
 
