@@ -12,15 +12,13 @@ development.
 
 To deploy a cluster suitable for production, refer to [Installation](installation).
 
-
 ### Requirements
 
-- AMD64 processor
+- x86-64 processor
 - 2CPU
 - 2GB RAM
 - 10GB free disk space
 - RedHat Enterprise Linux 7.x+, CentOS 7.x+, Ubuntu 16.04+, or Debian 9.x+
-
 
 ### Before you begin
 
@@ -154,10 +152,9 @@ To deploy a cluster suitable for production, refer to [Installation](installatio
 Congratulations! You now have a single-host Kubernetes cluster
 equipped with {{site.prodname}}.
 
-
 ### Next steps
 
-**[Secure a simple application using the Kubernetes `NetworkPolicy` API](../../security/tutorials/kubernetes-policy-basic)**
+- [Secure a simple application using the Kubernetes `NetworkPolicy` API](../../security/tutorials/kubernetes-policy-basic)
 
 **[Control ingress and egress traffic using the Kubernetes `NetworkPolicy` API](../../security/tutorials/kubernetes-policy-advanced)**
 
