@@ -493,7 +493,9 @@ func (m *bpfEndpointManager) ensureQdisc(ifaceName string) {
 
 func (m *bpfEndpointManager) attachWorkloadProgram(endpoint *proto.WorkloadEndpoint, polDirection PolDirection) error {
 	ap := m.calculateTCAttachPoint(tc.EpTypeWorkload, polDirection, endpoint.Name)
-	err := tc.AttachProgram(ap, nil)
+	// Host side of the veth is always configured as 169.254.1.1.
+	hostIP := net.IPv4(169, 254, 1, 1)
+	err := tc.AttachProgram(ap, hostIP)
 	if err != nil {
 		return err
 	}
