@@ -30,9 +30,11 @@ Migrating to Calico IPAM solves these use cases and more.
 There are two ways to switch your cluster to use Calico networking. Both methods give you a fully-functional Calico cluster using VXLAN networking between pods.
 
 - **Create a new cluster using Calico and migrate existing workloads**
+
   If you have the ability to migrate worloads from one cluster to the next without caring about downtime, this is the easiest method: [create a new cluster using Calico]({{site.baseurl}}/getting-started/kubernetes/quickstart).
 
 - **Live migration on an existing cluster**
+
   If your workloads are already in production, or downtime is not an option, use the live migration tool that performs a rolling update of each node in the cluster. 
 
 ### Before you begin...
