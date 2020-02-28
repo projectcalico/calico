@@ -441,7 +441,7 @@ static CALI_BPF_INLINE bool vxlan_v4_encap_too_big(struct __sk_buff *skb)
 {
 	__u32 mtu = TUNNEL_MTU;
 
-	if (skb->len > mtu) {
+	if (skb->len - sizeof(struct ethhdr) > mtu) {
 		CALI_DEBUG("SKB too long (len=%d) vs limit=%d\n", skb->len, mtu);
 		return true;
 	}
