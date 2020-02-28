@@ -57,6 +57,19 @@ spec:
           image: {{.Values.cni.image}}:{{ .Values.cni.tag }}
           command: ["/opt/cni/bin/calico-ipam", "-upgrade"]
           env:
+{{- if .Values.bpf }}
+            # Overrides for kubernetes API server host/port.  Needed in BPF mode.
+            - name: KUBERNETES_SERVICE_HOST
+              valueFrom:
+                configMapKeyRef:
+                  name: calico-config
+                  key: kubernetes_service_host
+            - name: KUBERNETES_SERVICE_PORT
+              valueFrom:
+                configMapKeyRef:
+                  name: calico-config
+                  key: kubernetes_service_port
+{{- end }}
             - name: KUBERNETES_NODE_NAME
               valueFrom:
                 fieldRef:
@@ -80,6 +93,19 @@ spec:
           image: {{.Values.cni.image}}:{{ .Values.cni.tag }}
           command: ["/install-cni.sh"]
           env:
+{{- if .Values.bpf }}
+            # Overrides for kubernetes API server host/port.  Needed in BPF mode.
+            - name: KUBERNETES_SERVICE_HOST
+              valueFrom:
+                configMapKeyRef:
+                  name: calico-config
+                  key: kubernetes_service_host
+            - name: KUBERNETES_SERVICE_PORT
+              valueFrom:
+                configMapKeyRef:
+                  name: calico-config
+                  key: kubernetes_service_port
+{{- end }}
             # Name of the CNI config file to create.
             - name: CNI_CONF_NAME
               value: "10-{{include "variant_name" . | lower}}.conflist"
@@ -164,6 +190,22 @@ spec:
         - name: calico-node
           image: {{.Values.node.image}}:{{.Values.node.tag}}
           env:
+{{- if .Values.bpf }}
+            # Overrides for kubernetes API server host/port.  Needed in BPF mode.
+            - name: KUBERNETES_SERVICE_HOST
+              valueFrom:
+                configMapKeyRef:
+                  name: calico-config
+                  key: kubernetes_service_host
+            - name: KUBERNETES_SERVICE_PORT
+              valueFrom:
+                configMapKeyRef:
+                  name: calico-config
+                  key: kubernetes_service_port
+            # Actually enable BPF mode.
+            - name: FELIX_BPFENABLED
+              value: "true"
+{{- end }}
 {{- if eq .Values.datastore "etcd" }}
             # The location of the etcd cluster.
             - name: ETCD_ENDPOINTS
@@ -235,7 +277,7 @@ spec:
               value: "autodetect"
             # Enable IPIP
             - name: CALICO_IPV4POOL_IPIP
-              value: "Always"
+              value: "{{- if .Values.bpf -}} CrossSubnet {{- else -}} Always {{- end -}}"
             # Set MTU for tunnel device used if ipip is enabled
             - name: FELIX_IPINIPMTU
               valueFrom:
@@ -341,6 +383,13 @@ spec:
 {{- end }}
             - name: policysync
               mountPath: /var/run/nodeagent
+{{- if .Values.bpf }}
+            # We need to mount the BPF filesystem at /sys/fs/bpf and we need that mount to persist
+            # even if {{ include "nodeName" . }} is restarted.
+            - name: sysfs
+              mountPath: /sys/fs/
+              mountPropagation: Bidirectional
+{{- end }}
 {{- if eq .Values.network "flannel" }}
   {{- if eq .Values.datastore "kubernetes" }}
         # This container runs flannel using the kube-subnet-mgr backend
@@ -470,6 +519,12 @@ spec:
           hostPath:
             path: /run/xtables.lock
             type: FileOrCreate
+{{- if .Values.bpf }}
+        - name: sysfs
+          hostPath:
+            path: /sys/fs/
+            type: DirectoryOrCreate
+{{- end }}
 {{- if and (eq .Values.network "flannel") (eq .Values.datastore "kubernetes") }}
         # Used by flannel.
         - name: flannel-cfg

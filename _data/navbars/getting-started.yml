@@ -1,4 +1,4 @@
-title: "Get started"
+title: "Install"
 path: /getting-started/
 order: 1
 section:
@@ -34,6 +34,13 @@ section:
       path: /getting-started/kubernetes/self-managed-onprem/onpremises  
     - title: Customize manifests
       path: /getting-started/kubernetes/installation/config-options
+  - title: OpenShift
+    path: /getting-started/openshift/
+    section:
+    - title: System requirements
+      path: /getting-started/openshift/requirements
+    - title: Installation
+      path: /getting-started/openshift/installation
   - title: Flannel
     path: /getting-started/kubernetes/flannel/
     section:
