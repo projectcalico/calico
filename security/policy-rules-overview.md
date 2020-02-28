@@ -1,11 +1,15 @@
 ---
-title: Use network connectivity rules in policy for Calico workload and host endpoint resources.
-description: More examples of using policy rules in Calico network policies.
+title: Basic rules
+description: Define network connectivity for Calico endpoints using policy rules and label selectors. 
 ---
+
+### Big picture
+
+Use Calico policy rules and label selectors that match Calico endpoints (pods, OpenStack VMs, and host interfaces) to define network connectivity.
 
 ### Value
 
-If you've read [Get started with Calico policy]({{ site.baseurl }}/security/calico-network-policy) and [Kubernetes policy]({{ site.baseurl }}/security/kubernetes-network-policy), you already know how to use label selectors to apply policy rules. This section provides more examples of using Calico policy rules in: 
+If you've read [Get started with Calico policy]({{ site.baseurl }}/security/calico-network-policy) and [Kubernetes policy]({{ site.baseurl }}/security/kubernetes-network-policy), you already know how to use label selectors to apply policy rules. This section provides more examples of using Calico policy rules. For all policy rules, see: 
 
 - [Global network policy]({{ site.baseurl }}/reference/resources/globalnetworkpolicy)
 - [Network policy]({{ site.baseurl }}/reference/resources/networkpolicy)
