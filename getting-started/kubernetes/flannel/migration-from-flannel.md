@@ -52,7 +52,7 @@ There are two ways to switch your cluster to use Calico networking. Both methods
 
 - [Migrate from flannel networking to Calico networking, live migration](#migrate-from-flannel-networking-to-calico-networking-live-migration)
 - [Modify flannel configuration](#modify-flannel-configuration)
-- [Check migration status](#check-migration-status)
+- [View migration status](#check-migration-status)
 - [View migration logs](#view-migration-logs)
 - [Revert migration](#revert-migration)
 
@@ -109,7 +109,6 @@ which can be set as environment variables within the pod.
 | FLANNEL_PORT                     | UDP port used for VXLAN.                                             |  8472                                      |
 | CALICO_DAEMONSET_NAME            | Name of the calico daemon set in the kube-system namespace.          |  calico-node                               |
 | CNI_CONFIG_DIR                   | Full path on the host in which to search for CNI config files.       |  /etc/cni/net.d                            |
-
 
 #### View migration status
 
