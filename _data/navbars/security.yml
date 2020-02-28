@@ -4,7 +4,7 @@ order: 3
 section:
 - title: Adopt a zero trust network model for security
   path: /security/adopt-zero-trust
-- title: Get started
+- title: Get started with policy
   path: /security/get-started
   section:
   - title: Calico policy
@@ -30,7 +30,7 @@ section:
 - title: Policy rules
   path: /security/policy-rules
   section:
-  - title: Overview
+  - title: Basic rules
     path: /security/policy-rules-overview
   - title: Namespace rule
     path: /security/namespace-policy
