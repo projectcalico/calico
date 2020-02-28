@@ -140,17 +140,16 @@ def _neutron_rule_to_etcd_rule(rule):
     if rule['protocol'] is None or rule['protocol'] == -1:
         pass
     elif rule['protocol'] == 'ipv6-icmp':
-        etcd_rule['protocol'] = 'ICMPv6'
+        etcd_rule['protocol'] = {'IPv6': 'ICMPv6'}[ethertype]
     elif rule['protocol'] == 'icmp':
-        etcd_rule['protocol'] = {'IPv4': 'ICMP',
-                                 'IPv6': 'ICMPv6'}[ethertype]
+        etcd_rule['protocol'] = {'IPv4': 'ICMP'}[ethertype]
     elif isinstance(rule['protocol'], int):
         etcd_rule['protocol'] = rule['protocol']
     else:
         etcd_rule['protocol'] = rule['protocol'].upper()
 
     port_spec = None
-    if rule['protocol'] == 'icmp':
+    if rule['protocol'] == 'icmp' or rule['protocol'] == 'ipv6-icmp':
         # OpenStack stashes the ICMP match criteria in
         # port_range_min/max.
         icmp_fields = {}
