@@ -123,11 +123,11 @@ eBPF dataplane mode is a tech preview feature, which supports a subset of {{site
 * Activate its embedded implementation of `kube-proxy` to implement Kubernetes service load balancing.
 * Disable support for IPv6 and host endpoints.
 
-See the [getting started guide]({{ site.baseurl }}/getting-started/kubernetes/trying-eBPF) for step-by step instructions on trying out this feature.
+See the [getting started guide]({{ site.baseurl }}/getting-started/kubernetes/trying-ebpf) for step-by step instructions on trying out this feature.
 
 | Configuration parameter / Environment variable                                        | Description | Schema | Default |
 | ------------------------------------------------------------------------------------- | ----------- | ------ |---------|
-| BPFEnabled                         / <br/> FELIX_BPFENABLED                           | Enable eBPF dataplane mode.  eBPF mode has a number of limitations, see the [getting started guide]({{ site.baseurl }}/getting-started/kubernetes/trying-eBPF).  This is a tech preview feature and subject to change in future releases. | true, false |  false |
+| BPFEnabled                         / <br/> FELIX_BPFENABLED                           | Enable eBPF dataplane mode.  eBPF mode has a number of limitations, see the [getting started guide]({{ site.baseurl }}/getting-started/kubernetes/trying-ebpf).  This is a tech preview feature and subject to change in future releases. | true, false |  false |
 | BPFLogLevel                        / <br/> FELIX_BPFLOGLEVEL                          | The log level used by the BPF programs.  The logs are emitted to the BPF trace pipe, accessible with the command `tc exec BPF debug`.  This is a tech preview feature and subject to change in future releases. | Off,Info,Debug | Off |
 | BPFDataIfacePattern                / <br/> FELIX_BPFDATAIFACEPATTERN                  | Controls which interfaces Felix should attach BPF programs to in order to catch traffic to/from the external network.  This needs to match the interfaces that Calico workload traffic flows over as well as any interfaces that handle incoming traffic to NodePorts and services from outside the cluster.  It should not match the workload interfaces (usually named cali...)..  This is a tech preview feature and subject to change in future releases. | regular expression | `^(en.*|eth.*|tunl0$)` |
 | BPFConnectTimeLoadBalancingEnabled / <br/> FELIX_BPFCONNECTTIMELOADBALANCINGENABLED   | Controls whether Felix installs the connect-time load balancer.  In the current release, the connect-time load balancer is required for the host to reach kubernetes services.  This is a tech preview feature and subject to change in future releases. | true,false |  true |

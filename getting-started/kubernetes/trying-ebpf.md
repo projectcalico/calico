@@ -7,12 +7,12 @@ description: Try out the eBPF dataplane tech preview.
 
 Install {{site.prodname}} and enable the tech preview of the new eBPF dataplane.
 
-> **Warning!** eBPF mode is a tech preview and should not be used in production clusters. It does not support all the features of {{site.prodname}} and it is missing some security features (for example anti-spoofing protection).
+> **Warning!** eBPF mode is a tech preview and should not be used in production clusters. It has had very limited testing and it will contain bugs such as dropping packets or slowing down responses (please report these on the Calico Users slack or Github).  In addition, it does not support all the features of {{site.prodname}} and it is missing some security features (for example anti-spoofing protection).
 {: .alert .alert-danger }
 
 ### Value
 
-The new eBPF dataplane mode has several advantages over iptables mode:
+The new eBPF dataplane mode has several advantages over standard linux networking pipeline mode:
 
 * It scales to higher throughput.
 * It uses less CPU per GBit.
@@ -47,10 +47,10 @@ To make it easier to try out the tech preview, we have created a custom Kubernet
 In the tech preview release, eBPF mode has the following pre-requisites:
 
 - A v5.3+ Linux kernel, for the tech preview release, we have limited our testing to Ubuntu 19.10 so we strongly recommend that you start with that too.
-- An underlying network that doesn't require Calico to use an overlay.  The instructions below guide you through setting up a cluster in a single AWS subnet; an alternative would be to set up your cluster on-prem with a routed network topology.  Using the IPIP or VXLAN overlay modes add additional overhead making it harder to see the benefits of eBPF mode. 
-- The network must be configured to allow {{site.prodname}} packets between Calico hosts.  VXLAN is used to forward packets from outside the cluster that are destined for NodePorts and ClusterIPs.
-- Single-homed hosts; eBPF mode currently assumes a single "main" host IP.
-- Must use the Calico CNI plugin and Calico IPAM.  It is not compatible with third-party CNI plugins (AWS CNI/Azure CNI/GKE CNI/flannel etc).
+- An underlying network that doesn't require Calico to use an overlay.  The instructions below guide you through setting up a cluster in a single AWS subnet; an alternative would be to set up your cluster on-prem with a routed network topology.
+- The network must be configured to allow VXLAN packets between  {{site.prodname}}  hosts.
+- Single-homed hosts; eBPF mode currently assumes a single "main" host IP and interface.
+- Must use the Calico CNI plugin and Calico IPAM.  It is not yet compatible with third-party CNI plugins (AWS CNI/Azure CNI/GKE CNI/flannel etc).
 - IPv4 only.  The tech preview release does not support IPv6.
 - Kubernetes API Datastore only.
 - Typha is not supported in the tech preview. 
@@ -60,6 +60,7 @@ In the tech preview release, eBPF mode has the following pre-requisites:
 
 - [Set up a suitable cluster](#set-up-a-suitable-cluster)
 - [Install Calico on nodes](#install-calico-on-nodes)
+- [Toggle between eBPF and the standard linux networking pipeline](#toggle-between-ebpf-and-the-standard-linux-networking-pipeline)
 
 #### Set up a suitable cluster
 
@@ -182,6 +183,33 @@ For the tech preview, only the Kubernetes API Datastore is supported.  Since {{s
    kube-scheduler-host-name                        1/1     Running   0          46m
    ``` 
 
+#### Toggle between eBPF and the standard linux networking pipeline 
+
+After following the above instructions you'll have a cluster running in eBPF mode.  If you'd like to switch to the standard linux networking pipeline mode for comparison purposes:
+
+1. In the manifest above, eBPF mode is configured with an environment variable.  To disable it, you can patch the calico-node daemon set:
+   ```bash
+   kubectl set env -n kube-system ds/calico-node FELIX_BPFENABLED="false"
+   ```
+   
+1. To re-enable the Kubernetes `kube-proxy` you can use the following command to reverse the node selector change we made above:
+   ```bash
+   kubectl patch ds -n kube-system kube-proxy --type merge -p '{"spec":{"template":{"spec":{"nodeSelector":{"non-calico": null}}}}}'
+   ```
+
+To re-enable BPF mode:
+
+1. Disable `kube-proxy` on your cluster.  The following command adds a node selector to the `kube-proxy` daemon set that won't match anything:
+
+   ```bash
+   kubectl patch ds -n kube-system kube-proxy -p '{"spec":{"template":{"spec":{"nodeSelector":{"non-calico": "true"}}}}}'
+   ```  
+   
+1. Re-enable eBPF mode:
+   ```bash
+   kubectl set env -n kube-system ds/calico-node FELIX_BPFENABLED="true"
+   ```
+
 ### Next steps
 
 **Tools**
@@ -194,5 +222,4 @@ For the tech preview, only the Kubernetes API Datastore is supported.  Since {{s
 
 **Security**
 
-- [Secure Calico component communications]({{site.baseurl}}/security/comms/crypto-auth)
 - [Secure pods with Calico network policy]({{site.baseurl}}/security/calico-network-policy)
