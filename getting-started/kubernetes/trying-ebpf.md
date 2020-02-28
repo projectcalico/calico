@@ -210,6 +210,9 @@ To re-enable BPF mode:
    kubectl set env -n kube-system ds/calico-node FELIX_BPFENABLED="true"
    ```
 
+> **Warning!** Switching between eBPF and standard linux networking can cause long-lived flows to be silently dropped since the two dataplane modes do not share connection-tracking state.
+{: .alert .alert-danger }
+
 ### Next steps
 
 **Tools**
