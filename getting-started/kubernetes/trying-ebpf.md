@@ -1,0 +1,190 @@
+---
+title: Try out the eBPF tech preview
+description: Try out the eBPF dataplane tech preview.
+---
+
+### Big picture
+
+Install {{site.prodname}} and enable the tech preview of the new eBPF dataplane.
+
+> **Warning!** eBPF mode is a tech preview and should not be used in production clusters. It does not support all the features of {{site.prodname}} and it is missing some security features (for example anti-spoofing protection).
+{: .alert .alert-danger }
+
+### Value
+
+The new eBPF dataplane mode has several advantages over iptables mode:
+
+* It scales to higher throughput.
+* It uses less CPU per GBit.
+* It has native support for Kubernetes services (without needing kube-proxy) that:
+
+  * Reduces first packet latency for packets to services.
+  * Preserves external client source IP addresses all the way to the pod.
+  * Supports DSR (Direct Server Return) for more efficient service routing.
+  * Uses less CPU than kube-proxy to keep the dataplane in sync.
+  
+Trying out the tech preview will give you a taste of these benefits and an opportunity to give feedback to the {{site.prodname}} team. 
+
+### Features
+
+This how-to guide uses the following {{site.prodname}} features:
+
+- **calico/node**
+- **eBPF dataplane**
+
+### Concepts
+
+#### eBPF
+
+eBPF is a technology that allows you to write mini programs that can be attached to various low-level hooks in the Linux kernel, for a wide variety of uses including networking, security, and tracing. You’ll see a lot of non-networking projects leveraging eBPF, but for {{site.prodname}} our focus is on networking, and in particular, pushing the networking capabilities of the latest Linux kernel’s to the limit.
+
+#### eBPF mode manifest
+
+To make it easier to try out the tech preview, we have created a custom Kubernetes manifest (.yaml file) with eBPF mode pre-enabled.
+
+### Before you begin...
+
+In the tech preview release, eBPF mode has the following pre-requisites:
+
+- A v5.3+ Linux kernel, for the tech preview release, we have limited our testing to Ubuntu 19.10 so we strongly recommend that you start with that too.
+- An underlying network that doesn't require Calico to use an overlay.  The instructions below guide you through setting up a cluster in a single AWS subnet; an alternative would be to set up your cluster on-prem with a routed network topology.  Using the IPIP or VXLAN overlay modes add additional overhead making it harder to see the benefits of eBPF mode. 
+- The network must be configured to allow {{site.prodname}} packets between Calico hosts.  VXLAN is used to forward packets from outside the cluster that are destined for NodePorts and ClusterIPs.
+- Single-homed hosts; eBPF mode currently assumes a single "main" host IP.
+- Must use the Calico CNI plugin and Calico IPAM.  It is not compatible with third-party CNI plugins (AWS CNI/Azure CNI/GKE CNI/flannel etc).
+- IPv4 only.  The tech preview release does not support IPv6.
+- Kubernetes API Datastore only.
+- Typha is not supported in the tech preview. 
+- The base [requirements]({{site.baseurl}}/getting-started/kubernetes/requirements) also apply.
+
+### How to
+
+- [Set up a suitable cluster](#set-up-a-suitable-cluster)
+- [Install Calico on nodes](#install-calico-on-nodes)
+
+#### Set up a suitable cluster
+
+We recommend using `kubeadm` to bootstrap a suitable cluster on AWS.  
+
+1. In AWS create a controller node and at least 2 worker nodes in the same VPC subnet.  Use Ubuntu 19.10 as the image.
+
+1. On each node, {% include open-new-window.html text='install kubeadm' url='https://kubernetes.io/docs/setup/production-environment/tools/kubeadm/install-kubeadm/' %}; we recommend using docker as the containeriser in order to match our test environment as closely as possible.
+
+1. Create the controller node of a new cluster. On the controller VM, execute:
+
+   ```
+   sudo kubeadm init --pod-network-cidr 192.168.0.0/16
+   ```
+
+1. To set up kubectl for the ubuntu user, run:
+
+   ```
+   mkdir -p $HOME/.kube
+   sudo cp -i /etc/kubernetes/admin.conf $HOME/.kube/config
+   sudo chown $(id -u):$(id -g) $HOME/.kube/config
+   ```
+   The final line of the kubeadm init output contains the command for joining your workers to the controller.  Run this on each worker, prepending `sudo` to run it as root.  It will look something like this:
+
+   ```
+   sudo kubeadm join 10.240.0.11:6443 --token <token> --discovery-token-ca-cert-hash sha256:<hash>
+   ```
+
+1. On the controller, verify that all nodes have joined
+
+   ```
+   kubectl get nodes
+   ```
+   which should output something similar to:
+
+   ```
+   NAME         STATUS     ROLES    AGE     VERSION
+   controller   NotReady   master   5m49s   v1.17.2
+   worker-0     NotReady   <none>   3m38s   v1.17.2
+   worker-1     NotReady   <none>   3m7s    v1.17.2
+   worker-2     NotReady   <none>   5s      v1.17.2
+   ```
+
+   The nodes will report NotReady until we complete the installation of {{site.prodname}} below.
+
+#### Install {{site.prodname}} on nodes
+
+For the tech preview, only the Kubernetes API Datastore is supported.  Since {{site.prodname}} replaces `kube-proxy` in eBPF mode, it requires the IP and port of your API server to be set in its config map. 
+
+1. Download the {{site.prodname}} networking manifest for the Kubernetes API datastore.
+
+   ```bash
+   curl {{ "/manifests/calico-bpf.yaml" | absolute_url }} -O
+   ```
+{% include content/pod-cidr-sed.md yaml="calico" %}
+1. Find the real IP and port of your API server.  One way to do this is to run the following command:
+   ```bash
+   kubectl get endpoints kubernetes
+   ```
+   The output should look like this:
+   ```bash
+   kubectl get endpoints kubernetes
+   NAME         ENDPOINTS           AGE
+   kubernetes   <IP>:<port>         43h
+   ```
+   Record the `<IP>` and `<port>`.
+1. Modify the `kubernetes_service_host` and `kubernetes_service_port` variables in the config map at the top of the manifest.  Set `kubernetes_service_host` to the IP you recorded above.  Set `kubernetes_service_port` to the port.
+   ```yaml
+   kind: ConfigMap
+   apiVersion: v1
+   metadata:
+     name: calico-config
+     namespace: kube-system
+   data:
+     ...
+     kubernetes_service_host: "<IP>"
+     kubernetes_service_port: "<port>"
+     ...
+   ```
+   
+1. Disable `kube-proxy` on your cluster.  The following command adds a node selector to the `kube-proxy` daemon set that won't match anything:
+
+   ```bash
+   kubectl patch ds -n kube-system kube-proxy -p '{"spec":{"template":{"spec":{"nodeSelector":{"non-calico": "true"}}}}}'
+   ```  
+   
+   Since the selector won't match anything, `kube-proxy` won't run anywhere but it can be easily re-enabled by removing the selector.
+   
+1. Apply the {{site.prodname}} manifest using the following command.
+
+   ```bash
+   kubectl apply -f calico-bpf.yaml
+   ```
+   
+1. Verify that the calico-node pods start and become ready and that the `kube-proxy` pods shut down:
+   ```bash
+   watch kubectl get po -n kube-system
+   ```
+   Should give output like this:
+   ```
+   NAME                                            READY   STATUS    RESTARTS   AGE
+   calico-kube-controllers-78d64db6fd-dlqwm        1/1     Running   0          28m
+   calico-node-6ffzz                               1/1     Running   0          13m
+   calico-node-9ccpx                               1/1     Running   0          13m
+   calico-node-mx2v4                               1/1     Running   0          13m
+   calico-node-n9pc9                               1/1     Running   0          13m
+   coredns-5644d7b6d9-bpddg                        1/1     Running   0          46m
+   coredns-5644d7b6d9-glfr7                        1/1     Running   0          46m
+   etcd-host-name                                  1/1     Running   0          46m
+   kube-apiserver-host-name                        1/1     Running   0          46m
+   kube-controller-manager-host-name               1/1     Running   0          46m
+   kube-scheduler-host-name                        1/1     Running   0          46m
+   ``` 
+
+### Next steps
+
+**Tools**
+
+- [Install and configure calicoctl]({{site.baseurl}}/getting-started/calicoctl/install)
+
+**Networking**
+
+- If you are using the default BGP networking with full-mesh node-to-node peering with no encapsulation, go to [Configure BGP peering]({{site.baseurl}}/networking/bgp) to get traffic flowing between pods.
+
+**Security**
+
+- [Secure Calico component communications]({{site.baseurl}}/security/comms/crypto-auth)
+- [Secure pods with Calico network policy]({{site.baseurl}}/security/calico-network-policy)
