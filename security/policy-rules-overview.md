@@ -1,15 +1,11 @@
 ---
-title: Pods
-description: Use policy rules in network policy and global network policy as match criteria using label selectors. 
+title: Define network connectivity rules for Calico workload and host endpoint resources.
+description: Use policy rules in Calico policy as match criteria using label selectors. 
 ---
 
-### Big picture
+### Value
 
-Use label selectors to apply policy rules in {{site.prodname}} network policy and global network policy. 
-
-If you've read [Get started with Calico policy]({{ site.baseurl }}/security/calico-network-policy) and [Kubernetes policy]({{ site.baseurl }}/security/kubernetes-network-policy) and done the tutorials, you already know how to use label selectors to apply policy rules. If you need more help, the Policy rules section provides more examples of specific rules. 
-
-For the complete list of policy rules, see: 
+If you've read [Get started with Calico policy]({{ site.baseurl }}/security/calico-network-policy) and [Kubernetes policy]({{ site.baseurl }}/security/kubernetes-network-policy) and done the tutorials, you already know how to use label selectors to apply policy rules. This section provides more examples of using specific policy rules in {{site.prodname}} for: 
 
 - [Global network policy]({{ site.baseurl }}/reference/resources/globalnetworkpolicy)
 - [Network policy]({{ site.baseurl }}/reference/resources/networkpolicy)
