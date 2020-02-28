@@ -35,25 +35,25 @@ For details of {{site.prodname}} network design and architecture, see a lightboa
 
 {{site.prodname}} can perform network policy enforcement with a number of other Kubernetes networking options.
 
-##### Amazon AWS VPC CNI
+**Amazon AWS VPC CNI**
 
 The Amazon VPC CNI plugin uses AWS elastic network interfaces to provide pod networking. It is the default networking used in Amazon EKS, with {{site.prodname}} for [network policy enforcement]({{ site.baseurl }}/security/calico-network-policy).
 
-##### Azure CNI
+**Azure CNI**
 
 The Azure CNI plugin configures the Azure virtual network to provide pod networking. It is the default networking used in Microsoft AKS, with {{site.prodname}} for [network policy enforcement]({{ site.baseurl }}/security/calico-network-policy).
 
-##### Flannel
+**Flannel**
 
 Flannel routes pod traffic using static per-node CIDRs. It provides a number of networking backends. [Calico can be used for network policy enforcement]({{ site.baseurl }}/security/calico-network-policy).
 
-##### Google cloud networking
+**Google cloud networking**
 
-Google cloud routes and [Alias IP ranges](https://cloud.google.com/vpc/docs/alias-ip) can be used to provide pod networking on Google cloud, and is the default for Google Kubernetes Engine (GKE), with {{site.prodname}} for [network policy enforcement]({{ site.baseurl }}/security/calico-network-policy).
+Google cloud routes and {% include open-new-window.html text='Alias IP ranges' url='https://cloud.google.com/vpc/docs/alias-ip' %} can be used to provide pod networking on Google cloud, and is the default for Google Kubernetes Engine (GKE), with {{site.prodname}} for [network policy enforcement]({{ site.baseurl }}/security/calico-network-policy).
 
 #### Networking options
 
-The table below shows common networking options when using {{site.prodname}}.
+The following table shows common {{site.prodname}} networking options.
 
 | **Networking Option**                                        | **Suitable Environments**                    | **Dataplane Performance and Visibility**                 | **Setup Complexity** | **Notes**                                                    |
 | ------------------------------------------------------------ | -------------------------------------------- | -------------------------------------------------------- | -------------------- | ------------------------------------------------------------ |
