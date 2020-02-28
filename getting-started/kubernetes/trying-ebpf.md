@@ -65,7 +65,15 @@ In the tech preview release, eBPF mode has the following pre-requisites:
 
 We recommend using `kubeadm` to bootstrap a suitable cluster on AWS.  
 
-1. In AWS create a controller node and at least 2 worker nodes in the same VPC subnet.  Use Ubuntu 19.10 as the image.
+1. In AWS, create a controller node and at least 2 worker nodes in the same VPC subnet.  Use Ubuntu 19.10 as the image.
+
+1. **Important** disable the source/destination check on each node's interface.  This is required in order to use non-overlay networking.
+
+   1. Open the Amazon EC2 console and navigate to "Instances".
+
+   1. Select the instance and choose **Actions** > **Networking** > **Change Source/Dest. Check**.
+
+   1. Verify that source/destination check is disabled. Otherwise, choose **Yes, Disable**.
 
 1. On each node, {% include open-new-window.html text='install kubeadm' url='https://kubernetes.io/docs/setup/production-environment/tools/kubeadm/install-kubeadm/' %}; we recommend using docker as the containeriser in order to match our test environment as closely as possible.
 
@@ -96,11 +104,11 @@ We recommend using `kubeadm` to bootstrap a suitable cluster on AWS.
    which should output something similar to:
 
    ```
-   NAME         STATUS     ROLES    AGE     VERSION
-   controller   NotReady   master   5m49s   v1.17.2
-   worker-0     NotReady   <none>   3m38s   v1.17.2
-   worker-1     NotReady   <none>   3m7s    v1.17.2
-   worker-2     NotReady   <none>   5s      v1.17.2
+   NAME                                           STATUS      ROLES    AGE   VERSION
+   ip-172-16-101-119.us-west-2.compute.internal   NotReady    <none>   86m   v1.17.3
+   ip-172-16-101-27.us-west-2.compute.internal    NotReady    <none>   86m   v1.17.3
+   ip-172-16-101-49.us-west-2.compute.internal    NotReady    master   88m   v1.17.3
+   ip-172-16-102-174.us-west-2.compute.internal   NotReady    <none>   86m   v1.17.3
    ```
 
    The nodes will report NotReady until we complete the installation of {{site.prodname}} below.
