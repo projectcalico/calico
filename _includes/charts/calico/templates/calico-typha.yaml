@@ -74,6 +74,19 @@ spec:
           name: calico-typha
           protocol: TCP
         env:
+{{- if .Values.bpf }}
+          # Overrides for kubernetes API server host/port.  Needed in BPF mode.
+          - name: KUBERNETES_SERVICE_HOST
+            valueFrom:
+              configMapKeyRef:
+                name: calico-config
+                key: kubernetes_service_host
+          - name: KUBERNETES_SERVICE_PORT
+            valueFrom:
+              configMapKeyRef:
+                name: calico-config
+                key: kubernetes_service_port
+{{- end }}
           # Enable "info" logging by default.  Can be set to "debug" to increase verbosity.
           - name: TYPHA_LOGSEVERITYSCREEN
             value: "info"
