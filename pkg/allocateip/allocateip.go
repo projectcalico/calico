@@ -37,15 +37,6 @@ func Run() {
 	// Install a hook that adds file and line number information.
 	logrus.AddHook(&logutils.ContextHook{})
 
-	// Load the client config from environment.
-	cfg, c := calicoclient.CreateClient()
-
-	// If configured to use host-local IPAM, this script has nothing to do, so just return.
-	if cfg.Spec.K8sUsePodCIDR {
-		logrus.Debug("Using host-local IPAM, no need to allocate a tunnel IP")
-		return
-	}
-
 	// This binary is only ever invoked _after_ the
 	// startup binary has been invoked and the modified environments have
 	// been sourced.  Therefore, the NODENAME environment will always be
@@ -53,6 +44,20 @@ func Run() {
 	nodename := os.Getenv("NODENAME")
 	if nodename == "" {
 		logrus.Panic("NODENAME environment is not set")
+	}
+
+	run(nodename)
+}
+
+func run(nodename string) {
+
+	// Load the client config from environment.
+	cfg, c := calicoclient.CreateClient()
+
+	// If configured to use host-local IPAM, this script has nothing to do, so just return.
+	if cfg.Spec.K8sUsePodCIDR {
+		logrus.Debug("Using host-local IPAM, no need to allocate a tunnel IP")
+		return
 	}
 
 	ctx := context.Background()
