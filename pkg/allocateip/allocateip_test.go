@@ -103,6 +103,109 @@ func checkTunnelAddressForNode(c client.Interface, tunnelType string, nodeName s
 	}
 }
 
+var _ = Describe("FV tests", func() {
+	// Set up logging.
+	log.SetOutput(os.Stdout)
+	log.SetFormatter(&logutils.Formatter{})
+	log.AddHook(&logutils.ContextHook{})
+
+	ctx := context.Background()
+	cfg, _ := apiconfig.LoadClientConfigFromEnvironment()
+
+	var c client.Interface
+	BeforeEach(func() {
+		// Clear out datastore
+		be, err := backend.NewClient(*cfg)
+		Expect(err).ToNot(HaveOccurred())
+		err = be.Clean()
+		Expect(err).ToNot(HaveOccurred())
+
+		// Create a client.
+		c, _ = client.New(*cfg)
+
+		// Create an IPPool.
+		_, err = c.IPPools().Create(ctx, makeIPv4Pool("pool1", "172.16.0.0/16", 31), options.SetOptions{})
+		Expect(err).NotTo(HaveOccurred())
+	})
+
+	It("should not leak addresses if the existing allocation has no attributes", func() {
+		// Create an allocation which simulates an "old-style" allocation, prior to us
+		// using handles and attributes to attach metadata.
+		ipAddr, _, _ := net.ParseCIDR("172.16.0.1/32")
+		nodename := "my-test-node"
+		args := ipam.AssignIPArgs{
+			IP:       *ipAddr,
+			Hostname: nodename,
+		}
+		Expect(c.IPAM().AssignIP(ctx, args)).NotTo(HaveOccurred())
+
+		// Create a Node object which uses that allocation.
+		node := makeNode("192.168.0.1/24", "fdff:ffff:ffff:ffff:ffff::/80")
+		node.Name = nodename
+		node.Spec.BGP.IPv4IPIPTunnelAddr = "172.16.0.1"
+		_, err := c.Nodes().Create(ctx, node, options.SetOptions{})
+		Expect(err).NotTo(HaveOccurred())
+
+		// Run the allocateip code.
+		run(nodename)
+
+		// Assert that the node has the same IP on it.
+		newNode, err := c.Nodes().Get(ctx, nodename, options.GetOptions{})
+		Expect(err).NotTo(HaveOccurred())
+		Expect(newNode.Spec.BGP).NotTo(BeNil())
+		Expect(newNode.Spec.BGP.IPv4IPIPTunnelAddr).To(Equal("172.16.0.1"))
+
+		// Assert that the IPAM allocation has been updated to include a handle and attributes.
+		attrs, handle, err := c.IPAM().GetAssignmentAttributes(ctx, net.IP{IP: gnet.ParseIP("172.16.0.1")})
+		Expect(err).NotTo(HaveOccurred())
+		Expect(len(attrs)).To(Equal(2))
+		Expect(handle).NotTo(BeNil())
+		Expect(*handle).To(Equal("ipip-tunnel-addr-my-test-node"))
+	})
+
+	It("should not claim an address that has a handle but no attributes", func() {
+		// This test covers a scenario where the node has an IP address in its spec,
+		// but the IP has no attributes because it was assigned using an old version of Calico.
+		// In this scenario, either the allocation in IPAM has a  handle - in which case it is a
+		// WEP address - or the allocation has no handle, in which case it is a node tunnel addr.
+		// For WEP addresses, we should leave them alone and just allocate a new tunnel addr.
+
+		// Create an allocation which simulates an "old-style" allocation, prior to us
+		// using handles and attributes to attach metadata.
+		ipAddr, _, _ := net.ParseCIDR("172.16.0.1/32")
+		nodename := "my-test-node"
+		wepHandle := "some-wep-handle"
+		args := ipam.AssignIPArgs{
+			IP:       *ipAddr,
+			HandleID: &wepHandle,
+			Hostname: nodename,
+		}
+		Expect(c.IPAM().AssignIP(ctx, args)).NotTo(HaveOccurred())
+
+		// Create a Node object which uses that allocation.
+		node := makeNode("192.168.0.1/24", "fdff:ffff:ffff:ffff:ffff::/80")
+		node.Name = nodename
+		node.Spec.BGP.IPv4IPIPTunnelAddr = "172.16.0.1"
+		_, err := c.Nodes().Create(ctx, node, options.SetOptions{})
+		Expect(err).NotTo(HaveOccurred())
+
+		// Run the allocateip code.
+		run(nodename)
+
+		// Assert that the node no longer has the same IP on it.
+		newNode, err := c.Nodes().Get(ctx, nodename, options.GetOptions{})
+		Expect(err).NotTo(HaveOccurred())
+		Expect(newNode.Spec.BGP).NotTo(BeNil())
+		Expect(newNode.Spec.BGP.IPv4IPIPTunnelAddr).NotTo(Equal("172.16.0.1"))
+
+		// Assert that the IPAM allocation for the original address is stil intact.
+		_, handle, err := c.IPAM().GetAssignmentAttributes(ctx, net.IP{IP: gnet.ParseIP("172.16.0.1")})
+		Expect(err).NotTo(HaveOccurred())
+		Expect(handle).NotTo(BeNil())
+		Expect(*handle).To(Equal("some-wep-handle"))
+	})
+})
+
 var _ = allocateIPDescribe("ensureHostTunnelAddress", []string{"ipip", "vxlan"}, func(tunnelType string) {
 	log.SetOutput(os.Stdout)
 	// Set log formatting.
