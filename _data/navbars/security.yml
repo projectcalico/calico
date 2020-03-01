@@ -32,13 +32,13 @@ section:
   section:
   - title: Basic rules
     path: /security/policy-rules-overview
-  - title: Namespace rule
+  - title: Namespace rules
     path: /security/namespace-policy
-  - title: Service accounts rule
+  - title: Service accounts rules
     path: /security/service-accounts
-  - title: External IPs or networks rule
+  - title: External IPs or networks rules
     path: /security/external-ips-policy
-  - title: ICMP/ping rule
+  - title: ICMP/ping rules
     path: /security/icmp-ping
 - title: Policy for hosts
   path: /security/hosts
