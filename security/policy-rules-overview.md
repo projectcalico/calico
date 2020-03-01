@@ -9,7 +9,7 @@ Use Calico policy rules and label selectors that match Calico endpoints (pods, O
 
 ### Value
 
-Using label selectors to identify the endpoints (pods, OpenStack VMs, host interfaces) that a policy applies to, or that should be selected by policy rules, means you can define policy without knowing the IP addresses of the endpoints. This is ideal for handling the dynamic nature of workloads with ephemeral IPs (such as Kubernetes pods).
+Using label selectors to identify the endpoints (pods, OpenStack VMs, host interfaces) that a policy applies to, or that should be selected by policy rules, means you can define policy without knowing the IP addresses of the endpoints. This is ideal for handling dynamic workloads with ephemeral IPs (such as Kubernetes pods).
 
 ### How to
 
