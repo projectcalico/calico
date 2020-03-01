@@ -47,7 +47,7 @@ Notice there are four BGP sessions, one to each other node in the cluster. In a 
 works well and is highly resilient. However, the total number of BGP sessions scales as the square
 of the number of nodes, and in a large cluster this creates a lot of overhead.
 
-In this lab we will configure a fixed number of _route reflectors_. Route reflectors annouce their
+In this lab we will configure a fixed number of _route reflectors_. Route reflectors announce their
 own routes and the routes they receive from other peers. This means nodes only need to peer with the
 route reflectors to get all the routes in the cluster. This peering arrangement means that the number
 of BGP sessions scales linearly with the number of nodes.

@@ -1,0 +1,8 @@
+---
+layout: null
+---
+{% helm %}
+datastore: kubernetes
+network: calico
+bpf: true
+{% endhelm %}

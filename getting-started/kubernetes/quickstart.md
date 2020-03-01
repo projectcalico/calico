@@ -12,15 +12,13 @@ development.
 
 To deploy a cluster suitable for production, refer to [Installation](installation).
 
-
 ### Requirements
 
-- AMD64 processor
+- x86-64 processor
 - 2CPU
 - 2GB RAM
 - 10GB free disk space
 - RedHat Enterprise Linux 7.x+, CentOS 7.x+, Ubuntu 16.04+, or Debian 9.x+
-
 
 ### Before you begin
 
@@ -28,7 +26,7 @@ To deploy a cluster suitable for production, refer to [Installation](installatio
   If NetworkManager is present on the host, refer to
   [Configure NetworkManager](../../maintenance/troubleshooting#configure-networkmanager).
 
-- [Follow the Kubernetes instructions to install kubeadm](https://kubernetes.io/docs/setup/independent/install-kubeadm/){:target="_blank"}.
+- {% include open-new-window.html text='Follow the Kubernetes instructions to install kubeadm' url='https://kubernetes.io/docs/setup/production-environment/tools/kubeadm/install-kubeadm/' %}
 
    > **Note**: After installing kubeadm, do not power down or restart
    the host. Instead, continue directly to the
@@ -154,13 +152,9 @@ To deploy a cluster suitable for production, refer to [Installation](installatio
 Congratulations! You now have a single-host Kubernetes cluster
 equipped with {{site.prodname}}.
 
-
 ### Next steps
 
-**[Secure a simple application using the Kubernetes `NetworkPolicy` API](../../security/tutorials/kubernetes-policy-basic)**
-
-**[Control ingress and egress traffic using the Kubernetes `NetworkPolicy` API](../../security/tutorials/kubernetes-policy-advanced)**
-
-**[Create a user interface that shows blocked and allowed connections in real time](../../security/tutorials/kubernetes-policy-demo/kubernetes-demo)**
-
-**[Install and configure calicoctl](../calicoctl/install)**
+- [Secure a simple application using the Kubernetes NetworkPolicy API](../../security/tutorials/kubernetes-policy-basic)
+- [Control ingress and egress traffic using the Kubernetes NetworkPolicy API](../../security/tutorials/kubernetes-policy-advanced)
+- [Create a user interface that shows blocked and allowed connections in real time](../../security/tutorials/kubernetes-policy-demo/kubernetes-demo)
+- [Install and configure calicoctl](../calicoctl/install)
