@@ -102,7 +102,7 @@ default-ipv4-ippool   192.168.0.0/16   true   Always     false      all()
 2. Label the nodes.
 
    To assign IP pools to specific nodes, these nodes must be labelled
-   using [kubectl label](https://kubernetes.io/docs/tasks/configure-pod-container/assign-pods-nodes/#add-a-label-to-a-node).
+   using {% include open-new-window.html text='kubectl label' url='https://kubernetes.io/docs/tasks/configure-pod-container/assign-pods-nodes/#add-a-label-to-a-node' %}.
 
    ```bash
    kubectl label nodes kube-node-0 rack=0
