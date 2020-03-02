@@ -52,6 +52,7 @@ In the tech preview release, eBPF mode has the following pre-requisites:
 - Single-homed hosts; eBPF mode currently assumes a single "main" host IP and interface.
 - Must use the Calico CNI plugin and Calico IPAM.  It is not yet compatible with third-party CNI plugins (AWS CNI/Azure CNI/GKE CNI/flannel etc).
 - IPv4 only.  The tech preview release does not support IPv6.
+- The MTU used by the BPF programs when doing encapsulation is hard coded (with the inner MTU limited to 1410 bytes).
 - Kubernetes API Datastore only.
 - Typha is not supported in the tech preview. 
 - The base [requirements]({{site.baseurl}}/getting-started/kubernetes/requirements) also apply.
@@ -124,7 +125,12 @@ For the tech preview, only the Kubernetes API Datastore is supported.  Since {{s
    curl {{ "/manifests/calico-bpf.yaml" | absolute_url }} -O
    ```
    
-   The manifest is configured to use the Kubernetes API Datastore, to turn on BPF mode, and to use cross-subnet IPIP encapsulation (the best setting for AWS). 
+   The manifest is configured to:
+    
+   * use the Kubernetes API Datastore
+   * turn on BPF mode
+   * use no encapsulation (which requires using a single subnet in AWS).
+   
 1. Find the real IP and port of your API server.  One way to do this is to run the following command:
    ```bash
    kubectl get endpoints kubernetes

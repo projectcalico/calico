@@ -46,7 +46,11 @@ data:
 {{- end }}
 
   # Configure the MTU to use
+  {{- if .Values.bpf }}
+  veth_mtu: "1410"
+  {{- else }}
   veth_mtu: "1440"
+  {{- end}}
 {{- else if eq .Values.network "flannel" }}
   # The interface used by canal for host <-> host communication.
   # If left blank, then the interface is chosen using the node's
