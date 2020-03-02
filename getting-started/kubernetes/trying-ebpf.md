@@ -36,7 +36,7 @@ This how-to guide uses the following {{site.prodname}} features:
 
 #### eBPF
 
-eBPF is a technology that allows you to write mini programs that can be attached to various low-level hooks in the Linux kernel, for a wide variety of uses including networking, security, and tracing. You’ll see a lot of non-networking projects leveraging eBPF, but for {{site.prodname}} our focus is on networking, and in particular, pushing the networking capabilities of the latest Linux kernel’s to the limit.
+eBPF (or "extended Berkeley Packet Filter"), is a technology that allows you to write mini programs that can be attached to various low-level hooks in the Linux kernel, for a wide variety of uses including networking, security, and tracing. You’ll see a lot of non-networking projects leveraging eBPF, but for {{site.prodname}} our focus is on networking, and in particular, pushing the networking capabilities of the latest Linux kernels to the limit.
 
 #### eBPF mode manifest
 
@@ -76,7 +76,7 @@ We recommend using `kubeadm` to bootstrap a suitable cluster on AWS.
 
    1. Verify that source/destination check is disabled. Otherwise, choose **Yes, Disable**.
 
-1. On each node, {% include open-new-window.html text='install kubeadm' url='https://kubernetes.io/docs/setup/production-environment/tools/kubeadm/install-kubeadm/' %}; we recommend using docker as the containeriser in order to match our test environment as closely as possible.
+1. On each node, {% include open-new-window.html text='install kubeadm' url='https://kubernetes.io/docs/setup/production-environment/tools/kubeadm/install-kubeadm/' %}; we recommend using docker as the container runtime in order to match our test environment as closely as possible.
 
 1. Create the controller node of a new cluster. On the controller VM, execute:
 
@@ -112,18 +112,19 @@ We recommend using `kubeadm` to bootstrap a suitable cluster on AWS.
    ip-172-16-102-174.us-west-2.compute.internal   NotReady    <none>   86m   v1.17.3
    ```
 
-   The nodes will report NotReady until we complete the installation of {{site.prodname}} below.
+   The nodes will report `NotReady` until we complete the installation of {{site.prodname}} below.
 
 #### Install {{site.prodname}} on nodes
 
 For the tech preview, only the Kubernetes API Datastore is supported.  Since {{site.prodname}} replaces `kube-proxy` in eBPF mode, it requires the IP and port of your API server to be set in its config map. 
 
-1. Download the {{site.prodname}} networking manifest for the Kubernetes API datastore.
+1. Download the following {{site.prodname}} install manifest.
 
    ```bash
    curl {{ "/manifests/calico-bpf.yaml" | absolute_url }} -O
    ```
-{% include content/pod-cidr-sed.md yaml="calico" %}
+   
+   The manifest is configured to use the Kubernetes API Datastore, to turn on BPF mode, and to use cross-subnet IPIP encapsulation (the best setting for AWS). 
 1. Find the real IP and port of your API server.  One way to do this is to run the following command:
    ```bash
    kubectl get endpoints kubernetes
