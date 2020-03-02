@@ -46,8 +46,7 @@ To deploy a cluster suitable for production, refer to [Installation](installatio
    ```
 
    > **Note**: If 192.168.0.0/16 is already in use within your network you must select a different pod network
-   > CIDR, replacing 192.168.0.0/16 in the above command as well as in any manifests applied below.
-   {: .alert .alert-info}
+   > CIDR, replacing 192.168.0.0/16 in the above command. {: .alert .alert-info}
 
 1. Execute the following commands to configure kubectl (also returned by
    `kubeadm init`).
