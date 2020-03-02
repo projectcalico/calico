@@ -173,6 +173,21 @@ static CALI_BPF_INLINE int forward_or_drop(struct __sk_buff *skb,
 		goto deny;
 	}
 
+	if (rc == CALI_RES_REDIR_IFINDEX) {
+		int redir_flags = 0;
+		if  (CALI_F_FROM_HOST) {
+			redir_flags = BPF_F_INGRESS;
+		}
+		rc = bpf_redirect(skb->ifindex, redir_flags);
+		if (rc == TC_ACT_REDIRECT) {
+			CALI_DEBUG("Redirect to the same interface (%d) succeeded\n", skb->ifindex);
+			goto skip_fib;
+		}
+
+		CALI_DEBUG("Redirect to the same interface (%d) failed\n", skb->ifindex);
+		goto deny;
+	}
+
 #if FIB_ENABLED
 	// Try a short-circuit FIB lookup.
 	if (fwd_fib(fwd)) {
@@ -260,6 +275,8 @@ static CALI_BPF_INLINE int forward_or_drop(struct __sk_buff *skb,
 
 cancel_fib:
 #endif /* FIB_ENABLED */
+
+skip_fib:
 
 	if (CALI_F_TO_HOST) {
 		/* Packet is towards host namespace, mark it so that downstream
@@ -349,9 +366,9 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 
 			/* XXX do a proper CT lookup to find this */
 			ip_header->saddr = cali_host_ip();
-			int ip_csum_offset = skb_iphdr_offset(skb) + offsetof(struct iphdr, check);
+			int l3_csum_off = skb_iphdr_offset(skb) + offsetof(struct iphdr, check);
 
-			int res = bpf_l3_csum_replace(skb, ip_csum_offset, ip_src, cali_host_ip(), 4);
+			int res = bpf_l3_csum_replace(skb, l3_csum_off, ip_src, cali_host_ip(), 4);
 			if (res) {
 				fwd.reason = CALI_REASON_CSUM_FAIL;
 				goto deny;
@@ -675,7 +692,9 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct __sk_buff *skb,
 	struct tcphdr *tcp_header = (void*)(ip_header+1);
 	struct udphdr *udp_header = (void*)(ip_header+1);
 
-	size_t csum_offset = 0, ip_csum_offset;
+	__u8 ihl = ip_header->ihl * 4;
+
+	size_t l4_csum_off = 0, l3_csum_off;
 	int res = 0;
 	bool encap_needed = false;
 	uint32_t fib_flags = 0;
@@ -695,6 +714,16 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct __sk_buff *skb,
 		case CALI_CT_ESTABLISHED_SNAT:
 			goto icmp_ttl_exceeded;
 		}
+	}
+
+	l3_csum_off = skb_iphdr_offset(skb) +  offsetof(struct iphdr, check);
+	switch (state->ip_proto) {
+	case IPPROTO_TCP:
+		l4_csum_off = skb_l4hdr_offset(skb, ihl) + offsetof(struct tcphdr, check);
+		break;
+	case IPPROTO_UDP:
+		l4_csum_off = skb_l4hdr_offset(skb, ihl) + offsetof(struct udphdr, check);
+		break;
 	}
 
 	switch (state->ct_result.rc){
@@ -806,27 +835,26 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct __sk_buff *skb,
 		}
 
 		ip_header->daddr = state->post_nat_ip_dst;
-		ip_csum_offset = skb_offset(skb, ip_header) +  offsetof(struct iphdr, check);
 
 		switch (state->ip_proto) {
 		case IPPROTO_TCP:
 			tcp_header->dest = host_to_be16(state->post_nat_dport);
-			csum_offset = skb_offset(skb, tcp_header) + offsetof(struct tcphdr, check);
 			break;
 		case IPPROTO_UDP:
 			udp_header->dest = host_to_be16(state->post_nat_dport);
-			csum_offset = skb_offset(skb, udp_header) + offsetof(struct udphdr, check);
 			break;
 		}
 
-		if (csum_offset) {
-			res = skb_nat_l4_csum_ipv4(skb, csum_offset, state->ip_dst,
+		CALI_VERB("L3 csum at %d L4 csum at %d\n", l3_csum_off, l4_csum_off);
+
+		if (l4_csum_off) {
+			res = skb_nat_l4_csum_ipv4(skb, l4_csum_off, state->ip_dst,
 					state->post_nat_ip_dst,	host_to_be16(state->dport),
 					host_to_be16(state->post_nat_dport),
 					state->ip_proto == IPPROTO_UDP ? BPF_F_MARK_MANGLED_0 : 0);
 		}
 
-		res |= bpf_l3_csum_replace(skb, ip_csum_offset, state->ip_dst, state->post_nat_ip_dst, 4);
+		res |= bpf_l3_csum_replace(skb, l3_csum_off, state->ip_dst, state->post_nat_ip_dst, 4);
 
 		if (res) {
 			reason = CALI_REASON_CSUM_FAIL;
@@ -839,48 +867,48 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct __sk_buff *skb,
 		goto allow;
 
 	case CALI_CT_ESTABLISHED_SNAT:
-		CALI_DEBUG("CT: SNAT to %x:%d\n",
+		CALI_DEBUG("CT: SNAT from %x:%d\n",
 				be32_to_host(state->ct_result.nat_ip), state->ct_result.nat_port);
 
 		if (dnat_return_should_encap() && state->ct_result.tun_ret_ip) {
-			/* XXX do this before NAT until we can track the icmp back */
-			if (ip_is_dnf(ip_header) && vxlan_v4_encap_too_big(skb)) {
-				CALI_DEBUG("Return ICMP mtu is too big\n");
-				goto icmp_too_big;
-			}
 			if (CALI_F_DSR) {
 				/* SNAT will be done after routing, when leaving HEP */
 				CALI_DEBUG("DSR enabled, skipping SNAT + encap\n");
 				goto allow;
 			}
+			/* XXX do this before NAT until we can track the icmp back */
+			if (!(state->ip_proto == IPPROTO_TCP && skb_is_gso(skb)) &&
+					ip_is_dnf(ip_header) && vxlan_v4_encap_too_big(skb)) {
+				CALI_DEBUG("Return ICMP mtu is too big\n");
+				goto icmp_too_big;
+			}
 		}
 
 		// Actually do the NAT.
 		ip_header->saddr = state->ct_result.nat_ip;
-		ip_csum_offset = skb_offset(skb, ip_header) +  offsetof(struct iphdr, check);
 
 		switch (state->ip_proto) {
 		case IPPROTO_TCP:
 			tcp_header->source = host_to_be16(state->ct_result.nat_port);
-			csum_offset = skb_offset(skb, tcp_header) + offsetof(struct tcphdr, check);
 			break;
 		case IPPROTO_UDP:
 			udp_header->source = host_to_be16(state->ct_result.nat_port);
-			csum_offset = skb_offset(skb, udp_header) + offsetof(struct udphdr, check);
 			break;
 		}
 
-		if (csum_offset) {
-			res = skb_nat_l4_csum_ipv4(skb, csum_offset, state->ip_src,
+		CALI_VERB("L3 csum at %d L4 csum at %d\n", l3_csum_off, l4_csum_off);
+
+		if (l4_csum_off) {
+			res = skb_nat_l4_csum_ipv4(skb, l4_csum_off, state->ip_src,
 					state->ct_result.nat_ip, host_to_be16(state->sport),
 					host_to_be16(state->ct_result.nat_port),
 					state->ip_proto == IPPROTO_UDP ? BPF_F_MARK_MANGLED_0 : 0);
 		}
 
 		CALI_VERB("L3 checksum update (csum is at %d) port from %x to %x\n",
-				ip_csum_offset, state->ip_src, state->ct_result.nat_ip);
+				l3_csum_off, state->ip_src, state->ct_result.nat_ip);
 
-		int csum_rc = bpf_l3_csum_replace(skb, ip_csum_offset,
+		int csum_rc = bpf_l3_csum_replace(skb, l3_csum_off,
 						  state->ip_src, state->ct_result.nat_ip, 4);
 		CALI_VERB("bpf_l3_csum_replace(IP): %d\n", csum_rc);
 		res |= csum_rc;
@@ -971,6 +999,10 @@ icmp_too_big:
 	state->ip_proto = IPPROTO_ICMP;
 
 	fib_flags |= BPF_FIB_LOOKUP_OUTPUT;
+	if (CALI_F_FROM_WEP) {
+		/* we know it came from workload, just send it back the same way */
+		rc = CALI_RES_REDIR_IFINDEX;
+	}
 
 	goto allow;
 
