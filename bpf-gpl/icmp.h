@@ -130,7 +130,7 @@ static CALI_BPF_INLINE int icmp_v4_reply(struct __sk_buff *skb,
 #ifdef CALI_PARANOID
 	/* XXX verify that ip_orig.daddr is always the node's IP
 	 *
-	 * we only call this function because of NodePOrt encap
+	 * we only call this function because of NodePort encap
 	 */
 	if (ip_orig.daddr != cali_host_ip()) {
 		CALI_DEBUG("ICMP v4 reply: ip_orig.daddr != cali_host_ip() 0x%x\n", ip_orig.daddr);
@@ -180,8 +180,8 @@ static CALI_BPF_INLINE int icmp_v4_too_big(struct __sk_buff *skb)
 		__be16  unused;
 		__be16  mtu;
 	} frag = {
-		// ICMP MTU ignores the ethernet header.
-		.mtu = host_to_be16(TUNNEL_MTU),
+		// ICMP MTU refers to the IP packet size.
+		.mtu = host_to_be16(TNNL_INNER_IP_MTU),
 	};
 
 	CALI_DEBUG("Sending ICMP too big mtu=%d\n", be16_to_host(frag.mtu));
