@@ -53,7 +53,7 @@ section that matches your type.
    communications with mutual TLS authentication, continue to [Enable application layer policy]({{site.baseurl}}/security/app-layer-policy) (optional).
 
 The geeky details of what you get:
-{% include geek-details.html details='Policy:Calico,IPAM:Host-local,CNI:Calico,Overlay:VXLAN,Routing:Static,Datastore:Kubernetes' %}   
+{% include geek-details.html details='Policy:Calico,IPAM:Host-local,CNI:Calico,Overlay:VXLAN,Routing:Static,Datastore:Kubernetes' %}
 
 ### Installing with the etcd datastore
 
@@ -84,5 +84,5 @@ etcd, complete the following steps.
    communications with mutual TLS authentication, continue to [Enable application layer policy]({{site.baseurl}}/security/app-layer-policy) (optional).
 
 The geeky details of what you get:
-{% include geek-details.html details='Policy:Calico,IPAM:Host-local,CNI:Calico,Overlay:VXLAN,Routing:Static,Datastore:etcd' %}   
+{% include geek-details.html details='Policy:Calico,IPAM:Host-local,CNI:Calico,Overlay:VXLAN,Routing:Static,Datastore:etcd' %}
 
