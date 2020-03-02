@@ -6,7 +6,7 @@ require (
 	github.com/kelseyhightower/confd v0.0.0-00010101000000-000000000000
 	github.com/onsi/ginkgo v1.10.1
 	github.com/onsi/gomega v1.7.0
-	github.com/projectcalico/felix v0.0.0-20200225205426-a286df35bb16
+	github.com/projectcalico/felix v0.0.0-20200302175626-ffd3291c6c5a
 	github.com/projectcalico/libcalico-go v1.7.2-0.20200225165413-26809aa675f6
 	github.com/sirupsen/logrus v1.4.2
 	gopkg.in/fsnotify/fsnotify.v1 v1.4.7
@@ -17,7 +17,7 @@ require (
 )
 
 replace (
-	github.com/kelseyhightower/confd => github.com/projectcalico/confd v0.0.0-20200213081014-968a2869ccb3
+	github.com/kelseyhightower/confd => github.com/projectcalico/confd v1.0.1-0.20200228081248-56dc9b1c6ee9
 	github.com/sirupsen/logrus => github.com/projectcalico/logrus v1.0.4-calico
 
 	k8s.io/api v0.0.0 => k8s.io/api v0.0.0-20191016110408-35e52d86657a
