@@ -114,6 +114,27 @@ The Kubernetes API datastore driver reads its configuration from Kubernetes-prov
 | `NetlinkTimeoutSecs`                 | `FELIX_NETLINKTIMEOUTSECS`                 | Time, in seconds, that Felix will wait for netlink (i.e. routing table list/update) operations to complete before giving up and retrying. [Default: `10`] | float |
 | `RouteRefreshInterval`               | `FELIX_ROUTEREFRESHINTERVAL`               | Period, in seconds, at which Felix re-checks the routes in the dataplane to ensure that no other process has accidentally broken {{site.prodname}}'s rules. Set to 0 to disable route refresh. [Default: `90`] | int |
 
+#### eBPF dataplane configuration
+
+eBPF dataplane mode is a tech preview feature, which supports a subset of {{site.prodname}} function in this release.  When BPFEnabled is set to `true`, Felix will:
+
+* Require a v5.3 Linux kernel.
+* Implement workload endpoint policy with eBPF programs instead of iptables.
+* Activate its embedded implementation of `kube-proxy` to implement Kubernetes service load balancing.
+* Disable support for IPv6 and host endpoints.
+
+See the [getting started guide]({{ site.baseurl }}/getting-started/kubernetes/trying-ebpf) for step-by step instructions on trying out this feature.
+
+| Configuration parameter / Environment variable                                        | Description | Schema | Default |
+| ------------------------------------------------------------------------------------- | ----------- | ------ |---------|
+| BPFEnabled                         / <br/> FELIX_BPFENABLED                           | Enable eBPF dataplane mode.  eBPF mode has a number of limitations, see the [getting started guide]({{ site.baseurl }}/getting-started/kubernetes/trying-ebpf).  This is a tech preview feature and subject to change in future releases. | true, false |  false |
+| BPFLogLevel                        / <br/> FELIX_BPFLOGLEVEL                          | The log level used by the BPF programs.  The logs are emitted to the BPF trace pipe, accessible with the command `tc exec BPF debug`.  This is a tech preview feature and subject to change in future releases. | Off,Info,Debug | Off |
+| BPFDataIfacePattern                / <br/> FELIX_BPFDATAIFACEPATTERN                  | Controls which interfaces Felix should attach BPF programs to in order to catch traffic to/from the external network.  This needs to match the interfaces that Calico workload traffic flows over as well as any interfaces that handle incoming traffic to NodePorts and services from outside the cluster.  It should not match the workload interfaces (usually named cali...)..  This is a tech preview feature and subject to change in future releases. | regular expression | `^(en.*|eth.*|tunl0$)` |
+| BPFConnectTimeLoadBalancingEnabled / <br/> FELIX_BPFCONNECTTIMELOADBALANCINGENABLED   | Controls whether Felix installs the connect-time load balancer.  In the current release, the connect-time load balancer is required for the host to reach kubernetes services.  This is a tech preview feature and subject to change in future releases. | true,false |  true |
+| BPFExternalServiceMode             / <br/> FELIX_BPFEXTERNALSERVICEMODE               | Controls how traffic from outside the cluster to NodePorts and ClusterIPs is handled.  In Tunnel mode, packet is tunneled from the ingress host to the host with the backing pod and back again.  In DSR mode, traffic is tunneled to the host with the backing pod and then returned directly; this requires a network that allows direct return. | Tunnel,DSR |  Tunnel |
+| BPFKubeProxyIptablesCleanupEnabled / <br/> FELIX_BPFKUBEPROXYIPTABLESCLEANUPENABLED   | Controls whether Felix will clean up the iptables rules created by the Kubernetes `kube-proxy`; should only be enabled if `kube-proxy` is not running. This is a tech preview feature and subject to change in future releases. | true,false| true |
+| BPFKubeProxyMinSyncPeriod          / <br/> FELIX_BPFKUBEPROXYMINSYNCPERIOD            | Controls the minimum time between dataplane updates for Felix's embedded `kube-proxy` implementation. | seconds | `1` |
+
 #### Kubernetes-specific configuration
 
 | Configuration parameter | Environment variable       | Description  | Schema |
