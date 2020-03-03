@@ -1,4 +1,4 @@
-- title: master
+- title: v3.13.0-pre-release
   note: ""
   tigera-operator:
    image: tigera/operator
@@ -6,20 +6,20 @@
    version: release-v1.1
   components:
      typha:
-      version: master
+      version: release-v3.13
      calicoctl:
-      version: master
+      version: release-v3.13
      calico/node:
-      version: master
+      version: release-v3.13
      calico/cni:
-      version: master
+      version: release-v3.13
      calico/kube-controllers:
-      version: master
+      version: release-v3.13
      networking-calico:
-      version: master
+      version: release-v3.13
      flannel:
       version: v0.11.0
      calico/dikastes:
-      version: master
+      version: release-v3.13
      flexvol:
-      version: master
+      version: release-v3.13
