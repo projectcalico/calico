@@ -1401,7 +1401,7 @@ func hexToCIDRMapValue(hexStrings []string) (uint32, error) {
 }
 
 // cidrMapValueToHex takes a ref count as unsigned 32 bit number and
-// turns it into an array of hex strings, whic bpftool can understand.
+// turns it into an array of hex strings, which bpftool can understand.
 func cidrMapValueToHex(refCount uint32) []string {
 	refCountBytes := make([]byte, 4)
 	nativeEndian.PutUint32(refCountBytes, refCount)

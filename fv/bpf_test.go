@@ -1082,7 +1082,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 					nodePortsTest(false)
 				})
 
-				// FIXME connect time shares the same NAT table and it is a loterry whic one is gets
+				// FIXME connect time shares the same NAT table and it is a lottery which one is gets
 				if !testOpts.connTimeEnabled {
 					Context("with test-service being a nodeport @ "+strconv.Itoa(int(npPort))+
 						" ExternalTrafficPolicy=local", func() {

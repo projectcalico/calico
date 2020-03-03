@@ -365,7 +365,7 @@ func (b *Block) LoadImm64(dst Reg, imm int64) {
 
 // LoadMapFD special variant of LoadImm64 for loading map FDs.
 func (b *Block) LoadMapFD(dst Reg, fd uint32) {
-	// Have to use LoadImm64 with the special psuedo-register even though FDs are only 32 bits.
+	// Have to use LoadImm64 with the special pseudo-register even though FDs are only 32 bits.
 	b.add(LoadImm64, dst, RPseudoMapFD, 0, int32(fd))
 	b.add(LoadImm64Pt2, 0, 0, 0, 0)
 }

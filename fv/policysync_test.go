@@ -1,6 +1,6 @@
 // +build fvtests
 
-// Copyright (c) 2019 Tigera, Inc. All rights reserved.
+// Copyright (c) 2019-2020 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -295,7 +295,7 @@ var _ = Context("_POL-SYNC_ _BPF-SAFE_ policy sync API tests", func() {
 						doChurn := func(wlIndexes ...int) {
 							for i := 0; i < 100; i++ {
 								wlIdx := wlIndexes[i%len(wlIndexes)]
-								By(fmt.Sprintf("Churn %d; targetting workload %d", i, wlIdx))
+								By(fmt.Sprintf("Churn %d; targeting workload %d", i, wlIdx))
 
 								policy := api.NewGlobalNetworkPolicy()
 								policy.SetName("policy-0")
