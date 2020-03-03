@@ -24,3 +24,5 @@ filesystem/code/*
 filesystem/usr
 Makefile.common*
 bin
+kubectl
+/tests/k8st/kind
