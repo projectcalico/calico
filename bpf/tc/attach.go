@@ -18,6 +18,7 @@ package tc
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"math/rand"
@@ -26,11 +27,14 @@ import (
 	"os/exec"
 	"path"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 
 	"github.com/pkg/errors"
-	"github.com/sirupsen/logrus"
+	log "github.com/sirupsen/logrus"
+
+	"github.com/projectcalico/libcalico-go/lib/set"
 
 	"github.com/projectcalico/felix/bpf"
 )
@@ -56,10 +60,12 @@ func (e ErrAttachFailed) Error() string {
 // AttachProgram attaches a BPF program from a file to the TC attach point
 func AttachProgram(attachPoint AttachPoint, hostIP net.IP) error {
 	// FIXME we use this lock so that two copies of tc running in parallel don't re-use the same jump map.
-	// This can happen if tc incorrectly decides the two programs are identical (when if fact they differ by attach
+	// This can happen if tc incorrectly decides the two programs are identical (when in fact they differ by attach
 	// point).
+	log.Debug("AttachProgram waiting for lock...")
 	tcLock.Lock()
 	defer tcLock.Unlock()
+	log.Debug("AttachProgram got lock.")
 
 	// Work around tc map name collision: when we load two identical BPF programs onto different interfaces, tc
 	// pins object-local maps to a namespace based on the hash of the BPF program, which is the same for both
@@ -88,7 +94,7 @@ func AttachProgram(attachPoint AttachPoint, hostIP net.IP) error {
 
 	hostIP = hostIP.To4()
 	if len(hostIP) == 4 {
-		logrus.WithField("ip", hostIP).Debug("Patching in host IP")
+		log.WithField("ip", hostIP).Debug("Patching in host IP")
 		replacement := make([]byte, 6)
 		copy(replacement[2:], hostIP)
 		exeData = bytes.ReplaceAll(exeData, []byte("\x00\x00HOST"), replacement)
@@ -118,11 +124,11 @@ func AttachProgram(attachPoint AttachPoint, hostIP net.IP) error {
 	if err != nil {
 		if strings.Contains(err.Error(), "Cannot find device") {
 			// Avoid a big, spammy log when the issue is that the interface isn't present.
-			logrus.WithField("iface", attachPoint.Iface).Info(
+			log.WithField("iface", attachPoint.Iface).Info(
 				"Failed to attach BPF program; interface not found.  Will retry if it show up.")
 			return nil
 		}
-		logrus.WithError(err).WithFields(logrus.Fields{"out": string(out)}).
+		log.WithError(err).WithFields(log.Fields{"out": string(out)}).
 			WithField("command", tcCmd).Error("Failed to attach BPF program")
 		if err, ok := err.(*exec.ExitError); ok {
 			// ExitError is really unhelpful dumped to the log, swap it for a custom one.
@@ -144,49 +150,155 @@ func repinJumpMaps() {
 			return err
 		}
 		if info.Name() == "cali_jump" {
-			logrus.WithField("path", path).Debug("Queueing deletion of map")
+			log.WithField("path", path).Debug("Queueing deletion of map")
 
-			out, err := exec.Command("bpftool", "map", "dump", "pinned", path).Output()
-			if err != nil {
-				logrus.WithError(err).Panic("Failed to dump map")
+			if log.GetLevel() >= log.DebugLevel {
+				out, err := exec.Command("bpftool", "map", "dump", "pinned", path).Output()
+				if err != nil {
+					log.WithError(err).Panic("Failed to dump map")
+				}
+				log.WithField("dump", string(out)).Debug("Map dump before deletion")
 			}
-			logrus.WithField("dump", string(out)).Info("Map dump before deletion")
 
-			out, err = exec.Command("bpftool", "map", "show", "pinned", path).Output()
+			out, err := exec.Command("bpftool", "map", "show", "pinned", path).Output()
 			if err != nil {
-				logrus.WithError(err).Panic("Failed to show map")
+				log.WithError(err).Panic("Failed to show map")
 			}
-			logrus.WithField("dump", string(out)).Info("Map show before deletion")
+			log.WithField("dump", string(out)).Debug("Map show before deletion")
 			id := string(bytes.Split(out, []byte(":"))[0])
 
 			newPath := path + fmt.Sprint(rand.Uint32())
 			out, err = exec.Command("bpftool", "map", "pin", "id", id, newPath).Output()
 			if err != nil {
-				logrus.WithError(err).Panic("Failed to repin map")
+				log.WithError(err).Panic("Failed to repin map")
 			}
-			logrus.WithField("dump", string(out)).Debug("Repin output")
+			log.WithField("dump", string(out)).Debug("Repin output")
 
 			err = os.Remove(path)
 			if err != nil {
-				logrus.WithError(err).Panic("Failed to remove old map pin")
+				log.WithError(err).Panic("Failed to remove old map pin")
 			}
 
-			out, err = exec.Command("bpftool", "map", "dump", "pinned", newPath).Output()
-			if err != nil {
-				logrus.WithError(err).Panic("Failed to show map")
+			if log.GetLevel() >= log.DebugLevel {
+				out, err = exec.Command("bpftool", "map", "dump", "pinned", newPath).Output()
+				if err != nil {
+					log.WithError(err).Panic("Failed to show map")
+				}
+				log.WithField("dump", string(out)).Debug("Map show after repin")
 			}
-			logrus.WithField("dump", string(out)).Info("Map show after repin")
 		}
 		return nil
 	})
 	if os.IsNotExist(err) {
-		logrus.WithError(err).Warn("tc directory missing from BPF file system?")
+		log.WithError(err).Warn("tc directory missing from BPF file system?")
 		return
 	}
 	if err != nil {
-		logrus.WithError(err).Panic("Failed to walk BPF filesystem")
+		log.WithError(err).Panic("Failed to walk BPF filesystem")
 	}
-	logrus.Debug("Finished moving map pins that we don't need.")
+	log.Debug("Finished moving map pins that we don't need.")
+}
+
+// CleanUpJumpMaps scans for cali_jump maps that are still pinned to the filesystem but no longer referenced by
+// our BPF programs.
+func CleanUpJumpMaps() {
+	// So that we serialise with AttachProgram()
+	log.Debug("CleanUpJumpMaps waiting for lock...")
+	tcLock.Lock()
+	defer tcLock.Unlock()
+	log.Debug("CleanUpJumpMaps got lock, cleaning up...")
+
+	// Find the maps we care about by walking the BPF filesystem.
+	mapIDToPath := make(map[int]string)
+	err := filepath.Walk("/sys/fs/bpf/tc", func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if strings.HasPrefix(info.Name(), "cali_jump") {
+			log.WithField("path", path).Debug("Examining map")
+
+			out, err := exec.Command("bpftool", "map", "show", "pinned", path).Output()
+			if err != nil {
+				log.WithError(err).Panic("Failed to show map")
+			}
+			log.WithField("dump", string(out)).Debug("Map show before deletion")
+			idStr := string(bytes.Split(out, []byte(":"))[0])
+			id, err := strconv.Atoi(idStr)
+			if err != nil {
+				log.WithError(err).WithField("dump", string(out)).Error("Failed to parse bpftool output.")
+				return err
+			}
+			mapIDToPath[id] = path
+		}
+		return nil
+	})
+	if os.IsNotExist(err) {
+		log.WithError(err).Warn("tc directory missing from BPF file system?")
+		return
+	}
+	if err != nil {
+		log.WithError(err).Error("Error while looking for maps.")
+	}
+
+	// Find all the programs that are attached to interfaces.
+	out, err := exec.Command("bpftool", "net", "-j").Output()
+	if err != nil {
+		log.WithError(err).Panic("Failed to list attached bpf programs")
+	}
+	log.WithField("dump", string(out)).Debug("Attached BPF programs")
+
+	var attached []struct {
+		TC []struct {
+			DevName string `json:"devname"`
+			ID      int    `json:"id"`
+		} `json:"tc"`
+	}
+	err = json.Unmarshal(out, &attached)
+	if err != nil {
+		log.WithError(err).WithField("dump", string(out)).Error("Failed to parse list of attached BPF programs")
+	}
+	attachedProgs := set.New()
+	for _, prog := range attached[0].TC {
+		log.WithField("prog", prog).Debug("Adding prog to attached set")
+		attachedProgs.Add(prog.ID)
+	}
+
+	// Find all the maps that the attached programs refer to and remove them from consideration.
+	progsJSON, err := exec.Command("bpftool", "prog", "list", "--json").Output()
+	if err != nil {
+		log.WithError(err).Info("Failed to list BPF programs, assuming there's nothing to clean up.")
+		return
+	}
+	var progs []struct {
+		ID   int    `json:"id"`
+		Name string `json:"name"`
+		Maps []int  `json:"map_ids"`
+	}
+	err = json.Unmarshal(progsJSON, &progs)
+	if err != nil {
+		log.WithError(err).Info("Failed to parse bpftool output.  Assuming nothing to clean up.")
+		return
+	}
+	for _, p := range progs {
+		if !attachedProgs.Contains(p.ID) {
+			log.WithField("prog", p).Debug("Prog is not in the attached set, skipping")
+			continue
+		}
+		for _, id := range p.Maps {
+			log.WithField("mapID", id).WithField("prog", p).Debug("Map is still in use")
+			delete(mapIDToPath, id)
+		}
+	}
+
+	// Remove the pins.
+	for id, p := range mapIDToPath {
+		log.WithFields(log.Fields{"id": id, "path": p}).Debug("Removing stale BPF map pin.")
+		err := os.Remove(p)
+		if err != nil {
+			log.WithError(err).Warn("Removed stale BPF map pin.")
+		}
+		log.WithFields(log.Fields{"id": id, "path": p}).Info("Removed stale BPF map pin.")
+	}
 }
 
 // EnsureQdisc makes sure that qdisc is attached to the given interface

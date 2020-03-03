@@ -437,6 +437,12 @@ func (m *bpfEndpointManager) applyProgramsToDirtyWorkloadEndpoints() {
 		return nil
 	})
 	wg.Wait()
+
+	if m.dirtyWorkloads.Len() > 0 {
+		// Clean up any left-over jump maps in the background...
+		go tc.CleanUpJumpMaps()
+	}
+
 	m.dirtyWorkloads.Iter(func(item interface{}) error {
 		wlID := item.(proto.WorkloadEndpointID)
 		err := errs[wlID]
