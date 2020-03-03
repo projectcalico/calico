@@ -391,7 +391,7 @@ func (s *Syncer) applyDerived(sname k8sp.ServicePortName, t svcType, sinfo k8sp.
 
 	svc, ok := s.newSvcMap[getSvcKey(sname, "")]
 	if !ok {
-		// this should not happend
+		// this should not happen
 		return errors.Errorf("no ClusterIP for derived service type %d", t)
 	}
 

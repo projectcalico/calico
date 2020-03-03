@@ -74,7 +74,7 @@ push gateway - run in a GKE container cluster, "k8sfv", in the
 
 -   Create a GKE container cluster with 2 nodes.  Follow the web UI
     instructions to get credentials so you can run `kubectl` on your own
-    machine, targetting that cluster.
+    machine, targeting that cluster.
 
 -   Run `kubectl apply -f monitoring.yaml` repeatedly, with intervening
     pauses, until it completely succeeds (where `monitoring.yaml` is in

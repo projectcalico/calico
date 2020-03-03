@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2018 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2020 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -136,7 +136,7 @@ func (r *DefaultRuleRenderer) ProtoRuleToIptablesRules(pRule *proto.Rule, ipVers
 	//     positive matches on dest address
 	//     negated matches on source address
 	//     negated matches on dest address
-	//     rule containing rest of match critera
+	//     rule containing rest of match criteria
 	//
 	// We use one match bit to record whether all the blocks accept the packet and one as a
 	// scratch bit for each block to use.  As an invariant, at the end of each block, the

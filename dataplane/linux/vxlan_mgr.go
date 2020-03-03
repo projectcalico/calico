@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2019 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2020 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -425,7 +425,7 @@ func (m *vxlanManager) configureVXLANDevice(mtu int, localVTEP *proto.VXLANTunne
 	// already. Check for mismatched configuration. If they don't match, recreate the device.
 	if incompat := vxlanLinksIncompat(vxlan, link); incompat != "" {
 		// Existing device doesn't match desired configuration - delete it and recreate.
-		logrus.Warningf("%q exists with incompatable configuration: %v; recreating device", vxlan.Name, incompat)
+		logrus.Warningf("%q exists with incompatible configuration: %v; recreating device", vxlan.Name, incompat)
 		if err = m.nlHandle.LinkDel(link); err != nil {
 			return fmt.Errorf("failed to delete interface: %v", err)
 		}
