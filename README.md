@@ -2,6 +2,7 @@
 [![Coverage Status](https://coveralls.io/repos/github/projectcalico/typha/badge.svg?branch=master&cachebreaker=1)](https://coveralls.io/github/projectcalico/typha?branch=master)
 [![Slack Status](https://slack.projectcalico.org/badge.svg)](https://slack.projectcalico.org)
 [![IRC Channel](https://img.shields.io/badge/irc-%23calico-blue.svg)](https://kiwiirc.com/client/irc.freenode.net/#calico)
+[![Go Report Card](https://goreportcard.com/badge/github.com/projectcalico/typha)](https://goreportcard.com/report/github.com/projectcalico/typha)
 # Project Calico
 
 <!--
