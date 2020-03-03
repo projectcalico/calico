@@ -27,6 +27,7 @@ import (
 	"os/exec"
 	"path"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -199,6 +200,10 @@ func repinJumpMaps() {
 	log.Debug("Finished moving map pins that we don't need.")
 }
 
+// tcDirRegex matches tc's auto-created directory names so we can clean them up when removing maps without accidentally
+// removing other user-created dirs..
+var tcDirRegex = regexp.MustCompile(`[0-9a-f]{40}`)
+
 // CleanUpJumpMaps scans for cali_jump maps that are still pinned to the filesystem but no longer referenced by
 // our BPF programs.
 func CleanUpJumpMaps() {
@@ -210,14 +215,14 @@ func CleanUpJumpMaps() {
 
 	// Find the maps we care about by walking the BPF filesystem.
 	mapIDToPath := make(map[int]string)
-	err := filepath.Walk("/sys/fs/bpf/tc", func(path string, info os.FileInfo, err error) error {
+	err := filepath.Walk("/sys/fs/bpf/tc", func(p string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
 		}
 		if strings.HasPrefix(info.Name(), "cali_jump") {
-			log.WithField("path", path).Debug("Examining map")
+			log.WithField("path", p).Debug("Examining map")
 
-			out, err := exec.Command("bpftool", "map", "show", "pinned", path).Output()
+			out, err := exec.Command("bpftool", "map", "show", "pinned", p).Output()
 			if err != nil {
 				log.WithError(err).Panic("Failed to show map")
 			}
@@ -228,7 +233,7 @@ func CleanUpJumpMaps() {
 				log.WithError(err).WithField("dump", string(out)).Error("Failed to parse bpftool output.")
 				return err
 			}
-			mapIDToPath[id] = path
+			mapIDToPath[id] = p
 		}
 		return nil
 	})
@@ -299,6 +304,41 @@ func CleanUpJumpMaps() {
 		}
 		log.WithFields(log.Fields{"id": id, "path": p}).Info("Removed stale BPF map pin.")
 	}
+
+	// Look for empty dirs.
+	emptyAutoDirs := set.New()
+	err = filepath.Walk("/sys/fs/bpf/tc", func(p string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if info.IsDir() && tcDirRegex.MatchString(info.Name()){
+			p := path.Clean(p)
+			log.WithField("path", p).Debug("Found tc auto-created dir.")
+			emptyAutoDirs.Add(p)
+		} else {
+			dirPath := path.Clean(path.Dir(p))
+			log.WithField("path", dirPath).Debug("tc dir is not empty.")
+			emptyAutoDirs.Discard(dirPath)
+		}
+		return nil
+	})
+	if os.IsNotExist(err) {
+		log.WithError(err).Warn("tc directory missing from BPF file system?")
+		return
+	}
+	if err != nil {
+		log.WithError(err).Error("Error while looking for maps.")
+	}
+
+	emptyAutoDirs.Iter(func(item interface{}) error {
+		p := item.(string)
+		log.WithField("path", p).Debug("Removing empty dir.")
+		err := os.Remove(p)
+		if err != nil {
+			log.WithError(err).Error("Error while removing empty dir.")
+		}
+		return nil
+	})
 }
 
 // EnsureQdisc makes sure that qdisc is attached to the given interface
