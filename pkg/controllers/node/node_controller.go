@@ -1,4 +1,4 @@
-// Copyright (c) 2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2020 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -35,10 +35,14 @@ import (
 )
 
 const (
-	RateLimitCalicoList   = "calico-list"
 	RateLimitK8s          = "k8s"
+	RateLimitCalicoCreate = "calico-create"
+	RateLimitCalicoList   = "calico-list"
+	RateLimitCalicoUpdate = "calico-update"
 	RateLimitCalicoDelete = "calico-delete"
 	nodeLabelAnnotation   = "projectcalico.org/kube-labels"
+	hepCreatedLabelKey    = "projectcalico.org/created-by"
+	hepCreatedLabelValue  = "calico-kube-controllers"
 )
 
 var (
@@ -59,6 +63,8 @@ type NodeController struct {
 	nodemapLock  sync.Mutex
 	syncer       bapi.Syncer
 	config       *config.Config
+	nodeCache    map[string]*api.Node
+	syncStatus   bapi.SyncStatus
 }
 
 // NewNodeController Constructor for NodeController
@@ -70,6 +76,7 @@ func NewNodeController(ctx context.Context, k8sClientset *kubernetes.Clientset, 
 		rl:           workqueue.DefaultControllerRateLimiter(),
 		nodemapper:   map[string]string{},
 		config:       cfg,
+		nodeCache:    make(map[string]*api.Node),
 	}
 
 	// channel used to kick the controller into scheduling a sync. It has length
@@ -89,9 +96,7 @@ func NewNodeController(ctx context.Context, k8sClientset *kubernetes.Clientset, 
 		}}
 
 	// Determine if we should sync node labels.
-	syncLabels := cfg.SyncNodeLabels && cfg.DatastoreType != "kubernetes"
-
-	if syncLabels {
+	if cfg.SyncNodeLabels && cfg.DatastoreType != "kubernetes" {
 		// Add handlers for node add/update events from k8s.
 		handlers.AddFunc = func(obj interface{}) {
 			nc.syncNodeLabels(obj.(*v1.Node))
@@ -105,11 +110,11 @@ func NewNodeController(ctx context.Context, k8sClientset *kubernetes.Clientset, 
 	// also syncs up labels between k8s/calico node objects
 	nc.indexer, nc.informer = cache.NewIndexerInformer(listWatcher, &v1.Node{}, 0, handlers, cache.Indexers{})
 
-	if syncLabels {
-		// Start the syncer.
-		nc.initSyncer()
-		nc.syncer.Start()
-	}
+	// Start the syncer. We always need to run this to manage auto
+	// hostendpoints: if autoHostEndpoints was enabled then disabled later on
+	// then we need to remove the leftover auto heps.
+	nc.initSyncer()
+	nc.syncer.Start()
 
 	return nc
 }

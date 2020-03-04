@@ -1,4 +1,4 @@
-// Copyright (c) 2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2020 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,6 +15,7 @@
 package node
 
 import (
+	api "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	apiv3 "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	bapi "github.com/projectcalico/libcalico-go/lib/backend/api"
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
@@ -37,6 +38,19 @@ func (c *NodeController) initSyncer() {
 
 func (c *NodeController) OnStatusUpdated(status bapi.SyncStatus) {
 	logrus.Infof("Node controller syncer status updated: %s", status)
+	c.syncStatus = status
+
+	switch status {
+	case bapi.ResyncInProgress:
+		// Starting the resync so clear our node cache.
+		c.nodeCache = make(map[string]*api.Node)
+
+	case bapi.InSync:
+		err := c.syncAllAutoHostendpoints()
+		if err != nil {
+			logrus.WithError(err).Fatal("failed to sync all auto hostendpoints")
+		}
+	}
 }
 
 func (c *NodeController) OnUpdates(updates []bapi.Update) {
@@ -45,42 +59,71 @@ func (c *NodeController) OnUpdates(updates []bapi.Update) {
 		switch upd.UpdateType {
 		case bapi.UpdateTypeKVNew:
 			fallthrough
+
 		case bapi.UpdateTypeKVUpdated:
 			n := upd.KVPair.Value.(*apiv3.Node)
-			if kn := getK8sNodeName(*n); kn != "" {
-				// Create a mapping from Kubernetes node -> Calico node.
-				logrus.Debugf("Mapping k8s node -> calico node. %s -> %s", kn, n.Name)
-				c.nodemapLock.Lock()
-				c.nodemapper[kn] = n.Name
-				c.nodemapLock.Unlock()
 
-				// It has a node reference - get that Kubernetes node, and if
-				// it exists perform a sync.
-				obj, ok, err := c.indexer.GetByKey(kn)
-				if !ok {
-					logrus.Debugf("No corresponding kubernetes node")
-					continue
-				} else if err != nil {
-					logrus.WithError(err).Warnf("Couldn't get node from indexer")
-					continue
+			if c.config.SyncNodeLabels && c.config.DatastoreType != "kubernetes" {
+				if kn := getK8sNodeName(*n); kn != "" {
+					// Create a mapping from Kubernetes node -> Calico node.
+					logrus.Debugf("Mapping k8s node -> calico node. %s -> %s", kn, n.Name)
+					c.nodemapLock.Lock()
+					c.nodemapper[kn] = n.Name
+					c.nodemapLock.Unlock()
+
+					// It has a node reference - get that Kubernetes node, and if
+					// it exists perform a sync.
+					obj, ok, err := c.indexer.GetByKey(kn)
+					if !ok {
+						logrus.Debugf("No corresponding kubernetes node")
+						continue
+					} else if err != nil {
+						logrus.WithError(err).Warnf("Couldn't get node from indexer")
+						continue
+					}
+					c.syncNodeLabels(obj.(*v1.Node))
 				}
-				c.syncNodeLabels(obj.(*v1.Node))
 			}
+
+			if c.config.AutoHostEndpoints == "enabled" {
+				// Cache all updated nodes.
+				c.nodeCache[n.Name] = n
+
+				// If we're already in-sync, sync the node's auto hostendpoint.
+				if c.syncStatus == bapi.InSync {
+					err := c.syncAutoHostendpointWithRetries(n)
+					if err != nil {
+						logrus.WithError(err).Fatal()
+					}
+				}
+			}
+
 		case bapi.UpdateTypeKVDeleted:
 			if upd.KVPair.Value != nil {
 				logrus.Warnf("KVPair value should be nil for Deleted UpdataType")
 			}
 
+			nodeName := upd.KVPair.Key.(model.ResourceKey).Name
+
 			// Try to perform unmapping based on resource name (calico node name).
-			n := upd.KVPair.Key.(model.ResourceKey).Name
-			for kn, cn := range c.nodemapper {
-				if cn == n {
-					// Remove it from node map.
-					logrus.Debugf("Unmapping k8s node -> calico node. %s -> %s", kn, cn)
-					c.nodemapLock.Lock()
-					delete(c.nodemapper, kn)
-					c.nodemapLock.Unlock()
-					break
+			if c.config.SyncNodeLabels && c.config.DatastoreType != "kubernetes" {
+				for kn, cn := range c.nodemapper {
+					if cn == nodeName {
+						// Remove it from node map.
+						logrus.Debugf("Unmapping k8s node -> calico node. %s -> %s", kn, cn)
+						c.nodemapLock.Lock()
+						delete(c.nodemapper, kn)
+						c.nodemapLock.Unlock()
+						break
+					}
+				}
+			}
+
+			if c.config.AutoHostEndpoints == "enabled" && c.syncStatus == bapi.InSync {
+				hepName := c.generateAutoHostendpointName(nodeName)
+				err := c.deleteHostendpointWithRetries(hepName)
+				if err != nil {
+					logrus.WithError(err).Fatal()
 				}
 			}
 
