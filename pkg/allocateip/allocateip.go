@@ -117,7 +117,7 @@ func ensureHostTunnelAddress(ctx context.Context, c client.Interface, nodename s
 	assign := true
 	if addr == "" {
 		// The tunnel has no IP address assigned, assign one.
-		logCtx.WithField("Node", nodename).Info("Assign a new tunnel address")
+		logCtx.Info("Assign a new tunnel address")
 	} else {
 		// Go ahead checking status of current address.
 		ipAddr := gnet.ParseIP(addr)
@@ -125,8 +125,8 @@ func ensureHostTunnelAddress(ctx context.Context, c client.Interface, nodename s
 			logCtx.WithError(err).Fatalf("Failed to parse the CIDR '%s'", addr)
 		}
 
-		// Check if we got correct assignment attributes
-		attr, err := c.IPAM().GetAssignmentAttributes(ctx, net.IP{IP: ipAddr})
+		// Check if we got correct assignment attributes.
+		attr, handle, err := c.IPAM().GetAssignmentAttributes(ctx, net.IP{IP: ipAddr})
 		if err == nil {
 			if attr[ipam.AttributeType] == attrString && attr[ipam.AttributeNode] == nodename {
 				// The tunnel address is still assigned to this node, but is it in the correct pool this time?
@@ -139,8 +139,38 @@ func ensureHostTunnelAddress(ctx context.Context, c client.Interface, nodename s
 					logCtx.WithField("currentAddr", addr).Info("Current address is still valid, do nothing")
 					assign = false
 				}
+			} else if len(attr) == 0 {
+				// No attributes means that this is an old address, assigned by code that didn't use
+				// allocation attributes. It might be a pod address, or it might be a node tunnel
+				// address. The only way to tell is by the existence of a handle, since workload
+				// addresses have always used a handle, whereas tunnel addresses didn't start
+				// using handles until the same time as they got allocation attributes.
+				if handle != nil {
+					// Handle exists, so this address belongs to a workload. We need to assign
+					// a new one for the node, but we shouldn't clean up the old address.
+					logCtx.WithField("currentAddr", addr).Info("Current address is occupied, assign a new one")
+				} else {
+					// Handle does not exist. This is just an old tunnel address that comes from
+					// a time before we used handles and allocation attributes. Attempt to
+					// reassign the same address, but now with metadata. It's possible that someone
+					// else takes the address while we do this, in which case we'll just
+					// need to assign a new address.
+					if err := correctAllocationWithHandle(ctx, c, addr, nodename, vxlan); err != nil {
+						if _, ok := err.(cerrors.ErrorResourceAlreadyExists); !ok {
+							// Unknown error attempting to allocate the address. Exit.
+							logCtx.WithError(err).Fatal("Error correcting tunnel IP allocation")
+						}
+
+						// The address was taken by someone else. We need to assign a new one.
+						logCtx.WithError(err).Warn("Failed to correct missing attributes, will assign a new address")
+					} else {
+						// We corrected the address, we can just return.
+						logCtx.Info("Updated tunnel address with allocation attributes")
+						return
+					}
+				}
 			} else {
-				// The tunnel address has been allocated to something else, reassign it.
+				// The allocation has attributes, but doesn't belong to us. Assign a new one.
 				logCtx.WithField("currentAddr", addr).Info("Current address is occupied, assign a new one")
 			}
 		} else if _, ok := err.(cerrors.ErrorResourceDoesNotExist); ok {
@@ -172,11 +202,35 @@ func ensureHostTunnelAddress(ctx context.Context, c client.Interface, nodename s
 	}
 }
 
-// assignHostTunnelAddr claims an IP address from the first pool
-// with some space. Stores the result in the host's config as its tunnel
-// address. It will assign a VXLAN address if vxlan is true, otherwise an IPIP address.
-func assignHostTunnelAddr(ctx context.Context, c client.Interface, nodename string, cidrs []net.IPNet, vxlan bool) {
-	// Build attributes and handle for this allocation.
+func correctAllocationWithHandle(ctx context.Context, c client.Interface, addr, nodename string, vxlan bool) error {
+	ipAddr := net.ParseIP(addr)
+	if ipAddr == nil {
+		log.Fatalf("Failed to parse node tunnel address '%s'", addr)
+	}
+
+	// Release the old allocation.
+	ipsToRelease := []net.IP{*ipAddr}
+	_, err := c.IPAM().ReleaseIPs(ctx, ipsToRelease)
+	if err != nil {
+		// If we fail to release the old allocation, we shouldn't continue any further. Just exit.
+		log.WithField("IP", ipAddr.String()).WithError(err).Fatal("Error releasing address")
+	}
+
+	// Attempt to re-assign the same address, but with a handle this time.
+	handle, attrs := generateHandleAndAttributes(nodename, vxlan)
+	args := ipam.AssignIPArgs{
+		IP:       *ipAddr,
+		HandleID: &handle,
+		Attrs:    attrs,
+		Hostname: nodename,
+	}
+
+	// If we fail to allocate the same IP, return an error. We'll just
+	// have to allocate a new one.
+	return c.IPAM().AssignIP(ctx, args)
+}
+
+func generateHandleAndAttributes(nodename string, vxlan bool) (string, map[string]string) {
 	attrs := map[string]string{ipam.AttributeNode: nodename}
 	var handle string
 	if vxlan {
@@ -186,6 +240,15 @@ func assignHostTunnelAddr(ctx context.Context, c client.Interface, nodename stri
 		attrs[ipam.AttributeType] = ipam.AttributeTypeIPIP
 		handle = fmt.Sprintf("ipip-tunnel-addr-%s", nodename)
 	}
+	return handle, attrs
+}
+
+// assignHostTunnelAddr claims an IP address from the first pool
+// with some space. Stores the result in the host's config as its tunnel
+// address. It will assign a VXLAN address if vxlan is true, otherwise an IPIP address.
+func assignHostTunnelAddr(ctx context.Context, c client.Interface, nodename string, cidrs []net.IPNet, vxlan bool) {
+	// Build attributes and handle for this allocation.
+	handle, attrs := generateHandleAndAttributes(nodename, vxlan)
 	logCtx := getLogger(vxlan)
 
 	args := ipam.AutoAssignArgs{
@@ -206,48 +269,50 @@ func assignHostTunnelAddr(ctx context.Context, c client.Interface, nodename stri
 		logCtx.Fatal("Unable to autoassign an address - pools are likely exhausted.")
 	}
 
-	var updateError error
+	// Update the node object with the assigned address.
+	ip := ipv4Addrs[0].IP.String()
+	if err = updateNodeWithAddress(ctx, c, nodename, ip, vxlan); err != nil {
+		// We hit an error, so release the IP address before exiting.
+		err := c.IPAM().ReleaseByHandle(ctx, handle)
+		if err != nil {
+			logCtx.WithError(err).WithField("IP", ip).Errorf("Error releasing IP address on failure")
+		}
+
+		// Log the error and exit with exit code 1.
+		logCtx.WithError(err).WithField("IP", ip).Fatal("Unable to set tunnel address")
+	}
+
+	logCtx.WithField("IP", ip).Info("Assigned tunnel address to node")
+}
+
+func updateNodeWithAddress(ctx context.Context, c client.Interface, nodename string, addr string, vxlan bool) error {
 	// If the update fails with ResourceConflict error then retry 5 times with 1 second delay before failing.
 	for i := 0; i < 5; i++ {
 		node, err := c.Nodes().Get(ctx, nodename, options.GetOptions{})
 		if err != nil {
-			logCtx.WithError(err).Fatalf("Unable to retrieve tunnel address for cleanup. Error getting node '%s'", nodename)
+			return err
 		}
 
 		if vxlan {
-			node.Spec.IPv4VXLANTunnelAddr = ipv4Addrs[0].IP.String()
+			node.Spec.IPv4VXLANTunnelAddr = addr
 		} else {
 			if node.Spec.BGP == nil {
 				node.Spec.BGP = &v3.NodeBGPSpec{}
 			}
-			node.Spec.BGP.IPv4IPIPTunnelAddr = ipv4Addrs[0].IP.String()
+			node.Spec.BGP.IPv4IPIPTunnelAddr = addr
 		}
 
-		_, updateError = c.Nodes().Update(ctx, node, options.SetOptions{})
-		if _, ok := updateError.(cerrors.ErrorResourceUpdateConflict); ok {
+		_, err = c.Nodes().Update(ctx, node, options.SetOptions{})
+		if _, ok := err.(cerrors.ErrorResourceUpdateConflict); ok {
 			// Wait for a second and try again if there was a conflict during the resource update.
-			logCtx.Infof("Error updating node %s: %s. Retrying.", node.Name, err)
+			log.WithField("node", node.Name).WithError(err).Info("Error updating node, retrying.")
 			time.Sleep(1 * time.Second)
 			continue
 		}
 
-		break
+		return nil
 	}
-
-	// Check to see if there was still an error after the retry loop,
-	// and release the IP if there was an error.
-	if updateError != nil {
-		// We hit an error, so release the IP address before exiting.
-		_, err := c.IPAM().ReleaseIPs(ctx, []net.IP{{IP: ipv4Addrs[0].IP}})
-		if err != nil {
-			logCtx.WithError(err).WithField("IP", ipv4Addrs[0].IP.String()).Errorf("Error releasing IP address on failure")
-		}
-
-		// Log the error and exit with exit code 1.
-		logCtx.WithError(err).WithField("IP", ipv4Addrs[0].IP.String()).Fatal("Unable to set tunnel address")
-	}
-
-	logCtx.WithField("IP", ipv4Addrs[0].String()).Info("Set tunnel address")
+	return fmt.Errorf("Too many retries attempting to update node with tunnel address")
 }
 
 // removeHostTunnelAddr removes any existing IP address for this host's

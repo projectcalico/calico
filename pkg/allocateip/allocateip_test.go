@@ -88,7 +88,7 @@ func checkTunnelAddressForNode(c client.Interface, tunnelType string, nodeName s
 	n, err := c.Nodes().Get(ctx, nodeName, options.GetOptions{})
 	Expect(err).NotTo(HaveOccurred())
 
-	attr, err := c.IPAM().GetAssignmentAttributes(ctx, net.IP{IP: gnet.ParseIP(addr)})
+	attr, _, err := c.IPAM().GetAssignmentAttributes(ctx, net.IP{IP: gnet.ParseIP(addr)})
 	Expect(err).NotTo(HaveOccurred())
 	Expect(attr[ipam.AttributeNode]).To(Equal(nodeName))
 
@@ -171,7 +171,7 @@ var _ = Describe("FV tests", func() {
 		// For WEP addresses, we should leave them alone and just allocate a new tunnel addr.
 
 		// Create an allocation which simulates an "old-style" allocation, prior to us
-		// using handles and attributes to attach metadata.
+		// using attributes to attach metadata.
 		ipAddr, _, _ := net.ParseCIDR("172.16.0.1/32")
 		nodename := "my-test-node"
 		wepHandle := "some-wep-handle"
@@ -197,6 +197,10 @@ var _ = Describe("FV tests", func() {
 		Expect(err).NotTo(HaveOccurred())
 		Expect(newNode.Spec.BGP).NotTo(BeNil())
 		Expect(newNode.Spec.BGP.IPv4IPIPTunnelAddr).NotTo(Equal("172.16.0.1"))
+
+		// Try to parse the new address to make sure it's a valid IP.
+		_, _, err = net.ParseCIDROrIP(newNode.Spec.BGP.IPv4IPIPTunnelAddr)
+		Expect(err).NotTo(HaveOccurred())
 
 		// Assert that the IPAM allocation for the original address is stil intact.
 		_, handle, err := c.IPAM().GetAssignmentAttributes(ctx, net.IP{IP: gnet.ParseIP("172.16.0.1")})
@@ -298,7 +302,7 @@ var _ = allocateIPDescribe("ensureHostTunnelAddress", []string{"ipip", "vxlan"},
 
 		// Check old address
 		// Verify 172.16.10.10 has been released.
-		_, err = c.IPAM().GetAssignmentAttributes(ctx, net.IP{IP: gnet.ParseIP("172.16.10.10")})
+		_, _, err = c.IPAM().GetAssignmentAttributes(ctx, net.IP{IP: gnet.ParseIP("172.16.10.10")})
 		Expect(err).To(BeAssignableToTypeOf(cerrors.ErrorResourceDoesNotExist{}))
 
 		// Check new address has been assigned in pool1.
@@ -329,7 +333,7 @@ var _ = allocateIPDescribe("ensureHostTunnelAddress", []string{"ipip", "vxlan"},
 
 		// Check old address.
 		// Verify 172.16.10.10 has not been touched.
-		attr, err := c.IPAM().GetAssignmentAttributes(ctx, net.IP{IP: gnet.ParseIP("172.16.10.10")})
+		attr, _, err := c.IPAM().GetAssignmentAttributes(ctx, net.IP{IP: gnet.ParseIP("172.16.10.10")})
 		Expect(err).NotTo(HaveOccurred())
 		Expect(attr).To(Equal(wepAttr))
 
@@ -366,7 +370,7 @@ var _ = allocateIPDescribe("ensureHostTunnelAddress", []string{"ipip", "vxlan"},
 		Expect(err).NotTo(HaveOccurred())
 
 		// Verify 172.16.0.1 is not properly assigned to tunnel address.
-		_, err = c.IPAM().GetAssignmentAttributes(ctx, net.IP{IP: gnet.ParseIP("172.16.0.1")})
+		_, _, err = c.IPAM().GetAssignmentAttributes(ctx, net.IP{IP: gnet.ParseIP("172.16.0.1")})
 		Expect(err).To(BeAssignableToTypeOf(cerrors.ErrorResourceDoesNotExist{}))
 
 		_, ip4net, _ := net.ParseCIDR("172.16.0.0/31")
@@ -387,7 +391,7 @@ var _ = allocateIPDescribe("ensureHostTunnelAddress", []string{"ipip", "vxlan"},
 		checkTunnelAddressForNode(c, tunnelType, node.Name, "172.16.0.1")
 
 		// Verify 172.16.0.0 has not been released.
-		attr, err := c.IPAM().GetAssignmentAttributes(ctx, net.IP{IP: gnet.ParseIP("172.16.0.0")})
+		attr, _, err := c.IPAM().GetAssignmentAttributes(ctx, net.IP{IP: gnet.ParseIP("172.16.0.0")})
 		Expect(err).NotTo(HaveOccurred())
 		Expect(attr).To(Equal(wepAttr))
 	})
