@@ -74,6 +74,14 @@ func makeNode(ipv4 string, ipv6 string) *api.Node {
 	return n
 }
 
+var _ = Describe("Default IPv4 pool CIDR", func() {
+
+	It("default pool must be valid", func() {
+		_, _, err := net.ParseCIDR(DEFAULT_IPV4_POOL_CIDR)
+		Expect(err).To(BeNil())
+	})
+})
+
 var _ = Describe("Non-etcd related tests", func() {
 
 	Describe("Termination tests", func() {

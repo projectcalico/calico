@@ -41,6 +41,7 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/upgrade/migrator/clients"
 	"github.com/projectcalico/node/pkg/calicoclient"
 	"github.com/projectcalico/node/pkg/startup/autodetection"
+	"github.com/projectcalico/node/pkg/startup/autodetection/ipv4"
 	log "github.com/sirupsen/logrus"
 	kapiv1 "k8s.io/api/core/v1"
 	v1 "k8s.io/api/core/v1"
@@ -821,6 +822,13 @@ func configureIPPools(ctx context.Context, client client.Interface, kubeadmConfi
 	// Read IPV4 CIDR from env if set and parse then check it for errors
 	if ipv4Pool == "" {
 		ipv4Pool = DEFAULT_IPV4_POOL_CIDR
+
+		_, preferedNet, _ := net.ParseCIDR(DEFAULT_IPV4_POOL_CIDR)
+		if selectedPool, err := ipv4.GetDefaultIPv4Pool(preferedNet); err == nil {
+			ipv4Pool = selectedPool.String()
+		}
+
+		log.Infof("Selected default IP pool is '%s'", ipv4Pool)
 	}
 	_, ipv4Cidr, err := cnet.ParseCIDR(ipv4Pool)
 	if err != nil || ipv4Cidr.Version() != 4 {
