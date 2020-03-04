@@ -6,7 +6,7 @@ require (
 	github.com/kelseyhightower/confd v0.0.0-00010101000000-000000000000
 	github.com/onsi/ginkgo v1.10.1
 	github.com/onsi/gomega v1.7.0
-	github.com/projectcalico/felix v0.0.0-20200302175626-ffd3291c6c5a
+	github.com/projectcalico/felix v0.0.0-20200304132532-30c47af5512c
 	github.com/projectcalico/libcalico-go v1.7.2-0.20200225165413-26809aa675f6
 	github.com/sirupsen/logrus v1.4.2
 	gopkg.in/fsnotify/fsnotify.v1 v1.4.7
