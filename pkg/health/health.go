@@ -14,6 +14,7 @@
 package health
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net/http"
@@ -24,6 +25,7 @@ import (
 	"time"
 
 	log "github.com/sirupsen/logrus"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/projectcalico/node/pkg/health/bird"
 )
@@ -48,54 +50,73 @@ func init() {
 }
 
 func Run(bird, bird6, felixReady, felixLive, birdLive, bird6Live bool, thresholdTime time.Duration) {
-	livenessChecks := felixLive || birdLive  || bird6Live
+	livenessChecks := felixLive || birdLive || bird6Live
 	readinessChecks := bird || felixReady || bird6
 
 	if !livenessChecks && !readinessChecks {
 		fmt.Printf("calico/node check error: must specify at least one of -bird-live, -bird6-live, -felix-live, -bird, -bird6, or -felix")
 		os.Exit(1)
 	}
+	ctx, cancel := context.WithTimeout(context.Background(), thresholdTime)
+	defer cancel()
+	g, ctx := errgroup.WithContext(ctx)
 
 	if felixLive {
-		if err := checkFelixHealth(felixLivenessEp, "liveness"); err != nil {
-			fmt.Printf("calico/node is not ready: Felix is not live: %+v", err)
-			os.Exit(1)
-		}
+		g.Go(func() error {
+			if err := checkFelixHealth(ctx, felixLivenessEp, "liveness"); err != nil {
+				return fmt.Errorf("calico/node is not ready: Felix is not live: %+v", err)
+			}
+			return nil
+		})
 	}
 
 	if birdLive {
-		if err := checkServiceIsLive([]string{"confd", "bird"}); err != nil {
-			fmt.Printf("calico/node is not ready: bird/confd is not live: %+v", err)
-			os.Exit(1)
-		}
+		g.Go(func() error {
+			if err := checkServiceIsLive([]string{"confd", "bird"}); err != nil {
+				return fmt.Errorf("calico/node is not ready: bird/confd is not live: %+v", err)
+			}
+			return nil
+		})
 	}
 
 	if bird6Live {
-		if err := checkServiceIsLive([]string{"confd", "bird6"}); err != nil {
-			fmt.Printf("calico/node is not ready: bird6/confd is not live: %+v", err)
-			os.Exit(1)
-		}
+		g.Go(func() error {
+			if err := checkServiceIsLive([]string{"confd", "bird6"}); err != nil {
+				return fmt.Errorf("calico/node is not ready: bird6/confd is not live: %+v", err)
+			}
+			return nil
+		})
 	}
 
 	if felixReady {
-		if err := checkFelixHealth(felixReadinessEp, "readiness"); err != nil {
-			fmt.Printf("calico/node is not ready: felix is not ready: %+v", err)
-			os.Exit(1)
-		}
+		g.Go(func() error {
+			if err := checkFelixHealth(ctx, felixReadinessEp, "readiness"); err != nil {
+				return fmt.Errorf("calico/node is not ready: felix is not ready: %+v", err)
+			}
+			return nil
+		})
 	}
 
 	if bird {
-		if err := checkBIRDReady("4", thresholdTime); err != nil {
-			fmt.Printf("calico/node is not ready: BIRD is not ready: %+v", err)
-			os.Exit(1)
-		}
+		g.Go(func() error {
+			if err := checkBIRDReady("4", thresholdTime); err != nil {
+				return fmt.Errorf("calico/node is not ready: BIRD is not ready: %+v", err)
+			}
+			return nil
+		})
 	}
 
 	if bird6 {
-		if err := checkBIRDReady("6", thresholdTime); err != nil {
-			fmt.Printf("calico/node is not ready: BIRD6 is not ready: %+v", err)
-			os.Exit(1)
-		}
+		g.Go(func() error {
+			if err := checkBIRDReady("6", thresholdTime); err != nil {
+				return fmt.Errorf("calico/node is not ready: BIRD6 is not ready: %+v", err)
+			}
+			return nil
+		})
+	}
+	if err := g.Wait(); err != nil {
+		fmt.Printf("%s", err)
+		os.Exit(1)
 	}
 }
 
@@ -184,9 +205,14 @@ func checkBIRDReady(ipv string, thresholdTime time.Duration) error {
 
 // checkFelixHealth checks if felix is ready or live by making an http request to
 // Felix's readiness or liveness endpoint.
-func checkFelixHealth(endpoint, probeType string) error {
-	c := &http.Client{Timeout: 5 * time.Second}
-	resp, err := c.Get(endpoint)
+func checkFelixHealth(ctx context.Context, endpoint, probeType string) error {
+	c := &http.Client{}
+	req, err := http.NewRequest(http.MethodGet, endpoint, nil)
+	req = req.WithContext(ctx)
+	if err != nil {
+		return err
+	}
+	resp, err := c.Do(req)
 	if err != nil {
 		return err
 	}

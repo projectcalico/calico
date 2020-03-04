@@ -9,6 +9,7 @@ require (
 	github.com/projectcalico/felix v0.0.0-20200302175626-ffd3291c6c5a
 	github.com/projectcalico/libcalico-go v1.7.2-0.20200225165413-26809aa675f6
 	github.com/sirupsen/logrus v1.4.2
+	golang.org/x/sync v0.0.0-20190911185100-cd5d95a43a6e
 	gopkg.in/fsnotify/fsnotify.v1 v1.4.7
 
 	k8s.io/api v0.0.0
