@@ -1,24 +1,72 @@
 # Release process
 
-networking-calico is released by creating a signed tag and pushing
-that tag to the Gerrit remote.  This tags the current code and
-triggers a release to PyPI.
+## Preparing for a release
 
-## Prerequisites
+Checkout the branch from which you want to release. For a major or minor release,
+you will need to create a new `release-vX.Y` branch based on the target Calico version.
 
-You must be [signed up as an OpenStack
-developer](https://docs.openstack.org/infra/manual/developers.html#account-setup)
-and a member of the [`networking-calico-release` group on
-Gerrit](https://review.opendev.org/#/admin/groups/1015,members).
+Make sure the branch is in a good state. You should have no local changes and tests should
+be passing.
 
-## Tagging a release
+## Building a release
 
-1. Decide the version number for the release.  Usually this is the
-   same as the wider Calico release.
+### Creating a patch release
 
-1. Create a signed `<version>` tag on the release commit (without any leading
-   `v`; for example `3.8.2`), with content `networking-calico <version>
-   release`, and push this to the gerrit remote.
+1. Choose a version e.g. `v1.0.1`
+
+1. Create the release. This will generate release notes, a tag, build the code, and verify the artifacts.
+
+   ```
+   make VERSION=v1.0.1 release
+   ```
+
+1. Publish the release.
+
+   ```
+   make VERSION=v1.0.1 release-publish
+   ```
+
+1. Publish the release on GitHub by following the link printed to screen.
+   - Copy the tag description or the generated release notes file, press edit, and paste it into the release body.
+   - Remove or clean up any messy commits.
+   - Title the release the same as the tag - e.g. `v1.0.1`
+   - Press "Publish release"
+
+1. If this is the latest stable release, perform the following step to publish the `latest` images. **Do not perform
+   this step for patches to older releases.**
+
+   ```
+   make VERSION=<version> release-publish-latest
+   ```
+
+### Creating a major / minor release
+
+1. Choose a version e.g. `v1.1.0`
+
+1. Create the release. This will generate release notes, a tag, build the code, and verify the artifacts.
+
+   ```
+   make VERSION=v1.1.0 PREVIOUS_RELEASE=v1.0.0 release
+   ```
+
+1. Publish the release.
+
+   ```
+   make VERSION=v1.1.0 release-publish
+   ```
+
+1. Publish the release on GitHub by following the link printed to screen.
+   - Copy the tag description or the generated release notes file, press edit, and paste it into the release body.
+   - Remove or clean up any messy commits.
+   - Title the release the same as the tag - e.g. `v1.1.0`
+   - Press "Publish release"
+
+1. If this is the latest stable release, perform the following step to publish the `latest` images. **Do not perform
+   this step for patches to older releases.**
+
+   ```
+   make VERSION=<version> release-publish-latest
+   ```
 
 # Debian and RPM packages
 

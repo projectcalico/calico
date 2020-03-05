@@ -129,6 +129,8 @@ EOF
 
 		    # Run script to automatically generate and
 		    # maintain BIRD config for the cluster.
+		    export ETCDCTL_API=3
+		    export ETCDCTL_ENDPOINTS=http://$SERVICE_HOST:$ETCD_PORT
 		    run_process calico-bird \
                       "${DEST}/networking-calico/devstack/auto-bird-conf.sh ${HOST_IP} ${ETCD_BIN_DIR}/etcdctl"
 
