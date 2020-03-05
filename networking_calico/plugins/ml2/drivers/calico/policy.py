@@ -140,7 +140,7 @@ def _neutron_rule_to_etcd_rule(rule):
     if rule['protocol'] is None or rule['protocol'] == -1:
         pass
     elif rule['protocol'] == 'ipv6-icmp':
-        etcd_rule['protocol'] = {'IPv6': 'ICMPv6'}[ethertype]
+        etcd_rule['protocol'] = 'ICMPv6'
     elif rule['protocol'] == 'icmp':
         etcd_rule['protocol'] = {'IPv4': 'ICMP',
                                  'IPv6': 'ICMPv6'}[ethertype]
