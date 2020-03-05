@@ -28,8 +28,8 @@ spec:
         metadata:
           type: object
         spec:
-          description: Specification of the desired state for the Calico or Tigera
-            Secure EE installation.
+          description: Specification of the desired state for the Calico or Calico
+            Enterprise installation.
           properties:
             calicoNetwork:
               description: CalicoNetwork specifies configuration options for Calico
@@ -41,6 +41,12 @@ spec:
                     a single pool will be configured when needed.
                   items:
                     properties:
+                      blockSize:
+                        description: 'BlockSize specifies the CIDR prefex length to
+                          use when allocating per-node IP blocks from the main IP
+                          pool CIDR. Default: 26 (IPv4), 122 (IPv6)'
+                        format: int32
+                        type: integer
                       cidr:
                         description: CIDR contains the address range for the IP Pool
                           in classless inter-domain routing format.
@@ -125,16 +131,12 @@ spec:
                       type: string
                   type: object
               type: object
-            clusterManagementType:
-              description: 'How the cluster is managed. Valid values for this field
-                are: Standalone, Management, Managed. Standalone clusters are fully
-                self-contained installations of Calico Enterprise. Management clusters
-                provide a single view to manage any number of Managed clusters, which
-                are a lighter weight installation. Default: Standalone'
-              enum:
-              - Standalone
-              - Management
-              - Managed
+            imagePath:
+              description: 'ImagePath allows for the path part of an image to be specified.
+                If specified then the specified value will be used as the image path
+                for each image. If not specified or empty, the default for each image
+                will be used.  Image format:    `<registry>/<imagePath>/<imageName>:<tag-name>`  This
+                option allows configuring the `<imagePath>` portion of the above format.'
               type: string
             imagePullSecrets:
               description: ImagePullSecrets is an array of references to container
@@ -156,9 +158,11 @@ spec:
               - DockerEnterprise
               type: string
             registry:
-              description: Registry is the default Docker registry used for component
-                Docker images. If specified, all Calico and Tigera Secure images will
-                be pulled from this registry.
+              description: 'Registry is the default Docker registry used for component
+                Docker images. If specified, all images will be pulled from this registry.
+                If not specified then the default registries will be used.  Image
+                format:    `<registry>/<imagePath>/<imageName>:<tag-name>`  This option
+                allows configuring the `<registry>` portion of the above format.'
               type: string
             variant:
               description: 'Variant is the product to install - one of Calico or TigeraSecureEnterprise
@@ -169,8 +173,8 @@ spec:
               type: string
           type: object
         status:
-          description: Most recently observed state for the Calico or Tigera Secure
-            EE installation.
+          description: Most recently observed state for the Calico or Calico Enterprise
+            installation.
           properties:
             variant:
               description: Variant is the most recently observed installed variant
