@@ -3,7 +3,5 @@
 # Uncomment this to turn on verbose mode.
 #export DH_VERBOSE=1
 
-export PBR_VERSION=
-
 %:
-	dh $@  --with python2,systemd
+	dh $@ --with python2,systemd --buildsystem=python_distutils
