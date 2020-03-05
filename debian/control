@@ -2,7 +2,7 @@ Source: networking-calico
 Section: net
 Priority: optional
 Maintainer: Neil Jerram <neil@projectcalico.org>
-Build-Depends: debhelper (>= 8.0.0), dh-systemd, python-all (>= 2.6), python-setuptools, python-pbr
+Build-Depends: debhelper (>= 8.0.0), dh-systemd, python-all (>= 2.6), python-setuptools
 XS-Python-Version: >= 2.6
 Standards-Version: 3.9.4
 
@@ -63,7 +63,6 @@ Package: networking-calico
 Architecture: all
 Depends:
  ${misc:Depends},
- python-pbr,
  python-babel,
  python-eventlet,
  python-six

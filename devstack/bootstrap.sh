@@ -63,6 +63,14 @@ set -ex
 #     running this script; for example:
 #
 #         export DEVSTACK_BRANCH=stable/liberty
+#
+# TEMPEST
+#
+#     By default this script is as minimal as possible, so it doesn't include
+#     Tempest or the initial network setup that Tempest expects.  If TEMPEST is
+#     set to 'true', Tempest will be installed and the required initial
+#     networks created, ready for a Tempest run after the stack setup has
+#     completed.
 # ------------------------------------------------------------------------------
 
 # Assume that we are starting from the home directory of a non-root
@@ -81,8 +89,8 @@ sudo apt-get -y install git
 # Prepare networking-calico tree - the following lines will check out
 # the master branch of networking-calico (if not already present).
 test -e networking-calico || \
-    git clone https://git.openstack.org/openstack/networking-calico
-cd networking-calico
+    git clone https://github.com/projectcalico/networking-calico
+pushd networking-calico
 
 # If TEST_GERRIT_CHANGE has been specified, merge that change from Gerrit.
 if [ -n "$TEST_GERRIT_CHANGE" ]; then
@@ -98,7 +106,8 @@ fi
 
 # Remember the current directory.
 ncdir=`pwd`
-cd ..
+ncref=`git rev-parse --abbrev-ref HEAD`
+popd
 
 # Enable IPv4 and IPv6 forwarding.
 sudo sysctl -w net.ipv4.ip_forward=1
@@ -106,7 +115,7 @@ sudo sysctl -w net.ipv6.conf.all.forwarding=1
 
 # Clone the DevStack repository (if not already present).
 test -e devstack || \
-    git clone https://git.openstack.org/openstack-dev/devstack
+    git clone ${DEVSTACK_REPO:-https://opendev.org/openstack/devstack}
 cd devstack
 
 # If DEVSTACK_BRANCH has been specified, check out that branch.  (Otherwise we
@@ -118,14 +127,23 @@ fi
 # Prepare DevStack config.
 cat > local.conf <<EOF
 [[local|localrc]]
-SERVICE_HOST=${SERVICE_HOST:-$HOSTNAME}
+SERVICE_HOST=${SERVICE_HOST:-$HOST_IP}
 ADMIN_PASSWORD=015133ea2bdc46ed434c
 DATABASE_PASSWORD=d0060b07d3f3631ece78
 RABBIT_PASSWORD=6366743536a8216bde26
 SERVICE_PASSWORD=91eb72bcafb4ddf246ab
 SERVICE_TOKEN=c5680feca5e2c9c8f820
 
-enable_plugin networking-calico $ncdir
+enable_plugin networking-calico $ncdir $ncref
+disable_service horizon
+
+LOGFILE=stack.log
+LOG_COLOR=False
+
+EOF
+
+if ! ${TEMPEST:-false}; then
+    cat >> local.conf <<EOF
 disable_service tempest
 
 # Devstack by default creates an initial Neutron network topology for VMs to
@@ -140,17 +158,18 @@ disable_service tempest
 # 'neutron subnet-create' invocations below.
 NEUTRON_CREATE_INITIAL_NETWORKS=False
 
-LOGFILE=stack.log
-LOG_COLOR=False
-
 EOF
+fi
 
 # Stack!
 ./stack.sh
 
-# If we're on the controller node, create a Calico network.
-if [ x${SERVICE_HOST:-$HOSTNAME} = x$HOSTNAME ]; then
-    . openrc admin admin
-    neutron net-create --shared --provider:network_type local calico
-    neutron subnet-create --gateway 10.65.0.1 --enable-dhcp --ip-version 4 --name calico-v4 calico 10.65.0.0/24
+# If we're on the controller node and not setting up for Tempest, create a
+# Calico network.
+if ! ${TEMPEST:-false}; then
+     if [ x${SERVICE_HOST:-$HOSTNAME} = x$HOSTNAME ]; then
+	 . openrc admin admin
+	 neutron net-create --shared --provider:network_type local calico
+	 neutron subnet-create --gateway 10.65.0.1 --enable-dhcp --ip-version 4 --name calico-v4 calico 10.65.0.0/24
+     fi
 fi

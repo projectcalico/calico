@@ -99,7 +99,7 @@ class DnsmasqRouted(dhcp.Dnsmasq):
             if mode:
                 if subnet.ip_version == 4:
                     cmd.append('--dhcp-range=%s%s,%s,%s,%s,%s' %
-                               ('set:', self._TAG_PREFIX % i,
+                               ('set:', 'subnet-%s' % subnet.id,
                                 cidr.network, mode, cidr.netmask, lease))
                 else:
                     if cidr.prefixlen < 64:
@@ -108,7 +108,7 @@ class DnsmasqRouted(dhcp.Dnsmasq):
                                   {'subnet': subnet.id, 'cidr': cidr})
                         continue
                     cmd.append('--dhcp-range=%s%s,%s,%s,%d,%s' %
-                               ('set:', self._TAG_PREFIX % i,
+                               ('set:', 'subnet-%s' % subnet.id,
                                 cidr.network, mode,
                                 cidr.prefixlen, lease))
                 possible_leases += cidr.size
