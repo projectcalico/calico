@@ -163,7 +163,7 @@ worker-2     NotReady   <none>   5s      v1.17.2
 On the controller, install {{site.prodname}} from the manifest:
 
 ```
-curl https://docs.projectcalico.org/master/manifests/calico.yaml -O
+curl {{ "/manifests/calico.yaml" | absolute_url }} -O
 ```
 
 If you wish to customize the {{site.prodname}} install, customize the downloaded calico.yaml manifest.  Then apply the manifest to install {{site.prodname}}.
