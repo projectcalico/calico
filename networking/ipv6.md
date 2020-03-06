@@ -114,7 +114,8 @@ If you installed {{site.prodname}} on the cluster using the default IPv4, and yo
    - Set the environment variable `CALICO_ROUTER_ID=hash` on {{site.nodecontainer}}.   
   This configures {{site.prodname}} to calculate the router ID based on the hostname, or 
    - Pass a unique value for `CALICO_ROUTER_ID` to each node individually. 
-1. Configure Kubernetes components to enable IPv6 using the following flags.   
+1. Configure Kubernetes components to enable IPv6 using the following flags.  
+
 | Component                   | **Flag**                                      | **Value/Content**                                            |
 | --------------------------- | --------------------------------------------- | ------------------------------------------------------------ |
 | **kube-apiserver**          | `--bind-address` or `--insecure-bind-address` | Set to the appropriate IPv6 address or `::` for all IPv6 addresses on the host. |
@@ -128,8 +129,9 @@ If you installed {{site.prodname}} on the cluster using the default IPv4, and yo
 |                             | `--node-ip`                                   | Set to the IPv6 address of the node.                         |
 | **kube-proxy**              | `--bind-address`                              | Set to the appropriate IPv6 address or `::` for all IPv6 addresses on the host. |
 |                             | `--master`                                    | Set with the IPv6 address where the `kube-apiserver` can be accessed. |
-|                             | `--cluster-cidr`                              | Set to match the {{site.prodname}} IPv6 IPPool.              |
-1. If you are using [kube-dns](/getting-started/kubernetes/installation/manifests/kubedns.yaml), you must modify your DNS for IPv6 operation.
+|                             | `--cluster-cidr`                              | Set to match the {{site.prodname}} IPv6 IPPool.              |  
+4. If you are using [kube-dns](/getting-started/kubernetes/installation/manifests/kubedns.yaml), you must modify your DNS for IPv6 operation.
+
    - Update the image versions to at least `1.14.8`.
    - Ensure the clusterIP for the DNS service matches the one specified to the kubelet as `--cluster-dns`.
    - Add `--dns-bind-address=[::]` to the arguments for the kubedns container.
