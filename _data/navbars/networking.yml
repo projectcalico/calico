@@ -28,9 +28,7 @@ section:
      path: /networking/get-started-ip-addresses
    - title: Configure IP autodetection
      path: /networking/ip-autodetection
-   - title: Enable dual stack
-     path: /networking/dual-stack
-   - title: Enable IPv6
+   - title: Configure IPv6 and IPv4 modes
      path: /networking/ipv6
    - title: Add a floating IP to a pod
      path: /networking/add-floating-ip
