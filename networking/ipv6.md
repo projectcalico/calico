@@ -41,11 +41,11 @@ This how-to guide uses the following {{site.prodname}} features:
 
 **Kubernetes**
 - [Configure dual stack](#configure-dual-stack)
-- [Configure IPv6-only, during installation](#configure-ipv6-only-during-calico-installation)
+- [Configure IPv6-only, during installation](#configure-ipv6-only-during-installation)
 - [Configure IPv6-only, after installation](#configure-ipv6-only-after-installation)
 
 **OpenStack**
-- [Configure OpenStack for IPv6, IPv4, or dual stack](#configure-ipv6-only-openstack)
+- [Configure OpenStack for IPv6, IPv4, or dual stack](#configure-openstack-for-ipv6-ipv4-or-dual-stack)
 
 #### Configure dual stack
 
