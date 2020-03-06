@@ -1,5 +1,5 @@
 version: v1.0
-name: Initial Pipeline
+name: CI for https://github.com/projectcalico/packaging
 agent:
   machine:
     type: e1-standard-4
