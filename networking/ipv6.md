@@ -22,7 +22,8 @@ This how-to guide uses the following {{site.prodname}} features:
 
 ### Before you begin...
 
-**{{site.prodname}} requirements**
+**{{site.prodname}} requirements** 
+
   You must be using {{site.prodname}} IPAM. The defaut mode is **IPv4** (CNI ConfigMap manifest with `assign_ipv4: true`).
 
 **Kubernetes support**
