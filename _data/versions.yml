@@ -1,5 +1,4 @@
 - title: v3.13.0
-  note: ""
   tigera-operator:
    image: tigera/operator
    registry: quay.io
