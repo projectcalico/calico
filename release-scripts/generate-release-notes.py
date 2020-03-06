@@ -17,7 +17,7 @@ MILESTONE="Calico %s" % VERSION
 RELEASE_STREAM = ".".join(VERSION.split(".")[:2])
 
 # The file where we'll store the release notes.
-FILENAME="_includes/%s/release-notes/%s-release-notes.md" % (RELEASE_STREAM, VERSION)
+FILENAME="_includes/release-notes/%s-release-notes.md" % VERSION
 
 # Repositories we care about. Add repositories here to include them in release
 # note generation.
