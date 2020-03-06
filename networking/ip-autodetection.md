@@ -73,7 +73,7 @@ Because you can configure IP address and subnet using either environment variabl
 |                                     | Set to autodetect                                     | The requested method is used (first-found, can-reach, interface, skip-interface), and the Node resource is updated. |
 |                                     | Not set, but Node resource has IP/IP6 values          | Node resource value is used.                                 |
 | IP                                  | Not set, and there is no IP value in Node resource    | Autodetects an IPv4 address and subnet, and updates Node resource. |
-| IP6                                 | Not set, and there is a notIP6 value in Node resource | No IP6 routing is performed on the node.                     |
+| IP6                                 | Not set, and there is a no IP6 value in Node resource | No IP6 routing is performed on the node.                     |
 
 ### How to
 
