@@ -39,7 +39,7 @@ This how-to guide uses the following {{site.prodname}} features:
 
 ### How to
 
->**Note**: All steps assume **new clusters** (not existing IPv4 clusters). 
+>**Note**: All tasks in this section assume **new clusters**; testing has not been done using existing IPv4 clusters. 
 {: .alert .alert-info}
 
 **Kubernetes**
@@ -152,7 +152,7 @@ If you installed {{site.prodname}} on the cluster using the default IPv4, and yo
 
 #### Configure OpenStack for IPv6, IPv4, or dual stack
 
-OpenStack controls whether a VM gets IPv4, IPv6, or both addresses, not {{site.prodname}}. Calico simply honors the addresses that OpenStack specifies. The following extra steps are required for IPv6-only or dual stack deployments -- so the guest OS can learn its IPv6 address if assigned by OpenStack.
+OpenStack (not {{site.prodname}}) controls whether a VM gets IPv4, IPv6, or both addresses. Calico simply honors the addresses that OpenStack specifies. The following extra steps are required for **IPv6-only** and **dual stack** deployments -- so the guest OS can learn its IPv6 address (if assigned by OpenStack).
 
 1. Verify that the guest VM image meets these requirements for IPv6 connectivity.   
 
