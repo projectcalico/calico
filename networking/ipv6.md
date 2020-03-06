@@ -10,7 +10,7 @@ Configure {{site.prodname}} IP address allocation mode (IPv6, IPv4, or both) for
 
 ### Value
 
-Although communication over IPv6 is increasingly desirable as the natural mode for workloads, it still often a requirement to continue support for IPv4. {{site.prodname}} supports using both protocols (called "**dual stack**"), as well as IPv6-only, and the default IPv4.
+Although communication over IPv6 is increasingly desirable as the natural mode for workloads, it is often a requirement to continue support for IPv4. {{site.prodname}} supports using both protocols (called "**dual stack**"), as well as IPv6-only, and the default IPv4.
 
 ### Features
 
@@ -18,6 +18,7 @@ This how-to guide uses the following {{site.prodname}} features:
 
 - **IPAM**, a CNI plugin configuration with `assign_ipv6` and `assign_ipv4` flags
 - **IPPool**
+- **calico-node** with IP autodetection
 
 ### Before you begin...
 
@@ -31,7 +32,7 @@ This how-to guide uses the following {{site.prodname}} features:
 
 **Kubernetes IPv6 host requirements**
   - An IPv6 address that is reachable from the other hosts
-  - The sysctl setting `net.ipv6.conf.all.forwarding` setting it to `1`.
+  - The sysctl setting, `net.ipv6.conf.all.forwarding`, is set to `1`.
     This ensures both Kubernetes service traffic and {{site.prodname}} traffic is forwarded appropriately.
   - A default IPv6 route
 
