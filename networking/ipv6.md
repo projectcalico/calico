@@ -16,13 +16,13 @@ Although communication over IPv6 is increasingly desirable as the natural mode f
 
 This how-to guide uses the following {{site.prodname}} features:
 
-- IPAM, a CNI plugin configuration with `assign_ipv6` and `assign_ipv4` flags
-- IPPool
+- **IPAM**, a CNI plugin configuration with `assign_ipv6` and `assign_ipv4` flags
+- **IPPool**
 
 ### Before you begin...
 
 **{{site.prodname}} requirements**
-  You must be using {{site.prodname}} IPAM. The defaut mode is IPv4 (CNI ConfigMap manifest with `assign_ipv4: true`).
+  You must be using {{site.prodname}} IPAM. The defaut mode is **IPv4** (CNI ConfigMap manifest with `assign_ipv4: true`).
 
 **Kubernetes support**
   - 1.16 and 1.17 support dual stack (alpha-level)
@@ -112,7 +112,8 @@ If you installed {{site.prodname}} on the cluster using the default IPv4, and yo
    - Set the environment variable `CALICO_ROUTER_ID=hash` on {{site.nodecontainer}}.   
   This configures {{site.prodname}} to calculate the router ID based on the hostname, or 
    - Pass a unique value for `CALICO_ROUTER_ID` to each node individually. 
-1. Configure Kubernetes components to enable IPv6 using the following flags.  
+1. Configure Kubernetes components to enable IPv6 using the following flags. 
+
 | Component                   | **Flag**                                      | **Value/Content**                                            |
 | --------------------------- | --------------------------------------------- | ------------------------------------------------------------ |
 | **kube-apiserver**          | `--bind-address` or `--insecure-bind-address` | Set to the appropriate IPv6 address or `::` for all IPv6 addresses on the host. |
