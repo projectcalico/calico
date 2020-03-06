@@ -114,7 +114,7 @@ If you installed {{site.prodname}} on the cluster using the default IPv4, and yo
    - Set the environment variable `CALICO_ROUTER_ID=hash` on {{site.nodecontainer}}.   
   This configures {{site.prodname}} to calculate the router ID based on the hostname, or 
    - Pass a unique value for `CALICO_ROUTER_ID` to each node individually. 
-1. Configure Kubernetes components to enable IPv6 using the following flags. 
+1. Configure Kubernetes components to enable IPv6 using the following flags.   
 | Component                   | **Flag**                                      | **Value/Content**                                            |
 | --------------------------- | --------------------------------------------- | ------------------------------------------------------------ |
 | **kube-apiserver**          | `--bind-address` or `--insecure-bind-address` | Set to the appropriate IPv6 address or `::` for all IPv6 addresses on the host. |
