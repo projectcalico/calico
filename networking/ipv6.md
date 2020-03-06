@@ -1,6 +1,6 @@
 ---
 title: Configure IPv6 and IPv4 modes
-description: Configure IPv6 and IPv4 modes, including dual stack for workloads.
+description: Configure IPv6, IPv4 or both modes (dual stack) IP modes for workloads.
 canonical_url: '/networking/ipv6'
 ---
 
@@ -53,7 +53,7 @@ To configure dual stack for Kubernetes, follow these steps:
 
 1. Set up a new cluster following the Kubernetes {% include open-new-window.html text='prerequisites' url='https://kubernetes.io/docs/concepts/services-networking/dual-stack/#prerequisites' %} and {% include open-new-window.html text='enablement steps' url='https://kubernetes.io/docs/concepts/services-networking/dual-stack/#enable-ipv4-ipv6-dual-stack' %}.
 
-1. Install {{site.prodname}} for [Kubernetes]({{site.baseurl}}/getting-started/kubernetes/self-managed-onprem/onpremises) or [OpenStack] ({{site.baseurl}}getting-started/openstack/installation/), downloadinf the right {{site.prodname}} manifest for the cluster, and your preferred datastore type.
+1. Using the {{site.prodname}}[Install guide for Kubernetes]({{site.baseurl}}/getting-started/kubernetes/self-managed-onprem/onpremises), download the right {{site.prodname}} manifest for the cluster, and your preferred datastore type.
 
 1. Edit the CNI config (`calico-config` ConfigMap in the manifest), and enable IP address allocation by setting both modes to true.
 
@@ -110,14 +110,15 @@ Be sure to set the value for `CALICO_IPV6POOL_CIDR` to the desired pool; it shou
 
 #### Configure IPv6-only, after installation
 
-If you have hosts that have only IPv6 addresses, or you want to disable the default IPv4 and only use IPv6, follow these steps.
+If you installed {{site.prodname}} on the cluster using the default IPv4, but you want switch to IPv6-only, or your hosts only have IPv6 addresses, follow these steps.
 
 1. Disable [IP autodetection of IPv4]({{site.baseurl}}//networking/ip-autodetection) by setting `IP` to `none`.
 
-1. If you disabled IPv4, you must configure another method to calculate the BGP router ID. (When IPv4 is enabled, Calico uses the node's IPv4 address as the BGP router ID.) There are two ways to calculate the BGP router ID:
+1. Calculate the {{site.prodname}} BGP router ID for IPv6 using either of the following methods.
 
-- Set the environment variable `CALICO_ROUTER_ID=hash` on {{site.nodecontainer}}. This configures {{site.prodname}} to calculate the router ID based on the hostname.
-- Pass a unique value for `CALICO_ROUTER_ID` to each node individually.
+  - Set the environment variable `CALICO_ROUTER_ID=hash` on {{site.nodecontainer}}. This configures {{site.prodname}} to calculate the router ID based on the hostname.
+  or
+  - Pass a unique value for `CALICO_ROUTER_ID` to each node individually.
 
 1. Configure Kubernetes components to enable IPv6 using the following flags.
 
@@ -162,8 +163,7 @@ If you have hosts that have only IPv6 addresses, or you want to disable the defa
 1. If you are using [kube-dns](/getting-started/kubernetes/installation/manifests/kubedns.yaml), you must modify your DNS for IPv6 operation.
 
    - Update the image versions to at least `1.14.8`.
-   - Ensure the clusterIP for the DNS service matches the one specified to
-  the kubelet as `--cluster-dns`.
+   - Ensure the clusterIP for the DNS service matches the one specified to the kubelet as `--cluster-dns`.
    - Add `--dns-bind-address=[::]` to the arguments for the kubedns container.
    - Add `--no-negcache` to the arguments for the dnsmasq container.
    - Switch the arguments on the sidecar container from
