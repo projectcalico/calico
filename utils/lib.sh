@@ -131,8 +131,8 @@ function test_validate_version {
 
 # Setup for accessing the RPM host.  Requires GCLOUD_ARGS and HOST to
 # be set by the caller.
-ssh_host="gcloud compute ssh ${GCLOUD_ARGS} ${HOST}"
-scp_host="gcloud compute scp ${GCLOUD_ARGS}"
+ssh_host="gcloud --quiet compute ssh ${GCLOUD_ARGS} ${HOST}"
+scp_host="gcloud --quiet compute scp ${GCLOUD_ARGS}"
 rpmdir=/usr/share/nginx/html/rpm
 
 function ensure_repo_exists {
