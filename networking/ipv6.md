@@ -10,13 +10,13 @@ Configure {{site.prodname}} IP address allocation mode (IPv6, IPv4, or both) for
 
 ### Value
 
-Although communication over IPv6 is increasingly desirable as the natural mode for workloads, it still often a requirement to continue support for IPv4. {{site.prodname}} supports using both protocols (called "dual stack"), as well as IPv6-only, and the default IPv4. 
+Although communication over IPv6 is increasingly desirable as the natural mode for workloads, it still often a requirement to continue support for IPv4. {{site.prodname}} supports using both protocols (called "**dual stack**"), as well as IPv6-only, and the default IPv4. 
 
 ### Features
 
 This how-to guide uses the following {{site.prodname}} features:
 
-- [**CNI plugin configuration**]({{ site.baseurl }}/reference/cni-plugin/configuration#ipam) with `assign_ipv6` and `assign_ipv4` flags
+- CNI plugin configuration with `assign_ipv6` and `assign_ipv4` flags
 
 ### Before you begin...
 
@@ -65,7 +65,7 @@ To configure dual stack for Kubernetes, follow these steps:
        },
    ```
 
-1. Add the following variable settings to the environment for the `calico-node` container:
+1. Configure IPv6 IP address autodetection and IP pool by adding the following variable settings to the environment for the `calico-node` container:
 
    | Variable name | Value |
    | ------------- | ----- |
@@ -73,7 +73,7 @@ To configure dual stack for Kubernetes, follow these steps:
    | `CALICO_IPV6POOL_CIDR` | the same as the IPv6 range you configured as the cluster CIDR to kube-controller-manager and kube-proxy |
    | `FELIX_IPV6SUPPORT` | `true` |
 
-1. Apply the edited manifest with `kubectl apply -f`.
+1. Apply the edited manifest with `kubectl apply -f`.  
    New pods will get IPv6 addresses as well as IPv4, and can communicate with each other and the outside world over IPv6.
 
 #### Configure IPv6-only, during installation
@@ -81,7 +81,7 @@ To configure dual stack for Kubernetes, follow these steps:
 To configure IPv6-only support for Kubernetes during {{site.prodname}} installation, follow these steps.
 
 1. Download the appropriate {{site.prodname}} manifest for IPv6 deployment and save it as `calico.yaml`.
-1. Edit the `calico.yaml` ipam section, and modify it to [disable IPv4 assignments and enable IPv6 assigments](/reference/cni-plugin/configuration#ipam).
+1. Edit the `calico.yaml` ipam section, and modify it to [disable IPv4 assignments and enable IPv6 assignments](/reference/cni-plugin/configuration#ipam).
    ```
        "ipam": {
            "type": "calico-ipam",
@@ -90,7 +90,7 @@ To configure IPv6-only support for Kubernetes during {{site.prodname}} installat
        },
    ```
 1. Add the following environment variables to the calico-node Daemonset in the `calico.yaml` file.   
-Be sure to set the value for `CALICO_IPV6POOL_CIDR` to the desired pool; it should match the `--cluster-cidr` passed to the kube-controller-manager and to kube-proxy.
+Be sure to set the value for `CALICO_IPV6POOL_CIDR` to the desired IP pool; it should match the `--cluster-cidr` passed to the kube-controller-manager and to kube-proxy.
 
    ```yaml
    - name: CALICO_IPV6POOL_CIDR
