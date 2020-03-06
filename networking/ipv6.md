@@ -16,7 +16,8 @@ Although communication over IPv6 is increasingly desirable as the natural mode f
 
 This how-to guide uses the following {{site.prodname}} features:
 
-- CNI plugin configuration with `assign_ipv6` and `assign_ipv4` flags
+- IPAM, a CNI plugin configuration with `assign_ipv6` and `assign_ipv4` flags
+- IPPool
 
 ### Before you begin...
 
@@ -65,7 +66,7 @@ To configure dual stack for Kubernetes, follow these steps:
        },
    ```
 
-1. Configure IPv6 IP address autodetection and IP pool by adding the following variable settings to the environment for the `calico-node` container:
+1. Configure IPv6 **IP address autodetection** and **IP pool** by adding the following variable settings to the environment for the `calico-node` container:
 
    | Variable name | Value |
    | ------------- | ----- |
@@ -110,58 +111,30 @@ Be sure to set the value for `CALICO_IPV6POOL_CIDR` to the desired IP pool; it s
 
 #### Configure IPv6-only, after installation
 
-If you installed {{site.prodname}} on the cluster using the default IPv4, but you want switch to IPv6-only, or your hosts only have IPv6 addresses, follow these steps.
+If you installed {{site.prodname}} on the cluster using the default IPv4, and you want switch to IPv6-only, or your hosts only have IPv6 addresses, follow these steps.
 
 1. Disable [IP autodetection of IPv4]({{site.baseurl}}//networking/ip-autodetection) by setting `IP` to `none`.
-
 1. Calculate the {{site.prodname}} BGP router ID for IPv6 using either of the following methods.
-
-  - Set the environment variable `CALICO_ROUTER_ID=hash` on {{site.nodecontainer}}. This configures {{site.prodname}} to calculate the router ID based on the hostname.
-  or
-  - Pass a unique value for `CALICO_ROUTER_ID` to each node individually.
-
+   - Set the environment variable `CALICO_ROUTER_ID=hash` on {{site.nodecontainer}}.
+  This configures {{site.prodname}} to calculate the router ID based on the hostname, or
+   - Pass a unique value for `CALICO_ROUTER_ID` to each node individually.
 1. Configure Kubernetes components to enable IPv6 using the following flags.
-
-   **kube-apiserver**
-
-   | Flag | Value/Content |
-   | ---- | ------------- |
-   | `--bind-address` or `--insecure-bind-address` | Set to the appropriate IPv6 address or `::` for all IPv6 addresses on the host. |
-   | `--advertise-address` | Set to the IPv6 address that nodes should use to access the kube-apiserver. |
-   | `--service-cluster-ip-range` | Set to an IPv6 CIDR that will be used for the Service IPs, the DNS service address must be in this range. |
-
-   **kube-controller-manager**
-
-   | Flag | Value/Content |
-   | ---- | ------------- |
-   | `--master` | Set with the IPv6 address where the kube-apiserver can be accessed. |
-   | `--cluster-cidr` | Set to match the {{site.prodname}} IPv6 IPPool. |
-
-   **kube-scheduler**
-
-   | Flag | Value/Content |
-   | ---- | ------------- |
-   | `--master` | Set with the IPv6 address where the kube-apiserver can be accessed. |
-
-   **kubelet**
-
-   | Flag | Value/Content |
-   | ---- | ------------- |
-   | `--address` | Set to the appropriate IPv6 address or `::` for all IPv6 addresses. |
-   | `--cluster-dns` | Set to the IPv6 address that will be used for the service DNS, this must be in the range used for `--service-cluster-ip-range`. |
-   | `--node-ip` | Set to the IPv6 address of the node. |
-
-   **kube-proxy**
-
-   | Flag | Value/Content |
-   | ---- | ------------- |
-   | `--bind-address` | Set to the appropriate IPv6 address or `::` for all IPv6 addresses on the host. |
-   | `--master` | Set with the IPv6 address where the kube-apiserver can be accessed. |
-   | `--cluster-cidr` | Set to match the {{site.prodname}} IPv6 IPPool. |
-
+| Component                   | **Flag**                                      | **Value/Content**                                            |
+| --------------------------- | --------------------------------------------- | ------------------------------------------------------------ |
+| **kube-apiserver**          | `--bind-address` or `--insecure-bind-address` | Set to the appropriate IPv6 address or `::` for all IPv6 addresses on the host. |
+|                             | `--advertise-address`                         | Set to the IPv6 address that nodes should use to access the `kube-apiserver`. |
+|                             | `--service-cluster-ip-range`                  | Set to an IPv6 CIDR that will be used for the Service IPs. The DNS service address must be in this range. |
+| **kube-controller-manager** | `--master`                                    | Set with the IPv6 address where the `kube-apiserver` can be accessed. |
+|                             | `--cluster-cidr`                              | Set to match the {{site.prodname}} IPv6 IPPool.              |
+| **kube-scheduler**          | `--master`                                    | Set with the IPv6 address where the `kube-apiserver` can be accessed. |
+| **kubelet**                 | `--address`                                   | Set to the appropriate IPv6 address or `::` for all IPv6 addresses. |
+|                             | `--cluster-dns`                               | Set to the IPv6 address that will be used for the service DNS; this must be in the range used for `--service-cluster-ip-range`. |
+|                             | `--node-ip`                                   | Set to the IPv6 address of the node.                         |
+| **kube-proxy**              | `--bind-address`                              | Set to the appropriate IPv6 address or `::` for all IPv6 addresses on the host. |
+|                             | `--master`                                    | Set with the IPv6 address where the `kube-apiserver` can be accessed. |
+|                             | `--cluster-cidr`                              | Set to match the {{site.prodname}} IPv6 IPPool.              |
 
 1. If you are using [kube-dns](/getting-started/kubernetes/installation/manifests/kubedns.yaml), you must modify your DNS for IPv6 operation.
-
    - Update the image versions to at least `1.14.8`.
    - Ensure the clusterIP for the DNS service matches the one specified to the kubelet as `--cluster-dns`.
    - Add `--dns-bind-address=[::]` to the arguments for the kubedns container.
