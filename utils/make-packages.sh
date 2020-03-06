@@ -13,6 +13,7 @@ scriptdir=$(dirname $(realpath $0))
 
 # Get the version based on Git state, and the Git commit ID.
 version=${FORCE_VERSION:-`git_auto_version`}
+version=`strip_v ${version}`
 sha=`git_commit_id`
 
 MY_UID=`id -u`
