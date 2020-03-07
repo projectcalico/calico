@@ -59,7 +59,7 @@ function build_archives() {
         if [[ "$branch" == legacy* ]]; then
             build release-legacy
         else
-            build release-${branch} ${branch}
+            build release-${branch} /${branch}
         fi
     done
 }

@@ -11,7 +11,7 @@ layout: docwithnav
     {%- for v in version["legacy"] %}
 - [{{ v }}](/{{ v }}){: data-proofer-ignore=""}
     {%- endfor -%}
-{% else %}
+{%- else -%}
 - [{{ version }}](/{{ version }})
 {% endif -%}
 {%- endfor -%}
