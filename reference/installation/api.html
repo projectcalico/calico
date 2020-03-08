@@ -4,8 +4,7 @@ description: Installation API reference
 layout: docwithnav
 ---
 
-The Kubernetes resources below configure {{site.prodname}} installation. Each resource is responsible for installing and configuring a different subsystem of {{site.prodname}} during installation. Most options can be modified on a running cluster using `kubectl`.
-
+The Kubernetes resources below configure {{site.prodname}} installation when using the operator (Currently, only on Openshift). Each resource is responsible for installing and configuring a different subsystem of {{site.prodname}} during installation. Most options can be modified on a running cluster using `kubectl`.
 
 <p>Packages:</p>
 <ul>
@@ -14,7 +13,7 @@ The Kubernetes resources below configure {{site.prodname}} installation. Each re
 </li>
 </ul>
 <h2 id="operator.tigera.io/v1">operator.tigera.io/v1</h2>
-<p>API Schema definitions for configuring the installation of Calico and Tigera Secure EE</p>
+<p>API Schema definitions for configuring the installation of Calico and Calico Enterprise</p>
 Resource Types:
 <ul><li>
 <a href="#operator.tigera.io/v1.Installation">Installation</a>
@@ -23,7 +22,7 @@ Resource Types:
 </li></ul>
 <h3 id="operator.tigera.io/v1.Installation">Installation
 </h3>
-<p>Installation configures an installation of Calico or Tigera Secure EE. At most one instance
+<p>Installation configures an installation of Calico or Calico Enterprise. At most one instance
 of this resource is supported. It must be named &ldquo;default&rdquo;. The Installation API installs core networking
 and network policy components, and provides general install-time configuration.</p>
 <table>
@@ -75,7 +74,7 @@ InstallationSpec
 </em>
 </td>
 <td>
-<p>Specification of the desired state for the Calico or Tigera Secure EE installation.</p>
+<p>Specification of the desired state for the Calico or Calico Enterprise installation.</p>
 <br/>
 <br/>
 <table>
@@ -90,7 +89,7 @@ ProductVariant
 </td>
 <td>
 <em>(Optional)</em>
-<p>Variant is the product to install - should be Calico
+<p>Variant is the product to install - one of Calico or TigeraSecureEnterprise
 Default: Calico</p>
 </td>
 </tr>
@@ -104,7 +103,28 @@ string
 <td>
 <em>(Optional)</em>
 <p>Registry is the default Docker registry used for component Docker images. If specified,
-all Calico and Tigera Secure images will be pulled from this registry.</p>
+all images will be pulled from this registry. If not specified then the default registries
+will be used.</p>
+<p>Image format:
+<code>&lt;registry&gt;/&lt;imagePath&gt;/&lt;imageName&gt;:&lt;tag-name&gt;</code></p>
+<p>This option allows configuring the <code>&lt;registry&gt;</code> portion of the above format.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>imagePath</code><br>
+<em>
+string
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>ImagePath allows for the path part of an image to be specified. If specified
+then the specified value will be used as the image path for each image. If not specified
+or empty, the default for each image will be used.</p>
+<p>Image format:
+<code>&lt;registry&gt;/&lt;imagePath&gt;/&lt;imageName&gt;:&lt;tag-name&gt;</code></p>
+<p>This option allows configuring the <code>&lt;imagePath&gt;</code> portion of the above format.</p>
 </td>
 </tr>
 <tr>
@@ -151,6 +171,23 @@ CalicoNetworkSpec
 <p>CalicoNetwork specifies configuration options for Calico provided pod networking.</p>
 </td>
 </tr>
+<tr>
+<td>
+<code>clusterManagementType</code><br>
+<em>
+<a href="#operator.tigera.io/v1.ClusterManagementType">
+ClusterManagementType
+</a>
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>How the cluster is managed. Valid values for this field are: Standalone, Management, Managed.
+Standalone clusters are fully self-contained installations of Calico Enterprise. Management clusters provide
+a single view to manage any number of Managed clusters, which are a lighter weight installation.
+Default: Standalone</p>
+</td>
+</tr>
 </table>
 </td>
 </tr>
@@ -164,14 +201,14 @@ InstallationStatus
 </em>
 </td>
 <td>
-<p>Most recently observed state for the Calico or Tigera Secure EE installation.</p>
+<p>Most recently observed state for the Calico or Calico Enterprise installation.</p>
 </td>
 </tr>
 </tbody>
 </table>
 <h3 id="operator.tigera.io/v1.TigeraStatus">TigeraStatus
 </h3>
-<p>TigeraStatus represents the most recently observed status for Calico or a Tigera Secure EE functional area.</p>
+<p>TigeraStatus represents the most recently observed status for Calico or a Calico Enterprise functional area.</p>
 <table>
 <thead>
 <tr>
@@ -316,6 +353,14 @@ IPv6 addresses will not be auto-detected.</p>
 </tr>
 </tbody>
 </table>
+<h3 id="operator.tigera.io/v1.ClusterManagementType">ClusterManagementType
+(<code>string</code> alias)</h3>
+<p>
+(<em>Appears on:</em>
+<a href="#operator.tigera.io/v1.InstallationSpec">InstallationSpec</a>)
+</p>
+<p>ClusterManagementType represents the type of multicluster management to use. Valid options for this field are: &ldquo;Standalone&rdquo;,
+&ldquo;Management&rdquo;, &ldquo;Managed&rdquo;.</p>
 <h3 id="operator.tigera.io/v1.ConditionStatus">ConditionStatus
 (<code>string</code> alias)</h3>
 <p>
@@ -400,6 +445,20 @@ string
 Default: &lsquo;all()&rsquo;</p>
 </td>
 </tr>
+<tr>
+<td>
+<code>blockSize</code><br>
+<em>
+int32
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>BlockSize specifies the CIDR prefex length to use when allocating per-node IP blocks from
+the main IP pool CIDR.
+Default: 26 (IPv4), 122 (IPv6)</p>
+</td>
+</tr>
 </tbody>
 </table>
 <h3 id="operator.tigera.io/v1.InstallationSpec">InstallationSpec
@@ -408,7 +467,7 @@ Default: &lsquo;all()&rsquo;</p>
 (<em>Appears on:</em>
 <a href="#operator.tigera.io/v1.Installation">Installation</a>)
 </p>
-<p>InstallationSpec defines configuration for a Calico or Tigera Secure EE installation.</p>
+<p>InstallationSpec defines configuration for a Calico or Calico Enterprise installation.</p>
 <table>
 <thead>
 <tr>
@@ -428,7 +487,7 @@ ProductVariant
 </td>
 <td>
 <em>(Optional)</em>
-<p>Variant is the product to install - should be Calico
+<p>Variant is the product to install - one of Calico or TigeraSecureEnterprise
 Default: Calico</p>
 </td>
 </tr>
@@ -442,7 +501,28 @@ string
 <td>
 <em>(Optional)</em>
 <p>Registry is the default Docker registry used for component Docker images. If specified,
-all Calico and Tigera Secure images will be pulled from this registry.</p>
+all images will be pulled from this registry. If not specified then the default registries
+will be used.</p>
+<p>Image format:
+<code>&lt;registry&gt;/&lt;imagePath&gt;/&lt;imageName&gt;:&lt;tag-name&gt;</code></p>
+<p>This option allows configuring the <code>&lt;registry&gt;</code> portion of the above format.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>imagePath</code><br>
+<em>
+string
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>ImagePath allows for the path part of an image to be specified. If specified
+then the specified value will be used as the image path for each image. If not specified
+or empty, the default for each image will be used.</p>
+<p>Image format:
+<code>&lt;registry&gt;/&lt;imagePath&gt;/&lt;imageName&gt;:&lt;tag-name&gt;</code></p>
+<p>This option allows configuring the <code>&lt;imagePath&gt;</code> portion of the above format.</p>
 </td>
 </tr>
 <tr>
@@ -489,6 +569,23 @@ CalicoNetworkSpec
 <p>CalicoNetwork specifies configuration options for Calico provided pod networking.</p>
 </td>
 </tr>
+<tr>
+<td>
+<code>clusterManagementType</code><br>
+<em>
+<a href="#operator.tigera.io/v1.ClusterManagementType">
+ClusterManagementType
+</a>
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>How the cluster is managed. Valid values for this field are: Standalone, Management, Managed.
+Standalone clusters are fully self-contained installations of Calico Enterprise. Management clusters provide
+a single view to manage any number of Managed clusters, which are a lighter weight installation.
+Default: Standalone</p>
+</td>
+</tr>
 </tbody>
 </table>
 <h3 id="operator.tigera.io/v1.InstallationStatus">InstallationStatus
@@ -497,7 +594,7 @@ CalicoNetworkSpec
 (<em>Appears on:</em>
 <a href="#operator.tigera.io/v1.Installation">Installation</a>)
 </p>
-<p>InstallationStatus defines the observed state of the Calico or Tigera Secure installation.</p>
+<p>InstallationStatus defines the observed state of the Calico or Calico Enterprise installation.</p>
 <table>
 <thead>
 <tr>
@@ -516,7 +613,7 @@ ProductVariant
 </em>
 </td>
 <td>
-<p>Variant is the most recently observed installed variant - should be Calico</p>
+<p>Variant is the most recently observed installed variant - one of Calico or TigeraSecureEnterprise</p>
 </td>
 </tr>
 </tbody>
@@ -605,7 +702,7 @@ specified IP or domain.</p>
 <a href="#operator.tigera.io/v1.InstallationSpec">InstallationSpec</a>, 
 <a href="#operator.tigera.io/v1.InstallationStatus">InstallationStatus</a>)
 </p>
-<p>ProductVariant represents the variant of the product. Valid options are: Calico.</p>
+<p>ProductVariant represents the variant of the product. Valid options are: Calico, TigeraSecureEnterprise.</p>
 <h3 id="operator.tigera.io/v1.Provider">Provider
 (<code>string</code> alias)</h3>
 <p>
