@@ -13,6 +13,6 @@ layout: docwithnav
     {%- endfor -%}
 {% else %}
 - [{{ version }}]({{ site.url }}/{{ version }})
-{% endif -%}
-{%- endfor -%}
+{%- endif -%}
+{%- endfor %}
 {% endif %}
