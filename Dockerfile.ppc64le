@@ -1,4 +1,4 @@
-FROM ppc64le/debian:9.8-slim
+FROM registry.access.redhat.com/ubi8/ubi-minimal:latest
 
 LABEL maintainer "Casey Davenport <casey@tigera.io>"
 
