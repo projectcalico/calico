@@ -37,14 +37,19 @@
 #define dnat_return_should_encap() (CALI_F_FROM_WEP && !CALI_F_TUNNEL)
 #define dnat_should_decap() (CALI_F_FROM_HEP && !CALI_F_TUNNEL)
 
-#define CALI_ENCAP_EXTRA_SIZE	50
+/* Number of bytes we add to a packet when we do encap. */
+#define VXLAN_ENCAP_SIZE	(sizeof(struct ethhdr) + sizeof(struct iphdr) + \
+				sizeof(struct udphdr) + sizeof(struct vxlanhdr))
+
+#define CALI_ENCAP_SIZE	VXLAN_ENCAP_SIZE
+
 
 #ifndef CALI_MTU
 #define CALI_MTU 1460
 #endif
 
 #ifndef CALI_NAT_TUNNEL_MTU
-#define CALI_NAT_TUNNEL_MTU	(CALI_MTU - CALI_ENCAP_EXTRA_SIZE) /* defaults to 1410 */
+#define CALI_NAT_TUNNEL_MTU	(CALI_MTU - CALI_ENCAP_SIZE) /* defaults to 1410 */
 #endif
 
 #ifndef CALI_NAT_TUNNEL_HEP_MTU
@@ -52,7 +57,11 @@
 #endif
 
 #ifndef CALI_NAT_TUNNEL_WEP_MTU
-#define CALI_NAT_TUNNEL_WEP_MTU	(CALI_NAT_TUNNEL_MTU - 20) /* cali ifaces reserve 20 for ipip */
+#define CALI_NAT_TUNNEL_WEP_MTU	(CALI_NAT_TUNNEL_MTU - 50) /* defaults to 1360 as cali ifaces' mtu
+							    * is 50 bytes smaller than the host
+							    * ifaces mtu in the anticipation of ipip
+							    * or vxlan overlay
+							    */
 #endif
 
 #if CALI_F_HEP
