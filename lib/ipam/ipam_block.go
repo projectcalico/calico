@@ -116,7 +116,10 @@ func (b *allocationBlock) assign(address cnet.IP, handleID *string, attrs map[st
 
 	// Check if already allocated.
 	if b.Allocations[ordinal] != nil {
-		return errors.New("Address already assigned in block")
+		return cerrors.ErrorResourceAlreadyExists{
+			Err:        fmt.Errorf("Address already assigned in block"),
+			Identifier: address.String(),
+		}
 	}
 
 	// Set up attributes.
