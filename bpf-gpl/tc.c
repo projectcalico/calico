@@ -188,7 +188,7 @@ static CALI_BPF_INLINE int forward_or_drop(struct __sk_buff *skb,
 		/* Swap the MACs as we are turning it back */
 		struct ethhdr *eth_hdr = (void *)(long)skb->data;
 		unsigned char mac[ETH_ALEN];
-		__builtin_memcpy(mac, &eth_hdr->h_source, ETH_ALEN);
+		__builtin_memcpy(mac, &eth_hdr->h_dest, ETH_ALEN);
 		__builtin_memcpy(&eth_hdr->h_dest, &eth_hdr->h_source, ETH_ALEN);
 		__builtin_memcpy(&eth_hdr->h_source, mac, ETH_ALEN);
 
