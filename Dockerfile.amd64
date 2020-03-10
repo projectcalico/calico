@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-FROM registry.access.redhat.com/ubi8/ubi-minimal:latest
+FROM registry.access.redhat.com/ubi8/ubi-minimal:8.1-407
 
 ARG GIT_VERSION=unknown
 
@@ -28,7 +28,7 @@ ADD bin/amd64/ /opt/cni/bin/
 ADD k8s-install/scripts/install-cni.sh /install-cni.sh
 ADD k8s-install/scripts/calico.conf.default /calico.conf.tmp
 
-RUN mkdir /licenses
+RUN microdnf install hostname && mkdir /licenses
 COPY LICENSE /licenses
 
 ENV PATH=$PATH:/opt/cni/bin
