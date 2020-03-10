@@ -118,6 +118,11 @@ func ensureHostTunnelAddress(ctx context.Context, c client.Interface, nodename s
 	if addr == "" {
 		// The tunnel has no IP address assigned, assign one.
 		logCtx.Info("Assign a new tunnel address")
+
+		// Defensively release any IP addresses with this handle. This covers a theoretical case
+		// where the node object has lost its reference to its IP, but the allocation still exists
+		// in IPAM. For example, if the node object was manually edited.
+		release = true
 	} else {
 		// Go ahead checking status of current address.
 		ipAddr := gnet.ParseIP(addr)
@@ -176,6 +181,11 @@ func ensureHostTunnelAddress(ctx context.Context, c client.Interface, nodename s
 		} else if _, ok := err.(cerrors.ErrorResourceDoesNotExist); ok {
 			// The tunnel address is not assigned, reassign it.
 			logCtx.WithField("currentAddr", addr).Info("Current address is not assigned, assign a new one")
+
+			// Defensively release any IP addresses with this handle. This covers a theoretical case
+			// where the node object has lost its reference to its correct IP, but the allocation still exists
+			// in IPAM. For example, if the node object was manually edited.
+			release = true
 		} else {
 			// Failed to get assignment attributes, datastore connection issues possible, panic
 			logCtx.WithError(err).Panicf("Failed to get assignment attributes for CIDR '%s'", addr)
@@ -183,16 +193,13 @@ func ensureHostTunnelAddress(ctx context.Context, c client.Interface, nodename s
 	}
 
 	if release {
-		logCtx.WithField("IP", addr).Info("Release old tunnel address")
-		ipAddr := net.ParseIP(addr)
-		if ipAddr == nil {
-			logCtx.WithError(err).Fatalf("Failed to parse the CIDR '%s'", addr)
-		}
-
-		ipsToRelease := []net.IP{*ipAddr}
-		_, err := c.IPAM().ReleaseIPs(ctx, ipsToRelease)
-		if err != nil {
-			logCtx.WithField("IP", ipAddr.String()).WithError(err).Fatal("Error releasing address")
+		logCtx.WithField("IP", addr).Info("Release any old tunnel addresses")
+		handle, _ := generateHandleAndAttributes(nodename, vxlan)
+		if err := c.IPAM().ReleaseByHandle(ctx, handle); err != nil {
+			if _, ok := err.(cerrors.ErrorResourceDoesNotExist); !ok {
+				logCtx.WithError(err).Fatal("Failed to release old addresses")
+			}
+			// No existing allocations for this node.
 		}
 	}
 
