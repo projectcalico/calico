@@ -6,6 +6,9 @@ def gen_values(versions, imageNames, imageRegistry, chart)
       image: #{versions.fetch("tigera-operator").image}
       version: #{versions.fetch("tigera-operator").version}
       registry: #{versions.fetch("tigera-operator").registry}
+    calicoctl:
+      image: #{imageRegistry}#{imageNames.fetch("calicoctl")}
+      tag: #{versions.fetch("calicoctl")}
     EOF
   else
     versionsYml = <<~EOF
