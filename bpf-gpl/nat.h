@@ -365,8 +365,8 @@ static CALI_BPF_INLINE int vxlan_v4_encap(struct __sk_buff *skb,  __be32 ip_src,
 	eth_inner = (void *)(vxlan+1);
 	ip_inner = (void*)(eth_inner+1);
 
-	/* Copy the original IP header. Since it is aready DNATed, the dest IP is
-	 * already set. All we need to do it to change the source IP
+	/* Copy the original IP header. Since it is already DNATed, the dest IP is
+	 * already set. All we need to do is to change the source IP
 	 */
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(5,2,0)
 	*ip = *ip_inner;
@@ -450,6 +450,11 @@ static CALI_BPF_INLINE bool vxlan_v4_encap_too_big(struct __sk_buff *skb)
 {
 	__u32 mtu = TUNNEL_MTU;
 
+	/* RFC-1191: MTU is the size in octets of the largest datagram that
+	 * could be forwarded, along the path of the original datagram, without
+	 * being fragmented at this router.  The size includes the IP header and
+	 * IP data, and does not include any lower-level headers.
+	 */
 	if (skb->len - sizeof(struct ethhdr) > mtu) {
 		CALI_DEBUG("SKB too long (len=%d) vs limit=%d\n", skb->len, mtu);
 		return true;
