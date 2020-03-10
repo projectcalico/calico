@@ -455,7 +455,7 @@ static CALI_BPF_INLINE bool vxlan_v4_encap_too_big(struct __sk_buff *skb)
 	 * being fragmented at this router.  The size includes the IP header and
 	 * IP data, and does not include any lower-level headers.
 	 */
-	if (skb->len - sizeof(struct ethhdr) > mtu) {
+	if (skb->len > sizeof(struct ethhdr) + mtu) {
 		CALI_DEBUG("SKB too long (len=%d) vs limit=%d\n", skb->len, mtu);
 		return true;
 	}
