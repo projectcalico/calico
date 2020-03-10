@@ -58,7 +58,7 @@ func (c *NodeController) syncIPAMCleanup() error {
 		// Include affinity if it exists. We want to track nodes even
 		// if there are no IPs actually assigned to that node.
 		if b.Affinity != nil {
-			n := strings.TrimLeft(*b.Affinity, "host:")
+			n := strings.TrimPrefix(*b.Affinity, "host:")
 			if _, ok := nodes[n]; !ok {
 				nodes[n] = []model.AllocationAttribute{}
 			}
