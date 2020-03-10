@@ -37,17 +37,19 @@
 #define dnat_return_should_encap() (CALI_F_FROM_WEP && !CALI_F_TUNNEL)
 #define dnat_should_decap() (CALI_F_FROM_HEP && !CALI_F_TUNNEL)
 
-// Base MTU of the host's network.
+/* Number of bytes we add to a packet when we do encap. */
+#define VXLAN_ENCAP_SIZE	(sizeof(struct ethhdr) + sizeof(struct iphdr) + \
+				sizeof(struct udphdr) + sizeof(struct vxlanhdr))
+
+#define CALI_ENCAP_SIZE	VXLAN_ENCAP_SIZE
+
+
 #ifndef CALI_MTU
 #define CALI_MTU 1460
 #endif
 
-// Number of bytes we add to a packet when we do encap.
-#define CALI_ENCAP_EXTRA_SIZE	(sizeof(struct ethhdr) + sizeof(struct iphdr) + sizeof(struct udphdr) + sizeof(struct vxlanhdr))
-
-// Inner MTU for packets that we encap.
 #ifndef CALI_NAT_TUNNEL_MTU
-#define CALI_NAT_TUNNEL_MTU	(CALI_MTU - CALI_ENCAP_EXTRA_SIZE) /* defaults to 1410 */
+#define CALI_NAT_TUNNEL_MTU	(CALI_MTU - CALI_ENCAP_SIZE) /* defaults to 1410 */
 #endif
 
 #ifndef CALI_NAT_TUNNEL_HEP_MTU
@@ -55,16 +57,18 @@
 #endif
 
 #ifndef CALI_NAT_TUNNEL_WEP_MTU
-#define CALI_NAT_TUNNEL_WEP_MTU	(CALI_NAT_TUNNEL_MTU - 20) /* cali ifaces reserve 20 for ipip */
+#define CALI_NAT_TUNNEL_WEP_MTU	(CALI_NAT_TUNNEL_MTU - 50) /* defaults to 1360 as cali ifaces' mtu
+							    * is 50 bytes smaller than the host
+							    * ifaces mtu in the anticipation of ipip
+							    * or vxlan overlay
+							    */
 #endif
 
 #if CALI_F_HEP
-#define TNNL_INNER_ETH_MTU	CALI_NAT_TUNNEL_HEP_MTU
+#define TUNNEL_MTU	CALI_NAT_TUNNEL_HEP_MTU
 #elif CALI_F_WEP
-#define TNNL_INNER_ETH_MTU	CALI_NAT_TUNNEL_WEP_MTU
+#define TUNNEL_MTU	CALI_NAT_TUNNEL_WEP_MTU
 #endif
-
-#define TNNL_INNER_IP_MTU (TNNL_INNER_ETH_MTU - sizeof(struct ethhdr))
 
 static CALI_BPF_INLINE __be32 cali_host_ip()
 {
@@ -362,7 +366,7 @@ static CALI_BPF_INLINE int vxlan_v4_encap(struct __sk_buff *skb,  __be32 ip_src,
 	ip_inner = (void*)(eth_inner+1);
 
 	/* Copy the original IP header. Since it is already DNATed, the dest IP is
-	 * already set. All we need to do it to change the source IP
+	 * already set. All we need to do is to change the source IP
 	 */
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(5,2,0)
 	*ip = *ip_inner;
@@ -444,9 +448,14 @@ static CALI_BPF_INLINE int is_vxlan_tunnel(struct iphdr *ip)
 
 static CALI_BPF_INLINE bool vxlan_v4_encap_too_big(struct __sk_buff *skb)
 {
-	__u32 mtu = TNNL_INNER_ETH_MTU;
+	__u32 mtu = TUNNEL_MTU;
 
-	if (skb->len > mtu) {
+	/* RFC-1191: MTU is the size in octets of the largest datagram that
+	 * could be forwarded, along the path of the original datagram, without
+	 * being fragmented at this router.  The size includes the IP header and
+	 * IP data, and does not include any lower-level headers.
+	 */
+	if (skb->len > sizeof(struct ethhdr) + mtu) {
 		CALI_DEBUG("SKB too long (len=%d) vs limit=%d\n", skb->len, mtu);
 		return true;
 	}
