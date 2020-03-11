@@ -39,7 +39,9 @@ $(document).ready(function(){
   });
 
   var shiftWindow = function() {
-    scrollBy(0, -97); // 97px is the height of navbar
+    const navbarHeight = 97;
+
+    scrollBy(0, -navbarHeight)
   };
 
   if (location.hash) {
