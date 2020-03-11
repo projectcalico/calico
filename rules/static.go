@@ -827,6 +827,28 @@ func (r *DefaultRuleRenderer) StaticRawPreroutingChain(ipVersion uint8) *Chain {
 		})
 	}
 
+	// For OpenStack, allow DHCP from the workload.  These must be allowed before checking
+	// against the iptables rp_filter module, because they have source 0.0.0.0, and the
+	// rp_filter module does not allow that (whereas the rp_filter sysctl setting _did_).
+	if r.OpenStackSpecialCasesEnabled {
+		log.Info("Adding OpenStack special-case rules")
+		dhcpSrcPort := uint16(68)
+		dhcpDestPort := uint16(67)
+		if ipVersion == 6 {
+			dhcpSrcPort = uint16(546)
+			dhcpDestPort = uint16(547)
+		}
+		rules = append(rules,
+			Rule{
+				Match: Match().
+					Protocol("udp").
+					SourcePorts(dhcpSrcPort).
+					DestPorts(dhcpDestPort),
+				Action: AcceptAction{},
+			},
+		)
+	}
+
 	// Apply strict RPF check to packets from workload interfaces.  This prevents
 	// workloads from spoofing their IPs.  Note: non-privileged containers can't
 	// usually spoof but privileged containers and VMs can.
