@@ -79,11 +79,26 @@ curl {{ "/manifests/ocp/tigera-operator/00-namespace-tigera-operator.yaml" | abs
 curl {{ "/manifests/ocp/tigera-operator/02-rolebinding-tigera-operator.yaml" | absolute_url }} -o manifests/02-rolebinding-tigera-operator.yaml
 curl {{ "/manifests/ocp/tigera-operator/02-role-tigera-operator.yaml" | absolute_url }} -o manifests/02-role-tigera-operator.yaml
 curl {{ "/manifests/ocp/tigera-operator/02-serviceaccount-tigera-operator.yaml" | absolute_url }} -o manifests/02-serviceaccount-tigera-operator.yaml
-curl {{ "/manifests/ocp/tigera-operator/02-configmap-calicoctl-resources.yaml" | absolute_url }} -o manifests/02-configmap-calicoctl-resources.yaml
+curl {{ "/manifests/ocp/tigera-operator/02-configmap-calico-resources.yaml" | absolute_url }} -o manifests/02-configmap-calico-resources.yaml
 curl {{ "/manifests/ocp/tigera-operator/02-configmap-tigera-install-script.yaml" | absolute_url }} -o manifests/02-configmap-tigera-install-script.yaml
 curl {{ "/manifests/ocp/tigera-operator/02-tigera-operator.yaml" | absolute_url }} -o manifests/02-tigera-operator.yaml
 curl {{ "/manifests/ocp/01-cr-installation.yaml" | absolute_url }} -o manifests/01-cr-installation.yaml
 ```
+
+#### Optionally provide additional configuration
+
+You may want to provide Calico with additional configuration at install-time. For example, BGP configuration or peers.
+You can use a Kubernetes ConfigMap with your desired Calico resources in order to set configuration as part of the installation.
+If you do not need to provide additional configuration, you can skip this section.
+
+To include [Calico resources]({{site.baseurl}}/reference/resources) during installation, edit `manifests/02-configmap-calico-resources.yaml in order to add your own configuration.
+
+> **Note**: If you have a directory with the Calico resources, you can create the file with the command:
+> ```
+> kubectl create configmap -n tigera-operator calico-resources \
+>   --from-file=<resource-directory> --dry-run -o yaml \
+>   > manifests/02-configmap-calico-resources.yaml
+> ```
 
 #### Create the cluster
 
