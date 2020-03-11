@@ -105,6 +105,21 @@ rules:
       - securitycontextconstraints
     verbs:
       - '*'
+  # Need these permissions for the calicoctl init container.
+  - apiGroups:
+      - crd.projectcalico.org
+    resources:
+      - bgpconfigurations
+      - bgppeers
+      - felixconfigurations
+      - globalnetworkpolicies
+      - globalnetworksets
+      - hostendpoints
+      - ippools
+      - networkpolicies
+      - networksets
+    verbs:
+      - create
 {{- end }}
     # Permissions below this point are required for TSEE only.
   - apiGroups:
