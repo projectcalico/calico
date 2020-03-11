@@ -89,7 +89,11 @@ do
       echo "$dir/$filename is already here and UPDATE_CNI_BINARIES isn't true, skipping"
       continue
     fi
-    cp "$path" $dir/ || exit_with_error "Failed to copy $path to $dir. This may be caused by selinux configuration on the host, or something else."
+    # Copy the binary to a temporary location, and then mv it into place. This safely
+    # distributes the binary even if the existing executable is currently running.
+    rm -f $dir/$filename.tmp
+    cp $path $dir/$filename.tmp
+    mv $dir/$filename.tmp $dir/$filename || exit_with_error "Failed to copy $dir/$filename.tmp to $dir/$filename. This may be caused by selinux configuration on the host, or something else."
   done
 
   echo "Wrote Calico CNI binaries to $dir"
