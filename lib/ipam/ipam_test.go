@@ -1447,7 +1447,7 @@ var _ = testutils.E2eDatastoreDescribe("IPAM tests", testutils.DatastoreAll, fun
 		Entry("Assign 1 IPv4 from a configured pool twice (first time)", net.ParseIP("192.168.1.0"), "test-host", true, []string{"192.168.1.0/24", "fd80:24e2:f998:72d6::/120"}, nil),
 
 		// - Expect an error returned while assigning the SAME IP again.
-		Entry("Assign 1 IPv4 from a configured pool twice (second time)", net.ParseIP("192.168.1.0"), "test-host", false, []string{"192.168.1.0/24", "fd80:24e2:f998:72d6::/120"}, errors.New("Address already assigned in block")),
+		Entry("Assign 1 IPv4 from a configured pool twice (second time)", net.ParseIP("192.168.1.0"), "test-host", false, []string{"192.168.1.0/24", "fd80:24e2:f998:72d6::/120"}, cerrors.ErrorResourceAlreadyExists{Err: errors.New("Address already assigned in block"), Identifier: "192.168.1.0"}),
 	)
 
 	DescribeTable("ReleaseIPs: requested IPs to be released vs actual unallocated IPs",
