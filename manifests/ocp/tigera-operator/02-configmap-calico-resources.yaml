@@ -1,0 +1,6 @@
+---
+layout: null
+---
+{% helm tigera-operator --execute templates/tigera-operator/02-configmap-calico-resources.yaml %}
+kubernetesProvider: openshift
+{% endhelm %}

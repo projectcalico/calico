@@ -52,16 +52,16 @@ spec:
           command:
             - /script/install.sh
           volumeMounts:
-            - name: calicoctl-resources
-              mountPath: /calicoctl-resources
+            - name: calico-resources
+              mountPath: /calico-resources
             - name: install-resources-script
               mountPath: /script/install.sh
               subPath: install.sh
       volumes:
-        - name: calicoctl-resources
+        - name: calico-resources
           configMap:
             defaultMode: 0400
-            name: calicoctl-resources
+            name: calico-resources
         - name: install-resources-script
           configMap:
             defaultMode: 0777

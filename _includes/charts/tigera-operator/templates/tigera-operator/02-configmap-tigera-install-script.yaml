@@ -7,7 +7,7 @@ metadata:
 data:
   install.sh: |
    #!/bin/sh
-   for i in $(ls /calicoctl-resources/*); do
+   for i in $(ls /calico-resources/*); do
      output=$(calicoctl create -f $i 2>&1)
      if [ $? -eq 0 ]; then
        echo Created resource from $i
@@ -21,5 +21,5 @@ data:
        fi
      fi
    done
-   echo All calicoctl resources were created or exist
+   echo All Calico resources were created or exist
 {{- end}}
