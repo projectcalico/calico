@@ -39,9 +39,9 @@ $(document).ready(function(){
   });
 
   var shiftWindow = function() {
-    const navbarHeight = 97;
+    var bodyPaddingTop = parseInt($('body').css('padding-top'));
 
-    scrollBy(0, -navbarHeight)
+    scrollBy(0, -bodyPaddingTop)
   };
 
   if (location.hash) {
