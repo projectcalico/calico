@@ -37,4 +37,14 @@ $(document).ready(function(){
       return false;
     }
   });
+
+  var shiftWindow = function() {
+    scrollBy(0, -97); // 97px is the height of navbar
+  };
+
+  if (location.hash) {
+    shiftWindow();
+  }
+
+  window.addEventListener("hashchange", shiftWindow);
 });
