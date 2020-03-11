@@ -459,7 +459,7 @@ bin/helm:
 
 .PHONY: values.yaml
 values.yaml: _includes/charts/calico/values.yaml _includes/charts/tigera-operator/values.yaml
-_includes/charts/%/values.yaml:
+_includes/charts/%/values.yaml: _plugins/values.rb _plugins/helm.rb
 	docker run --rm \
 	  -v $$PWD:/calico \
 	  -w /calico \
