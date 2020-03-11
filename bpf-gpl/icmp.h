@@ -180,8 +180,7 @@ static CALI_BPF_INLINE int icmp_v4_too_big(struct __sk_buff *skb)
 		__be16  unused;
 		__be16  mtu;
 	} frag = {
-		// ICMP MTU refers to the IP packet size.
-		.mtu = host_to_be16(TNNL_INNER_IP_MTU),
+		.mtu = host_to_be16(TUNNEL_MTU),
 	};
 
 	CALI_DEBUG("Sending ICMP too big mtu=%d\n", be16_to_host(frag.mtu));
