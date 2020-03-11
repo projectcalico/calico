@@ -410,6 +410,8 @@ github.com/projectcalico/felix v0.0.0-20200225205426-a286df35bb16 h1:UvR2MBsHbyB
 github.com/projectcalico/felix v0.0.0-20200225205426-a286df35bb16/go.mod h1:doTc+1oJ65RQ2v/fcTXHp8uHTbxuPIFX5qn6DZmpxto=
 github.com/projectcalico/felix v0.0.0-20200302175626-ffd3291c6c5a h1:6TimAo3l6Kh3/Ip1TeN6pPbQ1auCw7uXkJ5e1SLWVdc=
 github.com/projectcalico/felix v0.0.0-20200302175626-ffd3291c6c5a/go.mod h1:doTc+1oJ65RQ2v/fcTXHp8uHTbxuPIFX5qn6DZmpxto=
+github.com/projectcalico/felix v0.0.0-20200310181248-e09d25f2cc7b h1:u66NTNW9LugdFLS8lgIj0DmV1uq4G0ZjIsXg/OnIWpY=
+github.com/projectcalico/felix v0.0.0-20200310181248-e09d25f2cc7b/go.mod h1:doTc+1oJ65RQ2v/fcTXHp8uHTbxuPIFX5qn6DZmpxto=
 github.com/projectcalico/go-json v0.0.0-20161128004156-6219dc7339ba h1:aaF2byUCZhzszHsfPEr2M3qcU4ibtD/yk/il2R7T1PU=
 github.com/projectcalico/go-json v0.0.0-20161128004156-6219dc7339ba/go.mod h1:q8EdCgBdMQzgiX/uk4GXLWLk+gIHd1a7mWUAamJKDb4=
 github.com/projectcalico/go-yaml-wrapper v0.0.0-20191112210931-090425220c54 h1:Jt2Pic9dxgJisekm8q2WV9FaWxUJhhRfwHSP640drww=
