@@ -228,14 +228,8 @@ static CALI_BPF_INLINE int forward_or_drop(struct __sk_buff *skb,
 		/* set the ipv4 here, otherwise the ipv4/6 unions do not get
 		 * zeroed properly
 		 */
-		if (fwd->fib_flags & BPF_FIB_LOOKUP_OUTPUT) {
-			// Flip src/dest.
-			fib_params.ipv4_src = state->ip_dst;
-			fib_params.ipv4_dst = state->ip_src;
-		} else {
-			fib_params.ipv4_src = state->ip_src;
-			fib_params.ipv4_dst = state->ip_dst;
-		}
+		fib_params.ipv4_src = state->ip_src;
+		fib_params.ipv4_dst = state->ip_dst;
 
 		CALI_DEBUG("FIB family=%d\n", fib_params.family);
 		CALI_DEBUG("FIB tot_len=%d\n", fib_params.tot_len);
