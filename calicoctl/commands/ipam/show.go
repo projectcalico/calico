@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2019 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2020 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -72,8 +72,7 @@ Description:
 	ipamClient := client.IPAM()
 	if passedIP := parsedArgs["--ip"]; passedIP != nil {
 		ip := argutils.ValidateIP(passedIP.(string))
-		attr, err := ipamClient.GetAssignmentAttributes(ctx, ip)
-
+		attr, _, err := ipamClient.GetAssignmentAttributes(ctx, ip)
 		if err != nil {
 			if _, ok := err.(cerrors.ErrorResourceDoesNotExist); ok {
 				// IP address is not assigned.  The detailed error message here is either
