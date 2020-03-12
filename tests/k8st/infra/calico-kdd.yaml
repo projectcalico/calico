@@ -299,6 +299,16 @@ rules:
       - create
       - update
       - delete
+  # kube-controllers manages hostendpoints.
+  - apiGroups: ["crd.projectcalico.org"]
+    resources:
+      - hostendpoints
+    verbs:
+      - get
+      - list
+      - create
+      - update
+      - delete
   # Needs access to update clusterinformations.
   - apiGroups: ["crd.projectcalico.org"]
     resources:
