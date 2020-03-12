@@ -7,6 +7,17 @@ def gen_values(versions, imageNames, imageRegistry, chart)
       enabled: true
       kubernetesProvider: ""
 
+    certs:
+      node:
+        key:
+        cert:
+        commonName:
+      typha:
+        key:
+        cert:
+        commonName:
+        caBundle:
+
     # Configuration for the tigera operator
     tigeraOperator:
       image: #{versions.fetch("tigera-operator").image}
