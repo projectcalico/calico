@@ -1,5 +1,5 @@
 ---
-title: Upgrading
+title: Upgrade
 description: Upgrade to a newer version of Calico. 
 show_read_time: false
 show_toc: false
