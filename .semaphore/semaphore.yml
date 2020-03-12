@@ -11,7 +11,7 @@ blocks:
         - name: 'Job #1'
           commands:
             - checkout v3.13.1
-            - 'curl https://unified-agent.s3.amazonaws.com/wss-unified-agent-20.2.1.jar'
+            - 'curl -LJO https://unified-agent.s3.amazonaws.com/wss-unified-agent-20.2.1.jar'
             - 'ls '
             - pwd
             - git branch
