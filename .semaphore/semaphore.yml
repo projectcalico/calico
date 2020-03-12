@@ -10,10 +10,10 @@ blocks:
       jobs:
         - name: 'Job #1'
           commands:
-            - checkout v3.13.1
+            - checkout
             - 'curl -LJO https://unified-agent.s3.amazonaws.com/wss-unified-agent-20.2.1.jar'
             - ls -lrt
-            - java -jar wss-unified-agent-20.2.1.jar -d $(pwd) -apiKey 40448334219b4e0696e38c375188d990302371c58bdb46b8b896bfbdb51dd836 -project calico-3.13
+            - pwd
             - git log
             - git branch
             - git status
