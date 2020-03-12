@@ -2,6 +2,8 @@ apiVersion: apiextensions.k8s.io/v1beta1
 kind: CustomResourceDefinition
 metadata:
   name: installations.operator.tigera.io
+  annotations:
+    "helm.sh/hook": "crd-install"
 spec:
   group: operator.tigera.io
   names:
@@ -158,10 +160,14 @@ spec:
               type: array
             kubernetesProvider:
               description: KubernetesProvider specifies a particular provider of the
-                Kubernetes platform. This is often auto-detected. If specified, this
-                enables provider-specific configuration and must match the auto-detected
-                value (if any).
+                Kubernetes platform and enables provider-specific configuration. If
+                the specified value is empty, the Operator will attempt to automatically
+                determine the current provider. If the specified value is not empty,
+                the Operator will still attempt auto-detection, but will additionally
+                compare the auto-detected value to the specified value to confirm
+                they match.
               enum:
+              - ""
               - EKS
               - GKE
               - AKS
