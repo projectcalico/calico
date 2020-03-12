@@ -25,3 +25,30 @@
      flexvol:
       version: v3.13.1
 
+- title: v3.13.0
+  tigera-operator:
+   image: tigera/operator
+   registry: quay.io
+   version: v1.3.0
+  components:
+     typha:
+      version: v3.13.0
+     calicoctl:
+      version: v3.13.0
+     calico/node:
+      version: v3.13.0
+     calico/cni:
+      version: v3.13.0
+     calico/kube-controllers:
+      version: v3.13.0
+     calico/flannel-migration-controller:
+      version: v3.13.0
+     networking-calico:
+      version: v3.13.0
+     flannel:
+      version: v0.11.0
+     calico/dikastes:
+      version: v3.13.0
+     flexvol:
+      version: v3.13.0
+
