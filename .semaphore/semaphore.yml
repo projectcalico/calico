@@ -12,7 +12,8 @@ blocks:
           commands:
             - checkout v3.13.1
             - 'curl -LJO https://unified-agent.s3.amazonaws.com/wss-unified-agent-20.2.1.jar'
-            - 'ls '
+            - ls -lrt
             - pwd
+            - md5sum *
             - git branch
             - git status
