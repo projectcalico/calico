@@ -77,4 +77,4 @@ The Kubernetes API datastore driver reads its configuration from Kubernetes-prov
 | `ServerKeyFile`         | `TYPHA_SERVERKEYFILE`  | Path to the file containing the private key matching the Typha server certificate. Example: `/etc/typha/key.pem` (optional) | string |
 
 For more information on how to use and set these variables, refer to
-[Connections from Felix to Typha (Kubernetes)](../../security/comms/crypto-auth#connections-from-felix-to-typha-kubernetes).
+[Connections from Node to Typha (Kubernetes)](../../security/comms/crypto-auth#connections-from-node-to-typha-kubernetes).

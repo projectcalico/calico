@@ -79,6 +79,8 @@ section:
   section:
   - title: Configure encryption and authentication
     path: /security/comms/crypto-auth
+  - title: Provide TLS certificates for Typha and Node
+    path: /security/comms/typha-node-tls
   - title: Schedule to well-known nodes
     path: /security/comms/reduce-nodes
   - title: Secure Calico Prometheus endpoints
