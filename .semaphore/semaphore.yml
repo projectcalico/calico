@@ -10,8 +10,9 @@ blocks:
       jobs:
         - name: 'Job #1'
           commands:
-            - checkout
-            - ls
+            - checkout v3.13.1
+            - 'curl https://unified-agent.s3.amazonaws.com/wss-unified-agent-20.2.1.jar'
+            - 'ls '
             - pwd
-            - java -version
-            - env
+            - git branch
+            - git status
