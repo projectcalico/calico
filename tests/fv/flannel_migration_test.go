@@ -358,7 +358,7 @@ func validateCalicoIPAM(fc *testutils.FlannelCluster, client client.Interface, b
 		Expect(node.Spec.VXLANTunnelMACAddr).To(Equal(fn.VtepMac))
 
 		// Check tunnel ip been correctly assigned.
-		attr, err := client.IPAM().GetAssignmentAttributes(ctx, vtepIP)
+		attr, _, err := client.IPAM().GetAssignmentAttributes(ctx, vtepIP)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(attr[ipam.AttributeNode]).To(Equal(nodeName))
 		Expect(attr[ipam.AttributeType]).To(Equal(ipam.AttributeTypeVXLAN))
