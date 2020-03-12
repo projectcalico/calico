@@ -1,4 +1,5 @@
 def gen_values(versions, imageNames, imageRegistry, chart)
+  # foobar!
   if chart == "tigera-operator"  
     versionsYml = <<~EOF
     # Configuration for the tigera operator
