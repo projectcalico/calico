@@ -766,7 +766,7 @@ spec:
       priorityClassName: system-cluster-critical
       containers:
         - name: calico-kube-controllers
-          image: calico/kube-controllers:master
+          image: calico/kube-controllers:release-v3.13
           env:
             # Choose which controllers to run.
             - name: ENABLED_CONTROLLERS
