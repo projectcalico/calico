@@ -5,7 +5,7 @@ description: Add TLS certificates to secure communications between Typha and Nod
 
 ### Big picture
 
-Provide TLS certificates that allow mutual TLS authentication between Node and Typha.
+Provide TLS certificates that allow mutual TLS authentication between Node and Typha on Operator or OpenShift installations.
 
 ### Value
 
