@@ -4,6 +4,8 @@ agent:
   machine:
     type: e1-standard-4
     os_image: ubuntu1804
+execution_time_limit:
+  minutes: 120
 global_job_config:
   prologue:
     commands:
@@ -17,6 +19,10 @@ blocks:
 # Run the full set of tests. Each job can potentially be run in parallel,
 # provided Semaphore has enough boxes available.
 - name: "Tests"
+  execution_time_limit:
+    # Semaphore's default is 1 hour, and these tests take about that time or a little
+    # longer.
+    minutes: 90
   dependencies: []
   task:
     jobs:
@@ -27,7 +33,7 @@ blocks:
       commands:
       - make k8s-test
 
-# If tests passed, then build and push images. 
+# If tests passed, then build and push images.
 # We'll only do this on non-PR builds, where we have credentials to do so.
 - name: "Push images"
   dependencies: ["Tests"]
