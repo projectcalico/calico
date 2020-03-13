@@ -44,9 +44,6 @@ By default, {{site.prodname}} Typha and Node components are configured with self
 
 1. Create the Node Secret with the following command:
    ```bash
-   kubectl create configmap node-certs -n tigera-operator \
-     --from-file=cert.crt=</path/to/node/cert> --from-file=key.key=</path/to/node/key> \
-     --from-literal=common-name=<node certificate common name> >> typha-node-tls.yaml
    kubectl create secret generic node-certs -n tigera-operator \
      --from-file=cert.crt=</path/to/node/cert> --from-file=key.key=</path/to/node/key> \
      --from-literal=common-name=<node certificate common name> --dry-run  -o yaml --save-config >> typha-node-tls.yaml
