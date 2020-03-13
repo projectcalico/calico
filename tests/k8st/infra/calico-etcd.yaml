@@ -435,7 +435,7 @@ spec:
       serviceAccountName: calico-kube-controllers
       containers:
         - name: calico-kube-controllers
-          image: calico/kube-controllers:master
+          image: calico/kube-controllers:release-v3.13
           env:
             # The location of the Calico etcd cluster.
             - name: ETCD_ENDPOINTS
