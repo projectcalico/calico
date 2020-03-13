@@ -25,6 +25,7 @@ require (
 	github.com/projectcalico/pod2daemon v0.0.0-20191223184832-a0e1c4693271
 	github.com/projectcalico/typha v0.7.3-0.20200225165812-8542a2238d65
 	github.com/prometheus/client_golang v0.9.2
+	github.com/safchain/ethtool v0.0.0-20190326074333-42ed695e3de8
 	github.com/satori/go.uuid v1.2.0
 	github.com/sirupsen/logrus v1.4.2
 	github.com/smartystreets/goconvey v0.0.0-20190731233626-505e41936337 // indirect

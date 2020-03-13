@@ -27,6 +27,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 
 	"github.com/kelseyhightower/envconfig"
 	. "github.com/onsi/ginkgo"
@@ -300,4 +301,34 @@ func (cc ConnConfig) GetTestMessageSequence(msg string) (int, error) {
 
 func IsMessagePartOfStream(msg string) bool {
 	return strings.HasPrefix(strings.TrimSpace(msg), ConnectionTypeStream)
+}
+
+// HasSyscallConn represents objects that can return a syscall.RawConn
+type HasSyscallConn interface {
+	SyscallConn() (syscall.RawConn, error)
+}
+
+// ConnMTU returns the MTU of the connection for _connected_ connections. That
+// excludes unconnected udp which requires different approach for each peer.
+func ConnMTU(hsc HasSyscallConn) (int, error) {
+	c, err := hsc.SyscallConn()
+	if err != nil {
+		return 0, err
+	}
+
+	mtu := 0
+	var sysErr error
+	err = c.Control(func(fd uintptr) {
+		mtu, sysErr = syscall.GetsockoptInt(int(fd), syscall.IPPROTO_IP, syscall.IP_MTU)
+	})
+
+	if err != nil {
+		return 0, err
+	}
+
+	if sysErr != nil {
+		return 0, sysErr
+	}
+
+	return mtu, nil
 }

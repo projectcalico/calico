@@ -51,55 +51,58 @@ type Checker struct {
 }
 
 func (c *Checker) ExpectSome(from ConnectionSource, to ConnectionTarget, explicitPort ...uint16) {
-	UnactivatedCheckers.Add(c)
-	if c.ReverseDirection {
-		from, to = to.(ConnectionSource), from.(ConnectionTarget)
-	}
-	c.expectations = append(c.expectations, Expectation{From: from, To: to.ToMatcher(explicitPort...), Expected: true, ExpSrcIPs: from.SourceIPs()})
+	c.expect(true, from, to, explicitPort)
 }
 
 func (c *Checker) ExpectSNAT(from ConnectionSource, srcIP string, to ConnectionTarget, explicitPort ...uint16) {
-	UnactivatedCheckers.Add(c)
 	c.CheckSNAT = true
-	if c.ReverseDirection {
-		from, to = to.(ConnectionSource), from.(ConnectionTarget)
-	}
-	c.expectations = append(c.expectations, Expectation{From: from, To: to.ToMatcher(explicitPort...), Expected: true, ExpSrcIPs: []string{srcIP}})
+	c.expect(true, from, to, explicitPort, ExpectWithSrcIPs(srcIP))
 }
 
 func (c *Checker) ExpectNone(from ConnectionSource, to ConnectionTarget, explicitPort ...uint16) {
-	UnactivatedCheckers.Add(c)
-	if c.ReverseDirection {
-		from, to = to.(ConnectionSource), from.(ConnectionTarget)
-	}
-	c.expectations = append(c.expectations, Expectation{From: from, To: to.ToMatcher(explicitPort...), Expected: false, ExpSrcIPs: nil})
+	c.expect(false, from, to, explicitPort)
+}
+
+// ExpectDataTransfer check if sendLen can be send to the dest and whether
+// recvLen of data can be received from the dest reliably
+func (c *Checker) ExpectDataTransfer(from TransferSource, to ConnectionTarget,
+	ports []uint16, sendLen, recvLen int) {
+	c.expect(true, from, to, ports, ExpectWithSendLen(sendLen), ExpectWithRecvLen(recvLen))
 }
 
 func (c *Checker) ExpectLoss(from ConnectionSource, to ConnectionTarget,
 	duration time.Duration, maxPacketLossPercent float64, maxPacketLossNumber int, explicitPort ...uint16) {
 
-	Expect(duration.Seconds()).NotTo(BeZero(), "Packet loss test must have a duration")
-	Expect(maxPacketLossPercent).To(BeNumerically("<=", 100), "Loss percentage should be <=100")
-	Expect(maxPacketLossPercent >= 0 || maxPacketLossNumber >= 0).To(BeTrue(), "Either loss count or percent must be specified")
+	// Packet loss measurements shouldn't be retried.
+	c.RetriesDisabled = true
+
+	c.expect(true, from, to, explicitPort, ExpectWithLoss(duration, maxPacketLossPercent, maxPacketLossNumber))
+}
+
+func (c *Checker) expect(connectivity bool, from ConnectionSource, to ConnectionTarget,
+	explicitPort []uint16, opts ...ExpectationOption) {
 
 	UnactivatedCheckers.Add(c)
 	if c.ReverseDirection {
 		from, to = to.(ConnectionSource), from.(ConnectionTarget)
 	}
-	c.expectations = append(c.expectations, Expectation{
-		From:      from,
-		To:        to.ToMatcher(explicitPort...),
-		Expected:  true,
-		ExpSrcIPs: nil,
-		ExpectedPacketLoss: ExpPacketLoss{
-			Duration:   duration,
-			MaxPercent: maxPacketLossPercent,
-			MaxNumber:  maxPacketLossNumber,
-		},
-	})
 
-	// Packet loss measurements shouldn't be retried.
-	c.RetriesDisabled = true
+	e := Expectation{
+		From:     from,
+		To:       to.ToMatcher(explicitPort...),
+		Expected: connectivity,
+	}
+
+	if connectivity {
+		// we expect the from.SourceIPs() by default
+		e.ExpSrcIPs = from.SourceIPs()
+	}
+
+	for _, option := range opts {
+		option(&e)
+	}
+
+	c.expectations = append(c.expectations, e)
 }
 
 func (c *Checker) ResetExpectations() {
@@ -125,7 +128,12 @@ func (c *Checker) ActualConnectivity() ([]*Result, []string) {
 			if c.Protocol != "" {
 				p = c.Protocol
 			}
-			responses[i] = exp.From.CanConnectTo(exp.To.IP, exp.To.Port, p, exp.ExpectedPacketLoss.Duration)
+			if exp.sendLen > 0 || exp.recvLen > 0 {
+				responses[i] = exp.From.(TransferSource).
+					CanTransferData(exp.To.IP, exp.To.Port, p, exp.sendLen, exp.recvLen)
+			} else {
+				responses[i] = exp.From.CanConnectTo(exp.To.IP, exp.To.Port, p, exp.ExpectedPacketLoss.Duration)
+			}
 			pretty[i] = fmt.Sprintf("%s -> %s = %v", exp.From.SourceName(), exp.To.TargetName, responses[i] != nil)
 			if c.CheckSNAT && responses[i] != nil {
 				srcIP := strings.Split(responses[i].LastResponse.SourceAddr, ":")[0]
@@ -239,9 +247,11 @@ func NewRequest(payload string) Request {
 }
 
 type Request struct {
-	Timestamp time.Time
-	ID        string
-	Payload   string
+	Timestamp    time.Time
+	ID           string
+	Payload      string
+	SendSize     int
+	ResponseSize int
 }
 
 func (req Request) Equal(oth Request) bool {
@@ -294,6 +304,12 @@ type ConnectionSource interface {
 	SourceIPs() []string
 }
 
+// TransferSource can connect and also can transfer data to/from
+type TransferSource interface {
+	ConnectionSource
+	CanTransferData(ip, port, protocol string, sendLen, recvLen int) *Result
+}
+
 func (m *Matcher) Match(actual interface{}) (success bool, err error) {
 	success = actual.(ConnectionSource).CanConnectTo(m.IP, m.Port, m.Protocol, time.Duration(0)) != nil
 	return
@@ -311,12 +327,52 @@ func (m *Matcher) NegatedFailureMessage(actual interface{}) (message string) {
 	return
 }
 
+type ExpectationOption func(e *Expectation)
+
+func ExpectWithSrcIPs(ips ...string) ExpectationOption {
+	return func(e *Expectation) {
+		e.ExpSrcIPs = ips
+	}
+}
+
+func ExpectWithSendLen(l int) ExpectationOption {
+	return func(e *Expectation) {
+		e.sendLen = l
+	}
+}
+
+func ExpectWithRecvLen(l int) ExpectationOption {
+	return func(e *Expectation) {
+		e.recvLen = l
+	}
+}
+
+func ExpectWithLoss(duration time.Duration, maxPacketLossPercent float64, maxPacketLossNumber int) ExpectationOption {
+	Expect(duration.Seconds()).NotTo(BeZero(),
+		"Packet loss test must have a duration")
+	Expect(maxPacketLossPercent).To(BeNumerically("<=", 100),
+		"Loss percentage should be <=100")
+	Expect(maxPacketLossPercent >= 0 || maxPacketLossNumber >= 0).To(BeTrue(),
+		"Either loss count or percent must be specified")
+
+	return func(e *Expectation) {
+		e.ExpectedPacketLoss = ExpPacketLoss{
+			Duration:   duration,
+			MaxPercent: maxPacketLossPercent,
+			MaxNumber:  maxPacketLossNumber,
+		}
+	}
+}
+
 type Expectation struct {
 	From               ConnectionSource // Workload or Container
 	To                 *Matcher         // Workload or IP, + port
 	Expected           bool
 	ExpSrcIPs          []string
 	ExpectedPacketLoss ExpPacketLoss
+
+	sendLen int
+	recvLen int
 }
 
 type ExpPacketLoss struct {

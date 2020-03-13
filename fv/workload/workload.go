@@ -243,6 +243,13 @@ func (w *Workload) CanConnectTo(ip, port, protocol string, duration time.Duratio
 	return anyPort.CanConnectTo(ip, port, protocol, duration)
 }
 
+func (w *Workload) CanTransferData(ip, port, protocol string, sendLen, recvLen int) *connectivity.Result {
+	anyPort := Port{
+		Workload: w,
+	}
+	return anyPort.CanTransferData(ip, port, protocol, 0, sendLen, recvLen)
+}
+
 func (w *Workload) Port(port uint16) *Port {
 	return &Port{
 		Workload: w,
@@ -503,7 +510,7 @@ type SpoofedWorkload struct {
 }
 
 func (s *SpoofedWorkload) CanConnectTo(ip, port, protocol string, duration time.Duration) *connectivity.Result {
-	return canConnectTo(s.Workload, ip, port, s.SpoofedSourceIP, "", protocol, duration)
+	return canConnectTo(s.Workload, ip, port, s.SpoofedSourceIP, "", protocol, duration, 0, 0)
 }
 
 type Port struct {
@@ -526,10 +533,19 @@ func (p *Port) SourceIPs() []string {
 // If it is not a packet loss test, packet loss string is "".
 func (p *Port) CanConnectTo(ip, port, protocol string, duration time.Duration) *connectivity.Result {
 	srcPort := strconv.Itoa(int(p.Port))
-	return canConnectTo(p.Workload, ip, port, "", srcPort, protocol, duration)
+	return canConnectTo(p.Workload, ip, port, "", srcPort, protocol, duration, 0, 0)
 }
 
-func canConnectTo(w *Workload, ip, port, srcIp, srcPort, protocol string, duration time.Duration) *connectivity.Result {
+func (p *Port) CanTransferData(ip, port, protocol string,
+	duration time.Duration, sendLen, recvLen int) *connectivity.Result {
+
+	srcPort := strconv.Itoa(int(p.Port))
+	return canConnectTo(p.Workload, ip, port, "", srcPort, protocol, duration, sendLen, recvLen)
+}
+
+func canConnectTo(w *Workload, ip, port, srcIp, srcPort, protocol string,
+	duration time.Duration, sendLen, recvLen int) *connectivity.Result {
+
 	// Ensure that the host has the 'test-connection' binary.
 	w.C.EnsureBinary("test-connection")
 
@@ -549,7 +565,10 @@ func canConnectTo(w *Workload, ip, port, srcIp, srcPort, protocol string, durati
 
 	// Run 'test-connection' to the target.
 	args := []string{
-		"exec", w.C.Name, "/test-connection", w.namespacePath, ip, port, "--protocol=" + protocol, fmt.Sprintf("--duration=%d", int(duration.Seconds())),
+		"exec", w.C.Name, "/test-connection", w.namespacePath, ip, port, "--protocol=" + protocol,
+		fmt.Sprintf("--duration=%d", int(duration.Seconds())),
+		fmt.Sprintf("--sendlen=%d", sendLen),
+		fmt.Sprintf("--recvlen=%d", recvLen),
 	}
 	if srcIp != "" {
 		args = append(args, fmt.Sprintf("--source-ip=%s", srcIp))

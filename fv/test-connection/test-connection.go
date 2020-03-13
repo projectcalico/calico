@@ -44,7 +44,7 @@ import (
 const usage = `test-connection: test connection to some target, for Felix FV testing.
 
 Usage:
-  test-connection <namespace-path> <ip-address> <port> [--source-ip=<source_ip>] [--source-port=<source>] [--protocol=<protocol>] [--duration=<seconds>] [--loop-with-file=<file>]
+  test-connection <namespace-path> <ip-address> <port> [--source-ip=<source_ip>] [--source-port=<source>] [--protocol=<protocol>] [--duration=<seconds>] [--loop-with-file=<file>] [--sendlen=<bytes>] [--recvlen=<bytes>]
 
 Options:
   --source-ip=<source_ip>  Source IP to use for the connection [default: 0.0.0.0].
@@ -53,6 +53,8 @@ Options:
   --duration=<seconds>   Total seconds test should run. 0 means run a one off connectivity check. Non-Zero means packets loss test.[default: 0]
   --loop-with-file=<file>  Whether to send messages repeatedly, file is used for synchronization
   --debug Enable debug logging
+  --sendlen=<bytes> How many additional bytes to send
+  --recvlen=<bytes> Tell the other side to send this many additional bytes
 
 If connection is successful, test-connection exits successfully.
 
@@ -97,6 +99,18 @@ func main() {
 		log.Debug("Debug logging enabled")
 	}
 
+	sendLenStr := arguments["--sendlen"].(string)
+	recvLenStr := arguments["--recvlen"].(string)
+
+	sendLen := 0
+	if sendLenStr != "" {
+		sendLen, _ = strconv.Atoi(sendLenStr)
+	}
+	recvLen := 0
+	if recvLenStr != "" {
+		recvLen, _ = strconv.Atoi(recvLenStr)
+	}
+
 	// Set default for source IP. If we're using IPv6 as indicated by ipAddress
 	// and no --source-ip option was provided, set the source IP to the default
 	// IPv6 address.
@@ -116,7 +130,8 @@ func main() {
 		loopFile = arg.(string)
 	}
 
-	log.Infof("Test connection from namespace %v IP %v port %v to IP %v port %v proto %v max duration %d seconds", namespacePath, sourceIpAddress, sourcePort, ipAddress, port, protocol, seconds)
+	log.Infof("Test connection from namespace %v IP %v port %v to IP %v port %v proto %v max duration %d seconds",
+		namespacePath, sourceIpAddress, sourcePort, ipAddress, port, protocol, seconds)
 
 	if loopFile == "" {
 		// I found that configuring the timeouts on all the network calls was a bit fiddly.  Since
@@ -133,7 +148,8 @@ func main() {
 		err = maybeAddAddr(sourceIpAddress)
 		// Test connection from wherever we are already running.
 		if err == nil {
-			err = tryConnect(ipAddress, port, sourceIpAddress, sourcePort, protocol, seconds, loopFile)
+			err = tryConnect(ipAddress, port, sourceIpAddress, sourcePort, protocol,
+				seconds, loopFile, sendLen, recvLen)
 		}
 	} else {
 		// Get the specified network namespace (representing a workload).
@@ -151,7 +167,8 @@ func main() {
 			if e != nil {
 				return e
 			}
-			return tryConnect(ipAddress, port, sourceIpAddress, sourcePort, protocol, seconds, loopFile)
+			return tryConnect(ipAddress, port, sourceIpAddress, sourcePort, protocol,
+				seconds, loopFile, sendLen, recvLen)
 		})
 	}
 
@@ -194,6 +211,9 @@ type testConn struct {
 	config   utils.ConnConfig
 	protocol protocolDriver
 	duration time.Duration
+
+	sendLen int
+	recvLen int
 }
 
 type protocolDriver interface {
@@ -203,7 +223,9 @@ type protocolDriver interface {
 	Close() error
 }
 
-func NewTestConn(remoteIpAddr, remotePort, sourceIpAddr, sourcePort, protocol string, duration time.Duration) (*testConn, error) {
+func NewTestConn(remoteIpAddr, remotePort, sourceIpAddr, sourcePort, protocol string,
+	duration time.Duration, sendLen, recvLen int) (*testConn, error) {
+
 	err := utils.RunCommand("ip", "r")
 	if err != nil {
 		return nil, err
@@ -273,12 +295,17 @@ func NewTestConn(remoteIpAddr, remotePort, sourceIpAddr, sourcePort, protocol st
 		config:   utils.ConnConfig{ConnType: connType, ConnID: uuid.NewV4().String()},
 		protocol: driver,
 		duration: duration,
+		sendLen:  sendLen,
+		recvLen:  recvLen,
 	}, nil
 
 }
 
-func tryConnect(remoteIPAddr, remotePort, sourceIPAddr, sourcePort, protocol string, seconds int, loopFile string) error {
-	tc, err := NewTestConn(remoteIPAddr, remotePort, sourceIPAddr, sourcePort, protocol, time.Duration(seconds)*time.Second)
+func tryConnect(remoteIPAddr, remotePort, sourceIPAddr, sourcePort, protocol string,
+	seconds int, loopFile string, sendLen, recvLen int) error {
+
+	tc, err := NewTestConn(remoteIPAddr, remotePort, sourceIPAddr, sourcePort, protocol,
+		time.Duration(seconds)*time.Second, sendLen, recvLen)
 	if err != nil {
 		panic(err)
 	}
@@ -297,8 +324,16 @@ func tryConnect(remoteIPAddr, remotePort, sourceIPAddr, sourcePort, protocol str
 	return tc.tryConnectWithPacketLoss()
 }
 
+func (tc *testConn) GetTestMessage(sequence int) connectivity.Request {
+	req := tc.config.GetTestMessage(sequence)
+	req.SendSize = tc.sendLen
+	req.ResponseSize = tc.recvLen
+
+	return req
+}
+
 func (tc *testConn) tryLoopFile(loopFile string) error {
-	req := tc.config.GetTestMessage(0)
+	req := tc.GetTestMessage(0)
 	msg, err := json.Marshal(req)
 	if err != nil {
 		log.WithError(err).Panic("Failed to marshall request")
@@ -347,7 +382,7 @@ func (tc *testConn) tryLoopFile(loopFile string) error {
 func (tc *testConn) tryConnectOnceOff() error {
 	log.Info("Doing single-shot test...")
 
-	req := tc.config.GetTestMessage(0)
+	req := tc.GetTestMessage(0)
 	msg, err := json.Marshal(req)
 	if err != nil {
 		log.WithError(err).Panic("Failed to marshall request")
@@ -357,6 +392,13 @@ func (tc *testConn) tryConnectOnceOff() error {
 	if err != nil {
 		log.WithError(err).Fatal("Failed to send")
 	}
+
+	if tc.sendLen > 0 {
+		if err := tc.protocol.Send(make([]byte, tc.sendLen)); err != nil {
+			log.WithError(err).Fatal("Failed send extra bytes")
+		}
+	}
+
 	respRaw, err := tc.protocol.Receive()
 	if err != nil {
 		log.WithError(err).Fatal("Failed to receive")
@@ -370,6 +412,16 @@ func (tc *testConn) tryConnectOnceOff() error {
 
 	if !resp.Request.Equal(req) {
 		log.WithField("reply", resp).Fatal("Unexpected response")
+	}
+
+	if tc.recvLen > 0 {
+		bytes, err := tc.protocol.Receive()
+		if len(bytes) < tc.recvLen {
+			log.WithError(err).WithField("received extra bytes", len(bytes)).Fatal("Receive too short")
+		}
+		if err != nil {
+			log.WithError(err).Fatal("Failed to receive extra bytes")
+		}
 	}
 
 	res := connectivity.Result{
@@ -476,7 +528,7 @@ func (tc *testConn) tryConnectWithPacketLoss() error {
 
 				return
 			default:
-				req := tc.config.GetTestMessage(count)
+				req := tc.GetTestMessage(count)
 				msg, err := json.Marshal(req)
 				if err != nil {
 					log.WithError(err).Panic("Failed to marshall request")
