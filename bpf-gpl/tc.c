@@ -834,7 +834,7 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct __sk_buff *skb,
 		if (encap_needed) {
 			if (!(state->ip_proto == IPPROTO_TCP && skb_is_gso(skb)) &&
 					ip_is_dnf(ip_header) && vxlan_v4_encap_too_big(skb)) {
-				CALI_DEBUG("Request packet with DNF set is too big");
+				CALI_DEBUG("Request packet with DNF set is too big\n");
 				goto icmp_too_big;
 			}
 			state->ip_src = cali_host_ip();
