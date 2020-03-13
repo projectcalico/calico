@@ -1,6 +1,6 @@
 ---
 title: Provide TLS certificates for Typha and Node
-description: Add TLS certificates to secure communications between if you are using Typha to scale your deployment.
+description: Add TLS certificates to secure communications between Typha and Node.
 ---
 
 ### Big picture
