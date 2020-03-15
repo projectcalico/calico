@@ -42,7 +42,7 @@ The Calico **NetworkPolicy** supports the following features:
 - **Optional packet handling controls**: disable connection tracking, apply before DNAT, apply to forwarded traffic and/or locally terminated traffic
 
 ### Concepts
-
+ 
 #### Endpoints
 
 Calico network policies apply to **endpoints**. In Kubernetes, each pod is a Calico endpoint. However, Calico can support other kinds of endpoints. There are two types of Calico endpoints: **workload endpoints** (such as a Kubernetes pod or OpenStack VM) and **host endpoints** (an interface or group of interfaces on a host). 
@@ -97,6 +97,9 @@ The Kubernetes network policy specification defines the following behavior:
 
 For compatibility with Kubernetes, **Calico network policy** follows the same behavior for Kubernetes pods.  For other endpoint types (VMs, host interfaces), Calico network policy is default deny. That is, only traffic specifically allowed by network policy is allowed, even if no network policies apply to the endpoint.
 
+### Before you begin
+
+Calicoctl needs to be **installed** and **configured** before Calico network policy can be made.
 
 ### How to
 
