@@ -18,3 +18,4 @@ blocks:
             - git branch
             - git status
             - cat *.config
+            - go
