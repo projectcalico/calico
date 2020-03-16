@@ -347,7 +347,7 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 	}
 
 	struct iphdr *ip_header;
-	if (CALI_F_TO_HEP) {
+	if (CALI_F_TO_HEP || CALI_F_TO_WEP) {
 		switch (skb->mark) {
 		case CALI_SKB_MARK_BYPASS_FWD:
 			CALI_DEBUG("Packet approved for forward.\n");
