@@ -182,7 +182,7 @@ ClusterManagementType
 </td>
 <td>
 <em>(Optional)</em>
-<p>How the cluster is managed. Valid values for this field are: Standalone (Calico and Calico Enterprise), Management (Calico Enterprise only), Managed (Calico Enterprise only). Standalone clusters are self-contained, complete installation of Calico or Calico Enterprise. Management clusters provide a single view to manage any number of Managed clusters (that use a lighter-weight installation).
+<p>How the cluster is managed. Valid values for this field are: Standalone (Calico or Calico Enterprise), Management (Calico Enterprise only), Managed (Calico Enterprise only). Standalone clusters are self-contained, complete installations of Calico or Calico Enterprise. Management clusters provide a single view to manage any number of Managed clusters (that use a lighter-weight installation).
 Default: Standalone</p>
 </td>
 </tr>
@@ -357,8 +357,8 @@ IPv6 addresses will not be auto-detected.</p>
 (<em>Appears on:</em>
 <a href="#operator.tigera.io/v1.InstallationSpec">InstallationSpec</a>)
 </p>
-<p>ClusterManagementType represents the type of multicluster management to use. Valid options for this field are: &ldquo;Standalone&rdquo;,
-&ldquo;Management&rdquo;, &ldquo;Managed&rdquo;.</p>
+<p>ClusterManagementType represents the type of multicluster management to use. Valid options for this field are: &ldquo;Standalone - Calico or Calico Enterprise&rdquo;,
+&ldquo;Management - Calico Enterprise only&rdquo;, &ldquo;Managed - Calico Enterprise only&rdquo;.</p>
 <h3 id="operator.tigera.io/v1.ConditionStatus">ConditionStatus
 (<code>string</code> alias)</h3>
 <p>
