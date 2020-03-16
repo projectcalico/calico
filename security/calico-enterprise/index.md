@@ -1,6 +1,6 @@
 ---
 title: Calico Enterprise
-description: Learn about the prodution-grade features for implementing a CaaS platform in our commercial product, Calico Enterprise. 
+description: Learn about the produtcion-grade features for implementing a CaaS platform in our commercial product, Calico Enterprise. 
 show_read_time: false
 show_toc: false
 ---
