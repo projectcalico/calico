@@ -17,7 +17,5 @@ blocks:
             - git log
             - git branch
             - git status
-            - cat *.config
-            - go
             - go -version
-            - env | grep go
+            - docker
