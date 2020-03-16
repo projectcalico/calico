@@ -92,6 +92,32 @@ func entityRuleAPIV2TOBackend(er *apiv3.EntityRule, ns string) (nsSelector, sele
 	return
 }
 
+func getSelector(er *apiv3.EntityRule, ns string, direction string) string {
+
+	nsSelector, selector := entityRuleAPIV2TOBackend(er, ns)
+
+	// We need to namespace the rule's selector when converting to a v1 object.
+	// This occurs when the selector (and/or SA Selector), NotSelector, or NamespaceSelector
+	// is provided and either this is a namespaced NetworkPolicy object, or a
+	// NamespaceSelector was defined.
+	if nsSelector != "" && (selector != "" || er.NotSelector != "" || er.NamespaceSelector != "") {
+		logCxt := log.WithFields(log.Fields{
+			"Namespace":         ns,
+			"Selector(s)":       selector,
+			"NamespaceSelector": nsSelector,
+			"NotSelector":       er.NotSelector,
+		})
+		logCxt.Debugf("Update %v Selector to include namespace", direction)
+		if selector != "" {
+			selector = fmt.Sprintf("(%s) && (%s)", nsSelector, selector)
+		} else {
+			selector = nsSelector
+		}
+	}
+
+	return selector
+}
+
 // RuleAPIToBackend converts an API Rule structure to a Backend Rule structure.
 func RuleAPIV2ToBackend(ar apiv3.Rule, ns string) model.Rule {
 	var icmpCode, icmpType, notICMPCode, notICMPType *int
@@ -105,42 +131,8 @@ func RuleAPIV2ToBackend(ar apiv3.Rule, ns string) model.Rule {
 		notICMPType = ar.NotICMP.Type
 	}
 
-	sourceNSSelector, sourceSelector := entityRuleAPIV2TOBackend(&ar.Source, ns)
-
-	// We need to namespace the rule's selector when converting to a v1 object.
-	// This occurs when the selector (and/or SA Selector), NotSelector, or NamespaceSelector
-	// is provided and either this is a namespaced NetworkPolicy object, or a
-	// NamespaceSelector was defined.
-	if sourceNSSelector != "" && (sourceSelector != "" || ar.Source.NotSelector != "" || ar.Source.NamespaceSelector != "") {
-		logCxt := log.WithFields(log.Fields{
-			"Namespace":         ns,
-			"Selector(s)":       sourceSelector,
-			"NamespaceSelector": sourceNSSelector,
-			"NotSelector":       ar.Source.NotSelector,
-		})
-		logCxt.Debug("Update source Selector to include namespace")
-		if sourceSelector != "" {
-			sourceSelector = fmt.Sprintf("(%s) && (%s)", sourceNSSelector, sourceSelector)
-		} else {
-			sourceSelector = sourceNSSelector
-		}
-	}
-
-	destNSSelector, destSelector := entityRuleAPIV2TOBackend(&ar.Destination, ns)
-	if destNSSelector != "" && (destSelector != "" || ar.Destination.NotSelector != "" || ar.Destination.NamespaceSelector != "") {
-		logCxt := log.WithFields(log.Fields{
-			"Namespace":         ns,
-			"Selector(s)":       destSelector,
-			"NamespaceSelector": destNSSelector,
-			"NotSelector":       ar.Destination.NotSelector,
-		})
-		logCxt.Debug("Update Destination Selector to include namespace")
-		if destSelector != "" {
-			destSelector = fmt.Sprintf("(%s) && (%s)", destNSSelector, destSelector)
-		} else {
-			destSelector = destNSSelector
-		}
-	}
+	sourceSelector := getSelector(&ar.Source, ns, "source")
+	destSelector := getSelector(&ar.Destination, ns, "destination")
 
 	var srcServiceAcctMatch, dstServiceAcctMatch apiv3.ServiceAccountMatch
 	if ar.Source.ServiceAccounts != nil {
