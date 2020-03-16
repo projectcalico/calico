@@ -1,6 +1,6 @@
 ---
 title: Calico Enterprise Manager user interface
-description: Learn about our web-based user interface that is designed for users from different disciplines, and with different skill sets. 
+description: Learn about Calico Enterprise's web-based user interface that is designed for users from different disciplines, and with different skill sets. 
 calico_enterprise: true
 ---
 
