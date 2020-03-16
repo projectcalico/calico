@@ -1,6 +1,6 @@
 ---
 title: Federation
-description: Federated services provide service discovery of remote pods in another cluster. 
+description: Simplify the creation and maintenance of security controls using federated tiers and policies.
 calico_enterprise: true
 ---
 
