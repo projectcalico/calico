@@ -52,7 +52,7 @@ func entityRuleAPIV2TOBackend(er *apiv3.EntityRule, ns string) (nsSelector, sele
 		nsSelector = parseSelectorAttachPrefix(er.NamespaceSelector, conversion.NamespaceLabelPrefix)
 
 		// We treat "all()" as "select all namespaces". Since in the v1 data model "all()" will select
-		// all endpoints, translate this to an equivalent expressions which means select any workload that
+		// all endpoints, translate this to an equivalent expression which means select any workload that
 		// is in a namespace.
 		nsSelector = strings.Replace(nsSelector, "all()", "has(projectcalico.org/namespace)", -1)
 	} else if ns != "" {
@@ -217,7 +217,7 @@ func parseServiceAccounts(sam *apiv3.ServiceAccountMatch) string {
 	names := strings.Join(sam.Names, "', '")
 	selectors := fmt.Sprintf("%s in { '%s' }", apiv3.LabelServiceAccount, names)
 
-	// Normailize it now
+	// Normalize it now
 	parsedSelector, err := parser.Parse(selectors)
 	if err != nil {
 		log.WithError(err).Errorf("Failed to parse service account Names: %s", selectors)
