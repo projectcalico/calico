@@ -1,6 +1,6 @@
 ---
 title: Federation
-description: Simplify the creation and maintenance of security controls using federated tiers and policies.
+description: Use federation for cross-cluster pod referencing, service discovery, and security for tiered policies.
 calico_enterprise: true
 ---
 
