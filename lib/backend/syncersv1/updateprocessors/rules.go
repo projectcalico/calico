@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2018 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2020 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -40,10 +40,15 @@ func RulesAPIV2ToBackend(ars []apiv3.Rule, ns string) []model.Rule {
 	return brs
 }
 
-// entityRuleAPIV2ToBackend collects the ordered set of selectors for the EntityRule:
-// (serviceAccountSelector) && (selector)
-// It also returns the namespace selector to use
-func entityRuleAPIV2TOBackend(er *apiv3.EntityRule, ns string) (nsSelector, selector string) {
+// Form and return a single selector expression for all the endpoints that an EntityRule should
+// match.  The returned expression incorporates the semantics of:
+// - the EntityRule's Selector, NamespaceSelector and ServiceAccounts fields
+// - the namespace or global-ness of the policy that the EntityRule is part of
+// - endpoints for a namespaced policy being limited to the namespace (or to selected namespaces) as
+//   soon as _any_ of the selector fields are used, including NotSelector.
+func getSelector(er *apiv3.EntityRule, ns string, direction string) string {
+
+	var nsSelector, selector string
 
 	// Determine which namespaces are impacted by this entityRule.
 	if er.NamespaceSelector != "" {
@@ -88,13 +93,6 @@ func entityRuleAPIV2TOBackend(er *apiv3.EntityRule, ns string) (nsSelector, sele
 			selector = "(" + selector + ")"
 		}
 	}
-
-	return
-}
-
-func getSelector(er *apiv3.EntityRule, ns string, direction string) string {
-
-	nsSelector, selector := entityRuleAPIV2TOBackend(er, ns)
 
 	// We need to namespace the rule's selector when converting to a v1 object.
 	// This occurs when the selector (and/or SA Selector), NotSelector, or NamespaceSelector
