@@ -15,8 +15,9 @@ blocks:
             - ls -lrt
             - pwd
             - whereis docker
-            - docker login -u $UNAME -p $PASS
+            - docker login quay.io -u $UNAME -p $PASS
             - 'docker pull quay.io/tigera/cnx-node:v2.7.1'
+            - docker images
       env_vars:
         - name: UNAME
           value: manojah
