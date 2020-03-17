@@ -11,11 +11,11 @@ blocks:
         - name: 'Job #1'
           commands:
             - checkout
-            - 'curl -LJO https://unified-agent.s3.amazonaws.com/wss-unified-agent-20.2.1.jar'
+            - '#curl -LJO https://unified-agent.s3.amazonaws.com/wss-unified-agent-20.2.1.jar'
             - ls -lrt
             - pwd
             - git log
             - git branch
             - git status
-            - go -version
+            - go version
             - docker
