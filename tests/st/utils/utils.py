@@ -129,12 +129,16 @@ def retry_until_success(function, retries=10, ex_class=Exception, *args, **kwarg
     :param ex_class: The class of expected exceptions.
     :returns: the value returned by function
     """
+    # We used to wait one second for every retry. In order to speed things up,
+    # we now wait .1 seconds, but to keep overall wait time the same we need
+    # to make a corresponding increase in the number of retries.
+    retries = 10 * retries
     for retry in range(retries + 1):
         try:
             result = function(*args, **kwargs)
         except ex_class:
             if retry < retries:
-                sleep(1)
+                sleep(.1)
             else:
                 raise
         else:
