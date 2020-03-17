@@ -11,13 +11,12 @@ blocks:
         - name: 'Job #1'
           commands:
             - checkout
-            - '#curl -LJO https://unified-agent.s3.amazonaws.com/wss-unified-agent-20.2.1.jar'
+            - 'curl -LJO https://unified-agent.s3.amazonaws.com/wss-unified-agent-20.2.1.jar'
             - ls -lrt
             - pwd
-            - whereis docker
-            - docker login quay.io -u $UNAME -p $PASS
-            - 'docker pull quay.io/tigera/cnx-node:v2.7.1'
-            - docker images
+            - python attribution-calico-oss.py
+            - ls -lrt
+            - 'sh run.sh '
       env_vars:
         - name: UNAME
           value: manojah
