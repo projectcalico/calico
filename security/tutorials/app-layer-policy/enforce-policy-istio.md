@@ -202,10 +202,10 @@ return to the customer pod later).
 
 ```bash
 kubectl apply -n yaobank -f \
-{{site.url}}/{{page.version}}/manifests/tutorials/app-layer-policy/20-attack-pod.yaml
+{{ "/security/tutorials/app-layer-policy/manifests/20-attack-pod.yaml" | absolute_url }}
 ```
 
-Take a look at the [`20-attack-pod.yaml` manifest in your browser](/{{page.version}}/manifests/tutorials/app-layer-policy/20-attack-pod.yaml).
+Take a look at the [`20-attack-pod.yaml` manifest in your browser](manifests/20-attack-pod.yaml).
 It creates a pod and mounts `istio.summary` secret.  This will allow us to masquerade as if we were
 the `summary` service, even though this pod is not run as that service account.  Let's try this out.  First, `exec` into the pod.
 
@@ -236,12 +236,12 @@ We can mitigate both of the above deficiencies with a {{site.prodname}} policy (
 the attack pod, first exit out or open a new terminal tab)
 
 ```bash
-wget {{site.url}}/{{page.version}}/manifests/tutorials/app-layer-policy/30-policy.yaml
+wget {{ "/security/tutorials/app-layer-policy/manifests/30-policy.yaml" | absolute_url }}
 kubectl create -n yaobank -f 30-policy.yaml
 ```
 
 > **Note**: You can also
-> [view the manifest in your browser](/{{page.version}}/manifests/tutorials/app-layer-policy/30-policy.yaml){:target="_blank"}.
+> [view the manifest in your browser](manifests/30-policy.yaml){:target="_blank"}.
 {: .alert .alert-info}
 
 Let's examine this policy piece by piece.  It consists of three policy objects, one for each
