@@ -99,7 +99,10 @@ For compatibility with Kubernetes, **Calico network policy** follows the same be
 
 ### Before you begin
 
-Calicoctl needs to be **installed** and **configured** before Calico network policy can be made.
+Calicoctl must be **installed** and **configured** before use. If you are calicoctl is printing *"no etcd endpoints specified"*, please configure Calico to either a Kubernetes or etcd datastore.
+
+- [Install Calicoctl](https://docs.projectcalico.org/v3.5/usage/calicoctl/install)
+- [Configure Calicoctl](https://docs.projectcalico.org/getting-started/calicoctl/configure/)
 
 ### How to
 
