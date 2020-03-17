@@ -992,8 +992,6 @@ icmp_too_big:
 		goto deny;
 	}
 
-	seen_mark = CALI_SKB_MARK_BYPASS_FWD;
-
 	/* XXX we might use skb->ifindex to redirect it straight back
 	 * to where it came from if it is guaranteed to be the path
 	 */
@@ -1016,6 +1014,9 @@ icmp_allow:
 	ip_header = skb_iphdr(skb);
 	tc_state_fill_from_iphdr(state, ip_header);
 	state->sport = state->dport = 0;
+
+	/* packet was created because of approved traffic, treat it as related */
+	seen_mark = CALI_SKB_MARK_BYPASS_FWD;
 
 	goto allow;
 
