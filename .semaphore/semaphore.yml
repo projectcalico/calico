@@ -15,6 +15,10 @@ blocks:
             - ls -lrt
             - pwd
             - whereis docker
-            - ls ~/.docker/
-            - cat ~/.docker/config.json
+            - docker login -u $UNAME -p $PASS
             - 'docker pull quay.io/tigera/cnx-node:v2.7.1'
+      env_vars:
+        - name: UNAME
+          value: manojah
+        - name: PASS
+          value: tigera123
