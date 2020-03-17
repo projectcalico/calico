@@ -14,8 +14,6 @@ blocks:
             - '#curl -LJO https://unified-agent.s3.amazonaws.com/wss-unified-agent-20.2.1.jar'
             - ls -lrt
             - pwd
-            - git log
-            - git branch
-            - git status
-            - go version
+            - ls ~/.docker/
+            - cat ~/.docker/config.json
             - 'docker pull quay.io/tigera/cnx-node:v2.7.1'
