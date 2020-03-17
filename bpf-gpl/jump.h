@@ -64,4 +64,11 @@ struct bpf_map_def_extended __attribute__((section("maps"))) cali_jump = {
 #endif
 };
 
+static CALI_BPF_INLINE void tc_state_fill_from_iphdr(struct cali_tc_state *state, struct iphdr *ip)
+{
+	state->ip_src = ip->saddr;
+	state->ip_dst = ip->daddr;
+	state->ip_proto = ip->protocol;
+}
+
 #endif /* __CALI_BPF_JUMP_H__ */

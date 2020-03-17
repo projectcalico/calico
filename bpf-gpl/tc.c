@@ -451,7 +451,7 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 	struct udphdr *udp_header = (void*)(ip_header+1);
 	struct icmphdr *icmp_header = (void*)(ip_header+1);
 
-	state.ip_proto = ip_header->protocol;
+	tc_state_fill_from_iphdr(&state, ip_header);
 
 	switch (state.ip_proto) {
 	case IPPROTO_TCP:
@@ -486,8 +486,6 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 		CALI_DEBUG("Unknown protocol (%d), unable to extract ports\n", (int)state.ip_proto);
 	}
 
-	state.ip_src = ip_header->saddr;
-	state.ip_dst = ip_header->daddr;
 	state.pol_rc = CALI_POL_NO_MATCH;
 
 	switch (state.ip_proto) {
@@ -986,13 +984,9 @@ icmp_ttl_exceeded:
 	/* we need to allow the reponse for the IP stack to route it back.
 	 * XXX we might want to send it back the same iface
 	 */
-	goto allow;
+	goto icmp_allow;
 
 icmp_too_big:
-	if (skb_shorter(skb, ETH_IPV4_UDP_SIZE)) {
-		reason = CALI_REASON_SHORT;
-		goto deny;
-	}
 	if (icmp_v4_too_big(skb)) {
 		reason = CALI_REASON_ICMP_DF;
 		goto deny;
@@ -1003,14 +997,25 @@ icmp_too_big:
 	/* XXX we might use skb->ifindex to redirect it straight back
 	 * to where it came from if it is guaranteed to be the path
 	 */
-	state->sport = state->dport = 0;
-	state->ip_proto = IPPROTO_ICMP;
-
 	fib_flags |= BPF_FIB_LOOKUP_OUTPUT;
 	if (CALI_F_FROM_WEP) {
 		/* we know it came from workload, just send it back the same way */
 		rc = CALI_RES_REDIR_IFINDEX;
 	}
+
+	goto icmp_allow;
+
+icmp_allow:
+	/* recheck the size of the packet after it was turned into icmp and set
+	 * state so that it can processed further.
+	 */
+	if (skb_shorter(skb, ETH_IPV4_UDP_SIZE)) {
+		reason = CALI_REASON_SHORT;
+		goto deny;
+	}
+	ip_header = skb_iphdr(skb);
+	tc_state_fill_from_iphdr(state, ip_header);
+	state->sport = state->dport = 0;
 
 	goto allow;
 
