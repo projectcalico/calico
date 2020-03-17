@@ -11,8 +11,9 @@ blocks:
         - name: 'Job #1'
           commands:
             - checkout
-            - 'curl -LJO https://unified-agent.s3.amazonaws.com/wss-unified-agent-20.2.1.jar'
             - ls -lrt
+            - git rev-parse --short HEAD
+            - 'curl -LJO https://unified-agent.s3.amazonaws.com/wss-unified-agent-20.2.1.jar'
             - pwd
             - python attribution-calico-oss.py
             - ls -lrt
