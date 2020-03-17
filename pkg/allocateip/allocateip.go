@@ -361,9 +361,30 @@ func removeHostTunnelAddr(ctx context.Context, c client.Interface, nodename stri
 			node.Spec.BGP = nil
 		}
 
-		// Release the IP.
-		if _, err := c.IPAM().ReleaseIPs(ctx, []net.IP{*ipAddr}); err != nil {
-			logCtx.WithError(err).WithField("IP", ipAddr.String()).Fatal("Error releasing address from IPAM")
+		// Release tunnel IP address(es) for the node.
+		handle, _ := generateHandleAndAttributes(nodename, vxlan)
+		if err := c.IPAM().ReleaseByHandle(ctx, handle); err != nil {
+			if _, ok := err.(cerrors.ErrorResourceDoesNotExist); !ok {
+				// Unknown error releasing the address.
+				logCtx.WithError(err).WithField("IP", ipAddr.String()).Fatal("Error releasing address by handle")
+			}
+
+			// There are no addresses with this handle. Check to see if the IP on the node
+			// belongs to us. If it has no handle and no attributes, then we can pretty confidently
+			// say that it belongs to us rather than a pod and should be cleaned up.
+			logCtx.WithField("handle", handle).Info("No IPs with handle, release exact IP")
+			attr, handle, err := c.IPAM().GetAssignmentAttributes(ctx, *ipAddr)
+			if err != nil {
+				if _, ok := err.(cerrors.ErrorResourceDoesNotExist); !ok {
+					logCtx.WithError(err).Fatal("Failed to query attributes")
+				}
+				// No allocation exists, we don't have anything to do.
+			} else if len(attr) == 0 && handle == nil {
+				// The IP is ours. Release it by passing the exact IP.
+				if _, err := c.IPAM().ReleaseIPs(ctx, []net.IP{*ipAddr}); err != nil {
+					logCtx.WithError(err).WithField("IP", ipAddr.String()).Fatal("Error releasing address from IPAM")
+				}
+			}
 		}
 
 		// Update the node object.
