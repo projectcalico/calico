@@ -1,0 +1,13 @@
+{{/* if any of .Values.certs.node or .Values.certs.typha is not nil */}}
+{{ if without (concat (values .Values.certs.node) (values .Values.certs.typha)) nil }}
+apiVersion: v1
+kind: Secret
+metadata:
+  name: node-certs
+  namespace: tigera-operator
+type: Opaque
+data:
+  cert.crt: {{ required "must set certs.node.cert" .Values.certs.node.cert | b64enc }}
+  key.key: {{ required "must set certs.node.key" .Values.certs.node.key | b64enc }}
+  common-name: {{ required "must set certs.node.commonName" .Values.certs.node.commonName | b64enc }}
+{{ end }}
