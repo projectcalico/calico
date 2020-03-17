@@ -221,6 +221,8 @@ type protocolDriver interface {
 	Send(msg []byte) error
 	Receive() ([]byte, error)
 	Close() error
+
+	MTU() (int, error)
 }
 
 func NewTestConn(remoteIpAddr, remotePort, sourceIpAddr, sourcePort, protocol string,
@@ -388,6 +390,13 @@ func (tc *testConn) tryConnectOnceOff() error {
 		log.WithError(err).Panic("Failed to marshall request")
 	}
 
+	mtuPair := connectivity.MTUPair{}
+	mtuPair.Start, err = tc.protocol.MTU()
+	if err != nil {
+		log.WithError(err).Error("Failed to read connection MTU")
+		return err
+	}
+
 	err = tc.protocol.Send(msg)
 	if err != nil {
 		log.WithError(err).Fatal("Failed to send")
@@ -424,12 +433,15 @@ func (tc *testConn) tryConnectOnceOff() error {
 		}
 	}
 
+	mtuPair.Start, err = tc.protocol.MTU()
+
 	res := connectivity.Result{
 		LastResponse: resp,
 		Stats: connectivity.Stats{
 			RequestsSent:      1,
 			ResponsesReceived: 1,
 		},
+		ClientMTU: mtuPair,
 	}
 	res.PrintToStdout()
 
@@ -675,6 +687,10 @@ func (d *connectedUDP) Receive() ([]byte, error) {
 	}
 }
 
+func (d *connectedUDP) MTU() (int, error) {
+	return utils.ConnMTU(d.conn)
+}
+
 // unconnectedUDP abstracts an unconnected UDP stream.  I.e. it calls ListenPacket() to open the local side
 // of the connection than then it uses SendTo and RecvFrom.
 type unconnectedUDP struct {
@@ -728,6 +744,10 @@ func (d *unconnectedUDP) Receive() ([]byte, error) {
 		log.Infof("Received %d bytes from %s", n, from)
 	}
 	return bufIn[:n], err
+}
+
+func (d *unconnectedUDP) MTU() (int, error) {
+	return 0, nil
 }
 
 // connectedSCTP abstracts an SCTP stream.
@@ -797,6 +817,10 @@ func (d *connectedSCTP) Close() error {
 	return d.conn.Close()
 }
 
+func (d *connectedSCTP) MTU() (int, error) {
+	return 0, nil
+}
+
 // connectedTCP abstracts an SCTP stream.
 type connectedTCP struct {
 	localAddr  string
@@ -841,4 +865,8 @@ func (d *connectedTCP) Close() error {
 		return nil
 	}
 	return d.conn.Close()
+}
+
+func (d *connectedTCP) MTU() (int, error) {
+	return utils.ConnMTU(d.conn.(utils.HasSyscallConn))
 }

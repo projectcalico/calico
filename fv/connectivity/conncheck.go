@@ -272,7 +272,7 @@ type Response struct {
 	Request Request
 }
 
-func (r Response) SourceIP() string {
+func (r *Response) SourceIP() string {
 	return strings.Split(r.SourceAddr, ":")[0]
 }
 
@@ -424,9 +424,16 @@ func (e Expectation) Matches(response *Result, checkSNAT bool) bool {
 
 var UnactivatedCheckers = set.New()
 
+// MTUPair is a pair of MTU value recorded before and after data were transfered
+type MTUPair struct {
+	Start int
+	End   int
+}
+
 type Result struct {
 	LastResponse Response
 	Stats        Stats
+	ClientMTU    MTUPair
 }
 
 func (r Result) PrintToStdout() {
@@ -546,6 +553,7 @@ func (cmd *CheckCmd) run(cName string, logMsg string) *Result {
 		}
 		return &resp
 	}
+
 	return nil
 }
 
