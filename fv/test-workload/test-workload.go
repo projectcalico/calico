@@ -463,7 +463,7 @@ func main() {
 
 						_, err = p.WriteTo(data, addr)
 
-						if !utils.IsMessagePartOfStream(request.Payload) {
+						if !connectivity.IsMessagePartOfStream(request.Payload) {
 							// Only print when packet is not part of stream.
 							logCxt.WithError(err).WithField("remoteAddr", addr).Info("Responded")
 						}

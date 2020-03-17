@@ -546,9 +546,6 @@ func (p *Port) CanTransferData(ip, port, protocol string,
 func canConnectTo(w *Workload, ip, port, srcIp, srcPort, protocol string,
 	duration time.Duration, sendLen, recvLen int) *connectivity.Result {
 
-	// Ensure that the host has the 'test-connection' binary.
-	w.C.EnsureBinary("test-connection")
-
 	if protocol == "udp" || protocol == "sctp" {
 		// If this is a retry then we may have stale conntrack entries and we don't want those
 		// to influence the connectivity check.  UDP lacks a sequence number, so conntrack operates
@@ -563,25 +560,25 @@ func canConnectTo(w *Workload, ip, port, srcIp, srcPort, protocol string,
 
 	logMsg := "Connection test"
 
-	// Run 'test-connection' to the target.
-	args := []string{
-		"exec", w.C.Name, "/test-connection", w.namespacePath, ip, port, "--protocol=" + protocol,
-		fmt.Sprintf("--duration=%d", int(duration.Seconds())),
-		fmt.Sprintf("--sendlen=%d", sendLen),
-		fmt.Sprintf("--recvlen=%d", recvLen),
+	opts := []connectivity.CheckOption{
+		connectivity.WithNamespacePath(w.namespacePath),
+		connectivity.WithDuration(duration),
+		connectivity.WithSendLen(sendLen),
+		connectivity.WithRecvLen(recvLen),
 	}
+
 	if srcIp != "" {
-		args = append(args, fmt.Sprintf("--source-ip=%s", srcIp))
 		logMsg += " (spoofed)"
+		opts = append(opts, connectivity.WithSourceIP(srcIp))
 	}
 	if srcPort != "" {
-		// If we are using a particular source port, fill it in.
-		args = append(args, fmt.Sprintf("--source-port=%s", srcPort))
 		logMsg += " (with source port)"
+		opts = append(opts, connectivity.WithSourcePort(srcPort))
 	}
-	connectionCmd := utils.Command("docker", args...)
 
-	return utils.RunConnectionCmd(connectionCmd, logMsg)
+	w.C.EnsureBinary(connectivity.BinaryName)
+
+	return connectivity.Check(w.C.Name, logMsg, ip, port, protocol, opts...)
 }
 
 // ToMatcher implements the connectionTarget interface, allowing this port to be used as

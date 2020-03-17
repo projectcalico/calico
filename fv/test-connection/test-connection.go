@@ -208,7 +208,7 @@ type statistics struct {
 type testConn struct {
 	stat statistics
 
-	config   utils.ConnConfig
+	config   connectivity.ConnConfig
 	protocol protocolDriver
 	duration time.Duration
 
@@ -282,9 +282,9 @@ func NewTestConn(remoteIpAddr, remotePort, sourceIpAddr, sourcePort, protocol st
 
 	var connType string
 	if duration == time.Duration(0) {
-		connType = utils.ConnectionTypePing
+		connType = connectivity.ConnectionTypePing
 	} else {
-		connType = utils.ConnectionTypeStream
+		connType = connectivity.ConnectionTypeStream
 		if protocol != "udp" {
 			panic("Wrong protocol for packets loss test")
 		}
@@ -292,7 +292,7 @@ func NewTestConn(remoteIpAddr, remotePort, sourceIpAddr, sourcePort, protocol st
 
 	log.Infof("%s connection established from %v to %v", connType, localAddr, remoteAddr)
 	return &testConn{
-		config:   utils.ConnConfig{ConnType: connType, ConnID: uuid.NewV4().String()},
+		config:   connectivity.ConnConfig{ConnType: connType, ConnID: uuid.NewV4().String()},
 		protocol: driver,
 		duration: duration,
 		sendLen:  sendLen,
@@ -317,7 +317,7 @@ func tryConnect(remoteIPAddr, remotePort, sourceIPAddr, sourcePort, protocol str
 		return tc.tryLoopFile(loopFile)
 	}
 
-	if tc.config.ConnType == utils.ConnectionTypePing {
+	if tc.config.ConnType == connectivity.ConnectionTypePing {
 		return tc.tryConnectOnceOff()
 	}
 

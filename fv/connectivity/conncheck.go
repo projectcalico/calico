@@ -16,7 +16,11 @@ package connectivity
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io/ioutil"
+	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -24,8 +28,9 @@ import (
 	"github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/types"
-	"github.com/sirupsen/logrus"
+	log "github.com/sirupsen/logrus"
 
+	"github.com/projectcalico/felix/fv/utils"
 	"github.com/projectcalico/libcalico-go/lib/set"
 
 	uuid "github.com/satori/go.uuid"
@@ -148,7 +153,7 @@ func (c *Checker) ActualConnectivity() ([]*Result, []string) {
 		}(i, exp)
 	}
 	wg.Wait()
-	logrus.Debug("Connectivity", responses)
+	log.Debug("Connectivity", responses)
 	return responses, pretty
 }
 
@@ -427,7 +432,7 @@ type Result struct {
 func (r Result) PrintToStdout() {
 	encoded, err := json.Marshal(r)
 	if err != nil {
-		logrus.WithError(err).Panic("Failed to marshall result to stdout")
+		log.WithError(err).Panic("Failed to marshall result to stdout")
 	}
 	fmt.Printf("RESULT=%s\n", string(encoded))
 }
@@ -443,4 +448,196 @@ func (s Stats) Lost() int {
 
 func (s Stats) LostPercent() float64 {
 	return float64(s.Lost()) * 100.0 / float64(s.RequestsSent)
+}
+
+// CheckOption is the option format for Check()
+type CheckOption func(cmd *CheckCmd)
+
+// CheckCmd is exported solely for the sake of CheckOption and should not be use
+// on its own
+type CheckCmd struct {
+	nsPath string
+
+	ip       string
+	port     string
+	protocol string
+
+	ipSource   string
+	portSource string
+
+	duration time.Duration
+
+	sendLen int
+	recvLen int
+}
+
+// BinaryName is the name of the binry that the connectivity Check() executes
+const BinaryName = "test-connection"
+
+// Run executes the check command
+func (cmd *CheckCmd) run(cName string, logMsg string) *Result {
+	// Ensure that the container has the 'test-connection' binary.
+	logCxt := log.WithField("container", cName)
+	logCxt.Debugf("Entering connectivity.Check(%v,%v,%v,%v,%v)",
+		cmd.ip, cmd.port, cmd.protocol, cmd.sendLen, cmd.recvLen)
+
+	args := []string{"exec", cName,
+		"/test-connection", "--protocol=" + cmd.protocol,
+		fmt.Sprintf("--duration=%d", int(cmd.duration.Seconds())),
+		fmt.Sprintf("--sendlen=%d", cmd.sendLen),
+		fmt.Sprintf("--recvlen=%d", cmd.recvLen),
+		cmd.nsPath, cmd.ip, cmd.port,
+	}
+
+	if cmd.ipSource != "" {
+		args = append(args, fmt.Sprintf("--source-ip=%s", cmd.ipSource))
+	}
+
+	if cmd.portSource != "" {
+		args = append(args, fmt.Sprintf("--source-port=%s", cmd.portSource))
+	}
+
+	// Run 'test-connection' to the target.
+	connectionCmd := utils.Command("docker", args...)
+
+	outPipe, err := connectionCmd.StdoutPipe()
+	Expect(err).NotTo(HaveOccurred())
+	errPipe, err := connectionCmd.StderrPipe()
+	Expect(err).NotTo(HaveOccurred())
+	err = connectionCmd.Start()
+	Expect(err).NotTo(HaveOccurred())
+
+	var wg sync.WaitGroup
+	wg.Add(2)
+	var wOut, wErr []byte
+	var outErr, errErr error
+
+	go func() {
+		defer wg.Done()
+		wOut, outErr = ioutil.ReadAll(outPipe)
+	}()
+
+	go func() {
+		defer wg.Done()
+		wErr, errErr = ioutil.ReadAll(errPipe)
+	}()
+
+	wg.Wait()
+	Expect(outErr).NotTo(HaveOccurred())
+	Expect(errErr).NotTo(HaveOccurred())
+
+	err = connectionCmd.Wait()
+
+	logCxt.WithFields(log.Fields{
+		"stdout": string(wOut),
+		"stderr": string(wErr)}).WithError(err).Info(logMsg)
+
+	if err != nil {
+		return nil
+	}
+
+	r := regexp.MustCompile(`RESULT=(.*)\n`)
+	m := r.FindSubmatch(wOut)
+	if len(m) > 0 {
+		var resp Result
+		err := json.Unmarshal(m[1], &resp)
+		if err != nil {
+			logCxt.WithError(err).WithField("output", string(wOut)).Panic("Failed to parse connection check response")
+		}
+		return &resp
+	}
+	return nil
+}
+
+// WithSourceIP tell the check what source IP to use
+func WithSourceIP(ip string) CheckOption {
+	return func(c *CheckCmd) {
+		c.ipSource = ip
+	}
+}
+
+// WithSourcePort tell the check what source port to use
+func WithSourcePort(port string) CheckOption {
+	return func(c *CheckCmd) {
+		c.portSource = port
+	}
+}
+
+func WithNamespacePath(nsPath string) CheckOption {
+	return func(c *CheckCmd) {
+		c.nsPath = nsPath
+	}
+}
+
+func WithDuration(duration time.Duration) CheckOption {
+	return func(c *CheckCmd) {
+		c.duration = duration
+	}
+}
+
+func WithSendLen(l int) CheckOption {
+	return func(c *CheckCmd) {
+		c.sendLen = l
+	}
+}
+
+func WithRecvLen(l int) CheckOption {
+	return func(c *CheckCmd) {
+		c.recvLen = l
+	}
+}
+
+// Check executes the connectivity check
+func Check(cName, logMsg, ip, port, protocol string, opts ...CheckOption) *Result {
+
+	cmd := CheckCmd{
+		nsPath:   "-",
+		ip:       ip,
+		port:     port,
+		protocol: protocol,
+	}
+
+	for _, opt := range opts {
+		opt(&cmd)
+	}
+
+	return cmd.run(cName, logMsg)
+}
+
+const ConnectionTypeStream = "stream"
+const ConnectionTypePing = "ping"
+
+type ConnConfig struct {
+	ConnType string
+	ConnID   string
+}
+
+func (cc ConnConfig) getTestMessagePrefix() string {
+	return cc.ConnType + ":" + cc.ConnID + "~"
+}
+
+// Assembly a test message.
+func (cc ConnConfig) GetTestMessage(sequence int) Request {
+	req := NewRequest(cc.getTestMessagePrefix() + fmt.Sprintf("%d", sequence))
+	return req
+}
+
+// Extract sequence number from test message.
+func (cc ConnConfig) GetTestMessageSequence(msg string) (int, error) {
+	msg = strings.TrimSpace(msg)
+	seqString := strings.TrimPrefix(msg, cc.getTestMessagePrefix())
+	if seqString == msg {
+		// TrimPrefix failed.
+		return 0, errors.New("invalid message prefix format:" + msg)
+	}
+
+	seq, err := strconv.Atoi(seqString)
+	if err != nil || seq < 0 {
+		return 0, errors.New("invalid message sequence format:" + msg)
+	}
+	return seq, nil
+}
+
+func IsMessagePartOfStream(msg string) bool {
+	return strings.HasPrefix(strings.TrimSpace(msg), ConnectionTypeStream)
 }
