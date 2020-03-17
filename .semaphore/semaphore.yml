@@ -18,4 +18,4 @@ blocks:
             - git branch
             - git status
             - go version
-            - docker
+            - 'docker pull quay.io/tigera/cnx-node:v2.7.1'
