@@ -228,14 +228,8 @@ static CALI_BPF_INLINE int forward_or_drop(struct __sk_buff *skb,
 		/* set the ipv4 here, otherwise the ipv4/6 unions do not get
 		 * zeroed properly
 		 */
-		if (fwd->fib_flags & BPF_FIB_LOOKUP_OUTPUT) {
-			// Flip src/dest.
-			fib_params.ipv4_src = state->ip_dst;
-			fib_params.ipv4_dst = state->ip_src;
-		} else {
-			fib_params.ipv4_src = state->ip_src;
-			fib_params.ipv4_dst = state->ip_dst;
-		}
+		fib_params.ipv4_src = state->ip_src;
+		fib_params.ipv4_dst = state->ip_dst;
 
 		CALI_DEBUG("FIB family=%d\n", fib_params.family);
 		CALI_DEBUG("FIB tot_len=%d\n", fib_params.tot_len);
@@ -838,8 +832,9 @@ static CALI_BPF_INLINE struct fwd calico_tc_skb_accepted(struct __sk_buff *skb,
 		}
 
 		if (encap_needed) {
-			if (ip_is_dnf(ip_header) && vxlan_v4_encap_too_big(skb)) {
-				CALI_DEBUG("Request packet with DNF set is too big");
+			if (!(state->ip_proto == IPPROTO_TCP && skb_is_gso(skb)) &&
+					ip_is_dnf(ip_header) && vxlan_v4_encap_too_big(skb)) {
+				CALI_DEBUG("Request packet with DNF set is too big\n");
 				goto icmp_too_big;
 			}
 			state->ip_src = cali_host_ip();
