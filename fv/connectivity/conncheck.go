@@ -71,8 +71,8 @@ func (c *Checker) ExpectNone(from ConnectionSource, to ConnectionTarget, explici
 // ExpectDataTransfer check if sendLen can be send to the dest and whether
 // recvLen of data can be received from the dest reliably
 func (c *Checker) ExpectDataTransfer(from TransferSource, to ConnectionTarget,
-	ports []uint16, sendLen, recvLen int) {
-	c.expect(true, from, to, ports, ExpectWithSendLen(sendLen), ExpectWithRecvLen(recvLen))
+	ports []uint16, opts ...ExpectationOption) {
+	c.expect(true, from, to, ports, opts...)
 }
 
 func (c *Checker) ExpectLoss(from ConnectionSource, to ConnectionTarget,
@@ -133,23 +133,34 @@ func (c *Checker) ActualConnectivity() ([]*Result, []string) {
 			if c.Protocol != "" {
 				p = c.Protocol
 			}
+
+			var res *Result
 			if exp.sendLen > 0 || exp.recvLen > 0 {
-				responses[i] = exp.From.(TransferSource).
+				res = exp.From.(TransferSource).
 					CanTransferData(exp.To.IP, exp.To.Port, p, exp.sendLen, exp.recvLen)
 			} else {
-				responses[i] = exp.From.CanConnectTo(exp.To.IP, exp.To.Port, p, exp.ExpectedPacketLoss.Duration)
+				res = exp.From.CanConnectTo(exp.To.IP, exp.To.Port, p, exp.ExpectedPacketLoss.Duration)
 			}
-			pretty[i] = fmt.Sprintf("%s -> %s = %v", exp.From.SourceName(), exp.To.TargetName, responses[i] != nil)
-			if c.CheckSNAT && responses[i] != nil {
-				srcIP := strings.Split(responses[i].LastResponse.SourceAddr, ":")[0]
-				pretty[i] += " (from " + srcIP + ")"
+
+			pretty[i] += fmt.Sprintf("%s -> %s = %v", exp.From.SourceName(), exp.To.TargetName, res != nil)
+
+			if res != nil {
+				if c.CheckSNAT {
+					srcIP := strings.Split(res.LastResponse.SourceAddr, ":")[0]
+					pretty[i] += " (from " + srcIP + ")"
+				}
+				if res.ClientMTU.Start != 0 {
+					pretty[i] += fmt.Sprintf(" (client MTU %d -> %d)", res.ClientMTU.Start, res.ClientMTU.End)
+				}
+				if exp.ExpectedPacketLoss.Duration > 0 {
+					sent := res.Stats.RequestsSent
+					lost := res.Stats.Lost()
+					pct := res.Stats.LostPercent()
+					pretty[i] += fmt.Sprintf(" (sent: %d, lost: %d / %.1f%%)", sent, lost, pct)
+				}
 			}
-			if exp.ExpectedPacketLoss.Duration > 0 && responses[i] != nil {
-				sent := responses[i].Stats.RequestsSent
-				lost := responses[i].Stats.Lost()
-				pct := responses[i].Stats.LostPercent()
-				pretty[i] += fmt.Sprintf(" (sent: %d, lost: %d / %.1f%%)", sent, lost, pct)
-			}
+
+			responses[i] = res
 		}(i, exp)
 	}
 	wg.Wait()
@@ -163,14 +174,21 @@ func (c *Checker) ExpectedConnectivityPretty() []string {
 	result := make([]string, len(c.expectations))
 	for i, exp := range c.expectations {
 		result[i] = fmt.Sprintf("%s -> %s = %v", exp.From.SourceName(), exp.To.TargetName, exp.Expected)
-		if c.CheckSNAT && exp.Expected {
-			result[i] += " (from " + strings.Join(exp.ExpSrcIPs, "|") + ")"
+		if exp.Expected {
+			if c.CheckSNAT {
+				result[i] += " (from " + strings.Join(exp.ExpSrcIPs, "|") + ")"
+			}
+			if exp.clientMTUStart != 0 || exp.clientMTUEnd != 0 {
+				result[i] += fmt.Sprintf(" (client MTU %d -> %d)", exp.clientMTUStart, exp.clientMTUEnd)
+			}
 		}
-		if exp.ExpectedPacketLoss.MaxNumber >= 0 {
-			result[i] += fmt.Sprintf(" (maxLoss: %d packets)", exp.ExpectedPacketLoss.MaxNumber)
-		}
-		if exp.ExpectedPacketLoss.MaxPercent >= 0 {
-			result[i] += fmt.Sprintf(" (maxLoss: %.1f%%)", exp.ExpectedPacketLoss.MaxPercent)
+		if exp.ExpectedPacketLoss.Duration > 0 {
+			if exp.ExpectedPacketLoss.MaxNumber >= 0 {
+				result[i] += fmt.Sprintf(" (maxLoss: %d packets)", exp.ExpectedPacketLoss.MaxNumber)
+			}
+			if exp.ExpectedPacketLoss.MaxPercent >= 0 {
+				result[i] += fmt.Sprintf(" (maxLoss: %.1f%%)", exp.ExpectedPacketLoss.MaxPercent)
+			}
 		}
 	}
 	return result
@@ -340,18 +358,32 @@ func ExpectWithSrcIPs(ips ...string) ExpectationOption {
 	}
 }
 
+// ExpectWithSendLen asserts how much additional data on top of the original
+// requests should be sent with success
 func ExpectWithSendLen(l int) ExpectationOption {
 	return func(e *Expectation) {
 		e.sendLen = l
 	}
 }
 
+// ExpectWithRecvLen asserts how much additional data on top of the original
+// response should be received with success
 func ExpectWithRecvLen(l int) ExpectationOption {
 	return func(e *Expectation) {
 		e.recvLen = l
 	}
 }
 
+// ExpectWithClientAdjustedMTU asserts that the connection MTU should change
+// during the transfer
+func ExpectWithClientAdjustedMTU(from, to int) ExpectationOption {
+	return func(e *Expectation) {
+		e.clientMTUStart = from
+		e.clientMTUEnd = to
+	}
+}
+
+// ExpectWithLoss asserts that the connection has a certain loos rate
 func ExpectWithLoss(duration time.Duration, maxPacketLossPercent float64, maxPacketLossNumber int) ExpectationOption {
 	Expect(duration.Seconds()).NotTo(BeZero(),
 		"Packet loss test must have a duration")
@@ -378,6 +410,9 @@ type Expectation struct {
 
 	sendLen int
 	recvLen int
+
+	clientMTUStart int
+	clientMTUEnd   int
 }
 
 type ExpPacketLoss struct {
@@ -392,11 +427,22 @@ func (e Expectation) Matches(response *Result, checkSNAT bool) bool {
 			return false
 		}
 		if checkSNAT {
+			match := false
 			for _, src := range e.ExpSrcIPs {
 				if src == response.LastResponse.SourceIP() {
-					return true
+					match = true
+					break
 				}
 			}
+			if !match {
+				return false
+			}
+		}
+
+		if e.clientMTUStart != 0 && e.clientMTUStart != response.ClientMTU.Start {
+			return false
+		}
+		if e.clientMTUEnd != 0 && e.clientMTUEnd != response.ClientMTU.End {
 			return false
 		}
 

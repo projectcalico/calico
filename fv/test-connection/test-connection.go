@@ -433,7 +433,7 @@ func (tc *testConn) tryConnectOnceOff() error {
 		}
 	}
 
-	mtuPair.Start, err = tc.protocol.MTU()
+	mtuPair.End, err = tc.protocol.MTU()
 
 	res := connectivity.Result{
 		LastResponse: resp,

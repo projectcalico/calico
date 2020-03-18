@@ -1070,7 +1070,11 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 									}
 
 									port := []uint16{npPort}
-									cc.ExpectDataTransfer(externalClient, TargetIP(felixes[1].IP), port, 1500, 1360)
+									cc.ExpectDataTransfer(externalClient, TargetIP(felixes[1].IP), port,
+										ExpectWithSendLen(1500),
+										ExpectWithRecvLen(1360),
+										ExpectWithClientAdjustedMTU(1500, 1500),
+									)
 									cc.CheckConnectivity()
 								})
 							}
