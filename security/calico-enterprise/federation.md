@@ -1,6 +1,6 @@
 ---
 title: Federation
-description: Use federation for cross-cluster pod referencing, service discovery, and security for tiered policies.
+description: Use federation for cross-cluster pod referencing, service discovery, and security with tiered policies.
 calico_enterprise: true
 ---
 
