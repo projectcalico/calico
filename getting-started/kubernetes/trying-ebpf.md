@@ -221,3 +221,7 @@ To re-enable BPF mode:
 
 > **Warning!** Switching between eBPF and standard linux networking can cause long-lived flows to be silently dropped since the two dataplane modes do not share connection-tracking state.
 {: .alert .alert-danger }
+
+### Give us feedback
+
+We want to hear about your experience at {% include open-new-window.html text='project calico' url='http://slack.projectcalico.org/' %}.
