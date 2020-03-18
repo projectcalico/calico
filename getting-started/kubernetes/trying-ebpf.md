@@ -224,4 +224,4 @@ To re-enable BPF mode:
 
 ### Send us feedback
 
-We want to hear about your experience at {% include open-new-window.html text='project calico' url='http://slack.projectcalico.org/' %}.
+We want to hear about your experience, so please don’t hesitate to connect with us via the {% include open-new-window.html text='Calico Users Slack' url='http://slack.projectcalico.org/' %} group.
