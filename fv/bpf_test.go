@@ -1069,6 +1069,10 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 										Skip("FIXME externalClient also does conntime balancing")
 									}
 
+									pmtu, err := w[0][0].PathMTU(externalClient.IP)
+									Expect(err).NotTo(HaveOccurred())
+									Expect(pmtu).To(Equal(0)) // nothing specific for this path yet
+
 									port := []uint16{npPort}
 									cc.ExpectDataTransfer(externalClient, TargetIP(felixes[1].IP), port,
 										ExpectWithSendLen(1500),
@@ -1076,6 +1080,10 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 										ExpectWithClientAdjustedMTU(1500, 1500),
 									)
 									cc.CheckConnectivity()
+
+									pmtu, err = w[0][0].PathMTU(externalClient.IP)
+									Expect(err).NotTo(HaveOccurred())
+									Expect(pmtu).To(Equal(1360)) // adjusteded due to the transfer
 								})
 							}
 						}
