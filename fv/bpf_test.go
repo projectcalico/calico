@@ -1069,6 +1069,11 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 										Skip("FIXME externalClient also does conntime balancing")
 									}
 
+									_, err := w[0][0].RunCmd("ethtool", "-K", "eth0", "gso", "off")
+									Expect(err).NotTo(HaveOccurred())
+									_, err = w[0][0].RunCmd("ethtool", "-K", "eth0", "tso", "off")
+									Expect(err).NotTo(HaveOccurred())
+
 									pmtu, err := w[0][0].PathMTU(externalClient.IP)
 									Expect(err).NotTo(HaveOccurred())
 									Expect(pmtu).To(Equal(0)) // nothing specific for this path yet

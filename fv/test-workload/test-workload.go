@@ -34,7 +34,6 @@ import (
 	nsutils "github.com/containernetworking/plugins/pkg/testutils"
 	"github.com/docopt/docopt-go"
 	"github.com/ishidawataru/sctp"
-	"github.com/safchain/ethtool"
 	log "github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
 )
@@ -169,27 +168,6 @@ func main() {
 			if err != nil {
 				log.WithError(err).Info("Failed to set dev lo up")
 			}
-
-			ethtl, err := ethtool.NewEthtool()
-			if err != nil {
-				return
-			}
-			defer ethtl.Close()
-
-			if err = ethtl.Change("eth0", map[string]bool{
-				"tx-generic-segmentation": false,
-				"tx-tcp-segmentation":     false,
-			}); err != nil {
-				log.WithError(err).Error("Failed to turn off GSO/TSO on eth0")
-				return
-			}
-
-			features, err := ethtl.Features("eth0")
-			if err != nil {
-				log.WithError(err).Error("Failed to get features of  eth0")
-				return
-			}
-			log.WithField("features", features).Info("eth0")
 
 			if strings.Contains(ipAddress, ":") {
 				// Make sure ipv6 is enabled in the container/pod network namespace.
