@@ -208,6 +208,99 @@ var _ = Describe("FV tests", func() {
 		Expect(handle).NotTo(BeNil())
 		Expect(*handle).To(Equal("some-wep-handle"))
 	})
+
+	It("should release old IPAM addresses if they exist and the node has none", func() {
+		// Create an allocation for this node in IPAM.
+		ipAddr, _, _ := net.ParseCIDR("172.16.0.1/32")
+		nodename := "my-test-node"
+		handle, attrs := generateHandleAndAttributes(nodename, false)
+		args := ipam.AssignIPArgs{
+			IP:       *ipAddr,
+			HandleID: &handle,
+			Hostname: nodename,
+			Attrs:    attrs,
+		}
+		Expect(c.IPAM().AssignIP(ctx, args)).NotTo(HaveOccurred())
+
+		// Create a Node object which does NOT use that allocation. It should clean up
+		// the old leaked address and assign a new one.
+		node := makeNode("192.168.0.1/24", "fdff:ffff:ffff:ffff:ffff::/80")
+		node.Name = nodename
+
+		// We don't want an address on the node for this scenario.
+		node.Spec.BGP.IPv4IPIPTunnelAddr = ""
+		_, err := c.Nodes().Create(ctx, node, options.SetOptions{})
+		Expect(err).NotTo(HaveOccurred())
+
+		// Run the allocateip code.
+		run(nodename)
+
+		// Assert that the node no longer has the same IP on it.
+		newNode, err := c.Nodes().Get(ctx, nodename, options.GetOptions{})
+		Expect(err).NotTo(HaveOccurred())
+		Expect(newNode.Spec.BGP).NotTo(BeNil())
+
+		// Try to parse the new address to make sure it's a valid IP.
+		_, _, err = net.ParseCIDROrIP(newNode.Spec.BGP.IPv4IPIPTunnelAddr)
+		Expect(err).NotTo(HaveOccurred())
+
+		// Assert that the IPAM allocation for the original leaked address is gone.
+		_, _, err = c.IPAM().GetAssignmentAttributes(ctx, net.IP{IP: gnet.ParseIP("172.16.0.1")})
+		Expect(err).To(HaveOccurred())
+
+		// Assert that exactly one address exists for the node and that it matches the node.
+		ips, err := c.IPAM().IPsByHandle(ctx, handle)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(len(ips)).To(Equal(1))
+		Expect(newNode.Spec.BGP.IPv4IPIPTunnelAddr).To(Equal(ips[0].String()))
+	})
+
+	It("should release old IPAM addresses if they exist and the node has a different address", func() {
+		// Create an allocation for this node in IPAM.
+		ipAddr, _, _ := net.ParseCIDR("172.16.0.1/32")
+		nodename := "my-test-node"
+		handle, attrs := generateHandleAndAttributes(nodename, false)
+		args := ipam.AssignIPArgs{
+			IP:       *ipAddr,
+			HandleID: &handle,
+			Hostname: nodename,
+			Attrs:    attrs,
+		}
+		Expect(c.IPAM().AssignIP(ctx, args)).NotTo(HaveOccurred())
+
+		// Create a Node object which does NOT use that allocation. It should clean up
+		// the old leaked address and assign a new one.
+		node := makeNode("192.168.0.1/24", "fdff:ffff:ffff:ffff:ffff::/80")
+		node.Name = nodename
+
+		// Put a different address on the node.
+		node.Spec.BGP.IPv4IPIPTunnelAddr = "172.16.0.5"
+		_, err := c.Nodes().Create(ctx, node, options.SetOptions{})
+		Expect(err).NotTo(HaveOccurred())
+
+		// Run the allocateip code.
+		run(nodename)
+
+		// Assert that the node no longer has the same IP on it.
+		newNode, err := c.Nodes().Get(ctx, nodename, options.GetOptions{})
+		Expect(err).NotTo(HaveOccurred())
+		Expect(newNode.Spec.BGP).NotTo(BeNil())
+
+		// Try to parse the new address to make sure it's a valid IP.
+		_, _, err = net.ParseCIDROrIP(newNode.Spec.BGP.IPv4IPIPTunnelAddr)
+		Expect(err).NotTo(HaveOccurred())
+
+		// Assert that the IPAM allocation for the original leaked address is gone.
+		_, _, err = c.IPAM().GetAssignmentAttributes(ctx, net.IP{IP: gnet.ParseIP("172.16.0.1")})
+		Expect(err).To(HaveOccurred())
+
+		// Assert that exactly one address exists for the node and that it matches the node.
+		ips, err := c.IPAM().IPsByHandle(ctx, handle)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(len(ips)).To(Equal(1))
+		Expect(newNode.Spec.BGP.IPv4IPIPTunnelAddr).To(Equal(ips[0].String()))
+	})
+
 })
 
 var _ = allocateIPDescribe("ensureHostTunnelAddress", []string{"ipip", "vxlan"}, func(tunnelType string) {
