@@ -4,6 +4,11 @@ description: Configure Felix, the daemon that runs on every machine the provide 
 canonical_url: '/reference/felix/configuration'
 ---
 
+This article is valid only if you are:
+
+- Configuring Felix through environment variables, and are not using the operator installation method (which does not support using environment variables). For operator install users, see [Felix Configuration Resource]({{site.baseurl}}/referrence/resources/felixconfig).
+- Updating the Felix configuration file (`felix.cfg`).
+
 Configuration for Felix is read from one of four possible locations, in
 order, as follows.
 
