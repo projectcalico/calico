@@ -4,7 +4,7 @@ description: Learn how to create more advanced Calico network policies (namespac
 canonical_url: "/security/tutorials/calico-policy-advanced"
 ---
 
-Calico Policies extend the functionalities of Kubernetes Network Policies. To demonstrate this, the tutorial will walk through the [Kubernetes Advanced NetworkPolicy Tutorial](kubernetes-policy-advanced) but with everything implemented using Calico policies. This tutorial also serves as a good example in highlighting the syntactical differences between Calico and Kubernetes Network Policies.
+Calico Network Policies _extend_ the functionalities of Kubernetes Network Policies. To demonstrate this, this page will walk through the [Kubernetes Advanced NetworkPolicy](kubernetes-policy-advanced) tutorial but with everything implemented using Calico policies. This serves as a good example in highlighting the syntactical differences between the two type of policies while demonstrating Calico Network Policicy's flexibility.
 
 ### Requirements
 
