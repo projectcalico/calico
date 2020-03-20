@@ -116,6 +116,46 @@ oc get tigerastatus
 
 > **Note**: To get more information, add `-o yaml` to the above command.
 
+#### Integrate with Operator Lifecycle Manager (OLM)
+
+In OpenShift Container Platform, the [Operator Lifecycle Manager](https://docs.openshift.com/container-platform/4.3/operators/understanding_olm/olm-understanding-olm.html#olm-overview_olm-understanding-olm) helps
+cluster admins manage the lifecycle of operators running in their cluster. Most operators can be installed directly from the OpenShift Console.
+But {{site.prodname}}'s operator provides OpenShift networking so the operator must be installed when the cluster is provisioned.
+
+In order to register the running Calico operator with OLM, you will need to create an OperatorGroup for the operator:
+
+```bash
+oc apply -f - <<EOF
+apiVersion: operators.coreos.com/v1
+kind: OperatorGroup
+metadata:
+  name: tigera-operator
+  namespace: tigera-operator
+spec:
+  targetNamespaces:
+    - tigera-operator
+EOF
+```
+
+Next, you will create a Subscription to the operator:
+
+```bash
+oc apply -f - <<EOF
+apiVersion: operators.coreos.com/v1alpha1
+kind: Subscription
+metadata:
+  name: tigera-operator
+  namespace: tigera-operator
+spec:
+  channel: stable
+  installPlanApproval: Manual
+  name: tigera-operator
+  source: certified-operators
+  sourceNamespace: openshift-marketplace
+  startingCSV: tigera-operator.{{page.version}}
+EOF
+```
+
 ### Above and beyond
 
 - [Get started with Kubernetes network policy]({{site.baseurl}}/security/kubernetes-network-policy)
