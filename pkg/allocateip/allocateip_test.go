@@ -300,7 +300,6 @@ var _ = Describe("FV tests", func() {
 		Expect(len(ips)).To(Equal(1))
 		Expect(newNode.Spec.BGP.IPv4IPIPTunnelAddr).To(Equal(ips[0].String()))
 	})
-
 })
 
 var _ = allocateIPDescribe("ensureHostTunnelAddress", []string{"ipip", "vxlan"}, func(tunnelType string) {
@@ -564,6 +563,86 @@ var _ = allocateIPDescribe("removeHostTunnelAddress", []string{"ipip", "vxlan"},
 		n, err := c.Nodes().Get(ctx, node.Name, options.GetOptions{})
 		Expect(err).NotTo(HaveOccurred())
 		Expect(n.Spec.BGP).To(BeNil())
+	})
+
+	It("should release IP address allocations", func() {
+		// Create an allocation for this node in IPAM.
+		ipAddr, _, _ := net.ParseCIDR("172.16.0.1/32")
+		nodename := "my-test-node"
+		handle, attrs := generateHandleAndAttributes(nodename, isVxlan)
+		args := ipam.AssignIPArgs{
+			IP:       *ipAddr,
+			HandleID: &handle,
+			Attrs:    attrs,
+			Hostname: nodename,
+		}
+		Expect(c.IPAM().AssignIP(ctx, args)).NotTo(HaveOccurred())
+
+		// Create a Node object which uses that allocation.
+		node := makeNode("192.168.0.1/24", "fdff:ffff:ffff:ffff:ffff::/80")
+		node.Name = nodename
+		setTunnelAddressForNode(tunnelType, node, "172.16.0.1")
+		_, err := c.Nodes().Create(ctx, node, options.SetOptions{})
+		Expect(err).NotTo(HaveOccurred())
+
+		// Remove the tunnel address.
+		removeHostTunnelAddr(ctx, c, node.Name, isVxlan)
+
+		// Assert that the IPAM allocation is gone.
+		_, _, err = c.IPAM().GetAssignmentAttributes(ctx, net.IP{IP: gnet.ParseIP("172.16.0.1")})
+		Expect(err).To(HaveOccurred())
+	})
+
+	It("should release old-style IP address allocations", func() {
+		// Create an old-style allocation for this node in IPAM.
+		ipAddr, _, _ := net.ParseCIDR("172.16.0.1/32")
+		nodename := "my-test-node"
+		args := ipam.AssignIPArgs{
+			IP:       *ipAddr,
+			Hostname: nodename,
+		}
+		Expect(c.IPAM().AssignIP(ctx, args)).NotTo(HaveOccurred())
+
+		// Create a Node object which uses that allocation.
+		node := makeNode("192.168.0.1/24", "fdff:ffff:ffff:ffff:ffff::/80")
+		node.Name = nodename
+		setTunnelAddressForNode(tunnelType, node, "172.16.0.1")
+		_, err := c.Nodes().Create(ctx, node, options.SetOptions{})
+		Expect(err).NotTo(HaveOccurred())
+
+		// Remove the tunnel address.
+		removeHostTunnelAddr(ctx, c, node.Name, isVxlan)
+
+		// Assert that the IPAM allocation is gone.
+		_, _, err = c.IPAM().GetAssignmentAttributes(ctx, net.IP{IP: gnet.ParseIP("172.16.0.1")})
+		Expect(err).To(HaveOccurred())
+	})
+
+	It("should not release old-style IP address allocations belonging to someone else", func() {
+		// Create an old-style allocation for this node in IPAM.
+		ipAddr, _, _ := net.ParseCIDR("172.16.0.1/32")
+		nodename := "my-test-node"
+		handle := "some-handle"
+		args := ipam.AssignIPArgs{
+			IP:       *ipAddr,
+			HandleID: &handle,
+			Hostname: nodename,
+		}
+		Expect(c.IPAM().AssignIP(ctx, args)).NotTo(HaveOccurred())
+
+		// Create a Node object which uses that allocation.
+		node := makeNode("192.168.0.1/24", "fdff:ffff:ffff:ffff:ffff::/80")
+		node.Name = nodename
+		setTunnelAddressForNode(tunnelType, node, "172.16.0.1")
+		_, err := c.Nodes().Create(ctx, node, options.SetOptions{})
+		Expect(err).NotTo(HaveOccurred())
+
+		// Remove the tunnel address.
+		removeHostTunnelAddr(ctx, c, node.Name, isVxlan)
+
+		// Assert that the IPAM allocation is not gone.
+		_, _, err = c.IPAM().GetAssignmentAttributes(ctx, net.IP{IP: gnet.ParseIP("172.16.0.1")})
+		Expect(err).NotTo(HaveOccurred())
 	})
 })
 
