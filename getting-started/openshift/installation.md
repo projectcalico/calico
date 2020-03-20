@@ -120,10 +120,10 @@ oc get tigerastatus
 #### Integrate with Operator Lifecycle Manager (OLM)
 
 In OpenShift Container Platform, the [Operator Lifecycle Manager](https://docs.openshift.com/container-platform/4.3/operators/understanding_olm/olm-understanding-olm.html#olm-overview_olm-understanding-olm) helps
-cluster admins manage the lifecycle of operators running in their cluster. Most operators can be installed directly from the OpenShift Console.
-But {{site.prodname}}'s operator provides OpenShift networking so the operator must be installed when the cluster is provisioned.
+cluster admins manage the lifecycle of operators running in their cluster. We can get the benefits of managing the {{site.prodname}}
+operator with OLM by registering the operator.
 
-In order to register the running Calico operator with OLM, you will need to create an OperatorGroup for the operator:
+In order to register the running {{site.prodname}} operator with OLM, first you will need to create an OperatorGroup for the operator:
 
 ```bash
 oc apply -f - <<EOF
@@ -138,7 +138,9 @@ spec:
 EOF
 ```
 
-Next, you will create a Subscription to the operator:
+Next, you will create a Subscription to the operator. By subscribing to the operator package, the {{site.prodname}} operator will be managed by OLM.
+
+> **Note**: This will trigger the operator deployment to be recreated and all of its resources (pods, deployments, etc.) to be recreated.
 
 ```bash
 oc apply -f - <<EOF
@@ -156,6 +158,13 @@ spec:
   startingCSV: tigera-operator.{{page.version}}
 EOF
 ```
+
+Once this is complete, the {{site.prodname}} will be appear as an installed operator in the OpenShift console.
+The user-interface provides options for editing the operator installation, viewing the operator's status, and more.
+
+> **Note**: Upgrading the operator is enabled via the OpenShift console. But **always** refer to the upgrade instructions first at [https://docs.projectcalico.org/maintenance/upgrading](https://docs.projectcalico.org/maintenance/upgrading).
+{: .alert .alert-danger}
+
 
 ### Above and beyond
 
