@@ -1,6 +1,6 @@
 ---
 title: BGP peer
-canonical_url: 'https://docs.projectcalico.org/v3.9/reference/resources/bgppeer'
+canonical_url: '/reference/resources/bgppeer'
 ---
 
 A BGP peer resource (`BGPPeer`) represents a remote BGP peer with

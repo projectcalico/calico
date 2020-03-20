@@ -1,6 +1,6 @@
 ---
 title: Calico DC/OS Installation Guide
-canonical_url: 'https://docs.projectcalico.org/v2.6/getting-started/mesos/installation/dc-os/framework'
+canonical_url: '/getting-started/mesos/installation/dc-os/framework'
 ---
 
 The following guide walks through installing Calico for DC/OS using the Universe

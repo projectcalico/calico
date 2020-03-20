@@ -1,6 +1,6 @@
 ---
 title: Binary install with package manager
-canonical_url: 'https://docs.projectcalico.org/v3.9/getting-started/bare-metal/installation/binary-mgr'
+canonical_url: '/getting-started/bare-metal/installation/binary-mgr'
 ---
 
 

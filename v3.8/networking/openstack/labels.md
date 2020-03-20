@@ -1,6 +1,6 @@
 ---
 title: Endpoint labels and operator policy
-canonical_url: 'https://docs.projectcalico.org/v3.9/networking/openstack/labels'
+canonical_url: '/networking/openstack/labels'
 ---
 
 When {{site.prodname}} represents an OpenStack VM as a {{site.prodname}} WorkloadEndpoint,

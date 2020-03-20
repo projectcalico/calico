@@ -1,6 +1,6 @@
 ---
 title: Creating policy for basic connectivity
-canonical_url: 'https://docs.projectcalico.org/v3.5/getting-started/bare-metal/policy/index'
+canonical_url: '/getting-started/bare-metal/policy/'
 ---
 
 

@@ -1,6 +1,6 @@
 ---
 title: Networking Mesos Tasks with Calico
-canonical_url: 'https://docs.projectcalico.org/v2.1/getting-started/mesos/tutorials/unified'
+canonical_url: '/getting-started/mesos/tutorials/unified'
 ---
 
 ## Prerequisites

@@ -1,6 +1,6 @@
 ---
 title: Install calico/node
-canonical_url: 'https://docs.projectcalico.org/v3.9/getting-started/kubernetes/hardway/install-node'
+canonical_url: '/getting-started/kubernetes/hardway/install-node'
 ---
 
 `calico/node` runs three daemons

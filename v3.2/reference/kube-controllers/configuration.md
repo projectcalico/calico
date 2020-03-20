@@ -1,6 +1,6 @@
 ---
 title: Configuring the Calico Kubernetes controllers
-canonical_url: 'https://docs.projectcalico.org/v3.9/reference/kube-controllers/configuration'
+canonical_url: '/reference/kube-controllers/configuration'
 ---
 
 The {{site.prodname}} Kubernetes controllers are primarily configured through environment variables. When running

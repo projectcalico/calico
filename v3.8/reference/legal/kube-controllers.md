@@ -1,6 +1,6 @@
 ---
 title: Kubernetes controllers attributions
-canonical_url: 'https://docs.projectcalico.org/v3.9/reference/legal/kube-controllers'
+canonical_url: '/reference/legal/kube-controllers'
 ---
 
 ### Direct Dependencies

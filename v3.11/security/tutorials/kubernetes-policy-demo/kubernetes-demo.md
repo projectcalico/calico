@@ -1,7 +1,7 @@
 ---
 title: Kubernetes policy, demo
 description: See how applying Kubernetes policy allows and denies connections in this visual demo. 
-canonical_url: 'https://docs.projectcalico.org/v3.9/security/tutorials/kubernetes-policy-demo/kubernetes-demo'
+canonical_url: '/security/tutorials/kubernetes-policy-demo/kubernetes-demo'
 ---
 The included demo sets up a frontend and backend service, as well as a client service, all
 running on Kubernetes.  It then configures network policy on each service.

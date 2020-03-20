@@ -1,6 +1,6 @@
 ---
 title: Configure IP pools
-canonical_url: 'https://docs.projectcalico.org/v3.9/getting-started/kubernetes/hardway/configure-ip-pools'
+canonical_url: '/getting-started/kubernetes/hardway/configure-ip-pools'
 ---
 
 A *workload* is a container or VM that {{site.prodname}} handles the virtual networking for. In Kubernetes, workloads are pods.

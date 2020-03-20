@@ -1,6 +1,6 @@
 ---
 tile: Installing Calico in DC/OS
-canonical_url: 'https://docs.projectcalico.org/v1.5/getting-started/mesos/installation/dc-os'
+canonical_url: '/getting-started/mesos/installation/dc-os'
 ---
 
 

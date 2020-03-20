@@ -1,7 +1,7 @@
 ---
 title: Configure workload access outside the cluster
 description: Enable and disable internet access for your workloads.
-canonical_url: 'https://docs.projectcalico.org/v3.10/networking/workloads-outside-cluster'
+canonical_url: '/v3.10/networking/workloads-outside-cluster'
 ---
 
 ### Big picture

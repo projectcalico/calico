@@ -1,6 +1,6 @@
 ---
 title: Typha attributions
-canonical_url: 'https://docs.projectcalico.org/v3.9/reference/legal/typha'
+canonical_url: '/reference/legal/typha'
 ---
 
 

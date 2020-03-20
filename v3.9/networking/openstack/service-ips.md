@@ -1,6 +1,6 @@
 ---
 title: Service IPs
-canonical_url: 'https://docs.projectcalico.org/v3.9/networking/openstack/service-ips'
+canonical_url: '/networking/openstack/service-ips'
 ---
 
 {{site.prodname}} supports two approaches for assigning a service IP to a

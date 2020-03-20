@@ -1,6 +1,6 @@
 ---
 title: Summary
-canonical_url: 'https://docs.projectcalico.org/v3.8/security/host-endpoints/summary'
+canonical_url: '/security/host-endpoints/summary'
 ---
 
 

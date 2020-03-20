@@ -1,6 +1,6 @@
 ---
 title: calicoctl endpoint
-canonical_url: 'https://docs.projectcalico.org/v1.6/reference/calicoctl/endpoint'
+canonical_url: '/reference/calicoctl/endpoint'
 ---
 
 This sections describes the `calicoctl endpoint` commands.

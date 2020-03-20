@@ -1,6 +1,6 @@
 ---
 title: Assign IP addresses based on topology
-canonical_url: 'https://docs.projectcalico.org/v3.10/networking/assign-ip-addresses-topology'
+canonical_url: '/v3.10/networking/assign-ip-addresses-topology'
 ---
 
 ### Big picture

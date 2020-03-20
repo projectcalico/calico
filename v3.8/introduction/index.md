@@ -1,6 +1,6 @@
 ---
 title: ''
-canonical_url: 'https://docs.projectcalico.org/v3.9/introduction/index'
+canonical_url: '/introduction/'
 custom_css: css/intro.css
 ---
 

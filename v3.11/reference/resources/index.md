@@ -1,7 +1,7 @@
 ---
 title: Resource definitions
 description: Calico resources (APIs) that you can manage using calicoctl
-canonical_url: 'https://docs.projectcalico.org/v3.9/reference/resources/index'
+canonical_url: '/reference/resources/'
 ---
 
 This section describes the set of valid resource types that can be managed

@@ -1,6 +1,6 @@
 ---
 title: Host endpoints
-canonical_url: 'https://docs.projectcalico.org/v3.8/security/host-endpoints/index'
+canonical_url: '/security/host-endpoints/'
 ---
 
 This guide describes how to use {{site.prodname}} to secure the network interfaces

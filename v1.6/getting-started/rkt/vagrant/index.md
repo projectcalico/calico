@@ -1,6 +1,6 @@
 ---
 title: Calico Networking with rkt
-canonical_url: 'https://docs.projectcalico.org/v1.6/getting-started/rkt/vagrant/index'
+canonical_url: '/getting-started/rkt/vagrant/'
 ---
 
 This tutorial describes how to set up a Calico cluster in a pure rkt environment.

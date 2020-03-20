@@ -1,6 +1,6 @@
 ---
 title: Standing up Kubernetes
-canonical_url: 'https://docs.projectcalico.org/v3.9/getting-started/kubernetes/hardway/standing-up-kubernetes'
+canonical_url: '/getting-started/kubernetes/hardway/standing-up-kubernetes'
 ---
 
 We will install {{site.prodname}} on a Kubernetes cluster. To demonstrate a highly available {{site.prodname}} control plane, we will use five nodes in this guide. This lab walks you through provisioning a Kubernetes cluster in AWS using kubeadm.

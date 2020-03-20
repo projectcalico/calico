@@ -1,6 +1,6 @@
 ---
 title: Release notes
-canonical_url: 'https://docs.projectcalico.org/v3.9/release-notes/index'
+canonical_url: '/release-notes/'
 ---
 
 The following table shows component versioning for {{site.prodname}}  **{{ page.version }}**.

@@ -1,6 +1,6 @@
 ---
 title: Typha overview
-canonical_url: 'https://docs.projectcalico.org/v3.9/reference/typha/index'
+canonical_url: '/reference/typha/'
 ---
 
 The Typha daemon sits between the datastore (such as the Kubernetes API server) and many instances of Felix. Typha's main purpose is to increase scale by reducing each node's impact on the datastore.  Services such as [Felix](https://github.com/projectcalico/felix) and [confd](https://github.com/projectcalico/confd) connect to Typha instead of connecting directly to the datastore as Typha maintains a single datastore connection on behalf of all its clients. It caches the datastore state and deduplicates events so that they can be fanned out to many listeners.

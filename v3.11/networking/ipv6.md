@@ -1,7 +1,7 @@
 ---
 title: Enabling IPv6 support
 Description: Enable IPv6 support for workloads on Kubernetes and OpenStack.
-canonical_url: 'https://docs.projectcalico.org/v3.9/networking/ipv6'
+canonical_url: '/networking/ipv6'
 ---
 
 ### About enabling IPv6
