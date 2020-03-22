@@ -1,6 +1,6 @@
 ---
 title: Creating host endpoint objects
-canonical_url: 'https://docs.projectcalico.org/v3.9/reference/host-endpoints/objects'
+canonical_url: '/reference/host-endpoints/objects'
 ---
 
 

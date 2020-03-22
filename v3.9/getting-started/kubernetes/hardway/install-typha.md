@@ -1,6 +1,6 @@
 ---
 title: Install Typha
-canonical_url: 'https://docs.projectcalico.org/v3.9/getting-started/kubernetes/hardway/install-typha'
+canonical_url: '/getting-started/kubernetes/hardway/install-typha'
 ---
 
 **Typha** sits between the Kubernetes API server and per-node daemons like **Felix** and **confd** (running in `calico/node`).

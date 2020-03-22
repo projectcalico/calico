@@ -1,6 +1,6 @@
 ---
 title: Pre-DNAT policy
-canonical_url: 'https://docs.projectcalico.org/v3.8/security/host-endpoints/pre-dnat'
+canonical_url: '/security/host-endpoints/pre-dnat'
 ---
 
 

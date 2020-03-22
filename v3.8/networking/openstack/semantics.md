@@ -1,6 +1,6 @@
 ---
 title: Detailed semantics
-canonical_url: 'https://docs.projectcalico.org/v3.9/networking/openstack/semantics'
+canonical_url: '/networking/openstack/semantics'
 ---
 
 A {{site.prodname}} network is a Neutron network (either provider or tenant) whose

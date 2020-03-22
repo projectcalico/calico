@@ -1,6 +1,6 @@
 ---
 title: Advertising Kubernetes services over BGP
-canonical_url: 'https://docs.projectcalico.org/v3.9/networking/service-advertisement'
+canonical_url: '/networking/service-advertisement'
 ---
 
 ## About advertising Kubernetes services over BGP

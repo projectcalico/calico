@@ -1,6 +1,6 @@
 ---
 title: Installing Calico on host endpoints
-canonical_url: 'https://docs.projectcalico.org/v3.9/getting-started/bare-metal/installation/index'
+canonical_url: '/getting-started/bare-metal/installation/'
 ---
 
 You will need to install calicoctl and configure it to connect to your etcd datastore.

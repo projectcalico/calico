@@ -1,6 +1,6 @@
 ---
 title: Calico on OpenStack
-canonical_url: 'https://docs.projectcalico.org/v3.9/getting-started/openstack/installation/index'
+canonical_url: '/getting-started/openstack/installation/'
 ---
 
 There are many ways to try out {{site.prodname}} with OpenStack, because OpenStack

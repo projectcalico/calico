@@ -1,6 +1,6 @@
 ---
 title: Container install
-canonical_url: 'https://docs.projectcalico.org/v3.9/getting-started/bare-metal/installation/container'
+canonical_url: '/getting-started/bare-metal/installation/container'
 ---
 
 ## Running under Docker

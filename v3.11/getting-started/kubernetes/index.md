@@ -1,7 +1,7 @@
 ---
 title: Quickstart for Calico on Kubernetes
 description: Install a single-host Kubernetes cluster with Calico
-canonical_url: 'https://docs.projectcalico.org/v3.9/getting-started/kubernetes/index'
+canonical_url: '/getting-started/kubernetes/'
 ---
 
 

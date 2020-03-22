@@ -1,6 +1,6 @@
 ---
 title: Segmenting etcd on Kubernetes (basic)
-canonical_url: 'https://docs.projectcalico.org/v3.9/reference/etcd-rbac/kubernetes'
+canonical_url: '/reference/etcd-rbac/kubernetes'
 ---
 
 When using etcd with RBAC, all components that access etcd must be configured

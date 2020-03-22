@@ -1,7 +1,7 @@
 ---
 title: Floating IPs
 description: Configure floating IP in Calico for OpenStack 
-canonical_url: 'https://docs.projectcalico.org/v3.9/networking/openstack/floating-ips'
+canonical_url: '/networking/openstack/floating-ips'
 ---
 
 networking-calico includes beta support for floating IPs.  Currently this

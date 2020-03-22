@@ -1,6 +1,6 @@
 ---
 title: Integration Guide
-canonical_url: 'https://docs.projectcalico.org/v3.9/getting-started/kubernetes/installation/integration'
+canonical_url: '/getting-started/kubernetes/installation/integration'
 ---
 
 This document explains the components necessary to install {{site.prodname}} on

@@ -1,6 +1,6 @@
 ---
 title: Configure BGP peering
-canonical_url: 'https://docs.projectcalico.org/v3.9/getting-started/kubernetes/hardway/configure-bgp-peering'
+canonical_url: '/getting-started/kubernetes/hardway/configure-bgp-peering'
 ---
 
 We have configured {{site.prodname}} to distribute routing information over the

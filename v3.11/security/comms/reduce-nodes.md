@@ -1,7 +1,7 @@
 ---
 title: Schedule to well-known nodes
 description: Learn how to configure the Calico Typha TCP port.
-canonical_url: 'https://docs.projectcalico.org/v3.9/security/comms/reduce-nodes'
+canonical_url: '/security/comms/reduce-nodes'
 ---
 
 If you are on Kubernetes, use the Kubernetes API datastore, and have a cluster of more

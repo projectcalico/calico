@@ -1,6 +1,6 @@
 ---
 title: Configuring Conntrack
-canonical_url: 'https://docs.projectcalico.org/v3.6/networking/conntrack'
+canonical_url: '/networking/conntrack'
 ---
 
 A common problem on Linux systems is running out of space in the

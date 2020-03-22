@@ -1,6 +1,6 @@
 ---
 title: Integration Guide
-canonical_url: 'https://docs.projectcalico.org/v2.6/getting-started/mesos/installation/integration'
+canonical_url: '/getting-started/mesos/installation/integration'
 ---
 
 This guide explains how to integrate Calico networking and policy on an existing

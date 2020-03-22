@@ -1,6 +1,6 @@
 ---
 title: Enable dual stack
-canonical_url: 'https://docs.projectcalico.org/master/networking/dual-stack'
+canonical_url: '/master/networking/dual-stack'
 ---
 
 ### Big picture

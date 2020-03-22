@@ -1,6 +1,6 @@
 ---
 title: Protect hosts tutorial
-canonical_url: 'https://docs.projectcalico.org/v3.9/security/tutorials/protect-hosts'
+canonical_url: '/security/tutorials/protect-hosts'
 ---
 
 Imagine that the administrator of a Kubernetes cluster wants to secure it as much as

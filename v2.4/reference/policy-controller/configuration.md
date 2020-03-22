@@ -1,6 +1,6 @@
 ---
 title: Configuring the Calico policy controller
-canonical_url: 'https://docs.projectcalico.org/v2.5/reference/policy-controller/configuration'
+canonical_url: '/reference/policy-controller/configuration'
 ---
 
 The policy controller is primarily configured through environment variables.  When running

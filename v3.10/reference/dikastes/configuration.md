@@ -1,6 +1,6 @@
 ---
 title: Configuring Dikastes
-canonical_url: 'https://docs.projectcalico.org/v3.9/reference/dikastes/configuration'
+canonical_url: '/reference/dikastes/configuration'
 ---
 
 Configuration for Dikastes is read from the command line arguments passed. The command line options

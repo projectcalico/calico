@@ -1,6 +1,6 @@
 ---
 title: Reference
-canonical_url: 'https://docs.projectcalico.org/v3.9/reference/index'
+canonical_url: '/reference/'
 ---
 
 This section contains reference information about {{site.prodname}} resources,

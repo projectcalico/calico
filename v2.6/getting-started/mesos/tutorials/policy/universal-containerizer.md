@@ -1,6 +1,6 @@
 ---
 title: Network Policy (Universal Containerizer)
-canonical_url: 'https://docs.projectcalico.org/v2.6/getting-started/mesos/tutorials/policy/universal-containerizer'
+canonical_url: '/getting-started/mesos/tutorials/policy/universal-containerizer'
 ---
 
 This document will demonstrate how to manipulate policy for Calico using

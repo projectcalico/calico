@@ -1,6 +1,6 @@
 ---
 title: Ubuntu
-canonical_url: 'https://docs.projectcalico.org/v3.9/getting-started/openstack/installation/ubuntu'
+canonical_url: '/getting-started/openstack/installation/ubuntu'
 ---
 
 These instructions will take you through a first-time install of

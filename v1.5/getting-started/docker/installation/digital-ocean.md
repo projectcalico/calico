@@ -1,6 +1,6 @@
 ---
 title: Running the Calico tutorials on DigitalOcean
-canonical_url: 'https://docs.projectcalico.org/v1.6/getting-started/docker/installation/digital-ocean'
+canonical_url: '/getting-started/docker/installation/digital-ocean'
 ---
 
 

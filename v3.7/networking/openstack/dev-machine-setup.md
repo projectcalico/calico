@@ -1,6 +1,6 @@
 ---
 title: Setting up a development machine
-canonical_url: 'https://docs.projectcalico.org/v3.9/networking/openstack/dev-machine-setup'
+canonical_url: '/networking/openstack/dev-machine-setup'
 ---
 
 In this example, a user wants to spin up a machine to use as a Linux

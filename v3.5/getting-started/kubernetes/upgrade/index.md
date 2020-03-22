@@ -1,6 +1,6 @@
 ---
 title: Upgrading Calico for Kubernetes
-canonical_url: 'https://docs.projectcalico.org/v3.5/getting-started/kubernetes/upgrade/index'
+canonical_url: '/getting-started/kubernetes/upgrade/'
 ---
 
 ## Before you begin

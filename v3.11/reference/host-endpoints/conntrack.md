@@ -1,6 +1,6 @@
 ---
 title: Connection tracking
-canonical_url: 'https://docs.projectcalico.org/v3.9/reference/host-endpoints/conntrack'
+canonical_url: '/reference/host-endpoints/conntrack'
 ---
 
 

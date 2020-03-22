@@ -1,7 +1,7 @@
 ---
 title: Protect hosts tutorial
 description: Learn how to secure incoming traffic from outside the cluster using Calico host endpoints with network policy, including allowing controlled access to specific Kubernetes services.
-canonical_url: 'https://docs.projectcalico.org/v3.9/security/tutorials/protect-hosts'
+canonical_url: '/security/tutorials/protect-hosts'
 ---
 
 Imagine that the administrator of a Kubernetes cluster wants to secure it as much as

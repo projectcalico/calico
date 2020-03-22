@@ -1,6 +1,6 @@
 ---
 title: Connecting to Tasks
-canonical_url: 'https://docs.projectcalico.org/v2.6/getting-started/mesos/tutorials/connecting-tasks'
+canonical_url: '/getting-started/mesos/tutorials/connecting-tasks'
 ---
 
 When Calico is used to network Mesos tasks,
