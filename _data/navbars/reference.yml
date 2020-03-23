@@ -68,6 +68,8 @@ section:
       path: /reference/resources/hostendpoint
     - title: IP pool
       path: /reference/resources/ippool
+    - title: Kubernetes controllers configuration
+      path: /reference/resources/kubecontrollersconfig
     - title: Network policy
       path: /reference/resources/networkpolicy
     - title: Network set
