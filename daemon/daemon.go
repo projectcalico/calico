@@ -166,6 +166,7 @@ func Run(configFile string, gitVersion string, buildDate string, gitRevision str
 	var typhaAddr string
 	var numClientsCreated int
 	var k8sClientSet *kubernetes.Clientset
+	var kubernetesVersion string
 configRetry:
 	for {
 		if numClientsCreated > 60 {
@@ -293,6 +294,18 @@ configRetry:
 					continue configRetry
 				}
 			}
+		}
+
+		if k8sClientSet != nil {
+			serverVersion, err := k8sClientSet.Discovery().ServerVersion()
+			if err != nil {
+				log.WithError(err).Error("Couldn't read server version from server")
+			}
+
+			log.Infof("Server Version: %#v\n", *serverVersion)
+			kubernetesVersion = serverVersion.GitVersion
+		} else {
+			log.Error("no Kubernetes client available")
 		}
 
 		// If we're configured to discover Typha, do that now so we can retry if we fail.
@@ -511,6 +524,7 @@ configRetry:
 		}()
 
 		usageRep := usagerep.New(
+			usagerep.StaticItems{KubernetesVersion: kubernetesVersion},
 			configParams.UsageReportingInitialDelaySecs,
 			configParams.UsageReportingIntervalSecs,
 			statsChanOut,
