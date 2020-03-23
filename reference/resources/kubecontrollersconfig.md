@@ -19,6 +19,7 @@ metadata:
 spec:
   logSeverityScreen: info
   healthEnabled: true
+  etcdv3CompactionPeriod: 10m
   controllers:
     node:
       reconcilerPeriod: 5m
@@ -54,11 +55,12 @@ spec:
 
 #### Spec
 
-| Field             | Description                                               | Accepted Values                    | Schema | Default    |
-|-------------------|-----------------------------------------------------------|------------------------------------|--------|------------|
-| logSeverityScreen | The log severity above which logs are sent to the stdout. | Debug, Info, Warning, Error, Fatal | string | `Info`     |
-| healthEnabled     | Enable support for health checks                          | true, false                        | bool   | true       |
-| controllers       | Enabled controllers and their settings                    |                                    | [Controllers](#controllers) | |
+| Field                  | Description                                               | Accepted Values                    | Schema | Default    |
+|------------------------|-----------------------------------------------------------|------------------------------------|--------|------------|
+| logSeverityScreen      | The log severity above which logs are sent to the stdout. | Debug, Info, Warning, Error, Fatal | string | `Info`     |
+| healthEnabled          | Enable support for health checks                          | true, false                        | bool   | true       |
+| etcdv3CompactionPeriod | The period between etcdv3 compaction requests. Only applies when using etcd as the {{site.prodname}} datastore. | Set to 0 to disable, > 0 to enable |  [Duration string][parse-duration] | 10m |
+| controllers            | Enabled controllers and their settings                    |                                    | [Controllers](#controllers) | |
 
 #### Controllers
 
