@@ -111,6 +111,7 @@ endif
 # Versions and location of dependencies used in the build.
 BIRD_VER?=v0.3.3-0-g1e8dd375
 BIRD_IMAGE ?= calico/bird:$(BIRD_VER)-$(ARCH)
+BIRD_SOURCE=filesystem/included-source/bird-$(BIRD_VER).tar.gz
 
 # Versions and locations of dependencies used in tests.
 CALICOCTL_VER?=master
@@ -167,6 +168,7 @@ clean:
 	find . -name '*.created' -exec rm -f {} +
 	find . -name '*.pyc' -exec rm -f {} +
 	rm -rf certs *.tar vendor $(NODE_CONTAINER_BIN_DIR)
+	rm -rf filesystem/included-source
 	rm -rf dist
 
 	# Delete images that we built in this repo
@@ -253,7 +255,7 @@ sub-image-%:
 	$(MAKE) image ARCH=$*
 
 $(BUILD_IMAGE): $(NODE_CONTAINER_CREATED)
-$(NODE_CONTAINER_CREATED): register ./Dockerfile.$(ARCH) $(NODE_CONTAINER_FILES) $(NODE_CONTAINER_BINARY)
+$(NODE_CONTAINER_CREATED): register $(BIRD_SOURCE) ./Dockerfile.$(ARCH) $(NODE_CONTAINER_FILES) $(NODE_CONTAINER_BINARY)
 ifeq ($(LOCAL_BUILD),true)
 	# If doing a local build, copy in local confd templates in case there are changes.
 	cp -r ../confd/etc/calico/confd/templates vendor/github.com/kelseyhightower/confd/etc/calico/confd
@@ -266,6 +268,11 @@ endif
 	"
 	docker build --pull -t $(BUILD_IMAGE):latest-$(ARCH) . --build-arg BIRD_IMAGE=$(BIRD_IMAGE) --build-arg QEMU_IMAGE=$(CALICO_BUILD) --build-arg ver=$(CALICO_GIT_VER) -f ./Dockerfile.$(ARCH)
 	touch $@
+
+# download BIRD source to include in image.
+$(BIRD_SOURCE):
+	mkdir -p filesystem/included-source/
+	wget -O $@ https://github.com/projectcalico/bird/tarball/$(BIRD_VER)
 
 # ensure we have a real imagetag
 imagetag:
