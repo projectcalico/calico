@@ -17,16 +17,16 @@ kind: KubeControllersConfiguration
 metadata:
   name: default
 spec:
-  logSeverityScreen: info
-  healthEnabled: true
+  logSeverityScreen: Info
+  healthChecks: Enabled
   etcdv3CompactionPeriod: 10m
   controllers:
     node:
       reconcilerPeriod: 5m
       numberOfWorkers: 1
-      syncLabels: true
+      syncLabels: Enabled
       hostEndpoint:
-        autoCreate: false
+        autoCreate: Disabled
     policy:
       reconcilerPeriod: 5m
       numberOfWorkers: 1
@@ -57,8 +57,8 @@ spec:
 
 | Field                  | Description                                               | Accepted Values                    | Schema | Default    |
 |------------------------|-----------------------------------------------------------|------------------------------------|--------|------------|
-| logSeverityScreen      | The log severity above which logs are sent to the stdout. | Debug, Info, Warning, Error, Fatal | string | `Info`     |
-| healthEnabled          | Enable support for health checks                          | true, false                        | bool   | true       |
+| logSeverityScreen      | The log severity above which logs are sent to the stdout. | Debug, Info, Warning, Error, Fatal | string | Info       |
+| healthChecks           | Enable support for health checks                          | Enabled, Disabled                  | string | Enabled    |
 | etcdv3CompactionPeriod | The period between etcdv3 compaction requests. Only applies when using etcd as the {{site.prodname}} datastore. | Set to 0 to disable, > 0 to enable |  [Duration string][parse-duration] | 10m |
 | controllers            | Enabled controllers and their settings                    |                                    | [Controllers](#controllers) | |
 
@@ -80,14 +80,14 @@ The node controller automatically cleans up configuration for nodes that no long
 |------------------------------------|-----------------------------|-------------------|--------|------------|
 | reconcilerPeriod | Period to perform reconciliation with the {{site.prodname}} datastore | | [Duration string][parse-duration] | 5m |
 | numberOfWorkers | Number of goroutines to allocate to the controller | > 0 | int | 1 |
-| syncLabels | When enabled, Kubernetes node labels will be copied to {{site.prodname}} node objects. | true, false | bool | true |
+| syncLabels | When enabled, Kubernetes node labels will be copied to {{site.prodname}} node objects. | Enabled, Disabled | string | Enabled |
 | hostEndpoint | Controls allocation of host endpoints | | [HostEndpoints](#hostendpoints) | |
 
 #### HostEndpoints
 
-| Field      | Description                                                   | Accepted Values | Schema | Default    |
-|------------|---------------------------------------------------------------|-----------------|--------|------------|
-| autoCreate | When true, automatically create a host endpoint for each node | true, false     | bool   | false      |
+| Field      | Description                                                   | Accepted Values   | Schema | Default    |
+|------------|---------------------------------------------------------------|-------------------|--------|------------|
+| autoCreate | When true, automatically create a host endpoint for each node | Enabled, Disabled | string | Disabled   |
 
 #### PolicyController
 
