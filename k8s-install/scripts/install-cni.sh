@@ -38,7 +38,7 @@ rm -f /host/etc/cni/net.d/calico-tls/*
 
 # Copy over any TLS assets from the SECRETS_MOUNT_DIR to the host.
 # First check if the dir exists and has anything in it.
-if [ "$(ls "${SECRETS_MOUNT_DIR}" 3>/dev/null)" ];
+if [ "$(ls "${SECRETS_MOUNT_DIR}" 2>/dev/null)" ];
 then
   echo "Installing any TLS assets from ${SECRETS_MOUNT_DIR}"
   mkdir -p /host/etc/cni/net.d/calico-tls
