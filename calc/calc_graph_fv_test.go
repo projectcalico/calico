@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2019 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2020 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -19,6 +19,10 @@ package calc_test
 
 import (
 	"os"
+	"sort"
+	"sync"
+
+	"github.com/projectcalico/libcalico-go/lib/set"
 
 	. "github.com/projectcalico/felix/calc"
 	"github.com/projectcalico/felix/dataplane/mock"
@@ -266,6 +270,10 @@ var baseTests = []StateList{
 
 		// Add it back again.
 		vxlanWithBlock,
+
+		// Adding/removing IPv6 pool should cause no problems.
+		vxlanWithIPv6Resources,
+		vxlanWithBlock,
 	},
 	{
 		// This sequence switches the IP pool between VXLAN and IPIP.
@@ -321,7 +329,20 @@ var baseTests = []StateList{
 		// Add it back again.
 		vxlanWithMAC,
 	},
+	{
+		// Test L3 route resolver in node resource mode.
+		// Note: the test logic below auto-enables the Node resources flag if it detects any states with
+		// Node resources (and the route resolver ignores whichever datatype it expects to be disabled).
+		// Hence, we have to use all Node resource-based states or all host IP-base ones.
+		vxlanWithBlockNodeRes,
+		vxlanLocalBlockWithBorrowsNodeRes,
+		vxlanLocalBlockWithBorrowsCrossSubnetNodeRes,
+		vxlanLocalBlockWithBorrowsDifferentSubnetNodeRes,
+		vxlanWithBlockNodeRes,
+	},
 }
+
+var logOnce sync.Once
 
 func testExpanders() (testExpanders []func(baseTest StateList) (desc string, mappedTests []StateList)) {
 	testExpanders = []func(baseTest StateList) (desc string, mappedTests []StateList){
@@ -329,7 +350,9 @@ func testExpanders() (testExpanders []func(baseTest StateList) (desc string, map
 	}
 
 	if os.Getenv("DISABLE_TEST_EXPANSION") == "true" {
-		log.Info("Test expansion disabled")
+		logOnce.Do(func() {
+			log.Info("Test expansion disabled")
+		})
 		return
 	}
 	testExpanders = append(testExpanders,
@@ -410,6 +433,7 @@ var _ = Describe("Async calculation graph state sequencing tests:", func() {
 					conf.FelixHostname = localHostname
 					conf.VXLANEnabled = true
 					conf.BPFEnabled = true
+					conf.SetUseNodeResourceUpdates(test.UsesNodeResources())
 					outputChan := make(chan interface{})
 					asyncGraph := NewAsyncCalcGraph(conf, []chan<- interface{}{outputChan}, nil)
 					// And a validation filter, with a channel between it
@@ -493,7 +517,7 @@ func expectCorrectDataplaneState(mockDataplane *mock.MockDataplane, state State)
 	Expect(mockDataplane.ActiveVTEPs()).To(Equal(state.ExpectedVTEPs),
 		"Active VTEPs were incorrect after moving to state: %v",
 		state.Name)
-	Expect(mockDataplane.ActiveRoutes()).To(Equal(state.ExpectedRoutes),
+	Expect(stringifyRoutes(mockDataplane.ActiveRoutes())).To(Equal(stringifyRoutes(state.ExpectedRoutes)),
 		"Active routes were incorrect after moving to state: %v",
 		state.Name)
 	Expect(mockDataplane.EndpointToPolicyOrder()).To(Equal(state.ExpectedEndpointPolicyOrder),
@@ -511,6 +535,16 @@ func expectCorrectDataplaneState(mockDataplane *mock.MockDataplane, state State)
 	Expect(mockDataplane.ActivePreDNATPolicies()).To(Equal(state.ExpectedPreDNATPolicyIDs),
 		"PreDNAT policies incorrect after moving to state: %v",
 		state.Name)
+}
+
+func stringifyRoutes(routes set.Set) []string {
+	out := make([]string, 0, routes.Len())
+	routes.Iter(func(item interface{}) error {
+		out = append(out, fmt.Sprintf("%+v", item))
+		return nil
+	})
+	sort.Strings(out)
+	return out
 }
 
 type flushStrategy int
@@ -537,6 +571,7 @@ func doStateSequenceTest(expandedTest StateList, flushStrategy flushStrategy) {
 		conf.FelixHostname = localHostname
 		conf.VXLANEnabled = true
 		conf.BPFEnabled = true
+		conf.SetUseNodeResourceUpdates(expandedTest.UsesNodeResources())
 		mockDataplane = mock.NewMockDataplane()
 		eventBuf = NewEventSequencer(mockDataplane)
 		eventBuf.Callback = mockDataplane.OnEvent

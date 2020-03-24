@@ -1,3 +1,17 @@
+// Copyright (c) 2019-2020 Tigera, Inc. All rights reserved.
+
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package intdataplane
 
 import (
@@ -138,17 +152,20 @@ var _ = Describe("VXLANManager", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		manager.OnUpdate(&proto.RouteUpdate{
-			Type: proto.RouteType_NOENCAP,
-			Node: "node2",
-			Dst:  "172.0.0.1/26",
-			Gw:   "172.8.8.8/32",
+			Type:        proto.RouteType_REMOTE_WORKLOAD,
+			IpPoolType:  proto.IPPoolType_VXLAN,
+			Dst:         "172.0.0.1/26",
+			DstNodeName: "node2",
+			DstNodeIP:   "172.8.8.8",
+			SameSubnet:  true,
 		})
 
 		manager.OnUpdate(&proto.RouteUpdate{
-			Type: proto.RouteType_VXLAN,
-			Node: "node2",
-			Dst:  "172.0.0.2/26",
-			Gw:   "172.8.8.8/32",
+			Type:        proto.RouteType_REMOTE_WORKLOAD,
+			IpPoolType:  proto.IPPoolType_VXLAN,
+			Dst:         "172.0.0.2/26",
+			DstNodeName: "node2",
+			DstNodeIP:   "172.8.8.8",
 		})
 
 		Expect(rt.currentRoutes["vxlan.calico"]).To(HaveLen(0))
@@ -170,10 +187,12 @@ var _ = Describe("VXLANManager", func() {
 		})
 
 		manager.OnUpdate(&proto.RouteUpdate{
-			Type: proto.RouteType_NOENCAP,
-			Node: "node2",
-			Dst:  "172.0.0.1/32",
-			Gw:   "172.8.8.8/32",
+			Type:        proto.RouteType_REMOTE_WORKLOAD,
+			IpPoolType:  proto.IPPoolType_VXLAN,
+			Dst:         "172.0.0.1/26",
+			DstNodeName: "node2",
+			DstNodeIP:   "172.8.8.8",
+			SameSubnet:  true,
 		})
 
 		err := manager.CompleteDeferredWork()

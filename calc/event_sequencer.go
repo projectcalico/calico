@@ -141,8 +141,7 @@ func NewEventSequencer(conf configInterface) *EventSequencer {
 }
 
 type routeID struct {
-	routeType proto.RouteType
-	dst       string
+	dst string
 }
 
 func (buf *EventSequencer) OnIPSetAdded(setID string, ipSetType proto.IPSetUpdate_IPSetType) {
@@ -766,18 +765,16 @@ func (buf *EventSequencer) flushVTEPAdds() {
 
 func (buf *EventSequencer) OnRouteUpdate(update *proto.RouteUpdate) {
 	routeID := routeID{
-		routeType: update.Type,
-		dst:       update.Dst,
+		dst: update.Dst,
 	}
 	log.WithFields(log.Fields{"id": routeID}).Debug("Route update")
 	buf.pendingRouteDeletes.Discard(routeID)
 	buf.pendingRouteUpdates[routeID] = update
 }
 
-func (buf *EventSequencer) OnRouteRemove(routeType proto.RouteType, dst string) {
+func (buf *EventSequencer) OnRouteRemove(dst string) {
 	routeID := routeID{
-		routeType: routeType,
-		dst:       dst,
+		dst: dst,
 	}
 	log.WithFields(log.Fields{"id": routeID}).Debug("Route update")
 	delete(buf.pendingRouteUpdates, routeID)
@@ -798,7 +795,7 @@ func (buf *EventSequencer) flushRouteAdds() {
 func (buf *EventSequencer) flushRouteRemoves() {
 	buf.pendingRouteDeletes.Iter(func(item interface{}) error {
 		id := item.(routeID)
-		msg := proto.RouteRemove{Dst: id.dst, Type: id.routeType}
+		msg := proto.RouteRemove{Dst: id.dst}
 		buf.Callback(&msg)
 		buf.sentRoutes.Discard(id)
 		return nil

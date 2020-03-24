@@ -93,7 +93,7 @@ func (t *V4Trie) Get(cidr V4CIDR) interface{} {
 }
 
 func (t *V4Trie) LookupPath(buffer []V4TrieEntry, cidr V4CIDR) []V4TrieEntry {
-	return t.root.lookupPath(buffer, cidr)
+	return t.root.lookupPath(buffer[:0], cidr)
 }
 
 // LPM does a longest prefix match on the trie
@@ -132,7 +132,7 @@ func (t *V4Trie) LPM(cidr V4CIDR) (V4CIDR, interface{}) {
 
 func (n *V4Node) lookupPath(buffer []V4TrieEntry, cidr V4CIDR) []V4TrieEntry {
 	if n == nil {
-		return nil
+		return buffer[:0]
 	}
 
 	if !n.cidr.ContainsV4(cidr.addr) {
