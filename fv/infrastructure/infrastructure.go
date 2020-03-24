@@ -1,4 +1,4 @@
-// Copyright (c) 2018 Tigera, Inc. All rights reserved.
+// Copyright (c) 2018-2019 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,6 +15,9 @@
 package infrastructure
 
 import (
+	. "github.com/onsi/gomega"
+
+	"github.com/projectcalico/felix/fv/utils"
 	api "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	client "github.com/projectcalico/libcalico-go/lib/clientv3"
 )
@@ -34,6 +37,8 @@ type DatastoreInfra interface {
 	// GetCalicoClient will return a client.Interface configured to access
 	// the datastore.
 	GetCalicoClient() client.Interface
+	// GetClusterGUID will return the cluster GUID.
+	GetClusterGUID() string
 	// SetExpectedIPIPTunnelAddr will set the Felix object's
 	// ExpectedIPIPTunnelAddr field, if we expect Felix to see that field being
 	// set after it has started up for the first time.
@@ -70,4 +75,19 @@ type DatastoreInfra interface {
 
 	// Stop cleans up anything necessary in preparation for the end of the test.
 	Stop()
+}
+
+// Creates a default profile that allows workloads with this profile to talk to each
+// other in the absence of any Policy.
+func CreateDefaultProfile(c client.Interface, name string, labels map[string]string, entityRuleSelector string) {
+	d := api.NewProfile()
+	d.Name = name
+	d.Spec.LabelsToApply = labels
+	d.Spec.Egress = []api.Rule{{Action: api.Allow}}
+	d.Spec.Ingress = []api.Rule{{
+		Action: api.Allow,
+		Source: api.EntityRule{Selector: entityRuleSelector},
+	}}
+	_, err := c.Profiles().Create(utils.Ctx, d, utils.NoOptions)
+	Expect(err).NotTo(HaveOccurred())
 }

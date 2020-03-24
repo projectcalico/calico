@@ -65,7 +65,7 @@ var _ = Describe("UsageReporter with mocked URL and short interval", func() {
 		configUpdateC = make(chan map[string]string)
 
 		// Create a usage reporter and override its base URL and initial interval.
-		u = New(StaticItems{KubernetesVersion:"v1.17.0"}, 500*time.Millisecond, 1*time.Second, statsUpdateC, configUpdateC)
+		u = New(StaticItems{KubernetesVersion: "v1.17.0"}, 500*time.Millisecond, 1*time.Second, statsUpdateC, configUpdateC)
 		port := tcpListener.Addr().(*net.TCPAddr).Port
 		u.BaseURL = fmt.Sprintf("http://localhost:%d/UsageCheck/calicoVersionCheck?", port)
 
@@ -238,7 +238,7 @@ var _ = Describe("UsageReporter with default URL", func() {
 	})
 
 	It("should calculate correct URL mainline", func() {
-		rawURL := u.calculateURL("theguid", "atype", "testVer",true, calc.StatsUpdate{
+		rawURL := u.calculateURL("theguid", "atype", "testVer", true, calc.StatsUpdate{
 			NumHostEndpoints:     123,
 			NumWorkloadEndpoints: 234,
 			NumHosts:             10,

@@ -43,11 +43,12 @@ const (
 var _ = Context("Config update tests, after starting felix", func() {
 
 	var (
-		etcd     *containers.Container
-		felix    *infrastructure.Felix
-		felixPID int
-		client   client.Interface
-		w        [3]*workload.Workload
+		etcd          *containers.Container
+		felix         *infrastructure.Felix
+		felixPID      int
+		client        client.Interface
+		w             [3]*workload.Workload
+		cfgChangeTime time.Time
 	)
 
 	BeforeEach(func() {
@@ -125,7 +126,12 @@ var _ = Context("Config update tests, after starting felix", func() {
 	})
 
 	shouldExitAfterADelay := func() {
-		Consistently(felix.GetFelixPIDs, "1s", "100ms").Should(ContainElement(felixPID))
+		// The config delay time is 2s in Felix, so let's check that the config remains the same for at least
+		// 1s since the time of the config change.
+		monitorTime := time.Second - time.Since(cfgChangeTime)
+		if monitorTime > 0 {
+			Consistently(felix.GetFelixPIDs, monitorTime, "100ms").Should(ContainElement(felixPID))
+		}
 		Eventually(felix.GetFelixPIDs, "10s", "100ms").ShouldNot(ContainElement(felixPID))
 
 		// Update felix pid after restart.
@@ -159,6 +165,9 @@ var _ = Context("Config update tests, after starting felix", func() {
 				// Then remove the config that we added.
 				ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 				defer cancel()
+
+				// Track the current time and then make the config change.
+				cfgChangeTime = time.Now()
 				config.Spec.InterfacePrefix = ""
 				_, err := client.FelixConfigurations().Update(ctx, config, options.SetOptions{})
 				Expect(err).NotTo(HaveOccurred())
@@ -180,6 +189,8 @@ var _ = Context("Config update tests, after starting felix", func() {
 
 		Context("after switch to ipvs mode that should trigger a restart", func() {
 			BeforeEach(func() {
+				// Track the current time and then make the config change.
+				cfgChangeTime = time.Now()
 				err := proxy.switchToMode(kubeProxyModeIPVS)
 				Expect(err).NotTo(HaveOccurred())
 			})
@@ -189,7 +200,8 @@ var _ = Context("Config update tests, after starting felix", func() {
 
 		Context("after switch to iptables mode that should trigger a restart", func() {
 			BeforeEach(func() {
-				// First switch to ipvs mode.
+				// Track the current time and then make the config change to ipvs mode
+				cfgChangeTime = time.Now()
 				err := proxy.switchToMode(kubeProxyModeIPVS)
 				Expect(err).NotTo(HaveOccurred())
 
@@ -197,7 +209,8 @@ var _ = Context("Config update tests, after starting felix", func() {
 				shouldExitAfterADelay()
 				waitForFelixInSync(felix)
 
-				// Back to iptables mode.
+				// Track the current time and then make the config change back to iptables mode.
+				cfgChangeTime = time.Now()
 				err = proxy.switchToMode(kubeProxyModeIptables)
 				Expect(err).NotTo(HaveOccurred())
 			})

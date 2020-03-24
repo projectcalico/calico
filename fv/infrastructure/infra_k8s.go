@@ -1,4 +1,4 @@
-// Copyright (c) 2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2018-2020 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -25,6 +25,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/davecgh/go-spew/spew"
 
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 
@@ -458,6 +460,16 @@ func (kds *K8sDatastoreInfra) GetCalicoClient() client.Interface {
 	return kds.calicoClient
 }
 
+func (kds *K8sDatastoreInfra) GetClusterGUID() string {
+	ci, err := kds.GetCalicoClient().ClusterInformation().Get(
+		context.Background(),
+		"default",
+		options.GetOptions{},
+	)
+	Expect(err).NotTo(HaveOccurred())
+	return ci.Spec.ClusterGUID
+}
+
 func (kds *K8sDatastoreInfra) SetExpectedIPIPTunnelAddr(felix *Felix, idx int, needBGP bool) {
 	felix.ExpectedIPIPTunnelAddr = fmt.Sprintf("10.65.%d.1", idx)
 	felix.ExtraSourceIPs = append(felix.ExtraSourceIPs, felix.ExpectedIPIPTunnelAddr)
@@ -608,7 +620,7 @@ func (kds *K8sDatastoreInfra) DumpErrorData() {
 	if err == nil {
 		utils.AddToTestOutput("Kubernetes Namespaces\n")
 		for _, ns := range nsList.Items {
-			utils.AddToTestOutput(fmt.Sprintf("%v\n", ns))
+			utils.AddToTestOutput(spew.Sdump(ns))
 		}
 	}
 
@@ -616,42 +628,42 @@ func (kds *K8sDatastoreInfra) DumpErrorData() {
 	if err == nil {
 		utils.AddToTestOutput("Calico Profiles\n")
 		for _, profile := range profiles.Items {
-			utils.AddToTestOutput(fmt.Sprintf("%v\n", profile))
+			utils.AddToTestOutput(spew.Sdump(profile))
 		}
 	}
 	policies, err := kds.calicoClient.NetworkPolicies().List(context.Background(), options.ListOptions{})
 	if err == nil {
 		utils.AddToTestOutput("Calico NetworkPolicies\n")
 		for _, policy := range policies.Items {
-			utils.AddToTestOutput(fmt.Sprintf("%v\n", policy))
+			utils.AddToTestOutput(spew.Sdump(policy))
 		}
 	}
 	gnps, err := kds.calicoClient.GlobalNetworkPolicies().List(context.Background(), options.ListOptions{})
 	if err == nil {
 		utils.AddToTestOutput("Calico GlobalNetworkPolicies\n")
 		for _, gnp := range gnps.Items {
-			utils.AddToTestOutput(fmt.Sprintf("%v\n", gnp))
+			utils.AddToTestOutput(spew.Sdump(gnp))
 		}
 	}
 	workloads, err := kds.calicoClient.WorkloadEndpoints().List(context.Background(), options.ListOptions{})
 	if err == nil {
 		utils.AddToTestOutput("Calico WorkloadEndpoints\n")
 		for _, w := range workloads.Items {
-			utils.AddToTestOutput(fmt.Sprintf("%v\n", w))
+			utils.AddToTestOutput(spew.Sdump(w))
 		}
 	}
 	nodes, err := kds.calicoClient.Nodes().List(context.Background(), options.ListOptions{})
 	if err == nil {
 		utils.AddToTestOutput("Calico Nodes\n")
 		for _, n := range nodes.Items {
-			utils.AddToTestOutput(fmt.Sprintf("%v\n", n))
+			utils.AddToTestOutput(spew.Sdump(n))
 		}
 	}
 	heps, err := kds.calicoClient.HostEndpoints().List(context.Background(), options.ListOptions{})
 	if err == nil {
 		utils.AddToTestOutput("Calico Host Endpoints\n")
 		for _, hep := range heps.Items {
-			utils.AddToTestOutput(fmt.Sprintf("%v\n", hep))
+			utils.AddToTestOutput(spew.Sdump(hep))
 		}
 	}
 }

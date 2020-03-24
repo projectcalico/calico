@@ -35,7 +35,7 @@ const (
 )
 
 func New(
-	staticItems  StaticItems,
+	staticItems StaticItems,
 	initialDelay time.Duration,
 	interval time.Duration,
 	statsUpdateC <-chan calc.StatsUpdate,

@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2019 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2020 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,23 +17,31 @@ package utils
 import (
 	"bufio"
 	"context"
+	"encoding/json"
+	"errors"
 	"fmt"
+	"io/ioutil"
 	"os"
 	"os/exec"
+	"regexp"
+	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/kelseyhightower/envconfig"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	log "github.com/sirupsen/logrus"
 
-	"github.com/projectcalico/felix/calc"
-	"github.com/projectcalico/felix/ipsets"
-	"github.com/projectcalico/felix/rules"
 	"github.com/projectcalico/libcalico-go/lib/apiconfig"
 	client "github.com/projectcalico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/libcalico-go/lib/options"
 	"github.com/projectcalico/libcalico-go/lib/selector"
+
+	"github.com/projectcalico/felix/calc"
+	"github.com/projectcalico/felix/fv/connectivity"
+	"github.com/projectcalico/felix/ipsets"
+	"github.com/projectcalico/felix/rules"
 )
 
 type EnvConfig struct {
@@ -82,7 +90,8 @@ func run(checkNoError bool, command string, args ...string) error {
 			"output":  string(outputBytes)}).WithError(err).Warning("Command failed")
 	}
 	if checkNoError {
-		Expect(err).NotTo(HaveOccurred())
+		Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Command failed\nCommand: %v args: %v\nOutput:\n\n%v",
+			command, args, string(outputBytes)))
 	}
 	return err
 }
@@ -105,11 +114,16 @@ var _ = AfterEach(func() {
 	}
 })
 
-func RunCommand(command string, args ...string) error {
+func GetCommandOutput(command string, args ...string) (string, error) {
 	cmd := Command(command, args...)
 	log.Infof("Running '%s %s'", cmd.Path, strings.Join(cmd.Args, " "))
 	output, err := cmd.CombinedOutput()
-	log.Infof("output: %v", string(output))
+	return string(output), err
+}
+
+func RunCommand(command string, args ...string) error {
+	output, err := GetCommandOutput(command, args...)
+	log.Infof("output: %v", output)
 	return err
 }
 
@@ -196,4 +210,94 @@ func IPSetNameForSelector(ipVersion int, rawSelector string) string {
 	)
 
 	return ipVerConf.NameForMainIPSet(setID)
+}
+
+// Run a connection test command.
+// Report if connection test is successful and packet loss string for packet loss test.
+func RunConnectionCmd(connectionCmd *exec.Cmd, logMsg string) *connectivity.Result {
+	outPipe, err := connectionCmd.StdoutPipe()
+	Expect(err).NotTo(HaveOccurred())
+	errPipe, err := connectionCmd.StderrPipe()
+	Expect(err).NotTo(HaveOccurred())
+	err = connectionCmd.Start()
+	Expect(err).NotTo(HaveOccurred())
+
+	var wg sync.WaitGroup
+	wg.Add(2)
+	var wOut, wErr []byte
+	var outErr, errErr error
+
+	go func() {
+		defer wg.Done()
+		wOut, outErr = ioutil.ReadAll(outPipe)
+	}()
+
+	go func() {
+		defer wg.Done()
+		wErr, errErr = ioutil.ReadAll(errPipe)
+	}()
+
+	wg.Wait()
+	Expect(outErr).NotTo(HaveOccurred())
+	Expect(errErr).NotTo(HaveOccurred())
+
+	err = connectionCmd.Wait()
+
+	log.WithFields(log.Fields{
+		"stdout": string(wOut),
+		"stderr": string(wErr)}).WithError(err).Info(logMsg)
+
+	if err != nil {
+		return nil
+	}
+
+	r := regexp.MustCompile(`RESULT=(.*)\n`)
+	m := r.FindSubmatch(wOut)
+	if len(m) > 0 {
+		var resp connectivity.Result
+		err := json.Unmarshal(m[1], &resp)
+		if err != nil {
+			log.WithError(err).WithField("output", string(wOut)).Panic("Failed to parse connection check response")
+		}
+		return &resp
+	}
+	return nil
+}
+
+const ConnectionTypeStream = "stream"
+const ConnectionTypePing = "ping"
+
+type ConnConfig struct {
+	ConnType string
+	ConnID   string
+}
+
+func (cc ConnConfig) getTestMessagePrefix() string {
+	return cc.ConnType + ":" + cc.ConnID + "~"
+}
+
+// Assembly a test message.
+func (cc ConnConfig) GetTestMessage(sequence int) connectivity.Request {
+	req := connectivity.NewRequest(cc.getTestMessagePrefix() + fmt.Sprintf("%d", sequence))
+	return req
+}
+
+// Extract sequence number from test message.
+func (cc ConnConfig) GetTestMessageSequence(msg string) (int, error) {
+	msg = strings.TrimSpace(msg)
+	seqString := strings.TrimPrefix(msg, cc.getTestMessagePrefix())
+	if seqString == msg {
+		// TrimPrefix failed.
+		return 0, errors.New("invalid message prefix format:" + msg)
+	}
+
+	seq, err := strconv.Atoi(seqString)
+	if err != nil || seq < 0 {
+		return 0, errors.New("invalid message sequence format:" + msg)
+	}
+	return seq, nil
+}
+
+func IsMessagePartOfStream(msg string) bool {
+	return strings.HasPrefix(strings.TrimSpace(msg), ConnectionTypeStream)
 }
