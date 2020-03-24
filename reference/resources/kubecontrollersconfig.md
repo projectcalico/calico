@@ -85,9 +85,9 @@ The node controller automatically cleans up configuration for nodes that no long
 
 #### HostEndpoints
 
-| Field      | Description                                                   | Accepted Values   | Schema | Default    |
-|------------|---------------------------------------------------------------|-------------------|--------|------------|
-| autoCreate | When true, automatically create a host endpoint for each node | Enabled, Disabled | string | Disabled   |
+| Field      | Description                                                      | Accepted Values   | Schema | Default    |
+|------------|------------------------------------------------------------------|-------------------|--------|------------|
+| autoCreate | When enabled, automatically create a host endpoint for each node | Enabled, Disabled | string | Disabled   |
 
 #### PolicyController
 
