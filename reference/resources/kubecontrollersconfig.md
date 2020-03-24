@@ -23,23 +23,17 @@ spec:
   controllers:
     node:
       reconcilerPeriod: 5m
-      numberOfWorkers: 1
       syncLabels: Enabled
       hostEndpoint:
         autoCreate: Disabled
     policy:
       reconcilerPeriod: 5m
-      numberOfWorkers: 1
     workloadEndpoint:
       reconcilerPeriod: 5m
-      numberOfWorkers: 1
     serviceAccount:
       reconcilerPeriod: 5m
-      numberOfWorkers: 1
     namespace:
       reconcilerPeriod: 5m
-      numberOfWorkers: 1
-
 ```
 
 ### Kubernetes controllers configuration definition
@@ -79,7 +73,6 @@ The node controller automatically cleans up configuration for nodes that no long
 | Field                              | Description                 | Accepted Values   | Schema | Default    |
 |------------------------------------|-----------------------------|-------------------|--------|------------|
 | reconcilerPeriod | Period to perform reconciliation with the {{site.prodname}} datastore | | [Duration string][parse-duration] | 5m |
-| numberOfWorkers | Number of goroutines to allocate to the controller | > 0 | int | 1 |
 | syncLabels | When enabled, Kubernetes node labels will be copied to {{site.prodname}} node objects. | Enabled, Disabled | string | Enabled |
 | hostEndpoint | Controls allocation of host endpoints | | [HostEndpoints](#hostendpoints) | |
 
@@ -93,41 +86,36 @@ The node controller automatically cleans up configuration for nodes that no long
 
 The policy controller syncs Kubernetes network policies to the Calico datastore.  This controller is only valid when using etcd as the {{site.prodname}} datastore.
 
-| Field            | Description                                                | Accepted Values   | Schema                            | Default |
-|------------------|------------------------------------------------------------|-------------------|-----------------------------------|---------|
-| reconcilerPeriod | Period to perform reconciliation with the {{site.prodname}} datastore |                   | [Duration string][parse-duration] | 5m      |
-| numberOfWorkers  | Number of goroutines to allocate to the controller         | > 0               | int                               | 1       |
+| Field            | Description                                                           | Schema                            | Default |
+|------------------|-----------------------------------------------------------------------|-----------------------------------|---------|
+| reconcilerPeriod | Period to perform reconciliation with the {{site.prodname}} datastore | [Duration string][parse-duration] | 5m      |
 
 #### WorkloadEndpointController
 
 The workload endpoint controller automatically syncs Kubernetes pod label changes to the {{site.prodname}} datastore by updating the corresponding workload 
 endpoints appropriately.  This controller is only valid when using etcd as the {{site.prodname}} datastore. 
 
-| Field            | Description                                                | Accepted Values   | Schema                            | Default |
-|------------------|------------------------------------------------------------|-------------------|-----------------------------------|---------|
-| reconcilerPeriod | Period to perform reconciliation with the {{site.prodname}} datastore |                   | [Duration string][parse-duration] | 5m      |
-| numberOfWorkers  | Number of goroutines to allocate to the controller         | > 0               | int                               | 1       |
+| Field            | Description                                                           | Schema                            | Default |
+|------------------|-----------------------------------------------------------------------|-----------------------------------|---------|
+| reconcilerPeriod | Period to perform reconciliation with the {{site.prodname}} datastore | [Duration string][parse-duration] | 5m      |
 
 #### ServiceAccountController
 
 The service account controller syncs Kubernetes service account changes to the {{site.prodname}} datastore.  This controller is only valid when using etcd as 
 the {{site.prodname}} datastore.
 
-| Field            | Description                                                | Accepted Values   | Schema                            | Default |
-|------------------|------------------------------------------------------------|-------------------|-----------------------------------|---------|
-| reconcilerPeriod | Period to perform reconciliation with the {{site.prodname}} datastore |                   | [Duration string][parse-duration] | 5m      |
-| numberOfWorkers  | Number of goroutines to allocate to the controller         | > 0               | int                               | 1       |
+| Field            | Description                                                           | Schema                            | Default |
+|------------------|-----------------------------------------------------------------------|-----------------------------------|---------|
+| reconcilerPeriod | Period to perform reconciliation with the {{site.prodname}} datastore | [Duration string][parse-duration] | 5m      |
 
 #### NamespaceController
 
 The namespace controller syncs Kubernetes namespace label changes to the {{site.prodname}} datastore. This controller is only valid when using etcd as the
 {{site.prodname}} datastore.
 
-| Field            | Description                                                | Accepted Values   | Schema                            | Default |
-|------------------|------------------------------------------------------------|-------------------|-----------------------------------|---------|
-| reconcilerPeriod | Period to perform reconciliation with the {{site.prodname}} datastore |                   | [Duration string][parse-duration] | 5m      |
-| numberOfWorkers  | Number of goroutines to allocate to the controller         | > 0               | int                               | 1       |
-
+| Field            | Description                                                           | Schema                            | Default |
+|------------------|-----------------------------------------------------------------------|-----------------------------------|---------|
+| reconcilerPeriod | Period to perform reconciliation with the {{site.prodname}} datastore | [Duration string][parse-duration] | 5m      |
 
 ### Supported operations
 
