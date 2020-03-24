@@ -24,12 +24,15 @@ LABEL name="Calico Networking for CNI" \
       description="Calico Networking for CNI includes a CNI networking plugin and CNI IPAM plugin" \
       maintainer="laurence@tigera.io"
 
+RUN mkdir /licenses
+ADD licenses/ /licenses
+ADD LICENSE /licenses/
+
 ADD bin/amd64/ /opt/cni/bin/
 ADD k8s-install/scripts/install-cni.sh /install-cni.sh
 ADD k8s-install/scripts/calico.conf.default /calico.conf.tmp
 
-RUN microdnf install hostname && mkdir /licenses
-COPY LICENSE /licenses
+RUN microdnf install hostname
 
 ENV PATH=$PATH:/opt/cni/bin
 WORKDIR /opt/cni/bin
