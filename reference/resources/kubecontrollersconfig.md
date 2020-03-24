@@ -74,9 +74,9 @@ The node controller automatically cleans up configuration for nodes that no long
 |------------------------------------|-----------------------------|-------------------|--------|------------|
 | reconcilerPeriod | Period to perform reconciliation with the {{site.prodname}} datastore | | [Duration string][parse-duration] | 5m |
 | syncLabels | When enabled, Kubernetes node labels will be copied to {{site.prodname}} node objects. | Enabled, Disabled | string | Enabled |
-| hostEndpoint | Controls allocation of host endpoints | | [HostEndpoints](#hostendpoints) | |
+| hostEndpoint | Controls allocation of host endpoints | | [HostEndpoint](#hostendpoint) | |
 
-#### HostEndpoints
+#### HostEndpoint
 
 | Field      | Description                                                      | Accepted Values   | Schema | Default    |
 |------------|------------------------------------------------------------------|-------------------|--------|------------|
@@ -121,7 +121,7 @@ The namespace controller syncs Kubernetes namespace label changes to the {{site.
 
 | Datastore type        | Create  | Delete (Global `default`)  |  Update  | Get/List | Notes
 |-----------------------|---------|----------------------------|----------|----------|------
-| etcdv3                | Yes     | No                         | Yes      | Yes      |
-| Kubernetes API server | Yes     | No                         | Yes      | Yes      |
+| etcdv3                | Yes     | Yes                        | Yes      | Yes      |
+| Kubernetes API server | Yes     | Yes                        | Yes      | Yes      |
 
 [parse-duration]: https://golang.org/pkg/time/#ParseDuration
