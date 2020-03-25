@@ -188,6 +188,20 @@ a single view to manage any number of Managed clusters, which are a lighter weig
 Default: Standalone</p>
 </td>
 </tr>
+<tr>
+<td>
+<code>flexVolumePath</code><br>
+<em>
+string
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>FlexVolumePath optionally specifies a custom path for FlexVolume. If not specified, FlexVolume will be
+enabled by default. If set to &lsquo;None&rsquo;, FlexVolume will be disabled. The default is based on the
+kubernetesProvider.</p>
+</td>
+</tr>
 </table>
 </td>
 </tr>
@@ -584,6 +598,20 @@ ClusterManagementType
 Standalone clusters are fully self-contained installations of Calico Enterprise. Management clusters provide
 a single view to manage any number of Managed clusters, which are a lighter weight installation.
 Default: Standalone</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>flexVolumePath</code><br>
+<em>
+string
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>FlexVolumePath optionally specifies a custom path for FlexVolume. If not specified, FlexVolume will be
+enabled by default. If set to &lsquo;None&rsquo;, FlexVolume will be disabled. The default is based on the
+kubernetesProvider.</p>
 </td>
 </tr>
 </tbody>

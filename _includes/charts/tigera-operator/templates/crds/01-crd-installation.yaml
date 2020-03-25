@@ -142,6 +142,11 @@ spec:
               - Management
               - Managed
               type: string
+            flexVolumePath:
+              description: FlexVolumePath optionally specifies a custom path for FlexVolume.
+                If not specified, FlexVolume will be enabled by default. If set to
+                'None', FlexVolume will be disabled. The default is based on the kubernetesProvider.
+              type: string
             imagePath:
               description: 'ImagePath allows for the path part of an image to be specified.
                 If specified then the specified value will be used as the image path
