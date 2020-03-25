@@ -308,6 +308,8 @@ func TestNATNodePort(t *testing.T) {
 	Expect(err).NotTo(HaveOccurred())
 	dumpRTMap(rtMap)
 
+	vni := uint32(0)
+
 	// Arriving at node 1
 	runBpfTest(t, "calico_from_host_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
 		res, err := bpfrun(pktBytes)
@@ -324,6 +326,7 @@ func TestNATNodePort(t *testing.T) {
 		Expect(ipv4R.DstIP.String()).To(Equal(node2ip.String()))
 
 		checkVxlanEncap(pktR, false, ipv4, udp, payload)
+		vni = getVxlanVNI(pktR)
 
 		encapedPkt = res.dataOut
 	})
@@ -518,6 +521,63 @@ func TestNATNodePort(t *testing.T) {
 	dumpCTMap(ctMap)
 	// clean up
 	resetCTMap(ctMap)
+
+	/*
+	 * TEST that unknown VNI is passed through
+	 */
+	testUnrelatedVXLAN(t, node2ip, vni)
+}
+
+func testUnrelatedVXLAN(t *testing.T, nodeIP net.IP, vni uint32) {
+	vxlanTest := func(fillUDPCsum bool, validVNI bool) {
+		eth := ethDefault
+		ipv4 := &layers.IPv4{
+			Version:  4,
+			IHL:      5,
+			TTL:      64,
+			Flags:    layers.IPv4DontFragment,
+			SrcIP:    net.IPv4(1, 2, 3, 4),
+			DstIP:    nodeIP,
+			Protocol: layers.IPProtocolUDP,
+		}
+
+		udp := &layers.UDP{
+			SrcPort: layers.UDPPort(testVxlanPort),
+			DstPort: layers.UDPPort(testVxlanPort),
+		}
+
+		vxlan := &layers.VXLAN{
+			ValidIDFlag: validVNI,
+			VNI:         vni + 1,
+		}
+
+		payload := make([]byte, 64)
+
+		udp.Length = uint16(8 + 8 + len(payload))
+		_ = udp.SetNetworkLayerForChecksum(ipv4)
+
+		pkt := gopacket.NewSerializeBuffer()
+		err := gopacket.SerializeLayers(pkt, gopacket.SerializeOptions{ComputeChecksums: true},
+			eth, ipv4, udp, vxlan, gopacket.Payload(payload))
+		Expect(err).NotTo(HaveOccurred())
+		pktBytes := pkt.Bytes()
+
+		runBpfTest(t, "calico_to_workload_ep", rulesDefaultAllow, func(bpfrun bpfProgRunFn) {
+			res, err := bpfrun(pktBytes)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
+
+			pktR := gopacket.NewPacket(res.dataOut, layers.LayerTypeEthernet, gopacket.Default)
+			fmt.Printf("pktR = %+v\n", pktR)
+
+			Expect(res.dataOut).To(Equal(pktBytes))
+		})
+	}
+
+	hostIP = nodeIP
+
+	vxlanTest(true, true)
+	vxlanTest(false, false)
 }
 
 func TestNATNodePortICMPTooBig(t *testing.T) {

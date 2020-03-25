@@ -33,6 +33,10 @@
 #define CALI_VXLAN_PORT 4789 /* IANA VXLAN port */
 #endif
 
+#ifndef CALI_VXLAN_VNI
+#define CALI_VXLAN_VNI 0xca11c0
+#endif
+
 #define dnat_should_encap() (CALI_F_FROM_HEP && !CALI_F_TUNNEL)
 #define dnat_return_should_encap() (CALI_F_FROM_WEP && !CALI_F_TUNNEL)
 #define dnat_should_decap() (CALI_F_FROM_HEP && !CALI_F_TUNNEL)
@@ -387,8 +391,8 @@ static CALI_BPF_INLINE int vxlan_v4_encap(struct __sk_buff *skb,  __be32 ip_src,
 	udp->source = udp->dest = host_to_be16(CALI_VXLAN_PORT);
 	udp->len = host_to_be16(be16_to_host(ip->tot_len) - sizeof(struct iphdr));
 
-	/* set the I flag to make the VNI valid, keep the VNI 0-ed */
-	*((uint8_t*)&vxlan->flags) = 1 << 3;
+	*((uint8_t*)&vxlan->flags) = 1 << 3; /* set the I flag to make the VNI valid */
+	vxlan->vni = host_to_be32(CALI_VXLAN_VNI) >> 8; /* it is actually 24-bit, last 8 reserved */
 
 	/* keep eth_inner MACs zeroed, it is useless after decap */
 	eth_inner->h_proto = eth->h_proto;
@@ -443,8 +447,35 @@ static CALI_BPF_INLINE int is_vxlan_tunnel(struct iphdr *ip)
 {
 	struct udphdr *udp = (struct udphdr *)(ip +1);
 
-	return ip->protocol == IPPROTO_UDP && udp->dest == host_to_be16(CALI_VXLAN_PORT);
+	return ip->protocol == IPPROTO_UDP &&
+		udp->dest == host_to_be16(CALI_VXLAN_PORT) &&
+		udp->check == 0;
 }
+
+static CALI_BPF_INLINE bool vxlan_size_ok(struct __sk_buff *skb, struct udphdr *udp)
+{
+	return skb_has_data_after(skb, udp, sizeof(struct vxlanhdr));
+}
+
+static CALI_BPF_INLINE __u32 vxlan_vni(struct __sk_buff *skb, struct udphdr *udp)
+{
+	struct vxlanhdr *vxlan;
+
+	vxlan = skb_ptr_after(skb, udp);
+
+	return be32_to_host(vxlan->vni << 8); /* 24-bit field, last 8 reserved */
+}
+
+static CALI_BPF_INLINE bool vxlan_vni_is_valid(struct __sk_buff *skb, struct udphdr *udp)
+{
+	struct vxlanhdr *vxlan;
+
+	vxlan = skb_ptr_after(skb, udp);
+
+	return *((uint8_t*)&vxlan->flags) & (1 << 3);
+}
+
+#define vxlan_udp_csum_ok(udp) ((udp)->check == 0)
 
 static CALI_BPF_INLINE bool vxlan_v4_encap_too_big(struct __sk_buff *skb)
 {

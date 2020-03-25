@@ -97,7 +97,8 @@ func checkVxlan(pktR gopacket.Packet) gopacket.Packet {
 	vxlanL := gopacket.NewPacket(payloadL.Payload(), layers.LayerTypeVXLAN, gopacket.Default)
 	Expect(vxlanL).NotTo(BeNil())
 	fmt.Printf("vxlanL = %+v\n", vxlanL)
-	Expect(vxlanL.Layer(layers.LayerTypeVXLAN)).To(layersMatchFields(&layers.VXLAN{ValidIDFlag: true}))
+	Expect(vxlanL.Layer(layers.LayerTypeVXLAN)).
+		To(layersMatchFields(&layers.VXLAN{ValidIDFlag: true, VNI: 0xca11c0}))
 
 	ethL := vxlanL.Layer(layers.LayerTypeEthernet)
 	Expect(ethL).NotTo(BeNil())
@@ -109,6 +110,28 @@ func checkVxlan(pktR gopacket.Packet) gopacket.Packet {
 		}))
 
 	return gopacket.NewPacket(ethL.LayerPayload(), layers.LayerTypeIPv4, gopacket.Default)
+}
+
+func getVxlanVNI(pktR gopacket.Packet) uint32 {
+	ipv4L := pktR.Layer(layers.LayerTypeIPv4)
+	Expect(ipv4L).NotTo(BeNil())
+
+	udpL := pktR.Layer(layers.LayerTypeUDP)
+	Expect(udpL).NotTo(BeNil())
+	udpR := udpL.(*layers.UDP)
+	Expect(udpR.SrcPort).To(Equal(layers.UDPPort(testVxlanPort)))
+	Expect(udpR.DstPort).To(Equal(layers.UDPPort(testVxlanPort)))
+	Expect(udpR.Checksum).To(Equal(uint16(0)))
+
+	payloadL := pktR.ApplicationLayer()
+	Expect(payloadL).NotTo(BeNil())
+	vxlan := gopacket.NewPacket(payloadL.Payload(), layers.LayerTypeVXLAN, gopacket.Default)
+	Expect(vxlan).NotTo(BeNil())
+
+	vxlanL := vxlan.Layer(layers.LayerTypeVXLAN)
+	Expect(vxlanL).NotTo(BeNil())
+
+	return vxlanL.(*layers.VXLAN).VNI
 }
 
 func checkInnerIP(ip gopacket.Packet, NATed bool, ipv4 *layers.IPv4,
