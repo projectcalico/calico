@@ -97,7 +97,7 @@ wget -q --timeout=5 nginx -O -
 
 It should return:
 
-```bash
+```
 wget: download timed out
 ```
 
