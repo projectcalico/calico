@@ -66,7 +66,12 @@ func FilterLevels(maxLevel log.Level) []log.Level {
 // Example:
 //    2017-01-05 09:17:48.238 [INFO][85386] endpoint_mgr.go 434: Skipping configuration of
 //    interface because it is oper down. ifaceName="cali1234"
-type Formatter struct{}
+type Formatter struct {
+	// If specified, prepends the component to the file name. This is useful for when
+	// multiple components are logging to the same file (e.g., calico/node) for distinguishing
+	// which component sourced the log.
+	Component string
+}
 
 func (f *Formatter) Format(entry *log.Entry) ([]byte, error) {
 	stamp := entry.Time.Format("2006-01-02 15:04:05.000")
@@ -78,7 +83,11 @@ func (f *Formatter) Format(entry *log.Entry) ([]byte, error) {
 	if b == nil {
 		b = &bytes.Buffer{}
 	}
-	fmt.Fprintf(b, "%s [%s][%d] %v %v: %v", stamp, levelStr, pid, fileName, lineNo, entry.Message)
+	if f.Component != "" {
+		fmt.Fprintf(b, "%s [%s][%d] %s/%v %v: %v", stamp, levelStr, pid, f.Component, fileName, lineNo, entry.Message)
+	} else {
+		fmt.Fprintf(b, "%s [%s][%d] %v %v: %v", stamp, levelStr, pid, fileName, lineNo, entry.Message)
+	}
 	appendKVsAndNewLine(b, entry)
 	return b.Bytes(), nil
 }
