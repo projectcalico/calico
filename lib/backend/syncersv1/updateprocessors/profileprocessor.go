@@ -1,4 +1,4 @@
-// Copyright (c) 2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2020 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -25,7 +25,7 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/backend/watchersyncer"
 )
 
-// Create a new SyncerUpdateProcessor to sync Profile data in v1 format for
+// Create a new SyncerUpdateProcessor to sync Profile data in model and v3 formats for
 // consumption by Felix.
 func NewProfileUpdateProcessor() watchersyncer.SyncerUpdateProcessor {
 	return &profileUpdateProcessor{
@@ -62,6 +62,7 @@ func (pup *profileUpdateProcessor) Process(kvp *model.KVPair) ([]*model.KVPair, 
 
 	v1labelsKey := model.ProfileLabelsKey{pk}
 	v1rulesKey := model.ProfileRulesKey{pk}
+	v3kvp := *kvp
 
 	var v1profile *model.Profile
 	var err error
@@ -71,6 +72,7 @@ func (pup *profileUpdateProcessor) Process(kvp *model.KVPair) ([]*model.KVPair, 
 		if err != nil {
 			// Currently treat any errors as a deletion event.
 			log.WithField("Resource", kvp.Key).Warn("Unable to process resource data - treating as deleted")
+			v3kvp.Value = nil
 		}
 	}
 
@@ -90,7 +92,9 @@ func (pup *profileUpdateProcessor) Process(kvp *model.KVPair) ([]*model.KVPair, 
 		ruleskvp.Revision = kvp.Revision
 	}
 
-	return []*model.KVPair{labelskvp, ruleskvp}, nil
+	// Stream the whole v3 Profile resource, as well as the v1 pieces that legacy Felix code
+	// expects.
+	return []*model.KVPair{labelskvp, ruleskvp, &v3kvp}, nil
 }
 
 func (pup *profileUpdateProcessor) OnSyncerStarting() {
