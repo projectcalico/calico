@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2018 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2018, 2020 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -40,10 +40,15 @@ const ExpectNoNamespace = ""
 type resourceMatcher struct {
 	kind, namespace, name string
 	spec                  interface{}
+	status                interface{}
 }
 
 func Resource(kind, namespace, name string, spec interface{}, optionalDescription ...interface{}) *resourceMatcher {
-	return &resourceMatcher{kind, namespace, name, spec}
+	return &resourceMatcher{kind, namespace, name, spec, nil}
+}
+
+func ResourceWithStatus(kind, namespace, name string, spec, status interface{}, optionalDescription ...interface{}) *resourceMatcher {
+	return &resourceMatcher{kind, namespace, name, spec, status}
 }
 
 // Another name for the same matcher (which reads better when checking a single item).
@@ -67,7 +72,8 @@ func (m *resourceMatcher) Match(actual interface{}) (success bool, err error) {
 		(res.GetObjectKind().GroupVersionKind().Kind == m.kind) &&
 		(res.GetObjectKind().GroupVersionKind().Group == apiv3.Group) &&
 		(res.GetObjectKind().GroupVersionKind().Version == apiv3.VersionCurrent) &&
-		reflect.DeepEqual(getSpec(res), m.spec)
+		reflect.DeepEqual(getSpec(res), m.spec) &&
+		(m.status == nil || reflect.DeepEqual(getStatus(res), m.status))
 	return
 }
 
@@ -352,4 +358,13 @@ func getSpec(res runtime.Object) interface{} {
 
 	spec := v.FieldByName("Spec")
 	return spec.Interface()
+}
+
+// getStatus returns the Status structure from the supplied resource.
+func getStatus(res runtime.Object) interface{} {
+	v, err := conversion.EnforcePtr(res)
+	Expect(err).NotTo(HaveOccurred())
+
+	status := v.FieldByName("Status")
+	return status.Interface()
 }

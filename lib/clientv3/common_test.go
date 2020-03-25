@@ -1,4 +1,4 @@
-// Copyright (c) 2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017, 2020 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -32,6 +32,7 @@ import (
 )
 
 var MatchResource = testutils.Resource
+var MatchResourceWithStatus = testutils.ResourceWithStatus
 
 var _ = testutils.E2eDatastoreDescribe("Common resource tests", testutils.DatastoreAll, func(config apiconfig.CalicoAPIConfig) {
 	Describe("Common resource tests", func() {
