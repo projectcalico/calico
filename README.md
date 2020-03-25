@@ -34,7 +34,7 @@ There are many avenues to get started with Calico depending on your situation.
   about fifteen minutes.
 - Running a managed public cloud? Use our
   [guides for enabling Calico Network Policies](https://docs.projectcalico.org/getting-started/kubernetes/managed-public-cloud/).
-- Want to go deeper? Visit [https://docs.projectcalico.org](docs.projectcalico.org) for full documentation.
+- Want to go deeper? Visit [https://docs.projectcalico.org](https://docs.projectcalico.org) for full documentation.
 
 ## Getting Started Developing Calico
 
@@ -45,15 +45,15 @@ feedback.
 - [The Developer Guide](DEVELOPER_GUIDE.md) will walk you through how to set up a development environment, build the code,
   and run tests.
 - [The Calico Documentation Guide](CONTRIBUTING_DOCS.md) will get you started on making changes to
-  [https://docs.projectcalico.org](docs.projectcalico.org).
+  [https://docs.projectcalico.org](https://docs.projectcalico.org).
 
 ## Join the Calico Community!
 
 The Calico community is committed to fostering an open and welcoming environment, with several ways to engage with other users
 and developers. You can find out more about our monthly meetings, Slack group, and Discourse by visiting our
-[Community Repository](https://www.projectcalico.org/community).
+[Community Repository](https://github.com/projectcalico/community).
 
 ## License
 
-Calico is available under the Apache 2.0 license. See the [LICENSE](LICENSE.md) file for details.
+Calico is available under the Apache 2.0 license. See the [LICENSE](LICENSE) file for details.
 
