@@ -309,13 +309,13 @@ as described in the section above.
    at the newly created commit.
 
    ```
-   make release RELEASE_STREAM=vX.Y
+   make release
    ```
 
    Then, publish the tag and release.
 
    ```
-   make release-publish RELEASE_STREAM=vX.Y
+   make release-publish
    ```
 1. Merge the PR. This will cause the live docs site to be updated (after a few minutes).
 
@@ -341,7 +341,7 @@ release notes for a given version, perform the following steps.
 1. Run the following command to collect all release notes for the given version.
 
    ```
-   make RELEASE_STREAM=vX.Y release-notes
+   make release-notes
    ```
 
    A file called `<VERSION>-release-notes.md` will be created with the raw release note content.
