@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2019 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2020 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -49,6 +49,10 @@ type Interface interface {
 	FelixConfigurations() FelixConfigurationInterface
 	// ClusterInformation returns an interface for managing the cluster information resource.
 	ClusterInformation() ClusterInformationInterface
+	// KubeControllersConfiguration returns an interface for managing the
+	// KubeControllersConfiguration resource.
+	KubeControllersConfiguration() KubeControllersConfigurationInterface
+
 	// EnsureInitialized is used to ensure the backend datastore is correctly
 	// initialized for use by Calico.  This method may be called multiple times, and
 	// will have no effect if the datastore is already correctly initialized.

@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2019 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2020 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -213,6 +213,12 @@ func NewKubeClient(ca *apiconfig.CalicoAPIConfigSpec) (api.Client, error) {
 		apiv3.KindWorkloadEndpoint,
 		resources.NewWorkloadEndpointClient(cs),
 	)
+	kubeClient.registerResourceClient(
+		reflect.TypeOf(model.ResourceKey{}),
+		reflect.TypeOf(model.ResourceListOptions{}),
+		apiv3.KindKubeControllersConfiguration,
+		resources.NewKubeControllersConfigClient(cs, crdClientV1),
+	)
 
 	if ca.K8sUsePodCIDR {
 		// Using host-local IPAM. Use Kubernetes pod CIDRs to back IPAM.
@@ -318,6 +324,7 @@ func (c *KubeClient) Clean() error {
 		apiv3.KindNetworkSet,
 		apiv3.KindIPPool,
 		apiv3.KindHostEndpoint,
+		apiv3.KindKubeControllersConfiguration,
 	}
 	ctx := context.Background()
 	for _, k := range kinds {
@@ -420,6 +427,8 @@ func buildCRDClientV1(cfg rest.Config) (*rest.RESTClient, error) {
 				&apiv3.IPAMHandleList{},
 				&apiv3.IPAMConfig{},
 				&apiv3.IPAMConfigList{},
+				&apiv3.KubeControllersConfiguration{},
+				&apiv3.KubeControllersConfigurationList{},
 			)
 			return nil
 		})
