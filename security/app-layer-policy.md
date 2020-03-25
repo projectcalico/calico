@@ -1,6 +1,6 @@
 ---
-title: Enable application layer policy for Istio
-description: Enable application layer policy for Istio service mesh.
+title: Enable Calico application layer policy for Istio
+description: Enable Calico application layer policy for Istio service mesh.
 canonical_url: '/security/app-layer-policy'
 ---
 
