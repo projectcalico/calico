@@ -1,4 +1,4 @@
-# Copyright (c) 2015-2019 Tigera, Inc. All rights reserved.
+# Copyright (c) 2015-2020 Tigera, Inc. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -814,6 +814,42 @@ class TestCalicoctlCommands(TestBase):
         rc = calicoctl("get clusterinfo %s -o yaml" % name(clusterinfo_name1_rev1))
         rc.assert_no_error()
         rc.assert_data(ci)  # Implicitly checks the GUID is still the same.
+
+    def test_kubecontrollersconfig(self):
+        """
+        Test CRUD commands behave as expected on the kube controllers configuration resource:
+        """
+        # Create a new default KubeControllersConfiguration and get it to determine the current
+        # resource version.
+        rc = calicoctl("create", data=kubecontrollersconfig_name1_rev1)
+        rc.assert_no_error()
+        rc = calicoctl(
+            "get kubecontrollersconfig %s -o yaml" % name(kubecontrollersconfig_name1_rev1))
+        rc.assert_no_error()
+        rev0 = rc.decoded
+
+        # Replace the KubeControllersConfiguration (with no resource version) and get it to
+        # assert the resource version is not the same.
+        rc = calicoctl("replace", data=kubecontrollersconfig_name1_rev2)
+        rc.assert_no_error()
+        rc = calicoctl(
+            "get kubecontrollersconfig %s -o yaml" % name(kubecontrollersconfig_name1_rev2))
+        rc.assert_no_error()
+        rev1 = rc.decoded
+        self.assertNotEqual(rev0['metadata']['resourceVersion'], rev1['metadata']['resourceVersion'])
+
+        # Apply an update to the KubeControllersConfiguration and assert the resource version is not the same.
+        rc = calicoctl("apply", data=kubecontrollersconfig_name1_rev1)
+        rc.assert_no_error()
+        rc = calicoctl(
+            "get kubecontrollersconfig %s -o yaml" % name(kubecontrollersconfig_name1_rev1))
+        rc.assert_no_error()
+        rev2 = rc.decoded
+        self.assertNotEqual(rev1['metadata']['resourceVersion'], rev2['metadata']['resourceVersion'])
+
+        # Delete the resource by name (i.e. without using a resource version).
+        rc = calicoctl("delete kubecontrollersconfig %s" % name(rev2))
+        rc.assert_no_error()
 
     @parameterized.expand([
         ('create', 'replace'),
