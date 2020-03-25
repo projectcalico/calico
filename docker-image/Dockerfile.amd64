@@ -6,6 +6,11 @@ ENV TINI_VERSION v0.18.0
 ADD https://github.com/krallin/tini/releases/download/${TINI_VERSION}/tini-static-amd64 /sbin/tini
 RUN chmod +x /sbin/tini
 
+# Add in top-level license file
+RUN mkdir /licenses
+ADD licenses /licenses
+COPY LICENSE /licenses
+
 FROM scratch
 COPY --from=base /sbin/tini /sbin/tini
 
