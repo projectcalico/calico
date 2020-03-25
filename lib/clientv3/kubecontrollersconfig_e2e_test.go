@@ -134,7 +134,7 @@ var _ = testutils.E2eDatastoreDescribe("KubeControllersConfiguration tests", tes
 			Expect(outError).To(HaveOccurred())
 			Expect(outError.Error()).To(ContainSubstring("resource does not exist: KubeControllersConfiguration(" + name + ") with error:"))
 
-			By("Attempting to creating a new KubeControllersConfiguration with name/spec1 and a non-empty ResourceVersion")
+			By("Attempting to creating a new KubeControllersConfiguration with spec1 and a non-empty ResourceVersion")
 			_, outError = c.KubeControllersConfiguration().Create(ctx, &apiv3.KubeControllersConfiguration{
 				ObjectMeta: metav1.ObjectMeta{Name: name, ResourceVersion: "12345"},
 				Spec:       spec1,
@@ -142,7 +142,7 @@ var _ = testutils.E2eDatastoreDescribe("KubeControllersConfiguration tests", tes
 			Expect(outError).To(HaveOccurred())
 			Expect(outError.Error()).To(Equal("error with field Metadata.ResourceVersion = '12345' (field must not be set for a Create request)"))
 
-			By("Getting KubeControllersConfiguration (name) before it is created")
+			By("Getting KubeControllersConfiguration before it is created")
 			_, outError = c.KubeControllersConfiguration().Get(ctx, name, options.GetOptions{})
 			Expect(outError).To(HaveOccurred())
 			Expect(outError.Error()).To(ContainSubstring("resource does not exist: KubeControllersConfiguration(" + name + ") with error:"))
@@ -155,7 +155,7 @@ var _ = testutils.E2eDatastoreDescribe("KubeControllersConfiguration tests", tes
 			Expect(outError).To(HaveOccurred())
 			Expect(outError.Error()).To(Equal("Cannot create a Kube Controllers Configuration resource with a name other than \"default\""))
 
-			By("Creating a new KubeControllersConfiguration with name/spec1")
+			By("Creating a new KubeControllersConfiguration with spec1")
 			res1, outError := c.KubeControllersConfiguration().Create(ctx, &apiv3.KubeControllersConfiguration{
 				ObjectMeta: metav1.ObjectMeta{Name: name},
 				Spec:       spec1,
@@ -166,7 +166,7 @@ var _ = testutils.E2eDatastoreDescribe("KubeControllersConfiguration tests", tes
 			// Track the version of the original data for name.
 			rv1_1 := res1.ResourceVersion
 
-			By("Attempting to create the same KubeControllersConfiguration with name but with spec2")
+			By("Attempting to create the same KubeControllersConfiguration but with spec2")
 			_, outError = c.KubeControllersConfiguration().Create(ctx, &apiv3.KubeControllersConfiguration{
 				ObjectMeta: metav1.ObjectMeta{Name: name},
 				Spec:       spec2,
@@ -174,20 +174,20 @@ var _ = testutils.E2eDatastoreDescribe("KubeControllersConfiguration tests", tes
 			Expect(outError).To(HaveOccurred())
 			Expect(outError.Error()).To(Equal("resource already exists: KubeControllersConfiguration(" + name + ")"))
 
-			By("Getting KubeControllersConfiguration (name) and comparing the output against spec1")
+			By("Getting KubeControllersConfiguration and comparing the output against spec1")
 			res, outError := c.KubeControllersConfiguration().Get(ctx, name, options.GetOptions{})
 			Expect(outError).NotTo(HaveOccurred())
 			Expect(res).To(MatchResource(apiv3.KindKubeControllersConfiguration, testutils.ExpectNoNamespace, name, spec1))
 			Expect(res.ResourceVersion).To(Equal(res1.ResourceVersion))
 
-			By("Listing all the KubeControllersConfiguration, expecting a single result with name/spec1")
+			By("Listing all the KubeControllersConfiguration, expecting a single result with spec1")
 			outList, outError := c.KubeControllersConfiguration().List(ctx, options.ListOptions{})
 			Expect(outError).NotTo(HaveOccurred())
 			Expect(outList.Items).To(ConsistOf(
 				testutils.Resource(apiv3.KindKubeControllersConfiguration, testutils.ExpectNoNamespace, name, spec1),
 			))
 
-			By("Updating KubeControllersConfiguration name with spec2")
+			By("Updating KubeControllersConfiguration with spec2")
 			res1.Spec = spec2
 			res1, outError = c.KubeControllersConfiguration().Update(ctx, res1, options.SetOptions{})
 			Expect(outError).NotTo(HaveOccurred())
@@ -214,14 +214,14 @@ var _ = testutils.E2eDatastoreDescribe("KubeControllersConfiguration tests", tes
 			// Track the version of the updated name data.
 			rv1_2 := res1.ResourceVersion
 
-			By("Updating KubeControllersConfiguration name without specifying a resource version")
+			By("Updating KubeControllersConfiguration without specifying a resource version")
 			res1.Spec = spec1
 			res1.ObjectMeta.ResourceVersion = ""
 			_, outError = c.KubeControllersConfiguration().Update(ctx, res1, options.SetOptions{})
 			Expect(outError).To(HaveOccurred())
 			Expect(outError.Error()).To(Equal("error with field Metadata.ResourceVersion = '' (field must be set for an Update request)"))
 
-			By("Updating KubeControllersConfiguration name using the previous resource version")
+			By("Updating KubeControllersConfiguration using the previous resource version")
 			res1.Spec = spec1
 			res1.ResourceVersion = rv1_1
 			_, outError = c.KubeControllersConfiguration().Update(ctx, res1, options.SetOptions{})
@@ -229,21 +229,21 @@ var _ = testutils.E2eDatastoreDescribe("KubeControllersConfiguration tests", tes
 			Expect(outError.Error()).To(Equal("update conflict: KubeControllersConfiguration(" + name + ")"))
 
 			if config.Spec.DatastoreType != apiconfig.Kubernetes {
-				By("Getting KubeControllersConfiguration (name) with the original resource version and comparing the output against spec1")
+				By("Getting KubeControllersConfiguration with the original resource version and comparing the output against spec1")
 				res, outError = c.KubeControllersConfiguration().Get(ctx, name, options.GetOptions{ResourceVersion: rv1_1})
 				Expect(outError).NotTo(HaveOccurred())
 				Expect(res).To(MatchResource(apiv3.KindKubeControllersConfiguration, testutils.ExpectNoNamespace, name, spec1))
 				Expect(res.ResourceVersion).To(Equal(rv1_1))
 			}
 
-			By("Getting KubeControllersConfiguration (name) with the updated resource version and comparing the output against spec2")
+			By("Getting KubeControllersConfiguration with the updated resource version and comparing the output against spec2")
 			res, outError = c.KubeControllersConfiguration().Get(ctx, name, options.GetOptions{ResourceVersion: rv1_2})
 			Expect(outError).NotTo(HaveOccurred())
 			Expect(res).To(MatchResource(apiv3.KindKubeControllersConfiguration, testutils.ExpectNoNamespace, name, spec2))
 			Expect(res.ResourceVersion).To(Equal(rv1_2))
 
 			if config.Spec.DatastoreType != apiconfig.Kubernetes {
-				By("Listing KubeControllersConfiguration with the original resource version and checking for a single result with name/spec1")
+				By("Listing KubeControllersConfiguration with the original resource version and checking for a single result with spec1")
 				outList, outError = c.KubeControllersConfiguration().List(ctx, options.ListOptions{ResourceVersion: rv1_1})
 				Expect(outError).NotTo(HaveOccurred())
 				Expect(outList.Items).To(ConsistOf(
@@ -251,7 +251,7 @@ var _ = testutils.E2eDatastoreDescribe("KubeControllersConfiguration tests", tes
 				))
 			}
 
-			By("Listing KubeControllersConfiguration with the latest resource version and checking for one result with name/spec2")
+			By("Listing KubeControllersConfiguration with the latest resource version and checking for one result with spec2")
 			outList, outError = c.KubeControllersConfiguration().List(ctx, options.ListOptions{})
 			Expect(outError).NotTo(HaveOccurred())
 			Expect(outList.Items).To(ConsistOf(
@@ -276,19 +276,19 @@ var _ = testutils.E2eDatastoreDescribe("KubeControllersConfiguration tests", tes
 			Expect(res).To(MatchResourceWithStatus(apiv3.KindKubeControllersConfiguration, testutils.ExpectNoNamespace, name, spec2, status2))
 			rv1_3 := res.ResourceVersion
 
-			By("Getting resource and verifying status1 is present")
+			By("Getting resource and verifying status2 is present")
 			res, outError = c.KubeControllersConfiguration().Get(ctx, name, options.GetOptions{})
 			Expect(outError).ToNot(HaveOccurred())
 			Expect(res).To(MatchResourceWithStatus(apiv3.KindKubeControllersConfiguration, testutils.ExpectNoNamespace, name, spec2, status2))
 
 			if config.Spec.DatastoreType != apiconfig.Kubernetes {
-				By("Deleting KubeControllersConfiguration (name) with the old resource version")
+				By("Deleting KubeControllersConfiguration with the old resource version")
 				_, outError = c.KubeControllersConfiguration().Delete(ctx, name, options.DeleteOptions{ResourceVersion: rv1_1})
 				Expect(outError).To(HaveOccurred())
 				Expect(outError.Error()).To(Equal("update conflict: KubeControllersConfiguration(" + name + ")"))
 			}
 
-			By("Deleting KubeControllersConfiguration (name) with the new resource version")
+			By("Deleting KubeControllersConfiguration with the new resource version")
 			dres, outError := c.KubeControllersConfiguration().Delete(ctx, name, options.DeleteOptions{ResourceVersion: rv1_3})
 			Expect(outError).NotTo(HaveOccurred())
 			Expect(dres).To(MatchResourceWithStatus(apiv3.KindKubeControllersConfiguration, testutils.ExpectNoNamespace, name, spec2, status2))
@@ -306,13 +306,13 @@ var _ = testutils.E2eDatastoreDescribe("KubeControllersConfiguration tests", tes
 
 	Describe("KubeControllersConfiguration watch functionality", func() {
 		It("should handle watch events for different resource versions and event types", func() {
-			By("Listing KubeControllersConfiguration with the latest resource version and checking for one result with name/spec2")
+			By("Listing KubeControllersConfiguration with the latest resource version and checking for one result with spec2")
 			outList, outError := c.KubeControllersConfiguration().List(ctx, options.ListOptions{})
 			Expect(outError).NotTo(HaveOccurred())
 			Expect(outList.Items).To(HaveLen(0))
 			rev0 := outList.ResourceVersion
 
-			By("Configuring a KubeControllersConfiguration name/spec1 and storing the response")
+			By("Configuring a KubeControllersConfiguration spec1 and storing the response")
 			outRes1, err := c.KubeControllersConfiguration().Create(
 				ctx,
 				&apiv3.KubeControllersConfiguration{
@@ -343,7 +343,7 @@ var _ = testutils.E2eDatastoreDescribe("KubeControllersConfiguration tests", tes
 			})
 			testWatcher1.Stop()
 
-			By("Configuring a KubeControllersConfiguration name2/spec2 and storing the response")
+			By("Configuring a KubeControllersConfiguration spec2 and storing the response")
 			outRes2, err := c.KubeControllersConfiguration().Create(
 				ctx,
 				&apiv3.KubeControllersConfiguration{
@@ -392,7 +392,7 @@ var _ = testutils.E2eDatastoreDescribe("KubeControllersConfiguration tests", tes
 
 			// Only etcdv3 supports watching a specific instance of a resource.
 			if config.Spec.DatastoreType == apiconfig.EtcdV3 {
-				By("Starting a watcher from rev0 watching name - this should get all events for name")
+				By("Starting a watcher from rev0 watching by name - this should get all events")
 				w, err = c.KubeControllersConfiguration().Watch(ctx, options.ListOptions{Name: name, ResourceVersion: rev0})
 				Expect(err).NotTo(HaveOccurred())
 				testWatcher2_1 := testutils.NewTestResourceWatch(config.Spec.DatastoreType, w)

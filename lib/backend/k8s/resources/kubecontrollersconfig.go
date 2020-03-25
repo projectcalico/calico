@@ -35,7 +35,7 @@ func NewKubeControllersConfigClient(c *kubernetes.Clientset, r *rest.RESTClient)
 		restClient:      r,
 		name:            KubeControllersConfigCRDName,
 		resource:        KubeControllersConfigResourceName,
-		description:     "Calico Cluster Information",
+		description:     "Calico Kubernetes Controllers Configuration",
 		k8sResourceType: reflect.TypeOf(apiv3.KubeControllersConfiguration{}),
 		k8sResourceTypeMeta: metav1.TypeMeta{
 			Kind:       apiv3.KindKubeControllersConfiguration,
