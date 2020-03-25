@@ -39,14 +39,13 @@ type KubeControllersConfiguration struct {
 
 // KubeControllersConfigurationSpec contains the values of the Kubernetes controllers configuration.
 type KubeControllersConfigurationSpec struct {
-
 	// LogSeverityScreen is the log severity above which logs are sent to the stdout. [Default: Info]
 	LogSeverityScreen string `json:"logSeverityScreen,omitempty" validate:"omitempty,logLevel"`
 
-	// HealthChecks enables or disables support for health checks
+	// HealthChecks enables or disables support for health checks [Default: Enabled]
 	HealthChecks string `json:"healthChecks,omitempty" validate:"omitempty,oneof=Enabled Disabled"`
 
-	// EtcdV3CompactionPeriod is the period between etcdv3 compaction requests. Set to 0 to disable.
+	// EtcdV3CompactionPeriod is the period between etcdv3 compaction requests. Set to 0 to disable. [Default: 10m]
 	EtcdV3CompactionPeriod string `json:"etcdV3CompactionPeriod,omitempty" validate:"omitempty,duration"`
 
 	// Controllers enables and configures individual Kubernetes controllers
@@ -55,74 +54,71 @@ type KubeControllersConfigurationSpec struct {
 
 // ControllersConfig enables and configures individual Kubernetes controllers
 type ControllersConfig struct {
-	// Node enables and configures the node controller
+	// Node enables and configures the node controller. Enabled by default, set to nil to disable.
 	Node *NodeControllerConfig `json:"node,omitempty"`
 
-	// Policy enables and configures the policy controller
+	// Policy enables and configures the policy controller. Enabled by default, set to nil to disable.
 	Policy *PolicyControllerConfig `json:"policy,omitempty"`
 
-	// WorkloadEndpoint enables and configures the workload endpoint controller
+	// WorkloadEndpoint enables and configures the workload endpoint controller. Enabled by default, set to nil to disable.
 	WorkloadEndpoint *WorkloadEndpointControllerConfig `json:"workloadEndpoint,omitempty"`
 
-	// ServiceAccount enables and configures the service account controller
+	// ServiceAccount enables and configures the service account controller. Enabled by default, set to nil to disable.
 	ServiceAccount *ServiceAccountControllerConfig `json:"serviceAccount,omitempty"`
 
-	// Namespace enables and configures the namespace controller
+	// Namespace enables and configures the namespace controller. Enabled by default, set to nil to disable.
 	Namespace *NamespaceControllerConfig `json:"namespace,omitempty"`
 }
 
 // NodeControllerConfig configures the node controller, which automatically cleans up configuration
 // for nodes that no longer exist. Optionally, it can create host endpoints for all Kubernetes nodes.
 type NodeControllerConfig struct {
-
-	// ReconcilerPeriod is the period to perform reconciliation with the Calico datastore.
+	// ReconcilerPeriod is the period to perform reconciliation with the Calico datastore. [Default: 5m]
 	ReconcilerPeriod string `json:"reconcilerPeriod,omitempty" validate:"omitempty,duration"`
 
-	// SyncLabels controls whether to copy Kubernetes node labels to Calico nodes
+	// SyncLabels controls whether to copy Kubernetes node labels to Calico nodes. [Default: Enabled]
 	SyncLabels string `json:"syncLabels,omitempty" validate:"omitempty,oneof=Enabled Disabled"`
 
-	// HostEndpoint controls syncing nodes to host endpoints
+	// HostEndpoint controls syncing nodes to host endpoints. Disabled by default, set to nil to disable.
 	HostEndpoint *AutoHostEndpointConfig `json:"hostEndpoint,omitempty"`
 }
 
 type AutoHostEndpointConfig struct {
-
-	// AutoCreate enables automatic creation of host endpoints for every node
+	// AutoCreate enables automatic creation of host endpoints for every node. [Default: Disabled]
 	AutoCreate string `json:"autoCreate,omitempty" validate:"omitempty,oneof=Enabled Disabled"`
 }
 
 // PolicyControllerConfig configures the network policy controller, which syncs Kubernetes policies
 // to Calico policies (only used for etcdv3 datastore).
 type PolicyControllerConfig struct {
-
-	// ReconcilerPeriod is the period to perform reconciliation with the Calico datastore.
+	// ReconcilerPeriod is the period to perform reconciliation with the Calico datastore. [Default: 5m]
 	ReconcilerPeriod string `json:"reconcilerPeriod,omitempty" validate:"omitempty,duration"`
 }
 
 // WorkloadEndpointControllerConfig configures the workload endpoint controller, which syncs Kubernetes
 // labels to Calico workload endpoints (only used for etcdv3 datastore).
 type WorkloadEndpointControllerConfig struct {
-
-	// ReconcilerPeriod is the period to perform reconciliation with the Calico datastore.
+	// ReconcilerPeriod is the period to perform reconciliation with the Calico datastore. [Default: 5m]
 	ReconcilerPeriod string `json:"reconcilerPeriod,omitempty" validate:"omitempty,duration"`
 }
 
 // ServiceAccountControllerConfig configures the service account controller, which syncs Kubernetes
 // service accounts to Calico profiles (only used for etcdv3 datastore).
 type ServiceAccountControllerConfig struct {
-
-	// ReconcilerPeriod is the period to perform reconciliation with the Calico datastore.
+	// ReconcilerPeriod is the period to perform reconciliation with the Calico datastore. [Default: 5m]
 	ReconcilerPeriod string `json:"reconcilerPeriod,omitempty" validate:"omitempty,duration"`
 }
 
 // NamespaceControllerConfig configures the service account controller, which syncs Kubernetes
 // service accounts to Calico profiles (only used for etcdv3 datastore).
 type NamespaceControllerConfig struct {
-
-	// ReconcilerPeriod is the period to perform reconciliation with the Calico datastore.
+	// ReconcilerPeriod is the period to perform reconciliation with the Calico datastore. [Default: 5m]
 	ReconcilerPeriod string `json:"reconcilerPeriod,omitempty" validate:"omitempty,duration"`
 }
 
+// KubeControllersConfigurationStatus represents the status of the configuration. It's useful for admins to
+// be able to see the actual config that was applied, which can be modified by environment variables on the
+// kube-controllers process.
 type KubeControllersConfigurationStatus struct {
 	// RunningConfig contains the effective config that is running in the kube-controllers pod, after
 	// merging the API resource with any environment variables.
