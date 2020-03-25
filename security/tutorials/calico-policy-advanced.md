@@ -4,12 +4,12 @@ description: Learn how to create more advanced Calico network policies (namespac
 canonical_url: "/security/tutorials/calico-policy-advanced"
 ---
 
-Calico Network Policies _extend_ the functionalities of Kubernetes Network Policies. To demonstrate this, this page will walk through the [Kubernetes Advanced NetworkPolicy](kubernetes-policy-advanced) tutorial but with everything implemented using Calico policies. This serves as a good example in highlighting the syntactical differences between the two type of policies while demonstrating Calico Network Policicy's flexibility.
+Calico Network Policies _extend_ the functionalities of Kubernetes Network Policies. To demonstrate this, this page will walk through the [Kubernetes Advanced NetworkPolicy](kubernetes-policy-advanced) tutorial but with everything implemented using Calico policies. This serves as a good example in highlighting the syntactical differences between the two type of policies while demonstrating Calico Network Policy's flexibility.
 
 ### Requirements
 
 - Calico v2.6.1+ with Kubernetes 1.8+
-- A working Kubernetes cluster and access to it using kubectl
+- A working Kubernetes cluster and access to it using kubectl and calicoctl
 - Your Kubernetes nodes have connectivity to the public internet
 - You are familiar with [Kubernetes NetworkPolicy](kubernetes-policy-basic) or [Kubernetes NetworkPolicy Advanced](kubernetes-policy-advanced)
 
@@ -72,7 +72,7 @@ It should return the HTML of the google.com home page.
 Enable ingress isolation on the namespace by deploying a [default deny all ingress traffic policy](https://kubernetes.io/docs/concepts/services-networking/network-policies/#default-deny-all-ingress-traffic).
 
 ```bash
-kubectl create -f - <<EOF
+calicoctl create -f - <<EOF
 apiVersion: projectcalico.org/v3
 kind: NetworkPolicy
 metadata:
@@ -124,7 +124,7 @@ We can see that the ingress access to the nginx service is denied while egress a
 Run the following to create a `NetworkPolicy` which allows traffic to nginx pods from any pods in the `advanced-policy-demo` namespace.
 
 ```bash
-kubectl create -f - <<EOF
+calicoctl create -f - <<EOF
 apiVersion: projectcalico.org/v3
 kind: NetworkPolicy
 metadata:
@@ -165,7 +165,7 @@ After creating the policy, we can now access the nginx Service.
 Enable egress isolation on the namespace by deploying a [default deny all egress traffic policy](https://kubernetes.io/docs/concepts/services-networking/network-policies/#4-deny-all-egress-traffic).
 
 ```bash
-kubectl create -f - <<EOF
+calicoctl create -f - <<EOF
 apiVersion: projectcalico.org/v3
 kind: NetworkPolicy
 metadata:
@@ -224,7 +224,7 @@ from any pods in the `advanced-policy-demo` namespace to the `kube-system` names
 
 ```bash
 kubectl label namespace kube-system name=kube-system
-kubectl create -f - <<EOF
+calicoctl create -f - <<EOF
 apiVersion: projectcalico.org/v3
 kind: NetworkPolicy
 metadata:
@@ -285,7 +285,7 @@ Even though DNS egress traffic is now working, all other egress traffic from all
 Run the following to create a `NetworkPolicy` which allows egress traffic from any pods in the `advanced-policy-demo` namespace to pods with labels matching `run: nginx` in the same namespace.
 
 ```bash
-kubectl create -f - <<EOF
+calicoctl create -f - <<EOF
 apiVersion: projectcalico.org/v3
 kind: NetworkPolicy
 metadata:
