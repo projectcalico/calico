@@ -23,6 +23,7 @@ RUN chmod +x /sbin/tini
 
 # Add in top-level license file
 RUN mkdir /licenses
+ADD licenses /licenses
 COPY LICENSE /licenses
 
 FROM scratch
