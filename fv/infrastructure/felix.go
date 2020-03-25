@@ -18,7 +18,9 @@ import (
 	"fmt"
 	"os"
 	"path"
+	"syscall"
 
+	. "github.com/onsi/gomega"
 	log "github.com/sirupsen/logrus"
 
 	"github.com/projectcalico/felix/fv/containers"
@@ -34,14 +36,33 @@ type Felix struct {
 	// ExpectedVXLANTunnelAddr contains the IP that the infrastructure expects to
 	// get assigned to the VXLAN tunnel.  Filled in by AddNode().
 	ExpectedVXLANTunnelAddr string
+
+	// IP of the Typha that this Felix is using (if any).
+	TyphaIP string
+
+	startupDelayed bool
 }
 
 func (f *Felix) GetFelixPID() int {
+	if f.startupDelayed {
+		log.Panic("GetFelixPID() called but startup is delayed")
+	}
 	return f.GetSinglePID("calico-felix")
 }
 
 func (f *Felix) GetFelixPIDs() []int {
+	if f.startupDelayed {
+		log.Panic("GetFelixPIDs() called but startup is delayed")
+	}
 	return f.GetPIDs("calico-felix")
+}
+
+func (f *Felix) TriggerDelayedStart() {
+	if !f.startupDelayed {
+		log.Panic("TriggerDelayedStart() called but startup wasn't delayed")
+	}
+	f.Exec("touch", "/start-trigger")
+	f.startupDelayed = false
 }
 
 func RunFelix(infra DatastoreInfra, id int, options TopologyOptions) *Felix {
@@ -58,6 +79,8 @@ func RunFelix(infra DatastoreInfra, id int, options TopologyOptions) *Felix {
 		"FELIX_BPFLOGLEVEL":              "debug",
 		"FELIX_USAGEREPORTINGENABLED":    "false",
 		"FELIX_IPV6SUPPORT":              ipv6Enabled,
+		// Disable log dropping, because it can cause flakes in tests that look for particular logs.
+		"FELIX_DEBUGDISABLELOGDROPPING": "true",
 	}
 
 	containerName := containers.UniqueName(fmt.Sprintf("felix-%d", id))
@@ -71,6 +94,10 @@ func RunFelix(infra DatastoreInfra, id int, options TopologyOptions) *Felix {
 		// FIXME: isolate individual Felix instances in their own cgroups.  Unfortunately, this doesn't work on systems that are using cgroupv1
 		// see https://elixir.bootlin.com/linux/v5.3.11/source/include/linux/cgroup-defs.h#L788 for explanation.
 		// envVars["FELIX_DEBUGBPFCGROUPV2"] = containerName
+	}
+
+	if options.DelayFelixStart {
+		args = append(args, "-e", "DELAY_FELIX_START=true")
 	}
 
 	for k, v := range options.ExtraEnvVars {
@@ -125,12 +152,18 @@ func RunFelix(infra DatastoreInfra, id int, options TopologyOptions) *Felix {
 		"-P", "FORWARD", "DROP")
 
 	return &Felix{
-		Container: c,
+		Container:      c,
+		startupDelayed: options.DelayFelixStart,
 	}
 }
 
 func (f *Felix) Stop() {
-	// FIXME need to detach programs.
 	_ = f.ExecMayFail("rmdir", path.Join("/run/calico/cgroup/", f.Name))
 	f.Container.Stop()
+}
+
+func (f *Felix) Restart() {
+	oldPID := f.GetFelixPID()
+	f.Signal(syscall.SIGHUP)
+	Eventually(f.GetFelixPID, "10s", "100ms").ShouldNot(Equal(oldPID))
 }

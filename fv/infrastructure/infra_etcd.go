@@ -1,4 +1,4 @@
-// Copyright (c) 2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2018-2019 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,16 +15,19 @@
 package infrastructure
 
 import (
+	"context"
 	"errors"
 	"fmt"
 
 	. "github.com/onsi/gomega"
 	log "github.com/sirupsen/logrus"
 
-	"github.com/projectcalico/felix/fv/containers"
-	"github.com/projectcalico/felix/fv/utils"
 	api "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	client "github.com/projectcalico/libcalico-go/lib/clientv3"
+	"github.com/projectcalico/libcalico-go/lib/options"
+
+	"github.com/projectcalico/felix/fv/containers"
+	"github.com/projectcalico/felix/fv/utils"
 )
 
 type EtcdDatastoreInfra struct {
@@ -77,6 +80,16 @@ func (eds *EtcdDatastoreInfra) GetBadEndpointDockerArgs() []string {
 
 func (eds *EtcdDatastoreInfra) GetCalicoClient() client.Interface {
 	return utils.GetEtcdClient(eds.etcdContainer.IP)
+}
+
+func (eds *EtcdDatastoreInfra) GetClusterGUID() string {
+	ci, err := eds.GetCalicoClient().ClusterInformation().Get(
+		context.Background(),
+		"default",
+		options.GetOptions{},
+	)
+	Expect(err).NotTo(HaveOccurred())
+	return ci.Spec.ClusterGUID
 }
 
 func (eds *EtcdDatastoreInfra) SetExpectedIPIPTunnelAddr(felix *Felix, idx int, needBGP bool) {

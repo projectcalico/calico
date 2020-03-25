@@ -311,7 +311,7 @@ func CleanUpJumpMaps() {
 		if err != nil {
 			return err
 		}
-		if info.IsDir() && tcDirRegex.MatchString(info.Name()){
+		if info.IsDir() && tcDirRegex.MatchString(info.Name()) {
 			p := path.Clean(p)
 			log.WithField("path", p).Debug("Found tc auto-created dir.")
 			emptyAutoDirs.Add(p)

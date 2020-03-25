@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2019 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2020 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,18 +17,18 @@ package infrastructure
 import (
 	"context"
 	"fmt"
+	"regexp"
 	"time"
 
 	. "github.com/onsi/gomega"
 	log "github.com/sirupsen/logrus"
 
-	"regexp"
-
-	"github.com/projectcalico/felix/fv/containers"
 	api "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	client "github.com/projectcalico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/libcalico-go/lib/errors"
 	"github.com/projectcalico/libcalico-go/lib/options"
+
+	"github.com/projectcalico/felix/fv/containers"
 )
 
 type TopologyOptions struct {
@@ -43,6 +43,8 @@ type TopologyOptions struct {
 	IPIPRoutesEnabled         bool
 	VXLANMode                 api.VXLANMode
 	InitialFelixConfiguration *api.FelixConfiguration
+	NATOutgoingEnabled        bool
+	DelayFelixStart           bool
 }
 
 func DefaultTopologyOptions() TopologyOptions {
@@ -149,7 +151,7 @@ func StartNNodeTopology(n int, opts TopologyOptions, infra DatastoreInfra) (feli
 			ipPool := api.NewIPPool()
 			ipPool.Name = "test-pool"
 			ipPool.Spec.CIDR = "10.65.0.0/16"
-			ipPool.Spec.NATOutgoing = true
+			ipPool.Spec.NATOutgoing = opts.NATOutgoingEnabled
 			if opts.IPIPEnabled {
 				ipPool.Spec.IPIPMode = api.IPIPModeAlways
 			} else {
@@ -163,9 +165,11 @@ func StartNNodeTopology(n int, opts TopologyOptions, infra DatastoreInfra) (feli
 		}).ShouldNot(HaveOccurred())
 	}
 
+	typhaIP := ""
 	if opts.WithTypha {
 		typha := RunTypha(infra, opts)
 		opts.ExtraEnvVars["FELIX_TYPHAADDR"] = typha.IP + ":5473"
+		typhaIP = typha.IP
 	}
 
 	for i := 0; i < n; i++ {
@@ -173,6 +177,7 @@ func StartNNodeTopology(n int, opts TopologyOptions, infra DatastoreInfra) (feli
 		opts.ExtraEnvVars["BPF_LOG_PFX"] = fmt.Sprintf("%d-", i)
 		felix := RunFelix(infra, i, opts)
 		opts.ExtraEnvVars["BPF_LOG_PFX"] = ""
+		felix.TyphaIP = typhaIP
 		if opts.IPIPEnabled {
 			infra.SetExpectedIPIPTunnelAddr(felix, i, bool(n > 1))
 		}
@@ -181,7 +186,7 @@ func StartNNodeTopology(n int, opts TopologyOptions, infra DatastoreInfra) (feli
 		}
 
 		var w chan struct{}
-		if felix.ExpectedIPIPTunnelAddr != "" {
+		if !opts.DelayFelixStart && felix.ExpectedIPIPTunnelAddr != "" {
 			// If felix has an IPIP tunnel address defined, Felix may restart after loading its config.
 			// Handle that here by monitoring the log and waiting for the correct tunnel IP to show up
 			// before we return.

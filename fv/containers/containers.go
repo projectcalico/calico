@@ -1,4 +1,4 @@
-// Copyright (c) 2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2020 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,10 +16,8 @@ package containers
 
 import (
 	"bufio"
-	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"os/exec"
 	"regexp"
@@ -28,13 +26,14 @@ import (
 	"sync"
 	"time"
 
-	"github.com/projectcalico/felix/fv/connectivity"
-
 	. "github.com/onsi/gomega"
 	log "github.com/sirupsen/logrus"
 
-	"github.com/projectcalico/felix/fv/utils"
+	"github.com/projectcalico/felix/fv/connectivity"
+
 	"github.com/projectcalico/libcalico-go/lib/set"
+
+	"github.com/projectcalico/felix/fv/utils"
 )
 
 type Container struct {
@@ -44,6 +43,7 @@ type Container struct {
 	IPPrefix       string
 	Hostname       string
 	runCmd         *exec.Cmd
+	Stdin          io.WriteCloser
 
 	mutex         sync.Mutex
 	binaries      set.Set
@@ -158,8 +158,18 @@ func (c *Container) signalDockerRun(sig os.Signal) {
 	logCxt.Info("Signalled docker run")
 }
 
+func (c *Container) Signal(sig os.Signal) {
+	c.signalDockerRun(sig)
+}
+
 type RunOpts struct {
-	AutoRemove bool
+	AutoRemove    bool
+	WithStdinPipe bool
+	SameNamespace *Container
+}
+
+func NextContainerIndex() int {
+	return containerIdx + 1
 }
 
 func Run(namePrefix string, opts RunOpts, args ...string) (c *Container) {
@@ -179,16 +189,28 @@ func RunWithFixedName(name string, opts RunOpts, args ...string) (c *Container) 
 
 	// Prep command to run the container.
 	log.WithField("container", c).Info("About to run container")
-	runArgs := []string{"run", "--name", c.Name, "--hostname", c.Name}
+	runArgs := []string{"run", "--name", c.Name}
 
 	if opts.AutoRemove {
 		runArgs = append(runArgs, "--rm")
+	}
+
+	if opts.SameNamespace != nil {
+		runArgs = append(runArgs, "--network=container:"+opts.SameNamespace.Name)
+	} else {
+		runArgs = append(runArgs, "--hostname", c.Name)
 	}
 
 	// Add remaining args
 	runArgs = append(runArgs, args...)
 
 	c.runCmd = utils.Command("docker", runArgs...)
+
+	if opts.WithStdinPipe {
+		var err error
+		c.Stdin, err = c.runCmd.StdinPipe()
+		Expect(err).NotTo(HaveOccurred())
+	}
 
 	// Get the command's output pipes, so we can merge those into the test's own logging.
 	stdout, err := c.runCmd.StdoutPipe()
@@ -332,6 +354,11 @@ func (c *Container) DockerInspect(format string) string {
 	return string(outputBytes)
 }
 
+func (c *Container) GetID() string {
+	output := c.DockerInspect("{{.Id}}")
+	return strings.TrimSpace(output)
+}
+
 func (c *Container) GetIP() string {
 	output := c.DockerInspect("{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}")
 	return strings.TrimSpace(output)
@@ -348,7 +375,7 @@ func (c *Container) GetHostname() string {
 }
 
 func (c *Container) GetPIDs(processName string) []int {
-	out, err := c.ExecOutput("pgrep", fmt.Sprintf("^%s$", processName))
+	out, err := c.ExecOutput("pgrep", "-f", fmt.Sprintf("^%s$", processName))
 	if err != nil {
 		log.WithError(err).Warn("pgrep failed, assuming no PIDs")
 		return nil
@@ -428,8 +455,8 @@ func (c *Container) GetSinglePID(processName string) int {
 			// Success, there's one process.
 			return filteredProcs[0].PID
 		}
-		Expect(time.Since(start)).To(BeNumerically("<", time.Second),
-			"Timed out waiting for there to be a single PID")
+		ExpectWithOffset(1, time.Since(start)).To(BeNumerically("<", 5*time.Second),
+			fmt.Sprintf("Timed out waiting for there to be a single PID for %s", processName))
 		time.Sleep(50 * time.Millisecond)
 	}
 }
@@ -524,7 +551,7 @@ func (c *Container) ExecMayFail(cmd ...string) error {
 func (c *Container) ExecOutput(args ...string) (string, error) {
 	arg := []string{"exec", c.Name}
 	arg = append(arg, args...)
-	cmd := exec.Command("docker", arg...)
+	cmd := utils.Command("docker", arg...)
 	stderr, err := cmd.StderrPipe()
 	if err != nil {
 		return "", err
@@ -534,6 +561,20 @@ func (c *Container) ExecOutput(args ...string) (string, error) {
 	go c.copyOutputToLog("exec-err", stderr, &wg, nil)
 	defer wg.Wait()
 	out, err := cmd.Output()
+	if err != nil {
+		if out == nil {
+			return "", err
+		}
+		return string(out), err
+	}
+	return string(out), nil
+}
+
+func (c *Container) ExecCombinedOutput(args ...string) (string, error) {
+	arg := []string{"exec", c.Name}
+	arg = append(arg, args...)
+	cmd := utils.Command("docker", arg...)
+	out, err := cmd.CombinedOutput()
 	if err != nil {
 		if out == nil {
 			return "", err
@@ -553,7 +594,7 @@ func (c *Container) SourceIPs() []string {
 	return ips
 }
 
-func (c *Container) CanConnectTo(ip, port, protocol string) *connectivity.Response {
+func (c *Container) CanConnectTo(ip, port, protocol string, duration time.Duration) *connectivity.Result {
 	// Ensure that the container has the 'test-connection' binary.
 	logCxt := log.WithField("container", c.Name)
 	logCxt.Debugf("Entering Container.CanConnectTo(%v,%v,%v)", ip, port, protocol)
@@ -561,52 +602,7 @@ func (c *Container) CanConnectTo(ip, port, protocol string) *connectivity.Respon
 
 	// Run 'test-connection' to the target.
 	connectionCmd := utils.Command("docker", "exec", c.Name,
-		"/test-connection", "--protocol="+protocol, "-", ip, port)
-	outPipe, err := connectionCmd.StdoutPipe()
-	Expect(err).NotTo(HaveOccurred())
-	errPipe, err := connectionCmd.StderrPipe()
-	Expect(err).NotTo(HaveOccurred())
-	err = connectionCmd.Start()
-	Expect(err).NotTo(HaveOccurred())
+		"/test-connection", "--protocol="+protocol, "-", ip, port, fmt.Sprintf("--duration=%d", int(duration.Seconds())))
 
-	var wg sync.WaitGroup
-	wg.Add(2)
-	var wOut, wErr []byte
-	var outErr, errErr error
-
-	go func() {
-		defer wg.Done()
-		wOut, outErr = ioutil.ReadAll(outPipe)
-	}()
-
-	go func() {
-		defer wg.Done()
-		wErr, errErr = ioutil.ReadAll(errPipe)
-	}()
-
-	wg.Wait()
-	Expect(outErr).NotTo(HaveOccurred())
-	Expect(errErr).NotTo(HaveOccurred())
-
-	err = connectionCmd.Wait()
-
-	logCxt.WithFields(log.Fields{
-		"stdout": string(wOut),
-		"stderr": string(wErr)}).WithError(err).Info("Connection test")
-
-	if err != nil {
-		return nil
-	}
-
-	r := regexp.MustCompile(`RESPONSE=(.*)\n`)
-	m := r.FindSubmatch(wOut)
-	if len(m) > 0 {
-		var resp connectivity.Response
-		err := json.Unmarshal(m[1], &resp)
-		if err != nil {
-			logCxt.WithError(err).WithField("output", string(wOut)).Panic("Failed to parse connection check response")
-		}
-		return &resp
-	}
-	return nil
+	return utils.RunConnectionCmd(connectionCmd, "Connection test")
 }

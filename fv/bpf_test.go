@@ -218,6 +218,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 
 			options = infrastructure.DefaultTopologyOptions()
 			options.FelixLogSeverity = "debug"
+			options.NATOutgoingEnabled = true
 			switch testOpts.tunnel {
 			case "none":
 				options.IPIPEnabled = false
@@ -1082,7 +1083,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 					nodePortsTest(false)
 				})
 
-				// FIXME connect time shares the same NAT table and it is a lottery which one is gets
+				// FIXME connect time shares the same NAT table and it is a lottery which one it gets
 				if !testOpts.connTimeEnabled {
 					Context("with test-service being a nodeport @ "+strconv.Itoa(int(npPort))+
 						" ExternalTrafficPolicy=local", func() {

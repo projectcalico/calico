@@ -15,13 +15,14 @@
 package connectivity
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/onsi/ginkgo"
-	"github.com/onsi/gomega"
+	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/types"
 	"github.com/sirupsen/logrus"
 
@@ -33,7 +34,7 @@ import (
 // ConnectivityChecker records a set of connectivity expectations and supports calculating the
 // actual state of the connectivity between the given workloads.  It is expected to be used like so:
 //
-//     var cc = &conncheck.ConnectivityChecker{}
+//     var cc = &connectivity.Checker{}
 //     cc.ExpectNone(w[2], w[0], 1234)
 //     cc.ExpectSome(w[1], w[0], 5678)
 //     cc.CheckConnectivity()
@@ -43,6 +44,10 @@ type Checker struct {
 	Protocol         string // "tcp" or "udp"
 	expectations     []Expectation
 	CheckSNAT        bool
+	RetriesDisabled  bool
+
+	// OnFail, if set, will be called instead of ginkgo.Fail().  (Useful for testing the checker itself.)
+	OnFail func(msg string)
 }
 
 func (c *Checker) ExpectSome(from ConnectionSource, to ConnectionTarget, explicitPort ...uint16) {
@@ -50,7 +55,7 @@ func (c *Checker) ExpectSome(from ConnectionSource, to ConnectionTarget, explici
 	if c.ReverseDirection {
 		from, to = to.(ConnectionSource), from.(ConnectionTarget)
 	}
-	c.expectations = append(c.expectations, Expectation{from, to.ToMatcher(explicitPort...), true, from.SourceIPs()})
+	c.expectations = append(c.expectations, Expectation{From: from, To: to.ToMatcher(explicitPort...), Expected: true, ExpSrcIPs: from.SourceIPs()})
 }
 
 func (c *Checker) ExpectSNAT(from ConnectionSource, srcIP string, to ConnectionTarget, explicitPort ...uint16) {
@@ -59,7 +64,7 @@ func (c *Checker) ExpectSNAT(from ConnectionSource, srcIP string, to ConnectionT
 	if c.ReverseDirection {
 		from, to = to.(ConnectionSource), from.(ConnectionTarget)
 	}
-	c.expectations = append(c.expectations, Expectation{from, to.ToMatcher(explicitPort...), true, []string{srcIP}})
+	c.expectations = append(c.expectations, Expectation{From: from, To: to.ToMatcher(explicitPort...), Expected: true, ExpSrcIPs: []string{srcIP}})
 }
 
 func (c *Checker) ExpectNone(from ConnectionSource, to ConnectionTarget, explicitPort ...uint16) {
@@ -67,21 +72,49 @@ func (c *Checker) ExpectNone(from ConnectionSource, to ConnectionTarget, explici
 	if c.ReverseDirection {
 		from, to = to.(ConnectionSource), from.(ConnectionTarget)
 	}
-	c.expectations = append(c.expectations, Expectation{from, to.ToMatcher(explicitPort...), false, nil})
+	c.expectations = append(c.expectations, Expectation{From: from, To: to.ToMatcher(explicitPort...), Expected: false, ExpSrcIPs: nil})
+}
+
+func (c *Checker) ExpectLoss(from ConnectionSource, to ConnectionTarget,
+	duration time.Duration, maxPacketLossPercent float64, maxPacketLossNumber int, explicitPort ...uint16) {
+
+	Expect(duration.Seconds()).NotTo(BeZero(), "Packet loss test must have a duration")
+	Expect(maxPacketLossPercent).To(BeNumerically("<=", 100), "Loss percentage should be <=100")
+	Expect(maxPacketLossPercent >= 0 || maxPacketLossNumber >= 0).To(BeTrue(), "Either loss count or percent must be specified")
+
+	UnactivatedCheckers.Add(c)
+	if c.ReverseDirection {
+		from, to = to.(ConnectionSource), from.(ConnectionTarget)
+	}
+	c.expectations = append(c.expectations, Expectation{
+		From:      from,
+		To:        to.ToMatcher(explicitPort...),
+		Expected:  true,
+		ExpSrcIPs: nil,
+		ExpectedPacketLoss: ExpPacketLoss{
+			Duration:   duration,
+			MaxPercent: maxPacketLossPercent,
+			MaxNumber:  maxPacketLossNumber,
+		},
+	})
+
+	// Packet loss measurements shouldn't be retried.
+	c.RetriesDisabled = true
 }
 
 func (c *Checker) ResetExpectations() {
 	c.expectations = nil
 	c.CheckSNAT = false
+	c.RetriesDisabled = false
 }
 
 // ActualConnectivity calculates the current connectivity for all the expected paths.  It returns a
 // slice containing one response for each attempted check (or nil if the check failed) along with
 // a same-length slice containing a pretty-printed description of the check and its result.
-func (c *Checker) ActualConnectivity() ([]*Response, []string) {
+func (c *Checker) ActualConnectivity() ([]*Result, []string) {
 	UnactivatedCheckers.Discard(c)
 	var wg sync.WaitGroup
-	responses := make([]*Response, len(c.expectations))
+	responses := make([]*Result, len(c.expectations))
 	pretty := make([]string, len(c.expectations))
 	for i, exp := range c.expectations {
 		wg.Add(1)
@@ -92,11 +125,17 @@ func (c *Checker) ActualConnectivity() ([]*Response, []string) {
 			if c.Protocol != "" {
 				p = c.Protocol
 			}
-			responses[i] = exp.From.CanConnectTo(exp.To.IP, exp.To.Port, p)
+			responses[i] = exp.From.CanConnectTo(exp.To.IP, exp.To.Port, p, exp.ExpectedPacketLoss.Duration)
 			pretty[i] = fmt.Sprintf("%s -> %s = %v", exp.From.SourceName(), exp.To.TargetName, responses[i] != nil)
 			if c.CheckSNAT && responses[i] != nil {
-				srcIP := strings.Split(responses[i].SourceAddr, ":")[0]
+				srcIP := strings.Split(responses[i].LastResponse.SourceAddr, ":")[0]
 				pretty[i] += " (from " + srcIP + ")"
+			}
+			if exp.ExpectedPacketLoss.Duration > 0 && responses[i] != nil {
+				sent := responses[i].Stats.RequestsSent
+				lost := responses[i].Stats.Lost()
+				pct := responses[i].Stats.LostPercent()
+				pretty[i] += fmt.Sprintf(" (sent: %d, lost: %d / %.1f%%)", sent, lost, pct)
 			}
 		}(i, exp)
 	}
@@ -114,6 +153,12 @@ func (c *Checker) ExpectedConnectivityPretty() []string {
 		if c.CheckSNAT && exp.Expected {
 			result[i] += " (from " + strings.Join(exp.ExpSrcIPs, "|") + ")"
 		}
+		if exp.ExpectedPacketLoss.MaxNumber >= 0 {
+			result[i] += fmt.Sprintf(" (maxLoss: %d packets)", exp.ExpectedPacketLoss.MaxNumber)
+		}
+		if exp.ExpectedPacketLoss.MaxPercent >= 0 {
+			result[i] += fmt.Sprintf(" (maxLoss: %.1f%%)", exp.ExpectedPacketLoss.MaxPercent)
+		}
 	}
 	return result
 }
@@ -128,11 +173,16 @@ func (c *Checker) CheckConnectivity(optionalDescription ...interface{}) {
 	c.CheckConnectivityWithTimeoutOffset(2, defaultConnectivityTimeout, optionalDescription...)
 }
 
+func (c *Checker) CheckConnectivityPacketLoss(optionalDescription ...interface{}) {
+	// Timeout is not used for packet loss test because there is no retry.
+	c.CheckConnectivityWithTimeoutOffset(2, 0*time.Second, optionalDescription...)
+}
+
 func (c *Checker) CheckConnectivityWithTimeout(timeout time.Duration, optionalDescription ...interface{}) {
-	gomega.Expect(timeout).To(gomega.BeNumerically(">", 100*time.Millisecond),
+	Expect(timeout).To(BeNumerically(">", 100*time.Millisecond),
 		"Very low timeout, did you mean to multiply by time.<Unit>?")
 	if len(optionalDescription) > 0 {
-		gomega.Expect(optionalDescription[0]).NotTo(gomega.BeAssignableToTypeOf(time.Second),
+		Expect(optionalDescription[0]).NotTo(BeAssignableToTypeOf(time.Second),
 			"Unexpected time.Duration passed for description")
 	}
 	c.CheckConnectivityWithTimeoutOffset(2, timeout, optionalDescription...)
@@ -146,9 +196,9 @@ func (c *Checker) CheckConnectivityWithTimeoutOffset(callerSkip int, timeout tim
 	// do at least one retry before we time out.  That covers the case where the first
 	// connectivity check takes longer than the timeout.
 	completedAttempts := 0
-	var actualConn []*Response
+	var actualConn []*Result
 	var actualConnPretty []string
-	for time.Since(start) < timeout || completedAttempts < 2 {
+	for !c.RetriesDisabled && time.Since(start) < timeout || completedAttempts < 2 {
 		actualConn, actualConnPretty = c.ActualConnectivity()
 		failed := false
 		expConnectivity = c.ExpectedConnectivityPretty()
@@ -173,19 +223,25 @@ func (c *Checker) CheckConnectivityWithTimeoutOffset(callerSkip int, timeout tim
 		strings.Join(actualConnPretty, "\n    "),
 		strings.Join(expConnectivity, "\n    "),
 	)
-	ginkgo.Fail(message, callerSkip)
+	if c.OnFail != nil {
+		c.OnFail(message)
+	} else {
+		ginkgo.Fail(message, callerSkip)
+	}
 }
 
-func NewRequest() Request {
+func NewRequest(payload string) Request {
 	return Request{
 		Timestamp: time.Now(),
 		ID:        uuid.NewV4().String(),
+		Payload:   payload,
 	}
 }
 
 type Request struct {
 	Timestamp time.Time
 	ID        string
+	Payload   string
 }
 
 func (req Request) Equal(oth Request) bool {
@@ -233,13 +289,13 @@ type Matcher struct {
 }
 
 type ConnectionSource interface {
-	CanConnectTo(ip, port, protocol string) *Response
+	CanConnectTo(ip, port, protocol string, duration time.Duration) *Result
 	SourceName() string
 	SourceIPs() []string
 }
 
 func (m *Matcher) Match(actual interface{}) (success bool, err error) {
-	success = actual.(ConnectionSource).CanConnectTo(m.IP, m.Port, m.Protocol) != nil
+	success = actual.(ConnectionSource).CanConnectTo(m.IP, m.Port, m.Protocol, time.Duration(0)) != nil
 	return
 }
 
@@ -256,31 +312,79 @@ func (m *Matcher) NegatedFailureMessage(actual interface{}) (message string) {
 }
 
 type Expectation struct {
-	From      ConnectionSource // Workload or Container
-	To        *Matcher         // Workload or IP, + port
-	Expected  bool
-	ExpSrcIPs []string
+	From               ConnectionSource // Workload or Container
+	To                 *Matcher         // Workload or IP, + port
+	Expected           bool
+	ExpSrcIPs          []string
+	ExpectedPacketLoss ExpPacketLoss
 }
 
-func (e Expectation) Matches(response *Response, checkSNAT bool) bool {
+type ExpPacketLoss struct {
+	Duration   time.Duration // how long test will run
+	MaxPercent float64       // 10 means 10%. -1 means field not valid.
+	MaxNumber  int           // 10 means 10 packets. -1 means field not valid.
+}
+
+func (e Expectation) Matches(response *Result, checkSNAT bool) bool {
 	if e.Expected {
 		if response == nil {
 			return false
 		}
 		if checkSNAT {
 			for _, src := range e.ExpSrcIPs {
-				if src == response.SourceIP() {
+				if src == response.LastResponse.SourceIP() {
 					return true
 				}
 			}
 			return false
 		}
+
+		if e.ExpectedPacketLoss.Duration > 0 {
+			// This is a packet loss test.
+			lossCount := response.Stats.Lost()
+			lossPercent := response.Stats.LostPercent()
+
+			if e.ExpectedPacketLoss.MaxNumber >= 0 && lossCount > e.ExpectedPacketLoss.MaxNumber {
+				return false
+			}
+			if e.ExpectedPacketLoss.MaxPercent >= 0 && lossPercent > e.ExpectedPacketLoss.MaxPercent {
+				return false
+			}
+		}
+
 	} else {
 		if response != nil {
 			return false
 		}
 	}
+
 	return true
 }
 
 var UnactivatedCheckers = set.New()
+
+type Result struct {
+	LastResponse Response
+	Stats        Stats
+}
+
+func (r Result) PrintToStdout() {
+	encoded, err := json.Marshal(r)
+	if err != nil {
+		logrus.WithError(err).Panic("Failed to marshall result to stdout")
+	}
+	fmt.Printf("RESULT=%s\n", string(encoded))
+}
+
+type Stats struct {
+	RequestsSent      int
+	ResponsesReceived int
+}
+
+func (s Stats) Lost() int {
+	return s.RequestsSent - s.ResponsesReceived
+}
+
+func (s Stats) LostPercent() float64 {
+	return float64(s.Lost()) * 100.0 / float64(s.RequestsSent)
+}

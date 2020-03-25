@@ -303,6 +303,10 @@ var _ = infrastructure.DatastoreDescribe("IPIP topology before adding host IPs t
 })
 
 func getNumIPSetMembers(c *containers.Container, ipSetName string) int {
+	return getIPSetCounts(c)[ipSetName]
+}
+
+func getIPSetCounts(c *containers.Container) map[string]int {
 	ipsetsOutput, err := c.ExecOutput("ipset", "list")
 	Expect(err).NotTo(HaveOccurred())
 	numMembers := map[string]int{}
@@ -321,5 +325,5 @@ func getNumIPSetMembers(c *containers.Container, ipSetName string) int {
 			numMembers[currentName]++
 		}
 	}
-	return numMembers[ipSetName]
+	return numMembers
 }

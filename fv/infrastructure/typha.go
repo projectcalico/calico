@@ -23,9 +23,10 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
+	"github.com/projectcalico/typha/pkg/tlsutils"
+
 	"github.com/projectcalico/felix/fv/containers"
 	"github.com/projectcalico/felix/fv/utils"
-	"github.com/projectcalico/typha/pkg/tlsutils"
 )
 
 type Typha struct {
@@ -52,18 +53,21 @@ func RunTypha(infra DatastoreInfra, options TopologyOptions) *Typha {
 
 	if options.WithFelixTyphaTLS {
 		EnsureTLSCredentials()
+		args = append(args, "-v", CertDir+":"+CertDir)
+	}
+
+	if options.WithFelixTyphaTLS {
 		args = append(args,
-			"-e", "TYPHA_CAFILE="+filepath.Join(certDir, "ca.crt"),
-			"-e", "TYPHA_SERVERKEYFILE="+filepath.Join(certDir, "server.key"),
-			"-e", "TYPHA_SERVERCERTFILE="+filepath.Join(certDir, "server.crt"),
+			"-e", "TYPHA_CAFILE="+filepath.Join(CertDir, "ca.crt"),
+			"-e", "TYPHA_SERVERKEYFILE="+filepath.Join(CertDir, "server.key"),
+			"-e", "TYPHA_SERVERCERTFILE="+filepath.Join(CertDir, "server.crt"),
 			"-e", "TYPHA_CLIENTCN=typha-client",
-			"-v", certDir+":"+certDir,
 		)
-		options.ExtraEnvVars["FELIX_TYPHACAFILE"] = filepath.Join(certDir, "ca.crt")
-		options.ExtraEnvVars["FELIX_TYPHAKEYFILE"] = filepath.Join(certDir, "client.key")
-		options.ExtraEnvVars["FELIX_TYPHACERTFILE"] = filepath.Join(certDir, "client.crt")
+		options.ExtraEnvVars["FELIX_TYPHACAFILE"] = filepath.Join(CertDir, "ca.crt")
+		options.ExtraEnvVars["FELIX_TYPHAKEYFILE"] = filepath.Join(CertDir, "client.key")
+		options.ExtraEnvVars["FELIX_TYPHACERTFILE"] = filepath.Join(CertDir, "client.crt")
 		options.ExtraEnvVars["FELIX_TYPHACN"] = "typha-server"
-		options.ExtraVolumes[certDir] = certDir
+		options.ExtraVolumes[CertDir] = CertDir
 	}
 
 	args = append(args,
@@ -80,42 +84,50 @@ func RunTypha(infra DatastoreInfra, options TopologyOptions) *Typha {
 	}
 }
 
-var certDir = ""
+var CertDir = ""
 
 func EnsureTLSCredentials() {
-	if certDir != "" {
+	if CertDir != "" {
 		// Already in place.
 		return
 	}
 
 	// Generate credentials needed for Felix-Typha TLS.
 	var err error
-	certDir, err = ioutil.TempDir("", "felixfv")
+	CertDir, err = ioutil.TempDir("", "felixfv")
 	tlsutils.PanicIfErr(err)
 
 	// Trusted CA.
 	caCert, caKey := tlsutils.MakeCACert("trustedCA")
-	tlsutils.WriteCert(caCert.Raw, filepath.Join(certDir, "ca.crt"))
+	tlsutils.WriteCert(caCert.Raw, filepath.Join(CertDir, "ca.crt"))
+
+	// Untrusted CA.
+	untrustedCert, untrustedKey := tlsutils.MakeCACert("untrustedCA")
 
 	// Typha server.
 	serverCert, serverKey := tlsutils.MakePeerCert("typha-server", "", x509.ExtKeyUsageServerAuth, caCert, caKey)
-	tlsutils.WriteKey(serverKey, filepath.Join(certDir, "server.key"))
-	tlsutils.WriteCert(serverCert, filepath.Join(certDir, "server.crt"))
+	tlsutils.WriteKey(serverKey, filepath.Join(CertDir, "server.key"))
+	tlsutils.WriteCert(serverCert, filepath.Join(CertDir, "server.crt"))
 
 	// Typha client with good CN.
 	clientCert, clientKey := tlsutils.MakePeerCert("typha-client", "", x509.ExtKeyUsageClientAuth, caCert, caKey)
-	tlsutils.WriteKey(clientKey, filepath.Join(certDir, "client.key"))
-	tlsutils.WriteCert(clientCert, filepath.Join(certDir, "client.crt"))
+	tlsutils.WriteKey(clientKey, filepath.Join(CertDir, "client.key"))
+	tlsutils.WriteCert(clientCert, filepath.Join(CertDir, "client.crt"))
+
+	// Untrusted Typha client.
+	clientUntrustedCert, clientUntrustedKey := tlsutils.MakePeerCert("typha-client", "", x509.ExtKeyUsageClientAuth, untrustedCert, untrustedKey)
+	tlsutils.WriteKey(clientUntrustedKey, filepath.Join(CertDir, "client-untrusted.key"))
+	tlsutils.WriteCert(clientUntrustedCert, filepath.Join(CertDir, "client-untrusted.crt"))
 
 	// Ensure that all users can read these credentials.  (Needed because Typha now
 	// runs as non-root.)
-	err = exec.Command("chmod", "-R", "a+rx", certDir).Run()
+	err = exec.Command("chmod", "-R", "a+rx", CertDir).Run()
 	tlsutils.PanicIfErr(err)
 }
 
 func RemoveTLSCredentials() {
-	if certDir != "" {
-		err := os.RemoveAll(certDir)
+	if CertDir != "" {
+		err := os.RemoveAll(CertDir)
 		tlsutils.PanicIfErr(err)
 	}
 }

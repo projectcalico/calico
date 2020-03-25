@@ -1,4 +1,4 @@
-// Copyright (c) 2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017-2020 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,6 +15,7 @@
 package main
 
 import (
+	"bufio"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -295,7 +296,7 @@ func main() {
 			}()
 
 			decoder := json.NewDecoder(conn)
-			encoder := json.NewEncoder(conn)
+			w := bufio.NewWriter(conn)
 
 			for {
 				var request connectivity.Request
@@ -313,7 +314,18 @@ func main() {
 					Request:    request,
 				}
 
-				err = encoder.Encode(&response)
+				respBytes, err := json.Marshal(&response)
+				if err != nil {
+					log.Error("failed to marshall response while handling connection")
+					return
+				}
+				respBytes = append(respBytes, '\n')
+				_, err = w.Write(respBytes)
+				if err != nil {
+					log.Error("failed to write response while handling connection")
+					return
+				}
+				err = w.Flush()
 				if err != nil {
 					log.Error("failed to write response while handling connection")
 					return
@@ -368,9 +380,14 @@ func main() {
 							logCxt.WithError(err).WithField("remoteAddr", addr).Info("Failed to respond")
 							continue
 						}
+						data = append(data, '\n')
 
 						_, err = p.WriteTo(data, addr)
-						logCxt.WithError(err).WithField("remoteAddr", addr).Info("Responded")
+
+						if !utils.IsMessagePartOfStream(request.Payload) {
+							// Only print when packet is not part of stream.
+							logCxt.WithError(err).WithField("remoteAddr", addr).Info("Responded")
+						}
 					}
 				}()
 			} else if useSctp {
