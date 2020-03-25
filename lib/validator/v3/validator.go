@@ -20,6 +20,7 @@ import (
 	"reflect"
 	"regexp"
 	"strings"
+	"time"
 
 	log "github.com/sirupsen/logrus"
 	"gopkg.in/go-playground/validator.v9"
@@ -144,6 +145,7 @@ func init() {
 	registerFieldValidator("iptablesBackend", validateIptablesBackend)
 	registerFieldValidator("prometheusHost", validatePrometheusHost)
 	registerFieldValidator("regexp", validateRegexp)
+	registerFieldValidator("duration", validateDuration)
 
 	// Register network validators (i.e. validating a correctly masked CIDR).  Also
 	// accepts an IP address without a mask (assumes a full mask).
@@ -237,6 +239,13 @@ func validateRegexp(fl validator.FieldLevel) bool {
 	s := fl.Field().String()
 	log.Debugf("Validate regexp: %s", s)
 	_, err := regexp.Compile(s)
+	return err == nil
+}
+
+func validateDuration(fl validator.FieldLevel) bool {
+	s := fl.Field().String()
+	log.Debugf("Validate duration %s", s)
+	_, err := time.ParseDuration(s)
 	return err == nil
 }
 

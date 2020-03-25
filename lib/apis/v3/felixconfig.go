@@ -324,7 +324,7 @@ func NewFelixConfiguration() *FelixConfiguration {
 	}
 }
 
-// NewFelixConfigurationList creates a new 9zeroed) FelixConfigurationList struct with the TypeMetadata
+// NewFelixConfigurationList creates a new (zeroed) FelixConfigurationList struct with the TypeMetadata
 // initialized to the current version.
 func NewFelixConfigurationList() *FelixConfigurationList {
 	return &FelixConfigurationList{
