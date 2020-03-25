@@ -31,6 +31,8 @@ if [ "$CONTEXT" == "deploy-preview" ]; then
     JEKYLL_CONFIG=$JEKYLL_CONFIG,$(pwd)/_config_url.yml
 fi
 
+# build builds a branch $1 into the dir _site/$2. If $2 is not provided, the
+# branch is built into _site/
 function build() {
     echo "[DEBUG] building branch $1 into dir $2"
     TEMP_DIR=$(mktemp -d)
@@ -44,17 +46,21 @@ function build() {
     rsync -r $TEMP_DIR/_site .
 }
 
-# master builds skip the git clone and build the site in the current tree
+# build_master builds skip the git clone and build the site in the current tree
 function build_master() {
     jekyll build --config $JEKYLL_CONFIG --baseurl /master --destination _site/master
 }
 
+# build_archives builds the archives. The release-legacy branch is special
+# and is built into _site directly (the legacy docs were a version per dir).
+# Newer archive versions are built into its own directory for that version.
 function build_archives() {
-    grep -oP '^- \K(.*)' _data/archives.yml | xargs -I _ echo release-_ | while read branch; do
-        if [[ "$branch" == release-legacy*  ]]; then
-            branch="release-legacy"
+    grep -oP '^- \K(.*)' _data/archives.yml | while read branch; do
+        if [[ "$branch" == legacy* ]]; then
+            build release-legacy
+        else
+            build release-${branch} /${branch}
         fi
-        build $branch
     done
 }
 

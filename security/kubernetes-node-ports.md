@@ -1,5 +1,5 @@
 ---
-title: Apply policy to Kubernetes node ports
+title: Apply Calico policy to Kubernetes node ports
 description: Restrict access to Kubernetes node ports using Calico global network policy. Follow the steps to secure the host, the node ports, and the cluster. 
 ---
 

@@ -42,3 +42,28 @@ spec:
               value: "tigera-operator"
             - name: TIGERA_OPERATOR_INIT_IMAGE_VERSION
               value: {{.Values.tigeraOperator.version}}
+{{- if eq .Values.installation.kubernetesProvider "openshift" }}
+      initContainers:
+        - name: create-initial-resources
+          image: {{.Values.calicoctl.image}}:{{.Values.calicoctl.tag}}
+          env:
+            - name: DATASTORE_TYPE
+              value: kubernetes
+          command:
+            - /script/install.sh
+          volumeMounts:
+            - name: calico-resources
+              mountPath: /calico-resources
+            - name: install-resources-script
+              mountPath: /script/install.sh
+              subPath: install.sh
+      volumes:
+        - name: calico-resources
+          configMap:
+            defaultMode: 0400
+            name: calico-resources
+        - name: install-resources-script
+          configMap:
+            defaultMode: 0777
+            name: install-resources-script
+{{- end}}

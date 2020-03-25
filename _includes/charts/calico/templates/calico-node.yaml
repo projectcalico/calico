@@ -275,9 +275,9 @@ spec:
             # Auto-detect the BGP IP address.
             - name: IP
               value: "autodetect"
-            # Enable IPIP
+            # {{- if .Values.bpf -}} For best performance, disable {{- else -}} Enable {{- end -}} IPIP
             - name: CALICO_IPV4POOL_IPIP
-              value: "{{- if .Values.bpf -}} CrossSubnet {{- else -}} Always {{- end -}}"
+              value: "{{- if .Values.bpf -}} Never {{- else -}} Always {{- end -}}"
             # Set MTU for tunnel device used if ipip is enabled
             - name: FELIX_IPINIPMTU
               valueFrom:

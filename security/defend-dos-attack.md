@@ -1,6 +1,6 @@
 ---
 title: Defend against DoS attacks
-description: Define DoS mitigation rules in Calico policy to quickly drop connections when under attack. Learn how rules will use eBPF and XDP, including hardware offload when available.
+description: Define DoS mitigation rules in Calico policy to quickly drop connections when under attack. Learn how rules use eBPF and XDP, including hardware offload when available.
 ---
 
 ### Big picture 

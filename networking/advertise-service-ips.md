@@ -63,7 +63,7 @@ If your {{site.prodname}} deployment is configured to peer with BGP routers outs
 
 1. Determine the service cluster IP range.  (Or ranges, if your cluster is [dual stack]({{ site.baseurl }}/networking/dual-stack).)
 
-   The range(s) for your cluster can be inferred from the `--service-cluster-ip-range` option passed to the Kubernetes API server. For help, see the [Kubernetes API server reference guide](https://kubernetes.io/docs/reference/command-line-tools-reference/kube-apiserver/).
+   The range(s) for your cluster can be inferred from the `--service-cluster-ip-range` option passed to the Kubernetes API server. For help, see the {% include open-new-window.html text='Kubernetes API server reference guide' url='https://kubernetes.io/docs/reference/command-line-tools-reference/kube-apiserver/' %}.
 
 1. Check to see if you have a default BGPConfiguration.
 
@@ -144,7 +144,7 @@ If your {{site.prodname}} deployment is configured to peer with BGP routers outs
 
 ### Tutorial
 
-For a tutorial on how service advertisement works with {{site.prodname}}, see the blog [Kubernetes Service IP Route Advertisement](https://www.projectcalico.org/kubernetes-service-ip-route-advertisement/).
+For a tutorial on how service advertisement works with {{site.prodname}}, see the blog {% include open-new-window.html text='Kubernetes Service IP Route Advertisement' url='https://www.projectcalico.org/kubernetes-service-ip-route-advertisement/' %}.
 
 ### Above and beyond
 

@@ -47,8 +47,7 @@ False`, so at the moment - unfortunately - it *still* has to be understood that
 > **Note**: {{site.prodname}}'s connectivity design, based on IP routing, allows unicast IP
 > and anycast IP. Anycast IP also requires support for allowed-address-pairs,
 > or some other way of assigning the same IP address to more than one instance;
-> work for allowed-address-pairs support is in progress at
-> [https://review.openstack.org/#/c/344008/](https://review.openstack.org/#/c/344008/).
+> work for allowed-address-pairs support is in progress at {% include open-new-window.html text='opendev' url='https://review.openstack.org/#/c/344008/' %}.
 > Multicast IP support is on our roadmap but not yet implemented. Broadcast IP
 > is not possible because it depends on L2 adjacency.
 {: .alert .alert-info}

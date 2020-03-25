@@ -4,7 +4,7 @@ order: 3
 section:
 - title: Adopt a zero trust network model for security
   path: /security/adopt-zero-trust
-- title: Get started
+- title: Get started with policy
   path: /security/get-started
   section:
   - title: Calico policy
@@ -19,26 +19,26 @@ section:
     section:
     - title: Get started with Kubernetes network policy
       path: /security/kubernetes-network-policy
-    - title: Enable default deny for Kubernetes pods
-      path: /security/kubernetes-default-deny
     - title: Kubernetes policy, demo
       path: /security/tutorials/kubernetes-policy-demo/kubernetes-demo
     - title: Kubernetes policy, basic tutorial
       path: /security/tutorials/kubernetes-policy-basic
     - title: Kubernetes policy, advanced tutorial
       path: /security/tutorials/kubernetes-policy-advanced
+  - title: Enable default deny 
+    path: /security/kubernetes-default-deny    
 - title: Policy rules
   path: /security/policy-rules
   section:
-  - title: Overview
+  - title: Basic rules
     path: /security/policy-rules-overview
-  - title: Use namespace in policy rules
+  - title: Namespace rules
     path: /security/namespace-policy
-  - title: Use service accounts in policy rules
+  - title: Service accounts rules
     path: /security/service-accounts
-  - title: Use external IPs or networks in policy rules
+  - title: External IPs or networks rules
     path: /security/external-ips-policy
-  - title: Use ICMP/ping in policy rules
+  - title: ICMP/ping rules
     path: /security/icmp-ping
 - title: Policy for hosts
   path: /security/hosts
@@ -79,7 +79,7 @@ section:
   section:
   - title: Configure encryption and authentication
     path: /security/comms/crypto-auth
-  - title: Schedule to well-known nodes
+  - title: Schedule Typha for scaling to well-known nodes
     path: /security/comms/reduce-nodes
   - title: Secure Calico Prometheus endpoints
     path: /security/comms/secure-metrics

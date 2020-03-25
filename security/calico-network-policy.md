@@ -79,7 +79,7 @@ Each network policy rule applies to either **ingress** or **egress** traffic. Fr
 You can specify whether policy applies to ingress, egress, or both using the **types** field. If you do not use the types field, Calico defaults to the following values.
 
 
-| Ingress rule present? | Engress rule present? |      Value      |
+| Ingress rule present? | Egress rule present?  |      Value      |
 | :-------------------: | :-------------------: | :-------------: |
 |          No           |          No           |     Ingress     |
 |          Yes          |          No           |     Ingress     |

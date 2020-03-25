@@ -1,6 +1,6 @@
 ---
 title: Floating IPs
-description: Configure floating IP in Calico for OpenStack. 
+description: Configure floating IPs in Calico for OpenStack. 
 canonical_url: '/networking/openstack/floating-ips'
 ---
 

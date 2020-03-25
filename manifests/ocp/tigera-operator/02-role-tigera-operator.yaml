@@ -2,5 +2,6 @@
 layout: null
 ---
 {% helm tigera-operator --execute templates/tigera-operator/02-role-tigera-operator.yaml %}
-kubernetesProvider: openshift
+installation:
+  kubernetesProvider: openshift
 {% endhelm %}
