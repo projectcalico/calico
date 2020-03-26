@@ -15,7 +15,7 @@ import (
 
 func init() {
 	log.AddHook(logutils.ContextHook{})
-	log.SetFormatter(&logutils.Formatter{})
+	log.SetFormatter(&logutils.Formatter{Component: "confd"})
 }
 
 // SetLevel sets the log level. Valid levels are panic, fatal, error, warn, info and debug.

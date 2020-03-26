@@ -217,7 +217,7 @@ func (t *TemplateResource) sync() error {
 		return nil
 	}
 	if !ok {
-		log.Info("Target config " + t.Dest + " out of sync")
+		log.Debug("Target config " + t.Dest + " out of sync")
 		if !t.syncOnly && t.CheckCmd != "" {
 			if err := t.check(); err != nil {
 				if isFileExist(t.Dest) {
