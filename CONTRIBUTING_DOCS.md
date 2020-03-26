@@ -11,10 +11,9 @@ The doc contribution process works as follows.
 1. Fork the [Project Calico repo](https://github.com/projectcalico/calico).
 1. Create a branch in your fork off of the master branch.
 1. Give your branch a short but descriptive name.
-1. Make your changes in the `master` folder.
-1. [Build the site locally to make sure it renders as expected](#building-the-doc-site-locally).
-1. [Check for broken links](#checking-for-broken-links).
+1. Preview your changes to make sure they render as expected. You can either [build the site locally](#building-the-doc-site-locally) or go directly to the next step and submit a pull request to [build the site with the Project Calico CI/CD system](#previewing-the-changes-from-cicd).
 1. Submit a pull request (PR) against the master branch of the [Project Calico repo](https://github.com/projectcalico/calico).
+1. [Check for broken links](#checking-for-broken-links).
 1. If you haven't already signed our contributer agreement, GitHub will prompt you to do so (required).
 1. Request a review from one or more Calico maintainers.
 1. After getting the approval of at least one Calico maintainer, we ask that you [backport the changes in the `master` folder to the folders of the last two releases](#how-to-quickly-apply-changes-in-master-to-a-previous-release), if appropriate.
@@ -29,7 +28,9 @@ The doc contribution process works as follows.
 We also encourage you to review [Doc site organization](#doc-site-organization), [Organizational changes](#organizational-changes), [Link syntax](#link-syntax), and [RELEASING.md](RELEASING.md) for additional information.
 
 
-## Building the doc site locally
+## Previewing your changes
+
+### Building the doc site locally
 
 We use GitHub Pages and Jekyll to serve and build our site. While there are [several ways to build the site locally](https://help.github.com/articles/setting-up-your-github-pages-site-locally-with-jekyll/), we recommend using our Docker image and the Makefile in the root of the repo. These will allow you to build the site with a single command.
 
@@ -43,11 +44,15 @@ make serve
 
 Once the build completes, it returns a URL as the value of `Server address:`. Copy and paste this URL into your browser to view the site.
 
-> **Note**: To view the changes that you've made in the master branch, select **nightly** from the **Version** list box.
+> **Note**: To view the changes that you've made in the master branch, select **nightly** from the **Releases** page.
 
 > **Pro tip**: Jekyll can take a while to render every page. To speed up builds, a supplemental `_config_dev.yml` exists which excludes all directories except `master`. You can include it in your builds as follows `jekyll serve --config _config.yml,_config_dev.yml`. Alternatively, you can pass enable it in `make` using the following environment variable `DEV=true make serve`.
 
+### Previewing the changes from CI/CD
 
+The Project Calico CI/CD system will generate a site preview automatically with every docs change. An automated response to the PR will indicate "Deploy preview for calico ready!" and provide a link to the preview. If your change is minor and you are not a regular contributor to the project, this method may be easier than building the doc site locally.
+
+**Note** To view the changes you've made to the master branch, select **nightly** from the **Releases** page. 
 
 ## Checking for broken links
 
