@@ -31,7 +31,6 @@ import (
 	api "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	client "github.com/projectcalico/libcalico-go/lib/clientv3"
 	cerrors "github.com/projectcalico/libcalico-go/lib/errors"
-	"github.com/projectcalico/libcalico-go/lib/logutils"
 	"github.com/projectcalico/libcalico-go/lib/names"
 	cnet "github.com/projectcalico/libcalico-go/lib/net"
 	"github.com/projectcalico/libcalico-go/lib/numorstring"
@@ -283,16 +282,6 @@ func clearNodeIPs(ctx context.Context, client client.Interface, node *api.Node, 
 }
 
 func configureLogging() {
-	// Log to stdout.  this prevents our logs from being interpreted as errors by, for example,
-	// fluentd's default configuration.
-	log.SetOutput(os.Stdout)
-
-	// Set log formatting.
-	log.SetFormatter(&logutils.Formatter{})
-
-	// Install a hook that adds file and line number information.
-	log.AddHook(&logutils.ContextHook{})
-
 	// Default to info level logging
 	logLevel := log.InfoLevel
 

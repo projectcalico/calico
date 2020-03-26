@@ -62,8 +62,9 @@ var confdRunOnce = flagSet.Bool("confd-run-once", false, "Run confd in oneshot m
 var confdKeep = flagSet.Bool("confd-keep-stage-file", false, "Keep stage file when running confd")
 
 func main() {
-	// Set up logging formatting.
-	logrus.SetFormatter(&logutils.Formatter{})
+	// Log to stdout.  this prevents our logs from being interpreted as errors by, for example,
+	// fluentd's default configuration.
+	logrus.SetOutput(os.Stdout)
 
 	// Install a hook that adds file/line no information.
 	logrus.AddHook(&logutils.ContextHook{})
@@ -101,10 +102,13 @@ func main() {
 		fmt.Println(startup.VERSION)
 		os.Exit(0)
 	} else if *runFelix {
+		logrus.SetFormatter(&logutils.Formatter{Component: "felix"})
 		felix.Run("/etc/calico/felix.cfg", buildinfo.GitVersion, buildinfo.GitRevision, buildinfo.BuildDate)
 	} else if *runStartup {
+		logrus.SetFormatter(&logutils.Formatter{Component: "startup"})
 		startup.Run()
 	} else if *runConfd {
+		logrus.SetFormatter(&logutils.Formatter{Component: "confd"})
 		cfg, err := confdConfig.InitConfig(true)
 		cfg.ConfDir = "/etc/calico/confd"
 		cfg.KeepStageFile = *confdKeep
@@ -114,8 +118,10 @@ func main() {
 		}
 		confd.Run(cfg)
 	} else if *allocateTunnelAddrs {
+		logrus.SetFormatter(&logutils.Formatter{Component: "tunnel-ip-allocator"})
 		allocateip.Run()
 	} else if *monitorToken {
+		logrus.SetFormatter(&logutils.Formatter{Component: "cni-config-monitor"})
 		cni.Run()
 	} else {
 		fmt.Println("No valid options provided. Usage:")
