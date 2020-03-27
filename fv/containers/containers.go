@@ -594,15 +594,7 @@ func (c *Container) SourceIPs() []string {
 	return ips
 }
 
-func (c *Container) CanConnectTo(ip, port, protocol string, duration time.Duration) *connectivity.Result {
-	// Ensure that the container has the 'test-connection' binary.
-	logCxt := log.WithField("container", c.Name)
-	logCxt.Debugf("Entering Container.CanConnectTo(%v,%v,%v)", ip, port, protocol)
-	c.EnsureBinary("test-connection")
-
-	// Run 'test-connection' to the target.
-	connectionCmd := utils.Command("docker", "exec", c.Name,
-		"/test-connection", "--protocol="+protocol, "-", ip, port, fmt.Sprintf("--duration=%d", int(duration.Seconds())))
-
-	return utils.RunConnectionCmd(connectionCmd, "Connection test")
+func (c *Container) CanConnectTo(ip, port, protocol string, opts ...connectivity.CheckOption) *connectivity.Result {
+	c.EnsureBinary(connectivity.BinaryName)
+	return connectivity.Check(c.Name, "Connection test", ip, port, protocol, opts...)
 }

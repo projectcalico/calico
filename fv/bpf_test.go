@@ -245,6 +245,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 				for i, felix := range felixes {
 					felix.Exec("iptables-save", "-c")
 					felix.Exec("ip", "r")
+					felix.Exec("ip", "route", "show", "cached")
 					felix.Exec("calico-bpf", "ipsets", "dump")
 					felix.Exec("calico-bpf", "routes", "dump")
 					felix.Exec("calico-bpf", "nat", "dump")
@@ -253,6 +254,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 					log.Infof("[%d]NATBackend: %+v", i, currBpfeps[i])
 					log.Infof("[%d]SendRecvMap: %+v", i, dumpSendRecvMap(felix))
 				}
+				externalClient.Exec("ip", "route", "show", "cached")
 			}
 		})
 
@@ -1061,6 +1063,65 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 								cc.ExpectSome(externalClient, TargetIP(felixes[1].IP), npPort)
 								cc.CheckConnectivity()
 							})
+
+							if testOpts.protocol == "tcp" && !testOpts.connTimeEnabled {
+
+								const (
+									npEncapOverhead = 50
+									hostIfaceMTU    = 1500
+									podIfaceMTU     = 1410
+									sendLen         = hostIfaceMTU
+									recvLen         = podIfaceMTU - npEncapOverhead
+								)
+
+								Context("with TCP, tx/rx close to MTU size on NP via node1->node0 ", func() {
+
+									negative := ""
+									adjusteMTU := podIfaceMTU - npEncapOverhead
+									if testOpts.dsr {
+										negative = "not "
+										adjusteMTU = 0
+									}
+
+									It("should "+negative+"adjust MTU on workload side", func() {
+										// force non-GSO packets when workload replies
+										_, err := w[0][0].RunCmd("ethtool", "-K", "eth0", "gso", "off")
+										Expect(err).NotTo(HaveOccurred())
+										_, err = w[0][0].RunCmd("ethtool", "-K", "eth0", "tso", "off")
+										Expect(err).NotTo(HaveOccurred())
+
+										pmtu, err := w[0][0].PathMTU(externalClient.IP)
+										Expect(err).NotTo(HaveOccurred())
+										Expect(pmtu).To(Equal(0)) // nothing specific for this path yet
+
+										port := []uint16{npPort}
+										cc.ExpectConnectivity(externalClient, TargetIP(felixes[1].IP), port,
+											ExpectWithSendLen(sendLen),
+											ExpectWithRecvLen(recvLen),
+											ExpectWithClientAdjustedMTU(hostIfaceMTU, hostIfaceMTU),
+										)
+										cc.CheckConnectivity()
+
+										pmtu, err = w[0][0].PathMTU(externalClient.IP)
+										Expect(err).NotTo(HaveOccurred())
+										Expect(pmtu).To(Equal(adjusteMTU))
+									})
+
+									It("should not adjust MTU on client side if GRO off on nodes", func() {
+										// force non-GSO packets on node ingress
+										err := felixes[1].ExecMayFail("ethtool", "-K", "eth0", "gro", "off")
+										Expect(err).NotTo(HaveOccurred())
+
+										port := []uint16{npPort}
+										cc.ExpectConnectivity(externalClient, TargetIP(felixes[1].IP), port,
+											ExpectWithSendLen(sendLen),
+											ExpectWithRecvLen(recvLen),
+											ExpectWithClientAdjustedMTU(hostIfaceMTU, hostIfaceMTU),
+										)
+										cc.CheckConnectivity()
+									})
+								})
+							}
 						}
 
 						It("should have connectivity from external to w[0] via node0", func() {

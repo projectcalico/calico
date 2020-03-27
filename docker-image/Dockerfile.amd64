@@ -42,8 +42,9 @@ RUN apt-get update && apt-get install -y \
     # Also needed (provides utilities for browsing procfs like ps)
     procps \
     ca-certificates \
-    # Felix FV tests require wget
-    wget
+    # Felix FV tests require these
+    wget \
+    ethtool
 
 # Default to the xtables backend of iptables.
 RUN update-alternatives --set iptables /usr/sbin/iptables-legacy

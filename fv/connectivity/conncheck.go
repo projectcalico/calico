@@ -16,7 +16,11 @@ package connectivity
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io/ioutil"
+	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -24,8 +28,9 @@ import (
 	"github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/types"
-	"github.com/sirupsen/logrus"
+	log "github.com/sirupsen/logrus"
 
+	"github.com/projectcalico/felix/fv/utils"
 	"github.com/projectcalico/libcalico-go/lib/set"
 
 	uuid "github.com/satori/go.uuid"
@@ -51,55 +56,59 @@ type Checker struct {
 }
 
 func (c *Checker) ExpectSome(from ConnectionSource, to ConnectionTarget, explicitPort ...uint16) {
-	UnactivatedCheckers.Add(c)
-	if c.ReverseDirection {
-		from, to = to.(ConnectionSource), from.(ConnectionTarget)
-	}
-	c.expectations = append(c.expectations, Expectation{From: from, To: to.ToMatcher(explicitPort...), Expected: true, ExpSrcIPs: from.SourceIPs()})
+	c.expect(true, from, to, explicitPort)
 }
 
 func (c *Checker) ExpectSNAT(from ConnectionSource, srcIP string, to ConnectionTarget, explicitPort ...uint16) {
-	UnactivatedCheckers.Add(c)
 	c.CheckSNAT = true
-	if c.ReverseDirection {
-		from, to = to.(ConnectionSource), from.(ConnectionTarget)
-	}
-	c.expectations = append(c.expectations, Expectation{From: from, To: to.ToMatcher(explicitPort...), Expected: true, ExpSrcIPs: []string{srcIP}})
+	c.expect(true, from, to, explicitPort, ExpectWithSrcIPs(srcIP))
 }
 
 func (c *Checker) ExpectNone(from ConnectionSource, to ConnectionTarget, explicitPort ...uint16) {
-	UnactivatedCheckers.Add(c)
-	if c.ReverseDirection {
-		from, to = to.(ConnectionSource), from.(ConnectionTarget)
-	}
-	c.expectations = append(c.expectations, Expectation{From: from, To: to.ToMatcher(explicitPort...), Expected: false, ExpSrcIPs: nil})
+	c.expect(false, from, to, explicitPort)
+}
+
+// ExpectConnectivity asserts existing connectivity between a ConnectionSource
+// and ConnectionTarget with details configurable with ExpectationOption(s).
+// This is a super set of ExpectSome()
+func (c *Checker) ExpectConnectivity(from ConnectionSource, to ConnectionTarget,
+	ports []uint16, opts ...ExpectationOption) {
+	c.expect(true, from, to, ports, opts...)
 }
 
 func (c *Checker) ExpectLoss(from ConnectionSource, to ConnectionTarget,
 	duration time.Duration, maxPacketLossPercent float64, maxPacketLossNumber int, explicitPort ...uint16) {
 
-	Expect(duration.Seconds()).NotTo(BeZero(), "Packet loss test must have a duration")
-	Expect(maxPacketLossPercent).To(BeNumerically("<=", 100), "Loss percentage should be <=100")
-	Expect(maxPacketLossPercent >= 0 || maxPacketLossNumber >= 0).To(BeTrue(), "Either loss count or percent must be specified")
+	// Packet loss measurements shouldn't be retried.
+	c.RetriesDisabled = true
+
+	c.expect(true, from, to, explicitPort, ExpectWithLoss(duration, maxPacketLossPercent, maxPacketLossNumber))
+}
+
+func (c *Checker) expect(connectivity bool, from ConnectionSource, to ConnectionTarget,
+	explicitPort []uint16, opts ...ExpectationOption) {
 
 	UnactivatedCheckers.Add(c)
 	if c.ReverseDirection {
 		from, to = to.(ConnectionSource), from.(ConnectionTarget)
 	}
-	c.expectations = append(c.expectations, Expectation{
-		From:      from,
-		To:        to.ToMatcher(explicitPort...),
-		Expected:  true,
-		ExpSrcIPs: nil,
-		ExpectedPacketLoss: ExpPacketLoss{
-			Duration:   duration,
-			MaxPercent: maxPacketLossPercent,
-			MaxNumber:  maxPacketLossNumber,
-		},
-	})
 
-	// Packet loss measurements shouldn't be retried.
-	c.RetriesDisabled = true
+	e := Expectation{
+		From:     from,
+		To:       to.ToMatcher(explicitPort...),
+		Expected: connectivity,
+	}
+
+	if connectivity {
+		// we expect the from.SourceIPs() by default
+		e.ExpSrcIPs = from.SourceIPs()
+	}
+
+	for _, option := range opts {
+		option(&e)
+	}
+
+	c.expectations = append(c.expectations, e)
 }
 
 func (c *Checker) ResetExpectations() {
@@ -125,22 +134,42 @@ func (c *Checker) ActualConnectivity() ([]*Result, []string) {
 			if c.Protocol != "" {
 				p = c.Protocol
 			}
-			responses[i] = exp.From.CanConnectTo(exp.To.IP, exp.To.Port, p, exp.ExpectedPacketLoss.Duration)
-			pretty[i] = fmt.Sprintf("%s -> %s = %v", exp.From.SourceName(), exp.To.TargetName, responses[i] != nil)
-			if c.CheckSNAT && responses[i] != nil {
-				srcIP := strings.Split(responses[i].LastResponse.SourceAddr, ":")[0]
-				pretty[i] += " (from " + srcIP + ")"
+
+			var res *Result
+
+			opts := []CheckOption{
+				WithDuration(exp.ExpectedPacketLoss.Duration),
 			}
-			if exp.ExpectedPacketLoss.Duration > 0 && responses[i] != nil {
-				sent := responses[i].Stats.RequestsSent
-				lost := responses[i].Stats.Lost()
-				pct := responses[i].Stats.LostPercent()
-				pretty[i] += fmt.Sprintf(" (sent: %d, lost: %d / %.1f%%)", sent, lost, pct)
+
+			if exp.sendLen > 0 || exp.recvLen > 0 {
+				opts = append(opts, WithSendLen(exp.sendLen), WithRecvLen(exp.recvLen))
 			}
+
+			res = exp.From.CanConnectTo(exp.To.IP, exp.To.Port, p, opts...)
+
+			pretty[i] += fmt.Sprintf("%s -> %s = %v", exp.From.SourceName(), exp.To.TargetName, res != nil)
+
+			if res != nil {
+				if c.CheckSNAT {
+					srcIP := strings.Split(res.LastResponse.SourceAddr, ":")[0]
+					pretty[i] += " (from " + srcIP + ")"
+				}
+				if res.ClientMTU.Start != 0 {
+					pretty[i] += fmt.Sprintf(" (client MTU %d -> %d)", res.ClientMTU.Start, res.ClientMTU.End)
+				}
+				if exp.ExpectedPacketLoss.Duration > 0 {
+					sent := res.Stats.RequestsSent
+					lost := res.Stats.Lost()
+					pct := res.Stats.LostPercent()
+					pretty[i] += fmt.Sprintf(" (sent: %d, lost: %d / %.1f%%)", sent, lost, pct)
+				}
+			}
+
+			responses[i] = res
 		}(i, exp)
 	}
 	wg.Wait()
-	logrus.Debug("Connectivity", responses)
+	log.Debug("Connectivity", responses)
 	return responses, pretty
 }
 
@@ -150,14 +179,21 @@ func (c *Checker) ExpectedConnectivityPretty() []string {
 	result := make([]string, len(c.expectations))
 	for i, exp := range c.expectations {
 		result[i] = fmt.Sprintf("%s -> %s = %v", exp.From.SourceName(), exp.To.TargetName, exp.Expected)
-		if c.CheckSNAT && exp.Expected {
-			result[i] += " (from " + strings.Join(exp.ExpSrcIPs, "|") + ")"
+		if exp.Expected {
+			if c.CheckSNAT {
+				result[i] += " (from " + strings.Join(exp.ExpSrcIPs, "|") + ")"
+			}
+			if exp.clientMTUStart != 0 || exp.clientMTUEnd != 0 {
+				result[i] += fmt.Sprintf(" (client MTU %d -> %d)", exp.clientMTUStart, exp.clientMTUEnd)
+			}
 		}
-		if exp.ExpectedPacketLoss.MaxNumber >= 0 {
-			result[i] += fmt.Sprintf(" (maxLoss: %d packets)", exp.ExpectedPacketLoss.MaxNumber)
-		}
-		if exp.ExpectedPacketLoss.MaxPercent >= 0 {
-			result[i] += fmt.Sprintf(" (maxLoss: %.1f%%)", exp.ExpectedPacketLoss.MaxPercent)
+		if exp.ExpectedPacketLoss.Duration > 0 {
+			if exp.ExpectedPacketLoss.MaxNumber >= 0 {
+				result[i] += fmt.Sprintf(" (maxLoss: %d packets)", exp.ExpectedPacketLoss.MaxNumber)
+			}
+			if exp.ExpectedPacketLoss.MaxPercent >= 0 {
+				result[i] += fmt.Sprintf(" (maxLoss: %.1f%%)", exp.ExpectedPacketLoss.MaxPercent)
+			}
 		}
 	}
 	return result
@@ -239,9 +275,11 @@ func NewRequest(payload string) Request {
 }
 
 type Request struct {
-	Timestamp time.Time
-	ID        string
-	Payload   string
+	Timestamp    time.Time
+	ID           string
+	Payload      string
+	SendSize     int
+	ResponseSize int
 }
 
 func (req Request) Equal(oth Request) bool {
@@ -257,7 +295,7 @@ type Response struct {
 	Request Request
 }
 
-func (r Response) SourceIP() string {
+func (r *Response) SourceIP() string {
 	return strings.Split(r.SourceAddr, ":")[0]
 }
 
@@ -289,13 +327,13 @@ type Matcher struct {
 }
 
 type ConnectionSource interface {
-	CanConnectTo(ip, port, protocol string, duration time.Duration) *Result
+	CanConnectTo(ip, port, protocol string, opts ...CheckOption) *Result
 	SourceName() string
 	SourceIPs() []string
 }
 
 func (m *Matcher) Match(actual interface{}) (success bool, err error) {
-	success = actual.(ConnectionSource).CanConnectTo(m.IP, m.Port, m.Protocol, time.Duration(0)) != nil
+	success = actual.(ConnectionSource).CanConnectTo(m.IP, m.Port, m.Protocol) != nil
 	return
 }
 
@@ -311,12 +349,69 @@ func (m *Matcher) NegatedFailureMessage(actual interface{}) (message string) {
 	return
 }
 
+type ExpectationOption func(e *Expectation)
+
+func ExpectWithSrcIPs(ips ...string) ExpectationOption {
+	return func(e *Expectation) {
+		e.ExpSrcIPs = ips
+	}
+}
+
+// ExpectWithSendLen asserts how much additional data on top of the original
+// requests should be sent with success
+func ExpectWithSendLen(l int) ExpectationOption {
+	return func(e *Expectation) {
+		e.sendLen = l
+	}
+}
+
+// ExpectWithRecvLen asserts how much additional data on top of the original
+// response should be received with success
+func ExpectWithRecvLen(l int) ExpectationOption {
+	return func(e *Expectation) {
+		e.recvLen = l
+	}
+}
+
+// ExpectWithClientAdjustedMTU asserts that the connection MTU should change
+// during the transfer
+func ExpectWithClientAdjustedMTU(from, to int) ExpectationOption {
+	return func(e *Expectation) {
+		e.clientMTUStart = from
+		e.clientMTUEnd = to
+	}
+}
+
+// ExpectWithLoss asserts that the connection has a certain loos rate
+func ExpectWithLoss(duration time.Duration, maxPacketLossPercent float64, maxPacketLossNumber int) ExpectationOption {
+	Expect(duration.Seconds()).NotTo(BeZero(),
+		"Packet loss test must have a duration")
+	Expect(maxPacketLossPercent).To(BeNumerically("<=", 100),
+		"Loss percentage should be <=100")
+	Expect(maxPacketLossPercent >= 0 || maxPacketLossNumber >= 0).To(BeTrue(),
+		"Either loss count or percent must be specified")
+
+	return func(e *Expectation) {
+		e.ExpectedPacketLoss = ExpPacketLoss{
+			Duration:   duration,
+			MaxPercent: maxPacketLossPercent,
+			MaxNumber:  maxPacketLossNumber,
+		}
+	}
+}
+
 type Expectation struct {
 	From               ConnectionSource // Workload or Container
 	To                 *Matcher         // Workload or IP, + port
 	Expected           bool
 	ExpSrcIPs          []string
 	ExpectedPacketLoss ExpPacketLoss
+
+	sendLen int
+	recvLen int
+
+	clientMTUStart int
+	clientMTUEnd   int
 }
 
 type ExpPacketLoss struct {
@@ -331,11 +426,22 @@ func (e Expectation) Matches(response *Result, checkSNAT bool) bool {
 			return false
 		}
 		if checkSNAT {
+			match := false
 			for _, src := range e.ExpSrcIPs {
 				if src == response.LastResponse.SourceIP() {
-					return true
+					match = true
+					break
 				}
 			}
+			if !match {
+				return false
+			}
+		}
+
+		if e.clientMTUStart != 0 && e.clientMTUStart != response.ClientMTU.Start {
+			return false
+		}
+		if e.clientMTUEnd != 0 && e.clientMTUEnd != response.ClientMTU.End {
 			return false
 		}
 
@@ -363,15 +469,22 @@ func (e Expectation) Matches(response *Result, checkSNAT bool) bool {
 
 var UnactivatedCheckers = set.New()
 
+// MTUPair is a pair of MTU value recorded before and after data were transfered
+type MTUPair struct {
+	Start int
+	End   int
+}
+
 type Result struct {
 	LastResponse Response
 	Stats        Stats
+	ClientMTU    MTUPair
 }
 
 func (r Result) PrintToStdout() {
 	encoded, err := json.Marshal(r)
 	if err != nil {
-		logrus.WithError(err).Panic("Failed to marshall result to stdout")
+		log.WithError(err).Panic("Failed to marshall result to stdout")
 	}
 	fmt.Printf("RESULT=%s\n", string(encoded))
 }
@@ -387,4 +500,197 @@ func (s Stats) Lost() int {
 
 func (s Stats) LostPercent() float64 {
 	return float64(s.Lost()) * 100.0 / float64(s.RequestsSent)
+}
+
+// CheckOption is the option format for Check()
+type CheckOption func(cmd *CheckCmd)
+
+// CheckCmd is exported solely for the sake of CheckOption and should not be use
+// on its own
+type CheckCmd struct {
+	nsPath string
+
+	ip       string
+	port     string
+	protocol string
+
+	ipSource   string
+	portSource string
+
+	duration time.Duration
+
+	sendLen int
+	recvLen int
+}
+
+// BinaryName is the name of the binry that the connectivity Check() executes
+const BinaryName = "test-connection"
+
+// Run executes the check command
+func (cmd *CheckCmd) run(cName string, logMsg string) *Result {
+	// Ensure that the container has the 'test-connection' binary.
+	logCxt := log.WithField("container", cName)
+	logCxt.Debugf("Entering connectivity.Check(%v,%v,%v,%v,%v)",
+		cmd.ip, cmd.port, cmd.protocol, cmd.sendLen, cmd.recvLen)
+
+	args := []string{"exec", cName,
+		"/test-connection", "--protocol=" + cmd.protocol,
+		fmt.Sprintf("--duration=%d", int(cmd.duration.Seconds())),
+		fmt.Sprintf("--sendlen=%d", cmd.sendLen),
+		fmt.Sprintf("--recvlen=%d", cmd.recvLen),
+		cmd.nsPath, cmd.ip, cmd.port,
+	}
+
+	if cmd.ipSource != "" {
+		args = append(args, fmt.Sprintf("--source-ip=%s", cmd.ipSource))
+	}
+
+	if cmd.portSource != "" {
+		args = append(args, fmt.Sprintf("--source-port=%s", cmd.portSource))
+	}
+
+	// Run 'test-connection' to the target.
+	connectionCmd := utils.Command("docker", args...)
+
+	outPipe, err := connectionCmd.StdoutPipe()
+	Expect(err).NotTo(HaveOccurred())
+	errPipe, err := connectionCmd.StderrPipe()
+	Expect(err).NotTo(HaveOccurred())
+	err = connectionCmd.Start()
+	Expect(err).NotTo(HaveOccurred())
+
+	var wg sync.WaitGroup
+	wg.Add(2)
+	var wOut, wErr []byte
+	var outErr, errErr error
+
+	go func() {
+		defer wg.Done()
+		wOut, outErr = ioutil.ReadAll(outPipe)
+	}()
+
+	go func() {
+		defer wg.Done()
+		wErr, errErr = ioutil.ReadAll(errPipe)
+	}()
+
+	wg.Wait()
+	Expect(outErr).NotTo(HaveOccurred())
+	Expect(errErr).NotTo(HaveOccurred())
+
+	err = connectionCmd.Wait()
+
+	logCxt.WithFields(log.Fields{
+		"stdout": string(wOut),
+		"stderr": string(wErr)}).WithError(err).Info(logMsg)
+
+	if err != nil {
+		return nil
+	}
+
+	r := regexp.MustCompile(`RESULT=(.*)\n`)
+	m := r.FindSubmatch(wOut)
+	if len(m) > 0 {
+		var resp Result
+		err := json.Unmarshal(m[1], &resp)
+		if err != nil {
+			logCxt.WithError(err).WithField("output", string(wOut)).Panic("Failed to parse connection check response")
+		}
+		return &resp
+	}
+
+	return nil
+}
+
+// WithSourceIP tell the check what source IP to use
+func WithSourceIP(ip string) CheckOption {
+	return func(c *CheckCmd) {
+		c.ipSource = ip
+	}
+}
+
+// WithSourcePort tell the check what source port to use
+func WithSourcePort(port string) CheckOption {
+	return func(c *CheckCmd) {
+		c.portSource = port
+	}
+}
+
+func WithNamespacePath(nsPath string) CheckOption {
+	return func(c *CheckCmd) {
+		c.nsPath = nsPath
+	}
+}
+
+func WithDuration(duration time.Duration) CheckOption {
+	return func(c *CheckCmd) {
+		c.duration = duration
+	}
+}
+
+func WithSendLen(l int) CheckOption {
+	return func(c *CheckCmd) {
+		c.sendLen = l
+	}
+}
+
+func WithRecvLen(l int) CheckOption {
+	return func(c *CheckCmd) {
+		c.recvLen = l
+	}
+}
+
+// Check executes the connectivity check
+func Check(cName, logMsg, ip, port, protocol string, opts ...CheckOption) *Result {
+
+	cmd := CheckCmd{
+		nsPath:   "-",
+		ip:       ip,
+		port:     port,
+		protocol: protocol,
+	}
+
+	for _, opt := range opts {
+		opt(&cmd)
+	}
+
+	return cmd.run(cName, logMsg)
+}
+
+const ConnectionTypeStream = "stream"
+const ConnectionTypePing = "ping"
+
+type ConnConfig struct {
+	ConnType string
+	ConnID   string
+}
+
+func (cc ConnConfig) getTestMessagePrefix() string {
+	return cc.ConnType + ":" + cc.ConnID + "~"
+}
+
+// Assembly a test message.
+func (cc ConnConfig) GetTestMessage(sequence int) Request {
+	req := NewRequest(cc.getTestMessagePrefix() + fmt.Sprintf("%d", sequence))
+	return req
+}
+
+// Extract sequence number from test message.
+func (cc ConnConfig) GetTestMessageSequence(msg string) (int, error) {
+	msg = strings.TrimSpace(msg)
+	seqString := strings.TrimPrefix(msg, cc.getTestMessagePrefix())
+	if seqString == msg {
+		// TrimPrefix failed.
+		return 0, errors.New("invalid message prefix format:" + msg)
+	}
+
+	seq, err := strconv.Atoi(seqString)
+	if err != nil || seq < 0 {
+		return 0, errors.New("invalid message sequence format:" + msg)
+	}
+	return seq, nil
+}
+
+func IsMessagePartOfStream(msg string) bool {
+	return strings.HasPrefix(strings.TrimSpace(msg), ConnectionTypeStream)
 }

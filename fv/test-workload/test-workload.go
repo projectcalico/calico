@@ -26,9 +26,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/projectcalico/felix/fv/connectivity"
-
 	"github.com/projectcalico/felix/fv/cgroup"
+	"github.com/projectcalico/felix/fv/connectivity"
+	"github.com/projectcalico/felix/fv/utils"
 
 	"github.com/containernetworking/plugins/pkg/ns"
 	nsutils "github.com/containernetworking/plugins/pkg/testutils"
@@ -36,8 +36,6 @@ import (
 	"github.com/ishidawataru/sctp"
 	log "github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
-
-	"github.com/projectcalico/felix/fv/utils"
 )
 
 const usage = `test-workload, test workload for Felix FV testing.
@@ -103,8 +101,11 @@ func main() {
 		}
 		// Create a veth pair.
 		veth := &netlink.Veth{
-			LinkAttrs: netlink.LinkAttrs{Name: interfaceName},
-			PeerName:  peerName,
+			LinkAttrs: netlink.LinkAttrs{
+				Name: interfaceName,
+				MTU:  1410, // XXX tie it with felix configuration
+			},
+			PeerName: peerName,
 		}
 		err = netlink.LinkAdd(veth)
 		panicIfError(err)
@@ -295,6 +296,16 @@ func main() {
 				log.WithError(err).Info("Closed connection.")
 			}()
 
+			if hasSyscallConn, ok := conn.(utils.HasSyscallConn); ok {
+				mtu, err := utils.ConnMTU(hasSyscallConn)
+				log.WithError(err).Infof("server start PMTU: %d", mtu)
+
+				defer func() {
+					mtu, err := utils.ConnMTU(hasSyscallConn)
+					log.WithError(err).Infof("server end PMTU: %d", mtu)
+				}()
+			}
+
 			decoder := json.NewDecoder(conn)
 			w := bufio.NewWriter(conn)
 
@@ -305,6 +316,36 @@ func main() {
 				if err != nil {
 					log.WithError(err).Error("failed to read request")
 					return
+				}
+
+				if request.SendSize > 0 {
+					rcv := request.SendSize
+					buff := make([]byte, 4096)
+
+					r := decoder.Buffered()
+
+					for rcv > 0 {
+						n, err := r.Read(buff)
+						rcv -= n
+						if err == io.EOF {
+							break
+						}
+					}
+
+					for rcv > 0 {
+						var err error
+						n := 0
+						if rcv < 4096 {
+							n, err = conn.Read(buff[:rcv])
+						} else {
+							n, err = conn.Read(buff)
+						}
+						rcv -= n
+						if err != nil {
+							log.Errorf("Reading from connection failed. %d bytes too short\n", rcv)
+							return
+						}
+					}
 				}
 
 				response := connectivity.Response{
@@ -329,6 +370,22 @@ func main() {
 				if err != nil {
 					log.Error("failed to write response while handling connection")
 					return
+				}
+
+				if request.ResponseSize > 0 {
+					wrt := bufio.NewWriter(conn)
+					respBytes = make([]byte, request.ResponseSize)
+					respBytes[request.ResponseSize-1] = '\n'
+					n, err := wrt.Write(respBytes)
+					if err != nil {
+						log.Errorf("Writing to connection failed. %d bytes too short", request.ResponseSize-n)
+						break
+					}
+					err = wrt.Flush()
+					if err != nil {
+						log.Errorf("Writing to connection failed to flush out", request.ResponseSize-n)
+						break
+					}
 				}
 			}
 		}
@@ -384,7 +441,7 @@ func main() {
 
 						_, err = p.WriteTo(data, addr)
 
-						if !utils.IsMessagePartOfStream(request.Payload) {
+						if !connectivity.IsMessagePartOfStream(request.Payload) {
 							// Only print when packet is not part of stream.
 							logCxt.WithError(err).WithField("remoteAddr", addr).Info("Responded")
 						}
