@@ -99,7 +99,7 @@ For compatibility with Kubernetes, **Calico network policy** follows the same be
 
 ### Before you begin
 
-Calicoctl must be **installed** and **configured** before use. If calicoctl is printing *"no etcd endpoints specified"*, please configure Calico to either a Kubernetes or etcd datastore.
+Calicoctl must be **installed** and **configured** before use. Calicoctl will use etcd as the datastore by default, but many Calico installation manifests configure Kubernetes as the datastore. You can find more information on how to install and configure calicoctl in the following links:
 
 - [Install Calicoctl]({{ site.baseurl }}/getting-started/calicoctl/install)
 - [Configure Calicoctl]({{ site.baseurl }}/getting-started/calicoctl/configure/overview)
