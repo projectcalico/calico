@@ -336,6 +336,11 @@ func (b *mockDatastore) NetworkSets() clientv3.NetworkSetInterface {
 	panic("not implemented")
 }
 
+// KubeControllersConfiguration returns an interface for managing the kubecontrollers configuration resources.
+func (b *mockDatastore) KubeControllersConfiguration() clientv3.KubeControllersConfigurationInterface {
+	panic("not implemented")
+}
+
 func (b *mockDatastore) Backend() bapi.Client {
 	panic("not implemented")
 }
