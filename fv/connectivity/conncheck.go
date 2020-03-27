@@ -68,9 +68,10 @@ func (c *Checker) ExpectNone(from ConnectionSource, to ConnectionTarget, explici
 	c.expect(false, from, to, explicitPort)
 }
 
-// ExpectDataTransfer check if sendLen can be send to the dest and whether
-// recvLen of data can be received from the dest reliably
-func (c *Checker) ExpectDataTransfer(from TransferSource, to ConnectionTarget,
+// ExpectConnectivity asserts existing connectivity between a ConnectionSource
+// and ConnectionTarget with details configurable with ExpectationOption(s).
+// This is a super set of ExpectSome()
+func (c *Checker) ExpectConnectivity(from ConnectionSource, to ConnectionTarget,
 	ports []uint16, opts ...ExpectationOption) {
 	c.expect(true, from, to, ports, opts...)
 }
@@ -135,12 +136,16 @@ func (c *Checker) ActualConnectivity() ([]*Result, []string) {
 			}
 
 			var res *Result
-			if exp.sendLen > 0 || exp.recvLen > 0 {
-				res = exp.From.(TransferSource).
-					CanTransferData(exp.To.IP, exp.To.Port, p, exp.sendLen, exp.recvLen)
-			} else {
-				res = exp.From.CanConnectTo(exp.To.IP, exp.To.Port, p, exp.ExpectedPacketLoss.Duration)
+
+			opts := []CheckOption{
+				WithDuration(exp.ExpectedPacketLoss.Duration),
 			}
+
+			if exp.sendLen > 0 || exp.recvLen > 0 {
+				opts = append(opts, WithSendLen(exp.sendLen), WithRecvLen(exp.recvLen))
+			}
+
+			res = exp.From.CanConnectTo(exp.To.IP, exp.To.Port, p, opts...)
 
 			pretty[i] += fmt.Sprintf("%s -> %s = %v", exp.From.SourceName(), exp.To.TargetName, res != nil)
 
@@ -322,19 +327,13 @@ type Matcher struct {
 }
 
 type ConnectionSource interface {
-	CanConnectTo(ip, port, protocol string, duration time.Duration) *Result
+	CanConnectTo(ip, port, protocol string, opts ...CheckOption) *Result
 	SourceName() string
 	SourceIPs() []string
 }
 
-// TransferSource can connect and also can transfer data to/from
-type TransferSource interface {
-	ConnectionSource
-	CanTransferData(ip, port, protocol string, sendLen, recvLen int) *Result
-}
-
 func (m *Matcher) Match(actual interface{}) (success bool, err error) {
-	success = actual.(ConnectionSource).CanConnectTo(m.IP, m.Port, m.Protocol, time.Duration(0)) != nil
+	success = actual.(ConnectionSource).CanConnectTo(m.IP, m.Port, m.Protocol) != nil
 	return
 }
 

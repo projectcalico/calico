@@ -1095,7 +1095,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 										Expect(pmtu).To(Equal(0)) // nothing specific for this path yet
 
 										port := []uint16{npPort}
-										cc.ExpectDataTransfer(externalClient, TargetIP(felixes[1].IP), port,
+										cc.ExpectConnectivity(externalClient, TargetIP(felixes[1].IP), port,
 											ExpectWithSendLen(sendLen),
 											ExpectWithRecvLen(recvLen),
 											ExpectWithClientAdjustedMTU(hostIfaceMTU, hostIfaceMTU),
@@ -1113,7 +1113,7 @@ func describeBPFTests(opts ...bpfTestOpt) bool {
 										Expect(err).NotTo(HaveOccurred())
 
 										port := []uint16{npPort}
-										cc.ExpectDataTransfer(externalClient, TargetIP(felixes[1].IP), port,
+										cc.ExpectConnectivity(externalClient, TargetIP(felixes[1].IP), port,
 											ExpectWithSendLen(sendLen),
 											ExpectWithRecvLen(recvLen),
 											ExpectWithClientAdjustedMTU(hostIfaceMTU, hostIfaceMTU),

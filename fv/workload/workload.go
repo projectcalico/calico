@@ -236,18 +236,11 @@ func (w *Workload) SourceIPs() []string {
 	return []string{w.IP}
 }
 
-func (w *Workload) CanConnectTo(ip, port, protocol string, duration time.Duration) *connectivity.Result {
+func (w *Workload) CanConnectTo(ip, port, protocol string, opts ...connectivity.CheckOption) *connectivity.Result {
 	anyPort := Port{
 		Workload: w,
 	}
-	return anyPort.CanConnectTo(ip, port, protocol, duration)
-}
-
-func (w *Workload) CanTransferData(ip, port, protocol string, sendLen, recvLen int) *connectivity.Result {
-	anyPort := Port{
-		Workload: w,
-	}
-	return anyPort.CanTransferData(ip, port, protocol, 0, sendLen, recvLen)
+	return anyPort.CanConnectTo(ip, port, protocol, opts...)
 }
 
 func (w *Workload) Port(port uint16) *Port {
@@ -550,8 +543,9 @@ type SpoofedWorkload struct {
 	SpoofedSourceIP string
 }
 
-func (s *SpoofedWorkload) CanConnectTo(ip, port, protocol string, duration time.Duration) *connectivity.Result {
-	return canConnectTo(s.Workload, ip, port, s.SpoofedSourceIP, "", protocol, duration, 0, 0)
+func (s *SpoofedWorkload) CanConnectTo(ip, port, protocol string, opts ...connectivity.CheckOption) *connectivity.Result {
+	opts = append(opts, connectivity.WithSourceIP(s.SpoofedSourceIP))
+	return canConnectTo(s.Workload, ip, port, protocol, "(spoofed)", opts...)
 }
 
 type Port struct {
@@ -572,20 +566,12 @@ func (p *Port) SourceIPs() []string {
 
 // Return if a connection is good and packet loss string "PacketLoss[xx]".
 // If it is not a packet loss test, packet loss string is "".
-func (p *Port) CanConnectTo(ip, port, protocol string, duration time.Duration) *connectivity.Result {
-	srcPort := strconv.Itoa(int(p.Port))
-	return canConnectTo(p.Workload, ip, port, "", srcPort, protocol, duration, 0, 0)
+func (p *Port) CanConnectTo(ip, port, protocol string, opts ...connectivity.CheckOption) *connectivity.Result {
+	opts = append(opts, connectivity.WithSourcePort(strconv.Itoa(int(p.Port))))
+	return canConnectTo(p.Workload, ip, port, protocol, "(with source port)", opts...)
 }
 
-func (p *Port) CanTransferData(ip, port, protocol string,
-	duration time.Duration, sendLen, recvLen int) *connectivity.Result {
-
-	srcPort := strconv.Itoa(int(p.Port))
-	return canConnectTo(p.Workload, ip, port, "", srcPort, protocol, duration, sendLen, recvLen)
-}
-
-func canConnectTo(w *Workload, ip, port, srcIp, srcPort, protocol string,
-	duration time.Duration, sendLen, recvLen int) *connectivity.Result {
+func canConnectTo(w *Workload, ip, port, protocol, logSuffix string, opts ...connectivity.CheckOption) *connectivity.Result {
 
 	if protocol == "udp" || protocol == "sctp" {
 		// If this is a retry then we may have stale conntrack entries and we don't want those
@@ -601,21 +587,9 @@ func canConnectTo(w *Workload, ip, port, srcIp, srcPort, protocol string,
 
 	logMsg := "Connection test"
 
-	opts := []connectivity.CheckOption{
-		connectivity.WithNamespacePath(w.namespacePath),
-		connectivity.WithDuration(duration),
-		connectivity.WithSendLen(sendLen),
-		connectivity.WithRecvLen(recvLen),
-	}
-
-	if srcIp != "" {
-		logMsg += " (spoofed)"
-		opts = append(opts, connectivity.WithSourceIP(srcIp))
-	}
-	if srcPort != "" {
-		logMsg += " (with source port)"
-		opts = append(opts, connectivity.WithSourcePort(srcPort))
-	}
+	// enforce the name space as we want to execute it in the workload
+	opts = append(opts, connectivity.WithNamespacePath(w.namespacePath))
+	logMsg += " " + logSuffix
 
 	w.C.EnsureBinary(connectivity.BinaryName)
 

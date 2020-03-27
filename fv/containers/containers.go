@@ -594,18 +594,7 @@ func (c *Container) SourceIPs() []string {
 	return ips
 }
 
-func (c *Container) checkConnectivity(ip, port, protocol string,
-	opts ...connectivity.CheckOption) *connectivity.Result {
-
+func (c *Container) CanConnectTo(ip, port, protocol string, opts ...connectivity.CheckOption) *connectivity.Result {
 	c.EnsureBinary(connectivity.BinaryName)
 	return connectivity.Check(c.Name, "Connection test", ip, port, protocol, opts...)
-}
-
-func (c *Container) CanConnectTo(ip, port, protocol string, duration time.Duration) *connectivity.Result {
-	return c.checkConnectivity(ip, port, protocol, connectivity.WithDuration(duration))
-}
-
-func (c *Container) CanTransferData(ip, port, protocol string, sendLen, recvLen int) *connectivity.Result {
-	return c.checkConnectivity(ip, port, protocol,
-		connectivity.WithSendLen(sendLen), connectivity.WithRecvLen(recvLen))
 }
