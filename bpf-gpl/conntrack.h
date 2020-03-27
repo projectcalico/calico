@@ -30,6 +30,23 @@ struct calico_ct_key {
 	uint16_t port_a, port_b; // HBO
 };
 
+#define src_lt_dest(ip_src, ip_dst, sport, dport) \
+	((ip_src) < (ip_dst)) || (((ip_src) == (ip_dst)) && (sport) < (dport))
+
+#define __ct_make_key(proto, ipa, ipb, porta, portb) 		\
+		(struct calico_ct_key) {			\
+			.protocol = proto,			\
+			.addr_a = ipa, .port_a = porta,		\
+			.addr_b = ipb, .port_b = portb,		\
+		}
+
+#define ct_make_key(sltd, p, ipa, ipb, pta, ptb) ({						\
+	struct calico_ct_key k;									\
+	k = sltd ? __ct_make_key(p, ipa, ipb, pta, ptb) : __ct_make_key(p, ipb, ipa, ptb, pta);	\
+	dump_ct_key(&k);									\
+	k;											\
+})
+
 enum cali_ct_type {
 	CALI_CT_TYPE_NORMAL	= 0x00, /* Non-NATted entry. */
 	CALI_CT_TYPE_NAT_FWD	= 0x01, /* Forward entry for a DNATted flow, keyed on orig src/dst.
@@ -148,21 +165,8 @@ static CALI_BPF_INLINE int calico_ct_v4_create_tracking(struct ct_ctx *ctx,
 		 */
 		CALI_DEBUG("CT-ALL Asked to create entry but packet is marked as "
 				"from another endpoint, doing lookup\n");
-		bool srcLTDest = (ip_src < ip_dst) || ((ip_src == ip_dst) && sport < dport);
-		if (srcLTDest) {
-			*k = (struct calico_ct_key) {
-				.protocol = ctx->proto,
-				.addr_a = ip_src, .port_a = sport,
-				.addr_b = ip_dst, .port_b = dport,
-			};
-		} else  {
-			*k = (struct calico_ct_key) {
-				.protocol = ctx->proto,
-				.addr_a = ip_dst, .port_a = dport,
-				.addr_b = ip_src, .port_b = sport,
-			};
-		}
-		dump_ct_key(k);
+		bool srcLTDest = src_lt_dest(ip_src, ip_dst, sport, dport);
+		*k = ct_make_key(srcLTDest, ctx->proto, ip_src, ip_dst, sport, dport);
 		struct calico_ct_value *ct_value = bpf_map_lookup_elem(&cali_v4_ct, k);
 		if (!ct_value) {
 			CALI_VERB("CT Packet marked as from workload but got a conntrack miss!\n");
@@ -341,23 +345,8 @@ static CALI_BPF_INLINE void calico_ct_v4_tcp_delete(
 	CALI_DEBUG("CT-TCP delete from %x:%d\n", be32_to_host(ip_src), sport);
 	CALI_DEBUG("CT-TCP delete to   %x:%d\n", be32_to_host(ip_dst), dport);
 
-	bool srcLTDest = (ip_src < ip_dst) || ((ip_src == ip_dst) && sport < dport);
-	struct calico_ct_key k;
-	if (srcLTDest) {
-		k = (struct calico_ct_key) {
-			.protocol = IPPROTO_TCP,
-			.addr_a = ip_src, .port_a = sport,
-			.addr_b = ip_dst, .port_b = dport,
-		};
-	} else  {
-		k = (struct calico_ct_key) {
-			.protocol = IPPROTO_TCP,
-			.addr_a = ip_dst, .port_a = dport,
-			.addr_b = ip_src, .port_b = sport,
-		};
-	}
-
-	dump_ct_key(&k);
+	bool srcLTDest = src_lt_dest(ip_src, ip_dst, sport, dport);
+	struct calico_ct_key k = ct_make_key(srcLTDest, IPPROTO_TCP, ip_src, ip_dst, sport, dport);
 
 	int rc = bpf_map_delete_elem(&cali_v4_ct, &k);
 	CALI_DEBUG("CT-TCP delete result: %d\n", rc);
@@ -425,7 +414,6 @@ static CALI_BPF_INLINE void ct_tcp_entry_update(struct tcphdr *tcp_header,
 	}
 }
 
-
 static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_lookup(struct ct_ctx *ctx)
 {
 	__u8 proto = ctx->proto;
@@ -454,22 +442,8 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_lookup(struct ct_ctx
 		goto out_lookup_fail;
 	}
 
-	bool srcLTDest = (ip_src < ip_dst) || ((ip_src == ip_dst) && sport < dport);
-	struct calico_ct_key k;
-	if (srcLTDest) {
-		k = (struct calico_ct_key) {
-			.protocol = proto,
-			.addr_a = ip_src, .port_a = sport,
-			.addr_b = ip_dst, .port_b = dport,
-		};
-	} else  {
-		k = (struct calico_ct_key) {
-			.protocol = proto,
-			.addr_a = ip_dst, .port_a = dport,
-			.addr_b = ip_src, .port_b = sport,
-		};
-	}
-	dump_ct_key(&k);
+	bool srcLTDest = src_lt_dest(ip_src, ip_dst, sport, dport);
+	struct calico_ct_key k = ct_make_key(srcLTDest, proto, ip_src, ip_dst, sport, dport);
 
 	struct calico_ct_value *v = bpf_map_lookup_elem(&cali_v4_ct, &k);
 	if (!v) {
