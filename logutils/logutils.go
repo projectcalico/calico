@@ -53,7 +53,7 @@ func ConfigureEarlyLogging() {
 
 	// Replace logrus' formatter with a custom one using our time format,
 	// shared with the Python code.
-	log.SetFormatter(&logutils.Formatter{})
+	log.SetFormatter(&logutils.Formatter{Component: "felix"})
 
 	// Install a hook that adds file/line no information.
 	log.AddHook(&logutils.ContextHook{})
