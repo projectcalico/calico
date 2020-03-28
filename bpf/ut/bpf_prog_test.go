@@ -593,3 +593,8 @@ func testPacket(ethAlt *layers.Ethernet, ipv4Alt *layers.IPv4, l4Alt gopacket.La
 func testPacketUDPDefault() (*layers.Ethernet, *layers.IPv4, gopacket.Layer, []byte, []byte, error) {
 	return testPacket(nil, nil, nil, nil)
 }
+
+func resetBPFMaps() {
+	resetCTMap(ctMap)
+	resetRTMap(rtMap)
+}

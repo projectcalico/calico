@@ -193,4 +193,18 @@ static CALI_BPF_INLINE int icmp_v4_ttl_exceeded(struct __sk_buff *skb)
 	return icmp_v4_reply(skb, ICMP_TIME_EXCEEDED, ICMP_EXC_TTL, 0);
 }
 
+static CALI_BPF_INLINE bool icmp_type_is_err(__u8 type)
+{
+	switch (type) {
+	case ICMP_DEST_UNREACH:
+	case ICMP_SOURCE_QUENCH:
+	case ICMP_REDIRECT:
+	case ICMP_TIME_EXCEEDED:
+	case ICMP_PARAMETERPROB:
+		return true;
+	}
+
+	return false;
+}
+
 #endif /* __CALI_ICMP_H__ */

@@ -508,6 +508,7 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 	}
 
 	struct ct_ctx ct_lookup_ctx = {
+		.skb = skb,
 		.proto	= state.ip_proto,
 		.src	= state.ip_src,
 		.sport	= state.sport,

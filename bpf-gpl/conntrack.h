@@ -21,6 +21,7 @@
 #include <linux/in.h>
 #include "nat.h"
 #include "bpf.h"
+#include "icmp.h"
 
 // Connection tracking.
 
@@ -339,6 +340,69 @@ struct calico_ct_result {
 	__be32 tun_ret_ip;
 };
 
+/* skb_is_icmp_err_unpack fills in ctx, but only what needs to be changed. For instance, keeps the
+ * cxt->skb or ctx->nat_tun_src. It returns true if the original packet is an icmp error and all
+ * checks went well.
+ */
+static CALI_BPF_INLINE bool skb_is_icmp_err_unpack(struct __sk_buff *skb, struct ct_ctx *ctx)
+{
+	struct iphdr *ip;
+	struct icmphdr *icmp;
+	long ip_off;
+	__u8 proto;
+	int minsz;
+
+	ip_off = skb_iphdr_offset(skb);
+	minsz = ip_off + sizeof(struct iphdr) + sizeof(struct icmphdr) + sizeof(struct iphdr) + 8;
+
+	if (skb_shorter(skb, minsz)) {
+		CALI_DEBUG("CT-ICMP: %d shorter than %d\n", skb_len_dir_access(skb), minsz);
+		return false;
+	}
+
+	ip = skb_iphdr(skb);
+
+	if (ip->ihl != 5) {
+		CALI_INFO("CT-ICMP: ip options unsupported\n");
+		return false;
+	}
+
+	icmp = (struct icmphdr *)(ip + 1);
+	ip = (struct iphdr *)(icmp + 1); /* skip to inner ip */
+
+	if (!icmp_type_is_err(icmp->type)) {
+		CALI_DEBUG("CT-ICMP: type %d not an error\n", icmp->type);
+		return false;
+	}
+
+	proto = ip->protocol;
+	CALI_DEBUG("CT-ICMP: proto %d\n", proto);
+
+	ctx->proto = proto;
+	ctx->src = ip->saddr;
+	ctx->dst = ip->daddr;
+
+	switch (proto) {
+	case IPPROTO_TCP:
+		{
+			struct tcphdr *tcp = (struct tcphdr *)(ip + 1);
+			ctx->sport = be16_to_host(tcp->source);
+			ctx->dport = be16_to_host(tcp->dest);
+			ctx->tcp = tcp;
+		}
+		break;
+	case IPPROTO_UDP:
+		{
+			struct udphdr *udp = (struct udphdr *)(ip + 1);
+			ctx->sport = be16_to_host(udp->source);
+			ctx->dport = be16_to_host(udp->dest);
+		}
+		break;
+	};
+
+	return true;
+}
+
 static CALI_BPF_INLINE void calico_ct_v4_tcp_delete(
 		__be32 ip_src, __be32 ip_dst, __u16 sport, __u16 dport)
 {
@@ -353,7 +417,7 @@ static CALI_BPF_INLINE void calico_ct_v4_tcp_delete(
 }
 
 #define CALI_CT_LOG(level, fmt, ...) \
-	CALI_LOG_IF_FLAG(level, CALI_COMPILE_FLAGS, "CT-%d "fmt, proto, ## __VA_ARGS__)
+	CALI_LOG_IF_FLAG(level, CALI_COMPILE_FLAGS, "CT-%d "fmt, proto_orig, ## __VA_ARGS__)
 #define CALI_CT_DEBUG(fmt, ...) \
 	CALI_CT_LOG(CALI_LOG_LEVEL_DEBUG, fmt, ## __VA_ARGS__)
 #define CALI_CT_VERB(fmt, ...) \
@@ -365,7 +429,7 @@ static CALI_BPF_INLINE void ct_tcp_entry_update(struct tcphdr *tcp_header,
 						struct calico_ct_leg *src_to_dst,
 						struct calico_ct_leg *dst_to_src)
 {
-	__u8 proto = IPPROTO_TCP; /* used by logging */
+	__u8 proto_orig = IPPROTO_TCP; /* used by logging */
 
 	if (tcp_header->rst) {
 		CALI_CT_DEBUG("RST seen, marking CT entry.\n");
@@ -416,12 +480,13 @@ static CALI_BPF_INLINE void ct_tcp_entry_update(struct tcphdr *tcp_header,
 
 static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_lookup(struct ct_ctx *ctx)
 {
-	__u8 proto = ctx->proto;
+	__u8 proto_orig = ctx->proto;
 	__be32 ip_src = ctx->src;
 	__be32 ip_dst = ctx->dst;
 	__u16 sport = ctx->sport;
 	__u16 dport = ctx->dport;
 	struct tcphdr *tcp_header = ctx->tcp;
+	bool related = false;
 
 	CALI_CT_DEBUG("lookup from %x:%d\n", be32_to_host(ip_src), sport);
 	CALI_CT_DEBUG("lookup to   %x:%d\n", be32_to_host(ip_dst), dport);
@@ -443,12 +508,36 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_lookup(struct ct_ctx
 	}
 
 	bool srcLTDest = src_lt_dest(ip_src, ip_dst, sport, dport);
-	struct calico_ct_key k = ct_make_key(srcLTDest, proto, ip_src, ip_dst, sport, dport);
+	struct calico_ct_key k = ct_make_key(srcLTDest, ctx->proto, ip_src, ip_dst, sport, dport);
 
 	struct calico_ct_value *v = bpf_map_lookup_elem(&cali_v4_ct, &k);
 	if (!v) {
-		CALI_CT_DEBUG("Miss.\n");
-		goto out_lookup_fail;
+		if (ctx->proto != IPPROTO_ICMP) {
+			CALI_CT_DEBUG("Miss.\n");
+			goto out_lookup_fail;
+		}
+		if (!skb_is_icmp_err_unpack(ctx->skb, ctx)) {
+			CALI_CT_DEBUG("unrelated icmp\n");
+			goto out_lookup_fail;
+		}
+
+		ip_src = ctx->src;
+		ip_dst = ctx->dst;
+		sport = ctx->sport;
+		dport = ctx->dport;
+		tcp_header = ctx->tcp;
+
+		CALI_CT_DEBUG("CT-ICMP related lookup from %x:%d\n", be32_to_host(ip_src), sport);
+		CALI_CT_DEBUG("CT-ICMP related lookup to   %x:%d\n", be32_to_host(ip_dst), dport);
+
+		srcLTDest = src_lt_dest(ip_src, ip_dst, sport, dport);
+		k = ct_make_key(srcLTDest, ctx->proto, ip_src, ip_dst, sport, dport);
+		v = bpf_map_lookup_elem(&cali_v4_ct, &k);
+		if (!v) {
+			CALI_CT_DEBUG("Miss on ICMP related\n");
+			goto out_lookup_fail;
+		}
+		related = true;
 	}
 
 	__u64 now = bpf_ktime_get_ns();
@@ -488,7 +577,7 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_lookup(struct ct_ctx
 		result.tun_ret_ip = tracking_v->tun_ip;
 		CALI_CT_DEBUG("fwd tun_ip:%x\n", be32_to_host(tracking_v->tun_ip));
 
-		if (proto == IPPROTO_ICMP) {
+		if (ctx->proto == IPPROTO_ICMP) {
 			result.rc =	CALI_CT_ESTABLISHED_DNAT;
 			result.nat_ip = tracking_v->orig_ip;
 		} else if (CALI_F_TO_HOST) {
@@ -510,7 +599,7 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_lookup(struct ct_ctx
 			dst_to_src = &v->a_to_b;
 		}
 
-		if (proto == IPPROTO_ICMP) {
+		if (ctx->proto == IPPROTO_ICMP) {
 			result.rc =	CALI_CT_ESTABLISHED_SNAT;
 			result.nat_ip = v->orig_ip;
 			break;
@@ -595,6 +684,19 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_lookup(struct ct_ctx
 				src_to_dst->whitelisted &&
 				!result.tun_ret_ip;
 
+	if (related) {
+		if (proto_orig == IPPROTO_ICMP) {
+			/* flip src/dst as ICMP related carries the original ip/l4 headers in
+			 * opposite direction - it is a reaction on the original packet.
+			 */
+			struct calico_ct_leg *tmp;
+
+			tmp = src_to_dst;
+			src_to_dst = dst_to_src;
+			dst_to_src = tmp;
+		}
+	}
+
 	if (CALI_F_TO_HOST && !ctx->nat_tun_src) {
 		/* Source of the packet is the endpoint, so check the src whitelist. */
 		if (src_to_dst->whitelisted) {
@@ -626,7 +728,7 @@ static CALI_BPF_INLINE struct calico_ct_result calico_ct_v4_lookup(struct ct_ctx
 		}
 	}
 
-	if (tcp_header) {
+	if (tcp_header && !related) {
 		if (ret_from_tun) {
 			/* we returned from tunnel, we are after SNAT, unlike
 			 * with NAT on workload, we hit FWD entry in both
