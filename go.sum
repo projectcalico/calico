@@ -241,6 +241,8 @@ github.com/projectcalico/libcalico-go v1.7.2-0.20191213004157-43756ead7b6c h1:7V
 github.com/projectcalico/libcalico-go v1.7.2-0.20191213004157-43756ead7b6c/go.mod h1:5Upl9epOoyHRS1D4O9nckdFUtB0munzl4T1yoW52S14=
 github.com/projectcalico/libcalico-go v1.7.2-0.20191214003639-2449a6f3ad4f h1:N1vtiA7i9GbCnWa1B67QGZ5jPPJllPd9g1odqUqGdbk=
 github.com/projectcalico/libcalico-go v1.7.2-0.20191214003639-2449a6f3ad4f/go.mod h1:5Upl9epOoyHRS1D4O9nckdFUtB0munzl4T1yoW52S14=
+github.com/projectcalico/libcalico-go v1.7.2-0.20200325215000-9afaf4873979 h1:anhvKdh1eqwQDYhPOEF/H5ZST/eKCg+1kK0lsoPE3O8=
+github.com/projectcalico/libcalico-go v1.7.2-0.20200325215000-9afaf4873979/go.mod h1:yd3FK67e+YeaYtKw5ImPw+YFyFF/G0ZCzbbwNAwwZh8=
 github.com/projectcalico/logrus v1.0.4-calico h1:bHJ2KLGTFzoWpRISe13CO7HVxxrKunDjyUz/wFiBY8c=
 github.com/projectcalico/logrus v1.0.4-calico/go.mod h1:DfgrchabbtEO9wjOz5lVae+XRvjFKKWEA9GTMme6A8g=
 github.com/projectcalico/typha v0.0.0-20200101040924-dd530012dcd1 h1:XKVoel+AbDMw+n6uicDype9ZDiS+4AQ39wIWAAANSYY=
@@ -279,6 +281,8 @@ github.com/projectcalico/typha v0.0.0-20200305041717-2ec620b935d5 h1:EmE4S9oIkYZ
 github.com/projectcalico/typha v0.0.0-20200305041717-2ec620b935d5/go.mod h1:y/iY6sbJr3PkD9rykamaMt6BPNx/79vsixBVEzA1M6g=
 github.com/projectcalico/typha v0.0.0-20200312041120-11b950f8164f h1:ajxhlBnBrWIBAlkSrPSmDM0sJjrGLhFttQNLcBDm5gg=
 github.com/projectcalico/typha v0.0.0-20200312041120-11b950f8164f/go.mod h1:5blbpI3NKdVvgy+ZQJM4pEoKt5Xqdj5vHMfRu8M4Fjg=
+github.com/projectcalico/typha v0.0.0-20200327230615-99d223e5f7bd h1:q9KPrKdP2R9pv3y3eYKBj/4RKcjdAYQXuKdihSVks28=
+github.com/projectcalico/typha v0.0.0-20200327230615-99d223e5f7bd/go.mod h1:JeWELyUMIYWsxsiKAXu9H8LYJ6mOTrhlNqJagOaczgs=
 github.com/projectcalico/typha v0.7.2/go.mod h1:pu3HHmupPjQFDgYi+nF6sG8sRsCKU50Lku1pGBEFQAM=
 github.com/projectcalico/typha v0.7.3-0.20191204184435-8efd36dbad90 h1:2g+V/sYsuh1M4W6hVVR9fw0nPyoXuKMEyAGDXLAHzLk=
 github.com/projectcalico/typha v0.7.3-0.20191204184435-8efd36dbad90/go.mod h1:+7pruopMI1kPhTEqAub9e8bD3hsMbOQNyi9vcXbKr2U=
