@@ -868,35 +868,33 @@ func (m *endpointManager) resolveHostEndpoints() {
 			log.WithField("id", id).Info("Updating host endpoint chains.")
 			hostEp := m.rawHostEndpoints[id]
 
-			if !m.bpfEnabled {
-				// Update the filter chain, for normal traffic.
-				var ingressPolicyNames, egressPolicyNames []string
-				var ingressForwardPolicyNames, egressForwardPolicyNames []string
-				if len(hostEp.Tiers) > 0 {
-					ingressPolicyNames = hostEp.Tiers[0].IngressPolicies
-					egressPolicyNames = hostEp.Tiers[0].EgressPolicies
-				}
-				if len(hostEp.ForwardTiers) > 0 {
-					ingressForwardPolicyNames = hostEp.ForwardTiers[0].IngressPolicies
-					egressForwardPolicyNames = hostEp.ForwardTiers[0].EgressPolicies
-				}
-
-				filtChains := m.ruleRenderer.HostEndpointToFilterChains(
-					ifaceName,
-					m.epMarkMapper,
-					ingressPolicyNames,
-					egressPolicyNames,
-					ingressForwardPolicyNames,
-					egressForwardPolicyNames,
-					hostEp.ProfileIds,
-				)
-
-				if !reflect.DeepEqual(filtChains, m.activeHostIfaceToFiltChains[ifaceName]) {
-					m.filterTable.UpdateChains(filtChains)
-				}
-				newHostIfaceFiltChains[ifaceName] = filtChains
-				delete(m.activeHostIfaceToFiltChains, ifaceName)
+			// Update the filter chain, for normal traffic.
+			var ingressPolicyNames, egressPolicyNames []string
+			var ingressForwardPolicyNames, egressForwardPolicyNames []string
+			if len(hostEp.Tiers) > 0 {
+				ingressPolicyNames = hostEp.Tiers[0].IngressPolicies
+				egressPolicyNames = hostEp.Tiers[0].EgressPolicies
 			}
+			if len(hostEp.ForwardTiers) > 0 {
+				ingressForwardPolicyNames = hostEp.ForwardTiers[0].IngressPolicies
+				egressForwardPolicyNames = hostEp.ForwardTiers[0].EgressPolicies
+			}
+
+			filtChains := m.ruleRenderer.HostEndpointToFilterChains(
+				ifaceName,
+				m.epMarkMapper,
+				ingressPolicyNames,
+				egressPolicyNames,
+				ingressForwardPolicyNames,
+				egressForwardPolicyNames,
+				hostEp.ProfileIds,
+			)
+
+			if !reflect.DeepEqual(filtChains, m.activeHostIfaceToFiltChains[ifaceName]) {
+				m.filterTable.UpdateChains(filtChains)
+			}
+			newHostIfaceFiltChains[ifaceName] = filtChains
+			delete(m.activeHostIfaceToFiltChains, ifaceName)
 		}
 
 		newHostIfaceMangleChains := map[string][]*iptables.Chain{}
