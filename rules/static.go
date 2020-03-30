@@ -842,6 +842,7 @@ func (r *DefaultRuleRenderer) StaticRawPreroutingChain(ipVersion uint8) *Chain {
 			Rule{
 				Match: Match().
 					Protocol("udp").
+					SourceNet("0.0.0.0").
 					SourcePorts(dhcpSrcPort).
 					DestPorts(dhcpDestPort),
 				Action: AcceptAction{},
