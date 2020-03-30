@@ -1,4 +1,4 @@
-// Copyright (c) 2016 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016,2020 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -33,8 +33,10 @@ var (
 	typeHostMetadata  = reflect.TypeOf(HostMetadata{})
 	typeOrchRefs      = reflect.TypeOf([]OrchRef{})
 	typeHostIp        = rawIPType
+	typeWireguard     = reflect.TypeOf(Wireguard{})
 	matchHostMetadata = regexp.MustCompile(`^/?calico/v1/host/([^/]+)/metadata$`)
 	matchHostIp       = regexp.MustCompile(`^/?calico/v1/host/([^/]+)/bird_ip$`)
+	matchWireguard    = regexp.MustCompile(`^/?calico/v1/host/([^/]+)/wireguard$`)
 )
 
 type Node struct {
@@ -56,6 +58,11 @@ type Node struct {
 type OrchRef struct {
 	Orchestrator string `json:"orchestrator,omitempty"`
 	NodeName     string `json:"nodeName,omitempty"`
+}
+
+type Wireguard struct {
+	InterfaceIPv4Addr *net.IP `json:"interfaceIPv4Addr,omitempty"`
+	PublicKey         string  `json:"publicKey,omitempty"`
 }
 
 type NodeKey struct {
@@ -218,4 +225,55 @@ func (options OrchRefListOptions) defaultPathRoot() string {
 
 func (options OrchRefListOptions) KeyFromDefaultPath(path string) Key {
 	return OrchRefKey{Hostname: options.Hostname}
+}
+
+// The Felix Wireguard Key.
+type WireguardKey struct {
+	NodeName string
+}
+
+func (key WireguardKey) defaultPath() (string, error) {
+	if key.NodeName == "" {
+		return "", errors.ErrorInsufficientIdentifiers{Name: "name"}
+	}
+	return fmt.Sprintf("/calico/v1/host/%s/wireguard",
+		key.NodeName), nil
+}
+
+func (key WireguardKey) defaultDeletePath() (string, error) {
+	return key.defaultPath()
+}
+
+func (key WireguardKey) defaultDeleteParentPaths() ([]string, error) {
+	return nil, nil
+}
+
+func (key WireguardKey) valueType() (reflect.Type, error) {
+	return typeWireguard, nil
+}
+
+func (key WireguardKey) String() string {
+	return fmt.Sprintf("Node(nodename=%s)", key.NodeName)
+}
+
+type WireguardListOptions struct {
+	NodeName string
+}
+
+func (options WireguardListOptions) defaultPathRoot() string {
+	if options.NodeName == "" {
+		return "/calico/v1/host"
+	} else {
+		return fmt.Sprintf("/calico/v1/host/%s/wireguard", options.NodeName)
+	}
+}
+
+func (options WireguardListOptions) KeyFromDefaultPath(path string) Key {
+	log.Debugf("Get Node key from %s", path)
+	if r := matchWireguard.FindAllStringSubmatch(path, -1); len(r) == 1 {
+		return WireguardKey{NodeName: r[0][1]}
+	} else {
+		log.Debugf("%s didn't match regex", path)
+		return nil
+	}
 }

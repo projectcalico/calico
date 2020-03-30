@@ -1,4 +1,4 @@
-// Copyright (c) 2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017,2020 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -35,6 +35,8 @@ type Node struct {
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 	// Specification of the Node.
 	Spec NodeSpec `json:"spec,omitempty"`
+	// Status of the Node.
+	Status NodeStatus `json:"status,omitempty"`
 }
 
 // NodeSpec contains the specification for a Node resource.
@@ -50,6 +52,15 @@ type NodeSpec struct {
 
 	// OrchRefs for this node.
 	OrchRefs []OrchRef `json:"orchRefs,omitempty" validate:"omitempty"`
+
+	// Wireguard configuration for this node.
+	Wireguard *NodeWireguardSpec `json:"wireguard,omitempty" validate:"omitempty"`
+}
+
+type NodeStatus struct {
+	// WireguardPublicKey is the Wireguard public-key for this node.
+	// wireguardPublicKey validates if the string is a valid base64 encoded key.
+	WireguardPublicKey string `json:"wireguardPublicKey,omitempty" validate:"omitempty,wireguardPublicKey"`
 }
 
 // OrchRef is used to correlate a Calico node to its corresponding representation in a given orchestrator
@@ -76,6 +87,12 @@ type NodeBGPSpec struct {
 	// RouteReflectorClusterID enables this node as a route reflector within the given
 	// cluster.
 	RouteReflectorClusterID string `json:"routeReflectorClusterID,omitempty" validate:"omitempty,ipv4"`
+}
+
+// NodeWireguardSpec contains the specification for the Node wireguard configuration.
+type NodeWireguardSpec struct {
+	// InterfaceIPv4Address is the IPv4 address for the Wireguard interface.
+	InterfaceIPv4Address string `json:"interfaceIpv4Address,omitempty" validate:"omitempty,ipv4"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object

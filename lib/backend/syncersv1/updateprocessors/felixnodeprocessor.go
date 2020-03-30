@@ -1,4 +1,4 @@
-// Copyright (c) 2019 Tigera, Inc. All rights reserved.
+// Copyright (c) 2019-2020 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -24,6 +24,8 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	"github.com/projectcalico/libcalico-go/lib/backend/watchersyncer"
 	cnet "github.com/projectcalico/libcalico-go/lib/net"
+
+	wg "golang.zx2c4.com/wireguard/wgctrl/wgtypes"
 )
 
 // Create a new SyncerUpdateProcessor to sync Node data in v1 format for
@@ -48,7 +50,7 @@ func (c *FelixNodeUpdateProcessor) Process(kvp *model.KVPair) ([]*model.KVPair, 
 	// v1 model.  For a delete these will all be nil.  If we fail to convert any value then
 	// just treat that as a delete on the underlying key and return the error alongside
 	// the updates.
-	var ipv4, ipv4Tunl, vxlanTunlIp, vxlanTunlMac interface{}
+	var ipv4, ipv4Tunl, vxlanTunlIp, vxlanTunlMac, wgConfig interface{}
 	var node *apiv3.Node
 	var ok bool
 	if kvp.Value != nil {
@@ -112,6 +114,34 @@ func (c *FelixNodeUpdateProcessor) Process(kvp *model.KVPair) ([]*model.KVPair, 
 				err = fmt.Errorf("failed to update VXLANTunnelMACAddr")
 			}
 		}
+
+		var wgIfaceIpv4Addr *cnet.IP
+		var wgPubKey string
+		if wgSpec := node.Spec.Wireguard; wgSpec != nil {
+			if len(wgSpec.InterfaceIPv4Address) != 0 {
+				wgIfaceIpv4Addr = cnet.ParseIP(wgSpec.InterfaceIPv4Address)
+				if wgIfaceIpv4Addr != nil {
+					log.WithField("InterfaceIPv4Addr", wgIfaceIpv4Addr).Debug("Parsed Wireguard interface address")
+				} else {
+					log.WithField("InterfaceIPv4Addr", wgSpec.InterfaceIPv4Address).Warn("Failed to parse InterfaceIPv4Address")
+					err = fmt.Errorf("failed to parse InterfaceIPv4Address as an IP address")
+				}
+			}
+		}
+		if wgPubKey = node.Status.WireguardPublicKey; wgPubKey != "" {
+			_, err := wg.ParseKey(wgPubKey)
+			if err == nil {
+				log.WithField("public-key", wgPubKey).Debug("Parsed Wireguard public-key")
+			} else {
+				log.WithField("WireguardPublicKey", wgPubKey).Warn("Failed to parse Wireguard public-key")
+				err = fmt.Errorf("failed to parse PublicKey as Wireguard public-key")
+			}
+		}
+		// If either of interface address or public-key is set, set the WireguardKey value.
+		// If we failed to parse both the values, leave the WireguardKey value empty.
+		if wgIfaceIpv4Addr != nil || wgPubKey != "" {
+			wgConfig = &model.Wireguard{InterfaceIPv4Addr: wgIfaceIpv4Addr, PublicKey: wgPubKey}
+		}
 	}
 
 	// Return the add/delete updates and any errors.
@@ -153,6 +183,13 @@ func (c *FelixNodeUpdateProcessor) Process(kvp *model.KVPair) ([]*model.KVPair, 
 				Kind: apiv3.KindNode,
 			},
 			Value:    node,
+			Revision: kvp.Revision,
+		},
+		{
+			Key: model.WireguardKey{
+				NodeName: name,
+			},
+			Value:    wgConfig,
 			Revision: kvp.Revision,
 		},
 	}, err

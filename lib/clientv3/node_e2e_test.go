@@ -1,4 +1,4 @@
-// Copyright (c) 2017 Tigera, Inc. All rights reserved.
+// Copyright (c) 2017,2020 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -151,6 +151,37 @@ var _ = testutils.E2eDatastoreDescribe("Node tests (kdd)", testutils.DatastoreK8
 		Expect(err).NotTo(HaveOccurred())
 		Expect(node.Spec.IPv4VXLANTunnelAddr).To(Equal(""))
 	})
+
+	It("should update Wireguard interface address on a node", func() {
+		c, err := clientv3.New(config)
+		Expect(err).NotTo(HaveOccurred())
+		be, err := backend.NewClient(config)
+		Expect(err).NotTo(HaveOccurred())
+		be.Clean()
+
+		// Get a node.
+		By("Querying a node with no Wireguard spec")
+		name := "127.0.0.1"
+		node, err := c.Nodes().Get(ctx, name, options.GetOptions{})
+		Expect(err).NotTo(HaveOccurred())
+
+		// Wit no Wireguard config, wireguard spec should be nil.
+		Expect(node.Spec.Wireguard).To(BeNil())
+
+		// Update the Wireguard spec.
+		By("Updating the Wireguard spec")
+		node.Spec.Wireguard = &apiv3.NodeWireguardSpec{}
+		node.Spec.Wireguard.InterfaceIPv4Address = "192.168.1.1"
+		_, err = c.Nodes().Update(ctx, node, options.SetOptions{})
+		Expect(err).NotTo(HaveOccurred())
+
+		By("Querying the node again")
+		node, err = c.Nodes().Get(ctx, name, options.GetOptions{})
+		Expect(err).NotTo(HaveOccurred())
+
+		// It should now not be nil.
+		Expect(node.Spec.Wireguard).NotTo(BeNil())
+	})
 })
 
 var _ = testutils.E2eDatastoreDescribe("Node tests (etcdv3)", testutils.DatastoreEtcdV3, func(config apiconfig.CalicoAPIConfig) {
@@ -174,6 +205,9 @@ var _ = testutils.E2eDatastoreDescribe("Node tests (etcdv3)", testutils.Datastor
 				NodeName:     "node1",
 			},
 		},
+		Wireguard: &apiv3.NodeWireguardSpec{
+			InterfaceIPv4Address: "192.168.50.7",
+		},
 	}
 	spec2 := apiv3.NodeSpec{
 		BGP: &apiv3.NodeBGPSpec{
@@ -191,6 +225,10 @@ var _ = testutils.E2eDatastoreDescribe("Node tests (etcdv3)", testutils.Datastor
 			},
 		},
 	}
+	status := apiv3.NodeStatus{
+		WireguardPublicKey: "jlkVyQYooZYzI2wFfNhSZez5eWh44yfq1wKVjLvSXgY=",
+	}
+
 	Describe("nodes", func() {
 		It("should clean up weps, IPAM allocations, etc. when deleted", func() {
 			c, err := clientv3.New(config)
@@ -363,7 +401,7 @@ var _ = testutils.E2eDatastoreDescribe("Node tests (etcdv3)", testutils.Datastor
 	})
 
 	DescribeTable("Node e2e CRUD tests",
-		func(name1, name2 string, spec1, spec2 apiv3.NodeSpec) {
+		func(name1, name2 string, spec1, spec2 apiv3.NodeSpec, status apiv3.NodeStatus) {
 			c, err := clientv3.New(config)
 			Expect(err).NotTo(HaveOccurred())
 
@@ -563,10 +601,27 @@ var _ = testutils.E2eDatastoreDescribe("Node tests (etcdv3)", testutils.Datastor
 			_, outError = c.Nodes().Get(ctx, name2, options.GetOptions{})
 			Expect(outError).To(HaveOccurred())
 			Expect(outError.Error()).To(ContainSubstring("resource does not exist: Node(" + name2 + ") with error:"))
+
+			By("Setting status no node resource")
+			res1, outError = c.Nodes().Create(ctx, &apiv3.Node{
+				ObjectMeta: metav1.ObjectMeta{Name: name1},
+				Spec:       spec1,
+			}, options.SetOptions{})
+			Expect(outError).ToNot(HaveOccurred())
+			res1.Status = status
+			res, outError = c.Nodes().Update(ctx, res1, options.SetOptions{})
+			Expect(outError).ToNot(HaveOccurred())
+			Expect(res).To(MatchResourceWithStatus(apiv3.KindNode, testutils.ExpectNoNamespace, name1, spec1, status))
+
+			By("Getting resource and verifying status is present")
+			res, outError = c.Nodes().Get(ctx, name1, options.GetOptions{})
+			Expect(outError).ToNot(HaveOccurred())
+			Expect(res).To(MatchResourceWithStatus(apiv3.KindNode, testutils.ExpectNoNamespace, name1, spec1, status))
+
 		},
 
 		// Test 1: Pass two fully populated NodeSpecs and expect the series of operations to succeed.
-		Entry("Two fully populated NodeSpecs", name1, name2, spec1, spec2),
+		Entry("Two fully populated NodeSpecs", name1, name2, spec1, spec2, status),
 	)
 
 	Describe("Node watch functionality", func() {
