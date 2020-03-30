@@ -1,5 +1,5 @@
 ---
-title: Calico policy, advanced tutorial
+title: Calico policy tutorial
 description: Learn how to create more advanced Calico network policies (namespace, allow and deny all ingress and egress).
 canonical_url: "/security/tutorials/calico-policy-advanced"
 ---
