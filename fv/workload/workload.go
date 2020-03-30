@@ -534,8 +534,6 @@ func (w *Workload) PathMTU(ip string) (int, error) {
 			return strconv.Atoi(m[1])
 		}
 	}
-
-	return 0, nil
 }
 
 type SpoofedWorkload struct {
