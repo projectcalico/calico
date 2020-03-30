@@ -59,6 +59,7 @@ Description:
     * globalNetworkSet
     * hostEndpoint
     * ipPool
+    * kubeControllersConfiguration
     * networkPolicy
     * networkSet
     * node
@@ -112,7 +113,7 @@ Description:
 			fmt.Printf("Successfully applied %d resource(s)\n", results.numHandled)
 		}
 	} else {
-		if results.numHandled - len(results.resErrs) > 0 {
+		if results.numHandled-len(results.resErrs) > 0 {
 			fmt.Printf("Partial success: ")
 			if results.singleKind != "" {
 				fmt.Printf("applied the first %d out of %d '%s' resources:\n",

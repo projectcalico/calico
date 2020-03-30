@@ -1,4 +1,4 @@
-// Copyright (c) 2016-2019 Tigera, Inc. All rights reserved.
+// Copyright (c) 2016-2020 Tigera, Inc. All rights reserved.
 
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -61,6 +61,7 @@ Description:
     * globalNetworkSet
     * hostEndpoint
     * ipPool
+    * kubeControllersConfiguration
     * networkPolicy
     * networkSet
     * node
@@ -109,7 +110,7 @@ Description:
 			fmt.Printf("Successfully created %d resource(s)\n", results.numHandled)
 		}
 	} else {
-		if results.numHandled - len(results.resErrs) > 0 {
+		if results.numHandled-len(results.resErrs) > 0 {
 			fmt.Printf("Partial success: ")
 			if results.singleKind != "" {
 				fmt.Printf("created the first %d out of %d '%s' resources:\n",
