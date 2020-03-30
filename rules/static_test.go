@@ -96,8 +96,6 @@ var _ = Describe("Static", func() {
 							{Action: ClearMarkAction{Mark: 0xf0}},
 							{Match: Match().InInterface("cali+"),
 								Action: SetMarkAction{Mark: 0x40}},
-							{Match: Match().Protocol("udp").SourceNet("0.0.0.0").SourcePorts(546).DestPorts(547),
-								Action: AcceptAction{}},
 							{Match: Match().MarkSingleBitSet(0x40).RPFCheckFailed(),
 								Action: DropAction{}},
 							{Match: Match().MarkClear(0x40),

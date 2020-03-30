@@ -827,7 +827,7 @@ func (r *DefaultRuleRenderer) StaticRawPreroutingChain(ipVersion uint8) *Chain {
 		})
 	}
 
-	// For OpenStack, allow DHCP packets with source 0.0.0.0.  These must be allowed before
+	// For OpenStack, allow DHCP v4 packets with source 0.0.0.0.  These must be allowed before
 	// checking against the iptables rp_filter module, because the rp_filter module in some
 	// kernel versions does not allow for DHCP with source 0.0.0.0 (whereas the rp_filter sysctl
 	// setting _did_).
@@ -838,25 +838,22 @@ func (r *DefaultRuleRenderer) StaticRawPreroutingChain(ipVersion uint8) *Chain {
 	// case will again be allowed by the following specific rule; the actual IP case should be
 	// allowed by the general RPF check.  (Ref: https://www.ietf.org/rfc/rfc2131.txt page 37)
 	//
+	// Note: in DHCPv6, the initial request is sent with a link-local IPv6 address, which should
+	// pass RPF, hence no special case is needed for DHCPv6.
+	//
 	// Here we are only focussing on anti-spoofing, and note that we ACCEPT a correct packet for
 	// the current raw table, but don't mark it (with our Accept bit) as automatically accepted
 	// for later tables.  Hence - for the policy level - we still have an OpenStack DHCP special
 	// case again in filterWorkloadToHostChain.
-	if r.OpenStackSpecialCasesEnabled {
-		log.Info("Adding OpenStack special-case rules")
-		dhcpSrcPort := uint16(68)
-		dhcpDestPort := uint16(67)
-		if ipVersion == 6 {
-			dhcpSrcPort = uint16(546)
-			dhcpDestPort = uint16(547)
-		}
+	if r.OpenStackSpecialCasesEnabled && ipVersion == 4 {
+		log.Info("Add OpenStack special-case rule for DHCP with source 0.0.0.0")
 		rules = append(rules,
 			Rule{
 				Match: Match().
 					Protocol("udp").
 					SourceNet("0.0.0.0").
-					SourcePorts(dhcpSrcPort).
-					DestPorts(dhcpDestPort),
+					SourcePorts(68).
+					DestPorts(67),
 				Action: AcceptAction{},
 			},
 		)
