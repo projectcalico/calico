@@ -65,6 +65,48 @@ var _ = Describe("Static", func() {
 				}
 			})
 
+			Context("with OpenStack special cases", func() {
+				BeforeEach(func() {
+					conf.OpenStackSpecialCasesEnabled = true
+				})
+
+				It("IPv4: Should return expected raw PREROUTING chain", func() {
+					Expect(findChain(rr.StaticRawTableChains(4), "cali-PREROUTING")).To(Equal(&Chain{
+						Name: "cali-PREROUTING",
+						Rules: []Rule{
+							{Action: ClearMarkAction{Mark: 0xf0}},
+							{Match: Match().InInterface("cali+"),
+								Action: SetMarkAction{Mark: 0x40}},
+							{Match: Match().Protocol("udp").SourceNet("0.0.0.0").SourcePorts(68).DestPorts(67),
+								Action: AcceptAction{}},
+							{Match: Match().MarkSingleBitSet(0x40).RPFCheckFailed(),
+								Action: DropAction{}},
+							{Match: Match().MarkClear(0x40),
+								Action: JumpAction{Target: ChainDispatchFromHostEndpoint}},
+							{Match: Match().MarkSingleBitSet(0x10),
+								Action: AcceptAction{}},
+						},
+					}))
+				})
+
+				It("IPv6: Should return expected raw PREROUTING chain", func() {
+					Expect(findChain(rr.StaticRawTableChains(6), "cali-PREROUTING")).To(Equal(&Chain{
+						Name: "cali-PREROUTING",
+						Rules: []Rule{
+							{Action: ClearMarkAction{Mark: 0xf0}},
+							{Match: Match().InInterface("cali+"),
+								Action: SetMarkAction{Mark: 0x40}},
+							{Match: Match().MarkSingleBitSet(0x40).RPFCheckFailed(),
+								Action: DropAction{}},
+							{Match: Match().MarkClear(0x40),
+								Action: JumpAction{Target: ChainDispatchFromHostEndpoint}},
+							{Match: Match().MarkSingleBitSet(0x10),
+								Action: AcceptAction{}},
+						},
+					}))
+				})
+			})
+
 			for _, ipVersion := range []uint8{4, 6} {
 				Describe(fmt.Sprintf("IPv%d", ipVersion), func() {
 					// Capture current value of ipVersion.
