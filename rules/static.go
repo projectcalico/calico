@@ -827,9 +827,21 @@ func (r *DefaultRuleRenderer) StaticRawPreroutingChain(ipVersion uint8) *Chain {
 		})
 	}
 
-	// For OpenStack, allow DHCP from the workload.  These must be allowed before checking
-	// against the iptables rp_filter module, because they have source 0.0.0.0, and the
-	// rp_filter module does not allow that (whereas the rp_filter sysctl setting _did_).
+	// For OpenStack, allow DHCP packets with source 0.0.0.0.  These must be allowed before
+	// checking against the iptables rp_filter module, because the rp_filter module in some
+	// kernel versions does not allow for DHCP with source 0.0.0.0 (whereas the rp_filter sysctl
+	// setting _did_).
+	//
+	// Initial DHCP requests (DHCPDISCOVER) have source 0.0.0.0, and so will be allowed through
+	// by the specific rule just following.  Later DHCP requests (DHCPREQUEST) may have source
+	// 0.0.0.0, or the client's actual IP (as discovered through the DHCP process).  The 0.0.0.0
+	// case will again be allowed by the following specific rule; the actual IP case should be
+	// allowed by the general RPF check.  (Ref: https://www.ietf.org/rfc/rfc2131.txt page 37)
+	//
+	// Here we are only focussing on anti-spoofing, and note that we ACCEPT a correct packet for
+	// the current raw table, but don't mark it (with our Accept bit) as automatically accepted
+	// for later tables.  Hence - for the policy level - we still have an OpenStack DHCP special
+	// case again in filterWorkloadToHostChain.
 	if r.OpenStackSpecialCasesEnabled {
 		log.Info("Adding OpenStack special-case rules")
 		dhcpSrcPort := uint16(68)
