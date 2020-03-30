@@ -26,3 +26,10 @@ To build the Calico Networking Plugin for CNI locally, clone this repository and
 [cni]: https://github.com/containernetworking/cni
 [cni specification]: https://github.com/containernetworking/cni/blob/master/SPEC.md
 [![Analytics](https://calico-ga-beacon.appspot.com/UA-52125893-3/calico-cni/README.md?pixel)](https://github.com/igrigorik/ga-beacon)
+
+## License
+
+Calico binaries are licensed under the [Apache v2.0 license](LICENSE).
+
+Calico imports packages with a number of apache-compatible licenses. For more information, see [licenses](./licenses). In addition, the base container image contains
+pre-packaged software with a variety of licenses.
