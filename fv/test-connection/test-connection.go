@@ -434,6 +434,9 @@ func (tc *testConn) tryConnectOnceOff() error {
 	}
 
 	mtuPair.End, err = tc.protocol.MTU()
+	if err != nil {
+		log.WithError(err).Fatal("Failed to get MTU")
+	}
 
 	res := connectivity.Result{
 		LastResponse: resp,
