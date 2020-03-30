@@ -202,6 +202,21 @@ enabled by default. If set to &lsquo;None&rsquo;, FlexVolume will be disabled. T
 kubernetesProvider.</p>
 </td>
 </tr>
+<tr>
+<td>
+<code>nodeUpdateStrategy</code><br>
+<em>
+<a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.16/#daemonsetupdatestrategy-v1-apps">
+Kubernetes apps/v1.DaemonSetUpdateStrategy
+</a>
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>NodeUpdateStrategy can be used to customize the desired update strategy, such as the MaxUnavailable
+field.</p>
+</td>
+</tr>
 </table>
 </td>
 </tr>
@@ -298,7 +313,7 @@ TigeraStatusStatus
 (<em>Appears on:</em>
 <a href="#operator.tigera.io/v1.InstallationSpec">InstallationSpec</a>)
 </p>
-<p>CalicoNetwork specifies configuration options for Calico provided pod networking.</p>
+<p>CalicoNetworkSpec specifies configuration options for Calico provided pod networking.</p>
 <table>
 <thead>
 <tr>
@@ -365,6 +380,21 @@ NodeAddressAutodetection
 IPv6 addresses will not be auto-detected.</p>
 </td>
 </tr>
+<tr>
+<td>
+<code>hostPorts</code><br>
+<em>
+<a href="#operator.tigera.io/v1.HostPortsType">
+HostPortsType
+</a>
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>HostPorts configures whether or not Calico will support Kubernetes HostPorts.
+Default: Enabled</p>
+</td>
+</tr>
 </tbody>
 </table>
 <h3 id="operator.tigera.io/v1.ClusterManagementType">ClusterManagementType
@@ -390,6 +420,13 @@ IPv6 addresses will not be auto-detected.</p>
 </p>
 <p>EncapsulationType is the type of encapsulation to use on an IP pool. Valid
 options are: IPIP, VXLAN, IPIPCrossSubnet, VXLANCrossSubnet, None.</p>
+<h3 id="operator.tigera.io/v1.HostPortsType">HostPortsType
+(<code>string</code> alias)</h3>
+<p>
+(<em>Appears on:</em>
+<a href="#operator.tigera.io/v1.CalicoNetworkSpec">CalicoNetworkSpec</a>)
+</p>
+<p>HostPortsType specifies if the HostPorts plugin enabled status.</p>
 <h3 id="operator.tigera.io/v1.IPPool">IPPool
 </h3>
 <p>
@@ -612,6 +649,21 @@ string
 <p>FlexVolumePath optionally specifies a custom path for FlexVolume. If not specified, FlexVolume will be
 enabled by default. If set to &lsquo;None&rsquo;, FlexVolume will be disabled. The default is based on the
 kubernetesProvider.</p>
+</td>
+</tr>
+<tr>
+<td>
+<code>nodeUpdateStrategy</code><br>
+<em>
+<a href="https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.16/#daemonsetupdatestrategy-v1-apps">
+Kubernetes apps/v1.DaemonSetUpdateStrategy
+</a>
+</em>
+</td>
+<td>
+<em>(Optional)</em>
+<p>NodeUpdateStrategy can be used to customize the desired update strategy, such as the MaxUnavailable
+field.</p>
 </td>
 </tr>
 </tbody>

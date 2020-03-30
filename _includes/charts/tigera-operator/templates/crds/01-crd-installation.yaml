@@ -35,6 +35,13 @@ spec:
               description: CalicoNetwork specifies configuration options for Calico
                 provided pod networking.
               properties:
+                hostPorts:
+                  description: 'HostPorts configures whether or not Calico will support
+                    Kubernetes HostPorts. Default: Enabled'
+                  enum:
+                  - Enabled
+                  - Disabled
+                  type: string
                 ipPools:
                   description: IPPools contains a list of IP pools to use for allocating
                     pod IP addresses. At most one IP pool may be specified. If omitted,
@@ -173,6 +180,10 @@ spec:
               - OpenShift
               - DockerEnterprise
               type: string
+            nodeUpdateStrategy:
+              description: NodeUpdateStrategy can be used to customize the desired
+                update strategy, such as the MaxUnavailable field.
+              type: object
             registry:
               description: 'Registry is the default Docker registry used for component
                 Docker images. If specified, all images will be pulled from this registry.
