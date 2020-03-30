@@ -50,11 +50,11 @@ if [ $1 -eq 1 ] ; then
     iptables-save > /etc/sysconfig/iptables
 
     # Enable IP forwarding.
-    cat > /etc/sysctl.d/10-networking-calico.conf <<EOF
+    cat > /etc/sysctl.d/99-networking-calico.conf <<EOF
 net.ipv4.ip_forward=1
 net.ipv6.conf.all.forwarding=1
 EOF
-    sysctl -p
+    sysctl --system
 fi
 
 %preun -n calico-compute
