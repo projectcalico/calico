@@ -46,7 +46,7 @@ type KubeControllersConfigurationSpec struct {
 	HealthChecks string `json:"healthChecks,omitempty" validate:"omitempty,oneof=Enabled Disabled"`
 
 	// EtcdV3CompactionPeriod is the period between etcdv3 compaction requests. Set to 0 to disable. [Default: 10m]
-	EtcdV3CompactionPeriod string `json:"etcdV3CompactionPeriod,omitempty" validate:"omitempty,duration"`
+	EtcdV3CompactionPeriod *metav1.Duration `json:"etcdV3CompactionPeriod,omitempty" validate:"omitempty"`
 
 	// Controllers enables and configures individual Kubernetes controllers
 	Controllers ControllersConfig `json:"controllers"`
@@ -74,7 +74,7 @@ type ControllersConfig struct {
 // for nodes that no longer exist. Optionally, it can create host endpoints for all Kubernetes nodes.
 type NodeControllerConfig struct {
 	// ReconcilerPeriod is the period to perform reconciliation with the Calico datastore. [Default: 5m]
-	ReconcilerPeriod string `json:"reconcilerPeriod,omitempty" validate:"omitempty,duration"`
+	ReconcilerPeriod *metav1.Duration `json:"reconcilerPeriod,omitempty" validate:"omitempty"`
 
 	// SyncLabels controls whether to copy Kubernetes node labels to Calico nodes. [Default: Enabled]
 	SyncLabels string `json:"syncLabels,omitempty" validate:"omitempty,oneof=Enabled Disabled"`
@@ -92,28 +92,28 @@ type AutoHostEndpointConfig struct {
 // to Calico policies (only used for etcdv3 datastore).
 type PolicyControllerConfig struct {
 	// ReconcilerPeriod is the period to perform reconciliation with the Calico datastore. [Default: 5m]
-	ReconcilerPeriod string `json:"reconcilerPeriod,omitempty" validate:"omitempty,duration"`
+	ReconcilerPeriod *metav1.Duration `json:"reconcilerPeriod,omitempty" validate:"omitempty"`
 }
 
 // WorkloadEndpointControllerConfig configures the workload endpoint controller, which syncs Kubernetes
 // labels to Calico workload endpoints (only used for etcdv3 datastore).
 type WorkloadEndpointControllerConfig struct {
 	// ReconcilerPeriod is the period to perform reconciliation with the Calico datastore. [Default: 5m]
-	ReconcilerPeriod string `json:"reconcilerPeriod,omitempty" validate:"omitempty,duration"`
+	ReconcilerPeriod *metav1.Duration `json:"reconcilerPeriod,omitempty" validate:"omitempty"`
 }
 
 // ServiceAccountControllerConfig configures the service account controller, which syncs Kubernetes
 // service accounts to Calico profiles (only used for etcdv3 datastore).
 type ServiceAccountControllerConfig struct {
 	// ReconcilerPeriod is the period to perform reconciliation with the Calico datastore. [Default: 5m]
-	ReconcilerPeriod string `json:"reconcilerPeriod,omitempty" validate:"omitempty,duration"`
+	ReconcilerPeriod *metav1.Duration `json:"reconcilerPeriod,omitempty" validate:"omitempty"`
 }
 
 // NamespaceControllerConfig configures the service account controller, which syncs Kubernetes
 // service accounts to Calico profiles (only used for etcdv3 datastore).
 type NamespaceControllerConfig struct {
 	// ReconcilerPeriod is the period to perform reconciliation with the Calico datastore. [Default: 5m]
-	ReconcilerPeriod string `json:"reconcilerPeriod,omitempty" validate:"omitempty,duration"`
+	ReconcilerPeriod *metav1.Duration `json:"reconcilerPeriod,omitempty" validate:"omitempty"`
 }
 
 // KubeControllersConfigurationStatus represents the status of the configuration. It's useful for admins to

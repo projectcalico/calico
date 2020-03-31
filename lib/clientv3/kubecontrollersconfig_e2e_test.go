@@ -16,6 +16,7 @@ package clientv3_test
 
 import (
 	"context"
+	"time"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/ginkgo/extensions/table"
@@ -40,7 +41,7 @@ var _ = testutils.E2eDatastoreDescribe("KubeControllersConfiguration tests", tes
 		HealthChecks: apiv3.Enabled,
 		Controllers: apiv3.ControllersConfig{
 			Node: &apiv3.NodeControllerConfig{
-				ReconcilerPeriod: "5m30s",
+				ReconcilerPeriod: &metav1.Duration{Duration: time.Second * 330},
 				SyncLabels:       apiv3.Enabled,
 				HostEndpoint:     nil,
 			},
@@ -54,16 +55,16 @@ var _ = testutils.E2eDatastoreDescribe("KubeControllersConfiguration tests", tes
 		HealthChecks: apiv3.Disabled,
 		Controllers: apiv3.ControllersConfig{
 			Node: &apiv3.NodeControllerConfig{
-				ReconcilerPeriod: "5m30s",
+				ReconcilerPeriod: &metav1.Duration{Duration: time.Second * 330},
 				SyncLabels:       apiv3.Enabled,
 				HostEndpoint: &apiv3.AutoHostEndpointConfig{
 					AutoCreate: apiv3.Enabled,
 				},
 			},
-			Policy:           &apiv3.PolicyControllerConfig{ReconcilerPeriod: "3m"},
-			WorkloadEndpoint: &apiv3.WorkloadEndpointControllerConfig{ReconcilerPeriod: "4m"},
-			ServiceAccount:   &apiv3.ServiceAccountControllerConfig{ReconcilerPeriod: "5m"},
-			Namespace:        &apiv3.NamespaceControllerConfig{ReconcilerPeriod: "6m"},
+			Policy:           &apiv3.PolicyControllerConfig{ReconcilerPeriod: &metav1.Duration{Duration: time.Minute * 3}},
+			WorkloadEndpoint: &apiv3.WorkloadEndpointControllerConfig{ReconcilerPeriod: &metav1.Duration{Duration: time.Minute * 4}},
+			ServiceAccount:   &apiv3.ServiceAccountControllerConfig{ReconcilerPeriod: &metav1.Duration{Duration: time.Minute * 5}},
+			Namespace:        &apiv3.NamespaceControllerConfig{ReconcilerPeriod: &metav1.Duration{Duration: time.Minute * 6}},
 		},
 	}
 	status1 := apiv3.KubeControllersConfigurationStatus{
@@ -72,7 +73,7 @@ var _ = testutils.E2eDatastoreDescribe("KubeControllersConfiguration tests", tes
 			HealthChecks:      apiv3.Enabled,
 			Controllers: apiv3.ControllersConfig{
 				Node: &apiv3.NodeControllerConfig{
-					ReconcilerPeriod: "5m30s",
+					ReconcilerPeriod: &metav1.Duration{Duration: time.Second * 330},
 					SyncLabels:       apiv3.Enabled,
 					HostEndpoint:     nil,
 				},
@@ -92,16 +93,16 @@ var _ = testutils.E2eDatastoreDescribe("KubeControllersConfiguration tests", tes
 			HealthChecks: apiv3.Disabled,
 			Controllers: apiv3.ControllersConfig{
 				Node: &apiv3.NodeControllerConfig{
-					ReconcilerPeriod: "5m30s",
+					ReconcilerPeriod: &metav1.Duration{Duration: time.Second * 330},
 					SyncLabels:       apiv3.Enabled,
 					HostEndpoint: &apiv3.AutoHostEndpointConfig{
 						AutoCreate: apiv3.Enabled,
 					},
 				},
-				Policy:           &apiv3.PolicyControllerConfig{ReconcilerPeriod: "3m"},
-				WorkloadEndpoint: &apiv3.WorkloadEndpointControllerConfig{ReconcilerPeriod: "4m"},
-				ServiceAccount:   &apiv3.ServiceAccountControllerConfig{ReconcilerPeriod: "5m"},
-				Namespace:        &apiv3.NamespaceControllerConfig{ReconcilerPeriod: "6m"},
+				Policy:           &apiv3.PolicyControllerConfig{ReconcilerPeriod: &metav1.Duration{Duration: time.Minute * 3}},
+				WorkloadEndpoint: &apiv3.WorkloadEndpointControllerConfig{ReconcilerPeriod: &metav1.Duration{Duration: time.Minute * 4}},
+				ServiceAccount:   &apiv3.ServiceAccountControllerConfig{ReconcilerPeriod: &metav1.Duration{Duration: time.Minute * 5}},
+				Namespace:        &apiv3.NamespaceControllerConfig{ReconcilerPeriod: &metav1.Duration{Duration: time.Minute * 6}},
 			},
 		},
 		EnvironmentVars: map[string]string{
