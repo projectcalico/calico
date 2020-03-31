@@ -59,3 +59,13 @@ try:
 except ImportError:
     # Pre-Ocata.
     from neutron.manager import NeutronManager as plugin_dir
+
+try:
+    # Present here since January 2016 (commit c8be1a1be91).
+    from neutron_lib.constants import IP_PROTOCOL_MAP
+except ImportError:
+    # We probably don't need to support IP protocol names for older
+    # OpenStack versions.  But if such a need arises, we can add code
+    # here to get IP_PROTOCOL_MAP in the appropriate way from those
+    # old versions.
+    IP_PROTOCOL_MAP = {}

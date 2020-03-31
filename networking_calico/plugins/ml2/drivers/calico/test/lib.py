@@ -53,6 +53,15 @@ sys.modules['sqlalchemy.orm'] = m_sqlalchemy.orm
 sys.modules['sqlalchemy.orm.exc'] = m_sqlalchemy.orm.exc
 sys.modules['networking_calico.compat'] = m_compat = mock.MagicMock()
 
+# Set up some IP protocol mappings to test.  (Unfortunately, importing
+# the real IP_PROTOCOL_MAP from neutron_lib.constants tries to pull in
+# too much other stuff.)
+m_compat.IP_PROTOCOL_MAP = {
+    'esp': 50,
+    'ah': 51,
+    'rsvp': 46,
+}
+
 port1 = {'binding:vif_type': 'tap',
          'binding:host_id': 'felix-host-1',
          'id': 'DEADBEEF-1234-5678',
