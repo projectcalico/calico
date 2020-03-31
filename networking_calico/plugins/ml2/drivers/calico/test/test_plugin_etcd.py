@@ -1161,6 +1161,26 @@ class TestPluginEtcd(TestPluginEtcdBase):
             'action': 'Allow',
         })
 
+    def test_neutron_rule_to_etcd_rule_protocol_name(self):
+        for neutron_protocol_spec, calico_protocol_spec in \
+                lib.m_compat.IP_PROTOCOL_MAP.items():
+            self.assertNeutronToEtcd(_neutron_rule_from_dict({
+                "protocol": neutron_protocol_spec,
+            }), {
+                'action': 'Allow',
+                'ipVersion': 4,
+                'protocol': calico_protocol_spec,
+            })
+
+    def test_neutron_rule_to_etcd_rule_protocol_any(self):
+        for protocol_spec in ['any', 0]:
+            self.assertNeutronToEtcd(_neutron_rule_from_dict({
+                "protocol": protocol_spec,
+            }), {
+                'action': 'Allow',
+                'ipVersion': 4,
+            })
+
     def test_not_master_does_not_resync(self):
         """Test that a driver that is not master does not resync."""
         # Initialize the state early to put the elector in place, then override

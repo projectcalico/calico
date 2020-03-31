@@ -14,6 +14,7 @@
 # limitations under the License.
 
 from networking_calico.common import config as calico_config
+from networking_calico.compat import IP_PROTOCOL_MAP
 from networking_calico.compat import log
 from networking_calico import datamodel_v3
 from networking_calico.plugins.ml2.drivers.calico.syncer import ResourceSyncer
@@ -133,11 +134,35 @@ def _neutron_rule_to_etcd_rule(rule):
     """
     ethertype = rule['ethertype']
     etcd_rule = {'action': 'Allow'}
+
     # Map the ethertype field from Neutron to etcd format.
     etcd_rule['ipVersion'] = {'IPv4': 4,
                               'IPv6': 6}[ethertype]
+
     # Map the protocol field from Neutron to etcd format.
-    if rule['protocol'] is None or rule['protocol'] == -1:
+    #
+    # Per https://docs.openstack.org/api-ref/network/v2/
+    # ?expanded=create-security-group-rule-detail#
+    # security-group-rules-security-group-rules:
+    #
+    # "The IP protocol can be represented by a string, an integer, or
+    # null. Valid string or integer values are any or 0, ah or 51,
+    # dccp or 33, egp or 8, esp or 50, gre or 47, icmp or 1, icmpv6 or
+    # 58, igmp or 2, ipip or 4, ipv6-encap or 41, ipv6-frag or 44,
+    # ipv6-icmp or 58, ipv6-nonxt or 59, ipv6-opts or 60, ipv6-route
+    # or 43, ospf or 89, pgm or 113, rsvp or 46, sctp or 132, tcp or
+    # 6, udp or 17, udplite or 136, vrrp or 112. Additionally, any
+    # integer value between [0-255] is also valid. The string any (or
+    # integer 0) means all IP protocols. See the constants in
+    # neutron_lib.constants for the most up-to-date list of supported
+    # strings."
+    #
+    # In addition we have previously supported -1 for any, and 'icmp'
+    # to mean 'icmpv6' when the ethertype is IPv6; so we also retain
+    # those for back-compatibility.
+    if rule['protocol'] is None or rule['protocol'] in [-1, 0, 'any']:
+        # In the Calico data model, 'any' is represented by omitting
+        # the 'protocol' field.
         pass
     elif rule['protocol'] == 'ipv6-icmp':
         etcd_rule['protocol'] = 'ICMPv6'
@@ -146,6 +171,8 @@ def _neutron_rule_to_etcd_rule(rule):
                                  'IPv6': 'ICMPv6'}[ethertype]
     elif isinstance(rule['protocol'], int):
         etcd_rule['protocol'] = rule['protocol']
+    elif rule['protocol'] in IP_PROTOCOL_MAP:
+        etcd_rule['protocol'] = IP_PROTOCOL_MAP[rule['protocol']]
     else:
         etcd_rule['protocol'] = rule['protocol'].upper()
 
