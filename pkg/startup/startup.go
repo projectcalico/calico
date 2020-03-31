@@ -64,6 +64,8 @@ const (
 
 	// KubeadmConfigConfigMap is defined in k8s.io/kubernetes, which we can't import due to versioning issues.
 	KubeadmConfigConfigMap = "kubeadm-config"
+	// Rancher clusters store their state in this config map in the kube-system namespace.
+	RancherStateConfigMap = "full-cluster-state"
 )
 
 // Version string, set during build.
@@ -116,7 +118,7 @@ func Run() {
 	// updated IP data and use the full list of nodes for validation.
 	node := getNode(ctx, cli, nodeName)
 
-	var kubeadmConfig *v1.ConfigMap
+	var kubeadmConfig, rancherState *v1.ConfigMap
 
 	// If Calico is running in policy only mode we don't need to write
 	// BGP related details to the Node.
@@ -179,8 +181,21 @@ func Run() {
 			if err != nil {
 				// Any error other than not finding kubeadm's config map should be serious enough
 				// that we ought to stop here and return.
-				if !errors.IsNotFound(err) {
+				if errors.IsNotFound(err) {
+					kubeadmConfig = nil
+				} else {
 					log.WithError(err).Error("failed to query kubeadm's config map")
+					terminate()
+					return
+				}
+			}
+
+			rancherState, err = clientset.CoreV1().ConfigMaps(metav1.NamespaceSystem).Get(RancherStateConfigMap, metav1.GetOptions{})
+			if err != nil {
+				if errors.IsNotFound(err) {
+					rancherState = nil
+				} else {
+					log.WithError(err).Error("failed to query Rancher's cluster state config map")
 					terminate()
 					return
 				}
@@ -204,7 +219,7 @@ func Run() {
 	configureIPPools(ctx, cli, kubeadmConfig)
 
 	// Set default configuration required for the cluster.
-	if err := ensureDefaultConfig(ctx, cfg, cli, node, kubeadmConfig); err != nil {
+	if err := ensureDefaultConfig(ctx, cfg, cli, node, kubeadmConfig, rancherState); err != nil {
 		log.WithError(err).Errorf("Unable to set global default configuration")
 		terminate()
 	}
@@ -1012,7 +1027,7 @@ func checkConflictingNodes(ctx context.Context, client client.Interface, node *a
 
 // ensureDefaultConfig ensures all of the required default settings are
 // configured.
-func ensureDefaultConfig(ctx context.Context, cfg *apiconfig.CalicoAPIConfig, c client.Interface, node *api.Node, kubeadmConfig *v1.ConfigMap) error {
+func ensureDefaultConfig(ctx context.Context, cfg *apiconfig.CalicoAPIConfig, c client.Interface, node *api.Node, kubeadmConfig, rancherState *v1.ConfigMap) error {
 	// Ensure the ClusterInformation is populated.
 	// Get the ClusterType from ENV var. This is set from the manifest.
 	clusterType := os.Getenv("CLUSTER_TYPE")
@@ -1022,6 +1037,14 @@ func ensureDefaultConfig(ctx context.Context, cfg *apiconfig.CalicoAPIConfig, c 
 			clusterType = "kubeadm"
 		} else {
 			clusterType += ",kubeadm"
+		}
+	}
+
+	if rancherState != nil {
+		if len(clusterType) == 0 {
+			clusterType = "rancher"
+		} else {
+			clusterType += ",rancher"
 		}
 	}
 
