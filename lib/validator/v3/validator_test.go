@@ -15,6 +15,8 @@
 package v3_test
 
 import (
+	"time"
+
 	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -1814,11 +1816,8 @@ func init() {
 		Entry("should accept valid log severity",
 			api.KubeControllersConfigurationSpec{LogSeverityScreen: "Error"}, true,
 		),
-		Entry("should not accept invalid compaction period",
-			api.KubeControllersConfigurationSpec{EtcdV3CompactionPeriod: "12parsecs"}, false,
-		),
 		Entry("should accept valid compaction period",
-			api.KubeControllersConfigurationSpec{EtcdV3CompactionPeriod: "12m"}, true,
+			api.KubeControllersConfigurationSpec{EtcdV3CompactionPeriod: &v1.Duration{Duration: time.Minute * 12}}, true,
 		),
 		Entry("should accept ControllersConfig with no values",
 			api.KubeControllersConfigurationSpec{Controllers: api.ControllersConfig{}}, true,
@@ -1833,10 +1832,7 @@ func init() {
 			}}, true,
 		),
 		Entry("should accept valid reconciliation period on node",
-			api.NodeControllerConfig{ReconcilerPeriod: "5m30s"}, true,
-		),
-		Entry("should not accept invalid reconciliation period on node",
-			api.NodeControllerConfig{ReconcilerPeriod: "a long time"}, false,
+			api.NodeControllerConfig{ReconcilerPeriod: &v1.Duration{Duration: time.Minute * 5}}, true,
 		),
 		Entry("should not accept invalid sync labels",
 			api.NodeControllerConfig{SyncLabels: "yes"}, false,
@@ -1854,28 +1850,16 @@ func init() {
 			api.NodeControllerConfig{HostEndpoint: &api.AutoHostEndpointConfig{}}, true,
 		),
 		Entry("should accept valid reconciliation period on policy",
-			api.PolicyControllerConfig{ReconcilerPeriod: "5m30s"}, true,
-		),
-		Entry("should not accept invalid reconciliation period on policy",
-			api.PolicyControllerConfig{ReconcilerPeriod: "a long time"}, false,
+			api.PolicyControllerConfig{ReconcilerPeriod: &v1.Duration{Duration: time.Second * 330}}, true,
 		),
 		Entry("should accept valid reconciliation period on workload endpoint",
-			api.WorkloadEndpointControllerConfig{ReconcilerPeriod: "5m30s"}, true,
-		),
-		Entry("should not accept invalid reconciliation period on workload",
-			api.WorkloadEndpointControllerConfig{ReconcilerPeriod: "a long time"}, false,
+			api.WorkloadEndpointControllerConfig{ReconcilerPeriod: &v1.Duration{Duration: time.Second * 330}}, true,
 		),
 		Entry("should accept valid reconciliation period on service account",
-			api.ServiceAccountControllerConfig{ReconcilerPeriod: "5m30s"}, true,
-		),
-		Entry("should not accept invalid reconciliation period on service account",
-			api.ServiceAccountControllerConfig{ReconcilerPeriod: "a long time"}, false,
+			api.ServiceAccountControllerConfig{ReconcilerPeriod: &v1.Duration{Duration: time.Second * 330}}, true,
 		),
 		Entry("should accept valid reconciliation period on namespace",
-			api.NamespaceControllerConfig{ReconcilerPeriod: "5m30s"}, true,
-		),
-		Entry("should not accept invalid reconciliation period on namespace",
-			api.NamespaceControllerConfig{ReconcilerPeriod: "a long time"}, false,
+			api.NamespaceControllerConfig{ReconcilerPeriod: &v1.Duration{Duration: time.Second * 330}}, true,
 		),
 	)
 }
