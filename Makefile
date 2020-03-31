@@ -316,6 +316,7 @@ release-publish: release-prereqs
 	@echo ""
 
 ## Generates release notes for the given version.
+.PHONY: release-notes
 release-notes: 
 	VERSION=$(CALICO_VER) GITHUB_TOKEN=$(GITHUB_TOKEN) python2 ./release-scripts/generate-release-notes.py
 
