@@ -348,41 +348,25 @@ static CALI_BPF_INLINE bool skb_is_icmp_err_unpack(struct __sk_buff *skb, struct
 {
 	struct iphdr *ip;
 	struct icmphdr *icmp;
-	long ip_off;
-	__u8 proto;
-	int minsz;
 
-	ip_off = skb_iphdr_offset(skb);
-	minsz = ip_off + sizeof(struct iphdr) + sizeof(struct icmphdr) + sizeof(struct iphdr) + 8;
-
-	if (skb_shorter(skb, minsz)) {
-		CALI_DEBUG("CT-ICMP: %d shorter than %d\n", skb_len_dir_access(skb), minsz);
+	if (!icmp_skb_get_hdr(skb, &icmp)) {
+		CALI_DEBUG("CT-ICMP: failed to get inner IP\n");
 		return false;
 	}
-
-	ip = skb_iphdr(skb);
-
-	if (ip->ihl != 5) {
-		CALI_INFO("CT-ICMP: ip options unsupported\n");
-		return false;
-	}
-
-	icmp = (struct icmphdr *)(ip + 1);
-	ip = (struct iphdr *)(icmp + 1); /* skip to inner ip */
 
 	if (!icmp_type_is_err(icmp->type)) {
 		CALI_DEBUG("CT-ICMP: type %d not an error\n", icmp->type);
 		return false;
 	}
 
-	proto = ip->protocol;
-	CALI_DEBUG("CT-ICMP: proto %d\n", proto);
+	ip = (struct iphdr *)(icmp + 1); /* skip to inner ip */
+	CALI_DEBUG("CT-ICMP: proto %d\n", ip->protocol);
 
-	ctx->proto = proto;
+	ctx->proto = ip->protocol;
 	ctx->src = ip->saddr;
 	ctx->dst = ip->daddr;
 
-	switch (proto) {
+	switch (ip->protocol) {
 	case IPPROTO_TCP:
 		{
 			struct tcphdr *tcp = (struct tcphdr *)(ip + 1);
