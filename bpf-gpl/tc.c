@@ -476,7 +476,7 @@ static CALI_BPF_INLINE int calico_tc(struct __sk_buff *skb)
 		break;
 	case IPPROTO_ICMP:
 		icmp_header = (void*)(ip_header+1);
-		CALI_DEBUG("ICMP; ports: type=%d code=%d\n",
+		CALI_DEBUG("ICMP; type=%d code=%d\n",
 				icmp_header->type, icmp_header->code);
 		break;
 	case 4:

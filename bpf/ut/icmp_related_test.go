@@ -24,6 +24,7 @@ import (
 
 	"github.com/projectcalico/felix/bpf/nat"
 	"github.com/projectcalico/felix/bpf/routes"
+	"github.com/projectcalico/felix/ip"
 	"github.com/projectcalico/felix/proto"
 )
 
@@ -100,6 +101,10 @@ func TestICMPRelatedNATPodPod(t *testing.T) {
 		nat.NewNATValue(0, 1, 0, 0).AsBytes(),
 	)
 	Expect(err).NotTo(HaveOccurred())
+	defer func() {
+		err := natMap.Delete(nat.NewNATKey(ipv4.DstIP, uint16(udp.DstPort), uint8(ipv4.Protocol)).AsBytes())
+		Expect(err).NotTo(HaveOccurred())
+	}()
 
 	natIP := net.IPv4(8, 8, 8, 8)
 	natPort := uint16(666)
@@ -109,6 +114,10 @@ func TestICMPRelatedNATPodPod(t *testing.T) {
 		nat.NewNATBackendValue(natIP, natPort).AsBytes(),
 	)
 	Expect(err).NotTo(HaveOccurred())
+	defer func() {
+		err := natBEMap.Delete(nat.NewNATBackendKey(0, 0).AsBytes())
+		Expect(err).NotTo(HaveOccurred())
+	}()
 
 	var natPkt gopacket.Packet
 
@@ -133,25 +142,101 @@ func TestICMPRelatedNATPodPod(t *testing.T) {
 		// we have a normal ct record, it is related, must be allowe
 		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
 
-		icmpPkt := gopacket.NewPacket(res.dataOut, layers.LayerTypeEthernet, gopacket.Default)
+		checkICMP(res.dataOut, ipv4.SrcIP, ipv4.SrcIP, ipv4.DstIP)
+	})
+}
 
-		ipv4L := icmpPkt.Layer(layers.LayerTypeIPv4)
-		Expect(ipv4L).NotTo(BeNil())
-		ipv4R := ipv4L.(*layers.IPv4)
+func TestICMPRelatedFromHost(t *testing.T) {
+	RegisterTestingT(t)
 
-		Expect(ipv4R.DstIP.String()).To(Equal(ipv4.SrcIP.String()))
+	defer resetBPFMaps()
 
-		payloadL := icmpPkt.ApplicationLayer()
-		Expect(payloadL).NotTo(BeNil())
-		origPkt := gopacket.NewPacket(payloadL.Payload(), layers.LayerTypeIPv4, gopacket.Default)
-		Expect(origPkt).NotTo(BeNil())
+	_, ipv4, l4, _, pktBytes, err := testPacketUDPDefault()
+	Expect(err).NotTo(HaveOccurred())
+	udp := l4.(*layers.UDP)
 
-		ipv4L = origPkt.Layer(layers.LayerTypeIPv4)
-		Expect(ipv4L).NotTo(BeNil())
-		ipv4R = ipv4L.(*layers.IPv4)
+	runBpfTest(t, "calico_from_host_ep", rulesAllowUDP, func(bpfrun bpfProgRunFn) {
+		res, err := bpfrun(pktBytes)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
+	})
 
-		Expect(ipv4R.SrcIP.String()).To(Equal(ipv4.SrcIP.String()))
-		Expect(ipv4R.DstIP.String()).To(Equal(ipv4.DstIP.String()))
+	icmpTTLExceeded := makeICMPError(ipv4, udp, 11 /* Time Exceeded */, 0 /* TTL expired */)
+
+	runBpfTest(t, "calico_to_host_ep", rulesAllowUDP, func(bpfrun bpfProgRunFn) {
+		res, err := bpfrun(icmpTTLExceeded)
+		Expect(err).NotTo(HaveOccurred())
+		// we have a normal ct record, it is related, must be allowed
+		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
+
+		checkICMP(res.dataOut, ipv4.SrcIP, ipv4.SrcIP, ipv4.DstIP)
+	})
+}
+
+func TestICMPRelatedFromHostBeforeNAT(t *testing.T) {
+	RegisterTestingT(t)
+
+	defer resetBPFMaps()
+
+	_, ipv4, l4, _, pktBytes, err := testPacketUDPDefault()
+	Expect(err).NotTo(HaveOccurred())
+	udp := l4.(*layers.UDP)
+
+	err = natMap.Update(
+		nat.NewNATKey(ipv4.DstIP, uint16(udp.DstPort), uint8(ipv4.Protocol)).AsBytes(),
+		nat.NewNATValue(0, 1, 0, 0).AsBytes(),
+	)
+	Expect(err).NotTo(HaveOccurred())
+	defer func() {
+		err := natMap.Delete(nat.NewNATKey(ipv4.DstIP, uint16(udp.DstPort), uint8(ipv4.Protocol)).AsBytes())
+		Expect(err).NotTo(HaveOccurred())
+	}()
+
+	natIP := net.IPv4(8, 8, 8, 8)
+	natPort := uint16(666)
+
+	err = natBEMap.Update(
+		nat.NewNATBackendKey(0, 0).AsBytes(),
+		nat.NewNATBackendValue(natIP, natPort).AsBytes(),
+	)
+	Expect(err).NotTo(HaveOccurred())
+	defer func() {
+		err := natBEMap.Delete(nat.NewNATBackendKey(0, 0).AsBytes())
+		Expect(err).NotTo(HaveOccurred())
+	}()
+
+	// NP route
+	node2IP := net.IPv4(3, 3, 3, 3)
+	node2wCIDR := net.IPNet{
+		IP:   natIP,
+		Mask: net.IPv4Mask(255, 255, 255, 0),
+	}
+
+	err = rtMap.Update(
+		routes.NewKey(ip.CIDRFromIPNet(&node2wCIDR).(ip.V4CIDR)).AsBytes(),
+		routes.NewValueWithNextHop(routes.FlagsRemoteWorkload, ip.FromNetIP(node2IP).(ip.V4Addr)).AsBytes(),
+	)
+	Expect(err).NotTo(HaveOccurred())
+
+	// this will create NAT tracking entries for a nodeport
+	runBpfTest(t, "calico_from_host_ep", rulesAllowUDP, func(bpfrun bpfProgRunFn) {
+		res, err := bpfrun(pktBytes)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
+	})
+
+	// we base the packet on the orignal packet before NAT as if we let the original packet through
+	// before we do the actual NAT as that is where we check for TTL as doing it for the tunneled
+	// packet would be complicated
+	icmpTTLExceeded := makeICMPError(ipv4, udp, 11 /* Time Exceeded */, 0 /* TTL expired */)
+
+	runBpfTest(t, "calico_to_host_ep", rulesAllowUDP, func(bpfrun bpfProgRunFn) {
+		res, err := bpfrun(icmpTTLExceeded)
+		Expect(err).NotTo(HaveOccurred())
+		// we have a normal ct record, it is related, must be allowed
+		Expect(res.Retval).To(Equal(resTC_ACT_UNSPEC))
+
+		checkICMP(res.dataOut, ipv4.SrcIP, ipv4.SrcIP, ipv4.DstIP)
 	})
 }
 
@@ -172,7 +257,7 @@ func makeICMPError(ipInner *layers.IPv4, l4 gopacket.SerializableLayer, icmpType
 		IHL:      5,
 		TTL:      64,
 		Flags:    layers.IPv4DontFragment,
-		SrcIP:    net.IPv4(11, 22, 33, 44),
+		SrcIP:    hostIP,
 		DstIP:    ipInner.SrcIP,
 		Protocol: layers.IPProtocolICMPv4,
 		Length:   uint16(20 + len(payload)),
@@ -188,4 +273,27 @@ func makeICMPError(ipInner *layers.IPv4, l4 gopacket.SerializableLayer, icmpType
 	Expect(err).NotTo(HaveOccurred())
 
 	return pkt.Bytes()
+}
+
+func checkICMP(bytes []byte, origSrc, innerSrc, innerDst net.IP) {
+
+	icmpPkt := gopacket.NewPacket(bytes, layers.LayerTypeEthernet, gopacket.Default)
+
+	ipv4L := icmpPkt.Layer(layers.LayerTypeIPv4)
+	Expect(ipv4L).NotTo(BeNil())
+	ipv4R := ipv4L.(*layers.IPv4)
+
+	Expect(ipv4R.DstIP.String()).To(Equal(origSrc.String()))
+
+	payloadL := icmpPkt.ApplicationLayer()
+	Expect(payloadL).NotTo(BeNil())
+	origPkt := gopacket.NewPacket(payloadL.Payload(), layers.LayerTypeIPv4, gopacket.Default)
+	Expect(origPkt).NotTo(BeNil())
+
+	ipv4L = origPkt.Layer(layers.LayerTypeIPv4)
+	Expect(ipv4L).NotTo(BeNil())
+	ipv4R = ipv4L.(*layers.IPv4)
+
+	Expect(ipv4R.SrcIP.String()).To(Equal(innerSrc.String()))
+	Expect(ipv4R.DstIP.String()).To(Equal(innerDst.String()))
 }
